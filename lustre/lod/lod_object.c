@@ -1606,8 +1606,8 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			 * the FIDs of all shards of the striped directory. */
 			if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_V1)
 				rc = lmv_mds_md_size(
-						le32_to_cpu(lmv1->lmv_stripe_count),
-						le32_to_cpu(lmv1->lmv_magic));
+					le32_to_cpu(lmv1->lmv_stripe_count),
+					le32_to_cpu(lmv1->lmv_magic));
 		} else {
 			lmv1 = buf->lb_buf;
 			if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)

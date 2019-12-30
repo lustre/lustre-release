@@ -17729,7 +17729,7 @@ run_test 230i "lfs migrate -m tolerates trailing slashes"
 
 test_230j() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	$LFS mkdir -m 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
@@ -17737,7 +17737,7 @@ test_230j() {
 		error "create $tfile failed"
 	cat /etc/passwd > $DIR/$tdir/$tfile
 
-	$LFS migrate -m 1 $DIR/$tdir
+	$LFS migrate -m 1 $DIR/$tdir || error "migrate failed"
 
 	cmp /etc/passwd $DIR/$tdir/$tfile ||
 		error "DoM file mismatch after migration"
@@ -17875,6 +17875,156 @@ test_230n() {
 		error "File data mismatch after migration"
 }
 run_test 230n "Dir migration with mirrored file"
+
+test_230o() {
+	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+		skip "Need MDS version at least 2.13.52"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	local restripe_status
+	local delta
+	local i
+	local j
+
+	# in case "crush" hash type is not set
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+
+	restripe_status=$(do_facet mds1 $LCTL get_param -n \
+			   mdt.*MDT0000.enable_dir_restripe)
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=1"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.enable_dir_restripe=$restripe_status"
+
+	mkdir $DIR/$tdir
+	createmany -m $DIR/$tdir/f 100 ||
+		error "create files under remote dir failed $i"
+	createmany -d $DIR/$tdir/d 100 ||
+		error "create dirs under remote dir failed $i"
+
+	for i in $(seq 2 $MDSCOUNT); do
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+		$LFS setdirstripe -c $i $DIR/$tdir ||
+			error "split -c $i $tdir failed"
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -H $DIR/$tdir" "crush" 100 ||
+			error "dir split not finished"
+		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
+			awk '/migrate/ {sum += $2} END { print sum }')
+		echo "$delta files migrated when dir split from $((i - 1)) to $i stripes"
+		# delta is around total_files/stripe_count
+		[ $delta -lt $((200 /(i - 1))) ] ||
+			error "$delta files migrated"
+	done
+}
+run_test 230o "dir split"
+
+test_230p() {
+	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+		skip "Need MDS version at least 2.13.52"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	local restripe_status
+	local delta
+	local i
+	local j
+
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+
+	restripe_status=$(do_facet mds1 $LCTL get_param -n \
+			   mdt.*MDT0000.enable_dir_restripe)
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=1"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.enable_dir_restripe=$restripe_status"
+
+	test_mkdir -c $MDSCOUNT -H crush $DIR/$tdir
+	createmany -m $DIR/$tdir/f 100 ||
+		error "create files under remote dir failed $i"
+	createmany -d $DIR/$tdir/d 100 ||
+		error "create dirs under remote dir failed $i"
+
+	for i in $(seq $((MDSCOUNT - 1)) -1 1); do
+		local mdt_hash="crush"
+
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+		$LFS setdirstripe -c $i $DIR/$tdir ||
+			error "split -c $i $tdir failed"
+		[ $i -eq 1 ] && mdt_hash="none"
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash 100 ||
+			error "dir merge not finished"
+		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
+			awk '/migrate/ {sum += $2} END { print sum }')
+		echo "$delta files migrated when dir merge from $((i + 1)) to $i stripes"
+		# delta is around total_files/stripe_count
+		[ $delta -lt $((200 / i)) ] ||
+			error "$delta files migrated"
+	done
+}
+run_test 230p "dir merge"
+
+test_230q() {
+	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+		skip "Need MDS version at least 2.13.52"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local saved_threshold=$(do_facet mds1 \
+			$LCTL get_param -n mdt.*-MDT0000.dir_split_count)
+	local saved_delta=$(do_facet mds1 \
+			$LCTL get_param -n mdt.*-MDT0000.dir_split_delta)
+	local threshold=100
+	local delta=2
+	local total=0
+	local stripe_count=0
+	local stripe_index
+	local nr_files
+
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.dir_split_count=$saved_threshold"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.dir_split_delta=$saved_delta"
+	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.dir_restripe_nsonly=1"
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_auto_split=1"
+	do_nodes $mdts "$LCTL set_param mdt.*.dir_split_count=$threshold"
+	do_nodes $mdts "$LCTL set_param mdt.*.dir_split_delta=$delta"
+	do_nodes $mdts "$LCTL set_param mdt.*.dir_restripe_nsonly=0"
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+
+	$LFS mkdir -i -1 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
+	stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
+
+	while [ $stripe_count -lt $MDSCOUNT ]; do
+		createmany -m $DIR/$tdir/f $total $((threshold * 3 / 2)) ||
+			error "create sub files failed"
+		stat $DIR/$tdir > /dev/null
+		total=$((total + threshold * 3 / 2))
+		stripe_count=$((stripe_count + delta))
+		[ $stripe_count -gt $MDSCOUNT ] && stripe_count=$MDSCOUNT
+
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -c $DIR/$tdir" "$stripe_count" 40 ||
+			error "stripe count $($LFS getdirstripe -c $DIR/$tdir) != $stripe_count"
+
+		wait_update $HOSTNAME \
+			"$LFS getdirstripe -H $DIR/$tdir" "crush" 200 ||
+			error "stripe hash $($LFS getdirstripe -H $DIR/$tdir) != crush"
+
+		nr_files=$($LFS getstripe -m $DIR/$tdir/* |
+			   grep -w $stripe_index | wc -l)
+		echo "$nr_files files on MDT$stripe_index after split"
+		[ $nr_files -lt $((total / (stripe_count - 1))) ] ||
+			error "$nr_files files on MDT$stripe_index after split"
+
+		nr_files=$(ls $DIR/$tdir | wc -w)
+		[ $nr_files -eq $total ] ||
+			error "total sub files $nr_files != $total"
+	done
+}
+run_test 230q "dir auto split"
 
 test_231a()
 {

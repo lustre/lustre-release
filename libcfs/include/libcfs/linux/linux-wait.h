@@ -203,6 +203,8 @@ __out:	__ret;								\
 
 #ifndef TASK_NOLOAD
 
+#define TASK_IDLE TASK_INTERRUPTIBLE
+
 #define ___wait_event_idle(wq_head, condition, exclusive, ret, cmd)	\
 ({									\
 	wait_queue_entry_t __wq_entry;					\

@@ -794,6 +794,36 @@ static ssize_t enable_dir_restripe_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_dir_restripe);
 
+static ssize_t enable_dir_auto_split_show(struct kobject *kobj,
+					  struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_enable_dir_auto_split);
+}
+
+static ssize_t enable_dir_auto_split_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_dir_auto_split = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_dir_auto_split);
+
 /**
  * Show MDT async commit count.
  *
@@ -1101,6 +1131,108 @@ static ssize_t enable_remote_rename_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_remote_rename);
 
+static ssize_t dir_split_count_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			 mdt->mdt_restriper.mdr_dir_split_count);
+}
+
+static ssize_t dir_split_count_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	char tbuf[22] = "";
+	s64 val;
+	int rc;
+
+	if (count > (sizeof(tbuf) - 1))
+		return -EINVAL;
+
+	memcpy(tbuf, buffer, count);
+
+	rc = sysfs_memparse(buffer, count, &val, "B");
+	if (rc < 0)
+		return rc;
+
+	if (val < 0)
+		return -ERANGE;
+
+	mdt->mdt_restriper.mdr_dir_split_count = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dir_split_count);
+
+static ssize_t dir_split_delta_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_restriper.mdr_dir_split_delta);
+}
+
+static ssize_t dir_split_delta_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	u32 val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_restriper.mdr_dir_split_delta = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dir_split_delta);
+
+static ssize_t dir_restripe_nsonly_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_dir_restripe_nsonly);
+}
+
+static ssize_t dir_restripe_nsonly_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_dir_restripe_nsonly = val;
+	return count;
+}
+LUSTRE_RW_ATTR(dir_restripe_nsonly);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
 LUSTRE_RW_ATTR(job_cleanup_interval);
@@ -1141,6 +1273,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_dir_restripe.attr,
+	&lustre_attr_enable_dir_auto_split.attr,
 	&lustre_attr_enable_remote_rename.attr,
 	&lustre_attr_commit_on_sharing.attr,
 	&lustre_attr_local_recovery.attr,
@@ -1152,6 +1285,9 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_hsm_control.attr,
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_readonly.attr,
+	&lustre_attr_dir_split_count.attr,
+	&lustre_attr_dir_split_delta.attr,
+	&lustre_attr_dir_restripe_nsonly.attr,
 	NULL,
 };
 

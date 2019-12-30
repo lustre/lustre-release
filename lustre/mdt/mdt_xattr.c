@@ -318,7 +318,7 @@ out:
 }
 
 /* update dir layout after migration/restripe */
-static int mdt_dir_layout_update(struct mdt_thread_info *info)
+int mdt_dir_layout_update(struct mdt_thread_info *info)
 {
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
@@ -346,14 +346,6 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 	    mdt->mdt_enable_remote_dir_gid != -1)
 		RETURN(-EPERM);
-
-	/* mti_big_lmm is used to save LMV, but it may be uninitialized. */
-	if (unlikely(!info->mti_big_lmm)) {
-		info->mti_big_lmmsize = lmv_mds_md_size(64, LMV_MAGIC);
-		OBD_ALLOC(info->mti_big_lmm, info->mti_big_lmmsize);
-		if (!info->mti_big_lmm)
-			RETURN(-ENOMEM);
-	}
 
 	obj = mdt_object_find(env, mdt, rr->rr_fid1);
 	if (IS_ERR(obj))
@@ -398,9 +390,6 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 	if (rc)
 		GOTO(unlock_pobj, rc);
 
-	ma->ma_lmv = info->mti_big_lmm;
-	ma->ma_lmv_size = info->mti_big_lmmsize;
-	ma->ma_valid = 0;
 	rc = mdt_stripe_get(info, obj, ma, XATTR_NAME_LMV);
 	if (rc)
 		GOTO(unlock_obj, rc);
@@ -439,7 +428,7 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 
 		if (lum_stripe_count > 1 && lmu->lum_hash_type &&
 		    lmu->lum_hash_type !=
-		    (lmv->lmv_merge_hash & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
+		    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
 			CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 				lmv->lmv_hash_type, lmu->lum_hash_type);
@@ -479,7 +468,7 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 		}
 
 		if (lmu->lum_stripe_offset != LMV_OFFSET_DEFAULT) {
-			CERROR("%s: "DFID" dir split offset %u != -1\n",
+			CERROR("%s: "DFID" dir merge offset %u != -1\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 				lmu->lum_stripe_offset);
 			GOTO(unlock_obj, rc = -EINVAL);
@@ -488,7 +477,7 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 		if (lmu->lum_hash_type &&
 		    lmu->lum_hash_type !=
 		    (lmv->lmv_merge_hash & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
-			CERROR("%s: "DFID" split hash mismatch %u != %u\n",
+			CERROR("%s: "DFID" merge hash mismatch %u != %u\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 				lmv->lmv_merge_hash, lmu->lum_hash_type);
 			GOTO(unlock_obj, rc = -EINVAL);

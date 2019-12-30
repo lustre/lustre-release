@@ -58,6 +58,7 @@
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_quota.h>
 #include <lustre_swab.h>
+#include <lustre_lmv.h>
 #include <obd.h>
 #include <obd_support.h>
 #include <lustre_barrier.h>
@@ -979,8 +980,8 @@ int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 	RETURN(rc);
 }
 
-int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
-		   struct md_attr *ma, const char *name)
+int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		     struct md_attr *ma, const char *name)
 {
 	struct md_object *next = mdt_object_child(o);
 	struct lu_buf    *buf = &info->mti_buf;
@@ -1056,6 +1057,40 @@ got:
 	return rc;
 }
 
+int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		   struct md_attr *ma, const char *name)
+{
+	int rc;
+
+	if (!info->mti_big_lmm) {
+		OBD_ALLOC(info->mti_big_lmm, PAGE_SIZE);
+		if (!info->mti_big_lmm)
+			return -ENOMEM;
+		info->mti_big_lmmsize = PAGE_SIZE;
+	}
+
+	if (strcmp(name, XATTR_NAME_LOV) == 0) {
+		ma->ma_lmm = info->mti_big_lmm;
+		ma->ma_lmm_size = info->mti_big_lmmsize;
+		ma->ma_valid &= ~MA_LOV;
+	} else if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		ma->ma_lmv = info->mti_big_lmm;
+		ma->ma_lmv_size = info->mti_big_lmmsize;
+		ma->ma_valid &= ~MA_LMV;
+	} else {
+		LBUG();
+	}
+
+	LASSERT(!info->mti_big_lmm_used);
+	rc = __mdt_stripe_get(info, o, ma, name);
+	/* since big_lmm is always used here, clear 'used' flag to avoid
+	 * assertion in mdt_big_xattr_get().
+	 */
+	info->mti_big_lmm_used = 0;
+
+	return rc;
+}
+
 int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
 		      struct lu_fid *pfid)
 {
@@ -1103,6 +1138,51 @@ int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
 	RETURN(0);
 }
 
+int mdt_attr_get_pfid_name(struct mdt_thread_info *info, struct mdt_object *o,
+			   struct lu_fid *pfid, struct lu_name *lname)
+{
+	struct lu_buf *buf = &info->mti_buf;
+	struct link_ea_header *leh;
+	struct link_ea_entry *lee;
+	int reclen;
+	int rc;
+
+	buf->lb_buf = info->mti_xattr_buf;
+	buf->lb_len = sizeof(info->mti_xattr_buf);
+	rc = mo_xattr_get(info->mti_env, mdt_object_child(o), buf,
+			  XATTR_NAME_LINK);
+	if (rc == -ERANGE) {
+		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LINK);
+		buf->lb_buf = info->mti_big_lmm;
+		buf->lb_len = info->mti_big_lmmsize;
+	}
+	if (rc < 0)
+		return rc;
+
+	if (rc < sizeof(*leh)) {
+		CERROR("short LinkEA on "DFID": rc = %d\n",
+		       PFID(mdt_object_fid(o)), rc);
+		return -ENODATA;
+	}
+
+	leh = (struct link_ea_header *)buf->lb_buf;
+	lee = (struct link_ea_entry *)(leh + 1);
+	if (leh->leh_magic == __swab32(LINK_EA_MAGIC)) {
+		leh->leh_magic = LINK_EA_MAGIC;
+		leh->leh_reccount = __swab32(leh->leh_reccount);
+		leh->leh_len = __swab64(leh->leh_len);
+	}
+	if (leh->leh_magic != LINK_EA_MAGIC)
+		return -EINVAL;
+
+	if (leh->leh_reccount == 0)
+		return -ENODATA;
+
+	linkea_entry_unpack(lee, &reclen, lname, pfid);
+
+	return 0;
+}
+
 int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma)
 {
@@ -1140,19 +1220,19 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	}
 
 	if (need & MA_LOV && (S_ISREG(mode) || S_ISDIR(mode))) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
 		if (rc)
 			GOTO(out, rc);
 	}
 
 	if (need & MA_LMV && S_ISDIR(mode)) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
 		if (rc != 0)
 			GOTO(out, rc);
 	}
 
 	if (need & MA_LMV_DEF && S_ISDIR(mode)) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
 		if (rc != 0)
 			GOTO(out, rc);
 	}
@@ -1202,19 +1282,21 @@ out:
 }
 
 static int mdt_getattr_internal(struct mdt_thread_info *info,
-                                struct mdt_object *o, int ma_need)
+				struct mdt_object *o, int ma_need)
 {
-	struct md_object	*next = mdt_object_child(o);
-	const struct mdt_body	*reqbody = info->mti_body;
-	struct ptlrpc_request	*req = mdt_info_req(info);
-	struct md_attr		*ma = &info->mti_attr;
-	struct lu_attr		*la = &ma->ma_attr;
-	struct req_capsule	*pill = info->mti_pill;
-	const struct lu_env	*env = info->mti_env;
-	struct mdt_body		*repbody;
-	struct lu_buf		*buffer = &info->mti_buf;
-	struct obd_export	*exp = info->mti_exp;
-	int			 rc;
+	struct mdt_device *mdt = info->mti_mdt;
+	struct md_object *next = mdt_object_child(o);
+	const struct mdt_body *reqbody = info->mti_body;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_attr *la = &ma->ma_attr;
+	struct req_capsule *pill = info->mti_pill;
+	const struct lu_env *env = info->mti_env;
+	struct mdt_body *repbody;
+	struct lu_buf *buffer = &info->mti_buf;
+	struct obd_export *exp = info->mti_exp;
+	int rc;
+
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
@@ -1301,13 +1383,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		}
 	}
 
-        if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
+	if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
 	    reqbody->mbo_valid & OBD_MD_FLDIREA  &&
-            lustre_msg_get_opc(req->rq_reqmsg) == MDS_GETATTR) {
-                /* get default stripe info for this dir. */
-                ma->ma_need |= MA_LOV_DEF;
-        }
-        ma->ma_need |= ma_need;
+	    lustre_msg_get_opc(req->rq_reqmsg) == MDS_GETATTR) {
+		/* get default stripe info for this dir. */
+		ma->ma_need |= MA_LOV_DEF;
+	}
+	ma->ma_need |= ma_need;
 
 	rc = mdt_attr_get_complex(info, o, ma);
 	if (unlikely(rc)) {
@@ -1326,22 +1408,27 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			repbody->mbo_t_state = MS_RESTORE;
 	}
 
-        if (likely(ma->ma_valid & MA_INODE))
-                mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
-        else
-                RETURN(-EFAULT);
+	if (unlikely(!(ma->ma_valid & MA_INODE)))
+		RETURN(-EFAULT);
 
-        if (mdt_body_has_lov(la, reqbody)) {
-                if (ma->ma_valid & MA_LOV) {
-                        LASSERT(ma->ma_lmm_size);
+	mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
+
+	if (mdt_body_has_lov(la, reqbody)) {
+		u32 stripe_count = 1;
+
+		if (ma->ma_valid & MA_LOV) {
+			LASSERT(ma->ma_lmm_size);
 			repbody->mbo_eadatasize = ma->ma_lmm_size;
 			if (S_ISDIR(la->la_mode))
 				repbody->mbo_valid |= OBD_MD_FLDIREA;
 			else
 				repbody->mbo_valid |= OBD_MD_FLEASIZE;
 			mdt_dump_lmm(D_INFO, ma->ma_lmm, repbody->mbo_valid);
-                }
+		}
 		if (ma->ma_valid & MA_LMV) {
+			struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
+			u32 magic = le32_to_cpu(lmv->lmv_magic);
+
 			/* Return -ENOTSUPP for old client */
 			if (!mdt_is_striped_client(req->rq_export))
 				RETURN(-ENOTSUPP);
@@ -1350,6 +1437,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			mdt_dump_lmv(D_INFO, ma->ma_lmv);
 			repbody->mbo_eadatasize = ma->ma_lmv_size;
 			repbody->mbo_valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
+
+			stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
+			if (magic == LMV_MAGIC_STRIPE && lmv_is_restriping(lmv))
+				mdt_restripe_migrate_add(info, o);
+			else if (magic == LMV_MAGIC_V1 &&
+				 lmv_is_restriping(lmv))
+				mdt_restripe_update_add(info, o);
 		}
 		if (ma->ma_valid & MA_LMV_DEF) {
 			/* Return -ENOTSUPP for old client */
@@ -1366,6 +1460,18 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			repbody->mbo_valid |= (OBD_MD_FLDIREA |
 					       OBD_MD_DEFAULT_MEA);
 		}
+		CDEBUG(D_VFSTRACE,
+		       "dirent count %llu stripe count %u MDT count %d\n",
+		       ma->ma_attr.la_dirent_count, stripe_count,
+		       atomic_read(&mdt->mdt_mds_mds_conns) + 1);
+		if (ma->ma_attr.la_dirent_count != LU_DIRENT_COUNT_UNSET &&
+		    ma->ma_attr.la_dirent_count >
+			mdt->mdt_restriper.mdr_dir_split_count &&
+		    !fid_is_root(mdt_object_fid(o)) &&
+		    mdt->mdt_enable_dir_auto_split &&
+		    !o->mot_restriping &&
+		    stripe_count < atomic_read(&mdt->mdt_mds_mds_conns) + 1)
+			mdt_auto_split_add(info, o);
 	} else if (S_ISLNK(la->la_mode) &&
 		   reqbody->mbo_valid & OBD_MD_LINKNAME) {
 		buffer->lb_buf = ma->ma_lmm;
@@ -1403,8 +1509,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			       print_limit < rc ? "..." : "", print_limit,
 			       (char *)ma->ma_lmm + rc - print_limit, rc);
 			rc = 0;
-                }
-        }
+		}
+	}
 
 	if (reqbody->mbo_valid & OBD_MD_FLMODEASIZE) {
 		repbody->mbo_max_mdsize = info->mti_mdt->mdt_max_mdsize;
@@ -1426,10 +1532,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 #endif
 
 out:
-        if (rc == 0)
+	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_GETATTR);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdt_getattr(struct tgt_session_info *tsi)
@@ -5369,6 +5475,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
 
 	mdt_stack_pre_fini(env, m, md2lu_dev(m->mdt_child));
+
+	mdt_restriper_stop(m);
 	ping_evictor_stop();
 
 	/* Remove the HSM /proc entry so the coordinator cannot be
@@ -5510,10 +5618,12 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_dir = 1;
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_enable_dir_migration = 1;
-	m->mdt_enable_dir_restripe = 1;
+	m->mdt_enable_dir_restripe = 0;
+	m->mdt_enable_dir_auto_split = 0;
 	m->mdt_enable_remote_dir_gid = 0;
 	m->mdt_enable_chprojid_gid = 0;
 	m->mdt_enable_remote_rename = 1;
+	m->mdt_dir_restripe_nsonly = 1;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);
@@ -5674,7 +5784,14 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_LOCAL_RECOV))
 		m->mdt_lut.lut_local_recovery = 1;
 
+	rc = mdt_restriper_start(m);
+	if (rc)
+		GOTO(err_ping_evictor, rc);
+
 	RETURN(0);
+
+err_ping_evictor:
+	ping_evictor_stop();
 err_procfs:
 	mdt_tunables_fini(m);
 err_recovery:
@@ -5824,6 +5941,8 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		init_rwsem(&mo->mot_dom_sem);
 		init_rwsem(&mo->mot_open_sem);
 		atomic_set(&mo->mot_open_count, 0);
+		mo->mot_restripe_offset = 0;
+		INIT_LIST_HEAD(&mo->mot_restripe_linkage);
 		RETURN(o);
 	}
 	RETURN(NULL);

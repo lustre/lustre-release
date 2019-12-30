@@ -444,32 +444,42 @@ insane:
 
 static inline bool lmv_is_splitting(const struct lmv_mds_md_v1 *lmv)
 {
-	LASSERT(lmv_is_sane2(lmv));
+	if (!lmv_is_sane2(lmv))
+		return false;
+
 	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type));
 }
 
 static inline bool lmv_is_merging(const struct lmv_mds_md_v1 *lmv)
 {
-	LASSERT(lmv_is_sane2(lmv));
+	if (!lmv_is_sane2(lmv))
+		return false;
+
 	return lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type));
 }
 
 static inline bool lmv_is_migrating(const struct lmv_mds_md_v1 *lmv)
 {
-	LASSERT(lmv_is_sane(lmv));
+	if (!lmv_is_sane(lmv))
+		return false;
+
 	return lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type));
 }
 
 static inline bool lmv_is_restriping(const struct lmv_mds_md_v1 *lmv)
 {
-	LASSERT(lmv_is_sane2(lmv));
+	if (!lmv_is_sane2(lmv))
+		return false;
+
 	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type)) ||
 	       lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type));
 }
 
 static inline bool lmv_is_layout_changing(const struct lmv_mds_md_v1 *lmv)
 {
-	LASSERT(lmv_is_sane2(lmv));
+	if (!lmv_is_sane2(lmv))
+		return false;
+
 	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type)) ||
 	       lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type)) ||
 	       lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type));

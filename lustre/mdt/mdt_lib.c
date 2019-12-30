@@ -1523,6 +1523,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	} else {
 		spec->sp_migrate_close = 0;
 	}
+	spec->sp_migrate_nsonly = 0;
 
 	/* lustre version > 2.11 migration packs lum */
 	if (req_capsule_has_field(pill, &RMF_EADATA, RCL_CLIENT)) {

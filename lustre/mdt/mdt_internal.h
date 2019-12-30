@@ -59,6 +59,7 @@
 #include <lustre_eacl.h>
 #include <lustre_quota.h>
 #include <lustre_linkea.h>
+#include <lustre_lmv.h>
 
 struct mdt_object;
 
@@ -205,6 +206,36 @@ struct mdt_statfs_cache {
 	__u64 msf_age;
 };
 
+/* split directory automatically when sub file count exceeds 50k */
+#define DIR_SPLIT_COUNT_DEFAULT	50000
+
+/* directory auto-split allocate delta new stripes each time */
+#define DIR_SPLIT_DELTA_DEFAULT	4
+
+struct mdt_dir_restriper {
+	struct lu_env		mdr_env;
+	struct lu_context	mdr_session;
+	struct task_struct     *mdr_task;
+	/* lock for below fields */
+	spinlock_t		mdr_lock;
+	/* auto split when plain dir/shard sub files exceed threshold */
+	u64			mdr_dir_split_count;
+	/* auto split growth delta */
+	u32			mdr_dir_split_delta;
+	/* directories to split */
+	struct list_head	mdr_auto_splitting;
+	/* directories under which sub files are migrating */
+	struct list_head	mdr_migrating;
+	/* directories waiting to update layout after migration */
+	struct list_head	mdr_updating;
+	/* time to update directory layout after migration */
+	time64_t		mdr_update_time;
+	/* lum used in split/migrate/layout_change */
+	union lmv_mds_md	mdr_lmv;
+	/* page used in readdir */
+	struct page	       *mdr_page;
+};
+
 struct mdt_device {
 	/* super-class */
 	struct lu_device	   mdt_lu_dev;
@@ -256,9 +287,12 @@ struct mdt_device {
 				   mdt_enable_striped_dir:1,
 				   mdt_enable_dir_migration:1,
 				   mdt_enable_dir_restripe:1,
+				   mdt_enable_dir_auto_split:1,
 				   mdt_enable_remote_rename:1,
 				   mdt_skip_lfsck:1,
-				   mdt_readonly:1;
+				   mdt_readonly:1,
+				   /* dir restripe migrate dirent only */
+				   mdt_dir_restripe_nsonly:1;
 
 				   /* user with gid can create remote/striped
 				    * dir, and set default dir stripe */
@@ -293,6 +327,8 @@ struct mdt_device {
 	atomic_t		   mdt_async_commit_count;
 
 	struct mdt_object	  *mdt_md_root;
+
+	struct mdt_dir_restriper   mdt_restriper;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
@@ -304,14 +340,17 @@ struct mdt_object {
 	struct lu_object_header	mot_header;
 	struct lu_object	mot_obj;
 	unsigned int		mot_lov_created:1,  /* lov object created */
-				mot_cache_attr:1;   /* enable remote object
+				mot_cache_attr:1,   /* enable remote object
 						     * attribute cache */
+				mot_restriping:1,   /* dir restriping */
+				/* dir auto-split disabled */
+				mot_auto_split_disabled:1;
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
-	/* Lock to protect object's SOM update. */
-	struct mutex		mot_som_mutex;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
+	/* Lock to protect object's SOM update. */
+	struct mutex		mot_som_mutex;
 	/* lock to protect read/write stages for Data-on-MDT files */
 	struct rw_semaphore	mot_dom_sem;
 	/* Lock to protect lease open.
@@ -319,6 +358,10 @@ struct mdt_object {
 	struct rw_semaphore	mot_open_sem;
 	atomic_t		mot_lease_count;
 	atomic_t		mot_open_count;
+	/* directory offset, used in sub file migration in dir restripe */
+	loff_t			mot_restripe_offset;
+	/* link to mdt_restriper auto_splitting/migrating/updating */
+	struct list_head	mot_restripe_linkage;
 };
 
 struct mdt_lock_handle {
@@ -849,10 +892,14 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
 int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 		      const char *name);
+int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		     struct md_attr *ma, const char *name);
 int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		   struct md_attr *ma, const char *name);
 int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
 		      struct lu_fid *pfid);
+int mdt_attr_get_pfid_name(struct mdt_thread_info *info, struct mdt_object *o,
+			   struct lu_fid *pfid, struct lu_name *lname);
 int mdt_write_get(struct mdt_object *o);
 void mdt_write_put(struct mdt_object *o);
 int mdt_write_read(struct mdt_object *o);
@@ -888,6 +935,10 @@ int mdt_version_get_check(struct mdt_thread_info *, struct mdt_object *, int);
 void mdt_version_get_save(struct mdt_thread_info *, struct mdt_object *, int);
 int mdt_version_get_check_save(struct mdt_thread_info *, struct mdt_object *,
                                int);
+int mdt_lookup_version_check(struct mdt_thread_info *info,
+			     struct mdt_object *p,
+			     const struct lu_name *lname,
+			     struct lu_fid *fid, int idx);
 void mdt_thread_info_init(struct ptlrpc_request *req,
 			  struct mdt_thread_info *mti);
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
@@ -1360,5 +1411,24 @@ static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
 	return is_admin;
 }
 
+int mdt_reint_migrate(struct mdt_thread_info *info,
+		      struct mdt_lock_handle *unused);
+int mdt_dir_layout_update(struct mdt_thread_info *info);
+
+/* directory restripe */
+int mdt_restripe_internal(struct mdt_thread_info *info,
+			  struct mdt_object *parent,
+			  struct mdt_object *child,
+			  const struct lu_name *lname,
+			  struct lu_fid *tfid,
+			  struct md_op_spec *spec,
+			  struct md_attr *ma);
+int mdt_restriper_start(struct mdt_device *mdt);
+void mdt_restriper_stop(struct mdt_device *mdt);
+void mdt_auto_split_add(struct mdt_thread_info *info, struct mdt_object *o);
+void mdt_restripe_migrate_add(struct mdt_thread_info *info,
+			      struct mdt_object *o);
+void mdt_restripe_update_add(struct mdt_thread_info *info,
+			     struct mdt_object *o);
 
 #endif /* _MDT_INTERNAL_H */

@@ -171,7 +171,6 @@ struct lu_device_operations {
 	 * \param[in] parent	parent object
 	 * \param[in] name	lu_name
 	 *
-	 * \retval 0		on success
 	 * \retval 0		0 FID allocated successfully.
 	 * \retval 1		1 FID allocated successfully and new sequence
 	 *                      requested from seq meta server

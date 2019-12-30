@@ -204,11 +204,16 @@ struct md_layout_change {
 			__u32			*mlc_resync_ids;
 		}; /* file */
 		struct {
-			struct md_object	*mlc_parent;	/* parent obj in plain dir split */
-			struct md_object	*mlc_target;	/* target obj in plain dir split */
-			struct lu_attr		*mlc_attr;	/* target attr in plain dir split */
-			const struct lu_name	*mlc_name;	/* target name in plain dir split */
-			struct md_op_spec	*mlc_spec;	/* dir split spec */
+			/* parent obj in plain dir split */
+			struct md_object	*mlc_parent;
+			/* target obj in plain dir split */
+			struct md_object	*mlc_target;
+			/* target attr in plain dir split */
+			struct lu_attr		*mlc_attr;
+			/* target name in plain dir split */
+			const struct lu_name	*mlc_name;
+			/* dir split spec */
+			struct md_op_spec	*mlc_spec;
 		}; /* dir */
 	};
 };

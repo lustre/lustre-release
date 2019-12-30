@@ -4040,7 +4040,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* NB: if user issued different migrate command, we can't ajust it silently
+/* NB: if user issued different migrate command, we can't adjust it silently
  * here, because this command will decide target MDT in subdir migration in
  * LMV.
  */
@@ -4180,8 +4180,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 					GOTO(out, rc = -EINVAL);
 				GOTO(out, rc = -EALREADY);
 			}
-			if (S_ISDIR(attr->la_mode))
-				nsonly = spec->sp_migrate_nsonly;
+			nsonly = spec->sp_migrate_nsonly;
 		} else {
 			spobj = tpobj;
 			mdd_object_get(spobj);
@@ -4646,7 +4645,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 		return rc;
 
 	/* tobj mode will be used in lod_declare_xattr_set(), but it's not
-	 * createb yet.
+	 * created yet.
 	 */
 	tobj->mod_obj.mo_lu.lo_header->loh_attr |= S_IFDIR;
 

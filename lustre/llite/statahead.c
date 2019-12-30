@@ -901,10 +901,6 @@ static void sa_statahead(struct dentry *parent, const char *name, int len,
 	EXIT;
 }
 
-#ifndef TASK_IDLE
-#define TASK_IDLE TASK_INTERRUPTIBLE
-#endif
-
 /* async glimpse (agl) thread main function */
 static int ll_agl_thread(void *arg)
 {
