@@ -937,11 +937,13 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 			GOTO(out_tx, rc);
 	}
 
-	rc = dt_declare_xattr_set(env, dt_obj, &info->fti_buf,
-			XATTR_NAME_FID, 0, th);
-	if (rc)
-		GOTO(out_tx, rc);
-
+	if (oa->o_valid & (OBD_MD_FLFID | OBD_MD_FLOSTLAYOUT |
+			   OBD_MD_LAYOUT_VERSION)) {
+		rc = dt_declare_xattr_set(env, dt_obj, &info->fti_buf,
+					  XATTR_NAME_FID, 0, th);
+		if (rc)
+			GOTO(out_tx, rc);
+	}
 	/* We don't need a transno for this operation which will be re-executed
 	 * anyway when the OST_WRITE (with a transno assigned) is replayed */
 	rc = dt_trans_start_local(env, ofd->ofd_osd , th);
@@ -949,6 +951,17 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 		GOTO(out_tx, rc);
 
 	ofd_read_lock(env, ofd_obj);
+
+	rc = ofd_attr_handle_id(env, ofd_obj, la, 0 /* !is_setattr */);
+	if (rc != 0)
+		GOTO(out_unlock, rc);
+
+	if (!la->la_valid && !(oa->o_valid &
+	    (OBD_MD_FLFID | OBD_MD_FLOSTLAYOUT | OBD_MD_LAYOUT_VERSION)))
+		/* no attributes to set */
+		GOTO(out_unlock, rc = 0);
+
+
 
 	/* set uid/gid/projid */
 	if (la->la_valid) {
