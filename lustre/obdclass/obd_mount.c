@@ -50,6 +50,8 @@
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_param.h>
 
+static DEFINE_SPINLOCK(client_lock);
+static struct module *client_mod;
 static int (*client_fill_super)(struct super_block *sb);
 
 static void (*kill_super_cb)(struct super_block *sb);
@@ -1623,10 +1625,16 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 	}
 
 	if (lmd_is_client(lmd)) {
+		bool have_client = false;
+
 		CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
-		if (client_fill_super == NULL)
+		if (!client_fill_super)
 			request_module("lustre");
-		if (client_fill_super == NULL) {
+		spin_lock(&client_lock);
+		if (client_fill_super && try_module_get(client_mod))
+			have_client = true;
+		spin_unlock(&client_lock);
+		if (!have_client) {
 			LCONSOLE_ERROR_MSG(0x165,
 					   "Nothing registered for client mount! Is the 'lustre' module loaded?\n");
 			lustre_put_lsi(sb);
@@ -1640,7 +1648,9 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 			/* Connect and start */
 			/* (should always be ll_fill_super) */
 			rc = (*client_fill_super)(sb);
-			/* c_f_s will call lustre_common_put_super on failure */
+			/* c_f_s will call lustre_common_put_super on failure,
+			 * which takes care of the module reference.
+			 */
 		}
 	} else {
 #ifdef HAVE_SERVER_SUPPORT
@@ -1680,17 +1690,17 @@ out:
  * We can't call ll_fill_super by name because it lives in a module that
  * must be loaded after this one.
  */
-void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
+void lustre_register_super_ops(struct module *mod,
+			       int (*cfs)(struct super_block *sb),
+			       void (*ksc)(struct super_block *sb))
 {
+	spin_lock(&client_lock);
+	client_mod = mod;
 	client_fill_super = cfs;
+	kill_super_cb = ksc;
+	spin_unlock(&client_lock);
 }
-EXPORT_SYMBOL(lustre_register_client_fill_super);
-
-void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb))
-{
-	kill_super_cb = cfs;
-}
-EXPORT_SYMBOL(lustre_register_kill_super_cb);
+EXPORT_SYMBOL(lustre_register_super_ops);
 
 /***************** FS registration ******************/
 #ifdef HAVE_FSTYPE_MOUNT

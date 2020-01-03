@@ -1075,8 +1075,6 @@ int ll_fill_super(struct super_block *sb)
 	CDEBUG(D_VFSTRACE, "VFS Op: cfg_instance %s-%016lx (sb %p)\n",
 	       profilenm, cfg_instance, sb);
 
-	try_module_get(THIS_MODULE);
-
 	OBD_ALLOC_PTR(cfg);
 	if (cfg == NULL)
 		GOTO(out_free_cfg, err = -ENOMEM);
