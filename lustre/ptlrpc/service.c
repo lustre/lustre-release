@@ -3368,13 +3368,10 @@ void ptlrpc_hr_fini(void)
 static void ptlrpc_wait_replies(struct ptlrpc_service_part *svcpt)
 {
 	while (1) {
-		int rc;
-		struct l_wait_info lwi = LWI_TIMEOUT(cfs_time_seconds(10),
-						     NULL, NULL);
-
-		rc = l_wait_event(svcpt->scp_waitq,
-		     atomic_read(&svcpt->scp_nreps_difficult) == 0, &lwi);
-		if (rc == 0)
+		if (wait_event_idle_timeout(
+			svcpt->scp_waitq,
+			atomic_read(&svcpt->scp_nreps_difficult) == 0,
+			cfs_time_seconds(10)) > 0)
 			break;
 		CWARN("Unexpectedly long timeout %s %p\n",
 		      svcpt->scp_service->srv_name, svcpt->scp_service);

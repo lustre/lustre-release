@@ -1391,23 +1391,15 @@ lfsck_layout_lastid_load(const struct lu_env *env,
 
 			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY4) &&
 			    cfs_fail_val > 0) {
-				struct l_wait_info lwi = LWI_TIMEOUT(
-						cfs_time_seconds(cfs_fail_val),
-						NULL, NULL);
+				struct ptlrpc_thread *thread =
+					&lfsck->li_thread;
 
-				/* Some others may changed the cfs_fail_val
-				 * as zero after above check, re-check it for
-				 * sure to avoid falling into wait for ever. */
-				if (likely(lwi.lwi_timeout > 0)) {
-					struct ptlrpc_thread *thread =
-						&lfsck->li_thread;
-
-					up_write(&com->lc_sem);
-					l_wait_event(thread->t_ctl_waitq,
-						     !thread_is_running(thread),
-						     &lwi);
-					down_write(&com->lc_sem);
-				}
+				up_write(&com->lc_sem);
+				wait_event_idle_timeout(
+					thread->t_ctl_waitq,
+					!thread_is_running(thread),
+					cfs_time_seconds(cfs_fail_val));
+				down_write(&com->lc_sem);
 			}
 		}
 
@@ -5748,13 +5740,11 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY5) &&
 	    cfs_fail_val == lfsck_dev_idx(lfsck)) {
-		struct l_wait_info	 lwi = LWI_TIMEOUT(cfs_time_seconds(1),
-							   NULL, NULL);
 		struct ptlrpc_thread	*thread = &lfsck->li_thread;
 
-		l_wait_event(thread->t_ctl_waitq,
-			     !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle_timeout(thread->t_ctl_waitq,
+					!thread_is_running(thread),
+					cfs_time_seconds(1));
 	}
 
 	lfsck_rbtree_update_bitmap(env, com, fid, false);
@@ -6205,9 +6195,6 @@ static int lfsck_layout_slave_double_scan(const struct lu_env *env,
 				       LFSCK_CHECKPOINT_INTERVAL;
 
 	while (1) {
-		struct l_wait_info lwi = LWI_TIMEOUT(cfs_time_seconds(30),
-						     NULL, NULL);
-
 		rc = lfsck_layout_slave_query_master(env, com);
 		if (list_empty(&llsd->llsd_master_list)) {
 			if (unlikely(!thread_is_running(thread)))
@@ -6221,21 +6208,22 @@ static int lfsck_layout_slave_double_scan(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(done, rc);
 
-		rc = l_wait_event(thread->t_ctl_waitq,
-				  !thread_is_running(thread) ||
-				  lo->ll_flags & LF_INCOMPLETE ||
-				  list_empty(&llsd->llsd_master_list),
-				  &lwi);
+		rc = wait_event_idle_timeout(
+			thread->t_ctl_waitq,
+			!thread_is_running(thread) ||
+			lo->ll_flags & LF_INCOMPLETE ||
+			list_empty(&llsd->llsd_master_list),
+			cfs_time_seconds(30));
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(done, rc = 0);
 
 		if (lo->ll_flags & LF_INCOMPLETE)
 			GOTO(done, rc = 1);
 
-		if (rc == -ETIMEDOUT)
+		if (rc == 0)
 			continue;
 
-		GOTO(done, rc = (rc < 0 ? rc : 1));
+		GOTO(done, rc = 1);
 	}
 
 done:

@@ -985,7 +985,6 @@ static int ll_statahead_thread(void *arg)
 	int first = 0;
 	struct md_op_data *op_data;
 	struct ll_dir_chain chain;
-	struct l_wait_info lwi = { 0 };
 	struct page *page = NULL;
 	__u64 pos = 0;
 	int rc = 0;
@@ -1182,9 +1181,9 @@ out:
 	 * safely because statahead RPC will access sai data */
 	while (sai->sai_sent != sai->sai_replied) {
 		/* in case we're not woken up, timeout wait */
-		lwi = LWI_TIMEOUT(cfs_time_seconds(1) >> 3, NULL, NULL);
-		l_wait_event(sa_thread->t_ctl_waitq,
-			sai->sai_sent == sai->sai_replied, &lwi);
+		wait_event_idle_timeout(sa_thread->t_ctl_waitq,
+					sai->sai_sent == sai->sai_replied,
+					cfs_time_seconds(1) >> 3);
 	}
 
 	/* release resources held by statahead RPCs */
@@ -1410,7 +1409,6 @@ static int revalidate_statahead_dentry(struct inode *dir,
 					bool unplug)
 {
 	struct sa_entry *entry = NULL;
-	struct l_wait_info lwi = { 0 };
 	struct ll_dentry_data *ldd;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	int rc = 0;
@@ -1458,10 +1456,9 @@ static int revalidate_statahead_dentry(struct inode *dir,
 		spin_lock(&lli->lli_sa_lock);
 		sai->sai_index_wait = entry->se_index;
 		spin_unlock(&lli->lli_sa_lock);
-		lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(30), NULL,
-				       LWI_ON_SIGNAL_NOOP, NULL);
-		rc = l_wait_event(sai->sai_waitq, sa_ready(entry), &lwi);
-		if (rc < 0) {
+		rc = wait_event_idle_timeout(sai->sai_waitq, sa_ready(entry),
+					     cfs_time_seconds(30));
+		if (rc == 0) {
 			/*
 			 * entry may not be ready, so it may be used by inflight
 			 * statahead RPC, don't free it.

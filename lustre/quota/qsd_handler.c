@@ -694,7 +694,6 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			 enum osd_quota_local_flags *local_flags)
 {
 	struct lquota_entry *lqe;
-	struct l_wait_info lwi;
 	enum osd_quota_local_flags qtype_flag = 0;
 	int rc, ret = -EINPROGRESS;
 	ENTRY;
@@ -737,16 +736,18 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 
 	/* acquire quota space for the operation, cap overall wait time to
 	 * prevent a service thread from being stuck for too long */
-	lwi = LWI_TIMEOUT(cfs_time_seconds(qsd_wait_timeout(qqi->qqi_qsd)),
-			  NULL, NULL);
-	rc = l_wait_event(lqe->lqe_waiters, qsd_acquire(env, lqe, space, &ret),
-			  &lwi);
+	rc = wait_event_idle_timeout(
+		lqe->lqe_waiters, qsd_acquire(env, lqe, space, &ret),
+		cfs_time_seconds(qsd_wait_timeout(qqi->qqi_qsd)));
 
-	if (rc == 0 && ret == 0) {
+	if (rc > 0 && ret == 0) {
 		qid->lqi_space += space;
+		rc = 0;
 	} else {
-		if (rc == 0)
+		if (rc > 0)
 			rc = ret;
+		else if (rc == 0)
+			rc = -ETIMEDOUT;
 
 		LQUOTA_DEBUG(lqe, "acquire quota failed:%d", rc);
 

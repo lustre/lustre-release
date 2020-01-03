@@ -1895,16 +1895,12 @@ bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
 void lfsck_control_speed(struct lfsck_instance *lfsck)
 {
 	struct ptlrpc_thread *thread = &lfsck->li_thread;
-	struct l_wait_info    lwi;
 
 	if (lfsck->li_sleep_jif > 0 &&
 	    lfsck->li_new_scanned >= lfsck->li_sleep_rate) {
-		lwi = LWI_TIMEOUT_INTR(lfsck->li_sleep_jif, NULL,
-				       LWI_ON_SIGNAL_NOOP, NULL);
-
-		l_wait_event(thread->t_ctl_waitq,
-			     !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle_timeout(thread->t_ctl_waitq,
+					!thread_is_running(thread),
+					lfsck->li_sleep_jif);
 		lfsck->li_new_scanned = 0;
 	}
 }
@@ -1913,16 +1909,12 @@ void lfsck_control_speed_by_self(struct lfsck_component *com)
 {
 	struct lfsck_instance	*lfsck  = com->lc_lfsck;
 	struct ptlrpc_thread	*thread = &lfsck->li_thread;
-	struct l_wait_info	 lwi;
 
 	if (lfsck->li_sleep_jif > 0 &&
 	    com->lc_new_scanned >= lfsck->li_sleep_rate) {
-		lwi = LWI_TIMEOUT_INTR(lfsck->li_sleep_jif, NULL,
-				       LWI_ON_SIGNAL_NOOP, NULL);
-
-		l_wait_event(thread->t_ctl_waitq,
-			     !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle_timeout(thread->t_ctl_waitq,
+					!thread_is_running(thread),
+					lfsck->li_sleep_jif);
 		com->lc_new_scanned = 0;
 	}
 }

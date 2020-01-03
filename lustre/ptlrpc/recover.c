@@ -345,15 +345,18 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 		GOTO(out, rc);
 
 	if (!async) {
-		struct l_wait_info lwi;
 		long timeout = cfs_time_seconds(obd_timeout);
 
-		CDEBUG(D_HA, "%s: recovery started, waiting %u seconds\n",
+		CDEBUG(D_HA, "%s: recovery started, waiting %u jiffies\n",
 		       obd2cli_tgt(imp->imp_obd), obd_timeout);
 
-		lwi = LWI_TIMEOUT(timeout, NULL, NULL);
-		rc = l_wait_event(imp->imp_recovery_waitq,
-				  !ptlrpc_import_in_recovery(imp), &lwi);
+		rc = wait_event_idle_timeout(imp->imp_recovery_waitq,
+					     !ptlrpc_import_in_recovery(imp),
+					     timeout);
+		if (rc == 0)
+			rc = -ETIMEDOUT;
+		else
+			rc = 0;
 		CDEBUG(D_HA, "%s: recovery finished\n",
 		       obd2cli_tgt(imp->imp_obd));
 	}

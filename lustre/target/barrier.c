@@ -199,13 +199,11 @@ static int barrier_freeze(const struct lu_env *env,
 		RETURN(1);
 
 	if (phase1 && inflight != 0) {
-		struct l_wait_info lwi = LWI_TIMEOUT(cfs_time_seconds(left),
-						     NULL, NULL);
-
-		rc = l_wait_event(barrier->bi_waitq,
-				  percpu_counter_sum(&barrier->bi_writers) == 0,
-				  &lwi);
-		if (rc)
+		rc = wait_event_idle_timeout(
+			barrier->bi_waitq,
+			percpu_counter_sum(&barrier->bi_writers) == 0,
+			cfs_time_seconds(left));
+		if (rc <= 0)
 			RETURN(1);
 
 		/* sync again after all inflight modifications done. */

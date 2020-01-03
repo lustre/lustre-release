@@ -629,7 +629,6 @@ static int mgc_requeue_thread(void *data)
 	spin_lock(&config_list_lock);
 	rq_state |= RQ_RUNNING;
 	while (!(rq_state & RQ_STOP)) {
-		struct l_wait_info lwi;
 		struct config_llog_data *cld, *cld_prev;
 		int rand = prandom_u32_max(MGC_TIMEOUT_RAND_CENTISEC);
 		int to;
@@ -644,13 +643,14 @@ static int mgc_requeue_thread(void *data)
 		}
 
 		/* Always wait a few seconds to allow the server who
-		   caused the lock revocation to finish its setup, plus some
-		   random so everyone doesn't try to reconnect at once. */
+		 * caused the lock revocation to finish its setup, plus some
+		 * random so everyone doesn't try to reconnect at once.
+		 */
 		to = cfs_time_seconds(MGC_TIMEOUT_MIN_SECONDS * 100 + rand);
 		/* rand is centi-seconds */
-		lwi = LWI_TIMEOUT(to / 100, NULL, NULL);
-		l_wait_event(rq_waitq, rq_state & (RQ_STOP | RQ_PRECLEANUP),
-			     &lwi);
+		wait_event_idle_timeout(rq_waitq,
+					rq_state & (RQ_STOP | RQ_PRECLEANUP),
+					to/100);
 
 		/*
 		 * iterate & processing through the list. for each cld, process
@@ -2084,7 +2084,6 @@ restart:
 		if (rcl == -ESHUTDOWN &&
 		    atomic_read(&mgc->u.cli.cl_mgc_refcount) > 0 && !retry) {
 			struct obd_import *imp;
-			struct l_wait_info lwi;
 			long timeout = cfs_time_seconds(obd_timeout);
 
 			mutex_unlock(&cld->cld_lock);
@@ -2098,9 +2097,9 @@ restart:
 			 * FULL or closed */
 			ptlrpc_pinger_force(imp);
 
-			lwi = LWI_TIMEOUT(timeout, NULL, NULL);
-			l_wait_event(imp->imp_recovery_waitq,
-				     !mgc_import_in_recovery(imp), &lwi);
+			wait_event_idle_timeout(imp->imp_recovery_waitq,
+						!mgc_import_in_recovery(imp),
+						timeout);
 
 			if (imp->imp_state == LUSTRE_IMP_FULL) {
 				retry = true;

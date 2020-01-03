@@ -414,7 +414,6 @@ osd_scrub_wakeup(struct lustre_scrub *scrub, struct osd_otable_it *it)
 static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 			  struct lu_fid *fid, uint64_t *oid)
 {
-	struct l_wait_info lwi = { 0 };
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct osd_otable_it *it = dev->od_otable_it;
@@ -425,15 +424,14 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0) {
-		lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val), NULL, NULL);
-		if (likely(lwi.lwi_timeout > 0)) {
-			l_wait_event(thread->t_ctl_waitq,
-				!list_empty(&scrub->os_inconsistent_items) ||
-				!thread_is_running(thread),
-				&lwi);
-			if (unlikely(!thread_is_running(thread)))
-				RETURN(SCRUB_NEXT_EXIT);
-		}
+		wait_event_idle_timeout(
+			thread->t_ctl_waitq,
+			!list_empty(&scrub->os_inconsistent_items) ||
+			!thread_is_running(thread),
+			cfs_time_seconds(cfs_fail_val));
+
+		if (unlikely(!thread_is_running(thread)))
+			RETURN(SCRUB_NEXT_EXIT);
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {

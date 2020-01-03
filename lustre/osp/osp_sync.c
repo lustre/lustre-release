@@ -1208,7 +1208,6 @@ static int osp_sync_thread(void *_arg)
 {
 	struct osp_device	*d = _arg;
 	struct ptlrpc_thread	*thread = &d->opd_sync_thread;
-	struct l_wait_info	 lwi = { 0 };
 	struct llog_ctxt	*ctxt;
 	struct obd_device	*obd = d->opd_obd;
 	struct llog_handle	*llh;
@@ -1319,11 +1318,11 @@ next:
 	while (atomic_read(&d->opd_sync_rpcs_in_progress) > 0) {
 		osp_sync_process_committed(&env, d);
 
-		lwi = LWI_TIMEOUT(cfs_time_seconds(5), NULL, NULL);
-		rc = l_wait_event(d->opd_sync_waitq,
-				atomic_read(&d->opd_sync_rpcs_in_progress) == 0,
-				  &lwi);
-		if (rc == -ETIMEDOUT)
+		rc = wait_event_idle_timeout(
+			d->opd_sync_waitq,
+			atomic_read(&d->opd_sync_rpcs_in_progress) == 0,
+			cfs_time_seconds(5));
+		if (rc == 0)
 			count++;
 		LASSERTF(count < 10, "%s: %d %d %sempty\n",
 			 d->opd_obd->obd_name,

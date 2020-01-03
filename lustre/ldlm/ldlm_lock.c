@@ -1460,7 +1460,6 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 		    (!ldlm_is_lvb_ready(lock))) {
 			__u64 wait_flags = LDLM_FL_LVB_READY |
 				LDLM_FL_DESTROYED | LDLM_FL_FAIL_NOTIFIED;
-			struct l_wait_info lwi;
 
 			if (lock->l_completion_ast) {
 				int err = lock->l_completion_ast(lock,
@@ -1470,12 +1469,11 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					GOTO(out_fail_match, matched = 0);
 			}
 
-			lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
-					       NULL, LWI_ON_SIGNAL_NOOP, NULL);
+			wait_event_idle_timeout(
+				lock->l_waitq,
+				lock->l_flags & wait_flags,
+				cfs_time_seconds(obd_timeout));
 
-			/* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
-			l_wait_event(lock->l_waitq, lock->l_flags & wait_flags,
-				     &lwi);
 			if (!ldlm_is_lvb_ready(lock))
 				GOTO(out_fail_match, matched = 0);
 		}

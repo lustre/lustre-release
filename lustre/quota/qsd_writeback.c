@@ -433,7 +433,6 @@ static int qsd_upd_thread(void *arg)
 {
 	struct qsd_instance	*qsd = (struct qsd_instance *)arg;
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
-	struct l_wait_info	 lwi;
 	struct list_head	 queue;
 	struct qsd_upd_rec	*upd, *n;
 	struct lu_env		*env;
@@ -458,11 +457,12 @@ static int qsd_upd_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 
 	INIT_LIST_HEAD(&queue);
-	lwi = LWI_TIMEOUT(cfs_time_seconds(QSD_WB_INTERVAL), NULL, NULL);
 	while (1) {
-		l_wait_event(thread->t_ctl_waitq,
-			     qsd_job_pending(qsd, &queue, &uptodate) ||
-			     !thread_is_running(thread), &lwi);
+		wait_event_idle_timeout(
+			thread->t_ctl_waitq,
+			qsd_job_pending(qsd, &queue, &uptodate) ||
+			!thread_is_running(thread),
+			cfs_time_seconds(QSD_WB_INTERVAL));
 
 		list_for_each_entry_safe(upd, n, &queue, qur_link) {
 			list_del_init(&upd->qur_link);

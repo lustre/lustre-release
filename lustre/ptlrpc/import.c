@@ -471,7 +471,6 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
 	long timeout_jiffies = cfs_time_seconds(obd_timeout);
-	struct l_wait_info lwi;
 	int rc;
 
 	ptlrpc_pinger_force(imp);
@@ -479,9 +478,13 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 	CDEBUG(D_HA, "%s: recovery started, waiting %u seconds\n",
 	       obd2cli_tgt(imp->imp_obd), obd_timeout);
 
-	lwi = LWI_TIMEOUT(timeout_jiffies, NULL, NULL);
-	rc = l_wait_event(imp->imp_recovery_waitq,
-			  !ptlrpc_import_in_recovery(imp), &lwi);
+	rc = wait_event_idle_timeout(imp->imp_recovery_waitq,
+				     !ptlrpc_import_in_recovery(imp),
+				     timeout_jiffies);
+	if (rc == 0)
+		rc = -ETIMEDOUT;
+	else
+		rc = 0;
 	CDEBUG(D_HA, "%s: recovery finished s:%s\n", obd2cli_tgt(imp->imp_obd),
 	       ptlrpc_import_state_name(imp->imp_state));
 	return rc;
