@@ -68,21 +68,12 @@ static ssize_t dom_stripesize_store(struct kobject *kobj,
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
-	char tbuf[22] = "";
-	s64 val;
+	u64 val;
 	int rc;
 
-	if (count > (sizeof(tbuf) - 1))
-		return -EINVAL;
-
-	memcpy(tbuf, buffer, count);
-
-	rc = lu_str_to_s64(tbuf, count, &val, '1');
-	if (rc)
+	rc = sysfs_memparse(buffer, count, &val, "B");
+	if (rc < 0)
 		return rc;
-
-	if (val < 0)
-		return -ERANGE;
 
 	/* 1GB is the limit */
 	if (val > (1ULL << 30))
@@ -126,21 +117,12 @@ static ssize_t stripesize_store(struct kobject *kobj, struct attribute *attr,
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
-	char tbuf[22] = "";
-	s64 val;
+	u64 val;
 	int rc;
 
-	if (count > (sizeof(tbuf) - 1))
-		return -EINVAL;
-
-	memcpy(tbuf, buffer, count);
-
-	rc = lu_str_to_s64(tbuf, count, &val, '1');
-	if (rc)
+	rc = sysfs_memparse(buffer, count, &val, "B");
+	if (rc < 0)
 		return rc;
-
-	if (val < 0)
-		return -ERANGE;
 
 	lod_fix_desc_stripe_size(&val);
 	lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size = val;

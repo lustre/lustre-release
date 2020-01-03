@@ -43,6 +43,7 @@
 #include <linux/debugfs.h>
 #include <linux/rwsem.h>
 #include <linux/spinlock.h>
+#include <linux/string_helpers.h>
 #include <linux/seq_file.h>
 
 #include <libcfs/libcfs.h>
@@ -621,7 +622,9 @@ extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
 extern int lprocfs_str_with_units_to_u64(const char __user *buffer,
 					 unsigned long count, __u64 *val,
 					 char defunit);
-
+int string_to_size(u64 *size, const char *buffer, size_t count);
+int sysfs_memparse(const char *buffer, size_t count, u64 *val,
+		    const char *defunit);
 char *lprocfs_strnstr(const char *s1, const char *s2, size_t len);
 char *lprocfs_find_named_value(const char *buffer, const char *name,
 				size_t *count);

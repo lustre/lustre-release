@@ -56,16 +56,23 @@ static ssize_t lov_stripesize_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct lov_desc *desc;
-	s64 val;
+	char kernbuf[22] = "";
+	u64 val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
-	if (rc)
+
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	if (rc < 0)
 		return rc;
-	if (val < 0)
-		return -ERANGE;
 
 	lov_fix_desc_stripe_size(&val);
 	desc->ld_default_stripe_size = val;

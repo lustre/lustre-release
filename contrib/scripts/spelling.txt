@@ -134,6 +134,8 @@ LPLX||%#lx
 LPO64||%#llo
 LPPID||%d
 lprocfs_str_to_s64||kstrtoxxx_from_user
+lprocfs_str_with_units_to_s64||sysfs_memparse
+lu_str_to_s64|sysfs_memparse
 LPROC_SEQ_FOPS||LUSTRE_RW_ATTR
 LPROC_SEQ_FOPS_RO_TYPE||LUSTRE_RO_ATTR
 LPROC_SEQ_FOPS_RO||LUSTRE_RO_ATTR

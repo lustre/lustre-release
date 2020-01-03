@@ -1758,6 +1758,185 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 }
 EXPORT_SYMBOL(lprocfs_read_helper);
 
+/**
+ * string_to_size - convert ASCII string representing a numerical
+ *		    value with optional units to 64-bit binary value
+ *
+ * @size:	The numerical value extract out of @buffer
+ * @buffer:	passed in string to parse
+ * @count:	length of the @buffer
+ *
+ * This function returns a 64-bit binary value if @buffer contains a valid
+ * numerical string. The string is parsed to 3 significant figures after
+ * the decimal point. Support the string containing an optional units at
+ * the end which can be base 2 or base 10 in value. If no units are given
+ * the string is assumed to just a numerical value.
+ *
+ * Returns:	@count if the string is successfully parsed,
+ *		-errno on invalid input strings. Error values:
+ *
+ *  - ``-EINVAL``: @buffer is not a proper numerical string
+ *  - ``-EOVERFLOW``: results does not fit into 64 bits.
+ *  - ``-E2BIG ``: @buffer is not large
+ */
+int string_to_size(u64 *size, const char *buffer, size_t count)
+{
+	/* For string_get_size() it can support values above exabytes,
+	 * (ZiB, YiB) due to breaking the return value into a size and
+	 * bulk size to avoid 64 bit overflow. We don't break the size
+	 * up into block size units so we don't support ZiB or YiB.
+	 */
+	static const char *const units_10[] = {
+		"kB", "MB", "GB", "TB", "PB", "EB"
+	};
+	static const char *const units_2[] = {
+		"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"
+	};
+	static const char *const *const units_str[] = {
+		[STRING_UNITS_2] = units_2,
+		[STRING_UNITS_10] = units_10,
+	};
+	static const unsigned int coeff[] = {
+		[STRING_UNITS_10] = 1000,
+		[STRING_UNITS_2] = 1024,
+	};
+	enum string_size_units unit;
+	u64 whole, blk_size = 1;
+	char kernbuf[22], *end;
+	size_t len = count;
+	int rc;
+	int i;
+
+	if (count >= sizeof(kernbuf))
+		return -E2BIG;
+
+	*size = 0;
+	/* 'iB' is used for based 2 numbers. If @buffer contains only a 'B'
+	 * or only numbers then we treat it as a direct number which doesn't
+	 * matter if its STRING_UNITS_2 or STRING_UNIT_10.
+	 */
+	unit = strstr(buffer, "iB") ? STRING_UNITS_2 : STRING_UNITS_10;
+	i = unit == STRING_UNITS_2 ? ARRAY_SIZE(units_2) - 1 :
+				     ARRAY_SIZE(units_10) - 1;
+	do {
+		end = strstr(buffer, units_str[unit][i]);
+		if (end) {
+			for (; i >= 0; i--)
+				blk_size *= coeff[unit];
+			len -= strlen(end);
+			break;
+		}
+	} while (i--);
+
+	/* as 'B' is a substring of all units, we need to handle it
+	 * separately.
+	 */
+	if (!end) {
+		/* 'B' is only acceptable letter at this point */
+		end = strchr(buffer, 'B');
+		if (end) {
+			len -= strlen(end);
+
+			if (count - len > 2 ||
+			    (count - len == 2 && strcmp(end, "B\n") != 0))
+				return -EINVAL;
+		}
+		/* kstrtoull will error out if it has non digits */
+		goto numbers_only;
+	}
+
+	end = strchr(buffer, '.');
+	if (end) {
+		/* need to limit 3 decimal places */
+		char rem[4] = "000";
+		u64 frac = 0;
+		size_t off;
+
+		len = end - buffer;
+		end++;
+
+		/* limit to 3 decimal points */
+		off = min_t(size_t, 3, strspn(end, "0123456789"));
+		/* need to limit frac_d to a u32 */
+		memcpy(rem, end, off);
+		rc = kstrtoull(rem, 10, &frac);
+		if (rc)
+			return rc;
+
+		if (fls64(frac) + fls64(blk_size) - 1 > 64)
+			return -EOVERFLOW;
+
+		frac *= blk_size;
+		do_div(frac, 1000);
+		*size += frac;
+	}
+numbers_only:
+	snprintf(kernbuf, sizeof(kernbuf), "%.*s", (int)len, buffer);
+	rc = kstrtoull(kernbuf, 10, &whole);
+	if (rc)
+		return rc;
+
+	if (whole != 0 && fls64(whole) + fls64(blk_size) - 1 > 64)
+		return -EOVERFLOW;
+
+	*size += whole * blk_size;
+
+	return count;
+}
+EXPORT_SYMBOL(string_to_size);
+
+/**
+ * sysfs_memparse - parse a ASCII string to 64-bit binary value,
+ *		    with optional units
+ *
+ * @buffer:	kernel pointer to input string
+ * @count:	number of bytes in the input @buffer
+ * @val:	(output) binary value returned to caller
+ * @defunit:	default unit suffix to use if none is provided
+ *
+ * Parses a string into a number. The number stored at @buffer is
+ * potentially suffixed with K, M, G, T, P, E. Besides these other
+ * valid suffix units are shown in the string_to_size() function.
+ * If the string lacks a suffix then the defunit is used. The defunit
+ * should be given as a binary unit (e.g. MiB) as that is the standard
+ * for tunables in Lustre. If no unit suffix is given (e.g. 'G'), then
+ * it is assumed to be in binary units.
+ *
+ * Returns:	0 on success or -errno on failure.
+ */
+int sysfs_memparse(const char *buffer, size_t count, u64 *val,
+		   const char *defunit)
+{
+	char param[23];
+	int rc;
+
+	if (count >= sizeof(param))
+		return -E2BIG;
+
+	count = strlen(buffer);
+	if (count && buffer[count - 1] == '\n')
+		count--;
+
+	if (!count)
+		return -EINVAL;
+
+	if (isalpha(buffer[count - 1])) {
+		if (buffer[count - 1] != 'B') {
+			scnprintf(param, sizeof(param), "%.*siB",
+				  (int)count, buffer);
+		} else {
+			memcpy(param, buffer, sizeof(param));
+		}
+	} else {
+		scnprintf(param, sizeof(param), "%.*s%s", (int)count,
+			  buffer, defunit);
+	}
+
+	rc = string_to_size(val, param, strlen(param));
+	return rc < 0 ? rc : 0;
+}
+EXPORT_SYMBOL(sysfs_memparse);
+
 /* Obtains the conversion factor for the unit specified */
 static int get_mult(char unit, __u64 *mult)
 {

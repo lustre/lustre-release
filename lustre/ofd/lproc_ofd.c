@@ -389,14 +389,22 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file	*m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
-	__s64 val;
+	char kernbuf[22] = "";
+	u64 val;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
 
-	if (val <= 0)
+	if (val == 0)
 		return -EINVAL;
 
 	if (val > DT_MAX_BRW_SIZE ||

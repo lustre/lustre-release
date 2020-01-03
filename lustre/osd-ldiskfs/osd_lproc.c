@@ -561,6 +561,7 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
+	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
@@ -568,8 +569,15 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_with_units_to_u64(buffer, count, &val, '1');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	if (rc < 0)
 		return rc;
 
 	osd->od_readcache_max_filesize = val > OSD_MAX_CACHE_SIZE ?
@@ -599,18 +607,24 @@ ldiskfs_osd_readcache_max_io_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
-	s64 val;
+	char kernbuf[22] = "";
+	u64 val;
 	int rc;
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
-	if (val < 0)
-		return -ERANGE;
 
 	if (val > PTLRPC_MAX_BRW_SIZE)
 		return -ERANGE;
@@ -641,18 +655,24 @@ ldiskfs_osd_writethrough_max_io_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
-	s64 val;
+	char kernbuf[22] = "";
+	u64 val;
 	int rc;
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
-	if (val < 0)
-		return -ERANGE;
 
 	if (val > PTLRPC_MAX_BRW_SIZE)
 		return -ERANGE;

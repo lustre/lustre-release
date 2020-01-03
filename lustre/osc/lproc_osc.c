@@ -212,7 +212,8 @@ static ssize_t osc_cached_mb_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
-	__s64 pages_number;
+	u64 pages_number;
+	const char *tmp;
 	long rc;
 	char kernbuf[128];
 
@@ -223,16 +224,12 @@ static ssize_t osc_cached_mb_seq_write(struct file *file,
 		return -EFAULT;
 	kernbuf[count] = 0;
 
-	buffer += lprocfs_find_named_value(kernbuf, "used_mb:", &count) -
-		  kernbuf;
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
-	if (rc)
+	tmp = lprocfs_find_named_value(kernbuf, "used_mb:", &count);
+	rc = sysfs_memparse(tmp, count, &pages_number, "MiB");
+	if (rc < 0)
 		return rc;
 
 	pages_number >>= PAGE_SHIFT;
-
-	if (pages_number < 0)
-		return -ERANGE;
 
 	rc = atomic_long_read(&cli->cl_lru_in_list) - pages_number;
 	if (rc > 0) {
@@ -285,17 +282,23 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &obd->u.cli;
-	s64 val;
+	char kernbuf[22] = "";
+	u64 val;
 	int rc;
 
 	if (obd == NULL)
 		return 0;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
-	if (val < 0)
-		return val;
 
 	/* this is only for shrinking grant */
 	spin_lock(&cli->cl_loi_list_lock);

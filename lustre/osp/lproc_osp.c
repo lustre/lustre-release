@@ -835,14 +835,22 @@ osp_reserved_mb_high_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file		*m = file->private_data;
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	__s64			val;
+	char kernbuf[22] = "";
+	u64 val;
 	int			rc;
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
 	val >>= 20;
 	if (val < 1)
@@ -896,14 +904,22 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file		*m = file->private_data;
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	__s64			val;
+	char kernbuf[22] = "";
+	u64 val;
 	int			rc;
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	if (rc < 0)
 		return rc;
 	val >>= 20;
 

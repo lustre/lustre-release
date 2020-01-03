@@ -387,6 +387,7 @@ zfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
+	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
@@ -394,8 +395,15 @@ zfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	if (unlikely(osd->od_os == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_with_units_to_u64(buffer, count, &val, '1');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	if (rc < 0)
 		return rc;
 
 	osd->od_readcache_max_filesize = val > OSD_MAX_CACHE_SIZE ?

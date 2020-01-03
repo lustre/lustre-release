@@ -524,6 +524,20 @@ struct miscdevice obd_psdev = {
 	.fops	= &obd_psdev_fops,
 };
 
+#define test_string_to_size_one(value, result, def_unit)		\
+({									\
+		u64 __size;						\
+		int __ret;						\
+									\
+		BUILD_BUG_ON(strlen(value) >= 23);			\
+		__ret = sysfs_memparse((value), (result), &__size,	\
+				       (def_unit));			\
+		if (__ret == 0 && (u64)result != __size)		\
+			CERROR("string_helper: size %llu != result %llu\n",\
+			       __size, (u64)result);			\
+		__ret;							\
+})
+
 static int obd_init_checks(void)
 {
         __u64 u64val, div64val;
@@ -586,6 +600,53 @@ static int obd_init_checks(void)
 		      (__u64)PAGE_SIZE);
                 ret = -EINVAL;
         }
+
+	/* invalid string */
+	ret = test_string_to_size_one("256B34", 256, "B");
+	if (ret == 0)
+		CERROR("string_helpers: format should be number then units\n");
+	ret = test_string_to_size_one("132OpQ", 132, "B");
+	if (ret == 0)
+		CERROR("string_helpers: invalid units should be rejected\n");
+	ret = 0;
+
+	/* small values */
+	test_string_to_size_one("0B", 0, "B");
+	ret = test_string_to_size_one("1.82B", 1, "B");
+	if (ret == 0)
+		CERROR("string_helpers: number string with 'B' and '.' should be invalid\n");
+	ret = 0;
+	test_string_to_size_one("512B", 512, "B");
+	test_string_to_size_one("1.067kB", 1067, "B");
+	test_string_to_size_one("1.042KiB", 1067, "B");
+
+	/* Lustre special handling */
+	test_string_to_size_one("16", 16777216, "MiB");
+	test_string_to_size_one("65536", 65536, "B");
+	test_string_to_size_one("128K", 131072, "B");
+	test_string_to_size_one("1M", 1048576, "B");
+	test_string_to_size_one("256.5G", 275414777856ULL, "GiB");
+
+	/* normal values */
+	test_string_to_size_one("8.39MB", 8390000, "MiB");
+	test_string_to_size_one("8.00MiB", 8388608, "MiB");
+	test_string_to_size_one("256GB", 256000000, "GiB");
+	test_string_to_size_one("238.731 GiB", 256335459385ULL, "GiB");
+
+	/* huge values */
+	test_string_to_size_one("0.4TB", 400000000000ULL, "TiB");
+	test_string_to_size_one("12.5TiB", 13743895347200ULL, "TiB");
+	test_string_to_size_one("2PB", 2000000000000000ULL, "PiB");
+	test_string_to_size_one("16PiB", 18014398509481984ULL, "PiB");
+
+	/* huge values should overflow */
+	ret = test_string_to_size_one("1000EiB", 0, "EiB");
+	if (ret != -EOVERFLOW)
+		CERROR("string_helpers: Failed to detect overflow\n");
+	ret = test_string_to_size_one("1000EB", 0, "EiB");
+	if (ret != -EOVERFLOW)
+		CERROR("string_helpers: Failed to detect overflow\n");
+	ret = 0;
 
         return ret;
 }

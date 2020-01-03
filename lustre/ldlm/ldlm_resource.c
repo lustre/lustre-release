@@ -111,14 +111,22 @@ static ssize_t seq_watermark_write(struct file *file,
 				   const char __user *buffer, size_t count,
 				   loff_t *off)
 {
-	__s64 value;
+	u64 value;
 	__u64 watermark;
 	__u64 *data = ((struct seq_file *)file->private_data)->private;
 	bool wm_low = (data == &ldlm_reclaim_threshold_mb) ? true : false;
+	char kernbuf[22] = "";
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &value, 'M');
-	if (rc) {
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &value, "MiB");
+	if (rc < 0) {
 		CERROR("Failed to set %s, rc = %d.\n",
 		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb",
 		       rc);

@@ -166,11 +166,19 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 	struct seq_file *sfl = file->private_data;
 	struct obd_device *dev = sfl->private;
 	struct client_obd *cli = &dev->u.cli;
-	s64 pages_number;
+	char kernbuf[22] = "";
+	u64 pages_number;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
-	if (rc)
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+	kernbuf[count] = 0;
+
+	rc = sysfs_memparse(kernbuf, count, &pages_number, "MiB");
+	if (rc < 0)
 		return rc;
 
 	/* MB -> pages */
@@ -251,7 +259,8 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *sfl = file->private_data;
 	struct obd_device *dev = sfl->private;
 	struct client_obd *cli = &dev->u.cli;
-	__s64 pages_number;
+	u64 pages_number;
+	const char *tmp;
 	long rc;
 	char kernbuf[128];
 
@@ -262,16 +271,12 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	kernbuf[count] = 0;
 
-	buffer += lprocfs_find_named_value(kernbuf, "used_mb:", &count) -
-		  kernbuf;
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
-	if (rc)
+	tmp = lprocfs_find_named_value(kernbuf, "used_mb:", &count);
+	rc = sysfs_memparse(tmp, count, &pages_number, "MiB");
+	if (rc < 0)
 		return rc;
 
 	pages_number >>= PAGE_SHIFT;
-
-	if (pages_number < 0)
-		return -ERANGE;
 
 	rc = atomic_long_read(&cli->cl_lru_in_list) - pages_number;
 	if (rc > 0) {
