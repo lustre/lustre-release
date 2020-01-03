@@ -386,8 +386,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
 			 "%s.%lld.%ld", libcfs_debug_file_path_arr,
 			 (s64)current_time, (uintptr_t)arg);
-		printk(KERN_ALERT "LustreError: dumping log to %s\n",
-		       debug_file_name);
+		pr_alert("LustreError: dumping log to %s\n", debug_file_name);
 		cfs_tracefile_dump_all_pages(debug_file_name);
 		libcfs_run_debug_log_upcall(debug_file_name);
 	}
@@ -421,8 +420,8 @@ void libcfs_debug_dumplog(void)
 			     (void *)(long)current_pid(),
 			     "libcfs_debug_dumper");
 	if (IS_ERR(dumper))
-		printk(KERN_ERR "LustreError: cannot start log dump thread:"
-		       " %ld\n", PTR_ERR(dumper));
+		pr_err("LustreError: cannot start log dump thread: rc = %ld\n",
+		       PTR_ERR(dumper));
 	else
 		schedule();
 

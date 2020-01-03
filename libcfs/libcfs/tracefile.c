@@ -160,9 +160,8 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 			if (unlikely(tage == NULL)) {
 				if ((!memory_pressure_get() ||
 				     in_interrupt()) && printk_ratelimit())
-					printk(KERN_WARNING
-					       "cannot allocate a tage (%ld)\n",
-					       tcd->tcd_cur_pages);
+					pr_warn("Lustre: cannot allocate a tage (%ld)\n",
+						tcd->tcd_cur_pages);
 				return NULL;
 			}
 		}
@@ -198,8 +197,7 @@ static void cfs_tcd_shrink(struct cfs_trace_cpu_data *tcd)
 	 */
 
 	if (printk_ratelimit())
-		printk(KERN_WARNING "debug daemon buffer overflowed; "
-			"discarding 10%% of pages (%d of %ld)\n",
+		pr_warn("Lustre: debug daemon buffer overflowed; discarding 10%% of pages (%d of %ld)\n",
 			pgcount + 1, tcd->tcd_cur_pages);
 
 	INIT_LIST_HEAD(&pc.pc_pages);
@@ -226,8 +224,8 @@ static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
          */
 
 	if (len > PAGE_SIZE) {
-		printk(KERN_ERR
-		       "cowardly refusing to write %lu bytes in a page\n", len);
+		pr_err("LustreError: cowardly refusing to write %lu bytes in a page\n",
+		       len);
 		return NULL;
 	}
 
@@ -313,8 +311,8 @@ int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 
 		max_nob = PAGE_SIZE - tage->used - known_size;
 		if (max_nob <= 0) {
-			printk(KERN_EMERG "negative max_nob: %d\n",
-			       max_nob);
+			pr_emerg("LustreError: negative max_nob: %d\n",
+				 max_nob);
 			mask |= D_ERROR;
 			cfs_trace_put_tcd(tcd);
 			tcd = NULL;
@@ -336,14 +334,13 @@ int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
         }
 
 	if (*(string_buf + needed - 1) != '\n') {
-		printk(KERN_INFO "format at %s:%d:%s doesn't end in "
-		       "newline\n", file, msgdata->msg_line, msgdata->msg_fn);
+		pr_info("Lustre: format at %s:%d:%s doesn't end in newline\n",
+			file, msgdata->msg_line, msgdata->msg_fn);
 	} else if (mask & D_TTY) {
 		/* TTY needs '\r\n' to move carriage to leftmost position */
 		if (needed < 2 || *(string_buf + needed - 2) != '\r')
-			printk(KERN_INFO "format at %s:%d:%s doesn't end in "
-			       "'\\r\\n'\n", file, msgdata->msg_line,
-			       msgdata->msg_fn);
+			pr_info("Lustre: format at %s:%d:%s doesn't end in '\\r\\n'\n",
+				file, msgdata->msg_line, msgdata->msg_fn);
 	}
 
         header.ph_len = known_size + needed;
@@ -651,7 +648,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 	if (IS_ERR(filp)) {
 		rc = PTR_ERR(filp);
 		filp = NULL;
-		printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
+		pr_err("LustreError: can't open %s for dump: rc = %d\n",
 		      filename, rc);
 		goto out;
 	}
@@ -673,8 +670,8 @@ int cfs_tracefile_dump_all_pages(char *filename)
 		rc = cfs_kernel_write(filp, buf, tage->used, &filp->f_pos);
 		kunmap(tage->page);
 		if (rc != (int)tage->used) {
-			printk(KERN_WARNING "wanted to write %u but wrote "
-			       "%d\n", tage->used, rc);
+			pr_warn("Lustre: wanted to write %u but wrote %d\n",
+				tage->used, rc);
 			put_pages_back(&pc);
 			__LASSERT(list_empty(&pc.pc_pages));
 			break;
@@ -685,7 +682,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)
-		printk(KERN_ERR "sync returns %d\n", rc);
+		pr_err("LustreError: sync returns: rc = %d\n", rc);
 close:
 	filp_close(filp, NULL);
 out:
@@ -827,10 +824,8 @@ int cfs_trace_daemon_command(char *str)
         } else {
 		strcpy(cfs_tracefile, str);
 
-		printk(KERN_INFO
-		       "Lustre: debug daemon will attempt to start writing "
-		       "to %s (%lukB max)\n", cfs_tracefile,
-		       (long)(cfs_tracefile_size >> 10));
+		pr_info("Lustre: debug daemon will attempt to start writing to %s (%lukB max)\n",
+			cfs_tracefile, (long)(cfs_tracefile_size >> 10));
 
 		cfs_trace_start_thread();
         }
@@ -866,16 +861,14 @@ int cfs_trace_set_debug_mb(int mb)
 	struct cfs_trace_cpu_data *tcd;
 
 	if (mb < num_possible_cpus()) {
-		printk(KERN_WARNING
-		       "Lustre: %d MB is too small for debug buffer size, "
-		       "setting it to %d MB.\n", mb, num_possible_cpus());
+		pr_warn("Lustre: %d MB is too small for debug buffer size, setting it to %d MB.\n",
+			mb, num_possible_cpus());
 		mb = num_possible_cpus();
 	}
 
 	if (mb > limit) {
-		printk(KERN_WARNING
-		       "Lustre: %d MB is too large for debug buffer size, "
-		       "setting it to %d MB.\n", mb, limit);
+		pr_warn("Lustre: %d MB is too large for debug buffer size, setting it to %d MB.\n",
+			mb, limit);
 		mb = limit;
 	}
 
@@ -942,8 +935,8 @@ static int tracefiled(void *arg)
 			if (IS_ERR(filp)) {
 				rc = PTR_ERR(filp);
 				filp = NULL;
-				printk(KERN_WARNING "couldn't open %s: "
-				       "%d\n", cfs_tracefile, rc);
+				pr_warn("Lustre: couldn't open %s: rc = %d\n",
+					cfs_tracefile, rc);
 			}
 		}
                 cfs_tracefile_read_unlock();
@@ -968,8 +961,8 @@ static int tracefiled(void *arg)
 			rc = cfs_kernel_write(filp, buf, tage->used, &f_pos);
 			kunmap(tage->page);
 			if (rc != (int)tage->used) {
-				printk(KERN_WARNING "wanted to write %u "
-				       "but wrote %d\n", tage->used, rc);
+				pr_warn("Lustre: wanted to write %u but wrote %d\n",
+					tage->used, rc);
 				put_pages_back(&pc);
 				__LASSERT(list_empty(&pc.pc_pages));
 				break;
@@ -981,24 +974,21 @@ static int tracefiled(void *arg)
 		if (!list_empty(&pc.pc_pages)) {
                         int i;
 
-			printk(KERN_ALERT "Lustre: trace pages aren't "
-			       " empty\n");
-			printk(KERN_ERR "total cpus(%d): ",
-			       num_possible_cpus());
+			pr_alert("Lustre: trace pages aren't empty\n");
+			pr_err("Lustre: total cpus(%d): ", num_possible_cpus());
 			for (i = 0; i < num_possible_cpus(); i++)
 				if (cpu_online(i))
-					printk(KERN_ERR "%d(on) ", i);
+					pr_cont("%d(on) ", i);
 				else
-					printk(KERN_ERR "%d(off) ", i);
-			printk(KERN_ERR "\n");
+					pr_cont("%d(off) ", i);
+			pr_cont("\n");
 
 			i = 0;
 			list_for_each_entry_safe(tage, tmp, &pc.pc_pages,
-						     linkage)
-				printk(KERN_ERR "page %d belongs to cpu "
-				       "%d\n", ++i, tage->cpu);
-			printk(KERN_ERR "There are %d pages unwritten\n",
-			       i);
+						 linkage)
+				pr_err("Lustre: page %d belongs to cpu %d\n",
+				       ++i, tage->cpu);
+			pr_err("Lustre: There are %d pages unwritten\n", i);
 		}
 		__LASSERT(list_empty(&pc.pc_pages));
 end_loop:
@@ -1052,8 +1042,7 @@ void cfs_trace_stop_thread(void)
 
 	mutex_lock(&cfs_trace_thread_mutex);
 	if (thread_running) {
-		printk(KERN_INFO
-		       "Lustre: shutting down debug daemon thread...\n");
+		pr_info("Lustre: shutting down debug daemon thread...\n");
 		atomic_set(&tctl->tctl_shutdown, 1);
 		wait_for_completion(&tctl->tctl_stop);
 		thread_running = 0;
