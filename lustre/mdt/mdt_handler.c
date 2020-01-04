@@ -3525,20 +3525,18 @@ static void mdt_save_remote_lock(struct mdt_thread_info *info,
 
 	if (lustre_handle_is_used(h)) {
 		struct ldlm_lock *lock = ldlm_handle2lock(h);
+		struct ptlrpc_request *req = mdt_info_req(info);
 
 		if (o != NULL &&
 		    (lock->l_policy_data.l_inodebits.bits &
 		     (MDS_INODELOCK_XATTR | MDS_INODELOCK_UPDATE)))
 			mo_invalidate(info->mti_env, mdt_object_child(o));
 
-		if (decref || !info->mti_has_trans ||
+		if (decref || !info->mti_has_trans || !req ||
 		    !(mode & (LCK_PW | LCK_EX))) {
 			ldlm_lock_decref_and_cancel(h, mode);
 			LDLM_LOCK_PUT(lock);
 		} else {
-			struct ptlrpc_request *req = mdt_info_req(info);
-
-			LASSERT(req != NULL);
 			tgt_save_slc_lock(&info->mti_mdt->mdt_lut, lock,
 					  req->rq_transno);
 			ldlm_lock_decref(h, mode);
