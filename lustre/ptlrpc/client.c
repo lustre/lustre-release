@@ -37,6 +37,7 @@
 #include <linux/delay.h>
 #include <linux/random.h>
 
+#include <lnet/lib-lnet.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_lib.h>
@@ -68,6 +69,28 @@ static void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
 		put_page(BD_GET_KIOV(desc, i).kiov_page);
 }
 
+static int ptlrpc_prep_bulk_frag_pages(struct ptlrpc_bulk_desc *desc,
+				       void *frag, int len)
+{
+	unsigned int offset = (uintptr_t)frag & ~PAGE_MASK;
+
+	ENTRY;
+	while (len > 0) {
+		int page_len = min_t(unsigned int, PAGE_SIZE - offset,
+				     len);
+		uintptr_t vaddr = (uintptr_t) frag;
+
+		ptlrpc_prep_bulk_page_nopin(desc,
+					    lnet_kvaddr_to_page(vaddr),
+					    offset, page_len);
+		offset = 0;
+		len -= page_len;
+		frag += page_len;
+	}
+
+	RETURN(desc->bd_nob);
+}
+
 const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_pin_ops = {
 	.add_kiov_frag	= ptlrpc_prep_bulk_page_pin,
 	.release_frags	= ptlrpc_release_bulk_page_pin,
@@ -77,6 +100,7 @@ EXPORT_SYMBOL(ptlrpc_bulk_kiov_pin_ops);
 const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops = {
 	.add_kiov_frag	= ptlrpc_prep_bulk_page_nopin,
 	.release_frags	= ptlrpc_release_bulk_noop,
+	.add_iov_frag	= ptlrpc_prep_bulk_frag_pages,
 };
 EXPORT_SYMBOL(ptlrpc_bulk_kiov_nopin_ops);
 
