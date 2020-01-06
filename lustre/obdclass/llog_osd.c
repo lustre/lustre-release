@@ -1247,8 +1247,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 		} else {
 			/* If logid == NULL, then it means the caller needs
 			 * to allocate new FID (llog_cat_declare_add_rec()). */
-			rc = obd_fid_alloc(env, ctxt->loc_exp,
-					   &lgi->lgi_fid, NULL);
+			rc = dt_fid_alloc(env, dt, &lgi->lgi_fid, NULL, NULL);
 			if (rc < 0)
 				RETURN(rc);
 			rc = 0;

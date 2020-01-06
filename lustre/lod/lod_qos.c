@@ -1015,7 +1015,7 @@ repeat_find:
 		}
 		spin_unlock(&lqr->lqr_alloc);
 
-		rc = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
+		rc = dt_fid_alloc(env, mdt->ltd_tgt, &fid, NULL, NULL);
 		if (rc < 0) {
 			QOS_DEBUG("#%d: alloc FID failed: %dl\n", mdt_idx, rc);
 			spin_lock(&lqr->lqr_alloc);
@@ -1762,7 +1762,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
 				continue;
 
-			rc2 = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
+			rc2 = dt_fid_alloc(env, mdt->ltd_tgt, &fid, NULL, NULL);
 			if (rc2 < 0) {
 				QOS_DEBUG("can't alloc FID on #%u: %d\n",
 					  mdt_idx, rc2);

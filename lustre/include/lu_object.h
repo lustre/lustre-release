@@ -102,6 +102,7 @@ struct lu_device;
 struct lu_object_header;
 struct lu_context;
 struct lu_env;
+struct lu_name;
 
 /**
  * Operations common for data and meta-data devices.
@@ -160,6 +161,27 @@ struct lu_device_operations {
                            struct lu_device *parent,
                            struct lu_device *dev);
 
+
+	/**
+	 * Allocate new FID for file with @name under @parent
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[out] fid	new FID allocated
+	 * \param[in] parent	parent object
+	 * \param[in] name	lu_name
+	 *
+	 * \retval 0		on success
+	 * \retval 0		0 FID allocated successfully.
+	 * \retval 1		1 FID allocated successfully and new sequence
+	 *                      requested from seq meta server
+	 * \retval negative	negative errno if FID allocation failed.
+	 */
+	int (*ldo_fid_alloc)(const struct lu_env *env,
+			     struct lu_device *dev,
+			     struct lu_fid *fid,
+			     struct lu_object *parent,
+			     const struct lu_name *name);
 };
 
 /**

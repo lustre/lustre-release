@@ -1563,11 +1563,28 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	RETURN(rc);
 }
 
+/**
+ * Implementation of lu_device_operations::ldo_fid_alloc() for OSD
+ *
+ * Allocate FID.
+ *
+ * see include/lu_object.h for the details.
+ */
+static int osd_fid_alloc(const struct lu_env *env, struct lu_device *d,
+			 struct lu_fid *fid, struct lu_object *parent,
+			 const struct lu_name *name)
+{
+	struct osd_device *osd = osd_dev(d);
+
+	return seq_client_alloc_fid(env, osd->od_cl_seq, fid);
+}
+
 struct lu_device_operations osd_lu_ops = {
 	.ldo_object_alloc	= osd_object_alloc,
 	.ldo_process_config	= osd_process_config,
 	.ldo_recovery_complete	= osd_recovery_complete,
 	.ldo_prepare		= osd_prepare,
+	.ldo_fid_alloc		= osd_fid_alloc,
 };
 
 static void osd_type_start(struct lu_device_type *t)
@@ -1576,14 +1593,6 @@ static void osd_type_start(struct lu_device_type *t)
 
 static void osd_type_stop(struct lu_device_type *t)
 {
-}
-
-int osd_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-		  struct lu_fid *fid, struct md_op_data *op_data)
-{
-	struct osd_device *osd = osd_dev(exp->exp_obd->obd_lu_dev);
-
-	return seq_client_alloc_fid(env, osd->od_cl_seq, fid);
 }
 
 static struct lu_device_type_operations osd_device_type_ops = {
@@ -1612,7 +1621,6 @@ static const struct obd_ops osd_obd_device_ops = {
 	.o_owner       = THIS_MODULE,
 	.o_connect	= osd_obd_connect,
 	.o_disconnect	= osd_obd_disconnect,
-	.o_fid_alloc	= osd_fid_alloc
 };
 
 static int __init osd_init(void)

@@ -711,10 +711,41 @@ static int osp_recovery_complete(const struct lu_env *env,
 	RETURN(0);
 }
 
+/**
+ * Implementation of lu_device_operations::ldo_fid_alloc() for OSP
+ *
+ * Allocate FID from remote MDT.
+ *
+ * see include/lu_object.h for the details.
+ */
+static int osp_fid_alloc(const struct lu_env *env, struct lu_device *d,
+			 struct lu_fid *fid, struct lu_object *parent,
+			 const struct lu_name *name)
+{
+	struct osp_device *osp = lu2osp_dev(d);
+	struct client_obd *cli = &osp->opd_obd->u.cli;
+	struct lu_client_seq *seq = cli->cl_seq;
+	int rc;
+
+	ENTRY;
+
+	/* Sigh, fid client is not ready yet */
+	if (!osp->opd_obd->u.cli.cl_seq)
+		RETURN(-ENOTCONN);
+
+	if (!osp->opd_obd->u.cli.cl_seq->lcs_exp)
+		RETURN(-ENOTCONN);
+
+	rc = seq_client_alloc_fid(env, seq, fid);
+
+	RETURN(rc);
+}
+
 const struct lu_device_operations osp_lu_ops = {
 	.ldo_object_alloc	= osp_object_alloc,
 	.ldo_process_config	= osp_process_config,
 	.ldo_recovery_complete	= osp_recovery_complete,
+	.ldo_fid_alloc		= osp_fid_alloc,
 };
 
 /**
@@ -1789,44 +1820,6 @@ static int osp_obd_set_info_async(const struct lu_env *env,
 	RETURN(0);
 }
 
-/**
- * Implementation of obd_ops: o_fid_alloc
- *
- * Allocate a FID. There are two cases in which OSP performs
- * FID allocation.
- *
- * 1. FID precreation for data objects, which is done in
- *    osp_precreate_fids() instead of this function.
- * 2. FID allocation for each sub-stripe of a striped directory.
- *    Similar to other FID clients, OSP requests the sequence
- *    from its corresponding remote MDT, which in turn requests
- *    sequences from the sequence controller (MDT0).
- *
- * \param[in] env	execution environment
- * \param[in] exp	export of the OSP
- * \param[out] fid	FID being allocated
- * \param[in] unused	necessary for the interface but unused.
- *
- * \retval 0		0 FID allocated successfully.
- * \retval 1		1 FID allocated successfully and new sequence
- *                      requested from seq meta server
- * \retval negative	negative errno if FID allocation failed.
- */
-static int osp_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-			 struct lu_fid *fid, struct md_op_data *unused)
-{
-	struct client_obd	*cli = &exp->exp_obd->u.cli;
-	struct osp_device	*osp = lu2osp_dev(exp->exp_obd->obd_lu_dev);
-	struct lu_client_seq	*seq = cli->cl_seq;
-	ENTRY;
-
-	LASSERT(osp->opd_obd->u.cli.cl_seq != NULL);
-	/* Sigh, fid client is not ready yet */
-	LASSERT(osp->opd_obd->u.cli.cl_seq->lcs_exp != NULL);
-
-	RETURN(seq_client_alloc_fid(env, seq, fid));
-}
-
 /* context key constructor/destructor: mdt_key_init, mdt_key_fini */
 LU_KEY_INIT_FINI(osp, struct osp_thread_info);
 static void osp_key_exit(const struct lu_context *ctx,
@@ -1888,7 +1881,6 @@ static const struct obd_ops osp_obd_device_ops = {
 	.o_statfs	= osp_obd_statfs,
 	.o_fid_init	= client_fid_init,
 	.o_fid_fini	= client_fid_fini,
-	.o_fid_alloc	= osp_fid_alloc,
 };
 
 /**

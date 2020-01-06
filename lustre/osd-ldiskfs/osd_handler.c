@@ -8062,10 +8062,18 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	RETURN(result);
 }
 
-static int osd_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-			 struct lu_fid *fid, struct md_op_data *op_data)
+/**
+ * Implementation of lu_device_operations::ldo_fid_alloc() for OSD
+ *
+ * Allocate FID.
+ *
+ * see include/lu_object.h for the details.
+ */
+static int osd_fid_alloc(const struct lu_env *env, struct lu_device *d,
+			 struct lu_fid *fid, struct lu_object *parent,
+			 const struct lu_name *name)
 {
-	struct osd_device *osd = osd_dev(exp->exp_obd->obd_lu_dev);
+	struct osd_device *osd = osd_dev(d);
 
 	return seq_client_alloc_fid(env, osd->od_cl_seq, fid);
 }
@@ -8084,6 +8092,7 @@ const struct lu_device_operations osd_lu_ops = {
 	.ldo_process_config    = osd_process_config,
 	.ldo_recovery_complete = osd_recovery_complete,
 	.ldo_prepare           = osd_prepare,
+	.ldo_fid_alloc	       = osd_fid_alloc,
 };
 
 static const struct lu_device_type_operations osd_device_type_ops = {
@@ -8122,7 +8131,6 @@ static const struct obd_ops osd_obd_device_ops = {
 	.o_owner = THIS_MODULE,
 	.o_connect	= osd_obd_connect,
 	.o_disconnect	= osd_obd_disconnect,
-	.o_fid_alloc	= osd_fid_alloc,
 	.o_health_check = osd_health_check,
 };
 

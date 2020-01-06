@@ -2058,11 +2058,11 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 
 			if (idx == master_index) {
 				/* Allocate the FID locally */
-				rc = obd_fid_alloc(env, lod->lod_child_exp,
-						   &fid, NULL);
+				tgt_dt = lod->lod_child;
+				rc = dt_fid_alloc(env, tgt_dt, &fid, NULL,
+						  NULL);
 				if (rc < 0)
 					continue;
-				tgt_dt = lod->lod_child;
 				break;
 			}
 
@@ -2076,7 +2076,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 				/* this OSP doesn't feel well */
 				continue;
 
-			rc = obd_fid_alloc(env, tgt->ltd_exp, &fid, NULL);
+			rc = dt_fid_alloc(env, tgt_dt, &fid, NULL, NULL);
 			if (rc < 0)
 				continue;
 
@@ -2166,7 +2166,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	/* Allocate the first stripe locally */
-	rc = obd_fid_alloc(env, lod->lod_child_exp, &fid, NULL);
+	rc = dt_fid_alloc(env, lod->lod_child, &fid, NULL, NULL);
 	if (rc < 0)
 		GOTO(out, rc);
 

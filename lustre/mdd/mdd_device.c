@@ -1317,11 +1317,30 @@ out_los:
 	return rc;
 }
 
+/**
+ * Implementation of lu_device_operations::ldo_fid_alloc() for MDD.
+ *
+ * Find corresponding device by passed parent and name, and allocate FID from
+ * there.
+ *
+ * see include/lu_object.h for the details.
+ */
+static int mdd_fid_alloc(const struct lu_env *env, struct lu_device *d,
+			 struct lu_fid *fid, struct lu_object *parent,
+			 const struct lu_name *name)
+{
+	struct mdd_device *mdd = lu2mdd_dev(d);
+	struct lu_object *o = lu_object_next(parent);
+
+	return dt_fid_alloc(env, mdd->mdd_child, fid, o, name);
+}
+
 const struct lu_device_operations mdd_lu_ops = {
         .ldo_object_alloc      = mdd_object_alloc,
         .ldo_process_config    = mdd_process_config,
         .ldo_recovery_complete = mdd_recovery_complete,
         .ldo_prepare           = mdd_prepare,
+	.ldo_fid_alloc	       = mdd_fid_alloc,
 };
 
 static int mdd_root_get(const struct lu_env *env,

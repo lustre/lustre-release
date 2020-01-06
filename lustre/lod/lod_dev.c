@@ -96,6 +96,7 @@
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_update.h>
 #include <lustre_log.h>
+#include <lustre_lmv.h>
 
 #include "lod_internal.h"
 
@@ -1229,11 +1230,68 @@ out_put:
 	RETURN(rc);
 }
 
+/**
+ * Implementation of lu_device_operations::ldo_fid_alloc() for LOD
+ *
+ * Find corresponding device by passed parent and name, and allocate FID from
+ * there.
+ *
+ * see include/lu_object.h for the details.
+ */
+static int lod_fid_alloc(const struct lu_env *env, struct lu_device *d,
+			 struct lu_fid *fid, struct lu_object *parent,
+			 const struct lu_name *name)
+{
+	struct lod_device *lod = lu2lod_dev(d);
+	struct lod_object *lo = lu2lod_obj(parent);
+	struct dt_device *next;
+	int rc;
+
+	ENTRY;
+
+	/* if @parent is remote, we don't know whether its layout was changed,
+	 * always reload layout.
+	 */
+	if (lu_object_remote(parent))
+		lod_striping_free(env, lo);
+
+	rc = lod_striping_load(env, lo);
+	if (rc)
+		RETURN(rc);
+
+	if (lo->ldo_dir_stripe_count > 0 && name) {
+		struct dt_object *stripe;
+		int idx;
+
+		idx = __lmv_name_to_stripe_index(lo->ldo_dir_hash_type,
+						 lo->ldo_dir_stripe_count,
+						 lo->ldo_dir_migrate_hash,
+						 lo->ldo_dir_migrate_offset,
+						 name->ln_name,
+						 name->ln_namelen, true);
+		if (idx < 0)
+			RETURN(idx);
+
+		stripe = lo->ldo_stripe[idx];
+		if (!stripe || !dt_object_exists(stripe))
+			RETURN(-ENODEV);
+
+		next = lu2dt_dev(stripe->do_lu.lo_dev);
+	} else {
+		next = lod->lod_child;
+	}
+
+	rc = dt_fid_alloc(env, next, fid, parent, name);
+
+	RETURN(rc);
+}
+
 const struct lu_device_operations lod_lu_ops = {
 	.ldo_object_alloc	= lod_object_alloc,
 	.ldo_process_config	= lod_process_config,
 	.ldo_recovery_complete	= lod_recovery_complete,
 	.ldo_prepare		= lod_prepare,
+	.ldo_fid_alloc		= lod_fid_alloc,
 };
 
 /**

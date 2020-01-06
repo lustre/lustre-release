@@ -2148,6 +2148,17 @@ static inline int dt_object_sync(const struct lu_env *env, struct dt_object *o,
 	return o->do_ops->do_object_sync(env, o, start, end);
 }
 
+static inline int dt_fid_alloc(const struct lu_env *env,
+			       struct dt_device *d,
+			       struct lu_fid *fid,
+			       struct lu_object *parent,
+			       const struct lu_name *name)
+{
+	struct lu_device *l = dt2lu_dev(d);
+
+	return l->ld_ops->ldo_fid_alloc(env, l, fid, parent, name);
+}
+
 int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
                            struct thandle *th);
 void dt_version_set(const struct lu_env *env, struct dt_object *o,
