@@ -1536,7 +1536,8 @@ test_40a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	touch $DIR2
 	mkdir $DIR1/$tfile &
 	PID1=$!; pdo_sched
@@ -1556,7 +1557,8 @@ test_40a() {
 
 	#  all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tfile*
 	return 0
@@ -1567,7 +1569,8 @@ test_40b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	touch $DIR1/$tfile &
 	PID1=$!; pdo_sched
 	# open|create
@@ -1587,7 +1590,8 @@ test_40b() {
 	# all operations above shouldn't wait the first one
 
         check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tfile*
 	return 0
@@ -1599,7 +1603,8 @@ test_40c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile $DIR1/$tfile-0 &
 	PID1=$!; pdo_sched
 	# open|create
@@ -1619,7 +1624,8 @@ test_40c() {
 
         # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tfile*
 	return 0
@@ -1631,7 +1637,8 @@ test_40d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$!; pdo_sched
 	# open|create
@@ -1651,7 +1658,8 @@ test_40d() {
 
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	return 0
 }
@@ -1662,7 +1670,8 @@ test_40e() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-0 &
 	PID1=$!; pdo_sched
 	# open|create
@@ -1680,7 +1689,8 @@ test_40e() {
 
        # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tfile*
 	return 0
@@ -1691,12 +1701,14 @@ run_test 40e "pdirops: rename and others =============="
 test_41a() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; echo "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	rm -rf $DIR/$tfile*
@@ -1707,12 +1719,14 @@ run_test 41a "pdirops: create vs mkdir =============="
 test_41b() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
 	rm -rf $DIR/$tfile*
@@ -1724,12 +1738,14 @@ test_41c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -1740,12 +1756,14 @@ run_test 41c "pdirops: create vs link =============="
 test_41d() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "unlink must succeed"
 	rm -rf $DIR/$tfile*
@@ -1757,12 +1775,14 @@ test_41e() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -1773,12 +1793,14 @@ run_test 41e "pdirops: create and rename (tgt) =============="
 test_41f() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -1789,12 +1811,14 @@ run_test 41f "pdirops: create and rename (src) =============="
 test_41g() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
 	rm -rf $DIR/$tfile*
@@ -1805,12 +1829,14 @@ run_test 41g "pdirops: create vs getattr =============="
 test_41h() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -1822,12 +1848,14 @@ run_test 41h "pdirops: create vs readdir =============="
 test_42a() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	rm -rf $DIR/$tfile*
@@ -1838,12 +1866,14 @@ run_test 42a "pdirops: mkdir vs mkdir =============="
 test_42b() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
 	rm -rf $DIR/$tfile*
@@ -1855,12 +1885,14 @@ test_42c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -1871,12 +1903,14 @@ run_test 42c "pdirops: mkdir vs link =============="
 test_42d() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rmdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "unlink must succeed"
 	rm -rf $DIR/$tfile*
@@ -1888,12 +1922,14 @@ test_42e() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv -T $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "rename must fail"
 	rm -rf $DIR/$tfile*
@@ -1904,12 +1940,14 @@ run_test 42e "pdirops: mkdir and rename (tgt) =============="
 test_42f() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -1920,12 +1958,14 @@ run_test 42f "pdirops: mkdir and rename (src) =============="
 test_42g() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
 	rm -rf $DIR/$tfile*
@@ -1936,12 +1976,14 @@ run_test 42g "pdirops: mkdir vs getattr =============="
 test_42h() {
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -1963,12 +2005,14 @@ test_43b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "create must succeed"
 	rm -rf $DIR/$tfile*
@@ -1981,12 +2025,14 @@ test_43c() {
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "link must succeed"
 	rm -rf $DIR/$tfile*
@@ -1998,12 +2044,14 @@ test_43d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "unlink must fail"
 	rm -rf $DIR/$tfile*
@@ -2016,12 +2064,14 @@ test_43e() {
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv -u $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2033,12 +2083,14 @@ test_43f() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "rename must fail"
 	rm -rf $DIR/$tfile*
@@ -2050,12 +2102,14 @@ test_43g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "stat must fail"
 	rm -rf $DIR/$tfile*
@@ -2067,12 +2121,14 @@ test_43h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2085,12 +2141,14 @@ test_43i() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 &&
 		{ wait $PID1; error "remote mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "remote mkdir must succeed"
@@ -2124,12 +2182,14 @@ test_44a() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; date;error "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	date
@@ -2142,12 +2202,14 @@ test_44b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
 	rm -rf $DIR/$tfile*
@@ -2160,12 +2222,14 @@ test_44c() {
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -2177,12 +2241,14 @@ test_44d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "unlink must succeed"
 	rm -rf $DIR/$tfile*
@@ -2196,12 +2262,14 @@ test_44e() {
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2214,12 +2282,14 @@ test_44f() {
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-3 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2231,12 +2301,14 @@ test_44g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
 	rm -rf $DIR/$tfile*
@@ -2248,12 +2320,14 @@ test_44h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2267,12 +2341,14 @@ test_44i() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 				error "remote mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "remote mkdir must fail"
@@ -2297,12 +2373,14 @@ test_45b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "create must succeed"
 	rm -rf $DIR/$tfile*
@@ -2315,12 +2393,14 @@ test_45c() {
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "link must succeed"
 	rm -rf $DIR/$tfile*
@@ -2332,12 +2412,14 @@ test_45d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "unlink must fail"
 	rm -rf $DIR/$tfile*
@@ -2350,12 +2432,14 @@ test_45e() {
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2367,12 +2451,14 @@ test_45f() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-3 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "rename must fail"
 	rm -rf $DIR/$tfile*
@@ -2384,12 +2470,14 @@ test_45g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "stat must fail"
 	rm -rf $DIR/$tfile*
@@ -2401,11 +2489,13 @@ test_45h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2418,12 +2508,14 @@ test_45i() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 				error "create remote dir isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "create remote dir must succeed"
@@ -2437,12 +2529,14 @@ test_46a() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	rm -rf $DIR/$tfile*
@@ -2454,12 +2548,14 @@ test_46b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
 	rm -rf $DIR/$tfile*
@@ -2471,12 +2567,14 @@ test_46c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -2488,12 +2586,14 @@ test_46d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "unlink must succeed"
 	rm -rf $DIR/$tfile*
@@ -2506,12 +2606,14 @@ test_46e() {
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2524,12 +2626,14 @@ test_46f() {
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-3 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2541,12 +2645,14 @@ test_46g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
 	rm -rf $DIR/$tfile*
@@ -2558,12 +2664,14 @@ test_46h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2576,12 +2684,14 @@ test_46i() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 				error "remote mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "remote mkdir must fail"
@@ -2595,12 +2705,14 @@ test_47a() {
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	rm -rf $DIR/$tfile*
@@ -2612,13 +2724,15 @@ test_47b() {
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	sleep 1 # please do not remove this sleep, see LU-10754
 	multiop $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
@@ -2632,12 +2746,14 @@ test_47c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -2649,12 +2765,14 @@ test_47d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rmdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rmdir must succeed"
@@ -2668,12 +2786,14 @@ test_47e() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv -T $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "rename must fail"
@@ -2686,12 +2806,14 @@ test_47f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
@@ -2706,12 +2828,14 @@ test_47g() {
 	sync_all_data
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
