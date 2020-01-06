@@ -22856,7 +22856,7 @@ test_807() {
 		error "truncate $tdir/trunc failed"
 
 	local bs=1048576
-	dd if=/dev/zero of=$DIR/$tdir/single_dd bs=$bs count=1 ||
+	dd if=/dev/zero of=$DIR/$tdir/single_dd bs=$bs count=1 conv=fsync ||
 		error "write $tfile failed"
 
 	# multi-client wirtes
@@ -22877,7 +22877,8 @@ test_807() {
 		wait ${pids[$i]}
 	done
 
-	sleep 5
+	do_rpc_nodes "$CLIENTS" cancel_lru_locks osc
+	do_nodes "$CLIENTS" "sync ; sleep 5 ; sync"
 	$LSOM_SYNC -u $cl_user -m $FSNAME-MDT0000 $MOUNT
 	check_lsom_data $DIR/$tdir/trunc
 	check_lsom_data $DIR/$tdir/single_dd
