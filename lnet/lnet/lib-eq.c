@@ -40,13 +40,13 @@
 /**
  * Create an event queue that has room for \a count number of events.
  *
- * The event queue is circular and older events will be overwritten by new
- * ones if they are not removed in time by the user using the functions
- * LNetEQGet(), LNetEQWait(), or LNetEQPoll(). It is up to the user to
- * determine the appropriate size of the event queue to prevent this loss
- * of events. Note that when EQ handler is specified in \a callback, no
- * event loss can happen, since the handler is run for each event deposited
- * into the EQ.
+ * The event queue is circular and older events will be overwritten by
+ * new ones if they are not removed in time by the user using the
+ * function LNetEQPoll().  It is up to the user to determine the
+ * appropriate size of the event queue to prevent this loss of events.
+ * Note that when EQ handler is specified in \a callback, no event loss
+ * can happen, since the handler is run for each event deposited into
+ * the EQ.
  *
  * \param count The number of events to be stored in the event queue. It
  * will be rounded up to the next power of two.
@@ -263,58 +263,6 @@ lnet_eq_dequeue_event(struct lnet_eq *eq, struct lnet_event *ev)
 	eq->eq_deq_seq = new_event->sequence + 1;
 	RETURN(rc);
 }
-
-/**
- * A nonblocking function that can be used to get the next event in an EQ.
- * If an event handler is associated with the EQ, the handler will run before
- * this function returns successfully. The event is removed from the queue.
- *
- * \param eventq A handle for the event queue.
- * \param event On successful return (1 or -EOVERFLOW), this location will
- * hold the next event in the EQ.
- *
- * \retval 0	      No pending event in the EQ.
- * \retval 1	      Indicates success.
- * \retval -ENOENT    If \a eventq does not point to a valid EQ.
- * \retval -EOVERFLOW Indicates success (i.e., an event is returned) and that
- * at least one event between this event and the last event obtained from the
- * EQ has been dropped due to limited space in the EQ.
- */
-int
-LNetEQGet(struct lnet_handle_eq eventq, struct lnet_event *event)
-{
-	int which;
-
-	return LNetEQPoll(&eventq, 1, 0,
-			 event, &which);
-}
-EXPORT_SYMBOL(LNetEQGet);
-
-/**
- * Block the calling process until there is an event in the EQ.
- * If an event handler is associated with the EQ, the handler will run before
- * this function returns successfully. This function returns the next event
- * in the EQ and removes it from the EQ.
- *
- * \param eventq A handle for the event queue.
- * \param event On successful return (1 or -EOVERFLOW), this location will
- * hold the next event in the EQ.
- *
- * \retval 1	      Indicates success.
- * \retval -ENOENT    If \a eventq does not point to a valid EQ.
- * \retval -EOVERFLOW Indicates success (i.e., an event is returned) and that
- * at least one event between this event and the last event obtained from the
- * EQ has been dropped due to limited space in the EQ.
- */
-int
-LNetEQWait(struct lnet_handle_eq eventq, struct lnet_event *event)
-{
-	int which;
-
-	return LNetEQPoll(&eventq, 1, MAX_SCHEDULE_TIMEOUT,
-			  event, &which);
-}
-EXPORT_SYMBOL(LNetEQWait);
 
 static int
 lnet_eq_wait_locked(signed long *timeout)

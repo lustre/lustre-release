@@ -145,24 +145,16 @@ int LNetMDUnlink(struct lnet_handle_md md_in);
  * that can be stored in an EQ. The struct lnet_event defines a structure that
  * holds the information about with an event.
  *
- * There are five functions for dealing with EQs: LNetEQAlloc() is used to
- * create an EQ and allocate the resources needed, while LNetEQFree()
- * releases these resources and free the EQ. LNetEQGet() retrieves the next
- * event from an EQ, and LNetEQWait() can be used to block a process until
- * an EQ has at least one event. LNetEQPoll() can be used to test or wait
- * on multiple EQs.
+ * There are three functions for dealing with EQs: LNetEQAlloc() is used
+ * to create an EQ and allocate the resources needed, while LNetEQFree()
+ * releases these resources and free the EQ.  LNetEQPoll() can be used
+ * to test or wait on multiple EQs.
  * @{ */
 int LNetEQAlloc(unsigned int	   count_in,
 		lnet_eq_handler_t  handler,
 		struct lnet_handle_eq *handle_out);
 
 int LNetEQFree(struct lnet_handle_eq eventq_in);
-
-int LNetEQGet(struct lnet_handle_eq eventq_in,
-	      struct lnet_event *event_out);
-
-int LNetEQWait(struct lnet_handle_eq eventq_in,
-	       struct lnet_event *event_out);
 
 int LNetEQPoll(struct lnet_handle_eq *eventqs_in,
 	       int		 neq_in,
