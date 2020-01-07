@@ -45,7 +45,7 @@
     <para>If it is necessary to access up-to-date LSoM data that has gone
     stale, it is possible to flush the xattr cache from the client by
     cancelling the MDC locks via
-    <literal>ldlm set_param ldlm.namespaces.*mdc*.lru_size=clear</literal>.
+    <literal>lctl set_param ldlm.namespaces.*mdc*.lru_size=clear</literal>.
     Otherwise, the file attributes will be dropped from the client cache if
     the file has not been accessed before the LDLM lock timeout.  The timeout
     is stored via
