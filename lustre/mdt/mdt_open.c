@@ -1218,7 +1218,9 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (rc != 0)
 				GOTO(out, rc);
 
-			mdt_pack_secctx_in_reply(info, o);
+			rc = mdt_pack_secctx_in_reply(info, o);
+			if (unlikely(rc))
+				GOTO(out, rc);
 
 			rc = mdt_finish_open(info, NULL, o, open_flags, 0, rep);
 		} else {
@@ -1573,7 +1575,9 @@ again:
 		}
 	}
 
-	mdt_pack_secctx_in_reply(info, child);
+	rc = mdt_pack_secctx_in_reply(info, child);
+	if (unlikely(rc))
+		GOTO(out_child, result = rc);
 
 	rc = mdt_check_resent_lock(info, child, lhc);
 	if (rc < 0) {

@@ -1735,11 +1735,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		}
 
 		rc = mdt_getattr_internal(info, child, 0);
-		if (unlikely(rc != 0))
+		if (unlikely(rc != 0)) {
 			mdt_object_unlock(info, child, lhc, 1);
+			RETURN(rc);
+		}
 
-		mdt_pack_secctx_in_reply(info, child);
-
+		rc = mdt_pack_secctx_in_reply(info, child);
+		if (unlikely(rc))
+			mdt_object_unlock(info, child, lhc, 1);
 		RETURN(rc);
 	}
 
@@ -1854,7 +1857,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		mdt_lock_reg_init(lhc, LCK_PR);
 
 		if (!(child_bits & MDS_INODELOCK_UPDATE) &&
-		      mdt_object_exists(child) && !mdt_object_remote(child)) {
+		    !mdt_object_remote(child)) {
 			struct md_attr *ma = &info->mti_attr;
 
 			ma->ma_valid = 0;
@@ -1868,12 +1871,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 * lock and this might save us RPC on later STAT. For
 			 * directories, it also let negative dentry cache start
 			 * working for this dir. */
-                        if (ma->ma_valid & MA_INODE &&
-                            ma->ma_attr.la_valid & LA_CTIME &&
-                            info->mti_mdt->mdt_namespace->ns_ctime_age_limit +
-				ma->ma_attr.la_ctime < ktime_get_real_seconds())
-                                child_bits |= MDS_INODELOCK_UPDATE;
-                }
+			if (ma->ma_valid & MA_INODE &&
+			    ma->ma_attr.la_valid & LA_CTIME &&
+			    info->mti_mdt->mdt_namespace->ns_ctime_age_limit +
+			    ma->ma_attr.la_ctime < ktime_get_real_seconds())
+				child_bits |= MDS_INODELOCK_UPDATE;
+		}
 
 		/* layout lock must be granted in a best-effort way
 		 * for IT operations */
@@ -1915,7 +1918,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		GOTO(out_child, rc);
 	}
 
-	mdt_pack_secctx_in_reply(info, child);
+	rc = mdt_pack_secctx_in_reply(info, child);
+	if (unlikely(rc)) {
+		mdt_object_unlock(info, child, lhc, 1);
+		GOTO(out_child, rc);
+	}
 
 	lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
 	if (lock) {
@@ -1927,8 +1934,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
 
-		if (mdt_object_exists(child) &&
-		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && child != parent) {
 			mdt_object_put(info->mti_env, child);
 			rc = mdt_pack_size2body(info, child_fid,

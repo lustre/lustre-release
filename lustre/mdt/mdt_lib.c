@@ -1779,14 +1779,14 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
         RETURN(rc);
 }
 
-void mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
-			      struct mdt_object *child)
+int mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
+			     struct mdt_object *child)
 {
 	char *secctx_name;
 	struct lu_buf *buffer;
 	struct mdt_body *repbody;
 	struct req_capsule *pill = info->mti_pill;
-	int rc;
+	int rc = 0;
 
 	if (req_capsule_has_field(pill, &RMF_FILE_SECCTX, RCL_SERVER) &&
 	    req_capsule_get_size(pill, &RMF_FILE_SECCTX, RCL_SERVER) != 0) {
@@ -1811,12 +1811,21 @@ void mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
 			if (rc < buffer->lb_len)
 				req_capsule_shrink(pill, &RMF_FILE_SECCTX, rc,
 						   RCL_SERVER);
+			rc = 0;
 		} else {
 			CDEBUG(D_SEC,
 			     "security context not found for "DFID": rc = %d\n",
 			     PFID(mdt_object_fid(child)), rc);
 			req_capsule_shrink(pill, &RMF_FILE_SECCTX, 0,
 					   RCL_SERVER);
+			/* handling -ENOENT is important because it may change
+			 * object state in DNE env dropping LOHA_EXISTS flag,
+			 * it is important to return that to the caller.
+			 * Check LU-13115 for details.
+			 */
+			if (rc != -ENOENT)
+				rc = 0;
 		}
 	}
+	return rc;
 }
