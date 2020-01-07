@@ -1475,6 +1475,7 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lmv_stripe_md *lsm = md->lmv;
+	struct cl_attr	*attr;
 	int rc = 0;
 
 	ENTRY;
@@ -1498,69 +1499,63 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	 * normally dir layout doesn't change, only take read lock to check
 	 * that to avoid blocking other MD operations.
 	 */
-	if (lli->lli_lsm_md)
-		down_read(&lli->lli_lsm_sem);
-	else
-		down_write(&lli->lli_lsm_sem);
+	down_read(&lli->lli_lsm_sem);
 
-	/*
-	 * if dir layout mismatch, check whether version is increased, which
-	 * means layout is changed, this happens in dir migration and lfsck.
+	/* some current lookup initialized lsm, and unchanged */
+	if (lli->lli_lsm_md && lsm_md_eq(lli->lli_lsm_md, lsm))
+		GOTO(unlock, rc = 0);
+
+	/* if dir layout doesn't match, check whether version is increased,
+	 * which means layout is changed, this happens in dir split/merge and
+	 * lfsck.
 	 *
 	 * foreign LMV should not change.
 	 */
-	if (lli->lli_lsm_md && !lsm_md_eq(lli->lli_lsm_md, lsm)) {
-		if (lmv_dir_striped(lli->lli_lsm_md) &&
-		    lsm->lsm_md_layout_version <=
-		    lli->lli_lsm_md->lsm_md_layout_version) {
-			CERROR("%s: "DFID" dir layout mismatch:\n",
-			       ll_i2sbi(inode)->ll_fsname,
-			       PFID(&lli->lli_fid));
-			lsm_md_dump(D_ERROR, lli->lli_lsm_md);
-			lsm_md_dump(D_ERROR, lsm);
-			GOTO(unlock, rc = -EINVAL);
-		}
-
-		/* layout changed, switch to write lock */
-		up_read(&lli->lli_lsm_sem);
-		down_write(&lli->lli_lsm_sem);
-		ll_dir_clear_lsm_md(inode);
+	if (lli->lli_lsm_md && lmv_dir_striped(lli->lli_lsm_md) &&
+	    lsm->lsm_md_layout_version <=
+	    lli->lli_lsm_md->lsm_md_layout_version) {
+		CERROR("%s: "DFID" dir layout mismatch:\n",
+		       ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid));
+		lsm_md_dump(D_ERROR, lli->lli_lsm_md);
+		lsm_md_dump(D_ERROR, lsm);
+		GOTO(unlock, rc = -EINVAL);
 	}
 
-	/* set directory layout */
-	if (!lli->lli_lsm_md) {
-		struct cl_attr	*attr;
+	up_read(&lli->lli_lsm_sem);
+	down_write(&lli->lli_lsm_sem);
+	/* clear existing lsm */
+	if (lli->lli_lsm_md) {
+		lmv_free_memmd(lli->lli_lsm_md);
+		lli->lli_lsm_md = NULL;
+	}
 
-		rc = ll_init_lsm_md(inode, md);
-		up_write(&lli->lli_lsm_sem);
-		if (rc != 0)
-			RETURN(rc);
+	rc = ll_init_lsm_md(inode, md);
+	up_write(&lli->lli_lsm_sem);
 
-		/* set md->lmv to NULL, so the following free lustre_md
-		 * will not free this lsm */
-		md->lmv = NULL;
+	if (rc)
+		RETURN(rc);
 
-		/*
-		 * md_merge_attr() may take long, since lsm is already set,
-		 * switch to read lock.
-		 */
-		down_read(&lli->lli_lsm_sem);
+	/* set md->lmv to NULL, so the following free lustre_md will not free
+	 * this lsm.
+	 */
+	md->lmv = NULL;
 
-		if (!lmv_dir_striped(lli->lli_lsm_md))
-			GOTO(unlock, rc);
+	/* md_merge_attr() may take long, since lsm is already set, switch to
+	 * read lock.
+	 */
+	down_read(&lli->lli_lsm_sem);
 
-		OBD_ALLOC_PTR(attr);
-		if (attr == NULL)
-			GOTO(unlock, rc = -ENOMEM);
+	if (!lmv_dir_striped(lli->lli_lsm_md))
+		GOTO(unlock, rc = 0);
 
-		/* validate the lsm */
-		rc = md_merge_attr(ll_i2mdexp(inode), lsm, attr,
-				   ll_md_blocking_ast);
-		if (rc != 0) {
-			OBD_FREE_PTR(attr);
-			GOTO(unlock, rc);
-		}
+	OBD_ALLOC_PTR(attr);
+	if (!attr)
+		GOTO(unlock, rc = -ENOMEM);
 
+	/* validate the lsm */
+	rc = md_merge_attr(ll_i2mdexp(inode), lli->lli_lsm_md, attr,
+			   ll_md_blocking_ast);
+	if (!rc) {
 		if (md->body->mbo_valid & OBD_MD_FLNLINK)
 			md->body->mbo_nlink = attr->cat_nlink;
 		if (md->body->mbo_valid & OBD_MD_FLSIZE)
@@ -1571,13 +1566,14 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 			md->body->mbo_ctime = attr->cat_ctime;
 		if (md->body->mbo_valid & OBD_MD_FLMTIME)
 			md->body->mbo_mtime = attr->cat_mtime;
-
-		OBD_FREE_PTR(attr);
 	}
+
+	OBD_FREE_PTR(attr);
+	GOTO(unlock, rc);
 unlock:
 	up_read(&lli->lli_lsm_sem);
 
-	RETURN(rc);
+	return rc;
 }
 
 void ll_clear_inode(struct inode *inode)
