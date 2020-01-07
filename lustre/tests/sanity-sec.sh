@@ -2184,7 +2184,7 @@ test_30() {
 	# unload keys from ring
 	do_node ${clients_arr[0]} "keyctl show |
 		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
-	# invalidate the key with bogus filesystem name
+	# generate key with bogus filesystem name
 	do_node ${clients_arr[0]} "lgss_sk -w $SK_PATH/$FSNAME-bogus.key \
 		-f $FSNAME.bogus -t client -d /dev/urandom" ||
 		error "lgss_sk failed (1)"
@@ -2200,9 +2200,13 @@ test_30() {
 			error "mount with invalid key"
 		fi
 	fi
-	SK_PATH=$OLD_SK_PATH
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount clients"
+	# unload keys from ring
+	do_node ${clients_arr[0]} "keyctl show |
+		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
+	rm -f $SK_PATH
+	SK_PATH=$OLD_SK_PATH
 	zconf_mount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to mount clients"
 }
