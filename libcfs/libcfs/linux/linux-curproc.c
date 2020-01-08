@@ -256,9 +256,11 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 
 			entry = env_start;
 			entry_len = env_end - env_start;
+			CDEBUG(D_INFO, "key: %s, entry: %s\n", key, entry);
 
 			/* Key length + length of '=' */
 			if (entry_len > key_len + 1 &&
+			    entry[key_len] == '='  &&
 			    !memcmp(entry, key, key_len)) {
 				entry += key_len + 1;
 				entry_len -= key_len + 1;
