@@ -15539,7 +15539,7 @@ jobstats_set() {
 		"$FSNAME.sys.jobid_var" $new_jobenv
 }
 
-test_205() { # Job stats
+test_205a() { # Job stats
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $MDS1_VERSION -ge $(version_code 2.7.1) ]] ||
 		skip "Need MDS version with at least 2.7.1"
@@ -15641,7 +15641,18 @@ test_205() { # Job stats
 
 	verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
 }
-run_test 205 "Verify job stats"
+run_test 205a "Verify job stats"
+
+# LU-13117
+test_205b() {
+	$LCTL set_param jobid_var=USER jobid_name="%e.%u"
+	env -i USERTESTJOBSTATS=foolish touch $DIR/$tfile.1
+	do_facet $SINGLEMDS $LCTL get_param mdt.*.job_stats |
+		grep job_id: | grep foolish &&
+			error "Unexpected jobid found"
+	true
+}
+run_test 205b "Verify job stats jobid parsing"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {
