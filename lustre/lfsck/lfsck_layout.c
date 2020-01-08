@@ -6046,8 +6046,8 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			   "run_time_phase2: %lld seconds\n"
 			   "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: N/A\n"
-			   "real-time_speed_phase1: %llu items/sec\n"
-			   "real-time_speed_phase2: N/A\n",
+			   "real_time_speed_phase1: %llu items/sec\n"
+			   "real_time_speed_phase2: N/A\n",
 			   checked,
 			   lo->ll_objs_checked_phase2,
 			   rtime,
@@ -6093,8 +6093,8 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			   "run_time_phase2: %lld seconds\n"
 			   "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: %llu items/sec\n"
-			   "real-time_speed_phase1: N/A\n"
-			   "real-time_speed_phase2: %llu items/sec\n"
+			   "real_time_speed_phase1: N/A\n"
+			   "real_time_speed_phase2: %llu items/sec\n"
 			   "current_position: "DFID"\n",
 			   lo->ll_objs_checked_phase1,
 			   checked,
@@ -6118,8 +6118,8 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			   "run_time_phase2: %lld seconds\n"
 			   "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: %llu objs/sec\n"
-			   "real-time_speed_phase1: N/A\n"
-			   "real-time_speed_phase2: N/A\n"
+			   "real_time_speed_phase1: N/A\n"
+			   "real_time_speed_phase2: N/A\n"
 			   "current_position: N/A\n",
 			   lo->ll_objs_checked_phase1,
 			   lo->ll_objs_checked_phase2,

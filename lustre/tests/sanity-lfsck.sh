@@ -5249,6 +5249,11 @@ test_36a() {
 
 	check_mount_and_prep
 
+	lfs df $DIR
+	lfs df -i $DIR
+	lctl get_param osc.*.*grant*
+	stack_trap "lfs df $DIR; lfs df -i $DIR; lctl get_param osc.*.*grant*"
+
 	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
 		-N -E 3M -o 2,0 -E -1 -o 1 $DIR/$tdir/f0 ||
 		error "(0) Fail to create mirror file $DIR/$tdir/f0"

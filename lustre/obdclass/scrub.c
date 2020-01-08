@@ -474,7 +474,7 @@ void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub)
 
 		seq_printf(m, "run_time: %lld seconds\n"
 			   "average_speed: %lld objects/sec\n"
-			   "real-time_speed: %lld objects/sec\n"
+			   "real_time_speed: %lld objects/sec\n"
 			   "current_position: %llu\n"
 			   "scrub_in_prior: %s\n"
 			   "scrub_full_speed: %s\n"
@@ -489,7 +489,7 @@ void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub)
 			speed = div_s64(speed, sf->sf_run_time);
 		seq_printf(m, "run_time: %ld seconds\n"
 			   "average_speed: %lld objects/sec\n"
-			   "real-time_speed: N/A\n"
+			   "real_time_speed: N/A\n"
 			   "current_position: N/A\n",
 			   sf->sf_run_time, speed);
 	}
