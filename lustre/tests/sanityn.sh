@@ -4913,6 +4913,17 @@ test_104() {
 }
 run_test 104 "Verify that MDS stores atime/mtime/ctime during close"
 
+test_105() {
+	test_mkdir -p $DIR/$tdir
+	echo test > $DIR/$tdir/$tfile
+	$LCTL set_param fail_loc=0x416
+	cancel_lru_locks osc & sleep 1
+	fsize1=$(stat -c %s $DIR2/$tdir/$tfile)
+	wait
+	[[ $fsize1 = 5 ]] ||  error "Glimpse returned wrong file size $fsize1"
+}
+run_test 105 "Glimpse and lock cancel race"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script
