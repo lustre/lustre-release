@@ -1475,7 +1475,7 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 
 int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh,
 		   bool shared);
-void osd_trunc_unlock_all(struct list_head *list);
+void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list);
 void osd_process_truncates(struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 

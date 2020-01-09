@@ -2196,13 +2196,14 @@ int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh, bool shared)
 	else
 		down_write(&obj->oo_ext_idx_sem);
 	al->tl_shared = shared;
+	lu_object_get(&obj->oo_dt.do_lu);
 
 	list_add(&al->tl_list, &oh->ot_trunc_locks);
 
 	return 0;
 }
 
-void osd_trunc_unlock_all(struct list_head *list)
+void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list)
 {
 	struct osd_access_lock *al, *tmp;
 	list_for_each_entry_safe(al, tmp, list, tl_list) {
@@ -2210,6 +2211,7 @@ void osd_trunc_unlock_all(struct list_head *list)
 			up_read(&al->tl_obj->oo_ext_idx_sem);
 		else
 			up_write(&al->tl_obj->oo_ext_idx_sem);
+		osd_object_put(env, al->tl_obj);
 		list_del(&al->tl_list);
 		OBD_FREE_PTR(al);
 	}
