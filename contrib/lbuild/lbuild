@@ -1484,6 +1484,8 @@ build_kernel_with_srpm() {
                                   sed -e '/_VERSION=/s/_[0-9]*_g.*$//g';
                                   cat "$FULL_PATCH";
                                   cat "$LBUILD_DIR/lbuild";
+				  test -f lbuild-${DISTROMAJ%%[0-9]*} &&
+				  cat lbuild-${DISTROMAJ%%[0-9]*};
                                   cat "$LBUILD_DIR/lbuild-$DISTROMAJ"; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
@@ -1609,6 +1611,8 @@ build_ofed() {
                                   echo "$BUILD_GEN")";
                                   cat "${linux}/include/linux/autoconf.h";
                                   cat "$LBUILD_DIR/lbuild";
+				  test -f lbuild-${DISTROMAJ%%[0-9]*} &&
+				  cat lbuild-${DISTROMAJ%%[0-9]*};
                                   cat "$LBUILD_DIR/lbuild-$DISTROMAJ"; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
