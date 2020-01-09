@@ -92,6 +92,8 @@
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_yaml_name libyaml
 	%global requires_kmod_name kmod-%{lustre_name}
+	%global requires_kmod_osd_zfs_name kmod-%{lustre_name}-osd-zfs
+	%global requires_kmod_zfs_name kmod-zfs
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name kmod-%{lustre_name}-tests
 	%endif
@@ -99,6 +101,8 @@
 %else	#for Suse
 	%global requires_yaml_name libyaml-0-2
 	%global requires_kmod_name %{lustre_name}-kmp
+	%global requires_kmod_osd_zfs_name %{lustre_name}-osd-zfs-kmp
+	%global requires_kmod_zfs_name kmod-zfs
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name %{lustre_name}-tests-kmp
 	%endif
@@ -228,6 +232,9 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
 Provides: lustre-osd-mount = %{version}
+Requires: zfs
+Requires: %{requires_kmod_zfs_name}
+Requires: %{requires_kmod_osd_zfs_name}
 Group: System Environment/Kernel
 
 %description osd-zfs-mount
