@@ -2121,7 +2121,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		OBD_FREE_PTR(oh);
 	}
 
-	osd_trunc_unlock_all(&truncates);
+	osd_trunc_unlock_all(env, &truncates);
 
 	/* inform the quota slave device that the transaction is stopping */
 	qsd_op_end(env, qsd, qtrans);
