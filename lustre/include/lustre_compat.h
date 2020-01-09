@@ -737,7 +737,6 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 }
 #endif /* !CONFIG_BLK_DEV_INTEGRITY */
 
-#ifdef HAVE_BLK_INTEGRITY_ENABLED
 #ifndef INTEGRITY_FLAG_READ
 #define INTEGRITY_FLAG_READ BLK_INTEGRITY_VERIFY
 #endif
@@ -775,12 +774,6 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 
 	return false;
 }
-#else
-static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
-{
-	return false;
-}
-#endif /* HAVE_BLK_INTEGRITY_ENABLED */
 
 #ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
 #define ll_pagevec_init(pvec, n) pagevec_init(pvec)
