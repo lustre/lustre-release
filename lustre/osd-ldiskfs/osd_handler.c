@@ -1012,6 +1012,7 @@ again:
 	filp->f_mapping = inode->i_mapping;
 	filp->f_op = fops;
 	filp->private_data = NULL;
+	filp->f_cred = current_cred();
 	set_file_inode(filp, inode);
 	rc = osd_security_file_alloc(filp);
 	if (rc)
@@ -6621,6 +6622,7 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 		down_read(&obj->oo_ext_idx_sem);
 	}
 
+	filp->f_cred = current_cred();
 	rc = osd_security_file_alloc(filp);
 	if (rc)
 		RETURN(rc);
