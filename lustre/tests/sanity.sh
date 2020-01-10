@@ -12493,33 +12493,22 @@ test_133g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
-	# eventually, this can also be replaced with "lctl get_param -R",
-	# but not until that option is always available on the server
 	local facet
 	for facet in mds1 ost1; do
-		[ $(lustre_version_code $facet) -le $(version_code 2.5.54) ] &&
-			skip_noexit "Too old lustre on $facet"
-		local facet_proc_dirs=$(do_facet $facet \
-					\\\ls -d $proc_regexp 2>/dev/null)
-		echo "${facet}_proc_dirs='$facet_proc_dirs'"
-		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
-		do_facet $facet find $facet_proc_dirs \
-			! -name req_history \
-			-exec cat '{}' \\\; &> /dev/null
-
-		do_facet $facet find $facet_proc_dirs \
-			! -name req_history \
-			-type f \
-			-exec cat '{}' \\\; &> /dev/null ||
-				error "proc file read failed"
-
-		do_facet $facet find $facet_proc_dirs \
-			-ignore_readdir_race \
-			-type f \
-			-not -name force_lbug \
-			-not -name changelog_mask \
-			-exec badarea_io '{}' \\\; ||
-				error_133 "$facet find $facet_proc_dirs failed"
+		local facet_ver=$(lustre_version_code $facet)
+		if [ $facet_ver -ge $(version_code 2.7.65) ]; then
+			do_facet $facet "$LCTL get_param -R '*'" &> /dev/null
+		else
+			log "$facet: too old lustre for get_param -R"
+		fi
+		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
+			do_facet $facet "$LCTL list_param -R '*' | grep '=' |
+				tr -d= | egrep -v 'force_lbug|changelog_mask' |
+				xargs badarea_io" ||
+					error_133 "$facet badarea_io failed"
+		else
+			skip_noexit "$facet: too old lustre for get_param -R"
+		fi
 	done
 
 	# remount the FS in case writes/reads /proc break the FS

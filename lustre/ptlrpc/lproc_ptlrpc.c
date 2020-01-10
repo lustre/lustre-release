@@ -1029,7 +1029,6 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 
 		req = srhi->srhi_req;
 
-		libcfs_nid2str_r(req->rq_self, nidstr, sizeof(nidstr));
 		arrival.tv_sec = req->rq_arrival_time.tv_sec;
 		arrival.tv_nsec = req->rq_arrival_time.tv_nsec;
 		sent.tv_sec = req->rq_sent;
@@ -1043,8 +1042,13 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 		 * parser. Currently I only print stuff here I know is OK
 		 * to look at coz it was set up in request_in_callback()!!!
 		 */
-		seq_printf(s, "%lld:%s:%s:x%llu:%d:%s:%lld.%06lld:%lld.%06llds(%+lld.0s) ",
-			   req->rq_history_seq, nidstr,
+		seq_printf(s,
+			   "%lld:%s:%s:x%llu:%d:%s:%lld.%06lld:%lld.%06llds(%+lld.0s) ",
+			   req->rq_history_seq,
+			   req->rq_export && req->rq_export->exp_obd ?
+				req->rq_export->exp_obd->obd_name :
+				libcfs_nid2str_r(req->rq_self, nidstr,
+						 sizeof(nidstr)),
 			   libcfs_id2str(req->rq_peer), req->rq_xid,
 			   req->rq_reqlen, ptlrpc_rqphase2str(req),
 			   (s64)req->rq_arrival_time.tv_sec,
