@@ -1816,6 +1816,14 @@ static dnode_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 			       osd->od_svname, rc);
 			return ERR_PTR(rc);
 		}
+	} else if ((fid_is_llog(fid))) {
+		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
+					       LLOG_MIN_CHUNK_SIZE, 0, oh->ot_tx);
+		if (unlikely(rc)) {
+			CERROR("%s: can't change blocksize: %d\n",
+			       osd->od_svname, rc);
+			return ERR_PTR(rc);
+		}
 	}
 
 	return dn;
