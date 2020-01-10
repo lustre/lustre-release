@@ -2491,7 +2491,7 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 		       set, timeout);
 
 		if ((timeout == 0 && !signal_pending(current)) ||
-		    set->set_allow_intr)
+		    set->set_allow_intr) {
 			/*
 			 * No requests are in-flight (ether timed out
 			 * or delayed), so we can allow interrupts.
@@ -2502,7 +2502,10 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 					cfs_time_seconds(timeout ? timeout : 1),
 					ptlrpc_expired_set,
 					ptlrpc_interrupted_set, set);
-		else
+
+			rc = l_wait_event(set->set_waitq,
+					  ptlrpc_check_set(NULL, set), &lwi);
+		} else {
 			/*
 			 * At least one request is in flight, so no
 			 * interrupts are allowed. Wait until all
@@ -2511,29 +2514,32 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 			lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),
 					  ptlrpc_expired_set, set);
 
-		rc = l_wait_event(set->set_waitq,
-				  ptlrpc_check_set(NULL, set), &lwi);
-
-		/*
-		 * LU-769 - if we ignored the signal because it was already
-		 * pending when we started, we need to handle it now or we risk
-		 * it being ignored forever
-		 */
-		if (rc == -ETIMEDOUT &&
-		    (!lwi.lwi_allow_intr || set->set_allow_intr) &&
-		    signal_pending(current)) {
-			sigset_t blocked_sigs =
-					   cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
+			rc = l_wait_event(set->set_waitq,
+					  ptlrpc_check_set(NULL, set), &lwi);
 
 			/*
-			 * In fact we only interrupt for the "fatal" signals
-			 * like SIGINT or SIGKILL. We still ignore less
-			 * important signals since ptlrpc set is not easily
-			 * reentrant from userspace again
+			 * LU-769 - if we ignored the signal because
+			 * it was already pending when we started, we
+			 * need to handle it now or we risk it being
+			 * ignored forever
 			 */
-			if (signal_pending(current))
-				ptlrpc_interrupted_set(set);
-			cfs_restore_sigs(blocked_sigs);
+			if (rc == -ETIMEDOUT &&
+			    signal_pending(current)) {
+				sigset_t blocked_sigs =
+					cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
+
+				/*
+				 * In fact we only interrupt for the
+				 * "fatal" signals like SIGINT or
+				 * SIGKILL. We still ignore less
+				 * important signals since ptlrpc set
+				 * is not easily reentrant from
+				 * userspace again
+				 */
+				if (signal_pending(current))
+					ptlrpc_interrupted_set(set);
+				cfs_restore_sigs(blocked_sigs);
+			}
 		}
 
 		LASSERT(rc == 0 || rc == -EINTR || rc == -ETIMEDOUT);
