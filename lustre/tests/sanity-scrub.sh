@@ -38,8 +38,8 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 # 400M MDT device can guarantee uninitialized groups during the OI scrub
-MDSSIZE=400000
-OSTSIZE=200000
+[[ $MDSSIZE < 400000 || "$mds1_FSTYPE" == ldiskfs ]] && MDSSIZE=400000
+[[ $OSTSIZE < 400000 || "$ost1_FSTYPE" == ldiskfs ]] && OSTSIZE=400000
 
 # no need too many OSTs, to reduce the format/start/stop overhead
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
