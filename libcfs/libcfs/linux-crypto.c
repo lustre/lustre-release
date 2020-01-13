@@ -100,8 +100,9 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 					 CRYPTO_ALG_ASYNC);
 	}
 	if (IS_ERR(tfm)) {
-		CDEBUG(D_INFO, "Failed to alloc crypto hash %s\n",
-		       (*type)->cht_name);
+		CDEBUG_LIMIT(PTR_ERR(tfm) == -ENOMEM ? D_ERROR : D_INFO,
+			     "Failed to alloc crypto hash %s: rc = %d\n",
+			     (*type)->cht_name, (int)PTR_ERR(tfm));
 		return PTR_ERR(tfm);
 	}
 

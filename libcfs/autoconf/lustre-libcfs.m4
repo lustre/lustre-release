@@ -1164,6 +1164,20 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
 #
+# LIBCFS_CONFIG_CRYPTO_CRC32
+#
+# The kernel must support CONFIG_CRYPTO_CRC32 to RPC checksumming
+#
+AC_DEFUN([LIBCFS_CONFIG_CRYPTO_CRC32], [
+LB_CHECK_CONFIG_IM([CRYPTO_CRC32], [],
+	[AC_MSG_ERROR([
+
+Lustre requires that CONFIG_CRYPTO_CRC32 is enabled in your kernel.
+])])
+]) # LIBCFS_CONFIG_CRYPTO_CRC32
+
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1172,6 +1186,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX], [
 AC_MSG_NOTICE([LibCFS kernel checks
 ==============================================================================])
 LIBCFS_CONFIG_PANIC_DUMPLOG
+LIBCFS_CONFIG_CRYPTO_CRC32
 
 # 3.11
 LIBCFS_KTIME_GET_TS64
