@@ -857,6 +857,10 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	bool	found = false;
 	ENTRY;
 
+	/* fast path, ignore quota enforcement request for root owned files */
+	if (qi->lqi_id.qid_uid == 0)
+		return 0;
+
 	if (unlikely(qsd == NULL))
 		RETURN(0);
 
@@ -880,7 +884,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	 *    - quota isn't enforced for this quota type
 	 * or - the user/group is root
 	 * or - quota accounting isn't enabled */
-	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0 ||
+	if (!qsd_type_enabled(qsd, qi->lqi_type) ||
 	    (qsd->qsd_type_array[qi->lqi_type])->qqi_acct_failed)
 		RETURN(0);
 
