@@ -287,14 +287,6 @@ static unsigned long ll_iov_iter_alignment(const struct iov_iter *i)
 }
 #endif
 
-#ifndef HAVE_AIO_COMPLETE
-static inline void aio_complete(struct kiocb *iocb, ssize_t res, ssize_t res2)
-{
-	if (iocb->ki_complete)
-		iocb->ki_complete(iocb, res, res2);
-}
-#endif
-
 /** direct IO pages */
 struct ll_dio_pages {
 	struct cl_dio_aio	*ldp_aio;
@@ -308,47 +300,6 @@ struct ll_dio_pages {
 	/* the file offset of the first page. */
 	loff_t			ldp_file_offset;
 };
-
-static void ll_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
-{
-	struct cl_dio_aio *aio = container_of(anchor, typeof(*aio), cda_sync);
-	ssize_t ret = anchor->csi_sync_rc;
-
-	ENTRY;
-
-	/* release pages */
-	while (aio->cda_pages.pl_nr > 0) {
-		struct cl_page *page = cl_page_list_first(&aio->cda_pages);
-
-		cl_page_get(page);
-		cl_page_list_del(env, &aio->cda_pages, page);
-		cl_page_delete(env, page);
-		cl_page_put(env, page);
-	}
-
-	if (!is_sync_kiocb(aio->cda_iocb))
-		aio_complete(aio->cda_iocb, ret ?: aio->cda_bytes, 0);
-
-	EXIT;
-}
-
-static struct cl_dio_aio *ll_aio_alloc(struct kiocb *iocb)
-{
-	struct cl_dio_aio *aio;
-
-	OBD_ALLOC_PTR(aio);
-	if (aio != NULL) {
-		/*
-		 * Hold one ref so that it won't be released until
-		 * every pages is added.
-		 */
-		cl_sync_io_init_notify(&aio->cda_sync, 1, is_sync_kiocb(iocb) ?
-				       NULL : aio, ll_aio_end);
-		cl_page_list_init(&aio->cda_pages);
-		aio->cda_iocb = iocb;
-	}
-	return aio;
-}
 
 static int
 ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
@@ -480,7 +431,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	io = lcc->lcc_io;
 	LASSERT(io != NULL);
 
-	aio = ll_aio_alloc(iocb);
+	aio = cl_aio_alloc(iocb);
 	if (!aio)
 		RETURN(-ENOMEM);
 
