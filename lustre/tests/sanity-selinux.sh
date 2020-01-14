@@ -505,7 +505,6 @@ create_nodemap() {
 	check_nodemap $nm trusted_nodemap 1
 
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
-	do_facet mgs $LCTL set_param nodemap.$nm.sepol="$sepol"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.sepol="$sepol"
 
 	check_nodemap $nm sepol $sepol
@@ -515,6 +514,11 @@ remove_nodemap() {
 	local nm=$1
 
 	do_facet mgs $LCTL nodemap_del $nm
+
+	wait_update_facet --verbose mds1 \
+		"$LCTL get_param nodemap.$nm.id 2>/dev/null | \
+		grep -c $nm || true" 0 30 ||
+		error "nodemap $nm could not be removed"
 
 	do_facet mgs $LCTL nodemap_activate 0
 
@@ -569,7 +573,6 @@ test_21a() {
 
 	# store wrong sepol in nodemap
 	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
-	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
 	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
 	check_nodemap c0 sepol $sepol
 
@@ -683,7 +686,6 @@ test_21b() {
 
 	# store wrong sepol in nodemap
 	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
-	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
 	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
 	check_nodemap c0 sepol $sepol
 
@@ -708,7 +710,6 @@ test_21b() {
 
 	# reset correct sepol
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
-	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
 	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
 	check_nodemap c0 sepol $sepol
 
