@@ -1975,6 +1975,12 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
 		GOTO(out, rc = -EIO);
 
+	 /*
+	  * we ignore quota checks for system-owned files, but still
+	  * need to count blocks for uid/gid/projid
+	  */
+	osd_trans_declare_op(env, oh, OSD_OT_QUOTA, 3);
+
 	/*
 	 * XXX temporary stuff. Some abstraction layer should
 	 * be used.

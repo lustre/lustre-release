@@ -529,6 +529,10 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 			th->th_ignore_quota;
 	ENTRY;
 
+	/* very fast path for special files like llog */
+	if (uid == 0 && gid == 0 && projid == 0)
+		return 0;
+
 	if (osd_qid_declare_flags & OSD_QID_INODE)
 		qsd = osd->od_quota_slave_md;
 	else if (osd_qid_declare_flags & OSD_QID_BLK)

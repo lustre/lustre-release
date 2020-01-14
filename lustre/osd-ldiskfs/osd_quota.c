@@ -645,6 +645,10 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			th->th_ignore_quota;
 	ENTRY;
 
+	/* very fast path for special files like llog */
+	if (uid == 0 && gid == 0 && projid == 0)
+		return 0;
+
 	/* let's start with user quota */
 	qi->lqi_id.qid_uid = uid;
 	qi->lqi_type = USRQUOTA;
