@@ -2797,6 +2797,18 @@ static void __exit ksocklnd_exit(void)
 	lnet_unregister_lnd(&the_ksocklnd);
 }
 
+static struct lnet_lnd the_ksocklnd = {
+	.lnd_type		= SOCKLND,
+	.lnd_startup		= ksocknal_startup,
+	.lnd_shutdown		= ksocknal_shutdown,
+	.lnd_ctl		= ksocknal_ctl,
+	.lnd_send		= ksocknal_send,
+	.lnd_recv		= ksocknal_recv,
+	.lnd_notify_peer_down	= ksocknal_notify_gw_down,
+	.lnd_query		= ksocknal_query,
+	.lnd_accept		= ksocknal_accept,
+};
+
 static int __init ksocklnd_init(void)
 {
 	int rc;
@@ -2804,17 +2816,6 @@ static int __init ksocklnd_init(void)
 	/* check ksnr_connected/connecting field large enough */
 	BUILD_BUG_ON(SOCKLND_CONN_NTYPES > 4);
 	BUILD_BUG_ON(SOCKLND_CONN_ACK != SOCKLND_CONN_BULK_IN);
-
-	/* initialize the_ksocklnd */
-	the_ksocklnd.lnd_type     = SOCKLND;
-	the_ksocklnd.lnd_startup  = ksocknal_startup;
-	the_ksocklnd.lnd_shutdown = ksocknal_shutdown;
-	the_ksocklnd.lnd_ctl      = ksocknal_ctl;
-	the_ksocklnd.lnd_send     = ksocknal_send;
-	the_ksocklnd.lnd_recv     = ksocknal_recv;
-	the_ksocklnd.lnd_notify_peer_down   = ksocknal_notify_gw_down;
-	the_ksocklnd.lnd_query    = ksocknal_query;
-	the_ksocklnd.lnd_accept   = ksocknal_accept;
 
 	rc = ksocknal_tunables_init();
 	if (rc != 0)
