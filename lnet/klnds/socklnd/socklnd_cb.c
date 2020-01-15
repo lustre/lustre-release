@@ -2502,62 +2502,65 @@ __must_hold(&ksocknal_data.ksnd_global_lock)
 static void
 ksocknal_check_peer_timeouts(int idx)
 {
-	struct list_head *peers = &ksocknal_data.ksnd_peers[idx];
+	struct hlist_head *peers = &ksocknal_data.ksnd_peers[idx];
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_conn *conn;
 	struct ksock_tx *tx;
 
  again:
-        /* NB. We expect to have a look at all the peers and not find any
-         * connections to time out, so we just use a shared lock while we
-         * take a look... */
+	/* NB. We expect to have a look at all the peers and not find any
+	 * connections to time out, so we just use a shared lock while we
+	 * take a look...
+	 */
 	read_lock(&ksocknal_data.ksnd_global_lock);
 
-	list_for_each_entry(peer_ni, peers, ksnp_list) {
+	hlist_for_each_entry(peer_ni, peers, ksnp_list) {
 		struct ksock_tx *tx_stale;
 		time64_t deadline = 0;
 		int resid = 0;
 		int n = 0;
 
-                if (ksocknal_send_keepalive_locked(peer_ni) != 0) {
+		if (ksocknal_send_keepalive_locked(peer_ni) != 0) {
 			read_unlock(&ksocknal_data.ksnd_global_lock);
-                        goto again;
-                }
+			goto again;
+		}
 
-                conn = ksocknal_find_timed_out_conn (peer_ni);
+		conn = ksocknal_find_timed_out_conn(peer_ni);
 
-                if (conn != NULL) {
+		if (conn != NULL) {
 			read_unlock(&ksocknal_data.ksnd_global_lock);
 
-                        ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
+			ksocknal_close_conn_and_siblings(conn, -ETIMEDOUT);
 
-                        /* NB we won't find this one again, but we can't
-                         * just proceed with the next peer_ni, since we dropped
-                         * ksnd_global_lock and it might be dead already! */
-                        ksocknal_conn_decref(conn);
-                        goto again;
-                }
+			/* NB we won't find this one again, but we can't
+			 * just proceed with the next peer_ni, since we dropped
+			 * ksnd_global_lock and it might be dead already!
+			 */
+			ksocknal_conn_decref(conn);
+			goto again;
+		}
 
-                /* we can't process stale txs right here because we're
-                 * holding only shared lock */
+		/* we can't process stale txs right here because we're
+		 * holding only shared lock
+		 */
 		if (!list_empty(&peer_ni->ksnp_tx_queue)) {
 			struct ksock_tx *tx;
 
 			tx = list_entry(peer_ni->ksnp_tx_queue.next,
 					struct ksock_tx, tx_list);
 			if (ktime_get_seconds() >= tx->tx_deadline) {
-                                ksocknal_peer_addref(peer_ni);
+				ksocknal_peer_addref(peer_ni);
 				read_unlock(&ksocknal_data.ksnd_global_lock);
 
-                                ksocknal_flush_stale_txs(peer_ni);
+				ksocknal_flush_stale_txs(peer_ni);
 
-                                ksocknal_peer_decref(peer_ni);
-                                goto again;
-                        }
-                }
+				ksocknal_peer_decref(peer_ni);
+				goto again;
+			}
+		}
 
 		if (list_empty(&peer_ni->ksnp_zc_req_list))
-                        continue;
+			continue;
 
 		tx_stale = NULL;
 		spin_lock(&peer_ni->ksnp_lock);
@@ -2676,19 +2679,20 @@ int ksocknal_reaper(void *arg)
                         nenomem_conns++;
                 }
 
-                /* careful with the jiffy wrap... */
+		/* careful with the jiffy wrap... */
 		while ((timeout = deadline - ktime_get_seconds()) <= 0) {
-                        const int n = 4;
-                        const int p = 1;
-                        int       chunk = ksocknal_data.ksnd_peer_hash_size;
+			const int n = 4;
+			const int p = 1;
+			int  chunk = HASH_SIZE(ksocknal_data.ksnd_peers);
 			unsigned int lnd_timeout;
 
-                        /* Time to check for timeouts on a few more peers: I do
-                         * checks every 'p' seconds on a proportion of the peer_ni
-                         * table and I need to check every connection 'n' times
-                         * within a timeout interval, to ensure I detect a
-                         * timeout on any connection within (n+1)/n times the
-                         * timeout interval. */
+			/* Time to check for timeouts on a few more peers: I
+			 * do checks every 'p' seconds on a proportion of the
+			 * peer_ni table and I need to check every connection
+			 * 'n' times within a timeout interval, to ensure I
+			 * detect a timeout on any connection within (n+1)/n
+			 * times the timeout interval.
+			 */
 
 			lnd_timeout = lnet_get_lnd_timeout();
 			if (lnd_timeout > n * p)
@@ -2696,14 +2700,14 @@ int ksocknal_reaper(void *arg)
 			if (chunk == 0)
 				chunk = 1;
 
-                        for (i = 0; i < chunk; i++) {
-                                ksocknal_check_peer_timeouts (peer_index);
-                                peer_index = (peer_index + 1) %
-                                             ksocknal_data.ksnd_peer_hash_size;
-                        }
+			for (i = 0; i < chunk; i++) {
+				ksocknal_check_peer_timeouts(peer_index);
+				peer_index = (peer_index + 1) %
+					HASH_SIZE(ksocknal_data.ksnd_peers);
+			}
 
 			deadline += p;
-                }
+		}
 
                 if (nenomem_conns != 0) {
                         /* Reduce my timeout if I rescheduled ENOMEM conns.

@@ -48,6 +48,7 @@
 #include <linux/sysctl.h>
 #include <linux/uio.h>
 #include <linux/unistd.h>
+#include <linux/hashtable.h>
 #include <net/sock.h>
 #include <net/tcp.h>
 
@@ -62,15 +63,15 @@
 #define SOCKNAL_NSCHEDS		3
 #define SOCKNAL_NSCHEDS_HIGH	(SOCKNAL_NSCHEDS << 1)
 
-#define SOCKNAL_PEER_HASH_SIZE  101             /* # peer_ni lists */
-#define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
-#define SOCKNAL_INSANITY_RECONN 5000            /* connd is trying on reconn infinitely */
-#define SOCKNAL_ENOMEM_RETRY    1		/* seconds between retries */
+#define SOCKNAL_PEER_HASH_BITS	7	/* log2 of # peer_ni lists */
+#define SOCKNAL_RESCHED		100	/* # scheduler loops before reschedule */
+#define SOCKNAL_INSANITY_RECONN	5000	/* connd is trying on reconn infinitely */
+#define SOCKNAL_ENOMEM_RETRY	1	/* seconds between retries */
 
-#define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
-#define SOCKNAL_SINGLE_FRAG_RX      0           /* disable multi-fragment receives */
+#define SOCKNAL_SINGLE_FRAG_TX      0	/* disable multi-fragment sends */
+#define SOCKNAL_SINGLE_FRAG_RX      0	/* disable multi-fragment receives */
 
-#define SOCKNAL_VERSION_DEBUG       0           /* enable protocol version debugging */
+#define SOCKNAL_VERSION_DEBUG       0	/* enable protocol version debugging */
 
 /* risk kmap deadlock on multi-frag I/O (backs off to single-frag if disabled).
  * no risk if we're not running on a CONFIG_HIGHMEM platform. */
@@ -178,8 +179,7 @@ struct ksock_nal_data {
 	/* stabilize peer_ni/conn ops */
 	rwlock_t		ksnd_global_lock;
 	/* hash table of all my known peers */
-	struct list_head	*ksnd_peers;
-	int			ksnd_peer_hash_size; /* size of ksnd_peers */
+	DECLARE_HASHTABLE(ksnd_peers, SOCKNAL_PEER_HASH_BITS);
 
 	int			ksnd_nthreads;	/* # live threads */
 	int			ksnd_shuttingdown; /* tell threads to exit */
@@ -383,26 +383,26 @@ struct ksock_route {
 #define SOCKNAL_KEEPALIVE_PING          1       /* cookie for keepalive ping */
 
 struct ksock_peer_ni {
-	struct list_head	ksnp_list;	/* stash on global peer_ni list */
+	struct hlist_node	ksnp_list;	/* stash on global peer_ni list */
 	time64_t		ksnp_last_alive;/* when (in seconds) I was last alive */
 	struct lnet_process_id	ksnp_id;	/* who's on the other end(s) */
-	atomic_t              ksnp_refcount; /* # users */
-	int                   ksnp_closing;  /* being closed */
-	int                   ksnp_accepting;/* # passive connections pending */
-	int                   ksnp_error;    /* errno on closing last conn */
-	__u64                 ksnp_zc_next_cookie;/* ZC completion cookie */
-	__u64                 ksnp_incarnation;   /* latest known peer_ni incarnation */
-	struct ksock_proto   *ksnp_proto;    /* latest known peer_ni protocol */
+	atomic_t		ksnp_refcount;	/* # users */
+	int			ksnp_closing;	/* being closed */
+	int			ksnp_accepting;	/* # passive connections pending */
+	int			ksnp_error;	/* errno on closing last conn */
+	__u64			ksnp_zc_next_cookie;/* ZC completion cookie */
+	__u64			ksnp_incarnation;   /* latest known peer_ni incarnation */
+	struct ksock_proto	*ksnp_proto;	/* latest known peer_ni protocol */
 	struct list_head	ksnp_conns;	/* all active connections */
 	struct list_head	ksnp_routes;	/* routes */
 	struct list_head	ksnp_tx_queue;	/* waiting packets */
-	spinlock_t	      ksnp_lock;	/* serialize, g_lock unsafe */
+	spinlock_t		ksnp_lock;	/* serialize, g_lock unsafe */
 	/* zero copy requests wait for ACK  */
 	struct list_head	ksnp_zc_req_list;
 	time64_t		ksnp_send_keepalive; /* time to send keepalive */
-	struct lnet_ni       *ksnp_ni;       /* which network */
-	int                   ksnp_n_passive_ips; /* # of... */
-	__u32                 ksnp_passive_ips[LNET_INTERFACES_NUM]; /* preferred local interfaces */
+	struct lnet_ni		*ksnp_ni;	/* which network */
+	int			ksnp_n_passive_ips; /* # of... */
+	__u32			ksnp_passive_ips[LNET_INTERFACES_NUM]; /* preferred local interfaces */
 };
 
 struct ksock_connreq {
@@ -471,14 +471,6 @@ ksocknal_route_mask(void)
         return ((1 << SOCKLND_CONN_CONTROL) |
                 (1 << SOCKLND_CONN_BULK_IN) |
                 (1 << SOCKLND_CONN_BULK_OUT));
-}
-
-static inline struct list_head *
-ksocknal_nid2peerlist (lnet_nid_t nid)
-{
-        unsigned int hash = ((unsigned int)nid) % ksocknal_data.ksnd_peer_hash_size;
-
-        return (&ksocknal_data.ksnd_peers [hash]);
 }
 
 static inline void
