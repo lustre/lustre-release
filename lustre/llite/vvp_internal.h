@@ -114,10 +114,10 @@ struct vvp_io {
 	struct kiocb		*vui_iocb;
 
 	/* Readahead state. */
-	pgoff_t	vui_ra_start;
-	pgoff_t	vui_ra_count;
+	pgoff_t			vui_ra_start_idx;
+	pgoff_t			vui_ra_pages;
 	/* Set when vui_ra_{start,count} have been initialized. */
-	bool		vui_ra_valid;
+	bool			vui_ra_valid;
 };
 
 extern struct lu_device_type vvp_device_type;

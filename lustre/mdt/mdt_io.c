@@ -1511,7 +1511,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		len = tail;
 		offset = mbo->mbo_dom_size - len;
 	}
-	LASSERT((offset % PAGE_SIZE) == 0);
+	LASSERT((offset & ~PAGE_MASK) == 0);
 	rc = req_capsule_server_grow(pill, &RMF_NIOBUF_INLINE,
 				     sizeof(*rnb) + len);
 	if (rc != 0) {

@@ -87,12 +87,12 @@ static int osc_io_read_ahead(const struct lu_env *env,
 			ldlm_lock_decref(&lockh, dlmlock->l_req_mode);
 		}
 
-		ra->cra_rpc_size = osc_cli(osc)->cl_max_pages_per_rpc;
-		ra->cra_end = cl_index(osc2cl(osc),
-				       dlmlock->l_policy_data.l_extent.end);
+		ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
+		ra->cra_end_idx = cl_index(osc2cl(osc),
+					   dlmlock->l_policy_data.l_extent.end);
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_cbdata = dlmlock;
-		if (ra->cra_end != CL_PAGE_EOF)
+		if (ra->cra_end_idx != CL_PAGE_EOF)
 			ra->cra_contention = true;
 		result = 0;
 	}

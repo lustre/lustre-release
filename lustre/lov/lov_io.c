@@ -1044,7 +1044,8 @@ static int lov_io_read_ahead(const struct lu_env *env,
 			      ra);
 
 	CDEBUG(D_READA, DFID " cra_end = %lu, stripes = %d, rc = %d\n",
-	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end, r0->lo_nr, rc);
+	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end_idx,
+		    r0->lo_nr, rc);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1056,29 +1057,29 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	 */
 
 	/* cra_end is stripe level, convert it into file level */
-	ra_end = ra->cra_end;
+	ra_end = ra->cra_end_idx;
 	if (ra_end != CL_PAGE_EOF)
-		ra->cra_end = lov_stripe_pgoff(loo->lo_lsm, index,
-					       ra_end, stripe);
+		ra->cra_end_idx = lov_stripe_pgoff(loo->lo_lsm, index,
+						   ra_end, stripe);
 
 	/* boundary of current component */
 	ra_end = cl_index(obj, (loff_t)lov_io_extent(lio, index)->e_end);
-	if (ra_end != CL_PAGE_EOF && ra->cra_end >= ra_end)
-		ra->cra_end = ra_end - 1;
+	if (ra_end != CL_PAGE_EOF && ra->cra_end_idx >= ra_end)
+		ra->cra_end_idx = ra_end - 1;
 
 	if (r0->lo_nr == 1) /* single stripe file */
 		RETURN(0);
 
 	pps = lov_lse(loo, index)->lsme_stripe_size >> PAGE_SHIFT;
 
-	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, index = %u, "
+	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, index = %d, "
 	       "stripe_size = %u, stripe no = %u, start index = %lu\n",
-	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end, pps, index,
+	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end_idx, pps, index,
 	       lov_lse(loo, index)->lsme_stripe_size, stripe, start);
 
 	/* never exceed the end of the stripe */
-	ra->cra_end = min_t(pgoff_t,
-			    ra->cra_end, start + pps - start % pps - 1);
+	ra->cra_end_idx = min_t(pgoff_t, ra->cra_end_idx,
+				start + pps - start % pps - 1);
 	RETURN(0);
 }
 

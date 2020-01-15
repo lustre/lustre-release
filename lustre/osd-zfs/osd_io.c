@@ -284,7 +284,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			} else if (lnb[i].lnb_data != NULL) {
 				int j, apages, abufsz;
 				abufsz = arc_buf_size(lnb[i].lnb_data);
-				apages = abufsz / PAGE_SIZE;
+				apages = abufsz >> PAGE_SHIFT;
 				/* these references to pages must be invalidated
 				 * to prevent access in osd_bufs_put() */
 				for (j = 0; j < apages; j++)
@@ -909,7 +909,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			 * in this case it fallbacks to dmu_write() */
 			abufsz = arc_buf_size(lnb[i].lnb_data);
 			LASSERT(abufsz & PAGE_MASK);
-			apages = abufsz / PAGE_SIZE;
+			apages = abufsz >> PAGE_SHIFT;
 			LASSERT(i + apages <= npages);
 			/* these references to pages must be invalidated
 			 * to prevent access in osd_bufs_put() */

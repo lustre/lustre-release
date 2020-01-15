@@ -1327,7 +1327,7 @@ static int osc_refresh_count(const struct lu_env *env,
 		return 0;
 	else if (cl_offset(obj, index + 1) > kms)
 		/* catch sub-page write at end of file */
-		return kms % PAGE_SIZE;
+		return kms & ~PAGE_MASK;
 	else
 		return PAGE_SIZE;
 }

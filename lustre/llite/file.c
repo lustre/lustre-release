@@ -466,7 +466,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	 * client PAGE_SIZE to be used on that client, if server's PAGE_SIZE is
 	 * smaller then offset may be not aligned and that data is just ignored.
 	 */
-	if (rnb->rnb_offset % PAGE_SIZE)
+	if (rnb->rnb_offset & ~PAGE_MASK)
 		RETURN_EXIT;
 
 	/* Server returns whole file or just file tail if it fills in reply
@@ -486,9 +486,9 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	data = (char *)rnb + sizeof(*rnb);
 
 	lnb.lnb_file_offset = rnb->rnb_offset;
-	start = lnb.lnb_file_offset / PAGE_SIZE;
+	start = lnb.lnb_file_offset >> PAGE_SHIFT;
 	index = 0;
-	LASSERT(lnb.lnb_file_offset % PAGE_SIZE == 0);
+	LASSERT((lnb.lnb_file_offset & ~PAGE_MASK) == 0);
 	lnb.lnb_page_offset = 0;
 	do {
 		lnb.lnb_data = data + (index << PAGE_SHIFT);

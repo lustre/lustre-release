@@ -1476,16 +1476,16 @@ struct cl_read_ahead {
 	/* Maximum page index the readahead window will end.
 	 * This is determined DLM lock coverage, RPC and stripe boundary.
 	 * cra_end is included. */
-	pgoff_t cra_end;
+	pgoff_t		cra_end_idx;
 	/* optimal RPC size for this read, by pages */
-	unsigned long cra_rpc_size;
+	unsigned long	cra_rpc_pages;
 	/* Release callback. If readahead holds resources underneath, this
 	 * function should be called to release it. */
-	void    (*cra_release)(const struct lu_env *env, void *cbdata);
+	void		(*cra_release)(const struct lu_env *env, void *cbdata);
 	/* Callback data for cra_release routine */
-	void	*cra_cbdata;
+	void		*cra_cbdata;
 	/* whether lock is in contention */
-	bool	cra_contention;
+	bool		cra_contention;
 };
 
 static inline void cl_read_ahead_release(const struct lu_env *env,
