@@ -437,8 +437,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	if (!dom_lock)
 		RETURN_EXIT;
 
-	if (!req_capsule_has_field(&req->rq_pill, &RMF_NIOBUF_INLINE,
-				   RCL_SERVER))
+	if (!req_capsule_field_present(&req->rq_pill, &RMF_NIOBUF_INLINE,
+				       RCL_SERVER))
 		RETURN_EXIT;
 
 	rnb = req_capsule_server_get(&req->rq_pill, &RMF_NIOBUF_INLINE);
