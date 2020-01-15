@@ -521,59 +521,63 @@ EXPORT_SYMBOL(ptlrpc_reconnect_import);
  */
 static int import_select_connection(struct obd_import *imp)
 {
-        struct obd_import_conn *imp_conn = NULL, *conn;
-        struct obd_export *dlmexp;
-        char *target_start;
-        int target_len, tried_all = 1;
-        ENTRY;
+	struct obd_import_conn *imp_conn = NULL, *conn;
+	struct obd_export *dlmexp;
+	char *target_start;
+	int target_len, tried_all = 1;
+	int rc = 0;
+	ENTRY;
 
 	spin_lock(&imp->imp_lock);
 
 	if (list_empty(&imp->imp_conn_list)) {
-		CERROR("%s: no connections available\n",
-		       imp->imp_obd->obd_name);
-		spin_unlock(&imp->imp_lock);
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CERROR("%s: no connections available: rc = %d\n",
+		       imp->imp_obd->obd_name, rc);
+		GOTO(out_unlock, rc);
 	}
 
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
 		CDEBUG(D_HA, "%s: connect to NID %s last attempt %lld\n",
-                       imp->imp_obd->obd_name,
-                       libcfs_nid2str(conn->oic_conn->c_peer.nid),
-                       conn->oic_last_attempt);
+		       imp->imp_obd->obd_name,
+		       libcfs_nid2str(conn->oic_conn->c_peer.nid),
+		       conn->oic_last_attempt);
 
-                /* If we have not tried this connection since
-                   the last successful attempt, go with this one */
-                if ((conn->oic_last_attempt == 0) ||
+		/* If we have not tried this connection since
+		 * the last successful attempt, go with this one
+		 */
+		if ((conn->oic_last_attempt == 0) ||
 		    conn->oic_last_attempt <= imp->imp_last_success_conn) {
-                        imp_conn = conn;
-                        tried_all = 0;
-                        break;
-                }
+			imp_conn = conn;
+			tried_all = 0;
+			break;
+		}
 
-                /* If all of the connections have already been tried
-                   since the last successful connection; just choose the
-                   least recently used */
-                if (!imp_conn)
-                        imp_conn = conn;
+		/* If all of the connections have already been tried
+		 * since the last successful connection; just choose the
+		 * least recently used
+		 */
+		if (!imp_conn)
+			imp_conn = conn;
 		else if (imp_conn->oic_last_attempt > conn->oic_last_attempt)
-                        imp_conn = conn;
-        }
+			imp_conn = conn;
+	}
 
-        /* if not found, simply choose the current one */
-        if (!imp_conn || imp->imp_force_reconnect) {
-                LASSERT(imp->imp_conn_current);
-                imp_conn = imp->imp_conn_current;
-                tried_all = 0;
-        }
-        LASSERT(imp_conn->oic_conn);
+	/* if not found, simply choose the current one */
+	if (!imp_conn || imp->imp_force_reconnect) {
+		LASSERT(imp->imp_conn_current);
+		imp_conn = imp->imp_conn_current;
+		tried_all = 0;
+	}
+	LASSERT(imp_conn->oic_conn);
 
-        /* If we've tried everything, and we're back to the beginning of the
-           list, increase our timeout and try again. It will be reset when
-           we do finally connect. (FIXME: really we should wait for all network
-           state associated with the last connection attempt to drain before
-           trying to reconnect on it.) */
-        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
+	/* If we've tried everything, and we're back to the beginning of the
+	 * list, increase our timeout and try again. It will be reset when
+	 * we do finally connect. (FIXME: really we should wait for all network
+	 * state associated with the last connection attempt to drain before
+	 * trying to reconnect on it.)
+	 */
+	if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
 		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
 		if (at_get(at) < CONNECTION_SWITCH_MAX) {
 			at_measured(at, at_get(at) + CONNECTION_SWITCH_INC);
@@ -582,46 +586,47 @@ static int import_select_connection(struct obd_import *imp)
 		}
 		LASSERT(imp_conn->oic_last_attempt);
 		CDEBUG(D_HA, "%s: tried all connections, increasing latency "
-			"to %ds\n", imp->imp_obd->obd_name, at_get(at));
+		       "to %ds\n", imp->imp_obd->obd_name, at_get(at));
 	}
 
 	imp_conn->oic_last_attempt = ktime_get_seconds();
 
-        /* switch connection, don't mind if it's same as the current one */
-        if (imp->imp_connection)
-                ptlrpc_connection_put(imp->imp_connection);
-        imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+	/* switch connection, don't mind if it's same as the current one */
+	if (imp->imp_connection)
+		ptlrpc_connection_put(imp->imp_connection);
+	imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
 
-        dlmexp =  class_conn2export(&imp->imp_dlm_handle);
-        LASSERT(dlmexp != NULL);
-        if (dlmexp->exp_connection)
-                ptlrpc_connection_put(dlmexp->exp_connection);
-        dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
-        class_export_put(dlmexp);
+	dlmexp = class_conn2export(&imp->imp_dlm_handle);
+	if (!dlmexp)
+		GOTO(out_unlock, rc = -EINVAL);
+	if (dlmexp->exp_connection)
+		ptlrpc_connection_put(dlmexp->exp_connection);
+	dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+	class_export_put(dlmexp);
 
-        if (imp->imp_conn_current != imp_conn) {
-                if (imp->imp_conn_current) {
-                        deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
-                                  &target_start, &target_len);
+	if (imp->imp_conn_current != imp_conn) {
+		if (imp->imp_conn_current) {
+			deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
+				  &target_start, &target_len);
 
-                        CDEBUG(D_HA, "%s: Connection changing to"
-                               " %.*s (at %s)\n",
-                               imp->imp_obd->obd_name,
-                               target_len, target_start,
-                               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
-                }
+			CDEBUG(D_HA, "%s: Connection changing to"
+			       " %.*s (at %s)\n",
+			       imp->imp_obd->obd_name,
+			       target_len, target_start,
+			       libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+		}
 
-                imp->imp_conn_current = imp_conn;
-        }
+		imp->imp_conn_current = imp_conn;
+	}
 
 	/* The below message is checked in conf-sanity.sh test_35[ab] */
-        CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
-               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
-               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+	CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
+	       imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
+	       libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
 
+out_unlock:
 	spin_unlock(&imp->imp_lock);
-
-	RETURN(0);
+	RETURN(rc);
 }
 
 /*
