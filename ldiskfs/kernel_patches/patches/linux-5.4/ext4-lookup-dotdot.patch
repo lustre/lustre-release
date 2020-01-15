@@ -1,0 +1,37 @@
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index cd01c4a..0aefa8e 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -1663,6 +1663,32 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
+ 			return ERR_PTR(-EPERM);
+ 		}
+ 	}
++	/* ".." shouldn't go into dcache to preserve dcache hierarchy
++	 * otherwise we'll get parent being a child of actual child.
++	 * see bug 10458 for details -bzzz */
++	if (inode && (dentry->d_name.name[0] == '.' &&
++		      (dentry->d_name.len == 1 || (dentry->d_name.len == 2 &&
++					     dentry->d_name.name[1] == '.')))) {
++		struct dentry *goal = NULL;
++
++		/* first, look for an existing dentry - any one is good */
++		goal = d_find_any_alias(inode);
++		if (goal == NULL) {
++			spin_lock(&dentry->d_lock);
++			/* there is no alias, we need to make current dentry:
++			 *  a) inaccessible for __d_lookup()
++			 *  b) inaccessible for iopen */
++			J_ASSERT(hlist_unhashed(&dentry->d_u.d_alias));
++			dentry->d_flags |= DCACHE_NFSFS_RENAMED;
++			/* this is d_instantiate() ... */
++			hlist_add_head(&dentry->d_u.d_alias, &inode->i_dentry);
++			dentry->d_inode = inode;
++			spin_unlock(&dentry->d_lock);
++		}
++		if (goal)
++			iput(inode);
++		return goal;
++	}
+ 
+ #ifdef CONFIG_UNICODE
+ 	if (!inode && IS_CASEFOLDED(dir)) {

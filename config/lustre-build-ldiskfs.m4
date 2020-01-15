@@ -92,6 +92,18 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	[LDISKFS_SERIES="5.0.0-13-ubuntu19.series"])
 ])
 ])
+# Not RHEL/SLES or Ubuntu .. probably mainline
+AS_IF([test -z "$LDISKFS_SERIES"],
+	[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[],
+	[LDISKFS_SERIES="5.4.0-ml.series"],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],
+		[LDISKFS_SERIES="5.4.0-ml.series"], # lt
+		[LDISKFS_SERIES="5.4.0-ml.series"], # eq
+		[LDISKFS_SERIES="5.4.0-ml.series"]  # gt
+		)])
+	],
+[])
 AS_IF([test -z "$LDISKFS_SERIES"],
 	[AC_MSG_RESULT([failed to identify series])],
 	[AC_MSG_RESULT([$LDISKFS_SERIES])])
@@ -138,12 +150,24 @@ ext4_journal_start, [
 # LB_EXT4_BREAD_4ARGS
 #
 # 3.18 ext4_bread has 4 arguments
+# NOTE: It may not be exported for modules, use a positive compiler test here.
 #
 AC_DEFUN([LB_EXT4_BREAD_4ARGS], [
 LB_CHECK_COMPILE([if ext4_bread takes 4 arguments],
 ext4_bread, [
 	#include <linux/fs.h>
 	#include "$EXT4_SRC_DIR/ext4.h"
+
+	struct buffer_head *ext4_bread(handle_t *handle, struct inode *inode,
+				       ext4_lblk_t block, int map_flags)
+	{
+		struct buffer_head *bh = NULL;
+		(void)handle;
+		(void)inode;
+		(void)block;
+		(void)map_flags;
+		return bh;
+	}
 ],[
 	ext4_bread(NULL, NULL, 0, 0);
 ],[
@@ -287,6 +311,72 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_HAVE_BVEC_ITER_ALL
 
 #
+# LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
+#
+# kernel 5.2 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
+# ext4: avoid declaring fs inconsistent due to invalid file handles
+# __ext4_find_entry became a helper function for ext4_find_entry
+# conflicting with previous ldiskfs patches.
+# ldiskfs patches map ext4_find_entry to ldiskfs_find_entry_locked to
+# avoid conflicting with __ext4_find_entry
+#
+# When the following check succeeds __ext4_find_entry helper is not
+# used.
+#
+AC_DEFUN([LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if __ldiskfs_find_entry is available],
+ldiskfs_find_entry_locked, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+	#include "$EXT4_SRC_DIR/namei.c"
+
+	static int __ext4_find_entry(void) { return 0; }
+],[
+	int x = __ext4_find_entry();
+	(void)x;
+],[
+	AC_DEFINE(HAVE___LDISKFS_FIND_ENTRY, 1,
+		[if __ldiskfs_find_entry is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
+
+#
+# LB_LDISKFSFS_DIRHASH_WANTS_DIR
+#
+# kernel 5.2 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
+# ext4fs_dirhash UNICODE support
+#
+AC_DEFUN([LB_LDISKFSFS_DIRHASH_WANTS_DIR], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if ldiskfsfs_dirhash takes an inode argument],
+ext4fs_dirhash, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+
+	int ext4fs_dirhash(const struct inode *dir, const char *name, int len,
+			  struct dx_hash_info *hinfo)
+	{
+		(void)dir;
+		(void)name;
+		(void)len;
+		(void)hinfo;
+		return 0;
+	}
+],[
+	int f = ext4fs_dirhash(NULL, NULL, 0, NULL);
+	(void)f;
+],[
+	AC_DEFINE(HAVE_LDISKFSFS_GETHASH_INODE_ARG, 1,
+		[if ldiskfsfs_dirhash takes an inode argument])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_LDISKFSFS_DIRHASH_WANTS_DIR
+
+#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -336,6 +426,8 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_HAVE_I_CRYPT_INFO
 	LB_LDISKFS_IGET_HAS_FLAGS_ARG
 	LB_HAVE_BVEC_ITER_ALL
+	LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
+	LB_LDISKFSFS_DIRHASH_WANTS_DIR
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

@@ -1,0 +1,24 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 1342fe9..22250a4 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -2686,6 +2686,8 @@ extern void ext4_mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
+ extern int ext4_init_inode_table(struct super_block *sb,
+ 				 ext4_group_t group, int barrier);
+ extern void ext4_end_bitmap_read(struct buffer_head *bh, int uptodate);
++extern struct buffer_head *
++ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group);
+ 
+ /* mballoc.c */
+ extern const struct file_operations ext4_seq_prealloc_table_fops;
+@@ -2805,6 +2807,10 @@ extern int ext4_ext_migrate(struct inode *);
+ extern int ext4_ind_migrate(struct inode *inode);
+ 
+ /* namei.c */
++extern struct buffer_head *ext4_append(handle_t *handle,
++				       struct inode *inode,
++				       ext4_lblk_t *block);
++
+ extern int ext4_dirblock_csum_verify(struct inode *inode,
+ 				     struct buffer_head *bh);
+ extern int ext4_orphan_add(handle_t *, struct inode *);

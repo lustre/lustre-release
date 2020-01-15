@@ -166,6 +166,25 @@ static inline struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
 #define LVAR_HASH_R5        (0)
 #define LVAR_HASH_PREFIX    (0)
 
+#ifdef HAVE_LDISKFSFS_GETHASH_INODE_ARG
+/*
+ * NOTE: doing this breaks on file systems configured with
+ *       case-insensitive file name lookups
+ *
+ * kernel 5.2 commit b886ee3e778ec2ad43e276fd378ab492cf6819b7
+ * ext4: Support case-insensitive file name lookups
+ *
+ * FUTURE:
+ *  We need to pass the struct inode *dir down to hash_build0
+ *  to enable case-insensitive file name support ext4/ldiskfs
+ */
+#define e_ldiskfsfs_dirhash(name, len, info) \
+		__ldiskfsfs_dirhash(name, len, info)
+#else
+#define e_ldiskfsfs_dirhash(name, len, info) \
+		ldiskfsfs_dirhash(name, len, info)
+#endif
+
 static u32 hash_build0(const char *name, int namelen)
 {
 	u32 result;
@@ -186,14 +205,14 @@ static u32 hash_build0(const char *name, int namelen)
 
 		hinfo.hash_version = LDISKFS_DX_HASH_TEA;
 		hinfo.seed = NULL;
-		ldiskfsfs_dirhash(name, namelen, &hinfo);
+		e_ldiskfsfs_dirhash(name, namelen, &hinfo);
 		result = hinfo.hash;
 		if (LVAR_HASH_SANDWICH) {
 			u32 result2;
 
 			hinfo.hash_version = LDISKFS_DX_HASH_TEA;
 			hinfo.seed = NULL;
-			ldiskfsfs_dirhash(name, namelen, &hinfo);
+			e_ldiskfsfs_dirhash(name, namelen, &hinfo);
 			result2 = hinfo.hash;
 			result = (0xfc000000 & result2) | (0x03ffffff & result);
 		}

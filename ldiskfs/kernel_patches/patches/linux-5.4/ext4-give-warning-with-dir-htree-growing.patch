@@ -1,0 +1,156 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 8203441..3ef90af 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1470,6 +1470,7 @@ struct ext4_sb_info {
+ 	unsigned long s_mb_prealloc_table_size;
+ 	unsigned int s_mb_group_prealloc;
+ 	unsigned int s_max_dir_size_kb;
++	unsigned long s_warning_dir_size;
+ 	/* where last allocation was done - for stream allocation */
+ 	unsigned long s_mb_last_group;
+ 	unsigned long s_mb_last_start;
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index d654387..d98e90b 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -755,12 +755,20 @@ struct ext4_dir_lock_data {
+ #define ext4_htree_lock_data(l)	((struct ext4_dir_lock_data *)(l)->lk_private)
+ #define ext4_find_entry(dir, name, dirent, inline) \
+ 			ext4_find_entry_locked(dir, name, dirent, inline, NULL)
+-#define ext4_add_entry(handle, dentry, inode) \
+-			ext4_add_entry_locked(handle, dentry, inode, NULL)
+ 
+ /* NB: ext4_lblk_t is 32 bits so we use high bits to identify invalid blk */
+ #define EXT4_HTREE_NODE_CHANGED	(0xcafeULL << 32)
+ 
++inline int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++			  struct inode *inode)
++{
++	int ret = ext4_add_entry_locked(handle, dentry, inode, NULL);
++
++	if (ret == -ENOBUFS)
++		ret = 0;
++	return ret;
++}
++
+ static void ext4_htree_event_cb(void *target, void *event)
+ {
+ 	u64 *block = (u64 *)target;
+@@ -2598,6 +2606,54 @@ out:
+ 	return err;
+ }
+ 
++static unsigned long __ext4_max_dir_size(struct dx_frame *frames,
++			       struct dx_frame *frame, struct inode *dir)
++{
++	unsigned long max_dir_size;
++
++	if (EXT4_SB(dir->i_sb)->s_max_dir_size_kb) {
++		max_dir_size = EXT4_SB(dir->i_sb)->s_max_dir_size_kb << 10;
++	} else {
++		max_dir_size = EXT4_BLOCK_SIZE(dir->i_sb);
++		while (frame >= frames) {
++			max_dir_size *= dx_get_limit(frame->entries);
++			if (frame == frames)
++				break;
++			frame--;
++		}
++		/* use 75% of max dir size in average */
++		max_dir_size = max_dir_size / 4 * 3;
++	}
++	return max_dir_size;
++}
++
++/*
++ * With hash tree growing, it is easy to hit ENOSPC, but it is hard
++ * to predict when it will happen. let's give administrators warning
++ * when reaching 3/5 and 2/3 of limit
++ */
++static inline bool dir_size_in_warning_range(struct dx_frame *frames,
++					     struct dx_frame *frame,
++					     struct inode *dir)
++{
++	unsigned long size1, size2;
++	struct super_block *sb = dir->i_sb;
++
++	if (unlikely(!EXT4_SB(sb)->s_warning_dir_size))
++		EXT4_SB(sb)->s_warning_dir_size =
++			__ext4_max_dir_size(frames, frame, dir);
++
++	size1 = EXT4_SB(sb)->s_warning_dir_size / 16 * 10;
++	size1 = size1 & ~(EXT4_BLOCK_SIZE(sb) - 1);
++	size2 = EXT4_SB(sb)->s_warning_dir_size / 16 * 11;
++	size2 = size2 & ~(EXT4_BLOCK_SIZE(sb) - 1);
++	if (in_range(dir->i_size, size1, EXT4_BLOCK_SIZE(sb)) ||
++	    in_range(dir->i_size, size2, EXT4_BLOCK_SIZE(sb)))
++		return true;
++
++	return false;
++}
++
+ /*
+  *	ext4_add_entry()
+  *
+@@ -2727,6 +2783,7 @@ static int ext4_dx_add_entry(handle_t *handle, struct ext4_filename *fname,
+ 	struct ext4_dir_entry_2 *de;
+ 	int restart;
+ 	int err;
++	bool ret_warn = false;
+ 
+ again:
+ 	restart = 0;
+@@ -2755,6 +2812,11 @@ again:
+ 	/* Block full, should compress but for now just split */
+ 	dxtrace(printk(KERN_DEBUG "using %u of %u node entries\n",
+ 		       dx_get_count(entries), dx_get_limit(entries)));
++
++	if (frame - frames + 1 >= ext4_dir_htree_level(sb) ||
++	    EXT4_SB(sb)->s_warning_dir_size)
++		ret_warn = dir_size_in_warning_range(frames, frame, dir);
++
+ 	/* Need to split index? */
+ 	if (dx_get_count(entries) == dx_get_limit(entries)) {
+ 		ext4_lblk_t newblock;
+@@ -2918,6 +2980,8 @@ cleanup:
+ 	 */
+ 	if (restart && err == 0)
+ 		goto again;
++	if (err == 0 && ret_warn)
++		err = -ENOBUFS;
+ 	return err;
+ }
+ 
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 70cd294..132dd23 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1899,6 +1899,8 @@ static int handle_mount_opt(struct super_block *sb, char *opt, int token,
+ 		sbi->s_li_wait_mult = arg;
+ 	} else if (token == Opt_max_dir_size_kb) {
+ 		sbi->s_max_dir_size_kb = arg;
++		/* reset s_warning_dir_size and make it re-calculated */
++		sbi->s_warning_dir_size = 0;
+ 	} else if (token == Opt_stripe) {
+ 		sbi->s_stripe = arg;
+ 	} else if (token == Opt_resuid) {
+diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
+index d24d6d9..13217a6 100644
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -182,6 +182,7 @@ EXT4_ATTR_OFFSET(inode_readahead_blks, 0644, inode_readahead,
+ EXT4_RW_ATTR_SBI_UI(inode_goal, s_inode_goal);
+ EXT4_RW_ATTR_SBI_UI(max_dir_size, s_max_dir_size_kb);
+ EXT4_RW_ATTR_SBI_UI(max_dir_size_kb, s_max_dir_size_kb);
++EXT4_RW_ATTR_SBI_UI(warning_dir_size, s_warning_dir_size);
+ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
+ EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
+@@ -214,6 +215,7 @@ static struct attribute *ext4_attrs[] = {
+ 	ATTR_LIST(inode_goal),
+ 	ATTR_LIST(max_dir_size),
+ 	ATTR_LIST(max_dir_size_kb),
++	ATTR_LIST(warning_dir_size),
+ 	ATTR_LIST(mb_stats),
+ 	ATTR_LIST(mb_max_to_scan),
+ 	ATTR_LIST(mb_min_to_scan),

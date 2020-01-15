@@ -1,0 +1,58 @@
+From 01da8ce642e08594db95d940b3352ad7ee153b09 Mon Sep 17 00:00:00 2001
+From: Shaun Tancheff <stancheff@cray.com>
+Date: Tue, 6 Aug 2019 17:11:57 -0500
+Subject: [PATCH] + linux-5.3/ext4-attach-jinode-in-writepages
+
+---
+ fs/ext4/ext4.h  | 1 +
+ fs/ext4/inode.c | 8 ++++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 65c02d6..f28104a 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -2672,6 +2672,7 @@ extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
+ extern void ext4_process_freed_data(struct super_block *sb, tid_t commit_tid);
+ 
+ /* inode.c */
++#define HAVE_LDISKFS_INFO_JINODE
+ int ext4_inode_is_fast_symlink(struct inode *inode);
+ struct buffer_head *ext4_getblk(handle_t *, struct inode *, ext4_lblk_t, int);
+ struct buffer_head *ext4_bread(handle_t *, struct inode *, ext4_lblk_t, int);
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 434b256..0fd5f4e 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -735,6 +735,10 @@ out_sem:
+ 				(loff_t)map->m_lblk << inode->i_blkbits;
+ 			loff_t length = (loff_t)map->m_len << inode->i_blkbits;
+ 
++			ret = ext4_inode_attach_jinode(inode);
++			if (ret)
++				return ret;
++
+ 			if (flags & EXT4_GET_BLOCKS_IO_SUBMIT)
+ 				ret = ext4_jbd2_inode_add_wait(handle, inode,
+ 						start_byte, length);
+@@ -2829,6 +2833,9 @@ static int ext4_writepages(struct address_space *mapping,
+ 		mpd.last_page = wbc->range_end >> PAGE_SHIFT;
+ 	}
+ 
++	ret = ext4_inode_attach_jinode(inode);
++	if (ret)
++		goto out_writepages;
+ 	mpd.inode = inode;
+ 	mpd.wbc = wbc;
+ 	ext4_io_submit_init(&mpd.io_submit, wbc);
+@@ -4446,6 +4453,7 @@ int ext4_inode_attach_jinode(struct inode *inode)
+ 		jbd2_free_inode(jinode);
+ 	return 0;
+ }
++EXPORT_SYMBOL(ext4_inode_attach_jinode);
+ 
+ /*
+  * ext4_truncate()
+-- 
+2.20.1
+

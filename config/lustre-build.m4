@@ -420,8 +420,8 @@ AM_CONDITIONAL([DOC], [test x$ENABLE_DOC = x1])
 AM_CONDITIONAL([MANPAGES], [test x$enable_manpages = xyes])
 AM_CONDITIONAL([LINUX], [test x$lb_target_os = xlinux])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
-AM_CONDITIONAL([RHEL], [test x$RHEL_KERNEL = xyes])
-AM_CONDITIONAL([SUSE], [test x$SUSE_KERNEL = xyes])
+AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release])
+AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
 
 LN_CONDITIONALS
