@@ -46,6 +46,7 @@
 #include "cl_internal.h"
 
 static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg);
+static DEFINE_MUTEX(cl_page_kmem_mutex);
 
 #ifdef LIBCFS_DEBUG
 # define PASSERT(env, page, expr)                                       \
@@ -142,11 +143,24 @@ cl_page_at_trusted(const struct cl_page *page,
 	RETURN(NULL);
 }
 
+static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
+{
+	int index = cl_page->cp_kmem_index;
+
+	if (index >= 0) {
+		LASSERT(index < ARRAY_SIZE(cl_page_kmem_array));
+		LASSERT(cl_page_kmem_size_array[index] == bufsize);
+		OBD_SLAB_FREE(cl_page, cl_page_kmem_array[index], bufsize);
+	} else {
+		OBD_FREE(cl_page, bufsize);
+	}
+}
+
 static void cl_page_free(const struct lu_env *env, struct cl_page *page,
 			 struct pagevec *pvec)
 {
 	struct cl_object *obj  = page->cp_obj;
-	int pagesize = cl_object_header(obj)->coh_page_bufsize;
+	unsigned short bufsize = cl_object_header(obj)->coh_page_bufsize;
 
 	PASSERT(env, page, list_empty(&page->cp_batch));
 	PASSERT(env, page, page->cp_owner == NULL);
@@ -167,7 +181,7 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page,
 	lu_object_ref_del_at(&obj->co_lu, &page->cp_obj_ref, "cl_page", page);
 	cl_object_put(env, obj);
 	lu_ref_fini(&page->cp_reference);
-	OBD_FREE(page, pagesize);
+	__cl_page_free(page, bufsize);
 	EXIT;
 }
 
@@ -182,6 +196,59 @@ static inline void cl_page_state_set_trust(struct cl_page *page,
         *(enum cl_page_state *)&page->cp_state = state;
 }
 
+static struct cl_page *__cl_page_alloc(struct cl_object *o)
+{
+	int i = 0;
+	struct cl_page *cl_page = NULL;
+	unsigned short bufsize = cl_object_header(o)->coh_page_bufsize;
+
+check:
+	/* the number of entries in cl_page_kmem_array is expected to
+	 * only be 2-3 entries, so the lookup overhead should be low.
+	 */
+	for ( ; i < ARRAY_SIZE(cl_page_kmem_array); i++) {
+		if (smp_load_acquire(&cl_page_kmem_size_array[i])
+		    == bufsize) {
+			OBD_SLAB_ALLOC_GFP(cl_page, cl_page_kmem_array[i],
+					   bufsize, GFP_NOFS);
+			if (cl_page)
+				cl_page->cp_kmem_index = i;
+			return cl_page;
+		}
+		if (cl_page_kmem_size_array[i] == 0)
+			break;
+	}
+
+	if (i < ARRAY_SIZE(cl_page_kmem_array)) {
+		char cache_name[32];
+
+		mutex_lock(&cl_page_kmem_mutex);
+		if (cl_page_kmem_size_array[i]) {
+			mutex_unlock(&cl_page_kmem_mutex);
+			goto check;
+		}
+		snprintf(cache_name, sizeof(cache_name),
+			 "cl_page_kmem-%u", bufsize);
+		cl_page_kmem_array[i] =
+			kmem_cache_create(cache_name, bufsize,
+					  0, 0, NULL);
+		if (cl_page_kmem_array[i] == NULL) {
+			mutex_unlock(&cl_page_kmem_mutex);
+			return NULL;
+		}
+		smp_store_release(&cl_page_kmem_size_array[i],
+				  bufsize);
+		mutex_unlock(&cl_page_kmem_mutex);
+		goto check;
+	} else {
+		OBD_ALLOC_GFP(cl_page, bufsize, GFP_NOFS);
+		if (cl_page)
+			cl_page->cp_kmem_index = -1;
+	}
+
+	return cl_page;
+}
+
 struct cl_page *cl_page_alloc(const struct lu_env *env,
 		struct cl_object *o, pgoff_t ind, struct page *vmpage,
 		enum cl_page_type type)
@@ -190,8 +257,8 @@ struct cl_page *cl_page_alloc(const struct lu_env *env,
 	struct lu_object_header *head;
 
 	ENTRY;
-	OBD_ALLOC_GFP(page, cl_object_header(o)->coh_page_bufsize,
-			GFP_NOFS);
+
+	page = __cl_page_alloc(o);
 	if (page != NULL) {
 		int result = 0;
 		atomic_set(&page->cp_ref, 1);

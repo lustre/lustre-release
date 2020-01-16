@@ -47,6 +47,8 @@ struct cl_thread_info {
 };
 
 extern struct kmem_cache *cl_dio_aio_kmem;
+extern struct kmem_cache *cl_page_kmem_array[16];
+extern unsigned short cl_page_kmem_size_array[16];
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env);
 void cl_page_disown0(const struct lu_env *env,

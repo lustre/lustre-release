@@ -729,6 +729,8 @@ enum cl_page_type {
 struct cl_page {
 	/** Reference counter. */
 	atomic_t		 cp_ref;
+	/* which slab kmem index this memory allocated from */
+	int			 cp_kmem_index;
 	/** An object this page is a part of. Immutable after creation. */
 	struct cl_object	*cp_obj;
 	/** vmpage */
