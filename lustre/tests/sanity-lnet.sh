@@ -48,6 +48,7 @@ if module_loaded lnet ; then
 fi
 
 cleanup_testsuite() {
+	trap "" EXIT
 	rm -f $TMP/sanity-dlc*
 	cleanup_netns
 	cleanup_lnet
@@ -222,6 +223,8 @@ validate_gateway_nids() {
 
 cleanupall -f
 setup_netns || error "setup_netns failed with $?"
+
+stack_trap 'cleanup_testsuite' EXIT
 
 test_0() {
 	load_module ../lnet/lnet/lnet || error "Failed to load module rc = $?"
