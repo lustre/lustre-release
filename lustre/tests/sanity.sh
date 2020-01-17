@@ -556,11 +556,6 @@ test_17g() {
 	[ $MDS1_VERSION -le $(version_code 2.3.55) ] &&
 		TESTS="4094 4095"
 
-	# skip long symlink name for rhel6.5.
-	# rhel6.5 has a limit (PATH_MAX - sizeof(struct filename))
-	grep -q '6.5' /etc/redhat-release &>/dev/null &&
-		TESTS="59 60 61 4062 4063"
-
 	for i in $TESTS; do
 		local SYMNAME=$(str_repeat 'x' $i)
 		ln -s $SYMNAME $DIR/$tdir/f$i || error "failed $i-char symlink"

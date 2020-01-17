@@ -9719,19 +9719,14 @@ verify_yaml_layout() {
 
 is_project_quota_supported() {
 	$ENABLE_PROJECT_QUOTAS || return 1
-	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
-		[ $(lustre_version_code $SINGLEMDS) -gt \
-		$(version_code 2.9.55) ] &&
-		lfs --help | grep project >&/dev/null &&
-		egrep -q "7." /etc/redhat-release && return 0
 
-	if [ "$(facet_fstype $SINGLEMDS)" == "zfs" ]; then
-		[ $(lustre_version_code $SINGLEMDS) -le \
-			$(version_code 2.10.53) ] && return 1
+	[[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" &&
+	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ]] &&
+		do_facet mds1 lfs --help |& grep -q project && return 0
 
-		do_facet mds1 $ZPOOL get all |
-			grep -q project_quota && return 0
-	fi
+	[[ "$(facet_fstype $SINGLEMDS)" == "zfs" &&
+	   $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.10.53) ]] &&
+		do_facet mds1 $ZPOOL get all | grep -q project_quota && return 0
 
 	return 1
 }
