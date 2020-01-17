@@ -1913,6 +1913,24 @@ recheck:
 					RETURN(rc);
 				}
 			}
+			/* Any stripe count is forbidden on DoM component */
+			if (lum->lmm_stripe_count) {
+				CDEBUG(D_LAYOUT,
+				       "invalid DoM layout stripe count %u, must be 0\n",
+				       le16_to_cpu(lum->lmm_stripe_count));
+				RETURN(-EINVAL);
+			}
+
+			/* Any pool is forbidden on DoM component */
+			if (lum->lmm_magic == LOV_USER_MAGIC_V3) {
+				struct lov_user_md_v3 *v3 = (void *)lum;
+
+				if (v3->lmm_pool_name[0] != '\0') {
+					CDEBUG(D_LAYOUT,
+					       "DoM component cannot have pool assigned\n");
+					RETURN(-EINVAL);
+				}
+			}
 		}
 
 		prev_end = le64_to_cpu(ext->e_end);

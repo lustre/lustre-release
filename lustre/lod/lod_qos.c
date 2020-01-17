@@ -2188,11 +2188,16 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		    lov_pattern(v1->lmm_pattern) == LOV_PATTERN_MDT)
 			lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 
+		if (lov_pattern(lod_comp->llc_pattern) == LOV_PATTERN_MDT &&
+		    lod_comp->llc_stripe_count != 0) {
+			CDEBUG(D_LAYOUT, "%s: invalid stripe count: %u\n",
+			       lod2obd(d)->obd_name,
+			       lod_comp->llc_stripe_count);
+			GOTO(free_comp, rc = -EINVAL);
+		}
+
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_obj_set_pool(lo, i, pool_name);
-
-		LASSERT(ergo(lov_pattern(lod_comp->llc_pattern) ==
-			     LOV_PATTERN_MDT, lod_comp->llc_stripe_count == 0));
 
 		if (pool_name == NULL)
 			continue;

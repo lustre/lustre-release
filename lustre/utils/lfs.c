@@ -3255,6 +3255,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migration_block = true;
 			break;
 		case 'C':
+			if (lsa.lsa_pattern == LLAPI_LAYOUT_MDT) {
+				fprintf(stderr,
+					"%s %s: -C|--overstripe-count incompatible with DoM layout\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
 			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			/* fall through */
 		case 'c':
@@ -3480,6 +3486,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				fprintf(stderr, "warning: '--ost-list' is "
 					"deprecated, use '--ost' instead\n");
 #endif
+			if (lsa.lsa_pattern == LLAPI_LAYOUT_MDT) {
+				fprintf(stderr,
+					"%s %s: -o|--ost incompatible with DoM layout\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
 			/* -o allows overstriping, and must note it because
 			 * parse_targets is shared with MDT striping, which
 			 * does not allow duplicates
