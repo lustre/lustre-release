@@ -473,19 +473,14 @@ ksocknal_send_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello)
         hmv->version_major = cpu_to_le16 (KSOCK_PROTO_V1_MAJOR);
         hmv->version_minor = cpu_to_le16 (KSOCK_PROTO_V1_MINOR);
 
-        if (the_lnet.ln_testprotocompat != 0) {
-                /* single-shot proto check */
-                LNET_LOCK();
-                if ((the_lnet.ln_testprotocompat & 1) != 0) {
-                        hmv->version_major++;   /* just different! */
-                        the_lnet.ln_testprotocompat &= ~1;
-                }
-                if ((the_lnet.ln_testprotocompat & 2) != 0) {
-                        hmv->magic = LNET_PROTO_MAGIC;
-                        the_lnet.ln_testprotocompat &= ~2;
-                }
-                LNET_UNLOCK();
-        }
+	if (the_lnet.ln_testprotocompat) {
+		/* single-shot proto check */
+		if (test_and_clear_bit(0, &the_lnet.ln_testprotocompat))
+			hmv->version_major++;   /* just different! */
+
+		if (test_and_clear_bit(1, &the_lnet.ln_testprotocompat))
+			hmv->magic = LNET_PROTO_MAGIC;
+	}
 
         hdr->src_nid        = cpu_to_le64 (hello->kshm_src_nid);
         hdr->src_pid        = cpu_to_le32 (hello->kshm_src_pid);
@@ -531,15 +526,11 @@ ksocknal_send_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello)
         hello->kshm_magic   = LNET_PROTO_MAGIC;
         hello->kshm_version = conn->ksnc_proto->pro_version;
 
-        if (the_lnet.ln_testprotocompat != 0) {
-                /* single-shot proto check */
-                LNET_LOCK();
-                if ((the_lnet.ln_testprotocompat & 1) != 0) {
-                        hello->kshm_version++;   /* just different! */
-                        the_lnet.ln_testprotocompat &= ~1;
-                }
-                LNET_UNLOCK();
-        }
+	if (the_lnet.ln_testprotocompat) {
+		/* single-shot proto check */
+		if (test_and_clear_bit(0, &the_lnet.ln_testprotocompat))
+			hello->kshm_version++;   /* just different! */
+	}
 
 	rc = lnet_sock_write(sock, hello, offsetof(struct ksock_hello_msg, kshm_ips),
                                lnet_acceptor_timeout());

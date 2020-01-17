@@ -3916,9 +3916,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		return 0;
 
 	case IOC_LIBCFS_TESTPROTOCOMPAT:
-		lnet_net_lock(LNET_LOCK_EX);
 		the_lnet.ln_testprotocompat = data->ioc_flags;
-		lnet_net_unlock(LNET_LOCK_EX);
 		return 0;
 
 	case IOC_LIBCFS_LNET_FAULT:

@@ -1113,7 +1113,7 @@ struct lnet {
 	const struct lnet_lnd		*ln_lnds[NUM_LNDS];
 
 	/* test protocol compatibility flags */
-	int				ln_testprotocompat;
+	unsigned long			ln_testprotocompat;
 
 	/* 0 - load the NIs from the mod params
 	 * 1 - do not load the NIs from the mod params
