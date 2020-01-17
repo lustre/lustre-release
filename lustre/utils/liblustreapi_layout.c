@@ -549,8 +549,12 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		else if (v1->lmm_pattern == (LOV_PATTERN_RAID0 |
 					 LOV_PATTERN_OVERSTRIPING))
 			comp->llc_pattern = LLAPI_LAYOUT_OVERSTRIPING;
+		else if (v1->lmm_pattern == LOV_PATTERN_MDT)
+			comp->llc_pattern = LLAPI_LAYOUT_MDT;
 		else
-			/* Lustre only supports RAID0 for now. */
+			/* Lustre only supports RAID0, overstripping
+			 * and DoM for now.
+			 */
 			comp->llc_pattern = v1->lmm_pattern;
 
 		if (v1->lmm_stripe_size == 0)
