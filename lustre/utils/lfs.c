@@ -3111,6 +3111,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				fprintf(stderr, "warning: '--ost-list' is "
 					"deprecated, use '--ost' instead\n");
 #endif
+			if (lsa.lsa_pattern == LLAPI_LAYOUT_MDT) {
+				fprintf(stderr,
+					"%s %s: -o|--ost incompatible with DoM layout\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
 			lsa.lsa_nr_tgts = parse_targets(tgts,
 						sizeof(tgts) / sizeof(__u32),
 						lsa.lsa_nr_tgts, optarg);
