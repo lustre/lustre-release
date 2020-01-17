@@ -1822,6 +1822,7 @@ static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archive_count,
 		*archive_array = archive_count;
 
 	ptlrpc_request_set_replen(req);
+	req->rq_no_resend = 1;
 
 	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
