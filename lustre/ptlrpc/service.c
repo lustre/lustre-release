@@ -2554,14 +2554,6 @@ static void ptlrpc_check_rqbd_pool(struct ptlrpc_service_part *svcpt)
 	}
 }
 
-static int ptlrpc_retry_rqbds(void *arg)
-{
-	struct ptlrpc_service_part *svcpt = (struct ptlrpc_service_part *)arg;
-
-	svcpt->scp_rqbd_timeout = 0;
-	return -ETIMEDOUT;
-}
-
 static inline int ptlrpc_threads_enough(struct ptlrpc_service_part *svcpt)
 {
 	return svcpt->scp_nreqs_active <
@@ -2705,20 +2697,28 @@ static __attribute__((__noinline__)) int
 ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 		  struct ptlrpc_thread *thread)
 {
-	/* Don't exit while there are replies to be handled */
-	struct l_wait_info lwi = LWI_TIMEOUT(svcpt->scp_rqbd_timeout,
-					     ptlrpc_retry_rqbds, svcpt);
-
 	ptlrpc_watchdog_disable(&thread->t_watchdog);
 
 	cond_resched();
 
-	l_wait_event_exclusive_head(svcpt->scp_waitq,
-				ptlrpc_thread_stopping(thread) ||
-				ptlrpc_server_request_incoming(svcpt) ||
-				ptlrpc_server_request_pending(svcpt, false) ||
-				ptlrpc_rqbd_pending(svcpt) ||
-				ptlrpc_at_check(svcpt), &lwi);
+	if (svcpt->scp_rqbd_timeout == 0)
+		/* Don't exit while there are replies to be handled */
+		wait_event_idle_exclusive_lifo(
+			svcpt->scp_waitq,
+			ptlrpc_thread_stopping(thread) ||
+			ptlrpc_server_request_incoming(svcpt) ||
+			ptlrpc_server_request_pending(svcpt, false) ||
+			ptlrpc_rqbd_pending(svcpt) ||
+			ptlrpc_at_check(svcpt));
+	else if (wait_event_idle_exclusive_lifo_timeout(
+			 svcpt->scp_waitq,
+			 ptlrpc_thread_stopping(thread) ||
+			 ptlrpc_server_request_incoming(svcpt) ||
+			 ptlrpc_server_request_pending(svcpt, false) ||
+			 ptlrpc_rqbd_pending(svcpt) ||
+			 ptlrpc_at_check(svcpt),
+			 svcpt->scp_rqbd_timeout) == 0)
+		svcpt->scp_rqbd_timeout = 0;
 
 	if (ptlrpc_thread_stopping(thread))
 		return -EINTR;
