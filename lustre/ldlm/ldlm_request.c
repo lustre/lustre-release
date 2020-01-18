@@ -71,10 +71,6 @@ MODULE_PARM_DESC(ldlm_enqueue_min, "lock enqueue timeout minimum");
 /* in client side, whether the cached locks will be canceled before replay */
 unsigned int ldlm_cancel_unused_locks_before_replay = 1;
 
-static void interrupted_completion_wait(void *data)
-{
-}
-
 struct lock_wait_data {
 	struct ldlm_lock *lwd_lock;
 	__u32             lwd_conn_cnt;
@@ -111,9 +107,8 @@ int ldlm_request_bufsize(int count, int type)
 	return sizeof(struct ldlm_request) + avail;
 }
 
-int ldlm_expired_completion_wait(void *data)
+void ldlm_expired_completion_wait(struct lock_wait_data *lwd)
 {
-	struct lock_wait_data *lwd = data;
 	struct ldlm_lock *lock = lwd->lwd_lock;
 	struct obd_import *imp;
 	struct obd_device *obd;
@@ -135,7 +130,7 @@ int ldlm_expired_completion_wait(void *data)
 			if (last_dump == 0)
 				libcfs_debug_dumplog();
 		}
-		RETURN(0);
+		RETURN_EXIT;
 	}
 
 	obd = lock->l_conn_export->exp_obd;
@@ -147,7 +142,7 @@ int ldlm_expired_completion_wait(void *data)
 		   (s64)(ktime_get_real_seconds() - lock->l_activity),
 		   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
-	RETURN(0);
+	EXIT;
 }
 
 int is_granted_or_cancelled_nolock(struct ldlm_lock *lock)
@@ -269,7 +264,6 @@ int ldlm_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	struct lock_wait_data lwd;
 	struct obd_device *obd;
 	struct obd_import *imp = NULL;
-	struct l_wait_info lwi;
 	time64_t timeout;
 	int rc = 0;
 
@@ -300,15 +294,6 @@ noreproc:
 	lwd.lwd_lock = lock;
 	lock->l_activity = ktime_get_real_seconds();
 
-	if (ldlm_is_no_timeout(lock)) {
-		LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
-		lwi = LWI_INTR(interrupted_completion_wait, &lwd);
-	} else {
-		lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout),
-				       ldlm_expired_completion_wait,
-				       interrupted_completion_wait, &lwd);
-	}
-
 	if (imp != NULL) {
 		spin_lock(&imp->imp_lock);
 		lwd.lwd_conn_cnt = imp->imp_conn_cnt;
@@ -322,8 +307,22 @@ noreproc:
 		rc = -EINTR;
 	} else {
 		/* Go to sleep until the lock is granted or cancelled. */
-		rc = l_wait_event(lock->l_waitq,
-				  is_granted_or_cancelled(lock), &lwi);
+		if (ldlm_is_no_timeout(lock)) {
+			LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
+			rc = l_wait_event_abortable(
+				lock->l_waitq,
+				is_granted_or_cancelled(lock));
+		} else {
+			if (wait_event_idle_timeout(
+				    lock->l_waitq,
+				    is_granted_or_cancelled(lock),
+				    cfs_time_seconds(timeout)) == 0) {
+				ldlm_expired_completion_wait(&lwd);
+				rc = l_wait_event_abortable(
+					lock->l_waitq,
+					is_granted_or_cancelled(lock));
+			}
+		}
 	}
 
 	if (rc) {

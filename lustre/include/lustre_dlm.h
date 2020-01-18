@@ -1641,7 +1641,6 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
 } while (0)
 
 /* ldlm_request.c */
-int ldlm_expired_completion_wait(void *data);
 /** \defgroup ldlm_local_ast Default AST handlers for local locks
  * These AST handlers are typically used for server-side local locks and are
  * also used by client-side lock handlers to perform minimum level base
