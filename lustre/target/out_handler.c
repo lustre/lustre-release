@@ -1004,17 +1004,23 @@ int out_handle(struct tgt_session_info *tsi)
 		update_bufs[0] = ouh->ouh_inline_data;
 	} else {
 		struct out_update_buffer *tmp;
+		int page_count = 0;
 
 		oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
 		if (oub == NULL)
 			GOTO(out_free, rc = err_serious(-EPROTO));
 
-		desc = ptlrpc_prep_bulk_exp(pill->rc_req, update_buf_count,
+		for (i = 0; i < update_buf_count; i++)
+			/* First *and* last might be partial pages, hence +1 */
+			page_count += DIV_ROUND_UP(oub[i].oub_size,
+						   PAGE_SIZE) + 1;
+
+		desc = ptlrpc_prep_bulk_exp(pill->rc_req, page_count,
 					    PTLRPC_BULK_OPS_COUNT,
 					    PTLRPC_BULK_GET_SINK |
-					    PTLRPC_BULK_BUF_KVEC,
+					    PTLRPC_BULK_BUF_KIOV,
 					    MDS_BULK_PORTAL,
-					    &ptlrpc_bulk_kvec_ops);
+					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
 			GOTO(out_free, rc = err_serious(-ENOMEM));
 
