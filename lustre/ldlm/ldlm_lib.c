@@ -3306,16 +3306,6 @@ void ldlm_dump_export_locks(struct obd_export *exp)
 #endif
 
 #ifdef HAVE_SERVER_SUPPORT
-static int target_bulk_timeout(void *data)
-{
-	ENTRY;
-	/*
-	 * We don't fail the connection here, because having the export
-	 * killed makes the (vital) call to commitrw very sad.
-	 */
-	RETURN(1);
-}
-
 static inline const char *bulk2type(struct ptlrpc_request *req)
 {
 	if (req->rq_bulk_read)
@@ -3330,7 +3320,6 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 	struct ptlrpc_request *req = desc->bd_req;
 	time64_t start = ktime_get_seconds();
 	time64_t deadline;
-	struct l_wait_info lwi;
 	int rc = 0;
 
 	ENTRY;
@@ -3375,20 +3364,19 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 
 	do {
 		time64_t timeoutl = deadline - ktime_get_seconds();
-		long timeout_jiffies = timeoutl <= 0 ?
-				       1 : cfs_time_seconds(timeoutl);
 		time64_t rq_deadline;
 
-		lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
-					   cfs_time_seconds(1),
-					   target_bulk_timeout, desc);
-		rc = l_wait_event(desc->bd_waitq,
-				  !ptlrpc_server_bulk_active(desc) ||
-				  exp->exp_failed ||
-				  exp->exp_conn_cnt >
-				  lustre_msg_get_conn_cnt(req->rq_reqmsg),
-				  &lwi);
-		LASSERT(rc == 0 || rc == -ETIMEDOUT);
+		while (timeoutl >= 0 &&
+		       wait_event_idle_timeout(
+			       desc->bd_waitq,
+			       !ptlrpc_server_bulk_active(desc) ||
+			       exp->exp_failed ||
+			       exp->exp_conn_cnt >
+			       lustre_msg_get_conn_cnt(req->rq_reqmsg),
+			       timeoutl ? cfs_time_seconds(1) : 1) == 0)
+			timeoutl -= 1;
+		rc = timeoutl < 0 ? -ETIMEDOUT : 0;
+
 		/* Wait again if we changed rq_deadline. */
 		rq_deadline = READ_ONCE(req->rq_deadline);
 		deadline = start + bulk_timeout;

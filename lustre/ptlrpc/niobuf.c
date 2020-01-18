@@ -268,9 +268,6 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
  */
 void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
-	struct l_wait_info       lwi;
-	int                      rc;
-
 	LASSERT(!in_interrupt());           /* might sleep */
 
 	if (!ptlrpc_server_bulk_active(desc))   /* completed or */
@@ -290,14 +287,16 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 	for (;;) {
 		/* Network access will complete in finite time but the HUGE
 		 * timeout lets us CWARN for visibility of sluggish NALs */
-		lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
-					   cfs_time_seconds(1), NULL, NULL);
-		rc = l_wait_event(desc->bd_waitq,
-				  !ptlrpc_server_bulk_active(desc), &lwi);
-		if (rc == 0)
+		int seconds = LONG_UNLINK;
+
+		while (seconds > 0 &&
+		       wait_event_idle_timeout(desc->bd_waitq,
+					       !ptlrpc_server_bulk_active(desc),
+					       cfs_time_seconds(1)) == 0)
+			seconds -= 1;
+		if (seconds > 0)
 			return;
 
-		LASSERT(rc == -ETIMEDOUT);
 		CWARN("Unexpectedly long timeout: desc %p\n", desc);
 	}
 }
@@ -437,8 +436,6 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 {
 	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-	struct l_wait_info       lwi;
-	int                      rc;
 	ENTRY;
 
 	LASSERT(!in_interrupt());     /* might sleep */
@@ -478,15 +475,18 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 		 * Network access will complete in finite time but the HUGE
 		 * timeout lets us CWARN for visibility of sluggish NALs.
 		 */
-		lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
-					   cfs_time_seconds(1), NULL, NULL);
-		rc = l_wait_event(*wq, !ptlrpc_client_bulk_active(req), &lwi);
-		if (rc == 0) {
+		int seconds = LONG_UNLINK;
+
+		while (seconds > 0 &&
+		       wait_event_idle_timeout(*wq,
+					       !ptlrpc_client_bulk_active(req),
+					       cfs_time_seconds(1)) == 0)
+			seconds -= 1;
+		if (seconds > 0) {
 			ptlrpc_rqphase_move(req, req->rq_next_phase);
 			RETURN(1);
 		}
 
-		LASSERT(rc == -ETIMEDOUT);
 		DEBUG_REQ(D_WARNING, req, "Unexpectedly long timeout: desc %p",
 			  desc);
 	}

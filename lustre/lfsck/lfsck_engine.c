@@ -1711,6 +1711,8 @@ int lfsck_assistant_engine(void *args)
 				GOTO(cleanup, rc = 0);
 
 			while (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
+				int seconds = 30;
+
 				rc = lfsck_assistant_query_others(env, com);
 				if (lfsck_phase2_next_ready(lad))
 					goto p2_next;
@@ -1720,25 +1722,23 @@ int lfsck_assistant_engine(void *args)
 
 				/* Pull LFSCK status on related targets once
 				 * per 30 seconds if we are not notified. */
-				lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(30),
-							   cfs_time_seconds(1),
-							   NULL, NULL);
-				rc = l_wait_event(athread->t_ctl_waitq,
-					lfsck_phase2_next_ready(lad) ||
-					test_bit(LAD_EXIT, &lad->lad_flags) ||
-					!thread_is_running(mthread),
-					&lwi);
+				while (seconds > 0 &&
+				       wait_event_idle_timeout(
+					       athread->t_ctl_waitq,
+					       lfsck_phase2_next_ready(lad) ||
+					       test_bit(LAD_EXIT,
+							&lad->lad_flags) ||
+					       !thread_is_running(mthread),
+					       cfs_time_seconds(1)) == 0)
+					seconds -= 1;
 
 				if (unlikely(
 					test_bit(LAD_EXIT, &lad->lad_flags) ||
 					!thread_is_running(mthread)))
 					GOTO(cleanup, rc = 0);
 
-				if (rc == -ETIMEDOUT)
+				if (seconds == 0)
 					continue;
-
-				if (rc < 0)
-					GOTO(cleanup, rc);
 
 p2_next:
 				rc = lao->la_handler_p2(env, com);

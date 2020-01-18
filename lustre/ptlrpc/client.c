@@ -2741,9 +2741,6 @@ EXPORT_SYMBOL(ptlrpc_req_xid);
  */
 static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 {
-	int rc;
-	struct l_wait_info lwi;
-
 	/*
 	 * Might sleep.
 	 */
@@ -2784,24 +2781,25 @@ static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 	 * unlinked before returning a req to the pool.
 	 */
 	for (;;) {
-		/* The wq argument is ignored by user-space wait_event macros */
 		wait_queue_head_t *wq = (request->rq_set) ?
 					&request->rq_set->set_waitq :
 					&request->rq_reply_waitq;
+		int seconds = LONG_UNLINK;
 		/*
 		 * Network access will complete in finite time but the HUGE
 		 * timeout lets us CWARN for visibility of sluggish NALs
 		 */
-		lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
-					   cfs_time_seconds(1), NULL, NULL);
-		rc = l_wait_event(*wq, !ptlrpc_client_recv_or_unlink(request),
-				  &lwi);
-		if (rc == 0) {
+		while (seconds > 0 &&
+		       wait_event_idle_timeout(
+			       *wq,
+			       !ptlrpc_client_recv_or_unlink(request),
+			       cfs_time_seconds(1)) == 0)
+			seconds -= 1;
+		if (seconds > 0) {
 			ptlrpc_rqphase_move(request, request->rq_next_phase);
 			RETURN(1);
 		}
 
-		LASSERT(rc == -ETIMEDOUT);
 		DEBUG_REQ(D_WARNING, request,
 			  "Unexpectedly long timeout receiving_reply=%d req_ulinked=%d reply_unlinked=%d",
 			  request->rq_receiving_reply,

@@ -3396,7 +3396,6 @@ ptlrpc_service_unlink_rqbd(struct ptlrpc_service *svc)
 {
 	struct ptlrpc_service_part *svcpt;
 	struct ptlrpc_request_buffer_desc *rqbd;
-	struct l_wait_info lwi;
 	int rc;
 	int i;
 
@@ -3434,18 +3433,21 @@ ptlrpc_service_unlink_rqbd(struct ptlrpc_service *svc)
 		 */
 		spin_lock(&svcpt->scp_lock);
 		while (svcpt->scp_nrqbds_posted != 0) {
+			int seconds = LONG_UNLINK;
+
 			spin_unlock(&svcpt->scp_lock);
 			/*
 			 * Network access will complete in finite time but
 			 * the HUGE timeout lets us CWARN for visibility
 			 * of sluggish NALs
 			 */
-			lwi = LWI_TIMEOUT_INTERVAL(
-					cfs_time_seconds(LONG_UNLINK),
-					cfs_time_seconds(1), NULL, NULL);
-			rc = l_wait_event(svcpt->scp_waitq,
-					  svcpt->scp_nrqbds_posted == 0, &lwi);
-			if (rc == -ETIMEDOUT) {
+			while (seconds > 0 &&
+			       wait_event_idle_timeout(
+				       svcpt->scp_waitq,
+				       svcpt->scp_nrqbds_posted == 0,
+				       cfs_time_seconds(1)) == 0)
+				seconds -= 1;
+			if (seconds == 0) {
 				CWARN("Service %s waiting for request buffers\n",
 				      svcpt->scp_service->srv_name);
 			}
