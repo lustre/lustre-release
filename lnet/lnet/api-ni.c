@@ -2062,7 +2062,14 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 		islo = ni->ni_net->net_lnd->lnd_type == LOLND;
 
 		LASSERT(!in_interrupt());
+		/* Holding the mutex makes it safe for lnd_shutdown
+		 * to call module_put(). Module unload cannot finish
+		 * until lnet_unregister_lnd() completes, and that
+		 * requires the mutex.
+		 */
+		mutex_lock(&the_lnet.ln_lnd_mutex);
 		(net->net_lnd->lnd_shutdown)(ni);
+		mutex_unlock(&the_lnet.ln_lnd_mutex);
 
 		if (!islo)
 			CDEBUG(D_LNI, "Removed LNI %s\n",
