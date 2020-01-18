@@ -550,11 +550,6 @@ lnet_init_locks(void)
 	mutex_init(&the_lnet.ln_lnd_mutex);
 }
 
-static void
-lnet_fini_locks(void)
-{
-}
-
 struct kmem_cache *lnet_mes_cachep;	   /* MEs kmem_cache */
 struct kmem_cache *lnet_small_mds_cachep;  /* <= LNET_SMALL_MD_SIZE bytes
 					    *  MDs kmem_cache */
@@ -643,8 +638,6 @@ lnet_destroy_locks(void)
 		cfs_percpt_lock_free(the_lnet.ln_net_lock);
 		the_lnet.ln_net_lock = NULL;
 	}
-
-	lnet_fini_locks();
 }
 
 static int
