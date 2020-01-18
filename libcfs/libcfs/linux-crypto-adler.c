@@ -31,8 +31,8 @@
 
 #include <linux/module.h>
 #include <linux/zutil.h>
-#include <libcfs/linux/linux-crypto.h>
 #include <crypto/internal/hash.h>
+#include "linux-crypto.h"
 
 #define CHKSUM_BLOCK_SIZE	1
 #define CHKSUM_DIGEST_SIZE	4

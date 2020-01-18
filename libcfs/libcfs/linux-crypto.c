@@ -32,7 +32,7 @@
 #include <linux/pagemap.h>
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
-#include <libcfs/linux/linux-crypto.h>
+#include "linux-crypto.h"
 
 #ifndef HAVE_CRYPTO_HASH_HELPERS
 static inline const char *crypto_ahash_alg_name(struct crypto_ahash *tfm)

@@ -48,7 +48,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/linux/linux-crypto.h>
 #include <obd.h>
 #include <obd_support.h>
 

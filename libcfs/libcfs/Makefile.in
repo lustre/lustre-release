@@ -1,10 +1,8 @@
 MODULES = libcfs
 
-libcfs-linux-objs := linux-tracefile.o linux-debug.o
-libcfs-linux-objs += linux-prim.o
+libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-curproc.o
 libcfs-linux-objs += linux-hash.o
-libcfs-linux-objs += linux-crypto.o linux-crypto-adler.o
 libcfs-linux-objs += linux-wait.o
 
 default: all
@@ -12,9 +10,11 @@ default: all
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 
 libcfs-all-objs := debug.o fail.o module.o tracefile.o \
-		   libcfs_string.o hash.o \
+		   libcfs_string.o hash.o heap.o \
 		   workitem.o libcfs_cpu.o \
-		   libcfs_mem.o libcfs_lock.o heap.o
+		   libcfs_mem.o libcfs_lock.o \
+		   linux-crypto.o linux-crypto-adler.o \
+		   linux-debug.o linux-tracefile.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 
