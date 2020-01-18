@@ -135,11 +135,11 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 		comp_v1 = (struct lov_comp_md_v1 *)lum;
 
 	if (comp_v1 != NULL) {
-		__swab32s(&comp_v1->lcm_magic);
-		__swab32s(&comp_v1->lcm_size);
-		__swab32s(&comp_v1->lcm_layout_gen);
-		__swab16s(&comp_v1->lcm_flags);
-		__swab16s(&comp_v1->lcm_entry_count);
+		comp_v1->lcm_magic = __swab32(comp_v1->lcm_magic);
+		comp_v1->lcm_size = __swab32(comp_v1->lcm_size);
+		comp_v1->lcm_layout_gen = __swab32(comp_v1->lcm_layout_gen);
+		comp_v1->lcm_flags = __swab16(comp_v1->lcm_flags);
+		comp_v1->lcm_entry_count = __swab16(comp_v1->lcm_entry_count);
 		ent_count = comp_v1->lcm_entry_count;
 	} else {
 		ent_count = 1;
@@ -148,13 +148,13 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 	for (i = 0; i < ent_count; i++) {
 		if (comp_v1 != NULL) {
 			ent = &comp_v1->lcm_entries[i];
-			__swab32s(&ent->lcme_id);
-			__swab32s(&ent->lcme_flags);
-			__swab64s(&ent->lcme_timestamp);
-			__swab64s(&ent->lcme_extent.e_start);
-			__swab64s(&ent->lcme_extent.e_end);
-			__swab32s(&ent->lcme_offset);
-			__swab32s(&ent->lcme_size);
+			ent->lcme_id = __swab32(ent->lcme_id);
+			ent->lcme_flags = __swab32(ent->lcme_flags);
+			ent->lcme_timestamp = __swab64(ent->lcme_timestamp);
+			ent->lcme_extent.e_start = __swab64(ent->lcme_extent.e_start);
+			ent->lcme_extent.e_end = __swab64(ent->lcme_extent.e_end);
+			ent->lcme_offset = __swab32(ent->lcme_offset);
+			ent->lcme_size = __swab32(ent->lcme_size);
 
 			lum = (struct lov_user_md *)((char *)comp_v1 +
 					ent->lcme_offset);
@@ -162,11 +162,11 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 		}
 		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
 
-		__swab32s(&lum->lmm_magic);
-		__swab32s(&lum->lmm_pattern);
-		__swab32s(&lum->lmm_stripe_size);
-		__swab16s(&lum->lmm_stripe_count);
-		__swab16s(&lum->lmm_stripe_offset);
+		lum->lmm_magic = __swab32(lum->lmm_magic);
+		lum->lmm_pattern = __swab32(lum->lmm_pattern);
+		lum->lmm_stripe_size = __swab32(lum->lmm_stripe_size);
+		lum->lmm_stripe_count = __swab16(lum->lmm_stripe_count);
+		lum->lmm_stripe_offset = __swab16(lum->lmm_stripe_offset);
 
 		if (lum->lmm_magic != LOV_MAGIC_V1) {
 			struct lov_user_md_v3 *v3;
@@ -177,7 +177,7 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 		}
 
 		for (j = 0; j < obj_count; j++)
-			__swab32s(&lod[j].l_ost_idx);
+			lod[j].l_ost_idx = __swab32(lod[j].l_ost_idx);
 	}
 }
 

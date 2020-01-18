@@ -2740,12 +2740,12 @@ struct llog_rec_hdr {
 	__u32	lrh_index;
 	__u32	lrh_type;
 	__u32	lrh_id;
-};
+} __attribute__((packed));
 
 struct llog_rec_tail {
 	__u32	lrt_len;
 	__u32	lrt_index;
-};
+} __attribute__((packed));
 
 /* Where data follow just after header */
 #define REC_DATA(ptr)						\
@@ -3325,7 +3325,7 @@ struct link_ea_entry {
         unsigned char      lee_reclen[2];
         unsigned char      lee_parent_fid[sizeof(struct lu_fid)];
         char               lee_name[0];
-}__attribute__((packed));
+} __attribute__((packed));
 
 /** fid2path request/reply structure */
 struct getinfo_fid2path {
@@ -3553,7 +3553,7 @@ struct update_op {
 	__u16		uop_type;
 	__u16		uop_param_count;
 	__u16		uop_params_off[0];
-};
+} __attribute__((packed));
 
 struct update_ops {
 	struct update_op	uops_op[0];

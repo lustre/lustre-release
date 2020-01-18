@@ -2135,12 +2135,12 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 		strcat(path, dent->d_name);
 
 		if (dent->d_type == DT_UNKNOWN) {
-			lstatx_t *stx = &param->fp_lmd->lmd_stx;
+			struct lov_user_mds_data *lmd = param->fp_lmd;
 
-			rc = get_lmd_info(path, d, NULL, param->fp_lmd,
+			rc = get_lmd_info(path, d, NULL, lmd,
 					  param->fp_lum_size, GET_LMD_INFO);
 			if (rc == 0)
-				dent->d_type = IFTODT(stx->stx_mode);
+				dent->d_type = IFTODT(lmd->lmd_stx.stx_mode);
 			else if (ret == 0)
 				ret = rc;
 
@@ -3966,15 +3966,17 @@ int llapi_file_lookup(int dirfd, const char *name)
  *
  * If 0 is returned, we need to do another RPC to the OSTs to obtain the
  * updated timestamps. */
-static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
+static int find_time_check(struct find_param *param, int mds)
 {
+	struct lov_user_mds_data *lmd = param->fp_lmd;
 	int rc = 1;
 	int rc2;
 
 	/* Check if file is accepted. */
 	if (param->fp_atime) {
-		rc2 = find_value_cmp(stx->stx_atime.tv_sec, param->fp_atime,
-				     param->fp_asign, param->fp_exclude_atime,
+		rc2 = find_value_cmp(lmd->lmd_stx.stx_atime.tv_sec,
+				     param->fp_atime, param->fp_asign,
+				     param->fp_exclude_atime,
 				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
@@ -3982,8 +3984,9 @@ static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
 	}
 
 	if (param->fp_mtime) {
-		rc2 = find_value_cmp(stx->stx_mtime.tv_sec, param->fp_mtime,
-				     param->fp_msign, param->fp_exclude_mtime,
+		rc2 = find_value_cmp(lmd->lmd_stx.stx_mtime.tv_sec,
+				     param->fp_mtime, param->fp_msign,
+				     param->fp_exclude_mtime,
 				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
@@ -3995,8 +3998,9 @@ static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
 	}
 
 	if (param->fp_ctime) {
-		rc2 = find_value_cmp(stx->stx_ctime.tv_sec, param->fp_ctime,
-				     param->fp_csign, param->fp_exclude_ctime,
+		rc2 = find_value_cmp(lmd->lmd_stx.stx_ctime.tv_sec,
+				     param->fp_ctime, param->fp_csign,
+				     param->fp_exclude_ctime,
 				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
@@ -4010,8 +4014,9 @@ static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
 	return rc;
 }
 
-static int find_newerxy_check(lstatx_t *stx, struct find_param *param, int mds)
+static int find_newerxy_check(struct find_param *param, int mds)
 {
+	struct lov_user_mds_data *lmd = param->fp_lmd;
 	int i;
 	int rc = 1;
 	int rc2;
@@ -4019,7 +4024,7 @@ static int find_newerxy_check(lstatx_t *stx, struct find_param *param, int mds)
 	for (i = 0; i < 2; i++) {
 		/* Check if file is accepted. */
 		if (param->fp_newery[NEWERXY_ATIME][i]) {
-			rc2 = find_value_cmp(stx->stx_atime.tv_sec,
+			rc2 = find_value_cmp(lmd->lmd_stx.stx_atime.tv_sec,
 					     param->fp_newery[NEWERXY_ATIME][i],
 					     -1, i, 0, mds);
 			if (rc2 < 0)
@@ -4028,7 +4033,7 @@ static int find_newerxy_check(lstatx_t *stx, struct find_param *param, int mds)
 		}
 
 		if (param->fp_newery[NEWERXY_MTIME][i]) {
-			rc2 = find_value_cmp(stx->stx_mtime.tv_sec,
+			rc2 = find_value_cmp(lmd->lmd_stx.stx_mtime.tv_sec,
 					     param->fp_newery[NEWERXY_MTIME][i],
 					     -1, i, 0, mds);
 			if (rc2 < 0)
@@ -4043,7 +4048,7 @@ static int find_newerxy_check(lstatx_t *stx, struct find_param *param, int mds)
 		}
 
 		if (param->fp_newery[NEWERXY_CTIME][i]) {
-			rc2 = find_value_cmp(stx->stx_ctime.tv_sec,
+			rc2 = find_value_cmp(lmd->lmd_stx.stx_ctime.tv_sec,
 					     param->fp_newery[NEWERXY_CTIME][i],
 					     -1, i, 0, mds);
 			if (rc2 < 0)
@@ -4070,14 +4075,14 @@ static int check_obd_match(struct find_param *param)
 {
 	struct lov_user_ost_data_v1 *objects;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
-	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
-	lstatx_t *stx = &param->fp_lmd->lmd_stx;
+	struct lov_user_mds_data *lmd = param->fp_lmd;
+	struct lov_user_md_v1 *v1 = &lmd->lmd_lmm;
 	int i, j, k, count = 1;
 
 	if (param->fp_obd_uuid && param->fp_obd_index == OBD_NOT_FOUND)
 		return 0;
 
-	if (!S_ISREG(stx->stx_mode))
+	if (!S_ISREG(lmd->lmd_stx.stx_mode))
 		return 0;
 
 	/* exclude foreign */
@@ -4387,9 +4392,9 @@ static int find_check_pool(struct find_param *param)
 
 static int find_check_comp_options(struct find_param *param)
 {
-	lstatx_t *stx = &param->fp_lmd->lmd_stx;
 	struct lov_comp_md_v1 *comp_v1, *forged_v1 = NULL;
-	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	struct lov_user_mds_data *lmd = param->fp_lmd;
+	struct lov_user_md_v1 *v1 = &lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
 	int i, ret = 0;
 
@@ -4405,7 +4410,8 @@ static int find_check_comp_options(struct find_param *param)
 		comp_v1 = forged_v1;
 		comp_v1->lcm_entry_count = 1;
 		entry = &comp_v1->lcm_entries[0];
-		entry->lcme_flags = S_ISDIR(stx->stx_mode) ? 0 : LCME_FL_INIT;
+		entry->lcme_flags = S_ISDIR(lmd->lmd_stx.stx_mode) ?
+				    0 : LCME_FL_INIT;
 		entry->lcme_extent.e_start = 0;
 		entry->lcme_extent.e_end = LUSTRE_EOF;
 	}
@@ -4531,9 +4537,9 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			void *data, struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
+	struct lov_user_mds_data *lmd = param->fp_lmd;
 	DIR *dir = dirp == NULL ? NULL : *dirp;
 	int decision = 1; /* 1 is accepted; -1 is rejected. */
-	lstatx_t *stx = &param->fp_lmd->lmd_stx;
 	int lustre_fs = 1;
 	int checked_type = 0;
 	int ret = 0;
@@ -4623,7 +4629,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (dir != NULL) {
 				ret = llapi_file_fget_mdtidx(dirfd(dir),
 						     &param->fp_file_mdt_index);
-			} else if (S_ISREG(stx->stx_mode)) {
+			} else if (S_ISREG(lmd->lmd_stx.stx_mode)) {
 				/* FIXME: we could get the MDT index from the
 				 * file's FID in lmd->lmd_lmm.lmm_oi without
 				 * opening the file, once we are sure that
@@ -4657,7 +4663,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	}
 
 	if (param->fp_type && !checked_type) {
-		if ((stx->stx_mode & S_IFMT) == param->fp_type) {
+		if ((lmd->lmd_stx.stx_mode & S_IFMT) == param->fp_type) {
 			if (param->fp_exclude_type)
 				goto decided;
 		} else {
@@ -4669,8 +4675,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
         /* Prepare odb. */
 	if (param->fp_obd_uuid || param->fp_mdt_uuid) {
 		if (lustre_fs && param->fp_got_uuids &&
-		    param->fp_dev != makedev(stx->stx_dev_major,
-					     stx->stx_dev_minor)) {
+		    param->fp_dev != makedev(lmd->lmd_stx.stx_dev_major,
+					     lmd->lmd_stx.stx_dev_minor)) {
 			/* A lustre/lustre mount point is crossed. */
 			param->fp_got_uuids = 0;
 			param->fp_obds_printed = 0;
@@ -4684,8 +4690,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (ret)
 				goto out;
 
-			param->fp_dev = makedev(stx->stx_dev_major,
-						stx->stx_dev_minor);
+			param->fp_dev = makedev(lmd->lmd_stx.stx_dev_major,
+						lmd->lmd_stx.stx_dev_minor);
 		} else if (!lustre_fs && param->fp_got_uuids) {
 			/* A lustre/non-lustre mount point is crossed. */
 			param->fp_got_uuids = 0;
@@ -4787,7 +4793,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 
 obd_matches:
 	if (param->fp_check_uid) {
-		if (stx->stx_uid == param->fp_uid) {
+		if (lmd->lmd_stx.stx_uid == param->fp_uid) {
 			if (param->fp_exclude_uid)
 				goto decided;
 		} else {
@@ -4797,7 +4803,7 @@ obd_matches:
 	}
 
 	if (param->fp_check_gid) {
-		if (stx->stx_gid == param->fp_gid) {
+		if (lmd->lmd_stx.stx_gid == param->fp_gid) {
 			if (param->fp_exclude_gid)
 				goto decided;
 		} else {
@@ -4852,8 +4858,8 @@ obd_matches:
                 int for_mds;
 
 		for_mds = lustre_fs ?
-			  (S_ISREG(stx->stx_mode) && stripe_count) : 0;
-		decision = find_time_check(stx, param, for_mds);
+			  (S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) : 0;
+		decision = find_time_check(param, for_mds);
 		if (decision == -1)
 			goto decided;
 	}
@@ -4862,23 +4868,23 @@ obd_matches:
 		int for_mds;
 
 		for_mds = lustre_fs ?
-			  (S_ISREG(stx->stx_mode) && stripe_count) : 0;
-		decision = find_newerxy_check(stx, param, for_mds);
+			  (S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) : 0;
+		decision = find_newerxy_check(param, for_mds);
 		if (decision == -1)
 			goto decided;
 	}
 
 	flags = param->fp_lmd->lmd_flags;
 	if (param->fp_check_size &&
-	    ((S_ISREG(stx->stx_mode) && stripe_count) ||
-	      S_ISDIR(stx->stx_mode)) &&
+	    ((S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) ||
+	      S_ISDIR(lmd->lmd_stx.stx_mode)) &&
 	    !(flags & OBD_MD_FLSIZE ||
 	      (param->fp_lazy && flags & OBD_MD_FLLAZYSIZE)))
 		decision = 0;
 
 	if (param->fp_check_blocks &&
-	    ((S_ISREG(stx->stx_mode) && stripe_count) ||
-	      S_ISDIR(stx->stx_mode)) &&
+	    ((S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) ||
+	      S_ISDIR(lmd->lmd_stx.stx_mode)) &&
 	    !(flags & OBD_MD_FLBLOCKS ||
 	      (param->fp_lazy && flags & OBD_MD_FLLAZYBLOCKS)))
 		decision = 0;
@@ -4923,12 +4929,12 @@ obd_matches:
 
 		convert_lmd_statx(param->fp_lmd, &st, true);
 		/* Check the time on osc. */
-		decision = find_time_check(stx, param, 0);
+		decision = find_time_check(param, 0);
 		if (decision == -1)
 			goto decided;
 
 		if (param->fp_newerxy) {
-			decision = find_newerxy_check(stx, param, 0);
+			decision = find_newerxy_check(param, 0);
 			if (decision == -1)
 				goto decided;
 
@@ -4936,7 +4942,8 @@ obd_matches:
 	}
 
 	if (param->fp_check_size) {
-		decision = find_value_cmp(stx->stx_size, param->fp_size,
+		decision = find_value_cmp(lmd->lmd_stx.stx_size,
+					  param->fp_size,
 					  param->fp_size_sign,
 					  param->fp_exclude_size,
 					  param->fp_size_units, 0);
@@ -4945,7 +4952,7 @@ obd_matches:
 	}
 
 	if (param->fp_check_blocks) { /* convert st_blocks to bytes */
-		decision = find_value_cmp(stx->stx_blocks * 512,
+		decision = find_value_cmp(lmd->lmd_stx.stx_blocks * 512,
 					  param->fp_blocks,
 					  param->fp_blocks_sign,
 					  param->fp_exclude_blocks,

@@ -325,7 +325,7 @@ struct lu_fid {
 	 * used.
 	 **/
 	__u32 f_ver;
-};
+} __attribute__((packed));
 
 static inline bool fid_is_zero(const struct lu_fid *fid)
 {
@@ -509,7 +509,7 @@ struct ost_id {
 		} oi;
 		struct lu_fid oi_fid;
 	};
-};
+} __attribute__((packed));
 
 #define DOSTID "%#llx:%llu"
 #define POSTID(oi) ((unsigned long long)ostid_seq(oi)), \
@@ -789,7 +789,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 					   * used when reading */
 	};
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
-} __attribute__((packed,  __may_alias__));
+} __attribute__((packed, __may_alias__));
 
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
@@ -805,7 +805,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	};
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
-} __attribute__((packed));
+} __attribute__((packed, __may_alias__));
 
 struct lov_foreign_md {
 	__u32 lfm_magic;	/* magic number = LOV_MAGIC_FOREIGN */
@@ -813,7 +813,7 @@ struct lov_foreign_md {
 	__u32 lfm_type;		/* type, see LU_FOREIGN_TYPE_ */
 	__u32 lfm_flags;	/* flags, type specific */
 	char lfm_value[];
-};
+} __attribute__((packed));
 
 #define foreign_size(lfm) (((struct lov_foreign_md *)lfm)->lfm_length + \
 			   offsetof(struct lov_foreign_md, lfm_value))
@@ -831,7 +831,7 @@ struct lov_foreign_md {
 struct lu_extent {
 	__u64	e_start;
 	__u64	e_end;
-};
+} __attribute__((packed));
 
 #define DEXT "[%#llx, %#llx)"
 #define PEXT(ext) (unsigned long long)(ext)->e_start, (unsigned long long)(ext)->e_end
@@ -992,7 +992,7 @@ struct lmv_user_mds_data {
 	struct lu_fid	lum_fid;
 	__u32		lum_padding;
 	__u32		lum_mds;
-};
+} __attribute__((packed, __may_alias__));
 
 enum lmv_hash_type {
 	LMV_HASH_TYPE_UNKNOWN	= 0,	/* 0 is reserved for testing purpose */
@@ -1645,7 +1645,7 @@ struct changelog_rec {
 		__u32		cr_markerflags; /**< CL_MARK flags */
 	};
 	struct lu_fid		cr_pfid;        /**< parent fid */
-};
+} __attribute__ ((packed));
 
 /* Changelog extension for RENAME. */
 struct changelog_ext_rename {
