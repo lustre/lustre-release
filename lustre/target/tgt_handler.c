@@ -1069,12 +1069,20 @@ int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 	struct ptlrpc_bulk_desc	*desc;
 	int			 i;
 	int			 rc;
+	int			 pages = 0;
 
 	ENTRY;
 
-	desc = ptlrpc_prep_bulk_exp(req, rdbuf->rb_nbufs, 1,
-				  PTLRPC_BULK_PUT_SOURCE | PTLRPC_BULK_BUF_KVEC,
-				    MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
+	for (i = 0; i < rdbuf->rb_nbufs; i++)
+		/* There is only one caller (out_read) and we *know* that
+		 * bufs are at most 4K, and 4K aligned, so a simple DIV_ROUND_UP
+		 * is always sufficient.
+		 */
+		pages += DIV_ROUND_UP(rdbuf->rb_bufs[i].lb_len, PAGE_SIZE);
+	desc = ptlrpc_prep_bulk_exp(req, pages, 1,
+				  PTLRPC_BULK_PUT_SOURCE | PTLRPC_BULK_BUF_KIOV,
+				    MDS_BULK_PORTAL,
+				    &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)
 		RETURN(-ENOMEM);
 
