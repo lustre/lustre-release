@@ -629,31 +629,6 @@ restart:
 	RETURN(LDLM_ITER_CONTINUE);
 }
 
-struct ldlm_flock_wait_data {
-	struct ldlm_lock *fwd_lock;
-	int               fwd_generation;
-};
-
-static void
-ldlm_flock_interrupted_wait(void *data)
-{
-	struct ldlm_lock *lock;
-	ENTRY;
-
-	lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
-
-	/* take lock off the deadlock detection hash list.
-	 */
-	lock_res_and_lock(lock);
-	ldlm_flock_blocking_unlink(lock);
-
-	/* client side - set flag to prevent lock from being put on LRU list */
-	ldlm_set_cbpending(lock);
-	unlock_res_and_lock(lock);
-
-	EXIT;
-}
-
 /**
  * Flock completion callback function.
  *
@@ -670,8 +645,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	struct file_lock *getlk = lock->l_ast_data;
 	struct obd_device *obd;
 	struct obd_import *imp = NULL;
-	struct ldlm_flock_wait_data fwd;
-	struct l_wait_info lwi;
 	enum ldlm_error err;
 	int rc = 0;
 	ENTRY;
@@ -702,25 +675,26 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	LDLM_DEBUG(lock,
 		   "client-side enqueue returned a blocked lock, sleeping");
-	fwd.fwd_lock = lock;
 	obd = class_exp2obd(lock->l_conn_export);
 
 	/* if this is a local lock, there is no import */
 	if (obd)
 		imp = obd->u.cli.cl_import;
 
-	if (imp) {
-		spin_lock(&imp->imp_lock);
-		fwd.fwd_generation = imp->imp_generation;
-		spin_unlock(&imp->imp_lock);
-	}
-
-	lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);
-
 	/* Go to sleep until the lock is granted. */
-	rc = l_wait_event(lock->l_waitq, is_granted_or_cancelled(lock), &lwi);
+	rc = l_wait_event_abortable(lock->l_waitq,
+				    is_granted_or_cancelled(lock));
+	if (rc < 0) {
+		/* take lock off the deadlock detection hash list. */
+		lock_res_and_lock(lock);
+		ldlm_flock_blocking_unlink(lock);
 
-	if (rc) {
+		/* client side - set flag to prevent lock from being
+		 * put on LRU list
+		 */
+		ldlm_set_cbpending(lock);
+		unlock_res_and_lock(lock);
+
 		LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
 			   rc);
 		RETURN(rc);
