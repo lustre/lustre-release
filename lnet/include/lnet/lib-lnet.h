@@ -371,28 +371,6 @@ lnet_wire_handle2md(struct lnet_handle_wire *wh)
 }
 
 static inline void
-lnet_me2handle(struct lnet_handle_me *handle, struct lnet_me *me)
-{
-	handle->cookie = me->me_lh.lh_cookie;
-}
-
-static inline struct lnet_me *
-lnet_handle2me(struct lnet_handle_me *handle)
-{
-	/* ALWAYS called with resource lock held */
-	struct lnet_libhandle *lh;
-	int		 cpt;
-
-	cpt = lnet_cpt_of_cookie(handle->cookie);
-	lh = lnet_res_lh_lookup(the_lnet.ln_me_containers[cpt],
-				handle->cookie);
-	if (lh == NULL)
-		return NULL;
-
-	return lh_entry(lh, struct lnet_me, me_lh);
-}
-
-static inline void
 lnet_peer_net_addref_locked(struct lnet_peer_net *lpn)
 {
 	atomic_inc(&lpn->lpn_refcount);

@@ -195,7 +195,7 @@ struct lnet_eq {
 
 struct lnet_me {
 	struct list_head	me_list;
-	struct lnet_libhandle	me_lh;
+	int			me_cpt;
 	struct lnet_process_id	me_match_id;
 	unsigned int		me_portal;
 	unsigned int		me_pos;		/* hash offset in mt_hash */
@@ -1007,8 +1007,6 @@ struct lnet {
 	int				ln_nportals;
 	/* the vector of portals */
 	struct lnet_portal		**ln_portals;
-	/* percpt ME containers */
-	struct lnet_res_container	**ln_me_containers;
 	/* percpt MD container */
 	struct lnet_res_container	**ln_md_containers;
 

@@ -95,15 +95,15 @@ bool LNetIsPeerLocal(lnet_nid_t nid);
  * request. MEs can be dynamically inserted into a match list by LNetMEAttach()
  * and removed from its list by LNetMEUnlink().
  * @{ */
-int LNetMEAttach(unsigned int	   portal,
-		 struct lnet_process_id	match_id_in,
-		 __u64		   match_bits_in,
-		 __u64		   ignore_bits_in,
-		 enum lnet_unlink	unlink_in,
-		 enum lnet_ins_pos	pos_in,
-		 struct lnet_handle_me	*handle_out);
+struct lnet_me *
+LNetMEAttach(unsigned int portal,
+	     struct lnet_process_id match_id_in,
+	     __u64 match_bits_in,
+	     __u64 ignore_bits_in,
+	     enum lnet_unlink unlink_in,
+	     enum lnet_ins_pos pos_in);
 
-int LNetMEUnlink(struct lnet_handle_me current_in);
+void LNetMEUnlink(struct lnet_me *current_in);
 /** @} lnet_me */
 
 /** \defgroup lnet_md Memory descriptors
@@ -118,9 +118,9 @@ int LNetMEUnlink(struct lnet_handle_me current_in);
  * and LNetMDBind(); one operation to unlink and release the resources
  * associated with a MD: LNetMDUnlink().
  * @{ */
-int LNetMDAttach(struct lnet_handle_me current_in,
-		 struct lnet_md	   md_in,
-		 enum lnet_unlink  unlink_in,
+int LNetMDAttach(struct lnet_me *current_in,
+		 struct lnet_md md_in,
+		 enum lnet_unlink unlink_in,
 		 struct lnet_handle_md *md_handle_out);
 
 int LNetMDBind(struct lnet_md	 md_in,

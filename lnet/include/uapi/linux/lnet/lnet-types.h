@@ -372,10 +372,6 @@ static inline int LNetMDHandleIsInvalid(struct lnet_handle_md h)
 	return (LNET_WIRE_HANDLE_COOKIE_NONE == h.cookie);
 }
 
-struct lnet_handle_me {
-	__u64	cookie;
-};
-
 /**
  * Global process ID.
  */

@@ -1183,14 +1183,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 	if (rc != 0)
 		goto failed;
 
-	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_ME);
-	if (recs == NULL) {
-		rc = -ENOMEM;
-		goto failed;
-	}
-
-	the_lnet.ln_me_containers = recs;
-
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_MD);
 	if (recs == NULL) {
 		rc = -ENOMEM;
@@ -1250,11 +1242,6 @@ lnet_unprepare (void)
 	if (the_lnet.ln_md_containers != NULL) {
 		lnet_res_containers_destroy(the_lnet.ln_md_containers);
 		the_lnet.ln_md_containers = NULL;
-	}
-
-	if (the_lnet.ln_me_containers != NULL) {
-		lnet_res_containers_destroy(the_lnet.ln_me_containers);
-		the_lnet.ln_me_containers = NULL;
 	}
 
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
@@ -1666,7 +1653,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 		.nid = LNET_NID_ANY,
 		.pid = LNET_PID_ANY
 	};
-	struct lnet_handle_me me_handle;
+	struct lnet_me *me;
 	struct lnet_md md = { NULL };
 	int rc, rc2;
 
@@ -1686,11 +1673,11 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	}
 
 	/* Ping target ME/MD */
-	rc = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+	me = LNetMEAttach(LNET_RESERVED_PORTAL, id,
 			  LNET_PROTO_PING_MATCHBITS, 0,
-			  LNET_UNLINK, LNET_INS_AFTER,
-			  &me_handle);
-	if (rc != 0) {
+			  LNET_UNLINK, LNET_INS_AFTER);
+	if (IS_ERR(me)) {
+		rc = PTR_ERR(me);
 		CERROR("Can't create ping target ME: %d\n", rc);
 		goto fail_decref_ping_buffer;
 	}
@@ -1705,7 +1692,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	md.eq_handle = the_lnet.ln_ping_target_eq;
 	md.user_ptr  = *ppbuf;
 
-	rc = LNetMDAttach(me_handle, md, LNET_RETAIN, ping_mdh);
+	rc = LNetMDAttach(me, md, LNET_RETAIN, ping_mdh);
 	if (rc != 0) {
 		CERROR("Can't attach ping target MD: %d\n", rc);
 		goto fail_unlink_ping_me;
@@ -1715,8 +1702,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	return 0;
 
 fail_unlink_ping_me:
-	rc2 = LNetMEUnlink(me_handle);
-	LASSERT(rc2 == 0);
+	LNetMEUnlink(me);
 fail_decref_ping_buffer:
 	LASSERT(lnet_ping_buffer_numref(*ppbuf) == 1);
 	lnet_ping_buffer_decref(*ppbuf);
@@ -1848,7 +1834,7 @@ int lnet_push_target_resize(void)
 {
 	struct lnet_process_id id = { LNET_NID_ANY, LNET_PID_ANY };
 	struct lnet_md md = { NULL };
-	struct lnet_handle_me meh;
+	struct lnet_me *me;
 	struct lnet_handle_md mdh;
 	struct lnet_handle_md old_mdh;
 	struct lnet_ping_buffer *pbuf;
@@ -1867,11 +1853,12 @@ again:
 		goto fail_return;
 	}
 
-	rc = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+	me = LNetMEAttach(LNET_RESERVED_PORTAL, id,
 			  LNET_PROTO_PING_MATCHBITS, 0,
-			  LNET_UNLINK, LNET_INS_AFTER,
-			  &meh);
-	if (rc) {
+			  LNET_UNLINK, LNET_INS_AFTER);
+
+	if (IS_ERR(me)) {
+		rc = PTR_ERR(me);
 		CERROR("Can't create push target ME: %d\n", rc);
 		goto fail_decref_pbuf;
 	}
@@ -1886,10 +1873,10 @@ again:
 	md.user_ptr  = pbuf;
 	md.eq_handle = the_lnet.ln_push_target_eq;
 
-	rc = LNetMDAttach(meh, md, LNET_RETAIN, &mdh);
+	rc = LNetMDAttach(me, md, LNET_RETAIN, &mdh);
 	if (rc) {
 		CERROR("Can't attach push MD: %d\n", rc);
-		goto fail_unlink_meh;
+		goto fail_unlink_me;
 	}
 	lnet_ping_buffer_addref(pbuf);
 
@@ -1912,8 +1899,8 @@ again:
 
 	return 0;
 
-fail_unlink_meh:
-	LNetMEUnlink(meh);
+fail_unlink_me:
+	LNetMEUnlink(me);
 fail_decref_pbuf:
 	lnet_ping_buffer_decref(pbuf);
 fail_return:

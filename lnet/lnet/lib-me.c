@@ -60,20 +60,16 @@
  * \param pos Indicates whether the new ME should be prepended or
  * appended to the match list. Allowed constants: LNET_INS_BEFORE,
  * LNET_INS_AFTER.
- * \param handle On successful returns, a handle to the newly created ME
- * object is saved here. This handle can be used later in LNetMEUnlink(),
- * or LNetMDAttach() functions.
  *
- * \retval 0	   On success.
- * \retval -EINVAL If \a portal is invalid.
- * \retval -ENOMEM If new ME object cannot be allocated.
+ * \retval A handle to the newly created ME is returned on success
+ * \retval ERR_PTR(-EINVAL) If \a portal is invalid.
+ * \retval ERR_PTR(-ENOMEM) If new ME object cannot be allocated.
  */
-int
+struct lnet_me *
 LNetMEAttach(unsigned int portal,
 	     struct lnet_process_id match_id,
 	     __u64 match_bits, __u64 ignore_bits,
-	     enum lnet_unlink unlink, enum lnet_ins_pos pos,
-	     struct lnet_handle_me *handle)
+	     enum lnet_unlink unlink, enum lnet_ins_pos pos)
 {
 	struct lnet_match_table *mtable;
 	struct lnet_me		*me;
@@ -82,16 +78,16 @@ LNetMEAttach(unsigned int portal,
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	if ((int)portal >= the_lnet.ln_nportals)
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
 	mtable = lnet_mt_of_attach(portal, match_id,
 				   match_bits, ignore_bits, pos);
 	if (mtable == NULL) /* can't match portal type */
-		return -EPERM;
+		return ERR_PTR(-EPERM);
 
 	me = lnet_me_alloc();
 	if (me == NULL)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	lnet_res_lock(mtable->mt_cpt);
 
@@ -102,8 +98,8 @@ LNetMEAttach(unsigned int portal,
 	me->me_unlink = unlink;
 	me->me_md = NULL;
 
-	lnet_res_lh_initialize(the_lnet.ln_me_containers[mtable->mt_cpt],
-			       &me->me_lh);
+	me->me_cpt = mtable->mt_cpt;
+
 	if (ignore_bits != 0)
 		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
 	else
@@ -115,10 +111,8 @@ LNetMEAttach(unsigned int portal,
 	else
 		list_add(&me->me_list, head);
 
-	lnet_me2handle(handle, me);
-
 	lnet_res_unlock(mtable->mt_cpt);
-	return 0;
+	return me;
 }
 EXPORT_SYMBOL(LNetMEAttach);
 
@@ -136,24 +130,17 @@ EXPORT_SYMBOL(LNetMEAttach);
  * \retval -ENOENT If \a meh does not point to a valid ME.
  * \see LNetMDUnlink() for the discussion on delivering unlink event.
  */
-int
-LNetMEUnlink(struct lnet_handle_me meh)
+void
+LNetMEUnlink(struct lnet_me *me)
 {
-	struct lnet_me *me;
 	struct lnet_libmd *md;
 	struct lnet_event ev;
 	int cpt;
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
-	cpt = lnet_cpt_of_cookie(meh.cookie);
+	cpt = me->me_cpt;
 	lnet_res_lock(cpt);
-
-	me = lnet_handle2me(&meh);
-	if (me == NULL) {
-		lnet_res_unlock(cpt);
-		return -ENOENT;
-	}
 
 	md = me->me_md;
 	if (md != NULL) {
@@ -167,7 +154,6 @@ LNetMEUnlink(struct lnet_handle_me meh)
 	lnet_me_unlink(me);
 
 	lnet_res_unlock(cpt);
-	return 0;
 }
 EXPORT_SYMBOL(LNetMEUnlink);
 
@@ -185,7 +171,6 @@ lnet_me_unlink(struct lnet_me *me)
 		lnet_md_unlink(md);
 	}
 
-	lnet_res_lh_invalidate(&me->me_lh);
 	lnet_me_free(me);
 }
 

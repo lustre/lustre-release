@@ -357,11 +357,12 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 {
 	int rc;
 	struct lnet_md md;
-	struct lnet_handle_me meh;
+	struct lnet_me *me;
 
-	rc = LNetMEAttach(portal, peer, matchbits, 0, LNET_UNLINK,
-			  local ? LNET_INS_LOCAL : LNET_INS_AFTER, &meh);
-	if (rc != 0) {
+	me = LNetMEAttach(portal, peer, matchbits, 0, LNET_UNLINK,
+			  local ? LNET_INS_LOCAL : LNET_INS_AFTER);
+	if (IS_ERR(me)) {
+		rc = PTR_ERR(me);
 		CERROR("LNetMEAttach failed: %d\n", rc);
 		LASSERT(rc == -ENOMEM);
 		return -ENOMEM;
@@ -374,13 +375,12 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 	md.options   = options;
 	md.eq_handle = srpc_data.rpc_lnet_eq;
 
-	rc = LNetMDAttach(meh, md, LNET_UNLINK, mdh);
+	rc = LNetMDAttach(me, md, LNET_UNLINK, mdh);
 	if (rc != 0) {
 		CERROR("LNetMDAttach failed: %d\n", rc);
 		LASSERT(rc == -ENOMEM);
 
-		rc = LNetMEUnlink(meh);
-		LASSERT(rc == 0);
+		LNetMEUnlink(me);
 		return -ENOMEM;
 	}
 

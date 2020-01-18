@@ -312,11 +312,10 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
 	struct lnet_process_id peer;
 	int rc = 0;
-	int rc2;
 	int posted_md;
 	int total_md;
 	__u64 mbits;
-	struct lnet_handle_me me_h;
+	struct lnet_me *me;
 	struct lnet_md md;
 	ENTRY;
 
@@ -377,8 +376,9 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 		    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_ATTACH)) {
 			rc = -ENOMEM;
 		} else {
-			rc = LNetMEAttach(desc->bd_portal, peer, mbits, 0,
-				  LNET_UNLINK, LNET_INS_AFTER, &me_h);
+			me = LNetMEAttach(desc->bd_portal, peer, mbits, 0,
+				  LNET_UNLINK, LNET_INS_AFTER);
+			rc = PTR_ERR_OR_ZERO(me);
 		}
 		if (rc != 0) {
 			CERROR("%s: LNetMEAttach failed x%llu/%d: rc = %d\n",
@@ -388,14 +388,13 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 		}
 
 		/* About to let the network at it... */
-		rc = LNetMDAttach(me_h, md, LNET_UNLINK,
+		rc = LNetMDAttach(me, md, LNET_UNLINK,
 				  &desc->bd_mds[posted_md]);
 		if (rc != 0) {
 			CERROR("%s: LNetMDAttach failed x%llu/%d: rc = %d\n",
 			       desc->bd_import->imp_obd->obd_name, mbits,
 			       posted_md, rc);
-			rc2 = LNetMEUnlink(me_h);
-			LASSERT(rc2 == 0);
+			LNetMEUnlink(me);
 			break;
 		}
 	}
@@ -687,11 +686,10 @@ int ptlrpc_error(struct ptlrpc_request *req)
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
 	int rc;
-	int rc2;
 	int mpflag = 0;
 	struct lnet_handle_md bulk_cookie;
 	struct ptlrpc_connection *connection;
-	struct lnet_handle_me reply_me_h;
+	struct lnet_me *reply_me = NULL;
 	struct lnet_md reply_md;
 	struct obd_import *imp = request->rq_import;
 	struct obd_device *obd = imp->imp_obd;
@@ -817,15 +815,16 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			request->rq_repmsg = NULL;
 		}
 
-                rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
-                                  connection->c_peer, request->rq_xid, 0,
-                                  LNET_UNLINK, LNET_INS_AFTER, &reply_me_h);
-                if (rc != 0) {
-                        CERROR("LNetMEAttach failed: %d\n", rc);
-                        LASSERT (rc == -ENOMEM);
-                        GOTO(cleanup_bulk, rc = -ENOMEM);
-                }
-        }
+		reply_me = LNetMEAttach(request->rq_reply_portal,
+					connection->c_peer, request->rq_xid, 0,
+					LNET_UNLINK, LNET_INS_AFTER);
+		if (IS_ERR(reply_me)) {
+			rc = PTR_ERR(reply_me);
+			CERROR("LNetMEAttach failed: %d\n", rc);
+			LASSERT(rc == -ENOMEM);
+			GOTO(cleanup_bulk, rc = -ENOMEM);
+		}
+	}
 
 	spin_lock(&request->rq_lock);
 	/* We are responsible for unlinking the reply buffer */
@@ -856,11 +855,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 		/* We must see the unlink callback to set rq_reply_unlinked,
 		 * so we can't auto-unlink */
-                rc = LNetMDAttach(reply_me_h, reply_md, LNET_RETAIN,
-                                  &request->rq_reply_md_h);
-                if (rc != 0) {
-                        CERROR("LNetMDAttach failed: %d\n", rc);
-                        LASSERT (rc == -ENOMEM);
+		rc = LNetMDAttach(reply_me, reply_md, LNET_RETAIN,
+				  &request->rq_reply_md_h);
+		if (rc != 0) {
+			CERROR("LNetMDAttach failed: %d\n", rc);
+			LASSERT(rc == -ENOMEM);
 			spin_lock(&request->rq_lock);
 			/* ...but the MD attach didn't succeed... */
 			request->rq_receiving_reply = 0;
@@ -910,9 +909,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
  cleanup_me:
 	/* MEUnlink is safe; the PUT didn't even get off the ground, and
 	 * nobody apart from the PUT's target has the right nid+XID to
-	 * access the reply buffer. */
-	rc2 = LNetMEUnlink(reply_me_h);
-	LASSERT (rc2 == 0);
+	 * access the reply buffer.
+	 */
+	LNetMEUnlink(reply_me);
 	/* UNLINKED callback called synchronously */
 	LASSERT(!request->rq_receiving_reply);
 
@@ -948,7 +947,7 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 	};
 	int rc;
 	struct lnet_md md;
-	struct lnet_handle_me me_h;
+	struct lnet_me *me;
 
         CDEBUG(D_NET, "LNetMEAttach: portal %d\n",
                service->srv_req_portal);
@@ -959,14 +958,14 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 	/* NB: CPT affinity service should use new LNet flag LNET_INS_LOCAL,
 	 * which means buffer can only be attached on local CPT, and LND
 	 * threads can find it by grabbing a local lock */
-	rc = LNetMEAttach(service->srv_req_portal,
+	me = LNetMEAttach(service->srv_req_portal,
 			  match_id, 0, ~0, LNET_UNLINK,
 			  rqbd->rqbd_svcpt->scp_cpt >= 0 ?
-			  LNET_INS_LOCAL : LNET_INS_AFTER, &me_h);
-        if (rc != 0) {
-                CERROR("LNetMEAttach failed: %d\n", rc);
-                return (-ENOMEM);
-        }
+			  LNET_INS_LOCAL : LNET_INS_AFTER);
+	if (IS_ERR(me)) {
+		CERROR("LNetMEAttach failed: %ld\n", PTR_ERR(me));
+		return -ENOMEM;
+	}
 
         LASSERT(rqbd->rqbd_refcount == 0);
         rqbd->rqbd_refcount = 1;
@@ -979,15 +978,15 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
         md.user_ptr  = &rqbd->rqbd_cbid;
         md.eq_handle = ptlrpc_eq_h;
 
-        rc = LNetMDAttach(me_h, md, LNET_UNLINK, &rqbd->rqbd_md_h);
-        if (rc == 0)
-                return (0);
+	rc = LNetMDAttach(me, md, LNET_UNLINK, &rqbd->rqbd_md_h);
+	if (rc == 0)
+		return 0;
 
-        CERROR("LNetMDAttach failed: %d; \n", rc);
-        LASSERT (rc == -ENOMEM);
-        rc = LNetMEUnlink (me_h);
-        LASSERT (rc == 0);
-        rqbd->rqbd_refcount = 0;
+	CERROR("LNetMDAttach failed: %d;\n", rc);
+	LASSERT(rc == -ENOMEM);
+	LNetMEUnlink(me);
+	LASSERT(rc == 0);
+	rqbd->rqbd_refcount = 0;
 
-        return (-ENOMEM);
+	return -ENOMEM;
 }

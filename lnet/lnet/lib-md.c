@@ -347,7 +347,7 @@ lnet_md_validate(struct lnet_md *umd)
 /**
  * Create a memory descriptor and attach it to a ME
  *
- * \param meh A handle for a ME to associate the new MD with.
+ * \param me An ME to associate the new MD with.
  * \param umd Provides initial values for the user-visible parts of a MD.
  * Other than its use for initialization, there is no linkage between this
  * structure and the MD maintained by the LNet.
@@ -370,12 +370,11 @@ lnet_md_validate(struct lnet_md *umd)
  * a MD.
  */
 int
-LNetMDAttach(struct lnet_handle_me meh, struct lnet_md umd,
+LNetMDAttach(struct lnet_me *me, struct lnet_md umd,
 	     enum lnet_unlink unlink, struct lnet_handle_md *handle)
 {
 	LIST_HEAD(matches);
 	LIST_HEAD(drops);
-	struct lnet_me		*me;
 	struct lnet_libmd	*md;
 	int			cpt;
 	int			rc;
@@ -398,14 +397,11 @@ LNetMDAttach(struct lnet_handle_me meh, struct lnet_md umd,
 	if (rc != 0)
 		goto out_free;
 
-	cpt = lnet_cpt_of_cookie(meh.cookie);
+	cpt = me->me_cpt;
 
 	lnet_res_lock(cpt);
 
-	me = lnet_handle2me(&meh);
-	if (me == NULL)
-		rc = -ENOENT;
-	else if (me->me_md != NULL)
+	if (me->me_md)
 		rc = -EBUSY;
 	else
 		rc = lnet_md_link(md, umd.eq_handle, cpt);
