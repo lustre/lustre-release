@@ -1693,7 +1693,6 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 	spin_unlock(&imp->imp_lock);
 
 	if (ptlrpc_import_in_recovery(imp)) {
-		struct l_wait_info lwi;
 		long timeout_jiffies;
 		time64_t timeout;
 
@@ -1709,15 +1708,16 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 			req_portal = imp->imp_client->cli_request_portal;
 			idx = import_at_get_index(imp, req_portal);
 			timeout = at_get(&imp->imp_at.iat_service_estimate[idx]);
-                }
+		}
 
 		timeout_jiffies = cfs_time_seconds(timeout);
-		lwi = LWI_TIMEOUT_INTR(max_t(long, timeout_jiffies, 1),
-                                       back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
-                rc = l_wait_event(imp->imp_recovery_waitq,
-                                  !ptlrpc_import_in_recovery(imp), &lwi);
-
-        }
+		if (wait_event_idle_timeout(imp->imp_recovery_waitq,
+					    !ptlrpc_import_in_recovery(imp),
+					    timeout_jiffies) == 0 &&
+		    l_wait_event_abortable(imp->imp_recovery_waitq,
+					   !ptlrpc_import_in_recovery(imp)) < 0)
+			rc = -EINTR;
+	}
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_FULL)

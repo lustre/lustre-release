@@ -274,12 +274,13 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 
 	spin_lock(&req->rq_lock);
 	if (req->rq_invalid_rqset) {
-		struct l_wait_info lwi = LWI_TIMEOUT(cfs_time_seconds(5),
-						     back_to_sleep, NULL);
-
 		req->rq_invalid_rqset = 0;
 		spin_unlock(&req->rq_lock);
-		l_wait_event(req->rq_set_waitq, (req->rq_set == NULL), &lwi);
+		if (wait_event_idle_timeout(req->rq_set_waitq,
+					    req->rq_set == NULL,
+					    cfs_time_seconds(5)) == 0)
+			l_wait_event_abortable(req->rq_set_waitq,
+					       req->rq_set == NULL);
 	} else if (req->rq_set) {
 		/*
 		 * If we have a vaid "rq_set", just reuse it to avoid double

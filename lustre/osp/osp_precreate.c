@@ -1200,8 +1200,6 @@ static int osp_precreate_thread(void *_arg)
 {
 	struct osp_device	*d = _arg;
 	struct ptlrpc_thread	*thread = &d->opd_pre_thread;
-	struct l_wait_info	 lwi2 = LWI_TIMEOUT(cfs_time_seconds(5),
-						    back_to_sleep, NULL);
 	struct lu_env		 env;
 	int			 rc;
 
@@ -1267,8 +1265,12 @@ static int osp_precreate_thread(void *_arg)
 		}
 
 		if (osp_statfs_update(&env, d)) {
-			l_wait_event(d->opd_pre_waitq,
-				     !osp_precreate_running(d), &lwi2);
+			if (wait_event_idle_timeout(d->opd_pre_waitq,
+						    !osp_precreate_running(d),
+						    cfs_time_seconds(5)) == 0)
+				l_wait_event_abortable(
+					d->opd_pre_waitq,
+					!osp_precreate_running(d));
 			continue;
 		}
 
