@@ -414,7 +414,12 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 				info->mti_mdt->mdt_max_mdsize = rc;
 				level = D_INFO;
 			} else {
-				level = D_ERROR;
+				/* The PFL layout EA could be enlarged when
+				 * the corresponding layout of some IO range
+				 * is started to be written, which can cause
+				 * other thread to get incorrect layout size
+				 * at mdt_intent_layout, see LU-13261. */
+				level = D_LAYOUT;
 			}
 			CDEBUG_LIMIT(level, "%s: small buffer size %d for EA "
 				     "%d (max_mdsize %d): rc = %d\n",
