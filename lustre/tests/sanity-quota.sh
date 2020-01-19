@@ -3526,6 +3526,8 @@ run_test 64 "lfs project on symlink files should fail"
 test_66() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
+	[ "$MDS1_VERSION" -lt $(version_code 2.12.4) ] &&
+		skip "Not supported before 2.12.4"
 	setup_quota_test || error "setup quota failed with $?"
 	stack_trap cleanup_quota_test EXIT
 	local old=$(do_facet mds1 $LCTL get_param -n \
