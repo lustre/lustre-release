@@ -16725,6 +16725,27 @@ test_230b() {
 	ln -s $migrate_dir/$tfile $migrate_dir/${tfile}_ln
 	ln -s $other_dir/$tfile $migrate_dir/${tfile}_ln_other
 
+	local len
+	local lnktgt
+
+	# inline symlink
+	for len in 58 59 60; do
+		lnktgt=$(str_repeat 'l' $len)
+		touch $migrate_dir/$lnktgt
+		ln -s $lnktgt $migrate_dir/${len}char_ln
+	done
+
+	# PATH_MAX
+	for len in 4094 4095; do
+		lnktgt=$(str_repeat 'l' $len)
+		ln -s $lnktgt $migrate_dir/${len}char_ln
+	done
+
+	# NAME_MAX
+	for len in 254 255; do
+		touch $migrate_dir/$(str_repeat 'l' $len)
+	done
+
 	$LFS migrate -m $MDTIDX $migrate_dir ||
 		error "fails on migrating remote dir to MDT1"
 
@@ -16732,7 +16753,8 @@ test_230b() {
 	for ((i = 0; i < 10; i++)); do
 		for file in $(find $migrate_dir/dir_${i}); do
 			mdt_index=$($LFS getstripe -m $file)
-			[ $mdt_index == $MDTIDX ] ||
+			# broken symlink getstripe will fail
+			[ $mdt_index -ne $MDTIDX ] && stat -L $file &&
 				error "$file is not on MDT${MDTIDX}"
 		done
 	done
@@ -16796,7 +16818,7 @@ test_230b() {
 	echo "migrate back to MDT0, checking.."
 	for file in $(find $migrate_dir); do
 		mdt_index=$($LFS getstripe -m $file)
-		[ $mdt_index == $MDTIDX ] ||
+		[ $mdt_index -ne $MDTIDX ] && stat -L $file &&
 			error "$file is not on MDT${MDTIDX}"
 	done
 
