@@ -1851,19 +1851,27 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos)
 {
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        int           rc;
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	int rc;
 
-        /* Read small symlink from inode body as we need to maintain correct
-         * on-disk symlinks for ldiskfs.
-         */
-        if (S_ISLNK(dt->do_lu.lo_header->loh_attr) &&
-            (buf->lb_len < sizeof(LDISKFS_I(inode)->i_data)))
-                rc = osd_ldiskfs_readlink(inode, buf->lb_buf, buf->lb_len);
-        else
-                rc = osd_ldiskfs_read(inode, buf->lb_buf, buf->lb_len, pos);
+	/* Read small symlink from inode body as we need to maintain correct
+	 * on-disk symlinks for ldiskfs.
+	 */
+	if (S_ISLNK(dt->do_lu.lo_header->loh_attr)) {
+		loff_t size = i_size_read(inode);
 
-        return rc;
+		if (buf->lb_len < size)
+			return -EOVERFLOW;
+
+		if (size < sizeof(LDISKFS_I(inode)->i_data))
+			rc = osd_ldiskfs_readlink(inode, buf->lb_buf, size);
+		else
+			rc = osd_ldiskfs_read(inode, buf->lb_buf, size, pos);
+	} else {
+		rc = osd_ldiskfs_read(inode, buf->lb_buf, buf->lb_len, pos);
+	}
+
+	return rc;
 }
 
 static inline int osd_extents_enabled(struct super_block *sb,
