@@ -1361,7 +1361,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	int		   rc;
 	ENTRY;
 
-
+	osd_index_backup(env, o, false);
 	if (o->od_os) {
 		osd_objset_unregister_callbacks(o);
 		if (!o->od_dt_dev.dd_rdonly) {
