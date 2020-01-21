@@ -190,54 +190,54 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 
 /* Setstripe and migrate share mostly the same parameters */
 #define SSM_CMD_COMMON(cmd) \
-	"usage: "cmd" [--component-end|-E <comp_end>]\n"		\
-	"                 [--stripe-count|-c <stripe_count>]\n"		\
-	"                 [--overstripe-count|-C <stripe_count>]\n"	\
-	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
-	"                 [--stripe-size|-S <stripe_size>]\n"		\
-	"                 [--extension-size|--ext-size|-z]\n"           \
-	"                 [--layout|-L <pattern>]\n"			\
-	"                 [--mirror-count|-N[mirror_count]]\n"		\
-	"                 [--ost|-o <ost_indices>]\n"			\
-	"                 [--pool|-p <pool_name>]\n"			\
-	"                 [--yaml|-y <yaml_template_file>]\n"		\
-	"                 [--copy=<lustre_src>]\n"
+	"usage: "cmd" [--component-end|-E COMP_END]\n"			\
+	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
+	"                 [--overstripe-count|-C STRIPE_COUNT]\n"	\
+	"                 [--stripe-index|-i START_OST_IDX]\n"		\
+	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
+	"                 [--extension-size|--ext-size|-z]\n"		\
+	"                 [--help|-h] [--layout|-L PATTERN]\n"		\
+	"                 [--mirror_count|-N[MIRROR_COUNT]]\n"		\
+	"                 [--ost|-o OST_INDICES]\n"			\
+	"                 [--pool|-p POOL_NAME]\n"			\
+	"                 [--yaml|-y YAML_TEMPLATE_FILE]\n"		\
+	"                 [--copy=LUSTRE_SRC]\n"
 
 #define SSM_HELP_COMMON \
-	"\tstripe_count: Number of OSTs to stripe on (0=fs default, -1 all)\n" \
+	"\tSTRIPE_COUNT: Number of OSTs to stripe on (0=fs default, -1 all)\n" \
 	"\t              Using -C instead of -c allows overstriping, which\n"  \
 	"\t              will place more than one stripe per OST if\n"	       \
 	"\t              stripe_count is greater than the number of OSTs.\n"   \
-	"\tstart_ost_idx: OST index of first stripe (-1=default round robin)\n"\
-	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n"	       \
+	"\tSTART_OST_IDX: OST index of first stripe (-1=default round robin)\n"\
+	"\tSTRIPE_SIZE:  Number of bytes on each OST (0=fs default)\n"	       \
 	"\t              Optional K, M, or G suffix (for KB, MB, GB\n"         \
 	"\t              respectively).  Must be a multiple of 64KiB.\n"       \
-	"\textension_size:\n"						       \
+	"\tEXTENSION_SIZE:\n"						       \
 	"\t              Number of bytes the previous component is extended\n" \
 	"\t              each time. Optional K, M, or G suffix (for KB,\n"     \
 	"\t              MB, GB respectively)\n"			       \
-	"\tpool_name:    Name of OST pool to use (default none)\n"	       \
-	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"    \
-	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
+	"\tPOOL_NAME:    Name of OST pool to use (default none)\n"	       \
+	"\tLAYOUT:       stripe pattern type: raid0, mdt (default raid0)\n"    \
+	"\tOST_INDICES:  List of OST indices, can be repeated multiple times\n"\
 	"\t              Indices be specified in a format of:\n"	       \
-	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	       \
+	"\t                -o OST_1,OST_I-OST_J,OST_N\n"		       \
 	"\t              Or:\n"						       \
-	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	       \
+	"\t                -o OST_1 -o OST_I-OST_J -o OST_N\n"		       \
 	"\t              If --pool is set with --ost then the OSTs\n"	       \
 	"\t              must be the members of the pool.\n"		       \
-	"\tcomp_end:     Extent end of component, start after previous end.\n" \
+	"\tCOMP_END:     Extent end of component, start after previous end.\n" \
 	"\t              Optional K, M, or G suffix (for KiB, MiB, GiB), or\n" \
 	"\t              -1 or 'eof' for max file size). Must be a multiple\n" \
 	"\t              of stripe_size and a multiple of 64KiB.\n"	       \
-	"\tyaml_template_file:\n"					       \
+	"\tYAML_TEMPLATE_FILE:\n"					       \
 	"\t              YAML layout template file, can't be used with -c,\n"  \
 	"\t              -i, -S, -p, -o, or -E arguments.\n"		       \
-	"\tlustre_src:   Lustre file/dir whose layout info is used to set\n"   \
+	"\tLUSTRE_SRC:   Lustre file/dir whose layout info is used to set\n"   \
 	"\t              another lustre file or directory, can't used with\n"  \
 	"\t              -c, -i, -S, -p, -o, or -E arguments.\n"
 
 #define MIRROR_CREATE_HELP						       \
-	"\tmirror_count: Number of mirrors to be created with the upcoming\n"  \
+	"\tMIRROR_COUNT: Number of mirrors to be created with the upcoming\n"  \
 	"\t              setstripe layout options\n"			       \
 	"\t              It defaults to 1 if not specified; if specified,\n"   \
 	"\t              it must follow the option without a space.\n"	       \
@@ -247,12 +247,12 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t              It can be a plain layout or a composite layout.\n"    \
 	"\t              If not specified, the stripe options inherited\n"     \
 	"\t              from the previous component will be used.\n"          \
-	"\tflags:        set flags to the component of the current mirror.\n"  \
+	"\tFLAGS:        set flags to the component of the current mirror.\n"  \
 	"\t              Only \"prefer\" flag is supported so far.\n"
 
 #define MIRROR_EXTEND_HELP						       \
 	MIRROR_CREATE_HELP						       \
-	"\tvictim_file:  The layout of victim_file will be split and used\n"   \
+	"\tVICTIM_FILE:  The layout of victim_file will be split and used\n"   \
 	"\t              as a mirror added to the mirrored file.\n"	       \
 	"\tno-verify:    This option indicates not to verify the mirror(s)\n"  \
 	"\t              from victim file(s) in case the victim file(s)\n"     \
@@ -261,7 +261,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 
 #define MIRROR_EXTEND_USAGE						       \
 	"                 {--mirror-count|-N[mirror_count]}\n"		       \
-	"                 [SETSTRIPE_OPTIONS|-f|--file <victim_file>]\n"       \
+	"                 [SETSTRIPE_OPTIONS|-f|--file VICTIM_FILE]\n"	       \
 	"                 [--no-verify]\n"
 
 #define SETSTRIPE_USAGE							\
@@ -285,11 +285,11 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
-	"		[--mdt-hash|-H mdt_hash]\n"			\
+	"		[--help|-h] [--mdt-hash|-H mdt_hash]\n"		\
 	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
 	"		[--default|-D] [--mode|-o mode]\n"		\
 	"		[--max-inherit|-X max_inherit]\n"		\
-	"		[--max-inherit-rr max_inherit_rr] <dir>\n"		\
+	"		[--max-inherit-rr max_inherit_rr] <dir>\n"	\
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\
 	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
@@ -298,11 +298,11 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
 	"\tmode: the file access permission of the directory (octal)\n" \
-	"To create dir with a foreign (free format) layout :\n" \
-	"setdirstripe|mkdir --foreign[=<foreign_type>] -x|-xattr <string> " \
-		"[--mode|-o mode] [--flags <hex>] <dir>\n" \
-	"\tmode: the mode of the directory\n" \
-	"\tforeign_type: none or symlink\n"
+	"To create dir with a foreign (free format) layout :\n"		\
+	"setdirstripe|mkdir --foreign[=FOREIGN_TYPE] -x|-xattr STRING " \
+		"[--mode|-o MODE] [--flags HEX] <dir>\n" \
+	"\tmode: the file access permissions of the directory\n"	\
+	"\tforeign_type: none, daos, symlink, or numeric value\n"
 
 /**
  * command_t mirror_cmdlist - lfs mirror commands.
@@ -310,56 +310,52 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 command_t mirror_cmdlist[] = {
 	{ .pc_name = "create", .pc_func = lfs_mirror_create,
 	  .pc_help = "Create a mirrored file.\n"
-		"usage: lfs mirror create "
-		"<--mirror-count|-N[mirror_count]> "
-		"[SETSTRIPE_OPTIONS] ... <filename|directory> ...\n"
+		"usage: lfs mirror create {--mirror-count|-N[MIRROR_COUNT]}\n"
+		"\t\t[SETSTRIPE_OPTIONS] <filename|directory> ...\n"
 	  MIRROR_CREATE_HELP },
 	{ .pc_name = "delete", .pc_func = lfs_mirror_delete,
 	  .pc_help = "Delete a mirror from a file.\n"
-	"usage: lfs mirror delete {--mirror-id <mirror_id> |\n"
-	"\t		  --component-id|--comp-id|-I <comp_id> |\n"
-	"\t		  -p <pool>} <mirrored_file> ...\n"
+	"usage: lfs mirror delete {--mirror-id MIRROR_ID|-p POOL|\n"
+	"\t		  --component-id|--comp-id|-I COMP_ID} <mirror_file>\n"
 	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
-		"usage: lfs mirror extend "
-		"<--mirror-count|-N[mirror_count]> [--no-verify] "
-		"[SETSTRIPE_OPTIONS|-f <victim_file>] ... <filename> ...\n"
+		"usage: lfs mirror extend {--mirror-count|-N[MIRROR_COUNT]}\n"
+		"\t\t[--no-verify] [SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... <filename> ...\n"
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
-	"usage: lfs mirror split <--mirror-id <mirror_id> |\n"
-	"\t		--component-id|-I <comp_id>|-p <pool>> [--destroy|-d]\n"
-	"\t		[-f <new_file>] <mirrored_file> ...\n"
-	"\tmirror_id:   The numerical unique identifier for a mirror. It\n"
-	"\t             can be fetched by lfs getstripe command.\n"
-	"\tcomp_id:     Unique component ID within a mirror.\n"
-	"\tpool:        Components on specified pool.\n"
-	"\tnew_file:    This option indicates the layout of the split\n"
-	"\t             mirror will be stored into. If not specified,\n"
-	"\t             a new file named <mirrored_file>.mirror~<mirror_id>\n"
-	"\t             will be used.\n" },
+	"usage: lfs mirror split [--destroy|-d] [-f NEW_FILE] [--help|-h]\n"
+	"\t\t{--mirror-id MIRROR_ID|--component-id|-I COMP_ID|-p POOL}\n"
+	"\t\t<mirrored file> ...\n"
+	"\tMIRROR_ID: The numerical unique identifier for a mirror.\n"
+	"\t           It can be fetched by the 'lfs getstripe' command.\n"
+	"\tCOMP_ID:   Unique component ID within a mirror.\n"
+	"\tPOOL:      Components using specified pool.\n"
+	"\tNEW_FILE:  This option indicates the layout of the split\n"
+	"\t           mirror will be stored into. If not specified,\n"
+	"\t           a new file named <mirrored_file>.mirror~MIRROR_ID\n"
+	"\t           will be used.\n" },
 	{ .pc_name = "read", .pc_func = lfs_mirror_read,
 	  .pc_help = "Read the content of a specified mirror of a file.\n"
-		"usage: lfs mirror read <--mirror-id|-N <mirror_id> "
-		"[--outfile|-o <output_file>] <mirrored_file>\n" },
+		"usage: lfs mirror read {--mirror-id|-N MIRROR_ID}\n"
+		"\t\t[--outfile|-o <output_file>] <mirrored_file>\n" },
 	{ .pc_name = "write", .pc_func = lfs_mirror_write,
 	  .pc_help = "Write to a specified mirror of a file.\n"
-		"usage: lfs mirror write <--mirror-id|-N <mirror_id> "
-		"[--inputfile|-i <input_file>] <mirrored_file>\n" },
+		"usage: lfs mirror write {--mirror-id|-N MIRROR_ID}\n"
+		"\t\t[--inputfile|-i <input_file>] <mirrored_file>\n" },
 	{ .pc_name = "copy", .pc_func = lfs_mirror_copy,
 	  .pc_help = "Copy a specified mirror to other mirror(s) of a file.\n"
-		"usage: lfs mirror copy <--read-mirror|-i <id0>> "
-		"<--write-mirror|-o <id1,id2>> <mirrored_file>\n" },
+		"usage: lfs mirror copy {--read-mirror|-i MIRROR_ID0}\n"
+		"\t\t{--write-mirror|-o MIRROR_ID1[,...]} <mirrored_file>\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
-		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
-		"<mirrored file> [<mirrored file2>...]\n"},
+		"usage: lfs mirror resync [--only MIRROR_ID[,...]>]\n"
+		"\t\t<mirrored_file> [<mirrored_file2>...]\n" },
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
-		"usage: lfs mirror verify "
-		"[--only <mirror_id,mirror_id2[,...]>] "
-		"[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n"},
+		"usage: lfs mirror verify [--only MIRROR_ID[,...]]\n"
+		"\t\t[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n" },
 	{ .pc_name = "list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
@@ -378,8 +374,7 @@ command_t pcc_cmdlist[] = {
 		"\t-i: archive id for RW-PCC\n" },
 	{ .pc_name = "attach_fid", .pc_func = lfs_pcc_attach_fid,
 	  .pc_help = "Attach given files into PCC by FID(s).\n"
-		"usage: lfs pcc attach_id <--id|-i NUM> <--mnt|-m mnt> "
-		"<fid> ...\n"
+		"usage: lfs pcc attach_id {--id|-i NUM} {--mnt|-m MOUNTPOINT} FID ...\n"
 		"\t-i: archive id for RW-PCC\n"
 		"\t-m: Lustre mount point\n" },
 	{ .pc_name = "state", .pc_func = lfs_pcc_state,
@@ -405,7 +400,7 @@ command_t cmdlist[] = {
 	 "To create a file with specified striping/composite layout, or\n"
 	 "create/replace the default layout on an existing directory:\n"
 	 SSM_CMD_COMMON("setstripe")
-	 "                 [--mode <mode>]\n"
+	 "                 [--mode MODE]\n"
 	 "                 <directory|filename>\n"
 	 " or\n"
 	 "To add component(s) to an existing composite file:\n"
@@ -415,43 +410,43 @@ command_t cmdlist[] = {
 	 "usage: setstripe [--delete|-d] <directory>\n"
 	 " or\n"
 	 "To create a mirrored file or set s default mirror layout on a directory:\n"
-	 "usage: setstripe {--mirror-count|-N}[mirror_count] [SETSTRIPE_OPTIONS] <directory|filename>\n"
+	 "usage: setstripe {--mirror-count|-N}[MIRROR_COUNT] [SETSTRIPE_OPTIONS] <directory|filename>\n"
 	 " or\n"
 	 "To delete the last component(s) from an existing composite file\n"
 	 "(note that this will also delete any data in those components):\n"
-	 "usage: setstripe --component-del [--component-id|-I <comp_id>]\n"
-	 "                               [--component-flags|-F <comp_flags>]\n"
+	 "usage: setstripe --component-del [--component-id|-I COMP_ID]\n"
+	 "                               [--component-flags|-F COMP_FLAGS]\n"
 	 "                               <filename>\n"
-	 "\tcomp_id:     Unique component ID to delete\n"
-	 "\tcomp_flags:  'init' indicating all instantiated components\n"
+	 "\tCOMP_ID:     Unique component ID to delete\n"
+	 "\tCOMP_FLAGS:  'init' indicating all instantiated components\n"
 	 "\t             '^init' indicating all uninstantiated components\n"
 	 "\t-I and -F cannot be specified at the same time\n"
 	 " or\n"
 	 "To set or clear flags on a specific component\n"
 	 "(note that this command can only be applied to mirrored files:\n"
-	 "usage: setstripe --comp-set {-I comp_id|--comp-flags=comp_flags}\n"
+	 "usage: setstripe --comp-set {-I COMP_ID|--comp-flags=COMP_FLAGS}\n"
 	 "                            <filename>\n"
 	 " or\n"
 	 "To create a file with a foreign (free format) layout:\n"
-	 "usage: setstripe --foreign[=<foreign_type>]\n"
-	 "                 --xattr|-x <layout_string> [--flags <hex>]\n"
-	 "                 [--mode <mode>] <filename>\n"},
+	 "usage: setstripe --foreign[=FOREIGN_TYPE]\n"
+	 "                 --xattr|-x LAYOUT_STRING [--flags HEX]\n"
+	 "                 [--mode MODE] <filename>\n"},
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the layout pattern for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
-	 "usage: getstripe [--ost|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
+	 "usage: getstripe [--ost|-O UUID] [--quiet|-q] [--verbose|-v]\n"
 	 "		   [--stripe-count|-c] [--stripe-index|-i] [--fid|-F]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
 	 "		   [--mdt-index|-m] [--recursive|-r] [--raw|-R]\n"
 	 "		   [--layout|-L] [--generation|-g] [--yaml|-y]\n"
-	 "		   [--component-id[=comp_id]|-I[comp_id]]\n"
-	 "		   [--component-flags[=comp_flags]]\n"
+	 "		   [--help|-h] [--component-id|-I[=COMP_ID]]\n"
+	 "		   [--component-flags[=COMP_FLAGS]]\n"
 	 "		   [--component-count]\n"
 	 "		   [--extension-size|--ext-size|-z]\n"
-	 "		   [--component-start[=[+-]comp_start]]\n"
-	 "		   [--component-end[=[+-]comp_end]|-E[[+-]comp_end]]\n"
-	 "		   [[!] --mirror-index=[+-]<index> |\n"
-	 "		    [!] --mirror-id=[+-]<id>] [--mirror-count|-N]\n"
+	 "		   [--component-start[=[+-]COMP_START]]\n"
+	 "		   [--component-end[=[+-]COMP_END]|-E[[+-]comp_end]]\n"
+	 "		   [[!] --mirror-index=[+-]INDEX |\n"
+	 "		   [!] --mirror-id=[+-]MIRROR_ID] [--mirror-count|-N]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "Create striped directory on specified MDT, same as mkdir.\n"
@@ -462,7 +457,7 @@ command_t cmdlist[] = {
 	 "To list the layout pattern info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
-	 "		      [--mdt-hash|-H] [--obd|-O <uuid>]\n"
+	 "		      [--help|-h] [--mdt-hash|-H] [--obd|-O UUID]\n"
 	 "		      [--recursive|-r] [--yaml|-y]\n"
 	 "		      [--verbose|-v] [--default|-D]\n"
 	 "		      [--max-inherit|-X]\n"
@@ -490,7 +485,7 @@ command_t cmdlist[] = {
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --ctime|-C [+-]N[smhdwy]]\n"
 	 "     [[!] --mtime|-M [+-]N[smhdwy]]\n"
-	 "     [[!] --btime|--Btime|-B [+-]N[smhdwy]]\n"
+	 "     [[!] --btime|--Btime|-B [+-]N[smhdwy]] [--help|-h]\n"
 	 "     [[!] --newer[XY] <reference>] [[!] --blocks|-b N]\n"
 	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
@@ -521,7 +516,7 @@ command_t cmdlist[] = {
 	{"check", lfs_check, 0,
 	 "Display the status of MGTs, MDTs or OSTs (as specified in the command)\n"
 	 "or all the servers (MGTs, MDTs and OSTs).\n"
-	 "usage: check <mgts|osts|mdts|all>"},
+	 "usage: check {mgts|osts|mdts|all}"},
 	{"osts", lfs_osts, 0, "list OSTs connected to client "
 	 "[for specified path only]\n" "usage: osts [path]"},
 	{"mdts", lfs_mdts, 0, "list MDTs connected to client "
@@ -536,27 +531,27 @@ command_t cmdlist[] = {
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
 #ifdef HAVE_SYS_QUOTA_H
 	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-	 "usage: setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
-	 "                -b <block-softlimit> -B <block-hardlimit>\n"
-	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
-	 "       setquota <-u|--user|-g|--group|-p|--projid> <uname>|<uid>|<gname>|<gid>|<projid>\n"
-	 "                [--block-softlimit <block-softlimit>]\n"
-	 "                [--block-hardlimit <block-hardlimit>]\n"
-	 "                [--inode-softlimit <inode-softlimit>]\n"
-	 "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-	 "       setquota [-t] <-u|--user|-g|--group|-p|--projid>\n"
-	 "                [--block-grace 'notify'|<block-grace>]\n"
-	 "                [--inode-grace 'notify'|<inode-grace>] <filesystem>\n"
-	 "       setquota <-U|-G|-P>\n"
-	 "                -b <block-softlimit> -B <block-hardlimit>\n"
-	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
-	 "       setquota <-U|--default-usr|-G|--default-grp|-P|--default-prj>\n"
-	 "                [--block-softlimit <block-softlimit>]\n"
-	 "                [--block-hardlimit <block-hardlimit>]\n"
-	 "                [--inode-softlimit <inode-softlimit>]\n"
-	 "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-	 "       setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
-	 "                <-d|--default>\n"
+	 "usage: setquota {-u|-g|-p} UNAME|UID|GNAME|GID|PROJID\n"
+	 "                -b BLOCK_SOFTLIMIT -B BLOCK_HARDLIMIT\n"
+	 "                -i INODE_SOFTLIMIT -I INODE_HARDLIMIT <filesystem>\n"
+	 "       setquota {-u|--user USER|UID|-g|--group GROUP|GID|-p|--projid PROJID}\n"
+	 "                [--block-softlimit BLOCK_SOFTLIMIT]\n"
+	 "                [--block-hardlimit BLOCK_HARDLIMIT]\n"
+	 "                [--inode-softlimit INODE_SOFTLIMIT]\n"
+	 "                [--inode-hardlimit INODE_HARDLIMIT] <filesystem>\n"
+	 "       setquota [-t] {-h|--help|-u|--user|-g|--group|-p|--projid}\n"
+	 "                [--block-grace 'notify'|BLOCK_GRACE]\n"
+	 "                [--inode-grace 'notify'|INODE_GRACE] <filesystem>\n"
+	 "       setquota {-U|-G|-P}\n"
+	 "                -b BLOCK_SOFTLIMIT -B BLOCK_HARDLIMIT\n"
+	 "                -i INODE_SOFTLIMIT -I INODE_HARDLIMIT <filesystem>\n"
+	 "       setquota {-U|--default-usr|-G|--default-grp|-P|--default-prj}\n"
+	 "                [--block-softlimit BLOCK_SOFTLIMIT]\n"
+	 "                [--block-hardlimit BLOCK_HARDLIMIT]\n"
+	 "                [--inode-softlimit INODE_SOFTLIMIT]\n"
+	 "                [--inode-hardlimit INODE_HARDLIMIT] <filesystem>\n"
+	 "       setquota {-u|-g|-p} UNAME|UID|GNAME|GID|PROJID\n"
+	 "                {-d|--default}\n"
 	 "       -b can be used instead of --block-softlimit/--block-grace\n"
 	 "       -B can be used instead of --block-hardlimit\n"
 	 "       -i can be used instead of --inode-softlimit/--inode-grace\n"
@@ -574,11 +569,10 @@ command_t cmdlist[] = {
 	 "      be notified after the quota is over soft limit but prevents\n"
 	 "      the soft limit from becoming the hard limit."},
 	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-	 "usage: quota [-q] [-v] [-h] [-o <obd_uuid>|-i <mdt_idx>|-I "
-		       "<ost_idx>]\n"
-	 "             [<-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>\n"
-	 "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g|-p> <filesystem>\n"
-	"	 quota [-q] [-v] [h] <-U|-G|-P> <filesystem>"},
+	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-i MDT_IDX|-I OST_IDX]\n"
+	 "             [{-u|-g|-p} UNAME|UID|GNAME|GID|PROJID] <filesystem>\n"
+	 "       quota [-o OBD_UUID|-i MDT_IDX|-I OST_IDX] -t {-u|-g|-p} <filesystem>\n"
+	"        quota [-q] [-v] [h] {-U|-G|-P} <filesystem>"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|-r] <file|directory...>\n"
@@ -652,11 +646,10 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate a directory between MDTs.\n"
-	 "usage: migrate [--mdt-count|-c] <stripe_count>\n"
-	 "		 [--mdt-hash|-H] <hash_type>\n"
-	 "               [--mdt-index|-m] <start_mdt_index>\n"
-	 "		 [--verbose|-v]\n"
-	 "		 <directory>\n"
+	 "usage: migrate [--mdt-count|-c STRIPE_COUNT]\n"
+	 "               [--mdt-hash|-H HASH_TYPE]\n"
+	 "               [--mdt-index|-m START_MDT_INDEX] [--verbose|-v]\n"
+	 "               <directory>\n"
 	 "\tmdt:	MDTs to stripe over, if only one MDT is specified\n"
 	 "			it's the MDT index of first stripe\n"
 	 "\tmdt_count:	number of MDTs to stripe a directory over\n"
@@ -667,21 +660,17 @@ command_t cmdlist[] = {
 	 "\n"
 	 "migrate file objects from one OST "
 	 "layout\nto another (may be not safe with concurent writes).\n"
-	 "usage: migrate  "
-	 "[--stripe-count|-c] <stripe_count>\n"
-	 "[--overstripe-count|-C] <stripe_count>\n"
-	 "		[--stripe-index|-i] <start_ost_index>\n"
-	 "		[--stripe-size|-S] <stripe_size>\n"
-	 "		[--pool|-p] <pool_name>\n"
-	 "		[--ost|-o] <ost_indices>\n"
-	 "		[--block|-b]\n"
-	 "		[--non-block|-n]\n"
-	 "		[--non-direct|-D]\n"
-	 "		<file|directory>\n"
-	 "\tstripe_count:     number of OSTs to stripe a file over\n"
-	 "\t		  Using -C instead of -c allows overstriping, which\n"
-	 "\t		  will place more than one stripe per OST if\n"
-	 "\t		  stripe_count is greater than the number of OSTs\n"
+	 "usage: migrate [--stripe-count|-c STRIPE_COUNT]\n"
+	 "               [--overstripe-count|-C STRIPE_COUNT]\n"
+	 "               [--stripe-index|-i START_OST_INDEX]\n"
+	 "               [--stripe-size|-S STRIPE_SIZE]\n"
+	 "               [--pool|-p <pool_name>] [--ost|-o OST_INDICES]\n"
+	 "               [--block|-b] [--non-block|-n] [--non-direct|-D]\n"
+	 "               <file|directory>\n"
+	 "\tstripe_count:   number of OSTs to stripe a file over\n"
+	 "\t                Using -C instead of -c allows overstriping, which\n"
+	 "\t                will place more than one stripe per OST if\n"
+	 "\t                stripe_count is greater than the number of OSTs\n"
 	 "\tstripe_ost_index: index of the first OST to stripe a file over\n"
 	 "\tstripe_size:      number of bytes to store before moving to the next OST\n"
 	 "\tpool_name:        name of the predefined pool of OSTs\n"
@@ -692,13 +681,13 @@ command_t cmdlist[] = {
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
 	 "use \"migrate\" instead.\n"
-	 "usage: mv <directory|filename> [--mdt-index|-m] <mdt_index> "
+	 "usage: mv <directory|filename> [--mdt-index|-m MDT_INDEX] "
 	 "[--verbose|-v]\n"},
 	{"ladvise", lfs_ladvise, 0,
 	 "Provide servers with advice about access patterns for a file.\n"
 	 "usage: ladvise [--advice|-a ADVICE] [--start|-s START[kMGT]]\n"
 	 "               [--background|-b] [--unset|-u]\n\n"
-	 "               {[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}\n"
+	 "               {--end|-e END[kMGT]|--length|-l LENGTH[kMGT]}\n"
 	 "               {[--mode|-m [READ,WRITE]}\n"
 	 "               <file> ...\n"},
 	{"mirror", lfs_mirror, mirror_cmdlist,
@@ -3491,7 +3480,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
 /* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
-/* find	{ .val = 'h',	.name = "help",		.has_arg = no_argument }, */
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
@@ -3543,7 +3532,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	while ((c = getopt_long(argc, argv,
-				"bc:C:dDE:f:H:i:I:m:N::no:p:L:s:S:vx:y:z:",
+				"bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:y:z:",
 				long_opts, NULL)) >= 0) {
 		size_units = 1;
 		switch (c) {
@@ -3866,9 +3855,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						lsa.lsa_nr_tgts, optarg, NULL);
 			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
-					"%s %s: invalid MDT target(s) '%s'\n",
-					progname, argv[0], optarg);
-				return CMD_HELP;
+					"%s: invalid MDT target(s) '%s'\n",
+					progname, optarg);
+				goto usage_error;
 			}
 
 			lsa.lsa_tgts = tgts;
@@ -4019,8 +4008,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lsa.lsa_extension_comp = true;
 			break;
 		default:
-			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
-				progname, argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+		case 'h':
 			goto usage_error;
 		}
 	}
@@ -4364,7 +4354,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		} else if (opc == SO_MIRROR_SPLIT || opc == SO_MIRROR_DELETE) {
 			if (!mirror_id && !comp_id && !lsa.lsa_pool_name) {
 				fprintf(stderr,
-					"%s: no mirror specified to delete from '%s'\n",
+					"%s: no mirror id, component id, or pool name specified to delete from '%s'\n",
 					progname, fname);
 				goto usage_error;
 			}
@@ -4920,6 +4910,7 @@ static int lfs_find(int argc, char **argv)
 			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = 'g',	.name = "gid",		.has_arg = required_argument },
 	{ .val = 'G',	.name = "group",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument },
@@ -4974,7 +4965,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-		"-0A:b:B:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
+		"-0A:b:B:c:C:D:E:g:G:hH:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
 		long_opts, &optidx)) >= 0) {
 		xtime = NULL;
 		xsign = NULL;
@@ -5644,11 +5635,11 @@ err_free:
 				param.fp_type = S_IFSOCK;
 				break;
 			default:
-				fprintf(stderr, "error: %s: bad type '%s'\n",
-					argv[0], optarg);
+				fprintf(stderr, "%s: bad type '%s'\n",
+					progname, optarg);
 				ret = CMD_HELP;
 				goto err;
-			};
+			}
 			break;
 		case LFS_FIND_PERM:
 			param.fp_exclude_perm = !!neg_opt;
@@ -5711,9 +5702,12 @@ err_free:
 			param.fp_exclude_ext_size = !!neg_opt;
 			break;
 		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+		case 'h':
 			ret = CMD_HELP;
 			goto err;
-		};
+		}
 	}
 
 	if (pathstart == -1) {
@@ -5782,6 +5776,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'F',	.name = "fid",		.has_arg = no_argument },
 	{ .val = 'g',	.name = "generation",	.has_arg = no_argument },
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 /* dirstripe { .val = 'H', .name = "mdt-hash",	.has_arg = required_argument }*/
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = no_argument },
@@ -6105,6 +6100,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			}
 			break;
 		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -6194,6 +6192,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "mdt-count",	 .has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	 .has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	 .has_arg = no_argument },
 	{ .val = 'i',	.name = "mdt-index",	 .has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt-index",	 .has_arg = no_argument },
@@ -6211,7 +6210,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHimO:rtTvXy", long_opts, NULL)) != -1) {
+				"cDhHimO:rtTvXy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
@@ -6220,23 +6219,24 @@ static int lfs_getdirstripe(int argc, char **argv)
 		case 'D':
 			param.fp_get_default_lmv = 1;
 			break;
-		case 'i':
-		case 'm':
-			param.fp_verbose |= VERBOSE_STRIPE_OFFSET;
-			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
 			fprintf(stderr,
 				"warning: '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
+			/* fallthrough */
 #endif
 		case 'H':
 			param.fp_verbose |= VERBOSE_HASH_TYPE;
 			break;
+		case 'i': /* fallthrough */
+		case 'm':
+			param.fp_verbose |= VERBOSE_STRIPE_OFFSET;
+			break;
 		case 'O':
 			if (param.fp_obd_uuid) {
 				fprintf(stderr,
-					"error: %s: only one obduuid allowed",
-					argv[0]);
+					"%s: only one obduuid allowed",
+					progname);
 				return CMD_HELP;
 			}
 			param.fp_obd_uuid = (struct obd_uuid *)optarg;
@@ -6257,8 +6257,10 @@ static int lfs_getdirstripe(int argc, char **argv)
 			param.fp_yaml = 1;
 			break;
 		default:
-			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
-				progname, argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -6650,6 +6652,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			.name = "flags",	.has_arg = required_argument },
 	{ .val = LFS_LAYOUT_FOREIGN_OPT,
 			.name = "foreign",	.has_arg = optional_argument},
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
@@ -6677,7 +6680,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	setstripe_args_init(&lsa);
 
-	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:x:X:",
+	while ((c = getopt_long(argc, argv, "c:dDi:hH:m:o:t:T:x:X:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -6691,8 +6694,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 			    lsa.lsa_stripe_count < -1 ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
-					"%s %s: invalid stripe count '%s'\n",
-					progname, argv[0], optarg);
+					"%s: invalid stripe count '%s'\n",
+					progname, optarg);
 				return CMD_HELP;
 			}
 			break;
@@ -6747,6 +6750,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 't':
 			fprintf(stderr,
 				"warning: '--hash-type' and '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
+			/* fallthrough */
 #endif
 		case 'H':
 			lsa.lsa_pattern = check_hashtype(optarg);
@@ -6847,8 +6851,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 			}
 			break;
 		default:
-			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
-				progname, argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -7189,13 +7195,15 @@ static int lfs_df(int argc, char **argv)
 			flags |= MNTDF_VERBOSE;
 			break;
 		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
 	if (optind < argc && !realpath(argv[optind], path)) {
 		rc = -errno;
-		fprintf(stderr, "error: invalid path '%s': %s\n",
-			argv[optind], strerror(-rc));
+		fprintf(stderr, "%s: invalid path '%s': %s\n",
+			progname, argv[optind], strerror(-rc));
 		return rc;
 	}
 
@@ -7265,8 +7273,11 @@ static int lfs_getname(int argc, char **argv)
 		case 'n':
 			opt_fsname = true;
 			break;
-		case 'h':
 		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -7467,6 +7478,7 @@ int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 	struct option long_opts[] = {
 	{ .val = 'b',	.name = "block-grace",	.has_arg = required_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inode-grace",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = no_argument },
 	{ .val = 't',	.name = "times",	.has_arg = no_argument },
@@ -7479,7 +7491,7 @@ int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 	qctl->qc_cmd  = LUSTRE_Q_SETINFO;
 	qctl->qc_type = ALLQUOTA;
 
-	while ((c = getopt_long(argc, argv, "b:gi:ptu",
+	while ((c = getopt_long(argc, argv, "b:ghi:ptu",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'u':
@@ -7493,7 +7505,8 @@ int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 quota_type:
 			if (qctl->qc_type != ALLQUOTA) {
 				fprintf(stderr,
-					"error: -u/g/p can't be used more than once\n");
+					"%s: -u/g/p cannot be used more than once\n",
+					progname);
 				return CMD_HELP;
 			}
 			qctl->qc_type = qtype;
@@ -7506,8 +7519,8 @@ quota_type:
 				dqi->dqi_bgrace = str2sec(optarg);
 				if (dqi->dqi_bgrace >= NOTIFY_GRACE_TIME) {
 					fprintf(stderr,
-						"error: bad block-grace: %s\n",
-						optarg);
+						"%s: bad block-grace: %s\n",
+						progname, optarg);
 					return CMD_HELP;
 				}
 			}
@@ -7521,8 +7534,8 @@ quota_type:
 				dqi->dqi_igrace = str2sec(optarg);
 				if (dqi->dqi_igrace >= NOTIFY_GRACE_TIME) {
 					fprintf(stderr,
-						"error: bad inode-grace: %s\n",
-						optarg);
+						"%s: bad inode-grace: %s\n",
+						progname, optarg);
 					return CMD_HELP;
 				}
 			}
@@ -7538,17 +7551,23 @@ quota_type:
 			break;
 		/* getopt prints error message for us when opterr != 0 */
 		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
 
 	if (qctl->qc_type == ALLQUOTA) {
-		fprintf(stderr, "error: neither -u, -g nor -p specified\n");
+		fprintf(stderr, "%s: neither -u, -g nor -p specified\n",
+			progname);
 		return CMD_HELP;
 	}
 
 	if (optind != argc - 1) {
-		fprintf(stderr, "error: unexpected parameters encountered\n");
+		fprintf(stderr, "%s: unexpected parameter '%s'\n",
+			progname, argv[optind + 1]);
 		return CMD_HELP;
 	}
 
@@ -7584,6 +7603,7 @@ int lfs_setquota(int argc, char **argv)
 	{ .val = 'd',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inode-softlimit",
 						.has_arg = required_argument },
 	{ .val = 'I',	.name = "inode-hardlimit",
@@ -7619,7 +7639,7 @@ int lfs_setquota(int argc, char **argv)
 				   * isn't reinitialized from command line
 				   */
 
-	while ((c = getopt_long(argc, argv, "b:B:dg:Gi:I:p:Pu:U",
+	while ((c = getopt_long(argc, argv, "b:B:dg:Ghi:I:p:Pu:U",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'U':
@@ -7742,6 +7762,8 @@ quota_type_def:
 			fprintf(stderr,
 				"%s setquota: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			rc = CMD_HELP;
 			goto out;
 		}
@@ -9331,20 +9353,20 @@ static int lfs_rmfid(int argc, char **argv)
 
 static int lfs_data_version(int argc, char **argv)
 {
-	char *path;
+	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 	__u64 data_version;
+	char *path;
 	int fd;
 	int rc;
 	int c;
-	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 
 	if (argc < 2) {
-		fprintf(stderr, "%s data_version: FILE must be specified\n",
+		fprintf(stderr, "%s: FILE must be specified\n",
 			progname);
 		return CMD_HELP;
 	}
 
-	while ((c = getopt(argc, argv, "nrw")) != -1) {
+	while ((c = getopt(argc, argv, "hnrw")) != -1) {
 		switch (c) {
 		case 'n':
 			data_version_flags = 0;
@@ -9359,6 +9381,8 @@ static int lfs_data_version(int argc, char **argv)
 			fprintf(stderr,
 				"%s data_version: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -9453,11 +9477,11 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 	{ .val = 'a',	.name = "noarchive",	.has_arg = no_argument },
 	{ .val = 'd',	.name = "dirty",	.has_arg = no_argument },
 	{ .val = 'e',	.name = "exists",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'i',	.name = "archive-id",	.has_arg = required_argument },
 	{ .val = 'l',	.name = "lost",		.has_arg = no_argument },
 	{ .val = 'r',	.name = "norelease",	.has_arg = no_argument },
-	{ .val = 'i',	.name = "archive-id",	.has_arg = required_argument },
 	{ .name = NULL } };
-	char short_opts[] = "lraAdei:";
 	__u64 mask = 0;
 	int c, rc;
 	char *path;
@@ -9467,7 +9491,7 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 	if (argc < 3)
 		return CMD_HELP;
 
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "aAdehi:lr",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'l':
@@ -9492,16 +9516,17 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 			errno = 0;
 			archive_id = strtol(optarg, &end, 10);
 			if (errno != 0 || *end != '\0' || archive_id < 0) {
-				fprintf(stderr, "invalid archive_id: '%s'\n",
-					end);
+				fprintf(stderr,
+					"%s: invalid archive_id: '%s'\n",
+					progname, end);
 				return CMD_HELP;
 			}
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -9683,11 +9708,11 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	struct option long_opts[] = {
 	{ .val = 'a',	.name = "archive",	.has_arg = required_argument },
 	{ .val = 'D',	.name = "data",		.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'l',	.name = "filelist",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mntpath",	.has_arg = required_argument },
 	{ .name = NULL } };
 	dev_t last_dev = 0;
-	char short_opts[] = "l:D:a:m:";
 	struct hsm_user_request *hur, *oldhur;
 	int c, i;
 	size_t len;
@@ -9707,7 +9732,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	if (argc < 2)
 		return CMD_HELP;
 
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "a:D:hl:m:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'l':
@@ -9731,11 +9756,11 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				some_file = strdup(optarg);
 			}
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -9915,7 +9940,7 @@ int lfs_get_mode(const char *string)
 	for (mode = 0; mode < ARRAY_SIZE(lock_mode_names); mode++) {
 		if (lock_mode_names[mode] == NULL)
 			continue;
-		if (strcmp(string, lock_mode_names[mode]) == 0)
+		if (strcasecmp(string, lock_mode_names[mode]) == 0)
 			return mode;
 	}
 
@@ -9943,27 +9968,25 @@ static int lfs_ladvise(int argc, char **argv)
 	{ .val = 'a',	.name = "advice",	.has_arg = required_argument },
 	{ .val = 'b',	.name = "background",	.has_arg = no_argument },
 	{ .val = 'e',	.name = "end",		.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'l',	.name = "length",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mode",		.has_arg = required_argument },
 	{ .val = 's',	.name = "start",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "unset",	.has_arg = no_argument },
 	{ .name = NULL } };
-	char			 short_opts[] = "a:be:l:m:s:u";
-	int			 c;
-	int			 rc = 0;
-	const char		*path;
-	int			 fd;
-	struct llapi_lu_ladvise	 advice;
-	enum lu_ladvise_type	 advice_type = LU_LADVISE_INVALID;
-	unsigned long long	 start = 0;
-	unsigned long long	 end = LUSTRE_EOF;
-	unsigned long long	 length = 0;
-	unsigned long long	 size_units;
-	unsigned long long	 flags = 0;
-	int			 mode = 0;
+	struct llapi_lu_ladvise advice;
+	enum lu_ladvise_type advice_type = LU_LADVISE_INVALID;
+	unsigned long long start = 0;
+	unsigned long long end = LUSTRE_EOF;
+	unsigned long long length = 0;
+	unsigned long long size_units;
+	unsigned long long flags = 0;
+	int c, fd, rc = 0;
+	const char *path;
+	int mode = 0;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "a:be:hl:m:s:u",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'a':
@@ -9971,7 +9994,7 @@ static int lfs_ladvise(int argc, char **argv)
 			if (advice_type == LU_LADVISE_INVALID) {
 				fprintf(stderr,
 					"%s: invalid advice type '%s'\n",
-					argv[0], optarg);
+					progname, optarg);
 				fprintf(stderr, "Valid types:");
 
 				for (advice_type = 0;
@@ -10033,11 +10056,11 @@ static int lfs_ladvise(int argc, char **argv)
 				return CMD_HELP;
 			}
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -10196,6 +10219,7 @@ static int lfs_heat_set(int argc, char **argv)
 {
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "clear",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "off",		.has_arg = no_argument },
 	{ .val = 'O',	.name = "on",		.has_arg = no_argument },
 	{ .name = NULL } };
@@ -10209,7 +10233,7 @@ static int lfs_heat_set(int argc, char **argv)
 		return CMD_HELP;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "coO", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "choO", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 			flags |= LU_HEAT_FLAG_CLEAR;
@@ -10221,11 +10245,11 @@ static int lfs_heat_set(int argc, char **argv)
 		case 'O':
 			flags &= ~LU_HEAT_FLAG_OFF;
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -10637,17 +10661,17 @@ error:
 
 static inline int lfs_mirror_resync(int argc, char **argv)
 {
+	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .name = NULL } };
 	struct ll_ioc_lease *ioc = NULL;
 	__u16 mirror_ids[128] = { 0 };
 	int ids_nr = 0;
 	int c;
 	int rc = 0;
 
-	struct option long_opts[] = {
-	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
-	{ .name = NULL } };
-
-	while ((c = getopt_long(argc, argv, "o:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "ho:", long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 'o':
 			rc = parse_mirror_ids(mirror_ids,
@@ -10662,9 +10686,11 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 			ids_nr = rc;
 			break;
 		default:
-			fprintf(stderr, "%s: options '%s' unrecognized.\n",
-				argv[0], argv[optind - 1]);
-			rc = -EINVAL;
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
+			rc = CMD_HELP;
 			goto error;
 		}
 	}
@@ -10777,11 +10803,12 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	const size_t buflen = 4 << 20;
 	off_t pos;
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "outfile",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "N:o:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "hN:o:", long_opts, NULL)) >= 0) {
 		char *end;
 
 		switch (c) {
@@ -10805,9 +10832,11 @@ static inline int lfs_mirror_read(int argc, char **argv)
 			outfile = optarg;
 			break;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized.\n",
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			return -EINVAL;
+			/* fallthrough */
+		case 'h':
+			return CMD_HELP;
 		}
 	}
 
@@ -10938,13 +10967,13 @@ static inline int lfs_mirror_write(int argc, char **argv)
 	off_t pos;
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	struct ll_ioc_lease_id ioc;
-
 	struct option long_opts[] = {
-	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inputfile",	.has_arg = required_argument },
+	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "N:i:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "hi:N:", long_opts, NULL)) >= 0) {
 		char *end;
 
 		switch (c) {
@@ -10968,9 +10997,11 @@ static inline int lfs_mirror_write(int argc, char **argv)
 			inputfile = optarg;
 			break;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			return -EINVAL;
+			/* fallthrough */
+		case 'h':
+			return CMD_HELP;
 		}
 	}
 
@@ -11169,13 +11200,16 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 	ssize_t copied;
 	struct ll_ioc_lease *ioc = NULL;
 	struct ll_ioc_lease_id *resync_ioc;
-
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "read-mirror",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "write-mirror",	.has_arg = required_argument },
 	{ .name = NULL } };
+	char cmd[PATH_MAX];
 
-	while ((c = getopt_long(argc, argv, "i:o:", long_opts, NULL)) >= 0) {
+	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
+	progname = cmd;
+	while ((c = getopt_long(argc, argv, "hi:o:", long_opts, NULL)) >= 0) {
 		char *end;
 
 		switch (c) {
@@ -11187,8 +11221,8 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 			if (errno != 0 || *end != '\0' || id == 0 ||
 			    id > UINT16_MAX) {
 				fprintf(stderr,
-					"%s %s: invalid read mirror ID '%s'\n",
-					progname, argv[0], optarg);
+					"%s: invalid read mirror ID '%s'\n",
+					progname, optarg);
 				return rc;
 			}
 
@@ -11209,9 +11243,11 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 			}
 			break;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			return -EINVAL;
+			/* fallthrough */
+		case 'h':
+			return CMD_HELP;
 		}
 	}
 
@@ -11940,13 +11976,14 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 	char cmd[PATH_MAX];
 
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
-	while ((c = getopt_long(argc, argv, "o:v", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "ho:v", long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 'o':
 			rc = parse_mirror_ids(mirror_ids,
@@ -11971,9 +12008,11 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 			verbose++;
 			break;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized.\n",
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			rc = -EINVAL;
+			/* fallthrough */
+		case 'h':
+			rc = CMD_HELP;
 			goto error;
 		}
 	}
@@ -12064,20 +12103,22 @@ static int lfs_getsom(int argc, char **argv)
 	enum lfs_som_type type = LFS_SOM_ATTR_ALL;
 	int rc = 0, c;
 
-	while ((c = getopt(argc, argv, "sbf")) != -1) {
+	while ((c = getopt(argc, argv, "bfhs")) != -1) {
 		switch (c) {
-		case 's':
-			type = LFS_SOM_SIZE;
-			break;
 		case 'b':
 			type = LFS_SOM_BLOCKS;
 			break;
 		case 'f':
 			type = LFS_SOM_FLAGS;
 			break;
+		case 's':
+			type = LFS_SOM_SIZE;
+			break;
 		default:
-			fprintf(stderr, "%s: invalid option '%c'\n",
-				progname, optopt);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -12150,6 +12191,7 @@ static int lfs_mirror_list_commands(int argc, char **argv)
 static int lfs_pcc_attach(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
 	{ .name = NULL } };
 	int c;
@@ -12161,7 +12203,7 @@ static int lfs_pcc_attach(int argc, char **argv)
 	enum lu_pcc_type type = LU_PCC_READWRITE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "i:",
+	while ((c = getopt_long(argc, argv, "hi:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
@@ -12171,15 +12213,15 @@ static int lfs_pcc_attach(int argc, char **argv)
 			    archive_id == 0 || archive_id > UINT32_MAX) {
 				fprintf(stderr,
 					"error: %s: bad archive ID '%s'\n",
-					argv[0], optarg);
+					progname, optarg);
 				return CMD_HELP;
 			}
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -12222,20 +12264,20 @@ static int lfs_pcc_attach(int argc, char **argv)
 static int lfs_pcc_attach_fid(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mnt",	.has_arg = required_argument },
 	{ .name = NULL } };
-	char			 short_opts[] = "i:m:";
-	int			 c;
-	int			 rc = 0;
-	__u32			 archive_id = 0;
-	char			*end;
-	const char		*mntpath = NULL;
-	const char		*fidstr;
-	enum lu_pcc_type	 type = LU_PCC_READWRITE;
+	int c;
+	int rc = 0;
+	__u32 archive_id = 0;
+	char *end;
+	const char *mntpath = NULL;
+	const char *fidstr;
+	enum lu_pcc_type type = LU_PCC_READWRITE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "hi:m:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
@@ -12252,11 +12294,11 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		case 'm':
 			mntpath = optarg;
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -12299,27 +12341,27 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 static int lfs_pcc_detach(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
 	{ .name = NULL } };
-	char			 short_opts[] = "k";
-	int			 c;
-	int			 rc = 0;
-	const char		*path;
-	char			 fullpath[PATH_MAX];
-	__u32			 detach_opt = PCC_DETACH_OPT_UNCACHE;
+	int c;
+	int rc = 0;
+	const char *path;
+	char fullpath[PATH_MAX];
+	__u32 detach_opt = PCC_DETACH_OPT_UNCACHE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "hk",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'k':
 			detach_opt = PCC_DETACH_OPT_NONE;
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -12352,27 +12394,27 @@ static int lfs_pcc_detach(int argc, char **argv)
 static int lfs_pcc_detach_fid(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
 	{ .name = NULL } };
-	char		 short_opts[] = "k";
-	int		 c;
-	int		 rc = 0;
-	const char	*fid;
-	const char	*mntpath;
-	__u32		 detach_opt = PCC_DETACH_OPT_UNCACHE;
+	int c;
+	int rc = 0;
+	const char *fid;
+	const char *mntpath;
+	__u32 detach_opt = PCC_DETACH_OPT_UNCACHE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, short_opts,
+	while ((c = getopt_long(argc, argv, "hk",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'k':
 			detach_opt = PCC_DETACH_OPT_NONE;
 			break;
-		case '?':
-			return CMD_HELP;
 		default:
-			fprintf(stderr, "%s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			/* fallthrough */
+		case 'h':
 			return CMD_HELP;
 		}
 	}
@@ -12398,16 +12440,16 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 
 static int lfs_pcc_state(int argc, char **argv)
 {
-	int			 rc = 0;
-	const char		*path;
-	char			 fullpath[PATH_MAX];
-	struct lu_pcc_state	 state;
+	int rc = 0;
+	const char *path;
+	char fullpath[PATH_MAX];
+	struct lu_pcc_state state;
 
 	optind = 1;
 
 	if (argc <= 1) {
 		fprintf(stderr, "%s: must specify one or more file names\n",
-			argv[0]);
+			progname);
 		return CMD_HELP;
 	}
 

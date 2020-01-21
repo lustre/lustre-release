@@ -92,7 +92,7 @@ set, a default value of 100 is used, limiting the object size to 1% of available
 space.
 .TP
 .B \\--help|-h
-Display help information.
+Display usage message.
 .TP
 .B \\--no-rsync
 Do not fall back to using rsync if
@@ -134,6 +134,7 @@ specified at the same time as the \fB-R \fRoption.
 .TP
 .B \\--verbose|-v
 Show verbose debug messages.
+.TP
 .B \\--max-free|-X \fI<max_free>
 When \fB-A \fRis set, \fImax_free \fRis the maximum amount of free space that
 can be considered available for the migration of the file on each OST.  The
@@ -147,27 +148,26 @@ Answer 'y' to usage warning without prompting (for scripts, use with caution).
 Input file names on stdin are separated by a null character.
 .SH EXAMPLES
 To rebalance all files within
-.I /testfs/jobs/2011
-(which are known not to be modified by in-use programs):
+.IR /testfs/jobs/2011 :
 .IP
 lfs_migrate /testfs/jobs/2011
 .PP
 To migrate files within the
 .I /testfs
 filesystem on OST0004 (perhaps because it is much more full than other OSTs),
-larger than 4GB (because it is more efficient to just migrate large files),
-and older than two days (to avoid files that are in use, though this is NOT
-a guarantee the files are not being modified, that is workload specific) after
-disabling file creation on testfs-OST0004 (this is needed on all MDS nodes):
+larger than 4GB (because it is more efficient to migrate a few large files than
+many small ones), and older than two days (to avoid files that are in use) to
+use auto-restriping for these files, after disabling file creation on
+testfs-OST0004 (this is needed on all MDS nodes):
 .IP
 .nf
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=0
-client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -y
+client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -y -A
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=20000
 .fi
 .PP
-To use automatic striping, and limit the object size per OST to 5% of current
-free space:
+To use automatic restriping, and limit the object size per OST to 5% of
+current free space:
 .IP
 lfs_migrate -A -C 20 /testfs/jobs/2011
 .SH NOTES

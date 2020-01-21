@@ -2,82 +2,88 @@
 .SH NAME
 lfs setquota \- set quota limits or grace time for users, groups or projects.
 .SH SYNOPSIS
-.B lfs setquota {\fB-u|--user|-g|--group|-p|--projid\fR} <\fIuname|uid|gname|gid|projid\fR>
-       [\fB--pool\fR <\fIpname\fR>]
-       [\fB--block-softlimit|-b\fR <\fIblock-softlimit\fR>[kMGTPE]]
-       [\fB--block-hardlimit|-B\fR <\fIblock-hardlimit\fR>[kMGTPE]]
-       [\fB--inode-softlimit|-i\fR <\fIinode-softlimit\fR>[kMGTPE]]
-       [\fB--inode-hardlimit|-I\fR <\fIinode-hardlimit\fR>[kMGTPE]] <\fIfilesystem\fR>
+.BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID | \fIGID | \fIPROJID
+       [\fB--pool \fIPOOLNAME ]
+       [\fB--block-softlimit\fR|\fB-b \fIBLOCK_SOFTLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--block-hardlimit\fR|\fB-B \fIBLOCK_HARDLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--inode-softlimit\fR|\fB-i \fIINODE_SOFTLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--inode-hardlimit\fR|\fB-I \fIINODE_HARDLIMIT\fR[\fBkMGTPE\fR]] <\fIfilesystem\fR>
 .TP
-.B lfs setquota \fB-t\fR {\fB-u|-g|-p\fR}
-       [\fB--pool\fR <\fIpname\fR>]
-       [\fB--block-grace|-b\fR <\fIblock-grace\fR>]
-       [\fB--inode-grace|-i\fR <\fIinode-grace\fR>] <\fIfilesystem\fR>
+.BR "lfs setquota -t " { -h | -u | -g | -p }
+       [\fB--pool\fR \fIPOOL_NAME\fR]
+       [\fB--block-grace\fR|\fB-b\fR \fIBLOCK_GRACE_TIME\fR]
+       [\fB--inode-grace\fR|\fB-i\fR \fIINODE_GRACE_TIME\fR] <\fIfilesystem\fR>
 .TP
-.B lfs setquota {\fB-u|--user|-g|--group|-p|--projid\fR} <\fIuname|uid|gname|gid|projid\fR>
+.BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
        [\fB--default|-d\fR] <\fIfilesystem\fR>
 .TP
-.B lfs setquota {\fB-U|--default-usr|-G|--default-grp|-P|--default-prj\fR}
-       [\fB--block-softlimit|-b\fR <\fIblock-softlimit\fR>[kMGTPE]]
-       [\fB--block-hardlimit|-B\fR <\fIblock-hardlimit\fR>[kMGTPE]]
-       [\fB--inode-softlimit|-i\fR <\fIinode-softlimit\fR>[kMGTPE]]
-       [\fB--inode-hardlimit|-I\fR <\fIinode-hardlimit\fR>[kMGTPE]] <\fIfilesystem\fR>
+.BR "lfs setquota " { -U | --default-usr | -G | --default-grp | -P | --default-prj }
+       [\fB--block-softlimit\fR|\fB-b\fR \fIBLOCK_SOFTLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--block-hardlimit\fR|\fB-B\fR \fIBLOCK_HARDLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--inode-softlimit\fR|\fB-i\fR \fIINODE_SOFTLIMIT\fR[\fBkMGTPE\fR]]
+       [\fB--inode-hardlimit\fR|\fB-I\fR \fIINODE_HARDLIMIT\fR[\fBkMGTPE\fR]] <\fIfilesystem\fR>
 .TP
 .SH DESCRIPTION
-.PP
-.BR "lfs setquota " {\fB-u|-g|-p\fR}
 .TP
-Command sets the filesystem quotas for users, groups or projects respectively. \
-Block limits unit is kilobyte (1024) by default and block limits are always \
-kilobyte-grained (even if specified in bytes), block limits can be specified \
-with a \
-.BR k "," M "," G "," T "," P ", or " E \
-suffixes which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 \
+.BR "lfs setquota " {\fB-u|-g|-p\fR}
+Command sets the filesystem quotas for users, groups or projects respectively.
+Block limits unit is kilobyte (1024) by default and block limits are always
+kilobyte-grained (even if specified in bytes), block limits can be specified
+with a
+.BR k "," M "," G "," T "," P ", or " E
+suffixes which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60
 accordingly.
 .TP
-.B -u|--user <\fIuname|uid\fR>
-Set user quota for \fIuname\fR or \fIuid\fR.
-.TP
-.B -g|--group <\fIgname|gid\fR>
-Set group quota for name \fIgname\fR or \fIgid\fR.
-.TP
-.B -p|--project <\fIprojid\fR>
-Set project quota for \fIprojid\fR.
-.TP
-.B --pool <\fIpname\fR>
-Set quota per OST pool \fIpname\fR.
-.TP
-.B -d|--default
-Set user/group/project to use the default quota limits.
-.TP
-.B -b|--block-softlimit <\fIblock-softlimit\fR>
+.BR -b | --block-softlimit \fIBLOCK_SOFTLIMIT
 Specify block softlimit, zero means unlimited.
 .TP
-.B -B|--block-hardlimit <\fIblock-hardlimit\fR>
-Specify block hardlimit, zero means unlimited. The block hardlimit should be \
+.BR -B | --block-hardlimit \fIBLOCK_HARDLIMIT
+Specify block hardlimit, zero means unlimited. The block hardlimit should be
 greater than block softlimit when it's being specified.
 .TP
-.B -i|--inode-softlimit <\fIinode-softlimit\fR>
+.BR -d|--default
+Set user/group/project to use the default quota limits.
+.TP
+.BR -g | --group \fIGROUPNAME\fR|\fIGID
+Set group quota for name \fIGROUPNAME\fR or \fIGID\fR.
+.TP
+.BR -h | --help
+Print usage message.
+.TP
+.BR -i | --inode-softlimit \fIINODE_SOFTLIMIT
 Specify inode softlimit, zero means unlimited.
 .TP
-.B -I|--inode-hardlimit <\fIinode-hardlimit\fR>
-Specify inode hardlimit, zero means unlimited. The inode hardlimit should be \
+.B -I|--inode-hardlimit \fIINODE_HARDLIMIT\fR
+Specify inode hardlimit, zero means unlimited. The inode hardlimit should be
 greater than inode softlimit when it's being specified.
-.PP
-.BR "lfs setquota -t "
 .TP
-Command sets the filesystem quota grace time for users, groups, or projects. \
-This is a global value that can take two forms: an amount of time or the word \
-\'\fBnotify\fR'.  Traditionally, this indicates the amount of time in seconds \
-that the soft quota limit can be exceeded before users are prevented from \
-creating new files or consuming more space.  This is intended to allow users \
-to exceed the quota limit for a short time to complete their work without \
-having to grant each user a larger hard quota limit. The alternative value of \
-\'\fBnotify\fR' informs users with an '\fB*\fR' in the quota output that they \
-are nearing their hard quota limit but does not block new writes until the hard \
-quota limit is reached.  The soft quota state is reset once the user, group, \
-or project reduces their space usage or file count below the soft quota limit. \
-Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds \
+.B -p|--project \fIPROJID\fR
+Set project quota for \fIPROJID\fR.
+.TP
+.B --pool \fIPOOL_NAME\fR
+Set quota per OST pool \fIPOOL_NAME\fR.
+.TP
+.BR -u | --user \fIUSERNAME\fR|\fBUID
+Set user quota for \fIUNAME\fR or \fIUID\fR.
+.PP
+.TP
+.BR "lfs setquota -t " { -h | -u | -g | -p "} " \fIGRACE_TIME
+Command sets the filesystem quota grace time for users, groups, or projects.
+The
+.I GRACE_TIME
+is a global value that can take two forms: an amount of time or the word
+.BR notify .
+Traditionally, this indicates the amount of time in seconds
+that the soft quota limit can be exceeded before users are prevented from
+creating new files or consuming more space.  This is intended to allow users
+to exceed the quota limit for a short time to complete their work without
+having to grant each user a larger hard quota limit. The alternative value of
+.B notify
+informs users with an '\fB*\fR' in the quota output that they
+are nearing their hard quota limit but does not block new writes until the hard
+quota limit is reached.  The soft quota state is reset once the user, group,
+or project reduces their space usage or file count below the soft quota limit.
+Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds
 value.  The maximum is 2^48 - 1 seconds.
 .TP
 .B -t
@@ -92,28 +98,27 @@ Set grace time for group.
 .B -p
 Set grace time for project.
 .TP
-.B -b|--block-grace 'notify'|<\fIblock-grace\fR>
+.BR -b | "--block-grace notify" | \fIBLOCK_GRACE_TIME\fR
 Specify grace time for block quota.
 .TP
-.B -i|--inode-grace 'notify'|<\fIinode-grace\fR>
+.BR -i | "--inode-grace notify" | \fIINODE_GRACE_TIME\fR
 Specify grace time for inode quota.
 .TP
-.B --pool <\fIpname\fR>
-Set grace time for user, group or project per OST pool \fIpname\fR.
-.PP
-.BR "lfs setquota " {\fB-U|--default-usr|-G|--default-grp|-P|--default-prj\fR}
+.B --pool \fIPOOL_NAME\fR
+Set grace time for user, group or project per OST pool \fIPOOL_NAME\fR.
 .TP
-Command sets the filesystem default limits for user,group,project quotas, \
-if set, users/groups/projects without specific quota setting will use \
+.BR "lfs setquota " { -U | --default-usr | -G | --default-grp | -P | --default-prj }
+Command sets the filesystem default limits for user, group, project quotas,
+if set, users/groups/projects without specific quota setting will use
 default quota limits automatically.
 .TP
-.B -U|--default-usr
+.BR -U | --default-usr
 Set default user quota limit.
 .TP
-.B -G|--default-grp
+.BR -G | --default-grp
 Set default group quota limit.
 .TP
-.B -P|--default-prj
+.BR -P | --default-prj
 Set default project quota limit.
 .TP
 .PP
@@ -129,7 +134,7 @@ Set quotas of user `bob' to use default quota setting
 Set system default user quota: 1 GB block softlimit and 2 GB block hardlimit
 .TP
 .B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
-Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 \
+Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4
 days for inode quotas
 .TP
 .B $ lfs setquota -u ivan --pool flash_pool -B 1G /mnt/lustre

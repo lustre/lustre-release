@@ -2,7 +2,7 @@
 .SH NAME
 lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .SH SYNOPSIS
-.B lfs setdirstripe [\fR-cdDHioTxX\fR] \fIDIR\fR...
+.B lfs setdirstripe [\fR-cdDhHioTxX\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
 Create a striped directory with specified striping pattern. This
@@ -24,6 +24,9 @@ is an alias for this command.
 Stripe the new directory over
 .I COUNT
 MDTs.
+.TP
+.BR \-h ", " \-\-help
+Print usage message.
 .TP
 .BR \-i ", " \-\-mdt\-index =\fISTART_MDT_INDEX\fR[,\fIMDT_INDEX ...]
 Use the MDT whose index is

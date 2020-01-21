@@ -3,8 +3,8 @@
 lfs migrate \- migrate files or directories between MDTs or OSTs.
 .SH SYNOPSIS
 .B lfs migrate
+.RB [ -h "] [" -v ]
 .RI [ SETSTRIPE_OPTIONS " ... ]"
-.RB [ -v ]
 .RI < file "> ..."
 .br
 .B lfs migrate -m \fIstart_mdt_index
@@ -46,6 +46,9 @@ migration, which prevents data data writes to the old file objects from
 being lost.  This should be used if an OST needs to be completely emptied
 prior to its removal, to ensure all requested files are migrated off the
 OST.
+.TP
+.BR -h , --help
+Print usage message.
 .TP
 .BR -n , --non-block
 Abort migration if concurrent file access is detected.  This can be

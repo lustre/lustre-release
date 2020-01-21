@@ -2,7 +2,7 @@
 .SH NAME
 lfs getdirstripe \- list the layout pattern of a given directory
 .SH SYNOPSIS
-.BR "lfs getdirstripe" " [" -cDimOrTXy "]... " \fIDIR\fR...
+.BR "lfs getdirstripe" " [" -cDhHimOrTXvy "]... " \fIDIR\fR...
 .SH DESCRIPTION
 Get the layout pattern of striped directories. This
 .BR lfs (1)
@@ -16,6 +16,9 @@ Only show the number of MDTs the directory is striped across.
 .TP
 .BR \-D ", " \-\-default
 Show the default layout used when creating new subdirectories.
+.TP
+.BR \-h ", " \-\-help
+Print usage message.
 .TP
 .BR \-H ", " \-\-mdt-hash
 Only show the hash function being used for this directory.
