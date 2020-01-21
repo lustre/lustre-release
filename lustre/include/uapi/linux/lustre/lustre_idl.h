@@ -1752,7 +1752,6 @@ enum {
 	LUSTRE_INDEX_FL		= 0x00001000, /* hash-indexed directory */
 	LUSTRE_DIRSYNC_FL	= 0x00010000, /* dirsync behaviour (dir only) */
 	LUSTRE_TOPDIR_FL	= 0x00020000, /* Top of directory hierarchies*/
-	LUSTRE_DIRECTIO_FL	= 0x00100000, /* Use direct i/o */
 	LUSTRE_INLINE_DATA_FL	= 0x10000000, /* Inode has inline data. */
 	LUSTRE_PROJINHERIT_FL	= 0x20000000, /* Create with parents projid */
 

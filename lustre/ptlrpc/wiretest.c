@@ -2516,8 +2516,6 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LUSTRE_DIRSYNC_FL);
 	LASSERTF(LUSTRE_TOPDIR_FL == 0x00020000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_TOPDIR_FL);
-	LASSERTF(LUSTRE_DIRECTIO_FL == 0x00100000UL, "found 0x%.8xUL\n",
-		(unsigned)LUSTRE_DIRECTIO_FL);
 	LASSERTF(LUSTRE_INLINE_DATA_FL == 0x10000000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_INLINE_DATA_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
