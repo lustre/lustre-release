@@ -3075,7 +3075,7 @@ run_test 30b "execute binary from Lustre as non-root ==========="
 test_30c() { # b=22376
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-	cp `which ls` $DIR || cp /bin/ls $DIR
+	cp $(which ls) $DIR || cp /bin/ls $DIR
 	chmod a-rw $DIR/ls
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
@@ -3083,6 +3083,22 @@ test_30c() { # b=22376
 	rm -f $DIR/ls
 }
 run_test 30c "execute binary from Lustre without read perms ===="
+
+test_30d() {
+	cp $(which dd) $DIR || error "failed to copy dd to $DIR/dd"
+
+	for i in {1..10}; do
+		$DIR/dd bs=1M count=128 if=/dev/zero of=$DIR/$tfile &
+		local PID=$!
+		sleep 1
+		$LCTL set_param ldlm.namespaces.*MDT*.lru_size=clear
+		wait $PID || error "executing dd from Lustre failed"
+		rm -f $DIR/$tfile
+	done
+
+	rm -f $DIR/dd
+}
+run_test 30d "execute binary from Lustre while clear locks"
 
 test_31a() {
 	$OPENUNLINK $DIR/f31 $DIR/f31 || error "openunlink failed"
