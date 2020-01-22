@@ -1453,9 +1453,9 @@ run_test 39d "sync write should update mtime"
 pdo_sched() {
 	# how long 40-47 take with specific delay
 	# sleep 0.1 # 78s
-	sleep 0.2 # 103s
+	# sleep 0.2 # 103s
 	# sleep 0.3 # 124s
-	# sleep 0.5 # 164s
+	sleep 0.5 # 164s
 }
 
 # for pdo testing, we must cancel MDT-MDT locks as well as client locks to
