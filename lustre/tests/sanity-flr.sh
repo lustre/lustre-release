@@ -437,7 +437,7 @@ test_0c() {
 		error "$LFS setstripe $td failed"
 
 	# create a mirrored file with composite layout mirrors
-	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
+	$mirror_cmd -N2 -E 8M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
 		    -N -c 4 -p none \
 		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
 		error "create mirrored file $tf failed"
@@ -449,7 +449,7 @@ test_0c() {
 		verify_comp_attr_with_default stripe-size $tf ${ids[$i]}
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr stripe-index $tf ${ids[$i]} 1
-		verify_comp_extent $tf ${ids[$i]} 0 4194304
+		verify_comp_extent $tf ${ids[$i]} 0 8388608
 	done
 
 	# verify components ${ids[1]} and ${ids[3]}
@@ -457,7 +457,7 @@ test_0c() {
 		verify_comp_attr stripe-size $tf ${ids[$i]} 4194304
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr pool $tf ${ids[$i]} flash
-		verify_comp_extent $tf ${ids[$i]} 4194304 EOF
+		verify_comp_extent $tf ${ids[$i]} 8388608 EOF
 	done
 
 	# verify component ${ids[4]}
@@ -613,7 +613,7 @@ test_0f() {
 
 	# extend the mirrored file with composite layout mirrors
 	$mirror_cmd -N -p archive \
-		    -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
+		    -N2 -E 8M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
 		    -N -c -1 -p none \
 		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
 		error "extend mirrored file $tf failed"
@@ -643,7 +643,7 @@ test_0f() {
 		verify_comp_attr_with_default stripe-size $tf ${ids[$i]}
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr stripe-index $tf ${ids[$i]} 1
-		verify_comp_extent $tf ${ids[$i]} 0 4194304
+		verify_comp_extent $tf ${ids[$i]} 0 8388608
 	done
 
 	# verify components ${ids[4]} and ${ids[6]}
@@ -651,7 +651,7 @@ test_0f() {
 		verify_comp_attr stripe-size $tf ${ids[$i]} 4194304
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr pool $tf ${ids[$i]} flash
-		verify_comp_extent $tf ${ids[$i]} 4194304 EOF
+		verify_comp_extent $tf ${ids[$i]} 8388608 EOF
 	done
 
 	# verify component ${ids[7]}
@@ -4164,7 +4164,7 @@ function check_ost_used() {
 	else
 		error "unknown type $io"
 	fi
-	dd $ddarg bs=2M count=1 || error "can't $io $file"
+	dd $ddarg bs=8M count=1 || error "can't $io $file"
 	cancel_lru_locks osc
 
 	# check only specified OSTs got reads
@@ -4196,7 +4196,7 @@ test_208a() {
 
 	stack_trap "rm -f $tf"
 	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
-	dd if=/dev/zero of=$tf bs=2M count=1 || error "can't dd (1)"
+	dd if=/dev/zero of=$tf bs=8M count=1 || error "can't dd (1)"
 	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
 	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
 	$LFS mirror resync $tf || error "can't resync"
@@ -4238,8 +4238,8 @@ test_208b() {
 	stack_trap "restore_lustre_params < $p; rm -f $p"
 
 	stack_trap "rm -f $tf"
-	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
-	dd if=/dev/zero of=$tf bs=2M count=1 || error "can't dd (1)"
+	$LFS setstripe -i0 -c1 -S1M $tf || error "can't setstripe"
+	dd if=/dev/zero of=$tf bs=8M count=1 || error "can't dd (1)"
 	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
 	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
 	$LFS mirror resync $tf || error "can't resync"
