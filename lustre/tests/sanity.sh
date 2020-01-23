@@ -14091,7 +14091,8 @@ test_130g() {
 	local file=$DIR/$tfile
 	local nr=$((OSTCOUNT * 100))
 
-	$LFS setstripe -C $nr $file || error "failed to setstripe -C $nr $file"
+	$LFS setstripe -C $nr -S1M $file ||
+		error "failed to setstripe -C $nr $file"
 
 	stack_trap "rm -f $file"
 	dd if=/dev/zero of=$file count=$nr bs=1M
