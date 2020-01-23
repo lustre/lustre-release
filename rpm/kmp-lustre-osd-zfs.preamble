@@ -1,4 +1,4 @@
-Summary:        Lustre osd-zfs feature support
+Requires:       zfs-kmod
 Requires:       %{name}-osd-zfs-mount = %{version}
 Provides:       %{name}-osd = %{version}
 Obsoletes:      %{name}-osd-zfs < %{version}
