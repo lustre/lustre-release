@@ -682,11 +682,17 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 
 out:
 	if (!rc && !osd_remote_fid(env, osd, fid)) {
-		rc = osd_consistency_check(env, osd, obj, fid, oid,
+		/*
+		 * this should ask the scrubber to check OI given
+		 * the mapping we just found in the dir entry.
+		 * but result of that check should not affect
+		 * result of the lookup in the directory.
+		 * otherwise such a direntry becomes hidden
+		 * from the layers above, including LFSCK which
+		 * is supposed to fix dangling entries.
+		 */
+		osd_consistency_check(env, osd, obj, fid, oid,
 				S_ISDIR(DTTOIF(oti->oti_zde.lzd_reg.zde_type)));
-		/* Only -ENOENT error will affect the lookup result. */
-		if (rc != -ENOENT)
-			rc = 0;
 	}
 
 	return rc == 0 ? 1 : (rc == -ENOENT ? -ENODATA : rc);
