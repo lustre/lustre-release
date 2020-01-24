@@ -8530,7 +8530,7 @@ test_123ab() {
 	local orig_val
 
 	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
-	do_facet mgs $LCTL set_param -P jobid_name="testname"
+	do_facet mgs $LCTL set_param -P jobid_name="TESTNAME"
 
 	yaml=$(do_facet mgs $LCTL --device MGS llog_print params |
 	       grep jobid_name | tail -n 1)
@@ -8539,7 +8539,7 @@ test_123ab() {
 	local val=$(awk '{ print $12 }' <<< "$yaml")
 	#return to the default
 	do_facet mgs $LCTL set_param -P jobid_name=$orig_val
-	[ $val = "testname" ] || error "bad value: $val"
+	[ $val = "TESTNAME" ] || error "bad value: $val"
 	[ $param = "jobid_name," ] || error "Bad param: $param"
 }
 run_test 123ab "llog_print params output values from set_param -P"
@@ -8655,7 +8655,7 @@ test_123F() {
 
 	# set jobid_var to a different value for test
 	local orig_val=$(do_facet mgs $LCTL get_param jobid_var)
-	do_facet mgs $LCTL set_param -P jobid_var="testname"
+	do_facet mgs $LCTL set_param -P jobid_var="TESTNAME"
 
 	for i in $cfgfiles params; do
 		do_facet mgs "lctl --device MGS llog_print ${i} >> $yaml_file"
@@ -8678,8 +8678,8 @@ test_123F() {
 	local set_val=$(do_facet mgs $LCTL get_param jobid_var)
 	do_facet mgs $LCTL set_param -P $orig_val
 
-	[ $set_val == "jobid_var=testname" ] ||
-		error "$set_val is not testname"
+	[ $set_val == "jobid_var=TESTNAME" ] ||
+		error "$set_val is not TESTNAME"
 
 	do_facet mgs rm "$yaml_file"
 	cleanup

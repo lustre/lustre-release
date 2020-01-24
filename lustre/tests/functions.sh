@@ -51,7 +51,7 @@ lrepl() {
 EOF
 
     # Prompt escapes don't work in read -p, sadly.
-    prompt=":test_${testnum:-UNKNOWN}:$(uname -n):$(basename $PWD)% "
+    prompt=":${TESTNAME:-UNKNOWN}:$(uname -n):$(basename $PWD)% "
 
     # We use read -r to get close to a shell experience
     while read -e -r -p "$prompt" rawline; do
