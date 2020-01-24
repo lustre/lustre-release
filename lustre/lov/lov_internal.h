@@ -236,11 +236,15 @@ struct pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct lu_tgt_pool	 pool_obds;
 	atomic_t		 pool_refcount;
-	struct hlist_node	 pool_hash;	/* access by poolname */
+	struct rhash_head	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;	/* serial access */
+	struct rcu_head		 pool_rcu;
 	struct proc_dir_entry	*pool_proc_entry;
 	struct obd_device	*pool_lobd;	/* owner */
 };
+
+int lov_pool_hash_init(struct rhashtable *tbl);
+void lov_pool_hash_destroy(struct rhashtable *tbl);
 
 struct lov_request {
 	struct obd_info		 rq_oi;
@@ -331,8 +335,6 @@ extern struct lu_device_type lov_device_type;
 
 #define LOV_MDC_TGT_MAX 256
 
-/* pools */
-extern struct cfs_hash_ops pool_hash_operations;
 /* lu_tgt_pool methods */
 int lov_ost_pool_init(struct lu_tgt_pool *op, unsigned int count);
 int lov_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);

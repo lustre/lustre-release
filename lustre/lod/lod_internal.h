@@ -59,11 +59,15 @@ struct pool_desc {
 	struct lu_tgt_pool	 pool_obds;	/* pool members */
 	atomic_t		 pool_refcount;
 	struct lu_qos_rr	 pool_rr;
-	struct hlist_node	 pool_hash;	/* access by poolname */
+	struct rhash_head	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;
+	struct rcu_head		 pool_rcu;
 	struct proc_dir_entry	*pool_proc_entry;
 	struct obd_device	*pool_lobd;	/* owner */
 };
+
+int lod_pool_hash_init(struct rhashtable *tbl);
+void lod_pool_hash_destroy(struct rhashtable *tbl);
 
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p)  ((p)->pool_obds.op_array)
@@ -118,7 +122,7 @@ struct lod_device {
 
 	/* OST pool data */
 	int			lod_pool_count;
-	struct cfs_hash	       *lod_pools_hash_body; /* used for key access */
+	struct rhashtable	lod_pools_hash_body; /* used for key access */
 	struct list_head	lod_pool_list; /* used for sequential access */
 	struct proc_dir_entry  *lod_pool_proc_entry;
 
@@ -607,7 +611,6 @@ int lod_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
 void lod_pool_putref(struct pool_desc *pool);
 int lod_pool_del(struct obd_device *obd, char *poolname);
-extern struct cfs_hash_ops pool_hash_operations;
 int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 int lod_pool_new(struct obd_device *obd, char *poolname);
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);

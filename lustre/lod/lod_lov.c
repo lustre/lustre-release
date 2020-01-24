@@ -2109,14 +2109,9 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod->lod_sp_me = LUSTRE_SP_CLI;
 
 	/* Set up OST pool environment */
-	lod->lod_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
-						   HASH_POOLS_MAX_BITS,
-						   HASH_POOLS_BKT_BITS, 0,
-						   CFS_HASH_MIN_THETA,
-						   CFS_HASH_MAX_THETA,
-						   &pool_hash_operations,
-						   CFS_HASH_DEFAULT);
-	if (lod->lod_pools_hash_body == NULL)
+	lod->lod_pool_count = 0;
+	rc = lod_pool_hash_init(&lod->lod_pools_hash_body);
+	if (rc)
 		RETURN(-ENOMEM);
 
 	INIT_LIST_HEAD(&lod->lod_pool_list);
@@ -2146,7 +2141,7 @@ out_mdt_rr_pool:
 out_mdt_pool:
 	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 out_hash:
-	cfs_hash_putref(lod->lod_pools_hash_body);
+	lod_pool_hash_destroy(&lod->lod_pools_hash_body);
 
 	return rc;
 }
@@ -2173,7 +2168,7 @@ int lod_pools_fini(struct lod_device *lod)
 		lod_pool_del(obd, pool->pool_name);
 	}
 
-	cfs_hash_putref(lod->lod_pools_hash_body);
+	lod_pool_hash_destroy(&lod->lod_pools_hash_body);
 	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool);
 	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
 	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);

@@ -58,6 +58,7 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-hash.h>
 #include <obd.h>
 #include "lod_internal.h"
 
@@ -96,130 +97,38 @@ void lod_pool_putref(struct pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
-		LASSERT(hlist_unhashed(&pool->pool_hash));
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
 		lod_tgt_pool_free(&(pool->pool_rr.lqr_pool));
 		lod_tgt_pool_free(&(pool->pool_obds));
-		OBD_FREE_PTR(pool);
+		kfree_rcu(pool, pool_rcu);
 		EXIT;
 	}
 }
 
-/**
- * Drop the refcount in cases where the caller holds a spinlock.
- *
- * This is needed if the caller cannot be blocked while freeing memory.
- * It assumes that there is some other known refcount held on the \a pool
- * and the memory cannot actually be freed, but the refcounting needs to
- * be kept accurate.
- *
- * \param[in] pool	pool descriptor on which to drop reference
- */
-static void pool_putref_locked(struct pool_desc *pool)
+static u32 pool_hashfh(const void *data, u32 len, u32 seed)
 {
-	CDEBUG(D_INFO, "pool %p\n", pool);
-	LASSERT(atomic_read(&pool->pool_refcount) > 1);
+	const char *pool_name = data;
 
-	atomic_dec(&pool->pool_refcount);
+	return hashlen_hash(cfs_hashlen_string((void *)(unsigned long)seed,
+					       pool_name));
 }
 
-/*
- * Group of functions needed for cfs_hash implementation.  This
- * includes pool lookup, refcounting, and cleanup.
- */
-
-/**
- * Hash the pool name for use by the cfs_hash handlers.
- *
- * Use the standard DJB2 hash function for ASCII strings in Lustre.
- *
- * \param[in] hash_body	hash structure where this key is embedded (unused)
- * \param[in] key	key to be hashed (in this case the pool name)
- * \param[in] mask	bitmask to limit the hash value to the desired size
- *
- * \retval		computed hash value from \a key and limited by \a mask
- */
-static __u32 pool_hashfn(struct cfs_hash *hash_body, const void *key,
-			 unsigned mask)
+static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 {
-	return cfs_hash_djb2_hash(key, strnlen(key, LOV_MAXPOOLNAME), mask);
+	const struct pool_desc *pool = obj;
+	const char *pool_name = arg->key;
+
+	return strcmp(pool_name, pool->pool_name);
 }
 
-/**
- * Return the actual key (pool name) from the hashed \a hnode.
- *
- * Allows extracting the key name when iterating over all hash entries.
- *
- * \param[in] hnode	hash node found by lookup or iteration
- *
- * \retval		char array referencing the pool name (no refcount)
- */
-static void *pool_key(struct hlist_node *hnode)
-{
-	struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-	return pool->pool_name;
-}
-
-/**
- * Check if the specified hash key matches the hash node.
- *
- * This is needed in case there is a hash key collision, allowing the hash
- * table lookup/iteration to distinguish between the two entries.
- *
- * \param[in] key	key (pool name) being searched for
- * \param[in] compared	current entry being compared
- *
- * \retval		0 if \a key is the same as the key of \a compared
- * \retval		1 if \a key is different from the key of \a compared
- */
-static int pool_hashkey_keycmp(const void *key, struct hlist_node *compared)
-{
-	return !strncmp(key, pool_key(compared), LOV_MAXPOOLNAME);
-}
-
-/**
- * Return the actual pool data structure from the hash table entry.
- *
- * Once the hash table entry is found, extract the pool data from it.
- * The return type of this function is void * because it needs to be
- * assigned to the generic hash operations table.
- *
- * \param[in] hnode	hash table entry
- *
- * \retval		struct pool_desc for the specified \a hnode
- */
-static void *pool_hashobject(struct hlist_node *hnode)
-{
-	return hlist_entry(hnode, struct pool_desc, pool_hash);
-}
-
-static void pool_hashrefcount_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-	pool_getref(pool);
-}
-
-static void pool_hashrefcount_put_locked(struct cfs_hash *hs,
-					 struct hlist_node *hnode)
-{
-	struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-	pool_putref_locked(pool);
-}
-
-struct cfs_hash_ops pool_hash_operations = {
-	.hs_hash	= pool_hashfn,
-	.hs_key		= pool_key,
-	.hs_keycmp	= pool_hashkey_keycmp,
-	.hs_object	= pool_hashobject,
-	.hs_get		= pool_hashrefcount_get,
-	.hs_put_locked  = pool_hashrefcount_put_locked,
+static const struct rhashtable_params pools_hash_params = {
+	.key_len	= 1, /* actually variable */
+	.key_offset	= offsetof(struct pool_desc, pool_name),
+	.head_offset	= offsetof(struct pool_desc, pool_hash),
+	.hashfn		= pool_hashfh,
+	.obj_cmpfn	= pool_cmpfn,
+	.automatic_shrinking = true,
 };
 
 /*
@@ -626,6 +535,23 @@ int lod_tgt_pool_free(struct lu_tgt_pool *op)
 	RETURN(0);
 }
 
+static void pools_hash_exit(void *vpool, void *data)
+{
+	struct pool_desc *pool = vpool;
+
+	lod_pool_putref(pool);
+}
+
+int lod_pool_hash_init(struct rhashtable *tbl)
+{
+	return rhashtable_init(tbl, &pools_hash_params);
+}
+
+void lod_pool_hash_destroy(struct rhashtable *tbl)
+{
+	rhashtable_free_and_destroy(tbl, pools_hash_exit, NULL);
+}
+
 /**
  * Allocate a new pool for the specified device.
  *
@@ -650,7 +576,8 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	if (strlen(poolname) > LOV_MAXPOOLNAME)
 		RETURN(-ENAMETOOLONG);
 
-	OBD_ALLOC_PTR(new_pool);
+	/* OBD_ALLOC_* doesn't work with direct kfree_rcu use */
+	new_pool = kmalloc(sizeof(*new_pool), GFP_KERNEL);
 	if (new_pool == NULL)
 		RETURN(-ENOMEM);
 
@@ -666,8 +593,6 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	rc = lod_tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
-
-	INIT_HLIST_NODE(&new_pool->pool_hash);
 
 #ifdef CONFIG_PROC_FS
 	pool_getref(new_pool);
@@ -689,11 +614,19 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	lod->lod_pool_count++;
 	spin_unlock(&obd->obd_dev_lock);
 
-	/* add to find only when it fully ready  */
-	rc = cfs_hash_add_unique(lod->lod_pools_hash_body, poolname,
-				 &new_pool->pool_hash);
-	if (rc)
-		GOTO(out_err, rc = -EEXIST);
+	/* Add to hash table only when it is fully ready. */
+	rc = rhashtable_lookup_insert_fast(&lod->lod_pools_hash_body,
+					   &new_pool->pool_hash,
+					   pools_hash_params);
+	if (rc) {
+		if (rc != -EEXIST)
+			/*
+			 * Hide -E2BIG and -EBUSY which
+			 * are not helpful.
+			 */
+			rc = -ENOMEM;
+		GOTO(out_err, rc);
+	}
 
 	CDEBUG(D_CONFIG, LOV_POOLNAMEF" is pool #%d\n",
 			poolname, lod->lod_pool_count);
@@ -731,8 +664,15 @@ int lod_pool_del(struct obd_device *obd, char *poolname)
 	ENTRY;
 
 	/* lookup and kill hash reference */
-	pool = cfs_hash_del_key(lod->lod_pools_hash_body, poolname);
-	if (pool == NULL)
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && rhashtable_remove_fast(&lod->lod_pools_hash_body,
+					   &pool->pool_hash,
+					   pools_hash_params) != 0)
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
 		RETURN(-ENOENT);
 
 	if (pool->pool_proc_entry != NULL) {
@@ -773,8 +713,13 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	int rc = -EINVAL;
 	ENTRY;
 
-	pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
-	if (pool == NULL)
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
 		RETURN(-ENOENT);
 
 	obd_str2uuid(&ost_uuid, ostname);
@@ -831,8 +776,14 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	int rc = -EINVAL;
 	ENTRY;
 
-	pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
-	if (pool == NULL)
+	/* lookup and kill hash reference */
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
 		RETURN(-ENOENT);
 
 	obd_str2uuid(&ost_uuid, ostname);
@@ -913,10 +864,15 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 
 	pool = NULL;
 	if (poolname[0] != '\0') {
-		pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
-		if (pool == NULL)
-			CDEBUG(D_CONFIG, "%s: request for an unknown pool ("
-			       LOV_POOLNAMEF")\n",
+		rcu_read_lock();
+		pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
+					 pools_hash_params);
+		if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+			pool = NULL;
+		rcu_read_unlock();
+		if (!pool)
+			CDEBUG(D_CONFIG,
+			       "%s: request for an unknown pool (" LOV_POOLNAMEF ")\n",
 			       lod->lod_child_exp->exp_obd->obd_name, poolname);
 		if (pool != NULL && pool_tgt_count(pool) == 0) {
 			CDEBUG(D_CONFIG, "%s: request for an empty pool ("

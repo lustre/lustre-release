@@ -71,9 +71,6 @@ extern atomic_long_t obd_dirty_pages;
 extern char obd_jobid_var[];
 
 /* Some hash init argument constants */
-#define HASH_POOLS_BKT_BITS 3
-#define HASH_POOLS_CUR_BITS 3
-#define HASH_POOLS_MAX_BITS 7
 #define HASH_NID_BKT_BITS 5
 #define HASH_NID_CUR_BITS 7
 #define HASH_NID_MAX_BITS 12

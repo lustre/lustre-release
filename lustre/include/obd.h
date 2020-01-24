@@ -401,7 +401,7 @@ struct lov_obd {
 	__u32			lov_tgt_size;	/* size of tgts array */
 	int			lov_connects;
 	int			lov_pool_count;
-	struct cfs_hash	       *lov_pools_hash_body; /* used for key access */
+	struct rhashtable       lov_pools_hash_body; /* used for key access */
 	struct list_head	lov_pool_list;	/* used for sequential access */
 	struct proc_dir_entry  *lov_pool_proc_entry;
 	enum lustre_sec_part	lov_sp_me;

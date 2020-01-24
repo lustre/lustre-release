@@ -41,12 +41,38 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-hash.h>
 
 #include <obd.h>
 #include "lov_internal.h"
 
 #define pool_tgt(_p, _i) \
 		_p->pool_lobd->u.lov.lov_tgts[_p->pool_obds.op_array[_i]]
+
+static u32 pool_hashfh(const void *data, u32 len, u32 seed)
+{
+	const char *pool_name = data;
+
+	return hashlen_hash(cfs_hashlen_string((void *)(unsigned long)seed,
+					       pool_name));
+}
+
+static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
+{
+	const struct pool_desc *pool = obj;
+	const char *pool_name = arg->key;
+
+	return strcmp(pool_name, pool->pool_name);
+}
+
+static const struct rhashtable_params pools_hash_params = {
+	.key_len	= 1, /* actually variable */
+	.key_offset	= offsetof(struct pool_desc, pool_name),
+	.head_offset	= offsetof(struct pool_desc, pool_hash),
+	.hashfn		= pool_hashfh,
+	.obj_cmpfn	= pool_cmpfn,
+	.automatic_shrinking = true,
+};
 
 static void lov_pool_getref(struct pool_desc *pool)
 {
@@ -58,97 +84,13 @@ static void lov_pool_putref(struct pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
-		LASSERT(hlist_unhashed(&pool->pool_hash));
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
 		lov_ost_pool_free(&(pool->pool_obds));
-		OBD_FREE_PTR(pool);
+		kfree_rcu(pool, pool_rcu);
 		EXIT;
 	}
 }
-
-static void lov_pool_putref_locked(struct pool_desc *pool)
-{
-	CDEBUG(D_INFO, "pool %p\n", pool);
-	LASSERT(atomic_read(&pool->pool_refcount) > 1);
-
-	atomic_dec(&pool->pool_refcount);
-}
-
-/*
- * hash function using a Rotating Hash algorithm
- * Knuth, D. The Art of Computer Programming,
- * Volume 3: Sorting and Searching,
- * Chapter 6.4.
- * Addison Wesley, 1973
- */
-static __u32 pool_hashfn(struct cfs_hash *hash_body, const void *key,
-			 unsigned mask)
-{
-        int i;
-        __u32 result;
-        char *poolname;
-
-        result = 0;
-        poolname = (char *)key;
-        for (i = 0; i < LOV_MAXPOOLNAME; i++) {
-                if (poolname[i] == '\0')
-                        break;
-                result = (result << 4)^(result >> 28) ^  poolname[i];
-        }
-        return (result % mask);
-}
-
-static void *pool_key(struct hlist_node *hnode)
-{
-        struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-        return (pool->pool_name);
-}
-
-static int
-pool_hashkey_keycmp(const void *key, struct hlist_node *compared_hnode)
-{
-        char *pool_name;
-        struct pool_desc *pool;
-
-        pool_name = (char *)key;
-	pool = hlist_entry(compared_hnode, struct pool_desc, pool_hash);
-        return !strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
-}
-
-static void *pool_hashobject(struct hlist_node *hnode)
-{
-	return hlist_entry(hnode, struct pool_desc, pool_hash);
-}
-
-static void pool_hashrefcount_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-        struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-        lov_pool_getref(pool);
-}
-
-static void pool_hashrefcount_put_locked(struct cfs_hash *hs,
-					 struct hlist_node *hnode)
-{
-        struct pool_desc *pool;
-
-	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-        lov_pool_putref_locked(pool);
-}
-
-struct cfs_hash_ops pool_hash_operations = {
-        .hs_hash        = pool_hashfn,
-        .hs_key         = pool_key,
-        .hs_keycmp      = pool_hashkey_keycmp,
-        .hs_object      = pool_hashobject,
-        .hs_get         = pool_hashrefcount_get,
-        .hs_put_locked  = pool_hashrefcount_put_locked,
-
-};
 
 #ifdef CONFIG_PROC_FS
 /*
@@ -421,6 +363,22 @@ int lov_ost_pool_free(struct lu_tgt_pool *op)
 	RETURN(0);
 }
 
+static void pools_hash_exit(void *vpool, void *data)
+{
+	struct pool_desc *pool = vpool;
+
+	lov_pool_putref(pool);
+}
+
+int lov_pool_hash_init(struct rhashtable *tbl)
+{
+	return rhashtable_init(tbl, &pools_hash_params);
+}
+
+void lov_pool_hash_destroy(struct rhashtable *tbl)
+{
+	rhashtable_free_and_destroy(tbl, pools_hash_exit, NULL);
+}
 
 int lov_pool_new(struct obd_device *obd, char *poolname)
 {
@@ -434,7 +392,8 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         if (strlen(poolname) > LOV_MAXPOOLNAME)
                 RETURN(-ENAMETOOLONG);
 
-        OBD_ALLOC_PTR(new_pool);
+	/* OBD_ALLOC doesn't work with direct use of kfree_rcu */
+	new_pool = kmalloc(sizeof(*new_pool), GFP_KERNEL);
         if (new_pool == NULL)
                 RETURN(-ENOMEM);
 
@@ -447,8 +406,6 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_err, rc);
-
-	INIT_HLIST_NODE(&new_pool->pool_hash);
 
 #ifdef CONFIG_PROC_FS
 	/* get ref for /proc file */
@@ -470,11 +427,19 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	lov->lov_pool_count++;
 	spin_unlock(&obd->obd_dev_lock);
 
-        /* add to find only when it fully ready  */
-        rc = cfs_hash_add_unique(lov->lov_pools_hash_body, poolname,
-                                 &new_pool->pool_hash);
-        if (rc)
-                GOTO(out_err, rc = -EEXIST);
+	/* Add to hash table only when it is fully ready. */
+	rc = rhashtable_lookup_insert_fast(&lov->lov_pools_hash_body,
+					   &new_pool->pool_hash,
+					   pools_hash_params);
+	if (rc) {
+		if (rc != -EEXIST)
+			/*
+			 * Hide -E2BIG and -EBUSY which
+			 * are not helpful.
+			 */
+			rc = -ENOMEM;
+		GOTO(out_err, rc);
+	}
 
         CDEBUG(D_CONFIG, LOV_POOLNAMEF" is pool #%d\n",
                poolname, lov->lov_pool_count);
@@ -501,10 +466,17 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
 
         lov = &(obd->u.lov);
 
-        /* lookup and kill hash reference */
-        pool = cfs_hash_del_key(lov->lov_pools_hash_body, poolname);
-        if (pool == NULL)
-                RETURN(-ENOENT);
+	/* lookup and kill hash reference */
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && rhashtable_remove_fast(&lov->lov_pools_hash_body,
+					   &pool->pool_hash,
+					   pools_hash_params) != 0)
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
+		RETURN(-ENOENT);
 
         if (pool->pool_proc_entry != NULL) {
                 CDEBUG(D_INFO, "proc entry %p\n", pool->pool_proc_entry);
@@ -535,9 +507,14 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
-        if (pool == NULL)
-                RETURN(-ENOENT);
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
+		RETURN(-ENOENT);
 
         obd_str2uuid(&ost_uuid, ostname);
 
@@ -581,9 +558,15 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
-        if (pool == NULL)
-                RETURN(-ENOENT);
+	/* lookup and kill hash reference */
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
+		RETURN(-ENOENT);
 
         obd_str2uuid(&ost_uuid, ostname);
 
