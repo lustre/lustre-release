@@ -2695,16 +2695,15 @@ start_client_load() {
 }
 
 start_client_loads () {
-    local -a clients=(${1//,/ })
-    local numloads=${#CLIENT_LOADS[@]}
-    local testnum
+	local -a clients=(${1//,/ })
+	local numloads=${#CLIENT_LOADS[@]}
 
-    for ((nodenum=0; nodenum < ${#clients[@]}; nodenum++ )); do
-        testnum=$((nodenum % numloads))
-        start_client_load ${clients[nodenum]} ${CLIENT_LOADS[testnum]}
-    done
-    # bug 22169: wait the background threads to start
-    sleep 2
+	for ((nodenum=0; nodenum < ${#clients[@]}; nodenum++ )); do
+		local load=$((nodenum % numloads))
+		start_client_load ${clients[nodenum]} ${CLIENT_LOADS[load]}
+	done
+	# bug 22169: wait the background threads to start
+	sleep 2
 }
 
 # only for remote client
@@ -5957,6 +5956,7 @@ skip_noexit() {
 
 	[[ -n "$TESTSUITELOG" ]] &&
 		echo "$TESTSUITE: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+	unset TESTNAME
 }
 
 skip() {
@@ -6007,59 +6007,63 @@ basetest() {
 export LAST_SKIPPED=
 export ALWAYS_SKIPPED=
 #
-# Main entry into test-framework. This is called with the name and
-# description of a test. The name is used to find the function to run
+# Main entry into test-framework. This is called with the number and
+# description of a test. The number is used to find the function to run
 # the test using "test_$name".
 #
 # This supports a variety of methods of specifying specific test to
-# run or not run.  These need to be documented...
+# run or not run:
+# - ONLY= env variable with space-separated list of test numbers to run
+# - EXCEPT= env variable with space-separated list of test numbers to exclude
 #
 run_test() {
 	assert_DIR
-	export base=$(basetest $1)
-	TESTNAME=test_$1
+	local testnum=$1
+	local testmsg=$2
+	export base=$(basetest $testnum)
+	export TESTNAME=test_$testnum
 	LAST_SKIPPED=
 	ALWAYS_SKIPPED=
 
 	# Check the EXCEPT, ALWAYS_EXCEPT and SLOW lists to see if we
 	# need to skip the current test. If so, set the ALWAYS_SKIPPED flag.
-	local testname=EXCEPT_$1
-	local testname_base=EXCEPT_$base
-	if [ ${!testname}x != x ]; then
+	local isexcept=EXCEPT_$testnum
+	local isexcept_base=EXCEPT_$base
+	if [ ${!isexcept}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping excluded test $1"
-	elif [ ${!testname_base}x != x ]; then
+		skip_message="skipping excluded test $testnum"
+	elif [ ${!isexcept_base}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping excluded test $1 (base $base)"
+		skip_message="skipping excluded test $testnum (base $base)"
 	fi
 
-	testname=EXCEPT_ALWAYS_$1
-	testname_base=EXCEPT_ALWAYS_$base
-	if [ ${!testname}x != x ]; then
+	isexcept=EXCEPT_ALWAYS_$testnum
+	isexcept_base=EXCEPT_ALWAYS_$base
+	if [ ${!isexcept}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping ALWAYS excluded test $1"
-	elif [ ${!testname_base}x != x ]; then
+		skip_message="skipping ALWAYS excluded test $testnum"
+	elif [ ${!isexcept_base}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping ALWAYS excluded test $1 (base $base)"
+		skip_message="skipping ALWAYS excluded test $testnum (base $base)"
 	fi
 
-	testname=EXCEPT_SLOW_$1
-	testname_base=EXCEPT_SLOW_$base
-	if [ ${!testname}x != x ]; then
+	isexcept=EXCEPT_SLOW_$testnum
+	isexcept_base=EXCEPT_SLOW_$base
+	if [ ${!isexcept}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping SLOW test $1"
-	elif [ ${!testname_base}x != x ]; then
+		skip_message="skipping SLOW test $testnum"
+	elif [ ${!isexcept_base}x != x ]; then
 		ALWAYS_SKIPPED="y"
-		skip_message="skipping SLOW test $1 (base $base)"
+		skip_message="skipping SLOW test $testnum (base $base)"
 	fi
 
 	# If there are tests on the ONLY list, check if the current test
 	# is on that list and, if so, check if the test is to be skipped
 	# and if we are supposed to honor the skip lists.
 	if [ -n "$ONLY" ]; then
-		testname=ONLY_$1
-		testname_base=ONLY_$base
-		if [[ ${!testname}x != x || ${!testname_base}x != x ]]; then
+		local isonly=ONLY_$testnum
+		local isonly_base=ONLY_$base
+		if [[ ${!isonly}x != x || ${!isonly_base}x != x ]]; then
 
 			if [[ -n "$ALWAYS_SKIPPED" && -n "$HONOR_EXCEPT" ]]; then
 				LAST_SKIPPED="y"
@@ -6069,7 +6073,7 @@ run_test() {
 				[ -n "$LAST_SKIPPED" ] &&
 					echo "" && LAST_SKIPPED=
 				ALWAYS_SKIPPED=
-				run_one_logged $1 "$2"
+				run_one_logged $testnum "$testmsg"
 				return $?
 			fi
 
@@ -6084,10 +6088,9 @@ run_test() {
 		skip_noexit "$skip_message"
 		return 0
 	else
-		run_one_logged $1 "$2"
+		run_one_logged $testnum "$testmsg"
 		return $?
 	fi
-
 }
 
 log() {
@@ -6187,10 +6190,7 @@ group descriptors corrupted"
 #
 run_one() {
 	local testnum=$1
-	local message=$2
-	export tfile=f${testnum}.${TESTSUITE}
-	export tdir=d${testnum}.${TESTSUITE}
-	export TESTNAME=test_$testnum
+	local testmsg="$2"
 	local SAVE_UMASK=`umask`
 	umask 0022
 
@@ -6198,7 +6198,7 @@ run_one() {
 		$SETUP
 	fi
 
-	banner "test $testnum: $message"
+	banner "test $testnum: $testmsg"
 	test_${testnum} || error "test_$testnum failed with $?"
 	cd $SAVE_PWD
 	reset_fail_loc
@@ -6209,9 +6209,6 @@ run_one() {
 		ps auxww | grep -v grep | grep -q "multiop " &&
 					error "multiop still running"
 	fi
-	unset TESTNAME
-	unset tdir
-	unset tfile
 	umask $SAVE_UMASK
 	$CLEANUP
 	return 0
@@ -6224,48 +6221,73 @@ run_one() {
 #  - test result is saved to data file
 #
 run_one_logged() {
-	local BEFORE=$(date +%s)
-	local TEST_ERROR
-	local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
+	local before=$SECONDS
+	local testnum=$1
+	local testmsg=$2
+	export tfile=f${testnum}.${TESTSUITE}
+	export tdir=d${testnum}.${TESTSUITE}
+	local name=$TESTSUITE.$TESTNAME.test_log.$(hostname -s).log
 	local test_log=$LOGDIR/$name
-	local zfs_log_name=${TESTSUITE}.test_${1}.zfs_log
+	local zfs_log_name=$TESTSUITE.$TESTNAME.zfs_log
 	local zfs_debug_log=$LOGDIR/$zfs_log_name
-	rm -rf $LOGDIR/err
-	rm -rf $LOGDIR/ignore
-	rm -rf $LOGDIR/skip
 	local SAVE_UMASK=$(umask)
+	local rc=0
 	umask 0022
 
+	rm -f $LOGDIR/err $LOGDIR/ignore $LOGDIR/skip
 	echo
-	log_sub_test_begin test_${1}
-	(run_one $1 "$2") 2>&1 | tee -i $test_log
-	local RC=${PIPESTATUS[0]}
+	# if ${ONLY_$testnum} set, repeat $ONLY_REPEAT times, otherwise once
+	local isonly=ONLY_$testnum
+	local repeat=${!isonly:+$ONLY_REPEAT}
 
-	[ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] &&
-		echo "test_$1 returned $RC" | tee $LOGDIR/err
+	for testiter in $(seq ${repeat:-1}); do
+		local before_sub=$SECONDS
+		log_sub_test_begin $TESTNAME
 
-	duration=$(($(date +%s) - $BEFORE))
-	pass "$1" "(${duration}s)"
+		# remove temp files between repetitions to avoid test failures
+		[ -n "$append" -a -n "$DIR" -a -n "$tdir" -a -n "$tfile" ] &&
+			rm -rf $DIR/$tdir* $DIR/$tfile*
+		# loop around subshell so stack_trap EXIT triggers each time
+		(run_one $testnum "$testmsg") 2>&1 | tee -i $append $test_log
+		rc=${PIPESTATUS[0]}
+		local append=-a
+		local duration_sub=$((SECONDS - before_sub))
+		local test_error
 
-	if [[ -f $LOGDIR/err ]]; then
-		TEST_ERROR=$(cat $LOGDIR/err)
-	elif [[ -f $LOGDIR/ignore ]]; then
-		TEST_ERROR=$(cat $LOGDIR/ignore)
-	elif [[ -f $LOGDIR/skip ]]; then
-		TEST_ERROR=$(cat $LOGDIR/skip)
-	fi
-	log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
+		[[ $rc != 0 && ! -f $LOGDIR/err ]] &&
+			echo "$TESTNAME returned $rc" | tee $LOGDIR/err
 
-	if [[ "$TEST_STATUS" != "SKIP" ]] && [[ -f $TF_SKIP ]]; then
+		if [[ -f $LOGDIR/err ]]; then
+			test_error=$(cat $LOGDIR/err)
+			TEST_STATUS="FAIL"
+		elif [[ -f $LOGDIR/ignore ]]; then
+			test_error=$(cat $LOGDIR/ignore)
+		elif [[ -f $LOGDIR/skip ]]; then
+			test_error=$(cat $LOGDIR/skip)
+			TEST_STATUS="SKIP"
+		else
+			TEST_STATUS="PASS"
+		fi
+
+		pass "$testnum" "($((SECONDS - before))s)"
+		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
+		[[ $rc != 0 ]] && break
+	done
+
+	if [[ "$TEST_STATUS" != "SKIP" && -f $TF_SKIP ]]; then
 		rm -f $TF_SKIP
 	fi
 
 	if [ -f $LOGDIR/err ]; then
 		log_zfs_info "$zfs_debug_log"
-		$FAIL_ON_ERROR && exit $RC
+		$FAIL_ON_ERROR && exit $rc
 	fi
 
 	umask $SAVE_UMASK
+
+	unset TESTNAME
+	unset tdir
+	unset tfile
 
 	return 0
 }
@@ -6288,9 +6310,9 @@ check_grant() {
 	export base=$(basetest $1)
 	[ "$CHECK_GRANT" == "no" ] && return 0
 
-	testnamebase=GCHECK_ONLY_${base}
-	testname=GCHECK_ONLY_$1
-	[ ${!testnamebase}x == x -a ${!testname}x == x ] && return 0
+	local isonly_base=GCHECK_ONLY_${base}
+	local isonly=GCHECK_ONLY_$1
+	[ ${!isonly_base}x == x -a ${!isonly}x == x ] && return 0
 
 	echo -n "checking grant......"
 

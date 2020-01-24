@@ -1231,7 +1231,7 @@ test_51() {
         for i in $SEQ
         do
 		#echo failover in $i sec
-		log "test_$testnum: failover in $i sec"
+		log "$TESTNAME: failover in $i sec"
 		sleep $i
 		facet_failover $SINGLEMDS
         done

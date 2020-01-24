@@ -4598,7 +4598,7 @@ test_103() {
 	[ $(lustre_version_code $ost1) -lt $(version_code 2.10.50) ] &&
 		skip "Lockahead needs OST version at least 2.10.50"
 
-	local testnum=23
+	local locktest=23
 
 	test_mkdir -p $DIR/$tdir
 
@@ -4615,7 +4615,7 @@ test_103() {
 	do_facet ost1 $LCTL set_param fail_loc=0x415 fail_val=2
 
 	echo "Incorrect size expected (no glimpse fix):"
-	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $testnum -f $tfile
+	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $locktest -f $tfile
 	rc=$?
 	if [ $rc -eq 0 ]; then
 		echo "This doesn't work 100%, but this is just reproducing the bug, not testing the fix, so OK to not fail test."
@@ -4632,9 +4632,9 @@ test_103() {
 	do_facet ost1 $LCTL set_param fail_loc=0x214 fail_val=2
 
 	# Write commit is still delayed by 2 seconds
-	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $testnum -f $tfile
+	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $locktest -f $tfile
 	rc=$?
-	[ $rc -eq 0 ] || error "Lockahead test${testnum} failed, ${rc}"
+	[ $rc -eq 0 ] || error "Lockahead test$locktest failed, $rc"
 
 	# guarantee write commit timeout has expired
 	sleep 2
