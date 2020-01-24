@@ -394,7 +394,7 @@ lnet_sock_connect(int interface, int local_port,
 	if (IS_ERR(sock))
 		return sock;
 
-	rc = kernel_connect(sock, peeraddr, sizeof(struct sockaddr_in), 0);
+	rc = kernel_connect(sock, peeraddr, sizeof(struct sockaddr_in6), 0);
 	if (rc == 0)
 		return sock;
 

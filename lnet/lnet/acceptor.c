@@ -145,7 +145,8 @@ lnet_connect(lnet_nid_t peer_nid, int interface, struct sockaddr *peeraddr,
 
 	BUILD_BUG_ON(sizeof(cr) > 16); /* not too big to be on the stack */
 
-	LASSERT(peeraddr->sa_family == AF_INET);
+	LASSERT(peeraddr->sa_family == AF_INET ||
+		peeraddr->sa_family == AF_INET6);
 
 	for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT;
 	     port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
