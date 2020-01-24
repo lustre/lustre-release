@@ -2323,9 +2323,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
  * Callback used when waiting on sets with l_wait_event.
  * Always returns 1.
  */
-int ptlrpc_expired_set(void *data)
+void ptlrpc_expired_set(struct ptlrpc_request_set *set)
 {
-	struct ptlrpc_request_set *set = data;
 	struct list_head *tmp;
 	time64_t now = ktime_get_real_seconds();
 
@@ -2360,13 +2359,6 @@ int ptlrpc_expired_set(void *data)
 		 */
 		ptlrpc_expire_one_request(req, 1);
 	}
-
-	/*
-	 * When waiting for a whole set, we always break out of the
-	 * sleep so we can recalculate the timeout, or enable interrupts
-	 * if everyone's timed out.
-	 */
-	RETURN(1);
 }
 
 /**
@@ -2384,9 +2376,8 @@ EXPORT_SYMBOL(ptlrpc_mark_interrupted);
  * Interrupts (sets interrupted flag) all uncompleted requests in
  * a set \a data. Callback for l_wait_event for interruptible waits.
  */
-static void ptlrpc_interrupted_set(void *data)
+static void ptlrpc_interrupted_set(struct ptlrpc_request_set *set)
 {
-	struct ptlrpc_request_set *set = data;
 	struct list_head *tmp;
 
 	LASSERT(set != NULL);
@@ -2462,7 +2453,6 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 {
 	struct list_head *tmp;
 	struct ptlrpc_request *req;
-	struct l_wait_info lwi;
 	time64_t timeout;
 	int rc;
 
@@ -2498,24 +2488,35 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 			 * We still want to block for a limited time,
 			 * so we allow interrupts during the timeout.
 			 */
-			lwi = LWI_TIMEOUT_INTR_ALL(
-					cfs_time_seconds(timeout ? timeout : 1),
-					ptlrpc_expired_set,
-					ptlrpc_interrupted_set, set);
-
-			rc = l_wait_event(set->set_waitq,
-					  ptlrpc_check_set(NULL, set), &lwi);
+			rc = l_wait_event_abortable_timeout(
+				set->set_waitq,
+				ptlrpc_check_set(NULL, set),
+				cfs_time_seconds(timeout ? timeout : 1));
+			if (rc == 0) {
+				rc = -ETIMEDOUT;
+				ptlrpc_expired_set(set);
+			} else if (rc < 0) {
+				rc = -EINTR;
+				ptlrpc_interrupted_set(set);
+			} else {
+				rc = 0;
+			}
 		} else {
 			/*
 			 * At least one request is in flight, so no
 			 * interrupts are allowed. Wait until all
 			 * complete, or an in-flight req times out.
 			 */
-			lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),
-					  ptlrpc_expired_set, set);
-
-			rc = l_wait_event(set->set_waitq,
-					  ptlrpc_check_set(NULL, set), &lwi);
+			rc = wait_event_idle_timeout(
+				set->set_waitq,
+				ptlrpc_check_set(NULL, set),
+				cfs_time_seconds(timeout ? timeout : 1));
+			if (rc == 0) {
+				ptlrpc_expired_set(set);
+				rc = -ETIMEDOUT;
+			} else {
+				rc = 0;
+			}
 
 			/*
 			 * LU-769 - if we ignored the signal because
