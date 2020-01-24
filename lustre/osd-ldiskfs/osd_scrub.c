@@ -2016,14 +2016,15 @@ static int osd_ios_lf_fill(void *buf,
 	scrub->os_lf_scanned++;
 	child = osd_lookup_one_len(dev, name, parent, namelen);
 	if (IS_ERR(child)) {
+		rc = PTR_ERR(child);
 		CDEBUG(D_LFSCK, "%s: cannot lookup child '%.*s': rc = %d\n",
-		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
-		RETURN(0);
+		      osd_name(dev), namelen, name, rc);
+		RETURN(rc);
 	} else if (!child->d_inode) {
 		dput(child);
 		CDEBUG(D_INODE, "%s: child '%.*s' lacks inode\n",
 		       osd_name(dev), namelen, name);
-		RETURN(0);
+		RETURN(-ENOENT);
 	}
 
 	inode = child->d_inode;
