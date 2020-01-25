@@ -593,7 +593,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 		/*
 		 * error happened, we'll try to repeat on next boot ?
 		 */
-		LASSERTF(req->rq_transno == 0 || rc == -EIO ||
+		LASSERTF(req->rq_transno == 0 || rc == -EIO || rc == -EROFS ||
 			 req->rq_import_generation < imp->imp_generation,
 			 "transno %llu, rc %d, gen: req %d, imp %d\n",
 			 req->rq_transno, rc, req->rq_import_generation,
