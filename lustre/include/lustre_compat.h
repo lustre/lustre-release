@@ -330,6 +330,13 @@ static inline int radix_tree_exceptional_entry(void *arg)
 }
 #endif
 
+#ifndef HAVE_XA_IS_VALUE
+static inline bool xa_is_value(void *entry)
+{
+	return radix_tree_exceptional_entry(entry);
+}
+#endif
+
 #ifndef HAVE_TRUNCATE_INODE_PAGES_FINAL
 static inline void truncate_inode_pages_final(struct address_space *map)
 {

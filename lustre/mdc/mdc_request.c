@@ -1134,7 +1134,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 	xa_lock_irqsave(&mapping->i_pages, flags);
 	found = radix_tree_gang_lookup(&mapping->page_tree,
 				       (void **)&page, offset, 1);
-	if (found > 0 && !radix_tree_exceptional_entry(page)) {
+	if (found > 0 && !xa_is_value(page)) {
 		struct lu_dirpage *dp;
 
 		get_page(page);

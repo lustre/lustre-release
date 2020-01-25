@@ -2771,6 +2771,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_INODE_TIMESPEC64
 
 #
+# LC_XA_IS_VALUE
+# kernel 4.19-rc6 commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
+# xarray: Replace exceptional entries
+# adds xa_is_value
+#
+AC_DEFUN([LC_XA_IS_VALUE], [
+LB_CHECK_COMPILE([xa_is_value exist],
+xa_is_value, [
+	#include <linux/xarray.h>
+],[
+	xa_is_value(NULL);
+],[
+	AC_DEFINE(HAVE_XA_IS_VALUE, 1, [xa_is_value exist])
+])
+]) # LC_XA_IS_VALUE
+
+#
 # LC___XA_SET_MARK
 #
 # kernel 4.20 commit v4.19-rc5-248-g9b89a0355144
@@ -3142,6 +3159,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.18
 	LC_INODE_TIMESPEC64
+	LC_XA_IS_VALUE
 
 	# 4.20
 	LC___XA_SET_MARK
