@@ -366,6 +366,14 @@ wait_grace_time() {
 			;;
 	esac
 
+	# from lfs.c:__sec2str()
+	# const char spec[] = "smhdw";
+	# {1, 60, 60*60, 24*60*60, 7*24*60*60};
+	[[ $time == *m* ]] && time=${time//m/} && time=$((time*60));
+	[[ $time == *h* ]] && time=${time//h/} && time=$((time*60*60));
+	[[ $time == *d* ]] && time=${time//d/} && time=$((time*24*60*60));
+	[[ $time == *w* ]] && time=${time//w/} && time=$((time*7*24*60*60));
+
 	echo "Sleep through grace ..."
 	[ "$time" == "-" ] &&
 	    error "Grace timeout was not set or quota not exceeded"
