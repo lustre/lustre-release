@@ -2386,9 +2386,6 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		if (rc < 0)
 			goto failed1;
 
-		LASSERT(ni->ni_net->net_tunables.lct_peer_timeout <= 0 ||
-			ni->ni_net->net_lnd->lnd_query != NULL);
-
 		lnet_ni_addref(ni);
 		list_add_tail(&ni->ni_netlist, &local_ni_list);
 

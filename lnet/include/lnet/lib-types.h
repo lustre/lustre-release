@@ -297,9 +297,6 @@ struct lnet_lnd {
 	/* notification of peer down */
 	void (*lnd_notify_peer_down)(lnet_nid_t peer);
 
-	/* query of peer aliveness */
-	void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, time64_t *when);
-
 	/* accept a new connection */
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
 };

@@ -33,7 +33,6 @@ const struct lnet_lnd the_kgnilnd = {
 	.lnd_send       = kgnilnd_send,
 	.lnd_recv       = kgnilnd_recv,
 	.lnd_eager_recv = kgnilnd_eager_recv,
-	.lnd_query      = kgnilnd_query,
 };
 
 kgn_data_t      kgnilnd_data;
@@ -1920,77 +1919,6 @@ kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 	}
 
 	return rc;
-}
-
-void
-kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
-{
-	kgn_net_t               *net = ni->ni_data;
-	kgn_tx_t                *tx;
-	kgn_peer_t              *peer = NULL;
-	kgn_conn_t              *conn = NULL;
-	struct lnet_process_id       id = {
-		.nid = nid,
-		.pid = LNET_PID_LUSTRE,
-	};
-	ENTRY;
-
-	/* I expect to find him, so only take a read lock */
-	read_lock(&kgnilnd_data.kgn_peer_conn_lock);
-	peer = kgnilnd_find_peer_locked(nid);
-	if (peer != NULL) {
-		/* LIE if in a quiesce - we will update the timeouts after,
-		 * but we don't want sends failing during it */
-		if (kgnilnd_data.kgn_quiesce_trigger) {
-			*when = ktime_get_seconds();
-			read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-			GOTO(out, 0);
-		}
-
-		/* Update to best guess, might refine on later checks */
-		*when = peer->gnp_last_alive;
-
-		/* we have a peer, how about a conn? */
-		conn = kgnilnd_find_conn_locked(peer);
-
-		if (conn == NULL)  {
-			/* if there is no conn, check peer last errno to see if clean disconnect
-			 * - if it was, we lie to LNet because we believe a TX would complete
-			 * on reconnect */
-			if (kgnilnd_conn_clean_errno(peer->gnp_last_errno)) {
-				*when = ktime_get_seconds();
-			}
-			/* we still want to fire a TX and new conn in this case */
-		} else {
-			/* gnp_last_alive is valid, run for the hills */
-			read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-			GOTO(out, 0);
-		}
-	}
-	/* if we get here, either we have no peer or no conn for him, so fire off
-	 * new TX to trigger conn setup */
-	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-
-	/* if we couldn't find him, we'll fire up a TX and get connected -
-	 * if we don't do this, after ni_peer_timeout, LNet will declare him dead.
-	 * So really we treat kgnilnd_query as a bit of a 'connect now' type
-	 * event because it'll only do this when it wants to send
-	 *
-	 * Use a real TX for this to get the proper gnp_tx_queue behavior, etc
-	 * normally we'd use kgnilnd_send_ctlmsg for this, but we don't really
-	 * care that this goes out quickly since we already know we need a new conn
-	 * formed */
-	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_NOOP_SEND))
-		return;
-
-	tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP, ni->ni_nid);
-	if (tx != NULL) {
-		kgnilnd_launch_tx(tx, net, &id);
-	}
-out:
-	CDEBUG(D_NETTRACE, "peer 0x%p->%s when %lld\n", peer,
-	       libcfs_nid2str(nid), *when);
-	EXIT;
 }
 
 int

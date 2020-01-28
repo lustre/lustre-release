@@ -2751,11 +2751,12 @@ kiblnd_check_reconnect(struct kib_conn *conn, int version,
 	}
 
 	write_lock_irqsave(glock, flags);
-        /* retry connection if it's still needed and no other connection
-         * attempts (active or passive) are in progress
-         * NB: reconnect is still needed even when ibp_tx_queue is
-         * empty if ibp_version != version because reconnect may be
-         * initiated by kiblnd_query() */
+	/* retry connection if it's still needed and no other connection
+	 * attempts (active or passive) are in progress
+	 * NB: reconnect is still needed even when ibp_tx_queue is
+	 * empty if ibp_version != version because reconnect may be
+	 * initiated.
+	 */
 	reconnect = (!list_empty(&peer_ni->ibp_tx_queue) ||
 		     peer_ni->ibp_version != version) &&
 		    peer_ni->ibp_connecting &&
