@@ -512,36 +512,33 @@ ksocknal_del_route_locked(struct ksock_route *route)
 }
 
 int
-ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ipaddr,
-		  int port)
+ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id,
+		  struct sockaddr *addr)
 {
 	struct list_head *tmp;
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_peer_ni *peer2;
 	struct ksock_route *route;
 	struct ksock_route *route2;
-	struct sockaddr_in sa = {.sin_family = AF_INET};
 
-        if (id.nid == LNET_NID_ANY ||
-            id.pid == LNET_PID_ANY)
-                return (-EINVAL);
+	if (id.nid == LNET_NID_ANY ||
+	    id.pid == LNET_PID_ANY)
+		return (-EINVAL);
 
 	/* Have a brand new peer_ni ready... */
 	peer_ni = ksocknal_create_peer(ni, id);
 	if (IS_ERR(peer_ni))
 		return PTR_ERR(peer_ni);
 
-	sa.sin_addr.s_addr = htonl(ipaddr);
-	sa.sin_port = htons(port);
-	route = ksocknal_create_route((struct sockaddr *)&sa);
-        if (route == NULL) {
-                ksocknal_peer_decref(peer_ni);
-                return (-ENOMEM);
-        }
+	route = ksocknal_create_route(addr);
+	if (route == NULL) {
+		ksocknal_peer_decref(peer_ni);
+		return (-ENOMEM);
+	}
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
-        /* always called with a ref on ni, so shutdown can't have started */
+	/* always called with a ref on ni, so shutdown can't have started */
 	LASSERT(atomic_read(&((struct ksock_net *)ni->ni_data)->ksnn_npeers)
 		>= 0);
 
@@ -558,9 +555,7 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ipaddr,
 	list_for_each(tmp, &peer_ni->ksnp_routes) {
 		route2 = list_entry(tmp, struct ksock_route, ksnr_list);
 
-		if (route2->ksnr_addr.ss_family == AF_INET &&
-		    ((struct sockaddr_in *)&route2->ksnr_addr)->sin_addr.s_addr
-		    == htonl(ipaddr))
+		if (rpc_cmp_addr(addr, (struct sockaddr *)&route2->ksnr_addr))
 			break;
 
 		route2 = NULL;
@@ -934,7 +929,7 @@ static void
 ksocknal_create_routes(struct ksock_peer_ni *peer_ni, int port,
                        __u32 *peer_ipaddrs, int npeer_ipaddrs)
 {
-	struct ksock_route		*newroute = NULL;
+	struct ksock_route	*newroute = NULL;
 	rwlock_t		*global_lock = &ksocknal_data.ksnd_global_lock;
 	struct lnet_ni *ni = peer_ni->ksnp_ni;
 	struct ksock_net		*net = ni->ni_data;
@@ -2223,13 +2218,15 @@ ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
                 return 0;
         }
 
-        case IOC_LIBCFS_ADD_PEER:
-                id.nid = data->ioc_nid;
-		id.pid = LNET_PID_LUSTRE;
-                return ksocknal_add_peer (ni, id,
-                                          data->ioc_u32[0], /* IP */
-                                          data->ioc_u32[1]); /* port */
+	case IOC_LIBCFS_ADD_PEER: {
+		struct sockaddr_in sa = {.sin_family = AF_INET};
 
+		id.nid = data->ioc_nid;
+		id.pid = LNET_PID_LUSTRE;
+		sa.sin_addr.s_addr = htonl(data->ioc_u32[0]);
+		sa.sin_port = htons(data->ioc_u32[1]);
+		return ksocknal_add_peer(ni, id, (struct sockaddr *)&sa);
+	}
         case IOC_LIBCFS_DEL_PEER:
                 id.nid = data->ioc_nid;
                 id.pid = LNET_PID_ANY;

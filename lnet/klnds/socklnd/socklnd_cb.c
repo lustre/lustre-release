@@ -887,6 +887,7 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 {
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_conn *conn;
+	struct sockaddr_in sa;
 	rwlock_t *g_lock;
 	int retry;
 	int rc;
@@ -934,9 +935,11 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
                         return -EHOSTUNREACH;
                 }
 
-                rc = ksocknal_add_peer(ni, id,
-                                       LNET_NIDADDR(id.nid),
-                                       lnet_acceptor_port());
+		memset(&sa, 0, sizeof(sa));
+		sa.sin_family = AF_INET;
+		sa.sin_addr.s_addr = htonl(LNET_NIDADDR(id.nid));
+		sa.sin_port = htons(lnet_acceptor_port());
+		rc = ksocknal_add_peer(ni, id, (struct sockaddr *)&sa);
                 if (rc != 0) {
                         CERROR("Can't add peer_ni %s: %d\n",
                                libcfs_id2str(id), rc);

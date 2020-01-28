@@ -575,8 +575,8 @@ int ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
 int ksocknal_accept(struct lnet_ni *ni, struct socket *sock);
 
-int ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ip,
-		      int port);
+int ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id,
+		      struct sockaddr *addr);
 struct ksock_peer_ni *ksocknal_find_peer_locked(struct lnet_ni *ni,
 					   struct lnet_process_id id);
 struct ksock_peer_ni *ksocknal_find_peer(struct lnet_ni *ni,
