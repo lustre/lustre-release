@@ -347,6 +347,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	struct out_update_header	*ouh;
 	struct out_update_buffer	*oub;
 	__u32				buf_count = 0;
+	int				page_count = 0;
 	int				repsize = 0;
 	struct object_update_reply	*reply;
 	int				rc, i;
@@ -418,13 +419,14 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	list_for_each_entry(ours, &our->our_req_list, ours_list) {
 		oub->oub_size = ours->ours_req_size;
 		oub++;
+		page_count += round_up(ours->ours_req_size, PAGE_SIZE) + 1;
 	}
 
 	req->rq_bulk_write = 1;
-	desc = ptlrpc_prep_bulk_imp(req, buf_count,
+	desc = ptlrpc_prep_bulk_imp(req, page_count,
 		MD_MAX_BRW_SIZE >> LNET_MTU_BITS,
-		PTLRPC_BULK_GET_SOURCE | PTLRPC_BULK_BUF_KVEC,
-		MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
+		PTLRPC_BULK_GET_SOURCE | PTLRPC_BULK_BUF_KIOV,
+		MDS_BULK_PORTAL, &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)
 		GOTO(out_req, rc = -ENOMEM);
 
