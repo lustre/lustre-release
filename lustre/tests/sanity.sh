@@ -14975,6 +14975,233 @@ test_162c() {
 }
 run_test 162c "fid2path works with paths 100 or more directories deep"
 
+oalr_event_count() {
+	local event="${1}"
+	local trace="${2}"
+
+	awk -v name="${FSNAME}-OST0000" \
+	    -v event="${event}" \
+	    '$1 == "TRACE" && $2 == event && $3 == name' \
+	    "${trace}" |
+	wc -l
+}
+
+oalr_expect_event_count() {
+	local event="${1}"
+	local trace="${2}"
+	local expect="${3}"
+	local count
+
+	count=$(oalr_event_count "${event}" "${trace}")
+	if ((count == expect)); then
+		return 0
+	fi
+
+	error_noexit "${event} event count was '${count}', expected ${expect}"
+	cat "${trace}" >&2
+	exit 1
+}
+
+cleanup_165() {
+	do_facet ost1 killall --quiet -KILL ofd_access_log_reader || true
+	stop ost1
+	start ost1 "$(ostdevname 1)" $OST_MOUNT_OPTS
+}
+
+setup_165() {
+	sync # Flush previous IOs so we can count log entries.
+	do_facet ost1 $LCTL set_param "obdfilter.${FSNAME}-OST0000.access_log_size=4096"
+	stack_trap cleanup_165 EXIT
+}
+
+test_165a() {
+	local trace="/tmp/${tfile}.trace"
+	local rc
+	local count
+
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	setup_165
+	sleep 5
+
+	do_facet ost1 ofd_access_log_reader --list
+	stop ost1
+
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+
+	# Parse trace file for discovery events:
+	oalr_expect_event_count alr_log_add "${trace}" 1
+	oalr_expect_event_count alr_log_eof "${trace}" 1
+	oalr_expect_event_count alr_log_free "${trace}" 1
+}
+run_test 165a "ofd access log discovery"
+
+test_165b() {
+	local trace="/tmp/${tfile}.trace"
+	local file="${DIR}/${tfile}"
+	local pfid1
+	local pfid2
+	local -a entry
+	local rc
+	local count
+	local size
+	local flags
+
+	setup_165
+
+	lfs setstripe -c 1 -i 0 "${file}"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	do_facet ost1 ofd_access_log_reader --list
+
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	sleep 5
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+
+	oalr_expect_event_count alr_log_entry "${trace}" 1
+
+	pfid1=$($LFS path2fid "${file}")
+
+	# 1     2             3   4    5     6   7    8    9     10
+	# TRACE alr_log_entry OST PFID BEGIN END TIME SIZE COUNT FLAGS
+	entry=( - $(awk -v pfid="${pfid}" '$1 == "TRACE" && $2 == "alr_log_entry"' "${trace}" ) )
+
+	echo "entry = '${entry[*]}'" >&2
+
+	pfid2=${entry[4]}
+	if [[ "${pfid1}" != "${pfid2}" ]]; then
+		error "entry '${entry[*]}' has invalid PFID '${pfid2}', expected ${pfid1}"
+	fi
+
+	size=${entry[8]}
+	if ((size != 1048576)); then
+		error "entry '${entry[*]}' has invalid io size '${size}', expected 1048576"
+	fi
+
+	flags=${entry[10]}
+	if [[ "${flags}" != "w" ]]; then
+		error "entry '${entry[*]}' has invalid io flags '${flags}', expected 'w'"
+	fi
+
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r524288c || error "cannot read '${file}'"
+	sleep 5
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+
+	oalr_expect_event_count alr_log_entry "${trace}" 1
+
+	entry=( - $(awk -v pfid="${pfid}" '$1 == "TRACE" && $2 == "alr_log_entry"' "${trace}" ) )
+	echo "entry = '${entry[*]}'" >&2
+
+	pfid2=${entry[4]}
+	if [[ "${pfid1}" != "${pfid2}" ]]; then
+		error "entry '${entry[*]}' has invalid PFID '${pfid2}', expected ${pfid1}"
+	fi
+
+	size=${entry[8]}
+	if ((size != 524288)); then
+		error "entry '${entry[*]}' has invalid io size '${size}', 524288"
+	fi
+
+	flags=${entry[10]}
+	if [[ "${flags}" != "r" ]]; then
+		error "entry '${entry[*]}' has invalid io flags '${flags}', expected 'r'"
+	fi
+}
+run_test 165b "ofd access log entries are produced and consumed"
+
+test_165c() {
+	local file="${DIR}/${tdir}/${tfile}"
+	test_mkdir "${DIR}/${tdir}"
+
+	setup_165
+
+	lfs setstripe -c 1 -i 0 "${DIR}/${tdir}"
+
+	# 4096 / 64 = 64. Create twice as many entries.
+	for ((i = 0; i < 128; i++)); do
+		$MULTIOP "${file}-${i}" oO_CREAT:O_WRONLY:w512c || error "cannot create file"
+	done
+
+	sync
+	do_facet ost1 ofd_access_log_reader --list
+	unlinkmany  "${file}-%d" 128
+}
+run_test 165c "full ofd access logs do not block IOs"
+
+oal_peek_entry_count() {
+	do_facet ost1 ofd_access_log_reader --list | awk '$1 == "_entry_count:" { print $2; }'
+}
+
+oal_expect_entry_count() {
+	local entry_count=$(oal_peek_entry_count)
+	local expect="$1"
+
+	if ((entry_count == expect)); then
+		return 0
+	fi
+
+	error_noexit "bad entry count, got ${entry_count}, expected ${expect}"
+	do_facet ost1 ofd_access_log_reader --list >&2
+	exit 1
+}
+
+test_165d() {
+	local trace="/tmp/${tfile}.trace"
+	local file="${DIR}/${tdir}/${tfile}"
+	local param="obdfilter.${FSNAME}-OST0000.access_log_mask"
+	local entry_count
+	test_mkdir "${DIR}/${tdir}"
+
+	setup_165
+	lfs setstripe -c 1 -i 0 "${file}"
+
+	do_facet ost1 lctl set_param "${param}=rw"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	oal_expect_entry_count 1
+
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	oal_expect_entry_count 2
+
+	do_facet ost1 lctl set_param "${param}=r"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	oal_expect_entry_count 2
+
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	oal_expect_entry_count 3
+
+	do_facet ost1 lctl set_param "${param}=w"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	oal_expect_entry_count 4
+
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	oal_expect_entry_count 4
+
+	do_facet ost1 lctl set_param "${param}=0"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	oal_expect_entry_count 4
+
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	oal_expect_entry_count 4
+}
+run_test 165d "ofd_access_log mask works"
+
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"

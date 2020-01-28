@@ -571,6 +571,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	int i, j, rc, tot_bytes = 0;
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_READ;
 	int maxlnb = *nr_local;
+	__u64 begin, end;
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -598,7 +599,12 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (ptlrpc_connection_is_local(exp->exp_connection))
 		dbt |= DT_BUFS_TYPE_LOCAL;
 
+	begin = -1;
+	end = 0;
+
 	for (*nr_local = 0, i = 0, j = 0; i < niocount; i++) {
+		begin = min_t(__u64, begin, rnb[i].rnb_offset);
+		end = max_t(__u64, end, rnb[i].rnb_offset + rnb[i].rnb_len);
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
 			rnb[i].rnb_len = 100 * 1024 * 1024;
@@ -620,6 +626,17 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	rc = dt_read_prep(env, ofd_object_child(fo), lnb, *nr_local);
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
+
+	ofd_access(ofd,
+		&(struct lu_fid) {
+			.f_seq = oa->o_parent_seq,
+			.f_oid = oa->o_parent_oid,
+			.f_ver = oa->o_stripe_idx,
+		},
+		begin, end,
+		tot_bytes,
+		niocount,
+		READ);
 
 	ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid, tot_bytes);
 	RETURN(0);
@@ -666,6 +683,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	int i, j, k, rc = 0, tot_bytes = 0;
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_WRITE;
 	int maxlnb = *nr_local;
+	__u64 begin, end;
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -773,8 +791,14 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (ptlrpc_connection_is_local(exp->exp_connection))
 		dbt |= DT_BUFS_TYPE_LOCAL;
 
+	begin = -1;
+	end = 0;
+
 	/* parse remote buffers to local buffers and prepare the latter */
 	for (*nr_local = 0, i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
+		begin = min_t(__u64, begin, rnb[i].rnb_offset);
+		end = max_t(__u64, end, rnb[i].rnb_offset + rnb[i].rnb_len);
+
 		if (OBD_FAIL_CHECK(OBD_FAIL_OST_2BIG_NIOBUF))
 			rnb[i].rnb_len += PAGE_SIZE;
 		rc = dt_bufs_get(env, ofd_object_child(fo),
@@ -802,6 +826,18 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		GOTO(err, rc);
 
 	ofd_read_unlock(env, fo);
+
+	ofd_access(ofd,
+		&(struct lu_fid) {
+			.f_seq = oa->o_parent_seq,
+			.f_oid = oa->o_parent_oid,
+			.f_ver = oa->o_stripe_idx,
+		},
+		begin, end,
+		tot_bytes,
+		obj->ioo_bufcnt,
+		WRITE);
+
 	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid, tot_bytes);
 	RETURN(0);
 err:

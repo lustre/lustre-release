@@ -41,6 +41,7 @@
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_disk.h>
+#include <uapi/linux/lustre/lustre_access_log.h>
 #include <uapi/linux/lustre/lustre_lfsck_user.h>
 #include <uapi/linux/lustre/lustre_cfg.h>
 
@@ -5369,6 +5370,82 @@ void lustre_assert_wire_constants(void)
 	/* Checks for union nodemap_rec */
 	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(union nodemap_rec));
+
+	LASSERTF(OFD_ACCESS_READ == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)OFD_ACCESS_READ);
+	LASSERTF(OFD_ACCESS_WRITE == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)OFD_ACCESS_WRITE);
+	/* Checks for struct ofd_access_entry_v1 */
+	LASSERTF((int)sizeof(struct ofd_access_entry_v1) == 64, "found %lld\n",
+		 (long long)(int)sizeof(struct ofd_access_entry_v1));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_parent_fid) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_parent_fid));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_parent_fid) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_parent_fid));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_begin) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_begin));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_begin) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_begin));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_end) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_end));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_end) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_end));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_time) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_time));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_time) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_time));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_size) == 40, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_size));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_size) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_size));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_segment_count) == 44, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_segment_count));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_segment_count) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_segment_count));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_flags) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_flags));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_flags));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_reserved1) == 52, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_reserved1));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved1));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_reserved2) == 56, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_reserved2));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved2));
+	LASSERTF((int)offsetof(struct ofd_access_entry_v1, oae_reserved3) == 60, "found %lld\n",
+		 (long long)(int)offsetof(struct ofd_access_entry_v1, oae_reserved3));
+	LASSERTF((int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ofd_access_entry_v1 *)0)->oae_reserved3));
+
+	LASSERTF(LUSTRE_ACCESS_LOG_VERSION_1 == 0x00010000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_ACCESS_LOG_VERSION_1);
+	LASSERTF(LUSTRE_ACCESS_LOG_TYPE_OFD == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_ACCESS_LOG_TYPE_OFD);
+	/* Checks for struct lustre_access_log_info_v1 */
+	LASSERTF((int)sizeof(struct lustre_access_log_info_v1) == 168, "found %lld\n",
+		 (long long)(int)sizeof(struct lustre_access_log_info_v1));
+	LASSERTF((int)offsetof(struct lustre_access_log_info_v1, lali_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_access_log_info_v1, lali_version));
+	LASSERTF((int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_version) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_version));
+	LASSERTF((int)offsetof(struct lustre_access_log_info_v1, lali_type) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_access_log_info_v1, lali_type));
+	LASSERTF((int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_type));
+	LASSERTF((int)offsetof(struct lustre_access_log_info_v1, lali_name) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_access_log_info_v1, lali_name));
+	LASSERTF((int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_name) == 128, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_name));
+	LASSERTF((int)offsetof(struct lustre_access_log_info_v1, lali_log_size) == 136, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_access_log_info_v1, lali_log_size));
+	LASSERTF((int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_log_size) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_log_size));
+	LASSERTF((int)offsetof(struct lustre_access_log_info_v1, lali_entry_size) == 140, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_access_log_info_v1, lali_entry_size));
+	LASSERTF((int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_entry_size) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_access_log_info_v1 *)0)->lali_entry_size));
 
 	/* Checks for struct lfsck_request */
 	LASSERTF((int)sizeof(struct lfsck_request) == 96, "found %lld\n",

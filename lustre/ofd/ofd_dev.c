@@ -2845,6 +2845,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	INIT_LIST_HEAD(&m->ofd_inconsistency_list);
 	spin_lock_init(&m->ofd_inconsistency_lock);
 
+	m->ofd_access_log_mask = -1; /* Log all accesses if enabled. */
+
 	spin_lock_init(&m->ofd_batch_lock);
 	init_rwsem(&m->ofd_lastid_rwsem);
 
@@ -3015,6 +3017,9 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 		d->ld_obd->obd_namespace = m->ofd_namespace = NULL;
 	}
 
+	ofd_access_log_delete(m->ofd_access_log);
+	m->ofd_access_log = NULL;
+
 	ofd_stack_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
 
 	LASSERT(atomic_read(&d->ld_ref) == 0);
@@ -3130,13 +3135,28 @@ static struct lu_device_type ofd_device_type = {
  */
 static int __init ofd_init(void)
 {
-	int				rc;
+	int rc;
 
 	rc = lu_kmem_init(ofd_caches);
 	if (rc)
 		return rc;
+
+	rc = ofd_access_log_module_init();
+	if (rc)
+		goto out_caches;
+
 	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
 				 LUSTRE_OST_NAME, &ofd_device_type);
+	if (rc)
+		goto out_ofd_access_log;
+
+	return 0;
+
+out_ofd_access_log:
+	ofd_access_log_module_exit();
+out_caches:
+	lu_kmem_fini(ofd_caches);
+
 	return rc;
 }
 
@@ -3148,8 +3168,9 @@ static int __init ofd_init(void)
  */
 static void __exit ofd_exit(void)
 {
-	lu_kmem_fini(ofd_caches);
 	class_unregister_type(LUSTRE_OST_NAME);
+	ofd_access_log_module_exit();
+	lu_kmem_fini(ofd_caches);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

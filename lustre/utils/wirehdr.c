@@ -36,6 +36,7 @@
 #include <string.h>
 
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_access_log.h>
 #ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>

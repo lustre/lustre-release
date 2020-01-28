@@ -120,6 +120,10 @@ struct ofd_device {
 	__u64			 ofd_inconsistency_self_detected;
 	__u64			 ofd_inconsistency_self_repaired;
 
+	struct ofd_access_log	*ofd_access_log;
+	unsigned int		 ofd_access_log_size;
+	unsigned int		 ofd_access_log_mask;
+
 	struct list_head	ofd_seq_list;
 	rwlock_t		ofd_seq_list_lock;
 	int			ofd_seq_count;
@@ -288,6 +292,18 @@ struct ofd_thread_info {
 
 extern void target_recovery_fini(struct obd_device *obd);
 extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
+
+/* ofd_access_log.c */
+bool ofd_access_log_size_is_valid(unsigned int size);
+int ofd_access_log_module_init(void);
+void ofd_access_log_module_exit(void);
+
+struct ofd_access_log;
+struct ofd_access_log *ofd_access_log_create(const char *ofd_name, size_t size);
+void ofd_access_log_delete(struct ofd_access_log *oal);
+void ofd_access(struct ofd_device *m,
+		const struct lu_fid *parent_fid, __u64 begin, __u64 end,
+		unsigned int size, unsigned int segment_count, int rw);
 
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;

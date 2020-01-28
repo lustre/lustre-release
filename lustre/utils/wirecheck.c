@@ -39,6 +39,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_access_log.h>
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_cfg.h>
@@ -2501,6 +2502,37 @@ static void check_nodemap_rec(void)
 	CHECK_UNION(nodemap_rec);
 }
 
+static void check_ofd_access_entry_v1(void)
+{
+	BLANK_LINE();
+	CHECK_VALUE_X(OFD_ACCESS_READ);
+	CHECK_VALUE_X(OFD_ACCESS_WRITE);
+	CHECK_STRUCT(ofd_access_entry_v1);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_parent_fid);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_begin);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_end);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_time);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_size);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_segment_count);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_flags);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_reserved1);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_reserved2);
+	CHECK_MEMBER(ofd_access_entry_v1, oae_reserved3);
+}
+
+static void check_lustre_access_log_info_v1(void)
+{
+	BLANK_LINE();
+	CHECK_VALUE_X(LUSTRE_ACCESS_LOG_VERSION_1);
+	CHECK_VALUE_X(LUSTRE_ACCESS_LOG_TYPE_OFD);
+	CHECK_STRUCT(lustre_access_log_info_v1);
+	CHECK_MEMBER(lustre_access_log_info_v1, lali_version);
+	CHECK_MEMBER(lustre_access_log_info_v1, lali_type);
+	CHECK_MEMBER(lustre_access_log_info_v1, lali_name);
+	CHECK_MEMBER(lustre_access_log_info_v1, lali_log_size);
+	CHECK_MEMBER(lustre_access_log_info_v1, lali_entry_size);
+}
+
 static void check_lfsck_request(void)
 {
 	BLANK_LINE();
@@ -3034,6 +3066,9 @@ main(int argc, char **argv)
 	check_nodemap_id_rec();
 	check_nodemap_global_rec();
 	check_nodemap_rec();
+
+	check_ofd_access_entry_v1();
+	check_lustre_access_log_info_v1();
 
 	check_lfsck_request();
 	check_lfsck_reply();

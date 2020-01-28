@@ -45,6 +45,7 @@
 #include <lprocfs_status.h>
 #include <linux/seq_file.h>
 #include <lustre_lfsck.h>
+#include <uapi/linux/lustre/lustre_access_log.h>
 
 #include "ofd_internal.h"
 
@@ -687,6 +688,105 @@ ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 
 LPROC_SEQ_FOPS(ofd_lfsck_verify_pfid);
 
+static ssize_t access_log_mask_show(struct kobject *kobj,
+			struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return snprintf(buf, PAGE_SIZE, "%s%s%s\n",
+		(ofd->ofd_access_log_mask == 0) ? "0" : "",
+		(ofd->ofd_access_log_mask & OFD_ACCESS_READ) ? "r" : "",
+		(ofd->ofd_access_log_mask & OFD_ACCESS_WRITE) ? "w" : "");
+}
+
+static ssize_t access_log_mask_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	unsigned int mask = 0;
+	size_t i;
+
+	for (i = 0; i < count; i++) {
+		switch (tolower(buffer[i])) {
+		case '0':
+			break;
+		case 'r':
+			mask |= OFD_ACCESS_READ;
+			break;
+		case 'w':
+			mask |= OFD_ACCESS_WRITE;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	ofd->ofd_access_log_mask = mask;
+
+	return count;
+}
+LUSTRE_RW_ATTR(access_log_mask);
+
+static ssize_t access_log_size_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_access_log_size);
+}
+
+static ssize_t access_log_size_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_access_log *oal;
+	unsigned int size;
+	ssize_t rc;
+
+	rc = kstrtouint(buffer, 0, &size);
+	if (rc < 0)
+		return rc;
+
+	if (!ofd_access_log_size_is_valid(size))
+		return -EINVAL;
+
+	/* The size of the ofd_access_log cannot be changed after it
+	 * has been created.
+	 */
+	if (ofd->ofd_access_log_size == size)
+		return count;
+
+	oal = ofd_access_log_create(obd->obd_name, size);
+	if (IS_ERR(oal))
+		return PTR_ERR(oal);
+
+	spin_lock(&ofd->ofd_flags_lock);
+	if (ofd->ofd_access_log != NULL) {
+		rc = -EBUSY;
+	} else {
+		ofd->ofd_access_log = oal;
+		ofd->ofd_access_log_size = size;
+		oal = NULL;
+		rc = count;
+	}
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	ofd_access_log_delete(oal);
+
+	return rc;
+}
+LUSTRE_RW_ATTR(access_log_size);
+
 static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -981,6 +1081,8 @@ static struct attribute *ofd_attrs[] = {
 #endif
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
+	&lustre_attr_access_log_mask.attr,
+	&lustre_attr_access_log_size.attr,
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)

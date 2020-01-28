@@ -41,6 +41,7 @@
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_disk.h>
+#include <uapi/linux/lustre/lustre_access_log.h>
 #include <uapi/linux/lustre/lustre_lfsck_user.h>
 #include <uapi/linux/lustre/lustre_cfg.h>
 

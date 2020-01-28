@@ -44,6 +44,7 @@ lustreinclude_HEADERS = \
 
 if SERVER
 lustreinclude_HEADERS += \
+	lustre_access_log.h \
 	lustre_barrier_user.h \
 	lustre_disk.h \
 	lustre_lfsck_user.h \
@@ -51,6 +52,7 @@ lustreinclude_HEADERS += \
 endif
 
 EXTRA_DIST = \
+	lustre_access_log.h \
 	lustre_barrier_user.h \
 	lustre_cfg.h \
 	lustre_disk.h \
