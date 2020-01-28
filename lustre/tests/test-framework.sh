@@ -456,7 +456,7 @@ version_code() {
 	# split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
 	eval set -- $(tr "[:punct:]" " " <<< $*)
 
-	echo -n "$(((${1:-0} << 16) | (${2:-0} << 8) | ${3:-0}))"
+	echo -n $(((${1:-0} << 16) | (${2:-0} << 8) | ${3:-0}))
 }
 
 export LINUX_VERSION=$(uname -r | sed -e "s/\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/")
@@ -493,14 +493,31 @@ export LINUX_VERSION_CODE=$(version_code ${LINUX_VERSION//\./ })
 # output: prints version string to stdout in (up to 4) dotted-decimal values
 lustre_build_version() {
 	local facet=${1:-client}
-	local ver=$(do_facet $facet "$LCTL get_param -n version 2>/dev/null ||
-				$LCTL lustre_build_version 2>/dev/null ||
-				$LCTL --version 2>/dev/null | cut -d' ' -f2")
+	local facet_version=${facet}_VERSION
+
+	# if the global variable is already set, then use that
+	[ -n "${!facet_version}" ] && echo ${!facet_version} && return
+
+	# this is the currently-running version of the kernel modules
+	local ver=$(do_facet $facet "$LCTL get_param -n version 2>/dev/null")
+	# we mostly test 2.10+ systems, only try others if the above fails
+	if [ -z "$ver" ]; then
+		ver=$(do_facet $facet "$LCTL lustre_build_version 2>/dev/null")
+	fi
+	if [ -z "$ver" ]; then
+		ver=$(do_facet $facet "$LCTL --version 2>/dev/null" |
+		      cut -d' ' -f2)
+	fi
 	local lver=$(egrep -i "lustre: |version: " <<<"$ver" | head -n 1)
 	[ -n "$lver" ] && ver="$lver"
 
-	sed -e 's/[^:]*: //' -e 's/^v//' -e 's/[ -].*//' -e 's/_/./g' <<<$ver |
-		cut -d. -f1-4
+	lver=$(sed -e 's/[^:]*: //' -e 's/^v//' -e 's/[ -].*//' <<<$ver |
+	       tr _ . | cut -d. -f1-4)
+
+	# save in global variable for the future
+	export $facet_version=$lver
+
+	echo $lver
 }
 
 # Report the Lustre numeric build version code for the supplied facet.
@@ -3222,13 +3239,13 @@ wait_delete_completed_mds() {
 }
 
 wait_for_host() {
-    local hostlist=$1
+	local hostlist=$1
 
-    # we can use "for" here because we are waiting the slowest
-    for host in ${hostlist//,/ }; do
-        check_network "$host" 900
-    done
-    while ! do_nodes $hostlist hostname  > /dev/null; do sleep 5; done
+	# we can use "for" here because we are waiting the slowest
+	for host in ${hostlist//,/ }; do
+		check_network "$host" 900
+	done
+	while ! do_nodes $hostlist hostname  > /dev/null; do sleep 5; done
 }
 
 wait_for_facet() {
@@ -5690,13 +5707,10 @@ check_network() {
 
 	[ "$host" = "$HOSTNAME" ] && return 0
 
-	echo "$(date +'%H:%M:%S (%s)') waiting for $host network $max secs ..."
-	if ! wait_for_function --quiet "ping -c 1 -w 3 $host" $max $sleep ; then
-		echo "Network not available!"
+	if ! wait_for_function --quiet "ping -c 1 -w 3 $host" $max $sleep; then
+		echo "$(date +'%H:%M:%S (%s)') waited for $host network ${max}s"
 		exit 1
 	fi
-
-	echo "$(date +'%H:%M:%S (%s)') network interface is UP"
 }
 
 no_dsh() {
@@ -7220,13 +7234,9 @@ check_node_health() {
 	for node in ${nodes//,/ }; do
 		check_network "$node" 5
 		if [ $? -eq 0 ]; then
-			do_node $node "rc=0;
-			val=\\\$($LCTL get_param -n catastrophe 2>&1);
-			if [[ \\\$? -eq 0 && \\\$val -ne 0 ]]; then
-				echo \\\$(hostname -s): \\\$val;
-				rc=\\\$val;
-			fi;
-			exit \\\$rc" || error "$node:LBUG/LASSERT detected"
+			do_node $node "$LCTL get_param catastrophe 2>&1" |
+				grep -q "catastrophe=1" &&
+				error "$node:LBUG/LASSERT detected" || true
 		fi
 	done
 }
@@ -8345,13 +8355,10 @@ init_logging() {
 
 	umask $save_umask
 
-	# If modules are not yet loaded then older "lctl lustre_build_version"
-	# will fail.  Use lctl build version instead.
-	log "Client: $($LCTL lustre_build_version)"
-	log "MDS: $(do_facet $SINGLEMDS $LCTL lustre_build_version 2>/dev/null||
-		    do_facet $SINGLEMDS $LCTL --version)"
-	log "OSS: $(do_facet ost1 $LCTL lustre_build_version 2> /dev/null ||
-		    do_facet ost1 $LCTL --version)"
+	# log actual client and server versions if needed for debugging
+	log "Client: $(lustre_build_version client)"
+	log "MDS: $(lustre_build_version mds1)"
+	log "OSS: $(lustre_build_version ost1)"
 }
 
 log_test() {
