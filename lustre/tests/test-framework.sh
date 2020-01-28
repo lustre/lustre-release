@@ -972,6 +972,22 @@ add_sk_mntflag() {
 	echo -n $mt_opts
 }
 
+from_build_tree() {
+	local from_tree
+
+	case $LUSTRE in
+	/usr/lib/lustre/* | /usr/lib64/lustre/* | /usr/lib/lustre | \
+	/usr/lib64/lustre )
+		from_tree=false
+		;;
+	*)
+		from_tree=true
+		;;
+	esac
+
+	[ $from_tree = true ]
+}
+
 init_gss() {
 	if $SHARED_KEY; then
 		GSS=true
@@ -981,16 +997,6 @@ init_gss() {
 	if ! $GSS; then
 		return
 	fi
-
-	case $LUSTRE in
-	/usr/lib/lustre/* | /usr/lib64/lustre/* | /usr/lib/lustre | \
-	/usr/lib64/lustre )
-		from_build_tree=false
-		;;
-	*)
-		from_build_tree=true
-		;;
-	esac
 
 	if ! module_loaded ptlrpc_gss; then
 		load_module ptlrpc/gss/ptlrpc_gss
@@ -1010,7 +1016,7 @@ init_gss() {
 		SK_NO_KEY=false
 		local lgssc_conf_file="/etc/request-key.d/lgssc.conf"
 
-		if $from_build_tree; then
+		if from_build_tree; then
 			mkdir -p $SK_OM_PATH
 			if grep -q request-key /proc/mounts > /dev/null; then
 				echo "SSK: Request key already mounted."
@@ -1029,7 +1035,7 @@ init_gss() {
 		cat $lgssc_conf_file
 
 		if ! local_mode; then
-			if $from_build_tree; then
+			if from_build_tree; then
 				do_nodes $(comma_list $(all_nodes)) "mkdir -p \
 					$SK_OM_PATH"
 				do_nodes $(comma_list $(all_nodes)) "mount \
@@ -1115,7 +1121,7 @@ init_gss() {
 	fi
 
 	if [ -n "$LGSS_KEYRING_DEBUG" ] && \
-	       ( local_mode || $from_build_tree ); then
+	       ( local_mode || from_build_tree ); then
 		lctl set_param -n \
 		     sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG
 	elif [ -n "$LGSS_KEYRING_DEBUG" ]; then
@@ -1134,16 +1140,6 @@ cleanup_gss() {
 
 cleanup_sk() {
 	if $GSS_SK; then
-		case $LUSTRE in
-		/usr/lib/lustre/* | /usr/lib64/lustre/* | /usr/lib/lustre | \
-		/usr/lib64/lustre )
-			from_build_tree=false
-			;;
-		*)
-			from_build_tree=true
-			;;
-		esac
-
 		if $SK_S2S; then
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNM"
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNMCLI"
@@ -1156,7 +1152,7 @@ cleanup_sk() {
 			$SK_PATH/$FSNAME*.key $SK_PATH/nodemap/$FSNAME*.key"
 		do_nodes $(comma_list $(all_nodes)) "keyctl show | \
 		  awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
-		if $from_build_tree; then
+		if from_build_tree; then
 			# Remove the mount and clean up the files we added to
 			# SK_PATH
 			do_nodes $(comma_list $(all_nodes)) "while grep -q \

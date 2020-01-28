@@ -2978,6 +2978,29 @@ test_140b() {
 }
 run_test 140b "local mount is excluded from recovery"
 
+test_141() {
+	local oldc
+	local newc
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	combined_mgs_mds || skip "needs combined MGS/MDT"
+	( local_mode || from_build_tree ) &&
+		skip "cannot run in local mode or from build tree"
+
+	# some get_param have a bug to handle dot in param name
+	do_rpc_nodes $(facet_active_host $SINGLEMDS) cancel_lru_locks MGC
+	oldc=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		'ldlm.namespaces.MGC*.lock_count')
+	fail $SINGLEMDS
+	do_rpc_nodes $(facet_active_host $SINGLEMDS) cancel_lru_locks MGC
+	newc=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		'ldlm.namespaces.MGC*.lock_count')
+
+	[ $oldc -eq $newc ] || error "mgc lost locks ($oldc != $newc)"
+	return 0
+}
+run_test 141 "do not lose locks on MGS restart"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
