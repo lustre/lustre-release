@@ -637,6 +637,7 @@ test_22a () {
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 
 	fail mds$((MDTIDX + 1))
 	wait $CLIENT_PID || error "lfs mkdir failed"
@@ -663,6 +664,7 @@ test_22b () {
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
 	wait $CLIENT_PID || error "lfs mkdir failed"
@@ -693,6 +695,7 @@ test_22c () {
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
 	fail mds$MDTIDX
@@ -720,6 +723,7 @@ test_22d () {
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
@@ -764,6 +768,7 @@ test_23a () {
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	local CLIENT_PID=$!
+	sleep 1
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
 
 	fail mds$((MDTIDX + 1))
@@ -793,6 +798,7 @@ test_23b () {
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	local CLIENT_PID=$!
+	sleep 1
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
@@ -827,6 +833,7 @@ test_23c () {
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0
 
 	fail mds${MDTIDX}
@@ -856,6 +863,7 @@ test_23d () {
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
+	sleep 1
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
