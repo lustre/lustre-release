@@ -27771,8 +27771,8 @@ test_803a() {
 			error "Fail to create $DIR/$tdir/dir${idx}"
 	done
 
-	sync; sleep 3
 	wait_delete_completed # ensure old test cleanups are finished
+	sleep 3
 	echo "before create:"
 	$LFS df -i $MOUNT
 	local before_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
@@ -27782,7 +27782,9 @@ test_803a() {
 			error "Fail to create $DIR/$tdir/foo$i"
 	done
 
-	sync; sleep 3
+	# sync ZFS-on-MDS to refresh statfs data
+	wait_zfs_commit mds1
+	sleep 3
 	echo "after create:"
 	$LFS df -i $MOUNT
 	local after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
@@ -27796,8 +27798,10 @@ test_803a() {
 			error "Fail to remove $DIR/$tdir/foo$i"
 	done
 
-	sleep 3 # avoid MDT return cached statfs
+	# sync ZFS-on-MDS to refresh statfs data
+	wait_zfs_commit mds1
 	wait_delete_completed
+	sleep 3 # avoid MDT return cached statfs
 	echo "after unlink:"
 	$LFS df -i $MOUNT
 	after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
