@@ -1207,9 +1207,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	struct out_read_reply *orr;
 	struct ptlrpc_bulk_desc *desc;
 	struct object_update_reply *reply;
-	__u32 left_size;
-	int nbufs;
-	int i;
+	int pages;
 	int rc;
 	ENTRY;
 
@@ -1237,26 +1235,18 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		GOTO(out_update, rc);
 
-	nbufs = (rbuf->lb_len + OUT_BULK_BUFFER_SIZE - 1) /
-					OUT_BULK_BUFFER_SIZE;
+	/* First *and* last might be partial pages, hence +1 */
+	pages = DIV_ROUND_UP(rbuf->lb_len, PAGE_SIZE) + 1;
+
 	/* allocate bulk descriptor */
-	desc = ptlrpc_prep_bulk_imp(req, nbufs, 1,
-				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KVEC,
-				    MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
+	desc = ptlrpc_prep_bulk_imp(req, pages, 1,
+				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
+				    MDS_BULK_PORTAL,
+				    &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	/* split the buffer into small chunk size */
-	left_size = rbuf->lb_len;
-	for (i = 0; i < nbufs; i++) {
-		int read_size;
-
-		read_size = left_size > OUT_BULK_BUFFER_SIZE ?
-				OUT_BULK_BUFFER_SIZE : left_size;
-		desc->bd_frag_ops->add_iov_frag(desc, ptr, read_size);
-
-		ptr += read_size;
-	}
+	desc->bd_frag_ops->add_iov_frag(desc, ptr, rbuf->lb_len);
 
 	osp_set_req_replay(osp, req);
 	req->rq_bulk_read = 1;
