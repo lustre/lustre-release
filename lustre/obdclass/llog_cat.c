@@ -396,9 +396,16 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 				      cgl->lgl_ogen, logid->lgl_ogen);
 				continue;
 			}
+			*res = llog_handle_get(loghandle);
+			if (!*res) {
+				CERROR("%s: log "DFID" refcount is zero!\n",
+				       loghandle->lgh_ctxt->loc_obd->obd_name,
+				       PFID(&logid->lgl_oi.oi_fid));
+				continue;
+			}
 			loghandle->u.phd.phd_cat_handle = cathandle;
 			up_write(&cathandle->lgh_lock);
-			GOTO(out, rc = 0);
+			RETURN(rc);
 		}
 	}
 	up_write(&cathandle->lgh_lock);
@@ -415,10 +422,12 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN | fmt, NULL);
 	if (rc < 0) {
 		llog_close(env, loghandle);
-		loghandle = NULL;
+		*res = NULL;
 		RETURN(rc);
 	}
 
+	*res = llog_handle_get(loghandle);
+	LASSERT(*res);
 	down_write(&cathandle->lgh_lock);
 	list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 	up_write(&cathandle->lgh_lock);
@@ -427,11 +436,7 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 	loghandle->u.phd.phd_cookie.lgc_lgl = cathandle->lgh_id;
 	loghandle->u.phd.phd_cookie.lgc_index =
 				loghandle->lgh_hdr->llh_cat_idx;
-	EXIT;
-out:
-	llog_handle_get(loghandle);
-	*res = loghandle;
-	return 0;
+	RETURN(0);
 }
 
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
@@ -727,7 +732,7 @@ int llog_cat_cancel_arr_rec(const struct lu_env *env,
 		       cathandle->lgh_ctxt->loc_obd->obd_name,
 		       PFID(&lgl->lgl_oi.oi_fid), lgl->lgl_ogen, rc);
 
-		llog_handle_put(loghandle);
+		llog_handle_put(env, loghandle);
 		RETURN(rc);
 	}
 
@@ -743,7 +748,7 @@ int llog_cat_cancel_arr_rec(const struct lu_env *env,
 		rc = 0;
 
 	}
-	llog_handle_put(loghandle);
+	llog_handle_put(env, loghandle);
 
 	if (rc)
 		CERROR("%s: fail to cancel %d llog-records: rc = %d\n",
@@ -888,7 +893,7 @@ out:
 	}
 
 	if (llh)
-		llog_handle_put(llh);
+		llog_handle_put(env, llh);
 
 	RETURN(rc);
 }
@@ -993,7 +998,7 @@ static int llog_cat_size_cb(const struct lu_env *env,
 	}
 
 	if (llh != NULL)
-		llog_handle_put(llh);
+		llog_handle_put(env, llh);
 
 	RETURN(0);
 }
@@ -1060,7 +1065,7 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 		rc = llog_cat_cleanup(env, cat_llh, llh,
 				      llh->u.phd.phd_cookie.lgc_index);
 
-	llog_handle_put(llh);
+	llog_handle_put(env, llh);
 	RETURN(rc);
 }
 

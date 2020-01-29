@@ -283,9 +283,10 @@ struct llog_handle {
 	char			*lgh_name;
 	void			*private_data;
 	struct llog_operations	*lgh_logops;
-	atomic_t		 lgh_refcount;
+	refcount_t		 lgh_refcount;
 
 	int			lgh_max_size;
+	bool			lgh_destroyed;
 };
 
 /* llog_osd.c */
