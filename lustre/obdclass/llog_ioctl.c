@@ -167,7 +167,7 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 			RETURN(rc);
 		}
 		rc = llog_process(env, loghandle, llog_check_cb, NULL, NULL);
-		llog_handle_put(loghandle);
+		llog_handle_put(env, loghandle);
 	} else {
 		bool ok;
 
@@ -292,7 +292,7 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 	}
 	llog_cat_cleanup(env, cat, log, log->u.phd.phd_cookie.lgc_index);
 out:
-	llog_handle_put(log);
+	llog_handle_put(env, log);
 	RETURN(rc);
 
 }

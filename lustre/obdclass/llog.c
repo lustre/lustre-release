@@ -91,16 +91,30 @@ out:
 	OBD_FREE_PTR(loghandle);
 }
 
-void llog_handle_get(struct llog_handle *loghandle)
+struct llog_handle *llog_handle_get(struct llog_handle *loghandle)
 {
-	atomic_inc(&loghandle->lgh_refcount);
+	if (atomic_inc_not_zero(&loghandle->lgh_refcount))
+		return loghandle;
+	return NULL;
 }
 
-void llog_handle_put(struct llog_handle *loghandle)
+int llog_handle_put(const struct lu_env *env, struct llog_handle *loghandle)
 {
-	LASSERT(atomic_read(&loghandle->lgh_refcount) > 0);
-	if (atomic_dec_and_test(&loghandle->lgh_refcount))
+	int rc = 0;
+
+	if (atomic_dec_and_test(&loghandle->lgh_refcount)) {
+		struct llog_operations *lop;
+
+		rc = llog_handle2ops(loghandle, &lop);
+		if (!rc) {
+			if (lop->lop_close)
+				rc = lop->lop_close(env, loghandle);
+			else
+				rc = -EOPNOTSUPP;
+		}
 		llog_free_handle(loghandle);
+	}
+	return rc;
 }
 
 static int llog_declare_destroy(const struct lu_env *env,
@@ -137,7 +151,7 @@ int llog_trans_destroy(const struct lu_env *env, struct llog_handle *handle,
 		RETURN(-EOPNOTSUPP);
 
 	LASSERT(handle->lgh_obj != NULL);
-	if (!dt_object_exists(handle->lgh_obj))
+	if (!llog_exist(handle))
 		RETURN(0);
 
 	rc = lop->lop_destroy(env, handle, th);
@@ -166,7 +180,7 @@ int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 		RETURN(rc);
 	}
 
-	if (!dt_object_exists(handle->lgh_obj))
+	if (!llog_exist(handle))
 		RETURN(0);
 
 	dt = lu2dt_dev(handle->lgh_obj->do_lu.lo_dev);
@@ -1284,20 +1298,7 @@ EXPORT_SYMBOL(llog_open);
 
 int llog_close(const struct lu_env *env, struct llog_handle *loghandle)
 {
-	struct llog_operations	*lop;
-	int			 rc;
-
-	ENTRY;
-
-	rc = llog_handle2ops(loghandle, &lop);
-	if (rc)
-		GOTO(out, rc);
-	if (lop->lop_close == NULL)
-		GOTO(out, rc = -EOPNOTSUPP);
-	rc = lop->lop_close(env, loghandle);
-out:
-	llog_handle_put(loghandle);
-	RETURN(rc);
+	return llog_handle_put(env, loghandle);
 }
 EXPORT_SYMBOL(llog_close);
 
