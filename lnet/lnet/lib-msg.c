@@ -939,7 +939,7 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 	LASSERT(md->md_refcount >= 0);
 
 	unlink = lnet_md_unlinkable(md);
-	if (md->md_eq != NULL) {
+	if (md->md_handler) {
 		if ((md->md_flags & LNET_MD_FLAG_ABORTED) && !status) {
 			msg->msg_ev.status   = -ETIMEDOUT;
 			CDEBUG(D_NET, "md 0x%p already unlinked\n", md);
@@ -947,7 +947,7 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 			msg->msg_ev.status   = status;
 		}
 		msg->msg_ev.unlinked = unlink;
-		md->md_eq(&msg->msg_ev);
+		md->md_handler(&msg->msg_ev);
 	}
 
 	if (unlink || (md->md_refcount == 0 &&

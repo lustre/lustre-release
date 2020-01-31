@@ -572,7 +572,7 @@ void lnet_prep_send(struct lnet_msg *msg, int type,
 		    unsigned int len);
 int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
 int lnet_send_ping(lnet_nid_t dest_nid, struct lnet_handle_md *mdh, int nnis,
-		   void *user_ptr, lnet_eq_handler_t eq, bool recovery);
+		   void *user_ptr, lnet_handler_t handler, bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);

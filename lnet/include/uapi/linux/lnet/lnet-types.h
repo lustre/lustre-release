@@ -322,7 +322,7 @@ struct lnet_ping_info {
 /**
  * Objects maintained by the LNet are accessed through handles. Handle types
  * have names of the form lnet_handle_xx, where xx is one of the two letter
- * object type codes ('eq' for event queue, 'md' for memory descriptor, and
+ * object type codes ('md' for memory descriptor, and
  * 'me' for match entry). Each type of object is given a unique handle type
  * to enhance type checking.
  */
@@ -341,7 +341,7 @@ static inline void LNetInvalidateMDHandle(struct lnet_handle_md *h)
 }
 
 /**
- * Check whether eq handle \a h is invalid.
+ * Check whether handler \a h is invalid.
  *
  * \return 1 if handle is invalid, 0 if valid.
  */
@@ -405,8 +405,7 @@ enum lnet_ins_pos {
  * API functions. It should return as quickly as possible.
  */
 struct lnet_event;
-typedef void (*lnet_eq_handler_t)(struct lnet_event *event);
-#define LNET_EQ_HANDLER_NONE NULL
+typedef void (*lnet_handler_t)(struct lnet_event *event);
 
 /**
  * Defines the visible parts of a memory descriptor. Values of this type
@@ -498,7 +497,7 @@ struct lnet_md {
 	 * the memory region. If this argument is NULL operations
 	 * performed on this memory descriptor are not logged.
 	 */
-	lnet_eq_handler_t eq_handle;
+	lnet_handler_t	handler;
 	/**
 	 * The bulk MD handle which was registered to describe the buffers
 	 * either to be used to transfer data to the peer or receive data

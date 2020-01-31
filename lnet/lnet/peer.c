@@ -2999,7 +2999,7 @@ __must_hold(&lp->lp_lock)
 	nnis = max(lp->lp_data_nnis, LNET_INTERFACES_MIN);
 
 	rc = lnet_send_ping(pnid, &lp->lp_ping_mdh, nnis, lp,
-			    the_lnet.ln_dc_eq, false);
+			    the_lnet.ln_dc_handler, false);
 
 	/*
 	 * if LNetMDBind in lnet_send_ping fails we need to decrement the
@@ -3091,7 +3091,7 @@ __must_hold(&lp->lp_lock)
 	md.threshold = 2; /* Put/Ack */
 	md.max_size  = 0;
 	md.options   = 0;
-	md.eq_handle = the_lnet.ln_dc_eq;
+	md.handler   = the_lnet.ln_dc_handler;
 	md.user_ptr  = lp;
 
 	rc = LNetMDBind(md, LNET_UNLINK, &lp->lp_push_mdh);
@@ -3475,7 +3475,7 @@ static int lnet_peer_discovery(void *arg)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	the_lnet.ln_dc_eq = NULL;
+	the_lnet.ln_dc_handler = NULL;
 
 	the_lnet.ln_dc_state = LNET_DC_STATE_SHUTDOWN;
 	wake_up(&the_lnet.ln_dc_waitq);
@@ -3494,14 +3494,14 @@ int lnet_peer_discovery_start(void)
 	if (the_lnet.ln_dc_state != LNET_DC_STATE_SHUTDOWN)
 		return -EALREADY;
 
-	the_lnet.ln_dc_eq = lnet_discovery_event_handler;
+	the_lnet.ln_dc_handler = lnet_discovery_event_handler;
 	the_lnet.ln_dc_state = LNET_DC_STATE_RUNNING;
 	task = kthread_run(lnet_peer_discovery, NULL, "lnet_discovery");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("Can't start peer discovery thread: %d\n", rc);
 
-		the_lnet.ln_dc_eq = NULL;
+		the_lnet.ln_dc_handler = NULL;
 
 		the_lnet.ln_dc_state = LNET_DC_STATE_SHUTDOWN;
 	}

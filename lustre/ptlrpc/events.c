@@ -40,7 +40,7 @@
 #include <lustre_sec.h>
 #include "ptlrpc_internal.h"
 
-lnet_eq_handler_t ptlrpc_eq;
+lnet_handler_t ptlrpc_handler;
 struct percpu_ref ptlrpc_pending;
 
 /*
@@ -602,7 +602,7 @@ int ptlrpc_ni_init(void)
 	 * because we are guaranteed to get every event via callback,
 	 * so we just set EQ size to 0 to avoid overhread of serializing
 	 * enqueue/dequeue operations in LNet. */
-	ptlrpc_eq = ptlrpc_master_callback;
+	ptlrpc_handler = ptlrpc_master_callback;
 	return 0;
 }
 
