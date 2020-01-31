@@ -6618,7 +6618,7 @@ run_one_logged() {
 
 		# remove temp files between repetitions to avoid test failures
 		[ -n "$append" -a -n "$DIR" -a -n "$tdir" -a -n "$tfile" ] &&
-			rm -rf $DIR/$tdir* $DIR/$tfile*
+			rm -rvf $DIR/$tdir* $DIR/$tfile*
 		# loop around subshell so stack_trap EXIT triggers each time
 		(run_one $testnum "$testmsg") 2>&1 | tee -i $append $test_log
 		rc=${PIPESTATUS[0]}

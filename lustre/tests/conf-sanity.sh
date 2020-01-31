@@ -8449,6 +8449,8 @@ test_112() {
 	(( $val == 1 )) || error "obdfilter.$FSNAME-OST0001*.no_precreate=$val"
 
 	mount_client $MOUNT || error "mount client failed"
+	wait_osc_import_state mds1 ost1 FULL
+	wait_osc_import_state client ost1 FULL
 	wait_osc_import_state client ost2 FULL
 
 	$LFS setstripe -i 0 $DIR/$tfile.0 ||
@@ -8460,6 +8462,8 @@ test_112() {
 	sleep_maxage
 	$LFS setstripe -i 1 $DIR/$tfile.2 ||
 		error "failed to create $tfile.2 on ost1 facet"
+	# files not cleaned with ONLY_REPEAT because of client unmount below
+	rm -f $DIR/$tfile.[012]
 	stop_ost2 || error "stop ost2 facet failed"
 	cleanup
 }
