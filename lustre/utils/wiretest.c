@@ -2301,6 +2301,8 @@ void lustre_assert_wire_constants(void)
 		OBD_BRW_OVER_GRPQUOTA);
 	LASSERTF(OBD_BRW_SOFT_SYNC == 0x4000, "found 0x%.8x\n",
 		OBD_BRW_SOFT_SYNC);
+	LASSERTF(OBD_BRW_RDMA_ONLY == 0x20000, "found 0x%.8x\n",
+		 OBD_BRW_RDMA_ONLY);
 
 	/* Checks for struct ost_body */
 	LASSERTF((int)sizeof(struct ost_body) == 208, "found %lld\n",

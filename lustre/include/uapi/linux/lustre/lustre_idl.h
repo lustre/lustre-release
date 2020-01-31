@@ -1372,6 +1372,7 @@ struct hsm_state_set {
 				      * space for unstable pages; asking
 				      * it to sync quickly */
 #define OBD_BRW_OVER_PRJQUOTA 0x8000 /* Running out of project quota */
+#define OBD_BRW_RDMA_ONLY    0x20000 /* RPC contains RDMA-only pages*/
 
 #define OBD_BRW_OVER_ALLQUOTA (OBD_BRW_OVER_USRQUOTA | \
 			       OBD_BRW_OVER_GRPQUOTA | \
