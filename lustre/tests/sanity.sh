@@ -22681,8 +22681,7 @@ test_811() {
 	stop mds1
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
 
-	sleep 5
-	[[ $(do_facet mds1 pgrep orph_.*-MDD | wc -l) -eq 0 ]] ||
+	wait_update_facet mds1 "pgrep orph_.*-MDD | wc -l" "0" ||
 		error "MDD orphan cleanup thread not quit"
 }
 run_test 811 "orphan name stub can be cleaned up in startup"
