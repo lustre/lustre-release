@@ -23001,6 +23001,42 @@ test_819b() {
 }
 run_test 819b "too big niobuf in write"
 
+
+function test_820_start_ost() {
+	sleep 5
+
+	for num in $(seq $OSTCOUNT); do
+		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS
+	done
+}
+
+test_820() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+
+	mkdir $DIR/$tdir
+	umount_client $MOUNT || error "umount failed"
+	for num in $(seq $OSTCOUNT); do
+		stop ost$num
+	done
+
+	# mount client with no active OSTs
+	# so that the client can't initialize max LOV EA size
+	# from OSC notifications
+	mount_client $MOUNT || error "mount failed"
+	# delay OST starting to keep this 0 max EA size for a while
+	test_820_start_ost &
+
+	# create a directory on MDS2
+	test_mkdir -i 1 -c1 $DIR/$tdir/mds2 ||
+		error "Failed to create directory"
+	# open intent should update default EA size
+	# see mdc_update_max_ea_from_body()
+	# notice this is the very first RPC to MDS2
+	cp /etc/services $DIR/$tdir/mds2 ||
+		error "Failed to copy files to mds$n"
+}
+run_test 820 "update max EA from open intent"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

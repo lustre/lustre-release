@@ -1575,6 +1575,9 @@ again:
 		}
 	}
 
+	repbody->mbo_max_mdsize = info->mti_mdt->mdt_max_mdsize;
+	repbody->mbo_valid |= OBD_MD_FLMODEASIZE;
+
 	rc = mdt_pack_secctx_in_reply(info, child);
 	if (unlikely(rc))
 		GOTO(out_child, result = rc);
