@@ -17,8 +17,30 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT "
 if $SHARED_KEY; then
 # bug number for skipped tests: LU-9795 LU-9795
-	ALWAYS_EXCEPT+="	13      402b"
+	ALWAYS_EXCEPT+="	13      402b "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+fi
+
+# Skip tests for PPC that fail frequently
+if [[ $(uname -m) = ppc64 ]]; then
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 1a       1b       1d       1e       12c      12f "
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 12g      12h      12m      12n      12o      12p "
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 12q      21       22       23       24a      24b "
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 24d      24e      24f      25b      30c      37 "
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 57       58       90       110b     111b     113 "
+	# bug number:    LU-12251 LU-12251 LU-12251 LU-12251 LU-12251 LU-12251
+	ALWAYS_EXCEPT+=" 222b     222d     228      260a     260b     260c "
+	# bug number:    LU-12252 LU-12252 LU-12252 LU-12252 LU-12252 LU-12252
+	ALWAYS_EXCEPT+=" 220A     220a     221      222a     222c     223a "
+	# bug number:    LU-12252 LU-12252 LU-12252 LU-12252 LU-12252 LU-12252
+	ALWAYS_EXCEPT+=" 223b     224A     224a     226      227      600"
+	# bug number:    LU-12252 LU-12252 LU-12252 LU-12252 LU-12252 LU-12252
+	ALWAYS_EXCEPT+=" 601      602      603      604      605 "
 fi
 
 build_test_filter

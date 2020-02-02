@@ -12,8 +12,14 @@ init_test_env $@
 init_logging
 
 # bug number for skipped test:
-ALWAYS_EXCEPT="$SANITY_PFL_EXCEPT"
+ALWAYS_EXCEPT="$SANITY_PFL_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+# Skip tests for PPC that fail frequently
+if [[ $(uname -m) = ppc64 ]]; then
+	# bug number:    LU-13186 LU-13205 LU-13207 LU-13186
+	ALWAYS_EXCEPT+=" 14       16a      16b      17"
+fi
 
 build_test_filter
 
