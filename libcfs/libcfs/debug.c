@@ -249,7 +249,7 @@ MODULE_PARM_DESC(libcfs_panic_on_lbug, "Lustre kernel panic on LBUG");
 atomic_t libcfs_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
 
-static wait_queue_head_t debug_ctlwq;
+static DECLARE_COMPLETION(debug_complete);
 
 char libcfs_debug_file_path_arr[PATH_MAX] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
 EXPORT_SYMBOL(libcfs_debug_file_path_arr);
@@ -396,26 +396,22 @@ void libcfs_debug_dumplog_internal(void *arg)
 static int libcfs_debug_dumplog_thread(void *arg)
 {
 	libcfs_debug_dumplog_internal(arg);
-	wake_up(&debug_ctlwq);
+	complete(&debug_complete);
 	return 0;
 }
 
 void libcfs_debug_dumplog(void)
 {
-	wait_queue_entry_t wait;
 	struct task_struct *dumper;
 
 	ENTRY;
-
-	/*
-	 * we're being careful to ensure that the kernel thread is
-	 * able to set our state to running as it exits before we
-	 * get to schedule()
+	/* If a previous call was interrupted, debug_complete->done
+	 * might be elevated, and so we won't actually wait here.
+	 * So we reinit the completion to ensure we wait for
+	 * one thread to complete, though it might not be the one
+	 * we start if there are overlaping thread.
 	 */
-	init_waitqueue_entry(&wait, current);
-	set_current_state(TASK_INTERRUPTIBLE);
-	add_wait_queue(&debug_ctlwq, &wait);
-
+	reinit_completion(&debug_complete);
 	dumper = kthread_run(libcfs_debug_dumplog_thread,
 			     (void *)(long)current_pid(),
 			     "libcfs_debug_dumper");
@@ -423,11 +419,7 @@ void libcfs_debug_dumplog(void)
 		pr_err("LustreError: cannot start log dump thread: rc = %ld\n",
 		       PTR_ERR(dumper));
 	else
-		schedule();
-
-	/* be sure to teardown if cfs_create_thread() failed */
-	remove_wait_queue(&debug_ctlwq, &wait);
-	set_current_state(TASK_RUNNING);
+		wait_for_completion_interruptible(&debug_complete);
 }
 EXPORT_SYMBOL(libcfs_debug_dumplog);
 
@@ -435,8 +427,6 @@ int libcfs_debug_init(unsigned long bufsize)
 {
 	int rc = 0;
 	unsigned int max = libcfs_debug_mb;
-
-	init_waitqueue_head(&debug_ctlwq);
 
 	if (libcfs_console_max_delay <= 0 || /* not set by user or */
 	    libcfs_console_min_delay <= 0 || /* set to invalid values */
