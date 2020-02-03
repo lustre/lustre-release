@@ -1129,9 +1129,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 
 	OBD_ALLOC_PTR(nodemap);
 	if (nodemap == NULL) {
-		CERROR("cannot allocate memory (%zu bytes)"
-		       "for nodemap '%s'\n", sizeof(*nodemap),
-		       name);
+		CERROR("cannot allocate memory (%zu bytes) for nodemap '%s'\n",
+		       sizeof(*nodemap), name);
 		GOTO(out, rc = -ENOMEM);
 	}
 

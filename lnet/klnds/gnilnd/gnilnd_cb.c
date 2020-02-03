@@ -548,8 +548,7 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 			 * which isn't allowed */
 			if ((kiov[i].kiov_offset != 0 && i > 0) ||
 			    (kiov[i].kiov_offset + kiov[i].kiov_len != PAGE_SIZE && i < niov - 1)) {
-				CNETERR("Can't make payload contiguous in I/O VM:"
-				       "page %d, offset %u, nob %u, kiov_offset %u kiov_len %u \n",
+				CNETERR("Can't make payload contiguous in I/O VM: page %d, offset %u, nob %u, kiov_offset %u, kiov_len %u\n",
 				       i, offset, nob, kiov->kiov_offset, kiov->kiov_len);
 				RETURN(-EINVAL);
 			}
@@ -713,8 +712,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 		if ((phys != tx->tx_phys) &&
 		    ((kiov->kiov_offset != 0) ||
 		     ((kiov->kiov_len < PAGE_SIZE) && (nob > kiov->kiov_len)))) {
-			CERROR("Can't make payload contiguous in I/O VM:"
-			       "page %d, offset %u, nob %u, kiov_offset %u kiov_len %u \n",
+			CERROR("Can't make payload contiguous in I/O VM: page %d, offset %u, nob %u, kiov_offset %u, kiov_len %u\n",
 			       (int)(phys - tx->tx_phys),
 			       offset, nob, kiov->kiov_offset, kiov->kiov_len);
 			rc = -EINVAL;

@@ -752,9 +752,9 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	if (d->opd_pre == NULL)
 		RETURN(0);
 
-	CDEBUG(D_OTHER, "%s: %llu blocks, %llu free, %llu avail, "
-	       "%u reserved mb low, %u reserved mb high,"
-	       "%llu files, %llu free files\n", d->opd_obd->obd_name,
+	CDEBUG(D_OTHER,
+	       "%s: %llu blocks, %llu free, %llu avail, %u reserved mb low, %u reserved mb high, %llu files, %llu free files\n",
+	       d->opd_obd->obd_name,
 	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail,
 	       d->opd_reserved_mb_low, d->opd_reserved_mb_high,
 	       sfs->os_files, sfs->os_ffree);

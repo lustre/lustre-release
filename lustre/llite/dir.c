@@ -329,8 +329,9 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	else
 		pos = 0;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) pos/size"
-	       "%lu/%llu 32bit_api %d\n", PFID(ll_inode2fid(inode)),
+	CDEBUG(D_VFSTRACE,
+	       "VFS Op:inode="DFID"(%p) pos/size%lu/%llu 32bit_api %d\n",
+	       PFID(ll_inode2fid(inode)),
 	       inode, (unsigned long)pos, i_size_read(inode), api32);
 
 	if (pos == MDS_DIR_END_OFF)

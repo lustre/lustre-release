@@ -988,8 +988,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	int rc = 0;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s, dir="DFID"(%p), file %p,"
-			   "open_flags %x, mode %x opened %d\n",
+	CDEBUG(D_VFSTRACE,
+	       "VFS Op:name=%.*s, dir="DFID"(%p), file %p, open_flags %x, mode %x opened %d\n",
 	       dentry->d_name.len, dentry->d_name.name,
 	       PFID(ll_inode2fid(dir)), dir, file, open_flags, mode,
 	       ll_is_opened(opened, file));

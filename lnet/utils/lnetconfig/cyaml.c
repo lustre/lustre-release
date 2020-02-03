@@ -1207,8 +1207,7 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 		rc = dispatch_tbl[token.type](&token, &tree);
 		if (rc != CYAML_ERROR_NONE) {
 			snprintf(err_str, sizeof(err_str),
-				"Failed to handle token:%d %s"
-				"[state=%d, rc=%d]",
+				"Failed to handle token:%d %s [state=%d, rc=%d]",
 				 token.type, token_type_string[token.type],
 				 tree.state, rc);
 			cYAML_build_error(-1, -1, "yaml", "builder",

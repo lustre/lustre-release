@@ -1154,8 +1154,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
 		bspace = toqb(bspace * 512);
 
-		CDEBUG(D_QUOTA, "%s: enforce quota on UID %u, GID %u,"
-		       "the quota space is %lld (%u)\n", osd->od_svname,
+		CDEBUG(D_QUOTA,
+		       "%s: enforce quota on UID %u, GID %u, the quota space is %lld (%u)\n",
+		       osd->od_svname,
 		       attr->la_uid, attr->la_gid, bspace, blksize);
 	}
 

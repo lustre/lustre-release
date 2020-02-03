@@ -140,8 +140,9 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 	now = ktime_get_real_seconds();
 
 	lqe_write_lock(lqe);
-	LQUOTA_DEBUG(lqe, "changing quota settings valid:%x hard:%llu soft:"
-		     "%llu time:%llu", valid, hard, soft, time);
+	LQUOTA_DEBUG(lqe,
+		     "changing quota settings valid:%x hard:%llu soft:%llu time:%llu",
+		     valid, hard, soft, time);
 
 	if (is_default && lqe->lqe_id.qid_uid != 0) {
 		LQUOTA_DEBUG(lqe, "set qid %llu to use default quota setting",
@@ -508,8 +509,8 @@ int qmt_dqacq0(const struct lu_env *env, struct lquota_entry *lqe,
 		if (slv_granted < qb_count ||
 		    lqe->lqe_granted < qb_count) {
 			/* can't release more than granted */
-			LQUOTA_ERROR(lqe, "Release too much! uuid:%s release:"
-				     "%llu granted:%llu, total:%llu",
+			LQUOTA_ERROR(lqe,
+				     "Release too much! uuid:%s release:%llu granted:%llu, total:%llu",
 				     obd_uuid2str(uuid), qb_count,
 				     slv_granted, lqe->lqe_granted);
 			GOTO(out_locked, rc = -EINVAL);

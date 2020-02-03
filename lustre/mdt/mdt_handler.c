@@ -3104,10 +3104,9 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 			rc = lu_env_init(&env, LCT_MD_THREAD);
 			if (unlikely(rc != 0)) {
-				CWARN("%s: lu_env initialization failed, object"
-				      "%p "DFID" is leaked!\n",
+				CWARN("%s: lu_env initialization failed, object %p "DFID" is leaked!: rc = %d\n",
 				      obd->obd_name, mo,
-				      PFID(mdt_object_fid(mo)));
+				      PFID(mdt_object_fid(mo)), rc);
 				RETURN(rc);
 			}
 

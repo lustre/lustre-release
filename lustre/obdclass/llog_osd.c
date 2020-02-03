@@ -910,8 +910,9 @@ static int llog_osd_next_block(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
-	CDEBUG(D_OTHER, "looking for log index %u (cur idx %u off"
-	       "%llu), size %llu\n", next_idx, *cur_idx,
+	CDEBUG(D_OTHER,
+	       "looking for log index %u (cur idx %u off %llu), size %llu\n",
+	       next_idx, *cur_idx,
 	       *cur_offset, lgi->lgi_attr.la_size);
 
 	while (*cur_offset < lgi->lgi_attr.la_size) {

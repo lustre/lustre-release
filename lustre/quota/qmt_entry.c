@@ -432,8 +432,9 @@ int qmt_slv_write(const struct lu_env *env, struct thandle *th,
 	rc = lquota_disk_write(env, th, slv_obj, &lqe->lqe_id,
 			       (struct dt_rec *)rec, flags, ver);
 	if (rc) {
-		LQUOTA_ERROR(lqe, "failed to update slave index "DFID" granted:"
-			     "%llu", PFID(lu_object_fid(&slv_obj->do_lu)),
+		LQUOTA_ERROR(lqe,
+			     "failed to update slave index "DFID" granted:%llu",
+			     PFID(lu_object_fid(&slv_obj->do_lu)),
 			     granted);
 		RETURN(rc);
 	}

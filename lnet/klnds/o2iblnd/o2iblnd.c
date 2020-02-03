@@ -2171,9 +2171,8 @@ again:
 		/* another thread is allocating a new pool */
 		spin_unlock(&ps->ps_lock);
 		trips++;
-                CDEBUG(D_NET, "Another thread is allocating new "
-		       "%s pool, waiting %d HZs for her to complete."
-		       "trips = %d\n",
+		CDEBUG(D_NET,
+		       "Another thread is allocating new %s pool, waiting %d jiffies for her to complete. trips = %d\n",
 		       ps->ps_name, interval, trips);
 
 		schedule_timeout_interruptible(interval);

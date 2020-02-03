@@ -221,8 +221,8 @@ static int seq_client_alloc_seq(const struct lu_env *env,
                 rc = seq_client_alloc_meta(env, seq);
                 if (rc) {
 			if (rc != -EINPROGRESS)
-				CERROR("%s: Can't allocate new meta-sequence,"
-				       "rc = %d\n", seq->lcs_name, rc);
+				CERROR("%s: Cannot allocate new meta-sequence: rc = %d\n",
+				       seq->lcs_name, rc);
                         RETURN(rc);
                 } else {
                         CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",

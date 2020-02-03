@@ -3036,8 +3036,8 @@ static int ll_ladvise_sanity(struct inode *inode,
 
 	if (advice > LU_LADVISE_MAX || advice == LU_LADVISE_INVALID) {
 		rc = -EINVAL;
-		CDEBUG(D_VFSTRACE, "%s: advice with value '%d' not recognized,"
-		       "last supported advice is %s (value '%d'): rc = %d\n",
+		CDEBUG(D_VFSTRACE,
+		       "%s: advice with value '%d' not recognized, last supported advice is %s (value '%d'): rc = %d\n",
 		       sbi->ll_fsname, advice,
 		       ladvise_names[LU_LADVISE_MAX-1], LU_LADVISE_MAX-1, rc);
 		GOTO(out, rc);
@@ -4100,8 +4100,8 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), start %lld, end %lld,"
-	       "datasync %d\n",
+	CDEBUG(D_VFSTRACE,
+	       "VFS Op:inode="DFID"(%p), start %lld, end %lld, datasync %d\n",
 	       PFID(ll_inode2fid(inode)), inode, start, end, datasync);
 
 	/* fsync's caller has already called _fdata{sync,write}, we want

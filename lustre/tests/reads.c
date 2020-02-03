@@ -51,10 +51,7 @@ static void usage(void)
 {
 	printf("reads: read random or stride chunks of a file.\n");
 	printf("Usage:\n\n");
-	printf("reads -f <filename> -s <filesize> -b <buffersize>"
-	       "-a <adjacent reads> [-v] [-h] [-C] [-l <stride_length> ] "
-	       "[ -o <stride_offset> ] [-S <seed>] [-n <iterations>]"
-	       "[-w <width>] [-t <timelimit>]\n");
+	printf("reads -f <filename> -s <filesize> -b <buffersize> -a <adjacent reads> [-v] [-h] [-C] [-l <stride_length> ] [ -o <stride_offset> ] [-S <seed>] [-n <iterations>][-w <width>] [-t <timelimit>]\n");
 }
 
 enum {

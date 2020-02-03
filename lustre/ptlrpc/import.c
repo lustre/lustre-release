@@ -1319,8 +1319,8 @@ finish:
 	ptlrpc_prepare_replay(imp);
 	rc = ptlrpc_import_recovery_state_machine(imp);
 	if (rc == -ENOTCONN) {
-		CDEBUG(D_HA, "evicted/aborted by %s@%s during recovery;"
-		       "invalidating and reconnecting\n",
+		CDEBUG(D_HA,
+		       "evicted/aborted by %s@%s during recovery; invalidating and reconnecting\n",
 		       obd2cli_tgt(imp->imp_obd),
 		       imp->imp_connection->c_remote_uuid.uuid);
 		ptlrpc_connect_import(imp);

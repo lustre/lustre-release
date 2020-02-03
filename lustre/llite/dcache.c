@@ -194,8 +194,9 @@ void ll_intent_drop_lock(struct lookup_intent *it)
 		if (it->it_remote_lock_mode != 0) {
 			handle.cookie = it->it_remote_lock_handle;
 
-			CDEBUG(D_DLMTRACE, "releasing remote lock with cookie"
-			       "%#llx from it %p\n", handle.cookie, it);
+			CDEBUG(D_DLMTRACE,
+			       "releasing remote lock with cookie %#llx from it %p\n",
+			       handle.cookie, it);
 			ldlm_lock_decref(&handle,
 					 it->it_remote_lock_mode);
 			it->it_remote_lock_mode = 0;

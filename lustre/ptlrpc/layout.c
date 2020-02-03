@@ -2189,8 +2189,9 @@ void __req_capsule_dump(struct req_capsule *pill, enum req_location loc)
 			 * have a specific dumper
 			 */
 			len = req_capsule_get_size(pill, field, loc);
-			CDEBUG(D_RPCTRACE, "Field %s has no dumper function;"
-				"field size is %u\n", field->rmf_name, len);
+			CDEBUG(D_RPCTRACE,
+			       "Field %s has no dumper function; field size is %u\n",
+			       field->rmf_name, len);
 		} else {
 			/* It's dumping side-effect that we're interested in */
 			(void) __req_capsule_get(pill, field, loc, NULL, 1);
