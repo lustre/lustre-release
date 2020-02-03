@@ -76,7 +76,7 @@ static void import_set_state_nolock(struct obd_import *imp,
 	}
 
 	/* A CLOSED import should remain so. */
-	if (state == LUSTRE_IMP_CLOSED)
+	if (imp->imp_state == LUSTRE_IMP_CLOSED)
 		return;
 
 	if (imp->imp_state != LUSTRE_IMP_NEW) {
