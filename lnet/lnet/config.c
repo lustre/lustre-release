@@ -203,9 +203,10 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 			goto failed;
 		}
 
-		memcpy(array, net->net_cpts, net->net_ncpts);
+		memcpy(array, net->net_cpts,
+		       net->net_ncpts * sizeof(*net->net_cpts));
 		loc = array + net->net_ncpts;
-		memcpy(loc, added_cpts, j);
+		memcpy(loc, added_cpts, j * sizeof(*net->net_cpts));
 
 		LIBCFS_FREE(net->net_cpts, sizeof(*net->net_cpts) *
 			    net->net_ncpts);
