@@ -48,8 +48,6 @@ static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
 
 char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 
-static DECLARE_RWSEM(cfs_tracefile_sem);
-
 int cfs_tracefile_init_arch(void)
 {
 	int i;
@@ -108,26 +106,6 @@ void cfs_tracefile_fini_arch(void)
 		kfree(cfs_trace_data[i]);
 		cfs_trace_data[i] = NULL;
 	}
-}
-
-void cfs_tracefile_read_lock(void)
-{
-	down_read(&cfs_tracefile_sem);
-}
-
-void cfs_tracefile_read_unlock(void)
-{
-	up_read(&cfs_tracefile_sem);
-}
-
-void cfs_tracefile_write_lock(void)
-{
-	down_write(&cfs_tracefile_sem);
-}
-
-void cfs_tracefile_write_unlock(void)
-{
-	up_write(&cfs_tracefile_sem);
 }
 
 enum cfs_trace_buf_type cfs_trace_buf_idx_get(void)

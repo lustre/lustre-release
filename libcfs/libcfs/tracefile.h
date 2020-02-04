@@ -58,11 +58,6 @@ extern void libcfs_run_debug_log_upcall(char *file);
 int  cfs_tracefile_init_arch(void);
 void cfs_tracefile_fini_arch(void);
 
-void cfs_tracefile_read_lock(void);
-void cfs_tracefile_read_unlock(void);
-void cfs_tracefile_write_lock(void);
-void cfs_tracefile_write_unlock(void);
-
 int cfs_tracefile_dump_all_pages(char *filename);
 void cfs_trace_debug_print(void);
 void cfs_trace_flush_pages(void);
