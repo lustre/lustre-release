@@ -245,7 +245,7 @@ static inline struct vvp_page *cl2vvp_page(const struct cl_page_slice *slice)
 
 static inline pgoff_t vvp_index(struct vvp_page *vpg)
 {
-	return vpg->vpg_cl.cpl_index;
+	return vpg->vpg_page->index;
 }
 
 struct vvp_device {

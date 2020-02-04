@@ -1171,13 +1171,12 @@ EXPORT_SYMBOL(cl_page_size);
  * \see cl_lock_slice_add(), cl_req_slice_add(), cl_io_slice_add()
  */
 void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
-		       struct cl_object *obj, pgoff_t index,
+		       struct cl_object *obj,
 		       const struct cl_page_operations *ops)
 {
 	ENTRY;
 	list_add_tail(&slice->cpl_linkage, &page->cp_layers);
 	slice->cpl_obj  = obj;
-	slice->cpl_index = index;
 	slice->cpl_ops  = ops;
 	slice->cpl_page = page;
 	EXIT;

@@ -822,7 +822,7 @@ static inline struct osc_page *oap2osc(struct osc_async_page *oap)
 
 static inline pgoff_t osc_index(struct osc_page *opg)
 {
-	return opg->ops_cl.cpl_index;
+	return opg->ops_cl.cpl_page->cp_osc_index;
 }
 
 static inline struct cl_page *oap2cl_page(struct osc_async_page *oap)

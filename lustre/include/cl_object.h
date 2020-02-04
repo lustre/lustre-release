@@ -765,6 +765,7 @@ struct cl_page {
 	struct cl_sync_io       *cp_sync_io;
 	/** layout_entry + stripe index, composed using lov_comp_index() */
 	unsigned int		cp_lov_index;
+	pgoff_t			cp_osc_index;
 };
 
 /**
@@ -774,7 +775,6 @@ struct cl_page {
  */
 struct cl_page_slice {
         struct cl_page                  *cpl_page;
-	pgoff_t				 cpl_index;
         /**
          * Object slice corresponding to this page slice. Immutable after
          * creation.
@@ -2071,7 +2071,7 @@ static inline void cl_device_fini(struct cl_device *d)
 }
 
 void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
-		       struct cl_object *obj, pgoff_t index,
+		       struct cl_object *obj,
 		       const struct cl_page_operations *ops);
 void cl_lock_slice_add(struct cl_lock *lock, struct cl_lock_slice *slice,
                        struct cl_object *obj,

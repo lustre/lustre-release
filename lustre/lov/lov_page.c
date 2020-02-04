@@ -98,7 +98,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 
 	page->cp_lov_index = lov_comp_index(entry, stripe);
 	lpg->lps_layout_gen = loo->lo_lsm->lsm_layout_gen;
-	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_comp_page_ops);
+	cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_comp_page_ops);
 
 	sub = lov_sub_get(env, lio, page->cp_lov_index);
 	if (IS_ERR(sub))
@@ -140,7 +140,7 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	page->cp_lov_index = ~0;
-	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_empty_page_ops);
+	cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_empty_page_ops);
 	addr = kmap(page->cp_vmpage);
 	memset(addr, 0, cl_page_size(obj));
 	kunmap(page->cp_vmpage);

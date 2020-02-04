@@ -427,7 +427,7 @@ static int echo_page_init(const struct lu_env *env, struct cl_object *obj,
 	 * wait_on_bit() interface to wait for the bit to be clear.
 	 */
 	ep->ep_lock = 0;
-	cl_page_slice_add(page, &ep->ep_cl, obj, index, &echo_page_ops);
+	cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
 	atomic_inc(&eco->eo_npages);
 	RETURN(0);
 }
