@@ -1848,6 +1848,117 @@ STRIPE OPTIONS:
 /mnt/lustre/file</screen>
     </section>
   </section>
+
+  <section xml:id="foreign_layout" condition='l2D'>
+    <title>
+      <indexterm><primary>striping</primary><secondary>Foreign</secondary>
+      </indexterm>Foreign Layout</title>
+    <para>The Lustre Foreign Layout feature is an extension of both the
+    LOV and LMV formats which allows the creation of empty files and directories
+    with the necessary specifications to point to corresponding objects outside
+    from Lustre namespace.</para>
+    <para>The new LOV/LMV foreign internal format can be represented as:</para>
+    <figure  xml:id="managinglayout.fig.foreign_format">
+      <title>LOV/LMV foreign format</title>
+      <mediaobject>
+        <imageobject>
+          <imagedata scalefit="1" width="100%"
+          fileref="figures/Foreign_Format.png" />
+        </imageobject>
+        <textobject>
+          <phrase>LOV/LMV foreign format</phrase>
+        </textobject>
+      </mediaobject>
+    </figure>
+    <section>
+      <title><literal>lfs set[dir]stripe</literal></title>
+      <para>The <literal>lfs set[dir]stripe</literal> commands are used to
+      create files or directories with foreign layouts, by calling the
+      corresponding API, itself invoking the appropriate ioctl().</para>
+      <section>
+        <title>Create a Foreign file/dir</title>
+        <para><emphasis role="bold">Command</emphasis></para>
+	<screen>lfs set[dir]stripe \
+--foreign[=&lt;foreign_type&gt;] --xattr|-x &lt;layout_string&gt; \
+[--flags &lt;hex_bitmask&gt;] [--mode &lt;mode_bits&gt;] \
+<replaceable>{file,dir}name</replaceable></screen>
+        <para>Both the <literal>--foreign</literal> and
+        <literal>--xattr|-x</literal> options are mandatory.
+        The <literal>&lt;foreign_type&gt;</literal> (default is "none", meaning
+        no special behavior), and both <literal>--flags</literal> and
+        <literal>--mode</literal> (default is O666) options are optional.</para>
+        <para><emphasis role="bold">Example</emphasis></para>
+        <para>The following command creates a foreign file of "none" type and
+        with "foo@bar" LOV content and specific mode and flags:
+        <screen># lfs setstripe --foreign=none --flags=0xda08 --mode=0640 \
+--xattr=foo@bar /mnt/lustre/file</screen>
+        <figure  xml:id="managinglayout.fig.foreign_createfile">
+          <title>Example: create a foreign file</title>
+          <mediaobject>
+            <imageobject>
+              <imagedata scalefit="1" width="100%" align="center"
+              fileref="figures/Foreign_Createfile.png" />
+            </imageobject>
+            <textobject>
+              <phrase>Example: create a foreign file</phrase>
+            </textobject>
+          </mediaobject>
+        </figure>
+        </para>
+      </section>
+    </section>
+    <section>
+      <title><literal>lfs get[dir]stripe</literal></title>
+      <para><literal>lfs get[dir]stripe</literal> commands can be used to
+      retrieve foreign LOV/LMV informations and content.</para>
+      <para><emphasis role="bold">Command</emphasis></para>
+      <screen>lfs get[dir]stripe [-v] <replaceable>filename</replaceable></screen>
+      <para><emphasis role="bold">List foreign layout information
+      </emphasis></para>
+      <para>Suppose we already have a foreign file
+        <literal>/mnt/lustre/file</literal>, created by the following command:</para>
+      <screen># lfs setstripe --foreign=none --flags=0xda08 --mode=0640 \
+--xattr=foo@bar /mnt/lustre/file</screen>
+      <para>The full foreign layout informations can be listed using the
+      following command:</para>
+      <screen># lfs getstripe -v /mnt/lustre/file
+/mnt/lustre/file
+  lfm_magic: 0x0BD70BD0
+  lfm_length: 7
+  lfm_type: none
+  lfm_flags: 0x0000DA08
+  lfm_value: foo@bar
+      </screen>
+      <note><para>As you can see the <literal>lfm_length</literal> field
+      value is the characters number in the variable length
+      <literal>lfm_value</literal> field.</para></note>
+    </section>
+    <section>
+        <title><literal>lfs find</literal></title>
+	<para><literal>lfs find</literal> commands can be used to search for
+        all the foreign files/directories or those that match the given
+        selection paremeters.</para>
+	<screen>lfs find
+[[!] --foreign[=&lt;foreign_type&gt;]</screen>
+        <para>The <literal>--foreign[=&lt;foreign_type&gt;]</literal> option
+        has been added to specify that all [!,but not] files and/or directories
+        with a foreign layout [and [!,but not] of
+        <literal>&lt;foreign_type&gt;</literal>] will be retrieved.</para>
+        <para><emphasis role="bold">Example</emphasis></para>
+        <screen># lfs setstripe --foreign=none --xattr=foo@bar /mnt/lustre/file
+# touch /mnt/lustre/file2
+
+# lfs find --foreign /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find ! --foreign /mnt/lustre/*
+/mnt/lustre/file2
+
+# lfs find --foreign=none /mnt/lustre/*
+/mnt/lustre/file</screen>
+    </section>
+  </section>
+
   <section xml:id="dbdoclet.50438209_10424">
     <title><indexterm>
         <primary>space</primary>
