@@ -4857,6 +4857,8 @@ check_mdt_xtimes()
 
 test_104() {
 	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip_env "ldiskfs only test"
+	[ $MDS1_VERSION -lt $(version_code 2.12.4) ] &&
+		skip "Need MDS version at least 2.12.4"
 
 	local pid
 	local mdtdev=$(mdsdevname ${SINGLEMDS//mds/})
