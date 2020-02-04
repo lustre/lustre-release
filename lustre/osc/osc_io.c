@@ -96,16 +96,16 @@ static int osc_io_read_ahead(const struct lu_env *env,
 		}
 
 		ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
-		ra->cra_end_idx = cl_index(osc2cl(osc),
-					   dlmlock->l_policy_data.l_extent.end);
+		ra->cra_end_idx =
+			dlmlock->l_policy_data.l_extent.end >> PAGE_SHIFT;
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_dlmlock = dlmlock;
 		ra->cra_oio = oio;
 		if (ra->cra_end_idx != CL_PAGE_EOF)
 			ra->cra_contention = true;
-		ra->cra_end_idx = min_t(pgoff_t, ra->cra_end_idx,
-					cl_index(osc2cl(osc),
-						 oinfo->loi_kms - 1));
+		ra->cra_end_idx = min_t(pgoff_t,
+					ra->cra_end_idx,
+					(oinfo->loi_kms - 1) >> PAGE_SHIFT);
 		result = 0;
 	}
 
@@ -273,7 +273,7 @@ void osc_page_touch_at(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	/* offset within stripe */
-	kms = cl_offset(obj, idx) + to;
+	kms = (idx << PAGE_SHIFT) + to;
 
 	cl_object_attr_lock(obj);
 	CDEBUG(D_INODE, "stripe KMS %sincreasing %llu->%llu %llu\n",
@@ -539,9 +539,9 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
 	int     partial;
 	pgoff_t start;
 
-        clob    = oio->oi_cl.cis_obj;
-        start   = cl_index(clob, size);
-        partial = cl_offset(clob, start) < size;
+	clob = oio->oi_cl.cis_obj;
+	start = size >> PAGE_SHIFT;
+	partial = (start << PAGE_SHIFT) < size;
 
         /*
          * Complain if there are pages in the truncated region.
@@ -561,8 +561,8 @@ int osc_punch_start(const struct lu_env *env, struct cl_io *io,
 		    struct cl_object *obj)
 {
 	struct osc_object *osc = cl2osc(obj);
-	pgoff_t pg_start = cl_index(obj, io->u.ci_setattr.sa_falloc_offset);
-	pgoff_t pg_end = cl_index(obj, io->u.ci_setattr.sa_falloc_end - 1);
+	pgoff_t pg_start = io->u.ci_setattr.sa_falloc_offset >> PAGE_SHIFT;
+	pgoff_t pg_end = (io->u.ci_setattr.sa_falloc_end - 1) >> PAGE_SHIFT;
 	int rc;
 
 	ENTRY;
@@ -961,8 +961,8 @@ int osc_io_fsync_start(const struct lu_env *env,
 	struct cl_fsync_io *fio = &io->u.ci_fsync;
 	struct cl_object   *obj = slice->cis_obj;
 	struct osc_object  *osc = cl2osc(obj);
-	pgoff_t start  = cl_index(obj, fio->fi_start);
-	pgoff_t end    = cl_index(obj, fio->fi_end);
+	pgoff_t start  = fio->fi_start >> PAGE_SHIFT;
+	pgoff_t end    = fio->fi_end >> PAGE_SHIFT;
 	int     result = 0;
 	ENTRY;
 
@@ -999,8 +999,8 @@ void osc_io_fsync_end(const struct lu_env *env,
 {
 	struct cl_fsync_io *fio = &slice->cis_io->u.ci_fsync;
 	struct cl_object   *obj = slice->cis_obj;
-	pgoff_t start = cl_index(obj, fio->fi_start);
-	pgoff_t end   = cl_index(obj, fio->fi_end);
+	pgoff_t start = fio->fi_start >> PAGE_SHIFT;
+	pgoff_t end   = fio->fi_end >> PAGE_SHIFT;
 	int result = 0;
 
 	if (fio->fi_mode == CL_FSYNC_LOCAL) {

@@ -379,7 +379,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	cl_2queue_init(queue);
 	for (i = 0; i < pv->ldp_count; i++) {
 		LASSERT(!(offset & (PAGE_SIZE - 1)));
-		page = cl_page_find(env, obj, cl_index(obj, offset),
+		page = cl_page_find(env, obj, offset >> PAGE_SHIFT,
 				    pv->ldp_pages[i], CPT_TRANSIENT);
 		if (IS_ERR(page)) {
 			rc = PTR_ERR(page);
@@ -652,8 +652,8 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 {
 	struct cl_attr *attr   = vvp_env_thread_attr(env);
 	struct cl_object *obj  = io->ci_obj;
-	loff_t          offset = cl_offset(obj, cl_page_index(pg));
-	int             result;
+	loff_t offset = cl_page_index(pg) << PAGE_SHIFT;
+	int result;
 	ENTRY;
 
 	cl_object_attr_lock(obj);

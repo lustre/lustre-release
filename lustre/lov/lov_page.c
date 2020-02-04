@@ -75,7 +75,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	stripe_cached = lio->lis_cached_entry != LIS_CACHE_ENTRY_NONE &&
 			page->cp_type == CPT_TRANSIENT;
 
-	offset = cl_offset(obj, index);
+	offset = index << PAGE_SHIFT;
 
 	if (stripe_cached) {
 		entry = lio->lis_cached_entry;
@@ -126,7 +126,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	cl_object_for_each(o, subobj) {
 		if (o->co_ops->coo_page_init) {
 			rc = o->co_ops->coo_page_init(sub->sub_env, o, page,
-						      cl_index(subobj, suboff));
+						      suboff >> PAGE_SHIFT);
 			if (rc != 0)
 				break;
 		}
@@ -136,18 +136,18 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 }
 
 int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, pgoff_t index)
+			struct cl_page *cl_page, pgoff_t index)
 {
 	void *addr;
 
 	ENTRY;
-	BUILD_BUG_ON(!__same_type(page->cp_lov_index, CP_LOV_INDEX_EMPTY));
-	page->cp_lov_index = CP_LOV_INDEX_EMPTY;
+	BUILD_BUG_ON(!__same_type(cl_page->cp_lov_index, CP_LOV_INDEX_EMPTY));
+	cl_page->cp_lov_index = CP_LOV_INDEX_EMPTY;
 
-	addr = kmap(page->cp_vmpage);
+	addr = kmap(cl_page->cp_vmpage);
 	memset(addr, 0, PAGE_SIZE);
-	kunmap(page->cp_vmpage);
-	SetPageUptodate(page->cp_vmpage);
+	kunmap(cl_page->cp_vmpage);
+	SetPageUptodate(cl_page->cp_vmpage);
 	RETURN(0);
 }
 

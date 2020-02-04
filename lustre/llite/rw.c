@@ -1513,7 +1513,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         cl_io_fini(env, io);
 
 	if (redirtied && wbc->sync_mode == WB_SYNC_ALL) {
-		loff_t offset = cl_offset(clob, vmpage->index);
+		loff_t offset = vmpage->index << PAGE_SHIFT;
 
 		/* Flush page failed because the extent is being written out.
 		 * Wait for the write of extent to be finished to avoid
@@ -1695,9 +1695,9 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 
 	/* mmap does not set the ci_rw fields */
 	if (!mmap) {
-		io_start_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos);
-		io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
-					io->u.ci_rw.crw_count - 1);
+		io_start_index = io->u.ci_rw.crw_pos >> PAGE_SHIFT;
+		io_end_index = (io->u.ci_rw.crw_pos +
+				io->u.ci_rw.crw_count - 1) >> PAGE_SHIFT;
 	} else {
 		io_start_index = cl_page_index(page);
 		io_end_index = cl_page_index(page);

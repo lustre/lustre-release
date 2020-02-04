@@ -1142,24 +1142,6 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 EXPORT_SYMBOL(cl_page_print);
 
 /**
- * Converts a byte offset within object \a obj into a page index.
- */
-loff_t cl_offset(const struct cl_object *obj, pgoff_t idx)
-{
-	return (loff_t)idx << PAGE_SHIFT;
-}
-EXPORT_SYMBOL(cl_offset);
-
-/**
- * Converts a page index into a byte offset within object \a obj.
- */
-pgoff_t cl_index(const struct cl_object *obj, loff_t offset)
-{
-	return offset >> PAGE_SHIFT;
-}
-EXPORT_SYMBOL(cl_index);
-
-/**
  * Adds page slice to the compound page.
  *
  * This is called by cl_object_operations::coo_page_init() methods to add a

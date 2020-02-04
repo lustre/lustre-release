@@ -131,11 +131,11 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 
 	LASSERT(ergo(is_trunc, lio->lis_trunc_stripe_index != NULL));
 
-	ext.e_start = cl_offset(obj, lock->cll_descr.cld_start);
+	ext.e_start = lock->cll_descr.cld_start << PAGE_SHIFT;
 	if (lock->cll_descr.cld_end == CL_PAGE_EOF)
 		ext.e_end = OBD_OBJECT_EOF;
 	else
-		ext.e_end  = cl_offset(obj, lock->cll_descr.cld_end + 1);
+		ext.e_end  = (lock->cll_descr.cld_end + 1) << PAGE_SHIFT;
 
 	nr = 0;
 	lov_foreach_io_layout(index, lio, &ext) {
@@ -182,8 +182,8 @@ init_sublock:
 			descr = &lls->sub_lock.cll_descr;
 			LASSERT(descr->cld_obj == NULL);
 			descr->cld_obj   = lovsub2cl(r0->lo_sub[i]);
-			descr->cld_start = cl_index(descr->cld_obj, start);
-			descr->cld_end   = cl_index(descr->cld_obj, end);
+			descr->cld_start = start >> PAGE_SHIFT;
+			descr->cld_end   = end >> PAGE_SHIFT;
 			descr->cld_mode  = lock->cll_descr.cld_mode;
 			descr->cld_gid   = lock->cll_descr.cld_gid;
 			descr->cld_enq_flags = lock->cll_descr.cld_enq_flags;

@@ -2050,8 +2050,8 @@ int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	lock = vvp_env_lock(env);
 	descr = &lock->cll_descr;
 	descr->cld_obj   = io->ci_obj;
-	descr->cld_start = cl_index(io->ci_obj, from);
-	descr->cld_end   = cl_index(io->ci_obj, from + PAGE_SIZE - 1);
+	descr->cld_start = from >> PAGE_SHIFT;
+	descr->cld_end   = (from + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	descr->cld_mode  = CLM_WRITE;
 	descr->cld_enq_flags = CEF_MUST | CEF_NONBLOCK;
 

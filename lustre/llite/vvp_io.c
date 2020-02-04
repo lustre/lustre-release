@@ -244,10 +244,8 @@ static int vvp_io_one_lock(const struct lu_env *env, struct cl_io *io,
 			   __u32 enqflags, enum cl_lock_mode mode,
 			   loff_t start, loff_t end)
 {
-	struct cl_object *obj = io->ci_obj;
-
 	return vvp_io_one_lock_index(env, io, enqflags, mode,
-				     cl_index(obj, start), cl_index(obj, end));
+				     start >> PAGE_SHIFT, end >> PAGE_SHIFT);
 }
 
 static int vvp_io_write_iter_init(const struct lu_env *env,
@@ -492,10 +490,8 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			policy_from_vma(&policy, vma, addr, count);
 			descr->cld_mode = vvp_mode_from_vma(vma);
 			descr->cld_obj = ll_i2info(inode)->lli_clob;
-			descr->cld_start = cl_index(descr->cld_obj,
-						    policy.l_extent.start);
-			descr->cld_end = cl_index(descr->cld_obj,
-						  policy.l_extent.end);
+			descr->cld_start = policy.l_extent.start >> PAGE_SHIFT;
+			descr->cld_end = policy.l_extent.end >> PAGE_SHIFT;
 			descr->cld_enq_flags = flags;
 			result = cl_io_lock_alloc_add(env, io, descr);
 
@@ -872,7 +868,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	/* initialize read-ahead window once per syscall */
 	if (!vio->vui_ra_valid) {
 		vio->vui_ra_valid = true;
-		vio->vui_ra_start_idx = cl_index(obj, pos);
+		vio->vui_ra_start_idx = pos >> PAGE_SHIFT;
 		vio->vui_ra_pages = 0;
 		page_offset = pos & ~PAGE_MASK;
 		if (page_offset) {
@@ -1500,8 +1496,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	trunc_sem_down_read_nowait(&lli->lli_trunc_sem);
 
         /* offset of the last byte on the page */
-        offset = cl_offset(obj, fio->ft_index + 1) - 1;
-        LASSERT(cl_index(obj, offset) == fio->ft_index);
+	offset = ((fio->ft_index + 1) << PAGE_SHIFT) - 1;
+	LASSERT((offset >> PAGE_SHIFT) == fio->ft_index);
 	result = vvp_prep_size(env, obj, io, 0, offset + 1, NULL);
 	if (result != 0)
 		RETURN(result);
@@ -1534,7 +1530,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
                 GOTO(out, result = +1);
         }
 
-	last_index = cl_index(obj, size - 1);
+	last_index = (size - 1) >> PAGE_SHIFT;
 
 	if (fio->ft_mkwrite ) {
 		/*
@@ -1642,7 +1638,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
                 /*
                  * Last page is mapped partially.
                  */
-                fio->ft_nob = size - cl_offset(obj, fio->ft_index);
+		fio->ft_nob = size - (fio->ft_index << PAGE_SHIFT);
         else
 		fio->ft_nob = PAGE_SIZE;
 

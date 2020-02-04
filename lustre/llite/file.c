@@ -3605,8 +3605,8 @@ int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 
 		descr->cld_obj   = io->ci_obj;
 		/* Convert byte offsets to pages */
-		descr->cld_start = cl_index(io->ci_obj, start);
-		descr->cld_end   = cl_index(io->ci_obj, end);
+		descr->cld_start = start >> PAGE_SHIFT;
+		descr->cld_end   = end >> PAGE_SHIFT;
 		descr->cld_mode  = cl_mode;
 		/* CEF_MUST is used because we do not want to convert a
 		 * lockahead request to a lockless lock */

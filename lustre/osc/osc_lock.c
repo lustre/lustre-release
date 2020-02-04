@@ -238,8 +238,8 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 		/* extend the lock extent, otherwise it will have problem when
 		 * we decide whether to grant a lockless lock. */
 		descr->cld_mode  = osc_ldlm2cl_lock(dlmlock->l_granted_mode);
-		descr->cld_start = cl_index(descr->cld_obj, ext->start);
-		descr->cld_end   = cl_index(descr->cld_obj, ext->end);
+		descr->cld_start = ext->start >> PAGE_SHIFT;
+		descr->cld_end   = ext->end >> PAGE_SHIFT;
 		descr->cld_gid   = ext->gid;
 
 		/* no lvb update for matched lock */
@@ -427,8 +427,8 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 
 		/* Destroy pages covered by the extent of the DLM lock */
 		result = osc_lock_flush(cl2osc(obj),
-					cl_index(obj, extent->start),
-					cl_index(obj, extent->end),
+					extent->start >> PAGE_SHIFT,
+					extent->end >> PAGE_SHIFT,
 					mode, discard);
 
 		/* losing a lock, update kms */
@@ -672,10 +672,10 @@ static unsigned long osc_lock_weight(const struct lu_env *env,
 	if (result != 0)
 		RETURN(1);
 
-	page_index = cl_index(obj, start);
+	page_index = start >> PAGE_SHIFT;
 
 	if (!osc_page_gang_lookup(env, io, oscobj,
-				  page_index, cl_index(obj, end),
+				  page_index, end >> PAGE_SHIFT,
 				  weigh_cb, (void *)&page_index))
 		result = 1;
 	cl_io_fini(env, io);
@@ -1171,9 +1171,9 @@ void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
 		return;
 
 	if (likely(io->ci_type == CIT_WRITE)) {
-		io_start = cl_index(obj, io->u.ci_rw.crw_pos);
-		io_end = cl_index(obj, io->u.ci_rw.crw_pos +
-						io->u.ci_rw.crw_count - 1);
+		io_start = io->u.ci_rw.crw_pos >> PAGE_SHIFT;
+		io_end = (io->u.ci_rw.crw_pos +
+			  io->u.ci_rw.crw_count - 1) >> PAGE_SHIFT;
 	} else {
 		LASSERT(cl_io_is_mkwrite(io));
 		io_start = io_end = io->u.ci_fault.ft_index;

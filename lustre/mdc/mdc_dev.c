@@ -341,7 +341,7 @@ static int mdc_dlm_canceling(const struct lu_env *env,
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 
 		/* Destroy pages covered by the extent of the DLM lock */
-		result = mdc_lock_flush(env, cl2osc(obj), cl_index(obj, 0),
+		result = mdc_lock_flush(env, cl2osc(obj), 0,
 					CL_PAGE_EOF, mode, discard);
 		/* Losing a lock, set KMS to 0.
 		 * NB: assumed that DOM lock covers whole data on MDT.
@@ -501,7 +501,7 @@ static void mdc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 		/* extend the lock extent, otherwise it will have problem when
 		 * we decide whether to grant a lockless lock. */
 		descr->cld_mode = osc_ldlm2cl_lock(dlmlock->l_granted_mode);
-		descr->cld_start = cl_index(descr->cld_obj, 0);
+		descr->cld_start = 0;
 		descr->cld_end = CL_PAGE_EOF;
 
 		/* no lvb update for matched lock */
