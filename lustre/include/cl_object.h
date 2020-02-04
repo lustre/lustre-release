@@ -737,8 +737,10 @@ struct cl_page {
 	struct page		*cp_vmpage;
 	/** Linkage of pages within group. Pages must be owned */
 	struct list_head	 cp_batch;
-	/** List of slices. Immutable after creation. */
-	struct list_head	 cp_layers;
+	/** array of slices offset. Immutable after creation. */
+	unsigned char		 cp_layer_offset[3];
+	/** current slice index */
+	unsigned char		 cp_layer_count:2;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.
@@ -781,8 +783,6 @@ struct cl_page_slice {
          */
         struct cl_object                *cpl_obj;
         const struct cl_page_operations *cpl_ops;
-        /** Linkage into cl_page::cp_layers. Immutable after creation. */
-	struct list_head		 cpl_linkage;
 };
 
 /**
