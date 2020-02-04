@@ -997,7 +997,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 
 	for (i = 0; i < paths.gl_pathc; i++) {
 		char *param_name = NULL, *tmp;
-		char pathname[PATH_MAX];
+		char pathname[PATH_MAX], param_dir[PATH_MAX+2];
 		struct stat st;
 		int rc2, j;
 
@@ -1093,11 +1093,13 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		}
 
 		/* Use param_name to grab subdirectory tree from full path */
-		tmp = strstr(paths.gl_pathv[i], param_name);
+		snprintf(param_dir, sizeof(param_dir), "/%s", param_name);
+		tmp = strstr(paths.gl_pathv[i], param_dir);
 
 		/* cleanup paramname now that we are done with it */
 		free(param_name);
 		param_name = NULL;
+		memset(&param_dir, '\0', sizeof(param_dir));
 
 		/* Shouldn't happen but just in case */
 		if (tmp == NULL) {
@@ -1105,6 +1107,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 				rc = -EINVAL;
 			continue;
 		}
+		tmp++;
 
 		rc2 = snprintf(pathname, sizeof(pathname), "%s/*", tmp);
 		if (rc2 < 0) {
