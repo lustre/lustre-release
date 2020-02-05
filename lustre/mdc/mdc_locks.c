@@ -188,7 +188,7 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
 		req->rq_replay = 0;
 		spin_unlock(&req->rq_lock);
 	}
-	if (rc && req->rq_transno != 0) {
+	if (rc && req->rq_err == 0 && req->rq_transno != 0) {
 		DEBUG_REQ(D_ERROR, req, "transno returned on error: rc = %d",
 			  rc);
 		LBUG();
