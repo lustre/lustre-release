@@ -883,7 +883,8 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 
 #ifdef HAVE_LDISKFS_IGET_WITH_FLAGS
 # define osd_ldiskfs_iget(sb, ino) \
-		ldiskfs_iget((sb), (ino), LDISKFS_IGET_HANDLE)
+		ldiskfs_iget((sb), (ino), \
+			     LDISKFS_IGET_HANDLE | LDISKFS_IGET_SPECIAL)
 #else
 # define osd_ldiskfs_iget(sb, ino) ldiskfs_iget((sb), (ino))
 #endif
