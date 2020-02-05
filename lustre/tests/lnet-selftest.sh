@@ -8,7 +8,12 @@ init_logging
 ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
 if (( $LINUX_VERSION_CODE >= $(version_code 4.4.0) )); then
 	# bug number for skipped test: LU-10073
-	ALWAYS_EXCEPT+="               smoke"
+	ALWAYS_EXCEPT+="               smoke "
+fi
+
+if [[ $(uname -m) = ppc64 ]]; then
+	# bug number for skipped test: LU-10073
+	ALWAYS_EXCEPT+="               smoke "
 fi
 
 build_test_filter
