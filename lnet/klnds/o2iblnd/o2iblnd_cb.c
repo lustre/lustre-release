@@ -1653,7 +1653,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
                 /* is the REPLY message too small for RDMA? */
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[lntmsg->msg_md->md_length]);
-                if (nob <= IBLND_MSG_SIZE)
+                if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
                         break;                  /* send IMMEDIATE */
 
 		tx = kiblnd_get_idle_tx(ni, target.nid);
@@ -1700,7 +1700,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
         case LNET_MSG_PUT:
                 /* Is the payload small enough not to need RDMA? */
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob <= IBLND_MSG_SIZE)
+                if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
                         break;                  /* send IMMEDIATE */
 
 		tx = kiblnd_get_idle_tx(ni, target.nid);

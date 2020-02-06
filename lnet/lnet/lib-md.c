@@ -104,10 +104,9 @@ lnet_kvaddr_to_page(unsigned long vaddr)
 }
 EXPORT_SYMBOL(lnet_kvaddr_to_page);
 
-int
-lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
+struct page *
+lnet_get_first_page(struct lnet_libmd *md, unsigned int offset)
 {
-	int cpt = CFS_CPT_ANY;
 	unsigned int niov;
 	struct bio_vec *kiov;
 
@@ -120,7 +119,7 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 		md = lnet_handle2md(&md->md_bulk_handle);
 
 	if (!md || md->md_niov == 0)
-		return CFS_CPT_ANY;
+		return NULL;
 
 	kiov = md->md_kiov;
 	niov = md->md_niov;
@@ -131,12 +130,28 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 		kiov++;
 		if (niov == 0) {
 			CERROR("offset %d goes beyond kiov\n", offset);
-			goto out;
+			return NULL;
 		}
 	}
 
-	cpt = cfs_cpt_of_node(lnet_cpt_table(),
-			      page_to_nid(kiov->bv_page));
+	return kiov->bv_page;
+}
+
+int
+lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
+{
+	struct page *page;
+	int cpt = CFS_CPT_ANY;
+
+	page = lnet_get_first_page(md, offset);
+	if (!page) {
+		CDEBUG(D_NET, "Couldn't resolve first page of md %p with offset %u\n",
+			md, offset);
+		goto out;
+	}
+
+	cpt = cfs_cpt_of_node(lnet_cpt_table(), page_to_nid(page));
+
 out:
 	return cpt;
 }
