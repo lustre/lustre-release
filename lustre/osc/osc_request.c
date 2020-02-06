@@ -48,6 +48,7 @@
 #include <linux/falloc.h>
 
 #include "osc_internal.h"
+#include <lnet/lnet_rdma.h>
 
 atomic_t osc_pool_req_count;
 unsigned int osc_reqpool_maxreqcount;
@@ -1391,6 +1392,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
 	struct inode *inode = NULL;
 	bool directio = false;
+	bool enable_checksum = true;
 
 	ENTRY;
 	if (pga[0]->pg) {
@@ -1532,6 +1534,11 @@ retry_encrypt:
 			pga[i]->bp_count_diff = 0;
 			pga[i]->bp_off_diff = 0;
 		}
+	}
+
+	if (lnet_is_rdma_only_page(pga[0]->pg)) {
+		enable_checksum = false;
+		short_io_size = 0;
 	}
 
 	/* Check if read/write is small enough to be a short io. */
@@ -1683,10 +1690,12 @@ no_bulk:
         if (osc_should_shrink_grant(cli))
                 osc_shrink_grant_local(cli, &body->oa);
 
+	if (!cli->cl_checksum || sptlrpc_flavor_has_bulk(&req->rq_flvr))
+		enable_checksum = false;
+
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
-                if (cli->cl_checksum &&
-                    !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
+                if (enable_checksum) {
                         /* store cl_cksum_type in a local variable since
                          * it can be changed via lprocfs */
 			enum cksum_types cksum_type = cli->cl_cksum_type;
@@ -1724,8 +1733,7 @@ no_bulk:
                 req_capsule_set_size(pill, &RMF_RCS, RCL_SERVER,
                                      sizeof(__u32) * niocount);
         } else {
-                if (cli->cl_checksum &&
-                    !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
+                if (enable_checksum) {
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
 			body->oa.o_flags |= obd_cksum_type_pack(obd_name,

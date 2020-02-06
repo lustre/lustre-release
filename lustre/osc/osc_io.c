@@ -42,6 +42,7 @@
 #include <linux/falloc.h>
 
 #include "osc_internal.h"
+#include <lnet/lnet_rdma.h>
 
 /** \addtogroup osc
  *  @{
@@ -153,6 +154,8 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	page = cl_page_list_first(qin);
 	if (page->cp_type == CPT_TRANSIENT)
 		brw_flags |= OBD_BRW_NOCACHE;
+	if (lnet_is_rdma_only_page(page->cp_vmpage))
+		brw_flags |= OBD_BRW_RDMA_ONLY;
 
         /*
          * NOTE: here @page is a top-level page. This is done to avoid
