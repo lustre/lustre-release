@@ -74,7 +74,7 @@ all-am: modules
 modules: undef.h ldiskfs-sources
 	$(MAKE) LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
-	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
+	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
 endif # LINUX
