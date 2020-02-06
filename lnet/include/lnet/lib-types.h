@@ -311,6 +311,10 @@ struct lnet_lnd {
 
 	/* accept a new connection */
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
+
+	/* get dma_dev priority */
+	unsigned int (*lnd_get_dev_prio)(struct lnet_ni *ni,
+					 unsigned int dev_idx);
 };
 
 struct lnet_tx_queue {

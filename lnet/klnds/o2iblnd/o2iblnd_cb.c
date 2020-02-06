@@ -662,7 +662,7 @@ kiblnd_unmap_tx(struct kib_tx *tx)
 		kiblnd_fmr_pool_unmap(&tx->tx_fmr, tx->tx_status);
 
 	if (tx->tx_nfrags != 0) {
-		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
+		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev,
 				    tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
 		tx->tx_nfrags = 0;
 	}
@@ -717,7 +717,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
         tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	tx->tx_nfrags = nfrags;
 
-	rd->rd_nfrags = kiblnd_dma_map_sg(hdev->ibh_ibdev, tx->tx_frags,
+	rd->rd_nfrags = kiblnd_dma_map_sg(hdev, tx->tx_frags,
 					  tx->tx_nfrags, tx->tx_dmadir);
 
         for (i = 0, nob = 0; i < rd->rd_nfrags; i++) {
@@ -1822,6 +1822,19 @@ failed_1:
 	kiblnd_tx_done(tx);
 failed_0:
 	lnet_finalize(lntmsg, -EIO);
+}
+
+unsigned int
+kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
+{
+	struct kib_net *net = ni->ni_data;
+	struct device *dev = NULL;
+
+	if (net)
+		dev = net->ibn_dev->ibd_hdev->ibh_ibdev->dma_device;
+
+	return lnet_get_dev_prio(dev, dev_idx);
+
 }
 
 int

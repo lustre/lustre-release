@@ -3399,6 +3399,7 @@ static const struct lnet_lnd the_o2iblnd = {
 	.lnd_ctl	= kiblnd_ctl,
 	.lnd_send	= kiblnd_send,
 	.lnd_recv	= kiblnd_recv,
+	.lnd_get_dev_prio = kiblnd_get_dev_prio,
 };
 
 static void ko2inlnd_assert_wire_constants(void)

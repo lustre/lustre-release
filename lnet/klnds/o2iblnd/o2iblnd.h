@@ -94,10 +94,10 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet_rdma.h>
 #include "o2iblnd-idl.h"
 
 #define IBLND_PEER_HASH_BITS		7	/* log2 of # peer_ni lists */
-
 #define IBLND_N_SCHED			2
 #define IBLND_N_SCHED_HIGH		4
 
@@ -1034,18 +1034,33 @@ static inline void kiblnd_dma_unmap_single(struct ib_device *dev,
 #define KIBLND_UNMAP_ADDR_SET(p, m, a)  do {} while (0)
 #define KIBLND_UNMAP_ADDR(p, m, a)      (a)
 
-static inline int kiblnd_dma_map_sg(struct ib_device *dev,
-                                    struct scatterlist *sg, int nents,
-                                    enum dma_data_direction direction)
+static inline int kiblnd_dma_map_sg(struct kib_hca_dev *hdev,
+				    struct scatterlist *sg, int nents,
+				    enum dma_data_direction direction)
 {
-        return ib_dma_map_sg(dev, sg, nents, direction);
+	int count;
+
+	count = lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
+				       sg, nents, direction);
+
+	if (count != 0)
+		return count;
+
+	return ib_dma_map_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
 
-static inline void kiblnd_dma_unmap_sg(struct ib_device *dev,
-                                       struct scatterlist *sg, int nents,
-                                       enum dma_data_direction direction)
+static inline void kiblnd_dma_unmap_sg(struct kib_hca_dev *hdev,
+				       struct scatterlist *sg, int nents,
+				       enum dma_data_direction direction)
 {
-        ib_dma_unmap_sg(dev, sg, nents, direction);
+	int count;
+
+	count = lnet_rdma_unmap_sg(hdev->ibh_ibdev->dma_device,
+				   sg, nents, direction);
+	if (count != 0)
+		return;
+
+	ib_dma_unmap_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
 
 #ifndef HAVE_IB_SG_DMA_ADDRESS
@@ -1147,4 +1162,6 @@ int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		int delayed, unsigned int niov,
 		struct bio_vec *kiov, unsigned int offset, unsigned int mlen,
 		unsigned int rlen);
+unsigned int kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx);
+
 
