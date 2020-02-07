@@ -1673,7 +1673,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 	lustre_msg_set_status(req->rq_reqmsg, current->pid);
 
-	rc = sptlrpc_req_refresh_ctx(req, -1);
+	rc = sptlrpc_req_refresh_ctx(req, 0);
 	if (rc) {
 		if (req->rq_err) {
 			req->rq_status = rc;
@@ -1990,7 +1990,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 				 * rq_wait_ctx is only touched by ptlrpcd,
 				 * so no lock is needed here.
 				 */
-				status = sptlrpc_req_refresh_ctx(req, -1);
+				status = sptlrpc_req_refresh_ctx(req, 0);
 				if (status) {
 					if (req->rq_err) {
 						req->rq_status = status;

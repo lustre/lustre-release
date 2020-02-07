@@ -628,27 +628,6 @@ int ctx_check_refresh(struct ptlrpc_cli_ctx *ctx)
 }
 
 static
-int ctx_refresh_timeout(struct ptlrpc_request *req)
-{
-	int rc;
-
-	/* conn_cnt is needed in expire_one_request */
-	lustre_msg_set_conn_cnt(req->rq_reqmsg, req->rq_import->imp_conn_cnt);
-
-	rc = ptlrpc_expire_one_request(req, 1);
-	/*
-	 * if we started recovery, we should mark this ctx dead; otherwise
-	 * in case of lgssd died nobody would retire this ctx, following
-	 * connecting will still find the same ctx thus cause deadlock.
-	 * there's an assumption that expire time of the request should be
-	 * later than the context refresh expire time.
-	 */
-	if (rc == 0)
-		req->rq_cli_ctx->cc_ops->die(req->rq_cli_ctx, 0);
-	return rc;
-}
-
-static
 void ctx_refresh_interrupt(struct ptlrpc_request *req)
 {
 
@@ -669,9 +648,9 @@ void req_off_ctx_list(struct ptlrpc_request *req, struct ptlrpc_cli_ctx *ctx)
 /**
  * To refresh the context of \req, if it's not up-to-date.
  * \param timeout
- * - < 0: don't wait
- * - = 0: wait until success or fatal error occur
- * - > 0: timeout value (in seconds)
+ * - == 0: do not wait
+ * - == MAX_SCHEDULE_TIMEOUT: wait indefinitely
+ * - > 0: not supported
  *
  * The status of the context could be subject to be changed by other threads
  * at any time. We allow this race, but once we return with 0, the caller will
@@ -692,6 +671,11 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 
 	if (req->rq_ctx_init || req->rq_ctx_fini)
 		RETURN(0);
+
+	if (timeout != 0 && timeout != MAX_SCHEDULE_TIMEOUT) {
+		CERROR("req %p: invalid timeout %lu\n", req, timeout);
+		RETURN(-EINVAL);
+	}
 
 	/*
 	 * during the process a request's context might change type even
@@ -805,7 +789,7 @@ again:
 		list_add(&req->rq_ctx_chain, &ctx->cc_req_list);
 	spin_unlock(&ctx->cc_lock);
 
-	if (timeout < 0)
+	if (timeout == 0)
 		RETURN(-EWOULDBLOCK);
 
 	/* Clear any flags that may be present from previous sends */
@@ -817,17 +801,13 @@ again:
 	req->rq_restart = 0;
 	spin_unlock(&req->rq_lock);
 
-	if (wait_event_idle_timeout(req->rq_reply_waitq,
-				    ctx_check_refresh(ctx),
-				    cfs_time_seconds(timeout)) == 0) {
-		rc = -ETIMEDOUT;
-		if (!ctx_refresh_timeout(req) &&
-		    l_wait_event_abortable(req->rq_reply_waitq,
-					   ctx_check_refresh(ctx))
-		    == -ERESTARTSYS) {
-			rc = -EINTR;
-			ctx_refresh_interrupt(req);
-		}
+	/* by now we know that timeout value is MAX_SCHEDULE_TIMEOUT,
+	 * so wait indefinitely with non-fatal signals blocked
+	 */
+	if (l_wait_event_abortable(req->rq_reply_waitq,
+				   ctx_check_refresh(ctx)) == -ERESTARTSYS) {
+		rc = -EINTR;
+		ctx_refresh_interrupt(req);
 	}
 
 	/*
@@ -981,7 +961,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	req->rq_flvr = sec->ps_flvr;
 	req->rq_cli_ctx = ctx;
 
-	rc = sptlrpc_req_refresh_ctx(req, 0);
+	rc = sptlrpc_req_refresh_ctx(req, MAX_SCHEDULE_TIMEOUT);
 	LASSERT(list_empty(&req->rq_ctx_chain));
 	sptlrpc_cli_ctx_put(req->rq_cli_ctx, 1);
 	ptlrpc_request_cache_free(req);
