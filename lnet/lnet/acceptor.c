@@ -145,7 +145,7 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
 EXPORT_SYMBOL(lnet_connect_console_error);
 
 struct socket *
-lnet_connect(lnet_nid_t peer_nid, __u32 local_ip, __u32 peer_ip,
+lnet_connect(lnet_nid_t peer_nid, int interface, __u32 peer_ip,
 	     int peer_port, struct net *ns)
 {
 	struct lnet_acceptor_connreq cr;
@@ -160,7 +160,7 @@ lnet_connect(lnet_nid_t peer_nid, __u32 local_ip, __u32 peer_ip,
 	     --port) {
 		/* Iterate through reserved ports. */
 
-		sock = lnet_sock_connect(local_ip, port,
+		sock = lnet_sock_connect(interface, port,
 					 peer_ip, peer_port, ns);
 		if (IS_ERR(sock)) {
 			rc = PTR_ERR(sock);
@@ -356,7 +356,7 @@ lnet_acceptor(void *arg)
 	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 
 	lnet_acceptor_state.pta_sock =
-		lnet_sock_listen(0, accept_port, accept_backlog,
+		lnet_sock_listen(accept_port, accept_backlog,
 				 lnet_acceptor_state.pta_ns);
 	if (IS_ERR(lnet_acceptor_state.pta_sock)) {
 		rc = PTR_ERR(lnet_acceptor_state.pta_sock);

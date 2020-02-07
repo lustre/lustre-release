@@ -1986,7 +1986,7 @@ ksocknal_connect(struct ksock_route *route)
                 }
 
 		sock = lnet_connect(peer_ni->ksnp_id.nid,
-				    route->ksnr_myipaddr,
+				    route->ksnr_myiface,
 				    route->ksnr_ipaddr, route->ksnr_port,
 				    peer_ni->ksnp_ni->ni_net_ns);
 		if (IS_ERR(sock)) {

@@ -39,6 +39,7 @@
 /* For sys_open & sys_close */
 #include <linux/syscalls.h>
 #include <net/sock.h>
+#include <linux/inetdevice.h>
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
@@ -175,10 +176,44 @@ lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout)
 }
 EXPORT_SYMBOL(lnet_sock_read);
 
-static struct socket *
-lnet_sock_create(__u32 local_ip, int local_port, struct net *ns)
+int choose_ipv4_src(__u32 *ret, int interface, __u32 dst_ipaddr, struct net *ns)
 {
-	struct sockaddr_in  locaddr;
+	struct net_device *dev;
+	struct in_device *in_dev;
+	int err;
+	DECLARE_CONST_IN_IFADDR(ifa);
+
+	rcu_read_lock();
+	dev = dev_get_by_index_rcu(ns, interface);
+	err = -EINVAL;
+	if (!dev || !(dev->flags & IFF_UP))
+		goto out;
+	in_dev = __in_dev_get_rcu(dev);
+	if (!in_dev)
+		goto out;
+	err = -ENOENT;
+	in_dev_for_each_ifa_rcu(ifa, in_dev) {
+		if (*ret == 0 ||
+		    ((dst_ipaddr ^ ntohl(ifa->ifa_local))
+		     & ntohl(ifa->ifa_mask)) == 0) {
+			/* This address at least as good as what we
+			 * already have
+			 */
+			*ret = ntohl(ifa->ifa_local);
+			err = 0;
+		}
+	}
+	endfor_ifa(in_dev);
+out:
+	rcu_read_unlock();
+	return err;
+}
+EXPORT_SYMBOL(choose_ipv4_src);
+
+static struct socket *
+lnet_sock_create(int interface, struct sockaddr *remaddr,
+		 int local_port, struct net *ns)
+{
 	struct socket	   *sock;
 	int		    rc;
 	int		    option;
@@ -201,12 +236,25 @@ lnet_sock_create(__u32 local_ip, int local_port, struct net *ns)
 		goto failed;
 	}
 
-	if (local_ip != 0 || local_port != 0) {
-		memset(&locaddr, 0, sizeof(locaddr));
+	if (interface >= 0 || local_port != 0) {
+		struct sockaddr_in locaddr = {};
+
 		locaddr.sin_family = AF_INET;
+		locaddr.sin_addr.s_addr = INADDR_ANY;
+		if (interface >= 0) {
+			struct sockaddr_in *sin = (void *)remaddr;
+			__u32 ip;
+
+			rc = choose_ipv4_src(&ip,
+					     interface,
+					     ntohl(sin->sin_addr.s_addr),
+					     ns);
+			if (rc)
+				goto failed;
+			locaddr.sin_addr.s_addr = htonl(ip);
+		}
+
 		locaddr.sin_port = htons(local_port);
-		locaddr.sin_addr.s_addr = (local_ip == 0) ?
-					  INADDR_ANY : htonl(local_ip);
 
 		rc = kernel_bind(sock, (struct sockaddr *)&locaddr,
 				 sizeof(locaddr));
@@ -303,12 +351,12 @@ lnet_sock_getbuf(struct socket *sock, int *txbufsize, int *rxbufsize)
 EXPORT_SYMBOL(lnet_sock_getbuf);
 
 struct socket *
-lnet_sock_listen(__u32 local_ip, int local_port, int backlog, struct net *ns)
+lnet_sock_listen(int local_port, int backlog, struct net *ns)
 {
 	struct socket *sock;
 	int rc;
 
-	sock = lnet_sock_create(local_ip, local_port, ns);
+	sock = lnet_sock_create(-1, NULL, local_port, ns);
 	if (IS_ERR(sock)) {
 		rc = PTR_ERR(sock);
 		if (rc == -EADDRINUSE)
@@ -327,7 +375,7 @@ lnet_sock_listen(__u32 local_ip, int local_port, int backlog, struct net *ns)
 }
 
 struct socket *
-lnet_sock_connect(__u32 local_ip, int local_port,
+lnet_sock_connect(int interface, int local_port,
 		  __u32 peer_ip, int peer_port,
 		  struct net *ns)
 {
@@ -335,14 +383,15 @@ lnet_sock_connect(__u32 local_ip, int local_port,
 	struct sockaddr_in srvaddr;
 	int rc;
 
-	sock = lnet_sock_create(local_ip, local_port, ns);
-	if (IS_ERR(sock))
-		return sock;
-
 	memset(&srvaddr, 0, sizeof(srvaddr));
 	srvaddr.sin_family = AF_INET;
 	srvaddr.sin_port = htons(peer_port);
 	srvaddr.sin_addr.s_addr = htonl(peer_ip);
+
+	sock = lnet_sock_create(interface, (struct sockaddr *)&srvaddr,
+				local_port, ns);
+	if (IS_ERR(sock))
+		return sock;
 
 	rc = kernel_connect(sock, (struct sockaddr *)&srvaddr,
 			    sizeof(srvaddr), 0);
@@ -355,8 +404,8 @@ lnet_sock_connect(__u32 local_ip, int local_port,
 	 * port... */
 
 	CDEBUG_LIMIT(rc == -EADDRNOTAVAIL ? D_NET : D_NETERROR,
-		     "Error %d connecting %pI4h/%d -> %pI4h/%d\n", rc,
-		     &local_ip, local_port, &peer_ip, peer_port);
+		     "Error %d connecting %d -> %pI4h/%d\n", rc,
+		     local_port, &peer_ip, peer_port);
 
 	sock_release(sock);
 	return ERR_PTR(rc);

@@ -90,6 +90,24 @@ extern struct lnet the_lnet;			/* THE network */
 		kernel_getsockname(sock, addr, addrlen)
 #endif
 
+/*
+ * kernel 5.3: commit ef11db3310e272d3d8dbe8739e0770820dd20e52
+ * added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
+ * and removed for_ifa and endfor_ifa.
+ * Use the _rntl variant as the current locking is rtnl.
+ */
+#ifdef in_dev_for_each_ifa_rtnl
+#define DECLARE_CONST_IN_IFADDR(ifa)		const struct in_ifaddr *ifa
+#define endfor_ifa(in_dev)
+#else
+#define DECLARE_CONST_IN_IFADDR(ifa)
+#define in_dev_for_each_ifa_rtnl(ifa, in_dev)	for_ifa((in_dev))
+#define in_dev_for_each_ifa_rcu(ifa, in_dev)	for_ifa((in_dev))
+#endif
+
+int choose_ipv4_src(__u32 *ret,
+		    int interface, __u32 dst_ipaddr, struct net *ns);
+
 bool lnet_is_route_alive(struct lnet_route *route);
 bool lnet_is_gateway_alive(struct lnet_peer *gw);
 
@@ -775,7 +793,7 @@ unsigned int lnet_get_lnd_timeout(void);
 void lnet_register_lnd(const struct lnet_lnd *lnd);
 void lnet_unregister_lnd(const struct lnet_lnd *lnd);
 
-struct socket *lnet_connect(lnet_nid_t peer_nid, __u32 local_ip, __u32 peer_ip,
+struct socket *lnet_connect(lnet_nid_t peer_nid, int interface, __u32 peer_ip,
 			    int peer_port, struct net *ns);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
                                 __u32 peer_ip, int port);
@@ -800,9 +818,9 @@ int lnet_sock_getaddr(struct socket *socket, bool remote, __u32 *ip, int *port);
 int lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
 int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 
-struct socket *lnet_sock_listen(__u32 ip, int port, int backlog,
+struct socket *lnet_sock_listen(int port, int backlog,
 				struct net *ns);
-struct socket *lnet_sock_connect(__u32 local_ip, int local_port,
+struct socket *lnet_sock_connect(int interface, int local_port,
 				 __u32 peer_ip, int peer_port, struct net *ns);
 
 int lnet_peers_start_down(void);
