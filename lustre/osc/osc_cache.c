@@ -2155,7 +2155,12 @@ __must_hold(&cli->cl_loi_list_lock)
 
 		OSC_IO_DEBUG(osc, "%lu in flight\n", rpcs_in_flight(cli));
 
-		if (osc_max_rpc_in_flight(cli, osc)) {
+		/* even if we have reached our max in flight RPCs, we still
+		 * allow all high-priority RPCs through to prevent their
+		 * starvation and leading to server evicting us for not
+		 * writing out pages in a timely manner LU-13131 */
+		if (osc_max_rpc_in_flight(cli, osc) &&
+		    list_empty(&osc->oo_hp_exts)) {
 			__osc_list_maint(cli, osc);
 			break;
 		}
