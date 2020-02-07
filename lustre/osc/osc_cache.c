@@ -94,11 +94,6 @@ static inline char *ext_flags(struct osc_extent *ext, char *flags)
 	return flags;
 }
 
-static inline char list_empty_marker(struct list_head *list)
-{
-	return list_empty(list) ? '-' : '+';
-}
-
 #define EXTSTR       "[%lu -> %lu/%lu]"
 #define EXTPARA(ext) (ext)->oe_start, (ext)->oe_end, (ext)->oe_max_end
 static const char *oes_strings[] = {

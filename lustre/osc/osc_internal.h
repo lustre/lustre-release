@@ -142,10 +142,10 @@ static inline char *cli_name(struct client_obd *cli)
 	return cli->cl_import->imp_obd->obd_name;
 }
 
-#ifndef min_t
-#define min_t(type,x,y) \
-        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
-#endif
+static inline char list_empty_marker(struct list_head *list)
+{
+	return list_empty(list) ? '-' : '+';
+}
 
 struct osc_async_args {
 	struct obd_info	*aa_oi;
