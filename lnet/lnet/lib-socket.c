@@ -376,25 +376,17 @@ lnet_sock_listen(int local_port, int backlog, struct net *ns)
 
 struct socket *
 lnet_sock_connect(int interface, int local_port,
-		  __u32 peer_ip, int peer_port,
+		  struct sockaddr *peeraddr,
 		  struct net *ns)
 {
 	struct socket *sock;
-	struct sockaddr_in srvaddr;
 	int rc;
 
-	memset(&srvaddr, 0, sizeof(srvaddr));
-	srvaddr.sin_family = AF_INET;
-	srvaddr.sin_port = htons(peer_port);
-	srvaddr.sin_addr.s_addr = htonl(peer_ip);
-
-	sock = lnet_sock_create(interface, (struct sockaddr *)&srvaddr,
-				local_port, ns);
+	sock = lnet_sock_create(interface, peeraddr, local_port, ns);
 	if (IS_ERR(sock))
 		return sock;
 
-	rc = kernel_connect(sock, (struct sockaddr *)&srvaddr,
-			    sizeof(srvaddr), 0);
+	rc = kernel_connect(sock, peeraddr, sizeof(struct sockaddr_in), 0);
 	if (rc == 0)
 		return sock;
 
@@ -404,8 +396,8 @@ lnet_sock_connect(int interface, int local_port,
 	 * port... */
 
 	CDEBUG_LIMIT(rc == -EADDRNOTAVAIL ? D_NET : D_NETERROR,
-		     "Error %d connecting %d -> %pI4h/%d\n", rc,
-		     local_port, &peer_ip, peer_port);
+		     "Error %d connecting %d -> %pISp\n", rc,
+		     local_port, peeraddr);
 
 	sock_release(sock);
 	return ERR_PTR(rc);

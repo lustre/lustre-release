@@ -803,7 +803,8 @@ int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 struct socket *lnet_sock_listen(int port, int backlog,
 				struct net *ns);
 struct socket *lnet_sock_connect(int interface, int local_port,
-				 __u32 peer_ip, int peer_port, struct net *ns);
+				 struct sockaddr *peeraddr,
+				 struct net *ns);
 
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(struct lnet_net *net);

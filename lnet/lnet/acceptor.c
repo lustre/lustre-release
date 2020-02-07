@@ -159,9 +159,12 @@ lnet_connect(lnet_nid_t peer_nid, int interface, __u32 peer_ip,
 	     port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
 	     --port) {
 		/* Iterate through reserved ports. */
+		struct sockaddr_in paddr = {.sin_family = AF_INET};
 
+		paddr.sin_addr.s_addr = htonl(peer_ip);
+		paddr.sin_port = htons(peer_port);
 		sock = lnet_sock_connect(interface, port,
-					 peer_ip, peer_port, ns);
+					 (struct sockaddr *)&paddr, ns);
 		if (IS_ERR(sock)) {
 			rc = PTR_ERR(sock);
 			if (rc == -EADDRINUSE || rc == -EADDRNOTAVAIL)
