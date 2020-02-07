@@ -152,7 +152,6 @@ lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
 	struct socket		*sock;
 	int			rc;
 	int			port;
-	int			fatal;
 
 	BUILD_BUG_ON(sizeof(cr) > 16); /* not too big to be on the stack */
 
@@ -161,13 +160,13 @@ lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
 	     --port) {
 		/* Iterate through reserved ports. */
 
-		rc = lnet_sock_connect(&sock, &fatal,
-					 local_ip, port,
-					 peer_ip, peer_port, ns);
-		if (rc != 0) {
-			if (fatal)
-				goto failed;
-			continue;
+		rc = lnet_sock_connect(&sock,
+				       local_ip, port,
+				       peer_ip, peer_port, ns);
+		if (rc) {
+			if (rc == -EADDRINUSE || rc == -EADDRNOTAVAIL)
+				continue;
+			goto failed;
 		}
 
 		BUILD_BUG_ON(LNET_PROTO_ACCEPTOR_VERSION != 1);

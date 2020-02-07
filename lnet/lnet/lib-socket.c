@@ -176,16 +176,13 @@ lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout)
 EXPORT_SYMBOL(lnet_sock_read);
 
 static int
-lnet_sock_create(struct socket **sockp, int *fatal,
+lnet_sock_create(struct socket **sockp,
 		 __u32 local_ip, int local_port, struct net *ns)
 {
 	struct sockaddr_in  locaddr;
 	struct socket	   *sock;
 	int		    rc;
 	int		    option;
-
-	/* All errors are fatal except bind failure if the port is in use */
-	*fatal = 1;
 
 #ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	rc = sock_create_kern(ns, PF_INET, SOCK_STREAM, 0, &sock);
@@ -217,7 +214,6 @@ lnet_sock_create(struct socket **sockp, int *fatal,
 				 sizeof(locaddr));
 		if (rc == -EADDRINUSE) {
 			CDEBUG(D_NET, "Port %d already in use\n", local_port);
-			*fatal = 0;
 			goto failed;
 		}
 		if (rc != 0) {
@@ -312,12 +308,11 @@ int
 lnet_sock_listen(struct socket **sockp,
 		   __u32 local_ip, int local_port, int backlog, struct net *ns)
 {
-	int	 fatal;
 	int	 rc;
 
-	rc = lnet_sock_create(sockp, &fatal, local_ip, local_port, ns);
+	rc = lnet_sock_create(sockp, local_ip, local_port, ns);
 	if (rc != 0) {
-		if (!fatal)
+		if (rc == -EADDRINUSE)
 			CERROR("Can't create socket: port %d already in use\n",
 			       local_port);
 		return rc;
@@ -333,7 +328,7 @@ lnet_sock_listen(struct socket **sockp,
 }
 
 int
-lnet_sock_connect(struct socket **sockp, int *fatal,
+lnet_sock_connect(struct socket **sockp,
 		  __u32 local_ip, int local_port,
 		  __u32 peer_ip, int peer_port,
 		  struct net *ns)
@@ -341,7 +336,7 @@ lnet_sock_connect(struct socket **sockp, int *fatal,
 	struct sockaddr_in  srvaddr;
 	int		    rc;
 
-	rc = lnet_sock_create(sockp, fatal, local_ip, local_port, ns);
+	rc = lnet_sock_create(sockp, local_ip, local_port, ns);
 	if (rc != 0)
 		return rc;
 
@@ -359,11 +354,10 @@ lnet_sock_connect(struct socket **sockp, int *fatal,
 	 * peer/port on the same local port on a differently typed
 	 * connection.	Let our caller retry with a different local
 	 * port... */
-	*fatal = !(rc == -EADDRNOTAVAIL);
 
-	CDEBUG_LIMIT(*fatal ? D_NETERROR : D_NET,
-	       "Error %d connecting %pI4h/%d -> %pI4h/%d\n", rc,
-	       &local_ip, local_port, &peer_ip, peer_port);
+	CDEBUG_LIMIT(rc == -EADDRNOTAVAIL ? D_NET : D_NETERROR,
+		     "Error %d connecting %pI4h/%d -> %pI4h/%d\n", rc,
+		     &local_ip, local_port, &peer_ip, peer_port);
 
 	sock_release(*sockp);
 	return rc;
