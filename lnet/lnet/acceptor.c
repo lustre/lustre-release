@@ -527,6 +527,10 @@ lnet_acceptor_stop(void)
 	if (lnet_acceptor_state.pta_shutdown) /* not running */
 		return;
 
+	/* If still required, return immediately */
+	if (the_lnet.ln_refcount && lnet_count_acceptor_nets() > 0)
+		return;
+
 	lnet_acceptor_state.pta_shutdown = 1;
 	wake_up(&lnet_acceptor_state.pta_waitq);
 
