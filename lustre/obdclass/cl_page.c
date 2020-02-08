@@ -210,17 +210,6 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cl_page,
 	EXIT;
 }
 
-/**
- * Helper function updating page state. This is the only place in the code
- * where cl_page::cp_state field is mutated.
- */
-static inline void cl_page_state_set_trust(struct cl_page *page,
-                                           enum cl_page_state state)
-{
-        /* bypass const. */
-        *(enum cl_page_state *)&page->cp_state = state;
-}
-
 static struct cl_page *__cl_page_alloc(struct cl_object *o)
 {
 	int i = 0;
@@ -274,38 +263,45 @@ check:
 	return cl_page;
 }
 
-struct cl_page *cl_page_alloc(const struct lu_env *env,
-		struct cl_object *o, pgoff_t ind, struct page *vmpage,
-		enum cl_page_type type)
+struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
+			      pgoff_t ind, struct page *vmpage,
+			      enum cl_page_type type)
 {
-	struct cl_page          *page;
+	struct cl_page *cl_page;
 	struct lu_object_header *head;
 
 	ENTRY;
 
-	page = __cl_page_alloc(o);
-	if (page != NULL) {
+	cl_page = __cl_page_alloc(o);
+	if (cl_page != NULL) {
 		int result = 0;
-		atomic_set(&page->cp_ref, 1);
-		page->cp_obj = o;
+
+		/*
+		 * Please fix cl_page:cp_state/type declaration if
+		 * these assertions fail in the future.
+		 */
+		BUILD_BUG_ON((1 << CP_STATE_BITS) < CPS_NR); /* cp_state */
+		BUILD_BUG_ON((1 << CP_TYPE_BITS) < CPT_NR); /* cp_type */
+		atomic_set(&cl_page->cp_ref, 1);
+		cl_page->cp_obj = o;
 		cl_object_get(o);
-		lu_object_ref_add_at(&o->co_lu, &page->cp_obj_ref, "cl_page",
-				     page);
-		page->cp_vmpage = vmpage;
-		cl_page_state_set_trust(page, CPS_CACHED);
-		page->cp_type = type;
-		INIT_LIST_HEAD(&page->cp_batch);
-		lu_ref_init(&page->cp_reference);
+		lu_object_ref_add_at(&o->co_lu, &cl_page->cp_obj_ref,
+				     "cl_page", cl_page);
+		cl_page->cp_vmpage = vmpage;
+		cl_page->cp_state = CPS_CACHED;
+		cl_page->cp_type = type;
+		INIT_LIST_HEAD(&cl_page->cp_batch);
+		lu_ref_init(&cl_page->cp_reference);
 		head = o->co_lu.lo_header;
 		list_for_each_entry(o, &head->loh_layers,
 				    co_lu.lo_linkage) {
 			if (o->co_ops->coo_page_init != NULL) {
-				result = o->co_ops->coo_page_init(env, o, page,
-								  ind);
+				result = o->co_ops->coo_page_init(env, o,
+							cl_page, ind);
 				if (result != 0) {
-					cl_page_delete0(env, page);
-					cl_page_free(env, page, NULL);
-					page = ERR_PTR(result);
+					cl_page_delete0(env, cl_page);
+					cl_page_free(env, cl_page, NULL);
+					cl_page = ERR_PTR(result);
 					break;
 				}
 			}
@@ -316,9 +312,9 @@ struct cl_page *cl_page_alloc(const struct lu_env *env,
 			cs_pagestate_dec(o, CPS_CACHED);
 		}
 	} else {
-		page = ERR_PTR(-ENOMEM);
+		cl_page = ERR_PTR(-ENOMEM);
 	}
-	RETURN(page);
+	RETURN(cl_page);
 }
 
 /**
@@ -383,62 +379,64 @@ static inline int cl_page_invariant(const struct cl_page *pg)
 }
 
 static void cl_page_state_set0(const struct lu_env *env,
-                               struct cl_page *page, enum cl_page_state state)
+			       struct cl_page *cl_page,
+			       enum cl_page_state state)
 {
-        enum cl_page_state old;
+	enum cl_page_state old;
 
-        /*
-         * Matrix of allowed state transitions [old][new], for sanity
-         * checking.
-         */
-        static const int allowed_transitions[CPS_NR][CPS_NR] = {
-                [CPS_CACHED] = {
-                        [CPS_CACHED]  = 0,
-                        [CPS_OWNED]   = 1, /* io finds existing cached page */
-                        [CPS_PAGEIN]  = 0,
-                        [CPS_PAGEOUT] = 1, /* write-out from the cache */
-                        [CPS_FREEING] = 1, /* eviction on the memory pressure */
-                },
-                [CPS_OWNED] = {
-                        [CPS_CACHED]  = 1, /* release to the cache */
-                        [CPS_OWNED]   = 0,
-                        [CPS_PAGEIN]  = 1, /* start read immediately */
-                        [CPS_PAGEOUT] = 1, /* start write immediately */
-                        [CPS_FREEING] = 1, /* lock invalidation or truncate */
-                },
-                [CPS_PAGEIN] = {
-                        [CPS_CACHED]  = 1, /* io completion */
-                        [CPS_OWNED]   = 0,
-                        [CPS_PAGEIN]  = 0,
-                        [CPS_PAGEOUT] = 0,
-                        [CPS_FREEING] = 0,
-                },
-                [CPS_PAGEOUT] = {
-                        [CPS_CACHED]  = 1, /* io completion */
-                        [CPS_OWNED]   = 0,
-                        [CPS_PAGEIN]  = 0,
-                        [CPS_PAGEOUT] = 0,
-                        [CPS_FREEING] = 0,
-                },
-                [CPS_FREEING] = {
-                        [CPS_CACHED]  = 0,
-                        [CPS_OWNED]   = 0,
-                        [CPS_PAGEIN]  = 0,
-                        [CPS_PAGEOUT] = 0,
-                        [CPS_FREEING] = 0,
-                }
-        };
+	/*
+	 * Matrix of allowed state transitions [old][new], for sanity
+	 * checking.
+	 */
+	static const int allowed_transitions[CPS_NR][CPS_NR] = {
+		[CPS_CACHED] = {
+			[CPS_CACHED]  = 0,
+			[CPS_OWNED]   = 1, /* io finds existing cached page */
+			[CPS_PAGEIN]  = 0,
+			[CPS_PAGEOUT] = 1, /* write-out from the cache */
+			[CPS_FREEING] = 1, /* eviction on the memory pressure */
+		},
+		[CPS_OWNED] = {
+			[CPS_CACHED]  = 1, /* release to the cache */
+			[CPS_OWNED]   = 0,
+			[CPS_PAGEIN]  = 1, /* start read immediately */
+			[CPS_PAGEOUT] = 1, /* start write immediately */
+			[CPS_FREEING] = 1, /* lock invalidation or truncate */
+		},
+		[CPS_PAGEIN] = {
+			[CPS_CACHED]  = 1, /* io completion */
+			[CPS_OWNED]   = 0,
+			[CPS_PAGEIN]  = 0,
+			[CPS_PAGEOUT] = 0,
+			[CPS_FREEING] = 0,
+		},
+		[CPS_PAGEOUT] = {
+			[CPS_CACHED]  = 1, /* io completion */
+			[CPS_OWNED]   = 0,
+			[CPS_PAGEIN]  = 0,
+			[CPS_PAGEOUT] = 0,
+			[CPS_FREEING] = 0,
+		},
+		[CPS_FREEING] = {
+			[CPS_CACHED]  = 0,
+			[CPS_OWNED]   = 0,
+			[CPS_PAGEIN]  = 0,
+			[CPS_PAGEOUT] = 0,
+			[CPS_FREEING] = 0,
+		}
+	};
 
-        ENTRY;
-        old = page->cp_state;
-        PASSERT(env, page, allowed_transitions[old][state]);
-        CL_PAGE_HEADER(D_TRACE, env, page, "%d -> %d\n", old, state);
-	PASSERT(env, page, page->cp_state == old);
-	PASSERT(env, page, equi(state == CPS_OWNED, page->cp_owner != NULL));
+	ENTRY;
+	old = cl_page->cp_state;
+	PASSERT(env, cl_page, allowed_transitions[old][state]);
+	CL_PAGE_HEADER(D_TRACE, env, cl_page, "%d -> %d\n", old, state);
+	PASSERT(env, cl_page, cl_page->cp_state == old);
+	PASSERT(env, cl_page, equi(state == CPS_OWNED,
+				   cl_page->cp_owner != NULL));
 
-	cs_pagestate_dec(page->cp_obj, page->cp_state);
-	cs_pagestate_inc(page->cp_obj, state);
-	cl_page_state_set_trust(page, state);
+	cs_pagestate_dec(cl_page->cp_obj, cl_page->cp_state);
+	cs_pagestate_inc(cl_page->cp_obj, state);
+	cl_page->cp_state = state;
 	EXIT;
 }
 
@@ -1217,6 +1215,7 @@ void cl_page_slice_add(struct cl_page *cl_page, struct cl_page_slice *slice,
 			((char *)cl_page + sizeof(*cl_page));
 
 	ENTRY;
+	LASSERT(cl_page->cp_layer_count < CP_MAX_LAYER);
 	LASSERT(offset < (1 << sizeof(cl_page->cp_layer_offset[0]) * 8));
 	cl_page->cp_layer_offset[cl_page->cp_layer_count++] = offset;
 	slice->cpl_obj  = obj;
