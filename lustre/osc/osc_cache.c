@@ -2323,7 +2323,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 
 	oap->oap_cmd = cmd;
 	oap->oap_page_off = ops->ops_from;
-	oap->oap_count = ops->ops_to - ops->ops_from;
+	oap->oap_count = ops->ops_to - ops->ops_from + 1;
 	/* No need to hold a lock here,
 	 * since this page is not in any list yet. */
 	oap->oap_async_flags = 0;
@@ -2584,7 +2584,8 @@ int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
 		++page_count;
 		mppr <<= (page_count > mppr);
 
-		if (unlikely(opg->ops_from > 0 || opg->ops_to < PAGE_SIZE))
+		if (unlikely(opg->ops_from > 0 ||
+			     opg->ops_to < PAGE_SIZE - 1))
 			can_merge = false;
 	}
 

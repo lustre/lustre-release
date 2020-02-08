@@ -496,17 +496,17 @@ struct osc_page {
 	 * An offset within page from which next transfer starts. This is used
 	 * by cl_page_clip() to submit partial page transfers.
 	 */
-	int                   ops_from;
+	unsigned int		ops_from:PAGE_SHIFT,
 	/**
-	 * An offset within page at which next transfer ends.
+	 * An offset within page at which next transfer ends(inclusive).
 	 *
 	 * \see osc_page::ops_from.
 	 */
-	int                   ops_to;
+				ops_to:PAGE_SHIFT,
 	/**
 	 * Boolean, true iff page is under transfer. Used for sanity checking.
 	 */
-	unsigned              ops_transfer_pinned:1,
+				ops_transfer_pinned:1,
 	/**
 	 * in LRU?
 	 */

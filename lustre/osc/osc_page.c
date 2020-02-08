@@ -214,7 +214,8 @@ static void osc_page_clip(const struct lu_env *env,
 	struct osc_async_page *oap = &opg->ops_oap;
 
 	opg->ops_from = from;
-	opg->ops_to   = to;
+	/* argument @to is exclusive, but @ops_to is inclusive */
+	opg->ops_to   = to - 1;
 	spin_lock(&oap->oap_lock);
 	oap->oap_async_flags |= ASYNC_COUNT_STABLE;
 	spin_unlock(&oap->oap_lock);
@@ -249,30 +250,29 @@ static const struct cl_page_operations osc_page_ops = {
 };
 
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
-		  struct cl_page *page, pgoff_t index)
+		  struct cl_page *cl_page, pgoff_t index)
 {
 	struct osc_object *osc = cl2osc(obj);
-	struct osc_page   *opg = cl_object_page_slice(obj, page);
+	struct osc_page *opg = cl_object_page_slice(obj, cl_page);
 	struct osc_io *oio = osc_env_io(env);
 	int result;
 
 	opg->ops_from = 0;
-	opg->ops_to   = PAGE_SIZE;
+	opg->ops_to = PAGE_SIZE - 1;
 
 	INIT_LIST_HEAD(&opg->ops_lru);
 
-	result = osc_prep_async_page(osc, opg, page->cp_vmpage,
+	result = osc_prep_async_page(osc, opg, cl_page->cp_vmpage,
 				     cl_offset(obj, index));
 	if (result != 0)
 		return result;
 
 	opg->ops_srvlock = osc_io_srvlock(oio);
-	cl_page_slice_add(page, &opg->ops_cl, obj, &osc_page_ops);
-	page->cp_osc_index = index;
-
+	cl_page_slice_add(cl_page, &opg->ops_cl, obj, &osc_page_ops);
+	cl_page->cp_osc_index = index;
 
 	/* reserve an LRU space for this page */
-	if (page->cp_type == CPT_CACHEABLE) {
+	if (cl_page->cp_type == CPT_CACHEABLE) {
 		result = osc_lru_alloc(env, osc_cli(osc), opg);
 		if (result == 0) {
 			result = radix_tree_preload(GFP_NOFS);
@@ -310,9 +310,9 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	LASSERT(oap->oap_async_flags & ASYNC_READY);
 	LASSERT(oap->oap_async_flags & ASYNC_COUNT_STABLE);
 
-	oap->oap_cmd       = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
-	oap->oap_page_off  = opg->ops_from;
-	oap->oap_count     = opg->ops_to - opg->ops_from;
+	oap->oap_cmd = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
+	oap->oap_page_off = opg->ops_from;
+	oap->oap_count = opg->ops_to - opg->ops_from + 1;
 	oap->oap_brw_flags = OBD_BRW_SYNC | brw_flags;
 
 	if (oio->oi_cap_sys_resource) {
