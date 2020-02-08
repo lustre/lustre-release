@@ -466,22 +466,22 @@ command_t cmdlist[] = {
 	/* LFSCK commands */
 	{"==== LFSCK ====", NULL, 0, "LFSCK"},
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
-	 "usage: lfsck_start [-M | --device [MDT,OST]_device]\n"
-	 "		     [-A | --all] [-c | --create-ostobj [on | off]]\n"
-	 "		     [-C | --create-mdtobj [on | off]]\n"
-	 "		     [-d | --delay-create-ostobj [on | off]]\n"
-	 "		     [-e | --error {continue | abort}] [-h | --help]\n"
-	 "		     [-n | --dryrun [on | off]] [-o | --orphan]\n"
-	 "		     [-r | --reset] [-s | --speed speed_limit]\n"
-	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
-	 "		     [-w | --window-size size]"},
+	 "usage: lfsck_start [--device|-M [MDT,OST]_device]\n"
+	 "		     [--all|-A] [--create-ostobj|-c [on | off]]\n"
+	 "		     [--create-mdtobj|-C [on | off]]\n"
+	 "		     [--delay-create-ostobj|-d [on | off]]\n"
+	 "		     [--error|-e {continue | abort}] [--help|-h]\n"
+	 "		     [--dryrun|-n [on | off]] [-o | --orphan]\n"
+	 "		     [--reset|-r] [--speed|-s speed_limit]\n"
+	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
+	 "		     [--window-size|-w size]"},
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
-	 "usage: lfsck_stop [-M | --device [MDT,OST]_device]\n"
-	 "		    [-A | --all] [-h | --help]"},
+	 "usage: lfsck_stop [--device|-M [MDT,OST]_device]\n"
+	 "		    [--all|-a] [--help|-h]"},
 	{"lfsck_query", jt_lfsck_query, 0, "check lfsck(s) status\n"
-	 "usage: lfsck_query [-M | --device MDT_device] [-h | --help]\n"
-	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
-	 "		     [-w | --wait]"},
+	 "usage: lfsck_query [--device|-M MDT_device] [--help|-h]\n"
+	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
+	 "		     [--wait|-w]"},
 #endif /* HAVE_SERVER_SUPPORT */
 	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
 	/* some test scripts still use these */

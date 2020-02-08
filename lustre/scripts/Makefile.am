@@ -84,7 +84,8 @@ endif # UTILS
 
 if ENABLE_BASH_COMPLETION
 bashcompletiondir = $(BASH_COMPLETION_DIR)
-dist_bashcompletion_DATA = bash-completion/lctl
+dist_bashcompletion_DATA = bash-completion/lustre bash-completion/lctl \
+			   bash-completion/lfs
 endif
 
 EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
@@ -92,7 +93,7 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
 	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
 	     zfsobj2fid ko2iblnd-probe statechange-lustre.sh \
-	     bash-completion/lctl
+	     bash-completion/lustre bash-completion/lctl bash-completion/lfs
 
 CLEANFILES = $(genscripts)
 
