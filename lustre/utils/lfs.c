@@ -186,16 +186,17 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--layout|-L <pattern>]\n"			\
-	"                 [--pool|-p <pool_name>]\n"			\
+	"                 [--mirror_count|-N[mirror_count]]\n"		\
 	"                 [--ost|-o <ost_indices>]\n"			\
+	"                 [--pool|-p <pool_name>]\n"			\
 	"                 [--yaml|-y <yaml_template_file>]\n"		\
 	"                 [--copy=<lustre_src>]\n"
 
 #define SSM_HELP_COMMON \
 	"\tstripe_count: Number of OSTs to stripe over (0=fs default, -1 all)\n" \
 	"\t		 Using -C instead of -c allows overstriping, which\n" \
-	 "\t		 will place more than one stripe per OST if\n" \
-	 "\t		 stripe_count is greater than the number of OSTs\n" \
+	"\t		 will place more than one stripe per OST if\n" \
+	"\t		 stripe_count is greater than the number of OSTs\n" \
 	"\tstart_ost_idx: OST index of first stripe (-1=default round robin)\n"\
 	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n" \
 	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
@@ -207,7 +208,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
 	"\t              Or:\n"						\
 	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
-	"\t              If --pool is set with --ost, then the OSTs\n"	\
+	"\t              If --pool is set with --ost then the OSTs\n"	\
 	"\t              must be the members of the pool.\n"		\
 	"\tcomp_end:     Extent end of component, start after previous end.\n"\
 	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
@@ -227,7 +228,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t              it must follow the option without a space.\n"	       \
 	"\t              The option can also be repeated multiple times to\n"  \
 	"\t              separate mirrors that have different layouts.\n"      \
-	"\tsetstripe options: Mirror layout\n"				       \
+	"\tSETSTRIPE_OPTIONS: Mirror layout as with 'setstripe'\n"	       \
 	"\t              It can be a plain layout or a composite layout.\n"    \
 	"\t              If not specified, the stripe options inherited\n"     \
 	"\t              from the previous component will be used.\n"          \
@@ -244,8 +245,8 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t              file.\n"
 
 #define MIRROR_EXTEND_USAGE						       \
-	"                 <--mirror-count|-N[mirror_count]>\n"		       \
-	"                 [setstripe options|-f <victim_file>]\n"	       \
+	"                 {--mirror-count|-N[mirror_count]}\n"		       \
+	"                 [SETSTRIPE_OPTIONS|-f|--file <victim_file>]\n"       \
 	"                 [--no-verify]\n"
 
 #define SETSTRIPE_USAGE							\
@@ -294,7 +295,7 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Create a mirrored file.\n"
 		"usage: lfs mirror create "
 		"<--mirror-count|-N[mirror_count]> "
-		"[setstripe options] ... <filename|directory> ...\n"
+		"[SETSTRIPE_OPTIONS] ... <filename|directory> ...\n"
 	  MIRROR_CREATE_HELP },
 	{ .pc_name = "delete", .pc_func = lfs_mirror_delete,
 	  .pc_help = "delete a mirror from a file.\n"
@@ -304,7 +305,7 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Extend a mirrored file.\n"
 		"usage: lfs mirror extend "
 		"<--mirror-count|-N[mirror_count]> [--no-verify] "
-		"[setstripe options|-f <victim_file>] ... <filename> ...\n"
+		"[SETSTRIPE_OPTIONS|-f <victim_file>] ... <filename> ...\n"
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
@@ -392,10 +393,10 @@ command_t cmdlist[] = {
 	 SSM_CMD_COMMON("setstripe --component-add")
 	 SSM_HELP_COMMON
 	 "To totally delete the default striping from an existing directory:\n"
-	 "usage: setstripe -d <directory>\n"
+	 "usage: setstripe [--delete|-d] <directory>\n"
 	 " or\n"
 	 "To create a mirrored file or set s default mirror layout on a directory:\n"
-	 "usage: setstripe -N[mirror_count] [STRIPE_OPTIONS] <directory|filename>\n"
+	 "usage: setstripe {--mirror-count|-N}[mirror_count] [SETSTRIPE_OPTIONS] <directory|filename>\n"
 	 " or\n"
 	 "To delete the last component(s) from an existing composite file\n"
 	 "(note that this will also delete any data in those components):\n"
@@ -474,7 +475,7 @@ command_t cmdlist[] = {
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
-	 "     [[!] --component-flags <comp_flags>]\n"
+	 "     [[!] --component-flags {init,stale,prefer,offline,nosync,extension}]\n"
 	 "     [[!] --mirror-count|-N [+-]<n>]\n"
 	 "     [[!] --mirror-state <[^]state>]\n"
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
@@ -497,7 +498,8 @@ command_t cmdlist[] = {
 	{"df", lfs_df, 0,
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
-	 "Usage: df [-i] [-h] [--lazy|-l] [--pool|-p <fsname>[.<pool>] [path]"},
+	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
+	 "          [--pool|-p <fsname>[.<pool>]] [path]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
@@ -577,7 +579,7 @@ command_t cmdlist[] = {
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
 	 "usage: rmfid <fsname|rootpath> <fid> ..."},
 	{"data_version", lfs_data_version, 0, "Display file data version for "
-	 "a given path.\n" "usage: data_version -[n|r|w] <path>"},
+	 "a given path.\n" "usage: data_version [-n|-r|-w] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
 	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
 	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"

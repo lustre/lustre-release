@@ -59,7 +59,9 @@
  * ("(non-zero)" and "0").
  *
  */
+#ifndef BUILD_BUG_ON
 #define BUILD_BUG_ON(cond) do {switch (0) {case (cond): case 1: break; } } while (0)
+#endif
 
 int ret;
 

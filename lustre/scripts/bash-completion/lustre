@@ -1,0 +1,349 @@
+_lustre_cmds()
+{
+	local cmd="$1"
+	local sub="$2"
+
+	# "--list-command" prints commands in columns and truncates long ones
+	"$cmd" "$sub" --non-existent-option |
+		sed -e 1d -e '$d' -e 's/"//g' -e /=/d -e /exit/d -e /quit/d
+}
+
+_lustre_long_opts()
+{
+	local cmd="$1"
+	local sub="$2"
+	local subsub="$3"
+
+	# strip off usage message decoration and leave long opts
+	if [[ -n "$subsub" ]]; then
+		"$cmd" "$sub" help "$subsub" |& grep -owE -- '--[-a-zA-Z0]*'
+	else
+		"$cmd" help "$sub" |& sed -e 1d | grep -owE -- '--[-a-zA-Z0]*'
+	fi
+	# several commands take the same options as setstripe, except --delete
+	case "$sub$subsub" in
+	migrate|mirrorcreate|mirrorextend)
+		_lustre_long_opts "$cmd" setstripe | grep -v -- --delete
+	esac
+}
+
+_lustre_short_opts()
+{
+	local cmd="$1"
+	local sub="$2"
+	local subsub="$3"
+
+	# strip off usage message decoration and leave short opts
+	if [[ -n "$subsub" ]]; then
+		"$cmd" "$sub" help "$subsub" |& grep -owE -- '-[-a-zA-Z0]'
+	else
+		"$cmd" help "$sub" |& grep -owE -- '-[-a-zA-Z0]'
+	fi
+	# several commands take the same options as setstripe, except -d
+	case "$sub$subsub" in
+	migrate|mirrorextend|mirrorextend)
+		_lustre_short_opts "$cmd" setstripe | grep -v -- -d
+	esac
+}
+
+_lustre_comp_flags()
+{
+	local cmd=$1
+	local flags
+
+	flags=$("$cmd" help find |& tr "<>[],}" " " |
+		grep -- '--component-flags {' | cut -d\{ -f2)
+	if [[ -z "$flags" ]]; then
+		local version=($("$cmd" --version))
+
+		case "${version[1]}" in
+		2.13*) flags="init stale prefer offline nosync extension";;
+		2.12*|2.11*) flags="init stale prefer offline nosync";;
+		*) flags="init";;
+		esac
+	fi
+	echo $flags
+}
+
+_lustre_mountpoints()
+{
+	findmnt --list -t lustre -n -o TARGET
+}
+
+_lustre_mount_fsnames()
+{
+	local mountpoint
+
+	# FIXME: will fail if newlines in $mountpoint, why would anyone do that?
+	_lustre_mountpoints | while read mountpoint; do
+		lfs getname -n "$mountpoint" 2> /dev/null
+	done
+}
+
+_lustre_devices()
+{
+	lctl device_list | awk '{ print $4 }'
+}
+
+_lustre_fsnames()
+{
+	local mountpoint="${1:-'.'}"
+
+	local fsname=$(lfs getname -n "$mountpoint" 2>/dev/null)
+
+	[[ -n "$fsname" ]] && echo "$fsname" || _lustre_mount_fsnames
+}
+
+_lustre_layouts()
+{
+	"$cmd" help find |& tr "[]," " " | grep -- --layout | sed "s/.*-L //"
+}
+
+_lustre_mdts()
+{
+	lfs mdts $1 | grep _UUID | sed -e "s/[0-9]*: //" -e "s/_UUID.*//"
+}
+
+_lustre_osts()
+{
+	lfs osts $1 | grep _UUID | sed -e "s/[0-9]*: //" -e "s/_UUID.*//"
+}
+
+_lustre_pools()
+{
+	if [[ -d "$1" ]]; then
+		"$cmd" pool_list $1 2> /dev/null | grep -v "[Pp]ools from" |
+			cut -d. -f2
+		return 0
+	fi
+
+	for fsname in $(_lustre_fsnames $1); do
+		"$cmd" pool_list $fsname 2> /dev/null | grep -v "[Pp]ools from"
+	done
+}
+
+_lfs()
+{
+	local cur prev words cword
+	local mountpoint cmd sub find_opts
+
+	COMPREPLY=()
+	# allow different versions of bash_completion to work
+	if declare -F _init_completion > /dev/null; then
+		# this provides more functionality, but is only in v2.x
+		_init_completion || return
+	else
+		# this is compatible with both v1.3 and v2.x
+		_get_comp_words_by_ref cur prev words cword
+	fi
+
+	cmd="${words[0]}"
+	sub="${words[1]}"
+	[[ "$sub" == "mirror" || "$sub" == "pcc" ]] && subsub="${words[2]}"
+	if [[ "$cword" == "1" || "$prev" == "help" ]]; then
+		COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd")' -- "$cur"))
+		return 0
+	fi
+
+	case "$cur" in
+	--*)
+		COMPREPLY+=($(compgen -W '$(_lustre_long_opts "$cmd" "$sub" "$subsub")' -- "$cur"))
+		return 0
+		;;
+	-*)
+		# lfs find allows "-longopt" for compatibility with find(1)
+		[[ "$sub" == "find" ]] && find_opts=$(_lustre_long_opts "$cmd" find)
+		COMPREPLY+=($(compgen -W '$(_lustre_short_opts "$cmd" "$sub" "$subsub") ${find_opts//--/-}' -- "$cur"))
+		return 0
+		;;
+	esac
+
+	case "$sub" in
+	check)
+		[[ -n "$cur" ]] && return 0
+		COMPREPLY+=($(compgen -W '$("$cmd" help check |& grep usage |
+					    sed -e "s/[<>|]/ /g" \
+					        -e "s/.*check //")' -- "$cur"))
+		return 0
+		;;
+	df)
+		mapfile -t COMPREPLY < <(
+			_lustre_mountpoints | grep -- "^$cur" | sed 's/ /\\ /g'
+		)
+		return 0
+		;;
+	find)
+		[[ -d "${words[2]}" ]] && mountpoint="${words[2]}"
+		case "${prev/--/-}" in
+		-component-flags|-comp-flags)
+			# FIXME: this should allow a comma-separated list
+			COMPREPLY+=($(compgen -W '$(_lustre_comp_flags)' -- "$cur"))
+			return 0
+			;;
+		-g|-group)
+			COMPREPLY+=($(compgen -g -- "$cur"))
+			return 0
+			;;
+		-L|-layout)
+			COMPREPLY+=($(compgen -W '$(_lustre_layouts)' -- "$cur"))
+			return 0
+			;;
+		-m|-mdt)
+			# FIXME: this should allow a comma-separated list
+			COMPREPLY+=($(compgen -W '$(_lustre_mdts "$mountpoint")' -- "$cur"))
+			return 0
+			;;
+		-O|-ost)
+			# FIXME: this should allow a comma-separated list
+			COMPREPLY+=($(compgen -W '$(_lustre_osts "$mountpoint")' -- "$cur"))
+			return 0
+			;;
+		-pool)
+			COMPREPLY+=($(compgen -W '$(_lustre_pools "$mountpoint")' -- "$cur"))
+			return 0
+			;;
+		-t|-type)
+			COMPREPLY+=($(compgen -W 'b c d f l p s' -- "$cur"))
+			return 0
+			;;
+		-u|-user)
+			COMPREPLY+=($(compgen -u -- "$cur"))
+			return 0
+			;;
+		esac
+		if [ -z "$mountpoint" ]; then
+			mapfile -t COMPREPLY < <(
+				_lustre_mountpoints | grep -- "^$cur" |
+					sed -e 's/ /\\ /g'
+			)
+			return 0
+		fi
+		;;
+	mirror)
+		if [[ "$prev" == "$sub" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd" "$sub")' -- "$cur"))
+			return 0
+		fi
+		;;
+	pcc)
+		if [[ "$prev" == "$sub" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd" "$sub")' -- "$cur"))
+			return 0
+		fi
+		;;
+	pool_list)
+		COMPREPLY+=($(compgen -W '$(_lustre_fsnames
+					    _lustre_pools)' -- "$cur"))
+		return 0
+		;;
+	setstripe)
+		case "$prev" in
+		--component-flags|--comp-flags)
+			# only subset allowed, easier to list than exclude for now
+			# COMPREPLY+=($(compgen -W '$(_lustre_comp_flags)' -- "$cur"))
+			# FIXME: this should allow a comma-separated list
+			COMPREPLY+=($(compgen -W 'nosync prefer' -- "$cur"))
+			return 0
+			;;
+		-p|--pool)
+			COMPREPLY+=($(compgen -W '$(_lustre_pools)' -- "$cur"))
+			return 0
+			;;
+		esac
+		;;
+	esac
+
+	_filedir
+	return 0
+} &&
+complete -F _lfs lfs
+
+_lctl()
+{
+	local cur prev words cword
+
+	COMPREPLY=()
+	# allow different versions of bash_completion to work
+	if declare -F _init_completion > /dev/null; then
+		# this provides more functionality, but is only in v2.x
+		_init_completion || return
+	else
+		# this is compatible with both v1.3 and v2.x
+		_get_comp_words_by_ref cur prev words cword
+	fi
+
+	cmd="${words[0]}"
+	sub="${words[1]}"
+	[[ "$sub" == "--device" && $cword -ge 4 ]] && sub="${words[3]}"
+
+	if [[ "$cword" == "1" || "$prev" == "help" ]]; then
+		COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd")' -- "$cur"))
+		return 0
+	fi
+
+	case "$cur" in
+	--*)
+		COMPREPLY+=($(compgen -W '$(_lustre_long_opts "$cmd" "$sub")' -- "$cur"))
+		return 0
+		;;
+	-*)
+		COMPREPLY+=($(compgen -W '$(_lustre_short_opts "$cmd" "$sub")' -- "$cur"))
+		return 0
+		;;
+	esac
+
+	case "$sub" in
+	--device)
+		if [[ "$cword" == "2" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_devices)' -- "$cur"))
+		elif [[ "$cword" == "3" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd")' -- "$cur"))
+		fi
+		return 0
+		;;
+	get_param|list_param|set_param)
+		local filter="s/=$//"
+		[[ "$sub" == "set_param" ]] && filter="/[^=/]$/d"
+		mapfile -t COMPREPLY < <(
+		    "$cmd" list_param -F "${cur#[\"\']}*" 2>/dev/null |
+		    sed -e "$filter" -e 's#/$#.#' \
+			-e "s#^${cur//\*/[^.]*}#$cur#"
+		)
+		compopt -o nospace
+
+		return 0
+		;;
+	pcc)
+		if [[ "$prev" == "$sub" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_cmds "$cmd" "$sub")' -- "$cur"))
+			return 0
+		fi
+		;;
+	pool_list)
+		if [[ "$cword" == "2" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_mountpoints
+						    _lustre_fsnames
+						    _lustre_pools)' -- "$cur"))
+			return 0
+		fi
+		;;
+	pool_destroy)
+		if [[ "$cword" == "2" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_pools)' -- "$cur"))
+			return 0
+		fi
+		return 0
+		;;
+	pool_add|pool_remove)
+		if [[ "$cword" == "2" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_pools)' -- "$cur"))
+			return 0
+		elif [[ "$cword" == "3" ]]; then
+			COMPREPLY+=($(compgen -W '$(_lustre_osts)' -- "$cur"))
+			return 0
+		fi
+		return 0
+		;;
+	esac
+} &&
+complete -F _lctl lctl
