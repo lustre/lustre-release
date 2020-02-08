@@ -54,7 +54,6 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 			    const char **secctx_name, void **secctx,
 			    __u32 *secctx_size)
 {
-#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY
 	int rc;
 
 	/*
@@ -82,14 +81,12 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 		return rc;
 
 	*secctx_name = XATTR_NAME_SELINUX;
-#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
 
 	return 0;
 }
 
-#ifdef HAVE_SECURITY_IINITSEC_CALLBACK
 /**
- * A helper function for ll_security_inode_init_security()
+ * A helper function for security_inode_init_security()
  * that takes care of setting xattrs
  *
  * Get security context of @inode from @xattr_array,
@@ -146,59 +143,13 @@ ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 	if (!selinux_is_enabled())
 		return 0;
 
-	rc = ll_security_inode_init_security(inode, dir, NULL, NULL, 0,
-					      &ll_initxattrs, dentry);
+	rc = security_inode_init_security(inode, dir, NULL,
+					  &ll_initxattrs, dentry);
 	if (rc == -EOPNOTSUPP)
 		return 0;
 
 	return rc;
 }
-#else /* !HAVE_SECURITY_IINITSEC_CALLBACK */
-/**
- * Initializes security context
- *
- * Get security context of @inode in @dir,
- * and put it in 'security.xxx' xattr of @dentry.
- *
- * \retval 0        success, or SELinux is disabled
- * \retval -ENOMEM  if no memory could be allocated for xattr name
- * \retval < 0      failure to get security context or set xattr
- */
-int
-ll_inode_init_security(struct dentry *dentry, struct inode *inode,
-		       struct inode *dir)
-{
-	char *full_name;
-	void *value;
-	char *name;
-	size_t len;
-	int err;
-
-	if (!selinux_is_enabled())
-		return 0;
-
-	err = ll_security_inode_init_security(inode, dir, &name, &value, &len,
-					      NULL, dentry);
-	if (err != 0) {
-		if (err == -EOPNOTSUPP)
-			return 0;
-		return err;
-	}
-
-	full_name = kasprintf(GFP_KERNEL, "%s%s", XATTR_SECURITY_PREFIX, name);
-	if (!full_name)
-		GOTO(out_free, err = -ENOMEM);
-
-	err = __vfs_setxattr(dentry, inode, full_name, value, len,
-			     XATTR_CREATE);
-	kfree(full_name);
-out_free:
-	kfree(name);
-	kfree(value);
-
-	return err;
-}
-#endif /* HAVE_SECURITY_IINITSEC_CALLBACK */
 
 /**
  * Get security context xattr name used by policy.
@@ -214,21 +165,10 @@ ll_listsecurity(struct inode *inode, char *secctx_name, size_t secctx_name_size)
 	if (!selinux_is_enabled())
 		return 0;
 
-#ifdef HAVE_SECURITY_INODE_LISTSECURITY
 	rc = security_inode_listsecurity(inode, secctx_name, secctx_name_size);
 	if (rc >= secctx_name_size)
 		rc = -ERANGE;
 	else if (rc >= 0)
 		secctx_name[rc] = '\0';
 	return rc;
-#else /* !HAVE_SECURITY_INODE_LISTSECURITY */
-	rc = sizeof(XATTR_NAME_SELINUX);
-	if (secctx_name && rc < secctx_name_size) {
-		memcpy(secctx_name, XATTR_NAME_SELINUX, rc);
-		secctx_name[rc] = '\0';
-	} else {
-		rc = -ERANGE;
-	}
-	return rc;
-#endif /* HAVE_SECURITY_INODE_LISTSECURITY */
 }

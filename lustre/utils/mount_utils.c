@@ -423,7 +423,6 @@ int loop_setup(struct mkfs_opts *mop)
 		char cmd[PATH_MAX];
 		int cmdsz = sizeof(cmd);
 
-#ifdef HAVE_LOOP_CTL_GET_FREE
 		ret = open("/dev/loop-control", O_RDWR);
 		if (ret < 0) {
 			fprintf(stderr, "%s: can't access loop control\n",
@@ -439,11 +438,7 @@ int loop_setup(struct mkfs_opts *mop)
 			return EACCES;
 		}
 		sprintf(l_device, "%s%d", loop_base, i);
-#else
-		sprintf(l_device, "%s%d", loop_base, i);
-		if (access(l_device, F_OK | R_OK))
-			break;
-#endif
+
 		snprintf(cmd, cmdsz, "losetup %s > /dev/null 2>&1", l_device);
 		ret = system(cmd);
 

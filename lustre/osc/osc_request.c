@@ -1446,13 +1446,13 @@ no_bulk:
                 LASSERT((pga[0]->flag & OBD_BRW_SRVLOCK) ==
                         (pg->flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {
-			unsigned char *ptr = ll_kmap_atomic(pg->pg, KM_USER0);
+			unsigned char *ptr = kmap_atomic(pg->pg);
 
 			LASSERT(short_io_size >= requested_nob + pg->count);
 			memcpy(short_io_buf + requested_nob,
 			       ptr + poff,
 			       pg->count);
-			ll_kunmap_atomic(ptr, KM_USER0);
+			kunmap_atomic(ptr);
 		} else if (short_io_size == 0) {
 			desc->bd_frag_ops->add_kiov_frag(desc, pg->pg, poff,
 							 pg->count);
@@ -1826,10 +1826,10 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 			CDEBUG(D_CACHE, "page %p count %d\n",
 			       aa->aa_ppga[i]->pg, count);
-			ptr = ll_kmap_atomic(aa->aa_ppga[i]->pg, KM_USER0);
+			ptr = kmap_atomic(aa->aa_ppga[i]->pg);
 			memcpy(ptr + (aa->aa_ppga[i]->off & ~PAGE_MASK), buf,
 			       count);
-			ll_kunmap_atomic((void *) ptr, KM_USER0);
+			kunmap_atomic((void *) ptr);
 
 			buf += count;
 			nob -= count;

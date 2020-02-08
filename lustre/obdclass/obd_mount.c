@@ -1702,19 +1702,11 @@ void lustre_register_super_ops(struct module *mod,
 EXPORT_SYMBOL(lustre_register_super_ops);
 
 /***************** FS registration ******************/
-#ifdef HAVE_FSTYPE_MOUNT
 static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
 				   const char *devname, void *data)
 {
 	return mount_nodev(fs_type, flags, data, lustre_fill_super);
 }
-#else
-static int lustre_get_sb(struct file_system_type *fs_type, int flags,
-			 const char *devname, void *data, struct vfsmount *mnt)
-{
-	return get_sb_nodev(fs_type, flags, data, lustre_fill_super, mnt);
-}
-#endif
 
 static void lustre_kill_super(struct super_block *sb)
 {
@@ -1740,11 +1732,7 @@ static void lustre_kill_super(struct super_block *sb)
 static struct file_system_type lustre_fs_type_tgt = {
 	.owner		= THIS_MODULE,
 	.name		= "lustre_tgt",
-#ifdef HAVE_FSTYPE_MOUNT
 	.mount		= lustre_mount,
-#else
-	.get_sb		= lustre_get_sb,
-#endif
 	.kill_sb	= lustre_kill_super,
 	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
 };
@@ -1772,11 +1760,7 @@ do {									    \
 static struct file_system_type lustre_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "lustre",
-#ifdef HAVE_FSTYPE_MOUNT
 	.mount		= lustre_mount,
-#else
-	.get_sb		= lustre_get_sb,
-#endif
 	.kill_sb	= lustre_kill_super,
 	.fs_flags	= FS_RENAME_DOES_D_MOVE,
 };

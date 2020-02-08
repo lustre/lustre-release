@@ -157,10 +157,9 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 static void ll_invalidate_negative_children(struct inode *dir)
 {
 	struct dentry *dentry, *tmp_subdir;
-	DECLARE_LL_D_HLIST_NODE_PTR(p);
 
 	spin_lock(&dir->i_lock);
-	ll_d_hlist_for_each_entry(dentry, p, &dir->i_dentry) {
+	hlist_for_each_entry(dentry, &dir->i_dentry, d_alias) {
 		spin_lock(&dentry->d_lock);
 		if (!list_empty(&dentry->d_subdirs)) {
 			struct dentry *child;
@@ -538,15 +537,14 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 {
 	struct dentry *alias, *discon_alias, *invalid_alias;
-	DECLARE_LL_D_HLIST_NODE_PTR(p);
 
-	if (ll_d_hlist_empty(&inode->i_dentry))
+	if (hlist_empty(&inode->i_dentry))
 		return NULL;
 
 	discon_alias = invalid_alias = NULL;
 
 	spin_lock(&inode->i_lock);
-	ll_d_hlist_for_each_entry(alias, p, &inode->i_dentry) {
+	hlist_for_each_entry(alias, &inode->i_dentry, d_alias) {
 		LASSERT(alias != dentry);
 
 		spin_lock(&alias->d_lock);
@@ -921,7 +919,6 @@ out:
 	return retval;
 }
 
-#ifdef HAVE_IOP_ATOMIC_OPEN
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 				   unsigned int flags)
 {
@@ -1118,111 +1115,6 @@ out_release:
 
 	RETURN(rc);
 }
-
-#else /* !HAVE_IOP_ATOMIC_OPEN */
-static struct lookup_intent *
-ll_convert_intent(struct open_intent *oit, int lookup_flags, bool is_readonly)
-{
-	struct lookup_intent *it;
-
-	OBD_ALLOC_PTR(it);
-	if (!it)
-		return ERR_PTR(-ENOMEM);
-
-	if (lookup_flags & LOOKUP_OPEN) {
-		it->it_op = IT_OPEN;
-		/* Avoid file creation for ro bind mount point(is_readonly) */
-		if ((lookup_flags & LOOKUP_CREATE) && !is_readonly)
-			it->it_op |= IT_CREAT;
-		it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
-		it->it_flags = ll_namei_to_lookup_intent_flag(oit->flags &
-						~(is_readonly ? O_CREAT : 0));
-		it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
-	} else {
-		it->it_op = IT_GETATTR;
-	}
-
-	return it;
-}
-
-static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
-                                   struct nameidata *nd)
-{
-	struct dentry *de;
-	ENTRY;
-
-	if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
-		struct lookup_intent *it;
-
-		if (ll_d2d(dentry) && ll_d2d(dentry)->lld_it) {
-			it = ll_d2d(dentry)->lld_it;
-			ll_d2d(dentry)->lld_it = NULL;
-		} else {
-			/*
-			 * Optimize away (CREATE && !OPEN). Let .create handle
-			 * the race. But only if we have write permissions
-			 * there, otherwise we need to proceed with lookup.
-			 * LU-4185
-			 */
-			if ((nd->flags & LOOKUP_CREATE) &&
-			    !(nd->flags & LOOKUP_OPEN) &&
-			    (inode_permission(parent,
-					      MAY_WRITE | MAY_EXEC) == 0))
-				RETURN(NULL);
-
-			it = ll_convert_intent(&nd->intent.open, nd->flags,
-				(nd->path.mnt->mnt_flags & MNT_READONLY) ||
-				(nd->path.mnt->mnt_sb->s_flags & SB_RDONLY));
-			if (IS_ERR(it))
-				RETURN((struct dentry *)it);
-		}
-
-		de = ll_lookup_it(parent, dentry, it, NULL, NULL, NULL);
-		if (de)
-			dentry = de;
-		if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
-			if (dentry->d_inode &&
-			    it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
-				if (S_ISFIFO(dentry->d_inode->i_mode)) {
-					/* We cannot call open here as it might
-					 * deadlock. This case is unreachable in
-					 * practice because of
-					 * OBD_CONNECT_NODEVOH. */
-				} else {
-					struct file *filp;
-
-					nd->intent.open.file->private_data = it;
-					filp = lookup_instantiate_filp(nd,
-								       dentry,
-								       NULL);
-					if (IS_ERR(filp)) {
-						if (de)
-							dput(de);
-						de = (struct dentry *)filp;
-					}
-				}
-			} else if (it_disposition(it, DISP_OPEN_CREATE)) {
-				/* XXX This can only reliably work on assumption
-				 * that there are NO hashed negative dentries.*/
-				ll_d2d(dentry)->lld_it = it;
-				it = NULL; /* Will be freed in ll_create_nd */
-				/* We absolutely depend on ll_create_nd to be
-				 * called to not leak this intent and possible
-				 * data attached to it */
-			}
-		}
-
-		if (it) {
-			ll_intent_release(it);
-			OBD_FREE(it, sizeof(*it));
-		}
-	} else {
-		de = ll_lookup_it(parent, dentry, NULL, NULL, NULL, NULL);
-	}
-
-	RETURN(de);
-}
-#endif /* HAVE_IOP_ATOMIC_OPEN */
 
 /* We depend on "mode" being set with the proper file type/umask by now */
 static struct inode *ll_create_node(struct inode *dir, struct lookup_intent *it)
@@ -1478,7 +1370,7 @@ err_exit:
 	return err;
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *dchild, ll_umode_t mode,
+static int ll_mknod(struct inode *dir, struct dentry *dchild, umode_t mode,
 		    dev_t rdev)
 {
 	struct qstr *name = &dchild->d_name;
@@ -1519,7 +1411,6 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, ll_umode_t mode,
 	RETURN(err);
 }
 
-#ifdef HAVE_IOP_ATOMIC_OPEN
 /*
  * Plain create. Intent create is handled in atomic_open.
  */
@@ -1549,59 +1440,6 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 
 	return rc;
 }
-#else /* !HAVE_IOP_ATOMIC_OPEN */
-static int ll_create_nd(struct inode *dir, struct dentry *dentry,
-			ll_umode_t mode, struct nameidata *nd)
-{
-	struct ll_dentry_data *lld = ll_d2d(dentry);
-	struct lookup_intent *it = NULL;
-	ktime_t kstart = ktime_get();
-	int rc;
-
-	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE, cfs_fail_val);
-
-	if (lld != NULL)
-		it = lld->lld_it;
-
-	if (!it) {
-		/* LU-8559: use LUSTRE_OPC_CREATE for non atomic open case
-		 * so that volatile file name is recoginized.
-		 * Mknod(2), however, is designed to not recognize volatile
-		 * file name to avoid inode leak under orphan directory until
-		 * MDT reboot */
-		return ll_new_node(dir, dentry, NULL, mode, 0,
-				   LUSTRE_OPC_CREATE);
-	}
-
-	lld->lld_it = NULL;
-
-	/* Was there an error? Propagate it! */
-	if (it->it_status) {
-		rc = it->it_status;
-		goto out;
-	}
-
-	rc = ll_create_it(dir, dentry, it, NULL, 0);
-	if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
-		struct file *filp;
-
-		nd->intent.open.file->private_data = it;
-		filp = lookup_instantiate_filp(nd, dentry, NULL);
-		if (IS_ERR(filp))
-			rc = PTR_ERR(filp);
-	}
-
-out:
-	ll_intent_release(it);
-	OBD_FREE(it, sizeof(*it));
-
-	if (!rc)
-		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_CREATE,
-				   ktime_us_delta(ktime_get(), kstart));
-
-	return rc;
-}
-#endif /* HAVE_IOP_ATOMIC_OPEN */
 
 static int ll_symlink(struct inode *dir, struct dentry *dchild,
 		      const char *oldpath)
@@ -1660,7 +1498,7 @@ out:
 	RETURN(err);
 }
 
-static int ll_mkdir(struct inode *dir, struct dentry *dchild, ll_umode_t mode)
+static int ll_mkdir(struct inode *dir, struct dentry *dchild, umode_t mode)
 {
 	struct qstr *name = &dchild->d_name;
 	ktime_t kstart = ktime_get();
@@ -1870,9 +1708,7 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 
 const struct inode_operations ll_dir_inode_operations = {
 	.mknod		= ll_mknod,
-#ifdef HAVE_IOP_ATOMIC_OPEN
 	.atomic_open	= ll_atomic_open,
-#endif
 	.lookup		= ll_lookup_nd,
 	.create		= ll_create_nd,
 	/* We need all these non-raw things for NFSD, to not patch it. */
@@ -1891,9 +1727,7 @@ const struct inode_operations ll_dir_inode_operations = {
 	.removexattr	= ll_removexattr,
 #endif
 	.listxattr	= ll_listxattr,
-#ifdef HAVE_IOP_GET_ACL
 	.get_acl	= ll_get_acl,
-#endif
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
 #endif
@@ -1909,9 +1743,7 @@ const struct inode_operations ll_special_inode_operations = {
 	.removexattr    = ll_removexattr,
 #endif
 	.listxattr      = ll_listxattr,
-#ifdef HAVE_IOP_GET_ACL
 	.get_acl	= ll_get_acl,
-#endif
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
 #endif

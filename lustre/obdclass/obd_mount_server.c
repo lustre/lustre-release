@@ -1723,23 +1723,13 @@ static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 	RETURN(0);
 }
 
-#ifdef HAVE_SUPEROPS_USE_DENTRY
 int server_show_options(struct seq_file *seq, struct dentry *dentry)
-#else
-int server_show_options(struct seq_file *seq, struct vfsmount *vfs)
-#endif
 {
 	struct lustre_sb_info *lsi;
 	struct lustre_mount_data *lmd;
 
-#ifdef HAVE_SUPEROPS_USE_DENTRY
 	LASSERT(seq != NULL && dentry != NULL);
 	lsi = s2lsi(dentry->d_sb);
-#else
-	LASSERT(seq != NULL && vfs != NULL);
-	lsi = s2lsi(vfs->mnt_sb);
-#endif
-
 	lmd = lsi->lsi_lmd;
 	seq_printf(seq, ",svname=%s", lmd->lmd_profile);
 

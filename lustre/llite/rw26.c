@@ -44,12 +44,7 @@
 #include <linux/string.h>
 #include <linux/unistd.h>
 #include <linux/writeback.h>
-
-#ifdef HAVE_MIGRATE_H
 #include <linux/migrate.h>
-#elif defined(HAVE_MIGRATE_MODE_H)
-#include <linux/migrate_mode.h>
-#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -570,10 +565,10 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	 * purposes here we can treat it like i_size.
 	 */
 	if (attr->cat_kms <= offset) {
-		char *kaddr = ll_kmap_atomic(vpg->vpg_page, KM_USER0);
+		char *kaddr = kmap_atomic(vpg->vpg_page);
 
 		memset(kaddr, 0, cl_page_size(obj));
-		ll_kunmap_atomic(kaddr, KM_USER0);
+		kunmap_atomic(kaddr);
 		GOTO(out, result = 0);
 	}
 
@@ -866,11 +861,8 @@ out:
 
 #ifdef CONFIG_MIGRATION
 static int ll_migratepage(struct address_space *mapping,
-			  struct page *newpage, struct page *page
-#ifdef HAVE_MIGRATEPAGE_4ARGS
-			  , enum migrate_mode mode
-#endif
-	)
+			  struct page *newpage, struct page *page,
+			  enum migrate_mode mode)
 {
         /* Always fail page migration until we have a proper implementation */
         return -EIO;

@@ -1130,7 +1130,7 @@ static int llog_cat_set_first_idx(struct llog_handle *cathandle, int idx)
 
 		while (idx != cathandle->lgh_last_idx) {
 			idx = (idx + 1) % bitmap_size;
-			if (!ext2_test_bit(idx, LLOG_HDR_BITMAP(llh))) {
+			if (!test_bit_le(idx, LLOG_HDR_BITMAP(llh))) {
 				/* update llh_cat_idx for each unset bit,
 				 * expecting the next one is set */
 				llh->llh_cat_idx = idx;

@@ -48,31 +48,12 @@
 #include <libcfs/linux/linux-fs.h>
 #include <obd_support.h>
 
-#define current_ngroups current_cred()->group_info->ngroups
-#define current_groups current_cred()->group_info->small_block
-
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                 vfs_symlink(dir, dentry, path, mode)
 #else
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                        vfs_symlink(dir, dentry, path)
-#endif
-
-#if !defined(HAVE_FILE_LLSEEK_SIZE) || defined(HAVE_FILE_LLSEEK_SIZE_5ARGS)
-#define ll_generic_file_llseek_size(file, offset, origin, maxbytes, eof) \
-		generic_file_llseek_size(file, offset, origin, maxbytes, eof);
-#else
-#define ll_generic_file_llseek_size(file, offset, origin, maxbytes, eof) \
-		generic_file_llseek_size(file, offset, origin, maxbytes);
-#endif
-
-#ifdef HAVE_INODE_DIO_WAIT
-/* inode_dio_wait(i) use as-is for write lock */
-# define inode_dio_write_done(i)	do {} while (0) /* for write unlock */
-#else
-# define inode_dio_wait(i)		down_write(&(i)->i_alloc_sem)
-# define inode_dio_write_done(i)	up_write(&(i)->i_alloc_sem)
 #endif
 
 #ifndef HAVE_INIT_LIST_HEAD_RCU
@@ -91,9 +72,6 @@ static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 #define bio_idx(bio)			(bio->bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_sector = sector)
 #define bio_sectors(bio)		((bio)->bi_size >> 9)
-#ifndef HAVE_BIO_END_SECTOR
-#define bio_end_sector(bio)		(bio->bi_sector + bio_sectors(bio))
-#endif
 #define bvl_to_page(bvl)		(bvl->bv_page)
 #endif
 
@@ -101,18 +79,6 @@ static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 #define bio_start_sector(bio) (bio->bi_iter.bi_sector)
 #else
 #define bio_start_sector(bio) (bio->bi_sector)
-#endif
-
-#ifdef HAVE_KMAP_ATOMIC_HAS_1ARG
-#define ll_kmap_atomic(a, b)	kmap_atomic(a)
-#define ll_kunmap_atomic(a, b)	kunmap_atomic(a)
-#else
-#define ll_kmap_atomic(a, b)	kmap_atomic(a, b)
-#define ll_kunmap_atomic(a, b)	kunmap_atomic(a, b)
-#endif
-
-#ifndef HAVE_CLEAR_INODE
-#define clear_inode(i)		end_writeback(i)
 #endif
 
 #ifndef HAVE_DENTRY_D_CHILD
@@ -123,29 +89,6 @@ static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 #define d_alias			d_u.d_alias
 #endif
 
-#ifndef DATA_FOR_LLITE_IS_LIST
-#define ll_d_hlist_node hlist_node
-#define ll_d_hlist_empty(list) hlist_empty(list)
-#define ll_d_hlist_entry(ptr, type, name) hlist_entry(ptr.first, type, name)
-#define ll_d_hlist_for_each(tmp, i_dentry) hlist_for_each(tmp, i_dentry)
-# ifdef HAVE_HLIST_FOR_EACH_3ARG
-# define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
-	p = NULL; hlist_for_each_entry(dentry, i_dentry, d_alias)
-# else
-# define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
-	hlist_for_each_entry(dentry, p, i_dentry, d_alias)
-# endif
-#define DECLARE_LL_D_HLIST_NODE_PTR(name) struct ll_d_hlist_node *name
-#else
-#define ll_d_hlist_node list_head
-#define ll_d_hlist_empty(list) list_empty(list)
-#define ll_d_hlist_entry(ptr, type, name) list_entry(ptr.next, type, name)
-#define ll_d_hlist_for_each(tmp, i_dentry) list_for_each(tmp, i_dentry)
-#define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
-	list_for_each_entry(dentry, i_dentry, d_alias)
-#define DECLARE_LL_D_HLIST_NODE_PTR(name) /* nothing */
-#endif /* !DATA_FOR_LLITE_IS_LIST */
-
 #ifndef HAVE_D_IN_LOOKUP
 static inline int d_in_lookup(struct dentry *dentry)
 {
@@ -153,117 +96,12 @@ static inline int d_in_lookup(struct dentry *dentry)
 }
 #endif
 
-#ifndef QUOTA_OK
-# define QUOTA_OK 0
-#endif
-#ifndef NO_QUOTA
-# define NO_QUOTA (-EDQUOT)
-#endif
-
-#ifndef SEEK_DATA
-#define SEEK_DATA      3       /* seek to the next data */
-#endif
-#ifndef SEEK_HOLE
-#define SEEK_HOLE      4       /* seek to the next hole */
-#endif
-
-#ifndef FMODE_UNSIGNED_OFFSET
-#define FMODE_UNSIGNED_OFFSET	((__force fmode_t)0x2000)
-#endif
-
-#if !defined(_ASM_GENERIC_BITOPS_EXT2_NON_ATOMIC_H_) && !defined(ext2_set_bit)
-# define ext2_set_bit             __test_and_set_bit_le
-# define ext2_clear_bit           __test_and_clear_bit_le
-# define ext2_test_bit            test_bit_le
-# define ext2_find_first_zero_bit find_first_zero_bit_le
-# define ext2_find_next_zero_bit  find_next_zero_bit_le
-#endif
-
-#ifdef ATTR_TIMES_SET
-# define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
-#else
-# define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET)
-#endif
-
-#ifndef XATTR_NAME_POSIX_ACL_ACCESS
-# define XATTR_NAME_POSIX_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
-#endif
-
-#ifndef XATTR_NAME_POSIX_ACL_DEFAULT
-# define XATTR_NAME_POSIX_ACL_DEFAULT POSIX_ACL_XATTR_DEFAULT
-#endif
-
-#ifndef HAVE_LM_XXX_LOCK_MANAGER_OPS
-# define lm_compare_owner	fl_compare_owner
-#endif
-
-/*
- * After 3.1, kernel's nameidata.intent.open.flags is different
- * with lustre's lookup_intent.it_flags, as lustre's it_flags'
- * lower bits equal to FMODE_xxx while kernel doesn't transliterate
- * lower bits of nameidata.intent.open.flags to FMODE_xxx.
- * */
-#include <linux/version.h>
-static inline int ll_namei_to_lookup_intent_flag(int flag)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 1, 0)
-	flag = (flag & ~O_ACCMODE) | OPEN_FMODE(flag);
-#endif
-	return flag;
-}
-
-#include <linux/fs.h>
-#ifndef HAVE_PROTECT_I_NLINK
-static inline void set_nlink(struct inode *inode, unsigned int nlink)
-{
-	inode->i_nlink = nlink;
-}
-#endif
-
-#ifdef HAVE_INODEOPS_USE_UMODE_T
-# define ll_umode_t	umode_t
-#else
-# define ll_umode_t	int
-#endif
-
 #ifndef HAVE_VM_FAULT_T
 #define vm_fault_t int
 #endif
 
-#include <linux/dcache.h>
-#ifndef HAVE_D_MAKE_ROOT
-static inline struct dentry *d_make_root(struct inode *root)
-{
-	struct dentry *res = d_alloc_root(root);
-
-	if (res == NULL && root)
-		iput(root);
-
-	return res;
-}
-#endif
-
 #ifndef HAVE_FOP_ITERATE_SHARED
 #define iterate_shared iterate
-#endif
-
-#ifdef HAVE_DIRTY_INODE_HAS_FLAG
-# define ll_dirty_inode(inode, flag)	(inode)->i_sb->s_op->dirty_inode((inode), flag)
-#else
-# define ll_dirty_inode(inode, flag)	(inode)->i_sb->s_op->dirty_inode((inode))
-#endif
-
-#ifdef HAVE_FILE_F_INODE
-# define set_file_inode(file, inode)	(file)->f_inode = inode
-#else
-# define set_file_inode(file, inode)
-#endif
-
-#ifndef HAVE_FILE_INODE
-static inline struct inode *file_inode(const struct file *file)
-{
-	return file->f_path.dentry->d_inode;
-}
 #endif
 
 #ifdef HAVE_OLDSIZE_TRUNCATE_PAGECACHE
@@ -286,20 +124,14 @@ static inline struct inode *file_inode(const struct file *file)
 #define ll_vfs_unlink(a, b) vfs_unlink(a, b)
 #endif
 
-#ifndef HAVE_INODE_OWNER_OR_CAPABLE
-#define inode_owner_or_capable(inode) is_owner_or_cap(inode)
-#endif
-
 static inline int ll_vfs_getattr(struct path *path, struct kstat *st)
 {
 	int rc;
 
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 	rc = vfs_getattr(path, st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
-#elif defined HAVE_VFS_GETATTR_2ARGS
-	rc = vfs_getattr(path, st);
 #else
-	rc = vfs_getattr(path->mnt, path->dentry, st);
+	rc = vfs_getattr(path, st);
 #endif
 	return rc;
 }
@@ -311,23 +143,10 @@ static inline bool d_is_positive(const struct dentry *dentry)
 }
 #endif
 
-#ifdef HAVE_VFS_CREATE_USE_NAMEIDATA
-# define LL_VFS_CREATE_FALSE NULL
-#else
-# define LL_VFS_CREATE_FALSE false
-#endif
-
 #ifndef HAVE_INODE_LOCK
 # define inode_lock(inode) mutex_lock(&(inode)->i_mutex)
 # define inode_unlock(inode) mutex_unlock(&(inode)->i_mutex)
 # define inode_trylock(inode) mutex_trylock(&(inode)->i_mutex)
-#endif
-
-#ifndef HAVE_RADIX_EXCEPTION_ENTRY
-static inline int radix_tree_exceptional_entry(void *arg)
-{
-	return 0;
-}
 #endif
 
 #ifndef HAVE_XA_IS_VALUE
@@ -352,35 +171,6 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 	else
 		return 0;
 }
-#endif
-
-#ifndef SIZE_MAX
-#define SIZE_MAX	(~(size_t)0)
-#endif
-
-#ifdef HAVE_SECURITY_IINITSEC_CALLBACK
-# define ll_security_inode_init_security(inode, dir, name, value, len, \
-					 initxattrs, dentry)	       \
-	 security_inode_init_security(inode, dir, &((dentry)->d_name), \
-				      initxattrs, dentry)
-#elif defined HAVE_SECURITY_IINITSEC_QSTR
-# define ll_security_inode_init_security(inode, dir, name, value, len, \
-					 initxattrs, dentry)	       \
-	 security_inode_init_security(inode, dir, &((dentry)->d_name), \
-				      name, value, len)
-#else /* !HAVE_SECURITY_IINITSEC_CALLBACK && !HAVE_SECURITY_IINITSEC_QSTR */
-# define ll_security_inode_init_security(inode, dir, name, value, len, \
-					 initxattrs, dentry)	       \
-	 security_inode_init_security(inode, dir, name, value, len)
-#endif
-
-#ifndef bio_for_each_segment_all /* since kernel version 3.9 */
-#ifdef HAVE_BVEC_ITER
-#define bio_for_each_segment_all(bv, bio, it) \
-	for (it = 0, bv = (bio)->bi_io_vec; it < (bio)->bi_vcnt; it++, bv++)
-#else
-#define bio_for_each_segment_all(bv, bio, it) bio_for_each_segment(bv, bio, it)
-#endif
 #endif
 
 #ifdef HAVE_PID_NS_FOR_CHILDREN
@@ -436,16 +226,6 @@ __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 }
 #endif /* HAVE_VFS_SETXATTR */
 
-#ifndef HAVE_POSIXACL_USER_NS
-/*
- * Mask out &init_user_ns so we don't jump
- * through hoops to define it somehow only
- * to have it ignored anyway.
- */
-#define posix_acl_from_xattr(a, b, c)	posix_acl_from_xattr(b, c)
-#define posix_acl_to_xattr(a, b, c, d)	posix_acl_to_xattr(b, c, d)
-#endif
-
 #ifndef HAVE_POSIX_ACL_VALID_USER_NS
 #define posix_acl_valid(a,b)		posix_acl_valid(b)
 #endif
@@ -480,17 +260,6 @@ static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 	if (i->count > count)
 		i->count = count;
 }
-#endif
-
-#ifndef HAVE_IS_SXID
-static inline bool is_sxid(umode_t mode)
-{
-	return (mode & S_ISUID) || ((mode & S_ISGID) && (mode & S_IXGRP));
-}
-#endif
-
-#ifndef IS_NOSEC
-#define IS_NOSEC(inode)	(!is_sxid(inode->i_mode))
 #endif
 
 /*
@@ -634,39 +403,8 @@ static inline struct timespec current_time(struct inode *inode)
 }
 #endif
 
-#ifndef time_after32
-/**
- * time_after32 - compare two 32-bit relative times
- * @a: the time which may be after @b
- * @b: the time which may be before @a
- *
- * time_after32(a, b) returns true if the time @a is after time @b.
- * time_before32(b, a) returns true if the time @b is before time @a.
- *
- * Similar to time_after(), compare two 32-bit timestamps for relative
- * times.  This is useful for comparing 32-bit seconds values that can't
- * be converted to 64-bit values (e.g. due to disk format or wire protocol
- * issues) when it is known that the times are less than 68 years apart.
- */
-#define time_after32(a, b)     ((s32)((u32)(b) - (u32)(a)) < 0)
-#define time_before32(b, a)    time_after32(a, b)
-
-#endif
-
-#ifndef __GFP_COLD
-#define __GFP_COLD 0
-#endif
-
-#ifndef alloc_workqueue
-#define alloc_workqueue(name, flags, max_active) create_workqueue(name)
-#endif
-
 #ifndef smp_store_mb
 #define smp_store_mb(var, value)	set_mb(var, value)
-#endif
-
-#ifndef READ_ONCE
-#define READ_ONCE ACCESS_ONCE
 #endif
 
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)

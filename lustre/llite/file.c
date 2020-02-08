@@ -422,14 +422,14 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	struct niobuf_local *lnb = data;
 	void *kaddr;
 
-	kaddr = ll_kmap_atomic(page, KM_USER0);
+	kaddr = kmap_atomic(page);
 	memcpy(kaddr, lnb->lnb_data, lnb->lnb_len);
 	if (lnb->lnb_len < PAGE_SIZE)
 		memset(kaddr + lnb->lnb_len, 0,
 		       PAGE_SIZE - lnb->lnb_len);
 	flush_dcache_page(page);
 	SetPageUptodate(page);
-	ll_kunmap_atomic(kaddr, KM_USER0);
+	kunmap_atomic(kaddr);
 	unlock_page(page);
 
 	return 0;
@@ -3981,73 +3981,6 @@ out_state:
 	}
 }
 
-#ifndef HAVE_FILE_LLSEEK_SIZE
-static inline loff_t
-llseek_execute(struct file *file, loff_t offset, loff_t maxsize)
-{
-	if (offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET))
-		return -EINVAL;
-	if (offset > maxsize)
-		return -EINVAL;
-
-	if (offset != file->f_pos) {
-		file->f_pos = offset;
-		file->f_version = 0;
-	}
-	return offset;
-}
-
-static loff_t
-generic_file_llseek_size(struct file *file, loff_t offset, int origin,
-                loff_t maxsize, loff_t eof)
-{
-	struct inode *inode = file_inode(file);
-
-	switch (origin) {
-	case SEEK_END:
-		offset += eof;
-		break;
-	case SEEK_CUR:
-		/*
-		 * Here we special-case the lseek(fd, 0, SEEK_CUR)
-		 * position-querying operation.  Avoid rewriting the "same"
-		 * f_pos value back to the file because a concurrent read(),
-		 * write() or lseek() might have altered it
-		 */
-		if (offset == 0)
-			return file->f_pos;
-		/*
-		 * f_lock protects against read/modify/write race with other
-		 * SEEK_CURs. Note that parallel writes and reads behave
-		 * like SEEK_SET.
-		 */
-		inode_lock(inode);
-		offset = llseek_execute(file, file->f_pos + offset, maxsize);
-		inode_unlock(inode);
-		return offset;
-	case SEEK_DATA:
-		/*
-		 * In the generic case the entire file is data, so as long as
-		 * offset isn't at the end of the file then the offset is data.
-		 */
-		if (offset >= eof)
-			return -ENXIO;
-		break;
-	case SEEK_HOLE:
-		/*
-		 * There is a virtual hole at the end of the file, so as long as
-		 * offset isn't i_size or larger, return i_size.
-		 */
-		if (offset >= eof)
-			return -ENXIO;
-		offset = eof;
-		break;
-	}
-
-	return llseek_execute(file, offset, maxsize);
-}
-#endif
-
 static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file_inode(file);
@@ -4068,8 +4001,8 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 		eof = i_size_read(inode);
 	}
 
-	retval = ll_generic_file_llseek_size(file, offset, origin,
-					     ll_file_maxbytes(inode), eof);
+	retval = generic_file_llseek_size(file, offset, origin,
+					  ll_file_maxbytes(inode), eof);
 	if (retval >= 0)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK,
 				   ktime_us_delta(ktime_get(), kstart));
@@ -5104,9 +5037,7 @@ struct inode_operations ll_file_inode_operations = {
 #endif
 	.listxattr	= ll_listxattr,
 	.fiemap		= ll_fiemap,
-#ifdef HAVE_IOP_GET_ACL
 	.get_acl	= ll_get_acl,
-#endif
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
 #endif

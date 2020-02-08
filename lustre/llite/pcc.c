@@ -1494,13 +1494,8 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	CDEBUG(D_CACHE, "opening pcc file '%.*s'\n", dname->len,
 	       dname->name);
 
-#ifdef HAVE_DENTRY_OPEN_USE_PATH
 	pcc_file = dentry_open(path, file->f_flags,
 			       pcc_super_cred(inode->i_sb));
-#else
-	pcc_file = dentry_open(path->dentry, path->mnt, file->f_flags,
-			       pcc_super_cred(inode->i_sb));
-#endif
 	if (IS_ERR_OR_NULL(pcc_file)) {
 		rc = pcc_file == NULL ? -EINVAL : PTR_ERR(pcc_file);
 		pcc_inode_put(pcci);
@@ -2197,7 +2192,7 @@ pcc_create(struct dentry *base, const char *name, umode_t mode)
 	if (d_is_positive(dentry))
 		goto out;
 
-	rc = vfs_create(dir, dentry, mode, LL_VFS_CREATE_FALSE);
+	rc = vfs_create(dir, dentry, mode, false);
 	if (rc) {
 		dput(dentry);
 		dentry = ERR_PTR(rc);
@@ -2472,12 +2467,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 
 	path.mnt = dataset->pccd_path.mnt;
 	path.dentry = dentry;
-#ifdef HAVE_DENTRY_OPEN_USE_PATH
 	pcc_filp = dentry_open(&path, O_WRONLY | O_LARGEFILE, current_cred());
-#else
-	pcc_filp = dentry_open(path.dentry, path.mnt, O_WRONLY | O_LARGEFILE,
-			       current_cred());
-#endif
 	if (IS_ERR_OR_NULL(pcc_filp)) {
 		rc = pcc_filp == NULL ? -EINVAL : PTR_ERR(pcc_filp);
 		GOTO(out_dentry, rc);

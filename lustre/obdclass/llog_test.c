@@ -67,7 +67,7 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 	int active_recs = 0;
 
 	for (i = 0; i < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr); i++) {
-		if (ext2_test_bit(i, LLOG_HDR_BITMAP(llh->lgh_hdr))) {
+		if (test_bit_le(i, LLOG_HDR_BITMAP(llh->lgh_hdr))) {
 			last_idx = i;
 			active_recs++;
 		}

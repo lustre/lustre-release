@@ -113,28 +113,6 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 	return hash >> (BITS_PER_LONG - bits);
 }
 
-/* This compatibility can be removed once kernel 3.3 is used,
- * since cache_register_net/cache_unregister_net are exported.
- * Note that since kernel 3.4 cache_register and cache_unregister
- * are removed.
-*/
-static inline int _cache_register_net(struct cache_detail *cd, struct net *net)
-{
-#ifdef HAVE_CACHE_REGISTER
-	return cache_register(cd);
-#else
-	return cache_register_net(cd, net);
-#endif
-}
-static inline void _cache_unregister_net(struct cache_detail *cd,
-					 struct net *net)
-{
-#ifdef HAVE_CACHE_REGISTER
-	cache_unregister(cd);
-#else
-	cache_unregister_net(cd, net);
-#endif
-}
 /****************************************
  * rpc sec init (rsi) cache *
  ****************************************/
@@ -219,19 +197,6 @@ static void rsi_request(struct cache_detail *cd,
 	qword_addhex(bpp, blen, rsi->in_token.data, rsi->in_token.len);
 	(*bpp)[-1] = '\n';
 }
-
-#ifdef HAVE_SUNRPC_UPCALL_HAS_3ARGS
-static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
-{
-	return sunrpc_cache_pipe_upcall(cd, h, rsi_request);
-}
-#else
-
-static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
-{
-	return sunrpc_cache_pipe_upcall(cd, h);
-}
-#endif
 
 static inline void __rsi_init(struct rsi *new, struct rsi *item)
 {
@@ -411,10 +376,8 @@ static struct cache_detail rsi_cache = {
 	.hash_table	= rsi_table,
 	.name		= "auth.sptlrpc.init",
 	.cache_put	= rsi_put,
-#ifndef HAVE_SUNRPC_UPCALL_HAS_3ARGS
 	.cache_request	= rsi_request,
-#endif
-	.cache_upcall	= rsi_upcall,
+	.cache_upcall	= sunrpc_cache_pipe_upcall,
 	.cache_parse	= rsi_parse,
 	.match		= rsi_match,
 	.init		= rsi_init,
@@ -1120,13 +1083,13 @@ int __init gss_init_svc_upcall(void)
 	 */
 	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
-	rc = _cache_register_net(&rsi_cache, &init_net);
+	rc = cache_register_net(&rsi_cache, &init_net);
 	if (rc != 0)
 		return rc;
 
-	rc = _cache_register_net(&rsc_cache, &init_net);
+	rc = cache_register_net(&rsc_cache, &init_net);
 	if (rc != 0) {
-		_cache_unregister_net(&rsi_cache, &init_net);
+		cache_unregister_net(&rsi_cache, &init_net);
 		return rc;
 	}
 
@@ -1152,8 +1115,8 @@ int __init gss_init_svc_upcall(void)
 void gss_exit_svc_upcall(void)
 {
 	cache_purge(&rsi_cache);
-	_cache_unregister_net(&rsi_cache, &init_net);
+	cache_unregister_net(&rsi_cache, &init_net);
 
 	cache_purge(&rsc_cache);
-	_cache_unregister_net(&rsc_cache, &init_net);
+	cache_unregister_net(&rsc_cache, &init_net);
 }

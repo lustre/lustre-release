@@ -538,29 +538,6 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 extern void lprocfs_remove(struct proc_dir_entry **root);
 extern void lprocfs_remove_proc_entry(const char *name,
                                       struct proc_dir_entry *parent);
-#ifndef HAVE_REMOVE_PROC_SUBTREE
-extern int remove_proc_subtree(const char *name,
-			       struct proc_dir_entry *parent);
-#define PDE_DATA(inode)		(PDE(inode)->data)
-
-static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
-{
-	struct proc_dir_entry *dp = PDE(inode);
-	int deleted = 0;
-
-	spin_lock(&(dp)->pde_unload_lock);
-	if (dp->proc_fops == NULL)
-		deleted = 1;
-	spin_unlock(&(dp)->pde_unload_lock);
-	if (deleted)
-		return -ENODEV;
-	return 0;
-}
-#else
-static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
-{ return 0; }
-#endif
-
 extern int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
@@ -748,12 +725,6 @@ static const struct file_operations name##_fops = {			\
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)			\
 static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\
-	int rc;								\
-									\
-	rc = LPROCFS_ENTRY_CHECK(inode);				\
-	if (rc < 0)							\
-		return rc;						\
-									\
 	return single_open(file, name##_seq_show,			\
 			   inode->i_private ? inode->i_private :	\
 					      PDE_DATA(inode));		\

@@ -73,6 +73,8 @@
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
+#define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
+
 struct ll_dentry_data {
 	struct lookup_intent		*lld_it;
 	unsigned int			lld_sa_generation;
@@ -403,19 +405,19 @@ int ll_xattr_cache_get(struct inode *inode,
 
 static inline bool obd_connect_has_secctx(struct obd_connect_data *data)
 {
-#if defined(HAVE_SECURITY_DENTRY_INIT_SECURITY) && defined(CONFIG_SECURITY)
+#ifdef CONFIG_SECURITY
 	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
 	       data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
 #else
 	return false;
-#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+#endif
 }
 
 static inline void obd_connect_set_secctx(struct obd_connect_data *data)
 {
-#if defined(HAVE_SECURITY_DENTRY_INIT_SECURITY) && defined(CONFIG_SECURITY)
+#ifdef CONFIG_SECURITY
 	data->ocd_connect_flags2 |= OBD_CONNECT2_FILE_SECCTX;
-#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+#endif
 }
 
 int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
@@ -1092,11 +1094,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 int ll_flush_ctx(struct inode *inode);
 void ll_umount_begin(struct super_block *sb);
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
-#ifdef HAVE_SUPEROPS_USE_DENTRY
 int ll_show_options(struct seq_file *seq, struct dentry *dentry);
-#else
-int ll_show_options(struct seq_file *seq, struct vfsmount *vfs);
-#endif
 void ll_dirty_page_discard_warn(struct page *page, int ioret);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 		  struct super_block *, struct lookup_intent *);

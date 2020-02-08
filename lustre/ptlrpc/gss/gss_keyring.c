@@ -428,11 +428,11 @@ static void kill_key_locked(struct key *key)
  */
 static void dispose_ctx_list_kr(struct hlist_head *freelist)
 {
-	struct hlist_node	__maybe_unused *pos, *next;
+	struct hlist_node *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	struct gss_cli_ctx	*gctx;
 
-	cfs_hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
+	hlist_for_each_entry_safe(ctx, next, freelist, cc_cache) {
 		hlist_del_init(&ctx->cc_cache);
 
 		/* reverse ctx: update current seq to buddy svcctx if exist.
@@ -475,14 +475,12 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
         ctx = gsec_kr->gsk_root_ctx;
 
         if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
-		struct hlist_node	__maybe_unused *node;
 		struct ptlrpc_cli_ctx	*tmp;
 
                 /* reverse ctx, search root ctx in list, choose the one
                  * with shortest expire time, which is most possibly have
                  * an established peer ctx at client side. */
-                cfs_hlist_for_each_entry(tmp, node, &gsec_kr->gsk_clist,
-                                         cc_cache) {
+		hlist_for_each_entry(tmp, &gsec_kr->gsk_clist, cc_cache) {
                         if (ctx == NULL || ctx->cc_expire == 0 ||
                             ctx->cc_expire > tmp->cc_expire) {
                                 ctx = tmp;
@@ -511,7 +509,6 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
                                  struct key *key)
 {
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_node __maybe_unused *hnode;
 	struct ptlrpc_cli_ctx *ctx;
 	time64_t now;
 
@@ -523,7 +520,7 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
 	now = ktime_get_real_seconds();
 
         /* set all existing ctxs short expiry */
-        cfs_hlist_for_each_entry(ctx, hnode, &gsec_kr->gsk_clist, cc_cache) {
+	hlist_for_each_entry(ctx, &gsec_kr->gsk_clist, cc_cache) {
                 if (ctx->cc_expire > now + RVS_CTX_EXPIRE_NICE) {
                         ctx->cc_early_expire = 1;
                         ctx->cc_expire = now + RVS_CTX_EXPIRE_NICE;
@@ -982,15 +979,15 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid, int grace,
 {
 	struct gss_sec_keyring	*gsec_kr;
 	struct hlist_head	 freelist = HLIST_HEAD_INIT;
-	struct hlist_node	__maybe_unused *pos, *next;
+	struct hlist_node *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
 
         gsec_kr = sec2gsec_keyring(sec);
 
 	spin_lock(&sec->ps_lock);
-	cfs_hlist_for_each_entry_safe(ctx, pos, next,
-				      &gsec_kr->gsk_clist, cc_cache) {
+	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,
+				  cc_cache) {
 		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 		if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
@@ -1050,15 +1047,15 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
 	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
 	struct hlist_head	freelist = HLIST_HEAD_INIT;
-	struct hlist_node	__maybe_unused *pos, *next;
+	struct hlist_node *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
 
 	CWARN("running gc\n");
 
 	spin_lock(&sec->ps_lock);
-	cfs_hlist_for_each_entry_safe(ctx, pos, next,
-				      &gsec_kr->gsk_clist, cc_cache) {
+	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,
+				  cc_cache) {
 		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 		atomic_inc(&ctx->cc_refcount);
@@ -1081,15 +1078,15 @@ static
 int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 {
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_node __maybe_unused *pos, *next;
+	struct hlist_node *next;
 	struct ptlrpc_cli_ctx *ctx;
 	struct gss_cli_ctx *gctx;
 	time64_t now = ktime_get_real_seconds();
 
 	ENTRY;
 	spin_lock(&sec->ps_lock);
-        cfs_hlist_for_each_entry_safe(ctx, pos, next,
-				      &gsec_kr->gsk_clist, cc_cache) {
+	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,
+				  cc_cache) {
                 struct key             *key;
                 char                    flags_str[40];
                 char                    mech[40];

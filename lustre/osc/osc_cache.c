@@ -2395,7 +2395,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		qid[USRQUOTA] = attr->cat_uid;
 		qid[GRPQUOTA] = attr->cat_gid;
 		qid[PRJQUOTA] = attr->cat_projid;
-		if (rc == 0 && osc_quota_chkdq(cli, qid) == NO_QUOTA)
+		if (rc == 0 && osc_quota_chkdq(cli, qid) == -EDQUOT)
 			rc = -EDQUOT;
 		if (rc)
 			RETURN(rc);

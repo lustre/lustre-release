@@ -25,26 +25,6 @@
 
 #include <linux/list.h>
 
-#ifdef HAVE_HLIST_FOR_EACH_3ARG
-#define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	hlist_for_each_entry(tpos, head, member)
-#define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
-	hlist_for_each_entry_safe(tpos, n, head, member)
-#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
-	hlist_for_each_entry_continue(tpos, member)
-#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
-	hlist_for_each_entry_from(tpos, member)
-#else
-#define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	hlist_for_each_entry(tpos, pos, head, member)
-#define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
-	hlist_for_each_entry_safe(tpos, pos, n, head, member)
-#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
-	hlist_for_each_entry_continue(tpos, pos, member)
-#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
-	hlist_for_each_entry_from(tpos, pos, member)
-#endif
-
 #ifdef HAVE_HLIST_ADD_AFTER
 #define hlist_add_behind(hnode, tail)	hlist_add_after(tail, hnode)
 #endif /* HAVE_HLIST_ADD_AFTER */

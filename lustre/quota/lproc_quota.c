@@ -300,10 +300,6 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 		goto out_lqp;
 	}
 
-	rc = LPROCFS_ENTRY_CHECK(inode);
-	if (rc < 0)
-		goto out_env;
-
 	rc = seq_open(file, &lprocfs_quota_seq_sops);
 	if (rc)
 		goto out_env;

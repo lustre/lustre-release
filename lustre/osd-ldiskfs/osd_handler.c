@@ -1013,7 +1013,7 @@ again:
 	filp->f_op = fops;
 	filp->private_data = NULL;
 	filp->f_cred = current_cred();
-	set_file_inode(filp, inode);
+	filp->f_inode = inode;
 	rc = osd_security_file_alloc(filp);
 	if (rc)
 		goto out;
@@ -1732,11 +1732,6 @@ static void osd_trans_commit_cb(struct super_block *sb,
 
 	OBD_FREE_PTR(oh);
 }
-
-#ifndef HAVE_SB_START_WRITE
-# define sb_start_write(sb) do {} while (0)
-# define sb_end_write(sb) do {} while (0)
-#endif
 
 static struct thandle *osd_trans_create(const struct lu_env *env,
 					struct dt_device *d)
@@ -3039,7 +3034,7 @@ static int osd_attr_set(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+	osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 
 	osd_trans_exec_check(env, handle, OSD_OT_ATTR_SET);
 
@@ -3346,7 +3341,7 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
 		 * enabled on ldiskfs (lquota takes care of it).
 		 */
 		LASSERTF(result == 0, "%d\n", result);
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 	}
 
 	attr->la_valid = valid;
@@ -3608,7 +3603,7 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		spin_lock(&obj->oo_guard);
 		clear_nlink(inode);
 		spin_unlock(&obj->oo_guard);
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 	}
 
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
@@ -4104,7 +4099,7 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 	}
 	spin_unlock(&obj->oo_guard);
 
-	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+	osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 	LINVRNT(osd_invariant(obj));
 
 	osd_trans_exec_check(env, th, OSD_OT_REF_ADD);
@@ -4177,7 +4172,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	ldiskfs_dec_count(oh->ot_handle, inode);
 	spin_unlock(&obj->oo_guard);
 
-	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+	osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 	LINVRNT(osd_invariant(obj));
 
 	osd_trans_exec_check(env, th, OSD_OT_REF_DEL);
@@ -4594,7 +4589,7 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		 * Version is set after all inode operations are finished,
 		 * so we should mark it dirty here
 		 */
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 
 		RETURN(0);
 	}
@@ -4777,7 +4772,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	file->f_path.dentry = dentry;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
-	set_file_inode(file, inode);
+	file->f_inode = inode;
 
 	rc = vfs_fsync_range(file, start, end, 0);
 
@@ -6460,7 +6455,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	file->f_path.dentry	= obj_dentry;
 	file->f_mapping		= obj->oo_inode->i_mapping;
 	file->f_op		= obj->oo_inode->i_fop;
-	set_file_inode(file, obj->oo_inode);
+	file->f_inode = obj->oo_inode;
 
 	lu_object_get(lo);
 	RETURN((struct dt_it *)oie);

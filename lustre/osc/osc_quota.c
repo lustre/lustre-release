@@ -61,11 +61,11 @@ int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 			 * quota space on this OST */
 			CDEBUG(D_QUOTA, "chkdq found noquota for %s %d\n",
 			       type == USRQUOTA ? "user" : "grout", qid[type]);
-			RETURN(NO_QUOTA);
+			RETURN(-EDQUOT);
 		}
 	}
 
-	RETURN(QUOTA_OK);
+	RETURN(0);
 }
 
 static inline u32 md_quota_flag(int qtype)

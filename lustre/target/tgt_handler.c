@@ -1769,13 +1769,12 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
-							KM_USER0);
+				char *ptr = kmap_atomic(local_nb[i].lnb_page);
 				char *ptr2 = page_address(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
-				ll_kunmap_atomic(ptr, KM_USER0);
+				kunmap_atomic(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -1802,13 +1801,12 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
-							KM_USER0);
+				char *ptr = kmap_atomic(local_nb[i].lnb_page);
 				char *ptr2 = page_address(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
-				ll_kunmap_atomic(ptr, KM_USER0);
+				kunmap_atomic(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -1957,9 +1955,9 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 		if (len > size)
 			return -EINVAL;
 
-		ptr = ll_kmap_atomic(local[i].lnb_page, KM_USER0);
+		ptr = kmap_atomic(local[i].lnb_page);
 		memcpy(buf + off, ptr, len);
-		ll_kunmap_atomic(ptr, KM_USER0);
+		kunmap_atomic(ptr);
 		buf += len;
 		size -= len;
 	}
@@ -2012,13 +2010,12 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
-							KM_USER0);
+				char *ptr = kmap_atomic(local_nb[i].lnb_page);
 				char *ptr2 = page_address(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
-				ll_kunmap_atomic(ptr, KM_USER0);
+				kunmap_atomic(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -2093,13 +2090,12 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
-							KM_USER0);
+				char *ptr = kmap_atomic(local_nb[i].lnb_page);
 				char *ptr2 = page_address(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
-				ll_kunmap_atomic(ptr, KM_USER0);
+				kunmap_atomic(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -2402,11 +2398,11 @@ static int tgt_shortio2pages(struct niobuf_local *local, int npages,
 
 		CDEBUG(D_PAGE, "index %d offset = %d len = %d left = %d\n",
 		       i, off, len, size);
-		ptr = ll_kmap_atomic(local[i].lnb_page, KM_USER0);
+		ptr = kmap_atomic(local[i].lnb_page);
 		if (ptr == NULL)
 			return -EINVAL;
 		memcpy(ptr + off, buf, len < size ? len : size);
-		ll_kunmap_atomic(ptr, KM_USER0);
+		kunmap_atomic(ptr);
 		buf += len;
 		size -= len;
 	}

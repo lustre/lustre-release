@@ -753,7 +753,6 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 		/* Truncate in memory pages - they must be clean pages
 		 * because osc has already notified to destroy osc_extents. */
 		vvp_do_vmtruncate(inode, io->u.ci_setattr.sa_attr.lvb_size);
-		inode_dio_write_done(inode);
 		inode_unlock(inode);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else {

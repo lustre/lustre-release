@@ -2265,7 +2265,7 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 	filp->f_op = fops;
 	filp->private_data = NULL;
 	filp->f_cred = current_cred();
-	set_file_inode(filp, inode);
+	filp->f_inode = inode;
 	rc = osd_security_file_alloc(filp);
 	if (rc)
 		RETURN(rc);

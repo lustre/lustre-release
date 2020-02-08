@@ -207,103 +207,6 @@ lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 }
 EXPORT_SYMBOL(lprocfs_add_vars);
 
-#ifndef HAVE_REMOVE_PROC_SUBTREE
-/* for b=10866, global variable */
-DECLARE_RWSEM(_lprocfs_lock);
-EXPORT_SYMBOL(_lprocfs_lock);
-
-static void lprocfs_remove_nolock(struct proc_dir_entry **proot)
-{
-	struct proc_dir_entry *root = *proot;
-	struct proc_dir_entry *temp = root;
-	struct proc_dir_entry *rm_entry;
-	struct proc_dir_entry *parent;
-
-	*proot = NULL;
-	if (!root || IS_ERR(root))
-		return;
-
-	parent = root->parent;
-	LASSERT(parent != NULL);
-
-	while (1) {
-		while (temp->subdir)
-			temp = temp->subdir;
-
-		rm_entry = temp;
-		temp = temp->parent;
-
-		/*
-		 * Memory corruption once caused this to fail, and
-		 * without this LASSERT we would loop here forever.
-		 */
-		LASSERTF(strlen(rm_entry->name) == rm_entry->namelen,
-			 "0x%p  %s/%s len %d\n", rm_entry, temp->name,
-			 rm_entry->name, (int)strlen(rm_entry->name));
-
-		remove_proc_entry(rm_entry->name, temp);
-		if (temp == parent)
-			break;
-	}
-}
-
-int remove_proc_subtree(const char *name, struct proc_dir_entry *parent)
-{
-	struct proc_dir_entry *t = NULL;
-	struct proc_dir_entry **p;
-	int len, busy = 0;
-
-	LASSERT(parent != NULL);
-	len = strlen(name);
-
-	down_write(&_lprocfs_lock);
-	/* lookup target name */
-	for (p = &parent->subdir; *p; p = &(*p)->next) {
-		if ((*p)->namelen != len)
-			continue;
-		if (memcmp(name, (*p)->name, len))
-			continue;
-		t = *p;
-		break;
-	}
-
-	if (t) {
-		/* verify it's empty: do not count "num_refs" */
-		for (p = &t->subdir; *p; p = &(*p)->next) {
-			if ((*p)->namelen != strlen("num_refs")) {
-				busy = 1;
-				break;
-			}
-			if (memcmp("num_refs", (*p)->name,
-				   strlen("num_refs"))) {
-				busy = 1;
-				break;
-			}
-		}
-	}
-
-	if (busy == 0)
-		lprocfs_remove_nolock(&t);
-
-	up_write(&_lprocfs_lock);
-	return 0;
-}
-#endif /* !HAVE_REMOVE_PROC_SUBTREE */
-
-#ifndef HAVE_PROC_REMOVE
-void proc_remove(struct proc_dir_entry *de)
-{
-#ifndef HAVE_REMOVE_PROC_SUBTREE
-	down_write(&_lprocfs_lock); /* search vs remove race */
-	lprocfs_remove_nolock(&de);
-	up_write(&_lprocfs_lock);
-#else
-	if (de)
-		remove_proc_subtree(de->name, de->parent);
-#endif
-}
-#endif
-
 void lprocfs_remove(struct proc_dir_entry **rooth)
 {
 	proc_remove(*rooth);
@@ -1546,10 +1449,6 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq;
 	int rc;
-
-	rc = LPROCFS_ENTRY_CHECK(inode);
-	if (rc < 0)
-		return rc;
 
 	rc = seq_open(file, &lprocfs_stats_seq_sops);
 	if (rc)

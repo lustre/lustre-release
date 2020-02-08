@@ -224,7 +224,6 @@ void ll_intent_release(struct lookup_intent *it)
 void ll_invalidate_aliases(struct inode *inode)
 {
 	struct dentry *dentry;
-	DECLARE_LL_D_HLIST_NODE_PTR(p);
 	ENTRY;
 
 	LASSERT(inode != NULL);
@@ -233,7 +232,7 @@ void ll_invalidate_aliases(struct inode *inode)
 	       PFID(ll_inode2fid(inode)), inode);
 
 	spin_lock(&inode->i_lock);
-	ll_d_hlist_for_each_entry(dentry, p, &inode->i_dentry) {
+	hlist_for_each_entry(dentry, &inode->i_dentry, d_alias) {
 		CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
 		       "inode %p flags %d\n", dentry->d_name.len,
 		       dentry->d_name.name, dentry, dentry->d_parent,
@@ -292,6 +291,9 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
+	       dentry->d_name.name, lookup_flags);
+
 	/* If this is intermediate component path lookup and we were able to get
 	 * to this dentry, then its lock has not been revoked and the
 	 * path component is valid. */
@@ -324,44 +326,8 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	return 1;
 }
 
-/*
- * Always trust cached dentries. Update statahead window if necessary.
- */
-#ifdef HAVE_IOP_ATOMIC_OPEN
-static int ll_revalidate_nd(struct dentry *dentry, unsigned int flags)
-{
-	int rc;
-	ENTRY;
-
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
-	       dentry->d_name.name, flags);
-
-	rc = ll_revalidate_dentry(dentry, flags);
-	RETURN(rc);
-}
-#else
-static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-	int rc;
-	ENTRY;
-
-	/*
-	 * this is normally called from NFS export, and we don't know whether
-	 * this is the last component.
-	 */
-	if (nd == NULL)
-		RETURN(1);
-
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
-	       dentry->d_name.name, nd->flags);
-
-	rc = ll_revalidate_dentry(dentry, nd->flags);
-	RETURN(rc);
-}
-#endif
-
 const struct dentry_operations ll_d_ops = {
-        .d_revalidate = ll_revalidate_nd,
+	.d_revalidate	= ll_revalidate_dentry,
         .d_release = ll_release,
         .d_delete  = ll_ddelete,
         .d_compare = ll_dcompare,

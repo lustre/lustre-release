@@ -572,6 +572,8 @@ struct osd_iobuf {
 
 int osd_security_file_alloc(struct file *file);
 
+#define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
+
 #ifdef HAVE_INODE_TIMESPEC64
 # define osd_timespec			timespec64
 # define osd_timespec_trunc(ts, gran)	timespec64_trunc((ts), (gran))
@@ -702,6 +704,7 @@ struct osd_thread_info {
 
 extern int ldiskfs_pdo;
 
+/* autoconf test is in lustre-build-ldiskfs.m4 */
 #ifdef HAVE_BVEC_ITER_ALL
 #define DECLARE_BVEC_ITER_ALL(iter) struct bvec_iter_all iter
 #else

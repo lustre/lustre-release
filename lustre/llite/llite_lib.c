@@ -1775,11 +1775,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		       (s64)attr->ia_mtime.tv_sec, (s64)attr->ia_ctime.tv_sec,
 		       ktime_get_real_seconds());
 
-	if (S_ISREG(inode->i_mode)) {
-		if (attr->ia_valid & ATTR_SIZE)
-			inode_dio_write_done(inode);
+	if (S_ISREG(inode->i_mode))
 		inode_unlock(inode);
-	}
 
 	/* We always do an MDS RPC, even if we're only changing the size;
 	 * only the MDS knows whether truncate() should fail with -ETXTBUSY */
@@ -2759,21 +2756,12 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
         OBD_FREE_PTR(op_data);
 }
 
-#ifdef HAVE_SUPEROPS_USE_DENTRY
 int ll_show_options(struct seq_file *seq, struct dentry *dentry)
-#else
-int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
-#endif
 {
 	struct ll_sb_info *sbi;
 
-#ifdef HAVE_SUPEROPS_USE_DENTRY
-	LASSERT((seq != NULL) && (dentry != NULL));
+	LASSERT(seq && dentry);
 	sbi = ll_s2sbi(dentry->d_sb);
-#else
-	LASSERT((seq != NULL) && (vfs != NULL));
-	sbi = ll_s2sbi(vfs->mnt_sb);
-#endif
 
 	if (sbi->ll_flags & LL_SBI_NOLCK)
 		seq_puts(seq, ",nolock");

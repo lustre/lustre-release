@@ -265,7 +265,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			CERROR("Can't cancel index 0 which is header\n");
 			GOTO(out_unlock, rc = -EINVAL);
 		}
-		if (!ext2_clear_bit(index[i], LLOG_HDR_BITMAP(llh))) {
+		if (!__test_and_clear_bit_le(index[i], LLOG_HDR_BITMAP(llh))) {
 			CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n",
 			       index[i]);
 			GOTO(out_unlock, rc = -ENOENT);
@@ -323,7 +323,7 @@ out_trans:
 		if (subtract_count)
 			loghandle->lgh_hdr->llh_count += num;
 		for (i = i - 1; i >= 0; i--)
-			ext2_set_bit(index[i], LLOG_HDR_BITMAP(llh));
+			set_bit_le(index[i], LLOG_HDR_BITMAP(llh));
 		mutex_unlock(&loghandle->lgh_hdr_mutex);
 	}
 	RETURN(rc);
@@ -371,7 +371,7 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		memset(LLOG_HDR_BITMAP(llh), 0, llh->llh_hdr.lrh_len -
 						llh->llh_bitmap_offset -
 						sizeof(llh->llh_tail));
-		ext2_set_bit(0, LLOG_HDR_BITMAP(llh));
+		set_bit_le(0, LLOG_HDR_BITMAP(llh));
 		LLOG_HDR_TAIL(llh)->lrt_len = llh->llh_hdr.lrh_len;
 		LLOG_HDR_TAIL(llh)->lrt_index = llh->llh_hdr.lrh_index;
 		rc = 0;
@@ -505,7 +505,7 @@ static int llog_process_thread(void *arg)
 
 		/* skip records not set in bitmap */
 		while (index <= last_index &&
-		       !ext2_test_bit(index, LLOG_HDR_BITMAP(llh)))
+		       !test_bit_le(index, LLOG_HDR_BITMAP(llh)))
 			++index;
 
 		/* There are no indices prior the last_index */
@@ -647,7 +647,7 @@ repeat:
 						    chunk_offset;
 
 			/* if set, process the callback on this record */
-			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
+			if (test_bit_le(index, LLOG_HDR_BITMAP(llh))) {
 				struct llog_cookie *lgc;
 				__u64	tmp_off;
 				int	tmp_idx;
@@ -729,7 +729,7 @@ out:
 				"plain"), index, llh->llh_count);
 
 			while (index <= last_index) {
-				if (ext2_test_bit(index,
+				if (test_bit_le(index,
 						  LLOG_HDR_BITMAP(llh)) != 0)
 					llog_cancel_rec(lpi->lpi_env, loghandle,
 							index);
@@ -899,7 +899,7 @@ int llog_reverse_process(const struct lu_env *env,
 
 		/* skip records not set in bitmap */
 		while (index >= first_index &&
-		       !ext2_test_bit(index, LLOG_HDR_BITMAP(llh)))
+		       !test_bit_le(index, LLOG_HDR_BITMAP(llh)))
 			--index;
 
 		LASSERT(index >= first_index - 1);
@@ -930,7 +930,7 @@ int llog_reverse_process(const struct lu_env *env,
 				GOTO(out, rc = 0); /* no more records */
 
 			/* if set, process the callback on this record */
-			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
+			if (test_bit_le(index, LLOG_HDR_BITMAP(llh))) {
 				rec = (void *)tail - tail->lrt_len +
 				      sizeof(*tail);
 

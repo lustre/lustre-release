@@ -2579,7 +2579,7 @@ int sptlrpc_current_user_desc_size(void)
 {
 	int ngroups;
 
-	ngroups = current_ngroups;
+	ngroups = current_cred()->group_info->ngroups;
 
 	if (ngroups > LUSTRE_MAX_GROUPS)
 		ngroups = LUSTRE_MAX_GROUPS;
@@ -2590,6 +2590,7 @@ EXPORT_SYMBOL(sptlrpc_current_user_desc_size);
 int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 {
 	struct ptlrpc_user_desc *pud;
+	int ngroups;
 
 	pud = lustre_msg_buf(msg, offset, 0);
 
@@ -2601,8 +2602,9 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 	pud->pud_ngroups = (msg->lm_buflens[offset] - sizeof(*pud)) / 4;
 
 	task_lock(current);
-	if (pud->pud_ngroups > current_ngroups)
-		pud->pud_ngroups = current_ngroups;
+	ngroups = current_cred()->group_info->ngroups;
+	if (pud->pud_ngroups > ngroups)
+		pud->pud_ngroups = ngroups;
 #ifdef HAVE_GROUP_INFO_GID
 	memcpy(pud->pud_groups, current_cred()->group_info->gid,
 	       pud->pud_ngroups * sizeof(__u32));

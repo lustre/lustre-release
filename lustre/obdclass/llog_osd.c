@@ -437,7 +437,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		/* llog can be empty only when first record is being written */
 		LASSERT(ergo(idx > 0, lgi->lgi_attr.la_size > 0));
 
-		if (!ext2_test_bit(idx, LLOG_HDR_BITMAP(llh))) {
+		if (!test_bit_le(idx, LLOG_HDR_BITMAP(llh))) {
 			CERROR("%s: modify unset record %u\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name, idx);
 			RETURN(-ENOENT);
@@ -611,7 +611,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	/* the lgh_hdr_mutex protects llog header data from concurrent
 	 * update/cancel, the llh_count and llh_bitmap are protected */
 	mutex_lock(&loghandle->lgh_hdr_mutex);
-	if (ext2_set_bit(index, LLOG_HDR_BITMAP(llh))) {
+	if (__test_and_set_bit_le(index, LLOG_HDR_BITMAP(llh))) {
 		CERROR("%s: index %u already set in log bitmap\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, index);
 		mutex_unlock(&loghandle->lgh_hdr_mutex);
@@ -722,7 +722,7 @@ out_unlock:
 out:
 	/* cleanup llog for error case */
 	mutex_lock(&loghandle->lgh_hdr_mutex);
-	ext2_clear_bit(index, LLOG_HDR_BITMAP(llh));
+	clear_bit_le(index, LLOG_HDR_BITMAP(llh));
 	llh->llh_count--;
 	mutex_unlock(&loghandle->lgh_hdr_mutex);
 

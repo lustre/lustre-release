@@ -542,6 +542,9 @@ static int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
 #else
 #define mdc_unpack_acl(req, md) 0
 #endif
+#ifdef HAVE_XA_IS_VALUE
+# include <linux/xarray.h>
+#endif
 
 int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                       struct obd_export *dt_exp, struct obd_export *md_exp,
@@ -1348,8 +1351,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	}
 
 	for (npages = 1; npages < max_pages; npages++) {
-		page = __page_cache_alloc(mapping_gfp_mask(inode->i_mapping)
-					  | __GFP_COLD);
+		page = page_cache_alloc(inode->i_mapping);
 		if (page == NULL)
 			break;
 		page_pool[npages] = page;
