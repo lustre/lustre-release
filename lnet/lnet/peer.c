@@ -3280,7 +3280,6 @@ static int lnet_peer_discovery(void *arg)
 	wait_for_completion(&the_lnet.ln_started);
 
 	CDEBUG(D_NET, "started\n");
-	cfs_block_allsigs();
 
 	for (;;) {
 		if (lnet_peer_discovery_wait_for_work())

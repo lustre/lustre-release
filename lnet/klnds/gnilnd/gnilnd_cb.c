@@ -3036,8 +3036,6 @@ kgnilnd_reaper(void *arg)
 	struct timer_list  timer;
 	DEFINE_WAIT(wait);
 
-	cfs_block_allsigs();
-
 	/* all gnilnd threads need to run fairly urgently */
 	set_user_nice(current, *kgnilnd_tunables.kgn_nice);
 	spin_lock(&kgnilnd_data.kgn_reaper_lock);
@@ -5012,8 +5010,6 @@ kgnilnd_scheduler(void *arg)
 	DEFINE_WAIT(wait);
 
 	dev = &kgnilnd_data.kgn_devices[(threadno + 1) % kgnilnd_data.kgn_ndevs];
-
-	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */
 	set_user_nice(current, *kgnilnd_tunables.kgn_sched_nice);

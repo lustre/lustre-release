@@ -171,21 +171,6 @@ int kstrtobool_from_user(const char __user *s, size_t count, bool *res)
 EXPORT_SYMBOL(kstrtobool_from_user);
 #endif /* !HAVE_KSTRTOBOOL_FROM_USER */
 
-sigset_t
-cfs_block_allsigs(void)
-{
-	unsigned long	flags;
-	sigset_t	old;
-
-	spin_lock_irqsave(&current->sighand->siglock, flags);
-	old = current->blocked;
-	sigfillset(&current->blocked);
-	recalc_sigpending();
-	spin_unlock_irqrestore(&current->sighand->siglock, flags);
-	return old;
-}
-EXPORT_SYMBOL(cfs_block_allsigs);
-
 sigset_t cfs_block_sigs(unsigned long sigs)
 {
 	unsigned long  flags;

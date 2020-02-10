@@ -204,8 +204,6 @@ cfs_wi_scheduler(void *arg)
 {
 	struct cfs_wi_sched *sched = (struct cfs_wi_sched *)arg;
 
-	cfs_block_allsigs();
-
 	/* CPT affinity scheduler? */
 	if (sched->ws_cptab != NULL)
 		if (cfs_cpt_bind(sched->ws_cptab, sched->ws_cpt) != 0)

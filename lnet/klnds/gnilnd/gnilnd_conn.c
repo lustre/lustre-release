@@ -2272,7 +2272,6 @@ kgnilnd_dgram_waitq(void *arg)
 	DEFINE_WAIT(mover_done);
 
 	snprintf(name, sizeof(name), "kgnilnd_dgn_%02d", dev->gnd_id);
-	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */
 	set_user_nice(current, *kgnilnd_tunables.kgn_nice);
@@ -2452,7 +2451,7 @@ kgnilnd_dgram_mover(void *arg)
 	DEFINE_WAIT(wait);
 
 	snprintf(name, sizeof(name), "kgnilnd_dg_%02d", dev->gnd_id);
-	cfs_block_allsigs();
+
 	/* all gnilnd threads need to run fairly urgently */
 	set_user_nice(current, *kgnilnd_tunables.kgn_nice);
 

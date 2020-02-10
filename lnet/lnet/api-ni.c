@@ -37,6 +37,9 @@
 #include <linux/ktime.h>
 #include <linux/moduleparam.h>
 #include <linux/uaccess.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#endif
 
 #include <lnet/lib-lnet.h>
 
@@ -1741,8 +1744,6 @@ static void
 lnet_ping_md_unlink(struct lnet_ping_buffer *pbuf,
 		    struct lnet_handle_md *ping_mdh)
 {
-	sigset_t	blocked = cfs_block_allsigs();
-
 	LNetMDUnlink(*ping_mdh);
 	LNetInvalidateMDHandle(ping_mdh);
 
@@ -1751,8 +1752,6 @@ lnet_ping_md_unlink(struct lnet_ping_buffer *pbuf,
 		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
 		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 	}
-
-	cfs_restore_sigs(blocked);
 }
 
 static void
@@ -4155,8 +4154,12 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
 	do {
 		/* MUST block for unlink to complete */
-		if (unlinked)
-			blocked = cfs_block_allsigs();
+		if (unlinked) {
+			sigset_t set;
+
+			sigfillset(&set);
+			sigprocmask(SIG_SETMASK, &set, &blocked);
+		}
 
 		rc2 = LNetEQPoll(&eqh, 1, timeout, &event, &which);
 

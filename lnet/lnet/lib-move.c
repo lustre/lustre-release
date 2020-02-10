@@ -3494,8 +3494,6 @@ lnet_monitor_thread(void *arg)
 	 *  4. Checks if there are any NIs on the remote recovery queue
 	 *     and pings them.
 	 */
-	cfs_block_allsigs();
-
 	while (the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING) {
 		now = ktime_get_real_seconds();
 
