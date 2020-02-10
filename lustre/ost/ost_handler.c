@@ -172,10 +172,10 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		GOTO(out_service, rc);
         }
 
-	mask = cfs_cpt_nodemask(cfs_cpt_table, CFS_CPT_ANY);
+	mask = cfs_cpt_nodemask(cfs_cpt_tab, CFS_CPT_ANY);
 	/* event CPT feature is disabled in libcfs level by set partition
 	 * number to 1, we still want to set node affinity for io service */
-	if (cfs_cpt_number(cfs_cpt_table) == 1 && nodes_weight(*mask) > 1) {
+	if (cfs_cpt_number(cfs_cpt_tab) == 1 && nodes_weight(*mask) > 1) {
 		int	cpt = 0;
 		int	i;
 

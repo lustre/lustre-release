@@ -175,7 +175,7 @@ ptlrpcd_select_pc(struct ptlrpc_request *req)
 	if (req != NULL && req->rq_send_state != LUSTRE_IMP_FULL)
 		return &ptlrpcd_rcv;
 
-	cpt = cfs_cpt_current(cfs_cpt_table, 1);
+	cpt = cfs_cpt_current(cfs_cpt_tab, 1);
 	if (ptlrpcds_cpt_idx == NULL)
 		idx = cpt;
 	else
@@ -445,7 +445,7 @@ static int ptlrpcd(void *arg)
 
 	unshare_fs_struct();
 
-	if (cfs_cpt_bind(cfs_cpt_table, pc->pc_cpt) != 0)
+	if (cfs_cpt_bind(cfs_cpt_tab, pc->pc_cpt) != 0)
 		CWARN("Failed to bind %s on CPT %d\n", pc->pc_name, pc->pc_cpt);
 
 	/*
@@ -592,7 +592,7 @@ static int ptlrpcd_partners(struct ptlrpcd *pd, int index)
 	if (pc->pc_npartners <= 0)
 		GOTO(out, rc);
 
-	OBD_CPT_ALLOC(pc->pc_partners, cfs_cpt_table, pc->pc_cpt,
+	OBD_CPT_ALLOC(pc->pc_partners, cfs_cpt_tab, pc->pc_cpt,
 		      sizeof(struct ptlrpcd_ctl *) * pc->pc_npartners);
 	if (pc->pc_partners == NULL) {
 		pc->pc_npartners = 0;
@@ -729,7 +729,7 @@ static void ptlrpcd_fini(void)
 	ptlrpcd_free(&ptlrpcd_rcv);
 
 	if (ptlrpcds_cpt_idx != NULL) {
-		ncpts = cfs_cpt_number(cfs_cpt_table);
+		ncpts = cfs_cpt_number(cfs_cpt_tab);
 		OBD_FREE(ptlrpcds_cpt_idx, ncpts * sizeof(ptlrpcds_cpt_idx[0]));
 		ptlrpcds_cpt_idx = NULL;
 	}
@@ -756,7 +756,7 @@ static int ptlrpcd_init(void)
 	/*
 	 * Determine the CPTs that ptlrpcd threads will run on.
 	 */
-	cptable = cfs_cpt_table;
+	cptable = cfs_cpt_tab;
 	ncpts = cfs_cpt_number(cptable);
 	if (ptlrpcd_cpts != NULL) {
 		struct cfs_expr_list *el;

@@ -36,8 +36,8 @@
 #include <libcfs/libcfs.h>
 
 /** Global CPU partition table */
-struct cfs_cpt_table *cfs_cpt_table __read_mostly;
-EXPORT_SYMBOL(cfs_cpt_table);
+struct cfs_cpt_table *cfs_cpt_tab __read_mostly;
+EXPORT_SYMBOL(cfs_cpt_tab);
 
 /**
  * modparam for setting number of partitions
@@ -1161,8 +1161,8 @@ static struct notifier_block cfs_cpu_notifier = {
 
 void cfs_cpu_fini(void)
 {
-	if (!IS_ERR_OR_NULL(cfs_cpt_table))
-		cfs_cpt_table_free(cfs_cpt_table);
+	if (!IS_ERR_OR_NULL(cfs_cpt_tab))
+		cfs_cpt_table_free(cfs_cpt_tab);
 
 #ifdef CONFIG_HOTPLUG_CPU
 #ifdef HAVE_HOTPLUG_STATE_MACHINE
@@ -1179,7 +1179,7 @@ int cfs_cpu_init(void)
 {
 	int ret;
 
-	LASSERT(!cfs_cpt_table);
+	LASSERT(!cfs_cpt_tab);
 
 #ifdef CONFIG_HOTPLUG_CPU
 #ifdef HAVE_HOTPLUG_STATE_MACHINE
@@ -1203,20 +1203,20 @@ int cfs_cpu_init(void)
 
 	get_online_cpus();
 	if (*cpu_pattern) {
-		cfs_cpt_table = cfs_cpt_table_create_pattern(cpu_pattern);
-		if (IS_ERR(cfs_cpt_table)) {
+		cfs_cpt_tab = cfs_cpt_table_create_pattern(cpu_pattern);
+		if (IS_ERR(cfs_cpt_tab)) {
 			CERROR("Failed to create cptab from pattern '%s'\n",
 			       cpu_pattern);
-			ret = PTR_ERR(cfs_cpt_table);
+			ret = PTR_ERR(cfs_cpt_tab);
 			goto failed_alloc_table;
 		}
 
 	} else {
-		cfs_cpt_table = cfs_cpt_table_create(cpu_npartitions);
-		if (IS_ERR(cfs_cpt_table)) {
+		cfs_cpt_tab = cfs_cpt_table_create(cpu_npartitions);
+		if (IS_ERR(cfs_cpt_tab)) {
 			CERROR("Failed to create cptab with npartitions %d\n",
 			       cpu_npartitions);
-			ret = PTR_ERR(cfs_cpt_table);
+			ret = PTR_ERR(cfs_cpt_tab);
 			goto failed_alloc_table;
 		}
 	}
@@ -1225,14 +1225,14 @@ int cfs_cpu_init(void)
 
 	LCONSOLE(0, "HW NUMA nodes: %d, HW CPU cores: %d, npartitions: %d\n",
 		 num_online_nodes(), num_online_cpus(),
-		 cfs_cpt_number(cfs_cpt_table));
+		 cfs_cpt_number(cfs_cpt_tab));
 	return 0;
 
 failed_alloc_table:
 	put_online_cpus();
 
-	if (!IS_ERR_OR_NULL(cfs_cpt_table))
-		cfs_cpt_table_free(cfs_cpt_table);
+	if (!IS_ERR_OR_NULL(cfs_cpt_tab))
+		cfs_cpt_table_free(cfs_cpt_tab);
 
 #ifdef CONFIG_HOTPLUG_CPU
 #ifdef HAVE_HOTPLUG_STATE_MACHINE

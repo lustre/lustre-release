@@ -1064,8 +1064,8 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 	int cpt;
 
 	ENTRY;
-	cpt = cfs_cpt_current(cfs_cpt_table, 0);
-	OBD_CPT_ALLOC(set, cfs_cpt_table, cpt, sizeof(*set));
+	cpt = cfs_cpt_current(cfs_cpt_tab, 0);
+	OBD_CPT_ALLOC(set, cfs_cpt_tab, cpt, sizeof(*set));
 	if (!set)
 		RETURN(NULL);
 	atomic_set(&set->set_refcount, 1);

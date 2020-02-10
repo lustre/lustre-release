@@ -593,7 +593,7 @@ sfw_load_test(struct sfw_test_instance *tsi)
 
 	CDEBUG(D_NET, "Reserved %d buffers for test %s\n",
 	       nbuf * (srpc_serv_is_framework(svc) ?
-		       1 : cfs_cpt_number(cfs_cpt_table)), svc->sv_name);
+		       1 : cfs_cpt_number(cfs_cpt_tab)), svc->sv_name);
 	return 0;
 }
 

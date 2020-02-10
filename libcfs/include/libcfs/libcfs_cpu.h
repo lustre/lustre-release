@@ -58,9 +58,9 @@
  *   . NUMA allocators, CPU affinity threads are built over CPU partitions,
  *     instead of HW CPUs or HW nodes.
  *
- *   . By default, Lustre modules should refer to the global cfs_cpt_table,
+ *   . By default, Lustre modules should refer to the global cfs_cpt_tab,
  *     instead of accessing HW CPUs directly, so concurrency of Lustre can be
- *     configured by cpu_npartitions of the global cfs_cpt_table
+ *     configured by cpu_npartitions of the global cfs_cpt_tab
  *
  *   . If cpu_npartitions=1(all CPUs in one pool), lustre should work the
  *     same way as 2.2 or earlier versions
@@ -124,7 +124,7 @@ struct cfs_cpt_table {
 /* any CPU partition */
 #define CFS_CPT_ANY		(-1)
 
-extern struct cfs_cpt_table	*cfs_cpt_table;
+extern struct cfs_cpt_table	*cfs_cpt_tab;
 
 /**
  * destroy a CPU partition table

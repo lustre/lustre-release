@@ -403,14 +403,14 @@ static int __proc_cpt_table(void *data, int write,
 	if (write)
 		return -EPERM;
 
-	LASSERT(cfs_cpt_table != NULL);
+	LASSERT(cfs_cpt_tab);
 
 	while (1) {
 		LIBCFS_ALLOC(buf, len);
 		if (buf == NULL)
 			return -ENOMEM;
 
-		rc = cfs_cpt_table_print(cfs_cpt_table, buf, len);
+		rc = cfs_cpt_table_print(cfs_cpt_tab, buf, len);
 		if (rc >= 0)
 			break;
 
@@ -451,14 +451,14 @@ static int __proc_cpt_distance(void *data, int write,
 	if (write)
 		return -EPERM;
 
-	LASSERT(cfs_cpt_table != NULL);
+	LASSERT(cfs_cpt_tab);
 
 	while (1) {
 		LIBCFS_ALLOC(buf, len);
 		if (buf == NULL)
 			return -ENOMEM;
 
-		rc = cfs_cpt_distance_print(cfs_cpt_table, buf, len);
+		rc = cfs_cpt_distance_print(cfs_cpt_tab, buf, len);
 		if (rc >= 0)
 			break;
 
