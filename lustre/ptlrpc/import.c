@@ -1777,7 +1777,6 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 	    imp->imp_state != LUSTRE_IMP_CLOSED) {
 		LASSERTF(imp->imp_state == LUSTRE_IMP_CONNECTING,
 			 "%s\n", ptlrpc_import_state_name(imp->imp_state));
-		imp->imp_state = LUSTRE_IMP_IDLE;
 		memset(&imp->imp_remote_handle, 0,
 		       sizeof(imp->imp_remote_handle));
 		/* take our DISCONNECT into account */
@@ -1787,6 +1786,9 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 			import_set_state_nolock(imp, LUSTRE_IMP_NEW);
 			ptlrpc_reset_reqs_generation(imp);
 			connect = 1;
+		} else {
+			/* do not expose transient IDLE state */
+			import_set_state_nolock(imp, LUSTRE_IMP_IDLE);
 		}
 	}
 
