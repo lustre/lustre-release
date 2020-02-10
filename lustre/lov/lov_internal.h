@@ -127,7 +127,7 @@ static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 			stripe_count = 0;
 
 		size += sizeof(*lsme);
-		size += lov_mds_md_size(lsme->lsme_stripe_count,
+		size += lov_mds_md_size(stripe_count,
 					lsme->lsme_magic);
 	}
 
