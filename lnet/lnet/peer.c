@@ -2021,20 +2021,6 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	}
 
 	/*
-	 * Check the MULTIRAIL flag. Complain if the peer was DLC
-	 * configured without it.
-	 */
-	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
-		if (lp->lp_state & LNET_PEER_CONFIGURED) {
-			CERROR("Push says %s is Multi-Rail, DLC says not\n",
-			       libcfs_nid2str(lp->lp_primary_nid));
-		} else {
-			lp->lp_state |= LNET_PEER_MULTI_RAIL;
-			lnet_peer_clr_non_mr_pref_nids(lp);
-		}
-	}
-
-	/*
 	 * The peer may have discovery disabled at its end. Set
 	 * NO_DISCOVERY as appropriate.
 	 */
@@ -2046,6 +2032,31 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		CDEBUG(D_NET, "Peer %s has discovery enabled\n",
 		       libcfs_nid2str(lp->lp_primary_nid));
 		lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
+	}
+
+	/*
+	 * Update the MULTI_RAIL flag based on the push. If the peer
+	 * was configured with DLC then the setting should match what
+	 * DLC put in.
+	 * NB: We verified above that the MR feature bit is set in pi_features
+	 */
+	if (lp->lp_state & LNET_PEER_MULTI_RAIL) {
+		CDEBUG(D_NET, "peer %s(%p) is MR\n",
+		       libcfs_nid2str(lp->lp_primary_nid), lp);
+	} else if (lp->lp_state & LNET_PEER_CONFIGURED) {
+		CWARN("Push says %s is Multi-Rail, DLC says not\n",
+		      libcfs_nid2str(lp->lp_primary_nid));
+	} else if (lnet_peer_discovery_disabled) {
+		CDEBUG(D_NET, "peer %s(%p) not MR: DD disabled locally\n",
+		       libcfs_nid2str(lp->lp_primary_nid), lp);
+	} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
+		CDEBUG(D_NET, "peer %s(%p) not MR: DD disabled remotely\n",
+		       libcfs_nid2str(lp->lp_primary_nid), lp);
+	} else {
+		CDEBUG(D_NET, "peer %s(%p) is MR capable\n",
+		       libcfs_nid2str(lp->lp_primary_nid), lp);
+		lp->lp_state |= LNET_PEER_MULTI_RAIL;
+		lnet_peer_clr_non_mr_pref_nids(lp);
 	}
 
 	/*
