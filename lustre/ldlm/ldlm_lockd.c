@@ -944,6 +944,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 	body->lock_handle[0] = lock->l_remote_handle;
+	body->lock_handle[1].cookie = lock->l_handle.h_cookie;
 	body->lock_desc = *desc;
 	body->lock_flags |= ldlm_flags_to_wire(lock->l_flags & LDLM_FL_AST_MASK);
 
@@ -1039,6 +1040,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 
 	body->lock_handle[0] = lock->l_remote_handle;
+	body->lock_handle[1].cookie = lock->l_handle.h_cookie;
 	body->lock_flags = ldlm_flags_to_wire(flags);
 	ldlm_lock2desc(lock, &body->lock_desc);
 	if (lvb_len > 0) {
@@ -2413,6 +2415,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 		ldlm_lock_remove_from_lru(lock);
 		ldlm_set_bl_ast(lock);
 	}
+	if (lock->l_remote_handle.cookie == 0)
+		lock->l_remote_handle = dlm_req->lock_handle[1];
 	unlock_res_and_lock(lock);
 
 	/*

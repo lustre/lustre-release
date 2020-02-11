@@ -552,8 +552,11 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 		 * bl_ast and -EINVAL reply is sent to server anyways.
 		 * b=17645
 		 */
-		lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED |
+		lock->l_flags |= LDLM_FL_FAILED |
 				 LDLM_FL_ATOMIC_CB | LDLM_FL_CBPENDING;
+		if (!(ldlm_is_bl_ast(lock) &&
+		      lock->l_remote_handle.cookie != 0))
+			lock->l_flags |= LDLM_FL_LOCAL_ONLY;
 		need_cancel = 1;
 	}
 	unlock_res_and_lock(lock);
