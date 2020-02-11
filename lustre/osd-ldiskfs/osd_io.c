@@ -1948,10 +1948,12 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 	}
 
+	inode_lock(inode);
 	/* add to orphan list to ensure truncate completion
 	 * if this transaction succeed. ldiskfs_truncate()
 	 * will take the inode out of the list */
 	rc = ldiskfs_orphan_add(oh->ot_handle, inode);
+	inode_unlock(inode);
 	if (rc != 0)
 		GOTO(out, rc);
 
