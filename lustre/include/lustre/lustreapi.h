@@ -38,6 +38,7 @@
  * @{
  */
 
+#include <glob.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <time.h>
@@ -1023,6 +1024,10 @@ ssize_t llapi_mirror_read(int fd, unsigned int id,
 ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count);
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 		       off_t pos, size_t count);
+
+int llapi_param_get_paths(const char *pattern, glob_t *paths);
+int llapi_param_get_value(const char *path, char **buf, size_t *buflen);
+void llapi_param_paths_free(glob_t *paths);
 
 /** @} llapi */
 

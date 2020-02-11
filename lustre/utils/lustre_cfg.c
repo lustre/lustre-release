@@ -54,6 +54,7 @@
 #include <libcfs/util/string.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>
+#include <lustre/lustreapi.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_cfg.h>
@@ -835,74 +836,32 @@ char *parameter_opname[] = {
 static int
 read_param(const char *path, const char *param_name, struct param_opts *popt)
 {
-	bool display_path = popt->po_show_path;
-	long page_size = sysconf(_SC_PAGESIZE);
 	int rc = 0;
-	char *buf;
-	int fd;
+	char *buf = NULL;
+	size_t buflen;
 
-	/* Read the contents of file to stdout */
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		rc = -errno;
+	rc = llapi_param_get_value(path, &buf, &buflen);
+	if (rc != 0) {
 		fprintf(stderr,
-			"error: get_param: opening '%s': %s\n",
-			path, strerror(errno));
-		return rc;
+			"error: read_param: \'%s\': %s\n",
+			path, strerror(-rc));
+		goto free_buf;
 	}
+	/* don't print anything for empty files */
+	if (buf[0] == '\0')
+		goto free_buf;
 
-	buf = calloc(1, page_size);
-	if (buf == NULL) {
-		fprintf(stderr,
-			"error: get_param: allocating '%s' buffer: %s\n",
-			path, strerror(errno));
-		close(fd);
-		return -ENOMEM;
+	if (popt->po_show_path) {
+		bool longbuf;
+
+		longbuf = strnchr(buf, buflen - 1, '\n') != NULL ||
+			buflen + strlen(param_name) >= 80;
+		printf("%s=%s", param_name, longbuf ? "\n" : "");
 	}
+	printf("%s", buf);
 
-	while (1) {
-		ssize_t count = read(fd, buf, page_size);
-
-		if (count == 0)
-			break;
-		if (count < 0) {
-			rc = -errno;
-			if (errno != EIO) {
-				fprintf(stderr, "error: get_param: "
-					"reading '%s': %s\n",
-					param_name, strerror(errno));
-			}
-			break;
-		}
-
-		/* Print the output in the format path=value if the value does
-		 * not contain a new line character and the output can fit in
-		 * a single line, else print value on new line */
-		if (display_path) {
-			bool longbuf;
-
-			longbuf = strnchr(buf, count - 1, '\n') != NULL ||
-					  count + strlen(param_name) >= 80;
-			printf("%s=%s", param_name, longbuf ? "\n" : buf);
-
-			/* Make sure it doesn't print again while looping */
-			display_path = false;
-
-			if (!longbuf)
-				continue;
-		}
-
-		if (fwrite(buf, 1, count, stdout) != count) {
-			rc = -errno;
-			fprintf(stderr,
-				"error: get_param: write to stdout: %s\n",
-				strerror(errno));
-			break;
-		}
-	}
-	close(fd);
+free_buf:
 	free(buf);
-
 	return rc;
 }
 
@@ -976,7 +935,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 	char *opname = parameter_opname[mode];
 	int rc, i;
 
-	rc = cfs_get_param_paths(&paths, "%s", pattern);
+	rc = llapi_param_get_paths(pattern, &paths);
 	if (rc != 0) {
 		rc = -errno;
 		if (!popt->po_recursive) {
@@ -1136,7 +1095,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		free(dir_cache[i]);
 	free(dir_cache);
 out_param:
-	cfs_free_param_data(&paths);
+	llapi_param_paths_free(&paths);
 	return rc;
 }
 
