@@ -1,0 +1,103 @@
+.TH llapi_param_get_value 3 "2020 Feb 24" "Lustre User API"
+.SH NAME
+llapi_param_get_value \- read parameter files for Lustre to a buffer
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_param_get_value(const char "  "*path"  ", char " "**buf" \
+", size_t " "*buflen" ");"
+.SH DESCRIPTION
+.LP
+The
+.B llapi_param_get_value()
+function reads the contents of files in procfs, sysfs, etc. into a buffer.
+If the buffer is preallocated, it will have a fixed size.
+If the buffer is not preallocated, it will be automatically sized to fit
+the contents of the file. There is also an option to query the size of a file.
+
+The behavior of
+.B llapi_param_get_value()
+depends on the value of
+.IR buf .
+If
+.I buf
+is NULL, then the contents of
+.I path
+will not be saved into
+.IR *buf ,
+but the number of bytes needed to hold the file will be stored in
+.IR buflen .
+This size will include the space needed for the NUL terminating byte.
+However, the size of the file can change because it is dynamically generated.
+This means that it's possible for the file size to increase which will cause
+the value stored in
+.I buflen
+to still not be large enough when used in a subsequent call.
+.sp
+If
+.I buf
+is not NULL but
+.I *buf
+is NULL, then
+.I *buf
+will point to an automatically allocated buffer that will hold the contents of
+.IR path ,
+and buflen will hold the number of bytes written excluding the NUL terminating
+byte.
+.sp
+If both
+.I buf
+and
+.I *buf
+are not NULL, then
+.I buf
+is assumed to be a pre-allocated buffer of
+.I *buflen
+size. The files contents will be put into
+.I *buf
+and the number of bytes written to
+.IR *buflen ,
+excluding the NUL terminating byte. In the case that
+.I buflen
+is too small to hold the NUL-terminated contents of the file,
+.I buflen
+will contain a suggested size for
+.IR *buf .
+This suggested size includes the NUL terminating byte, just as in the case where
+.I buf
+is NULL.
+
+.SH RETURN VALUES
+.TP
+.B 0
+on success
+.TP
+-ve
+error code on failure and sets errno appropriately.
+
+.SH ERRORS
+.TP
+-EINVAL
+if either
+.I path
+or
+.I buflen
+are NULL.
+.TP
+-EOVERFLOW
+if
+.I buf
+and
+.I *buf
+are not NULL, and the pre-allocated buffer is too small.
+.TP
+-ENOMEM
+if
+.I buf
+is not NULL, but the buffer allocation failed
+
+.SH SEE ALSO
+.BR llapi_get_param_paths (3),
+.BR lustreapi (7),
+.BR lctl-get_param (8)

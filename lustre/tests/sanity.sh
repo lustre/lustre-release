@@ -19690,12 +19690,22 @@ test_300d() {
 	#local striped directory
 	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
+        #look at the directories for debug purposes
+	ls -l $DIR/$tdir
+	$LFS getdirstripe $DIR/$tdir
+	ls -l $DIR/$tdir/striped_dir
+	$LFS getdirstripe $DIR/$tdir/striped_dir
 	createmany -o $DIR/$tdir/striped_dir/f 10 ||
 		error "create 10 files failed"
 
 	#remote striped directory
 	$LFS setdirstripe -i 1 -c 2 $DIR/$tdir/remote_striped_dir ||
 		error "set striped dir error"
+        #look at the directories for debug purposes
+	ls -l $DIR/$tdir
+	$LFS getdirstripe $DIR/$tdir
+	ls -l $DIR/$tdir/remote_striped_dir
+	$LFS getdirstripe $DIR/$tdir/remote_striped_dir
 	createmany -o $DIR/$tdir/remote_striped_dir/f 10 ||
 		error "create 10 files failed"
 

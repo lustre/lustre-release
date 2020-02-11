@@ -142,6 +142,8 @@ MANFILES =					\
 	llapi_layout_stripe_count_set.3		\
 	llapi_layout_stripe_size_get.3		\
 	llapi_layout_stripe_size_set.3		\
+	llapi_param_get_paths.3			\
+	llapi_param_get_value.3			\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\
 	llapi_pcc_attach.3			\
