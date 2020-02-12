@@ -1678,8 +1678,8 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct lustre_mdt_attrs *lma = NULL;
 	nvlist_t *nvbuf = NULL;
-	int size = 0;
-	int rc;
+	int rc, size = 0;
+	bool locked;
 	ENTRY;
 
 	LASSERT(it->ooi_user_ready);
@@ -1715,16 +1715,20 @@ again:
 
 	rc = __osd_xattr_load_by_oid(dev, it->ooi_pos, &nvbuf);
 
-	if (!scrub->os_full_speed)
+	locked = false;
+	if (!scrub->os_full_speed) {
 		spin_lock(&scrub->os_lock);
+		locked = true;
+	}
 	it->ooi_prefetched--;
 	if (!scrub->os_full_speed) {
 		if (scrub->os_waiting) {
 			scrub->os_waiting = 0;
 			wake_up_all(&thread->t_ctl_waitq);
 		}
-		spin_unlock(&scrub->os_lock);
 	}
+	if (locked)
+		spin_unlock(&scrub->os_lock);
 
 	if (rc == -ENOENT || rc == -EEXIST || rc == -ENODATA)
 		goto again;
