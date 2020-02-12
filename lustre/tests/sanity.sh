@@ -14323,8 +14323,10 @@ test_160j() {
 		skip "Need MDS version at least 2.12.56"
 
 	mount_client $MOUNT2 || error "mount_client on $MOUNT2 failed"
+	stack_trap "umount $MOUNT2" EXIT
 
 	changelog_register || error "first changelog_register failed"
+	stack_trap "changelog_deregister" EXIT
 
 	# generate some changelog
 	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
@@ -14333,10 +14335,13 @@ test_160j() {
 
 	# open the changelog device
 	exec 3>/dev/changelog-$FSNAME-MDT0000
+	stack_trap "exec 3>&-" EXIT
 	exec 4</dev/changelog-$FSNAME-MDT0000
+	stack_trap "exec 4<&-" EXIT
 
 	# umount the first lustre mount
 	umount $MOUNT
+	stack_trap "mount_client $MOUNT" EXIT
 
 	# read changelog
 	cat <&4 >/dev/null || error "read changelog failed"
@@ -14348,15 +14353,6 @@ test_160j() {
 
 	printf 'clear:'$cl_user':0' >&3
 
-	# close
-	exec 3>&-
-	exec 4<&-
-
-	# cleanup
-	changelog_deregister || error "changelog_deregister failed"
-
-	umount $MOUNT2
-	mount_client $MOUNT || error "mount_client on $MOUNT failed"
 }
 run_test 160j "client can be umounted  while its chanangelog is being used"
 
