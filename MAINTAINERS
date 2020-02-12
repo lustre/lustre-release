@@ -109,7 +109,7 @@ F:	lustre/obdclass/
 
 Lustre Client IO stack - CLIO
 R:	Bobijam Xu <bobijam@whamcloud.com>
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <farr0186@gmail.com>
 S:	Supported
 F:	Documentation/clio.txt
 F:	lustre/include/cl_object.h
@@ -132,6 +132,7 @@ F:	lustre/mdc/
 Lustre Client VFS Interface
 R:	Oleg Drokin <green@whamcloud.com>
 M:	Lai Siyao <lai.siyao@whamcloud.com>
+R:	Vladimir Saveliev <vlaidimir.saveliev@hpe.com>
 S:	Supported
 F:	lustre/llite/dcache.c
 F:	lustre/llite/dir.c
@@ -172,7 +173,7 @@ K:	dom_
 
 Lustre Distributed Lock Manager - LDLM
 R:	Oleg Drokin <green@whamcloud.com>
-M:	Patrick Farrell <pfarrell@whamcloud.com>
+M:	Patrick Farrell <farr0186@gmail.com>
 S:	Supported
 F:	lustre/include/lustre_dlm.h
 F:	lustre/include/lustre_dlm_flags.h
@@ -237,7 +238,8 @@ F:	lustre/tests/sanity-lfsck.sh
 F:	lustre/tests/sanity-scrub.sh
 
 Lustre Grant Space
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <farr0186@gmail.com>
+R:	Vladimir Saveliev <vlaidimir.saveliev@hpe.com>
 S:	Supported
 F:	lustre/ofd/ofd_dev.c
 F:	lustre/ofd/ofd_io.c
@@ -307,18 +309,21 @@ F:	lustre/include/lustre_patchless_compat.h
 
 Lustre Kernel Patches
 R:	Yang Sheng <ys@whamcloud.com>
+R:	Shaun Tancheff <shaun.tancheff@hpe.com>
 S:	Supported
 F:	lustre/kernel_patches/
 
 Lustre Kernel Patches for ldiskfs
 R:	Li Dongyang <dongyangli@ddn.com>
-M:	Artem Blagodarenko <c17828@cray.com>
+R:	Andrew Perepechko <andrew.perepechko@hpe.com>
+M:	Artem Blagodarenko <artem.blagodarenko@hpe.com>
 R:	Yang Sheng <ys@whamcloud.com>
 S:	Supported
 F:	ldiskfs/kernel_patches/
 
 Lustre Log - llog
 R:	Mikhail Pershin <mpershin@whamcloud.com>
+R:	Alexander Boyko <alexander.boyko@hpe.com>
 M:	Emoly Liu <emoly@whamcloud.com>
 S:	Supported
 F:	lustre/doc/lctl-llog*.8
@@ -337,13 +342,14 @@ F:	lustre/mdt/
 
 Lustre Network Request Scheduler - NRS
 R:	Qian Yingjin <qian@whamcloud.com>
-R:	Nikitas Angelinas <nangelinas@cray.com>
+R:	Nikitas Angelinas <nikitas.angelinas@hpe.com>
 S:	Maintained
 F:	lustre/include/lustre_nrs*.c
 F:	lustre/ptlrpc/nrs*.c
 
 Lustre Networking
 R:	Amir Shehata <ashehata@whamcloud.com>
+R:	Chris Horn <chris.horn@hpe.com>
 M:	Sonia Sharma <sharmaso@whamcloud.com>
 S:	Supported
 F:	Documentation/dlc.txt
@@ -356,8 +362,8 @@ F:	lustre/scripts/ko2iblnd-probe
 F:	lnet/
 
 Lustre Networking GNILND
-R:	Chris Horn <hornc@cray.com>
-R:	Chuck Fossen <chuckf@cray.com>
+R:	Chris Horn <chris.horn@hpe.com>
+R:	Chuck Fossen <charles.fossen@hpe.com>
 S:	Supported
 F:	lnet/klnds/gnilnd/
 
@@ -393,13 +399,15 @@ F:	Documentation/osd-api.txt
 
 Lustre OSD ldiskfs
 R:	Alex Zhuravlev <bzzz@whamcloud.com>
-M:	Artem Blagodarenko <c17828@cray.com>
+M:	Artem Blagodarenko <artem.blagodarenko@hpe.com>
+R:	Andrew Perepechko <andrew.perepechko@hpe.com>
 S:	Supported
 F:	lustre/osd-ldiskfs/
 F:	Documentation/osd-api.txt
 
 Lustre OSD Proxy - OSP
 R:	Alex Zhuravlev <bzzz@whamcloud.com>
+R:	Sergey Cheremencev <sergey.cheremencev@hpe.com>
 S:	Supported
 F:	lustre/osp/
 F:	Documentation/osd-api.txt
@@ -450,6 +458,7 @@ K:	OBD_CONNECT_.*
 
 Lustre Quotas
 R:	Hongchao Zhang <hongchao@whamcloud.com>
+R:	Sergey Cheremencev <sergey.cheremencev@hpe.com>
 M:	Wang Shilong <wshilong@whamcloud.com>
 S:	Supported
 F:	lustre/doc/*quota*.[13]
@@ -478,6 +487,7 @@ F:	lustre/utils/lsnapshot.c
 
 Lustre Tests
 R:	James Nunez <jnunez@whamcloud.com>
+M:	Elena Gryaznova <elena.gryaznova@hpe.com>
 M:	Sarah Liu <sarah@whamcloud.com>
 S:	Supported
 F:	lustre/tests/

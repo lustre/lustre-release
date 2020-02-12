@@ -151,7 +151,7 @@ Vinayakswami Hariharmath <vinayakswami.hariharmath@seagate.com> <vinayakswami.ha
 Vladimir Saveliev <vladimir.saveliev@seagate.com> <vladimir_saveliev@xyratex.com>
 
 # Remap to Cray
-Alexandr Boyko <c17825@cray.com> <alexander.boyko@seagate.com>
+Alexander Boyko <c17825@cray.com> <alexander.boyko@seagate.com>
 Alexander Zarochentsev <c17826@cray.com> <alexander.zarochentsev@seagate.com>
 Alexey Lyashkov <c17817@cray.com> <alexey.lyashkov@seagate.com>
 Andrew Perepechko <c17827@cray.com> <andrew.perepechko@seagate.com>
@@ -160,6 +160,7 @@ Artem Blagodarenko <c17828@cray.com> <artem.blagodarenko@seagate.com>
 Elena Gryaznova <c17455@cray.com> <elena.gryaznova@seagate.com>
 Elena Gryaznova <c17455@cray.com> Elena V. Gryaznova <c17455@cray.com>
 Nathan Rutman <nrutman@cray.com> <nathan.rutman@seagate.com>
+Nikitas Angelinas <nangelinas@cray.com> <nikitas.angelinas@seagate.com>
 Sergey Cheremencev <c17829@cray.com> <sergey.cheremencev@seagate.com>
 Vitaly Fertman <c17818@cray.com> <vitaly.fertman@seagate.com>
 Vladimir Saveliev <c17830@cray.com> <vladimir.saveliev@seagate.com>
@@ -278,6 +279,24 @@ Sonia Sharma <sharmaso@whamcloud.com> <sonia.sharma@intel.com>
 Wang Shilong <wshilong@whamcloud.com> wshilong@ddn.com>
 Wei Liu <sarah@whamcloud.com> <wei3.liu@intel.com>
 Yang Sheng <ys@whamcloud.com> <yang.sheng@intel.com>
+
+# Remap to HPE
+Alexander Boyko <alexander.boyko@hpe.com> <c17825@cray.com>
+Alexander Zarochentsev <alexander.zarochentsev@hpe.com> <c17826@cray.com>
+Alexey Lyashkov <alexey.lyashkov@hpe.com> <c17817@cray.com>
+Andrew Perepechko <andrew.perepechko@hpe.com> <c17827@cray.com>
+Andriy Skulysh <andriy.skulysh@hpe.com> <c17819@cray.com>
+Artem Blagodarenko <artem.blagodarenko@hpe.com> <c17828@cray.com>
+Chris Horn <chris.horn@hpe.com> <hornc@cray.com>
+Chuck Fossen <charles.fossen@hpe.com> <chuckf@cray.com>
+Elena Gryaznova <elena.gryaznova@hpe.com> <c17455@cray.com>
+Nathan Rutman <nathan.rutman@hpe.com> <nrutman@cray.com>
+Nikitas Angelinas <nikitas.angelinas@hpe.com> <nangelinas@cray.com>
+Petros Koutoupis <petros.koutoupis@hpe.com> <pkoutoupis@cray.com>
+Sergey Cheremencev <sergey.cheremencev@hpe.com> <c17829@cray.com>
+Shaun Tancheff <shaun.tancheff@hpe.com> <stancheff@cray.com>
+Vitaly Fertman <vitaly.fertman@hpe.com> <c17818@cray.com>
+Vladimir Saveliev <vlaidimir.saveliev@hpe.com> <c17830@cray.com>
 
 # Others
 Brian Behlendorf <behlendorf1@llnl.gov> <behlendo>
