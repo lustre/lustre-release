@@ -15,7 +15,7 @@ init_logging
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
 
 # bug number for skipped test: LU-11915
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT  110"
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT  110 115"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if $SHARED_KEY; then
@@ -8353,6 +8353,14 @@ test_115() {
 	IMAGESIZE=$((3072 << 30)) # 3072 GiB
 
 	stopall
+
+	echo "client1: "
+	lctl dl
+	mount | grep lustre
+	echo "mds1: "
+	do_facet mds1 "hostname; ifconfig; lctl dl; mount"
+	echo "ost1: "
+	do_facet ost1 "hostname; ifconfig; lctl dl; mount"
 	# We need MDT size 3072GB, because it is smallest
 	# partition that can store 2B inodes
 	do_facet $SINGLEMDS "mkdir -p $TMP/$tdir"
@@ -8365,9 +8373,9 @@ test_115() {
 	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
 	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
 
-	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1)) --device-size=$IMAGESIZE   \
+	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1))	 \
 		--mkfsoptions='-O ea_inode,^resize_inode,meta_bg \
-		-N 2247484000 -E lazy_itable_init'"
+		-N 2247484000 -E lazy_itable_init' --device-size=$IMAGESIZE"
 	add mds1 $mds_opts --mgs --reformat $mdsdev ||
 		skip_env "format large MDT failed"
 	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
