@@ -110,9 +110,8 @@ int libcfs_ioctl(unsigned long cmd, void __user *uparam)
 			err = -EINVAL;
 		else
 			err = notifier_to_errno(err);
-		if (!err)
-			if (copy_to_user(uparam, hdr, hdr->ioc_len))
-				err = -EFAULT;
+		if (copy_to_user(uparam, hdr, hdr->ioc_len) && !err)
+			err = -EFAULT;
 		break;
 	}
 out:
