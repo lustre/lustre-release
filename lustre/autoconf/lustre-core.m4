@@ -387,7 +387,7 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	enable_getsepol="no"
 	AC_MSG_WARN([
 
-No openssk-devel headers found, unable to build l_getsepol and SELinux status checking
+No openssl-devel headers found, unable to build l_getsepol and SELinux status checking
 ])
 ])
 AC_MSG_RESULT([$enable_getsepol])
