@@ -15,8 +15,13 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT "
 # Bug number for skipped test:    LU-11381
-ALWAYS_EXCEPT+="                  201"
+ALWAYS_EXCEPT+="                  201 "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+# skip all tests for PPC until we can get sanity-pfl to pass
+if [[ $(uname -m) = ppc64 ]]; then
+	skip "Skip FLR testing for PPC clients"
+fi
 
 build_test_filter
 
