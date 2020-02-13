@@ -19,8 +19,14 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
 # bug number for skipped test:  LU-7105
-ALWAYS_EXCEPT+="                28"
+ALWAYS_EXCEPT+="                28 "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+# skip tests for PPC until they are fixed
+if [[ $(uname -m) = ppc64 ]]; then
+	# bug number:    LU-11597 LU-11787
+	ALWAYS_EXCEPT+=" 16a      71a"
+fi
 
 if [ $mds1_FSTYPE = "zfs" ]; then
 	# LU-2829 / LU-2887 - make allowances for ZFS slowness
