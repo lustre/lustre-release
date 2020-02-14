@@ -922,7 +922,9 @@ struct osc_extent {
 	/** Non-delay RPC should be used for this extent. */
 				oe_ndelay:1,
 	/** direct IO pages */
-				oe_dio:1;
+				oe_dio:1,
+	/** this extent consists of RDMA only pages */
+				oe_is_rdma_only;
 	/** how many grants allocated for this extent.
 	 *  Grant allocated for this extent. There is no grant allocated
 	 *  for reading extents and sync write extents. */

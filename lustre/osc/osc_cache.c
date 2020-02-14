@@ -1851,6 +1851,9 @@ can_merge(const struct osc_extent *ext, const struct osc_extent *in_rpc)
 	if (in_rpc->oe_dio && overlapped(ext, in_rpc))
 		return false;
 
+	if (ext->oe_is_rdma_only != in_rpc->oe_is_rdma_only)
+		return false;
+
 	return true;
 }
 
@@ -2606,6 +2609,7 @@ int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_dio = !!(brw_flags & OBD_BRW_NOCACHE);
+	ext->oe_is_rdma_only = !!(brw_flags & OBD_BRW_RDMA_ONLY);
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;
 	list_splice_init(list, &ext->oe_pages);
