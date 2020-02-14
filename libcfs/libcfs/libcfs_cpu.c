@@ -627,7 +627,7 @@ int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 {
 	nodemask_t *mask;
 	int weight;
-	int rotor;
+	unsigned int rotor;
 	int node = 0;
 
 	/* convert CPU partition ID to HW node id */

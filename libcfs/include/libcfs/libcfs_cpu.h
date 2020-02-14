@@ -91,7 +91,7 @@ struct cfs_cpu_partition {
 	/* NUMA distance between CPTs */
 	unsigned int			*cpt_distance;
 	/* spread rotor for NUMA allocator */
-	int				 cpt_spread_rotor;
+	unsigned int			 cpt_spread_rotor;
 	/* NUMA node if cpt_nodemask is empty */
 	int				 cpt_node;
 };
@@ -101,7 +101,7 @@ struct cfs_cpu_partition {
 struct cfs_cpt_table {
 #ifdef CONFIG_SMP
 	/* spread rotor for NUMA allocator */
-	int				 ctb_spread_rotor;
+	unsigned int			 ctb_spread_rotor;
 	/* maximum NUMA distance between all nodes in table */
 	unsigned int			 ctb_distance;
 	/* partitions tables */
