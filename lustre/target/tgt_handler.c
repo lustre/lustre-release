@@ -1073,12 +1073,14 @@ int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 
 	ENTRY;
 
-	for (i = 0; i < rdbuf->rb_nbufs; i++)
-		/* There is only one caller (out_read) and we *know* that
-		 * bufs are at most 4K, and 4K aligned, so a simple DIV_ROUND_UP
-		 * is always sufficient.
-		 */
-		pages += DIV_ROUND_UP(rdbuf->rb_bufs[i].lb_len, PAGE_SIZE);
+	for (i = 0; i < rdbuf->rb_nbufs; i++) {
+		unsigned int offset;
+
+		offset = (unsigned long)rdbuf->rb_bufs[i].lb_buf & ~PAGE_MASK;
+		pages += DIV_ROUND_UP(rdbuf->rb_bufs[i].lb_len + offset,
+				      PAGE_SIZE);
+	}
+
 	desc = ptlrpc_prep_bulk_exp(req, pages, 1,
 				  PTLRPC_BULK_PUT_SOURCE | PTLRPC_BULK_BUF_KIOV,
 				    MDS_BULK_PORTAL,

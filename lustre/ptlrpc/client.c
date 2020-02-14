@@ -72,13 +72,13 @@ static void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
 static int ptlrpc_prep_bulk_frag_pages(struct ptlrpc_bulk_desc *desc,
 				       void *frag, int len)
 {
-	unsigned int offset = (uintptr_t)frag & ~PAGE_MASK;
+	unsigned int offset = (unsigned long)frag & ~PAGE_MASK;
 
 	ENTRY;
 	while (len > 0) {
 		int page_len = min_t(unsigned int, PAGE_SIZE - offset,
 				     len);
-		uintptr_t vaddr = (uintptr_t) frag;
+		unsigned long vaddr = (unsigned long)frag;
 
 		ptlrpc_prep_bulk_page_nopin(desc,
 					    lnet_kvaddr_to_page(vaddr),
