@@ -514,7 +514,7 @@ struct mdt_thread_info {
 	struct tg_reply_data	  *mti_reply_data;
 
 	/* FLR: layout change API */
-	struct md_layout_change	   mti_layout;
+	struct md_layout_change	   mti_mlc;
 };
 
 extern struct lu_context_key mdt_thread_key;

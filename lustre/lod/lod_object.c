@@ -1786,6 +1786,8 @@ out:
 	lo->ldo_stripe = stripe;
 	lo->ldo_dir_stripe_count = le32_to_cpu(lmv1->lmv_stripe_count);
 	lo->ldo_dir_stripes_allocated = le32_to_cpu(lmv1->lmv_stripe_count);
+	lo->ldo_dir_layout_version = le32_to_cpu(lmv1->lmv_layout_version);
+	lo->ldo_dir_hash_type = le32_to_cpu(lmv1->lmv_hash_type);
 	if (rc != 0)
 		lod_striping_free_nolock(env, lo);
 
@@ -2283,278 +2285,61 @@ out:
 }
 
 /**
- * Append source stripes after target stripes for migrating directory. NB, we
- * only need to declare this, the append is done inside lod_xattr_set_lmv().
+ * Set or replace striped directory layout, and LFSCK may set layout on a plain
+ * directory, so don't check stripe count.
  *
  * \param[in] env	execution environment
  * \param[in] dt	target object
  * \param[in] buf	LMV buf which contains source stripe fids
+ * \param[in] fl	set or replace
  * \param[in] th	transaction handle
  *
  * \retval		0 on success
  * \retval		negative if failed
  */
-static int lod_dir_declare_layout_add(const struct lu_env *env,
-				      struct dt_object *dt,
-				      const struct lu_buf *buf,
-				      struct thandle *th)
+static int lod_dir_layout_set(const struct lu_env *env,
+			      struct dt_object *dt,
+			      const struct lu_buf *buf,
+			      int fl,
+			      struct thandle *th)
 {
-	struct lod_thread_info *info = lod_env_info(env);
-	struct lod_device *lod = lu2lod_dev(dt->do_lu.lo_dev);
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lod_object *lo = lod_dt_obj(dt);
 	struct dt_object *next = dt_object_child(dt);
-	struct dt_object_format *dof = &info->lti_format;
+	struct lod_object *lo = lod_dt_obj(dt);
 	struct lmv_mds_md_v1 *lmv = buf->lb_buf;
-	struct dt_object **stripe;
-	__u32 stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
-	struct lu_fid *fid = &info->lti_fid;
-	struct lod_tgt_desc *tgt;
-	struct dt_object *dto;
-	struct dt_device *tgt_dt;
-	int type = LU_SEQ_RANGE_ANY;
-	struct dt_insert_rec *rec = &info->lti_dt_rec;
-	char *stripe_name = info->lti_key;
-	struct lu_name *sname;
-	struct linkea_data ldata = { NULL };
-	struct lu_buf linkea_buf;
-	__u32 idx;
+	struct lmv_mds_md_v1 *slave_lmv;
+	struct lu_buf slave_buf;
 	int i;
 	int rc;
 
 	ENTRY;
 
-	if (!lmv_is_sane(lmv))
-		RETURN(-EINVAL);
+	rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LMV, fl, th);
+	if (rc)
+		RETURN(rc);
 
-	dof->dof_type = DFT_DIR;
-
-	OBD_ALLOC(stripe,
-		  sizeof(*stripe) * (lo->ldo_dir_stripe_count + stripe_count));
-	if (stripe == NULL)
+	OBD_ALLOC_PTR(slave_lmv);
+	if (!slave_lmv)
 		RETURN(-ENOMEM);
 
-	for (i = 0; i < lo->ldo_dir_stripe_count; i++)
-		stripe[i] = lo->ldo_stripe[i];
+	lod_prep_slave_lmv_md(slave_lmv, lmv);
+	slave_buf.lb_buf = slave_lmv;
+	slave_buf.lb_len = sizeof(*slave_lmv);
 
-	for (i = 0; i < stripe_count; i++) {
-		fid_le_to_cpu(fid,
-			&lmv->lmv_stripe_fids[i]);
-		if (!fid_is_sane(fid))
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		if (!lo->ldo_stripe[i])
 			continue;
 
-		rc = lod_fld_lookup(env, lod, fid, &idx, &type);
-		if (rc)
-			GOTO(out, rc);
-
-		if (idx == lod2lu_dev(lod)->ld_site->ld_seq_site->ss_node_id) {
-			tgt_dt = lod->lod_child;
-		} else {
-			tgt = LTD_TGT(ltd, idx);
-			if (tgt == NULL)
-				GOTO(out, rc = -ESTALE);
-			tgt_dt = tgt->ltd_tgt;
-		}
-
-		dto = dt_locate_at(env, tgt_dt, fid,
-				  lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
-				  NULL);
-		if (IS_ERR(dto))
-			GOTO(out, rc = PTR_ERR(dto));
-
-		stripe[i + lo->ldo_dir_stripe_count] = dto;
-
-		if (!dt_try_as_dir(env, dto))
-			GOTO(out, rc = -ENOTDIR);
-
-		rc = lod_sub_declare_ref_add(env, dto, th);
-		if (rc)
-			GOTO(out, rc);
-
-		rc = lod_sub_declare_insert(env, dto,
-					    (const struct dt_rec *)rec,
-					    (const struct dt_key *)dot, th);
-		if (rc)
-			GOTO(out, rc);
-
-		rc = lod_sub_declare_insert(env, dto,
-					    (const struct dt_rec *)rec,
-					    (const struct dt_key *)dotdot, th);
-		if (rc)
-			GOTO(out, rc);
-
-		rc = lod_sub_declare_xattr_set(env, dto, buf,
-						XATTR_NAME_LMV, 0, th);
-		if (rc)
-			GOTO(out, rc);
-
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
-			 PFID(lu_object_fid(&dto->do_lu)),
-			 i + lo->ldo_dir_stripe_count);
-
-		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
-		rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
-				      sname, lu_object_fid(&dt->do_lu));
-		if (rc)
-			GOTO(out, rc);
-
-		linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
-		linkea_buf.lb_len = ldata.ld_leh->leh_len;
-		rc = lod_sub_declare_xattr_set(env, dto, &linkea_buf,
-					       XATTR_NAME_LINK, 0, th);
-		if (rc)
-			GOTO(out, rc);
-
-		rc = lod_sub_declare_insert(env, next,
-					    (const struct dt_rec *)rec,
-					    (const struct dt_key *)stripe_name,
-					    th);
-		if (rc)
-			GOTO(out, rc);
-
-		rc = lod_sub_declare_ref_add(env, next, th);
-		if (rc)
-			GOTO(out, rc);
-	}
-
-	if (lo->ldo_stripe)
-		OBD_FREE(lo->ldo_stripe,
-			 sizeof(*stripe) * lo->ldo_dir_stripes_allocated);
-	lo->ldo_stripe = stripe;
-	lo->ldo_dir_migrate_offset = lo->ldo_dir_stripe_count;
-	lo->ldo_dir_migrate_hash = le32_to_cpu(lmv->lmv_hash_type);
-	lo->ldo_dir_stripe_count += stripe_count;
-	lo->ldo_dir_stripes_allocated += stripe_count;
-	lo->ldo_dir_hash_type |= LMV_HASH_FLAG_MIGRATION;
-
-	RETURN(0);
-out:
-	i = lo->ldo_dir_stripe_count;
-	while (i < lo->ldo_dir_stripe_count + stripe_count && stripe[i])
-		dt_object_put(env, stripe[i++]);
-
-	OBD_FREE(stripe,
-		 sizeof(*stripe) * (stripe_count + lo->ldo_dir_stripe_count));
-	RETURN(rc);
-}
-
-static int lod_dir_declare_layout_delete(const struct lu_env *env,
-					 struct dt_object *dt,
-					 const struct lu_buf *buf,
-					 struct thandle *th)
-{
-	struct lod_thread_info *info = lod_env_info(env);
-	struct lod_object *lo = lod_dt_obj(dt);
-	struct dt_object *next = dt_object_child(dt);
-	struct lmv_user_md *lmu = buf->lb_buf;
-	__u32 final_stripe_count;
-	char *stripe_name = info->lti_key;
-	struct dt_object *dto;
-	int i;
-	int rc = 0;
-
-	if (!lmu)
-		return -EINVAL;
-
-	final_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
-	if (final_stripe_count >= lo->ldo_dir_stripe_count)
-		return -EINVAL;
-
-	for (i = final_stripe_count; i < lo->ldo_dir_stripe_count; i++) {
-		dto = lo->ldo_stripe[i];
-		if (!dto)
+		if (!dt_object_exists(lo->ldo_stripe[i]))
 			continue;
 
-		if (!dt_try_as_dir(env, dto))
-			return -ENOTDIR;
-
-		rc = lod_sub_declare_delete(env, dto,
-					    (const struct dt_key *)dot, th);
-		if (rc)
-			return rc;
-
-		rc = lod_sub_declare_ref_del(env, dto, th);
-		if (rc)
-			return rc;
-
-		rc = lod_sub_declare_delete(env, dto,
-					(const struct dt_key *)dotdot, th);
-		if (rc)
-			return rc;
-
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
-			 PFID(lu_object_fid(&dto->do_lu)), i);
-
-		rc = lod_sub_declare_delete(env, next,
-					(const struct dt_key *)stripe_name, th);
-		if (rc)
-			return rc;
-
-		rc = lod_sub_declare_ref_del(env, next, th);
-		if (rc)
-			return rc;
-	}
-
-	return 0;
-}
-
-/*
- * delete stripes from dir master object, the lum_stripe_count in argument is
- * the final stripe count, the stripes after that will be deleted, NB, they
- * are not destroyed, but deleted from it's parent namespace, this function
- * will be called in two places:
- * 1. mdd_migrate_create() delete stripes from source, and append them to
- *    target.
- * 2. mdd_dir_layout_shrink() delete stripes from source, and destroy them.
- */
-static int lod_dir_layout_delete(const struct lu_env *env,
-				 struct dt_object *dt,
-				 const struct lu_buf *buf,
-				 struct thandle *th)
-{
-	struct lod_thread_info *info = lod_env_info(env);
-	struct lod_object *lo = lod_dt_obj(dt);
-	struct dt_object *next = dt_object_child(dt);
-	struct lmv_user_md *lmu = buf->lb_buf;
-	__u32 final_stripe_count;
-	char *stripe_name = info->lti_key;
-	struct dt_object *dto;
-	int i;
-	int rc = 0;
-
-	ENTRY;
-
-	if (!lmu)
-		RETURN(-EINVAL);
-
-	final_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
-	if (final_stripe_count >= lo->ldo_dir_stripe_count)
-		RETURN(-EINVAL);
-
-	for (i = final_stripe_count; i < lo->ldo_dir_stripe_count; i++) {
-		dto = lo->ldo_stripe[i];
-		if (!dto)
-			continue;
-
-		rc = lod_sub_delete(env, dto,
-				    (const struct dt_key *)dotdot, th);
-		if (rc)
-			break;
-
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
-			 PFID(lu_object_fid(&dto->do_lu)), i);
-
-		rc = lod_sub_delete(env, next,
-				    (const struct dt_key *)stripe_name, th);
-		if (rc)
-			break;
-
-		rc = lod_sub_ref_del(env, next, th);
+		rc = lod_sub_xattr_set(env, lo->ldo_stripe[i], &slave_buf,
+				       XATTR_NAME_LMV, fl, th);
 		if (rc)
 			break;
 	}
 
 	lod_striping_free(env, lod_dt_obj(dt));
+	OBD_FREE_PTR(slave_lmv);
 
 	RETURN(rc);
 }
@@ -3590,20 +3375,6 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			RETURN(-ENOENT);
 
 		rc = lod_declare_modify_layout(env, dt, name, buf, th);
-	} else if (strncmp(name, XATTR_NAME_LMV, strlen(XATTR_NAME_LMV)) == 0 &&
-		   strlen(name) > strlen(XATTR_NAME_LMV)) {
-		const char *op = name + strlen(XATTR_NAME_LMV);
-
-		rc = -ENOTSUPP;
-		if (strcmp(op, ".add") == 0)
-			rc = lod_dir_declare_layout_add(env, dt, buf, th);
-		else if (strcmp(op, ".del") == 0)
-			rc = lod_dir_declare_layout_delete(env, dt, buf, th);
-		else if (strcmp(op, ".set") == 0)
-			rc = lod_sub_declare_xattr_set(env, next, buf,
-						       XATTR_NAME_LMV, fl, th);
-
-		RETURN(rc);
 	} else if (S_ISDIR(mode)) {
 		rc = lod_dir_declare_xattr_set(env, dt, buf, name, fl, th);
 	} else if (strcmp(name, XATTR_NAME_FID) == 0) {
@@ -3982,7 +3753,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 							cpu_to_le32(i);
 
 			rc = lod_sub_xattr_set(env, dto, &slave_lmv_buf,
-					       XATTR_NAME_LMV, fl, th);
+					       XATTR_NAME_LMV, 0, th);
 			if (rc != 0)
 				GOTO(out, rc);
 		}
@@ -4603,29 +4374,24 @@ static int lod_xattr_set(const struct lu_env *env,
 			 struct dt_object *dt, const struct lu_buf *buf,
 			 const char *name, int fl, struct thandle *th)
 {
-	struct dt_object	*next = dt_object_child(dt);
-	int			 rc;
+	struct dt_object *next = dt_object_child(dt);
+	int rc;
+
 	ENTRY;
 
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
-	    strcmp(name, XATTR_NAME_LMV) == 0) {
-		rc = lod_dir_striping_create(env, dt, NULL, NULL, th);
-		RETURN(rc);
-	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
-		   strncmp(name, XATTR_NAME_LMV, strlen(XATTR_NAME_LMV)) == 0 &&
-		   strlen(name) > strlen(XATTR_NAME_LMV)) {
-		const char *op = name + strlen(XATTR_NAME_LMV);
-
-		rc = -ENOTSUPP;
-		/*
-		 * XATTR_NAME_LMV".add" is never called, but only declared,
-		 * because lod_xattr_set_lmv() will do the addition.
-		 */
-		if (strcmp(op, ".del") == 0)
-			rc = lod_dir_layout_delete(env, dt, buf, th);
-		else if (strcmp(op, ".set") == 0)
-			rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LMV,
-					       fl, th);
+	    !strcmp(name, XATTR_NAME_LMV)) {
+		switch (fl) {
+		case LU_XATTR_CREATE:
+			rc = lod_dir_striping_create(env, dt, NULL, NULL, th);
+			break;
+		case 0:
+		case LU_XATTR_REPLACE:
+			rc = lod_dir_layout_set(env, dt, buf, fl, th);
+			break;
+		default:
+			LBUG();
+		}
 
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
@@ -7779,6 +7545,533 @@ out:
 	RETURN(rc);
 }
 
+typedef int (*mlc_handler)(const struct lu_env *env, struct dt_object *dt,
+			   const struct md_layout_change *mlc,
+			   struct thandle *th);
+
+/**
+ * Attach stripes after target's for migrating directory. NB, we
+ * only need to declare this, the actual work is done inside
+ * lod_xattr_set_lmv().
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	target object
+ * \param[in] mlc	layout change data
+ * \param[in] th	transaction handle
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+static int lod_dir_declare_layout_attach(const struct lu_env *env,
+					 struct dt_object *dt,
+					 const struct md_layout_change *mlc,
+					 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_device *lod = lu2lod_dev(dt->do_lu.lo_dev);
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next = dt_object_child(dt);
+	struct dt_object_format *dof = &info->lti_format;
+	struct lmv_mds_md_v1 *lmv = mlc->mlc_buf.lb_buf;
+	struct dt_object **stripes;
+	__u32 stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
+	struct lu_fid *fid = &info->lti_fid;
+	struct lod_tgt_desc *tgt;
+	struct dt_object *dto;
+	struct dt_device *tgt_dt;
+	int type = LU_SEQ_RANGE_ANY;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	char *stripe_name = info->lti_key;
+	struct lu_name *sname;
+	struct linkea_data ldata = { NULL };
+	struct lu_buf linkea_buf;
+	__u32 idx;
+	int i;
+	int rc;
+
+	ENTRY;
+
+	if (!lmv_is_sane(lmv))
+		RETURN(-EINVAL);
+
+	if (!dt_try_as_dir(env, dt))
+		return -ENOTDIR;
+
+	dof->dof_type = DFT_DIR;
+
+	OBD_ALLOC(stripes,
+		  sizeof(*stripes) * (lo->ldo_dir_stripe_count + stripe_count));
+	if (!stripes)
+		RETURN(-ENOMEM);
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++)
+		stripes[i] = lo->ldo_stripe[i];
+
+	rec->rec_type = S_IFDIR;
+
+	for (i = 0; i < stripe_count; i++) {
+		fid_le_to_cpu(fid,
+			&lmv->lmv_stripe_fids[i]);
+		if (!fid_is_sane(fid))
+			continue;
+
+		rc = lod_fld_lookup(env, lod, fid, &idx, &type);
+		if (rc)
+			GOTO(out, rc);
+
+		if (idx == lod2lu_dev(lod)->ld_site->ld_seq_site->ss_node_id) {
+			tgt_dt = lod->lod_child;
+		} else {
+			tgt = LTD_TGT(ltd, idx);
+			if (tgt == NULL)
+				GOTO(out, rc = -ESTALE);
+			tgt_dt = tgt->ltd_tgt;
+		}
+
+		dto = dt_locate_at(env, tgt_dt, fid,
+				  lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
+				  NULL);
+		if (IS_ERR(dto))
+			GOTO(out, rc = PTR_ERR(dto));
+
+		stripes[i + lo->ldo_dir_stripe_count] = dto;
+
+		if (!dt_try_as_dir(env, dto))
+			GOTO(out, rc = -ENOTDIR);
+
+		rc = lod_sub_declare_ref_add(env, dto, th);
+		if (rc)
+			GOTO(out, rc);
+
+		rec->rec_fid = lu_object_fid(&dto->do_lu);
+		rc = lod_sub_declare_insert(env, dto,
+					    (const struct dt_rec *)rec,
+					    (const struct dt_key *)dot, th);
+		if (rc)
+			GOTO(out, rc);
+
+		rc = lod_sub_declare_insert(env, dto,
+					    (const struct dt_rec *)rec,
+					    (const struct dt_key *)dotdot, th);
+		if (rc)
+			GOTO(out, rc);
+
+		rc = lod_sub_declare_xattr_set(env, dto, &mlc->mlc_buf,
+						XATTR_NAME_LMV, 0, th);
+		if (rc)
+			GOTO(out, rc);
+
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
+			 PFID(lu_object_fid(&dto->do_lu)),
+			 i + lo->ldo_dir_stripe_count);
+
+		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
+		rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
+				      sname, lu_object_fid(&dt->do_lu));
+		if (rc)
+			GOTO(out, rc);
+
+		linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+		linkea_buf.lb_len = ldata.ld_leh->leh_len;
+		rc = lod_sub_declare_xattr_set(env, dto, &linkea_buf,
+					       XATTR_NAME_LINK, 0, th);
+		if (rc)
+			GOTO(out, rc);
+
+		rc = lod_sub_declare_insert(env, next,
+					    (const struct dt_rec *)rec,
+					    (const struct dt_key *)stripe_name,
+					    th);
+		if (rc)
+			GOTO(out, rc);
+
+		rc = lod_sub_declare_ref_add(env, next, th);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	if (lo->ldo_stripe)
+		OBD_FREE(lo->ldo_stripe,
+			 sizeof(*stripes) * lo->ldo_dir_stripes_allocated);
+	lo->ldo_stripe = stripes;
+	lo->ldo_dir_migrate_offset = lo->ldo_dir_stripe_count;
+	lo->ldo_dir_migrate_hash = le32_to_cpu(lmv->lmv_hash_type);
+	lo->ldo_dir_stripe_count += stripe_count;
+	lo->ldo_dir_stripes_allocated += stripe_count;
+	lo->ldo_dir_hash_type |= LMV_HASH_FLAG_MIGRATION;
+
+	RETURN(0);
+out:
+	i = lo->ldo_dir_stripe_count;
+	while (i < lo->ldo_dir_stripe_count + stripe_count && stripes[i])
+		dt_object_put(env, stripes[i++]);
+
+	OBD_FREE(stripes,
+		 sizeof(*stripes) * (stripe_count + lo->ldo_dir_stripe_count));
+	return rc;
+}
+
+static int lod_dir_declare_layout_detach(const struct lu_env *env,
+					 struct dt_object *dt,
+					 const struct md_layout_change *unused,
+					 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next = dt_object_child(dt);
+	char *stripe_name = info->lti_key;
+	struct dt_object *dto;
+	int i;
+	int rc = 0;
+
+	if (!dt_try_as_dir(env, dt))
+		return -ENOTDIR;
+
+	if (!lo->ldo_dir_stripe_count)
+		return lod_sub_declare_delete(env, next,
+					(const struct dt_key *)dotdot, th);
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (!dto)
+			continue;
+
+		if (!dt_try_as_dir(env, dto))
+			return -ENOTDIR;
+
+		rc = lod_sub_declare_delete(env, dto,
+					(const struct dt_key *)dotdot, th);
+		if (rc)
+			return rc;
+
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+			 PFID(lu_object_fid(&dto->do_lu)), i);
+
+		rc = lod_sub_declare_delete(env, next,
+					(const struct dt_key *)stripe_name, th);
+		if (rc)
+			return rc;
+
+		rc = lod_sub_declare_ref_del(env, next, th);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+
+static int dt_dir_is_empty(const struct lu_env *env,
+			   struct dt_object *obj)
+{
+	struct dt_it *it;
+	const struct dt_it_ops *iops;
+	int rc;
+
+	ENTRY;
+
+	if (!dt_try_as_dir(env, obj))
+		RETURN(-ENOTDIR);
+
+	iops = &obj->do_index_ops->dio_it;
+	it = iops->init(env, obj, LUDA_64BITHASH);
+	if (IS_ERR(it))
+		RETURN(PTR_ERR(it));
+
+	rc = iops->get(env, it, (const struct dt_key *)"");
+	if (rc > 0) {
+		int i;
+
+		for (rc = 0, i = 0; rc == 0 && i < 3; ++i)
+			rc = iops->next(env, it);
+		if (!rc)
+			rc = -ENOTEMPTY;
+		else if (rc == 1)
+			rc = 0;
+	} else if (!rc) {
+		/* Huh? Index contains no zero key? */
+		rc = -EIO;
+	}
+
+	iops->put(env, it);
+	iops->fini(env, it);
+
+	RETURN(rc);
+}
+
+static int lod_dir_declare_layout_shrink(const struct lu_env *env,
+					 struct dt_object *dt,
+					 const struct md_layout_change *mlc,
+					 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next = dt_object_child(dt);
+	struct lmv_user_md *lmu = mlc->mlc_buf.lb_buf;
+	__u32 final_stripe_count;
+	char *stripe_name = info->lti_key;
+	struct lu_buf *lmv_buf = &info->lti_buf;
+	struct dt_object *dto;
+	int i;
+	int rc;
+
+	LASSERT(lmu);
+
+	if (!dt_try_as_dir(env, dt))
+		return -ENOTDIR;
+
+	/* shouldn't be called on plain directory */
+	LASSERT(lo->ldo_dir_stripe_count);
+
+	lmv_buf->lb_buf = &info->lti_lmv.lmv_md_v1;
+	lmv_buf->lb_len = sizeof(info->lti_lmv.lmv_md_v1);
+
+	final_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
+	LASSERT(final_stripe_count &&
+		final_stripe_count < lo->ldo_dir_stripe_count);
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (!dto)
+			continue;
+
+		if (i < final_stripe_count) {
+			if (final_stripe_count == 1)
+				continue;
+
+			rc = lod_sub_declare_xattr_set(env, dto, lmv_buf,
+						       XATTR_NAME_LMV,
+						       LU_XATTR_REPLACE, th);
+			if (rc)
+				return rc;
+
+			continue;
+		}
+
+		rc = dt_dir_is_empty(env, dto);
+		if (rc < 0)
+			return rc;
+
+		rc = lod_sub_declare_ref_del(env, dto, th);
+		if (rc)
+			return rc;
+
+		rc = lod_sub_declare_destroy(env, dto, th);
+		if (rc)
+			return rc;
+
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+			 PFID(lu_object_fid(&dto->do_lu)), i);
+
+		rc = lod_sub_declare_delete(env, next,
+					(const struct dt_key *)stripe_name, th);
+		if (rc)
+			return rc;
+
+		rc = lod_sub_declare_ref_del(env, next, th);
+		if (rc)
+			return rc;
+	}
+
+	rc = lod_sub_declare_xattr_set(env, next, lmv_buf, XATTR_NAME_LMV,
+				       LU_XATTR_REPLACE, th);
+	return rc;
+}
+
+/*
+ * detach all stripes from dir master object, NB, stripes are not destroyed, but
+ * deleted from it's parent namespace, this function is called in two places:
+ * 1. mdd_migrate_mdt() detach stripes from source, and attach them to
+ *    target.
+ * 2. mdd_dir_layout_update() detach stripe before turning 1-stripe directory to
+ *    a plain directory.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	target object
+ * \param[in] mlc	layout change data
+ * \param[in] th	transaction handle
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+static int lod_dir_layout_detach(const struct lu_env *env,
+				 struct dt_object *dt,
+				 const struct md_layout_change *mlc,
+				 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next = dt_object_child(dt);
+	char *stripe_name = info->lti_key;
+	struct dt_object *dto;
+	int i;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!lo->ldo_dir_stripe_count) {
+		/* plain directory delete .. */
+		rc = lod_sub_delete(env, next,
+				    (const struct dt_key *)dotdot, th);
+		RETURN(rc);
+	}
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (!dto)
+			continue;
+
+		rc = lod_sub_delete(env, dto,
+				    (const struct dt_key *)dotdot, th);
+		if (rc)
+			break;
+
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+			 PFID(lu_object_fid(&dto->do_lu)), i);
+
+		rc = lod_sub_delete(env, next,
+				    (const struct dt_key *)stripe_name, th);
+		if (rc)
+			break;
+
+		rc = lod_sub_ref_del(env, next, th);
+		if (rc)
+			break;
+	}
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (dto)
+			dt_object_put(env, dto);
+	}
+	OBD_FREE(lo->ldo_stripe,
+		 sizeof(struct dt_object *) * lo->ldo_dir_stripes_allocated);
+	lo->ldo_stripe = NULL;
+	lo->ldo_dir_stripes_allocated = 0;
+	lo->ldo_dir_stripe_count = 0;
+
+	RETURN(rc);
+}
+
+static int lod_dir_layout_shrink(const struct lu_env *env,
+				 struct dt_object *dt,
+				 const struct md_layout_change *mlc,
+				 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct dt_object *next = dt_object_child(dt);
+	struct lmv_user_md *lmu = mlc->mlc_buf.lb_buf;
+	__u32 final_stripe_count;
+	char *stripe_name = info->lti_key;
+	struct dt_object *dto;
+	struct lu_buf *lmv_buf = &info->lti_buf;
+	struct lmv_mds_md_v1 *lmv = &info->lti_lmv.lmv_md_v1;
+	u32 mdtidx;
+	int type = LU_SEQ_RANGE_ANY;
+	int i;
+	int rc;
+
+	ENTRY;
+
+	final_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
+
+	lmv_buf->lb_buf = lmv;
+	lmv_buf->lb_len = sizeof(*lmv);
+	lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_STRIPE);
+	lmv->lmv_stripe_count = cpu_to_le32(final_stripe_count);
+	lmv->lmv_hash_type = cpu_to_le32(lo->ldo_dir_hash_type) &
+			     cpu_to_le32(LMV_HASH_TYPE_MASK);
+	lmv->lmv_layout_version =
+			cpu_to_le32(lo->ldo_dir_layout_version + 1);
+
+	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (!dto)
+			continue;
+
+		if (i < final_stripe_count) {
+			/* if only one stripe left, no need to update
+			 * LMV because this stripe will replace master
+			 * object and act as a plain directory.
+			 */
+			if (final_stripe_count == 1)
+				continue;
+
+
+			rc = lod_fld_lookup(env, lod,
+					    lu_object_fid(&dto->do_lu),
+					    &mdtidx, &type);
+			if (rc)
+				RETURN(rc);
+
+			lmv->lmv_master_mdt_index = cpu_to_le32(mdtidx);
+			rc = lod_sub_xattr_set(env, dto, lmv_buf,
+					       XATTR_NAME_LMV,
+					       LU_XATTR_REPLACE, th);
+			if (rc)
+				RETURN(rc);
+
+			continue;
+		}
+
+		dt_write_lock(env, dto, DT_TGT_CHILD);
+		rc = lod_sub_ref_del(env, dto, th);
+		dt_write_unlock(env, dto);
+		if (rc)
+			RETURN(rc);
+
+		rc = lod_sub_destroy(env, dto, th);
+		if (rc)
+			RETURN(rc);
+
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+			 PFID(lu_object_fid(&dto->do_lu)), i);
+
+		rc = lod_sub_delete(env, next,
+				    (const struct dt_key *)stripe_name, th);
+		if (rc)
+			RETURN(rc);
+
+		rc = lod_sub_ref_del(env, next, th);
+		if (rc)
+			RETURN(rc);
+	}
+
+	rc = lod_fld_lookup(env, lod, lu_object_fid(&dt->do_lu), &mdtidx,
+			    &type);
+	if (rc)
+		RETURN(rc);
+
+	lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
+	lmv->lmv_master_mdt_index = cpu_to_le32(mdtidx);
+	rc = lod_sub_xattr_set(env, next, lmv_buf, XATTR_NAME_LMV,
+			       LU_XATTR_REPLACE, th);
+	if (rc)
+		RETURN(rc);
+
+	for (i = final_stripe_count; i < lo->ldo_dir_stripe_count; i++) {
+		dto = lo->ldo_stripe[i];
+		if (dto)
+			dt_object_put(env, dto);
+	}
+	lo->ldo_dir_stripe_count = final_stripe_count;
+
+	RETURN(rc);
+}
+
+static mlc_handler dir_mlc_declare_ops[MD_LAYOUT_MAX] = {
+	[MD_LAYOUT_ATTACH] = lod_dir_declare_layout_attach,
+	[MD_LAYOUT_DETACH] = lod_dir_declare_layout_detach,
+	[MD_LAYOUT_SHRINK] = lod_dir_declare_layout_shrink,
+};
+
+static mlc_handler dir_mlc_ops[MD_LAYOUT_MAX] = {
+	[MD_LAYOUT_DETACH] = lod_dir_layout_detach,
+	[MD_LAYOUT_SHRINK] = lod_dir_layout_shrink,
+};
+
 static int lod_declare_layout_change(const struct lu_env *env,
 		struct dt_object *dt, struct md_layout_change *mlc,
 		struct thandle *th)
@@ -7786,7 +8079,14 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lod_object *lo = lod_dt_obj(dt);
 	int rc;
+
 	ENTRY;
+
+	if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
+		LASSERT(dir_mlc_declare_ops[mlc->mlc_opc]);
+		rc = dir_mlc_declare_ops[mlc->mlc_opc](env, dt, mlc, th);
+		RETURN(rc);
+	}
 
 	if (!S_ISREG(dt->do_lu.lo_header->loh_attr) || !dt_object_exists(dt) ||
 	    dt_object_remote(dt_object_child(dt)))
@@ -7835,13 +8135,21 @@ static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
 	struct lod_object *lo = lod_dt_obj(dt);
 	int rc;
 
+	ENTRY;
+
+	if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
+		LASSERT(dir_mlc_ops[mlc->mlc_opc]);
+		rc = dir_mlc_ops[mlc->mlc_opc](env, dt, mlc, th);
+		RETURN(rc);
+	}
+
 	rc = lod_striped_create(env, dt, attr, NULL, th);
 	if (!rc && layout_attr->la_valid & LA_LAYOUT_VERSION) {
 		layout_attr->la_layout_version |= lo->ldo_layout_gen;
 		rc = lod_attr_set(env, dt, layout_attr, th);
 	}
 
-	return rc;
+	RETURN(rc);
 }
 
 struct dt_object_operations lod_obj_ops = {

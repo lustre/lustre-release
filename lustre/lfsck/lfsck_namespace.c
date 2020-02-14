@@ -1129,7 +1129,7 @@ static int lfsck_lmv_set(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, obj, &buf, XATTR_NAME_LMV".set", 0, th);
+	rc = dt_declare_xattr_set(env, obj, &buf, XATTR_NAME_LMV, 0, th);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1137,7 +1137,7 @@ static int lfsck_lmv_set(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_xattr_set(env, obj, &buf, XATTR_NAME_LMV".set", 0, th);
+	rc = dt_xattr_set(env, obj, &buf, XATTR_NAME_LMV, 0, th);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1341,8 +1341,8 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	}
 
 	if (parent_lmv_lost) {
-		rc = dt_declare_xattr_set(env, parent, &buf,
-					  XATTR_NAME_LMV".set", 0, th);
+		rc = dt_declare_xattr_set(env, parent, &buf, XATTR_NAME_LMV,
+					  0, th);
 		if (rc)
 			GOTO(stop, rc);
 	}
@@ -1375,8 +1375,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	}
 
 	if (parent_lmv_lost) {
-		rc = dt_xattr_set(env, parent, &buf, XATTR_NAME_LMV".set", 0,
-				  th);
+		rc = dt_xattr_set(env, parent, &buf, XATTR_NAME_LMV, 0, th);
 		if (rc)
 			GOTO(stop, rc);
 	}
@@ -1584,8 +1583,8 @@ again:
 		lmv->lmv_master_mdt_index = lfsck_dev_idx(lfsck);
 		lfsck_lmv_header_cpu_to_le(lmv2, lmv);
 		lfsck_buf_init(&lmv_buf, lmv2, sizeof(*lmv2));
-		rc = dt_declare_xattr_set(env, orphan, &lmv_buf,
-					  XATTR_NAME_LMV, 0, th);
+		rc = dt_declare_xattr_set(env, orphan, &lmv_buf, XATTR_NAME_LMV,
+					  0, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
@@ -5371,6 +5370,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	 */
 	if (S_ISREG(type))
 		child->do_ops->do_ah_init(env, hint,  parent, child, type);
+	else if (S_ISDIR(type))
+		child->do_ops->do_ah_init(env, hint,  NULL, child, type);
 
 	memset(dof, 0, sizeof(*dof));
 	dof->dof_type = dt_mode_to_dft(type);
@@ -5430,7 +5431,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 			lfsck_lmv_header_cpu_to_le(lmv2, lmv2);
 			lfsck_buf_init(&lmv_buf, lmv2, sizeof(*lmv2));
 			rc = dt_declare_xattr_set(env, child, &lmv_buf,
-						  XATTR_NAME_LMV".set", 0, th);
+						  XATTR_NAME_LMV, 0, th);
 			if (rc != 0)
 				GOTO(stop, rc);
 		}
@@ -5492,8 +5493,8 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 
 		/* 5b. generate slave LMV EA. */
 		if (lnr->lnr_lmv != NULL && lnr->lnr_lmv->ll_lmv_master) {
-			rc = dt_xattr_set(env, child, &lmv_buf,
-					  XATTR_NAME_LMV".set", 0, th);
+			rc = dt_xattr_set(env, child, &lmv_buf, XATTR_NAME_LMV,
+					  0, th);
 			if (rc != 0)
 				GOTO(unlock, rc);
 		}

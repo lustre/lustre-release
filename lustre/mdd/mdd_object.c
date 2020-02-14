@@ -1923,11 +1923,6 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 		RETURN(rc);
 	}
 
-	if (strcmp(name, XATTR_NAME_LMV) == 0) {
-		rc = mdd_dir_layout_shrink(env, obj, buf);
-		RETURN(rc);
-	}
-
 	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
 	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0) {
 		struct posix_acl *acl;
@@ -2942,7 +2937,20 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	struct thandle		*handle;
 	int flr_state;
 	int rc;
+
 	ENTRY;
+
+	if (S_ISDIR(mdd_object_type(obj))) {
+		switch (mlc->mlc_opc) {
+		case MD_LAYOUT_SHRINK:
+			rc = mdd_dir_layout_shrink(env, o, mlc);
+			break;
+		default:
+			LBUG();
+		}
+
+		RETURN(rc);
+	}
 
 	/* Verify acceptable operations */
 	switch (mlc->mlc_opc) {

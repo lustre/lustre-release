@@ -209,6 +209,7 @@ struct mdd_thread_info {
 	struct lfsck_req_local	  mti_lrl;
 	struct lu_seq_range	  mti_range;
 	union lmv_mds_md	  mti_lmv;
+	struct md_layout_change	  mti_mlc;
 };
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
@@ -277,7 +278,7 @@ int mdd_links_rename(const struct lu_env *env,
 		     int first, int check);
 int mdd_dir_layout_shrink(const struct lu_env *env,
 			  struct md_object *md_obj,
-			  const struct lu_buf *lmu_buf);
+			  struct md_layout_change *mlc);
 
 int mdd_changelog_write_rec(const struct lu_env *env,
 			    struct llog_handle *loghandle,

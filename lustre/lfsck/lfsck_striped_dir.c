@@ -2192,11 +2192,6 @@ repair:
 		if (repair_linkea) {
 			struct lustre_handle lh = { 0 };
 
-			rc1 = linkea_links_new(&ldata, &info->lti_big_buf,
-					       cname, lfsck_dto2fid(dir));
-			if (rc1 != 0)
-				goto next;
-
 			if (dir == NULL) {
 				dir = lfsck_assistant_object_load(env, lfsck,
 								  lso);
@@ -2210,6 +2205,11 @@ repair:
 					goto next;
 				}
 			}
+
+			rc1 = linkea_links_new(&ldata, &info->lti_big_buf,
+					       cname, lfsck_dto2fid(dir));
+			if (rc1 != 0)
+				goto next;
 
 			rc1 = lfsck_ibits_lock(env, lfsck, obj, &lh,
 					       MDS_INODELOCK_UPDATE |

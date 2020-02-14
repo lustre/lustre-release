@@ -316,8 +316,8 @@ out:
 	return rc;
 }
 
-/* shrink dir layout after migration */
-static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
+/* update dir layout after migration */
+static int mdt_dir_layout_update(struct mdt_thread_info *info)
 {
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
@@ -325,7 +325,7 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct lmv_user_md *lmu = rr->rr_eadata;
 	__u32 lum_stripe_count = lmu->lum_stripe_count;
-	struct lu_buf *buf = &info->mti_buf;
+	struct md_layout_change *mlc = &info->mti_mlc;
 	struct lmv_mds_md_v1 *lmv;
 	struct md_attr *ma = &info->mti_attr;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
@@ -375,7 +375,7 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 
 	/*
 	 * lock parent if dir will be shrunk to 1 stripe, because dir will be
-	 * converted to normal directory, as will change dir fid and update
+	 * converted to normal directory, as will change dir FID and update
 	 * namespace of parent.
 	 */
 	lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -440,9 +440,10 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 		GOTO(unlock_obj, rc = -EINVAL);
 	}
 
-	buf->lb_buf = rr->rr_eadata;
-	buf->lb_len = rr->rr_eadatalen;
-	rc = mo_xattr_set(env, mdt_object_child(obj), buf, XATTR_NAME_LMV, 0);
+	mlc->mlc_opc = MD_LAYOUT_SHRINK;
+	mlc->mlc_buf.lb_buf = rr->rr_eadata;
+	mlc->mlc_buf.lb_len = rr->rr_eadatalen;
+	rc = mo_layout_change(env, mdt_object_child(obj), mlc);
 	GOTO(unlock_obj, rc);
 
 unlock_obj:
@@ -506,7 +507,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
 			if (le32_to_cpu(*magic) == LMV_USER_MAGIC ||
 			    le32_to_cpu(*magic) == LMV_USER_MAGIC_SPECIFIC) {
-				rc = mdt_dir_layout_shrink(info);
+				rc = mdt_dir_layout_update(info);
 				GOTO(out, rc);
 			}
 		}

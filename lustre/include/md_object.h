@@ -181,6 +181,10 @@ enum md_layout_opc {
 	MD_LAYOUT_WRITE,	/* FLR: write the file */
 	MD_LAYOUT_RESYNC,	/* FLR: resync starts */
 	MD_LAYOUT_RESYNC_DONE,	/* FLR: resync done */
+	MD_LAYOUT_ATTACH,	/* attach stripes to target dir */
+	MD_LAYOUT_DETACH,	/* detach stripes from dir */
+	MD_LAYOUT_SHRINK,	/* shrink stripes (check empty and destroy) */
+	MD_LAYOUT_MAX,
 };
 
 /**

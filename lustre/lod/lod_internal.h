@@ -216,6 +216,7 @@ struct lod_object {
 			__u32		ldo_dir_hash_type;
 			__u32		ldo_dir_migrate_offset;
 			__u32		ldo_dir_migrate_hash;
+			__u32		ldo_dir_layout_version;
 			/* Is a slave stripe of striped directory? */
 			__u32		ldo_dir_slave_stripe:1,
 					ldo_dir_striped:1,
@@ -359,6 +360,7 @@ struct lod_thread_info {
 	struct lu_attr			lti_layout_attr;
 	/* object allocation avoid guide info */
 	struct lod_avoid_guide		lti_avoid;
+	union lmv_mds_md		lti_lmv;
 };
 
 extern const struct lu_device_operations lod_lu_ops;

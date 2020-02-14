@@ -2188,7 +2188,7 @@ static int mdd_declare_create_object(const struct lu_env *env,
 		rc = mdo_declare_xattr_set(env, c, buf,
 					   S_ISDIR(attr->la_mode) ?
 						XATTR_NAME_LMV : XATTR_NAME_LOV,
-					   0, handle);
+					   LU_XATTR_CREATE, handle);
 		if (rc)
 			GOTO(out, rc);
 
@@ -2382,7 +2382,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 		rc = mdo_xattr_set(env, son, buf,
 				   S_ISDIR(attr->la_mode) ? XATTR_NAME_LMV :
 							    XATTR_NAME_LOV,
-				   0, handle);
+				   LU_XATTR_CREATE, handle);
 		if (rc != 0)
 			GOTO(err_destroy, rc);
 	}
@@ -3310,232 +3310,6 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 	RETURN(rc);
 }
 
-typedef int (*mdd_dir_stripe_cb)(const struct lu_env *env,
-				 struct mdd_object *obj,
-				 struct mdd_object *stripe,
-				 const struct lu_buf *lmv_buf,
-				 const struct lu_buf *lmu_buf,
-				 int index,
-				 struct thandle *handle);
-
-static int mdd_dir_declare_delete_stripe(const struct lu_env *env,
-					 struct mdd_object *obj,
-					 struct mdd_object *stripe,
-					 const struct lu_buf *lmv_buf,
-					 const struct lu_buf *lmu_buf,
-					 int index,
-					 struct thandle *handle)
-{
-	struct mdd_thread_info *info = mdd_env_info(env);
-	char *stripe_name = info->mti_name;
-	struct lmv_user_md *lmu = lmu_buf->lb_buf;
-	int rc;
-
-	if (index < le32_to_cpu(lmu->lum_stripe_count))
-		return 0;
-
-	rc = mdo_declare_index_delete(env, stripe, dotdot, handle);
-	if (rc)
-		return rc;
-
-	snprintf(stripe_name, sizeof(info->mti_name), DFID":%d",
-		 PFID(mdd_object_fid(stripe)), index);
-
-	rc = mdo_declare_index_delete(env, obj, stripe_name, handle);
-	if (rc)
-		return rc;
-
-	rc = mdo_declare_ref_del(env, obj, handle);
-
-	return rc;
-}
-
-/* delete stripe from its master object namespace */
-static int mdd_dir_delete_stripe(const struct lu_env *env,
-				 struct mdd_object *obj,
-				 struct mdd_object *stripe,
-				 const struct lu_buf *lmv_buf,
-				 const struct lu_buf *lmu_buf,
-				 int index,
-				 struct thandle *handle)
-{
-	struct mdd_thread_info *info = mdd_env_info(env);
-	char *stripe_name = info->mti_name;
-	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
-	struct lmv_user_md *lmu = lmu_buf->lb_buf;
-	__u32 del_offset = le32_to_cpu(lmu->lum_stripe_count);
-	int rc;
-
-	ENTRY;
-
-	/* local dir will delete via LOD */
-	LASSERT(mdd_object_remote(obj));
-	LASSERT(del_offset < le32_to_cpu(lmv->lmv_stripe_count));
-
-	if (index < del_offset)
-		RETURN(0);
-
-	mdd_write_lock(env, stripe, DT_SRC_CHILD);
-	rc = __mdd_index_delete_only(env, stripe, dotdot, handle);
-	if (rc)
-		GOTO(out, rc);
-
-	snprintf(stripe_name, sizeof(info->mti_name), DFID":%d",
-		 PFID(mdd_object_fid(stripe)), index);
-
-	rc = __mdd_index_delete_only(env, obj, stripe_name, handle);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = mdo_ref_del(env, obj, handle);
-	GOTO(out, rc);
-out:
-	mdd_write_unlock(env, stripe);
-
-	return rc;
-}
-
-static int mdd_dir_declare_destroy_stripe(const struct lu_env *env,
-					  struct mdd_object *obj,
-					  struct mdd_object *stripe,
-					  const struct lu_buf *lmv_buf,
-					  const struct lu_buf *lmu_buf,
-					  int index,
-					  struct thandle *handle)
-{
-	struct lmv_user_md *lmu = lmu_buf->lb_buf;
-	__u32 shrink_offset = le32_to_cpu(lmu->lum_stripe_count);
-	int rc;
-
-	if (index < shrink_offset) {
-		if (shrink_offset < 2)
-			return 0;
-		return mdo_declare_xattr_set(env, stripe, lmv_buf,
-					     XATTR_NAME_LMV".set", 0, handle);
-	}
-
-	rc = mdo_declare_ref_del(env, stripe, handle);
-	if (rc)
-		return rc;
-
-	rc = mdo_declare_destroy(env, stripe, handle);
-
-	return rc;
-}
-
-static int mdd_dir_destroy_stripe(const struct lu_env *env,
-				  struct mdd_object *obj,
-				  struct mdd_object *stripe,
-				  const struct lu_buf *lmv_buf,
-				  const struct lu_buf *lmu_buf,
-				  int index,
-				  struct thandle *handle)
-{
-	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
-	struct lmv_user_md *lmu = lmu_buf->lb_buf;
-	__u32 shrink_offset = le32_to_cpu(lmu->lum_stripe_count);
-	int rc;
-
-	ENTRY;
-
-	/* update remaining stripes' LMV */
-	if (index < shrink_offset) {
-		struct lmv_mds_md_v1 *slave_lmv;
-		struct lu_buf slave_buf = {
-				.lb_buf = &info->mti_lmv.lmv_md_v1,
-				.lb_len = sizeof(*slave_lmv)
-		};
-		__u32 version = le32_to_cpu(lmv->lmv_layout_version);
-
-		/* if dir will be shrunk to 1-stripe, don't update */
-		if (shrink_offset < 2)
-			RETURN(0);
-
-		slave_lmv = slave_buf.lb_buf;
-		memset(slave_lmv, 0, sizeof(*slave_lmv));
-		slave_lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_STRIPE);
-		slave_lmv->lmv_stripe_count = lmu->lum_stripe_count;
-		slave_lmv->lmv_master_mdt_index = cpu_to_le32(index);
-		slave_lmv->lmv_hash_type = lmv->lmv_hash_type &
-					   cpu_to_le32(LMV_HASH_TYPE_MASK);
-		slave_lmv->lmv_layout_version = cpu_to_le32(++version);
-
-		rc = mdo_xattr_set(env, stripe, &slave_buf,
-				   XATTR_NAME_LMV".set", 0, handle);
-		RETURN(rc);
-	}
-
-	mdd_write_lock(env, stripe, DT_SRC_CHILD);
-	rc = mdo_ref_del(env, stripe, handle);
-	if (!rc)
-		rc = mdo_destroy(env, stripe, handle);
-	mdd_write_unlock(env, stripe);
-
-	RETURN(rc);
-}
-
-static int mdd_shrink_stripe_is_empty(const struct lu_env *env,
-				       struct mdd_object *obj,
-				       struct mdd_object *stripe,
-				       const struct lu_buf *lmv_buf,
-				       const struct lu_buf *lmu_buf,
-				       int index,
-				       struct thandle *handle)
-{
-	struct lmv_user_md *lmu = lmu_buf->lb_buf;
-	__u32 shrink_offset = le32_to_cpu(lmu->lum_stripe_count);
-
-	/* the default value is 0, but it means 1 */
-	if (!shrink_offset)
-		shrink_offset = 1;
-
-	if (index < shrink_offset)
-		return 0;
-
-	return mdd_dir_is_empty(env, stripe);
-}
-
-/*
- * iterate stripes of striped directory on remote MDT, local striped directory
- * is accessed via LOD.
- */
-static int mdd_dir_iterate_stripes(const struct lu_env *env,
-				   struct mdd_object *obj,
-				   const struct lu_buf *lmv_buf,
-				   const struct lu_buf *lmu_buf,
-				   struct thandle *handle,
-				   mdd_dir_stripe_cb cb)
-{
-	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-	struct lu_fid *fid = &mdd_env_info(env)->mti_fid2;
-	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
-	struct mdd_object *stripe;
-	int i;
-	int rc;
-
-	ENTRY;
-
-	LASSERT(lmv);
-
-	for (i = 0; i < le32_to_cpu(lmv->lmv_stripe_count); i++) {
-		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[i]);
-		if (!fid_is_sane(fid))
-			continue;
-
-		stripe = mdd_object_find(env, mdd, fid);
-		if (IS_ERR(stripe))
-			RETURN(PTR_ERR(stripe));
-
-		rc = cb(env, obj, stripe, lmv_buf, lmu_buf, i, handle);
-		mdd_object_put(env, stripe);
-		if (rc)
-			RETURN(rc);
-	}
-
-	RETURN(0);
-}
-
 typedef int (*mdd_xattr_cb)(const struct lu_env *env,
 			    struct mdd_object *obj,
 			    const struct lu_buf *buf,
@@ -3895,52 +3669,6 @@ static int migrate_linkea_prepare(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int mdd_dir_declare_layout_delete(const struct lu_env *env,
-					 struct mdd_object *obj,
-					 const struct lu_buf *lmv_buf,
-					 const struct lu_buf *lmu_buf,
-					 struct thandle *handle)
-{
-	int rc;
-
-	if (!lmv_buf->lb_buf)
-		rc = mdo_declare_index_delete(env, obj, dotdot, handle);
-	else if (mdd_object_remote(obj))
-		rc = mdd_dir_iterate_stripes(env, obj, lmv_buf, lmu_buf, handle,
-					     mdd_dir_declare_delete_stripe);
-	else
-		rc = mdo_declare_xattr_set(env, obj, lmu_buf,
-					   XATTR_NAME_LMV".del", 0, handle);
-
-	return rc;
-}
-
-static int mdd_dir_layout_delete(const struct lu_env *env,
-				 struct mdd_object *obj,
-				 const struct lu_buf *lmv_buf,
-				 const struct lu_buf *lmu_buf,
-				 struct thandle *handle)
-{
-	int rc;
-
-	ENTRY;
-
-	mdd_write_lock(env, obj, DT_SRC_PARENT);
-	if (!lmv_buf->lb_buf)
-		/* normal dir */
-		rc = __mdd_index_delete_only(env, obj, dotdot, handle);
-	else if (mdd_object_remote(obj))
-		/* striped, but remote */
-		rc = mdd_dir_iterate_stripes(env, obj, lmv_buf, lmu_buf, handle,
-					     mdd_dir_delete_stripe);
-	else
-		rc = mdo_xattr_set(env, obj, lmu_buf, XATTR_NAME_LMV".del", 0,
-				   handle);
-	mdd_write_unlock(env, obj);
-
-	RETURN(rc);
-}
-
 static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct mdd_object *tpobj,
 				      struct mdd_object *sobj,
@@ -3954,31 +3682,15 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
+	struct md_layout_change *mlc = &info->mti_mlc;
 	struct lmv_mds_md_v1 *lmv = sbuf->lb_buf;
 	int rc;
 
 	if (S_ISDIR(attr->la_mode)) {
-		struct lu_buf lmu_buf = { NULL };
-
-		if (lmv) {
-			struct lmv_user_md *lmu = &info->mti_lmv.lmv_user_md;
-
-			lmu->lum_stripe_count = 0;
-			lmu_buf.lb_buf = lmu;
-			lmu_buf.lb_len = sizeof(*lmu);
-		}
-
-		rc = mdd_dir_declare_layout_delete(env, sobj, sbuf, &lmu_buf,
-						   handle);
+		mlc->mlc_opc = MD_LAYOUT_DETACH;
+		rc = mdo_declare_layout_change(env, sobj, mlc, handle);
 		if (rc)
 			return rc;
-
-		if (lmv) {
-			rc = mdo_declare_xattr_del(env, sobj, XATTR_NAME_LMV,
-						   handle);
-			if (rc)
-				return rc;
-		}
 	}
 
 	rc = mdd_declare_create(env, mdo2mdd(&tpobj->mod_obj), tpobj, tobj,
@@ -3987,12 +3699,17 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	if (rc)
 		return rc;
 
+	/*
+	 * tobj mode will be used in mdo_declare_layout_change(), but it's not
+	 * createb yet, copy from sobj.
+	 */
+	tobj->mod_obj.mo_lu.lo_header->loh_attr &= ~S_IFMT;
+	tobj->mod_obj.mo_lu.lo_header->loh_attr |=
+		sobj->mod_obj.mo_lu.lo_header->loh_attr & S_IFMT;
+
 	if (S_ISDIR(attr->la_mode) && mdd_dir_is_empty(env, sobj) != 0) {
 		if (!lmv) {
-			/*
-			 * if sobj is not striped, fake a 1-stripe LMV, which
-			 * will be used to generate a compound LMV for tobj.
-			 */
+			/* if sobj is not striped, fake a 1-stripe LMV */
 			LASSERT(sizeof(info->mti_key) >
 				lmv_mds_md_size(1, LMV_MAGIC_V1));
 			lmv = (typeof(lmv))info->mti_key;
@@ -4002,30 +3719,16 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			lmv->lmv_hash_type = cpu_to_le32(LMV_HASH_TYPE_DEFAULT);
 			fid_le_to_cpu(&lmv->lmv_stripe_fids[0],
 				      mdd_object_fid(sobj));
-			sbuf->lb_buf = lmv;
-			sbuf->lb_len = lmv_mds_md_size(1, LMV_MAGIC_V1);
-
-			rc = mdo_declare_xattr_set(env, tobj, sbuf,
-						   XATTR_NAME_LMV".add", 0,
-						   handle);
-			sbuf->lb_buf = NULL;
-			sbuf->lb_len = 0;
+			mlc->mlc_buf.lb_buf = lmv;
+			mlc->mlc_buf.lb_len = lmv_mds_md_size(1, LMV_MAGIC_V1);
 		} else {
-			rc = mdo_declare_xattr_set(env, tobj, sbuf,
-						   XATTR_NAME_LMV".add", 0,
-						   handle);
+			mlc->mlc_buf = *sbuf;
 		}
+		mlc->mlc_opc = MD_LAYOUT_ATTACH;
+		rc = mdo_declare_layout_change(env, tobj, mlc, handle);
 		if (rc)
 			return rc;
 	}
-
-	/*
-	 * tobj mode will be used in lod_declare_xattr_set(), but it's not
-	 * createb yet, copy from sobj.
-	 */
-	tobj->mod_obj.mo_lu.lo_header->loh_attr &= ~S_IFMT;
-	tobj->mod_obj.mo_lu.lo_header->loh_attr |=
-		sobj->mod_obj.mo_lu.lo_header->loh_attr & S_IFMT;
 
 	rc = mdd_iterate_xattrs(env, sobj, tobj, true, handle,
 				mdo_declare_xattr_set);
@@ -4056,13 +3759,6 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 					handle, mdd_declare_update_link);
 		if (rc)
 			return rc;
-
-		if (lmv) {
-			rc = mdo_declare_xattr_del(env, sobj, XATTR_NAME_LMV,
-						   handle);
-			if (rc)
-				return rc;
-		}
 	}
 
 	return rc;
@@ -4113,32 +3809,16 @@ static int mdd_migrate_create(const struct lu_env *env,
 	 * 3. create/attach stripes for tobj, see lod_xattr_set_lmv().
 	 */
 	if (S_ISDIR(attr->la_mode)) {
-		struct lu_buf lmu_buf = { NULL };
+		struct mdd_thread_info *info = mdd_env_info(env);
+		struct md_layout_change *mlc = &info->mti_mlc;
 
-		if (sbuf->lb_buf) {
-			struct mdd_thread_info *info = mdd_env_info(env);
-			struct lmv_user_md *lmu = &info->mti_lmv.lmv_user_md;
+		mlc->mlc_opc = MD_LAYOUT_DETACH;
 
-			lmu->lum_stripe_count = 0;
-			lmu_buf.lb_buf = lmu;
-			lmu_buf.lb_len = sizeof(*lmu);
-		}
-
-		rc = mdd_dir_layout_delete(env, sobj, sbuf, &lmu_buf, handle);
+		mdd_write_lock(env, sobj, DT_SRC_PARENT);
+		rc = mdo_layout_change(env, sobj, mlc, handle);
+		mdd_write_unlock(env, sobj);
 		if (rc)
 			RETURN(rc);
-
-		/*
-		 * delete LMV so that later when destroying sobj it won't delete
-		 * stripes again.
-		 */
-		if (sbuf->lb_buf) {
-			mdd_write_lock(env, sobj, DT_SRC_CHILD);
-			rc = mdo_xattr_del(env, sobj, XATTR_NAME_LMV, handle);
-			mdd_write_unlock(env, sobj);
-			if (rc)
-				RETURN(rc);
-		}
 	}
 
 	/* don't set nlink from sobj */
@@ -4244,6 +3924,12 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 		if (rc)
 			return rc;
 
+		if (S_ISDIR(attr->la_mode)) {
+			rc = mdo_declare_ref_del(env, sobj, handle);
+			if (rc)
+				return rc;
+		}
+
 		rc = mdo_declare_destroy(env, sobj, handle);
 		if (rc)
 			return rc;
@@ -4333,6 +4019,8 @@ static int mdd_migrate_update(const struct lu_env *env,
 	if (do_create && do_destroy) {
 		mdd_write_lock(env, sobj, DT_SRC_CHILD);
 		mdo_ref_del(env, sobj, handle);
+		if (S_ISDIR(attr->la_mode))
+			mdo_ref_del(env, sobj, handle);
 		rc = mdo_destroy(env, sobj, handle);
 		mdd_write_unlock(env, sobj);
 	}
@@ -4644,51 +4332,21 @@ out:
 	return rc;
 }
 
-static int __mdd_dir_declare_layout_shrink(const struct lu_env *env,
-					   struct mdd_object *pobj,
-					   struct mdd_object *obj,
-					   struct mdd_object *stripe,
-					   struct lu_attr *attr,
-					   struct lu_buf *lmv_buf,
-					   const struct lu_buf *lmu_buf,
-					   struct lu_name *lname,
-					   struct thandle *handle)
+static int mdd_declare_1sd_collapse(const struct lu_env *env,
+				    struct mdd_object *pobj,
+				    struct mdd_object *obj,
+				    struct mdd_object *stripe,
+				    struct lu_attr *attr,
+				    struct md_layout_change *mlc,
+				    struct lu_name *lname,
+				    struct thandle *handle)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
-	struct lmv_user_md *lmu = (typeof(lmu))info->mti_key;
-	struct lu_buf shrink_buf = { .lb_buf = lmu,
-				     .lb_len = sizeof(*lmu) };
 	int rc;
 
-	LASSERT(lmv);
-
-	memcpy(lmu, lmu_buf->lb_buf, sizeof(*lmu));
-
-	if (le32_to_cpu(lmu->lum_stripe_count) < 2)
-		lmu->lum_stripe_count = 0;
-
-	rc = mdd_dir_declare_layout_delete(env, obj, lmv_buf, &shrink_buf,
-					   handle);
+	mlc->mlc_opc = MD_LAYOUT_DETACH;
+	rc = mdo_declare_layout_change(env, obj, mlc, handle);
 	if (rc)
 		return rc;
-
-	if (lmu->lum_stripe_count == 0) {
-		lmu->lum_stripe_count = cpu_to_le32(1);
-
-		rc = mdo_declare_xattr_del(env, obj, XATTR_NAME_LMV, handle);
-		if (rc)
-			return rc;
-	}
-
-	rc = mdd_dir_iterate_stripes(env, obj, lmv_buf, &shrink_buf, handle,
-				     mdd_dir_declare_destroy_stripe);
-	if (rc)
-		return rc;
-
-	if (le32_to_cpu(lmu->lum_stripe_count) > 1)
-		return mdo_declare_xattr_set(env, obj, lmv_buf,
-					     XATTR_NAME_LMV".set", 0, handle);
 
 	rc = mdo_declare_index_insert(env, stripe, mdd_object_fid(pobj),
 				      S_IFDIR, dotdot, handle);
@@ -4730,84 +4388,30 @@ static int __mdd_dir_declare_layout_shrink(const struct lu_env *env,
 		return rc;
 
 	return rc;
-
 }
 
-/*
- * after files under \a obj were migrated, shrink old stripes from \a obj,
- * furthermore, if it becomes a 1-stripe directory, convert it to a normal one.
- */
-static int __mdd_dir_layout_shrink(const struct lu_env *env,
-				   struct mdd_object *pobj,
-				   struct mdd_object *obj,
-				   struct mdd_object *stripe,
-				   struct lu_attr *attr,
-				   struct lu_buf *lmv_buf,
-				   const struct lu_buf *lmu_buf,
-				   struct lu_name *lname,
-				   struct thandle *handle)
+/* transform one-stripe directory to a plain directory */
+static int mdd_1sd_collapse(const struct lu_env *env,
+			    struct mdd_object *pobj,
+			    struct mdd_object *obj,
+			    struct mdd_object *stripe,
+			    struct lu_attr *attr,
+			    struct md_layout_change *mlc,
+			    struct lu_name *lname,
+			    struct thandle *handle)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
-	struct lmv_user_md *lmu = (typeof(lmu))info->mti_key;
-	struct lu_buf shrink_buf = { .lb_buf = lmu,
-				     .lb_len = sizeof(*lmu) };
-	int len = lmv_buf->lb_len;
-	__u32 version = le32_to_cpu(lmv->lmv_layout_version);
 	int rc;
 
 	ENTRY;
 
-	/* lmu needs to be altered, but lmu_buf is const */
-	memcpy(lmu, lmu_buf->lb_buf, sizeof(*lmu));
+	/* replace 1-stripe directory with its stripe */
+	mlc->mlc_opc = MD_LAYOUT_DETACH;
 
-	/*
-	 * if dir will be shrunk to 1-stripe, delete all stripes, because it
-	 * will be converted to normal dir.
-	 */
-	if (le32_to_cpu(lmu->lum_stripe_count) == 1)
-		lmu->lum_stripe_count = 0;
-
-	/* delete stripes after lmu_stripe_count */
-	rc = mdd_dir_layout_delete(env, obj, lmv_buf, &shrink_buf, handle);
+	mdd_write_lock(env, obj, DT_SRC_PARENT);
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
 	if (rc)
 		RETURN(rc);
-
-	if (lmu->lum_stripe_count == 0) {
-		lmu->lum_stripe_count = cpu_to_le32(1);
-
-		/* delete LMV to avoid deleting stripes again upon destroy */
-		mdd_write_lock(env, obj, DT_SRC_CHILD);
-		rc = mdo_xattr_del(env, obj, XATTR_NAME_LMV, handle);
-		mdd_write_unlock(env, obj);
-		if (rc)
-			RETURN(rc);
-	}
-
-	/* destroy stripes after lmu_stripe_count */
-	mdd_write_lock(env, obj, DT_SRC_PARENT);
-	rc = mdd_dir_iterate_stripes(env, obj, lmv_buf, &shrink_buf, handle,
-				     mdd_dir_destroy_stripe);
-	mdd_write_unlock(env, obj);
-
-	if (le32_to_cpu(lmu->lum_stripe_count) > 1) {
-		/* update dir LMV, that's all if it's still striped. */
-		lmv->lmv_stripe_count = lmu->lum_stripe_count;
-		lmv->lmv_hash_type &= ~cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
-		lmv->lmv_migrate_offset = 0;
-		lmv->lmv_migrate_hash = 0;
-		lmv->lmv_layout_version = cpu_to_le32(++version);
-
-		lmv_buf->lb_len = sizeof(*lmv);
-		rc = mdo_xattr_set(env, obj, lmv_buf, XATTR_NAME_LMV".set", 0,
-				   handle);
-		lmv_buf->lb_len = len;
-		RETURN(rc);
-	}
-
-	/* replace directory with its remaining stripe */
-	LASSERT(pobj);
-	LASSERT(stripe);
 
 	mdd_write_lock(env, pobj, DT_SRC_PARENT);
 	mdd_write_lock(env, obj, DT_SRC_CHILD);
@@ -4868,11 +4472,11 @@ out:
 }
 
 /*
- * shrink directory stripes to lum_stripe_count specified by lum_mds_md.
+ * shrink directory stripes after migration/merge
  */
 int mdd_dir_layout_shrink(const struct lu_env *env,
 			  struct md_object *md_obj,
-			  const struct lu_buf *lmu_buf)
+			  struct md_layout_change *mlc)
 {
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_thread_info *info = mdd_env_info(env);
@@ -4902,25 +4506,22 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 		RETURN(rc);
 
 	lmv = lmv_buf.lb_buf;
-	lmu = lmu_buf->lb_buf;
+	lmu = mlc->mlc_buf.lb_buf;
+
+	/* adjust the default value '0' to '1' */
+	if (lmu->lum_stripe_count == 0)
+		lmu->lum_stripe_count = cpu_to_le32(1);
 
 	/* this was checked in MDT */
 	LASSERT(le32_to_cpu(lmu->lum_stripe_count) <
 		le32_to_cpu(lmv->lmv_stripe_count));
-
-	rc = mdd_dir_iterate_stripes(env, obj, &lmv_buf, lmu_buf, NULL,
-				     mdd_shrink_stripe_is_empty);
-	if (rc < 0)
-		GOTO(out, rc);
-	else if (rc != 0)
-		GOTO(out, rc = -ENOTEMPTY);
 
 	/*
 	 * if obj stripe count will be shrunk to 1, we need to convert it to a
 	 * normal dir, which will change its fid and update parent namespace,
 	 * get obj name and parent fid from linkea.
 	 */
-	if (le32_to_cpu(lmu->lum_stripe_count) < 2) {
+	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
 		struct linkea_data *ldata = &info->mti_link_data;
 		char *filename = info->mti_name;
 
@@ -4964,10 +4565,17 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	if (IS_ERR(handle))
 		GOTO(out, rc = PTR_ERR(handle));
 
-	rc = __mdd_dir_declare_layout_shrink(env, pobj, obj, stripe, attr,
-					     &lmv_buf, lmu_buf, &lname, handle);
+	mlc->mlc_opc = MD_LAYOUT_SHRINK;
+	rc = mdo_declare_layout_change(env, obj, mlc, handle);
 	if (rc)
 		GOTO(stop_trans, rc);
+
+	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
+		rc = mdd_declare_1sd_collapse(env, pobj, obj, stripe, attr, mlc,
+					      &lname, handle);
+		if (rc)
+			GOTO(stop_trans, rc);
+	}
 
 	rc = mdd_declare_changelog_store(env, mdd, CL_LAYOUT, NULL, NULL,
 					 handle);
@@ -4978,10 +4586,19 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	if (rc)
 		GOTO(stop_trans, rc);
 
-	rc = __mdd_dir_layout_shrink(env, pobj, obj, stripe, attr, &lmv_buf,
-				     lmu_buf, &lname, handle);
+	mdd_write_lock(env, obj, DT_SRC_PARENT);
+	mlc->mlc_opc = MD_LAYOUT_SHRINK;
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
 	if (rc)
 		GOTO(stop_trans, rc);
+
+	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
+		rc = mdd_1sd_collapse(env, pobj, obj, stripe, attr, mlc, &lname,
+				      handle);
+		if (rc)
+			GOTO(stop_trans, rc);
+	}
 
 	rc = mdd_changelog_data_store_xattr(env, mdd, CL_LAYOUT, 0, obj,
 					    XATTR_NAME_LMV, handle);
