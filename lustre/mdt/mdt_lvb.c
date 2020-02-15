@@ -184,10 +184,6 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 		if (!info)
 			GOTO(out_env, rc = -ENOMEM);
 	}
-	if (!info->mti_exp)
-		info->mti_exp = req ? req->rq_export : NULL;
-	if (!info->mti_mdt)
-		info->mti_mdt = mdt;
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &res->lr_name);
@@ -285,7 +281,8 @@ static int mdt_lvbo_size(struct ldlm_lock *lock)
 
 	/* resource on server side never changes. */
 	mdt = ldlm_res_to_ns(lock->l_resource)->ns_lvbp;
-	LASSERT(mdt != NULL);
+	if (!mdt)
+		return 0;
 
 	if (IS_LQUOTA_RES(lock->l_resource)) {
 		if (mdt->mdt_qmt_dev == NULL)
@@ -335,6 +332,9 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 	LASSERT(env);
 
 	mdt = ldlm_lock_to_ns(lock)->ns_lvbp;
+	if (!mdt)
+		RETURN(0);
+
 	if (IS_LQUOTA_RES(lock->l_resource)) {
 		if (mdt->mdt_qmt_dev == NULL)
 			GOTO(out, rc = 0);
@@ -354,12 +354,6 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 		if (!info)
 			GOTO(out, rc = -ENOMEM);
 	}
-	if (!info->mti_env)
-		info->mti_env = env;
-	if (!info->mti_exp)
-		info->mti_exp = lock->l_export;
-	if (!info->mti_mdt)
-		info->mti_mdt = mdt;
 
 	/* LVB for DoM lock is needed only for glimpse,
 	 * don't fill DoM data if there is layout lock */
@@ -388,7 +382,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &lock->l_resource->lr_name);
 
-	obj = mdt_object_find(env, info->mti_mdt, fid);
+	obj = mdt_object_find(env, mdt, fid);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
@@ -410,8 +404,8 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 			 * and in that case mdt_max_mdsize is just updated
 			 * but if EA size is less than mdt_max_mdsize then
 			 * it is an error in lvblen value provided. */
-			if (rc > info->mti_mdt->mdt_max_mdsize) {
-				info->mti_mdt->mdt_max_mdsize = rc;
+			if (rc > mdt->mdt_max_mdsize) {
+				mdt->mdt_max_mdsize = rc;
 				level = D_INFO;
 			} else {
 				level = D_ERROR;
@@ -419,7 +413,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 			CDEBUG_LIMIT(level, "%s: small buffer size %d for EA "
 				     "%d (max_mdsize %d): rc = %d\n",
 				     mdt_obd_name(mdt), *lvblen, rc,
-				     info->mti_mdt->mdt_max_mdsize, -ERANGE);
+				     mdt->mdt_max_mdsize, -ERANGE);
 			*lvblen = rc;
 			GOTO(out_put, rc = -ERANGE);
 		}
@@ -443,10 +437,10 @@ out:
 static int mdt_lvbo_free(struct ldlm_resource *res)
 {
 	if (IS_LQUOTA_RES(res)) {
-		struct mdt_device	*mdt;
+		struct mdt_device *mdt;
 
 		mdt = ldlm_res_to_ns(res)->ns_lvbp;
-		if (mdt->mdt_qmt_dev == NULL)
+		if (!mdt || !mdt->mdt_qmt_dev)
 			return 0;
 
 		/* call lvbo free function of quota master */

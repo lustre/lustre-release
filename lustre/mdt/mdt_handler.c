@@ -3769,6 +3769,7 @@ void mdt_thread_info_fini(struct mdt_thread_info *info)
 	info->mti_env = NULL;
 	info->mti_pill = NULL;
 	info->mti_exp = NULL;
+	info->mti_mdt = NULL;
 
 	if (unlikely(info->mti_big_buf.lb_buf != NULL))
 		lu_buf_free(&info->mti_big_buf);
