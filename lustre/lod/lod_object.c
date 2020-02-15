@@ -5127,8 +5127,8 @@ static void lod_ah_init(const struct lu_env *env,
 				lc->ldo_dir_stripe_count = 0;
 		}
 
-		if (lc->ldo_dir_hash_type == LMV_HASH_TYPE_UNKNOWN)
-			lc->ldo_dir_hash_type =
+		if (!(lc->ldo_dir_hash_type & LMV_HASH_TYPE_MASK))
+			lc->ldo_dir_hash_type |=
 				d->lod_mdt_descs.ltd_lmv_desc.ld_pattern;
 
 		CDEBUG(D_INFO, "final dir stripe [%hu %d %u]\n",

@@ -2224,6 +2224,13 @@ struct lmv_mds_md_v1 {
 	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */
 };
 
+#define LMV_DEBUG(mask, lmv, msg)					\
+	CDEBUG(mask, "%s LMV: magic %#x count %u index %u hash %#x version %u migrate offset %u migrate hash %u.\n",	\
+	       msg, (lmv)->lmv_magic, (lmv)->lmv_stripe_count,		\
+	       (lmv)->lmv_master_mdt_index, (lmv)->lmv_hash_type,	\
+	       (lmv)->lmv_layout_version, (lmv)->lmv_migrate_offset,	\
+	       (lmv)->lmv_migrate_hash)
+
 /* foreign LMV EA */
 struct lmv_foreign_md {
 	__u32 lfm_magic;	/* magic number = LMV_MAGIC_FOREIGN */

@@ -300,7 +300,7 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 		if (lmv_dir_bad_hash(op_data->op_mea1))
 			RETURN(-EBADF);
 
-		if (lmv_dir_migrating(op_data->op_mea1)) {
+		if (lmv_dir_layout_changing(op_data->op_mea1)) {
 			if (flags & O_EXCL) {
 				/*
 				 * open(O_CREAT | O_EXCL) needs to check
@@ -308,11 +308,11 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 				 * old and new layout, check old layout on
 				 * client side.
 				 */
-				rc = lmv_migrate_existence_check(lmv, op_data);
+				rc = lmv_old_layout_lookup(lmv, op_data);
 				if (rc != -ENOENT)
 					RETURN(rc);
 
-				op_data->op_post_migrate = true;
+				op_data->op_new_layout = true;
 			} else {
 				/*
 				 * open(O_CREAT) will be sent to MDT in old

@@ -1700,9 +1700,8 @@ echo_md_dir_stripe_choose(const struct lu_env *env, struct echo_device *ed,
 		echo_md_build_name(&tmp_ln_name, info->eti_name, id);
 	}
 
-	idx = lmv_name_to_stripe_index(LMV_HASH_TYPE_FNV_1A_64,
-				le32_to_cpu(lmv->lmv_stripe_count),
-				tmp_ln_name.ln_name, tmp_ln_name.ln_namelen);
+	idx = lmv_name_to_stripe_index(lmv, tmp_ln_name.ln_name,
+				       tmp_ln_name.ln_namelen);
 
 	LASSERT(idx < le32_to_cpu(lmv->lmv_stripe_count));
 	fid_le_to_cpu(&stripe_fid, &lmv->lmv_stripe_fids[idx]);

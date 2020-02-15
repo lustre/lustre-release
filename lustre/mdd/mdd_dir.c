@@ -4087,22 +4087,14 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	plmv = pbuf.lb_buf;
 	if (plmv) {
 		__u32 hash_type = le32_to_cpu(plmv->lmv_hash_type);
-		__u32 count = le32_to_cpu(plmv->lmv_stripe_count);
 		int index;
 
-		/* locate target parent stripe */
-		if (hash_type & LMV_HASH_FLAG_MIGRATION) {
-			/*
-			 * fail check here to make sure top dir migration
-			 * succeed.
-			 */
-			if (OBD_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
-				GOTO(out, rc = -EIO);
-			hash_type &= ~LMV_HASH_FLAG_MIGRATION;
-			count = le32_to_cpu(plmv->lmv_migrate_offset);
-		}
-		index = lmv_name_to_stripe_index(hash_type, count,
-						 lname->ln_name,
+		/* fail check here to make sure top dir migration succeed. */
+		if ((hash_type & LMV_HASH_FLAG_MIGRATION) &&
+		    OBD_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
+			GOTO(out, rc = -EIO);
+
+		index = lmv_name_to_stripe_index(plmv, lname->ln_name,
 						 lname->ln_namelen);
 		if (index < 0)
 			GOTO(out, rc = index);
@@ -4114,26 +4106,17 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 
 		/* locate source parent stripe */
 		if (le32_to_cpu(plmv->lmv_hash_type) &
-		    LMV_HASH_FLAG_MIGRATION) {
-			hash_type = le32_to_cpu(plmv->lmv_migrate_hash);
-			count = le32_to_cpu(plmv->lmv_stripe_count) -
-				le32_to_cpu(plmv->lmv_migrate_offset);
-
-			index = lmv_name_to_stripe_index(hash_type, count,
-							 lname->ln_name,
-							 lname->ln_namelen);
-			if (index < 0) {
-				mdd_object_put(env, tpobj);
+		    LMV_HASH_FLAG_LAYOUT_CHANGE) {
+			index = lmv_name_to_stripe_index_old(plmv,
+							     lname->ln_name,
+							     lname->ln_namelen);
+			if (index < 0)
 				GOTO(out, rc = index);
-			}
 
-			index += le32_to_cpu(plmv->lmv_migrate_offset);
 			fid_le_to_cpu(fid, &plmv->lmv_stripe_fids[index]);
 			spobj = mdd_object_find(env, mdd, fid);
-			if (IS_ERR(spobj)) {
-				mdd_object_put(env, tpobj);
+			if (IS_ERR(spobj))
 				GOTO(out, rc = PTR_ERR(spobj));
-			}
 		} else {
 			spobj = tpobj;
 			mdd_object_get(spobj);

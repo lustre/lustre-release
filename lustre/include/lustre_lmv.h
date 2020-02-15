@@ -64,19 +64,15 @@ static inline bool lmv_dir_foreign(const struct lmv_stripe_md *lsm)
 	return lsm && lsm->lsm_md_magic == LMV_MAGIC_FOREIGN;
 }
 
-static inline bool lmv_dir_migrating(const struct lmv_stripe_md *lsm)
+static inline bool lmv_dir_layout_changing(const struct lmv_stripe_md *lsm)
 {
 	return lmv_dir_striped(lsm) &&
-	       lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION;
+	       (lsm->lsm_md_hash_type & LMV_HASH_FLAG_LAYOUT_CHANGE);
 }
 
 static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
 {
 	if (!lmv_dir_striped(lsm))
-		return false;
-
-	if (lmv_dir_migrating(lsm) &&
-	    lsm->lsm_md_stripe_count - lsm->lsm_md_migrate_offset <= 1)
 		return false;
 
 	if (lsm->lsm_md_hash_type & LMV_HASH_FLAG_BAD_TYPE)
@@ -279,36 +275,102 @@ lmv_hash_crush(unsigned int count, const char *name, int namelen)
 	return idx;
 }
 
-static inline int lmv_name_to_stripe_index(__u32 hash_type,
-					   unsigned int stripe_count,
-					   const char *name, int namelen)
+static inline int
+__lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
+			   __u32 migrate_hash, __u32 migrate_offset,
+			   const char *name, int namelen, bool new_layout)
 {
-	unsigned int idx;
+	__u32 saved_hash = hash_type;
+	__u32 saved_count = stripe_count;
+	int stripe_index = 0;
 
 	LASSERT(namelen > 0);
 	LASSERT(stripe_count > 0);
 
-	if (stripe_count == 1)
-		return 0;
-
-	switch (hash_type & LMV_HASH_TYPE_MASK) {
-	case LMV_HASH_TYPE_ALL_CHARS:
-		idx = lmv_hash_all_chars(stripe_count, name, namelen);
-		break;
-	case LMV_HASH_TYPE_FNV_1A_64:
-		idx = lmv_hash_fnv1a(stripe_count, name, namelen);
-		break;
-	case LMV_HASH_TYPE_CRUSH:
-		idx = lmv_hash_crush(stripe_count, name, namelen);
-		break;
-	default:
-		return -EBADFD;
+	if (hash_type & LMV_HASH_FLAG_MIGRATION) {
+		if (new_layout) {
+			stripe_count = migrate_offset;
+		} else {
+			hash_type = migrate_hash;
+			stripe_count -= migrate_offset;
+		}
 	}
 
-	CDEBUG(D_INFO, "name %.*s hash_type %#x idx %d/%u\n", namelen, name,
-	       hash_type, idx, stripe_count);
+	if (stripe_count > 1) {
+		switch (hash_type & LMV_HASH_TYPE_MASK) {
+		case LMV_HASH_TYPE_ALL_CHARS:
+			stripe_index = lmv_hash_all_chars(stripe_count, name,
+							  namelen);
+			break;
+		case LMV_HASH_TYPE_FNV_1A_64:
+			stripe_index = lmv_hash_fnv1a(stripe_count, name,
+						      namelen);
+			break;
+		case LMV_HASH_TYPE_CRUSH:
+			stripe_index = lmv_hash_crush(stripe_count, name,
+						      namelen);
+			break;
+		default:
+			return -EBADFD;
+		}
+	}
 
-	return idx;
+	LASSERT(stripe_index < stripe_count);
+
+	if ((saved_hash & LMV_HASH_FLAG_MIGRATION) && !new_layout)
+		stripe_index += migrate_offset;
+
+	LASSERT(stripe_index < saved_count);
+
+	CDEBUG(D_INFO, "name %.*s hash %#x/%#x idx %d/%u/%u under %s layout\n",
+	       namelen, name, saved_hash, migrate_hash, stripe_index,
+	       saved_count, migrate_offset, new_layout ? "new" : "old");
+
+	return stripe_index;
+}
+
+static inline int lmv_name_to_stripe_index(struct lmv_mds_md_v1 *lmv,
+					   const char *name, int namelen)
+{
+	if (lmv->lmv_magic == LMV_MAGIC_V1)
+		return __lmv_name_to_stripe_index(lmv->lmv_hash_type,
+						  lmv->lmv_stripe_count,
+						  lmv->lmv_migrate_hash,
+						  lmv->lmv_migrate_offset,
+						  name, namelen, true);
+
+	if (lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_V1))
+		return __lmv_name_to_stripe_index(
+					le32_to_cpu(lmv->lmv_hash_type),
+					le32_to_cpu(lmv->lmv_stripe_count),
+					le32_to_cpu(lmv->lmv_migrate_hash),
+					le32_to_cpu(lmv->lmv_migrate_offset),
+					name, namelen, true);
+
+	return -EINVAL;
+}
+
+static inline int lmv_name_to_stripe_index_old(struct lmv_mds_md_v1 *lmv,
+					       const char *name, int namelen)
+{
+	if (lmv->lmv_magic == LMV_MAGIC_V1 ||
+	    lmv->lmv_magic == LMV_MAGIC_STRIPE)
+		return __lmv_name_to_stripe_index(lmv->lmv_hash_type,
+						  lmv->lmv_stripe_count,
+						  lmv->lmv_migrate_hash,
+						  lmv->lmv_migrate_offset,
+						  name, namelen, false);
+
+	if (lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_V1) ||
+	    lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_STRIPE))
+		return __lmv_name_to_stripe_index(
+					le32_to_cpu(lmv->lmv_hash_type),
+					le32_to_cpu(lmv->lmv_stripe_count),
+					le32_to_cpu(lmv->lmv_migrate_hash),
+					le32_to_cpu(lmv->lmv_migrate_offset),
+					name, namelen, false);
+
+	return -EINVAL;
 }
 
 static inline bool lmv_user_magic_supported(__u32 lum_magic)
@@ -321,15 +383,18 @@ static inline bool lmv_user_magic_supported(__u32 lum_magic)
 static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
 {
 	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
-		return false;
+		goto insane;
 
 	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
-		return false;
+		goto insane;
 
 	if (!lmv_is_known_hash_type(lmv->lmv_hash_type))
-		return false;
+		goto insane;
 
 	return true;
+insane:
+	LMV_DEBUG(D_ERROR, lmv, "insane");
+	return false;
 }
 
 #endif

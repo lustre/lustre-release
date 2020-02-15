@@ -903,14 +903,14 @@ struct md_op_data {
 	__u16			op_mirror_id;
 
 	/*
-	 * used to access migrating dir: if it's set, assume migration is
-	 * finished, use the new layout to access dir, otherwise use old layout.
+	 * used to access dir that is changing layout: if it's set, access
+	 * dir by new layout, otherwise old layout.
 	 * By default it's not set, because new files are created under new
 	 * layout, if we can't find file with name under both old and new
 	 * layout, we are sure file with name doesn't exist, but in reverse
 	 * order there may be a race with creation by others.
 	 */
-	bool			op_post_migrate;
+	bool			op_new_layout;
 	/* used to access dir with bash hash */
 	__u32			op_stripe_index;
 	/* Archive ID for PCC attach */

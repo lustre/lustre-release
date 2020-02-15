@@ -971,24 +971,30 @@ int lfsck_shard_name_to_index(const struct lu_env *env, const char *name,
 	return idx;
 }
 
+static inline bool lfsck_name_hash_match(struct lmv_mds_md_v1 *lmv,
+					 const char *name, int namelen)
+{
+	int idx;
+
+	idx = lmv_name_to_stripe_index_old(lmv, name, namelen);
+	if (idx == lmv->lmv_master_mdt_index)
+		return true;
+
+	if (!(lmv->lmv_hash_type & LMV_HASH_FLAG_LAYOUT_CHANGE))
+		return false;
+
+	idx = lmv_name_to_stripe_index(lmv, name, namelen);
+	return (idx == lmv->lmv_master_mdt_index);
+}
+
 bool lfsck_is_valid_slave_name_entry(const struct lu_env *env,
 				     struct lfsck_lmv *llmv,
 				     const char *name, int namelen)
 {
-	struct lmv_mds_md_v1	*lmv;
-	int			 idx;
-
 	if (llmv == NULL || !llmv->ll_lmv_slave || !llmv->ll_lmv_verified)
 		return true;
 
-	lmv = &llmv->ll_lmv;
-	idx = lmv_name_to_stripe_index(lmv->lmv_hash_type,
-				       lmv->lmv_stripe_count,
-				       name, namelen);
-	if (unlikely(idx != lmv->lmv_master_mdt_index))
-		return false;
-
-	return true;
+	return lfsck_name_hash_match(&llmv->ll_lmv, name, namelen);
 }
 
 /**
@@ -1015,9 +1021,8 @@ int lfsck_namespace_check_name(const struct lu_env *env,
 			       struct dt_object *child,
 			       const struct lu_name *cname)
 {
-	struct lmv_mds_md_v1	*lmv = &lfsck_env_info(env)->lti_lmv;
-	int			 idx;
-	int			 rc;
+	struct lmv_mds_md_v1 *lmv = &lfsck_env_info(env)->lti_lmv;
+	int rc;
 
 	rc = lfsck_read_stripe_lmv(env, lfsck, parent, lmv);
 	if (rc != 0)
@@ -1027,11 +1032,8 @@ int lfsck_namespace_check_name(const struct lu_env *env,
 		if (!lfsck_is_valid_slave_lmv(lmv))
 			return 0;
 
-		idx = lmv_name_to_stripe_index(lmv->lmv_hash_type,
-					       lmv->lmv_stripe_count,
-					       cname->ln_name,
-					       cname->ln_namelen);
-		if (unlikely(idx != lmv->lmv_master_mdt_index))
+		if (!lfsck_name_hash_match(lmv, cname->ln_name,
+					   cname->ln_namelen))
 			return 1;
 	} else if (lfsck_shard_name_to_index(env, cname->ln_name,
 			cname->ln_namelen, lfsck_object_type(child),

@@ -1825,24 +1825,11 @@ static int mdt_migrate_lookup(struct mdt_thread_info *info,
 	if (ma->ma_valid & MA_LMV) {
 		/* if parent is striped, lookup on corresponding stripe */
 		struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
-		__u32 hash_type = le32_to_cpu(lmv->lmv_hash_type);
-		__u32 stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
-		bool is_migrating = le32_to_cpu(lmv->lmv_hash_type) &
-				    LMV_HASH_FLAG_MIGRATION;
 
-		if (is_migrating) {
-			hash_type = le32_to_cpu(lmv->lmv_migrate_hash);
-			stripe_count -= le32_to_cpu(lmv->lmv_migrate_offset);
-		}
-
-		rc = lmv_name_to_stripe_index(hash_type, stripe_count,
-					      lname->ln_name,
-					      lname->ln_namelen);
+		rc = lmv_name_to_stripe_index_old(lmv, lname->ln_name,
+						  lname->ln_namelen);
 		if (rc < 0)
 			return rc;
-
-		if (le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION)
-			rc += le32_to_cpu(lmv->lmv_migrate_offset);
 
 		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[rc]);
 
@@ -1853,7 +1840,9 @@ static int mdt_migrate_lookup(struct mdt_thread_info *info,
 		fid_zero(fid);
 		rc = mdo_lookup(env, mdt_object_child(stripe), lname, fid,
 				&info->mti_spec);
-		if (rc == -ENOENT && is_migrating) {
+		if (rc == -ENOENT &&
+		    (cpu_to_le32(lmv->lmv_hash_type) &
+		     LMV_HASH_FLAG_LAYOUT_CHANGE)) {
 			/*
 			 * if parent is migrating, and lookup child failed on
 			 * source stripe, lookup again on target stripe, if it
@@ -1862,11 +1851,7 @@ static int mdt_migrate_lookup(struct mdt_thread_info *info,
 			 */
 			mdt_object_put(env, stripe);
 
-			hash_type = le32_to_cpu(lmv->lmv_hash_type);
-			stripe_count = le32_to_cpu(lmv->lmv_migrate_offset);
-
-			rc = lmv_name_to_stripe_index(hash_type, stripe_count,
-						      lname->ln_name,
+			rc = lmv_name_to_stripe_index(lmv, lname->ln_name,
 						      lname->ln_namelen);
 			if (rc < 0)
 				return rc;
