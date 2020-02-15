@@ -1395,7 +1395,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	if (result < 0)
 		GOTO(out, result);
 
-again:
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh, (open_flags & MDS_OPEN_CREAT) ? LCK_PW : LCK_PR,
 			  &rr->rr_name);
@@ -1427,48 +1426,11 @@ again:
 		 PFID(mdt_object_fid(parent)), PNAME(&rr->rr_name),
 		 PFID(child_fid));
 
-	if (result != 0 && result != -ENOENT && result != -ESTALE)
+	if (result != 0 && result != -ENOENT)
 		GOTO(out_parent, result);
 
-	if (result == -ENOENT || result == -ESTALE) {
-		/* If the object is dead, let's check if the object
-		 * is being migrated to a new object */
-		if (result == -ESTALE) {
-			struct lu_buf lmv_buf;
-
-			lmv_buf.lb_buf = info->mti_xattr_buf;
-			lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
-			rc = mo_xattr_get(info->mti_env,
-					  mdt_object_child(parent),
-					  &lmv_buf, XATTR_NAME_LMV);
-			if (rc > 0) {
-				struct lmv_mds_md_v1 *lmv;
-
-				lmv = lmv_buf.lb_buf;
-				if (le32_to_cpu(lmv->lmv_hash_type) &
-						LMV_HASH_FLAG_MIGRATION) {
-					/* Get the new parent FID and retry */
-					mdt_object_unlock_put(info, parent,
-							      lh, 1);
-					mdt_lock_handle_init(lh);
-					fid_le_to_cpu(
-						(struct lu_fid *)rr->rr_fid1,
-						&lmv->lmv_stripe_fids[1]);
-					goto again;
-				}
-			}
-		}
-
+	if (result == -ENOENT) {
 		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
-		if (result == -ESTALE) {
-			/*
-			 * -ESTALE means the parent is a dead(unlinked) dir, so
-			 * it should return -ENOENT to in accordance with the
-			 * original mds implementaion.
-			 */
-			GOTO(out_parent, result = -ENOENT);
-		}
-
 		if (!(open_flags & MDS_OPEN_CREAT))
 			GOTO(out_parent, result);
 		if (mdt_rdonly(req->rq_export))

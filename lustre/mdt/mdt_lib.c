@@ -1520,6 +1520,8 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 			RETURN(rc);
 
 		spec->sp_migrate_close = 1;
+	} else {
+		spec->sp_migrate_close = 0;
 	}
 
 	/* lustre version > 2.11 migration packs lum */

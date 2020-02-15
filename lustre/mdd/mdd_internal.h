@@ -203,7 +203,6 @@ struct mdd_thread_info {
 	struct lu_buf		  mti_link_buf; /* buf for link ea */
 	struct lu_buf		  mti_xattr_buf;
 	struct obdo               mti_oa;
-	struct lmv_user_md	  mti_lmu;
 	struct dt_allocation_hint mti_hint;
 	struct dt_object_format   mti_dof;
 	struct linkea_data	  mti_link_data;

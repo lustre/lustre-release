@@ -1227,6 +1227,7 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_IO_READ]		= "read_bytes",
 	[LPROC_MDT_IO_WRITE]		= "write_bytes",
 	[LPROC_MDT_IO_PUNCH]		= "punch",
+	[LPROC_MDT_MIGRATE]		= "migrate",
 };
 
 void mdt_stats_counter_init(struct lprocfs_stats *stats)

@@ -2148,7 +2148,10 @@ lock_parent:
 
 	rc = mdo_migrate(env, mdt_object_child(pobj),
 			 mdt_object_child(sobj), &rr->rr_name,
-			 mdt_object_child(tobj), &info->mti_spec, ma);
+			 mdt_object_child(tobj),
+			 &info->mti_spec, ma);
+	if (!rc)
+		mdt_counter_incr(req, LPROC_MDT_MIGRATE);
 	EXIT;
 
 	mdt_object_unlock(info, tobj, lht, rc);

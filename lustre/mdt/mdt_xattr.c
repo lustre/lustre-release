@@ -410,34 +410,37 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 	lmv = &ma->ma_lmv->lmv_md_v1;
 
 	/* ditto */
-	if (!(le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION))
+	if (!(le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_LAYOUT_CHANGE))
 		GOTO(unlock_obj, rc = -EALREADY);
 
 	lum_stripe_count = lmu->lum_stripe_count;
 	if (!lum_stripe_count)
 		lum_stripe_count = cpu_to_le32(1);
 
-	if (lmv->lmv_migrate_offset != lum_stripe_count) {
-		CERROR("%s: "DFID" migrate mdt count mismatch %u != %u\n",
-			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-			lmv->lmv_migrate_offset, lmu->lum_stripe_count);
-		GOTO(unlock_obj, rc = -EINVAL);
-	}
+	if ((le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION)) {
+		if (lmv->lmv_migrate_offset != lum_stripe_count) {
+			CERROR("%s: "DFID" migrate mdt count mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_migrate_offset, lmu->lum_stripe_count);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
 
-	if (lmv->lmv_master_mdt_index != lmu->lum_stripe_offset) {
-		CERROR("%s: "DFID" migrate mdt index mismatch %u != %u\n",
-			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-			lmv->lmv_master_mdt_index, lmu->lum_stripe_offset);
-		GOTO(unlock_obj, rc = -EINVAL);
-	}
+		if (lmu->lum_stripe_offset != lmv->lmv_master_mdt_index) {
+			CERROR("%s: "DFID" migrate mdt index mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_master_mdt_index,
+				lmu->lum_stripe_offset);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
 
-	if (lum_stripe_count > 1 && lmu->lum_hash_type &&
-	    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) !=
-	    lmu->lum_hash_type) {
-		CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
-			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-			lmv->lmv_hash_type, lmu->lum_hash_type);
-		GOTO(unlock_obj, rc = -EINVAL);
+		if (lum_stripe_count > 1 && lmu->lum_hash_type &&
+		    (lmv->lmv_hash_type & ~cpu_to_le32(LMV_HASH_FLAG_MIGRATION))
+		    != lmu->lum_hash_type) {
+			CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_hash_type, lmu->lum_hash_type);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
 	}
 
 	mlc->mlc_opc = MD_LAYOUT_SHRINK;

@@ -2603,11 +2603,8 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		 * migrate may create 1-stripe directory, so lod_ah_init()
 		 * doesn't adjust stripe count from lmu.
 		 */
-		if (lmu && lmu->lum_stripe_count == cpu_to_le32(1)) {
-			info->mti_lmu = *lmu;
-			info->mti_lmu.lum_stripe_count = 0;
-			spec->u.sp_ea.eadata = &info->mti_lmu;
-		}
+		if (lmu && lmu->lum_stripe_count == cpu_to_le32(1))
+			lmu->lum_stripe_count = 0;
 	}
 
 	mdd_object_make_hint(env, mdd_pobj, son, attr, spec, hint);
@@ -3621,14 +3618,14 @@ static int mdd_iterate_linkea(const struct lu_env *env,
  * \retval	1 don't migrate
  * \retval	-errno on failure
  */
-static int migrate_linkea_prepare(const struct lu_env *env,
-				  struct mdd_device *mdd,
-				  struct mdd_object *spobj,
-				  struct mdd_object *tpobj,
-				  struct mdd_object *sobj,
-				  const struct lu_name *lname,
-				  const struct lu_attr *attr,
-				  struct linkea_data *ldata)
+static int mdd_migrate_linkea_prepare(const struct lu_env *env,
+				      struct mdd_device *mdd,
+				      struct mdd_object *spobj,
+				      struct mdd_object *tpobj,
+				      struct mdd_object *sobj,
+				      const struct lu_name *lname,
+				      const struct lu_attr *attr,
+				      struct linkea_data *ldata)
 {
 	__u32 source_mdt_index;
 	int rc;
@@ -3669,14 +3666,74 @@ static int migrate_linkea_prepare(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static int mdd_declare_migrate_update(const struct lu_env *env,
+				      struct mdd_object *spobj,
+				      struct mdd_object *tpobj,
+				      struct mdd_object *obj,
+				      const struct lu_name *lname,
+				      struct lu_attr *attr,
+				      struct lu_attr *spattr,
+				      struct lu_attr *tpattr,
+				      struct linkea_data *ldata,
+				      struct md_attr *ma,
+				      struct thandle *handle)
+{
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_attr *la = &info->mti_la_for_fix;
+	int rc;
+
+	rc = mdo_declare_index_delete(env, spobj, lname->ln_name, handle);
+	if (rc)
+		return rc;
+
+	if (S_ISDIR(attr->la_mode)) {
+		rc = mdo_declare_ref_del(env, spobj, handle);
+		if (rc)
+			return rc;
+	}
+
+	rc = mdo_declare_index_insert(env, tpobj, mdd_object_fid(obj),
+				      attr->la_mode & S_IFMT,
+				      lname->ln_name, handle);
+	if (rc)
+		return rc;
+
+	rc = mdd_declare_links_add(env, obj, handle, ldata);
+	if (rc)
+		return rc;
+
+	if (S_ISDIR(attr->la_mode)) {
+		rc = mdo_declare_ref_add(env, tpobj, handle);
+		if (rc)
+			return rc;
+	}
+
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdo_declare_attr_set(env, spobj, la, handle);
+	if (rc)
+		return rc;
+
+	if (tpobj != spobj) {
+		rc = mdo_declare_attr_set(env, tpobj, la, handle);
+		if (rc)
+			return rc;
+	}
+
+	return rc;
+}
+
 static int mdd_declare_migrate_create(const struct lu_env *env,
+				      struct mdd_object *spobj,
 				      struct mdd_object *tpobj,
 				      struct mdd_object *sobj,
 				      struct mdd_object *tobj,
 				      const struct lu_name *lname,
+				      struct lu_attr *spattr,
+				      struct lu_attr *tpattr,
 				      struct lu_attr *attr,
 				      struct lu_buf *sbuf,
 				      struct linkea_data *ldata,
+				      struct md_attr *ma,
 				      struct md_op_spec *spec,
 				      struct dt_allocation_hint *hint,
 				      struct thandle *handle)
@@ -3686,12 +3743,25 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	struct lmv_mds_md_v1 *lmv = sbuf->lb_buf;
 	int rc;
 
+	ENTRY;
+
 	if (S_ISDIR(attr->la_mode)) {
+		struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+
 		mlc->mlc_opc = MD_LAYOUT_DETACH;
 		rc = mdo_declare_layout_change(env, sobj, mlc, handle);
 		if (rc)
 			return rc;
+
+		lum->lum_hash_type |= cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
+	} else if (S_ISLNK(attr->la_mode)) {
+		spec->u.sp_symname = sbuf->lb_buf;
+	} else if (S_ISREG(attr->la_mode)) {
+		spec->sp_cr_flags |= MDS_OPEN_DELAY_CREATE;
+		spec->sp_cr_flags &= ~MDS_OPEN_HAS_EA;
 	}
+
+	mdd_object_make_hint(env, tpobj, tobj, attr, spec, hint);
 
 	rc = mdd_declare_create(env, mdo2mdd(&tpobj->mod_obj), tpobj, tobj,
 				lname, attr, handle, spec, ldata, NULL, NULL,
@@ -3707,7 +3777,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	tobj->mod_obj.mo_lu.lo_header->loh_attr |=
 		sobj->mod_obj.mo_lu.lo_header->loh_attr & S_IFMT;
 
-	if (S_ISDIR(attr->la_mode) && mdd_dir_is_empty(env, sobj) != 0) {
+	if (S_ISDIR(attr->la_mode)) {
 		if (!lmv) {
 			/* if sobj is not striped, fake a 1-stripe LMV */
 			LASSERT(sizeof(info->mti_key) >
@@ -3761,24 +3831,103 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			return rc;
 	}
 
+	if (!S_ISDIR(attr->la_mode) || lmv) {
+		rc = mdo_declare_ref_del(env, sobj, handle);
+		if (rc)
+			return rc;
+
+		if (S_ISDIR(attr->la_mode)) {
+			rc = mdo_declare_ref_del(env, sobj, handle);
+			if (rc)
+				return rc;
+		}
+
+		rc = mdo_declare_destroy(env, sobj, handle);
+		if (rc)
+			return rc;
+	}
+
+	rc = mdd_declare_migrate_update(env, spobj, tpobj, tobj, lname, attr,
+					spattr, tpattr, ldata, ma, handle);
 	return rc;
 }
 
 /**
- * Create target, migrate xattrs and update links.
+ * migrate dirent from \a spobj to \a tpobj.
+ **/
+static int mdd_migrate_update(const struct lu_env *env,
+			      struct mdd_object *spobj,
+			      struct mdd_object *tpobj,
+			      struct mdd_object *obj,
+			      const struct lu_name *lname,
+			      struct lu_attr *attr,
+			      struct lu_attr *spattr,
+			      struct lu_attr *tpattr,
+			      struct linkea_data *ldata,
+			      struct md_attr *ma,
+			      struct thandle *handle)
+{
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_attr *la = &info->mti_la_for_fix;
+	int rc;
+
+	ENTRY;
+
+	CDEBUG(D_INFO, "update "DFID"/%s to "DFID"/"DFID"\n",
+	       PFID(mdd_object_fid(spobj)), lname->ln_name,
+	       PFID(mdd_object_fid(tpobj)), PFID(mdd_object_fid(obj)));
+
+	rc = __mdd_index_delete(env, spobj, lname->ln_name,
+				S_ISDIR(attr->la_mode), handle);
+	if (rc)
+		RETURN(rc);
+
+	rc = __mdd_index_insert(env, tpobj, mdd_object_fid(obj),
+				attr->la_mode & S_IFMT,
+				lname->ln_name, handle);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_links_write(env, obj, ldata, handle);
+	if (rc)
+		RETURN(rc);
+
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+	la->la_valid = LA_CTIME | LA_MTIME;
+	mdd_write_lock(env, spobj, DT_SRC_PARENT);
+	rc = mdd_update_time(env, spobj, spattr, la, handle);
+	mdd_write_unlock(env, spobj);
+	if (rc)
+		RETURN(rc);
+
+	if (tpobj != spobj) {
+		la->la_valid = LA_CTIME | LA_MTIME;
+		mdd_write_lock(env, tpobj, DT_TGT_PARENT);
+		rc = mdd_update_time(env, tpobj, tpattr, la, handle);
+		mdd_write_unlock(env, tpobj);
+		if (rc)
+			RETURN(rc);
+	}
+
+	RETURN(rc);
+}
+
+/**
+ * Migrate file/dir to target MDT.
  *
  * Create target according to \a spec, and then migrate xattrs, if it's
- * directory, migrate source stripes to target, else update fid to target
- * for links.
+ * directory, migrate source stripes to target.
  *
  * \param[in] env	execution environment
+ * \param[in] spobj	source parent object
  * \param[in] tpobj	target parent object
  * \param[in] sobj	source object
  * \param[in] tobj	target object
  * \param[in] lname	file name
+ * \param[in] spattr	source parent attributes
+ * \param[in] tpattr	target parent attributes
  * \param[in] attr	source attributes
  * \param[in] sbuf	source LMV buf
- * \param[in] ldata	source linkea
  * \param[in] spec	migrate create spec
  * \param[in] hint	target creation hint
  * \param[in] handle	tranasction handle
@@ -3787,13 +3936,17 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
  * \retval	-errno on failure
  **/
 static int mdd_migrate_create(const struct lu_env *env,
+			      struct mdd_object *spobj,
 			      struct mdd_object *tpobj,
 			      struct mdd_object *sobj,
 			      struct mdd_object *tobj,
 			      const struct lu_name *lname,
+			      struct lu_attr *spattr,
+			      struct lu_attr *tpattr,
 			      struct lu_attr *attr,
 			      const struct lu_buf *sbuf,
 			      struct linkea_data *ldata,
+			      struct md_attr *ma,
 			      struct md_op_spec *spec,
 			      struct dt_allocation_hint *hint,
 			      struct thandle *handle)
@@ -3803,10 +3956,10 @@ static int mdd_migrate_create(const struct lu_env *env,
 	ENTRY;
 
 	/*
-	 * directory will migrate sobj stripes to tobj:
-	 * 1. delete stripes from sobj.
-	 * 2. add stripes to tobj, see lod_dir_declare_layout_add().
-	 * 3. create/attach stripes for tobj, see lod_xattr_set_lmv().
+	 * migrate sobj stripes to tobj if it's directory:
+	 * 1. detach stripes from sobj.
+	 * 2. attach stripes to tobj, see mdd_declare_migrate_mdt().
+	 * 3. create stripes for tobj, see lod_xattr_set_lmv().
 	 */
 	if (S_ISDIR(attr->la_mode)) {
 		struct mdd_thread_info *info = mdd_env_info(env);
@@ -3851,181 +4004,78 @@ static int mdd_migrate_create(const struct lu_env *env,
 		mdd_write_lock(env, sobj, DT_SRC_CHILD);
 		rc = mdo_xattr_del(env, sobj, XATTR_NAME_LOV, handle);
 		mdd_write_unlock(env, sobj);
-		if (rc)
+		/* O_DELAY_CREATE file may not have LOV, ignore -ENODATA */
+		if (rc && rc != -ENODATA)
 			RETURN(rc);
+		rc = 0;
 	}
 
-	if (!S_ISDIR(attr->la_mode))
+	/* update links FID */
+	if (!S_ISDIR(attr->la_mode)) {
 		rc = mdd_iterate_linkea(env, sobj, tobj, lname,
 					mdd_object_fid(tpobj), ldata,
 					NULL, handle, mdd_update_link);
-
-	RETURN(rc);
-}
-
-static int mdd_declare_migrate_update(const struct lu_env *env,
-				      struct mdd_object *spobj,
-				      struct mdd_object *tpobj,
-				      struct mdd_object *sobj,
-				      struct mdd_object *tobj,
-				      const struct lu_name *lname,
-				      struct lu_attr *attr,
-				      struct lu_attr *spattr,
-				      struct lu_attr *tpattr,
-				      struct linkea_data *ldata,
-				      bool do_create,
-				      bool do_destroy,
-				      struct md_attr *ma,
-				      struct thandle *handle)
-{
-	struct mdd_thread_info *info = mdd_env_info(env);
-	const struct lu_fid *fid = mdd_object_fid(do_create ? tobj : sobj);
-	struct lu_attr *la = &info->mti_la_for_fix;
-	int rc;
-
-	rc = mdo_declare_index_delete(env, spobj, lname->ln_name, handle);
-	if (rc)
-		return rc;
-
-	if (S_ISDIR(attr->la_mode)) {
-		rc = mdo_declare_ref_del(env, spobj, handle);
-		if (rc)
-			return rc;
-	}
-
-	rc = mdo_declare_index_insert(env, tpobj, fid, mdd_object_type(sobj),
-				      lname->ln_name, handle);
-	if (rc)
-		return rc;
-
-	rc = mdd_declare_links_add(env, do_create ? tobj : sobj, handle, ldata);
-	if (rc)
-		return rc;
-
-	if (S_ISDIR(attr->la_mode)) {
-		rc = mdo_declare_ref_add(env, tpobj, handle);
-		if (rc)
-			return rc;
-	}
-
-	la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdo_declare_attr_set(env, spobj, la, handle);
-	if (rc)
-		return rc;
-
-	if (tpobj != spobj) {
-		rc = mdo_declare_attr_set(env, tpobj, la, handle);
-		if (rc)
-			return rc;
-	}
-
-	if (do_create && do_destroy) {
-		rc = mdo_declare_ref_del(env, sobj, handle);
-		if (rc)
-			return rc;
-
-		if (S_ISDIR(attr->la_mode)) {
-			rc = mdo_declare_ref_del(env, sobj, handle);
-			if (rc)
-				return rc;
-		}
-
-		rc = mdo_declare_destroy(env, sobj, handle);
-		if (rc)
-			return rc;
-	}
-
-	return rc;
-}
-
-/**
- * migrate dirent from \a spobj to \a tpobj, and destroy \a sobj
- **/
-static int mdd_migrate_update(const struct lu_env *env,
-			      struct mdd_object *spobj,
-			      struct mdd_object *tpobj,
-			      struct mdd_object *sobj,
-			      struct mdd_object *tobj,
-			      const struct lu_name *lname,
-			      struct lu_attr *attr,
-			      struct lu_attr *spattr,
-			      struct lu_attr *tpattr,
-			      struct linkea_data *ldata,
-			      bool do_create,
-			      bool do_destroy,
-			      struct md_attr *ma,
-			      struct thandle *handle)
-{
-	struct mdd_thread_info *info = mdd_env_info(env);
-	const struct lu_fid *fid = mdd_object_fid(do_create ? tobj : sobj);
-	struct lu_attr *la = &info->mti_la_for_fix;
-	int rc;
-
-	ENTRY;
-
-	CDEBUG(D_INFO, "update %s "DFID"/"DFID" to "DFID"/"DFID"\n",
-	       lname->ln_name, PFID(mdd_object_fid(spobj)),
-	       PFID(mdd_object_fid(sobj)), PFID(mdd_object_fid(tpobj)),
-	       PFID(fid));
-
-	rc = __mdd_index_delete(env, spobj, lname->ln_name,
-				S_ISDIR(attr->la_mode), handle);
-	if (rc)
-		RETURN(rc);
-
-	rc = __mdd_index_insert(env, tpobj, fid, mdd_object_type(sobj),
-				lname->ln_name, handle);
-	if (rc)
-		RETURN(rc);
-
-	rc = mdd_links_write(env, do_create ? tobj : sobj, ldata, handle);
-	if (rc)
-		RETURN(rc);
-
-	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
-	la->la_valid = LA_CTIME | LA_MTIME;
-	mdd_write_lock(env, spobj, DT_SRC_PARENT);
-	rc = mdd_update_time(env, spobj, spattr, la, handle);
-	mdd_write_unlock(env, spobj);
-	if (rc)
-		RETURN(rc);
-
-	if (tpobj != spobj) {
-		la->la_valid = LA_CTIME | LA_MTIME;
-		mdd_write_lock(env, tpobj, DT_TGT_PARENT);
-		rc = mdd_update_time(env, tpobj, tpattr, la, handle);
-		mdd_write_unlock(env, tpobj);
 		if (rc)
 			RETURN(rc);
 	}
 
-	/*
-	 * there are three situations we shouldn't destroy source:
-	 * 1. if source is not dir, and it happens to be located on the same MDT
-	 *    as target parent.
-	 * 2. if source is not dir, and has link on the same MDT where source is
-	 *    located.
-	 * 3. if source is dir, and it's a normal, non-empty dir.
-	 *
-	 * the first two situations equals to !do_create, and the 3rd equals to
-	 * !do_destroy, so the below condition is actually
-	 * !(!do_create || !do_destroy).
-	 *
-	 * NB, if user has opened source dir before migration, he will get
-	 * -ENOENT error when close it later, because source is likely to be
-	 *  remote, which can't be moved to orphan list, but except this error
-	 *  message, this won't cause any inconsistency or trouble.
-	 */
-	if (do_create && do_destroy) {
+	/* don't destroy sobj if it's plain directory */
+	if (!S_ISDIR(attr->la_mode) || sbuf->lb_buf) {
 		mdd_write_lock(env, sobj, DT_SRC_CHILD);
-		mdo_ref_del(env, sobj, handle);
-		if (S_ISDIR(attr->la_mode))
-			mdo_ref_del(env, sobj, handle);
-		rc = mdo_destroy(env, sobj, handle);
+		rc = mdo_ref_del(env, sobj, handle);
+		if (!rc) {
+			if (S_ISDIR(attr->la_mode))
+				rc = mdo_ref_del(env, sobj, handle);
+			if (!rc)
+				rc = mdo_destroy(env, sobj, handle);
+		}
 		mdd_write_unlock(env, sobj);
+		if (rc)
+			RETURN(rc);
 	}
 
+	rc = mdd_migrate_update(env, spobj, tpobj, tobj, lname, attr,
+				spattr, tpattr, ldata, ma, handle);
+
 	RETURN(rc);
+}
+
+static int mdd_migrate_cmd_check(struct mdd_device *mdd,
+				 const struct lmv_mds_md_v1 *lmv,
+				 const struct lmv_user_md_v1 *lum,
+				 const struct lu_name *lname)
+{
+	__u32 lum_stripe_count = lum->lum_stripe_count;
+	__u32 lmv_hash_type = lmv->lmv_hash_type;
+	char *mdt_hash_name[] = { "none",
+				  LMV_HASH_NAME_ALL_CHARS,
+				  LMV_HASH_NAME_FNV_1A_64,
+				  LMV_HASH_NAME_CRUSH,
+	};
+
+	if (!lmv_is_sane(lmv))
+		return -EBADF;
+
+	/* if stripe_count unspecified, set to 1 */
+	if (!lum_stripe_count)
+		lum_stripe_count = cpu_to_le32(1);
+
+	lmv_hash_type &= ~cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
+
+	/* TODO: check specific MDTs */
+	if (lum_stripe_count != lmv->lmv_migrate_offset ||
+	    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
+	    (lum->lum_hash_type && lum->lum_hash_type != lmv_hash_type)) {
+		CERROR("%s: '"DNAME"' migration was interrupted, run 'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration.\n",
+			mdd2obd_dev(mdd)->obd_name, PNAME(lname),
+			le32_to_cpu(lmv->lmv_master_mdt_index),
+			le32_to_cpu(lmv->lmv_migrate_offset),
+			mdt_hash_name[le32_to_cpu(lmv_hash_type)],
+			PNAME(lname));
+		return -EPERM;
+	}
+
+	return -EALREADY;
 }
 
 /**
@@ -4068,11 +4118,11 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	struct lu_fid *fid = &info->mti_fid2;
 	struct lu_buf pbuf = { NULL };
 	struct lu_buf sbuf = { NULL };
-	struct lmv_mds_md_v1 *plmv;
+	struct lmv_mds_md_v1 *lmv;
 	struct thandle *handle;
-	bool do_create = true;
-	bool do_destroy = true;
+	bool nsonly = false;
 	int rc;
+
 	ENTRY;
 
 	rc = mdd_la_get(env, sobj, attr);
@@ -4084,36 +4134,36 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	if (rc < 0 && rc != -ENODATA)
 		RETURN(rc);
 
-	plmv = pbuf.lb_buf;
-	if (plmv) {
-		__u32 hash_type = le32_to_cpu(plmv->lmv_hash_type);
+	lmv = pbuf.lb_buf;
+	if (lmv) {
+		__u32 hash_type = le32_to_cpu(lmv->lmv_hash_type);
 		int index;
 
+		/* locate target parent stripe */
 		/* fail check here to make sure top dir migration succeed. */
 		if ((hash_type & LMV_HASH_FLAG_MIGRATION) &&
 		    OBD_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
 			GOTO(out, rc = -EIO);
 
-		index = lmv_name_to_stripe_index(plmv, lname->ln_name,
+		index = lmv_name_to_stripe_index(lmv, lname->ln_name,
 						 lname->ln_namelen);
 		if (index < 0)
 			GOTO(out, rc = index);
 
-		fid_le_to_cpu(fid, &plmv->lmv_stripe_fids[index]);
+		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[index]);
 		tpobj = mdd_object_find(env, mdd, fid);
 		if (IS_ERR(tpobj))
 			GOTO(out, rc = PTR_ERR(tpobj));
 
 		/* locate source parent stripe */
-		if (le32_to_cpu(plmv->lmv_hash_type) &
-		    LMV_HASH_FLAG_LAYOUT_CHANGE) {
-			index = lmv_name_to_stripe_index_old(plmv,
+		if (hash_type & LMV_HASH_FLAG_LAYOUT_CHANGE) {
+			index = lmv_name_to_stripe_index_old(lmv,
 							     lname->ln_name,
 							     lname->ln_namelen);
 			if (index < 0)
 				GOTO(out, rc = index);
 
-			fid_le_to_cpu(fid, &plmv->lmv_stripe_fids[index]);
+			fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[index]);
 			spobj = mdd_object_find(env, mdd, fid);
 			if (IS_ERR(spobj))
 				GOTO(out, rc = PTR_ERR(spobj));
@@ -4137,115 +4187,58 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 		GOTO(out, rc);
 
 	if (S_ISDIR(attr->la_mode)) {
-		struct lmv_user_md_v1 *lmu = spec->u.sp_ea.eadata;
+		struct lmv_user_md_v1 *lum = spec->u.sp_ea.eadata;
 
-		LASSERT(lmu);
+		LASSERT(lum);
 
-		/*
-		 * if user use default value '0' for stripe_count, we need to
+		/* if user use default value '0' for stripe_count, we need to
 		 * adjust it to '1' to create a 1-stripe directory.
 		 */
-		if (lmu->lum_stripe_count == 0) {
-			/* eadata is from request, don't alter it */
-			info->mti_lmu = *lmu;
-			info->mti_lmu.lum_stripe_count = cpu_to_le32(1);
-			spec->u.sp_ea.eadata = &info->mti_lmu;
-			lmu = spec->u.sp_ea.eadata;
-		}
+		if (lum->lum_stripe_count == 0)
+			lum->lum_stripe_count = cpu_to_le32(1);
 
 		rc = mdd_stripe_get(env, sobj, &sbuf, XATTR_NAME_LMV);
-		if (rc == -ENODATA) {
-			if (mdd_dir_is_empty(env, sobj) == 0) {
-				/*
-				 * if sobj is empty, and target is not striped,
-				 * create target as a normal directory.
-				 */
-				if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
-					info->mti_lmu = *lmu;
-					info->mti_lmu.lum_stripe_count = 0;
-					spec->u.sp_ea.eadata = &info->mti_lmu;
-					lmu = spec->u.sp_ea.eadata;
-				}
-			} else {
-				/*
-				 * sobj is not striped dir, if it's not empty,
-				 * it will be migrated to be a stripe of target,
-				 * don't destroy it after migration.
-				 */
-				do_destroy = false;
-			}
-		} else if (rc) {
+		if (rc && rc != -ENODATA)
 			GOTO(out, rc);
-		} else {
-			struct lmv_mds_md_v1 *lmv = sbuf.lb_buf;
 
-			if (le32_to_cpu(lmv->lmv_hash_type) &
-			    LMV_HASH_FLAG_MIGRATION) {
-				__u32 lum_stripe_count = lmu->lum_stripe_count;
-				__u32 lmv_hash_type = lmv->lmv_hash_type &
-					cpu_to_le32(LMV_HASH_TYPE_MASK);
-
-				if (!lum_stripe_count)
-					lum_stripe_count = cpu_to_le32(1);
-
-				/* TODO: check specific MDTs */
-				if (lmv->lmv_migrate_offset !=
-				    lum_stripe_count ||
-				    lmv->lmv_master_mdt_index !=
-				    lmu->lum_stripe_offset ||
-				    (lmu->lum_hash_type &&
-				     lmv_hash_type != lmu->lum_hash_type)) {
-					CERROR("%s: \'"DNAME"\' migration was "
-						"interrupted, run \'lfs migrate "
-						"-m %d -c %d -H %d "DNAME"\' to "
-						"finish migration.\n",
-						mdd2obd_dev(mdd)->obd_name,
-						PNAME(lname),
-						le32_to_cpu(
-						    lmv->lmv_master_mdt_index),
-						le32_to_cpu(
-						    lmv->lmv_migrate_offset),
-						le32_to_cpu(lmv_hash_type),
-						PNAME(lname));
-					GOTO(out, rc = -EPERM);
-				}
-				GOTO(out, rc = -EALREADY);
-			}
-		}
-	} else if (!mdd_object_remote(tpobj)) {
-		/*
-		 * if source is already on MDT where target parent is located,
-		 * no need to create, just update namespace.
-		 */
-		do_create = false;
-	} else if (S_ISLNK(attr->la_mode)) {
-		lu_buf_check_and_alloc(&sbuf, attr->la_size + 1);
-		if (!sbuf.lb_buf)
-			GOTO(out, rc = -ENOMEM);
-		rc = mdd_readlink(env, &sobj->mod_obj, &sbuf);
-		if (rc <= 0) {
-			rc = rc ?: -EFAULT;
-			CERROR("%s: "DFID" readlink failed: rc = %d\n",
-			       mdd_obj_dev_name(sobj),
-			       PFID(mdd_object_fid(sobj)), rc);
+		lmv = sbuf.lb_buf;
+		if (lmv &&
+		    (le32_to_cpu(lmv->lmv_hash_type) &
+		     LMV_HASH_FLAG_MIGRATION)) {
+			rc = mdd_migrate_cmd_check(mdd, lmv, lum, lname);
 			GOTO(out, rc);
 		}
-		spec->u.sp_symname = sbuf.lb_buf;
-	} else if (S_ISREG(attr->la_mode)) {
-		spec->sp_cr_flags |= MDS_OPEN_DELAY_CREATE;
-		spec->sp_cr_flags &= ~MDS_OPEN_HAS_EA;
+	} else {
+		if (spobj == tpobj)
+			GOTO(out, rc = -EALREADY);
+
+		/* update namespace only if @sobj is on MDT where @tpobj is. */
+		if (!mdd_object_remote(tpobj))
+			nsonly = true;
+
+		if (S_ISLNK(attr->la_mode)) {
+			lu_buf_check_and_alloc(&sbuf, attr->la_size + 1);
+			if (!sbuf.lb_buf)
+				GOTO(out, rc = -ENOMEM);
+
+			rc = mdd_readlink(env, &sobj->mod_obj, &sbuf);
+			if (rc <= 0) {
+				rc = rc ?: -EFAULT;
+				CERROR("%s: "DFID" readlink failed: rc = %d\n",
+				       mdd2obd_dev(mdd)->obd_name,
+				       PFID(mdd_object_fid(sobj)), rc);
+				GOTO(out, rc);
+			}
+		}
 	}
 
-	/*
-	 * if sobj has link on the same MDT, no need to create, just update
-	 * namespace, and it will be a remote file on target parent, which is
-	 * similar to rename.
-	 */
-	rc = migrate_linkea_prepare(env, mdd, spobj, tpobj, sobj, lname, attr,
-				    ldata);
+	/* linkea needs update upon FID or parent stripe change */
+	rc = mdd_migrate_linkea_prepare(env, mdd, spobj, tpobj, sobj, lname,
+					attr, ldata);
 	if (rc > 0)
-		do_create = false;
-	else if (rc)
+		/* update namespace only if @sobj has link on its MDT. */
+		nsonly = true;
+	else if (rc < 0)
 		GOTO(out, rc);
 
 	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
@@ -4253,23 +4246,19 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	if (rc)
 		GOTO(out, rc);
 
-	mdd_object_make_hint(env, tpobj, tobj, attr, spec, hint);
-
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		GOTO(out, rc = PTR_ERR(handle));
 
-	if (do_create) {
-		rc = mdd_declare_migrate_create(env, tpobj, sobj, tobj, lname,
-						attr, &sbuf, ldata, spec, hint,
+	if (nsonly)
+		rc = mdd_declare_migrate_update(env, spobj, tpobj, sobj, lname,
+						attr, spattr, tpattr, ldata, ma,
 						handle);
-		if (rc)
-			GOTO(stop_trans, rc);
-	}
-
-	rc = mdd_declare_migrate_update(env, spobj, tpobj, sobj, tobj, lname,
-					attr, spattr, tpattr, ldata, do_create,
-					do_destroy, ma, handle);
+	else
+		rc = mdd_declare_migrate_create(env, spobj, tpobj, sobj, tobj,
+						lname, spattr, tpattr, attr,
+						&sbuf, ldata, ma, spec, hint,
+						handle);
 	if (rc)
 		GOTO(stop_trans, rc);
 
@@ -4282,36 +4271,34 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	if (rc)
 		GOTO(stop_trans, rc);
 
-	if (do_create) {
-		rc = mdd_migrate_create(env, tpobj, sobj, tobj, lname, attr,
-					&sbuf, ldata, spec, hint, handle);
-		if (rc)
-			GOTO(stop_trans, rc);
-	}
-
-	rc = mdd_migrate_update(env, spobj, tpobj, sobj, tobj, lname, attr,
-				spattr, tpattr, ldata, do_create, do_destroy,
-				ma, handle);
+	if (nsonly)
+		rc = mdd_migrate_update(env, spobj, tpobj, sobj, lname, attr,
+					spattr, tpattr, ldata, ma, handle);
+	else
+		rc = mdd_migrate_create(env, spobj, tpobj, sobj, tobj, lname,
+					spattr, tpattr, attr, &sbuf, ldata, ma,
+					spec, hint, handle);
 	if (rc)
 		GOTO(stop_trans, rc);
 
-	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0, tobj,
-				    mdd_object_fid(spobj), mdd_object_fid(sobj),
-				    mdd_object_fid(tpobj), lname, lname,
-				    handle);
+	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0,
+				    nsonly ? sobj : tobj, mdd_object_fid(spobj),
+				    mdd_object_fid(sobj), mdd_object_fid(tpobj),
+				    lname, lname, handle);
 	if (rc)
 		GOTO(stop_trans, rc);
-
 	EXIT;
+
 stop_trans:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 out:
-	if (spobj && !IS_ERR(spobj))
+	if (!IS_ERR_OR_NULL(spobj))
 		mdd_object_put(env, spobj);
-	if (tpobj && !IS_ERR(tpobj))
+	if (!IS_ERR_OR_NULL(tpobj))
 		mdd_object_put(env, tpobj);
 	lu_buf_free(&sbuf);
 	lu_buf_free(&pbuf);
+
 	return rc;
 }
 

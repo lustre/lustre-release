@@ -3748,7 +3748,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
 	info->mti_spec.sp_permitted = 0;
-	info->mti_spec.sp_migrate_close = 0;
 
 	info->mti_spec.u.sp_ea.eadata = NULL;
 	info->mti_spec.u.sp_ea.eadatalen = 0;
