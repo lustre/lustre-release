@@ -1585,7 +1585,6 @@ int lfsck_assistant_engine(void *args)
 	struct ptlrpc_thread		  *athread = &lad->lad_thread;
 	struct lfsck_assistant_operations *lao     = lad->lad_ops;
 	struct lfsck_assistant_req	  *lar;
-	struct l_wait_info		   lwi     = { 0 };
 	int				   rc      = 0;
 	int				   rc1	   = 0;
 	int				   rc2;
@@ -1646,12 +1645,11 @@ int lfsck_assistant_engine(void *args)
 				GOTO(cleanup, rc);
 		}
 
-		l_wait_event(athread->t_ctl_waitq,
-			     !lfsck_assistant_req_empty(lad) ||
-			     test_bit(LAD_EXIT, &lad->lad_flags) ||
-			     test_bit(LAD_TO_POST, &lad->lad_flags) ||
-			     test_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags),
-			     &lwi);
+		wait_event_idle(athread->t_ctl_waitq,
+				!lfsck_assistant_req_empty(lad) ||
+				test_bit(LAD_EXIT, &lad->lad_flags) ||
+				test_bit(LAD_TO_POST, &lad->lad_flags) ||
+				test_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags));
 
 		if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags)))
 			GOTO(cleanup, rc = lad->lad_post_result);
