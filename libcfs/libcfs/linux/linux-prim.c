@@ -31,6 +31,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+
+#include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -101,6 +103,27 @@ time64_t ktime_get_seconds(void)
 }
 EXPORT_SYMBOL(ktime_get_seconds);
 #endif /* HAVE_KTIME_GET_SECONDS */
+
+static int (*cfs_apply_workqueue_attrs_t)(struct workqueue_struct *wq,
+					  const struct workqueue_attrs *attrs);
+
+int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
+			      const struct workqueue_attrs *attrs)
+{
+	return cfs_apply_workqueue_attrs_t(wq, attrs);
+}
+EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
+
+struct kmem_cache (*cfs_radix_tree_node_cachep);
+
+void cfs_arch_init(void)
+{
+#ifndef HAVE_WAIT_VAR_EVENT
+	wait_bit_init();
+#endif
+	cfs_apply_workqueue_attrs_t =
+		(void *)kallsyms_lookup_name("apply_workqueue_attrs");
+}
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 		     loff_t *pos)

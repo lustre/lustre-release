@@ -85,10 +85,16 @@ static inline void kernel_param_lock(struct module *mod)
 }
 #endif /* ! HAVE_KERNEL_PARAM_LOCK */
 
+int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
+			      const struct workqueue_attrs *attrs);
+
 #ifndef HAVE_KSTRTOBOOL_FROM_USER
 
 #define kstrtobool strtobool
 
 int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
-#endif
-#endif
+#endif /* HAVE_KSTRTOBOOL_FROM_USER */
+
+void cfs_arch_init(void);
+
+#endif /* __LIBCFS_LINUX_MISC_H__ */
