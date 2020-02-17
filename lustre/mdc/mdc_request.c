@@ -1088,7 +1088,12 @@ restart_bulk:
 			       exp->exp_obd->obd_name, -EIO);
 			RETURN(-EIO);
 		}
-		ssleep(resends);
+
+		/* If a signal interrupts then the timeout returned will
+		 * not be zero. In that case return -EINTR
+		 */
+		if (msleep_interruptible(resends * 1000))
+			RETURN(-EINTR);
 
 		goto restart_bulk;
 	}
