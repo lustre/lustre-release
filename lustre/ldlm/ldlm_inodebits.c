@@ -443,11 +443,9 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 	/* Lock is being converted already */
 	if (ldlm_is_converting(lock)) {
 		if (!(cancel_flags & LCF_ASYNC)) {
-			struct l_wait_info lwi = { 0 };
-
 			unlock_res_and_lock(lock);
-			l_wait_event(lock->l_waitq,
-				     is_lock_converted(lock), &lwi);
+			wait_event_idle(lock->l_waitq,
+					is_lock_converted(lock));
 			lock_res_and_lock(lock);
 		}
 		RETURN(0);
