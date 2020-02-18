@@ -2779,8 +2779,6 @@ void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev)
 		dt_object_put_nocache(env, scrub->os_obj);
 		scrub->os_obj = NULL;
 	}
-	if (dev->od_oi_table != NULL)
-		osd_oi_fini(osd_oti_get(env), dev);
 }
 
 /* object table based iteration APIs */
