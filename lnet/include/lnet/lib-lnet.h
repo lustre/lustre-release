@@ -841,6 +841,8 @@ static inline int lnet_push_target_resize_needed(void)
 }
 
 int lnet_push_target_resize(void);
+int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
+			  struct lnet_handle_md *mdh);
 void lnet_peer_push_event(struct lnet_event *ev);
 
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);

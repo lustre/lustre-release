@@ -504,6 +504,7 @@ struct lnet_ni {
 struct lnet_ping_buffer {
 	int			pb_nnis;
 	atomic_t		pb_refcnt;
+	bool			pb_needs_post;
 	struct lnet_ping_info	pb_info;
 };
 
