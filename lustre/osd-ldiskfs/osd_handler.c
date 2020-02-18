@@ -7741,6 +7741,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	osd_index_backup(env, o, false);
 	osd_shutdown(env, o);
 	osd_procfs_fini(o);
+	if (o->od_oi_table != NULL)
+		osd_oi_fini(osd_oti_get(env), o);
 	osd_obj_map_fini(o);
 	osd_umount(env, o);
 
