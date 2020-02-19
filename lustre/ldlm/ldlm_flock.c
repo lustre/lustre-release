@@ -364,13 +364,13 @@ reprocess:
 				continue;
 
 			if (intention != LDLM_PROCESS_ENQUEUE) {
-				reprocess_failed = 1;
 				if (ldlm_flock_deadlock(req, lock)) {
 					ldlm_flock_cancel_on_deadlock(
 						req, grant_work);
 					RETURN(LDLM_ITER_CONTINUE);
 				}
-				continue;
+				reprocess_failed = 1;
+				break;
 			}
 
 			if (*flags & LDLM_FL_BLOCK_NOWAIT) {
