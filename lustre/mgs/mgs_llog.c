@@ -1594,7 +1594,9 @@ int mgs_replace_nids(const struct lu_env *env,
 	}
 
 	/* Process client llogs */
-	name_create(&logname, fsname, "-client");
+	rc = name_create(&logname, fsname, "-client");
+	if (rc)
+		GOTO(out, rc);
 	rc = mgs_replace_nids_log(env, mgs_obd, logname, devname, nids);
 	name_destroy(&logname);
 	if (rc) {
@@ -1607,7 +1609,9 @@ int mgs_replace_nids(const struct lu_env *env,
 	for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
 		if (!test_bit(i, fsdb->fsdb_mdt_index_map))
 			continue;
-		name_create_mdt(&logname, fsname, i);
+		rc = name_create_mdt(&logname, fsname, i);
+		if (rc)
+			GOTO(out, rc);
 		rc = mgs_replace_nids_log(env, mgs_obd, logname, devname, nids);
 		name_destroy(&logname);
 		if (rc)
