@@ -21,6 +21,11 @@
 
 #include "socklnd.h"
 
+#include <linux/kvm_host.h>
+#if defined(__x86_64__) || defined(__i386__)
+#include <asm/hypervisor.h>
+#endif
+
 static int sock_timeout = 50;
 module_param(sock_timeout, int, 0644);
 MODULE_PARM_DESC(sock_timeout, "dead socket timeout (seconds)");
@@ -153,39 +158,49 @@ module_param(protocol, int, 0644);
 MODULE_PARM_DESC(protocol, "protocol version");
 #endif
 
+static inline bool is_native_host(void)
+{
+#ifdef HAVE_HYPERVISOR_IS_TYPE
+	return hypervisor_is_type(X86_HYPER_NATIVE);
+#elif defined(__x86_64__) || defined(__i386__)
+	return x86_hyper == NULL;
+#else
+	return true;
+#endif
+}
+
 struct ksock_tunables ksocknal_tunables;
 
 int ksocknal_tunables_init(void)
 {
-
-        /* initialize ksocknal_tunables structure */
-        ksocknal_tunables.ksnd_timeout            = &sock_timeout;
+	/* initialize ksocknal_tunables structure */
+	ksocknal_tunables.ksnd_timeout            = &sock_timeout;
 	ksocknal_tunables.ksnd_nscheds		  = &nscheds;
-        ksocknal_tunables.ksnd_nconnds            = &nconnds;
-        ksocknal_tunables.ksnd_nconnds_max        = &nconnds_max;
-        ksocknal_tunables.ksnd_min_reconnectms    = &min_reconnectms;
-        ksocknal_tunables.ksnd_max_reconnectms    = &max_reconnectms;
-        ksocknal_tunables.ksnd_eager_ack          = &eager_ack;
-        ksocknal_tunables.ksnd_typed_conns        = &typed_conns;
-        ksocknal_tunables.ksnd_min_bulk           = &min_bulk;
-        ksocknal_tunables.ksnd_tx_buffer_size     = &tx_buffer_size;
-        ksocknal_tunables.ksnd_rx_buffer_size     = &rx_buffer_size;
-        ksocknal_tunables.ksnd_nagle              = &nagle;
-        ksocknal_tunables.ksnd_round_robin        = &round_robin;
-        ksocknal_tunables.ksnd_keepalive          = &keepalive;
-        ksocknal_tunables.ksnd_keepalive_idle     = &keepalive_idle;
-        ksocknal_tunables.ksnd_keepalive_count    = &keepalive_count;
-        ksocknal_tunables.ksnd_keepalive_intvl    = &keepalive_intvl;
-        ksocknal_tunables.ksnd_credits            = &credits;
-        ksocknal_tunables.ksnd_peertxcredits      = &peer_credits;
-        ksocknal_tunables.ksnd_peerrtrcredits     = &peer_buffer_credits;
-        ksocknal_tunables.ksnd_peertimeout        = &peer_timeout;
-        ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
-        ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
-        ksocknal_tunables.ksnd_nonblk_zcack       = &nonblk_zcack;
-        ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
-        ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
-        ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
+	ksocknal_tunables.ksnd_nconnds            = &nconnds;
+	ksocknal_tunables.ksnd_nconnds_max        = &nconnds_max;
+	ksocknal_tunables.ksnd_min_reconnectms    = &min_reconnectms;
+	ksocknal_tunables.ksnd_max_reconnectms    = &max_reconnectms;
+	ksocknal_tunables.ksnd_eager_ack          = &eager_ack;
+	ksocknal_tunables.ksnd_typed_conns        = &typed_conns;
+	ksocknal_tunables.ksnd_min_bulk           = &min_bulk;
+	ksocknal_tunables.ksnd_tx_buffer_size     = &tx_buffer_size;
+	ksocknal_tunables.ksnd_rx_buffer_size     = &rx_buffer_size;
+	ksocknal_tunables.ksnd_nagle              = &nagle;
+	ksocknal_tunables.ksnd_round_robin        = &round_robin;
+	ksocknal_tunables.ksnd_keepalive          = &keepalive;
+	ksocknal_tunables.ksnd_keepalive_idle     = &keepalive_idle;
+	ksocknal_tunables.ksnd_keepalive_count    = &keepalive_count;
+	ksocknal_tunables.ksnd_keepalive_intvl    = &keepalive_intvl;
+	ksocknal_tunables.ksnd_credits            = &credits;
+	ksocknal_tunables.ksnd_peertxcredits      = &peer_credits;
+	ksocknal_tunables.ksnd_peerrtrcredits     = &peer_buffer_credits;
+	ksocknal_tunables.ksnd_peertimeout        = &peer_timeout;
+	ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
+	ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
+	ksocknal_tunables.ksnd_nonblk_zcack       = &nonblk_zcack;
+	ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
+	ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
+	ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
 
 	if (enable_irq_affinity) {
 		CWARN("irq_affinity is removed from socklnd because modern "
@@ -193,19 +208,25 @@ int ksocknal_tunables_init(void)
 		      "# NICs, although you still can set irq_affinity by "
 		      "another way, please check manual for details.\n");
 	}
-        ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
+	ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
 
 #ifdef SOCKNAL_BACKOFF
-        ksocknal_tunables.ksnd_backoff_init       = &backoff_init;
-        ksocknal_tunables.ksnd_backoff_max        = &backoff_max;
+	ksocknal_tunables.ksnd_backoff_init       = &backoff_init;
+	ksocknal_tunables.ksnd_backoff_max        = &backoff_max;
 #endif
 
 #if SOCKNAL_VERSION_DEBUG
-        ksocknal_tunables.ksnd_protocol           = &protocol;
+	ksocknal_tunables.ksnd_protocol           = &protocol;
 #endif
 
-        if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
-                *ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
+	if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
+		*ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
+
+	/* When on a hypervisor set the minimum zero copy size
+	 * above the maximum payload size
+	 */
+	if (!is_native_host())
+		*ksocknal_tunables.ksnd_zc_min_payload = (16 << 20) + 1;
 
 	return 0;
 };
