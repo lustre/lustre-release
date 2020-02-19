@@ -214,7 +214,7 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 	/* lock reference taken by ldlm_handle2lock_long() is
 	 * owned by osc_lock and released in osc_lock_detach()
 	 */
-	lu_ref_add(&dlmlock->l_reference, "osc_lock", oscl);
+	lu_ref_add_atomic(&dlmlock->l_reference, "osc_lock", oscl);
 	oscl->ols_has_ref = 1;
 
 	LASSERT(oscl->ols_dlmlock == NULL);

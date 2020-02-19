@@ -617,7 +617,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 	/* It's unlikely but possible that someone marked the lock as
 	 * destroyed after we did handle2object on it */
 	if ((flags == 0) && !ldlm_is_destroyed(lock)) {
-		lu_ref_add(&lock->l_reference, "handle", current);
+		lu_ref_add_atomic(&lock->l_reference, "handle", current);
 		RETURN(lock);
 	}
 
