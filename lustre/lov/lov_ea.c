@@ -207,8 +207,12 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	/* with Data-on-MDT set maxbytes to stripe size */
 	if (lsme_is_dom(lsme)) {
-		lov_bytes = lsme->lsme_stripe_size;
-		goto out_dom;
+		if (maxbytes) {
+			lov_bytes = lsme->lsme_stripe_size;
+			goto out_dom1;
+		} else {
+			goto out_dom2;
+		}
 	}
 
 	for (i = 0; i < stripe_count; i++) {
@@ -249,18 +253,21 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 			min_stripe_maxbytes = lov_bytes;
 	}
 
-	if (min_stripe_maxbytes == 0)
-		min_stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
-
-	lov_bytes = min_stripe_maxbytes * stripe_count;
-
-out_dom:
 	if (maxbytes) {
-		if (lov_bytes < min_stripe_maxbytes) /* handle overflow */
-			*maxbytes = MAX_LFS_FILESIZE;
+		if (min_stripe_maxbytes == 0)
+			min_stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
+
+		if (stripe_count == 0)
+			stripe_count = lov->desc.ld_tgt_count;
+
+		if (min_stripe_maxbytes <= LLONG_MAX / stripe_count)
+			lov_bytes = min_stripe_maxbytes * stripe_count;
 		else
-			*maxbytes = lov_bytes;
+			lov_bytes = MAX_LFS_FILESIZE;
+out_dom1:
+		*maxbytes = min_t(loff_t, lov_bytes, MAX_LFS_FILESIZE);
 	}
+out_dom2:
 
 	return lsme;
 
