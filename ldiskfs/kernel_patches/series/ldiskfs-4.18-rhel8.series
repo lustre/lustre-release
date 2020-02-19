@@ -23,4 +23,3 @@ ubuntu18/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-in
 rhel8/ext4-export-mb-stream-allocator-variables.patch
 rhel8/ext4-simple-blockalloc.patch
 rhel8/ext4-mballoc-skip-uninit-groups-cr0.patch
-rhel8/ext4-mballoc-prefetch.patch
