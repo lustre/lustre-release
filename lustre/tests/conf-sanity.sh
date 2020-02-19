@@ -113,6 +113,16 @@ start_mdt() {
 	start $facet ${dev} $MDS_MOUNT_OPTS $@ || return 94
 }
 
+stop_mdt_no_force() {
+	local num=$1
+	local facet=mds$num
+	local dev=$(mdsdevname $num)
+	shift 1
+
+	echo "stop mds service on `facet_active_host $facet`"
+	stop $facet || return 97
+}
+
 stop_mdt() {
 	local num=$1
 	local facet=mds$num
@@ -1427,6 +1437,16 @@ test_32newtarball() {
 	echo $T32_BLIMIT > $tmp/img/blimit
 	echo $T32_ILIMIT > $tmp/img/ilimit
 
+	$MULTIOP /mnt/$FSNAME/orph_file Ouw_c&
+	pid=$!
+	sync
+	stop_mdt_no_force 1
+	debugfs -R "ls /PENDING" ${MDSDEV1:-$MDSDEV}
+	cp ${MDSDEV1:-$MDSDEV} $tmp/img
+	start_mdt 1
+	kill -s USR1 $pid
+	wait $pid
+
 	stopall
 
 	pushd $tmp/src
@@ -1440,7 +1460,6 @@ test_32newtarball() {
 	uname -r >$tmp/img/kernel
 	uname -m >$tmp/img/arch
 
-	mv ${MDSDEV1:-$MDSDEV} $tmp/img
 	for num in $(seq 2 $MDSCOUNT); do
 		local devname=$(mdsdevname $num)
 		local facet=mds$num
@@ -2318,6 +2337,19 @@ t32_test() {
 		}
 		shall_cleanup_lustre=false
 	else
+		$MOUNT_CMD $nid:/$fsname $tmp/mnt/lustre || {
+			error_noexit "Mounting the client"
+			return 1
+		}
+
+		[[ $(do_facet mds1 pgrep orph_.*-MDD | wc -l) == 0 ]] ||
+			error "MDD orphan cleanup thread not quit"
+
+		umount $tmp/mnt/lustre || {
+			error_noexit "Unmounting the client"
+			return 1
+		}
+
 		if [[ "$dne_upgrade" != "no" ]] || $mdt2_is_available; then
 			$r $UMOUNT $tmp/mnt/mdt1 || {
 				error_noexit "Unmounting the MDT2"
@@ -2389,6 +2421,7 @@ test_32a() {
 
 	t32_check
 	for tarball in $tarballs; do
+		banner "testing $tarball upgrade"
 		t32_test $tarball || let "rc += $?"
 	done
 	return $rc
@@ -2402,6 +2435,7 @@ test_32b() {
 
 	t32_check
 	for tarball in $tarballs; do
+		banner "testing $tarball upgrade with writeconf"
 		t32_test $tarball writeconf || let "rc += $?"
 	done
 	return $rc
@@ -2417,8 +2451,9 @@ test_32c() {
 	t32_check
 	for tarball in $tarballs; do
 		# Do not support 1_8 and 2_1 direct upgrade to DNE2 anymore */
-		echo $tarball | grep "1_8" && continue
-		echo $tarball | grep "2_1" && continue
+		[[ "$tarball" =~ "1_8" ]] && echo "skip $tarball" && continue
+		[[ "$tarball" =~ "2_1" ]] && echo "skip $tarball" && continue
+		banner "testing $tarball upgrade with DNE"
 		load_modules
 		dne_upgrade=yes t32_test $tarball writeconf || rc=$?
 	done
@@ -2433,6 +2468,7 @@ test_32d() {
 
 	t32_check
 	for tarball in $tarballs; do
+		banner "testing $tarball upgrade with ff convert"
 		ff_convert=yes t32_test $tarball || rc=$?
 	done
 	return $rc
@@ -2449,8 +2485,9 @@ test_32e() {
 
 	t32_check
 	for tarball in $tarballs; do
-		echo $tarball | grep "2_9" || continue
+		[[ "$tarball" =~ "2_9" ]] || continue
 		#load_modules
+		banner "testing $tarball upgrade with DoM"
 		dom_upgrade=yes t32_test $tarball writeconf || let "rc += $?"
 	done
 	return $rc
