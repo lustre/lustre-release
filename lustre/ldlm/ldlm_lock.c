@@ -2204,8 +2204,11 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	arg->gl_interpret_data = gl_work->gl_interpret_data;
 
 	/* invoke the actual glimpse callback */
-	if (lock->l_glimpse_ast(lock, (void*)arg) == 0)
-		rc = 1;
+	rc = lock->l_glimpse_ast(lock, (void *)arg);
+	if (rc == 0)
+		rc = 1; /* update LVB if this is server lock */
+	else if (rc == -ELDLM_NO_LOCK_DATA)
+		ldlm_lvbo_update(lock->l_resource, lock, NULL, 1);
 
 	LDLM_LOCK_RELEASE(lock);
 	if (gl_work->gl_flags & LDLM_GL_WORK_SLAB_ALLOCATED)
