@@ -1400,6 +1400,13 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	LINVRNT(osd_invariant(obj));
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
+	    cfs_fail_val == 2) {
+		struct osd_thread_info *info = osd_oti_get(env);
+		struct osd_idmap_cache *oic = &info->oti_cache;
+		/* invalidate thread cache */
+		memset(&oic->oic_fid, 0, sizeof(oic->oic_fid));
+	}
 	if (fid_is_otable_it(&l->lo_header->loh_fid)) {
 		obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
 		l->lo_header->loh_attr |= LOHA_EXISTS;

@@ -140,6 +140,7 @@ static int server_deregister_mount(const char *name)
 	OBD_FREE(lmi, sizeof(*lmi));
 	mutex_unlock(&lustre_mount_info_lock);
 
+	OBD_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
 	RETURN(0);
 }
 

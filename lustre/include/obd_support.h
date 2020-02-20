@@ -237,6 +237,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED2 0x15b
 #define OBD_FAIL_MDS_FLD_LOOKUP			0x15c
 #define OBD_FAIL_MDS_CHANGELOG_REORDER	0x15d
+#define OBD_FAIL_MDS_LLOG_UMOUNT_RACE   0x15e
 #define OBD_FAIL_MDS_INTENT_DELAY		0x160
 #define OBD_FAIL_MDS_XATTR_REP			0x161
 #define OBD_FAIL_MDS_TRACK_OVERFLOW	 0x162
@@ -702,7 +703,7 @@ extern char obd_jobid_var[];
 
 /* LNet is allocated failure locations 0xe000 to 0xffff */
 /* Assign references to moved code to reduce code changes */
-#define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
+#define OBD_FAIL_PRECHECK(id)                   (unlikely(CFS_FAIL_PRECHECK(id)))
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)
 #define OBD_FAIL_CHECK_VALUE(id, value)         CFS_FAIL_CHECK_VALUE(id, value)
 #define OBD_FAIL_CHECK_ORSET(id, value)         CFS_FAIL_CHECK_ORSET(id, value)

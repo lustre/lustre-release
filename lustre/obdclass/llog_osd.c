@@ -1309,7 +1309,12 @@ generate:
 			GOTO(out, rc);
 		new_id = true;
 	}
-
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
+	    cfs_fail_val == 1) {
+		cfs_fail_val = 2;
+		OBD_RACE(OBD_FAIL_MDS_LLOG_UMOUNT_RACE);
+		msleep(MSEC_PER_SEC);
+	}
 	o = ls_locate(env, ls, &lgi->lgi_fid, NULL);
 	if (IS_ERR(o))
 		GOTO(out_name, rc = PTR_ERR(o));

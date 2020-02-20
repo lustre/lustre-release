@@ -19537,6 +19537,25 @@ test_278() {
 }
 run_test 278 "Race starting MDS between MDTs stop/start"
 
+test_280() {
+	[ $MGS_VERSION -lt $(version_code 2.13.52) ] &&
+		skip "Need MGS version at least 2.13.52"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	combined_mgs_mds || skip "needs combined MGS/MDT"
+
+	umount_client $MOUNT
+#define OBD_FAIL_MDS_LLOG_UMOUNT_RACE   0x15e
+	do_facet mgs $LCTL set_param fail_loc=0x8000015e fail_val=0
+
+	mount_client $MOUNT &
+	sleep 1
+	stop mgs || error "stop mgs failed"
+	#for a race mgs would crash
+	start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "start mgs failed"
+	mount_client $MOUNT || error "mount client failed"
+}
+run_test 280 "Race between MGS umount and client llog processing"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
