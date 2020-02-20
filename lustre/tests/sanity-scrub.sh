@@ -86,8 +86,8 @@ SHOW_SCRUB="do_facet $SINGLEMDS \
 		$LCTL get_param -n osd-*.${MDT_DEV}.oi_scrub"
 SHOW_SCRUB_ON_OST="do_facet ost1 \
 		$LCTL get_param -n osd-*.${OST_DEV}.oi_scrub"
-MOUNT_OPTS_SCRUB="-o user_xattr"
-MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
+MOUNT_OPTS_SCRUB="$MDS_MOUNT_OPTS -o user_xattr"
+MOUNT_OPTS_NOSCRUB="$MDS_MOUNT_OPTS -o user_xattr,noscrub"
 
 scrub_prep() {
 	local nfiles=$1
@@ -356,7 +356,7 @@ test_1a() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	scrub_prep 0
-	echo "start $SINGLEMDS without disabling OI scrub"
+	echo "start $SINGLEMDS without disabling OI scrub: $MOUNT_OPTS_SCRUB"
 	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
 
 	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
@@ -373,7 +373,7 @@ test_1a() {
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(6) Fail to stop MDS!"
 
-	echo "start $SINGLEMDS with disabling OI scrub"
+	echo "start $SINGLEMDS with disabling OI scrub: $MOUNT_OPTS_NOSCRUB"
 	start $SINGLEMDS $(mdsdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(7) Fail to start MDS!"
 

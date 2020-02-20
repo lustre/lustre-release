@@ -2890,7 +2890,7 @@ test_138() {
 	sleep 55
 	stop $SINGLEMDS || error "stop MDS failed"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) ||
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
 		error "start MDS failed"
 	zconf_mount_clients $CLIENTS $MOUNT
 }
@@ -2929,7 +2929,7 @@ test_140a() {
 	mount_mds_client
 
 	local cnt
-	cnt=$(do_facet mds1 $LCTL get_param "mdt.*.exports.*.export" |
+	cnt=$(do_facet mds1 $LCTL get_param "mdt.*MDT0000.exports.*.export" |
 		grep export_flags.*no_recovery | wc -l)
 	echo "$cnt clients with recovery disabled"
 	umount_mds_client
@@ -2940,7 +2940,7 @@ test_140a() {
 	do_facet mds1 $LCTL set_param mdt.*.local_recovery=1
 	mount_mds_client
 
-	cnt=$(do_facet mds1 $LCTL get_param "mdt.*.exports.*.export" |
+	cnt=$(do_facet mds1 $LCTL get_param "mdt.*MDT0000.exports.*.export" |
 		grep export_flags.*no_recovery | wc -l)
 	echo "$cnt clients with recovery disabled"
 	umount_mds_client
