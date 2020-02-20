@@ -645,7 +645,7 @@ run_ior() {
 
 	local cmd
 	if [ -n "$ior_custom_params" ]; then
-		cmd="$IOR $ior_custom_params -o $testdir/iorData"
+		cmd="$IOR -o $testdir/iorData $ior_custom_params"
 	else
 		cmd="$IOR -a $ior_type -b ${ior_blockSize}${ior_blockUnit} \
 		-o $testdir/iorData -t $ior_xferSize -v -C -w -r -W \
