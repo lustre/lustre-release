@@ -35,6 +35,18 @@ if [ "$SLOW" = no ]; then
     [ $smoke_DURATION -le 300 ] || smoke_DURATION=300
 fi
 
+lst_TESTS=${lst_TESTS:-"write read ping"}
+
+# "none" -> LST_BRW_CHECK_NONE
+# "full" -> LST_BRW_CHECK_FULL
+# "simple" -> LST_BRW_CHECK_SIMPLE
+lst_CHECK=${lst_CHECK:-"full"}
+
+case $lst_CHECK in
+	full|simple) check="check=$lst_CHECK";;
+	none) check="";;
+	*) error Unknown flag $lst_CHECK;;
+esac
 nodes=$(comma_list "$(osts_nodes) $(mdts_nodes)")
 lst_SERVERS=${lst_SERVERS:-$(comma_list "$(host_nids_address $nodes $NETTYPE)")}
 lst_CLIENTS=${lst_CLIENTS:-$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")}
@@ -91,7 +103,6 @@ test_smoke_sub () {
     local servers=$1
     local clients=$2
 
-
     local nc=$(echo ${clients//,/ } | wc -w)
     local ns=$(echo ${servers//,/ } | wc -w)
     echo '#!/bin/bash'
@@ -104,24 +115,27 @@ test_smoke_sub () {
     echo "$LST add_group s $(nids_list $servers)"
     echo "$LST add_batch b"
 
-    pre="$LST add_test --batch b --loop $lst_LOOP "
-    for t in "brw read" "brw write" ; do
-        for s in $lst_SIZES; do
-            for c in $lst_CONCR; do
-                for d in "${nc}:${ns} --from c --to s" "${ns}:${nc} --from s --to c"; do
-                    echo -n "$pre"
-                    echo " --concurrency $c --distribute $d $t check=full size=$s"
-                 done
-            done
-        done
-    done
-
-    for c in $lst_CONCR; do
-        for d in "${nc}:${ns} --from c --to s" "${ns}:${nc} --from s --to c"; do
-            echo -n "$pre"
-            echo " --concurrency $c --distribute $d ping "
-        done
-    done
+	pre="$LST add_test --batch b --loop $lst_LOOP "
+	for t in $lst_TESTS; do
+		for s in $lst_SIZES; do
+			for c in $lst_CONCR; do
+				for d in "${nc}:${ns} --from c --to s" \
+					"${ns}:${nc} --from s --to c"; do
+					echo -n "$pre --concurrency $c"\
+						" --distribute $d "
+					case $t in
+						read|write)
+							echo -n "brw $t" \
+							" $check size=$s";;
+						ping)
+							echo -n $t;;
+						*) error Unknonwn LST test;;
+					esac
+					echo
+				done
+			done
+		done
+	done
 
     echo $LST run b
     echo sleep 1
