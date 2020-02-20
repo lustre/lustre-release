@@ -282,6 +282,25 @@ print_opts () {
     [ -e $MACHINEFILE ] && cat $MACHINEFILE
 }
 
+is_lustre () {
+	[ "$(stat -f -c %T $1)" = "lustre" ]
+}
+
+setstripe_getstripe () {
+	local file=$1
+	shift
+	local params=$@
+
+	is_lustre $file || return 0
+
+	if [ -n "$params" ]; then
+		$LFS setstripe $params $file ||
+			error "setstripe $params failed"
+	fi
+	$LFS getstripe $file ||
+		error "getstripe $file failed"
+}
+
 run_compilebench() {
 	local dir=${1:-$DIR}
 	local cbench_DIR=${cbench_DIR:-""}
@@ -315,6 +334,7 @@ run_compilebench() {
 	# local testdir=$DIR/$tdir
 	local testdir=$dir/d0.compilebench.$$
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $cbench_STRIPEPARAMS
 
     local savePWD=$PWD
     cd $cbench_DIR
@@ -348,6 +368,8 @@ run_metabench() {
 
 	local testdir=$dir/d0.metabench
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $mbench_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -396,6 +418,8 @@ run_simul() {
 
 	local testdir=$DIR/d0.simul
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $simul_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -443,6 +467,8 @@ run_mdtest() {
 
 	local testdir=$DIR/d0.mdtest
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $mdtest_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -495,6 +521,7 @@ run_connectathon() {
 
 	local testdir=$dir/d0.connectathon
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $cnt_STRIPEPARAMS
 
 	local savePWD=$PWD
 	cd $cnt_DIR
@@ -595,13 +622,14 @@ run_ior() {
 	print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
 	mkdir -p $testdir
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
-	if [ -z "$NFSCLIENT" ]; then
-		ior_stripe_params=${ior_stripe_params:-"-c -1"}
-		$LFS setstripe $testdir $ior_stripe_params ||
-			{ error "setstripe failed" && return 2; }
-	fi
+	[[ "$ior_stripe_params" && -z "$ior_STRIPEPARAMS" ]] &&
+		ior_STRIPEPARAMS="$ior_stripe_params" &&
+		echo "got deprecated ior_stripe_params,"\
+			"use ior_STRIPEPARAMS instead"
+	setstripe_getstripe $testdir $ior_STRIPEPARAMS
 
 	#
 	# -b N  blockSize --
@@ -655,16 +683,18 @@ run_mib() {
 	mib_xferSize=${mib_xferSize:-1m}
 	mib_xferLimit=${mib_xferLimit:-5000}
 	mib_timeLimit=${mib_timeLimit:-300}
+	mib_STRIPEPARAMS=${mib_STRIPEPARAMS:-"-c -1"}
 
 	print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit \
 		MACHINEFILE
 
 	local testdir=$DIR/d0.mib
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $mib_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
-	$LFS setstripe $testdir -c -1 ||
-		error "setstripe failed"
+
 	#
 	# -I    Show intermediate values in output
 	# -H    Show headers in output
@@ -709,6 +739,8 @@ run_cascading_rw() {
 
 	local testdir=$DIR/d0.cascading_rw
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $casc_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -749,6 +781,8 @@ run_write_append_truncate() {
 
 	mkdir -p $testdir
 	# mpi_run uses mpiuser
+	setstripe_getstripe $testdir $write_STRIPEPARAMS
+
 	chmod 0777 $testdir
 
 	local cmd="write_append_truncate -n $write_REP $file"
@@ -776,15 +810,17 @@ run_write_disjoint() {
 	wdisjoint_REP=${wdisjoint_REP:-10000}
 	chunk_size_limit=$1
 
-    # FIXME
-    # Need space estimation here.
+	# FIXME
+	# Need space estimation here.
 
-    print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP \
-        MACHINEFILE
-    local testdir=$DIR/d0.write_disjoint
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
+	print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP \
+		MACHINEFILE
+	local testdir=$DIR/d0.write_disjoint
+	mkdir -p $testdir
+	setstripe_getstripe $testdir $wdisjoint_STRIPEPARAMS
+
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
 	local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP -m \
 			$chunk_size_limit"
@@ -813,6 +849,8 @@ run_parallel_grouplock() {
 
 	local testdir=$DIR/d0.parallel_grouplock
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $parallel_grouplock_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -867,19 +905,21 @@ run_statahead () {
 
 	# create large dir
 
-    # do not use default "d[0-9]*" dir name
-    # to avoid of rm $statahead_NUMFILES (500k) files in t-f cleanup
-    local dir=dstatahead
-    local testdir=$DIR/$dir
+	# do not use default "d[0-9]*" dir name
+	# to avoid of rm $statahead_NUMFILES (500k) files in t-f cleanup
+	local dir=dstatahead
+	local testdir=$DIR/$dir
 
-    # cleanup only if dir exists
-    # cleanup only $statahead_NUMFILES number of files
-    # ignore the other files created by someone else
-    [ -d $testdir ] &&
-        mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
-            $statahead_NUMFILES $testdir 'f%%d' --ignore
+	# cleanup only if dir exists
+	# cleanup only $statahead_NUMFILES number of files
+	# ignore the other files created by someone else
+	[ -d $testdir ] &&
+	mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
+		$statahead_NUMFILES $testdir 'f%%d' --ignore
 
-    mkdir -p $testdir
+	mkdir -p $testdir
+	setstripe_getstripe $testdir $statahead_STRIPEPARAMS
+
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
@@ -967,8 +1007,9 @@ run_rr_alloc() {
 	else
 		[ -e $DIR/$tdir ] || $LFS mkdir -i 0 $DIR/$tdir
 	fi
+	setstripe_getstripe $DIR/$tdir $rr_alloc_STRIPEPARAMS
+
 	chmod 0777 $DIR/$tdir
-	$LFS setstripe -c 1 /$DIR/$tdir
 
 	trap "cleanup_rr_alloc $clients $mntpt_root $rr_alloc_MNTPTS" EXIT ERR
 	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
@@ -1097,6 +1138,8 @@ run_fs_test() {
 	print_opts FS_TEST clients fs_test_threads fs_test_objsize MACHINEFILE
 
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $fs_test_STRIPEPARAMS
+
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
@@ -1167,6 +1210,7 @@ run_fio() {
 	[ x$FIO = x ] && skip_env "FIO not found"
 
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $fio_STRIPEPARAMS
 
 	# use fio job file if exists,
 	# create a simple one if missing
@@ -1236,6 +1280,7 @@ run_xdd() {
 		xdd_mbytes xdd_passes xdd_rwratio
 
 	mkdir -p $testdir
+	setstripe_getstripe $testdir $xdd_STRIPEPARAMS
 
 	local files=""
 	# Target files creates based on the given number of targets
