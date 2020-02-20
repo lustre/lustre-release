@@ -70,17 +70,28 @@ static void ll_destroy_inode(struct inode *inode)
 	call_rcu(&inode->i_rcu, ll_inode_destroy_callback);
 }
 
+static int ll_drop_inode(struct inode *inode)
+{
+	int drop = generic_drop_inode(inode);
+
+	if (!drop)
+		drop = llcrypt_drop_inode(inode);
+
+	return drop;
+}
+
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
-        .alloc_inode   = ll_alloc_inode,
-        .destroy_inode = ll_destroy_inode,
-        .evict_inode   = ll_delete_inode,
-        .put_super     = ll_put_super,
-        .statfs        = ll_statfs,
-        .umount_begin  = ll_umount_begin,
-        .remount_fs    = ll_remount_fs,
-        .show_options  = ll_show_options,
+	.alloc_inode   = ll_alloc_inode,
+	.destroy_inode = ll_destroy_inode,
+	.drop_inode    = ll_drop_inode,
+	.evict_inode   = ll_delete_inode,
+	.put_super     = ll_put_super,
+	.statfs        = ll_statfs,
+	.umount_begin  = ll_umount_begin,
+	.remount_fs    = ll_remount_fs,
+	.show_options  = ll_show_options,
 };
 
 static int __init lustre_init(void)

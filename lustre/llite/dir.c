@@ -50,6 +50,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <uapi/linux/llcrypt.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
@@ -2140,6 +2141,33 @@ out_detach:
 		OBD_FREE_PTR(detach);
 		RETURN(rc);
 	}
+#ifdef HAVE_LUSTRE_CRYPTO
+	case LL_IOC_SET_ENCRYPTION_POLICY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_set_policy(file, (const void __user *)arg);
+	case LL_IOC_GET_ENCRYPTION_POLICY_EX:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_get_policy_ex(file, (void __user *)arg);
+	case LL_IOC_ADD_ENCRYPTION_KEY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_add_key(file, (void __user *)arg);
+	case LL_IOC_REMOVE_ENCRYPTION_KEY:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_remove_key(file, (void __user *)arg);
+	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_remove_key_all_users(file,
+							  (void __user *)arg);
+	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
+		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
+			return -EOPNOTSUPP;
+		return llcrypt_ioctl_get_key_status(file, (void __user *)arg);
+#endif
 	default:
 		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL,
 				     (void __user *)arg));
