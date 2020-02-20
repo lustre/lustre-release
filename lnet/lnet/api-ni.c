@@ -1854,14 +1854,16 @@ int lnet_push_target_resize(void)
 	struct lnet_handle_md old_mdh;
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_ping_buffer *old_pbuf;
-	int nnis = the_lnet.ln_push_target_nnis;
+	int nnis;
 	int rc;
 
+again:
+	nnis = the_lnet.ln_push_target_nnis;
 	if (nnis <= 0) {
 		rc = -EINVAL;
 		goto fail_return;
 	}
-again:
+
 	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
 	if (!pbuf) {
 		rc = -ENOMEM;
