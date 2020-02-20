@@ -3144,6 +3144,7 @@ static inline int lmv_unpack_user_md(struct obd_export *exp,
 	lsm->lsm_md_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
 	lsm->lsm_md_master_mdt_index = le32_to_cpu(lmu->lum_stripe_offset);
 	lsm->lsm_md_hash_type = le32_to_cpu(lmu->lum_hash_type);
+	lsm->lsm_md_pool_name[LOV_MAXPOOLNAME] = 0;
 
 	return 0;
 }

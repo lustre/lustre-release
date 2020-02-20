@@ -98,8 +98,8 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 				lsm2->lsm_md_migrate_offset ||
 	    lsm1->lsm_md_migrate_hash !=
 				lsm2->lsm_md_migrate_hash ||
-	    strcmp(lsm1->lsm_md_pool_name,
-		      lsm2->lsm_md_pool_name) != 0)
+	    strncmp(lsm1->lsm_md_pool_name, lsm2->lsm_md_pool_name,
+		    sizeof(lsm1->lsm_md_pool_name)) != 0)
 		return false;
 
 	if (lmv_dir_striped(lsm1)) {
@@ -117,12 +117,16 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 {
 	int i;
 
-	CDEBUG(mask, "magic %#x stripe count %d master mdt %d hash type %#x "
-		"version %d migrate offset %d migrate hash %#x pool %s\n",
-		lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
-		lsm->lsm_md_master_mdt_index, lsm->lsm_md_hash_type,
-		lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
-		lsm->lsm_md_migrate_hash, lsm->lsm_md_pool_name);
+	/* If lsm_md_magic == LMV_MAGIC_FOREIGN pool_name may not be a null
+	 * terminated string so only print LOV_MAXPOOLNAME bytes.
+	 */
+	CDEBUG(mask,
+	       "magic %#x stripe count %d master mdt %d hash type %#x version %d migrate offset %d migrate hash %#x pool %.*s\n",
+	       lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
+	       lsm->lsm_md_master_mdt_index, lsm->lsm_md_hash_type,
+	       lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
+	       lsm->lsm_md_migrate_hash,
+	       LOV_MAXPOOLNAME, lsm->lsm_md_pool_name);
 
 	if (!lmv_dir_striped(lsm))
 		return;
