@@ -6283,6 +6283,7 @@ test_87() { #LU-6544
 		skip "ldiskfs only test"
 	[[ $OSTCOUNT -gt 59 ]] &&
 		skip "Ignore wide striping situation"
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	local mdsdev=$(mdsdevname 1)
 	local mdsvdev=$(mdsvdevname 1)
@@ -8340,6 +8341,7 @@ test_115() {
 	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 	fi
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	local dbfs_ver=$(do_facet $SINGLEMDS $DEBUGFS -V 2>&1)
 
