@@ -26,6 +26,18 @@ CLIENTS=${CLIENTS:-$HOSTNAME}
 RACERDIRS=${RACERDIRS:-"$DIR $DIR2"}
 echo RACERDIRS=$RACERDIRS
 
+RACER_FAILOVER=${RACER_FAILOVER:-false}
+FAIL_TARGETS=${FAIL_TARGETS:-"MDS OST"}
+RACER_FAILOVER_PERIOD=${RACER_FAILOVER_PERIOD:-60}
+
+if $RACER_FAILOVER; then
+	declare -a  victims
+	for target in $FAIL_TARGETS; do
+		victims=(${victims[@]} $(get_facets $target))
+	done
+	echo Victim facets ${victims[@]}
+fi
+
 #LU-4684
 RACER_ENABLE_MIGRATION=false
 
@@ -57,6 +69,18 @@ RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 
+fail_random_facet () {
+	local facets=${victims[@]}
+	facets=${facets// /,}
+
+	sleep $RACER_FAILOVER_PERIOD
+	while [ ! -f $racer_done ]; do
+		local facet=$(get_random_entry $facets)
+		facet_failover $facet
+		sleep $RACER_FAILOVER_PERIOD
+	done
+}
+
 # run racer
 test_1() {
 	local rrc=0
@@ -64,6 +88,9 @@ test_1() {
 	local clients=$CLIENTS
 	local RDIRS
 	local i
+	local racer_done=$TMP/racer_done
+
+	rm -f $racer_done
 
 	for d in ${RACERDIRS}; do
 		is_mounted $d || continue
@@ -100,6 +127,13 @@ test_1() {
 		rpids="$rpids $pid"
 	done
 
+	local failpid=""
+	if $RACER_FAILOVER; then
+		fail_random_facet &
+		failpid=$!
+		echo racers failpid: $failpid
+	fi
+
 	local lss_pids=""
 	if $RACER_ENABLE_SNAPSHOT; then
 		lss_gen_conf
@@ -122,6 +156,12 @@ test_1() {
 		    rrc=$((rrc + 1))
 		fi
 	done
+
+	if $RACER_FAILOVER; then
+		touch $racer_done
+		wait $failpid
+		rrc=$((rrc + $?))
+	fi
 
 	if $RACER_ENABLE_SNAPSHOT; then
 		killall -q lss_create.sh
