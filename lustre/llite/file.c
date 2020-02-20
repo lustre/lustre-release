@@ -2255,6 +2255,13 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 			GOTO(out, rc);
 
 		rc = ll_file_getstripe(inode, arg, lum_size);
+		if (S_ISREG(inode->i_mode) && IS_ENCRYPTED(inode) &&
+		    ll_i2info(inode)->lli_clob) {
+			struct iattr attr = { 0 };
+
+			rc = cl_setattr_ost(ll_i2info(inode)->lli_clob, &attr,
+					    OP_XVALID_FLAGS, LUSTRE_ENCRYPT_FL);
+		}
 	}
 	cl_lov_delay_create_clear(&file->f_flags);
 

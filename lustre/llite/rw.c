@@ -1449,8 +1449,8 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 {
 	struct inode              *inode  = vvp_object_inode(page->cp_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
-	struct ll_file_data       *fd     = file->private_data;
-	struct ll_readahead_state *ras    = &fd->fd_ras;
+	struct ll_file_data       *fd     = NULL;
+	struct ll_readahead_state *ras    = NULL;
 	struct cl_2queue          *queue  = &io->ci_queue;
 	struct cl_sync_io	  *anchor = NULL;
 	struct vvp_page           *vpg;
@@ -1460,10 +1460,15 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	pgoff_t io_end_index;
 	ENTRY;
 
+	if (file) {
+		fd = file->private_data;
+		ras = &fd->fd_ras;
+	}
+
 	vpg = cl2vvp_page(cl_object_page_slice(page->cp_obj, page));
 	uptodate = vpg->vpg_defer_uptodate;
 
-	if (ll_readahead_enabled(sbi) && !vpg->vpg_ra_updated) {
+	if (ll_readahead_enabled(sbi) && !vpg->vpg_ra_updated && ras) {
 		struct vvp_io *vio = vvp_env_io(env);
 		enum ras_update_flags flags = 0;
 
@@ -1490,7 +1495,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	io_start_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos);
 	io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
 				io->u.ci_rw.crw_count - 1);
-	if (ll_readahead_enabled(sbi)) {
+	if (ll_readahead_enabled(sbi) && ras) {
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file);
 		CDEBUG(D_READA, DFID " %d pages read ahead at %lu\n",

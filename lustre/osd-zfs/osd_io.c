@@ -1024,9 +1024,11 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
  * dmu_tx_hold_sa() and if off < size, dmu_tx_hold_free()
  * called and then assigned to a transaction group.
  */
-static int __osd_object_punch(objset_t *os, dnode_t *dn, dmu_tx_t *tx,
-				uint64_t size, uint64_t off, uint64_t len)
+static int __osd_object_punch(struct osd_object *obj, objset_t *os,
+			      dmu_tx_t *tx, uint64_t off, uint64_t len)
 {
+	dnode_t *dn = obj->oo_dn;
+	uint64_t size = obj->oo_attr.la_size;
 	int rc = 0;
 
 	/* Assert that the transaction has been assigned to a
@@ -1037,6 +1039,19 @@ static int __osd_object_punch(objset_t *os, dnode_t *dn, dmu_tx_t *tx,
 	 */
 	if (len == DMU_OBJECT_END && size == off)
 		return 0;
+
+	/* if object holds encrypted content, we need to make sure we truncate
+	 * on an encryption unit boundary, or subsequent reads will get
+	 * corrupted content
+	 */
+	if (len != DMU_OBJECT_END)
+		len -= LUSTRE_ENCRYPTION_UNIT_SIZE -
+			(off & ~LUSTRE_ENCRYPTION_MASK);
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+	    off & ~LUSTRE_ENCRYPTION_MASK)
+		off = (off & LUSTRE_ENCRYPTION_MASK) +
+			LUSTRE_ENCRYPTION_UNIT_SIZE;
+
 
 	/* XXX: dnode_free_range() can be used to save on dnode lookup */
 	if (off < size)
@@ -1069,8 +1084,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		len = end - start;
 	write_unlock(&obj->oo_attr_lock);
 
-	rc = __osd_object_punch(osd->od_os, obj->oo_dn, oh->ot_tx,
-				obj->oo_attr.la_size, start, len);
+	rc = __osd_object_punch(obj, osd->od_os, oh->ot_tx, start, len);
+
 	/* set new size */
 	if (len == DMU_OBJECT_END) {
 		write_lock(&obj->oo_attr_lock);
@@ -1100,6 +1115,14 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 		len = end - start;
 
 	/* declare we'll free some blocks ... */
+	/* if object holds encrypted content, we need to make sure we truncate
+	 * on an encryption unit boundary, or subsequent reads will get
+	 * corrupted content
+	 */
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+	    start & ~LUSTRE_ENCRYPTION_MASK)
+		start = (start & LUSTRE_ENCRYPTION_MASK) +
+			LUSTRE_ENCRYPTION_UNIT_SIZE;
 	if (start < obj->oo_attr.la_size) {
 		read_unlock(&obj->oo_attr_lock);
 		dmu_tx_mark_netfree(oh->ot_tx);

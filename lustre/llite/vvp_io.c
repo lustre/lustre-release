@@ -653,7 +653,14 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 	__u32 enqflags = 0;
 
 	if (cl_io_is_trunc(io)) {
-		if (io->u.ci_setattr.sa_attr.lvb_size == 0)
+		struct inode *inode = vvp_object_inode(io->ci_obj);
+
+		/* set enqueue flags to CEF_MUST in case of encrypted file,
+		 * to prevent lockless truncate
+		 */
+		if (S_ISREG(inode->i_mode) && IS_ENCRYPTED(inode))
+			enqflags = CEF_MUST;
+		else if (io->u.ci_setattr.sa_attr.lvb_size == 0)
 			enqflags = CEF_DISCARD_DATA;
 	} else if (cl_io_is_fallocate(io)) {
 		lock_start = io->u.ci_setattr.sa_falloc_offset;

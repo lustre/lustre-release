@@ -2065,8 +2065,13 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					break;
 				p++;
 			}
-			if (p - q == PAGE_SIZE / sizeof(*p))
+			if (p - q == PAGE_SIZE / sizeof(*p)) {
+				/* if page is empty forward info to upper layers
+				 * (ll_io_zero_page) by clearing PagePrivate2
+				 */
+				ClearPagePrivate2(pg->pg);
 				continue;
+			}
 
 			rc = llcrypt_decrypt_pagecache_blocks(pg->pg,
 							      PAGE_SIZE, 0);

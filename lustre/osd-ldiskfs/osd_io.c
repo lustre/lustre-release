@@ -2010,6 +2010,14 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		grow = true;
 	i_size_write(inode, start);
 	spin_unlock(&inode->i_lock);
+	/* if object holds encrypted content, we need to make sure we truncate
+	 * on an encryption unit boundary, or subsequent reads will get
+	 * corrupted content
+	 */
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+	    start & ~LUSTRE_ENCRYPTION_MASK)
+		start = (start & LUSTRE_ENCRYPTION_MASK) +
+			LUSTRE_ENCRYPTION_UNIT_SIZE;
 	ll_truncate_pagecache(inode, start);
 
 	/* optimize grow case */
@@ -2242,15 +2250,29 @@ void osd_execute_truncate(struct osd_object *obj)
 		return;
 	}
 
+	size = i_size_read(inode);
 	inode_lock(inode);
+	/* if object holds encrypted content, we need to make sure we truncate
+	 * on an encryption unit boundary, or block content will get corrupted
+	 */
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+	    size & ~LUSTRE_ENCRYPTION_MASK)
+		inode->i_size = (size & LUSTRE_ENCRYPTION_MASK) +
+			LUSTRE_ENCRYPTION_UNIT_SIZE;
 	ldiskfs_truncate(inode);
 	inode_unlock(inode);
+	if (inode->i_size != size) {
+		spin_lock(&inode->i_lock);
+		i_size_write(inode, size);
+		LDISKFS_I(inode)->i_disksize = size;
+		spin_unlock(&inode->i_lock);
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
+	}
 
 	/*
 	 * For a partial-page truncate, flush the page to disk immediately to
 	 * avoid data corruption during direct disk write.  b=17397
 	 */
-	size = i_size_read(inode);
 	if ((size & ~PAGE_MASK) == 0)
 		return;
 	if (osd_use_page_cache(d)) {
