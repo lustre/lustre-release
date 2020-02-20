@@ -42,6 +42,8 @@ lst_TESTS=${lst_TESTS:-"write read ping"}
 # "simple" -> LST_BRW_CHECK_SIMPLE
 lst_CHECK=${lst_CHECK:-"full"}
 
+lst_FROM=${lst_FROM:-"cs"}
+
 case $lst_CHECK in
 	full|simple) check="check=$lst_CHECK";;
 	none) check="";;
@@ -115,14 +117,23 @@ test_smoke_sub () {
     echo "$LST add_group s $(nids_list $servers)"
     echo "$LST add_batch b"
 
+	declare -a tests
+
+	case $lst_FROM in
+		c) tests[0]="${nc}:${ns} --from c --to s";;
+		s) tests[0]="${ns}:${nc} --from s --to c";;
+		cs)tests[0]="${nc}:${ns} --from c --to s"
+		   tests[1]="${ns}:${nc} --from s --to c";;
+		*) error Unknown flag $lst_FROM;;
+	esac
+
 	pre="$LST add_test --batch b --loop $lst_LOOP "
 	for t in $lst_TESTS; do
 		for s in $lst_SIZES; do
 			for c in $lst_CONCR; do
-				for d in "${nc}:${ns} --from c --to s" \
-					"${ns}:${nc} --from s --to c"; do
+				for ((i=0; i<${#tests[@]}; i++)); do
 					echo -n "$pre --concurrency $c"\
-						" --distribute $d "
+						" --distribute ${tests[i]} "
 					case $t in
 						read|write)
 							echo -n "brw $t" \
