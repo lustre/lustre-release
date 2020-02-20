@@ -9,6 +9,8 @@ MDSCOUNT=${MDSCOUNT:-1}
 NUM_THREADS=${NUM_THREADS:-$2}
 NUM_THREADS=${NUM_THREADS:-3}
 
+RACER_MAX_CLEANUP_WAIT=${RACER_MAX_CLEANUP_WAIT:-$DURATION}
+
 mkdir -p $DIR
 
 RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
@@ -32,11 +34,10 @@ racer_cleanup()
 	trap 0
 
 	local TOT_WAIT=0
-	local MAX_WAIT=$DURATION
 	local SHORT_WAIT=5
 
 	local rc
-	while [[ $TOT_WAIT -le $MAX_WAIT ]]; do
+	while [[ $TOT_WAIT -le $RACER_MAX_CLEANUP_WAIT ]]; do
 		rc=0
 		echo sleeping $SHORT_WAIT sec ...
 		sleep $SHORT_WAIT
@@ -58,9 +59,9 @@ racer_cleanup()
 			ps uww -C "${RACER_PROGS// /.sh,}.sh"
 			return 0
 		fi
-		echo -n "Waited $(( TOT_WAIT + SHORT_WAIT)), rc=$rc "
-		(( SHORT_WAIT+=SHORT_WAIT ))
 		(( TOT_WAIT+=SHORT_WAIT ))
+		echo -n "Waited $TOT_WAIT, rc=$rc "
+		(( SHORT_WAIT+=SHORT_WAIT ))
 	done
 	ps uww -C "${RACER_PROGS// /.sh,}.sh"
 	return 1
