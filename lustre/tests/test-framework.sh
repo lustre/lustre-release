@@ -6616,6 +6616,16 @@ ostname_from_index() {
     echo ${uuid/_UUID/}
 }
 
+mdtname_from_index() {
+	local uuid=$(mdtuuid_from_index $1)
+	echo ${uuid/_UUID/}
+}
+
+mdssize_from_index () {
+	local mdt=$(mdtname_from_index $2)
+	$LFS df $1 | grep $mdt | awk '{ print $2 }'
+}
+
 index_from_ostuuid()
 {
     $LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"

@@ -41,12 +41,16 @@ DP_DIO=${DP_DIO:-"no"}
 DOM_SIZE=${DOM_SIZE:-"1M"}
 DP_OSC="mdc"
 
-rm -rf $DIR/*
-
 DP_NORM=$DIR/dp_norm
 DP_DOM=$DIR/dp_dom
 DP_DOM_DNE=$DIR/dp_dne
 DP_STATS=${DP_STATS:-"no"}
+
+if $DO_CLEANUP; then
+	rm -rf $DIR/*
+else
+	rm -rf $DP_NORM $DP_DOM $DP_DOM_DNE
+fi
 
 # total number of files
 DP_FNUM=${DP_FNUM:-16384}
@@ -140,8 +144,7 @@ dp_run_cmd() {
 
 run_MDtest() {
 	if ! which mdtest > /dev/null 2>&1 ; then
-		echo "Mdtest is not installed, skipping"
-		return 0
+		skip_env "Mdtest is not installed, skipping"
 	fi
 
 	local mdtest=$(which mdtest)
@@ -167,38 +170,26 @@ run_MDtest() {
 }
 
 run_SmallIO() {
-	if [ ! -f createmany ] ; then
-		echo "Createmany is not installed, skipping"
-		return 0
-	fi
-
-	if [ ! -f smalliomany ] ; then
-		echo "Smalliomany is not installed, skipping"
-		return 0
-	fi
-
 	local TDIR=${1:-$DIR}
 	local count=$DP_FNUM
 
 	local MIN=$((count * 16))
-	[ $MDSSIZE -le $MIN ] && count=$((MDSSIZE / 16))
+	local mdssize=$(mdssize_from_index $TDIR 0)
+	[ $mdssize -le $MIN ] && count=$((mdssize / 16))
 
-	dp_run_cmd "./createmany -o $TDIR/file- $count | grep 'total:'"
+	dp_run_cmd "createmany -o $TDIR/file- $count | grep 'total:'"
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		error "File creation failed, aborting"
 	fi
 
-	if [ -f statmany ]; then
-		dp_run_cmd "./statmany -s $TDIR/file- $count $((count * 5)) |
-			grep 'total:'"
-		if [ ${PIPESTATUS[0]} != 0 ]; then
-			error "File stat failed, aborting"
-		fi
-
+	dp_run_cmd "statmany -s $TDIR/file- $count $((count * 5)) |
+		grep 'total:'"
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "File stat failed, aborting"
 	fi
 
 	for opc in w a r ; do
-		dp_run_cmd "./smalliomany -${opc} $TDIR/file- $count 300 |
+		dp_run_cmd "smalliomany -${opc} $TDIR/file- $count 300 |
 			grep 'total:'"
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "SmallIO -${opc} failed, aborting"
@@ -206,7 +197,7 @@ run_SmallIO() {
 
 	done
 
-	dp_run_cmd "./unlinkmany $TDIR/file- $count | grep 'total:'"
+	dp_run_cmd "unlinkmany $TDIR/file- $count | grep 'total:'"
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		error "SmallIO failed, aborting"
 	fi
@@ -216,8 +207,7 @@ run_SmallIO() {
 
 run_IOR() {
 	if ! which IOR > /dev/null 2>&1 ; then
-		echo "IOR is not installed, skipping"
-		return 0
+		skip_env "IOR is not installed, skipping"
 	fi
 
 	local IOR=$(which IOR)
@@ -262,8 +252,7 @@ run_IOR() {
 
 run_Dbench() {
 	if ! which dbench > /dev/null 2>&1 ; then
-		echo "Dbench is not installed, skipping"
-		return 0
+		skip_env "Dbench is not installed, skipping"
 	fi
 
 	local TDIR=${1:-$MOUNT}
@@ -285,8 +274,7 @@ run_Dbench() {
 run_FIO() {
 	# https://github.com/axboe/fio/archive/fio-2.8.zip
 	if ! which fio > /dev/null 2>&1 ; then
-		echo "No FIO installed, skipping"
-		return 0
+		skip_env "No FIO installed, skipping"
 	fi
 
 	local fnum=128 # per thread
@@ -357,14 +345,22 @@ run_FIO() {
 }
 
 run_compbench() {
-	if ! which compilebench > /dev/null 2>&1 ; then
-		echo "Compilebench is not installed, skipping"
-		return 0
+	local compilebench
+	if [ x$cbench_DIR = x ]; then
+		compilebench=$(which compilebench 2> /dev/null)
+	else
+		cd $cbench_DIR
+		[ -x compilebench ] ||
+			skip_env "compilebench is missing in $cbench_DIR"
+		compilebench=compilebench
 	fi
+
+	[ x$compilebench != x ] ||
+		skip_env "Compilebench is not installed, skipping"
 
 	local TDIR=${1:-$MOUNT}
 
-	dp_run_cmd "compilebench -D $TDIR -i 2 -r 2 --makej"
+	dp_run_cmd "$compilebench -D $TDIR -i 2 -r 2 --makej"
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		error "Compilebench failed, aborting"
 	fi
