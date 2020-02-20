@@ -6719,6 +6719,11 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
 	return it->oie_dirent->oied_namelen;
 }
 
+#if defined LDISKFS_DIR_ENTRY_LEN && defined LDISKFS_DIR_ENTRY_LEN_
+#undef LDISKFS_DIR_REC_LEN
+#define LDISKFS_DIR_REC_LEN(de)		LDISKFS_DIR_ENTRY_LEN_((de))
+#endif
+
 static inline bool osd_dotdot_has_space(struct ldiskfs_dir_entry_2 *de)
 {
 	if (LDISKFS_DIR_REC_LEN(de) >=
