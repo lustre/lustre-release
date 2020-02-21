@@ -1075,6 +1075,37 @@ static int lod_attr_get(const struct lu_env *env,
 	return dt_attr_get(env, dt_object_child(dt), attr);
 }
 
+void lod_adjust_stripe_size(struct lod_layout_component *comp,
+			    __u32 def_stripe_size)
+{
+	__u64 comp_end = comp->llc_extent.e_end;
+
+	/* Choose stripe size if not set. Note that default stripe size can't
+	 * be used as is, because it must be multiplier of given component end.
+	 *  - first check if default stripe size can be used
+	 *  - if not than select the lowest set bit from component end and use
+	 *    that value as stripe size
+	 */
+	if (!comp->llc_stripe_size) {
+		if (comp_end == LUSTRE_EOF || !(comp_end % def_stripe_size))
+			comp->llc_stripe_size = def_stripe_size;
+		else
+			comp->llc_stripe_size = comp_end & ~(comp_end - 1);
+	} else {
+		/* check stripe size is multiplier of comp_end */
+		if (comp_end != LUSTRE_EOF &&
+		    comp_end % comp->llc_stripe_size) {
+			/* fix that even for defined stripe size but warn
+			 * about the problem, that must not happen
+			 */
+			CWARN("Component end %llu is not aligned by the stripe size %u\n",
+			      comp_end, comp->llc_stripe_size);
+			dump_stack();
+			comp->llc_stripe_size = comp_end & ~(comp_end - 1);
+		}
+	}
+}
+
 static inline void lod_adjust_stripe_info(struct lod_layout_component *comp,
 					  struct lov_desc *desc,
 					  int append_stripes)
@@ -1087,8 +1118,8 @@ static inline void lod_adjust_stripe_info(struct lod_layout_component *comp,
 				desc->ld_default_stripe_count;
 		}
 	}
-	if (comp->llc_stripe_size <= 0)
-		comp->llc_stripe_size = desc->ld_default_stripe_size;
+
+	lod_adjust_stripe_size(comp, desc->ld_default_stripe_size);
 }
 
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,

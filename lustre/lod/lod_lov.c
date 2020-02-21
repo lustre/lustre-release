@@ -1721,7 +1721,6 @@ int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
 int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 			const struct lu_buf *buf, bool is_from_disk)
 {
-	struct lov_desc *desc = &d->lod_ost_descs.ltd_lov_desc;
 	struct lov_user_md_v1   *lum;
 	struct lov_comp_md_v1   *comp_v1;
 	struct lov_comp_md_entry_v1     *ent;
@@ -1933,9 +1932,7 @@ recheck:
 
 		/* extent end must be aligned with the stripe_size */
 		stripe_size = le32_to_cpu(lum->lmm_stripe_size);
-		if (stripe_size == 0)
-			stripe_size = desc->ld_default_stripe_size;
-		if (prev_end % stripe_size) {
+		if (stripe_size && prev_end % stripe_size) {
 			CDEBUG(D_LAYOUT, "stripe size isn't aligned, "
 			       "stripe_sz: %u, [%llu, %llu)\n",
 			       stripe_size, ext->e_start, prev_end);

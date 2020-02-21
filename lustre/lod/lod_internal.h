@@ -691,6 +691,8 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 			    struct lod_obj_stripe_cb_data *data);
 int lod_comp_copy_ost_lists(struct lod_layout_component *lod_comp,
 			    struct lov_user_md_v3 *v3);
+void lod_adjust_stripe_size(struct lod_layout_component *comp,
+			    __u32 def_stripe_size);
 
 /* lod_sub_object.c */
 struct thandle *lod_sub_get_thandle(const struct lu_env *env,

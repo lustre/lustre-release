@@ -2180,9 +2180,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		lod_comp->llc_pattern = v1->lmm_pattern;
-		lod_comp->llc_stripe_size = desc->ld_default_stripe_size;
-		if (v1->lmm_stripe_size)
-			lod_comp->llc_stripe_size = v1->lmm_stripe_size;
+		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
+		lod_adjust_stripe_size(lod_comp, desc->ld_default_stripe_size);
 
 		lod_comp->llc_stripe_count = desc->ld_default_stripe_count;
 		if (v1->lmm_stripe_count ||
