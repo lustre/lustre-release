@@ -64,6 +64,8 @@
 #include <limits.h>
 #include <ctype.h>
 
+#include <ext2fs/ext2fs.h>
+
 #ifndef BLKGETSIZE64
 #include <linux/fs.h> /* for BLKGETSIZE64 */
 #endif
@@ -84,6 +86,10 @@
 #define DEFAULT_SCHEDULER	"deadline"
 
 extern char *progname;
+
+static ext2_filsys backfs;
+static int open_flags = EXT2_FLAG_64BITS | EXT2_FLAG_SKIP_MMP |
+			EXT2_FLAG_IGNORE_SB_ERRORS | EXT2_FLAG_SUPER_ONLY;
 
 /* keep it less than LL_FID_NAMELEN */
 #define DUMMY_FILE_NAME_LEN             25
@@ -132,33 +138,6 @@ out:
 	return ret;
 }
 
-static int is_feature_enabled(const char *feature, const char *devpath)
-{
-	char cmd[PATH_MAX];
-	FILE *fp;
-	char enabled_features[4096] = "";
-	int ret = 1;
-
-	snprintf(cmd, sizeof(cmd), "%s -c -R features %s 2>&1",
-		 DEBUGFS, devpath);
-
-	/* Using popen() instead of run_command() since debugfs does
-	 * not return proper error code if command is not supported */
-	fp = popen(cmd, "r");
-	if (!fp) {
-		fprintf(stderr, "%s: %s\n", progname, strerror(errno));
-		return 0;
-	}
-
-	ret = fread(enabled_features, 1, sizeof(enabled_features) - 1, fp);
-	enabled_features[ret] = '\0';
-	pclose(fp);
-
-	if (strstr(enabled_features, feature))
-		return 1;
-	return 0;
-}
-
 /* Write the server config files */
 int ldiskfs_write_ldd(struct mkfs_opts *mop)
 {
@@ -181,20 +160,31 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 		dev = mop->mo_loopdev;
 
 	/* Multiple mount protection enabled if failover node specified */
-	if (mop->mo_flags & MO_FAILOVER &&
-	    !is_feature_enabled("mmp", dev)) {
-		if (is_e2fsprogs_feature_supp("-O mmp")) {
-			char *command = filepnm;
+	if (mop->mo_flags & MO_FAILOVER) {
+		if (!backfs)
+			ext2fs_open(dev, open_flags, 0, 0,
+				    unix_io_manager, &backfs);
+		if (!backfs || !ext2fs_has_feature_mmp(backfs->super)) {
+			if (is_e2fsprogs_feature_supp("-O mmp")) {
+				char *command = filepnm;
 
-			snprintf(command, sizeof(filepnm),
-				 TUNE2FS" -O mmp '%s' >/dev/null 2>&1", dev);
-			ret = run_command(command, sizeof(filepnm));
-			if (ret)
-				fprintf(stderr,
-					"%s: Unable to set 'mmp' on %s: %d\n",
-					progname, dev, ret);
-		} else {
-			disp_old_e2fsprogs_msg("mmp", 1);
+				snprintf(command, sizeof(filepnm),
+					 TUNE2FS" -O mmp '%s' >/dev/null 2>&1",
+					 dev);
+				ret = run_command(command, sizeof(filepnm));
+				if (ret)
+					fprintf(stderr,
+						"%s: Unable to set 'mmp' "
+						"on %s: %d\n",
+						progname, dev, ret);
+			} else {
+				disp_old_e2fsprogs_msg("mmp", 1);
+			}
+			/* avoid stale cache after following operations */
+			if (backfs) {
+				ext2fs_close(backfs);
+				backfs = NULL;
+			}
 		}
 	}
 
@@ -271,51 +261,37 @@ static int readcmd(char *cmd, char *buf, int len)
 
 int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 {
-	char tmpdir[] = "/tmp/dirXXXXXX";
+	errcode_t retval;
+	ext2_ino_t ino;
+	ext2_file_t file;
+	unsigned int got;
 	char cmd[PATH_MAX];
-	char filepnm[128];
-	FILE *filep;
 	int ret = 0;
-	int cmdsz = sizeof(cmd);
 
-	/* Make a temporary directory to hold Lustre data files. */
-	if (!mkdtemp(tmpdir)) {
-		fprintf(stderr, "%s: Can't create temporary directory %s: %s\n",
-			progname, tmpdir, strerror(errno));
-		return errno;
-	}
-
-	/* TODO: it's worth observing the get_mountdata() function that is
-	   in mount_utils.c for getting the mountdata out of the
-	   filesystem */
-
-	/* Construct debugfs command line. */
-	snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s/mountdata' '%s'",
-		 DEBUGFS, MOUNT_DATA_FILE, tmpdir, dev);
-
-	ret = run_command(cmd, cmdsz);
-	if (ret)
-		verrprint("%s: Unable to dump %s dir (%d)\n",
-			  progname, MOUNT_CONFIGS_DIR, ret);
-
-	sprintf(filepnm, "%s/mountdata", tmpdir);
-	filep = fopen(filepnm, "r");
-	if (filep) {
-		size_t num_read;
-		vprint("Reading %s\n", MOUNT_DATA_FILE);
-		num_read = fread(mo_ldd, sizeof(*mo_ldd), 1, filep);
-		if (num_read < 1 && ferror(filep)) {
-			fprintf(stderr, "%s: Unable to read from file %s: %s\n",
-				progname, filepnm, strerror(errno));
+	if (!backfs) {
+		retval = ext2fs_open(dev, open_flags, 0, 0,
+				     unix_io_manager, &backfs);
+		if (retval) {
+			fprintf(stderr, "Unable to open fs on %s\n", dev);
+			goto read_label;
 		}
-		fclose(filep);
 	}
-
-	snprintf(cmd, cmdsz, "rm -rf %s", tmpdir);
-	run_command(cmd, cmdsz);
-	if (ret)
-		verrprint("Failed to read old data (%d)\n", ret);
-
+	retval = ext2fs_namei(backfs, EXT2_ROOT_INO, EXT2_ROOT_INO,
+			      MOUNT_DATA_FILE, &ino);
+	if (retval) {
+		fprintf(stderr, "Error while looking up %s\n", MOUNT_DATA_FILE);
+		goto read_label;
+	}
+	retval = ext2fs_file_open(backfs, ino, 0, &file);
+	if (retval) {
+		fprintf(stderr, "Error while opening file %s\n",
+			MOUNT_DATA_FILE);
+		goto read_label;
+	}
+	retval = ext2fs_file_read(file, mo_ldd, sizeof(*mo_ldd), &got);
+	if (retval || got == 0)
+		fprintf(stderr, "Failed to read file %s\n", MOUNT_DATA_FILE);
+read_label:
 	/* As long as we at least have the label, we're good to go */
 	snprintf(cmd, sizeof(cmd), E2LABEL" %s", dev);
 	ret = readcmd(cmd, mo_ldd->ldd_svname, sizeof(mo_ldd->ldd_svname) - 1);
@@ -364,37 +340,20 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 /* Check whether the file exists in the device */
 static int file_in_dev(char *file_name, char *dev_name)
 {
-	FILE *fp;
-	char debugfs_cmd[256];
-	unsigned int inode_num;
-	int i;
+	ext2_ino_t ino;
+	errcode_t retval;
 
-	/* Construct debugfs command line. */
-	snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-		 "%s -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
-		 DEBUGFS, file_name, dev_name);
-
-	fp = popen(debugfs_cmd, "r");
-	if (!fp) {
-		fprintf(stderr, "%s: %s\n", progname, strerror(errno));
-		return 0;
+	if (!backfs) {
+		retval = ext2fs_open(dev_name, open_flags, 0, 0,
+				     unix_io_manager, &backfs);
+		if (retval)
+			return 0;
 	}
-
-	if (fscanf(fp, "Inode: %u", &inode_num) == 1) { /* exist */
-		pclose(fp);
+	retval = ext2fs_namei(backfs, EXT2_ROOT_INO, EXT2_ROOT_INO,
+			      file_name, &ino);
+	if (!retval)
 		return 1;
-	}
-	i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd) - 1, fp);
-	if (i) {
-		debugfs_cmd[i] = 0;
-		fprintf(stderr, "%s", debugfs_cmd);
-		if (strstr(debugfs_cmd, "unsupported feature")) {
-			disp_old_e2fsprogs_msg("an unknown", 0);
-		}
-		pclose(fp);
-		return -1;
-	}
-	pclose(fp);
+
 	return 0;
 }
 
@@ -1422,7 +1381,9 @@ int ldiskfs_enable_quota(struct mkfs_opts *mop)
 		dev = mop->mo_loopdev;
 
 	/* Quota feature is already enabled? */
-	if (is_feature_enabled("quota", dev)) {
+	if (!backfs)
+		ext2fs_open(dev, open_flags, 0, 0, unix_io_manager, &backfs);
+	if (backfs && ext2fs_has_feature_quota(backfs->super)) {
 		vprint("Quota feature is already enabled.\n");
 		return 0;
 	}
@@ -1446,7 +1407,10 @@ int ldiskfs_init(void)
 
 void ldiskfs_fini(void)
 {
-	return;
+	if (backfs) {
+		ext2fs_close(backfs);
+		backfs = NULL;
+	}
 }
 
 #ifndef PLUGIN_DIR

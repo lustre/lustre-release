@@ -140,6 +140,8 @@ if PLUGINS
 MNTMODLDFLAGS := -rdynamic
 MNTMODLIBS := -ldl
 MNTMODCFLAGS := -DPLUGIN_DIR=\"${pkglibdir}\"
+else
+MNTMODLIBS :=
 endif # PLUGINS
 
 if ZFS_ENABLED
@@ -157,7 +159,7 @@ libmount_utils_zfs.la : libmount_utils_zfs.a
 			 $(MNTMODLIBS) $(ZFS_LIBZFS_LIBS)
 else
 MNTMODLDFLAGS := $(ZFS_LIBZFS_LDFLAGS)
-MNTMODLIBS := $(ZFS_LIBZFS_LIBS)
+MNTMODLIBS += $(ZFS_LIBZFS_LIBS)
 PLUGIN_LIB += libmount_utils_zfs.a
 endif # PLUGINS
 endif # ZFS_ENABLED
@@ -171,11 +173,12 @@ libmount_utils_ldiskfs_a_CPPFLAGS :=
 if PLUGINS
 lib_LTLIBRARIES += libmount_utils_ldiskfs.la
 libmount_utils_ldiskfs.la : libmount_utils_ldiskfs.a
-	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic \
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic -lext2fs \
 			 -o mount_osd_ldiskfs.so \
 			 `$(AR) -t libmount_utils_ldiskfs.a` \
 			 $(MNTMODLIBS)
 else
+MNTMODLIBS += -lext2fs
 PLUGIN_LIB += libmount_utils_ldiskfs.a
 endif # PLUGINS
 endif # LDISKFS_ENABLED
