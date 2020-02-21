@@ -29,7 +29,8 @@ setup_nfs() {
 	# restart nfs server according to distro
 	do_nodes $LUSTRE_CLIENT "{ [[ -e /etc/SuSE-release ]] &&
 				 service nfsserver restart; } ||
-				 service nfs restart" || return 1
+				 service nfs restart ||
+				 service nfs-server restart" || return 1
 
 	do_nodes $NFS_CLIENTS "chkconfig --list rpcidmapd 2>/dev/null |
 			       grep -q rpcidmapd && service rpcidmapd restart ||
@@ -65,7 +66,8 @@ cleanup_nfs() {
 
 	do_nodes $LUSTRE_CLIENT "{ [[ -e /etc/SuSE-release ]] &&
 				 service nfsserver stop; } ||
-				 service nfs stop" || return 1
+				 service nfs stop ||
+				 service nfs-server stop" || return 1
 
 	do_nodes $LUSTRE_CLIENT "sed -i '/${MNTPNT##*/}/d' /etc/exports" || return 1
 
