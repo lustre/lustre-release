@@ -217,14 +217,18 @@ declare     ha_ior_params=${IORP:-'" -b $ior_blockSize -t 2m -w -W -T 1"'}
 declare     ha_simul_params=${SIMULP:-'" -n 10"'}
 declare     ha_mdtest_params=${MDTESTP:-'" -i 1 -n 1000"'}
 declare     ha_mpirun_options=${MPIRUN_OPTIONS:-""}
+declare     ha_clients_stripe=${CLIENTSSTRIPE:-'"$STRIPEPARAMS"'}
+declare     ha_nclientsset=${NCLIENTSSET:-1}
 
 eval ha_params_ior=($ha_ior_params)
 eval ha_params_simul=($ha_simul_params)
 eval ha_params_mdtest=($ha_mdtest_params)
+eval ha_stripe_clients=($ha_clients_stripe)
 
 declare ha_nparams_ior=${#ha_params_ior[@]}
 declare ha_nparams_simul=${#ha_params_simul[@]}
 declare ha_nparams_mdtest=${#ha_params_mdtest[@]}
+declare ha_nstripe_clients=${#ha_stripe_clients[@]}
 
 declare -A  ha_mpi_load_cmds=(
 	[ior]="$IOR -o {}/f.ior {params}"
@@ -404,6 +408,8 @@ ha_repeat_mpi_load()
 	local load=$2
 	local status=$3
 	local parameter=$4
+	local machines=$5
+	local stripeparams=$6
 	local tag=${ha_mpi_load_tags[$load]}
 	local cmd=${ha_mpi_load_cmds[$tag]}
 	local dir=$ha_test_dir/$client-$tag
@@ -418,7 +424,7 @@ ha_repeat_mpi_load()
 
 	ha_info "Starting $tag"
 
-	local machines="-machinefile $ha_machine_file"
+	machines="-machinefile $machines"
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
 		{
 		local mdt_index
@@ -429,6 +435,8 @@ ha_repeat_mpi_load()
 		fi
 		ha_on $client $LFS mkdir -i$mdt_index -c$ha_dir_stripe_count "$dir" &&
 		ha_on $client $LFS getdirstripe "$dir" &&
+		ha_on $client $LFS setstripe $stripeparams $dir &&
+		ha_on $client $LFS getstripe $dir &&
 		ha_on $client chmod a+xwr $dir &&
 		ha_on $client "su mpiuser sh -c \" $mpirun $ha_mpirun_options \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client )) \
@@ -462,15 +470,25 @@ ha_start_mpi_loads()
 	local status
 	local n
 	local nparam
+	local machines
+	local m
+	local -a mach
 
-	for client in ${ha_clients[@]}; do
-		ha_info ha_machine_file=$ha_machine_file
-		echo $client >> $ha_machine_file
+	# Define names for machinefiles for each client set
+	for (( n=0; n < $ha_nclientsset; n++ )); do
+		mach[$n]=$ha_machine_file$n
+	done
+
+	for ((n = 0; n < ${#ha_clients[@]}; n++)); do
+		m=$(( n % ha_nclientsset))
+		machines=${mach[m]}
+		ha_info machine_file=$machines
+		echo ${ha_clients[n]} >> $machines
 	done
 	local dirname=$(dirname $ha_machine_file)
 	for client in ${ha_clients[@]}; do
 		ha_on $client mkdir -p $dirname
-		scp $ha_machine_file $client:$ha_machine_file
+		scp $ha_machine_file* $client:$dirname
 	done
 
 	# ha_mpi_instances defines the number of
@@ -489,7 +507,12 @@ ha_start_mpi_loads()
 			nparam=$((n % num))
 			local aref=ha_params_$tag[nparam]
 			local parameter=${!aref}
-			ha_repeat_mpi_load $client $load $status "$parameter" &
+			local nstripe=$((n % ha_nstripe_clients))
+			aref=ha_stripe_clients[nstripe]
+			local stripe=${!aref}
+			local m=$(( n % ha_nclientsset))
+			machines=${mach[m]}
+			ha_repeat_mpi_load $client $load $status "$parameter" $machines "$stripe" &
 				ha_status_files+=("$status")
 		done
 	done
