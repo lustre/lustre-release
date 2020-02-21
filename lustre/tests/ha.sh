@@ -220,6 +220,8 @@ declare     ha_mpirun_options=${MPIRUN_OPTIONS:-""}
 declare     ha_clients_stripe=${CLIENTSSTRIPE:-'"$STRIPEPARAMS"'}
 declare     ha_nclientsset=${NCLIENTSSET:-1}
 
+declare     ha_racer_params=${RACERP:-"MDSCOUNT=1"}
+
 eval ha_params_ior=($ha_ior_params)
 eval ha_params_simul=($ha_simul_params)
 eval ha_params_mdtest=($ha_mdtest_params)
@@ -236,12 +238,15 @@ declare -A  ha_mpi_load_cmds=(
 	[mdtest]="$MDTEST {params} -d {}"
 )
 
+declare racer=${RACER:-"$(dirname $0)/racer/racer.sh"}
+
 declare     ha_nonmpi_loads=${ha_nonmpi_loads="dd tar iozone"}
 declare -a  ha_nonmpi_load_tags=($ha_nonmpi_loads)
-declare -a  ha_nonmpi_load_cmds=(
-	"dd if=/dev/zero of={}/f.dd bs=1M count=256"
-	"tar cf - /etc | tar xf - -C {}"
-	"iozone -a -e -+d -s $iozone_SIZE {}/f.iozone"
+declare -A  ha_nonmpi_load_cmds=(
+	[dd]="dd if=/dev/zero of={}/f.dd bs=1M count=256"
+	[tar]="tar cf - /etc | tar xf - -C {}"
+	[iozone]="iozone -a -e -+d -s $iozone_SIZE {}/f.iozone"
+	[racer]="$ha_racer_params $racer {}"
 )
 
 ha_usage()
@@ -474,6 +479,19 @@ ha_start_mpi_loads()
 	local m
 	local -a mach
 
+	# ha_mpi_instances defines the number of
+	# clients start mpi loads; should be <= ${#ha_clients[@]}
+	# do nothing if
+	#    ha_mpi_instances = 0
+	# or
+	#    ${#ha_mpi_load_tags[@]} =0
+	local inst=$ha_mpi_instances
+	(( inst == 0 )) || (( ${#ha_mpi_load_tags[@]} == 0 )) &&
+		ha_info "no mpi load to start" &&
+		return 0
+
+	(( inst <= ${#ha_clients[@]} )) || inst=${#ha_clients[@]}
+
 	# Define names for machinefiles for each client set
 	for (( n=0; n < $ha_nclientsset; n++ )); do
 		mach[$n]=$ha_machine_file$n
@@ -490,11 +508,6 @@ ha_start_mpi_loads()
 		ha_on $client mkdir -p $dirname
 		scp $ha_machine_file* $client:$dirname
 	done
-
-	# ha_mpi_instances defines the number of
-	# clients start mpi loads; should be <= ${#ha_clients[@]}
-	local inst=$ha_mpi_instances
-	(( inst <= ${#ha_clients[@]} )) || inst=${#ha_clients[@]}
 
 	for ((n = 0; n < $inst; n++)); do
 		client=${ha_clients[n]}
@@ -524,7 +537,7 @@ ha_repeat_nonmpi_load()
 	local load=$2
 	local status=$3
 	local tag=${ha_nonmpi_load_tags[$load]}
-	local cmd=${ha_nonmpi_load_cmds[$load]}
+	local cmd=${ha_nonmpi_load_cmds[$tag]}
 	local dir=$ha_test_dir/$client-$tag
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
