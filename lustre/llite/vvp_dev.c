@@ -40,6 +40,7 @@
 #include <obd.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
+#include <linux/kallsyms.h>
 
 /*****************************************************************************
  *
@@ -280,6 +281,15 @@ int vvp_global_init(void)
 	rc = lu_device_type_init(&vvp_device_type);
 	if (rc != 0)
 		goto out_kmem;
+
+#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
+	/*
+	 * Kernel v5.2-5678-gac1c3e4 no longer exports account_page_dirtied
+	 */
+	vvp_account_page_dirtied = (void *)
+		kallsyms_lookup_name("account_page_dirtied");
+	BUG_ON(!vvp_account_page_dirtied);
+#endif
 
 	return 0;
 

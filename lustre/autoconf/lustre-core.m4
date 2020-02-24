@@ -2120,15 +2120,9 @@ EXTRA_KCFLAGS="$tmp_flags"
 # After 5.2 kernel page dirtied is not exported
 #
 AC_DEFUN([LC_ACCOUNT_PAGE_DIRTIED], [
-LB_CHECK_COMPILE([if 'account_page_dirtied' is exported],
-account_page_dirtied, [
-	#include <linux/mm.h>
-],[
-	account_page_dirtied(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_ACCOUNT_PAGE_DIRTIED, 1,
-		[account_page_dirtied is available])
-])
+LB_CHECK_EXPORT([account_page_dirtied], [mm/page-writeback.c],
+	[AC_DEFINE(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT, 1,
+			[account_page_dirtied is exported])])
 ]) # LC_ACCOUNT_PAGE_DIRTIED
 
 #

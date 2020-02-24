@@ -319,6 +319,11 @@ struct lu_object *vvp_object_alloc(const struct lu_env *env,
 int vvp_global_init(void);
 void vvp_global_fini(void);
 
+#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
+typedef unsigned int (*vvp_account_page_dirtied)(struct page *page,
+						 struct address_space *mapping);
+#endif
+
 extern const struct file_operations vvp_dump_pgcache_file_ops;
 
 #endif /* VVP_INTERNAL_H */
