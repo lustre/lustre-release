@@ -91,7 +91,18 @@ Network Topology</title>
             Lustre file system uses any IP addresses aliased to the loopback (by default). When in
             doubt, explicitly specify networks.</para>
         </note>
-        <para><literal>ip2nets</literal> (&quot;&quot;) is a string that lists globally-available networks, each with a set of IP address ranges. LNet determines the locally-available networks from this list by matching the IP address ranges with the local IPs of a node. The purpose of this option is to be able to use the same <literal>modules.conf</literal> file across a variety of nodes on different networks. The string has the following syntax.</para>
+        </section>
+        <section remap="h4">
+          <title><indexterm><primary>configuring</primary>
+          <secondary>network</secondary><tertiary>ip2nets</tertiary></indexterm>
+          ip2nets (&quot;tcp&quot;)</title>
+        <para><literal>ip2nets</literal> is a string that lists globally
+          available networks, each with a set of IP address ranges. LNet
+          determines the locally-available networks from this list by matching
+          the IP address ranges with the local IPs of a node. Its purpose is
+          to allow the same <literal>modules.conf</literal> file to be used
+          across a variety of nodes on different networks. The string has the
+          following syntax.</para>
         <screen>&lt;ip2nets&gt; :== &lt;net-match&gt; [ &lt;comment&gt; ] { &lt;net-sep&gt; &lt;net-match&gt; }
 &lt;net-match&gt; :== [ &lt;w&gt; ] &lt;net-spec&gt; &lt;w&gt; &lt;ip-range&gt; { &lt;w&gt; &lt;ip-range&gt; }
 [ &lt;w&gt; ]
@@ -193,10 +204,29 @@ says that 2 networks (<literal>tcp0</literal> and <literal>o2ib0</literal>) are 
         <para>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
       </section>
       <section remap="h4">
-          <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>forwarding</tertiary></indexterm>
+          <title><indexterm><primary>configuring</primary>
+            <secondary>network</secondary>
+            <tertiary>forwarding</tertiary></indexterm>
 forwarding (&quot;&quot;)</title>
-        <para>This is a string that can be set either to &quot;<literal>enabled</literal>&quot; or &quot;<literal>disabled</literal>&quot; for explicit control of whether this node should act as a router, forwarding communications between all local networks.</para>
-        <para>A standalone router can be started by simply starting LNet (&apos;<literal>modprobe ptlrpc</literal>&apos;) with appropriate network topology options.</para>
+        <para>This is a string that can be set either to
+        &quot;<literal>enabled</literal>&quot; or
+        &quot;<literal>disabled</literal>&quot; for explicit control of whether
+        this node should act as a router, forwarding communications between all
+        local networks.</para>
+        <para>A standalone router can be started by simply starting LNet
+        (&apos;<literal>modprobe ptlrpc</literal>&apos;) with appropriate
+        network topology options.</para>
+      </section>
+        <section remap="h4">
+          <title><indexterm><primary>configuring</primary>
+            <secondary>network</secondary>
+            <tertiary>accept</tertiary></indexterm>accept (secure)</title>
+          <para>The acceptor is a TCP/IP service that some LNDs use to
+          establish communications. If a local network requires it and it has
+          not been disabled, the acceptor listens on a single port for
+          connection requests that it redirects to the appropriate local
+          network. The acceptor is part of the LNet module and configured
+          by the following options:</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
@@ -214,22 +244,32 @@ forwarding (&quot;&quot;)</title>
             <tbody>
               <row>
                 <entry>
-                  <para> <literal>acceptor</literal></para>
+                  <para><literal>accept</literal></para>
+                  <para><literal>(secure)</literal></para>
                 </entry>
                 <entry>
-                  <para>The acceptor is a TCP/IP service that some LNDs use to establish communications. If a local network requires it and it has not been disabled, the acceptor listens on a single port for connection requests that it redirects to the appropriate local network. The acceptor is part of the LNet module and configured by the following options:</para>
+                  <para>The type of connections that the acceptor will allow
+                  from remote nodes.</para>
                   <itemizedlist>
                     <listitem>
-                      <para><literal>secure</literal>  - Accept connections only from reserved TCP ports (below 1023).</para>
+                      <para><literal>secure</literal>  - Accept connections
+                      only from reserved TCP ports (below 1023).  This is the
+                      default, and prevents userspace processes from trying
+                      to connect to the server.</para>
                     </listitem>
                     <listitem>
-                      <para><literal>all</literal>  - Accept connections from any TCP port. </para>
-                      <note>
-                        <para>This is required for liblustre clients to allow connections on non-privileged ports.</para>
-                      </note>
+                      <para><literal>all</literal>  - Accept connections from
+                        any TCP port.  This may be needed to allow connections
+                        on non-privileged ports, for example from a client in a
+                        virtual machine running in userspace.</para>
                     </listitem>
                     <listitem>
-                      <para><literal>none</literal>  - Do not run the acceptor.</para>
+                      <para><literal>none</literal>  - Do not run the acceptor.
+                        This may prevent the client from receiving server RPCs
+                        if the TCP connection is lost and the server needs to
+                        contact the client for some reason (e.g. LDLM lock
+                        callback or size glimpse).
+                      </para>
                     </listitem>
                   </itemizedlist>
                 </entry>
@@ -240,7 +280,9 @@ forwarding (&quot;&quot;)</title>
                   <para> <literal>(988)</literal></para>
                 </entry>
                 <entry>
-                  <para>  Port number on which the acceptor should listen for connection requests. All nodes in a site configuration that require an acceptor must use the same port.</para>
+                  <para>Port number on which the acceptor should listen for
+                    connection requests. All nodes in a site configuration that
+                    require an acceptor must use the same port.</para>
                 </entry>
               </row>
               <row>
@@ -249,7 +291,8 @@ forwarding (&quot;&quot;)</title>
                   <para> <literal>(127)</literal></para>
                 </entry>
                 <entry>
-                  <para>Maximum length that the queue of pending connections may grow to (see listen(2)).</para>
+                  <para>Maximum length that the queue of pending connections may
+                    grow to (see listen(2)).</para>
                 </entry>
               </row>
               <row>
@@ -258,7 +301,8 @@ forwarding (&quot;&quot;)</title>
                   <para> <literal>(5, W)</literal></para>
                 </entry>
                 <entry>
-                  <para>Maximum time in seconds the acceptor is allowed to block while communicating with a peer.</para>
+                  <para>Maximum time in seconds the acceptor is allowed to block
+                    while communicating with a peer.</para>
                 </entry>
               </row>
               <row>
@@ -266,7 +310,17 @@ forwarding (&quot;&quot;)</title>
                   <para> <literal>accept_proto_version</literal></para>
                 </entry>
                 <entry>
-                  <para>Version of the acceptor protocol that should be used by outgoing connection requests. It defaults to the most recent acceptor protocol version, but it may be set to the previous version to allow the node to initiate connections with nodes that only understand that version of the acceptor protocol. The acceptor can, with some restrictions, handle either version (that is, it can accept connections from both &apos;old&apos; and &apos;new&apos; peers). For the current version of the acceptor protocol (version 1), the acceptor is compatible with old peers if it is only required by a single local network.</para>
+                  <para>Version of the acceptor protocol that should be used by
+                    outgoing connection requests. It defaults to the most recent
+                    acceptor protocol version, but it may be set to the previous
+                    version to allow the node to initiate connections with nodes
+                    that only understand that version of the acceptor protocol.
+                    The acceptor can, with some restrictions, handle either
+                    version (that is, it can accept connections from both
+                    &apos;old&apos; and &apos;new&apos; peers). For the current
+                    version of the acceptor protocol (version 1), the acceptor
+                    is compatible with old peers if it is only required by a
+                    single local network.</para>
                 </entry>
               </row>
             </tbody>
