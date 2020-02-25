@@ -49,6 +49,7 @@
 #endif
 
 #include <libcfs/linux/linux-time.h>
+#include <libcfs/linux/linux-wait.h>
 
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)
@@ -116,7 +117,7 @@ EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
 
 struct kmem_cache (*cfs_radix_tree_node_cachep);
 
-void cfs_arch_init(void)
+void __init cfs_arch_init(void)
 {
 #ifndef HAVE_WAIT_VAR_EVENT
 	wait_bit_init();
