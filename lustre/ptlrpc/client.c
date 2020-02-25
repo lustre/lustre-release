@@ -1910,7 +1910,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		}
 
 		/*
-		 * ptlrpc_set_wait->l_wait_event sets lwi_allow_intr
+		 * ptlrpc_set_wait uses l_wait_event_abortable_timeout()
 		 * so it sets rq_intr regardless of individual rpc
 		 * timeouts. The synchronous IO waiting path sets
 		 * rq_intr irrespective of whether ptlrpcd
@@ -2280,8 +2280,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 
 /**
  * Time out all uncompleted requests in request set pointed by \a data
- * Callback used when waiting on sets with l_wait_event.
- * Always returns 1.
+ * This is called when a wait times out.
  */
 void ptlrpc_expired_set(struct ptlrpc_request_set *set)
 {
@@ -2323,7 +2322,8 @@ void ptlrpc_expired_set(struct ptlrpc_request_set *set)
 
 /**
  * Interrupts (sets interrupted flag) all uncompleted requests in
- * a set \a data. Callback for l_wait_event for interruptible waits.
+ * a set \a data. This is called when a wait_event is interrupted
+ * by a signal.
  */
 static void ptlrpc_interrupted_set(struct ptlrpc_request_set *set)
 {

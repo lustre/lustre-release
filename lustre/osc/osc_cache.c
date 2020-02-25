@@ -1616,7 +1616,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 		spin_lock(&cli->cl_loi_list_lock);
 
 		if (rc <= 0) {
-			/* l_wait_event is interrupted by signal or timed out */
+			/* wait_event_idle_timeout timed out */
 			list_del_init(&ocw.ocw_entry);
 			if (rc == 0)
 				rc = -ETIMEDOUT;

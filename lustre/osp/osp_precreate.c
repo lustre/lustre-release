@@ -1466,8 +1466,9 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 				synced = 1;
 			}
 			if (atomic_read(&d->opd_sync_rpcs_in_progress)) {
-				/* just wait till destroys are done */
-				/* see l_wait_even() few lines below */
+				/* just wait till destroys are done
+				 * see wait_event_idle_timeout() below
+				 */
 			}
 			if (atomic_read(&d->opd_sync_changes) +
 			    atomic_read(&d->opd_sync_rpcs_in_progress) == 0) {

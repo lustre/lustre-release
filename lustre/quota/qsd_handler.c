@@ -623,7 +623,8 @@ static int qsd_acquire_remote(const struct lu_env *env,
  * \param space - is the amount of quota required for the operation
  * \param ret   - is the return code (-EDQUOT, -EINPROGRESS, ...)
  *
- * \retval true  - exit from l_wait_event and real return value in \a ret
+ * \retval true  - stop waiting in wait_event_idle_timeout,
+ *                 and real return value in \a ret
  * \retval false - continue waiting
  */
 static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
@@ -665,7 +666,7 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
 		/* already a request in flight, continue waiting */
 		RETURN(false);
 	*ret = rc;
-	RETURN(true); /* exit from l_wait_event */
+	RETURN(true);
 }
 
 /**

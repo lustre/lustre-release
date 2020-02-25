@@ -221,7 +221,13 @@ __out:	__ret;								\
 									\
 		if (condition)						\
 			break;						\
-		/* See justification in __l_wait_event */		\
+		/* We have to do this here because some signals */	\
+		/* are not blockable - ie from strace(1).       */	\
+		/* In these cases we want to schedule_timeout() */	\
+		/* again, because we don't want that to return  */	\
+		/* -EINTR when the RPC actually succeeded.      */	\
+		/* the recalc_sigpending() below will deliver the */	\
+		/* signal properly.                             */	\
 		if (signal_pending(current)) {				\
 			spin_lock_irqsave(&current->sighand->siglock,	\
 					  flags);			\
@@ -481,7 +487,7 @@ do {									\
 									\
 		if (condition)						\
 			break;						\
-		/* See justification in __l_wait_event */		\
+		/* See justification in ___wait_event_idle */		\
 		if (signal_pending(current)) {				\
 			spin_lock_irqsave(&current->sighand->siglock,	\
 					  flags);			\
