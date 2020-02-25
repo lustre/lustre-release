@@ -1886,7 +1886,7 @@ STRIPE OPTIONS:
         <literal>--xattr|-x</literal> options are mandatory.
         The <literal>&lt;foreign_type&gt;</literal> (default is "none", meaning
         no special behavior), and both <literal>--flags</literal> and
-        <literal>--mode</literal> (default is O666) options are optional.</para>
+        <literal>--mode</literal> (default is 0666) options are optional.</para>
         <para><emphasis role="bold">Example</emphasis></para>
         <para>The following command creates a foreign file of "none" type and
         with "foo@bar" LOV content and specific mode and flags:
