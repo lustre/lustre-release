@@ -850,6 +850,7 @@ out_ctx:
 	LASSERT(!request->rq_pool);
 	sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
 out_free:
+	atomic_dec(&imp->imp_reqs);
 	class_import_put(imp);
 
 	return rc;
@@ -894,11 +895,39 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
 		LASSERT(imp->imp_client != LP_POISON);
 
 		request->rq_import = class_import_get(imp);
+		atomic_inc(&imp->imp_reqs);
 	} else {
 		CERROR("request allocation out of memory\n");
 	}
 
 	return request;
+}
+
+static int ptlrpc_reconnect_if_idle(struct obd_import *imp)
+{
+	int rc;
+
+	/*
+	 * initiate connection if needed when the import has been
+	 * referenced by the new request to avoid races with disconnect.
+	 * serialize this check against conditional state=IDLE
+	 * in ptlrpc_disconnect_idle_interpret()
+	 */
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state == LUSTRE_IMP_IDLE) {
+		imp->imp_generation++;
+		imp->imp_initiated_at = imp->imp_generation;
+		imp->imp_state = LUSTRE_IMP_NEW;
+
+		/* connect_import_locked releases imp_lock */
+		rc = ptlrpc_connect_import_locked(imp);
+		if (rc)
+			return rc;
+		ptlrpc_pinger_add_import(imp);
+	} else {
+		spin_unlock(&imp->imp_lock);
+	}
+	return 0;
 }
 
 /**
@@ -918,32 +947,13 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
 	if (!request)
 		return NULL;
 
-	/*
-	 * initiate connection if needed when the import has been
-	 * referenced by the new request to avoid races with disconnect
-	 */
-	if (unlikely(imp->imp_state == LUSTRE_IMP_IDLE)) {
-		int rc;
-
-		CDEBUG_LIMIT(imp->imp_idle_debug,
-			     "%s: reconnect after %llds idle\n",
-			     imp->imp_obd->obd_name, ktime_get_real_seconds() -
-						     imp->imp_last_reply_time);
-		spin_lock(&imp->imp_lock);
-		if (imp->imp_state == LUSTRE_IMP_IDLE) {
-			imp->imp_generation++;
-			imp->imp_initiated_at = imp->imp_generation;
-			imp->imp_state = LUSTRE_IMP_NEW;
-
-			/* connect_import_locked releases imp_lock */
-			rc = ptlrpc_connect_import_locked(imp);
-			if (rc < 0) {
-				ptlrpc_request_free(request);
-				return NULL;
-			}
-			ptlrpc_pinger_add_import(imp);
-		} else {
-			spin_unlock(&imp->imp_lock);
+	/* don't make expensive check for idling connection
+	 * if it's already connected */
+	if (unlikely(imp->imp_state != LUSTRE_IMP_FULL)) {
+		if (ptlrpc_reconnect_if_idle(imp) < 0) {
+			atomic_dec(&imp->imp_reqs);
+			ptlrpc_request_free(request);
+			return NULL;
 		}
 	}
 
@@ -2586,6 +2596,10 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 		sptlrpc_cli_free_repbuf(request);
 
 	if (request->rq_import) {
+		if (!ptlrpcd_check_work(request)) {
+			LASSERT(atomic_read(&request->rq_import->imp_reqs) > 0);
+			atomic_dec(&request->rq_import->imp_reqs);
+		}
 		class_import_put(request->rq_import);
 		request->rq_import = NULL;
 	}
