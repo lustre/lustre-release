@@ -2774,7 +2774,7 @@ static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 		RETURN(0);
 
 	/*
-	 * We have to l_wait_event() whatever the result, to give liblustre
+	 * We have to wait_event_idle_timeout() whatever the result, to get
 	 * a chance to run reply_in_callback(), and to make sure we've
 	 * unlinked before returning a req to the pool.
 	 */

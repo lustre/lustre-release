@@ -280,8 +280,9 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 
 	/* The unlink ensures the callback happens ASAP and is the last
 	 * one.  If it fails, it must be because completion just happened,
-	 * but we must still l_wait_event() in this case, to give liblustre
-	 * a chance to run server_bulk_callback()*/
+	 * but we must still wait_event_idle_timeout() in this case, to give
+	 * us a chance to run server_bulk_callback()
+	 */
 	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 
 	for (;;) {
@@ -452,8 +453,9 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 
 	/* the unlink ensures the callback happens ASAP and is the last
 	 * one.  If it fails, it must be because completion just happened,
-	 * but we must still l_wait_event() in this case to give liblustre
-	 * a chance to run client_bulk_callback() */
+	 * but we must still wait_event_idle_timeout() in this case to give
+	 * us a chance to run client_bulk_callback()
+	 */
 	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 
 	if (ptlrpc_client_bulk_active(req) == 0)	/* completed or */

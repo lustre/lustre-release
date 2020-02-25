@@ -2980,7 +2980,7 @@ static int ptlrpc_hr_main(void *arg)
 	wake_up(&ptlrpc_hr.hr_waitq);
 
 	while (!ptlrpc_hr.hr_stopping) {
-		l_wait_condition(hrt->hrt_waitq, hrt_dont_sleep(hrt, &replies));
+		wait_event_idle(hrt->hrt_waitq, hrt_dont_sleep(hrt, &replies));
 
 		while (!list_empty(&replies)) {
 			struct ptlrpc_reply_state *rs;

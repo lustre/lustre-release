@@ -144,6 +144,10 @@ LPROC_SEQ_FOPS_WR_ONLY||LUSTRE_WO_ATTR
 LPU64||%llu
 LPX64i||%llx
 LPX64||%#llx
+l_wait_event||wait_event_idle
+l_wait_event_exclusive||l_wait_event_abortable_exclusive
+l_wait_event_exclusive_head||wait_event_idle_exclusive_lifo_timeout
+l_wait_condition||wait_event_idle
 \bMAX\(||max_t
 \bMIN\(||min_t
 mdo2fid||mdd_object_fid
