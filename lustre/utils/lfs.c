@@ -283,7 +283,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\tmode: the file access permission of the directory (octal)\n" \
 	"To create dir with a foreign (free format) layout :\n" \
 	"setdirstripe|mkdir --foreign[=<foreign_type>] -x|-xattr <string> " \
-		"[--mode|-m mode] [--flags <hex>] <dir>\n" \
+		"[--mode|-o mode] [--flags <hex>] <dir>\n" \
 	"\tmode: the mode of the directory\n" \
 	"\tforeign_type: none or daos\n"
 
