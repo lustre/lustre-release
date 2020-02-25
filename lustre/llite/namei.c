@@ -700,8 +700,10 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	GOTO(out, rc = 0);
 
 out:
-	if (rc != 0 && it->it_op & IT_OPEN)
+	if (rc != 0 && it->it_op & IT_OPEN) {
+		ll_intent_drop_lock(it);
 		ll_open_cleanup((*de)->d_sb, request);
+	}
 
 	return rc;
 }
