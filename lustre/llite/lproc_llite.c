@@ -549,15 +549,16 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 		/* reduce LRU budget from free slots. */
 		do {
-			long ov, nv;
+			long ov, nv, retv;
 
 			ov = atomic_long_read(&cache->ccc_lru_left);
 			if (ov == 0)
 				break;
 
 			nv = ov > diff ? ov - diff : 0;
-			rc = atomic_long_cmpxchg(&cache->ccc_lru_left, ov, nv);
-			if (likely(ov == rc)) {
+			retv = atomic_long_cmpxchg(&cache->ccc_lru_left,
+						   ov, nv);
+			if (likely(ov == retv)) {
 				diff -= ov - nv;
 				nrpages += ov - nv;
 				break;
