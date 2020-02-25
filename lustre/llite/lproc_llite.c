@@ -467,8 +467,10 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	long max_cached_mb;
 	long unused_mb;
 
+	mutex_lock(&cache->ccc_max_cache_mb_lock);
 	max_cached_mb = PAGES_TO_MiB(cache->ccc_lru_max);
 	unused_mb = PAGES_TO_MiB(atomic_long_read(&cache->ccc_lru_left));
+	mutex_unlock(&cache->ccc_max_cache_mb_lock);
 	seq_printf(m, "users: %d\n"
 		      "max_cached_mb: %ld\n"
 		      "used_mb: %ld\n"
@@ -522,9 +524,8 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	/* Allow enough cache so clients can make well-formed RPCs */
 	pages_number = max_t(long, pages_number, PTLRPC_MAX_BRW_PAGES);
 
-	spin_lock(&sbi->ll_lock);
+	mutex_lock(&cache->ccc_max_cache_mb_lock);
 	diff = pages_number - cache->ccc_lru_max;
-	spin_unlock(&sbi->ll_lock);
 
 	/* easy - add more LRU slots. */
 	if (diff >= 0) {
@@ -534,7 +535,7 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
-		RETURN(PTR_ERR(env));
+		GOTO(out_unlock, rc = PTR_ERR(env));
 
 	diff = -diff;
 	while (diff > 0) {
@@ -542,18 +543,21 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 		/* reduce LRU budget from free slots. */
 		do {
-			long ov, nv, retv;
+			long lru_left_old, lru_left_new, lru_left_ret;
 
-			ov = atomic_long_read(&cache->ccc_lru_left);
-			if (ov == 0)
+			lru_left_old = atomic_long_read(&cache->ccc_lru_left);
+			if (lru_left_old == 0)
 				break;
 
-			nv = ov > diff ? ov - diff : 0;
-			retv = atomic_long_cmpxchg(&cache->ccc_lru_left,
-						   ov, nv);
-			if (likely(ov == retv)) {
-				diff -= ov - nv;
-				nrpages += ov - nv;
+			lru_left_new = lru_left_old > diff ?
+					lru_left_old - diff : 0;
+			lru_left_ret =
+				atomic_long_cmpxchg(&cache->ccc_lru_left,
+						    lru_left_old,
+						    lru_left_new);
+			if (likely(lru_left_old == lru_left_ret)) {
+				diff -= lru_left_old - lru_left_new;
+				nrpages += lru_left_old - lru_left_new;
 				break;
 			}
 		} while (1);
@@ -566,8 +570,11 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 			break;
 		}
 
+		/* Request extra free slots to avoid them all being used
+		 * by other processes before this can continue shrinking.
+		 */
+		tmp = diff + min_t(long, diff, MiB_TO_PAGES(1024));
 		/* difficult - have to ask OSCs to drop LRU slots. */
-		tmp = diff << 1;
 		rc = obd_set_info_async(env, sbi->ll_dt_exp,
 				sizeof(KEY_CACHE_LRU_SHRINK),
 				KEY_CACHE_LRU_SHRINK,
@@ -579,13 +586,13 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 out:
 	if (rc >= 0) {
-		spin_lock(&sbi->ll_lock);
 		cache->ccc_lru_max = pages_number;
-		spin_unlock(&sbi->ll_lock);
 		rc = count;
 	} else {
 		atomic_long_add(nrpages, &cache->ccc_lru_left);
 	}
+out_unlock:
+	mutex_unlock(&cache->ccc_max_cache_mb_lock);
 	return rc;
 }
 LDEBUGFS_SEQ_FOPS(ll_max_cached_mb);

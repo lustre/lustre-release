@@ -2288,6 +2288,10 @@ struct cl_client_cache {
 	 * Used at umounting time and signaled on BRW commit
 	 */
 	wait_queue_head_t	ccc_unstable_waitq;
+	/**
+	 * Serialize max_cache_mb write operation
+	 */
+	struct mutex		ccc_max_cache_mb_lock;
 };
 /**
  * cl_cache functions
