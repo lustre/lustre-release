@@ -1762,7 +1762,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 		memset(&imp->imp_remote_handle, 0,
 		       sizeof(imp->imp_remote_handle));
 		/* take our DISCONNECT into account */
-		if (atomic_read(&imp->imp_inflight) > 1) {
+		if (atomic_read(&imp->imp_reqs) > 1) {
 			imp->imp_generation++;
 			imp->imp_initiated_at = imp->imp_generation;
 			import_set_state_nolock(imp, LUSTRE_IMP_NEW);

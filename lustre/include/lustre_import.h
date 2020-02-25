@@ -218,6 +218,8 @@ struct obd_import {
 	/** Wait queue for those who need to wait for recovery completion */
 	wait_queue_head_t         imp_recovery_waitq;
 
+	/** Number of requests allocated */
+	atomic_t                  imp_reqs;
 	/** Number of requests currently in-flight */
 	atomic_t                  imp_inflight;
 	/** Number of requests currently unregistering */

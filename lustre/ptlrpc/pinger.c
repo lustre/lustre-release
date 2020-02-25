@@ -100,13 +100,7 @@ static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
 	if (!imp->imp_idle_timeout)
 		return false;
 
-	/* 4 comes from:
-	 *  - client_obd_setup() - hashed import
-	 *  - ptlrpcd_alloc_work()
-	 *  - ptlrpcd_alloc_work()
-	 *  - ptlrpc_pinger_add_import
-	 */
-	if (atomic_read(&imp->imp_refcount) > 4)
+	if (atomic_read(&imp->imp_reqs) > 0)
 		return false;
 
 	/* any lock increases ns_bref being a resource holder */
