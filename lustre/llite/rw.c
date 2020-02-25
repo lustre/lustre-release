@@ -373,19 +373,30 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 			if (ra.cra_end_idx == 0 || ra.cra_end_idx < page_idx) {
 				pgoff_t end_idx;
 
+				/*
+				 * Do not shrink ria_end_idx at any case until
+				 * the minimum end of current read is covered.
+				 *
+				 * Do not extend read lock accross stripe if
+				 * lock contention detected.
+				 */
+				if (ra.cra_contention &&
+				    page_idx > ria->ria_end_idx_min) {
+					ria->ria_end_idx = *ra_end;
+					break;
+				}
+
 				cl_read_ahead_release(env, &ra);
 
 				rc = cl_io_read_ahead(env, io, page_idx, &ra);
 				if (rc < 0)
 					break;
 
-				/* Do not shrink ria_end_idx at any case until
-				 * the minimum end of current read is covered.
-				 * And only shrink ria_end_idx if the matched
-				 * LDLM lock doesn't cover more. */
-				if (page_idx > ra.cra_end_idx ||
-				    (ra.cra_contention &&
-				     page_idx > ria->ria_end_idx_min)) {
+				 /*
+				  * Only shrink ria_end_idx if the matched
+				  * LDLM lock doesn't cover more.
+				  */
+				if (page_idx > ra.cra_end_idx) {
 					ria->ria_end_idx = ra.cra_end_idx;
 					break;
 				}
