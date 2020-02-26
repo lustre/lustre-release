@@ -333,7 +333,7 @@ run_compilebench() {
 	# for new "test_foo" functions names
 	# local testdir=$DIR/$tdir
 	local testdir=$dir/d0.compilebench.$$
-	mkdir -p $testdir
+	test_mkdir -p $testdir
 	setstripe_getstripe $testdir $cbench_STRIPEPARAMS
 
     local savePWD=$PWD
@@ -367,7 +367,7 @@ run_metabench() {
 	print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
 	local testdir=$dir/d0.metabench
-	mkdir -p $testdir
+	test_mkdir -p $testdir
 	setstripe_getstripe $testdir $mbench_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -417,7 +417,7 @@ run_simul() {
 	print_opts SIMUL clients simul_REP simul_THREADS
 
 	local testdir=$DIR/d0.simul
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $simul_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -473,7 +473,7 @@ run_mdtest() {
 	print_opts MDTEST mdtest_iteration mdtest_THREADS mdtest_nFiles
 
 	local testdir=$DIR/d0.mdtest
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $mdtest_STRIPEPARAMS
 	chmod 0777 $testdir
 
@@ -481,7 +481,7 @@ run_mdtest() {
 		zconf_mount_clients $clients $MOUNT$i "$mntopts" ||
 			error_exit "Failed $clients on $MOUNT$i"
 		local dir=$DIR$i/d0.mdtest$i
-		mkdir -p $dir
+		test_mkdir $dir
 		setstripe_getstripe $dir $mdtest_SETSTRIPEPARAMS
 		chmod 0777 $dir
 		testdir="$testdir@$dir"
@@ -542,7 +542,7 @@ run_connectathon() {
 	echo "free space = $space KB"
 
 	local testdir=$dir/d0.connectathon
-	mkdir -p $testdir
+	test_mkdir -p $testdir
 	setstripe_getstripe $testdir $cnt_STRIPEPARAMS
 
 	local savePWD=$PWD
@@ -643,7 +643,7 @@ run_ior() {
 
 	print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
-	mkdir -p $testdir
+	test_mkdir -p $testdir
 
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
@@ -711,7 +711,7 @@ run_mib() {
 		MACHINEFILE
 
 	local testdir=$DIR/d0.mib
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $mib_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -760,7 +760,7 @@ run_cascading_rw() {
 	print_opts CASC_RW clients casc_THREADS casc_REP MACHINEFILE
 
 	local testdir=$DIR/d0.cascading_rw
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $casc_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -801,7 +801,7 @@ run_write_append_truncate() {
 
 	print_opts clients write_REP write_THREADS MACHINEFILE
 
-	mkdir -p $testdir
+	test_mkdir $testdir
 	# mpi_run uses mpiuser
 	setstripe_getstripe $testdir $write_STRIPEPARAMS
 
@@ -838,7 +838,7 @@ run_write_disjoint() {
 	print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP \
 		MACHINEFILE
 	local testdir=$DIR/d0.write_disjoint
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $wdisjoint_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -870,7 +870,7 @@ run_parallel_grouplock() {
 	print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
 
 	local testdir=$DIR/d0.parallel_grouplock
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $parallel_grouplock_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -939,7 +939,7 @@ run_statahead () {
 	mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
 		$statahead_NUMFILES $testdir 'f%%d' --ignore
 
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $statahead_STRIPEPARAMS
 
     # mpi_run uses mpiuser
@@ -1024,11 +1024,7 @@ run_rr_alloc() {
 	local rr_alloc_MNTPTS=${rr_alloc_MNTPTS:-11}
 	local total_MNTPTS=$((rr_alloc_MNTPTS * num_clients))
 	local mntpt_root="${TMP}/rr_alloc_mntpt/lustre"
-	if [ $MDSCOUNT -lt 2 ]; then
-		[ -e $DIR/$tdir ] || mkdir -p $DIR/$tdir
-	else
-		[ -e $DIR/$tdir ] || $LFS mkdir -i 0 $DIR/$tdir
-	fi
+	test_mkdir $DIR/$tdir
 	setstripe_getstripe $DIR/$tdir $rr_alloc_STRIPEPARAMS
 
 	chmod 0777 $DIR/$tdir
@@ -1159,7 +1155,7 @@ run_fs_test() {
 
 	print_opts FS_TEST clients fs_test_threads fs_test_objsize MACHINEFILE
 
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $fs_test_STRIPEPARAMS
 
 	# mpi_run uses mpiuser
@@ -1231,7 +1227,7 @@ run_fio() {
 
 	[ x$FIO = x ] && skip_env "FIO not found"
 
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $fio_STRIPEPARAMS
 
 	# use fio job file if exists,
@@ -1301,7 +1297,7 @@ run_xdd() {
 	print_opts XDD clients xdd_queuedepth xdd_blocksize xdd_reqsize \
 		xdd_mbytes xdd_passes xdd_rwratio
 
-	mkdir -p $testdir
+	test_mkdir $testdir
 	setstripe_getstripe $testdir $xdd_STRIPEPARAMS
 
 	local files=""

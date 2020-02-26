@@ -8773,9 +8773,8 @@ test_mkdir() {
 	[ $# -eq 1 ] || error "Only creating single directory is supported"
 	path="$*"
 
+	local parent=$(dirname $path)
 	if [ "$p_option" == "-p" ]; then
-		local parent=$(dirname $path)
-
 		[ -d $path ] && return 0
 		if [ ! -d ${parent} ]; then
 			mkdir -p ${parent} ||
@@ -8783,7 +8782,7 @@ test_mkdir() {
 		fi
 	fi
 
-	if [ $MDSCOUNT -le 1 ]; then
+	if [ $MDSCOUNT -le 1 ] || ! is_lustre ${parent}; then
 		mkdir $path || error "mkdir '$path' failed"
 	else
 		local mdt_index
