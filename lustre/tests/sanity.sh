@@ -6438,7 +6438,9 @@ test_56wb() {
 	echo "done."
 
 	echo -n "Removing test file from pool '$pool'..."
-	$LFS migrate $file1 &> /dev/null ||
+	# "lfs migrate $file" won't remove the file from the pool
+	# until some striping information is changed.
+	$LFS migrate -c 1 $file1 &> /dev/null ||
 		error "cannot remove from pool"
 	[ "$($LFS getstripe -p $file1)" ] &&
 		error "pool still set"
@@ -6460,19 +6462,23 @@ run_test 56wb "check lfs_migrate pool support"
 
 test_56wc() {
 	local file1="$DIR/$tdir/file1"
+	local parent_ssize
+	local parent_scount
+	local cur_ssize
+	local cur_scount
+	local orig_ssize
 
 	echo -n "Creating test dir..."
 	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"
-	local def_stripe_size=$($LFS getstripe -S $DIR/$tdir 2>/dev/null)
 	$LFS setstripe -S 1M -c 1 "$DIR/$tdir" &> /dev/null ||
-		error "cannot set stripe"
+		error "cannot set stripe by '-S 1M -c 1'"
 	echo "done"
 
 	echo -n "Setting initial stripe for test file..."
 	$LFS setstripe -S 512K -c 1 "$file1" &> /dev/null ||
 		error "cannot set stripe"
-	[ $($LFS getstripe -S "$file1") -eq 524288 ] ||
-		error "stripe size not set"
+	cur_ssize=$($LFS getstripe -S "$file1")
+	[ $cur_ssize -eq 524288 ] || error "setstripe -S $cur_ssize != 524288"
 	echo "done."
 
 	# File currently set to -S 512K -c 1
@@ -6489,8 +6495,8 @@ test_56wc() {
 	echo -n "Verifying -S option is passed through to lfs migrate..."
 	$LFS_MIGRATE -y -S 1M "$file1" &> /dev/null ||
 		error "migration failed"
-	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
-		error "file was not restriped"
+	cur_ssize=$($LFS getstripe -S "$file1")
+	[ $cur_ssize -eq 1048576 ] || error "migrate -S $cur_ssize != 1048576"
 	echo "done."
 
 	# File currently set to -S 1M -c 1
@@ -6501,8 +6507,9 @@ test_56wc() {
 		error "long option without argument not supported"
 	$LFS_MIGRATE -y --stripe-size 512K "$file1" &> /dev/null ||
 		error "long option with argument not supported"
-	[ $($LFS getstripe -S "$file1") -eq 524288 ] ||
-		error "file not restriped with --stripe-size option"
+	cur_ssize=$($LFS getstripe -S "$file1")
+	[ $cur_ssize -eq 524288 ] ||
+		error "migrate --stripe-size $cur_ssize != 524288"
 	echo "done."
 
 	# File currently set to -S 512K -c 1
@@ -6511,8 +6518,8 @@ test_56wc() {
 		echo -n "Verifying explicit stripe count can be set..."
 		$LFS_MIGRATE -y -c 2 "$file1" &> /dev/null ||
 			error "migrate failed"
-		[ $($LFS getstripe -c "$file1") -eq 2 ] ||
-			error "file not restriped to explicit count"
+		cur_scount=$($LFS getstripe -c "$file1")
+		[ $cur_scount -eq 2 ] || error "migrate -c $cur_scount != 2"
 		echo "done."
 	fi
 
@@ -6521,17 +6528,21 @@ test_56wc() {
 	# Ensure parent striping is used if -R is set, and no stripe
 	# count or size is specified
 	echo -n "Setting stripe for parent directory..."
-	$LFS setstripe -S 1M -c 1 "$DIR/$tdir" &> /dev/null ||
-		error "cannot set stripe"
+	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
+		error "cannot set stripe '-S 2M -c 1'"
 	echo "done."
 
 	echo -n "Verifying restripe option uses parent stripe settings..."
+	parent_ssize=$($LFS getstripe -S $DIR/$tdir 2>/dev/null)
+	parent_scount=$($LFS getstripe -c $DIR/$tdir 2>/dev/null)
 	$LFS_MIGRATE -y -R "$file1" &> /dev/null ||
 		error "migrate failed"
-	[ $($LFS getstripe -S "$file1") -eq $def_stripe_size ] ||
-		error "file not restriped to parent settings"
-	[ $($LFS getstripe -c "$file1") -eq 1 ] ||
-		error "file not restriped to parent settings"
+	cur_ssize=$($LFS getstripe -S "$file1")
+	[ $cur_ssize -eq $parent_ssize ] ||
+		error "migrate -R stripe_size $cur_ssize != $parent_ssize"
+	cur_scount=$($LFS getstripe -c "$file1")
+	[ $cur_scount -eq $parent_scount ] ||
+		error "migrate -R stripe_count $cur_scount != $parent_scount"
 	echo "done."
 
 	# File currently set to -S 1M -c 1
@@ -6539,13 +6550,14 @@ test_56wc() {
 	# Ensure striping is preserved if -R is not set, and no stripe
 	# count or size is specified
 	echo -n "Verifying striping size preserved when not specified..."
-	local orig_stripe_size=$($LFS getstripe -S "$file1" 2>/dev/null)
+	orig_ssize=$($LFS getstripe -S "$file1" 2>/dev/null)
 	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe on parent directory"
 	$LFS_MIGRATE -y "$file1" &> /dev/null ||
 		error "migrate failed"
-	[ $($LFS getstripe -S "$file1") -eq $orig_stripe_size ] ||
-		error "file was restriped"
+	cur_ssize=$($LFS getstripe -S "$file1")
+	[ $cur_ssize -eq $orig_ssize ] ||
+		error "migrate by default $cur_ssize != $orig_ssize"
 	echo "done."
 
 	# Ensure file name properly detected when final option has no argument
@@ -6832,6 +6844,75 @@ test_56xc() {
 	rm -rf $dir
 }
 run_test 56xc "lfs migration autostripe"
+
+test_56xd() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	local dir=$DIR/$tdir
+	local f_mgrt=$dir/$tfile.mgrt
+	local f_yaml=$dir/$tfile.yaml
+	local f_copy=$dir/$tfile.copy
+	local layout_yaml="-E 1M -S 512K -c 1 -E -1 -S 1M -c 2 -i 0"
+	local layout_copy="-c 2 -S 2M -i 1"
+	local yamlfile=$dir/yamlfile
+	local layout_before;
+	local layout_after;
+
+	test_mkdir "$dir" || error "cannot create dir $dir"
+	$LFS setstripe $layout_yaml $f_yaml ||
+		error "cannot setstripe $f_yaml with layout $layout_yaml"
+	$LFS getstripe --yaml $f_yaml > $yamlfile
+	$LFS setstripe $layout_copy $f_copy ||
+		error "cannot setstripe $f_copy with layout $layout_copy"
+	touch $f_mgrt
+	dd if=/dev/zero of=$f_mgrt bs=1M count=4
+
+	# 1. test option --yaml
+	$LFS_MIGRATE -y --yaml $yamlfile $f_mgrt ||
+		error "cannot migrate $f_mgrt with --yaml $yamlfile"
+	layout_before=$(get_layout_param $f_yaml)
+	layout_after=$(get_layout_param $f_mgrt)
+	[ "$layout_after" == "$layout_before" ] ||
+		error "lfs_migrate --yaml: $layout_after != $layout_before"
+
+	# 2. test option --copy
+	$LFS_MIGRATE -y --copy $f_copy $f_mgrt ||
+		error "cannot migrate $f_mgrt with --copy $f_copy"
+	layout_before=$(get_layout_param $f_copy)
+	layout_after=$(get_layout_param $f_mgrt)
+	[ "$layout_after" == "$layout_before" ] ||
+		error "lfs_migrate --copy: $layout_after != $layout_before"
+}
+run_test 56xd "check lfs_migrate --yaml and --copy support"
+
+test_56xe() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	local dir=$DIR/$tdir
+	local f_comp=$dir/$tfile
+	local layout="-E 1M -S 512K -c 1 -E -1 -S 1M -c 2 -i 0"
+	local layout_before=""
+	local layout_after=""
+
+	test_mkdir "$dir" || error "cannot create dir $dir"
+	$LFS setstripe $layout $f_comp ||
+		error "cannot setstripe $f_comp with layout $layout"
+	layout_before=$(get_layout_param $f_comp)
+	dd if=/dev/zero of=$f_comp bs=1M count=4
+
+	# 1. migrate a comp layout file by lfs_migrate
+	$LFS_MIGRATE -y $f_comp || error "cannot migrate $f_comp by lfs_migrate"
+	layout_after=$(get_layout_param $f_comp)
+	[ "$layout_before" == "$layout_after" ] ||
+		error "lfs_migrate: $layout_before != $layout_after"
+
+	# 2. migrate a comp layout file by lfs migrate
+	$LFS migrate $f_comp || error "cannot migrate $f_comp by lfs migrate"
+	layout_after=$(get_layout_param $f_comp)
+	[ "$layout_before" == "$layout_after" ] ||
+		error "lfs migrate: $layout_before != $layout_after"
+}
+run_test 56xe "migrate a composite layout file"
 
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
