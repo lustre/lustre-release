@@ -113,6 +113,7 @@ OPT_DEBUG=false
 OPT_DRYRUN=false
 OPT_FILE=()
 OPT_LAYOUT=()
+OPT_COMP=false
 OPT_NO_RSYNC=false
 OPT_NO_DIRECT=false
 OPT_NULL=false
@@ -151,7 +152,7 @@ while [ -n "$*" ]; do
 	   OPT_PASSTHROUGH+=("$arg");;
 	--rsync) OPT_RSYNC=true;;
 	--no-rsync) OPT_NO_RSYNC=true;;
-	--copy|--yaml|--file)
+	--copy|--yaml|--file) OPT_COMP=true;
 	   # these options have files as arguments, pass both through
 	   OPT_LAYOUT+="$arg $2 "; shift;;
 	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
@@ -167,22 +168,18 @@ while [ -n "$*" ]; do
 	shift
 done
 
-if $OPT_RESTRIPE && [ -n "$OPT_LAYOUT" ]; then
-	echo "$PROG: Options $OPT_LAYOUT cannot be used with the -R option" 1>&2
+if $OPT_RESTRIPE || $OPT_AUTOSTRIPE && [ -n "$OPT_LAYOUT" ]; then
+	echo "$PROG error: Options '$OPT_LAYOUT' can't be used with -R or -A" \
+		1>&2
 	exit 1
 elif $OPT_RESTRIPE && [[ "$OPT_STRIPE_COUNT" || "$OPT_STRIPE_SIZE" ]]; then
-	echo "$(basename $0): Options -c <stripe_count> and -S <stripe_size> "\
-	"may not be specified at the same time as the -R option." 1>&2
+	echo "$PROG error: Option -R can't be used with -c or -S" 1>&2
 	exit 1
 elif $OPT_AUTOSTRIPE && [ -n "$OPT_STRIPE_COUNT" ]; then
-	echo ""
-	echo "$(basename $0) error: The -c <stripe_count> option may not" 1>&2
-	echo "be specified at the same time as the -A option." 1>&2
+	echo "$PROG error: Option -A can't be used with -c" 1>&2
 	exit 1
 elif $OPT_AUTOSTRIPE && $OPT_RESTRIPE; then
-	echo ""
-	echo "$(basename $0) error: The -A option may not be specified at" 1>&2
-	echo "the same time as the -R option." 1>&2
+	echo "$PROG error: Option -A can't be used with -R" 1>&2
 	exit 1
 fi
 
@@ -289,12 +286,6 @@ function calc_stripe()
 lfs_migrate() {
 	while IFS='' read -d '' OLDNAME; do
 		local hlinks=()
-		local stripe_size="$OPT_STRIPE_SIZE"
-		local stripe_count="$OPT_STRIPE_COUNT"
-		local parent_count=""
-		local parent_size=""
-		local stripe_pool="${OPT_POOL#-p }"
-		local mirror_count
 		local layout
 
 		$ECHO -n "$OLDNAME: "
@@ -369,8 +360,34 @@ lfs_migrate() {
 			fi
 		fi
 
+		local stripe_size="$OPT_STRIPE_SIZE"
+		local stripe_count="$OPT_STRIPE_COUNT"
+		local stripe_opts="-N --comp-count -c -S -p -y"
+		local parent_count=""
+		local parent_size=""
+		local stripe_pool="${OPT_POOL#-p }"
+		local mirror_count=1
+		local comp_count=0
+		# avoid multiple getstripe calls
+		#   lcm_mirror_count:  1
+		#   lcm_entry_count:   0
+		#      lmm_stripe_count:  1
+		#      lmm_stripe_size:   1048576
+		#      lmm_pool:          pool_abc
+		local l_mirror_count=0
+		local l_comp_count=1
+		local l_stripe_count=2
+		local l_stripe_size=3
+		local l_stripe_pool=4
+		local layout_info=($($LFS getstripe $stripe_opts $OLDNAME \
+			2>/dev/null | awk '{ print $2 }'))
+
+		layout="${OPT_PASSTHROUGH[@]} "
+
 		if $OPT_RESTRIPE; then
 			UNLINK=""
+			layout+="--copy $(dirname $OLDNAME)"
+			OPT_COMP=true
 		else
 			# if rsync copies Lustre xattrs properly in the future
 			# (i.e. before the file data, so that it preserves
@@ -379,8 +396,8 @@ lfs_migrate() {
 			UNLINK="-u"
 
 			[ -n "$OPT_POOL" ] ||
-			 stripe_pool=$($LFS getstripe -p "$OLDNAME" 2>/dev/null)
-			mirror_count=$($LFS getstripe -N "$OLDFILE" 2>/dev/null)
+				stripe_pool=${layout_info[$l_stripe_pool]}
+			mirror_count=${layout_info[$l_mirror_count]}
 
 			if $OPT_AUTOSTRIPE; then
 				local filekb=$((${nlink_type[3]} / 1024))
@@ -391,11 +408,10 @@ lfs_migrate() {
 				[ $stripe_count -lt 1 ] && stripe_count=1
 			else
 				[ -n "$stripe_count" ] ||
-					stripe_count=$($LFS getstripe -c "$OLDNAME" \
-						2> /dev/null)
+					stripe_count=${layout_info[$l_stripe_count]}
 			fi
 			[ -n "$stripe_size" ] ||
-				stripe_size=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+				stripe_size=${layout_info[$l_stripe_size]}
 
 			[ -z "$stripe_count" -o -z "$stripe_size" ] && UNLINK=""
 		fi
@@ -403,26 +419,22 @@ lfs_migrate() {
 		if $OPT_DEBUG; then
 			local parent_count
 			local parent_size
+			local parent_layout
 
 			if $OPT_RESTRIPE; then
-				parent_count=$($LFS getstripe -c \
-					       $(dirname "$OLDNAME") 2> \
-					       /dev/null)
-				parent_size=$($LFS getstripe -S \
-					      $(dirname "$OLDNAME") 2> \
-					      /dev/null)
-				stripe_pool=$($LFS getstripe --pool \
-					      $(dirname "$OLDNAME") 2> \
-					      /dev/null)
-				mirror_count=$($LFS getstripe -N \
-					       $(dirname "$OLDFILE") 2> \
-					       /dev/null)
+				parent_layout=($($LFS getstripe $stripe_opts \
+					-d $(dirname $OLDNAME) 2>/dev/null |
+						awk '{print $2 }'))
+				parent_count=${parent_layout[$l_stripe_count]}
+				parent_size=${parent_layout[$l_stripe_size]}
+				stripe_pool=${parent_layout[$l_stripe_pool]}
+				mirror_count=${parent_layout[$l_mirror_count]}
 			fi
 
 			$ECHO -n "stripe_count=${stripe_count:-$parent_count},stripe_size=${stripe_size:-$parent_size}"
 			[ -n "$stripe_pool" ] &&
 				$ECHO -n ",pool=${stripe_pool}"
-			[ -n "$mirror_count" ] &&
+			[[ $mirror_count -gt 1 ]] &&
 				$ECHO -n ",mirror_count=${mirror_count}"
 			$ECHO -n " "
 		fi
@@ -432,12 +444,17 @@ lfs_migrate() {
 			continue
 		fi
 
-		layout="${OPT_PASSTHROUGH[@]} "
-		[ -n "$stripe_count" ] && layout+="-c $stripe_count "
-		[ -n "$stripe_size" ] && layout+="-S $stripe_size "
-		[ -z "$OPT_POOL" -a -n "$stripe_pool" ] &&
-					layout+="-p $stripe_pool "
-		[ -n "$mirror_count" ] && layout+="-N $mirror_count "
+		if ! $OPT_COMP && [ ${layout_info[$l_comp_count]} -gt 0 ]; then
+			layout+="--copy $OLDNAME"
+			OPT_COMP=true
+		fi
+		if ! $OPT_COMP; then
+			[ -n "$stripe_count" ] && layout+="-c $stripe_count "
+			[ -n "$stripe_size" ] && layout+="-S $stripe_size "
+			[ -n "$OPT_POOL" -a -n "$stripe_pool" ] &&
+						layout+="-p $stripe_pool "
+			[[ $mirror_count -gt 1 ]] && layout+="-N $mirror_count "
+		fi
 		layout+="$OPT_LAYOUT"
 
 		# detect other hard links and store them on a global
