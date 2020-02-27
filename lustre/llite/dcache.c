@@ -60,11 +60,6 @@ static void ll_release(struct dentry *de)
         if (lld == NULL) /* NFS copies the de->d_op methods (bug 4655) */
                 RETURN_EXIT;
 
-        if (lld->lld_it) {
-                ll_intent_release(lld->lld_it);
-                OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
-        }
-
 	de->d_fsdata = NULL;
 	call_rcu(&lld->lld_rcu_head, free_dentry_data);
 

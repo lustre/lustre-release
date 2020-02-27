@@ -76,7 +76,6 @@
 #define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
 
 struct ll_dentry_data {
-	struct lookup_intent		*lld_it;
 	unsigned int			lld_sa_generation;
 	unsigned int			lld_invalid:1;
 	unsigned int			lld_nfs_dentry:1;
