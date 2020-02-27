@@ -738,13 +738,13 @@ static int vvp_io_setattr_start(const struct lu_env *env,
 
 	if (cl_io_is_trunc(io)) {
 		trunc_sem_down_write(&lli->lli_trunc_sem);
-		inode_lock(inode);
+		mutex_lock(&lli->lli_setattr_mutex);
 		inode_dio_wait(inode);
 	} else if (cl_io_is_fallocate(io)) {
 		inode_lock(inode);
 		inode_dio_wait(inode);
 	} else {
-		inode_lock(inode);
+		mutex_lock(&lli->lli_setattr_mutex);
 	}
 
 	if (io->u.ci_setattr.sa_avalid & TIMES_SET_FLAGS)
@@ -764,12 +764,12 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 		/* Truncate in memory pages - they must be clean pages
 		 * because osc has already notified to destroy osc_extents. */
 		vvp_do_vmtruncate(inode, io->u.ci_setattr.sa_attr.lvb_size);
-		inode_unlock(inode);
+		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else if (cl_io_is_fallocate(io)) {
 		inode_unlock(inode);
 	} else {
-		inode_unlock(inode);
+		mutex_unlock(&lli->lli_setattr_mutex);
 	}
 }
 

@@ -185,6 +185,7 @@ struct ll_inode_info {
 			char		       *lli_symlink_name;
 			struct ll_trunc_sem	lli_trunc_sem;
 			struct range_lock_tree	lli_write_tree;
+			struct mutex		lli_setattr_mutex;
 
 			struct rw_semaphore	lli_glimpse_sem;
 			ktime_t			lli_glimpse_time;
