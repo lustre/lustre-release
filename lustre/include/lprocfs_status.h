@@ -522,8 +522,8 @@ extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                                   struct lprocfs_stats *stats);
 
 /* lprocfs_status.c */
-extern int ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *var,
-			     void *data);
+extern void ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *var,
+			      void *data);
 extern int lprocfs_add_vars(struct proc_dir_entry *root,
 			    struct lprocfs_vars *var, void *data);
 

@@ -1884,8 +1884,9 @@ static int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_orr_lprocfs_vars); i++)
 		nrs_orr_lprocfs_vars[i].data = &lprocfs_orr_data;
 
-	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_orr_lprocfs_vars,
-				 NULL);
+	ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_orr_lprocfs_vars, NULL);
+
+	return 0;
 }
 
 static const struct ptlrpc_nrs_pol_ops nrs_orr_ops = {
@@ -1936,8 +1937,9 @@ static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_trr_lprocfs_vars); i++)
 		nrs_trr_lprocfs_vars[i].data = &lprocfs_trr_data;
 
-	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_trr_lprocfs_vars,
-				 NULL);
+	ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_trr_lprocfs_vars, NULL);
+
+	return 0;
 }
 
 /**

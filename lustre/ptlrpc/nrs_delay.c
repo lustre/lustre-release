@@ -795,8 +795,9 @@ static int nrs_delay_lprocfs_init(struct ptlrpc_service *svc)
 	if (!svc->srv_debugfs_entry)
 		return 0;
 
-	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_delay_lprocfs_vars,
-				 NULL);
+	ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_delay_lprocfs_vars, NULL);
+
+	return 0;
 }
 
 /**

@@ -733,13 +733,11 @@ static int echo_fid_init(struct echo_device *ed, char *obd_name,
 	snprintf(prefix, MAX_OBD_NAME + 5, "srv-%s", obd_name);
 
 	/* Init client side sequence-manager */
-	rc = seq_client_init(ed->ed_cl_seq, NULL,
-			     LUSTRE_SEQ_METADATA,
-			     prefix, ss->ss_server_seq);
+	seq_client_init(ed->ed_cl_seq, NULL,
+			LUSTRE_SEQ_METADATA,
+			prefix, ss->ss_server_seq);
 	ed->ed_cl_seq->lcs_width = ECHO_SEQ_WIDTH;
 	OBD_FREE(prefix, MAX_OBD_NAME + 5);
-	if (rc)
-		GOTO(out_free_seq, rc);
 
 	RETURN(0);
 

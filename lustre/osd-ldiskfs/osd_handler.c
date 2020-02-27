@@ -7456,7 +7456,7 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
 {
 	struct seq_server_site *ss = osd_seq_site(osd);
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -7470,13 +7470,8 @@ static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
 	if (osd->od_cl_seq == NULL)
 		RETURN(-ENOMEM);
 
-	rc = seq_client_init(osd->od_cl_seq, NULL, LUSTRE_SEQ_METADATA,
-			     osd->od_svname, ss->ss_server_seq);
-	if (rc != 0) {
-		OBD_FREE_PTR(osd->od_cl_seq);
-		osd->od_cl_seq = NULL;
-		RETURN(rc);
-	}
+	seq_client_init(osd->od_cl_seq, NULL, LUSTRE_SEQ_METADATA,
+			osd->od_svname, ss->ss_server_seq);
 
 	if (ss->ss_node_id == 0) {
 		/*

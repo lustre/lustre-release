@@ -225,7 +225,7 @@ int fld_client_del_target(struct lu_client_fld *fld, u64 idx)
 
 struct dentry *fld_debugfs_dir;
 
-static int fld_client_debugfs_init(struct lu_client_fld *fld)
+static void fld_client_debugfs_init(struct lu_client_fld *fld)
 {
 	ENTRY;
 	fld->lcf_debugfs_entry = debugfs_create_dir(fld->lcf_name,
@@ -233,8 +233,6 @@ static int fld_client_debugfs_init(struct lu_client_fld *fld)
 	ldebugfs_add_vars(fld->lcf_debugfs_entry,
 			  fld_client_debugfs_list,
 			  fld);
-
-	return 0;
 }
 
 void fld_client_debugfs_fini(struct lu_client_fld *fld)
@@ -252,7 +250,7 @@ int fld_client_init(struct lu_client_fld *fld,
 		    const char *prefix, int hash)
 {
 	int cache_size, cache_threshold;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 	snprintf(fld->lcf_name, sizeof(fld->lcf_name),
@@ -283,9 +281,7 @@ int fld_client_init(struct lu_client_fld *fld,
 		GOTO(out, rc);
 	}
 
-	rc = fld_client_debugfs_init(fld);
-	if (rc)
-		GOTO(out, rc);
+	fld_client_debugfs_init(fld);
 	EXIT;
 out:
 	if (rc)

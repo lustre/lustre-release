@@ -842,17 +842,12 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 		GOTO(out_server, rc = -ENOMEM);
 
 	snprintf(name, len, "%s-super", obd_name);
-	rc = seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,
-			     name, NULL);
-	if (rc) {
-		CERROR("%s: seq client init error: rc = %d\n", obd_name, rc);
-		GOTO(out_client, rc);
-	}
+	seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,
+			name, NULL);
 
 	rc = seq_server_set_cli(env, ss->ss_server_seq, ss->ss_client_seq);
 
 	if (rc) {
-out_client:
 		seq_client_fini(ss->ss_client_seq);
 		OBD_FREE_PTR(ss->ss_client_seq);
 		ss->ss_client_seq = NULL;

@@ -440,26 +440,13 @@ static void seq_client_debugfs_fini(struct lu_client_seq *seq)
 	debugfs_remove_recursive(seq->lcs_debugfs_entry);
 }
 
-static int seq_client_debugfs_init(struct lu_client_seq *seq)
+static void seq_client_debugfs_init(struct lu_client_seq *seq)
 {
-        int rc;
-
 	seq->lcs_debugfs_entry = debugfs_create_dir(seq->lcs_name,
 						    seq_debugfs_dir);
 
-	rc = ldebugfs_add_vars(seq->lcs_debugfs_entry,
-			       seq_client_debugfs_list, seq);
-	if (rc) {
-		CERROR("%s: Can't init sequence manager debugfs, rc %d\n",
-		       seq->lcs_name, rc);
-                GOTO(out_cleanup, rc);
-        }
-
-        RETURN(0);
-
-out_cleanup:
-	seq_client_debugfs_fini(seq);
-        return rc;
+	ldebugfs_add_vars(seq->lcs_debugfs_entry,
+			  seq_client_debugfs_list, seq);
 }
 
 void seq_client_fini(struct lu_client_seq *seq)
@@ -478,13 +465,12 @@ void seq_client_fini(struct lu_client_seq *seq)
 }
 EXPORT_SYMBOL(seq_client_fini);
 
-int seq_client_init(struct lu_client_seq *seq,
-                    struct obd_export *exp,
-                    enum lu_cli_type type,
-                    const char *prefix,
-                    struct lu_server_seq *srv)
+void seq_client_init(struct lu_client_seq *seq,
+		     struct obd_export *exp,
+		     enum lu_cli_type type,
+		     const char *prefix,
+		     struct lu_server_seq *srv)
 {
-	int rc;
 	ENTRY;
 
 	LASSERT(seq != NULL);
@@ -509,10 +495,7 @@ int seq_client_init(struct lu_client_seq *seq,
 	snprintf(seq->lcs_name, sizeof(seq->lcs_name),
 		 "cli-%s", prefix);
 
-	rc = seq_client_debugfs_init(seq);
-	if (rc)
-		seq_client_fini(seq);
-	RETURN(rc);
+	seq_client_debugfs_init(seq);
 }
 EXPORT_SYMBOL(seq_client_init);
 
@@ -521,7 +504,7 @@ int client_fid_init(struct obd_device *obd,
 {
 	struct client_obd *cli = &obd->u.cli;
 	char *prefix;
-	int rc;
+	int rc = 0;
 	ENTRY;
 
 	down_write(&cli->cl_seq_rwsem);
@@ -536,10 +519,8 @@ int client_fid_init(struct obd_device *obd,
 	snprintf(prefix, MAX_OBD_NAME + 5, "cli-%s", obd->obd_name);
 
 	/* Init client side sequence-manager */
-	rc = seq_client_init(cli->cl_seq, exp, type, prefix, NULL);
+	seq_client_init(cli->cl_seq, exp, type, prefix, NULL);
 	OBD_FREE(prefix, MAX_OBD_NAME + 5);
-
-	GOTO(out, rc);
 
 out:
 	if (rc && cli->cl_seq) {
@@ -548,7 +529,7 @@ out:
 	}
 	up_write(&cli->cl_seq_rwsem);
 
-	return rc;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(client_fid_init);
 

@@ -137,14 +137,13 @@ EXPORT_SYMBOL(lprocfs_add_symlink);
 
 static const struct file_operations lprocfs_generic_fops = { };
 
-int ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *list,
-		      void *data)
+void ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *list,
+		       void *data)
 {
 	if (IS_ERR_OR_NULL(parent) || IS_ERR_OR_NULL(list))
-		return -EINVAL;
+		return;
 
 	while (list->name) {
-		struct dentry *entry;
 		umode_t mode = 0;
 
 		if (list->proc_mode != 0000) {
@@ -155,14 +154,11 @@ int ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *list,
 			if (list->fops->write)
 				mode |= 0200;
 		}
-		entry = debugfs_create_file(list->name, mode, parent,
-					    list->data ? : data,
-					    list->fops ? : &lprocfs_generic_fops);
-		if (IS_ERR_OR_NULL(entry))
-			return entry ? PTR_ERR(entry) : -ENOMEM;
+		debugfs_create_file(list->name, mode, parent,
+				    list->data ? : data,
+				    list->fops ? : &lprocfs_generic_fops);
 		list++;
 	}
-	return 0;
 }
 EXPORT_SYMBOL_GPL(ldebugfs_add_vars);
 

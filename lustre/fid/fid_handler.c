@@ -469,13 +469,8 @@ static int seq_server_debugfs_init(struct lu_server_seq *seq)
 	seq->lss_debugfs_entry = debugfs_create_dir(seq->lss_name,
 						    seq_debugfs_dir);
 
-	rc = ldebugfs_add_vars(seq->lss_debugfs_entry,
-			       seq_server_debugfs_list, seq);
-	if (rc) {
-		CERROR("%s: Can't init sequence manager debugfs, rc %d\n",
-		       seq->lss_name, rc);
-		GOTO(out_cleanup, rc);
-	}
+	ldebugfs_add_vars(seq->lss_debugfs_entry,
+			  seq_server_debugfs_list, seq);
 
 	if (seq->lss_type == LUSTRE_SEQ_CONTROLLER) {
 		rc = ldebugfs_seq_create(seq->lss_debugfs_entry, "fldb", 0644,

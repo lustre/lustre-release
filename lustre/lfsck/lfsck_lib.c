@@ -1622,11 +1622,9 @@ static int lfsck_fid_init(struct lfsck_instance *lfsck)
 		GOTO(out, rc = -ENOMEM);
 
 	snprintf(prefix, MAX_OBD_NAME + 7, "lfsck-%s", lfsck_lfsck2name(lfsck));
-	rc = seq_client_init(lfsck->li_seq, NULL, LUSTRE_SEQ_METADATA, prefix,
+	seq_client_init(lfsck->li_seq, NULL, LUSTRE_SEQ_METADATA, prefix,
 			     ss->ss_server_seq);
 	OBD_FREE(prefix, MAX_OBD_NAME + 7);
-	if (rc != 0)
-		GOTO(out, rc);
 
 	if (fid_is_sane(&bk->lb_last_fid))
 		lfsck->li_seq->lcs_fid = bk->lb_last_fid;
