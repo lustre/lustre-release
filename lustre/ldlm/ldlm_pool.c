@@ -799,15 +799,7 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 		       ldlm_ns_name(ns));
 		GOTO(out, rc = -EINVAL);
 	}
-	pl->pl_debugfs_entry = ldebugfs_register("pool", debugfs_ns_parent,
-						 NULL, NULL);
-	if (IS_ERR(pl->pl_debugfs_entry)) {
-		rc = PTR_ERR(pl->pl_debugfs_entry);
-		pl->pl_debugfs_entry = NULL;
-		CERROR("%s: cannot create 'pool' debugfs entry: rc = %d\n",
-		       ldlm_ns_name(ns), rc);
-		GOTO(out, rc);
-	}
+	pl->pl_debugfs_entry = debugfs_create_dir("pool", debugfs_ns_parent);
 
 	memset(pool_vars, 0, sizeof(pool_vars));
 

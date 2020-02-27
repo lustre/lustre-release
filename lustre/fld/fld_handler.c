@@ -410,15 +410,8 @@ static int fld_server_debugfs_init(struct lu_server_fld *fld)
 	int rc = 0;
 
 	ENTRY;
-	fld->lsf_debugfs_entry = ldebugfs_register(fld->lsf_name,
-						   fld_debugfs_dir,
-						   NULL, NULL);
-	if (IS_ERR_OR_NULL(fld->lsf_debugfs_entry)) {
-		rc = fld->lsf_debugfs_entry ? PTR_ERR(fld->lsf_debugfs_entry)
-					    : -ENOMEM;
-		fld->lsf_debugfs_entry = NULL;
-		RETURN(rc);
-	}
+	fld->lsf_debugfs_entry = debugfs_create_dir(fld->lsf_name,
+						    fld_debugfs_dir);
 
 	rc = ldebugfs_seq_create(fld->lsf_debugfs_entry, "fldb", 0444,
 				 &fld_debugfs_seq_fops, fld);

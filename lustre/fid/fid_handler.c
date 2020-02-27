@@ -466,15 +466,8 @@ static int seq_server_debugfs_init(struct lu_server_seq *seq)
 	int rc;
 	ENTRY;
 
-	seq->lss_debugfs_entry = ldebugfs_register(seq->lss_name,
-						   seq_debugfs_dir,
-						   NULL, NULL);
-	if (IS_ERR_OR_NULL(seq->lss_debugfs_entry)) {
-		rc = seq->lss_debugfs_entry ? PTR_ERR(seq->lss_debugfs_entry)
-					    : -ENOMEM;
-		seq->lss_debugfs_entry = NULL;
-		RETURN(rc);
-	}
+	seq->lss_debugfs_entry = debugfs_create_dir(seq->lss_name,
+						    seq_debugfs_dir);
 
 	rc = ldebugfs_add_vars(seq->lss_debugfs_entry,
 			       seq_server_debugfs_list, seq);

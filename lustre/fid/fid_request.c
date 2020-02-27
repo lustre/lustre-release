@@ -444,16 +444,8 @@ static int seq_client_debugfs_init(struct lu_client_seq *seq)
 {
         int rc;
 
-	seq->lcs_debugfs_entry = ldebugfs_register(seq->lcs_name,
-						   seq_debugfs_dir,
-						   NULL, NULL);
-	if (IS_ERR_OR_NULL(seq->lcs_debugfs_entry)) {
-		CERROR("%s: LdebugFS failed in seq-init\n", seq->lcs_name);
-		rc = seq->lcs_debugfs_entry ? PTR_ERR(seq->lcs_debugfs_entry)
-					    : -ENOMEM;
-		seq->lcs_debugfs_entry = NULL;
-		RETURN(rc);
-        }
+	seq->lcs_debugfs_entry = debugfs_create_dir(seq->lcs_name,
+						    seq_debugfs_dir);
 
 	rc = ldebugfs_add_vars(seq->lcs_debugfs_entry,
 			       seq_client_debugfs_list, seq);
@@ -586,9 +578,8 @@ static int __init fid_init(void)
 	if (rc)
 		return rc;
 #endif
-	de = ldebugfs_register(LUSTRE_SEQ_NAME,
-			       debugfs_lustre_root,
-			       NULL, NULL);
+	de = debugfs_create_dir(LUSTRE_SEQ_NAME,
+			       debugfs_lustre_root);
 	if (!IS_ERR(de))
 		seq_debugfs_dir = de;
 	return PTR_ERR_OR_ZERO(de);

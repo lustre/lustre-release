@@ -522,7 +522,6 @@ void fld_client_flush(struct lu_client_fld *fld)
 
 static int __init fld_init(void)
 {
-	struct dentry *de;
 #ifdef HAVE_SERVER_SUPPORT
 	int rc;
 
@@ -531,12 +530,9 @@ static int __init fld_init(void)
 		return rc;
 #endif /* HAVE_SERVER_SUPPORT */
 
-	de = ldebugfs_register(LUSTRE_FLD_NAME,
-			       debugfs_lustre_root,
-			       NULL, NULL);
-	if (!IS_ERR(de))
-		fld_debugfs_dir = de;
-	return PTR_ERR_OR_ZERO(de);
+	fld_debugfs_dir = debugfs_create_dir(LUSTRE_FLD_NAME,
+					     debugfs_lustre_root);
+	return PTR_ERR_OR_ZERO(fld_debugfs_dir);
 }
 
 static void __exit fld_exit(void)
