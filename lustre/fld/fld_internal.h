@@ -110,13 +110,15 @@ struct fld_cache {
          * sorted fld entries. */
 	struct list_head	fci_entries_head;
 
-        /**
-         * Cache statistics. */
-        struct fld_stats         fci_stat;
+	/**
+	 * Cache statistics.
+	 */
+	struct fld_stats	fci_stat;
 
-        /**
-         * Cache name used for debug and messages. */
-        char                     fci_name[80];
+	/**
+	 * Cache name used for debug and messages.
+	 */
+	char			fci_name[LUSTRE_MDT_MAXNAMELEN];
 };
 
 enum {

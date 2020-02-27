@@ -41,6 +41,7 @@
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <libcfs/libcfs.h>
 #include <seq_range.h>
+#include <lustre_fid.h>
 
 struct lu_env;
 struct lu_client_fld;
@@ -89,9 +90,10 @@ struct lu_server_fld {
          * Protect index modifications */
 	struct mutex		lsf_lock;
 
-        /**
-         * Fld service name in form "fld-srv-lustre-MDTXXX" */
-        char                     lsf_name[80];
+	/**
+	 * Fld service name in form "fld-srv-lustre-MDTXXX"
+	 */
+	char			lsf_name[LUSTRE_MDT_MAXNAMELEN];
 
 	int (*lsf_seq_lookup)(const struct lu_env *env,
 			      struct lu_server_fld *fld, u64 seq,
@@ -133,10 +135,10 @@ struct lu_client_fld {
          * Client FLD cache. */
         struct fld_cache        *lcf_cache;
 
-        /**
+	/**
 	 * Client fld debugfs entry name.
 	 */
-        char                     lcf_name[80];
+	char			lcf_name[LUSTRE_MDT_MAXNAMELEN];
 };
 
 /* Server methods */
