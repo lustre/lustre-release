@@ -59,29 +59,6 @@ int lprocfs_seq_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL(lprocfs_seq_release);
 
-struct dentry *ldebugfs_add_simple(struct dentry *root,
-				   char *name, void *data,
-				   const struct file_operations *fops)
-{
-	struct dentry *entry;
-	umode_t mode = 0;
-
-	if (!root || !name || !fops)
-		return ERR_PTR(-EINVAL);
-
-	if (fops->read)
-		mode = 0444;
-	if (fops->write)
-		mode |= 0200;
-	entry = debugfs_create_file(name, mode, root, data, fops);
-	if (IS_ERR_OR_NULL(entry)) {
-		CERROR("LprocFS: No memory to create <debugfs> entry %s", name);
-		return entry ?: ERR_PTR(-ENOMEM);
-	}
-	return entry;
-}
-EXPORT_SYMBOL(ldebugfs_add_simple);
-
 struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct file_operations *fops)

@@ -501,8 +501,6 @@ struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
 #endif
-struct dentry *ldebugfs_add_simple(struct dentry *root, char *name, void *data,
-				   const struct file_operations *fops);
 extern struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct file_operations *fops);
