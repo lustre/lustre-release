@@ -677,7 +677,7 @@ static unsigned long osc_lock_weight(const struct lu_env *env,
 	io->ci_ignore_layout = 1;
 	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (result != 0)
-		RETURN(result);
+		RETURN(1);
 
 	page_index = cl_index(obj, start);
 
