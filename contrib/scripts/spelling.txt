@@ -100,6 +100,7 @@ cfs_time_current_sec||ktime_get_real_seconds
 CLASSERT||BUILD_BUG_ON()
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
+container_of0||container_of_safe
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 from_timer||cfs_from_timer

@@ -219,9 +219,11 @@ ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
 #endif /* HAVE_FILLDIR_USE_CTX */
 	/*
 	 * It is hack to access lde_fid for comparison with lgd_fid.
-	 * So the input 'name' must be part of the 'lu_dirent'.
+	 * So the input 'name' must be part of the 'lu_dirent', and
+	 * so must appear to be a non-const pointer to an empty array.
 	 */
-	struct lu_dirent *lde = container_of0(name, struct lu_dirent, lde_name);
+	char (*n)[0] = (void *)name;
+	struct lu_dirent *lde = container_of0(n, struct lu_dirent, lde_name);
 	struct lu_fid fid;
 
 	fid_le_to_cpu(&fid, &lde->lde_fid);

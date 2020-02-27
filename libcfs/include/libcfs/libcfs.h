@@ -113,17 +113,7 @@ void cfs_restore_sigs(sigset_t);
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
-/* container_of depends on "likely" which is defined in libcfs_private.h */
-static inline void *__container_of(const void *ptr, unsigned long shift)
-{
-	if (unlikely(IS_ERR(ptr) || ptr == NULL))
-		return ERR_CAST(ptr);
-	else
-		return (char *)ptr - shift;
-}
-
-#define container_of0(ptr, type, member) \
-	((type *)__container_of((ptr), offsetof(type, member)))
+#define container_of0(ptr, type, member) container_of_safe(ptr, type, member)
 
 extern struct workqueue_struct *cfs_rehash_wq;
 

@@ -97,4 +97,21 @@ int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
 
 void cfs_arch_init(void);
 
+#ifndef container_of_safe
+/**
+ * container_of_safe - cast a member of a structure out to the containing structure
+ * @ptr:	the pointer to the member.
+ * @type:	the type of the container struct this is embedded in.
+ * @member:	the name of the member within the struct.
+ *
+ * If IS_ERR_OR_NULL(ptr), ptr is returned unchanged.
+ *
+ * Note: Copied from Linux 5.6, with BUILD_BUG_ON_MSG section removed.
+ */
+#define container_of_safe(ptr, type, member) ({				\
+	void *__mptr = (void *)(ptr);					\
+	IS_ERR_OR_NULL(__mptr) ? ERR_CAST(__mptr) :			\
+		((type *)(__mptr - offsetof(type, member))); })
+#endif
+
 #endif /* __LIBCFS_LINUX_MISC_H__ */
