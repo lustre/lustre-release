@@ -1628,7 +1628,7 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	int err, id, rc;
+	int err, id;
 
 	ENTRY;
 	LASSERT(sbi);
@@ -1639,26 +1639,18 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	sbi->ll_debugfs_entry = debugfs_create_dir(name, llite_root);
 	ldebugfs_add_vars(sbi->ll_debugfs_entry, lprocfs_llite_obd_vars, sb);
 
-	rc = ldebugfs_seq_create(sbi->ll_debugfs_entry, "dump_page_cache",0444,
-				 &vvp_dump_pgcache_file_ops, sbi);
-	if (rc)
-		CWARN("Error adding the dump_page_cache file\n");
+	debugfs_create_file("dump_page_cache", 0444, sbi->ll_debugfs_entry, sbi,
+			    &vvp_dump_pgcache_file_ops);
 
-	rc = ldebugfs_seq_create(sbi->ll_debugfs_entry, "extents_stats", 0644,
-				 &ll_rw_extents_stats_fops, sbi);
-	if (rc)
-		CWARN("Error adding the extent_stats file\n");
+	debugfs_create_file("extents_stats", 0644, sbi->ll_debugfs_entry, sbi,
+				 &ll_rw_extents_stats_fops);
 
-	rc = ldebugfs_seq_create(sbi->ll_debugfs_entry,
-				 "extents_stats_per_process", 0644,
-				 &ll_rw_extents_stats_pp_fops, sbi);
-	if (rc)
-		CWARN("Error adding the extents_stats_per_process file\n");
+	debugfs_create_file("extents_stats_per_process", 0644,
+			    sbi->ll_debugfs_entry, sbi,
+			    &ll_rw_extents_stats_pp_fops);
 
-	rc = ldebugfs_seq_create(sbi->ll_debugfs_entry, "offset_stats", 0644,
-				 &ll_rw_offset_stats_fops, sbi);
-	if (rc)
-		CWARN("Error adding the offset_stats file\n");
+	debugfs_create_file("offset_stats", 0644, sbi->ll_debugfs_entry, sbi,
+			    &ll_rw_offset_stats_fops);
 
 	/* File operations stats */
 	sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,

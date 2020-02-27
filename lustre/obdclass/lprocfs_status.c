@@ -1861,22 +1861,6 @@ char *lprocfs_find_named_value(const char *buffer, const char *name,
 }
 EXPORT_SYMBOL(lprocfs_find_named_value);
 
-int ldebugfs_seq_create(struct dentry *parent, const char *name, umode_t mode,
-			const struct file_operations *seq_fops, void *data)
-{
-	struct dentry *entry;
-
-	/* Disallow secretly (un)writable entries. */
-	LASSERT((!seq_fops->write) == (!(mode & 0222)));
-
-	entry = debugfs_create_file(name, mode, parent, data, seq_fops);
-	if (IS_ERR_OR_NULL(entry))
-		return entry ? PTR_ERR(entry) : -ENOMEM;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(ldebugfs_seq_create);
-
 int lprocfs_seq_create(struct proc_dir_entry *parent,
 		       const char *name,
 		       mode_t mode,

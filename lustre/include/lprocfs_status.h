@@ -540,8 +540,6 @@ extern int lprocfs_obd_cleanup(struct obd_device *obd);
 extern const struct file_operations lprocfs_evict_client_fops;
 #endif
 
-int ldebugfs_seq_create(struct dentry *parent, const char *name, umode_t mode,
-			const struct file_operations *seq_fops, void *data);
 extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 			      mode_t mode,
 			      const struct file_operations *seq_fops,
@@ -637,7 +635,7 @@ extern int lprocfs_seq_release(struct inode *, struct file *);
 /* write the name##_seq_show function, call LDEBUGFS_SEQ_FOPS_RO for read-only
  * debugfs entries; otherwise, you will define name##_seq_write function also
  * for a read-write debugfs entry, and then call LDEBUGFS_SEQ_FOPS instead.
- * Finally, call ldebugfs_seq_create(obd, filename, 0444, &name#_fops, data);
+ * Finally, call debugfs_create_file(filename, 0444, obd, data, &name#_fops);
  */
 #define __LDEBUGFS_SEQ_FOPS(name, custom_seq_write)			\
 static int name##_single_open(struct inode *inode, struct file *file)	\

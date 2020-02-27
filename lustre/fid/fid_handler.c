@@ -461,9 +461,8 @@ static void seq_server_debugfs_fini(struct lu_server_seq *seq)
 	debugfs_remove_recursive(seq->lss_debugfs_entry);
 }
 
-static int seq_server_debugfs_init(struct lu_server_seq *seq)
+static void seq_server_debugfs_init(struct lu_server_seq *seq)
 {
-	int rc;
 	ENTRY;
 
 	seq->lss_debugfs_entry = debugfs_create_dir(seq->lss_name,
@@ -472,21 +471,9 @@ static int seq_server_debugfs_init(struct lu_server_seq *seq)
 	ldebugfs_add_vars(seq->lss_debugfs_entry,
 			  seq_server_debugfs_list, seq);
 
-	if (seq->lss_type == LUSTRE_SEQ_CONTROLLER) {
-		rc = ldebugfs_seq_create(seq->lss_debugfs_entry, "fldb", 0644,
-					 &seq_fld_debugfs_seq_fops, seq);
-		if (rc) {
-			CERROR("%s: Can't create fldb for sequence manager debugfs: rc = %d\n",
-			       seq->lss_name, rc);
-			GOTO(out_cleanup, rc);
-		}
-	}
-
-	RETURN(0);
-
-out_cleanup:
-	seq_server_debugfs_fini(seq);
-	return rc;
+	if (seq->lss_type == LUSTRE_SEQ_CONTROLLER)
+		debugfs_create_file("fldb", 0644, seq->lss_debugfs_entry,
+				    seq, &seq_fld_debugfs_seq_fops);
 }
 
 int seq_server_init(const struct lu_env *env,
@@ -567,9 +554,7 @@ int seq_server_init(const struct lu_env *env,
 			lu_seq_range_is_sane(&seq->lss_space));
 	}
 
-	rc  = seq_server_debugfs_init(seq);
-        if (rc)
-                GOTO(out, rc);
+	seq_server_debugfs_init(seq);
 
         EXIT;
 out:

@@ -207,8 +207,6 @@ LPROC_SEQ_FOPS_WR_ONLY(srpc, sptlrpc_sepol);
 
 int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd)
 {
-	int     rc;
-
 	if (strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) != 0 &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) != 0 &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME) != 0 &&
@@ -219,29 +217,14 @@ int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd)
 		return -EINVAL;
 	}
 
-	rc = ldebugfs_seq_create(obd->obd_debugfs_entry, "srpc_info", 0444,
-				 &sptlrpc_info_lprocfs_fops, obd);
-	if (rc) {
-		CERROR("create proc entry srpc_info for %s: %d\n",
-		       obd->obd_name, rc);
-		return rc;
-	}
+	debugfs_create_file("srpc_info", 0444, obd->obd_debugfs_entry, obd,
+			    &sptlrpc_info_lprocfs_fops);
 
-	rc = ldebugfs_seq_create(obd->obd_debugfs_entry, "srpc_contexts",
-				 0444, &sptlrpc_ctxs_lprocfs_fops, obd);
-	if (rc) {
-		CERROR("create proc entry srpc_contexts for %s: %d\n",
-		       obd->obd_name, rc);
-		return rc;
-	}
+	debugfs_create_file("srpc_contexts", 0444, obd->obd_debugfs_entry, obd,
+			    &sptlrpc_ctxs_lprocfs_fops);
 
-	rc = ldebugfs_seq_create(obd->obd_debugfs_entry, "srpc_sepol",
-				 0200, &srpc_sptlrpc_sepol_fops, obd);
-	if (rc) {
-		CERROR("create proc entry srpc_sepol for %s: %d\n",
-		       obd->obd_name, rc);
-		return rc;
-	}
+	debugfs_create_file("srpc_sepol", 0200, obd->obd_debugfs_entry, obd,
+			    &srpc_sptlrpc_sepol_fops);
 
 	return 0;
 }

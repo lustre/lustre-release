@@ -405,20 +405,14 @@ static void fld_server_debugfs_fini(struct lu_server_fld *fld)
 	debugfs_remove_recursive(fld->lsf_debugfs_entry);
 }
 
-static int fld_server_debugfs_init(struct lu_server_fld *fld)
+static void fld_server_debugfs_init(struct lu_server_fld *fld)
 {
-	int rc = 0;
-
 	ENTRY;
 	fld->lsf_debugfs_entry = debugfs_create_dir(fld->lsf_name,
 						    fld_debugfs_dir);
 
-	rc = ldebugfs_seq_create(fld->lsf_debugfs_entry, "fldb", 0444,
-				 &fld_debugfs_seq_fops, fld);
-	if (rc)
-		debugfs_remove_recursive(fld->lsf_debugfs_entry);
-
-	RETURN(rc);
+	debugfs_create_file("fldb", 0444, fld->lsf_debugfs_entry, fld,
+			    &fld_debugfs_seq_fops);
 }
 
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
@@ -448,17 +442,13 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 	if (rc)
 		GOTO(out_cache, rc);
 
-	rc = fld_server_debugfs_init(fld);
-	if (rc)
-		GOTO(out_index, rc);
+	fld_server_debugfs_init(fld);
 
 	fld->lsf_control_exp = NULL;
 	fld->lsf_seq_lookup = fld_server_lookup;
 
 	fld->lsf_seq_lookup = fld_server_lookup;
 	RETURN(0);
-out_index:
-	fld_index_fini(env, fld);
 out_cache:
 	fld_cache_fini(fld->lsf_cache);
 	return rc;
