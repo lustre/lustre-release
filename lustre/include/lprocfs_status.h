@@ -516,8 +516,7 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off);
 extern int lprocfs_nid_stats_clear_seq_show(struct seq_file *file, void *data);
 #endif
-extern int ldebugfs_register_stats(struct dentry *parent, const char *name,
-				   struct lprocfs_stats *stats);
+extern const struct file_operations lprocfs_stats_seq_fops;
 extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                                   struct lprocfs_stats *stats);
 

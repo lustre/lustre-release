@@ -1677,10 +1677,8 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 				     llite_opcode_table[id].opname, ptr);
 	}
 
-	err = ldebugfs_register_stats(sbi->ll_debugfs_entry, "stats",
-				      sbi->ll_stats);
-	if (err)
-		GOTO(out_stats, err);
+	debugfs_create_file("stats", 0644, sbi->ll_debugfs_entry,
+			    sbi->ll_stats, &lprocfs_stats_seq_fops);
 
 	sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
 					       LPROCFS_STATS_FLAG_NONE);
@@ -1691,10 +1689,8 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 		lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
 				     ra_stat_string[id], "pages");
 
-	err = ldebugfs_register_stats(sbi->ll_debugfs_entry, "read_ahead_stats",
-				      sbi->ll_ra_stats);
-	if (err)
-		GOTO(out_ra_stats, err);
+	debugfs_create_file("read_ahead_stats", 0644, sbi->ll_debugfs_entry,
+			    sbi->ll_ra_stats, &lprocfs_stats_seq_fops);
 
 out_ll_kset:
 	/* Yes we also register sysfs mount kset here as well */

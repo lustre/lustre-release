@@ -1415,7 +1415,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations lprocfs_stats_seq_fops = {
+const struct file_operations lprocfs_stats_seq_fops = {
 	.owner   = THIS_MODULE,
 	.open    = lprocfs_stats_seq_open,
 	.read    = seq_read,
@@ -1423,22 +1423,7 @@ static const struct file_operations lprocfs_stats_seq_fops = {
 	.llseek  = seq_lseek,
 	.release = lprocfs_seq_release,
 };
-
-int ldebugfs_register_stats(struct dentry *parent, const char *name,
-			    struct lprocfs_stats *stats)
-{
-	struct dentry *entry;
-
-	LASSERT(!IS_ERR_OR_NULL(parent));
-
-	entry = debugfs_create_file(name, 0644, parent, stats,
-				    &lprocfs_stats_seq_fops);
-	if (IS_ERR_OR_NULL(entry))
-		return entry ? PTR_ERR(entry) : -ENOMEM;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(ldebugfs_register_stats);
+EXPORT_SYMBOL(lprocfs_stats_seq_fops);
 
 int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                            struct lprocfs_stats *stats)
