@@ -1284,19 +1284,9 @@ int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 	if (!list)
 		return rc;
 
-	dt->dd_debugfs_entry = ldebugfs_register(name,
-						 type->typ_debugfs_entry,
-						 list, dt);
-	if (IS_ERR_OR_NULL(dt->dd_debugfs_entry)) {
-		rc = dt->dd_debugfs_entry ? PTR_ERR(dt->dd_debugfs_entry)
-					  : -ENOMEM;
-		CERROR("%s: error %d setting up debugfs\n",
-		       name, rc);
-		dt->dd_debugfs_entry = NULL;
-		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);
-		kobject_put(&dt->dd_kobj);
-		return rc;
-	}
+	dt->dd_debugfs_entry = debugfs_create_dir(name,
+						 type->typ_debugfs_entry);
+	ldebugfs_add_vars(dt->dd_debugfs_entry, list, dt);
 
 	return rc;
 }

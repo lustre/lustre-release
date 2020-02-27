@@ -527,10 +527,6 @@ extern int ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *var,
 extern int lprocfs_add_vars(struct proc_dir_entry *root,
 			    struct lprocfs_vars *var, void *data);
 
-extern struct dentry *ldebugfs_register(const char *name,
-					struct dentry *parent,
-					struct lprocfs_vars *list,
-					void *data);
 extern struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
 		 struct lprocfs_vars *list, void *data);

@@ -717,18 +717,9 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 
 	/* Find the type procroot and add the proc entry for this device */
 	obd->obd_vars = lprocfs_mdd_obd_vars;
-	obd->obd_debugfs_entry = ldebugfs_register(name,
-						   type->typ_debugfs_entry,
-						   obd->obd_vars, mdd);
-	if (IS_ERR_OR_NULL(obd->obd_debugfs_entry)) {
-		rc = obd->obd_debugfs_entry ? PTR_ERR(obd->obd_debugfs_entry)
-					    : -ENOMEM;
-		CERROR("Error %d setting up debugfs for %s\n",
-		       rc, name);
-		obd->obd_debugfs_entry = NULL;
-
-		kobject_put(&mdd->mdd_kobj);
-	}
+	obd->obd_debugfs_entry = debugfs_create_dir(name,
+						     type->typ_debugfs_entry);
+	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_vars, mdd);
 
 	RETURN(rc);
 }

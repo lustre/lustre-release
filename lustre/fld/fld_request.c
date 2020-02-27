@@ -227,20 +227,12 @@ struct dentry *fld_debugfs_dir;
 
 static int fld_client_debugfs_init(struct lu_client_fld *fld)
 {
-	int rc;
-
 	ENTRY;
-	fld->lcf_debugfs_entry = ldebugfs_register(fld->lcf_name,
-						   fld_debugfs_dir,
-						   fld_client_debugfs_list,
-						   fld);
-	if (IS_ERR_OR_NULL(fld->lcf_debugfs_entry)) {
-		CERROR("%s: LdebugFS failed in fld-init\n", fld->lcf_name);
-		rc = fld->lcf_debugfs_entry ? PTR_ERR(fld->lcf_debugfs_entry)
-					    : -ENOMEM;
-		fld->lcf_debugfs_entry = NULL;
-		RETURN(rc);
-	}
+	fld->lcf_debugfs_entry = debugfs_create_dir(fld->lcf_name,
+						   fld_debugfs_dir);
+	ldebugfs_add_vars(fld->lcf_debugfs_entry,
+			  fld_client_debugfs_list,
+			  fld);
 
 	return 0;
 }

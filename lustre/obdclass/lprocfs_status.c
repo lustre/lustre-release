@@ -221,31 +221,6 @@ void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 }
 EXPORT_SYMBOL(lprocfs_remove_proc_entry);
 
-struct dentry *ldebugfs_register(const char *name, struct dentry *parent,
-				 struct lprocfs_vars *list, void *data)
-{
-	struct dentry *entry;
-
-	entry = debugfs_create_dir(name, parent);
-	if (IS_ERR_OR_NULL(entry)) {
-		entry = entry ?: ERR_PTR(-ENOMEM);
-		goto out;
-	}
-
-	if (!IS_ERR_OR_NULL(list)) {
-		int rc;
-
-		rc = ldebugfs_add_vars(entry, list, data);
-		if (rc) {
-			debugfs_remove(entry);
-			entry = ERR_PTR(rc);
-		}
-	}
-out:
-	return entry;
-}
-EXPORT_SYMBOL_GPL(ldebugfs_register);
-
 struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
 		 struct lprocfs_vars *list, void *data)
@@ -1124,21 +1099,9 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 
 	if (!obd->obd_type->typ_procroot)
 		debugfs_vars = obd->obd_vars;
-	obd->obd_debugfs_entry = ldebugfs_register(obd->obd_name,
-						   obd->obd_type->typ_debugfs_entry,
-						   debugfs_vars, obd);
-	if (IS_ERR_OR_NULL(obd->obd_debugfs_entry)) {
-		rc = obd->obd_debugfs_entry ? PTR_ERR(obd->obd_debugfs_entry)
-					    : -ENOMEM;
-		CERROR("error %d setting up debugfs for %s\n",
-		       rc, obd->obd_name);
-		obd->obd_debugfs_entry = NULL;
-
-		sysfs_remove_files(&obd->obd_kset.kobj, obd->obd_attrs);
-		obd->obd_attrs = NULL;
-		kset_unregister(&obd->obd_kset);
-		return rc;
-	}
+	obd->obd_debugfs_entry = debugfs_create_dir(
+		obd->obd_name, obd->obd_type->typ_debugfs_entry);
+	ldebugfs_add_vars(obd->obd_debugfs_entry, debugfs_vars, obd);
 
 	if (obd->obd_proc_entry || !obd->obd_type->typ_procroot)
 		GOTO(already_registered, rc);

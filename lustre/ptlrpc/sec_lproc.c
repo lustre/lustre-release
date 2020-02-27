@@ -267,14 +267,9 @@ int sptlrpc_lproc_init(void)
 
 	LASSERT(sptlrpc_debugfs_dir == NULL);
 
-	sptlrpc_debugfs_dir = ldebugfs_register("sptlrpc", debugfs_lustre_root,
-						sptlrpc_lprocfs_vars, NULL);
-	if (IS_ERR_OR_NULL(sptlrpc_debugfs_dir)) {
-		rc = sptlrpc_debugfs_dir ? PTR_ERR(sptlrpc_debugfs_dir)
-					 : -ENOMEM;
-		sptlrpc_debugfs_dir = NULL;
-		return rc;
-	}
+	sptlrpc_debugfs_dir = debugfs_create_dir("sptlrpc",
+						 debugfs_lustre_root);
+	ldebugfs_add_vars(sptlrpc_debugfs_dir, sptlrpc_lprocfs_vars, NULL);
 
 	sptlrpc_lprocfs_dir = lprocfs_register("sptlrpc", proc_lustre_root,
 					       NULL, NULL);

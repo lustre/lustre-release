@@ -284,14 +284,8 @@ dir_exist:
 		}
 	}
 #endif
-	type->typ_debugfs_entry = ldebugfs_register(name, debugfs_lustre_root,
-						    vars, type);
-	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
-		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
-					     : -ENOMEM;
-		type->typ_debugfs_entry = NULL;
-		GOTO(failed, rc);
-	}
+	type->typ_debugfs_entry = debugfs_create_dir(name, debugfs_lustre_root);
+	ldebugfs_add_vars(type->typ_debugfs_entry, vars, type);
 
 	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
 	if (rc)
@@ -1182,8 +1176,8 @@ static void obd_zombie_import_free(struct obd_import *imp)
 	while (!list_empty(&imp->imp_conn_list)) {
 		struct obd_import_conn *imp_conn;
 
-		imp_conn = list_entry(imp->imp_conn_list.next,
-				      struct obd_import_conn, oic_item);
+		imp_conn = list_first_entry(&imp->imp_conn_list,
+					    struct obd_import_conn, oic_item);
 		list_del_init(&imp_conn->oic_item);
                 ptlrpc_put_connection_superhack(imp_conn->oic_conn);
                 OBD_FREE(imp_conn, sizeof(*imp_conn));
@@ -1484,8 +1478,8 @@ static void class_disconnect_export_list(struct list_head *list,
         /* It's possible that an export may disconnect itself, but
          * nothing else will be added to this list. */
 	while (!list_empty(list)) {
-		exp = list_entry(list->next, struct obd_export,
-				 exp_obd_chain);
+		exp = list_first_entry(list, struct obd_export,
+				       exp_obd_chain);
 		/* need for safe call CDEBUG after obd_disconnect */
 		class_export_get(exp);
 
@@ -1830,8 +1824,8 @@ struct obd_export *obd_stale_export_get(void)
 
 	spin_lock(&obd_stale_export_lock);
 	if (!list_empty(&obd_stale_exports)) {
-		exp = list_entry(obd_stale_exports.next,
-				 struct obd_export, exp_stale_list);
+		exp = list_first_entry(&obd_stale_exports,
+				       struct obd_export, exp_stale_list);
 		list_del_init(&exp->exp_stale_list);
 	}
 	spin_unlock(&obd_stale_export_lock);
@@ -2044,8 +2038,9 @@ void obd_put_request_slot(struct client_obd *cli)
 	/* If there is free slot, wakeup the first waiter. */
 	if (!list_empty(&cli->cl_flight_waiters) &&
 	    likely(cli->cl_rpcs_in_flight < cli->cl_max_rpcs_in_flight)) {
-		orsw = list_entry(cli->cl_flight_waiters.next,
-				  struct obd_request_slot_waiter, orsw_entry);
+		orsw = list_first_entry(&cli->cl_flight_waiters,
+					struct obd_request_slot_waiter,
+					orsw_entry);
 		list_del_init(&orsw->orsw_entry);
 		cli->cl_rpcs_in_flight++;
 		wake_up(&orsw->orsw_waitq);
@@ -2102,8 +2097,9 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 		if (list_empty(&cli->cl_flight_waiters))
 			break;
 
-		orsw = list_entry(cli->cl_flight_waiters.next,
-				  struct obd_request_slot_waiter, orsw_entry);
+		orsw = list_first_entry(&cli->cl_flight_waiters,
+					struct obd_request_slot_waiter,
+					orsw_entry);
 		list_del_init(&orsw->orsw_entry);
 		cli->cl_rpcs_in_flight++;
 		wake_up(&orsw->orsw_waitq);

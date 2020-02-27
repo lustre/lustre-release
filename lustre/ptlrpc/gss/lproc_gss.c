@@ -227,22 +227,12 @@ int gss_init_tunables(void)
 
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
-	gss_debugfs_dir = ldebugfs_register("gss", sptlrpc_debugfs_dir,
-					    gss_debugfs_vars, NULL);
-	if (IS_ERR_OR_NULL(gss_debugfs_dir)) {
-		rc = gss_debugfs_dir ? PTR_ERR(gss_debugfs_dir) : -ENOMEM;
-		gss_debugfs_dir = NULL;
-		GOTO(out, rc);
-	}
+	gss_debugfs_dir = debugfs_create_dir("gss", sptlrpc_debugfs_dir);
+	ldebugfs_add_vars(gss_debugfs_dir, gss_debugfs_vars, NULL);
 
-	gss_debugfs_dir_lk = ldebugfs_register("lgss_keyring", gss_debugfs_dir,
-					       gss_lk_debugfs_vars, NULL);
-	if (IS_ERR(gss_debugfs_dir_lk)) {
-		rc = gss_debugfs_dir_lk ? PTR_ERR(gss_debugfs_dir_lk)
-					  : -ENOMEM;
-		gss_debugfs_dir_lk = NULL;
-		GOTO(out, rc);
-	}
+	gss_debugfs_dir_lk = debugfs_create_dir("lgss_keyring",
+						gss_debugfs_dir);
+	ldebugfs_add_vars(gss_debugfs_dir_lk, gss_lk_debugfs_vars, NULL);
 
 	gss_lprocfs_dir = lprocfs_register("gss", sptlrpc_lprocfs_dir,
 					   gss_lprocfs_vars, NULL);

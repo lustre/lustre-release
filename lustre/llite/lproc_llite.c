@@ -1633,14 +1633,8 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	if (IS_ERR_OR_NULL(llite_root))
 		goto out_ll_kset;
 
-	sbi->ll_debugfs_entry = ldebugfs_register(name, llite_root,
-						  lprocfs_llite_obd_vars, sb);
-	if (IS_ERR_OR_NULL(sbi->ll_debugfs_entry)) {
-		err = sbi->ll_debugfs_entry ? PTR_ERR(sbi->ll_debugfs_entry) :
-					      -ENOMEM;
-		sbi->ll_debugfs_entry = NULL;
-		RETURN(err);
-	}
+	sbi->ll_debugfs_entry = debugfs_create_dir(name, llite_root);
+	ldebugfs_add_vars(sbi->ll_debugfs_entry, lprocfs_llite_obd_vars, sb);
 
 	rc = ldebugfs_seq_create(sbi->ll_debugfs_entry, "dump_page_cache",0444,
 				 &vvp_dump_pgcache_file_ops, sbi);

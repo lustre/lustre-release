@@ -2574,18 +2574,9 @@ int hsm_cdt_tunables_init(struct mdt_device *mdt)
 	}
 
 	/* init debugfs entries, failure is not critical */
-	cdt->cdt_debugfs_dir = ldebugfs_register("hsm",
-						 obd->obd_debugfs_entry,
-						 lprocfs_mdt_hsm_vars, mdt);
-	if (IS_ERR_OR_NULL(cdt->cdt_debugfs_dir)) {
-		rc = cdt->cdt_debugfs_dir ? PTR_ERR(cdt->cdt_debugfs_dir) :
-					    -ENOMEM;
-		CERROR("%s: Cannot create 'hsm' directory in mdt proc dir, rc = %d\n",
-		       mdt_obd_name(mdt), rc);
-		cdt->cdt_debugfs_dir = NULL;
-		kobject_put(&cdt->cdt_hsm_kobj);
-		return rc;
-	}
+	cdt->cdt_debugfs_dir = debugfs_create_dir("hsm",
+						  obd->obd_debugfs_entry);
+	ldebugfs_add_vars(cdt->cdt_debugfs_dir, lprocfs_mdt_hsm_vars, mdt);
 
 	return 0;
 }
