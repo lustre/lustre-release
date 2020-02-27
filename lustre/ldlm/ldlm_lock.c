@@ -515,16 +515,16 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
                               const struct ldlm_res_id *new_resid)
 {
-        struct ldlm_resource *oldres = lock->l_resource;
+	struct ldlm_resource *oldres;
         struct ldlm_resource *newres;
         int type;
         ENTRY;
 
         LASSERT(ns_is_client(ns));
 
-        lock_res_and_lock(lock);
-        if (memcmp(new_resid, &lock->l_resource->lr_name,
-                   sizeof(lock->l_resource->lr_name)) == 0) {
+	oldres = lock_res_and_lock(lock);
+	if (memcmp(new_resid, &oldres->lr_name,
+		   sizeof(oldres->lr_name)) == 0) {
                 /* Nothing to do */
                 unlock_res_and_lock(lock);
                 RETURN(0);
@@ -1756,8 +1756,8 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 				  void *cookie, __u64 *flags)
 {
 	struct ldlm_lock *lock = *lockp;
-	struct ldlm_resource *res = lock->l_resource;
-	int local = ns_is_client(ldlm_res_to_ns(res));
+	struct ldlm_resource *res;
+	int local = ns_is_client(ns);
 	enum ldlm_error rc = ELDLM_OK;
 	struct ldlm_interval *node = NULL;
 #ifdef HAVE_SERVER_SUPPORT
@@ -1811,15 +1811,21 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		RETURN(ELDLM_OK);
 	}
 
+#ifdef HAVE_SERVER_SUPPORT
 	/* For a replaying lock, it might be already in granted list. So
 	 * unlinking the lock will cause the interval node to be freed, we
 	 * have to allocate the interval node early otherwise we can't regrant
-	 * this lock in the future. - jay */
-	if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
+	 * this lock in the future. - jay
+	 *
+	 * The only time the ldlm_resource changes for the ldlm_lock is when
+	 * ldlm_lock_change_resource() is called and that only happens for
+	 * the Lustre client case.
+	 */
+	if (!local && (*flags & LDLM_FL_REPLAY) &&
+	    lock->l_resource->lr_type == LDLM_EXTENT)
 		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
 
-#ifdef HAVE_SERVER_SUPPORT
-	reconstruct = !local && res->lr_type == LDLM_FLOCK &&
+	reconstruct = !local && lock->l_resource->lr_type == LDLM_FLOCK &&
 		      !(*flags & LDLM_FL_TEST_LOCK);
 	if (reconstruct) {
 		rc = req_can_reconstruct(cookie, NULL);
@@ -1830,8 +1836,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		}
 	}
 #endif
-
-	lock_res_and_lock(lock);
+	res = lock_res_and_lock(lock);
 	if (local && ldlm_is_granted(lock)) {
                 /* The server returned a blocked lock, but it was granted
                  * before we got a chance to actually enqueue it.  We don't
