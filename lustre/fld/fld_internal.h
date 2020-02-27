@@ -197,23 +197,10 @@ struct fld_cache_entry
 
 int fld_cache_insert_nolock(struct fld_cache *cache,
 			    struct fld_cache_entry *f_new);
-void fld_cache_delete(struct fld_cache *cache,
-                      const struct lu_seq_range *range);
 void fld_cache_delete_nolock(struct fld_cache *cache,
 			     const struct lu_seq_range *range);
 int fld_cache_lookup(struct fld_cache *cache,
 		     const u64 seq, struct lu_seq_range *range);
-
-struct fld_cache_entry *
-fld_cache_entry_lookup(struct fld_cache *cache,
-		       const struct lu_seq_range *range);
-
-void fld_cache_entry_delete(struct fld_cache *cache,
-			    struct fld_cache_entry *node);
-
-struct fld_cache_entry *
-fld_cache_entry_lookup_nolock(struct fld_cache *cache,
-			      const struct lu_seq_range *range);
 
 static inline const char *
 fld_target_name(const struct lu_fld_target *tar)
