@@ -586,31 +586,12 @@ int class_procfs_init(void)
 	}
 
 	debugfs_lustre_root = debugfs_create_dir("lustre", NULL);
-	if (IS_ERR_OR_NULL(debugfs_lustre_root)) {
-		rc = debugfs_lustre_root ? PTR_ERR(debugfs_lustre_root)
-					 : -ENOMEM;
-		debugfs_lustre_root = NULL;
-		kset_unregister(lustre_kset);
-		goto out;
-	}
 
 	file = debugfs_create_file("devices", 0444, debugfs_lustre_root, NULL,
 				   &obd_device_list_fops);
-	if (IS_ERR_OR_NULL(file)) {
-		rc = file ? PTR_ERR(file) : -ENOMEM;
-		debugfs_remove(debugfs_lustre_root);
-		kset_unregister(lustre_kset);
-		goto out;
-	}
 
 	file = debugfs_create_file("health_check", 0444, debugfs_lustre_root,
 				   NULL, &health_check_fops);
-	if (IS_ERR_OR_NULL(file)) {
-		rc = file ? PTR_ERR(file) : -ENOMEM;
-		debugfs_remove_recursive(debugfs_lustre_root);
-		kset_unregister(lustre_kset);
-		goto out;
-	}
 
 	entry = lprocfs_register("fs/lustre", NULL, NULL, NULL);
 	if (IS_ERR(entry)) {

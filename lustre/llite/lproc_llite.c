@@ -75,13 +75,11 @@ int llite_tunables_register(void)
 		goto free_kobj;
 
 	llite_root = debugfs_create_dir("llite", debugfs_lustre_root);
-	if (IS_ERR_OR_NULL(llite_root)) {
-		rc = llite_root ? PTR_ERR(llite_root) : -ENOMEM;
-		llite_root = NULL;
+	return 0;
+
 free_kobj:
-		kobject_put(llite_kobj);
-		llite_kobj = NULL;
-	}
+	kobject_put(llite_kobj);
+	llite_kobj = NULL;
 
 	return rc;
 }

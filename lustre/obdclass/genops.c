@@ -204,11 +204,6 @@ struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 		return ERR_PTR(rc);
 
 	symlink = debugfs_create_dir(name, debugfs_lustre_root);
-	if (IS_ERR_OR_NULL(symlink)) {
-		rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
-		kobject_put(&type->typ_kobj);
-		return ERR_PTR(rc);
-	}
 	type->typ_debugfs_entry = symlink;
 	type->typ_sym_filter = true;
 

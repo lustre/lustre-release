@@ -72,11 +72,6 @@ struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
 	va_end(ap);
 
 	entry = debugfs_create_symlink(name, parent, dest);
-	if (IS_ERR_OR_NULL(entry)) {
-		CERROR("LdebugFS: Could not create symbolic link from %s to %s\n",
-		       name, dest);
-		entry = NULL;
-	}
 
 	OBD_FREE(dest, MAX_STRING_SIZE + 1);
 no_entry:
