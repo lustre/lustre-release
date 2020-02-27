@@ -1,0 +1,49 @@
+From fabafc86567c2165c5b2165dcbf835edd6f81e72 Mon Sep 17 00:00:00 2001
+From: "Darrick J. Wong" <darrick.wong@oracle.com>
+Date: Thu, 30 Oct 2014 10:53:16 -0400
+Subject: [PATCH 2/7] ext4: remove extent status procfs files if journal load
+ fails
+
+If we can't load the journal, remove the procfs files for the extent
+status information file to avoid leaking resources.
+
+Signed-off-by: Darrick J. Wong <darrick.wong@oracle.com>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+Cc: stable@vger.kernel.org
+---
+ fs/ext4/super.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index bcdb48cf..95a01d56 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -4326,7 +4326,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_MMP) &&
+ 	    !(sb->s_flags & MS_RDONLY))
+ 		if (ext4_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block)))
+-			goto failed_mount3;
++			goto failed_mount3a;
+ 
+ 	ext4_ext_init(sb); /* needed before using extent-mapped journal */
+ 
+@@ -4338,7 +4338,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 	    EXT4_HAS_COMPAT_FEATURE(sb, EXT4_FEATURE_COMPAT_HAS_JOURNAL)) {
+ 		err = ext4_load_journal(sb, es, journal_devnum);
+ 		if (err)
+-			goto failed_mount3;
++			goto failed_mount3a;
+ 	} else if (test_opt(sb, NOLOAD) && !(sb->s_flags & MS_RDONLY) &&
+ 	      EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_RECOVER)) {
+ 		ext4_msg(sb, KERN_ERR, "required journal recovery "
+@@ -4635,6 +4635,7 @@ failed_mount_wq:
+ 		jbd2_journal_destroy(sbi->s_journal);
+ 		sbi->s_journal = NULL;
+ 	}
++failed_mount3a:
+ 	ext4_es_unregister_shrinker(sbi);
+ failed_mount3:
+ 	del_timer_sync(&sbi->s_err_report);
+-- 
+2.24.1
+

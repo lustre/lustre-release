@@ -1,0 +1,147 @@
+From 8d5847463404eb2d6b24f748d521d1930a432da9 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Tue, 25 Nov 2014 11:49:25 -0500
+Subject: [PATCH 4/7] ext4: move handling of list of shrinkable inodes into
+ extent status code
+
+Currently callers adding extents to extent status tree were responsible
+for adding the inode to the list of inodes with freeable extents. This
+is error prone and puts list handling in unnecessarily many places.
+
+Just add inode to the list automatically when the first non-delay extent
+is added to the tree and remove inode from the list when the last
+non-delay extent is removed.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/extents.c        |  2 --
+ fs/ext4/extents_status.c | 10 ++++++----
+ fs/ext4/extents_status.h |  2 --
+ fs/ext4/inode.c          |  2 --
+ fs/ext4/ioctl.c          |  2 --
+ fs/ext4/super.c          |  1 -
+ 6 files changed, 6 insertions(+), 13 deletions(-)
+
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index c012dc51..d9d51a5b 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -4689,7 +4689,6 @@ out2:
+ 
+ 	trace_ext4_ext_map_blocks_exit(inode, flags, map,
+ 				       err ? err : allocated);
+-	ext4_es_list_add(inode);
+ 	return err ? err : allocated;
+ }
+ 
+@@ -5263,7 +5262,6 @@ int ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
+ 		error = ext4_fill_fiemap_extents(inode, start_blk,
+ 						 len_blks, fieinfo);
+ 	}
+-	ext4_es_list_add(inode);
+ 	return error;
+ }
+ 
+diff --git a/fs/ext4/extents_status.c b/fs/ext4/extents_status.c
+index 382a7bf9..edd49793 100644
+--- a/fs/ext4/extents_status.c
++++ b/fs/ext4/extents_status.c
+@@ -298,7 +298,7 @@ out:
+ 	trace_ext4_es_find_delayed_extent_range_exit(inode, es);
+ }
+ 
+-void ext4_es_list_add(struct inode *inode)
++static void ext4_es_list_add(struct inode *inode)
+ {
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+ 	struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
+@@ -314,7 +314,7 @@ void ext4_es_list_add(struct inode *inode)
+ 	spin_unlock(&sbi->s_es_lock);
+ }
+ 
+-void ext4_es_list_del(struct inode *inode)
++static void ext4_es_list_del(struct inode *inode)
+ {
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+ 	struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
+@@ -344,7 +344,8 @@ ext4_es_alloc_extent(struct inode *inode, ext4_lblk_t lblk, ext4_lblk_t len,
+ 	 * We don't count delayed extent because we never try to reclaim them
+ 	 */
+ 	if (!ext4_es_is_delayed(es)) {
+-		EXT4_I(inode)->i_es_shk_nr++;
++		if (!EXT4_I(inode)->i_es_shk_nr++)
++			ext4_es_list_add(inode);
+ 		percpu_counter_inc(&EXT4_SB(inode->i_sb)->
+ 					s_es_stats.es_stats_shk_cnt);
+ 	}
+@@ -363,7 +364,8 @@ static void ext4_es_free_extent(struct inode *inode, struct extent_status *es)
+ 	/* Decrease the shrink counter when this es is not delayed */
+ 	if (!ext4_es_is_delayed(es)) {
+ 		BUG_ON(EXT4_I(inode)->i_es_shk_nr == 0);
+-		EXT4_I(inode)->i_es_shk_nr--;
++		if (!--EXT4_I(inode)->i_es_shk_nr)
++			ext4_es_list_del(inode);
+ 		percpu_counter_dec(&EXT4_SB(inode->i_sb)->
+ 					s_es_stats.es_stats_shk_cnt);
+ 	}
+diff --git a/fs/ext4/extents_status.h b/fs/ext4/extents_status.h
+index 0e6a33e8..b0b78b95 100644
+--- a/fs/ext4/extents_status.h
++++ b/fs/ext4/extents_status.h
+@@ -150,7 +150,5 @@ static inline void ext4_es_store_pblock_status(struct extent_status *es,
+ 
+ extern int ext4_es_register_shrinker(struct ext4_sb_info *sbi);
+ extern void ext4_es_unregister_shrinker(struct ext4_sb_info *sbi);
+-extern void ext4_es_list_add(struct inode *inode);
+-extern void ext4_es_list_del(struct inode *inode);
+ 
+ #endif /* _EXT4_EXTENTS_STATUS_H */
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index f6a2764c..9bbdc9e5 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -523,7 +523,6 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
+ 
+ 	/* Lookup extent status tree firstly */
+ 	if (ext4_es_lookup_extent(inode, map->m_lblk, &es)) {
+-		ext4_es_list_add(inode);
+ 		if (ext4_es_is_written(&es) || ext4_es_is_unwritten(&es)) {
+ 			map->m_pblk = ext4_es_pblock(&es) +
+ 					map->m_lblk - es.es_lblk;
+@@ -1519,7 +1518,6 @@ static int ext4_da_map_blocks(struct inode *inode, sector_t iblock,
+ 
+ 	/* Lookup extent status tree firstly */
+ 	if (ext4_es_lookup_extent(inode, iblock, &es)) {
+-		ext4_es_list_add(inode);
+ 		if (ext4_es_is_hole(&es)) {
+ 			retval = 0;
+ 			down_read(&EXT4_I(inode)->i_data_sem);
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index 122d517c..6a6a9588 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
+@@ -80,8 +80,6 @@ static void swap_inode_data(struct inode *inode1, struct inode *inode2)
+ 	memswap(&ei1->i_disksize, &ei2->i_disksize, sizeof(ei1->i_disksize));
+ 	ext4_es_remove_extent(inode1, 0, EXT_MAX_BLOCKS);
+ 	ext4_es_remove_extent(inode2, 0, EXT_MAX_BLOCKS);
+-	ext4_es_list_del(inode1);
+-	ext4_es_list_del(inode2);
+ 
+ 	isize = i_size_read(inode1);
+ 	i_size_write(inode1, i_size_read(inode2));
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index ea2a1026..8a81fa73 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1033,7 +1033,6 @@ void ext4_clear_inode(struct inode *inode)
+ 	dquot_drop(inode);
+ 	ext4_discard_preallocations(inode);
+ 	ext4_es_remove_extent(inode, 0, EXT_MAX_BLOCKS);
+-	ext4_es_list_del(inode);
+ 	if (EXT4_I(inode)->jinode) {
+ 		jbd2_journal_release_jbd_inode(EXT4_JOURNAL(inode),
+ 					       EXT4_I(inode)->jinode);
+-- 
+2.24.1
+

@@ -1,0 +1,156 @@
+From 1da6da1563df986dd35080d7edcf59b739696c40 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Tue, 25 Nov 2014 11:55:24 -0500
+Subject: [PATCH 7/7] ext4: introduce aging to extent status tree
+
+Introduce a simple aging to extent status tree. Each extent has a
+REFERENCED bit which gets set when the extent is used. Shrinker then
+skips entries with referenced bit set and clears the bit. Thus
+frequently used extents have higher chances of staying in memory.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/extents_status.c | 22 +++++++++++++++++-----
+ fs/ext4/extents_status.h | 35 +++++++++++++++++++++++++++++++----
+ 2 files changed, 48 insertions(+), 9 deletions(-)
+
+diff --git a/fs/ext4/extents_status.c b/fs/ext4/extents_status.c
+index a29708c0..0305f308 100644
+--- a/fs/ext4/extents_status.c
++++ b/fs/ext4/extents_status.c
+@@ -382,7 +382,7 @@ static void ext4_es_free_extent(struct inode *inode, struct extent_status *es)
+ static int ext4_es_can_be_merged(struct extent_status *es1,
+ 				 struct extent_status *es2)
+ {
+-	if (ext4_es_status(es1) != ext4_es_status(es2))
++	if (ext4_es_type(es1) != ext4_es_type(es2))
+ 		return 0;
+ 
+ 	if (((__u64) es1->es_len) + es2->es_len > EXT_MAX_BLOCKS) {
+@@ -425,6 +425,8 @@ ext4_es_try_to_merge_left(struct inode *inode, struct extent_status *es)
+ 	es1 = rb_entry(node, struct extent_status, rb_node);
+ 	if (ext4_es_can_be_merged(es1, es)) {
+ 		es1->es_len += es->es_len;
++		if (ext4_es_is_referenced(es))
++			ext4_es_set_referenced(es1);
+ 		rb_erase(&es->rb_node, &tree->root);
+ 		ext4_es_free_extent(inode, es);
+ 		es = es1;
+@@ -447,6 +449,8 @@ ext4_es_try_to_merge_right(struct inode *inode, struct extent_status *es)
+ 	es1 = rb_entry(node, struct extent_status, rb_node);
+ 	if (ext4_es_can_be_merged(es, es1)) {
+ 		es->es_len += es1->es_len;
++		if (ext4_es_is_referenced(es1))
++			ext4_es_set_referenced(es);
+ 		rb_erase(node, &tree->root);
+ 		ext4_es_free_extent(inode, es1);
+ 	}
+@@ -823,6 +827,8 @@ out:
+ 		es->es_lblk = es1->es_lblk;
+ 		es->es_len = es1->es_len;
+ 		es->es_pblk = es1->es_pblk;
++		if (!ext4_es_is_referenced(es))
++			ext4_es_set_referenced(es);
+ 		stats->es_stats_cache_hits++;
+ 	} else {
+ 		stats->es_stats_cache_misses++;
+@@ -1243,11 +1249,17 @@ static int es_do_reclaim_extents(struct ext4_inode_info *ei, ext4_lblk_t end,
+ 		 * We can't reclaim delayed extent from status tree because
+ 		 * fiemap, bigallic, and seek_data/hole need to use it.
+ 		 */
+-		if (!ext4_es_is_delayed(es)) {
+-			rb_erase(&es->rb_node, &tree->root);
+-			ext4_es_free_extent(inode, es);
+-			(*nr_shrunk)++;
++		if (ext4_es_is_delayed(es))
++			goto next;
++		if (ext4_es_is_referenced(es)) {
++			ext4_es_clear_referenced(es);
++			goto next;
+ 		}
++
++		rb_erase(&es->rb_node, &tree->root);
++		ext4_es_free_extent(inode, es);
++		(*nr_shrunk)++;
++next:
+ 		if (!node)
+ 			goto out_wrap;
+ 		es = rb_entry(node, struct extent_status, rb_node);
+diff --git a/fs/ext4/extents_status.h b/fs/ext4/extents_status.h
+index e86b1f34..691b5261 100644
+--- a/fs/ext4/extents_status.h
++++ b/fs/ext4/extents_status.h
+@@ -34,6 +34,7 @@ enum {
+ 	ES_UNWRITTEN_B,
+ 	ES_DELAYED_B,
+ 	ES_HOLE_B,
++	ES_REFERENCED_B,
+ 	ES_FLAGS
+ };
+ 
+@@ -44,6 +45,12 @@ enum {
+ #define EXTENT_STATUS_UNWRITTEN (1 << ES_UNWRITTEN_B)
+ #define EXTENT_STATUS_DELAYED	(1 << ES_DELAYED_B)
+ #define EXTENT_STATUS_HOLE	(1 << ES_HOLE_B)
++#define EXTENT_STATUS_REFERENCED	(1 << ES_REFERENCED_B)
++
++#define ES_TYPE_MASK	((ext4_fsblk_t)(EXTENT_STATUS_WRITTEN | \
++			  EXTENT_STATUS_UNWRITTEN | \
++			  EXTENT_STATUS_DELAYED | \
++			  EXTENT_STATUS_HOLE) << ES_SHIFT)
+ 
+ struct ext4_sb_info;
+ struct ext4_extent;
+@@ -93,24 +100,44 @@ static inline unsigned int ext4_es_status(struct extent_status *es)
+ 	return es->es_pblk >> ES_SHIFT;
+ }
+ 
++static inline unsigned int ext4_es_type(struct extent_status *es)
++{
++	return (es->es_pblk & ES_TYPE_MASK) >> ES_SHIFT;
++}
++
+ static inline int ext4_es_is_written(struct extent_status *es)
+ {
+-	return (ext4_es_status(es) & EXTENT_STATUS_WRITTEN) != 0;
++	return (ext4_es_type(es) & EXTENT_STATUS_WRITTEN) != 0;
+ }
+ 
+ static inline int ext4_es_is_unwritten(struct extent_status *es)
+ {
+-	return (ext4_es_status(es) & EXTENT_STATUS_UNWRITTEN) != 0;
++	return (ext4_es_type(es) & EXTENT_STATUS_UNWRITTEN) != 0;
+ }
+ 
+ static inline int ext4_es_is_delayed(struct extent_status *es)
+ {
+-	return (ext4_es_status(es) & EXTENT_STATUS_DELAYED) != 0;
++	return (ext4_es_type(es) & EXTENT_STATUS_DELAYED) != 0;
+ }
+ 
+ static inline int ext4_es_is_hole(struct extent_status *es)
+ {
+-	return (ext4_es_status(es) & EXTENT_STATUS_HOLE) != 0;
++	return (ext4_es_type(es) & EXTENT_STATUS_HOLE) != 0;
++}
++
++static inline void ext4_es_set_referenced(struct extent_status *es)
++{
++	es->es_pblk |= ((ext4_fsblk_t)EXTENT_STATUS_REFERENCED) << ES_SHIFT;
++}
++
++static inline void ext4_es_clear_referenced(struct extent_status *es)
++{
++	es->es_pblk &= ~(((ext4_fsblk_t)EXTENT_STATUS_REFERENCED) << ES_SHIFT);
++}
++
++static inline int ext4_es_is_referenced(struct extent_status *es)
++{
++	return (ext4_es_status(es) & EXTENT_STATUS_REFERENCED) != 0;
+ }
+ 
+ static inline ext4_fsblk_t ext4_es_pblock(struct extent_status *es)
+-- 
+2.24.1
+
