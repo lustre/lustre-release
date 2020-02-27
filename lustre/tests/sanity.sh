@@ -21912,6 +21912,27 @@ test_422() {
 }
 run_test 422 "kill a process with RPC in progress"
 
+stat_test() {
+    df -h $MOUNT &
+    df -h $MOUNT &
+    df -h $MOUNT &
+    df -h $MOUNT &
+    df -h $MOUNT &
+    df -h $MOUNT &
+}
+
+test_423() {
+    local _stats
+    # ensure statfs cache is expired
+    sleep 2;
+
+    _stats=$(stat_test | grep $MOUNT | sort -u | wc -l)
+    [[ ${_stats} -ne 1 ]] && error "statfs wrong"
+
+    return 0
+}
+run_test 423 "statfs should return a right data"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
