@@ -666,10 +666,12 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 		page = find_or_create_page(inode->i_mapping,
 					   offset >> PAGE_SHIFT, gfp_mask);
 
-		if (likely(page))
-			LASSERT(!test_bit(PG_private_2, &page->flags));
-		else
+		if (likely(page)) {
+			LASSERT(!PagePrivate2(page));
+			wait_on_page_writeback(page);
+		} else {
 			lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
+		}
 
 		return page;
 	}
@@ -678,34 +680,29 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 		/* consult with pagecache, but do not create new pages */
 		/* this is normally used once */
 		page = find_lock_page(inode->i_mapping, offset >> PAGE_SHIFT);
-		if (page)
+		if (page) {
+			wait_on_page_writeback(page);
 			return page;
+		}
 	}
 
 	LASSERT(oti->oti_dio_pages);
 	cur = oti->oti_dio_pages_used;
+	page = oti->oti_dio_pages[cur];
 
-	if (unlikely(!oti->oti_dio_pages[cur])) {
+	if (unlikely(!page)) {
 		LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
 		page = alloc_page(gfp_mask);
 		if (!page)
 			return NULL;
 		oti->oti_dio_pages[cur] = page;
+		SetPagePrivate2(page);
+		lock_page(page);
 	}
 
-	page = oti->oti_dio_pages[cur];
-	LASSERT(!test_bit(PG_private_2, &page->flags));
-	set_bit(PG_private_2, &page->flags);
-	oti->oti_dio_pages_used++;
-
-	LASSERT(!PageLocked(page));
-	lock_page(page);
-
-	LASSERT(!page->mapping);
-	LASSERT(!PageWriteback(page));
 	ClearPageUptodate(page);
-
 	page->index = offset >> PAGE_SHIFT;
+	oti->oti_dio_pages_used++;
 
 	return page;
 }
@@ -758,11 +755,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 
 		/* if the page isn't cached, then reset uptodate
 		 * to prevent reuse */
-		if (test_bit(PG_private_2, &page->flags)) {
-			clear_bit(PG_private_2, &page->flags);
-			ClearPageUptodate(page);
-			if (lnb[i].lnb_locked)
-				unlock_page(page);
+		if (PagePrivate2(page)) {
 			oti->oti_dio_pages_used--;
 		} else {
 			if (lnb[i].lnb_locked)
@@ -880,8 +873,6 @@ bypass_checks:
 			GOTO(cleanup, rc = -ENOMEM);
 
 		lnb->lnb_locked = 1;
-		wait_on_page_writeback(lnb->lnb_page);
-		BUG_ON(PageWriteback(lnb->lnb_page));
 	}
 
 #if 0
@@ -1323,9 +1314,11 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		for (i = 0; i < npages; i++) {
 			if (lnb[i].lnb_page == NULL)
 				continue;
-			LASSERT(PageLocked(lnb[i].lnb_page));
-			generic_error_remove_page(inode->i_mapping,
-						  lnb[i].lnb_page);
+			if (!PagePrivate2(lnb[i].lnb_page)) {
+				LASSERT(PageLocked(lnb[i].lnb_page));
+				generic_error_remove_page(inode->i_mapping,
+							  lnb[i].lnb_page);
+			}
 		}
 	}
 
@@ -1408,7 +1401,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		/* early release to let others read data during the bulk */
 		for (i = 0; i < iobuf->dr_npages; i++) {
 			LASSERT(PageLocked(iobuf->dr_pages[i]));
-			unlock_page(iobuf->dr_pages[i]);
+			if (!PagePrivate2(iobuf->dr_pages[i]))
+				unlock_page(iobuf->dr_pages[i]);
 		}
 	}
 
