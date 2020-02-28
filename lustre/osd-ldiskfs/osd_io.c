@@ -770,7 +770,6 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			if (pagevec_add(&pvec, page) == 0)
 				pagevec_release(&pvec);
 		}
-		dt_object_put(env, dt);
 
 		lnb[i].lnb_page = NULL;
 	}
@@ -883,8 +882,6 @@ bypass_checks:
 		lnb->lnb_locked = 1;
 		wait_on_page_writeback(lnb->lnb_page);
 		BUG_ON(PageWriteback(lnb->lnb_page));
-
-		lu_object_get(&dt->do_lu);
 	}
 
 #if 0
