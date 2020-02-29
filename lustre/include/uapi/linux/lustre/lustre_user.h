@@ -42,36 +42,28 @@
  * @{
  */
 
+#include <linux/fs.h>
+#include <linux/limits.h>
 #include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/quota.h>
 #include <linux/types.h>
+#include <linux/unistd.h>
+#include <linux/lustre/lustre_fiemap.h>
 
-#ifdef __KERNEL__
-# include <linux/fs.h>
-# include <linux/quota.h>
-# include <linux/string.h> /* snprintf() */
-# include <linux/version.h>
-# include <uapi/linux/lustre/lustre_fiemap.h>
-#else /* !__KERNEL__ */
-# include <limits.h>
+#ifndef __KERNEL__
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
-# include <stdint.h>
-# include <string.h>
-# define NEED_QUOTA_DEFS
-/* # include <sys/quota.h> - this causes complaints about caddr_t */
 # include <sys/stat.h>
-# include <linux/lustre/lustre_fiemap.h>
 # define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
-#endif /* __KERNEL__ */
-
-/* Handle older distros */
-#ifndef __ALIGN_KERNEL
-# define __ALIGN_KERNEL(x, a)   __ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
-# define __ALIGN_KERNEL_MASK(x, mask)   (((x) + (mask)) & ~(mask))
-#endif
+#endif /* !__KERNEL__ */
 
 #if defined(__cplusplus)
 extern "C" {
+#endif
+
+#ifdef __STRICT_ANSI__
+#define typeof  __typeof__
 #endif
 
 /*
@@ -1032,8 +1024,8 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 
 struct lustre_foreign_type {
-	uint32_t lft_type;
-	const char *lft_name;
+	__u32		lft_type;
+	const char	*lft_name;
 };
 
 /**
@@ -1181,7 +1173,7 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 #define LUSTRE_QUOTABLOCK_BITS 10
 #define LUSTRE_QUOTABLOCK_SIZE (1 << LUSTRE_QUOTABLOCK_BITS)
 
-static inline __u64 lustre_stoqb(size_t space)
+static inline __u64 lustre_stoqb(__kernel_size_t space)
 {
 	return (space + LUSTRE_QUOTABLOCK_SIZE - 1) >> LUSTRE_QUOTABLOCK_BITS;
 }
@@ -1268,10 +1260,10 @@ struct identity_downcall_data {
 };
 
 struct sepol_downcall_data {
-	__u32	       sdd_magic;
-	time_t	       sdd_sepol_mtime;
-	__u16	       sdd_sepol_len;
-	char	       sdd_sepol[0];
+	__u32		sdd_magic;
+	__kernel_time_t	sdd_sepol_mtime;
+	__u16		sdd_sepol_len;
+	char		sdd_sepol[0];
 };
 
 #ifdef NEED_QUOTA_DEFS
@@ -1696,10 +1688,10 @@ struct changelog_ext_xattr {
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 
-static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
+static inline __kernel_size_t changelog_rec_offset(enum changelog_rec_flags crf,
 					  enum changelog_rec_extra_flags cref)
 {
-	size_t size = sizeof(struct changelog_rec);
+	__kernel_size_t size = sizeof(struct changelog_rec);
 
 	if (crf & CLF_RENAME)
 		size += sizeof(struct changelog_ext_rename);
@@ -1722,7 +1714,7 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
 	return size;
 }
 
-static inline size_t changelog_rec_size(const struct changelog_rec *rec)
+static inline __kernel_size_t changelog_rec_size(const struct changelog_rec *rec)
 {
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
@@ -1734,7 +1726,7 @@ static inline size_t changelog_rec_size(const struct changelog_rec *rec)
 		(enum changelog_rec_flags)rec->cr_flags, cref);
 }
 
-static inline size_t changelog_rec_varsize(const struct changelog_rec *rec)
+static inline __kernel_size_t changelog_rec_varsize(const struct changelog_rec *rec)
 {
 	return changelog_rec_size(rec) - sizeof(*rec) + rec->cr_namelen;
 }
@@ -1860,7 +1852,7 @@ static inline char *changelog_rec_name(const struct changelog_rec *rec)
 		(enum changelog_rec_extra_flags)(cref & CLFE_SUPPORTED));
 }
 
-static inline size_t changelog_rec_snamelen(const struct changelog_rec *rec)
+static inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
 	return rec->cr_namelen - strlen(changelog_rec_name(rec)) - 1;
 }
@@ -2217,11 +2209,12 @@ static inline void *hur_data(struct hsm_user_request *hur)
 
 /**
  * Compute the current length of the provided hsm_user_request.  This returns -1
- * instead of an errno because ssize_t is defined to be only [ -1, SSIZE_MAX ]
+ * instead of an errno because __kernel_ssize_t is defined to be only
+ * [ -1, SSIZE_MAX ]
  *
  * return -1 on bounds check error.
  */
-static inline ssize_t hur_len(struct hsm_user_request *hur)
+static inline __kernel_size_t hur_len(struct hsm_user_request *hur)
 {
 	__u64	size;
 
@@ -2230,7 +2223,7 @@ static inline ssize_t hur_len(struct hsm_user_request *hur)
 		(__u64)hur->hur_request.hr_itemcount *
 		sizeof(hur->hur_user_item[0]) + hur->hur_request.hr_data_len;
 
-	if ((ssize_t)size < 0)
+	if ((__kernel_ssize_t)size < 0)
 		return -1;
 
 	return size;
@@ -2286,7 +2279,7 @@ struct hsm_action_item {
  * \retval buffer
  */
 static inline char *hai_dump_data_field(const struct hsm_action_item *hai,
-					char *buffer, size_t len)
+					char *buffer, __kernel_size_t len)
 {
 	int i;
 	int data_len;
@@ -2323,7 +2316,7 @@ struct hsm_action_list {
 /* Return pointer to first hai in action list */
 static inline struct hsm_action_item *hai_first(struct hsm_action_list *hal)
 {
-	size_t offset = __ALIGN_KERNEL(strlen(hal->hal_fsname) + 1, 8);
+	__kernel_size_t offset = __ALIGN_KERNEL(strlen(hal->hal_fsname) + 1, 8);
 
 	return (struct hsm_action_item *)(hal->hal_fsname + offset);
 }
@@ -2331,16 +2324,16 @@ static inline struct hsm_action_item *hai_first(struct hsm_action_list *hal)
 /* Return pointer to next hai */
 static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 {
-	size_t offset = __ALIGN_KERNEL(hai->hai_len, 8);
+	__kernel_size_t offset = __ALIGN_KERNEL(hai->hai_len, 8);
 
 	return (struct hsm_action_item *)((char *)hai + offset);
 }
 
 /* Return size of an hsm_action_list */
-static inline size_t hal_size(struct hsm_action_list *hal)
+static inline __kernel_size_t hal_size(struct hsm_action_list *hal)
 {
 	__u32 i;
-	size_t sz;
+	__kernel_size_t sz;
 	struct hsm_action_item *hai;
 
 	sz = sizeof(*hal) + __ALIGN_KERNEL(strlen(hal->hal_fsname) + 1, 8);

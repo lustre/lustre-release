@@ -32,15 +32,7 @@
 # define _LUSTRE_BARRIER_USER_H
 
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lustre/lustre_user.h>
-#else
-# include <linux/lustre/lustre_user.h>
-#endif
+#include <linux/lustre/lustre_user.h>
 
 #define BARRIER_VERSION_V1	1
 #define BARRIER_TIMEOUT_DEFAULT	30

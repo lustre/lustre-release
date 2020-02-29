@@ -38,15 +38,7 @@
 #define _UAPI_LUSTRE_FID_H_
 
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lustre/lustre_idl.h>
-#else
-# include <linux/lustre/lustre_idl.h>
-#endif
+#include <linux/lustre/lustre_idl.h>
 
 /** returns fid object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)
@@ -286,7 +278,7 @@ static inline bool fid_is_last_id(const struct lu_fid *fid)
  * \param fid an igif to get inode number from.
  * \return inode number for the igif.
  */
-static inline ino_t lu_igif_ino(const struct lu_fid *fid)
+static inline __kernel_ino_t lu_igif_ino(const struct lu_fid *fid)
 {
 	return fid_seq(fid);
 }

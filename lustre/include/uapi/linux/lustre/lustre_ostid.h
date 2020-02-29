@@ -36,15 +36,7 @@
 
 #include <linux/errno.h>
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-#include <uapi/linux/lustre/lustre_fid.h>
-#else
 #include <linux/lustre/lustre_fid.h>
-#endif
 
 static inline __u64 lmm_oi_id(const struct ost_id *oi)
 {

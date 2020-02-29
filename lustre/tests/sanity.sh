@@ -31,8 +31,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 export PARALLEL=${PARALLEL:-"no"}
 
 TRACE=${TRACE:-""}
-LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
+LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
@@ -20800,6 +20800,10 @@ test_400a() { # LU-1606, was conf-sanity test_74
 	local prefix=/usr/include/lustre
 	local prog
 
+	# Oleg removes c files in his test rig so test if any c files exist
+	[ -z "$(ls -A $LUSTRE_TESTS_API_DIR)" ] && \
+		skip_env "Needed c test files are missing"
+
 	if ! [[ -d $prefix ]]; then
 		# Assume we're running in tree and fixup the include path.
 		extra_flags+=" -I$LUSTRE/../lnet/include/uapi -I$LUSTRE/include/uapi -I$LUSTRE/include"
@@ -20807,7 +20811,7 @@ test_400a() { # LU-1606, was conf-sanity test_74
 	fi
 
 	for prog in $LUSTRE_TESTS_API_DIR/*.c; do
-		$CC -Wall -Werror $extra_flags -o $out $prog -llustreapi ||
+		$CC -Wall -Werror -std=c99 $extra_flags -o $out $prog -llustreapi ||
 			error "client api broken"
 	done
 	rm -f $out
@@ -20839,7 +20843,7 @@ test_400b() { # LU-1606, LU-5011
 			continue # lustre_ioctl.h is internal header
 		fi
 
-		$CC -Wall -Werror -include $header -c -x c /dev/null -o $out ||
+		$CC -Wall -Werror -std=c99 -include $header -c -x c /dev/null -o $out ||
 			error "cannot compile '$header'"
 	done
 	rm -f $out
