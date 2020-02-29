@@ -40,6 +40,9 @@
 
 #include <stdarg.h>
 #include <stdint.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <linux/lustre/lustre_user.h>
 
 #if defined(__cplusplus)

@@ -39,15 +39,7 @@
 #define _LUSTRE_LOG_USER_H
 
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-#include <uapi/linux/lustre/lustre_fid.h>
-#else
 #include <linux/lustre/lustre_fid.h>
-#endif
 
 /*  Lustre logs use FIDs constructed from oi_id and oi_seq directly,
  *  without attempting to use the IGIF and IDIF ranges as is done

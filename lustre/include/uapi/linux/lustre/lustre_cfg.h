@@ -36,21 +36,7 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lustre/lustre_user.h>
-#else
-# include <linux/lustre/lustre_user.h>
-#endif
-
-/* Handle older distros */
-#ifndef __ALIGN_KERNEL
-# define __ALIGN_KERNEL(x, a)		__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
-# define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
-#endif
+#include <linux/lustre/lustre_user.h>
 
 /** \defgroup cfg cfg
  *
@@ -264,7 +250,7 @@ static inline void lustre_cfg_bufs_reset(struct lustre_cfg_bufs *bufs,
 static inline void *lustre_cfg_buf(struct lustre_cfg *lcfg, __u32 index)
 {
 	__u32 i;
-	size_t offset;
+	__kernel_size_t offset;
 	__u32 bufcount;
 
 	if (!lcfg)
@@ -324,7 +310,7 @@ static inline void lustre_cfg_init(struct lustre_cfg *lcfg, int cmd,
 	}
 }
 
-static inline int lustre_cfg_sanity_check(void *buf, size_t len)
+static inline int lustre_cfg_sanity_check(void *buf, __kernel_size_t len)
 {
 	struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
 

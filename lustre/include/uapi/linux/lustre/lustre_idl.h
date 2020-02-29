@@ -71,21 +71,19 @@
 
 #include <asm/byteorder.h>
 #include <linux/errno.h>
+#include <linux/fiemap.h>
 #include <linux/types.h>
-
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.
  */
 #ifdef __KERNEL__
 # include <uapi/linux/lnet/lnet-types.h>
-# include <uapi/linux/lustre/lustre_user.h> /* Defn's shared with user-space. */
-# include <uapi/linux/lustre/lustre_ver.h>
 #else
 # include <linux/lnet/lnet-types.h>
-# include <linux/lustre/lustre_user.h>
-# include <linux/lustre/lustre_ver.h>
 #endif
+#include <linux/lustre/lustre_user.h>
+#include <linux/lustre/lustre_ver.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -528,12 +526,12 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 	return next;
 }
 
-static inline size_t lu_dirent_calc_size(size_t namelen, __u16 attr)
+static inline __kernel_size_t lu_dirent_calc_size(size_t namelen, __u16 attr)
 {
-	size_t size;
+	__kernel_size_t size;
 
 	if (attr & LUDA_TYPE) {
-		const size_t align = sizeof(struct luda_type) - 1;
+		const __kernel_size_t align = sizeof(struct luda_type) - 1;
 
 		size = (sizeof(struct lu_dirent) + namelen + 1 + align) &
 		       ~align;
@@ -1214,7 +1212,7 @@ static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 }
 
 static inline __u32
-lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
+lov_mds_md_max_stripe_count(__kernel_size_t buf_size, __u32 lmm_magic)
 {
 	switch (lmm_magic) {
 	case LOV_MAGIC_V1: {
@@ -2247,11 +2245,11 @@ struct lmv_mds_md_v1 {
  **/
 #define LUSTRE_FNV_1A_64_PRIME	0x100000001b3ULL
 #define LUSTRE_FNV_1A_64_OFFSET_BIAS 0xcbf29ce484222325ULL
-static inline __u64 lustre_hash_fnv_1a_64(const void *buf, size_t size)
+static inline __u64 lustre_hash_fnv_1a_64(const void *buf, __kernel_size_t size)
 {
 	__u64 hash = LUSTRE_FNV_1A_64_OFFSET_BIAS;
 	const unsigned char *p = buf;
-	size_t i;
+	__kernel_size_t i;
 
 	for (i = 0; i < size; i++) {
 		hash ^= p[i];

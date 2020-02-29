@@ -31,25 +31,17 @@
 #include <linux/ioctl.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lustre/lustre_idl.h>
-#else
-# include <linux/lustre/lustre_idl.h>
-# define __user
-#endif
+#include <linux/lustre/lustre_idl.h>
 
 #if !defined(__KERNEL__) && !defined(LUSTRE_UTILS)
 # error This file is for Lustre internal use only.
 #endif
 
-/* Handle older distros */
-#ifndef __ALIGN_KERNEL
-# define __ALIGN_KERNEL(x, a)	__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
-# define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
+/*
+ * sparse kernel source annotations
+ */
+#ifndef __user
+#define __user
 #endif
 
 enum md_echo_cmd {

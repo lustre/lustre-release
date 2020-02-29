@@ -50,7 +50,7 @@
 /* XXX: We use fiemap_extent::fe_reserved[0] */
 #define fe_device	fe_reserved[0]
 
-static inline size_t fiemap_count_to_size(size_t extent_count)
+static inline __kernel_size_t fiemap_count_to_size(size_t extent_count)
 {
 	return sizeof(struct fiemap) + extent_count *
 				       sizeof(struct fiemap_extent);
