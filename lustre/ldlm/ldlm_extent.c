@@ -890,7 +890,8 @@ static enum interval_iter ldlm_kms_shift_cb(struct interval_node *n,
 	/* If we find a lock with a greater or equal kms, we are not the
 	 * highest lock (or we share that distinction with another lock), and
 	 * don't need to update KMS.  Return old_kms and stop looking. */
-	if (lock->l_policy_data.l_extent.end >= arg->old_kms) {
+	if (lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF ||
+	    lock->l_policy_data.l_extent.end + 1 >= arg->old_kms) {
 		arg->kms = arg->old_kms;
 		arg->complete = true;
 		RETURN(INTERVAL_ITER_STOP);
