@@ -1,0 +1,124 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+# increment this if you have made a change that should force a new kernel
+# to build built for this distribution (only -- if you want to force a kernel
+# build on all distributions, update the BUILD_GEN variable in build/lbuild)
+BUILD_GEN+=".0"
+
+# This distro does not support zfs, so define WITH_ZFS
+# use words that make the bash log readable.
+WITH_ZFS="Zfs Not Supported"
+
+source ${LBUILD_DIR}/lbuild-sles
+
+kernel_srpm_location() {
+    local site
+    site="http://mgmt/cobbler/repo_mirror/updates-sles15.1-src"
+    echo "$site/src/"
+}
+
+edit_specs() {
+    # edit the SPECs with our changes
+    local spec
+    (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
+    for spec in $RPMSMPTYPE source syms; do
+        #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
+        sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
+               -e '/^%setup /a\
+cp  %_sourcedir/linux-4.12-lustre.patch %_builddir/%{name}-%{version}/intel.lustre.patch\
+grep -q intel.lustre.patch %_sourcedir/series.conf || echo -e "\\n\\tintel.lustre.patch" >> %_sourcedir/series.conf' \
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+
+        if $KERNEL_LUSTRE_NAMING; then
+            # these are all of the changes needed because we change the package names
+            # to kernel-lustre-*.  these should all go away when we stop this insanity
+            sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
+                   -e "/^Provides:  *kernel = /a\
+Provides:       kernel-$spec = %{version}-%{release}
+" \
+                   -e 's/^\([ 	][ 	]*-i %_builddir\/kernel-\)\(source-2.6.27.21\/\$patch; then\)/\1lustre-\2/' \
+                   -e '/^%build/,/^%changelog/s/\(kernel-\)\(source\.files\)/\1lustre-\2/g' \
+                   -e '/--no-backup-if-mismatch/,/fi/s/kernel-source-/kernel-lustre-source-/g' \
+                   -e "s/^\(%package -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(%description -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(%files -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Provides:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Requires:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Supplements:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                SOURCES/kernel-${spec}.spec || \
+                fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        fi
+    done
+}
+
+unpack_linux_devel_rpm-sles15() {
+    local callers_rpm="$1"
+
+    local rpmdir="${callers_rpm%/*}"
+
+    local kernelrpm
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
+
+    # this is a hack that should go away when the modified lustre kernel
+    # Provides kernel-default-devel                       vvvvvvvvv
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+    if [ -d "${rpmdir}/../noarch" ]; then
+	rpmdir="${rpmdir%/*}"
+	rpmdir="${rpmdir}/noarch"
+    fi
+
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+    # SLES also needs the kernel-source together with the kernel-default-devel
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-source = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-source in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+}
+
+find_linux_rpm-sles15() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+    local wanted_kernel_org="$wanted_kernel"
+
+    if [ "x$rpmfix_diff" != "x" ] && [ $wanted_kernel != "${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}" ]; then
+        wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}"
+    fi
+
+    local base_site="http://mgmt/cobbler/repo_mirror/updates-basesystem-sles15.1-x86_64"
+    local dev_site="http://mgmt/cobbler/repo_mirror/updates-devtools-sles15.1-x86_64"
+
+    if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
+        fetch_url "$base_site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    # SLES 15 also needs kernel-devel in addition to kernel-default-devel
+    if [ ! -f $pathtorpms/kernel-devel-$wanted_kernel_org.noarch.rpm ]; then
+        fetch_url "$base_site/noarch/kernel-devel-$wanted_kernel_org.noarch.rpm" $pathtorpms
+    fi
+    # SLES also needs the kernel-source along with kernel-devel
+    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel_org.noarch.rpm ]; then
+        fetch_url "$dev_site/noarch/kernel-source-$wanted_kernel_org.noarch.rpm" $pathtorpms
+    fi
+    echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
+
+    return 0
+}

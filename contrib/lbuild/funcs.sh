@@ -198,6 +198,7 @@ autodetect_target() {
         sles12.4) target="$(uname -r | cut -d . -f 1,2)-sles12sp4";;
         sles12.3) target="$(uname -r | cut -d . -f 1,2)-sles12sp3";;
         sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
+        sles15.1) target="$(uname -r | cut -d . -f 1,2)-sles15sp1";;
           fc18)   target="3.x-fc18";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
