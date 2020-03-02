@@ -2846,7 +2846,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	default:
 		rc = -ENOTTY;
 		CDEBUG(D_INODE, "%s: unrecognised ioctl %#x by %s: rc = %d\n",
-		       obd->obd_name, cmd, current_comm(), rc);
+		       obd->obd_name, cmd, current->comm, rc);
 		break;
 	}
 

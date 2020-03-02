@@ -334,7 +334,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 {
 	static time64_t last_expire;
 	bool expire_cache = false;
-	pid_t pid = current_pid();
+	pid_t pid = current->pid;
 	struct jobid_pid_map *pidmap = NULL;
 	time64_t now = ktime_get_real_seconds();
 	int rc = 0;
@@ -495,7 +495,7 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 
 		switch ((f = *jobfmt++)) {
 		case 'e': /* executable name */
-			l = snprintf(jobid, joblen, "%s", current_comm());
+			l = snprintf(jobid, joblen, "%s", current->comm);
 			break;
 		case 'g': /* group ID */
 			l = snprintf(jobid, joblen, "%u",
@@ -511,7 +511,7 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 				l = 0;
 			break;
 		case 'p': /* process ID */
-			l = snprintf(jobid, joblen, "%u", current_pid());
+			l = snprintf(jobid, joblen, "%u", current->pid);
 			break;
 		case 'u': /* user ID */
 			l = snprintf(jobid, joblen, "%u",
@@ -705,7 +705,7 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 		if (jid)
 			strlcpy(jobid, jid, sizeof(jobid));
 		rcu_read_unlock();
-	} else if (jobid_name_is_valid(current_comm())) {
+	} else if (jobid_name_is_valid(current->comm)) {
 		/*
 		 * obd_jobid_var holds the jobid environment variable name.
 		 * Skip initial check if obd_jobid_name already uses "%j",

@@ -779,7 +779,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		/* reset the exp_last_xid on each connection. */
 		req->rq_export->exp_last_xid = 0;
 	} else if (obd->obd_recovery_data.trd_processing_task !=
-		   current_pid()) {
+		   current->pid) {
 		rc = process_req_last_xid(req);
 		if (rc) {
 			req->rq_status = rc;

@@ -2289,7 +2289,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 
 	CDEBUG(D_RPCTRACE,
 	       "Handling RPC req@%p pname:cluuid+ref:pid:xid:nid:opc:job %s:%s+%d:%d:x%llu:%s:%d:%s\n",
-	       request, current_comm(),
+	       request, current->comm,
 	       (request->rq_export ?
 		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
@@ -2329,7 +2329,7 @@ put_conn:
 	arrived_usecs = ktime_us_delta(work_end, arrived);
 	CDEBUG(D_RPCTRACE,
 	       "Handled RPC req@%p pname:cluuid+ref:pid:xid:nid:opc:job %s:%s+%d:%d:x%llu:%s:%d:%s Request processed in %lldus (%lldus total) trans %llu rc %d/%d\n",
-	       request, current_comm(),
+	       request, current->comm,
 	       (request->rq_export ?
 	       (char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
@@ -2746,7 +2746,7 @@ static int ptlrpc_main(void *arg)
 	ENTRY;
 
 	thread->t_task = current;
-	thread->t_pid = current_pid();
+	thread->t_pid = current->pid;
 	unshare_fs_struct();
 
 	if (svc->srv_cpt_bind) {

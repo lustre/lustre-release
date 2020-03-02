@@ -848,7 +848,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name,
 		 imp->imp_connection->c_self,
 		 sec_part_flags[0] == '\0' ?
-		       current_pid() : imp->imp_sec_refpid);
+		       current->pid : imp->imp_sec_refpid);
 
         CDEBUG(D_SEC, "requesting key for %s\n", desc);
 

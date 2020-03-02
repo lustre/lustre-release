@@ -1071,7 +1071,7 @@ int lfsck_master_engine(void *args)
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
-	       current_pid());
+	       current->pid);
 
 	spin_lock(&lfsck->li_lock);
 	if (unlikely(!thread_is_starting(thread))) {
@@ -1102,7 +1102,7 @@ int lfsck_master_engine(void *args)
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
-	       current_pid(), rc);
+	       current->pid, rc);
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
 		rc = lfsck_post(env, lfsck, rc);

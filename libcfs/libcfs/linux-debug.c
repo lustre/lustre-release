@@ -264,7 +264,7 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
         if (in_interrupt()) {
                 cfs_trace_debug_print();
         } else {
-		libcfs_debug_dumplog_internal((void *)(long)current_pid());
+		libcfs_debug_dumplog_internal((void *)(long)current->pid);
         }
 #endif
         return 0;

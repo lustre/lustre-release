@@ -558,7 +558,7 @@ static int mdt_coordinator(void *data)
 	ENTRY;
 
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
-	       mdt_obd_name(mdt), current_pid());
+	       mdt_obd_name(mdt), current->pid);
 
 	hsd.hsd_mti = mti;
 	obd_uuid2fsname(hsd.hsd_fsname, mdt_obd_name(mdt),
@@ -738,11 +738,11 @@ clean_cb_alloc:
 
 	if (rc != 0)
 		CERROR("%s: coordinator thread exiting, process=%d, rc=%d\n",
-		       mdt_obd_name(mdt), current_pid(), rc);
+		       mdt_obd_name(mdt), current->pid, rc);
 	else
 		CDEBUG(D_HSM, "%s: coordinator thread exiting, process=%d,"
 			      " no error\n",
-		       mdt_obd_name(mdt), current_pid());
+		       mdt_obd_name(mdt), current->pid);
 
 	RETURN(rc);
 }

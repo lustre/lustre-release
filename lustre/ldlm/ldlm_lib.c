@@ -2507,7 +2507,7 @@ static void replay_request_or_update(struct lu_env *env,
 				continue;
 			}
 
-			LASSERT(trd->trd_processing_task == current_pid());
+			LASSERT(trd->trd_processing_task == current->pid);
 			DEBUG_REQ(D_HA, req, "processing x%llu t%lld from %s",
 				  req->rq_xid,
 				  lustre_msg_get_transno(req->rq_reqmsg),
@@ -2608,8 +2608,8 @@ static int target_recovery_thread(void *arg)
 	tgt_io_thread_init(thread); /* init thread_big_cache for IO requests */
 
 	CDEBUG(D_HA, "%s: started recovery thread pid %d\n", obd->obd_name,
-	       current_pid());
-	trd->trd_processing_task = current_pid();
+	       current->pid);
+	trd->trd_processing_task = current->pid;
 
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_recovering = 1;
@@ -2638,7 +2638,7 @@ static int target_recovery_thread(void *arg)
 	CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
 	       atomic_read(&obd->obd_lock_replay_clients));
 	while ((req = target_next_replay_lock(lut))) {
-		LASSERT(trd->trd_processing_task == current_pid());
+		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing lock from %s:",
 			  libcfs_nid2str(req->rq_peer.nid));
 		handle_recovery_req(thread, req,
@@ -2666,7 +2666,7 @@ static int target_recovery_thread(void *arg)
 	target_cancel_recovery_timer(obd);
 	spin_unlock(&obd->obd_recovery_task_lock);
 	while ((req = target_next_final_ping(obd))) {
-		LASSERT(trd->trd_processing_task == current_pid());
+		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing final ping from %s:",
 			  libcfs_nid2str(req->rq_peer.nid));
 		handle_recovery_req(thread, req,
@@ -2847,7 +2847,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
 	ENTRY;
 
-	if (obd->obd_recovery_data.trd_processing_task == current_pid()) {
+	if (obd->obd_recovery_data.trd_processing_task == current->pid) {
 		/* Processing the queue right now, don't re-add. */
 		RETURN(1);
 	}

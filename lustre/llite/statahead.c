@@ -1122,7 +1122,7 @@ static int ll_statahead_thread(void *arg)
 			       "statahead thread: pid %d\n",
 			       PFID(&lli->lli_fid), sai->sai_hit,
 			       sai->sai_miss, sai->sai_sent,
-			       sai->sai_replied, current_pid());
+			       sai->sai_replied, current->pid);
 			break;
 		}
 	}
@@ -1189,7 +1189,7 @@ void ll_authorize_statahead(struct inode *dir, void *key)
 		 */
 		LASSERT(lli->lli_opendir_pid == 0);
 		lli->lli_opendir_key = key;
-		lli->lli_opendir_pid = current_pid();
+		lli->lli_opendir_pid = current->pid;
 		lli->lli_sa_enabled = 1;
 	}
 	spin_unlock(&lli->lli_sa_lock);
@@ -1567,7 +1567,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 	spin_unlock(&lli->lli_sa_lock);
 
 	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	       current->pid, parent->d_name.len, parent->d_name.name);
 
 	task = kthread_create(ll_statahead_thread, parent, "ll_sa_%u",
 			      lli->lli_opendir_pid);

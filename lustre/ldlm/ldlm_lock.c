@@ -1671,7 +1671,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
 	lock->l_req_mode = mode;
 	lock->l_ast_data = data;
-	lock->l_pid = current_pid();
+	lock->l_pid = current->pid;
 	if (ns_is_server(ns))
 		ldlm_set_ns_srv(lock);
 	if (cbs) {

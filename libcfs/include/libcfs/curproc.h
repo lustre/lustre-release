@@ -39,10 +39,6 @@
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
-/* check if task is running in compat mode.*/
-#define current_pid()		(current->pid)
-#define current_comm()		(current->comm)
-
 typedef __u32 cfs_cap_t;
 
 #define CFS_CAP_CHOWN                   0

@@ -1687,7 +1687,7 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	default:
 		CERROR("%s: unrecognized ioctl %#x by %s\n", obd->obd_name,
-		       cmd, current_comm());
+		       cmd, current->comm);
 		rc = -ENOTTY;
 	}
 	module_put(THIS_MODULE);
