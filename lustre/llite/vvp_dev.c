@@ -266,6 +266,11 @@ struct lu_device_type vvp_device_type = {
         .ldt_ctx_tags = LCT_CL_THREAD
 };
 
+#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
+unsigned int (*vvp_account_page_dirtied)(struct page *page,
+					 struct address_space *mapping);
+#endif
+
 /**
  * A mutex serializing calls to vvp_inode_fini() under extreme memory
  * pressure, when environments cannot be allocated.
