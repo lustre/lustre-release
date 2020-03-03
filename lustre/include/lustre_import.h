@@ -45,6 +45,11 @@
 #include <linux/atomic.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#ifdef HAVE_REFCOUNT_T
+#include <linux/refcount.h>
+#else
+#include <libcfs/linux/linux-refcount.h>
+#endif
 #include <linux/spinlock.h>
 #include <linux/time.h>
 #include <linux/types.h>
@@ -165,7 +170,7 @@ struct import_state_hist {
  */
 struct obd_import {
 	/** Reference counter */
-	atomic_t                  imp_refcount;
+	refcount_t		  imp_refcount;
 	struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
 	/** Currently active connection */
 	struct ptlrpc_connection *imp_connection;

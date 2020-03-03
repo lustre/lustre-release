@@ -1175,7 +1175,7 @@ static void obd_zombie_import_free(struct obd_import *imp)
         CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
                 imp->imp_obd->obd_name);
 
-        LASSERT_ATOMIC_ZERO(&imp->imp_refcount);
+	LASSERT(refcount_read(&imp->imp_refcount) == 0);
 
         ptlrpc_put_connection_superhack(imp->imp_connection);
 
@@ -1197,9 +1197,9 @@ static void obd_zombie_import_free(struct obd_import *imp)
 
 struct obd_import *class_import_get(struct obd_import *import)
 {
-	atomic_inc(&import->imp_refcount);
+	refcount_inc(&import->imp_refcount);
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
-	       atomic_read(&import->imp_refcount),
+	       refcount_read(&import->imp_refcount),
                import->imp_obd->obd_name);
         return import;
 }
@@ -1209,13 +1209,13 @@ void class_import_put(struct obd_import *imp)
 {
 	ENTRY;
 
-        LASSERT_ATOMIC_GT_LT(&imp->imp_refcount, 0, LI_POISON);
+	LASSERT(refcount_read(&imp->imp_refcount) > 0);
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
-	       atomic_read(&imp->imp_refcount) - 1,
+	       refcount_read(&imp->imp_refcount) - 1,
                imp->imp_obd->obd_name);
 
-	if (atomic_dec_and_test(&imp->imp_refcount)) {
+	if (refcount_dec_and_test(&imp->imp_refcount)) {
                 CDEBUG(D_INFO, "final put import %p\n", imp);
                 obd_zombie_import_add(imp);
         }
@@ -1274,7 +1274,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
 	else
 		imp->imp_sec_refpid = 1;
 
-	atomic_set(&imp->imp_refcount, 2);
+	refcount_set(&imp->imp_refcount, 2);
 	atomic_set(&imp->imp_unregistering, 0);
 	atomic_set(&imp->imp_inflight, 0);
 	atomic_set(&imp->imp_replay_inflight, 0);

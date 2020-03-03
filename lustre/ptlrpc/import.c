@@ -1768,7 +1768,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 
 	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d",
 		  atomic_read(&imp->imp_inflight),
-		  atomic_read(&imp->imp_refcount), rc);
+		  refcount_read(&imp->imp_refcount), rc);
 
 	spin_lock(&imp->imp_lock);
 	/* DISCONNECT reply can be late and another connection can just

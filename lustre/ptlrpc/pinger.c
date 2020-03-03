@@ -108,7 +108,7 @@ static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
 	 *  - ptlrpcd_alloc_work()
 	 *  - ptlrpc_pinger_add_import
 	 */
-	if (atomic_read(&imp->imp_refcount) > 4)
+	if (refcount_read(&imp->imp_refcount) > 4)
 		return false;
 
 	/* any lock increases ns_bref being a resource holder */
