@@ -147,6 +147,11 @@ enum ldlm_mode mdc_lock_match(struct obd_export *exp, __u64 flags,
 			      enum ldlm_mode mode, struct lustre_handle *lockh);
 
 
+#define MDC_CHANGELOG_DEV_COUNT LMV_MAX_STRIPE_COUNT
+#define MDC_CHANGELOG_DEV_NAME	"changelog"
+extern struct class *mdc_changelog_class;
+extern dev_t mdc_changelog_dev;
+
 int mdc_changelog_cdev_init(struct obd_device *obd);
 
 void mdc_changelog_cdev_finish(struct obd_device *obd);

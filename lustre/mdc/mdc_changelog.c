@@ -33,7 +33,8 @@
 #include <linux/init.h>
 #include <linux/kthread.h>
 #include <linux/poll.h>
-#include <linux/miscdevice.h>
+#include <linux/device.h>
+#include <linux/cdev.h>
 
 #include <lustre_log.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
@@ -58,15 +59,16 @@ static LIST_HEAD(chlg_registered_devices);
 
 struct chlg_registered_dev {
 	/* Device name of the form "changelog-{MDTNAME}" */
-	char			ced_name[32];
-	/* Misc device descriptor */
-	struct miscdevice	ced_misc;
+	char			 ced_name[32];
+	/* changelog char device */
+	struct cdev		 ced_cdev;
+	struct device		*ced_device;
 	/* OBDs referencing this device (multiple mount point) */
-	struct list_head	ced_obds;
+	struct list_head	 ced_obds;
 	/* Reference counter for proper deregistration */
-	struct kref		ced_refs;
+	struct kref		 ced_refs;
 	/* Link within the global chlg_registered_devices */
-	struct list_head	ced_link;
+	struct list_head	 ced_link;
 };
 
 struct chlg_reader_state {
@@ -111,19 +113,57 @@ enum {
 	CDEV_CHLG_MAX_PREFETCH = 1024,
 };
 
+static DEFINE_IDR(chlg_minor_idr);
+static DEFINE_SPINLOCK(chlg_minor_lock);
+
+static int chlg_minor_alloc(int *pminor)
+{
+	void *minor_allocated = (void *)-1;
+	int minor;
+
+	idr_preload(GFP_KERNEL);
+	spin_lock(&chlg_minor_lock);
+	minor = idr_alloc(&chlg_minor_idr, minor_allocated, 0,
+			  MDC_CHANGELOG_DEV_COUNT, GFP_NOWAIT);
+	spin_unlock(&chlg_minor_lock);
+	idr_preload_end();
+
+	if (minor < 0)
+		return minor;
+
+	*pminor = minor;
+	return 0;
+}
+
+static void chlg_minor_free(int minor)
+{
+	spin_lock(&chlg_minor_lock);
+	idr_remove(&chlg_minor_idr, minor);
+	spin_unlock(&chlg_minor_lock);
+}
+
+static void chlg_device_release(struct device *dev)
+{
+	struct chlg_registered_dev *entry = dev_get_drvdata(dev);
+
+	chlg_minor_free(MINOR(entry->ced_cdev.dev));
+	OBD_FREE_PTR(entry);
+}
+
 /**
  * Deregister a changelog character device whose refcount has reached zero.
  */
 static void chlg_dev_clear(struct kref *kref)
 {
-	struct chlg_registered_dev *entry = container_of(kref,
-						struct chlg_registered_dev,
-						ced_refs);
+	struct chlg_registered_dev *entry;
+	
 	ENTRY;
+	entry = container_of(kref, struct chlg_registered_dev,
+			     ced_refs);
 
 	list_del(&entry->ced_link);
-	misc_deregister(&entry->ced_misc);
-	OBD_FREE_PTR(entry);
+	cdev_del(&entry->ced_cdev);
+	device_destroy(mdc_changelog_class, entry->ced_cdev.dev);
 	EXIT;
 }
 
@@ -551,13 +591,12 @@ out_kbuf:
 static int chlg_open(struct inode *inode, struct file *file)
 {
 	struct chlg_reader_state *crs;
-	struct miscdevice *misc = file->private_data;
 	struct chlg_registered_dev *dev;
 	struct task_struct *task;
 	int rc;
 	ENTRY;
 
-	dev = container_of(misc, struct chlg_registered_dev, ced_misc);
+	dev = container_of(inode->i_cdev, struct chlg_registered_dev, ced_cdev);
 
 	OBD_ALLOC_PTR(crs);
 	if (!crs)
@@ -676,11 +715,11 @@ static const struct file_operations chlg_fops = {
  * This uses obd_name of the form: "testfs-MDT0000-mdc-ffff88006501600"
  * and returns a name of the form: "changelog-testfs-MDT0000".
  */
-static void get_chlg_name(char *name, size_t name_len, struct obd_device *obd)
+static void get_target_name(char *name, size_t name_len, struct obd_device *obd)
 {
 	int i;
 
-	snprintf(name, name_len, "changelog-%s", obd->obd_name);
+	snprintf(name, name_len, "%s", obd->obd_name);
 
 	/* Find the 2nd '-' from the end and truncate on it */
 	for (i = 0; i < 2; i++) {
@@ -742,18 +781,16 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 {
 	struct chlg_registered_dev *exist;
 	struct chlg_registered_dev *entry;
-	int rc;
+	struct device *device;
+	dev_t dev;
+	int minor, rc;
 	ENTRY;
 
 	OBD_ALLOC_PTR(entry);
 	if (entry == NULL)
 		RETURN(-ENOMEM);
 
-	get_chlg_name(entry->ced_name, sizeof(entry->ced_name), obd);
-
-	entry->ced_misc.minor = MISC_DYNAMIC_MINOR;
-	entry->ced_misc.name  = entry->ced_name;
-	entry->ced_misc.fops  = &chlg_fops;
+	get_target_name(entry->ced_name, sizeof(entry->ced_name), obd);
 
 	kref_init(&entry->ced_refs);
 	INIT_LIST_HEAD(&entry->ced_obds);
@@ -771,14 +808,37 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 	list_add_tail(&entry->ced_link, &chlg_registered_devices);
 
 	/* Register new character device */
-	rc = misc_register(&entry->ced_misc);
-	if (rc != 0) {
-		list_del_init(&obd->u.cli.cl_chg_dev_linkage);
-		list_del(&entry->ced_link);
+	cdev_init(&entry->ced_cdev, &chlg_fops);
+	entry->ced_cdev.owner = THIS_MODULE;
+
+	rc = chlg_minor_alloc(&minor);
+	if (rc)
 		GOTO(out_unlock, rc);
-	}
+
+	dev = MKDEV(MAJOR(mdc_changelog_dev), minor);
+	rc = cdev_add(&entry->ced_cdev, dev, 1);
+	if (rc)
+		GOTO(out_minor, rc);
+
+	device = device_create(mdc_changelog_class, NULL, dev, entry, "%s-%s",
+			       MDC_CHANGELOG_DEV_NAME, entry->ced_name);
+	if (IS_ERR(device))
+		GOTO(out_cdev, rc = PTR_ERR(device));
+
+	device->release = chlg_device_release;
+	entry->ced_device = device;
 
 	entry = NULL;	/* prevent it from being freed below */
+	GOTO(out_unlock, rc = 0);
+
+out_cdev:
+	cdev_del(&entry->ced_cdev);
+
+out_minor:
+	chlg_minor_free(minor);
+
+	list_del_init(&obd->u.cli.cl_chg_dev_linkage);
+	list_del(&entry->ced_link);
 
 out_unlock:
 	mutex_unlock(&chlg_registered_dev_lock);
