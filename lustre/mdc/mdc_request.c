@@ -40,6 +40,7 @@
 #include <linux/utsname.h>
 #include <linux/delay.h>
 #include <linux/uidgid.h>
+#include <linux/device.h>
 
 #include <lustre_errno.h>
 
@@ -2957,15 +2958,40 @@ static const struct md_ops mdc_md_ops = {
 	.m_rmfid		= mdc_rmfid,
 };
 
+dev_t mdc_changelog_dev;
+struct class *mdc_changelog_class;
 static int __init mdc_init(void)
 {
-	return class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
-				   LUSTRE_MDC_NAME, &mdc_device_type);
+	int rc = 0;
+	rc = alloc_chrdev_region(&mdc_changelog_dev, 0,
+				 MDC_CHANGELOG_DEV_COUNT,
+				 MDC_CHANGELOG_DEV_NAME);
+	if (rc)
+		return rc;
+
+	mdc_changelog_class = class_create(THIS_MODULE, MDC_CHANGELOG_DEV_NAME);
+	if (IS_ERR(mdc_changelog_class)) {
+		rc = PTR_ERR(mdc_changelog_class);
+		goto out_dev;
+	}
+
+	rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
+				 LUSTRE_MDC_NAME, &mdc_device_type);
+	if (rc)
+		goto out_dev;
+
+	return 0;
+
+out_dev:
+	unregister_chrdev_region(mdc_changelog_dev, MDC_CHANGELOG_DEV_COUNT);
+	return rc;
 }
 
 static void __exit mdc_exit(void)
 {
-        class_unregister_type(LUSTRE_MDC_NAME);
+	class_destroy(mdc_changelog_class);
+	unregister_chrdev_region(mdc_changelog_dev, MDC_CHANGELOG_DEV_COUNT);
+	class_unregister_type(LUSTRE_MDC_NAME);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
