@@ -56,14 +56,6 @@
                        vfs_symlink(dir, dentry, path)
 #endif
 
-#ifndef HAVE_INIT_LIST_HEAD_RCU
-static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
-{
-	WRITE_ONCE(list->next, list);
-	WRITE_ONCE(list->prev, list);
-}
-#endif
-
 #ifdef HAVE_BVEC_ITER
 #define bio_idx(bio)			(bio->bi_iter.bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_iter.bi_sector = sector)
