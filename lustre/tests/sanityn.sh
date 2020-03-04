@@ -503,6 +503,26 @@ test_16d() {
 }
 run_test 16d "Verify DIO and buffer IO with two clients"
 
+test_16e() { # LU-13227
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+
+	# client1 write 10M data
+	dd if=/dev/zero of=$file1 bs=1M count=10
+	# drop locks
+	cancel_lru_locks osc > /dev/null
+	# use lockahead to generate one PW lock to keep LVB loaded.
+	$LFS ladvise -a lockahead --start 0 --length 1M \
+		--mode WRITE $file1
+	# direct write to extend file size on client2
+	dd if=/dev/zero of=$file2 bs=1M seek=20 count=1 \
+		oflag=direct conv=notrunc
+	local filesize=$(stat -c %s $file2)
+	[ "$filesize" -eq 22020096 ] ||
+		error "expected filesize 22020096 got $filesize"
+	rm -f $file1
+}
+run_test 16e "Verify size consistency for O_DIRECT write"
 
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return

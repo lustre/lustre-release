@@ -1298,6 +1298,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct ofd_thread_info *info = ofd_info(env);
 	struct ofd_device *ofd = ofd_exp(exp);
 	const struct lu_fid *fid = &oa->o_oi.oi_fid;
+	struct ldlm_namespace *ns = ofd->ofd_namespace;
+	struct ldlm_resource *rs = NULL;
 	__u64 valid;
 	int rc = 0;
 
@@ -1349,6 +1351,23 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			oa->o_valid |= OBD_MD_FLALLQUOTA;
 		}
 
+		/**
+		 * Update LVB after writing finish for server lock, see
+		 * comments in ldlm_lock_decref_internal(), If this is a
+		 * local lock on a server namespace and this was the last
+		 * reference, lock will be destroyed directly thus there
+		 * is no chance for ldlm_request_cancel() to update lvb.
+		 */
+		if (rc == 0 && (rnb[0].rnb_flags & OBD_BRW_SRVLOCK)) {
+			ost_fid_build_resid(fid, &info->fti_resid);
+			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
+					       LDLM_EXTENT, 0);
+			if (!IS_ERR(rs)) {
+				ldlm_res_lvbo_update(rs, NULL, 1);
+				ldlm_resource_putref(rs);
+			}
+		}
+
 		/* Convert back to client IDs. LU-9671.
 		 * nodemap_get_from_exp() may fail due to nodemap deactivated,
 		 * server ID will be returned back to client in that case. */
@@ -1363,14 +1382,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			nodemap_putref(nodemap);
 		}
 	} else if (cmd == OBD_BRW_READ) {
-		struct ldlm_namespace *ns = ofd->ofd_namespace;
 
 		/* If oa != NULL then ofd_preprw_read updated the inode
 		 * atime and we should update the lvb so that other glimpses
 		 * will also get the updated value. bug 5972 */
 		if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
-			 struct ldlm_resource *rs = NULL;
-
 			ost_fid_build_resid(fid, &info->fti_resid);
 			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
 					       LDLM_EXTENT, 0);
