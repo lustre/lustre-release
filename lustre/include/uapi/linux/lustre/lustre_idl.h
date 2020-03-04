@@ -88,15 +88,11 @@ extern "C" {
 
 #define CONNMGR_REQUEST_PORTAL          1
 #define CONNMGR_REPLY_PORTAL            2
-/* #define OSC_REQUEST_PORTAL		 3*/
 #define OSC_REPLY_PORTAL                4
-/*#define OSC_BULK_PORTAL		 5*/
 #define OST_IO_PORTAL                   6
 #define OST_CREATE_PORTAL               7
 #define OST_BULK_PORTAL                 8
-/*#define MDC_REQUEST_PORTAL		 9*/
 #define MDC_REPLY_PORTAL               10
-/*#define MDC_BULK_PORTAL		11*/
 #define MDS_REQUEST_PORTAL             12
 #define MDS_IO_PORTAL			13
 #define MDS_BULK_PORTAL                14
@@ -104,10 +100,7 @@ extern "C" {
 #define LDLM_CB_REPLY_PORTAL           16
 #define LDLM_CANCEL_REQUEST_PORTAL     17
 #define LDLM_CANCEL_REPLY_PORTAL       18
-/*#define PTLBD_REQUEST_PORTAL		19*/
-/*#define PTLBD_REPLY_PORTAL		20*/
-/*#define PTLBD_BULK_PORTAL		21*/
-#define MDS_SETATTR_PORTAL             22
+/* #define MDS_SETATTR_PORTAL             22 obsolete after 2.13 */
 #define MDS_READPAGE_PORTAL            23
 #define OUT_PORTAL			24
 #define MGC_REPLY_PORTAL               25

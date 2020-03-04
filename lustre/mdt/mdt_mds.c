@@ -60,7 +60,6 @@ struct mds_device {
 	struct ptlrpc_service	*mds_regular_service;
 	struct ptlrpc_service	*mds_readpage_service;
 	struct ptlrpc_service	*mds_out_service;
-	struct ptlrpc_service	*mds_setattr_service;
 	struct ptlrpc_service	*mds_mdsc_service;
 	struct ptlrpc_service	*mds_mdss_service;
 	struct ptlrpc_service	*mds_fld_service;
@@ -116,22 +115,6 @@ module_param(mds_rdpg_num_cpts, charp, 0444);
 MODULE_PARM_DESC(mds_rdpg_num_cpts,
 		 "CPU partitions MDS readpage threads should run on");
 
-/* NB: these two should be removed along with setattr service in the future */
-static unsigned long mds_attr_num_threads;
-module_param(mds_attr_num_threads, ulong, 0444);
-MODULE_PARM_DESC(mds_attr_num_threads,
-		 "number of MDS setattr service threads to start");
-
-static unsigned int mds_attr_cpu_bind = 1;
-module_param(mds_attr_cpu_bind, uint, 0444);
-MODULE_PARM_DESC(mds_attr_cpu_bind,
-		 "bind MDS setattr threads to particular CPU partitions");
-
-static char *mds_attr_num_cpts;
-module_param(mds_attr_num_cpts, charp, 0444);
-MODULE_PARM_DESC(mds_attr_num_cpts,
-		 "CPU partitions MDS setattr threads should run on");
-
 /* device init/fini methods */
 static void mds_stop_ptlrpc_service(struct mds_device *m)
 {
@@ -149,10 +132,6 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 	if (m->mds_out_service != NULL) {
 		ptlrpc_unregister_service(m->mds_out_service);
 		m->mds_out_service = NULL;
-	}
-	if (m->mds_setattr_service != NULL) {
-		ptlrpc_unregister_service(m->mds_setattr_service);
-		m->mds_setattr_service = NULL;
 	}
 	if (m->mds_mdsc_service != NULL) {
 		ptlrpc_unregister_service(m->mds_mdsc_service);
@@ -278,55 +257,6 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		rc = PTR_ERR(m->mds_readpage_service);
 		CERROR("failed to start readpage service: %d\n", rc);
 		m->mds_readpage_service = NULL;
-
-		GOTO(err_mds_svc, rc);
-	}
-
-	/*
-	 * setattr service configuration.
-	 *
-	 * XXX To keep the compatibility with old client(< 2.2), we need to
-	 * preserve this portal for a certain time, it should be removed
-	 * eventually. LU-617.
-	 */
-	memset(&conf, 0, sizeof(conf));
-	conf = (typeof(conf)) {
-		.psc_name		= LUSTRE_MDT_NAME "_setattr",
-		.psc_watchdog_factor	= MDT_SERVICE_WATCHDOG_FACTOR,
-		.psc_buf		= {
-			.bc_nbufs		= MDS_NBUFS,
-			.bc_buf_size		= MDS_BUFSIZE,
-			.bc_req_max_size	= MDS_MAXREQSIZE,
-			.bc_rep_max_size	= MDS_LOV_MAXREPSIZE,
-			.bc_req_portal		= MDS_SETATTR_PORTAL,
-			.bc_rep_portal		= MDC_REPLY_PORTAL,
-		},
-		.psc_thr		= {
-			.tc_thr_name		= LUSTRE_MDT_NAME "_attr",
-			.tc_thr_factor		= MDS_SETA_THR_FACTOR,
-			.tc_nthrs_init		= MDS_SETA_NTHRS_INIT,
-			.tc_nthrs_base		= MDS_SETA_NTHRS_BASE,
-			.tc_nthrs_max		= MDS_SETA_NTHRS_MAX,
-			.tc_nthrs_user		= mds_attr_num_threads,
-			.tc_cpu_bind		= mds_attr_cpu_bind,
-			.tc_ctx_tags		= LCT_MD_THREAD,
-		},
-		.psc_cpt		= {
-			.cc_pattern		= mds_attr_num_cpts,
-			.cc_affinity		= true,
-		},
-		.psc_ops		= {
-			.so_req_handler		= tgt_request_handle,
-			.so_req_printer		= target_print_req,
-			.so_hpreq_handler	= NULL,
-		},
-	};
-	m->mds_setattr_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-							 obd->obd_debugfs_entry);
-	if (IS_ERR(m->mds_setattr_service)) {
-		rc = PTR_ERR(m->mds_setattr_service);
-		CERROR("failed to start setattr service: %d\n", rc);
-		m->mds_setattr_service = NULL;
 
 		GOTO(err_mds_svc, rc);
 	}
@@ -667,7 +597,6 @@ static int mds_health_check(const struct lu_env *env, struct obd_device *obd)
 	rc |= ptlrpc_service_health_check(mds->mds_regular_service);
 	rc |= ptlrpc_service_health_check(mds->mds_readpage_service);
 	rc |= ptlrpc_service_health_check(mds->mds_out_service);
-	rc |= ptlrpc_service_health_check(mds->mds_setattr_service);
 	rc |= ptlrpc_service_health_check(mds->mds_mdsc_service);
 	rc |= ptlrpc_service_health_check(mds->mds_mdss_service);
 	rc |= ptlrpc_service_health_check(mds->mds_fld_service);
