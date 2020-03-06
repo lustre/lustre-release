@@ -8237,28 +8237,27 @@ num_inodes() {
 test_76() { # Now for bug 20433, added originally in bug 1443
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-	local CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
-
 	cancel_lru_locks osc
-	BEFORE_INODES=$(num_inodes)
-	echo "before inodes: $BEFORE_INODES"
-	local COUNT=1000
-	[ "$SLOW" = "no" ] && COUNT=100
-	for i in $(seq $COUNT); do
+	local cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
+	local before=$(num_inodes)
+	local count=$((512 * cpus))
+	[ "$SLOW" = "no" ] && count=$((64 * cpus))
+
+	echo "before inodes: $before"
+	for i in $(seq $count); do
 		touch $DIR/$tfile
 		rm -f $DIR/$tfile
 	done
 	cancel_lru_locks osc
-	AFTER_INODES=$(num_inodes)
-	echo "after inodes: $AFTER_INODES"
-	local wait=0
-	while [[ $((AFTER_INODES-1*${CPUS:-1})) -gt $BEFORE_INODES ]]; do
-		sleep 2
-		AFTER_INODES=$(num_inodes)
-		wait=$((wait+2))
-		echo "wait $wait seconds inodes: $AFTER_INODES"
-		if [ $wait -gt 30 ]; then
-			error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
+	local after=$(num_inodes)
+	echo "after inodes: $after"
+	while (( after > before + 8 * ${cpus:-1} )); do
+		sleep 1
+		after=$(num_inodes)
+		wait=$((wait + 1))
+		(( wait % 5 == 0 )) && echo "wait $wait seconds inodes: $after"
+		if (( wait > 30 )); then
+			error "inode slab grew from $before to $after"
 		fi
 	done
 }
