@@ -17,38 +17,13 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	80)     LDISKFS_SERIES="4.18-rhel8.series"      ;;
 	77)	LDISKFS_SERIES="3.10-rhel7.7.series"	;;
 	76)	LDISKFS_SERIES="3.10-rhel7.6.series"	;;
-	75)	LDISKFS_SERIES="3.10-rhel7.5.series"	;;
-	74)	LDISKFS_SERIES="3.10-rhel7.4.series"	;;
-	73)	LDISKFS_SERIES="3.10-rhel7.3.series"	;;
-	72)	LDISKFS_SERIES="3.10-rhel7.2.series"	;;
-	71)	LDISKFS_SERIES="3.10-rhel7.series"	;;
-	69)	LDISKFS_SERIES="2.6-rhel6.9.series"	;;
-	68)	LDISKFS_SERIES="2.6-rhel6.8.series"	;;
-	67)	LDISKFS_SERIES="2.6-rhel6.7.series"	;;
-	66)	LDISKFS_SERIES="2.6-rhel6.6.series"	;;
-	65)	LDISKFS_SERIES="2.6-rhel6.5.series"	;;
-	64)	LDISKFS_SERIES="2.6-rhel6.4.series"	;;
-	6[0-3])	LDISKFS_SERIES="2.6-rhel6.series"	;;
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.12.14],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.82],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32], [],
-	[LDISKFS_SERIES="2.6-sles11.series"],[LDISKFS_SERIES="2.6-sles11.series"])],
-	[LDISKFS_SERIES="3.0-sles11.series"],[
-		PLEV=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
-		case $PLEV in
-		2) LDISKFS_SERIES="3.0-sles11.series"
-			;;
-		3) LDISKFS_SERIES="3.0-sles11sp3.series"
-			;;
-		4) LDISKFS_SERIES="3.0-sles11sp4.series"
-			;;
-		esac
-	])],[LDISKFS_SERIES="3.12-sles12.series"],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[],
+	[LDISKFS_SERIES="3.12-sles12.series"],[
 		PLEV=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
 		case $PLEV in
 		1) LDISKFS_SERIES="3.12-sles12sp1.series"
