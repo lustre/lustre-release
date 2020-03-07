@@ -1,0 +1,49 @@
+Subject: [PATCH] ext4: don't verify group descriptors until after journal
+ replay
+
+When ldiskfs runs in failover mode with read-only disk, it may
+lose part of allocation updates and fail while mounting the
+filesystem due to group descriptor checks before journal replay.
+Don't panic with on-disk checks in read-only mode.
+
+Seagate-bug-id: MRP-797
+Signed-off-by: Alexey Lyashkov <alexey_lyashkov@xyratex.com>
+Signed-off-by: Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+Lustre-change: https://review.whamcloud.com/21141
+---
+ fs/ext4/super.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 6ea4936..134308f 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -4145,11 +4145,6 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 		}
+ 	}
+ 	sbi->s_gdb_count = db_count;
+-	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
+-		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
+-		ret = -EFSCORRUPTED;
+-		goto failed_mount2;
+-	}
+ 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
+ 	spin_lock_init(&sbi->s_next_gen_lock);
+ 
+@@ -4289,6 +4284,13 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 	sbi->s_journal->j_commit_callback = ext4_journal_commit_callback;
+ 
+ no_journal:
++
++	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		ret = -EFSCORRUPTED;
++		goto failed_mount_wq;
++	}
++
+ 	sbi->s_mb_cache = ext4_xattr_create_cache();
+ 	if (!sbi->s_mb_cache) {
+ 		ext4_msg(sb, KERN_ERR, "Failed to create an mb_cache");
+-- 
+2.20.1
+

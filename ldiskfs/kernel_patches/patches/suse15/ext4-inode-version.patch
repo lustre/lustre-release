@@ -1,0 +1,59 @@
+Subject: [PATCH] ext4: cache on-disk inode version in ext4_inode_info
+
+For use in lustre ldiskfs transaction handling
+---
+ fs/ext4/ext4.h   | 2 ++
+ fs/ext4/ialloc.c | 1 +
+ fs/ext4/inode.c  | 4 ++--
+ 3 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 0e2a7f5..271f96d 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1099,6 +1099,8 @@ struct ext4_inode_info {
+ 	struct dquot *i_dquot[MAXQUOTAS];
+ #endif
+ 
++	__u64 i_fs_version;
++
+ 	/* Precomputed uuid+inum+igen checksum for seeding inode checksums */
+ 	__u32 i_csum_seed;
+ 
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index fe1fee9..4da98da 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -1063,6 +1063,7 @@ got:
+ 	ei->i_dtime = 0;
+ 	ei->i_block_group = group;
+ 	ei->i_last_alloc_group = ~0;
++	ei->i_fs_version = 0;
+ 
+ 	ext4_set_inode_flags(inode);
+ 	if (IS_DIRSYNC(inode))
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 6b15a3a..9ab0039 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -4886,7 +4886,7 @@ struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
+ 				ivers |=
+ 		    (__u64)(le32_to_cpu(raw_inode->i_version_hi)) << 32;
+ 		}
+-		inode_set_iversion_queried(inode, ivers);
++		ei->i_fs_version = ivers;
+ 	}
+ 
+ 	ret = 0;
+@@ -5170,7 +5170,7 @@ static int ext4_do_update_inode(handle_t *handle,
+ 	}
+ 
+ 	if (likely(!test_opt2(inode->i_sb, HURD_COMPAT))) {
+-		u64 ivers = inode_peek_iversion(inode);
++		u64 ivers = cpu_to_le32(ei->i_fs_version);
+ 
+ 		raw_inode->i_disk_version = cpu_to_le32(ivers);
+ 		if (ei->i_extra_isize) {
+-- 
+2.20.1
+
