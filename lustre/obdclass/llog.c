@@ -499,7 +499,6 @@ static int llog_process_thread(void *arg)
 		struct llog_rec_hdr *rec;
 		off_t chunk_offset = 0;
 		unsigned int buf_offset = 0;
-		bool partial_chunk;
 		int	lh_last_idx;
 		int	synced_idx = 0;
 
@@ -540,13 +539,10 @@ repeat:
 		 * The absolute offset of the current chunk is calculated
 		 * from cur_offset value and stored in chunk_offset variable.
 		 */
-		if ((cur_offset & (chunk_size - 1)) != 0) {
-			partial_chunk = true;
+		if ((cur_offset & (chunk_size - 1)) != 0)
 			chunk_offset = cur_offset & ~(chunk_size - 1);
-		} else {
-			partial_chunk = false;
+		else
 			chunk_offset = cur_offset - chunk_size;
-		}
 
 		/* NB: when rec->lrh_len is accessed it is already swabbed
 		 * since it is used at the "end" of the loop and the rec
