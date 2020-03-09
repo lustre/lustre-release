@@ -75,7 +75,7 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-#                                  5          12          (min)"
+#                                  5          12     8   12  (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 135 136 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
@@ -12740,7 +12740,7 @@ test_136() {
 	local fname
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir || error "failed to set striping"
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir || error "failed to set striping"
 	#set only one record at plain llog
 #define OBD_FAIL_CATALOG_FULL_CHECK                0x131a
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x131a fail_val=1
