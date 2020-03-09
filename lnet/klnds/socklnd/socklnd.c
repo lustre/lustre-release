@@ -221,9 +221,10 @@ struct ksock_peer_ni *
 ksocknal_find_peer_locked(struct lnet_ni *ni, struct lnet_process_id id)
 {
 	struct ksock_peer_ni *peer_ni;
+	unsigned long hash = nidhash(id.nid);
 
 	hash_for_each_possible(ksocknal_data.ksnd_peers, peer_ni,
-			       ksnp_list, id.nid) {
+			       ksnp_list, hash) {
 		LASSERT(!peer_ni->ksnp_closing);
 
 		if (peer_ni->ksnp_ni != ni)
@@ -598,7 +599,8 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id,
 		peer_ni = peer2;
 	} else {
 		/* peer_ni table takes my ref on peer_ni */
-		hash_add(ksocknal_data.ksnd_peers, &peer_ni->ksnp_list, id.nid);
+		hash_add(ksocknal_data.ksnd_peers, &peer_ni->ksnp_list,
+			 nidhash(id.nid));
 	}
 
 	ksocknal_add_conn_cb_locked(peer_ni, conn_cb);
@@ -652,7 +654,8 @@ ksocknal_del_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ip)
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
 	if (id.nid != LNET_NID_ANY) {
-		lo = hash_min(id.nid, HASH_BITS(ksocknal_data.ksnd_peers));
+		lo = hash_min(nidhash(id.nid),
+			      HASH_BITS(ksocknal_data.ksnd_peers));
 		hi = lo;
 	} else {
 		lo = 0;
@@ -924,7 +927,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 			/* NB this puts an "empty" peer_ni in the peer_ni
 			 * table (which takes my ref) */
 			hash_add(ksocknal_data.ksnd_peers,
-				 &peer_ni->ksnp_list, peerid.nid);
+				 &peer_ni->ksnp_list, nidhash(peerid.nid));
 		} else {
 			ksocknal_peer_decref(peer_ni);
 			peer_ni = peer2;
@@ -1544,7 +1547,8 @@ ksocknal_close_matching_conns(struct lnet_process_id id, __u32 ipaddr)
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
 	if (id.nid != LNET_NID_ANY) {
-		lo = hash_min(id.nid, HASH_BITS(ksocknal_data.ksnd_peers));
+		lo = hash_min(nidhash(id.nid),
+			      HASH_BITS(ksocknal_data.ksnd_peers));
 		hi = lo;
 	} else {
 		lo = 0;
@@ -1638,7 +1642,8 @@ ksocknal_push(struct lnet_ni *ni, struct lnet_process_id id)
 	int rc = -ENOENT;
 
 	if (id.nid != LNET_NID_ANY) {
-		lo = hash_min(id.nid, HASH_BITS(ksocknal_data.ksnd_peers));
+		lo = hash_min(nidhash(id.nid),
+			      HASH_BITS(ksocknal_data.ksnd_peers));
 		hi = lo;
 	} else {
 		lo = 0;
