@@ -65,21 +65,15 @@ static int libcfs_param_debug_mb_set(const char *val,
 	if (rc < 0)
 		return rc;
 
-/*
- * RHEL6 does not support any kind of locking so we have to provide
- * our own
- */
-	if (!*((unsigned int *)kp->arg)) {
+	num = cfs_trace_set_debug_mb(num);
+
+	*((unsigned int *)kp->arg) = num;
+	num = cfs_trace_get_debug_mb();
+	if (num)
+		/* This value is more precise */
 		*((unsigned int *)kp->arg) = num;
-		return 0;
-	}
 
-	rc = cfs_trace_set_debug_mb(num);
-
-	if (!rc)
-		*((unsigned int *)kp->arg) = cfs_trace_get_debug_mb();
-
-	return rc;
+	return 0;
 }
 
 /*

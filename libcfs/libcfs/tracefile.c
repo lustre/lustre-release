@@ -880,7 +880,7 @@ int cfs_trace_set_debug_mb(int mb)
 
 	up_write(&cfs_tracefile_sem);
 
-	return 0;
+	return mb;
 }
 
 int cfs_trace_get_debug_mb(void)
