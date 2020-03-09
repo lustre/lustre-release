@@ -2919,6 +2919,9 @@ test_140a() {
 	[ $MDS1_VERSION -lt $(version_code 2.12.58) ] &&
 		skip "Need MDS version at least 2.13.50"
 
+	[ "$SHARED_KEY" = true ] &&
+		skip "server local client incompatible with SSK keys installed"
+
 	slr=$(do_facet mds1 \
 		$LCTL get_param -n mdt.$FSNAME-MDT0000.local_recovery)
 	stack_trap "do_facet mds1 $LCTL set_param \
@@ -2952,6 +2955,9 @@ run_test 140a "local mount is flagged properly"
 test_140b() {
 	[ $MDS1_VERSION -lt $(version_code 2.12.58) ] &&
 		skip "Need MDS version at least 2.13.50"
+
+	[ "$SHARED_KEY" = true ] &&
+		skip "server local client incompatible with SSK keys installed"
 
 	slr=$(do_facet mds1 \
 		$LCTL get_param -n mdt.$FSNAME-MDT0000.local_recovery)
