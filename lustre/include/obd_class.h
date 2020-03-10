@@ -531,42 +531,46 @@ static inline int obd_set_info_async(const struct lu_env *env,
 static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         int rc;
-	struct lu_device_type *ldt = obd->obd_type->typ_lu;
-	struct lu_device *d;
+	struct obd_type *type = obd->obd_type;
+	struct lu_device_type *ldt;
 
-        ENTRY;
+	ENTRY;
 
-        if (ldt != NULL) {
-                struct lu_context  session_ctx;
-                struct lu_env env;
-                lu_context_init(&session_ctx, LCT_SESSION | LCT_SERVER_SESSION);
-                session_ctx.lc_thread = NULL;
-                lu_context_enter(&session_ctx);
+	wait_var_event(&type->typ_lu,
+		       smp_load_acquire(&type->typ_lu) != OBD_LU_TYPE_SETUP);
+	ldt = type->typ_lu;
+	if (ldt != NULL) {
+		struct lu_context session_ctx;
+		struct lu_env env;
 
-                rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-                if (rc == 0) {
-                        env.le_ses = &session_ctx;
-                        d = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
-                        lu_env_fini(&env);
-                        if (!IS_ERR(d)) {
-                                obd->obd_lu_dev = d;
-                                d->ld_obd = obd;
-                                rc = 0;
-                        } else
-                                rc = PTR_ERR(d);
-                }
-                lu_context_exit(&session_ctx);
-                lu_context_fini(&session_ctx);
+		lu_context_init(&session_ctx, LCT_SESSION | LCT_SERVER_SESSION);
+		session_ctx.lc_thread = NULL;
+		lu_context_enter(&session_ctx);
 
-        } else {
+		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+		if (rc == 0) {
+			struct lu_device *dev;
+			env.le_ses = &session_ctx;
+			dev = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
+			lu_env_fini(&env);
+			if (!IS_ERR(dev)) {
+				obd->obd_lu_dev = dev;
+				dev->ld_obd = obd;
+				rc = 0;
+			} else
+				rc = PTR_ERR(dev);
+		}
+		lu_context_exit(&session_ctx);
+		lu_context_fini(&session_ctx);
+	} else {
 		if (!obd->obd_type->typ_dt_ops->o_setup) {
 			CERROR("%s: no %s operation\n", obd->obd_name,
 			       __func__);
 			RETURN(-EOPNOTSUPP);
 		}
-                rc = OBP(obd, setup)(obd, cfg);
-        }
-        RETURN(rc);
+		rc = OBP(obd, setup)(obd, cfg);
+	}
+	RETURN(rc);
 }
 
 static inline int obd_precleanup(struct obd_device *obd)

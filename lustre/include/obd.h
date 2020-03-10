@@ -111,6 +111,7 @@ struct obd_type {
 	struct kobject		 typ_kobj;
 };
 #define typ_name typ_kobj.name
+#define OBD_LU_TYPE_SETUP ((void *)0x01UL)
 
 struct brw_page {
 	u64		 off;

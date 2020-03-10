@@ -8906,6 +8906,24 @@ test_125()
 }
 run_test 125 "check l_tunedisk only tunes OSTs and their slave devices"
 
+test_126() {
+	[[ "$MDS1_VERSION" -ge $(version_code 2.13.52) ]] ||
+		skip "Need MDS version at least 2.13.52"
+
+	cleanup
+	do_rpc_nodes $(facet_active_host $SINGLEMDS) load_module ../libcfs/libcfs/libcfs
+	#define OBD_FAIL_OBD_SETUP 0x60d
+	do_facet mds1 $LCTL set_param fail_loc=0x60d
+	do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules &
+	for i in {1..40}; do
+		do_facet mds1 lsmod | grep -q osd_$mds1_FSTYPE && break
+		sleep 1
+	done
+	clear_failloc $SINGLEMDS 20 &
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+}
+run_test 126 "mount in parallel shouldn't cause a crash"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

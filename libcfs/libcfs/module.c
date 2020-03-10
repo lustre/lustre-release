@@ -387,8 +387,10 @@ static int proc_fail_loc(struct ctl_table *table, int write,
 	long old_fail_loc = cfs_fail_loc;
 
 	rc = proc_doulongvec_minmax(table, write, buffer, lenp, ppos);
-	if (old_fail_loc != cfs_fail_loc)
+	if (old_fail_loc != cfs_fail_loc) {
+		cfs_race_state = 1;
 		wake_up(&cfs_race_waitq);
+	}
 	return rc;
 }
 
