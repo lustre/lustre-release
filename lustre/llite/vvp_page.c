@@ -150,7 +150,7 @@ static void vvp_page_discard(const struct lu_env *env,
 	LASSERT(vmpage != NULL);
 	LASSERT(PageLocked(vmpage));
 
-	if (vpg->vpg_defer_uptodate && !vpg->vpg_ra_used)
+	if (vpg->vpg_defer_uptodate && !vpg->vpg_ra_used && vmpage->mapping)
 		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
 
 	ll_invalidate_page(vmpage);
@@ -160,14 +160,12 @@ static void vvp_page_delete(const struct lu_env *env,
 			    const struct cl_page_slice *slice)
 {
 	struct page      *vmpage = cl2vm_page(slice);
-	struct inode     *inode  = vmpage->mapping->host;
-	struct cl_object *obj    = slice->cpl_obj;
 	struct cl_page   *page   = slice->cpl_page;
 	int refc;
 
 	LASSERT(PageLocked(vmpage));
 	LASSERT((struct cl_page *)vmpage->private == page);
-	LASSERT(inode == vvp_object_inode(obj));
+
 
 	/* Drop the reference count held in vvp_page_init */
 	refc = atomic_dec_return(&page->cp_ref);
