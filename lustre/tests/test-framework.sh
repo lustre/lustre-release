@@ -6534,7 +6534,7 @@ run_one_logged() {
 			TEST_STATUS="PASS"
 		fi
 
-		pass "$testnum" "($((SECONDS - before))s)"
+		pass "$testnum" "(${duration_sub}s)"
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
 		[[ $rc != 0 ]] && break
 	done
