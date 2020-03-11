@@ -173,14 +173,14 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	vio->u.fault.ft_vma    = vma;
 	vio->u.fault.ft_vmpage = vmpage;
 
-	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
+	cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM), &set);
 
 	inode = vvp_object_inode(io->ci_obj);
 	lli = ll_i2info(inode);
 
 	result = cl_io_loop(env, io);
 
-	cfs_restore_sigs(set);
+	cfs_restore_sigs(&set);
 
         if (result == 0) {
                 lock_page(vmpage);
@@ -361,7 +361,7 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
 	 * other signals. */
-	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
+	cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM), &set);
 
 	/* make sure offset is not a negative number */
 	if (vmf->pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
@@ -390,7 +390,7 @@ restart:
 
 		result |= VM_FAULT_LOCKED;
 	}
-	cfs_restore_sigs(set);
+	cfs_restore_sigs(&set);
 
 out:
 	if (vmf->page && result == VM_FAULT_LOCKED) {
