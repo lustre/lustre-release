@@ -438,6 +438,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LMAC_STRIPE_INFO);
 	LASSERTF(LMAC_COMP_INFO == 0x00000020UL, "found 0x%.8xUL\n",
 		(unsigned)LMAC_COMP_INFO);
+	LASSERTF(LMAC_IDX_BACKUP == 0x00000040UL, "found 0x%.8xUL\n",
+		(unsigned)LMAC_IDX_BACKUP);
 	LASSERTF(LMAI_RELEASED == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LMAI_RELEASED);
 	LASSERTF(LMAI_AGENT == 0x00000002UL, "found 0x%.8xUL\n",
@@ -572,6 +574,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)FID_SEQ_UNUSED_START);
 	LASSERTF(FID_SEQ_UNUSED_END == 9, "found %lld\n",
 		 (long long)FID_SEQ_UNUSED_END);
+	LASSERTF(FID_SEQ_LLOG_NAME == 10, "found %lld\n",
+		 (long long)FID_SEQ_LLOG_NAME);
 	LASSERTF(FID_SEQ_RSVD == 11, "found %lld\n",
 		 (long long)FID_SEQ_RSVD);
 	LASSERTF(FID_SEQ_IGIF == 12, "found %lld\n",
@@ -588,6 +592,8 @@ void lustre_assert_wire_constants(void)
 			(long long)FID_SEQ_LOCAL_FILE);
 	LASSERTF(FID_SEQ_DOT_LUSTRE == 0x0000000200000002ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_DOT_LUSTRE);
+	LASSERTF(FID_SEQ_LOCAL_NAME == 0x0000000200000003ULL, "found 0x%.16llxULL\n",
+			(long long)FID_SEQ_LOCAL_NAME);
 	LASSERTF(FID_SEQ_SPECIAL == 0x0000000200000004ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_SPECIAL);
 	LASSERTF(FID_SEQ_QUOTA == 0x0000000200000005ULL, "found 0x%.16llxULL\n",
@@ -612,6 +618,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)FID_OID_DOT_LUSTRE);
 	LASSERTF(FID_OID_DOT_LUSTRE_OBF == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)FID_OID_DOT_LUSTRE_OBF);
+	LASSERTF(FID_OID_DOT_LUSTRE_LPF == 0x00000003UL, "found 0x%.8xUL\n",
+		(unsigned)FID_OID_DOT_LUSTRE_LPF);
 
 	/* Checks for struct lu_dirent */
 	LASSERTF((int)sizeof(struct lu_dirent) == 32, "found %lld\n",
@@ -723,6 +731,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)LU_LADVISE_WILLREAD);
 	LASSERTF(LU_LADVISE_DONTNEED == 2, "found %lld\n",
 		 (long long)LU_LADVISE_DONTNEED);
+	LASSERTF(LU_LADVISE_LOCKNOEXPAND == 3, "found %lld\n",
+		 (long long)LU_LADVISE_LOCKNOEXPAND);
+	LASSERTF(LU_LADVISE_LOCKAHEAD == 4, "found %lld\n",
+		 (long long)LU_LADVISE_LOCKAHEAD);
 
 	/* Checks for struct ladvise_hdr */
 	LASSERTF((int)sizeof(struct ladvise_hdr) == 32, "found %lld\n",
@@ -755,10 +767,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ladvise_hdr, lah_advise));
 	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_advise) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_advise));
-	LASSERTF(LF_ASYNC == 1, "found %lld\n",
-		 (long long)LF_ASYNC);
-	LASSERTF(LADVISE_MAGIC == 450829536, "found %lld\n",
-		 (long long)LADVISE_MAGIC);
+	BUILD_BUG_ON(LF_ASYNC != 0x00000001);
+	BUILD_BUG_ON(LF_UNSET != 0x00000002);
+	BUILD_BUG_ON(LADVISE_MAGIC != 0x1adf1ce0);
 
 	/* Checks for struct lustre_handle */
 	LASSERTF((int)sizeof(struct lustre_handle) == 8, "found %lld\n",
@@ -1307,6 +1318,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT_PINGLESS);
 	LASSERTF(OBD_CONNECT_FLOCK_DEAD == 0x8000000000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_FLOCK_DEAD);
+	LASSERTF(OBD_CONNECT_DISP_STRIPE == 0x10000000000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT_DISP_STRIPE);
 	LASSERTF(OBD_CONNECT_OPEN_BY_FID == 0x20000000000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_OPEN_BY_FID);
 	LASSERTF(OBD_CONNECT_LFSCK == 0x40000000000000ULL, "found 0x%.16llxULL\n",
@@ -1549,6 +1562,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLGID);
 	LASSERTF(OBD_MD_FLFLAGS == (0x00000800ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLFLAGS);
+	LASSERTF(OBD_MD_DOM_SIZE == (0X00001000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_DOM_SIZE);
 	LASSERTF(OBD_MD_FLNLINK == (0x00002000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLNLINK);
 	LASSERTF(OBD_MD_FLPARENT == (0x00004000ULL), "found 0x%.16llxULL\n",
@@ -1563,6 +1578,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLHANDLE);
 	LASSERTF(OBD_MD_FLCKSUM == (0x00100000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLCKSUM);
+	LASSERTF(OBD_MD_FLPRJQUOTA == (0x00400000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_FLPRJQUOTA);
 	LASSERTF(OBD_MD_FLGROUP == (0x01000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLGROUP);
 	LASSERTF(OBD_MD_FLFID == (0x02000000ULL), "found 0x%.16llxULL\n",
@@ -1591,10 +1608,14 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLXATTRRM);
 	LASSERTF(OBD_MD_FLACL == (0x0000008000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLACL);
+	LASSERTF(OBD_MD_FLAGSTATFS == (0x0000010000000000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_FLAGSTATFS);
 	LASSERTF(OBD_MD_FLCROSSREF == (0x0000100000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLCROSSREF);
 	LASSERTF(OBD_MD_FLGETATTRLOCK == (0x0000200000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLGETATTRLOCK);
+	LASSERTF(OBD_MD_FLOBJCOUNT == (0x0000400000000000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_FLOBJCOUNT);
 	LASSERTF(OBD_MD_FLDATAVERSION == (0x0010000000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLDATAVERSION);
 	LASSERTF(OBD_MD_CLOSE_INTENT_EXECED == (0x0020000000000000ULL), "found 0x%.16llxULL\n",
@@ -1605,6 +1626,12 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLOSTLAYOUT);
 	LASSERTF(OBD_MD_FLPROJID == (0x0100000000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLPROJID);
+	LASSERTF(OBD_MD_SECCTX == (0x0200000000000000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_SECCTX);
+	LASSERTF(OBD_MD_FLLAZYSIZE == (0x0400000000000000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_FLLAZYSIZE);
+	LASSERTF(OBD_MD_FLLAZYBLOCKS == (0x0800000000000000ULL), "found 0x%.16llxULL\n",
+		 OBD_MD_FLLAZYBLOCKS);
 	BUILD_BUG_ON(OBD_FL_INLINEDATA != 0x00000001);
 	BUILD_BUG_ON(OBD_FL_OBDMDEXISTS != 0x00000002);
 	BUILD_BUG_ON(OBD_FL_DELORPHAN != 0x00000004);
@@ -1612,6 +1639,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(OBD_FL_IDONLY != 0x00000010);
 	BUILD_BUG_ON(OBD_FL_RECREATE_OBJS != 0x00000020);
 	BUILD_BUG_ON(OBD_FL_DEBUG_CHECK != 0x00000040);
+	BUILD_BUG_ON(OBD_FL_NO_PRJQUOTA != 0x00000080);
 	BUILD_BUG_ON(OBD_FL_NO_USRQUOTA != 0x00000100);
 	BUILD_BUG_ON(OBD_FL_NO_GRPQUOTA != 0x00000200);
 	BUILD_BUG_ON(OBD_FL_CREATE_CROW != 0x00000400);
@@ -1761,10 +1789,15 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1));
-	LASSERTF(LCME_FL_INIT == 0x00000010UL, "found 0x%.8xUL\n",
-		(unsigned)LCME_FL_INIT);
-	LASSERTF(LCME_FL_NEG == 0x80000000UL, "found 0x%.8xUL\n",
-		(unsigned)LCME_FL_NEG);
+	BUILD_BUG_ON(LCME_FL_STALE != 0x00000001);
+	BUILD_BUG_ON(LCME_FL_PREF_RD != 0x00000002);
+	BUILD_BUG_ON(LCME_FL_PREF_WR != 0x00000004);
+	BUILD_BUG_ON(LCME_FL_PREF_RW != 0x00000006);
+	BUILD_BUG_ON(LCME_FL_OFFLINE != 0x00000008);
+	BUILD_BUG_ON(LCME_FL_INIT != 0x00000010);
+	BUILD_BUG_ON(LCME_FL_NOSYNC != 0x00000020);
+	BUILD_BUG_ON(LCME_FL_EXTENSION != 0x00000040);
+	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
 
 	/* Checks for struct lov_comp_md_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_v1) == 32, "found %lld\n",
@@ -2217,16 +2250,12 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lu_idxpage *)0)->lip_pad0) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lu_idxpage *)0)->lip_pad0));
 	BUILD_BUG_ON(LIP_MAGIC != 0x8A6D6B6C);
-	LASSERTF(LIP_HDR_SIZE == 16, "found %lld\n",
-		 (long long)LIP_HDR_SIZE);
-	LASSERTF(II_FL_NOHASH == 1, "found %lld\n",
-		 (long long)II_FL_NOHASH);
-	LASSERTF(II_FL_VARKEY == 2, "found %lld\n",
-		 (long long)II_FL_VARKEY);
-	LASSERTF(II_FL_VARREC == 4, "found %lld\n",
-		 (long long)II_FL_VARREC);
-	LASSERTF(II_FL_NONUNQ == 8, "found %lld\n",
-		 (long long)II_FL_NONUNQ);
+	BUILD_BUG_ON(LIP_HDR_SIZE != (__builtin_offsetof (struct lu_idxpage, lip_entries)));
+	BUILD_BUG_ON(II_FL_NOHASH != 0x00000001);
+	BUILD_BUG_ON(II_FL_VARKEY != 0x00000002);
+	BUILD_BUG_ON(II_FL_VARREC != 0x00000004);
+	BUILD_BUG_ON(II_FL_NONUNQ != 0x00000008);
+	BUILD_BUG_ON(II_FL_NOKEY != 0x00000010);
 
 	/* Checks for struct niobuf_remote */
 	LASSERTF((int)sizeof(struct niobuf_remote) == 16, "found %lld\n",
@@ -2247,6 +2276,8 @@ void lustre_assert_wire_constants(void)
 		OBD_BRW_READ);
 	LASSERTF(OBD_BRW_WRITE == 0x02, "found 0x%.8x\n",
 		OBD_BRW_WRITE);
+	LASSERTF(OBD_BRW_NDELAY == 0x04, "found 0x%.8x\n",
+		OBD_BRW_NDELAY);
 	LASSERTF(OBD_BRW_SYNC == 0x08, "found 0x%.8x\n",
 		OBD_BRW_SYNC);
 	LASSERTF(OBD_BRW_CHECK == 0x10, "found 0x%.8x\n",
@@ -2271,8 +2302,10 @@ void lustre_assert_wire_constants(void)
 		OBD_BRW_OVER_GRPQUOTA);
 	LASSERTF(OBD_BRW_SOFT_SYNC == 0x4000, "found 0x%.8x\n",
 		OBD_BRW_SOFT_SYNC);
+	LASSERTF(OBD_BRW_OVER_PRJQUOTA == 0x8000, "found 0x%.8x\n",
+		OBD_BRW_OVER_PRJQUOTA);
 	LASSERTF(OBD_BRW_RDMA_ONLY == 0x20000, "found 0x%.8x\n",
-		 OBD_BRW_RDMA_ONLY);
+		OBD_BRW_RDMA_ONLY);
 
 	/* Checks for struct ost_body */
 	LASSERTF((int)sizeof(struct ost_body) == 208, "found %lld\n",
@@ -2324,6 +2357,12 @@ void lustre_assert_wire_constants(void)
 		(unsigned)MDS_CLOSE_RESYNC_DONE);
 	LASSERTF(MDS_CLOSE_LAYOUT_SPLIT == 0x00020000UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_CLOSE_LAYOUT_SPLIT);
+	LASSERTF(MDS_TRUNC_KEEP_LEASE == 0x00040000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_TRUNC_KEEP_LEASE);
+	LASSERTF(MDS_PCC_ATTACH == 0x00080000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_PCC_ATTACH);
+	LASSERTF(MDS_CLOSE_UPDATE_TIMES == 0x00100000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CLOSE_UPDATE_TIMES);
 
 	/* Checks for struct mdt_body */
 	LASSERTF((int)sizeof(struct mdt_body) == 216, "found %lld\n",
@@ -2502,6 +2541,12 @@ void lustre_assert_wire_constants(void)
 			(long long)MDS_OPEN_NEWSTRIPE);
 	LASSERTF(MDS_OPEN_VOLATILE == 00000000000400000000000ULL, "found 0%.22lloULL\n",
 			(long long)MDS_OPEN_VOLATILE);
+	LASSERTF(MDS_OPEN_LEASE == 00000000001000000000000ULL, "found 0%.22lloULL\n",
+			(long long)MDS_OPEN_LEASE);
+	LASSERTF(MDS_OPEN_RESYNC == 00000000004000000000000ULL, "found 0%.22lloULL\n",
+			(long long)MDS_OPEN_RESYNC);
+	LASSERTF(MDS_OPEN_PCC == 00000000010000000000000ULL, "found 0%.22lloULL\n",
+			(long long)MDS_OPEN_PCC);
 	LASSERTF(LUSTRE_SYNC_FL == 0x00000008UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_SYNC_FL);
 	LASSERTF(LUSTRE_IMMUTABLE_FL == 0x00000010UL, "found 0x%.8xUL\n",
@@ -2522,6 +2567,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LUSTRE_TOPDIR_FL);
 	LASSERTF(LUSTRE_INLINE_DATA_FL == 0x10000000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_INLINE_DATA_FL);
+	LASSERTF(LUSTRE_SET_SYNC_FL == 0x00040000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_SET_SYNC_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_INODELOCK_LOOKUP);
 	LASSERTF(MDS_INODELOCK_UPDATE == 0x00000002UL, "found 0x%.8xUL\n",
@@ -3200,6 +3247,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding0));
 	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding0) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding0));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_lease_handle) == 72, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_lease_handle));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_lease_handle) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_lease_handle));
 	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding1) == 80, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding1));
 	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding1) == 8, "found %lld\n",
@@ -3510,24 +3561,17 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_intent, opc));
 	LASSERTF((int)sizeof(((struct ldlm_intent *)0)->opc) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_intent *)0)->opc));
-	LASSERTF(IT_OPEN == 1, "found %lld\n",
-		 (long long)IT_OPEN);
-	LASSERTF(IT_CREAT == 2, "found %lld\n",
-		 (long long)IT_CREAT);
-	LASSERTF(IT_READDIR == 4, "found %lld\n",
-		 (long long)IT_READDIR);
-	LASSERTF(IT_GETATTR == 8, "found %lld\n",
-		 (long long)IT_GETATTR);
-	LASSERTF(IT_LOOKUP == 16, "found %lld\n",
-		 (long long)IT_LOOKUP);
-	LASSERTF(IT_GETXATTR == 128, "found %lld\n",
-		 (long long)IT_GETXATTR);
-	LASSERTF(IT_LAYOUT == 1024, "found %lld\n",
-		 (long long)IT_LAYOUT);
-	LASSERTF(IT_QUOTA_DQACQ == 2048, "found %lld\n",
-		 (long long)IT_QUOTA_DQACQ);
-	LASSERTF(IT_QUOTA_CONN == 4096, "found %lld\n",
-		 (long long)IT_QUOTA_CONN);
+	BUILD_BUG_ON(IT_OPEN != 0x00000001);
+	BUILD_BUG_ON(IT_CREAT != 0x00000002);
+	BUILD_BUG_ON(IT_READDIR != 0x00000004);
+	BUILD_BUG_ON(IT_GETATTR != 0x00000008);
+	BUILD_BUG_ON(IT_LOOKUP != 0x00000010);
+	BUILD_BUG_ON(IT_GETXATTR != 0x00000080);
+	BUILD_BUG_ON(IT_LAYOUT != 0x00000400);
+	BUILD_BUG_ON(IT_QUOTA_DQACQ != 0x00000800);
+	BUILD_BUG_ON(IT_QUOTA_CONN != 0x00001000);
+	BUILD_BUG_ON(IT_GLIMPSE != 0x00004000);
+	BUILD_BUG_ON(IT_BRW != 0x00008000);
 
 	/* Checks for struct ldlm_resource_desc */
 	LASSERTF((int)sizeof(struct ldlm_resource_desc) == 40, "found %lld\n",
@@ -3831,6 +3875,8 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LLOG_GEN_REC != 274989056);
 	BUILD_BUG_ON(CHANGELOG_REC != 275120128);
 	BUILD_BUG_ON(CHANGELOG_USER_REC != 275185664);
+	BUILD_BUG_ON(HSM_AGENT_REC != 275251200);
+	BUILD_BUG_ON(UPDATE_REC != 275382272);
 	BUILD_BUG_ON(LLOG_HDR_MAGIC != 275010873);
 	BUILD_BUG_ON(LLOG_LOGID_MAGIC != 275010875);
 
@@ -4004,10 +4050,54 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_setattr64_rec, lsr_tail));
 	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_tail) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_setattr64_rec *)0)->lsr_tail));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_hdr) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_hdr), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_hdr), (int)offsetof(struct llog_setattr64_rec_v2, lsr_hdr));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_hdr) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_hdr), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_hdr), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_hdr));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_oi) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_oi), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_oi), (int)offsetof(struct llog_setattr64_rec_v2, lsr_oi));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_oi) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_oi), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_oi), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_oi));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_uid) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_uid), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_uid), (int)offsetof(struct llog_setattr64_rec_v2, lsr_uid));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_uid) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_uid), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_uid), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_uid));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_uid_h) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_uid_h), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_uid_h), (int)offsetof(struct llog_setattr64_rec_v2, lsr_uid_h));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_uid_h) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_uid_h), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_uid_h), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_uid_h));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_gid) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_gid), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_gid), (int)offsetof(struct llog_setattr64_rec_v2, lsr_gid));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_gid) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_gid), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_gid), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_gid));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_gid_h) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_gid_h), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_gid_h), (int)offsetof(struct llog_setattr64_rec_v2, lsr_gid_h));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_gid_h) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_gid_h), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_gid_h), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_gid_h));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_valid) == (int)offsetof(struct llog_setattr64_rec_v2, lsr_valid), "%d != %d\n",
+		 (int)offsetof(struct llog_setattr64_rec, lsr_valid), (int)offsetof(struct llog_setattr64_rec_v2, lsr_valid));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_valid) == (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_valid), "%d != %d\n",
+		 (int)sizeof(((struct llog_setattr64_rec *)0)->lsr_valid), (int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_valid));
 	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_projid) == 56, "found %lld\n",
 		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_projid));
 	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_projid) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_projid));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_layout_version) == 60, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_layout_version));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_layout_version) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_layout_version));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_padding2) == 64, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_padding2));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_padding2));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_padding3) == 72, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_padding3));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_padding3) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_padding3));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_tail) == 80, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_tail));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail));
 
 	/* Checks for struct llog_size_change_rec */
 	LASSERTF((int)sizeof(struct llog_size_change_rec) == 64, "found %lld\n",
@@ -4092,6 +4182,7 @@ void lustre_assert_wire_constants(void)
 	/* Checks for struct changelog_ext_jobid */
 	LASSERTF((int)sizeof(struct changelog_ext_jobid) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct changelog_ext_jobid));
+	BUILD_BUG_ON(LUSTRE_JOBID_SIZE != 32);
 	LASSERTF((int)offsetof(struct changelog_ext_jobid, cr_jobid) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct changelog_ext_jobid, cr_jobid));
 	LASSERTF((int)sizeof(((struct changelog_ext_jobid *)0)->cr_jobid) == 32, "found %lld\n",
@@ -4212,6 +4303,16 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_log_hdr, llh_tgtuuid));
 	LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid) == 40, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid));
+	BUILD_BUG_ON(LLOG_F_ZAP_WHEN_EMPTY != 0x00000001);
+	BUILD_BUG_ON(LLOG_F_IS_CAT != 0x00000002);
+	BUILD_BUG_ON(LLOG_F_IS_PLAIN != 0x00000004);
+	BUILD_BUG_ON(LLOG_F_EXT_JOBID != 0x00000008);
+	BUILD_BUG_ON(LLOG_F_IS_FIXSIZE != 0x00000010);
+	BUILD_BUG_ON(LLOG_F_EXT_EXTRA_FLAGS != 0x00000020);
+	BUILD_BUG_ON(LLOG_F_EXT_X_UIDGID != 0x00000040);
+	BUILD_BUG_ON(LLOG_F_EXT_X_NID != 0x00000080);
+	BUILD_BUG_ON(LLOG_F_EXT_X_OMODE != 0x00000100);
+	BUILD_BUG_ON(LLOG_F_EXT_X_XATTR != 0x00000200);
 
 	/* Checks for struct llogd_body */
 	LASSERTF((int)sizeof(struct llogd_body) == 48, "found %lld\n",
@@ -4630,6 +4731,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(FIEMAP_EXTENT_DATA_TAIL != 0x00000400);
 	BUILD_BUG_ON(FIEMAP_EXTENT_UNWRITTEN != 0x00000800);
 	BUILD_BUG_ON(FIEMAP_EXTENT_MERGED != 0x00001000);
+	BUILD_BUG_ON(FIEMAP_EXTENT_SHARED != 0x00002000);
 	BUILD_BUG_ON(FIEMAP_EXTENT_NO_DIRECT != 0x40000000);
 	BUILD_BUG_ON(FIEMAP_EXTENT_NET != 0x80000000);
 
@@ -4950,6 +5052,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_state_set, hss_clearmask));
 	LASSERTF((int)sizeof(((struct hsm_state_set *)0)->hss_clearmask) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_state_set *)0)->hss_clearmask));
+	BUILD_BUG_ON(HSS_SETMASK != 1);
+	BUILD_BUG_ON(HSS_CLEARMASK != 2);
+	BUILD_BUG_ON(HSS_ARCHIVE_ID != 4);
 
 	/* Checks for struct hsm_current_action */
 	LASSERTF((int)sizeof(struct hsm_current_action) == 24, "found %lld\n",
@@ -4966,6 +5071,16 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_current_action, hca_location));
 	LASSERTF((int)sizeof(((struct hsm_current_action *)0)->hca_location) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_current_action *)0)->hca_location));
+	BUILD_BUG_ON(HPS_NONE != 0);
+	BUILD_BUG_ON(HPS_WAITING != 1);
+	BUILD_BUG_ON(HPS_RUNNING != 2);
+	BUILD_BUG_ON(HPS_DONE != 3);
+	BUILD_BUG_ON(HUA_NONE != 1);
+	BUILD_BUG_ON(HUA_ARCHIVE != 10);
+	BUILD_BUG_ON(HUA_RESTORE != 11);
+	BUILD_BUG_ON(HUA_RELEASE != 12);
+	BUILD_BUG_ON(HUA_REMOVE != 13);
+	BUILD_BUG_ON(HUA_CANCEL != 14);
 
 	/* Checks for struct hsm_request */
 	LASSERTF((int)sizeof(struct hsm_request) == 24, "found %lld\n",
@@ -5102,6 +5217,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct object_update, ou_params));
 	LASSERTF((int)sizeof(((struct object_update *)0)->ou_params) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct object_update *)0)->ou_params));
+	BUILD_BUG_ON(UPDATE_FL_OST != 0x00000001);
+	BUILD_BUG_ON(UPDATE_FL_SYNC != 0x00000002);
+	BUILD_BUG_ON(UPDATE_FL_COMMITTED != 0x00000004);
+	BUILD_BUG_ON(UPDATE_FL_NOLOG != 0x00000008);
 
 	/* Checks for struct object_update_request */
 	LASSERTF((int)sizeof(struct object_update_request) == 8, "found %lld\n",
@@ -5122,6 +5241,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct object_update_request, ourq_updates));
 	LASSERTF((int)sizeof(((struct object_update_request *)0)->ourq_updates) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct object_update_request *)0)->ourq_updates));
+	BUILD_BUG_ON(UPDATE_REQUEST_MAGIC != 0xBDDE0002);
 
 	/* Checks for struct object_update_result */
 	LASSERTF((int)sizeof(struct object_update_result) == 8, "found %lld\n",
@@ -5162,6 +5282,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct object_update_reply, ourp_lens));
 	LASSERTF((int)sizeof(((struct object_update_reply *)0)->ourp_lens) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct object_update_reply *)0)->ourp_lens));
+	BUILD_BUG_ON(UPDATE_REPLY_MAGIC != 0x00BD0002);
 
 	/* Checks for struct out_update_header */
 	LASSERTF((int)sizeof(struct out_update_header) == 16, "found %lld\n",
@@ -5186,6 +5307,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct out_update_header, ouh_inline_data));
 	LASSERTF((int)sizeof(((struct out_update_header *)0)->ouh_inline_data) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct out_update_header *)0)->ouh_inline_data));
+	BUILD_BUG_ON(OUT_UPDATE_HEADER_MAGIC != 0xBDDF0001);
+	BUILD_BUG_ON(OUT_UPDATE_MAX_INLINE_SIZE != 4096);
 
 	/* Checks for struct out_update_buffer */
 	LASSERTF((int)sizeof(struct out_update_buffer) == 8, "found %lld\n",
@@ -5202,10 +5325,11 @@ void lustre_assert_wire_constants(void)
 	/* Checks for struct nodemap_cluster_rec */
 	LASSERTF((int)sizeof(struct nodemap_cluster_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct nodemap_cluster_rec));
-	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_name) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name) == 17, "found %lld\n",
-		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name));
+	BUILD_BUG_ON(LUSTRE_NODEMAP_NAME_LENGTH != 16);
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_name[16 + 1]) == 17, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name[16 + 1]));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]));
 	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_flags) == 17, "found %lld\n",
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_flags));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_flags) == 1, "found %lld\n",
