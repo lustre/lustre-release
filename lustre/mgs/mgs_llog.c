@@ -1513,23 +1513,21 @@ static int only_mgs_is_running(struct obd_device *mgs_obd)
 		/* skip self export */
 		if (exp == mgs_obd->obd_self_export)
 			continue;
-		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
-			continue;
 
 		++num_exports;
 
-		CERROR("%s: node %s still connected during replace_nids "
-		       "connect_flags:%llx\n",
-		       mgs_obd->obd_name,
-		       libcfs_nid2str(exp->exp_nid_stats->nid),
-		       exp_connect_flags(exp));
-
+		if (num_exports > 1)
+			CERROR("%s: node %s still connected during replace_nids connect_flags:%llx\n",
+			       mgs_obd->obd_name,
+			       libcfs_nid2str(exp->exp_nid_stats->nid),
+			       exp_connect_flags(exp));
 	}
 	spin_unlock(&mgs_obd->obd_dev_lock);
 
-	/* osd, MGS and MGC + self_export
-	   (wc -l /proc/fs/lustre/devices <= 2) && (non self exports == 0) */
-	return (num_devices <= 3) && (num_exports == 0);
+	/* osd, MGS and MGC + MGC export (nosvc starts MGC)
+	 *  (wc -l /proc/fs/lustre/devices <= 3) && (non self exports == 1)
+	 */
+	return (num_devices <= 3) && (num_exports <= 1);
 }
 
 static int name_create_mdt(char **logname, char *fsname, int mdt_idx)

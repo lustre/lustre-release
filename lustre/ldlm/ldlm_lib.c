@@ -1106,8 +1106,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 		mds_conn = OCD_HAS_FLAG(data, MDS);
 		mds_mds_conn = OCD_HAS_FLAG(data, MDS_MDS);
 
-		/* OBD_CONNECT_MNE_SWAB is defined as OBD_CONNECT_MDS_MDS
-		 * for Imperative Recovery connection from MGC to MGS.
+		/*
+		 * OBD_CONNECT_MNE_SWAB is removed at 2.12.7
+		 * Checking OBD_CONNECT_FID can be removed in the future.
 		 *
 		 * Via check OBD_CONNECT_FID, we can distinguish whether
 		 * the OBD_CONNECT_MDS_MDS/OBD_CONNECT_MNE_SWAB is from
