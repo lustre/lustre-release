@@ -2063,35 +2063,6 @@ check_mgs_config_res(void)
 }
 
 static void
-check_lustre_capa(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(lustre_capa);
-	CHECK_MEMBER(lustre_capa, lc_fid);
-	CHECK_MEMBER(lustre_capa, lc_opc);
-	CHECK_MEMBER(lustre_capa, lc_uid);
-	CHECK_MEMBER(lustre_capa, lc_gid);
-	CHECK_MEMBER(lustre_capa, lc_flags);
-	CHECK_MEMBER(lustre_capa, lc_keyid);
-	CHECK_MEMBER(lustre_capa, lc_timeout);
-	CHECK_MEMBER(lustre_capa, lc_expiry);
-	CHECK_CDEFINE(CAPA_HMAC_MAX_LEN);
-	CHECK_MEMBER(lustre_capa, lc_hmac[CAPA_HMAC_MAX_LEN]);
-}
-
-static void
-check_lustre_capa_key(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(lustre_capa_key);
-	CHECK_MEMBER(lustre_capa_key, lk_seq);
-	CHECK_MEMBER(lustre_capa_key, lk_keyid);
-	CHECK_MEMBER(lustre_capa_key, lk_padding);
-	CHECK_CDEFINE(CAPA_HMAC_KEY_MAX_LEN);
-	CHECK_MEMBER(lustre_capa_key, lk_key[CAPA_HMAC_KEY_MAX_LEN]);
-}
-
-static void
 check_getinfo_fid2path(void)
 {
 	BLANK_LINE();
@@ -3028,8 +2999,6 @@ main(int argc, char **argv)
 	check_mgs_nidtbl_entry();
 	check_mgs_config_body();
 	check_mgs_config_res();
-	check_lustre_capa();
-	check_lustre_capa_key();
 	check_getinfo_fid2path();
 	check_ll_user_fiemap();
 	check_ll_fiemap_extent();

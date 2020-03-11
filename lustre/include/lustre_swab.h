@@ -103,8 +103,6 @@ void lustre_swab_lov_user_md(struct lov_user_md *lum, size_t size);
 void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 void lustre_swab_idx_info(struct idx_info *ii);
 void lustre_swab_lip_header(struct lu_idxpage *lip);
-void lustre_swab_lustre_capa(struct lustre_capa *c);
-void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
 void lustre_swab_fid2path(struct getinfo_fid2path *gf);
 void lustre_swab_layout_intent(struct layout_intent *li);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);

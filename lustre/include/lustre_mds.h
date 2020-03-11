@@ -50,16 +50,6 @@
 #include <lustre_dlm.h>
 #include <lustre_export.h>
 
-struct mds_group_info {
-        struct obd_uuid *uuid;
-        int group;
-};
-
-struct mds_capa_info {
-        struct obd_uuid        *uuid;
-        struct lustre_capa_key *capa;
-};
-
 struct md_rejig_data {
 	struct md_object	*mrd_obj;
 	__u16			mrd_mirror_id;

@@ -4577,68 +4577,6 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct mgs_config_res *)0)->mcr_size) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_config_res *)0)->mcr_size));
 
-	/* Checks for struct lustre_capa */
-	LASSERTF((int)sizeof(struct lustre_capa) == 120, "found %lld\n",
-		 (long long)(int)sizeof(struct lustre_capa));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_fid) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_fid));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_fid) == 16, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_fid));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_opc) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_opc));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_opc) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_opc));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_uid) == 24, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_uid));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_uid) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_uid));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_gid) == 32, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_gid));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_gid) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_gid));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_flags) == 40, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_flags));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_flags) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_flags));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_keyid) == 44, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_keyid));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_keyid) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_keyid));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_timeout) == 48, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_timeout));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_timeout) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_timeout));
-	LASSERTF((int)offsetof(struct lustre_capa, lc_expiry) == 52, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_expiry));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_expiry) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_expiry));
-	BUILD_BUG_ON(CAPA_HMAC_MAX_LEN != 64);
-	LASSERTF((int)offsetof(struct lustre_capa, lc_hmac[64]) == 120, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa, lc_hmac[64]));
-	LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_hmac[64]) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa *)0)->lc_hmac[64]));
-
-	/* Checks for struct lustre_capa_key */
-	LASSERTF((int)sizeof(struct lustre_capa_key) == 72, "found %lld\n",
-		 (long long)(int)sizeof(struct lustre_capa_key));
-	LASSERTF((int)offsetof(struct lustre_capa_key, lk_seq) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa_key, lk_seq));
-	LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_seq) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_seq));
-	LASSERTF((int)offsetof(struct lustre_capa_key, lk_keyid) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa_key, lk_keyid));
-	LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_keyid) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_keyid));
-	LASSERTF((int)offsetof(struct lustre_capa_key, lk_padding) == 12, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa_key, lk_padding));
-	LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_padding));
-	BUILD_BUG_ON(CAPA_HMAC_KEY_MAX_LEN != 56);
-	LASSERTF((int)offsetof(struct lustre_capa_key, lk_key[56]) == 72, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_capa_key, lk_key[56]));
-	LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_key[56]) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_key[56]));
-
 	/* Checks for struct getinfo_fid2path */
 	LASSERTF((int)sizeof(struct getinfo_fid2path) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct getinfo_fid2path));

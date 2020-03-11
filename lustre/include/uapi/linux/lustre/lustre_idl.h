@@ -3246,67 +3246,6 @@ enum sec_cmd {
         SEC_FIRST_OPC           = SEC_CTX_INIT
 };
 
-/*
- * capa related definitions
- */
-#define CAPA_HMAC_MAX_LEN       64
-#define CAPA_HMAC_KEY_MAX_LEN   56
-
-/* NB take care when changing the sequence of elements this struct,
- * because the offset info is used in find_capa() */
-struct lustre_capa {
-        struct lu_fid   lc_fid;         /** fid */
-        __u64           lc_opc;         /** operations allowed */
-        __u64           lc_uid;         /** file owner */
-        __u64           lc_gid;         /** file group */
-        __u32           lc_flags;       /** HMAC algorithm & flags */
-        __u32           lc_keyid;       /** key# used for the capability */
-        __u32           lc_timeout;     /** capa timeout value (sec) */
-        __u32           lc_expiry;      /** expiry time (sec) */
-        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /** HMAC */
-} __attribute__((packed));
-
-/** lustre_capa::lc_opc */
-enum {
-        CAPA_OPC_BODY_WRITE   = 1<<0,  /**< write object data */
-        CAPA_OPC_BODY_READ    = 1<<1,  /**< read object data */
-        CAPA_OPC_INDEX_LOOKUP = 1<<2,  /**< lookup object fid */
-        CAPA_OPC_INDEX_INSERT = 1<<3,  /**< insert object fid */
-        CAPA_OPC_INDEX_DELETE = 1<<4,  /**< delete object fid */
-        CAPA_OPC_OSS_WRITE    = 1<<5,  /**< write oss object data */
-        CAPA_OPC_OSS_READ     = 1<<6,  /**< read oss object data */
-        CAPA_OPC_OSS_TRUNC    = 1<<7,  /**< truncate oss object */
-        CAPA_OPC_OSS_DESTROY  = 1<<8,  /**< destroy oss object */
-        CAPA_OPC_META_WRITE   = 1<<9,  /**< write object meta data */
-        CAPA_OPC_META_READ    = 1<<10, /**< read object meta data */
-};
-
-#define CAPA_OPC_OSS_RW (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE)
-#define CAPA_OPC_MDS_ONLY                                                   \
-        (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ | CAPA_OPC_INDEX_LOOKUP | \
-         CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
-#define CAPA_OPC_OSS_ONLY                                                   \
-        (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC |      \
-         CAPA_OPC_OSS_DESTROY)
-#define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
-#define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)
-
-/* lustre_capa::lc_hmac_alg */
-enum {
-        CAPA_HMAC_ALG_SHA1 = 1, /**< sha1 algorithm */
-        CAPA_HMAC_ALG_MAX,
-};
-
-#define CAPA_FL_MASK            0x00ffffff
-#define CAPA_HMAC_ALG_MASK      0xff000000
-
-struct lustre_capa_key {
-        __u64   lk_seq;       /**< mds# */
-        __u32   lk_keyid;     /**< key# */
-        __u32   lk_padding;
-        __u8    lk_key[CAPA_HMAC_KEY_MAX_LEN];    /**< key */
-} __attribute__((packed));
-
 /** The link ea holds 1 \a link_ea_entry for each hardlink */
 #define LINK_EA_MAGIC 0x11EAF1DFUL
 struct link_ea_header {
