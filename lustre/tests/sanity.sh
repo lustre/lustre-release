@@ -7613,8 +7613,8 @@ run_test 63b "async write errors should be returned to fsync ==="
 test_64a () {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-	df $DIR
-	lctl get_param -n osc.*[oO][sS][cC][_-]*.cur* | grep "[0-9]"
+	lfs df $DIR
+	lctl get_param osc.*[oO][sS][cC][_-]*.cur* | grep "=[1-9]"
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 

@@ -6219,22 +6219,22 @@ build_test_filter() {
 		fi
 	done
 
-    [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-        log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
-    [ "$EXCEPT_SLOW" ] && \
-        log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
-    for E in $EXCEPT; do
-        eval EXCEPT_${E}=true
-    done
-    for E in $ALWAYS_EXCEPT; do
-        eval EXCEPT_ALWAYS_${E}=true
-    done
-    for E in $EXCEPT_SLOW; do
-        eval EXCEPT_SLOW_${E}=true
-    done
-    for G in $GRANT_CHECK_LIST; do
-        eval GCHECK_ONLY_${G}=true
-        done
+	[ "$EXCEPT$ALWAYS_EXCEPT" ] &&
+		log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
+	[ "$EXCEPT_SLOW" ] &&
+		log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
+	for E in $EXCEPT; do
+		eval EXCEPT_${E}=true
+	done
+	for E in $ALWAYS_EXCEPT; do
+		eval EXCEPT_ALWAYS_${E}=true
+	done
+	for E in $EXCEPT_SLOW; do
+		eval EXCEPT_SLOW_${E}=true
+	done
+	for G in $GRANT_CHECK_LIST; do
+		eval GCHECK_ONLY_${G}=true
+	done
 }
 
 basetest() {
@@ -6547,6 +6547,27 @@ canonical_path() {
 	(cd $(dirname $1); echo $PWD/$(basename $1))
 }
 
+grant_from_clients() {
+	local nodes="$1"
+
+	# get client grant
+	do_nodes $nodes "$LCTL get_param -n osc.${FSNAME}-*.cur_*grant_bytes" |
+		calc_sum
+}
+
+grant_from_servers() {
+	local nodes="$1"
+
+	# get server grant
+	# which is tot_granted less grant_precreate
+	do_nodes $nodes "$LCTL get_param obdfilter.${FSNAME}-OST*.tot_granted" \
+		" obdfilter.${FSNAME}-OST*.tot_pending" \
+		" obdfilter.${FSNAME}-OST*.grant_precreate" |
+		tr '=' ' ' | awk '/tot_granted/{ total += $2 };
+				  /tot_pending/{ total -= $2 };
+				  /grant_precreate/{ total -= $2 };
+				  END { printf("%0.0f", total) }'
+}
 
 check_grant() {
 	export base=$(basetest $1)
@@ -6558,6 +6579,7 @@ check_grant() {
 
 	echo -n "checking grant......"
 
+	local osts=$(comma_list $(osts_nodes))
 	local clients=$CLIENTS
 	[ -z "$clients" ] && clients=$(hostname)
 
@@ -6566,29 +6588,28 @@ check_grant() {
 	clients_up # initiate all idling connections
 
 	# get client grant
-	client_grant=$(do_nodes $clients \
-		"$LCTL get_param -n osc.${FSNAME}-*.cur_*grant_bytes" |
-		awk '{ total += $1 } END { printf("%0.0f", total) }')
+	cli_grant=$(grant_from_clients $clients)
 
 	# get server grant
 	# which is tot_granted less grant_precreate
-	server_grant=$(do_nodes $(comma_list $(osts_nodes)) \
-		"$LCTL get_param "\
-		"obdfilter.${FSNAME}-OST*.{tot_granted,tot_pending,grant_precreate}" |
-		sed 's/=/ /'| awk '/tot_granted/{ total += $2 };
-				/tot_pending/{ total -= $2 };
-				/grant_precreate/{ total -= $2 };
-				END { printf("%0.0f", total) }')
+	srv_grant=$(grant_from_servers $osts)
 
+	count=0
 	# check whether client grant == server grant
-	if [[ $client_grant -ne $server_grant ]]; then
+	while [[ $cli_grant != $srv_grant && count++ -lt 30 ]]; do
+		echo "wait for client:$cli_grant == server:$srv_grant"
+		sleep 1
+		cli_grant=$(grant_from_clients $clients)
+		srv_grant=$(grant_from_servers $osts)
+	done
+	if [[ $cli_grant -ne $srv_grant ]]; then
 		do_nodes $(comma_list $(osts_nodes)) \
 			"$LCTL get_param obdfilter.${FSNAME}-OST*.tot*" \
-		        "obdfilter.${FSNAME}-OST*.grant_*"
+			"obdfilter.${FSNAME}-OST*.grant_*"
 		do_nodes $clients "$LCTL get_param osc.${FSNAME}-*.cur_*_bytes"
-		error "failed: client:${client_grant} server: ${server_grant}."
+		error "failed grant check: client:$cli_grant server:$srv_grant"
 	else
-		echo "pass: client:${client_grant} server: ${server_grant}"
+		echo "pass grant check: client:$cli_grant server:$srv_grant"
 	fi
 }
 
