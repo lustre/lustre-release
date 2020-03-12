@@ -367,6 +367,50 @@ static struct dt_index_operations lod_index_ops = {
 };
 
 /**
+ * Implementation of dt_index_operations::dio_lookup
+ *
+ * Used with striped directories.
+ *
+ * \see dt_index_operations::dio_lookup() in the API description for details.
+ */
+static int lod_striped_lookup(const struct lu_env *env, struct dt_object *dt,
+		      struct dt_rec *rec, const struct dt_key *key)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next;
+	const char *name = (const char *)key;
+
+	LASSERT(lo->ldo_dir_stripe_count > 0);
+
+	if (strcmp(name, dot) == 0) {
+		struct lu_fid *fid = (struct lu_fid *)rec;
+
+		*fid = *lod_object_fid(lo);
+		return 1;
+	}
+
+	if (strcmp(name, dotdot) == 0) {
+		next = dt_object_child(dt);
+	} else {
+		int index;
+
+		index = __lmv_name_to_stripe_index(lo->ldo_dir_hash_type,
+						   lo->ldo_dir_stripe_count,
+						   lo->ldo_dir_migrate_hash,
+						   lo->ldo_dir_migrate_offset,
+						   name, strlen(name), true);
+		if (index < 0)
+			return index;
+
+		next = lo->ldo_stripe[index];
+		if (!next || !dt_object_exists(next))
+			return -ENODEV;
+	}
+
+	return next->do_index_ops->dio_lookup(env, next, rec, key);
+}
+
+/**
  * Implementation of dt_it_ops::init.
  *
  * Used with striped objects. Internally just initializes the iterator
@@ -744,7 +788,7 @@ static int lod_striped_it_load(const struct lu_env *env,
 }
 
 static struct dt_index_operations lod_striped_index_ops = {
-	.dio_lookup		= lod_lookup,
+	.dio_lookup		= lod_striped_lookup,
 	.dio_declare_insert	= lod_declare_insert,
 	.dio_insert		= lod_insert,
 	.dio_declare_delete	= lod_declare_delete,

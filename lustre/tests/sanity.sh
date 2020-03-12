@@ -18403,6 +18403,38 @@ test_247e() {
 }
 run_test 247e "mount .. as fileset"
 
+test_247f() {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
+		skip "Need at least version 2.13.52"
+	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
+		grep -q subtree ||
+		skip "Fileset feature is not supported"
+
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/remote ||
+		error "mkdir remote failed"
+	mkdir $DIR/$tdir/remote/subdir || error "mkdir remote/subdir failed"
+	$LFS mkdir -c $MDSCOUNT $DIR/$tdir/striped ||
+		error "mkdir striped failed"
+	mkdir $DIR/$tdir/striped/subdir || error "mkdir striped/subdir failed"
+
+	local submount=${MOUNT}_$tdir
+
+	mkdir -p $submount || error "mkdir $submount failed"
+
+	local dir
+	local fileset=$FILESET
+
+	for dir in $tdir/remote $tdir/remote/subdir \
+		   $tdir/striped $tdir/striped/subdir $tdir/striped/. ; do
+		FILESET="$fileset/$dir" mount_client $submount ||
+			error "mount $dir failed"
+		umount_client $submount
+	done
+}
+run_test 247f "mount striped or remote directory as fileset"
+
 test_248a() {
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
 	[ -z "$fast_read_sav" ] && skip "no fast read support"
