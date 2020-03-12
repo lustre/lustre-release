@@ -19105,6 +19105,71 @@ test_270f() {
 }
 run_test 270f "DoM: maximum DoM stripe size checks"
 
+test_270g() {
+	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+		skip "Need MDS version at least 2.13.52"
+	local dom=$DIR/$tdir/$tfile
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir
+	local lodname=${FSNAME}-MDT0000-mdtlov
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params mds1 "lod.${lodname}.dom_stripesize_max_kb" > $save
+	save_lustre_params mds1 "lod.${lodname}.dom_threshold_free_mb" >> $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+
+	local dom_limit=1024
+	local dom_threshold="50%"
+
+	$LFS setstripe -d $DIR/$tdir
+	$LFS setstripe -E ${dom_limit}K -L mdt $DIR/$tdir ||
+		error "Can't set directory default striping"
+
+	do_facet mds1 $LCTL set_param -n \
+				lod.${lodname}.dom_stripesize_max_kb=$dom_limit
+	# set 0 threshold and create DOM file to change tunable stripesize
+	do_facet mds1 $LCTL set_param -n lod.${lodname}.dom_threshold_free_mb=0
+	$LFS setstripe -E ${dom_limit}K -L mdt -E -1 $dom ||
+		error "Failed to create $dom file"
+	# now tunable dom_cur_stripesize should reach maximum
+	local dom_current=$(do_facet mds1 $LCTL get_param -n \
+					lod.${lodname}.dom_stripesize_cur_kb)
+	[[ $dom_current == $dom_limit ]] ||
+		error "Current DOM stripesize is not maximum"
+	rm $dom
+
+	# set threshold for further tests
+	do_facet mds1 $LCTL set_param -n \
+			lod.${lodname}.dom_threshold_free_mb=$dom_threshold
+	echo "DOM threshold is $dom_threshold free space"
+	local dom_def
+	local dom_set
+	# Spoof bfree to exceed threshold
+	#define OBD_FAIL_MDS_STATFS_SPOOF   0x168
+	do_facet mds1 $LCTL set_param -n fail_loc=0x0168
+	for spfree in 40 20 0 15 30 55; do
+		do_facet mds1 $LCTL set_param -n fail_val=$spfree
+		$LFS setstripe -E ${dom_limit}K -L mdt -E -1 $dom ||
+			error "Failed to create $dom file"
+		dom_def=$(do_facet mds1 $LCTL get_param -n \
+					lod.${lodname}.dom_stripesize_cur_kb)
+		echo "Free space: ${spfree}%, default DOM stripe: ${dom_def}K"
+		[[ $dom_def != $dom_current ]] ||
+			error "Default stripe size was not changed"
+		if [[ $spfree > 0 ]] ; then
+			dom_set=$($LFS getstripe -S $dom)
+			[[ $dom_set == $((dom_def * 1024)) ]] ||
+				error "DOM component size is still old"
+		else
+			[[ $($LFS getstripe -L $dom) != "mdt" ]] ||
+				error "DoM component is set with no free space"
+		fi
+		rm $dom
+		dom_current=$dom_def
+	done
+}
+run_test 270g "DoM: default DoM stripe size depends on free space"
+
 test_271a() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
@@ -22746,7 +22811,8 @@ test_805() {
 	do_facet $SINGLEMDS zfs set quota=$(((usedkb+freekb)*1024)) $fsset
 	trap cleanup_805 EXIT
 	mkdir $DIR/$tdir
-	$LFS setstripe -E 1M -L mdt $DIR/$tdir || error "DoM not working"
+	$LFS setstripe -E 1M -c2 -E 4M -c2 -E -1 -c2 $DIR/$tdir ||
+		error "Can't set PFL layout"
 	createmany -m $DIR/$tdir/f- 1000000 && error "ENOSPC wasn't met"
 	rm -rf $DIR/$tdir || error "not able to remove"
 	do_facet $SINGLEMDS zfs set quota=$old $fsset

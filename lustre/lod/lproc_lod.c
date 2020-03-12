@@ -45,28 +45,47 @@
 
 #ifdef CONFIG_PROC_FS
 
-/**
- * Show DoM default stripe size.
- */
-static ssize_t dom_stripesize_show(struct kobject *kobj, struct attribute *attr,
+static ssize_t dom_stripesize_show(struct kobject *kobj,
+				   struct attribute *attr,
 				   char *buf)
 {
-	struct dt_device *dt = container_of(kobj, struct dt_device,
-					    dd_kobj);
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", lod->lod_dom_max_stripesize);
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			lod->lod_dom_stripesize_max_kb << 10);
 }
 
-/**
- * Set DoM default stripe size.
- */
-static ssize_t dom_stripesize_store(struct kobject *kobj,
-				    struct attribute *attr, const char *buffer,
-				    size_t count)
+static inline int dom_stripesize_max_kb_update(struct lod_device *lod,
+					       __u64 val)
 {
-	struct dt_device *dt = container_of(kobj, struct dt_device,
-					    dd_kobj);
+	/* 1GB is the limit */
+	if (val > (1ULL << 20))
+		return -ERANGE;
+
+	if (val > 0) {
+		if (val < LOD_DOM_MIN_SIZE_KB) {
+			LCONSOLE_INFO("Increasing provided stripe size to a minimum value %u\n",
+				      LOD_DOM_MIN_SIZE_KB);
+			val = LOD_DOM_MIN_SIZE_KB;
+		} else if (val & (LOD_DOM_MIN_SIZE_KB - 1)) {
+			val &= ~(LOD_DOM_MIN_SIZE_KB - 1);
+			LCONSOLE_WARN("Changing provided stripe size to %llu (a multiple of minimum %u)\n",
+				      val, LOD_DOM_MIN_SIZE_KB);
+		}
+	}
+	spin_lock(&lod->lod_lsfs_lock);
+	lod->lod_dom_stripesize_max_kb = val;
+	lod_dom_stripesize_recalc(lod);
+	spin_unlock(&lod->lod_lsfs_lock);
+	return 0;
+}
+
+static ssize_t dom_stripesize_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 	u64 val;
 	int rc;
@@ -75,30 +94,116 @@ static ssize_t dom_stripesize_store(struct kobject *kobj,
 	if (rc < 0)
 		return rc;
 
-	/* 1GB is the limit */
-	if (val > (1ULL << 30))
-		return -ERANGE;
+	rc = dom_stripesize_max_kb_update(lod, val >> 10);
+	if (rc)
+		return rc;
+	return count;
+}
 
-	if (val > 0) {
-		if (val < LOV_MIN_STRIPE_SIZE) {
-			LCONSOLE_INFO("Increasing provided stripe size to "
-				      "a minimum value %u\n",
-				      LOV_MIN_STRIPE_SIZE);
-			val = LOV_MIN_STRIPE_SIZE;
-		} else if (val & (LOV_MIN_STRIPE_SIZE - 1)) {
-			val &= ~(LOV_MIN_STRIPE_SIZE - 1);
-			LCONSOLE_WARN("Changing provided stripe size to %llu "
-				      "(a multiple of minimum %u)\n",
-				      val, LOV_MIN_STRIPE_SIZE);
-		}
+/* Old attribute name is still supported */
+LUSTRE_RW_ATTR(dom_stripesize);
+
+/**
+ * Show DoM maximum allowed stripe size.
+ */
+static ssize_t dom_stripesize_max_kb_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			lod->lod_dom_stripesize_max_kb);
+}
+
+/**
+ * Set DoM maximum allowed stripe size.
+ */
+static ssize_t dom_stripesize_max_kb_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "KiB");
+	if (rc < 0)
+		return rc;
+
+	rc = dom_stripesize_max_kb_update(lod, val >> 10);
+	if (rc)
+		return rc;
+	return count;
+}
+LUSTRE_RW_ATTR(dom_stripesize_max_kb);
+
+/**
+ * Show DoM default stripe size.
+ */
+static ssize_t dom_stripesize_cur_kb_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", lod->lod_dom_stripesize_cur_kb);
+}
+
+LUSTRE_RO_ATTR(dom_stripesize_cur_kb);
+
+/**
+ * Show DoM threshold.
+ */
+static ssize_t dom_threshold_free_mb_show(struct kobject *kobj,
+					  struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%llu\n",
+			lod->lod_dom_threshold_free_mb);
+}
+
+/**
+ * Set DoM default stripe size.
+ */
+static ssize_t dom_threshold_free_mb_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	u64 val;
+	int rc;
+	char *pct;
+
+	pct = strnchr(buffer, count, '%');
+	if (pct) {
+		rc = string_to_size(&val, buffer, pct - buffer);
+		if (rc < 0)
+			return rc;
+		val = mult_frac(lod->lod_lsfs_total_mb,
+				min_t(unsigned int, val, 100), 100);
+	} else {
+		rc = sysfs_memparse(buffer, count, &val, "MiB");
+		if (rc < 0)
+			return rc;
+		val >>= 20;
 	}
 
-	lod->lod_dom_max_stripesize = val;
+	spin_lock(&lod->lod_lsfs_lock);
+	lod->lod_dom_threshold_free_mb = val;
+	lod_dom_stripesize_recalc(lod);
+	spin_unlock(&lod->lod_lsfs_lock);
 
 	return count;
 }
 
-LUSTRE_RW_ATTR(dom_stripesize);
+LUSTRE_RW_ATTR(dom_threshold_free_mb);
 
 static ssize_t stripesize_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf)
@@ -935,6 +1040,9 @@ static const struct file_operations lod_proc_target_fops = {
 
 static struct attribute *lod_attrs[] = {
 	&lustre_attr_dom_stripesize.attr,
+	&lustre_attr_dom_stripesize_max_kb.attr,
+	&lustre_attr_dom_stripesize_cur_kb.attr,
+	&lustre_attr_dom_threshold_free_mb.attr,
 	&lustre_attr_stripesize.attr,
 	&lustre_attr_stripeoffset.attr,
 	&lustre_attr_stripecount.attr,

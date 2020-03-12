@@ -5523,8 +5523,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		GOTO(err_free_ns, rc);
 
 	/* Amount of available space excluded from granting and reserved
-	 * for metadata. It is in percentage and 50% is default value. */
-	tgd->tgd_reserved_pcnt = 50;
+	 * for metadata. It is a percentage of the total MDT size. */
+	tgd->tgd_reserved_pcnt = 10;
 
 	if (ONE_MB_BRW_SIZE < (1U << tgd->tgd_blockbits))
 		m->mdt_brw_size = 1U << tgd->tgd_blockbits;

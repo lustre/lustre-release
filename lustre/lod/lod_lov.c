@@ -1651,25 +1651,100 @@ int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1,
 	return -ERESTART;
 }
 
-int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
-		       struct lov_comp_md_entry_v1 *dom_ent)
+void lod_dom_stripesize_recalc(struct lod_device *d)
+{
+	__u64 threshold_mb = d->lod_dom_threshold_free_mb;
+	__u32 max_size = d->lod_dom_stripesize_max_kb;
+	__u32 def_size = d->lod_dom_stripesize_cur_kb;
+
+	/* use maximum allowed value if free space is above threshold */
+	if (d->lod_lsfs_free_mb >= threshold_mb) {
+		def_size = max_size;
+	} else if (!d->lod_lsfs_free_mb || max_size <= LOD_DOM_MIN_SIZE_KB) {
+		def_size = 0;
+	} else {
+		/* recalc threshold like it would be with def_size as max */
+		threshold_mb = mult_frac(threshold_mb, def_size, max_size);
+		if (d->lod_lsfs_free_mb < threshold_mb)
+			def_size = rounddown(def_size / 2, LOD_DOM_MIN_SIZE_KB);
+		else if (d->lod_lsfs_free_mb > threshold_mb * 2)
+			def_size = max_t(unsigned int, def_size * 2,
+					 LOD_DOM_MIN_SIZE_KB);
+	}
+
+	if (d->lod_dom_stripesize_cur_kb != def_size) {
+		CDEBUG(D_LAYOUT, "Change default DOM stripe size %d->%d\n",
+		       d->lod_dom_stripesize_cur_kb, def_size);
+		d->lod_dom_stripesize_cur_kb = def_size;
+	}
+}
+
+static __u32 lod_dom_stripesize_limit(const struct lu_env *env,
+				      struct lod_device *d)
+{
+	int rc;
+
+	/* set bfree as fraction of total space */
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_SPOOF)) {
+		spin_lock(&d->lod_lsfs_lock);
+		d->lod_lsfs_free_mb = mult_frac(d->lod_lsfs_total_mb,
+					min_t(int, cfs_fail_val, 100), 100);
+		GOTO(recalc, rc = 0);
+	}
+
+	if (d->lod_lsfs_age < ktime_get_seconds() - LOD_DOM_SFS_MAX_AGE) {
+		struct obd_statfs sfs;
+
+		spin_lock(&d->lod_lsfs_lock);
+		if (d->lod_lsfs_age > ktime_get_seconds() - LOD_DOM_SFS_MAX_AGE)
+			GOTO(unlock, rc = 0);
+
+		d->lod_lsfs_age = ktime_get_seconds();
+		spin_unlock(&d->lod_lsfs_lock);
+		rc = dt_statfs(env, d->lod_child, &sfs);
+		if (rc) {
+			CDEBUG(D_LAYOUT,
+			       "%s: failed to get OSD statfs: rc = %d\n",
+			       lod2obd(d)->obd_name, rc);
+			GOTO(out, rc);
+		}
+		/* udpate local OSD cached statfs data */
+		spin_lock(&d->lod_lsfs_lock);
+		d->lod_lsfs_total_mb = (sfs.os_blocks * sfs.os_bsize) >> 20;
+		d->lod_lsfs_free_mb = (sfs.os_bfree * sfs.os_bsize) >> 20;
+recalc:
+		lod_dom_stripesize_recalc(d);
+unlock:
+		spin_unlock(&d->lod_lsfs_lock);
+	}
+out:
+	return d->lod_dom_stripesize_cur_kb << 10;
+}
+
+int lod_dom_stripesize_choose(const struct lu_env *env, struct lod_device *d,
+			      struct lov_comp_md_v1 *comp_v1,
+			      struct lov_comp_md_entry_v1 *dom_ent,
+			      __u32 stripe_size)
 {
 	struct lov_comp_md_entry_v1 *ent;
 	struct lu_extent *dom_ext, *ext;
 	struct lov_user_md_v1 *lum;
-	__u32 stripe_size;
+	__u32 max_stripe_size;
 	__u16 mid, dom_mid;
 	int rc = 0;
 
 	dom_ext = &dom_ent->lcme_extent;
 	dom_mid = mirror_id_of(le32_to_cpu(dom_ent->lcme_id));
-	stripe_size = d->lod_dom_max_stripesize;
+	max_stripe_size = lod_dom_stripesize_limit(env, d);
+
+	/* Check stripe size againts current per-MDT limit */
+	if (stripe_size <= max_stripe_size)
+		return 0;
 
 	lum = (void *)comp_v1 + le32_to_cpu(dom_ent->lcme_offset);
-	CDEBUG(D_LAYOUT, "DoM component size %u was bigger than MDT limit %u, "
-	       "new size is %u\n", le32_to_cpu(lum->lmm_stripe_size),
-	       d->lod_dom_max_stripesize, stripe_size);
-	lum->lmm_stripe_size = cpu_to_le32(stripe_size);
+	CDEBUG(D_LAYOUT, "overwrite DoM component size %u with MDT limit %u\n",
+	       stripe_size, max_stripe_size);
+	lum->lmm_stripe_size = cpu_to_le32(max_stripe_size);
 
 	for_each_comp_entry_v1(comp_v1, ent) {
 		if (ent == dom_ent)
@@ -1690,17 +1765,17 @@ int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
 		 * DoM component in a file, all replicas are located on OSTs
 		 * always and don't need adjustment since use own layouts.
 		 */
-		ext->e_start = cpu_to_le64(stripe_size);
+		ext->e_start = cpu_to_le64(max_stripe_size);
 		break;
 	}
 
-	if (stripe_size == 0) {
+	if (max_stripe_size == 0) {
 		/* DoM component size is zero due to server setting,
 		 * remove it from the layout */
 		rc = lod_erase_dom_stripe(comp_v1, dom_ent);
 	} else {
 		/* Update DoM extent end finally */
-		dom_ext->e_end = cpu_to_le64(stripe_size);
+		dom_ext->e_end = cpu_to_le64(max_stripe_size);
 	}
 
 	return rc;
@@ -1718,8 +1793,9 @@ int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
  * \retval			0 if the striping is valid
  * \retval			-EINVAL if striping is invalid
  */
-int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
-			const struct lu_buf *buf, bool is_from_disk)
+int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
+			struct lod_object *lo, const struct lu_buf *buf,
+			bool is_from_disk)
 {
 	struct lov_user_md_v1   *lum;
 	struct lov_comp_md_v1   *comp_v1;
@@ -1886,21 +1962,15 @@ recheck:
 				       stripe_size, prev_end);
 				RETURN(-EINVAL);
 			}
-			/* Check stripe size againts per-MDT limit */
-			if (stripe_size > d->lod_dom_max_stripesize) {
-				CDEBUG(D_LAYOUT, "DoM component size "
-				       "%u is bigger than MDT limit %u, check "
-				       "dom_max_stripesize parameter\n",
-				       stripe_size, d->lod_dom_max_stripesize);
-				rc = lod_fix_dom_stripe(d, comp_v1, ent);
-				if (rc == -ERESTART) {
-					/* DoM entry was removed, re-check
-					 * new layout from start */
-					goto recheck;
-				} else if (rc) {
-					RETURN(rc);
-				}
-			}
+			/* Check and adjust stripe size by per-MDT limit */
+			rc = lod_dom_stripesize_choose(env, d, comp_v1, ent,
+						       stripe_size);
+			/* DoM entry was removed, re-check layout from start */
+			if (rc == -ERESTART)
+				goto recheck;
+			else if (rc)
+				RETURN(rc);
+
 			/* Any stripe count is forbidden on DoM component */
 			if (lum->lmm_stripe_count) {
 				CDEBUG(D_LAYOUT,

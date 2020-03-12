@@ -92,6 +92,9 @@ struct lod_avoid_guide {
 	__u32			lag_ost_avail;
 };
 
+#define LOD_DOM_MIN_SIZE_KB (LOV_MIN_STRIPE_SIZE >> 10)
+#define LOD_DOM_SFS_MAX_AGE 10
+
 struct lod_device {
 	struct dt_device      lod_dt_dev;
 	struct obd_export    *lod_child_exp;
@@ -118,7 +121,17 @@ struct lod_device {
 	/* maximum EA size underlied OSD may have */
 	unsigned int	      lod_osd_max_easize;
 	/* maximum size of MDT stripe for Data-on-MDT files. */
-	unsigned int          lod_dom_max_stripesize;
+	unsigned int          lod_dom_stripesize_max_kb;
+	/* current DOM default stripe size adjusted by threshold */
+	unsigned int	      lod_dom_stripesize_cur_kb;
+	/* Threshold at which DOM default stripe will start decreasing */
+	__u64		      lod_dom_threshold_free_mb;
+
+	/* Local OSD statfs cache */
+	spinlock_t	      lod_lsfs_lock;
+	time64_t	      lod_lsfs_age;
+	__u64		      lod_lsfs_total_mb;
+	__u64		      lod_lsfs_free_mb;
 
 	/* OST pool data */
 	int			lod_pool_count;
@@ -520,6 +533,7 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 int lod_striping_load(const struct lu_env *env, struct lod_object *lo);
 int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
 			const struct lu_buf *buf);
+void lod_dom_stripesize_recalc(struct lod_device *d);
 
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 	       const char *name);
@@ -593,8 +607,9 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 			   const struct lu_buf *buf);
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 			   struct lov_ost_data_v1 *objs, int index);
-int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
-			const struct lu_buf *buf, bool is_from_disk);
+int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
+			struct lod_object *lo, const struct lu_buf *buf,
+			bool is_from_disk);
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir);
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size);

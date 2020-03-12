@@ -1670,6 +1670,26 @@ out:
 	RETURN(rc);
 }
 
+static int lod_lsfs_init(const struct lu_env *env, struct lod_device *d)
+{
+	struct obd_statfs sfs;
+	int rc;
+
+	rc = dt_statfs(env, d->lod_child, &sfs);
+	if (rc) {
+		CDEBUG(D_LAYOUT, "%s: failed to get OSD statfs, rc = %d\n",
+		       lod2obd(d)->obd_name, rc);
+		return rc;
+	}
+
+	/* udpate local OSD cached statfs data */
+	spin_lock_init(&d->lod_lsfs_lock);
+	d->lod_lsfs_age = ktime_get_seconds();
+	d->lod_lsfs_total_mb = (sfs.os_blocks * sfs.os_bsize) >> 20;
+	d->lod_lsfs_free_mb = (sfs.os_bfree * sfs.os_bsize) >> 20;
+	return 0;
+}
+
 /**
  * Initialize LOD device at setup.
  *
@@ -1713,7 +1733,17 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	dt_conf_get(env, &lod->lod_dt_dev, &ddp);
 	lod->lod_osd_max_easize = ddp.ddp_max_ea_size;
-	lod->lod_dom_max_stripesize = (1ULL << 20); /* 1Mb as default value */
+	lod->lod_dom_stripesize_max_kb = (1ULL << 10); /* 1Mb is default */
+
+	/* initialize local statfs cached values */
+	rc = lod_lsfs_init(env, lod);
+	if (rc)
+		GOTO(out_disconnect, rc);
+
+	/* default threshold as half of total space, in MiB */
+	lod->lod_dom_threshold_free_mb = lod->lod_lsfs_total_mb / 2;
+	/* set default DoM stripe size based on free space amount */
+	lod_dom_stripesize_recalc(lod);
 
 	/* setup obd to be used with old lov code */
 	rc = lod_pools_init(lod, cfg);

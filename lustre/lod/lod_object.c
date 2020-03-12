@@ -2406,7 +2406,7 @@ static int lod_dir_declare_xattr_set(const struct lu_env *env,
 		if (rc != 0)
 			RETURN(rc);
 	} else if (strcmp(name, XATTR_NAME_LOV) == 0) {
-		rc = lod_verify_striping(d, lo, buf, false);
+		rc = lod_verify_striping(env, d, lo, buf, false);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -2653,7 +2653,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	if (lo->ldo_flr_state != LCM_FL_NONE)
 		RETURN(-EBUSY);
 
-	rc = lod_verify_striping(d, lo, buf, false);
+	rc = lod_verify_striping(env, d, lo, buf, false);
 	if (rc != 0)
 		RETURN(rc);
 
