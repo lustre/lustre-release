@@ -2115,7 +2115,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 
 
 	dt_write_lock(env, parent, 0);
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
+	rc = dt_lookup(env, dt_object_child(parent), (struct dt_rec *)&tfid,
 		       (const struct dt_key *)name);
 	/* Someone has removed the bad name entry by race. */
 	if (rc == -ENOENT)
