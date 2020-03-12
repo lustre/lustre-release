@@ -443,11 +443,10 @@ int libcfs_debug_init(unsigned long bufsize)
 			sizeof(libcfs_debug_file_path_arr));
 	}
 
-	/*
-	 * If libcfs_debug_mb is set to an invalid value or uninitialized
-	 * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES
+	/* If libcfs_debug_mb is uninitialized then just make the
+	 * total buffers smp_num_cpus * TCD_MAX_PAGES
 	 */
-	if (max > cfs_trace_max_debug_mb() || max < num_possible_cpus()) {
+	if (max < num_possible_cpus()) {
 		max = TCD_MAX_PAGES;
 	} else {
 		max = (max / num_possible_cpus());

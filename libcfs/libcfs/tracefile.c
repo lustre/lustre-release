@@ -854,8 +854,9 @@ int cfs_trace_set_debug_mb(int mb)
 {
 	int i;
 	int j;
-	int pages;
-	int limit = cfs_trace_max_debug_mb();
+	unsigned long pages;
+	unsigned long total_mb = (cfs_totalram_pages() >> (20 - PAGE_SHIFT));
+	unsigned long limit = max_t(unsigned long, 512, (total_mb * 4) / 5);
 	struct cfs_trace_cpu_data *tcd;
 
 	if (mb < num_possible_cpus()) {
@@ -865,7 +866,7 @@ int cfs_trace_set_debug_mb(int mb)
 	}
 
 	if (mb > limit) {
-		pr_warn("Lustre: %d MB is too large for debug buffer size, setting it to %d MB.\n",
+		pr_warn("Lustre: %d MB is too large for debug buffer size, setting it to %lu MB.\n",
 			mb, limit);
 		mb = limit;
 	}

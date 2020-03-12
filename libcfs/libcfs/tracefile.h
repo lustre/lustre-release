@@ -83,7 +83,6 @@ extern void libcfs_debug_dumplog_internal(void *arg);
 extern void libcfs_register_panic_notifier(void);
 extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
-extern int  cfs_trace_max_debug_mb(void);
 
 #define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
