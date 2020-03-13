@@ -3,6 +3,7 @@ trap 'kill $(jobs -p)' EXIT
 RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
+RACER_ENABLE_SEL=${RACER_ENABLE_SEL:-true}
 DIR=$1
 MAX=$2
 MAX_MB=${RACER_MAX_MB:-8}
@@ -18,6 +19,9 @@ $RACER_ENABLE_DOM && layout+=(dom dom dom)
 # check if it supports FLR
 $RACER_ENABLE_FLR && layout+=(flr flr flr)
 
+# check if it supports PFL layout
+$RACER_ENABLE_SEL && layout+=(sel sel sel)
+
 echo "layout: ${layout[*]}"
 
 while /bin/true; do
@@ -27,7 +31,7 @@ while /bin/true; do
 	stripecount=$((RANDOM % (OSTCOUNT + 1)))
 
 	[ $stripecount -gt 0 ] && {
-		stripesize=$(((RANDOM % 16 + 1) * 64))K
+		stripesize=$(((1 << (RANDOM % 5)) * 64))K
 		comp_end=$((${stripesize%K} * (RANDOM % 8 + 1)))K
 		pattern=${layout[$RANDOM % ${#layout[*]}]}
 
@@ -35,6 +39,7 @@ while /bin/true; do
 		dom) opt="setstripe -E $stripesize -L mdt -E eof -c $stripecount -S 1M" ;;
 		pfl) opt="setstripe -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
 		flr) opt="mirror create -N2 -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
+		sel) opt="setstripe -E 128M -S $stripesize -z 64M -E eof -c $stripecount -S 2M -z 128M" ;;
 		raid0) opt="setstripe -S $stripesize -c $stripecount" ;;
 		esac
 
