@@ -1012,8 +1012,6 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 	if (!msg->msg_peerrtrcredit) {
 		/* lpni_lock protects the credit manipulation */
 		spin_lock(&lpni->lpni_lock);
-		/* lp_lock protects the lp_rtrq */
-		spin_lock(&lp->lp_lock);
 
 		msg->msg_peerrtrcredit = 1;
 		lpni->lpni_rtrcredits--;
@@ -1021,15 +1019,16 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 			lpni->lpni_minrtrcredits = lpni->lpni_rtrcredits;
 
 		if (lpni->lpni_rtrcredits < 0) {
+			spin_unlock(&lpni->lpni_lock);
 			/* must have checked eager_recv before here */
 			LASSERT(msg->msg_rx_ready_delay);
 			msg->msg_rx_delayed = 1;
+			/* lp_lock protects the lp_rtrq */
+			spin_lock(&lp->lp_lock);
 			list_add_tail(&msg->msg_list, &lp->lp_rtrq);
 			spin_unlock(&lp->lp_lock);
-			spin_unlock(&lpni->lpni_lock);
 			return LNET_CREDIT_WAIT;
 		}
-		spin_unlock(&lp->lp_lock);
 		spin_unlock(&lpni->lpni_lock);
 	}
 
@@ -1256,15 +1255,15 @@ routing_off:
 		LASSERT(rxpeerni->lpni_peer_net);
 		LASSERT(rxpeerni->lpni_peer_net->lpn_peer);
 
-		lp = rxpeerni->lpni_peer_net->lpn_peer;
-
 		/* give back peer router credits */
 		msg->msg_peerrtrcredit = 0;
 
 		spin_lock(&rxpeerni->lpni_lock);
-		spin_lock(&lp->lp_lock);
-
 		rxpeerni->lpni_rtrcredits++;
+		spin_unlock(&rxpeerni->lpni_lock);
+
+		lp = rxpeerni->lpni_peer_net->lpn_peer;
+		spin_lock(&lp->lp_lock);
 
 		/* drop all messages which are queued to be routed on that
 		 * peer. */
@@ -1272,7 +1271,6 @@ routing_off:
 			LIST_HEAD(drop);
 			list_splice_init(&lp->lp_rtrq, &drop);
 			spin_unlock(&lp->lp_lock);
-			spin_unlock(&rxpeerni->lpni_lock);
 			lnet_drop_routed_msgs_locked(&drop, msg->msg_rx_cpt);
 		} else if (!list_empty(&lp->lp_rtrq)) {
 			int msg2_cpt;
@@ -1282,7 +1280,6 @@ routing_off:
 			list_del(&msg2->msg_list);
 			msg2_cpt = msg2->msg_rx_cpt;
 			spin_unlock(&lp->lp_lock);
-			spin_unlock(&rxpeerni->lpni_lock);
 			/*
 			 * messages on the lp_rtrq can be from any NID in
 			 * the peer, which means they might have different
@@ -1300,7 +1297,6 @@ routing_off:
 			}
 		} else {
 			spin_unlock(&lp->lp_lock);
-			spin_unlock(&rxpeerni->lpni_lock);
 		}
 	}
 	if (rxni != NULL) {
