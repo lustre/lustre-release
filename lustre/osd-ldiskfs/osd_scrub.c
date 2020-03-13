@@ -1079,7 +1079,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 			if (rc == 0) {
 				__u64 used = ksfs->f_files - ksfs->f_ffree;
 
-				do_div(used, sf->sf_items_updated_prior);
+				used = div64_u64(used, sf->sf_items_updated_prior);
 				/* If we hit too much inconsistent OI
 				 * mappings during the partial scan,
 				 * then scan the device completely. */
