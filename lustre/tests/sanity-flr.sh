@@ -2061,6 +2061,7 @@ test_46() {
 
 	########################### 3. FLR file #############################
 	echo "  ** 3. FLR file"
+	rm -f $file
 	$LFS setstripe -N -E1m -S 1M -c2 -o0,1 -E4m -c1 -Eeof -N -E16m -Eeof \
 		$file || error "3. Create FLR $file failed"
 
@@ -2089,6 +2090,38 @@ test_46() {
 		error "6. setstripe FLR $dir failed"
 
 	verify_46 $dir $dir.copy "6. FLR dir"
+
+	########################### 7. SEL file ##############################
+	echo "  ** 7. SEL file"
+	rm -f $file
+	$LFS setstripe -E256M -S 1M -c2 -o0,1 -z 64M -E-1 -o1,0 -z 128M \
+		$file || error "Create $file failed"
+
+	rm -f $file.copy
+	verify_46 $file $file.copy "7. SEL file"
+
+	########################### 8. SEL dir ##############################
+	echo "  ** 8. SEL dir"
+	$LFS setstripe -E256M -S 1M -c2 -z 64M -E-1 -z 128M \
+		$dir || error "setstripe $dir failed"
+
+	verify_46 $dir $dir.copy "8. SEL dir"
+
+	########################### 9. FLR SEL file ##########################
+	echo "  ** 9. FLR SEL file"
+	rm -f $file
+	$LFS setstripe -N -E256M -c2 -z 64M -E-1 -z 128M \
+		-N -E1G -c4 -z128M -E-1 -z256M $file || error "Create $file failed"
+
+	rm -f $file.copy
+	verify_46 $file $file.copy "9. SEL file"
+
+	########################### 10. FLR SEL dir #########################
+	echo "  ** 10. FLR SEL dir"
+	$LFS setstripe -N -E256M -c2 -z 64M -E-1 -z 128M \
+		-N -E1G -c4 -z128M -E-1 -z256M $dir || error "Create $file failed"
+
+	verify_46 $dir $dir.copy "10. SEL dir"
 }
 run_test 46 "Verify setstripe --copy option"
 

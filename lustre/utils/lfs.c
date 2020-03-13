@@ -2625,26 +2625,75 @@ static int build_component(struct llapi_layout **layout,
 	return rc;
 }
 
+static int build_prev_component(struct llapi_layout **layout,
+				struct lfs_setstripe_args *prev,
+				struct lfs_setstripe_args *lsa,
+				bool set_extent)
+{
+	int extension = lsa->lsa_comp_flags & LCME_FL_EXTENSION;
+	int rc;
+
+	if (prev->lsa_stripe_size) {
+		if (extension) {
+			prev->lsa_comp_end = lsa->lsa_comp_end;
+			prev->lsa_extension_size = lsa->lsa_extension_size;
+			prev->lsa_extension_comp = true;
+		}
+
+		rc = build_component(layout, prev, true);
+		if (rc)
+			return rc;
+	}
+
+	/* Copy lsa to previous lsa;
+	 * if this is an extension component, make the previous invalid; */
+	if (extension)
+		prev->lsa_stripe_size = 0;
+	else
+		*prev = *lsa;
+
+	return 0;
+}
+
 static int build_layout_from_yaml_node(struct cYAML *node,
 				       struct llapi_layout **layout,
 				       struct lfs_setstripe_args *lsa,
-				       __u32 *osts)
+				       struct lfs_setstripe_args *prevp)
 {
+	struct lfs_setstripe_args prev = { 0 };
+	__u32 *osts = lsa->lsa_tgts;
 	char *string;
 	int rc = 0;
 
+	if (prevp == NULL)
+		prevp = &prev;
+
 	while (node) {
+		string = node->cy_string;
+
 		if (node->cy_type == CYAML_TYPE_OBJECT) {
 			/* go deep to sub blocks */
+			if (string && !strncmp(string, "component", 9) &&
+			    strncmp(string, "component0", 10) &&
+			    strncmp(string, "components", 10)) {
+				rc = build_prev_component(layout, prevp, lsa, true);
+				if (rc)
+					return rc;
+
+				/* initialize lsa. */
+				setstripe_args_init(lsa);
+				lsa->lsa_first_comp = false;
+				lsa->lsa_tgts = osts;
+			}
+
 			rc = build_layout_from_yaml_node(node->cy_child, layout,
-							 lsa, osts);
+							 lsa, prevp);
 			if (rc)
 				return rc;
 		} else {
 			if (node->cy_string == NULL)
 				return -EINVAL;
 
-			string = node->cy_string;
 			/* skip leading lmm_ if present, to simplify parsing */
 			if (strncmp(string, "lmm_", 4) == 0)
 				string += 4;
@@ -2678,18 +2727,8 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 				if (!strcmp(string, "lcm_mirror_count")) {
 					lsa->lsa_mirror_count = node->cy_valueint;
 				} else if (!strcmp(string, "lcme_extent.e_start")) {
-					if (node->cy_valueint != 0 || *layout != NULL) {
-						rc = build_component(layout, lsa, true);
-						if (rc)
-							return rc;
-					}
-
 					if (node->cy_valueint == 0)
 						lsa->lsa_first_comp = true;
-
-					/* initialize lsa */
-					setstripe_args_init(lsa);
-					lsa->lsa_tgts = osts;
 				} else if (!strcmp(string, "lcme_extent.e_end")) {
 					if (node->cy_valueint == -1)
 						lsa->lsa_comp_end = LUSTRE_EOF;
@@ -2699,6 +2738,9 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 					lsa->lsa_stripe_count = node->cy_valueint;
 				} else if (!strcmp(string, "stripe_size")) {
 					lsa->lsa_stripe_size = node->cy_valueint;
+				} else if (!strcmp(string, "extension_size")) {
+					lsa->lsa_extension_size = node->cy_valueint;
+					lsa->lsa_extension_comp = true;
 				} else if (!strcmp(string, "stripe_offset")) {
 					lsa->lsa_stripe_off = node->cy_valueint;
 				} else if (!strcmp(string, "l_ost_idx")) {
@@ -2708,6 +2750,15 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 			}
 		}
 		node = node->cy_next;
+	}
+
+	if (prevp == &prev) {
+		rc = build_prev_component(layout, prevp, lsa, true);
+		if (rc)
+			return rc;
+
+		if (!(lsa->lsa_comp_flags & LCME_FL_EXTENSION))
+			rc = build_component(layout, lsa, *layout != NULL);
 	}
 
 	return rc;
@@ -2737,13 +2788,11 @@ static int lfs_comp_create_from_yaml(char *template,
 	setstripe_args_init(lsa);
 	lsa->lsa_tgts = osts;
 
-	rc = build_layout_from_yaml_node(tree, layout, lsa, osts);
+	rc = build_layout_from_yaml_node(tree, layout, lsa, NULL);
 	if (rc) {
 		fprintf(stderr, "%s: cannot build layout from YAML file %s.\n",
 			progname, template);
 		goto err;
-	} else {
-		rc = build_component(layout, lsa, *layout != NULL);
 	}
 	/* clean clean lsa */
 	setstripe_args_init(lsa);
@@ -2842,7 +2891,7 @@ static int layout_adjust_first_extent(char *fname, struct llapi_layout *layout,
 	uint64_t end;
 	int rc, ret = 0;
 
-	if (layout == NULL)
+	if (layout == NULL || !(comp_add || llapi_layout_is_composite(layout)))
 		return 0;
 
 	errno = 0;
@@ -3758,21 +3807,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	if (layout != NULL || mirror_list != NULL) {
-		if (mirror_list)
-			result = mirror_adjust_first_extents(mirror_list);
-		else
-			result = layout_adjust_first_extent(fname, layout,
-							    comp_add);
-		if (result == -ENODATA)
-			comp_add = 0;
-		else if (result != 0) {
-			fprintf(stderr, "error: %s: invalid layout\n",
-				progname);
-			goto error;
-		}
-	}
-
 	if (from_yaml && from_copy) {
 		fprintf(stderr,
 			"%s: can't specify --yaml and --copy together\n",
@@ -3921,6 +3955,21 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			fprintf(stderr, "error: %s: can't create composite "
 				"layout from template file %s\n",
 				argv[0], template);
+			goto error;
+		}
+	}
+
+	if (layout != NULL || mirror_list != NULL) {
+		if (mirror_list)
+			result = mirror_adjust_first_extents(mirror_list);
+		else
+			result = layout_adjust_first_extent(fname, layout,
+							    comp_add);
+		if (result == -ENODATA)
+			comp_add = 0;
+		else if (result != 0) {
+			fprintf(stderr, "error: %s: invalid layout\n",
+				progname);
 			goto error;
 		}
 	}

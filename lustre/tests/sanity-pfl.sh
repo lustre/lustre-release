@@ -851,6 +851,37 @@ test_16b() {
 }
 run_test 16b "Verify setstripe/getstripe with YAML config file + overstriping"
 
+test_16c() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+
+	local file=$DIR/$tdir/$tfile
+	local dir=$DIR/$tdir/dir
+	local temp=$DIR/$tdir/template
+	rm -rf $DIR/$tdir
+	test_mkdir $DIR/$tdir
+
+	#####################################################################
+	#	                    1. SEL file
+	# set stripe for source file
+	$LFS setstripe -E256M -S 1M -c2 -o0,1 -z 64M -E-1 -o1,0 -z 128M \
+		$file || error "Create $file failed"
+
+	echo "1. SEL file"
+	verify_yaml_layout $file $file.copy $temp "1. PFL file"
+
+	#####################################################################
+	#	                    2. SEL dir
+	# set stripe for source dir
+	test_mkdir $dir
+	$LFS setstripe -E256M -S 1M -c2 -z 64M -E-1 -z 128M \
+		$dir || error "setstripe $dir failed"
+
+	test_mkdir $dir.copy
+	echo "2. SEL template on dir"
+	verify_yaml_layout $dir $dir.copy $temp.dir "2. PFL dir"
+}
+run_test 16c "Verify setstripe/getstripe for SEL layout with YAML config file"
+
 test_17() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	local file=$DIR/$tdir/$tfile
