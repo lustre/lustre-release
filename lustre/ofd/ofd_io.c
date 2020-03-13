@@ -515,6 +515,8 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		RETURN(PTR_ERR(fo));
 	LASSERT(fo != NULL);
 
+	ofd_info(env)->fti_obj = fo;
+
 	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
@@ -547,10 +549,6 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
-	rc = dt_attr_get(env, ofd_object_child(fo), la);
-	if (unlikely(rc))
-		GOTO(buf_put, rc);
-
 	rc = dt_read_prep(env, ofd_object_child(fo), lnb, *nr_local);
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
@@ -671,6 +669,8 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (IS_ERR(fo))
 		GOTO(out, rc = PTR_ERR(fo));
 	LASSERT(fo != NULL);
+
+	ofd_info(env)->fti_obj = fo;
 
 	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo)) {
@@ -830,7 +830,6 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		rc = ofd_preprw_read(env, exp, ofd, fid, &info->fti_attr, oa,
 				     obj->ioo_bufcnt, rnb, nr_local, lnb,
 				     jobid);
-		obdo_from_la(oa, &info->fti_attr, LA_ATIME);
 	} else {
 		CERROR("%s: wrong cmd %d received!\n",
 		       exp->exp_obd->obd_name, cmd);
@@ -865,16 +864,12 @@ ofd_commitrw_read(const struct lu_env *env, struct ofd_device *ofd,
 
 	LASSERT(niocount > 0);
 
-	fo = ofd_object_find(env, ofd, fid);
-	if (IS_ERR(fo))
-		RETURN(PTR_ERR(fo));
+	fo = ofd_info(env)->fti_obj;
 	LASSERT(fo != NULL);
 	LASSERT(ofd_object_exists(fo));
 	dt_bufs_put(env, ofd_object_child(fo), lnb, niocount);
 
 	ofd_read_unlock(env, fo);
-	ofd_object_put(env, fo);
-	/* second put is pair to object_get in ofd_preprw_read */
 	ofd_object_put(env, fo);
 
 	RETURN(0);
@@ -1120,7 +1115,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 
 	LASSERT(objcount == 1);
 
-	fo = ofd_object_find(env, ofd, fid);
+	fo = ofd_info(env)->fti_obj;
 	LASSERT(fo != NULL);
 
 	o = ofd_object_child(fo);
@@ -1261,8 +1256,6 @@ out_stop:
 out:
 	dt_bufs_put(env, o, lnb, niocount);
 	ofd_object_put(env, fo);
-	/* second put is pair to object_get in ofd_preprw_write */
-	ofd_object_put(env, fo);
 	if (granted > 0)
 		tgt_grant_commit(exp, granted, old_rc);
 	RETURN(rc);
@@ -1382,19 +1375,6 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			nodemap_putref(nodemap);
 		}
 	} else if (cmd == OBD_BRW_READ) {
-
-		/* If oa != NULL then ofd_preprw_read updated the inode
-		 * atime and we should update the lvb so that other glimpses
-		 * will also get the updated value. bug 5972 */
-		if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
-			ost_fid_build_resid(fid, &info->fti_resid);
-			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
-					       LDLM_EXTENT, 0);
-			if (!IS_ERR(rs)) {
-				ldlm_res_lvbo_update(rs, NULL, 1);
-				ldlm_resource_putref(rs);
-			}
-		}
 		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);
 		if (old_rc)
