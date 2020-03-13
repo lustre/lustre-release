@@ -185,6 +185,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"                 [--overstripe-count|-C <stripe_count>]\n"	\
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
+	"                 [--extension-size|--ext-size|-z]\n"           \
 	"                 [--layout|-L <pattern>]\n"			\
 	"                 [--mirror_count|-N[mirror_count]]\n"		\
 	"                 [--ost|-o <ost_indices>]\n"			\
@@ -201,6 +202,10 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n" \
 	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
 	"\t              respectively)\n"				\
+	"\textension_size:\n"						\
+	"\t              Number of bytes the previous component is extended\n" \
+	"\t              each time. Can be specified with K, M, G (for KB,\n" \
+	"\t              MB, GB respectively)\n"			\
 	"\tpool_name:    Name of OST pool to use (default none)\n"	\
 	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"\
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
@@ -468,6 +473,7 @@ command_t cmdlist[] = {
 	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
 	 "     [[!] --stripe-index|-i <index,...>]\n"
 	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
+	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
