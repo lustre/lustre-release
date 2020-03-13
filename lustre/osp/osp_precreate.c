@@ -139,6 +139,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	union ptlrpc_async_args *aa = args;
 	struct obd_import *imp = req->rq_import;
 	struct obd_statfs *msfs;
+	struct obd_statfs *sfs;
 	struct osp_device *d;
 	u64 maxage_ns;
 
@@ -167,7 +168,13 @@ static int osp_statfs_interpret(const struct lu_env *env,
 		  jiffies + cfs_time_seconds(d->opd_statfs_maxage));
 	d->opd_statfs_update_in_progress = 0;
 
-	CDEBUG(D_CACHE, "updated statfs %p\n", d);
+	sfs = &d->opd_statfs;
+	CDEBUG(D_CACHE, "%s (%p): %llu blocks, %llu free, %llu avail, "
+	       "%u bsize, %u reserved mb low, %u reserved mb high,"
+	       "%llu files, %llu free files\n", d->opd_obd->obd_name, d,
+	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail, sfs->os_bsize,
+	       d->opd_reserved_mb_low, d->opd_reserved_mb_high,
+	       sfs->os_files, sfs->os_ffree);
 
 	RETURN(0);
 out:

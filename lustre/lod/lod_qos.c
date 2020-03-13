@@ -100,8 +100,9 @@ static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
  */
 static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 				struct lu_tgt_descs *ltd,
-				struct lu_tgt_desc *tgt)
+				struct lu_tgt_desc *tgt, __u64 reserve)
 {
+	struct obd_statfs_info info = { 0 };
 	struct lov_desc *desc = &ltd->ltd_lov_desc;
 	int rc;
 	ENTRY;
@@ -109,7 +110,8 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	LASSERT(d);
 	LASSERT(tgt);
 
-	rc = dt_statfs(env, tgt->ltd_tgt, &tgt->ltd_statfs);
+	info.os_enable_pre = 1;
+	rc = dt_statfs_info(env, tgt->ltd_tgt, &tgt->ltd_statfs, &info);
 	if (rc && rc != -ENOTCONN)
 		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
 
@@ -118,6 +120,11 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 		if (rc == -ENOSPC)
 			return rc;
 	}
+
+	if (reserve &&
+	    (reserve + (info.os_reserved_mb_low << 20) >
+	     tgt->ltd_statfs.os_bavail * tgt->ltd_statfs.os_bsize))
+		return -ENOSPC;
 
 	/* check whether device has changed state (active, inactive) */
 	if (rc != 0 && tgt->ltd_active) {
@@ -211,7 +218,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 
 	ltd_foreach_tgt(ltd, tgt) {
 		avail = tgt->ltd_statfs.os_bavail;
-		if (lod_statfs_and_check(env, lod, ltd, tgt))
+		if (lod_statfs_and_check(env, lod, ltd, tgt, 0))
 			continue;
 
 		if (tgt->ltd_statfs.os_bavail != avail)
@@ -615,7 +622,8 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 				     struct dt_object **stripe,
 				     __u32 *ost_indices,
 				     struct thandle *th,
-				     bool *overstriped)
+				     bool *overstriped,
+				     __u64 reserve)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
@@ -626,7 +634,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 
 	ENTRY;
 
-	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost);
+	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost, reserve);
 	if (rc)
 		RETURN(rc);
 
@@ -725,7 +733,8 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  */
 static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			    struct dt_object **stripe, __u32 *ost_indices,
-			    int flags, struct thandle *th, int comp_idx)
+			    int flags, struct thandle *th, int comp_idx,
+			    __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -819,7 +828,8 @@ repeat_find:
 		spin_unlock(&lqr->lqr_alloc);
 		rc = lod_check_and_reserve_ost(env, lo, lod_comp, ost_idx,
 					       speed, &stripe_idx, stripe,
-					       ost_indices, th, &overstriped);
+					       ost_indices, th, &overstriped,
+					       reserve);
 		spin_lock(&lqr->lqr_alloc);
 
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
@@ -1089,7 +1099,7 @@ repeat_find:
  */
 static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 			      struct dt_object **stripe, __u32 *ost_indices,
-			      struct thandle *th, int comp_idx)
+			      struct thandle *th, int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device	*m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1147,7 +1157,8 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs,
-					  LTD_TGT(&m->lod_ost_descs, ost_idx));
+					  LTD_TGT(&m->lod_ost_descs, ost_idx),
+					  reserve);
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
@@ -1201,7 +1212,8 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 static int lod_ost_alloc_specific(const struct lu_env *env,
 				  struct lod_object *lo,
 				  struct dt_object **stripe, __u32 *ost_indices,
-				  int flags, struct thandle *th, int comp_idx)
+				  int flags, struct thandle *th, int comp_idx,
+				  __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1294,7 +1306,8 @@ repeat_find:
 		 * start OST, then it can be skipped, otherwise skip it only
 		 * if it is inactive/recovering/out-of-space." */
 
-		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, tgt);
+		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs,
+					  tgt, reserve);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1395,7 +1408,8 @@ out:
  */
 static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			     struct dt_object **stripe, __u32 *ost_indices,
-			     int flags, struct thandle *th, int comp_idx)
+			     int flags, struct thandle *th, int comp_idx,
+			     __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1464,7 +1478,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 0;
 
-		rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost);
+		rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs,
+					  ost, reserve);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -2450,7 +2465,7 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
  */
 int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, struct thandle *th,
-			int comp_idx)
+			int comp_idx, __u64 reserve)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device      *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
@@ -2500,6 +2515,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (!ost_indices)
 			GOTO(out, rc = -ENOMEM);
 
+repeat:
 		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
 		CDEBUG(D_OTHER, "tgt_count %d stripe_count %d\n",
@@ -2508,7 +2524,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_ostlist.op_array &&
 		    lod_comp->llc_ostlist.op_count) {
 			rc = lod_alloc_ost_list(env, lo, stripe, ost_indices,
-						th, comp_idx);
+						th, comp_idx, reserve);
 		} else if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT) {
 			/**
 			 * collect OSTs and OSSs used in other mirrors whose
@@ -2523,15 +2539,15 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			lod_collect_avoidance(lo, lag, comp_idx);
 
 			rc = lod_ost_alloc_qos(env, lo, stripe, ost_indices,
-					       flag, th, comp_idx);
+					       flag, th, comp_idx, reserve);
 			if (rc == -EAGAIN)
 				rc = lod_ost_alloc_rr(env, lo, stripe,
 						      ost_indices, flag, th,
-						      comp_idx);
+						      comp_idx, reserve);
 		} else {
 			rc = lod_ost_alloc_specific(env, lo, stripe,
 						    ost_indices, flag, th,
-						    comp_idx);
+						    comp_idx, reserve);
 		}
 put_ldts:
 		lod_putref(d, &d->lod_ost_descs);
@@ -2539,6 +2555,15 @@ put_ldts:
 			for (i = 0; i < stripe_len; i++)
 				if (stripe[i] != NULL)
 					dt_object_put(env, stripe[i]);
+
+			/* In case there is no space on any OST, let's ignore
+			 * the @reserve space to avoid an error at the init
+			 * time, probably the actual IO will be less than the
+			 * given @reserve space (aka extension_size). */
+			if (reserve) {
+				reserve = 0;
+				goto repeat;
+			}
 			lod_comp->llc_stripe_count = 0;
 		} else {
 			lod_comp->llc_stripe = stripe;
@@ -2629,7 +2654,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		extent = &lod_comp->llc_extent;
 		QOS_DEBUG("comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
 		if (!lo->ldo_is_composite || size >= extent->e_start) {
-			rc = lod_qos_prep_create(env, lo, attr, th, i);
+			rc = lod_qos_prep_create(env, lo, attr, th, i, 0);
 			if (rc)
 				break;
 		}

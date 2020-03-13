@@ -4223,6 +4223,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 	new_comp->llc_flags &= ~LCME_FL_INIT;
 	new_comp->llc_stripe = NULL;
 	new_comp->llc_stripes_allocated = 0;
+	new_comp->llc_ost_indices = NULL;
 	new_comp->llc_stripe_offset = LOV_OFFSET_DEFAULT;
 	/* for uninstantiated components, layout gen stores default stripe
 	 * offset */
@@ -6290,7 +6291,9 @@ static int lod_invalidate(const struct lu_env *env, struct dt_object *dt)
 }
 
 static int lod_declare_instantiate_components(const struct lu_env *env,
-		struct lod_object *lo, struct thandle *th)
+					      struct lod_object *lo,
+					      struct thandle *th,
+					      __u64 reserve)
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	int i;
@@ -6301,7 +6304,7 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
 
 	for (i = 0; i < info->lti_count; i++) {
 		rc = lod_qos_prep_create(env, lo, NULL, th,
-					 info->lti_comp_idx[i]);
+					 info->lti_comp_idx[i], reserve);
 		if (rc)
 			break;
 	}
@@ -6337,36 +6340,21 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
  */
 static bool lod_sel_osts_allowed(const struct lu_env *env,
 				 struct lod_object *lo,
-				 int index, __u64 extension_size,
+				 int index, __u64 reserve,
 				 struct lu_extent *extent,
 				 struct lu_extent *comp_extent, int write)
 {
 	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[index];
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
+	struct lod_thread_info *tinfo = lod_env_info(env);
+	struct obd_statfs *sfs = &tinfo->lti_osfs;
 	__u64 available = 0;
-	__u64 size;
 	bool ret = true;
 	int i, rc;
 
 	ENTRY;
 
 	LASSERT(lod_comp->llc_stripe_count != 0);
-
-	if (write == 0 ||
-	    (extent->e_start == 0 && extent->e_end == OBD_OBJECT_EOF)) {
-		/* truncate or append */
-		size = extension_size;
-	} else {
-		/* In case of write op, check the real write extent,
-		 * it may be larger than the extension_size */
-		size = roundup(min(extent->e_end, comp_extent->e_end) -
-			       max(extent->e_start, comp_extent->e_start),
-			       extension_size);
-	}
-	/* extension_size is file level, so we must divide by stripe count to
-	 * compare it to available space on a single OST */
-	size /= lod_comp->llc_stripe_count;
 
 	lod_getref(&lod->lod_ost_descs);
 	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
@@ -6428,11 +6416,11 @@ static bool lod_sel_osts_allowed(const struct lu_env *env,
 		       (100ull * sfs->os_bavail) / sfs->os_blocks,
 		       (100ull * sfs->os_bfree) / sfs->os_blocks);
 
-		if (size * repeated > available) {
+		if (reserve * repeated > available) {
 			ret = false;
 			CDEBUG(D_LAYOUT, "low space on ost %d, available %llu "
-			       "< extension size %llu\n", index, available,
-			       extension_size);
+			       "< extension size %llu repeated %d\n", index,
+			       available, reserve, repeated);
 			break;
 		}
 	}
@@ -6538,6 +6526,26 @@ static __u64 lod_extension_new_end(__u64 extension_size, __u64 extent_end,
 	return new_end;
 }
 
+/**
+ * Calculate the exact reservation (per-OST extension_size) on the OSTs being
+ * instantiated. It needs to be calculated in advance and taken into account at
+ * the instantiation time, because otherwise lod_statfs_and_check() may consider
+ * an OST as OK, but SEL needs its extension_size to fit the free space and the
+ * OST may turn out to be low-on-space, thus inappropriate OST may be used and
+ * ENOSPC occurs.
+ *
+ * \param[in] lod_comp		lod component we are checking
+ *
+ * \retval	size to reserved on each OST of lod_comp's stripe.
+ */
+static __u64 lod_sel_stripe_reserved(struct lod_layout_component *lod_comp)
+{
+	/* extension_size is file level, so we must divide by stripe count to
+	 * compare it to available space on a single OST */
+	return  lod_comp->llc_stripe_size * SEL_UNIT_SIZE /
+		lod_comp->llc_stripe_count;
+}
+
 /* As lod_sel_handler() could be re-entered for the same component several
  * times, this is the data for the next call. Fields could be changed to
  * component indexes when needed, (e.g. if there is no need to instantiate
@@ -6619,7 +6627,7 @@ static int lod_sel_handler(const struct lu_env *env,
 	struct lod_layout_component *lod_comp;
 	struct lod_layout_component *prev;
 	struct lod_layout_component *next = NULL;
-	__u64 extension_size;
+	__u64 extension_size, reserve;
 	__u64 new_end = 0;
 	bool repeated;
 	int change = 0;
@@ -6656,11 +6664,13 @@ static int lod_sel_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
+	reserve = lod_sel_stripe_reserved(lod_comp);
+
 	if (!prev->llc_stripe) {
 		CDEBUG(D_LAYOUT, "Previous component not inited\n");
 		info->lti_count = 1;
 		info->lti_comp_idx[0] = index - 1;
-		rc = lod_declare_instantiate_components(env, lo, th);
+		rc = lod_declare_instantiate_components(env, lo, th, reserve);
 		/* ENOSPC tells us we can't use this component.  If there is
 		 * a next or we are repeating, we either spill over (next) or
 		 * extend the original comp (repeat).  Otherwise, return the
@@ -6672,8 +6682,7 @@ static int lod_sel_handler(const struct lu_env *env,
 	}
 
 	if (sd->sd_force == 0 && rc == 0)
-		rc = !lod_sel_osts_allowed(env, lo, index - 1,
-					   extension_size, extent,
+		rc = !lod_sel_osts_allowed(env, lo, index - 1, reserve, extent,
 					   &lod_comp->llc_extent, write);
 
 	repeated = !!(sd->sd_repeat);
@@ -6987,7 +6996,7 @@ static int lod_declare_update_plain(const struct lu_env *env,
 		RETURN(-EALREADY);
 
 	lod_obj_inc_layout_gen(lo);
-	rc = lod_declare_instantiate_components(env, lo, th);
+	rc = lod_declare_instantiate_components(env, lo, th, 0);
 	EXIT;
 out:
 	if (rc)
@@ -7404,7 +7413,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 		lo->ldo_layout_gen = layout_version & 0xffff;
 	}
 
-	rc = lod_declare_instantiate_components(env, lo, th);
+	rc = lod_declare_instantiate_components(env, lo, th, 0);
 	if (rc)
 		GOTO(out, rc);
 
@@ -7548,7 +7557,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		lo->ldo_flr_state = LCM_FL_SYNC_PENDING;
 	}
 
-	rc = lod_declare_instantiate_components(env, lo, th);
+	rc = lod_declare_instantiate_components(env, lo, th, 0);
 	if (rc)
 		GOTO(out, rc);
 

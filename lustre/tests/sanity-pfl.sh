@@ -1405,7 +1405,7 @@ test_20a() {
 	wait_mds_ost_sync
 
 	# First component is on OST0
-	$LFS setstripe -E 256M -i 0 -z 64M -E -1 -z 1G $comp_file ||
+	$LFS setstripe -E 256M -i 0 -z 64M -E -1 -z 128M $comp_file ||
 		error "Create $comp_file failed"
 
 	# write past end of first component, so it is extended
@@ -1429,12 +1429,12 @@ test_20a() {
 	$LFS getstripe $comp_file
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 128M -E 1152M $flg_opts $comp_file | \
+	found=$($LFS find --comp-start 128M -E 256M $flg_opts $comp_file | \
 		wc -l)
 	[ $found -eq 1 ] || error "Write: third component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 1152M -E EOF $flg_opts $comp_file |wc -l)
+	found=$($LFS find --comp-start 256M -E EOF $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Write: fourth extension component not found"
 
 	sel_layout_sanity $comp_file 3
@@ -1458,7 +1458,7 @@ test_20b() {
 
 	# normal component to 10M, extendable component to 1G
 	# further extendable to EOF
-	$LFS setstripe -E 10M -E 1G -p $TESTNAME -z 64M -E -1 -p "" -z 512M \
+	$LFS setstripe -E 10M -E 1G -p $TESTNAME -z 64M -E -1 -p "" -z 128M \
 		$comp_file || error "Create $comp_file failed"
 
 	replay_barrier $SINGLEMDS
@@ -1483,11 +1483,11 @@ test_20b() {
 	[ $found -eq 0 ] || error "Write: zero length component still present"
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 10M -E 522M $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 10M -E 138M $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Write: second component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 522M -E EOF $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 138M -E EOF $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Write: third component not found"
 
 	fail $SINGLEMDS
@@ -1496,11 +1496,11 @@ test_20b() {
 	[ $found -eq 0 ] || error "Failover: 0-length component still present"
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 10M -E 522M $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 10M -E 138M $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Failover: second component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 522M -E EOF $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 138M -E EOF $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Failover: third component not found"
 
 	sel_layout_sanity $comp_file 3
@@ -1687,7 +1687,7 @@ test_21b() {
 	test_mkdir -p $DIR/$tdir
 
 	# DoM, extendable component, further extendable component
-	$LFS setstripe -E 1M -L mdt -E 256M -i 0 -z 64M -E -1 -z 1G \
+	$LFS setstripe -E 1M -L mdt -E 256M -i 0 -z 64M -E -1 -z 128M \
 		$comp_file || error "Create $comp_file failed"
 
 	found=$($LFS find --comp-start 1M -E 1M $flg_opts $comp_file | wc -l)
@@ -1711,11 +1711,11 @@ test_21b() {
 	[ $found -eq 0 ] || error "Write: Zero length component still present"
 
 	flg_opts="--comp-flags init"
-	found=$($LFS find --comp-start 1M -E 1025M $flg_opts $comp_file | wc -l)
+	found=$($LFS find --comp-start 1M -E 129M $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Write: extended component not found"
 
 	flg_opts="--comp-flags extension"
-	found=$($LFS find --comp-start 1025M -E EOF $flg_opts $comp_file |wc -l)
+	found=$($LFS find --comp-start 129M -E EOF $flg_opts $comp_file |wc -l)
 	[ $found -eq 1 ] || error "Write: extension component not found"
 
 	sel_layout_sanity $comp_file 3
