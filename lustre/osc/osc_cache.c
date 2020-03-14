@@ -593,7 +593,10 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 			if (osc_extent_merge(env, ext, next_extent(ext)) == 0)
 				grant += cli->cl_grant_extent_tax;
 
-			if (ext->oe_urgent)
+			if (ext->oe_hp)
+				list_move_tail(&ext->oe_link,
+					       &obj->oo_hp_exts);
+			else if (ext->oe_urgent)
 				list_move_tail(&ext->oe_link,
 					       &obj->oo_urgent_exts);
 			else if (ext->oe_nr_pages == ext->oe_mppr) {
@@ -2875,7 +2878,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 					EASSERT(!ext->oe_hp, ext);
 					ext->oe_hp = 1;
 					list = &obj->oo_hp_exts;
-				} else if (!ext->oe_urgent) {
+				} else if (!ext->oe_urgent && !ext->oe_hp) {
 					ext->oe_urgent = 1;
 					list = &obj->oo_urgent_exts;
 				}
