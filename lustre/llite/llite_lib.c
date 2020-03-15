@@ -70,6 +70,17 @@ struct kmem_cache *ll_file_data_slab;
 #define log2(n) ffz(~(n))
 #endif
 
+/**
+ * If there is only one number of core visible to Lustre,
+ * async readahead will be disabled, to avoid massive over
+ * subscription, we use 1/2 of active cores as default max
+ * async readahead requests.
+ */
+static inline unsigned int ll_get_ra_async_max_active(void)
+{
+	return cfs_cpt_weight(cfs_cpt_tab, CFS_CPT_ANY) >> 1;
+}
+
 static struct ll_sb_info *ll_init_sbi(void)
 {
 	struct ll_sb_info *sbi = NULL;
@@ -118,6 +129,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 				sbi->ll_ra_info.ra_max_pages_per_file;
 	sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
 	sbi->ll_ra_info.ra_max_read_ahead_whole_pages = -1;
+	sbi->ll_ra_info.ra_async_max_active = ll_get_ra_async_max_active();
+	atomic_set(&sbi->ll_ra_info.ra_async_inflight, 0);
 
         sbi->ll_flags |= LL_SBI_VERBOSE;
 #ifdef ENABLE_CHECKSUM

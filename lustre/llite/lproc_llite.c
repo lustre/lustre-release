@@ -1112,18 +1112,19 @@ static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	if (val < 1 || val > WQ_UNBOUND_MAX_ACTIVE) {
-		CERROR("%s: cannot set max_read_ahead_async_active=%u %s than %u\n",
-		       sbi->ll_fsname, val,
-		       val < 1 ? "smaller" : "larger",
-		       val < 1 ? 1 : WQ_UNBOUND_MAX_ACTIVE);
+	/**
+	 * It doesn't make any sense to make it exceed what
+	 * workqueue could acutally support.
+	 */
+	if (val > WQ_UNBOUND_MAX_ACTIVE) {
+		CERROR("%s: cannot set max_read_ahead_async_active=%u larger than %u\n",
+		       sbi->ll_fsname, val, WQ_UNBOUND_MAX_ACTIVE);
 		return -ERANGE;
 	}
 
 	spin_lock(&sbi->ll_lock);
 	sbi->ll_ra_info.ra_async_max_active = val;
 	spin_unlock(&sbi->ll_lock);
-	workqueue_set_max_active(sbi->ll_ra_info.ll_readahead_wq, val);
 
 	return count;
 }

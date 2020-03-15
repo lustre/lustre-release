@@ -528,6 +528,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	__u64 kms;
 	int rc;
 	pgoff_t eof_index;
+	struct ll_sb_info *sbi;
 
 	work = container_of(wq, struct ll_readahead_work,
 			    lrw_readahead_work);
@@ -535,6 +536,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	ras = &fd->fd_ras;
 	file = work->lrw_file;
 	inode = file_inode(file);
+	sbi = ll_i2sbi(inode);
 
 	env = cl_env_alloc(&refcheck, LCT_NOREF);
 	if (IS_ERR(env))
@@ -567,7 +569,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 
 	ria->ria_end_idx = work->lrw_end_idx;
 	pages = ria->ria_end_idx - ria->ria_start_idx + 1;
-	ria->ria_reserved = ll_ra_count_get(ll_i2sbi(inode), ria,
+	ria->ria_reserved = ll_ra_count_get(sbi, ria,
 					    ria_page_count(ria), pages_min);
 
 	CDEBUG(D_READA,
@@ -631,6 +633,7 @@ out_put_env:
 out_free_work:
 	if (ra_end_idx > 0)
 		ll_ra_stats_inc_sbi(ll_i2sbi(inode), RA_STAT_ASYNC);
+	atomic_dec(&sbi->ll_ra_info.ra_async_inflight);
 	ll_readahead_work_free(work);
 }
 
@@ -1479,7 +1482,8 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 	 * we do async readahead, allowing the user thread to do fast i/o.
 	 */
 	if (stride_io_mode(ras) || !throttle ||
-	    ras->ras_window_pages < throttle)
+	    ras->ras_window_pages < throttle ||
+	    atomic_read(&ra->ra_async_inflight) > ra->ra_async_max_active)
 		return 0;
 
 	if ((atomic_read(&ra->ra_cur_pages) + pages) > ra->ra_max_pages)
@@ -1491,6 +1495,7 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 	/* ll_readahead_work_free() free it */
 	OBD_ALLOC_PTR(lrw);
 	if (lrw) {
+		atomic_inc(&sbi->ll_ra_info.ra_async_inflight);
 		lrw->lrw_file = get_file(file);
 		lrw->lrw_start_idx = start_idx;
 		lrw->lrw_end_idx = end_idx;

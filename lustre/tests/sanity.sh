@@ -20555,9 +20555,8 @@ test_318() {
 			   llite.*.max_read_ahead_async_active 2>/dev/null)
 	[ $max_active -ne 256 ] && error "expected 256 but got $max_active"
 
-	# currently reset to 0 is unsupported, leave it 512 for now.
-	$LCTL set_param llite.*.max_read_ahead_async_active=0 &&
-		error "set max_read_ahead_async_active should fail"
+	$LCTL set_param llite.*.max_read_ahead_async_active=0 ||
+		error "set max_read_ahead_async_active should succeed"
 
 	$LCTL set_param llite.*.max_read_ahead_async_active=512
 	max_active=$($LCTL get_param -n \

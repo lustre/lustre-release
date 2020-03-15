@@ -483,12 +483,12 @@ struct ll_ra_info {
 	unsigned long	ra_max_read_ahead_whole_pages;
 	struct workqueue_struct  *ll_readahead_wq;
 	/*
-	 * Max number of active works for readahead workqueue,
-	 * default is 0 which make workqueue init number itself,
-	 * unless there is a specific need for throttling the
-	 * number of active work items, specifying '0' is recommended.
+	 * Max number of active works could be triggered
+	 * for async readahead.
 	 */
 	unsigned int ra_async_max_active;
+	/* how many async readahead triggered in flight */
+	atomic_t ra_async_inflight;
 	/* Threshold to control when to trigger async readahead */
 	unsigned long ra_async_pages_per_file_threshold;
 };
