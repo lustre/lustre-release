@@ -191,13 +191,12 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 	struct lnet_libmd *lmd;
 	unsigned int size;
 
-	if ((umd->options & LNET_MD_KIOV) != 0) {
+	if (umd->options & LNET_MD_KIOV)
 		niov = umd->length;
-		size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
-	} else {
-		niov = 1;
-		size = offsetof(struct lnet_libmd, md_iov.iov[niov]);
-	}
+	else
+		niov = DIV_ROUND_UP(offset_in_page(umd->start) + umd->length,
+				    PAGE_SIZE);
+	size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
 		lmd = kmem_cache_zalloc(lnet_small_mds_cachep, GFP_NOFS);
@@ -218,7 +217,6 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 
 	lmd->md_niov = niov;
 	INIT_LIST_HEAD(&lmd->md_list);
-
 	lmd->md_me = NULL;
 	lmd->md_start = umd->start;
 	lmd->md_offset = 0;
@@ -231,8 +229,7 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 	lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
 	lmd->md_bulk_handle = umd->bulk_handle;
 
-	if ((umd->options & LNET_MD_KIOV) != 0) {
-		lmd->md_niov = niov = umd->length;
+	if (umd->options & LNET_MD_KIOV) {
 		memcpy(lmd->md_iov.kiov, umd->start,
 		       niov * sizeof(lmd->md_iov.kiov[0]));
 
@@ -255,18 +252,33 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
-	} else {   /* contiguous */
-		lmd->md_length = umd->length;
-		lmd->md_niov = niov = 1;
-		lmd->md_iov.iov[0].iov_base = umd->start;
-		lmd->md_iov.iov[0].iov_len = umd->length;
+	} else {   /* contiguous - split into pages */
+		void *pa = umd->start;
+		int len = umd->length;
 
+		lmd->md_length = len;
+		i = 0;
+		while (len) {
+			int plen;
+
+			plen = min_t(int, len, PAGE_SIZE - offset_in_page(pa));
+
+			lmd->md_iov.kiov[i].bv_page =
+				lnet_kvaddr_to_page((unsigned long) pa);
+			lmd->md_iov.kiov[i].bv_offset = offset_in_page(pa);
+			lmd->md_iov.kiov[i].bv_len = plen;
+
+			len -= plen;
+			pa += plen;
+			i += 1;
+		}
 		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->max_size < 0 ||
 		     umd->max_size > (int)umd->length)) { /* illegal max_size */
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
+		lmd->md_options |= LNET_MD_KIOV;
 	}
 
 	return lmd;
