@@ -184,7 +184,6 @@ Provides: lustre-client = %{version}-%{release}
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
-Requires: libselinux
 %endif
 %if %{with lustre_modules}
 %if %{with mofed}

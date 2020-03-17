@@ -576,6 +576,9 @@ fi
 if test x$enable_static != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without static"
 fi
+if test x$enable_mpitests != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without mpi"
+fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS
 
