@@ -2068,7 +2068,7 @@ ssize_t loop_period_show(struct kobject *kobj, struct attribute *attr,
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_loop_period);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_loop_period);
 }
 
 ssize_t loop_period_store(struct kobject *kobj, struct attribute *attr,
@@ -2096,7 +2096,7 @@ ssize_t grace_delay_show(struct kobject *kobj, struct attribute *attr,
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_grace_delay);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_grace_delay);
 }
 
 ssize_t grace_delay_store(struct kobject *kobj, struct attribute *attr,
@@ -2125,7 +2125,7 @@ ssize_t active_request_timeout_show(struct kobject *kobj,
 	struct coordinator *cdt = container_of(kobj, struct coordinator,
 					       cdt_hsm_kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_active_req_timeout);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", cdt->cdt_active_req_timeout);
 }
 
 ssize_t active_request_timeout_store(struct kobject *kobj,

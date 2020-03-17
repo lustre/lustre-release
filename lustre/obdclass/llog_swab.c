@@ -446,7 +446,7 @@ void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
 		__u32 createtime, canceltime;
 		/*
 		 * There was a problem with the original declaration of
-		 * cfg_marker on 32-bit systems because it used time_t as
+		 * cfg_marker on 32-bit systems because it used 32 time as
 		 * a wire protocol structure, and didn't verify this in
 		 * wirecheck.  We now have to convert the offsets of the
 		 * later fields in order to work on 32- and 64-bit systems.

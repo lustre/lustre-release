@@ -149,10 +149,10 @@ struct coordinator {
 						       * list */
 	struct mutex		 cdt_restore_lock;    /**< protect restore
 						       * list */
-	time_t			 cdt_loop_period;     /**< llog scan period */
-	time_t			 cdt_grace_delay;     /**< request grace
+	s32			 cdt_loop_period;     /**< llog scan period */
+	s32			 cdt_grace_delay;     /**< request grace
 						       * delay */
-	time_t			 cdt_active_req_timeout; /**< request timeout */
+	s32			 cdt_active_req_timeout; /**< request timeout */
 	__u32			 cdt_default_archive_id; /**< archive id used
 						       * when none are
 						       * specified */

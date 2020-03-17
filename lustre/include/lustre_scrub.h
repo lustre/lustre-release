@@ -240,7 +240,7 @@ struct scrub_file {
 	 * to time64_t since this breaks backwards compatibility.
 	 * It shouldn't take more than 136 years to complete :-)
 	 */
-	time_t	sf_run_time;
+	s32	sf_run_time;
 
 	/* How many completed OI scrub ran on the device. */
 	__u32   sf_success_count;
