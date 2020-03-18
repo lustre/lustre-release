@@ -266,13 +266,22 @@ static int vvp_object_init(const struct lu_env *env, struct lu_object *obj,
 	return result;
 }
 
+static void vvp_object_free_rcu(struct rcu_head *head)
+{
+	struct vvp_object *vob = container_of(head, struct vvp_object,
+					      vob_header.coh_lu.loh_rcu);
+
+	kmem_cache_free(vvp_object_kmem, vob);
+}
+
 static void vvp_object_free(const struct lu_env *env, struct lu_object *obj)
 {
 	struct vvp_object *vob = lu2vvp(obj);
 
 	lu_object_fini(obj);
 	lu_object_header_fini(obj->lo_header);
-	OBD_SLAB_FREE_PTR(vob, vvp_object_kmem);
+	OBD_FREE_PRE(vob, sizeof(*vob), "slab-freed");
+	call_rcu(&vob->vob_header.coh_lu.loh_rcu, vvp_object_free_rcu);
 }
 
 static const struct lu_object_operations vvp_lu_obj_ops = {

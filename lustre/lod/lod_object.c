@@ -8463,6 +8463,7 @@ static void lod_object_free(const struct lu_env *env, struct lu_object *o)
 	/* release all underlying object pinned */
 	lod_striping_free(env, lo);
 	lu_object_fini(o);
+	/* lo doesn't contain a lu_object_header, so we don't need call_rcu */
 	OBD_SLAB_FREE_PTR(lo, lod_object_kmem);
 }
 

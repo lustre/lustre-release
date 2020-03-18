@@ -335,6 +335,7 @@ static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
 	}
 
 	lu_object_fini(o);
+	/* mdd doesn't contain an lu_object_header, so don't need call_rcu */
 	OBD_SLAB_FREE_PTR(mdd, mdd_object_kmem);
 }
 

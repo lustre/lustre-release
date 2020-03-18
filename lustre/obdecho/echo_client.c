@@ -545,6 +545,14 @@ static void echo_object_delete(const struct lu_env *env, struct lu_object *obj)
 		OBD_FREE_PTR(eco->eo_oinfo);
 }
 
+static void echo_object_free_rcu(struct rcu_head *head)
+{
+	struct echo_object *eco = container_of(head, struct echo_object,
+					       eo_hdr.coh_lu.loh_rcu);
+
+	kmem_cache_free(echo_object_kmem, eco);
+}
+
 static void echo_object_free(const struct lu_env *env, struct lu_object *obj)
 {
 	struct echo_object *eco    = cl2echo_obj(lu2cl(obj));
@@ -554,7 +562,8 @@ static void echo_object_free(const struct lu_env *env, struct lu_object *obj)
 	lu_object_fini(obj);
 	lu_object_header_fini(obj->lo_header);
 
-	OBD_SLAB_FREE_PTR(eco, echo_object_kmem);
+	OBD_FREE_PRE(eco, sizeof(*eco), "slab-freed");
+	call_rcu(&eco->eo_hdr.coh_lu.loh_rcu, echo_object_free_rcu);
 	EXIT;
 }
 

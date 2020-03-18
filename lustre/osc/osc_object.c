@@ -118,6 +118,7 @@ void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	LASSERT(atomic_read(&osc->oo_nr_ios) == 0);
 
 	lu_object_fini(obj);
+	/* osc doen't contain an lu_object_header, so we don't need call_rcu */
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
 }
 EXPORT_SYMBOL(osc_object_free);

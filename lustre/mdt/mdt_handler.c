@@ -5775,22 +5775,31 @@ static int mdt_object_init(const struct lu_env *env, struct lu_object *o,
         RETURN(rc);
 }
 
+static void mdt_object_free_rcu(struct rcu_head *head)
+{
+	struct mdt_object *mo = container_of(head, struct mdt_object,
+					     mot_header.loh_rcu);
+
+	kmem_cache_free(mdt_object_kmem, mo);
+}
+
 static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
 {
-        struct mdt_object *mo = mdt_obj(o);
-        struct lu_object_header *h;
-        ENTRY;
+	struct mdt_object *mo = mdt_obj(o);
+	struct lu_object_header *h;
+	ENTRY;
 
-        h = o->lo_header;
-        CDEBUG(D_INFO, "object free, fid = "DFID"\n",
-               PFID(lu_object_fid(o)));
+	h = o->lo_header;
+	CDEBUG(D_INFO, "object free, fid = "DFID"\n",
+	       PFID(lu_object_fid(o)));
 
 	LASSERT(atomic_read(&mo->mot_open_count) == 0);
 	LASSERT(atomic_read(&mo->mot_lease_count) == 0);
 
 	lu_object_fini(o);
 	lu_object_header_fini(h);
-	OBD_SLAB_FREE_PTR(mo, mdt_object_kmem);
+	OBD_FREE_PRE(mo, sizeof(*mo), "slab-freed");
+	call_rcu(&mo->mot_header.loh_rcu, mdt_object_free_rcu);
 
 	EXIT;
 }

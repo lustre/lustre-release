@@ -70,6 +70,14 @@ int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
 
 }
 
+static void lovsub_object_free_rcu(struct rcu_head *head)
+{
+	struct lovsub_object *los = container_of(head, struct lovsub_object,
+						 lso_header.coh_lu.loh_rcu);
+
+	kmem_cache_free(lovsub_object_kmem, los);
+}
+
 static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
 {
 	struct lovsub_object *los = lu2lovsub(obj);
@@ -95,7 +103,8 @@ static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
 
 	lu_object_fini(obj);
 	lu_object_header_fini(&los->lso_header.coh_lu);
-	OBD_SLAB_FREE_PTR(los, lovsub_object_kmem);
+	OBD_FREE_PRE(los, sizeof(*los), "slab-freed");
+	call_rcu(&los->lso_header.coh_lu.loh_rcu, lovsub_object_free_rcu);
 	EXIT;
 }
 

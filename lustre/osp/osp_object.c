@@ -2272,6 +2272,14 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 	RETURN(rc);
 }
 
+static void osp_object_free_rcu(struct rcu_head *head)
+{
+	struct osp_object *obj = container_of(head, struct osp_object,
+					      opo_header.loh_rcu);
+
+	kmem_cache_free(osp_object_kmem, obj);
+}
+
 /**
  * Implement OSP layer lu_object_operations::loo_object_free() interface.
  *
@@ -2302,7 +2310,8 @@ static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 
 		OBD_FREE(oxe, oxe->oxe_buflen);
 	}
-	OBD_SLAB_FREE_PTR(obj, osp_object_kmem);
+	OBD_FREE_PRE(obj, sizeof(*obj), "slab-freed");
+	call_rcu(&obj->opo_header.loh_rcu, osp_object_free_rcu);
 }
 
 /**

@@ -1487,7 +1487,8 @@ static void mgs_object_free(const struct lu_env *env, struct lu_object *o)
 
 	dt_object_fini(&obj->mgo_obj);
 	lu_object_header_fini(h);
-	OBD_FREE_PTR(obj);
+	OBD_FREE_PRE(obj, sizeof(*obj), "kfreed");
+	kfree_rcu(obj, mgo_header.loh_rcu);
 }
 
 static int mgs_object_print(const struct lu_env *env, void *cookie,

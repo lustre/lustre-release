@@ -514,6 +514,8 @@ loo_object_delete
 	during potentially stack consuming resource release.
 loo_object_free
 	is called to actually release memory allocated by ->ldo->object_alloc()
+	If the object contains a struct lu_object_header, then it must be
+	freed by call_rcu() or rcu_kfree().
 loo_object_release
 	is called when object last it’s last user and moves onto LRU list of
 	unused objects. implementation of this method is optional to OSD.

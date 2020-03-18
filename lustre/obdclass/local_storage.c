@@ -65,7 +65,8 @@ static void ls_object_free(const struct lu_env *env, struct lu_object *o)
 
 	dt_object_fini(&obj->ls_obj);
 	lu_object_header_fini(h);
-	OBD_FREE_PTR(obj);
+	OBD_FREE_PRE(obj, sizeof(*obj), "kfreed");
+	kfree_rcu(obj, ls_header.loh_rcu);
 }
 
 static struct lu_object_operations ls_lu_obj_ops = {

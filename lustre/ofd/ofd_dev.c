@@ -455,6 +455,14 @@ static int ofd_object_init(const struct lu_env *env, struct lu_object *o,
 	RETURN(rc);
 }
 
+static void ofd_object_free_rcu(struct rcu_head *head)
+{
+	struct ofd_object *of = container_of(head, struct ofd_object,
+					     ofo_header.loh_rcu);
+
+	kmem_cache_free(ofd_object_kmem, of);
+}
+
 /**
  * Implementation of lu_object_operations::loo_object_free.
  *
@@ -476,7 +484,8 @@ static void ofd_object_free(const struct lu_env *env, struct lu_object *o)
 
 	lu_object_fini(o);
 	lu_object_header_fini(h);
-	OBD_SLAB_FREE_PTR(of, ofd_object_kmem);
+	OBD_FREE_PRE(of, sizeof(*of), "slab-freed");
+	call_rcu(&of->ofo_header.loh_rcu, ofd_object_free_rcu);
 	EXIT;
 }
 
