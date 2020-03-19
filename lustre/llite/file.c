@@ -1879,7 +1879,8 @@ out:
  * XXX: exact copy from kernel code (__generic_file_aio_write_nolock)
  */
 static int ll_file_get_iov_count(const struct iovec *iov,
-				 unsigned long *nr_segs, size_t *count)
+				 unsigned long *nr_segs, size_t *count,
+				 int access_flags)
 {
 	size_t cnt = 0;
 	unsigned long seg;
@@ -1894,7 +1895,7 @@ static int ll_file_get_iov_count(const struct iovec *iov,
 		cnt += iv->iov_len;
 		if (unlikely((ssize_t)(cnt|iv->iov_len) < 0))
 			return -EINVAL;
-		if (access_ok(VERIFY_READ, iv->iov_base, iv->iov_len))
+		if (access_ok(access_flags, iv->iov_base, iv->iov_len))
 			continue;
 		if (seg == 0)
 			return -EFAULT;
@@ -1914,7 +1915,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	ssize_t result;
 	ENTRY;
 
-	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
+	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_READ);
 	if (result)
 		RETURN(result);
 
@@ -1970,7 +1971,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	ssize_t result;
 	ENTRY;
 
-	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
+	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_WRITE);
 	if (result)
 		RETURN(result);
 
