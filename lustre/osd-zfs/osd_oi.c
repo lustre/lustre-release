@@ -1011,16 +1011,15 @@ struct osd_idmap_cache *osd_idc_add(const struct lu_env *env,
 
 	if (unlikely(oti->oti_ins_cache_used >= oti->oti_ins_cache_size)) {
 		i = oti->oti_ins_cache_size * 2;
-		LASSERT(i < 1000);
 		if (i == 0)
 			i = OSD_INS_CACHE_SIZE;
-		OBD_ALLOC(idc, sizeof(*idc) * i);
+		OBD_ALLOC_LARGE(idc, sizeof(*idc) * i);
 		if (idc == NULL)
 			return ERR_PTR(-ENOMEM);
 		if (oti->oti_ins_cache != NULL) {
 			memcpy(idc, oti->oti_ins_cache,
 			       oti->oti_ins_cache_used * sizeof(*idc));
-			OBD_FREE(oti->oti_ins_cache,
+			OBD_FREE_LARGE(oti->oti_ins_cache,
 				 oti->oti_ins_cache_used * sizeof(*idc));
 		}
 		oti->oti_ins_cache = idc;
