@@ -194,7 +194,7 @@ lprocfs_sptlrpc_sepol_seq_write(struct file *file, const char __user *buffer,
 	spin_lock(&imp->imp_sec->ps_lock);
 	snprintf(imp->imp_sec->ps_sepol, param->sdd_sepol_len + 1, "%s",
 		 param->sdd_sepol);
-	imp->imp_sec->ps_sepol_mtime = param->sdd_sepol_mtime;
+	imp->imp_sec->ps_sepol_mtime = ktime_set(param->sdd_sepol_mtime, 0);
 	spin_unlock(&imp->imp_sec->ps_lock);
 
 out:

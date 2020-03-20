@@ -281,7 +281,7 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
         char           *buf = mesg;
         int             len;
         struct rsi      rsii, *rsip = NULL;
-        time_t          expiry;
+	time64_t expiry;
         int             status = -EINVAL;
         ENTRY;
 
@@ -524,7 +524,7 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
         char                *buf = mesg;
         int                  len, rv, tmp_int;
         struct rsc           rsci, *rscp = NULL;
-        time_t               expiry;
+	time64_t expiry;
         int                  status = -EINVAL;
         struct gss_api_mech *gm = NULL;
 
@@ -746,7 +746,7 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
                 CERROR("unable to get expire time, drop it\n");
                 GOTO(out, rc = -EINVAL);
         }
-        rsci.h.expiry_time = (time_t) ctx_expiry;
+	rsci.h.expiry_time = ctx_expiry;
 
 	switch (imp->imp_obd->u.cli.cl_sp_to) {
 	case LUSTRE_SP_MDT:

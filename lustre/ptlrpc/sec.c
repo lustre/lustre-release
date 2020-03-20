@@ -1781,14 +1781,17 @@ static int sepol_helper(struct obd_import *imp)
 		argv[2] = (char *)imp->imp_obd->obd_type->typ_name;
 		argv[4] = imp->imp_obd->obd_name;
 		spin_lock(&imp->imp_sec->ps_lock);
-		if (imp->imp_sec->ps_sepol_mtime == 0 &&
+		if (ktime_to_ns(imp->imp_sec->ps_sepol_mtime) == 0 &&
 		    imp->imp_sec->ps_sepol[0] == '\0') {
 			/* ps_sepol has not been initialized */
 			argv[5] = NULL;
 			argv[7] = NULL;
 		} else {
-			snprintf(mtime_str, sizeof(mtime_str), "%lu",
-				 imp->imp_sec->ps_sepol_mtime);
+			time64_t mtime_ms;
+
+			mtime_ms = ktime_to_ms(imp->imp_sec->ps_sepol_mtime);
+			snprintf(mtime_str, sizeof(mtime_str), "%lld",
+				 mtime_ms / MSEC_PER_SEC);
 			mode_str[0] = imp->imp_sec->ps_sepol[0];
 		}
 		spin_unlock(&imp->imp_sec->ps_lock);

@@ -870,7 +870,7 @@ struct ptlrpc_sec {
         struct obd_import              *ps_import;
 	spinlock_t			ps_lock;
 	/** mtime of SELinux policy file */
-	time_t				ps_sepol_mtime;
+	ktime_t				ps_sepol_mtime;
 	/** next check time of SELinux policy file */
 	ktime_t				ps_sepol_checknext;
 	/**
