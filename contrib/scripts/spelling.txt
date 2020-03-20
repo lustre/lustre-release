@@ -168,5 +168,6 @@ strcat||strncat
 strcpy||strncpy
 struct timeval||struct timespec64
 tempnam||mkstemp
+time_t||timeout_t
 timer_setup||cfs_timer_setup
 wait_queue_t||wait_queue_entry_t

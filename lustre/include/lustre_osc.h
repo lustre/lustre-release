@@ -533,7 +533,7 @@ struct osc_brw_async_args {
 	int			 aa_requested_nob;
 	int			 aa_nio_count;
 	u32			 aa_page_count;
-	int			 aa_resends;
+	s32			 aa_resends;
 	struct brw_page		**aa_ppga;
 	struct client_obd	*aa_cli;
 	struct list_head	 aa_oaps;

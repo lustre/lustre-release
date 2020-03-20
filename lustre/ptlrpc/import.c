@@ -777,8 +777,8 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 
 	/* Report the rpc service time to the server so that it knows how long
 	 * to wait for clients to join recovery */
-	lustre_msg_set_service_time(request->rq_reqmsg,
-				    at_timeout2est(request->rq_timeout));
+	lustre_msg_set_service_timeout(request->rq_reqmsg,
+				       at_timeout2est(request->rq_timeout));
 
 	/* The amount of time we give the server to process the connect req.
 	 * import_select_connection will increase the net latency on
@@ -814,7 +814,7 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 		lustre_msg_add_op_flags(request->rq_reqmsg,
 					MSG_CONNECT_TRANSNO);
 
-	DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %ld)",
+	DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %d)",
 		  request->rq_timeout);
 	ptlrpcd_add_req(request);
 	rc = 0;
@@ -1011,6 +1011,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	struct obd_import *imp = request->rq_import;
 	struct lustre_handle old_hdl;
 	__u64 old_connect_flags;
+	timeout_t service_timeout;
 	int msg_flags;
 	struct obd_connect_data *ocd;
 	struct obd_export *exp = NULL;
@@ -1145,11 +1146,11 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	imp->imp_obd->obd_self_export->exp_connect_data = *ocd;
 
 	/* The net statistics after (re-)connect is not valid anymore,
-	 * because may reflect other routing, etc. */
+	 * because may reflect other routing, etc.
+	 */
+	service_timeout = lustre_msg_get_service_timeout(request->rq_repmsg);
 	at_reinit(&imp->imp_at.iat_net_latency, 0, 0);
-	ptlrpc_at_adj_net_latency(request,
-				  lustre_msg_get_service_time(
-					  request->rq_repmsg));
+	ptlrpc_at_adj_net_latency(request, service_timeout);
 
 	/* Import flags should be updated before waking import at FULL state */
 	rc = ptlrpc_connect_set_flags(imp, ocd, old_connect_flags, exp,
@@ -1668,7 +1669,7 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 
 	/* We want client umounts to happen quickly, no matter the
 	   server state... */
-	req->rq_timeout = min_t(int, req->rq_timeout,
+	req->rq_timeout = min_t(timeout_t, req->rq_timeout,
 				INITIAL_CONNECT_TIMEOUT);
 
 	import_set_state(imp, LUSTRE_IMP_CONNECTING);

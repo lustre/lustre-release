@@ -72,12 +72,12 @@ static struct ldlm_state *ldlm_state;
 /*
  * timeout for initial callback (AST) reply (bz10399)
  * Due to having to send a 32 bit time value over the
- * wire return it as time_t instead of time64_t
+ * wire return it as timeout_t instead of time64_t
  */
-static inline time_t ldlm_get_rq_timeout(void)
+static inline timeout_t ldlm_get_rq_timeout(void)
 {
 	/* Non-AT value */
-	time_t timeout = min(ldlm_timeout, obd_timeout / 3);
+	timeout_t timeout = min(ldlm_timeout, obd_timeout / 3);
 
 	return timeout < 1 ? 1 : timeout;
 }

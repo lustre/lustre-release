@@ -1892,40 +1892,40 @@ check_and_start_recovery_timer(struct obd_device *obd,
 			       struct ptlrpc_request *req,
 			       int new_client)
 {
-	time_t service_time = lustre_msg_get_service_time(req->rq_reqmsg);
+	timeout_t service_timeout = lustre_msg_get_service_timeout(req->rq_reqmsg);
 	struct obd_device_target *obt = &obd->u.obt;
 
-	if (!new_client && service_time)
+	if (!new_client && service_timeout)
 		/*
 		 * Teach server about old server's estimates, as first guess
 		 * at how long new requests will take.
 		 */
 		at_measured(&req->rq_rqbd->rqbd_svcpt->scp_at_estimate,
-			    service_time);
+			    service_timeout);
 
 	target_start_recovery_timer(obd);
 
 	/*
 	 * Convert the service time to RPC timeout,
-	 * and reuse service_time to limit stack usage.
+	 * and reuse service_timeout to limit stack usage.
 	 */
-	service_time = at_est2timeout(service_time);
+	service_timeout = at_est2timeout(service_timeout);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_SLUGGISH_NET) &&
-	    service_time < at_extra)
-		service_time = at_extra;
+	    service_timeout < at_extra)
+		service_timeout = at_extra;
 
 	/*
-	 * We expect other clients to timeout within service_time, then try
+	 * We expect other clients to timeout within service_timeout, then try
 	 * to reconnect, then try the failover server.  The max delay between
 	 * connect attempts is SWITCH_MAX + SWITCH_INC + INITIAL.
 	 */
-	service_time += 2 * INITIAL_CONNECT_TIMEOUT;
+	service_timeout += 2 * INITIAL_CONNECT_TIMEOUT;
 
 	LASSERT(obt->obt_magic == OBT_MAGIC);
-	service_time += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC);
-	if (service_time > obd->obd_recovery_timeout && !new_client)
-		extend_recovery_timer(obd, service_time, false);
+	service_timeout += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC);
+	if (service_timeout > obd->obd_recovery_timeout && !new_client)
+		extend_recovery_timer(obd, service_timeout, false);
 }
 
 /** Health checking routines */
@@ -2277,14 +2277,15 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 
 	/* don't reset timer for final stage */
 	if (!exp_finished(req->rq_export)) {
-		time_t to = obd_timeout;
+		timeout_t timeout = obd_timeout;
 
 		/**
-		 * Add request timeout to the recovery time so next request from
+		 * Add request @timeout to the recovery time so next request from
 		 * this client may come in recovery time
 		 */
 		if (!AT_OFF) {
 			struct ptlrpc_service_part *svcpt;
+			timeout_t est_timeout;
 
 			svcpt = req->rq_rqbd->rqbd_svcpt;
 			/*
@@ -2294,18 +2295,19 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 			 * use the maxium timeout here for waiting the client
 			 * sending the next req
 			 */
-			to = max_t(time_t,
-				   at_est2timeout(at_get(&svcpt->scp_at_estimate)),
-				   lustre_msg_get_timeout(req->rq_reqmsg));
+			est_timeout = at_get(&svcpt->scp_at_estimate);
+			timeout = max_t(timeout_t, at_est2timeout(est_timeout),
+					lustre_msg_get_timeout(req->rq_reqmsg));
 			/*
 			 * Add 2 net_latency, one for balance rq_deadline
 			 * (see ptl_send_rpc), one for resend the req to server,
 			 * Note: client will pack net_latency in replay req
 			 * (see ptlrpc_replay_req)
 			 */
-			to += 2 * lustre_msg_get_service_time(req->rq_reqmsg);
+			timeout += 2 * lustre_msg_get_service_timeout(req->rq_reqmsg);
 		}
-		extend_recovery_timer(class_exp2obd(req->rq_export), to, true);
+		extend_recovery_timer(class_exp2obd(req->rq_export), timeout,
+				      true);
 	}
 	EXIT;
 }

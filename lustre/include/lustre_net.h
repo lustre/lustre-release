@@ -1119,8 +1119,16 @@ struct ptlrpc_request {
 	 * service time estimate (secs)
 	 * If the request is not served by this time, it is marked as timed out.
 	 * Do not change to time64_t since this is transmitted over the wire.
+	 *
+	 * The linux kernel handles timestamps with time64_t and timeouts
+	 * are normally done with jiffies. Lustre shares the rq_timeout between
+	 * nodes. Since jiffies can vary from node to node Lustre instead
+	 * will express the timeout value in seconds. To avoid confusion with
+	 * timestamps (time64_t) and jiffy timeouts (long) Lustre timeouts
+	 * are expressed in s32 (timeout_t). Also what is transmitted over
+	 * the wire is 32 bits.
 	 */
-	time_t				 rq_timeout;
+	timeout_t			 rq_timeout;
 	/**
 	 * when request/reply sent (secs), or time when request should be sent
 	 */
@@ -2323,8 +2331,8 @@ void lustre_msg_set_limit(struct lustre_msg *msg, __u64 limit);
 int lustre_msg_get_status(struct lustre_msg *msg);
 __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg);
 __u32 lustre_msg_get_magic(struct lustre_msg *msg);
-__u32 lustre_msg_get_timeout(struct lustre_msg *msg);
-__u32 lustre_msg_get_service_time(struct lustre_msg *msg);
+timeout_t lustre_msg_get_timeout(struct lustre_msg *msg);
+timeout_t lustre_msg_get_service_timeout(struct lustre_msg *msg);
 char *lustre_msg_get_jobid(struct lustre_msg *msg);
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg);
 __u64 lustre_msg_get_mbits(struct lustre_msg *msg);
@@ -2341,8 +2349,9 @@ void lustre_msg_set_status(struct lustre_msg *msg, __u32 status);
 void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
 void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *sizes);
 void ptlrpc_request_set_replen(struct ptlrpc_request *req);
-void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout);
-void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time);
+void lustre_msg_set_timeout(struct lustre_msg *msg, timeout_t timeout);
+void lustre_msg_set_service_timeout(struct lustre_msg *msg,
+				    timeout_t service_timeout);
 void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
 void lustre_msg_set_mbits(struct lustre_msg *msg, __u64 mbits);

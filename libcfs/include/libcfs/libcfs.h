@@ -92,6 +92,8 @@ do {									\
 } while (0)
 #endif
 
+typedef s32 timeout_t;
+
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023

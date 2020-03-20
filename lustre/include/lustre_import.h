@@ -341,11 +341,11 @@ static inline unsigned int at_est2timeout(unsigned int val)
         return (val + (val >> 2) + 5);
 }
 
-static inline unsigned int at_timeout2est(unsigned int val)
+static inline timeout_t at_timeout2est(timeout_t timeout)
 {
-        /* restore estimate value from timeout: e=4/5(t-5) */
-        LASSERT(val);
-        return (max((val << 2) / 5, 5U) - 4);
+	/* restore estimate value from timeout: e=4/5(t-5) */
+	LASSERT(timeout > 0);
+	return max((timeout << 2) / 5, 5) - 4;
 }
 
 static inline void at_reset_nolock(struct adaptive_timeout *at, int val)

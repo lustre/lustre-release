@@ -503,9 +503,11 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 {
 	struct ptlrpc_service_part	*svcpt = req->rq_rqbd->rqbd_svcpt;
 	struct ptlrpc_service		*svc = svcpt->scp_service;
-	int service_time = max_t(int, ktime_get_real_seconds() -
-                                 req->rq_arrival_time.tv_sec, 1);
+	timeout_t service_timeout;
 
+	service_timeout = clamp_t(timeout_t, ktime_get_real_seconds() -
+					     req->rq_arrival_time.tv_sec, 1,
+				  (AT_OFF ? obd_timeout * 3 / 2 : at_max));
         if (!(flags & PTLRPC_REPLY_EARLY) &&
             (req->rq_type != PTL_RPC_MSG_ERR) &&
             (req->rq_reqmsg != NULL) &&
@@ -514,7 +516,8 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
                MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))) {
                 /* early replies, errors and recovery requests don't count
                  * toward our service time estimate */
-		int oldse = at_measured(&svcpt->scp_at_estimate, service_time);
+		int oldse = at_measured(&svcpt->scp_at_estimate,
+					service_timeout);
 
 		if (oldse != 0) {
 			DEBUG_REQ(D_ADAPTTO, req,
@@ -524,7 +527,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 		}
         }
         /* Report actual service time for client latency calc */
-        lustre_msg_set_service_time(req->rq_repmsg, service_time);
+	lustre_msg_set_service_timeout(req->rq_repmsg, service_timeout);
 	/* Report service time estimate for future client reqs, but report 0
 	 * (to be ignored by client) if it's an error reply during recovery.
 	 * b=15815
