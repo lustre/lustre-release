@@ -990,10 +990,11 @@ static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
 static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr)
 {
-	struct osd_object	*obj = osd_dt_obj(dt);
-	uint64_t		 blocks;
-	uint32_t		 blksize;
-	int			 rc = 0;
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	uint64_t blocks;
+	uint32_t blksize;
+	int rc = 0;
 
 	down_read(&obj->oo_guard);
 
@@ -1025,8 +1026,11 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	sa_object_size(obj->oo_sa_hdl, &blksize, &blocks);
 	/* we do not control size of indices, so always calculate
 	 * it from number of blocks reported by DMU */
-	if (S_ISDIR(attr->la_mode))
+	if (S_ISDIR(attr->la_mode)) {
 		attr->la_size = 512 * blocks;
+		rc = -zap_count(osd->od_os, obj->oo_dn->dn_object,
+				&attr->la_dirent_count);
+	}
 	/* Block size may be not set; suggest maximal I/O transfers. */
 	if (blksize == 0)
 		blksize = osd_spa_maxblocksize(

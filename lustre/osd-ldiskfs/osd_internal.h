@@ -153,6 +153,7 @@ struct osd_object {
 
 	struct list_head	oo_xattr_list;
 	struct lu_object_header *oo_header;
+	__u64			oo_dirent_count;
 };
 
 struct osd_obj_seq {

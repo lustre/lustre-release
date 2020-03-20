@@ -1436,6 +1436,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			result = 0;
 		}
 	}
+	obj->oo_dirent_count = LU_DIRENT_COUNT_UNSET;
 
 	LINVRNT(osd_invariant(obj));
 	return result;
@@ -2623,10 +2624,71 @@ static void osd_inode_getattr(const struct lu_env *env,
 		attr->la_flags |= LUSTRE_PROJINHERIT_FL;
 }
 
+static int osd_dirent_count(const struct lu_env *env, struct dt_object *dt,
+			    u64 *count)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	const struct dt_it_ops *iops;
+	struct dt_it *it;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(S_ISDIR(obj->oo_inode->i_mode));
+	LASSERT(fid_is_namespace_visible(lu_object_fid(&obj->oo_dt.do_lu)));
+
+	if (obj->oo_dirent_count != LU_DIRENT_COUNT_UNSET) {
+		*count = obj->oo_dirent_count;
+		RETURN(0);
+	}
+
+	/* directory not initialized yet */
+	if (!dt->do_index_ops) {
+		*count = 0;
+		RETURN(0);
+	}
+
+	iops = &dt->do_index_ops->dio_it;
+	it = iops->init(env, dt, LUDA_64BITHASH);
+	if (IS_ERR(it))
+		RETURN(PTR_ERR(it));
+
+	rc = iops->load(env, it, 0);
+	if (rc < 0) {
+		if (rc == -ENODATA) {
+			rc = 0;
+			*count = 0;
+		}
+		GOTO(out, rc);
+	}
+	if (rc > 0)
+		rc = iops->next(env, it);
+
+	for (*count = 0; rc == 0 || rc == -ESTALE; rc = iops->next(env, it)) {
+		if (rc == -ESTALE)
+			continue;
+
+		if (iops->key_size(env, it) == 0)
+			continue;
+
+		(*count)++;
+	}
+	if (rc == 1) {
+		obj->oo_dirent_count = *count;
+		rc = 0;
+	}
+out:
+	iops->put(env, it);
+	iops->fini(env, it);
+
+	RETURN(rc);
+}
+
 static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	int rc = 0;
 
 	if (unlikely(!dt_object_exists(dt)))
 		return -ENOENT;
@@ -2644,7 +2706,11 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	}
 	spin_unlock(&obj->oo_guard);
 
-	return 0;
+	if (S_ISDIR(obj->oo_inode->i_mode) &&
+	    fid_is_namespace_visible(lu_object_fid(&dt->do_lu)))
+		rc = osd_dirent_count(env, dt, &attr->la_dirent_count);
+
+	return rc;
 }
 
 static int osd_declare_attr_qid(const struct lu_env *env,
@@ -3143,6 +3209,8 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
 	oth = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oth->ot_handle->h_transaction != NULL);
+	if (fid_is_namespace_visible(lu_object_fid(&obj->oo_dt.do_lu)))
+		obj->oo_dirent_count = 0;
 	result = osd_mkfile(info, obj, mode, hint, th, attr);
 
 	return result;
@@ -5206,11 +5274,21 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	} else {
 		rc = PTR_ERR(bh);
 	}
+
+	if (!rc && fid_is_namespace_visible(lu_object_fid(&dt->do_lu)) &&
+	    obj->oo_dirent_count != LU_DIRENT_COUNT_UNSET) {
+		/* NB, dirent count may not be accurate, because it's counted
+		 * without lock.
+		 */
+		if (obj->oo_dirent_count)
+			obj->oo_dirent_count--;
+		else
+			obj->oo_dirent_count = LU_DIRENT_COUNT_UNSET;
+	}
 	if (hlock != NULL)
 		ldiskfs_htree_unlock(hlock);
 	else
 		up_write(&obj->oo_ext_idx_sem);
-
 	GOTO(out, rc);
 out:
 	LASSERT(osd_invariant(obj));
@@ -5545,6 +5623,10 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 					      hlock, th);
 		}
 	}
+	if (!rc && fid_is_namespace_visible(lu_object_fid(&pobj->oo_dt.do_lu))
+	    && pobj->oo_dirent_count != LU_DIRENT_COUNT_UNSET)
+		pobj->oo_dirent_count++;
+
 	if (hlock != NULL)
 		ldiskfs_htree_unlock(hlock);
 	else
@@ -6098,6 +6180,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 		iput(child_inode);
 	LASSERT(osd_invariant(obj));
 	osd_trans_exec_check(env, th, OSD_OT_INSERT);
+
 	RETURN(rc);
 }
 

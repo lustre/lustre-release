@@ -452,7 +452,11 @@ struct lu_attr {
 	__u32		la_projid;
 	/** set layout version to OST objects. */
 	__u32		la_layout_version;
+	/** dirent count */
+	__u64		la_dirent_count;
 };
+
+#define LU_DIRENT_COUNT_UNSET	~0ULL
 
 /**
  * Layer in the layered object.
