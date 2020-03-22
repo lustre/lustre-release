@@ -429,6 +429,11 @@ init_test_env() {
 	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 	get_lustre_env
 
+	# use localrecov to enable recovery for local clients, LU-12722
+	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] ||
+		export MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o localrecov"}
+	[[ $OST1_VERSION -lt $(version_code 2.13.52) ]] ||
+		export OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o localrecov"}
 }
 
 check_cpt_number() {
