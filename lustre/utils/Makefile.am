@@ -137,6 +137,8 @@ lr_reader_SOURCES = lr_reader.c
 
 ofd_access_log_reader_SOURCES = \
 	lstddef.h \
+	ofd_access_batch.c \
+	ofd_access_batch.h \
 	ofd_access_log_reader.c
 
 if UTILS

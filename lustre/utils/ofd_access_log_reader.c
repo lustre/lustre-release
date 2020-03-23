@@ -59,10 +59,12 @@
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <sys/timerfd.h>
 #include <sys/types.h>
 #include <linux/types.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_access_log.h>
+#include "ofd_access_batch.h"
 #include "lstddef.h"
 
 /* TODO fsname filter */
@@ -82,12 +84,10 @@ static FILE *trace_file;
 			fprintf(trace_file, "TRACE "fmt, ##args);	\
 	} while (0)
 
-#define DEBUG_D(x) DEBUG("%s = %d\n", #x, x)
+#define DEBUG_D(x) DEBUG("%s = %"PRIdMAX"\n", #x, (intmax_t)x)
 #define DEBUG_P(x) DEBUG("%s = %p\n", #x, x)
 #define DEBUG_S(x) DEBUG("%s = '%s'\n", #x, x)
-#define DEBUG_U(x) DEBUG("%s = %u\n", #x, x)
-#define DEBUG_U32(x) DEBUG("%s = %"PRIu32"\n", #x, x)
-#define DEBUG_U64(x) DEBUG("%s = %"PRIu64"\n", #x, x)
+#define DEBUG_U(x) DEBUG("%s = %"PRIuMAX"\n", #x, (uintmax_t)x)
 
 #define ERROR(fmt, args...) \
 	fprintf(stderr, "%s: "fmt, program_invocation_short_name, ##args)
@@ -125,6 +125,9 @@ static struct alr_log *alr_log[1 << 20]; /* 20 == MINORBITS */
 static int oal_version; /* FIXME ... major version, minor version */
 static unsigned int oal_log_major;
 static unsigned int oal_log_minor_max;
+static struct alr_batch *alr_batch;
+static FILE *alr_batch_file;
+static const char *alr_batch_file_path;
 
 #define D_ALR_DEV "%s %d"
 #define P_ALR_DEV(ad) \
@@ -221,6 +224,10 @@ static int alr_log_io(int epoll_fd, struct alr_dev *ad, unsigned int mask)
 			(unsigned int)oae->oae_size,
 			(unsigned int)oae->oae_segment_count,
 			alr_flags_to_str(oae->oae_flags));
+
+		alr_batch_add(alr_batch, ad->alr_name, &oae->oae_parent_fid,
+			oae->oae_time, oae->oae_begin, oae->oae_end,
+			oae->oae_size, oae->oae_segment_count, oae->oae_flags);
 	}
 
 	return ALR_OK;
@@ -250,6 +257,8 @@ static int alr_log_add(int epoll_fd, const char *path)
 	struct stat st;
 	int fd = -1;
 	int rc;
+
+	DEBUG_S(path);
 
 	fd = open(path, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
 	if (fd < 0) {
@@ -461,7 +470,7 @@ static int alr_signal_io(int epoll_fd, struct alr_dev *sd, unsigned int mask)
 	if (rc <= 0)
 		return ALR_OK;
 
-	DEBUG_U32(ssi.ssi_signo);
+	DEBUG_U(ssi.ssi_signo);
 	switch (ssi.ssi_signo) {
 	case SIGINT:
 	case SIGTERM:
@@ -469,6 +478,44 @@ static int alr_signal_io(int epoll_fd, struct alr_dev *sd, unsigned int mask)
 	default:
 		return ALR_OK;
 	}
+}
+
+/* batching timerfd epoll callback. Print batched access entries to
+ * alr_batch_file. */
+static int alr_batch_timer_io(int epoll_fd, struct alr_dev *td, unsigned int mask)
+{
+	time_t now = time(NULL);
+	uint64_t expire_count;
+	ssize_t rc;
+
+	TRACE("%s\n", __func__);
+	DEBUG_D(now);
+	DEBUG_U(mask);
+
+	rc = read(td->alr_fd, &expire_count, sizeof(expire_count));
+	if (rc <= 0)
+		return ALR_OK;
+
+	DEBUG_U(expire_count);
+
+	rc = alr_batch_print(alr_batch, alr_batch_file);
+	if (rc < 0) {
+		ERROR("cannot write to '%s': %s\n",
+			alr_batch_file_path, strerror(errno));
+		goto out;
+	}
+
+	/* FIXME: blocking write to batch file. */
+	rc = fflush(alr_batch_file);
+	if (rc < 0) {
+		ERROR("cannot write to '%s': %s\n",
+			alr_batch_file_path, strerror(errno));
+		goto out;
+	}
+out:
+	/* Failed writes will leave alr_batch_file (pipe) in a
+	 * weird state so make that fatal. */
+	return (rc < 0) ? ALR_EXIT_FAILURE : ALR_OK;
 }
 
 /* Call LUSTRE_ACCESS_LOG_IOCTL_INFO to get access log info and print
@@ -545,21 +592,41 @@ static struct alr_dev *alr_dev_create(int epoll_fd, int fd, const char *name,
 	return alr;
 }
 
+void usage(void)
+{
+	printf("Usage: %s: [OPTION]...\n"
+"Discover, read, batch, and write Lustre access logs\n"
+"\n"
+"Mandatory arguments to long options are mandatory for short options too.\n"
+"  -f, --batch-file=FILE          print batch to file (default stdout)\n"
+"  -i, --batch-interval=INTERVAL  print batch every INTERVAL seconds\n"
+"  -o, --batch-offset=OFFSET      print batch at OFFSET seconds\n"
+"  -d, --debug[=FILE]             print debug messages to FILE (stderr)\n"
+"  -h, --help                     display this help and exit\n"
+"  -l, --list                     print YAML list of available access logs\n"
+"  -t, --trace[=FILE]             print trace messages to FILE (stderr)\n",
+		program_invocation_short_name);
+}
+
 int main(int argc, char *argv[])
 {
 	const char ctl_path[] = "/dev/"LUSTRE_ACCESS_LOG_DIR_NAME"/control";
 	struct alr_dev *alr_signal = NULL;
+	struct alr_dev *alr_batch_timer = NULL;
 	struct alr_dev *alr_ctl = NULL;
+	time_t batch_interval = 0;
+	time_t batch_offset = 0;
 	unsigned int m;
 	int list_info = 0;
 	int epoll_fd = -1;
-	int signal_fd = -1;
-	int ctl_fd = -1;
 	int exit_status;
 	int rc;
 	int c;
 
 	static struct option options[] = {
+		{ .name = "batch-file", .has_arg = required_argument, .val = 'f', },
+		{ .name = "batch-interval", .has_arg = required_argument, .val = 'i', },
+		{ .name = "batch-offset", .has_arg = required_argument, .val = 'o', },
 		{ .name = "debug", .has_arg = optional_argument, .val = 'd', },
 		{ .name = "help", .has_arg = no_argument, .val = 'h', },
 		{ .name = "list", .has_arg = no_argument, .val = 'l', },
@@ -567,8 +634,25 @@ int main(int argc, char *argv[])
 		{ .name = NULL, },
 	};
 
-	while ((c = getopt_long(argc, argv, "d::hlt::", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d::f:hi:lt::", options, NULL)) != -1) {
 		switch (c) {
+		case 'f':
+			alr_batch_file_path = optarg;
+			break;
+		case 'i':
+			errno = 0;
+			batch_interval = strtoll(optarg, NULL, 0);
+			if (batch_interval < 0 || batch_interval >= 1048576 ||
+			    errno != 0)
+				FATAL("invalid batch interval '%s'\n", optarg);
+			break;
+		case 'o':
+			errno = 0;
+			batch_offset = strtoll(optarg, NULL, 0);
+			if (batch_offset < 0 || batch_offset >= 1048576 ||
+			    errno != 0)
+				FATAL("invalid batch offset '%s'\n", optarg);
+			break;
 		case 'd':
 			if (optarg == NULL) {
 				debug_file = stderr;
@@ -583,7 +667,7 @@ int main(int argc, char *argv[])
 
 			break;
 		case 'h':
-			/* ... */
+			usage();
 			exit(EXIT_SUCCESS);
 		case 'l':
 			list_info = 1;
@@ -602,9 +686,27 @@ int main(int argc, char *argv[])
 
 			break;
 		case '?':
-			/* Try ... for more ... */
+			fprintf(stderr, "Try '%s --help' for more information.\n",
+				program_invocation_short_name);
 			exit(EXIT_FAILURE);
 		}
+	}
+
+	if (batch_interval > 0) {
+		alr_batch = alr_batch_create(-1);
+		if (alr_batch == NULL)
+			FATAL("cannot create batch struct: %s\n",
+				strerror(errno));
+	}
+
+	if (alr_batch_file_path != NULL) {
+		alr_batch_file = fopen(alr_batch_file_path, "w");
+		if (alr_batch_file == NULL)
+			FATAL("cannot open batch file '%s': %s\n",
+				alr_batch_file_path, strerror(errno));
+	} else {
+		alr_batch_file_path = "stdout";
+		alr_batch_file = stdout;
 	}
 
 	epoll_fd = epoll_create1(EPOLL_CLOEXEC);
@@ -620,7 +722,7 @@ int main(int argc, char *argv[])
 	if (rc < 0)
 		FATAL("cannot set process signal mask: %s\n", strerror(errno));
 
-	signal_fd = signalfd(-1, &signal_mask, SFD_NONBLOCK|SFD_CLOEXEC);
+	int signal_fd = signalfd(-1, &signal_mask, SFD_NONBLOCK|SFD_CLOEXEC);
 	if (signal_fd < 0)
 		FATAL("cannot create signalfd: %s\n", strerror(errno));
 
@@ -630,8 +732,39 @@ int main(int argc, char *argv[])
 
 	signal_fd = -1;
 
+	/* Setup batch timer FD and add to epoll set. */
+	struct timespec now;
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc < 0)
+		FATAL("cannot read realtime clock: %s\n", strerror(errno));
+
+	int timer_fd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK|TFD_CLOEXEC);
+	if (timer_fd < 0)
+		FATAL("cannot create batch timerfd: %s\n", strerror(errno));
+
+	struct itimerspec it = {
+		.it_value.tv_sec = (batch_interval > 0) ?
+				   roundup(now.tv_sec, batch_interval) +
+				   (batch_offset % batch_interval) :
+				   0,
+		.it_interval.tv_sec = batch_interval,
+	};
+
+	DEBUG_D(it.it_value.tv_sec);
+
+	rc = timerfd_settime(timer_fd, TFD_TIMER_ABSTIME, &it, NULL);
+	if (rc < 0)
+		FATAL("cannot arm timerfd: %s\n", strerror(errno));
+
+	alr_batch_timer = alr_dev_create(epoll_fd, timer_fd, "batch_timer",
+					&alr_batch_timer_io, NULL);
+	if (alr_batch_timer == NULL)
+		FATAL("cannot register batch timerfd: %s\n", strerror(errno));
+
+	timer_fd = -1;
+
 	/* Open control device. */
-	ctl_fd = open(ctl_path, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
+	int ctl_fd = open(ctl_path, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
 	if (ctl_fd < 0)
 		FATAL("cannot open '%s': %s\n", ctl_path, strerror(errno));
 
@@ -715,7 +848,10 @@ out:
 
 	alr_dev_free(epoll_fd, alr_ctl);
 	alr_dev_free(epoll_fd, alr_signal);
+	alr_dev_free(epoll_fd, alr_batch_timer);
 	close(epoll_fd);
+
+	alr_batch_destroy(alr_batch);
 
 	DEBUG_D(exit_status);
 
