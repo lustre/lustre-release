@@ -15,8 +15,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:                         LU-13156
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_SELINUX_EXCEPT 21a 21b"}
+# bug number for skipped test:
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_SELINUX_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=$(dirname $0)
@@ -465,6 +465,7 @@ check_nodemap() {
 	local nm=$1
 	local key=$2
 	local val=$3
+	local facets=""
 	local i
 
 	if [ "$nm" == "active" ]; then
@@ -472,17 +473,23 @@ check_nodemap() {
 	else
 		proc_param="$nm.$key"
 	fi
-	is_sync=false
-	for i in $(seq 1 20); do
-		out=$(do_facet mds1 $LCTL get_param -n \
-				   nodemap.$proc_param 2>/dev/null)
-		echo "On mds1, ${proc_param} = $out"
-		[ "$val" == "$out" ] && is_sync=true && break
-		sleep 1
+	# check all MDS nodes, in reverse order to privilege remote ones first
+	for i in $(seq $MDSCOUNT); do
+		facets="mds$i $facets"
 	done
-	if ! $is_sync; then
-		error "$proc_param not updated on mds1 after 20 secs"
-	fi
+	for facet in $facets; do
+		is_sync=false
+		for i in {1..20}; do
+			out=$(do_facet $facet $LCTL get_param -n \
+				   nodemap.$proc_param 2>/dev/null)
+			echo "On $facet, ${proc_param} = $out"
+			[ "$val" == "$out" ] && is_sync=true && break
+			sleep 1
+		done
+		if ! $is_sync; then
+			error "$proc_param not updated on $facet after 20 secs"
+		fi
+	done
 }
 
 create_nodemap() {
@@ -504,6 +511,7 @@ create_nodemap() {
 	check_nodemap $nm admin_nodemap 1
 	check_nodemap $nm trusted_nodemap 1
 
+	sleep 10
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
 	do_facet mgs $LCTL set_param -P nodemap.$nm.sepol="$sepol"
 
