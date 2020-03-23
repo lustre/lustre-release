@@ -1410,7 +1410,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	quota_space += new_meta * LDISKFS_BLOCK_SIZE(osd_sb(osd));
 
 	/* quota space should be reported in 1K blocks */
-	quota_space = toqb(quota_space);
+	quota_space = stoqb(quota_space);
 
 	/* each new block can go in different group (bitmap + gd) */
 
@@ -2433,7 +2433,7 @@ static int osd_declare_fallocate(const struct lu_env *env,
 		quota_space += depth * LDISKFS_BLOCK_SIZE(osd_sb(osd));
 
 		/* quota space should be reported in 1K blocks */
-		quota_space = toqb(quota_space) + toqb(end - start) +
+		quota_space = stoqb(quota_space) + stoqb(end - start) +
 			LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
 	}
 
@@ -2689,7 +2689,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 
 	size = i_size_read(inode);
 	if (size > start)
-		space = -toqb((size > end ? end : size - start));
+		space = -stoqb((size > end ? end : size - start));
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), space, oh, obj,

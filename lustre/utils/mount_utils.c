@@ -789,13 +789,12 @@ int osd_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
-int osd_label_read(struct mkfs_opts *mop)
+int osd_label_read(char *dev, struct lustre_disk_data *ldd)
 {
-	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
 	if (backfs_mount_type_okay(ldd->ldd_mount_type))
-		ret = backfs_ops[ldd->ldd_mount_type]->label_read(mop);
+		ret = backfs_ops[ldd->ldd_mount_type]->label_read(dev, ldd);
 	else
 		ret = EINVAL;
 
@@ -858,7 +857,7 @@ int osd_mountdata_reset(struct mkfs_opts *mop, char *mountdata_arg)
 
 	memcpy(&(mop->mo_ldd), &ldd, sizeof(ldd));
 
-	ret = osd_label_read(mop);
+	ret = osd_label_read(mop->mo_device, &mop->mo_ldd);
 	if (ret != 0) {
 		fprintf(stderr, "%s: Failed to read label data: %s\n",
 			progname, strerror(ret));

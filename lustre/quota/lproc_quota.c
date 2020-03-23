@@ -234,7 +234,7 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 	if (fid_is_acct(fid))
 		seq_printf(p, "  %-8s { inodes: %12llu, kbytes: %12llu }\n",
 			   "usage:", ((struct lquota_acct_rec *)rec)->ispace,
-			   toqb(((struct lquota_acct_rec *)rec)->bspace));
+			   stoqb(((struct lquota_acct_rec *)rec)->bspace));
 	else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB ||
 		 fid_seq(fid) == FID_SEQ_LOCAL_NAME)
 		seq_printf(p, "  %-8s { hard: %12llu, soft: %12llu, granted: %12llu, time: %15llu }\n",

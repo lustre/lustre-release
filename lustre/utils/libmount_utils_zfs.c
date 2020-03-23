@@ -880,7 +880,7 @@ int zfs_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
-int zfs_label_read(struct mkfs_opts *mop)
+int zfs_label_read(char *dev, struct lustre_disk_data *ldd)
 {
 	zfs_handle_t *zhp;
 	int ret;
@@ -888,11 +888,11 @@ int zfs_label_read(struct mkfs_opts *mop)
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
 
-	zhp = zfs_open(g_zfs, mop->mo_device, ZFS_TYPE_FILESYSTEM);
+	zhp = zfs_open(g_zfs, dev, ZFS_TYPE_FILESYSTEM);
 	if (zhp == NULL)
 		return EINVAL;
 
-	ret = zfs_get_prop_str(zhp, LDD_SVNAME_PROP, mop->mo_ldd.ldd_svname);
+	ret = zfs_get_prop_str(zhp, LDD_SVNAME_PROP, ldd->ldd_svname);
 	zfs_close(zhp);
 
 	return ret;

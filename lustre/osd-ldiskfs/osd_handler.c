@@ -3232,7 +3232,7 @@ static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 		qid_t gid = U32_MAX;
 		qid_t projid = U32_MAX;
 
-		bspace = toqb(obj->oo_inode->i_blocks << 9);
+		bspace = stoqb(obj->oo_inode->i_blocks << 9);
 		if (attr->la_valid & LA_UID) {
 			uid = i_uid_read(obj->oo_inode);
 			rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
@@ -4115,7 +4115,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (inode == NULL)
 		RETURN(-ENOENT);
 
-	space = -toqb(LDISKFS_I(inode)->i_disksize);
+	space = -stoqb(LDISKFS_I(inode)->i_disksize);
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);

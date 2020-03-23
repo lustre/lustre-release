@@ -5915,12 +5915,8 @@ LC_MDS_MAX_THREADS
 AC_CHECK_HEADERS([netdb.h endian.h])
 
 # lustre/utils/llverfs.c lustre/utils/libmount_utils_ldiskfs.c
-AC_CHECK_HEADERS([ext2fs/ext2fs.h], [], [
-	AS_IF([test "x$enable_utils" = xyes -a "x$enable_ldiskfs" = xyes], [
-		AC_MSG_ERROR([
-ext2fs.h not found. Please install e2fsprogs development package.
-		])
-	])
+AS_IF([test "x$enable_utils" = xyes -a "x$enable_ldiskfs" = xyes], [
+	PKG_CHECK_MODULES([EXT2FS], [ext2fs >= 1.47.3-wc2])
 ])
 
 # lustre/tests/statx_test.c

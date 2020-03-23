@@ -378,7 +378,7 @@ echo $TMPFILE
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: Lustre mount's ldiskfs-specific helper library
-BuildRequires: e2fsprogs-devel >= 1.44.3 pkgconfig(mount)
+BuildRequires: e2fsprogs-devel >= 1.47.3-wc1 pkgconfig(mount)
 Requires: ldiskfsprogs > 1.45.6
 Provides: lustre-osd-mount = %{version}
 Provides: %{name}-osd-mount = %{version}

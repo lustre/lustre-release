@@ -227,7 +227,7 @@ int qsd_refresh_usage(const struct lu_env *env, struct lquota_entry *lqe)
 		if (qqi->qqi_qsd->qsd_is_md)
 			lqe->lqe_usage = rec->ispace;
 		else
-			lqe->lqe_usage = toqb(rec->bspace);
+			lqe->lqe_usage = stoqb(rec->bspace);
 		lqe_write_unlock(lqe);
 		break;
 	default:

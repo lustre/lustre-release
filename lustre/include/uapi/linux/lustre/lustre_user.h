@@ -1464,7 +1464,7 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 /********* Quotas **********/
 
 /* From linux/fs/quota/quota.c */
-static inline __u64 toqb(__kernel_size_t space)
+static inline __u64 stoqb(__kernel_size_t space)
 {
 	return (space + QIF_DQBLKSIZE - 1) >> QIF_DQBLKSIZE_BITS;
 }

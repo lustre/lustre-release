@@ -812,7 +812,7 @@ static void label_lustre(struct mount_opts *mop)
 		 */
 		memset(&ldd, 0, sizeof(ldd));
 		ldd.ldd_mount_type = mop->mo_ldd.ldd_mount_type;
-		rc = osd_read_ldd(mop->mo_source, &ldd);
+		rc = osd_label_read(mop->mo_source, &ldd);
 		if (rc == 0) {
 			rc = strlen(ldd.ldd_svname);
 			if (rc >= 8 && ldd.ldd_svname[rc - 8] != '-')

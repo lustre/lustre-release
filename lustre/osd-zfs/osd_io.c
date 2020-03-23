@@ -925,7 +925,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	/* backend zfs FS might be configured to store multiple data copies */
 	space  *= osd->od_os->os_copies;
-	space   = toqb(space);
+	space   = stoqb(space);
 	CDEBUG(D_QUOTA, "writing %d pages, reserving %lldK of quota space\n",
 	       npages, space);
 

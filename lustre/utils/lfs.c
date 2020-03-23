@@ -9164,15 +9164,6 @@ static inline int lfs_verify_poolarg(char *pool)
 #define NOTIFY_GRACE		"notify"
 #define NOTIFY_GRACE_TIME	LQUOTA_GRACE_MASK
 
-#ifndef toqb
-static inline __u64 lustre_stoqb(size_t space)
-{
-	return (space + QIF_DQBLKSIZE - 1) >> QIF_DQBLKSIZE_BITS;
-}
-#else
-#define lustre_stoqb   toqb
-#endif
-
 static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 {
 	int c, rc;
@@ -9957,7 +9948,7 @@ static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
 		dqb->dqb_itime &= LQUOTA_GRACE_MASK;
 
 		if (dqb->dqb_bhardlimit &&
-		    lustre_stoqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
+		    stoqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
 			bover = 1;
 		} else if (dqb->dqb_bsoftlimit && dqb->dqb_btime) {
 			if (dqb->dqb_btime > now)
@@ -10026,7 +10017,7 @@ use_qid_value:
 		else if (bover)
 			diff2str(dqb->dqb_btime, timebuf, now);
 
-		kbytes2str(lustre_stoqb(dqb->dqb_curspace),
+		kbytes2str(stoqb(dqb->dqb_curspace),
 			   strbuf, sizeof(strbuf), param->qp_human_readable);
 		if (rc == -EREMOTEIO)
 			sprintf(numbuf[0], "%s*", strbuf);

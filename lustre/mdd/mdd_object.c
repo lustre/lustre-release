@@ -1345,7 +1345,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		if (qi.lqi_space > 0) {
 			qi.lqi_id.qid_gid = la->la_gid;
 			qi.lqi_type = GRPQUOTA;
-			qi.lqi_space = toqb(qi.lqi_space);
+			qi.lqi_space = stoqb(qi.lqi_space);
 			qi.lqi_is_blk = true;
 			rc = dt_reserve_or_free_quota(env, mdd->mdd_bottom,
 						      &qi);

@@ -1141,7 +1141,7 @@ static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 		uint32_t blksize;
 
 		sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
-		bspace = toqb(bspace * 512);
+		bspace = stoqb(bspace * 512);
 
 		CDEBUG(D_QUOTA,
 		       "%s: quota on UID=%u GID=%u PROJID=%u bspace=%lld*%u\n",

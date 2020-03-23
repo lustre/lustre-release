@@ -2233,6 +2233,10 @@ static bool is_cmd_supported(unsigned int cmd)
 	case FS_IOC_GETFSMAP:
 		return true;
 #endif
+	case FS_IOC_GETFSLABEL:
+		return true;
+	case FS_IOC_SETFSLABEL:
+		return true;
 	default:
 		return false;
 	}
