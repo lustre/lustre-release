@@ -587,14 +587,6 @@ extern ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off);
 
-int lu_str_to_s64(char *buffer, unsigned long count, __s64 *val, char defunit);
-extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
-					 unsigned long count, __s64 *val,
-					 char defunit);
-
-extern int lprocfs_str_with_units_to_u64(const char __user *buffer,
-					 unsigned long count, __u64 *val,
-					 char defunit);
 int string_to_size(u64 *size, const char *buffer, size_t count);
 int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 		    const char *defunit);
