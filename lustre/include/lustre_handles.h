@@ -39,11 +39,7 @@
  */
 
 #include <linux/rcupdate.h>
-#ifdef HAVE_REFCOUNT_T
 #include <linux/refcount.h>
-#else
-#include <libcfs/linux/linux-refcount.h>
-#endif
 #include <linux/spinlock.h>
 #include <libcfs/libcfs.h>
 

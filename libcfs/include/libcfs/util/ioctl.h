@@ -43,7 +43,7 @@
 /* Sparse annotation. */
 #define __user
 
-#include <uapi/linux/lnet/libcfs_ioctl.h>
+#include <linux/lnet/libcfs_ioctl.h>
 
 #define LIBCFS_IOC_INIT(data)					\
 do {								\

@@ -44,6 +44,7 @@ routerstat_SOURCES = routerstat.c
 routerstat_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 
 lst_SOURCES = lst.c
+lst_CFLAGS = -fPIC -D_LINUX_TIME_H -D_GNU_SOURCE
 lst_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
 	    $(LIBEFENCE)
 

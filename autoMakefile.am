@@ -1,15 +1,15 @@
 SUBDIRS := @LDISKFS_SUBDIR@ \
 	. \
 	@LUSTREIOKIT_SUBDIR@ \
-	@LIBCFS_SUBDIR@ \
 	@SNMP_SUBDIR@ \
+	libcfs \
 	lnet \
 	lustre
 
 DIST_SUBDIRS := ldiskfs \
 	lustre-iokit \
-	@LIBCFS_SUBDIR@ \
 	@SNMP_DIST_SUBDIR@ \
+	libcfs \
 	lnet \
 	lustre \
 	config

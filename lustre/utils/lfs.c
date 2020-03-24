@@ -76,7 +76,7 @@
 #include <linux/lustre/lustre_ver.h>
 #include <linux/lustre/lustre_param.h>
 #include <linux/lnet/nidstr.h>
-#include <cyaml.h>
+#include <lnetconfig/cyaml.h>
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))

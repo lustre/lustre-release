@@ -40,6 +40,13 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+/*
+ * sparse kernel source annotations
+ */
+#ifndef __user
+#define __user
+#endif
+
 #define LIBCFS_IOCTL_VERSION 0x0001000a
 #define LIBCFS_IOCTL_VERSION2 0x0001000b
 

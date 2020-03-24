@@ -36,6 +36,8 @@
 #define __UAPI_LNET_ST_H__
 
 #include <linux/types.h>
+#include <linux/lnet/lnet-types.h>
+#include <linux/time.h>
 
 #define LST_FEAT_NONE		(0)
 #define LST_FEAT_BULK_LEN	(1 << 0)	/* enable variable page size */
@@ -64,6 +66,13 @@
 #define LSTIO_TEST_ADD		0xC26		/* add test (to batch) */
 #define LSTIO_BATCH_QUERY	0xC27		/* query batch status */
 #define LSTIO_STAT_QUERY	0xC30		/* get stats */
+
+/*
+ * sparse kernel source annotations
+ */
+#ifndef __user
+#define __user
+#endif
 
 struct lst_sid {
 	lnet_nid_t	ses_nid;	/* nid of console node */
@@ -116,6 +125,13 @@ struct lstcon_test_batch_ent {
 	} u;
 };							/*** test/batch verbose information entry,
 							 *** for list_batch command */
+
+/* This will go away once we move to netlink */
+#if !defined(__KERNEL__) && !defined(__LIBCFS_UTIL_LIST_H__)
+struct list_head {
+	struct list_head *next, *prev;
+};
+#endif
 
 struct lstcon_rpc_ent {
 	struct list_head	rpe_link;		/* link chain */

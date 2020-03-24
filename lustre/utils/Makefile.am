@@ -67,6 +67,7 @@ lctl_LDADD :=  liblustreapi.la $(PTHREAD_LIBS) -lyaml
 lctl_DEPENDENCIES := liblustreapi.la
 
 lfs_SOURCES = lfs.c lfs_project.c lfs_project.h
+lfs_CFLAGS := -fPIC -I $(top_builddir)/lnet/utils
 lfs_LDADD := liblustreapi.la -lz
 lfs_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 lfs_DEPENDENCIES := liblustreapi.la

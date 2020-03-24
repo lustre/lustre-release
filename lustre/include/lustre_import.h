@@ -45,11 +45,7 @@
 #include <linux/atomic.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
-#ifdef HAVE_REFCOUNT_T
 #include <linux/refcount.h>
-#else
-#include <libcfs/linux/linux-refcount.h>
-#endif
 #include <linux/spinlock.h>
 #include <linux/time.h>
 #include <linux/types.h>

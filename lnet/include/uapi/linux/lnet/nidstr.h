@@ -29,15 +29,7 @@
 #define _LNET_NIDSTRINGS_H
 
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lnet/lnet-types.h>
-#else
-# include <linux/lnet/lnet-types.h>
-#endif
+#include <linux/lnet/lnet-types.h>
 
 /**
  *  Lustre Network Driver types.
@@ -73,20 +65,20 @@ struct list_head;
 char *libcfs_next_nidstring(void);
 int libcfs_isknown_lnd(__u32 lnd);
 char *libcfs_lnd2modname(__u32 lnd);
-char *libcfs_lnd2str_r(__u32 lnd, char *buf, size_t buf_size);
+char *libcfs_lnd2str_r(__u32 lnd, char *buf, __kernel_size_t buf_size);
 static inline char *libcfs_lnd2str(__u32 lnd)
 {
 	return libcfs_lnd2str_r(lnd, libcfs_next_nidstring(),
 				LNET_NIDSTR_SIZE);
 }
 int libcfs_str2lnd(const char *str);
-char *libcfs_net2str_r(__u32 net, char *buf, size_t buf_size);
+char *libcfs_net2str_r(__u32 net, char *buf, __kernel_size_t buf_size);
 static inline char *libcfs_net2str(__u32 net)
 {
 	return libcfs_net2str_r(net, libcfs_next_nidstring(),
 				LNET_NIDSTR_SIZE);
 }
-char *libcfs_nid2str_r(lnet_nid_t nid, char *buf, size_t buf_size);
+char *libcfs_nid2str_r(lnet_nid_t nid, char *buf, __kernel_size_t buf_size);
 static inline char *libcfs_nid2str(lnet_nid_t nid)
 {
 	return libcfs_nid2str_r(nid, libcfs_next_nidstring(),
@@ -105,13 +97,13 @@ int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
 int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
-			       char *max_nid, size_t nidstr_length);
+			       char *max_nid, __kernel_size_t nidstr_length);
 
 struct netstrfns {
 	__u32	nf_type;
 	char	*nf_name;
 	char	*nf_modname;
-	void	(*nf_addr2str)(__u32 addr, char *str, size_t size);
+	void	(*nf_addr2str)(__u32 addr, char *str, __kernel_size_t size);
 	int	(*nf_str2addr)(const char *str, int nob, __u32 *addr);
 	int	(*nf_parse_addrlist)(char *str, int len,
 				     struct list_head *list);

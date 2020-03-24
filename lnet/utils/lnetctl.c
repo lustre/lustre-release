@@ -30,7 +30,7 @@
 #include <limits.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
-#include <cyaml.h>
+#include "lnetconfig/cyaml.h"
 #include "lnetconfig/liblnetconfig.h"
 
 #define LNET_CONFIGURE		true

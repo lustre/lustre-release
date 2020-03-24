@@ -103,19 +103,6 @@ AC_SUBST(LUSTREIOKIT_SUBDIR)
 AM_CONDITIONAL([BUILD_LUSTREIOKIT], [test "x$enable_iokit" = xyes])
 ]) # LB_PATH_LUSTREIOKIT
 
-# Define no libcfs by default.
-AC_DEFUN([LB_LIBCFS_DIR], [
-AS_IF([test "x$libcfs_is_module" = xyes], [
-		LIBCFS_INCLUDE_DIR="libcfs/include"
-		LIBCFS_SUBDIR="libcfs"
-	], [
-		LIBCFS_INCLUDE_DIR="lnet/include"
-		LIBCFS_SUBDIR=""
-	])
-AC_SUBST(LIBCFS_INCLUDE_DIR)
-AC_SUBST(LIBCFS_SUBDIR)
-]) # LB_LIBCFS_DIR
-
 #
 # LB_LIBMOUNT
 #
@@ -329,13 +316,14 @@ AS_IF([test $target_cpu = powerpc64], [
 	CC="$CC -m64"
 ])
 
-CPPFLAGS="-I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lnet/include/uapi -I$PWD/lustre/include -I$PWD/lustre/include/uapi $CPPFLAGS"
+# UAPI headers, libcfs/include for util headers, lustre/include for liblustreapi and friends
+CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/include/uapi -I$PWD/lustre/include -I$PWD/lustre/include/uapi $CPPFLAGS"
 
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)
 
-# everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include/uapi -I$PWD/lustre/include"
+# everyone builds against lnet and lustre kernel headers
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/libcfs/include/libcfs -I$PWD/lnet/include/uapi -I$PWD/lnet/include -I$PWD/lustre/include/uapi -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ]) # LB_PROG_CC
 
@@ -608,8 +596,6 @@ LB_CONFIG_DIST
 
 LB_DOWNSTREAM_RELEASE
 LB_USES_DPKG
-
-LB_LIBCFS_DIR
 
 LB_INCLUDE_RULES
 

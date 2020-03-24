@@ -1179,6 +1179,39 @@ test_203() {
 }
 run_test 203 "add a network using an interface in the non-default namespace"
 
+test_300() {
+	# LU-13274
+	local header
+	local out=$TMP/$tfile
+	local prefix=/usr/include/linux/lnet
+
+	# We use a hard coded prefix so that this test will not fail
+	# when run in tree.
+	CC=${CC:-cc}
+	if ! which $CC > /dev/null 2>&1; then
+		skip_env "$CC is not installed"
+	fi
+
+	cleanup_lnet || exit 1
+	load_lnet
+
+	if ! [[ -d $prefix ]]; then
+		# Assume we're running in tree and fixup the include path.
+		prefix=$LUSTRE/../lnet/include/uapi/linux/lnet
+	fi
+
+	for header in $prefix/*.h; do
+		if ! [[ -f "$header" ]]; then
+			continue
+		fi
+
+		$CC -Wall -Werror -std=c99 -include $header -c -x c /dev/null -o $out ||
+			error "cannot compile '$header'"
+	done
+	rm -f $out
+}
+run_test 300 "packaged LNet UAPI headers can be compiled"
+
 complete $SECONDS
 
 cleanup_testsuite

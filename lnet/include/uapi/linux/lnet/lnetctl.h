@@ -23,17 +23,7 @@
 #define __UAPI_LNETCTL_H_
 
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lnet/lnet-types.h>
-#else
-# include <linux/lnet/lnet-types.h>
-#endif
-
-#include <stdbool.h>
+#include <linux/lnet/lnet-types.h>
 
 /** \addtogroup lnet_fault_simulation
  * @{ */
@@ -111,9 +101,9 @@ struct lnet_fault_attr {
 			/** error type mask */
 			__u32			da_health_error_mask;
 			/** randomize error generation */
-			bool			da_random;
+			__u32			da_random:1,
 			/** drop all messages if flag is set */
-			bool			da_drop_all;
+						da_drop_all:1;
 		} drop;
 		/** message latency simulation */
 		struct {

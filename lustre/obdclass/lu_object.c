@@ -42,11 +42,7 @@
 
 #include <linux/module.h>
 #include <linux/list.h>
-#ifdef HAVE_PROCESSOR_H
 #include <linux/processor.h>
-#else
-#include <libcfs/linux/processor.h>
-#endif
 #include <linux/random.h>
 
 #include <libcfs/libcfs.h>
