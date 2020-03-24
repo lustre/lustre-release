@@ -82,6 +82,7 @@ static int jt_global(int argc, char **argv);
 static int jt_peers(int argc, char **argv);
 static int jt_set_ni_value(int argc, char **argv);
 static int jt_set_peer_ni_value(int argc, char **argv);
+static int jt_calc_service_id(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -99,6 +100,7 @@ command_t cmd_list[] = {
 	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
 	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
 	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
+	{"service-id", jt_calc_service_id, 0, "Calculate IB Lustre service ID\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -241,6 +243,24 @@ command_t peer_cmds[] = {
 	 "\t--all: set all peer_nis values to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
+
+static int jt_calc_service_id(int argc, char **argv)
+{
+	int rc;
+	__u64 service_id;
+
+	rc = lustre_lnet_calc_service_id(&service_id);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		return rc;
+
+	/*
+	 * cYAML currently doesn't support printing hex values.
+	 * Therefore just print it locally here
+	 */
+	printf("service id:\n    value: 0x%llx\n", service_id);
+
+	return rc;
+}
 
 static inline void print_help(const command_t cmds[], const char *cmd_type,
 			      const char *pc_name)

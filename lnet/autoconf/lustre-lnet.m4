@@ -749,6 +749,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_IB_SG_DMA_ADDRESS_EXISTS
 
 #
+# LN_USR_RDMA
+#
+#
+AC_DEFUN([LN_USR_RDMA], [
+AC_MSG_CHECKING([if RDMA_PS_TCP exists])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <rdma/rdma_user_cm.h>
+
+	int main(void) {
+		int x = (int)RDMA_PS_TCP;
+		return x;
+	}
+])],[
+	AC_DEFINE(HAVE_USRSPC_RDMA_PS_TCP, 1,
+		[RDMA_PS_TCP exists])
+])
+]) # LN_USR_RDMA
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -815,6 +834,7 @@ AS_IF([test "$enable_efence" = yes], [
 AC_SUBST(LIBEFENCE)
 
 LN_CONFIG_DLC
+LN_USR_RDMA
 ]) # LN_CONFIGURE
 
 #

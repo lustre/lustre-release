@@ -424,6 +424,12 @@ int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_calc_service_id
+ *    Calculate the lustre service id to be used for qos
+ */
+int lustre_lnet_calc_service_id(__u64 *service_id);
+
+/*
  * lustre_lnet_config_discovery
  *   Enable or disable peer discovery. Peer discovery is enabled by default.
  *

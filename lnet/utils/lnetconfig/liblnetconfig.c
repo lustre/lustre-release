@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
+#include <rdma/rdma_user_cm.h>
 #include "liblnetconfig.h"
 
 #define CONFIG_CMD		"configure"
@@ -63,7 +64,12 @@
 #define MAX_NUM_IPS		128
 
 #define modparam_path "/sys/module/lnet/parameters/"
+#define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"
 #define gni_nid_path "/proc/cray_xt/"
+
+#ifndef HAVE_USRSPC_RDMA_PS_TCP
+#define RDMA_PS_TCP 0x0106
+#endif
 
 const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
 				 "dropped_stats"};
@@ -3202,7 +3208,7 @@ static void add_to_global(struct cYAML *show_rc, struct cYAML *node,
 }
 
 static int build_global_yaml_entry(char *err_str, int err_len, int seq_no,
-				   char *name, __u32 value,
+				   char *name, __u64 value,
 				   struct cYAML **show_rc,
 				   struct cYAML **err_rc, int err)
 {
@@ -3396,6 +3402,28 @@ int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
 	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
 				       "retry_count", retry_count, show_rc,
 				       err_rc, l_errno);
+}
+
+int lustre_lnet_calc_service_id(__u64 *service_id)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int service_port = -1, l_errno = 0;
+
+	rc = read_sysfs_file(o2ib_modparam_path, "service", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = errno;
+		fprintf(stderr, "error:\n    msg: \"cannot get service port: %s (%d)\"\n",
+			strerror(l_errno), -l_errno);
+		return rc;
+	} else {
+		service_port = atoi(val);
+	}
+
+	*service_id = htobe64(((__u64)RDMA_PS_TCP << 16) + service_port);
+
+	return LUSTRE_CFG_RC_NO_ERR;
 }
 
 int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
