@@ -272,6 +272,14 @@ run_suites() {
                         shift;
                         export ONLY=$(split_commas $1)
                         opts+="ONLY=$ONLY ";;
+                    --suite)
+                        shift;
+                        export SUITE=$(split_commas $1)
+                        opts+="SUITE=$SUITE ";;
+                    --pattern)
+                        shift;
+                        export PATTERN=$(split_commas $1)
+                        opts+="PATTERN=$PATTERN ";;
                     --except)
                         shift;
                         export EXCEPT=$(split_commas $1)

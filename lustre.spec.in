@@ -19,6 +19,10 @@
 %bcond_without mpi
 %bcond_with kabi
 
+# LUTF Turn off brp-python-precompile script as we don't want the python files
+# to be compiled on installation
+%global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
+
 # By default both gss and gss keyring are disabled.
 # gss keyring requires the gss core. If the builder
 # request gss_keyring we must enable gss core even if

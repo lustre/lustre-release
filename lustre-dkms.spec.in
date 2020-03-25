@@ -2,6 +2,10 @@
 %bcond_without zfs
 %bcond_with ldiskfs
 
+# LUTF Turn off brp-python-precompile script as we don't want the python files
+# to be compiled on installation
+%global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
+
 # Set the package name prefix
 %if %{with servers}
     %if %{with zfs}
