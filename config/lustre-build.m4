@@ -210,6 +210,18 @@ AC_ARG_ENABLE([tests],
 	AC_HELP_STRING([--disable-tests],
 		[disable building of Lustre tests]),
 	[], [enable_tests="yes"])
+
+#
+# Check to see if we can build the lutf
+#
+AX_PYTHON_DEVEL()
+AS_IF([test "x$PYTHON_VERSION_CHECK" = xno], [
+	enable_lutf="no"
+], [
+	AX_PKG_SWIG(2.0, [ enable_lutf="yes" ],
+			 [ enable_lutf="no" ])
+])
+
 AC_MSG_RESULT([$enable_tests])
 ]) # LB_CONFIG_TESTS
 
@@ -427,6 +439,7 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
+AM_CONDITIONAL([BUILD_LUTF], [test x$enable_lutf = xyes])
 
 LN_CONDITIONALS
 LC_CONDITIONALS
@@ -554,6 +567,9 @@ if test x$enable_modules != xyes ; then
 fi
 if test x$enable_tests != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_tests"
+fi
+if test x$enable_lutf != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without lustre_tests_lutf"
 fi
 if test x$enable_utils != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_utils"
