@@ -747,9 +747,13 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			case 'A':
 				LCONSOLE_WARN("Failing over %s\n",
 					      obd->obd_name);
+				spin_lock(&obd->obd_dev_lock);
 				obd->obd_fail = 1;
+#ifdef HAVE_SERVER_SUPPORT
 				obd->obd_no_transno = 1;
+#endif
 				obd->obd_no_recov = 1;
+				spin_unlock(&obd->obd_dev_lock);
 				if (OBP(obd, iocontrol)) {
 					obd_iocontrol(OBD_IOC_SYNC,
 						      obd->obd_self_export,

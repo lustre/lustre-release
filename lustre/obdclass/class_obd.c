@@ -464,29 +464,12 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 GOTO(out, err = -EINVAL);
         }
 
-        switch(cmd) {
-        case OBD_IOC_NO_TRANSNO: {
-                if (!obd->obd_attached) {
-                        CERROR("Device %d not attached\n", obd->obd_minor);
-                        GOTO(out, err = -ENODEV);
-                }
-                CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
-                       obd->obd_name);
-                obd->obd_no_transno = 1;
-                GOTO(out, err = 0);
-        }
+	err = obd_iocontrol(cmd, obd->obd_self_export, len, data, NULL);
+	if (err)
+		GOTO(out, err);
 
-        default: {
-                err = obd_iocontrol(cmd, obd->obd_self_export, len, data, NULL);
-                if (err)
-                        GOTO(out, err);
-
-		if (copy_to_user((void __user *)arg, data, len))
-                        err = -EFAULT;
-                GOTO(out, err);
-        }
-        }
-
+	if (copy_to_user((void __user *)arg, data, len))
+		err = -EFAULT;
 out:
 	OBD_FREE_LARGE(buf, len);
 	RETURN(err);

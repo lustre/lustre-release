@@ -177,6 +177,34 @@ static ssize_t max_dirty_mb_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(max_dirty_mb);
 
+#ifdef HAVE_SERVER_SUPPORT
+static ssize_t no_transno_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	struct obd_device *obd;
+	unsigned int idx;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &idx);
+	if (rc)
+		return rc;
+
+	obd = class_num2obd(idx);
+	if (!obd || !obd->obd_attached) {
+		if (obd)
+			CERROR("%s: not attached\n", obd->obd_name);
+		return -ENODEV;
+	}
+
+	spin_lock(&obd->obd_dev_lock);
+	obd->obd_no_transno = 1;
+	spin_unlock(&obd->obd_dev_lock);
+	return count;
+}
+LUSTRE_WO_ATTR(no_transno);
+#endif /* HAVE_SERVER_SUPPORT */
+
 static ssize_t version_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf)
 {
@@ -390,6 +418,7 @@ static struct attribute *lustre_attrs[] = {
 #ifdef HAVE_SERVER_SUPPORT
 	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_sattr_bulk_timeout.u.attr,
+	&lustre_attr_no_transno.attr,
 #endif
 	&lustre_sattr_lbug_on_eviction.u.attr,
 	NULL,

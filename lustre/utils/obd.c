@@ -838,19 +838,56 @@ int jt_opt_net(int argc, char **argv)
         return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
+/* Place this here so we can build tools that work with
+ * older Lustre versions
+ */
+#ifndef OBD_IOC_NO_TRANSNO
+#define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
+#endif
+
 int jt_obd_no_transno(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	glob_t path;
+	int count;
+	int fd;
 	int rc;
-
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
 
 	if (argc != 1)
 		return CMD_HELP;
 
 	memset(buf, 0, sizeof(rawbuf));
+
+	rc = cfs_get_param_paths(&path, "no_transno");
+	if (rc != 0)
+		goto old_ioctl;
+
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd < 0) {
+		cfs_free_param_data(&path);
+		goto old_ioctl;
+	}
+
+	snprintf(rawbuf, sizeof(rawbuf), "%d", cur_device);
+
+	count = write(fd, rawbuf, strlen(rawbuf));
+	if (count < 0)
+		rc = errno;
+
+	cfs_free_param_data(&path);
+	close(fd);
+	if (rc)
+		goto old_ioctl;
+
+	return 0;
+
+old_ioctl:
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
@@ -861,9 +898,10 @@ int jt_obd_no_transno(int argc, char **argv)
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));
-
+#endif
 	return rc;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 int jt_obd_set_readonly(int argc, char **argv)
 {

@@ -421,8 +421,10 @@ command_t cmdlist[] = {
 	 "usage: lookup <directory> <file>"},
 	{"readonly", jt_obd_set_readonly, 0,
 	 "disable writes to the underlying device\n"},
+#ifdef HAVE_SERVER_SUPPORT
 	{"notransno", jt_obd_no_transno, 0,
 	 "disable sending of committed-transno updates\n"},
+#endif
 	{"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a NID\n"
 	 "usage: add_uuid <uuid> <nid>"},
 	{"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"

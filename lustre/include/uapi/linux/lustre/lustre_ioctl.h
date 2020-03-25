@@ -172,7 +172,7 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 /* was	OBD_IOC_PING_TARGET	_IOW('f', 136, OBD_IOC_DATA_TYPE) until 2.11 */
 
 /*	OBD_IOC_DEC_FS_USE_COUNT _IO('f', 139) */
-#define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
+/* was	OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_SET_READONLY	_IOW('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY	_IOR('f', 142, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_ROOT_SQUASH	_IOWR('f', 143, OBD_IOC_DATA_TYPE) */
