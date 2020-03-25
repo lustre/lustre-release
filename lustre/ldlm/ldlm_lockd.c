@@ -3528,17 +3528,11 @@ int ldlm_init(void)
 	if (ldlm_lock_slab == NULL)
 		goto out_resource;
 
-	ldlm_interval_slab = kmem_cache_create("interval_node",
-					sizeof(struct ldlm_interval),
-					0, SLAB_HWCACHE_ALIGN, NULL);
-	if (ldlm_interval_slab == NULL)
-		goto out_lock;
-
 	ldlm_interval_tree_slab = kmem_cache_create("interval_tree",
 			sizeof(struct ldlm_interval_tree) * LCK_MODE_NUM,
 			0, SLAB_HWCACHE_ALIGN, NULL);
 	if (ldlm_interval_tree_slab == NULL)
-		goto out_interval;
+		goto out_lock_slab;
 
 #ifdef HAVE_SERVER_SUPPORT
 	ldlm_inodebits_slab = kmem_cache_create("ldlm_ibits_node",
@@ -3564,9 +3558,7 @@ out_inodebits:
 out_interval_tree:
 	kmem_cache_destroy(ldlm_interval_tree_slab);
 #endif
-out_interval:
-	kmem_cache_destroy(ldlm_interval_slab);
-out_lock:
+out_lock_slab:
 	kmem_cache_destroy(ldlm_lock_slab);
 out_resource:
 	kmem_cache_destroy(ldlm_resource_slab);
@@ -3587,7 +3579,6 @@ void ldlm_exit(void)
 	 */
 	rcu_barrier();
 	kmem_cache_destroy(ldlm_lock_slab);
-	kmem_cache_destroy(ldlm_interval_slab);
 	kmem_cache_destroy(ldlm_interval_tree_slab);
 #ifdef HAVE_SERVER_SUPPORT
 	kmem_cache_destroy(ldlm_inodebits_slab);

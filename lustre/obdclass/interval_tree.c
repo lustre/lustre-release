@@ -105,11 +105,6 @@ static inline int node_compare(struct interval_node *n1,
 	return extent_compare(&n1->in_extent, &n2->in_extent);
 }
 
-int node_equal(struct interval_node *n1, struct interval_node *n2)
-{
-	return extent_equal(&n1->in_extent, &n2->in_extent);
-}
-
 #define interval_for_each(node, root)                   \
 for (node = interval_first(root); node != NULL;         \
 	node = interval_next(node))
@@ -383,8 +378,6 @@ struct interval_node *interval_insert(struct interval_node *node,
 	p = root;
         while (*p) {
                 parent = *p;
-                if (node_equal(parent, node))
-                        RETURN(parent);
 
                 /* max_high field must be updated after each iteration */
                 if (parent->in_max_high < interval_high(node))

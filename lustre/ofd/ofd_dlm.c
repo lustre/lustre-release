@@ -104,31 +104,15 @@ struct ofd_intent_args {
  */
 static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 {
-	struct ldlm_interval	 *node = (struct ldlm_interval *)n;
-	struct ofd_intent_args	 *arg = args;
-	__u64			  size = arg->size;
-	struct ldlm_lock	 *victim_lock = NULL;
-	struct ldlm_lock	 *lck;
+	struct ldlm_lock *lock = container_of(n, struct ldlm_lock, l_tree_node);
+	struct ofd_intent_args *arg = args;
+	__u64 size = arg->size;
 	struct ldlm_glimpse_work *gl_work = NULL;
 	int rc = 0;
 
 	/* If the interval is lower than the current file size, just break. */
 	if (interval_high(n) <= size)
 		GOTO(out, rc = INTERVAL_ITER_STOP);
-
-	/* Find the 'victim' lock from this interval */
-	list_for_each_entry(lck, &node->li_group, l_sl_policy) {
-		victim_lock = LDLM_LOCK_GET(lck);
-
-		/* the same policy group - every lock has the
-		 * same extent, so needn't do it any more */
-		break;
-	}
-
-	/* l_export can be null in race with eviction - In that case, we will
-	 * not find any locks in this interval */
-	if (!victim_lock)
-		GOTO(out, rc = INTERVAL_ITER_CONT);
 
 	/*
 	 * This check is for lock taken in ofd_destroy_by_fid() that does
@@ -137,16 +121,17 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	 * Hence, if you are grabbing DLM locks on the server, always set
 	 * non-NULL glimpse_ast (e.g., ldlm_request.c::ldlm_glimpse_ast()).
 	 */
-	if (victim_lock->l_glimpse_ast == NULL) {
-		LDLM_DEBUG(victim_lock, "no l_glimpse_ast");
+	if (lock->l_glimpse_ast == NULL) {
+		LDLM_DEBUG(lock, "no l_glimpse_ast");
 		arg->no_glimpse_ast = true;
-		GOTO(out_release, rc = INTERVAL_ITER_STOP);
+		GOTO(out, rc = INTERVAL_ITER_STOP);
 	}
 
 	/* If NO_EXPANSION is not set, this is an active lock, and we don't need
 	 * to glimpse any further once we've glimpsed the client holding this
-	 * lock.  So set us up to stop.  See comment above this function. */
-	if (!(victim_lock->l_flags & LDLM_FL_NO_EXPANSION))
+	 * lock.  So set us up to stop.  See comment above this function.
+	 */
+	if (!(lock->l_flags & LDLM_FL_NO_EXPANSION))
 		rc = INTERVAL_ITER_STOP;
 	else
 		rc = INTERVAL_ITER_CONT;
@@ -155,10 +140,11 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	 * client; if so, don't add this lock to the glimpse list - We need
 	 * only glimpse each client once. (And if we know that client holds
 	 * an active lock, we can stop glimpsing.  So keep the rc set in the
-	 * check above.) */
+	 * check above.)
+	 */
 	list_for_each_entry(gl_work, &arg->gl_list, gl_list) {
-		if (gl_work->gl_lock->l_export == victim_lock->l_export)
-			GOTO(out_release, rc);
+		if (gl_work->gl_lock->l_export == lock->l_export)
+			GOTO(out, rc);
 	}
 
 	if (!CFS_FAIL_CHECK(OBD_FAIL_OST_GL_WORK_ALLOC))
@@ -167,25 +153,22 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 
 	if (!gl_work) {
 		arg->error = -ENOMEM;
-		GOTO(out_release, rc = INTERVAL_ITER_STOP);
+		GOTO(out, rc = INTERVAL_ITER_STOP);
 	}
 
 	/* Populate the gl_work structure. */
-	gl_work->gl_lock = victim_lock;
+	gl_work->gl_lock = LDLM_LOCK_GET(lock);
 	list_add_tail(&gl_work->gl_list, &arg->gl_list);
 	/* There is actually no need for a glimpse descriptor when glimpsing
-	 * extent locks */
+	 * extent locks
+	 */
 	gl_work->gl_desc = NULL;
 	/* This tells ldlm_work_gl_ast_lock this was allocated from a slab and
-	 * must be freed in a slab-aware manner. */
+	 * must be freed in a slab-aware manner.
+	 */
 	gl_work->gl_flags = LDLM_GL_WORK_SLAB_ALLOCATED;
 
 	GOTO(out, rc);
-
-out_release:
-	/* If the victim doesn't go on the glimpse list, we must release it */
-	LDLM_LOCK_RELEASE(victim_lock);
-
 out:
 	return rc;
 }

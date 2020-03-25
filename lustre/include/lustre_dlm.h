@@ -691,13 +691,6 @@ struct ldlm_cb_async_args {
 /** The ldlm_glimpse_work was slab allocated & must be freed accordingly.*/
 #define LDLM_GL_WORK_SLAB_ALLOCATED 0x1
 
-/** Interval node data for each LDLM_EXTENT lock. */
-struct ldlm_interval {
-	struct interval_node	li_node;  /* node for tree management */
-	struct list_head	li_group; /* locks having same policy */
-};
-#define to_ldlm_interval(n) container_of(n, struct ldlm_interval, li_node)
-
 /**
  * Interval tree for extent locks.
  * The interval tree must be accessed under the resource lock.
@@ -819,7 +812,7 @@ struct ldlm_lock {
 	 * Internal structures per lock type..
 	 */
 	union {
-		struct ldlm_interval	*l_tree_node;
+		struct interval_node	l_tree_node;
 		struct ldlm_ibits_node  *l_ibits_node;
 	};
 	/**

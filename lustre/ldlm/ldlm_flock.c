@@ -120,18 +120,12 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 void ldlm_flock_unlink_lock(struct ldlm_lock *lock)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct ldlm_interval *node = lock->l_tree_node;
+	struct interval_node **root = &res->lr_flock_node.lfn_root;
 
-	if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
+	if (!interval_is_intree(&lock->l_tree_node)) /* duplicate unlink */
 		return;
 
-	node = ldlm_interval_detach(lock);
-	if (node) {
-		struct interval_node **root = &res->lr_flock_node.lfn_root;
-
-		interval_erase(&node->li_node, root);
-		ldlm_interval_free(node);
-	}
+	interval_erase(&lock->l_tree_node, root);
 }
 
 static inline void
@@ -286,28 +280,19 @@ static void ldlm_flock_add_lock(struct ldlm_resource *res,
 				struct list_head *head,
 				struct ldlm_lock *lock)
 {
-	struct interval_node *found, **root;
-	struct ldlm_interval *node = lock->l_tree_node;
+	struct interval_node **root;
 	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
 	int rc;
 
 	LASSERT(ldlm_is_granted(lock));
 
-	LASSERT(node != NULL);
-	LASSERT(!interval_is_intree(&node->li_node));
+	LASSERT(!interval_is_intree(&lock->l_tree_node));
 
-	rc = interval_set(&node->li_node, extent->start, extent->end);
+	rc = interval_set(&lock->l_tree_node, extent->start, extent->end);
 	LASSERT(!rc);
 
 	root = &res->lr_flock_node.lfn_root;
-	found = interval_insert(&node->li_node, root);
-	if (found) { /* The same extent found. */
-		struct ldlm_interval *tmp = ldlm_interval_detach(lock);
-
-		LASSERT(tmp != NULL);
-		ldlm_interval_free(tmp);
-		ldlm_interval_attach(to_ldlm_interval(found), lock);
-	}
+	interval_insert(&lock->l_tree_node, root);
 
 	/* Add the locks into list */
 	ldlm_resource_add_lock(res, head, lock);
@@ -317,25 +302,13 @@ static void
 ldlm_flock_range_update(struct ldlm_lock *lock, struct ldlm_lock *req)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct interval_node *found, **root = &res->lr_flock_node.lfn_root;
-	struct ldlm_interval *node;
+	struct interval_node **root = &res->lr_flock_node.lfn_root;
 	struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
 
-	node = ldlm_interval_detach(lock);
-	if (!node) {
-		node = ldlm_interval_detach(req);
-		LASSERT(node);
-	} else {
-		interval_erase(&node->li_node, root);
-	}
-	interval_set(&node->li_node, extent->start, extent->end);
+	interval_erase(&lock->l_tree_node, root);
+	interval_set(&lock->l_tree_node, extent->start, extent->end);
+	interval_insert(&lock->l_tree_node, root);
 
-	found = interval_insert(&node->li_node, root);
-	if (found) { /* The policy group found. */
-		ldlm_interval_free(node);
-		node = to_ldlm_interval(found);
-	}
-	ldlm_interval_attach(node, lock);
 	EXIT;
 }
 
