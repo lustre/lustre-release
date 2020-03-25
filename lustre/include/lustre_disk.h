@@ -138,6 +138,10 @@ struct lustre_sb_info {
 	struct list_head	  lsi_lwp_list;
 	unsigned long		  lsi_lwp_started:1,
 				  lsi_server_started:1;
+#ifdef CONFIG_LL_ENCRYPTION
+	const struct llcrypt_operations	*lsi_cop;
+	struct key		 *lsi_master_keys; /* master crypto keys used */
+#endif
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000

@@ -1,0 +1,19 @@
+As __iget is not exported by the kernel, replace it with igrab.
+
+--- a/libcfs/libcfs/crypto/keyring.c
++++ b/libcfs/libcfs/crypto/keyring.c
+@@ -660,13 +660,8 @@ static void evict_dentries_for_decrypted
+ 
+ 	list_for_each_entry(ci, &mk->mk_decrypted_inodes, ci_master_key_link) {
+ 		inode = ci->ci_inode;
+-		spin_lock(&inode->i_lock);
+-		if (inode->i_state & (I_FREEING | I_WILL_FREE | I_NEW)) {
+-			spin_unlock(&inode->i_lock);
++		if (igrab(inode) == NULL)
+ 			continue;
+-		}
+-		__iget(inode);
+-		spin_unlock(&inode->i_lock);
+ 		spin_unlock(&mk->mk_decrypted_inodes_lock);
+ 
+ 		shrink_dcache_inode(inode);

@@ -1,0 +1,16 @@
+Linux 5.0 (commit 231baecdef7a) renames CRYPTO_TFM_REQ_WEAK_KEY to
+CRYPTO_TFM_REQ_FORBID_WEAK_KEYS.
+
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -15,6 +15,10 @@
+ #include <crypto/hash.h>
+ #include <lustre_disk.h>
+ 
++#ifndef CRYPTO_TFM_REQ_FORBID_WEAK_KEYS
++#define CRYPTO_TFM_REQ_FORBID_WEAK_KEYS CRYPTO_TFM_REQ_WEAK_KEY
++#endif
++
+ #define CONST_STRLEN(str)	(sizeof(str) - 1)
+ 
+ #define FS_KEY_DERIVATION_NONCE_SIZE	16

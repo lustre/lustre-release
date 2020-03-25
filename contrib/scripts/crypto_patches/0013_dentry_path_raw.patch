@@ -1,0 +1,13 @@
+As dentry_path is not exported by the kernel, replace with dentry_path_raw.
+
+--- a/libcfs/libcfs/crypto/keyring.c
++++ b/libcfs/libcfs/crypto/keyring.c
+@@ -707,7 +707,7 @@ static int check_for_busy_inodes(struct
+ 	spin_unlock(&mk->mk_decrypted_inodes_lock);
+ 
+ 	if (dentry) {
+-		path = dentry_path(dentry, _path, sizeof(_path));
++		path = dentry_path_raw(dentry, _path, sizeof(_path));
+ 		dput(dentry);
+ 	}
+ 	if (IS_ERR_OR_NULL(path))

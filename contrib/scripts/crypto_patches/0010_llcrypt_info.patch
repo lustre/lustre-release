@@ -1,0 +1,157 @@
+Replace use of inode->i_crypt_info with inode->i_private, cast as a struct llcrypt_info.
+This is required in order to be able to support encryption on kernels that lack
+inode->i_crypt_info field.
+
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -81,11 +81,7 @@ struct llcrypt_ctx {
+ 	u8 flags;				/* Flags */
+ };
+ 
+-static inline bool llcrypt_has_encryption_key(const struct inode *inode)
+-{
+-	/* pairs with cmpxchg_release() in llcrypt_get_encryption_info() */
+-	return READ_ONCE(inode->i_crypt_info) != NULL;
+-}
++extern bool llcrypt_has_encryption_key(const struct inode *inode);
+ 
+ static inline bool llcrypt_dummy_context_enabled(struct inode *inode)
+ {
+--- a/libcfs/libcfs/crypto/crypto.c
++++ b/libcfs/libcfs/crypto/crypto.c
+@@ -158,7 +158,7 @@ int llcrypt_crypt_block(const struct ino
+ 	struct skcipher_request *req = NULL;
+ 	DECLARE_CRYPTO_WAIT(wait);
+ 	struct scatterlist dst, src;
+-	struct llcrypt_info *ci = inode->i_crypt_info;
++	struct llcrypt_info *ci = llcrypt_info(inode);
+ 	struct crypto_skcipher *tfm = ci->ci_ctfm;
+ 	int res = 0;
+ 
+--- a/libcfs/libcfs/crypto/fname.c
++++ b/libcfs/libcfs/crypto/fname.c
+@@ -39,7 +39,7 @@ int fname_encrypt(struct inode *inode, c
+ {
+ 	struct skcipher_request *req = NULL;
+ 	DECLARE_CRYPTO_WAIT(wait);
+-	struct llcrypt_info *ci = inode->i_crypt_info;
++	struct llcrypt_info *ci = llcrypt_info(inode);
+ 	struct crypto_skcipher *tfm = ci->ci_ctfm;
+ 	union llcrypt_iv iv;
+ 	struct scatterlist sg;
+@@ -92,7 +92,7 @@ static int fname_decrypt(struct inode *i
+ 	struct skcipher_request *req = NULL;
+ 	DECLARE_CRYPTO_WAIT(wait);
+ 	struct scatterlist src_sg, dst_sg;
+-	struct llcrypt_info *ci = inode->i_crypt_info;
++	struct llcrypt_info *ci = llcrypt_info(inode);
+ 	struct crypto_skcipher *tfm = ci->ci_ctfm;
+ 	union llcrypt_iv iv;
+ 	int res;
+@@ -181,7 +181,7 @@ static int base64_decode(const char *src
+ bool llcrypt_fname_encrypted_size(const struct inode *inode, u32 orig_len,
+ 				  u32 max_len, u32 *encrypted_len_ret)
+ {
+-	const struct llcrypt_info *ci = inode->i_crypt_info;
++	const struct llcrypt_info *ci = llcrypt_info(inode);
+ 	int padding = 4 << (llcrypt_policy_flags(&ci->ci_policy) &
+ 			    LLCRYPT_POLICY_FLAGS_PAD_MASK);
+ 	u32 encrypted_len;
+--- a/libcfs/libcfs/crypto/keysetup.c
++++ b/libcfs/libcfs/crypto/keysetup.c
+@@ -501,7 +501,8 @@ int llcrypt_get_encryption_info(struct i
+ 	if (res)
+ 		goto out;
+ 
+-	if (cmpxchg_release(&inode->i_crypt_info, NULL, crypt_info) == NULL) {
++	if (cmpxchg_release(&(llcrypt_info_nocast(inode)), NULL,
++			    crypt_info) == NULL) {
+ 		if (master_key) {
+ 			struct llcrypt_master_key *mk =
+ 				master_key->payload.data[0];
+@@ -538,8 +539,8 @@ EXPORT_SYMBOL(llcrypt_get_encryption_inf
+  */
+ void llcrypt_put_encryption_info(struct inode *inode)
+ {
+-	put_crypt_info(inode->i_crypt_info);
+-	inode->i_crypt_info = NULL;
++	put_crypt_info(llcrypt_info(inode));
++	llcrypt_info_nocast(inode) = NULL;
+ }
+ EXPORT_SYMBOL(llcrypt_put_encryption_info);
+ 
+@@ -569,9 +570,10 @@ EXPORT_SYMBOL(llcrypt_free_inode);
+  */
+ int llcrypt_drop_inode(struct inode *inode)
+ {
+-	const struct llcrypt_info *ci = READ_ONCE(inode->i_crypt_info);
++	const struct llcrypt_info *ci;
+ 	const struct llcrypt_master_key *mk;
+ 
++	ci = (struct llcrypt_info *)READ_ONCE(llcrypt_info_nocast(inode));
+ 	/*
+ 	 * If ci is NULL, then the inode doesn't have an encryption key set up
+ 	 * so it's irrelevant.  If ci_master_key is NULL, then the master key
+@@ -593,3 +595,10 @@ int llcrypt_drop_inode(struct inode *ino
+ 	return !is_master_key_secret_present(&mk->mk_secret);
+ }
+ EXPORT_SYMBOL_GPL(llcrypt_drop_inode);
++
++inline bool llcrypt_has_encryption_key(const struct inode *inode)
++{
++	/* pairs with cmpxchg_release() in llcrypt_get_encryption_info() */
++	return READ_ONCE(llcrypt_info_nocast(inode)) != NULL;
++}
++EXPORT_SYMBOL_GPL(llcrypt_has_encryption_key);
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -19,6 +19,9 @@
+ #define CRYPTO_TFM_REQ_FORBID_WEAK_KEYS CRYPTO_TFM_REQ_WEAK_KEY
+ #endif
+ 
++#define llcrypt_info(inode)	     ((struct llcrypt_info *)(inode)->i_private)
++#define llcrypt_info_nocast(inode)   ((inode)->i_private)
++
+ #define CONST_STRLEN(str)	(sizeof(str) - 1)
+ 
+ #define FS_KEY_DERIVATION_NONCE_SIZE	16
+@@ -160,8 +163,8 @@ struct llcrypt_symlink_data {
+  * llcrypt_info - the "encryption key" for an inode
+  *
+  * When an encrypted file's key is made available, an instance of this struct is
+- * allocated and stored in ->i_crypt_info.  Once created, it remains until the
+- * inode is evicted.
++ * allocated and stored in '(struct llcrypt_info *)inode->i_private'.
++ * Once created, it remains until the inode is evicted.
+  */
+ struct llcrypt_info {
+ 
+--- a/libcfs/libcfs/crypto/policy.c
++++ b/libcfs/libcfs/crypto/policy.c
+@@ -212,7 +212,7 @@ static int llcrypt_get_policy(struct ino
+ 	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+ 	int ret;
+ 
+-	ci = READ_ONCE(inode->i_crypt_info);
++	ci = (struct llcrypt_info *)READ_ONCE(llcrypt_info_nocast(inode));
+ 	if (ci) {
+ 		/* key available, use the cached policy */
+ 		*policy = ci->ci_policy;
+@@ -472,7 +472,7 @@ EXPORT_SYMBOL(llcrypt_has_permitted_cont
+  * @parent: Parent inode from which the context is inherited.
+  * @child:  Child inode that inherits the context from @parent.
+  * @fs_data:  private data given by FS.
+- * @preload:  preload child i_crypt_info if true
++ * @preload:  preload child crypt info if true
+  *
+  * Return: 0 on success, -errno on failure
+  */
+@@ -489,7 +489,7 @@ int llcrypt_inherit_context(struct inode
+ 	if (res < 0)
+ 		return res;
+ 
+-	ci = READ_ONCE(parent->i_crypt_info);
++	ci = (struct llcrypt_info *)READ_ONCE(llcrypt_info_nocast(parent));
+ 	if (ci == NULL)
+ 		return -ENOKEY;
+ 

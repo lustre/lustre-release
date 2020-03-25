@@ -1,1 +1,1 @@
-SUBDIRS = libcfs 
+SUBDIRS = libcfs uapi

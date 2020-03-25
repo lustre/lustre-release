@@ -1,0 +1,15 @@
+contrib/scripts/crypto_patches/0001_llcrypt_private_include.patch
+contrib/scripts/crypto_patches/0002_dcache_encrypted_name.patch
+contrib/scripts/crypto_patches/0003_keyring_search_4args.patch
+contrib/scripts/crypto_patches/0004_master_keys.patch
+contrib/scripts/crypto_patches/0005_crypto_tfm_req_forbid_weak_keys.patch
+contrib/scripts/crypto_patches/0006_bvec_iter_all.patch
+contrib/scripts/crypto_patches/0007_crypto_init.patch
+contrib/scripts/crypto_patches/0008_key_desc_prefix.patch
+contrib/scripts/crypto_patches/0009_lsi_cop.patch
+contrib/scripts/crypto_patches/0010_llcrypt_info.patch
+contrib/scripts/crypto_patches/0011_llcrypt_cleanup.patch
+contrib/scripts/crypto_patches/0012_igrab.patch
+contrib/scripts/crypto_patches/0013_dentry_path_raw.patch
+contrib/scripts/crypto_patches/0014_cdebug.patch
+contrib/scripts/crypto_patches/0015_llcrypt_include.patch

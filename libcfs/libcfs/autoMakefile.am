@@ -34,6 +34,8 @@
 
 SUBDIRS = linux util
 DIST_SUBDIRS = linux util
+SUBDIRS += crypto
+DIST_SUBDIRS += crypto
 
 noinst_LTLIBRARIES = libcfs.la
 libcfs_la_SOURCES  := util/string.c util/nidstrings.c util/param.c
@@ -55,7 +57,7 @@ endif # LINUX
 
 endif # MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux/*.o libcfs
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux/*.o libcfs crypto/*.o
 EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h \
 	      workitem.c fail.c libcfs_cpu.c \
 	      heap.c libcfs_mem.c libcfs_lock.c \

@@ -263,6 +263,11 @@ debs: undef.h
 	elif test "x@ENABLE_GSS@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
 	fi; \
+	if test "x@ENABLE_CRYPTO@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} crypto"; \
+	elif test "x@ENABLE_CRYPTO@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nocrypto"; \
+	fi; \
 	if test "x@systemdsystemunitdir@" != "x"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"; \
 	fi; \

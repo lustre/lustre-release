@@ -49,6 +49,7 @@
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_param.h>
+#include <libcfs/crypto/llcrypt.h>
 
 static DEFINE_SPINLOCK(client_lock);
 static struct module *client_mod;
@@ -625,6 +626,7 @@ static int lustre_free_lsi(struct super_block *sb)
 	/* someone didn't call server_put_mount. */
 	LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
 
+	llcrypt_sb_free(sb);
 	if (lsi->lsi_lmd != NULL) {
 		if (lsi->lsi_lmd->lmd_dev != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_dev,

@@ -1,5 +1,7 @@
 SUBDIRS = linux util
 DIST_SUBDIRS = linux util
+SUBDIRS += crypto
+DIST_SUBDIRS += crypto
 
 libcfsdir = $(includedir)/libcfs
 

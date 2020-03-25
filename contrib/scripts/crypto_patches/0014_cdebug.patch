@@ -1,0 +1,45 @@
+Make llcrypt_msg use CDEBUG.
+
+--- a/libcfs/libcfs/crypto/crypto.c
++++ b/libcfs/libcfs/crypto/crypto.c
+@@ -451,7 +451,7 @@ fail:
+ 	return res;
+ }
+ 
+-void llcrypt_msg(const struct inode *inode, const char *level,
++void llcrypt_msg(const struct inode *inode, int mask,
+ 		 const char *fmt, ...)
+ {
+ 	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL,
+@@ -466,10 +466,10 @@ void llcrypt_msg(const struct inode *ino
+ 	vaf.fmt = fmt;
+ 	vaf.va = &args;
+ 	if (inode)
+-		printk("%sllcrypt (%s, inode %lu): %pV\n",
+-		       level, inode->i_sb->s_id, inode->i_ino, &vaf);
++		CDEBUG(mask, "llcrypt (%s, inode %lu): %pV\n",
++		       inode->i_sb->s_id, inode->i_ino, &vaf);
+ 	else
+-		printk("%sllcrypt: %pV\n", level, &vaf);
++		CDEBUG(mask, "llcrypt: %pV\n", &vaf);
+ 	va_end(args);
+ }
+ 
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -249,12 +249,12 @@ extern struct page *llcrypt_alloc_bounce
+ extern const struct dentry_operations llcrypt_d_ops;
+ 
+ extern void __printf(3, 4) __cold
+-llcrypt_msg(const struct inode *inode, const char *level, const char *fmt, ...);
++llcrypt_msg(const struct inode *inode, int mask, const char *fmt, ...);
+ 
+ #define llcrypt_warn(inode, fmt, ...)		\
+-	llcrypt_msg((inode), KERN_WARNING, fmt, ##__VA_ARGS__)
++	llcrypt_msg((inode), D_SEC, fmt, ##__VA_ARGS__)
+ #define llcrypt_err(inode, fmt, ...)		\
+-	llcrypt_msg((inode), KERN_ERR, fmt, ##__VA_ARGS__)
++	llcrypt_msg((inode), D_ERROR, fmt, ##__VA_ARGS__)
+ 
+ #define LLCRYPT_MAX_IV_SIZE	32
+ 

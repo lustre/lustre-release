@@ -54,6 +54,7 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
+#include <libcfs/crypto/llcrypt.h>
 #include "tracefile.h"
 
 static struct dentry *lnet_debugfs_root;
@@ -763,6 +764,12 @@ static int __init libcfs_init(void)
 	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
 		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
 
+	rc = llcrypt_init();
+	if (rc) {
+		CERROR("llcrypt_init: error %d\n", rc);
+		goto cleanup_wi;
+	}
+
 	CDEBUG (D_OTHER, "portals setup OK\n");
 	return 0;
 cleanup_wi:
@@ -786,6 +793,8 @@ static void __exit libcfs_exit(void)
 
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));
+
+	llcrypt_exit();
 
 	if (cfs_rehash_wq) {
 		destroy_workqueue(cfs_rehash_wq);

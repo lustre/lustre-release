@@ -1,0 +1,157 @@
+Linux 5.3 (commit 22d94f493bfb) introduces s_master_keys to struct super_block.
+As we need encryption support for older kernels, replace this with
+new lsi_master_keys field in struct lustre_sb_info.
+
+--- a/libcfs/libcfs/crypto/keyring.c
++++ b/libcfs/libcfs/crypto/keyring.c
+@@ -82,7 +82,7 @@ static void llcrypt_key_describe(const s
+ }
+ 
+ /*
+- * Type of key in ->s_master_keys.  Each key of this type represents a master
++ * Type of key in ->lsi_master_keys.  Each key of this type represents a master
+  * key which has been added to the filesystem.  Its payload is a
+  * 'struct llcrypt_master_key'.  The "." prefix in the key type name prevents
+  * users from adding keys of this type via the keyrings syscalls rather than via
+@@ -127,7 +127,7 @@ static struct key_type key_type_llcrypt_
+ 	.describe		= llcrypt_user_key_describe,
+ };
+ 
+-/* Search ->s_master_keys or ->mk_users */
++/* Search ->lsi_master_keys or ->mk_users */
+ static struct key *search_llcrypt_keyring(struct key *keyring,
+ 					  struct key_type *type,
+ 					  const char *description)
+@@ -196,13 +196,17 @@ static void format_mk_user_description(
+ 		mk_identifier, __kuid_val(current_fsuid()));
+ }
+ 
+-/* Create ->s_master_keys if needed.  Synchronized by llcrypt_add_key_mutex. */
++/* Create ->lsi_master_keys if needed.  Synchronized by llcrypt_add_key_mutex. */
+ static int allocate_filesystem_keyring(struct super_block *sb)
+ {
+ 	char description[LLCRYPT_FS_KEYRING_DESCRIPTION_SIZE];
+ 	struct key *keyring;
++	struct lustre_sb_info *lsi = s2lsi(sb);
+ 
+-	if (sb->s_master_keys)
++	if (!lsi)
++		return -EINVAL;
++
++	if (lsi->lsi_master_keys)
+ 		return 0;
+ 
+ 	format_fs_keyring_description(description, sb);
+@@ -214,18 +218,22 @@ static int allocate_filesystem_keyring(s
+ 		return PTR_ERR(keyring);
+ 
+ 	/* Pairs with READ_ONCE() in llcrypt_find_master_key() */
+-	smp_store_release(&sb->s_master_keys, keyring);
++	smp_store_release(&lsi->lsi_master_keys, keyring);
+ 	return 0;
+ }
+ 
+ void llcrypt_sb_free(struct super_block *sb)
+ {
+-	key_put(sb->s_master_keys);
+-	sb->s_master_keys = NULL;
++	struct lustre_sb_info *lsi = s2lsi(sb);
++
++	if (lsi != NULL) {
++		key_put(lsi->lsi_master_keys);
++		lsi->lsi_master_keys = NULL;
++	}
+ }
+ 
+ /*
+- * Find the specified master key in ->s_master_keys.
++ * Find the specified master key in ->lsi_master_keys.
+  * Returns ERR_PTR(-ENOKEY) if not found.
+  */
+ struct key *llcrypt_find_master_key(struct super_block *sb,
+@@ -233,9 +241,13 @@ struct key *llcrypt_find_master_key(stru
+ {
+ 	struct key *keyring;
+ 	char description[LLCRYPT_MK_DESCRIPTION_SIZE];
++	struct lustre_sb_info *lsi = s2lsi(sb);
++
++	if (!lsi)
++		return ERR_PTR(-EINVAL);
+ 
+ 	/* pairs with smp_store_release() in allocate_filesystem_keyring() */
+-	keyring = READ_ONCE(sb->s_master_keys);
++	keyring = READ_ONCE(lsi->lsi_master_keys);
+ 	if (keyring == NULL)
+ 		return ERR_PTR(-ENOKEY); /* No keyring yet, so no keys yet. */
+ 
+@@ -432,8 +444,12 @@ static int add_master_key(struct super_b
+ {
+ 	static DEFINE_MUTEX(llcrypt_add_key_mutex);
+ 	struct key *key;
++	struct lustre_sb_info *lsi = s2lsi(sb);
+ 	int err;
+ 
++	if (!lsi)
++		return -EINVAL;
++
+ 	mutex_lock(&llcrypt_add_key_mutex); /* serialize find + link */
+ retry:
+ 	key = llcrypt_find_master_key(sb, mk_spec);
+@@ -441,14 +457,15 @@ retry:
+ 		err = PTR_ERR(key);
+ 		if (err != -ENOKEY)
+ 			goto out_unlock;
+-		/* Didn't find the key in ->s_master_keys.  Add it. */
++		/* Didn't find the key in ->lsi_master_keys.  Add it. */
+ 		err = allocate_filesystem_keyring(sb);
+ 		if (err)
+ 			goto out_unlock;
+-		err = add_new_master_key(secret, mk_spec, sb->s_master_keys);
++		err = add_new_master_key(secret, mk_spec,
++					 lsi->lsi_master_keys);
+ 	} else {
+ 		/*
+-		 * Found the key in ->s_master_keys.  Re-add the secret if
++		 * Found the key in ->lsi_master_keys.  Re-add the secret if
+ 		 * needed, and add the user to ->mk_users if needed.
+ 		 */
+ 		down_write(&key->sem);
+--- a/libcfs/libcfs/crypto/keysetup.c
++++ b/libcfs/libcfs/crypto/keysetup.c
+@@ -326,7 +326,7 @@ static int setup_file_encryption_key(str
+ 		/*
+ 		 * As a legacy fallback for v1 policies, search for the key in
+ 		 * the current task's subscribed keyrings too.  Don't move this
+-		 * to before the search of ->s_master_keys, since users
++		 * to before the search of ->lsi_master_keys, since users
+ 		 * shouldn't be able to override filesystem-level keys.
+ 		 */
+ 		return llcrypt_setup_v1_file_key_via_subscribed_keyrings(ci);
+@@ -406,7 +406,7 @@ static void put_crypt_info(struct llcryp
+ 		 *
+ 		 * In addition, if we're removing the last inode from a key that
+ 		 * already had its secret removed, invalidate the key so that it
+-		 * gets removed from ->s_master_keys.
++		 * gets removed from ->lsi_master_keys.
+ 		 */
+ 		spin_lock(&mk->mk_decrypted_inodes_lock);
+ 		list_del(&ci->ci_master_key_link);
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -13,6 +13,7 @@
+ 
+ #include <libcfs/crypto/llcrypt.h>
+ #include <crypto/hash.h>
++#include <lustre_disk.h>
+ 
+ #define CONST_STRLEN(str)	(sizeof(str) - 1)
+ 
+@@ -372,7 +373,7 @@ struct llcrypt_master_key {
+ 
+ 	/*
+ 	 * Length of ->mk_decrypted_inodes, plus one if mk_secret is present.
+-	 * Once this goes to 0, the master key is removed from ->s_master_keys.
++	 * Once this goes to 0, the master key is removed from ->lsi_master_keys.
+ 	 * The 'struct llcrypt_master_key' will continue to live as long as the
+ 	 * 'struct key' whose payload it is, but we won't let this reference
+ 	 * count rise again.

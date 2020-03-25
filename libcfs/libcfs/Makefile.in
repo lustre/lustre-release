@@ -5,9 +5,13 @@ libcfs-linux-objs += linux-curproc.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
 
+libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
+libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o bio.o
+
 default: all
 
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
+libcfs-crypto-objs := $(addprefix crypto/,$(libcfs-crypto-objs))
 
 libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   libcfs_string.o hash.o heap.o \
@@ -17,6 +21,7 @@ libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   linux-debug.o linux-tracefile.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
+@LLCRYPT_TRUE@libcfs-objs += $(libcfs-crypto-objs)
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/../libcfs/libcfs
 

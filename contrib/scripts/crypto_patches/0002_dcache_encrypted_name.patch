@@ -1,0 +1,16 @@
+Linux 5.1 (commit 6cc248684d3d) renames DCACHE_ENCRYPTED_WITH_KEY to
+DCACHE_ENCRYPTED_NAME.
+
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -13,6 +13,10 @@
+ #ifndef _LINUX_LLCRYPT_H
+ #define _LINUX_LLCRYPT_H
+ 
++#ifndef DCACHE_ENCRYPTED_NAME
++#define DCACHE_ENCRYPTED_NAME 0x02000000
++#endif
++
+ #include <linux/fs.h>
+ #include <linux/mm.h>
+ #include <linux/slab.h>

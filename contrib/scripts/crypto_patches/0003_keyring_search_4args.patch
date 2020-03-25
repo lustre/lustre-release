@@ -1,0 +1,16 @@
+Linux 5.2 commit dcf49dbc8077) adds a 'recurse' flag for keyring searches.
+
+--- a/libcfs/libcfs/crypto/keyring.c
++++ b/libcfs/libcfs/crypto/keyring.c
+@@ -138,7 +138,11 @@ static struct key *search_llcrypt_keyrin
+ 	 */
+ 	key_ref_t keyref = make_key_ref(keyring, true /* possessed */);
+ 
++#ifdef HAVE_KEYRING_SEARCH_4ARGS
+ 	keyref = keyring_search(keyref, type, description, false);
++#else
++	keyref = keyring_search(keyref, type, description);
++#endif
+ 	if (IS_ERR(keyref)) {
+ 		if (PTR_ERR(keyref) == -EAGAIN || /* not found */
+ 		    PTR_ERR(keyref) == -EKEYREVOKED) /* recently invalidated */

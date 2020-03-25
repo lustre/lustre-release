@@ -561,6 +561,13 @@ elif test x$enable_gss = xno ; then
 	RPMBINARGS="$RPMBINARGS --without gss"
 	AC_SUBST(ENABLE_GSS, no)
 fi
+if test x$enable_crypto = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with crypto"
+	AC_SUBST(ENABLE_CRYPTO, yes)
+elif test x$enable_crypto = xno ; then
+	RPMBINARGS="$RPMBINARGS --without crypto"
+	AC_SUBST(ENABLE_CRYPTO, no)
+fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
 fi
@@ -618,6 +625,7 @@ LB_CONFIG_TESTS
 LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS
+LC_CONFIG_CRYPTO
 
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])

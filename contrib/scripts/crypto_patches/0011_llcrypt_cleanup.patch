@@ -1,0 +1,69 @@
+Add __exit functions for llcrypt.
+Initial fscrypt implementation lacks this because fscrypt is not a kernel module.
+
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -108,6 +108,7 @@ static inline void llcrypt_handle_d_move
+ 
+ /* crypto.c */
+ extern int __init llcrypt_init(void);
++extern void __exit llcrypt_exit(void);
+ extern void llcrypt_enqueue_decrypt_work(struct work_struct *);
+ extern struct llcrypt_ctx *llcrypt_get_ctx(gfp_t);
+ extern void llcrypt_release_ctx(struct llcrypt_ctx *);
+--- a/libcfs/libcfs/crypto/crypto.c
++++ b/libcfs/libcfs/crypto/crypto.c
+@@ -517,3 +517,22 @@ fail_free_queue:
+ fail:
+ 	return err;
+ }
++
++/**
++ * llcrypt_exit() - Clean up for fs encryption.
++ */
++void __exit llcrypt_exit(void)
++{
++	llcrypt_exit_keyring();
++
++	llcrypt_destroy();
++	/*
++	 * Make sure all delayed rcu free inodes are flushed before we
++	 * destroy cache.
++	 */
++	rcu_barrier();
++
++	kmem_cache_destroy(llcrypt_info_cachep);
++	kmem_cache_destroy(llcrypt_ctx_cachep);
++	destroy_workqueue(llcrypt_read_workqueue);
++}
+--- a/libcfs/libcfs/crypto/keyring.c
++++ b/libcfs/libcfs/crypto/keyring.c
+@@ -231,6 +231,7 @@ void llcrypt_sb_free(struct super_block
+ 		lsi->lsi_master_keys = NULL;
+ 	}
+ }
++EXPORT_SYMBOL(llcrypt_sb_free);
+ 
+ /*
+  * Find the specified master key in ->lsi_master_keys.
+@@ -1003,3 +1004,9 @@ err_unregister_llcrypt:
+ 	unregister_key_type(&key_type_llcrypt);
+ 	return err;
+ }
++
++void __exit llcrypt_exit_keyring(void)
++{
++	unregister_key_type(&key_type_llcrypt_user);
++	unregister_key_type(&key_type_llcrypt);
++}
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -444,6 +444,8 @@ extern int llcrypt_verify_key_added(stru
+ 
+ extern int __init llcrypt_init_keyring(void);
+ 
++extern void __exit llcrypt_exit_keyring(void);
++
+ /* keysetup.c */
+ 
+ struct llcrypt_mode {

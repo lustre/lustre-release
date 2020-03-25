@@ -1,0 +1,198 @@
+Replace (struct super_block *)->s_cop with (struct lustre_sb_info *)->lsi_cop.
+This is needed so that we can use llcrypt on kernels that do not have
+(struct super_block *)->s_cop.
+
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -20,6 +20,7 @@
+ #include <linux/fs.h>
+ #include <linux/mm.h>
+ #include <linux/slab.h>
++#include <lustre_disk.h>
+ #include <uapi/linux/llcrypt.h>
+ 
+ #define LL_CRYPTO_BLOCK_SIZE		16
+@@ -88,8 +89,13 @@ static inline bool llcrypt_has_encryptio
+ 
+ static inline bool llcrypt_dummy_context_enabled(struct inode *inode)
+ {
+-	return inode->i_sb->s_cop->dummy_context &&
+-		inode->i_sb->s_cop->dummy_context(inode);
++	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
++
++	if (unlikely(!lsi))
++		return false;
++
++	return lsi->lsi_cop->dummy_context &&
++		lsi->lsi_cop->dummy_context(inode);
+ }
+ 
+ /*
+@@ -275,9 +281,12 @@ extern const char *llcrypt_get_symlink(s
+ 				       unsigned int max_size,
+ 				       struct delayed_call *done);
+ static inline void llcrypt_set_ops(struct super_block *sb,
+-				   const struct llcrypt_operations *s_cop)
++				   const struct llcrypt_operations *lsi_cop)
+ {
+-	sb->s_cop = s_cop;
++	struct lustre_sb_info *lsi = s2lsi(sb);
++
++	if (lsi)
++		lsi->lsi_cop = lsi_cop;
+ }
+ #else  /* !CONFIG_LL_ENCRYPTION */
+ 
+@@ -557,7 +566,7 @@ static inline const char *llcrypt_get_sy
+ }
+ 
+ static inline void llcrypt_set_ops(struct super_block *sb,
+-				   const struct llcrypt_operations *s_cop)
++				   const struct llcrypt_operations *lsi_cop)
+ {
+ }
+ 
+--- a/libcfs/libcfs/crypto/fname.c
++++ b/libcfs/libcfs/crypto/fname.c
+@@ -333,8 +333,12 @@ int llcrypt_setup_filename(struct inode
+ 		return ret;
+ 
+ 	if (llcrypt_has_encryption_key(dir)) {
++		struct lustre_sb_info *lsi = s2lsi(dir->i_sb);
++
+ 		if (!llcrypt_fname_encrypted_size(dir, iname->len,
+-						  dir->i_sb->s_cop->max_namelen,
++						  lsi ?
++						    lsi->lsi_cop->max_namelen :
++						    NAME_MAX,
+ 						  &fname->crypto_buf.len))
+ 			return -ENAMETOOLONG;
+ 		fname->crypto_buf.name = kmalloc(fname->crypto_buf.len,
+--- a/libcfs/libcfs/crypto/keysetup.c
++++ b/libcfs/libcfs/crypto/keysetup.c
+@@ -424,16 +424,20 @@ int llcrypt_get_encryption_info(struct i
+ 	union llcrypt_context ctx;
+ 	struct llcrypt_mode *mode;
+ 	struct key *master_key = NULL;
++	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+ 	int res;
+ 
+ 	if (llcrypt_has_encryption_key(inode))
+ 		return 0;
+ 
+-	res = llcrypt_initialize(inode->i_sb->s_cop->flags);
++	if (!lsi)
++		return -ENOKEY;
++
++	res = llcrypt_initialize(lsi->lsi_cop->flags);
+ 	if (res)
+ 		return res;
+ 
+-	res = inode->i_sb->s_cop->get_context(inode, &ctx, sizeof(ctx));
++	res = lsi->lsi_cop->get_context(inode, &ctx, sizeof(ctx));
+ 	if (res < 0) {
+ 		if (!llcrypt_dummy_context_enabled(inode) ||
+ 		    IS_ENCRYPTED(inode)) {
+--- a/libcfs/libcfs/crypto/keysetup_v1.c
++++ b/libcfs/libcfs/crypto/keysetup_v1.c
+@@ -325,10 +325,16 @@ int llcrypt_setup_v1_file_key_via_subscr
+ 	key = find_and_lock_process_key(LLCRYPT_KEY_DESC_PREFIX,
+ 					ci->ci_policy.v1.master_key_descriptor,
+ 					ci->ci_mode->keysize, &payload);
+-	if (key == ERR_PTR(-ENOKEY) && ci->ci_inode->i_sb->s_cop->key_prefix) {
+-		key = find_and_lock_process_key(ci->ci_inode->i_sb->s_cop->key_prefix,
+-						ci->ci_policy.v1.master_key_descriptor,
+-						ci->ci_mode->keysize, &payload);
++	if (key == ERR_PTR(-ENOKEY)) {
++		struct lustre_sb_info *lsi = s2lsi(ci->ci_inode->i_sb);
++
++		if (lsi && lsi->lsi_cop->key_prefix) {
++			key =
++			    find_and_lock_process_key(lsi->lsi_cop->key_prefix,
++						      ci->ci_policy.v1.master_key_descriptor,
++						      ci->ci_mode->keysize,
++						      &payload);
++		}
+ 	}
+ 	if (IS_ERR(key))
+ 		return PTR_ERR(key);
+--- a/libcfs/libcfs/crypto/policy.c
++++ b/libcfs/libcfs/crypto/policy.c
+@@ -209,6 +209,7 @@ static int llcrypt_get_policy(struct ino
+ {
+ 	const struct llcrypt_info *ci;
+ 	union llcrypt_context ctx;
++	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+ 	int ret;
+ 
+ 	ci = READ_ONCE(inode->i_crypt_info);
+@@ -221,7 +222,10 @@ static int llcrypt_get_policy(struct ino
+ 	if (!IS_ENCRYPTED(inode))
+ 		return -ENODATA;
+ 
+-	ret = inode->i_sb->s_cop->get_context(inode, &ctx, sizeof(ctx));
++	if (!lsi)
++		return -ENODATA;
++
++	ret = lsi->lsi_cop->get_context(inode, &ctx, sizeof(ctx));
+ 	if (ret < 0)
+ 		return (ret == -ERANGE) ? -EINVAL : ret;
+ 
+@@ -233,6 +237,7 @@ static int set_encryption_policy(struct
+ {
+ 	union llcrypt_context ctx;
+ 	int ctxsize;
++	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+ 	int err;
+ 
+ 	if (!llcrypt_supported_policy(policy, inode))
+@@ -267,7 +272,10 @@ static int set_encryption_policy(struct
+ 
+ 	ctxsize = llcrypt_new_context_from_policy(&ctx, policy);
+ 
+-	return inode->i_sb->s_cop->set_context(inode, &ctx, ctxsize, NULL);
++	if (!lsi)
++		return -EINVAL;
++
++	return lsi->lsi_cop->set_context(inode, &ctx, ctxsize, NULL);
+ }
+ 
+ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
+@@ -313,11 +321,13 @@ int llcrypt_ioctl_set_policy(struct file
+ 
+ 	ret = llcrypt_get_policy(inode, &existing_policy);
+ 	if (ret == -ENODATA) {
++		struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
++
+ 		if (!S_ISDIR(inode->i_mode))
+ 			ret = -ENOTDIR;
+ 		else if (IS_DEADDIR(inode))
+ 			ret = -ENOENT;
+-		else if (!inode->i_sb->s_cop->empty_dir(inode))
++		else if (lsi && !lsi->lsi_cop->empty_dir(inode))
+ 			ret = -ENOTEMPTY;
+ 		else
+ 			ret = set_encryption_policy(inode, &policy);
+@@ -472,6 +482,7 @@ int llcrypt_inherit_context(struct inode
+ 	union llcrypt_context ctx;
+ 	int ctxsize;
+ 	struct llcrypt_info *ci;
++	struct lustre_sb_info *lsi = s2lsi(parent->i_sb);
+ 	int res;
+ 
+ 	res = llcrypt_get_encryption_info(parent);
+@@ -482,10 +493,13 @@ int llcrypt_inherit_context(struct inode
+ 	if (ci == NULL)
+ 		return -ENOKEY;
+ 
++	if (!lsi)
++		return -ENOKEY;
++
+ 	ctxsize = llcrypt_new_context_from_policy(&ctx, &ci->ci_policy);
+ 
+ 	BUILD_BUG_ON(sizeof(ctx) != LLCRYPT_SET_CONTEXT_MAX_SIZE);
+-	res = parent->i_sb->s_cop->set_context(child, &ctx, ctxsize, fs_data);
++	res = lsi->lsi_cop->set_context(child, &ctx, ctxsize, fs_data);
+ 	if (res)
+ 		return res;
+ 	return preload ? llcrypt_get_encryption_info(child): 0;

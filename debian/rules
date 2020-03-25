@@ -194,6 +194,11 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nogss"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-gss"; \
 	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "crypto"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-crypto"; \
+	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
+	fi; \
 	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	( cd $(BUILDDIR) && \
 		$(SRCDIR)/configure --disable-dependency-tracking \
@@ -474,6 +479,11 @@ kdist_config: prep-deb-files patch-stamp
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "o2ib"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-o2ib=$${O2IB_SRC}"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "crypto"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-crypto"; \
+	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
 	fi; \
 	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	./configure --with-linux=$(KSRC_TREE) \

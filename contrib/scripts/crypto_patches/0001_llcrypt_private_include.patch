@@ -1,0 +1,11 @@
+--- a/libcfs/libcfs/crypto/llcrypt_private.h
++++ b/libcfs/libcfs/crypto/llcrypt_private.h
+@@ -11,7 +11,7 @@
+ #ifndef _LLCRYPT_PRIVATE_H
+ #define _LLCRYPT_PRIVATE_H
+ 
+-#include <linux/llcrypt.h>
++#include <libcfs/crypto/llcrypt.h>
+ #include <crypto/hash.h>
+ 
+ #define CONST_STRLEN(str)	(sizeof(str) - 1)

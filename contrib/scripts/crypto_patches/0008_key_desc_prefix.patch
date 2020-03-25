@@ -1,0 +1,24 @@
+Keep 'fscrypt' as key desc prefix, for compatibility with third party tools.
+
+--- a/libcfs/include/uapi/linux/llcrypt.h
++++ b/libcfs/include/uapi/linux/llcrypt.h
+@@ -48,7 +48,7 @@ struct llcrypt_policy_v1 {
+  * Process-subscribed "logon" key description prefix and payload format.
+  * Deprecated; prefer LL_IOC_ADD_ENCRYPTION_KEY instead.
+  */
+-#define LLCRYPT_KEY_DESC_PREFIX		"llcrypt:"
++#define LLCRYPT_KEY_DESC_PREFIX		"fscrypt:"
+ #define LLCRYPT_KEY_DESC_PREFIX_SIZE	8
+ #define LLCRYPT_MAX_KEY_SIZE		64
+ struct llcrypt_key {
+--- a/libcfs/libcfs/crypto/hkdf.c
++++ b/libcfs/libcfs/crypto/hkdf.c
+@@ -129,7 +129,7 @@ int llcrypt_hkdf_expand(struct llcrypt_h
+ 
+ 	desc->tfm = hkdf->hmac_tfm;
+ 
+-	memcpy(prefix, "llcrypt\0", 8);
++	memcpy(prefix, "fscrypt\0", 8);
+ 	prefix[8] = context;
+ 
+ 	for (i = 0; i < okmlen; i += HKDF_HASHLEN) {

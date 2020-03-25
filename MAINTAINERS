@@ -129,6 +129,13 @@ S:	Supported
 F:	lustre/include/lustre_mdc.h
 F:	lustre/mdc/
 
+Lustre client side encryption
+M:	Sebastien Buisson <sbuisson@whamcloud.com>
+S:	Maintained
+F:	libcfs/libcfs/crypto/*.[ch]
+F:	libcfs/include/libcfs/crypto/*.h
+F:	libcfs/include/uapi/linux/llcrypt.h
+
 Lustre Client VFS Interface
 R:	Oleg Drokin <green@whamcloud.com>
 M:	Lai Siyao <lai.siyao@whamcloud.com>

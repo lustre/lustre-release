@@ -1878,6 +1878,22 @@ bi_bdev, [
 ]) # LC_BI_BDEV
 
 #
+# LC_IS_ENCRYPTED
+#
+# 4.14 introduced IS_ENCRYPTED and S_ENCRYPTED
+#
+AC_DEFUN([LC_IS_ENCRYPTED], [
+LB_CHECK_COMPILE([if IS_ENCRYPTED is defined],
+is_encrypted, [
+	#include <linux/fs.h>
+],[
+	IS_ENCRYPTED((struct inode *)0);
+],[
+	has_is_encrypted="yes"
+])
+]) # LC_IS_ENCRYPTED
+
+#
 # LC_I_PAGES
 #
 # kernel 4.17 commit b93b016313b3ba8003c3b8bb71f569af91f19fc7
@@ -2058,6 +2074,28 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAS_LINUX_SELINUX_ENABLED
 
 #
+# LB_HAVE_BVEC_ITER_ALL
+#
+# kernel 5.1 commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa
+# block: allow bio_for_each_segment_all() to iterate over multi-page bvec
+#
+AC_DEFUN([LB_HAVE_BVEC_ITER_ALL], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if bvec_iter_all exists for multi-page bvec iternation],
+ext4fs_dirhash, [
+	#include <linux/bvec.h>
+],[
+	struct bvec_iter_all iter;
+	(void)iter;
+],[
+	AC_DEFINE(HAVE_BVEC_ITER_ALL, 1,
+		[if bvec_iter_all exists for multi-page bvec iternation])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_HAVE_BVEC_ITER_ALL
+
+#
 # LC_ACCOUNT_PAGE_DIRTIED
 #
 # After 5.2 kernel page dirtied is not exported
@@ -2067,6 +2105,25 @@ LB_CHECK_EXPORT([account_page_dirtied], [mm/page-writeback.c],
 	[AC_DEFINE(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT, 1,
 			[account_page_dirtied is exported])])
 ]) # LC_ACCOUNT_PAGE_DIRTIED
+
+#
+# LC_KEYRING_SEARCH_4ARGS
+#
+# Kernel 5.2 commit dcf49dbc8077
+# keys: Add a 'recurse' flag for keyring searches
+#
+AC_DEFUN([LC_KEYRING_SEARCH_4ARGS], [
+LB_CHECK_COMPILE([if 'keyring_search' has 4 args],
+keyring_search_4args, [
+	#include <linux/key.h>
+],[
+	key_ref_t keyring;
+	keyring_search(keyring, NULL, NULL, false);
+],[
+	AC_DEFINE(HAVE_KEYRING_SEARCH_4ARGS, 1,
+		[keyring_search has 4 args])
+])
+]) # LC_KEYRING_SEARCH_4ARGS
 
 #
 # LC_BIO_BI_PHYS_SEGMENTS
@@ -2112,6 +2169,23 @@ lock_manager_ops_lm_compare_owner, [
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_LM_COMPARE_OWNER_EXISTS
+
+#
+# LC_FSCRYPT_SUPPORT
+#
+# 5.4 introduced fscrypt encryption policies v2
+#
+AC_DEFUN([LC_FSCRYPT_SUPPORT], [
+LB_CHECK_COMPILE([for fscrypt in-kernel support],
+fscrypt_support, [
+	#define __FS_HAS_ENCRYPTION 0
+	#include <linux/fscrypt.h>
+],[
+	fscrypt_ioctl_get_policy_ex(NULL, NULL);
+],[
+	has_fscrypt_support="yes"
+])
+]) # LC_FSCRYPT_SUPPORT
 
 #
 # LC_PROG_LINUX
@@ -2279,9 +2353,11 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 5.1
 	LC_HAS_LINUX_SELINUX_ENABLED
+	LB_HAVE_BVEC_ITER_ALL
 
 	# 5.2
 	LC_ACCOUNT_PAGE_DIRTIED
+	LC_KEYRING_SEARCH_4ARGS
 
 	# 5.3
 	LC_BIO_BI_PHYS_SEGMENTS
@@ -2432,6 +2508,41 @@ AS_IF([test $ENABLEOSDADDON -eq 0], [
 ])
 AC_SUBST(OSDADDON)
 ]) # LC_OSD_ADDON
+
+#
+# LC_CONFIG_CRYPTO
+#
+# Check whether to enable Lustre client crypto
+#
+AC_DEFUN([LC_CONFIG_CRYPTO], [
+AC_MSG_CHECKING([whether to enable Lustre client crypto])
+AC_ARG_ENABLE([crypto],
+	AC_HELP_STRING([--enable-crypto],
+		[enable Lustre client crypto]),
+	[], [enable_crypto="auto"])
+AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno], [
+	AC_MSG_RESULT(
+	)
+	LC_IS_ENCRYPTED
+	LC_FSCRYPT_SUPPORT])
+AS_IF([test "x$has_fscrypt_support" = xyes], [
+	AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via in-kernel fscrypt])
+	enable_crypto=yes],
+	[AS_IF([test "x$has_is_encrypted" = xyes], [
+	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via embedded llcrypt])
+	      AC_DEFINE(CONFIG_LL_ENCRYPTION, 1, [embedded llcrypt])
+	      enable_crypto=yes
+	      enable_llcrypt=yes], [
+	      AS_IF([test "x$enable_crypto" = xyes],
+	            [AC_MSG_ERROR([Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.])])
+	      AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno],
+	            [AC_MSG_WARN(Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.)])
+	      enable_crypto=no])])
+AS_IF([test "x$enable_dist" != xno], [
+	enable_crypto=yes
+	enable_llcrypt=yes])
+AC_MSG_RESULT([$enable_crypto])
+]) # LC_CONFIG_CRYPTO
 
 #
 # LC_CONFIGURE
@@ -2602,6 +2713,7 @@ AM_CONDITIONAL(ENABLE_BASH_COMPLETION, test "x$with_bash_completion_dir" != "xno
 AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 AM_CONDITIONAL(SELINUX, test "$SELINUX" = "-lselinux")
 AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes)
+AM_CONDITIONAL(LLCRYPT, test x$enable_llcrypt = xyes)
 ]) # LC_CONDITIONALS
 
 #

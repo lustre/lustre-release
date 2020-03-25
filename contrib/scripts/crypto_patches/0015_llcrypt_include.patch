@@ -1,0 +1,34 @@
+In case llcrypt is not built (CONFIG_LL_ENCRYPTION undefined),
+we need to have stubs for llcrypt init/exit functions.
+
+--- a/libcfs/include/libcfs/crypto/llcrypt.h
++++ b/libcfs/include/libcfs/crypto/llcrypt.h
+@@ -287,6 +287,13 @@ static inline void llcrypt_set_ops(struc
+ }
+ #else  /* !CONFIG_LL_ENCRYPTION */
+ 
++struct llcrypt_operations;
++#define llcrypt_init()         0
++#define llcrypt_exit()         {}
++
++#undef IS_ENCRYPTED
++#define IS_ENCRYPTED(x)	0
++
+ static inline bool llcrypt_has_encryption_key(const struct inode *inode)
+ {
+ 	return false;
+@@ -554,13 +561,7 @@ static inline int __llcrypt_encrypt_syml
+ 	return -EOPNOTSUPP;
+ }
+ 
+-static inline const char *llcrypt_get_symlink(struct inode *inode,
+-					      const void *caddr,
+-					      unsigned int max_size,
+-					      struct delayed_call *done)
+-{
+-	return ERR_PTR(-EOPNOTSUPP);
+-}
++#define llcrypt_get_symlink(inode, caddr, max_size, done)   ERR_PTR(-EOPNOTSUPP)
+ 
+ static inline void llcrypt_set_ops(struct super_block *sb,
+ 				   const struct llcrypt_operations *lsi_cop)

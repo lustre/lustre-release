@@ -1,0 +1,17 @@
+Linux 5.1 (commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa) introduces
+bvec_iter_all.
+
+--- a/libcfs/libcfs/crypto/bio.c
++++ b/libcfs/libcfs/crypto/bio.c
+@@ -29,7 +29,11 @@
+ static void __llcrypt_decrypt_bio(struct bio *bio, bool done)
+ {
+ 	struct bio_vec *bv;
++#ifdef HAVE_BVEC_ITER_ALL
+ 	struct bvec_iter_all iter_all;
++#else
++	int iter_all;
++#endif
+ 
+ 	bio_for_each_segment_all(bv, bio, iter_all) {
+ 		struct page *page = bv->bv_page;
