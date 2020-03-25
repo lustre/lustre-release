@@ -786,6 +786,22 @@ rhashtable_lookup_get_insert_fast, [
 ]) # LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 
 #
+# Kernel version 4.12-rc2 8f553c498e1772cccb39a114da4a498d22992758
+# provide proper CPU hotplug locking
+#
+AC_DEFUN([LIBCFS_CPUS_READ_LOCK], [
+LB_CHECK_COMPILE([if 'cpus_read_[un]lock' exist],
+cpu_read_lock, [
+	#include <linux/cpu.h>
+],[
+	cpus_read_lock();
+	cpus_read_unlock();
+],[
+	AC_DEFINE(HAVE_CPUS_READ_LOCK, 1, ['cpu_read_lock' exist])
+])
+]) # LIBCFS_CPUS_READ_LOCK
+
+#
 # Kernel version 4.12-rc3 f9727a17db9bab71ddae91f74f11a8a2f9a0ece6
 # renamed uuid_be to uuid_t
 #
@@ -1219,6 +1235,7 @@ LIBCFS_RHT_BUCKET_VAR
 LIBCFS_HAVE_PROCESSOR_HEADER
 LIBCFS_HAVE_WAIT_BIT_HEADER
 LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
+LIBCFS_CPUS_READ_LOCK
 LIBCFS_UUID_T
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY

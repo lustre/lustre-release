@@ -1114,7 +1114,9 @@ static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
 
 	/**
 	 * It doesn't make any sense to make it exceed what
-	 * workqueue could acutally support.
+	 * workqueue could acutally support. This can easily
+	 * over subscripe the cores but Lustre internally
+	 * throttles to avoid those impacts.
 	 */
 	if (val > WQ_UNBOUND_MAX_ACTIVE) {
 		CERROR("%s: cannot set max_read_ahead_async_active=%u larger than %u\n",
