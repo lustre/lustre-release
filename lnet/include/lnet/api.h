@@ -128,6 +128,8 @@ int LNetMDBind(struct lnet_md	 md_in,
 	       struct lnet_handle_md *md_handle_out);
 
 int LNetMDUnlink(struct lnet_handle_md md_in);
+
+void lnet_assert_handler_unused(lnet_handler_t handler);
 /** @} lnet_md */
 
 /** \defgroup lnet_data Data movement operations

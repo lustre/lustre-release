@@ -264,6 +264,24 @@ lnet_md_link(struct lnet_libmd *md, lnet_handler_t handler, int cpt)
 	return 0;
 }
 
+void lnet_assert_handler_unused(lnet_handler_t handler)
+{
+	struct lnet_res_container *container;
+	int cpt;
+
+	if (!handler)
+		return;
+	cfs_percpt_for_each(container, cpt, the_lnet.ln_md_containers) {
+		struct lnet_libmd *md;
+
+		lnet_res_lock(cpt);
+		list_for_each_entry(md, &container->rec_active, md_list)
+			LASSERT(md->md_handler != handler);
+		lnet_res_unlock(cpt);
+	}
+}
+EXPORT_SYMBOL(lnet_assert_handler_unused);
+
 /* must be called with lnet_res_lock held */
 void
 lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_event *ev)
