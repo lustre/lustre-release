@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian.murrell@intel.com>
 Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.8.3
-Build-Depends: module-assistant, libreadline-dev, debhelper (>=9.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, pkg-config, libtool, libyaml-dev, libselinux-dev, libsnmp-dev, mpi-default-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync, libssl-dev
+Build-Depends: module-assistant, libreadline-dev, debhelper (>=9.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, pkg-config, libtool, libyaml-dev, libselinux-dev, libsnmp-dev, mpi-default-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync, libssl-dev, libpython3-dev, swig
 Homepage: https://wiki.whamcloud.com/
 Vcs-Git: git://git.whamcloud.com/fs/lustre-release.git
 
@@ -84,7 +84,7 @@ Package: lustre-tests
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-iokit (= ${binary:Version}), lustre-dev (= ${binary:Version}), attr, rsync, perl, lsof, mpi-default-bin, selinux-utils
+Depends: lustre-iokit (= ${binary:Version}), lustre-dev (= ${binary:Version}), attr, rsync, perl, lsof, mpi-default-bin, selinux-utils, python3
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from

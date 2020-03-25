@@ -191,6 +191,10 @@ Requires: %{requires_kmod_name} = %{requires_kmod_version}
 %endif
 Requires: zlib
 Requires: %{requires_yaml_name}
+%if %{with lustre_tests_lutf}
+Requires: python3 >= 3.6.0
+BuildRequires: python3-devel >= 3.6.0, swig
+%endif
 BuildRequires: libtool libyaml-devel zlib-devel binutils-devel
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
@@ -347,6 +351,9 @@ Requires: lustre-devel = %{version}
 %if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
+%endif
+%if %{with lustre_tests_lutf}
+Requires: python3 >= 3.6.0
 %endif
 Requires: attr, rsync, perl, lsof, /usr/bin/getconf
 %if %{with mpi}
@@ -606,6 +613,13 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 if [ -n "$MPI_BIN" ]; then
 	echo "$MPI_BIN/*" >>lustre-tests.files
 fi
+%if %{with lustre_tests_lutf}
+echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
+%endif
+%endif
+
+%if %{with lustre_tests_lutf}
+echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 
 %files devel -f lustre-devel.files
@@ -712,6 +726,7 @@ fi
 %defattr(-, root, root)
 %{_bindir}/iokit-config
 %{_bindir}/iokit-gather-stats
+
 %{_bindir}/iokit-libecho
 %{_bindir}/iokit-lstats
 %{_bindir}/iokit-parse-ior

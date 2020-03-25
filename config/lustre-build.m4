@@ -344,8 +344,8 @@ AS_IF([test $target_cpu = powerpc64], [
 	CC="$CC -m64"
 ])
 
-# libcfs/include for util headers, lnetconfig headers, lustre/include for liblustreapi and friends
-CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils -I$PWD/lustre/include $CPPFLAGS"
+# UAPI headers, libcfs/include for util headers, lustre/include for liblustreapi and friends
+CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lnet/include/uapi -I$PWD/lustre/include -I$PWD/lustre/include/uapi $CPPFLAGS"
 
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)

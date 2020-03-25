@@ -1,0 +1,183 @@
+
+/* This is only for python2.7
+%typemap(in) FILE * {
+        $1 = PyFile_AsFile($input);
+}*/
+
+/* typemap for handling cYAML output parameter */
+%typemap(in, numinputs=0) struct cYAML** (struct cYAML *temp) {
+        temp = NULL;
+        $1 = &temp;
+}
+
+%typemap(argout) struct cYAML** {
+        /* The purpose of this typemap is to be able to handle out params
+           Ex: if the function being called is: foo(cYAML**a, cYAML **b)
+           then from python you'd call it: o1, o2 = foo()*/
+        PyObject *o, *o2, *o3;
+        o = SWIG_NewPointerObj(SWIG_as_voidptr(*$1), $*1_descriptor, SWIG_POINTER_OWN);
+        if ((!$result) || ($result == Py_None))
+                $result = o;
+        else
+        {
+                if(!PyTuple_Check($result))
+                {
+                        /* insert the original result in the tuple */
+                        o2 = $result;
+                        $result = PyTuple_New(1);
+                        PyTuple_SetItem($result, 0, o2);
+                }
+                o3 = PyTuple_New(1);
+                PyTuple_SetItem(o3, 0, o);
+                o2 = $result;
+                $result = PySequence_Concat(o2, o3);
+                Py_DECREF(o2);
+                Py_DECREF(o3);
+        }
+}
+
+/* typemap for handling cfs_expr_list output parameter */
+%typemap(in, numinputs=0) struct cfs_expr_list** (struct cfs_expr_list *temp) {
+        temp = NULL;
+        $1 = &temp;
+}
+
+%typemap(argout) struct cfs_expr_list** {
+        /* The purpose of this typemap is to be able to handle out params
+           Ex: if the function being called is: rc = foo(cfs_expr_list **a)
+           then from python you'd call it: o1, o2 = foo() where o2 becomes
+           the out parameter*/
+        PyObject *o, *o2, *o3;
+        o = SWIG_NewPointerObj(SWIG_as_voidptr(*$1), $*1_descriptor, SWIG_POINTER_OWN);
+        if ((!$result) || ($result == Py_None))
+                $result = o;
+        else
+        {
+                if(!PyTuple_Check($result))
+                {
+                        /* insert the original result in the tuple */
+                        o2 = $result;
+                        $result = PyTuple_New(1);
+                        PyTuple_SetItem($result, 0, o2);
+                }
+                o3 = PyTuple_New(1);
+                PyTuple_SetItem(o3, 0, o);
+                o2 = $result;
+                $result = PySequence_Concat(o2, o3);
+                Py_DECREF(o2);
+                Py_DECREF(o3);
+        }
+}
+
+/* typemap for handling array of character array output parameter */
+%typemap(in, numinputs=0) char *** (char **temp) {
+        temp = NULL;
+        $1 = &temp;
+}
+
+%typemap(argout) char *** {
+        /* The purpose of this typemap is to be able to handle out params
+           Ex: if the function being called is: rc = foo(char ***)
+           then from python you'd call it: o1, o2 = foo() where o2 becomes
+           the out parameter*/
+        PyObject *o, *o2, *o3;
+        o = SWIG_NewPointerObj(SWIG_as_voidptr(*$1), $*1_descriptor, SWIG_POINTER_OWN);
+        if ((!$result) || ($result == Py_None))
+                $result = o;
+        else
+        {
+                if(!PyTuple_Check($result))
+                {
+                        /* insert the original result in the tuple */
+                        o2 = $result;
+                        $result = PyTuple_New(1);
+                        PyTuple_SetItem($result, 0, o2);
+                }
+                o3 = PyTuple_New(1);
+                PyTuple_SetItem(o3, 0, o);
+                o2 = $result;
+                $result = PySequence_Concat(o2, o3);
+                Py_DECREF(o2);
+                Py_DECREF(o3);
+        }
+}
+
+
+/* This input typemap declares that char** requires no input parameter.
+ * Instead, the address of a local char* is used to call the function.
+ */
+%typemap(in,numinputs=0) char** (char* tmp) %{
+    tmp = NULL;
+    $1 = &tmp;
+%}
+
+/* After the function is called, the char** parameter contains a malloc'ed
+ * char* pointer.
+ * Construct a Python Unicode object (I'm using Python 3) and append it to
+ * any existing return value for the wrapper.
+ */
+%typemap(argout) char** (PyObject* obj) %{
+    if (*$1 == NULL)
+       goto fail;
+    obj = PyUnicode_FromString(*$1);
+    $result = SWIG_Python_AppendOutput($result,obj);
+%}
+
+/* The malloc'ed pointer is no longer needed, so make sure it is freed. */
+%typemap(freearg) char** %{
+    if (*$1)
+       free(*$1);
+%}
+
+/* typemap for handling lnet_nid_t output parameter */
+%typemap(in,numinputs=0) lnet_nid_t ** (lnet_nid_t *temp) {
+        temp = NULL;
+        $1 = &temp;
+}
+
+%typemap(argout) lnet_nid_t ** {
+        /* The purpose of this typemap is to be able to handle out params
+           Ex: if the function being called is: rc = foo(lnet_nid_t **a)
+           then from python you'd call it: o1, o2 = foo() where o2 becomes
+           the out parameter*/
+        PyObject *o, *o2, *o3;
+        o = SWIG_NewPointerObj(SWIG_as_voidptr(*$1), $*1_descriptor, SWIG_POINTER_OWN);
+        if ((!$result) || ($result == Py_None)) {
+		fprintf(stderr, "AMIR: %d\n", result);
+                $result = o;
+	} else
+        {
+                if(!PyTuple_Check($result))
+                {
+			fprintf(stderr, "AMIR 2\n");
+                        /* insert the original result in the tuple */
+                        o2 = $result;
+                        $result = PyTuple_New(1);
+                        PyTuple_SetItem($result, 0, o2);
+                }
+		fprintf(stderr, "AMIR 3\n");
+                o3 = PyTuple_New(1);
+                PyTuple_SetItem(o3, 0, o);
+                o2 = $result;
+                $result = PySequence_Concat(o2, o3);
+                Py_DECREF(o2);
+                Py_DECREF(o3);
+        }
+}
+
+/* The malloc'ed pointer is no longer needed, so make sure it is freed. */
+%typemap(freearg) lnet_nid_t ** %{
+    if (*$1) {
+       free(*$1);
+    }
+%}
+
+/*
+ * This is an interesting type map to allow for passing python bytes to
+ * C function using char *
+%typemap(in) (char *yaml_bytes, int yaml_bytes_len) {
+	Py_ssize_t len;
+	PyBytes_AsStringAndSize($input, &$1, &len);
+	$2 = (int)len;
+}
+*/

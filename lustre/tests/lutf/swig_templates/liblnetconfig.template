@@ -1,0 +1,34 @@
+%inline %{
+PyObject *lutf_parse_nidlist(char *str, int len, int max_nids) {
+	int rc, num_nids, i;
+	lnet_nid_t *nidl = calloc(sizeof(*nidl) * max_nids, 1);
+	struct list_head *l = calloc(sizeof(*l), 1);
+	PyObject *pylist;
+	if (!l || !nidl) {
+		if (l)
+			free(l);
+		if (nidl)
+			free(nidl);
+		return NULL;
+	}
+	INIT_LIST_HEAD(l);
+	rc = cfs_parse_nidlist(str, len, l);
+	if (!rc) {
+		free(l);
+		return NULL;
+	}
+	num_nids = cfs_expand_nidlist(l, nidl, max_nids);
+	cfs_free_nidlist(l);
+	pylist = PyList_New(num_nids);
+	for (i = 0; i < num_nids; i++) {
+		PyList_SetItem(pylist, i, PyLong_FromUnsignedLongLong(nidl[i]));
+	}
+	free(l);
+	free(nidl);
+	return pylist;
+}
+char *lutf_nid2str(unsigned long nid) {
+	return libcfs_nid2str(nid);
+}
+%}
+
