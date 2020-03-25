@@ -2424,10 +2424,6 @@ static int osd_commit_async(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* Our own copy of the set readonly functions if present, or NU if not. */
-static int (*priv_dev_set_rdonly)(struct block_device *bdev);
-static int (*priv_dev_check_rdonly)(struct block_device *bdev);
-/* static int (*priv_dev_clear_rdonly)(struct block_device *bdev); */
 static int (*priv_security_file_alloc)(struct file *file);
 
 int osd_security_file_alloc(struct file *file)
@@ -2448,35 +2444,8 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 
 	ENTRY;
 
-	if (priv_dev_set_rdonly) {
-		struct block_device *jdev = LDISKFS_SB(sb)->journal_bdev;
-
-		rc = 0;
-		CERROR("*** setting %s read-only ***\n",
-		       osd_dt_dev(d)->od_svname);
-
-		if (sb->s_op->freeze_fs) {
-			rc = sb->s_op->freeze_fs(sb);
-			if (rc)
-				goto out;
-		}
-
-		if (jdev && (jdev != dev)) {
-			CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
-			       (long)jdev);
-			priv_dev_set_rdonly(jdev);
-		}
-		CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
-		priv_dev_set_rdonly(dev);
-
-		if (sb->s_op->unfreeze_fs)
-			sb->s_op->unfreeze_fs(sb);
-	}
-
-out:
-	if (rc)
-		CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
-		       osd_dt_dev(d)->od_svname, (long)dev, rc);
+	CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
+	       osd_dt_dev(d)->od_svname, (long)dev, rc);
 
 	RETURN(rc);
 }
@@ -7676,23 +7645,10 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (lmd_flags & LMD_FLG_DEV_RDONLY) {
-		if (priv_dev_set_rdonly) {
-			priv_dev_set_rdonly(osd_sb(o)->s_bdev);
-			o->od_dt_dev.dd_rdonly = 1;
-			LCONSOLE_WARN("%s: set dev_rdonly on this device\n",
-				      name);
-		} else {
-			LCONSOLE_WARN("%s: not support dev_rdonly on this device",
-				      name);
+		LCONSOLE_WARN("%s: not support dev_rdonly on this device",
+			      name);
 
-			GOTO(out_mnt, rc = -EOPNOTSUPP);
-		}
-	} else if (priv_dev_check_rdonly &&
-		   priv_dev_check_rdonly(osd_sb(o)->s_bdev)) {
-		CERROR("%s: underlying device %s is marked as "
-		       "read-only. Setup failed\n", name, dev);
-
-		GOTO(out_mnt, rc = -EROFS);
+		GOTO(out_mnt, rc = -EOPNOTSUPP);
 	}
 
 	if (!ldiskfs_has_feature_journal(o->od_mnt->mnt_sb)) {
@@ -8212,9 +8168,6 @@ static int __init osd_init(void)
 #ifdef CONFIG_KALLSYMS
 	priv_security_file_alloc =
 		(void *)kallsyms_lookup_name("security_file_alloc");
-	priv_dev_set_rdonly = (void *)kallsyms_lookup_name("dev_set_rdonly");
-	priv_dev_check_rdonly =
-		(void *)kallsyms_lookup_name("dev_check_rdonly");
 #endif
 
 	rc = class_register_type(&osd_obd_device_ops, NULL, true, NULL,
