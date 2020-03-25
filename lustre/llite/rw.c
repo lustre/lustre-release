@@ -729,9 +729,12 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 
 	/* at least to extend the readahead window to cover current read */
 	if (!hit && vio->vui_ra_valid &&
-	    vio->vui_ra_start_idx + vio->vui_ra_pages > ria->ria_start_idx)
+	    vio->vui_ra_start_idx + vio->vui_ra_pages > ria->ria_start_idx) {
 		ria->ria_end_idx_min =
 			vio->vui_ra_start_idx + vio->vui_ra_pages - 1;
+		pages_min = vio->vui_ra_start_idx + vio->vui_ra_pages -
+				ria->ria_start_idx;
+	}
 
 	ria->ria_reserved = ll_ra_count_get(ll_i2sbi(inode), ria, pages,
 					    pages_min);

@@ -9273,6 +9273,30 @@ test_101h() {
 }
 run_test 101h "Readahead should cover current read window"
 
+test_101i() {
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 ||
+		error "dd 10M file failed"
+
+	local max_per_file_mb=$($LCTL get_param -n \
+		llite.*.max_read_ahead_per_file_mb 2>/dev/null)
+	cancel_lru_locks osc
+	stack_trap "$LCTL set_param llite.*.max_read_ahead_per_file_mb=$max_per_file_mb"
+	$LCTL set_param llite.*.max_read_ahead_per_file_mb=1 ||
+		error "set max_read_ahead_per_file_mb to 1 failed"
+
+	echo "Reset readahead stats"
+	$LCTL set_param llite.*.read_ahead_stats=0
+
+	dd if=$DIR/$tfile of=/dev/null bs=2M
+
+	$LCTL get_param llite.*.read_ahead_stats
+	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+		     awk '/misses/ { print $2 }')
+	[ $miss -eq 5 ] || error "expected misses 5 but got $miss"
+	rm -f $DIR/$tfile
+}
+run_test 101i "allow current readahead to exceed reservation"
+
 setup_test102() {
 	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
