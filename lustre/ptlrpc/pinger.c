@@ -148,7 +148,7 @@ static int ptlrpc_ping(struct obd_import *imp)
 
 static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 {
-#ifdef ENABLE_PINGER
+#ifdef CONFIG_LUSTRE_PINGER
 	time64_t time = soon ? PING_INTERVAL_SHORT : PING_INTERVAL;
 
 	if (imp->imp_state == LUSTRE_IMP_DISCON) {
@@ -158,7 +158,7 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 		time = min(time, dtime);
 	}
 	imp->imp_next_ping = ktime_get_seconds() + time;
-#endif /* ENABLE_PINGER */
+#endif /* CONFIG_LUSTRE_PINGER */
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
@@ -323,14 +323,26 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 
 int ptlrpc_start_pinger(void)
 {
-#ifdef ENABLE_PINGER
+#ifdef CONFIG_LUSTRE_PINGER
+	struct workqueue_attrs attrs = { };
+	cpumask_var_t *mask;
+
 	if (pinger_wq)
 		return -EALREADY;
 
-	pinger_wq = alloc_workqueue("ptlrpc_pinger", 0, 1);
+	pinger_wq = alloc_workqueue("ptlrpc_pinger", WQ_UNBOUND, 1);
 	if (!pinger_wq) {
 		CERROR("cannot start pinger workqueue\n");
 		return -ENOMEM;
+	}
+
+	mask = cfs_cpt_cpumask(cfs_cpt_tab, CFS_CPT_ANY);
+	if (mask && alloc_cpumask_var(&attrs.cpumask, GFP_KERNEL)) {
+		cpumask_copy(attrs.cpumask, *mask);
+		cpus_read_lock();
+		cfs_apply_workqueue_attrs(pinger_wq, &attrs);
+		cpus_read_unlock();
+		free_cpumask_var(attrs.cpumask);
 	}
 
 	queue_delayed_work(pinger_wq, &ping_work, 0);
@@ -345,7 +357,7 @@ int ptlrpc_pinger_remove_timeouts(void);
 
 int ptlrpc_stop_pinger(void)
 {
-#ifdef ENABLE_PINGER
+#ifdef CONFIG_LUSTRE_PINGER
 	if (!pinger_wq)
 		return -EALREADY;
 
@@ -540,7 +552,7 @@ int ptlrpc_pinger_remove_timeouts(void)
 
 void ptlrpc_pinger_wake_up(void)
 {
-#ifdef ENABLE_PINGER
+#ifdef CONFIG_LUSTRE_PINGER
 	mod_delayed_work(pinger_wq, &ping_work, 0);
 #endif
 }

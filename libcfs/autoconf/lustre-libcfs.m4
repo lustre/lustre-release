@@ -813,7 +813,7 @@ cpu_read_lock, [
 	cpus_read_lock();
 	cpus_read_unlock();
 ],[
-	AC_DEFINE(HAVE_CPUS_READ_LOCK, 1, ['cpu_read_lock' exist])
+	AC_DEFINE(HAVE_CPUS_READ_LOCK, 1, ['cpus_read_lock' exist])
 ])
 ]) # LIBCFS_CPUS_READ_LOCK
 
