@@ -50,6 +50,10 @@ static inline struct dentry *file_dentry(const struct file *file)
 }
 #endif
 
+#ifndef QSTR_INIT
+#define QSTR_INIT(n, l) { .len = l, .name = n }
+#endif
+
 #if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
 	vfs_fsync_range(fp, start, end, datasync)
