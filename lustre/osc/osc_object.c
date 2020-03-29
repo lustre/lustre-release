@@ -496,7 +496,7 @@ int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc)
 	osc_lock_discard_pages(env, osc, 0, CL_PAGE_EOF, true);
 
 	/* Clear ast data of dlm lock. Do this after discarding all pages */
-	osc_object_prune(env, osc2cl(osc));
+	cl_object_prune(env, osc2cl(osc));
 
 	RETURN(0);
 }
