@@ -5235,7 +5235,6 @@ out:
 	EXIT;
 }
 
-#define ll_do_div64(aaa,bbb)    do_div((aaa), (bbb))
 /**
  * Size initialization on late striping.
  *
@@ -5299,14 +5298,13 @@ static int lod_declare_init_size(const struct lu_env *env,
 				continue;
 
 			LASSERT(objects != NULL && stripe_size != 0);
-			/* ll_do_div64(a, b) returns a % b, and a = a / b */
-			ll_do_div64(size, (__u64)stripe_size);
-			stripe = ll_do_div64(size, (__u64)stripe_count);
+			do_div(size, stripe_size);
+			stripe = do_div(size, stripe_count);
 			LASSERT(objects[stripe] != NULL);
 
 			size = size * stripe_size;
 			offs = attr->la_size;
-			size += ll_do_div64(offs, stripe_size);
+			size += do_div(offs, stripe_size);
 
 			attr->la_valid = LA_SIZE;
 			attr->la_size = size;
