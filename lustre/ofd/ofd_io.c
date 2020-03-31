@@ -475,6 +475,71 @@ out:
 
 }
 
+/*
+ * Lazy ATIME update to refresh atime every ofd_atime_diff
+ * seconds so that external scanning tool can see it actual
+ * within that period and be able to identify accessed files
+ */
+static void ofd_handle_atime(const struct lu_env *env, struct ofd_device *ofd,
+			     struct ofd_object *fo, time64_t atime)
+{
+	struct lu_attr *la;
+	struct dt_object *o;
+	struct thandle *th;
+	int rc;
+
+	if (ofd->ofd_atime_diff == 0)
+		return;
+
+	la = &ofd_info(env)->fti_attr2;
+	o = ofd_object_child(fo);
+
+	if (unlikely(fo->ofo_atime_ondisk == 0)) {
+		rc = dt_attr_get(env, o, la);
+		if (unlikely(rc))
+			return;
+		LASSERT(la->la_valid & LA_ATIME);
+		if (la->la_atime == 0)
+			la->la_atime = la->la_mtime;
+		fo->ofo_atime_ondisk = la->la_atime;
+	}
+	if (atime - fo->ofo_atime_ondisk < ofd->ofd_atime_diff)
+		return;
+
+	/* atime hasn't been updated too long, update it */
+	fo->ofo_atime_ondisk = atime;
+
+	th = ofd_trans_create(env, ofd);
+	if (IS_ERR(th)) {
+		CERROR("%s: cannot create transaction: rc = %d\n",
+		       ofd_name(ofd), (int)PTR_ERR(th));
+		return;
+	}
+
+	la->la_valid = LA_ATIME;
+	rc = dt_declare_attr_set(env, o, la, th);
+	if (rc)
+		GOTO(out_tx, rc);
+
+	rc = dt_trans_start_local(env, ofd->ofd_osd , th);
+	if (rc) {
+		CERROR("%s: cannot start transaction: rc = %d\n",
+		       ofd_name(ofd), rc);
+		GOTO(out_tx, rc);
+	}
+
+	ofd_read_lock(env, fo);
+	if (ofd_object_exists(fo)) {
+		la->la_atime = fo->ofo_atime_ondisk;
+		rc = dt_attr_set(env, o, la, th);
+	}
+
+	ofd_read_unlock(env, fo);
+
+out_tx:
+	ofd_trans_stop(env, ofd, th, rc);
+}
+
 /**
  * Prepare buffers for read request processing.
  *
@@ -516,6 +581,9 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(fo != NULL);
 
 	ofd_info(env)->fti_obj = fo;
+
+	if (oa->o_valid & OBD_MD_FLATIME)
+		ofd_handle_atime(env, ofd, fo, oa->o_atime);
 
 	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo))
@@ -1186,6 +1254,10 @@ retry:
 			GOTO(out_stop, rc);
 	}
 
+	/* don't update atime on disk if it is older */
+	if (la->la_valid & LA_ATIME && la->la_atime <= fo->ofo_atime_ondisk)
+		la->la_valid &= ~LA_ATIME;
+
 	if (la->la_valid) {
 		/* update [mac]time if needed */
 		rc = dt_declare_attr_set(env, o, la, th);
@@ -1213,6 +1285,8 @@ retry:
 		rc = dt_attr_set(env, o, la, th);
 		if (rc)
 			GOTO(out_unlock, rc);
+		if (la->la_valid & LA_ATIME)
+			fo->ofo_atime_ondisk = la->la_atime;
 	}
 
 	/* get attr to return */

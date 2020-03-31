@@ -213,6 +213,8 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	if (attr->cra_type == CRT_WRITE) {
 		valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 		obdo_set_o_projid(oa, ll_i2info(inode)->lli_projid);
+	} else if (attr->cra_type == CRT_READ) {
+		valid_flags |= OBD_MD_FLATIME;
 	}
 	obdo_from_inode(oa, inode, valid_flags & attr->cra_flags);
 	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);

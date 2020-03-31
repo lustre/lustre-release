@@ -4508,6 +4508,49 @@ test_39p() {
 }
 run_test 39p "remote directory cached attributes updated after create ========"
 
+test_39r() {
+	[ $OST1_VERSION -ge $(version_code 2.13.52) ] ||
+		skip "no atime update on old OST"
+	if [ "$ost1_FSTYPE" != ldiskfs ]; then
+		skip_env "ldiskfs only test"
+	fi
+
+	local saved_adiff
+	saved_adiff=$(do_facet ost1 \
+		lctl get_param -n obdfilter.*OST0000.atime_diff)
+	stack_trap "do_facet ost1 \
+		lctl set_param obdfilter.*.atime_diff=$saved_adiff"
+
+	do_facet ost1 "lctl set_param obdfilter.*.atime_diff=5"
+
+	$LFS setstripe -i 0 $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 ||
+		error "can't write initial file"
+	cancel_lru_locks osc
+
+	# exceed atime_diff and access file
+	sleep 6
+	dd if=$DIR/$tfile of=/dev/null || error "can't udpate atime"
+
+	local atime_cli=$(stat -c %X $DIR/$tfile)
+	echo "client atime: $atime_cli"
+	# allow atime update to be written to device
+	do_facet ost1 "$LCTL set_param -n osd*.*OST*.force_sync 1"
+	sleep 5
+
+	local ostdev=$(ostdevname 1)
+	local fid=($(lfs getstripe -y $DIR/$tfile |
+			awk '/l_fid:/ { print $2 }' | tr ':' ' '))
+	local objpath="O/0/d$((${fid[1]} % 32))/$((${fid[1]}))"
+	local cmd="debugfs -c -R \\\"stat $objpath\\\" $ostdev"
+
+	echo "OST atime: $(do_facet ost1 "$cmd" |& grep atime)"
+	local atime_ost=$(do_facet ost1 "$cmd" |&
+			  awk -F'[: ]' '/atime:/ { print $4 }')
+	(( atime_cli == atime_ost )) ||
+		error "atime on client $atime_cli != ost $atime_ost"
+}
+run_test 39r "lazy atime update on OST"
 
 test_39q() { # LU-8041
 	local testdir=$DIR/$tdir

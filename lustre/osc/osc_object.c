@@ -379,7 +379,12 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 		oa->o_mtime = lvb->lvb_mtime;
 		oa->o_valid |= OBD_MD_FLMTIME;
 	}
-	if ((flags & OBD_MD_FLATIME) != 0) {
+	/* XXX:
+	 * I don't understand this part, what for OSC resets atime just
+	 * set by VVP layer to 0 so that OST gets 0 instead of actual
+	 * atime, bzzz. please inspect this place with extra care.
+	 */
+	if ((flags & OBD_MD_FLATIME) && lvb->lvb_atime > oa->o_atime) {
 		oa->o_atime = lvb->lvb_atime;
 		oa->o_valid |= OBD_MD_FLATIME;
 	}

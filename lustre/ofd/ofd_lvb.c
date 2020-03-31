@@ -147,10 +147,13 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	lvb->lvb_atime = info->fti_attr.la_atime;
 	lvb->lvb_ctime = info->fti_attr.la_ctime;
 
-	CDEBUG(D_DLMTRACE, "res: "DFID" initial lvb size: %llu, "
-	       "mtime: %#llx, blocks: %#llx\n",
-	       PFID(&info->fti_fid), lvb->lvb_size,
-	       lvb->lvb_mtime, lvb->lvb_blocks);
+	if (fo->ofo_atime_ondisk == 0)
+		fo->ofo_atime_ondisk = info->fti_attr.la_atime;
+
+	CDEBUG(D_DLMTRACE,
+	       "res: "DFID" initial LVB size: %llu, mtime: %#llx, atime: %#llx, ctime: %#llx, blocks: %#llx\n",
+	       PFID(&info->fti_fid), lvb->lvb_size, lvb->lvb_mtime,
+	       lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
 
 	info->fti_attr.la_valid = 0;
 

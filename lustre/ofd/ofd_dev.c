@@ -2946,6 +2946,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (tgd->tgd_osfs.os_bsize * tgd->tgd_osfs.os_blocks <
 	    OFD_PRECREATE_SMALL_FS)
 		m->ofd_precreate_batch = OFD_PRECREATE_BATCH_SMALL;
+	m->ofd_atime_diff = OFD_DEF_ATIME_DIFF;
 
 	rc = ofd_fs_setup(env, m, obd);
 	if (rc)

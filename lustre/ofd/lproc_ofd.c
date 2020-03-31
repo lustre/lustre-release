@@ -147,6 +147,57 @@ static ssize_t precreate_batch_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(precreate_batch);
 
 /**
+ * Show number of seconds to delay atime
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static ssize_t atime_diff_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return snprintf(buf, PAGE_SIZE, "%lld\n", ofd->ofd_atime_diff);
+}
+
+/**
+ * Change number of seconds to delay atime
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents maximum number
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t atime_diff_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val > 86400)
+		return -EINVAL;
+
+	ofd->ofd_atime_diff = val;
+	return count;
+}
+LUSTRE_RW_ATTR(atime_diff);
+
+/**
  * Show the last used ID for each FID sequence used by OFD.
  *
  * \param[in] m		seq_file handle
@@ -920,6 +971,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_grant_precreate.attr,
 	&lustre_attr_precreate_batch.attr,
+	&lustre_attr_atime_diff.attr,
 	&lustre_attr_degraded.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_no_precreate.attr,

@@ -53,6 +53,12 @@
 
 #define OFD_SOFT_SYNC_LIMIT_DEFAULT 16
 
+/*
+ * update atime if on-disk value older than client's one
+ * by OFD_ATIME_DIFF or more
+ */
+#define OFD_DEF_ATIME_DIFF	0 /* disabled */
+
 /* request stats */
 enum {
 	LPROC_OFD_STATS_READ = 0,
@@ -150,6 +156,7 @@ struct ofd_device {
 	struct attribute	*ofd_read_cache_enable;
 	struct attribute	*ofd_read_cache_max_filesize;
 	struct attribute	*ofd_write_cache_enable;
+	time64_t		 ofd_atime_diff;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
@@ -176,6 +183,7 @@ struct ofd_object {
 	struct lu_object_header	ofo_header;
 	struct dt_object	ofo_obj;
 	struct filter_fid	ofo_ff;
+	time64_t		ofo_atime_ondisk;
 	unsigned int		ofo_pfid_checking:1,
 				ofo_pfid_verified:1;
 };
