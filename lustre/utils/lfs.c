@@ -9458,22 +9458,16 @@ static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
  * \retval	1  not the same file
  * \retval	<0 error code
  */
-static inline int check_same_file(const char *f1, const char *f2)
+static inline int check_same_file(int fd, const char *f2)
 {
 	struct stat stbuf1;
 	struct stat stbuf2;
 
-	if (stat(f1, &stbuf1) < 0) {
-		fprintf(stderr, "%s: cannot stat file '%s': %s\n",
-			progname, f1, strerror(errno));
+	if (fstat(fd, &stbuf1) < 0)
 		return -errno;
-	}
 
-	if (stat(f2, &stbuf2) < 0) {
-		fprintf(stderr, "%s: cannot stat file '%s': %s\n",
-			progname, f2, strerror(errno));
-		return -errno;
-	}
+	if (stat(f2, &stbuf2) < 0)
+		return 1;
 
 	if (stbuf1.st_rdev == stbuf2.st_rdev &&
 	    stbuf1.st_ino == stbuf2.st_ino)
@@ -9539,19 +9533,6 @@ static inline int lfs_mirror_read(int argc, char **argv)
 
 	/* open mirror file */
 	fname = argv[optind];
-
-	if (outfile) {
-		rc = check_same_file(fname, outfile);
-		if (rc == 0) {
-			fprintf(stderr,
-			"%s %s: output file cannot be the mirrored file\n",
-				progname, argv[0]);
-			return -EINVAL;
-		}
-		if (rc < 0)
-			return rc;
-	}
-
 	fd = open(fname, O_DIRECT | O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "%s %s: cannot open '%s': %s\n",
@@ -9568,7 +9549,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 		goto close_fd;
 	}
 
-	/* open output file */
+	/* open output file - O_EXCL ensures output is not the same as input */
 	if (outfile) {
 		outfd = open(outfile, O_EXCL | O_WRONLY | O_CREAT, 0644);
 		if (outfd < 0) {
@@ -9708,19 +9689,6 @@ static inline int lfs_mirror_write(int argc, char **argv)
 
 	/* open mirror file */
 	fname = argv[optind];
-
-	if (inputfile) {
-		rc = check_same_file(fname, inputfile);
-		if (rc == 0) {
-			fprintf(stderr,
-			"%s %s: input file cannot be the mirrored file\n",
-				progname, argv[0]);
-			return -EINVAL;
-		}
-		if (rc < 0)
-			return rc;
-	}
-
 	fd = open(fname, O_DIRECT | O_WRONLY);
 	if (fd < 0) {
 		fprintf(stderr, "%s %s: cannot open '%s': %s\n",
@@ -9739,6 +9707,16 @@ static inline int lfs_mirror_write(int argc, char **argv)
 
 	/* open input file */
 	if (inputfile) {
+		rc = check_same_file(fd, inputfile);
+		if (rc == 0) {
+			fprintf(stderr,
+			"%s %s: input file cannot be the mirrored file\n",
+				progname, argv[0]);
+			goto close_fd;
+		}
+		if (rc < 0)
+			goto close_fd;
+
 		inputfd = open(inputfile, O_RDONLY, 0644);
 		if (inputfd < 0) {
 			fprintf(stderr, "%s %s: cannot open file '%s': %s\n",

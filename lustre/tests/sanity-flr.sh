@@ -767,6 +767,24 @@ test_0h() {
 }
 run_test 0h "set, clear and test flags for FLR files"
 
+test_0j() {
+	$LFS mirror create -N2 $DIR/$tfile || error "create $DIR/$tfile failed"
+
+	cp /etc/hosts $DIR/$tfile || error "write to $DIR/$tfile failed"
+	$LFS mirror resync $DIR/$tfile || error "resync $DIR/$tfile failed"
+	cmp /etc/hosts $DIR/$tfile || error "cmp with /etc/hosts failed"
+
+	$LFS mirror read -N2 -o $TMP/$tfile $DIR/$tfile || "read mirror failed"
+	stack_trap "rm -f $TMP/$tfile"
+	cmp $TMP/$tfile $DIR/$tfile || error "cmp with $TMP/$tfile failed"
+	$LFS mirror write -N2 -i /etc/passwd $DIR/$tfile || "write failed"
+	$LFS setstripe --comp-set -I 65537 --comp-flags=stale $DIR/$tfile ||
+		error "set component 1 stale failed"
+	$LFS mirror resync $DIR/$tfile || error "resync $DIR/$tfile failed"
+	cmp /etc/passwd $DIR/$tfile || error "cmp with /etc/passwd failed"
+}
+run_test 0j "test lfs mirror read/write commands"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
