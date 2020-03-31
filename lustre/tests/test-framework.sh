@@ -5218,8 +5218,9 @@ init_param_vars () {
 		fi
 	fi
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param lod.*.mdt_hash=crush"
+	(( MDS1_VERSION <= $(version_code 2.13.52) )) ||
+		do_nodes $(comma_list $(mdts_nodes)) \
+			"$LCTL set_param lod.*.mdt_hash=crush"
 	return 0
 }
 
