@@ -186,7 +186,7 @@ static inline __u64 osc_enq2ldlm_flags(__u32 enqflags)
 	if (enqflags & CEF_NONBLOCK)
 		result |= LDLM_FL_BLOCK_NOWAIT;
 	if (enqflags & CEF_GLIMPSE)
-		result |= LDLM_FL_HAS_INTENT;
+		result |= LDLM_FL_HAS_INTENT|LDLM_FL_CBPENDING;
 	if (enqflags & CEF_DISCARD_DATA)
 		result |= LDLM_FL_AST_DISCARD_DATA;
 	if (enqflags & CEF_PEEK)
