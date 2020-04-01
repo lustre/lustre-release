@@ -1080,45 +1080,6 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 #define  MGC_TARGET_REG_LIMIT_MAX RECONNECT_DELAY_MAX
 #define  MGC_SEND_PARAM_LIMIT 10
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-/* Send parameter to MGS*/
-static int mgc_set_mgs_param(struct obd_export *exp,
-                             struct mgs_send_param *msp)
-{
-        struct ptlrpc_request *req;
-        struct mgs_send_param *req_msp, *rep_msp;
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MGS_SET_INFO, LUSTRE_MGS_VERSION,
-                                        MGS_SET_INFO);
-        if (!req)
-                RETURN(-ENOMEM);
-
-        req_msp = req_capsule_client_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
-        if (!req_msp) {
-                ptlrpc_req_finished(req);
-                RETURN(-ENOMEM);
-        }
-
-        memcpy(req_msp, msp, sizeof(*req_msp));
-        ptlrpc_request_set_replen(req);
-
-        /* Limit how long we will wait for the enqueue to complete */
-        req->rq_delay_limit = MGC_SEND_PARAM_LIMIT;
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
-                memcpy(msp, rep_msp, sizeof(*rep_msp));
-        }
-
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
-#endif
-
 /* Take a config lock so we can get cancel notifications */
 static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 		       union ldlm_policy_data *policy, enum ldlm_mode mode,
@@ -1293,15 +1254,6 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		rc = mgc_fs_cleanup(env, exp->exp_obd);
 		RETURN(rc);
 	}
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-        if (KEY_IS(KEY_SET_INFO)) {
-                struct mgs_send_param *msp;
-
-                msp = (struct mgs_send_param *)val;
-                rc =  mgc_set_mgs_param(exp, msp);
-                RETURN(rc);
-        }
-#endif
         if (KEY_IS(KEY_MGSSEC)) {
                 struct client_obd     *cli = &exp->exp_obd->u.cli;
                 struct sptlrpc_flavor  flvr;

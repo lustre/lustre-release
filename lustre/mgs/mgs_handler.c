@@ -96,66 +96,6 @@ static inline bool str_starts_with(const char *str, const char *prefix)
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-static int mgs_set_info(struct tgt_session_info *tsi)
-{
-	struct mgs_thread_info	*mgi;
-	struct mgs_send_param	*msp, *rep_msp;
-	struct lustre_cfg	*lcfg;
-	size_t			 param_len;
-	char			*s;
-	int			 rc;
-
-	ENTRY;
-
-	mgi = mgs_env_info(tsi->tsi_env);
-	if (IS_ERR(mgi))
-		RETURN(err_serious(PTR_ERR(mgi)));
-
-	msp = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
-	if (msp == NULL)
-		RETURN(err_serious(-EFAULT));
-
-	param_len = strnlen(msp->mgs_param, sizeof(msp->mgs_param));
-	if (param_len == 0 || param_len == sizeof(msp->mgs_param))
-		RETURN(-EINVAL);
-
-	/* We only allow '*.lov.stripe{size,count,offset}=*' from an RPC. */
-	s = strchr(msp->mgs_param, '.');
-	if (s == NULL)
-		RETURN(-EINVAL);
-
-	if (!str_starts_with(s + 1, "lov.stripesize=") &&
-	    !str_starts_with(s + 1, "lov.stripecount=") &&
-	    !str_starts_with(s + 1, "lov.stripeoffset="))
-		RETURN(-EINVAL);
-
-	/* Construct lustre_cfg structure to pass to function mgs_set_param */
-	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
-	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
-	OBD_ALLOC(lcfg, lustre_cfg_len(mgi->mgi_bufs.lcfg_bufcount,
-				       mgi->mgi_bufs.lcfg_buflen));
-	if (!lcfg)
-		RETURN(-ENOMEM);
-	lustre_cfg_init(lcfg, LCFG_PARAM, &mgi->mgi_bufs);
-
-	rc = mgs_set_param(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg);
-	if (rc) {
-		LCONSOLE_WARN("%s: Unable to set parameter %s: %d\n",
-			      tgt_name(tsi->tsi_tgt), msp->mgs_param, rc);
-		GOTO(out_cfg, rc);
-	}
-
-	/* send back the whole msp in the reply */
-	rep_msp = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
-	*rep_msp = *msp;
-	EXIT;
-out_cfg:
-	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
-	return rc;
-}
-#endif
-
 enum ast_type {
 	AST_CONFIG	= 1,
 	AST_PARAMS	= 2,
@@ -1201,9 +1141,6 @@ TGT_RPC_HANDLER(MGS_FIRST_OPC,
 		0,			MGS_DISCONNECT,	 mgs_disconnect,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_MGS_HDL_VAR(0,			MGS_EXCEPTION,	 mgs_exception),
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_SET_INFO,	 mgs_set_info),
-#endif
 TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_TARGET_REG,	 mgs_target_reg),
 TGT_MGS_HDL_VAR(0,			MGS_TARGET_DEL,	 mgs_target_del),
 TGT_MGS_HDL(HAS_REPLY,			MGS_CONFIG_READ, mgs_config_read),

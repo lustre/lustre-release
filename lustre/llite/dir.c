@@ -412,27 +412,6 @@ out:
 	RETURN(rc);
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-static int ll_send_mgc_param(struct obd_export *mgc, char *string)
-{
-        struct mgs_send_param *msp;
-        int rc = 0;
-
-        OBD_ALLOC_PTR(msp);
-        if (!msp)
-                return -ENOMEM;
-
-	strlcpy(msp->mgs_param, string, sizeof(msp->mgs_param));
-        rc = obd_set_info_async(NULL, mgc, sizeof(KEY_SET_INFO), KEY_SET_INFO,
-                                sizeof(struct mgs_send_param), msp, NULL);
-        if (rc)
-                CERROR("Failed to set parameter: %d\n", rc);
-        OBD_FREE_PTR(msp);
-
-        return rc;
-}
-#endif
-
 /**
  * Create striped directory with specified stripe(@lump)
  *
@@ -578,10 +557,6 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 	struct md_op_data *op_data;
 	struct ptlrpc_request *req = NULL;
 	int rc = 0;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
-	struct obd_device *mgc = lsi->lsi_mgc;
-#endif
 	int lum_size;
 	ENTRY;
 
@@ -643,57 +618,6 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 	if (rc)
 		RETURN(rc);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-	/*
-	 * 2.9 server has stored filesystem default stripe in ROOT xattr,
-	 * and it's stored into system config for backward compatibility.
-	 *
-	 * In the following we use the fact that LOV_USER_MAGIC_V1 and
-	 * LOV_USER_MAGIC_V3 have the same initial fields so we do not
-	 * need the make the distiction between the 2 versions
-	 */
-	if (set_default && mgc->u.cli.cl_mgc_mgsexp &&
-	    (lump == NULL ||
-	     le32_to_cpu(lump->lmm_magic) == LOV_USER_MAGIC_V1 ||
-	     le32_to_cpu(lump->lmm_magic) == LOV_USER_MAGIC_V3)) {
-		char *param = NULL;
-		char *buf;
-
-		OBD_ALLOC(param, MGS_PARAM_MAXLEN);
-		if (param == NULL)
-			GOTO(end, rc = -ENOMEM);
-
-		buf = param;
-		/* Get fsname and assume devname to be -MDT0000. */
-		snprintf(buf, MGS_PARAM_MAXLEN, "%s-MDT0000.lov",
-			 sbi->ll_fsname);
-		buf += strlen(buf);
-
-		/* Set root stripesize */
-		snprintf(buf, MGS_PARAM_MAXLEN, ".stripesize=%u",
-			 lump ? le32_to_cpu(lump->lmm_stripe_size) : 0);
-		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-		if (rc)
-			GOTO(end, rc);
-
-		/* Set root stripecount */
-		snprintf(buf, MGS_PARAM_MAXLEN, ".stripecount=%hd",
-			 lump ? le16_to_cpu(lump->lmm_stripe_count) : 0);
-		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-		if (rc)
-			GOTO(end, rc);
-
-		/* Set root stripeoffset */
-		snprintf(buf, MGS_PARAM_MAXLEN, ".stripeoffset=%hd",
-			 lump ? le16_to_cpu(lump->lmm_stripe_offset) :
-				(typeof(lump->lmm_stripe_offset))(-1));
-		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-
-end:
-		if (param != NULL)
-			OBD_FREE(param, MGS_PARAM_MAXLEN);
-	}
-#endif
 	RETURN(rc);
 }
 

@@ -2569,15 +2569,6 @@ enum mgs_cmd {
 	MGS_FIRST_OPC	= MGS_CONNECT
 };
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-#define MGS_PARAM_MAXLEN 1024
-#define KEY_SET_INFO "set_info"
-
-struct mgs_send_param {
-        char             mgs_param[MGS_PARAM_MAXLEN];
-};
-#endif
-
 /* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN  64
 #define MTI_PARAM_MAXLEN 4096
