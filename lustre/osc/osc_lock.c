@@ -977,7 +977,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
 		RETURN(0);
 
 	if ((oscl->ols_flags & LDLM_FL_NO_EXPANSION) &&
-	    !(exp_connect_lockahead_old(exp) || exp_connect_lockahead(exp))) {
+	    !exp_connect_lockahead(exp)) {
 		result = -EOPNOTSUPP;
 		CERROR("%s: server does not support lockahead/locknoexpand: rc = %d\n",
 		       exp->exp_obd->obd_name, result);

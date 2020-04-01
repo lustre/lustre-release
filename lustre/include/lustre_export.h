@@ -442,11 +442,6 @@ static inline int exp_connect_large_acl(struct obd_export *exp)
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_LARGE_ACL);
 }
 
-static inline int exp_connect_lockahead_old(struct obd_export *exp)
-{
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_LOCKAHEAD_OLD);
-}
-
 static inline int exp_connect_lockahead(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCKAHEAD);

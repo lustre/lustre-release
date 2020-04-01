@@ -460,23 +460,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				  OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK |
 				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_SHORTIO |
 				  OBD_CONNECT_FLAGS2 | OBD_CONNECT_GRANT_SHRINK;
-
-/* The client currently advertises support for OBD_CONNECT_LOCKAHEAD_OLD so it
- * can interoperate with an older version of lockahead which was released prior
- * to landing in master. This support will be dropped when 2.13 development
- * starts.  At the point, we should not just drop the connect flag (below), we
- * should also remove the support in the code.
- *
- * Removing it means a few things:
- * 1. Remove this section here
- * 2. Remove CEF_NONBLOCK in ll_file_lockahead()
- * 3. Remove function exp_connect_lockahead_old
- * 4. Remove LDLM_FL_LOCKAHEAD_OLD_RESERVED in lustre_dlm_flags.h
- * */
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 12, 50, 0)
-	data->ocd_connect_flags |= OBD_CONNECT_LOCKAHEAD_OLD;
-#endif
-
 	data->ocd_connect_flags2 = OBD_CONNECT2_LOCKAHEAD |
 				   OBD_CONNECT2_INC_XID;
 

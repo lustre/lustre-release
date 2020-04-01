@@ -1740,18 +1740,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 out:
 	mutex_unlock(&oseq->os_create_lock);
 out_nolock:
-	if (rc == 0) {
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-		struct ofd_thread_info	*info = ofd_info(tsi->tsi_env);
-		struct lu_fid		*fid = &info->fti_fid;
-
-		/* For compatible purpose, it needs to convert back to
-		 * OST ID before put it on wire. */
-		*fid = rep_oa->o_oi.oi_fid;
-		fid_to_ostid(fid, &rep_oa->o_oi);
-#endif
+	if (rc == 0)
 		rep_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
-	}
 	ofd_seq_put(tsi->tsi_env, oseq);
 
 out_sem:

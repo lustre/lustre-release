@@ -158,16 +158,6 @@
 #define ldlm_clear_converting(_l)       LDLM_CLEAR_FLAG((_l), 1ULL << 25)
 
 /**
- * Part of original lockahead implementation, OBD_CONNECT_LOCKAHEAD_OLD.
- * Reserved temporarily to allow those implementations to keep working.
- * Will be removed after 2.12 release.
- * */
-#define LDLM_FL_LOCKAHEAD_OLD_RESERVED	0x0000000010000000ULL /* bit  28 */
-#define ldlm_is_do_not_expand_io(_l)	 LDLM_TEST_FLAG((_l), 1ULL << 28)
-#define ldlm_set_do_not_expand_io(_l)	 LDLM_SET_FLAG((_l), 1ULL << 28)
-#define ldlm_clear_do_not_expand_io(_l) LDLM_CLEAR_FLAG((_l), 1ULL << 28)
-
-/**
  * Do not expand this lock.  Grant it only on the extent requested.
  * Used for manually requested locks from the client (LU_LADVISE_LOCKAHEAD).
  * */

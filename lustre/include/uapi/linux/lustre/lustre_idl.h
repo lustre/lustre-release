@@ -816,7 +816,7 @@ struct ptlrpc_body_v2 {
 							 RPCs in parallel */
 #define OBD_CONNECT_DIR_STRIPE	 0x400000000000000ULL /* striped DNE dir */
 #define OBD_CONNECT_SUBTREE	0x800000000000000ULL /* fileset mount */
-#define OBD_CONNECT_LOCKAHEAD_OLD 0x1000000000000000ULL /* Old Cray lockahead */
+/* was OBD_CONNECT_LOCKAHEAD_OLD 0x1000000000000000ULL old lockahead 2.12-2.13*/
 
 /** bulk matchbits is sent within ptlrpc_body */
 #define OBD_CONNECT_BULK_MBITS	 0x2000000000000000ULL

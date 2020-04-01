@@ -58,20 +58,6 @@
 #include "obdctl.h"
 #include "mount_utils.h"
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 10, 53, 0)
-/*
- * LU-1783
- * We only #include a kernel level include file here because
- * important MS_ flag #defines are missing from the SLES version
- * of sys/mount.h
- * In the future if SLES updates sys/mount.h to have a more complete
- * set of flag #defines we should stop including linux/fs.h
- */
-#if !defined(MS_RDONLY)
-#include <linux/fs.h>
-#endif
-#endif
-
 #ifdef HAVE_LIBMOUNT
 # define WITH_LIBMOUNT	"(libmount)"
 #else

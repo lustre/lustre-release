@@ -1437,11 +1437,7 @@ out_free:
 			GOTO(lmv_out_free, rc = -EINVAL);
 		}
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 50, 0)
-		mode = data->ioc_type != 0 ? data->ioc_type : S_IRWXUGO;
-#else
 		mode = data->ioc_type;
-#endif
 		rc = ll_dir_setdirstripe(dentry, lum, lumlen, filename, mode);
 lmv_out_free:
 		OBD_FREE_LARGE(buf, len);
