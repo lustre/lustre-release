@@ -15,8 +15,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
-# bug number for skipped test:
-ALWAYS_EXCEPT+=" "
+# bug number for skipped test: LU-12312
+ALWAYS_EXCEPT+="               31"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="26"
