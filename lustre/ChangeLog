@@ -17,6 +17,7 @@ TBD Whamcloud
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary unpatched kernels built and tested during release cycle:
          3.10.0-1062.9.1.el7 (RHEL7.7)
+         3.10.0-1127.el7     (RHEL7.8)
          4.12.14-95.45       (SLES12 SP4)
          4.12.14-197.29      (SLES15 SP1)
          4.15.0-48           (Ubuntu 18.04)
