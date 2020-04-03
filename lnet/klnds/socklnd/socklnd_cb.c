@@ -1961,12 +1961,12 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 		if (ktime_get_seconds() >= deadline) {
 			rc = -ETIMEDOUT;
 			lnet_connect_console_error(
-				rc, lnet_nid_to_nid4(&peer_ni->ksnp_id.nid),
+				rc, &peer_ni->ksnp_id.nid,
 				(struct sockaddr *)&conn_cb->ksnr_addr);
 			goto failed;
 		}
 
-		sock = lnet_connect(lnet_nid_to_nid4(&peer_ni->ksnp_id.nid),
+		sock = lnet_connect(&peer_ni->ksnp_id.nid,
 				    conn_cb->ksnr_myiface,
 				    (struct sockaddr *)&conn_cb->ksnr_addr,
 				    peer_ni->ksnp_ni->ni_net_ns);
@@ -1979,7 +1979,7 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 					  type);
 		if (rc < 0) {
 			lnet_connect_console_error(
-				rc, lnet_nid_to_nid4(&peer_ni->ksnp_id.nid),
+				rc, &peer_ni->ksnp_id.nid,
 				(struct sockaddr *)&conn_cb->ksnr_addr);
 			goto failed;
 		}

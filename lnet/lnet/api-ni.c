@@ -883,6 +883,15 @@ static void lnet_assert_wire_constants(void)
 	BUILD_BUG_ON((int)offsetof(struct lnet_acceptor_connreq, acr_nid) != 8);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_acceptor_connreq *)0)->acr_nid) != 8);
 
+	/* Checks for struct lnet_acceptor_connreq_v2 */
+	BUILD_BUG_ON((int)sizeof(struct lnet_acceptor_connreq_v2) != 28);
+	BUILD_BUG_ON((int)offsetof(struct lnet_acceptor_connreq_v2, acr_magic) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_acceptor_connreq_v2 *)0)->acr_magic) != 4);
+	BUILD_BUG_ON((int)offsetof(struct lnet_acceptor_connreq_v2, acr_version) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_acceptor_connreq_v2 *)0)->acr_version) != 4);
+	BUILD_BUG_ON((int)offsetof(struct lnet_acceptor_connreq_v2, acr_nid) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct lnet_acceptor_connreq_v2 *)0)->acr_nid) != 20);
+
 	/* Checks for struct lnet_counters_common */
 	BUILD_BUG_ON((int)sizeof(struct lnet_counters_common) != 60);
 	BUILD_BUG_ON((int)offsetof(struct lnet_counters_common, lcc_msgs_alloc) != 0);

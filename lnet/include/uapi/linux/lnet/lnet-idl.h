@@ -190,12 +190,21 @@ struct lnet_magicversion {
 
 /* Acceptor connection request */
 struct lnet_acceptor_connreq {
-	__u32	acr_magic;	/* PTL_ACCEPTOR_PROTO_MAGIC */
+	__u32	acr_magic;	/* LNET_PROTO_ACCEPTOR_MAGIC */
 	__u32	acr_version;	/* protocol version */
 	__u64	acr_nid;	/* target NID */
 } __attribute__((packed));
 
 #define LNET_PROTO_ACCEPTOR_VERSION	1
+
+struct lnet_acceptor_connreq_v2 {
+	__u32			acr_magic;	/* LNET_PROTO_ACCEPTOR_MAGIC */
+	__u32			acr_version;	/* protocol version - 2 */
+	struct lnet_nid		acr_nid;	/* target NID */
+} __attribute__((packed));
+
+/* For use with 16-byte addresses */
+#define LNET_PROTO_ACCEPTOR_VERSION_16  2
 
 struct lnet_counters_common {
 	__u32	lcc_msgs_alloc;

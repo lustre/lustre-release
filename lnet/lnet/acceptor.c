@@ -90,57 +90,61 @@ lnet_acceptor_timeout(void)
 EXPORT_SYMBOL(lnet_acceptor_timeout);
 
 void
-lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
-			    struct sockaddr *sa)
+lnet_connect_console_error(int rc, struct lnet_nid *peer_nid,
+			   struct sockaddr *sa)
 {
 	switch (rc) {
 	/* "normal" errors */
 	case -ECONNREFUSED:
 		CNETERR("Connection to %s at host %pISp was refused: check that Lustre is running on that node.\n",
-			libcfs_nid2str(peer_nid), sa);
+			libcfs_nidstr(peer_nid), sa);
 		break;
 	case -EHOSTUNREACH:
 	case -ENETUNREACH:
 		CNETERR("Connection to %s at host %pIS was unreachable: the network or that node may be down, or Lustre may be misconfigured.\n",
-			libcfs_nid2str(peer_nid), sa);
+			libcfs_nidstr(peer_nid), sa);
 		break;
 	case -ETIMEDOUT:
 		CNETERR("Connection to %s at host %pISp took too long: that node may be hung or experiencing high load.\n",
-			libcfs_nid2str(peer_nid), sa);
+			libcfs_nidstr(peer_nid), sa);
 		break;
 	case -ECONNRESET:
 		LCONSOLE_ERROR_MSG(0x11b,
 				   "Connection to %s at host %pISp was reset: is it running a compatible version of Lustre and is %s one of its NIDs?\n",
-				   libcfs_nid2str(peer_nid), sa,
-				   libcfs_nid2str(peer_nid));
+				   libcfs_nidstr(peer_nid), sa,
+				   libcfs_nidstr(peer_nid));
 		break;
 	case -EPROTO:
 		LCONSOLE_ERROR_MSG(0x11c,
 				   "Protocol error connecting to %s at host %pISp: is it running a compatible version of Lustre?\n",
-				   libcfs_nid2str(peer_nid), sa);
+				   libcfs_nidstr(peer_nid), sa);
 		break;
 	case -EADDRINUSE:
 		LCONSOLE_ERROR_MSG(0x11d,
 				   "No privileged ports available to connect to %s at host %pISp\n",
-				   libcfs_nid2str(peer_nid), sa);
+				   libcfs_nidstr(peer_nid), sa);
 		break;
 	default:
 		LCONSOLE_ERROR_MSG(0x11e,
 				   "Unexpected error %d connecting to %s at host %pISp\n",
-				   rc, libcfs_nid2str(peer_nid), sa);
+				   rc, libcfs_nidstr(peer_nid), sa);
 		break;
 	}
 }
 EXPORT_SYMBOL(lnet_connect_console_error);
 
 struct socket *
-lnet_connect(lnet_nid_t peer_nid, int interface, struct sockaddr *peeraddr,
+lnet_connect(struct lnet_nid *peer_nid, int interface,
+	     struct sockaddr *peeraddr,
 	     struct net *ns)
 {
-	struct lnet_acceptor_connreq cr;
-	struct socket		*sock;
-	int			rc;
-	int			port;
+	struct lnet_acceptor_connreq cr1;
+	struct lnet_acceptor_connreq_v2 cr2;
+	void *cr;
+	int crsize;
+	struct socket *sock;
+	int rc;
+	int port;
 
 	BUILD_BUG_ON(sizeof(cr) > 16); /* not too big to be on the stack */
 
@@ -161,20 +165,32 @@ lnet_connect(lnet_nid_t peer_nid, int interface, struct sockaddr *peeraddr,
 
 		BUILD_BUG_ON(LNET_PROTO_ACCEPTOR_VERSION != 1);
 
-		cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
-		cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
-		cr.acr_nid     = peer_nid;
+		if (nid_is_nid4(peer_nid)) {
+			cr1.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
+			cr1.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+			cr1.acr_nid     = lnet_nid_to_nid4(peer_nid);
+			cr = &cr1;
+			crsize = sizeof(cr1);
 
-		if (the_lnet.ln_testprotocompat) {
-			/* single-shot proto check */
-			if (test_and_clear_bit(2, &the_lnet.ln_testprotocompat))
-				cr.acr_version++;
-			if (test_and_clear_bit(3, &the_lnet.ln_testprotocompat))
-				cr.acr_magic = LNET_PROTO_MAGIC;
+			if (the_lnet.ln_testprotocompat) {
+				/* single-shot proto check */
+				if (test_and_clear_bit(
+					    2, &the_lnet.ln_testprotocompat))
+					cr1.acr_version++;
+				if (test_and_clear_bit(
+					    3, &the_lnet.ln_testprotocompat))
+					cr1.acr_magic = LNET_PROTO_MAGIC;
+			}
+
+		} else {
+			cr2.acr_magic	= LNET_PROTO_ACCEPTOR_MAGIC;
+			cr2.acr_version	= LNET_PROTO_ACCEPTOR_VERSION_16;
+			cr2.acr_nid	= *peer_nid;
+			cr = &cr2;
+			crsize = sizeof(cr2);
 		}
 
-		rc = lnet_sock_write(sock, &cr, sizeof(cr),
-				       accept_timeout);
+		rc = lnet_sock_write(sock, cr, crsize, accept_timeout);
 		if (rc != 0)
 			goto failed_sock;
 
@@ -196,11 +212,14 @@ static int
 lnet_accept(struct socket *sock, __u32 magic)
 {
 	struct lnet_acceptor_connreq cr;
+	struct lnet_acceptor_connreq_v2 cr2;
+	struct lnet_nid nid;
 	struct sockaddr_storage peer;
-	int			rc;
-	int			flip;
+	int peer_version;
+	int rc;
+	int flip;
 	struct lnet_ni *ni;
-	char		       *str;
+	char *str;
 
 	LASSERT(sizeof(cr) <= 16);		/* not too big for the stack */
 
@@ -255,12 +274,13 @@ lnet_accept(struct socket *sock, __u32 magic)
 	if (flip)
 		__swab32s(&cr.acr_version);
 
-	if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
+	switch (cr.acr_version) {
+	default:
 		/* future version compatibility!
 		 * An acceptor-specific protocol rev will first send a version
 		 * query.  I send back my current version to tell her I'm
 		 * "old". */
-		int peer_version = cr.acr_version;
+		peer_version = cr.acr_version;
 
 		memset(&cr, 0, sizeof(cr));
 		cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
@@ -273,30 +293,48 @@ lnet_accept(struct socket *sock, __u32 magic)
 			CERROR("Error sending magic+version in response to version %d from %pIS: %d\n",
 			       peer_version, &peer, rc);
 		return -EPROTO;
-	}
 
-	rc = lnet_sock_read(sock, &cr.acr_nid,
-			      sizeof(cr) -
-			      offsetof(struct lnet_acceptor_connreq, acr_nid),
-			      accept_timeout);
+	case LNET_PROTO_ACCEPTOR_VERSION:
+
+		rc = lnet_sock_read(sock, &cr.acr_nid,
+				    sizeof(cr) -
+				    offsetof(struct lnet_acceptor_connreq,
+					     acr_nid),
+				    accept_timeout);
+		if (rc)
+			break;
+		if (flip)
+			__swab64s(&cr.acr_nid);
+
+		lnet_nid4_to_nid(cr.acr_nid, &nid);
+		break;
+
+	case LNET_PROTO_ACCEPTOR_VERSION_16:
+		rc = lnet_sock_read(sock, &cr2.acr_nid,
+				    sizeof(cr2) -
+				    offsetof(struct lnet_acceptor_connreq_v2,
+					     acr_nid),
+				    accept_timeout);
+		if (rc)
+			break;
+		nid = cr2.acr_nid;
+		break;
+	}
 	if (rc != 0) {
 		CERROR("Error %d reading connection request from %pIS\n",
 		       rc, &peer);
 		return -EIO;
 	}
 
-	if (flip)
-		__swab64s(&cr.acr_nid);
-
-	ni = lnet_nid2ni_addref(cr.acr_nid);
+	ni = lnet_nid_to_ni_addref(&nid);
 	if (ni == NULL ||               /* no matching net */
-	    lnet_nid_to_nid4(&ni->ni_nid) != cr.acr_nid) {
+	    !nid_same(&ni->ni_nid, &nid)) {
 		/* right NET, wrong NID! */
 		if (ni != NULL)
 			lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x120,
 				   "Refusing connection from %pIS for %s: No matching NI\n",
-				   &peer, libcfs_nid2str(cr.acr_nid));
+				   &peer, libcfs_nidstr(&nid));
 		return -EPERM;
 	}
 
@@ -305,12 +343,11 @@ lnet_accept(struct socket *sock, __u32 magic)
 		lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x121,
 				   "Refusing connection from %pIS for %s: NI doesn not accept IP connections\n",
-				  &peer, libcfs_nid2str(cr.acr_nid));
+				  &peer, libcfs_nidstr(&nid));
 		return -EPERM;
 	}
 
-	CDEBUG(D_NET, "Accept %s from %pI4h\n",
-	       libcfs_nid2str(cr.acr_nid), &peer);
+	CDEBUG(D_NET, "Accept %s from %pI4h\n", libcfs_nidstr(&nid), &peer);
 
 	rc = ni->ni_net->net_lnd->lnd_accept(ni, sock);
 
