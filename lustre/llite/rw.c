@@ -348,7 +348,11 @@ static unsigned long ria_page_count(struct ra_io_arg *ria)
 
 static pgoff_t ras_align(struct ll_readahead_state *ras, pgoff_t index)
 {
-	return index - (index % ras->ras_rpc_pages);
+	unsigned opt_size = min(ras->ras_window_pages, ras->ras_rpc_pages);
+
+	if (opt_size == 0)
+		opt_size = 1;
+	return index - (index % opt_size);
 }
 
 /* Check whether the index is in the defined ra-window */
