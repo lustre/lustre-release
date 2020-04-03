@@ -66,55 +66,6 @@ static void ll_release(struct dentry *de)
 	EXIT;
 }
 
-/* Compare if two dentries are the same.  Don't match if the existing dentry
- * is marked invalid.  Returns 1 if different, 0 if the same.
- *
- * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
- * an AST before calling d_revalidate_it().  The dentry still exists (marked
- * INVALID) so d_lookup() matches it, but we have no lock on it (so
- * lock_match() fails) and we spin around real_lookup().
- *
- * This race doesn't apply to lookups in d_alloc_parallel(), and for
- * those we want to ensure that only one dentry with a given name is
- * in ll_lookup_nd() at a time.  So allow invalid dentries to match
- * while d_in_lookup().  We will be called again when the lookup
- * completes, and can give a different answer then.
- */
-#if defined(HAVE_D_COMPARE_5ARGS)
-static int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
-		       unsigned int len, const char *str,
-		       const struct qstr *name)
-#elif defined(HAVE_D_COMPARE_4ARGS)
-static int ll_dcompare(const struct dentry *dentry, unsigned int len,
-		       const char *str, const struct qstr *name)
-#endif
-{
-	ENTRY;
-
-	if (len != name->len)
-		RETURN(1);
-
-	if (memcmp(str, name->name, len))
-		RETURN(1);
-
-	CDEBUG(D_DENTRY, "found name %.*s(%p) flags %#x refc %d\n",
-	       name->len, name->name, dentry, dentry->d_flags,
-	       ll_d_count(dentry));
-
-	/* mountpoint is always valid */
-	if (d_mountpoint((struct dentry *)dentry))
-		RETURN(0);
-
-	/* ensure exclusion against parallel lookup of the same name */
-	if (d_in_lookup((struct dentry *)dentry))
-		return 0;
-
-	if (d_lustre_invalid(dentry))
-		RETURN(1);
-
-	RETURN(0);
-}
-
 /**
  * Called when last reference to a dentry is dropped and dcache wants to know
  * whether or not it should cache it:
@@ -290,6 +241,14 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
 	       dentry->d_name.name, lookup_flags);
 
+	/* mountpoint is always valid */
+	if (d_mountpoint((struct dentry *)dentry))
+		return 1;
+
+	/* No lock -> invalid dentry */
+	if (d_lustre_invalid(dentry))
+		return 0;
+
 	/* If this is intermediate component path lookup and we were able to get
 	 * to this dentry, then its lock has not been revoked and the
 	 * path component is valid. */
@@ -326,5 +285,4 @@ const struct dentry_operations ll_d_ops = {
 	.d_revalidate	= ll_revalidate_dentry,
         .d_release = ll_release,
         .d_delete  = ll_ddelete,
-        .d_compare = ll_dcompare,
 };
