@@ -797,7 +797,8 @@ int llog_process_or_fork(const struct lu_env *env,
 	struct llog_process_info *lpi;
 	struct llog_process_data *d = data;
 	struct llog_process_cat_data *cd = catdata;
-	int                      rc;
+	__u32 flags = loghandle->lgh_hdr->llh_flags;
+	int rc;
 
 	ENTRY;
 
@@ -812,10 +813,10 @@ int llog_process_or_fork(const struct lu_env *env,
 	lpi->lpi_catdata   = catdata;
 
 	CDEBUG(D_OTHER, "Processing "DFID" flags 0x%03x startcat %d startidx %d first_idx %d last_idx %d\n",
-	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
-	       loghandle->lgh_hdr->llh_flags, d ? d->lpd_startcat : -1,
-	       d ? d->lpd_startidx : -1, cd ? cd->lpcd_first_idx : -1,
-	       cd ? cd->lpcd_last_idx : -1);
+	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), flags,
+	       (flags & LLOG_F_IS_CAT) && d ? d->lpd_startcat : -1,
+	       (flags & LLOG_F_IS_CAT) && d ? d->lpd_startidx : -1,
+	       cd ? cd->lpcd_first_idx : -1, cd ? cd->lpcd_last_idx : -1);
 	if (fork) {
 		struct task_struct *task;
 

@@ -419,7 +419,8 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		RETURN(rc);
 	}
 
-	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN | fmt, NULL);
+	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN |
+			      LLOG_F_ZAP_WHEN_EMPTY | fmt, NULL);
 	if (rc < 0) {
 		llog_close(env, loghandle);
 		*res = NULL;
@@ -884,13 +885,9 @@ static int llog_cat_process_cb(const struct lu_env *env,
 
 out:
 	/* The empty plain log was destroyed while processing */
-	if (rc == LLOG_DEL_PLAIN) {
-		rc = llog_cat_cleanup(env, cat_llh, llh,
-				      llh->u.phd.phd_cookie.lgc_index);
-	} else if (rc == LLOG_DEL_RECORD) {
+	if (rc == LLOG_DEL_PLAIN || rc == LLOG_DEL_RECORD)
 		/* clear wrong catalog entry */
-		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
-	}
+		rc = llog_cat_cleanup(env, cat_llh, llh, rec->lrh_index);
 
 	if (llh)
 		llog_handle_put(env, llh);
@@ -1169,7 +1166,8 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 			cathandle->u.chd.chd_current_log = NULL;
 		list_del_init(&loghandle->u.phd.phd_entry);
 		up_write(&cathandle->lgh_lock);
-		LASSERT(index == loghandle->u.phd.phd_cookie.lgc_index);
+		LASSERT(index == loghandle->u.phd.phd_cookie.lgc_index ||
+			loghandle->u.phd.phd_cookie.lgc_index == 0);
 		/* llog was opened and keep in a list, close it now */
 		llog_close(env, loghandle);
 	}
