@@ -13992,7 +13992,9 @@ test_160f() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
+	# use fnv1a because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+		error "test_mkdir $tdir failed"
 	log "$(date +%s): creating first files"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/$tfile failed"
@@ -14118,6 +14120,7 @@ test_160g() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
+	# use fnv1a because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
 		error "mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
@@ -14233,6 +14236,7 @@ test_160h() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
+	# use fnv1a because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
@@ -14383,6 +14387,7 @@ test_160i() {
 	changelog_register || error "first changelog_register failed"
 
 	# generate some changelog records to accumulate on each MDT
+	# use fnv1a because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
 		error "mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
@@ -14449,7 +14454,9 @@ test_160j() {
 	stack_trap "changelog_deregister" EXIT
 
 	# generate some changelog
-	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	# use fnv1a because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+		error "mkdir $tdir failed"
 	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/${tfile}bis failed"
 
@@ -14472,7 +14479,6 @@ test_160j() {
 		error "User $cl_user not found in changelog_users"
 
 	printf 'clear:'$cl_user':0' >&3
-
 }
 run_test 160j "client can be umounted  while its chanangelog is being used"
 
