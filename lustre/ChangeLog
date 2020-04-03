@@ -4,6 +4,7 @@ TBD Whamcloud
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
          3.10.0-1062.9.1.el7 (RHEL7.7)
+         3.10.0-1127.el7     (RHEL7.8)
        * Other server kernels known to build and work at some point (others may also work):
          3.10.0-862.14.4.el7 (RHEL7.5)
          3.10.0-957.27.2.el7 (RHEL7.6)
