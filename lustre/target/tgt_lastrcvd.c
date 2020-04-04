@@ -1200,6 +1200,7 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 {
 	struct lsd_reply_data	*lrd;
 	int	i;
+	int	rc;
 
 	lrd = &trd->trd_reply;
 	/* update export last transno */
@@ -1220,7 +1221,6 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 
 		if (update_lrd_file) {
 			loff_t	off;
-			int	rc;
 
 			/* write reply data to disk */
 			off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
@@ -1228,7 +1228,7 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 			if (unlikely(rc != 0)) {
 				CERROR("%s: can't update %s file: rc = %d\n",
 				       tgt_name(tgt), REPLY_DATA, rc);
-				RETURN(rc);
+				GOTO(free_slot, rc);
 			}
 		}
 	} else {
@@ -1242,8 +1242,12 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 			      MSG_REPLAY : MSG_REPLAY|MSG_RESENT;
 
 		if (req->rq_obsolete) {
+			CDEBUG(D_INFO,
+			       "drop reply data update for obsolete req xid=%llu,"
+			       "transno=%llu, tag=%hu\n", req->rq_xid,
+			       lrd->lrd_transno, trd->trd_tag);
 			mutex_unlock(&ted->ted_lcd_lock);
-			RETURN(-EALREADY);
+			GOTO(free_slot, rc = -EBADR);
 		}
 
 		if (!(lustre_msg_get_flags(req->rq_reqmsg) & exclude))
@@ -1262,6 +1266,11 @@ static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 	       trd->trd_tag, lrd->lrd_client_gen, trd->trd_index);
 
 	RETURN(0);
+
+free_slot:
+	if (tgt != NULL)
+		tgt_clear_reply_slot(tgt, trd->trd_index);
+	return rc;
 }
 
 int tgt_mk_reply_data(const struct lu_env *env,
@@ -1315,8 +1324,11 @@ int tgt_mk_reply_data(const struct lu_env *env,
 
 	rc = tgt_add_reply_data(env, tgt, ted, trd, req,
 				th, write_update);
-	if (rc < 0)
+	if (rc < 0) {
 		OBD_FREE_PTR(trd);
+		if (rc == -EBADR)
+			rc = 0;
+	}
 	return rc;
 
 }
