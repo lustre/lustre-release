@@ -1106,16 +1106,9 @@ static int pcc_layout_xattr_set(struct pcc_inode *pcci, __u32 gen)
 	if (!(lli->lli_pcc_dsflags & PCC_DATASET_AUTO_ATTACH))
 		RETURN(0);
 
-#ifndef HAVE_VFS_SETXATTR
-	if (!pcc_dentry->d_inode->i_op->setxattr)
-		RETURN(-ENOTSUPP);
+	rc = ll_vfs_setxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
+			     &gen, sizeof(gen), 0);
 
-	rc = pcc_dentry->d_inode->i_op->setxattr(pcc_dentry, pcc_xattr_layout,
-						 &gen, sizeof(gen), 0);
-#else
-	rc = __vfs_setxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
-			    &gen, sizeof(gen), 0);
-#endif
 	RETURN(rc);
 }
 
@@ -1238,18 +1231,8 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 		GOTO(out, rc = 0);
 
 	pcc_dentry = path.dentry;
-#ifndef HAVE_VFS_SETXATTR
-	if (!pcc_dentry->d_inode->i_op->getxattr)
-		/* ignore this error */
-		GOTO(out_put_path, rc = 0);
-
-	rc = pcc_dentry->d_inode->i_op->getxattr(pcc_dentry, pcc_xattr_layout,
-						 &pcc_gen, sizeof(pcc_gen));
-#else
-	rc = __vfs_getxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
-			    &pcc_gen, sizeof(pcc_gen));
-#endif
-
+	rc = ll_vfs_getxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
+			     &pcc_gen, sizeof(pcc_gen));
 	if (rc < 0)
 		/* ignore this error */
 		GOTO(out_put_path, rc = 0);

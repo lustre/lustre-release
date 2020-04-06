@@ -711,22 +711,6 @@ extern int ldiskfs_pdo;
 #define DECLARE_BVEC_ITER_ALL(iter) int iter
 #endif
 
-#ifndef HAVE_VFS_SETXATTR
-#define osd_setxattr(dentry, inode, name, buf, len, flag) \
-		((inode)->i_op->setxattr(dentry, name, buf, len, flag))
-#define osd_getxattr(dentry, inode, name, buf, len) \
-		((inode)->i_op->getxattr(dentry, name, buf, len))
-#define osd_removexattr(dentry, inode, name) \
-		((inode)->i_op->removexattr(dentry, name))
-#else /* HAVE_VFS_SETXATTR */
-#define osd_setxattr(dentry, inode, name, buf, len, flag) \
-		__vfs_setxattr(dentry, inode, name, buf, len, flag)
-#define osd_getxattr(dentry, inode, name, buf, len) \
-		__vfs_getxattr(dentry, inode, name, buf, len)
-#define osd_removexattr(dentry, inode, name) \
-		__vfs_removexattr(dentry, name)
-#endif /* !HAVE_VFS_SETXATTR */
-
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 				  const char *name, void *buf, int len)
 {
@@ -735,7 +719,7 @@ static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return osd_getxattr(dentry, inode, name, buf, len);
+	return ll_vfs_getxattr(dentry, inode, name, buf, len);
 }
 
 static inline int __osd_xattr_set(struct osd_thread_info *info,
@@ -747,7 +731,7 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 	dquot_initialize(inode);
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return osd_setxattr(dentry, inode, name, buf, buflen, fl);
+	return ll_vfs_setxattr(dentry, inode, name, buf, buflen, fl);
 }
 
 #ifdef CONFIG_PROC_FS

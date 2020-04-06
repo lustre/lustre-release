@@ -4411,7 +4411,7 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 
 		/* Remove old PFID EA entry firstly. */
 		dquot_initialize(inode);
-		rc = osd_removexattr(dentry, inode, XATTR_NAME_FID);
+		rc = ll_vfs_removexattr(dentry, inode, XATTR_NAME_FID);
 		if (rc == -ENODATA) {
 			if ((fl & LU_XATTR_REPLACE) && !(fl & LU_XATTR_CREATE))
 				RETURN(rc);
@@ -4717,7 +4717,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		dquot_initialize(inode);
 		dentry->d_inode = inode;
 		dentry->d_sb = inode->i_sb;
-		rc = osd_removexattr(dentry, inode, name);
+		rc = ll_vfs_removexattr(dentry, inode, name);
 	}
 
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);

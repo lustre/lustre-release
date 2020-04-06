@@ -193,31 +193,6 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 #define ll_removexattr  generic_removexattr
 #endif /* HAVE_IOP_XATTR */
 
-#ifndef HAVE_VFS_SETXATTR
-const struct xattr_handler *get_xattr_type(const char *name);
-
-static inline int
-__vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
-	       const void *value, size_t size, int flags)
-{
-	const struct xattr_handler *handler;
-	int rc;
-
-	handler = get_xattr_type(name);
-	if (!handler)
-		return -EOPNOTSUPP;
-
-#  if defined(HAVE_XATTR_HANDLER_INODE_PARAM)
-	rc = handler->set(handler, dentry, inode, name, value, size, flags);
-#  elif defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
-	rc = handler->set(handler, dentry, name, value, size, flags);
-#  else
-	rc = handler->set(dentry, name, value, size, flags, handler->flags);
-#  endif /* !HAVE_XATTR_HANDLER_INODE_PARAM */
-	return rc;
-}
-#endif /* HAVE_VFS_SETXATTR */
-
 #ifndef HAVE_POSIX_ACL_VALID_USER_NS
 #define posix_acl_valid(a,b)		posix_acl_valid(b)
 #endif
@@ -540,5 +515,46 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #ifndef HAVE_LINUX_SELINUX_IS_ENABLED
 #define selinux_is_enabled() 1
 #endif
+
+static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
+				  const char *name,
+				  void *value, size_t size)
+{
+#ifndef HAVE_VFS_SETXATTR
+	if (!inode->i_op->getxattr)
+		return -ENODATA;
+
+	return inode->i_op->getxattr(dentry, name, value, size);
+#else
+	return __vfs_getxattr(dentry, inode, name, value, size);
+#endif
+}
+
+static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
+				  const char *name,
+				  const void *value, size_t size, int flags)
+{
+#ifndef HAVE_VFS_SETXATTR
+	if (!inode->i_op->setxattr)
+		return -ENOTSUPP;
+
+	return inode->i_op->setxattr(dentry, name, value, size, flags);
+#else
+	return __vfs_setxattr(dentry, inode, name, value, size, flags);
+#endif
+}
+
+static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
+				     const char *name)
+{
+#ifndef HAVE_VFS_SETXATTR
+	if (!inode->i_op->setxattr)
+		return -ENOTSUPP;
+
+	return inode->i_op->removexattr(dentry, name);
+#else
+	return __vfs_removexattr(dentry, name);
+#endif
+}
 
 #endif /* _LUSTRE_COMPAT_H */

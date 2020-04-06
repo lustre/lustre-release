@@ -115,8 +115,8 @@ ll_initxattrs(struct inode *inode, const struct xattr *xattr_array,
 			break;
 		}
 
-		err = __vfs_setxattr(dentry, inode, full_name, xattr->value,
-				     xattr->value_len, XATTR_CREATE);
+		err = ll_vfs_setxattr(dentry, inode, full_name, xattr->value,
+				      xattr->value_len, XATTR_CREATE);
 		kfree(full_name);
 		if (err < 0)
 			break;
