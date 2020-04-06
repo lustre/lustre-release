@@ -1950,9 +1950,9 @@ lnet_handle_send(struct lnet_send_data *sd)
 		rspt = msg->msg_md->md_rspt_ptr;
 		if (rspt) {
 			rspt->rspt_next_hop_nid =
-				lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
+				msg->msg_txpeer->lpni_nid;
 			CDEBUG(D_NET, "rspt_next_hop_nid = %s\n",
-			       libcfs_nid2str(rspt->rspt_next_hop_nid));
+			       libcfs_nidstr(&rspt->rspt_next_hop_nid));
 		}
 	}
 
@@ -3220,7 +3220,7 @@ lnet_finalize_expired_responses(void)
 			if (ktime_compare(now, rspt->rspt_deadline) >= 0 ||
 			    the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN) {
 				struct lnet_peer_ni *lpni;
-				lnet_nid_t nid;
+				struct lnet_nid nid;
 
 				md = lnet_handle2md(&rspt->rspt_mdh);
 				if (!md) {
@@ -3278,7 +3278,7 @@ lnet_finalize_expired_responses(void)
 
 				CDEBUG(D_NET,
 				       "Response timeout: md = %p: nid = %s\n",
-				       md, libcfs_nid2str(nid));
+				       md, libcfs_nidstr(&nid));
 
 				/*
 				 * If there is a timeout on the response
@@ -3286,7 +3286,7 @@ lnet_finalize_expired_responses(void)
 				 * value so that we don't use it
 				 */
 				lnet_net_lock(0);
-				lpni = lnet_find_peer_ni_locked(nid);
+				lpni = lnet_peer_ni_find_locked(&nid);
 				if (lpni) {
 					lnet_handle_remote_failure_locked(lpni);
 					lnet_peer_ni_decref_locked(lpni);
