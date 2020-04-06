@@ -1961,7 +1961,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_peer *lp;
 
-	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md.start + ev->offset);
+	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md_start + ev->offset);
 
 	/* lnet_find_peer() adds a refcount */
 	lp = lnet_find_peer(ev->source.nid);
@@ -2264,7 +2264,7 @@ lnet_discovery_event_ack(struct lnet_peer *lp, struct lnet_event *ev)
 {
 	struct lnet_ping_buffer *pbuf;
 
-	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md.start);
+	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md_start);
 	spin_lock(&lp->lp_lock);
 	lp->lp_state &= ~LNET_PEER_PUSH_SENT;
 	lp->lp_push_error = ev->status;
@@ -2301,7 +2301,7 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 		goto out;
 	}
 
-	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md.start);
+	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md_start);
 	if (pbuf->pb_info.pi_magic == __swab32(LNET_PROTO_PING_MAGIC))
 		lnet_swap_pinginfo(pbuf);
 
@@ -2509,7 +2509,7 @@ lnet_discovery_event_unlink(struct lnet_peer *lp, struct lnet_event *ev)
  */
 static void lnet_discovery_event_handler(struct lnet_event *event)
 {
-	struct lnet_peer *lp = event->md.user_ptr;
+	struct lnet_peer *lp = event->md_user_ptr;
 	struct lnet_ping_buffer *pbuf;
 	int rc;
 
@@ -2539,7 +2539,7 @@ static void lnet_discovery_event_handler(struct lnet_event *event)
 	}
 	lnet_net_lock(LNET_LOCK_EX);
 	if (event->unlinked) {
-		pbuf = LNET_PING_INFO_TO_BUFFER(event->md.start);
+		pbuf = LNET_PING_INFO_TO_BUFFER(event->md_start);
 		lnet_ping_buffer_decref(pbuf);
 		lnet_peer_decref_locked(lp);
 	}

@@ -48,7 +48,7 @@ struct percpu_ref ptlrpc_pending;
  */
 void request_out_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
+	struct ptlrpc_cb_id   *cbid = ev->md_user_ptr;
 	struct ptlrpc_request *req = cbid->cbid_arg;
 	bool		       wakeup = false;
 	ENTRY;
@@ -88,18 +88,19 @@ void request_out_callback(struct lnet_event *ev)
  */
 void reply_in_callback(struct lnet_event *ev)
 {
-        struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
-        struct ptlrpc_request *req = cbid->cbid_arg;
-        ENTRY;
+	struct ptlrpc_cb_id   *cbid = ev->md_user_ptr;
+	struct ptlrpc_request *req = cbid->cbid_arg;
+	ENTRY;
 
-        DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
+	DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
 
-        LASSERT (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
-        LASSERT (ev->md.start == req->rq_repbuf);
-        LASSERT (ev->offset + ev->mlength <= req->rq_repbuf_len);
-        /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
-           for adaptive timeouts' early reply. */
-        LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
+	LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
+	LASSERT(ev->md_start == req->rq_repbuf);
+	LASSERT(ev->offset + ev->mlength <= req->rq_repbuf_len);
+	/* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
+	 * for adaptive timeouts' early reply.
+	 */
+	LASSERT((ev->md_options & LNET_MD_MANAGE_REMOTE) != 0);
 
 	spin_lock(&req->rq_lock);
 
@@ -179,10 +180,10 @@ out_wake:
  */
 void client_bulk_callback(struct lnet_event *ev)
 {
-        struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
-        struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
-        struct ptlrpc_request   *req;
-        ENTRY;
+	struct ptlrpc_cb_id     *cbid = ev->md_user_ptr;
+	struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
+	struct ptlrpc_request   *req;
+	ENTRY;
 
 	LASSERT((ptlrpc_is_bulk_put_sink(desc->bd_type) &&
 		 ev->type == LNET_EVENT_PUT) ||
@@ -289,22 +290,22 @@ static void ptlrpc_req_add_history(struct ptlrpc_service_part *svcpt,
  */
 void request_in_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id		  *cbid = ev->md.user_ptr;
+	struct ptlrpc_cb_id		  *cbid = ev->md_user_ptr;
 	struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
 	struct ptlrpc_service_part	  *svcpt = rqbd->rqbd_svcpt;
-	struct ptlrpc_service             *service = svcpt->scp_service;
-        struct ptlrpc_request             *req;
-        ENTRY;
+	struct ptlrpc_service		  *service = svcpt->scp_service;
+	struct ptlrpc_request		  *req;
+	ENTRY;
 
-        LASSERT (ev->type == LNET_EVENT_PUT ||
-                 ev->type == LNET_EVENT_UNLINK);
-        LASSERT ((char *)ev->md.start >= rqbd->rqbd_buffer);
-        LASSERT ((char *)ev->md.start + ev->offset + ev->mlength <=
-                 rqbd->rqbd_buffer + service->srv_buf_size);
+	LASSERT(ev->type == LNET_EVENT_PUT ||
+		ev->type == LNET_EVENT_UNLINK);
+	LASSERT((char *)ev->md_start >= rqbd->rqbd_buffer);
+	LASSERT((char *)ev->md_start + ev->offset + ev->mlength <=
+		rqbd->rqbd_buffer + service->srv_buf_size);
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, service %s\n",
-               ev->type, ev->status, service->srv_name);
+	CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
+	       "event type %d, status %d, service %s\n",
+	       ev->type, ev->status, service->srv_name);
 
         if (ev->unlinked) {
                 /* If this is the last request message to fit in the
@@ -335,7 +336,7 @@ void request_in_callback(struct lnet_event *ev)
 	 * flags are reset and scalars are zero.  We only set the message
 	 * size to non-zero if this was a successful receive. */
 	req->rq_xid = ev->match_bits;
-	req->rq_reqbuf = ev->md.start + ev->offset;
+	req->rq_reqbuf = ev->md_start + ev->offset;
 	if (ev->type == LNET_EVENT_PUT && ev->status == 0)
 		req->rq_reqdata_len = ev->mlength;
 	ktime_get_real_ts64(&req->rq_arrival_time);
@@ -391,7 +392,7 @@ void request_in_callback(struct lnet_event *ev)
  */
 void reply_out_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id	  *cbid = ev->md.user_ptr;
+	struct ptlrpc_cb_id	  *cbid = ev->md_user_ptr;
 	struct ptlrpc_reply_state *rs = cbid->cbid_arg;
 	struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
         ENTRY;
@@ -436,7 +437,7 @@ void reply_out_callback(struct lnet_event *ev)
  */
 void server_bulk_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
+	struct ptlrpc_cb_id     *cbid = ev->md_user_ptr;
 	struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
 	ENTRY;
 
@@ -482,7 +483,7 @@ void server_bulk_callback(struct lnet_event *ev)
 
 static void ptlrpc_master_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id *cbid = ev->md.user_ptr;
+	struct ptlrpc_cb_id *cbid = ev->md_user_ptr;
 	void (*callback)(struct lnet_event *ev) = cbid->cbid_fn;
 
 	/* Honestly, it's best to find out early. */

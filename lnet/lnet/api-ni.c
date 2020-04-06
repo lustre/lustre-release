@@ -1674,7 +1674,7 @@ lnet_ping_target_destroy(void)
 static void
 lnet_ping_target_event_handler(struct lnet_event *event)
 {
-	struct lnet_ping_buffer *pbuf = event->md.user_ptr;
+	struct lnet_ping_buffer *pbuf = event->md_user_ptr;
 
 	if (event->unlinked)
 		lnet_ping_buffer_decref(pbuf);
@@ -1947,7 +1947,7 @@ int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 
 static void lnet_push_target_event_handler(struct lnet_event *ev)
 {
-	struct lnet_ping_buffer *pbuf = ev->md.user_ptr;
+	struct lnet_ping_buffer *pbuf = ev->md_user_ptr;
 
 	CDEBUG(D_NET, "type %d status %d unlinked %d\n", ev->type, ev->status,
 	       ev->unlinked);
@@ -4099,7 +4099,7 @@ struct ping_data {
 static void
 lnet_ping_event_handler(struct lnet_event *event)
 {
-	struct ping_data *pd = event->md.user_ptr;
+	struct ping_data *pd = event->md_user_ptr;
 
 	CDEBUG(D_NET, "ping event (%d %d)%s\n",
 	       event->type, event->status,

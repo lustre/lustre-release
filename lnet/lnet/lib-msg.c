@@ -48,7 +48,7 @@ lnet_build_unlink_event(struct lnet_libmd *md, struct lnet_event *ev)
 	ev->status   = 0;
 	ev->unlinked = 1;
 	ev->type     = LNET_EVENT_UNLINK;
-	lnet_md_deconstruct(md, &ev->md);
+	lnet_md_deconstruct(md, ev);
 	lnet_md2handle(&ev->md_handle, md);
 	EXIT;
 }
@@ -360,7 +360,7 @@ lnet_msg_attach_md(struct lnet_msg *msg, struct lnet_libmd *md,
 
 	/* build umd in event */
 	lnet_md2handle(&msg->msg_ev.md_handle, md);
-	lnet_md_deconstruct(md, &msg->msg_ev.md);
+	lnet_md_deconstruct(md, &msg->msg_ev);
 }
 
 static int

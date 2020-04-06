@@ -266,20 +266,11 @@ lnet_md_link(struct lnet_libmd *md, lnet_handler_t handler, int cpt)
 
 /* must be called with lnet_res_lock held */
 void
-lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd)
+lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_event *ev)
 {
-	/* NB this doesn't copy out all the iov entries so when a
-	 * discontiguous MD is copied out, the target gets to know the
-	 * original iov pointer (in start) and the number of entries it had
-	 * and that's all.
-	 */
-	umd->start = lmd->md_start;
-	umd->length = ((lmd->md_options & LNET_MD_KIOV) == 0) ?
-		      lmd->md_length : lmd->md_niov;
-	umd->threshold = lmd->md_threshold;
-	umd->max_size = lmd->md_max_size;
-	umd->options = lmd->md_options;
-	umd->user_ptr = lmd->md_user_ptr;
+	ev->md_start = lmd->md_start;
+	ev->md_options = lmd->md_options;
+	ev->md_user_ptr = lmd->md_user_ptr;
 }
 
 static int

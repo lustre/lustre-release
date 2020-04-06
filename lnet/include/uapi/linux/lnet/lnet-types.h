@@ -629,11 +629,12 @@ struct lnet_event {
 	 */
 	struct lnet_handle_md	md_handle;
 	/**
-	 * A snapshot of the state of the MD immediately after the event has
-	 * been processed. In particular, the threshold field in md will
-	 * reflect the value of the threshold after the operation occurred.
+	 * A snapshot of relevant state of the MD immediately after the event
+	 * has been processed.
 	 */
-	struct lnet_md           md;
+	void			*md_start;
+	void			*md_user_ptr;
+	unsigned int		md_options;
 	/**
 	 * 64 bits of out-of-band user data. Only valid for LNET_EVENT_PUT.
 	 * \see LNetPut

@@ -1407,7 +1407,7 @@ static void
 srpc_lnet_ev_handler(struct lnet_event *ev)
 {
 	struct srpc_service_cd *scd;
-	struct srpc_event *rpcev = ev->md.user_ptr;
+	struct srpc_event *rpcev = ev->md_user_ptr;
 	struct srpc_client_rpc *crpc;
 	struct srpc_server_rpc *srpc;
 	struct srpc_buffer *buffer;
@@ -1486,7 +1486,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 		LASSERT(ev->type != LNET_EVENT_UNLINK ||
 			sv->sv_shuttingdown);
 
-		buffer = container_of(ev->md.start, struct srpc_buffer,
+		buffer = container_of(ev->md_start, struct srpc_buffer,
 				      buf_msg);
 		buffer->buf_peer = ev->source;
 		buffer->buf_self = ev->target.nid;
