@@ -190,13 +190,15 @@ void lnet_usr_translate_stats(struct lnet_ioctl_element_msg_stats *msg_stats,
 }
 
 int
-lnet_fail_nid(lnet_nid_t nid, unsigned int threshold)
+lnet_fail_nid(lnet_nid_t nid4, unsigned int threshold)
 {
 	struct lnet_test_peer *tp;
 	struct list_head *el;
 	struct list_head *next;
+	struct lnet_nid nid;
 	LIST_HEAD(cull);
 
+	lnet_nid4_to_nid(nid4, &nid);
 	/* NB: use lnet_net_lock(0) to serialize operations on test peers */
 	if (threshold != 0) {
 		/* Adding a new entry */
@@ -219,8 +221,8 @@ lnet_fail_nid(lnet_nid_t nid, unsigned int threshold)
 		tp = list_entry(el, struct lnet_test_peer, tp_list);
 
 		if (tp->tp_threshold == 0 ||	/* needs culling anyway */
-		    nid == LNET_NID_ANY ||	/* removing all entries */
-		    tp->tp_nid == nid) {	/* matched this one */
+		    LNET_NID_IS_ANY(&nid) ||	/* removing all entries */
+		    nid_same(&tp->tp_nid, &nid)) {	/* matched this one */
 			list_move(&tp->tp_list, &cull);
 		}
 	}
@@ -237,14 +239,16 @@ lnet_fail_nid(lnet_nid_t nid, unsigned int threshold)
 }
 
 static int
-fail_peer (lnet_nid_t nid, int outgoing)
+fail_peer(lnet_nid_t nid4, int outgoing)
 {
 	struct lnet_test_peer *tp;
 	struct list_head *el;
 	struct list_head *next;
+	struct lnet_nid nid;
 	LIST_HEAD(cull);
 	int fail = 0;
 
+	lnet_nid4_to_nid(nid4, &nid);
 	/* NB: use lnet_net_lock(0) to serialize operations on test peers */
 	lnet_net_lock(0);
 
@@ -262,8 +266,8 @@ fail_peer (lnet_nid_t nid, int outgoing)
 			continue;
 		}
 
-		if (tp->tp_nid == LNET_NID_ANY ||	/* fail every peer */
-		    nid == tp->tp_nid) {		/* fail this peer */
+		if (LNET_NID_IS_ANY(&tp->tp_nid) ||	/* fail every peer */
+		    nid_same(&nid, &tp->tp_nid)) {	/* fail this peer */
 			fail = 1;
 
 			if (tp->tp_threshold != LNET_MD_THRESH_INF) {

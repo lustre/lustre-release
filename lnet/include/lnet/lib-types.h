@@ -236,7 +236,7 @@ struct lnet_libmd {
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */
 	struct list_head	tp_list;	/* ln_test_peers */
-	lnet_nid_t		tp_nid;		/* matching nid */
+	struct lnet_nid		tp_nid;		/* matching nid */
 	unsigned int		tp_threshold;	/* # failures to simulate */
 };
 
