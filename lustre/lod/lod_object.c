@@ -1973,7 +1973,6 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 				  struct dt_object **stripes,
 				  __u32 *mdt_indices, bool is_specific)
 {
-	struct lod_thread_info  *info = lod_env_info(env);
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
 	struct lu_tgt_desc *tgt = NULL;
@@ -2042,8 +2041,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 				continue;
 
 			tgt_dt = tgt->ltd_tgt;
-			rc = dt_statfs(env, tgt_dt, &info->lti_osfs);
-			if (rc)
+			if (!tgt->ltd_active)
 				/* this OSP doesn't feel well */
 				continue;
 
