@@ -951,13 +951,14 @@ static int tgt_is_local_client(const struct lu_env *env,
 	struct tgt_session_info *tsi = tgt_ses_info(env);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 
+	if (exp_connect_flags(exp) & OBD_CONNECT_MDS ||
+	    exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
+		return 0;
 	if (tgt->lut_local_recovery)
 		return 0;
 	if (!req)
 		return 0;
 	if (!LNetIsPeerLocal(req->rq_peer.nid))
-		return 0;
-	if (exp_connect_flags(exp) & OBD_CONNECT_MDS)
 		return 0;
 
 	return 1;
