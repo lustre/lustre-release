@@ -597,7 +597,7 @@ struct lnet_peer_ni {
 	/* network peer is on */
 	struct lnet_net		*lpni_net;
 	/* peer's NID */
-	lnet_nid_t		lpni_nid;
+	struct lnet_nid		lpni_nid;
 	/* # refs */
 	struct kref		lpni_kref;
 	/* health value for the peer */

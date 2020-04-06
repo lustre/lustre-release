@@ -832,7 +832,7 @@ lnet_health_check(struct lnet_msg *msg)
 
 	CDEBUG(D_NET, "health check: %s->%s: %s: %s\n",
 	       libcfs_nidstr(&ni->ni_nid),
-	       (lo) ? "self" : libcfs_nid2str(lpni->lpni_nid),
+	       (lo) ? "self" : libcfs_nidstr(&lpni->lpni_nid),
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(hstatus));
 

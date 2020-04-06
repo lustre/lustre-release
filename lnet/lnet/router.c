@@ -1233,7 +1233,7 @@ rescan:
 
 		/* discover the router */
 		CDEBUG(D_NET, "discover %s, cpt = %d\n",
-		       libcfs_nid2str(lpni->lpni_nid), cpt);
+		       libcfs_nidstr(&lpni->lpni_nid), cpt);
 		rc = lnet_discover_peer_locked(lpni, cpt, false);
 
 		/* drop ref taken above */
@@ -1794,7 +1794,8 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 		 */
 		if (lnet_is_discovery_disabled(lp)) {
 			list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
-				if (route->lr_nid == lpni->lpni_nid)
+				if (route->lr_nid ==
+				    lnet_nid_to_nid4(&lpni->lpni_nid))
 					lnet_set_route_aliveness(route, alive);
 			}
 		}
@@ -1803,7 +1804,7 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 	lnet_net_unlock(0);
 
 	if (ni != NULL && !alive)
-		lnet_notify_peer_down(ni, lpni->lpni_nid);
+		lnet_notify_peer_down(ni, lnet_nid_to_nid4(&lpni->lpni_nid));
 
 	cpt = lpni->lpni_cpt;
 	lnet_net_lock(cpt);

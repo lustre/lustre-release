@@ -477,7 +477,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
                 }
 
 		if (peer != NULL) {
-			lnet_nid_t nid = peer->lpni_nid;
+			struct lnet_nid nid = peer->lpni_nid;
 			int nrefs = kref_read(&peer->lpni_kref);
 			time64_t lastalive = -1;
 			char *aliveness = "NA";
@@ -498,7 +498,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 
 			s += scnprintf(s, tmpstr + tmpsiz - s,
 				       "%-24s %4d %5s %5lld %5d %5d %5d %5d %5d %d\n",
-				       libcfs_nid2str(nid), nrefs, aliveness,
+				       libcfs_nidstr(&nid), nrefs, aliveness,
 				       lastalive, maxcr, rtrcr, minrtrcr, txcr,
 				       mintxcr, txqnob);
 			LASSERT(tmpstr + tmpsiz - s > 0);

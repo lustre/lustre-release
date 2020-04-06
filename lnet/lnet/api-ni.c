@@ -1527,9 +1527,11 @@ lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 }
 
 int
-lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni)
+lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni)
 {
 	struct lnet_net *net;
+	/* FIXME handle long-addr nid */
+	lnet_nid_t nid4 = lnet_nid_to_nid4(nid);
 
 	/* must called with hold of lnet_net_lock */
 	if (LNET_CPT_NUMBER == 1)
@@ -1544,34 +1546,36 @@ lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni)
 	 */
 	if (ni != NULL) {
 		if (ni->ni_cpts != NULL)
-			return ni->ni_cpts[lnet_nid_cpt_hash(nid,
+			return ni->ni_cpts[lnet_nid_cpt_hash(nid4,
 							     ni->ni_ncpts)];
 		else
-			return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+			return lnet_nid_cpt_hash(nid4, LNET_CPT_NUMBER);
 	}
 
 	/* no NI provided so look at the net */
-	net = lnet_get_net_locked(LNET_NIDNET(nid));
+	net = lnet_get_net_locked(LNET_NID_NET(nid));
 
 	if (net != NULL && net->net_cpts != NULL) {
-		return net->net_cpts[lnet_nid_cpt_hash(nid, net->net_ncpts)];
+		return net->net_cpts[lnet_nid_cpt_hash(nid4, net->net_ncpts)];
 	}
 
-	return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+	return lnet_nid_cpt_hash(nid4, LNET_CPT_NUMBER);
 }
 
 int
-lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni)
+lnet_cpt_of_nid(lnet_nid_t nid4, struct lnet_ni *ni)
 {
 	int	cpt;
 	int	cpt2;
+	struct lnet_nid nid;
 
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
+	lnet_nid4_to_nid(nid4, &nid);
 	cpt = lnet_net_lock_current();
 
-	cpt2 = lnet_cpt_of_nid_locked(nid, ni);
+	cpt2 = lnet_cpt_of_nid_locked(&nid, ni);
 
 	lnet_net_unlock(cpt);
 
@@ -1608,18 +1612,16 @@ lnet_islocalnet(__u32 net_id)
 }
 
 struct lnet_ni  *
-lnet_nid2ni_locked(lnet_nid_t nid4, int cpt)
+lnet_nid_to_ni_locked(struct lnet_nid *nid, int cpt)
 {
-	struct lnet_net *net;
+	struct lnet_net  *net;
 	struct lnet_ni *ni;
-	struct lnet_nid nid;
 
 	LASSERT(cpt != LNET_LOCK_EX);
-	lnet_nid4_to_nid(nid4, &nid);
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			if (nid_same(&ni->ni_nid, &nid))
+			if (nid_same(&ni->ni_nid, nid))
 				return ni;
 		}
 	}
@@ -1627,13 +1629,25 @@ lnet_nid2ni_locked(lnet_nid_t nid4, int cpt)
 	return NULL;
 }
 
+struct lnet_ni  *
+lnet_nid2ni_locked(lnet_nid_t nid4, int cpt)
+{
+	struct lnet_nid nid;
+
+	lnet_nid4_to_nid(nid4, &nid);
+	return lnet_nid_to_ni_locked(&nid, cpt);
+}
+
 struct lnet_ni *
-lnet_nid2ni_addref(lnet_nid_t nid)
+lnet_nid2ni_addref(lnet_nid_t nid4)
 {
 	struct lnet_ni *ni;
+	struct lnet_nid nid;
+
+	lnet_nid4_to_nid(nid4, &nid);
 
 	lnet_net_lock(0);
-	ni = lnet_nid2ni_locked(nid, 0);
+	ni = lnet_nid_to_ni_locked(&nid, 0);
 	if (ni)
 		lnet_ni_addref_locked(ni, 0);
 	lnet_net_unlock(0);
@@ -1641,6 +1655,21 @@ lnet_nid2ni_addref(lnet_nid_t nid)
 	return ni;
 }
 EXPORT_SYMBOL(lnet_nid2ni_addref);
+
+struct lnet_ni *
+lnet_nid_to_ni_addref(struct lnet_nid *nid)
+{
+	struct lnet_ni *ni;
+
+	lnet_net_lock(0);
+	ni = lnet_nid_to_ni_locked(nid, 0);
+	if (ni)
+		lnet_ni_addref_locked(ni, 0);
+	lnet_net_unlock(0);
+
+	return ni;
+}
+EXPORT_SYMBOL(lnet_nid_to_ni_addref);
 
 int
 lnet_islocalnid(lnet_nid_t nid)
@@ -3830,7 +3859,7 @@ lnet_get_peer_ni_recovery_list(struct lnet_ioctl_recovery_list *list)
 
 	lnet_net_lock(LNET_LOCK_EX);
 	list_for_each_entry(lpni, &the_lnet.ln_mt_peerNIRecovq, lpni_recovery) {
-		list->rlst_nid_array[i] = lpni->lpni_nid;
+		list->rlst_nid_array[i] = lnet_nid_to_nid4(&lpni->lpni_nid);
 		i++;
 		if (i >= LNET_MAX_SHOW_NUM_NID)
 			break;
@@ -4729,7 +4758,7 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	p = NULL;
 	while ((p = lnet_get_next_peer_ni_locked(lp, NULL, p)) != NULL) {
 		buf[i].pid = id.pid;
-		buf[i].nid = p->lpni_nid;
+		buf[i].nid = lnet_nid_to_nid4(&p->lpni_nid);
 		if (++i >= n_ids)
 			break;
 	}

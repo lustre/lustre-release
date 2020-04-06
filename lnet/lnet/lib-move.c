@@ -759,7 +759,7 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 	if (rc != 0) {
 		CERROR("recv from %s / send to %s aborted: "
 		       "eager_recv failed %d\n",
-		       libcfs_nid2str(msg->msg_rxpeer->lpni_nid),
+		       libcfs_nidstr(&msg->msg_rxpeer->lpni_nid),
 		       libcfs_id2str(msg->msg_target), rc);
 		LASSERT(rc < 0); /* required by my callers */
 	}
@@ -843,8 +843,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 
 	/* can't get here if we're sending to the loopback interface */
 	if (the_lnet.ln_loni)
-		LASSERT(lp->lpni_nid !=
-			lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid));
+		LASSERT(!nid_same(&lp->lpni_nid, &the_lnet.ln_loni->ni_nid));
 
 	/* NB 'lp' is always the next hop */
 	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
@@ -1338,8 +1337,8 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
 
 		if (best_lpni)
 			CDEBUG(D_NET, "n:[%s, %s] h:[%d, %d] p:[%d, %d] c:[%d, %d] s:[%d, %d]\n",
-				libcfs_nid2str(lpni->lpni_nid),
-				libcfs_nid2str(best_lpni->lpni_nid),
+				libcfs_nidstr(&lpni->lpni_nid),
+				libcfs_nidstr(&best_lpni->lpni_nid),
 				lpni_healthv, best_lpni_healthv,
 				lpni_sel_prio, best_sel_prio,
 				lpni->lpni_txcredits, best_lpni_credits,
@@ -1408,7 +1407,7 @@ select_lpni:
 	}
 
 	CDEBUG(D_NET, "sd_best_lpni = %s\n",
-	       libcfs_nid2str(best_lpni->lpni_nid));
+	       libcfs_nidstr(&best_lpni->lpni_nid));
 
 	return best_lpni;
 }
@@ -1848,7 +1847,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	       best_ni->ni_seq, best_ni->ni_net->net_seq,
 	       atomic_read(&best_ni->ni_tx_credits),
 	       best_ni->ni_sel_priority,
-	       libcfs_nid2str(best_lpni->lpni_nid),
+	       libcfs_nidstr(&best_lpni->lpni_nid),
 	       best_lpni->lpni_seq, best_lpni->lpni_peer_net->lpn_seq,
 	       best_lpni->lpni_txcredits,
 	       best_lpni->lpni_sel_priority);
@@ -1868,7 +1867,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 * the configuration has changed. We don't have a hold on the best_ni
 	 * yet, and it may have vanished.
 	 */
-	cpt2 = lnet_cpt_of_nid_locked(best_lpni->lpni_nid, best_ni);
+	cpt2 = lnet_cpt_of_nid_locked(&best_lpni->lpni_nid, best_ni);
 	if (sd->sd_cpt != cpt2) {
 		__u32 seq = lnet_get_dlc_seq_locked();
 		lnet_net_unlock(sd->sd_cpt);
@@ -1899,7 +1898,8 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 * what was originally set in the target or it will be the NID of
 	 * a router if this message should be routed
 	 */
-	msg->msg_target.nid = msg->msg_txpeer->lpni_nid;
+	/* FIXME handle large-addr nids */
+	msg->msg_target.nid = lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
 
 	/*
 	 * lnet_msg_commit assigns the correct cpt to the message, which
@@ -1930,13 +1930,16 @@ lnet_handle_send(struct lnet_send_data *sd)
 		 * lnet_select_pathway() function and is never changed.
 		 * It's safe to use it here.
 		 */
-		msg->msg_hdr.dest_nid = cpu_to_le64(final_dst_lpni->lpni_nid);
+		/* FIXME handle large-addr nid */
+		msg->msg_hdr.dest_nid =
+			cpu_to_le64(lnet_nid_to_nid4(&final_dst_lpni->lpni_nid));
 	} else {
 		/*
 		 * if we're not routing set the dest_nid to the best peer
 		 * ni NID that we picked earlier in the algorithm.
 		 */
-		msg->msg_hdr.dest_nid = cpu_to_le64(msg->msg_txpeer->lpni_nid);
+		msg->msg_hdr.dest_nid =
+			cpu_to_le64(lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid));
 	}
 
 	/*
@@ -1946,7 +1949,8 @@ lnet_handle_send(struct lnet_send_data *sd)
 	if (msg->msg_md) {
 		rspt = msg->msg_md->md_rspt_ptr;
 		if (rspt) {
-			rspt->rspt_next_hop_nid = msg->msg_txpeer->lpni_nid;
+			rspt->rspt_next_hop_nid =
+				lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
 			CDEBUG(D_NET, "rspt_next_hop_nid = %s\n",
 			       libcfs_nid2str(rspt->rspt_next_hop_nid));
 		}
@@ -1961,7 +1965,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 		       libcfs_nid2str(sd->sd_src_nid),
 		       libcfs_nid2str(msg->msg_hdr.dest_nid),
 		       libcfs_nid2str(sd->sd_dst_nid),
-		       libcfs_nid2str(msg->msg_txpeer->lpni_nid),
+		       libcfs_nidstr(&msg->msg_txpeer->lpni_nid),
 		       libcfs_nid2str(sd->sd_rtr_nid),
 		       lnet_msgtyp2str(msg->msg_type), msg->msg_retry_count);
 
@@ -1976,7 +1980,7 @@ lnet_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, struct lnet_ni *lni,
 	    !lnet_msg_is_response(msg) && lpni->lpni_pref_nnids == 0) {
 		CDEBUG(D_NET, "Setting preferred local NID %s on NMR peer %s\n",
 		       libcfs_nidstr(&lni->ni_nid),
-		       libcfs_nid2str(lpni->lpni_nid));
+		       libcfs_nidstr(&lpni->lpni_nid));
 		lnet_peer_ni_set_non_mr_pref_nid(
 			lpni, lnet_nid_to_nid4(&lni->ni_nid));
 	}
@@ -2031,8 +2035,8 @@ lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 	}
 
 	if (sd->sd_best_lpni &&
-	    sd->sd_best_lpni->lpni_nid ==
-	    lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid))
+	    nid_same(&sd->sd_best_lpni->lpni_nid,
+		      &the_lnet.ln_loni->ni_nid))
 		return lnet_handle_lo_send(sd);
 	else if (sd->sd_best_lpni)
 		return lnet_handle_send(sd);
@@ -2100,7 +2104,7 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 		return rc;
 	}
 
-	new_lpni = lnet_find_peer_ni_locked(lpni->lpni_nid);
+	new_lpni = lnet_find_peer_ni_locked(lnet_nid_to_nid4(&lpni->lpni_nid));
 	if (!new_lpni) {
 		lnet_peer_ni_decref_locked(lpni);
 		return -ENOENT;
@@ -2554,7 +2558,7 @@ lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 		/* If there is no best_ni we don't have a route */
 		if (!best_ni) {
 			CERROR("no path to %s from net %s\n",
-				libcfs_nid2str(best_lpni->lpni_nid),
+				libcfs_nidstr(&best_lpni->lpni_nid),
 				libcfs_net2str(best_lpni->lpni_net->net_id));
 			return -EHOSTUNREACH;
 		}
@@ -2680,8 +2684,8 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 		 * network
 		 */
 		if (sd->sd_best_lpni &&
-		    sd->sd_best_lpni->lpni_nid ==
-		    lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid)) {
+		    nid_same(&sd->sd_best_lpni->lpni_nid,
+			     &the_lnet.ln_loni->ni_nid)) {
 			/*
 			 * in case we initially started with a routed
 			 * destination, let's reset to local
@@ -3722,7 +3726,7 @@ lnet_recover_peer_nis(void)
 			LIBCFS_ALLOC(ev_info, sizeof(*ev_info));
 			if (!ev_info) {
 				CERROR("out of memory. Can't recover %s\n",
-				       libcfs_nid2str(lpni->lpni_nid));
+				       libcfs_nidstr(&lpni->lpni_nid));
 				spin_lock(&lpni->lpni_lock);
 				lpni->lpni_state &= ~LNET_PEER_NI_RECOVERY_PENDING;
 				spin_unlock(&lpni->lpni_lock);
@@ -3732,7 +3736,8 @@ lnet_recover_peer_nis(void)
 			/* look at the comments in lnet_recover_local_nis() */
 			mdh = lpni->lpni_recovery_ping_mdh;
 			LNetInvalidateMDHandle(&lpni->lpni_recovery_ping_mdh);
-			nid = lpni->lpni_nid;
+			/* FIXME handle large-addr nid */
+			nid = lnet_nid_to_nid4(&lpni->lpni_nid);
 			lnet_net_lock(0);
 			list_del_init(&lpni->lpni_recovery);
 			lnet_peer_ni_decref_locked(lpni);

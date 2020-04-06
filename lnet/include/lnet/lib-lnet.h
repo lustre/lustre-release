@@ -499,9 +499,14 @@ lnet_ni_alloc_w_cpt_array(struct lnet_net *net, __u32 *cpts, __u32 ncpts,
 			  char *iface);
 
 static inline int
-lnet_nid2peerhash(lnet_nid_t nid)
+lnet_nid2peerhash(struct lnet_nid *nid)
 {
-	return hash_long(nid, LNET_PEER_HASH_BITS);
+	u32 h = 0;
+	int i;
+
+	for (i = 0; i < 4; i++)
+		h = hash_32(nid->nid_addr[i]^h, 32);
+	return hash_32(LNET_NID_NET(nid) ^ h, LNET_PEER_HASH_BITS);
 }
 
 static inline struct list_head *
@@ -516,7 +521,7 @@ extern const struct lnet_lnd the_lolnd;
 extern int avoid_asym_router_failure;
 
 extern unsigned int lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number);
-extern int lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni);
+extern int lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni);
 extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
 extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
@@ -973,7 +978,8 @@ lnet_peer_ni_is_configured(struct lnet_peer_ni *lpni)
 static inline bool
 lnet_peer_ni_is_primary(struct lnet_peer_ni *lpni)
 {
-	return lpni->lpni_nid == lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
+	return lnet_nid_to_nid4(&lpni->lpni_nid) ==
+			lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
 }
 
 bool lnet_peer_is_uptodate(struct lnet_peer *lp);

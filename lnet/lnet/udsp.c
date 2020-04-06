@@ -255,7 +255,7 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 									    lpni)) != NULL) {
 					if (!lnet_get_net_locked(lpni->lpni_peer_net->lpn_net_id))
 						continue;
-					gw_nid = lpni->lpni_nid;
+					gw_nid = lnet_nid_to_nid4(&lpni->lpni_nid);
 					rc = cfs_match_nid_net(gw_nid,
 						rte_action->ud_net_id.udn_net_type,
 						&rte_action->ud_net_id.udn_net_num_range,
@@ -435,7 +435,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 				if (!cleared || revert) {
 					CDEBUG(D_NET, "%spref rtr nids from lpni %s\n",
 					       (revert) ? "revert " : "clear ",
-					       libcfs_nid2str(lpni->lpni_nid));
+					       libcfs_nidstr(&lpni->lpni_nid));
 					lnet_peer_clr_pref_rtrs(lpni);
 					cleared = true;
 					if (revert) {
@@ -445,7 +445,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 				}
 				CDEBUG(D_NET, "add gw nid %s as preferred for peer %s\n",
 				       libcfs_nid2str(gw_nid),
-				       libcfs_nid2str(lpni->lpni_nid));
+				       libcfs_nidstr(&lpni->lpni_nid));
 				/* match. Add to pref NIDs */
 				rc = lnet_peer_add_pref_rtr(lpni, gw_nid);
 				lnet_net_lock(LNET_LOCK_EX);
@@ -453,7 +453,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 				if (rc && rc != -EEXIST) {
 					CERROR("Failed to add %s to %s pref rtr list\n",
 					       libcfs_nid2str(gw_nid),
-					       libcfs_nid2str(lpni->lpni_nid));
+					       libcfs_nidstr(&lpni->lpni_nid));
 					return rc;
 				}
 			}
@@ -489,7 +489,7 @@ lnet_udsp_apply_ni_list(struct lnet_peer_ni *lpni,
 				lnet_peer_clr_pref_nids(lpni);
 				CDEBUG(D_NET, "%spref nids from lpni %s\n",
 					(revert) ? "revert " : "clear ",
-					libcfs_nid2str(lpni->lpni_nid));
+					libcfs_nidstr(&lpni->lpni_nid));
 				cleared = true;
 				if (revert) {
 					lnet_net_lock(LNET_LOCK_EX);
@@ -498,7 +498,7 @@ lnet_udsp_apply_ni_list(struct lnet_peer_ni *lpni,
 			}
 			CDEBUG(D_NET, "add nid %s as preferred for peer %s\n",
 				libcfs_nidstr(&ni->ni_nid),
-				libcfs_nid2str(lpni->lpni_nid));
+				libcfs_nidstr(&lpni->lpni_nid));
 			/* match. Add to pref NIDs */
 			rc = lnet_peer_add_pref_nid(
 				lpni, lnet_nid_to_nid4(&ni->ni_nid));
@@ -507,7 +507,7 @@ lnet_udsp_apply_ni_list(struct lnet_peer_ni *lpni,
 			if (rc && rc != -EEXIST) {
 				CERROR("Failed to add %s to %s pref nid list\n",
 					libcfs_nidstr(&ni->ni_nid),
-					libcfs_nid2str(lpni->lpni_nid));
+					libcfs_nidstr(&lpni->lpni_nid));
 				return rc;
 			}
 		}
@@ -527,7 +527,7 @@ lnet_udsp_apply_rule_on_lpni(struct udsp_info *udi)
 	bool local = udi->udi_local;
 	enum lnet_udsp_action_type type = udi->udi_type;
 
-	rc = cfs_match_nid_net(lpni->lpni_nid,
+	rc = cfs_match_nid_net(lnet_nid_to_nid4(&lpni->lpni_nid),
 		lp_match->ud_net_id.udn_net_type,
 		&lp_match->ud_net_id.udn_net_num_range,
 		&lp_match->ud_addr_range);
@@ -625,7 +625,7 @@ lnet_udsp_apply_rule_on_lpnis(struct udsp_info *udi)
 						    &lpn->lpn_peer_nis,
 						    lpni_peer_nis) {
 					CDEBUG(D_NET, "udsp examining lpni %s\n",
-					       libcfs_nid2str(lpni->lpni_nid));
+					       libcfs_nidstr(&lpni->lpni_nid));
 					udi->udi_lpni = lpni;
 					rc = lnet_udsp_apply_rule_on_lpni(udi);
 					if (rc)
@@ -1012,7 +1012,7 @@ lnet_udsp_get_peer_info(struct lnet_ioctl_construct_udsp_info *info,
 
 	info->cud_nid_priority = lpni->lpni_sel_priority;
 	CDEBUG(D_NET, "lpni %s has %d pref nids\n",
-	       libcfs_nid2str(lpni->lpni_nid),
+	       libcfs_nidstr(&lpni->lpni_nid),
 	       lpni->lpni_pref_nnids);
 	if (lpni->lpni_pref_nnids == 1) {
 		info->cud_pref_nid[0] = lpni->lpni_pref.nid;
