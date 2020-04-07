@@ -2519,8 +2519,8 @@ kgnilnd_base_shutdown(void)
 		for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++)
 			LASSERT(list_empty(&kgnilnd_data.kgn_peers[i]));
 
-		CFS_FREE_PTRE_ARRAT(kgnilnd_data.kgn_peers,
-				    *kgnilnd_tunables.kgn_peer_hash_size);
+		CFS_FREE_PTR_ARRAY(kgnilnd_data.kgn_peers,
+				   *kgnilnd_tunables.kgn_peer_hash_size);
 	}
 
 	down_write(&kgnilnd_data.kgn_net_rw_sem);
@@ -2528,8 +2528,8 @@ kgnilnd_base_shutdown(void)
 		for (i = 0; i < *kgnilnd_tunables.kgn_net_hash_size; i++)
 			LASSERT(list_empty(&kgnilnd_data.kgn_nets[i]));
 
-		CFS_FREE_PTRE_ARRAY(kgnilnd_data.kgn_nets,
-				    *kgnilnd_tunables.kgn_net_hash_size);
+		CFS_FREE_PTR_ARRAY(kgnilnd_data.kgn_nets,
+				   *kgnilnd_tunables.kgn_net_hash_size);
 	}
 	up_write(&kgnilnd_data.kgn_net_rw_sem);
 
