@@ -70,6 +70,7 @@ MANFILES =					\
 	lfs-pcc.1				\
 	lfs-pcc-detach.1			\
 	lfs-project.1				\
+	lfs-quota.1				\
 	lfs-rmfid.1				\
 	lfs-setdirstripe.1			\
 	lfs-setquota.1				\

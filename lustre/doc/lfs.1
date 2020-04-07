@@ -101,20 +101,6 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs pool_list \fR<\fIfilesystem\fR>[\fB.\fR<\fIpool\fR>] | <\fIpathname\fR>
 .br
-.B lfs quota \fR[\fB-qv\fR] [\fB-o \fIobd_uuid\fR|\fB-I \fIost_idx\fR|\fB-i \fImdt_idx\fR]
-          [\fB-u <\fIuname\fR|\fIuid\fR>|\fB-g <\fIgname\fR|\fIgid\fR>]
-[\fB-p <\fIprojid\fR>] <\fIfilesystem\fR>
-.br
-.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
-.br
-.B lfs quotacheck \fR[\fB-ug\fR] <\fIfilesystem\fR>
-.br
-.B lfs quota \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
-.br
-.B lfs quotaon \fR[\fB-ugf\fR] <\fIfilesystem\fR>
-.br
-.B lfs quotaoff \fR[\fB-ug\fR] <\fIfilesystem\fR>
-.br
 .B lfs setstripe \fR[\fB--stripe-size\fR|\fB-S <\fIsize\fR>] [\fB--stripe-count\fR|-c <\fIcount\fR>]
         [\fB--stripe-index\fR|\fB-i <\fIstart_ost_index\fR>] [\fB--pool\fR|\fB-p \fR<\fIpoolname\fR>]
         [\fB--ost-list\fR|\fB-o <\fIost_indices\fR>] <\fIdirectory\fR|\fIfilename\fR>
@@ -201,21 +187,6 @@ or
 or the OSTs in
 .IR filesystem.pool .
 .TP
-.B quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g|-p <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If user group and project are omitted quotas for current uid/gid/projid are shown. -v provides more verbose (with per-obd statistics) output. -q disables printing of additional descriptions (including column titles).
-.TP
-.B quota -t <-u|-g|-p> <filesystem>
-To display block and inode grace times for user (-u) or group (-g) or project (-p) quotas
-.TP
-.B quotacheck [-ugf] <filesystem> (deprecated as of 2.4.0)
-To scan the specified filesystem for disk usage, and create or update quota files. Options specify quota for users (-u) groups (-g) and force (-f). Not useful anymore with servers >= 2.4.0 since space accounting is always turned on.
-.TP
-.B quotaon [-ugf] <filesystem> (deprecated as of 2.4.0)
-To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement must be enabled via conf_param (e.g. lctl conf_param ${FSNAME}.quota.<ost|mdt>=<u|g|ug>)
-.TP
-.B quotaoff [-ugf] <filesystem> (deprecated as of 2.4.0)
-To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement can be turned off (for inode or block) by running the following command on the MGS: lctl conf_param ${FSNAME}.quota.<ost|mdt>=""
-.TP
 .B swap_layouts <filename1> <filename2>
 Swap the data (layout and OST objects) of two regular files. The
 two files have to be in the same filesystem, owned by the same user,
@@ -262,24 +233,6 @@ List all the OSTs
 .B $ lfs mdts
 List all the MDTs
 .TP
-.B $ lfs quota -u bob /mnt/lustre
-List quotas of user `bob'
-.TP
-.B $ lfs quota -U /mnt/lustre
-List user quotas of system default setting
-.TP
-.B $ lfs quota -t -u /mnt/lustre
-Show grace times for user quotas on /mnt/lustre
-.TP
-.B $ lfs quotachown -i /mnt/lustre
-Change file owner and group
-.TP
-.B $ lfs quotacheck -ug /mnt/lustre
-Quotacheck for user and group - will turn on quotas after making the check.
-.TP
-.B $ lfs quotaon -ug /mnt/lustre
-Turn quotas of user and group on
-.TP
 .B $ lfs quotaoff -ug /mnt/lustre
 Turn quotas of user and group off
 .SH NOTES
@@ -303,6 +256,7 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs_migrate (1),
 .BR lfs-project (1),
 .BR lfs-path2fid (1),
+.BR lfs-quota (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-setquota (1),
 .BR lfs-setstripe (1),

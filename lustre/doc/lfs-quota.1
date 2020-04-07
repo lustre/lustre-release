@@ -1,0 +1,114 @@
+.TH LFS-QUOTA 1 2020-04-06 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs quota \- display quota limits and status for users, groups, or projects.
+.SH SYNOPSIS
+.B lfs quota \fR[\fB-hqv\fR]
+       [\fB-o <\fIobd_uuid\fR>|\fB-I <\fIost_idx\fR>|\fB-i <\fImdt_idx\fR>]
+       [\fB-u <\fIuname\fR|\fIuid\fR>|\fB-g <\fIgname\fR|\fIgid\fR>\
+|\fB-p <\fIprojid\fR>]
+       <\fIfilesystem\fR>\fR
+
+.br
+.B lfs quota \fR[\fB-hq\fR] \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
+.br
+
+.br
+.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.br
+
+.TP
+.SH DESCRIPTION
+.PP
+.B lfs quota <\fIfilesystem\fR>\fR
+.TP
+
+Display disk usage and limits for individual users, groups, and projects. \
+By default the statistics for the entire filesystem are displayed but \
+individual MDTs and OSTs can be specified. \
+A user or group name or an ID can \
+be specified. If user, group and project are omitted, quotas for \
+current uid/gid/projid are shown.
+.TP
+.B -h
+Human readable. This will change the formatting of \
+block storage and time values. Without this option block storage values \
+are in kilobytes and times are in seconds. With this option block storage \
+values use the common metric binary suffixes
+.BR k "," M "," G "," T "," P "," E
+which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 \
+respectively.
+Time values use the "XXwXXdXXhXXmXXs" format. This format specifies \
+weeks, days, hours, minutes, seconds.
+.TP
+.B -q
+Quiet. Display only the line containing the data. \
+The line saying what the data is, and the line with the data
+column headers will not be printed.
+.TP
+.B -v
+Verbose. Display per-MDT and per-OST statistics in addition
+to the usual system wide data.
+.TP
+.B -u <\fIuname|uid\fR>
+Display user quota information for \fIuname\fR or \fIuid\fR.
+.TP
+.B -g <\fIgname|gid\fR>
+Display group quota information for name \fIgname\fR or \fIgid\fR.
+.TP
+.B -p <\fIprojid\fR>
+Display project quota information for \fIprojid\fR.
+.TP
+.B -o <\fIobd_uuid\fR>
+Display quota information for \fIobd_uuid\fR.
+.TP
+.B -i <\fImdt_idx\fR>
+Display project quota information for \fImdt_idx\fR.
+.TP
+.B -I <\fIost_idx\fR>
+Display project quota information for \fIost_idx\fR.
+.TP
+.B lfs quota \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
+.TP
+Display default quota values for users, groups, or projects. \
+This command requires super user permissions.
+.TP
+.B -U <\fIuname|uid\fR>
+Display default user quota information for <\fIfilesystem\fR>.
+.TP
+.B -G <\fIgname|gid\fR>
+Display default group quota information for name <\fIfilesystem\fR>.
+.TP
+.B -P <\fIprojid\fR>
+Display default project quota information for <\fIfilesystem\fR>.
+.TP
+.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.TP
+Display grace times for users, groups, or projects. \
+The format is always "XXwXXdXXhXXmXXs".
+.TP
+.B -u <\fIuname|uid\fR>
+Display default user grace times for <\fIfilesystem\fR>.
+.TP
+.B -g <\fIgname|gid\fR>
+Display default group grace times for name <\fIfilesystem\fR>.
+.TP
+.B -p <\fIprojid\fR>
+Display default project grace times for <\fIfilesystem\fR>.
+.TP
+.SH EXAMPLES
+.TP
+.B $ lfs quota /mnt/lustre
+Display quotas and usage for current user, group, and project
+.TP
+.B $ lfs quota -u bob /mnt/lustre
+Display quotas and usage for user 'bob'
+.TP
+.B $ lfs quota -U /mnt/lustre
+Display default user quotas
+.TP
+.B $ lfs quota -t -u /mnt/lustre
+Display grace times for user quotas on /mnt/lustre
+.TP
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-setquota(1)
