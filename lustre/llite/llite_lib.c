@@ -2127,12 +2127,6 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 				(body->mbo_mode & S_IFMT);
 
 	LASSERT(inode->i_mode != 0);
-	if (S_ISREG(inode->i_mode))
-		inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS + 1,
-				       LL_MAX_BLKSIZE_BITS);
-	else
-		inode->i_blkbits = inode->i_sb->s_blocksize_bits;
-
 	if (body->mbo_valid & OBD_MD_FLUID)
 		inode->i_uid = make_kuid(&init_user_ns, body->mbo_uid);
 	if (body->mbo_valid & OBD_MD_FLGID)

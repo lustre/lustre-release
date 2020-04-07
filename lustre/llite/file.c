@@ -4748,7 +4748,14 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 	stat->atime = inode->i_atime;
 	stat->mtime = inode->i_mtime;
 	stat->ctime = inode->i_ctime;
-	stat->blksize = sbi->ll_stat_blksize ?: 1 << inode->i_blkbits;
+	/* stat->blksize is used to tell about preferred IO size */
+	if (sbi->ll_stat_blksize)
+		stat->blksize = sbi->ll_stat_blksize;
+	else if (S_ISREG(inode->i_mode))
+		stat->blksize = 1 << min(PTLRPC_MAX_BRW_BITS + 1,
+					 LL_MAX_BLKSIZE_BITS);
+	else
+		stat->blksize = 1 << inode->i_sb->s_blocksize_bits;
 
 	stat->nlink = inode->i_nlink;
 	stat->size = i_size_read(inode);
