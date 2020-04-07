@@ -658,52 +658,19 @@ static inline bool mdt_is_striped_client(struct obd_export *exp)
 	return exp_connect_flags(exp) & OBD_CONNECT_DIR_STRIPE;
 }
 
-enum {
-	LMM_NO_DOM,
-	LMM_DOM_ONLY,
-	LMM_DOM_OST
-};
+__u32 mdt_lmm_dom_entry_check(struct lov_mds_md *lmm, int *dom_only);
 
-/* XXX Look into layout in MDT layer. This must be done in LOD. */
-static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
+static inline bool mdt_lmm_dom_only(struct lov_mds_md *lmm)
 {
-	struct lov_comp_md_v1 *comp_v1;
-	struct lov_mds_md *v1;
-	__u32 off;
-	bool has_dom = false, has_ost = false;
-	int i;
+	int dom_only = 0;
 
-	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
-		return LMM_NO_DOM;
+	mdt_lmm_dom_entry_check(lmm, &dom_only);
+	return dom_only;
+}
 
-	comp_v1 = (struct lov_comp_md_v1 *)lmm;
-	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
-	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
-
-	/* DoM entry is the first entry always */
-	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT &&
-	    le16_to_cpu(comp_v1->lcm_mirror_count) == 0)
-		return LMM_NO_DOM;
-
-	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
-		struct lov_comp_md_entry_v1 *lcme;
-
-		lcme = &comp_v1->lcm_entries[i];
-		if (!(le32_to_cpu(lcme->lcme_flags) & LCME_FL_INIT))
-			continue;
-
-		off = le32_to_cpu(lcme->lcme_offset);
-		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
-
-		if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) ==
-		    LOV_PATTERN_MDT)
-			has_dom = true;
-		else
-			has_ost = true;
-		if (has_dom && has_ost)
-			return LMM_DOM_OST;
-	}
-	return has_dom ? LMM_DOM_ONLY : LMM_NO_DOM;
+static inline __u32 mdt_lmm_dom_stripesize(struct lov_mds_md *lmm)
+{
+	return mdt_lmm_dom_entry_check(lmm, NULL);
 }
 
 static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)

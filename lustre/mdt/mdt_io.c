@@ -1421,6 +1421,11 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	}
 
 	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
+	if (!(mbo->mbo_valid & OBD_MD_DOM_SIZE))
+		RETURN(0);
+
+	if (!mbo->mbo_dom_size)
+		RETURN(0);
 
 	if (lustre_handle_is_used(lh)) {
 		struct ldlm_lock *lock;
@@ -1434,12 +1439,6 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 
 	/* return data along with open only along with DoM lock */
 	if (!dom_lock || !mdt->mdt_opts.mo_dom_read_open)
-		RETURN(0);
-
-	if (!(mbo->mbo_valid & OBD_MD_DOM_SIZE))
-		RETURN(0);
-
-	if (mbo->mbo_dom_size == 0)
 		RETURN(0);
 
 	CDEBUG(D_INFO, "File size %llu, reply sizes %d/%d\n",
@@ -1466,7 +1465,8 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		/* can fit whole data */
 		len = mbo->mbo_dom_size;
 		offset = 0;
-	} else {
+	} else if (mbo->mbo_dom_size <
+		   mdt_lmm_dom_stripesize(mti->mti_attr.ma_lmm)) {
 		int tail, pgbits;
 
 		/* File tail offset must be aligned with larger page size
@@ -1492,7 +1492,13 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 
 		len = tail;
 		offset = mbo->mbo_dom_size - len;
+	} else {
+		/* DOM stripe is fully written, so don't expect its tail
+		 * will be used by append.
+		 */
+		RETURN(0);
 	}
+
 	LASSERT((offset & ~PAGE_MASK) == 0);
 	rc = req_capsule_server_grow(pill, &RMF_NIOBUF_INLINE,
 				     sizeof(*rnb) + len);

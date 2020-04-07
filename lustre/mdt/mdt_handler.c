@@ -509,6 +509,58 @@ out:
 	RETURN(rc);
 }
 
+__u32 mdt_lmm_dom_entry_check(struct lov_mds_md *lmm, int *is_dom_only)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	__u32 off;
+	__u32 dom_stripesize = 0;
+	int i;
+	bool has_ost_stripes = false;
+
+	ENTRY;
+
+	if (is_dom_only)
+		*is_dom_only = 0;
+
+	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
+		RETURN(0);
+
+	comp_v1 = (struct lov_comp_md_v1 *)lmm;
+	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+	/* Fast check for DoM entry with no mirroring, should be the first */
+	if (le16_to_cpu(comp_v1->lcm_mirror_count) == 0 &&
+	    lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT)
+		RETURN(0);
+
+	/* check all entries otherwise */
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		struct lov_comp_md_entry_v1 *lcme;
+
+		lcme = &comp_v1->lcm_entries[i];
+		if (!(le32_to_cpu(lcme->lcme_flags) & LCME_FL_INIT))
+			continue;
+
+		off = le32_to_cpu(lcme->lcme_offset);
+		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+		if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) ==
+		    LOV_PATTERN_MDT)
+			dom_stripesize = le32_to_cpu(v1->lmm_stripe_size);
+		else
+			has_ost_stripes = true;
+
+		if (dom_stripesize && has_ost_stripes)
+			RETURN(dom_stripesize);
+	}
+	/* DoM-only case exits here */
+	if (is_dom_only && dom_stripesize)
+		*is_dom_only = 1;
+	RETURN(dom_stripesize);
+}
+
 /**
  * Pack size attributes into the reply.
  */
@@ -517,7 +569,7 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 {
 	struct mdt_body *b;
 	struct md_attr *ma = &info->mti_attr;
-	int dom_stripe;
+	__u32 dom_stripe;
 	bool dom_lock = false;
 
 	ENTRY;
@@ -528,9 +580,9 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 	    !(ma->ma_valid & MA_LOV && ma->ma_lmm != NULL))
 		RETURN(-ENODATA);
 
-	dom_stripe = mdt_lmm_dom_entry(ma->ma_lmm);
+	dom_stripe = mdt_lmm_dom_stripesize(ma->ma_lmm);
 	/* no DoM stripe, no size in reply */
-	if (dom_stripe == LMM_NO_DOM)
+	if (!dom_stripe)
 		RETURN(-ENOENT);
 
 	if (lustre_handle_is_used(lh)) {
@@ -2497,14 +2549,11 @@ out_shrink:
 
 	/*
 	 * Data-on-MDT optimization - read data along with OPEN and return it
-	 * in reply. Do that only if we have both DOM and LAYOUT locks.
+	 * in reply when possible.
 	 */
-	if (rc == 0 && op == REINT_OPEN && !req_is_replay(pill->rc_req) &&
-	    info->mti_attr.ma_lmm != NULL &&
-	    mdt_lmm_dom_entry(info->mti_attr.ma_lmm) == LMM_DOM_ONLY) {
+	if (rc == 0 && op == REINT_OPEN && !req_is_replay(pill->rc_req))
 		rc = mdt_dom_read_on_open(info, info->mti_mdt,
 					  &lhc->mlh_reg_lh);
-	}
 
 	return rc;
 }
@@ -5448,7 +5497,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 			m->mdt_skip_lfsck = 1;
 	}
 
-	/* DoM files get IO lock at open by default */
+	/* DoM files get IO lock at open optionally by default */
 	m->mdt_opts.mo_dom_lock = ALWAYS_DOM_LOCK_ON_OPEN;
 	/* DoM files are read at open and data is packed in the reply */
 	m->mdt_opts.mo_dom_read_open = 1;

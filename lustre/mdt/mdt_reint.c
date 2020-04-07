@@ -2091,8 +2091,7 @@ lock_parent:
 		if (rc)
 			GOTO(put_source, rc);
 
-		if (ma->ma_valid & MA_LOV &&
-		    mdt_lmm_dom_entry(ma->ma_lmm) != LMM_NO_DOM)
+		if (ma->ma_valid & MA_LOV && mdt_lmm_dom_stripesize(ma->ma_lmm))
 			GOTO(put_source, rc = -EOPNOTSUPP);
 	}
 

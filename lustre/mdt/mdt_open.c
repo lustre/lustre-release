@@ -809,8 +809,9 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	bool try_layout = false;
 	bool create_layout = false;
 	int rc = 0;
-	int dom_stripes = LMM_NO_DOM;
-	bool dom_lock = false;
+	__u32 dom_stripe = 0;
+	unsigned int dom_only = 0;
+	unsigned int dom_lock = 0;
 
 	ENTRY;
 
@@ -828,23 +829,23 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		    ma->ma_need & MA_LOV)
 			try_layout = true;
 
-		/* DoM files can have just MDT stripe or combined MDT + OST
-		 * stripes.
-		 * - In the first case the open for read/write will do IO to
-		 *   the MDT stripe and it makes sense to take IO lock in
-		 *   advance along with OPEN even if it is blocking lock.
-		 * - In the second case it is just size of MDT stripe and it
-		 *   is quite unlikely that client will write into it, though
-		 *   it may read it. So IO lock will be taken optionally if it
-		 *   is non-blocking one.
+		/* DoM files can take IO lock at OPEN when it makes sense,
+		 * check if file has DoM stripe and ask for lock if client
+		 * no lock on that resource yet.
 		 */
 		if (ma->ma_valid & MA_LOV && ma->ma_lmm != NULL)
-			dom_stripes = mdt_lmm_dom_entry(ma->ma_lmm);
-
-		if (dom_stripes == LMM_DOM_ONLY &&
-		    info->mti_mdt->mdt_opts.mo_dom_lock > 0 &&
+			dom_stripe = mdt_lmm_dom_entry_check(ma->ma_lmm,
+							     &dom_only);
+		/* If only DOM stripe is being used then we can expect IO
+		 * to it after OPEN and will return corresponding DOM ibit
+		 * using default strategy from mdt_opts.mo_dom_lock.
+		 * Otherwise trylock mode is used always and DOM ibit will
+		 * be returned optionally.
+		 */
+		if (dom_stripe &&
 		    !mdt_dom_client_has_lock(info, mdt_object_fid(obj)))
-			dom_lock = true;
+			dom_lock = !dom_only ? TRYLOCK_DOM_ON_OPEN :
+				   info->mti_mdt->mdt_opts.mo_dom_lock;
 	}
 
 	if (acq_lease) {
@@ -899,16 +900,14 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			lhc = &info->mti_lh[MDT_LH_LOCAL];
 		} else if (dom_lock) {
 			lm = (open_flags & MDS_FMODE_WRITE) ? LCK_PW : LCK_PR;
-			if (info->mti_mdt->mdt_opts.mo_dom_lock ==
-			    TRYLOCK_DOM_ON_OPEN) {
+			if (dom_lock == TRYLOCK_DOM_ON_OPEN) {
 				trybits |= MDS_INODELOCK_DOM |
 					   MDS_INODELOCK_LAYOUT;
 			} else {
-				/* mo_dom_lock == ALWAYS_DOM_LOCK_ON_OPEN */
+				/* dom_lock == ALWAYS_DOM_LOCK_ON_OPEN */
 				*ibits = MDS_INODELOCK_DOM;
-				if (info->mti_mdt->mdt_opts.mo_dom_read_open) {
+				if (info->mti_mdt->mdt_opts.mo_dom_read_open)
 					trybits |= MDS_INODELOCK_LAYOUT;
-				}
 			}
 		}
 

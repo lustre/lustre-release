@@ -218,7 +218,7 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	 * MDS only updates LSOM of the file if the size or block
 	 * size is being increased or the file is being truncated.
 	 */
-	if (mdt_lmm_dom_entry(info->mti_big_lmm) != LMM_DOM_ONLY &&
+	if (!mdt_lmm_dom_only(info->mti_big_lmm) &&
 	    !(tmp_ma->ma_valid & MA_INODE && tmp_ma->ma_attr.la_nlink == 0)) {
 		__u64 size;
 		__u64 blocks;
