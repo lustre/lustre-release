@@ -429,8 +429,8 @@ command_t cmdlist[] = {
 	 "		    [!] --mirror-id=[+-]<id>]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
-	 "To create a striped directory on a specified MDT. This can only\n"
-	 "be done on MDT0 with the right of administrator.\n"
+	 "Create striped directory on specified MDT, same as mkdir.\n"
+	 "May be restricted to root or group users, depending on settings.\n"
 	 "usage: setdirstripe [OPTION] <directory>\n"
 	 SETDIRSTRIPE_USAGE},
 	{"getdirstripe", lfs_getdirstripe, 0,
@@ -441,8 +441,7 @@ command_t cmdlist[] = {
 	 "		      [--recursive|-r] [--yaml|-y]\n"
 	 "		      [--verbose|-v] [--default|-D] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
-	 "To create a striped directory on a specified MDT. This can only\n"
-	 "be done on MDT0 with the right of administrator.\n"
+	 "Create striped directory on specified MDT, same as setdirstripe.\n"
 	 "usage: mkdir [OPTION] <directory>\n"
 	 SETDIRSTRIPE_USAGE},
 	{"rm_entry", lfs_rmentry, 0,
@@ -6049,6 +6048,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	/* if "lfs setdirstripe -D -i -1" is used, assume 1-stripe directory */
+	if (default_stripe && lsa.lsa_stripe_off == -1 &&
+	    (lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT ||
+	     lsa.lsa_stripe_count == 0))
+		lsa.lsa_stripe_count = 1;
 	if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT)
 		param->lsp_stripe_count = lsa.lsa_stripe_count;
 	if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)

@@ -5,10 +5,12 @@ lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .B lfs setdirstripe [\fR-cdDHioTx\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
-Create a striped directory with specified striping pattern. This lfs utility
-is similar to
-.BR lfs setstripe
-, but is used to create striped directory.
+Create a striped directory with specified striping pattern. This
+.B lfs
+sub-command is similar to
+.BR "lfs setstripe" ,
+but is used to create a striped directory or set the default layout for
+subdirectories.
 Can also be used to create directory with a foreign (free format) striping pattern (see
 .BR --foreign
 and
@@ -68,10 +70,12 @@ but existing sub-directories will not be affected.  The newly
 created sub-directories will also inherit the specified default
 striping pattern. Only default stripe count is supported for now.
 
-Note that striping all directories across all MDTs by default is not
+Note that striping all directories across all MDTs by default is
+.B not
 recommended at this time, as the clients will have to do more RPCs to
 create and access each directory, hurting performance rather than
-improving it.  Default striped directories are preferred for cases
+improving it.  Default striped directories are preferred for parent
+directories
 where large subdirectories will be created (e.g. file-per-process
 job output directories).
 .TP
@@ -90,13 +94,12 @@ Create a directory with a foreign (non-Lustre/free format, see
 option) striping. Where
 .BR type
 specifies a known foreign type (like
-.BR none
-,
-.BR daos
-, ...) or a 32-bit numeric type.
+.BR none ,
+.BR daos )
+or a 32-bit numeric type.
 .TP
 .BR \-\-flags =\fI<hex>\fR
-Specify a bitmask of flags.
+Specify a numeric bitmask of type-specific layout flags for the foreign layout.
 .TP
 .BR \-x ", " \-\-xattr =\fISTRING\fR
 Specify a string to be used as a foreign (free format) striping.
@@ -104,20 +107,26 @@ Specify a string to be used as a foreign (free format) striping.
 .PP
 The
 .B lfs setdirstripe
-command is only executable by root unless
+command is only usable by root unless the
 .B "mdt.*.enable_remote_dir_gid"
 is set on the MDS via
 .B lctl set_param
-to be either a non-zero GID to limit it to a single group
-(e.g. "operator" or "admin"), or "-1" to allow any group
-to create remote directories.
+to be either a non-zero numeric GID to limit it to a single group (e.g. the
+.BR "operator " or " admin"
+GID), or
+.B "-1"
+to allow any user/group to create remote directories.  By default, it is
+.B "0"
+to limit remote/striped directories to only the root user.
 
-The root of the file system is on MDT0000, and directories and files inherit the
-MDT of their parent directory unless a different MDT is specified with this
-command.
+The root directory of the file system is on MDT0000, and directories and
+files inherit the MDT of their parent directory unless a different MDT is
+specified with this command.
 
 By default, only directories on MDT0000 can contain directories that are not on
-the same MDT.  However, if "mdt.*.enable_remote_dir" is set non-zero on an MDT
+the same MDT.  However, if
+.B "mdt.*.enable_remote_dir"
+is set non-zero on an MDT (the default)
 then it will allow creating remote directories that have parents other than
 MDT0000. This is restricted to avoid creating directory trees that have
 intermediate path components on a series different MDTs and become unavailable
