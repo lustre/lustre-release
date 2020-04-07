@@ -1456,6 +1456,9 @@ dont_check_exports:
 	export->exp_connection = ptlrpc_connection_get(req->rq_peer,
 						       req->rq_self,
 						       &cluuid);
+	if (!export->exp_connection)
+		GOTO(out, rc = -ENOTCONN);
+
 	obd_nid_add(export->exp_obd, export);
 
 	lustre_msg_set_handle(req->rq_repmsg, &conn);

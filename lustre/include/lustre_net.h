@@ -51,6 +51,7 @@
  * @{
  */
 #include <linux/kobject.h>
+#include <linux/rhashtable.h>
 #include <linux/uio.h>
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
@@ -530,7 +531,7 @@ struct ptlrpc_replay_async_args {
  */
 struct ptlrpc_connection {
 	/** linkage for connections hash table */
-	struct hlist_node        c_hash;
+	struct rhash_head	c_hash;
 	/** Our own lnet nid for this connection */
 	lnet_nid_t              c_self;
 	/** Remote side nid for this connection */

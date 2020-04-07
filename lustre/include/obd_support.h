@@ -80,9 +80,6 @@ extern char obd_jobid_var[];
 #define HASH_LQE_BKT_BITS 5
 #define HASH_LQE_CUR_BITS 7
 #define HASH_LQE_MAX_BITS 12
-#define HASH_CONN_BKT_BITS 5
-#define HASH_CONN_CUR_BITS 5
-#define HASH_CONN_MAX_BITS 15
 #define HASH_EXP_LOCK_BKT_BITS  5
 #define HASH_EXP_LOCK_CUR_BITS  7
 #define HASH_EXP_LOCK_MAX_BITS  16
