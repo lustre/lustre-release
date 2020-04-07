@@ -109,9 +109,7 @@ setup_netns() {
 
 cleanup_netns() {
 	(ip netns list | grep -q $TESTNS) && ip netns del $TESTNS
-	if ip link show test1pl >/dev/null 2>&1; then
-		ip link del test1pl
-	fi
+	ip link show test1pl >& /dev/null && ip link del test1pl || return 0
 }
 
 configure_dlc() {
