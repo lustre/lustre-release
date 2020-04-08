@@ -4183,6 +4183,52 @@ test_81b() {
 }
 run_test 81b "rename under striped directory doesn't deadlock"
 
+test_81c() {
+	[ $MDSCOUNT -lt 4 ] && skip_env "needs >= 4 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
+		skip "Need MDS version at least 2.13.52"
+
+	# source is local, source parent is remote
+	$LFS mkdir -i 0 $DIR1/${tdir}_src || error "mkdir ${tdir}_src"
+	$LFS mkdir -i 1 $DIR1/${tdir}_tgt || error "mkdir ${tdir}_tgt"
+	$LFS mkdir -i 3 $DIR1/${tdir}_src/sub || error "mkdir sub"
+	$LFS mkdir -i 3 $DIR1/${tdir}_tgt/sub || error "mkdir sub"
+	stat $DIR2/${tdir}_src/sub || error "stat sub failed"
+	mv $DIR1/${tdir}_src/sub $DIR1/${tdir}_tgt/ || error "mv failed"
+	[ -f $DIR2/${tdir}_src/sub ] && error "sub should be gone"
+	rm -rf $DIR1/${tdir}_src $DIR1/${tdir}_tgt
+
+	# source is remote, source parent is local
+	$LFS mkdir -i 3 $DIR1/${tdir}_src || error "mkdir ${tdir}_src"
+	$LFS mkdir -i 1 $DIR1/${tdir}_tgt || error "mkdir ${tdir}_tgt"
+	$LFS mkdir -i 0 $DIR1/${tdir}_src/sub || error "mkdir sub"
+	$LFS mkdir -i 3 $DIR1/${tdir}_tgt/sub || error "mkdir sub"
+	stat $DIR2/${tdir}_src/sub || error "stat sub failed"
+	mv $DIR1/${tdir}_src/sub $DIR1/${tdir}_tgt/ || error "mv failed"
+	[ -f $DIR2/${tdir}_src/sub ] && error "sub should be gone"
+	rm -rf $DIR1/${tdir}_src $DIR1/${tdir}_tgt
+
+	# source and source parent are remote
+	$LFS mkdir -i 0 $DIR1/${tdir}_src || error "mkdir ${tdir}_src"
+	$LFS mkdir -i 1 $DIR1/${tdir}_tgt || error "mkdir ${tdir}_tgt"
+	mkdir $DIR1/${tdir}_src/sub || error "mkdir sub"
+	$LFS mkdir -i 3 $DIR1/${tdir}_tgt/sub || error "mkdir sub"
+	stat $DIR2/${tdir}_src/sub || error "stat sub failed"
+	mv $DIR1/${tdir}_src/sub $DIR1/${tdir}_tgt/ || error "mv failed"
+	[ -f $DIR2/${tdir}_src/sub ] && error "sub should be gone"
+	rm -rf $DIR1/${tdir}_src $DIR1/${tdir}_tgt
+
+	# source and source parent are remote, and source is remote object
+	$LFS mkdir -i 0 $DIR1/${tdir}_src || error "mkdir ${tdir}_src"
+	$LFS mkdir -i 1 $DIR1/${tdir}_tgt || error "mkdir ${tdir}_tgt"
+	$LFS mkdir -i 2 $DIR1/${tdir}_src/sub || error "mkdir sub"
+	$LFS mkdir -i 3 $DIR1/${tdir}_tgt/sub || error "mkdir sub"
+	stat $DIR2/${tdir}_src/sub || error "stat sub failed"
+	mv $DIR1/${tdir}_src/sub $DIR1/${tdir}_tgt/ || error "mv failed"
+	[ -f $DIR2/${tdir}_src/sub ] && error "sub should be gone" || true
+}
+run_test 81c "rename revoke LOOKUP lock for remote object"
+
 test_82() {
 	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.91) ]] ||
 		{ skip "Need MDS version at least 2.6.92"; return 0; }

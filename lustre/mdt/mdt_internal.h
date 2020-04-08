@@ -766,6 +766,9 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh,
 			   enum ldlm_mode mode, __u64 ibits, bool cache);
+int mdt_object_local_lock(struct mdt_thread_info *info, struct mdt_object *o,
+			  struct mdt_lock_handle *lh, __u64 *ibits,
+			  __u64 trybits, bool cos_incompat);
 int mdt_reint_striped_lock(struct mdt_thread_info *info,
 			   struct mdt_object *o,
 			   struct mdt_lock_handle *lh,

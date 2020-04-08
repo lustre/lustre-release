@@ -3175,10 +3175,9 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti, struct mdt_object *o,
 					  cache);
 }
 
-static int mdt_object_local_lock(struct mdt_thread_info *info,
-				 struct mdt_object *o,
-				 struct mdt_lock_handle *lh, __u64 *ibits,
-				 __u64 trybits, bool cos_incompat)
+int mdt_object_local_lock(struct mdt_thread_info *info, struct mdt_object *o,
+			  struct mdt_lock_handle *lh, __u64 *ibits,
+			  __u64 trybits, bool cos_incompat)
 {
 	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
 	union ldlm_policy_data *policy = &info->mti_policy;
