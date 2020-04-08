@@ -2460,10 +2460,13 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	/* set the file specific informations in lmm */
 	if (fst_lmm != NULL) {
+		struct ost_id temp_oi;
+
 		saved_oi = &info->mti_oa.o_oi;
 		mdd_get_lmm_oi(fst_lmm, saved_oi);
+		mdd_get_lmm_oi(snd_lmm, &temp_oi);
 		mdd_set_lmm_gen(fst_lmm, &snd_gen);
-		mdd_set_lmm_oi(fst_lmm, &snd_lmm->lmm_oi);
+		mdd_set_lmm_oi(fst_lmm, &temp_oi);
 		mdd_set_lmm_oi(snd_lmm, saved_oi);
 	} else {
 		if ((snd_lmm->lmm_magic & cpu_to_le32(LOV_MAGIC_MASK)) ==

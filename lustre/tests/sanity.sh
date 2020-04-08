@@ -7148,6 +7148,46 @@ test_56xe() {
 }
 run_test 56xe "migrate a composite layout file"
 
+test_56xf() {
+	[[ $OSTCOUNT -ge 2 ]] || skip_env "needs >= 2 OSTs"
+
+	[[ $MDS1_VERSION -ge $(version_code 2.13.53) ]] ||
+		skip "Need server version at least 2.13.53"
+
+	local dir=$DIR/$tdir
+	local f_comp=$dir/$tfile
+	local layout="-E 1M -c1 -E -1 -c2"
+	local fid_before=""
+	local fid_after=""
+
+	test_mkdir "$dir" || error "cannot create dir $dir"
+	$LFS setstripe $layout $f_comp ||
+		error "cannot setstripe $f_comp with layout $layout"
+	fid_before=$($LFS getstripe --fid $f_comp)
+	dd if=/dev/zero of=$f_comp bs=1M count=4
+
+	# 1. migrate a comp layout file to a comp layout
+	$LFS migrate $f_comp || error "cannot migrate $f_comp by lfs migrate"
+	fid_after=$($LFS getstripe --fid $f_comp)
+	[ "$fid_before" == "$fid_after" ] ||
+		error "comp-to-comp migrate: $fid_before != $fid_after"
+
+	# 2. migrate a comp layout file to a plain layout
+	$LFS migrate -c2 $f_comp ||
+		error "cannot migrate $f_comp by lfs migrate"
+	fid_after=$($LFS getstripe --fid $f_comp)
+	[ "$fid_before" == "$fid_after" ] ||
+		error "comp-to-plain migrate: $fid_before != $fid_after"
+
+	# 3. migrate a plain layout file to a comp layout
+	$LFS migrate $layout $f_comp ||
+		error "cannot migrate $f_comp by lfs migrate"
+	fid_after=$($LFS getstripe --fid $f_comp)
+	[ "$fid_before" == "$fid_after" ] ||
+		error "plain-to-comp migrate: $fid_before != $fid_after"
+}
+run_test 56xf "FID is not lost during migration of a composite layout file"
+
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
