@@ -2217,10 +2217,11 @@ mdt_free_inodes() {
 ost_dev_status() {
 	local ost_idx=$1
 	local mnt_pnt=${2:-$MOUNT}
+	local opts=$3
 	local ost_uuid
 
 	ost_uuid=$(ostuuid_from_index $ost_idx $mnt_pnt)
-	lfs_df $mnt_pnt | awk '/'$ost_uuid'/ { print $7 }'
+	lfs_df $opts $mnt_pnt | awk '/'$ost_uuid'/ { print $7 }'
 }
 
 setup_quota(){
