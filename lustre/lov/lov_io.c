@@ -115,7 +115,9 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 		     !lov_r0(lov, index)->lo_sub[stripe]))
 		RETURN(-EIO);
 
-	LASSERTF(is_index_within_mirror(lov, index, lio->lis_mirror_index),
+	LASSERTF(ergo(lov_is_flr(lov),
+		      is_index_within_mirror(lov, index,
+					     lio->lis_mirror_index)),
 		 DFID "iot = %d, index = %d, mirror = %d\n",
 		 PFID(lu_object_fid(lov2lu(lov))), io->ci_type, index,
 		 lio->lis_mirror_index);
