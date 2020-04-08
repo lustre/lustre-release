@@ -3132,8 +3132,7 @@ int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 		descr->cld_mode  = cl_mode;
 		/* CEF_MUST is used because we do not want to convert a
 		 * lockahead request to a lockless lock */
-		descr->cld_enq_flags = CEF_MUST | CEF_LOCK_NO_EXPAND |
-				       CEF_NONBLOCK;
+		descr->cld_enq_flags = CEF_MUST | CEF_LOCK_NO_EXPAND;
 
 		if (ladvise->lla_peradvice_flags & LF_ASYNC)
 			descr->cld_enq_flags |= CEF_SPECULATIVE;
