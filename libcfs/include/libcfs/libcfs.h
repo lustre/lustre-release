@@ -36,6 +36,10 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/workqueue.h>
+#include <linux/sched.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#endif
 
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-time.h>
@@ -93,6 +97,22 @@ do {									\
 #endif
 
 typedef s32 timeout_t;
+
+/* Block all signals except for the @sigs */
+static inline void cfs_block_sigsinv(unsigned long sigs, sigset_t *old)
+{
+	sigset_t new;
+
+	siginitsetinv(&new, sigs);
+	sigorsets(&new, &current->blocked, &new);
+	sigprocmask(SIG_BLOCK, &new, old);
+}
+
+static inline void
+cfs_restore_sigs(sigset_t *old)
+{
+	sigprocmask(SIG_SETMASK, old, NULL);
+}
 
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512

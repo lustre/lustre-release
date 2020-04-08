@@ -39,7 +39,6 @@
 #include <linux/fs_struct.h>
 #include <linux/sched.h>
 #ifdef HAVE_SCHED_HEADERS
-#include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
 #endif
 #include <linux/uaccess.h>
@@ -194,21 +193,3 @@ int kstrtobool_from_user(const char __user *s, size_t count, bool *res)
 }
 EXPORT_SYMBOL(kstrtobool_from_user);
 #endif /* !HAVE_KSTRTOBOOL_FROM_USER */
-
-/* Block all signals except for the @sigs */
-void cfs_block_sigsinv(unsigned long sigs, sigset_t *old)
-{
-	sigset_t new;
-
-	siginitsetinv(&new, sigs);
-	sigorsets(&new, &current->blocked, &new);
-	sigprocmask(SIG_BLOCK, &new, old);
-}
-EXPORT_SYMBOL(cfs_block_sigsinv);
-
-void
-cfs_restore_sigs(sigset_t *old)
-{
-	sigprocmask(SIG_SETMASK, old, NULL);
-}
-EXPORT_SYMBOL(cfs_restore_sigs);
