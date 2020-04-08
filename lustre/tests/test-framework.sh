@@ -700,6 +700,7 @@ load_modules_local() {
 	# if there is more than 4 CPU cores, libcfs should create multiple CPU
 	# partitions. So we just force libcfs to create 2 partitions for
 	# system with 2 or 4 cores
+	local saved_opts="$MODOPTS_LIBCFS"
 	if [ $ncpus -le 4 ] && [ $ncpus -gt 1 ]; then
 		# force to enable multiple CPU partitions
 		echo "Force libcfs to create 2 CPU partitions"
@@ -711,7 +712,7 @@ load_modules_local() {
 	load_module ../libcfs/libcfs/libcfs
 	# Prevent local MODOPTS_LIBCFS being passed as part of environment
 	# variable to remote nodes
-	unset MODOPTS_LIBCFS
+	MODOPTS_LIBCFS=$saved_opts
 
 	set_default_debug
 	load_module ../lnet/lnet/lnet
