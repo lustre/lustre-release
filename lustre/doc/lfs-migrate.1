@@ -99,21 +99,21 @@ Use
 for the new layout.
 .RS 1.2i
 .TP
-.B crush
-CRUSH hash algorithm.  This is a consistent hash
-algorithm, so minimum sub files need to relocate
-during directory restripe.
-.TP
-.B fnv_1a_64
-Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
-reasonably uniform, but not cryptographically strong,
-hashing of the filename. (default)
-.TP
-.B all_char
+.B all_char (type 1)
 Sum of ASCII characters modulo number of MDTs. This
 provides weak hashing of the filename, and is suitable
 for only testing or when the input is known to have
 perfectly uniform distribution (e.g. sequential numbers).
+.TP
+.B fnv_1a_64 (type 2)
+Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
+reasonably uniform, but not cryptographically strong,
+hashing of the filename. (default)
+.TP
+.B crush (type 3)
+CRUSH hash algorithm.  This is a consistent hash
+algorithm, so minimum sub files need to relocate
+during directory restripe.
 .RE
 .P
 Only the root user can migrate directories.  Files that have been archived by

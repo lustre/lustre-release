@@ -17045,7 +17045,7 @@ test_230d() {
 	old_count=$((MDSCOUNT - old_index))
 	new_index=$((RANDOM % MDSCOUNT))
 	new_count=$((MDSCOUNT - new_index))
-	new_hash="all_char"
+	new_hash=1 # for all_char
 
 	[ $old_count -gt 1 ] && old_count=$((old_count - RANDOM % old_count))
 	[ $new_count -gt 1 ] && new_count=$((new_count - RANDOM % new_count))

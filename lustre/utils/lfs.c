@@ -628,9 +628,9 @@ command_t cmdlist[] = {
 	 "			it's the MDT index of first stripe\n"
 	 "\tmdt_count:	number of MDTs to stripe a directory over\n"
 	 "\tmdt_hash:	hash type of the striped directory. mdt types:\n"
-	 "			crush     CRUSH hash algorithm (default)\n"
-	 "			fnv_1a_64 FNV-1a hash algorithm\n"
-	 "			all_char  sum of characters % MDT_COUNT\n"
+	 "		all_char  (type 1)sum of characters % MDT_COUNT\n"
+	 "		fnv_1a_64 (type 2)FNV-1a hash algorithm (default)\n"
+	 "		crush	  (type 3)CRUSH hash algorithm\n"
 	 "\n"
 	 "migrate file objects from one OST "
 	 "layout\nto another (may be not safe with concurent writes).\n"
@@ -712,8 +712,14 @@ command_t cmdlist[] = {
 
 static int check_hashtype(const char *hashtype)
 {
+	int type_num = atoi(hashtype);
 	int i;
 
+	/* numeric hash type */
+	if (hashtype && strlen(hashtype) == 1 &&
+	    (type_num > 0 && type_num < LMV_HASH_TYPE_MAX))
+		return type_num;
+	/* string hash type */
 	for (i = LMV_HASH_TYPE_ALL_CHARS; i < LMV_HASH_TYPE_MAX; i++)
 		if (strcmp(hashtype, mdt_hash_name[i]) == 0)
 			return i;
