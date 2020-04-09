@@ -615,6 +615,9 @@ ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
 uint32_t llapi_mirror_find(struct llapi_layout *layout,
 			   uint64_t file_start, uint64_t file_end,
 			   uint64_t *endp);
+int llapi_layout_get_last_init_comp(struct llapi_layout *layout);
+int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
+				struct llapi_layout *m_layout);
 int llapi_mirror_find_stale(struct llapi_layout *layout,
 		struct llapi_resync_comp *comp, size_t comp_size,
 		__u16 *mirror_ids, int ids_nr);

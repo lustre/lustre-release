@@ -1387,6 +1387,7 @@ struct mirror_args {
 	struct llapi_layout	*m_layout;
 	const char		*m_file;
 	struct mirror_args	*m_next;
+	bool			m_inherit;
 };
 
 /**
@@ -1738,14 +1739,36 @@ out:
 	return rc;
 }
 
-static int mirror_extend_layout(char *name, struct llapi_layout *layout)
+static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
+				bool inherit)
 {
+	struct llapi_layout *f_layout = NULL;
 	struct ll_ioc_lease *data = NULL;
 	int fd = -1;
 	int fdv = -1;
-	int rc;
+	int rc = 0;
 
-	rc = migrate_open_files(name, 0, NULL, layout, &fd, &fdv);
+	if (inherit) {
+		f_layout = llapi_layout_get_by_path(name, 0);
+		if (f_layout == NULL) {
+			fprintf(stderr, "%s: cannot get layout\n", progname);
+			goto out;
+		}
+		rc = llapi_layout_get_last_init_comp(f_layout);
+		if (rc) {
+			fprintf(stderr, "%s: cannot get the last init comp\n",
+				progname);
+			goto out;
+		}
+		rc = llapi_layout_mirror_inherit(f_layout, m_layout);
+		if (rc) {
+			fprintf(stderr,
+				"%s: cannot inherit from the last init comp\n",
+				progname);
+			goto out;
+		}
+	}
+	rc = migrate_open_files(name, 0, NULL, m_layout, &fd, &fdv);
 	if (rc < 0)
 		goto out;
 
@@ -1813,7 +1836,8 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 
 			while (mirror_count > 0) {
 				rc = mirror_extend_layout(fname,
-							mirror_list->m_layout);
+							mirror_list->m_layout,
+							mirror_list->m_inherit);
 				if (rc)
 					break;
 
@@ -2397,13 +2421,12 @@ new_comp:
 			return rc;
 		}
 
-		if (lsa->lsa_first_comp)
+		if (lsa->lsa_first_comp) {
 			prev_end = 0;
-
-		if (lsa->lsa_first_comp)
 			rc = llapi_layout_add_first_comp(layout);
-		else
+		} else {
 			rc = llapi_layout_comp_add(layout);
+		}
 		if (rc) {
 			fprintf(stderr, "Add component failed. %s\n",
 				strerror(errno));
@@ -2928,8 +2951,10 @@ static struct mirror_args *lfs_mirror_alloc(void)
 
 	while (1) {
 		mirror = calloc(1, sizeof(*mirror));
-		if (mirror != NULL)
+		if (mirror != NULL) {
+			mirror->m_inherit = false;
 			break;
+		}
 
 		sleep(1);
 	}
@@ -3475,6 +3500,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 			if (last_mirror != NULL) {
 				/* wrap up last mirror */
+				if (!setstripe_args_specified(&lsa))
+					last_mirror->m_inherit = true;
 				if (lsa.lsa_comp_end == 0)
 					lsa.lsa_comp_end = LUSTRE_EOF;
 
@@ -3626,6 +3653,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	if (mirror_mode) {
+		if (!setstripe_args_specified(&lsa))
+			last_mirror->m_inherit = true;
 		if (lsa.lsa_comp_end == 0)
 			lsa.lsa_comp_end = LUSTRE_EOF;
 	}

@@ -2702,6 +2702,71 @@ error:
 }
 
 /**
+ * Get the last initialized component
+ *
+ * \param[in] layout	component layout list.
+ *
+ * \retval 0		found
+ * \retval -EINVAL	not found
+ * \retval -EISDIR	directory layout
+ */
+int llapi_layout_get_last_init_comp(struct llapi_layout *layout)
+{
+	struct llapi_layout_comp *comp = NULL, *head = NULL;
+
+	if (!layout->llot_is_composite)
+		return 0;
+
+	head = list_entry(layout->llot_comp_list.next, typeof(*comp), llc_list);
+	if (head == NULL)
+		return -EINVAL;
+	if (head->llc_id == 0 && !(head->llc_flags & LCME_FL_INIT))
+		/* a directory */
+		return -EISDIR;
+
+	/* traverse the components from the tail to find the last init one */
+	comp = list_entry(layout->llot_comp_list.prev, typeof(*comp), llc_list);
+	while (comp != head) {
+		if (comp->llc_flags & LCME_FL_INIT)
+			break;
+		comp = list_entry(comp->llc_list.prev, typeof(*comp), llc_list);
+	}
+
+	layout->llot_cur_comp = comp;
+
+	return comp->llc_flags & LCME_FL_INIT ? 0 : -EINVAL;
+}
+
+/**
+ * Interit stripe info from the file's component to the mirror
+ *
+ * \param[in] layout	file component layout list.
+ * \param[in] layout	mirro component layout list.
+ *
+ * \retval 0		on success
+ * \retval -EINVAL	on error
+ */
+int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
+				struct llapi_layout *m_layout)
+{
+	struct llapi_layout_comp *m_comp = NULL;
+	struct llapi_layout_comp *f_comp = NULL;
+	int rc = 0;
+
+	f_comp = __llapi_layout_cur_comp(f_layout);
+	if (f_comp == NULL)
+		return -EINVAL;
+	m_comp = __llapi_layout_cur_comp(m_layout);
+	if (m_comp == NULL)
+		return -EINVAL;
+
+	m_comp->llc_stripe_size = f_comp->llc_stripe_size;
+	m_comp->llc_stripe_count = f_comp->llc_stripe_count;
+
+	return rc;
+}
+
+/**
  * Find all stale components.
  *
  * \param[in] layout		component layout list.

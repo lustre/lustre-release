@@ -608,11 +608,12 @@ test_0f() {
 		error "create mirrored file $tf failed"
 
 	# extend the mirrored file with composite layout mirrors
-	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
+	$mirror_cmd -N -p archive \
+		    -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
 		    -N -c -1 -p none \
 		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
 		error "extend mirrored file $tf failed"
-	verify_mirror_count $tf 7
+	verify_mirror_count $tf 8
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# verify component ${ids[0]}
@@ -627,8 +628,14 @@ test_0f() {
 	verify_comp_attr pool $tf ${ids[1]} ssd
 	verify_comp_extent $tf ${ids[1]} 33554432 EOF
 
-	# verify components ${ids[2]} and ${ids[4]}
-	for i in 2 4; do
+	# verify component ${ids[2]}
+	verify_comp_attr stripe-size $tf ${ids[0]} 16777216
+	verify_comp_attr_with_default stripe-count $tf ${ids[2]}
+	verify_comp_attr pool $tf ${ids[2]} archive
+	verify_comp_extent $tf ${ids[2]} 0 EOF
+
+	# verify components ${ids[3]} and ${ids[5]}
+	for i in 3 5; do
 		verify_comp_attr_with_default stripe-size $tf ${ids[$i]}
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr stripe-index $tf ${ids[$i]} 1
@@ -636,30 +643,30 @@ test_0f() {
 		verify_comp_extent $tf ${ids[$i]} 0 4194304
 	done
 
-	# verify components ${ids[3]} and ${ids[5]}
-	for i in 3 5; do
+	# verify components ${ids[4]} and ${ids[6]}
+	for i in 4 6; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 4194304
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr pool $tf ${ids[$i]} flash
 		verify_comp_extent $tf ${ids[$i]} 4194304 EOF
 	done
 
-	# verify component ${ids[6]}
-	verify_comp_attr stripe-size $tf ${ids[6]} 4194304
-	verify_comp_attr stripe-count $tf ${ids[6]} $OSTCOUNT
-	verify_comp_attr_with_parent pool $tf ${ids[6]}
-	verify_comp_extent $tf ${ids[6]} 0 EOF
+	# verify component ${ids[7]}
+	verify_comp_attr stripe-size $tf ${ids[7]} 4194304
+	verify_comp_attr stripe-count $tf ${ids[7]} $OSTCOUNT
+	verify_comp_attr_with_parent pool $tf ${ids[7]}
+	verify_comp_extent $tf ${ids[7]} 0 EOF
 
-	# verify components ${ids[7]}, ${ids[9]} and ${ids[11]}
-	for i in 7 9 11; do
+	# verify components ${ids[8]}, ${ids[10]} and ${ids[12]}
+	for i in 8 10 12; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
 		verify_comp_attr stripe-count $tf ${ids[$i]} $OSTCOUNT
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 0 536870912
 	done
 
-	# verify components ${ids[8]}, ${ids[10]} and ${ids[12]}
-	for i in 8 10 12; do
+	# verify components ${ids[9]}, ${ids[11]} and ${ids[13]}
+	for i in 9 11 13; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
 		verify_comp_attr stripe-count $tf ${ids[$i]} -1
 		verify_comp_attr pool $tf ${ids[$i]} archive
