@@ -104,6 +104,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 {
 	struct lov_desc *desc = &ltd->ltd_lov_desc;
 	int rc;
+	ENTRY;
 
 	LASSERT(d);
 	LASSERT(tgt);
@@ -152,8 +153,15 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 		}
 		spin_unlock(&d->lod_lock);
 	}
+	if (rc == -ENOTCONN) {
+		/* In case that the ENOTCONN for inactive OST state is
+		 * mistreated as MDT disconnection state by the client,
+		 * this error should be changed to someone else.
+		 */
+		rc = -EREMOTEIO;
+	}
 
-	return rc;
+	RETURN(rc);
 }
 
 static int lod_is_tgt_usable(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)

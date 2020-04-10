@@ -714,11 +714,15 @@ retry_open:
 	}
 
 	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) != 0) {
-		char *errmsg = "stripe already set";
+		char errmsg[512] = "stripe already set";
 
 		rc = -errno;
 		if (errno != EEXIST && errno != EALREADY)
-			errmsg = strerror(errno);
+			strncpy(errmsg, strerror(errno), sizeof(errmsg) - 1);
+		if (rc == -EREMOTEIO)
+			snprintf(errmsg, sizeof(errmsg),
+				 "inactive OST among your specified %d OST(s)",
+				 param->lsp_stripe_count);
 
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "setstripe error for '%s': %s", name, errmsg);

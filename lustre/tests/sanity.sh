@@ -1635,6 +1635,28 @@ test_27ce() {
 }
 run_test 27ce "more stripes than OSTs with -o"
 
+test_27cf() {
+	local osp_proc="osp.$FSNAME-OST0000-osc-MDT000*.active"
+	local pid=0
+
+	test_mkdir -p $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+	do_facet $SINGLEMDS "$LCTL set_param -n $osp_proc=0"
+	stack_trap "do_facet $SINGLEMDS $LCTL set_param -n $osp_proc=1" EXIT
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n $osp_proc | grep 1" ||
+		error "failed to set $osp_proc=0"
+
+	$LFS setstripe -o 0 $DIR/$tdir/$tfile &
+	pid=$!
+	sleep 1
+	do_facet $SINGLEMDS "$LCTL set_param -n $osp_proc=1"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n $osp_proc | grep 0" ||
+		error "failed to set $osp_proc=1"
+	wait $pid
+	[[ $pid -ne 0 ]] ||
+		error "should return error due to $osp_proc=0"
+}
+run_test 27cf "'setstripe -o' on inactive OSTs should return error"
+
 test_27d() {
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 0 -i -1 -S 0 $DIR/$tdir/$tfile ||
