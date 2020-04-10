@@ -82,6 +82,9 @@
 #   The number of clients run MPI loads is configured by parameter
 #   ha_mpi_instances. Only one client runs MPI workloads by default.
 #
+#   MPI workloads can be run from several users. The list of users to use is
+#   configured by parameter ha_mpi_users, default is "mpiuser".
+#
 # PROCESS STRUCTURE AND IPC
 #
 #   On the node where this script is run, the processes look like this:
@@ -212,6 +215,7 @@ declare     ha_mpi_instances=${ha_mpi_instances:-1}
 
 declare     ha_mpi_loads=${ha_mpi_loads="ior simul mdtest"}
 declare -a  ha_mpi_load_tags=($ha_mpi_loads)
+declare -a  ha_mpiusers=(${ha_mpi_users="mpiuser"})
 
 declare     ha_ior_params=${IORP:-'" -b $ior_blockSize -t 2m -w -W -T 1"'}
 declare     ha_simul_params=${SIMULP:-'" -n 10"'}
@@ -415,6 +419,7 @@ ha_repeat_mpi_load()
 	local parameter=$4
 	local machines=$5
 	local stripeparams=$6
+	local mpiuser=$7
 	local tag=${ha_mpi_load_tags[$load]}
 	local cmd=${ha_mpi_load_cmds[$tag]}
 	local dir=$ha_test_dir/$client-$tag
@@ -443,7 +448,7 @@ ha_repeat_mpi_load()
 		ha_on $client $LFS setstripe $stripeparams $dir &&
 		ha_on $client $LFS getstripe $dir &&
 		ha_on $client chmod a+xwr $dir &&
-		ha_on $client "su mpiuser sh -c \" $mpirun $ha_mpirun_options \
+		ha_on $client "su $mpiuser sh -c \" $mpirun $ha_mpirun_options \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client )) \
 			$machines $cmd \" " &&
 			ha_on $client rm -rf "$dir";
@@ -478,6 +483,7 @@ ha_start_mpi_loads()
 	local machines
 	local m
 	local -a mach
+	local mpiuser
 
 	# ha_mpi_instances defines the number of
 	# clients start mpi loads; should be <= ${#ha_clients[@]}
@@ -511,6 +517,7 @@ ha_start_mpi_loads()
 
 	for ((n = 0; n < $inst; n++)); do
 		client=${ha_clients[n]}
+		mpiuser=${ha_mpiusers[$((n % ${#ha_mpiusers[@]}))]}
 		for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
 			tag=${ha_mpi_load_tags[$load]}
 			status=$ha_status_file_prefix-$tag-$client
@@ -525,7 +532,7 @@ ha_start_mpi_loads()
 			local stripe=${!aref}
 			local m=$(( n % ha_nclientsset))
 			machines=${mach[m]}
-			ha_repeat_mpi_load $client $load $status "$parameter" $machines "$stripe" &
+			ha_repeat_mpi_load $client $load $status "$parameter" $machines "$stripe" "$mpiuser" &
 				ha_status_files+=("$status")
 		done
 	done
