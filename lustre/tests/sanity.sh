@@ -41,8 +41,8 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_EXCEPT "
 # bug number for skipped test: LU-9693 LU-6493 LU-9693
 ALWAYS_EXCEPT+="               42a     42b     42c "
-# bug number:    LU-8411 LU-9054 LU-13314
-ALWAYS_EXCEPT+=" 407     312     56ob"
+# bug number:    LU-8411 LU-9054
+ALWAYS_EXCEPT+=" 407     312"
 
 if $SHARED_KEY; then
 	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
@@ -5919,7 +5919,7 @@ test_56ob() {
 	cmd="$LFS find $dir -ctime +1s -type f"
 	nums=$($cmd | wc -l)
 	(( $nums == $count * 2 + 1)) ||
-		error "'$cmd' wrong: found $nums, expected $((expected*2+1))"
+		error "'$cmd' wrong: found $nums, expected $((count * 2 + 1))"
 }
 run_test 56ob "check lfs find -atime -mtime -ctime with units"
 

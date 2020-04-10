@@ -54,9 +54,9 @@ OST and MDT location, and composite layout attributes.
 .BR --atime | -A
 File was last accessed \fIn\fR*24 hours ago (if no units are given),
 or \fIn\fR*\fBs\fReconds, \fBm\fRinutes, \fBh\fRours, \fBd\fRays,
-\fBw\fReeks, or \fBy\fRears ago within a margin of error of 24h,
-or smaller if a unit is specified.  Multiple units can be specified,
-for example \fB8h20m\fR is equivalent to \fB500m\fR.  If multipe units
+\fBw\fReeks, or \fBy\fRears ago within a margin of error of 24h
+if no unit is specified.  Multiple units can be specified,
+for example \fB8h20m\fR is equivalent to \fB500m\fR.  If multiple units
 are specified, the margin of error is based on the smallest unit used, so
 .B -atime 3d
 has a margin of error of one day, while
@@ -155,6 +155,10 @@ File or directory inode is located on the specified MDT(s).
 DNE striped directory uses the given filename hashing function, one of:
 .RS 1.2i
 .TP
+.B crush
+The CRUSH consistent hash function, added in Lustre 2.14, minimizes
+entry migration if the directory stripe count changes during migration.
+.TP
 .B fnv_1a_64
 The Fowler\-Noll\-Vo hash function, which is a simple and efficient hash.
 .TP
@@ -202,7 +206,7 @@ standard
 .BR glob (7)
 file name regular expressions and wildcards.
 .TP
-.BR -newer [ XY "] " \fIreference
+.BR --newer [ XY "] " \fIreference
 Succeeds if timestamp \fIX\fR of the file being considered is newer
 than timestamp \fIY\fR of the file
 .IR reference .
@@ -384,5 +388,5 @@ command is part of the Lustre filesystem.
 .BR lfs-getdirstripe (1),
 .BR lfs-migrate (1),
 .BR lfs_migrate (1),
-.BR lustre (7)
+.BR lustre (7),
 .BR xargs (1)

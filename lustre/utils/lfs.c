@@ -4137,20 +4137,21 @@ static int lfs_poollist(int argc, char **argv)
 	return llapi_poollist(argv[1]);
 }
 
+#define FP_DEFAULT_TIME_MARGIN (24 * 60 * 60)
 static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 		       char *str)
 {
 	long long t = 0;
-	int res = 0;
+	int sign = 0;
 	char *endptr = "AD";
 	char *timebuf;
 
 	if (str[0] == '+')
-		res = 1;
+		sign = 1;
 	else if (str[0] == '-')
-		res = -1;
+		sign = -1;
 
-	if (res)
+	if (sign)
 		str++;
 
 	for (timebuf = str; *endptr && *(endptr + 1); timebuf = endptr + 1) {
@@ -4162,9 +4163,12 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 			unit *= 52; /* 52 weeks + 1 day below */
 		case  'w':	/* fallthrough */
 			unit *= 7;
+			if (param->fp_time_margin == FP_DEFAULT_TIME_MARGIN)
+				param->fp_time_margin *= (1 + unit / 52);
+			unit += (*endptr == 'y'); /* +1 day for 365 days/year */
 		case '\0': /* days are default unit if none used */
 		case  'd':	/* fallthrough */
-			unit = (unit + (*endptr == 'y')) * 24;
+			unit *= 24;
 		case  'h':	/* fallthrough */
 			unit *= 60;
 		case  'm':	/* fallthrough */
@@ -4186,7 +4190,7 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 		t += val * unit;
 	}
 	if (*time < t) {
-		if (res != 0)
+		if (sign != 0)
 			str--;
 		fprintf(stderr, "%s find: bad time '%s': too large\n",
 			progname, str);
@@ -4195,7 +4199,7 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 
 	*set = *time - t;
 
-	return res;
+	return sign;
 }
 
 static int str2quotaid(__u32 *id, const char *arg)
@@ -4298,7 +4302,7 @@ static int lfs_find(int argc, char **argv)
 	struct find_param param = {
 		.fp_max_depth = -1,
 		.fp_quiet = 1,
-		.fp_time_margin = 24 * 60 * 60,
+		.fp_time_margin = FP_DEFAULT_TIME_MARGIN,
 	};
 	struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
