@@ -180,7 +180,11 @@ echo # add a newline after mke2fs.
 umask 077
 
 OLDDEBUG=$(lctl get_param -n debug 2> /dev/null)
-lctl set_param debug=-1 2> /dev/null || true
+
+# ensure all internal functions know we want full debug
+export PTLDEBUG=all
+lctl set_param debug=$PTLDEBUG 2> /dev/null || true
+
 test_0a() {
 	touch $DIR/$tfile
 	$CHECKSTAT -t file $DIR/$tfile || error "$tfile is not a file"
