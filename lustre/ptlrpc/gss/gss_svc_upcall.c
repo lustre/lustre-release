@@ -162,6 +162,18 @@ static struct cache_detail rsi_cache;
 static struct rsi *rsi_update(struct rsi *new, struct rsi *old);
 static struct rsi *rsi_lookup(struct rsi *item);
 
+#ifdef HAVE_CACHE_DETAIL_WRITERS
+static inline int channel_users(struct cache_detail *cd)
+{
+	return atomic_read(&cd->writers);
+}
+#else
+static inline int channel_users(struct cache_detail *cd)
+{
+	return atomic_read(&cd->readers);
+}
+#endif
+
 static inline int rsi_hash(struct rsi *item)
 {
         return hash_mem((char *)item->in_handle.data, item->in_handle.len,
@@ -1204,14 +1216,14 @@ int __init gss_init_svc_upcall(void)
 	 * Here we wait at minimum 1.5 seconds.
 	 */
 	for (i = 0; i < 6; i++) {
-		if (atomic_read(&rsi_cache.readers) > 0)
+		if (channel_users(&rsi_cache) > 0)
 			break;
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		LASSERT(msecs_to_jiffies(MSEC_PER_SEC / 4) > 0);
 		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC / 4));
 	}
 
-	if (atomic_read(&rsi_cache.readers) == 0)
+	if (channel_users(&rsi_cache) == 0)
 		CWARN("Init channel is not opened by lsvcgssd, following "
 		      "request might be dropped until lsvcgssd is active\n");
 
