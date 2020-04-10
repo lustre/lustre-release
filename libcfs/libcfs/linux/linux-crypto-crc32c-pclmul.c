@@ -135,7 +135,7 @@ static struct shash_alg alg = {
 			.cra_priority		= 150,
 			.cra_blocksize		= CHKSUM_BLOCK_SIZE,
 			.cra_ctxsize		= sizeof(u32),
-			.cra_module		= THIS_MODULE,
+			.cra_module		= NULL,
 			.cra_init		= crc32c_pclmul_cra_init,
 	}
 };
