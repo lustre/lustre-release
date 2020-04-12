@@ -171,6 +171,10 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 /* was	OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_SET_READONLY	_IOW('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY	_IOR('f', 142, OBD_IOC_DATA_TYPE)
+enum obd_abort_recovery_flags {
+	OBD_FLG_ABORT_RECOV_OST	= 0x00008, /* LMD_FLG_ABORT_RECOV */
+	OBD_FLG_ABORT_RECOV_MDT	= 0x40000, /* LMD_FLG_ABORT_RECOV_MDT */
+};
 /*	OBD_IOC_ROOT_SQUASH	_IOWR('f', 143, OBD_IOC_DATA_TYPE) */
 #define OBD_GET_VERSION		_IOWR('f', 144, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_GSS_SUPPORT	_IOWR('f', 145, OBD_IOC_DATA_TYPE) */

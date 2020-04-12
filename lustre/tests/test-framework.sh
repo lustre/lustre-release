@@ -3763,16 +3763,19 @@ fail() {
 }
 
 fail_nodf() {
-        local facet=$1
-        facet_failover $facet
+	local facet=$1
+
+	facet_failover $facet
 }
 
 fail_abort() {
 	local facet=$1
+	local abort_type=${2:-"abort_recovery"}
+
 	stop $facet
 	change_active $facet
 	wait_for_facet $facet
-	mount_facet $facet -o abort_recovery
+	mount_facet $facet -o $abort_type
 	clients_up || echo "first stat failed: $?"
 	clients_up || error "post-failover stat: $?"
 }

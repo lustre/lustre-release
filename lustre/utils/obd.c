@@ -72,6 +72,7 @@
 #include <linux/lustre/lustre_barrier_user.h>
 #endif
 #include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ostid.h>
 #include <linux/lustre/lustre_param.h>
@@ -934,31 +935,44 @@ int jt_obd_set_readonly(int argc, char **argv)
 	return rc;
 }
 
-int jt_obd_abort_recovery(int argc, char **argv)
+static int obd_abort_recovery(char *cmd, enum obd_abort_recovery_flags flags)
 {
-	struct obd_ioctl_data data;
+	struct obd_ioctl_data data = {
+		.ioc_dev = cur_device,
+		.ioc_type = flags,
+	};
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	int rc;
-
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
-
-	if (argc != 1)
-		return CMD_HELP;
 
 	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
-			jt_cmdname(argv[0]));
+			jt_cmdname(cmd));
 		return rc;
 	}
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ABORT_RECOVERY, buf);
 	if (rc < 0)
-		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(cmd),
 			strerror(rc = errno));
 
 	return rc;
+}
+
+int jt_obd_abort_recovery(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	return obd_abort_recovery(argv[0], OBD_FLG_ABORT_RECOV_OST);
+}
+
+int jt_obd_abort_recovery_mdt(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	return obd_abort_recovery(argv[0], OBD_FLG_ABORT_RECOV_MDT);
 }
 
 int jt_get_version(int argc, char **argv)

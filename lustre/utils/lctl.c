@@ -192,6 +192,8 @@ command_t cmdlist[] = {
 	 "This command should be used on failed OSC devices in an MDT LOV.\n"},
 	{"abort_recovery", jt_obd_abort_recovery, 0,
 	 "abort recovery on a restarting MDT or OST device\n"},
+	{"abort_recovery_mdt", jt_obd_abort_recovery_mdt, 0,
+	 "abort recovery between MDTs\n"},
 	{"set_timeout", jt_lcfg_set_timeout, 0,
 	 "usage: conf_param obd_timeout=<secs>\n"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)

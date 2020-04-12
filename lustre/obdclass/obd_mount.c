@@ -1350,6 +1350,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		if (strncmp(s1, "abort_recov", 11) == 0) {
 			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
 			clear++;
+		} else if (strncmp(s1, "abort_recov_mdt", 15) == 0) {
+			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV_MDT;
+			clear++;
 		} else if (strncmp(s1, "recovery_time_soft=", 19) == 0) {
 			lmd->lmd_recovery_time_soft =
 				max_t(int, simple_strtoul(s1 + 19, NULL, 10),

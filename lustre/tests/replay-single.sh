@@ -3530,6 +3530,35 @@ test_100b() {
 }
 run_test 100b "DNE: create striped dir, fail MDT0"
 
+test_100c() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local striped_dir=$DIR/$tdir/striped_dir
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	#To make sure MDT1 and MDT0 are connected
+	#otherwise it may create single stripe dir here
+	$LFS setdirstripe -i1 $DIR/$tdir/remote_dir
+
+	replay_barrier mds2
+	$LFS mkdir -i1 -c2 $striped_dir
+
+	fail_abort mds2 abort_recov_mdt
+
+	createmany -o $striped_dir/f-%d 20 &&
+			error "createmany -o $DIR/$tfile should fail"
+
+	fail mds2
+	striped_dir_check_100 || error "striped dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 100c "DNE: create striped dir, fail MDT0"
+
 test_101() { #LU-5648
 	mkdir -p $DIR/$tdir/d1
 	mkdir -p $DIR/$tdir/d2

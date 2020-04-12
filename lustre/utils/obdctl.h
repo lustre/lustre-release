@@ -101,6 +101,7 @@ int jt_obd_cleanup(int argc, char **argv);
 int jt_obd_no_transno(int argc, char **argv);
 int jt_obd_set_readonly(int argc, char **argv);
 int jt_obd_abort_recovery(int argc, char **argv);
+int jt_obd_abort_recovery_mdt(int argc, char **argv);
 int jt_obd_list(int argc, char **argv);
 int jt_obd_create(int argc, char **argv);
 int jt_obd_test_create(int argc, char **argv);

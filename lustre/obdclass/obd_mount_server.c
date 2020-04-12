@@ -1471,10 +1471,15 @@ static int server_start_targets(struct super_block *sb)
 
 	/* abort recovery only on the complete stack:
 	 * many devices can be involved */
-	if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
+	if ((lsi->lsi_lmd->lmd_flags &
+	     (LMD_FLG_ABORT_RECOV | LMD_FLG_ABORT_RECOV_MDT)) &&
 	    (OBP(obd, iocontrol))) {
+		struct obd_ioctl_data karg = {
+			.ioc_type = lsi->lsi_lmd->lmd_flags,
+		};
+
 		obd_iocontrol(OBD_IOC_ABORT_RECOVERY, obd->obd_self_export, 0,
-			      NULL, NULL);
+			      &karg, NULL);
 	}
 
 out_mgc:
