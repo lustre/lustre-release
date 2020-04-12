@@ -52,36 +52,36 @@
 int seq_server_set_cli(const struct lu_env *env, struct lu_server_seq *seq,
 		       struct lu_client_seq *cli)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-        /*
-         * Ask client for new range, assign that range to ->seq_space and write
-         * seq state to backing store should be atomic.
-         */
+	/*
+	 * Ask client for new range, assign that range to ->seq_space and write
+	 * seq state to backing store should be atomic.
+	 */
 	mutex_lock(&seq->lss_mutex);
 
-	if (cli == NULL) {
+	if (!cli) {
 		CDEBUG(D_INFO, "%s: Detached sequence client\n", seq->lss_name);
 		seq->lss_cli = NULL;
 		GOTO(out_up, rc = 0);
 	}
 
-	if (seq->lss_cli != NULL) {
-		CDEBUG(D_HA, "%s: Sequence controller is already "
-		       "assigned\n", seq->lss_name);
+	if (seq->lss_cli) {
+		CDEBUG(D_HA, "%s: Sequence controller is already assigned\n",
+		       seq->lss_name);
 		GOTO(out_up, rc = -EEXIST);
 	}
 
-        CDEBUG(D_INFO, "%s: Attached sequence controller %s\n",
-               seq->lss_name, cli->lcs_name);
+	CDEBUG(D_INFO, "%s: Attached sequence controller %s\n",
+	       seq->lss_name, cli->lcs_name);
 
 	seq->lss_cli = cli;
 	cli->lcs_space.lsr_index = seq->lss_site->ss_node_id;
 	EXIT;
 out_up:
 	mutex_unlock(&seq->lss_mutex);
-        return rc;
+	return rc;
 }
 EXPORT_SYMBOL(seq_server_set_cli);
 /*
@@ -105,8 +105,8 @@ static inline void range_alloc(struct lu_seq_range *to,
  */
 
 static int __seq_server_alloc_super(struct lu_server_seq *seq,
-                                    struct lu_seq_range *out,
-                                    const struct lu_env *env)
+				    struct lu_seq_range *out,
+				    const struct lu_env *env)
 {
 	struct lu_seq_range *space = &seq->lss_space;
 	int rc;
@@ -131,17 +131,17 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 }
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
-                           struct lu_seq_range *out,
-                           const struct lu_env *env)
+			   struct lu_seq_range *out,
+			   const struct lu_env *env)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	mutex_lock(&seq->lss_mutex);
-        rc = __seq_server_alloc_super(seq, out, env);
+	rc = __seq_server_alloc_super(seq, out, env);
 	mutex_unlock(&seq->lss_mutex);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int seq_server_alloc_spec(struct lu_server_seq *seq,
@@ -180,17 +180,17 @@ int seq_server_alloc_spec(struct lu_server_seq *seq,
 }
 
 static int __seq_set_init(const struct lu_env *env,
-                            struct lu_server_seq *seq)
+			  struct lu_server_seq *seq)
 {
-        struct lu_seq_range *space = &seq->lss_space;
-        int rc;
+	struct lu_seq_range *space = &seq->lss_space;
+	int rc;
 
-        range_alloc(&seq->lss_lowater_set, space, seq->lss_set_width);
-        range_alloc(&seq->lss_hiwater_set, space, seq->lss_set_width);
+	range_alloc(&seq->lss_lowater_set, space, seq->lss_set_width);
+	range_alloc(&seq->lss_hiwater_set, space, seq->lss_set_width);
 
-        rc = seq_store_update(env, seq, NULL, 1);
+	rc = seq_store_update(env, seq, NULL, 1);
 
-        return rc;
+	return rc;
 }
 
 /*
@@ -284,15 +284,16 @@ int seq_server_check_and_alloc_super(const struct lu_env *env,
 
 		rc = seq_client_alloc_super(seq->lss_cli, env);
 		if (rc) {
-			CDEBUG(D_HA, "%s: Can't allocate super-sequence:"
-			      " rc %d\n", seq->lss_name, rc);
+			CDEBUG(D_HA,
+			       "%s: Can't allocate super-sequence: rc = %d\n",
+			       seq->lss_name, rc);
 			RETURN(rc);
 		}
 
 		/* Saving new range to allocation space. */
 		*space = seq->lss_cli->lcs_space;
 		LASSERT(lu_seq_range_is_sane(space));
-		if (seq->lss_cli->lcs_srv == NULL) {
+		if (!seq->lss_cli->lcs_srv) {
 			struct lu_server_fld *fld;
 
 			/* Insert it to the local FLDB */
@@ -327,9 +328,8 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 			static int printed;
 
 			if (printed++ % 8 == 0)
-				LCONSOLE_INFO("%s: Waiting to contact MDT0000 "
-					      "to allocate super-sequence\n",
-					      seq->lss_name);
+				LCONSOLE_INFO("%s: Waiting to contact MDT0000 to allocate super-sequence: rc = %d\n",
+					      seq->lss_name, rc);
 		} else {
 			CERROR("%s: Allocated super-sequence failed: rc = %d\n",
 			       seq->lss_name, rc);
@@ -340,34 +340,34 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 	rc = range_alloc_set(env, out, seq);
 	if (rc != 0) {
 		CERROR("%s: Allocated meta-sequence failed: rc = %d\n",
-			seq->lss_name, rc);
+		       seq->lss_name, rc);
 		RETURN(rc);
 	}
 
 	CDEBUG(D_INFO, "%s: Allocated meta-sequence " DRANGE"\n",
-		seq->lss_name, PRANGE(out));
+	       seq->lss_name, PRANGE(out));
 
 	RETURN(rc);
 }
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
-                          struct lu_seq_range *out,
-                          const struct lu_env *env)
+			  struct lu_seq_range *out,
+			  const struct lu_env *env)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	mutex_lock(&seq->lss_mutex);
-        rc = __seq_server_alloc_meta(seq, out, env);
+	rc = __seq_server_alloc_meta(seq, out, env);
 	mutex_unlock(&seq->lss_mutex);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(seq_server_alloc_meta);
 
 static int seq_server_handle(struct lu_site *site,
-                             const struct lu_env *env,
-                             __u32 opc, struct lu_seq_range *out)
+			     const struct lu_env *env,
+			     __u32 opc, struct lu_seq_range *out)
 {
 	int rc;
 	struct seq_server_site *ss_site;
@@ -379,9 +379,10 @@ static int seq_server_handle(struct lu_site *site,
 	switch (opc) {
 	case SEQ_ALLOC_META:
 		if (!ss_site->ss_server_seq) {
-			CERROR("Sequence server is not "
-			       "initialized\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			CERROR("Sequence server is not initialized: rc = %d\n",
+			       rc);
+			RETURN(rc);
 		}
 
 		dev = lu2dt_dev(ss_site->ss_server_seq->lss_obj->do_lu.lo_dev);
@@ -392,9 +393,10 @@ static int seq_server_handle(struct lu_site *site,
 		break;
 	case SEQ_ALLOC_SUPER:
 		if (!ss_site->ss_control_seq) {
-			CERROR("Sequence controller is not "
-			       "initialized\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			CERROR("Sequence controller is not initialized: rc = %d\n",
+			       rc);
+			RETURN(rc);
 		}
 
 		dev = lu2dt_dev(ss_site->ss_control_seq->lss_obj->do_lu.lo_dev);
@@ -425,16 +427,17 @@ static int seq_handler(struct tgt_session_info *tsi)
 	LASSERT(site != NULL);
 
 	opc = req_capsule_client_get(tsi->tsi_pill, &RMF_SEQ_OPC);
-	if (opc != NULL) {
+	if (opc) {
 		out = req_capsule_server_get(tsi->tsi_pill, &RMF_SEQ_RANGE);
-		if (out == NULL)
+		if (!out)
 			RETURN(err_serious(-EPROTO));
 
 		tmp = req_capsule_client_get(tsi->tsi_pill, &RMF_SEQ_RANGE);
 
-		/* seq client passed mdt id, we need to pass that using out
-		 * range parameter */
-
+		/*
+		 * seq client passed mdt id, we need to pass that using out
+		 * range parameter
+		 */
 		out->lsr_index = tmp->lsr_index;
 		out->lsr_flags = tmp->lsr_flags;
 		rc = seq_server_handle(site, tsi->tsi_env, *opc, out);
@@ -513,39 +516,38 @@ int seq_server_init(const struct lu_env *env,
 
 	mutex_init(&seq->lss_mutex);
 
-        seq->lss_width = is_srv ?
-                LUSTRE_SEQ_META_WIDTH : LUSTRE_SEQ_SUPER_WIDTH;
+	seq->lss_width = is_srv ?
+		LUSTRE_SEQ_META_WIDTH : LUSTRE_SEQ_SUPER_WIDTH;
 
-        snprintf(seq->lss_name, sizeof(seq->lss_name),
-                 "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
+	snprintf(seq->lss_name, sizeof(seq->lss_name),
+		 "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
 
-        rc = seq_store_init(seq, env, dev);
-        if (rc)
-                GOTO(out, rc);
-        /* Request backing store for saved sequence info. */
-        rc = seq_store_read(seq, env);
-        if (rc == -ENODATA) {
+	rc = seq_store_init(seq, env, dev);
+	if (rc)
+		GOTO(out, rc);
+	/* Request backing store for saved sequence info. */
+	rc = seq_store_read(seq, env);
+	if (rc == -ENODATA) {
 
-                /* Nothing is read, init by default value. */
-                seq->lss_space = is_srv ?
-                        LUSTRE_SEQ_ZERO_RANGE:
-                        LUSTRE_SEQ_SPACE_RANGE;
+		/* Nothing is read, init by default value. */
+		seq->lss_space = is_srv ?
+			LUSTRE_SEQ_ZERO_RANGE :
+			LUSTRE_SEQ_SPACE_RANGE;
 
 		seq->lss_space.lsr_index = ss->ss_node_id;
-		LCONSOLE_INFO("%s: No data found "
-			      "on store. Initialize space\n",
-			      seq->lss_name);
+		LCONSOLE_INFO("%s: No data found on store. Initialize space: rc = %d\n",
+			      seq->lss_name, rc);
 
-                rc = seq_store_update(env, seq, NULL, 0);
-                if (rc) {
-                        CERROR("%s: Can't write space data, "
-                               "rc %d\n", seq->lss_name, rc);
-                }
-        } else if (rc) {
-                CERROR("%s: Can't read space data, rc %d\n",
-                       seq->lss_name, rc);
-                GOTO(out, rc);
-        }
+		rc = seq_store_update(env, seq, NULL, 0);
+		if (rc) {
+			CERROR("%s: Can't write space data: rc = %d\n",
+			       seq->lss_name, rc);
+		}
+	} else if (rc) {
+		CERROR("%s: Can't read space data: rc = %d\n",
+		       seq->lss_name, rc);
+		GOTO(out, rc);
+	}
 
 	if (is_srv) {
 		LASSERT(lu_seq_range_is_sane(&seq->lss_space));
@@ -556,29 +558,29 @@ int seq_server_init(const struct lu_env *env,
 
 	seq_server_debugfs_init(seq);
 
-        EXIT;
+	EXIT;
 out:
-        if (rc)
-                seq_server_fini(seq, env);
-        return rc;
+	if (rc)
+		seq_server_fini(seq, env);
+	return rc;
 }
 EXPORT_SYMBOL(seq_server_init);
 
 void seq_server_fini(struct lu_server_seq *seq,
-                     const struct lu_env *env)
+		     const struct lu_env *env)
 {
-        ENTRY;
+	ENTRY;
 
 	seq_server_debugfs_fini(seq);
-        seq_store_fini(seq, env);
+	seq_store_fini(seq, env);
 
-        EXIT;
+	EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
 
 int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss)
 {
-	if (ss == NULL)
+	if (!ss)
 		RETURN(0);
 
 	if (ss->ss_server_seq) {
