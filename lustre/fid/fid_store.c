@@ -47,17 +47,17 @@
 
 static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
 {
-        struct lu_buf *buf;
+	struct lu_buf *buf;
 
-        buf = &info->sti_buf;
-        buf->lb_buf = &info->sti_space;
-        buf->lb_len = sizeof(info->sti_space);
-        return buf;
+	buf = &info->sti_buf;
+	buf->lb_buf = &info->sti_space;
+	buf->lb_len = sizeof(info->sti_space);
+	return buf;
 }
 
 struct seq_update_callback {
-        struct dt_txn_commit_cb suc_cb;
-        struct lu_server_seq   *suc_seq;
+	struct dt_txn_commit_cb suc_cb;
+	struct lu_server_seq   *suc_seq;
 };
 
 void seq_update_cb(struct lu_env *env, struct thandle *th,
@@ -76,17 +76,17 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
 int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 {
 	struct seq_update_callback *ccb;
-	struct dt_txn_commit_cb	   *dcb;
-	int			   rc;
+	struct dt_txn_commit_cb *dcb;
+	int rc;
 
 	OBD_ALLOC_PTR(ccb);
-	if (ccb == NULL)
+	if (!ccb)
 		return -ENOMEM;
 
-	ccb->suc_seq	   = seq;
+	ccb->suc_seq = seq;
 	seq->lss_need_sync = 1;
 
-	dcb	       = &ccb->suc_cb;
+	dcb = &ccb->suc_cb;
 	dcb->dcb_func  = seq_update_cb;
 	INIT_LIST_HEAD(&dcb->dcb_linkage);
 	strlcpy(dcb->dcb_name, "seq_update_cb", sizeof(dcb->dcb_name));
@@ -99,7 +99,7 @@ int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 
 /* This function implies that caller takes care about locking. */
 int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
-                     struct lu_seq_range *out, int sync)
+		     struct lu_seq_range *out, int sync)
 {
 	struct dt_device *dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
 	struct seq_thread_info *info;
@@ -125,7 +125,7 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 	if (rc)
 		GOTO(exit, rc);
 
-	if (out != NULL) {
+	if (out) {
 		rc = fld_declare_server_create(env,
 					       seq->lss_site->ss_server_fld,
 					       out, th);
@@ -142,7 +142,7 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 		CERROR("%s: Can't write space data, rc %d\n",
 		       seq->lss_name, rc);
 		GOTO(exit, rc);
-	} else if (out != NULL) {
+	} else if (out) {
 		rc = fld_server_create(env, seq->lss_site->ss_server_fld, out,
 				       th);
 		if (rc) {
@@ -151,8 +151,10 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 			GOTO(exit, rc);
 		}
 	}
-	/* next sequence update will need sync until this update is committed
-	 * in case of sync operation this is not needed obviously */
+	/*
+	 * next sequence update will need sync until this update is committed
+	 * in case of sync operation this is not needed obviously
+	 */
 	if (!sync)
 		/* if callback can't be added then sync always */
 		sync = !!seq_update_cb_add(th, seq);
@@ -168,45 +170,45 @@ exit:
  * needed (init time).
  */
 int seq_store_read(struct lu_server_seq *seq,
-                   const struct lu_env *env)
+		   const struct lu_env *env)
 {
-        struct seq_thread_info *info;
-        loff_t pos = 0;
-        int rc;
-        ENTRY;
+	struct seq_thread_info *info;
+	loff_t pos = 0;
+	int rc;
+	ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
-        LASSERT(info != NULL);
+	info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
+	LASSERT(info != NULL);
 
 	rc = dt_read(env, seq->lss_obj, seq_store_buf(info), &pos);
 
-        if (rc == sizeof(info->sti_space)) {
-                range_le_to_cpu(&seq->lss_space, &info->sti_space);
-                CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
-                       seq->lss_name, PRANGE(&seq->lss_space));
-                rc = 0;
-        } else if (rc == 0) {
-                rc = -ENODATA;
+	if (rc == sizeof(info->sti_space)) {
+		range_le_to_cpu(&seq->lss_space, &info->sti_space);
+		CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
+		       seq->lss_name, PRANGE(&seq->lss_space));
+		rc = 0;
+	} else if (rc == 0) {
+		rc = -ENODATA;
 	} else if (rc > 0) {
-                CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
-                       rc, (int)sizeof(info->sti_space));
-                rc = -EIO;
-        }
+		CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
+		       rc, (int)sizeof(info->sti_space));
+		rc = -EIO;
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int seq_store_init(struct lu_server_seq *seq,
-                   const struct lu_env *env,
-                   struct dt_device *dt)
+		   const struct lu_env *env,
+		   struct dt_device *dt)
 {
-        struct dt_object *dt_obj;
+	struct dt_object *dt_obj;
 	struct lu_fid fid;
 	struct lu_attr attr;
 	struct dt_object_format dof;
-        const char *name;
-        int rc;
-        ENTRY;
+	const char *name;
+	int rc;
+	ENTRY;
 
 	name = seq->lss_type == LUSTRE_SEQ_SERVER ?
 		LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
@@ -222,23 +224,23 @@ int seq_store_init(struct lu_server_seq *seq,
 	dof.dof_type = DFT_REGULAR;
 
 	dt_obj = dt_find_or_create(env, dt, &fid, &dof, &attr);
-        if (!IS_ERR(dt_obj)) {
-                seq->lss_obj = dt_obj;
-                rc = 0;
-        } else {
-                CERROR("%s: Can't find \"%s\" obj %d\n",
-                       seq->lss_name, name, (int)PTR_ERR(dt_obj));
-                rc = PTR_ERR(dt_obj);
-        }
+	if (!IS_ERR(dt_obj)) {
+		seq->lss_obj = dt_obj;
+		rc = 0;
+	} else {
+		CERROR("%s: Can't find \"%s\" obj %d\n",
+		       seq->lss_name, name, (int)PTR_ERR(dt_obj));
+		rc = PTR_ERR(dt_obj);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 void seq_store_fini(struct lu_server_seq *seq, const struct lu_env *env)
 {
 	ENTRY;
 
-	if (seq->lss_obj != NULL) {
+	if (seq->lss_obj) {
 		if (!IS_ERR(seq->lss_obj))
 			dt_object_put(env, seq->lss_obj);
 		seq->lss_obj = NULL;
