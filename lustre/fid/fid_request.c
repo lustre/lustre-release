@@ -52,8 +52,8 @@
 struct dentry *seq_debugfs_dir;
 
 static int seq_client_rpc(struct lu_client_seq *seq,
-                          struct lu_seq_range *output, __u32 opc,
-                          const char *opcname)
+			  struct lu_seq_range *output, __u32 opc,
+			  const char *opcname)
 {
 	struct obd_export     *exp = seq->lcs_exp;
 	struct ptlrpc_request *req;
@@ -66,7 +66,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 	LASSERT(exp != NULL && !IS_ERR(exp));
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_SEQ_QUERY,
 					LUSTRE_MDS_VERSION, SEQ_QUERY);
-	if (req == NULL)
+	if (!req)
 		RETURN(-ENOMEM);
 
 	/* Init operation code */
@@ -88,14 +88,18 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 	if (opc == SEQ_ALLOC_SUPER) {
 		req->rq_request_portal = SEQ_CONTROLLER_PORTAL;
 		req->rq_reply_portal = MDC_REPLY_PORTAL;
-		/* During allocating super sequence for data object,
+		/*
+		 * During allocating super sequence for data object,
 		 * the current thread might hold the export of MDT0(MDT0
 		 * precreating objects on this OST), and it will send the
 		 * request to MDT0 here, so we can not keep resending the
 		 * request here, otherwise if MDT0 is failed(umounted),
-		 * it can not release the export of MDT0 */
-		if (seq->lcs_type == LUSTRE_SEQ_DATA)
-			req->rq_no_delay = req->rq_no_resend = 1;
+		 * it can not release the export of MDT0
+		 */
+		if (seq->lcs_type == LUSTRE_SEQ_DATA) {
+			req->rq_no_resend = 1;
+			req->rq_no_delay = 1;
+		}
 		debug_mask = D_CONSOLE;
 	} else {
 		if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
@@ -145,39 +149,40 @@ out_req:
 
 /* Request sequence-controller node to allocate new super-sequence. */
 int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_env *env)
+			   const struct lu_env *env)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	mutex_lock(&seq->lcs_mutex);
 
-        if (seq->lcs_srv) {
+	if (seq->lcs_srv) {
 #ifdef HAVE_SEQ_SERVER
-                LASSERT(env != NULL);
-                rc = seq_server_alloc_super(seq->lcs_srv, &seq->lcs_space,
-                                            env);
+		LASSERT(env != NULL);
+		rc = seq_server_alloc_super(seq->lcs_srv, &seq->lcs_space, env);
 #else
 		rc = 0;
 #endif
 	} else {
-		/* Check whether the connection to seq controller has been
-		 * setup (lcs_exp != NULL) */
-		if (seq->lcs_exp == NULL) {
+		/*
+		 * Check whether the connection to seq controller has been
+		 * setup (lcs_exp != NULL)
+		 */
+		if (!seq->lcs_exp) {
 			mutex_unlock(&seq->lcs_mutex);
 			RETURN(-EINPROGRESS);
 		}
 
 		rc = seq_client_rpc(seq, &seq->lcs_space,
-                                    SEQ_ALLOC_SUPER, "super");
-        }
+				    SEQ_ALLOC_SUPER, "super");
+	}
 	mutex_unlock(&seq->lcs_mutex);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* Request sequence-controller node to allocate new meta-sequence. */
 static int seq_client_alloc_meta(const struct lu_env *env,
-                                 struct lu_client_seq *seq)
+				 struct lu_client_seq *seq)
 {
 	int rc;
 	ENTRY;
@@ -191,15 +196,19 @@ static int seq_client_alloc_meta(const struct lu_env *env,
 #endif
 	} else {
 		do {
-			/* If meta server return -EINPROGRESS or EAGAIN,
+			/*
+			 * If meta server return -EINPROGRESS or EAGAIN,
 			 * it means meta server might not be ready to
 			 * allocate super sequence from sequence controller
-			 * (MDT0)yet */
+			 * (MDT0)yet
+			 */
 			rc = seq_client_rpc(seq, &seq->lcs_space,
 					    SEQ_ALLOC_META, "meta");
 			if (rc == -EINPROGRESS || rc == -EAGAIN)
-				/* MDT0 is not ready, let's wait for 2
-				 * seconds and retry. */
+				/*
+				 * MDT0 is not ready, let's wait for 2
+				 * seconds and retry.
+				 */
 				ssleep(2);
 
 		} while (rc == -EINPROGRESS || rc == -EAGAIN);
@@ -218,28 +227,28 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 	LASSERT(lu_seq_range_is_sane(&seq->lcs_space));
 
 	if (lu_seq_range_is_exhausted(&seq->lcs_space)) {
-                rc = seq_client_alloc_meta(env, seq);
-                if (rc) {
+		rc = seq_client_alloc_meta(env, seq);
+		if (rc) {
 			if (rc != -EINPROGRESS)
 				CERROR("%s: Cannot allocate new meta-sequence: rc = %d\n",
 				       seq->lcs_name, rc);
-                        RETURN(rc);
-                } else {
-                        CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",
-                               seq->lcs_name, PRANGE(&seq->lcs_space));
-                }
-        } else {
-                rc = 0;
-        }
+			RETURN(rc);
+		} else {
+			CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",
+			       seq->lcs_name, PRANGE(&seq->lcs_space));
+		}
+	} else {
+		rc = 0;
+	}
 
 	LASSERT(!lu_seq_range_is_exhausted(&seq->lcs_space));
 	*seqnr = seq->lcs_space.lsr_start;
 	seq->lcs_space.lsr_start += 1;
 
 	CDEBUG(D_INFO, "%s: Allocated sequence [%#llx]\n", seq->lcs_name,
-               *seqnr);
+	       *seqnr);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int seq_fid_alloc_prep(struct lu_client_seq *seq,
@@ -276,8 +285,10 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq, __u64 seqnr,
 
 		seq->lcs_fid.f_seq = seqnr;
 		if (whole) {
-			/* Since the caller require the whole seq,
-			 * so marked this seq to be used */
+			/*
+			 * Since the caller require the whole seq,
+			 * so marked this seq to be used
+			 */
 			if (seq->lcs_type == LUSTRE_SEQ_METADATA)
 				seq->lcs_fid.f_oid =
 					LUSTRE_METADATA_SEQ_MAX_WIDTH;
@@ -315,7 +326,8 @@ int seq_client_get_seq(const struct lu_env *env,
 	init_waitqueue_entry(&link, current);
 
 	/* To guarantee that we can get a whole non-used sequence. */
-	while (seq_fid_alloc_prep(seq, &link) != 0);
+	while (seq_fid_alloc_prep(seq, &link) != 0)
+		; /* do nothing */
 
 	rc = seq_client_alloc_seq(env, seq, seqnr);
 	seq_fid_alloc_fini(seq, rc ? 0 : *seqnr, true);
@@ -367,8 +379,10 @@ int seq_client_alloc_fid(const struct lu_env *env,
 			break;
 		}
 
-		/* Release seq::lcs_mutex via seq_fid_alloc_prep() to avoid
-		 * deadlock during seq_client_alloc_seq(). */
+		/*
+		 * Release seq::lcs_mutex via seq_fid_alloc_prep() to avoid
+		 * deadlock during seq_client_alloc_seq().
+		 */
 		rc = seq_fid_alloc_prep(seq, &link);
 		if (rc)
 			continue;
@@ -378,8 +392,8 @@ int seq_client_alloc_fid(const struct lu_env *env,
 		seq_fid_alloc_fini(seq, rc ? 0 : seqnr, false);
 		if (rc) {
 			if (rc != -EINPROGRESS)
-				CERROR("%s: Can't allocate new sequence: "
-				       "rc = %d\n", seq->lcs_name, rc);
+				CERROR("%s: Can't allocate new sequence: rc = %d\n",
+				       seq->lcs_name, rc);
 			mutex_unlock(&seq->lcs_mutex);
 
 			RETURN(rc);
@@ -422,13 +436,12 @@ void seq_client_flush(struct lu_client_seq *seq)
 		set_current_state(TASK_RUNNING);
 	}
 
-        fid_zero(&seq->lcs_fid);
-        /**
-         * this id shld not be used for seq range allocation.
-         * set to -1 for dgb check.
-         */
-
-        seq->lcs_space.lsr_index = -1;
+	fid_zero(&seq->lcs_fid);
+	/**
+	 * this id shld not be used for seq range allocation.
+	 * set to -1 for dgb check.
+	 */
+	seq->lcs_space.lsr_index = -1;
 
 	lu_seq_range_init(&seq->lcs_space);
 	mutex_unlock(&seq->lcs_mutex);
@@ -455,7 +468,7 @@ void seq_client_fini(struct lu_client_seq *seq)
 
 	seq_client_debugfs_fini(seq);
 
-	if (seq->lcs_exp != NULL) {
+	if (seq->lcs_exp) {
 		class_export_put(seq->lcs_exp);
 		seq->lcs_exp = NULL;
 	}
@@ -489,7 +502,7 @@ void seq_client_init(struct lu_client_seq *seq,
 	/* Make sure that things are clear before work is started. */
 	seq_client_flush(seq);
 
-	if (exp != NULL)
+	if (exp)
 		seq->lcs_exp = class_export_get(exp);
 
 	snprintf(seq->lcs_name, sizeof(seq->lcs_name),
@@ -560,7 +573,7 @@ static int __init fid_init(void)
 		return rc;
 #endif
 	de = debugfs_create_dir(LUSTRE_SEQ_NAME,
-			       debugfs_lustre_root);
+				debugfs_lustre_root);
 	if (!IS_ERR(de))
 		seq_debugfs_dir = de;
 	return PTR_ERR_OR_ZERO(de);
