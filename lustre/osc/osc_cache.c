@@ -1370,7 +1370,6 @@ static void osc_consume_write_grant(struct client_obd *cli,
 	pga->flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
 	       PAGE_SIZE, pga, pga->pg);
-	osc_update_next_shrink(cli);
 }
 
 /* the companion to osc_consume_write_grant, called when a brw has completed.

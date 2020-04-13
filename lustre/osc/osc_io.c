@@ -357,6 +357,11 @@ int osc_io_commit_async(const struct lu_env *env,
 			pagevec_reinit(pvec);
 		}
 	}
+	/* The shrink interval is in seconds, so we can update it once per
+	 * write, rather than once per page.
+	 */
+	osc_update_next_shrink(osc_cli(osc));
+
 
 	/* Clean up any partially full pagevecs */
 	if (pagevec_count(pvec) != 0)
