@@ -29,8 +29,6 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/include/lustre/lustre_idl.h
- *
  * Lustre wire protocol definitions.
  */
 
@@ -42,7 +40,7 @@
  * that are used in interfaces with userspace should go in lustre_user.h.
  *
  * All structs being declared here should be built from simple fixed-size
- * types (__u8, __u16, __u32, __u64) or be built from other types or
+ * types defined in linux/types.h or be built from other types or
  * structs also declared in this file.  Similarly, all flags and magic
  * values in those structs should also be declared here.  This ensures
  * that the Lustre wire protocol is not influenced by external dependencies.
@@ -73,15 +71,7 @@
 #include <linux/errno.h>
 #include <linux/fiemap.h>
 #include <linux/types.h>
-/*
- * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS.
- */
-#ifdef __KERNEL__
-# include <uapi/linux/lnet/lnet-types.h>
-#else
-# include <linux/lnet/lnet-types.h>
-#endif
+#include <linux/lnet/lnet-types.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_ver.h>
 
@@ -99,15 +89,15 @@ extern "C" {
 
 #define CONNMGR_REQUEST_PORTAL          1
 #define CONNMGR_REPLY_PORTAL            2
-//#define OSC_REQUEST_PORTAL            3
+/* #define OSC_REQUEST_PORTAL		 3*/
 #define OSC_REPLY_PORTAL                4
-//#define OSC_BULK_PORTAL               5
+/*#define OSC_BULK_PORTAL		 5*/
 #define OST_IO_PORTAL                   6
 #define OST_CREATE_PORTAL               7
 #define OST_BULK_PORTAL                 8
-//#define MDC_REQUEST_PORTAL            9
+/*#define MDC_REQUEST_PORTAL		 9*/
 #define MDC_REPLY_PORTAL               10
-//#define MDC_BULK_PORTAL              11
+/*#define MDC_BULK_PORTAL		11*/
 #define MDS_REQUEST_PORTAL             12
 #define MDS_IO_PORTAL			13
 #define MDS_BULK_PORTAL                14
@@ -115,9 +105,9 @@ extern "C" {
 #define LDLM_CB_REPLY_PORTAL           16
 #define LDLM_CANCEL_REQUEST_PORTAL     17
 #define LDLM_CANCEL_REPLY_PORTAL       18
-//#define PTLBD_REQUEST_PORTAL           19
-//#define PTLBD_REPLY_PORTAL             20
-//#define PTLBD_BULK_PORTAL              21
+/*#define PTLBD_REQUEST_PORTAL		19*/
+/*#define PTLBD_REPLY_PORTAL		20*/
+/*#define PTLBD_BULK_PORTAL		21*/
 #define MDS_SETATTR_PORTAL             22
 #define MDS_READPAGE_PORTAL            23
 #define OUT_PORTAL			24
@@ -1779,52 +1769,6 @@ enum {
 #define FS_XFLAG_PROJINHERIT	0x00000200	/* create with parents projid */
 #endif
 
-#ifdef __KERNEL__
-/* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
- * for the client inode i_flags.  The LUSTRE_*_FL are the Lustre wire
- * protocol equivalents of LDISKFS_*_FL values stored on disk, while
- * the S_* flags are kernel-internal values that change between kernel
- * versions.  These flags are set/cleared via FSFILT_IOC_{GET,SET}_FLAGS.
- * See b=16526 for a full history. */
-static inline int ll_ext_to_inode_flags(int flags)
-{
-        return (((flags & LUSTRE_SYNC_FL)      ? S_SYNC      : 0) |
-                ((flags & LUSTRE_NOATIME_FL)   ? S_NOATIME   : 0) |
-                ((flags & LUSTRE_APPEND_FL)    ? S_APPEND    : 0) |
-#if defined(S_DIRSYNC)
-                ((flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
-#endif
-		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
-}
-
-static inline int ll_inode_to_ext_flags(int iflags)
-{
-        return (((iflags & S_SYNC)      ? LUSTRE_SYNC_FL      : 0) |
-                ((iflags & S_NOATIME)   ? LUSTRE_NOATIME_FL   : 0) |
-                ((iflags & S_APPEND)    ? LUSTRE_APPEND_FL    : 0) |
-#if defined(S_DIRSYNC)
-                ((iflags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
-#endif
-		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
-}
-
-static inline int ll_xflags_to_inode_flags(int xflags)
-{
-	return  ((xflags & FS_XFLAG_SYNC) ? S_SYNC : 0) |
-		((xflags & FS_XFLAG_NOATIME) ? S_NOATIME : 0) |
-		((xflags & FS_XFLAG_APPEND) ? S_APPEND : 0) |
-		((xflags & FS_XFLAG_IMMUTABLE) ? S_IMMUTABLE : 0);
-}
-
-static inline int ll_inode_flags_to_xflags(int flags)
-{
-	return  ((flags & S_SYNC) ? FS_XFLAG_SYNC : 0) |
-		((flags & S_NOATIME) ? FS_XFLAG_NOATIME : 0) |
-		((flags & S_APPEND) ? FS_XFLAG_APPEND : 0) |
-		((flags & S_IMMUTABLE) ? FS_XFLAG_IMMUTABLE : 0);
-}
-#endif
-
 /* 64 possible states */
 enum md_transient_state {
 	MS_RESTORE	= (1 << 0),	/* restore is running */
@@ -2279,18 +2223,22 @@ union lmv_mds_md {
 	struct lmv_foreign_md	 lmv_foreign_md;
 };
 
-static inline int lmv_mds_md_size(int stripe_count, unsigned int lmm_magic)
+static inline __kernel_ssize_t lmv_mds_md_size(int stripe_count,
+					       unsigned int lmm_magic)
 {
+	__kernel_ssize_t len = -EINVAL;
+
 	switch (lmm_magic) {
-	case LMV_MAGIC_V1:{
+	case LMV_MAGIC_V1: {
 		struct lmv_mds_md_v1 *lmm1;
 
-		return sizeof(*lmm1) + stripe_count *
-				       sizeof(lmm1->lmv_stripe_fids[0]);
-	}
+		len = sizeof(*lmm1);
+		len += stripe_count * sizeof(lmm1->lmv_stripe_fids[0]);
+		break; }
 	default:
-		return -EINVAL;
+		break;
 	}
+	return len;
 }
 
 static inline int lmv_mds_md_stripe_count_get(const union lmv_mds_md *lmm)

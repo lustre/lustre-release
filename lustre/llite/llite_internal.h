@@ -1025,6 +1025,23 @@ int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type);
 #endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 #endif
+
+static inline int ll_xflags_to_inode_flags(int xflags)
+{
+	return ((xflags & FS_XFLAG_SYNC)      ? S_SYNC      : 0) |
+	       ((xflags & FS_XFLAG_NOATIME)   ? S_NOATIME   : 0) |
+	       ((xflags & FS_XFLAG_APPEND)    ? S_APPEND    : 0) |
+	       ((xflags & FS_XFLAG_IMMUTABLE) ? S_IMMUTABLE : 0);
+}
+
+static inline int ll_inode_flags_to_xflags(int flags)
+{
+	return ((flags & S_SYNC)      ? FS_XFLAG_SYNC      : 0) |
+	       ((flags & S_NOATIME)   ? FS_XFLAG_NOATIME   : 0) |
+	       ((flags & S_APPEND)    ? FS_XFLAG_APPEND    : 0) |
+	       ((flags & S_IMMUTABLE) ? FS_XFLAG_IMMUTABLE : 0);
+}
+
 int ll_migrate(struct inode *parent, struct file *file,
 	       struct lmv_user_md *lum, const char *name);
 int ll_get_fid_by_name(struct inode *parent, const char *name,

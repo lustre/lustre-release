@@ -29,8 +29,6 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * uapi/linux/lustre_disk.h
- *
  * Lustre disk format definitions.
  *
  * Author: Nathan Rutman <nathan.rutman@seagate.com>
