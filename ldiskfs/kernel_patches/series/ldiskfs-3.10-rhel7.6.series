@@ -39,7 +39,7 @@ rhel7.6/ext4-export-mb-stream-allocator-variables.patch
 rhel7.6/ext4-optimize-ext4_find_delalloc_range-in-nodelalloc.patch
 rhel7.6/ext4-simple-blockalloc.patch
 rhel7.6/ext4-mballoc-skip-uninit-groups-cr0.patch
-rhel7/ext4-mballoc-prefetch.patch
+rhel7.6/ext4-mballoc-prefetch.patch
 rhel7.6/ext4-track-extent-status-tree-shrinker-delay-statict.patch
 rhel7.6/ext4-remove-extent-status-procfs-files-if-journal-lo.patch
 rhel7.6/ext4-change-LRU-to-round-robin-in-extent-status-tree.patch
