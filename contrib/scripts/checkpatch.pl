@@ -3042,7 +3042,7 @@ sub process {
 
 # Block comment styles
 # Networking with an initial /*
-		if ($realfile =~ m@^(drivers/net/|net/)@ &&
+		if ($realfile =~ m@^(drivers/net/|net/|lnet)@ &&
 		    $prevrawline =~ /^\+[ \t]*\/\*[ \t]*$/ &&
 		    $rawline =~ /^\+[ \t]*\*/ &&
 		    $realline > 2) {
