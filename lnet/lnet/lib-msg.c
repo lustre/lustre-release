@@ -539,10 +539,9 @@ lnet_handle_remote_failure(struct lnet_peer_ni *lpni)
 }
 
 static void
-lnet_incr_hstats(struct lnet_msg *msg, enum lnet_msg_hstatus hstatus)
+lnet_incr_hstats(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
+		 enum lnet_msg_hstatus hstatus)
 {
-	struct lnet_ni *ni = msg->msg_txni;
-	struct lnet_peer_ni *lpni = msg->msg_txpeer;
 	struct lnet_counters_health *health;
 
 	health = &the_lnet.ln_counters[0]->lct_health;
@@ -804,16 +803,6 @@ lnet_health_check(struct lnet_msg *msg)
 		return -1;
 
 	/*
-	 * stats are only incremented for errors so avoid wasting time
-	 * incrementing statistics if there is no error.
-	 */
-	if (hstatus != LNET_MSG_STATUS_OK) {
-		lnet_net_lock(0);
-		lnet_incr_hstats(msg, hstatus);
-		lnet_net_unlock(0);
-	}
-
-	/*
 	 * always prefer txni/txpeer if they message is committed for both
 	 * directions.
 	 */
@@ -835,6 +824,16 @@ lnet_health_check(struct lnet_msg *msg)
 	       (lo) ? "self" : libcfs_nid2str(lpni->lpni_nid),
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(hstatus));
+
+	/*
+	 * stats are only incremented for errors so avoid wasting time
+	 * incrementing statistics if there is no error.
+	 */
+	if (hstatus != LNET_MSG_STATUS_OK) {
+		lnet_net_lock(0);
+		lnet_incr_hstats(ni, lpni, hstatus);
+		lnet_net_unlock(0);
+	}
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_OK:
