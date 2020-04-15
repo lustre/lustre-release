@@ -469,7 +469,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 	if (lock == NULL)
 		RETURN(NULL);
 
-	RCU_INIT_POINTER(lock->l_resource, resource);
+	spin_lock_init(&lock->l_lock);
+	lock->l_resource = resource;
 	lu_ref_add(&resource->lr_reference, "lock", lock);
 
 	refcount_set(&lock->l_handle.h_ref, 2);
@@ -486,24 +487,24 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 	INIT_HLIST_NODE(&lock->l_exp_hash);
 	INIT_HLIST_NODE(&lock->l_exp_flock_hash);
 
-	lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
-			     LDLM_NSS_LOCKS);
+        lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
+                             LDLM_NSS_LOCKS);
 	INIT_HLIST_NODE(&lock->l_handle.h_link);
 	class_handle_hash(&lock->l_handle, lock_handle_owner);
 
-	lu_ref_init(&lock->l_reference);
-	lu_ref_add(&lock->l_reference, "hash", lock);
-	lock->l_callback_timeout = 0;
+        lu_ref_init(&lock->l_reference);
+        lu_ref_add(&lock->l_reference, "hash", lock);
+        lock->l_callback_timeout = 0;
 	lock->l_activity = 0;
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 	INIT_LIST_HEAD(&lock->l_exp_refs_link);
-	lock->l_exp_refs_nr = 0;
-	lock->l_exp_refs_target = NULL;
+        lock->l_exp_refs_nr = 0;
+        lock->l_exp_refs_target = NULL;
 #endif
 	INIT_LIST_HEAD(&lock->l_exp_list);
 
-	RETURN(lock);
+        RETURN(lock);
 }
 
 /**
@@ -543,13 +544,12 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 
         lu_ref_add(&newres->lr_reference, "lock", lock);
         /*
-	 * To flip the lock from the old to the new resource, oldres
-	 * and newres have to be locked. Resource spin-locks are taken
-	 * in the memory address order to avoid dead-locks.
-	 * As this is the only circumstance where ->l_resource
-	 * can change, and this cannot race with itself, it is safe
-	 * to access lock->l_resource without being careful about locking.
+         * To flip the lock from the old to the new resource, lock, oldres and
+         * newres have to be locked. Resource spin-locks are nested within
+         * lock->l_lock, and are taken in the memory address order to avoid
+         * dead-locks.
          */
+	spin_lock(&lock->l_lock);
         oldres = lock->l_resource;
         if (oldres < newres) {
                 lock_res(oldres);
@@ -560,9 +560,9 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         }
         LASSERT(memcmp(new_resid, &oldres->lr_name,
                        sizeof oldres->lr_name) != 0);
-	rcu_assign_pointer(lock->l_resource, newres);
+        lock->l_resource = newres;
         unlock_res(oldres);
-	unlock_res(newres);
+        unlock_res_and_lock(lock);
 
         /* ...and the flowers are still standing! */
         lu_ref_del(&oldres->lr_reference, "lock", lock);
@@ -2760,11 +2760,15 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 	struct va_format vaf;
         char *nid = "local";
 
-	rcu_read_lock();
-	resource = rcu_dereference(lock->l_resource);
-	if (resource && !atomic_inc_not_zero(&resource->lr_refcount))
-		resource = NULL;
-	rcu_read_unlock();
+	/* on server-side resource of lock doesn't change */
+	if ((lock->l_flags & LDLM_FL_NS_SRV) != 0) {
+		if (lock->l_resource != NULL)
+			resource = ldlm_resource_getref(lock->l_resource);
+	} else if (spin_trylock(&lock->l_lock)) {
+		if (lock->l_resource != NULL)
+			resource = ldlm_resource_getref(lock->l_resource);
+		spin_unlock(&lock->l_lock);
+	}
 
         va_start(args, fmt);
 	vaf.fmt = fmt;
