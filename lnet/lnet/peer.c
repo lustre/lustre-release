@@ -2032,7 +2032,8 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		 * discovery disabled, we need to reflect that in our
 		 * representation of the peer.
 		 */
-		if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
+		if (!(lp->lp_state & (LNET_PEER_NO_DISCOVERY |
+				      LNET_PEER_DISCOVERING)))
 			lp->lp_state |= LNET_PEER_MARK_DELETION;
 		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
 	} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
@@ -2331,13 +2332,6 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	} else {
 		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
 		       libcfs_nid2str(lp->lp_primary_nid));
-		/*
-		 * If the peer is going from discovery enabled to
-		 * discovery disabled, we need to reflect that in our
-		 * representation of the peer.
-		 */
-		if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
-			lp->lp_state |= LNET_PEER_MARK_DELETION;
 		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
 	}
 
