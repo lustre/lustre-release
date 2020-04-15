@@ -5,6 +5,7 @@ TBD Whamcloud
        * Server primary kernels built and tested during release cycle:
          3.10.0-957.27.2.el7 (RHEL7.6)
          3.10.0-1062.9.1.el7 (RHEL7.7)
+         3.10.0-1127.el7     (RHEL7.8)
        * Server known to build on the following kernels (others may also work):
          2.6.32-696.18.7.el6 (RHEL6.9)
          3.10.0-862.14.4.el7 (RHEL7.5)
