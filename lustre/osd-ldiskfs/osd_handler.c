@@ -3535,6 +3535,9 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 
 	LASSERT(obj->oo_inode != NULL);
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_OI_ENOSPC))
+		return -ENOSPC;
+
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle);
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
@@ -3893,6 +3896,9 @@ static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 	__u32 saved_nlink = dir->i_nlink;
 	int rc;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_DOTDOT_ENOSPC))
+		return -ENOSPC;
+
 	dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
 	osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
 
@@ -4141,8 +4147,21 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 			obj->oo_dt.do_body_ops = &osd_body_ops;
 	}
 
-	if (!result && !CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY))
+	if (!result && !CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY)) {
+		struct inode *inode = obj->oo_inode;
+
 		result = __osd_oi_insert(env, obj, fid, th);
+		if (result && inode) {
+			spin_lock(&obj->oo_guard);
+			clear_nlink(inode);
+			spin_unlock(&obj->oo_guard);
+			osd_dirty_inode(inode, I_DIRTY_DATASYNC);
+			ldiskfs_set_inode_state(inode,
+						LDISKFS_STATE_LUSTRE_DESTROY);
+			iput(inode);
+			obj->oo_inode = NULL;
+		}
+	}
 
 	/*
 	 * a small optimization - dt_insert() isn't usually applied

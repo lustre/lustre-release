@@ -1062,6 +1062,10 @@ int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
 	if (rc)
 		GOTO(stop, rc);
 
+	rc = dt_declare_ref_del(env, tgt_obj, th);
+	if (rc)
+		GOTO(stop, rc);
+
 	rc = dt_declare_destroy(env, tgt_obj, th);
 	if (rc)
 		GOTO(stop, rc);
@@ -1075,7 +1079,12 @@ int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
 		GOTO(stop, rc);
 
 	dt_write_lock(env, tgt_obj, 0);
-	rc = dt_destroy(env, tgt_obj, th);
+	rc = dt_ref_del(env, tgt_obj, th);
+	if (rc == 0) {
+		if (S_ISDIR(tgt_obj->do_lu.lo_header->loh_attr))
+			dt_ref_del(env, tgt_obj, th);
+		rc = dt_destroy(env, tgt_obj, th);
+	}
 	dt_write_unlock(env, tgt_obj);
 	dt_trans_stop(env, dev, th);
 	if (rc)

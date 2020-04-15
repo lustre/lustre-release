@@ -1272,6 +1272,37 @@ test_16() {
 }
 run_test 16 "Initial OI scrub can rebuild crashed index objects"
 
+test_17a() {
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
+
+#define OBD_FAIL_OSD_OI_ENOSPC				0x19d
+	do_facet mds1 $LCTL set_param fail_loc=0x8000019d
+	mkdir $DIR/$tdir && error "mkdir should fail"
+	stop mds1
+	local devname=$(mdsdevname 1)
+
+	stack_trap "start mds1 $devname $MDS_MOUNT_OPTS" EXIT
+	FSCK_MAX_ERR=0 run_e2fsck $(facet_active_host mds1) $devname -n ||
+		error "e2fsck returned $?"
+}
+run_test 17a "ENOSPC on OI insert shouldn't leak inodes"
+
+test_17b() {
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
+
+#define OBD_FAIL_OSD_DOTDOT_ENOSPC			0x19e
+	do_facet mds1 $LCTL set_param fail_loc=0x8000019e
+	mkdir $DIR/$tdir && error "mkdir should fail"
+	stop mds1
+	local devname=$(mdsdevname 1)
+
+	stack_trap "start mds1 $devname $MDS_MOUNT_OPTS" EXIT
+	FSCK_MAX_ERR=0 run_e2fsck $(facet_active_host mds1) $devname -n ||
+		error "e2fsck returned $?"
+}
+run_test 17b "ENOSPC on .. insertion shouldn't leak inodes"
+
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}
