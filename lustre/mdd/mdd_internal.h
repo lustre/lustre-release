@@ -176,6 +176,8 @@ struct mdd_object {
 	struct list_head	mod_users;  /**< unique user opens */
 };
 
+#define	MTI_KEEP_KEY	0x01
+
 struct mdd_thread_info {
 	struct lu_fid             mti_fid;
 	struct lu_fid             mti_fid2; /* used for be & cpu converting */
@@ -194,6 +196,7 @@ struct mdd_thread_info {
 	* then mti_ent::lde_name will be mti_key. */
 	struct lu_dirent	  mti_ent;
 	char			  mti_key[NAME_MAX + 16];
+	int			  mti_flags;
 	char			  mti_name[NAME_MAX + 1];
 	struct lu_buf             mti_buf[4];
 	struct lu_buf             mti_big_buf; /* biggish persistent buf */
