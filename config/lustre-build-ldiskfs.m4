@@ -27,9 +27,9 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[],
 	[LDISKFS_SERIES="3.12-sles12.series"],[
 		PLEV=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
-		case $PLEV in
+		case $PLEV in # (
 		1) LDISKFS_SERIES="3.12-sles12sp1.series"
-			;;
+			;; # (
 		*) LDISKFS_SERIES="3.12-sles12.series"
 			;;
 		esac
@@ -37,8 +37,28 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	    [LDISKFS_SERIES="4.4-sles12sp2.series"]
 	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
 	    [LDISKFS_SERIES="4.4-sles12sp3.series"]
-	)], [LDISKFS_SERIES="4.12-sles15.series"],
-	    [LDISKFS_SERIES="4.12-sles15.series"]
+	)], [], [
+		suse_conf=$LINUX_OBJ/include/generated/uapi/linux/suse_version.h
+		suse_vers=$(awk '[$]2 == "SUSE_VERSION" {print [$]3 }' $suse_conf)
+		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
+		echo "$suse_conf $suse_vers $suse_patchlevel  ${suse_vers}sp$suse_patchlevel" >> /tmp/log-nb
+		case ${suse_vers}sp$suse_patchlevel in # (
+		15sp0 ) LDISKFS_SERIES="4.12-sles15.series"
+			if test ! -f $LINUX/arch/x86/kernel/cpu/hygon.c ; then
+				# This file was added shortly after -150.22 so
+				# this must be 150.22 or earlier
+				LDISKFS_SERIES="4.12-sles15-22.series"
+			fi
+			;; # (
+		15sp1 ) LDISKFS_SERIES="4.12-sles15sp1.series"
+			if test ! -f $LINUX/arch/x86/kernel/cpu/umwait.c ; then
+				# This file was added after -197.7 so
+				# this must be -197.7 or earlier
+				LDISKFS_SERIES="4.12-sles15sp1-7.series"
+			fi
+			;;
+		esac
+	]
 	)], [LDISKFS_SERIES="5.4.0-ml.series"],
 	    [LDISKFS_SERIES="5.4.0-ml.series"])
 ], [test x$UBUNTU_KERNEL = xyes], [
