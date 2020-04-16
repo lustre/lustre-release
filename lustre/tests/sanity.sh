@@ -17369,6 +17369,21 @@ test_230m() {
 }
 run_test 230m "xattrs not changed after dir migration"
 
+test_230n() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -ge $(version_code 2.13.53) ]] ||
+		skip "Need MDS version at least 2.13.53"
+
+	$LFS mkdir -i 0 $DIR/$tdir || error "mkdir $tdir failed"
+	cat /etc/hosts > $DIR/$tdir/$tfile
+	$LFS mirror extend -N1 $DIR/$tdir/$tfile || error "Mirroring failed"
+	$LFS migrate -m 1 $DIR/$tdir || error "Migration failed"
+
+	cmp /etc/hosts $DIR/$tdir/$tfile ||
+		error "File data mismatch after migration"
+}
+run_test 230n "Dir migration with mirrored file"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
