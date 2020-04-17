@@ -6194,6 +6194,26 @@ test_56ra() {
 }
 run_test 56ra "check lfs find -size -lazy works for data on OSTs"
 
+test_56rb() {
+	local dir=$DIR/$tdir
+	local tmp=$TMP/$tfile.log
+	local mdt_idx;
+
+	test_mkdir -p $dir || error "failed to mkdir $dir"
+	$LFS setstripe -c 1 -i 0 $dir/$tfile ||
+		error "failed to setstripe $dir/$tfile"
+	dd if=/dev/zero of=$dir/$tfile bs=1M count=1
+
+	stack_trap "rm -f $tmp" EXIT
+	$LFS find --size +100K --ost 0 $dir 2>&1 | tee $tmp
+	[ -z "$(cat $tmp | grep "obd_uuid: ")" ] ||
+		error "failed to find --size +100K --ost 0 $dir"
+	$LFS find --size +100K --mdt $mdt_idx $dir 2>&1 | tee $tmp
+	[ -z "$(cat $tmp | grep "obd_uuid: ")" ] ||
+		error "failed to find --size +100K --mdt $mdt_idx $dir"
+}
+run_test 56rb "check lfs find --size --ost/--mdt works"
+
 test_56s() { # LU-611 #LU-9369
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
 

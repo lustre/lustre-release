@@ -4158,7 +4158,8 @@ static int print_failed_tgt(struct find_param *param, char *path, int type)
         memset(&stat_buf, 0, sizeof(struct obd_statfs));
         memset(&uuid_buf, 0, sizeof(struct obd_uuid));
 	ret = llapi_obd_statfs(path, type,
-			       param->fp_obd_index, &stat_buf,
+			       type == LL_STATFS_LOV ? param->fp_obd_index :
+			       param->fp_mdt_index, &stat_buf,
 			       &uuid_buf);
 	if (ret)
 		llapi_error(LLAPI_MSG_NORMAL, ret, "obd_uuid: %s failed",
