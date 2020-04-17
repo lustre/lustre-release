@@ -190,7 +190,7 @@ struct lnet_libhandle {
 struct lnet_me {
 	struct list_head	me_list;
 	int			me_cpt;
-	struct lnet_process_id	me_match_id;
+	struct lnet_processid	me_match_id;
 	unsigned int		me_portal;
 	unsigned int		me_pos;		/* hash offset in mt_hash */
 	__u64			me_match_bits;
@@ -959,7 +959,7 @@ enum lnet_match_flags {
 /* parameter for matching operations (GET, PUT) */
 struct lnet_match_info {
 	__u64			mi_mbits;
-	struct lnet_process_id	mi_id;
+	struct lnet_processid	mi_id;
 	unsigned int		mi_cpt;
 	unsigned int		mi_opc;
 	unsigned int		mi_portal;

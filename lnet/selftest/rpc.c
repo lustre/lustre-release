@@ -351,14 +351,18 @@ srpc_remove_service(struct srpc_service *sv)
 
 static int
 srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
-		       int len, int options, struct lnet_process_id peer,
+		       int len, int options, struct lnet_process_id peer4,
 		       struct lnet_handle_md *mdh, struct srpc_event *ev)
 {
 	int rc;
 	struct lnet_md md;
 	struct lnet_me *me;
+	struct lnet_processid peer;
 
-	me = LNetMEAttach(portal, peer, matchbits, 0, LNET_UNLINK,
+	peer.pid = peer4.pid;
+	lnet_nid4_to_nid(peer4.nid, &peer.nid);
+
+	me = LNetMEAttach(portal, &peer, matchbits, 0, LNET_UNLINK,
 			  local ? LNET_INS_LOCAL : LNET_INS_AFTER);
 	if (IS_ERR(me)) {
 		rc = PTR_ERR(me);
@@ -384,7 +388,7 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 
 	CDEBUG(D_NET,
 	       "Posted passive RDMA: peer %s, portal %d, matchbits %#llx\n",
-	       libcfs_id2str(peer), portal, matchbits);
+	       libcfs_id2str(peer4), portal, matchbits);
 	return 0;
 }
 

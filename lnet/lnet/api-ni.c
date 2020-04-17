@@ -1918,8 +1918,8 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 		       struct lnet_handle_md *ping_mdh,
 		       int ni_count, bool set_eq)
 {
-	struct lnet_process_id id = {
-		.nid = LNET_NID_ANY,
+	struct lnet_processid id = {
+		.nid = LNET_ANY_NID,
 		.pid = LNET_PID_ANY
 	};
 	struct lnet_me *me;
@@ -1937,7 +1937,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	}
 
 	/* Ping target ME/MD */
-	me = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+	me = LNetMEAttach(LNET_RESERVED_PORTAL, &id,
 			  LNET_PROTO_PING_MATCHBITS, 0,
 			  LNET_UNLINK, LNET_INS_AFTER);
 	if (IS_ERR(me)) {
@@ -2135,12 +2135,12 @@ again:
 int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 			  struct lnet_handle_md *mdhp)
 {
-	struct lnet_process_id id = { LNET_NID_ANY, LNET_PID_ANY };
+	struct lnet_processid id = { LNET_ANY_NID, LNET_PID_ANY };
 	struct lnet_md md = { NULL };
 	struct lnet_me *me;
 	int rc;
 
-	me = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+	me = LNetMEAttach(LNET_RESERVED_PORTAL, &id,
 			  LNET_PROTO_PING_MATCHBITS, 0,
 			  LNET_UNLINK, LNET_INS_AFTER);
 	if (IS_ERR(me)) {

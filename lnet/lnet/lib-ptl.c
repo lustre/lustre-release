@@ -43,15 +43,15 @@ module_param(portal_rotor, int, 0644);
 MODULE_PARM_DESC(portal_rotor, "redirect PUTs to different cpu-partitions");
 
 static int
-lnet_ptl_match_type(unsigned int index, struct lnet_process_id match_id,
+lnet_ptl_match_type(unsigned int index, struct lnet_processid *match_id,
 		    __u64 mbits, __u64 ignore_bits)
 {
 	struct lnet_portal	*ptl = the_lnet.ln_portals[index];
 	int			unique;
 
-	unique = ignore_bits == 0 &&
-		 match_id.nid != LNET_NID_ANY &&
-		 match_id.pid != LNET_PID_ANY;
+	unique = (ignore_bits == 0 &&
+		  !LNET_NID_IS_ANY(&match_id->nid) &&
+		  match_id->pid != LNET_PID_ANY);
 
 	LASSERT(!lnet_ptl_is_unique(ptl) || !lnet_ptl_is_wildcard(ptl));
 
@@ -153,8 +153,8 @@ lnet_try_match_md(struct lnet_libmd *md,
 		return LNET_MATCHMD_NONE;
 
 	/* mismatched ME nid/pid? */
-	if (me->me_match_id.nid != LNET_NID_ANY &&
-	    me->me_match_id.nid != info->mi_id.nid)
+	if (!LNET_NID_IS_ANY(&me->me_match_id.nid) &&
+	    !nid_same(&me->me_match_id.nid, &info->mi_id.nid))
 		return LNET_MATCHMD_NONE;
 
 	if (me->me_match_id.pid != LNET_PID_ANY &&
@@ -185,7 +185,7 @@ lnet_try_match_md(struct lnet_libmd *md,
 		/* this packet _really_ is too big */
 		CERROR("Matching packet from %s, match %llu"
 		       " length %d too big: %d left, %d allowed\n",
-		       libcfs_id2str(info->mi_id), info->mi_mbits,
+		       libcfs_idstr(&info->mi_id), info->mi_mbits,
 		       info->mi_rlength, md->md_length - offset, mlength);
 
 		return LNET_MATCHMD_DROP;
@@ -195,7 +195,7 @@ lnet_try_match_md(struct lnet_libmd *md,
 	CDEBUG(D_NET, "Incoming %s index %x from %s of "
 	       "length %d/%d into md %#llx [%d] + %d\n",
 	       (info->mi_opc == LNET_MD_OP_PUT) ? "put" : "get",
-	       info->mi_portal, libcfs_id2str(info->mi_id), mlength,
+	       info->mi_portal, libcfs_idstr(&info->mi_id), mlength,
 	       info->mi_rlength, md->md_lh.lh_cookie, md->md_niov, offset);
 
 	lnet_msg_attach_md(msg, md, offset, mlength);
@@ -214,18 +214,18 @@ lnet_try_match_md(struct lnet_libmd *md,
 }
 
 static struct lnet_match_table *
-lnet_match2mt(struct lnet_portal *ptl, struct lnet_process_id id, __u64 mbits)
+lnet_match2mt(struct lnet_portal *ptl, struct lnet_processid *id, __u64 mbits)
 {
 	if (LNET_CPT_NUMBER == 1)
 		return ptl->ptl_mtables[0]; /* the only one */
 
 	/* if it's a unique portal, return match-table hashed by NID */
 	return lnet_ptl_is_unique(ptl) ?
-	       ptl->ptl_mtables[lnet_cpt_of_nid(id.nid, NULL)] : NULL;
+	       ptl->ptl_mtables[lnet_nid2cpt(&id->nid, NULL)] : NULL;
 }
 
 struct lnet_match_table *
-lnet_mt_of_attach(unsigned int index, struct lnet_process_id id,
+lnet_mt_of_attach(unsigned int index, struct lnet_processid *id,
 		  __u64 mbits, __u64 ignore_bits, enum lnet_ins_pos pos)
 {
 	struct lnet_portal	*ptl;
@@ -274,7 +274,7 @@ lnet_mt_of_match(struct lnet_match_info *info, struct lnet_msg *msg)
 
 	LASSERT(lnet_ptl_is_wildcard(ptl) || lnet_ptl_is_unique(ptl));
 
-	mtable = lnet_match2mt(ptl, info->mi_id, info->mi_mbits);
+	mtable = lnet_match2mt(ptl, &info->mi_id, info->mi_mbits);
 	if (mtable != NULL)
 		return mtable;
 
@@ -355,14 +355,14 @@ lnet_mt_set_exhausted(struct lnet_match_table *mtable, int pos, int exhausted)
 
 struct list_head *
 lnet_mt_match_head(struct lnet_match_table *mtable,
-		   struct lnet_process_id id, __u64 mbits)
+		   struct lnet_processid *id, __u64 mbits)
 {
 	struct lnet_portal *ptl = the_lnet.ln_portals[mtable->mt_portal];
 
 	if (lnet_ptl_is_wildcard(ptl)) {
 		return &mtable->mt_mhash[mbits & LNET_MT_HASH_MASK];
 	} else {
-		unsigned long hash = mbits + id.nid + id.pid;
+		unsigned long hash = mbits + nidhash(&id->nid) + id->pid;
 
 		LASSERT(lnet_ptl_is_unique(ptl));
 		hash = hash_long(hash, LNET_MT_HASH_BITS);
@@ -384,7 +384,8 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	if (!list_empty(&mtable->mt_mhash[LNET_MT_HASH_IGNORE]))
 		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
 	else
-		head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
+		head = lnet_mt_match_head(mtable, &info->mi_id,
+					  info->mi_mbits);
  again:
 	/* NB: only wildcard portal needs to return LNET_MATCHMD_EXHAUSTED */
 	if (lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]))
@@ -415,7 +416,8 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	}
 
 	if (exhausted == 0 && head == &mtable->mt_mhash[LNET_MT_HASH_IGNORE]) {
-		head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
+		head = lnet_mt_match_head(mtable, &info->mi_id,
+					  info->mi_mbits);
 		goto again; /* re-check MEs w/o ignore-bits */
 	}
 
@@ -565,8 +567,9 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 	struct lnet_portal	*ptl;
 	int			rc;
 
-	CDEBUG(D_NET, "Request from %s of length %d into portal %d "
-	       "MB=%#llx\n", libcfs_id2str(info->mi_id),
+	CDEBUG(D_NET,
+	       "Request from %s of length %d into portal %d MB=%#llx\n",
+	       libcfs_idstr(&info->mi_id),
 	       info->mi_rlength, info->mi_portal, info->mi_mbits);
 
 	if (info->mi_portal >= the_lnet.ln_nportals) {
@@ -624,7 +627,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 		CDEBUG(D_NET,
 		       "Delaying %s from %s ptl %d MB %#llx off %d len %d\n",
 		       info->mi_opc == LNET_MD_OP_PUT ? "PUT" : "GET",
-		       libcfs_id2str(info->mi_id), info->mi_portal,
+		       libcfs_idstr(&info->mi_id), info->mi_portal,
 		       info->mi_mbits, info->mi_roffset, info->mi_rlength);
 	}
 	goto out0;
@@ -682,7 +685,7 @@ lnet_ptl_attach_md(struct lnet_me *me, struct lnet_libmd *md,
 
 		hdr   = &msg->msg_hdr;
 		/* Multi-Rail: Primary peer NID */
-		info.mi_id.nid	= msg->msg_initiator;
+		lnet_nid4_to_nid(msg->msg_initiator, &info.mi_id.nid);
 		info.mi_id.pid	= hdr->src_pid;
 		info.mi_opc	= LNET_MD_OP_PUT;
 		info.mi_portal	= hdr->msg.put.ptl_index;
@@ -715,7 +718,7 @@ lnet_ptl_attach_md(struct lnet_me *me, struct lnet_libmd *md,
 
 			CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
 			       "match %llu offset %d length %d.\n",
-			       libcfs_id2str(info.mi_id),
+			       libcfs_idstr(&info.mi_id),
 			       info.mi_portal, info.mi_mbits,
 			       info.mi_roffset, info.mi_rlength);
 		} else {

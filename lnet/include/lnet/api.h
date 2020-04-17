@@ -96,7 +96,7 @@ bool LNetIsPeerLocal(lnet_nid_t nid);
  * @{ */
 struct lnet_me *
 LNetMEAttach(unsigned int portal,
-	     struct lnet_process_id match_id_in,
+	     struct lnet_processid *match_id_in,
 	     __u64 match_bits_in,
 	     __u64 ignore_bits_in,
 	     enum lnet_unlink unlink_in,
