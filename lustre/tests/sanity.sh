@@ -71,6 +71,12 @@ init_test_env $@
 get_lustre_env
 init_logging
 
+# skip nfs tests on kernels >= 4.14.0 until they are fixed
+if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ];then
+	# bug number:	LU-12661
+	ALWAYS_EXCEPT+=" 817"
+fi
+
 #                                  5          12          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
