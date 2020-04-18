@@ -72,9 +72,16 @@ get_lustre_env
 init_logging
 
 # skip nfs tests on kernels >= 4.14.0 until they are fixed
-if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ];then
+if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ]; then
 	# bug number:	LU-12661
 	ALWAYS_EXCEPT+=" 817"
+fi
+
+# skip cgroup tests on RHEL8.1 kernels until they are fixed
+if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
+      $LINUX_VERSION_CODE <  $(version_code 5.4.0) )); then
+	# bug number:	LU-13063
+	ALWAYS_EXCEPT+=" 411"
 fi
 
 #                                  5          12          (min)"
