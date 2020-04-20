@@ -1689,11 +1689,11 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
         loff_t              new_size  = i_size_read(inode);
         unsigned long       block;
         int                 blocksize = 1 << inode->i_blkbits;
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
         int                 err = 0;
         int                 size;
         int                 boffs;
         int                 dirty_inode = 0;
-	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
 	bool create, sparse, sync = false;
 
 	if (write_NUL) {
@@ -1705,6 +1705,8 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		((char *)buf)[bufsize] = '\0';
 		++bufsize;
 	}
+
+	dirty_inode = test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA, &ei->i_flags);
 
 	/* sparse checking is racy, but sparse is very rare case, leave as is */
 	sparse = (new_size > 0 && (inode->i_blocks >> (inode->i_blkbits - 9)) <
@@ -1809,14 +1811,14 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		spin_lock(&inode->i_lock);
 		if (new_size > i_size_read(inode))
 			i_size_write(inode, new_size);
-		if (i_size_read(inode) > LDISKFS_I(inode)->i_disksize) {
-			LDISKFS_I(inode)->i_disksize = i_size_read(inode);
+		if (i_size_read(inode) > ei->i_disksize) {
+			ei->i_disksize = i_size_read(inode);
 			dirty_inode = 1;
 		}
 		spin_unlock(&inode->i_lock);
-		if (dirty_inode)
-			osd_dirty_inode(inode, I_DIRTY_DATASYNC);
         }
+	if (dirty_inode)
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 
         if (err == 0)
                 *offs = offset;

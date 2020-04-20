@@ -8,7 +8,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -1579,6 +1579,7 @@ static inline void ext4_clear_state_flag
+@@ -1617,6 +1617,7 @@ static inline void ext4_clear_state_flag
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -16,7 +16,7 @@ Index: linux-stage/fs/ext4/ext4.h
  					 EXT4_FEATURE_INCOMPAT_MMP |	\
  					 EXT4_FEATURE_INCOMPAT_DIRDATA| \
  					 EXT4_FEATURE_INCOMPAT_INLINE_DATA)
-@@ -1990,6 +1997,10 @@ struct mmpd_data {
+@@ -2028,6 +2029,10 @@ struct mmpd_data {
  # define ATTRIB_NORET	__attribute__((noreturn))
  # define NORET_AND	noreturn,
  
@@ -27,7 +27,7 @@ Index: linux-stage/fs/ext4/ext4.h
  /* bitmap.c */
  extern unsigned int ext4_count_free(char *bitmap, unsigned numchars);
  void ext4_inode_bitmap_csum_set(struct super_block *sb, ext4_group_t group,
-@@ -2194,6 +2205,7 @@ extern void ext4_set_inode_flags(struct
+@@ -2233,6 +2238,7 @@ extern void ext4_set_inode_flags(struct
  extern void ext4_get_inode_flags(struct ext4_inode_info *);
  extern int ext4_alloc_da_blocks(struct inode *inode);
  extern void ext4_set_aops(struct inode *inode);
@@ -39,7 +39,7 @@ Index: linux-stage/fs/ext4/inode.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/inode.c
 +++ linux-stage/fs/ext4/inode.c
-@@ -134,8 +134,6 @@ static void ext4_invalidatepage(struct p
+@@ -136,8 +136,6 @@ static void ext4_invalidatepage(struct p
  				unsigned int length);
  static int __ext4_journalled_writepage(struct page *page, unsigned int len);
  static int ext4_bh_delay_or_unwritten(handle_t *handle, struct buffer_head *bh);
@@ -48,7 +48,7 @@ Index: linux-stage/fs/ext4/inode.c
  
  /*
   * Test whether an inode is a fast symlink.
-@@ -184,6 +182,8 @@ void ext4_evict_inode(struct inode *inod
+@@ -186,6 +184,8 @@ void ext4_evict_inode(struct inode *inod
  {
  	handle_t *handle;
  	int err;
@@ -57,7 +57,7 @@ Index: linux-stage/fs/ext4/inode.c
  
  	trace_ext4_evict_inode(inode);
  
-@@ -236,8 +236,8 @@ void ext4_evict_inode(struct inode *inod
+@@ -235,8 +235,8 @@ void ext4_evict_inode(struct inode *inod
  	 * protection against it
  	 */
  	sb_start_intwrite(inode->i_sb);
@@ -68,7 +68,7 @@ Index: linux-stage/fs/ext4/inode.c
  	if (IS_ERR(handle)) {
  		ext4_std_error(inode->i_sb, PTR_ERR(handle));
  		/*
-@@ -252,6 +252,32 @@ void ext4_evict_inode(struct inode *inod
+@@ -251,6 +251,32 @@ void ext4_evict_inode(struct inode *inod
  
  	if (IS_SYNC(inode))
  		ext4_handle_sync(handle);
@@ -101,7 +101,7 @@ Index: linux-stage/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
-@@ -269,10 +296,10 @@ void ext4_evict_inode(struct inode *inod
+@@ -267,10 +293,10 @@ void ext4_evict_inode(struct inode *inod
  	 * enough credits left in the handle to remove the inode from
  	 * the orphan list and set the dtime field.
  	 */
@@ -115,7 +115,7 @@ Index: linux-stage/fs/ext4/inode.c
  		if (err != 0) {
  			ext4_warning(inode->i_sb,
  				     "couldn't extend journal (err %d)", err);
-@@ -308,6 +335,9 @@ void ext4_evict_inode(struct inode *inod
+@@ -307,6 +333,9 @@ void ext4_evict_inode(struct inode *inod
  		ext4_free_inode(handle, inode);
  	ext4_journal_stop(handle);
  	sb_end_intwrite(inode->i_sb);
@@ -125,7 +125,7 @@ Index: linux-stage/fs/ext4/inode.c
  	return;
  no_delete:
  	ext4_clear_inode(inode);	/* We must guarantee clearing of inode... */
-@@ -4681,7 +4711,7 @@ static int ext4_index_trans_blocks(struc
+@@ -5132,7 +5161,7 @@ static int ext4_index_trans_blocks(struc
   *
   * Also account for superblock, inode, quota and xattr blocks
   */
@@ -1032,7 +1032,7 @@ Index: linux-stage/fs/ext4/xattr.h
  #define BHDR(bh) ((struct ext4_xattr_header *)((bh)->b_data))
  #define ENTRY(ptr) ((struct ext4_xattr_entry *)(ptr))
  #define BFIRST(bh) ENTRY(BHDR(bh)+1)
-@@ -75,10 +84,11 @@ struct ext4_xattr_entry {
+@@ -75,10 +95,11 @@ struct ext4_xattr_entry {
  #define EXT4_ZERO_XATTR_VALUE ((void *)-1)
  
  struct ext4_xattr_info {
@@ -1045,7 +1045,7 @@ Index: linux-stage/fs/ext4/xattr.h
  };
  
  struct ext4_xattr_search {
-@@ -106,7 +116,13 @@ extern int ext4_xattr_get(struct inode *
+@@ -106,7 +127,13 @@ extern int ext4_xattr_get(struct inode *
  extern int ext4_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
  extern int ext4_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
  
@@ -1064,7 +1064,7 @@ Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/ialloc.c
 +++ linux-stage/fs/ext4/ialloc.c
-@@ -269,7 +269,6 @@ void ext4_free_inode(handle_t *handle, s
+@@ -247,7 +247,6 @@ void ext4_free_inode(handle_t *handle, s
  	 * as writing the quota to disk may need the lock as well.
  	 */
  	dquot_initialize(inode);
@@ -1085,3 +1085,31 @@ Index: linux-stage/fs/ext4/inline.c
  			size_t offs = le16_to_cpu(entry->e_value_offs);
  			if (offs < min_offs)
  				min_offs = offs;
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -2461,7 +2461,8 @@ int ext4_ext_index_trans_blocks(struct i
+ 
+ static inline int get_default_free_blocks_flags(struct inode *inode)
+ {
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++		ext4_test_inode_flag(inode, EXT4_INODE_EA_INODE))
+ 		return EXT4_FREE_BLOCKS_METADATA | EXT4_FREE_BLOCKS_FORGET;
+ 	else if (ext4_should_journal_data(inode))
+ 		return EXT4_FREE_BLOCKS_FORGET;
+Index: linux-stage/fs/ext4/indirect.c
+===================================================================
+--- linux-stage.orig/fs/ext4/indirect.c
++++ linux-stage/fs/ext4/indirect.c
+@@ -959,7 +959,8 @@ static int ext4_clear_blocks(handle_t *h
+ 	int	flags = EXT4_FREE_BLOCKS_VALIDATED;
+ 	int	err;
+ 
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++		ext4_test_inode_flag(inode, EXT4_INODE_EA_INODE))
+ 		flags |= EXT4_FREE_BLOCKS_FORGET | EXT4_FREE_BLOCKS_METADATA;
+ 	else if (ext4_should_journal_data(inode))
+ 		flags |= EXT4_FREE_BLOCKS_FORGET;
