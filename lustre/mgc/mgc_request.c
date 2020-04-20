@@ -1100,6 +1100,9 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	int rc;
 	ENTRY;
 
+	if (!exp)
+		RETURN(-EBADR);
+
 	CDEBUG(D_MGC, "Enqueue for %s (res %#llx)\n", cld->cld_logname,
                cld->cld_resid.name[0]);
 
