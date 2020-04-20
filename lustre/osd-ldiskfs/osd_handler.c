@@ -2118,6 +2118,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 	if (!inode)
 		return;
 
+	if (osd_has_index(obj) &&  obj->oo_dt.do_index_ops == &osd_index_iam_ops)
+		ldiskfs_set_inode_flag(inode, LDISKFS_INODE_JOURNAL_DATA);
+
 	uid = i_uid_read(inode);
 	gid = i_gid_read(inode);
 	projid = i_projid_read(inode);

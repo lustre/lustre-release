@@ -29,6 +29,20 @@ index 10a2a86..217fdcc 100644
  extern int ext4_writepage_trans_blocks(struct inode *);
  extern int ext4_chunk_trans_blocks(struct inode *, int nrblocks);
  extern int ext4_zero_partial_blocks(handle_t *handle, struct inode *inode,
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -2461,7 +2461,8 @@ int ext4_ext_index_trans_blocks(struct i
+ 
+ static inline int get_default_free_blocks_flags(struct inode *inode)
+ {
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++	    (EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 		return EXT4_FREE_BLOCKS_METADATA | EXT4_FREE_BLOCKS_FORGET;
+ 	else if (ext4_should_journal_data(inode))
+ 		return EXT4_FREE_BLOCKS_FORGET;
 diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 index 0cccda3..43ca376 100644
 --- a/fs/ext4/ialloc.c
@@ -41,6 +55,20 @@ index 0cccda3..43ca376 100644
  	dquot_free_inode(inode);
  	dquot_drop(inode);
  
+Index: linux-stage/fs/ext4/indirect.c
+===================================================================
+--- linux-stage.orig/fs/ext4/indirect.c
++++ linux-stage/fs/ext4/indirect.c
+@@ -959,7 +959,8 @@ static int ext4_clear_blocks(handle_t *h
+ 	int	flags = EXT4_FREE_BLOCKS_VALIDATED;
+ 	int	err;
+ 
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++	    (EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 		flags |= EXT4_FREE_BLOCKS_FORGET | EXT4_FREE_BLOCKS_METADATA;
+ 	else if (ext4_should_journal_data(inode))
+ 		flags |= EXT4_FREE_BLOCKS_FORGET;
 diff --git a/fs/ext4/inline.c b/fs/ext4/inline.c
 index 53e8a88..5112c5a 100644
 --- a/fs/ext4/inline.c

@@ -1012,6 +1012,20 @@ Index: linux-stage/fs/ext4/inode.c
  	return;
  no_delete:
  	clear_inode(inode);	/* We must guarantee clearing of inode... */
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -2163,7 +2163,8 @@ int ext4_remove_blocks(handle_t *handle
+ 	unsigned short ee_len =  ext4_ext_get_actual_len(ex);
+ 	int i, metadata = 0;
+ 
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++	    (EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 		metadata = 1;
+ #ifdef EXTENTS_STATS
+ 	{
 Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/ialloc.c
@@ -1024,3 +1038,17 @@ Index: linux-stage/fs/ext4/ialloc.c
  	vfs_dq_free_inode(inode);
  	vfs_dq_drop(inode);
  
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -4385,7 +4385,8 @@ static void ext4_clear_blocks(handle_t *h
+ 				__le32 *last)
+ {
+ 	__le32 *p;
+-	int	is_metadata = S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode);
++	int is_metadata = S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode) ||
++		(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL);
+ 
+ 	if (try_to_extend_transaction(handle, inode)) {
+ 		if (bh) {

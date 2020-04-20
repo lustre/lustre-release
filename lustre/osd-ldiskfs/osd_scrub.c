@@ -2615,6 +2615,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	inode = file_inode(filp);
+	ldiskfs_set_inode_flag(inode, LDISKFS_INODE_JOURNAL_DATA);
 	if (!dev->od_dt_dev.dd_rdonly) {
 		/* 'What the @fid is' is not imporatant, because the object
 		 * has no OI mapping, and only is visible inside the OSD.*/
