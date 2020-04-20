@@ -38,6 +38,7 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <lustre_osc.h>
+#include <lustre_dlm.h>
 
 #include "osc_internal.h"
 
@@ -1581,12 +1582,21 @@ static inline void cli_lock_after_unplug(struct client_obd *cli)
 static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 			   struct osc_async_page *oap, int bytes)
 {
-	struct osc_object	*osc = oap->oap_obj;
-	struct lov_oinfo	*loi = osc->oo_oinfo;
-	int			 rc = -EDQUOT;
-	unsigned long timeout = cfs_time_seconds(AT_OFF ? obd_timeout : at_max);
+	struct osc_object *osc = oap->oap_obj;
+	struct lov_oinfo *loi = osc->oo_oinfo;
+	int rc = -EDQUOT;
 	int remain;
 	bool entered = false;
+	/* We cannot wait for a long time here since we are holding ldlm lock
+	 * across the actual IO. If no requests complete fast (e.g. due to
+	 * overloaded OST that takes a long time to process everything, we'd
+	 * get evicted if we wait for a normal obd_timeout or some such.
+	 * So we try to wait half the time it would take the client to be
+	 * evicted by server which is half obd_timeout when AT is off
+	 * or at least ldlm_enqueue_min with AT on.
+	 * See LU-13131 */
+	unsigned long timeout = cfs_time_seconds(AT_OFF ? obd_timeout / 2 :
+							  ldlm_enqueue_min / 2);
 
 	ENTRY;
 
