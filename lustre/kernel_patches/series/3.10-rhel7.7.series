@@ -6,4 +6,3 @@ fix-integrity-verify-rhel7.patch
 fix-sd-dif-complete-rhel7.patch
 block-integrity-allow-optional-integrity-functions-rhel7.patch
 block-pass-bio-into-integrity_processing_fn-rhel7.patch
-dm-fix-handle-BLK_MQ_RQ_QUEUE_DEV_BUSY-rhel7.6.patch
