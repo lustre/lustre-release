@@ -1330,7 +1330,9 @@ EXPORT_SYMBOL(ping_show);
 ssize_t ping_store(struct kobject *kobj, struct attribute *attr,
 		   const char *buffer, size_t count)
 {
-	return ping_show(kobj, attr, (char *)buffer);
+	int rc = ping_show(kobj, attr, (char *)buffer);
+
+	return (rc < 0) ? rc : count;
 }
 EXPORT_SYMBOL(ping_store);
 
