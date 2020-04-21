@@ -521,7 +521,7 @@ static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
 				  void *value, size_t size)
 {
 #ifndef HAVE_VFS_SETXATTR
-	if (!inode->i_op->getxattr)
+	if (unlikely(!inode->i_op->getxattr))
 		return -ENODATA;
 
 	return inode->i_op->getxattr(dentry, name, value, size);
@@ -535,8 +535,8 @@ static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 				  const void *value, size_t size, int flags)
 {
 #ifndef HAVE_VFS_SETXATTR
-	if (!inode->i_op->setxattr)
-		return -ENOTSUPP;
+	if (unlikely(!inode->i_op->setxattr))
+		return -EOPNOTSUPP;
 
 	return inode->i_op->setxattr(dentry, name, value, size, flags);
 #else
@@ -548,8 +548,8 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 				     const char *name)
 {
 #ifndef HAVE_VFS_SETXATTR
-	if (!inode->i_op->setxattr)
-		return -ENOTSUPP;
+	if (unlikely(!inode->i_op->setxattr))
+		return -EOPNOTSUPP;
 
 	return inode->i_op->removexattr(dentry, name);
 #else
