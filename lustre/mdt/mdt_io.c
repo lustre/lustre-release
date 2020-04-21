@@ -1195,8 +1195,6 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 
 	ENTRY;
 
-	/* Get lock from request for possible resent case. */
-	mdt_intent_fixup_resent(mti, *lockp, lhc, flags);
 	req_capsule_set_size(mti->mti_pill, &RMF_MDT_MD, RCL_SERVER, 0);
 	req_capsule_set_size(mti->mti_pill, &RMF_ACL, RCL_SERVER, 0);
 	rc = req_capsule_server_pack(mti->mti_pill);
@@ -1222,6 +1220,8 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	if (mdt_object_remote(mo))
 		GOTO(out, rc = -EPROTO);
 
+	/* Get lock from request for possible resent case. */
+	mdt_intent_fixup_resent(mti, *lockp, lhc, flags);
 	/* resent case */
 	if (!lustre_handle_is_used(&lhc->mlh_reg_lh)) {
 		mdt_lock_handle_init(lhc);
@@ -1257,6 +1257,8 @@ out_fail:
 
 	rc = mdt_intent_lock_replace(mti, lockp, lhc, flags, rc);
 out:
+	if (rc < 0)
+		lhc->mlh_reg_lh.cookie = 0ull;
 	mdt_object_put(mti->mti_env, mo);
 	RETURN(rc);
 }
