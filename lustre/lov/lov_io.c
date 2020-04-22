@@ -318,8 +318,13 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	ENTRY;
 
 	if (!lov_is_flr(obj)) {
-		LASSERT(comp->lo_preferred_mirror == 0);
-		lio->lis_mirror_index = comp->lo_preferred_mirror;
+		/* only locks/pages are manipulated for CIT_MISC op, no
+		 * cl_io_loop() will be called, don't check/set mirror info.
+		 */
+		if (io->ci_type != CIT_MISC) {
+			LASSERT(comp->lo_preferred_mirror == 0);
+			lio->lis_mirror_index = comp->lo_preferred_mirror;
+		}
 		io->ci_ndelay = 0;
 		RETURN(0);
 	}
