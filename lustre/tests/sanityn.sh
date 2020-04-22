@@ -2183,7 +2183,9 @@ test_43j() {
 
 	for i in {1..100}; do
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE         0x167
-		do_facet $SINGLEMDS lctl set_param fail_loc=0x80000167
+		do_nodes $(comma_list $(mdts_nodes)) \
+			"lctl set_param -n fail_loc=0x80000167 2>/dev/null ||
+				true"
 		OK=0
 		mkdir $DIR1/$tdir &
 		PID1=$!
