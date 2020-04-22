@@ -1657,6 +1657,17 @@ static void check_ldlm_barrier_lvb(void)
 	CHECK_MEMBER(barrier_lvb, lvb_padding);
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+static void
+check_mgs_send_param(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mgs_send_param);
+	CHECK_CVALUE(MGS_PARAM_MAXLEN);
+	CHECK_MEMBER(mgs_send_param, mgs_param[MGS_PARAM_MAXLEN]);
+}
+#endif
+
 static void
 check_cfg_marker(void)
 {
@@ -2959,6 +2970,9 @@ main(int argc, char **argv)
 	check_ldlm_gl_lquota_desc();
 	check_ldlm_gl_barrier_desc();
 	check_ldlm_barrier_lvb();
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+	check_mgs_send_param();
+#endif
 	check_cfg_marker();
 	check_llog_logid();
 	check_llog_catid();

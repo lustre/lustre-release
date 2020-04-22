@@ -96,6 +96,45 @@ static inline bool str_starts_with(const char *str, const char *prefix)
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+static int mgs_set_info(struct tgt_session_info *tsi)
+{
+	struct mgs_thread_info *mgi;
+	struct mgs_send_param *msp;
+	size_t param_len;
+	char *s;
+
+	ENTRY;
+
+	mgi = mgs_env_info(tsi->tsi_env);
+	if (IS_ERR(mgi))
+		RETURN(err_serious(PTR_ERR(mgi)));
+
+	msp = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
+	if (msp == NULL)
+		RETURN(err_serious(-EFAULT));
+
+	param_len = strnlen(msp->mgs_param, sizeof(msp->mgs_param));
+	if (param_len == 0 || param_len == sizeof(msp->mgs_param))
+		RETURN(-EINVAL);
+
+	/* We only allow '*.lov.stripe{size,count,offset}=*' from an RPC. */
+	s = strchr(msp->mgs_param, '.');
+	if (s == NULL)
+		RETURN(-EINVAL);
+
+	if (!str_starts_with(s + 1, "lov.stripesize=") &&
+	    !str_starts_with(s + 1, "lov.stripecount=") &&
+	    !str_starts_with(s + 1, "lov.stripeoffset="))
+		RETURN(-EINVAL);
+
+	/* do nothing */
+	CDEBUG(D_MGS, "%s: ignoring set info '%s'\n",
+	       tgt_name(tsi->tsi_tgt), msp->mgs_param);
+	RETURN(0);
+}
+#endif
+
 enum ast_type {
 	AST_CONFIG	= 1,
 	AST_PARAMS	= 2,
@@ -1141,6 +1180,9 @@ TGT_RPC_HANDLER(MGS_FIRST_OPC,
 		0,			MGS_DISCONNECT,	 mgs_disconnect,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_MGS_HDL_VAR(0,			MGS_EXCEPTION,	 mgs_exception),
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_SET_INFO,	 mgs_set_info),
+#endif
 TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_TARGET_REG,	 mgs_target_reg),
 TGT_MGS_HDL_VAR(0,			MGS_TARGET_DEL,	 mgs_target_del),
 TGT_MGS_HDL(HAS_REPLY,			MGS_CONFIG_READ, mgs_config_read),

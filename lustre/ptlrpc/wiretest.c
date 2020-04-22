@@ -3812,6 +3812,15 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct barrier_lvb *)0)->lvb_padding) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct barrier_lvb *)0)->lvb_padding));
 
+	/* Checks for struct mgs_send_param */
+	LASSERTF((int)sizeof(struct mgs_send_param) == 1024, "found %lld\n",
+		 (long long)(int)sizeof(struct mgs_send_param));
+	BUILD_BUG_ON(MGS_PARAM_MAXLEN != 1024);
+	LASSERTF((int)offsetof(struct mgs_send_param, mgs_param[1024]) == 1024, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_send_param, mgs_param[1024]));
+	LASSERTF((int)sizeof(((struct mgs_send_param *)0)->mgs_param[1024]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_send_param *)0)->mgs_param[1024]));
+
 	/* Checks for struct cfg_marker */
 	LASSERTF((int)sizeof(struct cfg_marker) == 160, "found %lld\n",
 		 (long long)(int)sizeof(struct cfg_marker));
