@@ -1180,6 +1180,9 @@ LNetPrimaryNID(lnet_nid_t nid)
 	int rc = 0;
 	int cpt;
 
+	if (nid == LNET_NID_LO_0)
+		return LNET_NID_LO_0;
+
 	cpt = lnet_net_lock_current();
 	lpni = lnet_nid2peerni_locked(nid, LNET_NID_ANY, cpt);
 	if (IS_ERR(lpni)) {
