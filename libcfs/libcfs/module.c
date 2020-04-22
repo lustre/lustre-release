@@ -406,8 +406,6 @@ static int __proc_cpt_table(void *data, int write,
 	if (write)
 		return -EPERM;
 
-	LASSERT(cfs_cpt_tab);
-
 	while (1) {
 		LIBCFS_ALLOC(buf, len);
 		if (buf == NULL)
@@ -453,8 +451,6 @@ static int __proc_cpt_distance(void *data, int write,
 
 	if (write)
 		return -EPERM;
-
-	LASSERT(cfs_cpt_tab);
 
 	while (1) {
 		LIBCFS_ALLOC(buf, len);

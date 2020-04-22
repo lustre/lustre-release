@@ -174,7 +174,7 @@ cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
 	LASSERT(ops->hop_compare != NULL);
 	if (cptab) {
 		LASSERT(cptid == CFS_CPT_ANY ||
-		       (cptid >= 0 && cptid < cptab->ctb_nparts));
+		       (cptid >= 0 && cptid < cfs_cpt_number(cptab)));
 		LIBCFS_CPT_ALLOC(h, cptab, cptid, sizeof(*h));
 	} else {
 		LIBCFS_ALLOC(h, sizeof(*h));

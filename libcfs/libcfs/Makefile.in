@@ -13,12 +13,14 @@ default: all
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 libcfs-crypto-objs := $(addprefix crypto/,$(libcfs-crypto-objs))
 
+libcfs-objs-$(CONFIG_SMP) = libcfs_cpu.o
 libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   libcfs_string.o hash.o heap.o \
-		   workitem.o libcfs_cpu.o \
+		   workitem.o \
 		   libcfs_mem.o libcfs_lock.o \
 		   linux-crypto.o linux-crypto-adler.o \
-		   linux-debug.o linux-tracefile.o
+		   linux-debug.o linux-tracefile.o \
+		   $(libcfs-objs-y)
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 @LLCRYPT_TRUE@libcfs-objs += $(libcfs-crypto-objs)

@@ -67,7 +67,6 @@ static char *cpu_pattern = "N";
 module_param(cpu_pattern, charp, 0444);
 MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
 
-#ifdef CONFIG_SMP
 struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 {
 	struct cfs_cpt_table *cptab;
@@ -1232,68 +1231,3 @@ failed_cpu_dead:
 #endif /* CONFIG_HOTPLUG_CPU */
 	return ret;
 }
-
-#else /* ! CONFIG_SMP */
-
-struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
-{
-	struct cfs_cpt_table *cptab;
-
-	if (ncpt != 1) {
-		CERROR("Can't support cpu partition number %d\n", ncpt);
-		return NULL;
-	}
-
-	LIBCFS_ALLOC(cptab, sizeof(*cptab));
-	if (!cptab)
-		return NULL;
-
-	cpumask_set_cpu(0, cptab->ctb_cpumask);
-	node_set(0, cptab->ctb_nodemask);
-
-	return cptab;
-}
-EXPORT_SYMBOL(cfs_cpt_table_alloc);
-
-int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
-{
-	int rc;
-
-	rc = snprintf(buf, len, "0\t: 0\n");
-	len -= rc;
-	if (len <= 0)
-		return -EFBIG;
-
-	return rc;
-}
-EXPORT_SYMBOL(cfs_cpt_table_print);
-
-int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
-{
-	int rc;
-
-	rc = snprintf(buf, len, "0\t: 0:1\n");
-	len -= rc;
-	if (len <= 0)
-		return -EFBIG;
-
-	return rc;
-}
-EXPORT_SYMBOL(cfs_cpt_distance_print);
-
-void cfs_cpu_fini(void)
-{
-	if (cfs_cpt_table) {
-		cfs_cpt_table_free(cfs_cpt_table);
-		cfs_cpt_table = NULL;
-	}
-}
-
-int cfs_cpu_init(void)
-{
-	cfs_cpt_table = cfs_cpt_table_alloc(1);
-
-	return cfs_cpt_table ? 0 : -1;
-}
-
-#endif /* !CONFIG_SMP */

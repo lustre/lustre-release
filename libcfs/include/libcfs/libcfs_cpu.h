@@ -80,7 +80,13 @@
 
 #include <libcfs/linux/linux-cpu.h>
 
+/* any CPU partition */
+#define CFS_CPT_ANY		(-1)
+
+struct cfs_cpt_table;
+
 #ifdef CONFIG_SMP
+extern struct cfs_cpt_table	*cfs_cpt_tab;
 
 /** virtual processing unit */
 struct cfs_cpu_partition {
@@ -95,36 +101,26 @@ struct cfs_cpu_partition {
 	/* NUMA node if cpt_nodemask is empty */
 	int				 cpt_node;
 };
-#endif /* CONFIG_SMP */
 
 /** descriptor for CPU partitions */
 struct cfs_cpt_table {
-#ifdef CONFIG_SMP
 	/* spread rotor for NUMA allocator */
 	unsigned int			 ctb_spread_rotor;
 	/* maximum NUMA distance between all nodes in table */
 	unsigned int			 ctb_distance;
+	/* # of CPU partitions */
+	int				 ctb_nparts;
 	/* partitions tables */
 	struct cfs_cpu_partition	*ctb_parts;
 	/* shadow HW CPU to CPU partition ID */
 	int				*ctb_cpu2cpt;
-	/* shadow HW node to CPU partition ID */
-	int				*ctb_node2cpt;
-	/* # of CPU partitions */
-	int				 ctb_nparts;
-	/* all nodes in this partition table */
-	nodemask_t			*ctb_nodemask;
-#else
-	nodemask_t			 ctb_nodemask;
-#endif /* CONFIG_SMP */
 	/* all cpus in this partition table */
 	cpumask_var_t			 ctb_cpumask;
+	/* shadow HW node to CPU partition ID */
+	int				*ctb_node2cpt;
+	/* all nodes in this partition table */
+	nodemask_t			*ctb_nodemask;
 };
-
-/* any CPU partition */
-#define CFS_CPT_ANY		(-1)
-
-extern struct cfs_cpt_table	*cfs_cpt_tab;
 
 /**
  * destroy a CPU partition table
@@ -211,7 +207,6 @@ int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node);
  * remove all cpus in NUMA node \a node from CPU partition \a cpt
  */
 void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node);
-
 /**
  * add all cpus in node mask \a mask to CPU partition \a cpt
  * return 1 if successfully set all CPUs, otherwise return 0
@@ -228,6 +223,113 @@ void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt,
  * nodes in this partition, it might return a different node id each time.
  */
 int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt);
+
+int cfs_cpu_init(void);
+void cfs_cpu_fini(void);
+
+#else /* !CONFIG_SMP */
+
+#define cfs_cpt_tab ((struct cfs_cpt_table *)NULL)
+
+static inline void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
+{
+}
+
+static inline struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
+{
+	return NULL;
+}
+
+static inline int cfs_cpt_table_print(struct cfs_cpt_table *cptab,
+				      char *buf, int len)
+{
+	int rc;
+
+	rc = snprintf(buf, len, "0\t: 0\n");
+	len -= rc;
+	if (len <= 0)
+		return -EFBIG;
+
+	return rc;
+}
+
+static inline int cfs_cpt_distance_print(struct cfs_cpt_table *cptab,
+					 char *buf, int len)
+{
+	int rc;
+
+	rc = snprintf(buf, len, "0\t: 0:1\n");
+	len -= rc;
+	if (len <= 0)
+		return -EFBIG;
+
+	return rc;
+}
+
+static inline cpumask_var_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab,
+					     int cpt)
+{
+	return (cpumask_var_t *) cpu_online_mask;
+}
+
+static inline int cfs_cpt_number(struct cfs_cpt_table *cptab)
+{
+	return 1;
+}
+
+static inline int cfs_cpt_weight(struct cfs_cpt_table *cptab, int cpt)
+{
+	return 1;
+}
+
+static inline nodemask_t *cfs_cpt_nodemask(struct cfs_cpt_table *cptab,
+					   int cpt)
+{
+	return &node_online_map;
+}
+
+static inline unsigned int cfs_cpt_distance(struct cfs_cpt_table *cptab,
+					    int cpt1, int cpt2)
+{
+	return 1;
+}
+
+static inline int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt,
+				   int node)
+{
+	return 1;
+}
+
+static inline int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
+{
+	return 0;
+}
+
+static inline int cfs_cpt_current(struct cfs_cpt_table *cptab, int remap)
+{
+	return 0;
+}
+
+static inline int cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node)
+{
+	return 0;
+}
+
+static inline int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
+{
+	return 0;
+}
+
+static inline int cfs_cpu_init(void)
+{
+	return 0;
+}
+
+static inline void cfs_cpu_fini(void)
+{
+}
+
+#endif /* CONFIG_SMP */
 
 /*
  * allocate per-cpu-partition data, returned value is an array of pointers,
@@ -367,8 +469,5 @@ cfs_mem_cache_cpt_alloc(struct kmem_cache *cachep, struct cfs_cpt_table *cptab,
  */
 #define cfs_cpt_for_each(i, cptab)	\
 	for (i = 0; i < cfs_cpt_number(cptab); i++)
-
-int  cfs_cpu_init(void);
-void cfs_cpu_fini(void);
 
 #endif /* __LIBCFS_CPU_H__ */
