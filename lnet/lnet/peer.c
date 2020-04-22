@@ -262,7 +262,7 @@ lnet_peer_alloc(lnet_nid_t nid)
 	 * to ever use a different interface when sending messages to
 	 * myself.
 	 */
-	if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
+	if (nid == LNET_NID_LO_0)
 		lp->lp_state = LNET_PEER_NO_DISCOVERY;
 	lp->lp_cpt = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 
@@ -2467,7 +2467,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 * present in curnis[] then this peer is for this node.
 	 */
 	for (i = 0; i < ncurnis; i++) {
-		if (LNET_NETTYP(LNET_NIDNET(curnis[i])) == LOLND)
+		if (curnis[i] == LNET_NID_LO_0)
 			continue;
 		for (j = 1; j < pbuf->pb_info.pi_nnis; j++)
 			if (curnis[i] == pbuf->pb_info.pi_ni[j].ns_nid)
@@ -2643,7 +2643,7 @@ __must_hold(&lp->lp_lock)
 	if (pbuf->pb_info.pi_nnis <= 1)
 		goto out;
 	nid = pbuf->pb_info.pi_ni[1].ns_nid;
-	if (LNET_NETTYP(LNET_NIDNET(lp->lp_primary_nid)) == LOLND) {
+	if (lp->lp_primary_nid == LNET_NID_LO_0) {
 		rc = lnet_peer_set_primary_nid(lp, nid, flags);
 		if (!rc)
 			rc = lnet_peer_merge_data(lp, pbuf);

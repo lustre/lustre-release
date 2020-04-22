@@ -1579,7 +1579,7 @@ lnet_ping_info_validate(struct lnet_ping_info *pinfo)
 	/* Loopback is guaranteed to be present */
 	if (pinfo->pi_nnis < 1 || pinfo->pi_nnis > lnet_interfaces_max)
 		return -ERANGE;
-	if (LNET_NETTYP(LNET_NIDNET(LNET_PING_INFO_LONI(pinfo))) != LOLND)
+	if (LNET_PING_INFO_LONI(pinfo) != LNET_NID_LO_0)
 		return -EPROTO;
 	return 0;
 }
@@ -2756,7 +2756,7 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	}
 
 	cfg_ni->lic_nid = ni->ni_nid;
-	if (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND)
+	if (ni->ni_nid == LNET_NID_LO_0)
 		cfg_ni->lic_status = LNET_NI_STATUS_UP;
 	else
 		cfg_ni->lic_status = ni->ni_status->ns_status;
@@ -2848,7 +2848,7 @@ lnet_fill_ni_info_legacy(struct lnet_ni *ni,
 	config->cfg_config_u.cfg_net.net_peer_rtr_credits =
 		ni->ni_net->net_tunables.lct_peer_rtr_credits;
 
-	if (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND)
+	if (ni->ni_nid == LNET_NID_LO_0)
 		net_config->ni_status = LNET_NI_STATUS_UP;
 	else
 		net_config->ni_status = ni->ni_status->ns_status;

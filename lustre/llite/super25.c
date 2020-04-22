@@ -133,7 +133,7 @@ static int __init lustre_init(void)
 		if (LNetGetId(i, &lnet_id) == -ENOENT)
 			break;
 
-		if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND)
+		if (lnet_id.nid != LNET_NID_LO_0)
 			seed[0] ^= LNET_NIDADDR(lnet_id.nid);
 	}
 

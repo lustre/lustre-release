@@ -602,8 +602,7 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 			goto out;
 
 		for (i = 0; i < ping.ping_count; i++) {
-			if (!strcmp(libcfs_nid2str(ping.ping_buf[i].nid),
-				    "0@lo"))
+			if (ping.ping_buf[i].nid == LNET_NID_LO_0)
 				continue;
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)

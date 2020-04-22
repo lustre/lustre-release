@@ -777,7 +777,7 @@ lnet_health_check(struct lnet_msg *msg)
 	 * if we're sending to the LOLND then the msg_txpeer will not be
 	 * set. So no need to sanity check it.
 	 */
-	if (LNET_NETTYP(LNET_NIDNET(msg->msg_txni->ni_nid)) != LOLND)
+	if (msg->msg_txni->ni_nid != LNET_NID_LO_0)
 		LASSERT(msg->msg_txpeer);
 	else
 		lo = true;
