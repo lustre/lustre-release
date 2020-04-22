@@ -886,9 +886,9 @@ EXPORT_SYMBOL(tgt_counter_incr);
 
 int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp)
 {
-	struct lu_target	*tgt = class_exp2tgt(exp);
-	struct sptlrpc_flavor	 flvr;
-	int			 rc = 0;
+	struct lu_target *tgt = class_exp2tgt(exp);
+	struct sptlrpc_flavor flvr;
+	int rc = 0;
 
 	LASSERT(tgt);
 	LASSERT(tgt->lut_obd);
@@ -918,8 +918,7 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		if ((strcmp(exp->exp_obd->obd_type->typ_name,
 			   LUSTRE_MGS_NAME) == 0) &&
 		     (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_NULL ||
-		      LNET_NETTYP(LNET_NIDNET(exp->exp_connection->c_peer.nid))
-		      == LOLND))
+		      exp->exp_connection->c_peer.nid == LNET_NID_LO_0))
 			exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
 
 		if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&

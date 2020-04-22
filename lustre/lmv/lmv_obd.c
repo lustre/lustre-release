@@ -1126,7 +1126,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * can distribute subdirs evenly from the beginning.
 	 */
 	while (LNetGetId(i++, &lnet_id) != -ENOENT) {
-		if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND) {
+		if (lnet_id.nid != LNET_NID_LO_0) {
 			lmv->lmv_qos_rr_index = (u32)lnet_id.nid;
 			break;
 		}
@@ -1214,7 +1214,7 @@ static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
 		if (LNetGetId(i, &lnet_id) == -ENOENT)
 			break;
 
-		if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND) {
+		if (lnet_id.nid != LNET_NID_LO_0) {
 			/* We dont need a full 64-bit modulus, just enough
 			 * to distribute the requests across MDTs evenly.
 			 */

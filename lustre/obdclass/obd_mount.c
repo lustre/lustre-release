@@ -249,7 +249,7 @@ int lustre_start_mgc(struct super_block *sb)
 			struct lnet_process_id id;
 
 			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-				if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND)
+				if (id.nid == LNET_NID_LO_0)
 					continue;
 				nid = id.nid;
 				i++;

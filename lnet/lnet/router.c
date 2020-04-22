@@ -679,7 +679,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	       libcfs_net2str(net), hops, priority, libcfs_nid2str(gateway));
 
 	if (gateway == LNET_NID_ANY ||
-	    LNET_NETTYP(LNET_NIDNET(gateway)) == LOLND ||
+	    gateway == LNET_NID_LO_0 ||
 	    net == LNET_NIDNET(LNET_NID_ANY) ||
 	    LNET_NETTYP(net) == LOLND ||
 	    LNET_NIDNET(gateway) == net ||

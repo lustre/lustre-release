@@ -352,44 +352,44 @@ int jt_ptl_network(int argc, char **argv)
 int
 jt_ptl_list_nids(int argc, char **argv)
 {
-        struct libcfs_ioctl_data data;
-        int                      all = 0, return_nid = 0;
-        int                      count;
-        int                      rc;
+	struct libcfs_ioctl_data data;
+	int all = 0, return_nid = 0;
+	int count;
+	int rc;
 
-        all = (argc == 2) && (strcmp(argv[1], "all") == 0);
-        /* Hack to pass back value */
-        return_nid = (argc == 2) && (argv[1][0] == 1);
+	all = (argc == 2) && (strcmp(argv[1], "all") == 0);
+	/* Hack to pass back value */
+	return_nid = (argc == 2) && (argv[1][0] == 1);
 
-        if ((argc > 2) && !(all || return_nid)) {
-                fprintf(stderr, "usage: %s [all]\n", argv[0]);
-                return 0;
-        }
+	if ((argc > 2) && !(all || return_nid)) {
+		fprintf(stderr, "usage: %s [all]\n", argv[0]);
+		return 0;
+	}
 
-        for (count = 0;; count++) {
-                LIBCFS_IOC_INIT (data);
-                data.ioc_count = count;
-                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
+	for (count = 0;; count++) {
+		LIBCFS_IOC_INIT(data);
+		data.ioc_count = count;
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
 
-                if (rc < 0) {
-                        if ((count > 0) && (errno == ENOENT))
-                                /* We found them all */
-                                break;
-                        fprintf(stderr,"IOC_LIBCFS_GET_NI error %d: %s\n",
-                                errno, strerror(errno));
-                        return -1;
-                }
+		if (rc < 0) {
+			if ((count > 0) && (errno == ENOENT))
+				/* We found them all */
+				break;
+			fprintf(stderr, "IOC_LIBCFS_GET_NI error %d: %s\n",
+				errno, strerror(errno));
+			return -1;
+		}
 
-                if (all || (LNET_NETTYP(LNET_NIDNET(data.ioc_nid)) != LOLND)) {
-                        printf("%s\n", libcfs_nid2str(data.ioc_nid));
-                        if (return_nid) {
-                                *(__u64 *)(argv[1]) = data.ioc_nid;
-                                return_nid--;
-                        }
-                }
-        }
+		if (all || (data.ioc_nid != LNET_NID_LO_0)) {
+			printf("%s\n", libcfs_nid2str(data.ioc_nid));
+			if (return_nid) {
+				*(__u64 *)(argv[1]) = data.ioc_nid;
+				return_nid--;
+			}
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 int

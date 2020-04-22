@@ -506,14 +506,14 @@ static void ptlrpc_master_callback(struct lnet_event *ev)
 int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			struct lnet_process_id *peer, lnet_nid_t *self)
 {
-	int               best_dist = 0;
-	__u32             best_order = 0;
-	int               count = 0;
-	int               rc = -ENOENT;
-	int               dist;
-	__u32             order;
-	lnet_nid_t        dst_nid;
-	lnet_nid_t        src_nid;
+	int best_dist = 0;
+	__u32 best_order = 0;
+	int count = 0;
+	int rc = -ENOENT;
+	int dist;
+	__u32 order;
+	lnet_nid_t dst_nid;
+	lnet_nid_t src_nid;
 
 	peer->pid = LNET_PID_LUSTRE;
 
@@ -528,7 +528,7 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			continue;
 
 		if (dist == 0) {                /* local! use loopback LND */
-			peer->nid = *self = LNET_MKNID(LNET_MKNET(LOLND, 0), 0);
+			peer->nid = *self = LNET_NID_LO_0;
 			rc = 0;
 			break;
 		}

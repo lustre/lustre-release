@@ -753,12 +753,12 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_process_id target,
 static void
 lnet_ni_send(struct lnet_ni *ni, struct lnet_msg *msg)
 {
-	void   *priv = msg->msg_private;
+	void *priv = msg->msg_private;
 	int rc;
 
-	LASSERT (!in_interrupt ());
-	LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
-		 (msg->msg_txcredit && msg->msg_peertxcredit));
+	LASSERT(!in_interrupt());
+	LASSERT(ni->ni_nid == LNET_NID_LO_0 ||
+		(msg->msg_txcredit && msg->msg_peertxcredit));
 
 	rc = (ni->ni_net->net_lnd->lnd_send)(ni, priv, msg);
 	if (rc < 0) {
@@ -2623,12 +2623,12 @@ static int
 lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
 {
-	struct lnet_peer_ni	*lpni;
-	struct lnet_peer	*peer;
-	struct lnet_send_data	send_data;
-	int			cpt, rc;
-	int			md_cpt;
-	__u32			send_case = 0;
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer *peer;
+	struct lnet_send_data send_data;
+	int cpt, rc;
+	int md_cpt;
+	__u32 send_case = 0;
 
 	memset(&send_data, 0, sizeof(send_data));
 
@@ -2656,7 +2656,7 @@ again:
 	 */
 	send_data.sd_msg = msg;
 	send_data.sd_cpt = cpt;
-	if (LNET_NETTYP(LNET_NIDNET(dst_nid)) == LOLND) {
+	if (dst_nid == LNET_NID_LO_0) {
 		rc = lnet_handle_lo_send(&send_data);
 		lnet_net_unlock(cpt);
 		return rc;
@@ -5047,14 +5047,14 @@ EXPORT_SYMBOL(LNetGet);
 int
 LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
-	struct list_head	*e;
+	struct list_head *e;
 	struct lnet_ni *ni = NULL;
 	struct lnet_remotenet *rnet;
-	__u32			dstnet = LNET_NIDNET(dstnid);
-	int			hops;
-	int			cpt;
-	__u32			order = 2;
-	struct list_head	*rn_list;
+	__u32 dstnet = LNET_NIDNET(dstnid);
+	int hops;
+	int cpt;
+	__u32 order = 2;
+	struct list_head *rn_list;
 
 	/* if !local_nid_dist_zero, I don't return a distance of 0 ever
 	 * (when lustre sees a distance of 0, it substitutes 0@lo), so I
@@ -5070,7 +5070,7 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 			if (srcnidp != NULL)
 				*srcnidp = dstnid;
 			if (orderp != NULL) {
-				if (LNET_NETTYP(LNET_NIDNET(dstnid)) == LOLND)
+				if (dstnid == LNET_NID_LO_0)
 					*orderp = 0;
 				else
 					*orderp = 1;

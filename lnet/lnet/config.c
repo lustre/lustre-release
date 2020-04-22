@@ -1101,7 +1101,7 @@ lnet_parse_priority(char *str, unsigned int *priority, char **token)
 }
 
 static int
-lnet_parse_route (char *str, int *im_a_router)
+lnet_parse_route(char *str, int *im_a_router)
 {
 	/* static scratch buffer OK (single threaded) */
 	static char cmd[LNET_SINGLE_TEXTBUF_NOB];
@@ -1110,17 +1110,17 @@ lnet_parse_route (char *str, int *im_a_router)
 	LIST_HEAD(gateways);
 	struct list_head *tmp1;
 	struct list_head *tmp2;
-	__u32		  net;
-	lnet_nid_t	  nid;
-	struct lnet_text_buf  *ltb;
-	int		  rc;
-	char		 *sep;
-	char		 *token = str;
-	int		  ntokens = 0;
-	int		  myrc = -1;
-	__u32		  hops;
-	int		  got_hops = 0;
-	unsigned int	  priority = 0;
+	__u32 net;
+	lnet_nid_t nid;
+	struct lnet_text_buf *ltb;
+	int rc;
+	char *sep;
+	char *token = str;
+	int ntokens = 0;
+	int myrc = -1;
+	__u32 hops;
+	int got_hops = 0;
+	unsigned int priority = 0;
 
 	/* save a copy of the string for error messages */
 	strncpy(cmd, str, sizeof(cmd));
@@ -1191,8 +1191,7 @@ lnet_parse_route (char *str, int *im_a_router)
 					goto token_error;
 
 				nid = libcfs_str2nid(ltb->ltb_text);
-				if (nid == LNET_NID_ANY ||
-				    LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
+				if (nid == LNET_NID_ANY || nid == LNET_NID_LO_0)
 					goto token_error;
 			}
 		}
