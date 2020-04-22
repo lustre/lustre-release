@@ -299,10 +299,6 @@ EXPORT_SYMBOL(ptlrpc_free_bulk);
  */
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 {
-	__u32 serv_est;
-	int idx;
-	struct imp_at *at;
-
 	LASSERT(req->rq_import);
 
 	if (AT_OFF) {
@@ -317,18 +313,25 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 		req->rq_timeout = req->rq_import->imp_server_timeout ?
 				  obd_timeout / 2 : obd_timeout;
 	} else {
-		at = &req->rq_import->imp_at;
+		struct imp_at *at = &req->rq_import->imp_at;
+		timeout_t serv_est;
+		int idx;
+
 		idx = import_at_get_index(req->rq_import,
 					  req->rq_request_portal);
 		serv_est = at_get(&at->iat_service_estimate[idx]);
+		/*
+		 * Currently a 32 bit value is sent over the
+		 * wire for rq_timeout so please don't change this
+		 * to time64_t. The work for LU-1158 will in time
+		 * replace rq_timeout with a 64 bit nanosecond value
+		 */
 		req->rq_timeout = at_est2timeout(serv_est);
 	}
 	/*
 	 * We could get even fancier here, using history to predict increased
 	 * loading...
-	 */
-
-	/*
+	 *
 	 * Let the server know what this RPC timeout is by putting it in the
 	 * reqmsg
 	 */
@@ -338,10 +341,10 @@ EXPORT_SYMBOL(ptlrpc_at_set_req_timeout);
 
 /* Adjust max service estimate based on server value */
 static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
-				  unsigned int serv_est)
+				  timeout_t serv_est)
 {
 	int idx;
-	unsigned int oldse;
+	timeout_t oldse;
 	struct imp_at *at;
 
 	LASSERT(req->rq_import);
@@ -371,9 +374,10 @@ int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
 void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 			       timeout_t service_timeout)
 {
-	unsigned int nl, oldnl;
-	struct imp_at *at;
 	time64_t now = ktime_get_real_seconds();
+	struct imp_at *at;
+	timeout_t oldnl;
+	timeout_t nl;
 
 	LASSERT(req->rq_import);
 
@@ -393,9 +397,10 @@ void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 		return;
 	}
 
-	/* Network latency is total time less server processing time */
-	nl = max_t(int, now - req->rq_sent -
-			service_timeout, 0) + 1; /* st rounding */
+	/* Network latency is total time less server processing time,
+	 * st rounding
+	 */
+	nl = max_t(timeout_t, now - req->rq_sent - service_timeout, 0) + 1;
 	at = &req->rq_import->imp_at;
 
 	oldnl = at_measured(&at->iat_net_latency, nl);
@@ -2226,7 +2231,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 		       req->rq_real_sent < req->rq_sent ||
 		       req->rq_real_sent >= req->rq_deadline) ?
 		      "timed out for sent delay" : "timed out for slow reply"),
-		  (s64)req->rq_sent, (s64)req->rq_real_sent);
+		  req->rq_sent, req->rq_real_sent);
 
 	if (imp && obd_debug_peer_on_timeout)
 		LNetDebugPeer(imp->imp_connection->c_peer);

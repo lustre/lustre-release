@@ -1351,7 +1351,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
 	struct ptlrpc_request *reqcopy;
 	struct lustre_msg *reqmsg;
-	time64_t olddl = req->rq_deadline - ktime_get_real_seconds();
+	timeout_t olddl = req->rq_deadline - ktime_get_real_seconds();
 	time64_t newdl;
 	int rc;
 
@@ -1367,9 +1367,9 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	 * difference between clients' and servers' expectations
 	 */
 	DEBUG_REQ(D_ADAPTTO, req,
-		  "%ssending early reply (deadline %+llds, margin %+llds) for %d+%d",
+		  "%ssending early reply (deadline %+ds, margin %+ds) for %d+%d",
 		  AT_OFF ? "AT off - not " : "",
-		  (s64)olddl, (s64)(olddl - at_get(&svcpt->scp_at_estimate)),
+		  olddl, olddl - at_get(&svcpt->scp_at_estimate),
 		  at_get(&svcpt->scp_at_estimate), at_extra);
 
 	if (AT_OFF)
@@ -1378,8 +1378,8 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	if (olddl < 0) {
 		/* below message is checked in replay-ost-single.sh test_9 */
 		DEBUG_REQ(D_WARNING, req,
-			  "Already past deadline (%+llds), not sending early reply. Consider increasing at_early_margin (%d)?",
-			  (s64)olddl, at_early_margin);
+			  "Already past deadline (%+ds), not sending early reply. Consider increasing at_early_margin (%d)?",
+			  olddl, at_early_margin);
 
 		/* Return an error so we're not re-added to the timed list. */
 		RETURN(-ETIMEDOUT);
@@ -1436,8 +1436,8 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	 */
 	if (req->rq_deadline >= newdl) {
 		DEBUG_REQ(D_WARNING, req,
-			  "Could not add any time (%lld/%lld), not sending early reply",
-			  (s64)olddl, (s64)(newdl - ktime_get_real_seconds()));
+			  "Could not add any time (%d/%lld), not sending early reply",
+			  olddl, newdl - ktime_get_real_seconds());
 		RETURN(-ETIMEDOUT);
 	}
 
@@ -1530,7 +1530,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 	__u32 index, count;
 	time64_t deadline;
 	time64_t now = ktime_get_real_seconds();
-	s64 delay;
+	s64 delay_ms;
 	int first, counter = 0;
 
 	ENTRY;
@@ -1539,7 +1539,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 		spin_unlock(&svcpt->scp_at_lock);
 		RETURN(0);
 	}
-	delay = ktime_ms_delta(ktime_get(), svcpt->scp_at_checktime);
+	delay_ms = ktime_ms_delta(ktime_get(), svcpt->scp_at_checktime);
 	svcpt->scp_at_check = 0;
 
 	if (array->paa_count == 0) {
@@ -1610,10 +1610,10 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 		 */
 		LCONSOLE_WARN("%s: This server is not able to keep up with request traffic (cpu-bound).\n",
 			      svcpt->scp_service->srv_name);
-		CWARN("earlyQ=%d reqQ=%d recA=%d, svcEst=%d, delay=%lld\n",
+		CWARN("earlyQ=%d reqQ=%d recA=%d, svcEst=%d, delay=%lldms\n",
 		      counter, svcpt->scp_nreqs_incoming,
 		      svcpt->scp_nreqs_active,
-		      at_get(&svcpt->scp_at_estimate), delay);
+		      at_get(&svcpt->scp_at_estimate), delay_ms);
 	}
 
 	/*
@@ -2161,8 +2161,8 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	/* req_in handling should/must be fast */
 	if (ktime_get_real_seconds() - req->rq_arrival_time.tv_sec > 5)
 		DEBUG_REQ(D_WARNING, req, "Slow req_in handling %llds",
-			  (s64)(ktime_get_real_seconds() -
-				req->rq_arrival_time.tv_sec));
+			  ktime_get_real_seconds() -
+			  req->rq_arrival_time.tv_sec);
 
 	/* Set rpc server deadline and add it to the timed list */
 	deadline = (lustre_msghdr_get_flags(req->rq_reqmsg) &
@@ -2661,10 +2661,10 @@ static void ptlrpc_watchdog_fire(struct work_struct *w)
 	}
 }
 
-static void ptlrpc_watchdog_init(struct delayed_work *work, time_t time)
+static void ptlrpc_watchdog_init(struct delayed_work *work, timeout_t timeout)
 {
 	INIT_DELAYED_WORK(work, ptlrpc_watchdog_fire);
-	schedule_delayed_work(work, cfs_time_seconds(time));
+	schedule_delayed_work(work, cfs_time_seconds(timeout));
 }
 
 static void ptlrpc_watchdog_disable(struct delayed_work *work)
@@ -2672,13 +2672,13 @@ static void ptlrpc_watchdog_disable(struct delayed_work *work)
 	cancel_delayed_work_sync(work);
 }
 
-static void ptlrpc_watchdog_touch(struct delayed_work *work, time_t time)
+static void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout)
 {
 	struct ptlrpc_thread *thread = container_of(&work->work,
 						    struct ptlrpc_thread,
 						    t_watchdog.work);
 	thread->t_touched = ktime_get();
-	mod_delayed_work(system_wq, work, cfs_time_seconds(time));
+	mod_delayed_work(system_wq, work, cfs_time_seconds(timeout));
 }
 
 /**

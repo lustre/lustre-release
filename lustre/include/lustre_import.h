@@ -66,9 +66,13 @@ struct adaptive_timeout {
 	time64_t	at_binstart;         /* bin start time */
 	unsigned int	at_hist[AT_BINS];    /* timeout history bins */
 	unsigned int	at_flags;
-	unsigned int	at_current;          /* current timeout value */
-	unsigned int	at_worst_ever;       /* worst-ever timeout value */
-	time64_t	at_worst_time;       /* worst-ever timeout timestamp */
+	timeout_t	at_current_timeout;	/* current timeout value */
+	timeout_t	at_worst_timeout_ever;	/* worst-ever timeout delta
+						 * value
+						 */
+	time64_t	at_worst_timestamp;	/* worst-ever timeout
+						 * timestamp
+						 */
 	spinlock_t	at_lock;
 };
 
@@ -330,11 +334,23 @@ struct obd_import {
 	time64_t		imp_last_reply_time;	/* for health check */
 };
 
-/* import.c */
-static inline unsigned int at_est2timeout(unsigned int val)
+/* import.c : adaptive timeout handling.
+ *
+ * Lustre tracks how long RPCs take to complete. This information is reported
+ * back to clients who utilize the information to estimate the time needed
+ * for future requests and set appropriate RPC timeouts. Minimum and maximum
+ * service times can be configured via the at_min and at_max kernel module
+ * parameters, respectively.
+ *
+ * Since this information is transmitted between nodes the timeouts are in
+ * seconds not jiffies which can vary from node to node. To avoid confusion
+ * the timeout is handled in timeout_t (s32) instead of time64_t or
+ * long (jiffies).
+ */
+static inline timeout_t at_est2timeout(timeout_t timeout)
 {
-        /* add an arbitrary minimum: 125% +5 sec */
-        return (val + (val >> 2) + 5);
+	/* add an arbitrary minimum: 125% +5 sec */
+	return timeout + (timeout >> 2) + 5;
 }
 
 static inline timeout_t at_timeout2est(timeout_t timeout)
@@ -344,45 +360,53 @@ static inline timeout_t at_timeout2est(timeout_t timeout)
 	return max((timeout << 2) / 5, 5) - 4;
 }
 
-static inline void at_reset_nolock(struct adaptive_timeout *at, int val)
+static inline void at_reset_nolock(struct adaptive_timeout *at,
+				   timeout_t timeout)
 {
-        at->at_current = val;
-        at->at_worst_ever = val;
-	at->at_worst_time = ktime_get_real_seconds();
+	at->at_current_timeout = timeout;
+	at->at_worst_timeout_ever = timeout;
+	at->at_worst_timestamp = ktime_get_real_seconds();
 }
 
-static inline void at_reset(struct adaptive_timeout *at, int val)
+static inline void at_reset(struct adaptive_timeout *at, timeout_t timeout)
 {
 	spin_lock(&at->at_lock);
-	at_reset_nolock(at, val);
+	at_reset_nolock(at, timeout);
 	spin_unlock(&at->at_lock);
 }
 
-static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
+static inline void at_init(struct adaptive_timeout *at, timeout_t timeout,
+			   int flags)
+{
 	memset(at, 0, sizeof(*at));
 	spin_lock_init(&at->at_lock);
 	at->at_flags = flags;
-	at_reset(at, val);
+	at_reset(at, timeout);
 }
 
-static inline void at_reinit(struct adaptive_timeout *at, int val, int flags)
+static inline void at_reinit(struct adaptive_timeout *at, timeout_t timeout,
+			     int flags)
 {
 	spin_lock(&at->at_lock);
 	at->at_binstart = 0;
 	memset(at->at_hist, 0, sizeof(at->at_hist));
 	at->at_flags = flags;
-	at_reset_nolock(at, val);
+	at_reset_nolock(at, timeout);
 	spin_unlock(&at->at_lock);
 }
 
 extern unsigned int at_min;
-static inline int at_get(struct adaptive_timeout *at) {
-        return (at->at_current > at_min) ? at->at_current : at_min;
-}
-int at_measured(struct adaptive_timeout *at, unsigned int val);
-int import_at_get_index(struct obd_import *imp, int portal);
 extern unsigned int at_max;
 #define AT_OFF (at_max == 0)
+
+static inline timeout_t at_get(struct adaptive_timeout *at)
+{
+	return (at->at_current_timeout > at_min) ?
+		at->at_current_timeout : at_min;
+}
+
+timeout_t at_measured(struct adaptive_timeout *at, timeout_t timeout);
+int import_at_get_index(struct obd_import *imp, int portal);
 
 /* genops.c */
 struct obd_export;

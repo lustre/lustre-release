@@ -866,7 +866,7 @@ ssize_t recovery_time_soft_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%ld\n", obd->obd_recovery_timeout);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", obd->obd_recovery_timeout);
 }
 EXPORT_SYMBOL(recovery_time_soft_show);
 
@@ -894,7 +894,7 @@ ssize_t recovery_time_hard_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%ld\n", obd->obd_recovery_time_hard);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", obd->obd_recovery_time_hard);
 }
 EXPORT_SYMBOL(recovery_time_hard_show);
 

@@ -733,7 +733,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 
 		if (ldlm_is_ast_sent(lock)) {
 			struct ptlrpc_service_part *svc;
-			time64_t timeout;
+			timeout_t timeout;
 
 			svc = req->rq_rqbd->rqbd_svcpt;
 			timeout = at_est2timeout(at_get(&svc->scp_at_estimate));

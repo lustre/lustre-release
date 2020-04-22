@@ -549,7 +549,7 @@ static ssize_t contention_seconds_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return sprintf(buf, "%llu\n", ns->ns_contention_time);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ns->ns_contention_time);
 }
 
 static ssize_t contention_seconds_store(struct kobject *kobj,
@@ -558,9 +558,9 @@ static ssize_t contention_seconds_store(struct kobject *kobj,
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
-	unsigned long long tmp;
+	unsigned int tmp;
 
-	if (kstrtoull(buffer, 10, &tmp))
+	if (kstrtouint(buffer, 10, &tmp))
 		return -EINVAL;
 
 	ns->ns_contention_time = tmp;

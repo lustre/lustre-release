@@ -852,7 +852,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 	}
 	seq_printf(m, "    service_estimates:\n"
 		   "       services: %u sec\n"
-		   "       network: %u sec\n",
+		   "       network: %d sec\n",
 		   k,
 		   at_get(&imp->imp_at.iat_net_latency));
 
@@ -947,8 +947,8 @@ static void lprocfs_timeouts_seq_show_locked(struct seq_file *m,
 					     struct obd_device *obd,
 					     struct obd_import *imp)
 {
-	unsigned int cur, worst;
-	time64_t now, worstt;
+	timeout_t cur_timeout, worst_timeout;
+	time64_t now, worst_timestamp;
 	int i;
 
 	LASSERT(obd != NULL);
@@ -960,23 +960,29 @@ static void lprocfs_timeouts_seq_show_locked(struct seq_file *m,
 		   "last reply", (s64)imp->imp_last_reply_time,
 		   (s64)(now - imp->imp_last_reply_time));
 
-	cur = at_get(&imp->imp_at.iat_net_latency);
-	worst = imp->imp_at.iat_net_latency.at_worst_ever;
-	worstt = imp->imp_at.iat_net_latency.at_worst_time;
+	cur_timeout = at_get(&imp->imp_at.iat_net_latency);
+	worst_timeout = imp->imp_at.iat_net_latency.at_worst_timeout_ever;
+	worst_timestamp = imp->imp_at.iat_net_latency.at_worst_timestamp;
 	seq_printf(m, "%-10s : cur %3u  worst %3u (at %lld, %llds ago) ",
-		   "network", cur, worst, (s64)worstt, (s64)(now - worstt));
+		   "network", cur_timeout, worst_timeout, worst_timestamp,
+		   now - worst_timestamp);
 	lprocfs_at_hist_helper(m, &imp->imp_at.iat_net_latency);
 
 	for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+		struct adaptive_timeout *service_est;
+
 		if (imp->imp_at.iat_portal[i] == 0)
 			break;
-		cur = at_get(&imp->imp_at.iat_service_estimate[i]);
-		worst = imp->imp_at.iat_service_estimate[i].at_worst_ever;
-		worstt = imp->imp_at.iat_service_estimate[i].at_worst_time;
+
+		service_est = &imp->imp_at.iat_service_estimate[i];
+		cur_timeout = at_get(service_est);
+		worst_timeout = service_est->at_worst_timeout_ever;
+		worst_timestamp = service_est->at_worst_timestamp;
 		seq_printf(m, "portal %-2d  : cur %3u  worst %3u (at %lld, %llds ago) ",
-			   imp->imp_at.iat_portal[i], cur, worst, (s64)worstt,
-			   (s64)(now - worstt));
-		lprocfs_at_hist_helper(m, &imp->imp_at.iat_service_estimate[i]);
+			   imp->imp_at.iat_portal[i], cur_timeout,
+			   worst_timeout, worst_timestamp,
+			   now - worst_timestamp);
+		lprocfs_at_hist_helper(m, service_est);
 	}
 }
 

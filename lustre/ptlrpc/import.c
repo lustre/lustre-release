@@ -579,14 +579,16 @@ static int import_select_connection(struct obd_import *imp)
 	 */
 	if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
 		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
+
 		if (at_get(at) < CONNECTION_SWITCH_MAX) {
 			at_measured(at, at_get(at) + CONNECTION_SWITCH_INC);
 			if (at_get(at) > CONNECTION_SWITCH_MAX)
 				at_reset(at, CONNECTION_SWITCH_MAX);
 		}
 		LASSERT(imp_conn->oic_last_attempt);
-		CDEBUG(D_HA, "%s: tried all connections, increasing latency "
-		       "to %ds\n", imp->imp_obd->obd_name, at_get(at));
+		CDEBUG(D_HA,
+		       "%s: tried all connections, increasing latency to %ds\n",
+		       imp->imp_obd->obd_name, at_get(at));
 	}
 
 	imp_conn->oic_last_attempt = ktime_get_seconds();
@@ -1864,45 +1866,48 @@ void ptlrpc_cleanup_imp(struct obd_import *imp)
 
 /* Adaptive Timeout utils */
 
-/* Update at_current with the specified value (bounded by at_min and at_max),
- * as well as the AT history "bins".
+/* Update at_current_timeout with the specified value (bounded by at_min and
+ * at_max), as well as the AT history "bins".
  *  - Bin into timeslices using AT_BINS bins.
  *  - This gives us a max of the last at_history seconds without the storage,
  *    but still smoothing out a return to normalcy from a slow response.
  *  - (E.g. remember the maximum latency in each minute of the last 4 minutes.)
  */
-int at_measured(struct adaptive_timeout *at, unsigned int val)
+timeout_t at_measured(struct adaptive_timeout *at, timeout_t timeout)
 {
-        unsigned int old = at->at_current;
+	timeout_t old_timeout = at->at_current_timeout;
 	time64_t now = ktime_get_real_seconds();
 	long binlimit = max_t(long, at_history / AT_BINS, 1);
 
         LASSERT(at);
-        CDEBUG(D_OTHER, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
-	       val, at, (long)(now - at->at_binstart), at->at_current,
+	CDEBUG(D_OTHER, "add %u to %p time=%lld v=%u (%u %u %u %u)\n",
+	       timeout, at, now - at->at_binstart, at->at_current_timeout,
                at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
 
-        if (val == 0)
-                /* 0's don't count, because we never want our timeout to
-                   drop to 0, and because 0 could mean an error */
+	if (timeout <= 0)
+		/* Negative timeouts and 0's don't count, because we never
+		 * want our timeout to drop to 0 or below, and because 0 could
+		 * mean an error
+		 */
                 return 0;
 
 	spin_lock(&at->at_lock);
 
         if (unlikely(at->at_binstart == 0)) {
                 /* Special case to remove default from history */
-                at->at_current = val;
-                at->at_worst_ever = val;
-                at->at_worst_time = now;
-                at->at_hist[0] = val;
+		at->at_current_timeout = timeout;
+		at->at_worst_timeout_ever = timeout;
+		at->at_worst_timestamp = now;
+		at->at_hist[0] = timeout;
                 at->at_binstart = now;
         } else if (now - at->at_binstart < binlimit ) {
                 /* in bin 0 */
-                at->at_hist[0] = max(val, at->at_hist[0]);
-                at->at_current = max(val, at->at_current);
+		at->at_hist[0] = max_t(timeout_t, timeout, at->at_hist[0]);
+		at->at_current_timeout = max_t(timeout_t, timeout,
+					       at->at_current_timeout);
         } else {
                 int i, shift;
-                unsigned int maxv = val;
+		timeout_t maxv = timeout;
 
 		/* move bins over */
 		shift = (u32)(now - at->at_binstart) / binlimit;
@@ -1910,42 +1915,45 @@ int at_measured(struct adaptive_timeout *at, unsigned int val)
                 for(i = AT_BINS - 1; i >= 0; i--) {
                         if (i >= shift) {
                                 at->at_hist[i] = at->at_hist[i - shift];
-                                maxv = max(maxv, at->at_hist[i]);
+				maxv = max_t(timeout_t, maxv, at->at_hist[i]);
                         } else {
                                 at->at_hist[i] = 0;
                         }
                 }
-                at->at_hist[0] = val;
-                at->at_current = maxv;
+		at->at_hist[0] = timeout;
+		at->at_current_timeout = maxv;
                 at->at_binstart += shift * binlimit;
         }
 
-        if (at->at_current > at->at_worst_ever) {
-                at->at_worst_ever = at->at_current;
-                at->at_worst_time = now;
-        }
+	if (at->at_current_timeout > at->at_worst_timeout_ever) {
+		at->at_worst_timeout_ever = at->at_current_timeout;
+		at->at_worst_timestamp = now;
+	}
 
-        if (at->at_flags & AT_FLG_NOHIST)
+	if (at->at_flags & AT_FLG_NOHIST)
                 /* Only keep last reported val; keeping the rest of the history
-                   for proc only */
-                at->at_current = val;
+		 * for debugfs only
+		 */
+		at->at_current_timeout = timeout;
 
         if (at_max > 0)
-                at->at_current =  min(at->at_current, at_max);
-        at->at_current =  max(at->at_current, at_min);
-
-        if (at->at_current != old)
-                CDEBUG(D_OTHER, "AT %p change: old=%u new=%u delta=%d "
-                       "(val=%u) hist %u %u %u %u\n", at,
-                       old, at->at_current, at->at_current - old, val,
+		at->at_current_timeout = min_t(timeout_t,
+					       at->at_current_timeout, at_max);
+	at->at_current_timeout = max_t(timeout_t, at->at_current_timeout,
+				       at_min);
+	if (at->at_current_timeout != old_timeout)
+		CDEBUG(D_OTHER,
+		       "AT %p change: old=%u new=%u delta=%d (val=%d) hist %u %u %u %u\n",
+		       at, old_timeout, at->at_current_timeout,
+		       at->at_current_timeout - old_timeout, timeout,
                        at->at_hist[0], at->at_hist[1], at->at_hist[2],
                        at->at_hist[3]);
 
-        /* if we changed, report the old value */
-        old = (at->at_current != old) ? old : 0;
+	/* if we changed, report the old timeout value */
+	old_timeout = (at->at_current_timeout != old_timeout) ? old_timeout : 0;
 
 	spin_unlock(&at->at_lock);
-        return old;
+	return old_timeout;
 }
 
 /* Find the imp_at index for a given portal; assign if space available */

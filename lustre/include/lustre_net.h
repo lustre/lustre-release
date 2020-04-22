@@ -778,8 +778,10 @@ struct ptlrpc_hpreq_ops {
 struct ptlrpc_cli_req {
 	/** For bulk requests on client only: bulk descriptor */
 	struct ptlrpc_bulk_desc		*cr_bulk;
-	/** optional time limit for send attempts */
-	time64_t			 cr_delay_limit;
+	/** optional time limit for send attempts. This is a timeout
+	 *  not a timestamp so timeout_t (s32) is used instead of time64_t
+	 */
+	timeout_t			 cr_delay_limit;
 	/** time request was first queued */
 	time64_t			 cr_queued_time;
 	/** request sent in nanoseconds */
@@ -2557,6 +2559,30 @@ ptlrpc_server_get_timeout(struct ptlrpc_service_part *svcpt)
 
 	return svcpt->scp_service->srv_watchdog_factor *
 	       max_t(int, at, obd_timeout);
+}
+
+/**
+ * Calculate the amount of time for lock prolongation.
+ *
+ * This is helper function to get the timeout extra time.
+ *
+ * @req		current request
+ *
+ * Return:	amount of time to extend the timeout with
+ */
+static inline timeout_t prolong_timeout(struct ptlrpc_request *req)
+{
+	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
+	timeout_t req_timeout = 0;
+
+	if (AT_OFF)
+		return obd_timeout / 2;
+
+	if (req->rq_deadline > req->rq_arrival_time.tv_sec)
+		req_timeout = req->rq_deadline - req->rq_arrival_time.tv_sec;
+
+	return max(req_timeout,
+		   at_est2timeout(at_get(&svcpt->scp_at_estimate)));
 }
 
 static inline struct ptlrpc_service *

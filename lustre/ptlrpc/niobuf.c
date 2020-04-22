@@ -515,9 +515,10 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
               (MSG_RESENT | MSG_REPLAY |
                MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))) {
                 /* early replies, errors and recovery requests don't count
-                 * toward our service time estimate */
-		int oldse = at_measured(&svcpt->scp_at_estimate,
-					service_timeout);
+		 * toward our service time estimate
+		 */
+		timeout_t oldse = at_measured(&svcpt->scp_at_estimate,
+					      service_timeout);
 
 		if (oldse != 0) {
 			DEBUG_REQ(D_ADAPTTO, req,
@@ -537,7 +538,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	     req->rq_export->exp_obd->obd_recovering)) {
 		lustre_msg_set_timeout(req->rq_repmsg, 0);
 	} else {
-		time64_t timeout;
+		timeout_t timeout;
 
 		if (req->rq_export && req->rq_reqmsg != NULL &&
 		    (flags & PTLRPC_REPLY_EARLY) &&
@@ -547,7 +548,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 
 			timeout = ktime_get_real_seconds() -
 				  req->rq_arrival_time.tv_sec +
-				  min_t(time64_t, at_extra,
+				  min_t(timeout_t, at_extra,
 					exp_obd->obd_recovery_timeout / 4);
 		} else {
 			timeout = at_get(&svcpt->scp_at_estimate);

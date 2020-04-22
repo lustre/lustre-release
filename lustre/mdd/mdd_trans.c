@@ -104,10 +104,13 @@ static int mdd_changelog_gc_cb(const struct lu_env *env,
 	 * first as we assume they could be idle since longer
 	 */
 	if (rec->cur_time != 0) {
-		__u32 time_now = (__u32)ktime_get_real_seconds();
-		__u32 time_out = rec->cur_time +
-				 mdd->mdd_changelog_max_idle_time;
-		__u32 idle_time = time_now - rec->cur_time;
+		/* FIXME !!!! cur_time is a timestamp but only 32 bit in
+		 * in size. This is not 2038 safe !!!!
+		 */
+		u32 time_now = (u32)ktime_get_real_seconds();
+		timeout_t time_out = rec->cur_time +
+				     mdd->mdd_changelog_max_idle_time;
+		timeout_t idle_time = time_now - rec->cur_time;
 
 		/* treat oldest idle user first, and if no old format user
 		 * has been already selected

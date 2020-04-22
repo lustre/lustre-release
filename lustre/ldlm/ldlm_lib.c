@@ -1647,8 +1647,8 @@ static void target_finish_recovery(struct lu_target *lut)
 		elapsed_time = max_t(time64_t, now - obd->obd_recovery_start,
 				     1);
 		LCONSOLE_INFO("%s: Recovery over after %lld:%.02lld, of %d clients %d recovered and %d %s evicted.\n",
-			      obd->obd_name, (s64)elapsed_time / 60,
-			      (s64)elapsed_time % 60,
+			      obd->obd_name, elapsed_time / 60,
+			      elapsed_time % 60,
 			      atomic_read(&obd->obd_max_recoverable_clients),
 			      atomic_read(&obd->obd_connected_clients),
 			      obd->obd_stale_clients,
@@ -1805,7 +1805,7 @@ static void target_start_recovery_timer(struct obd_device *obd)
 	hrtimer_start(&obd->obd_recovery_timer, delay, HRTIMER_MODE_ABS);
 	spin_unlock(&obd->obd_dev_lock);
 
-	LCONSOLE_WARN("%s: Will be in recovery for at least %lu:%02lu, or until %d client%s reconnect%s\n",
+	LCONSOLE_WARN("%s: Will be in recovery for at least %u:%02u, or until %d client%s reconnect%s\n",
 		      obd->obd_name,
 		      obd->obd_recovery_timeout / 60,
 		      obd->obd_recovery_timeout % 60,
@@ -1823,12 +1823,12 @@ static void target_start_recovery_timer(struct obd_device *obd)
  * at least; otherwise, make sure the recovery timeout value is not less
  * than @dr_timeout.
  */
-static void extend_recovery_timer(struct obd_device *obd, time_t dr_timeout,
+static void extend_recovery_timer(struct obd_device *obd, timeout_t dr_timeout,
 				  bool extend)
 {
 	ktime_t left_ns;
-	time_t timeout;
-	time_t left;
+	timeout_t timeout;
+	timeout_t left;
 
 	spin_lock(&obd->obd_dev_lock);
 	if (!obd->obd_recovering || obd->obd_abort_recovery ||
@@ -1849,16 +1849,17 @@ static void extend_recovery_timer(struct obd_device *obd, time_t dr_timeout,
 		 */
 		if (dr_timeout > left) {
 			timeout += dr_timeout - left;
-			timeout = min_t(time_t, obd->obd_recovery_time_hard,
+			timeout = min_t(timeout_t, obd->obd_recovery_time_hard,
 					timeout);
 		}
 	} else {
-		timeout = clamp_t(time_t, dr_timeout, obd->obd_recovery_timeout,
+		timeout = clamp_t(timeout_t, dr_timeout,
+				  obd->obd_recovery_timeout,
 				  obd->obd_recovery_time_hard);
 	}
 
 	if (timeout == obd->obd_recovery_time_hard)
-		CWARN("%s: extended recovery timer reached hard limit: %ld, extend: %d\n",
+		CWARN("%s: extended recovery timer reached hard limit: %d, extend: %d\n",
 		      obd->obd_name, timeout, extend);
 
 	if (obd->obd_recovery_timeout < timeout) {
@@ -1873,7 +1874,7 @@ static void extend_recovery_timer(struct obd_device *obd, time_t dr_timeout,
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
-	CDEBUG(D_HA, "%s: recovery timer will expire in %ld seconds\n",
+	CDEBUG(D_HA, "%s: recovery timer will expire in %d seconds\n",
 		obd->obd_name, left);
 }
 
@@ -2342,7 +2343,7 @@ static int check_for_recovery_ready(struct lu_target *lut)
 			extend_recovery_timer(obd, obd->obd_recovery_timeout,
 					      true);
 			CDEBUG(D_HA,
-			       "%s update recovery is not ready, extend recovery %lu\n",
+			       "%s update recovery is not ready, extend recovery %d\n",
 			       obd->obd_name, obd->obd_recovery_timeout);
 			return 0;
 		}

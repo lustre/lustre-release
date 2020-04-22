@@ -308,13 +308,13 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 	}
 }
 
-static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
+static bool ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	time64_t now = ktime_get_seconds();
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
-		return 1;
+		return true;
 
 	CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
 	if (contended_locks > ldlm_res_to_ns(res)->ns_contended_locks)
@@ -676,7 +676,7 @@ destroylock:
 void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 			   struct ldlm_prolong_args *arg)
 {
-	time64_t timeout;
+	timeout_t timeout;
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PROLONG_PAUSE, 3);
 
@@ -696,7 +696,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	 */
 	timeout = arg->lpa_timeout + (ldlm_bl_timeout(lock) >> 1);
 
-	LDLM_DEBUG(lock, "refreshed to %llds.\n", timeout);
+	LDLM_DEBUG(lock, "refreshed to %ds.\n", timeout);
 
 	arg->lpa_blocks_cnt++;
 

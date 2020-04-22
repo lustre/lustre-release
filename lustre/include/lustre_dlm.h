@@ -500,7 +500,7 @@ struct ldlm_namespace {
 	 * The resources in this namespace remember contended state during
 	 * \a ns_contention_time, in seconds.
 	 */
-	time64_t		ns_contention_time;
+	timeout_t		ns_contention_time;
 
 	/**
 	 * Limit size of contended extent locks, in bytes.
@@ -910,7 +910,7 @@ struct ldlm_lock {
 	 * under this lock.
 	 * \see ost_rw_prolong_locks
 	 */
-	time64_t		l_callback_timeout;
+	time64_t		l_callback_timestamp;
 
 	/** Local PID of process which created this lock. */
 	__u32			l_pid;
@@ -1346,7 +1346,7 @@ struct ldlm_prolong_args {
 	struct ldlm_res_id	lpa_resid;
 	struct ldlm_extent	lpa_extent;
 	enum ldlm_mode		lpa_mode;
-	time64_t		lpa_timeout;
+	timeout_t		lpa_timeout;
 	int			lpa_locks_cnt;
 	int			lpa_blocks_cnt;
 };
@@ -1392,10 +1392,10 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 /** @} ldlm_handlers */
 
 void ldlm_revoke_export_locks(struct obd_export *exp);
-time64_t ldlm_bl_timeout(struct ldlm_lock *lock);
+timeout_t ldlm_bl_timeout(struct ldlm_lock *lock);
 #endif
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, time64_t timeout);
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
 int ldlm_init_export(struct obd_export *exp);

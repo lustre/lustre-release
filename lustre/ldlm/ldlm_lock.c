@@ -494,7 +494,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);
-        lock->l_callback_timeout = 0;
+	lock->l_callback_timestamp = 0;
 	lock->l_activity = 0;
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
@@ -2794,7 +2794,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
-				 lock->l_pid, lock->l_callback_timeout,
+				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type);
                 va_end(args);
                 return;
@@ -2820,7 +2820,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
-				 lock->l_pid, lock->l_callback_timeout,
+				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type);
 		break;
 
@@ -2843,7 +2843,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
-				 lock->l_pid, lock->l_callback_timeout);
+				 lock->l_pid, lock->l_callback_timestamp);
 		break;
 
 	case LDLM_IBITS:
@@ -2864,7 +2864,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
-				 lock->l_pid, lock->l_callback_timeout,
+				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type);
 		break;
 
@@ -2884,7 +2884,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
-				 lock->l_pid, lock->l_callback_timeout,
+				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type);
 		break;
 	}

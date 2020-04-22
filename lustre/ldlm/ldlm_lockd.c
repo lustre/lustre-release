@@ -152,8 +152,8 @@ static int expired_lock_dump;
 static LIST_HEAD(expired_lock_list);
 
 static int ldlm_lock_busy(struct ldlm_lock *lock);
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t timeout);
-static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds);
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout);
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout);
 
 static inline int have_expired_locks(void)
 {
@@ -240,7 +240,7 @@ static int expired_lock_main(void *arg)
 
 			/* Check if we need to prolong timeout */
 			if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
-			    lock->l_callback_timeout != 0 && /* not AST error */
+			    lock->l_callback_timestamp != 0 && /* not AST error */
 			    ldlm_lock_busy(lock)) {
 				LDLM_DEBUG(lock, "prolong the busy lock");
 				lock_res_and_lock(lock);
@@ -323,7 +323,7 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 	while (!list_empty(&waiting_locks_list)) {
 		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
 				  l_pending_chain);
-		if (lock->l_callback_timeout > ktime_get_seconds() ||
+		if (lock->l_callback_timestamp > ktime_get_seconds() ||
 		    lock->l_req_mode == LCK_GROUP)
 			break;
 
@@ -349,12 +349,12 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 	 */
 	if (!list_empty(&waiting_locks_list)) {
 		time64_t now = ktime_get_seconds();
-		time_t delta = 0;
+		timeout_t delta = 0;
 
 		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
 				  l_pending_chain);
-		if (lock->l_callback_timeout - now > 0)
-			delta = lock->l_callback_timeout - now;
+		if (lock->l_callback_timestamp - now > 0)
+			delta = lock->l_callback_timestamp - now;
 		mod_timer(&waiting_locks_timer,
 			  jiffies + cfs_time_seconds(delta));
 	}
@@ -373,26 +373,26 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
  *
  * Called with the namespace lock held.
  */
-static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds)
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t delay)
 {
 	unsigned long timeout_jiffies = jiffies;
 	time64_t now = ktime_get_seconds();
 	time64_t deadline;
-	time_t timeout;
+	timeout_t timeout;
 
 	if (!list_empty(&lock->l_pending_chain))
 		return 0;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
 	    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-		seconds = 1;
+		delay = 1;
 
-	deadline = now + seconds;
-	if (likely(deadline > lock->l_callback_timeout))
-		lock->l_callback_timeout = deadline;
+	deadline = now + delay;
+	if (likely(deadline > lock->l_callback_timestamp))
+		lock->l_callback_timestamp = deadline;
 
-	timeout = clamp_t(time_t, lock->l_callback_timeout - now,
-			  0, seconds);
+	timeout = clamp_t(timeout_t, lock->l_callback_timestamp - now,
+			  0, delay);
 	timeout_jiffies += cfs_time_seconds(timeout);
 
 	if (time_before(timeout_jiffies, waiting_locks_timer.expires) ||
@@ -432,7 +432,7 @@ static void ldlm_add_blocked_lock(struct ldlm_lock *lock)
 		obd_stale_export_adjust(lock->l_export);
 }
 
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 {
 	int ret;
 
@@ -481,7 +481,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
 	if (ret)
 		ldlm_add_blocked_lock(lock);
 
-	LDLM_DEBUG(lock, "%sadding to wait list(timeout: %lld, AT: %s)",
+	LDLM_DEBUG(lock, "%sadding to wait list(timeout: %d, AT: %s)",
 		   ret == 0 ? "not re-" : "", timeout,
 		   AT_OFF ? "off" : "on");
 	return ret;
@@ -512,12 +512,12 @@ static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
 		} else {
 			time64_t now = ktime_get_seconds();
 			struct ldlm_lock *next;
-			time_t delta = 0;
+			timeout_t delta = 0;
 
 			next = list_entry(list_next, struct ldlm_lock,
 					  l_pending_chain);
-			if (next->l_callback_timeout - now > 0)
-				delta = lock->l_callback_timeout - now;
+			if (next->l_callback_timestamp - now > 0)
+				delta = lock->l_callback_timestamp - now;
 
 			mod_timer(&waiting_locks_timer,
 				  jiffies + cfs_time_seconds(delta));
@@ -565,7 +565,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
  *
  * Called with namespace lock held.
  */
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 {
 	if (lock->l_export == NULL) {
 		/* We don't have a "waiting locks list" on clients. */
@@ -607,7 +607,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 	RETURN(0);
 }
 
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 {
 	RETURN(0);
 }
@@ -625,9 +625,9 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
  *
  * \retval            timeout in seconds to wait for the client reply
  */
-time64_t ldlm_bl_timeout(struct ldlm_lock *lock)
+timeout_t ldlm_bl_timeout(struct ldlm_lock *lock)
 {
-	time64_t timeout;
+	timeout_t timeout;
 
 	if (AT_OFF)
 		return obd_timeout / 2;
@@ -639,7 +639,8 @@ time64_t ldlm_bl_timeout(struct ldlm_lock *lock)
 	 * lock callbacks too...
 	 */
 	timeout = at_get(&lock->l_export->exp_bl_lock_at);
-	return max(timeout + (timeout >> 1), (time64_t)ldlm_enqueue_min);
+	return max_t(timeout_t, timeout + (timeout >> 1),
+		     (timeout_t)ldlm_enqueue_min);
 }
 EXPORT_SYMBOL(ldlm_bl_timeout);
 
@@ -663,7 +664,8 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 		 * the lock to the expired list
 		 */
 		LDLM_LOCK_GET(lock);
-	lock->l_callback_timeout = 0; /* differentiate it from expired locks */
+	/* differentiate it from expired locks */
+	lock->l_callback_timestamp = 0;
 	list_add(&lock->l_pending_chain, &expired_lock_list);
 	wake_up(&expired_lock_wait_queue);
 	spin_unlock_bh(&waiting_locks_spinlock);
@@ -1742,11 +1744,14 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 
 		if ((flags & LATF_STATS) && ldlm_is_ast_sent(lock) &&
 		    lock->l_blast_sent != 0) {
-			time64_t delay = ktime_get_real_seconds() -
-					 lock->l_blast_sent;
+			timeout_t delay = 0;
+
+			if (ktime_get_real_seconds() > lock->l_blast_sent)
+				delay = ktime_get_real_seconds() -
+					lock->l_blast_sent;
 			LDLM_DEBUG(lock,
-				   "server cancels blocked lock after %llds",
-				   (s64)delay);
+				   "server cancels blocked lock after %ds",
+				   delay);
 			at_measured(&lock->l_export->exp_bl_lock_at, delay);
 		}
 		ldlm_lock_cancel(lock);

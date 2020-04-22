@@ -1084,12 +1084,12 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
 /* See also lprocfs_rd_timeouts */
 static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 {
-	struct ptlrpc_service		*svc = m->private;
-	struct ptlrpc_service_part	*svcpt;
-	time64_t worstt;
-	unsigned int			cur;
-	unsigned int			worst;
-	int				i;
+	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service_part *svcpt;
+	time64_t worst_timestamp;
+	timeout_t cur_timeout;
+	timeout_t worst_timeout;
+	int i;
 
 	if (AT_OFF) {
 		seq_printf(m, "adaptive timeouts off, using obd_timeout %u\n",
@@ -1098,13 +1098,14 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 	}
 
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
-		cur	= at_get(&svcpt->scp_at_estimate);
-		worst	= svcpt->scp_at_estimate.at_worst_ever;
-		worstt	= svcpt->scp_at_estimate.at_worst_time;
+		cur_timeout = at_get(&svcpt->scp_at_estimate);
+		worst_timeout = svcpt->scp_at_estimate.at_worst_timeout_ever;
+		worst_timestamp = svcpt->scp_at_estimate.at_worst_timestamp;
 
 		seq_printf(m, "%10s : cur %3u  worst %3u (at %lld, %llds ago) ",
-			   "service", cur, worst, (s64)worstt,
-			   (s64)(ktime_get_real_seconds() - worstt));
+			   "service", cur_timeout, worst_timeout,
+			   worst_timestamp,
+			   ktime_get_real_seconds() - worst_timestamp);
 
 		lprocfs_at_hist_helper(m, &svcpt->scp_at_estimate);
 	}

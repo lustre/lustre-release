@@ -61,23 +61,6 @@ static inline void mdt_dom_write_unlock(struct mdt_object *mo)
 	up_write(&mo->mot_dom_sem);
 }
 
-/**
- * Lock prolongation for Data-on-MDT.
- * This is similar to OFD code but for DOM ibits lock.
- */
-static inline time64_t prolong_timeout(struct ptlrpc_request *req)
-{
-	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
-	time64_t req_timeout;
-
-	if (AT_OFF)
-		return obd_timeout / 2;
-
-	req_timeout = req->rq_deadline - req->rq_arrival_time.tv_sec;
-	return max_t(time64_t, at_est2timeout(at_get(&svcpt->scp_at_estimate)),
-		     req_timeout);
-}
-
 static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
 {
 	struct ldlm_resource *res;

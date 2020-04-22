@@ -2285,29 +2285,6 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 }
 
 /**
- * Calculate the amount of time for lock prolongation.
- *
- * This is helper for ofd_prolong_extent_locks() function to get
- * the timeout extra time.
- *
- * \param[in] req	current request
- *
- * \retval		amount of time to extend the timeout with
- */
-static inline time64_t prolong_timeout(struct ptlrpc_request *req)
-{
-	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
-	time64_t req_timeout;
-
-	if (AT_OFF)
-		return obd_timeout / 2;
-
-	req_timeout = req->rq_deadline - req->rq_arrival_time.tv_sec;
-	return max_t(time64_t, at_est2timeout(at_get(&svcpt->scp_at_estimate)),
-		     req_timeout);
-}
-
-/**
  * Prolong lock timeout for the given extent.
  *
  * This function finds all locks related with incoming request and
