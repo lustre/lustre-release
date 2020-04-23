@@ -1608,40 +1608,51 @@ int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1,
 {
 	struct lov_comp_md_entry_v1 *ent;
 	__u16 entries;
-	__u32 dom_off, dom_size, comp_size;
-	void *blob_src, *blob_dst;
-	unsigned int blob_size, blob_shift;
+	__u32 dom_off, dom_size, comp_size, off;
+	void *src, *dst;
+	unsigned int size, shift;
 
 	entries = le16_to_cpu(comp_v1->lcm_entry_count) - 1;
-	/* if file has only DoM stripe return just error */
-	if (entries == 0)
-		return -EFBIG;
+	LASSERT(entries > 0);
+	comp_v1->lcm_entry_count = cpu_to_le16(entries);
 
 	comp_size = le32_to_cpu(comp_v1->lcm_size);
 	dom_off = le32_to_cpu(dom_ent->lcme_offset);
 	dom_size = le32_to_cpu(dom_ent->lcme_size);
 
-	/* shift entries array first */
-	comp_v1->lcm_entry_count = cpu_to_le16(entries);
-	memmove(dom_ent, dom_ent + 1,
-		entries * sizeof(struct lov_comp_md_entry_v1));
-
-	/* now move blob of layouts */
-	blob_dst = (void *)comp_v1 + dom_off - sizeof(*dom_ent);
-	blob_src = (void *)comp_v1 + dom_off + dom_size;
-	blob_size = (unsigned long)((void *)comp_v1 + comp_size - blob_src);
-	blob_shift = sizeof(*dom_ent) + dom_size;
-
-	memmove(blob_dst, blob_src, blob_size);
-
+	/* all entries offsets are shifted by entry size at least */
+	shift = sizeof(*dom_ent);
 	for_each_comp_entry_v1(comp_v1, ent) {
-		__u32 off;
-
 		off = le32_to_cpu(ent->lcme_offset);
-		ent->lcme_offset = cpu_to_le32(off - blob_shift);
+		if (off == dom_off) {
+			/* Entry deletion creates two holes in layout data:
+			 * - hole in entries array
+			 * - hole in layout data at dom_off with dom_size
+			 *
+			 * First memmove is one entry shift from next entry
+			 * start with size up to dom_off in blob
+			 */
+			dst = (void *)ent;
+			src = (void *)(ent + 1);
+			size = (unsigned long)((void *)comp_v1 + dom_off - src);
+			memmove(dst, src, size);
+			/* take 'off' from just moved entry */
+			off = le32_to_cpu(ent->lcme_offset);
+			/* second memmove is blob tail after 'off' up to
+			 * component end
+			 */
+			dst = (void *)comp_v1 + dom_off - sizeof(*ent);
+			src = (void *)comp_v1 + off;
+			size = (unsigned long)(comp_size - off);
+			memmove(dst, src, size);
+			/* all entries offsets after DoM entry are shifted by
+			 * dom_size additionally
+			 */
+			shift += dom_size;
+		}
+		ent->lcme_offset = cpu_to_le32(off - shift);
 	}
-
-	comp_v1->lcm_size = cpu_to_le32(comp_size - blob_shift);
+	comp_v1->lcm_size = cpu_to_le32(comp_size - shift);
 
 	/* notify a caller to re-check entry */
 	return -ERESTART;
@@ -1728,6 +1739,7 @@ int lod_dom_stripesize_choose(const struct lu_env *env, struct lod_device *d,
 	__u32 max_stripe_size;
 	__u16 mid, dom_mid;
 	int rc = 0;
+	bool dom_next_entry = false;
 
 	dom_ext = &dom_ent->lcme_extent;
 	dom_mid = mirror_id_of(le32_to_cpu(dom_ent->lcme_id));
@@ -1742,6 +1754,10 @@ int lod_dom_stripesize_choose(const struct lu_env *env, struct lod_device *d,
 	       stripe_size, max_stripe_size);
 	lum->lmm_stripe_size = cpu_to_le32(max_stripe_size);
 
+	/* In common case the DoM stripe is first entry in a mirror and
+	 * can be deleted only if it is not single entry in layout or
+	 * mirror, otherwise error should be returned.
+	 */
 	for_each_comp_entry_v1(comp_v1, ent) {
 		if (ent == dom_ent)
 			continue;
@@ -1762,12 +1778,19 @@ int lod_dom_stripesize_choose(const struct lu_env *env, struct lod_device *d,
 		 * always and don't need adjustment since use own layouts.
 		 */
 		ext->e_start = cpu_to_le64(max_stripe_size);
+		dom_next_entry = true;
 		break;
 	}
 
 	if (max_stripe_size == 0) {
-		/* DoM component size is zero due to server setting,
-		 * remove it from the layout */
+		/* DoM component size is zero due to server setting, remove
+		 * it from the layout but only if next component exists in
+		 * the same mirror. That must be checked prior calling the
+		 * lod_erase_dom_stripe().
+		 */
+		if (!dom_next_entry)
+			return -EFBIG;
+
 		rc = lod_erase_dom_stripe(comp_v1, dom_ent);
 	} else {
 		/* Update DoM extent end finally */

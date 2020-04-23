@@ -19791,6 +19791,36 @@ test_270g() {
 }
 run_test 270g "DoM: default DoM stripe size depends on free space"
 
+test_270h() {
+	[[ $MDS1_VERSION -ge $(version_code 2.13.53) ]] ||
+		skip "Need MDS version at least 2.13.53"
+
+	local mdtname=${FSNAME}-MDT0000-mdtlov
+	local dom=$DIR/$tdir/$tfile
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params mds1 "lod.*.dom_stripesize" > $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir
+	$LFS setstripe -E 1M -c1  -E -1 -c2 ${dom}_1 ||
+		error "can't create OST file"
+	# mirrored file with DOM entry in the second mirror
+	$LFS mirror extend -N -E 1M -L mdt -E eof -c2 ${dom}_1 ||
+		error "can't create mirror with DoM component"
+
+	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=0
+
+	# DOM component in the middle and has other enries in the same mirror,
+	# should succeed but lost DoM component
+	$LFS setstripe --copy=${dom}_1 $dom ||
+		error "Can't create file from OST|DOM mirror layout"
+	# check new file has no DoM layout after all
+	[[ $($LFS getstripe -L $dom) != "mdt" ]] ||
+		error "File has DoM component while DoM is disabled"
+}
+run_test 270h "DoM: DoM stripe removal when disabled on server"
+
 test_271a() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
