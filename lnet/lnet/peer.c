@@ -1193,6 +1193,11 @@ LNetPrimaryNID(lnet_nid_t nid)
 	lp = lpni->lpni_peer_net->lpn_peer;
 
 	while (!lnet_peer_is_uptodate(lp)) {
+		spin_lock(&lp->lp_lock);
+		/* force a full discovery cycle */
+		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH;
+		spin_unlock(&lp->lp_lock);
+
 		rc = lnet_discover_peer_locked(lpni, cpt, true);
 		if (rc)
 			goto out_decref;
@@ -3064,6 +3069,21 @@ __must_hold(&lp->lp_lock)
 	return rc ? rc : LNET_REDISCOVER_PEER;
 }
 
+/*
+ * Mark the peer as discovered.
+ */
+static int lnet_peer_discovered(struct lnet_peer *lp)
+__must_hold(&lp->lp_lock)
+{
+	lp->lp_state |= LNET_PEER_DISCOVERED;
+	lp->lp_state &= ~(LNET_PEER_DISCOVERING |
+			  LNET_PEER_REDISCOVER);
+
+	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
+
+	return 0;
+}
+
 /* Active side of push. */
 static int lnet_peer_send_push(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3077,6 +3097,12 @@ __must_hold(&lp->lp_lock)
 	/* Don't push to a non-multi-rail peer. */
 	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
 		lp->lp_state &= ~LNET_PEER_FORCE_PUSH;
+		/* if peer's NIDs are uptodate then peer is discovered */
+		if (lp->lp_state & LNET_PEER_NIDS_UPTODATE) {
+			rc = lnet_peer_discovered(lp);
+			return rc;
+		}
+
 		return 0;
 	}
 
@@ -3168,22 +3194,6 @@ static void lnet_peer_discovery_error(struct lnet_peer *lp, int error)
 	lp->lp_state |= LNET_PEER_REDISCOVER;
 	spin_unlock(&lp->lp_lock);
 }
-
-/*
- * Mark the peer as discovered.
- */
-static int lnet_peer_discovered(struct lnet_peer *lp)
-__must_hold(&lp->lp_lock)
-{
-	lp->lp_state |= LNET_PEER_DISCOVERED;
-	lp->lp_state &= ~(LNET_PEER_DISCOVERING |
-			  LNET_PEER_REDISCOVER);
-
-	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
-
-	return 0;
-}
-
 
 /*
  * Discovering this peer is taking too long. Cancel any Ping or Push

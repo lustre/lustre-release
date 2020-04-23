@@ -1193,9 +1193,10 @@ rescan:
 			spin_unlock(&rtr->lp_lock);
 			continue;
 		}
-		/* make sure we actively discover the router */
+		/* make sure we fully discover the router */
 		rtr->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
-		rtr->lp_state |= LNET_PEER_RTR_DISCOVERY;
+		rtr->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH |
+			LNET_PEER_RTR_DISCOVERY;
 		spin_unlock(&rtr->lp_lock);
 
 		/* find the peer_ni associated with the primary NID */
