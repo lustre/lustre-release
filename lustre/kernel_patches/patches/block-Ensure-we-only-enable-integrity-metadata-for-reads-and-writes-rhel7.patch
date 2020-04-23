@@ -1,0 +1,33 @@
+From e69f18f06b97ed29645d020500222bfcec2b42b2 Mon Sep 17 00:00:00 2001
+From: "Martin K. Petersen" <martin.petersen@oracle.com>
+Date: Tue, 8 Apr 2014 22:59:31 -0400
+Subject: [PATCH] block: Ensure we only enable integrity metadata for reads and
+ writes
+
+We'd occasionally attempt to generate protection information for flushes
+and other requests with a zero payload. Make sure we only attempt to
+enable integrity for reads and writes.
+
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+Signed-off-by: Jens Axboe <axboe@fb.com>
+---
+ fs/bio-integrity.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/fs/bio-integrity.c b/fs/bio-integrity.c
+index b355b98dbf1b..1c2ce0c87711 100644
+--- a/fs/bio-integrity.c
++++ b/fs/bio-integrity.c
+@@ -182,6 +182,9 @@ static int bdev_integrity_enabled(struct block_device *bdev, int rw)
+  */
+ int bio_integrity_enabled(struct bio *bio)
+ {
++	if (!bio_is_rw(bio))
++		return 0;
++
+ 	/* Already protected? */
+ 	if (bio_integrity(bio))
+ 		return 0;
+-- 
+2.26.1
+
