@@ -593,6 +593,9 @@ struct lnet_peer {
 	/* primary NID of the peer */
 	lnet_nid_t		lp_primary_nid;
 
+	/* source NID to use during discovery */
+	lnet_nid_t		lp_disc_src_nid;
+
 	/* net to perform discovery on */
 	__u32			lp_disc_net_id;
 
