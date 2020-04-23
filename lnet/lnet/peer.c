@@ -255,6 +255,8 @@ lnet_peer_alloc(lnet_nid_t nid)
 	init_waitqueue_head(&lp->lp_dc_waitq);
 	spin_lock_init(&lp->lp_lock);
 	lp->lp_primary_nid = nid;
+	lp->lp_disc_src_nid = LNET_NID_ANY;
+
 	/*
 	 * Turn off discovery for loopback peer. If you're creating a peer
 	 * for the loopback interface then that was initiated when we
@@ -2174,6 +2176,8 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 
 	spin_lock(&lp->lp_lock);
 
+	lp->lp_disc_src_nid = ev->target.nid;
+
 	/*
 	 * If some kind of error happened the contents of message
 	 * cannot be used. Set PING_FAILED to trigger a retry.
@@ -2889,9 +2893,17 @@ __must_hold(&lp->lp_lock)
 		goto fail_unlink;
 	}
 
-	rc = LNetPut(LNET_NID_ANY, lp->lp_push_mdh,
+	rc = LNetPut(lp->lp_disc_src_nid, lp->lp_push_mdh,
 		     LNET_ACK_REQ, id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, 0);
+
+	/*
+	 * reset the discovery nid. There is no need to restrict sending
+	 * from that source, if we call lnet_push_update_to_peers(). It'll
+	 * get set to a specific NID, if we initiate discovery from the
+	 * scratch
+	 */
+	lp->lp_disc_src_nid = LNET_NID_ANY;
 
 	if (rc)
 		goto fail_unlink;

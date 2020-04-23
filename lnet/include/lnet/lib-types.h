@@ -650,6 +650,9 @@ struct lnet_peer {
 	/* primary NID of the peer */
 	lnet_nid_t		lp_primary_nid;
 
+	/* source NID to use during discovery */
+	lnet_nid_t		lp_disc_src_nid;
+
 	/* CPT of peer_table */
 	int			lp_cpt;
 
