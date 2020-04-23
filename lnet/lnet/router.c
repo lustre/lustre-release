@@ -526,8 +526,10 @@ lnet_router_discovery_complete(struct lnet_peer *lp)
 		* the gateway we assume this is intentional and we mark the
 		* gateway as multi-hop
 		*/
-		list_for_each_entry(route, &lp->lp_routes, lr_gwlist)
+		list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
+			lnet_set_route_aliveness(route, true);
 			lnet_set_route_hop_type(lp, route);
+		}
 
 		return;
 	}
