@@ -716,11 +716,12 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	if (obd->obd_recovering == 0) {
 		seq_printf(m, "COMPLETE\n");
 		seq_printf(m, "recovery_start: %lld\n",
-			   (s64)obd->obd_recovery_start);
+			   (s64)ktime_get_real_seconds() -
+			   (ktime_get_seconds() - obd->obd_recovery_start));
 		seq_printf(m, "recovery_duration: %lld\n",
 			   obd->obd_recovery_end ?
 			   obd->obd_recovery_end - obd->obd_recovery_start :
-			   ktime_get_real_seconds() - obd->obd_recovery_start);
+			   ktime_get_seconds() - obd->obd_recovery_start);
 		/* Number of clients that have completed recovery */
 		seq_printf(m, "completed_clients: %d/%d\n",
 			   atomic_read(&obd->obd_max_recoverable_clients) -
@@ -751,9 +752,11 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			seq_printf(m, "non-ready MDTs: %s\n",
 				   buf ? buf : "unknown (not enough RAM)");
 			seq_printf(m, "recovery_start: %lld\n",
-				   (s64)obd->obd_recovery_start);
+				   (s64)ktime_get_real_seconds() -
+				   (ktime_get_seconds() -
+				    obd->obd_recovery_start));
 			seq_printf(m, "time_waited: %lld\n",
-				   (s64)(ktime_get_real_seconds() -
+				   (s64)(ktime_get_seconds() -
 					 obd->obd_recovery_start));
 		}
 
@@ -771,14 +774,15 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	}
 
 	seq_printf(m, "RECOVERING\n");
-	seq_printf(m, "recovery_start: %lld\n", (s64)obd->obd_recovery_start);
+	seq_printf(m, "recovery_start: %lld\n", (s64)ktime_get_real_seconds() -
+		   (ktime_get_seconds() - obd->obd_recovery_start));
 	seq_printf(m, "time_remaining: %lld\n",
-		   ktime_get_real_seconds() >=
+		   ktime_get_seconds() >=
 		   obd->obd_recovery_start +
 		   obd->obd_recovery_timeout ? 0 :
 		   (s64)(obd->obd_recovery_start +
 			 obd->obd_recovery_timeout -
-			 ktime_get_real_seconds()));
+			 ktime_get_seconds()));
 	seq_printf(m, "connected_clients: %d/%d\n",
 		   atomic_read(&obd->obd_connected_clients),
 		   atomic_read(&obd->obd_max_recoverable_clients));

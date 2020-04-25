@@ -2361,7 +2361,6 @@ zconf_umount() {
 mount_mds_client() {
 	local mds_HOST=${SINGLEMDS}_HOST
 	echo $mds_HOST
-	do_facet $SINGLEMDS "mkdir -p $MOUNT2"
 	zconf_mount $mds1_HOST $MOUNT2 $MOUNT_OPTS ||
 		error "unable to mount $MOUNT2 on MDS"
 }
@@ -2370,7 +2369,7 @@ mount_mds_client() {
 umount_mds_client() {
 	local mds_HOST=${SINGLEMDS}_HOST
 	zconf_umount $mds1_HOST $MOUNT2
-	do_facet $SINGLEMDS "rm -rf $MOUNT2"
+	do_facet $SINGLEMDS "rmdir $MOUNT2"
 }
 
 # nodes is comma list

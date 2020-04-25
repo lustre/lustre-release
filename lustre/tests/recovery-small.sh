@@ -2970,11 +2970,12 @@ test_140b() {
 	mount_mds_client
 	replay_barrier mds1
 	umount_mds_client
-	local before=$SECONDS
 	fail mds1
-	local after=$SECONDS
-	(( $after-$before < $TIMEOUT*2 )) ||
-		error "recovery took too long" $((after-bsfore)) $TIMEOUT
+	local recovery=$(do_facet mds1 dmesg |
+			 awk -F: '/Recovery over after/ { print $4 }' |
+			 cut -d, -f1 | tail -1)
+	(( $recovery < $TIMEOUT*2 )) ||
+		error "recovery took too long $recovery > $((TIMEOUT * 2))"
 }
 run_test 140b "local mount is excluded from recovery"
 

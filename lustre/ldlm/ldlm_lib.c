@@ -2766,7 +2766,7 @@ static enum hrtimer_restart target_recovery_expired(struct hrtimer *timer)
 	CDEBUG(D_HA,
 	       "%s: recovery timed out; %d clients are still in recovery after %llu seconds (%d clients connected)\n",
 	       obd->obd_name, atomic_read(&obd->obd_lock_replay_clients),
-	       ktime_get_real_seconds() - obd->obd_recovery_start,
+	       ktime_get_seconds() - obd->obd_recovery_start,
 	       atomic_read(&obd->obd_connected_clients));
 
 	obd->obd_recovery_expired = 1;
