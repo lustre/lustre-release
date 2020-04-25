@@ -435,7 +435,9 @@ struct ldlm_namespace {
 	 */
 	unsigned int		ns_max_unused;
 
-	/** Maximum allowed age (last used time) for locks in the LRU */
+	/** Maximum allowed age (last used time) for locks in the LRU.  Set in
+	 * seconds from userspace, but stored in ns to avoid repeat conversions.
+	 */
 	ktime_t			ns_max_age;
 
 	/**
@@ -444,19 +446,20 @@ struct ldlm_namespace {
 	 */
 	unsigned int		ns_timeouts;
 	/**
-	 * Number of seconds since the file change time after which the
-	 * MDT will return an UPDATE lock along with a LOOKUP lock.
+	 * Number of seconds since the file change time after which
+	 * the MDT will return an UPDATE lock along with a LOOKUP lock.
 	 * This allows the client to start caching negative dentries
 	 * for a directory and may save an RPC for a later stat.
 	 */
-	time64_t		ns_ctime_age_limit;
+	timeout_t		ns_ctime_age_limit;
 	/**
-	 * Number of seconds since the lock was last used. The client may
-	 * cancel the lock limited by this age and flush related data if
-	 * any other client shows interest in it doing glimpse request.
-	 * This allows to cache stat data locally for such files early.
+	 * Number of (nano)seconds since the lock was last used. The client
+	 * may cancel the lock older than this age and flush related data if
+	 * another client shows interest in this lock by doing glimpse request.
+	 * This allows to cache stat data locally for such files early. Set in
+	 * seconds from userspace, but stored in ns to avoid repeat conversions.
 	 */
-	time64_t		ns_dirty_age_limit;
+	ktime_t			ns_dirty_age_limit;
 	/**
 	 * Used to rate-limit ldlm_namespace_dump calls.
 	 * \see ldlm_namespace_dump. Increased by 10 seconds every time

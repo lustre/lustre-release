@@ -416,8 +416,7 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	/* is lock is too old to be converted? */
 	lock_res_and_lock(lock);
 	if (ktime_after(ktime_get(),
-			ktime_add(lock->l_last_used,
-				  ktime_set(ns->ns_dirty_age_limit, 0)))) {
+			ktime_add(lock->l_last_used, ns->ns_dirty_age_limit))) {
 		unlock_res_and_lock(lock);
 		return 0;
 	}

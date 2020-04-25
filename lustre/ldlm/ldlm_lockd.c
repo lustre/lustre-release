@@ -2083,8 +2083,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 	if (lock->l_granted_mode == LCK_PW &&
 	    !lock->l_readers && !lock->l_writers &&
 	    ktime_after(ktime_get(),
-			ktime_add(lock->l_last_used,
-				  ktime_set(ns->ns_dirty_age_limit, 0)))) {
+			ktime_add(lock->l_last_used, ns->ns_dirty_age_limit))) {
 		unlock_res_and_lock(lock);
 
 		/* For MDS glimpse it is always DOM lock, set corresponding
