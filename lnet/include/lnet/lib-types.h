@@ -967,9 +967,13 @@ struct lnet_msg_container {
 	int			msc_nfinalizers;
 	/* msgs waiting to complete finalizing */
 	struct list_head	msc_finalizing;
+	/* msgs waiting to be resent */
+	struct list_head	msc_resending;
 	struct list_head	msc_active;	/* active message list */
 	/* threads doing finalization */
 	void			**msc_finalizers;
+	/* threads doing resends */
+	void			**msc_resenders;
 };
 
 /* Peer Discovery states */
