@@ -129,9 +129,10 @@ xml:id="installinglustre">
                     <entry>
                       <code>lustre-tests-<replaceable>ver</replaceable>_lustre.<replaceable>arch</replaceable></code>
                     </entry>
-                    <entry>Lustre I/O Kit benchmarking tools
-                    <emphasis role="italic">(Included in Lustre software as of
-                    release 2.2)</emphasis></entry>
+                    <entry>Scripts and programs used for running regression
+		    tests for Lustre, but likely only of interest to
+		    Lustre developers or testers.
+                    </entry>
                   </row>
                 </tbody>
               </tgroup>

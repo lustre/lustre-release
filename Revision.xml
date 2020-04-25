@@ -10,33 +10,27 @@ Instructions for providing a patch to the existing manual are available at:
 <link
 xl:href="http://wiki.lustre.org/Lustre_Manual_Changes">http://wiki.lustre.org/Lustre_Manual_Changes</link>.</para>
 
-	<para>This manual currently covers all the 2.x Lustre software releases.
-Features that are specific to individual releases are identified within the
-table of contents using a short hand notation (i.e. 'L24' is a Lustre software
-release 2.4 specific feature), and within the text using a distinct box.  For
-example:</para>
-
-	<para condition='l24'>Lustre software release version 2.4 includes support
-for multiple metadata servers.</para>
+      <para condition="l28">This manual covers a range of Lustre 2.x software
+        releases.  Features that are specific to individual releases are
+        identified within the table of contents using a short hand notation
+        (i.e. this paragraph is tagged for a Lustre 2.8 specific feature),
+        and within the text using a distinct box.  For example:</para>
 
     <note xml:id="whichversion"><title>which version?</title>
     <indexterm><primary>version</primary>
     <secondary>which version of Lustre am I running?</secondary></indexterm>
 
-    <para>The current version of Lustre
-    that is in use on the client can be found using the command 
-    <literal>lctl get_param version</literal>, for example:
+    <para>The current version of Lustre that is in use on the node can be found
+    using the command <literal>lctl get_param version</literal>, for example:
     <screen>$ lctl get_param version
-version=
-lustre: 2.7.59
-kernel: patchless_client
-build:  v2_7_59_0-g703195a-CHANGED-3.10.0.lustreopa</screen>
-	</para></note>
+version=2.10.5
+</screen>
+    </para></note>
 		
-	<para>Only the latest revision of this document is made readily available
-because changes are continually arriving. The current and latest revision of
-this manual is available from links maintained at: <link
-xl:href="http://lustre.opensfs.org/documentation/">http://lustre.opensfs.org/documentation/</link>.
+    <para>Only the latest revision of this document is made readily available
+      because changes are continually arriving. The current and latest revision
+      of this manual is available from links maintained at:
+      <link xl:href="http://lustre.opensfs.org/documentation/">http://lustre.opensfs.org/documentation/</link>.
 
         <revhistory>
             <revision>

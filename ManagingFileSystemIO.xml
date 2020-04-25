@@ -592,15 +592,9 @@ osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
     </section>
     <section remap="h3">
       <title>Ptlrpc Thread Pool</title>
-      <para>Releases prior to Lustre software release 2.2 used two portal RPC
-      daemons for each client/server pair. One daemon handled all synchronous
-      IO requests, and the second daemon handled all asynchronous (non-IO)
-      RPCs. The increasing use of large SMP nodes for Lustre servers exposed
-      some scaling issues. The lack of threads for large SMP nodes resulted in
-      cases where a single CPU would be 100% utilized and other CPUs would be
-      relativity idle. This is especially noticeable when a single client
-      traverses a large directory.</para>
-      <para>Lustre software release 2.2.x implements a ptlrpc thread pool, so
+      <para>The increasing use of large SMP nodes for Lustre servers requires
+        good scaling of many application threads generating large amounts of IO.
+        Lustre implements a ptlrpc thread pool, so
       that multiple threads can be created to serve asynchronous RPC requests.
       The number of threads spawned is controlled at module load time using
       module options. By default one thread is spawned per CPU, with a minimum

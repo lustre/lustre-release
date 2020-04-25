@@ -615,14 +615,6 @@ cpu_partition_table=
     <literal>ksocklnd</literal> using the 
     <literal>nscheds</literal> parameter. This adjusts the number of threads for
     each partition, not the overall number of threads on the LND.</para>
-    <note>
-      <para>Lustre software release 2.3 has greatly decreased the default
-      number of threads for 
-      <literal>ko2iblnd</literal> and 
-      <literal>ksocklnd</literal> on high-core count machines. The current
-      default values are automatically set and are chosen to work well across a
-      number of typical scenarios.</para>
-    </note>
     <section>
 	<title>ko2iblnd Tuning</title>
 	<para>The following table outlines the ko2iblnd module parameters to be used
@@ -1047,7 +1039,7 @@ cpu_partition_table=
 	</informaltable>
     </section>
   </section>
-  <section xml:id="dbdoclet.nrstuning" condition='l24'>
+  <section xml:id="dbdoclet.nrstuning">
     <title>
     <indexterm>
       <primary>tuning</primary>

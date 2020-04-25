@@ -372,12 +372,12 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
           <primary>striping</primary>
           <secondary>remote directories</secondary>
         </indexterm>Locating the MDT for a remote directory</title>
-      <para condition="l24">Lustre software release 2.4 can be configured with
-          multiple MDTs in the same file system. Each sub-directory can have a
-          different MDT. To identify on which MDT a given subdirectory is
-          located, pass the <literal>getstripe [--mdt-index|-M]</literal>
-          parameters to <literal>lfs</literal>. An example of this command is
-          provided in the section <xref linkend="lustremaint.rmremotedir"/>.</para>
+      <para>Lustre can be configured with multiple MDTs in the same file
+        system. Each directory and file could be located on a different MDT.
+        To identify which MDT a given subdirectory is located, pass the
+        <literal>getstripe [--mdt-index|-M]</literal> parameter to
+        <literal>lfs</literal>. An example of this command is provided in
+	the section <xref linkend="lustremaint.rmremotedir"/>.</para>
     </section>
   </section>
   <section xml:id="pfl" condition='l2A'>

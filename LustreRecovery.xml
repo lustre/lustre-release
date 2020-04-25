@@ -50,17 +50,18 @@
         <para> Transient network partition</para>
       </listitem>
     </itemizedlist>
-    <para>For Lustre software release 2.1.x and all earlier releases, all Lustre file system failure
-      and recovery operations are based on the concept of connection failure; all imports or exports
-      associated with a given connection are considered to fail if any of them fail. Lustre software
-      release 2.2.x adds the <xref linkend="imperativerecovery"/> feature which enables the MGS to
-      actively inform clients when a target restarts after a failure, failover or other
-      interruption.</para>
-    <para>For information on Lustre file system recovery, see <xref linkend="metadatereplay"/>. For
-      information on recovering from a corrupt file system, see <xref linkend="commitonshare"/>. For
-      information on resolving orphaned objects, a common issue after recovery, see <xref
-        linkend="dbdoclet.50438225_13916"/>. For information on imperative recovery see <xref
-        linkend="imperativerecovery"/>
+    <para>For Lustre, all Lustre file system failure and recovery operations
+      are based on the concept of connection failure; all imports or exports
+      associated with a given connection are considered to fail if any of
+      them fail.  The <xref linkend="imperativerecovery"/> feature allows
+      the MGS to actively inform clients when a target restarts after a
+      failure, failover, or other interruption to speed up recovery.</para>
+    <para>For information on Lustre file system recovery, see
+      <xref linkend="metadatereplay"/>. For information on recovering from a
+      corrupt file system, see <xref linkend="commitonshare"/>. For
+      information on resolving orphaned objects, a common issue after recovery,
+      see <xref linkend="dbdoclet.50438225_13916"/>. For information on
+      imperative recovery see <xref linkend="imperativerecovery"/>
     </para>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>client failure</secondary></indexterm>Client Failure</title>
@@ -122,8 +123,7 @@
       at the time of MDS failure are permitted to reconnect during the recovery
       window, to avoid the introduction of state changes that might conflict
       with what is being replayed by previously-connected clients.</para>
-      <para condition="l24">Lustre software release 2.4 introduces multiple
-      metadata targets. If multiple MDTs are in use, active-active failover
+      <para>If multiple MDTs are in use, active-active failover
       is possible (e.g. two MDS nodes, each actively serving one or more
       different MDTs for the same filesystem). See
       <xref linkend="dbdoclet.mdtactiveactive"/> for more information.</para>
@@ -403,7 +403,6 @@
   </section>
    <section xml:id="imperativerecovery">
     <title><indexterm><primary>imperative recovery</primary></indexterm>Imperative Recovery</title>
-	<para>Imperative Recovery (IR) was first introduced in Lustre software release 2.2.0.</para>
 	<para>Large-scale Lustre file system implementations have historically experienced problems
       recovering in a timely manner after a server failure. This is due to the way that clients
       detect the server failure and how the servers perform their recovery. Many of the processes
@@ -647,34 +646,45 @@ obdfilter.testfs-OST0001.instance=5
 $ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
     instance: 5
 </screen>
-	</section>
-	</section>
-	<section remap="h3" xml:id="imperativerecoveryrecomendations">
-	<title><indexterm><primary>imperative recovery</primary><secondary>Configuration Suggestions</secondary></indexterm>Configuration Suggestions for Imperative Recovery</title>
-<para>We used to build the MGS and MDT0 on the same target to save a server node. However, to make
-        IR work efficiently, we strongly recommend running the MGS node on a separate node for any
-        significant Lustre file system installation. There are three main advantages of doing this: </para>
-<orderedlist>
-<listitem><para>Be able to notify clients if the MDT0 is dead</para></listitem>
-<listitem><para>Load balance. The load on the MDS may be very high which may make the MGS unable to notify the clients in time</para></listitem>
-<listitem><para>Safety. The MGS code is simpler and much smaller compared to the code of MDT. This means the chance of MGS down time due to a software bug is very low.</para></listitem>
-</orderedlist>
-	</section>
+        </section>
+        </section>
+        <section remap="h3" xml:id="imperativerecoveryrecomendations">
+        <title><indexterm><primary>imperative recovery</primary><secondary>Configuration Suggestions</secondary></indexterm>Configuration Suggestions for Imperative Recovery</title>
+          <para>We used to build the MGS and MDT0000 on the same target to save
+            a server node. However, to make IR work efficiently, we strongly
+            recommend running the MGS node on a separate node for any
+            significant Lustre file system installation. There are three main
+            advantages of doing this: </para>
+          <orderedlist>
+            <listitem><para>Be able to notify clients when MDT0000 recovered.
+            </para></listitem>
+            <listitem><para>Improved load balance. The load on the MDS may be
+              very high which may make the MGS unable to notify the clients in
+              time.</para></listitem>
+            <listitem><para>Robustness. The MGS code is simpler and much smaller
+              compared to the MDS code. This means the chance of an MGS downtime
+              due to a software bug is very low.
+            </para></listitem>
+            </orderedlist>
+        </section>
   </section>
 
   <section xml:id="suppressingpings">
   <title><indexterm><primary>suppressing pings</primary></indexterm>Suppressing Pings</title>
-    <para>On clusters with large numbers of clients and OSTs, OBD_PING messages may impose
-      significant performance overheads. As an intermediate solution before a more self-contained
-      one is built, Lustre software release 2.4 introduces an option to suppress pings, allowing
-      ping overheads to be considerably reduced. Before turning on this option, administrators
-      should consider the following requirements and understand the trade-offs involved:</para>
+    <para>On clusters with large numbers of clients and OSTs,
+      <literal>OBD_PING</literal> messages may impose significant performance
+      overheads. There is an option to suppress pings, allowing ping overheads
+      to be considerably reduced. Before turning on this option, administrators
+      should consider the following requirements and understand the trade-offs
+      involved:</para>
     <itemizedlist>
       <listitem>
-        <para>When suppressing pings, a target can not detect client deaths, since clients do not
-          send pings that are only to keep their connections alive. Therefore, a mechanism external
-          to the Lustre file system shall be set up to notify Lustre targets of client deaths in a
-          timely manner, so that stale connections do not exist for too long and lock callbacks to
+        <para>When suppressing pings, a server cannot detect client deaths,
+          since clients do not send pings that are only to keep their
+          connections alive. Therefore, a mechanism external to the Lustre
+          file system shall be set up to notify Lustre targets of client
+          deaths in a timely manner, so that stale connections do not exist
+          for too long and lock callbacks to
           dead clients do not always have to wait for timeouts.</para>
       </listitem>
       <listitem>

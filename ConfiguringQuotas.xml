@@ -27,10 +27,10 @@ xml:id="configuringquotas">
         <literal>lctl</literal> commands (post-mount).</para>
       </listitem>
       <listitem>
-		<para>The quota feature in Lustre software is distributed
+        <para>The quota feature in Lustre software is distributed
         throughout the system (as the Lustre file system is a distributed file
         system). Because of this, quota setup and behavior on Lustre is
-        different from local disk quotas in the following ways:</para>
+        somewhat different from local disk quotas in the following ways:</para>
         <itemizedlist>
         <listitem>
           <para>No single point of administration: some commands must be
@@ -45,7 +45,8 @@ xml:id="configuringquotas">
           <listitem>
           <para>Accuracy: quota information is distributed throughout the file
           system and can only be accurately calculated with a quiescent file
-          system.</para>
+          system in order to minimize performance overhead during normal use.
+          </para>
         </listitem>
         </itemizedlist>
       </listitem>
@@ -55,13 +56,9 @@ xml:id="configuringquotas">
       <listitem>
         <para>Client does not set the
         <literal>usrquota</literal> or
-        <literal>grpquota</literal> options to mount. As of Lustre software
-        release 2.4, space accounting is always enabled by default and quota
-        enforcement can be enabled/disabled on a per-file system basis with
-        <literal>lctl conf_param</literal>. It is worth noting that both
-        <literal>lfs quotaon</literal> and
-        <literal>quota_type</literal> are deprecated as of Lustre software
-        release 2.4.0.</para>
+        <literal>grpquota</literal> options to mount. Space accounting is
+        enabled by default and quota enforcement can be enabled/disabled on
+        a per-filesystem basis with <literal>lctl conf_param</literal>.</para>
       </listitem>
     </itemizedlist>
     <caution>
@@ -86,14 +83,8 @@ xml:id="configuringquotas">
     responsible for management and enforcement. The back-end file
     system is responsible for resource usage and accounting. Because of
     this, it is necessary to begin enabling quotas by enabling quotas on the
-    back-end disk system. Because quota setup is dependent on the Lustre
-    software version in use, you may first need to run
-    <literal>lctl get_param version</literal> to identify
-    <xref linkend="whichversion"/> you are currently using.
+    back-end disk system.
     </para>
-    <section remap="h3" condition="l24" xml:id="enabling_disk_quota_after24">
-      <title>Enabling Disk Quotas (Lustre Software Release 2.4 and
-      later)</title>
       <caution>
         <para>Quota setup is orchestrated by the MGS and <emphasis>all setup
         commands in this section must be run directly on the MGS</emphasis>.
@@ -163,7 +154,7 @@ xml:id="configuringquotas">
           enables the QUOTA feature flag in the superblock which turns quota
           accounting on at mount time automatically. e2fsck was also modified
           to fix the quota files when the QUOTA feature flag is present. The
-	        project quota feature is disabled by default, and
+          project quota feature is disabled by default, and
           <literal>tune2fs</literal> needs to be run to enable every target
           manually.</para>
         </listitem>
@@ -195,13 +186,6 @@ xml:id="configuringquotas">
         </listitem>
       </itemizedlist>
       <note>
-      <para>Lustre file systems formatted with a Lustre release prior to 2.4.0
-      can be still safely upgraded to release 2.4.0, but will not have
-      functional space usage report until
-      <literal>tunefs.lustre --quota</literal> is run against all targets. This
-      command sets the QUOTA feature flag in the superblock and runs e2fsck (as
-      a result, the target must be offline) to build the per-UID/GID disk usage
-      database.</para>
       <para condition="l2A">Lustre filesystems formatted with a Lustre release
       prior to 2.10 can be still safely upgraded to release 2.10, but will not
       have project quota usage reporting functional until
@@ -212,13 +196,11 @@ xml:id="configuringquotas">
       considerations.</para>
       </note>
       <caution>
-        <para>Lustre software release 2.4 and later requires a version of
-        e2fsprogs that supports quota (i.e. newer or equal to 1.42.13.wc5,
-	1.42.13.wc6 or newer is needed for project quota support) to be
-	installed on the server nodes using ldiskfs backend (e2fsprogs is not
-	needed with ZFS backend). In general, we recommend to use the latest
-	e2fsprogs version available on
-	<link xl:href="http://downloads.whamcloud.com/e2fsprogs/">
+        <para>Lustre requires a version of e2fsprogs that supports quota
+        to be installed on the server nodes when using the ldiskfs backend
+        (e2fsprogs is not needed with ZFS backend). In general, we recommend
+        to use the latest e2fsprogs version available on
+        <link xl:href="http://downloads.whamcloud.com/e2fsprogs/">
         http://downloads.whamcloud.com/public/e2fsprogs/</link>.</para>
         <para>The ldiskfs OSD relies on the standard Linux quota to maintain
         accounting information on disk. As a consequence, the Linux kernel
@@ -227,16 +209,11 @@ xml:id="configuringquotas">
         <literal>CONFIG_QUOTACTL</literal> and
         <literal>CONFIG_QFMT_V2</literal> enabled.</para>
       </caution>
-      <para>As of Lustre software release 2.4.0, quota enforcement is thus
-      turned on/off independently of space accounting which is always enabled.
-      <literal>lfs quota
-      <replaceable>on|off</replaceable></literal> as well as the per-target
-      <literal>quota_type</literal> parameter are deprecated in favor of a
-      single per-file system quota parameter controlling inode/block quota
-      enforcement. Like all permanent parameters, this quota parameter can be
-      set via
-      <literal>lctl conf_param</literal> on the MGS via the following
-      syntax:</para>
+      <para>Quota enforcement is turned on/off independently of space
+        accounting which is always enabled.  There is a single per-file
+        system quota parameter controlling inode/block quota enforcement.
+        Like all permanent parameters, this quota parameter can be set via
+        <literal>lctl conf_param</literal> on the MGS via the command:</para>
       <screen>
 lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</replaceable>=<replaceable>u|g|p|ugp|none</replaceable>
 </screen>
@@ -281,26 +258,22 @@ lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</re
       <para>To turn on user, group, and project quotas for block only on
       file system
       <literal>testfs1</literal>, <emphasis>on the MGS</emphasis> run:</para>
-      <screen>$ lctl conf_param testfs1.quota.ost=ugp
-</screen>
+      <screen>mgs# lctl conf_param testfs1.quota.ost=ugp </screen>
       <para>To turn on group quotas for inodes on file system
       <literal>testfs2</literal>, on the MGS run:</para>
-      <screen>$ lctl conf_param testfs2.quota.mdt=g
-</screen>
+      <screen>mgs# lctl conf_param testfs2.quota.mdt=g </screen>
       <para>To turn off user, group, and project quotas for both inode and block
       on file system
       <literal>testfs3</literal>, on the MGS run:</para>
-      <screen>$ lctl conf_param testfs3.quota.ost=none
-</screen>
-      <screen>$ lctl conf_param testfs3.quota.mdt=none
-</screen>
+      <screen>mgs# lctl conf_param testfs3.quota.ost=none</screen>
+      <screen>mgs# lctl conf_param testfs3.quota.mdt=none</screen>
       <section xml:id="quota_verification">
-	    <title>
-	    <indexterm>
-	      <primary>Quotas</primary>
-	      <secondary>verifying</secondary>
-	    </indexterm>Quota Verification</title>
-	  <para>Once the quota parameters have been configured, all targets
+        <title>
+        <indexterm>
+          <primary>Quotas</primary>
+          <secondary>verifying</secondary>
+        </indexterm>Quota Verification</title>
+      <para>Once the quota parameters have been configured, all targets
       which are part of the file system will be automatically notified of the
       new quota settings and enable/disable quota enforcement as needed. The
       per-target enforcement status can still be verified by running the
@@ -317,7 +290,6 @@ user uptodate:  glb[1],slv[1],reint[0]
 group uptodate: glb[1],slv[1],reint[0]
 </screen>
       </section>
-    </section>
   </section>
   <section xml:id="quota_administration">
     <title>
@@ -325,7 +297,7 @@ group uptodate: glb[1],slv[1],reint[0]
       <primary>Quotas</primary>
       <secondary>creating</secondary>
     </indexterm>Quota Administration</title>
-	<para>Once the file system is up and running, quota limits on blocks
+    <para>Once the file system is up and running, quota limits on blocks
     and inodes can be set for user, group, and project. This is <emphasis>
     controlled entirely from a client</emphasis> via three quota
     parameters:</para>
@@ -484,13 +456,6 @@ uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
     <screen>
 lctl get_param osd-*.*.quota_slave.limit*
 </screen></para>
-    <note>
-      <para>Prior to 2.4, global quota limits used to be stored in
-      administrative quota files using the on-disk format of the linux quota
-      file. When upgrading MDT0000 to 2.4, those administrative quota files are
-      converted into IAM indexes automatically, conserving existing quota
-      limits previously set by the administrator.</para>
-    </note>
   </section>
   <section condition='l2C' xml:id="default_quota">
     <title>
@@ -635,37 +600,6 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
       <primary>Quotas</primary>
       <secondary>Interoperability</secondary>
     </indexterm>Quotas and Version Interoperability</title>
-    <para>The new quota protocol introduced in Lustre software release 2.4.0
-    <emphasis role="bold">is not compatible</emphasis> with previous
-    versions. As a consequence,
-    <emphasis role="bold">all Lustre servers must be upgraded to release 2.4.0
-    for quota to be functional</emphasis>. Quota limits set on the Lustre file
-    system prior to the upgrade will be automatically migrated to the new quota
-    index format. As for accounting information with ldiskfs backend, they will
-    be regenerated by running
-    <literal>tunefs.lustre --quota</literal> against all targets. It is worth
-    noting that running
-    <literal>tunefs.lustre --quota</literal> is
-    <emphasis role="bold">mandatory</emphasis> for all targets formatted with a
-    Lustre software release older than release 2.4.0, otherwise quota
-    enforcement as well as accounting won't be functional.</para>
-    <para>Besides, the quota protocol in release 2.4 takes for granted that the
-    Lustre client supports the
-    <literal>OBD_CONNECT_EINPROGRESS</literal> connect flag. Clients supporting
-    this flag will retry indefinitely when the server returns
-    <literal>EINPROGRESS</literal> in a reply. Here is the list of Lustre client
-    version which are compatible with release 2.4:</para>
-    <itemizedlist>
-      <listitem>
-        <para>Release 2.3-based clients and later</para>
-      </listitem>
-      <listitem>
-        <para>Release 1.8 clients newer or equal to release 1.8.9-wc1</para>
-      </listitem>
-      <listitem>
-        <para>Release 2.1 clients newer or equal to release 2.1.4</para>
-      </listitem>
-    </itemizedlist>
     <para condition="l2A">To use the project quota functionality introduced in
     Lustre 2.10, <emphasis role="bold">all Lustre servers and clients must be
     upgraded to Lustre release 2.10 or later for project quota to work
@@ -673,7 +607,7 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
     clients and not be accounted for on OSTs.  Furthermore, the
     <emphasis role="bold">servers may be required to use a patched kernel,
     </emphasis> for more information see
-    <xref linkend="enabling_disk_quota_after24"/>.</para>
+    <xref linkend="enabling_disk_quotas"/>.</para>
   </section>
   <section xml:id="granted_cache_and_quota_limits">
     <title>

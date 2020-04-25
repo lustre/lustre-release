@@ -70,8 +70,7 @@ client# mount -t lustre mds0@tcp0:/short
       <listitem>
         <para>Mount the MDT.</para>
         <note>
-          <para condition='l24'>Mount all MDTs if multiple MDTs are
-          present.</para>
+          <para>Mount all MDTs if multiple MDTs are present.</para>
         </note>
       </listitem>
       <listitem>
@@ -427,15 +426,16 @@ client# mount -t lustre mgsnode@tcp0:/foo /mnt/foo
 client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar
 </screen>
   </section>
-  <section xml:id="dbdoclet.lfsmkdir" condition='l24'>
+  <section xml:id="dbdoclet.lfsmkdir">
     <title>
     <indexterm>
       <primary>operations</primary>
       <secondary>remote directory</secondary>
-    </indexterm>Creating a sub-directory on a given MDT</title>
-    <para>Lustre 2.4 enables individual sub-directories to be serviced by
-    unique MDTs. An administrator can allocate a sub-directory to a given MDT
-    using the command:</para>
+    </indexterm>Creating a sub-directory on a specific MDT</title>
+    <para>It is possible to create individual directories, along with its
+      files and sub-directories, to be stored on specific MDTs. To create
+      a sub-directory on a given MDT use the command:
+    </para>
     <screen>
 client# lfs mkdir –i
 <replaceable>mdt_index</replaceable>
@@ -450,11 +450,11 @@ client# lfs mkdir –i
     <warning>
       <para>An administrator can allocate remote sub-directories to separate
       MDTs. Creating remote sub-directories in parent directories not hosted on
-      MDT0 is not recommended. This is because the failure of the parent MDT
+      MDT0000 is not recommended. This is because the failure of the parent MDT
       will leave the namespace below it inaccessible. For this reason, by
-      default it is only possible to create remote sub-directories off MDT0. To
-      relax this restriction and enable remote sub-directories off any MDT, an
-      administrator must issue the following command on the MGS:
+      default it is only possible to create remote sub-directories off MDT0000.
+      To relax this restriction and enable remote sub-directories off any MDT,
+      an administrator must issue the following command on the MGS:
       <screen>mgs# lctl conf_param <replaceable>fsname</replaceable>.mdt.enable_remote_dir=1</screen>
       For Lustre filesystem 'scratch', the command executed is:
       <screen>mgs# lctl conf_param scratch.mdt.enable_remote_dir=1</screen>
@@ -468,7 +468,7 @@ client# lfs mkdir –i
     <literal>enable_remote_dir_gid</literal>. For example, setting this
     parameter to the 'wheel' or 'admin' group ID allows users with that GID
     to create and delete remote and striped directories. Setting this
-    parameter to <literal>-1</literal> on MDT0 to permanently allow any
+    parameter to <literal>-1</literal> on MDT0000 to permanently allow any
     non-root users create and delete remote and striped directories.
     On the MGS execute the following command:
     <screen>mgs# lctl conf_param <replaceable>fsname</replaceable>.mdt.enable_remote_dir_gid=-1</screen>
@@ -840,16 +840,14 @@ mds1# lctl get_param mdt.testfs-MDT0000.recovery_status
     software tries the first one, and if that fails, it tries the second
     one.)</para>
     <para>Two options to 
-    <literal>mkfs.lustre</literal> can be used to specify failover nodes.
-    Introduced in Lustre software release 2.0, the 
+    <literal>mkfs.lustre</literal> can be used to specify failover nodes.  The
     <literal>--servicenode</literal> option is used to specify all service NIDs,
     including those for primary nodes and failover nodes. When the 
     <literal>--servicenode</literal> option is used, the first service node to
     load the target device becomes the primary service node, while nodes
     corresponding to the other specified NIDs become failover locations for the
-    target device. An older option, 
-    <literal>--failnode</literal>, specifies just the NIDS of failover nodes.
-    For more information about the 
+    target device. An older option, <literal>--failnode</literal>, specifies
+    just the NIDs of failover nodes.  For more information about the 
     <literal>--servicenode</literal> and 
     <literal>--failnode</literal> options, see 
     <xref xmlns:xlink="http://www.w3.org/1999/xlink"

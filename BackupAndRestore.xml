@@ -426,18 +426,6 @@ Changelog records consumed: 42</screen>
       expensive storage than the actual MDT device(s) since it only needs to
       have good streaming read/write speed instead of high random IOPS.</para>
     </note>
-    <warning condition='l23'>
-      <para>In Lustre software release 2.0 through 2.2, the only successful
-      way to backup and restore an MDT is to do a device-level backup as is
-      described in this section. File-level restore of an MDT is not possible
-      before Lustre software release 2.3, as the Object Index (OI) file cannot
-      be rebuilt after restore without the OI Scrub functionality. 
-      Since Lustre 2.3, Object Index files are automatically rebuilt at first
-      mount after a restore is detected (see 
-      <link xl:href="http://jira.whamcloud.com/browse/LU-957">LU-957</link>),
-      and file-level backup is supported (see 
-      <xref linkend="backup_fs_level"/>).</para>
-    </warning>
     <para>If hardware replacement is the reason for the backup or if a spare
     storage device is available, it is possible to do a raw copy of the MDT or
     OST from one block device to the other, as long as the new device is at
@@ -451,11 +439,8 @@ Changelog records consumed: 42</screen>
     <para>Even in the face of hardware errors, the <literal>ldiskfs</literal>
     file system is very robust and it may be possible
     to recover the file system data after running 
-    <literal>e2fsck -fy /dev/{newdev}</literal> on the new device, along with 
-    <literal>ll_recover_lost_found_objs</literal> for OST devices.</para>
-    <para condition="l26">With Lustre software version 2.6 and later, there is
-    no longer a need to run 
-    <literal>ll_recover_lost_found_objs</literal> on the OSTs, since the 
+    <literal>e2fsck -fy /dev/{newdev}</literal> on the new device.</para>
+    <para>With Lustre software version 2.6 and later, the
     <literal>LFSCK</literal> scanning will automatically move objects from 
     <literal>lost+found</literal> back into its correct location on the OST
     after directory corruption.</para>
@@ -493,19 +478,17 @@ Changelog records consumed: 42</screen>
     it is the preferred method for migration of OST devices, especially when it
     is desirable to reformat the underlying file system with different
     configuration options or to reduce fragmentation.</para>
-    <note><para>
-      <emphasis role="bold">Prior to Lustre software release 2.3</emphasis>, the
-      only successful way to perform an MDT backup and restore was to do a
-      device-level backup as described in
-      <xref linkend="dbdoclet.backup_device" />. The ability to do MDT
-      file-level backups is not available for Lustre software release 2.0
-      through 2.2, because restoration of the Object Index (OI) file does not
-      return the MDT to a functioning state.</para>
-      <para><emphasis role="bold">Since Lustre software release 2.3</emphasis>,
-      Object Index files are automatically rebuilt at first mount after a
-      restore is detected (see 
-      <link xl:href="http://jira.whamcloud.com/browse/LU-957">LU-957</link>),
-      so file-level MDT restore is supported.</para></note>
+    <note>
+      <para>Since Lustre stores internal metadata that maps FIDs to local
+        inode numbers via the Object Index file, they need to be rebuilt at
+        first mount after a restore is detected so that file-level MDT backup
+        and restore is supported.  The OI Scrub rebuilds these automatically
+        at first mount after a restore is detected, which may affect MDT
+        performance after mount until the rebuild is completed.  Progress can
+        be monitored via <literal>lctl get_param osd-*.*.oi_scrub</literal>
+        on the MDS or OSS node where the target filesystem was restored.
+      </para>
+    </note>
     <section xml:id="backup_fs_level.index_objects" condition="l2B">
       <title>
         <indexterm>
@@ -520,7 +503,7 @@ Changelog records consumed: 42</screen>
         before the unmount of the target (MDT or OST) in order to be able to
         restore the file system successfully.  To enable index backup on the
         target, execute the following command on the target server:</para>
-      <screen># lctl set_param osd-zfs.${fsname}-${target}.index_backup=1</screen>
+      <screen># lctl set_param osd-*.${fsname}-${target}.index_backup=1</screen>
       <para><replaceable>${target}</replaceable> is composed of the target type
         (MDT or  OST) plus the target index, such as <literal>MDT0000</literal>,
         <literal>OST0001</literal>, and so on.</para>
@@ -535,9 +518,8 @@ Changelog records consumed: 42</screen>
           <primary>backup</primary>
           <secondary>OST and MDT</secondary>
         </indexterm>Backing Up an OST or MDT</title>
-      <para>For Lustre software release 2.3 and newer with MDT file-level backup
-        support, substitute <literal>mdt</literal> for <literal>ost</literal>
-        in the instructions below.</para>
+      <para>If backing up an MDT, substitute <literal>mdt</literal> for
+        <literal>ost</literal> in the instructions below.</para>
       <orderedlist>
         <listitem>
           <para><emphasis role="bold">Umount the target</emphasis></para>

@@ -53,7 +53,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
   </glossdiv>
   <glossdiv>
     <title>D</title>
-    <glossentry xml:id="defaultstrippattern">
+    <glossentry xml:id="defaultstripepattern">
       <glossterm>Default stripe pattern</glossterm>
       <glossdef>
         <para>Information in the LOV descriptor that describes the default
@@ -79,20 +79,21 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
         new subdirectories at the time they are created.</para>
       </glossdef>
     </glossentry>
-    <glossentry xml:id="DNE" condition='l24'>
+    <glossentry xml:id="DNE">
       <glossterm>Distributed namespace (DNE)</glossterm>
       <glossdef>
         <para>A collection of metadata targets serving a single file
-        system namespace. Prior to DNE, Lustre file systems were limited to a
-        single metadata target for the entire name space. Without the ability 
-        to distribute metadata load over multiple targets, Lustre file system
-        performance is limited. Lustre was enhanced with DNE functionality in
-        two development phases. After completing the first phase of development
-        in Lustre software version 2.4, <emphasis>Remote Directories</emphasis>
-        allows the metadata for sub-directories to be serviced by an
-        independent MDT(s). After completing the second phase of development in
-        Lustre software version 2.8, <emphasis>Striped Directories</emphasis>
-        allows files in a single directory to be serviced by multiple MDTs.
+          system namespace. Without DNE, Lustre file systems are limited to a
+          single metadata target for the entire name space. Without the ability 
+          to distribute metadata load over multiple targets, Lustre file system
+          performance may be limited. The DNE functionality has two types of
+          scalability.  <emphasis>Remote Directories</emphasis> (DNE1) allows
+	  sub-directories to be serviced by an independent MDT(s), increasing
+	  aggregate metadata capacity and performance for independent sub-trees
+	  of the filesystem. This also allows performance isolation of workloads
+	  running in a specific sub-directory on one MDT from workloads on other
+	  MDTs. In Lustre 2.8 and later <emphasis>Striped Directories</emphasis>
+	  (DNE2) allows a single directory to be serviced by multiple MDTs.
         </para>
       </glossdef>
     </glossentry>
@@ -437,13 +438,13 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
         the file data.</para>
       </glossdef>
     </glossentry>
-    <glossentry xml:id="mdt0" condition='l24'>
-      <glossterm>MDT0</glossterm>
+    <glossentry xml:id="mdt0">
+      <glossterm>MDT0000</glossterm>
       <glossdef>
-        <para>The metadata target for the file system root. Since Lustre
-        software release 2.4, multiple metadata targets are possible in the
-        same file system. MDT0 is the root of the file system, which must be
-        available for the file system to be accessible.</para>
+        <para>The metadata target storing the file system root directory, as
+          well as some core services such as quota tables.  Multiple metadata
+          targets are possible in the same file system. MDT0000 must be
+          available for the file system to be accessible.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="mgs">
@@ -523,28 +524,11 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
         Examples include MDC, OSC, LOV, MDT, and OST.</para>
       </glossdef>
     </glossentry>
-    <glossentry xml:id="odbapi">
-      <glossterm>OBD API</glossterm>
-      <glossdef>
-        <para>The programming interface for configuring OBD devices. This was
-        formerly also the API for accessing object IO and attribute methods on
-        both the client and server, but has been replaced by the OSD API in
-        most parts of the code.</para>
-      </glossdef>
-    </glossentry>
     <glossentry xml:id="odbtype">
       <glossterm>OBD type</glossterm>
       <glossdef>
         <para>Module that can implement the Lustre object or metadata APIs.
         Examples of OBD types include the LOV, OSC and OSD.</para>
-      </glossdef>
-    </glossentry>
-    <glossentry xml:id="odbfilter">
-      <glossterm>Obdfilter</glossterm>
-      <glossdef>
-        <para>An older name for the OBD API data object operation device driver
-        that sits between the OST and the OSD. In Lustre software release 2.4
-        this device has been renamed OFD."</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="objectstorage">
@@ -663,17 +647,13 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
         server restarts.</para>
       </glossdef>
     </glossentry>
-    <glossentry xml:id="remotedirectories" condition='l24'>
+    <glossentry xml:id="remotedirectories">
       <glossterm>Remote directory</glossterm>
       <glossdef>
-        <para>A remote directory describes a feature of
-        Lustre where metadata for files in a given directory may be
-        stored on a different MDT than the metadata for the parent
-        directory. Remote directories only became possible with the
-        advent of DNE Phase 1, which arrived in Lustre version
-        2.4. Remote directories are available to system
-        administrators who wish to provide individual metadata
-        targets for individual workloads.</para>
+        <para>A remote directory describes a feature of Lustre where metadata
+	for files in a given directory may be stored on a different MDT than
+	the metadata for the parent directory.  This is sometimes referred
+	to as DNE1.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="replay">
@@ -746,13 +726,12 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="stripeddirectory" condition='l28'>
       <glossterm>Striped Directory</glossterm>
       <glossdef>
-        <para>A striped directory is a feature of Lustre
-        software where metadata for files in a given directory are
-        distributed evenly over multiple MDTs. Striped directories
+        <para>A striped directory is when metadata for files in a given
+	directory are distributed evenly over multiple MDTs. Striped directories
         are only available in Lustre software version 2.8 or later.
-        An administrator can use a striped directory to increase
-        metadata performance by distributing the metadata requests
-        in a single directory over two or more MDTs.</para>
+        A user can create a striped directory to increase metadata
+	performance of large directories by distributing the metadata
+	requests in a single directory over two or more MDTs.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="stridesize">

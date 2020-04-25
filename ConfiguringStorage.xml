@@ -137,11 +137,17 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>external journal</tertiary></indexterm>Choosing Parameters for an External Journal</title>
-      <para>If you have configured a RAID array and use it directly as an OST, it contains both data and metadata. For better performance, we recommend putting the OST journal on a separate device, by creating a small RAID 1 array and using it as an external journal for the OST.</para>
-      <para>In a Lustre file system, the default journal size is 400 MB. A journal size of up to 1
-        GB has shown increased performance but diminishing returns are seen for larger journals.
-        Additionally, a copy of the journal is kept in RAM. Therefore, make sure you have enough
-        memory available to hold copies of all the journals.</para>
+      <para>If you have configured a RAID array and use it directly as an OST,
+        it contains both data and metadata. For better performance, we
+        recommend putting the OST journal on a separate device, by creating a
+        small RAID 1 array and using it as an external journal for the OST.
+      </para>
+      <para>In a typical Lustre file system, the default OST journal size is
+        up to 1GB, and the default MDT journal size is up to 4GB, in order to
+        handle a high transaction rate without blocking on journal flushes.
+        Additionally, a copy of the journal is kept in RAM. Therefore, make
+        sure you have enough RAM on the servers to hold copies of all journals.
+        </para>
       <para>The file system journal options are specified to <literal>mkfs.lustre</literal> using
         the <literal>--mkfsoptions</literal> parameter. For example:</para>
       <screen>--mkfsoptions &quot;<replaceable>other_options</replaceable> -j -J device=/dev/mdJ&quot; </screen>

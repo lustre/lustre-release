@@ -244,7 +244,7 @@ ents&quot;</screen>
         &quot;even&quot; servers with <literal>o2ib2</literal> on <literal>rail1</literal>.</para>
     </section>
   </section>
-  <section xml:id="managinglnet.configuringroutes" condition='l24'>
+  <section xml:id="managinglnet.configuringroutes">
     <title><indexterm><primary>LNet</primary></indexterm>Dynamically Configuring
     LNet Routes</title>
     <para>Two scripts are provided:

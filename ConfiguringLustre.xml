@@ -127,8 +127,7 @@ mkfs.lustre --fsname=
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.addmdtindex">
-        <para>Optional for Lustre software release 2.4 and later. 
-        Add in additional MDTs.</para>
+        <para>Optionally add in additional MDTs.</para>
         <screen>
 mkfs.lustre --fsname=
 <replaceable>fsname</replaceable> --mgsnode=

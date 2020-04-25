@@ -207,10 +207,8 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       restoring from a file-level MDT backup (
       <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
       otherwise corrupted. Later phases of LFSCK will add further checks to the
-      Lustre distributed file system state.</para>
-    <para condition='l24'>In Lustre software release 2.4, LFSCK namespace
-      scanning can verify and repair the directory FID-in-dirent and LinkEA
-      consistency.</para>
+      Lustre distributed file system state. LFSCK namespace scanning can verify
+      and repair the directory FID-in-dirent and LinkEA consistency.</para>
     <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning
       can verify and repair MDT-OST file layout inconsistencies. File layout
       inconsistencies between MDT-objects and OST-objects that are checked and
@@ -436,8 +434,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     started. Anytime the LFSCK is triggered, the OI scrub will
                     run automatically, so there is no need to specify
                     OI_scrub in that case.</para>
-                    <para condition='l24'>
-                    <literal>namespace</literal>: check and repair
+                    <para><literal>namespace</literal>: check and repair
                     FID-in-dirent and LinkEA consistency.</para>
                     <para condition='l27'> Lustre-2.7 enhances
                     namespace consistency verification under DNE mode.</para>
@@ -818,7 +815,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           </informaltable>
         </section>
       </section>
-      <section condition='l24'>
+      <section>
         <title>LFSCK status of namespace via
         <literal>procfs</literal></title>
         <section>

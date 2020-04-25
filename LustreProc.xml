@@ -1293,7 +1293,7 @@ osc.myth-OST0001-osc-ffff8804296c2800.checksum_type
           </listitem>
           <listitem>
             <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_cache_mb</literal>
-              - Maximum amount of inactive data cached by the client.  The
+              - Maximum amount of read+write data cached by the client.  The
               default value is 3/4 of the client RAM.
             </para>
           </listitem>
@@ -2608,7 +2608,7 @@ debug=neterror warning error emerg console</screen>
     <section>
       <title>Interpreting OST Statistics</title>
       <note>
-        <para>See also <xref linkend="dbdoclet.50438219_84890"/> (<literal>llobdstat</literal>) and
+        <para>See also
             <xref linkend="dbdoclet.50438273_80593"/> (<literal>collectl</literal>).</para>
       </note>
       <para>OST <literal>stats</literal> files can be used to provide statistics showing activity
@@ -2868,7 +2868,7 @@ ost_write    21   2    59   [bytes] 7648424 15019  332725.08 910694 180397.87
     <section>
       <title>Interpreting MDT Statistics</title>
       <note>
-        <para>See also <xref linkend="dbdoclet.50438219_84890"/> (<literal>llobdstat</literal>) and
+        <para>See also
             <xref linkend="dbdoclet.50438273_80593"/> (<literal>collectl</literal>).</para>
       </note>
       <para>MDT <literal>stats</literal> files can be used to track MDT

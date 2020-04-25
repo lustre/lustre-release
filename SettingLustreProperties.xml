@@ -647,29 +647,6 @@ struct obd_uuid {
           <tbody>
             <row>
               <entry>
-                <para> <literal>LUSTRE_Q_QUOTAON</literal></para>
-              </entry>
-              <entry>
-                <para>Turns on quotas for a Lustre file system. Deprecated as of 2.4.0.
-                    <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>,
-                    <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group
-                  quota). The quota files must exist. They are normally created with the
-                    <literal>llapi_quotacheck</literal> call. This call is restricted to the super
-                  user privilege. As of 2.4.0, quota is now enabled on a per file system basis via
-                    <literal>lctl conf_param</literal> (see <xref linkend="enabling_disk_quotas"/>)
-                  on the MGS node and quotacheck isn't needed any more.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>LUSTRE_Q_QUOTAOFF</literal></para>
-              </entry>
-              <entry>
-                <para>Turns off quotas for a Lustre file system. Deprecated as of 2.4.0. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>, <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group quota). This call is restricted to the super user privilege. As of 2.4.0, quota is disabled via <literal>lctl conf_param</literal> (see <xref linkend="enabling_disk_quotas"/>).</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
                 <para> <literal>LUSTRE_Q_GETQUOTA</literal></para>
               </entry>
               <entry>

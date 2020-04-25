@@ -118,15 +118,13 @@ xml:id="understandingfailover">
           from the failed node.</para>
         </listitem>
       </itemizedlist>
-      <para>In Lustre software releases previous to Lustre software release
-      2.4, MDSs can be configured as an active/passive pair, while OSSs can be
-      deployed in an active/active configuration that provides redundancy
+      <para>If there is a single MDT in a filesystem, two MDSes can be
+      configured as an active/passive pair, while pairs of OSSes can be
+      deployed in an active/active configuration that improves OST availability
       without extra overhead. Often the standby MDS is the active MDS for
       another Lustre file system or the MGS, so no nodes are idle in the
-      cluster.</para>
-      <para condition="l24">Lustre software release 2.4 introduces metadata
-      targets for individual sub-directories. Active-active failover
-      configurations are available for MDSs that serve MDTs on shared
+      cluster.  If there are multiple MDTs in a filesystem, active-active
+      failover configurations are available for MDSs that serve MDTs on shared
       storage.</para>
     </section>
   </section>
@@ -149,11 +147,10 @@ xml:id="understandingfailover">
     <itemizedlist>
       <listitem>
         <para>For MDT failover, two MDSs can be configured to serve the same
-        MDT. Only one MDS node can serve an MDT at a time.</para>
-        <para condition="l24">Lustre software release 2.4 allows multiple MDTs.
-        By placing two or more MDT partitions on storage shared by two MDSs,
-        one MDS can fail and the remaining MDS can begin serving the unserved
-        MDT. This is described as an active/active failover pair.</para>
+          MDT. Only one MDS node can serve any MDT at one time.
+          By placing two or more MDT devices on storage shared by two MDSs,
+          one MDS can fail and the remaining MDS can begin serving the unserved
+          MDT. This is described as an active/active failover pair.</para>
       </listitem>
       <listitem>
         <para>For OST failover, multiple OSS nodes can be configured to be able
@@ -222,14 +219,13 @@ xml:id="understandingfailover">
         </mediaobject>
       </figure>
     </section>
-    <section xml:id='dbdoclet.mdtactiveactive' condition='l24'>
+    <section xml:id='dbdoclet.mdtactiveactive'>
       <title>
       <indexterm>
         <primary>failover</primary>
         <secondary>MDT</secondary>
       </indexterm>MDT Failover Configuration (Active/Active)</title>
-      <para>Multiple MDTs became available with the advent of Lustre software
-      release 2.4. MDTs can be setup as an active/active failover
+      <para>MDTs can be configured as an active/active failover
       configuration. A failover cluster is built from two MDSs as shown in 
       <xref linkend="understandingfailover.fig.configmdts" />.</para>
       <figure xml:id="understandingfailover.fig.configmdts">

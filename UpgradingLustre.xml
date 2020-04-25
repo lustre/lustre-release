@@ -92,78 +92,19 @@ xml:id="upgradinglustre">
       <secondary>multiple MDSs</secondary>
     </indexterm>
     <indexterm>
-      <primary>large_xattr</primary>
-      <secondary>ea_inode</secondary>
+      <primary>ea_inode</primary>
+      <secondary>large_xattr</secondary>
     </indexterm>
     <indexterm>
       <primary>wide striping</primary>
-      <secondary>large_xattr</secondary>
-      <tertiary>ea_inode</tertiary>
+      <secondary>ea_inode</secondary>
+      <tertiary>large_xattr</tertiary>
     </indexterm>Upgrading to Lustre Software Release 2.x (Major
     Release)</title>
     <para>The procedure for upgrading from a Lustre software release 2.x to a
-    more recent 2.x release of the Lustre software is described in this
-    section.</para>
-    <note>
-      <para>This procedure can also be used to upgrade Lustre software release
-      1.8.6-wc1 or later to any Lustre software release 2.x. To upgrade other
-      versions of Lustre software release 1.8.x, contact your support
-      provider.</para>
-    </note>
-    <note>
-      <para>In Lustre software release 2.2, a feature has been added for
-      ldiskfs-based MDTs that allows striping a single file across up to 2000
-      OSTs. By default, this "wide striping" feature is disabled. It is
-      activated by setting the <literal>ea_inode</literal> option on the MDT
-      using either <literal>mkfs.lustre</literal> or <literal>tune2fs</literal>.
-      For example after upgrading an existing file system to Lustre software
-      release 2.2 or later, wide striping can be enabled by running the
-      following command on the MDT device before mounting it:
-      <screen>tune2fs -O large_xattr</screen>
-      Once the wide striping feature is enabled and in use on the MDT, it is
-      not possible to directly downgrade the MDT file system to an earlier 
-      version of the Lustre software that does not support wide striping. To 
-      disable wide striping:
-      <orderedlist>
-        <listitem>
-          <para>Delete all wide-striped files, <emphasis>OR</emphasis>
-          use <literal>lfs_migrate -c 160</literal> (or fewer stripes)
-          to migrate the files to use fewer OSTs. This does not affect the
-          total number of OSTs that the whole filesystem can access.</para>
-        </listitem>
-        <listitem>
-          <para>Unmount the MDT.</para>
-        </listitem>
-        <listitem>
-          <para>Run the following command to turn off the 
-          <literal>large_xattr</literal> option:
-          <screen>tune2fs -O ^large_xattr</screen></para>
-        </listitem>
-      </orderedlist>Using either 
-      <literal>mkfs.lustre</literal> or 
-      <literal>tune2fs</literal> with 
-      <literal>large_xattr</literal> or 
-      <literal>ea_inode</literal> option reseults in 
-      <literal>ea_inode</literal> in the file system feature list.</para>
-    </note>
-    <note>
-      <para>To generate a list of all files with more than 160 stripes use 
-      <literal>lfs find</literal> with the 
-      <literal>--stripe-count</literal> option:
-      <screen>lfs find ${mountpoint} --stripe-count=+160</screen></para>
-    </note>
-    <note condition="l24">
-      <para>In Lustre software release 2.4, a new feature allows using multiple
-      MDTs, which can each serve one or more remote sub-directories in the file
-      system. The 
-      <literal>root</literal> directory is always located on MDT0.</para>
-      <para>Note that clients running a release prior to the Lustre software
-      release 2.4 can only see the namespace hosted by MDT0 and will return an
-      IO error if an attempt is made to access a directory on another
-      MDT.</para>
-    </note>
-    <para>To upgrade a Lustre software release 2.x to a more recent major
-    release, complete these steps:</para>
+      more recent 2.y major release of the Lustre software is described in this
+      section. To upgrade an existing 2.x installation to a more recent major
+      release, complete the following steps:</para>
     <orderedlist>
       <listitem>
         <para>Create a complete, restorable file system backup.</para>
@@ -265,17 +206,19 @@ xml:id="upgradinglustre">
         </orderedlist>
       </listitem>
       <listitem>
-        <para>(Optional) For upgrades to Lustre software release 2.2 or higher,
-        to enable wide striping on an existing MDT, run the following command
-        on the MDT:
-        <screen>tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
+        <para condition="l2D">Lustre allows striping a single file across up to
+          2000 OSTs. Before Lustre 2.13, the "wide striping" feature that
+          allowed creating files with more than 160 stripes was not enabled by
+          default. From the 2.13 release onward, the <literal>ea_inode</literal>
+	  feature is enabled for newly-formatted MDTs.  The feature can also
+	  be enabled by the <literal>tune2fs</literal> command on existing MDTs:
+        <screen>mds# tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
         </para>
         <para>For more information about wide striping, see 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping" />.</para>
       </listitem>
       <listitem>
-        <para>(Optional) For upgrades to Lustre software release 2.4 or higher,
-        to format an additional MDT, complete these steps:
+        <para>(Optional) To format an additional MDT, complete these steps:
         <orderedlist numeration="loweralpha">
           <listitem>
             <para>Determine the index used for the first MDT (each MDT must
@@ -295,16 +238,6 @@ xml:id="upgradinglustre">
         </orderedlist></para>
       </listitem>
       <listitem>
-        <para>(Optional) If you are upgrading to Lustre software release 2.3 or
-        higher from Lustre software release 2.2 or earlier and want to enable
-        the quota feature, complete these steps: 
-        <orderedlist numeration="loweralpha">
-          <listitem>
-            <para>Before setting up the file system, enter on both the MDS and
-            OSTs:
-            <screen>tunefs.lustre --quota</screen></para>
-          </listitem>
-      <listitem>
         <para>(Optional) If you are upgrading before Lustre software release
         2.10, to enable the project quota feature enter the following on every
         ldiskfs backend target:
@@ -315,32 +248,9 @@ xml:id="upgradinglustre">
             should only be enabled if the project quota feature is required and/or
             after it is known that the upgraded release does not need to be
             downgraded.</para></note>
-      </listitem>
-          <listitem>
-            <para>When setting up the file system, enter:
-            <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
+        <para>When setting up the file system, enter:
+        <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
 conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
-          </listitem>
-        </orderedlist></para>
-      </listitem>
-      <listitem>
-        <para>(Optional) If you are upgrading from Lustre software release 1.8,
-        you must manually enable the FID-in-dirent feature. On the MDS, enter:
-        <screen>tune2fs –O dirdata /dev/<replaceable>mdtdev</replaceable></screen></para>
-        <warning>
-          <para>This step is not reversible. Do not complete this step until
-          you are sure you will not be downgrading the Lustre software.</para>
-        </warning>
-	<para condition='l24'>This step only enables FID-in-dirent for newly
-	created files. If you are upgrading to Lustre software release 2.4,
-	you can use namespace LFSCK to enable FID-in-dirent for the existing
-	files. For the case of upgrading from Lustre software release 1.8, it is
-    important to note that if you do NOT enable <literal>dirdata</literal> via
-    the <literal>tune2fs</literal> command above, the namespace LFSCK will NOT
-	generate FID-in-dirent for the existing files. For more information about
-	FID-in-dirent and related functionalities in LFSCK, see
-    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-    linkend="understandinglustre.storageio" />.</para>
       </listitem>
       <listitem>
         <para>Start the Lustre file system by starting the components in the

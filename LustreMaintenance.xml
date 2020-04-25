@@ -230,15 +230,18 @@ mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-OST0000
     <section xml:id="lustremaint.changingservernid">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
 Changing a Server NID</title>
-      <para>In Lustre software release 2.3 or earlier, the <literal>tunefs.lustre
-        --writeconf</literal> command is used to rewrite all of the configuration files.</para>
-      <para condition="l24">If you need to change the NID on the MDT or OST, a new
-        <literal>replace_nids</literal> command was added in Lustre software release 2.4 to simplify
-      this process. The <literal>replace_nids</literal> command differs from <literal>tunefs.lustre
-        --writeconf</literal> in that it does not erase the entire configuration log, precluding the
-      need the need to execute the <literal>writeconf</literal> command on all servers and
-      re-specify all permanent parameter settings. However, the <literal>writeconf</literal> command
-      can still be used if desired.</para>
+      <para>In order to totally rewrite the Lustre configuration, the
+      <literal>tunefs.lustre --writeconf</literal> command is used to
+        rewrite all of the configuration files.</para>
+      <para>If you need to change only the NID of the MDT or OST, the
+        <literal>replace_nids</literal> command can simplify this process.
+	The <literal>replace_nids</literal> command differs from
+	<literal>tunefs.lustre --writeconf</literal> in that it does not
+	erase the entire configuration log, precluding the need the need to
+	execute the <literal>writeconf</literal> command on all servers and
+        re-specify all permanent parameter settings. However, the
+	<literal>writeconf</literal> command can still be used if desired.
+      </para>
       <para>Change a server NID in these situations:</para>
       <itemizedlist>
         <listitem>
@@ -344,7 +347,7 @@ Changing a Server NID</title>
 	     </listitem>
 	   </orderedlist>
 	</section>
-    <section xml:id="lustremaint.adding_new_mdt" condition='l24'>
+    <section xml:id="lustremaint.adding_new_mdt">
       <title><indexterm>
         <primary>maintenance</primary>
         <secondary>adding an MDT</secondary>
@@ -356,7 +359,7 @@ Changing a Server NID</title>
         user or application workloads from other users of the filesystem. It
         is possible to have multiple remote sub-directories reference the
         same MDT.  However, the root directory will always be located on
-        MDT0. To add a new MDT into the file system:</para>
+        MDT0000. To add a new MDT into the file system:</para>
       <orderedlist>
         <listitem>
           <para>Discover the maximum MDT index. Each MDT must have unique index.</para>
@@ -483,7 +486,7 @@ Removing and Restoring MDTs and OSTs</title>
           desire to continue using the filesystem before it is repaired.</para>
         </listitem>
       </itemizedlist>
-      <section condition="l24" xml:id="lustremaint.rmremotedir">
+      <section xml:id="lustremaint.rmremotedir">
       <title><indexterm><primary>maintenance</primary><secondary>removing an MDT</secondary></indexterm>Removing an MDT from the File System</title>
         <para>If the MDT is permanently inaccessible,
         <literal>lfs rm_entry {directory}</literal> can be used to delete the
@@ -505,7 +508,7 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
         <para>The <literal>lfs getstripe --mdt-index</literal> command
         returns the index of the MDT that is serving the given directory.</para>
       </section>
-      <section xml:id="lustremaint.inactivemdt" condition='l24'>
+      <section xml:id="lustremaint.inactivemdt">
       <title>
           <indexterm><primary>maintenance</primary></indexterm>
           <indexterm><primary>maintenance</primary><secondary>inactive MDTs</secondary></indexterm>Working with Inactive MDTs</title>

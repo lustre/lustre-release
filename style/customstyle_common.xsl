@@ -32,18 +32,6 @@
 <xsl:template name="condition-decorator">
 	<xsl:param name='content'/>
 	<xsl:choose>
-		<xsl:when test="@condition = 'l23'">
-			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced in Lustre 2.3'"/>
-				<xsl:with-param name='content' select="$content"/>
-			</xsl:call-template>
-		</xsl:when>
-		<xsl:when test="@condition = 'l24'">
-			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced in Lustre 2.4'"/>
-				<xsl:with-param name='content' select="$content"/>
-			</xsl:call-template>
-		</xsl:when>
 		<xsl:when test="@condition = 'l25'">
 			<xsl:call-template name='textdecoration-1'>
 				<xsl:with-param name='version' select="'Introduced in Lustre 2.5'"/>
@@ -167,12 +155,6 @@
 	<xsl:param name='condition'/>
 	<!-- add another span to hold the lustre version annotation -->
 	<xsl:choose>
-		<xsl:when test="$condition = 'l23'">
-			<span class='floatright'>L 2.3 </span>
-		</xsl:when>
-		<xsl:when test="$condition = 'l24'">
-			<span class='floatright'>L 2.4 </span>
-		</xsl:when>
 		<xsl:when test="$condition = 'l25'">
 			<span class='floatright'>L 2.5 </span>
 		</xsl:when>

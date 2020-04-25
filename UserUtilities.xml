@@ -484,9 +484,8 @@ lfs help
                 default values for unspecified fields. If the striping EA is
                 not set, 0, 0, and -1 will be printed for the stripe count,
                 size, and offset respectively.</para>
-                <para condition="l24">The 
-                <literal>--mdt-index</literal> prints the index of the MDT for a given
-                directory. See 
+                <para>The <literal>--mdt-index</literal> prints the index of
+		the MDT for a given directory. See 
                 <xref linkend="lustremaint.rmremotedir" />.</para>
               </entry>
             </row>

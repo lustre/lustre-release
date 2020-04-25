@@ -19,9 +19,6 @@
       <para><xref linkend="dbdoclet.50438219_44971"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_84890"/></para>
-    </listitem>
-    <listitem>
       <para><xref linkend="dbdoclet.50438219_90386"/></para>
     </listitem>
     <listitem>
@@ -793,19 +790,31 @@ lctl &gt; quit</screen>
   <section xml:id="dbdoclet.50438219_58217">
     <title><indexterm><primary>ll_decode_filter_fid</primary></indexterm>
 ll_decode_filter_fid</title>
-    <para>The ll_decode_filter_fid utility displays the Lustre object ID and MDT parent FID.</para>
+    <para>The <literal>ll_decode_filter_fid</literal> utility displays the
+    Lustre object ID and MDT parent FID.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>ll_decode_filter_fid object_file [object_file ...]</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The ll_decode_filter_fid utility decodes and prints the Lustre OST object ID, MDT FID,
-        stripe index for the specified OST object(s), which is stored in the &quot;trusted.fid&quot;
-        attribute on each OST object. This is accessible to <literal>ll_decode_filter_fid</literal>
-        when the OST file system is mounted locally as type ldiskfs for maintenance.</para>
-      <para>The &quot;trusted.fid&quot; extended attribute is stored on each OST object when it is first modified (data written or attributes set), and is not accessed or modified by Lustre after that time.</para>
-      <para>The OST object ID (objid) is useful in case of OST directory corruption, though normally the ll_recover_lost_found_objs(8) utility is able to reconstruct the entire OST object directory hierarchy. The MDS FID can be useful to determine which MDS inode an OST object is (or was) used by. The stripe index can be used in conjunction with other OST objects to reconstruct the layout of a file even if the MDT inode was lost.</para>
+      <para>The ll_decode_filter_fid utility decodes and prints the Lustre OST
+        object ID, MDT FID, stripe index for the specified OST object(s), which
+        is stored in the &quot;trusted.fid&quot; attribute on each OST object.
+        This is accessible to <literal>ll_decode_filter_fid</literal> when the
+        OST file system is mounted locally as type ldiskfs for maintenance.
+      </para>
+      <para>The &quot;trusted.fid&quot; extended attribute is stored on each
+        OST object when it is first modified (data written or attributes set),
+        and is not accessed or modified by Lustre after that time.</para>
+      <para>The OST object ID (objid) may be useful in case of OST directory
+        corruption, though LFSCK can normally reconstruct the entire OST object
+	directory tree, see <xref linkend="dbdoclet.lfsckadmin" /> for details.
+        The MDS FID can be useful to determine which MDS inode an OST object
+        is (or was) used by. The stripe index can be used in conjunction with
+        other OST objects to reconstruct the layout of a file even if the MDT
+        inode was lost.
+      </para>
     </section>
     <section remap="h5">
       <title>Examples</title>
@@ -837,75 +846,6 @@ ll_recover_lost_found_objs</title>
       online scanning will automatically move objects from
       <literal>lost+found</literal> to the proper place in the OST.</para>
     </note>
-    <note condition='l25'>
-      <para>The <literal>ll_recover_lost_found_objs</literal> tool is not
-        strictly necessary to bring an OST back online, it just avoids losing
-	access to objects that were moved to the lost+found directory due to
-	directory corruption on the OST.</para>
-    </note>
-    <section remap="h5">
-      <title>Synopsis</title>
-      <screen>$ ll_recover_lost_found_objs [-hv] -d directory</screen>
-    </section>
-    <section remap="h5">
-      <title>Description</title>
-      <para>The first time Lustre modifies an object, it saves the MDS inode number and the objid as an extended attribute on the object, so in case of directory corruption of the OST, it is possible to recover the objects. Running e2fsck fixes the corrupted OST directory, but it puts all of the objects into a lost and found directory, where they are inaccessible to Lustre. Use the ll_recover_lost_found_objs utility to recover all (or at least most) objects from a lost and found directory and return them to the O/0/d* directories.</para>
-      <para>To use ll_recover_lost_found_objs, mount the file system locally (using the <literal>-t ldiskfs</literal>, or <literal>-t zfs</literal> command), run the utility and then unmount it again. The OST must not be mounted by Lustre when ll_recover_lost_found_objs is run.</para>
-    </section>
-    <section remap="h5">
-      <title>Options</title>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal>-h</literal></para>
-              </entry>
-              <entry>
-                <para> Prints a help message</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-v</literal></para>
-              </entry>
-              <entry>
-                <para> Increases verbosity</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-d <replaceable>directory</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para> Sets the lost and found directory path</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-    </section>
-    <section remap="h5">
-      <title>Example</title>
-      <screen>ll_recover_lost_found_objs -d /mnt/ost/lost+found </screen>
-    </section>
-  </section>
-  <section xml:id="dbdoclet.50438219_84890">
-    <title><indexterm><primary>llodbstat</primary></indexterm>
-llobdstat</title>
-    <para>The llobdstat utility displays OST statistics.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>llobdstat ost_name [interval]</screen>

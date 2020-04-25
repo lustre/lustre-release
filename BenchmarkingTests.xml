@@ -822,11 +822,10 @@ Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time
     <title><indexterm><primary>benchmarking</primary>
       <secondary>MDS performance</secondary></indexterm>
     Testing MDS Performance (<literal>mds-survey</literal>)</title>
-	  <para><literal>mds-survey</literal> is available in Lustre software release
-    2.2 and beyond. The <literal>mds-survey</literal> script tests the local
-    metadata performance using the echo_client to drive different layers of the
-    MDS stack: mdd, mdt, osd (the Lustre software only supports mdd stack). It
-    can be used with the following classes of operations:</para>
+      <para>The <literal>mds-survey</literal> script tests the local
+        metadata performance using the echo_client to drive different layers of
+        the MDS stack: mdd, mdt, osd (the Lustre software only supports mdd
+        stack). It can be used with the following classes of operations:</para>
     <itemizedlist>
       <listitem>
         <para><literal>Open-create/mkdir/create</literal></para>

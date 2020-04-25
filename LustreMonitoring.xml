@@ -594,11 +594,10 @@ mdd.seb-MDT0000.changelog_deniednext=120</screen>
 <indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 
 Lustre Jobstats</title>
-    <para>The Lustre jobstats feature is available starting in Lustre software
-    release 2.3. It collects file system operation statistics for user processes
-    running on Lustre clients, and exposes them via procfs on the server using
-    the unique Job Identifier (JobID) provided by the job scheduler for each
-    job. Job schedulers known to be able to work with jobstats include:
+    <para>The Lustre jobstats feature collects file system operation statistics
+      for user processes running on Lustre clients, and exposes on the server
+      using the unique Job Identifier (JobID) provided by the job scheduler for
+      each job. Job schedulers known to be able to work with jobstats include:
       SLURM, SGE, LSF, Loadleveler, PBS and Maui/MOAB.</para>
     <para>Since jobstats is implemented in a scheduler-agnostic manner, it is
     likely that it will be able to work with other schedulers also, and also
