@@ -165,8 +165,10 @@ AS_IF([test "x$enable_modules" = xyes], [
 		], [*], [
 			# This is strange - Lustre supports a target we don't
 			AC_MSG_ERROR([Modules are not supported on $target_os])
-		])
 	])
+	# Use OpenSFS UAPI header path instead of linux kernel
+	CPPFLAGS="-I$PWD/lnet/include/uapi -I$PWD/lustre/include/uapi $CPPFLAGS"
+])
 ]) # LB_CONFIG_MODULES
 
 #
@@ -316,8 +318,8 @@ AS_IF([test $target_cpu = powerpc64], [
 	CC="$CC -m64"
 ])
 
-# UAPI headers, libcfs/include for util headers, lustre/include for liblustreapi and friends
-CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/include/uapi -I$PWD/lustre/include -I$PWD/lustre/include/uapi $CPPFLAGS"
+# libcfs/include for util headers, lnetconfig headers, lustre/include for liblustreapi and friends
+CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils -I$PWD/lustre/include $CPPFLAGS"
 
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)

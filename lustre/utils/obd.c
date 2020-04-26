@@ -68,7 +68,9 @@
 
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
+#ifdef HAVE_SERVER_SUPPPORT
 #include <linux/lustre/lustre_barrier_user.h>
+#endif
 #include <linux/lustre/lustre_cfg.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ostid.h>
