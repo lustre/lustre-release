@@ -210,7 +210,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
 ===================================================================
 --- /dev/null
 +++ linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
-@@ -0,0 +1,891 @@
+@@ -0,0 +1,895 @@
 +/*
 + * fs/ext4/htree_lock.c
 + *
@@ -436,22 +436,25 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
 +	}
 +
 +	newlk->lk_task = current;
-+	set_current_state(TASK_UNINTERRUPTIBLE);
 +	/* conflict, attach it on blocked list of curlk */
 +	list_add_tail(&newln->ln_blocked_list, &curln->ln_blocked_list);
 +	list_add(&newln->ln_alive_list, &curln->ln_alive_list);
 +	ln_block_inc(dep, newln->ln_mode);
 +
++retry:
++	set_current_state(TASK_UNINTERRUPTIBLE);
 +	htree_spin_unlock(newlk->lk_head, dep);
 +	/* wait to be given the lock */
 +	if (newlk->lk_task != NULL)
 +		schedule();
 +	/* granted, no doubt, wake up will set me RUNNING */
-+	if (event == NULL || htree_key_event_ignore(child, newln))
-+		return 0; /* granted without lh_lock */
-+
 +	htree_spin_lock(newlk->lk_head, dep);
-+	htree_key_event_enqueue(child, newln, dep, event);
++	/* Need to check lock really granted, thread maybe awaken wrongly */
++	if (list_empty(&newln->ln_granted_list) && htree_key_list_empty(newln))
++		goto retry;
++	if (event && !htree_key_event_ignore(child, newln))
++		htree_key_event_enqueue(child, newln, dep, event);
++
 +	return 1; /* still hold lh_lock */
 +}
 +
@@ -1012,10 +1015,11 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
 +		return NULL;
 +
 +	if (hbits < HTREE_HBITS_MIN)
-+		lhead->lh_hbits = HTREE_HBITS_MIN;
++		hbits = HTREE_HBITS_MIN;
 +	else if (hbits > HTREE_HBITS_MAX)
-+		lhead->lh_hbits = HTREE_HBITS_MAX;
++		hbits = HTREE_HBITS_MAX;
 +
++	lhead->lh_hbits = hbits;
 +	lhead->lh_lock = 0;
 +	lhead->lh_depth = depth;
 +	INIT_LIST_HEAD(&lhead->lh_blocked_list);
