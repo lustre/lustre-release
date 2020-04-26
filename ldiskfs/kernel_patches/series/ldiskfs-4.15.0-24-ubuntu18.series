@@ -10,6 +10,7 @@ ubuntu18/ext4-kill-dx-root.patch
 rhel7.6/ext4-mballoc-pa-free-mismatch.patch
 ubuntu18/ext4-data-in-dirent.patch
 ubuntu18/ext4-nocmtime.patch
+base/ext4-htree-lock.patch
 ubuntu18/ext4-pdirop.patch
 sles12sp2/ext4-max-dir-size.patch
 ubuntu18/ext4-corrupted-inode-block-bitmaps-handling-patches-001.patch

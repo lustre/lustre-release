@@ -13,6 +13,7 @@ suse15/ext4-large-dir.patch
 suse15/ext4-large-eas.patch
 suse15/ext4-disable-mb-cache.patch
 ubuntu18/ext4-nocmtime.patch
+base/ext4-htree-lock.patch
 rhel8/ext4-pdirop.patch
 suse15/ext4-max-dir-size.patch
 suse15/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
