@@ -444,6 +444,7 @@ make %{?_smp_mflags} -s %{?make_args}
 
 make install DESTDIR=$RPM_BUILD_ROOT
 
+%if %{with lustre_modules}
 # RHEL's kernel_module_path macro expects that all the modules
 # in a kmod package will be in modules_fs_path/<sub packagename>
 # but Lustre installs all of the modules in a single pass into
@@ -466,6 +467,7 @@ mkdir -p $basemodpath-tests/fs
 mv $basemodpath/fs/llog_test.ko $basemodpath-tests/fs/llog_test.ko
 mkdir -p $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
 mv $basemodpath/fs/kinode.ko $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
+%endif
 %endif
 
 :> lustre.files
