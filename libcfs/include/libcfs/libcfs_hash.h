@@ -118,48 +118,49 @@ struct cfs_hash_bd {
  * common hash attributes.
  */
 enum cfs_hash_tag {
-        /**
-         * don't need any lock, caller will protect operations with it's
-         * own lock. With this flag:
-         *  . CFS_HASH_NO_BKTLOCK, CFS_HASH_RW_BKTLOCK, CFS_HASH_SPIN_BKTLOCK
-         *    will be ignored.
-         *  . Some functions will be disabled with this flag, i.e:
-         *    cfs_hash_for_each_empty, cfs_hash_rehash
-         */
-        CFS_HASH_NO_LOCK        = 1 << 0,
-        /** no bucket lock, use one spinlock to protect the whole hash */
-        CFS_HASH_NO_BKTLOCK     = 1 << 1,
-        /** rwlock to protect bucket */
-        CFS_HASH_RW_BKTLOCK     = 1 << 2,
+	/**
+	 * don't need any lock, caller will protect operations with it's
+	 * own lock. With this flag:
+	 *  . CFS_HASH_NO_BKTLOCK, CFS_HASH_RW_BKTLOCK, CFS_HASH_SPIN_BKTLOCK
+	 *    will be ignored.
+	 *  . Some functions will be disabled with this flag, i.e:
+	 *    cfs_hash_for_each_empty, cfs_hash_rehash
+	 */
+	CFS_HASH_NO_LOCK	= BIT(0),
+	/** no bucket lock, use one spinlock to protect the whole hash */
+	CFS_HASH_NO_BKTLOCK	= BIT(1),
+	/** rwlock to protect bucket */
+	CFS_HASH_RW_BKTLOCK	= BIT(2),
 	/** spinlock to protect bucket */
-        CFS_HASH_SPIN_BKTLOCK   = 1 << 3,
-        /** always add new item to tail */
-        CFS_HASH_ADD_TAIL       = 1 << 4,
-        /** hash-table doesn't have refcount on item */
-        CFS_HASH_NO_ITEMREF     = 1 << 5,
-        /** big name for param-tree */
-        CFS_HASH_BIGNAME        = 1 << 6,
-        /** track global count */
-        CFS_HASH_COUNTER        = 1 << 7,
-        /** rehash item by new key */
-        CFS_HASH_REHASH_KEY     = 1 << 8,
-        /** Enable dynamic hash resizing */
-        CFS_HASH_REHASH         = 1 << 9,
-        /** can shrink hash-size */
-        CFS_HASH_SHRINK         = 1 << 10,
-        /** assert hash is empty on exit */
-        CFS_HASH_ASSERT_EMPTY   = 1 << 11,
-        /** record hlist depth */
-        CFS_HASH_DEPTH          = 1 << 12,
-        /**
-         * rehash is always scheduled in a different thread, so current
-         * change on hash table is non-blocking
-         */
-        CFS_HASH_NBLK_CHANGE    = 1 << 13,
+	CFS_HASH_SPIN_BKTLOCK	= BIT(3),
+	/** always add new item to tail */
+	CFS_HASH_ADD_TAIL	= BIT(4),
+	/** hash-table doesn't have refcount on item */
+	CFS_HASH_NO_ITEMREF	= BIT(5),
+	/** big name for param-tree */
+	CFS_HASH_BIGNAME	= BIT(6),
+	/** track global count */
+	CFS_HASH_COUNTER	= BIT(7),
+	/** rehash item by new key */
+	CFS_HASH_REHASH_KEY	= BIT(8),
+	/** Enable dynamic hash resizing */
+	CFS_HASH_REHASH		= BIT(9),
+	/** can shrink hash-size */
+	CFS_HASH_SHRINK		= BIT(10),
+	/** assert hash is empty on exit */
+	CFS_HASH_ASSERT_EMPTY	= BIT(11),
+	/** record hlist depth */
+	CFS_HASH_DEPTH		= BIT(12),
+	/**
+	 * rehash is always scheduled in a different thread, so current
+	 * change on hash table is non-blocking
+	 */
+	CFS_HASH_NBLK_CHANGE	= BIT(13),
 	/** rw semaphore lock to protect bucket */
-	CFS_HASH_RW_SEM_BKTLOCK	= 1 << 14,
-        /** NB, we typed hs_flags as  __u16, please change it
-         * if you need to extend >=16 flags */
+	CFS_HASH_RW_SEM_BKTLOCK	= BIT(14),
+	/** NB, we typed hs_flags as  __u16, please change it
+	 * if you need to extend >=16 flags
+	 */
 };
 
 /** most used attributes */

@@ -103,21 +103,21 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 
                 /* match token */
                 found = 0;
-                for (i = 0; i < 32; i++) {
-                        debugstr = bit2str(i);
-                        if (debugstr != NULL &&
-                            strlen(debugstr) == len &&
+		for (i = 0; i < 32; i++) {
+			debugstr = bit2str(i);
+			if (debugstr != NULL &&
+			    strlen(debugstr) == len &&
 			    strncasecmp(str, debugstr, len) == 0) {
-                                if (op == '-')
-                                        newmask &= ~(1 << i);
-                                else
-                                        newmask |= (1 << i);
-                                found = 1;
-                                break;
-                        }
-                }
+				if (op == '-')
+					newmask &= ~BIT(i);
+				else
+					newmask |= BIT(i);
+				found = 1;
+				break;
+			}
+		}
                 if (!found && len == 3 &&
-		    (strncasecmp(str, "ALL", len) == 0)) {
+                    (strncasecmp(str, "ALL", len) == 0)) {
                         if (op == '-')
                                 newmask = minmask;
                         else
