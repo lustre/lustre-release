@@ -759,7 +759,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	LASSERT(dt_object_exists(dt));
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
 	dmu_tx_mark_netfree(oh->ot_tx);
@@ -825,7 +825,7 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_dn != NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh != NULL);
 	LASSERT(oh->ot_tx != NULL);
 
@@ -1119,7 +1119,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
@@ -1255,7 +1255,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 	LASSERT(obj->oo_sa_hdl);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	/* Assert that the transaction has been assigned to a
 	   transaction group. */
 	LASSERT(oh->ot_tx->tx_txg != 0);
@@ -1475,7 +1475,7 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	LASSERT(handle != NULL);
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
 	/* this is the minimum set of EAs on every Lustre object */
@@ -1932,7 +1932,7 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dof != NULL);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	LASSERT(obj->oo_dn == NULL);
 
@@ -2054,7 +2054,7 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 	LASSERT(obj->oo_sa_hdl != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	write_lock(&obj->oo_attr_lock);
 	nlink = ++obj->oo_attr.la_nlink;
@@ -2096,7 +2096,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 	LASSERT(obj->oo_sa_hdl != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
 
 	write_lock(&obj->oo_attr_lock);

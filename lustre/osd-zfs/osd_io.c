@@ -174,7 +174,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	uint64_t            oid;
 	ENTRY;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/* in some cases declare can race with creation (e.g. llog)
 	 * and we need to wait till object is initialized. notice
@@ -219,7 +219,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	osd_dmu_write(osd, obj->oo_dn, offset, (uint64_t)buf->lb_len,
 		      buf->lb_buf, oh->ot_tx);
@@ -647,7 +647,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	LASSERT(lnb);
 	LASSERT(npages > 0);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	for (i = 0; i < npages; i++) {
 		if (last_page && lnb[i].lnb_page->index != (last_page->index + 1))
@@ -833,7 +833,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/* adjust block size. Assume the buffers are sorted. */
 	(void)osd_grow_blocksize(obj, oh, lnb[0].lnb_file_offset,
@@ -1051,7 +1051,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	write_lock(&obj->oo_attr_lock);
 	/* truncate */
@@ -1083,7 +1083,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	__u64		    len;
 	ENTRY;
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	read_lock(&obj->oo_attr_lock);
 	if (end == OBD_OBJECT_EOF || end >= obj->oo_attr.la_size)

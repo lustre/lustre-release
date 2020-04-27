@@ -493,19 +493,19 @@ static inline int lu_device_is_osd(const struct lu_device *d)
 static inline struct osd_object *osd_obj(const struct lu_object *o)
 {
 	LASSERT(lu_device_is_osd(o->lo_dev));
-	return container_of0(o, struct osd_object, oo_dt.do_lu);
+	return container_of(o, struct osd_object, oo_dt.do_lu);
 }
 
 static inline struct osd_device *osd_dt_dev(const struct dt_device *d)
 {
 	LASSERT(lu_device_is_osd(&d->dd_lu_dev));
-	return container_of0(d, struct osd_device, od_dt_dev);
+	return container_of(d, struct osd_device, od_dt_dev);
 }
 
 static inline struct osd_device *osd_dev(const struct lu_device *d)
 {
 	LASSERT(lu_device_is_osd(d));
-	return osd_dt_dev(container_of0(d, struct dt_device, dd_lu_dev));
+	return osd_dt_dev(container_of(d, struct dt_device, dd_lu_dev));
 }
 
 static inline struct osd_object *osd_dt_obj(const struct dt_object *d)

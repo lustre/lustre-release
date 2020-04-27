@@ -414,7 +414,7 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(handle != NULL);
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	down_read(&obj->oo_guard);
 	__osd_xattr_declare_set(env, obj, buf->lb_len, name, oh);
@@ -876,7 +876,7 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	     strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 
 	down_write(&obj->oo_guard);
 	CDEBUG(D_INODE, "Setting xattr %s with size %d\n",
@@ -946,7 +946,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 	LASSERT(obj->oo_dn != NULL);
 
@@ -1032,7 +1032,7 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn != NULL);
 	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt));
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&

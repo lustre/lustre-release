@@ -901,7 +901,7 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	LASSERT(rec1->rec_type != 0);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	idc = osd_idc_find_or_init(env, osd, fid);
 	if (IS_ERR(idc))
@@ -1015,7 +1015,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(parent));
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	idc = osd_idc_find(env, osd, fid);
 	if (unlikely(idc == NULL)) {
@@ -1122,7 +1122,7 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	LASSERT(zap_dn != NULL);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/*
 	 * In Orion . and .. were stored in the directory (not generated upon
@@ -1161,7 +1161,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(zap_dn);
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/*
 	 * In Orion . and .. were stored in the directory (not generated upon
@@ -1769,7 +1769,7 @@ static int osd_declare_index_insert(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	LASSERT(obj->oo_dn);
 
@@ -1798,7 +1798,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 	LASSERT(th != NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	rc = osd_prepare_key_uint64(obj, k, key);
 
@@ -1823,7 +1823,7 @@ static int osd_declare_index_delete(const struct lu_env *env,
 	LASSERT(th != NULL);
 	LASSERT(obj->oo_dn);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
@@ -1846,7 +1846,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_dn);
 	LASSERT(th != NULL);
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	rc = osd_prepare_key_uint64(obj, k, key);
 

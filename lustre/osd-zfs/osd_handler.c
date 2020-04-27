@@ -175,8 +175,8 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 {
-	struct osd_thandle *oh = container_of0(th, struct osd_thandle,
-					       ot_super);
+	struct osd_thandle *oh = container_of(th, struct osd_thandle,
+					      ot_super);
 
 	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
 	LASSERT(&dcb->dcb_func != NULL);
@@ -200,7 +200,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 
 	ENTRY;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh);
 	LASSERT(oh->ot_tx);
 
@@ -285,7 +285,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	int			 rc;
 	ENTRY;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	list_splice_init(&oh->ot_unlinked_list, &unlinked);
 
 	osd_oti_get(env)->oti_ins_cache_depth--;
