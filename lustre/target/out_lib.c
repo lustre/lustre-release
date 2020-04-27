@@ -707,7 +707,7 @@ static int out_tx_write_exec(const struct lu_env *env, struct thandle *th,
 
 	if (arg->reply != NULL)
 		object_update_result_insert(arg->reply, NULL, 0, arg->index,
-					    rc);
+					    rc < 0 ? rc : 0);
 
 	return rc > 0 ? 0 : rc;
 }

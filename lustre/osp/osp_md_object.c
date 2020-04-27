@@ -1127,6 +1127,23 @@ static ssize_t osp_md_declare_write(const struct lu_env *env,
 	return 0;
 }
 
+static int osp_write_interpreter(const struct lu_env *env,
+				  struct object_update_reply *reply,
+				  struct ptlrpc_request *req,
+				  struct osp_object *obj,
+				  void *data, int index, int rc)
+{
+	if (rc) {
+		CDEBUG(D_HA, "error "DFID": rc = %d\n",
+		       PFID(lu_object_fid(&obj->opo_obj.do_lu)), rc);
+		spin_lock(&obj->opo_lock);
+		obj->opo_attr.la_valid = 0;
+		obj->opo_stale = 1;
+		spin_unlock(&obj->opo_lock);
+	}
+	return 0;
+}
+
 /**
  * Implementation of dt_body_operations::dbo_write
  *
@@ -1164,6 +1181,12 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	rc = osp_check_and_set_rpc_version(oth, obj);
+	if (rc < 0)
+		RETURN(rc);
+
+	/* to be able to invalidate object's state in case of an error */
+	rc = osp_insert_update_callback(env, update, obj, NULL,
+			osp_write_interpreter);
 	if (rc < 0)
 		RETURN(rc);
 
