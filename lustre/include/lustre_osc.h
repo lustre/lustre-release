@@ -738,7 +738,7 @@ static inline struct osc_io *osc_env_io(const struct lu_env *env)
 
 static inline struct osc_device *lu2osc_dev(const struct lu_device *d)
 {
-	return container_of0(d, struct osc_device, od_cl.cd_lu_dev);
+	return container_of_safe(d, struct osc_device, od_cl.cd_lu_dev);
 }
 
 static inline struct obd_export *osc_export(const struct osc_object *obj)
@@ -753,7 +753,7 @@ static inline struct client_obd *osc_cli(const struct osc_object *obj)
 
 static inline struct osc_object *cl2osc(const struct cl_object *obj)
 {
-	return container_of0(obj, struct osc_object, oo_cl);
+	return container_of_safe(obj, struct osc_object, oo_cl);
 }
 
 static inline struct cl_object *osc2cl(const struct osc_object *obj)
@@ -763,8 +763,8 @@ static inline struct cl_object *osc2cl(const struct osc_object *obj)
 
 static inline struct osc_device *obd2osc_dev(const struct obd_device *obd)
 {
-	return container_of0(obd->obd_lu_dev, struct osc_device,
-			     od_cl.cd_lu_dev);
+	return container_of_safe(obd->obd_lu_dev, struct osc_device,
+				 od_cl.cd_lu_dev);
 }
 
 static inline struct lu_device *osc2lu_dev(struct osc_device *osc)
@@ -779,13 +779,13 @@ static inline struct lu_object *osc2lu(struct osc_object *osc)
 
 static inline struct osc_object *lu2osc(const struct lu_object *obj)
 {
-	return container_of0(obj, struct osc_object, oo_cl.co_lu);
+	return container_of_safe(obj, struct osc_object, oo_cl.co_lu);
 }
 
 static inline struct osc_io *cl2osc_io(const struct lu_env *env,
 				       const struct cl_io_slice *slice)
 {
-	struct osc_io *oio = container_of0(slice, struct osc_io, oi_cl);
+	struct osc_io *oio = container_of(slice, struct osc_io, oi_cl);
 
 	LINVRNT(oio == osc_env_io(env));
 	return oio;
@@ -813,12 +813,12 @@ static inline enum cl_lock_mode osc_ldlm2cl_lock(enum ldlm_mode mode)
 
 static inline struct osc_page *cl2osc_page(const struct cl_page_slice *slice)
 {
-	return container_of0(slice, struct osc_page, ops_cl);
+	return container_of_safe(slice, struct osc_page, ops_cl);
 }
 
 static inline struct osc_page *oap2osc(struct osc_async_page *oap)
 {
-	return container_of0(oap, struct osc_page, ops_oap);
+	return container_of_safe(oap, struct osc_page, ops_oap);
 }
 
 static inline pgoff_t osc_index(struct osc_page *opg)
@@ -848,7 +848,7 @@ osc_cl_page_osc(struct cl_page *page, struct osc_object *osc)
 
 static inline struct osc_lock *cl2osc_lock(const struct cl_lock_slice *slice)
 {
-	return container_of0(slice, struct osc_lock, ols_cl);
+	return container_of_safe(slice, struct osc_lock, ols_cl);
 }
 
 static inline int osc_io_srvlock(struct osc_io *oio)

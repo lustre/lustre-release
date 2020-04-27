@@ -1867,8 +1867,8 @@ static inline int lu_device_is_dt(const struct lu_device *d)
 
 static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 {
-        LASSERT(lu_device_is_dt(l));
-        return container_of0(l, struct dt_device, dd_lu_dev);
+	LASSERT(lu_device_is_dt(l));
+	return container_of_safe(l, struct dt_device, dd_lu_dev);
 }
 
 struct dt_object {
@@ -1903,8 +1903,8 @@ static inline struct lu_device *dt2lu_dev(struct dt_device *d)
 
 static inline struct dt_object *lu2dt(struct lu_object *l)
 {
-        LASSERT(l == NULL || IS_ERR(l) || lu_device_is_dt(l->lo_dev));
-        return container_of0(l, struct dt_object, do_lu);
+	LASSERT(l == NULL || IS_ERR(l) || lu_device_is_dt(l->lo_dev));
+	return container_of_safe(l, struct dt_object, do_lu);
 }
 
 int  dt_object_init(struct dt_object *obj,
@@ -1925,13 +1925,13 @@ static inline int dt_object_remote(const struct dt_object *dt)
 static inline struct dt_object *lu2dt_obj(struct lu_object *o)
 {
 	LASSERT(ergo(o != NULL, lu_device_is_dt(o->lo_dev)));
-	return container_of0(o, struct dt_object, do_lu);
+	return container_of_safe(o, struct dt_object, do_lu);
 }
 
 static inline struct dt_object *dt_object_child(struct dt_object *o)
 {
-	return container_of0(lu_object_next(&(o)->do_lu),
-			     struct dt_object, do_lu);
+	return container_of(lu_object_next(&(o)->do_lu),
+			    struct dt_object, do_lu);
 }
 
 /**

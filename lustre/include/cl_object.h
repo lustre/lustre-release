@@ -2051,8 +2051,8 @@ static inline struct cl_site *lu2cl_site(const struct lu_site *site)
 
 static inline struct cl_device *lu2cl_dev(const struct lu_device *d)
 {
-        LASSERT(d == NULL || IS_ERR(d) || lu_device_is_cl(d));
-        return container_of0(d, struct cl_device, cd_lu_dev);
+	LASSERT(d == NULL || IS_ERR(d) || lu_device_is_cl(d));
+	return container_of_safe(d, struct cl_device, cd_lu_dev);
 }
 
 static inline struct lu_device *cl2lu_dev(struct cl_device *d)
@@ -2062,45 +2062,45 @@ static inline struct lu_device *cl2lu_dev(struct cl_device *d)
 
 static inline struct cl_object *lu2cl(const struct lu_object *o)
 {
-        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_cl(o->lo_dev));
-        return container_of0(o, struct cl_object, co_lu);
+	LASSERT(o == NULL || IS_ERR(o) || lu_device_is_cl(o->lo_dev));
+	return container_of_safe(o, struct cl_object, co_lu);
 }
 
 static inline const struct cl_object_conf *
 lu2cl_conf(const struct lu_object_conf *conf)
 {
-        return container_of0(conf, struct cl_object_conf, coc_lu);
+	return container_of_safe(conf, struct cl_object_conf, coc_lu);
 }
 
 static inline struct cl_object *cl_object_next(const struct cl_object *obj)
 {
-        return obj ? lu2cl(lu_object_next(&obj->co_lu)) : NULL;
+	return obj ? lu2cl(lu_object_next(&obj->co_lu)) : NULL;
 }
 
 static inline struct cl_object_header *luh2coh(const struct lu_object_header *h)
 {
-        return container_of0(h, struct cl_object_header, coh_lu);
+	return container_of_safe(h, struct cl_object_header, coh_lu);
 }
 
 static inline struct cl_site *cl_object_site(const struct cl_object *obj)
 {
-        return lu2cl_site(obj->co_lu.lo_dev->ld_site);
+	return lu2cl_site(obj->co_lu.lo_dev->ld_site);
 }
 
 static inline
 struct cl_object_header *cl_object_header(const struct cl_object *obj)
 {
-        return luh2coh(obj->co_lu.lo_header);
+	return luh2coh(obj->co_lu.lo_header);
 }
 
 static inline int cl_device_init(struct cl_device *d, struct lu_device_type *t)
 {
-        return lu_device_init(&d->cd_lu_dev, t);
+	return lu_device_init(&d->cd_lu_dev, t);
 }
 
 static inline void cl_device_fini(struct cl_device *d)
 {
-        lu_device_fini(&d->cd_lu_dev);
+	lu_device_fini(&d->cd_lu_dev);
 }
 
 void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,

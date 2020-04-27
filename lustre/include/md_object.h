@@ -384,8 +384,8 @@ struct md_object {
 
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {
-        LASSERT(IS_ERR(d) || lu_device_is_md(d));
-        return container_of0(d, struct md_device, md_lu_dev);
+	LASSERT(IS_ERR(d) || lu_device_is_md(d));
+	return container_of_safe(d, struct md_device, md_lu_dev);
 }
 
 static inline struct lu_device *md2lu_dev(struct md_device *d)
@@ -395,8 +395,8 @@ static inline struct lu_device *md2lu_dev(struct md_device *d)
 
 static inline struct md_object *lu2md(const struct lu_object *o)
 {
-        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->lo_dev));
-        return container_of0(o, struct md_object, mo_lu);
+	LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->lo_dev));
+	return container_of_safe(o, struct md_object, mo_lu);
 }
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
