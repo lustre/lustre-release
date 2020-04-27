@@ -102,7 +102,7 @@ restart:
 
 		if (list_empty(head))
 			continue;
-		if (hint && !(hint->l_policy_data.l_inodebits.bits & (1 << i)))
+		if (hint && !(hint->l_policy_data.l_inodebits.bits & BIT(i)))
 			continue;
 
 		node = list_entry(head->next, struct ldlm_ibits_node,
@@ -550,7 +550,7 @@ void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
 
 	if (head == &res->lr_waiting) {
 		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
-			if (lock->l_policy_data.l_inodebits.bits & (1 << i))
+			if (lock->l_policy_data.l_inodebits.bits & BIT(i))
 				list_add_tail(&lock->l_ibits_node->lin_link[i],
 					&res->lr_ibits_queues->liq_waiting[i]);
 		}

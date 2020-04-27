@@ -1667,7 +1667,7 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 
 	uc = lu_ucred(env);
 	uc_cap_save = uc->uc_cap;
-	uc->uc_cap |= 1 << CFS_CAP_DAC_OVERRIDE;
+	uc->uc_cap |= BIT(CFS_CAP_DAC_OVERRIDE);
 	rc = mdo_create(env, mdt_object_child(local_root), &lname,
 			mdt_object_child(obj), spec, attr);
 	uc->uc_cap = uc_cap_save;

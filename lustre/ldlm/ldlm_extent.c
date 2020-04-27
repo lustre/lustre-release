@@ -1050,7 +1050,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         LASSERT(!interval_is_intree(&node->li_node));
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
-	LASSERT(lock->l_granted_mode == 1 << idx);
+	LASSERT(lock->l_granted_mode == BIT(idx));
 	LASSERT(lock->l_granted_mode == res->lr_itree[idx].lit_mode);
 
         /* node extent initialize */
@@ -1106,7 +1106,7 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 		return;
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
-	LASSERT(lock->l_granted_mode == 1 << idx);
+	LASSERT(lock->l_granted_mode == BIT(idx));
 	tree = &res->lr_itree[idx];
 
 	LASSERT(tree->lit_root != NULL); /* assure the tree is not null */

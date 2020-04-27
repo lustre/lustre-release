@@ -1341,7 +1341,7 @@ static bool ldlm_resource_extent_new(struct ldlm_resource *res)
 	/* Initialize interval trees for each lock mode. */
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		res->lr_itree[idx].lit_size = 0;
-		res->lr_itree[idx].lit_mode = 1 << idx;
+		res->lr_itree[idx].lit_mode = BIT(idx);
 		res->lr_itree[idx].lit_root = NULL;
 	}
 	return true;

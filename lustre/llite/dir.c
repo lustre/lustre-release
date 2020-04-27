@@ -1043,7 +1043,7 @@ static int copy_and_ct_start(int cmd, struct obd_export *exp,
 
 		count = 0;
 		for (i = 0; i < sizeof(archive_mask) * 8; i++) {
-			if ((1 << i) & archive_mask) {
+			if (BIT(i) & archive_mask) {
 				lk->lk_data[count] = i + 1;
 				count++;
 			}

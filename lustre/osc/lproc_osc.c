@@ -409,9 +409,9 @@ static int osc_checksum_type_seq_show(struct seq_file *m, void *v)
                 return 0;
 
 	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
-		if (((1 << i) & obd->u.cli.cl_supp_cksum_types) == 0)
+		if ((BIT(i) & obd->u.cli.cl_supp_cksum_types) == 0)
 			continue;
-		if (obd->u.cli.cl_cksum_type == (1 << i))
+		if (obd->u.cli.cl_cksum_type == BIT(i))
 			seq_printf(m, "[%s] ", cksum_name[i]);
 		else
 			seq_printf(m, "%s ", cksum_name[i]);

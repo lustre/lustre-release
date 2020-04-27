@@ -4543,24 +4543,24 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits, enum ldlm_mode l_req_mode)
 
 	flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
 	for (i = 0; i < MDS_INODELOCK_NUMBITS && *bits != 0; i++) {
-		policy.l_inodebits.bits = *bits & (1 << i);
+		policy.l_inodebits.bits = *bits & BIT(i);
 		if (policy.l_inodebits.bits == 0)
 			continue;
 
-                if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS,
-                                  &policy, mode, &lockh)) {
-                        struct ldlm_lock *lock;
+		if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS,
+				  &policy, mode, &lockh)) {
+			struct ldlm_lock *lock;
 
-                        lock = ldlm_handle2lock(&lockh);
-                        if (lock) {
-                                *bits &=
-                                      ~(lock->l_policy_data.l_inodebits.bits);
-                                LDLM_LOCK_PUT(lock);
-                        } else {
-                                *bits &= ~policy.l_inodebits.bits;
-                        }
-                }
-        }
+			lock = ldlm_handle2lock(&lockh);
+			if (lock) {
+				*bits &=
+					~(lock->l_policy_data.l_inodebits.bits);
+				LDLM_LOCK_PUT(lock);
+			} else {
+				*bits &= ~policy.l_inodebits.bits;
+			}
+		}
+	}
         RETURN(*bits == 0);
 }
 
@@ -5023,7 +5023,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 		cred->fsuid = make_kuid(&init_user_ns, squash->rsi_uid);
 		cred->fsgid = make_kgid(&init_user_ns, squash->rsi_gid);
 		for (cap = 0; cap < sizeof(cfs_cap_t) * 8; cap++) {
-			if ((1 << cap) & CFS_CAP_FS_MASK)
+			if (BIT(cap) & CFS_CAP_FS_MASK)
 				cap_lower(cred->cap_effective, cap);
 		}
 		old_cred = override_creds(cred);

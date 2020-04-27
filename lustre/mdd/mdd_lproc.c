@@ -90,7 +90,7 @@ static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
 	int i = 0;
 
 	while (i < CL_LAST) {
-		if (mdd->mdd_cl.mc_mask & (1 << i))
+		if (mdd->mdd_cl.mc_mask & BIT(i))
 			seq_printf(m, "%s ", changelog_type2str(i));
 		i++;
 	}

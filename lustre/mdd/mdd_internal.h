@@ -161,9 +161,9 @@ struct mdd_device {
 
 enum mod_flags {
 	/* The dir object has been unlinked */
-	DEAD_OBJ   = 1 << 0,
-	ORPHAN_OBJ = 1 << 1,
-	VOLATILE_OBJ = 1 << 4,
+	DEAD_OBJ	= BIT(0),
+	ORPHAN_OBJ	= BIT(1),
+	VOLATILE_OBJ	= BIT(4),
 };
 
 struct mdd_object {
@@ -785,7 +785,7 @@ static inline bool mdd_changelog_enabled(const struct lu_env *env,
 	const struct lu_ucred *uc;
 
 	if ((mdd->mdd_cl.mc_flags & CLM_ON) &&
-	    (mdd->mdd_cl.mc_mask & (1 << type))) {
+	    (mdd->mdd_cl.mc_mask & BIT(type))) {
 		uc = lu_ucred_check(env);
 
 		return uc != NULL ? uc->uc_enable_audit : true;

@@ -717,7 +717,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 
 	ENTRY;
 
-	if (mdd->mdd_cl.mc_mask & (1 << CL_MARK)) {
+	if (mdd->mdd_cl.mc_mask & BIT(CL_MARK)) {
 		mdd->mdd_cl.mc_starttime = ktime_get();
 		RETURN(0);
 	}

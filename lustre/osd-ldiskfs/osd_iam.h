@@ -584,11 +584,11 @@ enum iam_it_flags {
         /*
          * this iterator will move (iam_it_next() will be called on it)
          */
-        IAM_IT_MOVE  = (1 << 0),
+        IAM_IT_MOVE  = BIT(0),
         /*
          * tree can be updated through this iterator.
          */
-        IAM_IT_WRITE = (1 << 1)
+        IAM_IT_WRITE = BIT(1)
 };
 
 /*

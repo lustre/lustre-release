@@ -134,11 +134,11 @@ int qsd_config(char *valstr, char *fsname, int pool)
 	}
 
 	if (strchr(valstr, 'u'))
-		enabled |= 1 << USRQUOTA;
+		enabled |= BIT(USRQUOTA);
 	if (strchr(valstr, 'g'))
-		enabled |= 1 << GRPQUOTA;
+		enabled |= BIT(GRPQUOTA);
 	if (strchr(valstr, 'p'))
-		enabled |= 1 << PRJQUOTA;
+		enabled |= BIT(PRJQUOTA);
 
 	mutex_lock(&qfs->qfs_mutex);
 	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)
@@ -173,8 +173,8 @@ int qsd_config(char *valstr, char *fsname, int pool)
 				qqi = qsd->qsd_type_array[type];
 				/* only trigger reintegration if this
 				 * type of quota is not enabled before */
-				if ((old_enabled & 1 << type) ||
-				    !(enabled & 1 << type))
+				if ((old_enabled & BIT(type)) ||
+				    !(enabled & BIT(type)))
 					continue;
 
 				if (qqi->qqi_acct_failed) {

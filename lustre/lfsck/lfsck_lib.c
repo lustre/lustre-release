@@ -1787,7 +1787,7 @@ void lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
 
 	seq_printf(m, "%s:%c", prefix, bits != 0 ? ' ' : '\n');
 
-	for (i = 0, flag = 1; bits != 0; i++, flag = 1 << i) {
+	for (i = 0, flag = 1; bits != 0; i++, flag = BIT(i)) {
 		if (flag & bits) {
 			bits &= ~flag;
 			if (names[i] != NULL) {
@@ -3570,8 +3570,8 @@ int lfsck_query(const struct lu_env *env, struct dt_device *key,
 			GOTO(out, rc = -ENOTSUPP);
 		}
 
-		for (i = 0, type = 1 << i; i < LFSCK_TYPE_BITS;
-		     i++, type = 1 << i) {
+		for (i = 0, type = BIT(i); i < LFSCK_TYPE_BITS;
+		     i++, type = BIT(i)) {
 			if (!(que->lu_types & type))
 				continue;
 
@@ -3595,8 +3595,8 @@ again:
 		if (!(que->lu_flags & LPF_WAIT))
 			GOTO(out, rc);
 
-		for (i = 0, type = 1 << i; i < LFSCK_TYPE_BITS;
-		     i++, type = 1 << i) {
+		for (i = 0, type = BIT(i); i < LFSCK_TYPE_BITS;
+		     i++, type = BIT(i)) {
 			if (!(que->lu_types & type))
 				continue;
 

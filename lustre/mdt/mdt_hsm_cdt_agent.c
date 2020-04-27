@@ -170,7 +170,7 @@ int mdt_hsm_agent_register_mask(struct mdt_thread_info *mti,
 
 		nr_archives = 0;
 		for (i = 0; i < sizeof(archive_mask) * 8; i++) {
-			if ((1 << i) & archive_mask) {
+			if (BIT(i) & archive_mask) {
 				archive_id[nr_archives] = i + 1;
 				nr_archives++;
 			}
@@ -325,9 +325,9 @@ int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
 	list_for_each_entry(ha, &cdt->cdt_agents, ha_list) {
 		for (i = 0; (i < ha->ha_archive_cnt); i++) {
 			/* only send once for each archive_id */
-			if ((1 << ha->ha_archive_id[i]) & archive_mask)
+			if (BIT(ha->ha_archive_id[i]) & archive_mask)
 				continue;
-			archive_mask |= (1 << ha->ha_archive_id[i]);
+			archive_mask |= BIT(ha->ha_archive_id[i]);
 
 			/* XXX: it could make sense to gather all
 			 * actions for the same archive_id like in

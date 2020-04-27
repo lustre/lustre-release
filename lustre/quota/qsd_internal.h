@@ -281,7 +281,7 @@ static inline int qsd_type_enabled(struct qsd_instance *qsd, int type)
 	pool = qsd->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT;
 	enabled = qsd->qsd_fsinfo->qfs_enabled[pool - LQUOTA_FIRST_RES];
 
-	return enabled & (1 << type);
+	return enabled & BIT(type);
 }
 
 /* helper function to set new qunit and compute associated qtune value */

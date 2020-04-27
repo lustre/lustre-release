@@ -83,7 +83,7 @@ struct lovsub_device;
 struct lovsub_object;
 
 enum lov_device_flags {
-        LOV_DEV_INITIALIZED = 1 << 0
+	LOV_DEV_INITIALIZED = BIT(0),
 };
 
 /*

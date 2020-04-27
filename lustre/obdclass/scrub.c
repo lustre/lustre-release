@@ -375,7 +375,7 @@ static void scrub_bits_dump(struct seq_file *m, int bits, const char *names[],
 
 	seq_printf(m, "%s:%c", prefix, bits != 0 ? ' ' : '\n');
 
-	for (i = 0, flag = 1; bits != 0; i++, flag = 1 << i) {
+	for (i = 0, flag = 1; bits != 0; i++, flag = BIT(i)) {
 		if (flag & bits) {
 			bits &= ~flag;
 			seq_printf(m, "%s%c", names[i],

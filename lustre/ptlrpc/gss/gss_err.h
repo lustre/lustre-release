@@ -172,11 +172,11 @@ typedef unsigned int OM_uint32;
 /*
  * Supplementary info bits:
  */
-#define GSS_S_CONTINUE_NEEDED   (1 << (GSS_C_SUPPLEMENTARY_OFFSET + 0))
-#define GSS_S_DUPLICATE_TOKEN   (1 << (GSS_C_SUPPLEMENTARY_OFFSET + 1))
-#define GSS_S_OLD_TOKEN         (1 << (GSS_C_SUPPLEMENTARY_OFFSET + 2))
-#define GSS_S_UNSEQ_TOKEN       (1 << (GSS_C_SUPPLEMENTARY_OFFSET + 3))
-#define GSS_S_GAP_TOKEN         (1 << (GSS_C_SUPPLEMENTARY_OFFSET + 4))
+#define GSS_S_CONTINUE_NEEDED   BIT(GSS_C_SUPPLEMENTARY_OFFSET + 0)
+#define GSS_S_DUPLICATE_TOKEN   BIT(GSS_C_SUPPLEMENTARY_OFFSET + 1)
+#define GSS_S_OLD_TOKEN         BIT(GSS_C_SUPPLEMENTARY_OFFSET + 2)
+#define GSS_S_UNSEQ_TOKEN       BIT(GSS_C_SUPPLEMENTARY_OFFSET + 3)
+#define GSS_S_GAP_TOKEN         BIT(GSS_C_SUPPLEMENTARY_OFFSET + 4)
 
 /* XXXX these are not part of the GSSAPI C bindings!  (but should be) */
 
