@@ -1120,13 +1120,13 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
 
-        LASSERT(handle != NULL);
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	LASSERT(handle != NULL);
+	oh = container_of(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        newblocks = npages;
+	newblocks = npages;
 
-        /* calculate number of extents (probably better to pass nb) */
+	/* calculate number of extents (probably better to pass nb) */
 	for (i = 0; i < npages; i++) {
 		if (i && lnb[i].lnb_file_offset !=
 		    lnb[i - 1].lnb_file_offset + lnb[i - 1].lnb_len)
@@ -1586,10 +1586,10 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(buf != NULL);
-        LASSERT(handle != NULL);
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
 	size = buf->lb_len;
 	bits = sb->s_blocksize_bits;

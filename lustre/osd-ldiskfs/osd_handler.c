@@ -1712,7 +1712,7 @@ static int osd_param_is_not_sane(const struct osd_device *dev,
 static void osd_trans_commit_cb(struct super_block *sb,
 				struct ldiskfs_journal_cb_entry *jcb, int error)
 {
-	struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
+	struct osd_thandle *oh = container_of(jcb, struct osd_thandle, ot_jcb);
 	struct thandle *th = &oh->ot_super;
 	struct lu_device *lud = &th->th_dev->dd_lu_dev;
 	struct dt_txn_commit_cb *dcb, *tmp;
@@ -1797,7 +1797,7 @@ void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th)
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_thandle *oh;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh != NULL);
 
 	CWARN("  create: %u/%u/%u, destroy: %u/%u/%u\n",
@@ -1856,7 +1856,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 
 	LASSERT(current->journal_info == NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh != NULL);
 	LASSERT(oh->ot_handle == NULL);
 
@@ -1985,7 +1985,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	ENTRY;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
 	remove_agents = oh->ot_remove_agents;
 
@@ -2070,8 +2070,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 {
-	struct osd_thandle *oh = container_of0(th, struct osd_thandle,
-					       ot_super);
+	struct osd_thandle *oh = container_of(th, struct osd_thandle,
+					      ot_super);
 
 	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
 	LASSERT(&dcb->dcb_func != NULL);
@@ -2793,7 +2793,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	obj = osd_dt_obj(dt);
 	LASSERT(osd_invariant(obj));
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_ATTR_SET,
@@ -3059,7 +3059,7 @@ static int osd_attr_set(const struct lu_env *env,
 		if (unlikely(ipd == NULL))
 			RETURN(-ENOMEM);
 
-		oh = container_of0(handle, struct osd_thandle, ot_super);
+		oh = container_of(handle, struct osd_thandle, ot_super);
 		rc = iam_update(oh->ot_handle, bag,
 				(const struct iam_key *)fid1,
 				(const struct iam_rec *)id, ipd);
@@ -3453,7 +3453,7 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 
 	LASSERT(obj->oo_inode != NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle);
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
@@ -3519,7 +3519,7 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	/*
@@ -3577,7 +3577,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (inode == NULL)
 		RETURN(-ENOENT);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
@@ -3628,7 +3628,7 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle);
 	LASSERT(inode);
 	LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
@@ -4087,7 +4087,7 @@ static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 	/* it's possible that object doesn't exist yet */
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_REF_ADD,
@@ -4117,7 +4117,7 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_is_write_locked(env, obj));
 	LASSERT(th != NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_ADD);
@@ -4165,7 +4165,7 @@ static int osd_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_REF_DEL,
@@ -4193,7 +4193,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_is_write_locked(env, obj));
 	LASSERT(th != NULL);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_DEL);
@@ -4344,7 +4344,7 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	if (strcmp(name, XATTR_NAME_LMA) == 0) {
@@ -4563,7 +4563,7 @@ static int osd_xattr_handle_linkea(const struct lu_env *env,
 
 	ENTRY;
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
 
 	rc = linkea_init_with_rec(&ldata);
@@ -4732,7 +4732,7 @@ static int osd_declare_xattr_del(const struct lu_env *env,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET,
@@ -5033,7 +5033,7 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
 {
 	struct osd_thandle *oh;
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	/* Recycle  may cause additional three blocks to be changed. */
@@ -5081,7 +5081,7 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(ipd == NULL))
 		RETURN(-ENOMEM);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
@@ -5112,7 +5112,7 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	credits = osd_dto_credits_noquota[DTO_INDEX_DELETE];
@@ -5375,7 +5375,7 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
 
 	LASSERT(handle != NULL);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
@@ -5425,7 +5425,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(ipd == NULL))
 		RETURN(-ENOMEM);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 	if (S_ISDIR(obj->oo_inode->i_mode)) {
@@ -6020,7 +6020,7 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 	LASSERT(fid != NULL);
 	LASSERT(rec1->rec_type != 0);
 
-	oh = container_of0(handle, struct osd_thandle, ot_super);
+	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
 	credits = osd_dto_credits_noquota[DTO_INDEX_INSERT];
