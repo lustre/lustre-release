@@ -311,7 +311,8 @@ struct osp_object {
 	struct dt_object	opo_obj;
 	unsigned int		opo_reserved:1,
 				opo_non_exist:1,
-				opo_stale:1;
+				opo_stale:1,
+				opo_destroyed:1;
 
 	/* read/write lock for md osp object */
 	struct rw_semaphore	opo_sem;

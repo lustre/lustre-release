@@ -582,6 +582,8 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 
 	if (is_ost_obj(&dt->do_lu) && obj->opo_non_exist)
 		RETURN(-ENOENT);
+	if (obj->opo_destroyed)
+		RETURN(-ENOENT);
 
 	spin_lock(&obj->opo_lock);
 	if (obj->opo_attr.la_valid != 0 && !obj->opo_stale) {
