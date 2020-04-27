@@ -880,8 +880,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_bucket_bits = ldlm_ns_hash_defs[ns_type].nsd_all_bits -
 			     ldlm_ns_hash_defs[ns_type].nsd_bkt_bits;
 
-	OBD_ALLOC_LARGE(ns->ns_rs_buckets,
-			BIT(ns->ns_bucket_bits) * sizeof(ns->ns_rs_buckets[0]));
+	OBD_ALLOC_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	if (!ns->ns_rs_buckets)
 		goto out_hash;
 
@@ -951,8 +950,7 @@ out_sysfs:
 	ldlm_namespace_sysfs_unregister(ns);
 	ldlm_namespace_cleanup(ns, 0);
 out_hash:
-	OBD_FREE_LARGE(ns->ns_rs_buckets,
-		       BIT(ns->ns_bucket_bits) * sizeof(ns->ns_rs_buckets[0]));
+	OBD_FREE_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	kfree(ns->ns_name);
 	cfs_hash_putref(ns->ns_rs_hash);
 out_ns:
@@ -1221,8 +1219,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 	ldlm_namespace_debugfs_unregister(ns);
 	ldlm_namespace_sysfs_unregister(ns);
 	cfs_hash_putref(ns->ns_rs_hash);
-	OBD_FREE_LARGE(ns->ns_rs_buckets,
-		       BIT(ns->ns_bucket_bits) * sizeof(ns->ns_rs_buckets[0]));
+	OBD_FREE_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	kfree(ns->ns_name);
 	/* Namespace \a ns should be not on list at this time, otherwise
 	 * this will cause issues related to using freed \a ns in poold

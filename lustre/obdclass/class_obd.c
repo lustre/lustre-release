@@ -134,27 +134,28 @@ out:
 
 static int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
-	if (data->ioc_len > BIT(30)) {
+	const int maxlen = 1 << 30;
+	if (data->ioc_len > maxlen) {
 		CERROR("OBD ioctl: ioc_len larger than 1<<30\n");
 		return 1;
 	}
 
-	if (data->ioc_inllen1 > BIT(30)) {
+	if (data->ioc_inllen1 > maxlen) {
 		CERROR("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
 		return 1;
 	}
 
-	if (data->ioc_inllen2 > BIT(30)) {
+	if (data->ioc_inllen2 > maxlen) {
 		CERROR("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
 		return 1;
 	}
 
-	if (data->ioc_inllen3 > BIT(30)) {
+	if (data->ioc_inllen3 > maxlen) {
 		CERROR("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
 		return 1;
 	}
 
-	if (data->ioc_inllen4 > BIT(30)) {
+	if (data->ioc_inllen4 > maxlen) {
 		CERROR("OBD ioctl: ioc_inllen4 larger than 1<<30\n");
 		return 1;
 	}

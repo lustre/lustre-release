@@ -73,13 +73,14 @@ static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 
 static bool libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
 {
-	if (data->ioc_hdr.ioc_len > BIT(30))
+	const int maxlen = 1 << 30;
+	if (data->ioc_hdr.ioc_len > maxlen)
 		return true;
 
-	if (data->ioc_inllen1 > BIT(30))
+	if (data->ioc_inllen1 > maxlen)
 		return true;
 
-	if (data->ioc_inllen2 > BIT(30))
+	if (data->ioc_inllen2 > maxlen)
 		return true;
 
 	if (data->ioc_inlbuf1 && !data->ioc_inllen1)

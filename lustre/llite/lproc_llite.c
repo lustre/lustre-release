@@ -1759,26 +1759,26 @@ static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
                 write_tot += pp_info->pp_w_hist.oh_buckets[i];
         }
 
-        for(i = 0; i < LL_HIST_MAX; i++) {
-                r = pp_info->pp_r_hist.oh_buckets[i];
-                w = pp_info->pp_w_hist.oh_buckets[i];
-                read_cum += r;
-                write_cum += w;
-		end = BIT(i + LL_HIST_START - units);
+	for(i = 0; i < LL_HIST_MAX; i++) {
+		r = pp_info->pp_r_hist.oh_buckets[i];
+		w = pp_info->pp_w_hist.oh_buckets[i];
+		read_cum += r;
+		write_cum += w;
+		end = 1 << (i + LL_HIST_START - units);
 		seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4u %4u  | "
 			   "%14lu %4u %4u\n", start, *unitp, end, *unitp,
-                           (i == LL_HIST_MAX - 1) ? '+' : ' ',
-                           r, pct(r, read_tot), pct(read_cum, read_tot),
-                           w, pct(w, write_tot), pct(write_cum, write_tot));
-                start = end;
-		if (start == BIT(10)) {
-                        start = 1;
-                        units += 10;
-                        unitp++;
-                }
-                if (read_cum == read_tot && write_cum == write_tot)
-                        break;
-        }
+			   (i == LL_HIST_MAX - 1) ? '+' : ' ',
+			   r, pct(r, read_tot), pct(read_cum, read_tot),
+			   w, pct(w, write_tot), pct(write_cum, write_tot));
+		start = end;
+		if (start == (1 << 10)) {
+			start = 1;
+			units += 10;
+			unitp++;
+		}
+		if (read_cum == read_tot && write_cum == write_tot)
+			break;
+	}
 }
 
 static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
@@ -1939,7 +1939,7 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                 lprocfs_oh_clear(&io_extents->pp_extents[cur].pp_w_hist);
         }
 
-	for (i = 0; (count >= BIT(LL_HIST_START + i)) &&
+	for (i = 0; (count >= 1 << (LL_HIST_START + i)) &&
 	     (i < (LL_HIST_MAX - 1)); i++);
 	if (rw == 0) {
 		io_extents->pp_extents[cur].pp_r_hist.oh_buckets[i]++;
