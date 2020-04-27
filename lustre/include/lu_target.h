@@ -338,21 +338,21 @@ enum tgt_handler_flags {
 	 * struct *_body is passed in the incoming message, and object
 	 * identified by this fid exists on disk.
 	 */
-	HAS_BODY = (1 << 0),
+	HAS_BODY	= BIT(0),
 	/*
 	 * struct ldlm_request is passed in the incoming message.
 	 */
-	HAS_KEY = (1 << 1),
+	HAS_KEY		= BIT(1),
 	/*
 	 * this request has fixed reply format, so that reply message can be
 	 * packed by generic code.
 	 */
-	HAS_REPLY = (1 << 2),
+	HAS_REPLY	= BIT(2),
 	/*
 	 * this request will modify something, so check whether the file system
 	 * is readonly or not, then return -EROFS to client asap if necessary.
 	 */
-	IS_MUTABLE = (1 << 3)
+	IS_MUTABLE	= BIT(3)
 };
 
 struct tgt_handler {

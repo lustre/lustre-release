@@ -65,17 +65,17 @@ struct obd_export;
 
 /** metadata attributes */
 enum ma_valid {
-	MA_INODE     = 1 << 0,
-	MA_LOV       = 1 << 1,
-	MA_FLAGS     = 1 << 2,
-	MA_LMV       = 1 << 3,
-	MA_ACL_DEF   = 1 << 4,
-	MA_LOV_DEF   = 1 << 5,
-	MA_HSM       = 1 << 6,
-	MA_PFID      = 1 << 7,
-	MA_LMV_DEF   = 1 << 8,
-	MA_SOM	     = 1 << 9,
-	MA_FORCE_LOG	= 1 << 10, /* forced close logged in mdt_mfd_close */
+	MA_INODE	= BIT(0),
+	MA_LOV		= BIT(1),
+	MA_FLAGS	= BIT(2),
+	MA_LMV		= BIT(3),
+	MA_ACL_DEF	= BIT(4),
+	MA_LOV_DEF	= BIT(5),
+	MA_HSM		= BIT(6),
+	MA_PFID		= BIT(7),
+	MA_LMV_DEF	= BIT(8),
+	MA_SOM		= BIT(9),
+	MA_FORCE_LOG	= BIT(10), /* forced close logged in mdt_mfd_close */
 };
 
 typedef enum {
@@ -91,13 +91,13 @@ typedef enum {
 } mdl_mode_t;
 
 typedef enum {
-        MDT_NUL_LOCK = 0,
-        MDT_REG_LOCK = (1 << 0),
-        MDT_PDO_LOCK = (1 << 1)
+	MDT_NUL_LOCK = 0,
+	MDT_REG_LOCK = BIT(0),
+	MDT_PDO_LOCK = BIT(1),
 } mdl_type_t;
 
 /* lfs rgetfacl permission check */
-#define MAY_RGETFACL    (1 << 14)
+#define MAY_RGETFACL	BIT(14)
 
 /* memory structure for hsm attributes
  * for fields description see the on disk structure hsm_attrs
@@ -725,7 +725,7 @@ void lu_ucred_global_fini(void);
 
 #define md_cap_t(x) (x)
 
-#define MD_CAP_TO_MASK(x) (1 << (x))
+#define MD_CAP_TO_MASK(x) BIT(x)
 
 #define md_cap_raised(c, flag) (md_cap_t(c) & MD_CAP_TO_MASK(flag))
 

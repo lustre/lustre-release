@@ -62,9 +62,9 @@ union lquota_rec {
 
 /* flags for inode/block quota accounting */
 enum osd_qid_declare_flags {
-	OSD_QID_INODE	= 1 << 0,
-	OSD_QID_BLK	= 1 << 1,
-	OSD_QID_FORCE	= 1 << 2,
+	OSD_QID_INODE	= BIT(0),
+	OSD_QID_BLK	= BIT(1),
+	OSD_QID_FORCE	= BIT(2),
 };
 
 /* Index features supported by the global index objects
@@ -178,10 +178,10 @@ struct qsd_instance;
 
 /* flags for quota local enforcement */
 enum osd_quota_local_flags {
-	QUOTA_FL_OVER_USRQUOTA = 1 << 0,
-	QUOTA_FL_OVER_GRPQUOTA = 1 << 1,
-	QUOTA_FL_SYNC = 1 << 2,
-	QUOTA_FL_OVER_PRJQUOTA = 1 << 3,
+	QUOTA_FL_OVER_USRQUOTA	= BIT(0),
+	QUOTA_FL_OVER_GRPQUOTA	= BIT(1),
+	QUOTA_FL_SYNC		= BIT(2),
+	QUOTA_FL_OVER_PRJQUOTA	= BIT(3),
 };
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,

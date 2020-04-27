@@ -269,16 +269,16 @@ enum nrs_policy_flags {
 	 * service. The flag cannot be used on policies that use
 	 * \e PTLRPC_NRS_FL_REG_EXTERN
 	 */
-	PTLRPC_NRS_FL_FALLBACK		= (1 << 0),
+	PTLRPC_NRS_FL_FALLBACK		= BIT(0),
 	/**
 	 * Start policy immediately after registering.
 	 */
-	PTLRPC_NRS_FL_REG_START		= (1 << 1),
+	PTLRPC_NRS_FL_REG_START		= BIT(1),
 	/**
 	 * This is a policy registering from a module different to the one NRS
 	 * core ships in (currently ptlrpc).
 	 */
-	PTLRPC_NRS_FL_REG_EXTERN	= (1 << 2),
+	PTLRPC_NRS_FL_REG_EXTERN	= BIT(2),
 };
 
 /**
@@ -289,8 +289,8 @@ enum nrs_policy_flags {
  * in a service.
  */
 enum ptlrpc_nrs_queue_type {
-	PTLRPC_NRS_QUEUE_REG	= (1 << 0),
-	PTLRPC_NRS_QUEUE_HP	= (1 << 1),
+	PTLRPC_NRS_QUEUE_REG	= BIT(0),
+	PTLRPC_NRS_QUEUE_HP	= BIT(1),
 	PTLRPC_NRS_QUEUE_BOTH	= (PTLRPC_NRS_QUEUE_REG | PTLRPC_NRS_QUEUE_HP)
 };
 

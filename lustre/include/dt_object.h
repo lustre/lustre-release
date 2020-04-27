@@ -332,19 +332,19 @@ struct dt_index_features {
 };
 
 enum dt_index_flags {
-        /** index supports variable sized keys */
-        DT_IND_VARKEY = 1 << 0,
-        /** index supports variable sized records */
-        DT_IND_VARREC = 1 << 1,
-        /** index can be modified */
-        DT_IND_UPDATE = 1 << 2,
-        /** index supports records with non-unique (duplicate) keys */
-        DT_IND_NONUNQ = 1 << 3,
-        /**
-         * index support fixed-size keys sorted with natural numerical way
-         * and is able to return left-side value if no exact value found
-         */
-        DT_IND_RANGE = 1 << 4,
+	/** index supports variable sized keys */
+	DT_IND_VARKEY = BIT(0),
+	/** index supports variable sized records */
+	DT_IND_VARREC = BIT(1),
+	/** index can be modified */
+	DT_IND_UPDATE = BIT(2),
+	/** index supports records with non-unique (duplicate) keys */
+	DT_IND_NONUNQ = BIT(3),
+	/**
+	 * index support fixed-size keys sorted with natural numerical way
+	 * and is able to return left-side value if no exact value found
+	 */
+	DT_IND_RANGE = BIT(4),
 };
 
 /* for dt_read_lock() and dt_write_lock() object lock rule */

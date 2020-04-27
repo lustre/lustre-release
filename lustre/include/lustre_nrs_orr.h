@@ -64,13 +64,13 @@ struct nrs_orr_req_range {
  * RPC types supported by the ORR/TRR policies
  */
 enum nrs_orr_supp {
-	NOS_OST_READ  = (1 << 0),
-	NOS_OST_WRITE = (1 << 1),
-	NOS_OST_RW    = (NOS_OST_READ | NOS_OST_WRITE),
+	NOS_OST_READ	= BIT(0),
+	NOS_OST_WRITE	= BIT(1),
+	NOS_OST_RW	= (NOS_OST_READ | NOS_OST_WRITE),
 	/**
 	 * Default value for policies.
 	 */
-	NOS_DFLT      = NOS_OST_READ
+	NOS_DFLT	= NOS_OST_READ
 };
 
 /**

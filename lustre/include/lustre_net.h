@@ -553,8 +553,8 @@ struct ptlrpc_client {
 
 /** state flags of requests */
 /* XXX only ones left are those used by the bulk descs as well! */
-#define PTL_RPC_FL_INTR      (1 << 0)  /* reply wait was interrupted by user */
-#define PTL_RPC_FL_TIMEOUT   (1 << 7)  /* request timed out waiting for reply */
+#define PTL_RPC_FL_INTR		BIT(0)	/* reply wait was interrupted by user */
+#define PTL_RPC_FL_TIMEOUT	BIT(7)	/* request timed out waiting for reply */
 
 #define REQ_MAX_ACK_LOCKS 8
 
@@ -1193,7 +1193,7 @@ static inline bool ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
 static inline bool lustre_req_swabbed(struct ptlrpc_request *req, size_t index)
 {
 	LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
-	return req->rq_req_swab_mask & (1 << index);
+	return req->rq_req_swab_mask & BIT(index);
 }
 
 /**
@@ -1202,7 +1202,7 @@ static inline bool lustre_req_swabbed(struct ptlrpc_request *req, size_t index)
 static inline bool lustre_rep_swabbed(struct ptlrpc_request *req, size_t index)
 {
 	LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
-	return req->rq_rep_swab_mask & (1 << index);
+	return req->rq_rep_swab_mask & BIT(index);
 }
 
 /**
@@ -1227,9 +1227,9 @@ static inline bool ptlrpc_rep_need_swab(struct ptlrpc_request *req)
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req,
 					  size_t index)
 {
-        LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
-        LASSERT((req->rq_req_swab_mask & (1 << index)) == 0);
-        req->rq_req_swab_mask |= 1 << index;
+	LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
+	LASSERT((req->rq_req_swab_mask & BIT(index)) == 0);
+	req->rq_req_swab_mask |= BIT(index);
 }
 
 /**
@@ -1238,9 +1238,9 @@ static inline void lustre_set_req_swabbed(struct ptlrpc_request *req,
 static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req,
 					  size_t index)
 {
-        LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
-        LASSERT((req->rq_rep_swab_mask & (1 << index)) == 0);
-        req->rq_rep_swab_mask |= 1 << index;
+	LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
+	LASSERT((req->rq_rep_swab_mask & BIT(index)) == 0);
+	req->rq_rep_swab_mask |= BIT(index);
 }
 
 /**
@@ -1464,10 +1464,10 @@ struct ptlrpc_bulk_desc {
 
 enum {
 	SVC_INIT	= 0,
-	SVC_STOPPED	= 1 << 0,
-	SVC_STOPPING	= 1 << 1,
-	SVC_STARTING	= 1 << 2,
-	SVC_RUNNING	= 1 << 3,
+	SVC_STOPPED	= BIT(0),
+	SVC_STOPPING	= BIT(1),
+	SVC_STARTING	= BIT(2),
+	SVC_RUNNING	= BIT(3),
 };
 
 #define PTLRPC_THR_NAME_LEN		32
@@ -1885,24 +1885,24 @@ struct ptlrpcd_ctl {
 
 /* Bits for pc_flags */
 enum ptlrpcd_ctl_flags {
-        /**
-         * Ptlrpc thread start flag.
-         */
-        LIOD_START       = 1 << 0,
-        /**
-         * Ptlrpc thread stop flag.
-         */
-        LIOD_STOP        = 1 << 1,
-        /**
-         * Ptlrpc thread force flag (only stop force so far).
-         * This will cause aborting any inflight rpcs handled
-         * by thread if LIOD_STOP is specified.
-         */
-        LIOD_FORCE       = 1 << 2,
-        /**
-         * This is a recovery ptlrpc thread.
-         */
-        LIOD_RECOVERY    = 1 << 3,
+	/**
+	 * Ptlrpc thread start flag.
+	 */
+	LIOD_START	= BIT(0),
+	/**
+	 * Ptlrpc thread stop flag.
+	 */
+	LIOD_STOP	= BIT(1),
+	/**
+	 * Ptlrpc thread force flag (only stop force so far).
+	 * This will cause aborting any inflight rpcs handled
+	 * by thread if LIOD_STOP is specified.
+	 */
+	LIOD_FORCE	= BIT(2),
+	/**
+	 * This is a recovery ptlrpc thread.
+	 */
+	LIOD_RECOVERY	= BIT(3),
 };
 
 /**

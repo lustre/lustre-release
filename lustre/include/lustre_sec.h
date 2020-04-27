@@ -532,12 +532,12 @@ struct ptlrpc_ctx_ops {
 #define PTLRPC_CTX_CACHED_BIT          (8)  /* in ctx cache (hash etc.) */
 #define PTLRPC_CTX_ETERNAL_BIT         (9)  /* always valid */
 
-#define PTLRPC_CTX_NEW                 (1 << PTLRPC_CTX_NEW_BIT)
-#define PTLRPC_CTX_UPTODATE            (1 << PTLRPC_CTX_UPTODATE_BIT)
-#define PTLRPC_CTX_DEAD                (1 << PTLRPC_CTX_DEAD_BIT)
-#define PTLRPC_CTX_ERROR               (1 << PTLRPC_CTX_ERROR_BIT)
-#define PTLRPC_CTX_CACHED              (1 << PTLRPC_CTX_CACHED_BIT)
-#define PTLRPC_CTX_ETERNAL             (1 << PTLRPC_CTX_ETERNAL_BIT)
+#define PTLRPC_CTX_NEW                 BIT(PTLRPC_CTX_NEW_BIT)
+#define PTLRPC_CTX_UPTODATE            BIT(PTLRPC_CTX_UPTODATE_BIT)
+#define PTLRPC_CTX_DEAD                BIT(PTLRPC_CTX_DEAD_BIT)
+#define PTLRPC_CTX_ERROR               BIT(PTLRPC_CTX_ERROR_BIT)
+#define PTLRPC_CTX_CACHED              BIT(PTLRPC_CTX_CACHED_BIT)
+#define PTLRPC_CTX_ETERNAL             BIT(PTLRPC_CTX_ETERNAL_BIT)
 
 #define PTLRPC_CTX_STATUS_MASK         (PTLRPC_CTX_NEW_BIT    |       \
                                         PTLRPC_CTX_UPTODATE   |       \

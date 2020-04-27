@@ -321,12 +321,12 @@ struct lu_device_type_operations;
  * device types.
  */
 enum lu_device_tag {
-        /** this is meta-data device */
-        LU_DEVICE_MD = (1 << 0),
-        /** this is data device */
-        LU_DEVICE_DT = (1 << 1),
-        /** data device in the client stack */
-        LU_DEVICE_CL = (1 << 2)
+	/** this is meta-data device */
+	LU_DEVICE_MD = BIT(0),
+	/** this is data device */
+	LU_DEVICE_DT = BIT(1),
+	/** data device in the client stack */
+	LU_DEVICE_CL = BIT(2)
 };
 
 /**
@@ -508,9 +508,9 @@ enum lu_object_header_flags {
 };
 
 enum lu_object_header_attr {
-	LOHA_EXISTS		= 1 << 0,
-	LOHA_REMOTE		= 1 << 1,
-	LOHA_HAS_AGENT_ENTRY	= 1 << 2,
+	LOHA_EXISTS		= BIT(0),
+	LOHA_REMOTE		= BIT(1),
+	LOHA_HAS_AGENT_ENTRY	= BIT(2),
 	/**
 	 * UNIX file type is stored in S_IFMT bits.
 	 */
@@ -931,10 +931,10 @@ struct lu_rdpg {
 };
 
 enum lu_xattr_flags {
-	LU_XATTR_REPLACE = (1 << 0),
-	LU_XATTR_CREATE  = (1 << 1),
-	LU_XATTR_MERGE   = (1 << 2),
-	LU_XATTR_SPLIT   = (1 << 3),
+	LU_XATTR_REPLACE = BIT(0),
+	LU_XATTR_CREATE  = BIT(1),
+	LU_XATTR_MERGE   = BIT(2),
+	LU_XATTR_SPLIT   = BIT(3),
 };
 
 /** @} helpers */
@@ -1017,62 +1017,62 @@ struct lu_context {
  */
 
 enum lu_context_tag {
-        /**
-         * Thread on md server
-         */
-        LCT_MD_THREAD = 1 << 0,
-        /**
-         * Thread on dt server
-         */
-        LCT_DT_THREAD = 1 << 1,
-        /**
-         * Thread on client
-         */
-        LCT_CL_THREAD = 1 << 3,
-        /**
-         * A per-request session on a server, and a per-system-call session on
-         * a client.
-         */
-        LCT_SESSION   = 1 << 4,
-        /**
-         * A per-request data on OSP device
-         */
-        LCT_OSP_THREAD = 1 << 5,
-        /**
-         * MGS device thread
-         */
-        LCT_MG_THREAD = 1 << 6,
-        /**
-         * Context for local operations
-         */
-	LCT_LOCAL = 1 << 7,
+	/**
+	 * Thread on md server
+	 */
+	LCT_MD_THREAD		= BIT(0),
+	/**
+	 * Thread on dt server
+	 */
+	LCT_DT_THREAD		= BIT(1),
+	/**
+	 * Thread on client
+	 */
+	LCT_CL_THREAD		= BIT(3),
+	/**
+	 * A per-request session on a server, and a per-system-call session on
+	 * a client.
+	 */
+	LCT_SESSION		= BIT(4),
+	/**
+	 * A per-request data on OSP device
+	 */
+	LCT_OSP_THREAD		= BIT(5),
+	/**
+	 * MGS device thread
+	 */
+	LCT_MG_THREAD		= BIT(6),
+	/**
+	 * Context for local operations
+	 */
+	LCT_LOCAL		= BIT(7),
 	/**
 	 * session for server thread
 	 **/
-	LCT_SERVER_SESSION = 1 << 8,
-        /**
-         * Set when at least one of keys, having values in this context has
-         * non-NULL lu_context_key::lct_exit() method. This is used to
-         * optimize lu_context_exit() call.
-         */
-        LCT_HAS_EXIT  = 1 << 28,
-        /**
-         * Don't add references for modules creating key values in that context.
-         * This is only for contexts used internally by lu_object framework.
-         */
-        LCT_NOREF     = 1 << 29,
-        /**
-         * Key is being prepared for retiring, don't create new values for it.
-         */
-        LCT_QUIESCENT = 1 << 30,
-        /**
-         * Context should be remembered.
-         */
-        LCT_REMEMBER  = 1 << 31,
-        /**
-         * Contexts usable in cache shrinker thread.
-         */
-        LCT_SHRINKER  = LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD|LCT_NOREF
+	LCT_SERVER_SESSION	= BIT(8),
+	/**
+	 * Set when at least one of keys, having values in this context has
+	 * non-NULL lu_context_key::lct_exit() method. This is used to
+	 * optimize lu_context_exit() call.
+	 */
+	LCT_HAS_EXIT		= BIT(28),
+	/**
+	 * Don't add references for modules creating key values in that context.
+	 * This is only for contexts used internally by lu_object framework.
+	 */
+	LCT_NOREF		= BIT(29),
+	/**
+	 * Key is being prepared for retiring, don't create new values for it.
+	 */
+	LCT_QUIESCENT		= BIT(30),
+	/**
+	 * Context should be remembered.
+	 */
+	LCT_REMEMBER		= BIT(31),
+	/**
+	 * Contexts usable in cache shrinker thread.
+	 */
+	LCT_SHRINKER	= LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD|LCT_NOREF,
 };
 
 /**

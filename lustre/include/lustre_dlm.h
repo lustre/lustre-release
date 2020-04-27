@@ -308,8 +308,8 @@ struct ldlm_valblock_ops {
  * Greedy means release cached locks aggressively
  */
 enum ldlm_appetite {
-	LDLM_NAMESPACE_GREEDY = 1 << 0,
-	LDLM_NAMESPACE_MODEST = 1 << 1
+	LDLM_NAMESPACE_GREEDY = BIT(0),
+	LDLM_NAMESPACE_MODEST = BIT(1),
 };
 
 /**

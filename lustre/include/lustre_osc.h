@@ -221,11 +221,11 @@ enum osc_dap_flags {
 	 * Just check if the desired lock exists, it won't hold reference
 	 * count on lock.
 	 */
-	OSC_DAP_FL_TEST_LOCK = 1 << 0,
+	OSC_DAP_FL_TEST_LOCK = BIT(0),
 	/**
 	 * Return the lock even if it is being canceled.
 	 */
-	OSC_DAP_FL_CANCELING = 1 << 1
+	OSC_DAP_FL_CANCELING = BIT(1),
 };
 
 /*
