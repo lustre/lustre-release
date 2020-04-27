@@ -691,14 +691,14 @@ typedef enum {
 
 /* Error Event Categories */
 /* WARNING: DO NOT CHANGE THESE UNLESS YOU CHANGE ghal_err_cat.h */
-#define GNI_ERRMASK_CORRECTABLE_MEMORY   (1 << 0)
-#define GNI_ERRMASK_CRITICAL             (1 << 1)
-#define GNI_ERRMASK_TRANSACTION          (1 << 2)
-#define GNI_ERRMASK_ADDRESS_TRANSLATION  (1 << 3)
-#define GNI_ERRMASK_TRANSIENT            (1 << 4)
-#define GNI_ERRMASK_INFORMATIONAL        (1 << 5)
-#define GNI_ERRMASK_DIAG_ONLY            (1 << 6)
-#define GNI_ERRMASK_UNKNOWN_TRANSACTION  (1 << 7)
+#define GNI_ERRMASK_CORRECTABLE_MEMORY   BIT(0)
+#define GNI_ERRMASK_CRITICAL             BIT(1)
+#define GNI_ERRMASK_TRANSACTION          BIT(2)
+#define GNI_ERRMASK_ADDRESS_TRANSLATION  BIT(3)
+#define GNI_ERRMASK_TRANSIENT            BIT(4)
+#define GNI_ERRMASK_INFORMATIONAL        BIT(5)
+#define GNI_ERRMASK_DIAG_ONLY            BIT(6)
+#define GNI_ERRMASK_UNKNOWN_TRANSACTION  BIT(7)
 
 /* RDMA mode */
 /* local_addr is a physical address (kernel only) */
@@ -712,19 +712,19 @@ typedef enum {
 /* Post CE modes, used during GNI_PostFma(...) */
 /* Use two operands (only meaningful for single operand collective operations).
  * Single operand CE operations are all variations of AND, OR, XOR and ADD.  */
-#define GNI_CEMODE_TWO_OP               (1 << 0)
+#define GNI_CEMODE_TWO_OP               BIT(0)
 /* The provided operands are an intermediate result that has experienced an
  * invalid operation floating point exception. */
-#define GNI_CEMODE_FPE_OP_INVAL         (1 << 1)
+#define GNI_CEMODE_FPE_OP_INVAL         BIT(1)
 /* The provided operands are an intermediate result that has experienced an
  * overflow floating point exception */
-#define GNI_CEMODE_FPE_OFLOW            (1 << 2)
+#define GNI_CEMODE_FPE_OFLOW            BIT(2)
 /* The provided operands are an intermediate result that has experienced an
  * underflow floating point exception. */
-#define GNI_CEMODE_FPE_UFLOW            (1 << 3)
+#define GNI_CEMODE_FPE_UFLOW            BIT(3)
 /* The provided operands are an intermediate result that has experienced an
  * inexact result floating point exception. */
-#define GNI_CEMODE_FPE_PRECISION        (1 << 4)
+#define GNI_CEMODE_FPE_PRECISION        BIT(4)
 
 /* Maximum length in bytes of a datagram transaction */
 #define GNI_DATAGRAM_MAXSIZE    128

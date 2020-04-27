@@ -213,9 +213,9 @@ struct lnet_libmd {
 	struct bio_vec		 md_kiov[LNET_MAX_IOV];
 };
 
-#define LNET_MD_FLAG_ZOMBIE	 (1 << 0)
-#define LNET_MD_FLAG_AUTO_UNLINK (1 << 1)
-#define LNET_MD_FLAG_ABORTED	 (1 << 2)
+#define LNET_MD_FLAG_ZOMBIE	 BIT(0)
+#define LNET_MD_FLAG_AUTO_UNLINK BIT(1)
+#define LNET_MD_FLAG_ABORTED	 BIT(2)
 
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */
@@ -569,13 +569,13 @@ struct lnet_peer_ni {
 };
 
 /* Preferred path added due to traffic on non-MR peer_ni */
-#define LNET_PEER_NI_NON_MR_PREF	(1 << 0)
+#define LNET_PEER_NI_NON_MR_PREF	BIT(0)
 /* peer is being recovered. */
-#define LNET_PEER_NI_RECOVERY_PENDING	(1 << 1)
+#define LNET_PEER_NI_RECOVERY_PENDING	BIT(1)
 /* recovery ping failed */
-#define LNET_PEER_NI_RECOVERY_FAILED	(1 << 2)
+#define LNET_PEER_NI_RECOVERY_FAILED	BIT(2)
 /* peer is being deleted */
-#define LNET_PEER_NI_DELETING		(1 << 3)
+#define LNET_PEER_NI_DELETING		BIT(3)
 
 struct lnet_peer {
 	/* chain on pt_peer_list */
@@ -681,9 +681,9 @@ struct lnet_peer {
  *
  * A peer is marked ROUTER if it indicates so in the feature bit.
  */
-#define LNET_PEER_MULTI_RAIL	(1 << 0)	/* Multi-rail aware */
-#define LNET_PEER_NO_DISCOVERY	(1 << 1)	/* Peer disabled discovery */
-#define LNET_PEER_ROUTER_ENABLED (1 << 2)	/* router feature enabled */
+#define LNET_PEER_MULTI_RAIL		BIT(0)	/* Multi-rail aware */
+#define LNET_PEER_NO_DISCOVERY		BIT(1)	/* Peer disabled discovery */
+#define LNET_PEER_ROUTER_ENABLED	BIT(2)	/* router feature enabled */
 
 /*
  * A peer is marked CONFIGURED if it was configured by DLC.
@@ -698,39 +698,39 @@ struct lnet_peer {
  * A peer that was created as the result of inbound traffic will not
  * be marked at all.
  */
-#define LNET_PEER_CONFIGURED	(1 << 3)	/* Configured via DLC */
-#define LNET_PEER_DISCOVERED	(1 << 4)	/* Peer was discovered */
-#define LNET_PEER_REDISCOVER	(1 << 5)	/* Discovery was disabled */
+#define LNET_PEER_CONFIGURED		BIT(3)	/* Configured via DLC */
+#define LNET_PEER_DISCOVERED		BIT(4)	/* Peer was discovered */
+#define LNET_PEER_REDISCOVER		BIT(5)	/* Discovery was disabled */
 /*
  * A peer is marked DISCOVERING when discovery is in progress.
  * The other flags below correspond to stages of discovery.
  */
-#define LNET_PEER_DISCOVERING	(1 << 6)	/* Discovering */
-#define LNET_PEER_DATA_PRESENT	(1 << 7)	/* Remote peer data present */
-#define LNET_PEER_NIDS_UPTODATE	(1 << 8)	/* Remote peer info uptodate */
-#define LNET_PEER_PING_SENT	(1 << 9)	/* Waiting for REPLY to Ping */
-#define LNET_PEER_PUSH_SENT	(1 << 10)	/* Waiting for ACK of Push */
-#define LNET_PEER_PING_FAILED	(1 << 11)	/* Ping send failure */
-#define LNET_PEER_PUSH_FAILED	(1 << 12)	/* Push send failure */
+#define LNET_PEER_DISCOVERING		BIT(6)	/* Discovering */
+#define LNET_PEER_DATA_PRESENT		BIT(7)	/* Remote peer data present */
+#define LNET_PEER_NIDS_UPTODATE		BIT(8)	/* Remote peer info uptodate */
+#define LNET_PEER_PING_SENT		BIT(9)	/* Waiting for REPLY to Ping */
+#define LNET_PEER_PUSH_SENT		BIT(10)	/* Waiting for ACK of Push */
+#define LNET_PEER_PING_FAILED		BIT(11)	/* Ping send failure */
+#define LNET_PEER_PUSH_FAILED		BIT(12)	/* Push send failure */
 /*
  * A ping can be forced as a way to fix up state, or as a manual
  * intervention by an admin.
  * A push can be forced in circumstances that would normally not
  * allow for one to happen.
  */
-#define LNET_PEER_FORCE_PING	(1 << 13)	/* Forced Ping */
-#define LNET_PEER_FORCE_PUSH	(1 << 14)	/* Forced Push */
+#define LNET_PEER_FORCE_PING		BIT(13)	/* Forced Ping */
+#define LNET_PEER_FORCE_PUSH		BIT(14)	/* Forced Push */
 
 /* force delete even if router */
-#define LNET_PEER_RTR_NI_FORCE_DEL (1 << 15)
+#define LNET_PEER_RTR_NI_FORCE_DEL	BIT(15)
 
 /* gw undergoing alive discovery */
-#define LNET_PEER_RTR_DISCOVERY (1 << 16)
+#define LNET_PEER_RTR_DISCOVERY		BIT(16)
 /* gw has undergone discovery (does not indicate success or failure) */
-#define LNET_PEER_RTR_DISCOVERED (1 << 17)
+#define LNET_PEER_RTR_DISCOVERED	BIT(17)
 
 /* peer is marked for deletion */
-#define LNET_PEER_MARK_DELETION (1 << 18)
+#define LNET_PEER_MARK_DELETION		BIT(18)
 
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
@@ -854,21 +854,21 @@ struct lnet_rtrbuf {
 
 enum lnet_match_flags {
 	/* Didn't match anything */
-	LNET_MATCHMD_NONE	= (1 << 0),
+	LNET_MATCHMD_NONE	= BIT(0),
 	/* Matched OK */
-	LNET_MATCHMD_OK		= (1 << 1),
+	LNET_MATCHMD_OK		= BIT(1),
 	/* Must be discarded */
-	LNET_MATCHMD_DROP	= (1 << 2),
+	LNET_MATCHMD_DROP	= BIT(2),
 	/* match and buffer is exhausted */
-	LNET_MATCHMD_EXHAUSTED	= (1 << 3),
+	LNET_MATCHMD_EXHAUSTED	= BIT(3),
 	/* match or drop */
 	LNET_MATCHMD_FINISH	= (LNET_MATCHMD_OK | LNET_MATCHMD_DROP),
 };
 
 /* Options for struct lnet_portal::ptl_options */
-#define LNET_PTL_LAZY		    (1 << 0)
-#define LNET_PTL_MATCH_UNIQUE	    (1 << 1)	/* unique match, for RDMA */
-#define LNET_PTL_MATCH_WILDCARD     (1 << 2)	/* wildcard match, request portal */
+#define LNET_PTL_LAZY		BIT(0)
+#define LNET_PTL_MATCH_UNIQUE	BIT(1)	/* unique match, for RDMA */
+#define LNET_PTL_MATCH_WILDCARD	BIT(2)	/* wildcard match, request portal */
 
 /* parameter for matching operations (GET, PUT) */
 struct lnet_match_info {

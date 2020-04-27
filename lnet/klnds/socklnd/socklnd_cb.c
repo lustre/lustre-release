@@ -1925,48 +1925,48 @@ ksocknal_connect(struct ksock_route *route)
 
         route->ksnr_connecting = 1;
 
-        for (;;) {
-                wanted = ksocknal_route_mask() & ~route->ksnr_connected;
+	for (;;) {
+		wanted = ksocknal_route_mask() & ~route->ksnr_connected;
 
-                /* stop connecting if peer_ni/route got closed under me, or
-                 * route got connected while queued */
-                if (peer_ni->ksnp_closing || route->ksnr_deleted ||
-                    wanted == 0) {
-                        retry_later = 0;
-                        break;
-                }
+		/* stop connecting if peer_ni/route got closed under me, or
+		 * route got connected while queued */
+		if (peer_ni->ksnp_closing || route->ksnr_deleted ||
+		    wanted == 0) {
+			retry_later = 0;
+			break;
+		}
 
-                /* reschedule if peer_ni is connecting to me */
-                if (peer_ni->ksnp_accepting > 0) {
-                        CDEBUG(D_NET,
-                               "peer_ni %s(%d) already connecting to me, retry later.\n",
-                               libcfs_nid2str(peer_ni->ksnp_id.nid), peer_ni->ksnp_accepting);
-                        retry_later = 1;
-                }
+		/* reschedule if peer_ni is connecting to me */
+		if (peer_ni->ksnp_accepting > 0) {
+			CDEBUG(D_NET,
+			       "peer_ni %s(%d) already connecting to me, retry later.\n",
+			       libcfs_nid2str(peer_ni->ksnp_id.nid), peer_ni->ksnp_accepting);
+			retry_later = 1;
+		}
 
-                if (retry_later) /* needs reschedule */
-                        break;
+		if (retry_later) /* needs reschedule */
+			break;
 
-                if ((wanted & (1 << SOCKLND_CONN_ANY)) != 0) {
-                        type = SOCKLND_CONN_ANY;
-                } else if ((wanted & (1 << SOCKLND_CONN_CONTROL)) != 0) {
-                        type = SOCKLND_CONN_CONTROL;
-                } else if ((wanted & (1 << SOCKLND_CONN_BULK_IN)) != 0) {
-                        type = SOCKLND_CONN_BULK_IN;
-                } else {
-                        LASSERT ((wanted & (1 << SOCKLND_CONN_BULK_OUT)) != 0);
-                        type = SOCKLND_CONN_BULK_OUT;
-                }
+		if ((wanted & BIT(SOCKLND_CONN_ANY)) != 0) {
+			type = SOCKLND_CONN_ANY;
+		} else if ((wanted & BIT(SOCKLND_CONN_CONTROL)) != 0) {
+			type = SOCKLND_CONN_CONTROL;
+		} else if ((wanted & BIT(SOCKLND_CONN_BULK_IN)) != 0) {
+			type = SOCKLND_CONN_BULK_IN;
+		} else {
+			LASSERT ((wanted & BIT(SOCKLND_CONN_BULK_OUT)) != 0);
+			type = SOCKLND_CONN_BULK_OUT;
+		}
 
 		write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
 		if (ktime_get_seconds() >= deadline) {
-                        rc = -ETIMEDOUT;
-                        lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
-                                                   route->ksnr_ipaddr,
-                                                   route->ksnr_port);
-                        goto failed;
-                }
+			rc = -ETIMEDOUT;
+			lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
+						   route->ksnr_ipaddr,
+						   route->ksnr_port);
+			goto failed;
+		}
 
 		sock = lnet_connect(peer_ni->ksnp_id.nid,
 				    route->ksnr_myiface,
@@ -1977,23 +1977,23 @@ ksocknal_connect(struct ksock_route *route)
 			goto failed;
 		}
 
-                rc = ksocknal_create_conn(peer_ni->ksnp_ni, route, sock, type);
-                if (rc < 0) {
-                        lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
-                                                   route->ksnr_ipaddr,
-                                                   route->ksnr_port);
-                        goto failed;
-                }
+		rc = ksocknal_create_conn(peer_ni->ksnp_ni, route, sock, type);
+		if (rc < 0) {
+			lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
+						   route->ksnr_ipaddr,
+						   route->ksnr_port);
+			goto failed;
+		}
 
-                /* A +ve RC means I have to retry because I lost the connection
-                 * race or I have to renegotiate protocol version */
-                retry_later = (rc != 0);
-                if (retry_later)
-                        CDEBUG(D_NET, "peer_ni %s: conn race, retry later.\n",
-                               libcfs_nid2str(peer_ni->ksnp_id.nid));
+		/* A +ve RC means I have to retry because I lost the connection
+		 * race or I have to renegotiate protocol version */
+		retry_later = (rc != 0);
+		if (retry_later)
+			CDEBUG(D_NET, "peer_ni %s: conn race, retry later.\n",
+			       libcfs_nid2str(peer_ni->ksnp_id.nid));
 
 		write_lock_bh(&ksocknal_data.ksnd_global_lock);
-        }
+	}
 
         route->ksnr_scheduled = 0;
         route->ksnr_connecting = 0;

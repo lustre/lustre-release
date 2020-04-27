@@ -469,12 +469,12 @@ static inline __u32 ksocknal_csum(__u32 crc, unsigned char const *p, size_t len)
 static inline int
 ksocknal_route_mask(void)
 {
-        if (!*ksocknal_tunables.ksnd_typed_conns)
-                return (1 << SOCKLND_CONN_ANY);
+	if (!*ksocknal_tunables.ksnd_typed_conns)
+		return BIT(SOCKLND_CONN_ANY);
 
-        return ((1 << SOCKLND_CONN_CONTROL) |
-                (1 << SOCKLND_CONN_BULK_IN) |
-                (1 << SOCKLND_CONN_BULK_OUT));
+	return (BIT(SOCKLND_CONN_CONTROL) |
+		BIT(SOCKLND_CONN_BULK_IN) |
+		BIT(SOCKLND_CONN_BULK_OUT));
 }
 
 static inline void

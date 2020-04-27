@@ -88,7 +88,7 @@ lnet_fault_attr_match(struct lnet_fault_attr *attr, lnet_nid_t src,
 	    !lnet_fault_nid_match(attr->fa_local_nid, local_nid))
 		return false;
 
-	if (!(attr->fa_msg_mask & (1 << type)))
+	if (!(attr->fa_msg_mask & BIT(type)))
 		return false;
 
 	/* NB: ACK and REPLY have no portal, but they should have been
@@ -313,7 +313,7 @@ lnet_fault_match_health(enum lnet_msg_hstatus *hstatus, __u32 mask)
 		return;
 	}
 
-	if (mask & (1 << choice)) {
+	if (mask & BIT(choice)) {
 		*hstatus = choice;
 		return;
 	}
@@ -322,7 +322,7 @@ lnet_fault_match_health(enum lnet_msg_hstatus *hstatus, __u32 mask)
 	i = HSTATUS_END;
 	best_delta = HSTATUS_END;
 	while (i > 0) {
-		if (mask & (1 << i)) {
+		if (mask & BIT(i)) {
 			delta = choice - i;
 			if (delta < 0)
 				delta *= -1;
@@ -1075,10 +1075,10 @@ lnet_fault_ctl(int opc, struct libcfs_ioctl_data *data)
 int
 lnet_fault_init(void)
 {
-	BUILD_BUG_ON(LNET_PUT_BIT != 1 << LNET_MSG_PUT);
-	BUILD_BUG_ON(LNET_ACK_BIT != 1 << LNET_MSG_ACK);
-	BUILD_BUG_ON(LNET_GET_BIT != 1 << LNET_MSG_GET);
-	BUILD_BUG_ON(LNET_REPLY_BIT != 1 << LNET_MSG_REPLY);
+	BUILD_BUG_ON(LNET_PUT_BIT != BIT(LNET_MSG_PUT));
+	BUILD_BUG_ON(LNET_ACK_BIT != BIT(LNET_MSG_ACK));
+	BUILD_BUG_ON(LNET_GET_BIT != BIT(LNET_MSG_GET));
+	BUILD_BUG_ON(LNET_REPLY_BIT != BIT(LNET_MSG_REPLY));
 
 	mutex_init(&delay_dd.dd_mutex);
 	spin_lock_init(&delay_dd.dd_lock);
