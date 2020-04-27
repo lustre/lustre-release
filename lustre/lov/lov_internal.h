@@ -369,7 +369,7 @@ static inline bool lov_oinfo_is_dummy(const struct lov_oinfo *loi)
 
 static inline struct obd_device *lov2obd(const struct lov_obd *lov)
 {
-	return container_of0(lov, struct obd_device, u.lov);
+	return container_of_safe(lov, struct obd_device, u.lov);
 }
 
 static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
