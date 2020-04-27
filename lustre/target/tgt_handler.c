@@ -903,12 +903,13 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		exp->exp_sp_peer = req->rq_sp_from;
 		exp->exp_flvr = flvr;
 
-		/* when on mgs, if no restriction is set, or if client
-		 * is loopback, allow any flavor */
+		/* when on mgs, if no restriction is set, or if the client
+		 * NID is on the local node, allow any flavor
+		 */
 		if ((strcmp(exp->exp_obd->obd_type->typ_name,
 			   LUSTRE_MGS_NAME) == 0) &&
 		     (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_NULL ||
-		      exp->exp_connection->c_peer.nid == LNET_NID_LO_0))
+		      LNetIsPeerLocal(exp->exp_connection->c_peer.nid)))
 			exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
 
 		if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
