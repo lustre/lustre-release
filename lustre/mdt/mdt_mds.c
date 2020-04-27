@@ -567,7 +567,7 @@ err_mds_svc:
 
 static inline struct mds_device *mds_dev(struct lu_device *d)
 {
-	return container_of0(d, struct mds_device, mds_md_dev.md_lu_dev);
+	return container_of_safe(d, struct mds_device, mds_md_dev.md_lu_dev);
 }
 
 static struct lu_device *mds_device_fini(const struct lu_env *env,

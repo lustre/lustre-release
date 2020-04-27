@@ -66,7 +66,7 @@ int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt);
 
 static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 {
-	return container_of0(lmv, struct obd_device, u.lmv);
+	return container_of_safe(lmv, struct obd_device, u.lmv);
 }
 
 static inline struct lu_tgt_desc *

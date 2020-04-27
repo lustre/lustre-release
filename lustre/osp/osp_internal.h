@@ -460,7 +460,7 @@ static inline int lu_device_is_osp(struct lu_device *d)
 static inline struct osp_device *lu2osp_dev(struct lu_device *d)
 {
 	LASSERT(lu_device_is_osp(d));
-	return container_of0(d, struct osp_device, opd_dt_dev.dd_lu_dev);
+	return container_of_safe(d, struct osp_device, opd_dt_dev.dd_lu_dev);
 }
 
 static inline struct lu_device *osp2lu_dev(struct osp_device *d)
@@ -471,13 +471,13 @@ static inline struct lu_device *osp2lu_dev(struct osp_device *d)
 static inline struct osp_device *dt2osp_dev(struct dt_device *d)
 {
 	LASSERT(lu_device_is_osp(&d->dd_lu_dev));
-	return container_of0(d, struct osp_device, opd_dt_dev);
+	return container_of_safe(d, struct osp_device, opd_dt_dev);
 }
 
 static inline struct osp_object *lu2osp_obj(struct lu_object *o)
 {
 	LASSERT(ergo(o != NULL, lu_device_is_osp(o->lo_dev)));
-	return container_of0(o, struct osp_object, opo_obj.do_lu);
+	return container_of_safe(o, struct osp_object, opo_obj.do_lu);
 }
 
 static inline struct lu_object *osp2lu_obj(struct osp_object *obj)
@@ -488,7 +488,7 @@ static inline struct lu_object *osp2lu_obj(struct osp_object *obj)
 static inline struct osp_object *osp_obj(const struct lu_object *o)
 {
 	LASSERT(lu_device_is_osp(o->lo_dev));
-	return container_of0(o, struct osp_object, opo_obj.do_lu);
+	return container_of_safe(o, struct osp_object, opo_obj.do_lu);
 }
 
 static inline struct osp_object *dt2osp_obj(const struct dt_object *d)

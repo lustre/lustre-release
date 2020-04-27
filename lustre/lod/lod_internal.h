@@ -404,7 +404,7 @@ static inline int lu_device_is_lod(struct lu_device *d)
 static inline struct lod_device* lu2lod_dev(struct lu_device *d)
 {
 	LASSERT(lu_device_is_lod(d));
-	return container_of0(d, struct lod_device, lod_dt_dev.dd_lu_dev);
+	return container_of_safe(d, struct lod_device, lod_dt_dev.dd_lu_dev);
 }
 
 static inline struct lu_device *lod2lu_dev(struct lod_device *d)
@@ -426,7 +426,7 @@ static inline struct lod_device *dt2lod_dev(struct dt_device *d)
 static inline struct lod_object *lu2lod_obj(struct lu_object *o)
 {
 	LASSERT(ergo(o != NULL, lu_device_is_lod(o->lo_dev)));
-	return container_of0(o, struct lod_object, ldo_obj.do_lu);
+	return container_of_safe(o, struct lod_object, ldo_obj.do_lu);
 }
 
 static inline struct lu_object *lod2lu_obj(struct lod_object *obj)

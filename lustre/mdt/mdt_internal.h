@@ -916,12 +916,12 @@ int mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
-	return container_of0(d, struct mdt_device, mdt_lu_dev);
+	return container_of_safe(d, struct mdt_device, mdt_lu_dev);
 }
 
 static inline struct mdt_object *mdt_obj(struct lu_object *o)
 {
-	return container_of0(o, struct mdt_object, mot_obj);
+	return container_of_safe(o, struct mdt_object, mot_obj);
 }
 
 static inline struct dt_object *mdt_obj2dt(struct mdt_object *mo)

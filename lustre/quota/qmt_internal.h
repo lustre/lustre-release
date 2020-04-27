@@ -301,7 +301,7 @@ struct qmt_thread_info *qmt_info(const struct lu_env *env)
 /* helper routine to convert a lu_device into a qmt_device */
 static inline struct qmt_device *lu2qmt_dev(struct lu_device *ld)
 {
-	return container_of0(lu2dt_dev(ld), struct qmt_device, qmt_dt_dev);
+	return container_of_safe(lu2dt_dev(ld), struct qmt_device, qmt_dt_dev);
 }
 
 /* helper routine to convert a qmt_device into lu_device */

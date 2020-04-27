@@ -56,7 +56,7 @@ struct lwp_device {
 
 static inline struct lwp_device *lu2lwp_dev(struct lu_device *d)
 {
-	return container_of0(d, struct lwp_device, lpd_dev);
+	return container_of_safe(d, struct lwp_device, lpd_dev);
 }
 
 static inline struct lu_device *lwp2lu_dev(struct lwp_device *d)

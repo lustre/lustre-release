@@ -68,7 +68,7 @@ struct echo_srv_device {
 
 static inline struct echo_srv_device *echo_srv_dev(struct lu_device *d)
 {
-	return container_of0(d, struct echo_srv_device, esd_dev);
+	return container_of_safe(d, struct echo_srv_device, esd_dev);
 }
 
 static inline struct obd_device *echo_srv_obd(struct echo_srv_device *esd)

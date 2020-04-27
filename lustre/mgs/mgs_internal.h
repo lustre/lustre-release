@@ -330,7 +330,7 @@ static inline int lu_device_is_mgs(struct lu_device *d)
 static inline struct mgs_device* lu2mgs_dev(struct lu_device *d)
 {
 	LASSERT(lu_device_is_mgs(d));
-	return container_of0(d, struct mgs_device, mgs_dt_dev.dd_lu_dev);
+	return container_of_safe(d, struct mgs_device, mgs_dt_dev.dd_lu_dev);
 }
 
 static inline struct mgs_device *exp2mgs_dev(struct obd_export *exp)
@@ -352,7 +352,7 @@ static inline struct mgs_device *dt2mgs_dev(struct dt_device *d)
 static inline struct mgs_object *lu2mgs_obj(struct lu_object *o)
 {
 	LASSERT(ergo(o != NULL, lu_device_is_mgs(o->lo_dev)));
-	return container_of0(o, struct mgs_object, mgo_obj.do_lu);
+	return container_of_safe(o, struct mgs_object, mgo_obj.do_lu);
 }
 
 static inline struct lu_object *mgs2lu_obj(struct mgs_object *obj)

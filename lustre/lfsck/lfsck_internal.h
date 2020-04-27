@@ -1109,7 +1109,8 @@ extern struct lu_context_key lfsck_thread_key;
 
 static inline struct dt_device *lfsck_obj2dev(struct dt_object *obj)
 {
-	return container_of0(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
+	return container_of_safe(obj->do_lu.lo_dev, struct dt_device,
+				 dd_lu_dev);
 }
 
 static inline struct lfsck_thread_info *

@@ -166,7 +166,7 @@ struct ofd_device {
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
 {
-	return container_of0(d, struct ofd_device, ofd_dt_dev.dd_lu_dev);
+	return container_of_safe(d, struct ofd_device, ofd_dt_dev.dd_lu_dev);
 }
 
 static inline struct obd_device *ofd_obd(struct ofd_device *ofd)
@@ -195,7 +195,7 @@ struct ofd_object {
 
 static inline struct ofd_object *ofd_obj(struct lu_object *o)
 {
-	return container_of0(o, struct ofd_object, ofo_obj.do_lu);
+	return container_of_safe(o, struct ofd_object, ofo_obj.do_lu);
 }
 
 static inline int ofd_object_exists(struct ofd_object *obj)

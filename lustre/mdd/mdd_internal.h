@@ -440,8 +440,8 @@ static inline int lu_device_is_mdd(struct lu_device *d)
 
 static inline struct mdd_device *lu2mdd_dev(struct lu_device *d)
 {
-        LASSERT(lu_device_is_mdd(d));
-        return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
+	LASSERT(lu_device_is_mdd(d));
+	return container_of_safe(d, struct mdd_device, mdd_md_dev.md_lu_dev);
 }
 
 static inline struct lu_device *mdd2lu_dev(struct mdd_device *mdd)
@@ -451,18 +451,19 @@ static inline struct lu_device *mdd2lu_dev(struct mdd_device *mdd)
 
 static inline struct mdd_object *lu2mdd_obj(struct lu_object *o)
 {
-        LASSERT(ergo(o != NULL, lu_device_is_mdd(o->lo_dev)));
-        return container_of0(o, struct mdd_object, mod_obj.mo_lu);
+	LASSERT(ergo(o != NULL, lu_device_is_mdd(o->lo_dev)));
+	return container_of_safe(o, struct mdd_object,
+				 mod_obj.mo_lu);
 }
 
 static inline struct mdd_device *mdo2mdd(struct md_object *mdo)
 {
-        return lu2mdd_dev(mdo->mo_lu.lo_dev);
+	return lu2mdd_dev(mdo->mo_lu.lo_dev);
 }
 
 static inline struct mdd_object *md2mdd_obj(struct md_object *mdo)
 {
-	return container_of0(mdo, struct mdd_object, mod_obj);
+	return container_of_safe(mdo, struct mdd_object, mod_obj);
 }
 
 static inline const

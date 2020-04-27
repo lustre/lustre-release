@@ -135,7 +135,7 @@ static int echo_client_cleanup(struct obd_device *obd);
  */
 static inline struct echo_device *cl2echo_dev(const struct cl_device *dev)
 {
-	return container_of0(dev, struct echo_device, ed_cl);
+	return container_of_safe(dev, struct echo_device, ed_cl);
 }
 
 static inline struct cl_device *echo_dev2cl(struct echo_device *d)
@@ -193,7 +193,8 @@ struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
 #ifdef HAVE_SERVER_SUPPORT
 static inline struct echo_md_device *lu2emd_dev(struct lu_device *d)
 {
-	return container_of0(d, struct echo_md_device, emd_md_dev.md_lu_dev);
+	return container_of_safe(d, struct echo_md_device,
+				 emd_md_dev.md_lu_dev);
 }
 
 static inline struct lu_device *emd2lu_dev(struct echo_md_device *d)
