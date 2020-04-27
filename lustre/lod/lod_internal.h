@@ -420,7 +420,7 @@ static inline struct obd_device *lod2obd(struct lod_device *d)
 static inline struct lod_device *dt2lod_dev(struct dt_device *d)
 {
 	LASSERT(lu_device_is_lod(&d->dd_lu_dev));
-	return container_of0(d, struct lod_device, lod_dt_dev);
+	return container_of(d, struct lod_device, lod_dt_dev);
 }
 
 static inline struct lod_object *lu2lod_obj(struct lu_object *o)
@@ -442,7 +442,7 @@ static inline const struct lu_fid *lod_object_fid(struct lod_object *obj)
 static inline struct lod_object *lod_obj(const struct lu_object *o)
 {
 	LASSERT(lu_device_is_lod(o->lo_dev));
-	return container_of0(o, struct lod_object, ldo_obj.do_lu);
+	return container_of(o, struct lod_object, ldo_obj.do_lu);
 }
 
 static inline struct lod_object *lod_dt_obj(const struct dt_object *d)
@@ -452,8 +452,8 @@ static inline struct lod_object *lod_dt_obj(const struct dt_object *d)
 
 static inline struct dt_object* lod_object_child(struct lod_object *o)
 {
-	return container_of0(lu_object_next(lod2lu_obj(o)),
-			struct dt_object, do_lu);
+	return container_of(lu_object_next(lod2lu_obj(o)),
+			    struct dt_object, do_lu);
 }
 
 static inline bool lod_obj_is_striped(struct dt_object *dt)

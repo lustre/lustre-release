@@ -2392,8 +2392,8 @@ static int lfsck_async_interpret(const struct lu_env *env,
 	struct lfsck_async_interpret_args *laia = args;
 	struct lfsck_instance		  *lfsck;
 
-	lfsck = container_of0(laia->laia_ltds, struct lfsck_instance,
-			      li_mdt_descs);
+	lfsck = container_of(laia->laia_ltds, struct lfsck_instance,
+			     li_mdt_descs);
 	lfsck_interpret(env, lfsck, req, laia, rc);
 	lfsck_tgt_put(laia->laia_ltd);
 	if (rc != 0 && laia->laia_result != -EALREADY)

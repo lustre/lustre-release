@@ -87,7 +87,7 @@ static void lfsck_namespace_assistant_req_fini(const struct lu_env *env,
 					       struct lfsck_assistant_req *lar)
 {
 	struct lfsck_namespace_req *lnr =
-			container_of0(lar, struct lfsck_namespace_req, lnr_lar);
+		container_of(lar, struct lfsck_namespace_req, lnr_lar);
 
 	if (lnr->lnr_lmv != NULL)
 		lfsck_lmv_put(env, lnr->lnr_lmv);
@@ -5566,7 +5566,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	const struct lu_name	   *cname;
 	struct thandle		   *handle   = NULL;
 	struct lfsck_namespace_req *lnr      =
-			container_of0(lar, struct lfsck_namespace_req, lnr_lar);
+		container_of(lar, struct lfsck_namespace_req, lnr_lar);
 	struct dt_object	   *dir      = NULL;
 	struct dt_object	   *obj      = NULL;
 	struct lfsck_assistant_object *lso   = lar->lar_parent;

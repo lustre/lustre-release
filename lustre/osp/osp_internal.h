@@ -498,8 +498,8 @@ static inline struct osp_object *dt2osp_obj(const struct dt_object *d)
 
 static inline struct dt_object *osp_object_child(struct osp_object *o)
 {
-	return container_of0(lu_object_next(osp2lu_obj(o)),
-                             struct dt_object, do_lu);
+	return container_of(lu_object_next(osp2lu_obj(o)),
+			    struct dt_object, do_lu);
 }
 
 static inline struct seq_server_site *osp_seq_site(struct osp_device *osp)

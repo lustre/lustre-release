@@ -478,8 +478,8 @@ static inline struct lu_object *mdd2lu_obj(struct mdd_object *obj)
 
 static inline struct dt_object *mdd_object_child(struct mdd_object *obj)
 {
-	return container_of0(lu_object_next(mdd2lu_obj(obj)),
-			     struct dt_object, do_lu);
+	return container_of(lu_object_next(mdd2lu_obj(obj)),
+			    struct dt_object, do_lu);
 }
 
 static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)

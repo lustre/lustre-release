@@ -346,7 +346,7 @@ static inline struct lu_device *mgs2lu_dev(struct mgs_device *d)
 static inline struct mgs_device *dt2mgs_dev(struct dt_device *d)
 {
 	LASSERT(lu_device_is_mgs(&d->dd_lu_dev));
-	return container_of0(d, struct mgs_device, mgs_dt_dev);
+	return container_of(d, struct mgs_device, mgs_dt_dev);
 }
 
 static inline struct mgs_object *lu2mgs_obj(struct lu_object *o)
@@ -363,7 +363,7 @@ static inline struct lu_object *mgs2lu_obj(struct mgs_object *obj)
 static inline struct mgs_object *mgs_obj(const struct lu_object *o)
 {
 	LASSERT(lu_device_is_mgs(o->lo_dev));
-	return container_of0(o, struct mgs_object, mgo_obj.do_lu);
+	return container_of(o, struct mgs_object, mgo_obj.do_lu);
 }
 
 static inline struct mgs_object *dt2mgs_obj(const struct dt_object *d)
@@ -373,8 +373,8 @@ static inline struct mgs_object *dt2mgs_obj(const struct dt_object *d)
 
 static inline struct dt_object* mgs_object_child(struct mgs_object *o)
 {
-	return container_of0(lu_object_next(mgs2lu_obj(o)),
-			     struct dt_object, do_lu);
+	return container_of(lu_object_next(mgs2lu_obj(o)),
+			    struct dt_object, do_lu);
 }
 
 struct mgs_direntry {

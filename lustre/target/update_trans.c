@@ -1330,7 +1330,7 @@ static void distribute_txn_batchid_cb(struct lu_env *env,
 	struct distribute_txn_bid_data		*dtbd = NULL;
 	struct target_distribute_txn_data	*tdtd;
 
-	dtbd = container_of0(cb, struct distribute_txn_bid_data, dtbd_cb);
+	dtbd = container_of(cb, struct distribute_txn_bid_data, dtbd_cb);
 	tdtd = dtbd->dtbd_tdtd;
 
 	CDEBUG(D_HA, "%s: %llu batchid updated\n",

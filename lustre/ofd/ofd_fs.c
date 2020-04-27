@@ -320,7 +320,7 @@ void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd)
 	write_unlock(&ofd->ofd_seq_list_lock);
 
 	while (!list_empty(&dispose)) {
-		oseq = container_of0(dispose.next, struct ofd_seq, os_list);
+		oseq = container_of(dispose.next, struct ofd_seq, os_list);
 		list_del_init(&oseq->os_list);
 		ofd_seq_put(env, oseq);
 	}

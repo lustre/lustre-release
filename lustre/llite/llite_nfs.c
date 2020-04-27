@@ -223,7 +223,13 @@ ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
 	 * so must appear to be a non-const pointer to an empty array.
 	 */
 	char (*n)[0] = (void *)name;
-	struct lu_dirent *lde = container_of0(n, struct lu_dirent, lde_name);
+	/* NOTE: This should be container_of().  However container_of() in
+	 * kernels earlier than v4.13-rc1~37^2~94 cause this to generate a
+	 * warning, which fails when we compile with -Werror.  Those earlier
+	 * kernels don't have container_of_safe, calling that instead will use
+	 * the lustre-local version which doesn't generate the warning.
+	 */
+	struct lu_dirent *lde = container_of_safe(n, struct lu_dirent, lde_name);
 	struct lu_fid fid;
 
 	fid_le_to_cpu(&fid, &lde->lde_fid);

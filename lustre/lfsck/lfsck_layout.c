@@ -209,7 +209,7 @@ static void lfsck_layout_assistant_req_fini(const struct lu_env *env,
 					    struct lfsck_assistant_req *lar)
 {
 	struct lfsck_layout_req *llr =
-			container_of0(lar, struct lfsck_layout_req, llr_lar);
+		container_of(lar, struct lfsck_layout_req, llr_lar);
 
 	lfsck_object_put(env, llr->llr_child);
 	lfsck_assistant_object_put(env, lar->lar_parent);
@@ -4302,7 +4302,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 					     struct lfsck_assistant_req *lar)
 {
 	struct lfsck_layout_req		     *llr    =
-			container_of0(lar, struct lfsck_layout_req, llr_lar);
+		container_of(lar, struct lfsck_layout_req, llr_lar);
 	struct lfsck_assistant_object	     *lso    = lar->lar_parent;
 	struct lfsck_layout		     *lo     = com->lc_file_ram;
 	struct lfsck_thread_info	     *info   = lfsck_env_info(env);

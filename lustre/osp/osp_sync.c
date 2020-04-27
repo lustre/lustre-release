@@ -1599,7 +1599,7 @@ void osp_sync_local_commit_cb(struct lu_env *env, struct thandle *th,
 	struct osp_last_committed_cb	*cb;
 	struct osp_device		*d;
 
-	cb = container_of0(dcb, struct osp_last_committed_cb, ospc_cb);
+	cb = container_of(dcb, struct osp_last_committed_cb, ospc_cb);
 	d = cb->ospc_dev;
 
 	CDEBUG(D_HA, "%s: %llu committed\n", d->opd_obd->obd_name,

@@ -4920,7 +4920,7 @@ static int mgs_xattr_del(const struct lu_env *env, struct dt_object *obj)
 
 	ENTRY;
 
-	dev = container_of0(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
+	dev = container_of(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));

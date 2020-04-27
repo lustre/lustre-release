@@ -215,7 +215,7 @@ static inline struct dt_object *ofd_object_child(struct ofd_object *_obj)
 {
 	struct lu_object *lu = &(_obj)->ofo_obj.do_lu;
 
-	return container_of0(lu_object_next(lu), struct dt_object, do_lu);
+	return container_of(lu_object_next(lu), struct dt_object, do_lu);
 }
 
 static inline struct ofd_device *ofd_obj2dev(const struct ofd_object *fo)

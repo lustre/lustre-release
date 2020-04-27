@@ -630,7 +630,7 @@ nrs_tbf_jobid_hash_lookup(struct cfs_hash *hs,
 	if (hnode == NULL)
 		return NULL;
 
-	cli = container_of0(hnode, struct nrs_tbf_client, tc_hnode);
+	cli = container_of(hnode, struct nrs_tbf_client, tc_hnode);
 	if (!list_empty(&cli->tc_lru))
 		list_del_init(&cli->tc_lru);
 	return cli;
@@ -713,8 +713,8 @@ nrs_tbf_jobid_cli_put(struct nrs_tbf_head *head,
 	cfs_hash_bd_unlock(head->th_cli_hash, &bd, 1);
 
 	while (!list_empty(&zombies)) {
-		cli = container_of0(zombies.next,
-				    struct nrs_tbf_client, tc_lru);
+		cli = container_of(zombies.next,
+				   struct nrs_tbf_client, tc_lru);
 		list_del_init(&cli->tc_lru);
 		nrs_tbf_cli_fini(cli);
 	}
@@ -1396,7 +1396,7 @@ nrs_tbf_cli_hash_lookup(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	if (hnode == NULL)
 		return NULL;
 
-	cli = container_of0(hnode, struct nrs_tbf_client, tc_hnode);
+	cli = container_of(hnode, struct nrs_tbf_client, tc_hnode);
 	if (!list_empty(&cli->tc_lru))
 		list_del_init(&cli->tc_lru);
 	return cli;
@@ -1720,8 +1720,8 @@ nrs_tbf_cli_put(struct nrs_tbf_head *head, struct nrs_tbf_client *cli)
 	cfs_hash_bd_unlock(head->th_cli_hash, &bd, 1);
 
 	while (!list_empty(&zombies)) {
-		cli = container_of0(zombies.next,
-				    struct nrs_tbf_client, tc_lru);
+		cli = container_of(zombies.next,
+				   struct nrs_tbf_client, tc_lru);
 		list_del_init(&cli->tc_lru);
 		nrs_tbf_cli_fini(cli);
 	}

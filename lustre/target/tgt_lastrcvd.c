@@ -529,7 +529,7 @@ static void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
 {
 	struct tgt_new_client_callback *ccb;
 
-	ccb = container_of0(cb, struct tgt_new_client_callback, lncc_cb);
+	ccb = container_of(cb, struct tgt_new_client_callback, lncc_cb);
 
 	LASSERT(ccb->lncc_exp->exp_obd);
 
@@ -867,7 +867,7 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 {
 	struct tgt_last_committed_callback *ccb;
 
-	ccb = container_of0(cb, struct tgt_last_committed_callback, llcc_cb);
+	ccb = container_of(cb, struct tgt_last_committed_callback, llcc_cb);
 
 	LASSERT(ccb->llcc_exp);
 	LASSERT(ccb->llcc_tgt != NULL);

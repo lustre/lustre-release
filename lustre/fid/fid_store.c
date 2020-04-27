@@ -65,7 +65,7 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
 {
 	struct seq_update_callback *ccb;
 
-	ccb = container_of0(cb, struct seq_update_callback, suc_cb);
+	ccb = container_of(cb, struct seq_update_callback, suc_cb);
 
 	LASSERT(ccb->suc_seq != NULL);
 

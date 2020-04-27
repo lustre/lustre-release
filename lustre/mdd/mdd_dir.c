@@ -800,7 +800,7 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 		struct llog_changelog_rec *rec;
 
 		mdd = lu2mdd_dev(loghandle->lgh_ctxt->loc_obd->obd_lu_dev);
-		rec = container_of0(r, struct llog_changelog_rec, cr_hdr);
+		rec = container_of(r, struct llog_changelog_rec, cr_hdr);
 
 		spin_lock(&mdd->mdd_cl.mc_lock);
 		rec->cr.cr_index = mdd->mdd_cl.mc_index + 1;
