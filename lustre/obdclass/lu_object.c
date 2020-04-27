@@ -401,7 +401,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 		 * lives as long as possible and ->loo_object_free() methods
 		 * can look at its contents.
 		 */
-		o = container_of0(splice.prev, struct lu_object, lo_linkage);
+		o = container_of(splice.prev, struct lu_object, lo_linkage);
 		list_del_init(&o->lo_linkage);
 		LASSERT(o->lo_ops->loo_object_free != NULL);
 		o->lo_ops->loo_object_free(env, o);
@@ -673,7 +673,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 		return ERR_PTR(-ENOENT);
 	}
 
-	h = container_of0(hnode, struct lu_object_header, loh_hash);
+	h = container_of(hnode, struct lu_object_header, loh_hash);
 	if (!list_empty(&h->loh_lru)) {
 		struct lu_site_bkt_data *bkt;
 

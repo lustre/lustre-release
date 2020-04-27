@@ -240,7 +240,7 @@ struct dt_object *dt_locate_at(const struct lu_env *env,
 
 	list_for_each_entry(n, &lo->lo_header->loh_layers, lo_linkage) {
 		if (n->lo_dev == &dev->dd_lu_dev)
-			return container_of0(n, struct dt_object, do_lu);
+			return container_of(n, struct dt_object, do_lu);
 	}
 
 	lu_object_put(env, lo);

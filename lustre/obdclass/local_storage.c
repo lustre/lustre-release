@@ -47,7 +47,7 @@ static int ls_object_init(const struct lu_env *env, struct lu_object *o,
 
 	ENTRY;
 
-	ls = container_of0(o->lo_dev, struct ls_device, ls_top_dev.dd_lu_dev);
+	ls = container_of(o->lo_dev, struct ls_device, ls_top_dev.dd_lu_dev);
 	under = &ls->ls_osd->dd_lu_dev;
 	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
 	if (below == NULL)

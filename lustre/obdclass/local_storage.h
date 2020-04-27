@@ -52,7 +52,7 @@ struct ls_device {
 
 static inline struct ls_device *dt2ls_dev(struct dt_device *d)
 {
-	return container_of0(d, struct ls_device, ls_top_dev);
+	return container_of_safe(d, struct ls_device, ls_top_dev);
 }
 
 struct ls_object {
@@ -62,7 +62,7 @@ struct ls_object {
 
 static inline struct ls_object *lu2ls_obj(struct lu_object *o)
 {
-	return container_of0(o, struct ls_object, ls_obj.do_lu);
+	return container_of_safe(o, struct ls_object, ls_obj.do_lu);
 }
 
 static inline struct dt_object *ls_locate(const struct lu_env *env,

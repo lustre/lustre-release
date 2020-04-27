@@ -41,7 +41,8 @@
 
 static inline struct dt_device *scrub_obj2dev(struct dt_object *obj)
 {
-	return container_of0(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
+	return container_of_safe(obj->do_lu.lo_dev, struct dt_device,
+				 dd_lu_dev);
 }
 
 static void scrub_file_to_cpu(struct scrub_file *des, struct scrub_file *src)
