@@ -262,16 +262,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 	if (param.status) {
 		logmsg(LL_ERR, "status: %ld (%s)\n",
 		       param.status, strerror((int)(-param.status)));
-
-		/* kernel return -ETIMEDOUT means the rpc timedout, we should
-		 * notify the caller to reinitiate the gss negotiation, by
-		 * returning -ERESTART
-		 */
-		if (param.status == -ETIMEDOUT)
-			rc = -ERESTART;
-		else
-			rc = param.status;
-		return rc;
+		return param.status;
 	}
 
 	p = (unsigned int *)outbuf;
@@ -424,7 +415,7 @@ static int lgssc_negotiation(struct lgss_nego_data *lnd, int req_fd[2],
 			if (lnd->lnd_rpc_err) {
 				logmsg(LL_ERR, "negotiation rpc error: %d\n",
 				       lnd->lnd_rpc_err);
-				return -1;
+				return lnd->lnd_rpc_err;
 			}
 
 			if (gr.gr_major != GSS_S_COMPLETE &&
@@ -433,7 +424,7 @@ static int lgssc_negotiation(struct lgss_nego_data *lnd, int req_fd[2],
 
 				logmsg(LL_ERR, "negotiation gss error %x\n",
 				       lnd->lnd_gss_err);
-				return -1;
+				return -ENOTCONN;
 			}
 
 			if (gr.gr_ctx.length != 0) {
@@ -646,11 +637,10 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 				  struct keyring_upcall_param *kup,
 				  int req_fd[2], int reply_fd[2])
 {
-	struct lgss_nego_data   lnd;
-	OM_uint32               min_stat;
-	int                     rc = -1;
-
-	memset(&lnd, 0, sizeof(lnd));
+	struct lgss_nego_data lnd;
+	OM_uint32 min_stat;
+	int rc = -1;
+	bool redo = true;
 
 	if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
 		logmsg(LL_ERR, "key %08x: failed to construct service "
@@ -665,6 +655,8 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 		goto out_cred;
 	}
 
+retry_nego:
+	memset(&lnd, 0, sizeof(lnd));
 	if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
 		logmsg(LL_ERR, "key %08x: failed to initialize "
 		       "negotiation data\n", keyid);
@@ -673,7 +665,11 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 	}
 
 	rc = lgssc_negotiation(&lnd, req_fd, reply_fd);
-	if (rc) {
+	if (rc == -EAGAIN || (rc == -ETIMEDOUT && redo)) {
+		logmsg(LL_ERR, "Failed negotiation must retry\n");
+		redo = false;
+		goto retry_nego;
+	} else if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to negotiation\n", keyid);
 		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
 		goto out;
@@ -709,12 +705,10 @@ static int lgssc_kr_negotiate_manual(key_serial_t keyid, struct lgss_cred *cred,
 				     struct keyring_upcall_param *kup,
 				     int req_fd[2], int reply_fd[2])
 {
-	struct lgss_nego_data   lnd;
-	OM_uint32               min_stat;
-	int                     rc;
-
-retry:
-	memset(&lnd, 0, sizeof(lnd));
+	struct lgss_nego_data lnd;
+	OM_uint32 min_stat;
+	int rc;
+	bool redo = true;
 
 	rc = lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid);
 	if (rc) {
@@ -731,6 +725,8 @@ retry:
 		goto out_cred;
 	}
 
+retry:
+	memset(&lnd, 0, sizeof(lnd));
 	rc = lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n);
 	if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to initialize "
@@ -745,10 +741,10 @@ retry:
 	 * update to the kernel key
 	 */
 	rc = lgssc_negotiation_manual(&lnd, cred, req_fd, reply_fd);
-	if (rc == -EAGAIN) {
+	if (rc == -EAGAIN || (rc == -ETIMEDOUT && redo)) {
 		logmsg(LL_ERR, "Failed negotiation must retry\n");
+		redo = false;
 		goto retry;
-
 	} else if (rc) {
 		logmsg(LL_ERR, "key %08x: failed to negotiate\n", keyid);
 		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);

@@ -25120,8 +25120,18 @@ test_820() {
 	# open intent should update default EA size
 	# see mdc_update_max_ea_from_body()
 	# notice this is the very first RPC to MDS2
-	cp /etc/services $DIR/$tdir/mds2 ||
-		error "Failed to copy files to mds$n"
+	out=$(cp /etc/services $DIR/$tdir/mds2 2>&1)
+	ret=$?
+	echo $out
+	# With SSK, this situation can lead to -EPERM being returned.
+	# In that case, simply retry.
+	if [ $ret -ne 0 ] && $SHARED_KEY; then
+		if echo "$out" | grep -q "not permitted"; then
+			cp /etc/services $DIR/$tdir/mds2
+			ret=$?
+		fi
+	fi
+	[ $ret -eq 0 ] || error "Failed to copy files to mds$n"
 }
 run_test 820 "update max EA from open intent"
 
