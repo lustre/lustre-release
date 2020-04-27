@@ -88,40 +88,6 @@ struct cfs_cpt_table;
 #ifdef CONFIG_SMP
 extern struct cfs_cpt_table	*cfs_cpt_tab;
 
-/** virtual processing unit */
-struct cfs_cpu_partition {
-	/* CPUs mask for this partition */
-	cpumask_var_t			 cpt_cpumask;
-	/* nodes mask for this partition */
-	nodemask_t			*cpt_nodemask;
-	/* NUMA distance between CPTs */
-	unsigned int			*cpt_distance;
-	/* spread rotor for NUMA allocator */
-	unsigned int			 cpt_spread_rotor;
-	/* NUMA node if cpt_nodemask is empty */
-	int				 cpt_node;
-};
-
-/** descriptor for CPU partitions */
-struct cfs_cpt_table {
-	/* spread rotor for NUMA allocator */
-	unsigned int			 ctb_spread_rotor;
-	/* maximum NUMA distance between all nodes in table */
-	unsigned int			 ctb_distance;
-	/* # of CPU partitions */
-	int				 ctb_nparts;
-	/* partitions tables */
-	struct cfs_cpu_partition	*ctb_parts;
-	/* shadow HW CPU to CPU partition ID */
-	int				*ctb_cpu2cpt;
-	/* all cpus in this partition table */
-	cpumask_var_t			 ctb_cpumask;
-	/* shadow HW node to CPU partition ID */
-	int				*ctb_node2cpt;
-	/* all nodes in this partition table */
-	nodemask_t			*ctb_nodemask;
-};
-
 /**
  * destroy a CPU partition table
  */
