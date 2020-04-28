@@ -298,8 +298,10 @@ command_t mirror_cmdlist[] = {
 		"[SETSTRIPE_OPTIONS] ... <filename|directory> ...\n"
 	  MIRROR_CREATE_HELP },
 	{ .pc_name = "delete", .pc_func = lfs_mirror_delete,
-	  .pc_help = "delete a mirror from a file.\n"
-		"usage: lfs mirror delete {--comp-id|-I <comp_id>|-p <pool>} <mirrored_file> ...\n"
+	  .pc_help = "Delete a mirror from a file.\n"
+	"usage: lfs mirror delete {--mirror-id <mirror_id> |\n"
+	"\t		  --component-id|--comp-id|-I <comp_id> |\n"
+	"\t		  -p <pool>} <mirrored_file> ...\n"
 	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
@@ -310,7 +312,7 @@ command_t mirror_cmdlist[] = {
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
 	"usage: lfs mirror split <--mirror-id <mirror_id> |\n"
-	"\t		<--component-id|-I <comp_id>|-p <pool>> [--destroy|-d]\n"
+	"\t		--component-id|-I <comp_id>|-p <pool>> [--destroy|-d]\n"
 	"\t		[-f <new_file>] <mirrored_file> ...\n"
 	"\tmirror_id:   The numerical unique identifier for a mirror. It\n"
 	"\t             can be fetched by lfs getstripe command.\n"

@@ -3,9 +3,9 @@
 lfs mirror delete \- delete a specified mirror from an existing mirrored file
 .SH SYNOPSIS
 .B lfs mirror delete
-{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\fB\-I\fR
-<\fIcomp_id\fR> |\fB\-\-pool\fR <\fIpool\fR>}
-<\fImirrored_file\fR>
+{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\
+\fB\-\-comp\-id\fR|\fB\-I\fR <\fIcomp_id\fR> |
+\fB\-\-pool\fR <\fIpool\fR>} <\fImirrored_file\fR>
 .SH DESCRIPTION
 This command deletes a mirror with mirror ID <\fImirror_id\fR> or containing
 a component with <\fIcomp_id\fR> or containing a component on <\fIpool\fR>
@@ -35,6 +35,9 @@ The pool storing a component contained within a mirror.
 .TP
 .B lfs mirror delete --mirror-id 2 /mnt/lustre/file1
 Delete the mirror with ID 2 of /mnt/lustre/file1.
+.TP
+.B lfs mirror delete --comp-id 65537 /mnt/lustre/file1
+Delete the mirror containing the component with ID 65537 of /mnt/lustre/file1.
 .TP
 .B lfs mirror delete --pool ssd /mnt/lustre/file1
 Split a mirror on pool ssd out of /mnt/lustre/file1 and destroy it.

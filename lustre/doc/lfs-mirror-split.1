@@ -3,8 +3,9 @@
 lfs mirror split \- split a specified mirror from an existing mirrored file
 .SH SYNOPSIS
 .B lfs mirror split
-{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\fB\-I\fR
-<\fIcomp_id\fR> |\fB\-\-pool\fR <\fIpool\fR>}
+{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\
+\fB\-\-comp\-id\fR|\fB\-I\fR
+<\fIcomp_id\fR> | \fB\-\-pool\fR <\fIpool\fR>}
 [\fB\-\-destroy\fR|\fB\-d\fR]
 [\fB\-f\fR <\fInew_file\fR>]
 <\fImirrored_file\fR>
@@ -55,6 +56,10 @@ Split a mirror with ID 2 out of /mnt/lustre/file1 and destroy it.
 .B lfs mirror split --mirror-id 3 -f /mnt/lustre/file2 /mnt/lustre/file1
 Split a mirror with ID 3 out of /mnt/lustre/file1 and store it into
 /mnt/lustre/file2.
+.TP
+.B lfs mirror split --comp-id 65537 -d /mnt/lustre/file1
+Split a mirror containing the component with ID 65537 out of /mnt/lustre/file1
+and destroy it.
 .TP
 .B lfs mirror split --pool lustre-nvme -d /mnt/lustre/file1
 Split a mirror on pool lustre-nvme out of /mnt/lustre/file1 and destroy it.
