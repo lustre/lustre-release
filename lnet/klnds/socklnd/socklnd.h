@@ -450,6 +450,7 @@ struct ksock_proto {
 extern const struct ksock_proto ksocknal_protocol_v1x;
 extern const struct ksock_proto ksocknal_protocol_v2x;
 extern const struct ksock_proto ksocknal_protocol_v3x;
+extern const struct ksock_proto ksocknal_protocol_v4x;
 
 #define KSOCK_PROTO_V1_MAJOR    LNET_PROTO_TCP_VERSION_MAJOR
 #define KSOCK_PROTO_V1_MINOR    LNET_PROTO_TCP_VERSION_MINOR

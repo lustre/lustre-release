@@ -2046,7 +2046,8 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 		conn = list_first_entry_or_null(&peer_ni->ksnp_conns,
 						struct ksock_conn, ksnc_list);
 		if (conn)
-			LASSERT(conn->ksnc_proto == &ksocknal_protocol_v3x);
+			LASSERT(conn->ksnc_proto == &ksocknal_protocol_v3x ||
+				conn->ksnc_proto == &ksocknal_protocol_v4x);
 
 		/* take all the blocked packets while I've got the lock and
 		 * complete below...
@@ -2411,8 +2412,9 @@ __must_hold(&ksocknal_data.ksnd_global_lock)
 	if (list_empty(&peer_ni->ksnp_conns))
                 return 0;
 
-        if (peer_ni->ksnp_proto != &ksocknal_protocol_v3x)
-                return 0;
+	if (peer_ni->ksnp_proto != &ksocknal_protocol_v3x &&
+	    peer_ni->ksnp_proto != &ksocknal_protocol_v4x)
+		return 0;
 
         if (*ksocknal_tunables.ksnd_keepalive <= 0 ||
 	    ktime_get_seconds() < peer_ni->ksnp_last_alive +

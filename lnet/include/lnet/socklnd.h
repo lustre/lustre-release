@@ -80,6 +80,10 @@ struct ksock_msg {
 		/* - nothing */
 		/* case ksm_kh.ksh_type == KSOCK_MSG_LNET */
 		struct lnet_hdr_nid4 lnetmsg_nid4;
+		/* case ksm_kh.ksh_type == KSOCK_MSG_LNET &&
+		 *      kshm_version >= KSOCK_PROTO_V4
+		 */
+		struct lnet_hdr_nid16 lnetmsg_nid16;
 	} __packed ksm_u;
 } __packed;
 #define ksm_type ksm_kh.ksh_type
@@ -90,5 +94,6 @@ struct ksock_msg {
  * other LND (usocklnd, for example) */
 #define KSOCK_PROTO_V2		2
 #define KSOCK_PROTO_V3		3
+#define KSOCK_PROTO_V4		4
 
 #endif

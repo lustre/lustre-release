@@ -547,6 +547,32 @@ static inline void lnet_hdr_to_nid4(const struct lnet_hdr *hdr,
 	hdr_nid4->msg = hdr->msg;
 }
 
+static inline void lnet_hdr_from_nid16(struct lnet_hdr *hdr,
+					const struct lnet_hdr_nid16 *vhdr)
+{
+	const struct lnet_hdr *hdr16 = (void *)vhdr;
+
+	hdr->dest_nid = hdr16->dest_nid;
+	hdr->src_nid = hdr16->src_nid;
+	hdr->dest_pid = le32_to_cpu(hdr16->dest_pid);
+	hdr->src_pid = le32_to_cpu(hdr16->src_pid);
+	hdr->type = le32_to_cpu(hdr16->type);
+	hdr->payload_length = le32_to_cpu(hdr16->payload_length);
+}
+
+static inline void lnet_hdr_to_nid16(const struct lnet_hdr *hdr,
+				      struct lnet_hdr_nid16 *vhdr)
+{
+	struct lnet_hdr *hdr16 = (void *)vhdr;
+
+	hdr16->dest_nid = hdr->dest_nid;
+	hdr16->src_nid = hdr->src_nid;
+	hdr16->dest_pid = cpu_to_le32(hdr->dest_pid);
+	hdr16->src_pid = cpu_to_le32(hdr->src_pid);
+	hdr16->type = cpu_to_le32(hdr->type);
+	hdr16->payload_length = cpu_to_le32(hdr->payload_length);
+}
+
 extern const struct lnet_lnd the_lolnd;
 extern int avoid_asym_router_failure;
 
