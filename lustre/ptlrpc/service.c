@@ -3427,7 +3427,7 @@ ptlrpc_service_unlink_rqbd(struct ptlrpc_service *svc)
 		 */
 		spin_lock(&svcpt->scp_lock);
 		while (svcpt->scp_nrqbds_posted != 0) {
-			int seconds = LONG_UNLINK;
+			int seconds = PTLRPC_REQ_LONG_UNLINK;
 
 			spin_unlock(&svcpt->scp_lock);
 			/*

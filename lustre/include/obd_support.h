@@ -127,13 +127,14 @@ extern char obd_jobid_var[];
 #define RECONNECT_DELAY_MAX (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC + \
                              INITIAL_CONNECT_TIMEOUT)
 /* The min time a target should wait for clients to reconnect in recovery */
-#define OBD_RECOVERY_TIME_MIN    (2*RECONNECT_DELAY_MAX)
-#define OBD_IR_FACTOR_MIN         1
-#define OBD_IR_FACTOR_MAX         10
-#define OBD_IR_FACTOR_DEFAULT    (OBD_IR_FACTOR_MAX/2)
+#define OBD_RECOVERY_TIME_MIN	(2*RECONNECT_DELAY_MAX)
+#define OBD_IR_FACTOR_MIN	1
+#define OBD_IR_FACTOR_MAX	10
+#define OBD_IR_FACTOR_DEFAULT	(OBD_IR_FACTOR_MAX/2)
 /* default timeout for the MGS to become IR_FULL */
-#define OBD_IR_MGS_TIMEOUT       (4*obd_timeout)
-#define LONG_UNLINK 300          /* Unlink should happen before now */
+#define OBD_IR_MGS_TIMEOUT	(4*obd_timeout)
+/* Unlink should happen within this many seconds. */
+#define PTLRPC_REQ_LONG_UNLINK	300
 
 /**
  * Time interval of shrink, if the client is "idle" more than this interval,
