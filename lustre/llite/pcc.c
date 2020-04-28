@@ -2050,22 +2050,17 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	RETURN(rc);
 }
 
-static void pcc_layout_wait(struct pcc_inode *pcci)
-{
-
-	while (atomic_read(&pcci->pcci_active_ios) > 0) {
-		CDEBUG(D_CACHE, "Waiting for IO completion: %d\n",
-		       atomic_read(&pcci->pcci_active_ios));
-		wait_event_idle(pcci->pcci_waitq,
-				atomic_read(&pcci->pcci_active_ios) == 0);
-	}
-}
-
 static void __pcc_layout_invalidate(struct pcc_inode *pcci)
 {
 	pcci->pcci_type = LU_PCC_NONE;
 	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
-	pcc_layout_wait(pcci);
+	if (atomic_read(&pcci->pcci_active_ios) == 0)
+		return;
+
+	CDEBUG(D_CACHE, "Waiting for IO completion: %d\n",
+		       atomic_read(&pcci->pcci_active_ios));
+	wait_event_idle(pcci->pcci_waitq,
+			atomic_read(&pcci->pcci_active_ios) == 0);
 }
 
 void pcc_layout_invalidate(struct inode *inode)
