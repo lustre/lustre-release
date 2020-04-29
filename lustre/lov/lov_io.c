@@ -373,11 +373,12 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 			/**
 			 * for truncate, we uses [size, EOF) to judge whether
 			 * a write intent needs to be send, but we need to
-			 * restore the write extent to [0, size).
+			 * restore the write extent to [0, size], in truncate,
+			 * the byte in the size position is accessed.
 			 */
 			io->ci_write_intent.e_start = 0;
 			io->ci_write_intent.e_end =
-					io->u.ci_setattr.sa_attr.lvb_size;
+					io->u.ci_setattr.sa_attr.lvb_size + 1;
 		}
 		/* stop cl_io_init() loop */
 		RETURN(1);
