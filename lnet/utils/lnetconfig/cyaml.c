@@ -163,7 +163,7 @@ static yaml_token_handler dispatch_tbl[] = {
 };
 
 /* dispatch table */
-static char *token_type_string[] = {
+static const char * const token_type_string[] = {
 	[YAML_NO_TOKEN] = "YAML_NO_TOKEN",
 	[YAML_STREAM_START_TOKEN] = "YAML_STREAM_START_TOKEN",
 	[YAML_STREAM_END_TOKEN] = "YAML_STREAM_END_TOKEN",
@@ -188,7 +188,7 @@ static char *token_type_string[] = {
 	[YAML_SCALAR_TOKEN] = "YAML_SCALAR_TOKEN",
 };
 
-static char *state_string[] = {
+static const char * const state_string[] = {
 	[TREE_STATE_COMPLETE] = "COMPLETE",
 	[TREE_STATE_INITED] = "INITED",
 	[TREE_STATE_TREE_STARTED] = "TREE_STARTED",

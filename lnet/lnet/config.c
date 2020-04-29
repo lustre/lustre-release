@@ -578,7 +578,7 @@ failed:
  * nilist.
  */
 int
-lnet_parse_networks(struct list_head *netlist, char *networks,
+lnet_parse_networks(struct list_head *netlist, const char *networks,
 		    bool use_tcp_bonding)
 {
 	struct cfs_expr_list *net_el = NULL;
@@ -899,10 +899,10 @@ lnet_free_text_bufs(struct list_head *tbs)
 }
 
 static int
-lnet_str2tbs_sep(struct list_head *tbs, char *str)
+lnet_str2tbs_sep(struct list_head *tbs, const char *str)
 {
 	LIST_HEAD(pending);
-	char *sep;
+	const char *sep;
 	int nob;
 	int i;
 	struct lnet_text_buf *ltb;
@@ -1263,7 +1263,7 @@ lnet_parse_route_tbs(struct list_head *tbs, int *im_a_router)
 }
 
 int
-lnet_parse_routes (char *routes, int *im_a_router)
+lnet_parse_routes(const char *routes, int *im_a_router)
 {
 	LIST_HEAD(tbs);
 	int rc = 0;
@@ -1457,7 +1457,8 @@ lnet_splitnets(char *source, struct list_head *nets)
 }
 
 static int
-lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
+lnet_match_networks(const char **networksp, const char *ip2nets,
+		    __u32 *ipaddrs, int nip)
 {
 	static char	  networks[LNET_SINGLE_TEXTBUF_NOB];
 	static char	  source[LNET_SINGLE_TEXTBUF_NOB];
@@ -1646,7 +1647,7 @@ unlock_rtnl:
 EXPORT_SYMBOL(lnet_inet_enumerate);
 
 int
-lnet_parse_ip2nets (char **networksp, char *ip2nets)
+lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 {
 	struct lnet_inetdev *ifaces = NULL;
 	__u32	  *ipaddrs = NULL;

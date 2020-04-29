@@ -39,7 +39,7 @@
 
 /* This must be longer than the longest string below */
 #define SYNC_STATES_MAXLEN 16
-static char *sync_lock_cancel_states[] = {
+static const char * const sync_lock_cancel_states[] = {
 	[SYNC_LOCK_CANCEL_NEVER]	= "never",
 	[SYNC_LOCK_CANCEL_BLOCKING]	= "blocking",
 	[SYNC_LOCK_CANCEL_ALWAYS]	= "always",

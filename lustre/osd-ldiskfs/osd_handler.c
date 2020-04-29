@@ -7576,7 +7576,7 @@ static int osd_mount(const struct lu_env *env,
 	*options = '\0';
 	if (opts != NULL) {
 		/* strip out the options for back compatiblity */
-		static char *sout[] = {
+		static const char * const sout[] = {
 			"mballoc",
 			"iopen",
 			"noiopen",

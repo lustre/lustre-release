@@ -536,17 +536,17 @@ intf_max_set(const char *val, cfs_kernel_param_arg_t *kp)
 	return 0;
 }
 
-static char *
+static const char *
 lnet_get_routes(void)
 {
 	return routes;
 }
 
-static char *
+static const char *
 lnet_get_networks(void)
 {
-	char   *nets;
-	int	rc;
+	const char *nets;
+	int rc;
 
 	if (*networks != 0 && *ip2nets != 0) {
 		LCONSOLE_ERROR_MSG(0x101, "Please specify EITHER 'networks' or "
@@ -3178,7 +3178,7 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 				      struct lnet_ioctl_config_lnd_tunables *tun)
 {
 	struct lnet_net *net;
-	char *nets;
+	const char *nets;
 	int rc;
 	LIST_HEAD(net_head);
 
@@ -3361,7 +3361,7 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 	LIST_HEAD(net_head);
 	int rc;
 	struct lnet_ioctl_config_lnd_tunables tun;
-	char *nets = conf->cfg_config_u.cfg_net.net_intf;
+	const char *nets = conf->cfg_config_u.cfg_net.net_intf;
 
 	/* Create a net/ni structures for the network string */
 	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);

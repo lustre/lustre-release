@@ -116,9 +116,9 @@ enum lustre_imp_state {
 };
 
 /** Returns test string representation of numeric import state \a state */
-static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
+static inline const char *ptlrpc_import_state_name(enum lustre_imp_state state)
 {
-	static char *import_state_names[] = {
+	static const char * const import_state_names[] = {
 		"<UNKNOWN>", "CLOSED",  "NEW", "DISCONN",
 		"CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT",
 		"RECOVER", "FULL", "EVICTED", "IDLE",

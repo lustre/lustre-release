@@ -151,9 +151,9 @@ struct mount_opts {
 #ifdef HAVE_SERVER_SUPPORT
 int get_mountdata(char *, struct lustre_disk_data *);
 
-static inline char *mt_str(enum ldd_mount_type mt)
+static inline const char *mt_str(enum ldd_mount_type mt)
 {
-	static char *mount_type_string[] = {
+	static const char * const mount_type_string[] = {
 		"ext3",
 		"ldiskfs",
 		"smfs",
@@ -164,9 +164,9 @@ static inline char *mt_str(enum ldd_mount_type mt)
 	return mount_type_string[mt];
 }
 
-static inline char *mt_type(enum ldd_mount_type mt)
+static inline const char *mt_type(enum ldd_mount_type mt)
 {
-	static char *mount_type_string[] = {
+	static const char * const mount_type_string[] = {
 		"osd-ldiskfs",
 		"osd-ldiskfs",
 		"osd-smfs",

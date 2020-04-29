@@ -61,8 +61,7 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
-static char *osd_0copy_tag = "zerocopy";
-
+static char osd_0copy_tag[] = "zerocopy";
 
 static void dbuf_set_pending_evict(dmu_buf_t *db)
 {

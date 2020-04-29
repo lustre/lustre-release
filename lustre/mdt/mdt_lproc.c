@@ -844,7 +844,7 @@ static ssize_t sync_count_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(sync_count);
 
-static char *dom_open_lock_modes[NUM_DOM_LOCK_ON_OPEN_MODES] = {
+static const char *dom_open_lock_modes[NUM_DOM_LOCK_ON_OPEN_MODES] = {
 	[NO_DOM_LOCK_ON_OPEN] = "never",
 	[TRYLOCK_DOM_ON_OPEN] = "trylock",
 	[ALWAYS_DOM_LOCK_ON_OPEN] = "always",
