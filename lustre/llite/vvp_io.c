@@ -37,10 +37,10 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-
 #include <obd.h>
 #include <linux/pagevec.h>
 #include <linux/memcontrol.h>
+
 #include "llite_internal.h"
 #include "vvp_internal.h"
 #include <libcfs/linux/linux-misc.h>
@@ -953,7 +953,7 @@ static inline void ll_account_page_dirtied(struct page *page,
 static inline void ll_page_tag_dirty(struct page *page,
 				     struct address_space *mapping)
 {
-#ifdef HAVE___XA_SET_MARK
+#ifndef HAVE_RADIX_TREE_TAG_SET
 	__xa_set_mark(&mapping->i_pages, page_index(page), PAGECACHE_TAG_DIRTY);
 #else
 	radix_tree_tag_set(&mapping->page_tree, page_index(page),
@@ -990,7 +990,7 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		 page, (void *) page->private);
 
 	/* Rest of code derived from __set_page_dirty_nobuffers */
-	xa_lock_irqsave(&mapping->i_pages, flags);
+	ll_xa_lock_irqsave(&mapping->i_pages, flags);
 
 	/* Notes on differences with __set_page_dirty_nobuffers:
 	 * 1. We don't need to call page_mapping because we know this is a page
@@ -1020,7 +1020,7 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		dirtied++;
 		unlock_page_memcg(page);
 	}
-	xa_unlock_irqrestore(&mapping->i_pages, flags);
+	ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 
 	CDEBUG(D_VFSTRACE, "mapping %p, count %d, dirtied %d\n", mapping,
 	       count, dirtied);

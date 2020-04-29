@@ -41,6 +41,7 @@
 #include <linux/delay.h>
 #include <linux/uidgid.h>
 #include <linux/device.h>
+#include <linux/xarray.h>
 
 #include <lustre_errno.h>
 
@@ -48,6 +49,7 @@
 #include <llog_swab.h>
 #include <lprocfs_status.h>
 #include <lustre_acl.h>
+#include <lustre_compat.h>
 #include <lustre_fid.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_kernelcomm.h>
@@ -542,9 +544,6 @@ static int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
 }
 #else
 #define mdc_unpack_acl(req, md) 0
-#endif
-#ifdef HAVE_XA_IS_VALUE
-# include <linux/xarray.h>
 #endif
 
 int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
@@ -1142,14 +1141,14 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 	unsigned long flags;
 	int found;
 
-	xa_lock_irqsave(&mapping->i_pages, flags);
+	ll_xa_lock_irqsave(&mapping->i_pages, flags);
 	found = radix_tree_gang_lookup(&mapping->page_tree,
 				       (void **)&page, offset, 1);
-	if (found > 0 && !xa_is_value(page)) {
+	if (found > 0 && !ll_xa_is_value(page)) {
 		struct lu_dirpage *dp;
 
 		get_page(page);
-		xa_unlock_irqrestore(&mapping->i_pages, flags);
+		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 		/*
 		 * In contrast to find_lock_page() we are sure that directory
 		 * page cannot be truncated (while DLM lock is held) and,
@@ -1198,7 +1197,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			page = ERR_PTR(-EIO);
 		}
 	} else {
-		xa_unlock_irqrestore(&mapping->i_pages, flags);
+		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 		page = NULL;
 	}
 	return page;

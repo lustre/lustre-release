@@ -141,11 +141,19 @@ static inline bool d_is_positive(const struct dentry *dentry)
 # define inode_trylock(inode) mutex_trylock(&(inode)->i_mutex)
 #endif
 
-#ifndef HAVE_XA_IS_VALUE
-static inline bool xa_is_value(void *entry)
+/* Old kernels lacked both Xarray support and the page cache
+ * using Xarrays. Our back ported Xarray support introduces
+ * the real xa_is_value() but we need a wrapper as well for
+ * the page cache interaction. Lets keep xa_is_value() separate
+ * in old kernels for Xarray support and page cache handling.
+ */
+#ifdef HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY
+static inline bool ll_xa_is_value(void *entry)
 {
 	return radix_tree_exceptional_entry(entry);
 }
+#else
+#define ll_xa_is_value	xa_is_value
 #endif
 
 #ifndef HAVE_TRUNCATE_INODE_PAGES_FINAL
@@ -492,13 +500,12 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 
 #ifdef HAVE_I_PAGES
 #define page_tree i_pages
+#define ll_xa_lock_irqsave(lockp, flags) xa_lock_irqsave(lockp, flags)
+#define ll_xa_unlock_irqrestore(lockp, flags) xa_unlock_irqrestore(lockp, flags)
 #else
 #define i_pages tree_lock
-#endif
-
-#ifndef xa_lock_irqsave
-#define xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
-#define xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
+#define ll_xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
+#define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
 #endif
 
 #ifndef HAVE_LOCK_PAGE_MEMCG

@@ -2263,9 +2263,9 @@ void ll_delete_inode(struct inode *inode)
 	 */
 	nrpages = mapping->nrpages;
 	if (nrpages) {
-		xa_lock_irqsave(&mapping->i_pages, flags);
+		ll_xa_lock_irqsave(&mapping->i_pages, flags);
 		nrpages = mapping->nrpages;
-		xa_unlock_irqrestore(&mapping->i_pages, flags);
+		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
 	} /* Workaround end */
 
 	LASSERTF(nrpages == 0, "%s: inode="DFID"(%p) nrpages=%lu, "

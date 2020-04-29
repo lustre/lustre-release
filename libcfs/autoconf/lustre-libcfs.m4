@@ -1069,6 +1069,28 @@ clear_and_wake_up_bit, [
 ]) # LIBCFS_CLEAR_AND_WAKE_UP_BIT
 
 #
+# LIBCFS_XARRAY_SUPPORT
+#
+# 4.19-rc5 kernel commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
+# replaced the radix tree implementation with Xarrays. This change
+# introduced functionaly needed for general Xarray support
+#
+AC_DEFUN([LIBCFS_XARRAY_SUPPORT], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if page cache uses Xarray],
+xarray_support, [
+	#include <linux/radix-tree.h>
+],[
+	radix_tree_exceptional_entry(NULL);
+],[
+	AC_DEFINE(HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY, 1,
+		[kernel lacks 'xa_is_value'])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_XARRAY_SUPPORT
+
+#
 # LIBCFS_HAVE_IOV_ITER_TYPE
 #
 # kernel 4.20 commit 00e23707442a75b404392cef1405ab4fd498de6b
@@ -1290,6 +1312,8 @@ LIBCFS_TIMER_SETUP
 LIBCFS_WAIT_VAR_EVENT
 # 4.17
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
+# 4.19
+LIBCFS_XARRAY_SUPPORT
 # 4.20
 LIBCFS_HAVE_IOV_ITER_TYPE
 # 5.0

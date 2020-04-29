@@ -4,6 +4,7 @@ libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-curproc.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
+libcfs-linux-objs += xarray.o
 
 libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
 libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o bio.o

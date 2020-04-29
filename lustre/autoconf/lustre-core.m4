@@ -1967,41 +1967,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_INODE_TIMESPEC64
 
 #
-# LC_XA_IS_VALUE
-# kernel 4.19-rc6 commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
-# xarray: Replace exceptional entries
-# adds xa_is_value
-#
-AC_DEFUN([LC_XA_IS_VALUE], [
-LB_CHECK_COMPILE([xa_is_value exist],
-xa_is_value, [
-	#include <linux/xarray.h>
-],[
-	xa_is_value(NULL);
-],[
-	AC_DEFINE(HAVE_XA_IS_VALUE, 1, [xa_is_value exist])
-])
-]) # LC_XA_IS_VALUE
-
-#
 # LC___XA_SET_MARK
 #
 # kernel 4.20 commit v4.19-rc5-248-g9b89a0355144
-# xarray: Add XArray marks
+# xarray: Add XArray marks - replaced radix_tree_tag_set
 #
 AC_DEFUN([LC___XA_SET_MARK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
 LB_CHECK_COMPILE([if '__xa_set_mark' exists],
 __xa_set_mark, [
-	#include <linux/xarray.h>
 	#include <linux/fs.h>
+	#include <linux/radix-tree.h>
 ],[
-	struct xarray *xa = NULL;
-
-	__xa_set_mark(xa, 0, PAGECACHE_TAG_DIRTY);
+	radix_tree_tag_set(NULL, 0, PAGECACHE_TAG_DIRTY);
 ],[
-	AC_DEFINE(HAVE___XA_SET_MARK, 1,
+	AC_DEFINE(HAVE_RADIX_TREE_TAG_SET, 1,
 		[__xa_set_mark exists])
 ])
+EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC___XA_SET_MARK
 
 #
@@ -2343,7 +2327,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.18
 	LC_INODE_TIMESPEC64
-	LC_XA_IS_VALUE
 
 	# 4.20
 	LC___XA_SET_MARK
