@@ -2182,7 +2182,6 @@ nrs_tbf_opcode_startup(struct ptlrpc_nrs_policy *policy,
 	if (head->th_cli_hash == NULL)
 		return -ENOMEM;
 
-	start.u.tc_start.ts_opcodes = NULL;
 	start.u.tc_start.ts_opcodes_str = "*";
 
 	start.u.tc_start.ts_rpc_rate = tbf_rate;
@@ -2265,7 +2264,7 @@ nrs_tbf_opcode_list_parse(char *str, int len, struct cfs_bitmap **bitmaptr)
 			break;
 	}
 
-	if (rc == 0)
+	if (rc == 0 && bitmaptr)
 		*bitmaptr = opcodes;
 	else
 		CFS_FREE_BITMAP(opcodes);
@@ -2275,9 +2274,6 @@ nrs_tbf_opcode_list_parse(char *str, int len, struct cfs_bitmap **bitmaptr)
 
 static void nrs_tbf_opcode_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
-	if (cmd->u.tc_start.ts_opcodes)
-		CFS_FREE_BITMAP(cmd->u.tc_start.ts_opcodes);
-
 	if (cmd->u.tc_start.ts_opcodes_str)
 		OBD_FREE(cmd->u.tc_start.ts_opcodes_str,
 			 strlen(cmd->u.tc_start.ts_opcodes_str) + 1);
@@ -2304,7 +2300,7 @@ static int nrs_tbf_opcode_parse(struct nrs_tbf_cmd *cmd, char *id)
 	/* parse opcode list */
 	rc = nrs_tbf_opcode_list_parse(cmd->u.tc_start.ts_opcodes_str,
 				       strlen(cmd->u.tc_start.ts_opcodes_str),
-				       &cmd->u.tc_start.ts_opcodes);
+				       NULL);
 	if (rc)
 		nrs_tbf_opcode_cmd_fini(cmd);
 
@@ -2337,7 +2333,7 @@ static int nrs_tbf_opcode_rule_init(struct ptlrpc_nrs_policy *policy,
 		strlen(start->u.tc_start.ts_opcodes_str) + 1);
 
 	/* Default rule '*' */
-	if (start->u.tc_start.ts_opcodes == NULL)
+	if (strcmp(start->u.tc_start.ts_opcodes_str, "*") == 0)
 		return 0;
 
 	rc = nrs_tbf_opcode_list_parse(rule->tr_opcodes_str,

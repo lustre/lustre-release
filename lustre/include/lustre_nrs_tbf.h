@@ -306,7 +306,6 @@ struct nrs_tbf_cmd {
 			char			*ts_jobids_str;
 			struct list_head	 ts_ids;
 			char			*ts_ids_str;
-			struct cfs_bitmap	*ts_opcodes;
 			char			*ts_opcodes_str;
 			struct list_head	 ts_conds;
 			char			*ts_conds_str;
