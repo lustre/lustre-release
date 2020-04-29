@@ -733,9 +733,13 @@ cpu_hotplug_state_machine, [
 # introduced refcount_t which is atomic_t plus over flow guards.
 #
 AC_DEFUN([LIBCFS_REFCOUNT_T], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
 LB_CHECK_LINUX_HEADER([linux/refcount.h], [
 	AC_DEFINE(HAVE_REFCOUNT_T, 1,
-		[refcount_t is supported])])
+		[refcount_t is supported])
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_REFCOUNT_T
 
 #
@@ -839,9 +843,13 @@ uuid_t, [
 # introduce processor.h
 #
 AC_DEFUN([LIBCFS_HAVE_PROCESSOR_HEADER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
 LB_CHECK_LINUX_HEADER([linux/processor.h], [
 	AC_DEFINE(HAVE_PROCESSOR_H, 1,
-		[processor.h is present])])
+		[processor.h is present])
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_PROCESSOR_HEADER
 
 #
