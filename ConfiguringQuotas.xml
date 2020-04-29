@@ -912,6 +912,109 @@ adjust_qunit                               1 samples [us]  70 70 70
       4293, respectively. The unit is microseconds (μs).</para>
     </section>
   </section>
+  <section xml:id="quota_pools" condition='l2E'>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>pools</secondary>
+    </indexterm>Pool Quotas</title>
+    <para>
+    OST Pool Quotas feature gives an ability to limit user's (group's/project's)
+    disk usage at OST pool level. Each OST Pool Quota (PQ) maps directly to the
+    OST pool of the same name. Thus PQ could be tuned with standard <literal>
+    lctl pool_new/add/remove/erase</literal> commands. All PQ are subset of a
+    global pool that includes all OSTs and MDTs (DOM case).
+    It may be initially confusing to be prevented from using "all of" one quota
+    due to a different quota setting. In Lustre, a quota is a limit, not a right
+    to use an amount. You don't always get to use your quota - an OST may be out
+    of space, or some other quota is limiting. For example, if there is an inode
+    quota and a space quota, and you hit your inode limit while you still have
+    plenty of space, you can't use the space. For another example, quotas may
+    easily be over-allocated: everyone gets 10PB of quota, in a 15PB system.
+    That does not give them the right to use 10PB, it means they cannot use more
+    than 10PB. They may very well get ENOSPC long before that - but they will not
+    get EDQUOT. This behavior already exists in Lustre today, but pool quotas
+    increase the number of limits in play: user, group or project global space quota
+    and now all of those limits can also be defined for each pool. In all cases,
+    the net effect is that the actual amount of space you can use is limited to the
+    smallest (min) quota out of everything that is applicable.
+    See more details in
+    <link xl:href="http://wiki.lustre.org/OST_Pool_Quotas_HLD">
+    OST Pool Quotas HLD</link>
+    </para>
+    <section remap="h3">
+      <title>DOM and MDT pools</title>
+      <para>
+      From Quota Master point of view, "data" MDTs are regular members together
+      with OSTs. However Pool Quotas support only OSTs as there is currently
+      no mechanism to group MDTs in pools.
+      </para>
+    </section>
+    <section remap="h3">
+      <title>Lfs quota/setquota options to setup quota pools</title>
+      <para>
+      The same long option <literal>--pool</literal> is used to setup and report
+      Pool Quotas with <literal>lfs setquota</literal> and <literal>lfs setquota</literal>.
+      </para>
+      <para>
+      <literal>lfs setquota --pool <replaceable>pool_name</replaceable></literal>
+      is used to set the block and soft usage limit for the user, group, or
+      project for the specified pool name.
+      </para>
+      <para>
+      <literal>lfs quota --pool <replaceable>pool_name</replaceable></literal>
+      shows the user, group, or project usage for the specified pool name.
+      </para>
+    </section>
+    <section remap="h3">
+      <title>Quota pools interoperability</title>
+      <para>
+      Both client and server should have at least Lustre 2.14 to support Pool Quotas.
+      </para>
+      <note>
+       <para>Pool Quotas may be able to work with older clients if server
+       supports Pool Quotas. Pool quotas cannot be viewed or modified by
+       older clients. Since the quota enforcement is done on the servers, only
+       a single client is needed to configure the quotas. This could be done by
+       mounting a client directly on the MDS if needed.
+       </para>
+      </note>
+    </section>
+    <section remap="h3">
+      <title>Pool Quotas Hard Limit setup example</title>
+      <para>
+      Let's imagine you need to setup quota usage for already existed OST pool
+      <literal>flash_pool</literal>:
+      </para>
+      <screen>
+# it is a limit for global pool. PQ don't work properly without that
+lfs setquota -u <replaceable>ivan</replaceable> -B<replaceable>100T /mnt/testfs</replaceable>
+# set 1TiB block hard limit for ivan in a flash_pool
+lfs setquota -u <replaceable>ivan</replaceable> --pool <replaceable>flash_pool</replaceable> -B<replaceable>1T /mnt/testfs</replaceable>
+      </screen>
+      <para>
+      <note>
+       <para>System-side hard limit is required before setting Quota Pool limit.
+       If you do not need to limit user at all OSTs and MDTs at system,
+       only per pool, it is recommended to set some unrealistic big hard limit.
+       Without a global limit in place the Quota Pool limit will not be enforced.
+       No matter hard or soft global limit - at least one of them should be set.
+       </para>
+      </note>
+      </para>
+    </section>
+    <section remap="h3">
+      <title>Pool Quotas Soft Limit setup example</title>
+      <screen>
+# notify OSTs to enforce quota for ivan
+lfs setquota -u <replaceable>ivan</replaceable> -B<replaceable>10T /mnt/testfs</replaceable>
+# soft limit 10MiB for ivan in a pool flash_pool
+lfs setquota -u <replaceable>ivan</replaceable> --pool <replaceable>flash_pool</replaceable> -b<replaceable>1T /mnt/testfs</replaceable>
+# set block grace 600 s for all users at flash_pool
+lfs setquota -t -u --block-grace <replaceable>600</replaceable> --pool <replaceable>flash_pool /mnt/testfs</replaceable>
+      </screen>
+    </section>
+  </section>
 </chapter>
 <!--
   vim:expandtab:shiftwidth=2:tabstop=8:
