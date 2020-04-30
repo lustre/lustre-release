@@ -7151,16 +7151,16 @@ multiop_bg_pause() {
 }
 
 do_and_time () {
-    local cmd=$1
-    local rc
+	local cmd="$1"
+	local start
+	local rc
 
-    SECONDS=0
-    eval '$cmd'
+	start=$SECONDS
+	eval '$cmd'
+	[ ${PIPESTATUS[0]} -eq 0 ] || rc=1
 
-    [ ${PIPESTATUS[0]} -eq 0 ] || rc=1
-
-    echo $SECONDS
-    return $rc
+	echo $((SECONDS - start))
+	return $rc
 }
 
 inodes_available () {

@@ -9161,17 +9161,21 @@ test_101d() {
 	stack_trap "$LCTL set_param -n llite.*.max_read_ahead_mb $old_RA" EXIT
 	$LCTL get_param -n llite.*.max_read_ahead_mb
 
-	echo Reading the test file $file with read-ahead disabled
+	echo "Reading the test file $file with read-ahead disabled"
 	local sz_KB=$((sz_MB * 1024 / 4))
-	local raOFF=$(do_and_time "dd if=$file of=/dev/null bs=4k count=$sz_KB")
+	# 10485760 bytes transferred in 0.000938 secs (11179579337 bytes/sec)
+	# 104857600 bytes (105 MB) copied, 0.00876352 s, 12.0 GB/s
+	local raOFF=$(LANG=C dd if=$file of=/dev/null bs=4k count=$sz_KB |&
+		      sed -e '/records/d' -e 's/.* \([0-9]*\.[0-9]*\) *s.*/\1/')
 
-	echo Cancel LRU locks on lustre client to flush the client cache
+	echo "Cancel LRU locks on lustre client to flush the client cache"
 	cancel_lru_locks osc
 	echo Enable read-ahead with ${ra_MB}MB
 	$LCTL set_param -n llite.*.max_read_ahead_mb=$ra_MB
 
-	echo Reading the test file $file with read-ahead enabled
-	local raON=$(do_and_time "dd if=$file of=/dev/null bs=4k count=$sz_KB")
+	echo "Reading the test file $file with read-ahead enabled"
+	local raON=$(LANG=C dd if=$file of=/dev/null bs=4k count=$sz_KB |&
+		     sed -e '/records/d' -e 's/.* \([0-9]*\.[0-9]*\) *s.*/\1/')
 
 	echo "read-ahead disabled time read $raOFF"
 	echo "read-ahead enabled time read $raON"
@@ -9179,7 +9183,8 @@ test_101d() {
 	rm -f $file
 	wait_delete_completed
 
-	[ $raOFF -le 1 ] || [ $raON -lt $raOFF ] ||
+	# use awk for this check instead of bash because it handles decimals
+	awk "{ exit !($raOFF < 1.0 || $raOFF > $raON) }" <<<"ignore_me" ||
 		error "readahead ${raON}s > no-readahead ${raOFF}s ${sz_MB}M"
 }
 run_test 101d "file read with and without read-ahead enabled"
