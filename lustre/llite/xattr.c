@@ -213,7 +213,7 @@ static int get_hsm_state(struct inode *inode, u32 *hus_states)
 	return rc;
 }
 
-static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump)
+static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump, size_t size)
 {
 	struct lov_comp_md_v1 *comp_v1 = (struct lov_comp_md_v1 *)lump;
 	struct lov_user_md *v1 = lump;
@@ -228,13 +228,22 @@ static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump)
 		return 0;
 
 	if (lump->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		if (size < sizeof(*comp_v1))
+			return -ERANGE;
+
 		entry_count = comp_v1->lcm_entry_count;
+		if (size < offsetof(typeof(*comp_v1), lcm_entries[entry_count]))
+			return -ERANGE;
 		is_composite = true;
 	}
 
 	for (i = 0; i < entry_count; i++) {
 		if (lump->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
 			void *ptr = comp_v1;
+
+			if (comp_v1->lcm_entries[i].lcme_offset + sizeof(*v1) >
+			    size)
+				return -ERANGE;
 
 			ptr += comp_v1->lcm_entries[i].lcme_offset;
 			v1 = (struct lov_user_md *)ptr;
@@ -289,7 +298,7 @@ static int ll_setstripe_ea(struct dentry *dentry, struct lov_user_md *lump,
 		 */
 		return -ERANGE;
 	}
-	rc = ll_adjust_lum(inode, lump);
+	rc = ll_adjust_lum(inode, lump, size);
 	if (rc)
 		return rc;
 

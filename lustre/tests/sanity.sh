@@ -9525,36 +9525,54 @@ test_102a() {
 }
 run_test 102a "user xattr test =================================="
 
+check_102b_layout() {
+	local layout="$*"
+	local testfile=$DIR/$tfile
+
+	echo "test layout '$layout'"
+	$LFS setstripe $layout $testfile || error "setstripe failed"
+	$LFS getstripe -y $testfile
+
+	echo "get/set/list trusted.lov xattr ..." # b=10930
+	local value=$(getfattr -n trusted.lov -e hex $testfile | grep trusted)
+	[[ "$value" =~ "trusted.lov" ]] ||
+		error "can't get trusted.lov from $testfile"
+	local stripe_count_orig=$($LFS getstripe -c $testfile) ||
+		error "getstripe failed"
+
+	$MCREATE $testfile.2 || error "mcreate $testfile.2 failed"
+
+	value=$(cut -d= -f2 <<<$value)
+	# LU-13168: truncated xattr should fail if short lov_user_md header
+	[ $CLIENT_VERSION -lt $(version_code 2.13.53) ] &&
+		lens="${#value}" || lens="$(seq 4 2 ${#value})"
+	for len in $lens; do
+		echo "setfattr $len $testfile.2"
+		setfattr -n trusted.lov -v ${value:0:$len} $testfile.2 &&
+			[ $len -lt 66 ] && error "short xattr len=$len worked"
+	done
+	local stripe_size=$($LFS getstripe -S $testfile.2)
+	local stripe_count=$($LFS getstripe -c $testfile.2)
+	[[ $stripe_size -eq 65536 ]] ||
+		error "stripe size $stripe_size != 65536"
+	[[ $stripe_count -eq $stripe_count_orig ]] ||
+		error "stripe count $stripe_count != $stripe_count_orig"
+	rm $testfile $testfile.2
+}
+
 test_102b() {
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
 		skip_env "could not find setfattr"
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
-	# b10930: get/set/list trusted.lov xattr
-	echo "get/set/list trusted.lov xattr ..."
-	local testfile=$DIR/$tfile
-	$LFS setstripe -S 65536 -i 1 -c $OSTCOUNT $testfile ||
-		error "setstripe failed"
-	local STRIPECOUNT=$($LFS getstripe -c $testfile) ||
-		error "getstripe failed"
-	getfattr -d -m "^trusted" $testfile 2>/dev/null | grep "trusted.lov" ||
-		error "can't get trusted.lov from $testfile"
+	# check plain layout
+	check_102b_layout -S 65536 -i 1 -c $OSTCOUNT
 
-	local testfile2=${testfile}2
-	local value=$(getfattr -n trusted.lov $testfile 2>/dev/null |
-			grep "trusted.lov" | sed -e 's/[^=]\+=//')
+	# and also check composite layout
+	check_102b_layout -E 1M -S 65536 -i 1 -c $OSTCOUNT -Eeof -S4M
 
-	$MCREATE $testfile2
-	setfattr -n trusted.lov -v $value $testfile2
-	local stripe_size=$($LFS getstripe -S $testfile2)
-	local stripe_count=$($LFS getstripe -c $testfile2)
-	[[ $stripe_size -eq 65536 ]] ||
-		error "stripe size $stripe_size != 65536"
-	[[ $stripe_count -eq $STRIPECOUNT ]] ||
-		error "stripe count $stripe_count != $STRIPECOUNT"
-	rm -f $DIR/$tfile
 }
-run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
+run_test 102b "getfattr/setfattr for trusted.lov EAs"
 
 test_102c() {
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
