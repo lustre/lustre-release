@@ -617,6 +617,12 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	if (rc)
 		GOTO(out_put_env, rc);
 
+	/* overwrite jobid inited in vvp_io_init() */
+	if (strncmp(ll_i2info(inode)->lli_jobid, work->lrw_jobid,
+		    sizeof(work->lrw_jobid)))
+		memcpy(ll_i2info(inode)->lli_jobid, work->lrw_jobid,
+		       sizeof(work->lrw_jobid));
+
 	vvp_env_io(env)->vui_io_subtype = IO_NORMAL;
 	vvp_env_io(env)->vui_fd = fd;
 	io->ci_state = CIS_LOCKED;
@@ -1577,6 +1583,8 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 		ras->ras_next_readahead_idx = end_idx + 1;
 		ras->ras_async_last_readpage_idx = start_idx;
 		spin_unlock(&ras->ras_lock);
+		memcpy(lrw->lrw_jobid, ll_i2info(inode)->lli_jobid,
+		       sizeof(lrw->lrw_jobid));
 		ll_readahead_work_add(inode, lrw);
 	} else {
 		return -ENOMEM;

@@ -801,6 +801,7 @@ struct ll_readahead_work {
 
 	/* async worker to handler read */
 	struct work_struct		 lrw_readahead_work;
+	char				 lrw_jobid[LUSTRE_JOBID_SIZE];
 };
 
 extern struct kmem_cache *ll_file_data_slab;
