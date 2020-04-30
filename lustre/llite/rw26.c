@@ -598,11 +598,11 @@ out:
 	return result;
 }
 
-static int ll_tiny_write_begin(struct page *vmpage)
+static int ll_tiny_write_begin(struct page *vmpage, struct address_space *mapping)
 {
 	/* Page must be present, up to date, dirty, and not in writeback. */
 	if (!vmpage || !PageUptodate(vmpage) || !PageDirty(vmpage) ||
-	    PageWriteback(vmpage))
+	    PageWriteback(vmpage) || vmpage->mapping != mapping)
 		return -ENODATA;
 
 	return 0;
@@ -630,7 +630,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	lcc = ll_cl_find(file);
 	if (lcc == NULL) {
 		vmpage = grab_cache_page_nowait(mapping, index);
-		result = ll_tiny_write_begin(vmpage);
+		result = ll_tiny_write_begin(vmpage, mapping);
 		GOTO(out, result);
 	}
 
@@ -687,6 +687,15 @@ again:
 			if (vmpage == NULL)
 				GOTO(out, result = -ENOMEM);
 		}
+	}
+
+	/* page was truncated */
+	if (mapping != vmpage->mapping) {
+		CDEBUG(D_VFSTRACE, "page: %lu was truncated\n", index);
+		unlock_page(vmpage);
+		put_page(vmpage);
+		vmpage = NULL;
+		goto again;
 	}
 
 	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);

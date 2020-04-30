@@ -992,7 +992,7 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		ClearPageReclaim(pvec->pages[i]);
 
 	LASSERTF(page->mapping,
-		 "mapping must be set. page %p, page->private (cl_page) %p",
+		 "mapping must be set. page %p, page->private (cl_page) %p\n",
 		 page, (void *) page->private);
 
 	/* Rest of code derived from __set_page_dirty_nobuffers */
