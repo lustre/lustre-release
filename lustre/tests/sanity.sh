@@ -12759,7 +12759,7 @@ test_133g() {
 		fi
 		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
 			do_facet $facet "$LCTL list_param -R '*' | grep '=' |
-				tr -d= | egrep -v 'force_lbug|changelog_mask' |
+				tr -d = | egrep -v 'force_lbug|changelog_mask' |
 				xargs badarea_io" ||
 					error_133 "$facet badarea_io failed"
 		else
