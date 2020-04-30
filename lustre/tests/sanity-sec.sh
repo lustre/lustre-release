@@ -3533,6 +3533,61 @@ test_48b() {
 }
 run_test 48b "encrypted file: concurrent truncate"
 
+trace_cmd() {
+	local cmd="$@"
+	local xattr_name="security.c"
+
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+	$LCTL set_param debug=+info
+	$LCTL clear
+
+	echo $cmd
+	eval $cmd
+
+	$LCTL dk | grep -E "get xattr '${xattr_name}'|get xattrs"
+	[ $? -ne 0 ] || error "get xattr event was triggered"
+}
+
+test_49() {
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	local dirname=$DIR/$tdir/subdir
+
+	mkdir $dirname
+
+	trace_cmd stat $dirname
+	trace_cmd touch $dirname/f1
+	trace_cmd stat $dirname/f1
+	trace_cmd cat $dirname/f1
+	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
+	trace_cmd $TRUNCATE $dirname/f1 10240
+	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
+	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
+	trace_cmd $LFS setdirstripe -i 1 $dirname/d2
+	trace_cmd $LFS migrate -m 0 $dirname/d2
+
+	$LFS setdirstripe -i 1 -c 1 $dirname/d3
+	dirname=$dirname/d3/subdir
+	mkdir $dirname
+
+	trace_cmd stat $dirname
+	trace_cmd touch $dirname/f1
+	trace_cmd stat $dirname/f1
+	trace_cmd cat $dirname/f1
+	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
+	trace_cmd $TRUNCATE $dirname/f1 10240
+	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
+	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
+}
+run_test 49 "Avoid getxattr for encryption context"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

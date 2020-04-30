@@ -51,48 +51,77 @@ static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 	return rc;
 }
 
+int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
+		    bool preload)
+{
+	unsigned int ext_flags;
+	int rc = 0;
+
+	/* used as encryption unit size */
+	if (S_ISREG(inode->i_mode))
+		inode->i_blkbits = LUSTRE_ENCRYPTION_BLOCKBITS;
+	ext_flags = ll_inode_to_ext_flags(inode->i_flags) | LUSTRE_ENCRYPT_FL;
+	ll_update_inode_flags(inode, ext_flags);
+
+	if (encctx && encctxlen)
+		rc = ll_xattr_cache_insert(inode,
+					   LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+					   encctx, encctxlen);
+	if (rc)
+		return rc;
+
+	return preload ? llcrypt_get_encryption_info(inode) : 0;
+}
+
+/* ll_set_context has 2 distinct behaviors, depending on the value of inode
+ * parameter:
+ * - inode is NULL:
+ *   passed fs_data is a struct md_op_data *. We need to store enc ctx in
+ *   op_data, so that it will be sent along to the server with the request that
+ *   the caller is preparing, thus saving a setxattr request.
+ * - inode is not NULL:
+ *   normal case in which passed fs_data is a struct dentry *, letting proceed
+ *   with setxattr operation.
+ *   This use case should only be used when explicitly setting a new encryption
+ *   policy on an existing, empty directory.
+ */
 static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 			  void *fs_data)
 {
-	unsigned int ext_flags;
 	struct dentry *dentry;
-	struct md_op_data *op_data;
-	struct ptlrpc_request *req = NULL;
 	int rc;
 
-	if (inode == NULL)
-		return 0;
+	if (inode == NULL) {
+		struct md_op_data *op_data = (struct md_op_data *)fs_data;
 
-	ext_flags = ll_inode_to_ext_flags(inode->i_flags) | LUSTRE_ENCRYPT_FL;
-	dentry = (struct dentry *)fs_data;
+		if (!op_data)
+			return -EINVAL;
+
+		OBD_ALLOC(op_data->op_file_encctx, len);
+		if (op_data->op_file_encctx == NULL)
+			return -ENOMEM;
+		op_data->op_file_encctx_size = len;
+		memcpy(op_data->op_file_encctx, ctx, len);
+		return 0;
+	}
 
 	/* Encrypting the root directory is not allowed */
 	if (inode->i_ino == inode->i_sb->s_root->d_inode->i_ino)
 		return -EPERM;
 
-	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-				     LUSTRE_OPC_ANY, NULL);
-	if (IS_ERR(op_data))
-		return PTR_ERR(op_data);
-
-	op_data->op_attr_flags = LUSTRE_ENCRYPT_FL;
-	op_data->op_xvalid |= OP_XVALID_FLAGS;
-	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL, 0, &req);
-	ll_finish_md_op_data(op_data);
-	ptlrpc_req_finished(req);
-	if (rc)
-		return rc;
-
+	dentry = (struct dentry *)fs_data;
 	rc = ll_vfs_setxattr(dentry, inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
 			     ctx, len, XATTR_CREATE);
 	if (rc)
 		return rc;
 
-	/* used as encryption unit size */
-	if (S_ISREG(inode->i_mode))
-		inode->i_blkbits = LUSTRE_ENCRYPTION_BLOCKBITS;
-	ll_update_inode_flags(inode, ext_flags);
-	return 0;
+	return ll_set_encflags(inode, (void *)ctx, len, false);
+}
+
+inline void llcrypt_free_ctx(void *encctx, __u32 size)
+{
+	if (encctx)
+		OBD_FREE(encctx, size);
 }
 
 inline bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
@@ -142,6 +171,16 @@ const struct llcrypt_operations lustre_cryptops = {
 	.max_namelen		= NAME_MAX,
 };
 #else /* !HAVE_LUSTRE_CRYPTO */
+int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
+		    bool preload)
+{
+	return 0;
+}
+
+inline void llcrypt_free_ctx(void *encctx, __u32 size)
+{
+}
+
 inline bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
 {
 	return false;

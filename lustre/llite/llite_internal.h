@@ -442,6 +442,11 @@ int ll_xattr_cache_get(struct inode *inode,
 			size_t size,
 			__u64 valid);
 
+int ll_xattr_cache_insert(struct inode *inode,
+			  const char *name,
+			  char *buffer,
+			  size_t size);
+
 static inline bool obd_connect_has_secctx(struct obd_connect_data *data)
 {
 #ifdef CONFIG_SECURITY

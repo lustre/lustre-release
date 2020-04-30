@@ -455,7 +455,9 @@ static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 	LASSERT(obd_md_valid == OBD_MD_FLXATTR ||
 		obd_md_valid == OBD_MD_FLXATTRLS);
 
-	/* The below message is checked in sanity-selinux.sh test_20d */
+	/* Message below is checked in sanity-selinux test_20d
+	 * and sanity-sec test_49
+	 */
 	CDEBUG(D_INFO, "%s: get xattr '%s' for "DFID"\n",
 	       exp->exp_obd->obd_name, name, PFID(fid));
 	rc = mdc_xattr_common(exp, &RQF_MDS_GETXATTR, fid, MDS_GETXATTR,

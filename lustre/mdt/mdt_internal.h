@@ -969,6 +969,8 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
 int mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
 			     struct mdt_object *child);
+int mdt_pack_encctx_in_reply(struct mdt_thread_info *info,
+			     struct mdt_object *child);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {

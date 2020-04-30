@@ -600,8 +600,18 @@ static inline int mdo_declare_xattr_set(const struct lu_env *env,
                                         const char *name,
                                         int fl, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return dt_declare_xattr_set(env, next, buf, name, fl, handle);
+	struct dt_object *next = mdd_object_child(obj);
+	int rc;
+
+	rc = dt_declare_xattr_set(env, next, buf, name, fl, handle);
+	if (rc >= 0 && strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) {
+		struct lu_attr la = { 0 };
+
+		la.la_valid = LA_FLAGS;
+		la.la_flags = LUSTRE_ENCRYPT_FL;
+		rc = dt_declare_attr_set(env, next, &la, handle);
+	}
+	return rc;
 }
 
 static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
@@ -609,11 +619,20 @@ static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
 				int fl, struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
+	int rc;
 
 	if (!mdd_object_exists(obj))
 		return -ENOENT;
 
-	return dt_xattr_set(env, next, buf, name, fl, handle);
+	rc = dt_xattr_set(env, next, buf, name, fl, handle);
+	if (rc >= 0 && strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) {
+		struct lu_attr la = { 0 };
+
+		la.la_valid = LA_FLAGS;
+		la.la_flags = LUSTRE_ENCRYPT_FL;
+		rc = dt_attr_set(env, next, &la, handle);
+	}
+	return rc;
 }
 
 static inline int mdo_declare_xattr_del(const struct lu_env *env,

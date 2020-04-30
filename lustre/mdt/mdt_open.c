@@ -1229,6 +1229,10 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (unlikely(rc))
 				GOTO(out, rc);
 
+			rc = mdt_pack_encctx_in_reply(info, o);
+			if (unlikely(rc))
+				GOTO(out, rc);
+
 			rc = mdt_finish_open(info, NULL, o, open_flags, 0, rep);
 		} else {
 			/*
@@ -1557,6 +1561,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	repbody->mbo_valid |= OBD_MD_FLMODEASIZE;
 
 	rc = mdt_pack_secctx_in_reply(info, child);
+	if (unlikely(rc))
+		GOTO(out_child, result = rc);
+
+	rc = mdt_pack_encctx_in_reply(info, child);
 	if (unlikely(rc))
 		GOTO(out_child, result = rc);
 

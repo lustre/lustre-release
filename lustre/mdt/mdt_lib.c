@@ -795,6 +795,12 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 	    !(body->mbo_valid & OBD_MD_SECCTX))
 		req_capsule_shrink(pill, &RMF_FILE_SECCTX, 0, RCL_SERVER);
 
+	/* Shrink optional ENCCTX buffer if it is not used */
+	if (req_capsule_has_field(pill, &RMF_FILE_ENCCTX, RCL_SERVER) &&
+	    req_capsule_get_size(pill, &RMF_FILE_ENCCTX, RCL_SERVER) != 0 &&
+	    !(body->mbo_valid & OBD_MD_ENCCTX))
+		req_capsule_shrink(pill, &RMF_FILE_ENCCTX, 0, RCL_SERVER);
+
 	/*
 	 * Some more field should be shrinked if needed.
 	 * This should be done by those who added fields to reply message.
@@ -1085,6 +1091,28 @@ static int mdt_file_secctx_unpack(struct req_capsule *pill,
 	return 0;
 }
 
+static int mdt_file_encctx_unpack(struct req_capsule *pill,
+				  void **encctx, size_t *encctx_size)
+{
+	*encctx = NULL;
+	*encctx_size = 0;
+
+	if (!exp_connect_encrypt(pill->rc_req->rq_export))
+		return 0;
+
+	if (!req_capsule_has_field(pill, &RMF_FILE_ENCCTX, RCL_CLIENT) ||
+	    !req_capsule_field_present(pill, &RMF_FILE_ENCCTX, RCL_CLIENT))
+		return -EPROTO;
+
+	*encctx_size = req_capsule_get_size(pill, &RMF_FILE_ENCCTX, RCL_CLIENT);
+	if (*encctx_size == 0)
+		return 0;
+
+	*encctx = req_capsule_client_get(pill, &RMF_FILE_ENCCTX);
+
+	return 0;
+}
+
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
 	struct lu_ucred *uc = mdt_ucred(info);
@@ -1315,6 +1343,11 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	rc = mdt_file_secctx_unpack(pill, &sp->sp_cr_file_secctx_name,
 				    &sp->sp_cr_file_secctx,
 				    &sp->sp_cr_file_secctx_size);
+	if (rc < 0)
+		RETURN(rc);
+
+	rc = mdt_file_encctx_unpack(pill, &sp->sp_cr_file_encctx,
+				    &sp->sp_cr_file_encctx_size);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -1648,6 +1681,11 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	if (rc < 0)
 		RETURN(rc);
 
+	rc = mdt_file_encctx_unpack(pill, &sp->sp_cr_file_encctx,
+				    &sp->sp_cr_file_encctx_size);
+	if (rc < 0)
+		RETURN(rc);
+
 	rc = req_check_sepol(pill);
 	if (rc)
 		RETURN(rc);
@@ -1962,4 +2000,73 @@ int mdt_is_remote_object(struct mdt_thread_info *info,
 	}
 
 	RETURN(0);
+}
+
+int mdt_pack_encctx_in_reply(struct mdt_thread_info *info,
+			     struct mdt_object *child)
+{
+	struct lu_buf *buffer;
+	struct mdt_body *repbody;
+	struct req_capsule *pill = info->mti_pill;
+	struct obd_export *exp = mdt_info_req(info)->rq_export;
+	int rc = 0;
+
+	if (!exp_connect_encrypt(exp))
+		return rc;
+
+	if (req_capsule_has_field(pill, &RMF_FILE_ENCCTX, RCL_SERVER) &&
+	    req_capsule_get_size(pill, &RMF_FILE_ENCCTX, RCL_SERVER) != 0) {
+		struct lu_attr la = { 0 };
+		struct dt_object *dt = mdt_obj2dt(child);
+
+		if (dt && dt->do_ops && dt->do_ops->do_attr_get)
+			dt_attr_get(info->mti_env, mdt_obj2dt(child), &la);
+
+		if (la.la_valid & LA_FLAGS && la.la_flags & LUSTRE_ENCRYPT_FL) {
+			buffer = &info->mti_buf;
+
+			/* fill reply buffer with encryption context now */
+			buffer->lb_len =
+				req_capsule_get_size(pill, &RMF_FILE_ENCCTX,
+						     RCL_SERVER);
+			buffer->lb_buf =
+				req_capsule_server_get(pill, &RMF_FILE_ENCCTX);
+			rc = mo_xattr_get(info->mti_env,
+					  mdt_object_child(child),
+					  buffer,
+					  LL_XATTR_NAME_ENCRYPTION_CONTEXT);
+			if (rc >= 0) {
+				CDEBUG(D_SEC,
+				       "found encryption ctx of size %d for "DFID"\n",
+				       rc, PFID(mdt_object_fid(child)));
+
+				repbody = req_capsule_server_get(pill,
+								 &RMF_MDT_BODY);
+				repbody->mbo_valid |= OBD_MD_ENCCTX;
+				if (rc < buffer->lb_len)
+					req_capsule_shrink(pill,
+							   &RMF_FILE_ENCCTX, rc,
+							   RCL_SERVER);
+				rc = 0;
+			} else {
+				CDEBUG(D_SEC,
+				       "encryption ctx not found for "DFID": rc = %d\n",
+				       PFID(mdt_object_fid(child)), rc);
+				req_capsule_shrink(pill, &RMF_FILE_ENCCTX, 0,
+						   RCL_SERVER);
+				/* handling -ENOENT is important because it may
+				 * change object state in DNE env dropping
+				 * LOHA_EXISTS flag, it is important to return
+				 * that to the caller.
+				 * Check LU-13115 for details.
+				 */
+				if (rc != -ENOENT)
+					rc = 0;
+			}
+		} else {
+			req_capsule_shrink(pill, &RMF_FILE_ENCCTX, 0,
+					   RCL_SERVER);
+		}
+	}
+	return rc;
 }

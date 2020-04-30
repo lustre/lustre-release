@@ -59,7 +59,7 @@ enum req_location {
 };
 
 /* Maximal number of fields (buffers) in a request message. */
-#define REQ_MAX_FIELD_NR 11
+#define REQ_MAX_FIELD_NR 12
 
 struct req_capsule {
         struct ptlrpc_request   *rc_req;
@@ -260,6 +260,7 @@ extern struct req_msg_field RMF_CLOSE_DATA;
 extern struct req_msg_field RMF_FILE_SECCTX_NAME;
 extern struct req_msg_field RMF_FILE_SECCTX;
 extern struct req_msg_field RMF_FID_ARRAY;
+extern struct req_msg_field RMF_FILE_ENCCTX;
 
 /*
  * connection handle received in MDS_CONNECT request.

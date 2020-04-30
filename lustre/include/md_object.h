@@ -160,6 +160,10 @@ struct md_op_spec {
 	void		*sp_cr_file_secctx; /* xattr value */
 	size_t		 sp_cr_file_secctx_size; /* xattr value size */
 
+	/* File encryption context for creates. */
+	void		*sp_cr_file_encctx; /* enc ctx value */
+	size_t		 sp_cr_file_encctx_size; /* enc ctx size */
+
 	/* Archive ID used for auto PCC attach when create newly files. */
 	__u32		 sp_archive_id;
 

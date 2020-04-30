@@ -914,6 +914,10 @@ struct md_op_data {
 	void		       *op_file_secctx;
 	__u32			op_file_secctx_size;
 
+	/* File encryption context, for creates/metadata ops */
+	void		       *op_file_encctx;
+	__u32			op_file_encctx_size;
+
 	__u32			op_projid;
 
 	/* Used by readdir */

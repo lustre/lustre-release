@@ -210,6 +210,9 @@ rebuild:
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
 			     op_data->op_file_secctx_size);
 
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX, RCL_CLIENT,
+			     op_data->op_file_encctx_size);
+
 	/* get SELinux policy info if any */
 	rc = sptlrpc_get_sepol(req);
 	if (rc < 0) {

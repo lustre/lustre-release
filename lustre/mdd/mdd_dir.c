@@ -2221,6 +2221,16 @@ static int mdd_declare_create_object(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out, rc);
 	}
+
+	if (spec->sp_cr_file_encctx != NULL) {
+		buf = mdd_buf_get_const(env, spec->sp_cr_file_encctx,
+					spec->sp_cr_file_encctx_size);
+		rc = mdo_declare_xattr_set(env, c, buf,
+					   LL_XATTR_NAME_ENCRYPTION_CONTEXT, 0,
+					   handle);
+		if (rc < 0)
+			GOTO(out, rc);
+	}
 out:
 	return rc;
 }
@@ -2438,6 +2448,16 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 					spec->sp_cr_file_secctx_size);
 		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_file_secctx_name,
 				   0, handle);
+		if (rc < 0)
+			GOTO(err_initlized, rc);
+	}
+
+	if (spec->sp_cr_file_encctx != NULL) {
+		buf = mdd_buf_get_const(env, spec->sp_cr_file_encctx,
+					spec->sp_cr_file_encctx_size);
+		rc = mdo_xattr_set(env, son, buf,
+				   LL_XATTR_NAME_ENCRYPTION_CONTEXT, 0,
+				   handle);
 		if (rc < 0)
 			GOTO(err_initlized, rc);
 	}

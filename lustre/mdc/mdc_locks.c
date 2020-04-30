@@ -326,6 +326,9 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
 			     op_data->op_file_secctx_size);
 
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX, RCL_CLIENT,
+			     op_data->op_file_encctx_size);
+
 	/* get SELinux policy info if any */
 	rc = sptlrpc_get_sepol(req);
 	if (rc < 0) {
@@ -381,6 +384,15 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
 				     RCL_SERVER, 0);
 	}
+
+	if (exp_connect_encrypt(exp) && !(it->it_op & IT_CREAT) &&
+	    it->it_op & IT_OPEN)
+		req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER,
+				     obd->u.cli.cl_max_mds_easize);
+	else
+		req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER, 0);
 
 	/**
 	 * Inline buffer for possible data from Data-on-MDT files.
@@ -462,6 +474,9 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	/* pack the intent */
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = IT_GETXATTR;
+	/* Message below is checked in sanity-selinux test_20d
+	 * and sanity-sec test_49
+	 */
 	CDEBUG(D_INFO, "%s: get xattrs for "DFID"\n",
 	       exp->exp_obd->obd_name, PFID(&op_data->op_fid1));
 
@@ -575,6 +590,13 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
 				     RCL_SERVER, 0);
 	}
+
+	if (exp_connect_encrypt(exp) && it->it_op & (IT_LOOKUP | IT_GETATTR))
+		req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER, easize);
+	else
+		req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER, 0);
 
 	ptlrpc_request_set_replen(req);
 	RETURN(req);

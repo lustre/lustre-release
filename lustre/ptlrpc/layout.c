@@ -213,7 +213,8 @@ static const struct req_msg_field *mds_reint_create_acl_client[] = {
 	&RMF_DLM_REQ,
 	&RMF_FILE_SECCTX_NAME,
 	&RMF_FILE_SECCTX,
-	&RMF_SELINUX_POL
+	&RMF_SELINUX_POL,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *mds_reint_create_sym_client[] = {
@@ -225,7 +226,8 @@ static const struct req_msg_field *mds_reint_create_sym_client[] = {
 	&RMF_DLM_REQ,
 	&RMF_FILE_SECCTX_NAME,
 	&RMF_FILE_SECCTX,
-	&RMF_SELINUX_POL
+	&RMF_SELINUX_POL,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *mds_reint_open_client[] = {
@@ -237,7 +239,8 @@ static const struct req_msg_field *mds_reint_open_client[] = {
 	&RMF_EADATA,
 	&RMF_FILE_SECCTX_NAME,
 	&RMF_FILE_SECCTX,
-	&RMF_SELINUX_POL
+	&RMF_SELINUX_POL,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *mds_reint_open_server[] = {
@@ -467,7 +470,8 @@ static const struct req_msg_field *ldlm_intent_open_server[] = {
 	&RMF_CAPA1,
 	&RMF_CAPA2,
 	&RMF_NIOBUF_INLINE,
-	&RMF_FILE_SECCTX
+	&RMF_FILE_SECCTX,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
@@ -488,7 +492,8 @@ static const struct req_msg_field *ldlm_intent_getattr_server[] = {
 	&RMF_ACL,
 	&RMF_CAPA1,
 	&RMF_FILE_SECCTX,
-	&RMF_DEFAULT_MDT_MD
+	&RMF_DEFAULT_MDT_MD,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *ldlm_intent_create_client[] = {
@@ -501,7 +506,8 @@ static const struct req_msg_field *ldlm_intent_create_client[] = {
 	&RMF_EADATA,
 	&RMF_FILE_SECCTX_NAME,
 	&RMF_FILE_SECCTX,
-	&RMF_SELINUX_POL
+	&RMF_SELINUX_POL,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *ldlm_intent_open_client[] = {
@@ -515,7 +521,8 @@ static const struct req_msg_field *ldlm_intent_open_client[] = {
 	&RMF_EADATA,
 	&RMF_FILE_SECCTX_NAME,
 	&RMF_FILE_SECCTX,
-	&RMF_SELINUX_POL
+	&RMF_SELINUX_POL,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *ldlm_intent_getxattr_client[] = {
@@ -1064,6 +1071,10 @@ EXPORT_SYMBOL(RMF_FILE_SECCTX_NAME);
 struct req_msg_field RMF_FILE_SECCTX =
 	DEFINE_MSGF("file_secctx", RMF_F_NO_SIZE_CHECK, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_FILE_SECCTX);
+
+struct req_msg_field RMF_FILE_ENCCTX =
+	DEFINE_MSGF("file_encctx", RMF_F_NO_SIZE_CHECK, -1, NULL, NULL);
+EXPORT_SYMBOL(RMF_FILE_ENCCTX);
 
 struct req_msg_field RMF_LLOGD_BODY =
         DEFINE_MSGF("llogd_body", 0,

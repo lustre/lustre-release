@@ -1913,6 +1913,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		}
 
 		rc = mdt_pack_secctx_in_reply(info, child);
+		if (unlikely(rc)) {
+			mdt_object_unlock(info, child, lhc, 1);
+			RETURN(rc);
+		}
+
+		rc = mdt_pack_encctx_in_reply(info, child);
 		if (unlikely(rc))
 			mdt_object_unlock(info, child, lhc, 1);
 		RETURN(rc);
@@ -2102,6 +2108,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	}
 
 	rc = mdt_pack_secctx_in_reply(info, child);
+	if (unlikely(rc)) {
+		mdt_object_unlock(info, child, lhc, 1);
+		GOTO(out_child, rc);
+	}
+
+	rc = mdt_pack_encctx_in_reply(info, child);
 	if (unlikely(rc)) {
 		mdt_object_unlock(info, child, lhc, 1);
 		GOTO(out_child, rc);
@@ -2569,17 +2581,27 @@ static void mdt_preset_secctx_size(struct mdt_thread_info *info)
 	    req_capsule_has_field(pill, &RMF_FILE_SECCTX_NAME,
 				  RCL_CLIENT)) {
 		if (req_capsule_get_size(pill, &RMF_FILE_SECCTX_NAME,
-					 RCL_CLIENT) != 0) {
+					 RCL_CLIENT) != 0)
 			/* pre-set size in server part with max size */
 			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
 					     RCL_SERVER,
-					     info->mti_mdt->mdt_max_ea_size);
-		} else {
+					     OBD_MAX_DEFAULT_EA_SIZE);
+		else
 			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
 					     RCL_SERVER, 0);
-		}
 	}
+}
 
+static void mdt_preset_encctx_size(struct mdt_thread_info *info)
+{
+	struct req_capsule *pill = info->mti_pill;
+
+	if (req_capsule_has_field(pill, &RMF_FILE_ENCCTX,
+				  RCL_SERVER))
+		/* pre-set size in server part with max size */
+		req_capsule_set_size(pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER,
+				     info->mti_mdt->mdt_max_mdsize);
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info,
@@ -2621,6 +2643,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 				     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
 	mdt_preset_secctx_size(info);
+	mdt_preset_encctx_size(info);
 
 	rc = req_capsule_server_pack(pill);
 	if (rc != 0) {
@@ -3872,6 +3895,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 					     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
 		mdt_preset_secctx_size(info);
+		mdt_preset_encctx_size(info);
 
 		rc = req_capsule_server_pack(pill);
 		if (rc)

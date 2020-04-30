@@ -2966,7 +2966,8 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
 	ll_unlock_md_op_lsm(op_data);
 	security_release_secctx(op_data->op_file_secctx,
 				op_data->op_file_secctx_size);
-        OBD_FREE_PTR(op_data);
+	llcrypt_free_ctx(op_data->op_file_encctx, op_data->op_file_encctx_size);
+	OBD_FREE_PTR(op_data);
 }
 
 int ll_show_options(struct seq_file *seq, struct dentry *dentry)

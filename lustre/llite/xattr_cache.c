@@ -550,3 +550,38 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Insert an xattr value into the cache.
+ *
+ * Add @name xattr with @buffer value and @size length for @inode.
+ * Init cache for @inode if necessary.
+ *
+ * \retval 0       success
+ * \retval < 0	   from ll_xattr_cache_add(), except -EPROTO is ignored for
+ *		   LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr
+ */
+int ll_xattr_cache_insert(struct inode *inode,
+			  const char *name,
+			  char *buffer,
+			  size_t size)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	int rc;
+
+	ENTRY;
+
+	down_read(&lli->lli_xattrs_list_rwsem);
+	if (!ll_xattr_cache_valid(lli))
+		ll_xattr_cache_init(lli);
+	rc = ll_xattr_cache_add(&lli->lli_xattrs, name, buffer,
+				size);
+	up_read(&lli->lli_xattrs_list_rwsem);
+
+	if (rc == -EPROTO &&
+	    strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0)
+		/* it means enc ctx was already in cache,
+		 * ignore error as it cannot be modified
+		 */
+		rc = 0;
+	RETURN(rc);
+}
