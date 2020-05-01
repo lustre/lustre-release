@@ -3120,7 +3120,7 @@ __must_hold(&lp->lp_lock)
 	md.length    = LNET_PING_INFO_SIZE(pbuf->pb_nnis);
 	md.threshold = 2; /* Put/Ack */
 	md.max_size  = 0;
-	md.options   = 0;
+	md.options   = LNET_MD_TRACK_RESPONSE;
 	md.handler   = the_lnet.ln_dc_handler;
 	md.user_ptr  = lp;
 

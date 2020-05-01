@@ -3609,7 +3609,7 @@ lnet_send_ping(lnet_nid_t dest_nid,
 	md.length    = LNET_PING_INFO_SIZE(nnis);
 	md.threshold = 2; /* GET/REPLY */
 	md.max_size  = 0;
-	md.options   = LNET_MD_TRUNCATE;
+	md.options   = LNET_MD_TRUNCATE | LNET_MD_TRACK_RESPONSE;
 	md.user_ptr  = user_data;
 	md.handler   = handler;
 
