@@ -2623,7 +2623,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		RETURN(obj ? PTR_ERR(obj) : -ENOENT);
 
 #ifndef HAVE_S_UUID_AS_UUID_T
-	memcpy(dev->od_uuid.b, sb->s_uuid, UUID_SIZE);
+	memcpy(dev->od_uuid.b, sb->s_uuid, sizeof(dev->od_uuid));
 #else
 	uuid_copy(&dev->od_uuid, &sb->s_uuid);
 #endif

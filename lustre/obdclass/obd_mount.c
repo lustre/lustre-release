@@ -410,7 +410,7 @@ int lustre_start_mgc(struct super_block *sb)
 		GOTO(out_free, rc = -ENOMEM);
 
 	generate_random_uuid(uuidc.b);
-	snprintf(uuid->uuid, UUID_SIZE, "%pU", uuidc.b);
+	snprintf(uuid->uuid, sizeof(*uuid), "%pU", uuidc.b);
 
 	/* Start the MGC */
 	rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,

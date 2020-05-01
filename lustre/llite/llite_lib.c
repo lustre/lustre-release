@@ -1104,7 +1104,7 @@ int ll_fill_super(struct super_block *sb)
 
 	/* UUID handling */
 	generate_random_uuid(uuid.b);
-	snprintf(sbi->ll_sb_uuid.uuid, UUID_SIZE, "%pU", uuid.b);
+	snprintf(sbi->ll_sb_uuid.uuid, sizeof(sbi->ll_sb_uuid), "%pU", uuid.b);
 
 	CDEBUG(D_CONFIG, "llite sb uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
