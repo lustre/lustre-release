@@ -69,6 +69,30 @@ lnet_msg_is_response(struct lnet_msg *msg)
 	return msg->msg_type == LNET_MSG_ACK || msg->msg_type == LNET_MSG_REPLY;
 }
 
+static inline bool
+lnet_response_tracking_enabled(__u32 msg_type, unsigned int md_options)
+{
+	if (md_options & LNET_MD_NO_TRACK_RESPONSE)
+		/* Explicitly disabled in MD options */
+		return false;
+
+	if (md_options & LNET_MD_TRACK_RESPONSE)
+		/* Explicity enabled in MD options */
+		return true;
+
+	if (lnet_response_tracking == 3)
+		/* Enabled for all message types */
+		return true;
+
+	if (msg_type == LNET_MSG_PUT)
+		return lnet_response_tracking == 2;
+
+	if (msg_type == LNET_MSG_GET)
+		return lnet_response_tracking == 1;
+
+	return false;
+}
+
 static inline struct lnet_comm_count *
 get_stats_counts(struct lnet_element_stats *stats,
 		 enum lnet_stats_type stats_type)
@@ -4739,7 +4763,9 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 			       md->md_me->me_portal);
 		lnet_res_unlock(cpt);
 
-		lnet_rspt_free(rspt, cpt);
+		if (rspt)
+			lnet_rspt_free(rspt, cpt);
+
 		lnet_msg_free(msg);
 		return -ENOENT;
 	}
@@ -4772,8 +4798,11 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 
 	lnet_build_msg_event(msg, LNET_EVENT_SEND);
 
-	if (ack == LNET_ACK_REQ)
+	if (rspt && lnet_response_tracking_enabled(LNET_MSG_PUT,
+						   md->md_options))
 		lnet_attach_rsp_tracker(rspt, cpt, md, mdh);
+	else if (rspt)
+		lnet_rspt_free(rspt, cpt);
 
 	if (CFS_FAIL_CHECK_ORSET(CFS_FAIL_PTLRPC_OST_BULK_CB2,
 				 CFS_FAIL_ONCE))
@@ -4991,7 +5020,10 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 
 	lnet_build_msg_event(msg, LNET_EVENT_SEND);
 
-	lnet_attach_rsp_tracker(rspt, cpt, md, mdh);
+	if (lnet_response_tracking_enabled(LNET_MSG_GET, md->md_options))
+		lnet_attach_rsp_tracker(rspt, cpt, md, mdh);
+	else
+		lnet_rspt_free(rspt, cpt);
 
 	rc = lnet_send(self, msg, LNET_NID_ANY);
 	if (rc < 0) {
