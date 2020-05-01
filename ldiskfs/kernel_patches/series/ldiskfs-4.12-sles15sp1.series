@@ -20,7 +20,6 @@ ubuntu18/ext4-give-warning-with-dir-htree-growing.patch
 ubuntu18/ext4-jcb-optimization.patch
 suse15/ext4-attach-jinode-in-writepages.patch
 suse15/ext4-dont-check-before-replay.patch
-rhel7.6/ext4-dont-check-in-ro.patch
 rhel7.6/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
 rhel7.6/ext4-optimize-ext4_find_delalloc_range-in-nodelalloc.patch
 rhel7.6/ext4-export-orphan-add.patch

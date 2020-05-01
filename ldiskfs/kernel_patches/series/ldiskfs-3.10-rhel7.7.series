@@ -27,7 +27,6 @@ rhel7.6/ext4-projid-quotas.patch
 rhel7.6/ext4-projid-xfs-ioctls.patch
 rhel7.7/ext4-fix-xattr-shifting-when-expanding-inodes.patch
 rhel7.6/ext4-attach-jinode-in-writepages.patch
-rhel7.6/ext4-dont-check-in-ro.patch
 rhel7.6/ext4-dont-check-before-replay.patch
 rhel7.6/ext4-cleanup-goto-next-group.patch
 rhel7.6/ext4-reduce-lock-contention-in-__ext4_new_inode.patch

@@ -22,7 +22,6 @@ sles12sp2/ext4-mmp-brelse.patch
 rhel7.6/ext4-jcb-optimization.patch
 sles12sp2/ext4-attach-jinode-in-writepages.patch
 sles12sp3/ext4-dont-check-before-replay.patch
-sles12sp2/ext4-dont-check-in-ro.patch
 sles12sp2/ext4-fix-xattr-shifting-when-expanding-inodes.patch
 rhel7.6/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
 rhel7.6/ext4-export-orphan-add.patch
