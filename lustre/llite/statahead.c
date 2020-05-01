@@ -920,8 +920,8 @@ static int ll_agl_thread(void *arg)
 
 	ENTRY;
 
-	CDEBUG(D_READA, "agl thread started: sai %p, parent %.*s\n",
-	       sai, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "agl thread started: sai %p, parent %pd\n",
+	       sai, parent);
 
 	while (({set_current_state(TASK_IDLE);
 		 !kthread_should_stop(); })) {
@@ -971,8 +971,8 @@ static void ll_stop_agl(struct ll_statahead_info *sai)
 		spin_lock(&plli->lli_agl_lock);
 	}
 	spin_unlock(&plli->lli_agl_lock);
-	CDEBUG(D_READA, "agl thread stopped: sai %p, parent %.*s\n",
-	       sai, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "agl thread stopped: sai %p, parent %pd\n",
+	       sai, parent);
 	ll_sai_put(sai);
 }
 
@@ -984,8 +984,8 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 
 	ENTRY;
 
-	CDEBUG(D_READA, "start agl thread: sai %p, parent %.*s\n",
-	       sai, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "start agl thread: sai %p, parent %pd\n",
+	       sai, parent);
 
 	plli = ll_i2info(parent->d_inode);
 	task = kthread_create(ll_agl_thread, parent,
@@ -1022,8 +1022,8 @@ static int ll_statahead_thread(void *arg)
 
 	ENTRY;
 
-	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %.*s\n",
-	       sai, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %pd\n",
+	       sai, parent);
 
 	OBD_ALLOC_PTR(op_data);
 	if (!op_data)
@@ -1195,8 +1195,8 @@ out:
 	/* release resources held by statahead RPCs */
 	sa_handle_callback(sai);
 
-	CDEBUG(D_READA, "statahead thread stopped: sai %p, parent %.*s\n",
-	       sai, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "%s: statahead thread stopped: sai %p, parent %pd\n",
+	       sbi->ll_fsname, sai, parent);
 
 	spin_lock(&lli->lli_sa_lock);
 	sai->sai_task = NULL;
@@ -1510,10 +1510,8 @@ static int revalidate_statahead_dentry(struct inode *dir,
 			} else if ((*dentryp)->d_inode != inode) {
 				/* revalidate, but inode is recreated */
 				CDEBUG(D_READA,
-				       "%s: stale dentry %.*s inode " DFID", statahead inode "DFID "\n",
-				       ll_i2sbi(inode)->ll_fsname,
-				       (*dentryp)->d_name.len,
-				       (*dentryp)->d_name.name,
+				       "%s: stale dentry %pd inode " DFID", statahead inode "DFID "\n",
+				       ll_i2sbi(inode)->ll_fsname, *dentryp,
 				       PFID(ll_inode2fid((*dentryp)->d_inode)),
 				       PFID(ll_inode2fid(inode)));
 				ll_intent_release(&it);
@@ -1604,8 +1602,8 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 	lli->lli_sai = sai;
 	spin_unlock(&lli->lli_sa_lock);
 
-	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %.*s]\n",
-	       current->pid, parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %pd]\n",
+	       current->pid, parent);
 
 	task = kthread_create(ll_statahead_thread, parent, "ll_sa_%u",
 			      lli->lli_opendir_pid);
@@ -1673,8 +1671,8 @@ int ll_statahead(struct inode *dir, struct dentry **dentryp, bool unplug)
 		int rc;
 
 		rc = revalidate_statahead_dentry(dir, sai, dentryp, unplug);
-		CDEBUG(D_READA, "revalidate statahead %.*s: %d.\n",
-		       (*dentryp)->d_name.len, (*dentryp)->d_name.name, rc);
+		CDEBUG(D_READA, "revalidate statahead %pd: rc = %d.\n",
+		       *dentryp, rc);
 		ll_sai_put(sai);
 		return rc;
 	}

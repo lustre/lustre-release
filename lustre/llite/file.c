@@ -2960,9 +2960,9 @@ int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "Lock request: file=%.*s, inode=%p, mode=%s "
-	       "start=%llu, end=%llu\n", dentry->d_name.len,
-	       dentry->d_name.name, dentry->d_inode,
+	CDEBUG(D_VFSTRACE,
+	       "Lock request: file=%pd, inode=%p, mode=%s start=%llu, end=%llu\n",
+	       dentry, dentry->d_inode,
 	       user_lockname[ladvise->lla_lockahead_mode], (__u64) start,
 	       (__u64) end);
 

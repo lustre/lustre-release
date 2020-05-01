@@ -127,9 +127,9 @@ static int ll_ddelete(const struct dentry *de)
 	ENTRY;
 	LASSERT(de);
 
-	CDEBUG(D_DENTRY, "%s dentry %.*s (%p, parent %p, inode %p) %s%s\n",
+	CDEBUG(D_DENTRY, "%s dentry %pd (%p, parent %p, inode %p) %s%s\n",
 	       d_lustre_invalid((struct dentry *)de) ? "deleting" : "keeping",
-	       de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
+	       de, de, de->d_parent, de->d_inode,
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
 
@@ -146,9 +146,9 @@ int ll_d_init(struct dentry *de)
 	ENTRY;
 	LASSERT(de != NULL);
 
-	CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
-		de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
-		ll_d_count(de));
+	CDEBUG(D_DENTRY, "ldd on dentry %pd (%p) parent %p inode %p refc %d\n",
+	       de, de, de->d_parent, de->d_inode,
+	       ll_d_count(de));
 
 	if (de->d_fsdata == NULL) {
 		struct ll_dentry_data *lld;
@@ -229,9 +229,9 @@ void ll_invalidate_aliases(struct inode *inode)
 
 	spin_lock(&inode->i_lock);
 	hlist_for_each_entry(dentry, &inode->i_dentry, d_alias) {
-		CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
-		       "inode %p flags %d\n", dentry->d_name.len,
-		       dentry->d_name.name, dentry, dentry->d_parent,
+		CDEBUG(D_DENTRY,
+		       "dentry in drop %pd (%p) parent %p inode %p flags %d\n",
+		       dentry, dentry, dentry->d_parent,
 		       dentry->d_inode, dentry->d_flags);
 
 		d_lustre_invalidate(dentry, 0);
