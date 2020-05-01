@@ -222,6 +222,24 @@ module_param_call(lnet_retry_count, retry_count_set, param_get_int,
 MODULE_PARM_DESC(lnet_retry_count,
 		 "Maximum number of times to retry transmitting a message");
 
+unsigned int lnet_response_tracking = 3;
+static int response_tracking_set(const char *val, cfs_kernel_param_arg_t *kp);
+
+#ifdef HAVE_KERNEL_PARAM_OPS
+static struct kernel_param_ops param_ops_response_tracking = {
+	.set = response_tracking_set,
+	.get = param_get_int,
+};
+
+#define param_check_response_tracking(name, p)  \
+	__param_check(name, p, int)
+module_param(lnet_response_tracking, response_tracking, 0644);
+#else
+module_param_call(lnet_response_tracking, response_tracking_set, param_get_int,
+		  &lnet_response_tracking, 0644);
+#endif
+MODULE_PARM_DESC(lnet_response_tracking,
+		 "(0|1|2|3) LNet Internal Only|GET Reply only|PUT ACK only|Full Tracking (default)");
 
 #define LNET_LND_TIMEOUT_DEFAULT ((LNET_TRANSACTION_TIMEOUT_HEALTH_DEFAULT - 1) / \
 				  (LNET_RETRY_COUNT_HEALTH_DEFAULT + 1))
@@ -529,6 +547,29 @@ intf_max_set(const char *val, cfs_kernel_param_arg_t *kp)
 	}
 
 	*(int *)kp->arg = value;
+
+	return 0;
+}
+
+static int
+response_tracking_set(const char *val, cfs_kernel_param_arg_t *kp)
+{
+	int rc;
+	unsigned long new_value;
+
+	rc = kstrtoul(val, 0, &new_value);
+	if (rc) {
+		CERROR("Invalid value for 'lnet_response_tracking'\n");
+		return -EINVAL;
+	}
+
+	if (new_value < 0 || new_value > 3) {
+		CWARN("Invalid value (%lu) for 'lnet_response_tracking'\n",
+		      new_value);
+		return -EINVAL;
+	}
+
+	lnet_response_tracking = new_value;
 
 	return 0;
 }

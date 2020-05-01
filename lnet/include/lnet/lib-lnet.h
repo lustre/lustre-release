@@ -457,6 +457,7 @@ struct lnet_net *lnet_get_net_locked(__u32 net_id);
 int lnet_lib_init(void);
 void lnet_lib_exit(void);
 
+extern unsigned int lnet_response_tracking;
 extern unsigned lnet_transaction_timeout;
 extern unsigned lnet_retry_count;
 extern unsigned int lnet_lnd_timeout;
