@@ -1964,7 +1964,6 @@ static unsigned int get_write_extents(struct osc_object *obj,
 	while (!list_empty(&obj->oo_hp_exts)) {
 		ext = list_entry(obj->oo_hp_exts.next, struct osc_extent,
 				 oe_link);
-		LASSERT(ext->oe_state == OES_CACHE);
 		if (!try_to_add_extent_for_io(cli, ext, &data))
 			return data.erd_page_count;
 		EASSERT(ext->oe_nr_pages <= data.erd_max_pages, ext);
@@ -2643,7 +2642,21 @@ int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
 	/* Reuse the initial refcount for RPC, don't drop it */
 	osc_extent_state_set(ext, OES_LOCK_DONE);
 	if (!ext->oe_rw) { /* write */
-		list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
+		if (!ext->oe_srvlock && !ext->oe_dio) {
+			/* The most likely case here is from lack of grants
+			 * so we are either out of quota or out of space.
+			 * Since this means we are holding locks across
+			 * potentially multi-striped IO, we must send out
+			 * everything out instantly to avoid prolonged
+			 * waits resulting in lock eviction (likely since
+			 * the extended wait in osc_cache_enter() did not
+			 * yield any additional grant due to a timeout.
+			 * LU-13131 */
+			ext->oe_hp = 1;
+			list_add_tail(&ext->oe_link, &obj->oo_hp_exts);
+		} else {
+			list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
+		}
 		osc_update_pending(obj, OBD_BRW_WRITE, page_count);
 	} else {
 		list_add_tail(&ext->oe_link, &obj->oo_reading_exts);
