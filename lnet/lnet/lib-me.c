@@ -85,7 +85,7 @@ LNetMEAttach(unsigned int portal,
 	if (mtable == NULL) /* can't match portal type */
 		return ERR_PTR(-EPERM);
 
-	me = kmem_cache_alloc(lnet_mes_cachep, GFP_NOFS | __GFP_ZERO);
+	me = kmem_cache_zalloc(lnet_mes_cachep, GFP_NOFS);
 	if (me == NULL) {
 		CDEBUG(D_MALLOC, "failed to allocate 'me'\n");
 		return ERR_PTR(-ENOMEM);

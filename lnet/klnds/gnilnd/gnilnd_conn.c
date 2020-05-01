@@ -963,12 +963,9 @@ kgnilnd_alloc_dgram(kgn_dgram_t **dgramp, kgn_device_t *dev, kgn_dgram_type_t ty
 {
 	kgn_dgram_t         *dgram;
 
-	dgram = kmem_cache_alloc(kgnilnd_data.kgn_dgram_cache, GFP_ATOMIC);
+	dgram = kmem_cache_zalloc(kgnilnd_data.kgn_dgram_cache, GFP_ATOMIC);
 	if (dgram == NULL)
 		return -ENOMEM;
-
-	/* cache alloc'd memory is not zeroed */
-	memset((void *)dgram, 0, sizeof(*dgram)) ;
 
 	INIT_LIST_HEAD(&dgram->gndg_list);
 	dgram->gndg_state = GNILND_DGRAM_USED;

@@ -107,6 +107,7 @@ from_timer||cfs_from_timer
 f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
 GETSTRIPE||LFS getstripe
+kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
 ldebugfs_remove||debugfs_remove_recursive
 ldlm_appetite_t||enum ldlm_appetite
 ldlm_cancel_flags_t||enum ldlm_cancel_flags

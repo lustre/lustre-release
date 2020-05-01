@@ -375,7 +375,7 @@ lnet_msg_alloc(void)
 {
 	struct lnet_msg *msg;
 
-	msg = kmem_cache_alloc(lnet_msg_cachep, GFP_NOFS | __GFP_ZERO);
+	msg = kmem_cache_zalloc(lnet_msg_cachep, GFP_NOFS);
 
 	return (msg);
 }
@@ -392,7 +392,7 @@ lnet_rspt_alloc(int cpt)
 {
 	struct lnet_rsp_tracker *rspt;
 
-	rspt = kmem_cache_alloc(lnet_rspt_cachep, GFP_NOFS | __GFP_ZERO);
+	rspt = kmem_cache_zalloc(lnet_rspt_cachep, GFP_NOFS);
 	if (rspt) {
 		lnet_net_lock(cpt);
 		the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc++;

@@ -913,7 +913,7 @@ do {									      \
 do {									      \
 	LASSERT(ergo((type) != GFP_ATOMIC, !in_interrupt()));		      \
 	(ptr) = (cptab) == NULL ?					      \
-		kmem_cache_alloc(slab, (type) | __GFP_ZERO) :		      \
+		kmem_cache_zalloc(slab, (type)) :			      \
 		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, (type) | __GFP_ZERO); \
 	if (likely((ptr)))                                                    \
 		OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \

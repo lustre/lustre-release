@@ -277,16 +277,13 @@ kgnilnd_alloc_tx (void)
 	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_ALLOC_TX))
 		return tx;
 
-	tx = kmem_cache_alloc(kgnilnd_data.kgn_tx_cache, GFP_ATOMIC);
+	tx = kmem_cache_zalloc(kgnilnd_data.kgn_tx_cache, GFP_ATOMIC);
 	if (tx == NULL) {
 		CERROR("failed to allocate tx\n");
 		return NULL;
 	}
 	CDEBUG(D_MALLOC, "slab-alloced 'tx': %lu at %p.\n",
 	       sizeof(*tx), tx);
-
-	/* need this memset, cache alloc'd memory is not cleared */
-	memset(tx, 0, sizeof(*tx));
 
 	/* setup everything here to minimize time under the lock */
 	tx->tx_buftype = GNILND_BUF_NONE;
