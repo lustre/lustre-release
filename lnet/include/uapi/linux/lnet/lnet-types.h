@@ -479,6 +479,10 @@ struct lnet_md {
 	 *   struct bio_vec.
 	 * - LNET_MD_MAX_SIZE: The max_size field is valid.
 	 * - LNET_MD_BULK_HANDLE: The bulk_handle field is valid.
+	 * - LNET_MD_TRACK_RESPONSE: Enable response tracking on this MD
+	 *   regardless of the value of the lnet_response_tracking param.
+	 * - LNET_MD_NO_TRACK_RESPONSE: Disable response tracking on this MD
+	 *   regardless of the value of the lnet_response_tracking param.
 	 *
 	 * Note:
 	 * - LNET_MD_KIOV allows for a scatter/gather capability for memory
@@ -539,6 +543,10 @@ struct lnet_md {
 #define LNET_MD_KIOV		     (1 << 8)
 /** See struct lnet_md::options. */
 #define LNET_MD_BULK_HANDLE	     (1 << 9)
+/** See struct lnet_md::options. */
+#define LNET_MD_TRACK_RESPONSE	     (1 << 10)
+/** See struct lnet_md::options. */
+#define LNET_MD_NO_TRACK_RESPONSE    (1 << 11)
 
 /* For compatibility with Cray Portals */
 #define LNET_MD_PHYS			     0
