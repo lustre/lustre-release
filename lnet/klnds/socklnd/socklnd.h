@@ -567,6 +567,13 @@ ksocknal_peer_decref(struct ksock_peer_ni *peer_ni)
 		ksocknal_destroy_peer(peer_ni);
 }
 
+static inline int ksocknal_timeout(void)
+{
+	return *ksocknal_tunables.ksnd_timeout ?
+		*ksocknal_tunables.ksnd_timeout :
+		lnet_get_lnd_timeout();
+}
+
 int ksocknal_startup(struct lnet_ni *ni);
 void ksocknal_shutdown(struct lnet_ni *ni);
 int ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg);
