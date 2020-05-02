@@ -785,6 +785,12 @@ extern void kiblnd_hdev_destroy(struct kib_hca_dev *hdev);
 
 int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
 
+static inline int kiblnd_timeout(void)
+{
+	return *kiblnd_tunables.kib_timeout ? *kiblnd_tunables.kib_timeout :
+		lnet_get_lnd_timeout();
+}
+
 static inline int
 kiblnd_concurrent_sends(int version, struct lnet_ni *ni)
 {
