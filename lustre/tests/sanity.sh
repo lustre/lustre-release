@@ -22788,6 +22788,14 @@ test_423() {
 }
 run_test 423 "statfs should return a right data"
 
+test_424() {
+#define OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH      0x522 | OBD_FAIL_ONCE
+	$LCTL set_param fail_loc=0x80000522
+	dd if=/dev/zero of=$DIR/$tfile bs=2M count=1 oflag=sync
+	rm -f $DIR/$tfile
+}
+run_test 424 "simulate ENOMEM in ptl_send_rpc bulk reply ME attach"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
