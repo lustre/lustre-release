@@ -52,6 +52,8 @@
 #include <ifaddrs.h>
 #include <rdma/rdma_user_cm.h>
 #include "liblnetconfig.h"
+#include <glob.h>
+#include <libcfs/util/param.h>
 
 #define CONFIG_CMD		"configure"
 #define UNCONFIG_CMD		"unconfigure"
@@ -3356,6 +3358,59 @@ int lustre_lnet_show_rtr_sensitivity(int seq_no, struct cYAML **show_rc,
 
 	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
 				       "router_sensitivity", sen, show_rc,
+				       err_rc, l_errno);
+}
+
+int lustre_lnet_show_lnd_timeout(int seq_no, struct cYAML **show_rc,
+				 struct cYAML **err_rc)
+{
+	char val[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN];
+	int lnd_to = -1;
+	int l_errno = 0;
+	int rc;
+	int fd;
+	glob_t path;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = cfs_get_param_paths(&path, "lnet_lnd_timeout");
+	if (rc < 0) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get LND timeout: %d\"", rc);
+		return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+					       "lnd_timeout", lnd_to, show_rc,
+					       err_rc, l_errno);
+	}
+
+	fd = open(path.gl_pathv[0], O_RDONLY);
+	if (fd < 0) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"error opening %s\"", path.gl_pathv[0]);
+		goto failed;
+	}
+
+	rc = read(fd, val, sizeof(val));
+	if (rc < 0)
+		l_errno = -errno;
+
+	close(fd);
+
+	if (rc < 0) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"error reading %s\"", path.gl_pathv[0]);
+		goto failed;
+	}
+
+	lnd_to = atoi(val);
+
+failed:
+	cfs_free_param_data(&path);
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "lnd_timeout", lnd_to, show_rc,
 				       err_rc, l_errno);
 }
 
