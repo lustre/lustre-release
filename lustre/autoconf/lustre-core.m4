@@ -3113,6 +3113,28 @@ inode_timespec64, [
 ]) # LC_INODE_TIMESPEC64
 
 #
+# LC_HAS_LINUX_SELINUX_ENABLED
+#
+# kernel 5.1 commit 3d252529480c68bfd6a6774652df7c8968b28e41
+# SELinux: Remove unused selinux_is_enabled
+#
+AC_DEFUN([LC_HAS_LINUX_SELINUX_ENABLED], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if linux/selinux.h exists],
+selinux_is_enabled, [
+	#include <linux/selinux.h>
+],[
+	bool has_selinux = selinux_is_enabled();
+	(void)has_selinux;
+],[
+	AC_DEFINE(HAVE_LINUX_SELINUX_IS_ENABLED, 1,
+		[if linux/selinux.h exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAS_LINUX_SELINUX_ENABLED
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3363,6 +3385,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.18
 	LC_INODE_TIMESPEC64
 	LC_XA_IS_VALUE
+
+	# 5.1
+	LC_HAS_LINUX_SELINUX_ENABLED
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

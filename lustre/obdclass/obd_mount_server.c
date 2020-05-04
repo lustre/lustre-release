@@ -43,7 +43,9 @@
 #define PRINT_MASK (D_SUPER | D_CONFIG)
 
 #include <linux/types.h>
+#ifdef HAVE_LINUX_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
+#endif
 #include <linux/statfs.h>
 #include <linux/version.h>
 #ifdef HAVE_KERNEL_LOCKED

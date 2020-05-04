@@ -808,4 +808,8 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	kmem_cache_create(name, size, align, flags, ctor)
 #endif
 
+#ifndef HAVE_LINUX_SELINUX_IS_ENABLED
+#define selinux_is_enabled() 1
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

@@ -33,7 +33,9 @@
 
 #include <linux/types.h>
 #include <linux/security.h>
+#ifdef HAVE_LINUX_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
+#endif
 #include <linux/xattr.h>
 #include "llite_internal.h"
 
@@ -55,7 +57,8 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 #ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY
 	int rc;
 
-	/* security_dentry_init_security() is strange. Like
+	/*
+	 * security_dentry_init_security() is strange. Like
 	 * security_inode_init_security() it may return a context (provided a
 	 * Linux security module is enabled) but unlike
 	 * security_inode_init_security() it does not return to us the name of
@@ -65,13 +68,16 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 	 * SELinux is the only module that implements
 	 * security_dentry_init_security(). Note that the NFS client code just
 	 * calls it and assumes that if anything is returned then it must come
-	 * from SELinux. */
+	 * from SELinux.
+	 */
 
 	if (!selinux_is_enabled())
 		return 0;
 
 	rc = security_dentry_init_security(dentry, mode, name, secctx,
 					   secctx_size);
+	if (rc == -EOPNOTSUPP)
+		return 0;
 	if (rc < 0)
 		return rc;
 
@@ -135,11 +141,17 @@ int
 ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 		       struct inode *dir)
 {
+	int rc;
+
 	if (!selinux_is_enabled())
 		return 0;
 
-	return ll_security_inode_init_security(inode, dir, NULL, NULL, 0,
-					       &ll_initxattrs, dentry);
+	rc = ll_security_inode_init_security(inode, dir, NULL, NULL, 0,
+					      &ll_initxattrs, dentry);
+	if (rc == -EOPNOTSUPP)
+		return 0;
+
+	return rc;
 }
 #else /* !HAVE_SECURITY_IINITSEC_CALLBACK */
 /**
