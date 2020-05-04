@@ -358,6 +358,14 @@ static inline struct gss_sec_keyring *sec2gsec_keyring(struct ptlrpc_sec *sec)
         return container_of(sec2gsec(sec), struct gss_sec_keyring, gsk_base);
 }
 
+#ifdef HAVE_CACHE_HASH_SPINLOCK
+# define sunrpc_cache_lookup(c, i, h) sunrpc_cache_lookup_rcu((c), (i), (h))
+# define cache_read_lock(cdetail)   spin_lock(&((cdetail)->hash_lock))
+# define cache_read_unlock(cdetail) spin_unlock(&((cdetail)->hash_lock))
+#else /* ! HAVE_CACHE_HASH_SPINLOCK */
+# define cache_read_lock(cdetail)   read_lock(&((cdetail)->hash_lock))
+# define cache_read_unlock(cdetail) read_unlock(&((cdetail)->hash_lock))
+#endif
 
 #define GSS_CTX_INIT_MAX_LEN            (1024)
 

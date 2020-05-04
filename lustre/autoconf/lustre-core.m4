@@ -2658,6 +2658,31 @@ iterate_shared, [
 ]) # LC_FOPS_ITERATE_SHARED
 
 #
+# LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
+#
+# kernel 4.20 commit 1863d77f15da0addcd293a1719fa5d3ef8cde3ca
+# SUNRPC: Replace the cache_detail->hash_lock with a regular spinlock
+#
+# Now that the reader functions are all RCU protected, use a regular
+# spinlock rather than a reader/writer lock.
+#
+AC_DEFUN([LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if cache_detail->hash_lock is a spinlock],
+hash_lock_isa_spinlock_t, [
+	#include <linux/sunrpc/cache.h>
+],[
+	spinlock_t *lock = &(((struct cache_detail *)0)->hash_lock);
+	spin_lock(lock);
+],[
+	AC_DEFINE(HAVE_CACHE_HASH_SPINLOCK, 1,
+		[if cache_detail->hash_lock is a spinlock])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
+
+#
 # LC_HAVE_POSIX_ACL_VALID_USER_NS
 #
 # 4.8 posix_acl_valid takes struct user_namespace
@@ -3385,6 +3410,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.18
 	LC_INODE_TIMESPEC64
 	LC_XA_IS_VALUE
+
+	# 4.20
+	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
 	# 5.1
 	LC_HAS_LINUX_SELINUX_ENABLED

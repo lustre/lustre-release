@@ -938,11 +938,11 @@ cache_check:
 		if (first_check) {
 			first_check = 0;
 
-			read_lock(&rsi_cache.hash_lock);
+			cache_read_lock(&rsi_cache);
 			valid = test_bit(CACHE_VALID, &rsip->h.flags);
 			if (valid == 0)
 				set_current_state(TASK_INTERRUPTIBLE);
-			read_unlock(&rsi_cache.hash_lock);
+			cache_read_unlock(&rsi_cache);
 
 			if (valid == 0) {
 				unsigned long jiffies;
