@@ -24,6 +24,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <libcfs/linux/linux-mem.h>
 #include "socklnd.h"
 
 struct ksock_tx *
@@ -982,7 +983,8 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 int
 ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
-	int mpflag = 1;
+	/* '1' for consistency with code that checks !mpflag to restore */
+	unsigned int mpflag = 1;
 	int type = lntmsg->msg_type;
 	struct lnet_process_id target = lntmsg->msg_target;
 	unsigned int payload_niov = lntmsg->msg_niov;
@@ -1007,15 +1009,16 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			     tx_frags.paged.kiov[payload_niov]);
 
         if (lntmsg->msg_vmflush)
-                mpflag = cfs_memory_pressure_get_and_set();
-        tx = ksocknal_alloc_tx(KSOCK_MSG_LNET, desc_size);
-        if (tx == NULL) {
-                CERROR("Can't allocate tx desc type %d size %d\n",
-                       type, desc_size);
-                if (lntmsg->msg_vmflush)
-                        cfs_memory_pressure_restore(mpflag);
-                return (-ENOMEM);
-        }
+		mpflag = memalloc_noreclaim_save();
+
+	tx = ksocknal_alloc_tx(KSOCK_MSG_LNET, desc_size);
+	if (tx == NULL) {
+		CERROR("Can't allocate tx desc type %d size %d\n",
+		       type, desc_size);
+		if (lntmsg->msg_vmflush)
+			memalloc_noreclaim_restore(mpflag);
+		return -ENOMEM;
+	}
 
 	tx->tx_conn = NULL;                     /* set when assigned a conn */
 	tx->tx_lnetmsg = lntmsg;
@@ -1035,10 +1038,14 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	tx->tx_msg.ksm_zc_cookies[0] = 0;
 	tx->tx_msg.ksm_zc_cookies[1] = 0;
 
-        /* The first fragment will be set later in pro_pack */
-        rc = ksocknal_launch_packet(ni, tx, target);
-        if (!mpflag)
-                cfs_memory_pressure_restore(mpflag);
+	/* The first fragment will be set later in pro_pack */
+	rc = ksocknal_launch_packet(ni, tx, target);
+	/*
+	 * We can't test lntsmg->msg_vmflush again as lntmsg may
+	 * have been freed.
+	 */
+	if (!mpflag)
+		memalloc_noreclaim_restore(mpflag);
 
         if (rc == 0)
                 return (0);

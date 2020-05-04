@@ -75,7 +75,7 @@ static struct cfs_trace_page *cfs_tage_alloc(gfp_t gfp)
 	struct cfs_trace_page *tage;
 
 	/* My caller is trying to free memory */
-	if (!in_interrupt() && memory_pressure_get())
+	if (!in_interrupt() && (current->flags & PF_MEMALLOC))
 		return NULL;
 
 	/*
@@ -159,7 +159,7 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 		} else {
 			tage = cfs_tage_alloc(GFP_ATOMIC);
 			if (unlikely(tage == NULL)) {
-				if ((!memory_pressure_get() ||
+				if ((!(current->flags & PF_MEMALLOC) ||
 				     in_interrupt()) && printk_ratelimit())
 					pr_warn("Lustre: cannot allocate a tage (%ld)\n",
 						tcd->tcd_cur_pages);

@@ -27,6 +27,9 @@
 #include <asm/page.h>
 #include <linux/nmi.h>
 #include <linux/pagemap.h>
+
+#include <libcfs/linux/linux-mem.h>
+
 #include "gnilnd.h"
 
 /* this is useful when needed to debug wire corruption. */
@@ -2125,7 +2128,8 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	kgn_net_t        *net = ni->ni_data;
 	kgn_tx_t         *tx;
 	int               rc = 0;
-	int               mpflag = 0;
+	/* '1' for consistency with code that checks !mpflag to restore */
+	unsigned int mpflag = 1;
 	int               reverse_rdma_flag = *kgnilnd_tunables.kgn_reverse_rdma;
 
 	/* NB 'private' is different depending on what we're sending.... */
@@ -2140,7 +2144,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		"lntmsg %p niov %d\n", lntmsg, niov);
 
 	if (msg_vmflush)
-		mpflag = cfs_memory_pressure_get_and_set();
+		mpflag = memalloc_noreclaim_save();
 
 	switch (type) {
 	default:
@@ -2266,7 +2270,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 out:
 	/* use stored value as we could have already finalized lntmsg here from a failed launch */
 	if (msg_vmflush)
-		cfs_memory_pressure_restore(mpflag);
+		memalloc_noreclaim_restore(mpflag);
 	return rc;
 }
 

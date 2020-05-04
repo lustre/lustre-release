@@ -40,6 +40,7 @@
 #include <linux/kthread.h>
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-mem.h>
 #include <lustre_errno.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
@@ -2143,7 +2144,7 @@ static inline void init_blwi(struct ldlm_bl_work_item *blwi,
 	init_completion(&blwi->blwi_comp);
 	INIT_LIST_HEAD(&blwi->blwi_head);
 
-	if (memory_pressure_get())
+	if (current->flags & PF_MEMALLOC)
 		blwi->blwi_mem_pressure = 1;
 
 	blwi->blwi_ns = ns;
@@ -2805,6 +2806,9 @@ static int ldlm_bl_thread_need_create(struct ldlm_bl_pool *blp,
 static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 			       struct ldlm_bl_work_item *blwi)
 {
+	/* '1' for consistency with code that checks !mpflag to restore */
+	unsigned int mpflags = 1;
+
 	ENTRY;
 
 	if (blwi->blwi_ns == NULL)
@@ -2812,7 +2816,7 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 		RETURN(LDLM_ITER_STOP);
 
 	if (blwi->blwi_mem_pressure)
-		memory_pressure_set();
+		mpflags = memalloc_noreclaim_save();
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL2, 4);
 
@@ -2834,7 +2838,7 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 					blwi->blwi_lock);
 	}
 	if (blwi->blwi_mem_pressure)
-		memory_pressure_clr();
+		memalloc_noreclaim_restore(mpflags);
 
 	if (blwi->blwi_flags & LCF_ASYNC)
 		OBD_FREE(blwi, sizeof(*blwi));

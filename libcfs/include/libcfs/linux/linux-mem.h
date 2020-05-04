@@ -44,6 +44,25 @@
 #ifdef HAVE_MM_INLINE
 # include <linux/mm_inline.h>
 #endif
+#include <linux/sched.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/mm.h>
+#endif
+
+#ifndef HAVE_MEMALLOC_RECLAIM
+static inline unsigned int memalloc_noreclaim_save(void)
+{
+	unsigned int flags = current->flags & PF_MEMALLOC;
+
+	current->flags |= PF_MEMALLOC;
+	return flags;
+}
+
+static inline void memalloc_noreclaim_restore(unsigned int flags)
+{
+	current->flags = (current->flags & ~PF_MEMALLOC) | flags;
+}
+#endif /* !HAVE_MEMALLOC_RECLAIM */
 
 /*
  * Shrinker

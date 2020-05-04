@@ -31,6 +31,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
+#include <libcfs/linux/linux-mem.h>
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <lustre_lib.h>
@@ -785,7 +786,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			request->rq_resend_cb(request, &request->rq_async_args);
 	}
 	if (request->rq_memalloc)
-		mpflag = cfs_memory_pressure_get_and_set();
+		mpflag = memalloc_noreclaim_save();
 
 	rc = sptlrpc_cli_wrap_request(request);
 	if (rc)
@@ -940,7 +941,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	}
 
 	if (request->rq_memalloc)
-		cfs_memory_pressure_restore(mpflag);
+		memalloc_noreclaim_restore(mpflag);
 
 	return rc;
 }

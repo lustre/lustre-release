@@ -2178,7 +2178,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	struct cl_req_attr		*crattr = NULL;
 	loff_t				starting_offset = OBD_OBJECT_EOF;
 	loff_t				ending_offset = 0;
-	int				mpflag = 0;
+	/* '1' for consistency with code that checks !mpflag to restore */
+	int mpflag = 1;
 	int				mem_tight = 0;
 	int				page_count = 0;
 	bool				soft_sync = false;
@@ -2205,7 +2206,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 	soft_sync = osc_over_unstable_soft_limit(cli);
 	if (mem_tight)
-		mpflag = cfs_memory_pressure_get_and_set();
+		mpflag = memalloc_noreclaim_save();
 
 	OBD_ALLOC_PTR_ARRAY(pga, page_count);
 	if (pga == NULL)
@@ -2327,8 +2328,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	EXIT;
 
 out:
-	if (mem_tight != 0)
-		cfs_memory_pressure_restore(mpflag);
+	if (mem_tight)
+		memalloc_noreclaim_restore(mpflag);
 
 	if (rc != 0) {
 		LASSERT(req == NULL);

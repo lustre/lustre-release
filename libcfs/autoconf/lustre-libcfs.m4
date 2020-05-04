@@ -763,6 +763,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_REFCOUNT_T
 
 #
+# Kernel version 4.12 commit 499118e966f1d2150bd66647c8932343c4e9a0b8
+# introduce memalloc_noreclaim_{save,restore}
+#
+AC_DEFUN([LIBCFS_MEMALLOC_NORECLAIM], [
+LB_CHECK_COMPILE([if memalloc_noreclaim_{save,restore} exist],
+memalloc_noreclaim, [
+	#include <linux/sched/mm.h>
+],[
+	int flag = memalloc_noreclaim_save();
+	memalloc_noreclaim_restore(flag);
+],[
+	AC_DEFINE(HAVE_MEMALLOC_RECLAIM, 1,
+		[memalloc_noreclaim_{save,restore}() is supported])
+])
+]) # LIBCFS_MEMALLOC_NORECLAIM
+
+#
 # LIBCFS_SCHED_HEADERS
 #
 # 4.11 has broken up sched.h into more headers.
@@ -1318,6 +1335,7 @@ LIBCFS_RHT_BUCKET_VAR
 # 4.12
 LIBCFS_HAVE_PROCESSOR_HEADER
 LIBCFS_HAVE_WAIT_BIT_HEADER
+LIBCFS_MEMALLOC_NORECLAIM
 LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
 LIBCFS_CPUS_READ_LOCK
 LIBCFS_UUID_T

@@ -38,6 +38,7 @@
 #include <linux/delay.h>
 #include <linux/uidgid.h>
 
+#include <libcfs/linux/linux-mem.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_cksum.h>
@@ -2477,6 +2478,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
 	bool wait_sync = false;
 	const char *obd_name = exp->exp_obd->obd_name;
+	/* '1' for consistency with code that checks !mpflag to restore */
+	unsigned int mpflags = 1;
 
 	ENTRY;
 
@@ -2535,7 +2538,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	if ((remote_nb[0].rnb_flags & OBD_BRW_MEMALLOC) &&
 	    ptlrpc_connection_is_local(exp->exp_connection))
-		memory_pressure_set();
+		mpflags = memalloc_noreclaim_save();
 
 	req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER,
 			     niocount * sizeof(*rcs));
@@ -2723,7 +2726,10 @@ out:
 				      obd_uuid2str(&exp->exp_client_uuid),
 				      obd_export_nid2str(exp), rc);
 	}
-	memory_pressure_clr();
+
+	if (mpflags)
+		memalloc_noreclaim_restore(mpflags);
+
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_brw_write);
