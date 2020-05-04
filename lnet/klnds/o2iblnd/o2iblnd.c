@@ -1008,8 +1008,7 @@ void
 kiblnd_destroy_conn(struct kib_conn *conn)
 {
 	struct rdma_cm_id *cmid = conn->ibc_cmid;
-	struct kib_peer_ni        *peer_ni = conn->ibc_peer;
-	int                rc;
+	struct kib_peer_ni *peer_ni = conn->ibc_peer;
 
 	LASSERT (!in_interrupt());
 	LASSERT (atomic_read(&conn->ibc_refcount) == 0);
@@ -1040,11 +1039,8 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 	if (cmid != NULL && cmid->qp != NULL)
 		rdma_destroy_qp(cmid);
 
-	if (conn->ibc_cq != NULL) {
-		rc = ib_destroy_cq(conn->ibc_cq);
-		if (rc != 0)
-			CWARN("Error destroying CQ: %d\n", rc);
-	}
+	if (conn->ibc_cq)
+		ib_destroy_cq(conn->ibc_cq);
 
 	kiblnd_txlist_done(&conn->ibc_zombie_txs, -ECONNABORTED,
 			   LNET_MSG_STATUS_OK);
