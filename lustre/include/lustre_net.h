@@ -2501,8 +2501,10 @@ ptlrpc_client_recv(struct ptlrpc_request *req)
 	return req->rq_receiving_reply;
 }
 
+#define ptlrpc_cli_wait_unlink(req) __ptlrpc_cli_wait_unlink(req, NULL)
+
 static inline int
-ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
+__ptlrpc_cli_wait_unlink(struct ptlrpc_request *req, bool *discard)
 {
 	int rc;
 
@@ -2514,6 +2516,15 @@ ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
 	if (req->rq_req_deadline > ktime_get_real_seconds()) {
 		spin_unlock(&req->rq_lock);
 		return 1;
+	}
+
+	if (discard) {
+		*discard = false;
+		if (req->rq_reply_unlinked && req->rq_req_unlinked == 0) {
+			*discard = true;
+			spin_unlock(&req->rq_lock);
+			return 1; /* Should call again after LNetMDUnlink */
+		}
 	}
 
 	rc = !req->rq_req_unlinked || !req->rq_reply_unlinked ||

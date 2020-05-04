@@ -471,7 +471,7 @@ EXPORT_SYMBOL(LNetMDBind);
  * \retval -ENOENT If \a mdh does not point to a valid MD object.
  */
 int
-LNetMDUnlink(struct lnet_handle_md mdh)
+__LNetMDUnlink(struct lnet_handle_md mdh, bool discard)
 {
 	struct lnet_event ev;
 	struct lnet_libmd *md = NULL;
@@ -505,6 +505,9 @@ LNetMDUnlink(struct lnet_handle_md mdh)
 		handler = md->md_handler;
 	}
 
+	if (discard)
+		md->md_flags |= LNET_MD_FLAG_DISCARD;
+
 	if (md->md_rspt_ptr != NULL)
 		lnet_detach_rsp_tracker(md, cpt);
 
@@ -517,4 +520,22 @@ LNetMDUnlink(struct lnet_handle_md mdh)
 
 	return 0;
 }
-EXPORT_SYMBOL(LNetMDUnlink);
+EXPORT_SYMBOL(__LNetMDUnlink);
+
+bool
+lnet_md_discarded(struct lnet_libmd *md)
+{
+	bool rc;
+	int cpt;
+
+	if (md == NULL)
+		return false;
+
+	cpt = lnet_cpt_of_cookie(md->md_lh.lh_cookie);
+	lnet_res_lock(cpt);
+	rc = md->md_flags & LNET_MD_FLAG_DISCARD;
+	lnet_res_unlock(cpt);
+
+	return rc;
+}
+EXPORT_SYMBOL(lnet_md_discarded);

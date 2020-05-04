@@ -3052,6 +3052,7 @@ kiblnd_base_startup(struct net *ns)
 
 	spin_lock_init(&kiblnd_data.kib_connd_lock);
 	INIT_LIST_HEAD(&kiblnd_data.kib_connd_conns);
+	INIT_LIST_HEAD(&kiblnd_data.kib_connd_waits);
 	INIT_LIST_HEAD(&kiblnd_data.kib_connd_zombies);
 	INIT_LIST_HEAD(&kiblnd_data.kib_reconn_list);
 	INIT_LIST_HEAD(&kiblnd_data.kib_reconn_wait);

@@ -437,6 +437,8 @@ struct kib_data {
 	struct list_head	kib_reconn_list;
 	/* peers wait for reconnection */
 	struct list_head	kib_reconn_wait;
+	/* connections wait for completion */
+	struct list_head	kib_connd_waits;
 	/*
 	 * The second that peers are pulled out from \a kib_reconn_wait
 	 * for reconnection.
@@ -690,6 +692,8 @@ struct kib_conn {
 	__u16			ibc_queue_depth;
 	/* connections max frags */
 	__u16			ibc_max_frags;
+	/* count of timeout txs waiting on cq */
+	__u16			ibc_waits;
 	/* receive buffers owned */
 	unsigned int		ibc_nrx:16;
 	/* scheduled for attention */

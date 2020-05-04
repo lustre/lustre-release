@@ -226,6 +226,7 @@ struct lnet_libmd {
  * call.
  */
 #define LNET_MD_FLAG_HANDLING	 BIT(3)
+#define LNET_MD_FLAG_DISCARD	 BIT(4)
 
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */

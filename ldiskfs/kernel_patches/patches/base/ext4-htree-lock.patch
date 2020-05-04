@@ -38,7 +38,7 @@ The idea is simple, like how pdirop is implement at LDLM level.
     while holding CW lock, we drop CW lock and take EX lock and retry.
   - disable pdirops by always EX lock on change and PR lock on lookup/readdir.
 
-Lustre-bug-id: LU-50" target="_blank">https://jira.whamcloud.com/browse/LU-50
+Lustre-bug-id: https://jira.whamcloud.com/browse/LU-50
 Lustre-change: http://review.whamcloud.com/375
 Signed-off-by: Liang Zhen <liang@whamcloud.com>
 

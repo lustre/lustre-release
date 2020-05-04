@@ -669,6 +669,7 @@ void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 void lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt);
 void lnet_clean_zombie_rstqs(void);
 
+bool lnet_md_discarded(struct lnet_libmd *md);
 void lnet_finalize(struct lnet_msg *msg, int rc);
 bool lnet_send_error_simulation(struct lnet_msg *msg,
 				enum lnet_msg_hstatus *hstatus);
