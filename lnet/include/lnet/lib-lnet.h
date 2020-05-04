@@ -76,7 +76,6 @@ extern struct lnet the_lnet;			/* THE network */
 
 /* default timeout */
 #define DEFAULT_PEER_TIMEOUT    180
-#define LNET_LND_DEFAULT_TIMEOUT 5
 
 #ifdef HAVE_KERN_SOCK_GETNAME_2ARGS
 #define lnet_kernel_getpeername(sock, addr, addrlen) \
