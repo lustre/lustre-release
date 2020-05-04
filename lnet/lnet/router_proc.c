@@ -902,6 +902,13 @@ static struct ctl_table lnet_table[] = {
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_portal_rotor,
 	},
+	{
+		.procname       = "lnet_lnd_timeout",
+		.data           = &lnet_lnd_timeout,
+		.maxlen         = sizeof(lnet_lnd_timeout),
+		.mode           = 0444,
+		.proc_handler   = &proc_dointvec,
+	},
 	{ .procname = NULL }
 };
 
