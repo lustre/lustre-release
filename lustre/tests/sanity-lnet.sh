@@ -1178,6 +1178,63 @@ test_103() {
 }
 run_test 103 "Delete route with multiple gw (tcp)"
 
+test_104() {
+	local tyaml="$TMP/sanity-lnet-$testnum-expected.yaml"
+
+	reinit_dlc || return $?
+
+	# Default value is '3'
+	local val=$($LNETCTL global show | awk '/response_tracking/{print $NF}')
+	[[ $val -ne 3 ]] &&
+		error "Expect 3 found $val"
+
+	echo "Set < 0;  Should fail"
+	do_lnetctl set response_tracking -1 &&
+		 error "should have failed $?"
+
+	reinit_dlc || return $?
+	cat <<EOF > $tyaml
+global:
+    response_tracking: -10
+EOF
+	do_lnetctl import < $tyaml &&
+		error "should have failed $?"
+
+	echo "Check valid values; Should succeed"
+	local i
+	for ((i = 0; i < 4; i++)); do
+		reinit_dlc || return $?
+		do_lnetctl set response_tracking $i ||
+			 error "should have succeeded $?"
+		$LNETCTL global show | grep -q "response_tracking: $i" ||
+			error "Failed to set response_tracking to $i"
+		reinit_dlc || return $?
+		cat <<EOF > $tyaml
+global:
+    response_tracking: $i
+EOF
+		do_lnetctl import < $tyaml ||
+			error "should have succeeded $?"
+		$LNETCTL global show | grep -q "response_tracking: $i" ||
+			error "Failed to set response_tracking to $i"
+	done
+
+	reinit_dlc || return $?
+	echo "Set > 3; Should fail"
+	do_lnetctl set response_tracking 4 &&
+		 error "should have failed $?"
+
+	reinit_dlc || return $?
+	cat <<EOF > $tyaml
+global:
+    response_tracking: 10
+EOF
+	do_lnetctl import < $tyaml &&
+		error "should have failed $?"
+	return 0
+}
+run_test 104 "Set/check response_tracking param"
+
 ### load lnet in default namespace, configure in target namespace
 
 test_200() {

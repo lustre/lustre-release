@@ -83,6 +83,7 @@ static int jt_peers(int argc, char **argv);
 static int jt_set_ni_value(int argc, char **argv);
 static int jt_set_peer_ni_value(int argc, char **argv);
 static int jt_calc_service_id(int argc, char **argv);
+static int jt_set_response_tracking(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -216,6 +217,14 @@ command_t set_cmds[] = {
 	{"router_sensitivity", jt_set_rtr_sensitivity, 0, "router sensitivity %\n"
 	 "\t100 - router interfaces need to be fully healthy to be used\n"
 	 "\t<100 - router interfaces can be used even if not healthy\n"},
+	{"response_tracking", jt_set_response_tracking, 0,
+	 "Set the behavior of response tracking\n"
+	 "\t0 - Only LNet pings and discovery pushes utilize response tracking\n"
+	 "\t1 - GETs are eligible for response tracking\n"
+	 "\t2 - PUTs are eligible for response tracking\n"
+	 "\t3 - Both PUTs and GETs are eligible for response tracking (default)\n"
+	 "\tNote: Regardless of the value of the response_tracking parameter LNet\n"
+	 "\t      pings and discovery pushes always utilize response tracking\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -331,6 +340,35 @@ static int check_cmd(const command_t *cmd_list, const char *cmd,
 out:
 	opterr = 1;
 	optind = 0;
+	return rc;
+}
+
+static int jt_set_response_tracking(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "response_tracking", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse response_tracking value",
+				  &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_response_tracking(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
 	return rc;
 }
 
@@ -1374,6 +1412,12 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_response_tracking(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	if (show_rc)
 		cYAML_print_tree(show_rc);
 
@@ -1661,6 +1705,13 @@ static int jt_export(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_drop_asym_route(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_response_tracking(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);

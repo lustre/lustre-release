@@ -251,6 +251,16 @@ count will be used\.
 drop them\. Asymmetrical route is when a message from a remote peer is coming
 through a router that would not be used by this node to reach the remote peer\.
 .
+.TP
+\fBlnetctl set\fR response_tracking \fI[0, 1, 2, 3]\fR
+Set the behavior of response tracking\.
+  0 - Only LNet pings and discovery pushes utilize response tracking\.
+  1 - GETs are eligible for response tracking\.
+  2 - PUTs are eligible for response tracking\.
+  3 - Both PUTs and GETs are eligible for response tracking (default)\.
+  Note: Regardless of the value of the response_tracking parameter LNet
+        pings and discovery pushes always utilize response tracking\.
+.
 .SS "Import and Export YAML Configuration Files"
 LNet configuration can be represented in YAML format\. A YAML configuration
 file can be passed to the lnetctl utility via the \fBimport\fR command\. The

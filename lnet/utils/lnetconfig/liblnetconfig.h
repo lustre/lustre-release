@@ -399,6 +399,10 @@ int lustre_lnet_show_local_ni_recovq(int seq_no, struct cYAML **show_rc,
 
 int lustre_lnet_show_peer_ni_recovq(int seq_no, struct cYAML **show_rc,
 				    struct cYAML **err_rc);
+int lustre_lnet_config_response_tracking(int count, int seq_no,
+					 struct cYAML **err_rc);
+int lustre_lnet_show_response_tracking(int seq_no, struct cYAML **show_rc,
+				       struct cYAML **err_rc);
 
 /*
  * lustre_lnet_config_max_intf

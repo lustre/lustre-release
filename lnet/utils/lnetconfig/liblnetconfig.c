@@ -2432,6 +2432,36 @@ int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc)
 	return rc;
 }
 
+int lustre_lnet_config_response_tracking(int val, int seq_no,
+					 struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val_str[LNET_MAX_STR_LEN];
+
+	if (val < 0 || val > 3) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "\"Valid values are: 0, 1, 2, or 3\"");
+	} else {
+		snprintf(err_str, sizeof(err_str), "\"success\"");
+
+		snprintf(val_str, sizeof(val_str), "%d", val);
+
+		rc = write_sysfs_file(modparam_path, "lnet_response_tracking",
+				      val_str, 1, strlen(val_str) + 1);
+		if (rc)
+			snprintf(err_str, sizeof(err_str),
+				 "\"cannot configure response tracking: %s\"",
+				 strerror(errno));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "response_tracking", err_str,
+			  err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3531,6 +3561,31 @@ int lustre_lnet_show_peer_ni_recovq(int seq_no, struct cYAML **show_rc,
 				   seq_no, show_rc, err_rc);
 }
 
+int lustre_lnet_show_response_tracking(int seq_no, struct cYAML **show_rc,
+				       struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int rsp_tracking = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_response_tracking", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get lnet_response_tracking value: %d\"", rc);
+	} else {
+		rsp_tracking = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "response_tracking", rsp_tracking,
+				       show_rc, err_rc, l_errno);
+}
+
 int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc)
 {
@@ -4526,7 +4581,7 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *rsen, *drop_asym_route;
+		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4593,6 +4648,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 							: -1,
 						     err_rc);
 
+	rsp_tracking = cYAML_get_object_item(tree, "response_tracking");
+	if (rsp_tracking)
+		rc = lustre_lnet_config_response_tracking(rsp_tracking->cy_valueint,
+						     seq_no ? seq_no->cy_valueint
+							: -1,
+						     err_rc);
+
 	return rc;
 }
 
@@ -4640,7 +4702,7 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *rsen, *drop_asym_route;
+		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4697,6 +4759,13 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 		rc = lustre_lnet_show_hsensitivity(seq_no ? seq_no->cy_valueint
 							: -1,
 						     show_rc, err_rc);
+
+	rsp_tracking = cYAML_get_object_item(tree, "response_tracking");
+	if (rsp_tracking)
+		rc = lustre_lnet_show_response_tracking(seq_no ?
+							seq_no->cy_valueint :
+							-1,
+							show_rc, err_rc);
 
 	return rc;
 }
