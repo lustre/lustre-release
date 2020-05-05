@@ -1084,6 +1084,10 @@ test_33c() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
 		skip "DNE CoS not supported"
 
+	# LU-13522
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "start mds1 failed"
+
 	local sync_count
 
 	mkdir $DIR/$tdir

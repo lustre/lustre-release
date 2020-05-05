@@ -5974,6 +5974,18 @@ static int mdt_obd_set_info_async(const struct lu_env *env,
 	RETURN(0);
 }
 
+static inline void mdt_enable_slc(struct mdt_device *mdt)
+{
+	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_NEVER)
+		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_BLOCKING;
+}
+
+static inline void mdt_disable_slc(struct mdt_device *mdt)
+{
+	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING)
+		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
+}
+
 /**
  * Match client and server connection feature flags.
  *
@@ -6134,6 +6146,12 @@ static int mdt_connect_internal(const struct lu_env *env,
 		       exp->exp_obd->obd_name, obd_export_nid2str(exp));
 	}
 
+	if ((data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
+	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
+		atomic_inc(&mdt->mdt_mds_mds_conns);
+		mdt_enable_slc(mdt);
+	}
+
 	return 0;
 }
 
@@ -6244,18 +6262,6 @@ static int mdt_export_cleanup(struct obd_export *exp)
         RETURN(rc);
 }
 
-static inline void mdt_enable_slc(struct mdt_device *mdt)
-{
-	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_NEVER)
-		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_BLOCKING;
-}
-
-static inline void mdt_disable_slc(struct mdt_device *mdt)
-{
-	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING)
-		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
-}
-
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
 	int rc;
@@ -6309,12 +6315,6 @@ static int mdt_obd_connect(const struct lu_env *env,
 		RETURN(-EINVAL);
 
 	mdt = mdt_dev(obd->obd_lu_dev);
-
-	if ((data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
-	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
-		atomic_inc(&mdt->mdt_mds_mds_conns);
-		mdt_enable_slc(mdt);
-	}
 
 	/*
 	 * first, check whether the stack is ready to handle requests
