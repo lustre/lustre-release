@@ -369,7 +369,7 @@ the number of agents.</para>
 		<para><literal>NRA</literal> No Retry Action. If a restore fails, do not reschedule it automatically.</para>
         </listitem>
         <listitem>
-		<para><literal>NBR</literal> Non Blocking Restore. No automatic restore is triggered. Access to a released file returns <literal>ENODATA</literal>.</para>
+		<para><literal>NBR</literal> Non Blocking Restore. Restore is triggered but does not block clients. Access to a released file returns <literal>ENODATA</literal>.</para>
         </listitem>
       </itemizedlist>
 	</section>
