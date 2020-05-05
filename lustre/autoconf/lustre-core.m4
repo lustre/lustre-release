@@ -428,6 +428,23 @@ dir_context, [
 ]) # LC_HAVE_DIR_CONTEXT
 
 #
+# LC_D_COMPARE_5ARGS
+#
+# 3.11 dentry_operations.d_compare() taken 5 arguments.
+#
+AC_DEFUN([LC_D_COMPARE_5ARGS], [
+LB_CHECK_COMPILE([if 'd_compare' taken 5 arguments],
+d_compare_5args, [
+	#include <linux/dcache.h>
+],[
+	((struct dentry_operations*)0)->d_compare(NULL,NULL,0,NULL,NULL);
+],[
+	AC_DEFINE(HAVE_D_COMPARE_5ARGS, 1,
+		[d_compare need 5 arguments])
+])
+]) # LC_D_COMPARE_5ARGS
+
+#
 # LC_HAVE_DCOUNT
 #
 # 3.11 need to access d_count to get dentry reference count
@@ -1519,6 +1536,24 @@ posix_acl_valid, [
 ]) # LC_HAVE_POSIX_ACL_VALID_USER_NS
 
 #
+# LC_D_COMPARE_4ARGS
+#
+# Kernel version 4.8 commit 6fa67e707559303e086303aeecc9e8b91ef497d5
+# get rid of 'parent' argument of ->d_compare()
+#
+AC_DEFUN([LC_D_COMPARE_4ARGS], [
+LB_CHECK_COMPILE([if 'd_compare' taken 4 arguments],
+d_compare_4args, [
+	#include <linux/dcache.h>
+],[
+	((struct dentry_operations*)0)->d_compare(NULL,0,NULL,NULL);
+],[
+	AC_DEFINE(HAVE_D_COMPARE_4ARGS, 1,
+		[d_compare need 4 arguments])
+])
+]) # LC_D_COMPARE_4ARGS
+
+#
 # LC_FULL_NAME_HASH_3ARGS
 #
 # Kernel version 4.8 commit 8387ff2577eb9ed245df9a39947f66976c6bcd02
@@ -2198,6 +2233,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.11
 	LC_INVALIDATE_RANGE
 	LC_HAVE_DIR_CONTEXT
+	LC_D_COMPARE_5ARGS
 	LC_HAVE_DCOUNT
 	LC_HAVE_DENTRY_D_U_D_ALIAS
 	LC_HAVE_DENTRY_D_CHILD
@@ -2289,6 +2325,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
+	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS
 	LC_STRUCT_POSIX_ACL_XATTR
 	LC_IOP_XATTR
