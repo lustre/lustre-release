@@ -54,6 +54,23 @@
  extern int ext4_wait_block_bitmap(struct super_block *sb,
  				  ext4_group_t block_group,
  				  struct buffer_head *bh);
+@@ -3047,6 +3051,7 @@ struct ext4_group_info {
+ #define EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT	3
+ #define EXT4_GROUP_INFO_IBITMAP_CORRUPT		\
+ 	(1 << EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT)
++#define EXT4_GROUP_INFO_BBITMAP_READ_BIT	4
+
+ #define EXT4_MB_GRP_NEED_INIT(grp)	\
+ 	(test_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &((grp)->bb_state)))
+@@ -3065,6 +3070,8 @@ struct ext4_group_info {
+ 	(set_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_CLEAR_TRIMMED(grp)	\
+ 	(clear_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
++#define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
++	(test_and_set_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
+ 
+ #define EXT4_MAX_CONTENTION		8
+ #define EXT4_CONTENTION_THRESHOLD	2
 --- linux-4.18/fs/ext4/mballoc.c	2019-11-28 14:55:26.500545920 +0300
 +++ linux-4.18/fs/ext4/mballoc.c	2019-12-02 11:21:46.656897291 +0300
 @@ -868,7 +868,7 @@ static int ext4_mb_init_cache(struct
@@ -65,7 +82,7 @@
  		if (IS_ERR(bh[i])) {
  			err = PTR_ERR(bh[i]);
  			bh[i] = NULL;
-@@ -2104,6 +2112,87 @@ static int ext4_mb_good_group(struct
+@@ -2104,6 +2112,92 @@ static int ext4_mb_good_group(struct
  	return 0;
  }
  
@@ -110,6 +127,10 @@
 +	}
 +	while (nr-- > 0) {
 +		grp = ext4_get_group_info(sb, group);
++		/* prevent expensive getblk() on groups w/ IO in progress */
++		if (EXT4_MB_GRP_TEST_AND_SET_READ(grp))
++			goto next;
++
 +		/* ignore empty groups - those will be skipped
 +		 * during the scanning as well */
 +		if (grp->bb_free > 0 && EXT4_MB_GRP_NEED_INIT(grp)) {
@@ -120,6 +141,7 @@
 +				brelse(bh);
 +			}
 +		}
++next:
 +		if (++group >= ngroups)
 +			group = 0;
 +	}
