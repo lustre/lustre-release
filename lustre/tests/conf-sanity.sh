@@ -1640,6 +1640,7 @@ t32_test() {
 	local writeconf=$2
 	local dne_upgrade=${dne_upgrade:-"no"}
 	local dom_upgrade=${dom_upgrade:-"no"}
+	local project_upgrade=${project_upgrade:-"no"}
 	local ff_convert=${ff_convert:-"no"}
 	local shall_cleanup_mdt=false
 	local shall_cleanup_mdt1=false
@@ -1736,6 +1737,16 @@ t32_test() {
 				error_noexit "import zfs pool failed"
 				return 1
 			}
+	elif [ "$project_upgrade" != "no" ]; then
+		! $r tune2fs -O project $mdt_dev &&
+			error_noexit "enable project on mdt0 failed" &&
+				return 1
+		$mdt2_is_available && ! $r tune2fs "-O project" $mdt2_dev &&
+			error_noexit "enable project on mdt failed" &&
+				return 1
+		! $r tune2fs -O project $ost_dev &&
+			error_noexit "enable project on mdt failed" &&
+				return 1
 	fi
 
 	$r $LCTL set_param debug="$PTLDEBUG"
@@ -2296,6 +2307,23 @@ t32_test() {
 		}
 		shall_cleanup_lustre=false
 	else
+		$MOUNT_CMD $nid:/$fsname $tmp/mnt/lustre || {
+			error_noexit "Mounting the client"
+			return 1
+		}
+
+		if [ "$mds1_FSTYPE" == ldiskfs -a \
+		    "$project_upgrade" != "no" ]; then
+			! $LFS project -d -p 1 $tmp/mnt/lustre/* &&
+				error_noexit "set project failed" &&
+					return 1
+		fi
+
+		umount $tmp/mnt/lustre || {
+			error_noexit "Unmounting the client"
+			return 1
+		}
+
 		if [[ "$dne_upgrade" != "no" ]] || $mdt2_is_available; then
 			$r $UMOUNT $tmp/mnt/mdt1 || {
 				error_noexit "Unmounting the MDT2"
@@ -2411,11 +2439,17 @@ test_32d() {
 
 	t32_check
 	for tarball in $tarballs; do
-		ff_convert=yes t32_test $tarball || rc=$?
+		banner "testing $tarball upgrade with ff convert and project upgrade"
+		project_upgrade="no"
+		[[ "$MDS1_VERSION" -ge $(version_code 2.12.5) ]] &&
+			[[ "$tarball" =~ "disk2_4-ldiskfs" ]] &&
+				project_upgrade="yes"
+		project_upgrade=$project_upgrade ff_convert=yes t32_test \
+			$tarball || rc=$?
 	done
 	return $rc
 }
-run_test 32d "convert ff test"
+run_test 32d "convert ff and project quota upgrade test"
 
 test_32e() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
