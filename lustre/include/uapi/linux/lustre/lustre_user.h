@@ -1273,7 +1273,7 @@ struct identity_downcall_data {
 
 struct sepol_downcall_data {
 	__u32		sdd_magic;
-	__kernel_time_t	sdd_sepol_mtime;
+	__s64		sdd_sepol_mtime;
 	__u16		sdd_sepol_len;
 	char		sdd_sepol[0];
 };

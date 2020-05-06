@@ -44,6 +44,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
+#include <linux/types.h>
 
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
@@ -1630,20 +1631,6 @@ lst_lnet_stat_value(int bw, int send, int off)
 }
 
 static void
-lst_timeval_diff(struct timeval *tv1,
-		 struct timeval *tv2, struct timeval *df)
-{
-	if (tv1->tv_usec >= tv2->tv_usec) {
-		df->tv_sec  = tv1->tv_sec - tv2->tv_sec;
-		df->tv_usec = tv1->tv_usec - tv2->tv_usec;
-		return;
-	}
-
-	df->tv_sec  = tv1->tv_sec - 1 - tv2->tv_sec;
-	df->tv_usec = tv1->tv_usec + 1000000 - tv2->tv_usec;
-}
-
-static void
 lst_cal_lnet_stat(float delta, struct lnet_counters_common *lnet_new,
 		  struct lnet_counters_common *lnet_old, int mbs)
 {
@@ -1831,26 +1818,16 @@ lst_print_stat(char *name, struct list_head *resultp,
 		lnet_old = (struct lnet_counters_common *)((char *)srpc_old +
 							   sizeof(*srpc_old));
 
-		/* Prior to version 2.3, the running_ms field was a counter for
-		 * the number of running tests.  We are looking at this value
-		 * to determine if it is a millisecond timestamep (>= 2.3) or a
-		 * test counter (< 2.3).  The number 500 is being used for this
-		 * barrier as the test counter should never get this high, and
-		 * the timestamp should never get this low.
+		/* Prior to version 2.3, the running_ms was a counter for
+		 * the number of running tests. Since 2.3, running_ms is
+		 * changed to hold the millisecond since the start of
+		 * the work item. The rpe_stamp field was formerly used,
+		 * but is no longer. In 2.12 rpe_stamp was changed to
+		 * struct timespec64 and has nanosecond resolution, in
+		 * case it is needed in the future.
 		 */
-		if (sfwk_new->running_ms > 500) {
-			/* use the timestamp from the remote node, not our
-			 * rpe_stamp from when we copied up the data out of
-			 * the kernel.
-			 */
-			delta = (float)(sfwk_new->running_ms -
-					sfwk_old->running_ms) / 1000;
-		} else {
-			struct timeval tv;
-
-			lst_timeval_diff(&new->rpe_stamp, &old->rpe_stamp, &tv);
-			delta = tv.tv_sec + (float)tv.tv_usec / 1000000;
-		}
+		delta = (float)(sfwk_new->running_ms -
+				sfwk_old->running_ms) / 1000;
 
 		if (!lnet) /* TODO */
 			continue;

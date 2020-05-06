@@ -471,7 +471,7 @@ lstcon_rpc_trans_interpreter(struct lstcon_rpc_trans *trans,
 	struct lstcon_rpc *crpc;
 	struct srpc_msg *msg;
 	struct lstcon_node *nd;
-	struct timeval tv;
+	struct timespec64 ts;
 	int error;
 	s64 dur;
 
@@ -499,11 +499,11 @@ lstcon_rpc_trans_interpreter(struct lstcon_rpc_trans *trans,
 
 		dur = crpc->crp_stamp_ns -
 		      console_session.ses_id.ses_stamp * NSEC_PER_MSEC;
-		tv = ns_to_timeval(dur);
+		ts = ns_to_timespec64(dur);
 
 		if (copy_to_user(&ent->rpe_peer,
 				 &nd->nd_id, sizeof(struct lnet_process_id)) ||
-		    copy_to_user(&ent->rpe_stamp, &tv, sizeof(tv)) ||
+		    copy_to_user(&ent->rpe_stamp, &ts, sizeof(ts)) ||
 		    copy_to_user(&ent->rpe_state,
 				 &nd->nd_state, sizeof(nd->nd_state)) ||
 		    copy_to_user(&ent->rpe_rpc_errno, &error,

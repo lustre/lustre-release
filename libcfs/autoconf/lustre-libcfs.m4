@@ -219,6 +219,26 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_IOV_ITER_HAS_TYPE
 
 #
+# LIBCFS_HAVE_NS_TO_TIMESPEC64
+#
+# Kernel version 4.16-rc3 commit a84d1169164b274f13b97a23ff235c000efe3b49
+# introduced struct __kernel_old_timeval
+#
+AC_DEFUN([LIBCFS_HAVE_NS_TO_TIMESPEC64],[
+LB_CHECK_COMPILE([does 'ns_to_timespec64()' exist],
+kernel_old_timeval, [
+	#include <linux/time.h>
+],[
+	struct timespec64 kts;
+
+	kts = ns_to_timespec64(0);
+],[
+	AC_DEFINE(HAVE_NS_TO_TIMESPEC64, 1,
+		[ns_to_timespec64() is available])
+])
+]) # LIBCFS_HAVE_NS_TO_TIMESPEC64
+
+#
 # Kernel version 3.17 changed hlist_add_after to
 # hlist_add_behind
 #
@@ -1246,6 +1266,8 @@ LIBCFS_KTIME_COMPARE
 LIBCFS_SHRINKER_COUNT
 # 3.15
 LIBCFS_IOV_ITER_HAS_TYPE
+# 3.16
+LIBCFS_HAVE_NS_TO_TIMESPEC64
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
 LIBCFS_TIMESPEC64
