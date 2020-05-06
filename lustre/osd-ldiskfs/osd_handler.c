@@ -2926,7 +2926,8 @@ static int osd_inode_setattr(const struct lu_env *env,
 }
 
 #ifdef HAVE_PROJECT_QUOTA
-static int osd_transfer_project(struct inode *inode, __u32 projid)
+static int osd_transfer_project(struct inode *inode, __u32 projid,
+				struct thandle *handle)
 {
 	struct super_block *sb = inode->i_sb;
 	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
@@ -2958,9 +2959,18 @@ static int osd_transfer_project(struct inode *inode, __u32 projid)
 
 	raw_inode = ldiskfs_raw_inode(&iloc);
 	if (!LDISKFS_FITS_IN_INODE(raw_inode, ei, i_projid)) {
-		err = -EOVERFLOW;
-		brelse(iloc.bh);
-		return err;
+		struct osd_thandle *oh =
+				container_of0(handle, struct osd_thandle,
+					      ot_super);
+		/**
+		 * try to expand inode size automatically.
+		 */
+		ldiskfs_mark_inode_dirty(oh->ot_handle, inode);
+		if (!LDISKFS_FITS_IN_INODE(raw_inode, ei, i_projid)) {
+			err = -EOVERFLOW;
+			brelse(iloc.bh);
+			return err;
+		}
 	}
 	brelse(iloc.bh);
 
@@ -2977,7 +2987,8 @@ static int osd_transfer_project(struct inode *inode, __u32 projid)
 }
 #endif
 
-static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
+static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
+			      struct thandle *handle)
 {
 	int rc;
 
@@ -3012,7 +3023,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 	if (attr->la_valid & LA_PROJID &&
 	    attr->la_projid != i_projid_read(inode)) {
 #ifdef HAVE_PROJECT_QUOTA
-		rc = osd_transfer_project(inode, attr->la_projid);
+		rc = osd_transfer_project(inode, attr->la_projid, handle);
 #else
 		rc = -ENOTSUPP;
 #endif
@@ -3073,7 +3084,7 @@ static int osd_attr_set(const struct lu_env *env,
 
 	inode = obj->oo_inode;
 
-	rc = osd_quota_transfer(inode, attr);
+	rc = osd_quota_transfer(inode, attr, handle);
 	if (rc)
 		return rc;
 
@@ -3361,7 +3372,8 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 }
 
 static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
-			  struct lu_attr *attr, struct dt_object_format *dof)
+			  struct lu_attr *attr, struct dt_object_format *dof,
+			  struct thandle *handle)
 {
 	struct inode *inode = obj->oo_inode;
 	__u64 valid = attr->la_valid;
@@ -3378,7 +3390,7 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
 	if ((valid & LA_MTIME) && (attr->la_mtime == inode->i_mtime.tv_sec))
 		attr->la_valid &= ~LA_MTIME;
 
-	result = osd_quota_transfer(inode, attr);
+	result = osd_quota_transfer(inode, attr, handle);
 	if (result)
 		return;
 
@@ -3429,7 +3441,7 @@ static int __osd_create(struct osd_thread_info *info, struct osd_object *obj,
 	}
 
 	if (likely(result == 0)) {
-		osd_attr_init(info, obj, attr, dof);
+		osd_attr_init(info, obj, attr, dof, th);
 		osd_object_init0(obj);
 	}
 
@@ -3894,7 +3906,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 #ifdef	HAVE_PROJECT_QUOTA
 	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL &&
 	    i_projid_read(pobj->oo_inode) != 0) {
-		rc = osd_transfer_project(local, 0);
+		rc = osd_transfer_project(local, 0, th);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is project "
 			       "quota enforcement enabled on the ldiskfs "
