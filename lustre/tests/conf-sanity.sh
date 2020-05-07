@@ -8559,7 +8559,10 @@ test_116() {
 
 	MDSSIZE=$old_mdssize
 	MDSISIZE=$old_mdsisize
-	do_facet $SINGLEMDS $MKFS $opts17t $tmpmnt/$mdtimg ||
+
+	do_facet $SINGLEMDS $MKFS \
+		${opts17t/-E /-E lazy_itable_init,lazy_journal_init,} \
+		$tmpmnt/$mdtimg ||
 		error "failed to mkfs for $tmpmnt/$mdtimg"
 
 	do_facet $SINGLEMDS $TUNE2FS -l $tmpmnt/$mdtimg |
