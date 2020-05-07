@@ -106,6 +106,20 @@ static inline int kref_read(const struct kref *kref)
 }
 #endif /* HAVE_KREF_READ */
 
+#ifdef HAVE_FORCE_SIG_WITH_TASK
+#define cfs_force_sig(sig, task)	force_sig((sig), (task))
+#else
+#define cfs_force_sig(sig, task)					\
+do {									\
+	unsigned long flags;						\
+									\
+	spin_lock_irqsave(&task->sighand->siglock, flags);		\
+	task->sighand->action[sig - 1].sa.sa_handler = SIG_DFL;		\
+	send_sig(sig, task, 1);						\
+	spin_unlock_irqrestore(&task->sighand->siglock, flags);         \
+} while (0)
+#endif
+
 void cfs_arch_init(void);
 
 #ifndef container_of_safe

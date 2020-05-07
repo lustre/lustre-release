@@ -2493,10 +2493,10 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 			 */
 			if (rc == -ETIMEDOUT &&
 			    signal_pending(current)) {
-				sigset_t blocked_sigs;
+				sigset_t old, new;
 
-				cfs_block_sigsinv(LUSTRE_FATAL_SIGS,
-						  &blocked_sigs);
+				siginitset(&new, LUSTRE_FATAL_SIGS);
+				sigprocmask(SIG_BLOCK, &new, &old);
 				/*
 				 * In fact we only interrupt for the
 				 * "fatal" signals like SIGINT or
@@ -2507,7 +2507,7 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 				 */
 				if (signal_pending(current))
 					ptlrpc_interrupted_set(set);
-				cfs_restore_sigs(&blocked_sigs);
+				sigprocmask(SIG_SETMASK, &old, NULL);
 			}
 		}
 

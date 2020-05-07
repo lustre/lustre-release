@@ -208,9 +208,10 @@ __out:	__ret;								\
 	wait_queue_entry_t __wq_entry;					\
 	unsigned long flags;						\
 	long __ret = ret;	/* explicit shadow */			\
-	sigset_t __old_blocked;						\
+	sigset_t __old_blocked, __new_blocked;				\
 									\
-	cfs_block_sigsinv(0, &__old_blocked);				\
+	siginitset(&__new_blocked, LUSTRE_FATAL_SIGS);			\
+	sigprocmask(0, &__new_blocked, &__old_blocked);			\
 	init_wait(&__wq_entry);						\
 	if (exclusive)							\
 		__wq_entry.flags = WQ_FLAG_EXCLUSIVE;			\
@@ -238,7 +239,7 @@ __out:	__ret;								\
 		cmd;							\
 	}								\
 	finish_wait(&wq_head, &__wq_entry);				\
-	cfs_restore_sigs(&__old_blocked);				\
+	sigprocmask(SIG_SETMASK, &__old_blocked, NULL);			\
 	__ret;								\
 })
 
@@ -473,9 +474,10 @@ do {									\
 	wait_queue_entry_t __wq_entry;					\
 	unsigned long flags;						\
 	long __ret = ret;	/* explicit shadow */			\
-	sigset_t __old_blocked;						\
+	sigset_t __old_blocked, __new_blocked;				\
 									\
-	cfs_block_sigsinv(0, &__old_blocked);				\
+	siginitset(&__new_blocked, LUSTRE_FATAL_SIGS);			\
+	sigprocmask(0, &__new_blocked, &__old_blocked);			\
 	init_wait(&__wq_entry);						\
 	__wq_entry.flags = WQ_FLAG_EXCLUSIVE;				\
 	for (;;) {							\
@@ -495,7 +497,7 @@ do {									\
 		}							\
 		cmd;							\
 	}								\
-	cfs_restore_sigs(&__old_blocked);				\
+	sigprocmask(SIG_SETMASK, &__old_blocked, NULL);			\
 	finish_wait(&wq_head, &__wq_entry);				\
 	__ret;								\
 })

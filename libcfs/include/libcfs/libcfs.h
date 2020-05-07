@@ -82,37 +82,7 @@
  #endif
 #endif
 
-#ifdef HAVE_FORCE_SIG_WITH_TASK
-#define cfs_force_sig(sig, task)	force_sig((sig), (task))
-#else
-#define cfs_force_sig(sig, task)					\
-do {									\
-	unsigned long flags;						\
-									\
-	spin_lock_irqsave(&task->sighand->siglock, flags);		\
-	task->sighand->action[sig - 1].sa.sa_handler = SIG_DFL;		\
-	send_sig(sig, task, 1);						\
-	spin_unlock_irqrestore(&task->sighand->siglock, flags);		\
-} while (0)
-#endif
-
 typedef s32 timeout_t;
-
-/* Block all signals except for the @sigs */
-static inline void cfs_block_sigsinv(unsigned long sigs, sigset_t *old)
-{
-	sigset_t new;
-
-	siginitsetinv(&new, sigs);
-	sigorsets(&new, &current->blocked, &new);
-	sigprocmask(SIG_BLOCK, &new, old);
-}
-
-static inline void
-cfs_restore_sigs(sigset_t *old)
-{
-	sigprocmask(SIG_SETMASK, old, NULL);
-}
 
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
@@ -130,8 +100,6 @@ static inline int notifier_from_ioctl_errno(int err)
  * Defined by platform
  */
 int unshare_fs_struct(void);
-void cfs_block_sigsinv(unsigned long sigs, sigset_t *sigset);
-void cfs_restore_sigs(sigset_t *sigset);
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 

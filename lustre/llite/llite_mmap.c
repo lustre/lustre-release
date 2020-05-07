@@ -148,7 +148,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	struct vvp_io           *vio;
 	int                      result;
 	__u16			 refcheck;
-	sigset_t		 set;
+	sigset_t old, new;
 	struct inode             *inode = NULL;
 	struct ll_inode_info     *lli;
 	ENTRY;
@@ -173,14 +173,15 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	vio->u.fault.ft_vma    = vma;
 	vio->u.fault.ft_vmpage = vmpage;
 
-	cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM), &set);
+	siginitsetinv(&new, sigmask(SIGKILL) | sigmask(SIGTERM));
+	sigprocmask(SIG_BLOCK, &new, &old);
 
 	inode = vvp_object_inode(io->ci_obj);
 	lli = ll_i2info(inode);
 
 	result = cl_io_loop(env, io);
 
-	cfs_restore_sigs(&set);
+	sigprocmask(SIG_SETMASK, &old, NULL);
 
         if (result == 0) {
                 lock_page(vmpage);
@@ -352,7 +353,7 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	bool cached;
 	vm_fault_t result;
 	ktime_t kstart = ktime_get();
-	sigset_t set;
+	sigset_t old, new;
 
 	result = pcc_fault(vma, vmf, &cached);
 	if (cached)
@@ -360,8 +361,10 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
-	 * other signals. */
-	cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM), &set);
+	 * other signals.
+	 */
+	siginitsetinv(&new, sigmask(SIGKILL) | sigmask(SIGTERM));
+	sigprocmask(SIG_BLOCK, &new, &old);
 
 	/* make sure offset is not a negative number */
 	if (vmf->pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
@@ -390,7 +393,7 @@ restart:
 
 		result |= VM_FAULT_LOCKED;
 	}
-	cfs_restore_sigs(&set);
+	sigprocmask(SIG_SETMASK, &old, NULL);
 
 out:
 	if (vmf->page && result == VM_FAULT_LOCKED) {
