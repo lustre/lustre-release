@@ -1604,10 +1604,11 @@ static bool ll_use_fast_io(struct file *file,
 	unsigned long fast_read_pages =
 		max(RA_REMAIN_WINDOW_MIN, ras->ras_rpc_pages);
 	loff_t skip_pages;
+	loff_t stride_bytes = ras->ras_stride_bytes;
 
-	if (stride_io_mode(ras)) {
+	if (stride_io_mode(ras) && stride_bytes) {
 		skip_pages = (ras->ras_stride_length +
-			ras->ras_stride_bytes - 1) / ras->ras_stride_bytes;
+			ras->ras_stride_bytes - 1) / stride_bytes;
 		skip_pages *= fast_read_pages;
 	} else {
 		skip_pages = fast_read_pages;
