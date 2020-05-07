@@ -42,21 +42,32 @@
  * @{
  */
 
-#include <linux/fs.h>
 #include <linux/limits.h>
 #include <linux/kernel.h>
-#include <linux/string.h>
-#include <linux/quota.h>
 #include <linux/types.h>
-#include <linux/unistd.h>
-#include <linux/lustre/lustre_fiemap.h>
 
-#ifndef __KERNEL__
+#ifdef __KERNEL__
+# include <linux/fs.h>
+# include <linux/quota.h>
+# include <linux/string.h> /* snprintf() */
+# include <linux/unistd.h>
+#else /* ! __KERNEL__ */
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
+# include <string.h>
+# define NEED_QUOTA_DEFS
+/* # include <sys/quota.h> - this causes complaints about caddr_t */
 # include <sys/stat.h>
 # define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
 #endif /* !__KERNEL__ */
+
+/* Handle older distros */
+#ifndef __ALIGN_KERNEL
+#define __ALIGN_KERNEL_MASK(x, mask) (((x) + (mask)) & ~(mask))
+#define __ALIGN_KERNEL(x, a)	     __ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
+#endif
+
+#include <linux/lustre/lustre_fiemap.h>
 
 #if defined(__cplusplus)
 extern "C" {
