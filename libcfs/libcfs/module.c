@@ -575,6 +575,31 @@ static void lnet_insert_debugfs_links(
 				       symlinks->target);
 }
 
+#ifndef HAVE_D_HASH_AND_LOOKUP
+/**
+ * d_hash_and_lookup - hash the qstr then search for a dentry
+ * @dir: Directory to search in
+ * @name: qstr of name we wish to find
+ *
+ * On lookup failure NULL is returned; on bad name - ERR_PTR(-error)
+ */
+struct dentry *d_hash_and_lookup(struct dentry *dir, struct qstr *name)
+{
+	/*
+	 * Check for a fs-specific hash function. Note that we must
+	 * calculate the standard hash first, as the d_op->d_hash()
+	 * routine may choose to leave the hash value unchanged.
+	 */
+	name->hash = full_name_hash(name->name, name->len);
+	if (dir->d_op && dir->d_op->d_hash) {
+		int err = dir->d_op->d_hash(dir, name);
+		if (unlikely(err < 0))
+			return ERR_PTR(err);
+	}
+	return d_lookup(dir, name);
+}
+#endif
+
 void lnet_remove_debugfs(struct ctl_table *table)
 {
 	for (; table && table->procname; table++) {

@@ -256,6 +256,16 @@ AS_IF([test "x$enable_crc32c_crypto" = xyes], [
 ]) # LIBCFS_ENABLE_CRC32C_ACCEL
 
 #
+# Kernel version v3.8-rc4-82-g4f522a247bc2 exported d_hash_and_lookup()
+# It was added in v2.6.16-3821-g3e7e241f8c5c, so no worries about header.
+#
+AC_DEFUN([LIBCFS_D_HASH_AND_LOOKUP],[
+LB_CHECK_EXPORT([d_hash_and_lookup], [fs/dcache.c],
+	[AC_DEFINE(HAVE_D_HASH_AND_LOOKUP, 1,
+		[d_hash_and_lookup is exported by the kernel])])
+]) # LIBCFS_D_HASH_AND_LOOKUP
+
+#
 # Kernel version 3.11 introduced ktime_get_ts64
 #
 AC_DEFUN([LIBCFS_KTIME_GET_TS64],[
@@ -1050,6 +1060,7 @@ LIBCFS_PROCESS_NAMESPACE
 LIBCFS_I_UID_READ
 # 3.8
 LIBCFS_HAVE_CRC32
+LIBCFS_D_HASH_AND_LOOKUP
 LIBCFS_ENABLE_CRC32_ACCEL
 # 3.10
 LIBCFS_ENABLE_CRC32C_ACCEL
