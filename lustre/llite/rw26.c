@@ -384,7 +384,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
  * then truncate this to be a full-sized RPC.  For 4kB PAGE_SIZE this is
  * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc. */
 #define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_SIZE) & \
-		      ~(DT_MAX_BRW_SIZE - 1))
+		      ~((size_t)DT_MAX_BRW_SIZE - 1))
 
 static ssize_t
 ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
