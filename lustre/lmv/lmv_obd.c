@@ -1596,6 +1596,9 @@ __lmv_locate_tgt(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
 		*fid = oinfo->lmo_fid;
 	if (mds != NULL)
 		*mds = oinfo->lmo_mds;
+	/* check stripe FID is sane */
+	if (!fid_is_sane(&oinfo->lmo_fid))
+		return ERR_PTR(-ENODEV);
 
 	tgt = lmv_get_target(lmv, oinfo->lmo_mds, NULL);
 
