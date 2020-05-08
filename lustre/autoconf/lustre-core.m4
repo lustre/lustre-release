@@ -3715,7 +3715,7 @@ AC_ARG_WITH([bash-completion-dir],
 AS_IF([test "x$with_bash_completion_dir" = "xyes"], [
 	BASH_COMPLETION_DIR="`pkg-config --variable=completionsdir bash-completion`"
 	AS_IF([test "x$BASH_COMPLETION_DIR" = "x"], [
-		[BASH_COMPLETION_DIR="$datadir/bash-completion/completions"]
+		[BASH_COMPLETION_DIR="/usr/share/bash-completion/completions"]
 	])
 ], [
 	BASH_COMPLETION_DIR="$with_bash_completion_dir"
