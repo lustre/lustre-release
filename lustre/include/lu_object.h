@@ -1377,7 +1377,8 @@ static inline bool lu_name_is_temp_file(const char *name, int namelen,
 	 * About 0.07% of randomly-generated names will slip through,
 	 * but this avoids 99.93% of cross-MDT renames for those files.
 	 */
-	if (digit >= suffixlen - 2 || upper == suffixlen || lower == suffixlen)
+	if ((digit >= suffixlen - 1 && !isdigit(name[namelen - suffixlen])) ||
+	    upper == suffixlen || lower == suffixlen)
 		return false;
 
 	return true;
