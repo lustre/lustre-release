@@ -1569,6 +1569,10 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
 			return ERR_CAST(oinfo);
 	}
 
+	/* check stripe FID is sane */
+	if (!fid_is_sane(&oinfo->lmo_fid))
+		return ERR_PTR(-ENODEV);
+
 	*fid = oinfo->lmo_fid;
 	*mds = oinfo->lmo_mds;
 	tgt = lmv_tgt(lmv, oinfo->lmo_mds);
