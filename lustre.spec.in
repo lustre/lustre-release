@@ -601,7 +601,7 @@ fi
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
 /sbin/mount.lustre_tgt
-%{_datadir}/bash-completion/completions/*
+@BASH_COMPLETION_DIR@
 %endif
 
 %if %{with manpages}
