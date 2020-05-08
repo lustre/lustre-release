@@ -188,12 +188,12 @@ ksocknal_queue_tx_zcack_v3(struct ksock_conn *conn,
                 return 1;
         }
 
-        if (cookie == tx->tx_msg.ksm_zc_cookies[0] ||
-            cookie == tx->tx_msg.ksm_zc_cookies[1]) {
+	if (cookie == tx->tx_msg.ksm_zc_cookies[0] ||
+	    cookie == tx->tx_msg.ksm_zc_cookies[1]) {
 		CWARN("%s: duplicated ZC cookie: %llu\n",
-                      libcfs_id2str(conn->ksnc_peer->ksnp_id), cookie);
-                return 1; /* XXX return error in the future */
-        }
+		      libcfs_idstr(&conn->ksnc_peer->ksnp_id), cookie);
+		return 1; /* XXX return error in the future */
+	}
 
         if (tx->tx_msg.ksm_zc_cookies[0] == 0) {
                 /* NOOP tx has only one ZC-ACK cookie, can carry at least one more */
@@ -239,13 +239,16 @@ ksocknal_queue_tx_zcack_v3(struct ksock_conn *conn,
                 }
 
         } else {
-                /* ksm_zc_cookies[0] < ksm_zc_cookies[1], it is range of cookies */
-                if (cookie >= tx->tx_msg.ksm_zc_cookies[0] &&
-                    cookie <= tx->tx_msg.ksm_zc_cookies[1]) {
+		/* ksm_zc_cookies[0] < ksm_zc_cookies[1], it is a range
+		 * of cookies
+		 */
+		if (cookie >= tx->tx_msg.ksm_zc_cookies[0] &&
+		    cookie <= tx->tx_msg.ksm_zc_cookies[1]) {
 			CWARN("%s: duplicated ZC cookie: %llu\n",
-                              libcfs_id2str(conn->ksnc_peer->ksnp_id), cookie);
-                        return 1; /* XXX: return error in the future */
-                }
+			      libcfs_idstr(&conn->ksnc_peer->ksnp_id),
+			      cookie);
+			return 1; /* XXX: return error in the future */
+		}
 
                 if (cookie == tx->tx_msg.ksm_zc_cookies[1] + 1) {
                         tx->tx_msg.ksm_zc_cookies[1] = cookie;
@@ -391,11 +394,12 @@ ksocknal_handle_zcreq(struct ksock_conn *c, __u64 cookie, int remote)
         if (tx == NULL)
                 return -ENOMEM;
 
-        if ((rc = ksocknal_launch_packet(peer_ni->ksnp_ni, tx, peer_ni->ksnp_id)) == 0)
-                return 0;
+	rc = ksocknal_launch_packet(peer_ni->ksnp_ni, tx, &peer_ni->ksnp_id);
+	if (rc == 0)
+		return 0;
 
-        ksocknal_free_tx(tx);
-        return rc;
+	ksocknal_free_tx(tx);
+	return rc;
 }
 
 /* (Sender) handle ZC_ACK from sink */

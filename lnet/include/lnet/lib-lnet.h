@@ -524,6 +524,7 @@ extern unsigned int lnet_nid_cpt_hash(struct lnet_nid *nid,
 				      unsigned int number);
 extern int lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni);
 extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
+extern int lnet_nid2cpt(struct lnet_nid *nid, struct lnet_ni *ni);
 extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
 extern struct lnet_ni *lnet_net2ni_locked(__u32 net, int cpt);

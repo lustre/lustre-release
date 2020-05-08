@@ -1145,6 +1145,24 @@ libcfs_id2str(struct lnet_process_id id)
 }
 EXPORT_SYMBOL(libcfs_id2str);
 
+char *
+libcfs_idstr(struct lnet_processid *id)
+{
+	char *str = libcfs_next_nidstring();
+
+	if (id->pid == LNET_PID_ANY) {
+		snprintf(str, LNET_NIDSTR_SIZE,
+			 "LNET_PID_ANY-%s", libcfs_nidstr(&id->nid));
+		return str;
+	}
+
+	snprintf(str, LNET_NIDSTR_SIZE, "%s%u-%s",
+		 ((id->pid & LNET_PID_USERFLAG) != 0) ? "U" : "",
+		 (id->pid & ~LNET_PID_USERFLAG), libcfs_nidstr(&id->nid));
+	return str;
+}
+EXPORT_SYMBOL(libcfs_idstr);
+
 int
 libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 {

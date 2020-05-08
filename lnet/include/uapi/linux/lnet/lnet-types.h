@@ -159,12 +159,14 @@ static inline int nid_same(const struct lnet_nid *n1,
 }
 
 /* This can be used when we need to hash a nid */
-static inline unsigned long nidhash(lnet_nid_t nid)
+static inline unsigned long nidhash(const struct lnet_nid *nid)
 {
+	int i;
 	unsigned long hash = 0;
 
-	hash ^= LNET_NIDNET(nid);
-	hash ^= LNET_NIDADDR(nid);
+	hash ^= LNET_NID_NET(nid);
+	for (i = 0; i < 4; i++)
+		hash ^= nid->nid_addr[i];
 	return hash;
 }
 
@@ -242,6 +244,34 @@ struct lnet_process_id {
 	/** process id */
 	lnet_pid_t pid;
 };
+
+/**
+ * Global process ID - with large addresses
+ */
+struct lnet_processid {
+	/** node id */
+	struct lnet_nid nid;
+	/** process id */
+	lnet_pid_t pid;
+};
+
+static inline void
+lnet_pid4_to_pid(struct lnet_process_id pid4, struct lnet_processid *pid)
+{
+	pid->pid = pid4.pid;
+	lnet_nid4_to_nid(pid4.nid, &pid->nid);
+}
+
+static inline struct lnet_process_id
+lnet_pid_to_pid4(struct lnet_processid *pid)
+{
+	struct lnet_process_id ret;
+
+	ret.pid = pid->pid;
+	ret.nid = lnet_nid_to_nid4(&pid->nid);
+	return ret;
+}
+
 /** @} lnet_addr */
 
 /** \addtogroup lnet_me

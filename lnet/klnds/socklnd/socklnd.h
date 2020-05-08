@@ -393,7 +393,7 @@ struct ksock_conn_cb {
 struct ksock_peer_ni {
 	struct hlist_node	ksnp_list;	/* stash on global peer_ni list */
 	time64_t		ksnp_last_alive;/* when (in seconds) I was last alive */
-	struct lnet_process_id	ksnp_id;	/* who's on the other end(s) */
+	struct lnet_processid	ksnp_id;	/* who's on the other end(s) */
 	refcount_t		ksnp_refcount;	/* # users */
 	int			ksnp_closing;	/* being closed */
 	int			ksnp_accepting;	/* # passive connections pending */
@@ -597,9 +597,9 @@ int ksocknal_accept(struct lnet_ni *ni, struct socket *sock);
 int ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id,
 		      struct sockaddr *addr);
 struct ksock_peer_ni *ksocknal_find_peer_locked(struct lnet_ni *ni,
-					   struct lnet_process_id id);
+					   struct lnet_processid *id);
 struct ksock_peer_ni *ksocknal_find_peer(struct lnet_ni *ni,
-				    struct lnet_process_id id);
+					 struct lnet_processid *id);
 extern void ksocknal_peer_failed(struct ksock_peer_ni *peer_ni);
 extern int ksocknal_create_conn(struct lnet_ni *ni,
 				struct ksock_conn_cb *conn_cb,
@@ -610,12 +610,12 @@ extern void ksocknal_destroy_conn(struct ksock_conn *conn);
 extern int  ksocknal_close_peer_conns_locked(struct ksock_peer_ni *peer_ni,
 					     struct sockaddr *peer, int why);
 extern int ksocknal_close_conn_and_siblings(struct ksock_conn *conn, int why);
-int ksocknal_close_matching_conns(struct lnet_process_id id, __u32 ipaddr);
+int ksocknal_close_matching_conns(struct lnet_processid *id, __u32 ipaddr);
 extern struct ksock_conn *ksocknal_find_conn_locked(struct ksock_peer_ni *peer_ni,
 						    struct ksock_tx *tx, int nonblk);
 
 extern int  ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
-				   struct lnet_process_id id);
+				   struct lnet_processid *id);
 extern struct ksock_tx *ksocknal_alloc_tx(int type, int size);
 extern void ksocknal_free_tx(struct ksock_tx *tx);
 extern struct ksock_tx *ksocknal_alloc_tx_noop(__u64 cookie, int nonblk);

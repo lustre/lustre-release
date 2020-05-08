@@ -1584,23 +1584,34 @@ lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni)
 }
 
 int
-lnet_cpt_of_nid(lnet_nid_t nid4, struct lnet_ni *ni)
+lnet_nid2cpt(struct lnet_nid *nid, struct lnet_ni *ni)
 {
 	int	cpt;
 	int	cpt2;
+
+	if (LNET_CPT_NUMBER == 1)
+		return 0; /* the only one */
+
+	cpt = lnet_net_lock_current();
+
+	cpt2 = lnet_cpt_of_nid_locked(nid, ni);
+
+	lnet_net_unlock(cpt);
+
+	return cpt2;
+}
+EXPORT_SYMBOL(lnet_nid2cpt);
+
+int
+lnet_cpt_of_nid(lnet_nid_t nid4, struct lnet_ni *ni)
+{
 	struct lnet_nid nid;
 
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
 	lnet_nid4_to_nid(nid4, &nid);
-	cpt = lnet_net_lock_current();
-
-	cpt2 = lnet_cpt_of_nid_locked(&nid, ni);
-
-	lnet_net_unlock(cpt);
-
-	return cpt2;
+	return lnet_nid2cpt(&nid, ni);
 }
 EXPORT_SYMBOL(lnet_cpt_of_nid);
 
