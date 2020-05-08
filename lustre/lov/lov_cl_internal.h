@@ -340,7 +340,8 @@ static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov, int i)
 {
 	LASSERT(lov->lo_type == LLT_COMP);
 	LASSERTF(i < lov->u.composite.lo_entry_count,
-		 "entry %d entry_count %d", i, lov->u.composite.lo_entry_count);
+		 "entry %d entry_count %d\n", i,
+		 lov->u.composite.lo_entry_count);
 
 	return &lov->u.composite.lo_entries[i].lle_raid0;
 }
@@ -370,7 +371,8 @@ static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)
 {
 	LASSERT(lov->lo_type == LLT_COMP);
 	LASSERTF(i < lov->u.composite.lo_entry_count,
-		 "entry %d entry_count %d", i, lov->u.composite.lo_entry_count);
+		 "entry %d entry_count %d\n", i,
+		 lov->u.composite.lo_entry_count);
 
 	return &lov->u.composite.lo_entries[i];
 }

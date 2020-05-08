@@ -47,7 +47,7 @@ static inline int fid2type(const struct lu_fid *fid)
 		return PRJQUOTA;
 	}
 
-	LASSERTF(0, "invalid fid for quota type: %u", fid_oid(fid));
+	LASSERTF(0, "invalid fid for quota type: %u\n", fid_oid(fid));
 	return USRQUOTA;
 }
 

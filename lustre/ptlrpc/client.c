@@ -888,7 +888,7 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
 	if (request) {
 		ptlrpc_cli_req_init(request);
 
-		LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
+		LASSERTF((unsigned long)imp > 0x1000, "%p\n", imp);
 		LASSERT(imp != LP_POISON);
 		LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p\n",
 			 imp->imp_client);

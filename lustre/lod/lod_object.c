@@ -7444,7 +7444,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		if (lo->ldo_mirrors[i].lme_stale)
 			continue;
 
-		LASSERTF(primary < 0, DFID " has multiple primary: %u / %u",
+		LASSERTF(primary < 0, DFID " has multiple primary: %u / %u\n",
 			 PFID(lod_object_fid(lo)),
 			 lo->ldo_mirrors[i].lme_id,
 			 lo->ldo_mirrors[primary].lme_id);

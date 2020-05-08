@@ -1547,7 +1547,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 					   "using this service will fail.\n",
 					   imp->imp_obd->obd_name, target_len,
 					   target_start);
-			LASSERTF(!obd_lbug_on_eviction, "LBUG upon eviction");
+			LASSERTF(!obd_lbug_on_eviction, "LBUG upon eviction\n");
                 }
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        obd2cli_tgt(imp->imp_obd),
