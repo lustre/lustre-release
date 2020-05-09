@@ -101,9 +101,11 @@ int main(int argc, char **argv)
 	else
 		rc = mknod(path, mode, dev);
 
-	if (rc)
+	if (rc) {
+		rc = errno;
 		fprintf(stderr, "%s: cannot create `%s' with mode %#o: %s\n",
-			argv[0], path, mode, strerror(errno));
+			argv[0], path, mode, strerror(rc));
+	}
 
 	return rc;
 }

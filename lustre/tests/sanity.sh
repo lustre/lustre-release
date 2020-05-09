@@ -12119,7 +12119,7 @@ set_dir_limits () {
 check_mds_dmesg() {
 	local facets=$(get_facets MDS)
 	for facet in ${facets//,/ }; do
-		do_facet $facet "dmesg | tail -3 | grep -q $1" && return 0
+		do_facet $facet "dmesg | tail -3 | grep $1" && return 0
 	done
 	return 1
 }
@@ -12134,55 +12134,49 @@ test_129() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local ENOSPC=28
-	local EFBIG=27
 	local has_warning=false
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 
 	# block size of mds1
-	local maxsize=$(($($LCTL get_param -n mdc.*MDT0000*.blocksize) * 5))
-	set_dir_limits $maxsize $maxsize
+	local maxsize=$(($($LCTL get_param -n mdc.*MDT0000*.blocksize) * 8))
+	set_dir_limits $maxsize $((maxsize * 6 / 8))
+	stack_trap "set_dir_limits 0 0"
+	stack_trap "unlinkmany $DIR/$tdir/file_base_ 2000 || true"
 	local dirsize=$(stat -c%s "$DIR/$tdir")
 	local nfiles=0
-	while [[ $dirsize -le $maxsize ]]; do
-		$MULTIOP $DIR/$tdir/file_base_$nfiles Oc
+	while (( $dirsize <= $maxsize )); do
+		$MCREATE $DIR/$tdir/file_base_$nfiles
 		rc=$?
-		if ! $has_warning; then
-			check_mds_dmesg '"is approaching"' && has_warning=true
-		fi
 		# check two errors:
-		# ENOSPC for new ext4 max_dir_size (kernel commit df981d03ee)
-		# EFBIG for previous versions included in ldiskfs series
-		if [ $rc -eq $EFBIG ] || [ $rc -eq $ENOSPC ]; then
+		# ENOSPC for ext4 max_dir_size, which has been used since
+		# kernel v3.6-rc1-8-gdf981d03ee, lustre v2_4_50_0-79-gaed82035c0
+		if (( rc == ENOSPC )); then
 			set_dir_limits 0 0
-			echo "return code $rc received as expected"
+			echo "rc=$rc returned as expected after $nfiles files"
 
 			createmany -o $DIR/$tdir/file_extra_$nfiles. 5 ||
-				error_exit "create failed w/o dir size limit"
+				error "create failed w/o dir size limit"
 
-			check_mds_dmesg '"has reached"' ||
-				error_exit "reached message should be output"
-
-			[ $has_warning = "false" ] &&
-				error_exit "warning message should be output"
+			# messages may be rate limited if test is run repeatedly
+			check_mds_dmesg '"is approaching max"' ||
+				echo "warning message should be output"
+			check_mds_dmesg '"has reached max"' ||
+				echo "reached message should be output"
 
 			dirsize=$(stat -c%s "$DIR/$tdir")
 
 			[[ $dirsize -ge $maxsize ]] && return 0
-			error_exit "current dir size $dirsize, " \
-				   "previous limit $maxsize"
-		elif [ $rc -ne 0 ]; then
-			set_dir_limits 0 0
-			error_exit "return $rc received instead of expected " \
-				   "$EFBIG or $ENOSPC, files in dir $dirsize"
+			error "dirsize $dirsize < $maxsize after $nfiles files"
+		elif (( rc != 0 )); then
+			break
 		fi
 		nfiles=$((nfiles + 1))
 		dirsize=$(stat -c%s "$DIR/$tdir")
 	done
 
-	set_dir_limits 0 0
-	error "exceeded dir size limit $maxsize($MDSCOUNT) : $dirsize bytes"
+	error "rc=$rc, size=$dirsize/$maxsize, mdt=$MDSCOUNT, nfiles=$nfiles"
 }
 run_test 129 "test directory size limit ========================"
 

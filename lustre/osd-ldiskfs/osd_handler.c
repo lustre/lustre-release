@@ -477,6 +477,7 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 		struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
 		struct inode *parent = child->d_parent->d_inode;
 		struct lu_fid *fid = NULL;
+		char fidstr[FID_LEN + 1] = "unknown";
 
 		rc2 = osd_get_lma(info, parent, child->d_parent, loa);
 		if (!rc2) {
@@ -493,19 +494,18 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 		}
 
 		if (fid != NULL)
-			/* below message is checked in sanity.sh test_129 */
-			CWARN("%s: directory (inode: %lu, FID: "DFID") %s maximum entry limit\n",
-			      osd_name(osd), parent->i_ino, PFID(fid),
-			      rc == -ENOSPC ? "has reached" : "is approaching");
-		else
-			/* below message is checked in sanity.sh test_129 */
-			CWARN("%s: directory (inode: %lu, FID: unknown) %s maximum entry limit\n",
-			      osd_name(osd), parent->i_ino,
-			      rc == -ENOSPC ? "has reached" : "is approaching");
+			snprintf(fidstr, sizeof(fidstr), DFID, PFID(fid));
 
-		/* ignore such error now */
-		if (rc == -ENOBUFS)
-			rc = 0;
+		/* below message is checked in sanity.sh test_129 */
+		if (rc == -ENOSPC) {
+			CWARN("%s: directory (inode: %lu, FID: %s) has reached max size limit\n",
+			      osd_name(osd), parent->i_ino, fidstr);
+		} else {
+			rc = 0;	/* ignore such error now */
+			CWARN("%s: directory (inode: %lu, FID: %s) is approaching max size limit\n",
+			      osd_name(osd), parent->i_ino, fidstr);
+		}
+
 	}
 
 	return rc;
