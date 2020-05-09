@@ -70,7 +70,7 @@
 char *progname;
 int verbose = 1;
 int version;
-static int print_only = 0;
+static int print_only;
 
 #ifdef HAVE_LDISKFS_OSD
 #define FSLIST_LDISKFS "ldiskfs"
@@ -176,17 +176,17 @@ void print_ldd(char *str, struct mkfs_opts *mop)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 
-        printf("\n   %s:\n", str);
-        printf("Target:     %s\n", ldd->ldd_svname);
-        if (ldd->ldd_svindex == INDEX_UNASSIGNED)
-                printf("Index:      unassigned\n");
-        else
-                printf("Index:      %d\n", ldd->ldd_svindex);
-        if (ldd->ldd_uuid[0])
-                printf("UUID:       %s\n", (char *)ldd->ldd_uuid);
-        printf("Lustre FS:  %s\n", ldd->ldd_fsname);
-        printf("Mount type: %s\n", MT_STR(ldd));
-        printf("Flags:      %#x\n", ldd->ldd_flags);
+	printf("\n   %s:\n", str);
+	printf("Target:     %s\n", ldd->ldd_svname);
+	if (ldd->ldd_svindex == INDEX_UNASSIGNED)
+		printf("Index:      unassigned\n");
+	else
+		printf("Index:      %d\n", ldd->ldd_svindex);
+	if (ldd->ldd_uuid[0])
+		printf("UUID:       %s\n", (char *)ldd->ldd_uuid);
+	printf("Lustre FS:  %s\n", ldd->ldd_fsname);
+	printf("Mount type: %s\n", MT_STR(ldd));
+	printf("Flags:      %#x\n", ldd->ldd_flags);
 	printf("              (%s%s%s%s%s%s%s%s)\n",
 	       IS_MDT(ldd) ? "MDT " : "",
 	       IS_OST(ldd) ? "OST " : "",
@@ -198,9 +198,9 @@ void print_ldd(char *str, struct mkfs_opts *mop)
 	       ldd->ldd_flags & LDD_F_NO_PRIMNODE ? "no_primnode " : "");
 	printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
 	osd_print_ldd_params(mop);
-        if (ldd->ldd_userdata[0])
-                printf("Comment: %s\n", ldd->ldd_userdata);
-        printf("\n");
+	if (ldd->ldd_userdata[0])
+		printf("Comment: %s\n", ldd->ldd_userdata);
+	printf("\n");
 }
 
 void set_defaults(struct mkfs_opts *mop)
@@ -228,10 +228,10 @@ static bool server_make_name(__u32 flags, __u16 index, const char *fs,
 	if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
 		if (!(flags & LDD_F_SV_ALL))
 			snprintf(name_buf, name_buf_size, "%.8s%c%s%04x", fs,
-				(flags & LDD_F_VIRGIN) ? ':' :
-				((flags & LDD_F_WRITECONF) ? '=' : '-'),
-				(flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
-				index);
+				 (flags & LDD_F_VIRGIN) ? ':' :
+				 ((flags & LDD_F_WRITECONF) ? '=' : '-'),
+				 (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+				  index);
 	} else if (flags & LDD_F_SV_TYPE_MGS) {
 		snprintf(name_buf, name_buf_size, "MGS");
 	} else {
@@ -243,9 +243,9 @@ static bool server_make_name(__u32 flags, __u16 index, const char *fs,
 
 static inline void badopt(const char *opt, char *type)
 {
-        fprintf(stderr, "%s: '--%s' only valid for %s\n",
-                progname, opt, type);
-        usage(stderr);
+	fprintf(stderr, "%s: '--%s' only valid for %s\n",
+		progname, opt, type);
+	usage(stderr);
 }
 
 #ifdef TUNEFS
@@ -317,93 +317,91 @@ static int erase_param(const char *const buf, const char *const param,
 #define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
-        char *converted, *s2 = 0, *c, *end, sep;
-        int left = MAXNIDSTR;
-        lnet_nid_t nid;
+	char *converted, *s2 = 0, *c, *end, sep;
+	int left = MAXNIDSTR;
+	lnet_nid_t nid;
 
-        converted = malloc(left);
-        if (converted == NULL) {
-                return NULL;
-        }
+	converted = malloc(left);
+	if (!converted)
+		return NULL;
 
-        end = s1 + strlen(s1);
-        c = converted;
-        while ((left > 0) && (s1 < end)) {
-                s2 = strpbrk(s1, ",:");
-                if (!s2)
-                        s2 = end;
-                sep = *s2;
-                *s2 = '\0';
-                nid = libcfs_str2nid(s1);
+	end = s1 + strlen(s1);
+	c = converted;
+	while ((left > 0) && (s1 < end)) {
+		s2 = strpbrk(s1, ",:");
+		if (!s2)
+			s2 = end;
+		sep = *s2;
+		*s2 = '\0';
+		nid = libcfs_str2nid(s1);
 		*s2 = sep;
 
-                if (nid == LNET_NID_ANY) {
+		if (nid == LNET_NID_ANY) {
 			fprintf(stderr, "%s: Cannot resolve hostname '%s'.\n",
 				progname, s1);
-                        free(converted);
-                        return NULL;
-                }
-                if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
-                            strlen("127.0.0.1")) == 0) {
-                        fprintf(stderr, "%s: The NID '%s' resolves to the "
-                                "loopback address '%s'.  Lustre requires a "
-                                "non-loopback address.\n",
-                                progname, s1, libcfs_nid2str(nid));
-                        free(converted);
-                        return NULL;
-                }
+			free(converted);
+			return NULL;
+		}
+		if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
+			    strlen("127.0.0.1")) == 0) {
+			fprintf(stderr,
+				"%s: The NID '%s' resolves to the loopback address '%s'.  Lustre requires a non-loopback address.\n",
+				progname, s1, libcfs_nid2str(nid));
+			free(converted);
+			return NULL;
+		}
 
-                c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
-                left = converted + MAXNIDSTR - c;
-                s1 = s2 + 1;
-        }
-        return converted;
+		c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
+		left = converted + MAXNIDSTR - c;
+		s1 = s2 + 1;
+	}
+	return converted;
 }
 
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	       char **mountopts, char *old_fsname)
 {
 	static struct option long_opts[] = {
-	{ .val = 'B' ,	.name =  "backfs-mount-opts",
+	{ .val = 'B',	.name =  "backfs-mount-opts",
 						.has_arg = required_argument},
-	{ .val = 'f' ,	.name =  "failnode",	.has_arg = required_argument},
-	{ .val = 'f' ,	.name =  "failover",	.has_arg = required_argument},
-	{ .val = 'G' ,	.name =  "mgs",		.has_arg = no_argument},
-	{ .val = 'h' ,	.name =  "help",	.has_arg = no_argument},
-	{ .val = 'i' ,	.name =  "index",	.has_arg = required_argument},
-	{ .val = 'L' ,	.name =  "fsname",	.has_arg = required_argument},
-	{ .val = 'm' ,	.name =  "mgsnode",	.has_arg = required_argument},
-	{ .val = 'm' ,	.name =  "mgsnid",	.has_arg = required_argument},
-	{ .val = 'n' ,	.name =  "dryrun",	.has_arg = no_argument},
-	{ .val = 'N' ,	.name =  "nomgs",	.has_arg = no_argument},
-	{ .val = 'o' ,	.name =  "mountfsoptions",
+	{ .val = 'f',	.name =  "failnode",	.has_arg = required_argument},
+	{ .val = 'f',	.name =  "failover",	.has_arg = required_argument},
+	{ .val = 'G',	.name =  "mgs",		.has_arg = no_argument},
+	{ .val = 'h',	.name =  "help",	.has_arg = no_argument},
+	{ .val = 'i',	.name =  "index",	.has_arg = required_argument},
+	{ .val = 'L',	.name =  "fsname",	.has_arg = required_argument},
+	{ .val = 'm',	.name =  "mgsnode",	.has_arg = required_argument},
+	{ .val = 'm',	.name =  "mgsnid",	.has_arg = required_argument},
+	{ .val = 'n',	.name =  "dryrun",	.has_arg = no_argument},
+	{ .val = 'N',	.name =  "nomgs",	.has_arg = no_argument},
+	{ .val = 'o',	.name =  "mountfsoptions",
 						.has_arg = required_argument},
-	{ .val = 'p' ,	.name =  "param",	.has_arg = required_argument},
-	{ .val = 'q' ,	.name =  "quiet",	.has_arg = no_argument},
-	{ .val = 's' ,	.name =  "servicenode",	.has_arg = required_argument},
-	{ .val = 't' ,	.name =  "network",	.has_arg = required_argument},
-	{ .val = 'u' ,	.name =  "comment",	.has_arg = required_argument},
-	{ .val = 'U' ,	.name =  "force-nohostid",
+	{ .val = 'p',	.name =  "param",	.has_arg = required_argument},
+	{ .val = 'q',	.name =  "quiet",	.has_arg = no_argument},
+	{ .val = 's',	.name =  "servicenode",	.has_arg = required_argument},
+	{ .val = 't',	.name =  "network",	.has_arg = required_argument},
+	{ .val = 'u',	.name =  "comment",	.has_arg = required_argument},
+	{ .val = 'U',	.name =  "force-nohostid",
 						.has_arg = no_argument},
-	{ .val = 'v' ,	.name =  "verbose",	.has_arg = no_argument},
-	{ .val = 'V' ,	.name =  "version",	.has_arg = no_argument},
+	{ .val = 'v',	.name =  "verbose",	.has_arg = no_argument},
+	{ .val = 'V',	.name =  "version",	.has_arg = no_argument},
 #ifndef TUNEFS
-	{ .val = 'b' ,	.name =  "backfstype",	.has_arg = required_argument},
-	{ .val = 'c' ,	.name =  "stripe-count-hint",
+	{ .val = 'b',	.name =  "backfstype",	.has_arg = required_argument},
+	{ .val = 'c',	.name =  "stripe-count-hint",
 						.has_arg = required_argument},
-	{ .val = 'd' ,	.name =  "device-size",	.has_arg = required_argument},
-	{ .val = 'k' ,	.name =  "mkfsoptions",	.has_arg = required_argument},
-	{ .val = 'M' ,	.name =  "mdt",		.has_arg = no_argument},
-	{ .val = 'O' ,	.name =  "ost",		.has_arg = no_argument},
-	{ .val = 'r' ,	.name =  "reformat",	.has_arg = no_argument},
-	{ .val = 'R' ,	.name =  "replace",	.has_arg = no_argument},
+	{ .val = 'd',	.name =  "device-size",	.has_arg = required_argument},
+	{ .val = 'k',	.name =  "mkfsoptions",	.has_arg = required_argument},
+	{ .val = 'M',	.name =  "mdt",		.has_arg = no_argument},
+	{ .val = 'O',	.name =  "ost",		.has_arg = no_argument},
+	{ .val = 'r',	.name =  "reformat",	.has_arg = no_argument},
+	{ .val = 'R',	.name =  "replace",	.has_arg = no_argument},
 #else
-	{ .val = 'E' ,	.name =  "erase-param",	.has_arg = required_argument},
-	{ .val = 'e' ,	.name =  "erase-params",
+	{ .val = 'E',	.name =  "erase-param",	.has_arg = required_argument},
+	{ .val = 'e',	.name =  "erase-params",
 						.has_arg = no_argument},
-	{ .val = 'Q' ,	.name =  "quota",	.has_arg = no_argument},
-	{ .val = 'R' ,	.name =  "rename",	.has_arg = optional_argument},
-	{ .val = 'w' ,	.name =  "writeconf",	.has_arg = no_argument},
+	{ .val = 'Q',	.name =  "quota",	.has_arg = no_argument},
+	{ .val = 'R',	.name =  "rename",	.has_arg = optional_argument},
+	{ .val = 'w',	.name =  "writeconf",	.has_arg = no_argument},
 #endif
 	{ .name = NULL } };
 	char *short_opts = "B:f:Ghi:L:m:nNo:p:qs:t:u:vV"
@@ -421,9 +419,11 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	bool index_option = false;
 
 #ifdef TUNEFS
-	/* For the right semantics, if '-e'/'--erase-params' is specified,
+	/*
+	 * For the right semantics, if '-e'/'--erase-params' is specified,
 	 * it must be picked out and all old parameters should be erased
-	 * before any other changes are done. */
+	 * before any other changes are done.
+	 */
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
 				  &longidx)) != EOF) {
 		switch (opt) {
@@ -460,7 +460,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			}
 
 			nids = convert_hostnames(optarg);
-			if (nids == NULL)
+			if (!nids)
 				return 1;
 
 			rc = append_param(ldd->ldd_params, PARAM_FAILNODE,
@@ -490,6 +490,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'i': {
 			char *endptr = NULL;
 			int base;
+
 			index_option = true;
 			/* LU-2374: check whether it is OST/MDT later */
 			base = (strlen(optarg) > 1 &&
@@ -498,15 +499,14 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			mop->mo_ldd.ldd_svindex = strtoul(optarg,
 							  &endptr, base);
 			if (*endptr != '\0') {
-				fprintf(stderr, "%s: wrong index %s. "
-					"Target index must be decimal or "
-					"hexadecimal.\n",
+				fprintf(stderr,
+					"%s: wrong index %s. Target index must be decimal or hexadecimal.\n",
 					progname, optarg);
 				return 1;
 			}
 			if (ldd->ldd_svindex >= INDEX_UNASSIGNED) {
-				fprintf(stderr, "%s: wrong index %u. "
-					"Target index must be less than %u.\n",
+				fprintf(stderr,
+					"%s: wrong index %u. Target index must be less than %u.\n",
 					progname, ldd->ldd_svindex,
 					INDEX_UNASSIGNED);
 				return 1;
@@ -521,8 +521,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
 			len = strlen(optarg);
 			if (len < 1 || len > LUSTRE_MAXFSNAME) {
-				fprintf(stderr, "%s: filesystem name must be "
-					"1-%d chars\n", progname, LUSTRE_MAXFSNAME);
+				fprintf(stderr,
+					"%s: filesystem name must be 1-%d chars\n",
+					progname, LUSTRE_MAXFSNAME);
 				return 1;
 			}
 
@@ -533,8 +534,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 					break;
 			}
 			if (*tmp != '\0') {
-				fprintf(stderr, "%s: char '%c' not allowed in "
-					"filesystem name\n", progname, *tmp);
+				fprintf(stderr,
+					"%s: char '%c' not allowed in filesystem name\n",
+					progname, *tmp);
 				return 1;
 			}
 			strscpy(new_fsname, optarg, sizeof(new_fsname));
@@ -543,7 +545,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'm': {
 			char *nids = convert_hostnames(optarg);
 
-			if (nids == NULL)
+			if (!nids)
 				return 1;
 
 			rc = append_param(ldd->ldd_params, PARAM_MGSNODE,
@@ -566,7 +568,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			break;
 		case 'p':
 #ifdef TUNEFS
-			/* Removes all existing instances of the parameter
+			/*
+			 * Removes all existing instances of the parameter
 			 * before adding new values.
 			 */
 			rc = erase_param(ldd->ldd_params, optarg, true);
@@ -588,7 +591,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 				return 1;
 			}
 
-			if (optarg == NULL)
+			if (!optarg)
 				return 1;
 
 			rc = add_param(ldd->ldd_params, PARAM_NETWORK, optarg);
@@ -625,8 +628,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			} while (++i < LDD_MT_LAST);
 
 			if (i == LDD_MT_LAST) {
-				fprintf(stderr, "%s: invalid backend filesystem"
-					" type %s\n", progname, optarg);
+				fprintf(stderr,
+					"%s: invalid backend filesystem type %s\n",
+					progname, optarg);
 				return 1;
 			}
 			break;
@@ -636,8 +640,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 				int stripe_count = atol(optarg);
 
 				if (stripe_count <= 0) {
-					fprintf(stderr, "%s: bad stripe count "
-						"%d\n", progname, stripe_count);
+					fprintf(stderr,
+						"%s: bad stripe count %s\n",
+						progname, optarg);
 					return 1;
 				}
 				mop->mo_stripe_count = stripe_count;
@@ -668,8 +673,10 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 #else /* TUNEFS */
 		case 'E':
 			rc = erase_param(ldd->ldd_params, optarg, false);
-			/* (rc == 1) means not found, so don't need to
-			 * call osd_erase_ldd(). */
+			/*
+			 * (rc == 1) means not found, so don't need to
+			 * call osd_erase_ldd().
+			 */
 			if (rc > 1)
 				return rc;
 			if (!rc) {
@@ -692,24 +699,26 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			mop->mo_flags |= MO_RENAME;
 			if (!optarg) {
 				if (IS_SEPARATED_MGS(ldd)) {
-					fprintf(stderr, "%s: must specify the "
-						"old fsname to be renamed for "
-						"separated MGS\n", progname);
+					fprintf(stderr,
+						"%s: must specify the old fsname to be renamed for separated MGS\n",
+						progname);
 					return 1;
 				}
 				break;
 			}
 
 			if ((strlen(optarg) < 1) || (strlen(optarg) > 8)) {
-				fprintf(stderr, "%s: filesystem name must be "
-					"1-8 chars\n", progname);
+				fprintf(stderr,
+					"%s: filesystem name must be 1-8 chars\n",
+					progname);
 				return 1;
 			}
 
 			tmp = strpbrk(optarg, "/:");
 			if (tmp) {
-				fprintf(stderr, "%s: char '%c' not allowed in "
-					"filesystem name\n", progname, *tmp);
+				fprintf(stderr,
+					"%s: char '%c' not allowed in filesystem name\n",
+					progname, *tmp);
 				return 1;
 			}
 
@@ -718,8 +727,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 					sizeof(ldd->ldd_fsname));
 			} else if (strlen(old_fsname) != strlen(optarg) ||
 				   strcmp(old_fsname, optarg) != 0) {
-				fprintf(stderr, "%s: the given fsname '%s' "
-					"to be renamed does not exist\n",
+				fprintf(stderr,
+					"%s: the given fsname '%s' to be renamed does not exist\n",
 					progname, optarg);
 				return 1;
 			}
@@ -740,10 +749,10 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
 	if (strlen(new_fsname) > 0) {
 		if (!(mop->mo_flags & (MO_FORCEFORMAT | MO_RENAME)) &&
-		     (!(ldd->ldd_flags &
-			(LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
-			fprintf(stderr, "%s: cannot change the name "
-				"of a registered target\n", progname);
+		    (!(ldd->ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
+			fprintf(stderr,
+				"%s: cannot change the name of a registered target\n",
+				progname);
 			return 1;
 		}
 
@@ -752,22 +761,25 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
 	if (index_option && !(mop->mo_ldd.ldd_flags &
 			      (LDD_F_VIRGIN | LDD_F_WRITECONF))) {
-		fprintf(stderr, "%s: cannot change the index of"
-			" a registered target\n", progname);
+		fprintf(stderr,
+			"%s: cannot change the index of a registered target\n",
+			progname);
 		return 1;
 	}
 
 #ifdef TUNEFS
 	if (mop->mo_flags & MO_RENAME) {
 		if (new_fsname[0] == '\0') {
-			fprintf(stderr, "%s: need to specify new fsname for "
-				"renaming case\n", progname);
+			fprintf(stderr,
+				"%s: need to specify new fsname for renaming case\n",
+				progname);
 			return 1;
 		}
 
 		if (strcmp(old_fsname, new_fsname) == 0) {
-			fprintf(stderr, "%s: cannot rename fsname '%s' to "
-				"the same name\n", progname, old_fsname);
+			fprintf(stderr,
+				"%s: cannot rename fsname '%s' to the same name\n",
+				progname, old_fsname);
 			return 1;
 		}
 	}
@@ -780,17 +792,17 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	if (optind == argc) {
 		/* The user didn't specify device name */
 		fatal();
-		fprintf(stderr, "Not enough arguments - device name or "
-			"pool/dataset name not specified.\n");
+		fprintf(stderr,
+			"Not enough arguments - device name or pool/dataset name not specified.\n");
 		return EINVAL;
-	} else {
-		/*  The device or pool/filesystem name */
-		strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
-
-		/* Followed by optional vdevs */
-		if (optind < argc - 1)
-			mop->mo_pool_vdevs = (char **) &argv[optind + 1];
 	}
+
+	/*  The device or pool/filesystem name */
+	strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
+
+	/* Followed by optional vdevs */
+	if (optind < argc - 1)
+		mop->mo_pool_vdevs = (char **)&argv[optind + 1];
 
 	return 0;
 }
@@ -802,12 +814,12 @@ int main(int argc, char *const argv[])
 	char *mountopts = NULL;
 	char wanted_mountopts[512] = "";
 	char old_fsname[16] = "";
-	unsigned mount_type;
+	unsigned int mount_type;
 	int ret = 0;
 	int ret2 = 0;
 
 	progname = strrchr(argv[0], '/');
-	if (progname != NULL)
+	if (progname)
 		progname++;
 	else
 		progname = argv[0];
@@ -828,15 +840,18 @@ int main(int argc, char *const argv[])
 		return ret;
 
 #ifdef TUNEFS
-	/* For tunefs, we must read in the old values before parsing any
-	   new ones. */
+	/*
+	 * For tunefs, we must read in the old values before parsing any
+	 * new ones.
+	 */
 
 	/* Check whether the disk has already been formatted by mkfs.lustre */
 	ret = osd_is_lustre(mop.mo_device, &mount_type);
 	if (ret == 0) {
 		fatal();
-		fprintf(stderr, "Device %s has not been formatted with "
-			"mkfs.lustre\n", mop.mo_device);
+		fprintf(stderr,
+			"Device %s has not been formatted with mkfs.lustre\n",
+			mop.mo_device);
 		ret = ENODEV;
 		goto out;
 	}
@@ -845,8 +860,9 @@ int main(int argc, char *const argv[])
 	ret = osd_read_ldd(mop.mo_device, ldd);
 	if (ret != 0) {
 		fatal();
-		fprintf(stderr, "Failed to read previous Lustre data from %s "
-			"(%d)\n", mop.mo_device, ret);
+		fprintf(stderr,
+			"Failed to read previous Lustre data from %s (%d)\n",
+			mop.mo_device, ret);
 		goto out;
 	}
 
@@ -901,8 +917,8 @@ int main(int argc, char *const argv[])
 	}
 
 	if (ldd->ldd_flags & LDD_F_NEED_INDEX)
-		fprintf(stderr, "warning: %s: for Lustre 2.4 and later, the "
-			"target index must be specified with --index\n",
+		fprintf(stderr,
+			"warning: %s: for Lustre 2.4 and later, the target index must be specified with --index\n",
 			mop.mo_device);
 
 	/* If no index is supplied for MDT by default set index to zero */
@@ -913,8 +929,10 @@ int main(int argc, char *const argv[])
 #ifndef TUNEFS
 	if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
 #else
-	/* Don't check --mgs or --mgsnode if print_only is set or
-	 * --erase-params is set. */
+	/*
+	 * Don't check --mgs or --mgsnode if print_only is set or
+	 * --erase-params is set.
+	 */
 	if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0) && !print_only &&
 	    !(mop.mo_flags & MO_ERASE_ALL)) {
 #endif
@@ -987,7 +1005,7 @@ int main(int argc, char *const argv[])
 	}
 
 	if (check_mtab_entry(mop.mo_device, mop.mo_device, NULL, NULL))
-		return(EEXIST);
+		return EEXIST;
 
 	/* Create the loopback file */
 	if (mop.mo_flags & MO_IS_LOOP) {
@@ -1008,7 +1026,7 @@ int main(int argc, char *const argv[])
 		if (ret != 0) {
 			fatal();
 			fprintf(stderr, "Loop device setup for %s failed: %s\n",
-					mop.mo_device, strerror(ret));
+				mop.mo_device, strerror(ret));
 			goto out;
 		}
 	}
@@ -1019,9 +1037,8 @@ int main(int argc, char *const argv[])
 		ret = osd_is_lustre(mop.mo_device, &mount_type);
 		if (ret != 0) {
 			fatal();
-			fprintf(stderr, "Device %s was previously formatted "
-				"for lustre. Use --reformat to reformat it, "
-				"or tunefs.lustre to modify.\n",
+			fprintf(stderr,
+				"Device %s was previously formatted for lustre. Use --reformat to reformat it, or tunefs.lustre to modify.\n",
 				mop.mo_device);
 			goto out;
 		}
@@ -1038,9 +1055,10 @@ int main(int argc, char *const argv[])
 	/* update svname with '=' to refresh config */
 	if (ldd->ldd_flags & LDD_F_WRITECONF) {
 		struct mount_opts opts;
+
 		opts.mo_ldd = *ldd;
 		opts.mo_source = mop.mo_device;
-		(void) osd_label_lustre(&opts);
+		(void)osd_label_lustre(&opts);
 	}
 
 	/* Rename filesystem fsname */
