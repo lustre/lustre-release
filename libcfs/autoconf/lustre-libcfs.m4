@@ -1259,6 +1259,8 @@ Lustre requires that CONFIG_CRYPTO_CRC32 is enabled in your kernel.
 ])])
 ]) # LIBCFS_CONFIG_CRYPTO_CRC32
 
+AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [] )
+AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [])
 
 #
 # LIBCFS_PROG_LINUX

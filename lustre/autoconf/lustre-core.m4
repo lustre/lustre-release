@@ -285,6 +285,18 @@ AC_ARG_ENABLE([gss],
 	[], [enable_gss="auto"])
 AC_MSG_RESULT([$enable_gss])
 
+AC_ARG_VAR([TEST_JOBS],
+    [simultaneous jobs during configure (defaults to $(nproc))])
+if test "x$ac_cv_env_TEST_JOBS_set" != "xset"; then
+	TEST_JOBS=${TEST_JOBS:-$(nproc)}
+fi
+AC_SUBST(TEST_JOBS)
+
+AC_ARG_VAR([TEST_DIR],
+    [location of temporary parallel configure tests (defaults to $PWD/lb2)])
+	TEST_DIR=${TEST_DIR:-$PWD/_lpb}
+AC_SUBST(TEST_DIR)
+
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
 	LC_KEY_TYPE_INSTANTIATE_2ARGS
@@ -2188,6 +2200,9 @@ lock_manager_ops_lm_compare_owner, [
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_LM_COMPARE_OWNER_EXISTS
+
+AC_DEFUN([LC_PROG_LINUX_SRC], [])
+AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
 
 #
 # LC_FSCRYPT_SUPPORT

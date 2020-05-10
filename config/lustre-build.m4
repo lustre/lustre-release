@@ -157,11 +157,25 @@ AC_MSG_RESULT([$enable_modules ($target_os)])
 AS_IF([test "x$enable_modules" = xyes], [
 	AS_CASE([$target_os],
 		[linux*], [
+			# Run serial tests
 			LB_PROG_LINUX
 			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
 			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR])
 			LC_PROG_LINUX
+
+			# Run any parallel compile tests
+			LIBCFS_PROG_LINUX_SRC
+			LN_PROG_LINUX_SRC
+			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_SRC])
+			LC_PROG_LINUX_SRC
+
+			# Collect parallel compile tests results
+			LIBCFS_PROG_LINUX_RESULTS
+			LN_PROG_LINUX_RESULTS
+			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR_RESULTS])
+			LC_PROG_LINUX_RESULTS
+
 		], [*], [
 			# This is strange - Lustre supports a target we don't
 			AC_MSG_ERROR([Modules are not supported on $target_os])

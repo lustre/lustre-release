@@ -638,3 +638,182 @@ AC_CACHE_CHECK([for $1], lb_header, [
 AS_VAR_IF([lb_header], [yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_header])dnl
 ]) # LB_CHECK_LINUX_HEADER
+
+# ------------------------------------------------------------------------------
+# Support 2 stage: parallel compile then checked test results
+# Heavily inspired by OpenZFS
+
+AC_DEFUN([LB2_LINUX_CONFTEST_C], [
+test -d ${TEST_DIR}/$2 || mkdir -p ${TEST_DIR}/$2
+cat confdefs.h - <<_EOF >${TEST_DIR}/$2/$2.c
+$1
+_EOF
+])
+
+#
+# LB2_LINUX_CONFTEST_MAKEFILE
+#
+# $1 - *unique* test case name
+# $2 - additional build flags (ccflags)
+# $3 - external kernel includes for lnet o2ib|gni
+#
+AC_DEFUN([LB2_LINUX_CONFTEST_MAKEFILE], [
+	test -d ${TEST_DIR} || mkdir -p ${TEST_DIR}
+	test -d ${TEST_DIR}/$1 || mkdir -p ${TEST_DIR}/$1
+
+	file=${TEST_DIR}/$1/Makefile
+	EXT_INCLUDE="$3"
+
+	cat - <<_EOF >$file
+# Example command line to manually build source
+# make modules -C $LINUX_OBJ $ARCH_UM M=${TEST_DIR}/$1
+
+${LD:+LD="$LD"}
+CC=$CC
+ZINC=${ZFS}
+SINC=${SPL}
+ZOBJ=${ZFS_OBJ}
+SOBJ=${SPL_OBJ}
+
+LINUXINCLUDE  = $EXT_INCLUDE
+LINUXINCLUDE += -I$LINUX/arch/$SUBARCH/include
+LINUXINCLUDE += -Iinclude -Iarch/$SUBARCH/include/generated
+LINUXINCLUDE += -I$LINUX/include
+LINUXINCLUDE += -Iinclude2
+LINUXINCLUDE += -I$LINUX/include/uapi
+LINUXINCLUDE += -Iinclude/generated
+LINUXINCLUDE += -I$LINUX/arch/$SUBARCH/include/uapi
+LINUXINCLUDE += -Iarch/$SUBARCH/include/generated/uapi
+LINUXINCLUDE += -I$LINUX/include/uapi -Iinclude/generated/uapi
+ifneq (\$(SOBJ),)
+LINUXINCLUDE += -include \$(SOBJ)/spl_config.h
+endif
+ifneq (\$(ZOBJ),)
+LINUXINCLUDE += -include \$(ZOBJ)/zfs_config.h
+endif
+ifneq (\$(SINC),)
+LINUXINCLUDE += -I\$(SINC)/include
+endif
+ifneq (\$(ZINC),)
+LINUXINCLUDE += -I\$(ZINC) -I\$(ZINC)/include
+ifneq (\$(SINC),)
+LINUXINCLUDE += -I\$(SINC)
+else
+LINUXINCLUDE += -I\$(ZINC)/include/spl
+endif
+endif
+LINUXINCLUDE += -include $CONFIG_INCLUDE
+KBUILD_EXTRA_SYMBOLS=${ZFS_OBJ:+$ZFS_OBJ/Module.symvers}
+
+ccflags-y := -Werror-implicit-function-declaration
+_EOF
+
+	# Additional custom CFLAGS as requested.
+	m4_ifval($2, [echo "ccflags-y += $2" >>$file], [])
+
+	# Test case source
+	echo "obj-m := $1.o" >>$file
+	echo "obj-m += $1/" >>${TEST_DIR}/Makefile
+])
+
+
+#
+# LB2_LINUX_COMPILE
+#
+# $1 - build dir
+# $2 - test command
+# $3 - pass command
+# $4 - fail command
+#
+# Used internally by LB2_LINUX_TEST_COMPILE
+#
+AC_DEFUN([LB2_LINUX_COMPILE], [
+	AC_TRY_COMMAND([
+	    KBUILD_MODPOST_NOFINAL="yes"
+	    make modules -k -j$TEST_JOBS -C $LINUX_OBJ $ARCH_UM
+	    M=$1 >$1/build.log 2>&1])
+	AS_IF([AC_TRY_COMMAND([$2])], [$3], [$4])
+])
+
+#
+# LB2_LINUX_TEST_COMPILE
+#
+# Perform a full compile excluding the final modpost phase.
+# $1 - flavor
+# $2 - dirname
+#
+AC_DEFUN([LB2_LINUX_TEST_COMPILE], [
+	LB2_LINUX_COMPILE([$2], [test -f $2/build.log], [
+		mv $2/Makefile $2/Makefile.compile.$1
+		mv $2/build.log $2/build.log.$1
+	],[
+	        AC_MSG_ERROR([
+        *** Unable to compile test source to determine kernel interfaces.])
+	])
+])
+
+#
+# Perform the compilation of the test cases in two phases.
+#
+# Phase 1) attempt to build the object files for all of the tests
+#          defined by the LB2_LINUX_TEST_SRC macro.
+#
+# Phase 2) disable all tests which failed the initial compilation.
+#
+# This allows us efficiently build the test cases in parallel while
+# remaining resilient to build failures which are expected when
+# detecting the available kernel interfaces.
+#
+# The maximum allowed parallelism can be controlled by setting the
+# TEST_JOBS environment variable which defaults to $(nproc).
+#
+AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
+	# Phase 1 - Compilation only, final linking is skipped.
+	LB2_LINUX_TEST_COMPILE([$1], [${TEST_DIR}])
+
+	for dir in $(awk '/^obj-m/ { print [$]3 }' \
+	    ${TEST_DIR}/Makefile.compile.$1); do
+		name=${dir%/}
+		AS_IF([test -f ${TEST_DIR}/$name/$name.o], [
+			touch ${TEST_DIR}/$name/$name.ko
+		])
+	done
+])
+
+#
+# LB2_LINUX_TEST_SRC
+#
+# $1 - *unique* name
+# $2 - global
+# $3 - source
+# $4 - extra cflags
+# $5 - external include paths
+#
+# NOTICE as all of the test cases are compiled in parallel tests may not
+# depend on the results other tests.
+# Each test needs resolve any external dependencies at the time the program
+# source is generated.
+#
+AC_DEFUN([LB2_LINUX_TEST_SRC], [
+	LB2_LINUX_CONFTEST_C([LB_LANG_PROGRAM([[$2]], [[$3]])], [$1])
+	LB2_LINUX_CONFTEST_MAKEFILE([$1], [$4], [$5])
+])
+
+#
+# LB2_LINUX_TEST_RESULT
+#
+# $1 - *unique* name matching the LB2_LINUX_TEST_SRC macro
+# $2 - run on success (valid .ko generated)
+# $3 - run on failure (unable to compile)
+#
+AC_DEFUN([LB2_LINUX_TEST_RESULT], [
+	AS_IF([test -d ${TEST_DIR}/$1], [
+		AS_IF([test -f ${TEST_DIR}/$1/$1.ko], [$2], [$3])
+	], [
+		AC_MSG_ERROR([
+	*** No matching source for the "$1" test, check that
+	*** both the test source and result macros refer to the same name.
+		])
+	])
+])
+

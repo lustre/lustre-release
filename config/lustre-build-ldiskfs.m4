@@ -427,6 +427,10 @@ AC_MSG_RESULT([$enable_ldiskfs])
 AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 ]) # LB_CONFIG_LDISKFS
 
+
+AC_DEFUN([LB_EXT4_SRC_DIR_SRC], [])
+AC_DEFUN([LB_EXT4_SRC_DIR_RESULTS], [])
+
 #
 # LB_VALIDATE_EXT4_SRC_DIR
 #
