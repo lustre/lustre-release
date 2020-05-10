@@ -559,6 +559,8 @@ struct mdt_thread_info {
 
 	/* FLR: layout change API */
 	struct md_layout_change	   mti_mlc;
+
+	struct lu_seq_range	   mti_range;
 };
 
 extern struct lu_context_key mdt_thread_key;
@@ -1430,5 +1432,8 @@ void mdt_restripe_migrate_add(struct mdt_thread_info *info,
 			      struct mdt_object *o);
 void mdt_restripe_update_add(struct mdt_thread_info *info,
 			     struct mdt_object *o);
+int mdt_is_remote_object(struct mdt_thread_info *info,
+			 struct mdt_object *parent,
+			 struct mdt_object *child);
 
 #endif /* _MDT_INTERNAL_H */

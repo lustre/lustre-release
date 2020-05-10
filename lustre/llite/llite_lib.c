@@ -1599,8 +1599,8 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		GOTO(unlock, rc = -ENOMEM);
 
 	/* validate the lsm */
-	rc = md_merge_attr(ll_i2mdexp(inode), lli->lli_lsm_md, attr,
-			   ll_md_blocking_ast);
+	rc = md_merge_attr(ll_i2mdexp(inode), &lli->lli_fid, lli->lli_lsm_md,
+			   attr, ll_md_blocking_ast);
 	if (!rc) {
 		if (md->body->mbo_valid & OBD_MD_FLNLINK)
 			md->body->mbo_nlink = attr->cat_nlink;
