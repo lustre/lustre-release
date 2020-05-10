@@ -141,6 +141,7 @@ out:
 }
 
 int lmv_revalidate_slaves(struct obd_export *exp,
+			  const struct lu_fid *pfid,
 			  const struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags)
@@ -187,7 +188,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		 * which is not needed here.
 		 */
 		memset(op_data, 0, sizeof(*op_data));
-		op_data->op_fid1 = fid;
+		op_data->op_fid1 = *pfid;
 		op_data->op_fid2 = fid;
 
 		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds, NULL);
@@ -425,12 +426,17 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 
 retry:
-	tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+	if (op_data->op_name) {
+		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+		if (!fid_is_sane(&op_data->op_fid2))
+			fid_zero(&op_data->op_fid2);
+	} else if (fid_is_sane(&op_data->op_fid2)) {
+		tgt = lmv_find_target(lmv, &op_data->op_fid2);
+	} else {
+		tgt = lmv_find_target(lmv, &op_data->op_fid1);
+	}
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
-
-	if (!fid_is_sane(&op_data->op_fid2))
-		fid_zero(&op_data->op_fid2);
 
 	CDEBUG(D_INODE, "LOOKUP_INTENT with fid1="DFID", fid2="DFID
 	       ", name='%s' -> mds #%u\n",
@@ -449,7 +455,8 @@ retry:
 		/* If RPC happens, lsm information will be revalidated
 		 * during update_inode process (see ll_update_lsm_md) */
 		if (op_data->op_mea2 != NULL) {
-			rc = lmv_revalidate_slaves(exp, op_data->op_mea2,
+			rc = lmv_revalidate_slaves(exp, &op_data->op_fid2,
+						   op_data->op_mea2,
 						   cb_blocking,
 						   extra_lock_flags);
 			if (rc != 0)

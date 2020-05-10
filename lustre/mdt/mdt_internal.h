@@ -513,6 +513,7 @@ struct mdt_thread_info {
 
 	/* FLR: layout change API */
 	struct md_layout_change	   mti_layout;
+	struct lu_seq_range	   mti_range;
 };
 
 extern struct lu_context_key mdt_thread_key;
@@ -1319,5 +1320,9 @@ int mdt_data_version_get(struct tgt_session_info *tsi);
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
+
+int mdt_is_remote_object(struct mdt_thread_info *info,
+			 struct mdt_object *parent,
+			 struct mdt_object *child);
 
 #endif /* _MDT_INTERNAL_H */

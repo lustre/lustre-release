@@ -3452,6 +3452,7 @@ int lmv_quotactl(struct obd_device *unused, struct obd_export *exp,
 }
 
 static int lmv_merge_attr(struct obd_export *exp,
+			  const struct lu_fid *fid,
 			  const struct lmv_stripe_md *lsm,
 			  struct cl_attr *attr,
 			  ldlm_blocking_callback cb_blocking)
@@ -3459,7 +3460,7 @@ static int lmv_merge_attr(struct obd_export *exp,
 	int rc;
 	int i;
 
-	rc = lmv_revalidate_slaves(exp, lsm, cb_blocking, 0);
+	rc = lmv_revalidate_slaves(exp, fid, lsm, cb_blocking, 0);
 	if (rc < 0)
 		return rc;
 

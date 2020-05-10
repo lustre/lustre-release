@@ -1668,14 +1668,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                  __u64 child_bits,
                                  struct ldlm_reply *ldlm_rep)
 {
-	struct ptlrpc_request  *req = mdt_info_req(info);
-	struct mdt_body        *reqbody = NULL;
-	struct mdt_object      *parent = info->mti_object;
-	struct mdt_object      *child;
-	struct lu_fid          *child_fid = &info->mti_tmp_fid1;
-	struct lu_name         *lname = NULL;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_body *reqbody = NULL;
+	struct mdt_object *parent = info->mti_object;
+	struct mdt_object *child = NULL;
+	struct lu_fid *child_fid = &info->mti_tmp_fid1;
+	struct lu_name *lname = NULL;
 	struct mdt_lock_handle *lhp = NULL;
-	struct ldlm_lock       *lock;
+	struct ldlm_lock *lock;
 	__u64 try_bits = 0;
 	bool is_resent;
 	int ma_need = 0;
@@ -1742,6 +1742,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	mdt_name_unpack(info->mti_pill, &RMF_NAME, lname, MNF_FIX_ANON);
 
 	if (lu_name_is_valid(lname)) {
+		if (mdt_object_remote(parent)) {
+			CERROR("%s: parent "DFID" is on remote target\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(parent)));
+			RETURN(-EPROTO);
+		}
+
 		CDEBUG(D_INODE, "getattr with lock for "DFID"/"DNAME", "
 		       "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)),
 		       PNAME(lname), ldlm_rep);
@@ -1751,9 +1758,32 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			RETURN(err_serious(-EPROTO));
 
 		*child_fid = reqbody->mbo_fid2;
-
 		if (unlikely(!fid_is_sane(child_fid)))
 			RETURN(err_serious(-EINVAL));
+
+		if (lu_fid_eq(mdt_object_fid(parent), child_fid)) {
+			mdt_object_get(info->mti_env, parent);
+			child = parent;
+		} else {
+			child = mdt_object_find(info->mti_env, info->mti_mdt,
+						child_fid);
+			if (IS_ERR(child))
+				RETURN(PTR_ERR(child));
+		}
+
+		if (mdt_object_remote(child)) {
+			CERROR("%s: child "DFID" is on remote target\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(child)));
+			GOTO(out_child, rc = -EPROTO);
+		}
+
+		/* don't fetch LOOKUP lock if it's remote object */
+		rc = mdt_is_remote_object(info, parent, child);
+		if (rc < 0)
+			GOTO(out_child, rc);
+		if (rc)
+			child_bits &= ~MDS_INODELOCK_LOOKUP;
 
 		CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
 		       "ldlm_rep = %p\n",
@@ -1767,14 +1797,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj,
 				"Parent doesn't exist!");
-		RETURN(-ESTALE);
-	}
-
-	if (mdt_object_remote(parent)) {
-		CERROR("%s: parent "DFID" is on remote target\n",
-		       mdt_obd_name(info->mti_mdt),
-		       PFID(mdt_object_fid(parent)));
-		RETURN(-EIO);
+		GOTO(out_child, rc = -ESTALE);
 	}
 
 	if (lu_name_is_valid(lname)) {
@@ -1808,30 +1831,18 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
 
 		if (rc != 0)
-			GOTO(out_parent, rc);
+			GOTO(unlock_parent, rc);
+
+		child = mdt_object_find(info->mti_env, info->mti_mdt,
+					child_fid);
+		if (unlikely(IS_ERR(child)))
+			GOTO(unlock_parent, rc = PTR_ERR(child));
 	}
 
 	mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
 
-	/*
-	 *step 3: find the child object by fid & lock it.
-	 *        regardless if it is local or remote.
-	 *
-	 *Note: LU-3240 (commit 762f2114d282a98ebfa4dbbeea9298a8088ad24e)
-	 *	set parent dir fid the same as child fid in getattr by fid case
-	 *	we should not lu_object_find() the object again, could lead
-	 *	to hung if there is a concurrent unlink destroyed the object.
-	 */
-	if (lu_fid_eq(mdt_object_fid(parent), child_fid)) {
-		mdt_object_get(info->mti_env, parent);
-		child = parent;
-	} else {
-		child = mdt_object_find(info->mti_env, info->mti_mdt,
-					child_fid);
-	}
-
-	if (unlikely(IS_ERR(child)))
-		GOTO(out_parent, rc = PTR_ERR(child));
+	/* step 3: lock child regardless if it is local or remote. */
+	LASSERT(child);
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout * 2);
 	if (!mdt_object_exists(child)) {
@@ -1921,7 +1932,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		if (mdt_object_exists(child) &&
 		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && child != parent) {
-			LDLM_LOCK_PUT(lock);
 			mdt_object_put(info->mti_env, child);
 			/* NB: call the mdt_pack_size2body always after
 			 * mdt_object_put(), that is why this special
@@ -1935,8 +1945,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
 				unlock_res_and_lock(lock);
 			}
-
-			GOTO(out_parent, rc = 0);
+			LDLM_LOCK_PUT(lock);
+			GOTO(unlock_parent, rc = 0);
 		}
 	}
 	if (lock)
@@ -1944,8 +1954,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 	EXIT;
 out_child:
-	mdt_object_put(info->mti_env, child);
-out_parent:
+	if (child)
+		mdt_object_put(info->mti_env, child);
+unlock_parent:
 	if (lhp)
 		mdt_object_unlock(info, parent, lhp, 1);
 	return rc;

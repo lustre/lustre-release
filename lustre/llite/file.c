@@ -4360,8 +4360,8 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
 
 	/* Call getattr by fid, so do not provide name at all. */
-	op_data = ll_prep_md_op_data(NULL, inode, inode, NULL, 0, 0,
-				     LUSTRE_OPC_ANY, NULL);
+	op_data = ll_prep_md_op_data(NULL, dentry->d_parent->d_inode, inode,
+				     NULL, 0, 0, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
@@ -4403,7 +4403,7 @@ static int ll_merge_md_attr(struct inode *inode)
 
 	LASSERT(lli->lli_lsm_md != NULL);
 	down_read(&lli->lli_lsm_sem);
-	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
+	rc = md_merge_attr(ll_i2mdexp(inode), &lli->lli_fid, lli->lli_lsm_md,
 			   &attr, ll_md_blocking_ast);
 	up_read(&lli->lli_lsm_sem);
 	if (rc != 0)
