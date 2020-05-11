@@ -831,6 +831,9 @@ int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
 
+	memset(err_str, 0, LNET_MAX_STR_LEN);
+	snprintf(err_str, LNET_MAX_STR_LEN, "\"generic error\"");
+
 	if (nw == NULL || nidstr == NULL) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
 			 "\"missing mandatory parameter:'%s'\"",
@@ -905,6 +908,8 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 {
 	int rc;
 	char err_str[LNET_MAX_STR_LEN];
+	memset(err_str, 0, LNET_MAX_STR_LEN);
+	snprintf(err_str, LNET_MAX_STR_LEN, "\"generic error\"");
 
 	if (hops == -1) {
 		hops = LNET_UNDEFINED_HOPS;
@@ -938,6 +943,7 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 
 	rc = lustre_lnet_route_common(nw, nidstr, hops, prio, sen, seq_no,
 				      err_rc, LNETCTL_ADD_CMD);
+	return rc;
 out:
 	cYAML_build_error(rc, seq_no, ADD_CMD, "route", err_str, err_rc);
 
