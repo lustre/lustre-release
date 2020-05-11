@@ -466,7 +466,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
-#ifdef CONFIG_LUSTRE_PINGER
+#ifdef CONFIG_LUSTRE_FS_PINGER
 	long timeout_jiffies = cfs_time_seconds(obd_timeout);
 	int rc;
 

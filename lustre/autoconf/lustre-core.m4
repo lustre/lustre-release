@@ -102,7 +102,7 @@ AC_ARG_ENABLE([pinger],
 	[], [enable_pinger="yes"])
 AC_MSG_RESULT([$enable_pinger])
 AS_IF([test "x$enable_pinger" != xno],
-	[AC_DEFINE(CONFIG_LUSTRE_PINGER, 1,[Use the Pinger])])
+	[AC_DEFINE(CONFIG_LUSTRE_FS_PINGER, 1,[Use the Pinger])])
 ]) # LC_CONFIG_PINGER
 
 #

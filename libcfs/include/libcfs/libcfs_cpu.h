@@ -297,6 +297,30 @@ static inline void cfs_cpu_fini(void)
 
 #endif /* CONFIG_SMP */
 
+static inline
+struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
+						struct cfs_cpt_table *tbl,
+						int flags, int cpt, int nthrs)
+{
+	cpumask_var_t *mask = cfs_cpt_cpumask(tbl, cpt);
+	struct workqueue_attrs attrs = { };
+	struct workqueue_struct *wq;
+
+	wq = alloc_workqueue(wq_name, WQ_UNBOUND | flags, nthrs);
+	if (!wq)
+		return ERR_PTR(-ENOMEM);
+
+	if (mask && alloc_cpumask_var(&attrs.cpumask, GFP_KERNEL)) {
+		cpumask_copy(attrs.cpumask, *mask);
+		cpus_read_lock();
+		cfs_apply_workqueue_attrs(wq, &attrs);
+		cpus_read_unlock();
+		free_cpumask_var(attrs.cpumask);
+	}
+
+	return wq;
+}
+
 /*
  * allocate per-cpu-partition data, returned value is an array of pointers,
  * variable can be indexed by CPU ID.

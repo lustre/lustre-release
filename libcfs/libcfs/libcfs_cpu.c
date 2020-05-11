@@ -32,8 +32,8 @@
 
 #include <linux/cpu.h>
 #include <linux/sched.h>
-#include <libcfs/libcfs_cpu.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_cpu.h>
 
 /** virtual processing unit */
 struct cfs_cpu_partition {

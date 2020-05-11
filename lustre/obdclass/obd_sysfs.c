@@ -214,7 +214,7 @@ static ssize_t version_show(struct kobject *kobj, struct attribute *attr,
 static ssize_t pinger_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
 {
-#ifdef CONFIG_LUSTRE_PINGER
+#ifdef CONFIG_LUSTRE_FS_PINGER
 	const char *state = "on";
 #else
 	const char *state = "off";

@@ -1893,11 +1893,11 @@ EXPORT_SYMBOL(obd_stale_export_adjust);
  */
 int obd_zombie_impexp_init(void)
 {
-	zombie_wq = alloc_workqueue("obd_zombid", 0, 0);
-	if (!zombie_wq)
-		return -ENOMEM;
+	zombie_wq = cfs_cpt_bind_workqueue("obd_zombid", cfs_cpt_tab,
+					   0, CFS_CPT_ANY,
+					   cfs_cpt_number(cfs_cpt_tab));
 
-	return 0;
+	return IS_ERR(zombie_wq) ? PTR_ERR(zombie_wq) : 0;
 }
 
 /**
