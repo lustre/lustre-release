@@ -281,14 +281,15 @@ ksocknal_match_tx(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
                 return SOCKNAL_MATCH_YES;
 #endif
 
-        if (tx == NULL || tx->tx_lnetmsg == NULL) {
-                /* noop packet */
-		nob = offsetof(struct ksock_msg, ksm_u);
-        } else {
-                nob = tx->tx_lnetmsg->msg_len +
-                      ((conn->ksnc_proto == &ksocknal_protocol_v1x) ?
-		       sizeof(struct lnet_hdr) : sizeof(struct ksock_msg));
-        }
+	if (tx == NULL || tx->tx_lnetmsg == NULL) {
+		/* noop packet */
+		nob = sizeof(struct ksock_msg_hdr);
+	} else {
+		nob = tx->tx_lnetmsg->msg_len +
+			((conn->ksnc_proto == &ksocknal_protocol_v1x) ?
+			 0 : sizeof(struct ksock_msg_hdr)) +
+			sizeof(struct lnet_hdr);
+	}
 
         /* default checking for typed connection */
         switch (conn->ksnc_type) {
@@ -320,10 +321,11 @@ ksocknal_match_tx_v3(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 {
         int nob;
 
-        if (tx == NULL || tx->tx_lnetmsg == NULL)
-		nob = offsetof(struct ksock_msg, ksm_u);
-        else
-		nob = tx->tx_lnetmsg->msg_len + sizeof(struct ksock_msg);
+	if (tx == NULL || tx->tx_lnetmsg == NULL)
+		nob = sizeof(struct ksock_msg_hdr);
+	else
+		nob = sizeof(struct ksock_msg_hdr) + sizeof(struct lnet_hdr) +
+			tx->tx_lnetmsg->msg_len;
 
         switch (conn->ksnc_type) {
         default:
@@ -718,30 +720,41 @@ ksocknal_pack_msg_v1(struct ksock_tx *tx)
 static void
 ksocknal_pack_msg_v2(struct ksock_tx *tx)
 {
+	int hdr_size;
+
 	tx->tx_hdr.iov_base = (void *)&tx->tx_msg;
 
-        if (tx->tx_lnetmsg != NULL) {
-                LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
+	switch (tx->tx_msg.ksm_type) {
+	case KSOCK_MSG_LNET:
+		LASSERT(tx->tx_lnetmsg != NULL);
+		hdr_size = (sizeof(struct ksock_msg_hdr) +
+				sizeof(struct lnet_hdr));
 
-                tx->tx_msg.ksm_u.lnetmsg.ksnm_hdr = tx->tx_lnetmsg->msg_hdr;
-		tx->tx_hdr.iov_len = sizeof(struct ksock_msg);
-		tx->tx_resid = tx->tx_nob = sizeof(struct ksock_msg) + tx->tx_lnetmsg->msg_len;
-        } else {
-                LASSERT(tx->tx_msg.ksm_type == KSOCK_MSG_NOOP);
+		tx->tx_msg.ksm_u.lnetmsg = tx->tx_lnetmsg->msg_hdr;
+		tx->tx_hdr.iov_len = hdr_size;
+		tx->tx_resid = tx->tx_nob = hdr_size + tx->tx_lnetmsg->msg_len;
+		break;
+	case KSOCK_MSG_NOOP:
+		LASSERT(tx->tx_lnetmsg == NULL);
+		hdr_size = sizeof(struct ksock_msg_hdr);
 
-		tx->tx_hdr.iov_len = offsetof(struct ksock_msg,
-					      ksm_u.lnetmsg.ksnm_hdr);
-		tx->tx_resid = tx->tx_nob = offsetof(struct ksock_msg,  ksm_u.lnetmsg.ksnm_hdr);
-        }
-        /* Don't checksum before start sending, because packet can be piggybacked with ACK */
+		tx->tx_hdr.iov_len = hdr_size;
+		tx->tx_resid = tx->tx_nob = hdr_size;
+		break;
+	default:
+		LASSERT(0);
+	}
+	/* Don't checksum before start sending, because packet can be
+	 * piggybacked with ACK
+	 */
 }
 
 static void
 ksocknal_unpack_msg_v1(struct ksock_msg *msg)
 {
-        msg->ksm_csum           = 0;
-        msg->ksm_type           = KSOCK_MSG_LNET;
-        msg->ksm_zc_cookies[0]  = msg->ksm_zc_cookies[1]  = 0;
+	msg->ksm_csum		= 0;
+	msg->ksm_type		= KSOCK_MSG_LNET;
+	msg->ksm_zc_cookies[0]	= msg->ksm_zc_cookies[1]  = 0;
 }
 
 static void

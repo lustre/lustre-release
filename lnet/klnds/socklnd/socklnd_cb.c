@@ -1080,14 +1080,15 @@ ksocknal_new_packet(struct ksock_conn *conn, int nob_to_skip)
 		switch (conn->ksnc_proto->pro_version) {
 		case  KSOCK_PROTO_V2:
 		case  KSOCK_PROTO_V3:
-                        conn->ksnc_rx_state = SOCKNAL_RX_KSM_HEADER;
+			conn->ksnc_rx_state = SOCKNAL_RX_KSM_HEADER;
 			conn->ksnc_rx_iov = (struct kvec *)&conn->ksnc_rx_iov_space;
-                        conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg;
+			conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg;
 
-			conn->ksnc_rx_nob_wanted = offsetof(struct ksock_msg, ksm_u);
-			conn->ksnc_rx_nob_left = offsetof(struct ksock_msg, ksm_u);
-			conn->ksnc_rx_iov[0].iov_len  = offsetof(struct ksock_msg, ksm_u);
-                        break;
+			conn->ksnc_rx_nob_wanted = sizeof(struct ksock_msg_hdr);
+			conn->ksnc_rx_nob_left = sizeof(struct ksock_msg_hdr);
+			conn->ksnc_rx_iov[0].iov_len =
+				sizeof(struct ksock_msg_hdr);
+			break;
 
 		case KSOCK_PROTO_V1:
 			/* Receiving bare struct lnet_hdr */
@@ -1196,16 +1197,6 @@ ksocknal_process_receive(struct ksock_conn *conn,
 			__swab64s(&conn->ksnc_msg.ksm_zc_cookies[1]);
 		}
 
-		if (conn->ksnc_msg.ksm_type != KSOCK_MSG_NOOP &&
-		    conn->ksnc_msg.ksm_type != KSOCK_MSG_LNET) {
-			CERROR("%s: Unknown message type: %x\n",
-			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
-			       conn->ksnc_msg.ksm_type);
-			ksocknal_new_packet(conn, 0);
-			ksocknal_close_conn_and_siblings(conn, -EPROTO);
-			return (-EPROTO);
-		}
-
 		if (conn->ksnc_msg.ksm_type == KSOCK_MSG_NOOP &&
 		    conn->ksnc_msg.ksm_csum != 0 &&     /* has checksum */
 		    conn->ksnc_msg.ksm_csum != conn->ksnc_rx_csum) {
@@ -1240,25 +1231,36 @@ ksocknal_process_receive(struct ksock_conn *conn,
 			}
 		}
 
-		if (conn->ksnc_msg.ksm_type == KSOCK_MSG_NOOP) {
+		switch (conn->ksnc_msg.ksm_type) {
+		case KSOCK_MSG_NOOP:
 			ksocknal_new_packet(conn, 0);
 			return 0;	/* NOOP is done and just return */
+
+		case KSOCK_MSG_LNET:
+
+			conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
+			conn->ksnc_rx_nob_wanted = sizeof(struct lnet_hdr);
+			conn->ksnc_rx_nob_left = sizeof(struct lnet_hdr);
+
+			conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
+			conn->ksnc_rx_iov[0].iov_base =
+				(void *)&conn->ksnc_msg.ksm_u.lnetmsg;
+			conn->ksnc_rx_iov[0].iov_len = sizeof(struct lnet_hdr);
+
+			conn->ksnc_rx_niov = 1;
+			conn->ksnc_rx_kiov = NULL;
+			conn->ksnc_rx_nkiov = 0;
+
+			goto again;     /* read lnet header now */
+
+		default:
+			CERROR("%s: Unknown message type: %x\n",
+			       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
+			       conn->ksnc_msg.ksm_type);
+			ksocknal_new_packet(conn, 0);
+			ksocknal_close_conn_and_siblings(conn, -EPROTO);
+			return -EPROTO;
 		}
-
-		conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
-		conn->ksnc_rx_nob_wanted = sizeof(struct ksock_lnet_msg);
-		conn->ksnc_rx_nob_left = sizeof(struct ksock_lnet_msg);
-
-		conn->ksnc_rx_iov = (struct kvec *)&conn->ksnc_rx_iov_space;
-		conn->ksnc_rx_iov[0].iov_base =
-			(char *)&conn->ksnc_msg.ksm_u.lnetmsg;
-		conn->ksnc_rx_iov[0].iov_len  = sizeof(struct ksock_lnet_msg);
-
-		conn->ksnc_rx_niov = 1;
-		conn->ksnc_rx_kiov = NULL;
-		conn->ksnc_rx_nkiov = 0;
-
-		goto again;     /* read lnet header now */
 
 	case SOCKNAL_RX_LNET_HEADER:
 		/* unpack message header */
@@ -1266,7 +1268,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 
 		if ((conn->ksnc_peer->ksnp_id.pid & LNET_PID_USERFLAG) != 0) {
 			/* Userspace peer_ni */
-			lhdr = &conn->ksnc_msg.ksm_u.lnetmsg.ksnm_hdr;
+			lhdr = &conn->ksnc_msg.ksm_u.lnetmsg;
 			id = &conn->ksnc_peer->ksnp_id;
 
 			/* Substitute process ID assigned at connection time */
@@ -1278,7 +1280,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 		ksocknal_conn_addref(conn);     /* ++ref while parsing */
 
 		rc = lnet_parse(conn->ksnc_peer->ksnp_ni,
-				&conn->ksnc_msg.ksm_u.lnetmsg.ksnm_hdr,
+				&conn->ksnc_msg.ksm_u.lnetmsg,
 				lnet_nid_to_nid4(&conn->ksnc_peer->ksnp_id.nid),
 				conn, 0);
 		if (rc < 0) {
@@ -1315,7 +1317,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 		if (rc == 0 && conn->ksnc_msg.ksm_zc_cookies[0] != 0) {
 			LASSERT(conn->ksnc_proto != &ksocknal_protocol_v1x);
 
-			lhdr = &conn->ksnc_msg.ksm_u.lnetmsg.ksnm_hdr;
+			lhdr = &conn->ksnc_msg.ksm_u.lnetmsg;
 			id = &conn->ksnc_peer->ksnp_id;
 
 			rc = conn->ksnc_proto->pro_handle_zcreq(
