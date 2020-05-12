@@ -65,7 +65,7 @@ static void errlog(const char *fmt, ...)
 {
 	va_list args;
 
-	openlog(progname, LOG_PERROR | LOG_PID, LOG_AUTHPRIV);
+	openlog(progname, LOG_PID, LOG_AUTHPRIV);
 
 	va_start(args, fmt);
 	vsyslog(LOG_NOTICE, fmt, args);
@@ -222,6 +222,94 @@ int get_opts(int argc, char *const argv[])
 	return 0;
 }
 
+#define sepol_downcall(type_t, magic) ({ \
+	glob_t path; \
+	int fd, size; \
+	struct type_t *data; \
+	int idx; \
+	char *p; \
+	\
+	size = offsetof(struct type_t, \
+			sdd_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1]); \
+	data = malloc(size); \
+	if (!data) { \
+		errlog("malloc sepol downcall data(%d) failed!\n", size); \
+		rc = -ENOMEM; \
+		goto out_mdval; \
+	} \
+	memset(data, 0, size); \
+	\
+	/* Put all info together and generate string \
+	 * to represent SELinux policy information \
+	 */ \
+	rc = snprintf(data->sdd_sepol, LUSTRE_NODEMAP_SEPOL_LENGTH + 1, \
+		      "%.1d:%s:%u:", enforce, policy_type, policyver); \
+	if (rc >= LUSTRE_NODEMAP_SEPOL_LENGTH + 1) { \
+		rc = -EMSGSIZE; \
+		goto out_data_ ## type_t ; \
+	} \
+	\
+	p = data->sdd_sepol + strlen(data->sdd_sepol); \
+	size = LUSTRE_NODEMAP_SEPOL_LENGTH + 1 - strlen(data->sdd_sepol); \
+	for (idx = 0; idx < mdsize; idx++) { \
+		rc = snprintf(p, size, "%02x", \
+			      (unsigned char)(mdval[idx])); \
+		p += 2; \
+		size -= 2; \
+		if (size < 0 || rc >= size) { \
+			rc = -EMSGSIZE; \
+			goto out_data_ ## type_t ; \
+		} \
+	} \
+	data->sdd_sepol_len = p - data->sdd_sepol; \
+	\
+	size = offsetof(struct type_t, \
+			sdd_sepol[data->sdd_sepol_len]); \
+	\
+	if (!obd_type || !obd_name) { \
+		/* called without arg (presumably from command line): \
+		 * print SELinux status and exit \
+		 */ \
+		printf("SELinux status info: %.*s\n", \
+		       data->sdd_sepol_len, data->sdd_sepol); \
+		return 0; \
+	} \
+	\
+	data->sdd_magic = magic; \
+	data->sdd_sepol_mtime = policymtime; \
+	/* Send SELinux policy info to kernelspace */ \
+	rc = cfs_get_param_paths(&path, "%s/%s/srpc_sepol", obd_type, \
+				 obd_name); \
+	if (rc != 0) { \
+		errlog("can't get param '%s/%s/srpc_sepol': %s\n", \
+		       obd_type, obd_name, strerror(errno)); \
+		rc = -errno; \
+		goto out_data_ ## type_t ; \
+	} \
+	\
+	fd = open(path.gl_pathv[0], O_WRONLY); \
+	if (fd < 0) { \
+		errlog("can't open file '%s':%s\n", path.gl_pathv[0], \
+			strerror(errno)); \
+		rc = -errno; \
+		goto out_params_ ## type_t ; \
+	} \
+	\
+	rc = write(fd, data, size); \
+	close(fd); \
+	if (rc != size) { \
+		errlog("partial write ret %d: %s\n", rc, strerror(errno)); \
+		rc = -errno; \
+	} else { \
+		rc = 0; \
+	} \
+	\
+	out_params_ ## type_t :	    \
+	cfs_free_param_data(&path); \
+	out_data_ ## type_t :	    \
+	free(data); \
+})
+
 /**
  * Calculate SELinux status information.
  * String that represents SELinux status info has the following format:
@@ -243,14 +331,9 @@ int main(int argc, char **argv)
 	struct stat st;
 	time_t policymtime;
 	int enforce;
-	struct sepol_downcall_data *data = NULL;
-	glob_t path;
-	int fd, size;
 	char *policy_type = NULL;
 	unsigned char *mdval = NULL;
 	unsigned int mdsize = 0;
-	char *p;
-	int idx;
 	int rc;
 
 	progname = basename(argv[0]);
@@ -294,98 +377,28 @@ int main(int argc, char **argv)
 	}
 
 	/* Now we need to calculate SELinux status information */
-	size = offsetof(struct sepol_downcall_data,
-			sdd_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1]);
-	data = malloc(size);
-	if (!data) {
-		errlog("malloc sepol downcall data(%d) failed!\n", size);
-		rc = -ENOMEM;
-		goto out;
-	}
-	memset(data, 0, size);
-
 	/* Get policy name */
 	rc = sepol_get_policy_info(&policy_type);
 	if (rc < 0)
-		goto out_data;
+		goto out;
 
 	/* Read binary SELinux policy, and compute hash */
 	rc = sepol_get_policy_data(pol_bin_path, &mdval, &mdsize);
 	if (rc < 0)
 		goto out_poltyp;
 
-	/* Put all info together and generate string
-	 * to represent SELinux policy information
-	 */
-	rc = snprintf(data->sdd_sepol, LUSTRE_NODEMAP_SEPOL_LENGTH + 1,
-		      "%.1d:%s:%u:", enforce, policy_type, policyver);
-	if (rc >= LUSTRE_NODEMAP_SEPOL_LENGTH + 1) {
-		rc = -EMSGSIZE;
-		goto out_mdval;
-	}
+	sepol_downcall(sepol_downcall_data, SEPOL_DOWNCALL_MAGIC);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
+	if (rc == -EINVAL)
+		/* try with old magic */
+		sepol_downcall(sepol_downcall_data_old,
+			       SEPOL_DOWNCALL_MAGIC_OLD);
+#endif
 
-	p = data->sdd_sepol + strlen(data->sdd_sepol);
-	size = LUSTRE_NODEMAP_SEPOL_LENGTH + 1 - strlen(data->sdd_sepol);
-	for (idx = 0; idx < mdsize; idx++) {
-		rc = snprintf(p, size, "%02x",
-			      (unsigned char)(mdval[idx]));
-		p += 2;
-		size -= 2;
-		if (size < 0 || rc >= size) {
-			rc = -EMSGSIZE;
-			goto out_mdval;
-		}
-	}
-	data->sdd_sepol_len = p - data->sdd_sepol;
-
-	size = offsetof(struct sepol_downcall_data,
-			sdd_sepol[data->sdd_sepol_len]);
-
-	if (!obd_type || !obd_name) {
-		/* called without arg (presumably from command line):
-		 * print SELinux status and exit
-		 */
-		printf("SELinux status info: %.*s\n",
-		       data->sdd_sepol_len, data->sdd_sepol);
-		return 0;
-	}
-
-	data->sdd_magic = SEPOL_DOWNCALL_MAGIC;
-	data->sdd_sepol_mtime = policymtime;
-	/* Send SELinux policy info to kernelspace */
-	rc = cfs_get_param_paths(&path, "%s/%s/srpc_sepol", obd_type, obd_name);
-	if (rc != 0) {
-		errlog("can't get param '%s/%s/srpc_sepol': %s\n",
-		       obd_type, obd_name, strerror(errno));
-		rc = -errno;
-		goto out_mdval;
-	}
-
-	fd = open(path.gl_pathv[0], O_WRONLY);
-	if (fd < 0) {
-		errlog("can't open file '%s':%s\n", path.gl_pathv[0],
-		       strerror(errno));
-		rc = -errno;
-		goto out_params;
-	}
-
-	rc = write(fd, data, size);
-	close(fd);
-	if (rc != size) {
-		errlog("partial write ret %d: %s\n", rc, strerror(errno));
-		rc = -errno;
-	} else {
-		rc = 0;
-	}
-
-out_params:
-	cfs_free_param_data(&path);
 out_mdval:
 	free(mdval);
 out_poltyp:
 	free(policy_type);
-out_data:
-	free(data);
 out:
 	if (isatty(STDIN_FILENO))
 		/* we are called from the command line */
