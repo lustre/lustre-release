@@ -5552,6 +5552,34 @@ test_37()
 }
 run_test 37 "LFSCK must skip a ORPHAN"
 
+test_40a() {
+	[[ $MDSCOUNT -ge 2 ]] || skip "needs >= 2 MDTs"
+
+	check_mount_and_prep
+	$LFS mkdir -i 1 $DIR/$tdir/dir1
+	$LFS setstripe -E 1M -c1 -S 1M -E 128M -c2 -S 4M -E eof $DIR/$tdir/dir1
+
+	touch $DIR/$tdir/dir1/f1
+	local layout1=$(get_layout_param $DIR/$tdir/dir1/f1)
+
+	echo "Migrate $DIR/$tdir/dir1 from MDT1 to MDT0"
+	$LFS migrate -m 0 $DIR/$tdir/dir1
+
+	echo "trigger LFSCK for layout"
+	do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV} -t layout -r
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_LAYOUT
+		error "(2) unexpected status"
+	}
+
+	local layout2=$(get_layout_param $DIR/$tdir/dir1/f1)
+
+	[[ "$layout1" == "$layout2" ]] || error "layout lost after lfsck"
+}
+run_test 40a "LFSCK correctly fixes lmm_oi in composite layout"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
