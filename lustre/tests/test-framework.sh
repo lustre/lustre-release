@@ -4734,14 +4734,11 @@ mkfs_opts() {
 	opts+=${LDLM_TIMEOUT:+" --param=sys.ldlm_timeout=$LDLM_TIMEOUT"}
 
 	if [ $type == MDS ]; then
-		opts+=${MDSCAPA:+" --param-mdt.capa=$MDSCAPA"}
 		opts+=${DEF_STRIPE_SIZE:+" --param=lov.stripesize=$DEF_STRIPE_SIZE"}
 		opts+=${DEF_STRIPE_COUNT:+" --param=lov.stripecount=$DEF_STRIPE_COUNT"}
 		opts+=${L_GETIDENTITY:+" --param=mdt.identity_upcall=$L_GETIDENTITY"}
 
 		if [ $fstype == ldiskfs ]; then
-			fs_mkfs_opts+="-O ea_inode,large_dir"
-
 			var=${facet}_JRN
 			if [ -n "${!var}" ]; then
 				fs_mkfs_opts+=" -J device=${!var}"
@@ -4753,8 +4750,6 @@ mkfs_opts() {
 	fi
 
 	if [ $type == OST ]; then
-		opts+=${OSSCAPA:+" --param=ost.capa=$OSSCAPA"}
-
 		if [ $fstype == ldiskfs ]; then
 			var=${facet}_JRN
 			if [ -n "${!var}" ]; then

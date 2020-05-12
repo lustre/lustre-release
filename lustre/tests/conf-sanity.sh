@@ -5013,7 +5013,7 @@ test_59() {
 }
 run_test 59 "writeconf mount option"
 
-test_60() { # LU-471
+test_60a() { # LU-471
 	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip "ldiskfs only test"
 	fi
@@ -5039,7 +5039,22 @@ test_60() { # LU-471
 	stop_mds
 	reformat_and_config
 }
-run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
+run_test 60a "check mkfs.lustre --mkfsoptions -E -O options setting"
+
+test_60b() {
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	local features=$(do_facet $SINGLEMDS $DUMPE2FS $(mdsdevname 1) |
+			 grep features)
+	[ ${PIPESTATUS[0]} -eq 0 ] || error "$DUMPE2FS $(mdsdevname 1) failed"
+
+	echo $features
+	# ea_inode feature should be enabled by default for MDTs
+	[[ "$features" =~ "ea_inode" ]] || error "ea_inode is not set"
+	# large_dir feature should be enabled by default for MDTs
+	[[ "$features" =~ "large_dir" ]] || error "large_dir is not set"
+}
+run_test 60b "check mkfs.lustre MDT default features"
 
 test_61a() { # LU-80
 	local lxattr=$(large_xattr_enabled)
