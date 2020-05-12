@@ -140,7 +140,7 @@ static int osc_page_print(const struct lu_env *env,
 			  "1< %#x %d %u %s %s > "
 			  "2< %lld %u %u %#x %#x | %p %p %p > "
 			  "3< %d %lld %d > "
-			  "4< %d %d %d %lu %s | %s %s %s %s > "
+			  "4< %d %d %d %lu %c | %s %s %s %s > "
 			  "5< %s %s %s %s | %d %s | %d %s %s>\n",
 			  opg, osc_index(opg),
                           /* 1 */
@@ -159,7 +159,7 @@ static int osc_page_print(const struct lu_env *env,
                           cli->cl_r_in_flight, cli->cl_w_in_flight,
                           cli->cl_max_rpcs_in_flight,
                           cli->cl_avail_grant,
-                          osc_list(&cli->cl_cache_waiters),
+			  waitqueue_active(&cli->cl_cache_waiters) ? '+' : '-',
                           osc_list(&cli->cl_loi_ready_list),
                           osc_list(&cli->cl_loi_hp_ready_list),
                           osc_list(&cli->cl_loi_write_list),

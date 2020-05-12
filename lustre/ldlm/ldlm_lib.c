@@ -366,7 +366,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	/* cl_dirty_max_pages may be changed at connect time in
 	 * ptlrpc_connect_interpret(). */
 	client_adjust_max_dirty(cli);
-	INIT_LIST_HEAD(&cli->cl_cache_waiters);
+	init_waitqueue_head(&cli->cl_cache_waiters);
 	INIT_LIST_HEAD(&cli->cl_loi_ready_list);
 	INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
 	INIT_LIST_HEAD(&cli->cl_loi_write_list);
