@@ -254,6 +254,22 @@ bool mgs_barrier_expired(struct fs_db *fsdb, time64_t timeout)
 	return expired > ktime_get_real_seconds();
 }
 
+static inline bool mgs_barrier_tests_disabled(struct barrier_ctl *bc,
+					      struct obd_export *exp,
+					      struct fs_db *fsdb)
+{
+	__u64 flags = exp_connect_flags(exp);
+
+	if ((flags & OBD_CONNECT_MDS_MDS) && !(flags & OBD_CONNECT_BARRIER)) {
+		fsdb->fsdb_barrier_disabled = 1;
+		LCONSOLE_WARN("%s: Barrier incompatible connection %s\n",
+			      bc->bc_name,
+			      obd_uuid2str(&exp->exp_client_uuid));
+		return true;
+	}
+	return false;
+}
+
 /**
  * Create the barrier for the given instance.
  *
@@ -330,12 +346,8 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 			spin_lock(&mgs_obd->obd_dev_lock);
 			list_for_each_entry(exp, &mgs_obd->obd_exports,
 					    exp_obd_chain) {
-				__u64 flags = exp_connect_flags(exp);
-				if (!!(flags & OBD_CONNECT_MDS_MDS) &&
-				    !(flags & OBD_CONNECT_BARRIER)) {
-					fsdb->fsdb_barrier_disabled = 1;
+				if (mgs_barrier_tests_disabled(bc, exp, fsdb))
 					break;
-				}
 			}
 			spin_unlock(&mgs_obd->obd_dev_lock);
 		}
@@ -489,12 +501,8 @@ static int mgs_barrier_thaw(const struct lu_env *env,
 			spin_lock(&mgs_obd->obd_dev_lock);
 			list_for_each_entry(exp, &mgs_obd->obd_exports,
 					    exp_obd_chain) {
-				__u64 flags = exp_connect_flags(exp);
-				if (!!(flags & OBD_CONNECT_MDS_MDS) &&
-				    !(flags & OBD_CONNECT_BARRIER)) {
-					fsdb->fsdb_barrier_disabled = 1;
+				if (mgs_barrier_tests_disabled(bc, exp, fsdb))
 					break;
-				}
 			}
 			spin_unlock(&mgs_obd->obd_dev_lock);
 		}
@@ -656,12 +664,8 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 		spin_lock(&mgs_obd->obd_dev_lock);
 		list_for_each_entry(exp, &mgs_obd->obd_exports,
 				    exp_obd_chain) {
-			__u64 flags = exp_connect_flags(exp);
-			if (!!(flags & OBD_CONNECT_MDS_MDS) &&
-			    !(flags & OBD_CONNECT_BARRIER)) {
-				b_fsdb->fsdb_barrier_disabled = 1;
+			if (mgs_barrier_tests_disabled(bc, exp, b_fsdb))
 				break;
-			}
 		}
 		spin_unlock(&mgs_obd->obd_dev_lock);
 	}
