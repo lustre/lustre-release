@@ -169,14 +169,17 @@ AC_DEFUN([LB_SPL], [
 		AC_MSG_RESULT([$splsym])
 	])
 
-	SPL=${splsrc}
-	SPL_OBJ=${splobj}
-	SPL_VERSION=${splver}
+	AS_IF([test x$enable_zfs = xyes], [
+		SPL=${splsrc}
+		SPL_OBJ=${splobj}
+		SPL_VERSION=${splver}
 
-	AC_SUBST(SPL)
-	AC_SUBST(SPL_OBJ)
-	AC_SUBST(SPL_VERSION)
-	AC_SUBST(EXTRA_SYMBOLS)
+		AC_SUBST(SPL)
+		AC_SUBST(SPL_OBJ)
+		AC_SUBST(SPL_VERSION)
+		AC_SUBST(EXTRA_SYMBOLS)
+	])
+
 ])
 
 AC_DEFUN([LB_ZFS], [
@@ -287,14 +290,17 @@ AC_DEFUN([LB_ZFS], [
 		AC_MSG_RESULT([$zfssym])
 	])
 
-	ZFS=${zfssrc}
-	ZFS_OBJ=${zfsobj}
-	ZFS_VERSION=${zfsver}
+	AS_IF([test x$enable_zfs = xyes], [
+		ZFS=${zfssrc}
+		ZFS_OBJ=${zfsobj}
+		ZFS_VERSION=${zfsver}
 
-	AC_SUBST(ZFS)
-	AC_SUBST(ZFS_OBJ)
-	AC_SUBST(ZFS_VERSION)
-	AC_SUBST(EXTRA_SYMBOLS)
+		AC_SUBST(ZFS)
+		AC_SUBST(ZFS_OBJ)
+		AC_SUBST(ZFS_VERSION)
+		AC_SUBST(EXTRA_SYMBOLS)
+	])
+
 ])
 
 AC_DEFUN([LB_ZFS_DEVEL], [
@@ -400,7 +406,8 @@ AC_DEFUN([LB_CONFIG_ZFS], [
 		dnl #
 		dnl # SPL is only needed if ZFS is prior to 0.8.0
 		dnl #
-		AS_IF([test x$enable_modules = xyes && test $ZFS_MAJOR -eq 0 && test $ZFS_MINOR -lt 8], [
+		AS_IF([test x$enable_modules = xyes && test -n "$ZFS_MAJOR" &&
+			    test $ZFS_MAJOR -eq 0 && test $ZFS_MINOR -lt 8], [
 			LB_SPL
 		],[
 			enable_spl=no
