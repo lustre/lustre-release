@@ -157,7 +157,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 			])
 		])
 		AS_IF([test "x$lb_cv_mainline_kernel_sig" = "xyes"], [
-			MAINLINE_KERNEL="yes"
+			RHEL_KERNEL="yes"
 			KERNEL_FOUND="yes"
 		])
 	])
@@ -174,7 +174,6 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 		[KMP_MODDIR=$withval
 		 IN_KERNEL=''],[
 		AS_IF([test x$RHEL_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
-		      [test x$MAINLINE_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
 		      [test x$SUSE_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
 		      [test x$UBUNTU_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
 		      [test x$DEBIAN_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
