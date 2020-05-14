@@ -307,10 +307,8 @@ static struct lu_device *lwp_device_free(const struct lu_env *env,
 	struct lwp_device *m = lu2lwp_dev(lu);
 	ENTRY;
 
-	if (atomic_read(&lu->ld_ref) && lu->ld_site) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
-		lu_site_print(env, lu->ld_site, &msgdata, lu_cdebug_printer);
-	}
+	lu_site_print(env, lu->ld_site, &lu->ld_ref, D_ERROR,
+		      lu_cdebug_printer);
 	lu_device_fini(&m->lpd_dev);
 	OBD_FREE_PTR(m);
 	RETURN(NULL);

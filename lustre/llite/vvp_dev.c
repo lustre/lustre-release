@@ -374,21 +374,13 @@ int cl_sb_fini(struct super_block *sb)
  *
  ****************************************************************************/
 
-struct vvp_pgcache_id {
-        unsigned                 vpi_bucket;
-        unsigned                 vpi_depth;
-        uint32_t                 vpi_index;
-
-        unsigned                 vpi_curdep;
-        struct lu_object_header *vpi_obj;
-};
-
 struct vvp_seq_private {
 	struct ll_sb_info	*vsp_sbi;
 	struct lu_env		*vsp_env;
 	u16			vsp_refcheck;
 	struct cl_object	*vsp_clob;
-	struct vvp_pgcache_id	vvp_id;
+	struct rhashtable_iter	vsp_iter;
+	u32			vsp_page_index;
 	/*
 	 * prev_pos is the 'pos' of the last object returned
 	 * by ->start of ->next.
@@ -396,80 +388,43 @@ struct vvp_seq_private {
 	loff_t			vvp_prev_pos;
 };
 
-static int vvp_pgcache_obj_get(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			       struct hlist_node *hnode, void *data)
-{
-        struct vvp_pgcache_id   *id  = data;
-        struct lu_object_header *hdr = cfs_hash_object(hs, hnode);
-
-	if (lu_object_is_dying(hdr))
-		return 0;
-
-        if (id->vpi_curdep-- > 0)
-                return 0; /* continue */
-
-        cfs_hash_get(hs, hnode);
-        id->vpi_obj = hdr;
-        return 1;
-}
-
-static struct cl_object *vvp_pgcache_obj(const struct lu_env *env,
-					 struct lu_device *dev,
-					 struct vvp_pgcache_id *id)
-{
-	LASSERT(lu_device_is_cl(dev));
-
-	id->vpi_obj = NULL;
-	id->vpi_curdep = id->vpi_depth;
-
-	cfs_hash_hlist_for_each(dev->ld_site->ls_obj_hash, id->vpi_bucket,
-				vvp_pgcache_obj_get, id);
-	if (id->vpi_obj != NULL) {
-		struct lu_object *lu_obj;
-
-		lu_obj = lu_object_locate(id->vpi_obj, dev->ld_type);
-		if (lu_obj != NULL) {
-			lu_object_ref_add(lu_obj, "dump", current);
-			return lu2cl(lu_obj);
-		}
-		lu_object_put(env, lu_object_top(id->vpi_obj));
-	}
-	return NULL;
-}
-
 static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 {
 	struct lu_device *dev = &priv->vsp_sbi->ll_cl->cd_lu_dev;
+	struct lu_object_header *h;
+	struct page *vmpage = NULL;
 
-	while (1) {
+	rhashtable_walk_start(&priv->vsp_iter);
+	while ((h = rhashtable_walk_next(&priv->vsp_iter)) != NULL) {
 		struct inode *inode;
-		struct page *vmpage;
 		int nr;
 
 		if (!priv->vsp_clob) {
-			struct cl_object *clob;
+			struct lu_object *lu_obj;
 
-			while ((clob = vvp_pgcache_obj(priv->vsp_env, dev, &priv->vvp_id)) == NULL &&
-			       ++(priv->vvp_id.vpi_bucket) < CFS_HASH_NHLIST(dev->ld_site->ls_obj_hash))
-				priv->vvp_id.vpi_depth = 0;
-			if (!clob)
-				return NULL;
-			priv->vsp_clob = clob;
-			priv->vvp_id.vpi_index = 0;
+			lu_obj = lu_object_get_first(h, dev);
+			if (!lu_obj)
+				continue;
+
+			priv->vsp_clob = lu2cl(lu_obj);
+			lu_object_ref_add(lu_obj, "dump", current);
+			priv->vsp_page_index = 0;
 		}
 
 		inode = vvp_object_inode(priv->vsp_clob);
-		nr = find_get_pages_contig(inode->i_mapping, priv->vvp_id.vpi_index, 1, &vmpage);
+		nr = find_get_pages_contig(inode->i_mapping,
+					   priv->vsp_page_index, 1, &vmpage);
 		if (nr > 0) {
-			priv->vvp_id.vpi_index = vmpage->index;
-			return vmpage;
+			priv->vsp_page_index = vmpage->index;
+			break;
 		}
 		lu_object_ref_del(&priv->vsp_clob->co_lu, "dump", current);
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
 		priv->vsp_clob = NULL;
-		priv->vvp_id.vpi_index = 0;
-		priv->vvp_id.vpi_depth++;
+		priv->vsp_page_index = 0;
 	}
+	rhashtable_walk_stop(&priv->vsp_iter);
+	return vmpage;
 }
 
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
@@ -534,7 +489,10 @@ static int vvp_pgcache_show(struct seq_file *f, void *v)
 static void vvp_pgcache_rewind(struct vvp_seq_private *priv)
 {
 	if (priv->vvp_prev_pos) {
-		memset(&priv->vvp_id, 0, sizeof(priv->vvp_id));
+		struct lu_site *s = priv->vsp_sbi->ll_cl->cd_lu_dev.ld_site;
+
+		rhashtable_walk_exit(&priv->vsp_iter);
+		rhashtable_walk_enter(&s->ls_obj_hash, &priv->vsp_iter);
 		priv->vvp_prev_pos = 0;
 		if (priv->vsp_clob) {
 			lu_object_ref_del(&priv->vsp_clob->co_lu, "dump",
@@ -547,7 +505,7 @@ static void vvp_pgcache_rewind(struct vvp_seq_private *priv)
 
 static struct page *vvp_pgcache_next_page(struct vvp_seq_private *priv)
 {
-	priv->vvp_id.vpi_index += 1;
+	priv->vsp_page_index += 1;
 	return vvp_pgcache_current(priv);
 }
 
@@ -561,7 +519,7 @@ static void *vvp_pgcache_start(struct seq_file *f, loff_t *pos)
 		/* Return the current item */;
 	} else {
 		WARN_ON(*pos != priv->vvp_prev_pos + 1);
-		priv->vvp_id.vpi_index += 1;
+		priv->vsp_page_index += 1;
 	}
 
 	priv->vvp_prev_pos = *pos;
@@ -593,6 +551,7 @@ static struct seq_operations vvp_pgcache_ops = {
 static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 {
 	struct vvp_seq_private *priv;
+	struct lu_site *s;
 
 	priv = __seq_open_private(filp, &vvp_pgcache_ops, sizeof(*priv));
 	if (!priv)
@@ -601,13 +560,15 @@ static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 	priv->vsp_sbi = inode->i_private;
 	priv->vsp_env = cl_env_get(&priv->vsp_refcheck);
 	priv->vsp_clob = NULL;
-	memset(&priv->vvp_id, 0, sizeof(priv->vvp_id));
 	if (IS_ERR(priv->vsp_env)) {
 		int err = PTR_ERR(priv->vsp_env);
 
 		seq_release_private(inode, filp);
 		return err;
 	}
+
+	s = priv->vsp_sbi->ll_cl->cd_lu_dev.ld_site;
+	rhashtable_walk_enter(&s->ls_obj_hash, &priv->vsp_iter);
 
 	return 0;
 }
@@ -621,8 +582,8 @@ static int vvp_dump_pgcache_seq_release(struct inode *inode, struct file *file)
 		lu_object_ref_del(&priv->vsp_clob->co_lu, "dump", current);
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
 	}
-
 	cl_env_put(priv->vsp_env, &priv->vsp_refcheck);
+	rhashtable_walk_exit(&priv->vsp_iter);
 	return seq_release_private(inode, file);
 }
 

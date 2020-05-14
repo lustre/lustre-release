@@ -1294,10 +1294,8 @@ static struct lu_device *osp_device_free(const struct lu_env *env,
 {
 	struct osp_device *osp = lu2osp_dev(lu);
 
-	if (atomic_read(&lu->ld_ref) && lu->ld_site) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
-		lu_site_print(env, lu->ld_site, &msgdata, lu_cdebug_printer);
-	}
+	lu_site_print(env, lu->ld_site, &lu->ld_ref, D_ERROR,
+		      lu_cdebug_printer);
 	dt_device_fini(&osp->opd_dt_dev);
 	OBD_FREE_PTR(osp);
 

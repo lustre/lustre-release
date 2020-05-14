@@ -1405,11 +1405,9 @@ err_ns:
 	obd->obd_namespace = NULL;
 err_ops:
 	lu_site_purge(env, mgs2lu_dev(mgs)->ld_site, ~0);
-	if (!cfs_hash_is_empty(mgs2lu_dev(mgs)->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
-		lu_site_print(env, mgs2lu_dev(mgs)->ld_site, &msgdata,
-				lu_cdebug_printer);
-	}
+	lu_site_print(env, mgs2lu_dev(mgs)->ld_site,
+		      &mgs2lu_dev(mgs)->ld_site->ls_obj_hash.nelems,
+		      D_OTHER, lu_cdebug_printer);
 	obd_disconnect(mgs->mgs_bottom_exp);
 err_lmi:
 	if (lmi)
@@ -1582,11 +1580,8 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 	obd->obd_namespace = NULL;
 
 	lu_site_purge(env, d->ld_site, ~0);
-	if (!cfs_hash_is_empty(d->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
-		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
-	}
-
+	lu_site_print(env, d->ld_site, &d->ld_site->ls_obj_hash.nelems,
+		      D_OTHER, lu_cdebug_printer);
 	LASSERT(mgs->mgs_bottom_exp);
 	obd_disconnect(mgs->mgs_bottom_exp);
 

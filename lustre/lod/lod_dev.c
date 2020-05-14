@@ -1841,10 +1841,9 @@ static struct lu_device *lod_device_free(const struct lu_env *env,
 
 	ENTRY;
 
-	if (atomic_read(&lu->ld_ref) > 0 &&
-	    !cfs_hash_is_empty(lu->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
-		lu_site_print(env, lu->ld_site, &msgdata, lu_cdebug_printer);
+	if (atomic_read(&lu->ld_site->ls_obj_hash.nelems)) {
+		lu_site_print(env, lu->ld_site, &lu->ld_ref, D_ERROR,
+			      lu_cdebug_printer);
 	}
 	LASSERTF(atomic_read(&lu->ld_ref) == 0, "lu is %p\n", lu);
 	dt_device_fini(&lod->lod_dt_dev);
