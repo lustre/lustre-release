@@ -457,9 +457,9 @@ int qmt_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_rem(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_del(struct obd_device *obd, char *poolname);
 
-inline struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi);
-inline int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx);
-inline unsigned int qmt_sarr_count(struct qmt_pool_info *qpi);
+struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi);
+int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx);
+unsigned int qmt_sarr_count(struct qmt_pool_info *qpi);
 
 /* qmt_entry.c */
 extern struct lquota_entry_operations qmt_lqe_ops;
@@ -494,16 +494,16 @@ bool qmt_revalidate(const struct lu_env *, struct lquota_entry *);
 void qmt_revalidate_lqes(const struct lu_env *, struct qmt_device *, __u32);
 __u64 qmt_alloc_expand(struct lquota_entry *, __u64, __u64);
 
-inline void qti_lqes_init(const struct lu_env *);
-inline int qti_lqes_add(const struct lu_env *, struct lquota_entry *);
-inline void qti_lqes_del(const struct lu_env *, int);
-inline void qti_lqes_fini(const struct lu_env *);
-inline int qti_lqes_min_qunit(const struct lu_env *);
-inline int qti_lqes_edquot(const struct lu_env *);
-inline int qti_lqes_restore_init(const struct lu_env *env);
-inline void qti_lqes_restore_fini(const struct lu_env *env);
-inline void qti_lqes_write_lock(const struct lu_env *env);
-inline void qti_lqes_write_unlock(const struct lu_env *env);
+void qti_lqes_init(const struct lu_env *env);
+int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe);
+void qti_lqes_del(const struct lu_env *env, int index);
+void qti_lqes_fini(const struct lu_env *env);
+int qti_lqes_min_qunit(const struct lu_env *env);
+int qti_lqes_edquot(const struct lu_env *env);
+int qti_lqes_restore_init(const struct lu_env *env);
+void qti_lqes_restore_fini(const struct lu_env *env);
+void qti_lqes_write_lock(const struct lu_env *env);
+void qti_lqes_write_unlock(const struct lu_env *env);
 
 struct lqe_glbl_data *qmt_alloc_lqe_gd(struct qmt_pool_info *, int);
 void qmt_free_lqe_gd(struct lqe_glbl_data *);

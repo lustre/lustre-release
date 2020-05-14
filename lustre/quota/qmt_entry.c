@@ -857,7 +857,7 @@ void qmt_revalidate_lqes(const struct lu_env *env,
 	}
 }
 
-inline void qti_lqes_init(const struct lu_env *env)
+void qti_lqes_init(const struct lu_env *env)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 
@@ -866,7 +866,7 @@ inline void qti_lqes_init(const struct lu_env *env)
 	qti->qti_lqes_num = QMT_MAX_POOL_NUM;
 }
 
-inline int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
+int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 
@@ -901,7 +901,7 @@ inline int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 	return 0;
 }
 
-inline void qti_lqes_del(const struct lu_env *env, int index)
+void qti_lqes_del(const struct lu_env *env, int index)
 {
 	struct lquota_entry	**lqes;
 	int lqes_cnt = qti_lqes_cnt(env);
@@ -925,7 +925,7 @@ inline void qti_lqes_del(const struct lu_env *env, int index)
 	qti_lqes_cnt(env)--;
 }
 
-inline void qti_lqes_fini(const struct lu_env *env)
+void qti_lqes_fini(const struct lu_env *env)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_entry	**lqes = qti->qti_lqes;
