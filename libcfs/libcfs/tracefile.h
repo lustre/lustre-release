@@ -42,8 +42,6 @@ enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_MAX
 };
 
-/* trace file lock routines */
-
 #define TRACEFILE_NAME_SIZE 1024
 extern char      cfs_tracefile[TRACEFILE_NAME_SIZE];
 extern long long cfs_tracefile_size;
@@ -187,11 +185,6 @@ extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS];
 	     j < num_possible_cpus();					  \
 	     j++, (tcd) = &(*cfs_trace_data[i])[j].tcd)
 
-#define cfs_tcd_for_each_type_lock(tcd, i, cpu)                           \
-    for (i = 0; cfs_trace_data[i] &&                                      \
-         (tcd = &(*cfs_trace_data[i])[cpu].tcd) &&                        \
-         cfs_trace_lock_tcd(tcd, 1); cfs_trace_unlock_tcd(tcd, 1), i++)
-
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
 struct page_collection {
@@ -250,9 +243,6 @@ extern void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
                                  const char *buf, int len, const char *file,
                                  const char *fn);
 
-extern int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
-extern void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
-
 extern char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 extern enum cfs_trace_buf_type cfs_trace_buf_idx_get(void);
 
@@ -262,22 +252,6 @@ static inline char *cfs_trace_get_console_buffer(void)
 	unsigned int j = cfs_trace_buf_idx_get();
 
 	return cfs_trace_console_buffers[i][j];
-}
-
-static inline struct cfs_trace_cpu_data *cfs_trace_get_tcd(void)
-{
-	struct cfs_trace_cpu_data *tcd =
-		&(*cfs_trace_data[cfs_trace_buf_idx_get()])[get_cpu()].tcd;
-
-	cfs_trace_lock_tcd(tcd, 0);
-
-	return tcd;
-}
-
-static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
-{
-	cfs_trace_unlock_tcd(tcd, 0);
-	put_cpu();
 }
 
 int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, gfp_t gfp,

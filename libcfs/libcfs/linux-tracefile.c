@@ -117,41 +117,6 @@ enum cfs_trace_buf_type cfs_trace_buf_idx_get(void)
 	return CFS_TCD_TYPE_PROC;
 }
 
-/*
- * The walking argument indicates the locking comes from all tcd types
- * iterator and we must lock it and dissable local irqs to avoid deadlocks
- * with other interrupt locks that might be happening. See LU-1311
- * for details.
- */
-int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
-	__acquires(&tcd->tcd_lock)
-{
-	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
-	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
-		spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
-	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
-		spin_lock_bh(&tcd->tcd_lock);
-	else if (unlikely(walking))
-		spin_lock_irq(&tcd->tcd_lock);
-	else
-		spin_lock(&tcd->tcd_lock);
-	return 1;
-}
-
-void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
-	__releases(&tcd->tcd_lock)
-{
-	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
-	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
-		spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
-	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
-		spin_unlock_bh(&tcd->tcd_lock);
-	else if (unlikely(walking))
-		spin_unlock_irq(&tcd->tcd_lock);
-	else
-		spin_unlock(&tcd->tcd_lock);
-}
-
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
 		      struct cfs_trace_page *tage)
 {

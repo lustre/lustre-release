@@ -63,6 +63,64 @@ static DECLARE_RWSEM(cfs_tracefile_sem);
 static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 					struct cfs_trace_cpu_data *tcd);
 
+/* trace file lock routines */
+/* The walking argument indicates the locking comes from all tcd types
+ * iterator and we must lock it and dissable local irqs to avoid deadlocks
+ * with other interrupt locks that might be happening. See LU-1311
+ * for details.
+ */
+int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
+	__acquires(&tcd->tcd_lock)
+{
+	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
+	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
+		spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
+	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
+		spin_lock_bh(&tcd->tcd_lock);
+	else if (unlikely(walking))
+		spin_lock_irq(&tcd->tcd_lock);
+	else
+		spin_lock(&tcd->tcd_lock);
+	return 1;
+}
+
+void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
+	__releases(&tcd->tcd_lock)
+{
+	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
+	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
+		spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
+	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
+		spin_unlock_bh(&tcd->tcd_lock);
+	else if (unlikely(walking))
+		spin_unlock_irq(&tcd->tcd_lock);
+	else
+		spin_unlock(&tcd->tcd_lock);
+}
+
+#define cfs_tcd_for_each_type_lock(tcd, i, cpu)				\
+	for (i = 0; cfs_trace_data[i] &&				\
+	     (tcd = &(*cfs_trace_data[i])[cpu].tcd) &&			\
+	     cfs_trace_lock_tcd(tcd, 1); cfs_trace_unlock_tcd(tcd, 1), i++)
+
+static inline struct cfs_trace_cpu_data *
+cfs_trace_get_tcd(void)
+{
+	struct cfs_trace_cpu_data *tcd =
+		&(*cfs_trace_data[cfs_trace_buf_idx_get()])[get_cpu()].tcd;
+
+	cfs_trace_lock_tcd(tcd, 0);
+
+	return tcd;
+}
+
+static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
+{
+	cfs_trace_unlock_tcd(tcd, 0);
+
+	put_cpu();
+}
+
 static inline struct cfs_trace_page *
 cfs_tage_from_list(struct list_head *list)
 {
