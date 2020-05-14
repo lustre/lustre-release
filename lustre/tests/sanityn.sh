@@ -550,7 +550,9 @@ test_18() {
                 excepts="$excepts -e $(($(printf %d \'$idx)-96))"
         done
 
-	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2 $excepts
+	excepts="$excepts -e 7 -e 8 -e 9"
+	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2 $excepts ||
+		error "mmap_sanity test failed"
 	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="

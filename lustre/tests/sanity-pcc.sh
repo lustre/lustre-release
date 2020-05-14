@@ -681,6 +681,7 @@ test_4() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
+	local excepts="-e 6 -e 7 -e 8 -e 9"
 
 	! is_project_quota_supported &&
 		skip "project quota is not supported" && return
@@ -694,16 +695,26 @@ test_4() {
 	lfs project -sp $project_id $DIR/$tdir ||
 		error "lfs project -sp $project_id $DIR/$tdir failed"
 
-	# mmap_sanity tst7 failed on the local ext4 filesystem.
-	# It seems that Lustre filesystem does special process for tst 7.
-	# Thus, we exclude tst7 from the PCC testing.
-	# There is a mmap problem for PCC when multiple clients read/write
-	# on a shared mmapped file. Thus, we exclude mmap_sanity tst6 from
-	# the PCC tesing.
-	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir -e 6 -e 7 ||
+	# 1. mmap_sanity tst7 failed on the local ext4 filesystem.
+	#    It seems that Lustre filesystem does special process for tst 7.
+	# 2. There is a mmap problem for PCC when multiple clients read/write
+	#    on a shared mmapped file for mmap_sanity tst 6.
+	# 3. Current CentOS8 kernel does not strictly obey POSIX syntax for
+	#    mmap() within the maping but beyond current end of the underlying
+	#    files: It does not send SIGBUS signals to the process.
+	# 4. For negative file offset, sanity_mmap also failed on 48 bits
+	#    ldiksfs backend due to too large offset: "Value too large for
+	#    defined data type".
+	# mmap_sanity tst7/tst8/tst9 all failed on Lustre and local ext4.
+	# Thus, we exclude sanity tst6/tst7/tst8/tst9 from the PCC testing.
+	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir $excepts ||
 		error "mmap_sanity test failed"
 	sync; sleep 1; sync
 
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL \
+		set_param ldlm.namespaces.*mdc*.lru_size=clear
 	rm -rf $DIR/$tdir || error "failed to remove $DIR/$tdir"
 }
 run_test 4 "Auto cache test for mmap"
