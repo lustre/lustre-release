@@ -788,10 +788,10 @@ unsigned int lnet_get_lnd_timeout(void);
 void lnet_register_lnd(const struct lnet_lnd *lnd);
 void lnet_unregister_lnd(const struct lnet_lnd *lnd);
 
-struct socket *lnet_connect(lnet_nid_t peer_nid, int interface, __u32 peer_ip,
-			    int peer_port, struct net *ns);
+struct socket *lnet_connect(lnet_nid_t peer_nid, int interface,
+			    struct sockaddr *peeraddr, struct net *ns);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
-                                __u32 peer_ip, int port);
+				struct sockaddr *sa);
 int lnet_count_acceptor_nets(void);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
@@ -809,7 +809,8 @@ struct lnet_inetdev {
 int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns);
 int lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
 int lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
-int lnet_sock_getaddr(struct socket *socket, bool remote, __u32 *ip, int *port);
+int lnet_sock_getaddr(struct socket *socket, bool remote,
+		      struct sockaddr_storage *peer);
 int lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
 int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 
