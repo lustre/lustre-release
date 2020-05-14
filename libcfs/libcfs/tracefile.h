@@ -78,8 +78,6 @@ int cfs_trace_set_debug_mb(int mb);
 int cfs_trace_get_debug_mb(void);
 
 extern void libcfs_debug_dumplog_internal(void *arg);
-extern void libcfs_register_panic_notifier(void);
-extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
 
 #define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))
