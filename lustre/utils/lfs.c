@@ -1992,6 +1992,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	char *ptr;
 	struct ll_ioc_lease *data;
 	uint16_t mirror_count;
+	__u32 mirror_id;
 	int mdt_index;
 	int fd, fdv;
 	int rc;
@@ -2030,22 +2031,35 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 
 		rc = llapi_layout_comp_iterate(layout, find_comp_id_by_pool,
 					       &data);
-		id = data.id;
+		mirror_id = data.id;
 	} else if (mflags & MF_COMP_ID) {
 		rc = llapi_layout_comp_iterate(layout, find_comp_id, &id);
-		id = mirror_id_of(id);
+		mirror_id = mirror_id_of(id);
 	} else {
 		rc = llapi_layout_comp_iterate(layout, find_mirror_id, &id);
+		mirror_id = id;
 	}
 	if (rc < 0) {
 		fprintf(stderr, "error %s: failed to iterate layout of '%s'\n",
 			progname, fname);
 		goto free_layout;
 	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
-		fprintf(stderr,
-		     "error %s: file '%s' does not contain mirror with id %u\n",
-			progname, fname, id);
-		goto free_layout;
+		if (mflags & MF_COMP_POOL) {
+			fprintf(stderr,
+				"error %s: file '%s' does not contain mirror with pool '%s'\n",
+				progname, fname, pool);
+			goto free_layout;
+		} else if (mflags & MF_COMP_ID) {
+			fprintf(stderr,
+				"error %s: file '%s' does not contain mirror with comp-id %u\n",
+				progname, fname, id);
+			goto free_layout;
+		} else {
+			fprintf(stderr,
+				"error %s: file '%s' does not contain mirror with id %u\n",
+				progname, fname, id);
+			goto free_layout;
+		}
 	}
 
 	fd = open(fname, O_RDWR);
@@ -2088,7 +2102,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	if (victim_file == NULL) {
 		/* use a temp file to store the splitted layout */
 		if (mflags & MF_DESTROY) {
-			if (last_non_stale_mirror(id, layout)) {
+			if (last_non_stale_mirror(mirror_id, layout)) {
 				rc = -EUCLEAN;
 				fprintf(stderr,
 					"%s: cannot destroy the last non-stale mirror of file '%s'\n",
@@ -2100,7 +2114,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 							O_LOV_DELAY_CREATE);
 		} else {
 			snprintf(victim, sizeof(victim), "%s.mirror~%u",
-				 fname, id);
+				 fname, mirror_id);
 			fdv = open(victim, flags, S_IRUSR | S_IWUSR);
 		}
 	} else {
@@ -2135,7 +2149,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	data->lil_flags = LL_LEASE_LAYOUT_SPLIT;
 	data->lil_count = 2;
 	data->lil_ids[0] = fdv;
-	data->lil_ids[1] = id;
+	data->lil_ids[1] = mirror_id;
 	rc = llapi_lease_set(fd, data);
 	if (rc <= 0) {
 		if (rc == 0) /* lost lease lock */
