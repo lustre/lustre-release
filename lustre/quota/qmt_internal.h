@@ -129,7 +129,7 @@ struct qmt_pool_info {
 
 	union qmt_sarray	 qpi_sarr;
 	/* recalculation thread pointer */
-	struct ptlrpc_thread	 qpi_recalc_thread;
+	struct task_struct	*qpi_recalc_task;
 	/* rw semaphore to avoid acquire/release during
 	 * pool recalculation. */
 	struct rw_semaphore	 qpi_recalc_sem;

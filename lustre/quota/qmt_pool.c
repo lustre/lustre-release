@@ -174,8 +174,6 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	if (pool == NULL)
 		RETURN(-ENOMEM);
 	INIT_LIST_HEAD(&pool->qpi_linkage);
-	init_waitqueue_head(&pool->qpi_recalc_thread.t_ctl_waitq);
-	thread_set_flags(&pool->qpi_recalc_thread, SVC_STOPPED);
 	init_rwsem(&pool->qpi_recalc_sem);
 
 	pool->qpi_rtype = pool_type;
@@ -990,7 +988,7 @@ out_env:
 
 static int
 qmt_obj_recalc(const struct lu_env *env, struct dt_object *obj,
-	       struct ptlrpc_thread *thread, struct lquota_site *site)
+	       struct lquota_site *site)
 {
 	struct qmt_thread_info *qti = qmt_info(env);
 	union lquota_id *qid = &qti->qti_id;
@@ -1054,7 +1052,7 @@ next:
 			CWARN("quota: failed to parse index "DFID
 			      ", ->next error: rc = %d\n",
 			      PFID(&qti->qti_fid), rc);
-	} while (rc == 0 && thread_is_running(thread));
+	} while (rc == 0 && !kthread_should_stop());
 
 out:
 	iops->put(env, it);
@@ -1160,7 +1158,6 @@ static int qmt_pool_recalc(void *args)
 	ENTRY;
 
 	pool = args;
-	thread_set_flags(&pool->qpi_recalc_thread, SVC_RUNNING);
 
 	obd = qmt_get_mgc(pool->qpi_qmt);
 	if (IS_ERR(obd))
@@ -1211,7 +1208,7 @@ static int qmt_pool_recalc(void *args)
 			struct obd_uuid uuid;
 			int idx;
 
-			if (thread_is_stopping(&pool->qpi_recalc_thread))
+			if (kthread_should_stop())
 				GOTO(out_stop, rc = 0);
 			idx = qmt_sarr_get_idx(pool, i);
 			LASSERT(idx >= 0);
@@ -1232,9 +1229,7 @@ static int qmt_pool_recalc(void *args)
 
 			CDEBUG(D_QUOTA, "slv_obj is found %p for uuid %s\n",
 			       slv_obj, uuid.uuid);
-			qmt_obj_recalc(&env, slv_obj,
-				       &pool->qpi_recalc_thread,
-				       pool->qpi_site[qtype]);
+			qmt_obj_recalc(&env, slv_obj, pool->qpi_site[qtype]);
 			dt_object_put(&env, slv_obj);
 		}
 		/* Now go trough the site hash and compare lqe_granted
@@ -1249,8 +1244,15 @@ out_stop:
 out_env:
 	lu_env_fini(&env);
 out:
-	thread_set_flags(&pool->qpi_recalc_thread, SVC_STOPPED);
-	wake_up(&pool->qpi_recalc_thread.t_ctl_waitq);
+	if (xchg(&pool->qpi_recalc_task, NULL) == NULL)
+		/*
+		 * Someone is waiting for us to stop - be sure not to exit
+		 * before kthread_stop() gets a ref on the task.  No event
+		 * will happen on 'pool, this is just a convenient way to
+		 * wait.
+		 */
+		wait_var_event(pool, kthread_should_stop());
+
 	clear_bit(QPI_FLAG_RECALC_OFFSET, &pool->qpi_flags);
 	/* Pool can't be changed, since sem has been down.
 	 * Thus until up_read, no one can restart recalc thread. */
@@ -1266,29 +1268,27 @@ out:
 static int qmt_start_pool_recalc(struct lu_env *env, struct qmt_pool_info *qpi)
 {
 	struct task_struct *task;
-	char *name;
 	int rc = 0;
 
 	if (!test_and_set_bit(QPI_FLAG_RECALC_OFFSET, &qpi->qpi_flags)) {
-		LASSERT(thread_is_stopped(&qpi->qpi_recalc_thread) ||
-			thread_is_init(&qpi->qpi_recalc_thread));
-		OBD_ALLOC(name, QPI_MAXNAME + sizeof("qmt_pool_recalc_"));
-		if (name == NULL)
-			RETURN(-ENOMEM);
-
-		snprintf(name, QPI_MAXNAME, "qsd_reint_%s",
-			 qpi->qpi_name);
+		LASSERT(!qpi->qpi_recalc_task);
 
 		qpi_getref(qpi);
-		thread_set_flags(&qpi->qpi_recalc_thread, SVC_STARTING);
-		task = kthread_run(qmt_pool_recalc, qpi, name);
+		task = kthread_create(qmt_pool_recalc, qpi,
+				      "qsd_reint_%s", qpi->qpi_name);
 		if (IS_ERR(task)) {
-			thread_set_flags(&qpi->qpi_recalc_thread, SVC_STOPPED);
 			clear_bit(QPI_FLAG_RECALC_OFFSET, &qpi->qpi_flags);
 			rc = PTR_ERR(task);
 			qpi_putref(env, qpi);
+		} else {
+			qpi->qpi_recalc_task = task;
+			/* Using park/unpark to start the thread ensures that
+			 * the thread function does get calls, so the
+			 * ref on qpi will be dropped
+			 */
+			kthread_park(task);
+			kthread_unpark(task);
 		}
-		OBD_FREE(name, QPI_MAXNAME + sizeof("qmt_pool_recalc_"));
 	}
 
 	RETURN(rc);
@@ -1296,15 +1296,11 @@ static int qmt_start_pool_recalc(struct lu_env *env, struct qmt_pool_info *qpi)
 
 static inline void qmt_stop_pool_recalc(struct qmt_pool_info *qpi)
 {
-	struct ptlrpc_thread	*thread = &qpi->qpi_recalc_thread;
+	struct task_struct *task;
 
-	if (!thread_is_stopped(thread)) {
-		thread_set_flags(thread, SVC_STOPPING);
-		wake_up(&thread->t_ctl_waitq);
-
-		wait_event_idle(thread->t_ctl_waitq,
-				thread_is_stopped(thread));
-	}
+	task = xchg(&qpi->qpi_recalc_task, NULL);
+	if (task)
+		kthread_stop(task);
 }
 
 static int qmt_pool_slv_nr_change(const struct lu_env *env,
