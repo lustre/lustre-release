@@ -57,6 +57,13 @@
 %{!?kdir:    %global kdir    /lib/modules/%{_kver}/source}
 %{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{_kver}/source" ]; then echo "/lib/modules/%{_kver}/build"; else echo "%{kdir}"; fi)}
 
+
+%if 0%{?suse_version} >= 1310
+	%define _flavor %(basename %{kobjdir})
+%else
+	%define _flavor default
+%endif
+
 %if %{defined _take_kver}
 # as an alternative to this implementation we could simply "make -C $kdir kernelversion"
 %global kver %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)
@@ -115,7 +122,7 @@
 
 %global modules_fs_path /lib/modules/%{_kver}/%{kmoddir}
 # requires want to set a version including epoch
-%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
+%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//' -e s/%{_flavor}//)
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_kmod_name kmod-%{lustre_name}
@@ -260,10 +267,10 @@ echo $TMPFILE
 %else
 %define preamble %{SOURCE1}
 %endif
-%kernel_module_package -n %{name} -p %preamble -f %SOURCE2 default
+%kernel_module_package -n %{name} -p %preamble -f %SOURCE2 %{_flavor}
 
 %if %{with ldiskfs}
-%kernel_module_package -n %{name}-osd-ldiskfs -p %SOURCE3 -f %SOURCE4 default
+%kernel_module_package -n %{name}-osd-ldiskfs -p %SOURCE3 -f %SOURCE4 %{_flavor}
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
@@ -280,7 +287,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %endif	# with ldiskfs
 
 %if %{with zfs}
-%kernel_module_package -n %{name}-osd-zfs -p %SOURCE5 -f %SOURCE6 default
+%kernel_module_package -n %{name}-osd-zfs -p %SOURCE5 -f %SOURCE6 %{_flavor}
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
@@ -343,7 +350,7 @@ This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
 
 %if %{with lustre_modules}
-%kernel_module_package -n %{name}-tests -f %SOURCE7 default
+%kernel_module_package -n %{name}-tests -f %SOURCE7 %{_flavor}
 %endif
 %endif
 
