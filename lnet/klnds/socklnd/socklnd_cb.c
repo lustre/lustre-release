@@ -1054,7 +1054,7 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 int
 ksocknal_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-	struct task_struct *task = kthread_run(fn, arg, name);
+	struct task_struct *task = kthread_run(fn, arg, "%s", name);
 
 	if (IS_ERR(task))
 		return PTR_ERR(task);
