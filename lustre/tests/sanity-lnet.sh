@@ -67,7 +67,7 @@ load_lnet() {
 	# variable to remote nodes
 	unset MODOPTS_LIBCFS
 
-	set_default_debug
+	set_default_debug "neterror net nettrace malloc"
 	load_module ../lnet/lnet/lnet "$@"
 
 	LNDPATH=${LNDPATH:-"../lnet/klnds"}
@@ -1001,9 +1001,11 @@ add_net() {
 	local net="$1"
 	local if="$2"
 
-	reinit_dlc || return $?
-	load_module ../lnet/klnds/socklnd/ksocklnd ||
-		error "Can't load ksocklnd.ko"
+	if ! lsmod | grep -q ksocklnd ; then
+		load_module ../lnet/klnds/socklnd/ksocklnd ||
+			error "Can't load ksocklnd.ko"
+	fi
+
 	do_lnetctl net add --net ${net} --if ${if} ||
 		error "Failed to add net ${net} on if ${if}"
 }
@@ -1027,6 +1029,7 @@ compare_route_add() {
 
 test_100() {
 	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
 	add_net "tcp" "eth0"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
@@ -1059,6 +1062,7 @@ run_test 100 "Add route with single gw (tcp)"
 
 test_101() {
 	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
 	add_net "tcp" "eth0"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
@@ -1121,6 +1125,7 @@ compare_route_del() {
 
 test_102() {
 	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
 	add_net "tcp" "eth0"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 	do_lnetctl route add --net tcp102 --gateway 102.102.102.102@tcp ||
@@ -1131,6 +1136,7 @@ run_test 102 "Delete route with single gw (tcp)"
 
 test_103() {
 	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
 	add_net "tcp" "eth0"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 	do_lnetctl route add --net tcp103 \
@@ -1176,6 +1182,293 @@ test_203() {
 	do_ns $LNETCTL net add --net tcp0 --if $FAKE_IF
 }
 run_test 203 "add a network using an interface in the non-default namespace"
+
+LNET_PARAMS_FILE="$TMP/$TESTSUITE.parameters"
+function save_lnet_params() {
+	$LNETCTL global show | egrep -v '^global:$' |
+			       sed 's/://' > $LNET_PARAMS_FILE
+}
+
+function restore_lnet_params() {
+	local param value
+	while read param value; do
+		[[ $param == max_intf ]] && continue
+		[[ $param == lnd_timeout ]] && continue
+		$LNETCTL set ${param} ${value} ||
+			error "Failed to restore ${param} to ${value}"
+	done < $LNET_PARAMS_FILE
+}
+
+function lnet_health_pre() {
+	save_lnet_params
+
+	# Lower transaction timeout to speed up test execution
+	$LNETCTL set transaction_timeout 10 ||
+		error "Failed to set transaction_timeout $?"
+
+	# Increase recovery interval so we have time to capture health values
+	$LNETCTL set recovery_interval 20 ||
+		error "Failed to set recovery_interval $?"
+
+	RETRY_PARAM=$($LNETCTL global show | awk '/retry_count/{print $NF}')
+	RSND_PRE=$($LNETCTL stats show | awk '/resend_count/{print $NF}')
+	LO_HVAL_PRE=$($LNETCTL net show -v 2 | awk '/health value/{print $NF}' |
+		      xargs echo | sed 's/ /+/g' | bc -l)
+
+	local my_nid=$($LCTL list_nids | head -n 1)
+
+	RMT_HVAL_PRE=$($LNETCTL peer show --nid $my_nid -v 2 2>/dev/null |
+		       awk '/health value/{print $NF}' | xargs echo |
+		       sed 's/ /+/g' | bc -l)
+
+	# Might not have any peers so initialize to zero.
+	RMT_HVAL_PRE=${RMT_HVAL_PRE:-0}
+
+	return 0
+}
+
+function lnet_health_post() {
+	RSND_POST=$($LNETCTL stats show | awk '/resend_count/{print $NF}')
+	LO_HVAL_POST=$($LNETCTL net show -v 2 |
+		       awk '/health value/{print $NF}' |
+		       xargs echo | sed 's/ /+/g' | bc -l)
+
+	local my_nid=$($LCTL list_nids | head -n 1)
+
+	RMT_HVAL_POST=$($LNETCTL peer show --nid $my_nid -v 2 2>/dev/null |
+			awk '/health value/{print $NF}' | xargs echo |
+			sed 's/ /+/g' | bc -l)
+
+	# Might not have any peers so initialize to zero.
+	RMT_HVAL_POST=${RMT_HVAL_POST:-0}
+
+	${VERBOSE} &&
+	echo "Pre resends: $RSND_PRE" &&
+	echo "Post resends: $RSND_POST" &&
+	echo "Resends delta: $((RSND_POST - RSND_PRE))" &&
+	echo "Pre local health: $LO_HVAL_PRE" &&
+	echo "Post local health: $LO_HVAL_POST" &&
+	echo "Pre remote health: $RMT_HVAL_PRE" &&
+	echo "Post remote health: $RMT_HVAL_POST"
+
+	restore_lnet_params
+
+	return 0
+}
+
+function check_no_resends() {
+	echo "Check that no resends took place"
+	[[ $RSND_POST -ne $RSND_PRE ]] &&
+		error "Found resends: $RSND_POST != $RSND_PRE"
+
+	return 0
+}
+
+function check_resends() {
+	local delta=$((RSND_POST - RSND_PRE))
+
+	echo "Check that $RETRY_PARAM resends took place"
+	[[ $delta -ne $RETRY_PARAM ]] &&
+		error "Expected $RETRY_PARAM resends found $delta"
+
+	return 0
+}
+
+function check_no_local_health() {
+	echo "Check that local NI health is unchanged"
+	[[ $LO_HVAL_POST -ne $LO_HVAL_PRE ]] &&
+		error "Local health changed: $LO_HVAL_POST != $LO_HVAL_PRE"
+
+	return 0
+}
+
+function check_local_health() {
+	echo "Check that local NI health has been changed"
+	[[ $LO_HVAL_POST -eq $LO_HVAL_PRE ]] &&
+		error "Local health unchanged: $LO_HVAL_POST == $LO_HVAL_PRE"
+
+	return 0
+}
+
+function check_no_remote_health() {
+	echo "Check that remote NI health is unchanged"
+	[[ $RMT_HVAL_POST -ne $RMT_HVAL_PRE ]] &&
+		error "Remote health changed: $RMT_HVAL_POST != $RMT_HVAL_PRE"
+
+	return 0
+}
+
+function check_remote_health() {
+	echo "Check that remote NI health has been changed"
+	[[ $RMT_HVAL_POST -eq $RMT_HVAL_PRE ]] &&
+		error "Remote health unchanged: $RMT_HVAL_POST == $RMT_HVAL_PRE"
+
+	return 0
+}
+
+# See lnet/lnet/lib-msg.c:lnet_health_check()
+LNET_LOCAL_RESEND_STATUSES="local_interrupt local_dropped local_aborted"
+LNET_LOCAL_RESEND_STATUSES+=" local_no_route local_timeout"
+LNET_LOCAL_NO_RESEND_STATUSES="local_error"
+test_204() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+
+	lnet_health_pre || return $?
+
+	local hstatus
+	for hstatus in ${LNET_LOCAL_RESEND_STATUSES} \
+		       ${LNET_LOCAL_NO_RESEND_STATUSES}; do
+		echo "Simulate $hstatus"
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+	done
+
+	lnet_health_post
+
+	check_no_resends || return $?
+	check_no_local_health || return $?
+
+	return 0
+}
+run_test 204 "Check no health or resends for single-rail local failures"
+
+test_205() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	local hstatus
+	for hstatus in ${LNET_LOCAL_RESEND_STATUSES}; do
+		reinit_dlc || return $?
+		add_net "tcp" "eth0" || return $?
+		add_net "tcp1" "eth0" || return $?
+
+		echo "Simulate $hstatus"
+		lnet_health_pre
+
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+
+		lnet_health_post
+
+		check_resends || return $?
+		check_local_health || return $?
+	done
+
+	for hstatus in ${LNET_LOCAL_NO_RESEND_STATUSES}; do
+		reinit_dlc || return $?
+		add_net "tcp" "eth0" || return $?
+		add_net "tcp1" "eth0" || return $?
+
+		echo "Simulate $hstatus"
+		lnet_health_pre || return $?
+
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+
+		lnet_health_post
+
+		check_no_resends || return $?
+		check_local_health || return $?
+	done
+
+	return 0
+}
+run_test 205 "Check health and resends for multi-rail local failures"
+
+# See lnet/lnet/lib-msg.c:lnet_health_check()
+LNET_REMOTE_RESEND_STATUSES="remote_dropped"
+LNET_REMOTE_NO_RESEND_STATUSES="remote_error remote_timeout network_timeout"
+test_206() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+
+	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+		error "failed to discover myself"
+
+	lnet_health_pre || return $?
+
+	local hstatus
+	for hstatus in ${LNET_REMOTE_RESEND_STATUSES} \
+		       ${LNET_REMOTE_NO_RESEND_STATUSES}; do
+		echo "Simulate $hstatus"
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+	done
+
+	lnet_health_post
+
+	check_no_resends || return $?
+	check_no_local_health || return $?
+	check_no_remote_health || return $?
+
+	return 0
+}
+run_test 206 "Check no health or resends for single-rail remote failures"
+
+test_207() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	local hstatus
+	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
+		reinit_dlc || return $?
+		add_net "tcp" "eth0" || return $?
+		add_net "tcp1" "eth0" || return $?
+
+		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+			error "failed to discover myself"
+
+		echo "Simulate $hstatus"
+		lnet_health_pre || return $?
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+
+		lnet_health_post
+
+		check_resends || return $?
+		check_no_local_health || return $?
+		check_remote_health || return $?
+	done
+	for hstatus in ${LNET_REMOTE_NO_RESEND_STATUSES}; do
+		reinit_dlc || return $?
+		add_net "tcp" "eth0" || return $?
+		add_net "tcp1" "eth0" || return $?
+
+		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+			error "failed to discover myself"
+
+		echo "Simulate $hstatus"
+		lnet_health_pre || return $?
+		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
+		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
+		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+			error "Should have failed"
+		$LCTL net_drop_del *
+
+		lnet_health_post
+
+		check_no_resends || return $?
+		check_no_local_health || return $?
+		check_remote_health || return $?
+	done
+
+	return 0
+}
+run_test 207 "Check health and resends for multi-rail remote errors"
 
 test_300() {
 	# LU-13274
