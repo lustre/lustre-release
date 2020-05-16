@@ -71,49 +71,49 @@
 #include <stdio.h>
 #include <yaml.h>
 
-static char * lcfg_devname;
+static char *lcfg_devname;
 
 int lcfg_set_devname(char *name)
 {
-        char *ptr;
-        int digit = 1;
+	char *ptr;
+	int digit = 1;
 
-        if (name) {
-                if (lcfg_devname)
-                        free(lcfg_devname);
-                /* quietly strip the unnecessary '$' */
-                if (*name == '$' || *name == '%')
-                        name++;
+	if (name) {
+		if (lcfg_devname)
+			free(lcfg_devname);
+		/* quietly strip the unnecessary '$' */
+		if (*name == '$' || *name == '%')
+			name++;
 
-                ptr = name;
-                while (*ptr != '\0') {
-                        if (!isdigit(*ptr)) {
-                            digit = 0;
-                            break;
-                        }
-                        ptr++;
-                }
+		ptr = name;
+		while (*ptr != '\0') {
+			if (!isdigit(*ptr)) {
+				digit = 0;
+				break;
+			}
+			ptr++;
+		}
 
-                if (digit) {
-                        /* We can't translate from dev # to name */
-                        lcfg_devname = NULL;
-                } else {
-                        lcfg_devname = strdup(name);
-                }
-        } else {
-                lcfg_devname = NULL;
-        }
-        return 0;
+		if (digit) {
+			/* We can't translate from dev # to name */
+			lcfg_devname = NULL;
+		} else {
+			lcfg_devname = strdup(name);
+		}
+	} else {
+		lcfg_devname = NULL;
+	}
+	return 0;
 }
 
-char * lcfg_get_devname(void)
+char *lcfg_get_devname(void)
 {
-        return lcfg_devname;
+	return lcfg_devname;
 }
 
 int jt_lcfg_device(int argc, char **argv)
 {
-        return jt_obd_device(argc, argv);
+	return jt_obd_device(argc, argv);
 }
 
 static int jt_lcfg_ioctl(struct lustre_cfg_bufs *bufs, char *arg, int cmd)
@@ -122,7 +122,7 @@ static int jt_lcfg_ioctl(struct lustre_cfg_bufs *bufs, char *arg, int cmd)
 	int rc;
 
 	lcfg = malloc(lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, cmd, bufs);
@@ -137,17 +137,17 @@ static int jt_lcfg_ioctl(struct lustre_cfg_bufs *bufs, char *arg, int cmd)
 
 int jt_lcfg_attach(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
-        int rc;
+	struct lustre_cfg_bufs bufs;
+	int rc;
 
-        if (argc != 4)
-                return CMD_HELP;
+	if (argc != 4)
+		return CMD_HELP;
 
-        lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_reset(&bufs, NULL);
 
-        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
-        lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
-        lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
+	lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+	lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
+	lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
 
 	rc = jt_lcfg_ioctl(&bufs, argv[0], LCFG_ATTACH);
 	if (rc == 0)
@@ -158,84 +158,83 @@ int jt_lcfg_attach(int argc, char **argv)
 
 int jt_lcfg_setup(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
-        int i;
+	struct lustre_cfg_bufs bufs;
+	int i;
 
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n",
-                        jt_cmdname(argv[0]));
-                return -EINVAL;
-        }
+	if (!lcfg_devname) {
+		fprintf(stderr,
+			"%s: please use 'device name' to set the device name for config commands.\n",
+			jt_cmdname(argv[0]));
+		return -EINVAL;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        if (argc > 6)
-                return CMD_HELP;
+	if (argc > 6)
+		return CMD_HELP;
 
-        for (i = 1; i < argc; i++) {
-                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
-        }
+	for (i = 1; i < argc; i++)
+		lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_SETUP);
 }
 
 int jt_obd_detach(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
+	struct lustre_cfg_bufs bufs;
 
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n",
-                        jt_cmdname(argv[0]));
-                return -EINVAL;
-        }
+	if (!lcfg_devname) {
+		fprintf(stderr,
+			"%s: please use 'device name' to set the device name for config commands.\n",
+			jt_cmdname(argv[0]));
+		return -EINVAL;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        if (argc != 1)
-                return CMD_HELP;
+	if (argc != 1)
+		return CMD_HELP;
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_DETACH);
 }
 
 int jt_obd_cleanup(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
-        char force = 'F';
-        char failover = 'A';
-        char flags[3] = { 0 };
-        int flag_cnt = 0, n;
+	struct lustre_cfg_bufs bufs;
+	char force = 'F';
+	char failover = 'A';
+	char flags[3] = { 0 };
+	int flag_cnt = 0, n;
 
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n",
-                        jt_cmdname(argv[0]));
-                return -EINVAL;
-        }
+	if (!lcfg_devname) {
+		fprintf(stderr,
+			"%s: please use 'device name' to set the device name for config commands.\n",
+			jt_cmdname(argv[0]));
+		return -EINVAL;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        if (argc < 1 || argc > 3)
-                return CMD_HELP;
+	if (argc < 1 || argc > 3)
+		return CMD_HELP;
 
-        /* we are protected from overflowing our buffer by the argc
-         * check above
-         */
-        for (n = 1; n < argc; n++) {
-                if (strcmp(argv[n], "force") == 0) {
-                        flags[flag_cnt++] = force;
-                } else if (strcmp(argv[n], "failover") == 0) {
-                        flags[flag_cnt++] = failover;
+	/*
+	 * we are protected from overflowing our buffer by the argc
+	 * check above
+	 */
+	for (n = 1; n < argc; n++) {
+		if (strcmp(argv[n], "force") == 0) {
+			flags[flag_cnt++] = force;
+		} else if (strcmp(argv[n], "failover") == 0) {
+			flags[flag_cnt++] = failover;
 		} else {
 			fprintf(stderr, "unknown option: %s\n", argv[n]);
 			return CMD_HELP;
 		}
 	}
 
-        if (flag_cnt) {
-                lustre_cfg_bufs_set_string(&bufs, 1, flags);
-        }
+	if (flag_cnt)
+		lustre_cfg_bufs_set_string(&bufs, 1, flags);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_CLEANUP);
 }
@@ -248,11 +247,11 @@ int do_add_uuid(char *func, char *uuid, lnet_nid_t nid)
 	struct lustre_cfg *lcfg;
 
 	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-	if (uuid != NULL)
+	if (uuid)
 		lustre_cfg_bufs_set_string(&bufs, 1, uuid);
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, LCFG_ADD_UUID, &bufs);
@@ -261,13 +260,13 @@ int do_add_uuid(char *func, char *uuid, lnet_nid_t nid)
 		rc = lcfg_ioctl(func, OBD_DEV_ID, lcfg);
 		free(lcfg);
 	}
-        if (rc) {
-                fprintf(stderr, "IOC_PORTAL_ADD_UUID failed: %s\n",
-                        strerror(errno));
-                return -1;
-        }
+	if (rc) {
+		fprintf(stderr, "IOC_PORTAL_ADD_UUID failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
 
-	if (uuid != NULL)
+	if (uuid)
 		printf("Added uuid %s: %s\n", uuid, libcfs_nid2str(nid));
 
 	return 0;
@@ -275,71 +274,69 @@ int do_add_uuid(char *func, char *uuid, lnet_nid_t nid)
 
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
-        lnet_nid_t nid;
+	lnet_nid_t nid;
 
-        if (argc != 3) {
-                return CMD_HELP;
-        }
+	if (argc != 3)
+		return CMD_HELP;
 
-        nid = libcfs_str2nid(argv[2]);
-        if (nid == LNET_NID_ANY) {
-                fprintf (stderr, "Can't parse NID %s\n", argv[2]);
-                return (-1);
-        }
+	nid = libcfs_str2nid(argv[2]);
+	if (nid == LNET_NID_ANY) {
+		fprintf(stderr, "Can't parse NID %s\n", argv[2]);
+		return (-1);
+	}
 
-        return do_add_uuid(argv[0], argv[1], nid);
+	return do_add_uuid(argv[0], argv[1], nid);
 }
 
 int jt_lcfg_del_uuid(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
+	struct lustre_cfg_bufs bufs;
 
-        if (argc != 2) {
-                fprintf(stderr, "usage: %s <uuid>\n", argv[0]);
-                return 0;
-        }
+	if (argc != 2) {
+		fprintf(stderr, "usage: %s <uuid>\n", argv[0]);
+		return 0;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-        if (strcmp (argv[1], "_all_"))
-                lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	if (strcmp(argv[1], "_all_"))
+		lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_DEL_UUID);
 }
 
 int jt_lcfg_del_mount_option(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
+	struct lustre_cfg_bufs bufs;
 
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc != 2)
+		return CMD_HELP;
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        /* profile name */
-        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+	/* profile name */
+	lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_DEL_MOUNTOPT);
 }
 
 int jt_lcfg_set_timeout(int argc, char **argv)
 {
-        int rc;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
+	int rc;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
 
-        fprintf(stderr, "%s has been deprecated. Use conf_param instead.\n"
-                "e.g. conf_param lustre-MDT0000 obd_timeout=50\n",
-                jt_cmdname(argv[0]));
-        return CMD_HELP;
+	fprintf(stderr,
+		"%s has been deprecated. Use conf_param instead.\ne.g. conf_param lustre-MDT0000 obd_timeout=50\n",
+		jt_cmdname(argv[0]));
+	return CMD_HELP;
 
+	if (argc != 2)
+		return CMD_HELP;
 
-        if (argc != 2)
-                return CMD_HELP;
-
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, LCFG_SET_TIMEOUT, &bufs);
@@ -348,40 +345,40 @@ int jt_lcfg_set_timeout(int argc, char **argv)
 		rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
 		free(lcfg);
 	}
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
-        return rc;
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
+	return rc;
 }
 
 int jt_lcfg_add_conn(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-        int priority;
-        int rc;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	int priority;
+	int rc;
 
-        if (argc == 2)
-                priority = 0;
-        else if (argc == 3)
-                priority = 1;
-        else
-                return CMD_HELP;
+	if (argc == 2)
+		priority = 0;
+	else if (argc == 3)
+		priority = 1;
+	else
+		return CMD_HELP;
 
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n",
-                        jt_cmdname(argv[0]));
-                return -EINVAL;
-        }
+	if (!lcfg_devname) {
+		fprintf(stderr,
+			"%s: please use 'device name' to set the device name for config commands.\n",
+			jt_cmdname(argv[0]));
+		return -EINVAL;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+	lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, LCFG_ADD_CONN, &bufs);
@@ -390,32 +387,32 @@ int jt_lcfg_add_conn(int argc, char **argv)
 		rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
 		free(lcfg);
 	}
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
 
-        return rc;
+	return rc;
 }
 
 int jt_lcfg_del_conn(int argc, char **argv)
 {
-        struct lustre_cfg_bufs bufs;
+	struct lustre_cfg_bufs bufs;
 
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc != 2)
+		return CMD_HELP;
 
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n",
-                        jt_cmdname(argv[0]));
-                return -EINVAL;
-        }
+	if (!lcfg_devname) {
+		fprintf(stderr,
+			"%s: please use 'device name' to set the device name for config commands.\n",
+			jt_cmdname(argv[0]));
+		return -EINVAL;
+	}
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        /* connection uuid */
-        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+	/* connection uuid */
+	lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_DEL_MOUNTOPT);
 }
@@ -426,14 +423,13 @@ int jt_lcfg_param(int argc, char **argv)
 	struct lustre_cfg_bufs bufs;
 	int i;
 
-        if (argc >= LUSTRE_CFG_MAX_BUFCOUNT)
-                return CMD_HELP;
+	if (argc >= LUSTRE_CFG_MAX_BUFCOUNT)
+		return CMD_HELP;
 
-        lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_reset(&bufs, NULL);
 
-        for (i = 1; i < argc; i++) {
-                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
-        }
+	for (i = 1; i < argc; i++)
+		lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_PARAM);
 }
@@ -451,12 +447,13 @@ struct param_opts {
 
 int lcfg_setparam_perm(char *func, char *buf)
 {
-	int     rc = 0;
+	int rc = 0;
 	struct lustre_cfg_bufs bufs;
 	struct lustre_cfg *lcfg;
 
 	lustre_cfg_bufs_reset(&bufs, NULL);
-	/* This same command would be executed on all nodes, many
+	/*
+	 * This same command would be executed on all nodes, many
 	 * of which should fail (silently) because they don't have
 	 * that proc file existing locally. There would be no
 	 * preprocessing on the MGS to try to figure out which
@@ -473,10 +470,9 @@ int lcfg_setparam_perm(char *func, char *buf)
 
 	lustre_cfg_bufs_set_string(&bufs, 1, buf);
 
-
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount,
 				     bufs.lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 		fprintf(stderr, "error: allocating lcfg for %s: %s\n",
 			jt_cmdname(func), strerror(rc));
@@ -493,7 +489,8 @@ int lcfg_setparam_perm(char *func, char *buf)
 	return rc;
 }
 
-/* Param set to single log file, used by all clients and servers.
+/*
+ * Param set to single log file, used by all clients and servers.
  * This should be loaded after the individual config logs.
  * Called from set param with -P option.
  */
@@ -511,7 +508,6 @@ static int jt_lcfg_setparam_perm(int argc, char **argv,
 		return CMD_HELP;
 
 	for (i = first_param, rc = 0; i < argc; i++) {
-
 		len = strlen(argv[i]);
 
 		buf = argv[i];
@@ -519,7 +515,7 @@ static int jt_lcfg_setparam_perm(int argc, char **argv,
 		/* put an '=' on the end in case it doesn't have one */
 		if (popt->po_delete && argv[i][len - 1] != '=') {
 			buf = malloc(len + 1);
-			if (buf == NULL) {
+			if (!buf) {
 				rc = -ENOMEM;
 				break;
 			}
@@ -546,7 +542,7 @@ int lcfg_conf_param(char *func, char *buf)
 
 	/* We could put other opcodes here. */
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (lcfg == NULL) {
+	if (!lcfg) {
 		rc = -ENOMEM;
 	} else {
 		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
@@ -559,13 +555,17 @@ int lcfg_conf_param(char *func, char *buf)
 	return rc;
 }
 
-/* Param set in config log on MGS */
-/* conf_param key=value */
-/* Note we can actually send mgc conf_params from clients, but currently
+/*
+ * Param set in config log on MGS
+ * conf_param key=value
+ *
+ * Note we can actually send mgc conf_params from clients, but currently
  * that's only done for default file striping (see ll_send_mgc_param),
- * and not here. */
-/* After removal of a parameter (-d) Lustre will use the default
- * AT NEXT REBOOT, not immediately. */
+ * and not here.
+ *
+ * After removal of a parameter (-d) Lustre will use the default
+ * AT NEXT REBOOT, not immediately.
+ */
 int jt_lcfg_confparam(int argc, char **argv)
 {
 	int rc;
@@ -593,7 +593,7 @@ int jt_lcfg_confparam(int argc, char **argv)
 
 		/* for delete, make it "<param>=\0" */
 		buf = malloc(strlen(argv[optind]) + 2);
-		if (buf == NULL) {
+		if (!buf) {
 			rc = -ENOMEM;
 			goto out;
 		}
@@ -646,9 +646,9 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 
 	/* Take the original filename string and chop off the glob addition */
 	tmp = strstr(filename, "/lustre/");
-	if (tmp == NULL) {
+	if (!tmp) {
 		tmp = strstr(filename, "/lnet/");
-		if (tmp != NULL)
+		if (tmp)
 			tmp += strlen("/lnet/");
 	} else {
 		tmp += strlen("/lustre/");
@@ -656,7 +656,7 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 
 	/* Allocate return string */
 	param_name = strdup(tmp);
-	if (param_name == NULL)
+	if (!param_name)
 		return NULL;
 
 	/* replace '/' with '.' to match conf_param and sysctl */
@@ -668,7 +668,7 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 		suffix_len = strlen(suffix);
 
 		tmp = realloc(param_name, suffix_len + strlen(param_name) + 1);
-		if (tmp != NULL) {
+		if (tmp) {
 			param_name = tmp;
 			strncat(param_name, suffix,
 				strlen(param_name) + suffix_len);
@@ -682,15 +682,15 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 /* BEWARE - kernel definition of strnchr has args in different order! */
 static char *strnchr(const char *p, char c, size_t n)
 {
-       if (!p)
-               return (0);
+	if (!p)
+		return (0);
 
-       while (n-- > 0) {
-               if (*p == c)
-                       return ((char *)p);
-               p++;
-       }
-       return (0);
+	while (n-- > 0) {
+		if (*p == c)
+			return ((char *)p);
+		p++;
+	}
+	return (0);
 }
 
 /**
@@ -731,7 +731,7 @@ clean_path(struct param_opts *popt, char *path)
 
 	/* get rid of '\', glob doesn't like it */
 	tmp = strrchr(path, '\\');
-	if (tmp != NULL) {
+	if (tmp) {
 		char *tail = path + strlen(path);
 
 		while (tmp != path) {
@@ -745,19 +745,20 @@ clean_path(struct param_opts *popt, char *path)
 
 	/* Does this path contain a NID string ? */
 	tmp = strchr(path, '@');
-	if (tmp != NULL) {
+	if (tmp) {
 		char *find_nid = strdup(path);
 		lnet_nid_t nid;
 
-		if (find_nid == NULL)
+		if (!find_nid)
 			return -ENOMEM;
 
-		/* First we need to chop off rest after nid string.
-		 * Since find_nid is a clone of path it better have
-		 * '@' */
+		/*
+		 * First we need to chop off rest after nid string.
+		 * Since find_nid is a clone of path it better have '@'
+		 */
 		tmp = strchr(find_nid, '@');
 		tmp = strchr(tmp, '.');
-		if (tmp != NULL)
+		if (tmp)
 			*tmp = '\0';
 
 		/* Now chop off the front. */
@@ -770,7 +771,7 @@ clean_path(struct param_opts *popt, char *path)
 			nid = libcfs_str2nid(tmp);
 			if (nid != LNET_NID_ANY) {
 				nidstr = libcfs_nid2str(nid);
-				if (nidstr == NULL)
+				if (!nidstr)
 					return -EINVAL;
 				break;
 			}
@@ -786,12 +787,14 @@ clean_path(struct param_opts *popt, char *path)
 		if (!strncmp(tmp, "MGC", 3))
 			tmp += 3;
 
-		/* There exist cases where some of the subdirectories of the
+		/*
+		 * There exist cases where some of the subdirectories of the
 		 * the parameter tree has embedded in its name a NID string.
 		 * This means that it is possible that these subdirectories
 		 * could have actual '.' in its name. If this is the case we
-		 * don't want to blindly replace the '.' with '/'. */
-		if (nidstr != NULL) {
+		 * don't want to blindly replace the '.' with '/'.
+		 */
+		if (nidstr) {
 			char *match = strstr(tmp, nidstr);
 
 			if (tmp == match)
@@ -883,7 +886,7 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 	int fd, rc = 0;
 	ssize_t count;
 
-	if (value == NULL)
+	if (!value)
 		return -EINVAL;
 
 	/* Write the new value to the file */
@@ -904,8 +907,9 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 		}
 	} else if (count < strlen(value)) { /* Truncate case */
 		rc = -EINVAL;
-		fprintf(stderr, "error: set_param: setting %s=%s: "
-			"wrote only %zd\n", path, value, count);
+		fprintf(stderr,
+			"error: set_param: setting %s=%s: wrote only %zd\n",
+			path, value, count);
 	} else if (popt->po_show_path) {
 		printf("%s=%s\n", param_name, value);
 	}
@@ -946,7 +950,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 	}
 
 	dup_cache = calloc(paths.gl_pathc, sizeof(char *));
-	if (dup_cache == NULL) {
+	if (!dup_cache) {
 		rc = -ENOMEM;
 		fprintf(stderr,
 			"error: %s: allocating '%s' dup_cache[%zd]: %s\n",
@@ -956,7 +960,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 
 	for (i = 0; i < paths.gl_pathc; i++) {
 		char *param_name = NULL, *tmp;
-		char pathname[PATH_MAX], param_dir[PATH_MAX+2];
+		char pathname[PATH_MAX], param_dir[PATH_MAX + 2];
 		struct stat st;
 		int rc2, j;
 
@@ -972,7 +976,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			continue;
 
 		param_name = display_name(paths.gl_pathv[i], &st, popt);
-		if (param_name == NULL) {
+		if (!param_name) {
 			fprintf(stderr,
 				"error: %s: generating name for '%s': %s\n",
 				opname, paths.gl_pathv[i], strerror(ENOMEM));
@@ -1007,13 +1011,13 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			 * small amounts of data, less than a page in size, are
 			 * located under /sys/fs/lustre and in the case of large
 			 * parameter data files, think stats for example, are
-			 * located in the debugfs tree. Since the files are split
-			 * across two trees the directories are often duplicated
-			 * which means these directories are listed twice which
-			 * leads to duplicate output to the user. To avoid
-			 * scanning a directory twice we have to cache any
-			 * directory and check if a search has been requested
-			 * twice.
+			 * located in the debugfs tree. Since the files are
+			 * split across two trees the directories are often
+			 * duplicated which means these directories are listed
+			 * twice which leads to duplicate output to the user.
+			 * To avoid scanning a directory twice we have to cache
+			 * any directory and check if a search has been
+			 * requested twice.
 			 */
 			for (j = 0; j < dup_count; j++) {
 				if (!strcmp(dup_cache[j], param_name))
@@ -1031,8 +1035,10 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			break;
 		}
 
-		/* Only directories are searched recursively if
-		 * requested by the user */
+		/*
+		 * Only directories are searched recursively if
+		 * requested by the user
+		 */
 		if (!S_ISDIR(st.st_mode) || !popt->po_recursive) {
 			free(param_name);
 			param_name = NULL;
@@ -1061,7 +1067,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		memset(&param_dir, '\0', sizeof(param_dir));
 
 		/* Shouldn't happen but just in case */
-		if (tmp == NULL) {
+		if (!tmp) {
 			if (rc == 0)
 				rc = -EINVAL;
 			continue;
@@ -1070,8 +1076,10 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 
 		rc2 = snprintf(pathname, sizeof(pathname), "%s/*", tmp);
 		if (rc2 < 0) {
-			/* snprintf() should never an error, and if it does
-			 * there isn't much point trying to use fprintf() */
+			/*
+			 * snprintf() should never an error, and if it does
+			 * there isn't much point trying to use fprintf()
+			 */
 			continue;
 		}
 		if (rc2 >= sizeof(pathname)) {
@@ -1217,7 +1225,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 		}
 
 		rc2 = param_display(&popt, path, NULL,
-				   popt.po_only_path ? LIST_PARAM : GET_PARAM);
+				    popt.po_only_path ? LIST_PARAM : GET_PARAM);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
@@ -1241,10 +1249,9 @@ int jt_lcfg_getparam(int argc, char **argv)
  */
 int jt_nodemap_info(int argc, char **argv)
 {
-	const char		usage_str[] = "usage: nodemap_info "
-					      "[list|nodemap_name|all]\n";
-	struct param_opts	popt;
-	int			rc = 0;
+	const char usage_str[] = "usage: nodemap_info [list|nodemap_name|all]\n";
+	struct param_opts popt;
+	int rc = 0;
 
 	memset(&popt, 0, sizeof(popt));
 	popt.po_show_path = 1;
@@ -1266,29 +1273,30 @@ int jt_nodemap_info(int argc, char **argv)
 		snprintf(pattern, sizeof(pattern), "nodemap/%s/*", argv[1]);
 		rc = param_display(&popt, pattern, NULL, LIST_PARAM);
 		if (rc == -ESRCH)
-			fprintf(stderr, "error: nodemap_info: cannot find "
-					"nodemap %s\n", argv[1]);
+			fprintf(stderr,
+				"error: nodemap_info: cannot find nodemap %s\n",
+				argv[1]);
 	}
 	return rc;
 }
 
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
-        int ch;
+	int ch;
 
-        popt->po_show_path = 1;
-        popt->po_only_path = 0;
-        popt->po_show_type = 0;
-        popt->po_recursive = 0;
+	popt->po_show_path = 1;
+	popt->po_only_path = 0;
+	popt->po_show_type = 0;
+	popt->po_recursive = 0;
 	popt->po_perm = 0;
 	popt->po_delete = 0;
 	popt->po_file = 0;
 
 	while ((ch = getopt(argc, argv, "nPdF")) != -1) {
-                switch (ch) {
-                case 'n':
-                        popt->po_show_path = 0;
-                        break;
+		switch (ch) {
+		case 'n':
+			popt->po_show_path = 0;
+			break;
 		case 'P':
 			popt->po_perm = 1;
 			break;
@@ -1298,11 +1306,11 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		case 'F':
 			popt->po_file = 1;
 			break;
-                default:
-                        return -1;
-                }
-        }
-        return optind;
+		default:
+			return -1;
+		}
+	}
+	return optind;
 }
 
 enum paramtype {
@@ -1310,7 +1318,6 @@ enum paramtype {
 	PT_SETPARAM,
 	PT_CONFPARAM
 };
-
 
 #define PS_NONE 0
 #define PS_PARAM_FOUND 1
@@ -1341,7 +1348,6 @@ static struct cfg_stage_data {
 	{ PS_NONE, "none" }
 };
 
-
 void conf_to_set_param(enum paramtype confset, const char *param,
 		       const char *device, char *buf,
 		       int bufsize)
@@ -1357,7 +1363,7 @@ void conf_to_set_param(enum paramtype confset, const char *param,
 	 * sys.* params are top level, we just need to trim the sys.
 	 */
 	tmp = strstr(param, "sys.");
-	if (tmp != NULL) {
+	if (tmp) {
 		tmp += 4;
 		strncpy(buf, tmp, bufsize);
 		return;
@@ -1473,7 +1479,7 @@ int lcfg_setparam_yaml(char *func, char *filename)
 			int size = strlen(parameter) + strlen(value) + 2;
 			char *buf = malloc(size);
 
-			if (buf == NULL) {
+			if (!buf) {
 				rc = 2;
 				break;
 			}
@@ -1509,8 +1515,10 @@ int jt_lcfg_setparam(int argc, char **argv)
 		return CMD_HELP;
 
 	if (popt.po_perm)
-		/* We can't delete parameters that were
-		 * set with old conf_param interface */
+		/*
+		 * We can't delete parameters that were
+		 * set with old conf_param interface
+		 */
 		return jt_lcfg_setparam_perm(argc, argv, &popt);
 
 	if (popt.po_file)
@@ -1518,10 +1526,10 @@ int jt_lcfg_setparam(int argc, char **argv)
 
 	for (i = index; i < argc; i++) {
 		int rc2;
-		path = argv[i];
 
+		path = argv[i];
 		value = strchr(path, '=');
-		if (value != NULL) {
+		if (value) {
 			/* format: set_param a=b */
 			*value = '\0';
 			value++;
@@ -1543,9 +1551,8 @@ int jt_lcfg_setparam(int argc, char **argv)
 				if (rc == 0)
 					rc = -EINVAL;
 				break;
-			} else {
-				value = argv[i];
 			}
+			value = argv[i];
 		}
 
 		rc2 = clean_path(&popt, path);
