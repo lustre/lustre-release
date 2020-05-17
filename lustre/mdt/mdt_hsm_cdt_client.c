@@ -111,32 +111,30 @@ static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 			       struct hsm_action_list *hal)
 {
 	struct hsm_action_item *hai;
-	int rc, i, ok_cnt;
+	int rc = 0, i;
+	bool check = false;
 	ENTRY;
 
-	ok_cnt = 0;
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		/* We only support ARCHIVE, RESTORE, REMOVE and CANCEL here. */
 		if (hai->hai_action == HSMA_NONE)
 			RETURN(-EINVAL);
 
-		/* in a cancel request hai_cookie may be set by caller to
-		 * show the request to be canceled
-		 * if not we need to search by FID
+		/* In a cancel request hai_cookie may be set by caller to show
+		 * the request to be canceled. If there is at least one cancel
+		 * request that does not have a cookie set we need to search by
+		 * FID; we can skip checking in all other cases
 		 */
-		if (hai->hai_action == HSMA_CANCEL && hai->hai_cookie != 0)
-			ok_cnt++;
-		else
-			hai->hai_cookie = 0;
+		if (hai->hai_action == HSMA_CANCEL && hai->hai_cookie == 0) {
+			check = true;
+			break;
+		}
 	}
 
-	/* if all requests are cancel with cookie, no need to find compatible */
-	if (ok_cnt == hal->hal_count)
-		RETURN(0);
-
-	rc = cdt_llog_process(env, mdt, hsm_find_compatible_cb, hal, 0, 0,
-			      READ);
+	if (check)
+		rc = cdt_llog_process(env, mdt, hsm_find_compatible_cb, hal, 0,
+					      0, READ);
 
 	RETURN(rc);
 }
