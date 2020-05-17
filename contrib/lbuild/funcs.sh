@@ -203,6 +203,7 @@ autodetect_target() {
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
+        sles12.5) target="$(uname -r | cut -d . -f 1,2)-sles12sp5";;
         sles12.4) target="$(uname -r | cut -d . -f 1,2)-sles12sp4";;
         sles12.3) target="$(uname -r | cut -d . -f 1,2)-sles12sp3";;
         sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;

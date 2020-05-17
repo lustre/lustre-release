@@ -22,6 +22,7 @@ TBD Whamcloud
          4.18.0-80.11.2.el8   (RHEL8.0)
          4.4.180-94.97        (SLES12 SP3)
          4.12.14-95.45        (SLES12 SP4)
+         4.12.14-122.20       (SLES12 SP5)
          4.15.0-45            (Ubuntu 18.04)
        * Client known to build on unpatched kernels (others may also work):
          2.6.32-696.18.7.el6  (RHEL6.9)
