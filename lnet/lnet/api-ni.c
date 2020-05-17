@@ -4257,7 +4257,6 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	int cpt;
 	int i;
 	int rc;
-	int max_intf = lnet_interfaces_max;
 
 	if (n_ids <= 0 ||
 	    id.nid == LNET_NID_ANY)
@@ -4267,11 +4266,11 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 		id.pid = LNET_PID_LUSTRE;
 
 	/*
-	 * if the user buffer has more space than the max_intf
-	 * then only fill it up to max_intf
+	 * If the user buffer has more space than the lnet_interfaces_max,
+	 * then only fill it up to lnet_interfaces_max.
 	 */
-	if (n_ids > max_intf)
-		n_ids = max_intf;
+	if (n_ids > lnet_interfaces_max)
+		n_ids = lnet_interfaces_max;
 
 	CFS_ALLOC_PTR_ARRAY(buf, n_ids);
 	if (!buf)
@@ -4299,11 +4298,6 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	if (rc)
 		goto out_decref;
 
-	/* Peer may have changed. */
-	lp = lpni->lpni_peer_net->lpn_peer;
-	if (lp->lp_nnis < n_ids)
-		n_ids = lp->lp_nnis;
-
 	i = 0;
 	p = NULL;
 	while ((p = lnet_get_next_peer_ni_locked(lp, NULL, p)) != NULL) {
@@ -4312,20 +4306,16 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 		if (++i >= n_ids)
 			break;
 	}
+	rc = i;
 
-	lnet_net_unlock(cpt);
-
-	rc = -EFAULT;
-	if (copy_to_user(ids, buf, n_ids * sizeof(*buf)))
-		goto out_relock;
-	rc = n_ids;
-out_relock:
-	lnet_net_lock(cpt);
 out_decref:
 	lnet_peer_ni_decref_locked(lpni);
 out:
 	lnet_net_unlock(cpt);
 
+	if (rc >= 0)
+		if (copy_to_user(ids, buf, rc * sizeof(*buf)))
+			rc = -EFAULT;
 	CFS_FREE_PTR_ARRAY(buf, n_ids);
 
 	return rc;
