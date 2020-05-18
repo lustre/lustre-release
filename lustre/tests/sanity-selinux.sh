@@ -93,6 +93,13 @@ check_selinux_xattr() {
 	echo $xattrval
 }
 
+get_sel_ctx() {
+	local file=$1
+
+	[ -n "$file" ] || return;
+	[ -f $file ] || return;
+	stat $file | awk '$1 == "Context:" {print $2}'
+}
 
 test_1() {
 	local devname=$(mdsdevname 1)
@@ -230,7 +237,7 @@ test_5() {
 
 	# get sec context
 	ls -lZ $filename
-	local secctxseen=$(ls -lZ $filename | awk '{print $4}' | cut -d: -f3)
+	local secctxseen=$(get_sel_ctx $filename | cut -d: -f3)
 
 	[ "$newsecctx" == "$secctxseen" ] ||
 		error "sec context seen from 1st mount point is not correct"
@@ -254,7 +261,7 @@ test_10() {
 
 	# get sec context from 1st mount point
 	ls -lZ $filename1
-	local secctxseen=$(ls -lZ $filename1 | awk '{print $4}' | cut -d: -f3)
+	local secctxseen=$(get_sel_ctx $filename1 | cut -d: -f3)
 
 	[ "$newsecctx" == "$secctxseen" ] ||
 		error_ignore LU-6784 \
@@ -288,12 +295,12 @@ test_20a() {
 
 	# get sec info on second mount point
 	if [ -e "$filename2" ]; then
-		secinfo2=$(ls -lZ $filename2 | awk '{print $4}')
+		secinfo2=$(get_sel_ctx $filename2)
 	fi
 
 	# get sec info on first mount point
 	wait $touchpid
-	secinfo1=$(ls -lZ $filename1 | awk '{print $4}')
+	secinfo1=$(get_sel_ctx $filename1)
 
 	# compare sec contexts
 	[ -z "$secinfo2" -o "$secinfo1" == "$secinfo2" ] ||
