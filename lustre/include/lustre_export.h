@@ -213,7 +213,7 @@ struct obd_export {
 	/* Unlinked export list */
 	struct list_head	exp_stale_list;
 	struct rhash_head	exp_uuid_hash;	/** uuid-export hash */
-	struct hlist_node	exp_nid_hash;	/** nid-export hash */
+	struct rhlist_head	exp_nid_hash;	/** nid-export hash */
 	struct hlist_node	exp_gen_hash;   /** last_rcvd clt gen hash */
         /**
          * All exports eligible for ping evictor are linked into a list
@@ -279,7 +279,8 @@ struct obd_export {
 				 * request. */
 				exp_replay_done:1,
 				/* local client with recovery disabled */
-				exp_no_recovery:1;
+				exp_no_recovery:1,
+				exp_hashed:1;
 	/* also protected by exp_lock */
 	enum lustre_sec_part	exp_sp_peer;
 	struct sptlrpc_flavor	exp_flvr;		/* current */

@@ -1057,7 +1057,6 @@ struct obd_export *__class_new_export(struct obd_device *obd,
 	export->exp_last_request_time = ktime_get_real_seconds();
 	spin_lock_init(&export->exp_lock);
 	spin_lock_init(&export->exp_rpc_lock);
-	INIT_HLIST_NODE(&export->exp_nid_hash);
 	INIT_HLIST_NODE(&export->exp_gen_hash);
 	spin_lock_init(&export->exp_bl_list_lock);
 	INIT_LIST_HEAD(&export->exp_bl_list);
@@ -1427,22 +1426,21 @@ int class_disconnect(struct obd_export *export)
 	spin_lock(&export->exp_lock);
 	already_disconnected = export->exp_disconnected;
 	export->exp_disconnected = 1;
+#ifdef HAVE_SERVER_SUPPORT
 	/*  We hold references of export for uuid hash
 	 *  and nid_hash and export link at least. So
-	 *  it is safe to call cfs_hash_del in there.  */
-	if (!hlist_unhashed(&export->exp_nid_hash))
-		cfs_hash_del(export->exp_obd->obd_nid_hash,
-			     &export->exp_connection->c_peer.nid,
-			     &export->exp_nid_hash);
+	 *  it is safe to call rh*table_remove_fast in
+	 *  there.
+	 */
+	obd_nid_del(export->exp_obd, export);
+#endif /* HAVE_SERVER_SUPPORT */
 	spin_unlock(&export->exp_lock);
 
         /* class_cleanup(), abort_recovery(), and class_fail_export()
          * all end up in here, and if any of them race we shouldn't
          * call extra class_export_puts(). */
-        if (already_disconnected) {
-		LASSERT(hlist_unhashed(&export->exp_nid_hash));
+	if (already_disconnected)
                 GOTO(no_disconn, already_disconnected);
-        }
 
 	CDEBUG(D_IOCTL, "disconnect: cookie %#llx\n",
                export->exp_handle.h_cookie);
@@ -1626,13 +1624,13 @@ void class_fail_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(class_fail_export);
 
+#ifdef HAVE_SERVER_SUPPORT
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
-	struct cfs_hash *nid_hash;
-	struct obd_export *doomed_exp = NULL;
-	int exports_evicted = 0;
-
 	lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
+	struct obd_export *doomed_exp;
+	struct rhashtable_iter iter;
+	int exports_evicted = 0;
 
 	spin_lock(&obd->obd_dev_lock);
 	/* umount has run already, so evict thread should leave
@@ -1641,31 +1639,39 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 		spin_unlock(&obd->obd_dev_lock);
 		return exports_evicted;
 	}
-	nid_hash = obd->obd_nid_hash;
-	cfs_hash_getref(nid_hash);
 	spin_unlock(&obd->obd_dev_lock);
 
-	do {
-		doomed_exp = cfs_hash_lookup(nid_hash, &nid_key);
-                if (doomed_exp == NULL)
-                        break;
+	rhltable_walk_enter(&obd->obd_nid_hash, &iter);
+	rhashtable_walk_start(&iter);
+	while ((doomed_exp = rhashtable_walk_next(&iter)) != NULL) {
+		if (IS_ERR(doomed_exp))
+			continue;
 
-                LASSERTF(doomed_exp->exp_connection->c_peer.nid == nid_key,
-                         "nid %s found, wanted nid %s, requested nid %s\n",
-                         obd_export_nid2str(doomed_exp),
-                         libcfs_nid2str(nid_key), nid);
-                LASSERTF(doomed_exp != obd->obd_self_export,
-                         "self-export is hashed by NID?\n");
-                exports_evicted++;
-		LCONSOLE_WARN("%s: evicting %s (at %s) by administrative "
-			      "request\n", obd->obd_name,
+		if (!doomed_exp->exp_connection ||
+		    doomed_exp->exp_connection->c_peer.nid != nid_key)
+			continue;
+
+		if (!refcount_inc_not_zero(&doomed_exp->exp_handle.h_ref))
+			continue;
+
+		rhashtable_walk_stop(&iter);
+
+		LASSERTF(doomed_exp != obd->obd_self_export,
+			 "self-export is hashed by NID?\n");
+
+		LCONSOLE_WARN("%s: evicting %s (at %s) by administrative request\n",
+			      obd->obd_name,
 			      obd_uuid2str(&doomed_exp->exp_client_uuid),
 			      obd_export_nid2str(doomed_exp));
-                class_fail_export(doomed_exp);
-                class_export_put(doomed_exp);
-        } while (1);
 
-	cfs_hash_putref(nid_hash);
+		class_fail_export(doomed_exp);
+		class_export_put(doomed_exp);
+		exports_evicted++;
+
+		rhashtable_walk_start(&iter);
+	}
+	rhashtable_walk_stop(&iter);
+	rhashtable_walk_exit(&iter);
 
         if (!exports_evicted)
                 CDEBUG(D_HA,"%s: can't disconnect NID '%s': no exports found\n",
@@ -1674,7 +1680,6 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
 
-#ifdef HAVE_SERVER_SUPPORT
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
 	struct obd_export *doomed_exp = NULL;

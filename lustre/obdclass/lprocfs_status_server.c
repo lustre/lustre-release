@@ -168,11 +168,9 @@ static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
 }
 
 static int
-lprocfs_exp_print_export_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			     struct hlist_node *hnode, void *cb_data)
+lprocfs_exp_print_export_seq(struct obd_export *exp, void *cb_data)
 {
 	struct seq_file		*m = cb_data;
-	struct obd_export	*exp = cfs_hash_object(hs, hnode);
 	struct obd_device	*obd;
 	struct obd_connect_data	*ocd;
 
@@ -227,11 +225,9 @@ out:
 static int lprocfs_exp_export_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-			      lprocfs_exp_print_export_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_export_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_export);
 
@@ -276,26 +272,12 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 EXPORT_SYMBOL(lprocfs_free_per_client_stats);
 
 static int
-lprocfs_exp_print_uuid_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			   struct hlist_node *hnode, void *cb_data)
+lprocfs_exp_print_nodemap_seq(struct obd_export *exp, void *cb_data)
 {
-	struct seq_file *m = cb_data;
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
-
-	if (exp->exp_nid_stats != NULL)
-		seq_printf(m, "%s\n", obd_uuid2str(&exp->exp_client_uuid));
-	return 0;
-}
-
-static int
-lprocfs_exp_print_nodemap_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			      struct hlist_node *hnode, void *cb_data)
-{
-	struct seq_file *m = cb_data;
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 	struct lu_nodemap *nodemap = exp->exp_target_data.ted_nodemap;
+	struct seq_file *m = cb_data;
 
-	if (nodemap != NULL)
+	if (nodemap)
 		seq_printf(m, "%s\n", nodemap->nm_name);
 	return 0;
 }
@@ -304,22 +286,28 @@ static int
 lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-			      lprocfs_exp_print_nodemap_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_nodemap_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_nodemap);
+
+static int
+lprocfs_exp_print_uuid_seq(struct obd_export *exp, void *cb_data)
+{
+	struct seq_file *m = cb_data;
+
+	if (exp->exp_nid_stats)
+		seq_printf(m, "%s\n", obd_uuid2str(&exp->exp_client_uuid));
+	return 0;
+}
 
 static int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-				lprocfs_exp_print_uuid_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_uuid_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_uuid);
 
@@ -362,16 +350,16 @@ static void ldebugfs_rhash_seq_show(const char *name, struct rhashtable *ht,
 }
 
 static int
-lprocfs_exp_print_hash_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			   struct hlist_node *hnode, void *cb_data)
+lprocfs_exp_print_hash_seq(struct obd_export *exp, void *cb_data)
 
 {
+	struct obd_device *obd = exp->exp_obd;
 	struct seq_file *m = cb_data;
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 
 	if (exp->exp_lock_hash != NULL) {
-		cfs_hash_debug_header(m);
-		cfs_hash_debug_str(hs, m);
+		seq_printf(m, "%-*s   cur   min        max theta t-min t-max flags rehash   count distribution\n",
+			   HASH_NAME_LEN, "name");
+		ldebugfs_rhash_seq_show("NID_HASH", &obd->obd_nid_hash.ht, m);
 	}
 	return 0;
 }
@@ -379,19 +367,15 @@ lprocfs_exp_print_hash_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 static int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-				lprocfs_exp_print_hash_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_hash_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_hash);
 
-int lprocfs_exp_print_replydata_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				    struct hlist_node *hnode, void *cb_data)
+int lprocfs_exp_print_replydata_seq(struct obd_export *exp, void *cb_data)
 
 {
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 	struct seq_file *m = cb_data;
 	struct tg_export_data *ted = &exp->exp_target_data;
 
@@ -409,19 +393,14 @@ int lprocfs_exp_print_replydata_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-				lprocfs_exp_print_replydata_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_replydata_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_replydata);
 
-int lprocfs_exp_print_fmd_count_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				    struct hlist_node *hnode, void *cb_data)
-
+int lprocfs_exp_print_fmd_count_seq(struct obd_export *exp, void *cb_data)
 {
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 	struct seq_file *m = cb_data;
 	struct tg_export_data *ted = &exp->exp_target_data;
 
@@ -433,11 +412,9 @@ int lprocfs_exp_print_fmd_count_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 int lprocfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-			      lprocfs_exp_print_fmd_count_seq, m);
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_exp_print_fmd_count_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_fmd_count);
 
@@ -691,9 +668,9 @@ int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 	seq_printf(m, "%-*s   cur   min        max theta t-min t-max flags  rehash   count  maxdep distribution\n",
 		   HASH_NAME_LEN, "name");
 	ldebugfs_rhash_seq_show("UUID_HASH", &obd->obd_uuid_hash, m);
+	ldebugfs_rhash_seq_show("NID_HASH", &obd->obd_nid_hash.ht, m);
 
 	cfs_hash_debug_header(m);
-	cfs_hash_debug_str(obd->obd_nid_hash, m);
 	cfs_hash_debug_str(obd->obd_nid_stats_hash, m);
 	return 0;
 }

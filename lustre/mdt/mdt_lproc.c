@@ -1304,10 +1304,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 };
 
 static int
-lprocfs_mdt_print_open_files(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			     struct hlist_node *hnode, void *v)
+lprocfs_mdt_print_open_files(struct obd_export *exp, void *v)
 {
-	struct obd_export	*exp = cfs_hash_object(hs, hnode);
 	struct seq_file		*seq = v;
 
 	if (exp->exp_lock_hash != NULL) {
@@ -1328,12 +1326,9 @@ lprocfs_mdt_print_open_files(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 static int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
 {
 	struct nid_stat *stats = seq->private;
-	struct obd_device *obd = stats->nid_obd;
 
-	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-			      lprocfs_mdt_print_open_files, seq);
-
-	return 0;
+	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+				       lprocfs_mdt_print_open_files, seq);
 }
 
 int lprocfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)

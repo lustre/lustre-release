@@ -151,6 +151,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 	EXIT;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * POSIX locks deadlock detection code.
  *
@@ -167,11 +168,9 @@ struct ldlm_flock_lookup_cb_data {
 	struct obd_export *exp;
 };
 
-static int ldlm_flock_lookup_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				struct hlist_node *hnode, void *data)
+static int ldlm_flock_lookup_cb(struct obd_export *exp, void *data)
 {
 	struct ldlm_flock_lookup_cb_data *cb_data = data;
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 	struct ldlm_lock *lock;
 
 	lock = cfs_hash_lookup(exp->exp_flock_hash, cb_data->bl_owner);
@@ -204,16 +203,21 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 			.lock = NULL,
 			.exp = NULL,
 		};
+		struct ptlrpc_connection *bl_exp_conn;
 		struct obd_export *bl_exp_new;
 		struct ldlm_lock *lock = NULL;
 		struct ldlm_flock *flock;
 
+		bl_exp_conn = bl_exp->exp_connection;
 		if (bl_exp->exp_flock_hash != NULL) {
-			cfs_hash_for_each_key(
-				bl_exp->exp_obd->obd_nid_hash,
-				&bl_exp->exp_connection->c_peer.nid,
-				ldlm_flock_lookup_cb, &cb_data);
-			lock = cb_data.lock;
+			int found;
+
+			found = obd_nid_export_for_each(bl_exp->exp_obd,
+							bl_exp_conn->c_peer.nid,
+							ldlm_flock_lookup_cb,
+							&cb_data);
+			if (found)
+				lock = cb_data.lock;
 		}
 		if (lock == NULL)
 			break;
@@ -235,7 +239,7 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 			break;
 
 		if (bl_owner == req_owner &&
-		    (bl_exp->exp_connection->c_peer.nid ==
+		    (bl_exp_conn->c_peer.nid ==
 		     req_exp->exp_connection->c_peer.nid)) {
 			class_export_put(bl_exp);
 			return 1;
@@ -264,6 +268,7 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
 		ldlm_add_ast_work_item(lock, NULL, work_list);
 	}
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 /**
  * Process a granting attempt for flock lock.
@@ -291,8 +296,10 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	int overlaps = 0;
 	int splitted = 0;
 	const struct ldlm_callback_suite null_cbs = { NULL };
+#ifdef HAVE_SERVER_SUPPORT
 	struct list_head *grant_work = (intention == LDLM_PROCESS_ENQUEUE ?
 					NULL : work_list);
+#endif
 	ENTRY;
 
 	CDEBUG(D_DLMTRACE, "flags %#llx owner %llu pid %u mode %u start "
@@ -327,7 +334,9 @@ reprocess:
 				break;
 			}
 		}
-	} else {
+	}
+#ifdef HAVE_SERVER_SUPPORT
+	else {
 		int reprocess_failed = 0;
 		lockmode_verify(mode);
 
@@ -411,11 +420,11 @@ reprocess:
 	 * deadlock detection hash list.
 	 */
 	ldlm_flock_blocking_unlink(req);
+#endif /* HAVE_SERVER_SUPPORT */
 
 	/* Scan the locks owned by this process that overlap this request.
 	 * We may have to merge or split existing locks.
 	 */
-
 	if (!ownlocks)
 		ownlocks = &res->lr_granted;
 

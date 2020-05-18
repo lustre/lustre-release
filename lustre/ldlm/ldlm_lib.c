@@ -818,7 +818,6 @@ static inline int target_check_recovery_timer(struct obd_device *target)
  * from old lib/target.c
  * --------------------------------------------------------------------------
  */
-
 static int target_handle_reconnect(struct lustre_handle *conn,
 				   struct obd_export *exp,
 				   struct obd_uuid *cluuid)
@@ -1448,11 +1447,8 @@ dont_check_exports:
 
 	if (export->exp_connection != NULL) {
 		/* Check to see if connection came from another NID. */
-		if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
-		    !hlist_unhashed(&export->exp_nid_hash))
-			cfs_hash_del(export->exp_obd->obd_nid_hash,
-				     &export->exp_connection->c_peer.nid,
-				     &export->exp_nid_hash);
+		if (export->exp_connection->c_peer.nid != req->rq_peer.nid)
+			obd_nid_del(export->exp_obd, export);
 
 		ptlrpc_connection_put(export->exp_connection);
 	}
@@ -1460,10 +1456,7 @@ dont_check_exports:
 	export->exp_connection = ptlrpc_connection_get(req->rq_peer,
 						       req->rq_self,
 						       &cluuid);
-	if (hlist_unhashed(&export->exp_nid_hash))
-		cfs_hash_add(export->exp_obd->obd_nid_hash,
-			     &export->exp_connection->c_peer.nid,
-			     &export->exp_nid_hash);
+	obd_nid_add(export->exp_obd, export);
 
 	lustre_msg_set_handle(req->rq_repmsg, &conn);
 
