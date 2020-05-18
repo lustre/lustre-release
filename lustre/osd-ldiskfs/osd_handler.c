@@ -1179,7 +1179,7 @@ trigger:
 		}
 	}
 
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		if (scrub->os_partial_scan && !scrub->os_in_join)
 			goto join;
 
@@ -5669,8 +5669,7 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	if (!fid_is_norm(fid) && !fid_is_igif(fid))
 		RETURN(0);
 
-	if (thread_is_running(&scrub->os_thread) &&
-	    scrub->os_pos_current > id->oii_ino)
+	if (scrub->os_running && scrub->os_pos_current > id->oii_ino)
 		RETURN(0);
 
 	if (dev->od_auto_scrub_interval == AS_NEVER ||
@@ -5711,7 +5710,7 @@ again:
 	insert = false;
 
 trigger:
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		if (inode == NULL) {
 			inode = osd_iget(oti, dev, id);
 			/* The inode has been removed (by race maybe). */

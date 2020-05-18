@@ -262,7 +262,7 @@ struct lustre_scrub {
 	/* Object for the scrub file. */
 	struct dt_object       *os_obj;
 
-	struct ptlrpc_thread    os_thread;
+	struct task_struct     *os_task;
 	struct list_head	os_inconsistent_items;
 
 	/* write lock for scrub prep/update/post/checkpoint,
@@ -300,6 +300,7 @@ struct lustre_scrub {
 				os_convert_igif:1,
 				os_partial_scan:1,
 				os_in_join:1,
+				os_running:1,	/* scrub thread is running */
 				os_full_scrub:1;
 };
 

@@ -564,7 +564,7 @@ osd_consistency_check(const struct lu_env *env, struct osd_device *osd,
 			RETURN(rc);
 	}
 
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		if (scrub->os_pos_current > oid)
 			RETURN(0);
 	} else if (osd->od_auto_scrub_interval == AS_NEVER) {
@@ -596,7 +596,7 @@ again:
 	insert = false;
 
 trigger:
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		if (!dn) {
 			rc = __osd_obj2dnode(osd->od_os, oid, &dn);
 			/* The object has been removed (by race maybe). */

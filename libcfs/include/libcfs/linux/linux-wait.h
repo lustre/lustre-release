@@ -136,6 +136,20 @@ do {									\
 		__ret = __wait_var_event_timeout(var, condition, timeout); \
 	__ret;								\
 })
+#else /* !HAVE_WAIT_VAR_EVENT */
+/* linux-3.10.0-1062.el7 defines wait_var_event_timeout() using
+ * __wait_cond_timeout(), but doesn't define __wait_cond_timeout !!!
+ */
+# ifndef __wait_cond_timeout
+# define ___wait_cond_timeout(condition)				\
+({									\
+	bool __cond = (condition);					\
+	if (__cond && !__ret)						\
+		__ret = 1;						\
+	__cond || !__ret;						\
+})
+# endif /* __wait_cond_timeout */
+
 #endif /* ! HAVE_WAIT_VAR_EVENT */
 
 /*

@@ -641,7 +641,7 @@ trigger:
 	}
 
 	/* The case someone triggered the OI scrub already. */
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		if (!rc) {
 			LASSERT(remote);
 

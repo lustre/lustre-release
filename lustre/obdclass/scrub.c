@@ -275,26 +275,12 @@ EXPORT_SYMBOL(scrub_checkpoint);
 int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,
 		void *data, __u32 flags)
 {
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct task_struct *task;
 	int rc;
 	ENTRY;
 
-again:
-	/* os_lock: sync status between stop and scrub thread */
-	spin_lock(&scrub->os_lock);
-	if (thread_is_running(thread)) {
-		spin_unlock(&scrub->os_lock);
+	if (scrub->os_task)
 		RETURN(-EALREADY);
-	}
-
-	if (unlikely(thread_is_stopping(thread))) {
-		spin_unlock(&scrub->os_lock);
-		wait_event_idle(thread->t_ctl_waitq,
-				thread_is_stopped(thread));
-		goto again;
-	}
-	spin_unlock(&scrub->os_lock);
 
 	if (scrub->os_file.sf_status == SS_COMPLETED) {
 		if (!(flags & SS_SET_FAILOUT))
@@ -306,18 +292,25 @@ again:
 		flags |= SS_RESET;
 	}
 
-	scrub->os_start_flags = flags;
-	thread_set_flags(thread, 0);
-	task = kthread_run(threadfn, data, "OI_scrub");
+	task = kthread_create(threadfn, data, "OI_scrub");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start iteration thread: rc = %d\n",
 		       scrub->os_name, rc);
 		RETURN(rc);
 	}
-
-	wait_event_idle(thread->t_ctl_waitq,
-			thread_is_running(thread) || thread_is_stopped(thread));
+	spin_lock(&scrub->os_lock);
+	if (scrub->os_task) {
+		/* Lost a race */
+		spin_unlock(&scrub->os_lock);
+		kthread_stop(task);
+		RETURN(-EALREADY);
+	}
+	scrub->os_start_flags = flags;
+	scrub->os_task = task;
+	wake_up_process(task);
+	spin_unlock(&scrub->os_lock);
+	wait_var_event(scrub, scrub->os_running || !scrub->os_task);
 
 	RETURN(0);
 }
@@ -325,21 +318,14 @@ EXPORT_SYMBOL(scrub_start);
 
 void scrub_stop(struct lustre_scrub *scrub)
 {
-	struct ptlrpc_thread *thread = &scrub->os_thread;
+	struct task_struct *task;
 
-	/* os_lock: sync status between stop and scrub thread */
 	spin_lock(&scrub->os_lock);
-	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
-		thread_set_flags(thread, SVC_STOPPING);
-		spin_unlock(&scrub->os_lock);
-		wake_up_all(&thread->t_ctl_waitq);
-		wait_event_idle(thread->t_ctl_waitq,
-				thread_is_stopped(thread));
-		/* Do not skip the last lock/unlock, which can guarantee that
-		 * the caller cannot return until the OI scrub thread exit. */
-		spin_lock(&scrub->os_lock);
-	}
+	scrub->os_running = 0;
 	spin_unlock(&scrub->os_lock);
+	task = xchg(&scrub->os_task, NULL);
+	if (task)
+		kthread_stop(task);
 }
 EXPORT_SYMBOL(scrub_stop);
 
@@ -455,7 +441,7 @@ void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub)
 		   sf->sf_items_igif, sf->sf_success_count);
 
 	speed = checked;
-	if (thread_is_running(&scrub->os_thread)) {
+	if (scrub->os_running) {
 		s64 new_checked = scrub->os_new_checked;
 		time64_t duration;
 		time64_t rtime;

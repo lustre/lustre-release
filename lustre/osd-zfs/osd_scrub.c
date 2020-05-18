@@ -283,7 +283,6 @@ out:
 static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct scrub_file *sf = &scrub->os_file;
 	__u32 flags = scrub->os_start_flags;
 	int rc;
@@ -343,9 +342,9 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 	rc = scrub_file_store(env, scrub);
 	if (!rc) {
 		spin_lock(&scrub->os_lock);
-		thread_set_flags(thread, SVC_RUNNING);
+		scrub->os_running = 1;
 		spin_unlock(&scrub->os_lock);
-		wake_up_all(&thread->t_ctl_waitq);
+		wake_up_var(scrub);
 	}
 	up_write(&scrub->os_rwsem);
 
@@ -365,7 +364,7 @@ static int osd_scrub_post(const struct lu_env *env, struct osd_device *dev,
 
 	down_write(&scrub->os_rwsem);
 	spin_lock(&scrub->os_lock);
-	thread_set_flags(&scrub->os_thread, SVC_STOPPING);
+	scrub->os_running = 0;
 	spin_unlock(&scrub->os_lock);
 	if (scrub->os_new_checked > 0) {
 		sf->sf_items_checked += scrub->os_new_checked;
@@ -407,7 +406,7 @@ osd_scrub_wakeup(struct lustre_scrub *scrub, struct osd_otable_it *it)
 	spin_lock(&scrub->os_lock);
 	if (osd_scrub_has_window(it) ||
 	    !list_empty(&scrub->os_inconsistent_items) ||
-	    it->ooi_waiting || !thread_is_running(&scrub->os_thread))
+	    it->ooi_waiting || kthread_should_stop())
 		scrub->os_waiting = 0;
 	else
 		scrub->os_waiting = 1;
@@ -420,7 +419,6 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 			  struct lu_fid *fid, uint64_t *oid)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct osd_otable_it *it = dev->od_otable_it;
 	struct lustre_mdt_attrs *lma = NULL;
 	nvlist_t *nvbuf = NULL;
@@ -429,19 +427,19 @@ static int osd_scrub_next(const struct lu_env *env, struct osd_device *dev,
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0) {
-		wait_event_idle_timeout(
-			thread->t_ctl_waitq,
+		wait_var_event_timeout(
+			scrub,
 			!list_empty(&scrub->os_inconsistent_items) ||
-			!thread_is_running(thread),
+			kthread_should_stop(),
 			cfs_time_seconds(cfs_fail_val));
 
-		if (unlikely(!thread_is_running(thread)))
+		if (kthread_should_stop())
 			RETURN(SCRUB_NEXT_EXIT);
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
 		spin_lock(&scrub->os_lock);
-		thread_set_flags(thread, SVC_STOPPING);
+		scrub->os_running = 0;
 		spin_unlock(&scrub->os_lock);
 		RETURN(SCRUB_NEXT_CRASH);
 	}
@@ -474,10 +472,9 @@ again:
 	}
 
 	if (!scrub->os_full_speed && !osd_scrub_has_window(it))
-		wait_event_idle(thread->t_ctl_waitq,
-				osd_scrub_wakeup(scrub, it));
+		wait_var_event(scrub, osd_scrub_wakeup(scrub, it));
 
-	if (unlikely(!thread_is_running(thread)))
+	if (kthread_should_stop())
 		GOTO(out, rc = SCRUB_NEXT_EXIT);
 
 	rc = -dmu_object_next(dev->od_os, &scrub->os_pos_current, B_FALSE, 0);
@@ -510,7 +507,7 @@ again:
 		it->ooi_prefetched++;
 		if (it->ooi_waiting) {
 			it->ooi_waiting = 0;
-			wake_up_all(&thread->t_ctl_waitq);
+			wake_up_var(scrub);
 		}
 		spin_unlock(&scrub->os_lock);
 	}
@@ -528,7 +525,6 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 			  const struct lu_fid *fid, uint64_t oid, int rc)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct osd_otable_it *it = dev->od_otable_it;
 
 	rc = osd_scrub_check_update(env, dev, fid, oid, rc);
@@ -538,7 +534,7 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 			it->ooi_prefetched++;
 			if (it->ooi_waiting) {
 				it->ooi_waiting = 0;
-				wake_up_all(&thread->t_ctl_waitq);
+				wake_up_var(scrub);
 			}
 			spin_unlock(&scrub->os_lock);
 		}
@@ -566,7 +562,6 @@ static int osd_scrub_main(void *args)
 	struct lu_env env;
 	struct osd_device *dev = (struct osd_device *)args;
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct lu_fid *fid;
 	uint64_t oid;
 	int rc = 0;
@@ -589,11 +584,11 @@ static int osd_scrub_main(void *args)
 	if (!scrub->os_full_speed) {
 		struct osd_otable_it *it = dev->od_otable_it;
 
-		wait_event_idle(thread->t_ctl_waitq,
-				it->ooi_user_ready ||
-				!thread_is_running(thread));
+		wait_var_event(scrub,
+			       it->ooi_user_ready ||
+			       kthread_should_stop());
 
-		if (unlikely(!thread_is_running(thread)))
+		if (kthread_should_stop())
 			GOTO(post, rc = 0);
 
 		scrub->os_pos_current = it->ooi_pos;
@@ -604,14 +599,14 @@ static int osd_scrub_main(void *args)
 	       scrub->os_pos_current);
 
 	fid = &osd_oti_get(&env)->oti_fid;
-	while (!rc && thread_is_running(thread)) {
+	while (!rc && !kthread_should_stop()) {
 		rc = osd_scrub_next(&env, dev, fid, &oid);
 		switch (rc) {
 		case SCRUB_NEXT_EXIT:
 			GOTO(post, rc = 0);
 		case SCRUB_NEXT_CRASH:
 			spin_lock(&scrub->os_lock);
-			thread_set_flags(&scrub->os_thread, SVC_STOPPING);
+			scrub->os_running = 0;
 			spin_unlock(&scrub->os_lock);
 			GOTO(out, rc = -EINVAL);
 		case SCRUB_NEXT_FATAL:
@@ -644,9 +639,12 @@ out:
 
 noenv:
 	spin_lock(&scrub->os_lock);
-	thread_set_flags(thread, SVC_STOPPED);
-	wake_up_all(&thread->t_ctl_waitq);
+	scrub->os_running = 0;
 	spin_unlock(&scrub->os_lock);
+	if (xchg(&scrub->os_task, NULL) == NULL)
+		/* scrub_stop is waiting, we need to synchronize */
+		wait_var_event(scrub, kthread_should_stop());
+	wake_up_var(scrub);
 	return rc;
 }
 
@@ -1424,7 +1422,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	       &dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid,
 	       sizeof(dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid));
 	memset(&dev->od_scrub, 0, sizeof(struct lustre_scrub));
-	init_waitqueue_head(&scrub->os_thread.t_ctl_waitq);
 	init_rwsem(&scrub->os_rwsem);
 	spin_lock_init(&scrub->os_lock);
 	INIT_LIST_HEAD(&scrub->os_inconsistent_items);
@@ -1670,7 +1667,7 @@ osd_otable_it_wakeup(struct lustre_scrub *scrub, struct osd_otable_it *it)
 {
 	spin_lock(&scrub->os_lock);
 	if (it->ooi_pos < scrub->os_pos_current || scrub->os_waiting ||
-	    !thread_is_running(&scrub->os_thread))
+	    !scrub->os_running)
 		it->ooi_waiting = 0;
 	else
 		it->ooi_waiting = 1;
@@ -1684,7 +1681,6 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct osd_otable_it *it = (struct osd_otable_it *)di;
 	struct osd_device *dev = it->ooi_dev;
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct lustre_mdt_attrs *lma = NULL;
 	nvlist_t *nvbuf = NULL;
 	int rc, size = 0;
@@ -1706,10 +1702,10 @@ again:
 	}
 
 	if (it->ooi_pos >= scrub->os_pos_current)
-		wait_event_idle(thread->t_ctl_waitq,
-				osd_otable_it_wakeup(scrub, it));
+		wait_var_event(scrub,
+			       osd_otable_it_wakeup(scrub, it));
 
-	if (!thread_is_running(thread) && !it->ooi_used_outside)
+	if (!scrub->os_running && !it->ooi_used_outside)
 		GOTO(out, rc = 1);
 
 	rc = -dmu_object_next(dev->od_os, &it->ooi_pos, B_FALSE, 0);
@@ -1733,7 +1729,7 @@ again:
 	if (!scrub->os_full_speed) {
 		if (scrub->os_waiting) {
 			scrub->os_waiting = 0;
-			wake_up_all(&thread->t_ctl_waitq);
+			wake_up_var(scrub);
 		}
 	}
 	if (locked)
@@ -1829,7 +1825,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 	it->ooi_prefetched_dnode = 0;
 	it->ooi_user_ready = 1;
 	if (!scrub->os_full_speed)
-		wake_up_all(&scrub->os_thread.t_ctl_waitq);
+		wake_up_var(scrub);
 
 	/* Unplug OSD layer iteration by the first next() call. */
 	rc = osd_otable_it_next(env, (struct dt_it *)it);
@@ -1865,7 +1861,6 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t oid, bool insert)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct osd_inconsistent_item *oii;
 	bool wakeup = false;
 	ENTRY;
@@ -1882,7 +1877,7 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 	oii->oii_insert = insert;
 
 	spin_lock(&scrub->os_lock);
-	if (unlikely(!thread_is_running(thread))) {
+	if (!scrub->os_running) {
 		spin_unlock(&scrub->os_lock);
 		OBD_FREE_PTR(oii);
 		RETURN(-EAGAIN);
@@ -1894,7 +1889,7 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 	spin_unlock(&scrub->os_lock);
 
 	if (wakeup)
-		wake_up_all(&thread->t_ctl_waitq);
+		wake_up_var(scrub);
 
 	RETURN(0);
 }
