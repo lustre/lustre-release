@@ -239,7 +239,7 @@ lpcc_rw_test() {
 
 	do_facet $SINGLEAGT $LFS mkdir -i0 -c1 $DIR/$tdir
 	setup_pcc_mapping
-	$project && lfs project -sp $project_id $DIR/$tdir
+	$project && lfs project -sp $project_id $DIR2/$tdir
 
 	do_facet $SINGLEAGT "echo -n attach_origin > $file"
 	if ! $project; then

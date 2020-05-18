@@ -1279,15 +1279,16 @@ static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 }
 
 static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
-        struct req_capsule      *pill = info->mti_pill;
+	struct req_capsule      *pill = info->mti_pill;
 
-        if (req_capsule_get_size(pill, &RMF_DLM_REQ, RCL_CLIENT)) {
-                info->mti_dlm_req = req_capsule_client_get(pill, &RMF_DLM_REQ);
-                if (info->mti_dlm_req == NULL)
-                        RETURN(-EFAULT);
-        }
+	if (!info->mti_intent_lock &&
+	    req_capsule_get_size(pill, &RMF_DLM_REQ, RCL_CLIENT)) {
+		info->mti_dlm_req = req_capsule_client_get(pill, &RMF_DLM_REQ);
+		if (info->mti_dlm_req == NULL)
+			RETURN(-EFAULT);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
@@ -1425,22 +1426,25 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 		if (tgt == NULL)
 			RETURN(-EFAULT);
 	} else {
-		req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_ACL);
+		if (!info->mti_intent_lock)
+			req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_ACL);
+		rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+							RCL_CLIENT);
+		if (rr->rr_eadatalen > 0) {
+			sp->no_create = !!req_is_replay(mdt_info_req(info));
+			if (S_ISDIR(attr->la_mode)) {
+				sp->u.sp_ea.eadata =
+					req_capsule_client_get(pill,
+							       &RMF_EADATA);
+				sp->u.sp_ea.eadatalen = rr->rr_eadatalen;
+				sp->sp_cr_flags |= MDS_OPEN_HAS_EA;
+			}
+		}
 		if (S_ISDIR(attr->la_mode)) {
 			struct obd_export *exp = mdt_info_req(info)->rq_export;
 
 			sp->sp_dmv_imp_inherit =
 				info->mti_mdt->mdt_enable_dmv_implicit_inherit;
-			if (req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT)
-			    > 0) {
-				sp->u.sp_ea.eadata =
-					req_capsule_client_get(pill,
-							       &RMF_EADATA);
-				sp->u.sp_ea.eadatalen =
-					req_capsule_get_size(pill, &RMF_EADATA,
-							     RCL_CLIENT);
-				sp->sp_cr_flags |= MDS_OPEN_HAS_EA;
-			}
 			if (OCD_HAS_FLAG2(&exp->exp_connect_data,
 					  DMV_IMP_INHERIT)) {
 				if ((sp->sp_cr_flags & MDS_OPEN_DEFAULT_LMV) &&

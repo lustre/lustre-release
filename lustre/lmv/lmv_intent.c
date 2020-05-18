@@ -353,7 +353,7 @@ retry:
 		LASSERT(fid_is_zero(&op_data->op_fid2));
 		LASSERT(op_data->op_name != NULL);
 
-		tgt = lmv_locate_tgt(lmv, op_data);
+		tgt = lmv_locate_tgt_create(obd, lmv, op_data);
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));
 	}
@@ -564,7 +564,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_LAYOUT | IT_GETXATTR))
 		rc = lmv_intent_lookup(exp, op_data, it, reqp, cb_blocking,
 				       extra_lock_flags);
-	else if (it->it_op & IT_OPEN)
+	else if (it->it_op & (IT_OPEN | IT_CREAT))
 		rc = lmv_intent_open(exp, op_data, it, reqp, cb_blocking,
 				     extra_lock_flags);
 	else

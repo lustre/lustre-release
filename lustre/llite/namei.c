@@ -1552,37 +1552,25 @@ unlock:
 	up_read(&rlli->lli_lsm_sem);
 }
 
-static int ll_new_node(struct inode *dir, struct dentry *dchild,
-		       const char *tgt, umode_t mode, __u64 rdev, __u32 opc)
+static int ll_new_node_prepare(struct inode *dir, struct dentry *dchild,
+			       umode_t mode, __u32 opc, bool *encrypt,
+			       const char *tgt, struct md_op_data **op_datap,
+			       struct lmv_user_md **lump, void **datap,
+			       size_t *datalen, struct llcrypt_str *disk_link)
 {
-	struct qstr *name = &dchild->d_name;
-	struct ptlrpc_request *request = NULL;
-	struct md_op_data *op_data = NULL;
-	struct inode *inode = NULL;
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
-	struct llcrypt_str *disk_link = NULL;
-	bool encrypt = false;
-	struct lmv_user_md *lum = NULL;
-	const void *data = NULL;
-	size_t datalen = 0;
+	struct lmv_user_md *lum = *lump;
+	struct md_op_data *op_data = NULL;
 	int err;
 
 	ENTRY;
-	if (unlikely(tgt != NULL)) {
-		disk_link = (struct llcrypt_str *)rdev;
-		rdev = 0;
-		if (!disk_link)
-			RETURN(-EINVAL);
-		data = disk_link->name;
-		datalen = disk_link->len;
-	}
 
-again:
-	op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
-				     name->len, 0, opc, NULL);
+	op_data = ll_prep_md_op_data(NULL, dir, NULL, dchild->d_name.name,
+				     dchild->d_name.len, mode, opc, NULL);
 	if (IS_ERR(op_data))
-		GOTO(err_exit, err = PTR_ERR(op_data));
+		RETURN(PTR_ERR(op_data));
 
+	*op_datap = op_data;
 	if (S_ISDIR(mode)) {
 		ll_qos_mkdir_prep(op_data, dir);
 		if ((exp_connect_flags2(ll_i2mdexp(dir)) &
@@ -1609,8 +1597,9 @@ again:
 			lum->lum_max_inherit_rr = lsm->lsm_md_max_inherit_rr;
 			lum->lum_pool_name[0] = 0;
 			op_data->op_bias |= MDS_CREATE_DEFAULT_LMV;
-			data = lum;
-			datalen = sizeof(*lum);
+			*lump = lum;
+			*datap = lum;
+			*datalen = sizeof(*lum);
 		}
 	}
 
@@ -1635,10 +1624,10 @@ again:
 			GOTO(err_exit, err);
 		if (!llcrypt_has_encryption_key(dir))
 			GOTO(err_exit, err = -ENOKEY);
-		encrypt = true;
+		*encrypt = true;
 	}
 
-	if (encrypt) {
+	if (*encrypt) {
 		err = llcrypt_inherit_context(dir, NULL, op_data, false);
 		if (err)
 			GOTO(err_exit, err);
@@ -1674,10 +1663,110 @@ again:
 			if (err)
 				GOTO(err_exit, err);
 
-			data = disk_link->name;
-			datalen = disk_link->len;
+			*datap = disk_link->name;
+			*datalen = disk_link->len;
 		}
 	}
+
+	RETURN(0);
+err_exit:
+	if (!IS_ERR_OR_NULL(op_data)) {
+		ll_finish_md_op_data(op_data);
+		*op_datap = NULL;
+	}
+	if (lum) {
+		OBD_FREE_PTR(lum);
+		*lump = NULL;
+	}
+	RETURN(err);
+}
+
+static int ll_new_node_finish(struct inode *dir, struct dentry *dchild,
+			      bool encrypt, umode_t mode, const char *tgt,
+			      struct inode **inode, struct md_op_data *op_data,
+			      struct ptlrpc_request *request)
+{
+	int err;
+
+	ENTRY;
+
+	ll_update_times(request, dir);
+
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_NEWNODE_PAUSE, cfs_fail_val);
+
+	err = ll_prep_inode(inode, &request->rq_pill, dchild->d_sb, NULL);
+	if (err)
+		RETURN(err);
+
+	/* must be done before d_instantiate, because it calls
+	 * security_d_instantiate, which means a getxattr if security
+	 * context is not set yet
+	 */
+	err = ll_inode_notifysecctx(*inode,
+				    op_data->op_file_secctx,
+				    op_data->op_file_secctx_size);
+	if (err)
+		RETURN(err);
+
+	d_instantiate(dchild, *inode);
+
+	if (encrypt) {
+		err = ll_set_encflags(*inode, op_data->op_file_encctx,
+				      op_data->op_file_encctx_size, true);
+		if (err)
+			RETURN(err);
+
+		if (S_ISLNK(mode)) {
+			struct ll_inode_info *lli = ll_i2info(*inode);
+
+			/* Cache the plaintext symlink target
+			 * for later use by get_link()
+			 */
+			OBD_ALLOC(lli->lli_symlink_name, strlen(tgt) + 1);
+			/* do not return an error if we cannot
+			 * cache the symlink locally
+			 */
+			if (lli->lli_symlink_name)
+				memcpy(lli->lli_symlink_name,
+				       tgt, strlen(tgt) + 1);
+		}
+	}
+
+	if (!test_bit(LL_SBI_FILE_SECCTX, ll_i2sbi(dir)->ll_flags))
+		err = ll_inode_init_security(dchild, *inode, dir);
+
+	RETURN(err);
+}
+
+static int ll_new_node(struct inode *dir, struct dentry *dchild,
+		       const char *tgt, umode_t mode, __u64 rdev, __u32 opc)
+{
+	struct ptlrpc_request *request = NULL;
+	struct md_op_data *op_data = NULL;
+	struct inode *inode = NULL;
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	struct llcrypt_str *disk_link = NULL;
+	bool encrypt = false;
+	struct lmv_user_md *lum = NULL;
+	void *data = NULL;
+	size_t datalen = 0;
+	int err;
+
+	ENTRY;
+	if (unlikely(tgt != NULL)) {
+		disk_link = (struct llcrypt_str *)rdev;
+		rdev = 0;
+		if (!disk_link)
+			RETURN(-EINVAL);
+		data = disk_link->name;
+		datalen = disk_link->len;
+	}
+
+again:
+	err = ll_new_node_prepare(dir, dchild, mode, opc, &encrypt, tgt,
+				  &op_data, &lum, &data, &datalen, disk_link);
+	if (err)
+		GOTO(err_exit, err);
 
 	err = md_create(sbi->ll_md_exp, op_data, data, datalen, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
@@ -1753,53 +1842,10 @@ again:
 	if (err < 0)
 		GOTO(err_exit, err);
 
-	ll_update_times(request, dir);
-
-	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_NEWNODE_PAUSE, cfs_fail_val);
-
-	err = ll_prep_inode(&inode, &request->rq_pill, dchild->d_sb, NULL);
+	err = ll_new_node_finish(dir, dchild, encrypt, mode, tgt,
+				 &inode, op_data, request);
 	if (err)
 		GOTO(err_exit, err);
-
-	/* must be done before d_instantiate, because it calls
-	 * security_d_instantiate, which means a getxattr if security
-	 * context is not set yet
-	 */
-	err = ll_inode_notifysecctx(inode,
-				    op_data->op_file_secctx,
-				    op_data->op_file_secctx_size);
-	if (err)
-		GOTO(err_exit, err);
-
-	d_instantiate(dchild, inode);
-
-	if (encrypt) {
-		err = ll_set_encflags(inode, op_data->op_file_encctx,
-				      op_data->op_file_encctx_size, true);
-		if (err)
-			GOTO(err_exit, err);
-
-		if (S_ISLNK(mode)) {
-			struct ll_inode_info *lli = ll_i2info(inode);
-
-			/* Cache the plaintext symlink target
-			 * for later use by get_link()
-			 */
-			OBD_ALLOC(lli->lli_symlink_name, strlen(tgt) + 1);
-			/* do not return an error if we cannot
-			 * cache the symlink locally
-			 */
-			if (lli->lli_symlink_name)
-				memcpy(lli->lli_symlink_name,
-				       tgt, strlen(tgt) + 1);
-		}
-	}
-
-	if (!test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
-		err = ll_inode_init_security(dchild, inode, dir);
-		if (err)
-			GOTO(err_exit, err);
-	}
 
 	EXIT;
 err_exit:
@@ -1977,8 +2023,18 @@ clear:
 static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 		    struct dentry *dchild, umode_t mode)
 {
+	struct lookup_intent mkdir_it = { .it_op = IT_CREAT };
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	struct ptlrpc_request *request = NULL;
+	struct md_op_data *op_data;
+	struct inode *inode = NULL;
+	struct lmv_user_md *lum = NULL;
+	bool encrypt = false;
+	void *data = NULL;
+	size_t datalen = 0;
 	ktime_t kstart = ktime_get();
-	int err;
+	int rc;
+
 	ENTRY;
 
 	/* VFS has locked the inode before calling this */
@@ -1990,16 +2046,60 @@ static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
 		mode &= ~current_umask();
 
-	mode = (mode & (S_IRWXUGO|S_ISVTX)) | S_IFDIR;
+	mode = (mode & (S_IRWXUGO | S_ISVTX)) | S_IFDIR;
+	if (!sbi->ll_intent_mkdir_enabled) {
+		rc = ll_new_node(dir, dchild, NULL, mode, 0, LUSTRE_OPC_MKDIR);
+		GOTO(out_tally, rc);
+	}
 
-	err = ll_new_node(dir, dchild, NULL, mode, 0, LUSTRE_OPC_MKDIR);
-	if (err == 0)
-		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKDIR,
+	mkdir_it.it_create_mode = mode;
+	rc = ll_new_node_prepare(dir, dchild, mode, LUSTRE_OPC_MKDIR, &encrypt,
+				 NULL, &op_data, &lum, &data, &datalen, NULL);
+	if (rc)
+		GOTO(out_tally, rc);
+
+	op_data->op_data = data;
+	op_data->op_data_size = datalen;
+	rc = md_intent_lock(sbi->ll_md_exp, op_data, &mkdir_it,
+			    &request, &ll_md_blocking_ast, 0);
+	if (rc)
+		GOTO(out_fini, rc);
+
+	/* dir layout may change */
+	ll_unlock_md_op_lsm(op_data);
+
+	rc = ll_new_node_finish(dir, dchild, encrypt, mode, NULL,
+				&inode, op_data, request);
+	if (rc)
+		GOTO(out_fini, rc);
+
+	if (mkdir_it.it_lock_mode) {
+		__u64 bits = 0;
+
+		LASSERT(it_disposition(&mkdir_it, DISP_LOOKUP_NEG));
+		ll_set_lock_data(sbi->ll_md_exp, inode, &mkdir_it, &bits);
+		if (bits & MDS_INODELOCK_LOOKUP) {
+			if (!ll_d_setup(dchild, false))
+				GOTO(out_fini, rc = -ENOMEM);
+			d_lustre_revalidate(dchild);
+		}
+	}
+
+out_fini:
+	ll_finish_md_op_data(op_data);
+	ll_intent_release(&mkdir_it);
+	ptlrpc_req_finished(request);
+	if (lum)
+		OBD_FREE_PTR(lum);
+
+out_tally:
+	if (rc == 0)
+		ll_stats_ops_tally(sbi, LPROC_LL_MKDIR,
 				   ktime_us_delta(ktime_get(), kstart));
 
 	ll_clear_inode_lock_owner(dir);
 
-	RETURN(err);
+	RETURN(rc);
 }
 
 static int ll_rmdir(struct inode *dir, struct dentry *dchild)

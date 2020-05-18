@@ -527,7 +527,8 @@ struct mdt_thread_info {
 				   mti_big_acl_used:1,
 				   mti_som_strict:1,
 	/* Batch processing environment */
-				   mti_batch_env:1;
+				   mti_batch_env:1,
+				   mti_intent_lock:1;
 
 	/* opdata for mdt_reint_open(), has the same as
 	 * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this

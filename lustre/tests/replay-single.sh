@@ -5064,6 +5064,109 @@ test_136() {
 }
 run_test 136 "MDS to disconnect all OSPs first, then cleanup ldlm"
 
+check_striped_create_137() {
+	local stripe_count
+
+	cancel_lru_locks mdc
+	$CHECKSTAT -t dir $DIR/$tdir/striped_dir/dir0 ||
+		error "Create under striped dir failed"
+	$LFS getdirstripe $DIR/$tdir/striped_dir/dir0
+	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/dir0)
+	[ $stripe_count -eq 0 ] || error "$stripe_count != 0 after recovery"
+
+	$CHECKSTAT -t dir $DIR/$tdir/striped_dir/dir1 ||
+		error "Create under striped dir failed"
+	$LFS getdirstripe $DIR/$tdir/striped_dir/dir1
+	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/dir1)
+	[ $stripe_count -eq 0 ] || error "$stripe_count != 0 after recovery"
+}
+
+test_137a() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need MDS >= 2.15.61 for intent mkdir"
+
+	[[ $FAILURE_MODE != "HARD" ]] ||
+		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.intent_mkdir" > $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	$LCTL set_param llite.*.intent_mkdir=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i1 -c$MDSCOUNT $DIR/$tdir/striped_dir
+	replay_barrier mds1
+	mkdir $DIR/$tdir/striped_dir/dir0
+	mkdir $DIR/$tdir/striped_dir/dir1
+	fail mds1
+
+	check_striped_create_137 || error "check striped dir0 failed"
+	rm -rf $DIR/$tdir || error "rm -rf $DIR/$tdir failed"
+}
+run_test 137a "DNE: create under striped dir, fail MDT1"
+
+test_137b() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need MDS version at least 2.15.61 for intent mkdir"
+
+	[[ $FAILURE_MODE != "HARD" ]] ||
+		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.intent_mkdir" > $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	$LCTL set_param llite.*.intent_mkdir=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i1 -c$MDSCOUNT $DIR/$tdir/striped_dir
+	replay_barrier mds2
+	mkdir $DIR/$tdir/striped_dir/dir0
+	mkdir $DIR/$tdir/striped_dir/dir1
+	fail mds2
+
+	check_striped_create_137 ||
+		error "check create under striped_dir failed"
+
+	rm -rf $DIR/$tdir
+}
+run_test 137b "DNE: create under striped dir, fail MDT2"
+
+test_137c() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need MDS version at least 2.15.61 for intent mkdir"
+
+	[[ $FAILURE_MODE != "HARD" ]] ||
+		[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.intent_mkdir" > $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	$LCTL set_param llite.*.intent_mkdir=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i1 -c$MDSCOUNT $DIR/$tdir/striped_dir
+	replay_barrier mds1
+	replay_barrier mds2
+	mkdir $DIR/$tdir/striped_dir/dir0
+	mkdir $DIR/$tdir/striped_dir/dir1
+	fail mds2,mds1
+
+	check_striped_create_137 ||
+		error "check create under striped_dir failed"
+
+	rm -rf $DIR/$tdir
+}
+run_test 137c "DNE: create under striped dir, fail MDT1/MDT2"
+
 test_200() {
 	[[ -z $RCLIENTS ]] && skip "Need remote client"
 

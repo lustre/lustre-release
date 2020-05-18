@@ -439,6 +439,90 @@ err_free_rq:
 	return ERR_PTR(rc);
 }
 
+static struct ptlrpc_request *
+mdc_intent_create_pack(struct obd_export *exp, struct lookup_intent *it,
+		       struct md_op_data *op_data, __u32 acl_bufsize,
+		       __u64 extra_lock_flags)
+{
+	LIST_HEAD(cancels);
+	struct ptlrpc_request *req;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct sptlrpc_sepol *sepol;
+	struct ldlm_intent *lit;
+	int count = 0;
+	int rc;
+
+	ENTRY;
+
+	if (fid_is_sane(&op_data->op_fid1))
+		/* cancel parent's UPDATE lock. */
+		count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+						&cancels, LCK_EX,
+						MDS_INODELOCK_UPDATE);
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_LDLM_INTENT_CREATE);
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(ERR_PTR(-ENOMEM));
+	}
+
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+			     op_data->op_namelen + 1);
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
+			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?
+			     strlen(op_data->op_file_secctx_name) + 1 : 0);
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
+			     op_data->op_file_secctx_size);
+	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+			     op_data->op_data_size);
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX, RCL_CLIENT,
+			     op_data->op_file_encctx_size);
+
+	/* get SELinux policy info if any */
+	sepol = sptlrpc_sepol_get(req);
+	if (IS_ERR(sepol)) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		GOTO(err_free_rq, rc = PTR_ERR(sepol));
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     sptlrpc_sepol_size(sepol));
+
+	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	if (rc < 0)
+		GOTO(err_put_sepol, rc);
+
+	/* Pack the intent */
+	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
+	lit->opc = (__u64)it->it_op;
+
+	/* Pack the intent request. */
+	mdc_create_pack(&req->rq_pill, op_data, op_data->op_data,
+			op_data->op_data_size, it->it_create_mode,
+			op_data->op_fsuid, op_data->op_fsgid,
+			op_data->op_cap, 0, sepol);
+
+	sptlrpc_sepol_put(sepol);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+			     obd->u.cli.cl_default_mds_easize);
+	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
+	req_capsule_set_size(&req->rq_pill, &RMF_DEFAULT_MDT_MD, RCL_SERVER,
+			     sizeof(struct lmv_user_md));
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
+			     RCL_SERVER, 0);
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX, RCL_SERVER, 0);
+
+	ptlrpc_request_set_replen(req);
+	RETURN(req);
+
+err_put_sepol:
+	sptlrpc_sepol_put(sepol);
+err_free_rq:
+	ptlrpc_request_free(req);
+	return ERR_PTR(rc);
+}
+
 #define GA_DEFAULT_EA_NAME_LEN	 20
 #define GA_DEFAULT_EA_VAL_LEN	250
 #define GA_DEFAULT_EA_NUM	 10
@@ -949,7 +1033,7 @@ static int mdc_enqueue_base(struct obd_export *exp,
 		LASSERT(policy == NULL);
 
 		saved_flags |= LDLM_FL_HAS_INTENT;
-		if (it->it_op & (IT_GETATTR | IT_READDIR))
+		if (it->it_op & (IT_GETATTR | IT_READDIR | IT_CREAT))
 			policy = &update_policy;
 		else if (it->it_op & IT_LAYOUT)
 			policy = &layout_policy;
@@ -987,6 +1071,9 @@ resend:
 		lvb_type = LVB_T_LAYOUT;
 	} else if (it->it_op & IT_GETXATTR) {
 		req = mdc_intent_getxattr_pack(exp, it, op_data);
+	} else if (it->it_op == IT_CREAT) {
+		req = mdc_intent_create_pack(exp, it, op_data, acl_bufsize,
+					     extra_lock_flags);
 	} else {
 		LBUG();
 		RETURN(-EINVAL);

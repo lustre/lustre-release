@@ -4493,6 +4493,7 @@ void mdt_thread_info_reset(struct mdt_thread_info *info)
 	info->mti_big_lmm_used = 0;
 	info->mti_big_acl_used = 0;
 	info->mti_som_strict = 0;
+	info->mti_intent_lock = 0;
 
 	info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
@@ -5105,6 +5106,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 
 	switch (it_opc) {
 	case IT_OPEN:
+	case IT_CREAT:
 	case IT_OPEN|IT_CREAT:
 		/*
 		 * OCREAT is not a IS_MUTABLE request since the file may
@@ -5252,6 +5254,13 @@ static int mdt_intent_policy(const struct lu_env *env,
 		it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
 		if (it != NULL) {
 			mdt_ptlrpc_stats_update(req, it->opc);
+			info->mti_intent_lock = 1;
+			/*
+			 * For intent lock request with policy, the ELC locks
+			 * have been cancelled in ldlm_handle_enqueue0().
+			 * Thus set @mti_dlm_req with null here.
+			 */
+			info->mti_dlm_req = NULL;
 			rc = mdt_intent_opc(it->opc, info, lockp, flags);
 			if (rc == 0)
 				rc = ELDLM_OK;

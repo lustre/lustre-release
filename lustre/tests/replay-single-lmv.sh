@@ -5,6 +5,7 @@ set -e
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env "$@"
+init_logging
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="REPLAY_SINGLE_LMV_EXCEPT "

@@ -32140,6 +32140,32 @@ test_851() {
 }
 run_test 851 "fanotify can monitor open/read/write/close events for lustre fs"
 
+test_852() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.15.61) )) ||
+		skip "Need MDS version at least 2.15.61 for intent mkdir"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.intent_mkdir" > $save
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	$LCTL set_param llite.*.intent_mkdir=1
+
+	test_mkdir -p -c$MDSCOUNT $DIR/$tdir
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir ||
+			error "set default dirstripe failed"
+	fi
+
+	mkdir $DIR/$tdir/tdir || error "mkdir tdir failed"
+	mkdir $DIR/$tdir/tdir/tfile || error "mkdir tdir/tfile failed"
+	touch -d "2020-08-25 15:08" $DIR/$tdir/tdir/tfile ||
+		error "touch time failed"
+	chown 0:0 $DIR/$tdir/tdir/tfile || error "chown 0:0 tdir/tfile failed"
+	chmod 755 $DIR/$tdir/tdir/tfile || error "chmod 755 tdir/tfile failed"
+}
+run_test 852 "mkdir using intent lock for striped directory"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

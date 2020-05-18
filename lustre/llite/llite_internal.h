@@ -884,7 +884,8 @@ struct ll_sb_info {
 				 ll_client_common_fill_super_succeeded:1,
 				 ll_checksum_set:1,
 				 ll_inode_cache_enabled:1,
-				 ll_enable_statahead_fname:1;
+				 ll_enable_statahead_fname:1,
+				 ll_intent_mkdir_enabled:1;
 
 	struct lustre_client_ocd ll_lco;
 

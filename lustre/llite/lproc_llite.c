@@ -1239,6 +1239,33 @@ static ssize_t xattr_cache_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(xattr_cache);
 
+static ssize_t intent_mkdir_show(struct kobject *kobj,
+				 struct attribute *attr, char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_intent_mkdir_enabled);
+}
+
+static ssize_t intent_mkdir_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_intent_mkdir_enabled = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(intent_mkdir);
+
 static ssize_t tiny_write_show(struct kobject *kobj,
 			       struct attribute *attr,
 			       char *buf)
@@ -2097,6 +2124,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
 	&lustre_attr_xattr_cache.attr,
+	&lustre_attr_intent_mkdir.attr,
 	&lustre_attr_fast_read.attr,
 	&lustre_attr_tiny_write.attr,
 	&lustre_attr_parallel_dio.attr,

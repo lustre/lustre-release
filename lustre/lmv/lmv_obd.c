@@ -2162,6 +2162,61 @@ static bool lmv_qos_exclude(struct lmv_obd *lmv, struct md_op_data *op_data)
 	return prefix != NULL;
 }
 
+struct lmv_tgt_desc *lmv_locate_tgt_create(struct obd_device *obd,
+					   struct lmv_obd *lmv,
+					   struct md_op_data *op_data)
+{
+	struct lmv_tgt_desc *tgt;
+
+	ENTRY;
+
+	tgt = lmv_locate_tgt(lmv, op_data);
+	if (IS_ERR(tgt))
+		RETURN(tgt);
+
+	/* the order to apply policy in mkdir:
+	 * 1. is "lfs mkdir -i N"? mkdir on MDT N.
+	 * 2. is "lfs mkdir -i -1"? mkdir by space usage.
+	 * 3. is starting MDT specified in default LMV? mkdir on MDT N.
+	 * 4. is default LMV space balanced? mkdir by space usage.
+	 *
+	 * If the existing parent or specific MDT selected is deactivated
+	 * with OS_STATFS_NOCREATE then select a different MDT by QOS.
+	 */
+	if (lmv_op_user_specific_mkdir(op_data)) {
+		struct lmv_user_md *lum = op_data->op_data;
+
+		op_data->op_mds = le32_to_cpu(lum->lum_stripe_offset);
+		tgt = lmv_tgt(lmv, op_data->op_mds);
+		if (!tgt)
+			RETURN(ERR_PTR(-ENODEV));
+		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+			GOTO(new_tgt, -EAGAIN);
+	} else if (lmv_op_user_qos_mkdir(op_data)) {
+		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
+		if (IS_ERR(tgt))
+			RETURN(tgt);
+	} else if (lmv_op_default_specific_mkdir(op_data)) {
+		struct lmv_stripe_md *lsm = &op_data->op_default_lso1->lso_lsm;
+
+		op_data->op_mds = lsm->lsm_md_master_mdt_index;
+		tgt = lmv_tgt(lmv, op_data->op_mds);
+		if (!tgt)
+			RETURN(ERR_PTR(-ENODEV));
+		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+			GOTO(new_tgt, -EAGAIN);
+	} else if ((lmv_op_default_qos_mkdir(op_data) &&
+		    !lmv_qos_exclude(lmv, op_data)) ||
+		   tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) {
+new_tgt:
+		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
+		if (IS_ERR(tgt))
+			RETURN(tgt);
+	}
+
+	RETURN(tgt);
+}
+
 static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		      const void *data, size_t datalen, umode_t mode, uid_t uid,
 		      gid_t gid, kernel_cap_t cap_effective, __u64 rdev,
@@ -2193,49 +2248,9 @@ static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		op_data->op_new_layout = true;
 	}
 
-	tgt = lmv_locate_tgt(lmv, op_data);
+	tgt = lmv_locate_tgt_create(obd, lmv, op_data);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
-
-	/* the order to apply policy in mkdir:
-	 * 1. is "lfs mkdir -i N"? mkdir on MDT N.
-	 * 2. is "lfs mkdir -i -1"? mkdir by space usage.
-	 * 3. is starting MDT specified in default LMV? mkdir on MDT N.
-	 * 4. is default LMV space balanced? mkdir by space usage.
-	 *
-	 * If the existing parent or specific MDT selected is deactivated
-	 * with OS_STATFS_NOCREATE then select a different MDT by QOS.
-	 */
-	if (lmv_op_user_specific_mkdir(op_data)) {
-		struct lmv_user_md *lum = op_data->op_data;
-
-		op_data->op_mds = le32_to_cpu(lum->lum_stripe_offset);
-		tgt = lmv_tgt(lmv, op_data->op_mds);
-		if (!tgt)
-			RETURN(-ENODEV);
-		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
-			GOTO(new_tgt, -EAGAIN);
-	} else if (lmv_op_user_qos_mkdir(op_data)) {
-		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
-	} else if (lmv_op_default_specific_mkdir(op_data)) {
-		struct lmv_stripe_md *lsm = &op_data->op_default_lso1->lso_lsm;
-
-		op_data->op_mds = lsm->lsm_md_master_mdt_index;
-		tgt = lmv_tgt(lmv, op_data->op_mds);
-		if (!tgt)
-			RETURN(-ENODEV);
-		if (unlikely(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE))
-			GOTO(new_tgt, -EAGAIN);
-	} else if ((lmv_op_default_qos_mkdir(op_data) &&
-		    !lmv_qos_exclude(lmv, op_data)) ||
-		   tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE) {
-new_tgt:
-		tgt = lmv_locate_tgt_by_space(lmv, op_data, tgt);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
-	}
 
 retry:
 	rc = lmv_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
