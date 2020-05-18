@@ -92,8 +92,8 @@ bool LNetIsPeerLocal(lnet_nid_t nid);
  * list is a chain of MEs. Each ME includes a pointer to a memory descriptor
  * and a set of match criteria. The match criteria can be used to reject
  * incoming requests based on process ID or the match bits provided in the
- * request. MEs can be dynamically inserted into a match list by LNetMEAttach()
- * and removed from its list by LNetMEUnlink().
+ * request. MEs can be dynamically inserted into a match list by LNetMEAttach(),
+ * and must then be attached to an MD with LNetMDAttach().
  * @{ */
 struct lnet_me *
 LNetMEAttach(unsigned int portal,
@@ -102,8 +102,6 @@ LNetMEAttach(unsigned int portal,
 	     __u64 ignore_bits_in,
 	     enum lnet_unlink unlink_in,
 	     enum lnet_ins_pos pos_in);
-
-void LNetMEUnlink(struct lnet_me *current_in);
 /** @} lnet_me */
 
 /** \defgroup lnet_md Memory descriptors

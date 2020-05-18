@@ -397,7 +397,6 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 			CERROR("%s: LNetMDAttach failed x%llu/%d: rc = %d\n",
 			       desc->bd_import->imp_obd->obd_name, mbits,
 			       posted_md, rc);
-			LNetMEUnlink(me);
 			break;
 		}
 	}
@@ -711,28 +710,28 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	LNetInvalidateMDHandle(&bulk_cookie);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
-                RETURN(0);
+	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
+		RETURN(0);
 
-        LASSERT(request->rq_type == PTL_RPC_MSG_REQUEST);
-        LASSERT(request->rq_wait_ctx == 0);
+	LASSERT(request->rq_type == PTL_RPC_MSG_REQUEST);
+	LASSERT(request->rq_wait_ctx == 0);
 
-        /* If this is a re-transmit, we're required to have disengaged
-         * cleanly from the previous attempt */
-        LASSERT(!request->rq_receiving_reply);
+	/* If this is a re-transmit, we're required to have disengaged
+	 * cleanly from the previous attempt */
+	LASSERT(!request->rq_receiving_reply);
 	LASSERT(!((lustre_msg_get_flags(request->rq_reqmsg) & MSG_REPLAY) &&
-		(imp->imp_state == LUSTRE_IMP_FULL)));
+		  (imp->imp_state == LUSTRE_IMP_FULL)));
 
 	if (unlikely(obd != NULL && obd->obd_fail)) {
 		CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
-			obd->obd_name);
+		       obd->obd_name);
 		/* this prevents us from waiting in ptlrpc_queue_wait */
 		spin_lock(&request->rq_lock);
 		request->rq_err = 1;
 		spin_unlock(&request->rq_lock);
-                request->rq_status = -ENODEV;
-                RETURN(-ENODEV);
-        }
+		request->rq_status = -ENODEV;
+		RETURN(-ENODEV);
+	}
 
 	connection = imp->imp_connection;
 
@@ -781,7 +780,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	LASSERT(AT_OFF || imp->imp_state != LUSTRE_IMP_FULL ||
 		(imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT) ||
 		!(imp->imp_connect_data.ocd_connect_flags &
-		OBD_CONNECT_AT));
+		  OBD_CONNECT_AT));
 
 	if (request->rq_resend) {
 		lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
@@ -808,16 +807,16 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		bulk_cookie = request->rq_bulk->bd_mds[0];
 	}
 
-        if (!noreply) {
-                LASSERT (request->rq_replen != 0);
-                if (request->rq_repbuf == NULL) {
-                        LASSERT(request->rq_repdata == NULL);
-                        LASSERT(request->rq_repmsg == NULL);
-                        rc = sptlrpc_cli_alloc_repbuf(request,
-                                                      request->rq_replen);
-                        if (rc) {
-                                /* this prevents us from looping in
-                                 * ptlrpc_queue_wait */
+	if (!noreply) {
+		LASSERT (request->rq_replen != 0);
+		if (request->rq_repbuf == NULL) {
+			LASSERT(request->rq_repdata == NULL);
+			LASSERT(request->rq_repmsg == NULL);
+			rc = sptlrpc_cli_alloc_repbuf(request,
+						      request->rq_replen);
+			if (rc) {
+				/* this prevents us from looping in
+				 * ptlrpc_queue_wait */
 				spin_lock(&request->rq_lock);
 				request->rq_err = 1;
 				spin_unlock(&request->rq_lock);
@@ -853,24 +852,24 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	request->rq_receiving_reply = !noreply;
 	/* Clear any flags that may be present from previous sends. */
 	request->rq_req_unlinked = 0;
-        request->rq_replied = 0;
-        request->rq_err = 0;
-        request->rq_timedout = 0;
-        request->rq_net_err = 0;
-        request->rq_resend = 0;
-        request->rq_restart = 0;
+	request->rq_replied = 0;
+	request->rq_err = 0;
+	request->rq_timedout = 0;
+	request->rq_net_err = 0;
+	request->rq_resend = 0;
+	request->rq_restart = 0;
 	request->rq_reply_truncated = 0;
 	spin_unlock(&request->rq_lock);
 
-        if (!noreply) {
-                reply_md.start     = request->rq_repbuf;
-                reply_md.length    = request->rq_repbuf_len;
-                /* Allow multiple early replies */
-                reply_md.threshold = LNET_MD_THRESH_INF;
-                /* Manage remote for early replies */
-                reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
-                        LNET_MD_MANAGE_REMOTE |
-                        LNET_MD_TRUNCATE; /* allow to make EOVERFLOW error */;
+	if (!noreply) {
+		reply_md.start     = request->rq_repbuf;
+		reply_md.length    = request->rq_repbuf_len;
+		/* Allow multiple early replies */
+		reply_md.threshold = LNET_MD_THRESH_INF;
+		/* Manage remote for early replies */
+		reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
+			LNET_MD_MANAGE_REMOTE |
+			LNET_MD_TRUNCATE; /* allow to make EOVERFLOW error */;
 		reply_md.user_ptr  = &request->rq_reply_cbid;
 		reply_md.handler = ptlrpc_handler;
 
@@ -885,7 +884,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			/* ...but the MD attach didn't succeed... */
 			request->rq_receiving_reply = 0;
 			spin_unlock(&request->rq_lock);
-			GOTO(cleanup_me, rc = -ENOMEM);
+			GOTO(cleanup_bulk, rc = -ENOMEM);
 		}
 		percpu_ref_get(&ptlrpc_pending);
 
@@ -895,20 +894,21 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		       request->rq_reply_portal);
 	}
 
-        /* add references on request for request_out_callback */
-        ptlrpc_request_addref(request);
+	/* add references on request for request_out_callback */
+	ptlrpc_request_addref(request);
 	if (obd != NULL && obd->obd_svc_stats != NULL)
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
-			atomic_read(&imp->imp_inflight));
+				    atomic_read(&imp->imp_inflight));
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
 	request->rq_sent_ns = ktime_get_real();
 	request->rq_sent = ktime_get_real_seconds();
 	/* We give the server rq_timeout secs to process the req, and
-	   add the network latency for our local timeout. */
-        request->rq_deadline = request->rq_sent + request->rq_timeout +
-                ptlrpc_at_get_net_latency(request);
+	 * add the network latency for our local timeout.
+	 */
+	request->rq_deadline = request->rq_sent + request->rq_timeout +
+		ptlrpc_at_get_net_latency(request);
 
 	ptlrpc_pinger_sending_on_import(imp);
 
@@ -924,16 +924,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		GOTO(out, rc);
 
 	request->rq_req_unlinked = 1;
-        ptlrpc_req_finished(request);
-        if (noreply)
-                GOTO(out, rc);
+	ptlrpc_req_finished(request);
+	if (noreply)
+		GOTO(out, rc);
 
- cleanup_me:
-	/* MEUnlink is safe; the PUT didn't even get off the ground, and
-	 * nobody apart from the PUT's target has the right nid+XID to
-	 * access the reply buffer.
-	 */
-	LNetMEUnlink(reply_me);
+	LNetMDUnlink(request->rq_reply_md_h);
+
 	/* UNLINKED callback called synchronously */
 	LASSERT(!request->rq_receiving_reply);
 
@@ -1006,7 +1002,6 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 
 	CERROR("ptlrpc: LNetMDAttach failed: rc = %d\n", rc);
 	LASSERT(rc == -ENOMEM);
-	LNetMEUnlink(me);
 	LASSERT(rc == 0);
 	rqbd->rqbd_refcount = 0;
 

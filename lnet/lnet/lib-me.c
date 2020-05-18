@@ -119,47 +119,6 @@ LNetMEAttach(unsigned int portal,
 }
 EXPORT_SYMBOL(LNetMEAttach);
 
-/**
- * Unlink a match entry from its match list.
- *
- * This operation also releases any resources associated with the ME. If a
- * memory descriptor is attached to the ME, then it will be unlinked as well
- * and an unlink event will be generated. It is an error to use the ME handle
- * after calling LNetMEUnlink().
- *
- * \param meh A handle for the ME to be unlinked.
- *
- * \retval 0	   On success.
- * \retval -ENOENT If \a meh does not point to a valid ME.
- * \see LNetMDUnlink() for the discussion on delivering unlink event.
- */
-void
-LNetMEUnlink(struct lnet_me *me)
-{
-	struct lnet_libmd *md;
-	struct lnet_event ev;
-	int cpt;
-
-	LASSERT(the_lnet.ln_refcount > 0);
-
-	cpt = me->me_cpt;
-	lnet_res_lock(cpt);
-
-	md = me->me_md;
-	if (md != NULL) {
-		md->md_flags |= LNET_MD_FLAG_ABORTED;
-		if (md->md_handler && md->md_refcount == 0) {
-			lnet_build_unlink_event(md, &ev);
-			md->md_handler(&ev);
-		}
-	}
-
-	lnet_me_unlink(me);
-
-	lnet_res_unlock(cpt);
-}
-EXPORT_SYMBOL(LNetMEUnlink);
-
 /* call with lnet_res_lock please */
 void
 lnet_me_unlink(struct lnet_me *me)

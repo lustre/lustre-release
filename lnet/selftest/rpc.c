@@ -380,7 +380,6 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 		CERROR("LNetMDAttach failed: %d\n", rc);
 		LASSERT(rc == -ENOMEM);
 
-		LNetMEUnlink(me);
 		return -ENOMEM;
 	}
 
