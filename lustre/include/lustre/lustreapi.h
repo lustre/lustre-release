@@ -54,10 +54,6 @@ extern "C" {
 #define LL_MAXQUOTAS 3
 #endif
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
-#endif
-
 #define lustre_fid struct lu_fid
 
 /* Currently external applications can access this but in the

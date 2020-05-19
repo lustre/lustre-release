@@ -292,4 +292,27 @@ static inline __u32 reciprocal_scale(__u32 val, __u32 ep_ro)
 	(type *)((char *)__mptr - offsetof(type, member));	\
 })
 
+#ifndef HAVE_COPY_FILE_RANGE
+
+#ifndef __NR_copy_file_range
+
+#if defined(_ASM_X86_UNISTD_64_H)
+#define __NR_copy_file_range 326
+#elif defined(_ASM_X86_UNISTD_32_H)
+#define __NR_copy_file_range 285
+#else
+#define __NR_copy_file_range 285
+#endif
+
+#endif
+
+static inline loff_t copy_file_range(int fd_in, loff_t *off_in, int fd_out,
+				     loff_t *off_out, size_t len,
+				     unsigned int flags)
+{
+	return syscall(__NR_copy_file_range, fd_in, off_in, fd_out,
+		       off_out, len, flags);
+}
+#endif /* !HAVE_COPY_FILE_RANGE */
+
 #endif /* !_LSTDDEF_H */

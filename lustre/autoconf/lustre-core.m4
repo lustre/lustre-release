@@ -56,6 +56,16 @@ AC_CHECK_FUNCS([name_to_handle_at],
 ]) # LC_GLIBC_SUPPORT_FHANDLES
 
 #
+# LC_GLIBC_SUPPORT_COPY_FILE_RANGE
+#
+AC_DEFUN([LC_GLIBC_SUPPORT_COPY_FILE_RANGE], [
+AC_CHECK_FUNCS([copy_file_range],
+	[AC_DEFINE(HAVE_COPY_FILE_RANGE, 1,
+		[copy_file_range() is supported])],
+	[AC_MSG_WARN([copy_file_range() is not supported])])
+]) # LC_GLIBC_SUPPORT_COPY_FILE_RANGE
+
+#
 # LC_STACK_SIZE
 #
 # Ensure the stack size is at least 8k in Lustre server (all kernels)
@@ -2239,6 +2249,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_CONFIG_GSS
 
 	LC_GLIBC_SUPPORT_FHANDLES
+	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
 

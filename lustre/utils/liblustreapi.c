@@ -80,6 +80,7 @@
 #include <linux/lustre/lustre_ostid.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include "lustreapi_internal.h"
+#include "lstddef.h"
 
 static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
