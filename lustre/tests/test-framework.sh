@@ -7947,8 +7947,11 @@ gather_logs () {
 	fi
 
 	if [ ! -f $LOGDIR/shared ]; then
-		do_nodes $list rsync -az "${prefix}.*.${suffix}" \
-			 $HOSTNAME:$LOGDIR
+		local remote_nodes=$(exclude_items_from_list $list $HOSTNAME)
+
+		for node in ${remote_nodes//,/ }; do
+			rsync -az -e ssh $node:${prefix}.'*'.${suffix} $LOGDIR &
+		done
 	fi
 }
 
