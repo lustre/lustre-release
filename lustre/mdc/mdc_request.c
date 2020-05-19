@@ -2995,10 +2995,12 @@ static int __init mdc_init(void)
 	rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
 				 LUSTRE_MDC_NAME, &mdc_device_type);
 	if (rc)
-		goto out_dev;
+		goto out_class;
 
 	return 0;
 
+out_class:
+	class_destroy(mdc_changelog_class);
 out_dev:
 	unregister_chrdev_region(mdc_changelog_dev, MDC_CHANGELOG_DEV_COUNT);
 	return rc;
@@ -3006,9 +3008,10 @@ out_dev:
 
 static void __exit mdc_exit(void)
 {
+	class_unregister_type(LUSTRE_MDC_NAME);
 	class_destroy(mdc_changelog_class);
 	unregister_chrdev_region(mdc_changelog_dev, MDC_CHANGELOG_DEV_COUNT);
-	class_unregister_type(LUSTRE_MDC_NAME);
+	idr_destroy(&mdc_changelog_minor_idr);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

@@ -62,7 +62,7 @@ struct chlg_registered_dev {
 	char			 ced_name[32];
 	/* changelog char device */
 	struct cdev		 ced_cdev;
-	struct device		*ced_device;
+	struct device		 ced_device;
 	/* OBDs referencing this device (multiple mount point) */
 	struct list_head	 ced_obds;
 	/* Reference counter for proper deregistration */
@@ -113,7 +113,7 @@ enum {
 	CDEV_CHLG_MAX_PREFETCH = 1024,
 };
 
-static DEFINE_IDR(chlg_minor_idr);
+DEFINE_IDR(mdc_changelog_minor_idr);
 static DEFINE_SPINLOCK(chlg_minor_lock);
 
 static int chlg_minor_alloc(int *pminor)
@@ -123,7 +123,7 @@ static int chlg_minor_alloc(int *pminor)
 
 	idr_preload(GFP_KERNEL);
 	spin_lock(&chlg_minor_lock);
-	minor = idr_alloc(&chlg_minor_idr, minor_allocated, 0,
+	minor = idr_alloc(&mdc_changelog_minor_idr, minor_allocated, 0,
 			  MDC_CHANGELOG_DEV_COUNT, GFP_NOWAIT);
 	spin_unlock(&chlg_minor_lock);
 	idr_preload_end();
@@ -138,7 +138,7 @@ static int chlg_minor_alloc(int *pminor)
 static void chlg_minor_free(int minor)
 {
 	spin_lock(&chlg_minor_lock);
-	idr_remove(&chlg_minor_idr, minor);
+	idr_remove(&mdc_changelog_minor_idr, minor);
 	spin_unlock(&chlg_minor_lock);
 }
 
@@ -156,14 +156,14 @@ static void chlg_device_release(struct device *dev)
 static void chlg_dev_clear(struct kref *kref)
 {
 	struct chlg_registered_dev *entry;
-	
+
 	ENTRY;
 	entry = container_of(kref, struct chlg_registered_dev,
 			     ced_refs);
 
 	list_del(&entry->ced_link);
-	cdev_del(&entry->ced_cdev);
-	device_destroy(mdc_changelog_class, entry->ced_cdev.dev);
+	cdev_device_del(&entry->ced_cdev, &entry->ced_device);
+	put_device(&entry->ced_device);
 	EXIT;
 }
 
@@ -781,8 +781,6 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 {
 	struct chlg_registered_dev *exist;
 	struct chlg_registered_dev *entry;
-	struct device *device;
-	dev_t dev;
 	int minor, rc;
 	ENTRY;
 
@@ -807,32 +805,32 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 	list_add_tail(&obd->u.cli.cl_chg_dev_linkage, &entry->ced_obds);
 	list_add_tail(&entry->ced_link, &chlg_registered_devices);
 
-	/* Register new character device */
-	cdev_init(&entry->ced_cdev, &chlg_fops);
-	entry->ced_cdev.owner = THIS_MODULE;
-
 	rc = chlg_minor_alloc(&minor);
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	dev = MKDEV(MAJOR(mdc_changelog_dev), minor);
-	rc = cdev_add(&entry->ced_cdev, dev, 1);
+	device_initialize(&entry->ced_device);
+	entry->ced_device.devt = MKDEV(MAJOR(mdc_changelog_dev), minor);
+	entry->ced_device.class = mdc_changelog_class;
+	entry->ced_device.release = chlg_device_release;
+	dev_set_drvdata(&entry->ced_device, entry);
+	rc = dev_set_name(&entry->ced_device, "%s-%s", MDC_CHANGELOG_DEV_NAME,
+			  entry->ced_name);
 	if (rc)
 		GOTO(out_minor, rc);
 
-	device = device_create(mdc_changelog_class, NULL, dev, entry, "%s-%s",
-			       MDC_CHANGELOG_DEV_NAME, entry->ced_name);
-	if (IS_ERR(device))
-		GOTO(out_cdev, rc = PTR_ERR(device));
-
-	device->release = chlg_device_release;
-	entry->ced_device = device;
+	/* Register new character device */
+	cdev_init(&entry->ced_cdev, &chlg_fops);
+	entry->ced_cdev.owner = THIS_MODULE;
+	rc = cdev_device_add(&entry->ced_cdev, &entry->ced_device);
+	if (rc)
+		GOTO(out_device_name, rc);
 
 	entry = NULL;	/* prevent it from being freed below */
 	GOTO(out_unlock, rc = 0);
 
-out_cdev:
-	cdev_del(&entry->ced_cdev);
+out_device_name:
+	kfree_const(entry->ced_device.kobj.name);
 
 out_minor:
 	chlg_minor_free(minor);
