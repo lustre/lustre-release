@@ -4409,6 +4409,157 @@ test_70()
 }
 run_test 70 "check lfs setquota/quota with a pool option"
 
+test_71a()
+{
+	local limit=10  # 10M
+	local global_limit=100  # 100M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+	local qpool2="qpool2"
+
+	[ "$ost1_FSTYPE" == zfs ] &&
+		skip "ZFS grants some block space together with inode"
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs"
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 1 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool2 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	# create 1st component 1-10M
+	$LFS setstripe -E 10M -S 1M -c 1 -i 0 $testfile
+	#create 2nd component 10-30M
+	$LFS setstripe --component-add -E 30M -c 1 -i 1 $testfile
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	# сheck normal use and out of quota with PFL
+	# 1st element is in qppol1(OST0), 2nd in qpool2(OST2).
+	test_1_check_write $testfile "user" $((limit*2))
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+
+	# create 1st component 1-10M
+	$LFS setstripe -E 10M -S 1M -c 1 -i 0 $testfile
+	# create 2nd component 10-30M
+	$LFS setstripe --component-add -E 30M -c 1 -i 1 $testfile
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	# write to the 2nd component
+	$RUNAS $DD of=$testfile count=$limit seek=10 ||
+		quota_error $short_qtype $TSTUSR \
+			"write failure, but expect success"
+	# this time maybe cache write,  ignore it's failure
+	$RUNAS $DD of=$testfile count=$((2*limit)) seek=10 || true
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	# write over limit in qpool2(2nd component 10-30M)
+	$RUNAS $DD of=$testfile count=1 seek=$((10 + 2*limit)) &&
+		quota_error u $TSTUSR "user write success, but expect EDQUOT"
+	# write to the 1st component - OST0 is empty
+	$RUNAS $DD of=$testfile count=$limit seek=0 ||
+		quota_error u $TSTUSR "write failed"
+
+	cleanup_quota_test
+}
+run_test 71a "Check PFL with quota pools"
+
+test_71b()
+{
+	local global_limit=1000 # 1G
+	local limit1=160 # 160M
+	local limit2=10 # 10M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+	local qpool2="qpool2"
+
+	[ "$ost1_FSTYPE" == zfs ] &&
+		skip "ZFS grants some block space together with inode"
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 1 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit2}M -o $qpool2 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	# First component is on OST0, 2nd on OST1
+	$LFS setstripe -E 128M -i 0 -z 64M -E -1 -i 1 -z 64M $testfile
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	# fill the 1st component on OST0
+	$RUNAS $DD of=$testfile count=128 ||
+		quota_error u $TSTUSR "write failed"
+	# write to the 2nd cmpnt on OST1
+	$RUNAS $DD of=$testfile count=$((limit2/2)) seek=128 ||
+		quota_error u $TSTUSR "write failed"
+	# this time maybe cache write,  ignore it's failure
+	$RUNAS $DD of=$testfile count=$((limit2/2)) seek=$((128 + limit2/2)) ||
+		true
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	# write over limit in qpool2
+	$RUNAS $DD of=$testfile count=2 seek=$((128 + limit2)) &&
+		quota_error u $TSTUSR "user write success, but expect EDQUOT"
+
+	cleanup_quota_test
+}
+run_test 71b "Check SEL with quota pools"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
