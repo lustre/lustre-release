@@ -79,7 +79,7 @@
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
 +EXPORT_SYMBOL(ext4_truncate);
-+EXPORT_SYMBOL(ext4_iget);
++EXPORT_SYMBOL(__ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);
 +EXPORT_SYMBOL(ext4_itable_unused_count);
 +EXPORT_SYMBOL(ext4_force_commit);

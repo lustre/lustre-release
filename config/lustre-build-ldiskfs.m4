@@ -21,23 +21,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.3.18],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.12.14],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.82],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[],
-	[LDISKFS_SERIES="3.12-sles12.series"],[
-		PLEV=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
-		case $PLEV in # (
-		1) LDISKFS_SERIES="3.12-sles12sp1.series"
-			;; # (
-		*) LDISKFS_SERIES="3.12-sles12.series"
-			;;
-		esac
-	])],[LDISKFS_SERIES="4.4-sles12sp2.series"],
-	    [LDISKFS_SERIES="4.4-sles12sp2.series"]
-	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
-	    [LDISKFS_SERIES="4.4-sles12sp3.series"]
-	)], [], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.12.14],[], [], [
 		suse_conf=$LINUX_OBJ/include/generated/uapi/linux/suse_version.h
 		suse_vers=$(awk '[$]2 == "SUSE_VERSION" {print [$]3 }' $suse_conf)
 		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
