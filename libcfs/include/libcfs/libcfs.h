@@ -42,6 +42,7 @@
 #endif
 
 #include <libcfs/linux/linux-misc.h>
+#include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
 
@@ -50,7 +51,6 @@
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
 #include <libcfs/libcfs_cpu.h>
-#include <libcfs/libcfs_prim.h>
 #include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_workitem.h>
 #include <libcfs/libcfs_hash.h>
@@ -71,16 +71,6 @@
 #  define __must_hold(x)
 # endif /* !__CHECKER__ */
 #endif /* !__must_hold */
-
-#ifdef HAVE_TOTALRAM_PAGES_AS_FUNC
- #ifndef cfs_totalram_pages
-  #define cfs_totalram_pages() totalram_pages()
- #endif
-#else
- #ifndef cfs_totalram_pages
-  #define cfs_totalram_pages() totalram_pages
- #endif
-#endif
 
 typedef s32 timeout_t;
 
@@ -121,6 +111,16 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 int (*handler)(void *data, int write, loff_t pos,
 					void __user *buffer, int len));
 
+/*
+ * Memory
+ */
+#if BITS_PER_LONG == 32
+/* limit to lowmem on 32-bit systems */
+#define NUM_CACHEPAGES \
+	min(cfs_totalram_pages(), 1UL << (30 - PAGE_SHIFT) * 3 / 4)
+#else
+#define NUM_CACHEPAGES cfs_totalram_pages()
+#endif
 
 #define wait_var_event_warning(var, condition, format, ...)		\
 do {									\
