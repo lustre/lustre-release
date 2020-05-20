@@ -2801,6 +2801,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	while ((c = getopt_long(argc, argv,
 				"bc:dDE:f:H:i:I:m:N::no:p:L:s:S:vy:", long_opts,
 				NULL)) >= 0) {
+		size_units = 1;
 		switch (c) {
 		case 0:
 			/* Long options. */
