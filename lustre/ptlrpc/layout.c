@@ -2626,8 +2626,9 @@ int req_capsule_server_grow(struct req_capsule *pill,
 	/* Now we need only buffers, copy them and grow the needed one */
 	to = lustre_msg_buf(nrs->rs_msg, 0, 0);
 	from = lustre_msg_buf(rs->rs_msg, 0, 0);
-	len = (char *)rs->rs_msg + lustre_packed_msg_size(rs->rs_msg) - from;
-	memcpy(to, from, len);
+	memcpy(to, from,
+	       (char *)rs->rs_msg + lustre_packed_msg_size(rs->rs_msg) - from);
+	lustre_msg_set_buflen(nrs->rs_msg, offset, len);
 	pill->rc_req->rq_replen = lustre_grow_msg(nrs->rs_msg, offset, newlen);
 
         if (rs->rs_difficult) {
