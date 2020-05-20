@@ -1653,22 +1653,22 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, long count)
 EXPORT_SYMBOL(ll_stats_ops_tally);
 
 static const char *const ra_stat_string[] = {
-	[RA_STAT_HIT] = "hits",
-	[RA_STAT_MISS] = "misses",
-	[RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",
-	[RA_STAT_MISS_IN_WINDOW] = "miss inside window",
-	[RA_STAT_FAILED_GRAB_PAGE] = "failed grab_cache_page",
-	[RA_STAT_FAILED_MATCH] = "failed lock match",
-	[RA_STAT_DISCARDED] = "read but discarded",
-	[RA_STAT_ZERO_LEN] = "zero length file",
-	[RA_STAT_ZERO_WINDOW] = "zero size window",
-	[RA_STAT_EOF] = "read-ahead to EOF",
-	[RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
-	[RA_STAT_WRONG_GRAB_PAGE] = "wrong page from grab_cache_page",
-	[RA_STAT_FAILED_REACH_END] = "failed to reach end",
-	[RA_STAT_ASYNC] = "async readahead",
-	[RA_STAT_FAILED_FAST_READ] = "failed to fast read",
-	[RA_STAT_MMAP_RANGE_READ] = "mmap range read",
+	[RA_STAT_HIT]			= "hits",
+	[RA_STAT_MISS]			= "misses",
+	[RA_STAT_DISTANT_READPAGE]	= "readpage_not_consecutive",
+	[RA_STAT_MISS_IN_WINDOW]	= "miss_inside_window",
+	[RA_STAT_FAILED_GRAB_PAGE]	= "failed_grab_cache_page",
+	[RA_STAT_FAILED_MATCH]		= "failed_lock_match",
+	[RA_STAT_DISCARDED]		= "read_but_discarded",
+	[RA_STAT_ZERO_LEN]		= "zero_length_file",
+	[RA_STAT_ZERO_WINDOW]		= "zero_size_window",
+	[RA_STAT_EOF]			= "readahead_to_eof",
+	[RA_STAT_MAX_IN_FLIGHT]		= "hit_max_readahead_issue",
+	[RA_STAT_WRONG_GRAB_PAGE]	= "wrong_page_from_grab_cache_page",
+	[RA_STAT_FAILED_REACH_END]	= "failed_to_reach_end",
+	[RA_STAT_ASYNC]			= "async_readahead",
+	[RA_STAT_FAILED_FAST_READ]	= "failed_to_fast_read",
+	[RA_STAT_MMAP_RANGE_READ]	= "mmap_range_read",
 };
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)

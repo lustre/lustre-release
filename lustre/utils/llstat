@@ -1,45 +1,146 @@
 #!/usr/bin/perl
-# llstat is a utility that takes stats files as input with optional 
-# clear-flag. The clear-flag is used to clear the stats file before 
-# printing stats information. The lustre stats files generally located
-# inside proc/fs/lustre/. This program first reads the required statistics
+# llstat is a utility that takes stats files as input with optional
+# clear-flag. The clear-flag is used to clear the stats file before
+# printing stats information. The stats files may be in /proc/fs/lustre
+# or /sys/kernel/debug/lustre. This first reads the required statistics
 # information from specified stat file, process the information and prints
 # the output after every interval specified by user.
 
 # Subroutine for printing usages information
 sub usage()
 {
-	print STDERR "Usage: $pname [-c] [-g] [-i <interval>] [-h <help>] <stats_file>\n";
-	print STDERR "       stats_file : lustre/.../stat\n";
-	print STDERR "       -i interval: polling period\n";
+	print STDERR "Monitor operation count/rate of a subsystem\n";
+	print STDERR "Usage: $pname [-c] [-d] [-g] [-h] [-i <interval>] [-n count] <stats_file>\n";
+	print STDERR "       stats_file : Lustre 'stats' file to watch\n";
+	print STDERR "       -i interval: polling period in seconds\n";
 	print STDERR "       -c         : clear stats file first\n";
+	print STDERR "       -d         : debug mode\n";
 	print STDERR "       -g         : graphable output format\n";
 	print STDERR "       -h         : help, display this information\n";
-	print STDERR "example: $pname -i 1 ost (monitors lustre/ost/OSS/ost/stats)\n";
+	print STDERR "       -n count   : number of samples printed\n";
+	print STDERR "example: $pname -i 1 ost_io (ost.OSS.ost_io.stats)\n";
 	print STDERR "Use CTRL + C to stop statistics printing\n";
 	exit 1;
+}
+
+#Globals
+my $pname = $0;
+my $obddev = "";
+my $obdstats = "stats";
+my $clear = 0;
+my $graphable = 0;
+my $interval = 0;
+my $statspath = "None";
+my $statsname = "stats";
+my $anysumsquare = 0;
+my $printed_once = 0;
+my %cumulhash;
+my %sumhash;
+my $anysum = 0;
+my $starttime = 0;
+my $width = 120;
+my $have_readkey = 0;
+my $debug = 0;
+my $counter = 999999999;
+my $ONE_MB = 1048576;
+
+# Command line parameter parsing
+use Getopt::Std;
+getopts('cdghi:w:') or usage();
+usage() if $opt_h;
+$clear = 1 if $opt_c;
+$debug = $opt_d if $opt_d;
+$graphable = 1 if $opt_g;
+$interval = $opt_i if $opt_i;
+$counter = $opt_n if $opt_n;
+$width = $opt_w if $opt_w;
+
+my $i = 0;
+foreach (@ARGV) {
+	$obddev = $_;
+	$obddev =~ s/\./\//g;
+	$i++;
+	if ($i > 1) {
+		print "ERROR: extra argument $_\n";
+		usage();
+	}
+}
+if (!$obddev) {
+	print "ERROR: Need to specify stats_file\n";
+	usage();
+}
+
+# Process arguments
+my $procpath = "/sys/kernel/debug/lustre";
+foreach my $param ( "$obddev", "$obddev*/$obdstats", "$obddev*/*/$obdstats",
+		    "*/$obddev*/$obdstats", "*/*/$obddev*/$obdstats" ) {
+	if ($debug) {
+		print "trying $procpath/$param\n";
+	}
+	my $st = glob("$procpath/$param");
+	if ($debug) {
+		print "glob $procpath/$param = $st\n";
+	}
+	if (-f "$st") {
+		$statspath = $st;
+		$statsname = `lctl list_param $param | head -n 1`;
+		if ($debug) {
+			print "using '$statsname' from $statspath\n"
+		}
+		last;
+	}
+}
+if ($statspath =~ /^None$/) {
+	# some older stats are kept in /proc, but don't look there first
+	$procpath = "/proc/fs/lustre";
+
+	foreach my $param ( "$obddev", "$obddev*/$obdstats", "$obddev*/*/$obdstats",
+			    "*/$obddev*/$obdstats", "*/*/$obddev*/$obdstats" ) {
+		if ($debug) {
+			print "trying $procpath/$param\n";
+		}
+		$st = glob("$procpath/$param");
+		if ($debug) {
+			print "glob $procpath/$param = $st\n";
+		}
+		if (-f "$st") {
+			$statspath = $st;
+			$statsname = `lctl list_param $param | head -n 1`;
+			if ($debug) {
+				print "using $statspath\n"
+			}
+			last;
+		}
+	}
+	if ($statspath =~ /^None$/) {
+		die "Cannot locate stat file for: $obddev\n";
+	}
 }
 
 sub print_headings()
 {	my $cc = $_[0];
 	if ($graphable) {
-		if ( $print_once && $interval ) {
+		if (!$printed_once && $interval) {
 			printf "Timestamp [Name Count Rate Total Unit]...";
 			printf "\n--------------------------------------------------------------------";
-			$print_once = 0;
+			$printed_once = 1;
 		}
 		if ($cc && !$starttime) {
 			$starttime = $cc
 		}
-	       	printf "\n%-5.0f", ($cc - $starttime);
+		printf "\n%-5lu", ($cc - $starttime);
 	} else {
-		printf "$statspath @ $cc\n";
-		printf "%-25s %-10s %-10s %-10s", "Name", "Cur.Count", "Cur.Rate", "#Events";
-		if ( $anysum ) {
-			printf "%-8s %10s %10s %12s %10s", "Unit", "last", "min", "avg", "max";
+		printf "$statsname @ $cc\n";
+		if ($width <= 90) {
+			printf "%-20s %-6s %-9s", "Name", "Rate", "#Events";
+		} else {
+			printf "%-23s %-6s %-6s %-10s", "Name", "Count", "Rate", "#Events";
 		}
-		if ( $anysumsquare ) {
-			printf "%10s", "stddev";
+		if ($anysum) {
+			printf "%-7s %8s %6s %8s %10s", "Unit", "last", "min", "avg", "max";
+		}
+		if ($anysumsquare && $width >= 100) {
+			printf " %8s", "stddev";
 		}
 		printf "\n";
 	}
@@ -53,8 +154,8 @@ sub readstat()
 	seek STATS, 0, 0;
 	while (<STATS>) {
 	chop;
-	($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare) 
-		= split(/\s+/, $_);
+	($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare) =
+		split(/\s+/, $_);
 	$prevcount = $cumulhash->{$name};
 	if (defined($prevcount)) {
 		$diff = $cumulcount - $prevcount;
@@ -63,40 +164,49 @@ sub readstat()
 			&print_headings($cumulcount);
 			$| = 1;
 			if ($tdiff == 0) {
-			    $tdiff = 1; # avoid division by zero
+				$tdiff = 1; # avoid division by zero
 			}
 		}
 		elsif ($cumulcount!=0) {
 			if ($graphable) {
-			    my $myunit = $unit;
-			    my $myname = $name;
-			    if (defined($sum)) {
-				$myunit = "[reqs]";
-				$myname = $myname . "_rq";
-			    }
-			    printf "   %s %lu %lu %lu %s", 
-			    $myname, $diff, ($diff/$tdiff), $cumulcount, $myunit;
+				my $myunit = $unit;
+				my $myname = $name;
+				if (defined($sum)) {
+					$myunit = "[reqs]";
+					$myname = $myname . "_rq";
+				}
+				printf "   %s %lu %lu %lu %s", $myname, $diff,
+					($diff/$tdiff), $cumulcount, $myunit;
 			} else {
-			    printf "%-25s %-10lu %-10lu %-10lu",
-			    $name, $diff, ($diff/$tdiff), $cumulcount;
+				if ($width <= 90) {
+					printf "%-20.20s %-6lu %-9lu",
+						$name, ($diff/$tdiff), $cumulcount;
+				} else {
+					printf "%-23.23s %-6lu %-6lu %-10lu", $name,
+						$diff, ($diff/$tdiff), $cumulcount;
+				}
 			}
 			if (defined($sum)) {
 				my $sum_orig = $sum;
 				my $sum_diff = $sum - $sumhash->{$name};
 				if ($graphable) {
-				    printf "   %s %lu %.2f %lu %s",
-				    $name, $sum_diff, ($sum_diff/$tdiff), $sum, $unit;
+					printf "   %s %lu %lu %lu %s", $name,
+						$diff ? ($sum_diff / $diff) : 0,
+						($sum_diff/$tdiff), $sum, $unit;
 				} else {
-				    printf "%-8s %10lu %10lu %12.2f %10lu", $unit, 
-				    $sum_diff, $min, ($sum/$cumulcount), $max;
+					printf "%-7s %8lu %6lu %8lu %10lu", $unit,
+						$diff ? ($sum_diff / $diff) : 0, $min,
+						($sum/$cumulcount), $max;
 				}
-				if (defined($sumsquare)) {
-					my $s = $sumsquare - (($sum_orig*$sum_orig)/$cumulcount);
+				if (defined($sumsquare) && $width >= 100) {
+					my $s = $sumsquare - (($sum_orig * $sum_orig) /
+							      $cumulcount);
 					if ($s >= 0) {
-						my $cnt = ($cumulcount >= 2) ? $cumulcount : 2 ;
+						my $cnt = ($cumulcount >= 2) ?
+							  $cumulcount : 2 ;
 						my $stddev = sqrt($s/($cnt - 1));
 						if (!$graphable) {
-							printf " %9.2f ", $stddev;
+							printf " %8lu", $stddev;
 						}
 					}
 				}
@@ -107,7 +217,7 @@ sub readstat()
 			$| = 1;
 		}
 	} else {
-		if ($cumulcount!=0) {
+		if ($cumulcount != 0) {
 			# print info when interval is not specified.
 			printf "%-25s $cumulcount\n", $name
 		}
@@ -121,83 +231,47 @@ sub readstat()
 	$cumulhash->{$name} = $cumulcount;
 	$sumhash->{$name} = $sum;
 	} #end of while
-}
 
-#Globals
-$pname = $0;
-$obdstats = "stats";
-$clear = 0;
-$graphable = 0;
-$interval = 0;
-$statspath = "None";
-$anysumsquare = 0;
-$mhz = 0;
-$print_once = 1;
-%cumulhash;
-%sumhash;
-$anysum = 0;
-$obddev = "";
-$starttime = 0;
-$ONE_MB = 1048576;
-
-# Command line parameter parsing
-use Getopt::Std;
-getopts('hcgi:') or usage();
-usage() if $opt_h;
-$clear = 1 if $opt_c;
-$graphable = 1 if $opt_g;
-$interval = $opt_i if $opt_i;
-
-my $i = 0;
-foreach (@ARGV) {
-        $obddev = $_;
-        $i++;
-        if ($i > 1) {
-                print "ERROR: extra argument $_\n";
-                usage();
-        }
-}
-if ( !$obddev ) {
-	print "ERROR: Need to specify stats_file\n";
-	usage();
-}
-# Process arguments
-if ( -f $obddev ) {
-	$statspath = $obddev;
-} elsif ( -f "$obddev/$obdstats" ) {
-	$statspath = "$obddev/$obdstats";
-} else {
-	my $st = glob("/{proc,sys}/fs/lustre/*/$obddev/$obdstats");
-	if ( -f "$st" ) {
-		$statspath = $st;
-	} else {
-		$st = glob("/{proc,sys}/fs/lustre/*/*/$obddev/$obdstats");
-		if ( -f "$st" ) {
-			$statspath = $st;
-		}
+	if (!$graphable) {
+		printf "\n";
 	}
 }
-if ( $statspath =~ /^None$/ ) {
-	die "Cannot locate stat file for: $obddev\n";
+
+# check if Term::ReadKey is installed for efficient tty size, but OK if missing
+eval "require Term::ReadKey" or $have_readkey = 0;
+if ($debug) {
+	print "have_readkey=$have_readkey\n";
 }
+if ($have_readkey) {
+	eval "use Term::ReadKey";
+}
+
 # Clears stats file before printing information in intervals
-if ( $clear ) {
-	open ( STATS, "> $statspath") || die "Cannot clear $statspath: $!\n";
+if ($clear) {
+	open(STATS, "> $statspath") || die "Cannot clear $statspath: $!\n";
 	print STATS " ";
 	close STATS;
-	sleep($interval);	    
+	sleep($interval);
 }
-use POSIX qw(strftime);
-$time_v = time();
-$hostname = `lctl list_nids | head -1`;
+
+$hostname = `lctl list_nids | head -1 2> /dev/null`;
 chop($hostname);
-print "$pname: STATS on ", strftime("%D", localtime($time_v));
-print " $statspath on $hostname\n";
+printf "%s: %s at %s on %s\n", $pname, $statsname, `date`, $hostname;
 open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
 do {
+	# find the terminal width
+	if (!$opt_w) {
+		if ($have_readkey) {
+			($width, $height, $wpixels, $hpixels) = GetTerminalSize();
+		} else {
+			($height, $width) = split / /, `stty size 2> /dev/null`;
+			#$width = 120 if ! $width
+		}
+	}
+
 	readstat();
-	if ($interval) { 
+	if ($interval) {
 		sleep($interval);
 	}
-} while ($interval);
+} while ($interval && $counter-- > 0);
 close STATS;

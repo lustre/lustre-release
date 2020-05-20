@@ -1,99 +1,131 @@
 #!/usr/bin/perl
-# llobdstat is a utility that parses obdfilter statistics files
-# found at proc/fs/lustre/<ostname>/stats.
-# It is mainly useful to watch the statistics change over time.
+# llobdstat is a utility that parses OST statistics files
+# found at e.g. obdfilter.<ostname>.stats or osc.<ostname>*.stats.
+# It is mainly useful to watch the bandwidth usage over time.
 
 my $pname = $0;
-
+my $obddev = "";
 my $obdstats = "stats";
+my $statspath = "None";
+my $statsname = $obdstats;
+my $interval = 0;
+my $counter = 999999999;
+my $debug = 0;
+my $have_readkey = 1;
+my $width = 120;
+my $height = 25;
 
 sub usage()
 {
-    print STDERR "Usage: $pname <ost_name> [<interval> [<count>}]\n";
-    print STDERR "where  ost_name  : ost name under obdfilter\n";
-    print STDERR "       interval  : sample interval in seconds\n";
-    print STDERR "example: $pname lustre-OST0000 2\n";
-    print STDERR "Use CTRL + C to stop statistics printing\n";
-    exit 1;
+	print STDERR "Monitor read/write bandwidth of an OST device\n";
+	print STDERR "Usage: $pname [-h] [-i <interval>] [-v] <ost_name> [<interval> [<count>}]\n";
+	print STDERR "       stats_file : Lustre 'stats' file to watch\n";
+	print STDERR "       -d         : debug mode\n";
+	print STDERR "       -h         : help, display this information\n";
+	print STDERR "       -i interval: polling period in seconds\n";
+	print STDERR "       -n count   : number of samples printed\n";
+	print STDERR "example: $pname -i 5 lustre-OST0000\n";
+	print STDERR "Use CTRL + C to stop statistics printing\n";
+	exit 1;
 }
 
-my $statspath = "None";
-my $interval = 0;
-my $counter = undef;
+# Command line parameter parsing
+use Getopt::Std;
+getopts('dhi:n:') or usage();
+usage() if $opt_h;
+$debug = $opt_d if $opt_d;
+$interval = $opt_i if $opt_i;
+$counter = $opt_n if $opt_n;
 
-if (($#ARGV < 0) || ($#ARGV > 2)) {
-    usage();
-} else {
-    if ( $ARGV[0] =~ /help$/ ) {
-        usage();
-    }
-    if ( -f $ARGV[0] ) {
-        $statspath = $ARGV[0];
-    } elsif ( -f "$ARGV[0]/$obdstats" ) {
-        $statspath = "$ARGV[0]/$obdstats";
-    } else {
-	my $st = glob ("/{proc,sys}/fs/lustre/obdfilter/$ARGV[0]");
-	if ( -f "$st" ) {
-	    $statspath = $st;
+my $i = 0;
+foreach (@ARGV) {
+	if ($i == 0) {
+		$obddev = $_;
+		$obddev =~ s/\./\//g;
+	} elsif ($i == 1) {
+		$interval = $_;
+	} elsif ($i == 2) {
+		$counter = $_;
 	} else {
-	    my $st = glob("/{proc,sys}/fs/lustre/obdfilter/$ARGV[0]/$obdstats");
-	    if ( -f "$st" ) {
-		$statspath = $st;
-	    }
+		print "ERROR: extra argument $_\n";
+		usage();
 	}
-    }
-    if ( $statspath =~ /^None$/ ) {
-        die "Cannot locate stat file for: $ARGV[0]\n";
-    }
-    if ($#ARGV > 0) {
-        $interval = $ARGV[1];
-    }
-    if ($#ARGV > 1) {
-        $counter = $ARGV[2];
-    }
+	$i++;
+}
+if ( !$obddev ) {
+	print "ERROR: Need to specify stats_file\n";
+	usage();
 }
 
-print "$pname on $ARGV[0]\n";
+# Process arguments
+my $procpath = "/proc/fs/lustre";
+foreach my $param ( "$obddev", "$obddev*/$obdstats", "$obddev*/*/$obdstats",
+		    "*/$obddev*/$obdstats", "*/*/$obddev*/$obdstats" ) {
+	if ($debug) {
+		printf "trying $procpath/$param\n";
+	}
+	my $st = glob("$procpath/$param");
+	if ( -f "$st" ) {
+		$statspath = $st;
+		$statsname = `lctl list_param $param | head -n 1`;
+		if ($debug) {
+			print "using $statspath\n"
+		}
+		last;
+	}
+}
+if ($statspath =~ /^None$/) {
+	# server stats are currently in /proc/fs/lustre, but may move eventually
+	$procpath = "/sys/kernel/debug/lustre";
+
+	foreach my $param ( "$obddev", "$obddev*/$obdstats", "$obddev*/*/$obdstats",
+			    "*/$obddev*/$obdstats", "*/*/$obddev*/$obdstats" ) {
+		if ($debug) {
+			print "trying $procpath/$param\n";
+		}
+		$st = glob("$procpath/$param");
+		if ($debug) {
+			print "glob $procpath/$param = $st\n";
+		}
+		if (-f "$st") {
+			$statspath = $st;
+			$statsname = `lctl list_param $param | head -n 1`;
+			if ($debug) {
+				print "using $statspath\n"
+			}
+			last;
+		}
+	}
+	if ($statspath =~ /^None$/) {
+		die "Cannot locate stat file for: $obddev\n";
+	}
+}
+
+# check if Term::ReadKey is installed for efficient tty size, but OK if missing
+eval "require Term::ReadKey" or $have_readkey = 0;
+if ($debug) {
+	print "have_readkey=$have_readkey\n";
+}
+if ($have_readkey) {
+	eval "use Term::ReadKey";
+}
+
+print "$pname on $statsname\n";
 
 my %cur;
 my %last;
-my $mhz = 0;
 
-# Removed some statstics like open, close that obdfilter doesn't contain.
+# Removed some statstics like open, close that the OST doesn't contain.
 # To add statistics parameters one needs to specify parameter names in the
 # below declarations in the same sequence.
-my ($read_bytes, $write_bytes, $create, $destroy, $statfs, $punch,
-    $snapshot_time) = ("read_bytes", "write_bytes", "create", "destroy",
-                       "statfs", "punch", "snapshot_time");
+my ($read_bytes, $write_bytes, $create, $destroy, $statfs, $punch, $timestamp) =
+	("read_bytes", "write_bytes", "create", "destroy", "statfs", "punch",
+	 "snapshot_time");
 
 my @extinfo = ($create, $destroy, $statfs, $punch);
 my %shortname = ($create => "cx", $destroy => "dx", $statfs => "st", $punch => "pu");
 
-sub get_cpumhz()
-{
-    my $cpu_freq;
-    my $itc_freq; # On Itanium systems use this
-    if (open(CPUINFO, "/proc/cpuinfo")==0) {
-        return;
-    }
-    while (<CPUINFO>) {
-        if (/^cpu MHz\s+:\s*([\d\.]+)/) { $cpu_freq=$1; }
-        elsif (/^itc MHz\s+:\s*([\d\.]+)/) { $itc_freq=$1; }
-    }
-    if (defined($itc_freq)) {
-        $mhz = $itc_freq;
-    } elsif (defined($cpu_freq)) {
-        $mhz = $cpu_freq;
-    } else {
-        $mhz = 1;
-    }
-    close CPUINFO;
-}
-
-get_cpumhz();
-print "Processor counters run at $mhz MHz\n";
-
-# read statistics from obdfilter stats file.
+# read statistics from the stats file.
 # This subroutine gets called after every interval specified by user.
 sub readstat()
 {
@@ -103,7 +135,6 @@ sub readstat()
     seek STATS, 0, 0;
     while (<STATS>) {
         chop;
-#        ($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare)
         @iodata = split(/\s+/, $_);
         my $name = $iodata[0];
 
@@ -111,46 +142,61 @@ sub readstat()
         if (defined($prevcount)) {
             $last{$name} = $prevcount;
         }
-        if ($name =~ /^read_bytes$/ || $name =~ /^write_bytes$/) {
-            $cur{$name} = $iodata[6];
-        }
-        elsif ($name =~ /^snapshot_time$/) {
-#            $cumulcount =~ /(\d+)/;
+        if ($name =~ /^$timestamp$/) {
             $cur{$name} = $iodata[1];
+        } elsif ($name =~ /^$read_bytes$/) {
+	    if (defined($cur{"read_ops"})) {
+		$last{"read_ops"} = $cur{"read_ops"};
+	    }
+            $cur{"read_ops"} = $iodata[1];
+            $cur{$name} = $iodata[6];
+	} elsif ($name =~ /^$write_bytes$/) {
+	    if (defined($cur{"write_ops"})) {
+		$last{"write_ops"} = $cur{"write_ops"};
+	    }
+            $cur{"write_ops"} = $iodata[1];
+            $cur{$name} = $iodata[6];
         } else {
             $cur{$name} = $iodata[1];
         }
     }
 }
 
-# process stats information read from obdfilter stats file.
+# process stats information read from the stats file.
 # This subroutine gets called after every interval specified by user.
 sub process_stats()
 {
     my $delta;
     my $data;
-    my $last_time = $last{$snapshot_time};
+    my $last_time = $last{$timestamp};
     if (!defined($last_time)) {
-        printf "Read: %-g, Write: %-g, create/destroy: %-g/%-g, stat: %-g, punch: %-g\n",
-        $cur{$read_bytes}, $cur{$write_bytes},
-        $cur{$create}, $cur{$destroy},
-        $cur{$statfs}, $cur{$punch};
-        if ($interval) {
-            print "[NOTE: cx: create, dx: destroy, st: statfs, pu: punch ]\n\n";
-            print "Timestamp   Read-delta  ReadRate  Write-delta  WriteRate\n";
-            print "--------------------------------------------------------\n";
-        }
+        printf "Read: %.1f GiB, Write: %.1f GiB, cr: %lu dx: %lu, st: %lu, pu: %lu\n",
+            $cur{$read_bytes} / (1 << 30), $cur{$write_bytes} / (1 << 30),
+            $cur{$create}, $cur{$destroy}, $cur{$statfs}, $cur{$punch};
+	print "[NOTE: cx: create, dx: destroy, st: statfs, pu: punch]\n\n";
     } else {
-        my $timespan = $cur{$snapshot_time} - $last{$snapshot_time};
-        my $rdelta = $cur{$read_bytes} - $last{$read_bytes};
-        my $rrate = ($rdelta) / ($timespan * ( 1 << 20 ));
-        my $wdelta = $cur{$write_bytes} - $last{$write_bytes};
-        my $wrate = ($wdelta) / ($timespan * ( 1 << 20 ));
-        $rdelta = ($rdelta) / (1024 * 1024);
-        $wdelta = ($wdelta) / (1024 * 1024);
+        my $timespan = $cur{$timestamp} - $last{$timestamp};
+        my $rtot = ($cur{$read_bytes} - $last{$read_bytes}) / (1 << 20);
+        my $riops = ($cur{"read_ops"} - $last{"read_ops"}) / $timespan;
+        my $rrate = $rtot / $timespan;
+        my $wtot = ($cur{$write_bytes} - $last{$write_bytes}) / (1 << 20);
+        my $wiops = ($cur{"write_ops"} - $last{"write_ops"}) / $timespan;
+        my $wrate = $wtot / $timespan;
+
+	# this is printed once per screen, like vmstat/iostat
+        if ($count++ % ($height - 2) == 0) {
+            print "Timestamp  Read-MiB RdMiB/s WriteMiB WrMiB/s RdIOPS WrIOPS\n";
+            print "---------- -------- ------- -------- ------- ------ ------\n";
+	    if ($have_readkey) {
+		($width, $height, $wpixels, $hpixels) = GetTerminalSize();
+	    } else {
+		($height, $width) = split / /, `stty size 2> /dev/null`;
+		#$width = 120 if ! $width
+	    }
+        }
         # This print repeats after every interval.
-        printf "%10lu  %6.2fMB  %6.2fMB/s   %6.2fMB  %6.2fMB/s",
-               $cur{$snapshot_time}, $rdelta, $rrate, $wdelta, $wrate;
+        printf "%10lu %8.1f %7.1f %8.1f %7.1f %6lu %6lu",
+               $cur{$timestamp}, $rtot, $rrate, $wtot, $wrate, $riops, $wiops;
 
         $delta = $cur{$getattr} - $last{$getattr};
         if ( $delta != 0 ) {
@@ -169,7 +215,7 @@ sub process_stats()
     }
 }
 
-#Open the obdfilter stat file with STATS
+#Open the stat file with STATS
 open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
 do {
     # read the statistics from stat file.
@@ -181,6 +227,5 @@ do {
     }
     # Repeat the statistics printing after every "interval" specified in
     # command line, up to counter times, if specified
-} while ($interval && (defined($counter) ? $counter-- > 0 : 1));
+} while ($interval && $counter-- > 0);
 close STATS;
-# llobdfilter.pl ends here.
