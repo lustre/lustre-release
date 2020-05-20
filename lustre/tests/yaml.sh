@@ -57,6 +57,7 @@ yml_test_group() {
     TEST_GROUP=${TEST_GROUP:-"acc-sm-$(hostname -s)"}
     TEST_HOST=${TEST_HOST:-$(hostname -s)}
     TEST_USER=${TEST_USER:-$USER}
+    TEST_PROJECT=${TEST_PROJECT:-"LUSTRE"}
 
     # TestGroup information
     cat <<EOF
@@ -65,6 +66,7 @@ TestGroup:
     testhost: $TEST_HOST
     submission: $(date)
     user_name: $TEST_USER
+project: $TEST_PROJECT
 EOF
 }
 
