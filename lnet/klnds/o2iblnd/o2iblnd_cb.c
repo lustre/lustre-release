@@ -1095,24 +1095,28 @@ kiblnd_check_sends_locked(struct kib_conn *conn)
 static void
 kiblnd_tx_complete(struct kib_tx *tx, int status)
 {
-        int           failed = (status != IB_WC_SUCCESS);
+	int           failed = (status != IB_WC_SUCCESS);
 	struct kib_conn   *conn = tx->tx_conn;
-        int           idle;
+	int           idle;
 
-        LASSERT (tx->tx_sending > 0);
+	if (tx->tx_sending <= 0) {
+		CERROR("Received an event on a freed tx: %p status %d\n",
+		       tx, tx->tx_status);
+		return;
+	}
 
-        if (failed) {
-                if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
+	if (failed) {
+		if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
 			CNETERR("Tx -> %s cookie %#llx"
-                                " sending %d waiting %d: failed %d\n",
-                                libcfs_nid2str(conn->ibc_peer->ibp_nid),
-                                tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
-                                status);
+				" sending %d waiting %d: failed %d\n",
+				libcfs_nid2str(conn->ibc_peer->ibp_nid),
+				tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
+				status);
 
-                kiblnd_close_conn(conn, -EIO);
-        } else {
-                kiblnd_peer_alive(conn->ibc_peer);
-        }
+		kiblnd_close_conn(conn, -EIO);
+	} else {
+		kiblnd_peer_alive(conn->ibc_peer);
+	}
 
 	spin_lock(&conn->ibc_lock);
 
