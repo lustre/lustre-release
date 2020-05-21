@@ -340,10 +340,32 @@ ext4fs_dirhash, [
 	(void)f;
 ],[
 	AC_DEFINE(HAVE_LDISKFSFS_GETHASH_INODE_ARG, 1,
-		[if ldiskfsfs_dirhash takes an inode argument])
+		[ldiskfsfs_dirhash takes an inode argument])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_LDISKFSFS_DIRHASH_WANTS_DIR
+
+#
+# LB_JBD2_H_TOTAL_CREDITS
+#
+# kernel 5.5 commit 933f1c1e0b75bbc29730eef07c9e196c6dfd37e5
+# jbd2: Reserve space for revoke descriptor blocks
+#
+AC_DEFUN([LB_JBD2_H_TOTAL_CREDITS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if struct jbd2_journal_handle has h_total_credits member],
+handle_t_h_revoke_credits, [
+	#include <linux/jbd2.h>
+],[
+	int x = offsetof(struct jbd2_journal_handle, h_total_credits);
+	(void)x;
+],[
+	AC_DEFINE(HAVE_JOURNAL_TOTAL_CREDITS, 1,
+		[struct jbd2_journal_handle has h_total_credits member])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_JBD2_H_TOTAL_CREDITS
 
 #
 # LB_CONFIG_LDISKFS
@@ -396,6 +418,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_LDISKFS_IGET_HAS_FLAGS_ARG
 	LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
 	LB_LDISKFSFS_DIRHASH_WANTS_DIR
+	LB_JBD2_H_TOTAL_CREDITS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

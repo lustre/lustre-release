@@ -2004,6 +2004,9 @@ vm_fault_t, [
 # When inode times are timespec64 stop using the deprecated
 # time interfaces.
 #
+# kernel v5.5-rc1-6-gba70609d5ec6 ba70609d5ec664a8f36ba1c857fcd97a478adf79
+# fs: Delete timespec64_trunc()
+#
 AC_DEFUN([LC_INODE_TIMESPEC64], [
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
@@ -2012,9 +2015,9 @@ inode_timespec64, [
 	#include <linux/fs.h>
 ],[
 	struct inode *inode = NULL;
-	struct timespec64 ts = {};
+	struct timespec64 ts = {0, 1};
 
-	inode->i_atime = timespec64_trunc(ts, 1);
+	inode->i_atime = ts;
 	(void)inode;
 ],[
 	AC_DEFINE(HAVE_INODE_TIMESPEC64, 1,

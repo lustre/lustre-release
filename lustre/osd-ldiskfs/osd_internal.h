@@ -578,10 +578,8 @@ int osd_security_file_alloc(struct file *file);
 
 #ifdef HAVE_INODE_TIMESPEC64
 # define osd_timespec			timespec64
-# define osd_timespec_trunc(ts, gran)	timespec64_trunc((ts), (gran))
 #else
 # define osd_timespec			timespec
-# define osd_timespec_trunc(ts, gran)	timespec_trunc((ts), (gran))
 #endif
 
 static inline struct osd_timespec osd_inode_time(struct inode *inode,
@@ -589,7 +587,7 @@ static inline struct osd_timespec osd_inode_time(struct inode *inode,
 {
 	struct osd_timespec ts = { .tv_sec = seconds };
 
-	return osd_timespec_trunc(ts, inode->i_sb->s_time_gran);
+	return ts;
 }
 
 #define OSD_INS_CACHE_SIZE	8
@@ -1180,6 +1178,11 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 	}
 	oh->ot_credits += credits;
 }
+
+/* linux: v5.4-rc3-21-g933f1c1e0b75 renamed h_buffer_credits */
+#ifdef HAVE_JOURNAL_TOTAL_CREDITS
+#define h_buffer_credits h_total_credits
+#endif
 
 static inline void osd_trans_exec_op(const struct lu_env *env,
 				     struct thandle *th,
