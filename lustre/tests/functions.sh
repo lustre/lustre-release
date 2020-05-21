@@ -169,7 +169,7 @@ signaled() {
 }
 
 mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS --oversubscribe"
+    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
     local command="$mpirun $@"
     local mpilog=$TMP/mpi.log
     local rc
