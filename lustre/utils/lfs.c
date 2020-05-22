@@ -147,6 +147,7 @@ enum setstripe_origin {
 	SO_MIRROR_SPLIT,
 	SO_MIRROR_DELETE,
 };
+
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc);
 
@@ -154,22 +155,27 @@ static inline int lfs_setstripe(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_SETSTRIPE);
 }
+
 static inline int lfs_setstripe_migrate(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIGRATE);
 }
+
 static inline int lfs_mirror_create(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_CREATE);
 }
+
 static inline int lfs_mirror_extend(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_EXTEND);
 }
+
 static inline int lfs_mirror_split(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_SPLIT);
 }
+
 static inline int lfs_mirror_delete(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_DELETE);
@@ -486,9 +492,9 @@ command_t cmdlist[] = {
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <hashtype>\n"
 	 "     [[!] --mdt-index|-m <uuid|index,...>]\n"
-         "\t !: used before an option indicates 'NOT' requested attribute\n"
-         "\t -: used before a value indicates less than requested value\n"
-         "\t +: used before a value indicates more than requested value\n"
+	 "\t !: used before an option indicates 'NOT' requested attribute\n"
+	 "\t -: used before a value indicates less than requested value\n"
+	 "\t +: used before a value indicates more than requested value\n"
 	 "\thashtype:	hash type of the striped directory.\n"
 	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
 	 "\t		all_char  sum of characters % MDT_COUNT\n"},
@@ -514,10 +520,10 @@ command_t cmdlist[] = {
 	 "                -b <block-softlimit> -B <block-hardlimit>\n"
 	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
 	 "       setquota <-u|--user|-g|--group|-p|--projid> <uname>|<uid>|<gname>|<gid>|<projid>\n"
-         "                [--block-softlimit <block-softlimit>]\n"
-         "                [--block-hardlimit <block-hardlimit>]\n"
-         "                [--inode-softlimit <inode-softlimit>]\n"
-         "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
+	 "                [--block-softlimit <block-softlimit>]\n"
+	 "                [--block-hardlimit <block-hardlimit>]\n"
+	 "                [--inode-softlimit <inode-softlimit>]\n"
+	 "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
 	 "       setquota [-t] <-u|--user|-g|--group|-p|--projid>\n"
 	 "                [--block-grace 'notify'|<block-grace>]\n"
 	 "                [--inode-grace 'notify'|<inode-grace>] <filesystem>\n"
@@ -531,9 +537,9 @@ command_t cmdlist[] = {
 	 "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
 	 "       setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
 	 "                <-d|--default>\n"
-         "       -b can be used instead of --block-softlimit/--block-grace\n"
-         "       -B can be used instead of --block-hardlimit\n"
-         "       -i can be used instead of --inode-softlimit/--inode-grace\n"
+	 "       -b can be used instead of --block-softlimit/--block-grace\n"
+	 "       -B can be used instead of --block-hardlimit\n"
+	 "       -i can be used instead of --inode-softlimit/--inode-grace\n"
 	 "       -I can be used instead of --inode-hardlimit\n"
 	 "       -d can be used instead of --default\n\n"
 	 "Note: The total quota space will be split into many qunits and\n"
@@ -565,16 +571,16 @@ command_t cmdlist[] = {
 	 "         clear the project inherit flag and ID on the file or directory\n"
 	},
 #endif
-        {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
-         "usage: flushctx [-k] [mountpoint...]"},
-        {"changelog", lfs_changelog, 0,
-         "Show the metadata changes on an MDT."
-         "\nusage: changelog <mdtname> [startrec [endrec]]"},
-        {"changelog_clear", lfs_changelog_clear, 0,
-         "Indicate that old changelog records up to <endrec> are no longer of "
-         "interest to consumer <id>, allowing the system to free up space.\n"
-         "An <endrec> of 0 means all records.\n"
-         "usage: changelog_clear <mdtname> <id> <endrec>"},
+	{"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
+	 "usage: flushctx [-k] [mountpoint...]"},
+	{"changelog", lfs_changelog, 0,
+	 "Show the metadata changes on an MDT."
+	 "\nusage: changelog <mdtname> [startrec [endrec]]"},
+	{"changelog_clear", lfs_changelog_clear, 0,
+	 "Indicate that old changelog records up to <endrec> are no longer of "
+	 "interest to consumer <id>, allowing the system to free up space.\n"
+	 "An <endrec> of 0 means all records.\n"
+	 "usage: changelog_clear <mdtname> <id> <endrec>"},
 	{"fid2path", lfs_fid2path, 0,
 	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
 	 "specify link number <linkno>.\n"
@@ -714,7 +720,6 @@ command_t cmdlist[] = {
 	{ 0, 0, 0, NULL }
 };
 
-
 static int check_hashtype(const char *hashtype)
 {
 	int type_num = atoi(hashtype);
@@ -737,7 +742,7 @@ static uint32_t check_foreign_type_name(const char *foreign_type_name)
 	uint32_t i;
 
 	for (i = 0; i < LU_FOREIGN_TYPE_UNKNOWN; i++) {
-		if (lu_foreign_types[i].lft_name == NULL)
+		if (!lu_foreign_types[i].lft_name)
 			break;
 		if (strcmp(foreign_type_name,
 			   lu_foreign_types[i].lft_name) == 0)
@@ -776,7 +781,7 @@ migrate_open_files(const char *name, __u64 migration_flags,
 	struct stat		 st;
 	struct stat		 stv;
 
-	if (param == NULL && layout == NULL) {
+	if (!param && !layout) {
 		error_loc = "layout information";
 		return -EINVAL;
 	}
@@ -789,8 +794,8 @@ migrate_open_files(const char *name, __u64 migration_flags,
 
 	strncpy(parent, name, sizeof(parent));
 	ptr = strrchr(parent, '/');
-	if (ptr == NULL) {
-		if (getcwd(parent, sizeof(parent)) == NULL) {
+	if (!ptr) {
+		if (!getcwd(parent, sizeof(parent))) {
 			error_loc = "getcwd";
 			return -errno;
 		}
@@ -802,7 +807,8 @@ migrate_open_files(const char *name, __u64 migration_flags,
 
 	/* open file, direct io */
 	/* even if the file is only read, WR mode is nedeed to allow
-	 * layout swap on fd */
+	 * layout swap on fd
+	 */
 	rflags = O_RDWR;
 	if (!(migration_flags & MIGRATION_NONDIRECT))
 		rflags |= O_DIRECT;
@@ -846,11 +852,14 @@ migrate_open_files(const char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	/* In case the MDT does not support creation of volatile files
-	 * we should try to unlink it. */
+	/*
+	 * In case the MDT does not support creation of volatile files
+	 * we should try to unlink it.
+	 */
 	(void)unlink(volatile_file);
 
-	/* Not-owner (root?) special case.
+	/*
+	 * Not-owner (root?) special case.
 	 * Need to set owner/group of volatile file like original.
 	 * This will allow to pass related check during layout_swap.
 	 */
@@ -904,7 +913,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 	int	 rc;
 
 	layout = llapi_layout_get_by_fd(fd_src, 0);
-	if (layout != NULL) {
+	if (layout) {
 		uint64_t stripe_size;
 
 		rc = llapi_layout_stripe_size_get(layout, &stripe_size);
@@ -920,8 +929,10 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 		return -rc;
 
 	while (1) {
-		/* read new data only if we have written all
-		 * previously read data */
+		/*
+		 * read new data only if we have written all
+		 * previously read data
+		 */
 		if (wpos == rpos) {
 			if (check_file) {
 				rc = check_file(fd_src);
@@ -993,9 +1004,11 @@ static int migrate_block(int fd, int fdv)
 		gid = random();
 	while (gid == 0);
 
-	/* The grouplock blocks all concurrent accesses to the file.
+	/*
+	 * The grouplock blocks all concurrent accesses to the file.
 	 * It has to be taken after llapi_get_data_version as it would
-	 * block it too. */
+	 * block it too.
+	 */
 	rc = llapi_group_lock(fd, gid);
 	if (rc < 0) {
 		error_loc = "cannot get group lock";
@@ -1015,11 +1028,13 @@ static int migrate_block(int fd, int fdv)
 		goto out_unlock;
 	}
 
-	/* swap layouts
+	/*
+	 * swap layouts
 	 * for a migration we need to check data version on file did
 	 * not change.
 	 *
-	 * Pass in gid=0 since we already own grouplock. */
+	 * Pass in gid=0 since we already own grouplock.
+	 */
 	rc = llapi_fswap_layouts_grouplock(fd, fdv, dv1, 0, 0,
 					   SWAP_LAYOUTS_CHECK_DV1);
 	if (rc == -EAGAIN) {
@@ -1116,9 +1131,9 @@ static int lfs_component_set(char *fname, int comp_id,
 
 	if (neg_flags) {
 		if (neg_flags & LCME_FL_STALE) {
-			fprintf(stderr, "%s: cannot clear 'stale' flags from "
-				"component. Please use lfs-mirror-resync(1) "
-				"instead\n", progname);
+			fprintf(stderr,
+				"%s: cannot clear 'stale' flags from component. Please use lfs-mirror-resync(1) instead\n",
+				progname);
 			return -EINVAL;
 		}
 
@@ -1183,7 +1198,7 @@ static int lfs_component_add(char *fname, struct llapi_layout *layout)
 {
 	int	rc;
 
-	if (layout == NULL)
+	if (!layout)
 		return -EINVAL;
 
 	rc = llapi_layout_file_comp_add(fname, layout);
@@ -1199,7 +1214,7 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 	struct stat	st;
 	int	fd;
 
-	if (layout == NULL)
+	if (!layout)
 		return -EINVAL;
 
 	fd = lstat(fname, &st);
@@ -1249,7 +1264,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	/* if file has DoM layout already then migration is possible to
+	/*
+	 * if file has DoM layout already then migration is possible to
 	 * the new layout with the same DoM component via swap layout,
 	 * if new layout used bigger DOM size, then mirroring is used
 	 */
@@ -1262,10 +1278,12 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	}
 
 	if (!(migration_flags & MIGRATION_NONBLOCK)) {
-		/* Blocking mode (forced if servers do not support file lease).
+		/*
+		 * Blocking mode (forced if servers do not support file lease).
 		 * It is also the default mode, since we cannot distinguish
 		 * between a broken lease and a server that does not support
-		 * atomic swap/close (LU-6785) */
+		 * atomic swap/close (LU-6785)
+		 */
 		rc = migrate_block(fd, fdv);
 		goto out;
 	}
@@ -1282,9 +1300,11 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	/* Atomically put lease, swap layouts and close.
+	/*
+	 * Atomically put lease, swap layouts and close.
 	 * for a migration we need to check data version on file did
-	 * not change. */
+	 * not change.
+	 */
 	rc = llapi_fswap_layouts(fd, fdv, 0, 0, SWAP_LAYOUTS_CLOSE);
 	if (rc < 0) {
 		error_loc = "cannot swap layout";
@@ -1311,7 +1331,7 @@ static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 {
 	char *name;
 
-	if (string == NULL)
+	if (!string)
 		return -EINVAL;
 
 	*flags = 0;
@@ -1353,7 +1373,7 @@ static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 
 static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
 {
-	if (string == NULL)
+	if (!string)
 		return -EINVAL;
 
 	*state = 0;
@@ -1428,7 +1448,7 @@ static int mirror_create_sanity_check(const char *fname,
 	bool has_m_file = false;
 	bool has_m_layout = false;
 
-	if (list == NULL)
+	if (!list)
 		return -EINVAL;
 
 	if (fname) {
@@ -1452,14 +1472,14 @@ static int mirror_create_sanity_check(const char *fname,
 		}
 	}
 
-	while (list != NULL) {
-		if (list->m_file != NULL) {
+	while (list) {
+		if (list->m_file) {
 			has_m_file = true;
 			llapi_layout_free(list->m_layout);
 
 			list->m_layout =
 				llapi_layout_get_by_path(list->m_file, 0);
-			if (list->m_layout == NULL) {
+			if (!list->m_layout) {
 				fprintf(stderr,
 					"error: %s: file '%s' has no layout\n",
 					progname, list->m_file);
@@ -1467,7 +1487,7 @@ static int mirror_create_sanity_check(const char *fname,
 			}
 		} else {
 			has_m_layout = true;
-			if (list->m_layout == NULL) {
+			if (!list->m_layout) {
 				fprintf(stderr, "error: %s: no mirror layout\n",
 					progname);
 				return -EINVAL;
@@ -1535,7 +1555,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		return rc;
 
 	cur_mirror = mirror_list;
-	while (cur_mirror != NULL) {
+	while (cur_mirror) {
 		rc = llapi_layout_comp_iterate(cur_mirror->m_layout,
 					       mirror_set_flags,
 					       &cur_mirror->m_flags);
@@ -1550,8 +1570,8 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 			rc = llapi_layout_merge(&layout, cur_mirror->m_layout);
 			if (rc) {
 				rc = -errno;
-				fprintf(stderr, "error: %s: "
-					"merge layout failed: %s\n",
+				fprintf(stderr,
+					"error: %s: merge layout failed: %s\n",
 					progname, strerror(errno));
 				goto error;
 			}
@@ -1560,7 +1580,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		cur_mirror = cur_mirror->m_next;
 	}
 
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "error: %s: layout is NULL\n", progname);
 		return -EINVAL;
 	}
@@ -1614,8 +1634,10 @@ static ssize_t mirror_file_compare(int fd, int fdv)
 		if (bytes_read != read(fdv, buf + buflen, buflen))
 			break;
 
-		/* XXX: should compute the checksum on each buffer and then
-		 * compare checksum to avoid cache collision */
+		/*
+		 * XXX: should compute the checksum on each buffer and then
+		 * compare checksum to avoid cache collision
+		 */
 		if (memcmp(buf, buf + buflen, bytes_read))
 			break;
 
@@ -1698,7 +1720,6 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	if (rc < 0) {
 		error_loc = "cannot get data version";
 		goto out;
-
 	}
 
 	/* Make sure we keep original atime/mtime values */
@@ -1755,7 +1776,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 
 	if (inherit) {
 		f_layout = llapi_layout_get_by_path(name, 0);
-		if (f_layout == NULL) {
+		if (!f_layout) {
 			fprintf(stderr, "%s: cannot get layout\n", progname);
 			goto out;
 		}
@@ -1833,7 +1854,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 		return rc;
 
 	while (mirror_list) {
-		if (mirror_list->m_file != NULL) {
+		if (mirror_list->m_file) {
 			rc = mirror_extend_file(fname, mirror_list->m_file,
 						mirror_flags);
 		} else {
@@ -1892,6 +1913,7 @@ struct pool_to_id_cbdata {
 	const char *pool;
 	__u32 id;
 };
+
 static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 {
 	char buf[LOV_MAXPOOLNAME + 1];
@@ -2076,8 +2098,8 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	}
 	strncpy(parent, fname, sizeof(parent));
 	ptr = strrchr(parent, '/');
-	if (ptr == NULL) {
-		if (getcwd(parent, sizeof(parent)) == NULL) {
+	if (!ptr) {
+		if (!getcwd(parent, sizeof(parent))) {
 			fprintf(stderr, "error %s: getcwd failed: %s\n",
 				progname, strerror(errno));
 			rc = -errno;
@@ -2096,7 +2118,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		goto close_fd;
 	}
 
-	if (victim_file == NULL) {
+	if (!victim_file) {
 		/* use a temp file to store the splitted layout */
 		if (mflags & MF_DESTROY) {
 			if (last_non_stale_mirror(mirror_id, layout)) {
@@ -2260,7 +2282,7 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 	bool overstriped = false;
 	bool end_of_loop;
 
-	if (arg == NULL)
+	if (!arg)
 		return -EINVAL;
 
 	end_of_loop = false;
@@ -2320,7 +2342,7 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 		offset = nr;
 		rc = 0;
 	}
-	if (!end_of_loop && ptr != NULL)
+	if (!end_of_loop && ptr)
 		*ptr = ',';
 
 	if (!overstriped && pattern)
@@ -2418,9 +2440,9 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 	int i = 0, rc;
 
 new_comp:
-	if (layout == NULL) {
+	if (!layout) {
 		layout = llapi_layout_alloc();
-		if (layout == NULL) {
+		if (!layout) {
 			fprintf(stderr, "Alloc llapi_layout failed. %s\n",
 				strerror(errno));
 			errno = ENOMEM;
@@ -2431,8 +2453,10 @@ new_comp:
 	} else {
 		uint64_t start;
 
-		/* Get current component extent, current component
-		 * must be the tail component. */
+		/*
+		 * Get current component extent, current component
+		 * must be the tail component.
+		 */
 		rc = llapi_layout_comp_extent_get(layout, &start, &prev_end);
 		if (rc) {
 			fprintf(stderr, "Get comp extent failed. %s\n",
@@ -2463,8 +2487,10 @@ new_comp:
 	if (set_extent) {
 		uint64_t comp_end = lsa->lsa_comp_end;
 
-		/* The extendable component is 0-length, so it can be removed
-		 * if there is insufficient space to extend it. */
+		/*
+		 * The extendable component is 0-length, so it can be removed
+		 * if there is insufficient space to extend it.
+		 */
 		if (lsa->lsa_extension_comp)
 			comp_end = prev_end;
 
@@ -2481,39 +2507,41 @@ new_comp:
 
 	/* Data-on-MDT component setting */
 	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT) {
-		/* In case of Data-on-MDT patterns the only extra option
-		 * applicable is stripe size option. */
+		/*
+		 * In case of Data-on-MDT patterns the only extra option
+		 * applicable is stripe size option.
+		 */
 		if (lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
-			fprintf(stderr, "Option 'stripe-count' can't be "
-				"specified with Data-on-MDT component: %lld\n",
+			fprintf(stderr,
+				"Option 'stripe-count' can't be specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_count);
 			errno = EINVAL;
 			return -1;
 		}
 		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
-			fprintf(stderr, "Option 'stripe-size' can't be "
-				"specified with Data-on-MDT component: %llu\n",
+			fprintf(stderr,
+				"Option 'stripe-size' can't be specified with Data-on-MDT component: %llu\n",
 				lsa->lsa_stripe_size);
 			errno = EINVAL;
 			return -1;
 		}
 		if (lsa->lsa_nr_tgts != 0) {
-			fprintf(stderr, "Option 'ost-list' can't be specified "
-				"with Data-on-MDT component: '%i'\n",
+			fprintf(stderr,
+				"Option 'ost-list' can't be specified with Data-on-MDT component: '%i'\n",
 				lsa->lsa_nr_tgts);
 			errno = EINVAL;
 			return -1;
 		}
 		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
-			fprintf(stderr, "Option 'stripe-offset' can't be "
-				"specified with Data-on-MDT component: %lld\n",
+			fprintf(stderr,
+				"Option 'stripe-offset' can't be specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_off);
 			errno = EINVAL;
 			return -1;
 		}
 		if (lsa->lsa_pool_name != 0) {
-			fprintf(stderr, "Option 'pool' can't be specified "
-				"with Data-on-MDT component: '%s'\n",
+			fprintf(stderr,
+				"Option 'pool' can't be specified with Data-on-MDT component: '%s'\n",
 				lsa->lsa_pool_name);
 			errno = EINVAL;
 			return -1;
@@ -2559,7 +2587,7 @@ new_comp:
 		return rc;
 	}
 
-	if (lsa->lsa_pool_name != NULL) {
+	if (lsa->lsa_pool_name) {
 		rc = llapi_layout_pool_name_set(layout, lsa->lsa_pool_name);
 		if (rc) {
 			fprintf(stderr, "Set pool name: %s failed. %s\n",
@@ -2656,8 +2684,10 @@ static int build_prev_component(struct llapi_layout **layout,
 			return rc;
 	}
 
-	/* Copy lsa to previous lsa;
-	 * if this is an extension component, make the previous invalid; */
+	/*
+	 * Copy lsa to previous lsa;
+	 * if this is an extension component, make the previous invalid;
+	 */
 	if (extension)
 		prev->lsa_stripe_size = 0;
 	else
@@ -2676,7 +2706,7 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 	char *string;
 	int rc = 0;
 
-	if (prevp == NULL)
+	if (!prevp)
 		prevp = &prev;
 
 	while (node) {
@@ -2687,7 +2717,8 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 			if (string && !strncmp(string, "component", 9) &&
 			    strncmp(string, "component0", 10) &&
 			    strncmp(string, "components", 10)) {
-				rc = build_prev_component(layout, prevp, lsa, true);
+				rc = build_prev_component(layout, prevp, lsa,
+							  true);
 				if (rc)
 					return rc;
 
@@ -2702,7 +2733,7 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 			if (rc)
 				return rc;
 		} else {
-			if (node->cy_string == NULL)
+			if (!node->cy_string)
 				return -EINVAL;
 
 			/* skip leading lmm_ if present, to simplify parsing */
@@ -2729,7 +2760,8 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 							    &lsa->lsa_comp_neg_flags);
 					if (rc)
 						return rc;
-					/* Only template flags have meaning in
+					/*
+					 * Only template flags have meaning in
 					 * the layout for a new file
 					 */
 					lsa->lsa_comp_flags &= LCME_TEMPLATE_FLAGS;
@@ -2837,18 +2869,22 @@ static int layout_extend_comp(struct llapi_layout *layout,
 
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	if (rc < 0) {
-		fprintf(stderr, "%s setstripe: cannot move component cursor: "
-			"%s\n", progname, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot move component cursor: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
-	/* Even if the @size will not be used below, this will fail if
+	/*
+	 * Even if the @size will not be used below, this will fail if
 	 * this is not a SEL component - a good confirmation we are
-	 * working on right components. */
+	 * working on right components.
+	 */
 	rc = llapi_layout_extension_size_get(layout, &size);
 	if (rc < 0) {
-		fprintf(stderr, "%s setstripe: cannot get component ext size: "
-			"%s\n", progname, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot get component ext size: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
@@ -2869,8 +2905,9 @@ static int layout_extend_comp(struct llapi_layout *layout,
 
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_PREV);
 	if (rc < 0) {
-		fprintf(stderr, "%s setstripe: cannot move component cursor: "
-			"%s\n", progname, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot move component cursor: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
@@ -2902,38 +2939,44 @@ static int layout_adjust_first_extent(char *fname, struct llapi_layout *layout,
 	uint64_t end;
 	int rc, ret = 0;
 
-	if (layout == NULL || !(comp_add || llapi_layout_is_composite(layout)))
+	if (!layout || !(comp_add || llapi_layout_is_composite(layout)))
 		return 0;
 
 	errno = 0;
 	while (comp_add) {
 		head = llapi_layout_get_by_path(fname, 0);
-		if (head == NULL) {
+		if (!head) {
 			fprintf(stderr,
-				"%s setstripe: cannot read layout from '%s': "
-				"%s\n", progname, fname, strerror(errno));
+				"%s setstripe: cannot read layout from '%s': %s\n",
+				progname, fname, strerror(errno));
 			return -EINVAL;
 		} else if (errno == ENODATA) {
-			/* file without LOVEA, this component-add will be turned
-			 * into a component-create. */
+			/*
+			 * file without LOVEA, this component-add will be turned
+			 * into a component-create.
+			 */
 			llapi_layout_free(head);
 			ret = -ENODATA;
 
-			/* the new layout will be added to an empty one, it
-			 * still needs to be adjusted below */
+			/*
+			 * the new layout will be added to an empty one, it
+			 * still needs to be adjusted below
+			 */
 			comp_add = 0;
 			break;
 		} else if (!llapi_layout_is_composite(head)) {
-			fprintf(stderr, "%s setstripe: '%s' not a composite "
-				"file\n", progname, fname);
+			fprintf(stderr,
+				"%s setstripe: '%s' not a composite file\n",
+				progname, fname);
 			llapi_layout_free(head);
 			return -EINVAL;
 		}
 
 		rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
 		if (rc) {
-			fprintf(stderr, "%s setstripe: cannot get prev "
-				"extent: %s\n", progname, strerror(errno));
+			fprintf(stderr,
+				"%s setstripe: cannot get prev extent: %s\n",
+				progname, strerror(errno));
 			llapi_layout_free(head);
 			return rc;
 		}
@@ -2966,16 +3009,16 @@ static int layout_adjust_first_extent(char *fname, struct llapi_layout *layout,
 	}
 
 	if (start > prev_end || end < prev_end) {
-		fprintf(stderr,	"%s setstripe: first extent [%lu, %lu) not "
-			"adjacent with extent end %lu\n",
+		fprintf(stderr,
+			"%s setstripe: first extent [%lu, %lu) not adjacent with extent end %lu\n",
 			progname, start, end, prev_end);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_comp_extent_set(layout, prev_end, end);
 	if (rc) {
-		fprintf(stderr, "%s setstripe: cannot set component extent "
-			"[%lu, %lu): %s\n",
+		fprintf(stderr,
+			"%s setstripe: cannot set component extent [%lu, %lu): %s\n",
 			progname, prev_end, end, strerror(errno));
 		return rc;
 	}
@@ -2987,10 +3030,10 @@ static int mirror_adjust_first_extents(struct mirror_args *list)
 {
 	int rc = 0;
 
-	if (list == NULL)
+	if (!list)
 		return 0;
 
-	while (list != NULL) {
+	while (list) {
 		rc = layout_adjust_first_extent(NULL, list->m_layout, false);
 		if (rc)
 			break;
@@ -3019,7 +3062,7 @@ static struct mirror_args *lfs_mirror_alloc(void)
 
 	while (1) {
 		mirror = calloc(1, sizeof(*mirror));
-		if (mirror != NULL) {
+		if (mirror) {
 			mirror->m_inherit = false;
 			break;
 		}
@@ -3042,7 +3085,7 @@ static struct mirror_args *lfs_mirror_alloc(void)
  */
 static void lfs_mirror_free(struct mirror_args *mirror)
 {
-	if (mirror->m_layout != NULL)
+	if (mirror->m_layout)
 		llapi_layout_free(mirror->m_layout);
 	free(mirror);
 }
@@ -3059,7 +3102,7 @@ static void lfs_mirror_list_free(struct mirror_args *mirror_list)
 {
 	struct mirror_args *next_mirror = NULL;
 
-	while (mirror_list != NULL) {
+	while (mirror_list) {
 		next_mirror = mirror_list->m_next;
 		lfs_mirror_free(mirror_list);
 		mirror_list = next_mirror;
@@ -3255,7 +3298,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			if (result != 0)
 				goto usage_error;
 			if (mirror_mode && lsa.lsa_comp_neg_flags) {
-				fprintf(stderr, "%s: inverted flags are not supported\n",
+				fprintf(stderr,
+					"%s: inverted flags are not supported\n",
 					progname);
 				goto usage_error;
 			}
@@ -3291,7 +3335,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 
 			if (!mirror_mode || !last_mirror) {
-				fprintf(stderr, "error: %s: --flags must be specified with --mirror-count|-N option\n",
+				fprintf(stderr,
+					"error: %s: --flags must be specified with --mirror-count|-N option\n",
 					progname);
 				goto usage_error;
 			}
@@ -3302,7 +3347,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 
 			if (neg_flags) {
-				fprintf(stderr, "%s: inverted flags are not supported\n",
+				fprintf(stderr,
+					"%s: inverted flags are not supported\n",
 					progname);
 				result = -EINVAL;
 				goto usage_error;
@@ -3317,7 +3363,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		}
 		case LFS_LAYOUT_FOREIGN_OPT:
-			if (optarg != NULL) {
+			if (optarg) {
 				/* check pure numeric */
 				type = strtoul(optarg, &end, 0);
 				if (*end) {
@@ -3336,7 +3382,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case LFS_MODE_OPT:
 			mode_opt = optarg;
-			if (mode_opt != NULL) {
+			if (mode_opt) {
 				mode = strtoul(mode_opt, &end, 8);
 				if (*end != '\0') {
 					fprintf(stderr,
@@ -3397,8 +3443,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'D':
 			if (!migrate_mode) {
 				fprintf(stderr,
-					"%s %s: -D|--non-direct is valid "
-					"only for migrate command\n",
+					"%s %s: -D|--non-direct is valid only for migrate command\n",
 					progname, argv[0]);
 				goto usage_error;
 			}
@@ -3432,7 +3477,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case 'H':
 			if (!migrate_mode) {
-				fprintf(stderr, "--mdt-hash is valid only for migrate command\n");
+				fprintf(stderr,
+					"--mdt-hash is valid only for migrate command\n");
 				return CMD_HELP;
 			}
 
@@ -3473,7 +3519,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			if (opc == SO_MIRROR_EXTEND) {
-				if (last_mirror == NULL) {
+				if (!last_mirror) {
 					fprintf(stderr,
 				"error: %s: '-N' must exist in front of '%s'\n",
 						progname, argv[optopt + 1]);
@@ -3483,7 +3529,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				last_mirror->m_count = 1;
 			} else {
 				/* mirror split */
-				if (mirror_list == NULL)
+				if (!mirror_list)
 					mirror_list = lfs_mirror_alloc();
 				mirror_list->m_file = optarg;
 			}
@@ -3492,24 +3538,24 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'L':
 			if (strcmp(argv[optind - 1], "mdt") == 0) {
 				/* Can be only the first component */
-				if (layout != NULL) {
+				if (layout) {
 					result = -EINVAL;
-					fprintf(stderr, "error: 'mdt' layout "
-						"can be only the first one\n");
+					fprintf(stderr,
+						"error: 'mdt' layout can be only the first one\n");
 					goto error;
 				}
 				if (lsa.lsa_comp_end > (1ULL << 30)) { /* 1Gb */
 					result = -EFBIG;
-					fprintf(stderr, "error: 'mdt' layout "
-						"size is too big\n");
+					fprintf(stderr,
+						"error: 'mdt' layout size is too big\n");
 					goto error;
 				}
 				lsa.lsa_pattern = LLAPI_LAYOUT_MDT;
 			} else if (strcmp(argv[optind - 1], "raid0") != 0) {
 				result = -EINVAL;
-				fprintf(stderr, "error: layout '%s' is "
-					"unknown, supported layouts are: "
-					"'mdt', 'raid0'\n", argv[optind]);
+				fprintf(stderr,
+					"error: layout '%s' is unknown, supported layouts are: 'mdt', 'raid0'\n",
+					argv[optind]);
 				goto error;
 			}
 			break;
@@ -3550,7 +3596,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				mirror_mode = true;
 			}
 			mirror_count = 1;
-			if (optarg != NULL) {
+			if (optarg) {
 				mirror_count = strtoul(optarg, &end, 0);
 				if (*end != '\0' || mirror_count == 0) {
 					fprintf(stderr,
@@ -3564,10 +3610,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			new_mirror = lfs_mirror_alloc();
 			new_mirror->m_count = mirror_count;
 
-			if (mirror_list == NULL)
+			if (!mirror_list)
 				mirror_list = new_mirror;
 
-			if (last_mirror != NULL) {
+			if (last_mirror) {
 				/* wrap up last mirror */
 				if (!setstripe_args_specified(&lsa))
 					last_mirror->m_inherit = true;
@@ -3591,8 +3637,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'o':
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 			if (strcmp(argv[optind - 1], "--ost-list") == 0)
-				fprintf(stderr, "warning: '--ost-list' is "
-					"deprecated, use '--ost' instead\n");
+				fprintf(stderr,
+					"warning: '--ost-list' is deprecated, use '--ost' instead\n");
 #endif
 			if (lsa.lsa_pattern == LLAPI_LAYOUT_MDT) {
 				fprintf(stderr,
@@ -3600,7 +3646,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname, argv[0]);
 				goto usage_error;
 			}
-			/* -o allows overstriping, and must note it because
+			/*
+			 * -o allows overstriping, and must note it because
 			 * parse_targets is shared with MDT striping, which
 			 * does not allow duplicates
 			 */
@@ -3621,7 +3668,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				lsa.lsa_stripe_off = tgts[0];
 			break;
 		case 'p':
-			if (optarg == NULL)
+			if (!optarg)
 				goto usage_error;
 			lsa.lsa_pool_name = optarg;
 
@@ -3691,7 +3738,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		from_copy = true;
 
 	if (xattr && !foreign_mode) {
-		/* only print a warning as this is harmless and will be ignored
+		/*
+		 * only print a warning as this is harmless and will be ignored
 		 */
 		fprintf(stderr,
 			"%s %s: xattr has been specified for non-foreign layout\n",
@@ -3755,7 +3803,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	if (comp_set && !comp_id) {
-		fprintf(stderr, "%s %s: --component-set doesn't have component-id set\n",
+		fprintf(stderr,
+			"%s %s: --component-set doesn't have component-id set\n",
 			progname, argv[0]);
 		goto usage_error;
 	}
@@ -3802,15 +3851,15 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 
 		if (mirror_mode) {
-			fprintf(stderr, "error: %s: can't use --component-add "
-				"or --component-del for mirror operation\n",
+			fprintf(stderr,
+				"error: %s: can't use --component-add or --component-del for mirror operation\n",
 				progname);
 			goto usage_error;
 		}
 	}
 
 	if (comp_add) {
-		if (layout == NULL) {
+		if (!layout) {
 			fprintf(stderr,
 				"%s %s: option -E must be specified with --component-add\n",
 				progname, argv[0]);
@@ -3827,8 +3876,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	if ((from_yaml || from_copy) &&
 	    (setstripe_args_specified(&lsa) || layout != NULL)) {
-		fprintf(stderr, "error: %s: can't specify --yaml or --copy with"
-			" -c, -S, -i, -o, -p or -E options.\n",
+		fprintf(stderr,
+			"error: %s: can't specify --yaml or --copy with -c, -S, -i, -o, -p or -E options.\n",
 			argv[0]);
 		goto error;
 	}
@@ -3904,11 +3953,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 		migrate_mdt_param.fp_lmv_md = lmu;
 		migrate_mdt_param.fp_migrate = 1;
-	} else if (layout == NULL) {
+	} else if (!layout) {
 		/* initialize stripe parameters */
 		param = calloc(1, offsetof(typeof(*param),
 			       lsp_osts[lsa.lsa_nr_tgts]));
-		if (param == NULL) {
+		if (!param) {
 			fprintf(stderr,
 				"%s %s: cannot allocate memory for parameters: %s\n",
 				progname, argv[0], strerror(ENOMEM));
@@ -3963,8 +4012,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		result = lfs_comp_create_from_yaml(template, &layout,
 						   &lsa, tgts);
 		if (result) {
-			fprintf(stderr, "error: %s: can't create composite "
-				"layout from template file %s\n",
+			fprintf(stderr,
+				"error: %s: can't create composite layout from template file %s\n",
 				argv[0], template);
 			goto error;
 		}
@@ -3988,9 +4037,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
 		if (from_copy) {
 			layout = llapi_layout_get_by_path(template ?: fname, 0);
-			if (layout == NULL) {
-				fprintf(stderr, "%s: can't create composite "
-					"layout from file %s.\n",
+			if (!layout) {
+				fprintf(stderr,
+					"%s: can't create composite layout from file %s.\n",
 					progname, template ?: fname);
 				goto error;
 			}
@@ -4033,7 +4082,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					      mirror_flags,
 					      has_m_file ? mirror_list->m_file :
 					      NULL);
-		} else if (layout != NULL) {
+		} else if (layout) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      mode, layout);
 			if (result >= 0) {
@@ -4064,7 +4113,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	if (mode_opt != NULL)
+	if (mode_opt)
 		umask(previous_umask);
 
 	free(param);
@@ -4082,10 +4131,10 @@ error:
 
 static int lfs_poollist(int argc, char **argv)
 {
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc != 2)
+		return CMD_HELP;
 
-        return llapi_poollist(argv[1]);
+	return llapi_poollist(argv[1]);
 }
 
 static time_t set_time(struct find_param *param, time_t *time, time_t *set,
@@ -4154,7 +4203,7 @@ static int name2uid(unsigned int *id, const char *name)
 	struct passwd *passwd;
 
 	passwd = getpwnam(name);
-	if (passwd == NULL)
+	if (!passwd)
 		return -ENOENT;
 	*id = passwd->pw_uid;
 
@@ -4166,7 +4215,7 @@ static int name2gid(unsigned int *id, const char *name)
 	struct group *group;
 
 	group = getgrnam(name);
-	if (group == NULL)
+	if (!group)
 		return -ENOENT;
 	*id = group->gr_gid;
 
@@ -4183,7 +4232,7 @@ static int uid2name(char **name, unsigned int id)
 	struct passwd *passwd;
 
 	passwd = getpwuid(id);
-	if (passwd == NULL)
+	if (!passwd)
 		return -ENOENT;
 	*name = passwd->pw_name;
 
@@ -4195,7 +4244,7 @@ static inline int gid2name(char **name, unsigned int id)
 	struct group *group;
 
 	group = getgrgid(id);
-	if (group == NULL)
+	if (!group)
 		return -ENOENT;
 	*name = group->gr_name;
 
@@ -4209,7 +4258,7 @@ static int name2layout(__u32 *layout, char *name)
 	*layout = 0;
 	for (ptr = name; ; ptr = NULL) {
 		layout_name = strtok(ptr, ",");
-		if (layout_name == NULL)
+		if (!layout_name)
 			break;
 		if (strcmp(layout_name, "released") == 0)
 			*layout |= LOV_PATTERN_F_RELEASED;
@@ -4235,7 +4284,7 @@ static int lfs_find(int argc, char **argv)
 		.fp_quiet = 1,
 		.fp_time_margin = 24 * 60 * 60,
 	};
-        struct option long_opts[] = {
+	struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
 	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "btime",	.has_arg = required_argument },
@@ -4378,40 +4427,42 @@ static int lfs_find(int argc, char **argv)
 	while ((c = getopt_long_only(argc, argv,
 		"-0A:b:B:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
 		long_opts, &optidx)) >= 0) {
-                xtime = NULL;
-                xsign = NULL;
-                if (neg_opt)
-                        --neg_opt;
-                /* '!' is part of option */
-                /* when getopt_long_only() finds a string which is not
-                 * an option nor a known option argument it returns 1
-                 * in that case if we already have found pathstart and pathend
-                 * (i.e. we have the list of pathnames),
-                 * the only supported value is "!"
-                 */
-                isoption = (c != 1) || (strcmp(optarg, "!") == 0);
-                if (!isoption && pathend != -1) {
-                        fprintf(stderr, "err: %s: filename|dirname must either "
-                                        "precede options or follow options\n",
-                                        argv[0]);
-                        ret = CMD_HELP;
-                        goto err;
-                }
-                if (!isoption && pathstart == -1)
-                        pathstart = optind - 1;
-                if (isoption && pathstart != -1 && pathend == -1)
-                        pathend = optind - 2;
-                switch (c) {
-                case 0:
-                        /* Long options. */
-                        break;
-                case 1:
-                        /* unknown; opt is "!" or path component,
-                         * checking done above.
-                         */
-                        if (strcmp(optarg, "!") == 0)
-                                neg_opt = 2;
-                        break;
+		xtime = NULL;
+		xsign = NULL;
+		if (neg_opt)
+			--neg_opt;
+		/* '!' is part of option */
+		/*
+		 * when getopt_long_only() finds a string which is not
+		 * an option nor a known option argument it returns 1
+		 * in that case if we already have found pathstart and pathend
+		 * (i.e. we have the list of pathnames),
+		 * the only supported value is "!"
+		 */
+		isoption = (c != 1) || (strcmp(optarg, "!") == 0);
+		if (!isoption && pathend != -1) {
+			fprintf(stderr,
+				"err: %s: filename|dirname must either precede options or follow options\n",
+				argv[0]);
+			ret = CMD_HELP;
+			goto err;
+		}
+		if (!isoption && pathstart == -1)
+			pathstart = optind - 1;
+		if (isoption && pathstart != -1 && pathend == -1)
+			pathend = optind - 2;
+		switch (c) {
+		case 0:
+			/* Long options. */
+			break;
+		case 1:
+			/*
+			 * unknown; opt is "!" or path component,
+			 * checking done above.
+			 */
+			if (strcmp(optarg, "!") == 0)
+				neg_opt = 2;
+			break;
 		case 'A':
 			xtime = &param.fp_atime;
 			xsign = &param.fp_asign;
@@ -4476,8 +4527,9 @@ static int lfs_find(int argc, char **argv)
 
 			param.fp_comp_count = strtoul(optarg, &endptr, 0);
 			if (*endptr != '\0') {
-				fprintf(stderr, "error: bad component count "
-					"'%s'\n", optarg);
+				fprintf(stderr,
+					"error: bad component count '%s'\n",
+					optarg);
 				goto err;
 			}
 			param.fp_check_comp_count = 1;
@@ -4487,13 +4539,15 @@ static int lfs_find(int argc, char **argv)
 			rc = comp_str2flags(optarg, &param.fp_comp_flags,
 					    &param.fp_comp_neg_flags);
 			if (rc) {
-				fprintf(stderr, "error: bad component flags "
-					"'%s'\n", optarg);
+				fprintf(stderr,
+					"error: bad component flags '%s'\n",
+					optarg);
 				goto err;
 			}
 			param.fp_check_comp_flags = 1;
 			if (neg_opt) {
 				__u32 flags = param.fp_comp_neg_flags;
+
 				param.fp_comp_neg_flags = param.fp_comp_flags;
 				param.fp_comp_flags = flags;
 			}
@@ -4510,8 +4564,9 @@ static int lfs_find(int argc, char **argv)
 			rc = llapi_parse_size(optarg, &param.fp_comp_start,
 					      &param.fp_comp_start_units, 0);
 			if (rc) {
-				fprintf(stderr, "error: bad component start "
-					"'%s'\n", optarg);
+				fprintf(stderr,
+					"error: bad component start '%s'\n",
+					optarg);
 				goto err;
 			}
 			param.fp_check_comp_start = 1;
@@ -4529,30 +4584,32 @@ static int lfs_find(int argc, char **argv)
 			param.fp_check_mirror_state = 1;
 			if (neg_opt) {
 				__u16 state = param.fp_mirror_neg_state;
+
 				param.fp_mirror_neg_state =
 					param.fp_mirror_state;
 				param.fp_mirror_state = state;
 			}
 			break;
-                case 'c':
-                        if (optarg[0] == '+') {
+		case 'c':
+			if (optarg[0] == '+') {
 				param.fp_stripe_count_sign = -1;
-                                optarg++;
-                        } else if (optarg[0] == '-') {
+				optarg++;
+			} else if (optarg[0] == '-') {
 				param.fp_stripe_count_sign =  1;
-                                optarg++;
-                        }
+				optarg++;
+			}
 
 			param.fp_stripe_count = strtoul(optarg, &endptr, 0);
-                        if (*endptr != '\0') {
-                                fprintf(stderr,"error: bad stripe_count '%s'\n",
-                                        optarg);
-                                ret = -1;
-                                goto err;
-                        }
+			if (*endptr != '\0') {
+				fprintf(stderr,
+					"error: bad stripe_count '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
 			param.fp_check_stripe_count = 1;
 			param.fp_exclude_stripe_count = !!neg_opt;
-                        break;
+			break;
 		case 'D':
 			param.fp_max_depth = strtol(optarg, 0, 0);
 			break;
@@ -4575,8 +4632,9 @@ static int lfs_find(int argc, char **argv)
 						&param.fp_comp_end_units, 0);
 			}
 			if (rc) {
-				fprintf(stderr, "error: bad component end "
-					"'%s'\n", optarg);
+				fprintf(stderr,
+					"error: bad component end '%s'\n",
+					optarg);
 				goto err;
 			}
 			param.fp_check_comp_end = 1;
@@ -4586,7 +4644,7 @@ static int lfs_find(int argc, char **argv)
 			/* all types by default */
 			uint32_t type = LU_FOREIGN_TYPE_UNKNOWN;
 
-			if (optarg != NULL) {
+			if (optarg) {
 				/* check pure numeric */
 				type = strtoul(optarg, &endptr, 0);
 				if (*endptr) {
@@ -4757,16 +4815,17 @@ static int lfs_find(int argc, char **argv)
 			rc = name2gid(&param.fp_gid, optarg);
 			if (rc) {
 				param.fp_gid = strtoul(optarg, &endptr, 10);
-                                if (*endptr != '\0') {
-                                        fprintf(stderr, "Group/GID: %s cannot "
-                                                "be found.\n", optarg);
-                                        ret = -1;
-                                        goto err;
-                                }
-                        }
+				if (*endptr != '\0') {
+					fprintf(stderr,
+						"Group/GID: %s cannot be found.\n",
+						optarg);
+					ret = -1;
+					goto err;
+				}
+			}
 			param.fp_exclude_gid = !!neg_opt;
 			param.fp_check_gid = 1;
-                        break;
+			break;
 		case 'H':
 			param.fp_hash_type = check_hashtype(optarg);
 			if (param.fp_hash_type == 0) {
@@ -4794,19 +4853,20 @@ static int lfs_find(int argc, char **argv)
 			if (rc) {
 				param.fp_uid = strtoul(optarg, &endptr, 10);
 				if (*endptr != '\0') {
-					fprintf(stderr, "User/UID: %s cannot "
-                                                "be found.\n", optarg);
-                                        ret = -1;
-                                        goto err;
-                                }
-                        }
+					fprintf(stderr,
+						"User/UID: %s cannot be found.\n",
+						optarg);
+					ret = -1;
+					goto err;
+				}
+			}
 			param.fp_exclude_uid = !!neg_opt;
 			param.fp_check_uid = 1;
-                        break;
-                case 'n':
+			break;
+		case 'n':
 			param.fp_pattern = (char *)optarg;
 			param.fp_exclude_pattern = !!neg_opt;
-                        break;
+			break;
 		case 'N':
 			if (optarg[0] == '+') {
 				param.fp_mirror_count_sign = -1;
@@ -4826,56 +4886,57 @@ static int lfs_find(int argc, char **argv)
 			param.fp_check_mirror_count = 1;
 			param.fp_exclude_mirror_count = !!neg_opt;
 			break;
-                case 'm':
-                case 'i':
-                case 'O': {
-                        char *buf, *token, *next, *p;
-                        int len = 1;
-                        void *tmp;
+		case 'm':
+		case 'i':
+		case 'O': {
+			char *buf, *token, *next, *p;
+			int len = 1;
+			void *tmp;
 
-                        buf = strdup(optarg);
-                        if (buf == NULL) {
-                                ret = -ENOMEM;
-                                goto err;
-                        }
+			buf = strdup(optarg);
+			if (!buf) {
+				ret = -ENOMEM;
+				goto err;
+			}
 
 			param.fp_exclude_obd = !!neg_opt;
 
-                        token = buf;
-                        while (token && *token) {
-                                token = strchr(token, ',');
-                                if (token) {
-                                        len++;
-                                        token++;
-                                }
-                        }
-                        if (c == 'm') {
+			token = buf;
+			while (token && *token) {
+				token = strchr(token, ',');
+				if (token) {
+					len++;
+					token++;
+				}
+			}
+			if (c == 'm') {
 				param.fp_exclude_mdt = !!neg_opt;
 				param.fp_num_alloc_mdts += len;
 				tmp = realloc(param.fp_mdt_uuid,
 					      param.fp_num_alloc_mdts *
 					      sizeof(*param.fp_mdt_uuid));
-				if (tmp == NULL) {
+				if (!tmp) {
 					ret = -ENOMEM;
 					goto err_free;
 				}
 
 				param.fp_mdt_uuid = tmp;
-                        } else {
+			} else {
 				param.fp_exclude_obd = !!neg_opt;
 				param.fp_num_alloc_obds += len;
 				tmp = realloc(param.fp_obd_uuid,
 					      param.fp_num_alloc_obds *
 					      sizeof(*param.fp_obd_uuid));
-				if (tmp == NULL) {
+				if (!tmp) {
 					ret = -ENOMEM;
 					goto err_free;
 				}
 
 				param.fp_obd_uuid = tmp;
-                        }
-                        for (token = buf; token && *token; token = next) {
+			}
+			for (token = buf; token && *token; token = next) {
 				struct obd_uuid *puuid;
+
 				if (c == 'm') {
 					puuid =
 					&param.fp_mdt_uuid[param.fp_num_mdts++];
@@ -4883,12 +4944,12 @@ static int lfs_find(int argc, char **argv)
 					puuid =
 					&param.fp_obd_uuid[param.fp_num_obds++];
 				}
-                                p = strchr(token, ',');
-                                next = 0;
-                                if (p) {
-                                        *p = 0;
-                                        next = p+1;
-                                }
+				p = strchr(token, ',');
+				next = 0;
+				if (p) {
+					*p = 0;
+					next = p+1;
+				}
 
 				if (strlen(token) > sizeof(puuid->uuid) - 1) {
 					ret = -E2BIG;
@@ -5092,7 +5153,7 @@ err:
 	if (param.fp_mdt_uuid && param.fp_num_alloc_mdts)
 		free(param.fp_mdt_uuid);
 
-        return ret;
+	return ret;
 }
 
 static int lfs_getstripe_internal(int argc, char **argv,
@@ -5202,13 +5263,13 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->fp_max_depth = 0;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			if (optarg != NULL) {
+			if (optarg) {
 				rc = comp_str2flags(optarg,
 						    &param->fp_comp_flags,
 						    &param->fp_comp_neg_flags);
 				if (rc != 0) {
-					fprintf(stderr, "error: %s bad "
-						"component flags '%s'.\n",
+					fprintf(stderr,
+						"error: %s bad component flags '%s'.\n",
 						argv[0], optarg);
 					return CMD_HELP;
 				}
@@ -5219,7 +5280,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			}
 			break;
 		case LFS_COMP_START_OPT:
-			if (optarg != NULL) {
+			if (optarg) {
 				tmp = optarg;
 				if (tmp[0] == '+') {
 					param->fp_comp_start_sign = -1;
@@ -5232,13 +5293,12 @@ static int lfs_getstripe_internal(int argc, char **argv,
 						&param->fp_comp_start,
 						&param->fp_comp_start_units, 0);
 				if (rc != 0) {
-					fprintf(stderr, "error: %s bad "
-						"component start '%s'.\n",
+					fprintf(stderr,
+						"error: %s bad component start '%s'.\n",
 						argv[0], tmp);
 					return CMD_HELP;
-				} else {
-					param->fp_check_comp_start = 1;
 				}
+				param->fp_check_comp_start = 1;
 			} else {
 				param->fp_verbose |= VERBOSE_COMP_START;
 				param->fp_max_depth = 0;
@@ -5303,7 +5363,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->fp_get_default_lmv = 1;
 			break;
 		case 'E':
-			if (optarg != NULL) {
+			if (optarg) {
 				tmp = optarg;
 				if (tmp[0] == '+') {
 					param->fp_comp_end_sign = -1;
@@ -5323,8 +5383,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 						&param->fp_comp_end_units, 0);
 				}
 				if (rc != 0) {
-					fprintf(stderr, "error: %s bad "
-						"component end '%s'.\n",
+					fprintf(stderr,
+						"error: %s bad component end '%s'.\n",
 						argv[0], tmp);
 					return CMD_HELP;
 				}
@@ -5353,17 +5413,16 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			}
 			break;
 		case 'I':
-			if (optarg != NULL) {
+			if (optarg) {
 				param->fp_comp_id = strtoul(optarg, &end, 0);
 				if (*end != '\0' || param->fp_comp_id == 0 ||
 				    param->fp_comp_id > LCME_ID_MAX) {
-					fprintf(stderr, "error: %s bad "
-						"component id '%s'\n",
+					fprintf(stderr,
+						"error: %s bad component id '%s'\n",
 						argv[0], optarg);
 					return CMD_HELP;
-				} else {
-					param->fp_check_comp_id = 1;
 				}
+				param->fp_check_comp_id = 1;
 			} else {
 				param->fp_max_depth = 0;
 				param->fp_verbose |= VERBOSE_COMP_ID;
@@ -5377,8 +5436,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'M':
-			fprintf(stderr, "warning: '-M' deprecated"
-				", use '--mdt-index' or '-m' instead\n");
+			fprintf(stderr,
+				"warning: '-M' deprecated, use '--mdt-index' or '-m' instead\n");
 #endif
 		case 'm':
 			if (!(param->fp_verbose & VERBOSE_DETAIL))
@@ -5472,40 +5531,40 @@ static int lfs_getstripe_internal(int argc, char **argv,
 
 static int lfs_tgts(int argc, char **argv)
 {
-        char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
-        struct find_param param;
-        int index = 0, rc=0;
+	char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
+	struct find_param param;
+	int index = 0, rc = 0;
 
-        if (argc > 2)
-                return CMD_HELP;
+	if (argc > 2)
+		return CMD_HELP;
 
-        if (argc == 2 && !realpath(argv[1], path)) {
-                rc = -errno;
-                fprintf(stderr, "error: invalid path '%s': %s\n",
-                        argv[1], strerror(-rc));
-                return rc;
-        }
+	if (argc == 2 && !realpath(argv[1], path)) {
+		rc = -errno;
+		fprintf(stderr, "error: invalid path '%s': %s\n",
+			argv[1], strerror(-rc));
+		return rc;
+	}
 
-        while (!llapi_search_mounts(path, index++, mntdir, NULL)) {
-                /* Check if we have a mount point */
-                if (mntdir[0] == '\0')
-                        continue;
+	while (!llapi_search_mounts(path, index++, mntdir, NULL)) {
+		/* Check if we have a mount point */
+		if (mntdir[0] == '\0')
+			continue;
 
-                memset(&param, 0, sizeof(param));
-                if (!strcmp(argv[0], "mdts"))
+		memset(&param, 0, sizeof(param));
+		if (!strcmp(argv[0], "mdts"))
 			param.fp_get_lmv = 1;
 
-                rc = llapi_ostlist(mntdir, &param);
-                if (rc) {
-                        fprintf(stderr, "error: %s: failed on %s\n",
-                                argv[0], mntdir);
-                }
-                if (path[0] != '\0')
-                        break;
-                memset(mntdir, 0, PATH_MAX);
-        }
+		rc = llapi_ostlist(mntdir, &param);
+		if (rc) {
+			fprintf(stderr, "error: %s: failed on %s\n",
+				argv[0], mntdir);
+		}
+		if (path[0] != '\0')
+			break;
+		memset(mntdir, 0, PATH_MAX);
+	}
 
-        return rc;
+	return rc;
 }
 
 static int lfs_getstripe(int argc, char **argv)
@@ -5537,8 +5596,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHimO:rtTvy", long_opts, NULL)) != -1)
-	{
+				"cDHimO:rtTvy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
@@ -5553,8 +5611,8 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
-			fprintf(stderr, "warning: '-t' deprecated, "
-				"use '--mdt-hash' or '-H' instead\n");
+			fprintf(stderr,
+				"warning: '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
 #endif
 		case 'H':
 			param.fp_verbose |= VERBOSE_HASH_TYPE;
@@ -5645,7 +5703,8 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
-/* This is to identify various problem states for "lfs df" if .osn_err = true,
+/*
+ * This is to identify various problem states for "lfs df" if .osn_err = true,
  * so only show flags reflecting those states by default. Informational states
  * are only shown with "-v" and use lower-case names to distinguish them.
  * UNUSED[12] were for "EROFS = 30" until 1.6 but are now available for use.
@@ -5801,7 +5860,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 
 	if (pool) {
 		poolname = strchr(pool, '.');
-		if (poolname != NULL) {
+		if (poolname) {
 			if (strncmp(fsname, pool, strlen(fsname))) {
 				fprintf(stderr, "filesystem name incorrect\n");
 				return -ENODEV;
@@ -5855,7 +5914,8 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				rc = rc2;
 			}
 
-			/* If we have OSTs then don't report MDT block counts.
+			/*
+			 * If we have OSTs then don't report MDT block counts.
 			 * For MDT-only filesystems the expectation is that all
 			 * layouts have a DoM component.  For filesystems with
 			 * OSTs, files are not necessarily going to store data
@@ -5874,11 +5934,13 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 					     obd_uuid2str(&uuid_buf)) != 1)
 				continue;
 
-			/* the llapi_obd_statfs() call may have returned with
+			/*
+			 * the llapi_obd_statfs() call may have returned with
 			 * an error, but if it filled in uuid_buf we will at
 			 * lease use that to print out a message for that OBD.
 			 * If we didn't get anything in the uuid_buf, then fill
-			 * it in so that we can print an error message. */
+			 * it in so that we can print an error message.
+			 */
 			if (uuid_buf.uuid[0] == '\0')
 				snprintf(uuid_buf.uuid, sizeof(uuid_buf.uuid),
 					 "%s%04x", tp->st_name, index);
@@ -5913,7 +5975,8 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 
 	close(fd);
 
-	/* If we have _some_ OSTs, but don't have as many free objects on the
+	/*
+	 * If we have _some_ OSTs, but don't have as many free objects on the
 	 * OST as inodes on the MDTs, reduce the reported number of inodes
 	 * to compensate, so that the "inodes in use" number is correct.
 	 * This should be kept in sync with ll_statfs_internal().
@@ -6006,7 +6069,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			default_stripe = true;
 			break;
 		case LFS_LAYOUT_FOREIGN_OPT:
-			if (optarg != NULL) {
+			if (optarg) {
 				/* check pure numeric */
 				type = strtoul(optarg, &end, 0);
 				if (*end) {
@@ -6034,8 +6097,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
-			fprintf(stderr, "warning: '--hash-type' and '-t' "
-			      "deprecated, use '--mdt-hash' or '-H' instead\n");
+			fprintf(stderr,
+				"warning: '--hash-type' and '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
 #endif
 		case 'H':
 			lsa.lsa_pattern = check_hashtype(optarg);
@@ -6072,8 +6135,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 53, 0)
 		case 'm':
-			fprintf(stderr, "warning: '-m' is deprecated, "
-				"use '--mode' or '-o' instead\n");
+			fprintf(stderr,
+				"warning: '-m' is deprecated, use '--mode' or '-o' instead\n");
 #endif
 		case 'o':
 			mode_opt = optarg;
@@ -6095,7 +6158,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 	}
 
 	if (xattr && !foreign_mode) {
-		/* only print a warning as this is armless and will be
+		/*
+		 * only print a warning as this is armless and will be
 		 * ignored
 		 */
 		fprintf(stderr,
@@ -6133,7 +6197,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (mode_opt != NULL) {
+	if (mode_opt) {
 		mode = strtoul(mode_opt, &end, 8);
 		if (*end != '\0') {
 			fprintf(stderr,
@@ -6170,7 +6234,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	param = calloc(1, offsetof(typeof(*param),
 		       lsp_tgts[lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ?
 				lsa.lsa_stripe_count : lsa.lsa_nr_tgts]));
-	if (param == NULL) {
+	if (!param) {
 		fprintf(stderr,
 			"%s %s: cannot allocate memory for parameters: %s\n",
 			progname, argv[0], strerror(ENOMEM));
@@ -6229,7 +6293,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 				progname, dname, strerror(-result));
 	} while (!result && (dname = argv[++optind]));
 
-	if (mode_opt != NULL)
+	if (mode_opt)
 		umask(previous_mode);
 
 	free(param);
@@ -6251,11 +6315,12 @@ static int lfs_rmentry(int argc, char **argv)
 
 	index = 1;
 	dname = argv[index];
-	while (dname != NULL) {
+	while (dname) {
 		result = llapi_direntry_remove(dname);
 		if (result) {
-			fprintf(stderr, "error: %s: remove dir entry '%s' "
-				"failed\n", argv[0], dname);
+			fprintf(stderr,
+				"error: %s: remove dir entry '%s' failed\n",
+				argv[0], dname);
 			break;
 		}
 		dname = argv[++index];
@@ -6283,8 +6348,8 @@ static int lfs_mv(int argc, char **argv)
 		switch (c) {
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'M':
-			fprintf(stderr, "warning: '-M' deprecated"
-				", use '--mdt-index' or '-m' instead\n");
+			fprintf(stderr,
+				"warning: '-M' deprecated, use '--mdt-index' or '-m' instead\n");
 #endif
 		case 'm':
 			lmu.lum_stripe_offset = strtoul(optarg, &end, 0);
@@ -6330,12 +6395,12 @@ static int lfs_mv(int argc, char **argv)
 
 static int lfs_osts(int argc, char **argv)
 {
-        return lfs_tgts(argc, argv);
+	return lfs_tgts(argc, argv);
 }
 
 static int lfs_mdts(int argc, char **argv)
 {
-        return lfs_tgts(argc, argv);
+	return lfs_tgts(argc, argv);
 }
 
 static int lfs_df(int argc, char **argv)
@@ -6405,7 +6470,8 @@ static int print_instance(const char *mntdir, char *buf, size_t buflen,
 	if (opt_fsname == opt_instance) { /* both true or both false */
 		rc = llapi_getname(mntdir, buf, buflen);
 	} else if (opt_fsname) {
-		/* llapi_search_mounts() fills @buf with fsname, but that is not
+		/*
+		 * llapi_search_mounts() fills @buf with fsname, but that is not
 		 * called if explicit paths are specified on the command-line
 		 */
 		if (buf[0] == '\0')
@@ -6522,7 +6588,7 @@ static int lfs_check(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
+	rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
 	if (rc < 0 || mntdir[0] == '\0') {
 		fprintf(stderr,
 			"%s check: cannot find mounted Lustre filesystem: %s\n",
@@ -6536,22 +6602,12 @@ static int lfs_check(int argc, char **argv)
 			progname, argv[1], strerror(-rc));
 
 	return rc;
-
 }
 
 #ifdef HAVE_SYS_QUOTA_H
-#define ARG2INT(nr, str, msg)                                           \
-do {                                                                    \
-	char *endp;                                                     \
-	nr = strtol(str, &endp, 0);                                     \
-	if (*endp != '\0') {                                            \
-		fprintf(stderr, "%s: bad %s '%s'\n",			\
-			progname, msg, str);				\
-		return CMD_HELP;					\
-	}                                                               \
-} while (0)
-
-#define ADD_OVERFLOW(a,b) ((a + b) < a) ? (a = ULONG_MAX) : (a = a + b)
+#define ADD_OVERFLOW(a, b) \
+		     ((((a) + (b)) < (a)) ? \
+		      ((a) = ULONG_MAX) : ((a) = (a) + (b)))
 
 /* Convert format time string "XXwXXdXXhXXmXXs" into seconds value
  * returns the value or ULONG_MAX on integer overflow or incorrect format
@@ -6560,54 +6616,58 @@ do {                                                                    \
  *        2. specifiers may be encountered multiple times (2s3s is 5 seconds)
  *        3. empty integer value is interpreted as 0
  */
-static unsigned long str2sec(const char* timestr)
+static unsigned long str2sec(const char *timestr)
 {
-        const char spec[] = "smhdw";
-        const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
-        unsigned long val = 0;
-        char *tail;
+	const char spec[] = "smhdw";
+	const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
+	unsigned long val = 0;
+	char *tail;
 
-        if (strpbrk(timestr, spec) == NULL) {
-                /* no specifiers inside the time string,
-                   should treat it as an integer value */
-                val = strtoul(timestr, &tail, 10);
-                return *tail ? ULONG_MAX : val;
-        }
+	if (strpbrk(timestr, spec) == NULL) {
+		/*
+		 * no specifiers inside the time string,
+		 * should treat it as an integer value
+		 */
+		val = strtoul(timestr, &tail, 10);
+		return *tail ? ULONG_MAX : val;
+	}
 
-        /* format string is XXwXXdXXhXXmXXs */
-        while (*timestr) {
-                unsigned long v;
-                int ind;
-                char* ptr;
+	/* format string is XXwXXdXXhXXmXXs */
+	while (*timestr) {
+		unsigned long v;
+		int ind;
+		char *ptr;
 
-                v = strtoul(timestr, &tail, 10);
-                if (v == ULONG_MAX || *tail == '\0')
-                        /* value too large (ULONG_MAX or more)
-                           or missing specifier */
-                        goto error;
+		v = strtoul(timestr, &tail, 10);
+		if (v == ULONG_MAX || *tail == '\0')
+			/*
+			 * value too large (ULONG_MAX or more)
+			 * or missing specifier
+			 */
+			goto error;
 
-                ptr = strchr(spec, *tail);
-                if (ptr == NULL)
-                        /* unknown specifier */
-                        goto error;
+		ptr = strchr(spec, *tail);
+		if (!ptr)
+			/* unknown specifier */
+			goto error;
 
-                ind = ptr - spec;
+		ind = ptr - spec;
 
-                /* check if product will overflow the type */
-                if (!(v < ULONG_MAX / mult[ind]))
-                        goto error;
+		/* check if product will overflow the type */
+		if (!(v < ULONG_MAX / mult[ind]))
+			goto error;
 
-                ADD_OVERFLOW(val, mult[ind] * v);
-                if (val == ULONG_MAX)
-                        goto error;
+		ADD_OVERFLOW(val, mult[ind] * v);
+		if (val == ULONG_MAX)
+			goto error;
 
-                timestr = tail + 1;
-        }
+		timestr = tail + 1;
+	}
 
-        return val;
+	return val;
 
 error:
-        return ULONG_MAX;
+	return ULONG_MAX;
 }
 
 #define ARG2ULL(nr, str, def_units)					\
@@ -6626,13 +6686,13 @@ do {									\
 
 static inline int has_times_option(int argc, char **argv)
 {
-        int i;
+	int i;
 
-        for (i = 1; i < argc; i++)
-                if (!strcmp(argv[i], "-t"))
-                        return 1;
+	for (i = 1; i < argc; i++)
+		if (!strcmp(argv[i], "-t"))
+			return 1;
 
-        return 0;
+	return 0;
 }
 
 static inline int lfs_verify_poolarg(char *pool)
@@ -6679,8 +6739,8 @@ int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 			qtype = PRJQUOTA;
 quota_type:
 			if (qctl->qc_type != ALLQUOTA) {
-				fprintf(stderr, "error: -u/g/p can't be used "
-                                                "more than once\n");
+				fprintf(stderr,
+					"error: -u/g/p can't be used more than once\n");
 				return CMD_HELP;
 			}
 			qctl->qc_type = qtype;
@@ -6692,8 +6752,9 @@ quota_type:
 			} else {
 				dqi->dqi_bgrace = str2sec(optarg);
 				if (dqi->dqi_bgrace >= NOTIFY_GRACE_TIME) {
-					fprintf(stderr, "error: bad "
-						"block-grace: %s\n", optarg);
+					fprintf(stderr,
+						"error: bad block-grace: %s\n",
+						optarg);
 					return CMD_HELP;
 				}
 			}
@@ -6706,8 +6767,9 @@ quota_type:
 			} else {
 				dqi->dqi_igrace = str2sec(optarg);
 				if (dqi->dqi_igrace >= NOTIFY_GRACE_TIME) {
-					fprintf(stderr, "error: bad "
-						"inode-grace: %s\n", optarg);
+					fprintf(stderr,
+						"error: bad inode-grace: %s\n",
+						optarg);
 					return CMD_HELP;
 				}
 			}
@@ -6781,7 +6843,7 @@ int lfs_setquota(int argc, char **argv)
 	{ .val = 'U',	.name = "default-usr",	.has_arg = no_argument },
 	{ .val = 'o',	.name = "pool",		.has_arg = required_argument },
 	{ .name = NULL } };
-	unsigned limit_mask = 0;
+	unsigned int limit_mask = 0;
 	char *endptr;
 	bool use_default = false;
 	int qtype, qctl_len;
@@ -6802,8 +6864,9 @@ int lfs_setquota(int argc, char **argv)
 
 	qctl->qc_cmd  = LUSTRE_Q_SETQUOTA;
 	qctl->qc_type = ALLQUOTA; /* ALLQUOTA makes no sense for setquota,
-				  * so it can be used as a marker that qc_type
-				  * isn't reinitialized from command line */
+				   * so it can be used as a marker that qc_type
+				   * isn't reinitialized from command line
+				   */
 
 	while ((c = getopt_long(argc, argv, "b:B:dg:Gi:I:p:Pu:Uo:",
 		long_opts, NULL)) != -1) {
@@ -6822,7 +6885,7 @@ int lfs_setquota(int argc, char **argv)
 			qtype = GRPQUOTA;
 			qctl->qc_id = 0;
 			goto quota_type_def;
-                case 'g':
+		case 'g':
 			qtype = GRPQUOTA;
 			rc = name2gid(&qctl->qc_id, optarg);
 			goto quota_type;
@@ -6838,16 +6901,17 @@ quota_type:
 			if (rc) {
 				qctl->qc_id = strtoul(optarg, &endptr, 10);
 				if (*endptr != '\0') {
-					fprintf(stderr, "%s setquota: invalid"
-						" id '%s'\n", progname, optarg);
+					fprintf(stderr,
+						"%s setquota: invalid id '%s'\n",
+						progname, optarg);
 					rc = -1;
 					goto out;
 				}
 			}
 
 			if (qctl->qc_id == 0) {
-				fprintf(stderr, "%s setquota: can't set quota"
-					" for root usr/group/project.\n",
+				fprintf(stderr,
+					"%s setquota: can't set quota for root usr/group/project.\n",
 					progname);
 				rc = -1;
 				goto out;
@@ -6856,8 +6920,7 @@ quota_type:
 quota_type_def:
 			if (qctl->qc_type != ALLQUOTA) {
 				fprintf(stderr,
-					"%s setquota: only one of -u, -U, -g,"
-					" -G, -p or -P may be specified\n",
+					"%s setquota: only one of -u, -U, -g, -G, -p or -P may be specified\n",
 					progname);
 				rc = CMD_HELP;
 				goto out;
@@ -6875,8 +6938,7 @@ quota_type_def:
 			if (dqb->dqb_bsoftlimit &&
 			    dqb->dqb_bsoftlimit <= 1024) /* <= 1M? */
 				fprintf(stderr,
-					"%s setquota: warning: block softlimit '%llu' smaller than minimum qunit size\n"
-					"See '%s help setquota' or Lustre manual for details\n",
+					"%s setquota: warning: block softlimit '%llu' smaller than minimum qunit size\nSee '%s help setquota' or Lustre manual for details\n",
 					progname,
 					(unsigned long long)dqb->dqb_bsoftlimit,
 					progname);
@@ -6900,8 +6962,7 @@ quota_type_def:
 			if (dqb->dqb_isoftlimit &&
 			    dqb->dqb_isoftlimit <= 1024) /* <= 1K inodes? */
 				fprintf(stderr,
-					"%s setquota: warning: inode softlimit '%llu' smaller than minimum qunit size\n"
-					"See '%s help setquota' or Lustre manual for details\n",
+					"%s setquota: warning: inode softlimit '%llu' smaller than minimum qunit size\nSee '%s help setquota' or Lustre manual for details\n",
 					progname,
 					(unsigned long long)dqb->dqb_isoftlimit,
 					progname);
@@ -6912,8 +6973,7 @@ quota_type_def:
 			if (dqb->dqb_ihardlimit &&
 			    dqb->dqb_ihardlimit <= 1024) /* <= 1K inodes? */
 				fprintf(stderr,
-					"%s setquota: warning: inode hardlimit '%llu' smaller than minimum qunit size\n"
-					"See '%s help setquota' or Lustre manual for details\n",
+					"%s setquota: warning: inode hardlimit '%llu' smaller than minimum qunit size\nSee '%s help setquota' or Lustre manual for details\n",
 					progname,
 					(unsigned long long)dqb->dqb_ihardlimit,
 					progname);
@@ -6955,8 +7015,7 @@ quota_type_def:
 
 	if (use_default && limit_mask != 0) {
 		fprintf(stderr,
-			"%s setquota: limits should not be specified when"
-			" using default quota\n",
+			"%s setquota: limits should not be specified when using default quota\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;
@@ -6964,8 +7023,7 @@ quota_type_def:
 
 	if (use_default && qctl->qc_id == 0) {
 		fprintf(stderr,
-			"%s setquota: can not set default quota for root"
-			" user/group/project\n",
+			"%s setquota: can not set default quota for root user/group/project\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;
@@ -6979,7 +7037,7 @@ quota_type_def:
 		goto out;
 	}
 
-        mnt = argv[optind];
+	mnt = argv[optind];
 
 	if (use_default) {
 		dqb->dqb_bhardlimit = 0;
@@ -7044,7 +7102,7 @@ out:
  *        2. zero fields are not filled (except for p. 3): 5d1s
  *        3. zero seconds value is presented as "0s"
  */
-static char * __sec2str(time_t seconds, char *buf)
+static char *__sec2str(time_t seconds, char *buf)
 {
 	const char spec[] = "smhdw";
 	const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
@@ -7067,30 +7125,29 @@ static char * __sec2str(time_t seconds, char *buf)
 
 static void sec2str(time_t seconds, char *buf, int rc)
 {
-        char *tail = buf;
+	char *tail = buf;
 
-        if (rc)
-                *tail++ = '[';
+	if (rc)
+		*tail++ = '[';
 
-        tail = __sec2str(seconds, tail);
+	tail = __sec2str(seconds, tail);
 
-        if (rc && tail - buf < 39) {
-                *tail++ = ']';
-                *tail++ = 0;
-        }
+	if (rc && tail - buf < 39) {
+		*tail++ = ']';
+		*tail++ = 0;
+	}
 }
 
 static void diff2str(time_t seconds, char *buf, time_t now)
 {
-
-        buf[0] = 0;
-        if (!seconds)
-                return;
-        if (seconds <= now) {
-                strcpy(buf, "none");
-                return;
-        }
-        __sec2str(seconds - now, buf);
+	buf[0] = 0;
+	if (!seconds)
+		return;
+	if (seconds <= now) {
+		strcpy(buf, "none");
+		return;
+	}
+	__sec2str(seconds - now, buf);
 }
 
 static void print_quota_title(char *name, struct if_quotactl *qctl,
@@ -7153,26 +7210,23 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 
 		if (dqb->dqb_bhardlimit &&
 		    lustre_stoqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
-                        bover = 1;
-                } else if (dqb->dqb_bsoftlimit && dqb->dqb_btime) {
-                        if (dqb->dqb_btime > now) {
-                                bover = 2;
-                        } else {
-                                bover = 3;
-                        }
-                }
+			bover = 1;
+		} else if (dqb->dqb_bsoftlimit && dqb->dqb_btime) {
+			if (dqb->dqb_btime > now)
+				bover = 2;
+			else
+				bover = 3;
+		}
 
-                if (dqb->dqb_ihardlimit &&
-                    dqb->dqb_curinodes >= dqb->dqb_ihardlimit) {
-                        iover = 1;
-                } else if (dqb->dqb_isoftlimit && dqb->dqb_itime) {
-			if (dqb->dqb_itime > now) {
+		if (dqb->dqb_ihardlimit &&
+		    dqb->dqb_curinodes >= dqb->dqb_ihardlimit) {
+			iover = 1;
+		} else if (dqb->dqb_isoftlimit && dqb->dqb_itime) {
+			if (dqb->dqb_itime > now)
 				iover = 2;
-			} else {
+			else
 				iover = 3;
-			}
-                }
-
+		}
 
 		if (strlen(mnt) > 15)
 			printf("%s\n%15s", mnt, "");
@@ -7210,7 +7264,6 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			printf(" %7s%c %6s %7s %7s",
 			       numbuf[0], bover ? '*' : ' ', numbuf[1],
 			       numbuf[2], bover > 1 ? timebuf : "-");
-
 
 		if (iover)
 			diff2str(dqb->dqb_itime, timebuf, now);
@@ -7263,34 +7316,36 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 			   bool h, __u64 *total)
 {
-        int rc = 0, rc1 = 0, count = 0;
-        __u32 valid = qctl->qc_valid;
+	int rc = 0, rc1 = 0, count = 0;
+	__u32 valid = qctl->qc_valid;
 
-	/* TODO: for commands LUSTRE_Q_"S\|G"ETQUOTAPOOL we need
-	 * to go only through OSTs that belong to requested pool. */
-        rc = llapi_get_obd_count(mnt, &count, is_mdt);
-        if (rc) {
-                fprintf(stderr, "can not get %s count: %s\n",
-                        is_mdt ? "mdt": "ost", strerror(-rc));
-                return rc;
-        }
+	/*
+	 * TODO: for commands LUSTRE_Q_"S\|G"ETQUOTAPOOL we need
+	 * to go only through OSTs that belong to requested pool.
+	 */
+	rc = llapi_get_obd_count(mnt, &count, is_mdt);
+	if (rc) {
+		fprintf(stderr, "can not get %s count: %s\n",
+			is_mdt ? "mdt" : "ost", strerror(-rc));
+		return rc;
+	}
 
-        for (qctl->qc_idx = 0; qctl->qc_idx < count; qctl->qc_idx++) {
-                qctl->qc_valid = is_mdt ? QC_MDTIDX : QC_OSTIDX;
-                rc = llapi_quotactl(mnt, qctl);
-                if (rc) {
+	for (qctl->qc_idx = 0; qctl->qc_idx < count; qctl->qc_idx++) {
+		qctl->qc_valid = is_mdt ? QC_MDTIDX : QC_OSTIDX;
+		rc = llapi_quotactl(mnt, qctl);
+		if (rc) {
 			/* It is remote client case. */
 			if (rc == -EOPNOTSUPP) {
-                                rc = 0;
-                                goto out;
-                        }
+				rc = 0;
+				goto out;
+			}
 
-                        if (!rc1)
-                                rc1 = rc;
-                        fprintf(stderr, "quotactl %s%d failed.\n",
-                                is_mdt ? "mdt": "ost", qctl->qc_idx);
-                        continue;
-                }
+			if (!rc1)
+				rc1 = rc;
+			fprintf(stderr, "quotactl %s%d failed.\n",
+				is_mdt ? "mdt" : "ost", qctl->qc_idx);
+			continue;
+		}
 
 		print_quota(obd_uuid2str(&qctl->obd_uuid), qctl,
 			    qctl->qc_valid, 0, h, false);
@@ -7384,9 +7439,8 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 				      &total_balloc);
 		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
 			   human_readable);
-		printf("Total allocated inode limit: %ju, total "
-		       "allocated block limit: %s\n", (uintmax_t)total_ialloc,
-		       strbuf);
+		printf("Total allocated inode limit: %ju, total allocated block limit: %s\n",
+		       (uintmax_t)total_ialloc, strbuf);
 	}
 
 	if (use_default_for_blk)
@@ -7398,9 +7452,7 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		       *qtype_name(qctl->qc_type), qctl->qc_id);
 
 	if (rc1 || rc2 || rc3 || inacc)
-		printf("Some errors happened when getting quota info. "
-		       "Some devices may be not working or deactivated. "
-		       "The data in \"[]\" is inaccurate.\n");
+		printf("Some errors happened when getting quota info. Some devices may be not working or deactivated. The data in \"[]\" is inaccurate.\n");
 out:
 	if (rc1)
 		return rc1;
@@ -7619,13 +7671,13 @@ quota_type:
 			}
 			qctl->qc_type = qtype;
 			break;
-                case 't':
+		case 't':
 			qctl->qc_cmd = LUSTRE_Q_GETINFO;
-                        break;
-                case 'o':
+			break;
+		case 'o':
 			valid = qctl->qc_valid = QC_UUID;
 			snprintf(obd_uuid, sizeof(*obd_uuid), "%s", optarg);
-                        break;
+			break;
 		case 'i':
 			valid = qctl->qc_valid = QC_MDTIDX;
 			idx = qctl->qc_idx = atoi(optarg);
@@ -7648,12 +7700,12 @@ quota_type:
 				goto out;
 			}
 			break;
-                case 'v':
-                        verbose = 1;
-                        break;
-                case 'q':
-                        quiet = 1;
-                        break;
+		case 'v':
+			verbose = 1;
+			break;
+		case 'q':
+			quiet = 1;
+			break;
 		case 'h':
 			human_readable = true;
 			break;
@@ -7675,12 +7727,11 @@ quota_type:
 		}
 	}
 
-        /* current uid/gid info for "lfs quota /path/to/lustre/mount" */
+	/* current uid/gid info for "lfs quota /path/to/lustre/mount" */
 	if ((qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
 	     qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) &&
 	     qctl->qc_type == ALLQUOTA &&
 	     optind == argc - 1 && !show_default) {
-
 		qctl->qc_idx = idx;
 
 		for (qtype = USRQUOTA; qtype <= GRPQUOTA; qtype++) {
@@ -7767,22 +7818,22 @@ out:
 
 static int flushctx_ioctl(char *mp)
 {
-        int fd, rc;
+	int fd, rc;
 
-        fd = open(mp, O_RDONLY);
-        if (fd == -1) {
-                fprintf(stderr, "flushctx: error open %s: %s\n",
-                        mp, strerror(errno));
-                return -1;
-        }
+	fd = open(mp, O_RDONLY);
+	if (fd == -1) {
+		fprintf(stderr, "flushctx: error open %s: %s\n",
+			mp, strerror(errno));
+		return -1;
+	}
 
-        rc = ioctl(fd, LL_IOC_FLUSHCTX);
-        if (rc == -1)
-                fprintf(stderr, "flushctx: error ioctl %s: %s\n",
-                        mp, strerror(errno));
+	rc = ioctl(fd, LL_IOC_FLUSHCTX);
+	if (rc == -1)
+		fprintf(stderr, "flushctx: error ioctl %s: %s\n",
+			mp, strerror(errno));
 
-        close(fd);
-        return rc;
+	close(fd);
+	return rc;
 }
 
 static int lfs_flushctx(int argc, char **argv)
@@ -7792,24 +7843,28 @@ static int lfs_flushctx(int argc, char **argv)
 	int     index = 0;
 	int     rc = 0;
 
-        while ((c = getopt(argc, argv, "k")) != -1) {
-                switch (c) {
-                case 'k':
-                        kdestroy = 1;
-                        break;
-                default:
-                        fprintf(stderr, "error: %s: option '-%c' "
-                                        "unrecognized\n", argv[0], c);
-                        return CMD_HELP;
-                }
-        }
+	while ((c = getopt(argc, argv, "k")) != -1) {
+		switch (c) {
+		case 'k':
+			kdestroy = 1;
+			break;
+		default:
+			fprintf(stderr,
+				"error: %s: option '-%c' unrecognized\n",
+				argv[0], c);
+			return CMD_HELP;
+		}
+	}
 
-        if (kdestroy) {
-            if ((rc = system("kdestroy > /dev/null")) != 0) {
-                rc = WEXITSTATUS(rc);
-                fprintf(stderr, "error destroying tickets: %d, continuing\n", rc);
-            }
-        }
+	if (kdestroy) {
+		rc = system("kdestroy > /dev/null");
+		if (rc) {
+			rc = WEXITSTATUS(rc);
+			fprintf(stderr,
+				"error destroying tickets: %d, continuing\n",
+				rc);
+		}
+	}
 
 	if (optind >= argc) {
 		/* flush for all mounted lustre fs. */
@@ -7823,14 +7878,14 @@ static int lfs_flushctx(int argc, char **argv)
 
 			mntdir[0] = '\0'; /* avoid matching in next loop */
 		}
-        } else {
-                /* flush fs as specified */
-                while (optind < argc) {
-                        if (flushctx_ioctl(argv[optind++]))
-                                rc = -1;
-                }
-        }
-        return rc;
+	} else {
+		/* flush fs as specified */
+		while (optind < argc) {
+			if (flushctx_ioctl(argv[optind++]))
+				rc = -1;
+		}
+	}
+	return rc;
 }
 
 static int lfs_changelog(int argc, char **argv)
@@ -7847,28 +7902,28 @@ static int lfs_changelog(int argc, char **argv)
 
 	while ((rc = getopt_long(argc, argv, short_opts,
 		long_opts, NULL)) != -1) {
-                switch (rc) {
-                case 'f':
-                        follow++;
-                        break;
-                default:
+		switch (rc) {
+		case 'f':
+			follow++;
+			break;
+		default:
 			fprintf(stderr,
 				"%s changelog: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-                        return CMD_HELP;
-                }
-        }
+			return CMD_HELP;
+		}
+	}
 	if (optind >= argc) {
 		fprintf(stderr, "%s changelog: mdtname must be specified\n",
 			progname);
 		return CMD_HELP;
 	}
 
-        mdd = argv[optind++];
-        if (argc > optind)
-                startrec = strtoll(argv[optind++], NULL, 10);
-        if (argc > optind)
-                endrec = strtoll(argv[optind++], NULL, 10);
+	mdd = argv[optind++];
+	if (argc > optind)
+		startrec = strtoll(argv[optind++], NULL, 10);
+	if (argc > optind)
+		endrec = strtoll(argv[optind++], NULL, 10);
 
 	rc = llapi_changelog_start(&changelog_priv,
 				   CHANGELOG_FLAG_BLOCK |
@@ -7968,7 +8023,6 @@ static int lfs_changelog(int argc, char **argv)
 
 				if (strcmp(mode, "---") != 0)
 					printf(" m=%s", mode);
-
 			}
 
 			if (ef->cr_extra_flags & CLFE_XATTR) {
@@ -8094,7 +8148,7 @@ static int lfs_fid2path(int argc, char **argv)
 
 	device = argv[optind++];
 	path = calloc(1, PATH_MAX);
-	if (path == NULL) {
+	if (!path) {
 		rc = -errno;
 		fprintf(stderr,
 			"%s fid2path: cannot allocate memory for path: %s\n",
@@ -8111,6 +8165,7 @@ static int lfs_fid2path(int argc, char **argv)
 			int oldtmp = lnktmp;
 			long long rectmp = recno;
 			int rc2;
+
 			rc2 = llapi_fid2path(device, fid, path, PATH_MAX,
 					     &rectmp, &lnktmp);
 			if (rc2 < 0) {
@@ -8176,13 +8231,14 @@ static int lfs_path2fid(int argc, char **argv)
 		fprintf(stderr, "%s path2fid: FILE... must be specified\n",
 			progname);
 		return CMD_HELP;
-	}
-	else if (optind < argc - 1)
+	} else if (optind < argc - 1) {
 		sep = ": ";
+	}
 
 	rc = 0;
 	for (path = argv + optind; *path != NULL; path++) {
 		int err = 0;
+
 		if (!show_parents) {
 			err = llapi_path2fid(*path, &fid);
 			if (!err)
@@ -8269,7 +8325,7 @@ static int lfs_rmfid(int argc, char **argv)
 
 	nr = argc - optind;
 	fa = malloc(offsetof(struct fid_array, fa_fids[nr + 1]));
-	if (fa == NULL)
+	if (!fa)
 		return -ENOMEM;
 
 	fa->fa_nr = 0;
@@ -8485,7 +8541,6 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 		return CMD_HELP;
 
 	while (optind < argc) {
-
 		path = argv[optind];
 
 		/* If mode == 0, this means we apply the mask. */
@@ -8588,7 +8643,8 @@ static int lfs_hsm_prepare_file(const char *file, struct lu_fid *fid,
 		fprintf(stderr, "Cannot stat %s: %s\n", file, strerror(errno));
 		return -errno;
 	}
-	/* Checking for regular file as archiving as posix copytool
+	/*
+	 * Checking for regular file as archiving as posix copytool
 	 * rejects archiving files other than regular files
 	 */
 	if (!S_ISREG(st.st_mode)) {
@@ -8597,8 +8653,9 @@ static int lfs_hsm_prepare_file(const char *file, struct lu_fid *fid,
 	}
 	/* A request should be ... */
 	if (*last_dev != st.st_dev && *last_dev != 0) {
-		fprintf(stderr, "All files should be "
-			"on the same filesystem: %s\n", file);
+		fprintf(stderr,
+			"All files should be on the same filesystem: %s\n",
+			file);
 		return -EINVAL;
 	}
 	*last_dev = st.st_dev;
@@ -8636,7 +8693,7 @@ static int fill_hur_item(struct hsm_user_request *hur, unsigned int idx,
 
 	hui->hui_extent.length = -1;
 
-	if (mntpath != NULL) {
+	if (mntpath) {
 		rc = llapi_fid_parse(fname, &hui->hui_fid, NULL);
 		if (rc)
 			fprintf(stderr, "hsm: '%s' is not a valid FID\n",
@@ -8659,23 +8716,23 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	{ .val = 'l',	.name = "filelist",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mntpath",	.has_arg = required_argument },
 	{ .name = NULL } };
-	dev_t			 last_dev = 0;
-	char			 short_opts[] = "l:D:a:m:";
-	struct hsm_user_request	*hur, *oldhur;
-	int			 c, i;
-	size_t			 len;
-	int			 nbfile;
-	char			*line = NULL;
-	char			*filelist = NULL;
-	char			 fullpath[PATH_MAX];
-	char			*opaque = NULL;
-	int			 opaque_len = 0;
-	int			 archive_id = 0;
-	FILE			*fp;
-	int			 nbfile_alloc = 0;
-	char			*some_file = NULL;
-	char			*mntpath = NULL;
-	int			 rc;
+	dev_t last_dev = 0;
+	char short_opts[] = "l:D:a:m:";
+	struct hsm_user_request *hur, *oldhur;
+	int c, i;
+	size_t len;
+	int nbfile;
+	char *line = NULL;
+	char *filelist = NULL;
+	char fullpath[PATH_MAX];
+	char *opaque = NULL;
+	int opaque_len = 0;
+	int archive_id = 0;
+	FILE *fp;
+	int nbfile_alloc = 0;
+	char *some_file = NULL;
+	char *mntpath = NULL;
+	int rc;
 
 	if (argc < 2)
 		return CMD_HELP;
@@ -8693,14 +8750,13 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 			if (action != HUA_ARCHIVE &&
 			    action != HUA_REMOVE) {
 				fprintf(stderr,
-					"error: -a is supported only "
-					"when archiving or removing\n");
+					"error: -a is supported only when archiving or removing\n");
 				return CMD_HELP;
 			}
 			archive_id = atoi(optarg);
 			break;
 		case 'm':
-			if (some_file == NULL) {
+			if (!some_file) {
 				mntpath = optarg;
 				some_file = strdup(optarg);
 			}
@@ -8717,16 +8773,18 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	/* All remaining args are files, so we have at least nbfile */
 	nbfile = argc - optind;
 
-	if ((nbfile == 0) && (filelist == NULL))
+	if ((nbfile == 0) && (!filelist))
 		return CMD_HELP;
 
-	if (opaque != NULL)
+	if (opaque)
 		opaque_len = strlen(opaque);
 
-	/* Alloc the request structure with enough place to store all files
-	 * from command line. */
+	/*
+	 * Alloc the request structure with enough place to store all files
+	 * from command line.
+	 */
 	hur = llapi_hsm_user_request_alloc(nbfile, opaque_len);
-	if (hur == NULL) {
+	if (!hur) {
 		fprintf(stderr, "Cannot create the request: %s\n",
 			strerror(errno));
 		return errno;
@@ -8751,9 +8809,9 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	/* from here stop using nb_file, use hur->hur_request.hr_itemcount */
 
 	/* If a filelist was specified, read the filelist from it. */
-	if (filelist != NULL) {
+	if (filelist) {
 		fp = fopen(filelist, "r");
-		if (fp == NULL) {
+		if (!fp) {
 			fprintf(stderr, "Cannot read the file list %s: %s\n",
 				filelist, strerror(errno));
 			rc = -errno;
@@ -8761,8 +8819,10 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 		}
 
 		while ((rc = getline(&line, &len, fp)) != -1) {
-			/* If allocated buffer was too small, get something
-			 * larger */
+			/*
+			 * If allocated buffer was too small, get something
+			 * larger
+			 */
 			if (nbfile_alloc <= hur->hur_request.hr_itemcount) {
 				ssize_t size;
 
@@ -8770,9 +8830,9 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				oldhur = hur;
 				hur = llapi_hsm_user_request_alloc(nbfile_alloc,
 								   opaque_len);
-				if (hur == NULL) {
-					fprintf(stderr, "hsm: cannot allocate "
-						"the request: %s\n",
+				if (!hur) {
+					fprintf(stderr,
+						"hsm: cannot allocate the request: %s\n",
 						strerror(errno));
 					hur = oldhur;
 					rc = -errno;
@@ -8781,10 +8841,10 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				}
 				size = hur_len(oldhur);
 				if (size < 0) {
-					fprintf(stderr, "hsm: cannot allocate "
-						"%u files + %u bytes data\n",
-					    oldhur->hur_request.hr_itemcount,
-					    oldhur->hur_request.hr_data_len);
+					fprintf(stderr,
+						"hsm: cannot allocate %u files + %u bytes data\n",
+						oldhur->hur_request.hr_itemcount,
+						oldhur->hur_request.hr_data_len);
 					free(hur);
 					hur = oldhur;
 					rc = -E2BIG;
@@ -8806,7 +8866,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				goto out_free;
 			}
 
-			if (some_file == NULL) {
+			if (!some_file) {
 				some_file = line;
 				line = NULL;
 			}
@@ -8818,7 +8878,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 
 	/* If a --data was used, add it to the request */
 	hur->hur_request.hr_data_len = opaque_len;
-	if (opaque != NULL)
+	if (opaque)
 		memcpy(hur_data(hur), opaque, opaque_len);
 
 	/* Send the HSM request */
@@ -8939,8 +8999,9 @@ static int lfs_ladvise(int argc, char **argv)
 		case 'a':
 			advice_type = lfs_get_ladvice(optarg);
 			if (advice_type == LU_LADVISE_INVALID) {
-				fprintf(stderr, "%s: invalid advice type "
-					"'%s'\n", argv[0], optarg);
+				fprintf(stderr,
+					"%s: invalid advice type '%s'\n",
+					argv[0], optarg);
 				fprintf(stderr, "Valid types:");
 
 				for (advice_type = 0;
@@ -8977,8 +9038,9 @@ static int lfs_ladvise(int argc, char **argv)
 			rc = llapi_parse_size(optarg, &start,
 					      &size_units, 0);
 			if (rc) {
-				fprintf(stderr, "%s: bad start offset "
-					"'%s'\n", argv[0], optarg);
+				fprintf(stderr,
+					"%s: bad start offset '%s'\n",
+					argv[0], optarg);
 				return CMD_HELP;
 			}
 			break;
@@ -8995,8 +9057,8 @@ static int lfs_ladvise(int argc, char **argv)
 		case 'm':
 			mode = lfs_get_mode(optarg);
 			if (mode < 0) {
-				fprintf(stderr, "%s: bad mode '%s', valid "
-						 "modes are READ or WRITE\n",
+				fprintf(stderr,
+					"%s: bad mode '%s', valid modes are READ or WRITE\n",
 					argv[0], optarg);
 				return CMD_HELP;
 			}
@@ -9024,9 +9086,9 @@ static int lfs_ladvise(int argc, char **argv)
 	}
 
 	if (advice_type == LU_LADVISE_LOCKNOEXPAND) {
-		fprintf(stderr, "%s: Lock no expand advice is a per file "
-				 "descriptor advice, so when called from lfs, "
-				 "it does nothing.\n", argv[0]);
+		fprintf(stderr,
+			"%s: Lock no expand advice is a per file descriptor advice, so when called from lfs, it does nothing.\n",
+			argv[0]);
 		return CMD_HELP;
 	}
 
@@ -9091,9 +9153,9 @@ static int lfs_ladvise(int argc, char **argv)
 		rc2 = llapi_ladvise(fd, flags, 1, &advice);
 		close(fd);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot give advice '%s' to file "
-				"'%s': %s\n", argv[0],
-				ladvise_names[advice_type],
+			fprintf(stderr,
+				"%s: cannot give advice '%s' to file '%s': %s\n",
+				argv[0], ladvise_names[advice_type],
 				path, strerror(errno));
 
 			goto next;
@@ -9141,8 +9203,9 @@ static int lfs_heat_get(int argc, char **argv)
 		rc2 = llapi_heat_get(fd, heat);
 		close(fd);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot get heat of file '%s'"
-				": %s\n", argv[0], path, strerror(errno));
+			fprintf(stderr,
+				"%s: cannot get heat of file '%s': %s\n",
+				argv[0], path, strerror(errno));
 			goto next;
 		}
 
@@ -9217,8 +9280,9 @@ static int lfs_heat_set(int argc, char **argv)
 		rc2 = llapi_heat_set(fd, flags);
 		close(fd);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot setflags heat of file '%s'"
-				": %s\n", argv[0], path, strerror(errno));
+			fprintf(stderr,
+				"%s: cannot setflags heat of file '%s': %s\n",
+				argv[0], path, strerror(errno));
 			goto next;
 		}
 next:
@@ -9228,7 +9292,8 @@ next:
 	return rc;
 }
 
-/** The input string contains a comma delimited list of component ids and
+/**
+ * The input string contains a comma delimited list of component ids and
  * ranges, for example "1,2-4,7".
  */
 static int parse_mirror_ids(__u16 *ids, int size, char *arg)
@@ -9238,7 +9303,7 @@ static int parse_mirror_ids(__u16 *ids, int size, char *arg)
 	int nr = 0;
 	int rc;
 
-	if (arg == NULL)
+	if (!arg)
 		return -EINVAL;
 
 	while (!end_of_loop) {
@@ -9290,7 +9355,7 @@ static int parse_mirror_ids(__u16 *ids, int size, char *arg)
 		arg = ++ptr;
 		rc = 0;
 	}
-	if (!end_of_loop && ptr != NULL)
+	if (!end_of_loop && ptr)
 		*ptr = ',';
 
 	return rc < 0 ? rc : nr;
@@ -9401,7 +9466,7 @@ int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
 	}
 
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
@@ -9499,7 +9564,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	}
 
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
@@ -9646,7 +9711,6 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 			argv[0]);
 		rc = CMD_HELP;
 		goto error;
-
 	}
 
 	if (ids_nr > 0) {
@@ -9657,7 +9721,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 
 	/* set the lease on the file */
 	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
-	if (ioc == NULL) {
+	if (!ioc) {
 		fprintf(stderr, "%s: cannot alloc id array for ioc: %s.\n",
 			argv[0], strerror(errno));
 		rc = -errno;
@@ -9684,7 +9748,7 @@ static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
 	int rc;
 
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "could not get layout.\n");
 		return  -EINVAL;
 	}
@@ -10088,7 +10152,7 @@ static inline int get_other_mirror_ids(int fd, __u16 *ids, __u16 exclude_id)
 	int rc;
 
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "could not get layout\n");
 		return -EINVAL;
 	}
@@ -10234,7 +10298,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 	}
 
 	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
-	if (ioc == NULL) {
+	if (!ioc) {
 		fprintf(stderr,
 			"%s %s: cannot alloc comp id array for ioc: %s\n",
 			progname, argv[0], strerror(errno));
@@ -10244,7 +10308,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 
 	/* get stale component info */
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "%s %s: failed to get layout of '%s': %s\n",
 			progname, argv[0], fname, strerror(errno));
 		rc = -errno;
@@ -10321,6 +10385,7 @@ close_fd:
 
 	return rc;
 }
+
 /**
  * struct verify_chunk - Mirror chunk to be verified.
  * @chunk:        [start, end) of the chunk.
@@ -10547,7 +10612,7 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 				goto error;
 			}
 
-		next:
+next:
 			rc = llapi_layout_comp_use(layout,
 						   LLAPI_LAYOUT_COMP_USE_NEXT);
 			if (rc < 0) {
@@ -10755,7 +10820,7 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 	}
 
 	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
+	if (!layout) {
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
@@ -10934,7 +10999,6 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 			progname);
 		rc = CMD_HELP;
 		goto error;
-
 	}
 
 	if (ids_nr > 0) {
@@ -11112,8 +11176,9 @@ static int lfs_pcc_attach(int argc, char **argv)
 		case 'i':
 			archive_id = strtoul(optarg, &end, 0);
 			if (*end != '\0' || archive_id == 0) {
-				fprintf(stderr, "error: %s: bad archive ID "
-					"'%s'\n", argv[0], optarg);
+				fprintf(stderr,
+					"error: %s: bad archive ID '%s'\n",
+					argv[0], optarg);
 				return CMD_HELP;
 			}
 			break;
@@ -11141,7 +11206,7 @@ static int lfs_pcc_attach(int argc, char **argv)
 		int rc2;
 
 		path = argv[optind++];
-		if (realpath(path, fullpath) == NULL) {
+		if (!realpath(path, fullpath)) {
 			fprintf(stderr, "%s: could not find path '%s': %s\n",
 				argv[0], path, strerror(errno));
 			if (rc == 0)
@@ -11151,9 +11216,9 @@ static int lfs_pcc_attach(int argc, char **argv)
 
 		rc2 = llapi_pcc_attach(fullpath, archive_id, type);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot attach '%s' to PCC "
-				"with archive ID '%u': %s\n", argv[0],
-				path, archive_id, strerror(-rc2));
+			fprintf(stderr,
+				"%s: cannot attach '%s' to PCC with archive ID '%u': %s\n",
+				argv[0], path, archive_id, strerror(-rc2));
 			if (rc == 0)
 				rc = rc2;
 		}
@@ -11183,8 +11248,9 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		case 'i':
 			archive_id = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
-				fprintf(stderr, "error: %s: bad archive ID "
-					"'%s'\n", argv[0], optarg);
+				fprintf(stderr,
+					"error: %s: bad archive ID '%s'\n",
+					argv[0], optarg);
 				return CMD_HELP;
 			}
 			break;
@@ -11205,7 +11271,7 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (mntpath == NULL) {
+	if (!mntpath) {
 		fprintf(stderr, "%s: must specify Lustre mount point\n",
 			argv[0]);
 		return CMD_HELP;
@@ -11224,9 +11290,10 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		rc2 = llapi_pcc_attach_fid_str(mntpath, fidstr,
 					       archive_id, type);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot attach '%s' on '%s' to PCC "
-				"with archive ID '%u': %s\n", argv[0],
-				fidstr, mntpath, archive_id, strerror(rc2));
+			fprintf(stderr,
+				"%s: cannot attach '%s' on '%s' to PCC with archive ID '%u': %s\n",
+				argv[0], fidstr, mntpath, archive_id,
+				strerror(rc2));
 		}
 		if (rc == 0 && rc2 < 0)
 			rc = rc2;
@@ -11266,7 +11333,7 @@ static int lfs_pcc_detach(int argc, char **argv)
 		int rc2;
 
 		path = argv[optind++];
-		if (realpath(path, fullpath) == NULL) {
+		if (!realpath(path, fullpath)) {
 			fprintf(stderr, "%s: could not find path '%s': %s\n",
 				argv[0], path, strerror(errno));
 			if (rc == 0)
@@ -11277,8 +11344,9 @@ static int lfs_pcc_detach(int argc, char **argv)
 		rc2 = llapi_pcc_detach_file(fullpath, detach_opt);
 		if (rc2 < 0) {
 			rc2 = -errno;
-			fprintf(stderr, "%s: cannot detach '%s' from PCC: "
-				"%s\n", argv[0], path, strerror(errno));
+			fprintf(stderr,
+				"%s: cannot detach '%s' from PCC: %s\n",
+				argv[0], path, strerror(errno));
 			if (rc == 0)
 				rc = rc2;
 		}
@@ -11323,9 +11391,9 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 
 		rc2 = llapi_pcc_detach_fid_str(mntpath, fid, detach_opt);
 		if (rc2 < 0) {
-			fprintf(stderr, "%s: cannot detach '%s' on '%s' "
-				"from PCC: %s\n", argv[0], fid, mntpath,
-				strerror(-rc2));
+			fprintf(stderr,
+				"%s: cannot detach '%s' on '%s' from PCC: %s\n",
+				argv[0], fid, mntpath, strerror(-rc2));
 			if (rc == 0)
 				rc = rc2;
 		}
@@ -11352,7 +11420,7 @@ static int lfs_pcc_state(int argc, char **argv)
 		int rc2;
 
 		path = argv[optind++];
-		if (realpath(path, fullpath) == NULL) {
+		if (!realpath(path, fullpath)) {
 			fprintf(stderr, "%s: could not find path '%s': %s\n",
 				argv[0], path, strerror(errno));
 			if (rc == 0)
@@ -11364,8 +11432,9 @@ static int lfs_pcc_state(int argc, char **argv)
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
-			fprintf(stderr, "%s: cannot get PCC state of '%s': "
-				"%s\n", argv[0], path, strerror(-rc2));
+			fprintf(stderr,
+				"%s: cannot get PCC state of '%s': %s\n",
+				argv[0], path, strerror(-rc2));
 			continue;
 		}
 
