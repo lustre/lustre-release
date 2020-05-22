@@ -64,51 +64,52 @@ static inline int ext2_test_bit(int nr, const void *addr)
 {
 #if __BYTE_ORDER == __BIG_ENDIAN
 	const unsigned char *tmp = addr;
+
 	return (tmp[nr >> 3] >> (nr & 7)) & 1;
 #else
 	const unsigned long *tmp = addr;
+
 	return ((1UL << (nr & (__WORDSIZE - 1))) &
 		((tmp)[nr / __WORDSIZE])) != 0;
 #endif
 }
 
 int llog_pack_buffer(int fd, struct llog_log_hdr **llog_buf,
-                     struct llog_rec_hdr ***recs, int *recs_number);
+		     struct llog_rec_hdr ***recs, int *recs_number);
 
 void print_llog_header(struct llog_log_hdr *llog_buf);
 static void print_records(struct llog_rec_hdr **recs_buf,
 			  int rec_number, int is_ext);
 void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
-                        struct llog_rec_hdr **recs_buf);
+			struct llog_rec_hdr **recs_buf);
 
 #define CANCELLED 0x678
 
 #define PTL_CMD_BASE 100
-char* portals_command[17]=
-{
-        "REGISTER_PEER_FD",
-        "CLOSE_CONNECTION",
-        "REGISTER_MYNID",
-        "PUSH_CONNECTION",
-        "GET_CONN",
-        "DEL_PEER",
-        "ADD_PEER",
-        "GET_PEER",
-        "GET_TXDESC",
-        "ADD_ROUTE",
-        "DEL_ROUTE",
-        "GET_ROUTE",
-        "NOTIFY_ROUTER",
-        "ADD_INTERFACE",
-        "DEL_INTERFACE",
-        "GET_INTERFACE",
-        ""
+char *portals_command[17] = {
+	"REGISTER_PEER_FD",
+	"CLOSE_CONNECTION",
+	"REGISTER_MYNID",
+	"PUSH_CONNECTION",
+	"GET_CONN",
+	"DEL_PEER",
+	"ADD_PEER",
+	"GET_PEER",
+	"GET_TXDESC",
+	"ADD_ROUTE",
+	"DEL_ROUTE",
+	"GET_ROUTE",
+	"NOTIFY_ROUTER",
+	"ADD_INTERFACE",
+	"DEL_INTERFACE",
+	"GET_INTERFACE",
+	""
 };
 
 int is_fstype_ext(int fd)
 {
-	struct statfs		st;
-	int			rc;
+	struct statfs st;
+	int rc;
 
 	rc = fstatfs(fd, &st);
 	if (rc < 0) {
@@ -118,7 +119,6 @@ int is_fstype_ext(int fd)
 
 	return (st.f_type == EXT4_SUPER_MAGIC);
 }
-
 
 /**
  * Attempt to display a path to the object (file) containing changelog entries,
@@ -137,9 +137,8 @@ int is_fstype_ext(int fd)
 #define OSD_OI_FID_NR         (1UL << 7)
 static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 {
-
-	char			object_path[255];
-	struct lu_fid		fid_from_logid;
+	char object_path[255];
+	struct lu_fid fid_from_logid;
 
 	logid_to_fid(&lid->lid_id, &fid_from_logid);
 
@@ -151,7 +150,8 @@ static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 	else
 		snprintf(object_path, sizeof(object_path),
 			 "oi.%ju/"DFID_NOBRACE,
-			 (uintmax_t)(fid_from_logid.f_seq & (OSD_OI_FID_NR - 1)),
+			 (uintmax_t)(fid_from_logid.f_seq &
+				     (OSD_OI_FID_NR - 1)),
 			 PFID(&fid_from_logid));
 
 	printf("id="DFID":%x path=%s\n",
@@ -197,9 +197,9 @@ int main(int argc, char **argv)
 		goto out_fd;
 	}
 
-	if (llog_buf != NULL)
+	if (llog_buf)
 		print_llog_header(llog_buf);
-	if (recs_buf != NULL)
+	if (recs_buf)
 		print_records(recs_buf, rec_number, is_ext);
 	llog_unpack_buffer(fd, llog_buf, recs_buf);
 
@@ -208,8 +208,6 @@ out_fd:
 out:
 	return rc;
 }
-
-
 
 int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		     struct llog_rec_hdr ***recs,
@@ -241,7 +239,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	}
 
 	file_buf = malloc(file_size);
-	if (file_buf == NULL) {
+	if (!file_buf) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc, "Memory Alloc for file_buf.");
 		goto out;
@@ -279,7 +277,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	recs_num = count - 1;
 
 	recs_buf = calloc(recs_num, sizeof(**recs_pr));
-	if (recs_buf == NULL) {
+	if (!recs_buf) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "Error allocating %zd bytes for recs_buf",
@@ -352,9 +350,9 @@ clear_file_buf:
 void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
 			struct llog_rec_hdr **recs_buf)
 {
-	if (llog_buf != NULL)
+	if (llog_buf)
 		free(llog_buf);
-	if (recs_buf != NULL)
+	if (recs_buf)
 		free(recs_buf);
 }
 
@@ -369,7 +367,7 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
 	printf("Time : %s", ctime(&t));
 
 	printf("Number of records: %u\n",
-	       __le32_to_cpu(llog_buf->llh_count)-1);
+	       __le32_to_cpu(llog_buf->llh_count) - 1);
 
 	printf("Target uuid : %s\n",
 	       (char *)(&llog_buf->llh_tgtuuid));
@@ -381,16 +379,16 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
 
 static void print_1_cfg(struct lustre_cfg *lcfg)
 {
-        int i;
+	int i;
 
-        if (lcfg->lcfg_nid)
+	if (lcfg->lcfg_nid)
 		printf("nid=%s(%#jx)  ", libcfs_nid2str(lcfg->lcfg_nid),
 		       (uintmax_t)lcfg->lcfg_nid);
-        if (lcfg->lcfg_nal)
-                printf("nal=%d ", lcfg->lcfg_nal);
-        for (i = 0; i <  lcfg->lcfg_bufcount; i++)
-                printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i],
-                       (char*)lustre_cfg_buf(lcfg, i));
+	if (lcfg->lcfg_nal)
+		printf("nal=%d ", lcfg->lcfg_nal);
+	for (i = 0; i <  lcfg->lcfg_bufcount; i++)
+		printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i],
+		       (char *)lustre_cfg_buf(lcfg, i));
 }
 
 static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
@@ -401,7 +399,7 @@ static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
 		return NULL;
 
 	s = lustre_cfg_buf(lcfg, index);
-	if (s == NULL)
+	if (!s)
 		return NULL;
 
 	/*
@@ -419,7 +417,8 @@ static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
 		lost = s[last];
 		s[last] = '\0';
 		if (lost != '\0') {
-			fprintf(stderr, "Truncated buf %d to '%s' (lost '%c'...)\n",
+			fprintf(stderr,
+				"Truncated buf %d to '%s' (lost '%c'...)\n",
 				index, s, lost);
 		}
 	}
@@ -428,116 +427,116 @@ static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
 
 static void print_setup_cfg(struct lustre_cfg *lcfg)
 {
-        struct lov_desc *desc;
+	struct lov_desc *desc;
 
-        if ((lcfg->lcfg_bufcount == 2) &&
-            (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
-                printf("lov_setup ");
-                printf("0:%s  ", lustre_cfg_string(lcfg, 0));
-                printf("1:(struct lov_desc)\n");
-                desc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
-                printf("\t\tuuid=%s  ", (char*)desc->ld_uuid.uuid);
-                printf("stripe:cnt=%u ", desc->ld_default_stripe_count);
+	if ((lcfg->lcfg_bufcount == 2) &&
+	    (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
+		printf("lov_setup ");
+		printf("0:%s  ", lustre_cfg_string(lcfg, 0));
+		printf("1:(struct lov_desc)\n");
+		desc = (struct lov_desc *)(lustre_cfg_string(lcfg, 1));
+		printf("\t\tuuid=%s  ", (char *)desc->ld_uuid.uuid);
+		printf("stripe:cnt=%u ", desc->ld_default_stripe_count);
 		printf("size=%ju ", (uintmax_t)desc->ld_default_stripe_size);
 		printf("offset=%ju ",
 		       (uintmax_t)desc->ld_default_stripe_offset);
-                printf("pattern=%#x", desc->ld_pattern);
-        } else {
-                printf("setup     ");
-                print_1_cfg(lcfg);
-        }
+		printf("pattern=%#x", desc->ld_pattern);
+	} else {
+		printf("setup     ");
+		print_1_cfg(lcfg);
+	}
 }
 
 void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 {
 	enum lcfg_command_type cmd = __le32_to_cpu(lcfg->lcfg_command);
 
-        if (*skip > 0)
-                printf("SKIP ");
+	if (*skip > 0)
+		printf("SKIP ");
 
-        switch(cmd){
-        case(LCFG_ATTACH):{
-                printf("attach    ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_SETUP):{
-                print_setup_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DETACH):{
-                printf("detach    ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_CLEANUP):{
-                printf("cleanup   ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_ADD_UUID):{
-                printf("add_uuid  ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_UUID):{
-                printf("del_uuid  ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_ADD_CONN):{
-                printf("add_conn  ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_CONN):{
-                printf("del_conn  ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_LOV_ADD_OBD):{
-                printf("lov_modify_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_LOV_DEL_OBD):{
-                printf("lov_modify_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_ADD_MDC):{
-                printf("modify_mdc_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_MDC):{
-                printf("modify_mdc_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_MOUNTOPT):{
-                printf("mount_option ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_MOUNTOPT):{
-                printf("del_mount_option ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_SET_TIMEOUT):{
-                printf("set_timeout=%d ", lcfg->lcfg_num);
-                break;
-        }
-        case(LCFG_SET_LDLM_TIMEOUT):{
-                printf("set_ldlm_timeout=%d ", lcfg->lcfg_num);
-                break;
-        }
-        case(LCFG_SET_UPCALL):{
-                printf("set_lustre_upcall ");
-                print_1_cfg(lcfg);
-                break;
-        }
+	switch (cmd) {
+	case(LCFG_ATTACH):{
+		printf("attach    ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_SETUP):{
+		print_setup_cfg(lcfg);
+		break;
+	}
+	case(LCFG_DETACH):{
+		printf("detach    ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_CLEANUP):{
+		printf("cleanup   ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_ADD_UUID):{
+		printf("add_uuid  ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_DEL_UUID):{
+		printf("del_uuid  ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_ADD_CONN):{
+		printf("add_conn  ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_DEL_CONN):{
+		printf("del_conn  ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_LOV_ADD_OBD):{
+		printf("lov_modify_tgts add ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_LOV_DEL_OBD):{
+		printf("lov_modify_tgts del ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_ADD_MDC):{
+		printf("modify_mdc_tgts add ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_DEL_MDC):{
+		printf("modify_mdc_tgts del ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_MOUNTOPT):{
+		printf("mount_option ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_DEL_MOUNTOPT):{
+		printf("del_mount_option ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_SET_TIMEOUT):{
+		printf("set_timeout=%d ", lcfg->lcfg_num);
+		break;
+	}
+	case(LCFG_SET_LDLM_TIMEOUT):{
+		printf("set_ldlm_timeout=%d ", lcfg->lcfg_num);
+		break;
+	}
+	case(LCFG_SET_UPCALL):{
+		printf("set_lustre_upcall ");
+		print_1_cfg(lcfg);
+		break;
+	}
 	case(LCFG_PARAM):{
 		printf("param ");
 		print_1_cfg(lcfg);
@@ -548,22 +547,22 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 		print_1_cfg(lcfg);
 		break;
 	}
-        case(LCFG_SPTLRPC_CONF):{
-                printf("sptlrpc_conf ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_MARKER):{
-                struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                char createtime[26], canceltime[26] = "";
-                time_t time_tmp;
+	case(LCFG_SPTLRPC_CONF):{
+		printf("sptlrpc_conf ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_MARKER):{
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+		char createtime[26], canceltime[26] = "";
+		time_t time_tmp;
 
 		if (marker->cm_flags & CM_START &&
 		    marker->cm_flags & CM_SKIP) {
 			printf("SKIP START ");
 			(*skip)++;
 		} else if (marker->cm_flags & CM_END) {
-			printf(     "END   ");
+			printf("END   ");
 			*skip = 0;
 		}
 
@@ -574,79 +573,78 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 				printf("EXCLUDE END   ");
 		}
 
-                /* Handle overflow of 32-bit time_t gracefully.
-                 * The copy to time_tmp is needed in any case to
-                 * keep the pointer happy, even on 64-bit systems. */
-                time_tmp = marker->cm_createtime;
-                if (time_tmp == marker->cm_createtime) {
-                        ctime_r(&time_tmp, createtime);
-                        createtime[strlen(createtime) - 1] = 0;
-                } else {
-                        strcpy(createtime, "in the distant future");
-                }
+		/*
+		 * Handle overflow of 32-bit time_t gracefully.
+		 * The copy to time_tmp is needed in any case to
+		 * keep the pointer happy, even on 64-bit systems.
+		 */
+		time_tmp = marker->cm_createtime;
+		if (time_tmp == marker->cm_createtime) {
+			ctime_r(&time_tmp, createtime);
+			createtime[strlen(createtime) - 1] = 0;
+		} else {
+			strcpy(createtime, "in the distant future");
+		}
 
-                if (marker->cm_canceltime) {
-                        /* Like cm_createtime, we try to handle overflow of
-                         * 32-bit time_t gracefully. The copy to time_tmp
-                         * is also needed on 64-bit systems to keep the
-                         * pointer happy, see bug 16771 */
-                        time_tmp = marker->cm_canceltime;
-                        if (time_tmp == marker->cm_canceltime) {
-                                ctime_r(&time_tmp, canceltime);
-                                canceltime[strlen(canceltime) - 1] = 0;
-                        } else {
-                                strcpy(canceltime, "in the distant future");
-                        }
-                }
+		if (marker->cm_canceltime) {
+			/*
+			 * Like cm_createtime, we try to handle overflow of
+			 * 32-bit time_t gracefully. The copy to time_tmp
+			 * is also needed on 64-bit systems to keep the
+			 * pointer happy, see bug 16771
+			 */
+			time_tmp = marker->cm_canceltime;
+			if (time_tmp == marker->cm_canceltime) {
+				ctime_r(&time_tmp, canceltime);
+				canceltime[strlen(canceltime) - 1] = 0;
+			} else {
+				strcpy(canceltime, "in the distant future");
+			}
+		}
 
-                printf("marker %3d (flags=%#04x, v%d.%d.%d.%d) %-15s '%s' %s-%s",
-                       marker->cm_step, marker->cm_flags,
-                       OBD_OCD_VERSION_MAJOR(marker->cm_vers),
-                       OBD_OCD_VERSION_MINOR(marker->cm_vers),
-                       OBD_OCD_VERSION_PATCH(marker->cm_vers),
-                       OBD_OCD_VERSION_FIX(marker->cm_vers),
-                       marker->cm_tgtname, marker->cm_comment,
-                       createtime, canceltime);
-                break;
-        }
-        case(LCFG_POOL_NEW):{
-                printf("pool new ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_ADD):{
-                printf("pool add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_REM):{
-                printf("pool remove ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_DEL):{
-                printf("pool destroy ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        default:
-                printf("unsupported cmd_code = %x\n",cmd);
-        }
-        printf("\n");
+		printf("marker %3d (flags=%#04x, v%d.%d.%d.%d) %-15s '%s' %s-%s",
+		       marker->cm_step, marker->cm_flags,
+		       OBD_OCD_VERSION_MAJOR(marker->cm_vers),
+		       OBD_OCD_VERSION_MINOR(marker->cm_vers),
+		       OBD_OCD_VERSION_PATCH(marker->cm_vers),
+		       OBD_OCD_VERSION_FIX(marker->cm_vers),
+		       marker->cm_tgtname, marker->cm_comment,
+		       createtime, canceltime);
+		break;
+	}
+	case(LCFG_POOL_NEW):{
+		printf("pool new ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_POOL_ADD):{
+		printf("pool add ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_POOL_REM):{
+		printf("pool remove ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_POOL_DEL):{
+		printf("pool destroy ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	default:
+		printf("unsupported cmd_code = %x\n", cmd);
+	}
+	printf("\n");
 }
 
 static void print_hsm_action(struct llog_agent_req_rec *larr)
 {
-	char	buf[12];
-	int	sz;
+	char buf[12];
+	int sz;
 
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
-	printf("lrh=[type=%X len=%d idx=%d] fid="DFID
-	       " compound/cookie=%#llx/%#llx"
-	       " status=%s action=%s archive#=%d flags=%#llx"
-	       " create=%llu change=%llu"
-	       " extent=%#llx-%#llx gid=%#llx datalen=%d"
-	       " data=[%s]\n",
+	printf("lrh=[type=%X len=%d idx=%d] fid="DFID" compound/cookie=%#llx/%#llx status=%s action=%s archive#=%d flags=%#llx create=%llu change=%llu extent=%#llx-%#llx gid=%#llx datalen=%d data=[%s]\n",
 	       larr->arr_hdr.lrh_type,
 	       larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
 	       PFID(&larr->arr_hai.hai_fid),
@@ -671,9 +669,8 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 
 	secs = __le64_to_cpu(rec->cr.cr_time) >> 30;
 	gmtime_r(&secs, &ts);
-	printf("changelog record id:0x%x index:%llu cr_flags:0x%x "
-	       "cr_type:%s(0x%x) date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' "
-	       "target:"DFID, __le32_to_cpu(rec->cr_hdr.lrh_id),
+	printf("changelog record id:0x%x index:%llu cr_flags:0x%x cr_type:%s(0x%x) date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' target:"DFID,
+	       __le32_to_cpu(rec->cr_hdr.lrh_id),
 	       (unsigned long long)__le64_to_cpu(rec->cr.cr_index),
 	       __le32_to_cpu(rec->cr.cr_flags),
 	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
@@ -733,7 +730,6 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 
 			if (strcmp(mode, "---") != 0)
 				printf(" mode:%s", mode);
-
 		}
 
 		if (ef->cr_extra_flags & CLFE_XATTR) {
@@ -773,7 +769,7 @@ static void print_records(struct llog_rec_hdr **recs,
 	int i, skip = 0;
 
 	for (i = 0; i < rec_number; i++) {
-		if (recs[i] == NULL) {
+		if (!recs[i]) {
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "uninitialized llog record at index %d\n",
 				     i);
