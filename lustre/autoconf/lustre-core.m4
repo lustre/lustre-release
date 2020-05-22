@@ -3073,6 +3073,25 @@ i_pages, [
 ]) # LC_I_PAGES
 
 #
+# LC_VM_FAULT_T
+#
+# kernel 4.17 commit 3d3539018d2cbd12e5af4a132636ee7fd8d43ef0
+# mm: create the new vm_fault_t type
+#
+AC_DEFUN([LC_VM_FAULT_T], [
+LB_CHECK_COMPILE([if vm_fault_t type exists],
+vm_fault_t, [
+	#include <linux/mm_types.h>
+],[
+	vm_fault_t x = VM_FAULT_SIGBUS;
+	(void)x
+],[
+	AC_DEFINE(HAVE_VM_FAULT_T, 1,
+		[if vm_fault_t type exists])
+])
+]) # LC_VM_FAULT_T
+
+#
 # LC_INODE_TIMESPEC64
 #
 # kernel 4.18 commit 95582b00838837fc07e042979320caf917ce3fe6
@@ -3338,6 +3357,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BI_BDEV
 
 	# 4.17
+	LC_VM_FAULT_T
 	LC_I_PAGES
 
 	# 4.18

@@ -261,7 +261,7 @@ static inline int to_fault_error(int result)
  * \retval VM_FAULT_ERROR on general error
  * \retval NOPAGE_OOM not have memory for allocate new page
  */
-static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
+static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct lu_env           *env;
 	struct cl_io            *io;
@@ -340,16 +340,16 @@ out:
 }
 
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-static int ll_fault(struct vm_fault *vmf)
+static vm_fault_t ll_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 #else
-static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 #endif
 	int count = 0;
 	bool printed = false;
-	int result;
+	vm_fault_t result;
 	sigset_t set;
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
@@ -396,17 +396,18 @@ restart:
 }
 
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-static int ll_page_mkwrite(struct vm_fault *vmf)
+static vm_fault_t ll_page_mkwrite(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 #else
-static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
+static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
+				  struct vm_fault *vmf)
 {
 #endif
 	int count = 0;
 	bool printed = false;
 	bool retry;
-	int result;
+	vm_fault_t result;
 
 	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
 			   LPROC_LL_MKWRITE, 1);
