@@ -586,9 +586,9 @@ static int mdt_commitrw_read(const struct lu_env *env, struct mdt_device *mdt,
 
 static int mdt_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 			      struct mdt_device *mdt, struct mdt_object *mo,
-			      struct lu_attr *la, int objcount, int niocount,
-			      struct niobuf_local *lnb, unsigned long granted,
-			      int old_rc)
+			      struct lu_attr *la, struct obdo *oa, int objcount,
+			      int niocount, struct niobuf_local *lnb,
+			      unsigned long granted, int old_rc)
 {
 	struct dt_device *dt = mdt->mdt_bottom;
 	struct dt_object *dob;
@@ -654,7 +654,7 @@ retry:
 		GOTO(out_stop, rc);
 
 	dt_write_lock(env, dob, 0);
-	rc = dt_write_commit(env, dob, lnb, niocount, th, 0);
+	rc = dt_write_commit(env, dob, lnb, niocount, th, oa->o_size);
 	if (rc)
 		GOTO(unlock, rc);
 
@@ -745,7 +745,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 		la_from_obdo(la, oa, valid);
 
-		rc = mdt_commitrw_write(env, exp, mdt, mo, la, objcount,
+		rc = mdt_commitrw_write(env, exp, mdt, mo, la, oa, objcount,
 					npages, lnb, oa->o_grant_used, old_rc);
 		if (rc == 0)
 			obdo_from_la(oa, la, VALID_FLAGS | LA_GID | LA_UID);
@@ -1408,6 +1408,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	int rc;
 	loff_t offset;
 	unsigned int len, copied = 0;
+	__u64 real_dom_size;
 	int lnbs, nr_local, i;
 	bool dom_lock = false;
 
@@ -1441,8 +1442,18 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	if (!dom_lock || !mdt->mdt_opts.mo_dom_read_open)
 		RETURN(0);
 
+	/* if DoM object holds encrypted content, we need to make sure we
+	 * send whole encryption units, or client will read corrupted content
+	 */
+	if (mbo->mbo_valid & LA_FLAGS && mbo->mbo_flags & LUSTRE_ENCRYPT_FL &&
+	    mbo->mbo_dom_size & ~LUSTRE_ENCRYPTION_MASK)
+		real_dom_size = (mbo->mbo_dom_size & LUSTRE_ENCRYPTION_MASK) +
+				LUSTRE_ENCRYPTION_UNIT_SIZE;
+	else
+		real_dom_size = mbo->mbo_dom_size;
+
 	CDEBUG(D_INFO, "File size %llu, reply sizes %d/%d\n",
-	       mbo->mbo_dom_size, req->rq_reqmsg->lm_repsize, req->rq_replen);
+	       real_dom_size, req->rq_reqmsg->lm_repsize, req->rq_replen);
 	len = req->rq_reqmsg->lm_repsize - req->rq_replen;
 
 	/* NB: at this moment we have the following sizes:
@@ -1461,11 +1472,11 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	 * 1) try to fit into the buffer we have
 	 * 2) return just file tail otherwise.
 	 */
-	if (mbo->mbo_dom_size <= len) {
+	if (real_dom_size <= len) {
 		/* can fit whole data */
-		len = mbo->mbo_dom_size;
+		len = real_dom_size;
 		offset = 0;
-	} else if (mbo->mbo_dom_size <
+	} else if (real_dom_size <
 		   mdt_lmm_dom_stripesize(mti->mti_attr.ma_lmm)) {
 		int tail, pgbits;
 
@@ -1484,14 +1495,14 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		}
 		pgbits = max_t(int, PAGE_SHIFT,
 			       req->rq_export->exp_target_data.ted_pagebits);
-		tail = mbo->mbo_dom_size % (1 << pgbits);
+		tail = real_dom_size % (1 << pgbits);
 
 		/* no partial tail or tail can't fit in reply */
 		if (tail == 0 || len < tail)
 			RETURN(0);
 
 		len = tail;
-		offset = mbo->mbo_dom_size - len;
+		offset = real_dom_size - len;
 	} else {
 		/* DOM stripe is fully written, so don't expect its tail
 		 * will be used by append.

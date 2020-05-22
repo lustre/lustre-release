@@ -3537,7 +3537,7 @@ trace_cmd() {
 	local cmd="$@"
 	local xattr_name="security.c"
 
-	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+	cancel_lru_locks osc ; cancel_lru_locks mdc
 	$LCTL set_param debug=+info
 	$LCTL clear
 
@@ -3587,6 +3587,143 @@ test_49() {
 	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
 }
 run_test 49 "Avoid getxattr for encryption context"
+
+test_50() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local pagesz=$(getconf PAGESIZE)
+	local sz
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# write small file, data on MDT only
+	tr '\0' '1' < /dev/zero |
+	    dd of=$tmpfile bs=1 count=5000 conv=fsync
+	$LFS setstripe -E 1M -L mdt -E EOF $testfile
+	cp $tmpfile $testfile
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server"
+
+	# decrease size: truncate to PAGE_SIZE
+	$TRUNCATE $tmpfile $pagesz
+	$TRUNCATE $testfile $pagesz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (1)"
+
+	# increase size: truncate to 2 x PAGE_SIZE
+	sz=$((pagesz*2))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (2)"
+
+	# truncate to PAGE_SIZE / 2
+	sz=$((pagesz/2))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (3)"
+
+	# truncate to a smaller, non-multiple of PAGE_SIZE, non-multiple of 16
+	sz=$((sz-7))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (4)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, non-multiple of 16
+	sz=$((sz+18))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (5)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, in a different page
+	sz=$((sz+pagesz+30))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (6)"
+
+	rm -f $testfile
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# write hole in file, data spread on MDT and OST
+	tr '\0' '2' < /dev/zero |
+	    dd of=$tmpfile bs=1 count=1539 seek=1539074 conv=fsync,notrunc
+	$LFS setstripe -E 1M -L mdt -E EOF $testfile
+	cp --sparse=always $tmpfile $testfile
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server"
+
+	# truncate to a smaller, non-multiple of PAGE_SIZE, non-multiple of 16,
+	# inside OST part of data
+	sz=$((1024*1024+13))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (7)"
+
+	# truncate to a smaller, non-multiple of PAGE_SIZE, non-multiple of 16,
+	# inside MDT part of data
+	sz=7
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (8)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, non-multiple of 16,
+	# inside MDT part of data
+	sz=$((1024*1024-13))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (9)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, non-multiple of 16,
+	# inside OST part of data
+	sz=$((1024*1024+7))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (10)"
+
+	rm -f $tmpfile
+}
+run_test 50 "DoM encrypted file"
 
 log "cleanup: ======================================================"
 

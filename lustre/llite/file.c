@@ -423,6 +423,9 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 {
 	struct niobuf_local *lnb = data;
 	void *kaddr;
+	int rc = 0;
+
+	struct inode *inode = page2inode(page);
 
 	kaddr = kmap_atomic(page);
 	memcpy(kaddr, lnb->lnb_data, lnb->lnb_len);
@@ -432,9 +435,22 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	flush_dcache_page(page);
 	SetPageUptodate(page);
 	kunmap_atomic(kaddr);
+
+	if (inode && IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode)) {
+		if (!llcrypt_has_encryption_key(inode))
+			CDEBUG(D_SEC, "no enc key for "DFID"\n",
+			       PFID(ll_inode2fid(inode)));
+		/* decrypt only if page is not empty */
+		else if (memcmp(page_address(page),
+				page_address(ZERO_PAGE(0)),
+				PAGE_SIZE) != 0)
+			rc = llcrypt_decrypt_pagecache_blocks(page,
+							      PAGE_SIZE,
+							      0);
+	}
 	unlock_page(page);
 
-	return 0;
+	return rc;
 }
 
 void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
@@ -475,7 +491,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	 * buffer, in both cases total size should be equal to the file size.
 	 */
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-	if (rnb->rnb_offset + rnb->rnb_len != body->mbo_dom_size) {
+	if (rnb->rnb_offset + rnb->rnb_len != body->mbo_dom_size &&
+	    !(inode && IS_ENCRYPTED(inode))) {
 		CERROR("%s: server returns off/len %llu/%u but size %llu\n",
 		       ll_i2sbi(inode)->ll_fsname, rnb->rnb_offset,
 		       rnb->rnb_len, body->mbo_dom_size);

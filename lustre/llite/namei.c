@@ -634,6 +634,36 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		if (rc)
 			RETURN(rc);
 
+		/* If encryption context was returned by MDT, put it in
+		 * inode now to save an extra getxattr and avoid deadlock.
+		 */
+		if (body->mbo_valid & OBD_MD_ENCCTX) {
+			encctx = req_capsule_server_get(pill, &RMF_FILE_ENCCTX);
+			encctxlen = req_capsule_get_size(pill,
+							 &RMF_FILE_ENCCTX,
+							 RCL_SERVER);
+
+			if (encctxlen) {
+				CDEBUG(D_SEC,
+				       "server returned encryption ctx for "DFID"\n",
+				       PFID(ll_inode2fid(inode)));
+				rc = ll_xattr_cache_insert(inode,
+					       LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+							   encctx, encctxlen);
+				if (rc)
+					CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
+					      ll_i2sbi(inode)->ll_fsname,
+					      PFID(ll_inode2fid(inode)), rc);
+				else if (encrypt) {
+					rc = llcrypt_get_encryption_info(inode);
+					if (rc)
+						CDEBUG(D_SEC,
+						 "cannot get enc info for "DFID": rc = %d\n",
+						 PFID(ll_inode2fid(inode)), rc);
+				}
+			}
+		}
+
 		if (it->it_op & IT_OPEN)
 			ll_dom_finish_open(inode, request, it);
 
@@ -677,29 +707,6 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 				      ll_i2sbi(inode)->ll_fsname,
 				      PFID(ll_inode2fid(inode)),
 				      rc);
-		}
-
-		/* If encryption context was returned by MDT, put it in
-		 * inode now to save an extra getxattr and avoid deadlock.
-		 */
-		if (body->mbo_valid & OBD_MD_ENCCTX) {
-			encctx = req_capsule_server_get(pill, &RMF_FILE_ENCCTX);
-			encctxlen = req_capsule_get_size(pill,
-							 &RMF_FILE_ENCCTX,
-							 RCL_SERVER);
-
-			if (encctxlen) {
-				CDEBUG(D_SEC,
-				       "server returned encryption ctx for "DFID"\n",
-				       PFID(ll_inode2fid(inode)));
-				rc = ll_xattr_cache_insert(inode,
-					       LL_XATTR_NAME_ENCRYPTION_CONTEXT,
-					       encctx, encctxlen);
-				if (rc)
-					CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
-					      ll_i2sbi(inode)->ll_fsname,
-					      PFID(ll_inode2fid(inode)), rc);
-			}
 		}
 	}
 
