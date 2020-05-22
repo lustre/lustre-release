@@ -769,6 +769,33 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SOCK_GETNAME
 
 #
+# LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
+#
+# kernel 5.3 commit ef11db3310e272d3d8dbe8739e0770820dd20e52
+# and kernel 4.18.0-193.el8:
+# added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
+# and removed for_ifa and endfor_ifa.
+# Use the _rntl variant as the current locking is rtnl.
+#
+AC_DEFUN([LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'in_dev_for_each_ifa_rtnl' is defined],
+in_dev_for_each_ifa_rtnl_test, [
+	#include <linux/inetdevice.h>
+],[
+	const struct in_ifaddr *ifa = NULL;
+	struct in_device *in_dev = NULL;
+
+	in_dev_for_each_ifa_rtnl(ifa, in_dev) {}
+],[
+	AC_DEFINE(HAVE_IN_DEV_FOR_EACH_IFA_RTNL, 1,
+		['in_dev_for_each_ifa_rtnl' is defined])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
+
+#
 # LN_IB_DEVICE_OPS_EXISTS
 #
 # kernel 5.0 commit 521ed0d92ab0db3edd17a5f4716b7f698f4fce61
@@ -844,6 +871,8 @@ LN_CONFIG_SOCK_CREATE_KERN
 LN_CONFIG_SOCK_ACCEPT
 # 4.17
 LN_CONFIG_SOCK_GETNAME
+# 5.3 and 4.18.0-193.el8
+LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 ]) # LN_PROG_LINUX
 
 #
