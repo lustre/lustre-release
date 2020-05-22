@@ -12913,10 +12913,8 @@ test_133h() {
 		skip "Need MDS version at least 2.9.54"
 
 	local facet
-
 	for facet in client mds1 ost1; do
 		# Get the list of files that are missing the terminating newline
-		#local missing=($(do_facet $facet \
 		local plist=$(do_facet $facet
 			$LCTL list_param -FR '*' | grep '=' | tr -d =)
 		local ent
@@ -12925,8 +12923,10 @@ test_133h() {
 				awk -v FS='\v' -v RS='\v\v' \
 				"'END { if(NR>0 && \\\$NF !~ /.*\\\n\$/) \
 					print FILENAME}'" 2>/dev/null)
-			[ -z $missing ] ||
-				error "files do not end with newline: $missing"
+			[ -z $missing ] || {
+				do_facet $facet $LCTL get_param $ent | od -An -tx1
+				error "file does not end with newline: $facet-$ent"
+			}
 		done
 	done
 }

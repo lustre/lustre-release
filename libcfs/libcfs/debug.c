@@ -132,7 +132,9 @@ static int param_get_delay(char *buffer, cfs_kernel_param_arg_t *kp)
 {
 	unsigned int d = *(unsigned int *)kp->arg;
 
-	return sprintf(buffer, "%lu", jiffies_to_msecs(d * 10) / MSEC_PER_SEC);
+	param_get_byte(buffer, kp);
+	return sprintf(buffer, "%lu%c", jiffies_to_msecs(d * 10) / MSEC_PER_SEC,
+		       strnchr(buffer, PAGE_SIZE, '\n') ? '\n' : '\0');
 }
 
 unsigned int libcfs_console_max_delay;
