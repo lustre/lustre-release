@@ -49,9 +49,10 @@
 
 static int lctl_list_commands(int argc, char **argv);
 
-static int jt_opt_ignore_errors(int argc, char **argv) {
-        Parser_ignore_errors(1);
-        return 0;
+static int jt_opt_ignore_errors(int argc, char **argv)
+{
+	Parser_ignore_errors(1);
+	return 0;
 }
 
 static int jt_pcc_list_commands(int argc, char **argv);
@@ -626,29 +627,29 @@ static int jt_pcc(int argc, char **argv)
 
 int lctl_main(int argc, char **argv)
 {
-        int rc;
+	int rc;
 
-        setlinebuf(stdout);
+	setlinebuf(stdout);
 
 	if (ptl_initialize(argc, argv) < 0)
 		exit(1);
-        if (obd_initialize(argc, argv) < 0)
-                exit(2);
-        if (dbg_initialize(argc, argv) < 0)
-                exit(3);
+	if (obd_initialize(argc, argv) < 0)
+		exit(2);
+	if (dbg_initialize(argc, argv) < 0)
+		exit(3);
 
 	Parser_init("lctl > ", cmdlist);
 
-        if (argc > 1) {
+	if (argc > 1) {
 		llapi_set_command_name(argv[1]);
-                rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
+		rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
 		llapi_clear_command_name();
-        } else {
-                rc = Parser_commands();
-        }
+	} else {
+		rc = Parser_commands();
+	}
 
-        obd_finalize(argc, argv);
-        return rc < 0 ? -rc : rc;
+	obd_finalize(argc, argv);
+	return rc < 0 ? -rc : rc;
 }
 
 static int lctl_list_commands(int argc, char **argv)
