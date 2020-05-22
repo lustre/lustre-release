@@ -606,8 +606,7 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
 				ktime_get_seconds() - peer->gnp_last_alive);
 
-			lnet_notify(net->gnn_ni, peer_nid, alive,
-				    (alive) ? true : false,
+			lnet_notify(net->gnn_ni, peer_nid, alive, true,
 				    peer->gnp_last_alive);
 
 			kgnilnd_net_decref(net);
