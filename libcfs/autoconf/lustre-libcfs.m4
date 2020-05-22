@@ -414,6 +414,28 @@ shrinker_count_objects, [
 ]) # LIBCFS_SHRINKER_COUNT
 
 #
+# LIBCFS_IOV_ITER_HAS_TYPE
+#
+# kernel 3.15-rc4 commit 71d8e532b1549a478e6a6a8a44f309d050294d00
+# start adding the tag to iov_iter
+#
+AC_DEFUN([LIBCFS_IOV_ITER_HAS_TYPE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if iov_iter has member type],
+iov_iter_has_type_member, [
+	#include <linux/uio.h>
+],[
+	struct iov_iter iter = { .type = ITER_KVEC };
+	(void)iter;
+],[
+	AC_DEFINE(HAVE_IOV_ITER_HAS_TYPE_MEMBER, 1,
+		[if iov_iter has member type])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_IOV_ITER_HAS_TYPE
+
+#
 # Kernel version 3.16 added rhashtable.h in 7e1e77636e36075eb
 #
 AC_DEFUN([LIBCFS_LINUX_RHASHTABLE_H],[
@@ -1095,6 +1117,29 @@ clear_and_wake_up_bit, [
 ]) # LIBCFS_CLEAR_AND_WAKE_UP_BIT
 
 #
+# LIBCFS_HAVE_IOV_ITER_TYPE
+#
+# kernel 4.20 commit 00e23707442a75b404392cef1405ab4fd498de6b
+# iov_iter: Use accessor functions to access an iterator's type and direction.
+#
+AC_DEFUN([LIBCFS_HAVE_IOV_ITER_TYPE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if iov_iter_type exists],
+macro_iov_iter_type_exists, [
+	#include <linux/uio.h>
+],[
+	struct iov_iter iter = { .type = ITER_KVEC };
+	enum iter_type type = iov_iter_type(&iter);
+	(void)type;
+],[
+	AC_DEFINE(HAVE_IOV_ITER_TYPE, 1,
+		[if iov_iter_type exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_IOV_ITER_TYPE
+
+#
 # LIBCFS_CACHE_DETAIL_WRITERS
 #
 # kernel v5.3-rc2-1-g64a38e840ce5
@@ -1162,6 +1207,8 @@ LIBCFS_KTIME_AFTER
 LIBCFS_KTIME_BEFORE
 LIBCFS_KTIME_COMPARE
 LIBCFS_SHRINKER_COUNT
+# 3.15
+LIBCFS_IOV_ITER_HAS_TYPE
 # 3.16
 LIBCFS_LINUX_RHASHTABLE_H
 # 3.17
@@ -1221,6 +1268,8 @@ LIBCFS_TIMER_SETUP
 LIBCFS_WAIT_VAR_EVENT
 # 4.17
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
+# 4.20
+LIBCFS_HAVE_IOV_ITER_TYPE
 # 5.3
 LIBCFS_CACHE_DETAIL_WRITERS
 ]) # LIBCFS_PROG_LINUX
