@@ -511,7 +511,7 @@ __u32 gss_wrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 
 	LASSERT(skc->sc_session_kb.kb_tfm);
 
-	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
+	blocksize = crypto_sync_skcipher_blocksize(skc->sc_session_kb.kb_tfm);
 	if (gss_add_padding(message, message_buffer_length, blocksize))
 		return GSS_S_FAILURE;
 
@@ -573,7 +573,7 @@ __u32 gss_unwrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
 	skw.skw_hmac.len = sht_bytes;
 
-	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
+	blocksize = crypto_sync_skcipher_blocksize(skc->sc_session_kb.kb_tfm);
 	if (skw.skw_cipher.len % blocksize != 0)
 		return GSS_S_DEFECTIVE_TOKEN;
 
@@ -609,7 +609,7 @@ __u32 gss_prep_bulk_sk(struct gss_ctx *gss_context,
 	int i;
 
 	LASSERT(skc->sc_session_kb.kb_tfm);
-	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
+	blocksize = crypto_sync_skcipher_blocksize(skc->sc_session_kb.kb_tfm);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
 		if (desc->bd_vec[i].bv_offset & blocksize) {
@@ -627,26 +627,25 @@ __u32 gss_prep_bulk_sk(struct gss_ctx *gss_context,
 	return GSS_S_COMPLETE;
 }
 
-static __u32 sk_encrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
+static __u32 sk_encrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 			     struct ptlrpc_bulk_desc *desc, rawobj_t *cipher,
 			     int adj_nob)
 {
-	struct blkcipher_desc cdesc = {
-		.tfm = tfm,
-		.info = iv,
-		.flags = 0,
-	};
 	struct scatterlist ptxt;
 	struct scatterlist ctxt;
 	int blocksize;
 	int i;
 	int rc;
 	int nob = 0;
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
-	blocksize = crypto_blkcipher_blocksize(tfm);
+	blocksize = crypto_sync_skcipher_blocksize(tfm);
 
 	sg_init_table(&ptxt, 1);
 	sg_init_table(&ctxt, 1);
+
+	skcipher_request_set_sync_tfm(req, tfm);
+	skcipher_request_set_callback(req, 0, NULL, NULL);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
 		sg_set_page(&ptxt, desc->bd_vec[i].bv_page,
@@ -661,13 +660,15 @@ static __u32 sk_encrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 		desc->bd_enc_vec[i].bv_offset = ctxt.offset;
 		desc->bd_enc_vec[i].bv_len = ctxt.length;
 
-		rc = crypto_blkcipher_encrypt_iv(&cdesc, &ctxt, &ptxt,
-						 ptxt.length);
+		skcipher_request_set_crypt(req, &ptxt, &ctxt, ptxt.length, iv);
+		rc = crypto_skcipher_encrypt_iv(req, &ctxt, &ptxt, ptxt.length);
 		if (rc) {
 			CERROR("failed to encrypt page: %d\n", rc);
+			skcipher_request_zero(req);
 			return rc;
 		}
 	}
+	skcipher_request_zero(req);
 
 	if (adj_nob)
 		desc->bd_nob = nob;
@@ -675,15 +676,10 @@ static __u32 sk_encrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 	return 0;
 }
 
-static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
+static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 			     struct ptlrpc_bulk_desc *desc, rawobj_t *cipher,
 			     int adj_nob)
 {
-	struct blkcipher_desc cdesc = {
-		.tfm = tfm,
-		.info = iv,
-		.flags = 0,
-	};
 	struct scatterlist ptxt;
 	struct scatterlist ctxt;
 	int blocksize;
@@ -691,16 +687,20 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 	int rc;
 	int pnob = 0;
 	int cnob = 0;
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	sg_init_table(&ptxt, 1);
 	sg_init_table(&ctxt, 1);
 
-	blocksize = crypto_blkcipher_blocksize(tfm);
+	blocksize = crypto_sync_skcipher_blocksize(tfm);
 	if (desc->bd_nob_transferred % blocksize != 0) {
 		CERROR("Transfer not a multiple of block size: %d\n",
 		       desc->bd_nob_transferred);
 		return GSS_S_DEFECTIVE_TOKEN;
 	}
+
+	skcipher_request_set_sync_tfm(req, tfm);
+	skcipher_request_set_callback(req, 0, NULL, NULL);
 
 	for (i = 0; i < desc->bd_iov_count && cnob < desc->bd_nob_transferred;
 	     i++) {
@@ -710,6 +710,7 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 		if (ciov->bv_offset % blocksize != 0 ||
 		    ciov->bv_len % blocksize != 0) {
 			CERROR("Invalid bulk descriptor vector\n");
+			skcipher_request_zero(req);
 			return GSS_S_DEFECTIVE_TOKEN;
 		}
 
@@ -733,6 +734,7 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 			if (ciov->bv_len + cnob > desc->bd_nob_transferred ||
 			    piov->bv_len > ciov->bv_len) {
 				CERROR("Invalid decrypted length\n");
+				skcipher_request_zero(req);
 				return GSS_S_FAILURE;
 			}
 		}
@@ -751,10 +753,11 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 		if (piov->bv_len % blocksize == 0)
 			sg_assign_page(&ptxt, piov->bv_page);
 
-		rc = crypto_blkcipher_decrypt_iv(&cdesc, &ptxt, &ctxt,
-						 ctxt.length);
+		skcipher_request_set_crypt(req, &ctxt, &ptxt, ptxt.length, iv);
+		rc = crypto_skcipher_decrypt_iv(req, &ptxt, &ctxt, ptxt.length);
 		if (rc) {
 			CERROR("Decryption failed for page: %d\n", rc);
+			skcipher_request_zero(req);
 			return GSS_S_FAILURE;
 		}
 
@@ -769,6 +772,7 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 		cnob += ciov->bv_len;
 		pnob += piov->bv_len;
 	}
+	skcipher_request_zero(req);
 
 	/* if needed, clear up the rest unused iovs */
 	if (adj_nob)

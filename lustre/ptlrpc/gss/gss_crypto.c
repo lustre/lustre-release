@@ -59,7 +59,7 @@ int gss_keyblock_init(struct gss_keyblock *kb, const char *alg_name,
 {
 	int rc;
 
-	kb->kb_tfm = crypto_alloc_blkcipher(alg_name, alg_mode, 0);
+	kb->kb_tfm = crypto_alloc_sync_skcipher(alg_name, alg_mode, 0);
 	if (IS_ERR(kb->kb_tfm)) {
 		rc = PTR_ERR(kb->kb_tfm);
 		kb->kb_tfm = NULL;
@@ -68,8 +68,8 @@ int gss_keyblock_init(struct gss_keyblock *kb, const char *alg_name,
 		return rc;
 	}
 
-	rc = crypto_blkcipher_setkey(kb->kb_tfm, kb->kb_key.data,
-				     kb->kb_key.len);
+	rc = crypto_sync_skcipher_setkey(kb->kb_tfm, kb->kb_key.data,
+					 kb->kb_key.len);
 	if (rc) {
 		CERROR("failed to set %s key, len %d, rc = %d\n", alg_name,
 		       kb->kb_key.len, rc);
@@ -83,7 +83,7 @@ void gss_keyblock_free(struct gss_keyblock *kb)
 {
 	rawobj_free(&kb->kb_key);
 	if (kb->kb_tfm)
-		crypto_free_blkcipher(kb->kb_tfm);
+		crypto_free_sync_skcipher(kb->kb_tfm);
 }
 
 int gss_keyblock_dup(struct gss_keyblock *new, struct gss_keyblock *kb)
@@ -225,33 +225,31 @@ void gss_teardown_sgtable(struct sg_table *sgt)
 		sg_free_table(sgt);
 }
 
-int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
-		      const void *in, void *out, size_t length)
+int gss_crypt_generic(struct crypto_sync_skcipher *tfm, int decrypt,
+		      const void *iv, const void *in, void *out, size_t length)
 {
-	struct blkcipher_desc desc;
 	struct scatterlist sg;
 	struct sg_table sg_out;
 	__u8 local_iv[16] = {0};
 	__u32 ret = -EINVAL;
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	LASSERT(tfm);
-	desc.tfm = tfm;
-	desc.info = local_iv;
-	desc.flags = 0;
 
-	if (length % crypto_blkcipher_blocksize(tfm) != 0) {
+	if (length % crypto_sync_skcipher_blocksize(tfm) != 0) {
 		CERROR("output length %zu mismatch blocksize %d\n",
-		       length, crypto_blkcipher_blocksize(tfm));
+		       length, crypto_sync_skcipher_blocksize(tfm));
 		goto out;
 	}
 
-	if (crypto_blkcipher_ivsize(tfm) > ARRAY_SIZE(local_iv)) {
-		CERROR("iv size too large %d\n", crypto_blkcipher_ivsize(tfm));
+	if (crypto_sync_skcipher_ivsize(tfm) > ARRAY_SIZE(local_iv)) {
+		CERROR("iv size too large %d\n",
+			crypto_sync_skcipher_ivsize(tfm));
 		goto out;
 	}
 
 	if (iv)
-		memcpy(local_iv, iv, crypto_blkcipher_ivsize(tfm));
+		memcpy(local_iv, iv, crypto_sync_skcipher_ivsize(tfm));
 
 	if (in != out)
 		memmove(out, in, length);
@@ -260,11 +258,16 @@ int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
 	if (ret != 0)
 		goto out;
 
-	if (decrypt)
-		ret = crypto_blkcipher_decrypt_iv(&desc, &sg, &sg, length);
-	else
-		ret = crypto_blkcipher_encrypt_iv(&desc, &sg, &sg, length);
+	skcipher_request_set_sync_tfm(req, tfm);
+	skcipher_request_set_callback(req, 0, NULL, NULL);
+	skcipher_request_set_crypt(req, &sg, &sg, length, local_iv);
 
+	if (decrypt)
+		ret = crypto_skcipher_decrypt_iv(req, &sg, &sg, length);
+	else
+		ret = crypto_skcipher_encrypt_iv(req, &sg, &sg, length);
+
+	skcipher_request_zero(req);
 	gss_teardown_sgtable(&sg_out);
 out:
 	return ret;
@@ -396,11 +399,10 @@ int gss_add_padding(rawobj_t *msg, int msg_buflen, int blocksize)
 	return 0;
 }
 
-int gss_crypt_rawobjs(struct crypto_blkcipher *tfm, __u8 *iv,
+int gss_crypt_rawobjs(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		      int inobj_cnt, rawobj_t *inobjs, rawobj_t *outobj,
 		      int enc)
 {
-	struct blkcipher_desc desc;
 	struct scatterlist src;
 	struct scatterlist dst;
 	struct sg_table sg_dst;
@@ -408,12 +410,13 @@ int gss_crypt_rawobjs(struct crypto_blkcipher *tfm, __u8 *iv,
 	__u8 *buf;
 	__u32 datalen = 0;
 	int i, rc;
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
+
 	ENTRY;
 
 	buf = outobj->data;
-	desc.tfm  = tfm;
-	desc.info = iv;
-	desc.flags = 0;
+	skcipher_request_set_sync_tfm(req, tfm);
+	skcipher_request_set_callback(req, 0, NULL, NULL);
 
 	for (i = 0; i < inobj_cnt; i++) {
 		LASSERT(buf + inobjs[i].len <= outobj->data + outobj->len);
@@ -430,35 +433,30 @@ int gss_crypt_rawobjs(struct crypto_blkcipher *tfm, __u8 *iv,
 			RETURN(rc);
 		}
 
-		if (iv) {
-			if (enc)
-				rc = crypto_blkcipher_encrypt_iv(&desc, &dst,
-								 &src,
-								 src.length);
-			else
-				rc = crypto_blkcipher_decrypt_iv(&desc, &dst,
-								 &src,
-								 src.length);
-		} else {
-			if (enc)
-				rc = crypto_blkcipher_encrypt(&desc, &dst, &src,
-							      src.length);
-			else
-				rc = crypto_blkcipher_decrypt(&desc, &dst, &src,
-							      src.length);
-		}
+		skcipher_request_set_crypt(req, &src, &dst, src.length, iv);
+		if (!iv)
+			skcipher_request_set_crypt_iv(req);
+
+		if (enc)
+			rc = crypto_skcipher_encrypt_iv(req, &dst, &src,
+							src.length);
+		else
+			rc = crypto_skcipher_decrypt_iv(req, &dst, &src,
+							src.length);
 
 		gss_teardown_sgtable(&sg_src);
 		gss_teardown_sgtable(&sg_dst);
 
 		if (rc) {
 			CERROR("encrypt error %d\n", rc);
+			skcipher_request_zero(req);
 			RETURN(rc);
 		}
 
 		datalen += inobjs[i].len;
 		buf += inobjs[i].len;
 	}
+	skcipher_request_zero(req);
 
 	outobj->len = datalen;
 	RETURN(0);
