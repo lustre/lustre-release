@@ -891,8 +891,8 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 }
 
 /*
- * A peer is alive if it satisfies the following two conditions:
- *  1. peer health >= LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage
+ * A peer NI is alive if it satisfies the following two conditions:
+ *  1. peer NI health >= LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage
  *  2. the cached NI status received when we discover the peer is UP
  */
 static inline bool

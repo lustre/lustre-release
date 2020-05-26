@@ -2614,6 +2614,8 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	int cpt, rc;
 	int md_cpt;
 	__u32 send_case = 0;
+	bool final_hop;
+	bool mr_forwarding_allowed;
 
 	memset(&send_data, 0, sizeof(send_data));
 
@@ -2697,17 +2699,49 @@ again:
 	else
 		send_case |= REMOTE_DST;
 
+	final_hop = false;
+	if (msg->msg_routing && (send_case & LOCAL_DST))
+		final_hop = true;
+
+	/* Determine whether to allow MR forwarding for this message.
+	 * NB: MR forwarding is allowed if the message originator and the
+	 * destination are both MR capable, and the destination lpni that was
+	 * originally chosen by the originator is unhealthy or down.
+	 * We check the MR capability of the destination further below
+	 */
+	mr_forwarding_allowed = false;
+	if (final_hop) {
+		struct lnet_peer *src_lp;
+		struct lnet_peer_ni *src_lpni;
+
+		src_lpni = lnet_nid2peerni_locked(msg->msg_hdr.src_nid,
+						  LNET_NID_ANY, cpt);
+		/* We don't fail the send if we hit any errors here. We'll just
+		 * try to send it via non-multi-rail criteria
+		 */
+		if (!IS_ERR(src_lpni)) {
+			src_lp = lpni->lpni_peer_net->lpn_peer;
+			if (lnet_peer_is_multi_rail(src_lp) &&
+			    !lnet_is_peer_ni_alive(lpni))
+				mr_forwarding_allowed = true;
+
+		}
+		CDEBUG(D_NET, "msg %p MR forwarding %s\n", msg,
+		       mr_forwarding_allowed ? "allowed" : "not allowed");
+	}
+
 	/*
 	 * Deal with the peer as NMR in the following cases:
 	 * 1. the peer is NMR
 	 * 2. We're trying to recover a specific peer NI
-	 * 3. I'm a router sending to the final destination
+	 * 3. I'm a router sending to the final destination and MR forwarding is
+	 *    not allowed for this message (as determined above).
 	 *    In this case the source of the message would've
 	 *    already selected the final destination so my job
 	 *    is to honor the selection.
 	 */
 	if (!lnet_peer_is_multi_rail(peer) || msg->msg_recovery ||
-	    (msg->msg_routing && (send_case & LOCAL_DST)))
+	    (final_hop && !mr_forwarding_allowed))
 		send_case |= NMR_DST;
 	else
 		send_case |= MR_DST;
