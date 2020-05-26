@@ -780,6 +780,10 @@ lnet_health_check(struct lnet_msg *msg)
 	struct lnet_peer_ni *lpni;
 	struct lnet_ni *ni;
 	bool lo = false;
+	bool attempt_local_resend;
+	bool attempt_remote_resend;
+	bool handle_local_health;
+	bool handle_remote_health;
 
 	/* if we're shutting down no point in handling health. */
 	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
@@ -808,9 +812,40 @@ lnet_health_check(struct lnet_msg *msg)
 	if (msg->msg_tx_committed) {
 		ni = msg->msg_txni;
 		lpni = msg->msg_txpeer;
+		attempt_local_resend = attempt_remote_resend = true;
 	} else {
 		ni = msg->msg_rxni;
 		lpni = msg->msg_rxpeer;
+		attempt_local_resend = attempt_remote_resend = false;
+	}
+
+	/* Don't further decrement the health value if a recovery message
+	 * failed.
+	 */
+	if (msg->msg_recovery)
+		handle_local_health = handle_remote_health = false;
+	else
+		handle_local_health = handle_remote_health = true;
+
+	/* For local failures, health/recovery/resends are not needed if I only
+	 * have a single (non-lolnd) interface. NB: pb_nnis includes the lolnd
+	 * interface, so a single-rail node would have pb_nnis == 2.
+	 */
+	if (the_lnet.ln_ping_target->pb_nnis <= 2) {
+		handle_local_health = false;
+		attempt_local_resend = false;
+	}
+
+	/* For remote failures, health/recovery/resends are not needed if the
+	 * peer only has a single interface. Special case for routers where we
+	 * rely on health feature to manage route aliveness. NB: unlike pb_nnis
+	 * above, lp_nnis does _not_ include the lolnd, so a single-rail node
+	 * would have lp_nnis == 1.
+	 */
+	if (lpni && lpni->lpni_peer_net->lpn_peer->lp_nnis <= 1) {
+		attempt_remote_resend = false;
+		if (!lnet_isrouter(lpni))
+			handle_remote_health = false;
 	}
 
 	if (!lo)
@@ -877,45 +912,25 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
-		/*
-		 * don't further decrement the health value if the
-		 * recovery message failed.
-		 */
-		if (!msg->msg_recovery)
+		if (handle_local_health)
 			lnet_handle_local_failure(ni);
-		if (msg->msg_tx_committed)
-			/* add to the re-send queue */
+		if (attempt_local_resend)
 			return lnet_attempt_msg_resend(msg);
 		break;
-
-	/*
-	 * These errors will not trigger a resend so simply
-	 * finalize the message
-	 */
 	case LNET_MSG_STATUS_LOCAL_ERROR:
-		/*
-		 * don't further decrement the health value if the
-		 * recovery message failed.
-		 */
-		if (!msg->msg_recovery)
+		if (handle_local_health)
 			lnet_handle_local_failure(ni);
 		return -1;
-
-	/*
-	 * TODO: since the remote dropped the message we can
-	 * attempt a resend safely.
-	 */
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
-		if (!msg->msg_recovery)
+		if (handle_remote_health)
 			lnet_handle_remote_failure(lpni);
-		if (msg->msg_tx_committed)
+		if (attempt_remote_resend)
 			return lnet_attempt_msg_resend(msg);
 		break;
-
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
-		if (!msg->msg_recovery)
+		if (handle_remote_health)
 			lnet_handle_remote_failure(lpni);
 		return -1;
 	default:
