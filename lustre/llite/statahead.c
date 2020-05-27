@@ -975,8 +975,9 @@ static void ll_stop_agl(struct ll_statahead_info *sai)
 /* start agl thread */
 static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 {
-	struct ll_inode_info  *plli;
-	struct task_struct    *task;
+	int node = cfs_cpt_spread_node(cfs_cpt_tab, CFS_CPT_ANY);
+	struct ll_inode_info *plli;
+	struct task_struct *task;
 
 	ENTRY;
 
@@ -984,8 +985,8 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 	       sai, parent);
 
 	plli = ll_i2info(parent->d_inode);
-	task = kthread_create(ll_agl_thread, parent,
-			      "ll_agl_%u", plli->lli_opendir_pid);
+	task = kthread_create_on_node(ll_agl_thread, parent, node, "ll_agl_%d",
+				      plli->lli_opendir_pid);
 	if (IS_ERR(task)) {
 		CERROR("can't start ll_agl thread, rc: %ld\n", PTR_ERR(task));
 		sai->sai_agl_valid = 0;
@@ -1558,6 +1559,7 @@ out:
 static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 				  bool agl)
 {
+	int node = cfs_cpt_spread_node(cfs_cpt_tab, CFS_CPT_ANY);
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *sai = NULL;
 	struct dentry *parent = dentry->d_parent;
@@ -1605,8 +1607,8 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %pd]\n",
 	       current->pid, parent);
 
-	task = kthread_create(ll_statahead_thread, parent, "ll_sa_%u",
-			      lli->lli_opendir_pid);
+	task = kthread_create_on_node(ll_statahead_thread, parent, node,
+				      "ll_sa_%u", lli->lli_opendir_pid);
 	if (IS_ERR(task)) {
 		spin_lock(&lli->lli_sa_lock);
 		lli->lli_sai = NULL;
