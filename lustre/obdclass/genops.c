@@ -2062,20 +2062,21 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 	__u32				old;
 	int				diff;
 	int				i;
-	const char *type_name;
 	int				rc;
 
 	if (max > OBD_MAX_RIF_MAX || max < 1)
 		return -ERANGE;
 
-	type_name = cli->cl_import->imp_obd->obd_type->typ_name;
-	if (strcmp(type_name, LUSTRE_MDC_NAME) == 0) {
+	CDEBUG(D_INFO, "%s: max = %hu max_mod = %u rif = %u\n",
+	       cli->cl_import->imp_obd->obd_name, max,
+	       cli->cl_max_mod_rpcs_in_flight, cli->cl_max_rpcs_in_flight);
+
+	if (strcmp(cli->cl_import->imp_obd->obd_type->typ_name,
+		   LUSTRE_MDC_NAME) == 0) {
 		/* adjust max_mod_rpcs_in_flight to ensure it is always
 		 * strictly lower that max_rpcs_in_flight */
 		if (max < 2) {
-			CERROR("%s: cannot set max_rpcs_in_flight to 1 "
-			       "because it must be higher than "
-			       "max_mod_rpcs_in_flight value",
+			CERROR("%s: cannot set mdc.*.max_rpcs_in_flight=1\n",
 			       cli->cl_import->imp_obd->obd_name);
 			return -ERANGE;
 		}
@@ -2119,32 +2120,50 @@ EXPORT_SYMBOL(obd_get_max_mod_rpcs_in_flight);
 
 int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max)
 {
-	struct obd_connect_data	*ocd;
+	struct obd_connect_data *ocd;
 	__u16 maxmodrpcs;
 	__u16 prev;
 
 	if (max > OBD_MAX_RIF_MAX || max < 1)
 		return -ERANGE;
 
-	/* cannot exceed or equal max_rpcs_in_flight */
+	ocd = &cli->cl_import->imp_connect_data;
+	CDEBUG(D_INFO, "%s: max = %hu flags = %llx, max_mod = %u rif = %u\n",
+	       cli->cl_import->imp_obd->obd_name, max, ocd->ocd_connect_flags,
+	       ocd->ocd_maxmodrpcs, cli->cl_max_rpcs_in_flight);
+
+	if (max == OBD_MAX_RIF_MAX)
+		max = OBD_MAX_RIF_MAX - 1;
+
+	/* Cannot exceed or equal max_rpcs_in_flight.  If we are asked to
+	 * increase this value, also bump up max_rpcs_in_flight to match.
+	 */
 	if (max >= cli->cl_max_rpcs_in_flight) {
-		CERROR("%s: can't set max_mod_rpcs_in_flight to a value (%hu) "
-		       "higher or equal to max_rpcs_in_flight value (%u)\n",
-		       cli->cl_import->imp_obd->obd_name,
-		       max, cli->cl_max_rpcs_in_flight);
-		return -ERANGE;
+		CDEBUG(D_INFO,
+		       "%s: increasing max_rpcs_in_flight=%hu to allow larger max_mod_rpcs_in_flight=%u\n",
+		       cli->cl_import->imp_obd->obd_name, max + 1, max);
+		obd_set_max_rpcs_in_flight(cli, max + 1);
 	}
 
-	/* cannot exceed max modify RPCs in flight supported by the server */
-	ocd = &cli->cl_import->imp_connect_data;
-	if (ocd->ocd_connect_flags & OBD_CONNECT_MULTIMODRPCS)
+	/* cannot exceed max modify RPCs in flight supported by the server,
+	 * but verify ocd_connect_flags is at least initialized first.  If
+	 * not, allow it and fix value later in ptlrpc_connect_set_flags().
+	 */
+	if (!ocd->ocd_connect_flags) {
+		maxmodrpcs = cli->cl_max_rpcs_in_flight - 1;
+	} else if (ocd->ocd_connect_flags & OBD_CONNECT_MULTIMODRPCS) {
 		maxmodrpcs = ocd->ocd_maxmodrpcs;
-	else
+		if (maxmodrpcs == 0) { /* connection not finished yet */
+			maxmodrpcs = cli->cl_max_rpcs_in_flight - 1;
+			CDEBUG(D_INFO,
+			       "%s: partial connect, assume maxmodrpcs=%hu\n",
+			       cli->cl_import->imp_obd->obd_name, maxmodrpcs);
+		}
+	} else {
 		maxmodrpcs = 1;
+	}
 	if (max > maxmodrpcs) {
-		CERROR("%s: can't set max_mod_rpcs_in_flight to a value (%hu) "
-		       "higher than max_mod_rpcs_per_client value (%hu) "
-		       "returned by the server at connection\n",
+		CERROR("%s: can't set max_mod_rpcs_in_flight=%hu higher than ocd_maxmodrpcs=%hu returned by the server at connection\n",
 		       cli->cl_import->imp_obd->obd_name,
 		       max, maxmodrpcs);
 		return -ERANGE;
