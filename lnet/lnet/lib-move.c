@@ -2034,60 +2034,79 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	}
 
 	if (!route_found) {
-		/* we've already looked up the initial lpni using dst_nid */
-		lpni = sd->sd_best_lpni;
-		/* the peer tree must be in existence */
-		LASSERT(lpni && lpni->lpni_peer_net &&
-			lpni->lpni_peer_net->lpn_peer);
-		lp = lpni->lpni_peer_net->lpn_peer;
+		if (sd->sd_msg->msg_routing) {
+			/* If I'm routing this message then I need to find the
+			 * next hop based on the destination NID
+			 */
+			best_rnet = lnet_find_rnet_locked(LNET_NIDNET(sd->sd_dst_nid));
+			if (!best_rnet) {
+				CERROR("Unable to route message to %s - Route table may be misconfigured\n",
+				       libcfs_nid2str(sd->sd_dst_nid));
+				return -EHOSTUNREACH;
+			}
+		} else {
+			/* we've already looked up the initial lpni using
+			 * dst_nid
+			 */
+			lpni = sd->sd_best_lpni;
+			/* the peer tree must be in existence */
+			LASSERT(lpni && lpni->lpni_peer_net &&
+				lpni->lpni_peer_net->lpn_peer);
+			lp = lpni->lpni_peer_net->lpn_peer;
 
-		list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
-			/* is this remote network reachable?  */
-			rnet = lnet_find_rnet_locked(lpn->lpn_net_id);
-			if (!rnet)
-				continue;
+			list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
+				/* is this remote network reachable?  */
+				rnet = lnet_find_rnet_locked(lpn->lpn_net_id);
+				if (!rnet)
+					continue;
 
-			if (!best_lpn) {
+				if (!best_lpn) {
+					best_lpn = lpn;
+					best_rnet = rnet;
+				}
+
+				if (best_lpn->lpn_seq <= lpn->lpn_seq)
+					continue;
+
 				best_lpn = lpn;
 				best_rnet = rnet;
 			}
 
-			if (best_lpn->lpn_seq <= lpn->lpn_seq)
-				continue;
+			if (!best_lpn) {
+				CERROR("peer %s has no available nets\n",
+				       libcfs_nid2str(sd->sd_dst_nid));
+				return -EHOSTUNREACH;
+			}
 
-			best_lpn = lpn;
-			best_rnet = rnet;
+			sd->sd_best_lpni = lnet_find_best_lpni(sd->sd_best_ni,
+							       sd->sd_dst_nid,
+							       lp,
+							       best_lpn->lpn_net_id);
+			if (!sd->sd_best_lpni) {
+				CERROR("peer %s is unreachable\n",
+				       libcfs_nid2str(sd->sd_dst_nid));
+				return -EHOSTUNREACH;
+			}
+
+			/* We're attempting to round robin over the remote peer
+			 * NI's so update the final destination we selected
+			 */
+			sd->sd_final_dst_lpni = sd->sd_best_lpni;
+
+			/* Increment the sequence number of the remote lpni so
+			 * we can round robin over the different interfaces of
+			 * the remote lpni
+			 */
+			sd->sd_best_lpni->lpni_seq++;
 		}
-
-		if (!best_lpn) {
-			CERROR("peer %s has no available nets\n",
-			       libcfs_nid2str(sd->sd_dst_nid));
-			return -EHOSTUNREACH;
-		}
-
-		sd->sd_best_lpni = lnet_find_best_lpni(sd->sd_best_ni,
-						       sd->sd_dst_nid,
-						       lp,
-						       best_lpn->lpn_net_id);
-		if (!sd->sd_best_lpni) {
-			CERROR("peer %s is unreachable\n",
-			       libcfs_nid2str(sd->sd_dst_nid));
-			return -EHOSTUNREACH;
-		}
-
-		/*
-		 * We're attempting to round robin over the remote peer
-		 * NI's so update the final destination we selected
-		 */
-		sd->sd_final_dst_lpni = sd->sd_best_lpni;
 
 		/*
 		 * find the best route. Restrict the selection on the net of the
 		 * local NI if we've already picked the local NI to send from.
 		 * Otherwise, let's pick any route we can find and then find
-		 * a local NI we can reach the route's gateway on. Any route we select
-		 * will be reachable by virtue of the restriction we have when
-		 * adding a route.
+		 * a local NI we can reach the route's gateway on. Any route we
+		 * select will be reachable by virtue of the restriction we have
+		 * when adding a route.
 		 */
 		best_route = lnet_find_route_locked(best_rnet,
 						    LNET_NIDNET(src_nid),
@@ -2110,13 +2129,6 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 		gw = best_route->lr_gateway;
 		LASSERT(gw == gwni->lpni_peer_net->lpn_peer);
 		local_lnet = best_route->lr_lnet;
-
-		/*
-		 * Increment the sequence number of the remote lpni so we
-		 * can round robin over the different interfaces of the
-		 * remote lpni
-		 */
-		sd->sd_best_lpni->lpni_seq++;
 	}
 
 	/*
@@ -2153,7 +2165,8 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	if (sd->sd_rtr_nid == LNET_NID_ANY) {
 		LASSERT(best_route && last_route);
 		best_route->lr_seq = last_route->lr_seq + 1;
-		best_lpn->lpn_seq++;
+		if (best_lpn)
+			best_lpn->lpn_seq++;
 	}
 
 	return 0;
