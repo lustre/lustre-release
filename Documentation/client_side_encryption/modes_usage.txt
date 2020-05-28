@@ -1,0 +1,97 @@
+==============================================
+Lustre client-level encryption modes and usage
+==============================================
+
+Lustre client-level encryption relies on kernel's fscrypt, and more
+precisely on v2 encryption policies.
+fscrypt is a library which filesystems can hook into to support
+transparent encryption of files and directories.
+
+As a consequence, the encryption modes and usage described here,
+extracted from fscrypt's doc, apply to Lustre client-level encryption.
+
+Ref:
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/fscrypt.rst
+
+Encryption modes
+----------------
+
+fscrypt allows one encryption mode to be specified for file contents
+and one encryption mode to be specified for filenames.  Different
+directory trees are permitted to use different encryption modes.
+Currently, the following pairs of encryption modes are supported:
+
+- AES-256-XTS for contents and AES-256-CTS-CBC for filenames
+- AES-128-CBC for contents and AES-128-CTS-CBC for filenames
+- Adiantum for both contents and filenames
+
+If unsure, you should use the (AES-256-XTS, AES-256-CTS-CBC) pair.
+
+AES-128-CBC was added only for low-powered embedded devices with
+crypto accelerators such as CAAM or CESA that do not support XTS.
+
+Adiantum is a (primarily) stream cipher-based mode that is fast even
+on CPUs without dedicated crypto instructions.  It's also a true
+wide-block mode, unlike XTS.  It can also eliminate the need to derive
+per-file keys.  However, it depends on the security of two primitives,
+XChaCha12 and AES-256, rather than just one.  See the paper
+"Adiantum: length-preserving encryption for entry-level processors"
+(https://eprint.iacr.org/2018/720.pdf) for more details.  To use
+Adiantum, CONFIG_CRYPTO_ADIANTUM must be enabled.  Also, fast
+implementations of ChaCha and NHPoly1305 should be enabled, e.g.
+CONFIG_CRYPTO_CHACHA20_NEON and CONFIG_CRYPTO_NHPOLY1305_NEON for ARM.
+
+Contents encryption
+-------------------
+
+For file contents, each filesystem block is encrypted independently.
+Currently, only the case where the filesystem block size is equal to
+the system's page size (usually 4096 bytes) is supported.
+
+Each block's IV is set to the logical block number within the file as
+a little endian number, except that:
+
+- With CBC mode encryption, ESSIV is also used.  Specifically, each IV
+  is encrypted with AES-256 where the AES-256 key is the SHA-256 hash
+  of the file's data encryption key.
+
+- In the "direct key" configuration (FSCRYPT_POLICY_FLAG_DIRECT_KEY
+  set in the fscrypt_policy), the file's nonce is also appended to the
+  IV.  Currently this is only allowed with the Adiantum encryption
+  mode.
+
+Filenames encryption
+--------------------
+
+For filenames, each full filename is encrypted at once.  Because of
+the requirements to retain support for efficient directory lookups and
+filenames of up to 255 bytes, the same IV is used for every filename
+in a directory.
+
+However, each encrypted directory still uses a unique key; or
+alternatively (for the "direct key" configuration) has the file's
+nonce included in the IVs.  Thus, IV reuse is limited to within a
+single directory.
+
+With CTS-CBC, the IV reuse means that when the plaintext filenames
+share a common prefix at least as long as the cipher block size (16
+bytes for AES), the corresponding encrypted filenames will also share
+a common prefix.  This is undesirable.  Adiantum does not have this
+weakness, as it is a wide-block encryption mode.
+
+All supported filenames encryption modes accept any plaintext length
+>= 16 bytes; cipher block alignment is not required.  However,
+filenames shorter than 16 bytes are NUL-padded to 16 bytes before
+being encrypted.  In addition, to reduce leakage of filename lengths
+via their ciphertexts, all filenames are NUL-padded to the next 4, 8,
+16, or 32-byte boundary (configurable).  32 is recommended since this
+provides the best confidentiality, at the cost of making directory
+entries consume slightly more space.  Note that since NUL (``\0``) is
+not otherwise a valid character in filenames, the padding will never
+produce duplicate plaintexts.
+
+Symbolic link targets are considered a type of filename and are
+encrypted in the same way as filenames in directory entries, except
+that IV reuse is not a problem as each symlink has its own inode.
+
+

@@ -1,0 +1,159 @@
+===========================================
+Lustre client-level encryption threat model
+===========================================
+
+Lustre client-level encryption relies on kernel's fscrypt, and more
+precisely on v2 encryption policies.
+fscrypt is a library which filesystems can hook into to support
+transparent encryption of files and directories.
+
+As a consequence, the following threat model, extracted from
+fscrypt's and adapted, is applicable to Lustre client-level
+encryption.
+
+Ref:
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/fscrypt.rst
+
+Offline attacks
+---------------
+
+Provided that userspace chooses a strong encryption key, fscrypt
+protects the confidentiality of file contents and filenames in the
+event of a single point-in-time permanent offline compromise of the
+block device content.  fscrypt does not protect the confidentiality of
+non-filename metadata, e.g. file sizes, file permissions, file
+timestamps, and extended attributes.  Also, the existence and location
+of holes (unallocated blocks which logically contain all zeroes) in
+files is not protected.
+
+fscrypt is not guaranteed to protect confidentiality or authenticity
+if an attacker is able to manipulate the filesystem offline prior to
+an authorized user later accessing the filesystem.
+
+For the Lustre case, block devices are Lustre targets attached to
+the Lustre servers. Manipulating the filesystem offline means
+accessing the filesystem on these targets while Lustre is offline.
+
+Online attacks
+--------------
+
+fscrypt (and storage encryption in general) can only provide limited
+protection, if any at all, against online attacks.  In detail:
+
+Side-channel attacks
+~~~~~~~~~~~~~~~~~~~~
+
+fscrypt is only resistant to side-channel attacks, such as timing or
+electromagnetic attacks, to the extent that the underlying Linux
+Cryptographic API algorithms are.  If a vulnerable algorithm is used,
+such as a table-based implementation of AES, it may be possible for an
+attacker to mount a side channel attack against the online system.
+Side channel attacks may also be mounted against applications
+consuming decrypted data.
+
+Unauthorized file access on Lustre client
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After an encryption key has been added, fscrypt does not hide the
+plaintext file contents or filenames from other users on the same
+system.  Instead, existing access control mechanisms such as file mode
+bits, POSIX ACLs, LSMs, or namespaces should be used for this purpose.
+
+(For the reasoning behind this, understand that while the key is
+added, the confidentiality of the data, from the perspective of the
+system itself, is *not* protected by the mathematical properties of
+encryption but rather only by the correctness of the kernel.
+Therefore, any encryption-specific access control checks would merely
+be enforced by kernel *code* and therefore would be largely redundant
+with the wide variety of access control mechanisms already available.)
+
+For the Lustre case, it means plaintext file contents or filenames are
+not hidden from other users on the same Lustre client.
+
+Lustre client kernel memory compromise
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An attacker who compromises the system enough to read from arbitrary
+memory, e.g. by mounting a physical attack or by exploiting a kernel
+security vulnerability, can compromise all encryption keys that are
+currently in use.
+
+However, fscrypt with v2 encryption policies allows encryption keys to
+be removed from the kernel, which may protect them from later
+compromise. Key removal can be carried out by non-root users.
+
+In more detail, the FS_IOC_REMOVE_ENCRYPTION_KEY ioctl will wipe a
+master encryption key from kernel memory.  Moreover, it will try to
+evict all cached inodes which had been "unlocked" using the key,
+thereby wiping their per-file keys and making them once again appear
+"locked", i.e. in ciphertext or encrypted form.
+
+However, FS_IOC_REMOVE_ENCRYPTION_KEY has some limitations:
+
+- Per-file keys for in-use files will *not* be removed or wiped.
+  Therefore, for maximum effect, userspace should close the relevant
+  encrypted files and directories before removing a master key, as
+  well as kill any processes whose working directory is in an affected
+  encrypted directory.
+
+- The kernel cannot magically wipe copies of the master key(s) that
+  userspace might have as well.  Therefore, userspace must wipe all
+  copies of the master key(s) it makes as well.  Naturally, the same
+  also applies to all higher levels in the key hierarchy.  Userspace
+  should also follow other security precautions such as mlock()ing
+  memory containing keys to prevent it from being swapped out.
+
+- In general, decrypted contents and filenames in the kernel VFS
+  caches are freed but not wiped.  Therefore, portions thereof may be
+  recoverable from freed memory, even after the corresponding key(s)
+  were wiped.  To partially solve this, you can set
+  CONFIG_PAGE_POISONING=y in your kernel config and add page_poison=1
+  to your kernel command line.  However, this has a performance cost.
+
+- Secret keys might still exist in CPU registers, in crypto
+  accelerator hardware (if used by the crypto API to implement any of
+  the algorithms), or in other places not explicitly considered here.
+
+Lustre server kernel memory compromise
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An attacker on a Lustre server who compromises the system enough to
+read from arbitrary memory, e.g. by mounting a physical attack or by
+exploiting a kernel security vulnerability, cannot compromise Lustre
+files content. Indeed, encryption keys are not forwarded to the Lustre
+servers, and servers do not carry out decryption or encryption.
+Moreover, RPCs received by servers contain encrypted data, which is
+put as is in blocks to be stored on disk.
+
+Per-file key compromise
+~~~~~~~~~~~~~~~~~~~~~~~
+
+With one exception, fscrypt never uses the master key(s) for
+encryption directly.  Instead, they are only used as input to a KDF
+(Key Derivation Function) to derive the actual keys.
+
+For v2 encryption policies, the KDF is HKDF-SHA512. The master key is
+passed as the "input keying material", no salt is used, and a distinct
+"application-specific information string" is used for each distinct
+key to be derived.  For example, when a per-file encryption key is
+derived, the application-specific information string is the file's
+nonce prefixed with "fscrypt\0" and a context byte.  Different context
+bytes are used for other types of derived keys.
+
+So the per-file keys used to encrypt each file individually are
+obtained from a HKDF-SHA512 mechanism that is flexible, nonreversible,
+and evenly distributes entropy from the master key.
+HKDF is also standardized and widely used by other software.
+
+As a consequence, a compromise of a per-file key only impacts the
+associated file, not the master key.
+
+Master key verification
+~~~~~~~~~~~~~~~~~~~~~~~
+
+For master keys used for v2 encryption policies, a unique 16-byte "key
+identifier" is derived using the KDF.  This value is stored in
+the clear, and is used to reliably identify the key itself.
+
+Consequently, no malicious user can associate the wrong key with
+encrypted files.

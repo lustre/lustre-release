@@ -1,0 +1,112 @@
+============================================
+Lustre client-level encryption key hierarchy
+============================================
+
+Lustre client-level encryption relies on kernel's fscrypt, and more
+precisely on v2 encryption policies.
+fscrypt is a library which filesystems can hook into to support
+transparent encryption of files and directories.
+
+As a consequence, the following key hierarchy description, extracted
+from fscrypt's, is directly applicable to Lustre client-level encryption.
+
+Ref:
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/fscrypt.rst
+
+Master Keys
+-----------
+
+Each encrypted directory tree is protected by a *master key*.  Master
+keys can be up to 64 bytes long, and must be at least as long as the
+greater of the key length needed by the contents and filenames
+encryption modes being used.  For example, if AES-256-XTS is used for
+contents encryption, the master key must be 64 bytes (512 bits).  Note
+that the XTS mode is defined to require a key twice as long as that
+required by the underlying block cipher.
+
+To "unlock" an encrypted directory tree, userspace must provide the
+appropriate master key.  There can be any number of master keys, each
+of which protects any number of directory trees on any number of
+filesystems.
+
+Master keys should be pseudorandom, i.e. indistinguishable from random
+bytestrings of the same length.  This implies that users **must not**
+directly use a password as a master key, zero-pad a shorter key, or
+repeat a shorter key.  Instead, users should generate master keys
+either using a cryptographically secure random number generator, or by
+using a KDF (Key Derivation Function).  Note that whenever a KDF is
+used to "stretch" a lower-entropy secret such as a passphrase, it is
+critical that a KDF designed for this purpose be used, such as scrypt,
+PBKDF2, or Argon2.
+
+Key derivation function
+-----------------------
+
+With one exception, fscrypt never uses the master key(s) for
+encryption directly.  Instead, they are only used as input to a KDF
+(Key Derivation Function) to derive the actual keys.
+
+For v2 encryption policies, the KDF is HKDF-SHA512. The master key is
+passed as the "input keying material", no salt is used, and a distinct
+"application-specific information string" is used for each distinct
+key to be derived.  For example, when a per-file encryption key is
+derived, the application-specific information string is the file's
+nonce prefixed with "fscrypt\0" and a context byte.  Different context
+bytes are used for other types of derived keys.
+
+HKDF-SHA512 is preferred KDF because HKDF is more flexible, is
+nonreversible, and evenly distributes entropy from the master key.
+HKDF is also standardized and widely used by other software.
+
+Per-file keys
+-------------
+
+Since each master key can protect many files, it is necessary to
+"tweak" the encryption of each file so that the same plaintext in two
+files doesn't map to the same ciphertext, or vice versa.  In most
+cases, fscrypt does this by deriving per-file keys.  When a new
+encrypted inode (regular file, directory, or symlink) is created,
+fscrypt randomly generates a 16-byte nonce and stores it in the
+inode's encryption xattr.  Then, it uses a KDF (as described in `Key
+derivation function`_) to derive the file's key from the master key
+and nonce.
+
+Key derivation was chosen over key wrapping because wrapped keys would
+require larger xattrs which would be less likely to fit in-line in the
+filesystem's inode table, and there didn't appear to be any
+significant advantages to key wrapping.  In particular, currently
+there is no requirement to support unlocking a file with multiple
+alternative master keys or to support rotating master keys.  Instead,
+the master keys may be wrapped in userspace, e.g. as is done by the
+`fscrypt <https://github.com/google/fscrypt>`_ tool.
+
+Including the inode number in the IVs was considered.  However, it was
+rejected as it would have prevented ext4 filesystems from being
+resized, and by itself still wouldn't have been sufficient to prevent
+the same key from being directly reused for both XTS and CTS-CBC.
+
+DIRECT_KEY and per-mode keys
+----------------------------
+
+The Adiantum encryption mode is suitable for both contents and
+filenames encryption, and it accepts long IVs --- long enough to hold
+both an 8-byte logical block number and a 16-byte per-file nonce.
+Also, the overhead of each Adiantum key is greater than that of an
+AES-256-XTS key.
+
+Therefore, to improve performance and save memory, for Adiantum a
+"direct key" configuration is supported.  When the user has enabled
+this by setting FSCRYPT_POLICY_FLAG_DIRECT_KEY in the fscrypt policy,
+per-file keys are not used.  Instead, whenever any data (contents or
+filenames) is encrypted, the file's 16-byte nonce is included in the
+IV.  Moreover, for v2 encryption policies, the encryption is done with
+a per-mode key derived using the KDF.  Users may use the same master
+key for other v2 encryption policies.
+
+Key identifiers
+---------------
+
+For master keys used for v2 encryption policies, a unique 16-byte "key
+identifier" is also derived using the KDF.  This value is stored in
+the clear, since it is needed to reliably identify the key itself.
+

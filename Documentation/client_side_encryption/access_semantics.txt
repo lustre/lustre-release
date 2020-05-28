@@ -1,0 +1,128 @@
+===============================================
+Lustre client-level encryption access semantics
+===============================================
+
+Lustre client-level encryption relies on kernel's fscrypt, and more
+precisely on v2 encryption policies.
+fscrypt is a library which filesystems can hook into to support
+transparent encryption of files and directories.
+
+As a consequence, the access semantics described here, extracted from
+fscrypt's doc, apply to Lustre client-level encryption.
+
+Ref:
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/fscrypt.rst
+
+Access
+======
+
+Only Lustre clients need access to encryption master keys. Keys are
+added to the filesystem-level encryption keyring on the Lustre client.
+
+With the key
+------------
+
+With the encryption key, encrypted regular files, directories, and
+symlinks behave very similarly to their unencrypted counterparts ---
+after all, the encryption is intended to be transparent.  However,
+astute users may notice some differences in behavior:
+
+- Unencrypted files, or files encrypted with a different encryption
+  policy (i.e. different key, modes, or flags), cannot be renamed or
+  linked into an encrypted directory; see `Encryption policy
+  enforcement`_.  Attempts to do so will fail with EXDEV.  However,
+  encrypted files can be renamed within an encrypted directory, or
+  into an unencrypted directory.
+
+  Note: "moving" an unencrypted file into an encrypted directory, e.g.
+  with the `mv` program, is implemented in userspace by a copy
+  followed by a delete.  Be aware that the original unencrypted data
+  may remain recoverable from free space on the disk; prefer to keep
+  all files encrypted from the very beginning.  The `shred` program
+  may be used to overwrite the source files but isn't guaranteed to be
+  effective on all filesystems and storage devices.
+
+- Direct I/O is not supported on encrypted files.  Attempts to use
+  direct I/O on such files will fall back to buffered I/O.
+
+- The fallocate operations FALLOC_FL_COLLAPSE_RANGE,
+  FALLOC_FL_INSERT_RANGE, and FALLOC_FL_ZERO_RANGE are not supported
+  on encrypted files and will fail with EOPNOTSUPP.
+
+- DAX (Direct Access) is not supported on encrypted files.
+
+- The st_size of an encrypted symlink will not necessarily give the
+  length of the symlink target as required by POSIX.  It will actually
+  give the length of the ciphertext, which will be slightly longer
+  than the plaintext due to NUL-padding and an extra 2-byte overhead.
+
+- The maximum length of an encrypted symlink is 2 bytes shorter than
+  the maximum length of an unencrypted symlink.  For example, on an
+  EXT4 filesystem with a 4K block size, unencrypted symlinks can be up
+  to 4095 bytes long, while encrypted symlinks can only be up to 4093
+  bytes long (both lengths excluding the terminating null).
+
+Note that mmap *is* supported.  This is possible because the pagecache
+for an encrypted file contains the plaintext, not the ciphertext.
+
+Without the key
+---------------
+
+Some filesystem operations may be performed on encrypted regular
+files, directories, and symlinks even before their encryption key has
+been added, or after their encryption key has been removed:
+
+- File metadata may be read, e.g. using stat().
+
+- Directories may be listed, in which case the filenames will be
+  listed in an encoded form derived from their ciphertext.  The
+  algorithm is subject to change, but it is guaranteed that the
+  presented filenames will be no longer than NAME_MAX bytes, will not
+  contain the ``/`` or ``\0`` characters, and will uniquely identify
+  directory entries.
+
+  The ``.`` and ``..`` directory entries are special.  They are always
+  present and are not encrypted or encoded.
+
+- Files may be deleted.  That is, nondirectory files may be deleted
+  with unlink() as usual, and empty directories may be deleted with
+  rmdir() as usual.  Therefore, ``rm`` and ``rm -r`` will work as
+  expected.
+
+- Symlink targets may be read and followed, but they will be presented
+  in encrypted form, similar to filenames in directories.  Hence, they
+  are unlikely to point to anywhere useful.
+
+Without the key, regular files cannot be opened or truncated.
+Attempts to do so will fail with ENOKEY.  This implies that any
+regular file operations that require a file descriptor, such as
+read(), write(), mmap(), fallocate(), and ioctl(), are also forbidden.
+
+Also without the key, files of any type (including directories) cannot
+be created or linked into an encrypted directory, nor can a name in an
+encrypted directory be the source or target of a rename, nor can an
+O_TMPFILE temporary file be created in an encrypted directory.  All
+such operations will fail with ENOKEY.
+
+It is not currently possible to backup and restore encrypted files
+without the encryption key.  This would require special APIs which
+have not yet been implemented.
+
+Encryption policy enforcement
+=============================
+
+After an encryption policy has been set on a directory, all regular
+files, directories, and symbolic links created in that directory
+(recursively) will inherit that encryption policy.  Special files ---
+that is, named pipes, device nodes, and UNIX domain sockets --- will
+not be encrypted.
+
+Except for those special files, it is forbidden to have unencrypted
+files, or files encrypted with a different encryption policy, in an
+encrypted directory tree.  Attempts to link or rename such a file into
+an encrypted directory will fail with EXDEV.  This is also enforced
+during ->lookup() to provide limited protection against offline
+attacks that try to disable or downgrade encryption in known locations
+where applications may later write sensitive data.  It is recommended
+that systems implementing a form of "verified boot" take advantage of
+this by validating all top-level encryption policies prior to access.
