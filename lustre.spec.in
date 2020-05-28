@@ -100,6 +100,7 @@
     %endif
 %endif
 
+%if %{with lustre_modules}
 %if %{undefined kmoddir}
     %if %{defined kernel_module_package_moddir}
         %global kmoddir %{kernel_module_package_moddir}
@@ -117,7 +118,6 @@
 %global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
-	%global requires_yaml_name libyaml
 	%global requires_kmod_name kmod-%{lustre_name}
 	%global requires_kmod_osd_zfs_name kmod-%{lustre_name}-osd-zfs
 	%if %{with lustre_tests}
@@ -125,7 +125,6 @@
 	%endif
 	%global requires_kmod_version %{version}
 %else	#for Suse
-	%global requires_yaml_name libyaml-0-2
 	%global requires_kmod_name %{lustre_name}-kmp
 	%global requires_kmod_osd_zfs_name %{lustre_name}-osd-zfs-kmp
 	%if %{with lustre_tests}
@@ -136,6 +135,13 @@
 	%else
 		%global requires_kmod_version %{version}_%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
 	%endif
+%endif
+%endif
+
+%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+	%global requires_yaml_name libyaml
+%else	#for Suse
+	%global requires_yaml_name libyaml-0-2
 %endif
 
 # RHEL >= 7 comes with systemd
@@ -173,7 +179,10 @@ Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
 URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
-Requires: %{requires_kmod_name} = %{requires_kmod_version} zlib
+%if %{with lustre_modules}
+Requires: %{requires_kmod_name} = %{requires_kmod_version}
+%endif
+Requires: zlib
 Requires: %{requires_yaml_name}
 BuildRequires: libtool libyaml-devel zlib-devel binutils-devel
 %if %{_vendor}=="redhat"
@@ -309,8 +318,10 @@ Provides: lustre-tests = %{version}
 Requires: lustre-iokit
 %endif
 Requires: lustre-client = %{version}
+%if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
+%endif
 Requires: attr, rsync, perl, lsof, libtool, /usr/bin/getconf
 %if %{with mpi}
 %if %{mpi_name} == "mpich"
