@@ -47,10 +47,10 @@
 #include <lustre_lmv.h>
 
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
-                                     struct md_attr *ma)
+				     struct md_attr *ma)
 {
 	ma->ma_need = MA_INODE;
-        ma->ma_valid = 0;
+	ma->ma_valid = 0;
 }
 
 /**
@@ -59,7 +59,7 @@ static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
  * Return real version or ENOENT_VERSION if object doesn't exist
  */
 static void mdt_obj_version_get(struct mdt_thread_info *info,
-                                struct mdt_object *o, __u64 *version)
+				struct mdt_object *o, __u64 *version)
 {
 	LASSERT(o);
 
@@ -78,20 +78,20 @@ static void mdt_obj_version_get(struct mdt_thread_info *info,
  * Should be called only during replay.
  */
 static int mdt_version_check(struct ptlrpc_request *req,
-                             __u64 version, int idx)
+			     __u64 version, int idx)
 {
-        __u64 *pre_ver = lustre_msg_get_versions(req->rq_reqmsg);
-        ENTRY;
+	__u64 *pre_ver = lustre_msg_get_versions(req->rq_reqmsg);
 
-        if (!exp_connect_vbr(req->rq_export))
-                RETURN(0);
+	ENTRY;
+	if (!exp_connect_vbr(req->rq_export))
+		RETURN(0);
 
-        LASSERT(req_is_replay(req));
-        /** VBR: version is checked always because costs nothing */
-        LASSERT(idx < PTLRPC_NUM_VERSIONS);
-        /** Sanity check for malformed buffers */
-        if (pre_ver == NULL) {
-                CERROR("No versions in request buffer\n");
+	LASSERT(req_is_replay(req));
+	/** VBR: version is checked always because costs nothing */
+	LASSERT(idx < PTLRPC_NUM_VERSIONS);
+	/** Sanity check for malformed buffers */
+	if (pre_ver == NULL) {
+		CERROR("No versions in request buffer\n");
 		spin_lock(&req->rq_export->exp_lock);
 		req->rq_export->exp_vbr_failed = 1;
 		spin_unlock(&req->rq_export->exp_lock);
@@ -111,18 +111,18 @@ static int mdt_version_check(struct ptlrpc_request *req,
  * Save pre-versions in reply.
  */
 static void mdt_version_save(struct ptlrpc_request *req, __u64 version,
-                             int idx)
+			     int idx)
 {
-        __u64 *reply_ver;
+	__u64 *reply_ver;
 
-        if (!exp_connect_vbr(req->rq_export))
-                return;
+	if (!exp_connect_vbr(req->rq_export))
+		return;
 
-        LASSERT(!req_is_replay(req));
-        LASSERT(req->rq_repmsg != NULL);
-        reply_ver = lustre_msg_get_versions(req->rq_repmsg);
-        if (reply_ver)
-                reply_ver[idx] = version;
+	LASSERT(!req_is_replay(req));
+	LASSERT(req->rq_repmsg != NULL);
+	reply_ver = lustre_msg_get_versions(req->rq_repmsg);
+	if (reply_ver)
+		reply_ver[idx] = version;
 }
 
 /**
@@ -131,11 +131,11 @@ static void mdt_version_save(struct ptlrpc_request *req, __u64 version,
  */
 static void mdt_enoent_version_save(struct mdt_thread_info *info, int idx)
 {
-        /* save version of file name for replay, it must be ENOENT here */
-        if (!req_is_replay(mdt_info_req(info))) {
-                info->mti_ver[idx] = ENOENT_VERSION;
-                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
-        }
+	/* save version of file name for replay, it must be ENOENT here */
+	if (!req_is_replay(mdt_info_req(info))) {
+		info->mti_ver[idx] = ENOENT_VERSION;
+		mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+	}
 }
 
 /**
@@ -144,44 +144,44 @@ static void mdt_enoent_version_save(struct mdt_thread_info *info, int idx)
  * Versions are saved in reply only during normal operations not replays.
  */
 void mdt_version_get_save(struct mdt_thread_info *info,
-                          struct mdt_object *mto, int idx)
+			  struct mdt_object *mto, int idx)
 {
-        /* don't save versions during replay */
-        if (!req_is_replay(mdt_info_req(info))) {
-                mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
-                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
-        }
+	/* don't save versions during replay */
+	if (!req_is_replay(mdt_info_req(info))) {
+		mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+		mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+	}
 }
 
 /**
  * Get version from disk and check it, no save in reply.
  */
 int mdt_version_get_check(struct mdt_thread_info *info,
-                          struct mdt_object *mto, int idx)
+			  struct mdt_object *mto, int idx)
 {
-        /* only check versions during replay */
-        if (!req_is_replay(mdt_info_req(info)))
-                return 0;
+	/* only check versions during replay */
+	if (!req_is_replay(mdt_info_req(info)))
+		return 0;
 
-        mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
-        return mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
+	mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+	return mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
 }
 
 /**
  * Get version from disk and check if recovery or just save.
  */
 int mdt_version_get_check_save(struct mdt_thread_info *info,
-                               struct mdt_object *mto, int idx)
+			       struct mdt_object *mto, int idx)
 {
-        int rc = 0;
+	int rc = 0;
 
-        mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
-        if (req_is_replay(mdt_info_req(info)))
-                rc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx],
-                                       idx);
-        else
-                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
-        return rc;
+	mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+	if (req_is_replay(mdt_info_req(info)))
+		rc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx],
+				       idx);
+	else
+		mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+	return rc;
 }
 
 /**
@@ -195,25 +195,26 @@ int mdt_lookup_version_check(struct mdt_thread_info *info,
 			     const struct lu_name *lname,
 			     struct lu_fid *fid, int idx)
 {
-        int rc, vbrc;
+	int rc, vbrc;
 
-        rc = mdo_lookup(info->mti_env, mdt_object_child(p), lname, fid,
-                        &info->mti_spec);
-        /* Check version only during replay */
-        if (!req_is_replay(mdt_info_req(info)))
-                return rc;
+	rc = mdo_lookup(info->mti_env, mdt_object_child(p), lname, fid,
+			&info->mti_spec);
+	/* Check version only during replay */
+	if (!req_is_replay(mdt_info_req(info)))
+		return rc;
 
-        info->mti_ver[idx] = ENOENT_VERSION;
-        if (rc == 0) {
-                struct mdt_object *child;
-                child = mdt_object_find(info->mti_env, info->mti_mdt, fid);
-                if (likely(!IS_ERR(child))) {
-                        mdt_obj_version_get(info, child, &info->mti_ver[idx]);
-                        mdt_object_put(info->mti_env, child);
-                }
-        }
-        vbrc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
-        return vbrc ? vbrc : rc;
+	info->mti_ver[idx] = ENOENT_VERSION;
+	if (rc == 0) {
+		struct mdt_object *child;
+
+		child = mdt_object_find(info->mti_env, info->mti_mdt, fid);
+		if (likely(!IS_ERR(child))) {
+			mdt_obj_version_get(info, child, &info->mti_ver[idx]);
+			mdt_object_put(info->mti_env, child);
+		}
+	}
+	vbrc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
+	return vbrc ? vbrc : rc;
 
 }
 
@@ -360,7 +361,6 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	if (!mdt->mdt_enable_dir_restripe)
 		RETURN(-EPERM);
 
@@ -490,8 +490,8 @@ static int mdt_create(struct mdt_thread_info *info)
 	struct md_op_spec *spec = &info->mti_spec;
 	bool restripe = false;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	DEBUG_REQ(D_INODE, mdt_info_req(info),
 		  "Create ("DNAME"->"DFID") in "DFID,
 		  PNAME(&rr->rr_name), PFID(rr->rr_fid2), PFID(rr->rr_fid1));
@@ -506,7 +506,8 @@ static int mdt_create(struct mdt_thread_info *info)
 		struct obd_export *exp = mdt_info_req(info)->rq_export;
 
 		/* Only new clients can create remote dir( >= 2.4) and
-		 * striped dir(>= 2.6), old client will return -ENOTSUPP */
+		 * striped dir(>= 2.6), old client will return -ENOTSUPP
+		 */
 		if (!mdt_is_dne_client(exp))
 			RETURN(-ENOTSUPP);
 
@@ -680,8 +681,8 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
 	bool cos_incompat;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = mdt_object_striped(info, mo);
 	if (rc < 0)
 		RETURN(rc);
@@ -694,7 +695,8 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	/* Even though the new MDT will grant PERM lock to the old
 	 * client, but the old client will almost ignore that during
 	 * So it needs to revoke both LOOKUP and PERM lock here, so
-	 * both new and old client can cancel the dcache */
+	 * both new and old client can cancel the dcache
+	 */
 	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
 		lockpart |= MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
 
@@ -747,8 +749,8 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 	struct lu_ucred *uc = mdt_ucred(info);
 	cfs_cap_t cap_saved;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	/* If the file was modified, add the dirty flag */
 	ma->ma_need = MA_HSM;
 	rc = mdt_attr_get_complex(info, mo, ma);
@@ -764,7 +766,8 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 		ma->ma_hsm.mh_flags |= HS_DIRTY;
 
 		/* Bump cap so that closes from non-owner writers can
-		 * set the HSM state to dirty. */
+		 * set the HSM state to dirty.
+		 */
 		cap_saved = uc->uc_cap;
 		uc->uc_cap |= MD_CAP_TO_MASK(CFS_CAP_FOWNER);
 		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
@@ -787,8 +790,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	struct mdt_object *mo;
 	struct mdt_body *repbody;
 	int rc, rc2;
-	ENTRY;
 
+	ENTRY;
 	DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
 		  (unsigned int)ma->ma_attr.la_valid);
 
@@ -837,7 +840,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			GOTO(out_put, rc = -ETXTBSY);
 
 		/* LU-10286: compatibility check for FLR.
-		 * Please check the comment in mdt_finish_open() for details */
+		 * Please check the comment in mdt_finish_open() for details
+		 */
 		if (!exp_connect_flr(info->mti_exp) ||
 		    !exp_connect_overstriping(info->mti_exp)) {
 			rc = mdt_big_xattr_get(info, mo, XATTR_NAME_LOV);
@@ -941,8 +945,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (ma->ma_attr_flags & MDS_DATA_MODIFIED)
 		rc = mdt_add_dirty_flag(info, mo, ma);
 
-        ma->ma_need = MA_INODE;
-        ma->ma_valid = 0;
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
 	rc = mdt_attr_get_complex(info, mo, ma);
 	if (rc != 0)
 		GOTO(out_put, rc);
@@ -956,22 +960,22 @@ out:
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_SETATTR);
 
-        mdt_client_compatibility(info);
-        rc2 = mdt_fix_reply(info);
-        if (rc == 0)
-                rc = rc2;
-        return rc;
+	mdt_client_compatibility(info);
+	rc2 = mdt_fix_reply(info);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
 }
 
 static int mdt_reint_create(struct mdt_thread_info *info,
-                            struct mdt_lock_handle *lhc)
+			    struct mdt_lock_handle *lhc)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        int                     rc;
-        ENTRY;
+	struct ptlrpc_request   *req = mdt_info_req(info);
+	int                     rc;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
-                RETURN(err_serious(-ESTALE));
+	ENTRY;
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
+		RETURN(err_serious(-ESTALE));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(mdt_info_req(info),
@@ -984,11 +988,11 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 	case S_IFDIR:
 		mdt_counter_incr(req, LPROC_MDT_MKDIR);
 		break;
-        case S_IFREG:
-        case S_IFLNK:
-        case S_IFCHR:
-        case S_IFBLK:
-        case S_IFIFO:
+	case S_IFREG:
+	case S_IFLNK:
+	case S_IFCHR:
+	case S_IFBLK:
+	case S_IFIFO:
 	case S_IFSOCK:
 		/* Special file should stay on the same node as parent. */
 		mdt_counter_incr(req, LPROC_MDT_MKNOD);
@@ -1026,7 +1030,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	DEBUG_REQ(D_INODE, req, "unlink "DFID"/"DNAME"", PFID(rr->rr_fid1),
 		  PNAME(&rr->rr_name));
 
@@ -1076,15 +1079,15 @@ relock:
 		 *    find the name entry on MDT0 anymore.
 		 * In this case, MDT1 only needs to destory the local
 		 * directory.
-		 * */
+		 */
 		if (mdt_object_remote(mp) && rc == -ENOENT &&
 		    !fid_is_zero(rr->rr_fid2) &&
 		    lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
 			no_name = 1;
 			*child_fid = *rr->rr_fid2;
-		 } else {
+		} else {
 			GOTO(unlock_parent, rc);
-		 }
+		}
 	}
 
 	if (!fid_is_md_operative(child_fid))
@@ -1148,7 +1151,8 @@ relock:
 		 * this MDT. Since the unlink will happen on another MDT,
 		 * it will release the LOOKUP lock right away. Then What
 		 * would happen if another client try to grab the LOOKUP
-		 * lock at the same time with unlink XXX */
+		 * lock at the same time with unlink XXX
+		 */
 		mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_LOOKUP);
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
@@ -1158,7 +1162,8 @@ relock:
 	}
 	/* We used to acquire MDS_INODELOCK_FULL here but we can't do
 	 * this now because a running HSM restore on the child (unlink
-	 * victim) will hold the layout lock. See LU-4002. */
+	 * victim) will hold the layout lock. See LU-4002.
+	 */
 	lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE;
 	if (mdt_object_remote(mp)) {
 		/* Enqueue lookup lock from parent MDT */
@@ -1238,7 +1243,7 @@ unlock_parent:
 put_parent:
 	mdt_object_put(info->mti_env, mp);
 	CFS_RACE_WAKEUP(OBD_FAIL_OBD_ZERO_NLINK_RACE);
-        return rc;
+	return rc;
 }
 
 /*
@@ -1257,8 +1262,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	struct mdt_lock_handle  *lhp;
 	bool cos_incompat;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/"DNAME,
 		  PFID(rr->rr_fid1), PFID(rr->rr_fid2), PNAME(&rr->rr_name));
 
@@ -1274,7 +1279,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
 	/* Invalid case so return error immediately instead of
-	 * processing it */
+	 * processing it
+	 */
 	if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
 		RETURN(-EPERM);
 
@@ -1407,15 +1413,16 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 			   struct lustre_handle *lh)
 {
 	int	rc;
-	ENTRY;
 
+	ENTRY;
 	if (mdt_seq_site(info->mti_mdt)->ss_node_id != 0) {
 		struct lu_fid *fid = &info->mti_tmp_fid1;
 		struct mdt_object *obj;
 
 		/* XXX, right now, it has to use object API to
 		 * enqueue lock cross MDT, so it will enqueue
-		 * rename lock(with LUSTRE_BFL_FID) by root object */
+		 * rename lock(with LUSTRE_BFL_FID) by root object
+		 */
 		lu_root_fid(fid);
 		obj = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 		if (IS_ERR(obj))
@@ -1433,7 +1440,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 		__u64 flags = 0;
 
 		fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
-		memset(policy, 0, sizeof *policy);
+		memset(policy, 0, sizeof(*policy));
 		policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 		flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
 		rc = ldlm_cli_enqueue_local(info->mti_env, ns, res_id,
@@ -1465,7 +1472,6 @@ static struct mdt_object *mdt_parent_find_check(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	dir = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(dir))
 		RETURN(dir);
@@ -1540,9 +1546,9 @@ int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
  * different list.
  */
 struct mdt_sub_lock {
-	struct mdt_object      *msl_obj;
-	struct mdt_lock_handle	msl_lh;
-	struct list_head	msl_linkage;
+	struct mdt_object *msl_obj;
+	struct mdt_lock_handle msl_lh;
+	struct list_head msl_linkage;
 };
 
 static void mdt_unlock_list(struct mdt_thread_info *info,
@@ -1599,7 +1605,6 @@ static int mdt_link_parents_lock(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	if (S_ISDIR(lu_object_attr(&obj->mot_obj)))
 		RETURN(0);
 
@@ -1801,7 +1806,6 @@ static int mdt_lock_remote_slaves(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	LASSERT(mdt_object_remote(obj));
 	LASSERT(ma->ma_valid & MA_LMV);
 	LASSERT(lmv);
@@ -2125,8 +2129,8 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	bool open_sem_locked = false;
 	bool do_sync = false;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_INODE, "migrate "DFID"/"DNAME" to "DFID"\n", PFID(rr->rr_fid1),
 	       PNAME(&rr->rr_name), PFID(rr->rr_fid2));
 
@@ -2304,7 +2308,8 @@ unlock_open_sem:
 		up_write(&sobj->mot_open_sem);
 unlock_links:
 	/* if we've got too many locks to save into RPC,
-	 * then just commit before the locks are released */
+	 * then just commit before the locks are released
+	 */
 	if (!rc && do_sync)
 		mdt_device_sync(env, mdt);
 	mdt_unlock_list(info, &link_locks, do_sync ? 1 : rc);
@@ -2456,8 +2461,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	bool reverse = false, discard = false;
 	bool cos_incompat;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	DEBUG_REQ(D_INODE, req, "rename "DFID"/"DNAME" to "DFID"/"DNAME,
 		  PFID(rr->rr_fid1), PNAME(&rr->rr_name),
 		  PFID(rr->rr_fid2), PNAME(&rr->rr_tgt_name));
@@ -2521,7 +2526,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	/* source needs to be looked up after locking source parent, otherwise
 	 * this rename may race with unlink source, and cause rename hang, see
 	 * sanityn.sh 55b, so check parents first, if later we found source is
-	 * remote, relock parents. */
+	 * remote, relock parents.
+	 */
 	cos_incompat = (mdt_object_remote(msrcdir) ||
 			mdt_object_remote(mtgtdir));
 
@@ -2604,7 +2610,8 @@ relock:
 		GOTO(out_put_old, rc = -EXDEV);
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
-	 * to avoid reverse locking. */
+	 * to avoid reverse locking.
+	 */
 	if (mtgtdir != msrcdir) {
 		rc = mdo_is_subdir(info->mti_env, mdt_object_child(mtgtdir),
 				   old_fid);
@@ -2629,7 +2636,8 @@ relock:
 
 	/* find mnew object:
 	 * mnew target object may not exist now
-	 * lookup with version checking */
+	 * lookup with version checking
+	 */
 	fid_zero(new_fid);
 	rc = mdt_lookup_version_check(info, mtgtdir, &rr->rr_tgt_name, new_fid,
 				      3);
@@ -2670,7 +2678,8 @@ relock:
 		/* Before locking the target dir, check we do not replace
 		 * a dir with a non-dir, otherwise it may deadlock with
 		 * link op which tries to create a link in this dir
-		 * back to this non-dir. */
+		 * back to this non-dir.
+		 */
 		if (S_ISDIR(lu_object_attr(&mnew->mot_obj)) &&
 		    !S_ISDIR(lu_object_attr(&mold->mot_obj)))
 			GOTO(out_put_new, rc = -EISDIR);
@@ -2698,7 +2707,8 @@ relock:
 			GOTO(out_unlock_old, rc);
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
-		 * to avoid reverse locking. */
+		 * to avoid reverse locking.
+		 */
 		if (mtgtdir != msrcdir) {
 			rc = mdo_is_subdir(info->mti_env,
 					   mdt_object_child(msrcdir), new_fid);
@@ -2712,7 +2722,8 @@ relock:
 		/* We used to acquire MDS_INODELOCK_FULL here but we
 		 * can't do this now because a running HSM restore on
 		 * the rename onto victim will hold the layout
-		 * lock. See LU-4002. */
+		 * lock. See LU-4002.
+		 */
 
 		lh_newp = &info->mti_lh[MDT_LH_NEW];
 		mdt_lock_reg_init(lh_newp, LCK_EX);
@@ -2828,7 +2839,6 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	int rc, rc2;
 
 	ENTRY;
-
 	DEBUG_REQ(D_INODE, req, DFID", FLR file resync", PFID(rr->rr_fid1));
 
 	if (info->mti_dlm_req)
@@ -2854,7 +2864,8 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	/* It's really necessary to grab open_sem and check if the lease lock
 	 * has been lost. There would exist a concurrent writer coming in and
 	 * generating some dirty data in memory cache, the writeback would fail
-	 * after the layout version is increased by MDS_REINT_RESYNC RPC. */
+	 * after the layout version is increased by MDS_REINT_RESYNC RPC.
+	 */
 	if (!down_write_trylock(&mo->mot_open_sem))
 		GOTO(out_put_lease, rc = -EBUSY);
 
@@ -2950,8 +2961,8 @@ int mdt_reint_rec(struct mdt_thread_info *info,
 {
 	const struct mdt_reinter *mr;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	if (!(info->mti_rr.rr_opcode < ARRAY_SIZE(mdt_reinters)))
 		RETURN(-EPROTO);
 
