@@ -58,7 +58,8 @@ MODULE_PARM_DESC(oss_cpu_bind,
 
 static int oss_num_create_threads;
 module_param(oss_num_create_threads, int, 0444);
-MODULE_PARM_DESC(oss_num_create_threads, "number of OSS create threads to start");
+MODULE_PARM_DESC(oss_num_create_threads,
+		 "number of OSS create threads to start");
 
 static unsigned int oss_create_cpu_bind = 1;
 module_param(oss_create_cpu_bind, uint, 0444);
@@ -75,15 +76,16 @@ MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 
 #define OST_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
-static struct cfs_cpt_table	*ost_io_cptable;
+static struct cfs_cpt_table *ost_io_cptable;
 
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
-static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
+static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	static struct ptlrpc_service_conf	svc_conf;
+	static struct ptlrpc_service_conf svc_conf;
 	struct ost_obd *ost = &obd->u.ost;
-	nodemask_t		*mask;
+	nodemask_t *mask;
 	int rc;
+
 	ENTRY;
 
 	rc = lprocfs_obd_setup(obd, true);
@@ -130,7 +132,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		rc = PTR_ERR(ost->ost_service);
 		CERROR("failed to start service: %d\n", rc);
 		GOTO(out_lprocfs, rc);
-        }
+	}
 
 	memset(&svc_conf, 0, sizeof(svc_conf));
 	svc_conf = (typeof(svc_conf)) {
@@ -165,23 +167,25 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_create_service = ptlrpc_register_service(&svc_conf,
 							  &obd->obd_kset,
-							  obd->obd_debugfs_entry);
+							  obd->obd_debugfs_entry
+							  );
 	if (IS_ERR(ost->ost_create_service)) {
 		rc = PTR_ERR(ost->ost_create_service);
 		CERROR("failed to start OST create service: %d\n", rc);
 		GOTO(out_service, rc);
-        }
+	}
 
 	mask = cfs_cpt_nodemask(cfs_cpt_tab, CFS_CPT_ANY);
 	/* event CPT feature is disabled in libcfs level by set partition
-	 * number to 1, we still want to set node affinity for io service */
+	 * number to 1, we still want to set node affinity for io service
+	 */
 	if (cfs_cpt_number(cfs_cpt_tab) == 1 && nodes_weight(*mask) > 1) {
 		int	cpt = 0;
 		int	i;
 
 		ost_io_cptable = cfs_cpt_table_alloc(nodes_weight(*mask));
 		for_each_node_mask(i, *mask) {
-			if (ost_io_cptable == NULL) {
+			if (!ost_io_cptable) {
 				CWARN("OSS failed to create CPT table\n");
 				break;
 			}
@@ -241,7 +245,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		CERROR("failed to start OST I/O service: %d\n", rc);
 		ost->ost_io_service = NULL;
 		GOTO(out_create, rc);
-        }
+	}
 
 	memset(&svc_conf, 0, sizeof(svc_conf));
 	svc_conf = (typeof(svc_conf)) {
@@ -345,26 +349,28 @@ out_io:
 	ptlrpc_unregister_service(ost->ost_io_service);
 	ost->ost_io_service = NULL;
 out_create:
-        ptlrpc_unregister_service(ost->ost_create_service);
-        ost->ost_create_service = NULL;
+	ptlrpc_unregister_service(ost->ost_create_service);
+	ost->ost_create_service = NULL;
 out_service:
-        ptlrpc_unregister_service(ost->ost_service);
-        ost->ost_service = NULL;
+	ptlrpc_unregister_service(ost->ost_service);
+	ost->ost_service = NULL;
 out_lprocfs:
 	lprocfs_obd_cleanup(obd);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int ost_cleanup(struct obd_device *obd)
 {
 	struct ost_obd *ost = &obd->u.ost;
 	int err = 0;
+
 	ENTRY;
 
 	ping_evictor_stop();
 
 	/* there is no recovery for OST OBD, all recovery is controlled by
-	 * obdfilter OBD */
+	 * obdfilter OBD
+	 */
 	LASSERT(obd->obd_recovering == 0);
 	mutex_lock(&ost->ost_health_mutex);
 	ptlrpc_unregister_service(ost->ost_service);
@@ -383,7 +389,7 @@ static int ost_cleanup(struct obd_device *obd)
 
 	lprocfs_obd_cleanup(obd);
 
-	if (ost_io_cptable != NULL) {
+	if (ost_io_cptable) {
 		cfs_cpt_table_free(ost_io_cptable);
 		ost_io_cptable = NULL;
 	}
@@ -408,12 +414,11 @@ static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 
 /* use obd ops to offer management infrastructure */
 static const struct obd_ops ost_obd_ops = {
-        .o_owner        = THIS_MODULE,
-        .o_setup        = ost_setup,
-        .o_cleanup      = ost_cleanup,
-        .o_health_check = ost_health_check,
+	.o_owner        = THIS_MODULE,
+	.o_setup        = ost_setup,
+	.o_cleanup      = ost_cleanup,
+	.o_health_check = ost_health_check,
 };
-
 
 static int __init ost_init(void)
 {
@@ -424,7 +429,7 @@ static int __init ost_init(void)
 	rc = class_register_type(&ost_obd_ops, NULL, false, NULL,
 				 LUSTRE_OSS_NAME, NULL);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static void __exit ost_exit(void)
