@@ -10436,3 +10436,40 @@ statx_supported() {
 	$STATX --quiet --version
 	return $?
 }
+
+#
+# wrappers for createmany and unlinkmany
+# to set debug=0 if number of creates is high enough
+# this is to speedup testing
+#
+function createmany() {
+	local count=${!#}
+
+	(( count > 100 )) && {
+		local saved_debug=$($LCTL get_param -n debug)
+		local list=$(comma_list $(all_nodes))
+
+		do_nodes $list $LCTL set_param debug=0
+	}
+	$LUSTRE/tests/createmany $*
+	local rc=$?
+	(( count > 100 )) &&
+		do_nodes $list "$LCTL set_param debug=\\\"$saved_debug\\\""
+	return $rc
+}
+
+function unlinkmany() {
+	local count=${!#}
+
+	(( count > 100 )) && {
+		local saved_debug=$($LCTL get_param -n debug)
+		local list=$(comma_list $(all_nodes))
+
+		do_nodes $list $LCTL set_param debug=0
+	}
+	$LUSTRE/tests/unlinkmany $*
+	local rc=$?
+	(( count > 100 )) &&
+		do_nodes $list "$LCTL set_param debug=\\\"$saved_debug\\\""
+	return $rc
+}
