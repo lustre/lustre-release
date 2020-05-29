@@ -100,12 +100,12 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 		i <<= 1;
 
 	CDEBUG(D_OTHER, "realloc %u for %u (%u) pages\n",
-	       (unsigned)(pages * sizeof(iobuf->dr_pages[0])), i, pages);
+	       (unsigned int)(pages * sizeof(iobuf->dr_pages[0])), i, pages);
 	pages = i;
 	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	iobuf->dr_max_pages = 0;
 	CDEBUG(D_OTHER, "realloc %u for %u blocks\n",
-	       (unsigned)(blocks * sizeof(iobuf->dr_blocks[0])), blocks);
+	       (unsigned int)(blocks * sizeof(iobuf->dr_blocks[0])), blocks);
 
 	lu_buf_realloc(&iobuf->dr_bl_buf, blocks * sizeof(iobuf->dr_blocks[0]));
 	iobuf->dr_blocks = iobuf->dr_bl_buf.lb_buf;
@@ -141,18 +141,17 @@ static void osd_iobuf_add_page(struct osd_iobuf *iobuf,
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 {
-        int rw = iobuf->dr_rw;
+	int rw = iobuf->dr_rw;
 
-        if (iobuf->dr_elapsed_valid) {
-                iobuf->dr_elapsed_valid = 0;
-                LASSERT(iobuf->dr_dev == d);
-                LASSERT(iobuf->dr_frags > 0);
-                lprocfs_oh_tally(&d->od_brw_stats.
-                                 hist[BRW_R_DIO_FRAGS+rw],
-                                 iobuf->dr_frags);
+	if (iobuf->dr_elapsed_valid) {
+		iobuf->dr_elapsed_valid = 0;
+		LASSERT(iobuf->dr_dev == d);
+		LASSERT(iobuf->dr_frags > 0);
+		lprocfs_oh_tally(&d->od_brw_stats.hist[BRW_R_DIO_FRAGS+rw],
+				 iobuf->dr_frags);
 		lprocfs_oh_tally_log2(&d->od_brw_stats.hist[BRW_R_IO_TIME+rw],
 				      ktime_to_ms(iobuf->dr_elapsed));
-        }
+	}
 }
 
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
@@ -166,18 +165,12 @@ static void dio_complete_routine(struct bio *bio, int error)
 	struct osd_iobuf *iobuf = bio->bi_private;
 	struct bio_vec *bvl;
 
-        /* CAVEAT EMPTOR: possibly in IRQ context
-         * DO NOT record procfs stats here!!! */
+	/* CAVEAT EMPTOR: possibly in IRQ context
+	 * DO NOT record procfs stats here!!!
+	 */
 
 	if (unlikely(iobuf == NULL)) {
-		CERROR("***** bio->bi_private is NULL!  This should never "
-		       "happen.  Normally, I would crash here, but instead I "
-		       "will dump the bio contents to the console.  Please "
-		       "report this to <https://jira.whamcloud.com/> , along "
-		       "with any interesting messages leading up to this point "
-		       "(like SCSI errors, perhaps).  Because bi_private is "
-		       "NULL, I can't wake up the thread that initiated this "
-		       "IO - you will probably have to reboot this node.\n");
+		CERROR("***** bio->bi_private is NULL!  This should never happen.  Normally, I would crash here, but instead I will dump the bio contents to the console.  Please report this to <https://jira.whamcloud.com/> , along with any interesting messages leading up to this point (like SCSI errors, perhaps).  Because bi_private is NULL, I can't wake up the thread that initiated this IO - you will probably have to reboot this node.\n");
 		CERROR("bi_next: %p, bi_flags: %lx, " __stringify(bi_opf)
 		       ": %x, bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, bi_private: %p\n",
 		       bio->bi_next, (unsigned long)bio->bi_flags,
@@ -226,7 +219,8 @@ static void dio_complete_routine(struct bio *bio, int error)
 	 * filter_clear_dreq().  It was then possible to exhaust the biovec-256
 	 * mempool when serious on-disk fragmentation was encountered,
 	 * deadlocking the OST.  The bios are now released as soon as complete
-	 * so the pool cannot be exhausted while IOs are competing. bug 10076 */
+	 * so the pool cannot be exhausted while IOs are competing. b=10076
+	 */
 	bio_put(bio);
 }
 
@@ -306,9 +300,8 @@ static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
 	for (i = 0; i < sectors; i++) {
 		bio_guard = (__u16 *)bio_prot_buf;
 		if (*bio_guard != *expected_guard) {
-			CERROR("unexpected guard tags on sector %d "
-			       "expected guard %u, bio guard "
-			       "%u, sectors %u, tuple size %d\n",
+			CERROR(
+			       "unexpected guard tags on sector %d expected guard %u, bio guard %u, sectors %u, tuple size %d\n",
 			       i, *expected_guard, *bio_guard, sectors,
 			       tuple_size);
 			return -EIO;
@@ -446,7 +439,7 @@ static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 }
 
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
-                      struct osd_iobuf *iobuf)
+		      struct osd_iobuf *iobuf)
 {
 	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	struct page **pages = iobuf->dr_pages;
@@ -474,7 +467,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	ENTRY;
 
 	fault_inject = OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
-        LASSERT(iobuf->dr_npages == npages);
+	LASSERT(iobuf->dr_npages == npages);
 
 	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
 
@@ -482,42 +475,39 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	iobuf->dr_start_time = ktime_get();
 
 	blk_start_plug(&plug);
-        for (page_idx = 0, block_idx = 0;
-             page_idx < npages;
-             page_idx++, block_idx += blocks_per_page) {
+	for (page_idx = 0, block_idx = 0;
+	     page_idx < npages;
+	     page_idx++, block_idx += blocks_per_page) {
+		page = pages[page_idx];
+		LASSERT(block_idx + blocks_per_page <= total_blocks);
 
-                page = pages[page_idx];
-                LASSERT(block_idx + blocks_per_page <= total_blocks);
+		for (i = 0, page_offset = 0;
+		     i < blocks_per_page;
+		     i += nblocks, page_offset += blocksize * nblocks) {
+			nblocks = 1;
 
-                for (i = 0, page_offset = 0;
-                     i < blocks_per_page;
-                     i += nblocks, page_offset += blocksize * nblocks) {
+			if (blocks[block_idx + i] == 0) {  /* hole */
+				LASSERTF(iobuf->dr_rw == 0,
+					 "page_idx %u, block_idx %u, i %u\n",
+					 page_idx, block_idx, i);
+				memset(kmap(page) + page_offset, 0, blocksize);
+				kunmap(page);
+				continue;
+			}
 
-                        nblocks = 1;
+			sector = (sector_t)blocks[block_idx + i] << sector_bits;
 
-                        if (blocks[block_idx + i] == 0) {  /* hole */
-                                LASSERTF(iobuf->dr_rw == 0,
-                                         "page_idx %u, block_idx %u, i %u\n",
-                                         page_idx, block_idx, i);
-                                memset(kmap(page) + page_offset, 0, blocksize);
-                                kunmap(page);
-                                continue;
-                        }
+			/* Additional contiguous file blocks? */
+			while (i + nblocks < blocks_per_page &&
+			       (sector + (nblocks << sector_bits)) ==
+			       ((sector_t)blocks[block_idx + i + nblocks] <<
+				 sector_bits))
+				nblocks++;
 
-                        sector = (sector_t)blocks[block_idx + i] << sector_bits;
-
-                        /* Additional contiguous file blocks? */
-                        while (i + nblocks < blocks_per_page &&
-                               (sector + (nblocks << sector_bits)) ==
-                               ((sector_t)blocks[block_idx + i + nblocks] <<
-                                sector_bits))
-                                nblocks++;
-
-                        if (bio != NULL &&
-                            can_be_merged(bio, sector) &&
-                            bio_add_page(bio, page,
-                                         blocksize * nblocks, page_offset) != 0)
-                                continue;       /* added this frag OK */
+			if (bio && can_be_merged(bio, sector) &&
+			    bio_add_page(bio, page, blocksize * nblocks,
+					 page_offset) != 0)
+				continue;       /* added this frag OK */
 
 			if (bio != NULL) {
 				struct request_queue *q = bio_get_queue(bio);
@@ -548,13 +538,13 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 			bio = bio_alloc(GFP_NOIO, min(BIO_MAX_PAGES,
 						      (npages - page_idx) *
 						      blocks_per_page));
-                        if (bio == NULL) {
-                                CERROR("Can't allocate bio %u*%u = %u pages\n",
-                                       (npages - page_idx), blocks_per_page,
-                                       (npages - page_idx) * blocks_per_page);
-                                rc = -ENOMEM;
-                                goto out;
-                        }
+			if (bio == NULL) {
+				CERROR("Can't allocate bio %u*%u = %u pages\n",
+				       (npages - page_idx), blocks_per_page,
+				       (npages - page_idx) * blocks_per_page);
+				rc = -ENOMEM;
+				goto out;
+			}
 
 			bio_set_dev(bio, bdev);
 			bio_set_sector(bio, sector);
@@ -593,7 +583,8 @@ out:
 	/* in order to achieve better IO throughput, we don't wait for writes
 	 * completion here. instead we proceed with transaction commit in
 	 * parallel and wait for IO completion once transaction is stopped
-	 * see osd_trans_stop() for more details -bzzz */
+	 * see osd_trans_stop() for more details -bzzz
+	 */
 	if (iobuf->dr_rw == 0 || fault_inject) {
 		wait_event(iobuf->dr_wait,
 			   atomic_read(&iobuf->dr_numreqs) == 0);
@@ -614,11 +605,11 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 				   struct niobuf_local *lnb, int maxlnb)
 {
 	int rc = 0;
-        ENTRY;
+	ENTRY;
 
-        *nrpages = 0;
+	*nrpages = 0;
 
-        while (len > 0) {
+	while (len > 0) {
 		int poff = offset & (PAGE_SIZE - 1);
 		int plen = PAGE_SIZE - poff;
 
@@ -627,8 +618,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 			break;
 		}
 
-                if (plen > len)
-                        plen = len;
+		if (plen > len)
+			plen = len;
 		lnb->lnb_file_offset = offset;
 		lnb->lnb_page_offset = poff;
 		lnb->lnb_len = plen;
@@ -640,13 +631,13 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 		lnb->lnb_guard_disk = 0;
 		lnb->lnb_locked = 0;
 
-                LASSERTF(plen <= len, "plen %u, len %lld\n", plen,
-                         (long long) len);
-                offset += plen;
-                len -= plen;
-                lnb++;
-                (*nrpages)++;
-        }
+		LASSERTF(plen <= len, "plen %u, len %lld\n", plen,
+			 (long long) len);
+		offset += plen;
+		len -= plen;
+		lnb++;
+		(*nrpages)++;
+	}
 
 	RETURN(rc);
 }
@@ -660,7 +651,7 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 	struct page *page;
 	int cur;
 
-        LASSERT(inode);
+	LASSERT(inode);
 
 	if (cache) {
 		page = find_or_create_page(inode->i_mapping,
@@ -754,7 +745,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		/* if the page isn't cached, then reset uptodate
-		 * to prevent reuse */
+		 * to prevent reuse
+		 */
 		if (PagePrivate2(page)) {
 			oti->oti_dio_pages_used--;
 		} else {
@@ -919,7 +911,8 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 			return rc;
 	}
 	/* pages are sorted already. so, we just have to find
-	 * contig. space and process them properly */
+	 * contig. space and process them properly
+	 */
 	while (i < pages) {
 		long blen, total = 0;
 		struct ldiskfs_map_blocks map = { 0 };
@@ -945,22 +938,22 @@ cont_map:
 		rc = ldiskfs_map_blocks(handle, inode, &map, create);
 		if (rc >= 0) {
 			int c = 0;
+
 			for (; total < blen && c < map.m_len; c++, total++) {
 				if (rc == 0) {
 					*(blocks + total) = 0;
 					total++;
 					break;
-				} else {
-					*(blocks + total) = map.m_pblk + c;
-					/* unmap any possible underlying
-					 * metadata from the block device
-					 * mapping.  bug 6998. */
-					if ((map.m_flags & LDISKFS_MAP_NEW) &&
-					    create)
-						clean_bdev_aliases(
-							inode->i_sb->s_bdev,
-							map.m_pblk + c, 1);
 				}
+				*(blocks + total) = map.m_pblk + c;
+				/* unmap any possible underlying
+				 * metadata from the block device
+				 * mapping.  b=6998.
+				 */
+				if ((map.m_flags & LDISKFS_MAP_NEW) &&
+				    create)
+					clean_bdev_aliases(inode->i_sb->s_bdev,
+							   map.m_pblk + c, 1);
 			}
 			rc = 0;
 		}
@@ -981,19 +974,19 @@ cleanup:
 }
 
 static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
-                          struct niobuf_local *lnb, int npages)
+			  struct niobuf_local *lnb, int npages)
 {
-        struct osd_thread_info *oti   = osd_oti_get(env);
-        struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-        struct inode           *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_device      *osd   = osd_obj2dev(osd_dt_obj(dt));
+	struct osd_thread_info *oti   = osd_oti_get(env);
+	struct osd_iobuf       *iobuf = &oti->oti_iobuf;
+	struct inode           *inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_device      *osd   = osd_obj2dev(osd_dt_obj(dt));
 	ktime_t start, end;
 	s64 timediff;
 	ssize_t isize;
 	__s64  maxidx;
 	int i, rc = 0;
 
-        LASSERT(inode);
+	LASSERT(inode);
 
 	rc = osd_init_iobuf(osd, iobuf, 0, npages);
 	if (unlikely(rc != 0))
@@ -1035,17 +1028,17 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 	timediff = ktime_us_delta(end, start);
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
-        if (iobuf->dr_npages) {
+	if (iobuf->dr_npages) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
 						 iobuf->dr_npages,
 						 iobuf->dr_blocks, 0);
-                if (likely(rc == 0)) {
-                        rc = osd_do_bio(osd, inode, iobuf);
-                        /* do IO stats for preparation reads */
-                        osd_fini_iobuf(osd, iobuf);
-                }
-        }
-        RETURN(rc);
+		if (likely(rc == 0)) {
+			rc = osd_do_bio(osd, inode, iobuf);
+			/* do IO stats for preparation reads */
+			osd_fini_iobuf(osd, iobuf);
+		}
+	}
+	RETURN(rc);
 }
 
 struct osd_fextent {
@@ -1102,9 +1095,9 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 }
 
 static int osd_declare_write_commit(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    struct niobuf_local *lnb, int npages,
-                                    struct thandle *handle)
+				    struct dt_object *dt,
+				    struct niobuf_local *lnb, int npages,
+				    struct thandle *handle)
 {
 	const struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
 	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
@@ -1146,26 +1139,27 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		 * !(lnb[i].flags & OBD_BRW_SYNC)
 		 *
 		 * XXX we could handle this on per-lnb basis as done by
-		 * grant. */
+		 * grant.
+		 */
 		if ((lnb[i].lnb_flags & OBD_BRW_NOQUOTA) ||
 		    (lnb[i].lnb_flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
 		    OBD_BRW_FROM_GRANT)
 			declare_flags |= OSD_QID_FORCE;
 	}
 
-        /*
-         * each extent can go into new leaf causing a split
-         * 5 is max tree depth: inode + 4 index blocks
-         * with blockmaps, depth is 3 at most
-         */
-        if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
-                /*
-                 * many concurrent threads may grow tree by the time
-                 * our transaction starts. so, consider 2 is a min depth
-                 */
-                depth = ext_depth(inode);
-                depth = max(depth, 1) + 1;
-                newblocks += depth;
+	/*
+	 * each extent can go into new leaf causing a split
+	 * 5 is max tree depth: inode + 4 index blocks
+	 * with blockmaps, depth is 3 at most
+	 */
+	if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
+		/*
+		 * many concurrent threads may grow tree by the time
+		 * our transaction starts. so, consider 2 is a min depth
+		 */
+		depth = ext_depth(inode);
+		depth = max(depth, 1) + 1;
+		newblocks += depth;
 		credits++; /* inode */
 		credits += depth * 2 * extents;
 	} else {
@@ -1181,12 +1175,12 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	/* quota space should be reported in 1K blocks */
 	quota_space = toqb(quota_space);
 
-        /* each new block can go in different group (bitmap + gd) */
+	/* each new block can go in different group (bitmap + gd) */
 
-        /* we can't dirty more bitmap blocks than exist */
-        if (newblocks > LDISKFS_SB(osd_sb(osd))->s_groups_count)
+	/* we can't dirty more bitmap blocks than exist */
+	if (newblocks > LDISKFS_SB(osd_sb(osd))->s_groups_count)
 		credits += LDISKFS_SB(osd_sb(osd))->s_groups_count;
-        else
+	else
 		credits += newblocks;
 
 	/* we can't dirty more gd blocks than exist */
@@ -1206,7 +1200,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
-	 * revised. */
+	 * revised.
+	 */
 	if (local_flags & QUOTA_FL_OVER_USRQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
 	if (local_flags & QUOTA_FL_OVER_GRPQUOTA)
@@ -1250,7 +1245,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		if (lnb[i].lnb_rc == -ENOSPC &&
 		    (lnb[i].lnb_flags & OBD_BRW_MAPPED)) {
 			/* Allow the write to proceed if overwriting an
-			 * existing block */
+			 * existing block
+			 */
 			lnb[i].lnb_rc = 0;
 		}
 
@@ -1280,6 +1276,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		osd_iobuf_add_page(iobuf, &lnb[i]);
 	}
+
 	/* if file has grown, take user_size into account */
 	if (user_size && disk_size > user_size)
 		disk_size = user_size;
@@ -1310,7 +1307,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		rc = osd_do_bio(osd, inode, iobuf);
 		/* we don't do stats here as in read path because
-		 * write is async: we'll do this in osd_put_bufs() */
+		 * write is async: we'll do this in osd_put_bufs()
+		 */
 	} else {
 		osd_fini_iobuf(osd, iobuf);
 	}
@@ -1334,18 +1332,18 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
-                         struct niobuf_local *lnb, int npages)
+			 struct niobuf_local *lnb, int npages)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_iobuf *iobuf = &oti->oti_iobuf;
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_iobuf *iobuf = &oti->oti_iobuf;
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	int rc = 0, i, cache_hits = 0, cache_misses = 0;
 	ktime_t start, end;
 	s64 timediff;
 	loff_t isize;
 
-        LASSERT(inode);
+	LASSERT(inode);
 
 	rc = osd_init_iobuf(osd, iobuf, 0, npages);
 	if (unlikely(rc != 0))
@@ -1358,7 +1356,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
 		if (isize <= lnb[i].lnb_file_offset)
 			/* If there's no more data, abort early.
-			 * lnb->lnb_rc == 0, so it's easy to detect later. */
+			 * lnb->lnb_rc == 0, so it's easy to detect later.
+			 */
 			break;
 
 		/* instead of looking if we go beyong isize, send complete
@@ -1381,7 +1380,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		 * unlocked, the earlier another client can access it.
 		 * notice real unlock_page() can be called few lines
 		 * below after osd_do_bio(). lnb is a per-thread, so it's
-		 * fine to have PG_locked and lnb_locked inconsistent here */
+		 * fine to have PG_locked and lnb_locked inconsistent here
+		 */
 		lnb[i].lnb_locked = 0;
 	}
 	end = ktime_get();
@@ -1430,26 +1430,27 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
  */
 static int osd_ldiskfs_readlink(struct inode *inode, char *buffer, int buflen)
 {
-        struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
 
-        memcpy(buffer, (char *)ei->i_data, buflen);
+	memcpy(buffer, (char *)ei->i_data, buflen);
 
-        return  buflen;
+	return  buflen;
 }
 
 int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 {
-        struct buffer_head *bh;
-        unsigned long block;
-        int osize;
-        int blocksize;
-        int csize;
-        int boffs;
+	struct buffer_head *bh;
+	unsigned long block;
+	int osize;
+	int blocksize;
+	int csize;
+	int boffs;
 
-        /* prevent reading after eof */
+	/* prevent reading after eof */
 	spin_lock(&inode->i_lock);
 	if (i_size_read(inode) < *offs + size) {
 		loff_t diff = i_size_read(inode) - *offs;
+
 		spin_unlock(&inode->i_lock);
 		if (diff < 0) {
 			CDEBUG(D_OTHER,
@@ -1465,17 +1466,16 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 		spin_unlock(&inode->i_lock);
 	}
 
-        blocksize = 1 << inode->i_blkbits;
-        osize = size;
-        while (size > 0) {
-                block = *offs >> inode->i_blkbits;
-                boffs = *offs & (blocksize - 1);
-                csize = min(blocksize - boffs, size);
+	blocksize = 1 << inode->i_blkbits;
+	osize = size;
+	while (size > 0) {
+		block = *offs >> inode->i_blkbits;
+		boffs = *offs & (blocksize - 1);
+		csize = min(blocksize - boffs, size);
 		bh = __ldiskfs_bread(NULL, inode, block, 0);
 		if (IS_ERR(bh)) {
-			CERROR("%s: can't read %u@%llu on ino %lu: "
-			       "rc = %ld\n", osd_ino2name(inode),
-			       csize, *offs, inode->i_ino,
+			CERROR("%s: can't read %u@%llu on ino %lu: rc = %ld\n",
+			       osd_ino2name(inode), csize, *offs, inode->i_ino,
 			       PTR_ERR(bh));
 			return PTR_ERR(bh);
 		}
@@ -1487,11 +1487,11 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 			memset(buf, 0, csize);
 		}
 
-                *offs += csize;
-                buf += csize;
-                size -= csize;
-        }
-        return osize;
+		*offs += csize;
+		buf += csize;
+		size -= csize;
+	}
+	return osize;
 }
 
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
@@ -1543,7 +1543,8 @@ int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
 
 	/* legacy blockmap: 3 levels * 3 (bitmap,gd,itself)
 	 * we do not expect blockmaps on the large files,
-	 * so let's shrink it to 2 levels (4GB files) */
+	 * so let's shrink it to 2 levels (4GB files)
+	 */
 
 	/* this is default reservation: 2 levels */
 	credits = (blocks + 2) * 3;
@@ -1606,7 +1607,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 	if (_pos == -1) {
 		/* if this is an append, then we
-		 * should expect cross-block record */
+		 * should expect cross-block record
+		 */
 		pos = 0;
 	} else {
 		pos = _pos;
@@ -1641,7 +1643,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		depth = max(depth, 1) + 1;
 		credits = depth;
 		/* if not append, then split may need to modify
-		 * existing blocks moving entries into the new ones */
+		 * existing blocks moving entries into the new ones
+		 */
 		if (_pos != -1)
 			credits += depth;
 		/* blocks to store data: bitmap,gd,itself */
@@ -1650,7 +1653,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		credits = osd_calc_bkmap_credits(sb, inode, size, _pos, blocks);
 	}
 	/* if inode is created as part of the transaction,
-	 * then it's counted already by the creation method */
+	 * then it's counted already by the creation method
+	 */
 	if (inode != NULL)
 		credits++;
 
@@ -1660,7 +1664,8 @@ out:
 
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those
-	 * objects, so always set the lqi_space as 0. */
+	 * objects, so always set the lqi_space as 0.
+	 */
 	if (inode != NULL)
 		rc = osd_declare_inode_qid(env, i_uid_read(inode),
 					   i_gid_read(inode),
@@ -1693,16 +1698,16 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 				    handle_t *handle)
 {
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct buffer_head *bh        = NULL;
-        loff_t              offset    = *offs;
-        loff_t              new_size  = i_size_read(inode);
-        unsigned long       block;
-        int                 blocksize = 1 << inode->i_blkbits;
+	struct buffer_head *bh        = NULL;
+	loff_t              offset    = *offs;
+	loff_t              new_size  = i_size_read(inode);
+	unsigned long       block;
+	int                 blocksize = 1 << inode->i_blkbits;
 	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
-        int                 err = 0;
-        int                 size;
-        int                 boffs;
-        int                 dirty_inode = 0;
+	int                 err = 0;
+	int                 size;
+	int                 boffs;
+	int                 dirty_inode = 0;
 	bool create, sparse, sync = false;
 
 	if (write_NUL) {
@@ -1715,7 +1720,8 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		++bufsize;
 	}
 
-	dirty_inode = test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA, &ei->i_flags);
+	dirty_inode = test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
+				       &ei->i_flags);
 
 	/* sparse checking is racy, but sparse is very rare case, leave as is */
 	sparse = (new_size > 0 && (inode->i_blocks >> (inode->i_blkbits - 9)) <
@@ -1740,8 +1746,9 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		bh = __ldiskfs_bread(handle, inode, block, 0);
 
 		if (unlikely(IS_ERR_OR_NULL(bh) && !sync))
-			CWARN("%s: adding bh without locking off %llu (block %lu, "
-			      "size %d, offs %llu)\n", inode->i_sb->s_id,
+			CWARN(
+			      "%s: adding bh without locking off %llu (block %lu, size %d, offs %llu)\n",
+			      inode->i_sb->s_id,
 			      offset, block, bufsize, *offs);
 
 		if (IS_ERR_OR_NULL(bh)) {
@@ -1773,19 +1780,19 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 				bh = NULL;
 			}
 
-			CERROR("%s: error reading offset %llu (block %lu, "
-			       "size %d, offs %llu), credits %d/%d: rc = %d\n",
+			CERROR(
+			       "%s: error reading offset %llu (block %lu, size %d, offs %llu), credits %d/%d: rc = %d\n",
 			       inode->i_sb->s_id, offset, block, bufsize, *offs,
 			       credits, handle->h_buffer_credits, err);
-                        break;
-                }
+			break;
+		}
 
-                err = ldiskfs_journal_get_write_access(handle, bh);
-                if (err) {
-                        CERROR("journal_get_write_access() returned error %d\n",
-                               err);
-                        break;
-                }
+		err = ldiskfs_journal_get_write_access(handle, bh);
+		if (err) {
+			CERROR("journal_get_write_access() returned error %d\n",
+			       err);
+			break;
+		}
 		LASSERTF(boffs + size <= bh->b_size,
 			 "boffs %d size %d bh->b_size %lu\n",
 			 boffs, size, (unsigned long)bh->b_size);
@@ -1798,15 +1805,15 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		}
 		memcpy(bh->b_data + boffs, buf, size);
 		err = ldiskfs_handle_dirty_metadata(handle, NULL, bh);
-                if (err)
-                        break;
+		if (err)
+			break;
 
-                if (offset + size > new_size)
-                        new_size = offset + size;
-                offset += size;
-                bufsize -= size;
-                buf += size;
-        }
+		if (offset + size > new_size)
+			new_size = offset + size;
+		offset += size;
+		bufsize -= size;
+		buf += size;
+	}
 	if (sync)
 		up(&ei->i_append_sem);
 
@@ -1825,13 +1832,13 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 			dirty_inode = 1;
 		}
 		spin_unlock(&inode->i_lock);
-        }
+	}
 	if (dirty_inode)
 		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 
-        if (err == 0)
-                *offs = offset;
-        return err;
+	if (err == 0)
+		*offs = offset;
+	return err;
 }
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
@@ -1843,17 +1850,17 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	ssize_t			result;
 	int			is_link;
 
-        LASSERT(dt_object_exists(dt));
+	LASSERT(dt_object_exists(dt));
 
-        LASSERT(handle != NULL);
+	LASSERT(handle != NULL);
 	LASSERT(inode != NULL);
 	dquot_initialize(inode);
 
-        /* XXX: don't check: one declared chunk can be used many times */
+	/* XXX: don't check: one declared chunk can be used many times */
 	/* osd_trans_exec_op(env, handle, OSD_OT_WRITE); */
 
-        oh = container_of(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle->h_transaction != NULL);
+	oh = container_of(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
 	osd_trans_exec_op(env, handle, OSD_OT_WRITE);
 
 	/* Write small symlink to inode body as we need to maintain correct
@@ -1939,24 +1946,24 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
-                             __u64 start, __u64 end, struct thandle *th)
+			     __u64 start, __u64 end, struct thandle *th)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 	struct inode	   *inode;
 	int		    rc;
-        ENTRY;
+	ENTRY;
 
-        LASSERT(th);
-        oh = container_of(th, struct osd_thandle, ot_super);
+	LASSERT(th);
+	oh = container_of(th, struct osd_thandle, ot_super);
 
-        /*
-         * we don't need to reserve credits for whole truncate
-         * it's not possible as truncate may need to free too many
-         * blocks and that won't fit a single transaction. instead
-         * we reserve credits to change i_size and put inode onto
-         * orphan list. if needed truncate will extend or restart
-         * transaction
-         */
+	/*
+	 * we don't need to reserve credits for whole truncate
+	 * it's not possible as truncate may need to free too many
+	 * blocks and that won't fit a single transaction. instead
+	 * we reserve credits to change i_size and put inode onto
+	 * orphan list. if needed truncate will extend or restart
+	 * transaction
+	 */
 	osd_trans_declare_op(env, oh, OSD_OT_PUNCH,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE] + 3);
 
@@ -2000,7 +2007,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	 * and then get truncate RPC which essentially
 	 * would be skipped. this is bad.. so, disable
 	 * this optimization on MDS till the client stop
-	 * to sent MDS_REINT (LU-11033) -bzzz */
+	 * to sent MDS_REINT (LU-11033) -bzzz
+	 */
 	if (osd->od_is_ost && i_size_read(inode) == start)
 		RETURN(0);
 
@@ -2030,7 +2038,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	inode_lock(inode);
 	/* add to orphan list to ensure truncate completion
 	 * if this transaction succeed. ldiskfs_truncate()
-	 * will take the inode out of the list */
+	 * will take the inode out of the list
+	 */
 	rc = ldiskfs_orphan_add(oh->ot_handle, inode);
 	inode_unlock(inode);
 	if (rc != 0)
@@ -2150,7 +2159,7 @@ static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
  * e.g., when we create symlink
  */
 const struct dt_body_operations osd_body_ops_new = {
-        .dbo_declare_write = osd_declare_write,
+	.dbo_declare_write = osd_declare_write,
 };
 
 const struct dt_body_operations osd_body_ops = {
@@ -2223,6 +2232,7 @@ int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh, bool shared)
 void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list)
 {
 	struct osd_access_lock *al, *tmp;
+
 	list_for_each_entry_safe(al, tmp, list, tl_list) {
 		if (al->tl_shared)
 			up_read(&al->tl_obj->oo_ext_idx_sem);
