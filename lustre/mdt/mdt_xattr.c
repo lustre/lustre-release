@@ -50,7 +50,7 @@
 
 
 /* return EADATA length to the caller. negative value means error */
-static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
+static int mdt_getxattr_pack_reply(struct mdt_thread_info *info)
 {
 	struct req_capsule *pill = info->mti_pill;
 	struct ptlrpc_request *req = mdt_info_req(info);
@@ -65,7 +65,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
 	/* Determine how many bytes we need */
-        if (valid == OBD_MD_FLXATTR) {
+	if (valid == OBD_MD_FLXATTR) {
 		xattr_name = req_capsule_client_get(pill, &RMF_NAME);
 		if (!xattr_name)
 			RETURN(-EFAULT);
@@ -79,7 +79,8 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 				    &LU_BUF_NULL, xattr_name);
 		if (size == -ENODATA) {
 			/* XXX: Some client code will not handle -ENODATA
-			 * for XATTR_NAME_LOV (trusted.lov) properly. */
+			 * for XATTR_NAME_LOV (trusted.lov) properly.
+			 */
 			if (strcmp(xattr_name, XATTR_NAME_LOV) == 0)
 				rc = 0;
 			else
@@ -96,7 +97,8 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		xattr_name = "all";
 		/* N.B. eadatasize = 0 is not valid for FLXATTRALL */
 		/* We could calculate accurate sizes, but this would
-		 * introduce a lot of overhead, let's do it later... */
+		 * introduce a lot of overhead, let's do it later...
+		 */
 		size = info->mti_body->mbo_eadatasize;
 		if (size <= 0 || size > info->mti_mdt->mdt_max_ea_size ||
 		    size & (sizeof(__u32) - 1)) {
@@ -236,15 +238,15 @@ out_shrink:
 int mdt_getxattr(struct mdt_thread_info *info)
 {
 	struct ptlrpc_request  *req = mdt_info_req(info);
-        struct mdt_body        *reqbody;
-        struct mdt_body        *repbody = NULL;
-        struct md_object       *next;
-        struct lu_buf          *buf;
-        int                     easize, rc;
+	struct mdt_body        *reqbody;
+	struct mdt_body        *repbody = NULL;
+	struct md_object       *next;
+	struct lu_buf          *buf;
+	int                     easize, rc;
 	u64			valid;
-        ENTRY;
+	ENTRY;
 
-        LASSERT(info->mti_object != NULL);
+	LASSERT(info->mti_object != NULL);
 	LASSERT(lu_object_assert_exists(&info->mti_object->mot_obj));
 
 	CDEBUG(D_INODE, "getxattr "DFID"\n", PFID(&info->mti_body->mbo_fid1));
@@ -253,25 +255,25 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	if (rc)
 		RETURN(err_serious(rc));
 
-        reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-        if (reqbody == NULL)
-                RETURN(err_serious(-EFAULT));
+	reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	if (reqbody == NULL)
+		RETURN(err_serious(-EFAULT));
 
 	rc = mdt_init_ucred(info, reqbody);
-        if (rc)
-                RETURN(err_serious(rc));
+	if (rc)
+		RETURN(err_serious(rc));
 
-        next = mdt_object_child(info->mti_object);
-        easize = mdt_getxattr_pack_reply(info);
+	next = mdt_object_child(info->mti_object);
+	easize = mdt_getxattr_pack_reply(info);
 	if (easize == -ENODATA)
 		GOTO(out, rc = easize);
 	else if (easize < 0)
 		GOTO(out, rc = err_serious(easize));
 
-        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody != NULL);
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	LASSERT(repbody != NULL);
 
-        /* No need further getxattr. */
+	/* No need further getxattr. */
 	if (easize == 0 || reqbody->mbo_eadatasize == 0)
 		GOTO(out, rc = easize);
 
@@ -308,7 +310,8 @@ out:
 		mdt_counter_incr(req, LPROC_MDT_GETXATTR);
 		/* LU-11109: Set OBD_MD_FLXATTR on success so that
 		 * newer clients can distinguish between nonexistent
-		 * xattrs and zero length values. */
+		 * xattrs and zero length values.
+		 */
 		repbody->mbo_valid |= OBD_MD_FLXATTR;
 		repbody->mbo_eadatasize = rc;
 		rc = 0;
@@ -518,7 +521,7 @@ put_obj:
 }
 
 int mdt_reint_setxattr(struct mdt_thread_info *info,
-                       struct mdt_lock_handle *unused)
+		       struct mdt_lock_handle *unused)
 {
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	struct mdt_lock_handle	*lh;
@@ -542,12 +545,12 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
-                RETURN(err_serious(-ENOMEM));
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
+		RETURN(err_serious(-ENOMEM));
 
 	rc = mdt_init_ucred_reint(info);
-        if (rc != 0)
-                RETURN(rc);
+	if (rc != 0)
+		RETURN(rc);
 
 	if (strncmp(xattr_name, XATTR_USER_PREFIX,
 		    sizeof(XATTR_USER_PREFIX) - 1) == 0) {
@@ -607,25 +610,28 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		lockpart |= MDS_INODELOCK_LAYOUT;
 	}
 
-        /* Revoke all clients' lookup lock, since the access
-         * permissions for this inode is changed when ACL_ACCESS is
-         * set. This isn't needed for ACL_DEFAULT, since that does
-         * not change the access permissions of this inode, nor any
-         * other existing inodes. It is setting the ACLs inherited
-         * by new directories/files at create time. */
+	/* Revoke all clients' lookup lock, since the access
+	 * permissions for this inode is changed when ACL_ACCESS is
+	 * set. This isn't needed for ACL_DEFAULT, since that does
+	 * not change the access permissions of this inode, nor any
+	 * other existing inodes. It is setting the ACLs inherited
+	 * by new directories/files at create time.
+	 */
 	/* We need revoke both LOOKUP|PERM lock here, see mdt_attr_set. */
-        if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
+	if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
 		lockpart |= MDS_INODELOCK_PERM | MDS_INODELOCK_LOOKUP;
 	/* We need to take the lock on behalf of old clients so that newer
-	 * clients flush their xattr caches */
+	 * clients flush their xattr caches
+	 */
 	else
 		lockpart |= MDS_INODELOCK_XATTR;
 
-        lh = &info->mti_lh[MDT_LH_PARENT];
-        /* ACLs were sent to clients under LCK_CR locks, so taking LCK_EX
-         * to cancel them. */
-        mdt_lock_reg_init(lh, LCK_EX);
-        obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
+	lh = &info->mti_lh[MDT_LH_PARENT];
+	/* ACLs were sent to clients under LCK_CR locks, so taking LCK_EX
+	 * to cancel them.
+	 */
+	mdt_lock_reg_init(lh, LCK_EX);
+	obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
@@ -636,9 +642,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
 	if (unlikely(!(valid & OBD_MD_FLCTIME))) {
 		/* This isn't strictly an error, but all current clients
-		 * should set OBD_MD_FLCTIME when setting attributes. */
-		CWARN("%s: client miss to set OBD_MD_FLCTIME when "
-		      "setxattr %s: [object "DFID"] [valid %llu]\n",
+		 * should set OBD_MD_FLCTIME when setting attributes.
+		 */
+		CWARN("%s: client miss to set OBD_MD_FLCTIME when setxattr %s: [object "DFID"] [valid %llu]\n",
 		      mdt_obd_name(info->mti_mdt), xattr_name,
 		      PFID(rr->rr_fid1), valid);
 		attr->la_ctime = ktime_get_real_seconds();
@@ -665,13 +671,13 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 			ma->ma_attr_flags |= MDS_PERM_BYPASS;
 			mo_attr_set(env, child, ma);
 		}
-        } else if (valid & OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(env, child, xattr_name);
-                /* update ctime after xattr changed */
-                if (rc == 0) {
-                        ma->ma_attr_flags |= MDS_PERM_BYPASS;
-                        mo_attr_set(env, child, ma);
-                }
+	} else if (valid & OBD_MD_FLXATTRRM) {
+		rc = mo_xattr_del(env, child, xattr_name);
+		/* update ctime after xattr changed */
+		if (rc == 0) {
+			ma->ma_attr_flags |= MDS_PERM_BYPASS;
+			mo_attr_set(env, child, ma);
+		}
 	} else {
 		CDEBUG(D_INFO, "valid bits: %#llx\n", valid);
 		rc = -EINVAL;
@@ -680,9 +686,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_SETXATTR);
 
-        EXIT;
+	EXIT;
 out_unlock:
-        mdt_object_unlock_put(info, obj, lh, rc);
+	mdt_object_unlock_put(info, obj, lh, rc);
 out:
 	mdt_exit_ucred(info);
 	return rc;
