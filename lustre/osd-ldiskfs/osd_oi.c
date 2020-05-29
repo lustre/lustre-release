@@ -61,19 +61,19 @@ module_param(osd_oi_count, int, 0444);
 MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created, it's only valid for new filesystem.");
 
 static struct dt_index_features oi_feat = {
-        .dif_flags       = DT_IND_UPDATE,
-        .dif_recsize_min = sizeof(struct osd_inode_id),
-        .dif_recsize_max = sizeof(struct osd_inode_id),
-        .dif_ptrsize     = 4
+	.dif_flags       = DT_IND_UPDATE,
+	.dif_recsize_min = sizeof(struct osd_inode_id),
+	.dif_recsize_max = sizeof(struct osd_inode_id),
+	.dif_ptrsize     = 4
 };
 
 #define OSD_OI_NAME_BASE        "oi.16"
 
 static void osd_oi_table_put(struct osd_thread_info *info,
-			     struct osd_oi **oi_table, unsigned oi_count)
+			     struct osd_oi **oi_table, unsigned int oi_count)
 {
 	struct iam_container *bag;
-	int		      i;
+	int i;
 
 	for (i = 0; i < oi_count; i++) {
 		if (oi_table[i] == NULL)
@@ -152,52 +152,52 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 }
 
 static struct inode *osd_oi_index_open(struct osd_thread_info *info,
-                                       struct osd_device *osd,
-                                       const char *name,
-                                       struct dt_index_features *f,
-                                       bool create)
+				       struct osd_device *osd,
+				       const char *name,
+				       struct dt_index_features *f,
+				       bool create)
 {
-        struct dentry *dentry;
-        struct inode  *inode;
-        int            rc;
+	struct dentry *dentry;
+	struct inode  *inode;
+	int rc;
 
 	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
 					     strlen(name));
-        if (IS_ERR(dentry))
+	if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
 
-        if (dentry->d_inode) {
-                LASSERT(!is_bad_inode(dentry->d_inode));
-                inode = dentry->d_inode;
-                atomic_inc(&inode->i_count);
-                dput(dentry);
-                return inode;
-        }
+	if (dentry->d_inode) {
+		LASSERT(!is_bad_inode(dentry->d_inode));
+		inode = dentry->d_inode;
+		atomic_inc(&inode->i_count);
+		dput(dentry);
+		return inode;
+	}
 
-        /* create */
-        dput(dentry);
-        shrink_dcache_parent(osd_sb(osd)->s_root);
-        if (!create)
-                return ERR_PTR(-ENOENT);
+	/* create */
+	dput(dentry);
+	shrink_dcache_parent(osd_sb(osd)->s_root);
+	if (!create)
+		return ERR_PTR(-ENOENT);
 
-        rc = osd_oi_index_create_one(info, osd, name, f);
-        if (rc)
+	rc = osd_oi_index_create_one(info, osd, name, f);
+	if (rc)
 		return ERR_PTR(rc);
 
 	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
 					     strlen(name));
-        if (IS_ERR(dentry))
+	if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
 
-        if (dentry->d_inode) {
-                LASSERT(!is_bad_inode(dentry->d_inode));
-                inode = dentry->d_inode;
-                atomic_inc(&inode->i_count);
-                dput(dentry);
-                return inode;
-        }
+	if (dentry->d_inode) {
+		LASSERT(!is_bad_inode(dentry->d_inode));
+		inode = dentry->d_inode;
+		atomic_inc(&inode->i_count);
+		dput(dentry);
+		return inode;
+	}
 
-        return ERR_PTR(-ENOENT);
+	return ERR_PTR(-ENOENT);
 }
 
 /**
@@ -210,26 +210,27 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
  * \retval      -ve     failure
  */
 static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
-                       char *name, struct osd_oi **oi_slot, bool create)
+		       char *name, struct osd_oi **oi_slot, bool create)
 {
-        struct osd_directory *dir;
-        struct iam_container *bag;
-        struct inode         *inode;
-        struct osd_oi        *oi;
-        int                   rc;
+	struct osd_directory *dir;
+	struct iam_container *bag;
+	struct inode *inode;
+	struct osd_oi *oi;
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        oi_feat.dif_keysize_min = sizeof(struct lu_fid);
-        oi_feat.dif_keysize_max = sizeof(struct lu_fid);
+	oi_feat.dif_keysize_min = sizeof(struct lu_fid);
+	oi_feat.dif_keysize_max = sizeof(struct lu_fid);
 
-        inode = osd_oi_index_open(info, osd, name, &oi_feat, create);
-        if (IS_ERR(inode))
-                RETURN(PTR_ERR(inode));
+	inode = osd_oi_index_open(info, osd, name, &oi_feat, create);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
 
 	if (!osd->od_dt_dev.dd_rdonly) {
 		/* 'What the @fid is' is not imporatant, because these objects
-		 * have no OI mappings, and only are visible inside the OSD.*/
+		 * have no OI mappings, and only are visible inside the OSD.
+		 */
 		lu_igif_build(&info->oti_fid, inode->i_ino,
 			      inode->i_generation);
 		rc = osd_ea_fid_set(info, inode, &info->oti_fid,
@@ -238,32 +239,32 @@ static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
 			GOTO(out_inode, rc);
 	}
 
-        OBD_ALLOC_PTR(oi);
-        if (oi == NULL)
-                GOTO(out_inode, rc = -ENOMEM);
+	OBD_ALLOC_PTR(oi);
+	if (oi == NULL)
+		GOTO(out_inode, rc = -ENOMEM);
 
-        oi->oi_inode = inode;
-        dir = &oi->oi_dir;
+	oi->oi_inode = inode;
+	dir = &oi->oi_dir;
 
-        bag = &dir->od_container;
-        rc = iam_container_init(bag, &dir->od_descr, inode);
-        if (rc < 0)
-                GOTO(out_free, rc);
+	bag = &dir->od_container;
+	rc = iam_container_init(bag, &dir->od_descr, inode);
+	if (rc < 0)
+		GOTO(out_free, rc);
 
-        rc = iam_container_setup(bag);
-        if (rc < 0)
-                GOTO(out_container, rc);
+	rc = iam_container_setup(bag);
+	if (rc < 0)
+		GOTO(out_container, rc);
 
-        *oi_slot = oi;
-        RETURN(0);
+	*oi_slot = oi;
+	RETURN(0);
 
 out_container:
-        iam_container_fini(bag);
+	iam_container_fini(bag);
 out_free:
-        OBD_FREE_PTR(oi);
+	OBD_FREE_PTR(oi);
 out_inode:
-        iput(inode);
-        return rc;
+	iput(inode);
+	return rc;
 }
 
 /**
@@ -285,7 +286,7 @@ out_inode:
  */
 static int
 osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
-		  struct osd_oi **oi_table, unsigned oi_count, bool create)
+		  struct osd_oi **oi_table, unsigned int oi_count, bool create)
 {
 	struct scrub_file *sf = &osd->od_scrub.os_scrub.os_file;
 	int count = 0;
@@ -294,7 +295,8 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 	ENTRY;
 
 	/* NB: oi_count != 0 means that we have already created/known all OIs
-	 * and have known exact number of OIs. */
+	 * and have known exact number of OIs.
+	 */
 	LASSERT(oi_count <= OSD_OI_FID_NR_MAX);
 
 	for (i = 0; i < (oi_count != 0 ? oi_count : OSD_OI_FID_NR_MAX); i++) {
@@ -369,8 +371,9 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 				   OSD_OI_NAME_BASE, i);
 		rc = osd_remove_oi_one(osd, osd_sb(osd)->s_root, name, namelen);
 		if (rc != 0) {
-			CERROR("%s: fail to remove the stale OI file %s: "
-			       "rc = %d\n", osd_dev2name(osd), name, rc);
+			CERROR(
+			       "%s: fail to remove the stale OI file %s: rc = %d\n",
+			       osd_dev2name(osd), name, rc);
 			return rc;
 		}
 	}
@@ -423,9 +426,9 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 			if (likely((count & (count - 1)) == 0))
 				GOTO(out, rc = count);
 
-			LCONSOLE_WARN("%s: invalid oi count %d, remove them, "
-				      "then set it to %d\n", osd_dev2name(osd),
-				      count, osd_oi_count);
+			LCONSOLE_WARN(
+				      "%s: invalid oi count %d, remove them, then set it to %d\n",
+				      osd_dev2name(osd), count, osd_oi_count);
 			osd_oi_table_put(info, oi, count);
 			rc = osd_remove_ois(info, osd);
 			if (rc)
@@ -454,7 +457,8 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 			 *	when the MDT has performed file-level backup
 			 *	and restored after former upgrading from 1.8
 			 *	to 2.x. Fortunately, the osd_fid_lookup()can
-			 *	verify the inode to decrease the risk. */
+			 *	verify the inode to decrease the risk.
+			 */
 			scrub_file_reset(scrub, osd->od_uuid, SF_UPGRADE);
 		GOTO(out, rc = 1);
 	} else if (rc != -ENOENT) {
@@ -524,49 +528,49 @@ void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd)
 
 static inline int fid_is_fs_root(const struct lu_fid *fid)
 {
-        /* Map root inode to special local object FID */
-        return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-                         fid_oid(fid) == OSD_FS_ROOT_OID));
+	/* Map root inode to special local object FID */
+	return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+			 fid_oid(fid) == OSD_FS_ROOT_OID));
 }
 
 static int osd_oi_iam_lookup(struct osd_thread_info *oti,
-                             struct osd_oi *oi, struct dt_rec *rec,
-                             const struct dt_key *key)
+			     struct osd_oi *oi, struct dt_rec *rec,
+			     const struct dt_key *key)
 {
-        struct iam_container  *bag;
-        struct iam_iterator   *it = &oti->oti_idx_it;
-        struct iam_path_descr *ipd;
-        int                    rc;
-        ENTRY;
+	struct iam_container  *bag;
+	struct iam_iterator   *it = &oti->oti_idx_it;
+	struct iam_path_descr *ipd;
+	int rc;
+	ENTRY;
 
-        LASSERT(oi);
-        LASSERT(oi->oi_inode);
+	LASSERT(oi);
+	LASSERT(oi->oi_inode);
 
-        bag = &oi->oi_dir.od_container;
-        ipd = osd_idx_ipd_get(oti->oti_env, bag);
-        if (IS_ERR(ipd))
-                RETURN(-ENOMEM);
+	bag = &oi->oi_dir.od_container;
+	ipd = osd_idx_ipd_get(oti->oti_env, bag);
+	if (IS_ERR(ipd))
+		RETURN(-ENOMEM);
 
-        /* got ipd now we can start iterator. */
-        iam_it_init(it, bag, 0, ipd);
+	/* got ipd now we can start iterator. */
+	iam_it_init(it, bag, 0, ipd);
 
-        rc = iam_it_get(it, (struct iam_key *)key);
+	rc = iam_it_get(it, (struct iam_key *)key);
 	if (rc > 0)
 		iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)rec);
-        iam_it_put(it);
-        iam_it_fini(it);
-        osd_ipd_put(oti->oti_env, bag, ipd);
+	iam_it_put(it);
+	iam_it_fini(it);
+	osd_ipd_put(oti->oti_env, bag, ipd);
 
-        LINVRNT(osd_invariant(obj));
+	LINVRNT(osd_invariant(obj));
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, enum oi_check_flags flags)
 {
-	struct lu_seq_range	*range = &info->oti_seq_range;
-	int			rc;
+	struct lu_seq_range *range = &info->oti_seq_range;
+	int rc;
 	ENTRY;
 
 	if (flags & OI_KNOWN_ON_OST)
@@ -592,7 +596,8 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 		 * OST FLDB is not created until 2.6, so if some DNE
 		 * filesystem upgrade from 2.5 to 2.7/2.8, they will
 		 * not be able to find the sequence from local FLDB
-		 * cache see fld_index_init(). */
+		 * cache see fld_index_init().
+		 */
 		if (rc == -ENOENT && osd->od_is_ost)
 			RETURN(1);
 
@@ -612,7 +617,7 @@ static int __osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			   const struct lu_fid *fid, struct osd_inode_id *id)
 {
 	struct lu_fid *oi_fid = &info->oti_fid2;
-	int	       rc;
+	int rc;
 
 	fid_cpu_to_be(oi_fid, fid);
 	rc = osd_oi_iam_lookup(info, osd_fid2oi(osd, fid), (struct dt_rec *)id,
@@ -636,9 +641,9 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_lookup(info, osd, fid, id);
 
-
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		int rc;
+
 		if (fid_is_fs_root(fid)) {
 			osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
 				   osd_sb(osd)->s_root->d_inode->i_generation);
@@ -666,9 +671,9 @@ static int osd_oi_iam_refresh(struct osd_thread_info *oti, struct osd_oi *oi,
 			     const struct dt_rec *rec, const struct dt_key *key,
 			     handle_t *th, bool insert)
 {
-	struct iam_container	*bag;
-	struct iam_path_descr	*ipd;
-	int			rc;
+	struct iam_container *bag;
+	struct iam_path_descr *ipd;
+	int rc;
 	ENTRY;
 
 	LASSERT(oi);
@@ -736,7 +741,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		}
 
 		/* The EA inode should NOT be in OI, old OI scrub may added
-		 * such OI mapping by wrong, replace it. */
+		 * such OI mapping by wrong, replace it.
+		 */
 		if (unlikely(osd_is_ea_inode(inode))) {
 			iput(inode);
 			goto update;
@@ -753,10 +759,10 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 
 		if (!(lma->lma_compat & LMAC_NOT_IN_OI) &&
 		    lu_fid_eq(fid, &lma->lma_self_fid)) {
-			CERROR("%s: the FID "DFID" is used by two objects: "
-			       "%u/%u %u/%u\n", osd_dev2name(osd),
-			       PFID(fid), oi_id->oii_ino, oi_id->oii_gen,
-			       id->oii_ino, id->oii_gen);
+			CERROR(
+			       "%s: the FID "DFID" is used by two objects: %u/%u %u/%u\n",
+			       osd_dev2name(osd), PFID(fid), oi_id->oii_ino,
+			       oi_id->oii_gen, id->oii_ino, id->oii_gen);
 			return -EEXIST;
 		}
 
@@ -764,7 +770,8 @@ update:
 		osd_id_pack(oi_id, id);
 		rc = osd_oi_iam_refresh(info, osd_fid2oi(osd, fid),
 					(const struct dt_rec *)oi_id,
-					(const struct dt_key *)oi_fid, th, false);
+					(const struct dt_key *)oi_fid, th,
+					false);
 		if (rc != 0)
 			return rc;
 
