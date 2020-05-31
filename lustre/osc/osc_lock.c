@@ -1294,6 +1294,9 @@ struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 	if (dap_flags & OSC_DAP_FL_CANCELING)
 		match_flags |= LDLM_MATCH_UNREF;
 
+	if (dap_flags & OSC_DAP_FL_RIGHT)
+		match_flags |= LDLM_MATCH_RIGHT;
+
 	/*
 	 * It is fine to match any group lock since there could be only one
 	 * with a uniq gid and it conflicts with all other lock modes too

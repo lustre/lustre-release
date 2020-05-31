@@ -169,6 +169,7 @@ struct osc_thread_info {
 	 */
 	pgoff_t			oti_next_index;
 	pgoff_t			oti_fn_index; /* first non-overlapped index */
+	pgoff_t			oti_ng_index; /* negative lock caching */
 	struct cl_sync_io	oti_anchor;
 	struct cl_req_attr	oti_req_attr;
 	struct lu_buf		oti_ladvise_buf;
@@ -231,6 +232,10 @@ enum osc_dap_flags {
 	 * check ast data is present, requested to cancel cb
 	 */
 	OSC_DAP_FL_AST	     = BIT(2),
+	/**
+	 * look at right region for the desired lock
+	 */
+	OSC_DAP_FL_RIGHT     = BIT(3),
 };
 
 /*

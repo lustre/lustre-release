@@ -1199,8 +1199,9 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 
 	switch (lock->l_resource->lr_type) {
 	case LDLM_EXTENT:
-		if (lpol->l_extent.start > data->lmd_policy->l_extent.start ||
-		    lpol->l_extent.end < data->lmd_policy->l_extent.end)
+		if (!(data->lmd_match & LDLM_MATCH_RIGHT) &&
+		    (lpol->l_extent.start > data->lmd_policy->l_extent.start ||
+		     lpol->l_extent.end < data->lmd_policy->l_extent.end))
 			return INTERVAL_ITER_CONT;
 
 		if (unlikely(match == LCK_GROUP) &&
@@ -1285,6 +1286,9 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 	int idx;
 
 	data->lmd_lock = NULL;
+
+	if (data->lmd_match & LDLM_MATCH_RIGHT)
+		ext.end = OBD_OBJECT_EOF;
 
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		struct ldlm_interval_tree *tree = &res->lr_itree[idx];

@@ -3117,28 +3117,51 @@ static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct osc_object *osc = cbdata;
+	struct cl_page *page = ops->ops_cl.cpl_page;
 	pgoff_t index;
+	bool discard = false;
 
 	index = osc_index(ops);
-	if (index >= info->oti_fn_index) {
-		struct ldlm_lock *tmp;
-		struct cl_page *page = ops->ops_cl.cpl_page;
 
+	/* negative lock caching */
+	if (index < info->oti_ng_index) {
+		discard = true;
+	} else if (index >= info->oti_fn_index) {
+		struct ldlm_lock *tmp;
 		/* refresh non-overlapped index */
 		tmp = osc_dlmlock_at_pgoff(env, osc, index,
-					   OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_AST);
+					   OSC_DAP_FL_TEST_LOCK |
+					   OSC_DAP_FL_AST | OSC_DAP_FL_RIGHT);
 		if (tmp != NULL) {
 			__u64 end = tmp->l_policy_data.l_extent.end;
-			/* Cache the first-non-overlapped index so as to skip
-			 * all pages within [index, oti_fn_index). This is safe
-			 * because if tmp lock is canceled, it will discard
-			 * these pages. */
-			info->oti_fn_index = cl_index(osc2cl(osc), end + 1);
-			if (end == OBD_OBJECT_EOF)
-				info->oti_fn_index = CL_PAGE_EOF;
+			__u64 start = tmp->l_policy_data.l_extent.start;
+
+			/* no lock covering this page */
+			if (index < cl_index(osc2cl(osc), start)) {
+				/* no lock at @index, first lock at @start */
+				info->oti_ng_index = cl_index(osc2cl(osc),
+						     start);
+				discard = true;
+			} else {
+				/* Cache the first-non-overlapped index so as to
+				 * skip all pages within [index, oti_fn_index).
+				 * This is safe because if tmp lock is canceled,
+				 * it will discard these pages.
+				 */
+				info->oti_fn_index = cl_index(osc2cl(osc),
+						     end + 1);
+				if (end == OBD_OBJECT_EOF)
+					info->oti_fn_index = CL_PAGE_EOF;
+			}
 			LDLM_LOCK_PUT(tmp);
-		} else if (cl_page_own(env, io, page) == 0) {
-			/* discard the page */
+		} else {
+			info->oti_ng_index = CL_PAGE_EOF;
+			discard = true;
+		}
+	}
+
+	if (discard) {
+		if (cl_page_own(env, io, page) == 0) {
 			cl_page_discard(env, io, page);
 			cl_page_disown(env, io, page);
 		} else {
@@ -3201,6 +3224,7 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 	cb = discard ? osc_discard_cb : check_and_discard_cb;
 	info->oti_fn_index = info->oti_next_index = start;
+	info->oti_ng_index = 0;
 
 	osc_page_gang_lookup(env, io, osc,
 			     info->oti_next_index, end, cb, osc);
