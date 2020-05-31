@@ -1572,9 +1572,9 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 
 		list_move(&exp->exp_obd_chain, &work_list);
 		evicted++;
-		CDEBUG(D_HA, "%s: disconnect stale client %s@%s\n",
-		       obd->obd_name, exp->exp_client_uuid.uuid,
-		       obd_export_nid2str(exp));
+		CWARN("%s: disconnect stale client %s@%s\n",
+		      obd->obd_name, exp->exp_client_uuid.uuid,
+		      obd_export_nid2str(exp));
 		print_export_data(exp, "EVICTING", 0, D_HA);
 	}
 	spin_unlock(&obd->obd_dev_lock);
