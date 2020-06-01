@@ -1448,6 +1448,7 @@ struct ptlrpc_bulk_desc {
 	int                    bd_max_iov;      /* allocated size of bd_iov */
 	int                    bd_nob;          /* # bytes covered */
 	int                    bd_nob_transferred; /* # bytes GOT/PUT */
+	unsigned int		bd_nob_last;	/* # bytes in last MD */
 
 	__u64                  bd_last_mbits;
 
@@ -1455,6 +1456,9 @@ struct ptlrpc_bulk_desc {
 	lnet_nid_t             bd_sender;       /* stash event::sender */
 	int			bd_md_count;	/* # valid entries in bd_mds */
 	int			bd_md_max_brw;	/* max entries in bd_mds */
+
+	/** array of offsets for each MD */
+	unsigned int		bd_mds_off[PTLRPC_BULK_OPS_COUNT];
 	/** array of associated MDs */
 	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_COUNT];
 
