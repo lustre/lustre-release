@@ -468,6 +468,36 @@ test_20d() {
 }
 run_test 20d "[atomicity] avoid getxattr for security context"
 
+test_20e() {
+	[ "$CLIENT_VERSION" -lt $(version_code 2.13.54) ] &&
+		skip "Need client version >= 2.13.54"
+	local filename1=$DIR/$tdir/df20e
+	local delay=5
+	local evict
+	local unconctx="-u unconfined_u -r unconfined_r -t unconfined_t -l s0"
+
+	mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir
+	#define OBD_FAIL_LLITE_CREATE_FILE_PAUSE2   0x1416
+	do_facet client "$LCTL set_param fail_val=$delay fail_loc=0x80001416"
+
+	# create file on first mount point
+	$RUNAS_CMD -u $RUNAS_ID runcon $unconctx touch $filename1 &
+	local touchpid=$!
+	sleep 1
+	cancel_lru_locks mdc
+	sysctl -w vm.drop_caches=2
+	$RUNAS_CMD -u $RUNAS_ID runcon $unconctx stat $DIR/$tdir &
+
+	wait $touchpid
+
+	evict=$($LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] || error "eviction happened"
+}
+run_test 20e "client deadlock and eviction form MDS"
+
 check_nodemap() {
 	local nm=$1
 	local key=$2
