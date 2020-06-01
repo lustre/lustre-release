@@ -1425,6 +1425,7 @@ extern const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops;
  *  Another user is readpage for MDT.
  */
 struct ptlrpc_bulk_desc {
+	unsigned int	bd_refs; /* number MD's assigned including zero-sends */
 	/** completed with failure */
 	unsigned long bd_failure:1;
 	/** client side */
@@ -2020,7 +2021,7 @@ static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
 	LASSERT(desc != NULL);
 
 	spin_lock(&desc->bd_lock);
-	rc = desc->bd_md_count;
+	rc = desc->bd_refs;
 	spin_unlock(&desc->bd_lock);
 	return rc;
 }
@@ -2045,7 +2046,7 @@ static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
 
 
 	spin_lock(&desc->bd_lock);
-	rc = desc->bd_md_count;
+	rc = desc->bd_refs;
 	spin_unlock(&desc->bd_lock);
 	return rc;
 }

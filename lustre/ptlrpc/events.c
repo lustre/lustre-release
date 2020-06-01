@@ -204,8 +204,8 @@ void client_bulk_callback(struct lnet_event *ev)
 
 	spin_lock(&desc->bd_lock);
 	req = desc->bd_req;
-	LASSERT(desc->bd_md_count > 0);
-	desc->bd_md_count--;
+	LASSERT(desc->bd_refs > 0);
+	desc->bd_refs--;
 
 	if (ev->type != LNET_EVENT_UNLINK && ev->status == 0) {
 		desc->bd_nob_transferred += ev->mlength;
@@ -222,7 +222,7 @@ void client_bulk_callback(struct lnet_event *ev)
 
 	/* NB don't unlock till after wakeup; desc can disappear under us
 	 * otherwise */
-	if (desc->bd_md_count == 0)
+	if (desc->bd_refs == 0)
 		ptlrpc_client_wake_req(desc->bd_req);
 
 	spin_unlock(&desc->bd_lock);
@@ -454,7 +454,7 @@ void server_bulk_callback(struct lnet_event *ev)
 
 	spin_lock(&desc->bd_lock);
 
-	LASSERT(desc->bd_md_count > 0);
+	LASSERT(desc->bd_refs > 0);
 
 	if ((ev->type == LNET_EVENT_ACK ||
 	     ev->type == LNET_EVENT_REPLY) &&
@@ -470,9 +470,9 @@ void server_bulk_callback(struct lnet_event *ev)
 		desc->bd_failure = 1;
 
 	if (ev->unlinked) {
-		desc->bd_md_count--;
+		desc->bd_refs--;
 		/* This is the last callback no matter what... */
-		if (desc->bd_md_count == 0)
+		if (desc->bd_refs == 0)
 			wake_up(&desc->bd_waitq);
 	}
 

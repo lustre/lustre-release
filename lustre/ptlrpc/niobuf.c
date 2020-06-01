@@ -193,8 +193,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	 * off high bits to get bulk count for this RPC. LU-1431 */
 	mbits = desc->bd_req->rq_mbits & ~((__u64)desc->bd_md_max_brw - 1);
 	total_md = desc->bd_req->rq_mbits - mbits + 1;
-
-	desc->bd_md_count = total_md;
+	desc->bd_refs = total_md;
 	desc->bd_failure = 0;
 
 	md.user_ptr = &desc->bd_cbid;
@@ -250,9 +249,9 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 		 * event this creates will signal completion with failure,
 		 * so we return SUCCESS here! */
 		spin_lock(&desc->bd_lock);
-		desc->bd_md_count -= total_md - posted_md;
+		desc->bd_refs -= total_md - posted_md;
 		spin_unlock(&desc->bd_lock);
-		LASSERT(desc->bd_md_count >= 0);
+		LASSERT(desc->bd_refs >= 0);
 
 		mdunlink_iterate_helper(desc->bd_mds, posted_md);
 		RETURN(0);
@@ -365,7 +364,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 
 	desc->bd_registered = 1;
 	desc->bd_last_mbits = mbits;
-	desc->bd_md_count = total_md;
+	desc->bd_refs = total_md;
 	md.user_ptr = &desc->bd_cbid;
 	md.handler = ptlrpc_handler;
 	md.threshold = 1;                       /* PUT or GET */
@@ -407,9 +406,9 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	if (rc != 0) {
 		LASSERT(rc == -ENOMEM);
 		spin_lock(&desc->bd_lock);
-		desc->bd_md_count -= total_md - posted_md;
+		desc->bd_refs -= total_md - posted_md;
 		spin_unlock(&desc->bd_lock);
-		LASSERT(desc->bd_md_count >= 0);
+		LASSERT(desc->bd_refs >= 0);
 		mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 		req->rq_status = -ENOMEM;
 		desc->bd_registered = 0;
@@ -418,14 +417,15 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 
 	spin_lock(&desc->bd_lock);
 	/* Holler if peer manages to touch buffers before he knows the mbits */
-	if (desc->bd_md_count != total_md)
+	if (desc->bd_refs != total_md)
 		CWARN("%s: Peer %s touched %d buffers while I registered\n",
 		      desc->bd_import->imp_obd->obd_name, libcfs_id2str(peer),
-		      total_md - desc->bd_md_count);
+		      total_md - desc->bd_refs);
 	spin_unlock(&desc->bd_lock);
 
-	CDEBUG(D_NET, "Setup %u bulk %s buffers: %u pages %u bytes, "
-	       "mbits x%#llx-%#llx, portal %u\n", desc->bd_md_count,
+	CDEBUG(D_NET,
+	       "Setup %u bulk %s buffers: %u pages %u bytes, mbits x%#llx-%#llx, portal %u\n",
+	       desc->bd_refs,
 	       ptlrpc_is_bulk_op_get(desc->bd_type) ? "get-source" : "put-sink",
 	       desc->bd_iov_count, desc->bd_nob,
 	       desc->bd_last_mbits, req->rq_mbits, desc->bd_portal);
