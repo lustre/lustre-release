@@ -1150,14 +1150,8 @@ static ssize_t dir_split_count_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	char tbuf[22] = "";
 	s64 val;
 	int rc;
-
-	if (count > (sizeof(tbuf) - 1))
-		return -EINVAL;
-
-	memcpy(tbuf, buffer, count);
 
 	rc = sysfs_memparse(buffer, count, &val, "B");
 	if (rc < 0)
