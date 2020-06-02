@@ -844,13 +844,17 @@ out:
 	return rc;
 }
 
-#define CPT_WEIGHT_MIN 4
+#define CPT_WEIGHT_MIN	4u
 
-static int cfs_cpt_num_estimate(void)
+static unsigned int cfs_cpt_num_estimate(void)
 {
-	int nthr = cpumask_weight(topology_sibling_cpumask(smp_processor_id()));
-	int ncpu = num_online_cpus();
-	int ncpt = 1;
+	unsigned int nthr;
+	unsigned int ncpu = num_online_cpus();
+	unsigned int ncpt = 1;
+
+	preempt_disable();
+	nthr = cpumask_weight(topology_sibling_cpumask(smp_processor_id()));
+	preempt_enable();
 
 	if (ncpu > CPT_WEIGHT_MIN)
 		for (ncpt = 2; ncpu > 2 * nthr * ncpt; ncpt++)
@@ -860,7 +864,7 @@ static int cfs_cpt_num_estimate(void)
 	/* config many CPU partitions on 32-bit system could consume
 	 * too much memory
 	 */
-	ncpt = min(2, ncpt);
+	ncpt = min(2U, ncpt);
 #endif
 	while (ncpu % ncpt)
 		ncpt--; /* worst case is 1 */
