@@ -43,37 +43,38 @@
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
 {
-        struct lu_buf *buf;
-        struct mdt_thread_info *mti;
+	struct lu_buf *buf;
+	struct mdt_thread_info *mti;
 
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        buf = &mti->mti_buf;
-        buf->lb_buf = area;
-        buf->lb_len = len;
-        return buf;
+	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	buf = &mti->mti_buf;
+	buf->lb_buf = area;
+	buf->lb_len = len;
+	return buf;
 }
 
 const struct lu_buf *mdt_buf_const(const struct lu_env *env,
-                                   const void *area, ssize_t len)
+				   const void *area, ssize_t len)
 {
-        struct lu_buf *buf;
-        struct mdt_thread_info *mti;
+	struct lu_buf *buf;
+	struct mdt_thread_info *mti;
 
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        buf = &mti->mti_buf;
+	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	buf = &mti->mti_buf;
 
-        buf->lb_buf = (void *)area;
-        buf->lb_len = len;
-        return buf;
+	buf->lb_buf = (void *)area;
+	buf->lb_len = len;
+	return buf;
 }
 
 /* This callback notifies MDT that transaction was done. This is needed by
  * mdt_save_lock() only. It is similar to new target code and will be removed
- * as mdt_save_lock() will be converted to use target structures */
+ * as mdt_save_lock() will be converted to use target structures
+ */
 static int mdt_txn_stop_cb(const struct lu_env *env,
-                           struct thandle *txn, void *cookie)
+			   struct thandle *txn, void *cookie)
 {
-	struct mdt_thread_info	*mti;
+	struct mdt_thread_info *mti;
 
 	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 	LASSERT(mti);
@@ -109,11 +110,11 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
 
 void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 {
-        ENTRY;
+	ENTRY;
 
-        /* Remove transaction callback */
-        dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-        EXIT;
+	/* Remove transaction callback */
+	dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
+	EXIT;
 }
 
 /* reconstruction code */
@@ -135,15 +136,14 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 			continue;
 
 		if (rs->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
-			CERROR("%s: Resent req xid %llu has mismatched opc: "
-			       "new %d old %d\n", exp->exp_obd->obd_name,
-			       req->rq_xid, lustre_msg_get_opc(req->rq_reqmsg),
-			       rs->rs_opc);
+			CERROR("%s: Resent req xid %llu has mismatched opc: new %d old %d\n",
+			       exp->exp_obd->obd_name, req->rq_xid,
+			       lustre_msg_get_opc(req->rq_reqmsg), rs->rs_opc);
 
 		svcpt = rs->rs_svcpt;
 
-		CDEBUG(D_HA, "Stealing %d locks from rs %p x%lld.t%lld"
-		       " o%d NID %s\n",
+		CDEBUG(D_HA,
+		       "Stealing %d locks from rs %p x%lld.t%lld o%d NID %s\n",
 		       rs->rs_nlocks, rs,
 		       rs->rs_xid, rs->rs_transno, rs->rs_opc,
 		       obd_export_nid2str(exp));
@@ -207,7 +207,6 @@ __u64 mdt_req_from_lrd(struct ptlrpc_request *req,
 	return lrd->lrd_data;
 }
 
-
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,
 			     struct mdt_lock_handle *lhc)
 {
@@ -237,7 +236,7 @@ static void mdt_fake_ma(struct md_attr *ma)
 }
 
 static void mdt_reconstruct_create(struct mdt_thread_info *mti,
-                                   struct mdt_lock_handle *lhc)
+				   struct mdt_lock_handle *lhc)
 {
 	struct ptlrpc_request  *req = mdt_info_req(mti);
 	struct obd_export *exp = req->rq_export;
@@ -263,9 +262,9 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 		RETURN_EXIT;
 	}
 
-        body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-        mti->mti_attr.ma_need = MA_INODE;
-        mti->mti_attr.ma_valid = 0;
+	body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
+	mti->mti_attr.ma_need = MA_INODE;
+	mti->mti_attr.ma_valid = 0;
 	rc = mdt_attr_get_complex(mti, child, &mti->mti_attr);
 	if (rc == -ENOENT) {
 		mdt_fake_ma(&mti->mti_attr);
@@ -284,21 +283,21 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 }
 
 static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
-                                    struct mdt_lock_handle *lhc)
+				    struct mdt_lock_handle *lhc)
 {
-        struct ptlrpc_request  *req = mdt_info_req(mti);
-        struct obd_export *exp = req->rq_export;
-        struct mdt_device *mdt = mti->mti_mdt;
-        struct mdt_object *obj;
-        struct mdt_body *body;
+	struct ptlrpc_request  *req = mdt_info_req(mti);
+	struct obd_export *exp = req->rq_export;
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct mdt_object *obj;
+	struct mdt_body *body;
 	int rc;
 
 	mdt_req_from_lrd(req, mti->mti_reply_data);
 	if (req->rq_status)
 		return;
 
-        body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-        obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
+	body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
+	obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
 	if (IS_ERR(obj)) {
 		rc = PTR_ERR(obj);
 		LCONSOLE_WARN("cannot lookup "DFID": rc = %d; "
@@ -310,41 +309,41 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 		RETURN_EXIT;
 	}
 
-        mti->mti_attr.ma_need = MA_INODE;
-        mti->mti_attr.ma_valid = 0;
+	mti->mti_attr.ma_need = MA_INODE;
+	mti->mti_attr.ma_valid = 0;
 
 	rc = mdt_attr_get_complex(mti, obj, &mti->mti_attr);
 	if (rc == -ENOENT)
 		mdt_fake_ma(&mti->mti_attr);
-        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
-                           mdt_object_fid(obj));
+	mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
+			   mdt_object_fid(obj));
 
 	mdt_object_put(mti->mti_env, obj);
 }
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,
-                                  struct mdt_lock_handle *lhc);
+				  struct mdt_lock_handle *lhc);
 
 static mdt_reconstructor reconstructors[REINT_MAX] = {
-        [REINT_SETATTR]  = mdt_reconstruct_setattr,
-        [REINT_CREATE]   = mdt_reconstruct_create,
-        [REINT_LINK]     = mdt_reconstruct_generic,
-        [REINT_UNLINK]   = mdt_reconstruct_generic,
-        [REINT_RENAME]   = mdt_reconstruct_generic,
-        [REINT_OPEN]     = mdt_reconstruct_open,
+	[REINT_SETATTR]  = mdt_reconstruct_setattr,
+	[REINT_CREATE]   = mdt_reconstruct_create,
+	[REINT_LINK]     = mdt_reconstruct_generic,
+	[REINT_UNLINK]   = mdt_reconstruct_generic,
+	[REINT_RENAME]   = mdt_reconstruct_generic,
+	[REINT_OPEN]     = mdt_reconstruct_open,
 	[REINT_SETXATTR] = mdt_reconstruct_generic,
 	[REINT_RMENTRY]  = mdt_reconstruct_generic,
 	[REINT_MIGRATE]	 = mdt_reconstruct_generic,
 	[REINT_RESYNC]	 = mdt_reconstruct_generic
 };
 
-void mdt_reconstruct(struct mdt_thread_info *mti,
-                     struct mdt_lock_handle *lhc)
+void mdt_reconstruct(struct mdt_thread_info *mti, struct mdt_lock_handle *lhc)
 {
 	mdt_reconstructor reconst;
-        ENTRY;
+
+	ENTRY;
 	LASSERT(mti->mti_rr.rr_opcode < REINT_MAX &&
 		(reconst = reconstructors[mti->mti_rr.rr_opcode]) != NULL);
 	reconst(mti, lhc);
-        EXIT;
+	EXIT;
 }
