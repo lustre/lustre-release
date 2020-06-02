@@ -43,7 +43,7 @@
  * uptodate time on the local client.
  */
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
-                      struct ost_lvb *lvb, __u64 *kms_place)
+		      struct ost_lvb *lvb, __u64 *kms_place)
 {
 	struct lov_stripe_md_entry *lse = lsm->lsm_entries[index];
 	u64 size = 0;
@@ -67,43 +67,43 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
 		u64 lov_size;
 		u64 tmpsize;
 
-                if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks)) {
-                        rc = OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
-                        continue;
-                }
+		if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks)) {
+			rc = OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
+			continue;
+		}
 
-                tmpsize = loi->loi_kms;
+		tmpsize = loi->loi_kms;
 		lov_size = lov_stripe_size(lsm, index, tmpsize, i);
-                if (lov_size > kms)
-                        kms = lov_size;
+		if (lov_size > kms)
+			kms = lov_size;
 
-                if (loi->loi_lvb.lvb_size > tmpsize)
-                        tmpsize = loi->loi_lvb.lvb_size;
+		if (loi->loi_lvb.lvb_size > tmpsize)
+			tmpsize = loi->loi_lvb.lvb_size;
 
 		lov_size = lov_stripe_size(lsm, index, tmpsize, i);
-                if (lov_size > size)
-                        size = lov_size;
-                /* merge blocks, mtime, atime */
-                blocks += loi->loi_lvb.lvb_blocks;
-                if (loi->loi_lvb.lvb_mtime > current_mtime)
-                        current_mtime = loi->loi_lvb.lvb_mtime;
-                if (loi->loi_lvb.lvb_atime > current_atime)
-                        current_atime = loi->loi_lvb.lvb_atime;
-                if (loi->loi_lvb.lvb_ctime > current_ctime)
-                        current_ctime = loi->loi_lvb.lvb_ctime;
+		if (lov_size > size)
+			size = lov_size;
+		/* merge blocks, mtime, atime */
+		blocks += loi->loi_lvb.lvb_blocks;
+		if (loi->loi_lvb.lvb_mtime > current_mtime)
+			current_mtime = loi->loi_lvb.lvb_mtime;
+		if (loi->loi_lvb.lvb_atime > current_atime)
+			current_atime = loi->loi_lvb.lvb_atime;
+		if (loi->loi_lvb.lvb_ctime > current_ctime)
+			current_ctime = loi->loi_lvb.lvb_ctime;
 
 		CDEBUG(D_INODE, "MDT ID "DOSTID" on OST[%u]: s=%llu m=%llu"
 		       " a=%llu c=%llu b=%llu\n", POSTID(&lsm->lsm_oi),
 		       loi->loi_ost_idx, loi->loi_lvb.lvb_size,
 		       loi->loi_lvb.lvb_mtime, loi->loi_lvb.lvb_atime,
 		       loi->loi_lvb.lvb_ctime, loi->loi_lvb.lvb_blocks);
-        }
+	}
 
-        *kms_place = kms;
-        lvb->lvb_size = size;
-        lvb->lvb_blocks = blocks;
-        lvb->lvb_mtime = current_mtime;
-        lvb->lvb_atime = current_atime;
-        lvb->lvb_ctime = current_ctime;
-        RETURN(rc);
+	*kms_place = kms;
+	lvb->lvb_size = size;
+	lvb->lvb_blocks = blocks;
+	lvb->lvb_mtime = current_mtime;
+	lvb->lvb_atime = current_atime;
+	lvb->lvb_ctime = current_ctime;
+	RETURN(rc);
 }
