@@ -44,6 +44,8 @@
 #include <linux/fs.h>
 #include <linux/kthread.h>
 #include <linux/pagemap.h>
+#include <linux/poll.h>
+#include <linux/tty.h>
 #include <linux/uaccess.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/libcfs.h>
@@ -51,6 +53,7 @@
 /* XXX move things up to the top, comment */
 union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
 
+char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
@@ -103,6 +106,15 @@ void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 	     (tcd = &(*cfs_trace_data[i])[cpu].tcd) &&			\
 	     cfs_trace_lock_tcd(tcd, 1); cfs_trace_unlock_tcd(tcd, 1), i++)
 
+enum cfs_trace_buf_type cfs_trace_buf_idx_get(void)
+{
+	if (in_irq())
+		return CFS_TCD_TYPE_IRQ;
+	if (in_softirq())
+		return CFS_TCD_TYPE_SOFTIRQ;
+	return CFS_TCD_TYPE_PROC;
+}
+
 static inline struct cfs_trace_cpu_data *
 cfs_trace_get_tcd(void)
 {
@@ -119,6 +131,82 @@ static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
 	cfs_trace_unlock_tcd(tcd, 0);
 
 	put_cpu();
+}
+
+/* percents to share the total debug memory for each type */
+static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
+	80,	/* 80% pages for CFS_TCD_TYPE_PROC */
+	10,	/* 10% pages for CFS_TCD_TYPE_SOFTIRQ */
+	10	/* 10% pages for CFS_TCD_TYPE_IRQ */
+};
+
+int cfs_tracefile_init_arch(void)
+{
+	struct cfs_trace_cpu_data *tcd;
+	int i;
+	int j;
+
+	/* initialize trace_data */
+	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
+	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
+		cfs_trace_data[i] =
+			kmalloc_array(num_possible_cpus(),
+				      sizeof(union cfs_trace_data_union),
+				      GFP_KERNEL);
+		if (!cfs_trace_data[i])
+			goto out_trace_data;
+	}
+
+	/* arch related info initialized */
+	cfs_tcd_for_each(tcd, i, j) {
+		spin_lock_init(&tcd->tcd_lock);
+		tcd->tcd_pages_factor = pages_factor[i];
+		tcd->tcd_type = i;
+		tcd->tcd_cpu = j;
+	}
+
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			cfs_trace_console_buffers[i][j] =
+				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
+					GFP_KERNEL);
+
+			if (!cfs_trace_console_buffers[i][j])
+				goto out_buffers;
+		}
+
+	return 0;
+
+out_buffers:
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			kfree(cfs_trace_console_buffers[i][j]);
+			cfs_trace_console_buffers[i][j] = NULL;
+		}
+out_trace_data:
+	for (i = 0; cfs_trace_data[i]; i++) {
+		kfree(cfs_trace_data[i]);
+		cfs_trace_data[i] = NULL;
+	}
+	pr_err("lnet: Not enough memory\n");
+	return -ENOMEM;
+}
+
+void cfs_tracefile_fini_arch(void)
+{
+	int i;
+	int j;
+
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			kfree(cfs_trace_console_buffers[i][j]);
+			cfs_trace_console_buffers[i][j] = NULL;
+		}
+
+	for (i = 0; cfs_trace_data[i]; i++) {
+		kfree(cfs_trace_data[i]);
+		cfs_trace_data[i] = NULL;
+	}
 }
 
 static inline struct cfs_trace_page *
@@ -299,6 +387,103 @@ static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
                 cfs_tage_to_tail(tage, &tcd->tcd_pages);
         }
         return tage;
+}
+
+static void cfs_set_ptldebug_header(struct ptldebug_header *header,
+				    struct libcfs_debug_msg_data *msgdata,
+				    unsigned long stack)
+{
+	struct timespec64 ts;
+
+	ktime_get_real_ts64(&ts);
+
+	header->ph_subsys = msgdata->msg_subsys;
+	header->ph_mask = msgdata->msg_mask;
+	header->ph_cpu_id = smp_processor_id();
+	header->ph_type = cfs_trace_buf_idx_get();
+	/* y2038 safe since all user space treats this as unsigned, but
+	 * will overflow in 2106
+	 */
+	header->ph_sec = (u32)ts.tv_sec;
+	header->ph_usec = ts.tv_nsec / NSEC_PER_USEC;
+	header->ph_stack = stack;
+	header->ph_pid = current->pid;
+	header->ph_line_num = msgdata->msg_line;
+	header->ph_extern_pid = 0;
+}
+
+/**
+ * tty_write_msg - write a message to a certain tty, not just the console.
+ * @tty: the destination tty_struct
+ * @msg: the message to write
+ *
+ * tty_write_message is not exported, so write a same function for it
+ *
+ */
+static void tty_write_msg(struct tty_struct *tty, const char *msg)
+{
+	mutex_lock(&tty->atomic_write_lock);
+	tty_lock(tty);
+	if (tty->ops->write && tty->count > 0)
+		tty->ops->write(tty, msg, strlen(msg));
+	tty_unlock(tty);
+	mutex_unlock(&tty->atomic_write_lock);
+	wake_up_interruptible_poll(&tty->write_wait, POLLOUT);
+}
+
+static void cfs_tty_write_message(const char *prefix, int mask, const char *msg)
+{
+	struct tty_struct *tty;
+
+	tty = get_current_tty();
+	if (!tty)
+		return;
+
+	tty_write_msg(tty, prefix);
+	if ((mask & D_EMERG) || (mask & D_ERROR))
+		tty_write_msg(tty, "Error");
+	tty_write_msg(tty, ": ");
+	tty_write_msg(tty, msg);
+	tty_kref_put(tty);
+}
+
+static void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
+				 const char *buf, int len, const char *file,
+				 const char *fn)
+{
+	char *prefix = "Lustre";
+
+	if (hdr->ph_subsys == S_LND || hdr->ph_subsys == S_LNET)
+		prefix = "LNet";
+
+	if (mask & D_CONSOLE) {
+		if (mask & D_EMERG)
+			pr_emerg("%sError: %.*s", prefix, len, buf);
+		else if (mask & D_ERROR)
+			pr_err("%sError: %.*s", prefix, len, buf);
+		else if (mask & D_WARNING)
+			pr_warn("%s: %.*s", prefix, len, buf);
+		else if (mask & libcfs_printk)
+			pr_info("%s: %.*s", prefix, len, buf);
+	} else {
+		if (mask & D_EMERG)
+			pr_emerg("%sError: %d:%d:(%s:%d:%s()) %.*s", prefix,
+				 hdr->ph_pid, hdr->ph_extern_pid, file,
+				 hdr->ph_line_num, fn, len, buf);
+		else if (mask & D_ERROR)
+			pr_err("%sError: %d:%d:(%s:%d:%s()) %.*s", prefix,
+			       hdr->ph_pid, hdr->ph_extern_pid, file,
+			       hdr->ph_line_num, fn, len, buf);
+		else if (mask & D_WARNING)
+			pr_warn("%s: %d:%d:(%s:%d:%s()) %.*s", prefix,
+				hdr->ph_pid, hdr->ph_extern_pid, file,
+				hdr->ph_line_num, fn, len, buf);
+		else if (mask & (D_CONSOLE | libcfs_printk))
+			pr_info("%s: %.*s", prefix, len, buf);
+	}
+
+	if (mask & D_TTY)
+		cfs_tty_write_message(prefix, mask, buf);
 }
 
 int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,

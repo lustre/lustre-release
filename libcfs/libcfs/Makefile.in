@@ -20,7 +20,6 @@ libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   workitem.o \
 		   libcfs_mem.o libcfs_lock.o \
 		   linux-crypto.o linux-crypto-adler.o \
-		   linux-tracefile.o \
 		   $(libcfs-objs-y)
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
