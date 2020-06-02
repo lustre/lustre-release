@@ -9008,8 +9008,18 @@ pool_add_targets() {
 	fi
 
 	local t=$(for i in $list; do printf "$FSNAME-OST%04x_UUID " $i; done)
+	local tg=$(for i in $list;
+		do printf -- "-e $FSNAME-OST%04x_UUID " $i; done)
+	local firstx=$(printf "%04x" $first)
+	local lastx=$(printf "%04x" $last)
+
 	do_facet mgs $LCTL pool_add \
-			$FSNAME.$pool $FSNAME-OST[$first-$last/$step]
+		$FSNAME.$pool $FSNAME-OST[$firstx-$lastx/$step]
+	# ignore EEXIST(17)
+	if (( $? != 0 && $? != 17 )); then
+		error_noexit "pool_add $FSNAME-OST[$firstx-$lastx/$step] failed"
+		return 3
+	fi
 
 	# wait for OSTs to be added to the pool
 	for mds_id in $(seq $MDSCOUNT); do
@@ -9017,22 +9027,15 @@ pool_add_targets() {
 		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
 		wait_update_facet mds$mds_id \
 			"lctl get_param -n lod.$lodname.pools.$pool |
-				sort -u | tr '\n' ' ' " "$t" || {
+				grep $tg | sort -u | tr '\n' ' '" "$t" || {
 			error_noexit "mds$mds_id: Add to pool failed"
-			return 3
+			return 2
 		}
 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool \
-			| sort -u | tr '\n' ' ' " "$t" || {
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool |
+			grep $tg | sort -u | tr '\n' ' ' " "$t" || {
 		error_noexit "Add to pool failed"
 		return 1
-	}
-	local lfscount=$($LFS pool_list $FSNAME.$pool | grep -c "\-OST")
-	local addcount=$(((last - first) / step + 1))
-	[ $lfscount -eq $addcount ] || {
-		error_noexit "lfs pool_list bad ost count" \
-						"$lfscount != $addcount"
-		return 2
 	}
 }
 
