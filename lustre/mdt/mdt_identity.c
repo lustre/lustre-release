@@ -40,9 +40,9 @@
 #include "mdt_internal.h"
 
 static void mdt_identity_entry_init(struct upcall_cache_entry *entry,
-                                    void *unused)
+				    void *unused)
 {
-        entry->u.identity.mi_uc_entry = entry;
+	entry->u.identity.mi_uc_entry = entry;
 }
 
 static void mdt_identity_entry_free(struct upcall_cache *cache,
@@ -63,34 +63,34 @@ static void mdt_identity_entry_free(struct upcall_cache *cache,
 }
 
 static int mdt_identity_do_upcall(struct upcall_cache *cache,
-                                  struct upcall_cache_entry *entry)
+				  struct upcall_cache_entry *entry)
 {
-        char keystr[16];
-        char *argv[] = {
-                  [0] = cache->uc_upcall,
-                  [1] = cache->uc_name,
-                  [2] = keystr,
-                  [3] = NULL
-        };
-        char *envp[] = {
-                  [0] = "HOME=/",
-                  [1] = "PATH=/sbin:/usr/sbin",
-                  [2] = NULL
-        };
+	char keystr[16];
+	char *argv[] = {
+		[0] = cache->uc_upcall,
+		[1] = cache->uc_name,
+		[2] = keystr,
+		[3] = NULL
+	};
+	char *envp[] = {
+		[0] = "HOME=/",
+		[1] = "PATH=/sbin:/usr/sbin",
+		[2] = NULL
+	};
 	ktime_t start, end;
-        int rc;
-        ENTRY;
+	int rc;
 
-        /* There is race condition:
-         * "uc_upcall" was changed just after "is_identity_get_disabled" check.
-         */
+	ENTRY;
+	/* There is race condition:
+	 * "uc_upcall" was changed just after "is_identity_get_disabled" check.
+	 */
 	down_read(&cache->uc_upcall_rwsem);
-        CDEBUG(D_INFO, "The upcall is: '%s'\n", cache->uc_upcall);
+	CDEBUG(D_INFO, "The upcall is: '%s'\n", cache->uc_upcall);
 
-        if (unlikely(!strcmp(cache->uc_upcall, "NONE"))) {
-                CERROR("no upcall set\n");
-                GOTO(out, rc = -EREMCHG);
-        }
+	if (unlikely(!strcmp(cache->uc_upcall, "NONE"))) {
+		CERROR("no upcall set\n");
+		GOTO(out, rc = -EREMCHG);
+	}
 
 	argv[0] = cache->uc_upcall;
 	snprintf(keystr, sizeof(keystr), "%llu", entry->ue_key);
@@ -123,8 +123,8 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 	struct group_info *ginfo = NULL;
 	struct md_perm *perms = NULL;
 	int size, i;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(data);
 	if (data->idd_ngroups > NGROUPS_MAX)
 		RETURN(-E2BIG);
@@ -132,7 +132,8 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 	if (data->idd_ngroups > 0) {
 		ginfo = groups_alloc(data->idd_ngroups);
 		if (!ginfo) {
-			CERROR("failed to alloc %d groups\n", data->idd_ngroups);
+			CERROR("failed to alloc %d groups\n",
+			       data->idd_ngroups);
 			RETURN(-ENOMEM);
 		}
 
@@ -146,7 +147,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 		if (!perms) {
 			CERROR("failed to alloc %d permissions\n",
 			       data->idd_nperms);
-			if (ginfo != NULL)
+			if (ginfo)
 				put_group_info(ginfo);
 			RETURN(-ENOMEM);
 		}
@@ -172,42 +173,42 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 
 struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
 {
-        struct upcall_cache_entry *entry;
+	struct upcall_cache_entry *entry;
 
-        if (!cache)
-                return ERR_PTR(-ENOENT);
+	if (!cache)
+		return ERR_PTR(-ENOENT);
 
-        entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
-        if (IS_ERR(entry))
-                return ERR_PTR(PTR_ERR(entry));
-        else if (unlikely(!entry))
-                return ERR_PTR(-ENOENT);
-        else
-                return &entry->u.identity;
+	entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
+	if (IS_ERR(entry))
+		return ERR_PTR(PTR_ERR(entry));
+	else if (unlikely(!entry))
+		return ERR_PTR(-ENOENT);
+	else
+		return &entry->u.identity;
 }
 
 void mdt_identity_put(struct upcall_cache *cache, struct md_identity *identity)
 {
-        if (!cache)
-                return;
+	if (!cache)
+		return;
 
-        LASSERT(identity);
-        upcall_cache_put_entry(cache, identity->mi_uc_entry);
+	LASSERT(identity);
+	upcall_cache_put_entry(cache, identity->mi_uc_entry);
 }
 
 struct upcall_cache_ops mdt_identity_upcall_cache_ops = {
-        .init_entry     = mdt_identity_entry_init,
-        .free_entry     = mdt_identity_entry_free,
-        .do_upcall      = mdt_identity_do_upcall,
-        .parse_downcall = mdt_identity_parse_downcall,
+	.init_entry     = mdt_identity_entry_init,
+	.free_entry     = mdt_identity_entry_free,
+	.do_upcall      = mdt_identity_do_upcall,
+	.parse_downcall = mdt_identity_parse_downcall,
 };
 
 void mdt_flush_identity(struct upcall_cache *cache, int uid)
 {
-        if (uid < 0)
-                upcall_cache_flush_idle(cache);
-        else
-                upcall_cache_flush_one(cache, (__u64)uid, NULL);
+	if (uid < 0)
+		upcall_cache_flush_idle(cache);
+	else
+		upcall_cache_flush_one(cache, (__u64)uid, NULL);
 }
 
 /*
@@ -216,26 +217,25 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
  */
 __u32 mdt_identity_get_perm(struct md_identity *identity, lnet_nid_t nid)
 {
-
 	struct md_perm *perm;
 	int i;
 
 	if (!identity)
 		return CFS_SETGRP_PERM;
 
-        perm = identity->mi_perms;
-        /* check exactly matched nid first */
-        for (i = identity->mi_nperms - 1; i > 0; i--) {
-                if (perm[i].mp_nid != nid)
-                        continue;
-                return perm[i].mp_perm;
-        }
+	perm = identity->mi_perms;
+	/* check exactly matched nid first */
+	for (i = identity->mi_nperms - 1; i > 0; i--) {
+		if (perm[i].mp_nid != nid)
+			continue;
+		return perm[i].mp_perm;
+	}
 
-        /* check LNET_NID_ANY then */
-        if ((identity->mi_nperms > 0) &&
-            ((perm[0].mp_nid == nid) || (perm[0].mp_nid == LNET_NID_ANY)))
-                return perm[0].mp_perm;
+	/* check LNET_NID_ANY then */
+	if ((identity->mi_nperms > 0) &&
+	    ((perm[0].mp_nid == nid) || (perm[0].mp_nid == LNET_NID_ANY)))
+		return perm[0].mp_perm;
 
-        /* return default last */
+	/* return default last */
 	return CFS_SETGRP_PERM;
 }
