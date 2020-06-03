@@ -163,7 +163,7 @@ int choose_ipv4_src(__u32 *ret, int interface, __u32 dst_ipaddr, struct net *ns)
 		goto out;
 	err = -ENOENT;
 	in_dev_for_each_ifa_rcu(ifa, in_dev) {
-		if (*ret == 0 ||
+		if (err ||
 		    ((dst_ipaddr ^ ntohl(ifa->ifa_local))
 		     & ntohl(ifa->ifa_mask)) == 0) {
 			/* This address at least as good as what we
