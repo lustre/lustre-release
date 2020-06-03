@@ -18,8 +18,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
-# bug number for skipped test:  LU-7105
-ALWAYS_EXCEPT+="                28 "
+# bug number for skipped test:  LU-7105 LU-13628
+ALWAYS_EXCEPT+="                28      106"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skip tests for PPC until they are fixed
