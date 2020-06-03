@@ -3,6 +3,7 @@
 /Makefile.in
 /XMLCONFIG
 /badarea_io
+/check_fallocate
 /check_fhandle_syscalls
 /checkfiemap
 /checkstat
@@ -10,6 +11,8 @@
 /cmknod
 /copy_attr
 /copytool
+/create_foreign_dir
+/create_foreign_file
 /llapi_fid_test
 /llapi_hsm_test
 /llapi_layout_test
@@ -44,6 +47,7 @@
 /mkdirmany
 /mlink
 /mmap_cat
+/mmap_mknod_test
 /mmap_sanity
 /mrename
 /multifstat
@@ -61,6 +65,8 @@
 /openunlink
 /orphan_linkea_check
 /ostactive
+/parse_foreign_dir
+/parse_foreign_file
 /reads
 /rename_many
 /rmdirmany
@@ -75,6 +81,7 @@
 /stat
 /statmany
 /statone
+/statx
 /swap_lock_test
 /tchmod
 /test_brw
