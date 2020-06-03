@@ -572,6 +572,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_READ;
 	int maxlnb = *nr_local;
 	__u64 begin, end;
+	ktime_t kstart = ktime_get();
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -638,7 +639,9 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		niocount,
 		READ);
 
-	ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_READ_BYTES, jobid, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid,
+			 ktime_us_delta(ktime_get(), kstart));
 	RETURN(0);
 
 buf_put:
@@ -684,6 +687,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_WRITE;
 	int maxlnb = *nr_local;
 	__u64 begin, end;
+	ktime_t kstart = ktime_get();
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -838,7 +842,9 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		obj->ioo_bufcnt,
 		WRITE);
 
-	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE_BYTES, jobid, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid,
+			 ktime_us_delta(ktime_get(), kstart));
 	RETURN(0);
 err:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);

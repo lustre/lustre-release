@@ -1537,18 +1537,14 @@ static struct kobj_type sbi_ktype = {
 	.release        = sbi_kobj_release,
 };
 
-#define LPROCFS_TYPE_LATENCY \
-	(LPROCFS_TYPE_USEC | LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV)
 static const struct llite_file_opcode {
 	__u32		opcode;
 	__u32		type;
 	const char	*opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
 	/* file operation */
-	{ LPROC_LL_READ_BYTES,	LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
-		"read_bytes" },
-	{ LPROC_LL_WRITE_BYTES,	LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
-		"write_bytes" },
+	{ LPROC_LL_READ_BYTES,	LPROCFS_TYPE_BYTES_FULL, "read_bytes" },
+	{ LPROC_LL_WRITE_BYTES,	LPROCFS_TYPE_BYTES_FULL, "write_bytes" },
 	{ LPROC_LL_READ,	LPROCFS_TYPE_LATENCY,	"read" },
 	{ LPROC_LL_WRITE,	LPROCFS_TYPE_LATENCY,	"write" },
 	{ LPROC_LL_IOCTL,	LPROCFS_TYPE_REQS,	"ioctl" },

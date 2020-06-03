@@ -250,7 +250,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 		return NULL;
 	}
 
-	jobs->ojs_cntr_init_fn(job->js_stats);
+	jobs->ojs_cntr_init_fn(job->js_stats, 0);
 
 	memcpy(job->js_jobid, jobid, sizeof(job->js_jobid));
 	job->js_timestamp = ktime_get_real_seconds();

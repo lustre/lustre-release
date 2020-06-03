@@ -35,12 +35,6 @@
 
 /* functions below are stubs for now, they will be implemented with
  * grant support on MDT */
-static inline void mdt_io_counter_incr(struct obd_export *exp, int opcode,
-				       char *jobid, long amount)
-{
-	return;
-}
-
 static inline void mdt_dom_read_lock(struct mdt_object *mo)
 {
 	down_read(&mo->mot_dom_sem);
@@ -364,6 +358,8 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct niobuf_remote *rnb, int *nr_local,
 			   struct niobuf_local *lnb, char *jobid)
 {
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct dt_object *dob;
 	int i, j, rc, tot_bytes = 0;
 	int maxlnb = *nr_local;
@@ -422,7 +418,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
 
-	mdt_io_counter_incr(exp, LPROC_MDT_IO_READ, jobid, tot_bytes);
+	mdt_counter_incr(req, LPROC_MDT_IO_READ, tot_bytes);
 	RETURN(0);
 buf_put:
 	dt_bufs_put(env, dob, lnb, *nr_local);
@@ -437,6 +433,8 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct niobuf_remote *rnb, int *nr_local,
 			    struct niobuf_local *lnb, char *jobid)
 {
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct dt_object *dob;
 	int i, j, k, rc = 0, tot_bytes = 0;
 	int maxlnb = *nr_local;
@@ -496,7 +494,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (likely(rc))
 		GOTO(err, rc);
 
-	mdt_io_counter_incr(exp, LPROC_MDT_IO_WRITE, jobid, tot_bytes);
+	mdt_counter_incr(req, LPROC_MDT_IO_WRITE, tot_bytes);
 	RETURN(0);
 err:
 	dt_bufs_put(env, dob, lnb, *nr_local);
@@ -849,6 +847,7 @@ stop:
 int mdt_punch_hdl(struct tgt_session_info *tsi)
 {
 	const struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct ost_body *repbody;
 	struct mdt_thread_info *info;
 	struct lu_attr *la;
@@ -859,6 +858,7 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 	struct dt_object *dob;
 	__u64 flags = 0;
 	struct lustre_handle lh = { 0, };
+	ktime_t kstart = ktime_get();
 	__u64 start, end;
 	int rc;
 	bool srvlock;
@@ -942,8 +942,8 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 		GOTO(out_put, rc);
 
 	mdt_dom_obj_lvb_update(tsi->tsi_env, mo, false);
-	mdt_io_counter_incr(tsi->tsi_exp, LPROC_MDT_IO_PUNCH,
-			    tsi->tsi_jobid, 1);
+	mdt_counter_incr(req, LPROC_MDT_IO_PUNCH,
+			 ktime_us_delta(ktime_get(), kstart));
 	EXIT;
 out_put:
 	lu_object_put(tsi->tsi_env, &mo->mot_obj);

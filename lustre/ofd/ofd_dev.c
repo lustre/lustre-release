@@ -880,6 +880,7 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 	void			*key, *val = NULL;
 	int			 keylen, vallen, rc = 0;
 	bool			 is_grant_shrink;
+	ktime_t			 kstart = ktime_get();
 
 	ENTRY;
 
@@ -928,7 +929,7 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 		rc = -EOPNOTSUPP;
 	}
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SET_INFO,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	RETURN(rc);
 }
@@ -1074,6 +1075,7 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 	void				*key;
 	int				 keylen;
 	int				 replylen, rc = 0;
+	ktime_t				 kstart = ktime_get();
 
 	ENTRY;
 
@@ -1188,7 +1190,7 @@ out_put:
 		rc = -EOPNOTSUPP;
 	}
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_GET_INFO,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	RETURN(rc);
 }
@@ -1213,6 +1215,7 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 	struct ofd_object	*fo;
 	__u64			 flags = 0;
 	enum ldlm_mode		 lock_mode = LCK_PR;
+	ktime_t			 kstart = ktime_get();
 	bool			 srvlock;
 	int			 rc;
 	ENTRY;
@@ -1277,7 +1280,7 @@ out:
 		tgt_extent_unlock(&lh, lock_mode);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_GETATTR,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	repbody->oa.o_valid |= OBD_MD_FLFLAGS;
 	repbody->oa.o_flags = OBD_FL_FLUSH;
@@ -1304,6 +1307,7 @@ static int ofd_setattr_hdl(struct tgt_session_info *tsi)
 	struct ost_body		*repbody;
 	struct ldlm_resource	*res;
 	struct ofd_object	*fo;
+	ktime_t			 kstart = ktime_get();
 	int			 rc = 0;
 
 	ENTRY;
@@ -1352,7 +1356,7 @@ static int ofd_setattr_hdl(struct tgt_session_info *tsi)
 		     OFD_VALID_FLAGS | LA_UID | LA_GID | LA_PROJID);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SETATTR,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 	EXIT;
 out_put:
 	ofd_object_put(tsi->tsi_env, fo);
@@ -1489,10 +1493,11 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	u64			 seq = ostid_seq(&oa->o_oi);
 	u64			 oid = ostid_id(&oa->o_oi);
 	struct ofd_seq		*oseq;
-	s64 diff;
-	int rc = 0;
 	int			 sync_trans = 0;
 	long			 granted = 0;
+	ktime_t			 kstart = ktime_get();
+	s64			 diff;
+	int			 rc = 0;
 
 	ENTRY;
 
@@ -1730,7 +1735,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	}
 	EXIT;
 	ofd_counter_incr(exp, LPROC_OFD_STATS_CREATE,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 	if (unlikely(!oseq->os_last_id_synced))
 		oseq->os_last_id_synced = 1;
 out:
@@ -1763,6 +1768,7 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
 	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
 	struct lu_fid		*fid = &fti->fti_fid;
+	ktime_t			 kstart = ktime_get();
 	u64			 oid;
 	u32			 count;
 	int			 rc = 0;
@@ -1824,7 +1830,7 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 	}
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_DESTROY,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	GOTO(out, rc);
 
@@ -1846,6 +1852,7 @@ out:
  */
 static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 {
+	ktime_t			 kstart = ktime_get();
 	struct obd_statfs	*osfs;
 	int			 rc;
 
@@ -1865,7 +1872,7 @@ static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 		rc = -EINPROGRESS;
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_STATFS,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	RETURN(rc);
 }
@@ -1888,6 +1895,7 @@ static int ofd_sync_hdl(struct tgt_session_info *tsi)
 	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
 	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
 	struct ofd_object	*fo = NULL;
+	ktime_t			 kstart = ktime_get();
 	int			 rc = 0;
 
 	ENTRY;
@@ -1908,7 +1916,7 @@ static int ofd_sync_hdl(struct tgt_session_info *tsi)
 		GOTO(put, rc);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SYNC,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 	if (fo == NULL)
 		RETURN(0);
 
@@ -1953,6 +1961,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	int rc, mode;
 	__u64 start, end;
 	bool srvlock;
+	ktime_t kstart = ktime_get();
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
 	if (repbody == NULL)
@@ -2006,7 +2015,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 		rc = 0;
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_PREALLOC,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	EXIT;
 out_put:
@@ -2058,9 +2067,10 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 	struct ofd_object	*fo;
 	__u64			 flags = 0;
 	struct lustre_handle	 lh = { 0, };
-	int			 rc;
 	__u64			 start, end;
 	bool			 srvlock;
+	ktime_t			 kstart = ktime_get();
+	int			 rc;
 
 	ENTRY;
 
@@ -2122,7 +2132,7 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 		GOTO(out_put, rc);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_PUNCH,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 	EXIT;
 out_put:
 	ofd_object_put(tsi->tsi_env, fo);
@@ -2348,6 +2358,7 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 {
 	struct obd_quotactl *oqctl, *repoqc;
 	struct lu_nodemap *nodemap;
+	ktime_t kstart = ktime_get();
 	int id;
 	int rc;
 
@@ -2385,7 +2396,7 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
-			 tsi->tsi_jobid, 1);
+			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
 	if (repoqc->qc_id != id)
 		swap(repoqc->qc_id, id);

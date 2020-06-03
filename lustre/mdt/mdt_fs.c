@@ -78,7 +78,7 @@ int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 	if (stats->nid_stats == NULL)
 		RETURN(-ENOMEM);
 
-	mdt_stats_counter_init(stats->nid_stats);
+	mdt_stats_counter_init(stats->nid_stats, 0);
 
 	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
 	if (rc != 0) {

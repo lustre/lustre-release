@@ -88,7 +88,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
-	ofd_stats_counter_init(stats->nid_stats);
+	ofd_stats_counter_init(stats->nid_stats, 0);
 
 	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
 	if (rc != 0) {
@@ -903,6 +903,7 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 	struct ldlm_resource *res;
 	struct ofd_object *fo;
 	struct lu_fid *fid = &oa->o_oi.oi_fid;
+	ktime_t kstart = ktime_get();
 	int rc = 0;
 
 	ENTRY;
@@ -946,7 +947,8 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	ofd_counter_incr(exp, LPROC_OFD_STATS_SETATTR, NULL, 1);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_SETATTR, NULL,
+			 ktime_us_delta(ktime_get(), kstart));
 	EXIT;
 out_unlock:
 	ofd_object_put(env, fo);

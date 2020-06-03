@@ -165,7 +165,7 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src,
-			      struct mdt_object *tgt)
+			      struct mdt_object *tgt, long count)
 {
         struct md_attr *ma = &info->mti_attr;
         struct rename_stats *rstats = &mdt->mdt_rename_stats;
@@ -181,13 +181,13 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
         }
 
         if (src == tgt) {
-		mdt_counter_incr(req, LPROC_MDT_SAMEDIR_RENAME);
+		mdt_counter_incr(req, LPROC_MDT_SAMEDIR_RENAME, count);
                 lprocfs_oh_tally_log2(&rstats->hist[RENAME_SAMEDIR_SIZE],
                                       (unsigned int)ma->ma_attr.la_size);
                 return;
         }
 
-	mdt_counter_incr(req, LPROC_MDT_CROSSDIR_RENAME);
+	mdt_counter_incr(req, LPROC_MDT_CROSSDIR_RENAME, count);
         lprocfs_oh_tally_log2(&rstats->hist[RENAME_CROSSDIR_SRC_SIZE],
                               (unsigned int)ma->ma_attr.la_size);
 
@@ -1346,20 +1346,21 @@ int lprocfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
+void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount)
 {
 	struct obd_export *exp = req->rq_export;
 
 	if (exp->exp_obd && exp->exp_obd->obd_md_stats)
-		lprocfs_counter_incr(exp->exp_obd->obd_md_stats,
-				     opcode + LPROC_MD_LAST_OPC);
+		lprocfs_counter_add(exp->exp_obd->obd_md_stats,
+				    opcode + LPROC_MD_LAST_OPC, amount);
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
-		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
+		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
+				    amount);
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd,
 				      lustre_msg_get_jobid(req->rq_reqmsg),
-				      opcode, 1);
+				      opcode, amount);
 }
 
 static const char * const mdt_stats[] = {
@@ -1385,19 +1386,24 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_MIGRATE]		= "migrate",
 };
 
-void mdt_stats_counter_init(struct lprocfs_stats *stats)
+void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
 {
-	int idx;
+	int array_size = ARRAY_SIZE(mdt_stats);
+	int oidx; /* obd_md_stats index */
+	int midx; /* mdt_stats index */
 
-	LASSERT(stats && stats->ls_num >= ARRAY_SIZE(mdt_stats));
+	LASSERT(stats && stats->ls_num >= offset + array_size);
 
-	for (idx = 0; idx < ARRAY_SIZE(mdt_stats); idx++) {
-		int flags = 0;
-
-		if (idx == LPROC_MDT_IO_WRITE || idx == LPROC_MDT_IO_READ)
-			flags = LPROCFS_CNTR_AVGMINMAX;
-
-		lprocfs_counter_init(stats, idx, flags, mdt_stats[idx], "reqs");
+	for (midx = 0; midx < array_size; midx++) {
+		oidx = midx + offset;
+		if (midx == LPROC_MDT_IO_READ || midx == LPROC_MDT_IO_WRITE)
+			lprocfs_counter_init(stats, oidx,
+					     LPROCFS_TYPE_BYTES_FULL,
+					     mdt_stats[midx], "bytes");
+		else
+			lprocfs_counter_init(stats, oidx,
+					     LPROCFS_TYPE_LATENCY,
+					     mdt_stats[midx], "usecs");
 	}
 }
 
@@ -1405,7 +1411,6 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 {
 	struct obd_device *obd = mdt2obd_dev(mdt);
 	int rc;
-	int i;
 
 	ENTRY;
 	LASSERT(name != NULL);
@@ -1444,17 +1449,7 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 		return rc;
 
 	/* add additional MDT md_stats after the default ones */
-	for (i = 0; i < ARRAY_SIZE(mdt_stats); i++) {
-		int idx = i + LPROC_MD_LAST_OPC;
-		int flags = 0;
-
-		if (idx == LPROC_MDT_IO_WRITE || idx == LPROC_MDT_IO_READ)
-			flags = LPROCFS_CNTR_AVGMINMAX;
-
-		lprocfs_counter_init(obd->obd_md_stats, idx, flags,
-				     mdt_stats[i], "reqs");
-	}
-
+	mdt_stats_counter_init(obd->obd_md_stats, LPROC_MD_LAST_OPC);
 	rc = lprocfs_job_stats_init(obd, ARRAY_SIZE(mdt_stats),
 				    mdt_stats_counter_init);
 

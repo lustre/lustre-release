@@ -789,6 +789,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_object *mo;
 	struct mdt_body *repbody;
+	ktime_t kstart = ktime_get();
 	int rc, rc2;
 
 	ENTRY;
@@ -958,7 +959,8 @@ out_put:
 	mdt_object_put(info->mti_env, mo);
 out:
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_SETATTR);
+		mdt_counter_incr(req, LPROC_MDT_SETATTR,
+				 ktime_us_delta(ktime_get(), kstart));
 
 	mdt_client_compatibility(info);
 	rc2 = mdt_fix_reply(info);
@@ -971,6 +973,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
 	struct ptlrpc_request   *req = mdt_info_req(info);
+	ktime_t			kstart = ktime_get();
 	int                     rc;
 
 	ENTRY;
@@ -986,16 +989,12 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
 	switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
 	case S_IFDIR:
-		mdt_counter_incr(req, LPROC_MDT_MKDIR);
-		break;
 	case S_IFREG:
 	case S_IFLNK:
 	case S_IFCHR:
 	case S_IFBLK:
 	case S_IFIFO:
 	case S_IFSOCK:
-		/* Special file should stay on the same node as parent. */
-		mdt_counter_incr(req, LPROC_MDT_MKNOD);
 		break;
 	default:
 		CERROR("%s: Unsupported mode %o\n",
@@ -1005,6 +1004,16 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 	}
 
 	rc = mdt_create(info);
+	if (rc == 0) {
+		if ((info->mti_attr.ma_attr.la_mode & S_IFMT) == S_IFDIR)
+			mdt_counter_incr(req, LPROC_MDT_MKDIR,
+					 ktime_us_delta(ktime_get(), kstart));
+		else
+			/* Special file should stay on the same node as parent*/
+			mdt_counter_incr(req, LPROC_MDT_MKNOD,
+					 ktime_us_delta(ktime_get(), kstart));
+	}
+
 	RETURN(rc);
 }
 
@@ -1027,6 +1036,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	__u64 lock_ibits;
 	bool cos_incompat = false;
 	int no_name = 0;
+	ktime_t kstart = ktime_get();
 	int rc;
 
 	ENTRY;
@@ -1216,7 +1226,8 @@ out_stat:
 	if (ma->ma_valid & MA_INODE) {
 		switch (ma->ma_attr.la_mode & S_IFMT) {
 		case S_IFDIR:
-			mdt_counter_incr(req, LPROC_MDT_RMDIR);
+			mdt_counter_incr(req, LPROC_MDT_RMDIR,
+					 ktime_us_delta(ktime_get(), kstart));
 			break;
 		case S_IFREG:
 		case S_IFLNK:
@@ -1224,7 +1235,8 @@ out_stat:
 		case S_IFBLK:
 		case S_IFIFO:
 		case S_IFSOCK:
-			mdt_counter_incr(req, LPROC_MDT_UNLINK);
+			mdt_counter_incr(req, LPROC_MDT_UNLINK,
+					 ktime_us_delta(ktime_get(), kstart));
 			break;
 		default:
 			LASSERTF(0, "bad file type %o unlinking\n",
@@ -1260,6 +1272,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	struct mdt_object       *mp;
 	struct mdt_lock_handle  *lhs;
 	struct mdt_lock_handle  *lhp;
+	ktime_t kstart = ktime_get();
 	bool cos_incompat;
 	int rc;
 
@@ -1356,7 +1369,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 		      mdt_object_child(ms), &rr->rr_name, ma);
 
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_LINK);
+		mdt_counter_incr(req, LPROC_MDT_LINK,
+				 ktime_us_delta(ktime_get(), kstart));
 
 	EXIT;
 unlock_source:
@@ -2460,6 +2474,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	__u64 lock_ibits;
 	bool reverse = false, discard = false;
 	bool cos_incompat;
+	ktime_t kstart = ktime_get();
 	int rc;
 
 	ENTRY;
@@ -2783,13 +2798,15 @@ relock:
 
 	/* handle last link of tgt object */
 	if (rc == 0) {
-		mdt_counter_incr(req, LPROC_MDT_RENAME);
+		mdt_counter_incr(req, LPROC_MDT_RENAME,
+				 ktime_us_delta(ktime_get(), kstart));
 		if (mnew) {
 			mdt_handle_last_unlink(info, mnew, ma);
 			discard = mdt_dom_check_for_discard(info, mnew);
 		}
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
-					 msrcdir, mtgtdir);
+					 msrcdir, mtgtdir,
+					 ktime_us_delta(ktime_get(), kstart));
 	}
 
 	EXIT;

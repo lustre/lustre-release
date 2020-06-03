@@ -16353,16 +16353,20 @@ test_205a() { # Job stats
 }
 run_test 205a "Verify job stats"
 
-# LU-13117
+# LU-13117, LU-13597
 test_205b() {
+	job_stats="mdt.*.job_stats"
+	$LCTL set_param $job_stats=clear
 	$LCTL set_param jobid_var=USER jobid_name="%e.%u"
 	env -i USERTESTJOBSTATS=foolish touch $DIR/$tfile.1
-	do_facet $SINGLEMDS $LCTL get_param mdt.*.job_stats |
-		grep job_id: | grep foolish &&
+	do_facet $SINGLEMDS $LCTL get_param $job_stats |
+		grep "job_id:.*foolish" &&
 			error "Unexpected jobid found"
-	true
+	do_facet $SINGLEMDS $LCTL get_param $job_stats |
+		grep "open:.*min.*max.*sum" ||
+			error "wrong job_stats format found"
 }
-run_test 205b "Verify job stats jobid parsing"
+run_test 205b "Verify job stats jobid and output format"
 
 # LU-1480, LU-1773 and LU-1657
 test_206() {

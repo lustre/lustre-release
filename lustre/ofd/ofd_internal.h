@@ -61,7 +61,9 @@
 
 /* request stats */
 enum {
-	LPROC_OFD_STATS_READ = 0,
+	LPROC_OFD_STATS_READ_BYTES = 0,
+	LPROC_OFD_STATS_WRITE_BYTES,
+	LPROC_OFD_STATS_READ,
 	LPROC_OFD_STATS_WRITE,
 	LPROC_OFD_STATS_GETATTR,
 	LPROC_OFD_STATS_SETATTR,
@@ -368,9 +370,10 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 /* lproc_ofd.c */
 int ofd_tunables_init(struct ofd_device *ofd);
 #ifdef CONFIG_PROC_FS
-void ofd_stats_counter_init(struct lprocfs_stats *stats);
+void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset);
 #else
-static inline void ofd_stats_counter_init(struct lprocfs_stats *stats) {}
+static inline void ofd_stats_counter_init(struct lprocfs_stats *stats,
+					  unsigned int offset) {}
 #endif
 
 /* ofd_objects.c */

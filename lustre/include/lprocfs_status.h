@@ -154,8 +154,14 @@ enum {
 	LPROCFS_TYPE_BYTES		= 0x0200,
 	LPROCFS_TYPE_PAGES		= 0x0400,
 	LPROCFS_TYPE_USEC		= 0x0800,
-};
 
+	LPROCFS_TYPE_LATENCY		= LPROCFS_TYPE_USEC |
+					  LPROCFS_CNTR_AVGMINMAX |
+					  LPROCFS_CNTR_STDDEV,
+	LPROCFS_TYPE_BYTES_FULL		= LPROCFS_TYPE_BYTES |
+					  LPROCFS_CNTR_AVGMINMAX |
+					  LPROCFS_CNTR_STDDEV,
+};
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
 
 struct lprocfs_counter_header {
@@ -395,7 +401,8 @@ struct obd_histogram;
 #define JOBSTATS_NODELOCAL		"nodelocal"
 #define JOBSTATS_SESSION		"session"
 
-typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
+typedef void (*cntr_init_callback)(struct lprocfs_stats *stats,
+				   unsigned int offset);
 
 struct obd_job_stats {
 	struct cfs_hash	       *ojs_hash;	/* hash of jobids */

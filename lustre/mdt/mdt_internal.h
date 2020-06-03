@@ -1298,8 +1298,8 @@ enum mdt_stat_idx {
 	LPROC_MDT_LAST,
 };
 
-void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
-void mdt_stats_counter_init(struct lprocfs_stats *stats);
+void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount);
+void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset);
 int mdt_tunables_init(struct mdt_device *mdt, const char *name);
 void mdt_tunables_fini(struct mdt_device *mdt);
 
@@ -1309,7 +1309,8 @@ int lprocfs_mdt_open_files_seq_open(struct inode *inode,
 void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
-			      struct mdt_object *src, struct mdt_object *tgt);
+			      struct mdt_object *src, struct mdt_object *tgt,
+			      long count);
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {

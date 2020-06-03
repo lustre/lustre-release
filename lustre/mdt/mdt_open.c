@@ -1318,12 +1318,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	int created = 0;
 	int object_locked = 0;
 	u32 msg_flags;
+	ktime_t kstart = ktime_get();
 
 	ENTRY;
 	OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
 			       (obd_timeout + 1) / 4);
 
-	mdt_counter_incr(req, LPROC_MDT_OPEN);
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
 	ma->ma_need = MA_INODE;
@@ -1497,7 +1497,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                 GOTO(out_child, result);
                 }
 		created = 1;
-		mdt_counter_incr(req, LPROC_MDT_MKNOD);
+		mdt_counter_incr(req, LPROC_MDT_MKNOD,
+				 ktime_us_delta(ktime_get(), kstart));
         } else {
                 /*
                  * The object is on remote node, return its FID for remote open.
@@ -1603,6 +1604,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
 		}
 	}
+
+	mdt_counter_incr(req, LPROC_MDT_OPEN,
+			 ktime_us_delta(ktime_get(), kstart));
+
 	EXIT;
 out_child_unlock:
 	if (object_locked)
@@ -2440,10 +2445,10 @@ int mdt_close(struct tgt_session_info *tsi)
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
         struct md_attr         *ma = &info->mti_attr;
         struct mdt_body        *repbody = NULL;
+	ktime_t			kstart = ktime_get();
         int rc, ret = 0;
         ENTRY;
 
-	mdt_counter_incr(req, LPROC_MDT_CLOSE);
 	/* Close may come with the Size-on-MDS update. Unpack it. */
 	rc = mdt_close_unpack(info);
 	if (rc)
@@ -2498,5 +2503,8 @@ int mdt_close(struct tgt_session_info *tsi)
 		tsi->tsi_reply_fail_id = OBD_FAIL_MDS_CLOSE_NET_REP;
 out:
 	mdt_thread_info_fini(info);
+	if (rc == 0)
+		mdt_counter_incr(req, LPROC_MDT_CLOSE,
+				 ktime_us_delta(ktime_get(), kstart));
 	RETURN(rc ? rc : ret);
 }

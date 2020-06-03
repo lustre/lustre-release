@@ -415,6 +415,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	struct obd_statfs *osfs;
 	struct mdt_body *reqbody = NULL;
 	struct mdt_statfs_cache *msf;
+	ktime_t kstart = ktime_get();
 	int rc;
 
 	ENTRY;
@@ -504,7 +505,8 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 		osfs->os_bsize = 1 << COMPAT_BSIZE_SHIFT;
 	}
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_STATFS);
+		mdt_counter_incr(req, LPROC_MDT_STATFS,
+				 ktime_us_delta(ktime_get(), kstart));
 out:
 	mdt_thread_info_fini(info);
 	RETURN(rc);
@@ -1295,6 +1297,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	struct mdt_body *repbody;
 	struct lu_buf *buffer = &info->mti_buf;
 	struct obd_export *exp = info->mti_exp;
+	ktime_t kstart = ktime_get();
 	int rc;
 
 	ENTRY;
@@ -1533,7 +1536,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 out:
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_GETATTR);
+		mdt_counter_incr(req, LPROC_MDT_GETATTR,
+				 ktime_us_delta(ktime_get(), kstart));
 
 	RETURN(rc);
 }
@@ -2783,6 +2787,7 @@ static int mdt_sync(struct tgt_session_info *tsi)
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct req_capsule	*pill = tsi->tsi_pill;
 	struct mdt_body		*body;
+	ktime_t			 kstart = ktime_get();
 	int			 rc;
 
 	ENTRY;
@@ -2819,7 +2824,8 @@ static int mdt_sync(struct tgt_session_info *tsi)
 		mdt_thread_info_fini(info);
 	}
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_SYNC);
+		mdt_counter_incr(req, LPROC_MDT_SYNC,
+				 ktime_us_delta(ktime_get(), kstart));
 
 	RETURN(rc);
 }

@@ -244,6 +244,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	struct lu_buf          *buf;
 	int                     easize, rc;
 	u64			valid;
+	ktime_t			kstart = ktime_get();
 	ENTRY;
 
 	LASSERT(info->mti_object != NULL);
@@ -307,7 +308,8 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	EXIT;
 out:
 	if (rc >= 0) {
-		mdt_counter_incr(req, LPROC_MDT_GETXATTR);
+		mdt_counter_incr(req, LPROC_MDT_GETXATTR,
+				 ktime_us_delta(ktime_get(), kstart));
 		/* LU-11109: Set OBD_MD_FLXATTR on success so that
 		 * newer clients can distinguish between nonexistent
 		 * xattrs and zero length values.
@@ -536,6 +538,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	const char		*xattr_name = rr->rr_name.ln_name;
 	int			 xattr_len = rr->rr_eadatalen;
 	__u64			 lockpart = MDS_INODELOCK_UPDATE;
+	ktime_t			 kstart = ktime_get();
 	int			 rc;
 	ENTRY;
 
@@ -684,7 +687,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	}
 
 	if (rc == 0)
-		mdt_counter_incr(req, LPROC_MDT_SETXATTR);
+		mdt_counter_incr(req, LPROC_MDT_SETXATTR,
+				 ktime_us_delta(ktime_get(), kstart));
 
 	EXIT;
 out_unlock:
