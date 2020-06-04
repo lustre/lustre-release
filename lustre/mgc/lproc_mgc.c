@@ -54,7 +54,7 @@ static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 
 LDEBUGFS_SEQ_FOPS_RO(mgc_ir_state);
 
-struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
+struct ldebugfs_vars ldebugfs_mgc_obd_vars[] = {
 	{ .name	=	"connect_flags",
 	  .fops	=	&mgc_connect_flags_fops	},
 	{ .name	=	"mgs_server_uuid",
@@ -86,7 +86,7 @@ int mgc_tunables_init(struct obd_device *obd)
 	int rc;
 
 	obd->obd_ktype.default_attrs = mgc_attrs;
-	obd->obd_vars = lprocfs_mgc_obd_vars;
+	obd->obd_debugfs_vars = ldebugfs_mgc_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc)
 		return rc;

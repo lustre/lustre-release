@@ -179,7 +179,7 @@ int fld_client_rpc(struct obd_export *exp,
                    struct lu_seq_range *range, __u32 fld_op,
 		   struct ptlrpc_request **reqp);
 
-extern struct lprocfs_vars fld_client_debugfs_list[];
+extern struct ldebugfs_vars fld_client_debugfs_list[];
 
 struct fld_cache *fld_cache_init(const char *name,
                                  int cache_size, int cache_threshold);

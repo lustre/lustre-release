@@ -797,7 +797,7 @@ LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, connect_flags);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, server_uuid);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, timeouts);
 
-LPROC_SEQ_FOPS_RW_TYPE(osp, import);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(osp, import);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, state);
 
 /**
@@ -955,7 +955,7 @@ static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_WO_ATTR(force_sync);
 
-static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_osp_obd_vars[] = {
 	{ .name =	"connect_flags",
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"ost_server_uuid",
@@ -973,7 +973,7 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ NULL }
 };
 
-static struct lprocfs_vars lprocfs_osp_md_vars[] = {
+static struct ldebugfs_vars ldebugfs_osp_md_vars[] = {
 	{ .name =	"connect_flags",
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"mdt_server_uuid",
@@ -1062,10 +1062,10 @@ void osp_tunables_init(struct osp_device *osp)
 
 	if (osp->opd_connect_mdt) {
 		osp->opd_dt_dev.dd_ktype.default_attrs = osp_md_attrs;
-		obd->obd_vars = lprocfs_osp_md_vars;
+		obd->obd_debugfs_vars = ldebugfs_osp_md_vars;
 	} else {
 		osp->opd_dt_dev.dd_ktype.default_attrs = osp_obd_attrs;
-		obd->obd_vars = lprocfs_osp_obd_vars;
+		obd->obd_debugfs_vars = ldebugfs_osp_obd_vars;
 	}
 
 	rc = dt_tunables_init(&osp->opd_dt_dev, obd->obd_type, obd->obd_name,
@@ -1081,7 +1081,7 @@ void osp_tunables_init(struct osp_device *osp)
 	 */
 	obd->obd_debugfs_entry = debugfs_create_dir(
 		obd->obd_name, obd->obd_type->typ_debugfs_entry);
-	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_vars, obd);
+	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_debugfs_vars, obd);
 
 	sptlrpc_lprocfs_cliobd_attach(obd);
 	ptlrpc_lprocfs_register_obd(obd);

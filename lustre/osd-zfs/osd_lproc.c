@@ -422,7 +422,7 @@ static struct attribute *zfs_attrs[] = {
 	NULL,
 };
 
-struct lprocfs_vars lprocfs_osd_obd_vars[] = {
+struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name	=	"oi_scrub",
 	  .fops	=	&zfs_osd_oi_scrub_fops		},
 	{ .name =	"readcache_max_filesize",
@@ -450,7 +450,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 
 	osd->od_dt_dev.dd_ktype.default_attrs = zfs_attrs;
 	rc = dt_tunables_init(&osd->od_dt_dev, type, name,
-			      lprocfs_osd_obd_vars);
+			      ldebugfs_osd_obd_vars);
 	if (rc) {
 		CERROR("%s: cannot setup sysfs / debugfs entry: %d\n",
 		       name, rc);

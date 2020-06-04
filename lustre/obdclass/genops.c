@@ -223,7 +223,7 @@ EXPORT_SYMBOL(class_add_symlinks);
 
 int class_register_type(const struct obd_ops *dt_ops,
 			const struct md_ops *md_ops,
-			bool enable_proc, struct lprocfs_vars *vars,
+			bool enable_proc, struct ldebugfs_vars *vars,
 			const char *name, struct lu_device_type *ldt)
 {
 	struct obd_type *type;

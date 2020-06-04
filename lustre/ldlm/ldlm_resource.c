@@ -207,7 +207,7 @@ static const struct file_operations ldlm_granted_fops = {
 
 #endif /* HAVE_SERVER_SUPPORT */
 
-static struct lprocfs_vars ldlm_debugfs_list[] = {
+static struct ldebugfs_vars ldlm_debugfs_list[] = {
 	{ .name	=	"dump_namespaces",
 	  .fops	=	&ldlm_dump_ns_fops,
 	  .proc_mode =	0222 },

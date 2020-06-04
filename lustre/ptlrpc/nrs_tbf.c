@@ -3659,7 +3659,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
  */
 static int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars nrs_tbf_lprocfs_vars[] = {
+	struct ldebugfs_vars nrs_tbf_lprocfs_vars[] = {
 		{ .name		= "nrs_tbf_rule",
 		  .fops		= &ptlrpc_lprocfs_nrs_tbf_rule_fops,
 		  .data = svc },

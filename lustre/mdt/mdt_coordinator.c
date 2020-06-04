@@ -47,8 +47,6 @@
 #include <lustre_kernelcomm.h>
 #include "mdt_internal.h"
 
-static struct lprocfs_vars lprocfs_mdt_hsm_vars[];
-
 /**
  * get obj and HSM attributes on a fid
  * \param mti [IN] context
@@ -2504,7 +2502,7 @@ static ssize_t remove_count_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(remove_count);
 
-static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
+static struct ldebugfs_vars ldebugfs_mdt_hsm_vars[] = {
 	{ .name	=	"agents",
 	  .fops	=	&mdt_hsm_agent_fops			},
 	{ .name	=	"actions",
@@ -2576,7 +2574,7 @@ int hsm_cdt_tunables_init(struct mdt_device *mdt)
 	/* init debugfs entries, failure is not critical */
 	cdt->cdt_debugfs_dir = debugfs_create_dir("hsm",
 						  obd->obd_debugfs_entry);
-	ldebugfs_add_vars(cdt->cdt_debugfs_dir, lprocfs_mdt_hsm_vars, mdt);
+	ldebugfs_add_vars(cdt->cdt_debugfs_dir, ldebugfs_mdt_hsm_vars, mdt);
 
 	return 0;
 }

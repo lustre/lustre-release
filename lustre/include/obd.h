@@ -733,6 +733,7 @@ struct obd_device {
 	struct lprocfs_stats	*obd_svc_stats;
 	const struct attribute	       **obd_attrs;
 	struct lprocfs_vars	*obd_vars;
+	struct ldebugfs_vars	*obd_debugfs_vars;
 	atomic_t		obd_evict_inprogress;
 	wait_queue_head_t	obd_evict_inprogress_waitq;
 	struct list_head	obd_evict_list;	/* protected with pet_lock */

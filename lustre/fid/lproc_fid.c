@@ -199,7 +199,7 @@ LDEBUGFS_SEQ_FOPS(ldebugfs_server_fid_space);
 LDEBUGFS_SEQ_FOPS(ldebugfs_server_fid_width);
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_server_fid_server);
 
-struct lprocfs_vars seq_server_debugfs_list[] = {
+struct ldebugfs_vars seq_server_debugfs_list[] = {
 	{ .name	=	"space",
 	  .fops	=	&ldebugfs_server_fid_space_fops	},
 	{ .name	=	"width",
@@ -608,7 +608,7 @@ LDEBUGFS_SEQ_FOPS(ldebugfs_client_fid_width);
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_client_fid_server);
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_client_fid_fid);
 
-struct lprocfs_vars seq_client_debugfs_list[] = {
+struct ldebugfs_vars seq_client_debugfs_list[] = {
 	{ .name	=	"space",
 	  .fops	=	&ldebugfs_client_fid_space_fops	},
 	{ .name	=	"width",

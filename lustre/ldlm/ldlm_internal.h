@@ -353,7 +353,7 @@ enum ldlm_policy_res {
 	struct __##var##__dummy_write {; } /* semicolon catcher */
 
 static inline void
-ldlm_add_var(struct lprocfs_vars *vars, struct dentry *debugfs_entry,
+ldlm_add_var(struct ldebugfs_vars *vars, struct dentry *debugfs_entry,
 	     const char *name, void *data, const struct file_operations *ops)
 {
 	vars->name = name;

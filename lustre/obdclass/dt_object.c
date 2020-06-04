@@ -1256,7 +1256,7 @@ int dt_tunables_fini(struct dt_device *dt)
 EXPORT_SYMBOL(dt_tunables_fini);
 
 int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
-		     const char *name, struct lprocfs_vars *list)
+		     const char *name, struct ldebugfs_vars *list)
 {
 	int rc;
 

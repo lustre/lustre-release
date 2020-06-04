@@ -49,13 +49,25 @@
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
+/*
+ * Liuux 5.6 introduces proc_ops with v5.5-8862-gd56c0d45f0e2
+ * Now that proc and debugfs use separate operation vector types
+ * separate containers are also needed.
+ */
 struct lprocfs_vars {
 	const char			*name;
 	const struct file_operations	*fops;
 	void				*data;
-	/**
-	 * /proc file mode.
-	 */
+	/** /proc file mode. */
+	mode_t				 proc_mode;
+};
+
+/** Provide a debugfs container */
+struct ldebugfs_vars {
+	const char			*name;
+	const struct file_operations	*fops;
+	void				*data;
+	/** debugfs file mode. */
 	mode_t				 proc_mode;
 };
 
@@ -521,13 +533,17 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off);
 extern int lprocfs_nid_stats_clear_seq_show(struct seq_file *file, void *data);
 #endif
-extern const struct file_operations lprocfs_stats_seq_fops;
 extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
-                                  struct lprocfs_stats *stats);
+				  struct lprocfs_stats *stats);
+extern const struct file_operations ldebugfs_stats_seq_fops;
 
 /* lprocfs_status.c */
-extern void ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *var,
+extern void ldebugfs_add_vars(struct dentry *parent, struct ldebugfs_vars *var,
 			      void *data);
+extern struct dentry *ldebugfs_register(const char *name,
+					struct dentry *parent,
+					struct ldebugfs_vars *list,
+					void *data);
 extern int lprocfs_add_vars(struct proc_dir_entry *root,
 			    struct lprocfs_vars *var, void *data);
 
@@ -582,8 +598,15 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 		  char *buffer);
 
 extern ssize_t
+ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off);
+static inline ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off);
+			 size_t count, loff_t *off)
+{
+	return ldebugfs_import_seq_write(file, buffer, count, off);
+}
+
 extern int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data);
 extern ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
@@ -970,6 +993,10 @@ lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 static inline ssize_t
 lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
+{ return 0; }
+static inline ssize_t
+ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 { return 0; }
 static inline ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,

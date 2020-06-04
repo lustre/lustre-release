@@ -792,7 +792,7 @@ ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(index_backup);
 
-struct lprocfs_vars lprocfs_osd_obd_vars[] = {
+struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name	=	"oi_scrub",
 	  .fops	=	&ldiskfs_osd_oi_scrub_fops	},
 	{ .name	=	"readcache_max_filesize",
@@ -841,7 +841,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 
 	osd->od_dt_dev.dd_ktype.default_attrs = ldiskfs_attrs;
 	rc = dt_tunables_init(&osd->od_dt_dev, type, name,
-			      lprocfs_osd_obd_vars);
+			      ldebugfs_osd_obd_vars);
 	if (rc) {
 		CERROR("%s: cannot setup sysfs / debugfs entry: %d\n",
 		       name, rc);

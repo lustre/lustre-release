@@ -1075,7 +1075,7 @@ static struct attribute *lod_attrs[] = {
  */
 int lod_procfs_init(struct lod_device *lod)
 {
-	struct lprocfs_vars ldebugfs_obd_vars[] = { { NULL } };
+	struct ldebugfs_vars ldebugfs_obd_vars[] = { { NULL } };
 	struct obd_device *obd = lod2obd(lod);
 	struct obd_type *type;
 	struct kobject *lov;

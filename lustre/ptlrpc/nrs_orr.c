@@ -1866,7 +1866,7 @@ static int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 {
 	int	i;
 
-	struct lprocfs_vars nrs_orr_lprocfs_vars[] = {
+	struct ldebugfs_vars nrs_orr_lprocfs_vars[] = {
 		{ .name		= "nrs_orr_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops	},
 		{ .name		= "nrs_orr_offset_type",
@@ -1919,7 +1919,7 @@ static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 {
 	int	i;
 
-	struct lprocfs_vars nrs_trr_lprocfs_vars[] = {
+	struct ldebugfs_vars nrs_trr_lprocfs_vars[] = {
 		{ .name		= "nrs_trr_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops },
 		{ .name		= "nrs_trr_offset_type",

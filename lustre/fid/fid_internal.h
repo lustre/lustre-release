@@ -55,7 +55,7 @@ enum {
 
 extern struct lu_context_key seq_thread_key;
 
-extern struct lprocfs_vars seq_server_debugfs_list[];
+extern struct ldebugfs_vars seq_server_debugfs_list[];
 
 /* Store API functions. */
 struct dt_device;
@@ -89,7 +89,7 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
 
 extern struct dentry *seq_debugfs_dir;
 
-extern struct lprocfs_vars seq_client_debugfs_list[];
+extern struct ldebugfs_vars seq_client_debugfs_list[];
 
 extern const struct file_operations seq_fld_debugfs_seq_fops;
 

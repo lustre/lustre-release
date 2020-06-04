@@ -786,7 +786,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
  */
 static int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars nrs_crrn_lprocfs_vars[] = {
+	struct ldebugfs_vars nrs_crrn_lprocfs_vars[] = {
 		{ .name		= "nrs_crrn_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_crrn_quantum_fops,
 		  .data = svc },

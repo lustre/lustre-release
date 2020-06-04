@@ -254,7 +254,7 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
         }
 
 	debugfs_create_file(name, 0644, svc_debugfs_entry, svc_stats,
-			    &lprocfs_stats_seq_fops);
+			    &ldebugfs_stats_seq_fops);
 
 	if (dir)
 		*debugfs_root_ret = svc_debugfs_entry;
@@ -1190,7 +1190,7 @@ int ptlrpc_sysfs_register_service(struct kset *parent,
 void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 				      struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars lproc_vars[] = {
+	struct ldebugfs_vars ldebugfs_vars[] = {
 		{ .name	= "req_buffer_history_len",
 		  .fops	= &ptlrpc_lprocfs_req_history_len_fops,
 		  .data	= svc },
@@ -1221,7 +1221,7 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 	if (!svc->srv_debugfs_entry)
 		return;
 
-	ldebugfs_add_vars(svc->srv_debugfs_entry, lproc_vars, NULL);
+	ldebugfs_add_vars(svc->srv_debugfs_entry, ldebugfs_vars, NULL);
 
 	debugfs_create_file("req_history", 0400, svc->srv_debugfs_entry, svc,
 			    &req_history_fops);
@@ -1341,8 +1341,8 @@ EXPORT_SYMBOL(ping_store);
  * "echo connection=192.168.0.1@tcp0::instance > .../import".
  */
 ssize_t
-lprocfs_import_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
 	struct seq_file	  *m	= file->private_data;
 	struct obd_device *obd	= m->private;
@@ -1407,7 +1407,7 @@ out:
 	OBD_FREE(kbuf, count + 1);
 	return rc ?: count;
 }
-EXPORT_SYMBOL(lprocfs_import_seq_write);
+EXPORT_SYMBOL(ldebugfs_import_seq_write);
 
 int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *n)
 {

@@ -155,7 +155,7 @@ ssize_t sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
 
-static struct lprocfs_vars gss_debugfs_vars[] = {
+static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
 	{ .name	=	"init_channel",
@@ -203,7 +203,7 @@ gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 }
 LDEBUGFS_SEQ_FOPS(gss_lk_proc_dl);
 
-static struct lprocfs_vars gss_lk_debugfs_vars[] = {
+static struct ldebugfs_vars gss_lk_debugfs_vars[] = {
 	{ .name	=	"debug_level",
 	  .fops	=	&gss_lk_proc_dl_fops	},
 	{ NULL }

@@ -779,7 +779,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_pct);
 
 static int nrs_delay_lprocfs_init(struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars nrs_delay_lprocfs_vars[] = {
+	struct ldebugfs_vars nrs_delay_lprocfs_vars[] = {
 		{ .name		= "nrs_delay_min",
 		  .fops		= &ptlrpc_lprocfs_nrs_delay_min_fops,
 		  .data		= svc },

@@ -112,9 +112,9 @@ struct proc_dir_entry *lprocfs_add_symlink(const char *name,
 }
 EXPORT_SYMBOL(lprocfs_add_symlink);
 
-static const struct file_operations lprocfs_generic_fops = { };
+static const struct file_operations ldebugfs_empty_ops = { };
 
-void ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *list,
+void ldebugfs_add_vars(struct dentry *parent, struct ldebugfs_vars *list,
 		       void *data)
 {
 	if (IS_ERR_OR_NULL(parent) || IS_ERR_OR_NULL(list))
@@ -133,11 +133,13 @@ void ldebugfs_add_vars(struct dentry *parent, struct lprocfs_vars *list,
 		}
 		debugfs_create_file(list->name, mode, parent,
 				    list->data ? : data,
-				    list->fops ? : &lprocfs_generic_fops);
+				    list->fops ? : &ldebugfs_empty_ops);
 		list++;
 	}
 }
 EXPORT_SYMBOL_GPL(ldebugfs_add_vars);
+
+static const struct file_operations lprocfs_empty_ops = { };
 
 /**
  * Add /proc entries.
@@ -170,7 +172,7 @@ lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 				mode |= 0200;
 		}
 		proc = proc_create_data(list->name, mode, root,
-					list->fops ?: &lprocfs_generic_fops,
+					list->fops ?: &lprocfs_empty_ops,
 					list->data ?: data);
 		if (!proc)
 			return -ENOMEM;
@@ -1045,7 +1047,7 @@ static void obd_sysfs_release(struct kobject *kobj)
 
 int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 {
-	struct lprocfs_vars *debugfs_vars = NULL;
+	struct ldebugfs_vars *debugfs_vars = NULL;
 	int rc;
 
 	if (!obd || obd->obd_magic != OBD_DEVICE_MAGIC)
@@ -1077,7 +1079,7 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 	}
 
 	if (!obd->obd_type->typ_procroot)
-		debugfs_vars = obd->obd_vars;
+		debugfs_vars = obd->obd_debugfs_vars;
 	obd->obd_debugfs_entry = debugfs_create_dir(
 		obd->obd_name, obd->obd_type->typ_debugfs_entry);
 	ldebugfs_add_vars(obd->obd_debugfs_entry, debugfs_vars, obd);
@@ -1398,7 +1400,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-const struct file_operations lprocfs_stats_seq_fops = {
+const struct file_operations ldebugfs_stats_seq_fops = {
 	.owner   = THIS_MODULE,
 	.open    = lprocfs_stats_seq_open,
 	.read    = seq_read,
@@ -1406,7 +1408,16 @@ const struct file_operations lprocfs_stats_seq_fops = {
 	.llseek  = seq_lseek,
 	.release = lprocfs_seq_release,
 };
-EXPORT_SYMBOL(lprocfs_stats_seq_fops);
+EXPORT_SYMBOL(ldebugfs_stats_seq_fops);
+
+static const struct file_operations lprocfs_stats_seq_fops = {
+	.owner   = THIS_MODULE,
+	.open    = lprocfs_stats_seq_open,
+	.read    = seq_read,
+	.write   = lprocfs_stats_seq_write,
+	.llseek  = seq_lseek,
+	.release = lprocfs_seq_release,
+};
 
 int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                            struct lprocfs_stats *stats)

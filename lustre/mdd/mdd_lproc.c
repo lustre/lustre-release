@@ -644,7 +644,7 @@ static ssize_t append_pool_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(append_pool);
 
-static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_mdd_obd_vars[] = {
 	{ .name =	"changelog_mask",
 	  .fops =	&mdd_changelog_mask_fops	},
 	{ .name =	"changelog_users",
@@ -716,10 +716,10 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 		return rc;
 
 	/* Find the type procroot and add the proc entry for this device */
-	obd->obd_vars = lprocfs_mdd_obd_vars;
+	obd->obd_debugfs_vars = ldebugfs_mdd_obd_vars;
 	obd->obd_debugfs_entry = debugfs_create_dir(name,
 						     type->typ_debugfs_entry);
-	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_vars, mdd);
+	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_debugfs_vars, mdd);
 
 	RETURN(rc);
 }
