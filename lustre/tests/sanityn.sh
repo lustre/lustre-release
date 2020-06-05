@@ -4595,7 +4595,7 @@ run_test 102 "Test open by handle of unlinked file"
 # Compare file size between first & second mount, ensuring the client correctly
 # glimpses even with unused speculative locks - LU-11670
 test_103() {
-	[ $(lustre_version_code $ost1) -lt $(version_code 2.10.50) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "Lockahead needs OST version at least 2.10.50"
 
 	local locktest=23
