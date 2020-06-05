@@ -121,7 +121,6 @@ OPT_PASSTHROUGH=()
 OPT_POOL=""
 OPT_RESTRIPE=false
 OPT_YES=false
-LFS_OPT_DIRECTIO=""
 OPT_AUTOSTRIPE=false
 OPT_STRIPE_COUNT=""
 OPT_STRIPE_SIZE=""
@@ -147,7 +146,7 @@ while [ -n "$*" ]; do
 	-v|--verbose) OPT_DEBUG=true; ECHO=echo;;
 	-y|--yes) OPT_YES=true;;
 	-0) OPT_NULL=true;;
-	-b|--block|--non-block|--non-direct|--no-verify)
+	-b|--block|--non-block|--non-direct|-D|--no-verify)
 	   # Always pass non-layout options to 'lfs migrate'
 	   OPT_PASSTHROUGH+=("$arg");;
 	--rsync) OPT_RSYNC=true;;
@@ -157,7 +156,6 @@ while [ -n "$*" ]; do
 	   OPT_LAYOUT+="$arg $2 "; shift;;
 	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
 	-C) OPT_CAP="$2"; shift;;
-	-D) LFS_OPT_DIRECTIO="-D";;
 	-M|--min-free) OPT_MINFREE="$2"; shift;;
 	-X|--max-free) OPT_MAXFREE="$2"; shift;;
 	-c|--stripe-count) OPT_STRIPE_COUNT="$2"; shift;;
@@ -483,6 +481,7 @@ lfs_migrate() {
 
 		# first try to migrate via Lustre tools, then fall back to rsync
 		if ! $OPT_RSYNC; then
+			$OPT_DEBUG && echo -e "\n$LFS migrate $layout $OLDNAME"
 			if $LFS migrate $layout "$OLDNAME"; then
 				$ECHO "done"
 				# no-op if hlinks empty for 1-link files

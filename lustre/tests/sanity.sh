@@ -6796,6 +6796,24 @@ test_56wd() {
 }
 run_test 56wd "check lfs_migrate --rsync and --no-rsync work"
 
+test_56we() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+
+	test_mkdir $td || error "cannot create $td"
+	touch $tf || error "cannot touch $tf"
+
+	echo -n "Make sure --non-direct|-D works..."
+	$LFS_MIGRATE -y --non-direct -v $tf 2>&1 |
+		grep -q "lfs migrate --non-direct" ||
+		error "--non-direct option cannot work correctly"
+	$LFS_MIGRATE -y -D -v $tf 2>&1 |
+		grep -q "lfs migrate -D" ||
+		error "-D option cannot work correctly"
+	echo "done."
+}
+run_test 56we "check lfs_migrate --non-direct|-D support"
+
 test_56x() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 	check_swap_layouts_support
