@@ -634,6 +634,12 @@ static int local_object_declare_unlink(const struct lu_env *env,
 	if (rc < 0)
 		return rc;
 
+	if (S_ISDIR(p->do_lu.lo_header->loh_attr)) {
+		rc = dt_declare_ref_del(env, p, th);
+		if (rc < 0)
+			return rc;
+	}
+
 	rc = dt_declare_ref_del(env, c, th);
 	if (rc < 0)
 		return rc;
@@ -672,6 +678,14 @@ int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
 	rc = dt_trans_start_local(env, dt, th);
 	if (rc < 0)
 		GOTO(stop, rc);
+
+	if (S_ISDIR(dto->do_lu.lo_header->loh_attr)) {
+		dt_write_lock(env, parent, 0);
+		rc = dt_ref_del(env, parent, th);
+		dt_write_unlock(env, parent);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
 	dt_write_lock(env, dto, 0);
 	rc = dt_delete(env, parent, (struct dt_key *)name, th);
