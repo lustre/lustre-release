@@ -8199,6 +8199,9 @@ test_116() {
 run_test 116 "big size MDT support"
 
 test_117() {
+	[[ "$OST1_VERSION" -lt $(version_code 2.12.0) ]] &&
+		skip "Need OST version at least 2.12.0"
+
 	setup
 	do_facet ost1 "$LCTL set_param ost.OSS.ost_io.nrs_policies=fifo"
 	do_facet ost1 "$LCTL get_param -n ost.OSS.ost_io.nrs_tbf_rule" &&
