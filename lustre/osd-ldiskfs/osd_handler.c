@@ -3823,6 +3823,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct inode *local;
 	struct osd_thandle *oh;
+	uid_t own[2] = {0, 0};
 	int rc;
 
 	ENTRY;
@@ -3831,8 +3832,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type,
-				     NULL);
+	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type, own);
 	if (IS_ERR(local)) {
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));
