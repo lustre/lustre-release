@@ -15,7 +15,7 @@ init_logging
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
 
 # bug number for skipped test: LU-11915
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT  110 115"
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if $SHARED_KEY; then
@@ -8522,20 +8522,21 @@ test_115() {
 	echo "$dbfs_ver" | egrep -w "1.44.3.wc1|1.44.5.wc1|1.45.2.wc1" &&
 		skip_env "This version of debugfs doesn't show inode number"
 
-	is_dm_flakey_dev $SINGLEMDS $(mdsdevname 1) &&
-		skip "This test can not be executed on flakey dev"
-
 	IMAGESIZE=$((3072 << 30)) # 3072 GiB
 
 	stopall
+
+	local saved_flakey=${FLAKEY}
+	stack_trap "FLAKEY=$saved_flakey" EXIT
+	FLAKEY=false
 
 	echo "client1: "
 	lctl dl
 	mount | grep lustre
 	echo "mds1: "
-	do_facet mds1 "hostname; ifconfig; lctl dl; mount"
+	do_facet mds1 "hostname; lctl dl; mount"
 	echo "ost1: "
-	do_facet ost1 "hostname; ifconfig; lctl dl; mount"
+	do_facet ost1 "hostname; lctl dl; mount"
 	# We need MDT size 3072GB, because it is smallest
 	# partition that can store 2B inodes
 	do_facet $SINGLEMDS "mkdir -p $TMP/$tdir"
@@ -8562,21 +8563,23 @@ test_115() {
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir fail"
 	goal="/sys/fs/ldiskfs/$(basename $mdsdev)/inode_goal"
-echo goal: $goal
+	echo goal: $goal
 	# 2147483648 is 0x80000000
 	do_facet $SINGLEMDS "echo 2147483648 >> $goal; grep . $goal"
 	touch $DIR/$tdir/$tfile
 
-	# attrs from 1 to 15 go to block, 16th - to inode
-	for i in {1..16}; do
+	# attrs from 1 to 16 go to block, 17th - to inode
+	for i in {1..17}; do
 		local nm="trusted.ea$i"
 		setfattr -n $nm -v $(printf "xattr%0250d" $i) $DIR/$tdir/$tfile
 	done
 
+	do_facet $SINGLEMDS $DEBUGFS -c -R "stat ROOT/$tdir/$tfile" $mdsdev
+
 	# inode <2147483649> trusted.ea16 (255)
 	local inode_num=$(do_facet $SINGLEMDS \
 			"$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsdev" |
-			 awk '/ea16/ { print $2 }' |
+			 awk '/ea17/ { print $2 }' |
 			 sed -e 's/>//' -e 's/<//' -e 's/\"//')
 	echo "inode num: $inode_num"
 	[ $inode_num -ge 2147483648 ] || error "inode $inode_num too small"
