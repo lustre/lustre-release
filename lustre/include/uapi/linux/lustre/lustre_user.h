@@ -648,8 +648,6 @@ struct fsxattr {
 #define FS_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
 #define FS_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
 #endif
-#define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
-#define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
 #ifndef FS_XFLAG_PROJINHERIT
 #define FS_XFLAG_PROJINHERIT		0x00000200
 #endif
@@ -2433,31 +2431,6 @@ struct hsm_copy {
 	__u16			hc_errval; /* positive val */
 	__u32			padding;
 	struct hsm_action_item	hc_hai;
-};
-
-/* JSON objects */
-enum llapi_json_types {
-	LLAPI_JSON_INTEGER = 1,
-	LLAPI_JSON_BIGNUM,
-	LLAPI_JSON_REAL,
-	LLAPI_JSON_STRING
-};
-
-struct llapi_json_item {
-	char			*lji_key;
-	__u32			lji_type;
-	union {
-		int	lji_integer;
-		__u64	lji_u64;
-		double	lji_real;
-		char	*lji_string;
-	};
-	struct llapi_json_item	*lji_next;
-};
-
-struct llapi_json_item_list {
-	int			ljil_item_count;
-	struct llapi_json_item	*ljil_items;
 };
 
 enum lu_ladvise_type {

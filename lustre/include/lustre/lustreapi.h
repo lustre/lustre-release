@@ -54,6 +54,16 @@ extern "C" {
 #define LL_MAXQUOTAS 3
 #endif
 
+#ifndef SEL_UNIT_SIZE
+#define SEL_UNIT_SIZE 1024llu
+#endif
+
+#ifndef LOV_PATTERN_DEFAULT
+#define LOV_PATTERN_DEFAULT	0xffffffff
+#endif
+
+typedef struct statx lstatx_t;
+
 #define lustre_fid struct lu_fid
 
 /* Currently external applications can access this but in the
@@ -553,6 +563,30 @@ int llapi_hsm_request(const char *path, const struct hsm_user_request *request);
 int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca);
 
 /* JSON handling */
+enum llapi_json_types {
+	LLAPI_JSON_INTEGER = 1,
+	LLAPI_JSON_BIGNUM,
+	LLAPI_JSON_REAL,
+	LLAPI_JSON_STRING
+};
+
+struct llapi_json_item {
+	char			*lji_key;
+	__u32			lji_type;
+	union {
+		int		lji_integer;
+		__u64		lji_u64;
+		double		lji_real;
+		char		*lji_string;
+	};
+	struct llapi_json_item	*lji_next;
+};
+
+struct llapi_json_item_list {
+	int			ljil_item_count;
+	struct llapi_json_item	*ljil_items;
+};
+
 int llapi_json_init_list(struct llapi_json_item_list **item_list);
 int llapi_json_destroy_list(struct llapi_json_item_list **item_list);
 int llapi_json_add_item(struct llapi_json_item_list **item_list, char *key,

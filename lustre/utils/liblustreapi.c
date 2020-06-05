@@ -4597,7 +4597,7 @@ static int fget_projid(int fd, int *projid)
 	struct fsxattr fsx;
 	int rc;
 
-	rc = ioctl(fd, LL_IOC_FSGETXATTR, &fsx);
+	rc = ioctl(fd, FS_IOC_FSGETXATTR, &fsx);
 	if (rc)
 		return -errno;
 

@@ -3110,6 +3110,10 @@ struct llapi_layout_sanity_args {
 	int lsa_rc;
 };
 
+/* The component flags can be set by users at creation/modification time. */
+#define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
+				 LCME_FL_EXTENSION)
+
 static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 				  void *arg)
 {

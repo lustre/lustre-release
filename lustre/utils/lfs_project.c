@@ -118,7 +118,7 @@ static int project_get_xattr(const char *pathname, struct fsxattr *fsx,
 		return -errno;
 	}
 
-	ret = ioctl(fd, LL_IOC_FSGETXATTR, fsx);
+	ret = ioctl(fd, FS_IOC_FSGETXATTR, fsx);
 	if (ret) {
 		fprintf(stderr, "%s: failed to get xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));
@@ -207,7 +207,7 @@ project_set_one(const char *pathname, struct project_handle_control *phc)
 	if (phc->set_projid)
 		fsx.fsx_projid = phc->projid;
 
-	ret = ioctl(fd, LL_IOC_FSSETXATTR, &fsx);
+	ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
 	if (ret)
 		fprintf(stderr, "%s: failed to set xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));
@@ -235,7 +235,7 @@ project_clear_one(const char *pathname, struct project_handle_control *phc)
 	if (!phc->keep_projid)
 		fsx.fsx_projid = 0;
 
-	ret = ioctl(fd, LL_IOC_FSSETXATTR, &fsx);
+	ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
 	if (ret)
 		fprintf(stderr, "%s: failed to set xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));

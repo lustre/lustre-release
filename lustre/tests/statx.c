@@ -73,6 +73,11 @@ static bool o_quiet;
 
 #ifdef __NR_statx
 #ifndef HAVE_STATX
+
+#define AT_STATX_SYNC_TYPE	0x6000
+#define AT_STATX_FORCE_SYNC	0x2000
+#define AT_STATX_DONT_SYNC	0x4000
+
 static __attribute__((unused))
 ssize_t statx(int dfd, const char *filename, int flags,
 	      unsigned int mask, struct statx *buffer)
