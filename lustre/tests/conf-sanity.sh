@@ -8487,6 +8487,9 @@ check_slaves_max_sectors_kb()
 
 test_125()
 {
+	[[ "$MDS1_VERSION" -lt $(version_code 2.12.3) ]] &&
+		skip "Need MDS version at least 2.12.3"
+
 	local facet_list="mgs mds1 ost1"
 	combined_mgs_mds && facet_list="mgs ost1"
 
