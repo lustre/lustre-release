@@ -5599,7 +5599,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		LASSERT(lsi->lsi_lmd);
 		/* CMD is supported only in IAM mode */
 		LASSERT(num);
-		node_id = simple_strtol(num, NULL, 10);
+		rc = kstrtol(num, 10, &node_id);
+		if (rc)
+			RETURN(rc);
+
 		obd->u.obt.obt_magic = OBT_MAGIC;
 		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
 			m->mdt_skip_lfsck = 1;
