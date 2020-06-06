@@ -1343,11 +1343,11 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	struct tgt_session_info *tsi = tgt_ses_info(env);
-	struct obd_export	*exp = tsi->tsi_exp;
-	struct tg_export_data	*ted;
-	__u64			*transno_p;
-	int			 rc = 0;
-	bool			 lw_client;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct tg_export_data *ted;
+	__u64 *transno_p;
+	bool nolcd = false;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1355,11 +1355,15 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	LASSERT(exp != NULL);
 	ted = &exp->exp_target_data;
 
-	lw_client = exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT;
-	if (ted->ted_lr_idx < 0 && !lw_client)
-		/* ofd connect may cause transaction before export has
-		 * last_rcvd slot */
-		RETURN(0);
+	/* Some clients don't support recovery, and they don't have last_rcvd
+	 * client data:
+	 * 1. lightweight clients.
+	 * 2. local clients on MDS which doesn't enable "localrecov".
+	 * 3. OFD connect may cause transaction before export has last_rcvd
+	 *    slot.
+	 */
+	if (ted->ted_lr_idx < 0)
+		nolcd = true;
 
 	if (req != NULL)
 		tti->tti_transno = lustre_msg_get_transno(req->rq_reqmsg);
@@ -1400,14 +1404,13 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	/* if can't add callback, do sync write */
 	th->th_sync |= !!tgt_last_commit_cb_add(th, tgt, exp, tti->tti_transno);
 
-	if (lw_client) {
-		/* All operations performed by LW clients are synchronous and
-		 * we store the committed transno in the last_rcvd header */
+	if (nolcd) {
+		/* store transno in the last_rcvd header */
 		spin_lock(&tgt->lut_translock);
 		if (tti->tti_transno > tgt->lut_lsd.lsd_last_transno) {
 			tgt->lut_lsd.lsd_last_transno = tti->tti_transno;
 			spin_unlock(&tgt->lut_translock);
-			/* Although lightweight (LW) connections have no slot
+			/* Although current connection doesn't have slot
 			 * in the last_rcvd, we still want to maintain
 			 * the in-memory lsd_client_data structure in order to
 			 * properly handle reply reconstruction. */
@@ -1480,7 +1483,7 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 		}
 	}
 
-	if (!lw_client) {
+	if (!nolcd) {
 		tti->tti_off = ted->ted_lr_off;
 		if (CFS_FAIL_CHECK(OBD_FAIL_TGT_RCVD_EIO))
 			rc = -EIO;
