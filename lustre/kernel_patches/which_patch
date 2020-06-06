@@ -18,5 +18,6 @@ PATCH SERIES FOR SERVER KERNELS:
 3.10-rhel7.8.series     3.10.0-1127.8.2.el7  (RHEL 7.8)
 4.18-rhel8.series       4.18.0-80.11.2.el8   (RHEL 8.0)
 4.18-rhel8.1.series     4.18.0-147.8.1.el8   (RHEL 8.1)
+4.18-rhel8.2.series     4.18.0-193.1.2.el8   (RHEL 8.2)
 
 See lustre/ChangeLog for supported client kernel versions.
