@@ -773,7 +773,7 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	rwlock_t	       *glock = &kiblnd_data.kib_global_lock;
 	struct kib_net              *net = peer_ni->ibp_ni->ni_data;
 	struct kib_dev *dev;
-	struct ib_qp_init_attr *init_qp_attr;
+	struct ib_qp_init_attr init_qp_attr = {};
 	struct kib_sched_info	*sched;
 #ifdef HAVE_IB_CQ_INIT_ATTR
 	struct ib_cq_init_attr  cq_attr = {};
@@ -804,19 +804,11 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	 */
 	cpt = sched->ibs_cpt;
 
-	LIBCFS_CPT_ALLOC(init_qp_attr, lnet_cpt_table(), cpt,
-			 sizeof(*init_qp_attr));
-	if (init_qp_attr == NULL) {
-		CERROR("Can't allocate qp_attr for %s\n",
-		       libcfs_nid2str(peer_ni->ibp_nid));
-		goto failed_0;
-	}
-
 	LIBCFS_CPT_ALLOC(conn, lnet_cpt_table(), cpt, sizeof(*conn));
 	if (conn == NULL) {
 		CERROR("Can't allocate connection for %s\n",
 		       libcfs_nid2str(peer_ni->ibp_nid));
-		goto failed_1;
+		goto failed_0;
 	}
 
 	conn->ibc_state = IBLND_CONN_INIT;
@@ -905,29 +897,29 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 		goto failed_2;
 	}
 
-	init_qp_attr->event_handler = kiblnd_qp_event;
-	init_qp_attr->qp_context = conn;
-	init_qp_attr->cap.max_send_sge = *kiblnd_tunables.kib_wrq_sge;
-	init_qp_attr->cap.max_recv_sge = 1;
-	init_qp_attr->sq_sig_type = IB_SIGNAL_REQ_WR;
-	init_qp_attr->qp_type = IB_QPT_RC;
-	init_qp_attr->send_cq = cq;
-	init_qp_attr->recv_cq = cq;
+	init_qp_attr.event_handler = kiblnd_qp_event;
+	init_qp_attr.qp_context = conn;
+	init_qp_attr.cap.max_send_sge = *kiblnd_tunables.kib_wrq_sge;
+	init_qp_attr.cap.max_recv_sge = 1;
+	init_qp_attr.sq_sig_type = IB_SIGNAL_REQ_WR;
+	init_qp_attr.qp_type = IB_QPT_RC;
+	init_qp_attr.send_cq = cq;
+	init_qp_attr.recv_cq = cq;
 	/*
 	 * kiblnd_send_wrs() can change the connection's queue depth if
 	 * the maximum work requests for the device is maxed out
 	 */
-	init_qp_attr->cap.max_send_wr = kiblnd_send_wrs(conn);
-	init_qp_attr->cap.max_recv_wr = IBLND_RECV_WRS(conn);
+	init_qp_attr.cap.max_send_wr = kiblnd_send_wrs(conn);
+	init_qp_attr.cap.max_recv_wr = IBLND_RECV_WRS(conn);
 
-	rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd, init_qp_attr);
+	rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd, &init_qp_attr);
 	if (rc) {
 		CERROR("Can't create QP: %d, send_wr: %d, recv_wr: %d, "
 		       "send_sge: %d, recv_sge: %d\n",
-		       rc, init_qp_attr->cap.max_send_wr,
-		       init_qp_attr->cap.max_recv_wr,
-		       init_qp_attr->cap.max_send_sge,
-		       init_qp_attr->cap.max_recv_sge);
+		       rc, init_qp_attr.cap.max_send_wr,
+		       init_qp_attr.cap.max_recv_wr,
+		       init_qp_attr.cap.max_send_sge,
+		       init_qp_attr.cap.max_recv_sge);
 		goto failed_2;
 	}
 
@@ -953,8 +945,6 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 		goto failed_2;
 
 	kiblnd_map_rx_descs(conn);
-
-	LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
 
 	/* 1 ref for caller and each rxmsg */
 	atomic_set(&conn->ibc_refcount, 1 + IBLND_RX_MSGS(conn));
@@ -1001,8 +991,6 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
  failed_2:
 	kiblnd_destroy_conn(conn);
 	LIBCFS_FREE(conn, sizeof(*conn));
- failed_1:
-        LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
  failed_0:
         return NULL;
 }
