@@ -599,9 +599,6 @@ static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 		RETURN(NULL);
 	}
 
-	lsi->lsi_lmd->lmd_exclude_count = 0;
-	lsi->lsi_lmd->lmd_recovery_time_soft = 0;
-	lsi->lsi_lmd->lmd_recovery_time_hard = 0;
 	s2lsi_nocast(sb) = lsi;
 	/* we take 1 extra ref for our setup */
 	atomic_set(&lsi->lsi_mounts, 1);
