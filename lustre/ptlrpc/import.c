@@ -278,15 +278,12 @@ static time64_t ptlrpc_inflight_deadline(struct ptlrpc_request *req,
 static time64_t ptlrpc_inflight_timeout(struct obd_import *imp)
 {
 	time64_t now = ktime_get_real_seconds();
-	struct list_head *tmp, *n;
-	struct ptlrpc_request *req;
+	struct ptlrpc_request *req, *n;
 	time64_t timeout = 0;
 
 	spin_lock(&imp->imp_lock);
-	list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-		req = list_entry(tmp, struct ptlrpc_request, rq_list);
+	list_for_each_entry_safe(req, n, &imp->imp_sending_list, rq_list)
 		timeout = max(ptlrpc_inflight_deadline(req, now), timeout);
-	}
 	spin_unlock(&imp->imp_lock);
 	return timeout;
 }
@@ -299,8 +296,7 @@ static time64_t ptlrpc_inflight_timeout(struct obd_import *imp)
  */
 void ptlrpc_invalidate_import(struct obd_import *imp)
 {
-	struct list_head *tmp, *n;
-	struct ptlrpc_request *req;
+	struct ptlrpc_request *req, *n;
 	time64_t timeout;
 	int rc;
 
@@ -376,19 +372,15 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 				 * this point. */
 				rc = 1;
 			} else {
-				list_for_each_safe(tmp, n,
-						   &imp->imp_sending_list) {
-					req = list_entry(tmp,
-							 struct ptlrpc_request,
-							 rq_list);
+				list_for_each_entry_safe(req, n,
+							 &imp->imp_sending_list,
+							 rq_list) {
 					DEBUG_REQ(D_ERROR, req,
 						  "still on sending list");
 				}
-				list_for_each_safe(tmp, n,
-						   &imp->imp_delayed_list) {
-					req = list_entry(tmp,
-							 struct ptlrpc_request,
-							 rq_list);
+				list_for_each_entry_safe(req, n,
+							 &imp->imp_delayed_list,
+							 rq_list) {
 					DEBUG_REQ(D_ERROR, req,
 						  "still on delayed list");
 				}
@@ -634,14 +626,13 @@ out_unlock:
  */
 static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 {
-	struct ptlrpc_request	*req;
-	struct list_head	*tmp;
+	struct ptlrpc_request *req;
 
 	/* The requests in committed_list always have smaller transnos than
 	 * the requests in replay_list */
 	if (!list_empty(&imp->imp_committed_list)) {
-		tmp = imp->imp_committed_list.next;
-		req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+		req = list_first_entry(&imp->imp_committed_list,
+				       struct ptlrpc_request, rq_replay_list);
 		*transno = req->rq_transno;
 		if (req->rq_transno == 0) {
 			DEBUG_REQ(D_ERROR, req,
@@ -651,8 +642,8 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 		return 1;
 	}
 	if (!list_empty(&imp->imp_replay_list)) {
-		tmp = imp->imp_replay_list.next;
-		req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+		req = list_first_entry(&imp->imp_committed_list,
+				       struct ptlrpc_request, rq_replay_list);
 		*transno = req->rq_transno;
 		if (req->rq_transno == 0) {
 			DEBUG_REQ(D_ERROR, req, "zero transno in replay_list");
