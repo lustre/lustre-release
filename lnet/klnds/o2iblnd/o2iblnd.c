@@ -1929,7 +1929,7 @@ again:
 		spin_unlock(&fps->fps_lock);
 		CDEBUG(D_NET, "Another thread is allocating new "
 		       "FMR pool, waiting for her to complete\n");
-		schedule();
+		wait_var_event(fps, !fps->fps_increasing);
 		goto again;
 
 	}
@@ -1947,6 +1947,7 @@ again:
 	rc = kiblnd_create_fmr_pool(fps, &fpo);
 	spin_lock(&fps->fps_lock);
 	fps->fps_increasing = 0;
+	wake_up_var(fps);
 	if (rc == 0) {
 		fps->fps_version++;
 		list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
