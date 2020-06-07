@@ -2047,15 +2047,12 @@ void
 kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 {
 	LIST_HEAD(zombies);
-	struct list_head	*tmp;
-	struct list_head	*nxt;
+	struct kib_tx *nxt;
 	struct kib_tx *tx;
 
 	spin_lock(&conn->ibc_lock);
 
-	list_for_each_safe(tmp, nxt, txs) {
-		tx = list_entry(tmp, struct kib_tx, tx_list);
-
+	list_for_each_entry_safe(tx, nxt, txs, tx_list) {
 		if (txs == &conn->ibc_active_txs) {
 			LASSERT(!tx->tx_queued);
 			LASSERT(tx->tx_waiting ||

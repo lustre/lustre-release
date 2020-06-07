@@ -460,18 +460,15 @@ kiblnd_get_peer_info(struct lnet_ni *ni, int index,
 static void
 kiblnd_del_peer_locked(struct kib_peer_ni *peer_ni)
 {
-	struct list_head *ctmp;
-	struct list_head *cnxt;
+	struct kib_conn *cnxt;
 	struct kib_conn	*conn;
 
 	if (list_empty(&peer_ni->ibp_conns)) {
 		kiblnd_unlink_peer_locked(peer_ni);
 	} else {
-		list_for_each_safe(ctmp, cnxt, &peer_ni->ibp_conns) {
-			conn = list_entry(ctmp, struct kib_conn, ibc_list);
-
+		list_for_each_entry_safe(conn, cnxt, &peer_ni->ibp_conns,
+					 ibc_list)
 			kiblnd_close_conn_locked(conn, 0);
-		}
 		/* NB closing peer_ni's last conn unlinked it. */
 	}
 	/* NB peer_ni now unlinked; might even be freed if the peer_ni table had the
@@ -1038,13 +1035,11 @@ int
 kiblnd_close_peer_conns_locked(struct kib_peer_ni *peer_ni, int why)
 {
 	struct kib_conn	*conn;
-	struct list_head	*ctmp;
-	struct list_head	*cnxt;
-	int			count = 0;
+	struct kib_conn *cnxt;
+	int count = 0;
 
-	list_for_each_safe(ctmp, cnxt, &peer_ni->ibp_conns) {
-		conn = list_entry(ctmp, struct kib_conn, ibc_list);
-
+	list_for_each_entry_safe(conn, cnxt, &peer_ni->ibp_conns,
+				 ibc_list) {
 		CDEBUG(D_NET, "Closing conn -> %s, "
 			      "version: %x, reason: %d\n",
 		       libcfs_nid2str(peer_ni->ibp_nid),
@@ -1062,13 +1057,11 @@ kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
 				int version, __u64 incarnation)
 {
 	struct kib_conn	*conn;
-	struct list_head	*ctmp;
-	struct list_head	*cnxt;
-	int			count = 0;
+	struct kib_conn *cnxt;
+	int count = 0;
 
-	list_for_each_safe(ctmp, cnxt, &peer_ni->ibp_conns) {
-		conn = list_entry(ctmp, struct kib_conn, ibc_list);
-
+	list_for_each_entry_safe(conn, cnxt, &peer_ni->ibp_conns,
+				 ibc_list) {
 		if (conn->ibc_version     == version &&
 		    conn->ibc_incarnation == incarnation)
 			continue;
