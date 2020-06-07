@@ -2627,8 +2627,6 @@ static int ldlm_lock_replay_thread(void *data)
 {
 	struct obd_import *imp = data;
 
-	unshare_fs_struct();
-
 	CDEBUG(D_HA, "lock replay thread %s to %s@%s\n",
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
 	       imp->imp_connection->c_remote_uuid.uuid);

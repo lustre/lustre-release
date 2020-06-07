@@ -36,7 +36,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
-#include <linux/fs_struct.h>
 #include <linux/sched.h>
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/mm.h>

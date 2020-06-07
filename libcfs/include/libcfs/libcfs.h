@@ -86,11 +86,6 @@ static inline int notifier_from_ioctl_errno(int err)
 	return notifier_from_errno(err) | NOTIFY_STOP_MASK;
 }
 
-/*
- * Defined by platform
- */
-int unshare_fs_struct(void);
-
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
 #define container_of0(ptr, type, member) container_of_safe(ptr, type, member)

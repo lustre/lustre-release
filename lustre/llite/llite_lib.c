@@ -49,6 +49,7 @@
 #include <linux/delay.h>
 #include <linux/uidgid.h>
 #include <linux/security.h>
+#include <linux/fs_struct.h>
 
 #ifndef HAVE_CPUS_READ_LOCK
 #include <libcfs/linux/linux-cpu.h>

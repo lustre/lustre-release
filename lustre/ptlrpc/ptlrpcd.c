@@ -442,9 +442,6 @@ static int ptlrpcd(void *arg)
 	int				exit = 0;
 
 	ENTRY;
-
-	unshare_fs_struct();
-
 	if (cfs_cpt_bind(cfs_cpt_tab, pc->pc_cpt) != 0)
 		CWARN("Failed to bind %s on CPT %d\n", pc->pc_name, pc->pc_cpt);
 

@@ -39,6 +39,7 @@
 
 #define DEBUG_SUBSYSTEM S_OSD
 
+#include <linux/fs_struct.h>
 #include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/user_namespace.h>

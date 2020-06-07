@@ -774,8 +774,6 @@ static int llog_process_thread_daemonize(void *arg)
 	}
 	task_unlock(lpi->lpi_reftask);
 
-	unshare_fs_struct();
-
 	/* client env has no keys, tags is just 0 */
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_MG_THREAD);
 	if (rc)

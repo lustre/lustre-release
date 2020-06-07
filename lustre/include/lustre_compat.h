@@ -35,7 +35,6 @@
 
 #include <linux/aio.h>
 #include <linux/fs.h>
-#include <linux/fs_struct.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
 #include <linux/posix_acl_xattr.h>

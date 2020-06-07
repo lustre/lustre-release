@@ -2641,8 +2641,6 @@ static int target_recovery_thread(void *arg)
 	int rc = 0;
 
 	ENTRY;
-
-	unshare_fs_struct();
 	OBD_ALLOC_PTR(thread);
 	if (thread == NULL)
 		RETURN(-ENOMEM);
