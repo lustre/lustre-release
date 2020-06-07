@@ -349,6 +349,35 @@ static inline void trunc_sem_up_write(struct ll_trunc_sem *sem)
 	wake_up_var(&sem->ll_trunc_readers);
 }
 
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+static inline void lli_clear_acl(struct ll_inode_info *lli)
+{
+	if (lli->lli_posix_acl) {
+		posix_acl_release(lli->lli_posix_acl);
+		lli->lli_posix_acl = NULL;
+	}
+}
+
+static inline void lli_replace_acl(struct ll_inode_info *lli,
+				   struct lustre_md *md)
+{
+	spin_lock(&lli->lli_lock);
+	if (lli->lli_posix_acl)
+		posix_acl_release(lli->lli_posix_acl);
+	lli->lli_posix_acl = md->posix_acl;
+	spin_unlock(&lli->lli_lock);
+}
+#else
+static inline void lli_clear_acl(struct ll_inode_info *lli)
+{
+}
+
+static inline void lli_replace_acl(struct ll_inode_info *lli,
+				   struct lustre_md *md)
+{
+}
+#endif
+
 static inline __u32 ll_layout_version_get(struct ll_inode_info *lli)
 {
 	__u32 gen;

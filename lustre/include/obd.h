@@ -33,6 +33,8 @@
 #ifndef __OBD_H
 #define __OBD_H
 
+#include <linux/fs.h>
+#include <linux/posix_acl.h>
 #include <linux/kobject.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
@@ -1060,6 +1062,25 @@ struct lustre_md {
 	struct posix_acl        *posix_acl;
 #endif
 };
+
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+static inline void lmd_clear_acl(struct lustre_md *md)
+{
+	if (md->posix_acl) {
+		posix_acl_release(md->posix_acl);
+		md->posix_acl = NULL;
+	}
+}
+
+#define OBD_CONNECT_ACL_FLAGS  \
+	(OBD_CONNECT_ACL | OBD_CONNECT_UMASK | OBD_CONNECT_LARGE_ACL)
+#else
+static inline void lmd_clear_acl(struct lustre_md *md)
+{
+}
+
+#define OBD_CONNECT_ACL_FLAGS  (0)
+#endif
 
 struct md_open_data {
 	struct obd_client_handle	*mod_och;

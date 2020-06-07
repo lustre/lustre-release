@@ -281,10 +281,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
                 data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-	data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_UMASK |
-				   OBD_CONNECT_LARGE_ACL;
-#endif
+	data->ocd_connect_flags |= OBD_CONNECT_ACL_FLAGS;
 
 	data->ocd_cksum_types = obd_cksum_types_supported_client();
 
@@ -626,12 +623,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	ptlrpc_req_finished(request);
 
 	if (IS_ERR(root)) {
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-		if (lmd.posix_acl) {
-			posix_acl_release(lmd.posix_acl);
-			lmd.posix_acl = NULL;
-		}
-#endif
+		lmd_clear_acl(&lmd);
 		err = IS_ERR(root) ? PTR_ERR(root) : -EBADF;
 		root = NULL;
 		CERROR("%s: bad ll_iget() for root: rc = %d\n",
@@ -1662,13 +1654,8 @@ void ll_clear_inode(struct inode *inode)
 
 	ll_xattr_cache_destroy(inode);
 
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	forget_all_cached_acls(inode);
-	if (lli->lli_posix_acl) {
-		posix_acl_release(lli->lli_posix_acl);
-		lli->lli_posix_acl = NULL;
-	}
-#endif
+	lli_clear_acl(lli);
 	lli->lli_inode_magic = LLI_INODE_DEAD;
 
 	if (S_ISDIR(inode->i_mode))
@@ -2297,15 +2284,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 			return rc;
 	}
 
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-	if (body->mbo_valid & OBD_MD_FLACL) {
-		spin_lock(&lli->lli_lock);
-		if (lli->lli_posix_acl)
-			posix_acl_release(lli->lli_posix_acl);
-		lli->lli_posix_acl = md->posix_acl;
-		spin_unlock(&lli->lli_lock);
-	}
-#endif
+	if (body->mbo_valid & OBD_MD_FLACL)
+		lli_replace_acl(lli, md);
+
 	inode->i_ino = cl_fid_build_ino(&body->mbo_fid1,
 					sbi->ll_flags & LL_SBI_32BIT_API);
 	inode->i_generation = cl_fid_build_gen(&body->mbo_fid1);
@@ -2788,12 +2769,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 					     sbi->ll_flags & LL_SBI_32BIT_API),
 				 &md);
 		if (IS_ERR(*inode)) {
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-                        if (md.posix_acl) {
-                                posix_acl_release(md.posix_acl);
-                                md.posix_acl = NULL;
-                        }
-#endif
+                        lmd_clear_acl(&md);
                         rc = IS_ERR(*inode) ? PTR_ERR(*inode) : -ENOMEM;
                         *inode = NULL;
                         CERROR("new_inode -fatal: rc %d\n", rc);
