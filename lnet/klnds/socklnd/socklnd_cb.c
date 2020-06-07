@@ -54,7 +54,7 @@ ksocknal_alloc_tx(int type, int size)
         if (tx == NULL)
                 return NULL;
 
-	atomic_set(&tx->tx_refcount, 1);
+	refcount_set(&tx->tx_refcount, 1);
 	tx->tx_zc_aborted = 0;
 	tx->tx_zc_capable = 0;
 	tx->tx_zc_checked = 0;
@@ -455,7 +455,7 @@ ksocknal_txlist_done(struct lnet_ni *ni, struct list_head *txlist, int error)
 				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		}
 
-		LASSERT(atomic_read(&tx->tx_refcount) == 1);
+		LASSERT(refcount_read(&tx->tx_refcount) == 1);
 		ksocknal_tx_done(ni, tx, error);
 	}
 }
@@ -1164,7 +1164,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 	struct lnet_process_id *id;
 	int rc;
 
-	LASSERT (atomic_read(&conn->ksnc_conn_refcount) > 0);
+	LASSERT(refcount_read(&conn->ksnc_conn_refcount) > 0);
 
 	/* NB: sched lock NOT held */
 	/* SOCKNAL_RX_LNET_HEADER is here for backward compatibility */
