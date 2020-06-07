@@ -140,12 +140,8 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 		    fragsize < tx->tx_resid)
 			msgflg |= MSG_MORE;
 
-		if (sk->sk_prot->sendpage != NULL) {
-			rc = sk->sk_prot->sendpage(sk, page,
-						   offset, fragsize, msgflg);
-		} else {
-			rc = tcp_sendpage(sk, page, offset, fragsize, msgflg);
-		}
+		rc = sk->sk_prot->sendpage(sk, page,
+					   offset, fragsize, msgflg);
 	} else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
 		struct kvec	scratch;
