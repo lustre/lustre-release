@@ -236,7 +236,9 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	/* Current API version */
 	tunables->lnd_version = CURRENT_LND_VERSION;
 
-	if (kiblnd_translate_mtu(*kiblnd_tunables.kib_ib_mtu) < 0) {
+	if (*kiblnd_tunables.kib_ib_mtu &&
+	    ib_mtu_enum_to_int(ib_mtu_int_to_enum(*kiblnd_tunables.kib_ib_mtu)) !=
+	    *kiblnd_tunables.kib_ib_mtu) {
 		CERROR("Invalid ib_mtu %d, expected 256/512/1024/2048/4096\n",
 		       *kiblnd_tunables.kib_ib_mtu);
 		return -EINVAL;

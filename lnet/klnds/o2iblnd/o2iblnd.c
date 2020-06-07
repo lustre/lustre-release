@@ -636,40 +636,16 @@ kiblnd_debug_conn(struct kib_conn *conn)
 	spin_unlock(&conn->ibc_lock);
 }
 
-int
-kiblnd_translate_mtu(int value)
-{
-        switch (value) {
-        default:
-                return -1;
-        case 0:
-                return 0;
-        case 256:
-                return IB_MTU_256;
-        case 512:
-                return IB_MTU_512;
-        case 1024:
-                return IB_MTU_1024;
-        case 2048:
-                return IB_MTU_2048;
-        case 4096:
-                return IB_MTU_4096;
-        }
-}
-
 static void
 kiblnd_setup_mtu_locked(struct rdma_cm_id *cmid)
 {
-        int           mtu;
-
         /* XXX There is no path record for iWARP, set by netdev->change_mtu? */
         if (cmid->route.path_rec == NULL)
                 return;
 
-        mtu = kiblnd_translate_mtu(*kiblnd_tunables.kib_ib_mtu);
-        LASSERT (mtu >= 0);
-        if (mtu != 0)
-                cmid->route.path_rec->mtu = mtu;
+	if (*kiblnd_tunables.kib_ib_mtu)
+		cmid->route.path_rec->mtu =
+			ib_mtu_int_to_enum(*kiblnd_tunables.kib_ib_mtu);
 }
 
 static int
