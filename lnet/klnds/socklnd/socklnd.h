@@ -64,7 +64,6 @@
 #define SOCKNAL_NSCHEDS_HIGH	(SOCKNAL_NSCHEDS << 1)
 
 #define SOCKNAL_PEER_HASH_BITS	7	/* log2 of # peer_ni lists */
-#define SOCKNAL_RESCHED		100	/* # scheduler loops before reschedule */
 #define SOCKNAL_INSANITY_RECONN	5000	/* connd is trying on reconn infinitely */
 #define SOCKNAL_ENOMEM_RETRY	1	/* seconds between retries */
 
