@@ -1059,19 +1059,15 @@ ksocknal_thread_start(int (*fn)(void *arg), void *arg, char *name)
 	if (IS_ERR(task))
 		return PTR_ERR(task);
 
-	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-	ksocknal_data.ksnd_nthreads++;
-	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
+	atomic_inc(&ksocknal_data.ksnd_nthreads);
 	return 0;
 }
 
 void
 ksocknal_thread_fini (void)
 {
-	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-	if (--ksocknal_data.ksnd_nthreads == 0)
+	if (atomic_dec_and_test(&ksocknal_data.ksnd_nthreads))
 		wake_up_var(&ksocknal_data.ksnd_nthreads);
-	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 }
 
 int

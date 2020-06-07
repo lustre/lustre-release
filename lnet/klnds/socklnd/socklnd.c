@@ -2264,9 +2264,9 @@ ksocknal_base_shutdown(void)
 		}
 
 		wait_var_event_warning(&ksocknal_data.ksnd_nthreads,
-				       ksocknal_data.ksnd_nthreads == 0,
+				       atomic_read(&ksocknal_data.ksnd_nthreads) == 0,
 				       "waiting for %d threads to terminate\n",
-				       ksocknal_data.ksnd_nthreads);
+				       atomic_read(&ksocknal_data.ksnd_nthreads));
 
 		ksocknal_free_buffers();
 

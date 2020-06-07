@@ -182,7 +182,7 @@ struct ksock_nal_data {
 	/* hash table of all my known peers */
 	DECLARE_HASHTABLE(ksnd_peers, SOCKNAL_PEER_HASH_BITS);
 
-	int			ksnd_nthreads;	/* # live threads */
+	atomic_t		ksnd_nthreads;	/* # live threads */
 	int			ksnd_shuttingdown; /* tell threads to exit */
 	/* schedulers information */
 	struct ksock_sched	**ksnd_schedulers;
