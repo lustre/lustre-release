@@ -308,7 +308,7 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 
 	mdd_write_lock(env, obj, MOR_TGT_CHILD);
 	rc = mdd_orphan_declare_delete(env, obj, th);
-	if (rc == -ENOENT)
+	if (rc == -ENOENT || lu_object_is_dying(obj->mod_obj.mo_lu.lo_header))
 		orphan_exists = false;
 	else if (rc)
 		GOTO(unlock, rc);
