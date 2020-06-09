@@ -2230,7 +2230,13 @@ fscrypt_support, [
 ],[
 	fscrypt_ioctl_get_policy_ex(NULL, NULL);
 ],[
-	has_fscrypt_support="yes"
+	dnl When Lustre supports file name encryption, restore "yes" value
+	dnl for has_fscrypt_support and remove warning message.
+	has_fscrypt_support="no"
+	AC_MSG_WARN([
+This version of Lustre lacks file name encryption support,
+so it cannot make use of in-kernel fscrypt.
+Will use embedded llcrypt if possible.])
 ])
 ]) # LC_FSCRYPT_SUPPORT
 

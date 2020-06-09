@@ -314,6 +314,21 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 		return -EFAULT;
 	policy.version = version;
 
+	/* Force file/directory name encryption policy to null.
+	 * This is needed for interoperability with future versions.
+	 * Code to be removed when Lustre supports name encryption.
+	 */
+	CWARN("inode %lu: forcing policy filenames_encryption_mode to null\n",
+	      inode->i_ino);
+	switch (policy.version) {
+	case LLCRYPT_POLICY_V1:
+		policy.v1.filenames_encryption_mode = LLCRYPT_MODE_NULL;
+		break;
+	case LLCRYPT_POLICY_V2:
+		policy.v2.filenames_encryption_mode = LLCRYPT_MODE_NULL;
+		break;
+	}
+
 	if (!inode_owner_or_capable(inode))
 		return -EACCES;
 

@@ -463,8 +463,15 @@ int llcrypt_get_encryption_info(struct inode *inode)
 		/* Fake up a context for an unencrypted directory */
 		memset(&ctx, 0, sizeof(ctx));
 		ctx.version = LLCRYPT_CONTEXT_V1;
+		/* Force file/directory name encryption policy to null.
+		 * This is needed for interoperability with future versions.
+		 * Change to be reverted back when Lustre supports name
+		 * encryption.
+		 */
+		CWARN("inode %lu: setting policy filenames_encryption_mode to null\n",
+		      inode->i_ino);
 		ctx.v1.contents_encryption_mode = LLCRYPT_MODE_AES_256_XTS;
-		ctx.v1.filenames_encryption_mode = LLCRYPT_MODE_AES_256_CTS;
+		ctx.v1.filenames_encryption_mode = LLCRYPT_MODE_NULL;
 		memset(ctx.v1.master_key_descriptor, 0x42,
 		       LLCRYPT_KEY_DESCRIPTOR_SIZE);
 		res = sizeof(ctx.v1);
