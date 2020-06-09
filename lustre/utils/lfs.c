@@ -4198,6 +4198,22 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 	return res;
 }
 
+static int str2quotaid(__u32 *id, const char *arg)
+{
+	unsigned long int projid_tmp = 0;
+	char *endptr = NULL;
+
+	projid_tmp = strtoul(arg, &endptr, 10);
+	if (*endptr != '\0')
+		return -EINVAL;
+	if (projid_tmp > UINT32_MAX ||
+	    (projid_tmp == ULONG_MAX && (errno == ERANGE)))
+		return -ERANGE;
+
+	*id = projid_tmp;
+	return 0;
+}
+
 static int name2uid(unsigned int *id, const char *name)
 {
 	struct passwd *passwd;
@@ -4814,8 +4830,7 @@ static int lfs_find(int argc, char **argv)
 		case 'G':
 			rc = name2gid(&param.fp_gid, optarg);
 			if (rc) {
-				param.fp_gid = strtoul(optarg, &endptr, 10);
-				if (*endptr != '\0') {
+				if (str2quotaid(&param.fp_gid, optarg)) {
 					fprintf(stderr,
 						"Group/GID: %s cannot be found.\n",
 						optarg);
@@ -4851,8 +4866,7 @@ static int lfs_find(int argc, char **argv)
 		case 'U':
 			rc = name2uid(&param.fp_uid, optarg);
 			if (rc) {
-				param.fp_uid = strtoul(optarg, &endptr, 10);
-				if (*endptr != '\0') {
+				if (str2quotaid(&param.fp_uid, optarg)) {
 					fprintf(stderr,
 						"User/UID: %s cannot be found.\n",
 						optarg);
@@ -4997,10 +5011,9 @@ err_free:
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
 			if (rc) {
-				param.fp_projid = strtoul(optarg, &endptr, 10);
-				if (*endptr != '\0') {
+				if (str2quotaid(&param.fp_projid, optarg)) {
 					fprintf(stderr,
-						"Invalid project ID: %s",
+						"Invalid project ID: %s\n",
 						optarg);
 					ret = -1;
 					goto err;
@@ -6844,7 +6857,6 @@ int lfs_setquota(int argc, char **argv)
 	{ .val = 'o',	.name = "pool",		.has_arg = required_argument },
 	{ .name = NULL } };
 	unsigned int limit_mask = 0;
-	char *endptr;
 	bool use_default = false;
 	int qtype, qctl_len;
 
@@ -6899,8 +6911,7 @@ int lfs_setquota(int argc, char **argv)
 			rc = name2projid(&qctl->qc_id, optarg);
 quota_type:
 			if (rc) {
-				qctl->qc_id = strtoul(optarg, &endptr, 10);
-				if (*endptr != '\0') {
+				if (str2quotaid(&qctl->qc_id, optarg)) {
 					fprintf(stderr,
 						"%s setquota: invalid id '%s'\n",
 						progname, optarg);
@@ -7520,7 +7531,13 @@ static int lfs_project(int argc, char **argv)
 			phc.recursive = true;
 			break;
 		case 'p':
-			phc.projid = strtoul(optarg, NULL, 0);
+			if (str2quotaid(&phc.projid, optarg)) {
+				fprintf(stderr,
+					"Invalid project ID: %s\n",
+					optarg);
+				return CMD_HELP;
+			}
+
 			phc.assign_projid = true;
 
 			break;
@@ -7627,7 +7644,6 @@ static int lfs_quota(int argc, char **argv)
 	struct if_quotactl *qctl;
 	char *obd_uuid;
 	int rc = 0, rc1 = 0, verbose = 0, quiet = 0;
-	char *endptr;
 	__u32 valid = QC_GENERAL, idx = 0;
 	bool human_readable = false;
 	bool show_default = false;
@@ -7792,8 +7808,7 @@ quota_type:
 		}
 
 		if (rc) {
-			qctl->qc_id = strtoul(name, &endptr, 10);
-			if (*endptr != '\0') {
+			if (str2quotaid(&qctl->qc_id, name)) {
 				fprintf(stderr, "%s quota: invalid id '%s'\n",
 					progname, name);
 				rc = CMD_HELP;
