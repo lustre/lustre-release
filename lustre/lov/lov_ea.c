@@ -81,6 +81,7 @@ static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 			       u16 stripe_count)
 {
+	u32 pattern = le32_to_cpu(lmm->lmm_pattern);
 	int rc = 0;
 
 	if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
@@ -98,10 +99,7 @@ static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 		goto out;
 	}
 
-	if (lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT &&
-	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_RAID0 &&
-	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) !=
-			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING)) {
+	if (!lov_pattern_supported(lov_pattern(pattern))) {
 		rc = -EINVAL;
 		CERROR("lov: unrecognized striping pattern: rc = %d\n", rc);
 		lov_dump_lmm_common(D_WARNING, lmm);
