@@ -368,12 +368,27 @@ int llcrypt_ioctl_get_policy(struct file *filp, void __user *arg)
 }
 EXPORT_SYMBOL(llcrypt_ioctl_get_policy);
 
+/* Valid filenames_encryption_mode associated with contents_encryption_mode,
+ * as imposed by llcrypt_valid_enc_modes()
+ */
+static inline u8 contents2filenames_encmode(u8 contents_encryption_mode)
+{
+	if (contents_encryption_mode == LLCRYPT_MODE_AES_128_CBC)
+		return LLCRYPT_MODE_AES_128_CTS;
+	if (contents_encryption_mode == LLCRYPT_MODE_AES_256_XTS)
+		return LLCRYPT_MODE_AES_256_CTS;
+	if (contents_encryption_mode == LLCRYPT_MODE_ADIANTUM)
+		return LLCRYPT_MODE_ADIANTUM;
+	return LLCRYPT_MODE_NULL;
+}
+
 /* Extended ioctl version; can get policies of any version */
 int llcrypt_ioctl_get_policy_ex(struct file *filp, void __user *uarg)
 {
 	struct llcrypt_get_policy_ex_arg arg;
 	union llcrypt_policy *policy = (union llcrypt_policy *)&arg.policy;
 	size_t policy_size;
+	struct inode *inode = file_inode(filp);
 	int err;
 
 	/* arg is policy_size, then policy */
@@ -393,6 +408,33 @@ int llcrypt_ioctl_get_policy_ex(struct file *filp, void __user *uarg)
 	if (policy_size > arg.policy_size)
 		return -EOVERFLOW;
 	arg.policy_size = policy_size;
+
+	/* Do not return null filenames_encryption_mode to userspace, as it is
+	 * unknown. Instead, return valid mode associated with
+	 * contents_encryption_mode, as imposed by llcrypt_valid_enc_modes().
+	 */
+	switch (policy->version) {
+	case LLCRYPT_POLICY_V1:
+		if (policy->v1.filenames_encryption_mode == LLCRYPT_MODE_NULL) {
+			policy->v1.filenames_encryption_mode =
+				contents2filenames_encmode(
+					policy->v1.contents_encryption_mode);
+			CWARN("inode %lu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
+			      inode->i_ino,
+			      policy->v1.filenames_encryption_mode);
+		}
+		break;
+	case LLCRYPT_POLICY_V2:
+		if (policy->v2.filenames_encryption_mode == LLCRYPT_MODE_NULL) {
+			policy->v2.filenames_encryption_mode =
+				contents2filenames_encmode(
+					policy->v2.contents_encryption_mode);
+			CWARN("inode %lu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
+			      inode->i_ino,
+			      policy->v2.filenames_encryption_mode);
+		}
+		break;
+	}
 
 	if (copy_to_user(uarg, &arg, sizeof(arg.policy_size) + policy_size))
 		return -EFAULT;

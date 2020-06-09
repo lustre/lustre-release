@@ -166,6 +166,13 @@ int llcrypt_crypt_block(const struct inode *inode, llcrypt_direction_t rw,
 	struct crypto_skcipher *tfm = ci->ci_ctfm;
 	int res = 0;
 
+	if (tfm == NULL) {
+		if (dest_page != src_page)
+			memcpy(page_address(dest_page), page_address(src_page),
+			       PAGE_SIZE);
+		return 0;
+	}
+
 	if (WARN_ON_ONCE(len <= 0))
 		return -EINVAL;
 	if (WARN_ON_ONCE(len % LL_CRYPTO_BLOCK_SIZE != 0))

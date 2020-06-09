@@ -227,15 +227,18 @@ static inline bool llcrypt_valid_enc_modes(u32 contents_mode,
 					   u32 filenames_mode)
 {
 	if (contents_mode == LLCRYPT_MODE_AES_128_CBC &&
-	    filenames_mode == LLCRYPT_MODE_AES_128_CTS)
+	    (filenames_mode == LLCRYPT_MODE_AES_128_CTS ||
+	     filenames_mode == LLCRYPT_MODE_NULL))
 		return true;
 
 	if (contents_mode == LLCRYPT_MODE_AES_256_XTS &&
-	    filenames_mode == LLCRYPT_MODE_AES_256_CTS)
+	    (filenames_mode == LLCRYPT_MODE_AES_256_CTS ||
+	     filenames_mode == LLCRYPT_MODE_NULL))
 		return true;
 
 	if (contents_mode == LLCRYPT_MODE_ADIANTUM &&
-	    filenames_mode == LLCRYPT_MODE_ADIANTUM)
+	    (filenames_mode == LLCRYPT_MODE_ADIANTUM ||
+	     filenames_mode == LLCRYPT_MODE_NULL))
 		return true;
 
 	return false;

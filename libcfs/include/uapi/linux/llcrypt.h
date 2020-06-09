@@ -24,6 +24,7 @@
 #define LLCRYPT_POLICY_FLAGS_VALID		0x07
 
 /* Encryption algorithms */
+#define LLCRYPT_MODE_NULL			0
 #define LLCRYPT_MODE_AES_256_XTS		1
 #define LLCRYPT_MODE_AES_256_CTS		4
 #define LLCRYPT_MODE_AES_128_CBC		5

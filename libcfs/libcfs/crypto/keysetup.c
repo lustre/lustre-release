@@ -22,6 +22,12 @@
 static struct crypto_shash *essiv_hash_tfm;
 
 static struct llcrypt_mode available_modes[] = {
+	[LLCRYPT_MODE_NULL] = {
+		.friendly_name = "NULL",
+		.cipher_str = "null",
+		.keysize = 0,
+		.ivsize = 0,
+	},
 	[LLCRYPT_MODE_AES_256_XTS] = {
 		.friendly_name = "AES-256-XTS",
 		.cipher_str = "xts(aes)",
@@ -77,6 +83,9 @@ struct crypto_skcipher *llcrypt_allocate_skcipher(struct llcrypt_mode *mode,
 {
 	struct crypto_skcipher *tfm;
 	int err;
+
+	if (!strcmp(mode->cipher_str, "null"))
+		return NULL;
 
 	tfm = crypto_alloc_skcipher(mode->cipher_str, 0, 0);
 	if (IS_ERR(tfm)) {
@@ -396,7 +405,8 @@ static void put_crypt_info(struct llcrypt_info *ci)
 		llcrypt_put_direct_key(ci->ci_direct_key);
 	} else if ((ci->ci_ctfm != NULL || ci->ci_essiv_tfm != NULL) &&
 		   !llcrypt_is_direct_key_policy(&ci->ci_policy)) {
-		crypto_free_skcipher(ci->ci_ctfm);
+		if (ci->ci_ctfm)
+			crypto_free_skcipher(ci->ci_ctfm);
 		crypto_free_cipher(ci->ci_essiv_tfm);
 	}
 

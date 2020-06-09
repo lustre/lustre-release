@@ -58,6 +58,9 @@ int fname_encrypt(struct inode *inode, const struct qstr *iname,
 	memcpy(out, iname->name, iname->len);
 	memset(out + iname->len, 0, olen - iname->len);
 
+	if (tfm == NULL)
+		return 0;
+
 	/* Initialize the IV */
 	llcrypt_generate_iv(&iv, 0, ci);
 
@@ -100,6 +103,13 @@ static int fname_decrypt(struct inode *inode,
 	struct crypto_skcipher *tfm = ci->ci_ctfm;
 	union llcrypt_iv iv;
 	int res;
+
+	if (tfm == NULL) {
+		memcpy(oname->name, iname->name, iname->len);
+		oname->name[iname->len] = '\0';
+		oname->len = iname->len;
+		return 0;
+	}
 
 	/* Allocate request */
 	req = skcipher_request_alloc(tfm, GFP_NOFS);
