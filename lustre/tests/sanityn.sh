@@ -18,8 +18,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
-# bug number for skipped test:  LU-7105 LU-13628
-ALWAYS_EXCEPT+="                28      106"
+# bug number for skipped test:  LU-7105
+ALWAYS_EXCEPT+="                28 "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skip tests for PPC until they are fixed
@@ -5132,7 +5132,8 @@ test_106a() {
 	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
 	btime=$($STATX -c %W $DIR/$tfile)
 	output=$(do_facet mds1 "$DEBUGFS -c -R 'stat ROOT/$tfile' $mdtdev")
-	((mdt_btime=$(awk -F ':' /btime/'{ print $2 }' <<< "$output")))
+	echo $output
+	((mdt_btime=$(awk -F ':' /crtime/'{ print $2 }' <<< "$output")))
 	[[ $btime == $mdt_btime ]] ||
 		error "$DIR/$tfile btime ($btime:$mdt_btime) diff"
 
@@ -5202,7 +5203,7 @@ test_106c() {
 	touch $DIR/$tfile
 	# Mask supported in stx_attributes by Lustre is
 	# STATX_ATTR_IMMUTABLE(0x10) | STATX_ATTR_APPEND(0x20) : (0x30).
-	mask=$($STATX -c %q $DIR/$tfile)
+	mask=$($STATX -c %p $DIR/$tfile)
 	[[ $mask == "30" ]] ||
 		error "supported stx_attributes: got '$mask', expected '30'"
 	chattr +i $DIR/$tfile || error "chattr +i $DIR/$tfile failed"

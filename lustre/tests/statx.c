@@ -232,7 +232,7 @@ void usage(char *prog)
 	       "\t%%n   file name\n"
 	       "\t%%N   quoted file name with dereference if symbolic link\n"
 	       "\t%%o   optimal I/O transfer size hint\n"
-	       "\t%%q   Mask to show what's supported in stx_attributes\n"
+	       "\t%%p   Mask to show what's supported in stx_attributes\n"
 	       "\t%%r   Flags conveying information about the file: "
 	       "stx_attributes\n"
 	       "\t%%s   total size, in bytes\n"
