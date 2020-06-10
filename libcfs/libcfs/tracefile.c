@@ -263,27 +263,6 @@ static void cfs_tage_to_tail(struct cfs_trace_page *tage,
 	list_move_tail(&tage->linkage, queue);
 }
 
-int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, gfp_t gfp,
-			   struct list_head *stock)
-{
-	int i;
-
-	/*
-	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
-	 * from here: this will lead to infinite recursion.
-	 */
-
-	for (i = 0; i + tcd->tcd_cur_stock_pages < TCD_STOCK_PAGES ; ++ i) {
-		struct cfs_trace_page *tage;
-
-		tage = cfs_tage_alloc(gfp);
-		if (tage == NULL)
-			break;
-		list_add_tail(&tage->linkage, stock);
-	}
-	return i;
-}
-
 /* return a page that has 'len' bytes left at the end */
 static struct cfs_trace_page *
 cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)

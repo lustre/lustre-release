@@ -245,10 +245,6 @@ static inline char *cfs_trace_get_console_buffer(void)
 	return cfs_trace_console_buffers[i][j];
 }
 
-int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, gfp_t gfp,
-				struct list_head *stock);
-
-
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
                       struct cfs_trace_page *tage);
 
