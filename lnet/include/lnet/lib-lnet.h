@@ -74,8 +74,10 @@ extern struct lnet the_lnet;			/* THE network */
 /** exclusive lock */
 #define LNET_LOCK_EX		CFS_PERCPT_LOCK_EX
 
-/* default timeout */
+/* default timeout and credits */
 #define DEFAULT_PEER_TIMEOUT    180
+#define DEFAULT_PEER_CREDITS    8
+#define DEFAULT_CREDITS         256
 
 #ifdef HAVE_KERN_SOCK_GETNAME_2ARGS
 #define lnet_kernel_getpeername(sock, addr, addrlen) \

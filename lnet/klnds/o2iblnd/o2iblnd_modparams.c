@@ -66,11 +66,11 @@ module_param(ntx, int, 0444);
 MODULE_PARM_DESC(ntx, "# of message descriptors allocated for each pool");
 
 /* NB: this value is shared by all CPTs */
-static int credits = 256;
+static int credits = DEFAULT_CREDITS;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "# concurrent sends");
 
-static int peer_credits = 8;
+static int peer_credits = DEFAULT_PEER_CREDITS;
 module_param(peer_credits, int, 0444);
 MODULE_PARM_DESC(peer_credits, "# concurrent sends to 1 peer");
 

@@ -3171,6 +3171,19 @@ failed:
 	return rc;
 }
 
+static void
+lnet_set_tune_defaults(struct lnet_ioctl_config_lnd_tunables *tun)
+{
+	if (tun) {
+		if (!tun->lt_cmn.lct_peer_timeout)
+			tun->lt_cmn.lct_peer_timeout = DEFAULT_PEER_TIMEOUT;
+		if (!tun->lt_cmn.lct_peer_tx_credits)
+			tun->lt_cmn.lct_peer_tx_credits = DEFAULT_PEER_CREDITS;
+		if (!tun->lt_cmn.lct_max_tx_credits)
+			tun->lt_cmn.lct_max_tx_credits = DEFAULT_CREDITS;
+	}
+}
+
 static int lnet_handle_legacy_ip2nets(char *ip2nets,
 				      struct lnet_ioctl_config_lnd_tunables *tun)
 {
@@ -3186,6 +3199,8 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);
 	if (rc < 0)
 		return rc;
+
+	lnet_set_tune_defaults(tun);
 
 	mutex_lock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
@@ -3247,6 +3262,8 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 				       conf->lic_ni_intf[0]);
 	if (!ni)
 		return -ENOMEM;
+
+	lnet_set_tune_defaults(tun);
 
 	mutex_lock(&the_lnet.ln_api_mutex);
 
@@ -3380,13 +3397,16 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 	memset(&tun, 0, sizeof(tun));
 
 	tun.lt_cmn.lct_peer_timeout =
-	  conf->cfg_config_u.cfg_net.net_peer_timeout;
+	  (!conf->cfg_config_u.cfg_net.net_peer_timeout) ? DEFAULT_PEER_TIMEOUT :
+		conf->cfg_config_u.cfg_net.net_peer_timeout;
 	tun.lt_cmn.lct_peer_tx_credits =
-	  conf->cfg_config_u.cfg_net.net_peer_tx_credits;
+	  (!conf->cfg_config_u.cfg_net.net_peer_tx_credits) ? DEFAULT_PEER_CREDITS :
+		conf->cfg_config_u.cfg_net.net_peer_tx_credits;
 	tun.lt_cmn.lct_peer_rtr_credits =
 	  conf->cfg_config_u.cfg_net.net_peer_rtr_credits;
 	tun.lt_cmn.lct_max_tx_credits =
-	  conf->cfg_config_u.cfg_net.net_max_tx_credits;
+	  (!conf->cfg_config_u.cfg_net.net_max_tx_credits) ? DEFAULT_CREDITS :
+		conf->cfg_config_u.cfg_net.net_max_tx_credits;
 
 	rc = lnet_add_net_common(net, &tun);
 

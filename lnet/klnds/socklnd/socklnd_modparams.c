@@ -30,11 +30,11 @@ static int sock_timeout;
 module_param(sock_timeout, int, 0644);
 MODULE_PARM_DESC(sock_timeout, "dead socket timeout (seconds)");
 
-static int credits = 256;
+static int credits = DEFAULT_CREDITS;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "# concurrent sends");
 
-static int peer_credits = 8;
+static int peer_credits = DEFAULT_PEER_CREDITS;
 module_param(peer_credits, int, 0444);
 MODULE_PARM_DESC(peer_credits, "# concurrent sends to 1 peer");
 
