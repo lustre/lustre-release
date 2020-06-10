@@ -6587,10 +6587,41 @@ test_90b() {
 }
 run_test 90b "check max_mod_rpcs_in_flight is enforced after update"
 
+save_params_90c() {
+	# get max_rpcs_in_flight value
+	mrif_90c=$($LCTL get_param -n \
+		   mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight)
+	echo "max_rpcs_in_flight is $mrif_90c"
+
+	# get max_mod_rpcs_in_flight value
+	mmrif_90c=$($LCTL get_param -n \
+		    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight)
+	echo "max_mod_rpcs_in_flight is $mmrif_90c"
+
+	# get MDT max_mod_rpcs_per_client value
+	mmrpc_90c=$(do_facet mds1 \
+		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
+	echo "max_mod_rpcs_per_client is $mmrpc_90c"
+}
+
+restore_params_90c() {
+	trap 0
+
+	# restore max_rpcs_in_flight value
+	do_facet mgs $LCTL set_param -P \
+		mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$mrif_90c
+
+	# restore max_mod_rpcs_in_flight value
+	do_facet mgs $LCTL set_param -P \
+		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mmrif_90c
+
+	# restore MDT max_mod_rpcs_per_client value
+	do_facet mds1 "echo $mmrpc_90c > \
+		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+}
+
 test_90c() {
 	local tmp
-	local mrif
-	local mmrpc
 
 	setup
 
@@ -6606,42 +6637,64 @@ test_90c() {
 		skip "Client not able to send multiple modify RPCs in parallel"
 	fi
 
-	# get max_rpcs_in_flight value
-	mrif=$($LCTL get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight)
-	echo "max_rpcs_in_flight is $mrif"
-
-	# get MDT max_mod_rpcs_per_client
-	mmrpc=$(do_facet mds1 \
-		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
-	echo "max_mod_rpcs_per_client is $mmrpc"
+	save_params_90c
+	stack_trap restore_params_90c
 
 	# testcase 1
 	# attempt to set max_mod_rpcs_in_flight to max_rpcs_in_flight value
 	# prerequisite: set max_mod_rpcs_per_client to max_rpcs_in_flight value
-	umount_client $MOUNT
-	do_facet mds1 \
-		"echo $mrif > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
-	mount_client $MOUNT
+	do_facet mds1 "echo $mrif_90c > \
+		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
 
-	$LCTL set_param \
-	    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mrif &&
-	    error "set max_mod_rpcs_in_flight to $mrif should fail"
+	# if max_mod_rpcs_in_flight is set to be equal to or larger than
+	# max_rpcs_in_flight, then max_rpcs_in_flight will be increased
+	if [[ "$CLIENT_VERSION" -ge $(version_code 2.12.5) ]]; then
+		$LCTL set_param \
+		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mrif_90c ||
+			error "set max_mod_rpcs_in_flight to $mrif_90c failed"
+
+		local new_mrif=$($LCTL get_param -n \
+				 mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight)
+		((new_mrif == mrif_90c + 1)) ||
+			error "max_rpcs_in_flight was not increased"
+	fi
 
 	umount_client $MOUNT
-	do_facet mds1 \
-		"echo $mmrpc > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	do_facet mds1 "echo $mmrpc_90c > \
+		       /sys/module/mdt/parameters/max_mod_rpcs_per_client"
 	mount_client $MOUNT
 
 	# testcase 2
 	# attempt to set max_mod_rpcs_in_flight to max_mod_rpcs_per_client+1
 	# prerequisite: set max_rpcs_in_flight to max_mod_rpcs_per_client+2
 	$LCTL set_param \
-	    mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$((mmrpc + 2))
+		mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$((mmrpc_90c + 2))
 
 	$LCTL set_param \
-	    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$((mmrpc + 1)) &&
-	    error "set max_mod_rpcs_in_flight to $((mmrpc + 1)) should fail"
+	mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$((mmrpc_90c + 1)) &&
+	error "set max_mod_rpcs_in_flight to $((mmrpc_90c + 1)) should fail"
 
+	# testcase 3
+	# attempt to set max_mod_rpcs_in_flight permanently
+	do_facet mgs $LCTL set_param -P \
+		mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$mrif_90c
+
+	do_facet mgs $LCTL set_param -P \
+		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mrif_90c
+
+	remount_client $MOUNT
+
+	wait_update_facet --verbose client "$LCTL get_param -n \
+		mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" \
+		"$((mrif_90c + 1))" ||
+		error "expected '$((mrif_90c + 1))' for max_rpcs_in_flight"
+
+	wait_update_facet --verbose client "$LCTL get_param -n \
+		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight" \
+		"$mrif_90c" ||
+		error "expected '$mrif_90c' for max_mod_rpcs_in_flight"
+
+	restore_params_90c
 	cleanup
 }
 run_test 90c "check max_mod_rpcs_in_flight update limits"
