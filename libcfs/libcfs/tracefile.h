@@ -174,15 +174,6 @@ union cfs_trace_data_union {
 	char __pad[L1_CACHE_ALIGN(sizeof(struct cfs_trace_cpu_data))];
 };
 
-#define TCD_MAX_TYPES      8
-extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS];
-
-#define cfs_tcd_for_each(tcd, i, j)					  \
-    for (i = 0; cfs_trace_data[i] != NULL; i++)				  \
-	for (j = 0, ((tcd) = &(*cfs_trace_data[i])[j].tcd);		  \
-	     j < num_possible_cpus();					  \
-	     j++, (tcd) = &(*cfs_trace_data[i])[j].tcd)
-
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
 struct page_collection {
