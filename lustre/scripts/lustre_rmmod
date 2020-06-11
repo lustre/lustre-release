@@ -5,9 +5,33 @@
 # returned.
 ###############################################################################
 
+SCRIPT_NAME="$(basename "$0")"
+LCTL=${LCTL:-lctl}
+DEBUG='false'
+
+# Print help message
+print_usage() {
+	echo "$SCRIPT_NAME -h|--help"
+	echo "$SCRIPT_NAME [-d|--debug-kernel] [modulesname...]"
+	echo
+	echo -e "\t-h, --help\t\tDisplay this help message"
+	echo -e "\t-d, --debug-kernel\tDisplay lustre kernel debug messages"
+	echo -e "\tmodulesname\t\tList of lustre modules to unload. By default"
+	echo -e "\t\t\t\tldiskfs and libcfs (and their dependencies) are"
+	echo -e "\t\t\t\tselected."
+}
+
+# Print kernel debug message for lustre modules
+print_debug() {
+	$LCTL mark "$SCRIPT_NAME : Stop debug"
+	$LCTL debug_kernel
+	DEBUG='false'
+}
+
 # Unload all modules dependent on $1 (exclude removal of $1)
 unload_dep_modules_exclusive() {
 	local MODULE=$1
+
 	local DEPS="$(lsmod | awk '($1 == "'$MODULE'") { print $4 }')"
 	for SUBMOD in $(echo $DEPS | tr ',' ' '); do
 		unload_dep_modules_inclusive $SUBMOD || return 1
@@ -22,17 +46,49 @@ unload_dep_modules_inclusive() {
 	# if $MODULE not loaded, return 0
 	lsmod | egrep -q "^\<$MODULE\>" || return 0
 	unload_dep_modules_exclusive $MODULE || return 1
+
+	if $DEBUG; then
+		if [ "$MODULE" = 'libcfs' ]; then
+			print_debug
+		fi
+		$LCTL mark "$SCRIPT_NAME : Unload $MODULE"
+	fi
+
 	rmmod $MODULE || return 1
 	return 0
 }
 
-modules="$@"
+declare -a modules
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			print_usage >&2
+			exit 0
+			;;
+		-d|--debug-kernel)
+			if lsmod | egrep -q '^libcfs'; then
+				DEBUG='true'
+			else
+				echo "Debug unavailable: libcfs is not loaded" >&2
+			fi
+			;;
+		-*)
+			echo "Error invalid option" >&2
+			print_usage >&2
+			exit 2
+			;;
+		*)
+			modules+=("$1")
+			;;
+	esac
+	shift
+done
 
 # To maintain backwards compatibility, ldiskfs and libcfs must be
 # unloaded if no parameters are given, or if only the ldiskfs parameter
 # is given. It's ugly, but is needed to emulate the prior functionality
-if [ -z "$modules" ] || [ "$modules" = "ldiskfs" ]; then
-	modules="ptlrpc lnet_selftest ldiskfs libcfs"
+if [ "${#modules[@]}" -eq 0 ] || [ "${modules[*]}" = "ldiskfs" ]; then
+	modules=('ptlrpc' 'lnet_selftest' 'ldiskfs' 'libcfs')
 fi
 
 if [ -f /sys/kernel/debug/kmemleak ] ; then
@@ -46,9 +102,22 @@ if [ -f /sys/kernel/debug/kmemleak ] ; then
 	echo clear > /sys/kernel/debug/kmemleak
 fi
 
-for mod in $modules; do
+# Manage debug
+if $DEBUG; then
+	echo "Lustre debug parameters:" >&2
+	$LCTL get_param debug >&2
+	$LCTL get_param debug_mb >&2
+
+	$LCTL mark "$SCRIPT_NAME : Start debug"
+fi
+
+for mod in ${modules[*]}; do
 	unload_dep_modules_inclusive $mod || exit 1
 done
+
+if $DEBUG; then
+	print_debug
+fi
 
 if [ -f /sys/kernel/debug/kmemleak ] ; then
 	echo scan > /sys/kernel/debug/kmemleak
