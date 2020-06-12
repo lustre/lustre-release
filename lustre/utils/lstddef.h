@@ -1,7 +1,8 @@
 #ifndef _LSTDDEF_H
 #define _LSTDDEF_H
 
-#include <stddef.h>
+#include <linux/types.h>
+#include <sys/param.h>
 
 #define __ALIGN_LSTDDEF_MASK(x, mask) (((x) + (mask)) & ~(mask))
 #define __ALIGN_LSTDDEF(x, a) __ALIGN_LSTDDEF_MASK(x, (typeof(x))(a) - 1)
@@ -42,12 +43,6 @@
 #else
 # define DIV_ROUND_UP_SECTOR_T(ll, d) DIV_ROUND_UP(ll, d)
 #endif
-
-/* The `const' in roundup() prevents gcc-3.3 from calling __divdi3 */
-#define roundup(x, y) ({				\
-	const typeof(y) __y = y;			\
-	(((x) + (__y - 1)) / __y) * __y;		\
-})
 
 #define rounddown(x, y) ({				\
 	typeof(x) __x = (x);				\
