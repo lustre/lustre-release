@@ -64,7 +64,7 @@ u64 lu_prandom_u64_max(u64 ep_ro)
 		 * 32 bits (truncated to the upper limit, if needed)
 		 */
 		if (ep_ro > 0xffffffffULL)
-			rand = prandom_u32_max((u32)(ep_ro >> 32)) << 32;
+			rand = (u64)prandom_u32_max((u32)(ep_ro >> 32)) << 32;
 
 		if (rand == (ep_ro & 0xffffffff00000000ULL))
 			rand |= prandom_u32_max((u32)ep_ro);

@@ -238,7 +238,7 @@ int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 		if (unlikely(ktime_to_ns(printed) == 0 ||
 			     ktime_after(ktime_get(),
 					 ktime_add_ns(printed,
-						      3600*24*NSEC_PER_SEC)))) {
+					     3600ULL * 24 * NSEC_PER_SEC)))) {
 			LCONSOLE_WARN("jobid: '%s' value too large (%d)\n",
 				      obd_jobid_var, *jobid_len);
 			printed = ktime_get();

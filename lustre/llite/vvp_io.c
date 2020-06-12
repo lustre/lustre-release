@@ -829,7 +829,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 		GOTO(out, result);
 
 	LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
-			 "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
+			 "Read ino %lu, %zu bytes, offset %lld, size %llu\n",
 			 inode->i_ino, cnt, pos, i_size_read(inode));
 
 	/* turn off the kernel's read-ahead */
@@ -1309,9 +1309,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 		}
 	}
 	if (vio->vui_iocb->ki_pos != (pos + io->ci_nob - nob)) {
-		CDEBUG(D_VFSTRACE, "%s: write position mismatch: "
-		       "ki_pos %lld vs. pos %lld, written %ld, commit %ld "
-		       "rc %ld\n",
+		CDEBUG(D_VFSTRACE,
+		       "%s: write position mismatch: ki_pos %lld vs. pos %lld, written %zd, commit %zd: rc = %zd\n",
 		       file_dentry(file)->d_name.name,
 		       vio->vui_iocb->ki_pos, pos + io->ci_nob - nob,
 		       written, io->ci_nob - nob, result);
