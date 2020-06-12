@@ -497,15 +497,28 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 
 	out = data->ioc_bulk;
 	remains = data->ioc_inllen1;
-	for (i = 0; i < count; i++) {
+	/* OBD_FAIL: fetch the catalog records from the specified one */
+	if (OBD_FAIL_CHECK(OBD_FAIL_CATLIST))
+		data->ioc_count = cfs_fail_val - 1;
+	for (i = data->ioc_count; i < count; i++) {
 		id = &idarray[i].lci_logid;
 		l = snprintf(out, remains, "catalog_log: "DFID":%x\n",
-			     PFID(&id->lgl_oi.oi_fid), id->lgl_ogen);
+			      PFID(&id->lgl_oi.oi_fid), id->lgl_ogen);
 		out += l;
 		remains -= l;
-		if (remains <= 0)
-			break;
+		if (remains <= 0) {
+			if (remains < 0) {
+				/* the print is not complete */
+				remains += l;
+				data->ioc_bulk[out - data->ioc_bulk - l] = '\0';
+				data->ioc_count = i;
+			} else {
+				data->ioc_count = i++;
+			}
+			goto out;
+		}
 	}
+	data->ioc_count = 0;
 out:
 	OBD_FREE_LARGE(idarray, size);
 	RETURN(rc);

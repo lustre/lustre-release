@@ -8744,6 +8744,55 @@ test_123ae() { # LU-11566
 }
 run_test 123ae "llog_cancel can cancel requested record"
 
+test_123af() { #LU-13609
+	[ "$MGS_VERSION" -ge $(version_code 2.13.54) -a \
+	   "$MDS1_VERSION" -ge $(version_code 2.13.54) ] ||
+		skip "Need both MGS and MDS version at least 2.13.54"
+
+	[ -d $MOUNT/.lustre ] || setupall
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0" EXIT
+
+	local device
+	local facet
+	local cmd
+	local orig_clist
+	local orig_count
+	local new_clist
+	local new_count
+
+	for device in "MGS" "$FSNAME-MDT0000"; do
+		cmd="--device $device llog_catlist"
+		echo "lctl $cmd ..."
+		if [ "$device" = "MGS" ]; then
+			facet="mgs"
+		else
+			facet="mds1"
+		fi
+		orig_clist=($(do_facet $facet $LCTL $cmd | awk '{ print $2 }'))
+		orig_count=${#orig_clist[@]}
+		echo "orig_clist: ${orig_clist[@]}"
+
+		#define OBD_FAIL_CATLIST 0x131b
+		#fetch to llog records from the second one
+		do_facet $facet $LCTL set_param fail_loc=0x131b fail_val=2
+
+		new_clist=($(do_facet $facet $LCTL $cmd | awk '{ print $2 }'))
+		new_count=${#new_clist[@]}
+		echo "new_clist: ${new_clist[@]}"
+
+		[ $new_count -eq $((orig_count - 1)) ] ||
+			error "$new_count != $orig_count - 1"
+		for i in $(seq 0 $new_count); do
+			j=$((i + 1))
+			[ "${orig_clist[$j]}" = "${new_clist[$i]}" ] ||
+				error "${orig_clist[$j]} != ${new_clist[$i]}"
+		done
+		do_facet mds1 $LCTL set_param fail_loc=0
+		echo "done"
+	done
+}
+run_test 123af "llog_catlist can show all config files correctly"
+
 test_123F() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 

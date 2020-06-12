@@ -2639,25 +2639,38 @@ int jt_llog_catlist(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	char *tmp = NULL;
+	int start = 0;
 	int rc;
 
 	if (argc != 1)
 		return CMD_HELP;
 
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
-	data.ioc_inllen1 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8);
-	memset(buf, 0, sizeof(rawbuf));
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc) {
-		fprintf(stderr, "error: %s: invalid ioctl\n",
-			jt_cmdname(argv[0]));
-		return rc;
-	}
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
-	if (rc == 0)
-		fprintf(stdout, "%s", ((struct obd_ioctl_data *)buf)->ioc_bulk);
-	else
+	do {
+		memset(&data, 0, sizeof(data));
+		data.ioc_dev = cur_device;
+		data.ioc_inllen1 = sizeof(rawbuf) -
+				   __ALIGN_KERNEL(sizeof(data), 8);
+		data.ioc_count = start;
+		memset(buf, 0, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
+		if (rc < 0)
+			break;
+		tmp = ((struct obd_ioctl_data *)buf)->ioc_bulk;
+		if (strlen(tmp) > 0)
+			fprintf(stdout, "%s", tmp);
+		else
+			break;
+		start = ((struct obd_ioctl_data *)buf)->ioc_count;
+	} while (start);
+
+	if (rc < 0)
 		fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
 			strerror(errno));
 
