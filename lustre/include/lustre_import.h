@@ -231,6 +231,9 @@ struct obd_import {
 	atomic_t                  imp_unregistering;
 	/** Number of replay requests inflight */
 	atomic_t                  imp_replay_inflight;
+	/** In-flight replays rate control */
+	wait_queue_head_t	  imp_replay_waitq;
+
 	/** Number of currently happening import invalidations */
 	atomic_t                  imp_inval_count;
 	/** Numbner of request timeouts */

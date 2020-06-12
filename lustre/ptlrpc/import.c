@@ -1537,6 +1537,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
         ENTRY;
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
+		struct task_struct *task;
+
                 deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
                           &target_start, &target_len);
                 /* Don't care about MGC eviction */
@@ -1557,24 +1559,22 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		imp->imp_vbr_failed = 0;
 		spin_unlock(&imp->imp_lock);
 
-		{
-		struct task_struct *task;
 		/* bug 17802:  XXX client_disconnect_export vs connect request
 		 * race. if client is evicted at this time then we start
 		 * invalidate thread without reference to import and import can
 		 * be freed at same time. */
 		class_import_get(imp);
 		task = kthread_run(ptlrpc_invalidate_import_thread, imp,
-				     "ll_imp_inval");
+				   "ll_imp_inval");
 		if (IS_ERR(task)) {
 			class_import_put(imp);
-			CERROR("error starting invalidate thread: %d\n", rc);
 			rc = PTR_ERR(task);
+			CERROR("%s: can't start invalidate thread: rc = %d\n",
+			       imp->imp_obd->obd_name, rc);
 		} else {
 			rc = 0;
 		}
 		RETURN(rc);
-		}
         }
 
 	if (imp->imp_state == LUSTRE_IMP_REPLAY) {
