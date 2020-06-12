@@ -2056,16 +2056,11 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		}
 		for (idx = 0; idx < aa->aa_page_count; idx++) {
 			struct brw_page *pg = aa->aa_ppga[idx];
-			__u64 *p, *q;
 
 			/* do not decrypt if page is all 0s */
-			p = q = page_address(pg->pg);
-			while (p - q < PAGE_SIZE / sizeof(*p)) {
-				if (*p != 0)
-					break;
-				p++;
-			}
-			if (p - q == PAGE_SIZE / sizeof(*p)) {
+			if (memcmp(page_address(pg->pg),
+				   page_address(ZERO_PAGE(0)),
+				   PAGE_SIZE) == 0) {
 				/* if page is empty forward info to upper layers
 				 * (ll_io_zero_page) by clearing PagePrivate2
 				 */
