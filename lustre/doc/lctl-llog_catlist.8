@@ -2,8 +2,9 @@
 .SH NAME
 lctl llog_catlist \- list Lustre configuration log files
 .SH SYNOPSIS
-.B lctl llog_catlist
-
+.B lctl
+[--device <\fIdevice\fR>]
+.B llog_catlist
 .SH DESCRIPTION
 .B lctl llog_catlist
 is used to list the configuration log files on the MGS, or other target.
@@ -21,11 +22,17 @@ parameters are stored in these log files for the specified filesystem.  The
 log file contains the
 .B lctl set_param -P
 parameters for all filesystems serviced by this MGS.
+.SH OPTIONS
+.TP
+.B --device \fIdevice\fR
+The
+.I device
+to be used. By default MGS device is used for this operation.
 .SH EXAMPLES
 .TP
 To list all of the configuration logs on the MGS:
 .br
-# lctl --device MGS llog_catlist
+# lctl llog_catlist
 .br
 config_log: testfs-OST0000
 .br

@@ -8677,11 +8677,15 @@ test_123ab() {
 
 	local yaml
 	local orig_val
+	local mgs_arg=""
+
+	[[ $MGS_VERSION -gt $(version_code 2.13.54) ]] ||
+		mgs_arg="--device MGS"
 
 	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
 	do_facet mgs $LCTL set_param -P jobid_name="TESTNAME"
 
-	yaml=$(do_facet mgs $LCTL --device MGS llog_print params |
+	yaml=$(do_facet mgs $LCTL $mgs_arg llog_print params |
 	       grep jobid_name | tail -n 1)
 
 	local param=$(awk '{ print $10 }' <<< "$yaml")
@@ -8700,12 +8704,16 @@ test_123ac() { # LU-11566
 
 	local start=10
 	local end=50
+	local mgs_arg=""
+
+	[[ $MGS_VERSION -gt $(version_code 2.13.54) ]] ||
+		mgs_arg="--device MGS"
 
 	[ -d $MOUNT/.lustre ] || setup
 
 	# - { index: 10, event: add_uuid, nid: 192.168.20.1@tcp(0x20000c0a81401,
 	#     node: 192.168.20.1@tcp }
-	do_facet mgs $LCTL --device MGS \
+	do_facet mgs $LCTL $mgs_arg \
 		llog_print --start $start --end $end $FSNAME-client | tr -d , |
 		while read DASH BRACE INDEX idx EVENT BLAH BLAH BLAH; do
 		(( idx >= start )) || error "llog_print index $idx < $start"
@@ -8745,26 +8753,30 @@ test_123ae() { # LU-11566
 	[ -d $MOUNT/.lustre ] || setupall
 
 	local max=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
+	local mgs_arg=""
+
+	[[ $MGS_VERSION -gt $(version_code 2.13.54) ]] ||
+		mgs_arg="--device MGS"
 
 	if do_facet mgs "$LCTL help llog_cancel" 2>&1| grep -q -- --log_id; then
 		# save one set_param -P record in case none exist
 		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
 
 		local log=params
-		local orig=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		local orig=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
 			     tail -1 | awk '{ print $4 }' | tr -d , )
 		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
-		do_facet mgs $LCTL --device MGS llog_print $log | tail -1 |
+		do_facet mgs $LCTL $mgs_arg llog_print $log | tail -1 |
 			grep "parameter: osc.*.max_dirty_mb" ||
 			error "new set_param -P wasn't stored in params log"
 
 		# - { index: 71, event: set_param, device: general,
 		#     param: osc.*.max_dirty_mb, value: 256 }
-		local id=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		local id=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
 			   tail -1 | awk '{ print $4 }' | tr -d , )
 
-		do_facet mgs $LCTL --device MGS llog_cancel $log --log_idx=$id
-		local new=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		do_facet mgs $LCTL $mgs_arg llog_cancel $log --log_idx=$id
+		local new=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
 			    tail -1 | awk '{ print $4 }' | tr -d , )
 		(( new == orig )) ||
 			error "new llog_cancel now $new, not at $orig records"

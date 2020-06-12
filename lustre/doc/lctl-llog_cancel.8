@@ -2,8 +2,7 @@
 .SH NAME
 lctl llog_cancel \- cancel a record in a Lustre llog file
 .SH SYNOPSIS
-.B lctl --device
-.RI < device >
+.B lctl
 .B llog_cancel --log_idx
 .RI < index >
 .RI < logname >
@@ -35,11 +34,11 @@ for that log.
 .TP
 To cancel record 15 from the \fBtestfs-client\fR conf_param log:
 .br
-# lctl --device MGS llog_cancel --log_idx=15 testfs-client
+# lctl llog_cancel --log_idx=15 testfs-client
 .TP
 To cancel record 22 from the \fBparams\fR set_param log:
 .br
-# lctl --device MGS llog_cancel --log_idx=22 params
+# lctl llog_cancel --log_idx=22 params
 .SH AVAILABILITY
 .B lctl llog_cancel
 is a subcommand of

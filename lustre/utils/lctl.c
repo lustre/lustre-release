@@ -533,7 +533,8 @@ command_t cmdlist[] = {
 	 "usage: recover [MDC/OSC device]"},
 	/* Llog operations */
 	{"llog_catlist", jt_llog_catlist, 0,
-	 "list all catalog files on current device.\n"
+	 "list all catalog files on current device. If current device is not\n"
+	 "set, MGS device is used by default.\n"
 	 "usage: llog_catlist"},
 	{"llog_info", jt_llog_info, 0,
 	 "print log header information.\n"

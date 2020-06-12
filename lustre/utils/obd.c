@@ -2635,6 +2635,30 @@ int jt_lcfg_erase(int argc, char **argv)
 	return rc;
 }
 
+enum llog_default_dev_op {
+	LLOG_DFLT_MGS_SET = 0,
+	LLOG_DFLT_DEV_RESET
+};
+
+static int llog_default_device(enum llog_default_dev_op op)
+{
+	int rc = 0;
+	static int dflt_dev = -1;
+
+	if (op == LLOG_DFLT_MGS_SET && (cur_device == -1)) {
+		char mgs[] = "$MGS";
+
+		rc = do_device("llog_default_device", mgs);
+		dflt_dev = cur_device;
+
+	} else if (op == LLOG_DFLT_DEV_RESET && (dflt_dev != -1)) {
+		do_disconnect(NULL, 1);
+		dflt_dev = -1;
+	}
+
+	return rc;
+}
+
 int jt_llog_catlist(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
@@ -2645,6 +2669,9 @@ int jt_llog_catlist(int argc, char **argv)
 
 	if (argc != 1)
 		return CMD_HELP;
+
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
 
 	do {
 		memset(&data, 0, sizeof(data));
@@ -2657,7 +2684,7 @@ int jt_llog_catlist(int argc, char **argv)
 		if (rc) {
 			fprintf(stderr, "error: %s: invalid ioctl\n",
 				jt_cmdname(argv[0]));
-			return rc;
+			goto err;
 		}
 		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
 		if (rc < 0)
@@ -2673,6 +2700,9 @@ int jt_llog_catlist(int argc, char **argv)
 	if (rc < 0)
 		fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
 			strerror(errno));
+
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 
 	return rc;
 }
@@ -2715,6 +2745,10 @@ int jt_llog_info(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	/* Manage default device */
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
+
 	data.ioc_dev = cur_device;
 	data.ioc_inllen1 = strlen(catalog) + 1;
 	data.ioc_inlbuf1 = catalog;
@@ -2724,7 +2758,7 @@ int jt_llog_info(int argc, char **argv)
 	if (rc) {
 		fprintf(stderr, "%s: ioctl_pack failed for catalog '%s': %s\n",
 			jt_cmdname(cmd), catalog, strerror(-rc));
-		return rc;
+		goto err;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_INFO, buf);
@@ -2733,6 +2767,9 @@ int jt_llog_info(int argc, char **argv)
 	else
 		fprintf(stderr, "%s: OBD_IOC_LLOG_INFO failed: %s\n",
 			jt_cmdname(cmd), strerror(errno));
+
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 
 	return rc;
 }
@@ -2999,8 +3036,13 @@ int jt_llog_print(int argc, char **argv)
 	if (rc)
 		return rc;
 
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
+
 	rc = jt_llog_print_iter(catalog, start, end, jt_llog_print_cb,
 				NULL, false);
+
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 
 	return rc;
 }
@@ -3075,6 +3117,10 @@ int jt_llog_cancel(int argc, char **argv)
 	char *cmd = argv[0];
 	int rc;
 
+	/* Manage default device */
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
+
 	/* Parse catalog file (in inlbuf1) and named parameters */
 	rc = llog_parse_catalog_log_idx(&argc, &argv, "c:hi:l:", 3, &data);
 
@@ -3094,15 +3140,17 @@ int jt_llog_cancel(int argc, char **argv)
 		data.ioc_inlbuf3 = argv[1];
 	}
 
-	if (!data.ioc_inlbuf1 || !data.ioc_inlbuf3)
+	if (!data.ioc_inlbuf1 || !data.ioc_inlbuf3) {
 		/* missing mandatory parameters */
-		return CMD_HELP;
+		rc = CMD_HELP;
+		goto err;
+	}
 
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "%s: ioctl_pack for catalog '%s' failed: %s\n",
 			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
-		return rc;
+		goto err;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CANCEL, buf);
@@ -3111,6 +3159,8 @@ int jt_llog_cancel(int argc, char **argv)
 			jt_cmdname(cmd), data.ioc_inlbuf1, data.ioc_inlbuf3,
 			strerror(errno));
 
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 	return rc;
 }
 
@@ -3127,6 +3177,9 @@ int jt_llog_check(int argc, char **argv)
 	rc = llog_parse_catalog_start_end(&argc, &argv, &catalog, &start, &end);
 	if (rc)
 		return rc;
+
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
 
 	if (end == -1)
 		end = 0x7fffffff;
@@ -3151,7 +3204,7 @@ int jt_llog_check(int argc, char **argv)
 	if (rc) {
 		fprintf(stderr, "%s: ioctl_pack failed for catalog '%s': %s\n",
 			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
-		return rc;
+		goto err;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CHECK, buf);
@@ -3160,6 +3213,8 @@ int jt_llog_check(int argc, char **argv)
 	else
 		fprintf(stderr, "%s: OBD_IOC_LLOG_CHECK failed: %s\n",
 			jt_cmdname(cmd), strerror(errno));
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 	return rc;
 }
 
@@ -3170,26 +3225,31 @@ int jt_llog_remove(int argc, char **argv)
 	char *cmd = argv[0];
 	int rc;
 
+	if (llog_default_device(LLOG_DFLT_MGS_SET))
+		return CMD_INCOMPLETE;
+
 	rc = llog_parse_catalog_log_idx(&argc, &argv, "c:hl:", 2, &data);
 	if (rc)
-		return rc;
+		goto err;
 
 	if (argc == 1) {
 		if (data.ioc_inlbuf2) {
 			fprintf(stderr,
 				"%s: --log_id is set, unknown argument '%s'\n",
 				jt_cmdname(cmd), argv[0]);
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto err;
 		}
 
 		data.ioc_inllen2 = strlen(argv[0]) + 1;
 		data.ioc_inlbuf2 = argv[0];
 	}
+
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "%s: ioctl_pack for catalog '%s' failed: %s\n",
 			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
-		return rc;
+		goto err;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_REMOVE, buf);
@@ -3198,6 +3258,8 @@ int jt_llog_remove(int argc, char **argv)
 			jt_cmdname(cmd), data.ioc_inlbuf1, data.ioc_inlbuf2,
 			strerror(-rc));
 
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
 	return rc;
 }
 

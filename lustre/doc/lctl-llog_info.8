@@ -10,18 +10,18 @@ lctl llog_info \- print information about a Lustre configuration log
 is used to print information about the configuration log given by
 .IR logname .
 .SH OPTIONS
-.B logname
+.TP
+.I logname
 The name of the configuration log, in the form
 .IR fsname - target ,
-like
-.B testfs-client
-or
-.BR lustrefs-MDT0000 .
+like \fBtestfs-client\fR or \fBlustrefs-MDT0000\fR. See
+.BR lctl-llog_catlist (8)
+for a list of configuration logs.
 .SH EXAMPLES
 .TP
 To print all of the records from the testfs-client configuration log:
 .br
-# lctl --device MGS llog_info testfs-client
+# lctl llog_info testfs-client
 .br
 logid:            [0x4:0xa:0x0]:0
 .br

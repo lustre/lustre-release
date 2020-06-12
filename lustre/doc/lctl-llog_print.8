@@ -51,7 +51,7 @@ index number.
 .TP
 To print the configuration records from the \fBtestfs-client\fR logfile:
 .br
-# lctl --device MGS llog_print testfs-client
+# lctl llog_print testfs-client
 .br
 - { index: 3, event: attach, device: testfs-clilov, type: lov,
 .br
@@ -74,7 +74,7 @@ To print the configuration records from the \fBtestfs-client\fR logfile:
 :
 .TP
 To print the first 10 \fBset_param -P\fR records from \fBparams\fR:
-# lctl --device MGS llog_print --end=10 params
+# lctl llog_print --end=10 params
 .br
 - { index: 2, event: set_param, device: general, parameter: osc.*.max_dirty_mb, value: 32 }
 .br
