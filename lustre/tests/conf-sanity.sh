@@ -6311,23 +6311,15 @@ test_86() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need server version newer than 2.7.55"
 
-	local OST_OPTS="$(mkfs_opts ost1 $(ostdevname 1)) \
-		--reformat $(ostdevname 1) $(ostvdevname 1)"
-
 	local NEWSIZE=1024
 	local OLDSIZE=$(do_facet ost1 "$DEBUGFS -c -R stats $(ostdevname 1)" |
 		awk '/Flex block group size: / { print $NF; exit; }')
 
-	local opts=OST_OPTS
-	if [[ ${!opts} != *mkfsoptions* ]]; then
-		eval opts=\"${!opts} \
-			--mkfsoptions='\\\"-O flex_bg -G $NEWSIZE\\\"'\"
-	else
-		val=${!opts//--mkfsoptions=\\\"/ \
-			--mkfsoptions=\\\"-O flex_bg -G $NEWSIZE }
-		eval opts='${val}'
-	fi
+	[ "$OLDSIZE" == "$NEWSIZE" ] && skip "$NEWSIZE groups already"
 
+	local opts=" -O flex_bg -G $NEWSIZE"
+	opts=$(OST_FS_MKFS_OPTS+="$opts" mkfs_opts ost1 $(ostdevname 1))
+	opts+=" --reformat $(ostdevname 1) $(ostvdevname 1)"
 	echo "params: $opts"
 
 	trap cleanup_86 EXIT ERR

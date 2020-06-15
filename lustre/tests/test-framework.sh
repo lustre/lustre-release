@@ -4649,6 +4649,8 @@ mkfs_opts() {
 	var=${type}_FS_MKFS_OPTS
 	fs_mkfs_opts+=${!var:+" ${!var}"}
 
+	[[ "$QUOTA_TYPE" =~ "p" ]] && fs_mkfs_opts+=" -O project"
+
 	[ $fstype == ldiskfs ] && fs_mkfs_opts=$(squash_opt $fs_mkfs_opts)
 
 	if [ -n "${fs_mkfs_opts## }" ]; then
