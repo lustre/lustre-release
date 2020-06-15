@@ -29,10 +29,13 @@
  *
  * Access log entry batching for ofd_access_log_reader.
  */
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <assert.h>
 #include <malloc.h>
+#include <unistd.h>
+#include <pthread.h>
 #include <linux/lustre/lustre_access_log.h>
 #include <linux/lustre/lustre_fid.h>
 #include <linux/lustre/lustre_idl.h>
@@ -42,15 +45,15 @@
 #include "ofd_access_batch.h"
 
 /* XXX Weird param order to be consistent with list_replace_init(). */
-static inline void hlist_replace_init(struct hlist_node *old_node,
-				struct hlist_node *new_node)
+static inline void list_replace_init(struct list_head *old_node,
+				struct list_head *new_node)
 {
-	hlist_add_before(new_node, old_node);
-	hlist_del_init(old_node);
+	list_add(new_node, old_node);
+	list_del_init(old_node);
 }
 
 struct fid_hash_node {
-	struct hlist_node fhn_node;
+	struct list_head fhn_node;
 	struct lu_fid fhn_fid;
 };
 
@@ -118,45 +121,44 @@ static unsigned long fid_hash(const struct lu_fid *f, unsigned int shift)
 
 static void fhn_init(struct fid_hash_node *fhn, const struct lu_fid *fid)
 {
-	INIT_HLIST_NODE(&fhn->fhn_node);
+	INIT_LIST_HEAD(&fhn->fhn_node);
 	fhn->fhn_fid = *fid;
 }
 
-static bool fhn_is_hashed(const struct fid_hash_node *fhn)
+static bool fhn_is_hashed(struct fid_hash_node *fhn)
 {
-	return !hlist_unhashed(&fhn->fhn_node);
+	return !list_empty(&fhn->fhn_node);
 }
 
 static void fhn_del_init(struct fid_hash_node *fhn)
 {
 	if (fhn_is_hashed(fhn))
-		hlist_del_init(&fhn->fhn_node);
+		list_del_init(&fhn->fhn_node);
 }
 
 static inline void fhn_replace_init(struct fid_hash_node *old_fhn,
 				struct fid_hash_node *new_fhn)
 {
-	hlist_add_before(&new_fhn->fhn_node, &old_fhn->fhn_node);
-	hlist_del_init(&old_fhn->fhn_node);
+	list_add(&new_fhn->fhn_node, &old_fhn->fhn_node);
+	list_del_init(&old_fhn->fhn_node);
 }
 
-void fid_hash_add(struct hlist_head *head, unsigned int shift,
+void fid_hash_add(struct list_head *head, unsigned int shift,
 		struct fid_hash_node *fhn)
 {
 	assert(!fhn_is_hashed(fhn));
 
-	hlist_add_head(&fhn->fhn_node, &head[fid_hash(&fhn->fhn_fid, shift)]);
+	list_add(&fhn->fhn_node, &head[fid_hash(&fhn->fhn_fid, shift)]);
 }
 
 struct fid_hash_node *
-fid_hash_find(struct hlist_head *head, unsigned int shift, const struct lu_fid *fid)
+fid_hash_find(struct list_head *head, unsigned int shift, const struct lu_fid *fid)
 {
-	struct hlist_head *hash_list;
-	struct hlist_node *node, *next;
-	struct fid_hash_node *fhn;
+	struct list_head *hash_list;
+	struct fid_hash_node *fhn, *next;
 
 	hash_list = &head[fid_hash(fid, shift)];
-	hlist_for_each_entry_safe(fhn, node, next, hash_list, fhn_node) {
+	list_for_each_entry_safe(fhn, next, hash_list, fhn_node) {
 		assert(fhn_is_hashed(fhn));
 
 		if (fid_eq(fid, &fhn->fhn_fid))
@@ -167,28 +169,27 @@ fid_hash_find(struct hlist_head *head, unsigned int shift, const struct lu_fid *
 }
 
 struct fid_hash_node *
-fid_hash_insert(struct hlist_head *head, unsigned int shift, struct fid_hash_node *new_fhn)
+fid_hash_insert(struct list_head *head, unsigned int shift, struct fid_hash_node *new_fhn)
 {
-	struct hlist_head *list;
-	struct hlist_node *node, *next;
-	struct fid_hash_node *old_fhn;
+	struct list_head *list;
+	struct fid_hash_node *old_fhn, *next;
 
 	list = &head[fid_hash(&new_fhn->fhn_fid, shift)];
-	hlist_for_each_entry_safe(old_fhn, node, next, list, fhn_node) {
+	list_for_each_entry_safe(old_fhn, next, list, fhn_node) {
 		assert(fhn_is_hashed(old_fhn));
 
 		if (fid_eq(&old_fhn->fhn_fid, &new_fhn->fhn_fid))
 			return old_fhn;
 	}
 
-	hlist_add_head(&new_fhn->fhn_node, list);
+	list_add(&new_fhn->fhn_node, list);
 
 	return new_fhn;
 }
 
-int fid_hash_init(struct hlist_head **phead, unsigned int *pshift, unsigned int shift)
+int fid_hash_init(struct list_head **phead, unsigned int *pshift, unsigned int shift)
 {
-	struct hlist_head *new_head;
+	struct list_head *new_head;
 	unsigned int i;
 
 	new_head = malloc(sizeof(*new_head) << shift);
@@ -196,7 +197,7 @@ int fid_hash_init(struct hlist_head **phead, unsigned int *pshift, unsigned int 
 		return -1;
 
 	for (i = 0; i < (1 << shift); i++)
-		INIT_HLIST_HEAD(&new_head[i]);
+		INIT_LIST_HEAD(&new_head[i]);
 
 	*phead = new_head;
 	*pshift = shift;
@@ -204,9 +205,9 @@ int fid_hash_init(struct hlist_head **phead, unsigned int *pshift, unsigned int 
 	return 0;
 }
 
-int fid_hash_resize(struct hlist_head **phead, unsigned int *pshift, unsigned int new_shift)
+int fid_hash_resize(struct list_head **phead, unsigned int *pshift, unsigned int new_shift)
 {
-	struct hlist_head *new_head;
+	struct list_head *new_head;
 	unsigned int i;
 	int rc;
 
@@ -218,11 +219,10 @@ int fid_hash_resize(struct hlist_head **phead, unsigned int *pshift, unsigned in
 		return rc;
 
 	for (i = 0; i < (1 << *pshift); i++) {
-		struct hlist_head *list = &(*phead)[i];
-		struct hlist_node *node, *next;
-		struct fid_hash_node *fhn;
+		struct list_head *list = &(*phead)[i];
+		struct fid_hash_node *fhn, *next;
 
-		hlist_for_each_entry_safe(fhn, node, next, list, fhn_node) {
+		list_for_each_entry_safe(fhn, next, list, fhn_node) {
 			fhn_del_init(fhn);
 			fid_hash_add(new_head, new_shift, fhn);
 		}
@@ -258,7 +258,7 @@ enum {
 };
 
 struct alr_batch {
-	struct hlist_head *alrb_hash;
+	struct list_head *alrb_hash;
 	unsigned int alrb_hash_shift;
 	unsigned int alrb_count;
 };
@@ -323,51 +323,131 @@ out:
 	return rc;
 }
 
-/* Print, clear, and resize the batch. */
-int alr_batch_print(struct alr_batch *alrb, FILE *file)
+int sort_compare(const void *a1, const void *a2)
 {
-	unsigned int i;
-	unsigned int new_hash_shift;
-	int rc = 0;
+	int l = *(const int*)a1;
+	int r = *(const int *)a2;
+	if (l > r) return -1;
+	if (l < r) return  1;
+	return 0;
+}
 
-	if (alrb == NULL)
-		return 0;
+static void alre_printf(FILE *f, struct alr_entry *alre, int d)
+{
+	fprintf(f, "%s "DFID" %lld %llu %llu %llu %llu %llu %c\n",
+		alre->alre_obd_name,
+		PFID(&alre->alre_fid_hash_node.fhn_fid),
+		(long long)alre->alre_time[d],
+		(unsigned long long)alre->alre_begin[d],
+		(unsigned long long)alre->alre_end[d],
+		(unsigned long long)alre->alre_size[d],
+		(unsigned long long)alre->alre_segment_count[d],
+		(unsigned long long)alre->alre_count[d],
+		(d == ALR_READ) ? 'r' : 'w');
+}
 
-	for (i = 0; i < (1 << alrb->alrb_hash_shift); i++) {
-		struct hlist_head *list = &alrb->alrb_hash[i];
-		struct hlist_node *node, *next;
-		struct alr_entry *alre;
+struct alr_thread_arg {
+	struct list_head list;
+	int fraction;
+	FILE *file;
+};
 
-		hlist_for_each_entry_safe(alre, node, next, list,
-					alre_fid_hash_node.fhn_node) {
-			unsigned int d;
+void *alr_sort_and_print_thread(void *arg)
+{
+	struct alr_entry *alre, *next;
+	struct alr_thread_arg *aa = arg;
+	struct list_head *tmp = &aa->list;
+	int *sa, d, i, nr = 0;
+	unsigned long cut;
 
+	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
+		if (alre->alre_count[0] > 0)
+			nr++;
+		if (alre->alre_count[1] > 0)
+			nr++;
+	}
+	if (nr) {
+		sa = calloc(sizeof(int), nr);
+		if (!sa) {
+			fprintf(stderr, "cannot allocate memory for sorting\n");
+			exit(1);
+		}
+		i = 0;
+		list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
+			if (alre->alre_count[0] > 0)
+				sa[i++] = alre->alre_count[0];
+			if (alre->alre_count[1] > 0)
+				sa[i++] = alre->alre_count[1];
+		}
+		qsort(sa, nr, sizeof(int), sort_compare);
+		i = nr * aa->fraction / 100;
+		if (i > 0)
+			i--;
+		cut = sa[i];
+		if (cut < 1)
+			cut = 1;
+		free(sa);
+
+		/* there might be lots of items at @cut, but we want to limit total
+		 * output. so the first loop dumps all items > @cut and the second
+		 * loop dumps items=@cut so that total number (@i) is not exceeeded.
+		 * XXX: possible optimization - move items=@cut to another list, so
+		 * that 2nd pass takes < O(n) */
+		list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
 			for (d = 0; d < 2; d++) {
-				int rc2;
-
-				if (alre->alre_count[d] == 0)
+				if (alre->alre_count[d] <= cut)
 					continue;
-
-				/* stdio stream error state is sticky. */
-				rc2 = fprintf(file,
-					"%s "DFID" %lld %llu %llu %llu %llu %llu %c\n",
-					alre->alre_obd_name,
-					PFID(&alre->alre_fid_hash_node.fhn_fid),
-					(long long)alre->alre_time[d],
-					(unsigned long long)alre->alre_begin[d],
-					(unsigned long long)alre->alre_end[d],
-					(unsigned long long)alre->alre_size[d],
-					(unsigned long long)alre->alre_segment_count[d],
-					(unsigned long long)alre->alre_count[d],
-					(d == ALR_READ) ? 'r' : 'w');
-				if (rc2 < 0)
-					rc = rc2;
+				alre_printf(aa->file, alre, d);
+				i--;
 			}
-
+		}
+		list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
+			for (d = 0; d < 2 && i > 0; d++) {
+				if (alre->alre_count[d] != cut)
+					continue;
+				alre_printf(aa->file, alre, d);
+				i--;
+			}
 			alre_del_init(alre);
 			free(alre);
 		}
 	}
+
+	free(aa);
+	pthread_exit((void *)0);
+
+	return 0;
+}
+
+/* Print, clear, and resize the batch. */
+int alr_batch_print(struct alr_batch *alrb, FILE *file, int fraction)
+{
+	unsigned int new_hash_shift;
+	struct alr_thread_arg *aa;
+	pthread_t pid;
+	int i, rc;
+
+	if (alrb == NULL)
+		return 0;
+
+	aa = malloc(sizeof(*aa));
+	if (!aa)
+		return -ENOMEM;
+
+	/* move all collected items to the temp list */
+	INIT_LIST_HEAD(&aa->list);
+	for (i = 0; i < (1 << alrb->alrb_hash_shift); i++) {
+		if (list_empty(&alrb->alrb_hash[i]))
+			continue;
+		list_splice(&alrb->alrb_hash[i], &aa->list);
+		INIT_LIST_HEAD(&alrb->alrb_hash[i]);
+	}
+	aa->file = file;
+	aa->fraction = fraction;
+
+	/* as sorting may take time and we don't want to lose access
+	 * records we better do sorting and printing in a different thread */
+	rc = pthread_create(&pid, NULL, alr_sort_and_print_thread, aa);
 
 	/* Resize hash based on previous count. */
 	new_hash_shift = alrb->alrb_hash_shift;
@@ -413,11 +493,10 @@ void alr_batch_destroy(struct alr_batch *alrb)
 		return;
 
 	for (i = 0; i < (1 << alrb->alrb_hash_shift); i++) {
-		struct hlist_head *list = &alrb->alrb_hash[i];
-		struct hlist_node *node, *next;
-		struct alr_entry *alre;
+		struct list_head *list = &alrb->alrb_hash[i];
+		struct alr_entry *alre, *next;
 
-		hlist_for_each_entry_safe(alre, node, next, list, alre_fid_hash_node.fhn_node) {
+		list_for_each_entry_safe(alre, next, list, alre_fid_hash_node.fhn_node) {
 			alre_del_init(alre);
 			free(alre);
 		}

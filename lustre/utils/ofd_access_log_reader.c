@@ -128,6 +128,7 @@ static unsigned int oal_log_minor_max;
 static struct alr_batch *alr_batch;
 static FILE *alr_batch_file;
 static const char *alr_batch_file_path;
+static int alr_print_fraction = 100;
 
 #define D_ALR_DEV "%s %d"
 #define P_ALR_DEV(ad) \
@@ -498,7 +499,7 @@ static int alr_batch_timer_io(int epoll_fd, struct alr_dev *td, unsigned int mas
 
 	DEBUG_U(expire_count);
 
-	rc = alr_batch_print(alr_batch, alr_batch_file);
+	rc = alr_batch_print(alr_batch, alr_batch_file, alr_print_fraction);
 	if (rc < 0) {
 		ERROR("cannot write to '%s': %s\n",
 			alr_batch_file_path, strerror(errno));
@@ -629,12 +630,13 @@ int main(int argc, char *argv[])
 		{ .name = "batch-offset", .has_arg = required_argument, .val = 'o', },
 		{ .name = "debug", .has_arg = optional_argument, .val = 'd', },
 		{ .name = "help", .has_arg = no_argument, .val = 'h', },
+		{ .name = "fraction", .has_arg = required_argument, .val = 'F', },
 		{ .name = "list", .has_arg = no_argument, .val = 'l', },
 		{ .name = "trace", .has_arg = optional_argument, .val = 't', },
 		{ .name = NULL, },
 	};
 
-	while ((c = getopt_long(argc, argv, "d::f:hi:lt::", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d::f:F:hi:lt::", options, NULL)) != -1) {
 		switch (c) {
 		case 'f':
 			alr_batch_file_path = optarg;
@@ -669,6 +671,11 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage();
 			exit(EXIT_SUCCESS);
+		case 'F':
+			alr_print_fraction = strtoll(optarg, NULL, 0);
+			if (alr_print_fraction < 1 || alr_print_fraction > 100)
+				FATAL("invalid batch offset '%s'\n", optarg);
+			break;
 		case 'l':
 			list_info = 1;
 			break;

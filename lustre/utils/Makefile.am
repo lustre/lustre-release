@@ -140,6 +140,7 @@ ofd_access_log_reader_SOURCES = \
 	ofd_access_batch.c \
 	ofd_access_batch.h \
 	ofd_access_log_reader.c
+ofd_access_log_reader_LDADD := -lpthread
 
 if UTILS
 
