@@ -7477,7 +7477,8 @@ static void osd_key_fini(const struct lu_context *ctx,
 				__free_page(page);
 			}
 		}
-		OBD_FREE_PTR_ARRAY(info->oti_dio_pages, PTLRPC_MAX_BRW_PAGES);
+		OBD_FREE_PTR_ARRAY_LARGE(info->oti_dio_pages,
+					 PTLRPC_MAX_BRW_PAGES);
 	}
 
 	if (info->oti_inode != NULL)
