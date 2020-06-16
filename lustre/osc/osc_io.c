@@ -698,14 +698,17 @@ void osc_io_setattr_end(const struct lu_env *env,
 
 	if (cl_io_is_trunc(io)) {
 		__u64 size = io->u.ci_setattr.sa_attr.lvb_size;
-		cl_object_attr_lock(obj);
-		if (oa->o_valid & OBD_MD_FLBLOCKS) {
-			attr->cat_blocks = oa->o_blocks;
-			cl_valid |= CAT_BLOCKS;
-		}
 
-		cl_object_attr_update(env, obj, attr, cl_valid);
-		cl_object_attr_unlock(obj);
+		if (result == 0) {
+			cl_object_attr_lock(obj);
+			if (oa->o_valid & OBD_MD_FLBLOCKS) {
+				attr->cat_blocks = oa->o_blocks;
+				cl_valid |= CAT_BLOCKS;
+			}
+
+			cl_object_attr_update(env, obj, attr, cl_valid);
+			cl_object_attr_unlock(obj);
+		}
 		osc_trunc_check(env, io, oio, size);
 		osc_cache_truncate_end(env, oio->oi_trunc);
 		oio->oi_trunc = NULL;
