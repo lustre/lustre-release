@@ -2932,10 +2932,10 @@ test_51b() {
 
 	# delay glimpse so that layout has changed when glimpse finish
 #define OBD_FAIL_GLIMPSE_DELAY 0x1404
-	$LCTL set_param fail_loc=0x1404
+	$LCTL set_param fail_loc=0x1404 fail_val=4
 	stat -c %s $DIR2/$tfile |tee $tmpfile &
 	local pid=$!
-	sleep 1
+	sleep 0.2
 
 	# extend layout of testing file
 	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=1 seek=2 conv=notrunc ||
