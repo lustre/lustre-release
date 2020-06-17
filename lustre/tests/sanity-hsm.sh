@@ -84,7 +84,7 @@ CLIENT2=${CLIENT2:-$CLIENT1}
 
 search_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
-	do_nodesv $hosts "libtool execute pgrep -x $HSMTOOL"
+	do_nodesv $hosts "pgrep -x $HSMTOOL_PKILL"
 }
 
 wait_copytools() {
@@ -170,8 +170,8 @@ copytool_suspend() {
 	local agents=${1:-$(facet_active_host $SINGLEAGT)}
 
 	stack_trap \
-		"do_nodesv $agents libtool execute pkill -CONT -x '$HSMTOOL' || true" EXIT
-	do_nodesv $agents "libtool execute pkill -STOP -x $HSMTOOL" || return 0
+		"do_nodesv $agents pkill -CONT -x '$HSMTOOL_PKILL' || true" EXIT
+	do_nodesv $agents "pkill -STOP -x $HSMTOOL_PKILL" || return 0
 	echo "Copytool is suspended on $agents"
 }
 
@@ -489,7 +489,7 @@ get_agent_uuid() {
 
 	# Lustre mount-point is mandatory and last parameter on
 	# copytool cmd-line.
-	local mntpnt=$(do_rpc_nodes $agent libtool execute ps -C $HSMTOOL -o args= |
+	local mntpnt=$(do_rpc_nodes $agent ps -C $HSMTOOL_KILL -o args= |
 		       awk '{print $NF}')
 	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
 				  "parameter"

@@ -10034,6 +10034,15 @@ init_agt_vars() {
 	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
 	export HSMTOOL_TESTDIR
 
+	# Copytools invoked from within the source tree are executed through a
+	# libtool script and have a different process name
+	from_build_tree && LIBTOOL_PREFIX=lt-
+
+	export HSMTOOL_KILL=${LIBTOOL_PREFIX}${HSMTOOL}
+
+	# pgrep(1) and pkill(1) limit process name matching to 15 characters
+	export HSMTOOL_PKILL=${HSMTOOL_KILL:0:15}
+
 	HSM_ARCHIVE_NUMBER=2
 
 	# The test only support up to 10 MDTs
@@ -10069,7 +10078,7 @@ get_mdt_devices() {
 copytool_continue() {
 	local agents=${1:-$(facet_active_host $SINGLEAGT)}
 
-	do_nodesv $agents "libtool execute pkill -CONT -x $HSMTOOL" || return 0
+	do_nodesv $agents "pkill -CONT -x $HSMTOOL_PKILL" || return 0
 	echo "Copytool is continued on $agents"
 }
 
@@ -10077,7 +10086,7 @@ kill_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
 
 	echo "Killing existing copytools on $hosts"
-	do_nodesv $hosts "libtool execute killall -q $HSMTOOL" || true
+	do_nodesv $hosts "killall -q $HSMTOOL_KILL" || true
 	copytool_continue "$hosts"
 }
 
@@ -10133,7 +10142,7 @@ __lhsmtool_setup()
 	cmd+=" \"$mountpoint\""
 
 	echo "Starting copytool $facet on $(facet_host $facet)"
-	stack_trap "do_facet $facet libtool execute pkill -x '$HSMTOOL' || true" EXIT
+	stack_trap "do_facet $facet pkill -x '$HSMTOOL_PKILL' || true" EXIT
 	do_facet $facet "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
 }
 
