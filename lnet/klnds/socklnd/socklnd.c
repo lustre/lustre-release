@@ -411,12 +411,14 @@ ksocknal_add_route_locked(struct ksock_peer_ni *peer_ni, struct ksock_route *rou
 	struct list_head *tmp;
 	struct ksock_conn *conn;
 	struct ksock_route *route2;
+	struct ksock_net *net = peer_ni->ksnp_ni->ni_data;
 
 	LASSERT(!peer_ni->ksnp_closing);
 	LASSERT(route->ksnr_peer == NULL);
 	LASSERT(!route->ksnr_scheduled);
 	LASSERT(!route->ksnr_connecting);
 	LASSERT(route->ksnr_connected == 0);
+	LASSERT(net->ksnn_ninterfaces > 0);
 
 	/* LASSERT(unique) */
 	list_for_each(tmp, &peer_ni->ksnp_routes) {
@@ -432,6 +434,11 @@ ksocknal_add_route_locked(struct ksock_peer_ni *peer_ni, struct ksock_route *rou
 
 	route->ksnr_peer = peer_ni;
 	ksocknal_peer_addref(peer_ni);
+
+	/* set the route's interface to the current net's interface */
+	route->ksnr_myiface = net->ksnn_interfaces[0].ksni_index;
+	net->ksnn_interfaces[0].ksni_nroutes++;
+
 	/* peer_ni's routelist takes over my ref on 'route' */
 	list_add_tail(&route->ksnr_list, &peer_ni->ksnp_routes);
 
@@ -2668,6 +2675,7 @@ ksocknal_startup(struct lnet_ni *ni)
 		net->ksnn_ninterfaces = 1;
 		ni->ni_dev_cpt = ifaces[0].li_cpt;
 		ksi->ksni_ipaddr = ifaces[0].li_ipaddr;
+		ksi->ksni_index = ksocknal_ip2index(ksi->ksni_ipaddr, ni);
 		ksi->ksni_netmask = ifaces[0].li_netmask;
 		strlcpy(ksi->ksni_name, ifaces[0].li_name,
 			sizeof(ksi->ksni_name));
@@ -2707,6 +2715,8 @@ ksocknal_startup(struct lnet_ni *ni)
 				ksi = &net->ksnn_interfaces[j];
 				ni->ni_dev_cpt = ifaces[j].li_cpt;
 				ksi->ksni_ipaddr = ifaces[j].li_ipaddr;
+				ksi->ksni_index =
+				  ksocknal_ip2index(ksi->ksni_ipaddr, ni);
 				ksi->ksni_netmask = ifaces[j].li_netmask;
 				strlcpy(ksi->ksni_name, ifaces[j].li_name,
 					sizeof(ksi->ksni_name));
