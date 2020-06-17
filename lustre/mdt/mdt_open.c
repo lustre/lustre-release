@@ -867,8 +867,8 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			GOTO(out, rc = -EPROTO);
 		}
 
-		/* XXX: only exclusive open is supported. */
-		lm = LCK_EX;
+		/* should conflict with new opens for write/execute */
+		lm = LCK_PW;
 		*ibits = MDS_INODELOCK_OPEN;
 
 		/* never grant LCK_EX layout lock to client */
@@ -986,8 +986,11 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			PFID(mdt_object_fid(obj)),
 			atomic_read(&obj->mot_open_count), open_count);
 
-		if (atomic_read(&obj->mot_open_count) > open_count)
-			GOTO(out, rc = -EBUSY);
+		if (atomic_read(&obj->mot_open_count) > open_count) {
+			/* fail if anyone *else* has opened file for write */
+			if (mdt_write_read(obj) > 1)
+				GOTO(out, rc = -EBUSY);
+		}
 	}
 	GOTO(out, rc);
 

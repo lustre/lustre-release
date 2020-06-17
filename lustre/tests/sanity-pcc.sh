@@ -1048,7 +1048,7 @@ test_12() {
 	sleep 3
 	wait_request_state $(path2fid $file) RESTORE SUCCEED
 	$LFS hsm_remove $file || error "hsm remove $file failed"
-	wait $pid && error "RW-PCC attach $file should fail"
+	wait $pid
 	do_facet $SINGLEAGT "[ -f $lpcc_path ]"	&&
 		error "RW-PCC cached file '$lpcc_path' should be removed"
 
