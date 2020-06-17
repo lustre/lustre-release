@@ -769,22 +769,12 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
                 name++;
 
         sscanf(name, SFID, RFID(f));
-        if (!fid_is_sane(f)) {
-		CWARN("%s: Trying to lookup invalid FID [%s] in %s/%s, FID "
-		      "format should be "DFID"\n", mdd2obd_dev(mdd)->obd_name,
-		      lname->ln_name, dot_lustre_name, mdd_obf_dir_name,
-		      (__u64)FID_SEQ_NORMAL, 1, 0);
-                GOTO(out, rc = -EINVAL);
-        }
+	if (!fid_is_sane(f))
+		GOTO(out, rc = -ENOENT);
 
 	if (!fid_is_norm(f) && !fid_is_igif(f) && !fid_is_root(f) &&
-	    !fid_seq_is_dot(f->f_seq)) {
-		CWARN("%s: Trying to lookup invalid FID "DFID" in %s/%s, sequence should be >= %#llx or within [%#llx, %#llx].\n",
-		      mdd2obd_dev(mdd)->obd_name, PFID(f),
-		      dot_lustre_name, mdd_obf_dir_name, (__u64)FID_SEQ_NORMAL,
-		      (__u64)FID_SEQ_IGIF, (__u64)FID_SEQ_IGIF_MAX);
-		GOTO(out, rc = -EINVAL);
-	}
+	    !fid_seq_is_dot(f->f_seq))
+		GOTO(out, rc = -ENOENT);
 
         /* Check if object with this fid exists */
         child = mdd_object_find(env, mdd, f);
