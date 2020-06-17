@@ -159,9 +159,10 @@ static char const printf_flags[] = "'-+ #0I";
 static char const fmt_terse_fs[] = "%n %i %l %t %s %S %b %f %a %c %d\n";
 static char const fmt_terse_regular[] = "%n %s %b %f %u %g %D %i %h %t %T"
 					" %X %Y %Z %W %o\n";
+#ifdef HAVE_SELINUX
 static char const fmt_terse_selinux[] = "%n %s %b %f %u %g %D %i %h %t %T"
 					" %X %Y %Z %W %o %C\n";
-
+#endif
 static char *format;
 
 /* Whether to follow symbolic links;  True for --dereference (-L).  */
@@ -925,8 +926,10 @@ static int out_file_context(char *pformat, size_t prefix_len,
 
 	strcpy(pformat + prefix_len, "s");
 	printf(pformat, (scontext ? scontext : "?"));
+#ifdef HAVE_SELINUX
 	if (scontext)
 		freecon(scontext);
+#endif
 	return rc;
 }
 
@@ -1291,6 +1294,7 @@ static char *default_format(bool fs, bool terse, bool device)
 ");
 			free(temp);
 
+#ifdef HAVE_SELINUX
 			if (is_selinux_enabled() > 0) {
 				temp = format;
 				/* TRANSLATORS: This string uses format
@@ -1301,7 +1305,7 @@ static char *default_format(bool fs, bool terse, bool device)
 						   "Context: %C\n");
 				free(temp);
 			}
-
+#endif
 			temp = format;
 			/* TRANSLATORS: This string uses format specifiers from
 			 * 'stat --help' without --file-system, and NOT from
