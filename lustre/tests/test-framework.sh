@@ -10033,7 +10033,6 @@ init_agt_vars() {
 	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
 	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
 	export HSMTOOL_TESTDIR
-	export HSMTOOL_BASE=$(basename "$HSMTOOL" | cut -f1 -d" ")
 
 	HSM_ARCHIVE_NUMBER=2
 
@@ -10067,44 +10066,19 @@ get_mdt_devices() {
 	done
 }
 
-search_copytools() {
-	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
-	do_nodesv $hosts "pgrep -x $HSMTOOL_BASE"
+copytool_continue() {
+	local agents=${1:-$(facet_active_host $SINGLEAGT)}
+
+	do_nodesv $agents "libtool execute pkill -CONT -x $HSMTOOL" || return 0
+	echo "Copytool is continued on $agents"
 }
 
 kill_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
 
 	echo "Killing existing copytools on $hosts"
-	do_nodesv $hosts "killall -q $HSMTOOL_BASE" || true
-}
-
-wait_copytools() {
-	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
-	local wait_timeout=200
-	local wait_start=$SECONDS
-	local wait_end=$((wait_start + wait_timeout))
-	local sleep_time=100000 # 0.1 second
-
-	while ((SECONDS < wait_end)); do
-		if ! search_copytools $hosts; then
-			echo "copytools stopped in $((SECONDS - wait_start))s"
-			return 0
-		fi
-
-		echo "copytools still running on $hosts"
-		usleep $sleep_time
-		[ $sleep_time -lt 32000000 ] && # 3.2 seconds
-			sleep_time=$(bc <<< "$sleep_time * 2")
-	done
-
-	# try to dump Copytool's stack
-	do_nodesv $hosts "echo 1 >/proc/sys/kernel/sysrq ; " \
-			 "echo t >/proc/sysrq-trigger"
-
-	echo "copytools failed to stop in ${wait_timeout}s"
-
-	return 1
+	do_nodesv $hosts "libtool execute killall -q $HSMTOOL" || true
+	copytool_continue "$hosts"
 }
 
 copytool_monitor_cleanup() {

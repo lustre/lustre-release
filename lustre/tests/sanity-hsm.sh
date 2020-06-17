@@ -82,98 +82,9 @@ CLIENT1=${CLIENT1:-$HOSTNAME}
 # Exception is the test which need two separate nodes
 CLIENT2=${CLIENT2:-$CLIENT1}
 
-#
-# In order to test multiple remote HSM agents, a new facet type named "AGT" and
-# the following associated variables are added:
-#
-# AGTCOUNT: number of agents
-# AGTDEV{N}: target HSM mount point (root path of the backend)
-# agt{N}_HOST: hostname of the agent agt{N}
-# SINGLEAGT: facet of the single agent
-#
-# The number of agents is initialized as the number of remote client nodes.
-# By default, only single copytool is started on a remote client/agent. If there
-# was no remote client, then the copytool will be started on the local client.
-#
-init_agt_vars() {
-	local n
-	local agent
-
-	export AGTCOUNT=${AGTCOUNT:-$((CLIENTCOUNT - 1))}
-	[[ $AGTCOUNT -gt 0 ]] || AGTCOUNT=1
-
-	export SHARED_DIRECTORY=${SHARED_DIRECTORY:-$TMP}
-	if [[ $CLIENTCOUNT -gt 1 ]] &&
-		! check_shared_dir $SHARED_DIRECTORY $CLIENTS; then
-		skip_env "SHARED_DIRECTORY should be accessible"\
-			 "on all client nodes"
-		exit 0
-	fi
-
-	# We used to put the HSM archive in $SHARED_DIRECTORY but that
-	# meant NFS issues could hose sanity-hsm sessions. So now we
-	# use $TMP instead.
-	for n in $(seq $AGTCOUNT); do
-		eval export AGTDEV$n=\$\{AGTDEV$n:-"$TMP/arc$n"\}
-		agent=CLIENT$((n + 1))
-		if [[ -z "${!agent}" ]]; then
-			[[ $CLIENTCOUNT -eq 1 ]] && agent=CLIENT1 ||
-				agent=CLIENT2
-		fi
-		eval export agt${n}_HOST=\$\{agt${n}_HOST:-${!agent}\}
-	done
-
-	export SINGLEAGT=${SINGLEAGT:-agt1}
-
-	export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
-	export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
-	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
-	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
-	export HSMTOOL_TESTDIR
-
-	HSM_ARCHIVE_NUMBER=2
-
-	# The test only support up to 10 MDTs
-	MDT_PREFIX="mdt.$FSNAME-MDT000"
-	HSM_PARAM="${MDT_PREFIX}0.hsm"
-
-	# archive is purged at copytool setup
-	HSM_ARCHIVE_PURGE=true
-
-	# Don't allow copytool error upon start/setup
-	HSMTOOL_NOERROR=false
-}
-
-# Get the backend root path for the given agent facet.
-copytool_device() {
-	local facet=$1
-	local dev=AGTDEV$(facet_number $facet)
-
-	echo -n ${!dev}
-}
-
-get_mdt_devices() {
-	local mdtno
-	# get MDT device for each mdc
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		local idx=$(($mdtno - 1))
-		MDT[$idx]=$($LCTL get_param -n \
-			mdc.$FSNAME-MDT000${idx}-mdc-*.mds_server_uuid |
-			awk '{gsub(/_UUID/,""); print $1}' | head -n1)
-	done
-}
-
 search_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
 	do_nodesv $hosts "libtool execute pgrep -x $HSMTOOL"
-}
-
-kill_copytools() {
-	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
-
-	echo "Killing existing copytools on $hosts"
-	do_nodesv $hosts "libtool execute killall -q $HSMTOOL" || true
-	copytool_continue "$hosts"
 }
 
 wait_copytools() {
@@ -262,13 +173,6 @@ copytool_suspend() {
 		"do_nodesv $agents libtool execute pkill -CONT -x '$HSMTOOL' || true" EXIT
 	do_nodesv $agents "libtool execute pkill -STOP -x $HSMTOOL" || return 0
 	echo "Copytool is suspended on $agents"
-}
-
-copytool_continue() {
-	local agents=${1:-$(facet_active_host $SINGLEAGT)}
-
-	do_nodesv $agents "libtool execute pkill -CONT -x $HSMTOOL" || return 0
-	echo "Copytool is continued on $agents"
 }
 
 copytool_remove_backend() {
