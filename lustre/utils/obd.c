@@ -4975,18 +4975,20 @@ int jt_pool_cmd(int argc, char **argv)
 
 			for (j = 0; j < array_sz; j++) {
 				char ostname[MAX_OBD_NAME + 1];
+				int rc2;
 
 				snprintf(ostname, MAX_OBD_NAME, format,
 					 array[j]);
 				ostname[MAX_OBD_NAME] = '\0';
 
-				rc = check_and_complete_ostname(fsname,
+				rc2 = check_and_complete_ostname(fsname,
 								ostname);
-				if (rc) {
+				if (rc2) {
 					free(array);
 					free(cmds);
 					if (ostnames_buf)
 						free(ostnames_buf);
+					rc = rc ? rc : rc2;
 					goto out;
 				}
 				if (ostnames_buf) {
