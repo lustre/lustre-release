@@ -4210,26 +4210,35 @@ static int check_mdt_match(struct find_param *param)
  * not active, just print the object affected by this
  * failed target
  **/
-static int print_failed_tgt(struct find_param *param, char *path, int type)
+static void print_failed_tgt(struct find_param *param, char *path, int type)
 {
 	struct obd_statfs stat_buf;
 	struct obd_uuid uuid_buf;
-	int ret;
+	int tgt_nr, i, *indexes;
+	int ret = 0;
 
-	if (type != LL_STATFS_LOV && type != LL_STATFS_LMV)
-		return -EINVAL;
+	if (type != LL_STATFS_LOV && type != LL_STATFS_LMV) {
+		llapi_error(LLAPI_MSG_NORMAL, ret, "%s: wrong statfs type(%d)",
+			    __func__, type);
+		return;
+	}
 
-	memset(&stat_buf, 0, sizeof(struct obd_statfs));
-	memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-	ret = llapi_obd_statfs(path, type,
-			       type == LL_STATFS_LOV ? param->fp_obd_index :
-			       param->fp_mdt_index, &stat_buf,
-			       &uuid_buf);
-	if (ret)
-		llapi_error(LLAPI_MSG_NORMAL, ret, "obd_uuid: %s failed",
-			     param->fp_obd_uuid->uuid);
+	tgt_nr = (type == LL_STATFS_LOV) ? param->fp_obd_index :
+		 param->fp_mdt_index;
+	indexes = (type == LL_STATFS_LOV) ? param->fp_obd_indexes :
+		  param->fp_mdt_indexes;
 
-	return ret;
+	for (i = 0; i < tgt_nr; i++) {
+		memset(&stat_buf, 0, sizeof(struct obd_statfs));
+		memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+
+		ret = llapi_obd_statfs(path, type, indexes[i], &stat_buf,
+				       &uuid_buf);
+		if (ret)
+			llapi_error(LLAPI_MSG_NORMAL, ret,
+				    "%s: obd_uuid: %s failed",
+				    __func__, param->fp_obd_uuid->uuid);
+	}
 }
 
 static int find_check_stripe_size(struct find_param *param)
@@ -5147,7 +5156,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 	ret = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
 	if (ret != 0) {
 		llapi_error(LLAPI_MSG_ERROR, ret,
-			    "llapi_obd_statfs: error packing ioctl data");
+			    "%s: error packing ioctl data", __func__);
 		goto out;
 	}
 
@@ -5477,7 +5486,7 @@ int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
 	rc = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
 	if (rc != 0) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "llapi_obd_statfs: error packing ioctl data");
+			    "%s: error packing ioctl data", __func__);
 		return rc;
 	}
 

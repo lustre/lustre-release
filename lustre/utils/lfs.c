@@ -5948,7 +5948,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				continue;
 
 			/*
-			 * the llapi_obd_statfs() call may have returned with
+			 * the llapi_obd_fstatfs() call may have returned with
 			 * an error, but if it filled in uuid_buf we will at
 			 * lease use that to print out a message for that OBD.
 			 * If we didn't get anything in the uuid_buf, then fill

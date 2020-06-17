@@ -6268,14 +6268,15 @@ test_56rb() {
 	test_mkdir -p $dir || error "failed to mkdir $dir"
 	$LFS setstripe -c 1 -i 0 $dir/$tfile ||
 		error "failed to setstripe $dir/$tfile"
+	mdt_idx=$($LFS getdirstripe -i $dir)
 	dd if=/dev/zero of=$dir/$tfile bs=1M count=1
 
 	stack_trap "rm -f $tmp" EXIT
-	$LFS find --size +100K --ost 0 $dir 2>&1 | tee $tmp
-	[ -z "$(cat $tmp | grep "obd_uuid: ")" ] ||
+	$LFS find --size +100K --ost 0 $dir |& tee $tmp
+	! grep -q obd_uuid $tmp ||
 		error "failed to find --size +100K --ost 0 $dir"
-	$LFS find --size +100K --mdt $mdt_idx $dir 2>&1 | tee $tmp
-	[ -z "$(cat $tmp | grep "obd_uuid: ")" ] ||
+	$LFS find --size +100K --mdt $mdt_idx $dir |& tee $tmp
+	! grep -q obd_uuid $tmp ||
 		error "failed to find --size +100K --mdt $mdt_idx $dir"
 }
 run_test 56rb "check lfs find --size --ost/--mdt works"
