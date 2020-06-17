@@ -81,7 +81,8 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 	-y         answer 'y' to usage question (only when --rsync used)
 	-0         input file names on stdin are separated by a null character
 
-Options '-A', '-c', and '-R' are mutually exclusive.
+Options '-A', and '-R' are mutually exclusive with each other, and any
+specific layout (e.g. any specific parameters like '-c', '-S', '-E', '-p').
 Options '-C', '-M', and '-X' are ignored if '-A' is not set.
 
 If a directory is an argument, all files in the directory are migrated.
@@ -93,7 +94,7 @@ through to the 'lfs migrate' utility.
 If emptying an active OST, new files may continue to be allocated there.
 To prevent this, on each MDS run the following for each OST being emptied:
 
-    lctl set_param osp.<fsname>-OSTNNNN*.max_create_count=0'
+    lctl set_param osp.<fsname>-OSTxxxx*.max_create_count=0
 
 Examples:
       lfs_migrate /mnt/lustre/dir
@@ -143,7 +144,9 @@ while [ -n "$*" ]; do
 	-n) OPT_DRYRUN=true; OPT_YES=true
 	   echo "$PROG: -n deprecated, use --dry-run or --non-block" 1>&2;;
 	--dry-run) OPT_DRYRUN=true; OPT_YES=true;;
-	-p|--pool) OPT_POOL="$arg $2"; OPT_LAYOUT+="$OPT_POOL "; shift;;
+	-p|--pool) # if within a component, pass through pool
+		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_POOL="-p $2";
+		shift;;
 	-q|--quiet) ECHO=:;;
 	-R|--restripe) OPT_RESTRIPE=true;;
 	-s|--skip) OPT_CHECK=false;;
@@ -155,33 +158,36 @@ while [ -n "$*" ]; do
 	   OPT_PASSTHROUGH+=("$arg");;
 	--rsync) OPT_RSYNC=true; OPT_NO_RSYNC=false;;
 	--no-rsync) OPT_NO_RSYNC=true; OPT_RSYNC=false;;
-	--copy|--yaml|--file) OPT_COMP=true;
+	--copy|--yaml|--file) OPT_COPY=true;
 	   # these options have files as arguments, pass both through
 	   OPT_LAYOUT+="$arg $2 "; shift;;
 	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
 	-C) OPT_CAP="$2"; shift;;
+	-D) LFS_OPT_DIRECTIO="-D";;
+	-E|--comp-end|--component-end) OPT_COMP=true; OPT_LAYOUT+="$arg ";;
 	-M|--min-free) OPT_MINFREE="$2"; shift;;
 	-X|--max-free) OPT_MAXFREE="$2"; shift;;
-	-c|--stripe-count) OPT_STRIPE_COUNT="$2"; shift;;
-	-S|--stripe-size) OPT_STRIPE_SIZE="$2"; shift;;
+	-c|--stripe-count) # if within a component, pass through stripe_count
+		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_STRIPE_COUNT="$2"
+		shift;;
+	-S|--stripe-size) # if within a component, pass through stripe_size
+		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_STRIPE_SIZE="$2"
+		shift;;
 	*) # Pass other non-file layout options to 'lfs migrate'
-	   [ -e "$arg" ] && OPT_FILE+="$arg " && break || OPT_LAYOUT+="$arg "
+	   [[ -e "$arg" ]] && OPT_FILE+="$arg " && break || OPT_LAYOUT+="$arg "
 	esac
 	shift
 done
 
-if $OPT_RESTRIPE || $OPT_AUTOSTRIPE && [ -n "$OPT_LAYOUT" ]; then
-	echo "$PROG error: Options '$OPT_LAYOUT' can't be used with -R or -A" \
-		1>&2
+if ( $OPT_RESTRIPE || $OPT_AUTOSTRIPE ) &&
+   [[ -n "$OPT_STRIPE_COUNT" || -n "$OPT_STRIPE_SIZE" || -n "$OPT_POOL" ]]; then
+	echo "$PROG error: option -R or -A cannot be used with -c, -S, or -p" 1>&2
 	exit 1
-elif $OPT_RESTRIPE && [[ "$OPT_STRIPE_COUNT" || "$OPT_STRIPE_SIZE" ]]; then
-	echo "$PROG error: Option -R can't be used with -c or -S" 1>&2
+elif ( $OPT_RESTRIPE || $OPT_AUTOSTRIPE ) && [[ -n "$OPT_LAYOUT" ]]; then
+	echo "$PROG error: option -R or -A cannot be used with $OPT_LAYOUT" 1>&2
 	exit 1
-elif $OPT_AUTOSTRIPE && [ -n "$OPT_STRIPE_COUNT" ]; then
-	echo "$PROG error: Option -A can't be used with -c" 1>&2
-	exit 1
-elif $OPT_AUTOSTRIPE && $OPT_RESTRIPE; then
-	echo "$PROG error: Option -A can't be used with -R" 1>&2
+elif $OPT_RESTRIPE && $OPT_AUTOSTRIPE; then
+	echo "$PROG error: option -R cannot be used with -A" 1>&2
 	exit 1
 fi
 
@@ -359,33 +365,35 @@ lfs_migrate() {
 		local olddir=$(dirname "$OLDNAME")
 		local stripe_size="$OPT_STRIPE_SIZE"
 		local stripe_count="$OPT_STRIPE_COUNT"
-		local stripe_opts="-N --comp-count -c -S -p -y"
+		local getstripe_opts="-N --comp-count -c -S -p -y"
 		local parent_count=""
 		local parent_size=""
 		local stripe_pool="${OPT_POOL#-p }"
 		local mirror_count=1
 		local comp_count=0
-		# avoid multiple getstripe calls
-		#   lcm_mirror_count:  1
-		#   lcm_entry_count:   0
-		#      lmm_stripe_count:  1
-		#      lmm_stripe_size:   1048576
-		#      lmm_pool:          pool_abc
-		local l_mirror_count=0
-		local l_comp_count=1
-		local l_stripe_count=2
-		local l_stripe_size=3
-		local l_stripe_pool=4
-		local layout_info=($($LFS getstripe $stripe_opts "$OLDNAME" \
-			2>/dev/null | awk '{ print $2 }'))
 
 		layout="${OPT_PASSTHROUGH[@]} "
 
 		if $OPT_RESTRIPE; then
 			UNLINK=""
 			layout+="--copy $olddir"
-			OPT_COMP=true
-		else
+			OPT_COPY=true
+		elif ! $OPT_COMP; then
+			# avoid multiple getstripe calls
+			#   lcm_mirror_count:  1
+			#   lcm_entry_count:   0
+			#      lmm_stripe_count:  1
+			#      lmm_stripe_size:   1048576
+			#      lmm_pool:          pool_abc
+			local l_mirror_count=0
+			local l_comp_count=1
+			local l_stripe_count=2
+			local l_stripe_size=3
+			local l_stripe_pool=4
+			local layout_info
+
+			layout_info=($($LFS getstripe $getstripe_opts $OLDNAME \
+				       2>/dev/null | awk '{ print $2 }'))
 			# If rsync copies Lustre xattrs properly in the future
 			# (i.e. before the file data, so that it preserves
 			# striping) then we don't need this getstripe stuff.
@@ -419,7 +427,7 @@ lfs_migrate() {
 			local parent_layout
 
 			if $OPT_RESTRIPE; then
-				parent_layout=($($LFS getstripe $stripe_opts \
+				parent_layout=($($LFS getstripe $getstripe_opts\
 						-d "$olddir" 2>/dev/null |
 						awk '{print $2 }'))
 				parent_count=${parent_layout[$l_stripe_count]}
@@ -441,11 +449,12 @@ lfs_migrate() {
 			continue
 		fi
 
-		if ! $OPT_COMP && [ ${layout_info[$l_comp_count]} -gt 0 ]; then
+		if ! $OPT_COPY && ! $OPT_COMP &&
+		   [[ ${layout_info[$l_comp_count]} > 0 ]]; then
 			layout+="--copy $OLDNAME"
-			OPT_COMP=true
+			OPT_COPY=true
 		fi
-		if ! $OPT_COMP; then
+		if ! $OPT_COPY && ! $OPT_COMP; then
 			[ -n "$stripe_count" ] && layout+="-c $stripe_count "
 			[ -n "$stripe_size" ] && layout+="-S $stripe_size "
 			[ -n "$OPT_POOL" -a -n "$stripe_pool" ] &&

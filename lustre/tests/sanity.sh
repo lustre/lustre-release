@@ -7240,8 +7240,8 @@ test_56v() {
 }
 run_test 56v "check 'lfs find -m match with lfs getstripe -m'"
 
-test_56w() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+test_56wa() {
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local dir=$DIR/$tdir
@@ -7257,7 +7257,7 @@ test_56w() {
 	local required_space=$((file_num * file_size))
 	local free_space=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
 			   head -n1)
-	[[ $free_space -le $((required_space / 1024)) ]] &&
+	(( free_space >= required_space / 1024 )) ||
 		skip_env "need $required_space, have $free_space kbytes"
 
 	local dd_bs=65536
@@ -7268,13 +7268,13 @@ test_56w() {
 	local j
 	local file
 
-	for i in $(seq $NUMFILES); do
+	for ((i = 1; i <= NUMFILES; i++ )); do
 		file=$dir/file$i
 		yes | dd bs=$dd_bs count=$dd_count of=$file &>/dev/null ||
 			error "write data into $file failed"
 	done
-	for i in $(seq $NUMDIRS); do
-		for j in $(seq $NUMFILES); do
+	for ((i = 1; i <= NUMDIRS; i++ )); do
+		for ((j = 1; j <= NUMFILES; j++ )); do
 			file=$dir/dir$i/file$j
 			yes|dd bs=$dd_bs count=$dd_count of=$file &>/dev/null ||
 				error "write data into $file failed"
@@ -7282,14 +7282,14 @@ test_56w() {
 	done
 
 	# $LFS_MIGRATE will fail if hard link migration is unsupported
-	if [[ $MDS1_VERSION -gt $(version_code 2.5.55) ]]; then
+	if (( MDS1_VERSION > $(version_code 2.5.55) )); then
 		createmany -l$dir/dir1/file1 $dir/dir1/link 200 ||
 			error "creating links to $dir/dir1/file1 failed"
 	fi
 
 	local expected=-1
 
-	[[ $OSTCOUNT -gt 1 ]] && expected=$((OSTCOUNT - 1))
+	(( OSTCOUNT <= 1 )) || expected=$((OSTCOUNT - 1))
 
 	# lfs_migrate file
 	local cmd="$LFS_MIGRATE -y -c $expected $dir/file1"
@@ -7299,8 +7299,7 @@ test_56w() {
 
 	check_stripe_count $dir/file1 $expected
 
-	if [ $MDS1_VERSION -ge $(version_code 2.6.90) ];
-	then
+	if (( $MDS1_VERSION >= $(version_code 2.6.90) )); then
 		# lfs_migrate file onto OST 0 if it is on OST 1, or onto
 		# OST 1 if it is on OST 0. This file is small enough to
 		# be on only one stripe.
@@ -7311,7 +7310,7 @@ test_56w() {
 		local oldmd5=$(md5sum $file)
 		local newobdidx=0
 
-		[[ $obdidx -eq 0 ]] && newobdidx=1
+		(( obdidx != 0 )) || newobdidx=1
 		cmd="$LFS migrate -i $newobdidx $file"
 		echo $cmd
 		eval $cmd || error "$cmd failed"
@@ -7319,10 +7318,9 @@ test_56w() {
 		local realobdix=$($LFS getstripe -i $file)
 		local newmd5=$(md5sum $file)
 
-		[[ $newobdidx -ne $realobdix ]] &&
-			error "new OST is different (was=$obdidx, "\
-			      "wanted=$newobdidx, got=$realobdix)"
-		[[ "$oldmd5" != "$newmd5" ]] &&
+		(( $newobdidx == $realobdix )) ||
+			error "new OST is different (was=$obdidx, wanted=$newobdidx, got=$realobdix)"
+		[[ "$oldmd5" == "$newmd5" ]] ||
 			error "md5sum differ: $oldmd5, $newmd5"
 	fi
 
@@ -7331,7 +7329,7 @@ test_56w() {
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
 
-	for j in $(seq $NUMFILES); do
+	for (( j = 1; j <= NUMFILES; j++ )); do
 		check_stripe_count $dir/dir1/file$j $expected
 	done
 
@@ -7341,16 +7339,16 @@ test_56w() {
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
 
-	for i in $(seq 2 $NUMFILES); do
+	for (( i = 2; i <= NUMFILES; i++ )); do
 		check_stripe_count $dir/file$i $expected
 	done
-	for i in $(seq 2 $NUMDIRS); do
-		for j in $(seq $NUMFILES); do
-		check_stripe_count $dir/dir$i/file$j $expected
+	for (( i = 2; i <= NUMDIRS; i++ )); do
+		for (( j = 1; j <= NUMFILES; j++ )); do
+			check_stripe_count $dir/dir$i/file$j $expected
 		done
 	done
 }
-run_test 56w "check lfs_migrate -c stripe_count works"
+run_test 56wa "check lfs_migrate -c stripe_count works"
 
 test_56wb() {
 	local file1=$DIR/$tdir/file1
@@ -7432,12 +7430,15 @@ test_56wb() {
 run_test 56wb "check lfs_migrate pool support"
 
 test_56wc() {
-	local file1="$DIR/$tdir/file1"
+	local file1="$DIR/$tdir/$tfile"
+	local md5
 	local parent_ssize
 	local parent_scount
 	local cur_ssize
 	local cur_scount
 	local orig_ssize
+	local new_scount
+	local cur_comp
 
 	echo -n "Creating test dir..."
 	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"
@@ -7449,48 +7450,68 @@ test_56wc() {
 	$LFS setstripe -S 512K -c 1 "$file1" &> /dev/null ||
 		error "cannot set stripe"
 	cur_ssize=$($LFS getstripe -S "$file1")
-	[ $cur_ssize -eq 524288 ] || error "setstripe -S $cur_ssize != 524288"
+	(( cur_ssize == 524288 )) || error "setstripe -S $cur_ssize != 524288"
 	echo "done."
+
+	dd if=/dev/urandom of=$file1 bs=1M count=12 || error "dd $file1 failed"
+	stack_trap "rm -f $file1"
+	md5="$(md5sum $file1)"
 
 	# File currently set to -S 512K -c 1
 
 	# Ensure -c and -S options are rejected when -R is set
 	echo -n "Verifying incompatible options are detected..."
-	$LFS_MIGRATE -y -R -c 1 "$file1" &> /dev/null &&
-		error "incompatible -c and -R options not detected"
-	$LFS_MIGRATE -y -R -S 1M "$file1" &> /dev/null &&
-		error "incompatible -S and -R options not detected"
+	$LFS_MIGRATE -R -c 1 "$file1" &&
+		error "incompatible -R and -c options not detected"
+	$LFS_MIGRATE -R -S 1M "$file1" &&
+		error "incompatible -R and -S options not detected"
+	$LFS_MIGRATE -R -p pool "$file1" &&
+		error "incompatible -R and -p options not detected"
+	$LFS_MIGRATE -R -E eof -c 1 "$file1" &&
+		error "incompatible -R and -E options not detected"
+	$LFS_MIGRATE -R -A "$file1" &&
+		error "incompatible -R and -A options not detected"
+	$LFS_MIGRATE -A -c 1 "$file1" &&
+		error "incompatible -A and -c options not detected"
+	$LFS_MIGRATE -A -S 1M "$file1" &&
+		error "incompatible -A and -S options not detected"
+	$LFS_MIGRATE -A -p pool "$file1" &&
+		error "incompatible -A and -p options not detected"
+	$LFS_MIGRATE -A -E eof -c 1 "$file1" &&
+		error "incompatible -A and -E options not detected"
 	echo "done."
 
 	# Ensure unrecognized options are passed through to 'lfs migrate'
 	echo -n "Verifying -S option is passed through to lfs migrate..."
-	$LFS_MIGRATE -y -S 1M "$file1" &> /dev/null ||
-		error "migration failed"
+	$LFS_MIGRATE -y -S 1M "$file1" || error "migration failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
-	[ $cur_ssize -eq 1048576 ] || error "migrate -S $cur_ssize != 1048576"
+	(( cur_ssize == 1048576 )) || error "migrate -S $cur_ssize != 1048576"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (1)"
 	echo "done."
 
 	# File currently set to -S 1M -c 1
 
 	# Ensure long options are supported
 	echo -n "Verifying long options supported..."
-	$LFS_MIGRATE -y --non-block "$file1" &> /dev/null ||
+	$LFS_MIGRATE --non-block "$file1" ||
 		error "long option without argument not supported"
-	$LFS_MIGRATE -y --stripe-size 512K "$file1" &> /dev/null ||
+	$LFS_MIGRATE --stripe-size 512K "$file1" ||
 		error "long option with argument not supported"
 	cur_ssize=$($LFS getstripe -S "$file1")
-	[ $cur_ssize -eq 524288 ] ||
+	(( cur_ssize == 524288 )) ||
 		error "migrate --stripe-size $cur_ssize != 524288"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (2)"
 	echo "done."
 
 	# File currently set to -S 512K -c 1
 
-	if [ "$OSTCOUNT" -gt 1 ]; then
+	if (( OSTCOUNT > 1 )); then
 		echo -n "Verifying explicit stripe count can be set..."
-		$LFS_MIGRATE -y -c 2 "$file1" &> /dev/null ||
-			error "migrate failed"
+		$LFS_MIGRATE -c 2 "$file1" || error "migrate failed"
 		cur_scount=$($LFS getstripe -c "$file1")
-		[ $cur_scount -eq 2 ] || error "migrate -c $cur_scount != 2"
+		(( cur_scount == 2 )) || error "migrate -c $cur_scount != 2"
+		[[ "$(md5sum $file1)" == "$md5" ]] ||
+			error "file data has changed (3)"
 		echo "done."
 	fi
 
@@ -7501,19 +7522,20 @@ test_56wc() {
 	echo -n "Setting stripe for parent directory..."
 	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe '-S 2M -c 1'"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (4)"
 	echo "done."
 
 	echo -n "Verifying restripe option uses parent stripe settings..."
 	parent_ssize=$($LFS getstripe -S $DIR/$tdir 2>/dev/null)
 	parent_scount=$($LFS getstripe -c $DIR/$tdir 2>/dev/null)
-	$LFS_MIGRATE -y -R "$file1" &> /dev/null ||
-		error "migrate failed"
+	$LFS_MIGRATE -R "$file1" || error "migrate failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
-	[ $cur_ssize -eq $parent_ssize ] ||
+	(( cur_ssize == parent_ssize )) ||
 		error "migrate -R stripe_size $cur_ssize != $parent_ssize"
 	cur_scount=$($LFS getstripe -c "$file1")
-	[ $cur_scount -eq $parent_scount ] ||
+	(( cur_scount == parent_scount )) ||
 		error "migrate -R stripe_count $cur_scount != $parent_scount"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (5)"
 	echo "done."
 
 	# File currently set to -S 1M -c 1
@@ -7524,21 +7546,32 @@ test_56wc() {
 	orig_ssize=$($LFS getstripe -S "$file1" 2>/dev/null)
 	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe on parent directory"
-	$LFS_MIGRATE -y "$file1" &> /dev/null ||
-		error "migrate failed"
+	$LFS_MIGRATE "$file1" || error "migrate failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
-	[ $cur_ssize -eq $orig_ssize ] ||
+	(( cur_ssize == orig_ssize )) ||
 		error "migrate by default $cur_ssize != $orig_ssize"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (6)"
 	echo "done."
 
 	# Ensure file name properly detected when final option has no argument
 	echo -n "Verifying file name properly detected..."
-	$LFS_MIGRATE -y "$file1" &> /dev/null ||
+	$LFS_MIGRATE "$file1" ||
 		error "file name interpreted as option argument"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (7)"
 	echo "done."
 
-	# Clean up
-	rm -f "$file1"
+	# Ensure PFL arguments are passed through properly
+	echo -n "Verifying PFL options passed through..."
+	new_scount=$(((OSTCOUNT + 1) / 2))
+	$LFS_MIGRATE -E 1M -c 1 -E 16M -c $new_scount -E eof -c -1 "$file1" ||
+		error "migrate PFL arguments failed"
+	cur_comp=$($LFS getstripe --comp-count $file1)
+	(( cur_comp == 3 )) || error "component count '$cur_comp' != 3"
+	cur_scount=$($LFS getstripe --stripe-count $file1)
+	(( cur_scount == new_scount)) ||
+		error "PFL stripe count $cur_scount != $new_scount"
+	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (8)"
+	echo "done."
 }
 run_test 56wc "check unrecognized options for lfs_migrate are passed through"
 
