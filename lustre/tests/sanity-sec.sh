@@ -3195,6 +3195,9 @@ run_test 43 "test race on encrypted file size (3)"
 
 test_44() {
 	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local resfile=$TMP/resfile
+	local respage
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -3204,28 +3207,59 @@ test_44() {
 
 	which vmtouch || skip "This test needs vmtouch utility"
 
-	# Direct I/O is not supported on encrypted files.
-	# Attempts to use direct I/O on such files should fall back to
-	# buffered I/O.
+	# Direct I/O is now supported on encrypted files.
 
 	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
 
-	# write a page in file with O_DIRECT
 	$LFS setstripe -c1 -i0 $testfile
-	dd if=/dev/urandom of=$testfile bs=4096 count=1 conv=fsync oflag=direct
+	dd if=/dev/urandom of=$tmpfile bs=8192 count=1 conv=fsync
+	dd if=$tmpfile of=$testfile bs=8192 count=1 oflag=direct ||
+		error "could not write to file with O_DIRECT (1)"
 
 	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
-	[ "$respage" == "1/1" ] ||
-		error "write to enc file did not fall back to buffered IO"
+	[ "$respage" == "0/2" ] ||
+		error "write to enc file fell back to buffered IO"
 
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cancel_lru_locks
 
-	dd if=$testfile of=/dev/null bs=4096 count=1 iflag=direct
+	dd if=$testfile of=$resfile bs=8192 count=1 iflag=direct ||
+		error "could not read from file with O_DIRECT (1)"
 
 	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
-	[ "$respage" == "1/1" ] ||
-		error "write to enc file did not fall back to buffered IO"
+	[ "$respage" == "0/2" ] ||
+		error "read from enc file fell back to buffered IO"
+
+	cmp -bl $tmpfile $resfile ||
+		error "file $testfile is corrupted (1)"
+
+	rm -f $resfile
+
+	$TRUNCATE $tmpfile 4096
+	dd if=$tmpfile of=$testfile bs=4096 count=1 seek=13 oflag=direct ||
+		error "could not write to file with O_DIRECT (2)"
+
+	cancel_lru_locks
+
+	dd if=$testfile of=$resfile bs=4096 count=1 skip=13 iflag=direct ||
+		error "could not read from file with O_DIRECT (2)"
+	cmp -bl $tmpfile $resfile ||
+		error "file $testfile is corrupted (2)"
+
+	rm -f $testfile $resfile
+	$LFS setstripe -c1 -i0 $testfile
+
+	$TRUNCATE $tmpfile 2043
+	cp $tmpfile $testfile
+
+	cancel_lru_locks
+
+	dd if=$testfile of=$resfile bs=4096 count=1 iflag=direct ||
+		error "could not read from file with O_DIRECT (3)"
+	cmp -bl $tmpfile $resfile ||
+		error "file $testfile is corrupted (3)"
+
+	rm -f $tmpfile $resfile
 }
 run_test 44 "encrypted file access semantics: direct IO"
 
@@ -3763,6 +3797,62 @@ test_51() {
 	done
 }
 run_test 51 "FS capabilities ==============="
+
+test_52() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local mirror1=$TMP/$tfile.mirror1
+	local mirror2=$TMP/$tfile.mirror2
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	dd if=/dev/urandom of=$tmpfile bs=5000 count=1 conv=fsync
+
+	$LFS mirror create -N -i0 -N -i1 $testfile ||
+		error "could not create mirror"
+
+	dd if=$tmpfile of=$testfile bs=5000 count=1 conv=fsync ||
+		error "could not write to $testfile"
+
+	$LFS mirror resync $testfile ||
+		error "could not resync mirror"
+
+	$LFS mirror verify -v $testfile ||
+		error "verify mirror failed"
+
+	$LFS mirror read -N 1 -o $mirror1 $testfile ||
+		error "could not read from mirror 1"
+
+	cmp -bl $tmpfile $mirror1 ||
+		error "mirror 1 is corrupted"
+
+	$LFS mirror read -N 2 -o $mirror2 $testfile ||
+		error "could not read from mirror 2"
+
+	cmp -bl $tmpfile $mirror2 ||
+		error "mirror 2 is corrupted"
+
+	tr '\0' '2' < /dev/zero |
+	    dd of=$tmpfile bs=9000 count=1 conv=fsync
+
+	$LFS mirror write -N 1 -i $tmpfile $testfile ||
+		error "could not write to mirror 1"
+
+	$LFS mirror verify -v $testfile &&
+		error "mirrors should be different"
+
+	rm -f $tmpfile $mirror1 $mirror2
+}
+run_test 52 "Mirrored encrypted file"
 
 log "cleanup: ======================================================"
 

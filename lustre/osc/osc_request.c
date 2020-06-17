@@ -1354,13 +1354,9 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 	int i;
 
 	for (i = 0; i < page_count; i++) {
-		if (pga[i]->pg->mapping)
+		if (!pga[i]->pg->mapping)
 			/* bounce pages are unmapped */
-			continue;
-		if (pga[i]->flag & OBD_BRW_SYNC)
-			/* sync transfer cannot have encrypted pages */
-			continue;
-		llcrypt_finalize_bounce_page(&pga[i]->pg);
+			llcrypt_finalize_bounce_page(&pga[i]->pg);
 		pga[i]->count -= pga[i]->bp_count_diff;
 		pga[i]->off += pga[i]->bp_off_diff;
 	}
@@ -1454,6 +1450,19 @@ retry_encrypt:
 			pg->bp_off_diff = pg->off & ~PAGE_MASK;
 			pg->off = pg->off & PAGE_MASK;
 		}
+	} else if (opc == OST_READ && inode && IS_ENCRYPTED(inode)) {
+		for (i = 0; i < page_count; i++) {
+			struct brw_page *pg = pga[i];
+
+			/* count/off are forced to cover the whole page so that
+			 * all encrypted data is stored on the OST, so adjust
+			 * bp_{count,off}_diff for the size of the clear text.
+			 */
+			pg->bp_count_diff = PAGE_SIZE - pg->count;
+			pg->count = PAGE_SIZE;
+			pg->bp_off_diff = pg->off & ~PAGE_MASK;
+			pg->off = pg->off & PAGE_MASK;
+		}
 	}
 
         for (niocount = i = 1; i < page_count; i++) {
@@ -1467,8 +1476,13 @@ retry_encrypt:
         req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_CLIENT,
                              niocount * sizeof(*niobuf));
 
-	for (i = 0; i < page_count; i++)
+	for (i = 0; i < page_count; i++) {
 		short_io_size += pga[i]->count;
+		if (!inode || !IS_ENCRYPTED(inode)) {
+			pga[i]->bp_count_diff = 0;
+			pga[i]->bp_off_diff = 0;
+		}
+	}
 
 	/* Check if read/write is small enough to be a short io. */
 	if (short_io_size > cli->cl_max_short_io_bytes || niocount > 1 ||
@@ -2067,8 +2081,17 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 				continue;
 			}
 
+			/* The page is already locked when we arrive here,
+			 * except when we deal with a twisted page for
+			 * specific Direct IO support, in which case
+			 * PageChecked flag is set on page.
+			 */
+			if (PageChecked(pg->pg))
+				lock_page(pg->pg);
 			rc = llcrypt_decrypt_pagecache_blocks(pg->pg,
 							      PAGE_SIZE, 0);
+			if (PageChecked(pg->pg))
+				unlock_page(pg->pg);
 			if (rc)
 				GOTO(out, rc);
 		}

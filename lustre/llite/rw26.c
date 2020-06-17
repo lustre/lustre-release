@@ -308,6 +308,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	int io_pages    = 0;
 	size_t page_size = cl_page_size(obj);
 	int i;
+	pgoff_t index = offset >> PAGE_SHIFT;
 	ssize_t rc = 0;
 
 	ENTRY;
@@ -329,6 +330,28 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		}
 
 		page->cp_sync_io = anchor;
+		if (inode && IS_ENCRYPTED(inode)) {
+			struct page *vmpage = cl_page_vmpage(page);
+
+			/* In case of Direct IO on encrypted file, we need to
+			 * set the correct page index, and add a reference to
+			 * the mapping. This is required by llcrypt to proceed
+			 * to encryption/decryption, because each block is
+			 * encrypted independently, and each block's IV is set
+			 * to the logical block number within the file.
+			 * This is safe because we know these pages are private
+			 * to the thread doing the Direct IO, and despite
+			 * setting a mapping on the pages, cached lookups will
+			 * not find them.
+			 * Set PageChecked to detect special case of Direct IO
+			 * in osc_brw_fini_request().
+			 * Reference to the mapping and PageChecked flag are
+			 * removed in cl_aio_end().
+			 */
+			vmpage->index = index++;
+			vmpage->mapping = inode->i_mapping;
+			SetPageChecked(vmpage);
+		}
 		cl_2queue_add(queue, page);
 		/*
 		 * Set page clip to tell transfer formation engine
@@ -404,10 +427,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
 	struct vvp_io *vio;
-
-	/* if file is encrypted, return 0 so that we fall back to buffered IO */
-	if (IS_ENCRYPTED(inode))
-		return 0;
 
 	/* Check EOF by ourselves */
 	if (rw == READ && file_offset >= i_size_read(inode))

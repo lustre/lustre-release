@@ -2035,7 +2035,15 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 			    attr->ia_valid & ATTR_SIZE) {
 				xvalid |= OP_XVALID_FLAGS;
 				flags = LUSTRE_ENCRYPT_FL;
-				if (attr->ia_size & ~PAGE_MASK) {
+				/* Call to ll_io_zero_page is not necessary if
+				 * truncating on PAGE_SIZE boundary, because
+				 * whole pages will be wiped.
+				 * In case of Direct IO, all we need is to set
+				 * new size.
+				 */
+				if (attr->ia_size & ~PAGE_MASK &&
+				    !(attr->ia_valid & ATTR_FILE &&
+				      attr->ia_file->f_flags & O_DIRECT)) {
 					pgoff_t offset =
 						attr->ia_size & (PAGE_SIZE - 1);
 
