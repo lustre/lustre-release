@@ -631,3 +631,34 @@ int lov_lsm_entry(const struct lov_stripe_md *lsm, __u64 offset)
 
 	return -1;
 }
+
+/**
+ * lmm_layout_gen overlaps stripe_offset field, it needs to be reset back when
+ * sending to MDT for passing striping checks
+ */
+void lov_fix_ea_for_replay(void *lovea)
+{
+	struct lov_user_md *lmm = lovea;
+	struct lov_comp_md_v1 *c1;
+	int i;
+
+	switch (le32_to_cpu(lmm->lmm_magic)) {
+	case LOV_USER_MAGIC_V1:
+	case LOV_USER_MAGIC_V3:
+		lmm->lmm_stripe_offset = LOV_OFFSET_DEFAULT;
+		break;
+
+	case LOV_USER_MAGIC_COMP_V1:
+		c1 = (void *)lmm;
+		for (i = 0; i < le16_to_cpu(c1->lcm_entry_count); i++) {
+			struct lov_comp_md_entry_v1 *ent = &c1->lcm_entries[i];
+
+			if (le32_to_cpu(ent->lcme_flags) & LCME_FL_INIT) {
+				lmm = (void *)((char *)c1 +
+				      le32_to_cpu(ent->lcme_offset));
+				lmm->lmm_stripe_offset = LOV_OFFSET_DEFAULT;
+			}
+		}
+	}
+}
+EXPORT_SYMBOL(lov_fix_ea_for_replay);

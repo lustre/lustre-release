@@ -4894,16 +4894,19 @@ test_134() {
 	pool_add pool_134
 	pool_add_targets pool_134 1 1
 
-	mkdir $DIR/$tdir
-	$LFS setstripe -p pool_134 $DIR/$tdir
+	mkdir -p $DIR/$tdir/{A,B}
+	$LFS setstripe -p pool_134 $DIR/$tdir/A
+	$LFS setstripe -E EOF -p pool_134 $DIR/$tdir/B
 
 	replay_barrier mds1
 
-	touch $DIR/$tdir/$tfile
+	touch $DIR/$tdir/A/$tfile || error "touch non-pfl file failed"
+	touch $DIR/$tdir/B/$tfile || error "touch pfl failed"
 
 	fail mds1
 
-	[ -f $DIR/$tdir/$tfile ] || error "file does not exist"
+	[ -f $DIR/$tdir/A/$tfile ] || error "non-pfl file does not exist"
+	[ -f $DIR/$tdir/B/$tfile ] || error "pfl file does not exist"
 }
 run_test 134 "replay creation of a file created in a pool"
 

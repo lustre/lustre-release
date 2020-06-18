@@ -4441,6 +4441,7 @@ static int mdt_intent_open(enum ldlm_intent_flags it_opc,
         struct ldlm_reply      *rep = NULL;
         long                    opc;
         int                     rc;
+	struct ptlrpc_request  *req = mdt_info_req(info);
 
         static const struct req_format *intent_fmts[REINT_MAX] = {
                 [REINT_CREATE]  = &RQF_LDLM_INTENT_CREATE,
@@ -4457,6 +4458,9 @@ static int mdt_intent_open(enum ldlm_intent_flags it_opc,
 	mdt_intent_fixup_resent(info, *lockp, lhc, flags);
 
         rc = mdt_reint_internal(info, lhc, opc);
+
+	if (rc < 0 && lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+		DEBUG_REQ(D_ERROR, req, "Replay open failed with %d", rc);
 
 	/* Check whether the reply has been packed successfully. */
 	if (mdt_info_req(info)->rq_repmsg != NULL)

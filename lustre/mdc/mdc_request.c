@@ -637,6 +637,7 @@ void mdc_replay_open(struct ptlrpc_request *req)
 	struct obd_client_handle *och;
 	struct lustre_handle old_open_handle = { };
 	struct mdt_body *body;
+	struct ldlm_reply *rep;
 	ENTRY;
 
 	if (mod == NULL) {
@@ -648,6 +649,11 @@ void mdc_replay_open(struct ptlrpc_request *req)
 
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 	LASSERT(body != NULL);
+
+	rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	if (rep != NULL && rep->lock_policy_res2 != 0)
+		DEBUG_REQ(D_ERROR, req, "Open request replay failed with %ld ",
+			(long int)rep->lock_policy_res2);
 
 	spin_lock(&req->rq_lock);
 	och = mod->mod_och;

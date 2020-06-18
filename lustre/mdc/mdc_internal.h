@@ -95,9 +95,6 @@ int mdc_resource_get_unused_res(struct obd_export *exp,
 int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
 			    struct list_head *cancels, enum ldlm_mode mode,
                             __u64 bits);
-int mdc_save_lovea(struct ptlrpc_request *req,
-		   const struct req_msg_field *field,
-		   void *data, u32 size);
 /* mdc/mdc_request.c */
 int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);

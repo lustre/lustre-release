@@ -75,6 +75,8 @@ struct lov_oinfo {                 /* per-stripe data structure */
 	struct osc_async_rc     loi_ar;
 };
 
+void lov_fix_ea_for_replay(void *lovea);
+
 static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
 {
         oinfo->loi_kms = kms;
