@@ -196,7 +196,10 @@ zget:
 			GOTO(out, rc);
 		}
 
+		spin_lock(&scrub->os_lock);
 		scrub->os_full_speed = 1;
+		spin_unlock(&scrub->os_lock);
+
 		sf->sf_flags |= SF_INCONSISTENT;
 	} else if (oid == oid2) {
 		GOTO(out, rc = 0);
@@ -227,7 +230,9 @@ zget:
 		}
 
 update:
+		spin_lock(&scrub->os_lock);
 		scrub->os_full_speed = 1;
+		spin_unlock(&scrub->os_lock);
 		sf->sf_flags |= SF_INCONSISTENT;
 	}
 
@@ -304,6 +309,7 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 	if (flags & SS_RESET)
 		scrub_file_reset(scrub, dev->od_uuid, 0);
 
+	spin_lock(&scrub->os_lock);
 	scrub->os_partial_scan = 0;
 	if (flags & SS_AUTO_FULL) {
 		scrub->os_full_speed = 1;
@@ -315,7 +321,6 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 		scrub->os_full_speed = 0;
 	}
 
-	spin_lock(&scrub->os_lock);
 	scrub->os_in_prior = 0;
 	scrub->os_waiting = 0;
 	scrub->os_paused = 0;
@@ -538,7 +543,9 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 			spin_unlock(&scrub->os_lock);
 		}
 	} else {
+		spin_lock(&scrub->os_lock);
 		scrub->os_in_prior = 0;
+		spin_unlock(&scrub->os_lock);
 	}
 
 	if (rc)
@@ -1388,7 +1395,9 @@ void osd_scrub_stop(struct osd_device *dev)
 
 	/* od_otable_sem: prevent concurrent start/stop */
 	down(&dev->od_otable_sem);
+	spin_lock(&scrub->os_lock);
 	scrub->os_paused = 1;
+	spin_unlock(&scrub->os_lock);
 	scrub_stop(scrub);
 	up(&dev->od_otable_sem);
 

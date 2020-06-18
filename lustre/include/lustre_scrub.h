@@ -288,6 +288,10 @@ struct lustre_scrub {
 	__u64			os_new_checked;
 	__u64			os_pos_current;
 	__u32			os_start_flags;
+	/* Some of these bits can be set by different threads so
+	 * all updates must be protected by ->os_lock to avoid
+	 * racing read-modify-write cycles causing corruption.
+	 */
 	unsigned int		os_in_prior:1, /* process inconsistent item
 						* found by RPC prior */
 				os_waiting:1, /* Waiting for scan window. */

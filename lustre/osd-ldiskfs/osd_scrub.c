@@ -339,8 +339,11 @@ iget:
 				GOTO(out, rc = 0);
 		}
 
-		if (!scrub->os_partial_scan)
+		if (!scrub->os_partial_scan) {
+			spin_lock(&scrub->os_lock);
 			scrub->os_full_speed = 1;
+			spin_unlock(&scrub->os_lock);
+		}
 
 		switch (val) {
 		case SCRUB_NEXT_NOLMA:
@@ -367,9 +370,11 @@ iget:
 
 		GOTO(out, rc = 0);
 	} else {
-		if (!scrub->os_partial_scan)
+		if (!scrub->os_partial_scan) {
+			spin_lock(&scrub->os_lock);
 			scrub->os_full_speed = 1;
-
+			spin_unlock(&scrub->os_lock);
+		}
 		sf->sf_flags |= SF_INCONSISTENT;
 
 		/* XXX: If the device is restored from file-level backup, then
@@ -474,6 +479,7 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 	if (flags & SS_RESET)
 		scrub_file_reset(scrub, dev->od_uuid, 0);
 
+	spin_lock(&scrub->os_lock);
 	if (flags & SS_AUTO_FULL) {
 		scrub->os_full_speed = 1;
 		scrub->os_partial_scan = 0;
@@ -491,7 +497,6 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 		scrub->os_partial_scan = 0;
 	}
 
-	spin_lock(&scrub->os_lock);
 	scrub->os_in_prior = 0;
 	scrub->os_waiting = 0;
 	scrub->os_paused = 0;
@@ -810,10 +815,10 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 
 			oii = list_entry(scrub->os_inconsistent_items.next,
 				struct osd_inconsistent_item, oii_list);
-			spin_unlock(&scrub->os_lock);
 
 			*oic = &oii->oii_cache;
 			scrub->os_in_prior = 1;
+			spin_unlock(&scrub->os_lock);
 
 			return 0;
 		}
@@ -897,7 +902,9 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 
 	rc = osd_scrub_check_update(info, dev, oic, rc);
 	if (rc != 0) {
+		spin_lock(&scrub->os_lock);
 		scrub->os_in_prior = 0;
+		spin_unlock(&scrub->os_lock);
 		return rc;
 	}
 
@@ -910,7 +917,9 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	if (scrub->os_in_prior) {
+		spin_lock(&scrub->os_lock);
 		scrub->os_in_prior = 0;
+		spin_unlock(&scrub->os_lock);
 		return 0;
 	}
 
@@ -971,6 +980,7 @@ static void osd_scrub_join(const struct lu_env *env, struct osd_device *dev,
 	LASSERT(!(flags & SS_AUTO_PARTIAL));
 
 	down_write(&scrub->os_rwsem);
+	spin_lock(&scrub->os_lock);
 	scrub->os_in_join = 1;
 	if (flags & SS_SET_FAILOUT)
 		sf->sf_param |= SP_FAILOUT;
@@ -997,6 +1007,7 @@ static void osd_scrub_join(const struct lu_env *env, struct osd_device *dev,
 		sf->sf_flags |= SF_AUTO;
 		scrub->os_full_speed = 1;
 	}
+	spin_unlock(&scrub->os_lock);
 
 	scrub->os_new_checked = 0;
 	if (sf->sf_pos_last_checkpoint != 0)
@@ -2302,8 +2313,11 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 	 *	FID directly, instead, the OI scrub will scan the OI structure
 	 *	and try to re-generate the LMA from the OI mapping. But if the
 	 *	OI mapping crashed or lost also, then we have to give up under
-	 *	double failure cases. */
+	 *	double failure cases.
+	 */
+	spin_lock(&scrub->os_lock);
 	scrub->os_convert_igif = 1;
+	spin_unlock(&scrub->os_lock);
 	child = osd_lookup_one_len_unlocked(dev, dot_lustre_name, dentry,
 					    strlen(dot_lustre_name));
 	if (IS_ERR(child)) {
@@ -2553,7 +2567,9 @@ void osd_scrub_stop(struct osd_device *dev)
 
 	/* od_otable_mutex: prevent curcurrent start/stop */
 	mutex_lock(&dev->od_otable_mutex);
+	spin_lock(&scrub->os_lock);
 	scrub->os_paused = 1;
+	spin_unlock(&scrub->os_lock);
 	scrub_stop(scrub);
 	mutex_unlock(&dev->od_otable_mutex);
 }
@@ -3046,6 +3062,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	oii->oii_cache = *oic;
 	oii->oii_insert = insert;
 
+	spin_lock(&lscrub->os_lock);
 	if (lscrub->os_partial_scan) {
 		__u64 now = ktime_get_real_seconds();
 
@@ -3066,7 +3083,6 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 			lscrub->os_full_scrub = 1;
 	}
 
-	spin_lock(&lscrub->os_lock);
 	if (unlikely(!thread_is_running(thread))) {
 		spin_unlock(&lscrub->os_lock);
 		OBD_FREE_PTR(oii);
