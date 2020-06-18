@@ -1,18 +1,28 @@
+Many resources for using, configuring, and troubleshooting Lustre are at:
+    http://wiki.lustre.org/
+
+The low-volume list for announcements of new releases is at:
+    http://lists.lustre.org/listinfo.cgi/lustre-announce-lustre.org
+The generic Lustre discussion mailing list is available at:
+    http://lists.lustre.org/listinfo.cgi/lustre-discuss-lustre.org
+The Lustre developer mailing list is at:
+    http://lists.lustre.org/pipermail/lustre-devel-lustre.org
+
 Instructions for building, configuring and running Lustre:
-    https://wiki.whamcloud.com/display/PUB/Building+Lustre+from+Source
+    http://wiki.lustre.org/Compiling_Lustre
 and
     https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre.
 
 Instructions for contributing patches for Lustre:
-    https://wiki.whamcloud.com/display/PUB/Submitting+Changes
+    http://wiki.lustre.org/Submitting_Changes
 and
-    https://wiki.whamcloud.com/display/PUB/Using+Gerrit
+    http://wiki.lustre.org/Using_Gerrit
 
 The Lustre Coding Style Guidelines can be found at:
-    https://wiki.whamcloud.com/display/PUB/Coding+Guidelines
+    http://wiki.lustre.org/Lustre_Coding_Style_Guidelines
 
 The Lustre Test Script Style Guidelines can be found at:
-    https://wiki.whamcloud.com/display/PUB/Test+Coding+Style
+    http://wiki.lustre.org/Lustre_Script_Coding_Style
 
 In order to improve the quality of patches submitted to the Lustre tree,
 it is possible to automatically check every patch and commit against the
