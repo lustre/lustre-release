@@ -63,6 +63,7 @@
 #include <time.h>
 #include <fnmatch.h>
 #include <libgen.h> /* for dirname() */
+#include <linux/limits.h>
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #else
@@ -539,23 +540,21 @@ static int get_param_lmv(const char *path, const char *param,
 
 static int get_mds_md_size(const char *path)
 {
-	char buf[PATH_MAX], inst[PATH_MAX];
 	int md_size = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
-	int rc;
 
-	rc = llapi_getname(path, inst, sizeof(inst));
-	if (rc != 0)
-		return rc;
+	/*
+	 * Rather than open the file and do the ioctl to get the
+	 * instance name and close the file and search for the param
+	 * file and open the param file and read the param file and
+	 * parse the value and close the param file, let's just return
+	 * a large enough value. It's 2020, RAM is cheap and this is
+	 * much faster.
+	 */
 
-	/* Get the max ea size from llite parameters. */
-	rc = get_lustre_param_value("llite", inst, FILTER_BY_EXACT,
-				    "max_easize", buf, sizeof(buf));
-	if (rc != 0)
-		return rc;
+	if (md_size < XATTR_SIZE_MAX)
+		md_size = XATTR_SIZE_MAX;
 
-	rc = atoi(buf);
-
-	return rc > 0 ? rc : md_size;
+	return md_size;
 }
 
 int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)

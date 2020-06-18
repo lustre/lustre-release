@@ -16491,6 +16491,27 @@ test_209() {
 }
 run_test 209 "read-only open/close requests should be freed promptly"
 
+test_210() {
+	local pid
+
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:eW_E+eUc &
+	pid=$!
+	sleep 1
+
+	$LFS getstripe $DIR/$tfile
+	kill -USR1 $pid
+	wait $pid || error "multiop failed"
+
+	$MULTIOP $DIR/$tfile oO_RDONLY:eR_E+eUc &
+	pid=$!
+	sleep 1
+
+	$LFS getstripe $DIR/$tfile
+	kill -USR1 $pid
+	wait $pid || error "multiop failed"
+}
+run_test 210 "lfs getstripe does not break leases"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))
