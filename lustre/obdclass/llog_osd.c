@@ -612,8 +612,9 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	 * update/cancel, the llh_count and llh_bitmap are protected */
 	mutex_lock(&loghandle->lgh_hdr_mutex);
 	if (__test_and_set_bit_le(index, LLOG_HDR_BITMAP(llh))) {
-		CERROR("%s: index %u already set in log bitmap\n",
-		       o->do_lu.lo_dev->ld_obd->obd_name, index);
+		CERROR("%s: index %u already set in llog bitmap "DFID"\n",
+		       o->do_lu.lo_dev->ld_obd->obd_name, index,
+		       PFID(lu_object_fid(&o->do_lu)));
 		mutex_unlock(&loghandle->lgh_hdr_mutex);
 		LBUG(); /* should never happen */
 	}

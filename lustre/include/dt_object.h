@@ -2257,7 +2257,8 @@ static inline int dt_declare_record_write(const struct lu_env *env,
 
 	LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
 	LASSERT(th != NULL);
-	LASSERT(dt->do_body_ops);
+	LASSERTF(dt->do_body_ops, DFID" doesn't exit\n",
+		 PFID(lu_object_fid(&dt->do_lu)));
 	LASSERT(dt->do_body_ops->dbo_declare_write);
 	rc = dt->do_body_ops->dbo_declare_write(env, dt, buf, pos, th);
 	return rc;
