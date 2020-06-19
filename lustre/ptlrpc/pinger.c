@@ -268,13 +268,14 @@ static DECLARE_DELAYED_WORK(ping_work, ptlrpc_pinger_main);
 
 static void ptlrpc_pinger_main(struct work_struct *ws)
 {
-	time64_t this_ping = ktime_get_seconds();
-	time64_t time_to_next_wake;
+	time64_t this_ping, time_after_ping, time_to_next_wake;
 	struct timeout_item *item;
 	struct obd_import *imp;
 	struct list_head *iter;
 
 	do {
+		this_ping = ktime_get_seconds();
+
 		mutex_lock(&pinger_mutex);
 		list_for_each_entry(item, &timeout_list, ti_chain)
 			item->ti_cb(item, item->ti_cb_data);
@@ -290,8 +291,14 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 				ptlrpc_update_next_ping(imp, 0);
 		}
 		mutex_unlock(&pinger_mutex);
+
+		time_after_ping = ktime_get_seconds();
 		/* update memory usage info */
 		obd_update_maxusage();
+
+		if ((ktime_get_seconds() - this_ping - 3) > PING_INTERVAL)
+			CDEBUG(D_HA, "long time to ping: %lld, %lld, %lld\n",
+			       this_ping, time_after_ping, ktime_get_seconds());
 
 		/* Wait until the next ping time, or until we're stopped. */
 		time_to_next_wake = pinger_check_timeout(this_ping);
