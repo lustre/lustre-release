@@ -704,7 +704,8 @@ EXPORT_SYMBOL(cl_io_submit_sync);
  */
 int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 {
-	int result   = 0;
+	int result = 0;
+	int rc = 0;
 
 	LINVRNT(cl_io_is_loopable(io));
 	ENTRY;
@@ -738,7 +739,13 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 			}
 		}
 		cl_io_iter_fini(env, io);
-	} while (result == 0 && io->ci_continue);
+		if (result)
+			rc = result;
+	} while ((result == 0 || result == -EIOCBQUEUED) &&
+		 io->ci_continue);
+
+	if (rc && !result)
+		result = rc;
 
 	if (result == -EWOULDBLOCK && io->ci_ndelay) {
 		io->ci_need_restart = 1;

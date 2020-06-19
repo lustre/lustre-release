@@ -398,6 +398,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	size_t count = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
+	struct vvp_io *vio;
 
 	/* if file is encrypted, return 0 so that we fall back to buffered IO */
 	if (IS_ENCRYPTED(inode))
@@ -427,12 +428,13 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	env = lcc->lcc_env;
 	LASSERT(!IS_ERR(env));
+	vio = vvp_env_io(env);
 	io = lcc->lcc_io;
 	LASSERT(io != NULL);
 
-	aio = cl_aio_alloc(iocb);
-	if (!aio)
-		RETURN(-ENOMEM);
+	aio = io->ci_aio;
+	LASSERT(aio);
+	LASSERT(aio->cda_iocb == iocb);
 
 	/* 0. Need locking between buffered and direct access. and race with
 	 *    size changing by concurrent truncates and writes.
@@ -476,24 +478,38 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	}
 
 out:
-	aio->cda_bytes = tot_bytes;
-	cl_sync_io_note(env, &aio->cda_sync, result);
+	aio->cda_bytes += tot_bytes;
 
 	if (is_sync_kiocb(iocb)) {
+		struct cl_sync_io *anchor = &aio->cda_sync;
 		ssize_t rc2;
 
-		rc2 = cl_sync_io_wait(env, &aio->cda_sync, 0);
+		/**
+		 * @anchor was inited as 1 to prevent end_io to be
+		 * called before we add all pages for IO, so drop
+		 * one extra reference to make sure we could wait
+		 * count to be zero.
+		 */
+		cl_sync_io_note(env, anchor, result);
+
+		rc2 = cl_sync_io_wait(env, anchor, 0);
 		if (result == 0 && rc2)
 			result = rc2;
-
+		/**
+		 * One extra reference again, as if @anchor is
+		 * reused we assume it as 1 before using.
+		 */
+		atomic_add(1, &anchor->csi_sync_nr);
 		if (result == 0) {
-			struct vvp_io *vio = vvp_env_io(env);
 			/* no commit async for direct IO */
-			vio->u.write.vui_written += tot_bytes;
+			vio->u.readwrite.vui_written += tot_bytes;
 			result = tot_bytes;
 		}
-		cl_aio_free(aio);
 	} else {
+		if (rw == WRITE)
+			vio->u.readwrite.vui_written += tot_bytes;
+		else
+			vio->u.readwrite.vui_read += tot_bytes;
 		result = -EIOCBQUEUED;
 	}
 
@@ -666,7 +682,7 @@ again:
 	if (unlikely(vmpage == NULL ||
 		     PageDirty(vmpage) || PageWriteback(vmpage))) {
 		struct vvp_io *vio = vvp_env_io(env);
-		struct cl_page_list *plist = &vio->u.write.vui_queue;
+		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
 
                 /* if the page is already in dirty cache, we have to commit
 		 * the pages right now; otherwise, it may cause deadlock
@@ -827,17 +843,17 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 
 	LASSERT(cl_page_is_owned(page, io));
 	if (copied > 0) {
-		struct cl_page_list *plist = &vio->u.write.vui_queue;
+		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
 
 		lcc->lcc_page = NULL; /* page will be queued */
 
 		/* Add it into write queue */
 		cl_page_list_add(plist, page);
 		if (plist->pl_nr == 1) /* first page */
-			vio->u.write.vui_from = from;
+			vio->u.readwrite.vui_from = from;
 		else
 			LASSERT(from == 0);
-		vio->u.write.vui_to = from + copied;
+		vio->u.readwrite.vui_to = from + copied;
 
 		/* To address the deadlock in balance_dirty_pages() where
 		 * this dirty page may be written back in the same thread. */

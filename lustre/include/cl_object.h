@@ -1804,6 +1804,8 @@ struct cl_io {
         enum cl_io_state               ci_state;
         /** main object this io is against. Immutable after creation. */
         struct cl_object              *ci_obj;
+	/** one AIO request might be split in cl_io_loop */
+	struct cl_dio_aio	      *ci_aio;
         /**
          * Upper layer io, of which this io is a part of. Immutable after
          * creation.

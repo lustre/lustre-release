@@ -267,10 +267,20 @@ static int vvp_io_write_iter_init(const struct lu_env *env,
 {
 	struct vvp_io *vio = cl2vvp_io(env, ios);
 
-	cl_page_list_init(&vio->u.write.vui_queue);
-	vio->u.write.vui_written = 0;
-	vio->u.write.vui_from = 0;
-	vio->u.write.vui_to = PAGE_SIZE;
+	cl_page_list_init(&vio->u.readwrite.vui_queue);
+	vio->u.readwrite.vui_written = 0;
+	vio->u.readwrite.vui_from = 0;
+	vio->u.readwrite.vui_to = PAGE_SIZE;
+
+	return 0;
+}
+
+static int vvp_io_read_iter_init(const struct lu_env *env,
+				 const struct cl_io_slice *ios)
+{
+	struct vvp_io *vio = cl2vvp_io(env, ios);
+
+	vio->u.readwrite.vui_read = 0;
 
 	return 0;
 }
@@ -280,7 +290,7 @@ static void vvp_io_write_iter_fini(const struct lu_env *env,
 {
 	struct vvp_io *vio = cl2vvp_io(env, ios);
 
-	LASSERT(vio->u.write.vui_queue.pl_nr == 0);
+	LASSERT(vio->u.readwrite.vui_queue.pl_nr == 0);
 }
 
 static int vvp_io_fault_iter_init(const struct lu_env *env,
@@ -877,6 +887,11 @@ out:
 			io->ci_continue = 0;
 		io->ci_nob += result;
 		result = 0;
+	} else if (result == -EIOCBQUEUED) {
+		io->ci_nob += vio->u.readwrite.vui_read;
+		if (vio->vui_iocb)
+			vio->vui_iocb->ki_pos = pos +
+				vio->u.readwrite.vui_read;
 	}
 
 	return result;
@@ -1113,24 +1128,25 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	struct cl_object *obj = io->ci_obj;
 	struct inode *inode = vvp_object_inode(obj);
 	struct vvp_io *vio = vvp_env_io(env);
-	struct cl_page_list *queue = &vio->u.write.vui_queue;
+	struct cl_page_list *queue = &vio->u.readwrite.vui_queue;
 	struct cl_page *page;
 	int rc = 0;
 	int bytes = 0;
-	unsigned int npages = vio->u.write.vui_queue.pl_nr;
+	unsigned int npages = vio->u.readwrite.vui_queue.pl_nr;
 	ENTRY;
 
 	if (npages == 0)
 		RETURN(0);
 
 	CDEBUG(D_VFSTRACE, "commit async pages: %d, from %d, to %d\n",
-		npages, vio->u.write.vui_from, vio->u.write.vui_to);
+		npages, vio->u.readwrite.vui_from, vio->u.readwrite.vui_to);
 
 	LASSERT(page_list_sanity_check(obj, queue));
 
 	/* submit IO with async write */
 	rc = cl_io_commit_async(env, io, queue,
-				vio->u.write.vui_from, vio->u.write.vui_to,
+				vio->u.readwrite.vui_from,
+				vio->u.readwrite.vui_to,
 				write_commit_callback);
 	npages -= queue->pl_nr; /* already committed pages */
 	if (npages > 0) {
@@ -1138,18 +1154,18 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 		bytes = npages << PAGE_SHIFT;
 
 		/* first page */
-		bytes -= vio->u.write.vui_from;
+		bytes -= vio->u.readwrite.vui_from;
 		if (queue->pl_nr == 0) /* last page */
-			bytes -= PAGE_SIZE - vio->u.write.vui_to;
+			bytes -= PAGE_SIZE - vio->u.readwrite.vui_to;
 		LASSERTF(bytes > 0, "bytes = %d, pages = %d\n", bytes, npages);
 
-		vio->u.write.vui_written += bytes;
+		vio->u.readwrite.vui_written += bytes;
 
 		CDEBUG(D_VFSTRACE, "Committed %d pages %d bytes, tot: %ld\n",
-			npages, bytes, vio->u.write.vui_written);
+			npages, bytes, vio->u.readwrite.vui_written);
 
 		/* the first page must have been written. */
-		vio->u.write.vui_from = 0;
+		vio->u.readwrite.vui_from = 0;
 	}
 	LASSERT(page_list_sanity_check(obj, queue));
 	LASSERT(ergo(rc == 0, queue->pl_nr == 0));
@@ -1157,10 +1173,10 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	/* out of quota, try sync write */
 	if (rc == -EDQUOT && !cl_io_is_mkwrite(io)) {
 		rc = vvp_io_commit_sync(env, io, queue,
-					vio->u.write.vui_from,
-					vio->u.write.vui_to);
+					vio->u.readwrite.vui_from,
+					vio->u.readwrite.vui_to);
 		if (rc > 0) {
-			vio->u.write.vui_written += rc;
+			vio->u.readwrite.vui_written += rc;
 			rc = 0;
 		}
 	}
@@ -1294,12 +1310,12 @@ static int vvp_io_write_start(const struct lu_env *env,
 		result = vvp_io_write_commit(env, io);
 		/* Simulate short commit */
 		if (CFS_FAULT_CHECK(OBD_FAIL_LLITE_SHORT_COMMIT)) {
-			vio->u.write.vui_written >>= 1;
-			if (vio->u.write.vui_written > 0)
+			vio->u.readwrite.vui_written >>= 1;
+			if (vio->u.readwrite.vui_written > 0)
 				io->ci_need_restart = 1;
 		}
-		if (vio->u.write.vui_written > 0) {
-			result = vio->u.write.vui_written;
+		if (vio->u.readwrite.vui_written > 0) {
+			result = vio->u.readwrite.vui_written;
 			CDEBUG(D_VFSTRACE, "%s: write nob %zd, result: %zd\n",
 				file_dentry(file)->d_name.name,
 				io->ci_nob, result);
@@ -1328,10 +1344,16 @@ static int vvp_io_write_start(const struct lu_env *env,
 	if (result > 0 || result == -EIOCBQUEUED) {
 		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
 
-		if (result < cnt)
+		if (result != -EIOCBQUEUED && result < cnt)
 			io->ci_continue = 0;
 		if (result > 0)
 			result = 0;
+		/* move forward */
+		if (result == -EIOCBQUEUED) {
+			io->ci_nob += vio->u.readwrite.vui_written;
+			vio->vui_iocb->ki_pos = pos +
+					vio->u.readwrite.vui_written;
+		}
 	}
 
 	RETURN(result);
@@ -1618,6 +1640,7 @@ static const struct cl_io_operations vvp_io_ops = {
 	.op = {
 		[CIT_READ] = {
 			.cio_fini	= vvp_io_fini,
+			.cio_iter_init = vvp_io_read_iter_init,
 			.cio_lock	= vvp_io_read_lock,
 			.cio_start	= vvp_io_read_start,
 			.cio_end	= vvp_io_rw_end,

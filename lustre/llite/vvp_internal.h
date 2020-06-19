@@ -97,9 +97,10 @@ struct vvp_io {
 		struct {
 			struct cl_page_list vui_queue;
 			unsigned long vui_written;
+			unsigned long vui_read;
 			int vui_from;
 			int vui_to;
-		} write;
+		} readwrite; /* normal io */
 	} u;
 
 	enum vvp_io_subtype	vui_io_subtype;

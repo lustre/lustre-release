@@ -21828,6 +21828,13 @@ test_398c() { # LU-4198
 		--filename=$DIR/$tfile
 	[ $? -eq 0 ] || error "fio mixed read write error"
 
+	echo "AIO with large block size ${size}M"
+	fio --name=rand-rw --rw=randrw --bs=${size}M --direct=1 \
+		--numjobs=1 --fallocate=none --ioengine=libaio \
+		--iodepth=16 --allow_file_create=0 --size=${size}M \
+		--filename=$DIR/$tfile
+	[ $? -eq 0 ] || error "fio large block size failed"
+
 	rm -rf $DIR/$tfile
 	$LCTL set_param debug="$saved_debug"
 }
