@@ -71,7 +71,7 @@ gen_config() {
 	# and stop to generate the startup logs.
 	start_mds
 	start_ost
-        wait_osc_import_state mds ost FULL
+	wait_osc_import_state mds ost FULL
 	stop_ost
 	stop_mds
 }
@@ -95,7 +95,7 @@ writeconf_or_reformat() {
 }
 
 reformat() {
-        formatall
+	formatall
 }
 
 start_mgs () {
@@ -157,9 +157,9 @@ stop_mds() {
 }
 
 stop_mgs() {
-       echo "stop mgs service on `facet_active_host mgs`"
-       # These tests all use non-failover stop
-       stop mgs -f  || return 97
+	echo "stop mgs service on `facet_active_host mgs`"
+	# These tests all use non-failover stop
+	stop mgs -f  || return 97
 }
 
 start_ost() {
@@ -254,8 +254,8 @@ check_mount() {
 	do_facet client "cp /etc/passwd $DIR/a" || return 71
 	do_facet client "rm $DIR/a" || return 72
 	# make sure lustre is actually mounted (touch will block,
-        # but grep won't, so do it after)
-        do_facet client "grep $MOUNT' ' /proc/mounts > /dev/null" || return 73
+	# but grep won't, so do it after)
+	do_facet client "grep $MOUNT' ' /proc/mounts > /dev/null" || return 73
 	echo "setup single mount lustre success"
 }
 

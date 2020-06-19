@@ -4,9 +4,8 @@ AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 
 DIST_SUBDIRS = mpi
 
-noinst_DATA = disk1_8_up_2_5-ldiskfs.tar.bz2 disk2_1_up_2_5-ldiskfs.tar.bz2
-noinst_DATA += disk2_3_up_2_5-ldiskfs.tar.bz2 disk2_4-ldiskfs.tar.bz2
-noinst_DATA += disk2_4-zfs.tar.bz2 disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
+noinst_DATA = disk2_4-ldiskfs.tar.bz2 disk2_4-zfs.tar.bz2
+noinst_DATA += disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
 noinst_DATA += disk2_9-zfs.tar.bz2 disk2_9-ldiskfs.tar.bz2
 noinst_DATA += ldiskfs_mdt1_2_11.tar.bz2 ldiskfs_mdt2_2_11.tar.bz2
 noinst_DATA += ldiskfs_ost1_2_11.tar.bz2 ldiskfs_ost2_2_11.tar.bz2
