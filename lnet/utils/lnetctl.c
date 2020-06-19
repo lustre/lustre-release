@@ -91,6 +91,7 @@ static int jt_set_response_tracking(int argc, char **argv);
 static int jt_set_recovery_limit(int argc, char **argv);
 static int jt_udsp(int argc, char **argv);
 static int jt_setup_mrrouting(int argc, char **argv);
+static int jt_calc_cpt_of_nid(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -115,6 +116,9 @@ command_t cmd_list[] = {
 	{"udsp", jt_udsp, 0, "udsp {add | del | help}"},
 	{"setup-mrrouting", jt_setup_mrrouting, 0,
 	 "setup linux routing tables\n"},
+	{"cpt-of-nid", jt_calc_cpt_of_nid, 0, "Calculate the CPT associated with NID\n"
+	 "\t--nid: NID to calculate the CPT of\n"
+	 "\t--ncpt: Number of CPTs to consider in the calculation\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -287,22 +291,18 @@ command_t udsp_cmds[] = {
 	{ 0, 0, 0, NULL }
 };
 
-static int jt_calc_service_id(int argc, char **argv)
+static int parse_long(const char *number, long int *value)
 {
-	int rc;
-	__u64 service_id;
+	char *end;
 
-	rc = lustre_lnet_calc_service_id(&service_id);
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		return rc;
+	if (!number)
+		return -1;
 
-	/*
-	 * cYAML currently doesn't support printing hex values.
-	 * Therefore just print it locally here
-	 */
-	printf("service id:\n    value: 0x%jx\n", (uintmax_t)service_id);
+	*value = strtol(number,  &end, 0);
+	if (end != NULL && *end != 0)
+		return -1;
 
-	return rc;
+	return 0;
 }
 
 static int jt_setup_mrrouting(int argc, char **argv)
@@ -336,20 +336,6 @@ static inline void print_help(const command_t cmds[], const char *cmd_type,
 		}
 		printf("%s %s: %s\n", cmd_type, cmd->pc_name, cmd->pc_help);
 	}
-}
-
-static int parse_long(const char *number, long int *value)
-{
-	char *end;
-
-	if (!number)
-		return -1;
-
-	*value = strtol(number,  &end, 0);
-	if (end != NULL && *end != 0)
-		return -1;
-
-	return 0;
 }
 
 static int check_cmd(const command_t *cmd_list, const char *cmd,
@@ -421,6 +407,73 @@ static int jt_set_response_tracking(int argc, char **argv)
 	cYAML_free_tree(err_rc);
 
 	return rc;
+}
+
+static int jt_calc_service_id(int argc, char **argv)
+{
+	int rc;
+	__u64 service_id;
+
+	rc = lustre_lnet_calc_service_id(&service_id);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		return rc;
+
+	/* cYAML currently doesn't support printing hex values.
+	 * Therefore just print it locally here
+	 */
+	printf("service_id:\n    value: 0x%llx\n",
+	       (unsigned long long)(service_id));
+
+	return rc;
+}
+
+static int jt_calc_cpt_of_nid(int argc, char **argv)
+{
+	int rc, opt;
+	int cpt;
+	long int ncpts = -1;
+	char *nid = NULL;
+	struct cYAML *err_rc = NULL;
+	const char *const short_options = "n:c:h";
+	static const struct option long_options[] = {
+	{ .name = "nid",       .has_arg = required_argument, .val = 'n' },
+	{ .name = "ncpt",     .has_arg = required_argument, .val = 'c' },
+	{ .name = NULL } };
+
+	rc = check_cmd(cmd_list, "", "cpt-of-nid", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'n':
+			nid = optarg;
+			break;
+		case 'c':
+			rc = parse_long(optarg, &ncpts);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "cpt", "get",
+						"cannot parse input", &err_rc);
+				cYAML_print_tree2file(stderr, err_rc);
+				cYAML_free_tree(err_rc);
+				return -1;
+			}
+			break;
+		case '?':
+			print_help(cmd_list, "", "cpt-of-nid");
+		default:
+			return 0;
+		}
+	}
+
+	cpt = lustre_lnet_calc_cpt_of_nid(nid, ncpts);
+	if (cpt < 0)
+		return -1;
+
+	printf("cpt:\n    value: %d\n", cpt);
+
+	return 0;
 }
 
 static int jt_set_recovery_limit(int argc, char **argv)

@@ -44,6 +44,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/hash.h>
 #include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
 #include <sys/types.h>
@@ -3788,6 +3789,52 @@ out:
 			  err_rc);
 
 	return rc;
+}
+
+unsigned int
+lnet_nid_cpt_hash(lnet_nid_t nid, long int number)
+{
+	__u64		key = nid;
+	unsigned int	val;
+	int cpt_bits = 0;
+
+	if (number == 1)
+		return 0;
+
+	while ((1 << cpt_bits) < number)
+		cpt_bits++;
+
+	val = hash_long(key, cpt_bits);
+	/* NB: LNET_CP_NUMBER doesn't have to be PO2 */
+	if (val < number)
+		return val;
+
+	return (unsigned int)(key + val + (val >> 1)) % number;
+}
+
+int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
+{
+	int rc = LUSTRE_CFG_RC_BAD_PARAM;
+	lnet_nid_t nid;
+
+	if (!nidc) {
+		fprintf(stderr, "error:\n    msg: \"no NID provided\"\n");
+		return rc;
+	}
+
+	if (ncpts < 0) {
+		fprintf(stderr, "error:\n    msg: \"number of CPTs not provided\"\n");
+		return rc;
+	}
+
+	nid = libcfs_str2nid(nidc);
+	if (nid == LNET_NID_ANY) {
+		fprintf(stderr, "error:\n    msg: \"bad NID provided %s\"\n",
+			nidc);
+		return rc;
+	}
+
+	return (int)lnet_nid_cpt_hash(nid, ncpts);
 }
 
 int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
