@@ -492,8 +492,7 @@ out:
 			vio->u.write.vui_written += tot_bytes;
 			result = tot_bytes;
 		}
-		OBD_FREE_PTR(aio);
-
+		cl_aio_free(aio);
 	} else {
 		result = -EIOCBQUEUED;
 	}

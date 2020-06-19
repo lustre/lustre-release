@@ -2523,6 +2523,7 @@ int  cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
 void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb);
+void cl_aio_free(struct cl_dio_aio *aio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 {
 	cl_sync_io_init_notify(anchor, nr, NULL, NULL);
