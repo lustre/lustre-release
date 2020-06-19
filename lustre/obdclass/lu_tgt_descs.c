@@ -264,7 +264,7 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 	 * the tgt array and bitmap are allocated/grown dynamically as tgts are
 	 * added to the LOD/LMV, see lu_tgt_descs_add()
 	 */
-	ltd->ltd_tgt_bitmap = CFS_ALLOCATE_BITMAP(BITS_PER_LONG);
+	ltd->ltd_tgt_bitmap = bitmap_zalloc(BITS_PER_LONG, GFP_NOFS);
 	if (!ltd->ltd_tgt_bitmap)
 		return -ENOMEM;
 
@@ -300,7 +300,7 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 {
 	int i;
 
-	CFS_FREE_BITMAP(ltd->ltd_tgt_bitmap);
+	bitmap_free(ltd->ltd_tgt_bitmap);
 	for (i = 0; i < TGT_PTRS; i++) {
 		if (ltd->ltd_tgt_idx[i])
 			OBD_FREE_PTR(ltd->ltd_tgt_idx[i]);
@@ -324,27 +324,27 @@ EXPORT_SYMBOL(lu_tgt_descs_fini);
  */
 static int lu_tgt_descs_resize(struct lu_tgt_descs *ltd, __u32 newsize)
 {
-	struct cfs_bitmap *new_bitmap, *old_bitmap = NULL;
+	unsigned long *new_bitmap, *old_bitmap = NULL;
 
 	/* someone else has already resize the array */
 	if (newsize <= ltd->ltd_tgts_size)
 		return 0;
 
-	new_bitmap = CFS_ALLOCATE_BITMAP(newsize);
+	new_bitmap = bitmap_zalloc(newsize, GFP_NOFS);
 	if (!new_bitmap)
 		return -ENOMEM;
 
 	if (ltd->ltd_tgts_size > 0) {
 		/* the bitmap already exists, copy data from old one */
-		cfs_bitmap_copy(new_bitmap, ltd->ltd_tgt_bitmap);
+		bitmap_copy(new_bitmap, ltd->ltd_tgt_bitmap,
+			    ltd->ltd_tgts_size);
 		old_bitmap = ltd->ltd_tgt_bitmap;
 	}
 
 	ltd->ltd_tgts_size  = newsize;
 	ltd->ltd_tgt_bitmap = new_bitmap;
 
-	if (old_bitmap)
-		CFS_FREE_BITMAP(old_bitmap);
+	bitmap_free(old_bitmap);
 
 	CDEBUG(D_CONFIG, "tgt size: %d\n", ltd->ltd_tgts_size);
 
@@ -381,7 +381,7 @@ int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 		rc = lu_tgt_descs_resize(ltd, newsize);
 		if (rc)
 			RETURN(rc);
-	} else if (cfs_bitmap_check(ltd->ltd_tgt_bitmap, index)) {
+	} else if (test_bit(index, ltd->ltd_tgt_bitmap)) {
 		RETURN(-EEXIST);
 	}
 
@@ -392,7 +392,7 @@ int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 	}
 
 	LTD_TGT(ltd, tgt->ltd_index) = tgt;
-	cfs_bitmap_set(ltd->ltd_tgt_bitmap, tgt->ltd_index);
+	set_bit(tgt->ltd_index, ltd->ltd_tgt_bitmap);
 
 	ltd->ltd_lov_desc.ld_tgt_count++;
 	if (tgt->ltd_active)
@@ -409,7 +409,7 @@ void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 {
 	lu_qos_del_tgt(&ltd->ltd_qos, tgt);
 	LTD_TGT(ltd, tgt->ltd_index) = NULL;
-	cfs_bitmap_clear(ltd->ltd_tgt_bitmap, tgt->ltd_index);
+	clear_bit(tgt->ltd_index, ltd->ltd_tgt_bitmap);
 	ltd->ltd_lov_desc.ld_tgt_count--;
 	if (tgt->ltd_active)
 		ltd->ltd_lov_desc.ld_active_tgt_count--;

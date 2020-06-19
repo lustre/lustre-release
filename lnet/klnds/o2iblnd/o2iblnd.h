@@ -41,6 +41,9 @@
 #undef NEED_KTIME_GET_REAL_NS
 #endif
 
+/* MOFED has its own bitmap_alloc backport */
+#define HAVE_BITMAP_ALLOC 1
+
 #endif
 
 #include <linux/module.h>

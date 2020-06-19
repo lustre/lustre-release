@@ -296,8 +296,8 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
 			int next;
 
-			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap,
-					      src_pool->op_array[i]))
+			if (!test_bit(src_pool->op_array[i],
+				      ltd->ltd_tgt_bitmap))
 				continue;
 
 			tgt = LTD_TGT(ltd, src_pool->op_array[i]);
@@ -572,7 +572,7 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 	bool used = false;
 	int i;
 
-	if (!cfs_bitmap_check(lod->lod_ost_bitmap, index)) {
+	if (!test_bit(index, lod->lod_ost_bitmap)) {
 		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
 			  index);
 		return true;
@@ -808,7 +808,7 @@ repeat_find:
 			  stripe_idx, array_idx, ost_idx);
 
 		if ((ost_idx == LOV_QOS_EMPTY) ||
-		    !cfs_bitmap_check(m->lod_ost_bitmap, ost_idx))
+		    !test_bit(ost_idx, m->lod_ost_bitmap))
 			continue;
 
 		/* Fail Check before osc_precreate() is called
@@ -890,7 +890,7 @@ lod_qos_mdt_in_use_init(const struct lu_env *env,
 		for (j = 0; j < pool->op_count; j++) {
 			mdt_idx = pool->op_array[j];
 
-			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, mdt_idx))
+			if (!test_bit(mdt_idx, ltd->ltd_tgt_bitmap))
 				continue;
 
 			mdt = LTD_TGT(ltd, mdt_idx);
@@ -993,7 +993,7 @@ repeat_find:
 			  stripe_idx, pool_idx, mdt_idx);
 
 		if (mdt_idx == LOV_QOS_EMPTY ||
-		    !cfs_bitmap_check(ltd->ltd_tgt_bitmap, mdt_idx))
+		    !test_bit(mdt_idx, ltd->ltd_tgt_bitmap))
 			continue;
 
 		/* do not put >1 objects on one MDT */
@@ -1132,7 +1132,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 	     i++, array_idx = (array_idx + 1) % lod_comp->llc_stripe_count) {
 		__u32 ost_idx = lod_comp->llc_ostlist.op_array[array_idx];
 
-		if (!cfs_bitmap_check(m->lod_ost_bitmap, ost_idx)) {
+		if (!test_bit(ost_idx, m->lod_ost_bitmap)) {
 			rc = -ENODEV;
 			break;
 		}
@@ -1260,7 +1260,7 @@ repeat_find:
 			i++, array_idx = (array_idx + 1) % ost_count) {
 		ost_idx = osts->op_array[array_idx];
 
-		if (!cfs_bitmap_check(m->lod_ost_bitmap, ost_idx))
+		if (!test_bit(ost_idx, m->lod_ost_bitmap))
 			continue;
 
 		/* Fail Check before osc_precreate() is called
@@ -1458,7 +1458,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	good_osts = 0;
 	/* Find all the OSTs that are valid stripe candidates */
 	for (i = 0; i < osts->op_count; i++) {
-		if (!cfs_bitmap_check(lod->lod_ost_bitmap, osts->op_array[i]))
+		if (!test_bit(osts->op_array[i], lod->lod_ost_bitmap))
 			continue;
 
 		ost = OST_TGT(lod, osts->op_array[i]);
@@ -1702,7 +1702,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	good_mdts = 0;
 	/* Find all the MDTs that are valid stripe candidates */
 	for (i = 0; i < pool->op_count; i++) {
-		if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, pool->op_array[i]))
+		if (!test_bit(pool->op_array[i], ltd->ltd_tgt_bitmap))
 			continue;
 
 		mdt = LTD_TGT(ltd, pool->op_array[i]);

@@ -74,6 +74,24 @@ static inline void memalloc_noreclaim_restore(unsigned int flags)
 }
 #endif /* !HAVE_MEMALLOC_RECLAIM */
 
+#ifndef HAVE_BITMAP_ALLOC
+static inline unsigned long *bitmap_alloc(unsigned int nbits, gfp_t flags)
+{
+	return kmalloc_array(BITS_TO_LONGS(nbits), sizeof(unsigned long),
+			     flags);
+}
+
+static inline unsigned long *bitmap_zalloc(unsigned int nbits, gfp_t flags)
+{
+	return bitmap_alloc(nbits, flags | __GFP_ZERO);
+}
+
+static inline void bitmap_free(const unsigned long *bitmap)
+{
+	kfree(bitmap);
+}
+#endif /* !HAVE_BITMAP_ALLOC */
+
 /*
  * Shrinker
  */

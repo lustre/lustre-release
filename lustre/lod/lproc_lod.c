@@ -785,12 +785,12 @@ static void *lod_tgts_seq_start(struct seq_file *p, loff_t *pos, bool is_mdt)
 	LASSERT(obd != NULL);
 
 	lod_getref(ltd); /* released in lod_tgts_seq_stop */
-	if (*pos >= ltd->ltd_tgt_bitmap->size)
+	if (*pos >= ltd->ltd_tgts_size)
 		return NULL;
 
-	*pos = find_next_bit(ltd->ltd_tgt_bitmap->data,
-			     ltd->ltd_tgt_bitmap->size, *pos);
-	if (*pos < ltd->ltd_tgt_bitmap->size)
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap,
+			     ltd->ltd_tgts_size, *pos);
+	if (*pos < ltd->ltd_tgts_size)
 		return LTD_TGT(ltd, *pos);
 	else
 		return NULL;
@@ -835,12 +835,12 @@ static void *lod_tgts_seq_next(struct seq_file *p, void *v, loff_t *pos,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	if (*pos >= ltd->ltd_tgt_bitmap->size - 1)
+	if (*pos >= ltd->ltd_tgts_size - 1)
 		return NULL;
 
-	*pos = find_next_bit(ltd->ltd_tgt_bitmap->data,
-			     ltd->ltd_tgt_bitmap->size, *pos + 1);
-	if (*pos < ltd->ltd_tgt_bitmap->size)
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap,
+			     ltd->ltd_tgts_size, *pos + 1);
+	if (*pos < ltd->ltd_tgts_size)
 		return LTD_TGT(ltd, *pos);
 	else
 		return NULL;

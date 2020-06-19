@@ -1085,6 +1085,24 @@ wait_var_event, [
 ]) # LIBCFS_WAIT_VAR_EVENT
 
 #
+# LIBCFS_BITMAP_ALLOC
+#
+# Kernel version 4.17 commit c42b65e363ce97a828f81b59033c3558f8fa7f70
+# added bitmap memory allocation handling.
+#
+AC_DEFUN([LIBCFS_BITMAP_ALLOC], [
+LB_CHECK_COMPILE([if Linux bitmap memory management exist],
+bitmap_alloc, [
+	#include <linux/bitmap.h>
+],[
+	unsigned long *map = bitmap_alloc(1, GFP_KERNEL);
+],[
+	AC_DEFINE(HAVE_BITMAP_ALLOC, 1,
+		[Linux bitmap can be allocated])
+])
+]) # LIBCFS_BITMAP_ALLOC
+
+#
 # LIBCFS_CLEAR_AND_WAKE_UP_BIT
 #
 # Kernel version 4.17-rc2 commit 8236b0ae31c837d2b3a2565c5f8d77f637e824cc
@@ -1353,6 +1371,7 @@ LIBCFS_TIMER_SETUP
 # 4.16
 LIBCFS_WAIT_VAR_EVENT
 # 4.17
+LIBCFS_BITMAP_ALLOC
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
 # 4.19
 LIBCFS_XARRAY_SUPPORT

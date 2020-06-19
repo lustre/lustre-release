@@ -2108,7 +2108,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 
 			/* Sigh, this index is not in the bitmap, let's check
 			 * next available target */
-			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx) &&
+			if (!test_bit(idx, ltd->ltd_tgt_bitmap) &&
 			    idx != master_index)
 				continue;
 
@@ -6394,7 +6394,7 @@ static bool lod_sel_osts_allowed(const struct lu_env *env,
 		if (j < lod_comp->llc_stripe_count)
 			continue;
 
-		if (!cfs_bitmap_check(lod->lod_ost_bitmap, index)) {
+		if (!test_bit(index, lod->lod_ost_bitmap)) {
 			CDEBUG(D_LAYOUT, "ost %d no longer present\n", index);
 			ret = false;
 			break;
@@ -8502,7 +8502,7 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 
 	if (ltd != NULL) {
 		if (ltd->ltd_tgts_size > idx &&
-		    cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx)) {
+		    test_bit(idx, ltd->ltd_tgt_bitmap)) {
 			tgt = LTD_TGT(ltd, idx);
 
 			LASSERT(tgt != NULL);

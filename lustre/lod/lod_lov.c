@@ -415,7 +415,7 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 	mutex_lock(&ltd->ltd_mutex);
 	tgt = LTD_TGT(ltd, idx);
 	/* check that the index is allocated in the bitmap */
-	if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx) || !tgt) {
+	if (!test_bit(idx, ltd->ltd_tgt_bitmap) || !tgt) {
 		CERROR("%s: device %d is not set up\n", obd->obd_name, idx);
 		GOTO(out, rc = -EINVAL);
 	}
@@ -961,7 +961,7 @@ repeat:
 static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 {
 	if (unlikely(idx >= md->lod_ost_descs.ltd_tgts_size ||
-		     !cfs_bitmap_check(md->lod_ost_bitmap, idx))) {
+		     !test_bit(idx, md->lod_ost_bitmap))) {
 		CERROR("%s: bad idx: %d of %d\n", lod2obd(md)->obd_name, idx,
 		       md->lod_ost_descs.ltd_tgts_size);
 		return -EINVAL;
@@ -1530,7 +1530,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 		}
 
 		/* if lmm_stripe_offset is *not* in bitmap */
-		if (!cfs_bitmap_check(d->lod_ost_bitmap, stripe_offset)) {
+		if (!test_bit(stripe_offset, d->lod_ost_bitmap)) {
 			CDEBUG(D_LAYOUT, "stripe offset %u not in bitmap\n",
 			       stripe_offset);
 			GOTO(out, rc = -EINVAL);

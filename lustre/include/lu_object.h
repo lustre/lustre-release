@@ -1607,7 +1607,7 @@ struct lu_tgt_descs {
 	/* Size of the lu_tgts array, granted to be a power of 2 */
 	__u32			ltd_tgts_size;
 	/* bitmap of TGTs available */
-	struct cfs_bitmap	*ltd_tgt_bitmap;
+	unsigned long		*ltd_tgt_bitmap;
 	/* TGTs scheduled to be deleted */
 	__u32			ltd_death_row;
 	/* Table refcount used for delayed deletion */
@@ -1646,9 +1646,9 @@ static inline struct lu_tgt_desc *ltd_first_tgt(struct lu_tgt_descs *ltd)
 {
 	int index;
 
-	index = find_first_bit(ltd->ltd_tgt_bitmap->data,
-			       ltd->ltd_tgt_bitmap->size);
-	return (index < ltd->ltd_tgt_bitmap->size) ? LTD_TGT(ltd, index) : NULL;
+	index = find_first_bit(ltd->ltd_tgt_bitmap,
+			       ltd->ltd_tgts_size);
+	return (index < ltd->ltd_tgts_size) ? LTD_TGT(ltd, index) : NULL;
 }
 
 static inline struct lu_tgt_desc *ltd_next_tgt(struct lu_tgt_descs *ltd,
@@ -1660,10 +1660,10 @@ static inline struct lu_tgt_desc *ltd_next_tgt(struct lu_tgt_descs *ltd,
 		return NULL;
 
 	index = tgt->ltd_index;
-	LASSERT(index < ltd->ltd_tgt_bitmap->size);
-	index = find_next_bit(ltd->ltd_tgt_bitmap->data,
-			      ltd->ltd_tgt_bitmap->size, index + 1);
-	return (index < ltd->ltd_tgt_bitmap->size) ? LTD_TGT(ltd, index) : NULL;
+	LASSERT(index < ltd->ltd_tgts_size);
+	index = find_next_bit(ltd->ltd_tgt_bitmap,
+			      ltd->ltd_tgts_size, index + 1);
+	return (index < ltd->ltd_tgts_size) ? LTD_TGT(ltd, index) : NULL;
 }
 
 #define ltd_foreach_tgt(ltd, tgt) \

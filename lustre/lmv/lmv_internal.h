@@ -73,15 +73,15 @@ static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 static inline struct lu_tgt_desc *
 lmv_tgt(struct lmv_obd *lmv, __u32 index)
 {
-	return index < lmv->lmv_mdt_descs.ltd_tgt_bitmap->size ?
+	return index < lmv->lmv_mdt_descs.ltd_tgts_size ?
 		LTD_TGT(&lmv->lmv_mdt_descs, index) : NULL;
 }
 
 static inline bool
 lmv_mdt0_inited(struct lmv_obd *lmv)
 {
-	return lmv->lmv_mdt_descs.ltd_tgt_bitmap->size > 0 &&
-	       cfs_bitmap_check(lmv->lmv_mdt_descs.ltd_tgt_bitmap, 0);
+	return lmv->lmv_mdt_descs.ltd_tgts_size > 0 &&
+	       test_bit(0, lmv->lmv_mdt_descs.ltd_tgt_bitmap);
 }
 
 #define lmv_foreach_tgt(lmv, tgt) ltd_foreach_tgt(&(lmv)->lmv_mdt_descs, tgt)
