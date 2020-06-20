@@ -35,13 +35,6 @@
 
 #include <libcfs/libcfs.h>
 
-enum cfs_trace_buf_type {
-	CFS_TCD_TYPE_PROC = 0,
-	CFS_TCD_TYPE_SOFTIRQ,
-	CFS_TCD_TYPE_IRQ,
-	CFS_TCD_TYPE_MAX
-};
-
 #define TRACEFILE_NAME_SIZE 1024
 extern char      cfs_tracefile[TRACEFILE_NAME_SIZE];
 extern long long cfs_tracefile_size;
@@ -80,20 +73,6 @@ extern int  libcfs_panic_in_progress;
 #define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
 #define CFS_TRACEFILE_SIZE (500 << 20)
-
-#ifdef LUSTRE_TRACEFILE_PRIVATE
-
-/*
- * Private declare for tracefile
- */
-#define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))
-#define TCD_STOCK_PAGES (TCD_MAX_PAGES)
-
-#define CFS_TRACEFILE_SIZE (500 << 20)
-
-/* Size of a buffer for sprinting console messages if we can't get a page
- * from system */
-#define CFS_TRACE_CONSOLE_BUFFER_SIZE   1024
 
 union cfs_trace_data_union {
 	struct cfs_trace_cpu_data {
@@ -222,17 +201,6 @@ struct cfs_trace_page {
 	unsigned short		type;
 };
 
-extern char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
-extern enum cfs_trace_buf_type cfs_trace_buf_idx_get(void);
-
-static inline char *cfs_trace_get_console_buffer(void)
-{
-	unsigned int i = get_cpu();
-	unsigned int j = cfs_trace_buf_idx_get();
-
-	return cfs_trace_console_buffers[i][j];
-}
-
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
                       struct cfs_trace_page *tage);
 
@@ -256,7 +224,5 @@ do {									\
 	__LASSERT(tage->used <= PAGE_SIZE);				\
 	__LASSERT(page_count(tage->page) > 0);				\
 } while (0)
-
-#endif	/* LUSTRE_TRACEFILE_PRIVATE */
 
 #endif /* __LIBCFS_TRACEFILE_H__ */
