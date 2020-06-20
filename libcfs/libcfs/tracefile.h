@@ -53,9 +53,6 @@ extern char lnet_debug_log_upcall[1024];
 
 extern void libcfs_run_debug_log_upcall(char *file);
 
-int  cfs_tracefile_init_arch(void);
-void cfs_tracefile_fini_arch(void);
-
 int cfs_tracefile_dump_all_pages(char *filename);
 void cfs_trace_debug_print(void);
 void cfs_trace_flush_pages(void);

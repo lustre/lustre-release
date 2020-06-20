@@ -140,82 +140,6 @@ static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
 	put_cpu();
 }
 
-/* percents to share the total debug memory for each type */
-static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
-	80,	/* 80% pages for CFS_TCD_TYPE_PROC */
-	10,	/* 10% pages for CFS_TCD_TYPE_SOFTIRQ */
-	10	/* 10% pages for CFS_TCD_TYPE_IRQ */
-};
-
-int cfs_tracefile_init_arch(void)
-{
-	struct cfs_trace_cpu_data *tcd;
-	int i;
-	int j;
-
-	/* initialize trace_data */
-	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
-	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
-		cfs_trace_data[i] =
-			kmalloc_array(num_possible_cpus(),
-				      sizeof(union cfs_trace_data_union),
-				      GFP_KERNEL);
-		if (!cfs_trace_data[i])
-			goto out_trace_data;
-	}
-
-	/* arch related info initialized */
-	cfs_tcd_for_each(tcd, i, j) {
-		spin_lock_init(&tcd->tcd_lock);
-		tcd->tcd_pages_factor = pages_factor[i];
-		tcd->tcd_type = i;
-		tcd->tcd_cpu = j;
-	}
-
-	for (i = 0; i < num_possible_cpus(); i++)
-		for (j = 0; j < 3; j++) {
-			cfs_trace_console_buffers[i][j] =
-				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
-					GFP_KERNEL);
-
-			if (!cfs_trace_console_buffers[i][j])
-				goto out_buffers;
-		}
-
-	return 0;
-
-out_buffers:
-	for (i = 0; i < num_possible_cpus(); i++)
-		for (j = 0; j < 3; j++) {
-			kfree(cfs_trace_console_buffers[i][j]);
-			cfs_trace_console_buffers[i][j] = NULL;
-		}
-out_trace_data:
-	for (i = 0; cfs_trace_data[i]; i++) {
-		kfree(cfs_trace_data[i]);
-		cfs_trace_data[i] = NULL;
-	}
-	pr_err("lnet: Not enough memory\n");
-	return -ENOMEM;
-}
-
-void cfs_tracefile_fini_arch(void)
-{
-	int i;
-	int j;
-
-	for (i = 0; i < num_possible_cpus(); i++)
-		for (j = 0; j < 3; j++) {
-			kfree(cfs_trace_console_buffers[i][j]);
-			cfs_trace_console_buffers[i][j] = NULL;
-		}
-
-	for (i = 0; cfs_trace_data[i]; i++) {
-		kfree(cfs_trace_data[i]);
-		cfs_trace_data[i] = NULL;
-	}
-}
-
 static inline struct cfs_trace_page *
 cfs_tage_from_list(struct list_head *list)
 {
@@ -1277,21 +1201,39 @@ void cfs_trace_stop_thread(void)
 	mutex_unlock(&cfs_trace_thread_mutex);
 }
 
+/* percents to share the total debug memory for each type */
+static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
+	80, /* 80% pages for CFS_TCD_TYPE_PROC */
+	10, /* 10% pages for CFS_TCD_TYPE_SOFTIRQ */
+	10  /* 10% pages for CFS_TCD_TYPE_IRQ */
+};
+
 int cfs_tracefile_init(int max_pages)
 {
 	struct cfs_trace_cpu_data *tcd;
-	int	i;
-	int	j;
-	int	rc;
-	int	factor;
+	int i;
+	int j;
 
-	rc = cfs_tracefile_init_arch();
-	if (rc != 0)
-		return rc;
+	/* initialize trace_data */
+	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
+	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
+		cfs_trace_data[i] =
+			kmalloc_array(num_possible_cpus(),
+				      sizeof(union cfs_trace_data_union),
+				      GFP_KERNEL);
+		if (!cfs_trace_data[i])
+			goto out_trace_data;
+	}
 
+	/* arch related info initialized */
 	cfs_tcd_for_each(tcd, i, j) {
-		/* tcd_pages_factor is initialized int tracefile_init_arch. */
-		factor = tcd->tcd_pages_factor;
+		int factor = pages_factor[i];
+
+		spin_lock_init(&tcd->tcd_lock);
+		tcd->tcd_pages_factor = factor;
+		tcd->tcd_type = i;
+		tcd->tcd_cpu = j;
+
 		INIT_LIST_HEAD(&tcd->tcd_pages);
 		INIT_LIST_HEAD(&tcd->tcd_stock_pages);
 		INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
@@ -1302,7 +1244,31 @@ int cfs_tracefile_init(int max_pages)
 		LASSERT(tcd->tcd_max_pages > 0);
 		tcd->tcd_shutting_down = 0;
 	}
+
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			cfs_trace_console_buffers[i][j] =
+				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
+					GFP_KERNEL);
+			if (!cfs_trace_console_buffers[i][j])
+				goto out_buffers;
+		}
+
 	return 0;
+
+out_buffers:
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			kfree(cfs_trace_console_buffers[i][j]);
+			cfs_trace_console_buffers[i][j] = NULL;
+		}
+out_trace_data:
+	for (i = 0; cfs_trace_data[i]; i++) {
+		kfree(cfs_trace_data[i]);
+		cfs_trace_data[i] = NULL;
+	}
+	pr_err("lnet: Not enough memory\n");
+	return -ENOMEM;
 }
 
 static void trace_cleanup_on_all_cpus(void)
@@ -1314,6 +1280,9 @@ static void trace_cleanup_on_all_cpus(void)
 
 	for_each_possible_cpu(cpu) {
 		cfs_tcd_for_each_type_lock(tcd, i, cpu) {
+			if (!tcd->tcd_pages_factor)
+				/* Not initialised */
+				continue;
 			tcd->tcd_shutting_down = 1;
 
 			list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
@@ -1330,12 +1299,23 @@ static void trace_cleanup_on_all_cpus(void)
 static void cfs_trace_cleanup(void)
 {
 	struct page_collection pc;
+	int i;
+	int j;
 
 	INIT_LIST_HEAD(&pc.pc_pages);
 
 	trace_cleanup_on_all_cpus();
 
-	cfs_tracefile_fini_arch();
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < 3; j++) {
+			kfree(cfs_trace_console_buffers[i][j]);
+			cfs_trace_console_buffers[i][j] = NULL;
+		}
+
+	for (i = 0; cfs_trace_data[i]; i++) {
+		kfree(cfs_trace_data[i]);
+		cfs_trace_data[i] = NULL;
+	}
 }
 
 void cfs_tracefile_exit(void)
