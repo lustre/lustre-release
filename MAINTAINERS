@@ -157,7 +157,7 @@ F:	lustre/llite/symlink.c
 F:	lustre/llite/xattr*.c
 
 Lustre Configuration Management
-M:	James Simmons <uja.ornl@yahoo.com>
+M:	James Simmons <jsimmons@infradead.org>
 S:	Maintained
 F:	lustre/mgc/
 F:	lustre/mgs/
@@ -314,7 +314,7 @@ S:	Maintained
 F:	lustre/utils/lhsmtool_posix.c
 
 Lustre Kernel Compatibility
-R:	James Simmons <uja.ornl@yahoo.com>
+R:	James Simmons <jsimmons@infradead.org>
 S:	Maintained
 F:	libcfs/
 F:	lustre/include/lustre_compat.h
@@ -453,7 +453,7 @@ F:	lustre/tests/sanity-pcc.sh
 F:	lustre/utils/liblustreapi_pcc.c
 
 Lustre /proc and /sys
-R:	James Simmons <uja.ornl@yahoo.com>
+R:	James Simmons <jsimmons@infradead.org>
 S:	Maintained
 F:	lustre/*/*lproc*.[ch]
 F:	lustre/obdclass/obdsysfs.c
