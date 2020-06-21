@@ -962,15 +962,26 @@ int main(int argc, char *const argv[])
 #endif /* HAVE_GSS */
 
 	if (!mop.mo_fake) {
+		char *fstype = client ? "lustre" : "lustre_tgt";
+
 		/*
 		 * flags and target get to lustre_get_sb(), but not
 		 * lustre_fill_super().  Lustre ignores the flags, but mount
 		 * does not.
 		 */
 		for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
-			rc = mount(mop.mo_source, mop.mo_target, "lustre",
+			rc = mount(mop.mo_source, mop.mo_target, fstype,
 				   flags, (void *)options);
 			if (rc != 0) {
+				/* Older Lustre without 'lustre_tgt'.
+				 * Try 'lustre' instead
+				 */
+				if (rc == -ENODEV) {
+					fstype = "lustre";
+					i--;
+					continue;
+				}
+
 				if (verbose) {
 					fprintf(stderr,
 						"%s: mount %s at %s failed: %s retries left: %d\n",
