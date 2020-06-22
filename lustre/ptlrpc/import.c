@@ -1455,8 +1455,8 @@ static int signal_completed_replay(struct obd_import *imp)
 	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
 		RETURN(0);
 
-	LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
-	atomic_inc(&imp->imp_replay_inflight);
+	if (!atomic_add_unless(&imp->imp_replay_inflight, 1, 1))
+		RETURN(0);
 
 	req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
 					OBD_PING);
