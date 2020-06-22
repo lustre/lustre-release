@@ -8110,9 +8110,11 @@ static int lfs_changelog(int argc, char **argv)
 			}
 		}
 
+		if (!fid_is_zero(&rec->cr_pfid))
+			printf(" p="DFID, PFID(&rec->cr_pfid));
 		if (rec->cr_namelen)
-			printf(" p="DFID" %.*s", PFID(&rec->cr_pfid),
-			       rec->cr_namelen, changelog_rec_name(rec));
+			printf(" %.*s", rec->cr_namelen,
+			       changelog_rec_name(rec));
 
 		if (rec->cr_flags & CLF_RENAME) {
 			struct changelog_ext_rename *rnm =

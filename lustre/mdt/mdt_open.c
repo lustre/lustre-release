@@ -2393,6 +2393,13 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		ma->ma_valid = MA_INODE;
 		ma->ma_attr_flags |= MDS_CLOSE_UPDATE_TIMES;
 		ma->ma_attr.la_valid &= (LA_ATIME | LA_MTIME | LA_CTIME);
+
+		if (ma->ma_attr.la_valid & LA_MTIME) {
+			rc = mdt_attr_get_pfid(info, o, &ma->ma_pfid);
+			if (!rc)
+				ma->ma_valid |= MA_PFID;
+		}
+
 		rc = mo_attr_set(info->mti_env, next, ma);
 	}
 

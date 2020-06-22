@@ -353,7 +353,8 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 			     enum changelog_rec_type type,
 			     enum changelog_rec_flags clf_flags,
 			     struct mdd_object *mdd_obj,
-			     struct thandle *handle);
+			     struct thandle *handle,
+			     const struct lu_fid *pfid);
 int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
 			   enum changelog_rec_type type,
 			   enum changelog_rec_flags clf_flags,

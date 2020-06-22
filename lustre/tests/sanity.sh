@@ -14981,6 +14981,71 @@ test_160k() {
 }
 run_test 160k "Verify that changelog records are not lost"
 
+# Verifies that a file passed as a parameter has recently had an operation
+# performed on it that has generated an MTIME changelog which contains the
+# correct parent FID. As files might reside on a different MDT from the
+# parent directory in DNE configurations, the FIDs are translated to paths
+# before being compared, which should be identical
+compare_mtime_changelog() {
+	local file="${1}"
+	local mdtidx
+	local mtime
+	local cl_fid
+	local pdir
+	local dir
+
+	mdtidx=$($LFS getstripe --mdt-index $file)
+	mdtidx=$(printf "%04x" $mdtidx)
+
+	# Obtain the parent FID from the MTIME changelog
+	mtime=$($LFS changelog $FSNAME-MDT$mdtidx | tail -n 1 | grep MTIME)
+	[ -z "$mtime" ] && error "MTIME changelog not recorded"
+
+	cl_fid=$(sed -e 's/.* p=//' -e 's/ .*//' <<<$mtime)
+	[ -z "$cl_fid" ] && error "parent FID not present"
+
+	# Verify that the path for the parent FID is the same as the path for
+	# the test directory
+	pdir=$($LFS fid2path $MOUNT "$cl_fid")
+
+	dir=$(dirname $1)
+
+	[[ "${pdir%/}" == "$dir" ]] ||
+		error "MTIME changelog parent FID is wrong, expected $dir, got $pdir"
+}
+
+test_160l() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ $MDS1_VERSION -ge $(version_code 2.13.55) ]] ||
+		skip "Need MDS version at least 2.13.55"
+
+	local cl_user
+
+	changelog_register || error "changelog_register failed"
+	cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User '$cl_user' not found in changelog_users"
+
+	# Clear some types so that MTIME changelogs are generated
+	changelog_chmask "-CREAT"
+	changelog_chmask "-CLOSE"
+
+	test_mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+
+	# Test CL_MTIME during setattr
+	touch $DIR/$tdir/$tfile
+	compare_mtime_changelog $DIR/$tdir/$tfile
+
+	# Test CL_MTIME during close
+	dd if=/dev/urandom of=$DIR/$tdir/${tfile}_2 bs=1M count=64 ||
+		error "cannot create file $DIR/$tdir/${tfile}_2"
+	compare_mtime_changelog $DIR/$tdir/${tfile}_2
+}
+run_test 160l "Verify that MTIME changelog records contain the parent FID"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

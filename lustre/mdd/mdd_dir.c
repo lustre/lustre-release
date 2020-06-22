@@ -1937,7 +1937,8 @@ static int mdd_create_data(const struct lu_env *env,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, son, handle);
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, son, handle,
+				      NULL);
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
