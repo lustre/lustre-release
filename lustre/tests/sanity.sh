@@ -18059,11 +18059,14 @@ test_230o() {
 		skip "Need MDS version at least 2.13.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
+	local timeout=100
 
 	local restripe_status
 	local delta
 	local i
 	local j
+
+	[[ $(facet_fstype mds1) == zfs ]] && timeout=300
 
 	# in case "crush" hash type is not set
 	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
@@ -18085,7 +18088,7 @@ test_230o() {
 		$LFS setdirstripe -c $i $DIR/$tdir ||
 			error "split -c $i $tdir failed"
 		wait_update $HOSTNAME \
-			"$LFS getdirstripe -H $DIR/$tdir" "crush" 100 ||
+			"$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
 			error "dir split not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
@@ -18103,11 +18106,14 @@ test_230p() {
 		skip "Need MDS version at least 2.13.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
+	local timeout=100
 
 	local restripe_status
 	local delta
 	local i
 	local j
+
+	[[ $(facet_fstype mds1) == zfs ]] && timeout=300
 
 	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
 
@@ -18131,7 +18137,7 @@ test_230p() {
 			error "split -c $i $tdir failed"
 		[ $i -eq 1 ] && mdt_hash="none"
 		wait_update $HOSTNAME \
-			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash 100 ||
+			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash $timeout ||
 			error "dir merge not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
