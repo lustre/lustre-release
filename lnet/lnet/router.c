@@ -401,6 +401,7 @@ lnet_set_route_hop_type(struct lnet_peer *gw, struct lnet_route *route)
 	lnet_check_route_inconsistency(route);
 }
 
+/* Must hold net_lock/EX */
 static inline void
 lnet_set_route_aliveness(struct lnet_route *route, bool alive)
 {
@@ -415,6 +416,7 @@ lnet_set_route_aliveness(struct lnet_route *route, bool alive)
 	}
 }
 
+/* Must hold net_lock/EX */
 void
 lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 {
@@ -1770,6 +1772,37 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 
 	/* recalculate aliveness */
 	alive = lnet_is_peer_ni_alive(lpni);
+
+	lp = lpni->lpni_peer_net->lpn_peer;
+	/* If this is an LNet router then update route aliveness */
+	if (lp->lp_rtr_refcount) {
+		if (reset)
+			/* reset flag indicates gateway peer went up or down */
+			lp->lp_alive = alive;
+
+		/* If discovery is disabled, locally or on the gateway, then
+		 * any routes using lpni as next-hop need to be updated
+		 *
+		 * NB: We can get many notifications while a route is down, so
+		 * we try and avoid the expensive net_lock/EX here for the
+		 * common case of receiving duplicate lnet_notify() calls (i.e.
+		 * only grab EX lock when we actually need to update the route
+		 * aliveness).
+		 */
+		if (lnet_is_discovery_disabled(lp)) {
+			list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
+				if (route->lr_nid == lpni->lpni_nid &&
+				    route->lr_alive != alive) {
+					lnet_net_unlock(0);
+					lnet_net_lock(LNET_LOCK_EX);
+					lnet_set_route_aliveness(route, alive);
+					lnet_net_unlock(LNET_LOCK_EX);
+					lnet_net_lock(0);
+				}
+			}
+		}
+	}
+
 	lnet_net_unlock(0);
 
 	if (ni != NULL && !alive)
@@ -1778,12 +1811,6 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 	cpt = lpni->lpni_cpt;
 	lnet_net_lock(cpt);
 	lnet_peer_ni_decref_locked(lpni);
-	if (lpni && lpni->lpni_peer_net && lpni->lpni_peer_net->lpn_peer) {
-		lp = lpni->lpni_peer_net->lpn_peer;
-		lp->lp_alive = alive;
-		list_for_each_entry(route, &lp->lp_routes, lr_gwlist)
-			lnet_set_route_aliveness(route, alive);
-	}
 	lnet_net_unlock(cpt);
 
 	return 0;
