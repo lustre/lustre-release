@@ -1529,6 +1529,14 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 				result = -MDT_EREMOTE_OPEN;
                         GOTO(out_child, result);
 		} else if (mdt_object_exists(child)) {
+			/* Check early for MDS_OPEN_DIRECTORY/O_DIRECTORY to
+			 * avoid opening regular files from lfs getstripe
+			 * since doing so breaks the leases used by lfs
+			 * mirror. See LU-13693. */
+			if (open_flags & MDS_OPEN_DIRECTORY &&
+			    S_ISREG(lu_object_attr(&child->mot_obj)))
+				GOTO(out_child, result = -ENOTDIR);
+
 			/* We have to get attr & LOV EA & HSM for this
 			 * object. */
 			mdt_prep_ma_buf_from_rep(info, child, ma);

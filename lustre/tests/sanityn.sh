@@ -3011,6 +3011,27 @@ test_51d() {
 }
 run_test 51d "layout lock: losing layout lock should clean up memory map region"
 
+test_51e() {
+	local pid
+
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:eW_E+eUc &
+	pid=$!
+	sleep 1
+
+	$LFS getstripe $DIR2/$tfile
+	kill -USR1 $pid
+	wait $pid || error "multiop failed"
+
+	$MULTIOP $DIR/$tfile oO_RDONLY:eR_E+eUc &
+	pid=$!
+	sleep 1
+
+	$LFS getstripe $DIR2/$tfile
+	kill -USR1 $pid
+	wait $pid || error "multiop failed"
+}
+run_test 51e "lfs getstripe does not break leases, part 2"
+
 test_54_part1()
 {
 	echo "==> rename vs getattr vs setxattr should not deadlock"
