@@ -1981,6 +1981,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	struct lnet_route *last_route = NULL;
 	struct lnet_peer_ni *lpni = NULL;
 	struct lnet_peer_ni *gwni = NULL;
+	bool route_found = false;
 	lnet_nid_t src_nid = (sd->sd_src_nid != LNET_NID_ANY) ? sd->sd_src_nid :
 		(sd->sd_best_ni != NULL) ? sd->sd_best_ni->ni_nid :
 		LNET_NID_ANY;
@@ -1994,15 +1995,20 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	 */
 	if (sd->sd_rtr_nid != LNET_NID_ANY) {
 		gwni = lnet_find_peer_ni_locked(sd->sd_rtr_nid);
-		if (!gwni) {
-			CERROR("No peer NI for gateway %s\n",
+		if (gwni) {
+			gw = gwni->lpni_peer_net->lpn_peer;
+			lnet_peer_ni_decref_locked(gwni);
+			if (gw->lp_rtr_refcount) {
+				local_lnet = LNET_NIDNET(sd->sd_rtr_nid);
+				route_found = true;
+			}
+		} else {
+			CWARN("No peer NI for gateway %s. Attempting to find an alternative route.\n",
 			       libcfs_nid2str(sd->sd_rtr_nid));
-			return -EHOSTUNREACH;
 		}
-		gw = gwni->lpni_peer_net->lpn_peer;
-		lnet_peer_ni_decref_locked(gwni);
-		local_lnet = LNET_NIDNET(sd->sd_rtr_nid);
-	} else {
+	}
+
+	if (!route_found) {
 		/* we've already looked up the initial lpni using dst_nid */
 		lpni = sd->sd_best_lpni;
 		/* the peer tree must be in existence */
