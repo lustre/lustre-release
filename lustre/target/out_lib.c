@@ -597,6 +597,10 @@ int out_create_add_exec(const struct lu_env *env, struct dt_object *obj,
 	struct tx_arg *arg;
 	int rc;
 
+	/* LU-13653: ignore quota for DNE directory creation */
+	if (dof->dof_type == DFT_DIR)
+		th->th_ignore_quota = 1;
+
 	rc = dt_declare_create(env, obj, attr, NULL, dof, th);
 	if (rc != 0)
 		return rc;
