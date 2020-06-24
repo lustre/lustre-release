@@ -803,8 +803,8 @@ AC_DEFUN([LB2_LINUX_TEST_COMPILE_ALL], [
 # source is generated.
 #
 AC_DEFUN([LB2_LINUX_TEST_SRC], [
-	LB2_LINUX_CONFTEST_C([LB_LANG_PROGRAM([[$2]], [[$3]])], [$1])
-	LB2_LINUX_CONFTEST_MAKEFILE([$1], [$4], [$5])
+	LB2_LINUX_CONFTEST_C([LB_LANG_PROGRAM([[$2]], [[$3]])], [$1_pc])
+	LB2_LINUX_CONFTEST_MAKEFILE([$1_pc], [$4], [$5])
 ])
 
 #
@@ -815,8 +815,8 @@ AC_DEFUN([LB2_LINUX_TEST_SRC], [
 # $3 - run on failure (unable to compile)
 #
 AC_DEFUN([LB2_LINUX_TEST_RESULT], [
-	AS_IF([test -d ${TEST_DIR}/$1], [
-		AS_IF([test -f ${TEST_DIR}/$1/$1.ko], [$2], [$3])
+	AS_IF([test -d ${TEST_DIR}/$1_pc], [
+		AS_IF([test -f ${TEST_DIR}/$1_pc/$1_pc.ko], [$2], [$3])
 	], [
 		AC_MSG_ERROR([
 	*** No matching source for the "$1" test, check that
