@@ -265,7 +265,7 @@ debs: undef.h
 		cp debian/control.main $$debiantmp/control.main.bkp ; \
 		cp debian/control.modules.in $$debiantmp/control.modules.in.bkp ; \
 		sed -i "s+^\(Build-Depends: .*\)$$+\1, libkrb5-dev, libssl-dev+" debian/control.main ; \
-		awk 'BEGIN{change=0} $$1 == "Package:" {if (($$2 == "lustre-client-utils") || ($$2 == "lustre-server-utils")) change=1; else change=0; fi } {if (($$1 == "Depends:") && change) print $$0 ", libgssapi-krb5-2, libkrb5-3, libssl1.1+"; else print; fi}' debian/control.main > $$debiantmp/control.main && mv $$debiantmp/control.main debian/control.main ; \
+		awk 'BEGIN{change=0} $$1 == "Package:" {if (($$2 == "lustre-client-utils") || ($$2 == "lustre-server-utils")) change=1; else change=0; fi } {if (($$1 == "Depends:") && change) print $$0 ", libgssapi-krb5-2, libkrb5-3, libssl1.1"; else print; fi}' debian/control.main > $$debiantmp/control.main && mv $$debiantmp/control.main debian/control.main ; \
 		sed -i "s+^\(Build-Depends: .*\)$$+\1, libkrb5-dev, libssl-dev+" debian/control.modules.in ; \
 	elif test "x@ENABLE_GSS@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
