@@ -5356,9 +5356,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 			}
 
 			if (auto_distributed) {
-				int r;
 				int nr = MAX(param->lsp_stripe_count,
 					     lsb->sb_count / 2);
+				int r;
 
 				/* don't use server whose usage is above 90% */
 				while (nr != param->lsp_stripe_count &&
@@ -5374,11 +5374,15 @@ static int lfs_setdirstripe(int argc, char **argv)
 					lsb->sb_buf[r].sd_index;
 				if (param->lsp_stripe_count > 1) {
 					int i = 0;
+					int j;
 
 					param->lsp_is_specific = true;
-					for (; i < param->lsp_stripe_count; i++)
-						param->lsp_tgts[(i + r) % nr] =
-							lsb->sb_buf[i].sd_index;
+					for (; i < param->lsp_stripe_count;
+					     i++) {
+						j = (i + r) % nr;
+						param->lsp_tgts[i] =
+							lsb->sb_buf[j].sd_index;
+					}
 				}
 			}
 
