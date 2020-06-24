@@ -2326,7 +2326,7 @@ lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 static int
 lnet_handle_any_local_nmr_dst(struct lnet_send_data *sd)
 {
-	int rc;
+	int rc = 0;
 
 	/* sd->sd_best_lpni is already set to the final destination */
 
@@ -2343,7 +2343,23 @@ lnet_handle_any_local_nmr_dst(struct lnet_send_data *sd)
 		return -EFAULT;
 	}
 
-	rc = lnet_select_preferred_best_ni(sd);
+	if (sd->sd_msg->msg_routing) {
+		/* If I'm forwarding this message then I can choose any NI
+		 * on the destination peer net
+		 */
+		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL,
+							       sd->sd_peer,
+							       sd->sd_best_lpni->lpni_peer_net,
+							       sd->sd_md_cpt,
+							       true);
+		if (!sd->sd_best_ni) {
+			CERROR("Unable to forward message to %s. No local NI available\n",
+			       libcfs_nid2str(sd->sd_dst_nid));
+			rc = -EHOSTUNREACH;
+		}
+	} else
+		rc = lnet_select_preferred_best_ni(sd);
+
 	if (!rc)
 		rc = lnet_handle_send(sd);
 
