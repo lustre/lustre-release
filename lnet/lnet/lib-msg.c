@@ -68,7 +68,7 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
-		lnet_nid4_to_nid(hdr->dest_nid, &ev->target.nid);
+		ev->target.nid	  = hdr->dest_nid;
 		ev->target.pid	  = hdr->dest_pid;
 		ev->initiator.nid = LNET_ANY_NID;
 		ev->initiator.pid = the_lnet.ln_pid;
@@ -78,13 +78,13 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 	} else {
 		/* event for passive message */
 		ev->target.pid	  = hdr->dest_pid;
-		lnet_nid4_to_nid(hdr->dest_nid, &ev->target.nid);
+		ev->target.nid	  = hdr->dest_nid;
 		ev->initiator.pid = hdr->src_pid;
 		/* Multi-Rail: resolve src_nid to "primary" peer NID */
 		ev->initiator.nid = msg->msg_initiator;
 		/* Multi-Rail: track source NID. */
 		ev->source.pid	  = hdr->src_pid;
-		lnet_nid4_to_nid(hdr->src_nid, &ev->source.nid);
+		ev->source.nid	  = hdr->src_nid;
 		ev->rlength	  = hdr->payload_length;
 		ev->sender	  = msg->msg_from;
 		ev->mlength	  = msg->msg_wanted;
@@ -635,15 +635,15 @@ lnet_resend_msg_locked(struct lnet_msg *msg)
 	 * this message consumed. The message will
 	 * consume another credit when it gets resent.
 	 */
-	lnet_nid4_to_nid(msg->msg_hdr.dest_nid, &msg->msg_target.nid);
+	msg->msg_target.nid = msg->msg_hdr.dest_nid;
 	lnet_msg_decommit_tx(msg, -EAGAIN);
 	msg->msg_sending = 0;
 	msg->msg_receiving = 0;
 	msg->msg_target_is_router = 0;
 
 	CDEBUG(D_NET, "%s->%s:%s:%s - queuing msg (%p) for resend\n",
-	       libcfs_nid2str(msg->msg_hdr.src_nid),
-	       libcfs_nid2str(msg->msg_hdr.dest_nid),
+	       libcfs_nidstr(&msg->msg_hdr.src_nid),
+	       libcfs_nidstr(&msg->msg_hdr.dest_nid),
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(msg->msg_health_status), msg);
 
@@ -1114,9 +1114,9 @@ lnet_send_error_simulation(struct lnet_msg *msg,
 		return false;
 
 	CDEBUG(D_NET, "src %s(%s)->dst %s: %s simulate health error: %s\n",
-		libcfs_nid2str(msg->msg_hdr.src_nid),
+		libcfs_nidstr(&msg->msg_hdr.src_nid),
 		libcfs_nidstr(&msg->msg_txni->ni_nid),
-		libcfs_nid2str(msg->msg_hdr.dest_nid),
+		libcfs_nidstr(&msg->msg_hdr.dest_nid),
 		lnet_msgtyp2str(msg->msg_type),
 		lnet_health_error2str(*hstatus));
 

@@ -1867,7 +1867,7 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[rlen]);
 		if (nob > rx->rx_nob) {
 			CERROR("Immediate message from %s too big: %d(%d)\n",
-			       libcfs_nid2str(lntmsg->msg_hdr.src_nid),
+			       libcfs_nidstr(&lntmsg->msg_hdr.src_nid),
 			       nob, rx->rx_nob);
 			rc = -EPROTO;
 			break;

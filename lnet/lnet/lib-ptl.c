@@ -279,8 +279,8 @@ lnet_mt_of_match(struct lnet_match_info *info, struct lnet_msg *msg)
 		return mtable;
 
 	/* it's a wildcard portal */
-	routed = LNET_NIDNET(msg->msg_hdr.src_nid) !=
-		 LNET_NIDNET(msg->msg_hdr.dest_nid);
+	routed = LNET_NID_NET(&msg->msg_hdr.src_nid) !=
+		 LNET_NID_NET(&msg->msg_hdr.dest_nid);
 
 	if (portal_rotor == LNET_PTL_ROTOR_OFF ||
 	    (portal_rotor != LNET_PTL_ROTOR_ON && !routed)) {

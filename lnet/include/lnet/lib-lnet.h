@@ -522,8 +522,8 @@ static inline void lnet_hdr_from_nid4(struct lnet_hdr *hdr,
 {
 	const struct _lnet_hdr_nid4 *hdr_nid4 = (void *)vhdr;
 
-	hdr->dest_nid = le64_to_cpu(hdr_nid4->dest_nid);
-	hdr->src_nid = le64_to_cpu(hdr_nid4->src_nid);
+	lnet_nid4_to_nid(le64_to_cpu(hdr_nid4->dest_nid), &hdr->dest_nid);
+	lnet_nid4_to_nid(le64_to_cpu(hdr_nid4->src_nid), &hdr->src_nid);
 	hdr->dest_pid = le32_to_cpu(hdr_nid4->dest_pid);
 	hdr->src_pid = le32_to_cpu(hdr_nid4->src_pid);
 	hdr->type = le32_to_cpu(hdr_nid4->type);
@@ -537,8 +537,8 @@ static inline void lnet_hdr_to_nid4(const struct lnet_hdr *hdr,
 {
 	struct _lnet_hdr_nid4 *hdr_nid4 = (void *)vhdr;
 
-	hdr_nid4->dest_nid = cpu_to_le64(hdr->dest_nid);
-	hdr_nid4->src_nid = cpu_to_le64(hdr->src_nid);
+	hdr_nid4->dest_nid = cpu_to_le64(lnet_nid_to_nid4(&hdr->dest_nid));
+	hdr_nid4->src_nid = cpu_to_le64(lnet_nid_to_nid4(&hdr->src_nid));
 	hdr_nid4->dest_pid = cpu_to_le32(hdr->dest_pid);
 	hdr_nid4->src_pid = cpu_to_le32(hdr->src_pid);
 	hdr_nid4->type = cpu_to_le32(hdr->type);

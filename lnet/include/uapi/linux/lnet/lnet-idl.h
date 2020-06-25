@@ -153,8 +153,8 @@ union lnet_cmd_hdr {
  *  All fields before the union are in host-byte-order.
  */
 struct lnet_hdr {
-	lnet_nid_t		dest_nid;
-	lnet_nid_t		src_nid;
+	struct lnet_nid		dest_nid;
+	struct lnet_nid		src_nid;
 	lnet_pid_t		dest_pid;
 	lnet_pid_t		src_pid;
 	__u32			type;		/* enum lnet_msg_type */

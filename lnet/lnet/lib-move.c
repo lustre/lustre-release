@@ -724,7 +724,7 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_process_id target,
 	memset (&msg->msg_hdr, 0, sizeof (msg->msg_hdr));
 	msg->msg_hdr.type           = type;
 	/* dest_nid will be overwritten by lnet_select_pathway() */
-	msg->msg_hdr.dest_nid       = target.nid;
+	lnet_nid4_to_nid(target.nid, &msg->msg_hdr.dest_nid);
 	msg->msg_hdr.dest_pid       = target.pid;
 	/* src_nid will be set later */
 	msg->msg_hdr.src_pid        = the_lnet.ln_pid;
@@ -1813,11 +1813,9 @@ lnet_handle_lo_send(struct lnet_send_data *sd)
 
 	/* No send credit hassles with LOLND */
 	lnet_ni_addref_locked(the_lnet.ln_loni, cpt);
-	msg->msg_hdr.dest_nid =
-		lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid);
+	msg->msg_hdr.dest_nid = the_lnet.ln_loni->ni_nid;
 	if (!msg->msg_routing)
-		msg->msg_hdr.src_nid =
-			lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid);
+		msg->msg_hdr.src_nid = the_lnet.ln_loni->ni_nid;
 	msg->msg_target.nid = the_lnet.ln_loni->ni_nid;
 	lnet_msg_commit(msg, cpt);
 	msg->msg_txni = the_lnet.ln_loni;
@@ -1918,8 +1916,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 * originator and set it here.
 	 */
 	if (!msg->msg_routing)
-		msg->msg_hdr.src_nid =
-			lnet_nid_to_nid4(&msg->msg_txni->ni_nid);
+		msg->msg_hdr.src_nid = msg->msg_txni->ni_nid;
 
 	if (routing) {
 		msg->msg_target_is_router = 1;
@@ -1934,16 +1931,13 @@ lnet_handle_send(struct lnet_send_data *sd)
 		 * lnet_select_pathway() function and is never changed.
 		 * It's safe to use it here.
 		 */
-		/* FIXME handle large-addr nid */
-		msg->msg_hdr.dest_nid =
-			lnet_nid_to_nid4(&final_dst_lpni->lpni_nid);
+		msg->msg_hdr.dest_nid = final_dst_lpni->lpni_nid;
 	} else {
 		/*
 		 * if we're not routing set the dest_nid to the best peer
 		 * ni NID that we picked earlier in the algorithm.
 		 */
-		msg->msg_hdr.dest_nid =
-			lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
+		msg->msg_hdr.dest_nid = msg->msg_txpeer->lpni_nid;
 	}
 
 	/*
@@ -1964,10 +1958,10 @@ lnet_handle_send(struct lnet_send_data *sd)
 
 	if (!rc)
 		CDEBUG(D_NET, "TRACE: %s(%s:%s) -> %s(%s:%s) %s : %s try# %d\n",
-		       libcfs_nid2str(msg->msg_hdr.src_nid),
+		       libcfs_nidstr(&msg->msg_hdr.src_nid),
 		       libcfs_nidstr(&msg->msg_txni->ni_nid),
 		       libcfs_nidstr(&sd->sd_src_nid),
-		       libcfs_nid2str(msg->msg_hdr.dest_nid),
+		       libcfs_nidstr(&msg->msg_hdr.dest_nid),
 		       libcfs_nidstr(&sd->sd_dst_nid),
 		       libcfs_nidstr(&msg->msg_txpeer->lpni_nid),
 		       libcfs_nidstr(&sd->sd_rtr_nid),
@@ -3029,8 +3023,8 @@ again:
 		struct lnet_peer *src_lp;
 		struct lnet_peer_ni *src_lpni;
 
-		src_lpni = lnet_nid2peerni_locked(msg->msg_hdr.src_nid,
-						  LNET_NID_ANY, cpt);
+		src_lpni = lnet_peerni_by_nid_locked(&msg->msg_hdr.src_nid,
+						   NULL, cpt);
 		/* We don't fail the send if we hit any errors here. We'll just
 		 * try to send it via non-multi-rail criteria
 		 */
@@ -3351,11 +3345,11 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 
 		list_del_init(&msg->msg_list);
 
-		lpni = lnet_find_peer_ni_locked(msg->msg_hdr.dest_nid);
+		lpni = lnet_peer_ni_find_locked(&msg->msg_hdr.dest_nid);
 		if (!lpni) {
 			lnet_net_unlock(cpt);
 			CERROR("Expected that a peer is already created for %s\n",
-			       libcfs_nid2str(msg->msg_hdr.dest_nid));
+			       libcfs_nidstr(&msg->msg_hdr.dest_nid));
 			msg->msg_no_resend = true;
 			lnet_finalize(msg, -EFAULT);
 			lnet_net_lock(cpt);
@@ -4254,7 +4248,7 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	hdr->msg.get.sink_length  = le32_to_cpu(hdr->msg.get.sink_length);
 	hdr->msg.get.src_offset	  = le32_to_cpu(hdr->msg.get.src_offset);
 
-	source_id.nid = hdr->src_nid;
+	source_id.nid = lnet_nid_to_nid4(&hdr->src_nid);
 	source_id.pid = hdr->src_pid;
 	/* Primary peer NID */
 	info.mi_id.nid  = msg->msg_initiator;
@@ -4323,7 +4317,7 @@ lnet_parse_reply(struct lnet_ni *ni, struct lnet_msg *msg)
 	cpt = lnet_cpt_of_cookie(hdr->msg.reply.dst_wmd.wh_object_cookie);
 	lnet_res_lock(cpt);
 
-	src.nid = hdr->src_nid;
+	src.nid = lnet_nid_to_nid4(&hdr->src_nid);
 	src.pid = hdr->src_pid;
 
 	/* NB handles only looked up by creator (no flips) */
@@ -4384,7 +4378,7 @@ lnet_parse_ack(struct lnet_ni *ni, struct lnet_msg *msg)
 	struct lnet_libmd *md;
 	int cpt;
 
-	src.nid = hdr->src_nid;
+	src.nid = lnet_nid_to_nid4(&hdr->src_nid);
 	src.pid = hdr->src_pid;
 
 	/* Convert ack fields to host byte order */
@@ -4524,8 +4518,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	lnet_nid4_to_nid(from_nid4, &from_nid);
 
 	type = hdr->type;
-	src_nid = hdr->src_nid;
-	dest_nid = hdr->dest_nid;
+	src_nid = lnet_nid_to_nid4(&hdr->src_nid);
+	dest_nid = lnet_nid_to_nid4(&hdr->dest_nid);
 	dest_pid = hdr->dest_pid;
 	payload_length = hdr->payload_length;
 
@@ -4819,7 +4813,7 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 		msg = list_entry(head->next, struct lnet_msg, msg_list);
 		list_del(&msg->msg_list);
 
-		id.nid = msg->msg_hdr.src_nid;
+		id.nid = lnet_nid_to_nid4(&msg->msg_hdr.src_nid);
 		id.pid = msg->msg_hdr.src_pid;
 
 		LASSERT(msg->msg_md == NULL);
@@ -4866,7 +4860,7 @@ lnet_recv_delayed_msg_list(struct list_head *head)
 		/* md won't disappear under me, since each msg
 		 * holds a ref on it */
 
-		id.nid = msg->msg_hdr.src_nid;
+		id.nid = lnet_nid_to_nid4(&msg->msg_hdr.src_nid);
 		id.pid = msg->msg_hdr.src_pid;
 
 		LASSERT(msg->msg_rx_delayed);
@@ -5137,7 +5131,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 		getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid;
 	msg->msg_from = peer_id->nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
-	msg->msg_hdr.src_nid = lnet_nid_to_nid4(&peer_id->nid);
+	msg->msg_hdr.src_nid = peer_id->nid;
 	msg->msg_hdr.payload_length = getmd->md_length;
 	msg->msg_receiving = 1; /* required by lnet_msg_attach_md */
 

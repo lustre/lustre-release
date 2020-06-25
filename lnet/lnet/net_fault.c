@@ -429,8 +429,8 @@ lnet_drop_rule_match(struct lnet_hdr *hdr,
 		     lnet_nid_t local_nid,
 		     enum lnet_msg_hstatus *hstatus)
 {
-	lnet_nid_t src = hdr->src_nid;
-	lnet_nid_t dst = hdr->dest_nid;
+	lnet_nid_t src = lnet_nid_to_nid4(&hdr->src_nid);
+	lnet_nid_t dst = lnet_nid_to_nid4(&hdr->dest_nid);
 	unsigned int typ = hdr->type;
 	struct lnet_drop_rule *rule;
 	unsigned int ptl = -1;
@@ -605,8 +605,8 @@ bool
 lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg)
 {
 	struct lnet_delay_rule	*rule;
-	lnet_nid_t		 src = hdr->src_nid;
-	lnet_nid_t		 dst = hdr->dest_nid;
+	lnet_nid_t		 src = lnet_nid_to_nid4(&hdr->src_nid);
+	lnet_nid_t		 dst = lnet_nid_to_nid4(&hdr->dest_nid);
 	unsigned int		 typ = hdr->type;
 	unsigned int		 ptl = -1;
 
