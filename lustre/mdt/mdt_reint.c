@@ -1801,15 +1801,20 @@ static int mdt_link_parents_lock(struct mdt_thread_info *info,
 
 	EXIT;
 out:
-	if (rc)
+	if (rc) {
 		mdt_unlock_list(info, link_locks, rc);
-	else if (local_lnkp_cnt > RS_MAX_LOCKS - 6)
+	} else if (local_lnkp_cnt > RS_MAX_LOCKS - 5) {
+		CDEBUG(D_INFO, "Too many links (%d), sync operations\n",
+		       local_lnkp_cnt);
 		/*
 		 * parent may have 3 local objects: master object and 2 stripes
-		 * (if it's being migrated too); source may have 2 local
-		 * objects: master and 1 stripe; target has 1 local object.
+		 * (if it's being migrated too); source may have 1 local objects
+		 * as regular file; target has 1 local object.
+		 * Note, source may have 2 local locks if it is directory but it
+		 * can't have hardlinks, so it is not considered here.
 		 */
 		rc = 1;
+	}
 	return rc;
 }
 

@@ -18309,6 +18309,41 @@ test_230q() {
 }
 run_test 230q "dir auto split"
 
+test_230r() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -ge $(version_code 2.13.54) ]] ||
+		skip "Need MDS version at least 2.13.54"
+
+	# maximum amount of local locks:
+	# parent striped dir - 2 locks
+	# new stripe in parent to migrate to - 1 lock
+	# source and target - 2 locks
+	# Total 5 locks for regular file
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i1 -c2 $DIR/$tdir/dir1
+	touch $DIR/$tdir/dir1/eee
+
+	# create 4 hardlink for 4 more locks
+	# Total: 9 locks > RS_MAX_LOCKS (8)
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir2
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir3
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir4
+	$LFS mkdir -i1 -c1 $DIR/$tdir/dir5
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir2/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir3/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir4/eee
+	ln $DIR/$tdir/dir1/eee $DIR/$tdir/dir5/eee
+
+	cancel_lru_locks mdc
+
+	$LFS migrate -m1 -c1 $DIR/$tdir/dir1 ||
+		error "migrate dir fails"
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230r "migrate with too many local locks"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
