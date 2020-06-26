@@ -384,8 +384,7 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 
 		ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
 
-		lnet_prep_send(msg, LNET_MSG_ACK,
-			       lnet_pid_to_pid4(&msg->msg_ev.source), 0, 0);
+		lnet_prep_send(msg, LNET_MSG_ACK, &msg->msg_ev.source, 0, 0);
 
 		msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
 		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;

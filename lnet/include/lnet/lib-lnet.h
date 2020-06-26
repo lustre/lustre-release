@@ -655,7 +655,7 @@ void lnet_msg_commit(struct lnet_msg *msg, int cpt);
 void lnet_msg_decommit(struct lnet_msg *msg, int cpt, int status);
 
 void lnet_prep_send(struct lnet_msg *msg, int type,
-		    struct lnet_process_id target, unsigned int offset,
+		    struct lnet_processid *target, unsigned int offset,
 		    unsigned int len);
 int lnet_send(struct lnet_nid *nid, struct lnet_msg *msg,
 	      struct lnet_nid *rtr_nid);
