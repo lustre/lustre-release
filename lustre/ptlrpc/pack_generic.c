@@ -40,6 +40,10 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#ifndef CONFIG_CRYPTO_CRC32
+#include <linux/crc32.h>
+#endif
+
 #include <libcfs/libcfs.h>
 
 #include <llog_swab.h>
@@ -1374,20 +1378,23 @@ __u64 lustre_msg_get_mbits(struct lustre_msg *msg)
 	}
 }
 
-__u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
+__u32 lustre_msg_calc_cksum(struct lustre_msg *msg, __u32 buf)
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2: {
-		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-		__u32 len = lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF);
-
-		unsigned int hsize = 4;
+		struct ptlrpc_body *pb = lustre_msg_buf_v2(msg, buf, 0);
+		__u32 len = lustre_msg_buflen(msg, buf);
 		__u32 crc;
 
 		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+#ifdef CONFIG_CRYPTO_CRC32
+		unsigned int hsize = 4;
 		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32, (unsigned char *)pb,
 				       len, NULL, 0, (unsigned char *)&crc,
 				       &hsize);
+#else
+		crc = crc32_le(~(__u32)0, (unsigned char *)pb, len);
+#endif
 		return crc;
 	}
 	default:

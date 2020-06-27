@@ -100,7 +100,8 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
 	if (req->rq_early) {
 		cksums = lustre_msg_get_cksum(req->rq_repdata);
-		cksumc = lustre_msg_calc_cksum(req->rq_repmsg);
+		cksumc = lustre_msg_calc_cksum(req->rq_repmsg,
+					       MSG_PTLRPC_BODY_OFF);
 
 		if (cksumc != cksums) {
 			CDEBUG(D_SEC,
@@ -355,18 +356,17 @@ int null_authorize(struct ptlrpc_request *req)
 
 	rs->rs_repbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
 	rs->rs_repdata_len = req->rq_replen;
+	req->rq_reply_off = 0;
 
 	if (likely(req->rq_packed_final)) {
 		if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)
 			req->rq_reply_off = lustre_msg_early_size();
-		else
-			req->rq_reply_off = 0;
 	} else {
 		__u32 cksum;
 
-		cksum = lustre_msg_calc_cksum(rs->rs_repbuf);
+		cksum = lustre_msg_calc_cksum(rs->rs_repbuf,
+					      MSG_PTLRPC_BODY_OFF);
 		lustre_msg_set_cksum(rs->rs_repbuf, cksum);
-		req->rq_reply_off = 0;
 	}
 
 	return 0;

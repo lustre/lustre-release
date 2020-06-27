@@ -216,7 +216,6 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
 	struct lustre_msg *msg = req->rq_repdata;
 	struct plain_header *phdr;
-	__u32 cksum;
 	bool swabbed;
 
 	ENTRY;
@@ -251,12 +250,8 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 	}
 
 	if (unlikely(req->rq_early)) {
-		unsigned int hsize = 4;
+		__u32 cksum = lustre_msg_calc_cksum(msg, PLAIN_PACK_MSG_OFF);
 
-		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32,
-				lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0),
-				lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF),
-				NULL, 0, (unsigned char *)&cksum, &hsize);
 		if (cksum != msg->lm_cksum) {
 			CDEBUG(D_SEC,
 			       "early reply checksum mismatch: %08x != %08x\n",
@@ -890,20 +885,13 @@ int plain_authorize(struct ptlrpc_request *req)
 		phdr->ph_flags |= PLAIN_FL_BULK;
 
 	rs->rs_repdata_len = len;
+	req->rq_reply_off = 0;
 
 	if (likely(req->rq_packed_final)) {
 		if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)
 			req->rq_reply_off = plain_at_offset;
-		else
-			req->rq_reply_off = 0;
 	} else {
-		unsigned int hsize = 4;
-
-		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32,
-			lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0),
-			lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF),
-			NULL, 0, (unsigned char *)&msg->lm_cksum, &hsize);
-		req->rq_reply_off = 0;
+		msg->lm_cksum = lustre_msg_calc_cksum(msg, PLAIN_PACK_MSG_OFF);
 	}
 
 	RETURN(0);
