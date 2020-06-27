@@ -88,8 +88,17 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
 	CDEBUG(D_INFO, "The upcall is: '%s'\n", cache->uc_upcall);
 
 	if (unlikely(!strcmp(cache->uc_upcall, "NONE"))) {
-		CERROR("no upcall set\n");
-		GOTO(out, rc = -EREMCHG);
+		rc = -EREMCHG;
+		CERROR("%s: extended identity requested for user '%llu' called with 'NONE' upcall: rc = %d\n",
+		       cache->uc_name, entry->ue_key, rc);
+		GOTO(out, rc);
+	}
+
+	if (unlikely(cache->uc_upcall[0] == '\0')) {
+		rc = -EREMCHG;
+		CERROR("%s: extended identity requested for user '%llu' called with empty upcall: rc = %d\n",
+		       cache->uc_name, entry->ue_key, rc);
+		GOTO(out, rc);
 	}
 
 	argv[0] = cache->uc_upcall;
@@ -99,9 +108,9 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
 	rc = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 	end = ktime_get();
 	if (rc < 0) {
-		CERROR("%s: error invoking upcall %s %s %s: rc %d; check /proc/fs/lustre/mdt/%s/identity_upcall, time %ldus\n",
+		CERROR("%s: error invoking upcall %s %s %s: rc %d; check /proc/fs/lustre/mdt/%s/identity_upcall, time %ldus: rc = %d\n",
 		       cache->uc_name, argv[0], argv[1], argv[2], rc,
-		       cache->uc_name, (long)ktime_us_delta(end, start));
+		       cache->uc_name, (long)ktime_us_delta(end, start), rc);
 	} else {
 		CDEBUG(D_HA, "%s: invoked upcall %s %s %s, time %ldus\n",
 		       cache->uc_name, argv[0], argv[1], argv[2],
@@ -122,19 +131,24 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 	struct identity_downcall_data *data = args;
 	struct group_info *ginfo = NULL;
 	struct md_perm *perms = NULL;
-	int size, i;
+	int size, i, rc = 0;
 
 	ENTRY;
 	LASSERT(data);
-	if (data->idd_ngroups > NGROUPS_MAX)
-		RETURN(-E2BIG);
+	if (data->idd_ngroups > NGROUPS_MAX) {
+		rc = -E2BIG;
+		CERROR("%s: UID %u groups %u > maximum %u: rc = %d\n",
+		       cache->uc_name, data->idd_uid, data->idd_ngroups, NGROUPS_MAX, rc);
+		goto out;
+	}
 
 	if (data->idd_ngroups > 0) {
 		ginfo = groups_alloc(data->idd_ngroups);
 		if (!ginfo) {
-			CERROR("failed to alloc %d groups\n",
-			       data->idd_ngroups);
-			RETURN(-ENOMEM);
+			rc = -ENOMEM;
+			CERROR("%s: failed to alloc %d groups: rc = %d\n",
+			       cache->uc_name, data->idd_ngroups, rc);
+			goto out;
 		}
 
 		lustre_groups_from_list(ginfo, data->idd_groups);
@@ -145,11 +159,12 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 		size = data->idd_nperms * sizeof(*perms);
 		OBD_ALLOC(perms, size);
 		if (!perms) {
-			CERROR("failed to alloc %d permissions\n",
-			       data->idd_nperms);
+			rc = -ENOMEM;
+			CERROR("%s: failed to alloc %d permissions: rc = %d\n",
+			       cache->uc_name, data->idd_nperms, rc);
 			if (ginfo)
 				put_group_info(ginfo);
-			RETURN(-ENOMEM);
+			goto out;
 		}
 
 		for (i = 0; i < data->idd_nperms; i++) {
@@ -168,7 +183,8 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 	       identity, identity->mi_uid, identity->mi_gid,
 	       data->idd_ngroups, data->idd_nperms);
 
-	RETURN(0);
+out:
+	RETURN(rc);
 }
 
 struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
@@ -179,12 +195,12 @@ struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
 		return ERR_PTR(-ENOENT);
 
 	entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
-	if (IS_ERR(entry))
-		return ERR_PTR(PTR_ERR(entry));
-	else if (unlikely(!entry))
+	if (unlikely(!entry))
 		return ERR_PTR(-ENOENT);
-	else
-		return &entry->u.identity;
+	if (IS_ERR(entry))
+		return ERR_CAST(entry);
+
+	return &entry->u.identity;
 }
 
 void mdt_identity_put(struct upcall_cache *cache, struct md_identity *identity)
