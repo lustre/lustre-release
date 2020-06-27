@@ -503,7 +503,7 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 
 		ls = ls_device_get(dt);
 		if (IS_ERR(ls)) {
-			dto = ERR_PTR(PTR_ERR(ls));
+			dto = ERR_CAST(ls);
 		} else {
 			/* create the object */
 			dti->dti_attr.la_valid	= LA_MODE;
@@ -598,7 +598,7 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 
 		ls = ls_device_get(dt);
 		if (IS_ERR(ls)) {
-			dto = ERR_PTR(PTR_ERR(ls));
+			dto = ERR_CAST(ls);
 		} else {
 			/* create the object */
 			dti->dti_attr.la_valid		= LA_MODE;

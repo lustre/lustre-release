@@ -872,7 +872,7 @@ static struct md_object *mdo_locate(const struct lu_env *env,
 		LASSERT(obj != NULL);
 		mdo = lu2md(obj);
 	} else {
-		mdo = ERR_PTR(PTR_ERR(obj));
+		mdo = ERR_CAST(obj);
 	}
 	return mdo;
 }

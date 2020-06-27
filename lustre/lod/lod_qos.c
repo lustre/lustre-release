@@ -387,7 +387,7 @@ static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 	 */
 	o = lu_object_anon(env, nd, NULL);
 	if (IS_ERR(o))
-		GOTO(out, dt = ERR_PTR(PTR_ERR(o)));
+		GOTO(out, dt = ERR_CAST(o));
 
 	n = lu_object_locate(o->lo_header, nd->ld_type);
 	if (unlikely(n == NULL)) {

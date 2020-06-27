@@ -234,7 +234,7 @@ struct dt_object *dt_locate_at(const struct lu_env *env,
 
 	lo = lu_object_find_at(env, top_dev, fid, conf);
 	if (IS_ERR(lo))
-		return ERR_PTR(PTR_ERR(lo));
+		return ERR_CAST(lo);
 
 	LASSERT(lo != NULL);
 
