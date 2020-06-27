@@ -750,10 +750,13 @@ int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
 				       &req, valid, 0);
 	if (rc == -ENODATA && !fid_is_root(ll_inode2fid(inode)) &&
-	    !(valid & (OBD_MD_MEA|OBD_MD_DEFAULT_MEA)) && root_request != NULL)
-		rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
-					       &root_req, valid,
-					       GET_DEFAULT_LAYOUT_ROOT);
+	    !(valid & (OBD_MD_MEA|OBD_MD_DEFAULT_MEA)) && root_request != NULL){
+		int rc2 = ll_dir_get_default_layout(inode, (void **)&lmm,
+						    &lmm_size, &root_req, valid,
+						    GET_DEFAULT_LAYOUT_ROOT);
+		if (rc2 == 0)
+			rc = 0;
+	}
 
 	*plmm = lmm;
 	*plmm_size = lmm_size;
