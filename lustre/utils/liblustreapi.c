@@ -4422,38 +4422,45 @@ static int find_check_foreign(struct find_param *param)
 static int find_check_pool(struct find_param *param)
 {
 	struct lov_comp_md_v1 *comp_v1 = NULL;
-	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
-	struct lov_user_md_v3 *v3 = (void *)v1;
+	struct lov_user_md_v3 *v3 = (void *)&param->fp_lmd->lmd_lmm;
 	int i, count = 1;
 	bool found = false;
 
-	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
-		comp_v1 = (struct lov_comp_md_v1 *)v1;
+	if (v3->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v3;
 		count = comp_v1->lcm_entry_count;
 		/* empty requested pool is taken as no pool search */
-		if (count == 0 && param->fp_poolname[0] == '\0')
+		if (count == 0 && param->fp_poolname[0] == '\0') {
 			found = true;
+			goto found;
+		}
 	}
 
 	for (i = 0; i < count; i++) {
-		if (comp_v1 != NULL)
-			v1 = lov_comp_entry(comp_v1, i);
+		if (comp_v1 != NULL) {
+			if (!(comp_v1->lcm_entries[i].lcme_flags &
+			      LCME_FL_INIT))
+				continue;
 
-		if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+			v3 = (void *)lov_comp_entry(comp_v1, i);
+		}
+
+		if (v3->lmm_magic == LOV_USER_MAGIC_FOREIGN)
 			continue;
 
-		if (((v1->lmm_magic == LOV_USER_MAGIC_V1) &&
+		if (((v3->lmm_magic == LOV_USER_MAGIC_V1) &&
 		     (param->fp_poolname[0] == '\0')) ||
-		    ((v1->lmm_magic == LOV_USER_MAGIC_V3) &&
+		    ((v3->lmm_magic == LOV_USER_MAGIC_V3) &&
 		     (strncmp(v3->lmm_pool_name,
 			      param->fp_poolname, LOV_MAXPOOLNAME) == 0)) ||
-		    ((v1->lmm_magic == LOV_USER_MAGIC_V3) &&
+		    ((v3->lmm_magic == LOV_USER_MAGIC_V3) &&
 		     (strcmp(param->fp_poolname, "*") == 0))) {
 			found = true;
 			break;
 		}
 	}
 
+found:
 	if ((found && !param->fp_exclude_pool) ||
 	    (!found && param->fp_exclude_pool))
 		return 1;

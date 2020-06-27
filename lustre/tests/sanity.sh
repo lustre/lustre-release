@@ -2612,6 +2612,7 @@ test_27G() { #LU-10629
 	local ostrange="0 0 1"
 
 	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile.nopool
 	pool_add $POOL || error "pool_add failed"
 	pool_add_targets $POOL $ostrange || error "pool_add_targets failed"
 	$LFS setstripe -p $POOL $DIR/$tdir
@@ -2619,14 +2620,18 @@ test_27G() { #LU-10629
 	local pool=$($LFS getstripe -p $DIR/$tdir)
 
 	[ "$pool" = "$POOL" ] || error "Striping failed got '$pool' not '$POOL'"
+	touch $DIR/$tdir/$tfile.default
+	$LFS setstripe -E 1M --pool $POOL -c 1 -E eof -c 1 $DIR/$tdir/$tfile.pfl
+	$LFS find $DIR/$tdir -type f --pool $POOL
+	local found=$($LFS find $DIR/$tdir -type f --pool $POOL | wc -l)
+	[[ "$found" == "2" ]] ||
+		error "found $found != 2 files in '$DIR/$tdir' in '$POOL'"
 
 	$LFS setstripe -d $DIR/$tdir
 
-	pool=$($LFS getstripe -p $DIR/$tdir)
+	pool=$($LFS getstripe -p -d $DIR/$tdir)
 
-	rmdir $DIR/$tdir
-
-	[ -z "$pool" ] || error "'$pool' is not empty"
+	[[ "$pool" != "$POOL" ]] || error "$DIR/$tdir is still '$pool'"
 }
 run_test 27G "Clear OST pool from stripe"
 
