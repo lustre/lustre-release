@@ -1816,7 +1816,8 @@ static inline void
 lnet_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, struct lnet_ni *lni,
 			 struct lnet_msg *msg)
 {
-	if (!lnet_msg_is_response(msg) && lpni->lpni_pref_nnids == 0) {
+	if (!lnet_peer_is_multi_rail(lpni->lpni_peer_net->lpn_peer) &&
+	    !lnet_msg_is_response(msg) && lpni->lpni_pref_nnids == 0) {
 		CDEBUG(D_NET, "Setting preferred local NID %s on NMR peer %s\n",
 		       libcfs_nid2str(lni->ni_nid),
 		       libcfs_nid2str(lpni->lpni_nid));
