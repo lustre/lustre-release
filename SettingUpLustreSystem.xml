@@ -9,7 +9,7 @@
   <itemizedlist>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.50438256_49017"/>
+          <xref linkend="dbdoclet.storage_hardware_considerations"/>
       </para>
     </listitem>
     <listitem>
@@ -24,16 +24,16 @@
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.50438256_26456"/>
+          <xref linkend="dbdoclet.mds_oss_memory"/>
       </para>
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.50438256_78272"/>
+          <xref linkend="dbdoclet.network_considerations"/>
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438256_49017">
+  <section xml:id="dbdoclet.storage_hardware_considerations">
       <title><indexterm><primary>setup</primary></indexterm>
   <indexterm><primary>setup</primary><secondary>hardware</secondary></indexterm>        
   <indexterm><primary>design</primary><see>setup</see></indexterm>        
@@ -72,7 +72,11 @@
       a separate device.</para>
     <para>The MDS can effectively utilize a lot of CPU cycles. A minimum of four processor cores are recommended. More are advisable for files systems with many clients.</para>
     <note>
-      <para>Lustre clients running on architectures with different endianness are supported. One limitation is that the PAGE_SIZE kernel macro on the client must be as large as the PAGE_SIZE of the server. In particular, ia64 or PPC clients with large pages (up to 64kB pages) can run with x86 servers (4kB pages). If you are running x86 clients with ia64 or PPC servers, you must compile the ia64 kernel with a 4kB PAGE_SIZE (so the server page size is not larger than the client page size). </para>
+      <para>Lustre clients running on different CPU architectures is supported.
+      One limitation is that the PAGE_SIZE kernel macro on the client must be
+      as large as the PAGE_SIZE of the server. In particular, ARM or PPC
+      clients with large pages (up to 64kB pages) can run with x86 servers
+      (4kB pages).</para>
     </note>
     <section remap="h3">
         <title><indexterm>
@@ -523,13 +527,13 @@
       <screen>[oss#] mkfs.lustre --ost --mkfsoptions=&quot;-i $((8192 * 1024))&quot; ...</screen>
       </para>
       <note>
-        <para>OSTs formatted with ldiskfs can use a maximum of approximately
-        320 million objects per MDT, up to a maximum of 4 billion inodes.
+        <para>OSTs formatted with ldiskfs should preferably have fewer than
+        320 million objects per MDT, and up to a maximum of 4 billion inodes.
         Specifying a very small bytes-per-inode ratio for a large OST that
-        exceeds this limit can cause either premature out-of-space errors and prevent
-        the full OST space from being used, or will waste space and slow down
-        e2fsck more than necessary.  The default inode ratios are chosen to
-        ensure that the total number of inodes remain below this limit.
+        exceeds this limit can cause either premature out-of-space errors and
+        prevent the full OST space from being used, or will waste space and
+        slow down e2fsck more than necessary. The default inode ratios are
+        chosen to ensure the total number of inodes remain below this limit.
         </para>
       </note>
       <note>
@@ -564,13 +568,12 @@
       </indexterm>File and File System Limits</title>
 
       <para><xref linkend="settinguplustresystem.tab2"/> describes
-     current known limits of Lustre.  These limits are imposed by either
-     the Lustre architecture or the Linux virtual file system (VFS) and
-     virtual memory subsystems. In a few cases, a limit is defined within
-     the code and can be changed by re-compiling the Lustre software.
-     Instructions to install from source code are beyond the scope of this
-     document, and can be found elsewhere online. In these cases, the
-     indicated limit was used for testing of the Lustre software. </para>
+      current known limits of Lustre.  These limits may be imposed by either
+      the Lustre architecture or the Linux virtual file system (VFS) and
+      virtual memory subsystems. In a few cases, a limit is defined within
+      the code Lustre based on tested values and could be changed by editing
+      and re-compiling the Lustre software.  In these cases, the indicated
+      limit was used for testing of the Lustre software.</para>
 
     <table frame="all" xml:id="settinguplustresystem.tab2">
       <title>File and file system limits</title>
@@ -594,7 +597,7 @@
         <tbody>
           <row>
             <entry>
-              <para>Maximum number of MDTs</para>
+              <para><anchor xml:id="dbdoclet.max_mdt_count" xreflabel=""/>Maximum number of MDTs</para>
             </entry>
             <entry>
               <para>256</para>
@@ -611,28 +614,28 @@
           </row>
           <row>
             <entry>
-              <para>Maximum number of OSTs</para>
+              <para><anchor xml:id="dbdoclet.max_ost_count" xreflabel=""/>Maximum number of OSTs</para>
             </entry>
             <entry>
               <para>8150</para>
             </entry>
             <entry>
               <para>The maximum number of OSTs is a constant that can be
-              changed at compile time.  Lustre file systems with up to
-              4000 OSTs have been tested.  Multiple OST file systems can
-              be configured on a single OSS node.</para>
+              changed at compile time.  Lustre file systems with up to 4000
+              OSTs have been configured in the past.  Multiple OST targets
+              can be configured on a single OSS node.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum OST size</para>
+              <para><anchor xml:id="dbdoclet.max_ost_size" xreflabel=""/>Maximum OST size</para>
             </entry>
             <entry>
-              <para>512TiB (ldiskfs), 512TiB (ZFS)</para>
+              <para>1024TiB (ldiskfs), 1024TiB (ZFS)</para>
             </entry>
             <entry>
               <para>This is not a <emphasis>hard</emphasis> limit. Larger
-              OSTs are possible but most production systems do not
+              OSTs are possible, but most production systems do not
               typically go beyond the stated limit per OST because Lustre
               can add capacity and performance with additional OSTs, and
               having more OSTs improves aggregate I/O performance,
@@ -642,13 +645,13 @@
               <para>
               With 32-bit kernels, due to page cache limits, 16TB is the
               maximum block device size, which in turn applies to the
-              size of OST.  It is strongly recommended to run Lustre
-              clients and servers with 64-bit kernels.</para>
+              size of OST.  It is <emphasis>strongly</emphasis> recommended
+              to run Lustre clients and servers with 64-bit kernels.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum number of clients</para>
+              <para><anchor xml:id="dbdoclet.max_client_count" xreflabel=""/>Maximum number of clients</para>
             </entry>
             <entry>
               <para>131072</para>
@@ -661,21 +664,21 @@
           </row>
           <row>
             <entry>
-              <para>Maximum size of a single file system</para>
+              <para><anchor xml:id="dbdoclet.max_filesysem_size" xreflabel=""/>Maximum size of a single file system</para>
             </entry>
             <entry>
-              <para>at least 1EiB</para>
+              <para>2EiB or larger</para>
             </entry>
             <entry>
-              <para>Each OST can have a file system up to the
-              Maximum OST size limit, and the Maximum number of OSTs
-              can be combined into a single filesystem.
+              <para>Each OST can have a file system up to the "Maximum OST
+              size" limit, and the Maximum number of OSTs can be combined
+              into a single filesystem.
               </para>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum stripe count</para>
+              <para><anchor xml:id="dbdoclet.max_stripe_count" xreflabel=""/>Maximum stripe count</para>
             </entry>
             <entry>
               <para>2000</para>
@@ -684,13 +687,22 @@
               <para>This limit is imposed by the size of the layout that
               needs to be stored on disk and sent in RPC requests, but is
               not a hard limit of the protocol. The number of OSTs in the
-              filesystem can exceed the stripe count, but this limits the
-              number of OSTs across which a single file can be striped.</para>
+              filesystem can exceed the stripe count, but this is the maximum
+              number of OSTs on which a <emphasis>single file</emphasis>
+              can be striped.</para>
+              <note condition='l2D'><para>Before 2.13, the default for ldiskfs
+	      MDTs the maximum stripe count for a
+              <emphasis>single file</emphasis> is limited to 160 OSTs.  In order to
+              increase the maximum file stripe count, use
+              <literal>--mkfsoptions="-O ea_inode"</literal> when formatting the MDT,
+              or use <literal>tune2fs -O ea_inode</literal> to enable it after the
+              MDT has been formatted.</para>
+              </note>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum stripe size</para>
+              <para><anchor xml:id="dbdoclet.max_stripe_size" xreflabel=""/>Maximum stripe size</para>
             </entry>
             <entry>
               <para>&lt; 4 GiB</para>
@@ -702,7 +714,7 @@
           </row>
           <row>
             <entry>
-              <para>Minimum stripe size</para>
+              <para><anchor xml:id="dbdoclet.min_stripe_size" xreflabel=""/>Minimum stripe size</para>
             </entry>
             <entry>
               <para>64 KiB</para>
@@ -711,12 +723,13 @@
               <para>Due to the use of 64 KiB PAGE_SIZE on some CPU
               architectures such as ARM and POWER, the minimum stripe
               size is 64 KiB so that a single page is not split over
-              multiple servers.</para>
+              multiple servers.  This is also the minimum Data-on-MDT
+	      component size that can be specified.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum single object size</para>
+              <para><anchor xml:id="dbdoclet.max_object_size" xreflabel=""/>Maximum single object size</para>
             </entry>
             <entry>
               <para>16TiB (ldiskfs), 256TiB (ZFS)</para>
@@ -731,7 +744,7 @@
           </row>
           <row>
             <entry>
-              <para>Maximum <anchor xml:id="dbdoclet.50438256_marker-1290761" xreflabel=""/>file size</para>
+              <para><anchor xml:id="dbdoclet.max_file_size" xreflabel=""/>Maximum file size</para>
             </entry>
             <entry>
               <para>16 TiB on 32-bit systems</para>
@@ -754,14 +767,14 @@
           </row>
           <row>
             <entry>
-              <para>Maximum number of files or subdirectories in a single directory</para>
+              <para><anchor xml:id="dbdoclet.max_directory_size" xreflabel=""/>Maximum number of files or subdirectories in a single directory</para>
             </entry>
             <entry>
-              <para>10 million files (ldiskfs), 2^48 (ZFS)</para>
+              <para>600M-3.8B files (ldiskfs), 16T (ZFS)</para>
             </entry>
             <entry>
               <para>The Lustre software uses the ldiskfs hashed directory
-              code, which has a limit of about 10 million files, depending
+              code, which has a limit of at least 600 million files, depending
               on the length of the file name. The limit on subdirectories
               is the same as the limit on regular files.</para>
               <note condition='l28'><para>Starting in the 2.8 release it is
@@ -769,16 +782,19 @@
               over multiple MDTs with the <literal>lfs mkdir -c</literal>
               command, which increases the single directory limit by a
               factor of the number of directory stripes used.</para></note>
-              <para>Lustre file systems are tested with ten million files
-              in a single directory.</para>
+              <note condition='l2E'><para>Starting in the 2.14 release, the
+              <literal>large_dir</literal> feature of ldiskfs is enabled by
+              default to allow directories with more than 10M entries.  In
+              the 2.12 release, the <literal>large_dir</literal> feature was
+              present but not enabled by default.</para></note>
             </entry>
           </row>
           <row>
             <entry>
-              <para>Maximum number of files in the file system</para>
+              <para><anchor xml:id="dbdoclet.max_file_count" xreflabel=""/>Maximum number of files in the file system</para>
             </entry>
             <entry>
-              <para>4 billion (ldiskfs), 256 trillion (ZFS) per MDT</para>
+              <para>4 billion (ldiskfs), 256 trillion (ZFS) <emphasis>per MDT</emphasis></para>
             </entry>
             <entry>
               <para>The ldiskfs filesystem imposes an upper limit of
@@ -800,7 +816,7 @@
           </row>
           <row>
             <entry>
-              <para>Maximum length of a filename</para>
+              <para><anchor xml:id="dbdoclet.max_filename_size" xreflabel=""/>Maximum length of a filename</para>
             </entry>
             <entry>
               <para>255 bytes (filename)</para>
@@ -812,7 +828,7 @@
           </row>
           <row>
             <entry>
-              <para>Maximum length of a pathname</para>
+              <para><anchor xml:id="dbdoclet.max_pathname_size" xreflabel=""/>Maximum length of a pathname</para>
             </entry>
             <entry>
               <para>4096 bytes (pathname)</para>
@@ -823,7 +839,7 @@
           </row>
           <row>
             <entry>
-              <para>Maximum number of open files for a Lustre file system</para>
+              <para><anchor xml:id="dbdoclet.max_open_files" xreflabel=""/>Maximum number of open files for a Lustre file system</para>
             </entry>
             <entry>
               <para>No limit</para>
@@ -841,15 +857,8 @@
       </tgroup>
     </table>
     <para>&#160;</para>
-    <note><para>By default for ldiskfs MDTs the maximum stripe count for a
-    <emphasis>single file</emphasis> is limited to 160 OSTs.  In order to
-    increase the maximum file stripe count, use
-    <literal>--mkfsoptions="-O ea_inode"</literal> when formatting the MDT,
-    or use <literal>tune2fs -O ea_inode</literal> to enable it after the
-    MDT has been formatted.</para>
-    </note>
   </section>
-  <section xml:id="dbdoclet.50438256_26456">
+  <section xml:id="dbdoclet.mds_oss_memory">
     <title><indexterm><primary>setup</primary><secondary>memory</secondary></indexterm>Determining Memory Requirements</title>
     <para>This section describes the memory requirements for each Lustre file system component.</para>
     <section remap="h3">
@@ -991,7 +1000,7 @@
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438256_78272">
+  <section xml:id="dbdoclet.network_considerations">
     <title><indexterm>
         <primary>setup</primary>
         <secondary>network</secondary>

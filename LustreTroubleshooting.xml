@@ -748,7 +748,8 @@ server now claims 791)!
           <para> Lustre or kernel stack traces showing processes stuck in &quot;<literal>try_to_free_pages</literal>&quot;</para>
         </listitem>
       </itemizedlist>
-      <para>For information on determining the MDS memory and OSS memory requirements, see <xref linkend="dbdoclet.50438256_26456"/>.</para>
+      <para>For information on determining the MDS memory and OSS memory
+      requirements, see <xref linkend="dbdoclet.mds_oss_memory"/>.</para>
     </section>
     <section remap="h3">
       <title>Setting SCSI I/O Sizes</title>
