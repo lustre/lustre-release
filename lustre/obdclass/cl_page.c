@@ -350,7 +350,7 @@ struct cl_page *cl_page_find(const struct lu_env *env,
         if (type == CPT_CACHEABLE) {
 		/* vmpage lock is used to protect the child/parent
 		 * relationship */
-		KLASSERT(PageLocked(vmpage));
+		LASSERT(PageLocked(vmpage));
                 /*
                  * cl_vmpage_page() can be called here without any locks as
                  *
@@ -515,7 +515,7 @@ struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj)
 	struct cl_page *page;
 
 	ENTRY;
-	KLASSERT(PageLocked(vmpage));
+	LASSERT(PageLocked(vmpage));
 
 	/*
 	 * NOTE: absence of races and liveness of data are guaranteed by page

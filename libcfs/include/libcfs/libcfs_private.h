@@ -112,9 +112,7 @@ do {									\
 # define LINVRNT(exp) ((void)sizeof!!(exp))
 #endif
 
-#define KLASSERT(e) LASSERT(e)
-
-void lbug_with_loc(struct libcfs_debug_msg_data *) __attribute__((noreturn));
+void __noreturn lbug_with_loc(struct libcfs_debug_msg_data *msg);
 
 #define LBUG()                                                          \
 do {                                                                    \
@@ -235,9 +233,6 @@ do {									\
 
 /******************************************************************************/
 
-struct task_struct;
-
-void libcfs_debug_dumpstack(struct task_struct *tsk);
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);
@@ -256,72 +251,54 @@ void  cfs_array_free(void *vars);
 #if LASSERT_ATOMIC_ENABLED
 
 /** assert value of @a is equal to @v */
-#define LASSERT_ATOMIC_EQ(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) == v,                       \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_EQ(a, v)				\
+	LASSERTF(atomic_read(a) == v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is unequal to @v */
-#define LASSERT_ATOMIC_NE(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) != v,                       \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_NE(a, v)				\
+	LASSERTF(atomic_read(a) != v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is little than @v */
-#define LASSERT_ATOMIC_LT(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) < v,                        \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_LT(a, v)				\
+	LASSERTF(atomic_read(a) < v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is little/equal to @v */
-#define LASSERT_ATOMIC_LE(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) <= v,                       \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_LE(a, v)				\
+	LASSERTF(atomic_read(a) <= v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is great than @v */
-#define LASSERT_ATOMIC_GT(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) > v,                        \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_GT(a, v)				\
+	LASSERTF(atomic_read(a) > v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is great/equal to @v */
-#define LASSERT_ATOMIC_GE(a, v)                                 \
-do {                                                            \
-	LASSERTF(atomic_read(a) >= v,                       \
-		 "value: %d\n", atomic_read((a)));          \
-} while (0)
+#define LASSERT_ATOMIC_GE(a, v)				\
+	LASSERTF(atomic_read(a) >= v, "value: %d\n", atomic_read((a)));
 
 /** assert value of @a is great than @v1 and little than @v2 */
-#define LASSERT_ATOMIC_GT_LT(a, v1, v2)                         \
-do {                                                            \
-	int __v = atomic_read(a);                           \
-	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);     \
+#define LASSERT_ATOMIC_GT_LT(a, v1, v2)			\
+do {							\
+	int __v = atomic_read(a);			\
+	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);\
 } while (0)
 
 /** assert value of @a is great than @v1 and little/equal to @v2 */
-#define LASSERT_ATOMIC_GT_LE(a, v1, v2)                         \
-do {                                                            \
-	int __v = atomic_read(a);                           \
-	LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);    \
+#define LASSERT_ATOMIC_GT_LE(a, v1, v2)			\
+do {							\
+	int __v = atomic_read(a);			\
+	LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);\
 } while (0)
 
 /** assert value of @a is great/equal to @v1 and little than @v2 */
-#define LASSERT_ATOMIC_GE_LT(a, v1, v2)                         \
-do {                                                            \
-	int __v = atomic_read(a);                           \
-	LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);    \
+#define LASSERT_ATOMIC_GE_LT(a, v1, v2)			\
+do {							\
+	int __v = atomic_read(a);			\
+	LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);\
 } while (0)
 
 /** assert value of @a is great/equal to @v1 and little/equal to @v2 */
 #define LASSERT_ATOMIC_GE_LE(a, v1, v2)                         \
 do {                                                            \
-	int __v = atomic_read(a);                           \
+	int __v = atomic_read(a);				\
 	LASSERTF(__v >= v1 && __v <= v2, "value: %d\n", __v);   \
 } while (0)
 

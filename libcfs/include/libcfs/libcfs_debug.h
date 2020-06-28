@@ -38,7 +38,6 @@
 #ifndef __LIBCFS_DEBUG_H__
 #define __LIBCFS_DEBUG_H__
 
-#include <stdarg.h>
 #include <linux/limits.h>
 #include <uapi/linux/lnet/libcfs_debug.h>
 
@@ -49,16 +48,19 @@ extern unsigned int libcfs_subsystem_debug;
 extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
-extern unsigned int libcfs_console_ratelimit;
 extern unsigned int libcfs_watchdog_ratelimit;
+extern unsigned int libcfs_console_ratelimit;
 extern unsigned int libcfs_console_max_delay;
 extern unsigned int libcfs_console_min_delay;
 extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
 extern char libcfs_debug_file_path_arr[PATH_MAX];
 
+struct task_struct;
+
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
+void libcfs_debug_dumpstack(struct task_struct *tsk);
 
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;
@@ -284,16 +286,15 @@ do {									\
 	return;								\
 } while (0)
 
-extern int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
-                            const char *format1, ...)
-        __attribute__ ((format (printf, 2, 3)));
+int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
+		     const char *format1, ...)
+	__printf(2, 3);
 
 /* other external symbols that tracefile provides: */
-extern int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
-				   const char __user *usr_buffer,
-				   int usr_buffer_nob);
-extern int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
-				    const char *knl_buffer, char *append);
+int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
+			    const char __user *usr_buffer, int usr_buffer_nob);
+int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
+			     const char *knl_buffer, char *append);
 
 #define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
 
