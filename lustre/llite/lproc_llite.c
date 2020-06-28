@@ -1159,6 +1159,51 @@ read_ahead_async_file_threshold_mb_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(read_ahead_async_file_threshold_mb);
 
+static ssize_t read_ahead_range_kb_show(struct kobject *kobj,
+					struct attribute *attr,char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%lu\n",
+			sbi->ll_ra_info.ra_range_pages << (PAGE_SHIFT - 10));
+}
+
+static ssize_t
+read_ahead_range_kb_store(struct kobject *kobj,
+			       struct attribute *attr,
+			       const char *buffer, size_t count)
+{
+	unsigned long pages_number;
+	unsigned long max_ra_per_file;
+	u64 val;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "KiB");
+	if (rc < 0)
+		return rc;
+
+	pages_number = val >> PAGE_SHIFT;
+	/* Disable mmap range read */
+	if (pages_number == 0)
+		goto out;
+
+	max_ra_per_file = sbi->ll_ra_info.ra_max_pages_per_file;
+	if (pages_number > max_ra_per_file ||
+	    pages_number < RA_MIN_MMAP_RANGE_PAGES)
+		return -ERANGE;
+
+out:
+	spin_lock(&sbi->ll_lock);
+	sbi->ll_ra_info.ra_range_pages = pages_number;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(read_ahead_range_kb);
+
 static ssize_t fast_read_show(struct kobject *kobj,
 			      struct attribute *attr,
 			      char *buf)
@@ -1493,6 +1538,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_max_read_ahead_whole_mb.attr,
 	&lustre_attr_max_read_ahead_async_active.attr,
 	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
+	&lustre_attr_read_ahead_range_kb.attr,
 	&lustre_attr_stats_track_pid.attr,
 	&lustre_attr_stats_track_ppid.attr,
 	&lustre_attr_stats_track_gid.attr,
@@ -1605,6 +1651,7 @@ static const char *ra_stat_string[] = {
 	[RA_STAT_FAILED_REACH_END] = "failed to reach end",
 	[RA_STAT_ASYNC] = "async readahead",
 	[RA_STAT_FAILED_FAST_READ] = "failed to fast read",
+	[RA_STAT_MMAP_RANGE_READ] = "mmap range read",
 };
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)

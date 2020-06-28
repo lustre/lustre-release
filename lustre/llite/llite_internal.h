@@ -518,6 +518,12 @@ static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 /* default read-ahead full files smaller than limit on the second read */
 #define SBI_DEFAULT_READ_AHEAD_WHOLE_MAX	MiB_TO_PAGES(2UL)
 
+/* default range pages */
+#define SBI_DEFAULT_RA_RANGE_PAGES		MiB_TO_PAGES(1ULL)
+
+/* Min range pages */
+#define RA_MIN_MMAP_RANGE_PAGES			16UL
+
 enum ra_stat {
         RA_STAT_HIT = 0,
         RA_STAT_MISS,
@@ -534,6 +540,7 @@ enum ra_stat {
 	RA_STAT_FAILED_REACH_END,
 	RA_STAT_ASYNC,
 	RA_STAT_FAILED_FAST_READ,
+	RA_STAT_MMAP_RANGE_READ,
 	_NR_RA_STAT,
 };
 
@@ -541,6 +548,7 @@ struct ll_ra_info {
 	atomic_t	ra_cur_pages;
 	unsigned long	ra_max_pages;
 	unsigned long	ra_max_pages_per_file;
+	unsigned long	ra_range_pages;
 	unsigned long	ra_max_read_ahead_whole_pages;
 	struct workqueue_struct  *ll_readahead_wq;
 	/*
@@ -810,6 +818,16 @@ struct ll_readahead_state {
          */
 	pgoff_t		ras_window_start_idx;
 	pgoff_t		ras_window_pages;
+
+	/* Page index where min range read starts */
+	pgoff_t		ras_range_min_start_idx;
+	/* Page index where mmap range read ends */
+	pgoff_t		ras_range_max_end_idx;
+	/* number of mmap pages where last time detected */
+	pgoff_t		ras_last_range_pages;
+	/* number of mmap range requests */
+	pgoff_t		ras_range_requests;
+
 	/*
 	 * Optimal RPC size in pages.
 	 * It decides how many pages will be sent for each read-ahead.

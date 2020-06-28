@@ -136,6 +136,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 		    SBI_DEFAULT_READ_AHEAD_PER_FILE_MAX);
 	sbi->ll_ra_info.ra_async_pages_per_file_threshold =
 				sbi->ll_ra_info.ra_max_pages_per_file;
+	sbi->ll_ra_info.ra_range_pages = SBI_DEFAULT_RA_RANGE_PAGES;
 	sbi->ll_ra_info.ra_max_read_ahead_whole_pages = -1;
 	atomic_set(&sbi->ll_ra_info.ra_async_inflight, 0);
 
