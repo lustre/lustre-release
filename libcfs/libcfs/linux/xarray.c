@@ -10,7 +10,7 @@
  *
  * at kernel verison 5.2-rc2
  */
-#ifdef HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY
+#ifndef HAVE_XARRAY_SUPPORT
 #include <linux/bitmap.h>
 #include <linux/export.h>
 #include <linux/list.h>
@@ -2098,4 +2098,4 @@ void xa_dump(const struct xarray *xa)
 	xa_dump_entry(entry, 0, shift);
 }
 #endif
-#endif /* HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY */
+#endif /* !HAVE_XARRAY_SUPPORT */

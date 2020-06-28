@@ -147,7 +147,7 @@ static inline bool d_is_positive(const struct dentry *dentry)
  * the page cache interaction. Lets keep xa_is_value() separate
  * in old kernels for Xarray support and page cache handling.
  */
-#ifdef HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY
+#ifndef HAVE_XARRAY_SUPPORT
 static inline bool ll_xa_is_value(void *entry)
 {
 	return radix_tree_exceptional_entry(entry);

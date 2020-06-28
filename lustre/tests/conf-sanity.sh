@@ -4703,6 +4703,10 @@ test_63() {
 		skip "ldiskfs module has not been loaded"
 	fi
 
+	if grep -q "CONFIG_DEBUG_LOCK_ALLOC=y" /boot/config-$(uname -r); then
+		skip "test is not compatible with CONFIG_DEBUG_LOCK_ALLOC=y"
+	fi
+
 	echo "$inode_slab ldiskfs inodes per page"
 	[ "${inode_slab%.*}" -ge "3" ] && return 0
 

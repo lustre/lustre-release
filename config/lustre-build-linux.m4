@@ -544,6 +544,15 @@ m4_define([LB_LANG_PROGRAM],
 [
 #include <linux/kernel.h>
 #include <linux/module.h>
+
+#if defined(NEED_LOCKDEP_IS_HELD_DISCARD_CONST) \
+ && defined(CONFIG_LOCKDEP) \
+ && defined(lockdep_is_held)
+#undef lockdep_is_held
+	#define lockdep_is_held(lock) \
+		lock_is_held((struct lockdep_map *)&(lock)->dep_map)
+#endif
+
 $1
 int
 main (void)

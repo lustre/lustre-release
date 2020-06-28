@@ -14,7 +14,16 @@
  *
  * See Documentation/core-api/xarray.rst for how to use the XArray.
  */
-#ifdef HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY
+#ifndef HAVE_XARRAY_SUPPORT
+
+#if defined(NEED_LOCKDEP_IS_HELD_DISCARD_CONST) \
+ && defined(CONFIG_LOCKDEP) \
+ && defined(lockdep_is_held)
+#undef lockdep_is_held
+	#define lockdep_is_held(lock) \
+		lock_is_held((struct lockdep_map *)&(lock)->dep_map)
+#endif
+
 #include <linux/bug.h>
 #include <linux/compiler.h>
 #include <linux/gfp.h>
@@ -1752,6 +1761,6 @@ static inline void *xas_next(struct xa_state *xas)
 	xas->xa_offset++;
 	return xa_entry(xas->xa, node, xas->xa_offset);
 }
-#endif /* HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY */
+#endif /* !HAVE_XARRAY_SUPPORT */
 
 #endif /* _LINUX_XARRAY_H */

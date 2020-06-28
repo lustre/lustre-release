@@ -1045,6 +1045,31 @@ LB_CHECK_EXPORT([save_stack_trace_tsk], [arch/$SUBARCH/kernel/stacktrace.c],
 ]) # LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 
 #
+# LIBCFS_LOCKDEP_IS_HELD
+#
+# Kernel v4.15-rc8-106-g08f36ff64234
+# lockdep: Make lockdep checking constant
+#
+AC_DEFUN([LIBCFS_LOCKDEP_IS_HELD], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'lockdep_is_held()' uses const argument],
+lockdep_is_held, [
+	#include <linux/lockdep.h>
+],[
+#ifdef CONFIG_LOCKDEP
+	const struct spinlock *lock = NULL;
+
+	lockdep_is_held(lock);
+#endif
+],[],[
+	AC_DEFINE(NEED_LOCKDEP_IS_HELD_DISCARD_CONST, 1,
+		[lockdep_is_held() argument is const])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_LOCKDEP_IS_HELD
+
+#
 # LIBCFS_TIMER_SETUP
 #
 # Kernel version 4.15 commit e99e88a9d2b067465adaa9c111ada99a041bef9a
@@ -1135,12 +1160,12 @@ tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
 LB_CHECK_COMPILE([if page cache uses Xarray],
 xarray_support, [
-	#include <linux/radix-tree.h>
+	#include <linux/xarray.h>
 ],[
-	radix_tree_exceptional_entry(NULL);
+	xa_is_value(NULL);
 ],[
-	AC_DEFINE(HAVE_RADIX_TREE_EXCEPTIONAL_ENTRY, 1,
-		[kernel lacks 'xa_is_value'])
+	AC_DEFINE(HAVE_XARRAY_SUPPORT, 1,
+		[kernel Xarray implementation lacks 'xa_is_value'])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_XARRAY_SUPPORT
@@ -1367,6 +1392,7 @@ LIBCFS_NEW_KERNEL_WRITE
 LIBCFS_NEW_KERNEL_READ
 LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 # 4.15
+LIBCFS_LOCKDEP_IS_HELD
 LIBCFS_TIMER_SETUP
 # 4.16
 LIBCFS_WAIT_VAR_EVENT
