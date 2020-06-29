@@ -7839,18 +7839,25 @@ test_64c() {
 }
 run_test 64c "verify grant shrink"
 
+import_param() {
+	local tgt=$1
+	local param=$2
+
+	$LCTL get_param osc.$tgt.import | awk "/$param/ { print \$2 }"
+}
+
 # this does exactly what osc_request.c:osc_announce_cached() does in
 # order to calculate max amount of grants to ask from server
 want_grant() {
 	local tgt=$1
 
-	local nrpages=$($LCTL get_param -n osc.${tgt}.max_pages_per_rpc)
-	local rpc_in_flight=$($LCTL get_param -n osc.${tgt}.max_rpcs_in_flight)
+	local nrpages=$($LCTL get_param -n osc.$tgt.max_pages_per_rpc)
+	local rpc_in_flight=$($LCTL get_param -n osc.$tgt.max_rpcs_in_flight)
 
-	((rpc_in_flight ++));
+	((rpc_in_flight++));
 	nrpages=$((nrpages * rpc_in_flight))
 
-	local dirty_max_pages=$($LCTL get_param -n osc.${tgt}.max_dirty_mb)
+	local dirty_max_pages=$($LCTL get_param -n osc.$tgt.max_dirty_mb)
 
 	dirty_max_pages=$((dirty_max_pages * 1024 * 1024 / PAGE_SIZE))
 
@@ -7858,13 +7865,11 @@ want_grant() {
 	local undirty=$((nrpages * PAGE_SIZE))
 
 	local max_extent_pages
-	max_extent_pages=$($LCTL get_param osc.${tgt}.import |
-	    grep grant_max_extent_size | awk '{print $2}')
+	max_extent_pages=$(import_param $tgt grant_max_extent_size)
 	max_extent_pages=$((max_extent_pages / PAGE_SIZE))
 	local nrextents=$(((nrpages + max_extent_pages - 1) / max_extent_pages))
 	local grant_extent_tax
-	grant_extent_tax=$($LCTL get_param osc.${tgt}.import |
-	    grep grant_extent_tax | awk '{print $2}')
+	grant_extent_tax=$(import_param $tgt grant_extent_tax)
 
 	undirty=$((undirty + nrextents * grant_extent_tax))
 
@@ -7878,55 +7883,170 @@ grant_chunk() {
 	local max_brw_size
 	local grant_extent_tax
 
-	max_brw_size=$($LCTL get_param osc.${tgt}.import |
-	    grep max_brw_size | awk '{print $2}')
+	max_brw_size=$(import_param $tgt max_brw_size)
 
-	grant_extent_tax=$($LCTL get_param osc.${tgt}.import |
-	    grep grant_extent_tax | awk '{print $2}')
+	grant_extent_tax=$(import_param $tgt grant_extent_tax)
 
 	echo $(((max_brw_size + grant_extent_tax) * 2))
 }
 
 test_64d() {
-	[ $OST1_VERSION -lt $(version_code 2.10.56) ] &&
+	[ $OST1_VERSION -ge $(version_code 2.10.56) ] ||
 		skip "OST < 2.10.55 doesn't limit grants enough"
 
-	local tgt=$($LCTL dl | grep "0000-osc-[^mM]" | awk '{print $4}')
-	local file=$DIR/$tfile
+	local tgt=$($LCTL dl | awk '/OST0000-osc-[^mM]/ { print $4 }')
 
-	[[ $($LCTL get_param osc.${tgt}.import |
-	     grep "connect_flags:.*grant_param") ]] ||
+	[[ "$($LCTL get_param osc.${tgt}.import)" =~ "grant_param" ]] ||
 		skip "no grant_param connect flag"
 
-	local olddebug=$($LCTL get_param -n debug 2> /dev/null)
+	local olddebug="$($LCTL get_param -n debug 2> /dev/null)"
 
-	$LCTL set_param debug="$OLDDEBUG" 2> /dev/null || true
+	$LCTL set_param -n -n debug="$OLDDEBUG" || true
+	stack_trap "$LCTL set_param -n debug='$olddebug'" EXIT
+
 
 	local max_cur_granted=$(($(want_grant $tgt) + $(grant_chunk $tgt)))
-	stack_trap "rm -f $file" EXIT
+	stack_trap "rm -f $DIR/$tfile && wait_delete_completed" EXIT
 
-	$LFS setstripe $file -i 0 -c 1
-	dd if=/dev/zero of=$file bs=1M count=1000 &
+	$LFS setstripe $DIR/$tfile -i 0 -c 1
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1000 &
 	ddpid=$!
 
-	while true
-	do
-		local cur_grant=$($LCTL get_param -n osc.${tgt}.cur_grant_bytes)
-		if [[ $cur_grant -gt $max_cur_granted ]]
-		then
+	while kill -0 $ddpid; do
+		local cur_grant=$($LCTL get_param -n osc.$tgt.cur_grant_bytes)
+
+		if [[ $cur_grant -gt $max_cur_granted ]]; then
 			kill $ddpid
 			error "cur_grant $cur_grant > $max_cur_granted"
 		fi
-		kill -0 $ddpid
-		[[ $? -ne 0 ]] && break;
-		sleep 2
-	done
 
-	rm -f $DIR/$tfile
-	wait_delete_completed
-	$LCTL set_param debug="$olddebug" 2> /dev/null || true
+		sleep 1
+	done
 }
 run_test 64d "check grant limit exceed"
+
+check_grants() {
+	local tgt=$1
+	local expected=$2
+	local msg=$3
+	local cur_grants=$($LCTL get_param -n osc.$tgt.cur_grant_bytes)
+
+	((cur_grants == expected)) ||
+		error "$msg: grants mismatch: $cur_grants, expected $expected"
+}
+
+round_up_p2() {
+	echo $((($1 + $2 - 1) & ~($2 - 1)))
+}
+
+test_64e() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $OST1_VERSION -ge $(version_code 2.11.56) ] ||
+		skip "Need OSS version at least 2.11.56"
+
+	# Remount client to reset grant
+	remount_client $MOUNT || error "failed to remount client"
+	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+
+	local init_grants=$(import_param $osc_tgt initial_grant)
+
+	check_grants $osc_tgt $init_grants "init grants"
+
+	local extent_tax=$(import_param $osc_tgt grant_extent_tax)
+	local max_brw_size=$(import_param $osc_tgt max_brw_size)
+	local gbs=$(import_param $osc_tgt grant_block_size)
+
+	# write random number of bytes from max_brw_size / 4 to max_brw_size
+	local write_bytes=$(shuf -i $((max_brw_size / 4))-$max_brw_size -n 1)
+	# align for direct io
+	write_bytes=$(round_up_p2 $write_bytes PAGE_SIZE)
+	# round to grant consumption unit
+	local wb_round_up=$(round_up_p2 $write_bytes gbs)
+
+	local grants=$((wb_round_up + extent_tax))
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile  || error "lfs setstripe failed"
+
+	# define OBD_FAIL_TGT_NO_GRANT 0x725
+	# make the server not grant more back
+	do_facet ost1 $LCTL set_param fail_loc=0x725
+	dd if=/dev/zero of=$DIR/$tfile bs=$write_bytes count=1 oflag=direct
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	check_grants $osc_tgt $((init_grants - grants)) "dio w/o grant alloc"
+
+	rm -f $DIR/$tfile || error "rm failed"
+
+	# Remount client to reset grant
+	remount_client $MOUNT || error "failed to remount client"
+	osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
+
+	# define OBD_FAIL_TGT_NO_GRANT 0x725
+	# make the server not grant more back
+	do_facet ost1 $LCTL set_param fail_loc=0x725
+	$MULTIOP $DIR/$tfile "oO_WRONLY:w${write_bytes}yc"
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	check_grants $osc_tgt $((init_grants - grants)) "buf io w/o grant alloc"
+}
+run_test 64e "check grant consumption (no grant allocation)"
+
+test_64f() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	# Remount client to reset grant
+	remount_client $MOUNT || error "failed to remount client"
+	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+
+	local init_grants=$(import_param $osc_tgt initial_grant)
+	local extent_tax=$(import_param $osc_tgt grant_extent_tax)
+	local max_brw_size=$(import_param $osc_tgt max_brw_size)
+	local gbs=$(import_param $osc_tgt grant_block_size)
+	local chunk=$(grant_chunk $osc_tgt)
+
+	# write random number of bytes from max_brw_size / 4 to max_brw_size
+	local write_bytes=$(shuf -i $((max_brw_size / 4))-$max_brw_size -n 1)
+	# align for direct io
+	write_bytes=$(round_up_p2 $write_bytes PAGE_SIZE)
+	# round to grant consumption unit
+	local wb_round_up=$(round_up_p2 $write_bytes gbs)
+
+	local grants=$((wb_round_up + extent_tax))
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=$write_bytes count=1 oflag=direct ||
+		error "error writing to $DIR/$tfile"
+
+	check_grants $osc_tgt $((init_grants - grants + chunk)) \
+		"direct io with grant allocation"
+
+	rm -f $DIR/$tfile || error "rm failed"
+
+	# Remount client to reset grant
+	remount_client $MOUNT || error "failed to remount client"
+	osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
+
+	local cmd="oO_WRONLY:w${write_bytes}_yc"
+
+	$MULTIOP $DIR/$tfile $cmd &
+	MULTIPID=$!
+	sleep 1
+
+	check_grants $osc_tgt $((init_grants - grants)) \
+		"buffered io, not write rpc"
+
+	kill -USR1 $MULTIPID
+	wait
+
+	check_grants $osc_tgt $((init_grants - grants + chunk)) \
+		"buffered io, one RPC"
+}
+run_test 64f "check grant consumption (with grant allocation)"
 
 # bug 1414 - set/get directories' stripe info
 test_65a() {
