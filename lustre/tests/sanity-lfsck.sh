@@ -17,18 +17,64 @@ ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
 
 # DNE does not support striped directory on zfs-based backend yet.
 [ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-#Bug number for excepting test
-	ALWAYS_EXCEPT+=" 31"
+
+# bug number for skipped test:	LU-5855	LU-5855	LU-5855	LU-5855
+	ALWAYS_EXCEPT+="	31a	31b	31c	31d"
+# bug number for skipped test:	LU-5855	LU-5855	LU-5855	LU-5855
+	ALWAYS_EXCEPT+="	31e	31f	31g	31h"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
+# bug number for skipped test:	LU-4165
+	ALWAYS_EXCEPT+="	2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
+# bug number for skipped test:	LU-1267
+	ALWAYS_EXCEPT+="	11"
+# bug number for skipped test:	LU-3950
+	ALWAYS_EXCEPT+="	12"
+# bug number for skipped test:	LU-3593
+	ALWAYS_EXCEPT+="	13"
+# bug number for skipped test:	LU-3590
+	ALWAYS_EXCEPT+="	14"
+# bug number for skipped test:	LU-3591
+	ALWAYS_EXCEPT+="	15"
+# bug number for skipped test:	LU-3594	LU-3594
+	ALWAYS_EXCEPT+="	16	17"
+# bug number for skipped test:	LU-3336	LU-3336	LU-3336	LU-3336	LU-3336
+	ALWAYS_EXCEPT+="	18a	18b	18c	18d	18e"
+# bug number for skipped test:	LU-3951	LU-3951
+	ALWAYS_EXCEPT+="	19a	19b"
+# bug number for skipped test:	LU-4887	LU-4887
+	ALWAYS_EXCEPT+="	20	21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30 31"
+# bug number for skipped test:	LU-4788
+	ALWAYS_EXCEPT+="	2d"
+# bug number for skipped test:	LU-5511	LU-5511	LU-5511
+	ALWAYS_EXCEPT+="	2e	22a	22b"
+# bug number for skipped test:	LU-4788
+	ALWAYS_EXCEPT+="	3"
+# bug number for skipped test:	LU-5512	LU-5512	LU-5512
+	ALWAYS_EXCEPT+="	23a	23b	23c"
+# bug number for skipped test:	LU-5513
+	ALWAYS_EXCEPT+="	24"
+# bug number for skipped test:	LU-5515
+	ALWAYS_EXCEPT+="	25"
+# bug number for skipped test:	LU-5516	LU-5516
+	ALWAYS_EXCEPT+="	26a	26b"
+# bug number for skipped test:	LU-5516	LU-5516
+	ALWAYS_EXCEPT+="	27a	27b"
+# bug number for skipped test:	LU-5506
+	ALWAYS_EXCEPT+="	28"
+# bug number for skipped test:	LU-5517	LU-5517	LU-5517
+	ALWAYS_EXCEPT+="	29a	29b	29c"
+# bug number for skipped test:	LU-5518
+	ALWAYS_EXCEPT+="	30"
+# bug number for skipped test:	LU-5519	LU-5519	LU-5519	LU-5519
+	ALWAYS_EXCEPT+="	31a	31b	31c	31d"
+# bug number for skipped test:	LU-5519	LU-5519	LU-5519	LU-5519
+	ALWAYS_EXCEPT+="	31e	31f	31g	31h"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 build_test_filter
