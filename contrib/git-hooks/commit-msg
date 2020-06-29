@@ -245,10 +245,10 @@ for full details.  A good example of a valid commit comment is:
     Optionally, if the patch is backported from master, include links
     to the original patch to simplify tracking it across branches/repos:
 
-    $LUSTRE_CHANGE: $GERRIT_URL/nnnn
-    $LUSTRE_COMMIT: 40-char-git-hash-of-patch-on-master
+    $LUSTRE_CHANGE $GERRIT_URL/nnnn
+    $LUSTRE_COMMIT 40-char-git-hash-of-patch-on-master
     or
-    $LUSTRE_COMMIT: TBD (from 40-char-hash-of-unlanded-patch)
+    $LUSTRE_COMMIT TBD (from 40-char-hash-of-unlanded-patch)
 
     Finish the comment with a blank line followed by the signoff section.
     The "$CHANGEID" line should only be present when updating a previous
@@ -268,7 +268,7 @@ for full details.  A good example of a valid commit comment is:
 USAGE
 }
 
-[[ "$1" == "--help" ]] && usage && exit 0
+[[ "$1" == "--help" ]] && init && usage && exit 0
 
 init ${1+"$@"}
 exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
@@ -343,7 +343,7 @@ done
 unset LINE
 $HAS_SIGNOFF || error "missing valid $SIGNOFF: line."
 
-if $HAS_ERROR; then
+if $HAS_ERROR && [[ -z "$SKIP" ]]; then
 	exec 3<&- 4>&-
 	short
 	rm "$REVISED"

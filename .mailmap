@@ -5,115 +5,188 @@
 # Remap CVS to CFS
 Alexander Zarochentsev <zam@clusterfs.com> <zam>
 Alexey Lyashkov <shadow@clusterfs.com> <shadow>
+Alex Zhuravlev <alex@clusterfs.com> <alex>
 Alex Zhuravlev <alex@clusterfs.com> <alex_tomas>
-Andreas Dilger <adilger@clusterfs.com <uid707>
+Alok Bhagwat <alokbhagwat@clusterfs.com> <alokbhagwat>
+Amrut Joshi <amrutjoshi@clusterfs.com> <amrutjoshi>
+Andreas Dilger <adilger@clusterfs.com> <uid707>
 Andreas Dilger <adilger@clusterfs.com> <adilger>
 Andrew Perepechko <panda@clusterfs.com> <panda>
 Bobi Jam <bobijam@clusterfs.com> <bobijam>
 Brian J. Murrell <brian@clusterfs.com> <brian>
+Chao Wang <wangchao@clusterfs.com> <wangchao>
+Chen Zheng <chenzheng@clusterfs.com> <chenzheng>
+Cheng Shao <shaocheng@clusterfs.com> <shaocheng>
+Cheng Shao <shaocheng@clusterfs.com>
+Chris Cooper <ccooper@clusterfs.com> <buffalo-pull>
+Chris Cooper <ccooper@clusterfs.com> <coopcoopbware>
+Chris Cooper <ccooper@clusterfs.com> <ccooper>
 Cliff White <cliffw@clusterfs.com> <cliffw>
+Dmitry Zogin <dzogin@clusterfs.com> <dzogin>
+Elena Gryaznova <grev@clusterfs.com> <grev>
 Eric Barton <eeb@clusterfs.com> <eeb>
 Eric Mei <ericm@clusterfs.com> <ericm>
 Eric Mei <ericm@clusterfs.com> <meijia>
+Eric Mei <ericm@clusterfs.com> <nfshp>
+Fan Yong <fanyong@clusterfs.com> <fanyong>
+Girish Shilamkar <girish@clusterfs.com> <girish>
+Gord Eagle <gord-fig@clusterfs.com> <gord>
+Gord Eagle <gord-fig@clusterfs.com> <gord-fig>
 Hongchao Zhang <zhanghc@clusterfs.com> <zhanghc>
+Hou Feng <houfeng@clusterfs.com> <houfeng>
+Huang Hua <huanghua@clusterfs.com> <huanghua>
 Isaac Huang <isaac@clusterfs.com> <isaac>
+Jacob Berkman <jacob@clusterfs.com> <jacob>
 Jian Yu <yujian@clusterfs.com> <yujian>
 Jinshan Xiong <jay@clusterfs.com> <jxiong>
+Jody McIntyre <scjody@clusterfs.com> <scjody>
 Johann Lombardi <johann@clusterfs.com> <johann>
+Kalpak Shah <kalpak@clusterfs.com> <kalpak>
+Komal Nawandar <komaln@clusterfs.com> <komaln>
 Lai Siyao <lsy@clusterfs.com> <lsy>
+Landen Tian <tianzy@clusterfs.com> <tianzy>
+Li Zhonglian <sice@clusterfs.com> <sice>
 Liang Zhen <liang@clusterfs.com> <liangzhen>
-Liu Ying <emoly@clusterfs.com> <liuy>
+Liu Duo <liuduo@clusterfs.com> <liuduo>
+Emoly Liu <emoly@clusterfs.com> <liuy>
+Manoj Joseph <manoj@clusterfs.com> <manoj>
+Mathew Monroe <mmex@clusterfs.com> <mmex>
+Matt Wu <mattwu@clusterfs.com> <mattwu>
+Matt Wu <mattwu@clusterfs.com> <matt@ext2fsd.com>
+Maxim Patlasov <maxim@clusterfs.com> <maxim>
+Michael MacDonald <mjmac@clusterfs.com> <mjmac>
 Mike Shaver <shaver@clusterfs.com> <shaver>
 Mike Shaver <shaver@clusterfs.com> <uid23919>
 Mikhail Pershin <tappro@clusterfs.com> <tappro>
 Nathan Rutman <nathan@clusterfs.com> <nathan>
 Nic Henke <nic@clusterfs.com> <nic>
+Nick Jennings <nkj@clusterfs.com> <nkj>
 Nikita Danilov <nikita@clusterfs.com> <nikita>
 Niu Yawei <niu@clusterfs.com> <niu>
 Oleg Drokin <green@clusterfs.com> <green>
+Oleg Drokin <green@clusterfs.com> <green@linuxhacker.ru>
+Peng Zhao <pengzhao@clusterfs.com> <pengzhao>
 Peter Braam <braam@clusterfs.com> <braam>
 Peter Braam <braam@clusterfs.com> <uid34591>
 Phil Schwan <phil@clusterfs.com> <phil>
 Phil Schwan <phil@clusterfs.com> <pschwan>
+PJ Kirner <pjkirner@clusterfs.com> <pjkirner>
+Qian Yingjin <qian@clusterfs.com> <qian>
+Rahul Deshmukh <deshmukh@clusterfs.com> <deshmukh>
+Radhika Vullikanti <radhika@clusterfs.com> <radhika>
+Radhika Vullikanti <radhika@clusterfs.com> <radhikav>
 Robert Read <rread@clusterfs.com> <rread>
 Robert Read <rread@clusterfs.com> <robert.read>
 Robert Read <rread@clusterfs.com> <uid723>
+Rupesh Thakare <rupesh@clusterfs.com> <rupesh>
+Sergey Glushchenko <deen@clusterfs.com> <deen>
+Tian Ying <tianying@clusterfs.com> <tianying>
 Vitaly Fertman <vitaly@clusterfs.com> <vitaly>
 Vladimir Saveliev <vs@clusterfs.com> <vs>
 Walter Poxon <walter@clusterfs.com> <walter>
 Wang Di <wangdi@clusterfs.com> <wangdi>
 Wang Di <wangdi@clusterfs.com> <uid721>
 Wang Yibin <wangyb@clusterfs.com> <wangyb>
+Wu Fei <wufei@clusterfs.com> <wufei>
 Yang Sheng <yangsheng@clusterfs.com> <yangsheng>
-Yong Fan <fanyong@clusterfs.com> <fanyong>
+You Feng <youfeng@clusterfs.com> <youfeng>
+Yu Zhangyong <yzy@clusterfs.com> <yzy>
 Yury Umanets <yury@clusterfs.com> <yury>
 Zach Brown <zab@clusterfs.com> <zab>
+Zhao Hong <zhaohong@clusterfs.com> <zhaohong>
+Zhao Qiang <zhaoqiang@clusterfs.com> <zhaoqiang>
+Zhou Bowen <bwzhou@clusterfs.com> <bwzhou>
+Zhou Haibo <zhaibo@clusterfs.com> <zhaibo>
+Zhou Jianhui <jerrifer@clusterfs.com> <jerrifer>
 
 # Remap to Sun
+Alex Zhuravlev <alexey.zhuravlev@sun.com> <alex@clusterfs.com>
+Alexander Zarochentsev <Alexander.Zarochentsev@sun.com> <alexander.zarochentev@sun.com>
+Alexander Zarochentsev <Alexander.Zarochentsev@sun.com> <Alexander.Zarochentsev@Sun.COM>
+Alexander Zarochentsev <Alexander.Zarochentsev@sun.com>
+Alexey Lyashkov <alexey.lyashkov@sun.com> <shadow@clusterfs.com>
 Andreas Dilger <adilger@sun.com> <adilger@clusterfs.com>
-Andrew Perepechko <andrew.perepechko@sun.com> anserper <anserper>
-Andrew Perepechko <andrew.perepechko@sun.com> <panda@clusterfs.com>
-Alexander Zarochentsev <Alexander.Zarochentsev@sun.com> Alexander.Zarochentsev <Alexander.Zarochentsev@sun.com>
-Alexander Zarochentsev <Alexander.Zarochentsev@sun.com> Alexander.Zarochentev <alexander.zarochentev@sun.com>
+Andrew Perepechko <Andrew.Perepechko@sun.com> <anserper>
+Andrew Perepechko <Andrew.Perepechko@sun.com> <panda@clusterfs.com>
+Andrew Perepechko <Andrew.Perepechko@sun.com> <Andrew.Perepechko@Sun.COM>
 Bobi Jam <bobijam@sun.com> <bobijam@clusterfs.com>
 Brian J. Murrell <brian@sun.com> <brian@clusterfs.com>
 Cliff White <cliff.white@sun.com> <cliffw@clusterfs.com>
+Dmitry Zogin <Dmitry.Zogin@sun.com> <dzogin@clusterfs.com>
+Dmitry Zogin <Dmitry.Zogin@sun.com> <Dmitri.Zoguine@Sun.COM>
 Elena Gryaznova <grev@sun.com> <grev>
 Eric Barton <eric.barton@sun.com> <eeb@clusterfs.com>
-Eric Mei <eric.mei@sun.com> <ericm@clusterfs.com>
-Fan Yong <yong.fan@sun.com> <fanyong@clusterfs.com>
-Hongchao Zhang <Hongchao.Zhang@sun.com> hongchao.zhang <Hongchao.Zhang@sun.com>
-Hongchao Zhang <Hongchao.Zhang@sun.com> ZhangHongChao <Hongchao.zhang@sun.com>
-Hongchao Zhang <hongchao.zhang@sun.com> <zhanghc@clusterfs.com>
-Isaac Huang <he.huang@sun.com> <isaac@clusterfs.com>
-Jian Yu <jian.yu@sun.com> <yujian@clusterfs.com>
+Eric Mei <Eric.Mei@sun.com> <ericm@clusterfs.com>
+Fan Yong <Yong.Fan@sun.com> <fanyong@clusterfs.com>
+Hongchao Zhang <Hongchao.Zhang@sun.com> <zhanghc@clusterfs.com>
+Hongchao Zhang <Hongchao.Zhang@sun.com>
+Huang Hua <huanghua@sun.com> <huanghua@clusterfs.com>
+Isaac Huang <He.Huang@sun.com> <isaac@clusterfs.com>
+Jian Yu <Jian.Yu@sun.com> <yujian@clusterfs.com>
+Jinshan Xiong <Jinshan.Xiong@sun.com> <jay@clusterfs.com>
+Jinshan Xiong <Jinshan.Xiong@sun.com> <Jinshan.Xiong@Sun.COM>
 Johann Lombardi <johann@sun.com> <johann@clusterfs.com>
-Liang Zhen <liang.zhen@sun.com> <liang@clusterfs.com>
-LiuYing <emoly.liu@sun.com> <emoly@clusterfs.com>
+Landen Tian <tianzy@sun.com> <tianzy@clusterfs.com>
+Landen Tian <tianzy@sun.com> <landen@sun.com>
+Landen Tian <tianzy@sun.com>
+Liang Zhen <Liang.Zhen@sun.com> <liang@clusterfs.com>
+Lisa Week <lisa.week@sun.com> <lisaweek>
+Emoly Liu <Emoly.Liu@sun.com> <emoly@clusterfs.com>
+Emoly Liu <Emoly.Liu@sun.com> <Emoly.Liu@Sun.COM>
+Manoj Joseph <Manoj.Joseph@sun.com> <manoj@clusterfs.com>
+Manoj Joseph <Manoj.Joseph@sun.com> <Manoj.Joseph@Sun.COM>
+Maxim Patlasov <Maxim.Patlasov@sun.com> <maxim@clusterfs.com>
+Maxim Patlasov <Maxim.Patlasov@sun.com> <Maxim.Patlasov@Sun.COM>
 Mikhail Pershin <tappro@sun.com> <tappro@clusterfs.com>
-Mikhail Pershin <tappro@sun.com> Mike Tappro <tappro@sun.com>
-Mikhail Pershin <tappro@sun.com> Mike Tappro <tappro@garden.(none)>
+Mikhail Pershin <tappro@sun.com> <tappro@garden.(none)>
+Mikhail Pershin <tappro@sun.com>
 Nathan Rutman <nathan.rutman@sun.com> <nathan@clusterfs.com>
-Nicolas Williams <nicolas.williams@sun.com> nicolas.williams <nicolas.williams>
-Nicolas Williams <nicolas.williams@sun.com> <root@vl1.(none)>
+Nicolas Williams <Nicolas.Williams@sun.com> <nicolas.williams>
+Nicolas Williams <Nicolas.Williams@sun.com> <root@vl1.(none)>
+Nicolas Williams <Nicolas.Williams@sun.com> <Nicolas.Williams@Sun.COM>
 Niu Yawei <niu.yawei@sun.com> <niu@clusterfs.com>
 Oleg Drokin <oleg.drokin@sun.com> <green@clusterfs.com>
-Oleg Drokin <oleg.drokin@sun.com> <green@linuxhacker.ru>
 Pravin Shelar <Pravin.Shelar@sun.com> <pravin>
 Pravin Shelar <Pravin.Shelar@sun.com> <pravins>
-Pravin Shelar <Pravin.Shelar@sun.com> pravin <Pravin.Shelar@sun.com>
+Pravin Shelar <Pravin.Shelar@sun.com>
+Qian Yingjin <yingjin.qian@sun.com> <qian@clusterfs.com>
+Rahul Deshmukh <Rahul.Deshmukh@sun.com> <deshmukh@clusterfs.com>
+Rahul Deshmukh <Rahul.Deshmukh@sun.com> <Rahul.Deshmukh@Sun.COM>
 Ricardo M. Correia <ricardo.correia@sun.com> <rcorreia>
 Robert Read <robert.read@sun.com> <rread@clusterfs.com>
 Robert Read <robert.read@sun.com> <rread@vpn-129-150-244-142.sfbay.sun.com>
-Vitaly Fertman <vitaly.fertman@sun.com> <vitaly@clusterfs.com>
-Wang Yibin <wang.yibin@oracle.com>
-Wang Di <tom.wang@sun.com> <wangdi@clusterfs.com>
-Wang Di <tom.wang@sun.com> Tom.Wang <Tom.Wang@sun.com>
-Yang Sheng <sheng.yang@sun.com> <yangsheng@clusterfs.com>
-Yang Sheng <sheng.yang@sun.com> yangsheng <sheng.yang@sun.com>
+Sergey Glushchenko <deen@sun.com> <deen@clusterfs.com>
+Vitaly Fertman <Vitaly.Fertman@sun.com> <vitaly@clusterfs.com>
+Vitaly Fertman <Vitaly.Fertman@sun.com> <Vitaly.Fertman@Sun.COM>
+Vladimir Saveliev <Vladimir.Saveliev@sun.com> <Vladimir.Saveliev@Sun.COM>
+Wang Di <Tom.Wang@sun.com> <wangdi@clusterfs.com>
+Wang Di <Tom.Wang@sun.com> <Tom.Wang@Sun.COM>
+Wang Yibin <yibin.wang@sun.com> <wangyb@clusterfs.com>
+Yang Sheng <Sheng.Yang@sun.com> <yangsheng@clusterfs.com>
+Yang Sheng <Sheng.Yang@sun.com> yangsheng <sheng.yang@sun.com>
 
 # Remap to Oracle
-Alex Zhuravlev <alexey.zhuravlev@oracle.com> <alex@clusterfs.com>
 Andreas Dilger <andreas.dilger@oracle.com> <adilger@sun.com>
 Andreas Dilger <andreas.dilger@oracle.com> <adilger@mookie.adilger.int>
 Andrew Perepechko <andrew.perepechko@oracle.com> <andrew.perepechko@sun.com>
 Brian J. Murrell <brian.murrell@oracle.com> <brian@sun.com>
 Cliff White <cliff.white@oracle.com> <cliff.white@sun.com>
-Dmitry Zogin <dmitry.zoguine@oracle.com> dzogin <dmitri.zoguine@sun.com>
+Dmitry Zogin <dmitry.zoguine@oracle.com> <dmitri.zogin@sun.com>
 Elena Gryaznova <elena.gryaznova@oracle.com> <grev@sun.com>
+Elena Gryaznova <elena.gryaznova@oracle.com>
+Emoly Liu <emoly.liu@oracle.com> <emoly.liu@sun.com>
 Eric Barton <eric.barton@oracle.com> <eric.barton@sun.com>
 Eric Mei <eric.mei@oracle.com> <eric.mei@sun.com>
-LiuYing <emoly.liu@oracle.com> <emoly.liu@sun.com>
 Isaac Huang <he.h.huang@oracle.com> <he.huang@sun.com>
 Jian Yu <jian.yu@oracle.com> <jian.yu@sun.com>
-Jinshan Xiong <jinshan.xiong@oracle.com> Jay Xiong <jinshan.xiong@sun.com>
+Jinshan Xiong <jinshan.xiong@oracle.com> <jinshan.xiong@sun.com>
 Johann Lombardi <johann.lombardi@oracle.com> <johann@sun.com>
-Landen Tian <zhiyong.tian@oracle.com> <landen@sun.com>
-Landen Tian <zhiyong.tian@oracle.com> Landen <zhiyong.tian@oracle.com>
-LiuYing <emoly.liu@oracle.com> <emoly.liu@sun.com>
+Landen Tian <zhiyong.tian@oracle.com>
+Manoj Joseph <manoj.p.joseph@oracle.com> <manoj.joseph@sun.com>
 Mikhail Pershin <mikhail.pershin@oracle.com> <tappro@sun.com>
 Minh Diep <minh.diep@oracle.com> <minhdiep@lts-head.co.cfs>
 Minh Diep <minh.diep@oracle.com> <minh@clusterfs.com>
+Nicolas Williams <nicolas.williams@oracle.com> <nicolas.williams@sun.com>
 Nathan Rutman <nathan.rutman@oracle.com> <nathan.rutman@sun.com>
 Oleg Drokin <oleg.drokin@oracle.com> <oleg.drokin@sun.com>
 Ricardo M. Correia <ricardo.correia@oracle.com> <ricardo.correia@sun.com>
@@ -121,44 +194,53 @@ Robert Read <robert.read@oracle.com> <rread@sun.com>
 Terry Rutledge <terry.rutledge@oracle.com> <stinson1947>
 Terry Rutledge <terry.rutledge@oracle.com> <terry@.(none)>
 Vitaly Fertman <vitaly.fertman@oracle.com> <vitaly.fertman@sun.com>
-Wang Di <di.wang@oracle.com> Tom.Wang <Tom.Wang@sun.com>
-Wang Di <di.wang@oracle.com> di wang <di.wang@oracle.com>
+Vladimir Saveliev <vladimir.saveliev@oracle.com> <Vladimir.Saveliev@sun.com>
+Wang Di <di.wang@oracle.com> <Tom.Wang@sun.com>
+Wang Di <di.wang@oracle.com>
+Wang Yibin <wang.yibin@oracle.com> <yibin.wang@sun.com>
 Yang Sheng <sheng.yang@oracle.com> <sheng.yang@sun.com>
-Yang Sheng <sheng.yang@oracle.com> yangsheng <sheng.yang@oracle.com>
+Yang Sheng <sheng.yang@oracle.com>
 
 # Remap to Seagate
+Aditya Pandit <aditya.pandit@seagate.com> <panditadityashreesh@yahoo.com>
 Alexander Boyko <alexander.boyko@seagate.com> <alexander_boyko@xyratex.com>
+Alexander Lezhoev <alexander.lezhoev@seagate.com> <Alexander_Lezhoev@xyratex.com>
 Artem Blagodarenko <artem.blagodarenko@seagate.com> <artem_blagodarenko@xyratex.com>
-Alexander Zarochentsev <Alexander_Zarochentsev@xyratex.com> Alexander.Zarochentsev <Alexander.Zarochentev@xyratex.com>
 Alexander Zarochentsev <alexander.zarochentsev@seagate.com> <alexander_zarochentsev@xyratex.com>
 Alexey Lyashkov <alexey.lyashkov@seagate.com> <alexey_lyashkov@xyratex.com>
-Alexey Lyashkov <alexey_lyashkov@xyratex.com> <alexey_yashkov@xyratex.com>
+Alexey Lyashkov <alexey.lyashkov@seagate.com> <alexey_yashkov@xyratex.com>
 Andrew Perepechko <andrew.perepechko@seagate.com> <andrew_perepechko@xyratex.com>
-Andriy Skulysh <andriy_skulysh@xyratex.com> Andriy.Skulysh <Andriy_Skulysh@xyratex.com>
 Andriy Skulysh <andriy.skulysh@seagate.com> <andriy_skulysh@xyratex.com>
 Bruce Korb <bruce_korb@xyratex.com> <bruce.korb@gmail.com>
-Elena Grayaznova <elena.gryaznova@seagate.com> <elena_gryaznova@xyratex.com>
-Elena Grayaznova <elena.gryaznova@seagate.com> Elena V. Gryaznova <elena.gryaznova@seagate.com>
+Elena Gryaznova <elena.gryaznova@seagate.com> <elena_gryaznova@xyratex.com>
+Iurii Golovach <Iurii_Golovach@xyratex.com>
 Kyrylo Shatskyy <kyrylo.shatskyy@seagate.com> <kyrylo_shatskyy@xyratex.com>
 Nathan Rutman <nathan.rutman@seagate.com> <nathan_rutman@xyratex.com>
 Nathan Rutman <nathan.rutman@seagate.com> <nathan.rutman@xyratex.com>
 Nikitas Angelinas <nikitas.angelinas@seagate.com> <nikitas_angelinas@xyratex.com>
 Parinay Kondekar <parinay.kondekar@seagate.com> <parinay_kondekar@xyratex.com>
 Rahul Deshmukh <rahul.deshmukh@seagate.com> <rahul_deshmukh@xyratex.com>
+Rahul Deshmukh <rahul.deshmukh@seagate.com>
 Sergey Cheremencev <sergey.cheremencev@seagate.com> <sergey_cheremencev@xyratex.com>
+Sergey Glushchenko <sergey.glushchenko@seagate.com> <sergii_glushchenko@xyratex.com>
 Vitaly Fertman <vitaly.fertman@seagate.com> <vitaly_fertman@xyratex.com>
 Vinayakswami Hariharmath <vinayakswami.hariharmath@seagate.com> <vinayakswami.hariharmath@clogeny.com>
 Vladimir Saveliev <vladimir.saveliev@seagate.com> <vladimir_saveliev@xyratex.com>
 
 # Remap to Cray
 Alexander Boyko <c17825@cray.com> <alexander.boyko@seagate.com>
+Alexander Lezhoev <c17454@cray.com> <alexander.lezhoev@seagate.com>
+Alexander Lezhoev <c17454@cray.com> <garson2@gmail.com>
 Alexander Zarochentsev <c17826@cray.com> <alexander.zarochentsev@seagate.com>
 Alexey Lyashkov <c17817@cray.com> <alexey.lyashkov@seagate.com>
 Andrew Perepechko <c17827@cray.com> <andrew.perepechko@seagate.com>
 Andriy Skulysh <c17819@cray.com> <andriy.skulysh@seagate.com>
 Artem Blagodarenko <c17828@cray.com> <artem.blagodarenko@seagate.com>
 Elena Gryaznova <c17455@cray.com> <elena.gryaznova@seagate.com>
-Elena Gryaznova <c17455@cray.com> Elena V. Gryaznova <c17455@cray.com>
+Frank Zago <fzago@cray.com> <fzago>
+Frank Zago <fzago@cray.com> <frank@zago.net>
+Frank Zago <fzago@cray.com>
+James R. Shimek <jshimek@cray.com>
 Nathan Rutman <nrutman@cray.com> <nathan.rutman@seagate.com>
 Nikitas Angelinas <nangelinas@cray.com> <nikitas.angelinas@seagate.com>
 Sergey Cheremencev <c17829@cray.com> <sergey.cheremencev@seagate.com>
@@ -166,94 +248,92 @@ Vitaly Fertman <c17818@cray.com> <vitaly.fertman@seagate.com>
 Vladimir Saveliev <c17830@cray.com> <vladimir.saveliev@seagate.com>
 
 # Remap to Whamcloud
-Alex Zhuravlev <bzzz@whamcloud.com> <alexey.zhuravlev@oracle.com>
+Alex Zhuravlev <bzzz@whamcloud.com> <alexey.zhuravlev@sun.com>
 Andreas Dilger <adilger@whamcloud.com> <andreas.dilger@oracle.com>
 Andreas Dilger <adilger@whamcloud.com> <andreas.dilger@whamcloud.com>
+Bobi Jam <bobijam@whamcloud.com> <bobijam@sun.com>
 Brian J. Murrell <brian@whamcloud.com> <brian.murrell@oracle.com>
 Cliff White <cliffw@whamcloud.com> <cliff.white@oracle.com>
-Emoly Liu <emoly@whamcloud.com> LiuYing <emoly.liu@oracle.com>
+Emoly Liu <emoly@whamcloud.com> <emoly.liu@oracle.com>
 Eric Barton <eeb@whamcloud.com> <eric.barton@oracle.com>
 Fan Yong <yong.fan@whamcloud.com> <Yong.Fan@sun.com>
-Fan Yong <yong.fan@whamcloud.com> nasf <yong.fan@whamcloud.com>
+Fan Yong <yong.fan@whamcloud.com>
 Hongchao Zhang <hongchao.zhang@whamcloud.com> <Hongchao.Zhang@sun.com>
-Hongchao Zhang <hongchao.zhang@whamcloud.com> hongchao.zhang <Hongchao.Zhang@sun.com>
 Isaac Huang <isaac@whamcloud.com> <he.h.huang@oracle.com>
 Jian Yu <yujian@whamcloud.com> <jian.yu@oracle.com>
-Jian Yu <yujian@whamcloud.com> Yu Jian <yujian@whamcloud.com>
+Jian Yu <yujian@whamcloud.com>
 Jinshan Xiong <jinshan.xiong@whamcloud.com> <jinshan.xiong@oracle.com>
 Jinshan Xiong <jinshan.xiong@whamcloud.com> <jay@whamcloud.com>
 Johann Lombardi <johann@whamcloud.com> <johann.lombardi@oracle.com>
 Lai Siyao <laisiyao@whamcloud.com> <lsy@clusterfs.com>
 Li Wei <liwei@whamcloud.com> <W.Li@sun.com>
-Liang Zhan <liang@whamcloud.com> Liang Zhen <zhen.liang@sun.com>
-Liang Zhen <liang@whamcloud.com> Liang Zhan <liang@whamcloud.com>
+Liang Zhen <liang@whamcloud.com> <zhen.liang@sun.com>
 Mikhail Pershin <tappro@whamcloud.com> <mikhail.pershin@oracle.com>
-Mikhail Pershin <tappro@whamcloud.com> Mike Pershin <tappro@whamcloud.com>
+Mikhail Pershin <tappro@whamcloud.com>
 Minh Diep <mdiep@whamcloud.com> <minh.diep@oracle.com>
 Niu Yawei <niu@whamcloud.com> <niu.yawei@oracle.com>
 Oleg Drokin <green@whamcloud.com> <oleg.drokin@oracle.com>
-Oleg Drokin <green@whamcloud.com> <green@whamcloud.com
+Oleg Drokin <green@whamcloud.com>
 Robert Read <rread@whamcloud.com> <robert.read@oracle.com>
 Wang Di <di.wang@whamcloud.com> <di.wang@oracle.com>
-Wang Di <di.wang@whamcloud.com> Di Wang <di.wang@whamcloud.com>
-Wang Di <di.wang@whamcloud.com> Wang di <di.wang@whamcloud.com>
-Wang Di <di.wang@whamcloud.com> wang di <di.wang@whamcloud.com>
-Wang Di <di.wang@whamcloud.com> wangdi <di.wang@whamcloud.com>
-Wei Liu <sarah@whamcloud.com> Wei3 Liu <w3liu@unknown000dc5d3c256.gateway.2wire.net>
-Wei Liu <sarah@whamcloud.com> sarah <sarah@whamcloud.com>
+Wang Di <di.wang@whamcloud.com>
+Wei Liu <sarah@whamcloud.com> <w3liu@unknown000dc5d3c256.gateway.2wire.net>
+Wei Liu <sarah@whamcloud.com>
 Yang Sheng <ys@whamcloud.com> <sheng.yang@oracle.com>
-Yang Sheng <ys@whamcloud.com> yang sheng <ys@whamcloud.com>
-Yang Sheng <ys@whamcloud.com> YangSheng <ys@whamcloud.com>
+Yang Sheng <ys@whamcloud.com>
 
 # Remap to Intel
 #Alex Zhuravlev <alexey.zhuravlev@intel.com> <bzzz@whamcloud.com>
-Andreas Dilger <andreas.dilger@intel.com> Anreas Dilger <andreas.dilger@intel.com>
+Andreas Dilger <andreas.dilger@intel.com>
 #Andreas Dilger <andreas.dilger@intel.com> <adilger@whamcloud.com>
 Bob Glossman <bob.glossman@intel.com> <bogl@whamcloud.com>
 #Bobi Jam <bobijam.xu@intel.com> <bobijam@whamcloud.com>
 Brian J. Murrell <brian.murrell@intel.com> <brian@whamcloud.com>
 Bruno Faccini <bruno.faccini@intel.com> <bfaccini62@gmail.com>
-Chris Gearing <chris.gearing@intel.com> Chris <chris@whamcloud.com>
+Chris Gearing <chris.gearing@intel.com> <chris@whamcloud.com>
 Cliff White <cliff.white@intel.com> <cliffw@whamcloud.com>
 Cliff White <cliff.white@intel.com> <cliffwhi@intel.com>
+Cong Xu <cong.xu@intel.com>
 Dmitry Eremin <dmitry.eremin@intel.com> <dmiter4ever@gmail.com>
 Doug Oucharek <doug.s.oucharek@intel.com> <doug@whamcloud.com>
 #Emoly Liu <emoly.liu@intel.com> <emoly@whamcloud.com>
 Eric Barton <eric.barton@intel.com> <eeb@intel.com>
 Fan Yong <fan.yong@intel.com> <yong.fan@whamcloud.com>
+Frank Heckes <frank.heckes@intel.com> <Frank.Heckes@intel.com>
 Hongchao Zhang <hongchao.zhang@intel.com> <hongchao.zhang@whamcloud.com>
 #Jian Yu <jian.yu@intel.com> <yujian@whamcloud.com>
-Jinshan Xiong <jinshan.xiong@intel.com> <jay@whamcloud.com>
-Jinshan Xiong <jinshan.xiong@intel.com> Jinshan <jinshan.xiong@intel.com>
 Jinshan Xiong <jinshan.xiong@intel.com> <jinshan.xiong@whamcloud.com>
-Johann Lombardi <johann.lombardi@intel.com> Johann Lombard <johann.lombardi@intel.com>
+Jinshan Xiong <jinshan.xiong@intel.com>
 Johann Lombardi <johann.lombardi@intel.com> <johann@whamcloud.com>
+Johann Lombardi <johann.lombardi@intel.com>
 John L. Hammond <john.hammond@intel.com> <johnlockwoodhammond@gmail.com>
 #John L. Hammond <john.hammond@intel.com> <jhammond@whamcloud.com>
 Keith Mannthey <keith.mannthey@intel.com> <keith@whamcloud.com>
+Keith Mannthey <keith.mannthey@intel.com>
 Lai Siyao <lai.siyao@intel.com> <laisiyao@whamcloud.com>
 Li Wei <wei.g.li@intel.com> <liwei@whamcloud.com>
 Liang Zhen <liang.zhen@intel.com> <liang@whamcloud.com>
 #Mikhail Pershin <mike.pershin@intel.com> <tappro@whamcloud.com>
-Mikhail Pershin <mike.pershin@intel.com> <mike.pershin@intel.com>
+Mikhail Pershin <mike.pershin@intel.com>
 #Minh Diep <min.diep@intel.com> <mdiep@whamcloud.com>
 Niu Yawei <niu.yaweh@intel.com> <niu@whamcloud.com>
 #Oleg Drokin <oleg.drokin@intel.com> <green@whamcloud.com>
 Oleg Drokin <oleg.drokin@intel.com> <green@intel.com>
+Oleg Drokin <oleg.drokin@intel.com> <hpdd-review@intel.com>
 Richard Henwood <richard.henwood@intel.com> <build@lgit-121.(none)>
 Richard Henwood <richard.henwood@intel.com> <rhenwood@whamcloud.com>
-Robert Read <robert.read@intel.com> <robert.read.@intel.com>
-Sonia Sharma <sonia.sharma@intel.com> <sonia.sharma@intel.com>
+Robert Read <robert.read@intel.com>
+Sonia Sharma <sonia.sharma@intel.com>
 Wang Di <di.wang@intel.com> <di.wang@whamcloud.com>
-Wang Di <di.wang@intel.com> <di.wang@intel.com>
+Wang Di <di.wang@intel.com>
 Wei Liu <wei3.liu@intel.com> <w3liu@unknown000dc5d3c256.gateway.2wire.net>
 #Wei Liu <wei3.liu@intel.com> <sarah@whamcloud.com>
-Wei Li <wei.g.li@intel.com> <liwei@whamcloud.com>
-Yang Sheng <yang.sheng@intel.com> <yang.sheng@intel.com>
 #Yang Sheng <yang.sheng@intel.com> <ys@whamcloud.com>
+Yang Sheng <yang.sheng@intel.com>
 
 # Remap to Whamcloud2
 Alex Zhuravlev <bzzz@whamcloud.com> <alexey.zhuravlev@intel.com>
+Alex Zhuravlev <bzzz@whamcloud.com>
 Amir Shehata <ashehata@whamcloud.com> <amir.shehata@intel.com>
 Andreas Dilger <adilger@whamcloud.com> <andreas.dilger@intel.com>
 Andreas Dilger <adilger@whamcloud.com> <adilger@dilger.ca>
@@ -270,23 +350,27 @@ Li Dongyang <dongyangli@ddn.com> <dongyangli@ddn.com>
 Li Xi <lixi@ddn.com> <pkuelelixi@gmail.com>
 Mikhail Pershin <mpershin@whamcloud.com> <tappro@whamcloud.com>
 Mikhail Pershin <mpershin@whamcloud.com> <mike.pershin@intel.com>
-Mikhail Pershin <mpershin@whamcloud.com> <mpershin@whamcloud.com>
+Mikhail Pershin <mpershin@whamcloud.com>
 Minh Diep <mdiep@whamcloud.com> <minh.diep@intel.com>
 Nathaniel Clark <nclark@whamcloud.com> <nathaniel.l.clark@intel.com>
+Oleg Drokin <green@whamcloud.com> <gerrit-review@whamcloud.com>
 Oleg Drokin <green@whamcloud.com> <oleg.drokin@intel.com>
+Patrick Farrell <pfarrell@whamcloud.com> <farr0186@gmail.com>
 Patrick Farrell <pfarrell@whamcloud.com> <paf@cray.com>
 Sonia Sharma <sharmaso@whamcloud.com> <sonia.sharma@intel.com>
-Wang Shilong <wshilong@whamcloud.com> wshilong@ddn.com>
+Wang Shilong <wshilong@whamcloud.com> <wshilong@ddn.com>
 Wei Liu <sarah@whamcloud.com> <wei3.liu@intel.com>
 Yang Sheng <ys@whamcloud.com> <yang.sheng@intel.com>
 
 # Remap to HPE
 Alexander Boyko <alexander.boyko@hpe.com> <c17825@cray.com>
+Alexander Lezhoev <alexander.lezhoev@hpe.com> <c17454@cray.com>
 Alexander Zarochentsev <alexander.zarochentsev@hpe.com> <c17826@cray.com>
 Alexey Lyashkov <alexey.lyashkov@hpe.com> <c17817@cray.com>
 Andrew Perepechko <andrew.perepechko@hpe.com> <c17827@cray.com>
 Andriy Skulysh <andriy.skulysh@hpe.com> <c17819@cray.com>
 Artem Blagodarenko <artem.blagodarenko@hpe.com> <c17828@cray.com>
+Artem Blagodarenko <artem.blagodarenko@hpe.com> <artem.blagodarenko@gmail.com>
 Chris Horn <chris.horn@hpe.com> <hornc@cray.com>
 Chuck Fossen <charles.fossen@hpe.com> <chuckf@cray.com>
 Elena Gryaznova <elena.gryaznova@hpe.com> <c17455@cray.com>
@@ -294,21 +378,38 @@ Nathan Rutman <nathan.rutman@hpe.com> <nrutman@cray.com>
 Nikitas Angelinas <nikitas.angelinas@hpe.com> <nangelinas@cray.com>
 Petros Koutoupis <petros.koutoupis@hpe.com> <pkoutoupis@cray.com>
 Sergey Cheremencev <sergey.cheremencev@hpe.com> <c17829@cray.com>
+Sergey Cheremencev <sergey.cheremencev@hpe.com> <sergey.cheremencev@hpe.ccom>
 Shaun Tancheff <shaun.tancheff@hpe.com> <stancheff@cray.com>
 Vitaly Fertman <vitaly.fertman@hpe.com> <c17818@cray.com>
 Vladimir Saveliev <vlaidimir.saveliev@hpe.com> <c17830@cray.com>
 
 # Others
+Akam Kumar Bharathi <azurelustre@gmail.com>
+Amey Inamadar <amey_inamadar@intel.com> <amey_inamadar>
 Brian Behlendorf <behlendorf1@llnl.gov> <behlendo>
+Chas Williams <chas@cmf.nrl.navy.mil>
 Christopher J. Morrone <morrone2@llnl.gov> <morrone>
-Frank Zago <fzago@cray.com> <frank@zago.net>
+Dom Milos <don.milos@hp.com> <donmilos>
+Evan Felix <efelix@pnnl.gov> <efelix>
+Girish Chandrashekara <girishc@india.hp.com> <girish_c>
+Girish Chandrashekara <girishc@india.hp.com> <girishc>
 Gregoire Pichon <gregoire.pichon@atos.net> <gregoire.pichon@bull.net>
-Jacques-Charles LaFoucriere <jacques-charles.lafoucriere@cea.fr> jcl <jacques-charles.lafoucriere@cea.fr>
-Jacques-Charles LaFoucriere <jacques-charles.lafoucriere@cea.fr> jcl <jc.lafoucriere@cea.fr>
+Hariharan Thantry <hariharan.l.thantry@intel.com> <thantry>
+Jacques-Charles LaFoucriere <jacques-charles.lafoucriere@cea.fr> <jc.lafoucriere@cea.fr>
+Jacques-Charles LaFoucriere <jacques-charles.lafoucriere@cea.fr>
 James Simmons <jsimmons@infradead.org> <uja.ornl@gmail.com>
 James Simmons <jsimmons@infradead.org> <uja.ornl@yahoo.com>
 James Simmons <jsimmons@infradead.org>
 Jinshan Xiong <jinshan.xiong@uber.com> <jinshan.xiong@intel.com>
 Jinshan Xiong <jinshan.xiong@uber.com> <jinshan.xiong@gmail.com>
+John L. Hammond <jhammond@tacc.utexas.edu>
+Marcus Miller <marcusm@llnl.gov> <wmarcusm>
+Mark Burton <markb@ordern.com> <[mailto:markb@ordern.com]>
 Ned Bass <bass6@llnl.gov> <bass6@llnl.gov>
+Mr NeilBrown <neilb@suse.de> <neilb@suse.com>
+Mr NeilBrown <neilb@suse.de>
+Rumi Zahir <rumi.zahir@intel.com> <rzahir>
+S.Ravindranadh Chowdary <sravi@india.hp.com> <sravi>
+Teddy Zheng <teddy@ddn.com> <jjkky@yahoo.com>
+Teddy Zheng <teddy@ddn.com>
 Thomas Stibor <t.stibor@gsi.de> <thomas@stibor.net>
