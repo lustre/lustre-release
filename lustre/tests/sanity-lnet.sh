@@ -45,7 +45,8 @@ fi
 
 cleanup_lnet() {
 	echo "Cleaning up LNet"
-	$LNETCTL lnet unconfigure 2>/dev/null
+	lsmod | grep -q lnet &&
+		$LNETCTL lnet unconfigure 2>/dev/null
 	unload_modules
 }
 
@@ -105,19 +106,38 @@ do_ns() {
 	ip netns exec $TESTNS "$@"
 }
 
+setup_fakeif() {
+	local netns="$1"
+
+	local netns_arg=""
+	[[ -n $netns ]] &&
+		netns_arg="netns $netns"
+
+	ip link add 'test1pl' type veth peer name $FAKE_IF $netns_arg
+	ip link set 'test1pl' up
+	if [[ -n $netns ]]; then
+		do_ns ip addr add "${FAKE_IP}/31" dev $FAKE_IF
+		do_ns ip link set $FAKE_IF up
+	else
+		ip addr add "${FAKE_IP}/31" dev $FAKE_IF
+		ip link set $FAKE_IF up
+	fi
+}
+
+cleanup_fakeif() {
+	ip link show test1pl >& /dev/null && ip link del test1pl || return 0
+}
+
 setup_netns() {
 	cleanup_netns
 
 	ip netns add $TESTNS
-	ip link add 'test1pl' type veth peer name $FAKE_IF netns $TESTNS
-	ip link set 'test1pl' up
-	do_ns ip addr add "${FAKE_IP}/31" dev $FAKE_IF
-	do_ns ip link set $FAKE_IF up
+	setup_fakeif $TESTNS
 }
 
 cleanup_netns() {
 	(ip netns list | grep -q $TESTNS) && ip netns del $TESTNS
-	ip link show test1pl >& /dev/null && ip link del test1pl || return 0
+	cleanup_fakeif
 }
 
 configure_dlc() {
@@ -1477,6 +1497,90 @@ test_207() {
 	return 0
 }
 run_test 207 "Check health and resends for multi-rail remote errors"
+
+test_208_load_and_check_lnet() {
+	local ip2nets="$1"
+	local p_nid="$2"
+	local s_nid="$3"
+	local num_expected=1
+
+	load_lnet "networks=\"\" ip2nets=\"${ip2nets_str}\""
+
+	$LCTL net up ||
+		error "Failed to load LNet with ip2nets \"${ip2nets_str}\""
+
+	[[ -n $s_nid ]] &&
+		num_expected=2
+
+	declare -a nids
+	nids=( $($LCTL list_nids) )
+
+	[[ ${#nids[@]} -ne ${num_expected} ]] &&
+		error "Expect ${num_expected} NIDs found ${#nids[@]}"
+
+	[[ ${nids[0]} == ${p_nid} ]] ||
+		error "Expect NID \"${p_nid}\" found \"${nids[0]}\""
+
+	[[ -n $s_nid ]] && [[ ${nids[1]} != ${s_nid} ]] &&
+		error "Expect second NID \"${s_nid}\" found \"${nids[1]}\""
+
+	$LCTL net down &>/dev/null
+	cleanup_lnet
+}
+
+test_208() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	local eth0_ip=$(ip --oneline addr show dev eth0 |
+			awk '/inet /{print $4}' |
+			sed 's:/.*::')
+	local ip2nets_str="tcp(eth0) $eth0_ip"
+
+	echo "Configure single NID \"$ip2nets_str\""
+	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp"
+
+	ip2nets_str="tcp(eth0) $eth0_ip; tcp1($FAKE_IF) $FAKE_IP"
+	echo "Configure two NIDs; two NETs \"$ip2nets_str\""
+	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+				     "${FAKE_IP}@tcp1"
+
+	ip2nets_str="tcp(eth0) $eth0_ip; tcp($FAKE_IF) $FAKE_IP"
+	echo "Configure two NIDs; one NET \"$ip2nets_str\""
+	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+				     "${FAKE_IP}@tcp"
+	local addr1=( ${eth0_ip//./ } )
+	local addr2=( ${FAKE_IP//./ } )
+	local range="[${addr1[0]},${addr2[0]}]"
+
+	local i
+	for i in $(seq 1 3); do
+		range+=".[${addr1[$i]},${addr2[$i]}]"
+	done
+	ip2nets_str="tcp(eth0,${FAKE_IF}) ${range}"
+
+	echo "Configured two NIDs; one NET alt syntax \"$ip2nets_str\""
+	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+				     "${FAKE_IP}@tcp"
+
+	cleanup_fakeif
+
+	echo "alt syntax with missing IF \"$ip2nets_str\""
+	load_lnet "networks=\"\" ip2nets=\"${ip2nets_str}\""
+
+	echo "$LCTL net up should fail"
+	$LCTL net up &&
+		error "LNet bringup should have failed"
+
+	cleanup_lnet
+}
+run_test 208 "Test various kernel ip2nets configurations"
 
 test_300() {
 	# LU-13274

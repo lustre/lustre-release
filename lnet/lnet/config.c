@@ -356,10 +356,10 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 {
 	struct lnet_net		*net;
 
-	if (!lnet_net_unique(net_id, net_list, NULL)) {
-		CERROR("Duplicate net %s. Ignore\n",
-		       libcfs_net2str(net_id));
-		return NULL;
+	if (!lnet_net_unique(net_id, net_list, &net)) {
+		CDEBUG(D_NET, "Returning duplicate net %p %s\n", net,
+		       libcfs_net2str(net->net_id));
+		return net;
 	}
 
 	LIBCFS_ALLOC(net, sizeof(*net));
@@ -1469,12 +1469,8 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	struct list_head *t;
 	struct list_head *t2;
 	struct lnet_text_buf  *tb;
-	struct lnet_text_buf  *tb2;
-	__u32		  net1;
-	__u32		  net2;
 	int		  len;
 	int		  count;
-	int		  dup;
 	int		  rc;
 
 	if (lnet_str2tbs_sep(&raw_entries, ip2nets) < 0) {
@@ -1513,33 +1509,6 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 		rc = lnet_splitnets(source, &current_nets);
 		if (rc < 0)
 			break;
-
-		dup = 0;
-		list_for_each(t, &current_nets) {
-			tb = list_entry(t, struct lnet_text_buf, ltb_list);
-			net1 = lnet_netspec2net(tb->ltb_text);
-			LASSERT(net1 != LNET_NIDNET(LNET_NID_ANY));
-
-			list_for_each(t2, &matched_nets) {
-				tb2 = list_entry(t2, struct lnet_text_buf,
-						 ltb_list);
-				net2 = lnet_netspec2net(tb2->ltb_text);
-				LASSERT(net2 != LNET_NIDNET(LNET_NID_ANY));
-
-				if (net1 == net2) {
-					dup = 1;
-					break;
-				}
-			}
-
-			if (dup)
-				break;
-		}
-
-		if (dup) {
-			lnet_free_text_bufs(&current_nets);
-			continue;
-		}
 
 		list_for_each_safe(t, t2, &current_nets) {
 			tb = list_entry(t, struct lnet_text_buf, ltb_list);
