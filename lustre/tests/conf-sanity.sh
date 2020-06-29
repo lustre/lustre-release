@@ -140,6 +140,9 @@ start_mds() {
 	for num in $(seq $MDSCOUNT); do
 		start_mdt $num $@ || return 94
 	done
+	for num in $(seq $MDSCOUNT); do
+		wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds${num} FULL
+	done
 }
 
 start_mgsmds() {
@@ -165,6 +168,7 @@ stop_mgs() {
 start_ost() {
 	echo "start ost1 service on `facet_active_host ost1`"
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS $@ || return 95
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost1 FULL
 }
 
 stop_ost() {
@@ -176,6 +180,7 @@ stop_ost() {
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
 	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS $@ || return 92
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost2 FULL
 }
 
 stop_ost2() {
@@ -8614,6 +8619,35 @@ test_125()
 	return $rc
 }
 run_test 125 "check l_tunedisk only tunes OSTs and their slave devices"
+
+test_127() {
+	[[ "$ost1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	cleanup
+	setup
+	zconf_umount_clients $RCLIENTS $MOUNT
+
+	wait_osp_active ost ${FSNAME}-OST0000 0 1
+	local osc_tgt=$($LCTL dl | awk '/OST0000-osc-[^mM]/ { print $4 }')
+	local avail1=($($LCTL get_param -n osc.${osc_tgt}.kbytesavail))
+
+	$LFS setstripe -i 0 $DIR/$tfile || error "failed creating $DIR/$tfile"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M oflag=direct || true
+
+	local avail2=($($LCTL get_param -n osc.${osc_tgt}.kbytesavail))
+
+	if ((avail2 * 100 / avail1 > 1)); then
+		lfs df $DIR
+		ls -l $DIR/$tfile
+		error "more than 1% space left: before=$avail1 after=$avail2"
+	fi
+
+	local mbs=$(($(stat -c %s $DIR/$tfile) / (1024 * 1024)))
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$mbs conv=notrunc \
+		oflag=direct || error "overwrite failed"
+}
+run_test 127 "direct io overwrite on full ost"
 
 if ! combined_mgs_mds ; then
 	stop mgs

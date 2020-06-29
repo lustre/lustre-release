@@ -2731,6 +2731,27 @@ int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
 	ext->oe_obj = obj;
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
+	if (brw_flags & OBD_BRW_NOCACHE && !ext->oe_rw) { /* direct io write */
+		int grants;
+		int ppc;
+
+		ppc = 1 << (cli->cl_chunkbits - PAGE_SHIFT);
+		grants = cli->cl_grant_extent_tax;
+		grants += (1 << cli->cl_chunkbits) *
+			((page_count + ppc - 1) / ppc);
+
+		spin_lock(&cli->cl_loi_list_lock);
+		if (osc_reserve_grant(cli, grants) == 0) {
+			list_for_each_entry(oap, list, oap_pending_item) {
+				osc_consume_write_grant(cli,
+							&oap->oap_brw_page);
+				atomic_long_inc(&obd_dirty_pages);
+			}
+			__osc_unreserve_grant(cli, grants, 0);
+			ext->oe_grants = grants;
+		}
+		spin_unlock(&cli->cl_loi_list_lock);
+	}
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;
 	list_splice_init(list, &ext->oe_pages);

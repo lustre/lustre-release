@@ -902,6 +902,9 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 
 	ENTRY;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_NO_GRANT))
+		RETURN(0);
+
 	/* When tgd_grant_compat_disable is set, we don't grant any space to
 	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
 	 * Otherwise, space granted to such a client is inflated since it
