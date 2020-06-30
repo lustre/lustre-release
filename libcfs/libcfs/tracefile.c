@@ -55,12 +55,12 @@ enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_PROC = 0,
 	CFS_TCD_TYPE_SOFTIRQ,
 	CFS_TCD_TYPE_IRQ,
-	CFS_TCD_TYPE_MAX
+	CFS_TCD_TYPE_CNT
 };
 
 union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
 
-char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
+char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_CNT];
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
@@ -82,7 +82,7 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 	__acquires(&tcd->tcd_lock)
 {
-	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
+	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_CNT);
 	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
 		spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
 	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
@@ -97,7 +97,7 @@ int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 	__releases(&tcd->tcd_lock)
 {
-	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
+	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_CNT);
 	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
 		spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
 	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
@@ -1216,7 +1216,7 @@ void cfs_trace_stop_thread(void)
 }
 
 /* percents to share the total debug memory for each type */
-static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
+static unsigned int pages_factor[CFS_TCD_TYPE_CNT] = {
 	80, /* 80% pages for CFS_TCD_TYPE_PROC */
 	10, /* 10% pages for CFS_TCD_TYPE_SOFTIRQ */
 	10  /* 10% pages for CFS_TCD_TYPE_IRQ */
@@ -1230,7 +1230,7 @@ int cfs_tracefile_init(int max_pages)
 
 	/* initialize trace_data */
 	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
-	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
+	for (i = 0; i < CFS_TCD_TYPE_CNT; i++) {
 		cfs_trace_data[i] =
 			kmalloc_array(num_possible_cpus(),
 				      sizeof(union cfs_trace_data_union),
