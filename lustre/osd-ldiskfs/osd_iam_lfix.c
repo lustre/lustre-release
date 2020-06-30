@@ -672,7 +672,7 @@ static struct iam_operations iam_lfix_ops = {
 	.id_name        = "lfix"
 };
 
-static int iam_lfix_guess(struct iam_container *c)
+int iam_lfix_guess(struct iam_container *c)
 {
 	int result;
 	struct buffer_head *bh;
@@ -702,15 +702,6 @@ static int iam_lfix_guess(struct iam_container *c)
 		}
 	}
 	return result;
-}
-
-static struct iam_format iam_lfix_format = {
-	.if_guess = iam_lfix_guess
-};
-
-void iam_lfix_format_init(void)
-{
-	iam_format_register(&iam_lfix_format);
 }
 
 /*
