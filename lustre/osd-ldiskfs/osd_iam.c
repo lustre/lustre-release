@@ -152,18 +152,6 @@
 
 #include <ldiskfs/acl.h>
 
-/*
- * List of all registered formats.
- *
- * No locking. Callers synchronize.
- */
-static LIST_HEAD(iam_formats);
-
-void iam_format_register(struct iam_format *fmt)
-{
-	list_add(&fmt->if_linkage, &iam_formats);
-}
-
 static struct buffer_head *
 iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 {
@@ -205,27 +193,10 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 static int iam_format_guess(struct iam_container *c)
 {
 	int result;
-	struct iam_format *fmt;
 
-	/*
-	 * XXX temporary initialization hook.
-	 */
-	{
-		static int initialized = 0;
-
-		if (!initialized) {
-			iam_lvar_format_init();
-			iam_lfix_format_init();
-			initialized = 1;
-		}
-	}
-
-	result = -ENOENT;
-	list_for_each_entry(fmt, &iam_formats, if_linkage) {
-		result = fmt->if_guess(c);
-		if (result == 0)
-			break;
-	}
+	result = iam_lvar_guess(c);
+	if (result)
+		result = iam_lfix_guess(c);
 
 	if (result == 0) {
 		struct buffer_head *bh;

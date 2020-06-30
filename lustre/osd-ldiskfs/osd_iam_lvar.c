@@ -1057,7 +1057,7 @@ static struct iam_operations lvar_ops = {
 	.id_name        = "lvar"
 };
 
-static int lvar_guess(struct iam_container *c)
+int iam_lvar_guess(struct iam_container *c)
 {
 	int result;
 	struct buffer_head *bh;
@@ -1089,13 +1089,3 @@ static int lvar_guess(struct iam_container *c)
 	}
 	return result;
 }
-
-static struct iam_format lvar_format = {
-	.if_guess = lvar_guess
-};
-
-void iam_lvar_format_init(void)
-{
-	iam_format_register(&lvar_format);
-}
-

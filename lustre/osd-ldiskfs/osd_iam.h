@@ -1069,31 +1069,12 @@ struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
                   handle_t *h, struct buffer_head **bh);
 
-/*
- * Container format.
- */
-struct iam_format {
-        /*
-         * Method called to recognize container format. Should return true iff
-         * container @c conforms to this format. This method may do IO to read
-         * container pages.
-         *
-         * If container is recognized, this method sets operation vectors
-         * ->id_ops and ->id_leaf_ops in container description (c->ic_descr),
-         * and fills other description fields.
-         */
-        int (*if_guess)(struct iam_container *c);
-        /*
-         * Linkage into global list of container formats.
-         */
-	struct list_head if_linkage;
-};
-
-void iam_format_register(struct iam_format *fmt);
 int iam_root_limit(int rootgap, int blocksize, int size);
 
 void iam_lfix_format_init(void);
 void iam_lvar_format_init(void);
+int iam_lfix_guess(struct iam_container *c);
+int iam_lvar_guess(struct iam_container *c);
 void iam_htree_format_init(void);
 
 int iam_lfix_create(struct inode *obj,
