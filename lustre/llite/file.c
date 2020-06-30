@@ -5045,6 +5045,17 @@ long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 	int rc;
 
 	/*
+	 * Encrypted inodes can't handle collapse range or zero range or insert
+	 * range since we would need to re-encrypt blocks with a different IV or
+	 * XTS tweak (which are based on the logical block number).
+	 * Similar to what ext4 does.
+	 */
+	if (IS_ENCRYPTED(inode) &&
+	    (mode & (FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_INSERT_RANGE |
+		     FALLOC_FL_ZERO_RANGE)))
+		RETURN(-EOPNOTSUPP);
+
+	/*
 	 * Only mode == 0 (which is standard prealloc) is supported now.
 	 * Punch is not supported yet.
 	 */
