@@ -3834,7 +3834,7 @@ test_33h() {
 	done
 
 	local failed=0
-	for i in {1..50}; do
+	for i in {1..250}; do
 		for fname in $(mktemp -u $DIR/$tdir/.$tfile.XXXXXX) \
 			     $(mktemp $DIR/$tdir/$tfile.XXXXXXXX); do
 			touch $fname  || error "touch $fname failed"
@@ -3846,7 +3846,7 @@ test_33h() {
 		done
 	done
 	echo "$failed MDT index mismatches"
-	(( failed < 4 )) || error "MDT index mismatch $failed times"
+	(( failed < 20 )) || error "MDT index mismatch $failed times"
 
 }
 run_test 33h "temp file is located on the same MDT as target"
