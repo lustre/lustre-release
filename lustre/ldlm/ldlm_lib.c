@@ -1988,6 +1988,24 @@ static int check_for_next_lock(struct lu_target *lut)
 	return wake_up;
 }
 
+static int check_update_llog(struct lu_target *lut)
+{
+	struct obd_device *obd = lut->lut_obd;
+	struct target_distribute_txn_data *tdtd = lut->lut_tdtd;
+
+	if (obd->obd_abort_recovery) {
+		CDEBUG(D_HA, "waking for aborted recovery\n");
+		return 1;
+	}
+
+	if (atomic_read(&tdtd->tdtd_recovery_threads_count) == 0) {
+		CDEBUG(D_HA, "waking for completion of reading update log\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 /**
  * wait for recovery events,
  * check its status with help of check_routine
@@ -2027,18 +2045,16 @@ repeat:
 			 * updatelog retrieve threads did not get any records
 			 * yet, let's wait those threads stopped */
 			if (next_update_transno == 0) {
-				struct l_wait_info lwi = { 0 };
-
 				spin_unlock(&obd->obd_recovery_task_lock);
-				l_wait_event(tdtd->tdtd_recovery_threads_waitq,
-				       atomic_read(
-				       &tdtd->tdtd_recovery_threads_count) == 0,
-				       &lwi);
+
+				while (wait_event_timeout(
+					tdtd->tdtd_recovery_threads_waitq,
+					check_update_llog(lut),
+					cfs_time_seconds(60)) == 0);
 
 				spin_lock(&obd->obd_recovery_task_lock);
 				next_update_transno =
-					distribute_txn_get_next_transno(
-								lut->lut_tdtd);
+					distribute_txn_get_next_transno(tdtd);
 			}
 		}
 
@@ -2335,6 +2351,8 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 	obd->obd_replayed_requests++;
 }
 
+#define WATCHDOG_TIMEOUT (obd_timeout * 10)
+
 static void replay_request_or_update(struct lu_env *env,
 				     struct lu_target *lut,
 				     struct target_recovery_data *trd,
@@ -2405,8 +2423,13 @@ static void replay_request_or_update(struct lu_env *env,
 				  lustre_msg_get_transno(req->rq_reqmsg),
 				  libcfs_nid2str(req->rq_peer.nid));
 
+			thread->t_watchdog = lc_watchdog_add(WATCHDOG_TIMEOUT,
+							     NULL, NULL);
 			handle_recovery_req(thread, req,
 					    trd->trd_recovery_handler);
+			lc_watchdog_delete(thread->t_watchdog);
+			thread->t_watchdog = NULL;
+
 			/**
 			 * bz18031: increase next_recovery_transno before
 			 * target_request_copy_put() will drop exp_rpc reference
@@ -2426,7 +2449,11 @@ static void replay_request_or_update(struct lu_env *env,
 			LASSERT(tdtd != NULL);
 			dtrq = distribute_txn_get_next_req(tdtd);
 			lu_context_enter(&thread->t_env->le_ctx);
+			thread->t_watchdog = lc_watchdog_add(WATCHDOG_TIMEOUT,
+							     NULL, NULL);
 			rc = tdtd->tdtd_replay_handler(env, tdtd, dtrq);
+			lc_watchdog_delete(thread->t_watchdog);
+			thread->t_watchdog = NULL;
 			lu_context_exit(&thread->t_env->le_ctx);
 			extend_recovery_timer(obd, obd_timeout, true);
 
