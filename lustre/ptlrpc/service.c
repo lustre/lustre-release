@@ -2660,18 +2660,18 @@ static void ptlrpc_watchdog_fire(struct work_struct *w)
 	}
 }
 
-static void ptlrpc_watchdog_init(struct delayed_work *work, timeout_t timeout)
+void ptlrpc_watchdog_init(struct delayed_work *work, timeout_t timeout)
 {
 	INIT_DELAYED_WORK(work, ptlrpc_watchdog_fire);
 	schedule_delayed_work(work, cfs_time_seconds(timeout));
 }
 
-static void ptlrpc_watchdog_disable(struct delayed_work *work)
+void ptlrpc_watchdog_disable(struct delayed_work *work)
 {
 	cancel_delayed_work_sync(work);
 }
 
-static void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout)
+void ptlrpc_watchdog_touch(struct delayed_work *work, timeout_t timeout)
 {
 	struct ptlrpc_thread *thread = container_of(&work->work,
 						    struct ptlrpc_thread,
