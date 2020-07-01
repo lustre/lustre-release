@@ -13642,10 +13642,19 @@ test_154A() {
 	[ -z "$fid" ] && error "path2fid unable to get $tf FID"
 
 	# check that we get the same pathname back
-	local found=$($LFS fid2path $MOUNT "$fid")
-	[ -z "$found" ] && error "fid2path unable to get '$fid' path"
-	[ "$found" == "$tf" ] ||
-		error "fid2path($fid=path2fid($tf)) = $found != $tf"
+	local rootpath
+	local found
+	for rootpath in "$MOUNT" "$MOUNT///" "$MOUNT/$tfile"; do
+		echo "$rootpath $fid"
+		found=$($LFS fid2path $rootpath "$fid")
+		[ -z "$found" ] && error "fid2path unable to get '$fid' path"
+		[ "$found" == "$tf" ] || error "fid2path $found != $tf"
+	done
+
+	# check wrong root path format
+	rootpath=$MOUNT"_wrong"
+	found=$($LFS fid2path $rootpath "$fid")
+	[ -z "$found" ] || error "should fail ($rootpath != $MOUNT)"
 }
 run_test 154A "lfs path2fid and fid2path basic checks"
 
@@ -18655,7 +18664,7 @@ test_247c() {
 	$LFS fid2path $submount $fid && error "fid2path should fail"
 	cleanup_247 $submount
 }
-run_test 247c "running fid2path outside root"
+run_test 247c "running fid2path outside subdirectory root"
 
 test_247d() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
@@ -18668,11 +18677,28 @@ test_247d() {
 	FILESET="$FILESET/$tdir" mount_client $submount ||
 		error "mount $submount failed"
 	trap "cleanup_247 $submount" EXIT
-	local fid=$($LFS path2fid $submount/dir1)
-	$LFS fid2path $submount $fid || error "fid2path should succeed"
+
+	local td=$submount/dir1
+	local fid=$($LFS path2fid $td)
+	[ -z "$fid" ] && error "path2fid unable to get $td FID"
+
+	# check that we get the same pathname back
+	local rootpath
+	local found
+	for rootpath in "$submount" "$submount///" "$submount/dir1"; do
+		echo "$rootpath $fid"
+		found=$($LFS fid2path $rootpath "$fid")
+		[ -n "found" ] || error "fid2path should succeed"
+		[ "$found" == "$td" ] || error "fid2path $found != $td"
+	done
+	# check wrong root path format
+	rootpath=$submount"_wrong"
+	found=$($LFS fid2path $rootpath "$fid")
+	[ -z "$found" ] || error "fid2path should fail ($rootpath != $submount)"
+
 	cleanup_247 $submount
 }
-run_test 247d "running fid2path inside root"
+run_test 247d "running fid2path inside subdirectory root"
 
 # LU-8037
 test_247e() {

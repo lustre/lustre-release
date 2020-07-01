@@ -1289,7 +1289,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 	char buf[PATH_MAX], mntdir[PATH_MAX];
 	char *ptr, *ptr_end;
 	FILE *fp;
-	int idx = 0, len = 0, mntlen, fd;
+	int idx = 0, mntlen = 0, fd;
 	int rc = -ENODEV;
 	int fsnamelen, mountlen;
 
@@ -1345,16 +1345,19 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			rc = 0;
 			break;
 		/* Otherwise find the longest matching path */
-		} else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
+		} else if ((strlen(path) >= mntlen) &&
 			   (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
+			/* check the path format */
+			if (strlen(path) > mntlen && path[mntlen] != '/')
+				continue;
 			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
 			mntdir[sizeof(mntdir) - 1] = '\0';
-			len = mntlen;
 			if ((want & WANT_FSNAME) && fsname != NULL) {
 				strncpy(fsname, ptr, mountlen);
 				fsname[mountlen] = '\0';
 			}
 			rc = 0;
+			break;
 		}
 	}
 	endmntent(fp);
@@ -1362,8 +1365,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 	/* Found it */
 	if (rc == 0) {
 		if ((want & WANT_PATH) && path != NULL) {
-			strncpy(path, mntdir, PATH_MAX);
-			path[strlen(mntdir)] = '\0';
+			strncpy(path, mntdir, mntlen);
+			path[mntlen] = '\0';
 		}
 		if (want & WANT_FD) {
 			fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);

@@ -8113,8 +8113,9 @@ static int lfs_fid2path(int argc, char **argv)
 		{ .val = 'l',	.name = "link",	.has_arg = required_argument },
 		{ .val = 'r',	.name = "rec",	.has_arg = required_argument },
 		{ .name = NULL } };
-	char  short_opts[] = "cl:r:";
-	char *device, *fid, *path;
+	char short_opts[] = "cl:r:";
+	char mntdir[PATH_MAX];
+	char *device, *fid, *path, *rootpath;
 	long long recno = -1;
 	int linkno = -1;
 	int lnktmp;
@@ -8172,6 +8173,18 @@ static int lfs_fid2path(int argc, char **argv)
 	}
 
 	rc = 0;
+	/* in case that device is not the mountpoint */
+	if (device[0] == '/') {
+		rc = llapi_search_mounts(device, 0, mntdir, NULL);
+		if (rc == 0) {
+			rootpath = mntdir;
+		} else {
+			fprintf(stderr,
+				"%s fid2path: %s has no mountpoint: %s\n",
+				progname, device, strerror(-rc));
+			goto out;
+		}
+	}
 	while (optind < argc) {
 		fid = argv[optind++];
 
@@ -8185,8 +8198,9 @@ static int lfs_fid2path(int argc, char **argv)
 					     &rectmp, &lnktmp);
 			if (rc2 < 0) {
 				fprintf(stderr,
-					"%s fid2path: cannot find '%s': %s\n",
-					progname, fid, strerror(errno = -rc2));
+					"%s fid2path: cannot find %s %s: %s\n",
+					progname, device, fid,
+					strerror(errno = -rc2));
 				if (rc == 0)
 					rc = rc2;
 				break;
@@ -8195,8 +8209,8 @@ static int lfs_fid2path(int argc, char **argv)
 			if (printcur)
 				fprintf(stdout, "%lld ", rectmp);
 			if (device[0] == '/') {
-				fprintf(stdout, "%s", device);
-				if (device[strlen(device) - 1] != '/')
+				fprintf(stdout, "%s", rootpath);
+				if (rootpath[strlen(rootpath) - 1] != '/')
 					fprintf(stdout, "/");
 			} else if (path[0] == '\0') {
 				fprintf(stdout, "/");
@@ -8211,7 +8225,7 @@ static int lfs_fid2path(int argc, char **argv)
 				break;
 		}
 	}
-
+out:
 	free(path);
 	return rc;
 }
