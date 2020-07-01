@@ -47,6 +47,10 @@
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
 
+#ifndef VM_FAULT_RETRY
+#include <linux/mm_types.h>
+#endif
+
 #include "vvp_internal.h"
 #include "range_lock.h"
 #include "pcc.h"
