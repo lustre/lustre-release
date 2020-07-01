@@ -1656,19 +1656,16 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	/* do counter init */
 	for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
 		u32 type = llite_opcode_table[id].type;
-		void *ptr = NULL;
+		void *ptr = "unknown";
 
 		if (type & LPROCFS_TYPE_REQS)
 			ptr = "reqs";
 		else if (type & LPROCFS_TYPE_BYTES)
 			ptr = "bytes";
-		else if (type & LPROCFS_TYPE_PAGES)
-			ptr = "pages";
 		else if (type & LPROCFS_TYPE_USEC)
 			ptr = "usec";
 		lprocfs_counter_init(sbi->ll_stats,
-				     llite_opcode_table[id].opcode,
-				     (type & LPROCFS_CNTR_AVGMINMAX),
+				     llite_opcode_table[id].opcode, type,
 				     llite_opcode_table[id].opname, ptr);
 	}
 

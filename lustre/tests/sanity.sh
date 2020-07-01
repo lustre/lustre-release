@@ -16492,6 +16492,17 @@ test_205b() {
 }
 run_test 205b "Verify job stats jobid and output format"
 
+# LU-13733
+test_205c() {
+	$LCTL set_param llite.*.stats=0
+	dd if=/dev/zero of=$DIR/$tfile.1 bs=4k count=1
+	$LCTL get_param llite.*.stats
+	$LCTL get_param llite.*.stats | grep \
+		"write_bytes *1 samples \[bytes\] 4096 4096 4096 16777216" ||
+			error "wrong client stats format found"
+}
+run_test 205c "Verify client stats format"
+
 # LU-1480, LU-1773 and LU-1657
 test_206() {
 	mkdir -p $DIR/$tdir
