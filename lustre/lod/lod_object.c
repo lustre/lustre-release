@@ -8155,6 +8155,7 @@ static int lod_dir_layout_detach(const struct lu_env *env,
 	lo->ldo_stripe = NULL;
 	lo->ldo_dir_stripes_allocated = 0;
 	lo->ldo_dir_stripe_count = 0;
+	dt->do_index_ops = &lod_index_ops;
 
 	RETURN(rc);
 }
