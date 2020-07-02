@@ -41,13 +41,17 @@
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lprocfs_status.h>
 
-#define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
-                                         * and resends for avoid deadlocks */
-#define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
-                                         * obd_osfs_age */
+#define OBD_STATFS_NODELAY	0x0001	/* requests should be send without delay
+					 * and resends for avoid deadlocks */
+#define OBD_STATFS_FROM_CACHE	0x0002	/* the statfs callback should not update
+					 * obd_osfs_age */
 #define OBD_STATFS_FOR_MDT0	0x0004	/* The statfs is only for retrieving
 					 * information from MDT0. */
 #define OBD_STATFS_SUM		0x0008	/* get aggregated statfs from MDT */
+#define OBD_STATFS_NESTED	0x0010	/* Call while already holding
+					 * obd_dev_mutex of a difference
+					 * device.
+					 */
 
 extern rwlock_t obd_dev_lock;
 
@@ -1063,7 +1067,9 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 	    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 	     !(flags & OBD_STATFS_SUM))) {
 		/* the RPC will block anyway, so avoid sending many at once */
-		rc = mutex_lock_interruptible(&obd->obd_dev_mutex);
+		rc = mutex_lock_interruptible_nested(&obd->obd_dev_mutex,
+						     (flags & OBD_STATFS_NESTED)
+						     ? SINGLE_DEPTH_NESTING : 0);
 		if (rc)
 			RETURN(rc);
 		if (obd->obd_osfs_age < max_age ||
