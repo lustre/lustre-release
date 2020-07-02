@@ -201,6 +201,19 @@ lprocfs_exp_print_export_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	obd_export_flags2str(exp, m);
 	seq_printf(m, " ]\n");
 
+	if (obd->obd_type &&
+	    strcmp(obd->obd_type->typ_name, "obdfilter") == 0) {
+		struct filter_export_data *fed = &exp->exp_filter_data;
+
+		seq_printf(m, "    grant:\n");
+		seq_printf(m, "       granted: %ld\n",
+			fed->fed_ted.ted_grant);
+		seq_printf(m, "       dirty: %ld\n",
+			fed->fed_ted.ted_dirty);
+		seq_printf(m, "       pending: %ld\n",
+			fed->fed_ted.ted_pending);
+	}
+
 out:
 	return 0;
 }
