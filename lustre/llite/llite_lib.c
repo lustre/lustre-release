@@ -2873,12 +2873,12 @@ out_statfs:
 void ll_unlock_md_op_lsm(struct md_op_data *op_data)
 {
 	if (op_data->op_mea2_sem) {
-		up_read(op_data->op_mea2_sem);
+		up_read_non_owner(op_data->op_mea2_sem);
 		op_data->op_mea2_sem = NULL;
 	}
 
 	if (op_data->op_mea1_sem) {
-		up_read(op_data->op_mea1_sem);
+		up_read_non_owner(op_data->op_mea1_sem);
 		op_data->op_mea1_sem = NULL;
 	}
 }
@@ -2915,7 +2915,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	op_data->op_code = opc;
 
 	if (S_ISDIR(i1->i_mode)) {
-		down_read(&ll_i2info(i1)->lli_lsm_sem);
+		down_read_non_owner(&ll_i2info(i1)->lli_lsm_sem);
 		op_data->op_mea1_sem = &ll_i2info(i1)->lli_lsm_sem;
 		op_data->op_mea1 = ll_i2info(i1)->lli_lsm_md;
 		op_data->op_default_mea1 = ll_i2info(i1)->lli_default_lsm_md;
@@ -2925,7 +2925,10 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		op_data->op_fid2 = *ll_inode2fid(i2);
 		if (S_ISDIR(i2->i_mode)) {
 			if (i2 != i1) {
-				down_read(&ll_i2info(i2)->lli_lsm_sem);
+				/* i2 is typically a child of i1, and MUST be
+				 * further from the root to avoid deadlocks.
+				 */
+				down_read_non_owner(&ll_i2info(i2)->lli_lsm_sem);
 				op_data->op_mea2_sem =
 						&ll_i2info(i2)->lli_lsm_sem;
 			}
