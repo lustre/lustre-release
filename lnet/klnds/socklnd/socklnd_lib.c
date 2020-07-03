@@ -176,16 +176,14 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 void
 ksocknal_lib_eager_ack(struct ksock_conn *conn)
 {
-	int opt = 1;
 	struct socket *sock = conn->ksnc_sock;
 
-        /* Remind the socket to ACK eagerly.  If I don't, the socket might
-         * think I'm about to send something it could piggy-back the ACK
-         * on, introducing delay in completing zero-copy sends in my
-         * peer_ni. */
+	/* Remind the socket to ACK eagerly.  If I don't, the socket might
+	 * think I'm about to send something it could piggy-back the ACK on,
+	 * introducing delay in completing zero-copy sends in my peer_ni.
+	 */
 
-	kernel_setsockopt(sock, SOL_TCP, TCP_QUICKACK,
-			  (char *)&opt, sizeof(opt));
+	tcp_sock_set_quickack(sock->sk, 1);
 }
 
 int
@@ -407,162 +405,132 @@ ksocknal_lib_csum_tx(struct ksock_tx *tx)
 int
 ksocknal_lib_get_conn_tunables(struct ksock_conn *conn, int *txmem, int *rxmem, int *nagle)
 {
-        struct socket *sock = conn->ksnc_sock;
-        int            len;
-        int            rc;
+	struct socket *sock = conn->ksnc_sock;
+	struct tcp_sock *tp = tcp_sk(sock->sk);
 
-        rc = ksocknal_connsock_addref(conn);
-        if (rc != 0) {
-                LASSERT (conn->ksnc_closing);
-                *txmem = *rxmem = *nagle = 0;
-                return (-ESHUTDOWN);
-        }
+	if (ksocknal_connsock_addref(conn) < 0) {
+		LASSERT(conn->ksnc_closing);
+		*txmem = 0;
+		*rxmem = 0;
+		*nagle = 0;
+		return -ESHUTDOWN;
+	}
 
-	rc = lnet_sock_getbuf(sock, txmem, rxmem);
-        if (rc == 0) {
-                len = sizeof(*nagle);
-		rc = kernel_getsockopt(sock, SOL_TCP, TCP_NODELAY,
-				       (char *)nagle, &len);
-        }
+	lnet_sock_getbuf(sock, txmem, rxmem);
 
-        ksocknal_connsock_decref(conn);
+	*nagle = !(tp->nonagle & TCP_NAGLE_OFF);
 
-        if (rc == 0)
-                *nagle = !*nagle;
-        else
-                *txmem = *rxmem = *nagle = 0;
+	ksocknal_connsock_decref(conn);
 
-        return (rc);
+
+	return 0;
 }
 
 int
 ksocknal_lib_setup_sock (struct socket *sock)
 {
-        int             rc;
-        int             option;
-        int             keep_idle;
-        int             keep_intvl;
-        int             keep_count;
-        int             do_keepalive;
-        struct linger   linger;
+	int rc;
+	int keep_idle;
+	int keep_intvl;
+	int keep_count;
+	int do_keepalive;
+	struct tcp_sock *tp = tcp_sk(sock->sk);
 
-        sock->sk->sk_allocation = GFP_NOFS;
+	sock->sk->sk_allocation = GFP_NOFS;
 
-        /* Ensure this socket aborts active sends immediately when we close
-         * it. */
+	/* Ensure this socket aborts active sends immediately when closed. */
+	sock_reset_flag(sock->sk, SOCK_LINGER);
 
-        linger.l_onoff = 0;
-        linger.l_linger = 0;
+	tp->linger2 = -1;
 
-	rc = kernel_setsockopt(sock, SOL_SOCKET, SO_LINGER,
-			       (char *)&linger, sizeof(linger));
-        if (rc != 0) {
-                CERROR ("Can't set SO_LINGER: %d\n", rc);
-                return (rc);
-        }
+	if (!*ksocknal_tunables.ksnd_nagle)
+		tcp_sock_set_nodelay(sock->sk);
 
-        option = -1;
-	rc = kernel_setsockopt(sock, SOL_TCP, TCP_LINGER2,
-			       (char *)&option, sizeof(option));
-        if (rc != 0) {
-                CERROR ("Can't set SO_LINGER2: %d\n", rc);
-                return (rc);
-        }
-
-        if (!*ksocknal_tunables.ksnd_nagle) {
-                option = 1;
-
-		rc = kernel_setsockopt(sock, SOL_TCP, TCP_NODELAY,
-				       (char *)&option, sizeof(option));
-                if (rc != 0) {
-                        CERROR ("Can't disable nagle: %d\n", rc);
-                        return (rc);
-                }
-        }
-
-	rc = lnet_sock_setbuf(sock,
-			      *ksocknal_tunables.ksnd_tx_buffer_size,
-			      *ksocknal_tunables.ksnd_rx_buffer_size);
-        if (rc != 0) {
-                CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
-                        *ksocknal_tunables.ksnd_tx_buffer_size,
-                        *ksocknal_tunables.ksnd_rx_buffer_size, rc);
-                return (rc);
-        }
+	lnet_sock_setbuf(sock,
+			 *ksocknal_tunables.ksnd_tx_buffer_size,
+			 *ksocknal_tunables.ksnd_rx_buffer_size);
 
 /* TCP_BACKOFF_* sockopt tunables unsupported in stock kernels */
 #ifdef SOCKNAL_BACKOFF
-        if (*ksocknal_tunables.ksnd_backoff_init > 0) {
-                option = *ksocknal_tunables.ksnd_backoff_init;
+	if (*ksocknal_tunables.ksnd_backoff_init > 0) {
+		int option = *ksocknal_tunables.ksnd_backoff_init;
 #ifdef SOCKNAL_BACKOFF_MS
-                option *= 1000;
+		option *= 1000;
 #endif
 
 		rc = kernel_setsockopt(sock, SOL_TCP, TCP_BACKOFF_INIT,
 				       (char *)&option, sizeof(option));
-                if (rc != 0) {
-                        CERROR ("Can't set initial tcp backoff %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
-        }
+		if (rc != 0) {
+			CERROR("Can't set initial tcp backoff %d: %d\n",
+			       option, rc);
+			return rc;
+		}
+	}
 
-        if (*ksocknal_tunables.ksnd_backoff_max > 0) {
-                option = *ksocknal_tunables.ksnd_backoff_max;
+	if (*ksocknal_tunables.ksnd_backoff_max > 0) {
+		int option = *ksocknal_tunables.ksnd_backoff_max;
 #ifdef SOCKNAL_BACKOFF_MS
-                option *= 1000;
+		option *= 1000;
 #endif
 
 		rc = kernel_setsockopt(sock, SOL_TCP, TCP_BACKOFF_MAX,
 				       (char *)&option, sizeof(option));
-                if (rc != 0) {
-                        CERROR ("Can't set maximum tcp backoff %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
-        }
+		if (rc != 0) {
+			CERROR("Can't set maximum tcp backoff %d: %d\n",
+			       option, rc);
+			return rc;
+		}
+	}
 #endif
 
-        /* snapshot tunables */
-        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
-        keep_count = *ksocknal_tunables.ksnd_keepalive_count;
-        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
+	/* snapshot tunables */
+	keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
+	keep_count = *ksocknal_tunables.ksnd_keepalive_count;
+	keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
 
-        do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0);
+	do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0);
 
-        option = (do_keepalive ? 1 : 0);
-	rc = kernel_setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE,
-			       (char *)&option, sizeof(option));
-        if (rc != 0) {
-                CERROR ("Can't set SO_KEEPALIVE: %d\n", rc);
-                return (rc);
-        }
+#ifdef HAVE_KERNEL_SETSOCKOPT
+	/* open-coded version doesn't work in all kernels, and
+	 * there is no helper function, so call kernel_setsockopt()
+	 * directly.
+	 */
+	{
+		int option = (do_keepalive ? 1 : 0);
+		kernel_setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE,
+				  (char *)&option, sizeof(option));
+	}
+#else
+	if (sock->sk->sk_prot->keepalive)
+		sock->sk->sk_prot->keepalive(sock->sk, do_keepalive);
+	if (do_keepalive)
+		sock_set_flag(sock->sk, SOCK_KEEPOPEN);
+	else
+		sock_reset_flag(sock->sk, SOCK_KEEPOPEN);
+#endif /* HAVE_KERNEL_SETSOCKOPT */
 
-        if (!do_keepalive)
-                return (0);
+	if (!do_keepalive)
+		return (0);
 
-	rc = kernel_setsockopt(sock, SOL_TCP, TCP_KEEPIDLE,
-			       (char *)&keep_idle, sizeof(keep_idle));
-        if (rc != 0) {
-                CERROR ("Can't set TCP_KEEPIDLE: %d\n", rc);
-                return (rc);
-        }
+	rc = tcp_sock_set_keepidle(sock->sk, keep_idle);
+	if (rc != 0) {
+		CERROR("Can't set TCP_KEEPIDLE: %d\n", rc);
+		return rc;
+	}
 
-	rc = kernel_setsockopt(sock, SOL_TCP, TCP_KEEPINTVL,
-			       (char *)&keep_intvl, sizeof(keep_intvl));
-        if (rc != 0) {
-                CERROR ("Can't set TCP_KEEPINTVL: %d\n", rc);
-                return (rc);
-        }
+	rc = tcp_sock_set_keepintvl(sock->sk, keep_intvl);
+	if (rc != 0) {
+		CERROR("Can't set TCP_KEEPINTVL: %d\n", rc);
+		return rc;
+	}
 
-	rc = kernel_setsockopt(sock, SOL_TCP, TCP_KEEPCNT,
-			       (char *)&keep_count, sizeof(keep_count));
-        if (rc != 0) {
-                CERROR ("Can't set TCP_KEEPCNT: %d\n", rc);
-                return (rc);
-        }
+	rc = tcp_sock_set_keepcnt(sock->sk, keep_count);
+	if (rc != 0) {
+		CERROR("Can't set TCP_KEEPCNT: %d\n", rc);
+		return rc;
+	}
 
-        return (0);
+	return (0);
 }
 
 void
@@ -571,30 +539,27 @@ ksocknal_lib_push_conn(struct ksock_conn *conn)
 	struct sock *sk;
 	struct tcp_sock *tp;
 	int nonagle;
-	int val = 1;
 	int rc;
 
-        rc = ksocknal_connsock_addref(conn);
-        if (rc != 0)                            /* being shut down */
-                return;
+	rc = ksocknal_connsock_addref(conn);
+	if (rc != 0)                            /* being shut down */
+		return;
 
 	sk = conn->ksnc_sock->sk;
 	tp = tcp_sk(sk);
 
-        lock_sock (sk);
-        nonagle = tp->nonagle;
-        tp->nonagle = 1;
-        release_sock (sk);
+	lock_sock(sk);
+	nonagle = tp->nonagle;
+	tp->nonagle = TCP_NAGLE_OFF;
+	release_sock(sk);
 
-	rc = kernel_setsockopt(conn->ksnc_sock, SOL_TCP, TCP_NODELAY,
-			       (char *)&val, sizeof(val));
-        LASSERT (rc == 0);
+	tcp_sock_set_nodelay(conn->ksnc_sock->sk);
 
-        lock_sock (sk);
-        tp->nonagle = nonagle;
-        release_sock (sk);
+	lock_sock(sk);
+	tp->nonagle = nonagle;
+	release_sock(sk);
 
-        ksocknal_connsock_decref(conn);
+	ksocknal_connsock_decref(conn);
 }
 
 void ksocknal_read_callback(struct ksock_conn *conn);

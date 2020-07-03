@@ -1330,6 +1330,26 @@ mmap_write_lock, [
 ])
 ]) # LIBCFS_HAVE_MMAP_LOCK
 
+#
+# LIBCFS_KERNEL_SETSOCKOPT
+#
+# kernel v5.8-rc1~165^2~59^2
+# net: remove kernel_setsockopt
+AC_DEFUN([LIBCFS_KERNEL_SETSOCKOPT], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if kernel_setsockopt still in use],
+kernel_setsockopt_exists, [
+	#include <linux/net.h>
+],[
+	kernel_setsockopt(NULL, 0, 0, NULL, 0);
+],[
+	AC_DEFINE(HAVE_KERNEL_SETSOCKOPT, 1,
+		[kernel_setsockopt still in use])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_KERNEL_SETSOCKOPT
+
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [] )
 AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [])
 
@@ -1440,6 +1460,7 @@ LIBCFS_CACHE_DETAIL_WRITERS
 LIBCFS_HAVE_NR_UNSTABLE_NFS
 # 5.8
 LIBCFS_HAVE_MMAP_LOCK
+LIBCFS_KERNEL_SETSOCKOPT
 ]) # LIBCFS_PROG_LINUX
 
 #

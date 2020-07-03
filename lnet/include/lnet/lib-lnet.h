@@ -807,8 +807,8 @@ struct lnet_inetdev {
 };
 
 int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns);
-int lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
-int lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
+void lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
+void lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
 int lnet_sock_getaddr(struct socket *socket, bool remote,
 		      struct sockaddr_storage *peer);
 int lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
