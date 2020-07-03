@@ -1235,6 +1235,28 @@ cache_detail_writers_atomic, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
+#
+# LIBCFS_HAVE_NR_UNSTABLE_NFS
+#
+# kernel v5.8-rc1~201^2~75
+# mm/writeback: discard NR_UNSTABLE_NFS, use NR_WRITEBACK instead
+#
+AC_DEFUN([LIBCFS_HAVE_NR_UNSTABLE_NFS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if NR_UNSTABLE_NFS still in use],
+nr_unstable_nfs_exists, [
+	#include <linux/mm.h>
+
+	int i;
+],[
+	i = NR_UNSTABLE_NFS;
+],[
+	AC_DEFINE(HAVE_NR_UNSTABLE_NFS, 1,
+		[NR_UNSTABLE_NFS is still in use.])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_NR_UNSTABLE_NFS
 
 #
 # LIBCFS_PROG_LINUX
@@ -1349,6 +1371,7 @@ LIBCFS_GET_REQUEST_KEY_AUTH
 # 5.3
 LIBCFS_LOOKUP_USER_KEY
 LIBCFS_CACHE_DETAIL_WRITERS
+LIBCFS_HAVE_NR_UNSTABLE_NFS
 ]) # LIBCFS_PROG_LINUX
 
 #
