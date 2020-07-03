@@ -875,6 +875,13 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
  * In practice this can work pretty good because the pages in the same RPC
  * are likely from the same page zone.
  */
+#ifdef HAVE_NR_UNSTABLE_NFS
+/* Old kernels use a separate counter for unstable pages,
+ * newer kernels treat them like any other writeback.
+ */
+#define NR_WRITEBACK NR_UNSTABLE_NFS
+#endif
+
 static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 					    struct osc_brw_async_args *aa,
 					    int factor)
@@ -903,7 +910,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		}
 
 		if (count > 0) {
-			mod_zone_page_state(zone, NR_UNSTABLE_NFS,
+			mod_zone_page_state(zone, NR_WRITEBACK,
 					    factor * count);
 			count = 0;
 		}
@@ -911,7 +918,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		++count;
 	}
 	if (count > 0)
-		mod_zone_page_state(zone, NR_UNSTABLE_NFS, factor * count);
+		mod_zone_page_state(zone, NR_WRITEBACK, factor * count);
 }
 
 static inline void add_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
