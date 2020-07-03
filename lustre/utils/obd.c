@@ -2983,13 +2983,18 @@ static int llog_parse_catalog_start_end(int *argc, char **argv[],
 	if (*argc >= 1) {
 		if (*catalog) {
 			fprintf(stderr,
-				"%s: catalog is set, unknown argument '%s'\n",
+				"%s: logname is set, unknown argument '%s'\n",
 				cmd, (*argv)[0]);
 			return CMD_HELP;
 		}
 		*catalog = (*argv)[0];
 		(*argc)--;
 		(*argv)++;
+	}
+
+	if (*catalog == NULL) {
+		fprintf(stderr, "%s: no logname specified\n", cmd);
+		return CMD_HELP;
 	}
 
 	if (*argc >= 1) {
