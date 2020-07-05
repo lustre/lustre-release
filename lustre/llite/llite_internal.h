@@ -47,10 +47,6 @@
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
 
-#ifndef VM_FAULT_RETRY
-#include <linux/mm_types.h>
-#endif
-
 #include "vvp_internal.h"
 #include "range_lock.h"
 #include "pcc.h"
@@ -59,7 +55,7 @@
 #define FMODE_EXEC 0
 #endif
 
-#ifndef VM_FAULT_RETRY
+#ifndef HAVE_VM_FAULT_RETRY
 #define VM_FAULT_RETRY 0
 #endif
 

@@ -1990,6 +1990,27 @@ vm_fault_t, [
 ]) # LC_VM_FAULT_T
 
 #
+# LC_VM_FAULT_RETRY
+#
+# kernel 4.17 commit 3d3539018d2cbd12e5af4a132636ee7fd8d43ef0
+# mm: VM_FAULT_RETRY is defined in enum vm_fault_reason
+#
+AC_DEFUN([LC_VM_FAULT_RETRY], [
+LB_CHECK_COMPILE([if VM_FAULT_RETRY is defined],
+VM_FAULT_RETRY, [
+	#include <linux/mm.h>
+],[
+	#ifndef VM_FAULT_RETRY
+		vm_fault_t x;
+		x = VM_FAULT_RETRY;
+	#endif
+],[
+	AC_DEFINE(HAVE_VM_FAULT_RETRY, 1,
+		[if VM_FAULT_RETRY is defined])
+])
+]) # LC_VM_FAULT_RETRY
+
+#
 # LC_INODE_TIMESPEC64
 #
 # kernel 4.17-rc7 commit 8efd6894ff089adeeac7cb9f32125b85d963d1bc
@@ -2395,6 +2416,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.17
 	LC_VM_FAULT_T
+	LC_VM_FAULT_RETRY
 	LC_I_PAGES
 
 	# 4.18
