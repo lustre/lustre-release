@@ -756,17 +756,18 @@ ksocknal_pack_msg_v2(struct ksock_tx *tx)
 }
 
 static void
-ksocknal_unpack_msg_v1(struct ksock_msg *msg)
+ksocknal_unpack_msg_v1(struct ksock_msg *msg, struct lnet_hdr *hdr)
 {
 	msg->ksm_csum		= 0;
 	msg->ksm_type		= KSOCK_MSG_LNET;
 	msg->ksm_zc_cookies[0]	= msg->ksm_zc_cookies[1]  = 0;
+	lnet_hdr_from_nid4(hdr, &msg->ksm_u.lnetmsg_nid4);
 }
 
 static void
-ksocknal_unpack_msg_v2(struct ksock_msg *msg)
+ksocknal_unpack_msg_v2(struct ksock_msg *msg, struct lnet_hdr *hdr)
 {
-        return;  /* Do nothing */
+	lnet_hdr_from_nid4(hdr, &msg->ksm_u.lnetmsg_nid4);
 }
 
 const struct ksock_proto ksocknal_protocol_v1x =

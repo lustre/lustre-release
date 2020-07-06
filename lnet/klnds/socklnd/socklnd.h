@@ -435,7 +435,7 @@ struct ksock_proto {
 	int         (*pro_send_hello)(struct ksock_conn *, struct ksock_hello_msg *);     /* handshake function */
 	int         (*pro_recv_hello)(struct ksock_conn *, struct ksock_hello_msg *, int);/* handshake function */
 	void        (*pro_pack)(struct ksock_tx *);                                  /* message pack */
-	void        (*pro_unpack)(struct ksock_msg *);				/* message unpack */
+	void        (*pro_unpack)(struct ksock_msg *, struct lnet_hdr *);	/* message unpack */
 	struct ksock_tx *(*pro_queue_tx_msg)(struct ksock_conn *, struct ksock_tx *);          /* queue tx on the connection */
 	int         (*pro_queue_tx_zcack)(struct ksock_conn *, struct ksock_tx *, __u64); /* queue ZC ack on the connection */
 	int         (*pro_handle_zcreq)(struct ksock_conn *, __u64, int);            /* handle ZC request */
