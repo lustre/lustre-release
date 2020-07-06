@@ -324,10 +324,10 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	LASSERT(nid != LNET_NID_ANY);
 
 	LIBCFS_CPT_ALLOC(peer_ni, lnet_cpt_table(), cpt, sizeof(*peer_ni));
-        if (peer_ni == NULL) {
-                CERROR("Cannot allocate peer_ni\n");
-                return -ENOMEM;
-        }
+	if (!peer_ni) {
+		CERROR("Cannot allocate peer_ni\n");
+		return -ENOMEM;
+	}
 
 	peer_ni->ibp_ni = ni;
 	peer_ni->ibp_nid = nid;
@@ -338,7 +338,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	peer_ni->ibp_queue_depth_mod = 0;	/* try to use the default */
 	atomic_set(&peer_ni->ibp_refcount, 1);	/* 1 ref for caller */
 
-	INIT_LIST_HEAD(&peer_ni->ibp_list);	/* not in the peer_ni table yet */
+	INIT_HLIST_NODE(&peer_ni->ibp_list);
 	INIT_LIST_HEAD(&peer_ni->ibp_conns);
 	INIT_LIST_HEAD(&peer_ni->ibp_tx_queue);
 
@@ -372,7 +372,8 @@ kiblnd_destroy_peer(struct kib_peer_ni *peer_ni)
 	/* NB a peer_ni's connections keep a reference on their peer_ni until
 	 * they are destroyed, so we can be assured that _all_ state to do
 	 * with this peer_ni has been cleaned up when its refcount drops to
-	 * zero. */
+	 * zero.
+	 */
 	if (atomic_dec_and_test(&net->ibn_npeers))
 		wake_up_var(&net->ibn_npeers);
 }
@@ -381,14 +382,12 @@ struct kib_peer_ni *
 kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid)
 {
 	/* the caller is responsible for accounting the additional reference
-	 * that this creates */
-	struct list_head	*peer_list = kiblnd_nid2peerlist(nid);
-	struct list_head	*tmp;
-	struct kib_peer_ni		*peer_ni;
+	 * that this creates
+	 */
+	struct kib_peer_ni *peer_ni;
 
-	list_for_each(tmp, peer_list) {
-
-		peer_ni = list_entry(tmp, struct kib_peer_ni, ibp_list);
+	hash_for_each_possible(kiblnd_data.kib_peers, peer_ni,
+			       ibp_list, nid) {
 		LASSERT(!kiblnd_peer_idle(peer_ni));
 
 		/*
@@ -415,10 +414,10 @@ kiblnd_unlink_peer_locked(struct kib_peer_ni *peer_ni)
 {
 	LASSERT(list_empty(&peer_ni->ibp_conns));
 
-        LASSERT (kiblnd_peer_active(peer_ni));
-	list_del_init(&peer_ni->ibp_list);
-        /* lose peerlist's ref */
-        kiblnd_peer_decref(peer_ni);
+	LASSERT(kiblnd_peer_active(peer_ni));
+	hlist_del_init(&peer_ni->ibp_list);
+	/* lose peerlist's ref */
+	kiblnd_peer_decref(peer_ni);
 }
 
 static int
@@ -426,32 +425,25 @@ kiblnd_get_peer_info(struct lnet_ni *ni, int index,
 		     lnet_nid_t *nidp, int *count)
 {
 	struct kib_peer_ni		*peer_ni;
-	struct list_head	*ptmp;
 	int			 i;
 	unsigned long		 flags;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++) {
+	hash_for_each(kiblnd_data.kib_peers, i, peer_ni, ibp_list) {
+		LASSERT(!kiblnd_peer_idle(peer_ni));
 
-		list_for_each(ptmp, &kiblnd_data.kib_peers[i]) {
+		if (peer_ni->ibp_ni != ni)
+			continue;
 
-			peer_ni = list_entry(ptmp, struct kib_peer_ni, ibp_list);
-			LASSERT(!kiblnd_peer_idle(peer_ni));
+		if (index-- > 0)
+			continue;
 
-			if (peer_ni->ibp_ni != ni)
-				continue;
+		*nidp = peer_ni->ibp_nid;
+		*count = atomic_read(&peer_ni->ibp_refcount);
 
-			if (index-- > 0)
-				continue;
-
-			*nidp = peer_ni->ibp_nid;
-			*count = atomic_read(&peer_ni->ibp_refcount);
-
-			read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-					       flags);
-			return 0;
-		}
+		read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+		return 0;
 	}
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
@@ -480,27 +472,27 @@ static int
 kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 {
 	LIST_HEAD(zombies);
-	struct list_head	*ptmp;
-	struct list_head	*pnxt;
-	struct kib_peer_ni		*peer_ni;
-	int			lo;
-	int			hi;
-	int			i;
-	unsigned long		flags;
-	int			rc = -ENOENT;
+	struct hlist_node *pnxt;
+	struct kib_peer_ni *peer_ni;
+	int lo;
+	int hi;
+	int i;
+	unsigned long flags;
+	int rc = -ENOENT;
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        if (nid != LNET_NID_ANY) {
-                lo = hi = kiblnd_nid2peerlist(nid) - kiblnd_data.kib_peers;
-        } else {
-                lo = 0;
-                hi = kiblnd_data.kib_peer_hash_size - 1;
-        }
+	if (nid != LNET_NID_ANY) {
+		lo = hash_min(nid, HASH_BITS(kiblnd_data.kib_peers));
+		hi = lo;
+	} else {
+		lo = 0;
+		hi = HASH_SIZE(kiblnd_data.kib_peers) - 1;
+	}
 
 	for (i = lo; i <= hi; i++) {
-		list_for_each_safe(ptmp, pnxt, &kiblnd_data.kib_peers[i]) {
-			peer_ni = list_entry(ptmp, struct kib_peer_ni, ibp_list);
+		hlist_for_each_entry_safe(peer_ni, pnxt,
+					  &kiblnd_data.kib_peers[i], ibp_list) {
 			LASSERT(!kiblnd_peer_idle(peer_ni));
 
 			if (peer_ni->ibp_ni != ni)
@@ -531,39 +523,34 @@ kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 static struct kib_conn *
 kiblnd_get_conn_by_idx(struct lnet_ni *ni, int index)
 {
-	struct kib_peer_ni		*peer_ni;
-	struct list_head	*ptmp;
+	struct kib_peer_ni *peer_ni;
 	struct kib_conn	*conn;
-	struct list_head	*ctmp;
-	int			i;
-	unsigned long		flags;
+	struct list_head *ctmp;
+	int i;
+	unsigned long flags;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++) {
-		list_for_each(ptmp, &kiblnd_data.kib_peers[i]) {
+	hash_for_each(kiblnd_data.kib_peers, i, peer_ni, ibp_list) {
+		LASSERT(!kiblnd_peer_idle(peer_ni));
 
-			peer_ni = list_entry(ptmp, struct kib_peer_ni, ibp_list);
-			LASSERT(!kiblnd_peer_idle(peer_ni));
+		if (peer_ni->ibp_ni != ni)
+			continue;
 
-			if (peer_ni->ibp_ni != ni)
+		list_for_each(ctmp, &peer_ni->ibp_conns) {
+			if (index-- > 0)
 				continue;
 
-			list_for_each(ctmp, &peer_ni->ibp_conns) {
-				if (index-- > 0)
-					continue;
-
-				conn = list_entry(ctmp, struct kib_conn, ibc_list);
-				kiblnd_conn_addref(conn);
-				read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-						       flags);
-				return conn;
-			}
+			conn = list_entry(ctmp, struct kib_conn, ibc_list);
+			kiblnd_conn_addref(conn);
+			read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+					       flags);
+			return conn;
 		}
 	}
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-        return NULL;
+	return NULL;
 }
 
 static void
@@ -1100,28 +1087,27 @@ kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
 static int
 kiblnd_close_matching_conns(struct lnet_ni *ni, lnet_nid_t nid)
 {
-	struct kib_peer_ni		*peer_ni;
-	struct list_head	*ptmp;
-	struct list_head	*pnxt;
-	int			lo;
-	int			hi;
-	int			i;
-	unsigned long		flags;
-	int			count = 0;
+	struct kib_peer_ni *peer_ni;
+	struct hlist_node *pnxt;
+	int lo;
+	int hi;
+	int i;
+	unsigned long flags;
+	int count = 0;
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	if (nid != LNET_NID_ANY)
-		lo = hi = kiblnd_nid2peerlist(nid) - kiblnd_data.kib_peers;
-	else {
+	if (nid != LNET_NID_ANY) {
+		lo = hash_min(nid, HASH_BITS(kiblnd_data.kib_peers));
+		hi = lo;
+	} else {
 		lo = 0;
-		hi = kiblnd_data.kib_peer_hash_size - 1;
+		hi = HASH_SIZE(kiblnd_data.kib_peers) - 1;
 	}
 
 	for (i = lo; i <= hi; i++) {
-		list_for_each_safe(ptmp, pnxt, &kiblnd_data.kib_peers[i]) {
-
-			peer_ni = list_entry(ptmp, struct kib_peer_ni, ibp_list);
+		hlist_for_each_entry_safe(peer_ni, pnxt,
+					  &kiblnd_data.kib_peers[i], ibp_list) {
 			LASSERT(!kiblnd_peer_idle(peer_ni));
 
 			if (peer_ni->ibp_ni != ni)
@@ -2936,24 +2922,23 @@ kiblnd_destroy_dev(struct kib_dev *dev)
 static void
 kiblnd_base_shutdown(void)
 {
-	struct kib_sched_info	*sched;
-	int			i;
+	struct kib_sched_info *sched;
+	struct kib_peer_ni *peer_ni;
+	int i;
 
 	LASSERT(list_empty(&kiblnd_data.kib_devs));
 
 	CDEBUG(D_MALLOC, "before LND base cleanup: kmem %lld\n",
 	       libcfs_kmem_read());
 
-        switch (kiblnd_data.kib_init) {
-        default:
-                LBUG();
+	switch (kiblnd_data.kib_init) {
+	default:
+		LBUG();
 
-        case IBLND_INIT_ALL:
-        case IBLND_INIT_DATA:
-                LASSERT (kiblnd_data.kib_peers != NULL);
-                for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++) {
-			LASSERT(list_empty(&kiblnd_data.kib_peers[i]));
-                }
+	case IBLND_INIT_ALL:
+	case IBLND_INIT_DATA:
+		hash_for_each(kiblnd_data.kib_peers, i, peer_ni, ibp_list)
+			LASSERT(0);
 		LASSERT(list_empty(&kiblnd_data.kib_connd_zombies));
 		LASSERT(list_empty(&kiblnd_data.kib_connd_conns));
 		LASSERT(list_empty(&kiblnd_data.kib_reconn_list));
@@ -2964,7 +2949,8 @@ kiblnd_base_shutdown(void)
 
 		/* NB: we really want to stop scheduler threads net by net
 		 * instead of the whole module, this should be improved
-		 * with dynamic configuration LNet */
+		 * with dynamic configuration LNet.
+		 */
 		cfs_percpt_for_each(sched, i, kiblnd_data.kib_scheds)
 			wake_up_all(&sched->ibs_waitq);
 
@@ -2977,13 +2963,9 @@ kiblnd_base_shutdown(void)
 				       atomic_read(&kiblnd_data.kib_nthreads));
 		/* fall through */
 
-        case IBLND_INIT_NOTHING:
-                break;
-        }
-
-	if (kiblnd_data.kib_peers)
-		CFS_FREE_PTR_ARRAY(kiblnd_data.kib_peers,
-				   kiblnd_data.kib_peer_hash_size);
+	case IBLND_INIT_NOTHING:
+		break;
+	}
 
 	if (kiblnd_data.kib_scheds != NULL)
 		cfs_percpt_free(kiblnd_data.kib_scheds);
@@ -3065,9 +3047,9 @@ out:
 static int
 kiblnd_base_startup(struct net *ns)
 {
-	struct kib_sched_info	*sched;
-	int			rc;
-	int			i;
+	struct kib_sched_info *sched;
+	int rc;
+	int i;
 
 	LASSERT(kiblnd_data.kib_init == IBLND_INIT_NOTHING);
 
@@ -3081,14 +3063,7 @@ kiblnd_base_startup(struct net *ns)
 	INIT_LIST_HEAD(&kiblnd_data.kib_devs);
 	INIT_LIST_HEAD(&kiblnd_data.kib_failed_devs);
 
-	kiblnd_data.kib_peer_hash_size = IBLND_PEER_HASH_SIZE;
-	CFS_ALLOC_PTR_ARRAY(kiblnd_data.kib_peers,
-			    kiblnd_data.kib_peer_hash_size);
-	if (kiblnd_data.kib_peers == NULL)
-		goto failed;
-
-	for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++)
-		INIT_LIST_HEAD(&kiblnd_data.kib_peers[i]);
+	hash_init(kiblnd_data.kib_peers);
 
 	spin_lock_init(&kiblnd_data.kib_connd_lock);
 	INIT_LIST_HEAD(&kiblnd_data.kib_connd_conns);
@@ -3125,36 +3100,36 @@ kiblnd_base_startup(struct net *ns)
 		sched->ibs_cpt = i;
 	}
 
-        kiblnd_data.kib_error_qpa.qp_state = IB_QPS_ERR;
+	kiblnd_data.kib_error_qpa.qp_state = IB_QPS_ERR;
 
-        /* lists/ptrs/locks initialised */
-        kiblnd_data.kib_init = IBLND_INIT_DATA;
-        /*****************************************************/
+	/* lists/ptrs/locks initialised */
+	kiblnd_data.kib_init = IBLND_INIT_DATA;
+	/*****************************************************/
 
 	rc = kiblnd_thread_start(kiblnd_connd, NULL, "kiblnd_connd");
-        if (rc != 0) {
-                CERROR("Can't spawn o2iblnd connd: %d\n", rc);
-                goto failed;
-        }
+	if (rc != 0) {
+		CERROR("Can't spawn o2iblnd connd: %d\n", rc);
+		goto failed;
+	}
 
 	if (*kiblnd_tunables.kib_dev_failover != 0)
 		rc = kiblnd_thread_start(kiblnd_failover_thread, ns,
 					 "kiblnd_failover");
 
-        if (rc != 0) {
-                CERROR("Can't spawn o2iblnd failover thread: %d\n", rc);
-                goto failed;
-        }
+	if (rc != 0) {
+		CERROR("Can't spawn o2iblnd failover thread: %d\n", rc);
+		goto failed;
+	}
 
-        /* flag everything initialised */
-        kiblnd_data.kib_init = IBLND_INIT_ALL;
-        /*****************************************************/
+	/* flag everything initialised */
+	kiblnd_data.kib_init = IBLND_INIT_ALL;
+	/*****************************************************/
 
-        return 0;
+	return 0;
 
  failed:
-        kiblnd_base_shutdown();
-        return -ENETDOWN;
+	kiblnd_base_shutdown();
+	return -ENETDOWN;
 }
 
 static int
