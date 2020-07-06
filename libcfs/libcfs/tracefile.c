@@ -1083,17 +1083,22 @@ static int tracefiled(void *arg)
 
 	complete(&tctl->tctl_start);
 
-	while (1) {
-		wait_queue_entry_t __wait;
+	pc.pc_want_daemon_pages = 0;
 
-                pc.pc_want_daemon_pages = 0;
-                collect_pages(&pc);
+	while (!last_loop) {
+		wait_event_timeout(tctl->tctl_waitq,
+				   ({ collect_pages(&pc);
+				     !list_empty(&pc.pc_pages); }) ||
+				   atomic_read(&tctl->tctl_shutdown),
+				   cfs_time_seconds(1));
+		if (atomic_read(&tctl->tctl_shutdown))
+			last_loop = 1;
 		if (list_empty(&pc.pc_pages))
-                        goto end_loop;
+			continue;
 
-                filp = NULL;
+		filp = NULL;
 		down_read(&cfs_tracefile_sem);
-                if (cfs_tracefile[0] != 0) {
+		if (cfs_tracefile[0] != 0) {
 			filp = filp_open(cfs_tracefile,
 					 O_CREAT | O_RDWR | O_LARGEFILE,
 					 0600);
@@ -1105,11 +1110,11 @@ static int tracefiled(void *arg)
 			}
 		}
 		up_read(&cfs_tracefile_sem);
-                if (filp == NULL) {
-                        put_pages_on_daemon_list(&pc);
+		if (filp == NULL) {
+			put_pages_on_daemon_list(&pc);
 			__LASSERT(list_empty(&pc.pc_pages));
-                        goto end_loop;
-                }
+			continue;
+		}
 
 		list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 			struct dentry *de = file_dentry(filp);
@@ -1132,12 +1137,12 @@ static int tracefiled(void *arg)
 				__LASSERT(list_empty(&pc.pc_pages));
 				break;
 			}
-                }
+		}
 
 		filp_close(filp, NULL);
-                put_pages_on_daemon_list(&pc);
+		put_pages_on_daemon_list(&pc);
 		if (!list_empty(&pc.pc_pages)) {
-                        int i;
+			int i;
 
 			pr_alert("Lustre: trace pages aren't empty\n");
 			pr_err("Lustre: total cpus(%d): ", num_possible_cpus());
@@ -1156,22 +1161,9 @@ static int tracefiled(void *arg)
 			pr_err("Lustre: There are %d pages unwritten\n", i);
 		}
 		__LASSERT(list_empty(&pc.pc_pages));
-end_loop:
-		if (atomic_read(&tctl->tctl_shutdown)) {
-			if (last_loop == 0) {
-				last_loop = 1;
-				continue;
-			} else {
-				break;
-			}
-		}
-		init_wait(&__wait);
-		add_wait_queue(&tctl->tctl_waitq, &__wait);
-		schedule_timeout_interruptible(cfs_time_seconds(1));
-		remove_wait_queue(&tctl->tctl_waitq, &__wait);
-        }
+	}
 	complete(&tctl->tctl_stop);
-        return 0;
+	return 0;
 }
 
 int cfs_trace_start_thread(void)
