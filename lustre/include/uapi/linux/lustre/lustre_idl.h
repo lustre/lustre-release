@@ -848,6 +848,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ASYNC_DISCARD	0x4000ULL /* support async DoM data discard */
 #define OBD_CONNECT2_ENCRYPT		0x8000ULL /* client-to-disk encrypt */
 #define OBD_CONNECT2_FIDMAP	       0x10000ULL /* FID map */
+#define OBD_CONNECT2_GETATTR_PFID      0x20000ULL /* pack parent FID in getattr */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
