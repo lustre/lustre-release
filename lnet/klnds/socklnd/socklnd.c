@@ -1652,24 +1652,25 @@ ksocknal_close_matching_conns(struct lnet_processid *id, __u32 ipaddr)
 }
 
 void
-ksocknal_notify_gw_down(lnet_nid_t gw_nid)
+ksocknal_notify_gw_down(struct lnet_nid *gw_nid)
 {
 	/* The router is telling me she's been notified of a change in
 	 * gateway state....
 	 */
 	struct lnet_processid id = {
 		.pid	= LNET_PID_ANY,
+		.nid	= *gw_nid,
 	};
 
-	CDEBUG(D_NET, "gw %s down\n", libcfs_nid2str(gw_nid));
+	CDEBUG(D_NET, "gw %s down\n", libcfs_nidstr(gw_nid));
 
-	lnet_nid4_to_nid(gw_nid, &id.nid);
 	/* If the gateway crashed, close all open connections... */
 	ksocknal_close_matching_conns(&id, 0);
 	return;
 
 	/* We can only establish new connections
-	 * if we have autroutes, and these connect on demand. */
+	 * if we have autroutes, and these connect on demand.
+	 */
 }
 
 static void

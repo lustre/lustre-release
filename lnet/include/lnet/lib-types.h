@@ -327,7 +327,7 @@ struct lnet_lnd {
 			      struct lnet_msg *msg, void **new_privatep);
 
 	/* notification of peer down */
-	void (*lnd_notify_peer_down)(lnet_nid_t peer);
+	void (*lnd_notify_peer_down)(struct lnet_nid *peer);
 
 	/* accept a new connection */
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
