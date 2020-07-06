@@ -1615,7 +1615,7 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 void
 ksocknal_peer_failed(struct ksock_peer_ni *peer_ni)
 {
-	int notify = 0;
+	bool notify = false;
 	time64_t last_alive = 0;
 
 	/* There has been a connection failure or comms error; but I'll only
@@ -1628,7 +1628,7 @@ ksocknal_peer_failed(struct ksock_peer_ni *peer_ni)
 	     list_empty(&peer_ni->ksnp_conns) &&
 	     peer_ni->ksnp_accepting == 0 &&
 	     ksocknal_find_connecting_route_locked(peer_ni) == NULL) {
-		notify = 1;
+		notify = true;
 		last_alive = peer_ni->ksnp_last_alive;
 	}
 
@@ -1677,28 +1677,29 @@ ksocknal_finalize_zcreq(struct ksock_conn *conn)
 void
 ksocknal_terminate_conn(struct ksock_conn *conn)
 {
-        /* This gets called by the reaper (guaranteed thread context) to
-         * disengage the socket from its callbacks and close it.
-         * ksnc_refcount will eventually hit zero, and then the reaper will
-         * destroy it. */
+	/* This gets called by the reaper (guaranteed thread context) to
+	 * disengage the socket from its callbacks and close it.
+	 * ksnc_refcount will eventually hit zero, and then the reaper will
+	 * destroy it.
+	 */
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_sched *sched = conn->ksnc_scheduler;
-	int failed = 0;
+	bool failed = false;
 
-        LASSERT(conn->ksnc_closing);
+	LASSERT(conn->ksnc_closing);
 
-        /* wake up the scheduler to "send" all remaining packets to /dev/null */
+	/* wake up the scheduler to "send" all remaining packets to /dev/null */
 	spin_lock_bh(&sched->kss_lock);
 
-        /* a closing conn is always ready to tx */
-        conn->ksnc_tx_ready = 1;
+	/* a closing conn is always ready to tx */
+	conn->ksnc_tx_ready = 1;
 
-        if (!conn->ksnc_tx_scheduled &&
+	if (!conn->ksnc_tx_scheduled &&
 	    !list_empty(&conn->ksnc_tx_queue)) {
 		list_add_tail(&conn->ksnc_tx_list,
-                               &sched->kss_tx_conns);
-                conn->ksnc_tx_scheduled = 1;
-                /* extra ref for scheduler */
+			      &sched->kss_tx_conns);
+		conn->ksnc_tx_scheduled = 1;
+		/* extra ref for scheduler */
 		ksocknal_conn_addref(conn);
 
 		wake_up (&sched->kss_waitq);
@@ -1709,30 +1710,32 @@ ksocknal_terminate_conn(struct ksock_conn *conn)
 	/* serialise with callbacks */
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
-        ksocknal_lib_reset_callback(conn->ksnc_sock, conn);
+	ksocknal_lib_reset_callback(conn->ksnc_sock, conn);
 
-        /* OK, so this conn may not be completely disengaged from its
-         * scheduler yet, but it _has_ committed to terminate... */
-        conn->ksnc_scheduler->kss_nconns--;
+	/* OK, so this conn may not be completely disengaged from its
+	 * scheduler yet, but it _has_ committed to terminate...
+	 */
+	conn->ksnc_scheduler->kss_nconns--;
 
-        if (peer_ni->ksnp_error != 0) {
-                /* peer_ni's last conn closed in error */
+	if (peer_ni->ksnp_error != 0) {
+		/* peer_ni's last conn closed in error */
 		LASSERT(list_empty(&peer_ni->ksnp_conns));
-                failed = 1;
-                peer_ni->ksnp_error = 0;     /* avoid multiple notifications */
-        }
+		failed = true;
+		peer_ni->ksnp_error = 0;     /* avoid multiple notifications */
+	}
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
-        if (failed)
-                ksocknal_peer_failed(peer_ni);
+	if (failed)
+		ksocknal_peer_failed(peer_ni);
 
-        /* The socket is closed on the final put; either here, or in
-         * ksocknal_{send,recv}msg().  Since we set up the linger2 option
-         * when the connection was established, this will close the socket
-         * immediately, aborting anything buffered in it. Any hung
-         * zero-copy transmits will therefore complete in finite time. */
-        ksocknal_connsock_decref(conn);
+	/* The socket is closed on the final put; either here, or in
+	 * ksocknal_{send,recv}msg().  Since we set up the linger2 option
+	 * when the connection was established, this will close the socket
+	 * immediately, aborting anything buffered in it. Any hung
+	 * zero-copy transmits will therefore complete in finite time.
+	 */
+	ksocknal_connsock_decref(conn);
 }
 
 void
@@ -2603,7 +2606,7 @@ ksocknal_search_new_ipif(struct ksock_net *net)
 	for (i = 0; i < net->ksnn_ninterfaces; i++) {
 		char *ifnam = &net->ksnn_interfaces[i].ksni_name[0];
 		char *colon = strchr(ifnam, ':');
-		int found  = 0;
+		bool found  = false;
 		struct ksock_net *tmp;
 		int j;
 
@@ -2611,10 +2614,10 @@ ksocknal_search_new_ipif(struct ksock_net *net)
 			*colon = 0;
 
 		list_for_each_entry(tmp, &ksocknal_data.ksnd_nets,
-					ksnn_list) {
+				    ksnn_list) {
 			for (j = 0; !found && j < tmp->ksnn_ninterfaces; j++) {
 				char *ifnam2 = &tmp->ksnn_interfaces[j].\
-					     ksni_name[0];
+					ksni_name[0];
 				char *colon2 = strchr(ifnam2, ':');
 
 				if (colon2 != NULL)
