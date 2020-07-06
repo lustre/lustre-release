@@ -188,7 +188,10 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		 * which is not needed here.
 		 */
 		memset(op_data, 0, sizeof(*op_data));
-		op_data->op_fid1 = *pfid;
+		if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID)
+			op_data->op_fid1 = *pfid;
+		else
+			op_data->op_fid1 = fid;
 		op_data->op_fid2 = fid;
 
 		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds, NULL);
