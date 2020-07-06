@@ -2189,7 +2189,7 @@ ksocknal_connd(void *arg)
 	wait_queue_entry_t wait;
 	int cons_retry = 0;
 
-	init_waitqueue_entry(&wait, current);
+	init_wait(&wait);
 
 	spin_lock_bh(connd_lock);
 
@@ -2566,7 +2566,7 @@ int ksocknal_reaper(void *arg)
 	int peer_index = 0;
 	time64_t deadline = ktime_get_seconds();
 
-	init_waitqueue_entry(&wait, current);
+	init_wait(&wait);
 
 	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
