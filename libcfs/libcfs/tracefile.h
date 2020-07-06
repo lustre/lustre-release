@@ -65,7 +65,6 @@ int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob);
 int cfs_trace_set_debug_mb(int mb);
 int cfs_trace_get_debug_mb(void);
 
-extern void libcfs_debug_dumplog_internal(void *arg);
 extern int  libcfs_panic_in_progress;
 
 #define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))

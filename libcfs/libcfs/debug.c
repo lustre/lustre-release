@@ -395,14 +395,11 @@ static void libcfs_run_debug_log_upcall(char *file)
 /**
  * Dump Lustre log to ::debug_file_path by calling tracefile_dump_all_pages()
  */
-void libcfs_debug_dumplog_internal(void *arg)
+static void libcfs_debug_dumplog_internal(void *arg)
 {
 	static time64_t last_dump_time;
 	time64_t current_time;
-	void *journal_info;
 
-	journal_info = current->journal_info;
-	current->journal_info = NULL;
 	current_time = ktime_get_real_seconds();
 
 	if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0 &&
@@ -415,8 +412,6 @@ void libcfs_debug_dumplog_internal(void *arg)
 		cfs_tracefile_dump_all_pages(debug_file_name);
 		libcfs_run_debug_log_upcall(debug_file_name);
 	}
-
-	current->journal_info = journal_info;
 }
 
 static int libcfs_debug_dumplog_thread(void *arg)
