@@ -167,6 +167,16 @@ static inline int mdc_prep_elc_req(struct obd_export *exp,
 				 count);
 }
 
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md);
+#else
+static inline
+int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
+{
+	return 0;
+}
+#endif
+
 static inline unsigned long hash_x_index(__u64 hash, int hash64)
 {
 	if (BITS_PER_LONG == 32 && hash64)

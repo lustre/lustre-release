@@ -505,47 +505,6 @@ out:
 	return rc;
 }
 
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-static int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
-{
-        struct req_capsule     *pill = &req->rq_pill;
-        struct mdt_body        *body = md->body;
-        struct posix_acl       *acl;
-        void                   *buf;
-        int                     rc;
-        ENTRY;
-
-	if (!body->mbo_aclsize)
-		RETURN(0);
-
-	buf = req_capsule_server_sized_get(pill, &RMF_ACL, body->mbo_aclsize);
-
-	if (!buf)
-		RETURN(-EPROTO);
-
-	acl = posix_acl_from_xattr(&init_user_ns, buf, body->mbo_aclsize);
-	if (acl == NULL)
-		RETURN(0);
-        if (IS_ERR(acl)) {
-                rc = PTR_ERR(acl);
-                CERROR("convert xattr to acl: %d\n", rc);
-                RETURN(rc);
-        }
-
-        rc = posix_acl_valid(&init_user_ns, acl);
-        if (rc) {
-                CERROR("validate acl: %d\n", rc);
-                posix_acl_release(acl);
-                RETURN(rc);
-        }
-
-        md->posix_acl = acl;
-        RETURN(0);
-}
-#else
-#define mdc_unpack_acl(req, md) 0
-#endif
-
 int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                       struct obd_export *dt_exp, struct obd_export *md_exp,
                       struct lustre_md *md)
@@ -643,30 +602,24 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 			}
 		}
 	}
-        rc = 0;
+	rc = 0;
 
 	if (md->body->mbo_valid & OBD_MD_FLACL) {
 		/* for ACL, it's possible that FLACL is set but aclsize is zero.
 		 * only when aclsize != 0 there's an actual segment for ACL
 		 * in reply buffer.
 		 */
-		if (md->body->mbo_aclsize) {
-                        rc = mdc_unpack_acl(req, md);
-                        if (rc)
-                                GOTO(out, rc);
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-                } else {
-                        md->posix_acl = NULL;
-#endif
-                }
-        }
+		rc = mdc_unpack_acl(req, md);
+		if (rc)
+			GOTO(out, rc);
+	}
 
-        EXIT;
+	EXIT;
 out:
-        if (rc)
+	if (rc)
 		lmd_clear_acl(md);
 
-        return rc;
+	return rc;
 }
 
 int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)

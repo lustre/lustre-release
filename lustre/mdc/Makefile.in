@@ -1,5 +1,6 @@
 MODULES := mdc
-mdc-objs :=	mdc_request.o \
+
+mdc-objs-y :=	mdc_request.o \
 		mdc_reint.o \
 		lproc_mdc.o \
 		mdc_lib.o \
@@ -7,6 +8,10 @@ mdc-objs :=	mdc_request.o \
 		mdc_changelog.o \
 		mdc_dev.o
 
-EXTRA_DIST = $(mdc-objs:.o=.c) mdc_internal.h
+mdc-objs-$(CONFIG_FS_POSIX_ACL) += mdc_acl.o
+
+mdc-objs := $(mdc-objs-y)
+
+EXTRA_DIST = $(mdc-objs:.o=.c) mdc_acl.c mdc_internal.h
 
 @INCLUDE_RULES@
