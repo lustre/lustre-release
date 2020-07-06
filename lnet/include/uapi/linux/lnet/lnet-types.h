@@ -355,9 +355,6 @@ struct lnet_md {
 /** See struct lnet_md::options. */
 #define LNET_MD_NO_TRACK_RESPONSE    (1 << 11)
 
-/* For compatibility with Cray Portals */
-#define LNET_MD_PHYS			     0
-
 /** Infinite threshold on MD operations. See struct lnet_md::threshold */
 #define LNET_MD_THRESH_INF	 (-1)
 

@@ -50,7 +50,6 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 
 	LASSERT(mdidx < desc->bd_md_max_brw);
 	LASSERT(desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-	LASSERT(!(md->options & (LNET_MD_KIOV | LNET_MD_PHYS)));
 
 	/* just send a lnet header */
 	if (mdidx >= desc->bd_md_count) {
