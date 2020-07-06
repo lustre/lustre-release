@@ -1974,7 +1974,37 @@ extern void server_bulk_callback(struct lnet_event *ev);
 struct ptlrpc_connection *ptlrpc_connection_get(struct lnet_process_id peer,
                                                 lnet_nid_t self,
                                                 struct obd_uuid *uuid);
-int ptlrpc_connection_put(struct ptlrpc_connection *c);
+
+static inline void  ptlrpc_connection_put(struct ptlrpc_connection *conn)
+{
+	if (!conn)
+		return;
+
+	LASSERT(atomic_read(&conn->c_refcount) > 0);
+
+	/*
+	 * We do not remove connection from hashtable and
+	 * do not free it even if last caller released ref,
+	 * as we want to have it cached for the case it is
+	 * needed again.
+	 *
+	 * Deallocating it and later creating new connection
+	 * again would be wastful. This way we also avoid
+	 * expensive locking to protect things from get/put
+	 * race when found cached connection is freed by
+	 * ptlrpc_connection_put().
+	 *
+	 * It will be freed later in module unload time,
+	 * when ptlrpc_connection_fini()->lh_exit->conn_exit()
+	 * path is called.
+	 */
+	atomic_dec(&conn->c_refcount);
+
+	CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
+	       conn, atomic_read(&conn->c_refcount),
+	       libcfs_nid2str(conn->c_peer.nid));
+}
+
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 int ptlrpc_connection_init(void);
 void ptlrpc_connection_fini(void);

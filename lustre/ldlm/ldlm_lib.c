@@ -997,8 +997,7 @@ static int rev_import_reconnect(struct obd_export *exp,
 	/* avoid sending a request until import flags are changed */
 	ptlrpc_import_enter_resend(revimp);
 
-	if (revimp->imp_connection != NULL)
-		ptlrpc_connection_put(revimp->imp_connection);
+	ptlrpc_connection_put(revimp->imp_connection);
 
 	/*
 	 * client from recovery don't have a handle so we need to take from

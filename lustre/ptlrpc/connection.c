@@ -132,42 +132,6 @@ out:
 	return conn;
 }
 
-int ptlrpc_connection_put(struct ptlrpc_connection *conn)
-{
-	int rc = 0;
-	ENTRY;
-
-	if (!conn)
-		RETURN(rc);
-
-	LASSERT(atomic_read(&conn->c_refcount) > 0);
-
-	/*
-	 * We do not remove connection from hashtable and
-	 * do not free it even if last caller released ref,
-	 * as we want to have it cached for the case it is
-	 * needed again.
-	 *
-	 * Deallocating it and later creating new connection
-	 * again would be wastful. This way we also avoid
-	 * expensive locking to protect things from get/put
-	 * race when found cached connection is freed by
-	 * ptlrpc_connection_put().
-	 *
-	 * It will be freed later in module unload time,
-	 * when ptlrpc_connection_fini()->lh_exit->conn_exit()
-	 * path is called.
-	 */
-	if (atomic_dec_return(&conn->c_refcount) == 0)
-		rc = 1;
-
-	CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
-	       conn, atomic_read(&conn->c_refcount),
-	       libcfs_nid2str(conn->c_peer.nid));
-
-	RETURN(rc);
-}
-
 struct ptlrpc_connection *
 ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 {

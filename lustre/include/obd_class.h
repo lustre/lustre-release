@@ -1823,12 +1823,6 @@ struct lwp_register_item {
 	char		    lri_name[MTI_NAME_MAXLEN];
 };
 
-/* I'm as embarrassed about this as you are.
- *
- * <shaver> // XXX do not look into _superhack with remaining eye
- * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
-extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-
 /* obd_mount.c */
 #ifdef HAVE_SERVER_SUPPORT
 int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,

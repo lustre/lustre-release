@@ -79,8 +79,6 @@ static __init int ptlrpc_init(void)
 	if (rc)
 		GOTO(err_portals, rc);
 
-	ptlrpc_put_connection_superhack = ptlrpc_connection_put;
-
 	rc = ptlrpc_start_pinger();
 	if (rc)
 		GOTO(err_conn, rc);

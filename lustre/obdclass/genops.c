@@ -62,9 +62,6 @@ static LIST_HEAD(obd_stale_exports);
 static DEFINE_SPINLOCK(obd_stale_export_lock);
 static atomic_t obd_stale_export_num = ATOMIC_INIT(0);
 
-int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
-
 /*
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
@@ -947,8 +944,7 @@ static void class_export_destroy(struct obd_export *exp)
                exp->exp_client_uuid.uuid, obd->obd_name);
 
         /* "Local" exports (lctl, LOV->{mdc,osc}) have no connection. */
-        if (exp->exp_connection)
-                ptlrpc_put_connection_superhack(exp->exp_connection);
+	ptlrpc_connection_put(exp->exp_connection);
 
 	LASSERT(list_empty(&exp->exp_outstanding_replies));
 	LASSERT(list_empty(&exp->exp_uncommitted_replies));
@@ -1161,14 +1157,14 @@ EXPORT_SYMBOL(class_unlink_export);
 /* Import management functions */
 static void obd_zombie_import_free(struct obd_import *imp)
 {
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
-                imp->imp_obd->obd_name);
+	CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
+	       imp->imp_obd->obd_name);
 
 	LASSERT(refcount_read(&imp->imp_refcount) == 0);
 
-        ptlrpc_put_connection_superhack(imp->imp_connection);
+	ptlrpc_connection_put(imp->imp_connection);
 
 	while (!list_empty(&imp->imp_conn_list)) {
 		struct obd_import_conn *imp_conn;
@@ -1176,14 +1172,14 @@ static void obd_zombie_import_free(struct obd_import *imp)
 		imp_conn = list_first_entry(&imp->imp_conn_list,
 					    struct obd_import_conn, oic_item);
 		list_del_init(&imp_conn->oic_item);
-                ptlrpc_put_connection_superhack(imp_conn->oic_conn);
-                OBD_FREE(imp_conn, sizeof(*imp_conn));
-        }
+		ptlrpc_connection_put(imp_conn->oic_conn);
+		OBD_FREE(imp_conn, sizeof(*imp_conn));
+	}
 
-        LASSERT(imp->imp_sec == NULL);
+	LASSERT(imp->imp_sec == NULL);
 	LASSERTF(atomic_read(&imp->imp_reqs) == 0, "%s: imp_reqs = %d\n",
 		 imp->imp_obd->obd_name, atomic_read(&imp->imp_reqs));
-        class_decref(imp->imp_obd, "import", imp);
+	class_decref(imp->imp_obd, "import", imp);
 	OBD_FREE_PTR(imp);
 	EXIT;
 }
