@@ -129,51 +129,51 @@ kiblnd_msgtype2size(int type)
         }
 }
 
-static int kiblnd_unpack_rd(struct kib_msg *msg, int flip)
+static int kiblnd_unpack_rd(struct kib_msg *msg, bool flip)
 {
 	struct kib_rdma_desc *rd;
-        int                nob;
-        int                n;
-        int                i;
+	int nob;
+	int n;
+	int i;
 
-        LASSERT (msg->ibm_type == IBLND_MSG_GET_REQ ||
-                 msg->ibm_type == IBLND_MSG_PUT_ACK);
+	LASSERT(msg->ibm_type == IBLND_MSG_GET_REQ ||
+		msg->ibm_type == IBLND_MSG_PUT_ACK);
 
-        rd = msg->ibm_type == IBLND_MSG_GET_REQ ?
-                              &msg->ibm_u.get.ibgm_rd :
-                              &msg->ibm_u.putack.ibpam_rd;
+	rd = msg->ibm_type == IBLND_MSG_GET_REQ ?
+		&msg->ibm_u.get.ibgm_rd :
+		&msg->ibm_u.putack.ibpam_rd;
 
-        if (flip) {
-                __swab32s(&rd->rd_key);
-                __swab32s(&rd->rd_nfrags);
-        }
+	if (flip) {
+		__swab32s(&rd->rd_key);
+		__swab32s(&rd->rd_nfrags);
+	}
 
-        n = rd->rd_nfrags;
+	n = rd->rd_nfrags;
 
-        if (n <= 0 || n > IBLND_MAX_RDMA_FRAGS) {
-                CERROR("Bad nfrags: %d, should be 0 < n <= %d\n",
-                       n, IBLND_MAX_RDMA_FRAGS);
-                return 1;
-        }
+	if (n <= 0 || n > IBLND_MAX_RDMA_FRAGS) {
+		CERROR("Bad nfrags: %d, should be 0 < n <= %d\n",
+		       n, IBLND_MAX_RDMA_FRAGS);
+		return 1;
+	}
 
 	nob = offsetof(struct kib_msg, ibm_u) +
-              kiblnd_rd_msg_size(rd, msg->ibm_type, n);
+		kiblnd_rd_msg_size(rd, msg->ibm_type, n);
 
-        if (msg->ibm_nob < nob) {
-                CERROR("Short %s: %d(%d)\n",
-                       kiblnd_msgtype2str(msg->ibm_type), msg->ibm_nob, nob);
-                return 1;
-        }
+	if (msg->ibm_nob < nob) {
+		CERROR("Short %s: %d(%d)\n",
+		       kiblnd_msgtype2str(msg->ibm_type), msg->ibm_nob, nob);
+		return 1;
+	}
 
-        if (!flip)
-                return 0;
+	if (!flip)
+		return 0;
 
-        for (i = 0; i < n; i++) {
-                __swab32s(&rd->rd_frags[i].rf_nob);
-                __swab64s(&rd->rd_frags[i].rf_addr);
-        }
+	for (i = 0; i < n; i++) {
+		__swab32s(&rd->rd_frags[i].rf_nob);
+		__swab64s(&rd->rd_frags[i].rf_addr);
+	}
 
-        return 0;
+	return 0;
 }
 
 void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
@@ -203,112 +203,113 @@ void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
 int kiblnd_unpack_msg(struct kib_msg *msg, int nob)
 {
 	const int hdr_size = offsetof(struct kib_msg, ibm_u);
-        __u32     msg_cksum;
-        __u16     version;
-        int       msg_nob;
-        int       flip;
+	__u32 msg_cksum;
+	__u16 version;
+	int msg_nob;
+	bool flip;
 
-        /* 6 bytes are enough to have received magic + version */
-        if (nob < 6) {
-                CERROR("Short message: %d\n", nob);
-                return -EPROTO;
-        }
+	/* 6 bytes are enough to have received magic + version */
+	if (nob < 6) {
+		CERROR("Short message: %d\n", nob);
+		return -EPROTO;
+	}
 
-        if (msg->ibm_magic == IBLND_MSG_MAGIC) {
-                flip = 0;
-        } else if (msg->ibm_magic == __swab32(IBLND_MSG_MAGIC)) {
-                flip = 1;
-        } else {
-                CERROR("Bad magic: %08x\n", msg->ibm_magic);
-                return -EPROTO;
-        }
+	if (msg->ibm_magic == IBLND_MSG_MAGIC) {
+		flip = false;
+	} else if (msg->ibm_magic == __swab32(IBLND_MSG_MAGIC)) {
+		flip = true;
+	} else {
+		CERROR("Bad magic: %08x\n", msg->ibm_magic);
+		return -EPROTO;
+	}
 
-        version = flip ? __swab16(msg->ibm_version) : msg->ibm_version;
-        if (version != IBLND_MSG_VERSION &&
-            version != IBLND_MSG_VERSION_1) {
-                CERROR("Bad version: %x\n", version);
-                return -EPROTO;
-        }
+	version = flip ? __swab16(msg->ibm_version) : msg->ibm_version;
+	if (version != IBLND_MSG_VERSION &&
+	    version != IBLND_MSG_VERSION_1) {
+		CERROR("Bad version: %x\n", version);
+		return -EPROTO;
+	}
 
-        if (nob < hdr_size) {
-                CERROR("Short message: %d\n", nob);
-                return -EPROTO;
-        }
+	if (nob < hdr_size) {
+		CERROR("Short message: %d\n", nob);
+		return -EPROTO;
+	}
 
-        msg_nob = flip ? __swab32(msg->ibm_nob) : msg->ibm_nob;
-        if (msg_nob > nob) {
-                CERROR("Short message: got %d, wanted %d\n", nob, msg_nob);
-                return -EPROTO;
-        }
+	msg_nob = flip ? __swab32(msg->ibm_nob) : msg->ibm_nob;
+	if (msg_nob > nob) {
+		CERROR("Short message: got %d, wanted %d\n", nob, msg_nob);
+		return -EPROTO;
+	}
 
-        /* checksum must be computed with ibm_cksum zero and BEFORE anything
-         * gets flipped */
-        msg_cksum = flip ? __swab32(msg->ibm_cksum) : msg->ibm_cksum;
-        msg->ibm_cksum = 0;
-        if (msg_cksum != 0 &&
-            msg_cksum != kiblnd_cksum(msg, msg_nob)) {
-                CERROR("Bad checksum\n");
-                return -EPROTO;
-        }
+	/* checksum must be computed with ibm_cksum zero and BEFORE anything
+	 * gets flipped
+	 */
+	msg_cksum = flip ? __swab32(msg->ibm_cksum) : msg->ibm_cksum;
+	msg->ibm_cksum = 0;
+	if (msg_cksum != 0 &&
+	    msg_cksum != kiblnd_cksum(msg, msg_nob)) {
+		CERROR("Bad checksum\n");
+		return -EPROTO;
+	}
 
-        msg->ibm_cksum = msg_cksum;
+	msg->ibm_cksum = msg_cksum;
 
-        if (flip) {
-                /* leave magic unflipped as a clue to peer_ni endianness */
-                msg->ibm_version = version;
+	if (flip) {
+		/* leave magic unflipped as a clue to peer_ni endianness */
+		msg->ibm_version = version;
 		BUILD_BUG_ON(sizeof(msg->ibm_type) != 1);
 		BUILD_BUG_ON(sizeof(msg->ibm_credits) != 1);
-                msg->ibm_nob     = msg_nob;
-                __swab64s(&msg->ibm_srcnid);
-                __swab64s(&msg->ibm_srcstamp);
-                __swab64s(&msg->ibm_dstnid);
-                __swab64s(&msg->ibm_dststamp);
-        }
+		msg->ibm_nob     = msg_nob;
+		__swab64s(&msg->ibm_srcnid);
+		__swab64s(&msg->ibm_srcstamp);
+		__swab64s(&msg->ibm_dstnid);
+		__swab64s(&msg->ibm_dststamp);
+	}
 
-        if (msg->ibm_srcnid == LNET_NID_ANY) {
-                CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ibm_srcnid));
-                return -EPROTO;
-        }
+	if (msg->ibm_srcnid == LNET_NID_ANY) {
+		CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ibm_srcnid));
+		return -EPROTO;
+	}
 
-        if (msg_nob < kiblnd_msgtype2size(msg->ibm_type)) {
-                CERROR("Short %s: %d(%d)\n", kiblnd_msgtype2str(msg->ibm_type),
-                       msg_nob, kiblnd_msgtype2size(msg->ibm_type));
-                return -EPROTO;
-        }
+	if (msg_nob < kiblnd_msgtype2size(msg->ibm_type)) {
+		CERROR("Short %s: %d(%d)\n", kiblnd_msgtype2str(msg->ibm_type),
+		       msg_nob, kiblnd_msgtype2size(msg->ibm_type));
+		return -EPROTO;
+	}
 
-        switch (msg->ibm_type) {
-        default:
-                CERROR("Unknown message type %x\n", msg->ibm_type);
-                return -EPROTO;
+	switch (msg->ibm_type) {
+	default:
+		CERROR("Unknown message type %x\n", msg->ibm_type);
+		return -EPROTO;
 
-        case IBLND_MSG_NOOP:
-        case IBLND_MSG_IMMEDIATE:
-        case IBLND_MSG_PUT_REQ:
-                break;
+	case IBLND_MSG_NOOP:
+	case IBLND_MSG_IMMEDIATE:
+	case IBLND_MSG_PUT_REQ:
+		break;
 
-        case IBLND_MSG_PUT_ACK:
-        case IBLND_MSG_GET_REQ:
-                if (kiblnd_unpack_rd(msg, flip))
-                        return -EPROTO;
-                break;
+	case IBLND_MSG_PUT_ACK:
+	case IBLND_MSG_GET_REQ:
+		if (kiblnd_unpack_rd(msg, flip))
+			return -EPROTO;
+		break;
 
-        case IBLND_MSG_PUT_NAK:
-        case IBLND_MSG_PUT_DONE:
-        case IBLND_MSG_GET_DONE:
-                if (flip)
-                        __swab32s(&msg->ibm_u.completion.ibcm_status);
-                break;
+	case IBLND_MSG_PUT_NAK:
+	case IBLND_MSG_PUT_DONE:
+	case IBLND_MSG_GET_DONE:
+		if (flip)
+			__swab32s(&msg->ibm_u.completion.ibcm_status);
+		break;
 
-        case IBLND_MSG_CONNREQ:
-        case IBLND_MSG_CONNACK:
-                if (flip) {
-                        __swab16s(&msg->ibm_u.connparams.ibcp_queue_depth);
-                        __swab16s(&msg->ibm_u.connparams.ibcp_max_frags);
-                        __swab32s(&msg->ibm_u.connparams.ibcp_max_msg_size);
-                }
-                break;
-        }
-        return 0;
+	case IBLND_MSG_CONNREQ:
+	case IBLND_MSG_CONNACK:
+		if (flip) {
+			__swab16s(&msg->ibm_u.connparams.ibcp_queue_depth);
+			__swab16s(&msg->ibm_u.connparams.ibcp_max_frags);
+			__swab32s(&msg->ibm_u.connparams.ibcp_max_msg_size);
+		}
+		break;
+	}
+	return 0;
 }
 
 int
@@ -1788,7 +1789,7 @@ int kiblnd_fmr_pool_map(struct kib_fmr_poolset *fps, struct kib_tx *tx,
 	bool is_rx = (rd != tx->tx_rd);
 #ifdef HAVE_FMR_POOL_API
 	__u64 *pages = tx->tx_pages;
-	bool tx_pages_mapped = 0;
+	bool tx_pages_mapped = false;
 	int npages = 0;
 #endif
 	int rc;
@@ -1809,14 +1810,14 @@ again:
 
 			if (!tx_pages_mapped) {
 				npages = kiblnd_map_tx_pages(tx, rd);
-				tx_pages_mapped = 1;
+				tx_pages_mapped = true;
 			}
 
 			pfmr = kib_fmr_pool_map(fpo->fmr.fpo_fmr_pool,
 						pages, npages, iov);
 			if (likely(!IS_ERR(pfmr))) {
 				fmr->fmr_key  = is_rx ? pfmr->fmr->rkey
-						      : pfmr->fmr->lkey;
+					: pfmr->fmr->lkey;
 				fmr->fmr_frd  = NULL;
 				fmr->fmr_pfmr = pfmr;
 				fmr->fmr_pool = fpo;
@@ -1837,9 +1838,10 @@ again:
 #endif
 				struct ib_mr *mr;
 
-				frd = list_first_entry(&fpo->fast_reg.fpo_pool_list,
-							struct kib_fast_reg_descriptor,
-							frd_list);
+				frd = list_first_entry(
+					&fpo->fast_reg.fpo_pool_list,
+					struct kib_fast_reg_descriptor,
+					frd_list);
 				list_del(&frd->frd_list);
 				spin_unlock(&fps->fps_lock);
 
@@ -1873,8 +1875,8 @@ again:
 						 rd->rd_nfrags, PAGE_SIZE);
 #endif /* HAVE_IB_MAP_MR_SG_5ARGS */
 				if (unlikely(n != rd->rd_nfrags)) {
-					CERROR("Failed to map mr %d/%d "
-					       "elements\n", n, rd->rd_nfrags);
+					CERROR("Failed to map mr %d/%d elements\n",
+					       n, rd->rd_nfrags);
 					return n < 0 ? n : -EINVAL;
 				}
 
@@ -1892,12 +1894,12 @@ again:
 #else /* HAVE_IB_MAP_MR_SG */
 				if (!tx_pages_mapped) {
 					npages = kiblnd_map_tx_pages(tx, rd);
-					tx_pages_mapped = 1;
+					tx_pages_mapped = true;
 				}
 
 				LASSERT(npages <= frpl->max_page_list_len);
 				memcpy(frpl->page_list, pages,
-					sizeof(*pages) * npages);
+				       sizeof(*pages) * npages);
 
 				/* Prepare FastReg WR */
 				wr = &frd->frd_fastreg_wr;
@@ -1912,10 +1914,10 @@ again:
 				wr->wr.wr.fast_reg.page_shift = PAGE_SHIFT;
 				wr->wr.wr.fast_reg.length = nob;
 				wr->wr.wr.fast_reg.rkey =
-						is_rx ? mr->rkey : mr->lkey;
+					is_rx ? mr->rkey : mr->lkey;
 				wr->wr.wr.fast_reg.access_flags =
-						(IB_ACCESS_LOCAL_WRITE |
-						 IB_ACCESS_REMOTE_WRITE);
+					(IB_ACCESS_LOCAL_WRITE |
+					 IB_ACCESS_REMOTE_WRITE);
 #endif /* HAVE_IB_MAP_MR_SG */
 
 				fmr->fmr_key  = is_rx ? mr->rkey : mr->lkey;
