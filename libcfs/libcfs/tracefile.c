@@ -1166,7 +1166,7 @@ end_loop:
 				break;
 			}
 		}
-		init_waitqueue_entry(&__wait, current);
+		init_wait(&__wait);
 		add_wait_queue(&tctl->tctl_waitq, &__wait);
 		schedule_timeout_interruptible(cfs_time_seconds(1));
 		remove_wait_queue(&tctl->tctl_waitq, &__wait);

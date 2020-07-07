@@ -886,7 +886,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 
 	cache_get(&rsip->h); /* take an extra ref */
 	init_waitqueue_head(&rsip->waitq);
-	init_waitqueue_entry(&wait, current);
+	init_wait(&wait);
 	add_wait_queue(&rsip->waitq, &wait);
 
 cache_check:

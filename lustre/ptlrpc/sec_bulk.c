@@ -581,7 +581,7 @@ again:
 							page_pools.epp_waitqlen;
 
 				set_current_state(TASK_UNINTERRUPTIBLE);
-				init_waitqueue_entry(&waitlink, current);
+				init_wait(&waitlink);
 				add_wait_queue(&page_pools.epp_waitq,
 					       &waitlink);
 
