@@ -53,7 +53,7 @@
 #define FMODE_EXEC 0
 #endif
 
-#ifndef VM_FAULT_RETRY
+#ifndef HAVE_VM_FAULT_RETRY
 #define VM_FAULT_RETRY 0
 #endif
 
