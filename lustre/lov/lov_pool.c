@@ -65,7 +65,7 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 	return strcmp(pool_name, pool->pool_name);
 }
 
-static const struct rhashtable_params pools_hash_params = {
+const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
 	.key_offset	= offsetof(struct pool_desc, pool_name),
 	.head_offset	= offsetof(struct pool_desc, pool_hash),
@@ -80,7 +80,7 @@ static void lov_pool_getref(struct pool_desc *pool)
 	atomic_inc(&pool->pool_refcount);
 }
 
-static void lov_pool_putref(struct pool_desc *pool)
+void lov_pool_putref(struct pool_desc *pool)
 {
 	CDEBUG(D_INFO, "pool %p\n", pool);
 	if (atomic_dec_and_test(&pool->pool_refcount)) {

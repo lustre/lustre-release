@@ -4560,6 +4560,53 @@ test_71b()
 }
 run_test 71b "Check SEL with quota pools"
 
+test_72()
+{
+	local limit=10  # 10M
+	local global_limit=50  # 50M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	$LFS setstripe $testfile -c 1 -i 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+	test_1_check_write $testfile "user" $limit
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+	echo "used $used"
+	[ $used -ge $limit ] || error "used($used) is less than limit($limit)"
+	# check that lfs quota -uv --pool prints only OST that
+	# was added in a pool
+	lfs quota -v -u quota_usr --pool $qpool $DIR | grep -v "OST0001" |
+		grep "OST\|MDT" && error "$qpool consists wrong targets"
+
+	cleanup_quota_test
+}
+run_test 72 "lfs quota --pool prints only pool's OSTs"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

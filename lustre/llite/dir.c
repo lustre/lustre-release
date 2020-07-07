@@ -1213,13 +1213,21 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 		if ((cmd == Q_GETQUOTA || cmd == LUSTRE_Q_GETQUOTAPOOL) &&
 		    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
 		    !oqctl->qc_dqblk.dqb_curspace) {
-                        struct obd_quotactl *oqctl_tmp;
+			struct obd_quotactl *oqctl_tmp;
+			int qctl_len = sizeof(*oqctl_tmp) + LOV_MAXPOOLNAME + 1;
 
-                        OBD_ALLOC_PTR(oqctl_tmp);
-                        if (oqctl_tmp == NULL)
-                                GOTO(out, rc = -ENOMEM);
+			OBD_ALLOC(oqctl_tmp, qctl_len);
+			if (oqctl_tmp == NULL)
+				GOTO(out, rc = -ENOMEM);
 
-                        oqctl_tmp->qc_cmd = Q_GETOQUOTA;
+			if (cmd == LUSTRE_Q_GETQUOTAPOOL) {
+				oqctl_tmp->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
+				memcpy(oqctl_tmp->qc_poolname,
+				       qctl->qc_poolname,
+				       LOV_MAXPOOLNAME + 1);
+			} else {
+				oqctl_tmp->qc_cmd = Q_GETOQUOTA;
+			}
                         oqctl_tmp->qc_id = oqctl->qc_id;
                         oqctl_tmp->qc_type = oqctl->qc_type;
 
@@ -1232,21 +1240,22 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                                 oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
                         }
 
-                        /* collect space & inode usage from MDTs */
-                        oqctl_tmp->qc_dqblk.dqb_curspace = 0;
-                        oqctl_tmp->qc_dqblk.dqb_curinodes = 0;
-                        rc = obd_quotactl(sbi->ll_md_exp, oqctl_tmp);
-                        if (!rc || rc == -EREMOTEIO) {
-                                oqctl->qc_dqblk.dqb_curspace +=
-                                        oqctl_tmp->qc_dqblk.dqb_curspace;
-                                oqctl->qc_dqblk.dqb_curinodes =
-                                        oqctl_tmp->qc_dqblk.dqb_curinodes;
-                                oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
-                        } else {
-                                oqctl->qc_dqblk.dqb_valid &= ~QIF_SPACE;
-                        }
+			/* collect space & inode usage from MDTs */
+			oqctl_tmp->qc_cmd = Q_GETOQUOTA;
+			oqctl_tmp->qc_dqblk.dqb_curspace = 0;
+			oqctl_tmp->qc_dqblk.dqb_curinodes = 0;
+			rc = obd_quotactl(sbi->ll_md_exp, oqctl_tmp);
+			if (!rc || rc == -EREMOTEIO) {
+				oqctl->qc_dqblk.dqb_curspace +=
+					oqctl_tmp->qc_dqblk.dqb_curspace;
+				oqctl->qc_dqblk.dqb_curinodes =
+					oqctl_tmp->qc_dqblk.dqb_curinodes;
+				oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
+			} else {
+				oqctl->qc_dqblk.dqb_valid &= ~QIF_SPACE;
+			}
 
-                        OBD_FREE_PTR(oqctl_tmp);
+			OBD_FREE(oqctl_tmp, qctl_len);
                 }
 out:
 		QCTL_COPY(qctl, oqctl);

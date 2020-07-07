@@ -1262,20 +1262,38 @@ __releases(&md->lsm_lock)
 }
 
 static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
-                        struct obd_quotactl *oqctl)
+			struct obd_quotactl *oqctl)
 {
-        struct lov_obd      *lov = &obd->u.lov;
-        struct lov_tgt_desc *tgt;
-        __u64                curspace = 0;
-        __u64                bhardlimit = 0;
-        int                  i, rc = 0;
-        ENTRY;
+	struct lov_obd *lov = &obd->u.lov;
+	struct lov_tgt_desc *tgt;
+	struct pool_desc *pool = NULL;
+	__u64 curspace = 0;
+	__u64 bhardlimit = 0;
+	int i, rc = 0;
 
+	ENTRY;
 	if (oqctl->qc_cmd != Q_GETOQUOTA &&
-	    oqctl->qc_cmd != LUSTRE_Q_SETQUOTA) {
-		CERROR("%s: bad quota opc %x for lov obd\n",
-		       obd->obd_name, oqctl->qc_cmd);
-		RETURN(-EFAULT);
+	    oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+	    oqctl->qc_cmd != LUSTRE_Q_GETQUOTAPOOL) {
+		rc = -EFAULT;
+		CERROR("%s: bad quota opc %x for lov obd: rc = %d\n",
+		       obd->obd_name, oqctl->qc_cmd, rc);
+		RETURN(rc);
+	}
+
+	if (oqctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) {
+		rcu_read_lock();
+		pool = rhashtable_lookup(&lov->lov_pools_hash_body,
+					 oqctl->qc_poolname,
+					 pools_hash_params);
+		if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+			pool = NULL;
+		rcu_read_unlock();
+		if (!pool)
+			RETURN(-ENOENT);
+		/* Set Q_GETOQUOTA back as targets report it's own
+		 * usage and doesn't care about pools */
+		oqctl->qc_cmd = Q_GETOQUOTA;
 	}
 
         /* for lov tgt */
@@ -1288,16 +1306,21 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
                 if (!tgt)
                         continue;
 
-                if (!tgt->ltd_active || tgt->ltd_reap) {
-                        if (oqctl->qc_cmd == Q_GETOQUOTA &&
-                            lov->lov_tgts[i]->ltd_activate) {
+		if (pool &&
+		    tgt_check_index(tgt->ltd_index, &pool->pool_obds))
+			continue;
+
+		if (!tgt->ltd_active || tgt->ltd_reap) {
+			if (oqctl->qc_cmd == Q_GETOQUOTA &&
+			    lov->lov_tgts[i]->ltd_activate) {
 				rc = -ENETDOWN;
-                                CERROR("ost %d is inactive\n", i);
-                        } else {
-                                CDEBUG(D_HA, "ost %d is inactive\n", i);
-                        }
-                        continue;
-                }
+				CERROR("%s: ost %d is inactive: rc = %d\n",
+				       obd->obd_name, i, rc);
+			} else {
+				CDEBUG(D_HA, "ost %d is inactive\n", i);
+			}
+			continue;
+		}
 
                 err = obd_quotactl(tgt->ltd_exp, oqctl);
                 if (err) {
@@ -1312,6 +1335,8 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
                 }
         }
 	lov_tgts_putref(obd);
+	if (pool)
+		lov_pool_putref(pool);
 
         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                 oqctl->qc_dqblk.dqb_curspace = curspace;

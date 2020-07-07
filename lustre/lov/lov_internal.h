@@ -388,4 +388,7 @@ static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
 		ol->ol_comp_id = 0;
 	}
 }
+
+extern const struct rhashtable_params pools_hash_params;
+extern void lov_pool_putref(struct pool_desc *pool);
 #endif

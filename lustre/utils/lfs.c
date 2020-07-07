@@ -7324,16 +7324,39 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 	}
 }
 
+static int tgt_name2index(const char *tgtname, unsigned int *idx)
+{
+	char *dash, *endp;
+
+	/* format is "lustre-OST0001" */
+	dash = memchr(tgtname, '-', LUSTRE_MAXFSNAME + 1);
+	if (!dash) {
+		fprintf(stderr, "wrong tgtname format '%s'\n", tgtname);
+		return -EINVAL;
+	}
+	dash += 4;
+
+	*idx = strtoul(dash, &endp, 16);
+	if (*idx > 0xffff) {
+		fprintf(stderr, "wrong index %s\n", tgtname);
+		return -ERANGE;
+	}
+
+	return 0;
+}
+
 static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 			   bool h, __u64 *total)
 {
-	int rc = 0, rc1 = 0, count = 0;
+	int rc = 0, rc1 = 0, count = 0, i = 0;
+	char **list = NULL, *buffer = NULL;
 	__u32 valid = qctl->qc_valid;
 
-	/*
-	 * TODO: for commands LUSTRE_Q_"S\|G"ETQUOTAPOOL we need
-	 * to go only through OSTs that belong to requested pool.
-	 */
+	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL && is_mdt)
+		return 0;
+
+	/* Is it correct for the case OST0000, OST0002, OST0003 -
+	 * we will ask OST0001 that is absent and won't ask OST0003? */
 	rc = llapi_get_obd_count(mnt, &count, is_mdt);
 	if (rc) {
 		fprintf(stderr, "can not get %s count: %s\n",
@@ -7341,7 +7364,39 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 		return rc;
 	}
 
-	for (qctl->qc_idx = 0; qctl->qc_idx < count; qctl->qc_idx++) {
+	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) {
+		char fname[PATH_MAX];
+		char fsname[LUSTRE_MAXFSNAME + 1];
+		int bufsize = sizeof(struct obd_uuid) * count;
+
+		rc = llapi_search_fsname(mnt, fsname);
+		if (rc) {
+			fprintf(stderr, "cannot get fsname for mountpoint %s\n",
+				mnt);
+			goto out;
+		}
+		buffer = malloc(bufsize + sizeof(*list) * count);
+		if (!buffer)
+			return -ENOMEM;
+		list = (char **)(buffer + bufsize);
+		snprintf(fname, PATH_MAX, "%s.%s", fsname, qctl->qc_poolname);
+		count = llapi_get_poolmembers(fname, list, count,
+					      buffer, bufsize);
+		if (count <= 0)
+			goto out;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) {
+			unsigned int index;
+
+			if (tgt_name2index(list[i], &index))
+				continue;
+			qctl->qc_idx = index;
+		} else {
+			qctl->qc_idx = i;
+		}
+
 		qctl->qc_valid = is_mdt ? QC_MDTIDX : QC_OSTIDX;
 		rc = llapi_quotactl(mnt, qctl);
 		if (rc) {
@@ -7364,6 +7419,8 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 				   qctl->qc_dqblk.dqb_bhardlimit;
 	}
 out:
+	if (buffer)
+		free(buffer);
 	qctl->qc_valid = valid;
 	return rc ? : rc1;
 }

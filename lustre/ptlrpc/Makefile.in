@@ -15,7 +15,8 @@ target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
 target_objs += $(TARGET)out_lib.o $(TARGET)update_trans.o
 target_objs += $(TARGET)update_records.o $(TARGET)update_recovery.o
 target_objs += $(TARGET)tgt_grant.o $(TARGET)tgt_fmd.o
-target_objs += $(TARGET)tgt_pool.o
+
+target_pool_objs := $(TARGET)tgt_pool.o
 
 ptlrpc_objs := client.o recover.o connection.o niobuf.o pack_generic.o
 ptlrpc_objs += events.o ptlrpc_module.o service.o pinger.o
@@ -29,7 +30,7 @@ nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 nodemap_objs += nodemap_storage.o
 
-ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs) $(TARGET)barrier.o
+ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs) $(TARGET)barrier.o $(target_pool_objs)
 @SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs)
 
 @GSS_TRUE@obj-m += gss/
