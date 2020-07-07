@@ -1659,50 +1659,50 @@ void ksocknal_write_callback(struct ksock_conn *conn)
 static const struct ksock_proto *
 ksocknal_parse_proto_version(struct ksock_hello_msg *hello)
 {
-        __u32   version = 0;
+	__u32   version = 0;
 
-        if (hello->kshm_magic == LNET_PROTO_MAGIC)
-                version = hello->kshm_version;
-        else if (hello->kshm_magic == __swab32(LNET_PROTO_MAGIC))
-                version = __swab32(hello->kshm_version);
+	if (hello->kshm_magic == LNET_PROTO_MAGIC)
+		version = hello->kshm_version;
+	else if (hello->kshm_magic == __swab32(LNET_PROTO_MAGIC))
+		version = __swab32(hello->kshm_version);
 
-        if (version != 0) {
+	if (version) {
 #if SOCKNAL_VERSION_DEBUG
-                if (*ksocknal_tunables.ksnd_protocol == 1)
-                        return NULL;
+		if (*ksocknal_tunables.ksnd_protocol == 1)
+			return NULL;
 
-                if (*ksocknal_tunables.ksnd_protocol == 2 &&
-                    version == KSOCK_PROTO_V3)
-                        return NULL;
+		if (*ksocknal_tunables.ksnd_protocol == 2 &&
+		    version == KSOCK_PROTO_V3)
+			return NULL;
 #endif
-                if (version == KSOCK_PROTO_V2)
-                        return &ksocknal_protocol_v2x;
+		if (version == KSOCK_PROTO_V2)
+			return &ksocknal_protocol_v2x;
 
-                if (version == KSOCK_PROTO_V3)
-                        return &ksocknal_protocol_v3x;
+		if (version == KSOCK_PROTO_V3)
+			return &ksocknal_protocol_v3x;
 
-                return NULL;
-        }
+		return NULL;
+	}
 
-        if (hello->kshm_magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC)) {
+	if (hello->kshm_magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC)) {
 		struct lnet_magicversion *hmv;
 
 		BUILD_BUG_ON(sizeof(struct lnet_magicversion) !=
-			 offsetof(struct ksock_hello_msg, kshm_src_nid));
+			     offsetof(struct ksock_hello_msg, kshm_src_nid));
 
 		hmv = (struct lnet_magicversion *)hello;
 
-                if (hmv->version_major == cpu_to_le16 (KSOCK_PROTO_V1_MAJOR) &&
-                    hmv->version_minor == cpu_to_le16 (KSOCK_PROTO_V1_MINOR))
-                        return &ksocknal_protocol_v1x;
-        }
+		if (hmv->version_major == cpu_to_le16 (KSOCK_PROTO_V1_MAJOR) &&
+		    hmv->version_minor == cpu_to_le16 (KSOCK_PROTO_V1_MINOR))
+			return &ksocknal_protocol_v1x;
+	}
 
-        return NULL;
+	return NULL;
 }
 
 int
 ksocknal_send_hello(struct lnet_ni *ni, struct ksock_conn *conn,
-		    lnet_nid_t peer_nid, struct ksock_hello_msg *hello)
+		    struct lnet_nid *peer_nid, struct ksock_hello_msg *hello)
 {
 	/* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
 	struct ksock_net *net = (struct ksock_net *)ni->ni_data;
@@ -1712,12 +1712,12 @@ ksocknal_send_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	/* rely on caller to hold a ref on socket so it wouldn't disappear */
 	LASSERT(conn->ksnc_proto != NULL);
 
-	hello->kshm_src_nid         = lnet_nid_to_nid4(&ni->ni_nid);
-	hello->kshm_dst_nid         = peer_nid;
-	hello->kshm_src_pid         = the_lnet.ln_pid;
+	hello->kshm_src_nid = ni->ni_nid;
+	hello->kshm_dst_nid = *peer_nid;
+	hello->kshm_src_pid = the_lnet.ln_pid;
 
 	hello->kshm_src_incarnation = net->ksnn_incarnation;
-	hello->kshm_ctype           = conn->ksnc_type;
+	hello->kshm_ctype = conn->ksnc_type;
 
 	return conn->ksnc_proto->pro_send_hello(conn, hello);
 }
@@ -1725,24 +1725,23 @@ ksocknal_send_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 static int
 ksocknal_invert_type(int type)
 {
-        switch (type)
-        {
-        case SOCKLND_CONN_ANY:
-        case SOCKLND_CONN_CONTROL:
-                return (type);
-        case SOCKLND_CONN_BULK_IN:
-                return SOCKLND_CONN_BULK_OUT;
-        case SOCKLND_CONN_BULK_OUT:
-                return SOCKLND_CONN_BULK_IN;
-        default:
-                return (SOCKLND_CONN_NONE);
-        }
+	switch (type) {
+	case SOCKLND_CONN_ANY:
+	case SOCKLND_CONN_CONTROL:
+		return (type);
+	case SOCKLND_CONN_BULK_IN:
+		return SOCKLND_CONN_BULK_OUT;
+	case SOCKLND_CONN_BULK_OUT:
+		return SOCKLND_CONN_BULK_IN;
+	default:
+		return (SOCKLND_CONN_NONE);
+	}
 }
 
 int
 ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		    struct ksock_hello_msg *hello,
-		    struct lnet_process_id *peerid,
+		    struct lnet_processid *peerid,
 		    __u64 *incarnation)
 {
 	/* Return < 0        fatal error
@@ -1750,13 +1749,13 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	 *        EALREADY   lost connection race
 	 *        EPROTO     protocol version mismatch
 	 */
-	struct socket        *sock = conn->ksnc_sock;
-	int                  active = (conn->ksnc_proto != NULL);
-	int                  timeout;
-	int                  proto_match;
-	int                  rc;
+	struct socket *sock = conn->ksnc_sock;
+	int active = (conn->ksnc_proto != NULL);
+	int timeout;
+	int proto_match;
+	int rc;
 	const struct ksock_proto *proto;
-	struct lnet_process_id recv_id;
+	struct lnet_processid recv_id;
 
 	/* socket type set on active connections - not set on passive */
 	LASSERT(!active == !(conn->ksnc_type != SOCKLND_CONN_NONE));
@@ -1806,8 +1805,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 				conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
 			hello->kshm_nips = 0;
-			ksocknal_send_hello(ni, conn,
-					    lnet_nid_to_nid4(&ni->ni_nid),
+			ksocknal_send_hello(ni, conn, &ni->ni_nid,
 					    hello);
 		}
 
@@ -1831,7 +1829,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 
 	*incarnation = hello->kshm_src_incarnation;
 
-	if (hello->kshm_src_nid == LNET_NID_ANY) {
+	if (LNET_NID_IS_ANY(&hello->kshm_src_nid)) {
 		CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY from %pIS\n",
 		       &conn->ksnc_peeraddr);
 		return -EPROTO;
@@ -1845,10 +1843,12 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 					   &conn->ksnc_peeraddr) |
 			LNET_PID_USERFLAG;
 		LASSERT(conn->ksnc_peeraddr.ss_family == AF_INET);
-		recv_id.nid = LNET_MKNID(
-			LNET_NID_NET(&ni->ni_nid),
-			ntohl(((struct sockaddr_in *)
-			       &conn->ksnc_peeraddr)->sin_addr.s_addr));
+		memset(&recv_id.nid, 0, sizeof(recv_id.nid));
+		recv_id.nid.nid_type = ni->ni_nid.nid_type;
+		recv_id.nid.nid_num = ni->ni_nid.nid_num;
+		recv_id.nid.nid_addr[0] =
+			((struct sockaddr_in *)
+			 &conn->ksnc_peeraddr)->sin_addr.s_addr;
 	} else {
 		recv_id.nid = hello->kshm_src_nid;
 		recv_id.pid = hello->kshm_src_pid;
@@ -1861,7 +1861,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		conn->ksnc_type = ksocknal_invert_type(hello->kshm_ctype);
 		if (conn->ksnc_type == SOCKLND_CONN_NONE) {
 			CERROR("Unexpected type %d from %s ip %pIS\n",
-			       hello->kshm_ctype, libcfs_id2str(*peerid),
+			       hello->kshm_ctype, libcfs_idstr(peerid),
 			       &conn->ksnc_peeraddr);
 			return -EPROTO;
 		}
@@ -1869,12 +1869,12 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	}
 
 	if (peerid->pid != recv_id.pid ||
-	    peerid->nid != recv_id.nid) {
+	    !nid_same(&peerid->nid,  &recv_id.nid)) {
 		LCONSOLE_ERROR_MSG(0x130,
 				   "Connected successfully to %s on host %pIS, but they claimed they were %s; please check your Lustre configuration.\n",
-				   libcfs_id2str(*peerid),
+				   libcfs_idstr(peerid),
 				   &conn->ksnc_peeraddr,
-				   libcfs_id2str(recv_id));
+				   libcfs_idstr(&recv_id));
 		return -EPROTO;
 	}
 
@@ -1885,7 +1885,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 
 	if (ksocknal_invert_type(hello->kshm_ctype) != conn->ksnc_type) {
 		CERROR("Mismatched types: me %d, %s ip %pIS %d\n",
-		       conn->ksnc_type, libcfs_id2str(*peerid),
+		       conn->ksnc_type, libcfs_idstr(peerid),
 		       &conn->ksnc_peeraddr,
 		       hello->kshm_ctype);
 		return -EPROTO;

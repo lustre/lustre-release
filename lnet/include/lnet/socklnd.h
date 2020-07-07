@@ -35,17 +35,31 @@
 #include <uapi/linux/lnet/socklnd.h>
 
 struct ksock_hello_msg {
-	__u32			kshm_magic;	/* magic number of socklnd message */
-	__u32			kshm_version;	/* version of socklnd message */
+	__u32			kshm_magic;	/* LNET_PROTO_MAGIC */
+	__u32			kshm_version;	/* KSOCK_PROTO_V* */
+	struct lnet_nid		kshm_src_nid;	/* sender's nid */
+	struct lnet_nid		kshm_dst_nid;	/* destination nid */
+	lnet_pid_t		kshm_src_pid;	/* sender's pid */
+	lnet_pid_t		kshm_dst_pid;	/* destination pid */
+	__u64			kshm_src_incarnation; /* sender's incarnation */
+	__u64			kshm_dst_incarnation; /* destination's incarnation */
+	__u32			kshm_ctype;	/* SOCKLND_CONN_* */
+	__u32			kshm_nips;	/* always sent as zero */
+	__u32			kshm_ips[0];	/* deprecated */
+} __packed;
+
+struct ksock_hello_msg_nid4 {
+	__u32			kshm_magic;	/* LNET_PROTO_MAGIC */
+	__u32			kshm_version;	/* KSOCK_PROTO_V* */
 	lnet_nid_t		kshm_src_nid;	/* sender's nid */
 	lnet_nid_t		kshm_dst_nid;	/* destination nid */
 	lnet_pid_t		kshm_src_pid;	/* sender's pid */
 	lnet_pid_t		kshm_dst_pid;	/* destination pid */
 	__u64			kshm_src_incarnation; /* sender's incarnation */
 	__u64			kshm_dst_incarnation; /* destination's incarnation */
-	__u32			kshm_ctype;	/* connection type */
-	__u32			kshm_nips;	/* # IP addrs */
-	__u32			kshm_ips[0];	/* IP addrs */
+	__u32			kshm_ctype;	/* SOCKLND_CONN_* */
+	__u32			kshm_nips;	/* sent as zero */
+	__u32			kshm_ips[0];	/* deprecated */
 } __packed;
 
 struct ksock_msg_hdr {

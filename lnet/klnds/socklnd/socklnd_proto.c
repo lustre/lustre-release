@@ -488,12 +488,12 @@ ksocknal_send_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello)
 			hmv->magic = LNET_PROTO_MAGIC;
 	}
 
-        hdr->src_nid        = cpu_to_le64 (hello->kshm_src_nid);
-        hdr->src_pid        = cpu_to_le32 (hello->kshm_src_pid);
-        hdr->type           = cpu_to_le32 (LNET_MSG_HELLO);
-        hdr->payload_length = cpu_to_le32 (hello->kshm_nips * sizeof(__u32));
-        hdr->msg.hello.type = cpu_to_le32 (hello->kshm_ctype);
-        hdr->msg.hello.incarnation = cpu_to_le64 (hello->kshm_src_incarnation);
+	hdr->src_nid        = cpu_to_le64(lnet_nid_to_nid4(&hello->kshm_src_nid));
+	hdr->src_pid        = cpu_to_le32 (hello->kshm_src_pid);
+	hdr->type           = cpu_to_le32 (LNET_MSG_HELLO);
+	hdr->payload_length = cpu_to_le32 (hello->kshm_nips * sizeof(__u32));
+	hdr->msg.hello.type = cpu_to_le32 (hello->kshm_ctype);
+	hdr->msg.hello.incarnation = cpu_to_le64 (hello->kshm_src_incarnation);
 
 	rc = lnet_sock_write(sock, hdr, sizeof(*hdr), lnet_acceptor_timeout());
 	if (rc != 0) {
@@ -502,12 +502,11 @@ ksocknal_send_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello)
 		goto out;
 	}
 
-        if (hello->kshm_nips == 0)
-                goto out;
+	if (hello->kshm_nips == 0)
+		goto out;
 
-        for (i = 0; i < (int) hello->kshm_nips; i++) {
-                hello->kshm_ips[i] = __cpu_to_le32 (hello->kshm_ips[i]);
-        }
+	for (i = 0; i < (int) hello->kshm_nips; i++)
+		hello->kshm_ips[i] = __cpu_to_le32 (hello->kshm_ips[i]);
 
 	rc = lnet_sock_write(sock, hello->kshm_ips,
 			     hello->kshm_nips * sizeof(__u32),
@@ -516,11 +515,11 @@ ksocknal_send_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello)
 		CNETERR("Error %d sending HELLO payload (%d) to %pISp\n",
 			rc, hello->kshm_nips,
 			&conn->ksnc_peeraddr);
-        }
+	}
 out:
-        LIBCFS_FREE(hdr, sizeof(*hdr));
+	LIBCFS_FREE(hdr, sizeof(*hdr));
 
-        return rc;
+	return rc;
 }
 
 static int
@@ -528,27 +527,55 @@ ksocknal_send_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello)
 {
 	struct socket *sock = conn->ksnc_sock;
 	int rc;
+	struct ksock_hello_msg_nid4 *hello4;
 
-        hello->kshm_magic   = LNET_PROTO_MAGIC;
-        hello->kshm_version = conn->ksnc_proto->pro_version;
+	CFS_ALLOC_PTR(hello4);
+	if (!hello4) {
+		CERROR("Can't allocate struct ksock_hello_msg_nid4\n");
+		return -ENOMEM;
+	}
+
+	hello->kshm_magic = LNET_PROTO_MAGIC;
+	hello->kshm_version = conn->ksnc_proto->pro_version;
+
+	hello4->kshm_magic = LNET_PROTO_MAGIC;
+	hello4->kshm_version = conn->ksnc_proto->pro_version;
+	hello4->kshm_src_nid = lnet_nid_to_nid4(&hello->kshm_src_nid);
+	hello4->kshm_dst_nid = lnet_nid_to_nid4(&hello->kshm_dst_nid);
+	hello4->kshm_src_pid = hello->kshm_src_pid;
+	hello4->kshm_dst_pid = hello->kshm_dst_pid;
+	hello4->kshm_src_incarnation = hello->kshm_src_incarnation;
+	hello4->kshm_dst_incarnation = hello->kshm_dst_incarnation;
+	hello4->kshm_ctype = hello->kshm_ctype;
+	hello4->kshm_nips = hello->kshm_nips;
 
 	if (the_lnet.ln_testprotocompat) {
 		/* single-shot proto check */
 		if (test_and_clear_bit(0, &the_lnet.ln_testprotocompat))
 			hello->kshm_version++;   /* just different! */
 	}
+	hello4->kshm_magic = LNET_PROTO_MAGIC;
+	hello4->kshm_version = hello->kshm_version;
+	hello4->kshm_src_nid = lnet_nid_to_nid4(&hello->kshm_src_nid);
+	hello4->kshm_dst_nid = lnet_nid_to_nid4(&hello->kshm_dst_nid);
+	hello4->kshm_src_pid = hello->kshm_src_pid;
+	hello4->kshm_dst_pid = hello->kshm_dst_pid;
+	hello4->kshm_src_incarnation = hello->kshm_src_incarnation;
+	hello4->kshm_dst_incarnation = hello->kshm_dst_incarnation;
+	hello4->kshm_ctype = hello->kshm_ctype;
+	hello4->kshm_nips = hello->kshm_nips;
 
-	rc = lnet_sock_write(sock, hello, offsetof(struct ksock_hello_msg, kshm_ips),
-                               lnet_acceptor_timeout());
-
-	if (rc != 0) {
+	rc = lnet_sock_write(sock, hello4, sizeof(*hello4),
+			     lnet_acceptor_timeout());
+	CFS_FREE_PTR(hello4);
+	if (rc) {
 		CNETERR("Error %d sending HELLO hdr to %pISp\n",
 			rc, &conn->ksnc_peeraddr);
 		return rc;
 	}
 
-        if (hello->kshm_nips == 0)
-                return 0;
+	if (hello->kshm_nips == 0)
+		return 0;
 
 	rc = lnet_sock_write(sock, hello->kshm_ips,
 			     hello->kshm_nips * sizeof(__u32),
@@ -571,16 +598,16 @@ ksocknal_recv_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 	int rc;
 	int i;
 
-	LIBCFS_ALLOC(hdr, sizeof(*hdr));
-	if (hdr == NULL) {
+	CFS_ALLOC_PTR(hdr);
+	if (!hdr) {
 		CERROR("Can't allocate struct lnet_hdr_nid4\n");
 		return -ENOMEM;
 	}
 
 	rc = lnet_sock_read(sock, &hdr->src_nid,
-			      sizeof(*hdr) - offsetof(struct _lnet_hdr_nid4,
-						      src_nid),
-			      timeout);
+			    sizeof(*hdr) - offsetof(struct _lnet_hdr_nid4,
+						    src_nid),
+			    timeout);
 	if (rc != 0) {
 		CERROR("Error %d reading rest of HELLO hdr from %pIS\n",
 		       rc, &conn->ksnc_peeraddr);
@@ -597,12 +624,11 @@ ksocknal_recv_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 		goto out;
 	}
 
-        hello->kshm_src_nid         = le64_to_cpu (hdr->src_nid);
-        hello->kshm_src_pid         = le32_to_cpu (hdr->src_pid);
-        hello->kshm_src_incarnation = le64_to_cpu (hdr->msg.hello.incarnation);
-        hello->kshm_ctype           = le32_to_cpu (hdr->msg.hello.type);
-        hello->kshm_nips            = le32_to_cpu (hdr->payload_length) /
-                                         sizeof (__u32);
+	lnet_nid4_to_nid(le64_to_cpu(hdr->src_nid), &hello->kshm_src_nid);
+	hello->kshm_src_pid = le32_to_cpu(hdr->src_pid);
+	hello->kshm_src_incarnation = le64_to_cpu(hdr->msg.hello.incarnation);
+	hello->kshm_ctype = le32_to_cpu(hdr->msg.hello.type);
+	hello->kshm_nips = le32_to_cpu(hdr->payload_length) / sizeof(__u32);
 
 	if (hello->kshm_nips > LNET_INTERFACES_NUM) {
 		CERROR("Bad nips %d from ip %pIS\n",
@@ -611,68 +637,80 @@ ksocknal_recv_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 		goto out;
 	}
 
-        if (hello->kshm_nips == 0)
-                goto out;
+	if (hello->kshm_nips == 0)
+		goto out;
 
 	rc = lnet_sock_read(sock, hello->kshm_ips,
-                              hello->kshm_nips * sizeof(__u32), timeout);
-        if (rc != 0) {
+			    hello->kshm_nips * sizeof(__u32), timeout);
+	if (rc != 0) {
 		CERROR("Error %d reading IPs from ip %pIS\n",
 		       rc, &conn->ksnc_peeraddr);
 		LASSERT(rc < 0 && rc != -EALREADY);
-                goto out;
-        }
+		goto out;
+	}
 
-        for (i = 0; i < (int) hello->kshm_nips; i++) {
-                hello->kshm_ips[i] = __le32_to_cpu(hello->kshm_ips[i]);
+	for (i = 0; i < (int) hello->kshm_nips; i++) {
+		hello->kshm_ips[i] = __le32_to_cpu(hello->kshm_ips[i]);
 
-                if (hello->kshm_ips[i] == 0) {
+		if (hello->kshm_ips[i] == 0) {
 			CERROR("Zero IP[%d] from ip %pIS\n",
 			       i, &conn->ksnc_peeraddr);
-                        rc = -EPROTO;
-                        break;
-                }
-        }
+			rc = -EPROTO;
+			break;
+		}
+	}
 out:
-        LIBCFS_FREE(hdr, sizeof(*hdr));
+	CFS_FREE_PTR(hdr);
 
-        return rc;
+	return rc;
 }
 
 static int
 ksocknal_recv_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 		       int timeout)
 {
-	struct socket	  *sock = conn->ksnc_sock;
-        int                rc;
-        int                i;
+	struct socket *sock = conn->ksnc_sock;
+	struct ksock_hello_msg_nid4 *hello4 = (void *)hello;
+	int rc;
+	int i;
 
-        if (hello->kshm_magic == LNET_PROTO_MAGIC)
-                conn->ksnc_flip = 0;
-        else
-                conn->ksnc_flip = 1;
+	if (hello->kshm_magic == LNET_PROTO_MAGIC)
+		conn->ksnc_flip = 0;
+	else
+		conn->ksnc_flip = 1;
 
-	rc = lnet_sock_read(sock, &hello->kshm_src_nid,
-			      offsetof(struct ksock_hello_msg, kshm_ips) -
-				       offsetof(struct ksock_hello_msg, kshm_src_nid),
-                              timeout);
-        if (rc != 0) {
+	rc = lnet_sock_read(sock, &hello4->kshm_src_nid,
+			    offsetof(struct ksock_hello_msg_nid4, kshm_ips) -
+			    offsetof(struct ksock_hello_msg_nid4, kshm_src_nid),
+			    timeout);
+	if (rc != 0) {
 		CERROR("Error %d reading HELLO from %pIS\n",
 		       rc, &conn->ksnc_peeraddr);
 		LASSERT(rc < 0 && rc != -EALREADY);
-                return rc;
-        }
+		return rc;
+	}
 
-        if (conn->ksnc_flip) {
-                __swab32s(&hello->kshm_src_pid);
-                __swab64s(&hello->kshm_src_nid);
-                __swab32s(&hello->kshm_dst_pid);
-                __swab64s(&hello->kshm_dst_nid);
-                __swab64s(&hello->kshm_src_incarnation);
-                __swab64s(&hello->kshm_dst_incarnation);
-                __swab32s(&hello->kshm_ctype);
-                __swab32s(&hello->kshm_nips);
-        }
+	if (conn->ksnc_flip) {
+		/* These must be copied in reverse order to avoid corruption. */
+		hello->kshm_nips = __swab32(hello4->kshm_nips);
+		hello->kshm_ctype = __swab32(hello4->kshm_ctype);
+		hello->kshm_dst_incarnation = __swab64(hello4->kshm_dst_incarnation);
+		hello->kshm_src_incarnation = __swab64(hello4->kshm_src_incarnation);
+		hello->kshm_dst_pid = __swab32(hello4->kshm_dst_pid);
+		hello->kshm_src_pid = __swab32(hello4->kshm_src_pid);
+		lnet_nid4_to_nid(hello4->kshm_dst_nid, &hello->kshm_dst_nid);
+		lnet_nid4_to_nid(hello4->kshm_src_nid, &hello->kshm_src_nid);
+	} else {
+		/* These must be copied in reverse order to avoid corruption. */
+		hello->kshm_nips = hello4->kshm_nips;
+		hello->kshm_ctype = hello4->kshm_ctype;
+		hello->kshm_dst_incarnation = hello4->kshm_dst_incarnation;
+		hello->kshm_src_incarnation = hello4->kshm_src_incarnation;
+		hello->kshm_dst_pid = hello4->kshm_dst_pid;
+		hello->kshm_src_pid = hello4->kshm_src_pid;
+		lnet_nid4_to_nid(hello4->kshm_dst_nid, &hello->kshm_dst_nid);
+		lnet_nid4_to_nid(hello4->kshm_src_nid, &hello->kshm_src_nid);
+	}
 
 	if (hello->kshm_nips > LNET_INTERFACES_NUM) {
 		CERROR("Bad nips %d from ip %pIS\n",
@@ -680,8 +718,8 @@ ksocknal_recv_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 		return -EPROTO;
 	}
 
-        if (hello->kshm_nips == 0)
-                return 0;
+	if (hello->kshm_nips == 0)
+		return 0;
 
 	rc = lnet_sock_read(sock, hello->kshm_ips,
 			    hello->kshm_nips * sizeof(__u32), timeout);
@@ -692,18 +730,18 @@ ksocknal_recv_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello,
 		return rc;
 	}
 
-        for (i = 0; i < (int) hello->kshm_nips; i++) {
-                if (conn->ksnc_flip)
-                        __swab32s(&hello->kshm_ips[i]);
+	for (i = 0; i < (int) hello->kshm_nips; i++) {
+		if (conn->ksnc_flip)
+			__swab32s(&hello->kshm_ips[i]);
 
 		if (hello->kshm_ips[i] == 0) {
 			CERROR("Zero IP[%d] from ip %pIS\n",
 			       i, &conn->ksnc_peeraddr);
 			return -EPROTO;
 		}
-        }
+	}
 
-        return 0;
+	return 0;
 }
 
 static void
