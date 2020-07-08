@@ -2787,6 +2787,7 @@ test_38() {
 	local srvsz=0
 	local filesz
 	local bsize
+	local pagesz=$(getconf PAGE_SIZE)
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -2806,6 +2807,7 @@ test_38() {
 	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$blksz \
 		oflag=seek_bytes conv=fsync
 
+	blksz=$(($blksz > $pagesz ? $blksz : $pagesz))
 	# check that in-memory representation of file is correct
 	bsize=$(stat --format=%B $testfile)
 	filesz=$(stat --format=%b $testfile)
@@ -3153,7 +3155,7 @@ test_43() {
 
 	# create file
 	tr '\0' '1' < /dev/zero |
-		dd of=$tmpfile bs=$pagesz count=1 conv=fsync
+		dd of=$tmpfile bs=1 count=$pagesz conv=fsync
 	$LFS setstripe -c1 -i0 -S 256k $testfile
 	cp $tmpfile $testfile
 
@@ -3431,7 +3433,7 @@ test_48a() {
 
 	# create file, 4 x PAGE_SIZE long
 	tr '\0' '1' < /dev/zero |
-		dd of=$tmpfile bs=4x$pagesz count=1 conv=fsync
+		dd of=$tmpfile bs=1 count=4x$pagesz conv=fsync
 	$LFS setstripe -c1 -i0 $testfile
 	cp $tmpfile $testfile
 	echo "abc" > $tmpfile2
@@ -3842,7 +3844,7 @@ test_52() {
 		error "mirror 2 is corrupted"
 
 	tr '\0' '2' < /dev/zero |
-	    dd of=$tmpfile bs=9000 count=1 conv=fsync
+	    dd of=$tmpfile bs=1 count=9000 conv=fsync
 
 	$LFS mirror write -N 1 -i $tmpfile $testfile ||
 		error "could not write to mirror 1"
@@ -3853,6 +3855,117 @@ test_52() {
 	rm -f $tmpfile $mirror1 $mirror2
 }
 run_test 52 "Mirrored encrypted file"
+
+test_53() {
+	local testfile=$DIR/$tdir/$tfile
+	local testfile2=$DIR2/$tdir/$tfile
+	local tmpfile=$TMP/$tfile.tmp
+	local resfile=$TMP/$tfile.res
+	local pagesz
+	local filemd5
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	pagesz=$(getconf PAGESIZE)
+	[[ $pagesz == 65536 ]] || skip "Need 64K PAGE_SIZE client"
+
+	do_node $mds1_HOST \
+		"mount.lustre --help |& grep -q 'test_dummy_encryption:'" ||
+			skip "need dummy encryption support on MDS client mount"
+
+	# this test is probably useless now, but may turn out to be useful when
+	# Lustre supports servers with PAGE_SIZE != 4KB
+	pagesz=$(do_node $mds1_HOST getconf PAGESIZE)
+	[[ $pagesz == 4096 ]] || skip "Need 4K PAGE_SIZE MDS client"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	stack_trap "zconf_umount $mds1_HOST $MOUNT2" EXIT
+	setup_for_enc_tests
+
+	$LFS setstripe -c1 -i0 $testfile
+
+	# write from 1st client
+	cat /dev/urandom | tr -dc 'a-zA-Z0-9' |
+		dd of=$tmpfile bs=$((pagesz+3)) count=2 conv=fsync
+	dd if=$tmpfile of=$testfile bs=$((pagesz+3)) count=2 conv=fsync ||
+		error "could not write to $testfile (1)"
+
+	# read from 2nd client
+	# mount and IOs must be done in the same shell session, otherwise
+	# encryption key in session keyring is missing
+	do_node $mds1_HOST "mkdir -p $MOUNT2"
+	do_node $mds1_HOST \
+		"$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
+		 $MGSNID:/$FSNAME $MOUNT2 && \
+		 dd if=$testfile2 of=$resfile bs=$((pagesz+3)) count=2" ||
+		error "could not read from $testfile2 (1)"
+
+	# compare
+	filemd5=$(do_node $mds1_HOST md5sum $resfile | awk '{print $1}')
+	[ $filemd5 = $(md5sum $tmpfile | awk '{print $1}') ] ||
+		error "file is corrupted (1)"
+	do_node $mds1_HOST rm -f $resfile
+	cancel_lru_locks
+
+	# truncate from 2nd client
+	$TRUNCATE $tmpfile $((pagesz+3))
+	zconf_umount $mds1_HOST $MOUNT2 ||
+		error "umount $mds1_HOST $MOUNT2 failed (1)"
+	do_node $mds1_HOST "$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
+			   $MGSNID:/$FSNAME $MOUNT2 && \
+			   $TRUNCATE $testfile2 $((pagesz+3))" ||
+		error "could not truncate $testfile2 (1)"
+
+	# compare
+	cmp -bl $tmpfile $testfile ||
+		error "file is corrupted (2)"
+	rm -f $tmpfile $testfile
+	cancel_lru_locks
+	zconf_umount $mds1_HOST $MOUNT2 ||
+		error "umount $mds1_HOST $MOUNT2 failed (2)"
+
+	# do conversly
+	do_node $mds1_HOST \
+	      dd if=/dev/urandom of=$tmpfile bs=$((pagesz+3)) count=2 conv=fsync
+	# write from 2nd client
+	do_node $mds1_HOST \
+	   "$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
+	    $MGSNID:/$FSNAME $MOUNT2 && \
+	    dd if=$tmpfile of=$testfile2 bs=$((pagesz+3)) count=2 conv=fsync" ||
+		error "could not write to $testfile2 (2)"
+
+	# read from 1st client
+	dd if=$testfile of=$resfile bs=$((pagesz+3)) count=2 ||
+		error "could not read from $testfile (2)"
+
+	# compare
+	filemd5=$(do_node $mds1_HOST md5sum -b $tmpfile | awk '{print $1}')
+	[ $filemd5 = $(md5sum -b $resfile | awk '{print $1}') ] ||
+		error "file is corrupted (3)"
+	rm -f $resfile
+	cancel_lru_locks
+
+	# truncate from 1st client
+	do_node $mds1_HOST "$TRUNCATE $tmpfile $((pagesz+3))"
+	$TRUNCATE $testfile $((pagesz+3)) ||
+		error "could not truncate $testfile (2)"
+
+	# compare
+	zconf_umount $mds1_HOST $MOUNT2 ||
+		error "umount $mds1_HOST $MOUNT2 failed (3)"
+	do_node $mds1_HOST "$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
+			   $MGSNID:/$FSNAME $MOUNT2 && \
+			   cmp -bl $tmpfile $testfile2" ||
+		error "file is corrupted (4)"
+
+	do_node $mds1_HOST rm -f $tmpfile
+	rm -f $tmpfile
+}
+run_test 53 "Mixed PAGE_SIZE clients"
 
 log "cleanup: ======================================================"
 

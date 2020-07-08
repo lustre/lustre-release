@@ -440,13 +440,25 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 		if (!llcrypt_has_encryption_key(inode))
 			CDEBUG(D_SEC, "no enc key for "DFID"\n",
 			       PFID(ll_inode2fid(inode)));
-		/* decrypt only if page is not empty */
-		else if (memcmp(page_address(page),
-				page_address(ZERO_PAGE(0)),
-				PAGE_SIZE) != 0)
-			rc = llcrypt_decrypt_pagecache_blocks(page,
-							      PAGE_SIZE,
-							      0);
+		else {
+			unsigned int offs = 0;
+
+			while (offs < PAGE_SIZE) {
+				/* decrypt only if page is not empty */
+				if (memcmp(page_address(page) + offs,
+					   page_address(ZERO_PAGE(0)),
+					   LUSTRE_ENCRYPTION_UNIT_SIZE) == 0)
+					break;
+
+				rc = llcrypt_decrypt_pagecache_blocks(page,
+						    LUSTRE_ENCRYPTION_UNIT_SIZE,
+								      offs);
+				if (rc)
+					break;
+
+				offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
+			}
+		}
 	}
 	unlock_page(page);
 
