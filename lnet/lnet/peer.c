@@ -3081,6 +3081,8 @@ __must_hold(&lp->lp_lock)
 	lp->lp_state &= ~(LNET_PEER_DISCOVERING |
 			  LNET_PEER_REDISCOVER);
 
+	lp->lp_dc_error = 0;
+
 	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
 
 	return 0;
