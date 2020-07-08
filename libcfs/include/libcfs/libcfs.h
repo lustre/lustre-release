@@ -88,8 +88,6 @@ static inline int notifier_from_ioctl_errno(int err)
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
-#define container_of0(ptr, type, member) container_of_safe(ptr, type, member)
-
 extern struct workqueue_struct *cfs_rehash_wq;
 
 struct lnet_debugfs_symlink_def {

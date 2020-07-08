@@ -2961,9 +2961,9 @@ static int osd_transfer_project(struct inode *inode, __u32 projid,
 
 	raw_inode = ldiskfs_raw_inode(&iloc);
 	if (!LDISKFS_FITS_IN_INODE(raw_inode, ei, i_projid)) {
-		struct osd_thandle *oh =
-				container_of0(handle, struct osd_thandle,
-					      ot_super);
+		struct osd_thandle *oh = container_of(handle,
+						      struct osd_thandle,
+						      ot_super);
 		/**
 		 * try to expand inode size automatically.
 		 */
