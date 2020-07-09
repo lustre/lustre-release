@@ -3491,8 +3491,7 @@ __must_hold(&lp->lp_lock)
 
 	nnis = max(lp->lp_data_nnis, LNET_INTERFACES_MIN);
 
-	rc = lnet_send_ping(lnet_nid_to_nid4(&lp->lp_primary_nid),
-			    &lp->lp_ping_mdh, nnis, lp,
+	rc = lnet_send_ping(&lp->lp_primary_nid, &lp->lp_ping_mdh, nnis, lp,
 			    the_lnet.ln_dc_handler, false);
 
 	/*
