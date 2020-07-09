@@ -4287,11 +4287,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		spin_lock(&ni->ni_net->net_lock);
 		ni->ni_net->net_last_alive = ktime_get_real_seconds();
 		spin_unlock(&ni->ni_net->net_lock);
-		if (ni->ni_status != NULL &&
-		    ni->ni_status->ns_status == LNET_NI_STATUS_DOWN) {
-			ni->ni_status->ns_status = LNET_NI_STATUS_UP;
-			push = true;
-		}
+		push = lnet_ni_set_status_locked(ni, LNET_NI_STATUS_UP);
 		lnet_ni_unlock(ni);
 	}
 

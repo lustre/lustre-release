@@ -1049,15 +1049,9 @@ lnet_net_set_status_locked(struct lnet_net *net, __u32 status)
 	struct lnet_ni *ni;
 	bool update = false;
 
-	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-		lnet_ni_lock(ni);
-		if (ni->ni_status &&
-		    ni->ni_status->ns_status != status) {
-		    ni->ni_status->ns_status = status;
-		    update = true;
-		}
-		lnet_ni_unlock(ni);
-	}
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
+		if (lnet_ni_set_status(ni, status))
+			update = true;
 
 	return update;
 }
@@ -1066,6 +1060,7 @@ static bool
 lnet_update_ni_status_locked(void)
 {
 	struct lnet_net *net;
+	struct lnet_ni *ni;
 	bool push = false;
 	time64_t now;
 	time64_t timeout;
@@ -1080,13 +1075,13 @@ lnet_update_ni_status_locked(void)
 			continue;
 
 		if (now < net->net_last_alive + timeout)
-			continue;
+			goto check_ni_fatal;
 
 		spin_lock(&net->net_lock);
 		/* re-check with lock */
 		if (now < net->net_last_alive + timeout) {
 			spin_unlock(&net->net_lock);
-			continue;
+			goto check_ni_fatal;
 		}
 		spin_unlock(&net->net_lock);
 
@@ -1095,7 +1090,25 @@ lnet_update_ni_status_locked(void)
 		 * timeout on any of its constituent NIs, then mark all
 		 * the NIs down.
 		 */
-		push = lnet_net_set_status_locked(net, LNET_NI_STATUS_DOWN);
+		if (lnet_net_set_status_locked(net, LNET_NI_STATUS_DOWN)) {
+			push = true;
+			continue;
+		}
+
+check_ni_fatal:
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			/* lnet_ni_set_status() will perform the same check of
+			 * ni_status while holding the ni lock. We can safely
+			 * check ni_status without that lock because it is only
+			 * written to under net_lock/EX and our caller is
+			 * holding a net lock.
+			 */
+			if (atomic_read(&ni->ni_fatal_error_on) &&
+			    ni->ni_status &&
+			    ni->ni_status->ns_status != LNET_NI_STATUS_DOWN &&
+			    lnet_ni_set_status(ni, LNET_NI_STATUS_DOWN))
+				push = true;
+		}
 	}
 
 	return push;
