@@ -4566,7 +4566,7 @@ EXPORT_SYMBOL(LNetDebugPeer);
  * \retval true		If peer NID is on the local node.
  * \retval false	If peer NID is not on the local node.
  */
-bool LNetIsPeerLocal(lnet_nid_t nid)
+bool LNetIsPeerLocal(struct lnet_nid *nid)
 {
 	struct lnet_net *net;
 	struct lnet_ni *ni;
@@ -4575,7 +4575,7 @@ bool LNetIsPeerLocal(lnet_nid_t nid)
 	cpt = lnet_net_lock_current();
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
-			if (lnet_nid_to_nid4(&ni->ni_nid) == nid) {
+			if (nid_same(&ni->ni_nid, nid)) {
 				lnet_net_unlock(cpt);
 				return true;
 			}

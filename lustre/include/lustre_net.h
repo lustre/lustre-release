@@ -1971,7 +1971,7 @@ static inline bool ptlrpc_connection_is_local(struct ptlrpc_connection *conn)
 	if (nid_same(&conn->c_peer.nid, &conn->c_self))
 		return true;
 
-	RETURN(LNetIsPeerLocal(lnet_nid_to_nid4(&conn->c_peer.nid)));
+	RETURN(LNetIsPeerLocal(&conn->c_peer.nid));
 }
 
 /* ptlrpc/niobuf.c */
