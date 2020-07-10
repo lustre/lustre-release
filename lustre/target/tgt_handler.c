@@ -1983,7 +1983,7 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 			return -EINVAL;
 
 		ptr = kmap_atomic(local[i].lnb_page);
-		memcpy(buf + off, ptr, len);
+		memcpy(buf, ptr + off, len);
 		kunmap_atomic(ptr);
 		buf += len;
 		size -= len;
