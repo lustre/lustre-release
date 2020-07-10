@@ -309,7 +309,7 @@ bool lnet_is_route_alive(struct lnet_route *route)
 	 * enabled.
 	 */
 	if (lnet_is_discovery_disabled(gw))
-		return route->lr_alive;
+		return atomic_read(&route->lr_alive) == 1;
 
 	/*
 	 * check the gateway's interfaces on the local network
@@ -401,21 +401,6 @@ lnet_set_route_hop_type(struct lnet_peer *gw, struct lnet_route *route)
 	}
 	route->lr_single_hop = single_hop;
 	lnet_check_route_inconsistency(route);
-}
-
-/* Must hold net_lock/EX */
-static inline void
-lnet_set_route_aliveness(struct lnet_route *route, bool alive)
-{
-	/* Log when there's a state change */
-	if (route->lr_alive != alive) {
-		CERROR("route to %s through %s has gone from %s to %s\n",
-		       libcfs_net2str(route->lr_net),
-		       libcfs_nid2str(route->lr_gateway->lp_primary_nid),
-		       (route->lr_alive) ? "up" : "down",
-		       alive ? "up" : "down");
-		route->lr_alive = alive;
-	}
 }
 
 /* Must hold net_lock/EX */
@@ -726,6 +711,10 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	route->lr_nid = gateway;
 	route->lr_priority = priority;
 	route->lr_hops = hops;
+	if (lnet_peers_start_down())
+		atomic_set(&route->lr_alive, 0);
+	else
+		atomic_set(&route->lr_alive, 1);
 
 	lnet_net_lock(LNET_LOCK_EX);
 
@@ -1795,14 +1784,8 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 		 */
 		if (lnet_is_discovery_disabled(lp)) {
 			list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
-				if (route->lr_nid == lpni->lpni_nid &&
-				    route->lr_alive != alive) {
-					lnet_net_unlock(0);
-					lnet_net_lock(LNET_LOCK_EX);
+				if (route->lr_nid == lpni->lpni_nid)
 					lnet_set_route_aliveness(route, alive);
-					lnet_net_unlock(LNET_LOCK_EX);
-					lnet_net_lock(0);
-				}
 			}
 		}
 	}

@@ -4626,7 +4626,12 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		goto drop;
 	}
 
-	if (lnet_drop_asym_route && for_me &&
+	/* If this message was forwarded to us from a router then we may need
+	 * to update router aliveness or check for an asymmetrical route
+	 * (or both)
+	 */
+	if (((lnet_drop_asym_route && for_me) ||
+	     !lpni->lpni_peer_net->lpn_peer->lp_alive) &&
 	    LNET_NIDNET(src_nid) != LNET_NIDNET(from_nid)) {
 		__u32 src_net_id = LNET_NIDNET(src_nid);
 		struct lnet_peer *gw = lpni->lpni_peer_net->lpn_peer;
@@ -4636,10 +4641,24 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		list_for_each_entry(route, &gw->lp_routes, lr_gwlist) {
 			if (route->lr_net == src_net_id) {
 				found = true;
-				break;
+				/* If we're transitioning the gateway from
+				 * dead -> alive, and discovery is disabled
+				 * locally or on the gateway, then we need to
+				 * update the cached route aliveness for each
+				 * route to the src_nid's net.
+				 *
+				 * Otherwise, we're only checking for
+				 * symmetrical route, and we can break the
+				 * loop
+				 */
+				if (!gw->lp_alive &&
+				    lnet_is_discovery_disabled(gw))
+					lnet_set_route_aliveness(route, true);
+				else
+					break;
 			}
 		}
-		if (!found) {
+		if (lnet_drop_asym_route && for_me && !found) {
 			lnet_net_unlock(cpt);
 			/* we would not use from_nid to route a message to
 			 * src_nid
@@ -4650,6 +4669,18 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			       libcfs_nid2str(src_nid), lnet_msgtyp2str(type));
 			lnet_msg_free(msg);
 			goto drop;
+		}
+		if (!gw->lp_alive) {
+			struct lnet_peer_net *lpn;
+			struct lnet_peer_ni *lpni2;
+
+			gw->lp_alive = true;
+			/* Mark all remote NIs on src_nid's net UP */
+			lpn = lnet_peer_get_net_locked(gw, src_net_id);
+			if (lpn)
+				list_for_each_entry(lpni2, &lpn->lpn_peer_nis,
+						    lpni_peer_nis)
+					lpni2->lpni_ns_status = LNET_NI_STATUS_UP;
 		}
 	}
 

@@ -1114,4 +1114,16 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 void lnet_usr_translate_stats(struct lnet_ioctl_element_msg_stats *msg_stats,
 			      struct lnet_element_stats *stats);
 
+static inline void
+lnet_set_route_aliveness(struct lnet_route *route, bool alive)
+{
+	bool old = atomic_xchg(&route->lr_alive, alive);
+
+	if (old != alive)
+		CERROR("route to %s through %s has gone from %s to %s\n",
+		       libcfs_net2str(route->lr_net),
+		       libcfs_nid2str(route->lr_gateway->lp_primary_nid),
+		       old ? "up" : "down",
+		       alive ? "up" : "down");
+}
 #endif
