@@ -4471,8 +4471,9 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 {
 	struct list_head	 log_list;
 	struct mgs_direntry	*dirent, *n;
-	char			*out, *suffix;
-	int			 l, remains, rc;
+	char			*out, *suffix, prefix[] = "config_log: ";
+	int			 prefix_len = strlen(prefix);
+	int			 l, remains, start = 0, rc;
 
 	ENTRY;
 
@@ -4483,19 +4484,39 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 
 	out = data->ioc_bulk;
 	remains = data->ioc_inllen1;
+	/* OBD_FAIL: fetch the config_log records from the specified one */
+	if (OBD_FAIL_CHECK(OBD_FAIL_CATLIST))
+		data->ioc_count = cfs_fail_val;
+
 	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
 		list_del_init(&dirent->mde_list);
 		suffix = strrchr(dirent->mde_name, '-');
 		if (suffix != NULL) {
-			l = snprintf(out, remains, "config_log: %s\n",
+			l = prefix_len + dirent->mde_len + 1;
+			if (remains - 1 < 0) {
+				/* No enough space for this record */
+				mgs_direntry_free(dirent);
+				goto out;
+			}
+			start++;
+			if (start < data->ioc_count) {
+				mgs_direntry_free(dirent);
+				continue;
+			}
+			l = scnprintf(out, remains, "%s%s\n", prefix,
 				     dirent->mde_name);
 			out += l;
 			remains -= l;
 		}
 		mgs_direntry_free(dirent);
-		if (remains <= 0)
-			break;
+		if (remains == 0)
+			/* Full */
+			goto out;
 	}
+	/* Finished */
+	start = 0;
+out:
+	data->ioc_count = start;
 	RETURN(rc);
 }
 
