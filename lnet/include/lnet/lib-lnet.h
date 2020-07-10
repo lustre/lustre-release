@@ -797,7 +797,7 @@ int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
-bool lnet_drop_rule_match(struct lnet_hdr *hdr, lnet_nid_t local_nid,
+bool lnet_drop_rule_match(struct lnet_hdr *hdr, struct lnet_nid *local_nid,
 			  enum lnet_msg_hstatus *hstatus);
 
 int lnet_delay_rule_add(struct lnet_fault_attr *attr);

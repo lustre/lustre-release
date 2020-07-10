@@ -65,12 +65,16 @@ struct lnet_drop_rule {
 };
 
 static bool
-lnet_fault_nid_match(lnet_nid_t nid, lnet_nid_t msg_nid)
+lnet_fault_nid_match(lnet_nid_t nid, struct lnet_nid *msg_nid)
 {
-	if (nid == msg_nid || nid == LNET_NID_ANY)
+	if (nid == LNET_NID_ANY)
+		return true;
+	if (!msg_nid)
+		return false;
+	if (lnet_nid_to_nid4(msg_nid) == nid)
 		return true;
 
-	if (LNET_NIDNET(nid) != LNET_NIDNET(msg_nid))
+	if (LNET_NIDNET(nid) != LNET_NID_NET(msg_nid))
 		return false;
 
 	/* 255.255.255.255@net is wildcard for all addresses in a network */
@@ -78,8 +82,10 @@ lnet_fault_nid_match(lnet_nid_t nid, lnet_nid_t msg_nid)
 }
 
 static bool
-lnet_fault_attr_match(struct lnet_fault_attr *attr, lnet_nid_t src,
-		      lnet_nid_t local_nid, lnet_nid_t dst,
+lnet_fault_attr_match(struct lnet_fault_attr *attr,
+		      struct lnet_nid *src,
+		      struct lnet_nid *local_nid,
+		      struct lnet_nid *dst,
 		      unsigned int type, unsigned int portal)
 {
 	if (!lnet_fault_nid_match(attr->fa_src, src) ||
@@ -341,8 +347,10 @@ lnet_fault_match_health(enum lnet_msg_hstatus *hstatus, __u32 mask)
  * decide whether should drop this message or not
  */
 static bool
-drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
-		lnet_nid_t local_nid, lnet_nid_t dst,
+drop_rule_match(struct lnet_drop_rule *rule,
+		struct lnet_nid *src,
+		struct lnet_nid *local_nid,
+		struct lnet_nid *dst,
 		unsigned int type, unsigned int portal,
 		enum lnet_msg_hstatus *hstatus)
 {
@@ -426,11 +434,9 @@ drop_matched:
  */
 bool
 lnet_drop_rule_match(struct lnet_hdr *hdr,
-		     lnet_nid_t local_nid,
+		     struct lnet_nid *local_nid,
 		     enum lnet_msg_hstatus *hstatus)
 {
-	lnet_nid_t src = lnet_nid_to_nid4(&hdr->src_nid);
-	lnet_nid_t dst = lnet_nid_to_nid4(&hdr->dest_nid);
 	unsigned int typ = hdr->type;
 	struct lnet_drop_rule *rule;
 	unsigned int ptl = -1;
@@ -446,7 +452,8 @@ lnet_drop_rule_match(struct lnet_hdr *hdr,
 
 	cpt = lnet_net_lock_current();
 	list_for_each_entry(rule, &the_lnet.ln_drop_rules, dr_link) {
-		drop = drop_rule_match(rule, src, local_nid, dst, typ, ptl,
+		drop = drop_rule_match(rule, &hdr->src_nid, local_nid,
+				       &hdr->dest_nid, typ, ptl,
 				       hstatus);
 		if (drop)
 			break;
@@ -530,15 +537,15 @@ delay_rule_decref(struct lnet_delay_rule *rule)
  * decide whether should delay this message or not
  */
 static bool
-delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
-		lnet_nid_t dst, unsigned int type, unsigned int portal,
-		struct lnet_msg *msg)
+delay_rule_match(struct lnet_delay_rule *rule, struct lnet_nid *src,
+		 struct lnet_nid *dst, unsigned int type, unsigned int portal,
+		 struct lnet_msg *msg)
 {
 	struct lnet_fault_attr *attr = &rule->dl_attr;
 	bool delay;
 	time64_t now = ktime_get_seconds();
 
-	if (!lnet_fault_attr_match(attr, src, LNET_NID_ANY,
+	if (!lnet_fault_attr_match(attr, src, NULL,
 				   dst, type, portal))
 		return false;
 
@@ -605,8 +612,6 @@ bool
 lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg)
 {
 	struct lnet_delay_rule	*rule;
-	lnet_nid_t		 src = lnet_nid_to_nid4(&hdr->src_nid);
-	lnet_nid_t		 dst = lnet_nid_to_nid4(&hdr->dest_nid);
 	unsigned int		 typ = hdr->type;
 	unsigned int		 ptl = -1;
 
@@ -620,7 +625,8 @@ lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg)
 		ptl = le32_to_cpu(hdr->msg.get.ptl_index);
 
 	list_for_each_entry(rule, &the_lnet.ln_delay_rules, dl_link) {
-		if (delay_rule_match(rule, src, dst, typ, ptl, msg))
+		if (delay_rule_match(rule, &hdr->src_nid, &hdr->dest_nid,
+				     typ, ptl, msg))
 			return true;
 	}
 

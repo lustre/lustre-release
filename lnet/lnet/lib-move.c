@@ -4647,9 +4647,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 		goto drop;
 	}
 
-	/* FIXME need to support large-addr nid */
 	if (!list_empty(&the_lnet.ln_drop_rules) &&
-	    lnet_drop_rule_match(hdr, lnet_nid_to_nid4(&ni->ni_nid), NULL)) {
+	    lnet_drop_rule_match(hdr, &ni->ni_nid, NULL)) {
 		CDEBUG(D_NET,
 		       "%s, src %s, dst %s: Dropping %s to simulate silent message loss\n",
 		       libcfs_nidstr(from_nid), libcfs_nidstr(&src_nid),
