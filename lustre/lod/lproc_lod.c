@@ -977,12 +977,6 @@ static ssize_t lmv_failout_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(lmv_failout);
 
-char *mdt_hash_name[] = { "none",
-			  LMV_HASH_NAME_ALL_CHARS,
-			  LMV_HASH_NAME_FNV_1A_64,
-			  LMV_HASH_NAME_CRUSH,
-};
-
 static ssize_t mdt_hash_show(struct kobject *kobj, struct attribute *attr,
 			     char *buf)
 {

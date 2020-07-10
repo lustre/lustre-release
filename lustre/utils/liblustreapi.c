@@ -86,12 +86,6 @@
 static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
 
-char *mdt_hash_name[] = { "none",
-			  LMV_HASH_NAME_ALL_CHARS,
-			  LMV_HASH_NAME_FNV_1A_64,
-			  LMV_HASH_NAME_CRUSH,
-};
-
 struct lustre_foreign_type lu_foreign_types[] = {
 	{.lft_type = LU_FOREIGN_TYPE_NONE, .lft_name = "none"},
 	{.lft_type = LU_FOREIGN_TYPE_SYMLINK, .lft_name = "symlink"},
@@ -4751,7 +4745,8 @@ static int cb_find_init(char *path, int p, int *dp,
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
 	    param->fp_check_size || param->fp_check_blocks ||
 	    find_check_lmm_info(param) ||
-	    param->fp_check_mdt_count || param->fp_check_hash_type)
+	    param->fp_check_mdt_count || param->fp_hash_type ||
+	    param->fp_check_hash_flag)
 		decision = 0;
 
 	if (param->fp_type != 0 && checked_type == 0)
@@ -4759,7 +4754,8 @@ static int cb_find_init(char *path, int p, int *dp,
 
 	if (decision == 0) {
 		if (d != -1 && (param->fp_check_mdt_count ||
-		    param->fp_check_hash_type || param->fp_check_foreign)) {
+		    param->fp_hash_type || param->fp_check_foreign ||
+		    param->fp_check_hash_flag)) {
 			param->fp_get_lmv = 1;
 			ret = cb_get_dirstripe(path, &d, param);
 			if (ret != 0) {
@@ -4923,17 +4919,35 @@ static int cb_find_init(char *path, int p, int *dp,
 			goto decided;
 	}
 
-	if (param->fp_check_hash_type) {
+	if (param->fp_hash_type) {
 		__u32 found;
+		__u32 type = param->fp_lmv_md->lum_hash_type &
+			     LMV_HASH_TYPE_MASK;
 
 		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
 			decision = -1;
 			goto decided;
 		}
 
-		found = param->fp_lmv_md->lum_hash_type & param->fp_hash_type;
+		found = (1 << type) & param->fp_hash_type;
 		if ((found && param->fp_exclude_hash_type) ||
 		    (!found && !param->fp_exclude_hash_type)) {
+			decision = -1;
+			goto decided;
+		}
+	}
+
+	if (param->fp_check_hash_flag) {
+		__u32 flags = param->fp_lmv_md->lum_hash_type &
+			      ~LMV_HASH_TYPE_MASK;
+
+		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
+			decision = -1;
+			goto decided;
+		}
+
+		if (!(flags & param->fp_hash_inflags) ||
+		     (flags & param->fp_hash_exflags)) {
 			decision = -1;
 			goto decided;
 		}

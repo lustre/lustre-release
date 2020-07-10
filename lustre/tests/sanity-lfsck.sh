@@ -4848,6 +4848,10 @@ test_31a() {
 	[ $repaired -ge 1 ] ||
 		error "(5) Fail to repair bad name hash: $repaired"
 
+	local rc=$($LFS find -H badtype $DIR/$tdir/striped_dir | wc -l)
+	[ $rc -ge 1 ] ||
+		error "Fail to find flag bad type: $rc"
+
 	umount_client $MOUNT || error "(6) umount failed"
 	mount_client $MOUNT || error "(7) mount failed"
 
@@ -4950,6 +4954,9 @@ test_31c() {
 			 awk '/^striped_dirs_repaired/ { print $2 }')
 	[ $repaired -eq 1 ] ||
 		error "(4) Fail to re-generate master LMV EA: $repaired"
+
+	local rc=$($LFS find -H lostlmv $DIR/$tdir/striped_dir | wc -l)
+	[ $rc -eq 1 ] || error "Fail to find flag lost LMV: $rc"
 
 	umount_client $MOUNT || error "(5) umount failed"
 	mount_client $MOUNT || error "(6) mount failed"

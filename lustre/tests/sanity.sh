@@ -21936,15 +21936,17 @@ test_300i() {
 		error "create dir0 under hash dir failed"
 	$LFS setdirstripe -i0 -c$MDSCOUNT -H fnv_1a_64 $DIR/$tdir/hashdir/d1 ||
 		error "create dir1 under hash dir failed"
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H crush $DIR/$tdir/hashdir/d2 ||
+		error "create dir2 under hash dir failed"
 
 	# unfortunately, we need to umount to clear dir layout cache for now
 	# once we fully implement dir layout, we can drop this
 	umount_client $MOUNT || error "umount failed"
 	mount_client $MOUNT || error "mount failed"
 
-	$LFS find -H fnv_1a_64 $DIR/$tdir/hashdir
-	local dircnt=$($LFS find -H fnv_1a_64 $DIR/$tdir/hashdir | wc -l)
-	[ $dircnt -eq 1 ] || error "lfs find striped dir got:$dircnt,except:1"
+	$LFS find -H fnv_1a_64,crush $DIR/$tdir/hashdir
+	local dircnt=$($LFS find -H fnv_1a_64,crush $DIR/$tdir/hashdir | wc -l)
+	[ $dircnt -eq 2 ] || error "lfs find striped dir got:$dircnt,except:1"
 
 	#set the stripe to be unknown hash type
 	#define OBD_FAIL_UNKNOWN_LMV_STRIPE	0x1901

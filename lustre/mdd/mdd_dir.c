@@ -4081,11 +4081,6 @@ static int mdd_migrate_cmd_check(struct mdd_device *mdd,
 {
 	__u32 lum_stripe_count = lum->lum_stripe_count;
 	__u32 lmv_hash_type = lmv->lmv_hash_type;
-	char *mdt_hash_name[] = { "none",
-				  LMV_HASH_NAME_ALL_CHARS,
-				  LMV_HASH_NAME_FNV_1A_64,
-				  LMV_HASH_NAME_CRUSH,
-	};
 
 	if (!lmv_is_sane(lmv))
 		return -EBADF;

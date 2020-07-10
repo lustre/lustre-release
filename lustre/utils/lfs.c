@@ -508,14 +508,12 @@ command_t cmdlist[] = {
 	 "     [[!] --mirror-count|-N [+-]<n>]\n"
 	 "     [[!] --mirror-state <[^]state>]\n"
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
-	 "     [[!] --mdt-hash|-H <hashtype>\n"
+	 "     [[!] --mdt-hash|-H <[^][blm],[^]fnv_1a_64,all_char,crush,...>\n"
 	 "     [[!] --mdt-index|-m <uuid|index,...>]\n"
 	 "\t !: used before an option indicates 'NOT' requested attribute\n"
 	 "\t -: used before a value indicates less than requested value\n"
 	 "\t +: used before a value indicates more than requested value\n"
-	 "\thashtype:	hash type of the striped directory.\n"
-	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
-	 "\t		all_char  sum of characters % MDT_COUNT\n"},
+	 "\t ^: used before a flag indicates to exclude it\n"},
 	{"check", lfs_check, 0,
 	 "Display the status of MGTs, MDTs or OSTs (as specified in the command)\n"
 	 "or all the servers (MGTs, MDTs and OSTs).\n"
@@ -1486,6 +1484,65 @@ static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 out_free:
 	free(dup_string);
 	return rc;
+}
+
+static int mdthash_input(char *string, __u32 *inflags,
+			 __u32 *exflags, __u32 *type)
+{
+	char *name;
+	struct mhf_list {
+		char *name;
+		__u32 flag;
+	} mhflist[] = {
+		{"migrating", LMV_HASH_FLAG_MIGRATION},
+		{"badtype", LMV_HASH_FLAG_BAD_TYPE},
+		{"lostlmv", LMV_HASH_FLAG_LOST_LMV},
+	};
+
+	if (string == NULL)
+		return -EINVAL;
+
+	*inflags = 0;
+	*exflags = 0;
+	*type = 0;
+	for (name = strtok(string, ","); name; name = strtok(NULL, ",")) {
+		bool found = false;
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(mhflist); i++) {
+			if (strcmp(name, mhflist[i].name) == 0 ||
+			    name[0] == mhflist[i].name[0]) {
+				*inflags |= mhflist[i].flag;
+				found = true;
+			} else if (name[0] == '^' &&
+				   (strcmp(name + 1, mhflist[i].name) == 0 ||
+				    name[1] == mhflist[i].name[0])) {
+				*exflags |= mhflist[i].flag;
+				found = true;
+			}
+		}
+		if (!found) {
+			i = check_hashtype(name);
+			if (i > 0) {
+				*type |= 1 << i;
+				continue;
+			}
+			llapi_printf(LLAPI_MSG_ERROR,
+				     "%s: invalid mdt_hash value '%s'\n",
+				     progname, name);
+			return -EINVAL;
+		}
+	}
+
+	/* don't allow to include and exclude the same flag */
+	if (*inflags & *exflags) {
+		llapi_printf(LLAPI_MSG_ERROR,
+			     "%s: include and exclude same flag '%s'\n",
+			     progname, string);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
@@ -5042,14 +5099,15 @@ static int lfs_find(int argc, char **argv)
 			param.fp_check_gid = 1;
 			break;
 		case 'H':
-			param.fp_hash_type = check_hashtype(optarg);
-			if (param.fp_hash_type == 0) {
-				fprintf(stderr, "error: bad hash_type '%s'\n",
-					optarg);
+			rc = mdthash_input(optarg, &param.fp_hash_inflags,
+					   &param.fp_hash_exflags,
+					   &param.fp_hash_type);
+			if (rc) {
 				ret = -1;
 				goto err;
 			}
-			param.fp_check_hash_type = 1;
+			if (param.fp_hash_inflags || param.fp_hash_exflags)
+				param.fp_check_hash_flag = 1;
 			param.fp_exclude_hash_type = !!neg_opt;
 			break;
 		case 'l':

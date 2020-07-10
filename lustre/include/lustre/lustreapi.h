@@ -287,7 +287,7 @@ struct find_param {
 				 fp_exclude_mirror_index:1,
 				 fp_check_mdt_count:1,
 				 fp_exclude_mdt_count:1,
-				 fp_check_hash_type:1,
+				 fp_check_hash_flag:1,
 				 fp_exclude_hash_type:1,
 				 fp_yaml:1,	/* output layout in YAML */
 				 fp_check_blocks:1,
@@ -373,6 +373,8 @@ struct find_param {
 
 	time_t			 fp_btime;
 	int			 fp_bsign;
+	unsigned int		 fp_hash_inflags;
+	unsigned int		 fp_hash_exflags;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
