@@ -46,16 +46,21 @@
  */
 static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 			enum lnet_ack_req ack, struct ptlrpc_cb_id *cbid,
-			lnet_nid_t self, struct lnet_process_id peer_id,
+			lnet_nid_t self4, struct lnet_process_id peer_id4,
 			int portal, __u64 xid, unsigned int offset,
 			struct lnet_handle_md *bulk_cookie)
 {
-	int              rc;
-	struct lnet_md         md;
+	int rc;
+	struct lnet_md md;
+	struct lnet_nid self;
+	struct lnet_processid peer_id;
 	ENTRY;
 
-	LASSERT (portal != 0);
-	CDEBUG (D_INFO, "peer_id %s\n", libcfs_id2str(peer_id));
+	lnet_nid4_to_nid(self4, &self);
+	lnet_pid4_to_pid(peer_id4, &peer_id);
+
+	LASSERT(portal != 0);
+	CDEBUG(D_INFO, "peer_id %s\n", libcfs_id2str(peer_id4));
 	md.start     = base;
 	md.length    = len;
 	md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
@@ -87,15 +92,15 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 
 	percpu_ref_get(&ptlrpc_pending);
 
-	rc = LNetPut(self, *mdh, ack,
-		     peer_id, portal, xid, offset, 0);
+	rc = LNetPut(&self, *mdh, ack,
+		     &peer_id, portal, xid, offset, 0);
 	if (unlikely(rc != 0)) {
 		int rc2;
 		/* We're going to get an UNLINK event when I unlink below,
 		 * which will complete just like any other failed send, so
 		 * I fall through and return success here! */
 		CERROR("LNetPut(%s, %d, %lld) failed: %d\n",
-		       libcfs_id2str(peer_id), portal, xid, rc);
+		       libcfs_id2str(peer_id4), portal, xid, rc);
 		rc2 = LNetMDUnlink(*mdh);
 		LASSERTF(rc2 == 0, "rc2 = %d\n", rc2);
 	}
@@ -159,14 +164,16 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
  */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
-	struct obd_export        *exp = desc->bd_export;
-	lnet_nid_t		  self_nid;
-	struct lnet_process_id	  peer_id;
-	int                       rc = 0;
-	__u64                     mbits;
-	int                       posted_md;
-	int                       total_md;
-	struct lnet_md                 md;
+	struct obd_export	*exp = desc->bd_export;
+	lnet_nid_t		 self_nid4;
+	struct lnet_nid		 self_nid;
+	struct lnet_process_id	 peer_id4;
+	struct lnet_processid	 peer_id;
+	int			  rc = 0;
+	__u64			  mbits;
+	int			  posted_md;
+	int			 total_md;
+	struct lnet_md		 md;
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
@@ -183,8 +190,10 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	 * request, so they are based on the route taken by the
 	 * message.
 	 */
-	self_nid = desc->bd_req->rq_self;
-	peer_id = desc->bd_req->rq_source;
+	self_nid4 = desc->bd_req->rq_self;
+	peer_id4 = desc->bd_req->rq_source;
+	lnet_nid4_to_nid(self_nid4, &self_nid);
+	lnet_pid4_to_pid(peer_id4, &peer_id);
 
 	/* NB total length may be 0 for a read past EOF, so we send 0
 	 * length bulks, since the client expects bulk events.
@@ -228,18 +237,19 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 		/* Network is about to get at the memory */
 		if (ptlrpc_is_bulk_put_source(desc->bd_type))
-			rc = LNetPut(self_nid, desc->bd_mds[posted_md],
-				     LNET_ACK_REQ, peer_id,
+			rc = LNetPut(&self_nid, desc->bd_mds[posted_md],
+				     LNET_ACK_REQ, &peer_id,
 				     desc->bd_portal, mbits, 0, 0);
 		else
-			rc = LNetGet(self_nid, desc->bd_mds[posted_md],
-				     peer_id, desc->bd_portal, mbits, 0, false);
+			rc = LNetGet(self_nid4, desc->bd_mds[posted_md],
+				     peer_id4, desc->bd_portal,
+				     mbits, 0, false);
 
 		posted_md++;
 		if (rc != 0) {
 			CERROR("%s: failed bulk transfer with %s:%u x%llu: "
 			       "rc = %d\n", exp->exp_obd->obd_name,
-			       libcfs_id2str(peer_id), desc->bd_portal,
+			       libcfs_id2str(peer_id4), desc->bd_portal,
 			       mbits, rc);
 			break;
 		}
@@ -260,7 +270,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 	CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
 	       "id %s mbits %#llx-%#llx\n", desc->bd_iov_count,
-	       desc->bd_nob, desc->bd_portal, libcfs_id2str(peer_id),
+	       desc->bd_nob, desc->bd_portal, libcfs_id2str(peer_id4),
 	       mbits - posted_md, mbits - 1);
 
 	RETURN(0);

@@ -3579,7 +3579,7 @@ static int lnet_peer_send_push(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
 	struct lnet_ping_buffer *pbuf;
-	struct lnet_process_id id;
+	struct lnet_processid id;
 	struct lnet_md md;
 	int cpt;
 	int rc;
@@ -3626,13 +3626,13 @@ __must_hold(&lp->lp_lock)
 	lnet_peer_addref_locked(lp);
 	id.pid = LNET_PID_LUSTRE;
 	if (!LNET_NID_IS_ANY(&lp->lp_disc_dst_nid))
-		id.nid = lnet_nid_to_nid4(&lp->lp_disc_dst_nid);
+		id.nid = lp->lp_disc_dst_nid;
 	else
-		id.nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+		id.nid = lp->lp_primary_nid;
 	lnet_net_unlock(cpt);
 
-	rc = LNetPut(lnet_nid_to_nid4(&lp->lp_disc_src_nid), lp->lp_push_mdh,
-		     LNET_ACK_REQ, id, LNET_RESERVED_PORTAL,
+	rc = LNetPut(&lp->lp_disc_src_nid, lp->lp_push_mdh,
+		     LNET_ACK_REQ, &id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, 0);
 
 	/*
