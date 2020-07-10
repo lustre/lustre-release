@@ -4328,10 +4328,12 @@ LNetCtl(unsigned int cmd, void *arg)
 	}
 
 	case IOC_LIBCFS_LNET_DIST:
-		rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);
+		lnet_nid4_to_nid(data->ioc_nid, &nid);
+		rc = LNetDist(&nid, &nid, &data->ioc_u32[1]);
 		if (rc < 0 && rc != -EHOSTUNREACH)
 			return rc;
 
+		data->ioc_nid = lnet_nid_to_nid4(&nid);
 		data->ioc_u32[0] = rc;
 		return 0;
 

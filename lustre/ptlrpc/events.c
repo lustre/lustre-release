@@ -535,18 +535,18 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 	int rc = -ENOENT;
 	int dist;
 	__u32 order;
-	lnet_nid_t dst_nid;
-	lnet_nid_t src_nid;
+	struct lnet_nid dst_nid;
+	struct lnet_nid src_nid;
 
 	peer->pid = LNET_PID_LUSTRE;
 
 	/* Choose the matching UUID that's closest */
 	while (lustre_uuid_to_peer(uuid->uuid, &dst_nid, count++) == 0) {
 		if (peer->nid != LNET_NID_ANY && LNET_NIDADDR(peer->nid) == 0 &&
-		    LNET_NIDNET(dst_nid) != LNET_NIDNET(peer->nid))
+		    LNET_NID_NET(&dst_nid) != LNET_NIDNET(peer->nid))
 			continue;
 
-		dist = LNetDist(dst_nid, &src_nid, &order);
+		dist = LNetDist(&dst_nid, &src_nid, &order);
 		if (dist < 0)
 			continue;
 
@@ -562,8 +562,8 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			best_dist = dist;
 			best_order = order;
 
-			peer->nid = dst_nid;
-			*self = src_nid;
+			peer->nid = lnet_nid_to_nid4(&dst_nid);
+			*self = lnet_nid_to_nid4(&src_nid);
 			rc = 0;
 		}
 	}

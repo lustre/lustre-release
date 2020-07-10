@@ -1838,7 +1838,8 @@ void lustre_tgt_unregister_fs(void);
 int lustre_check_exclusion(struct super_block *sb, char *svname);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
+int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid,
+			int index);
 int class_add_uuid(const char *uuid, __u64 nid);
 int class_del_uuid (const char *uuid);
 int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,

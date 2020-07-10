@@ -5333,54 +5333,53 @@ EXPORT_SYMBOL(LNetGet);
  * \retval -EHOSTUNREACH If \a dstnid is not reachable.
  */
 int
-LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
+LNetDist(struct lnet_nid *dstnid, struct lnet_nid *srcnid, __u32 *orderp)
 {
 	struct list_head *e;
 	struct lnet_ni *ni = NULL;
 	struct lnet_remotenet *rnet;
-	__u32 dstnet = LNET_NIDNET(dstnid);
+	__u32 dstnet = LNET_NID_NET(dstnid);
 	int hops;
 	int cpt;
 	__u32 order = 2;
 	struct list_head *rn_list;
-	bool matched_dstnet = false;
+	struct lnet_ni *matched_dstnet = NULL;
 
 	/* if !local_nid_dist_zero, I don't return a distance of 0 ever
 	 * (when lustre sees a distance of 0, it substitutes 0@lo), so I
 	 * keep order 0 free for 0@lo and order 1 free for a local NID
-	 * match */
+	 * match
+	 * WARNING: dstnid and srcnid might point to same place.
+	 * Don't set *srcnid until late.
+	 */
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	cpt = lnet_net_lock_current();
 
 	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
-		/* FIXME support large-addr nid */
-		if (lnet_nid_to_nid4(&ni->ni_nid) == dstnid) {
-			if (srcnidp != NULL)
-				*srcnidp = dstnid;
+		if (nid_same(&ni->ni_nid, dstnid)) {
 			if (orderp != NULL) {
-				if (dstnid == LNET_NID_LO_0)
+				if (nid_is_lo0(dstnid))
 					*orderp = 0;
 				else
 					*orderp = 1;
 			}
+			if (srcnid)
+				*srcnid = *dstnid;
 			lnet_net_unlock(cpt);
 
 			return local_nid_dist_zero ? 0 : 1;
 		}
 
 		if (!matched_dstnet && LNET_NID_NET(&ni->ni_nid) == dstnet) {
-			matched_dstnet = true;
+			matched_dstnet = ni;
 			/* We matched the destination net, but we may have
 			 * additional local NIs to inspect.
 			 *
-			 * We record the nid and order as appropriate, but
+			 * We record the order as appropriate, but
 			 * they may be overwritten if we match local NI above.
 			 */
-			if (srcnidp)
-				/* FIXME support large-addr nids */
-				*srcnidp = lnet_nid_to_nid4(&ni->ni_nid);
 
 			if (orderp) {
 				/* Check if ni was originally created in
@@ -5401,6 +5400,8 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 	}
 
 	if (matched_dstnet) {
+		if (srcnid)
+			*srcnid = matched_dstnet->ni_nid;
 		lnet_net_unlock(cpt);
 		return 1;
 	}
@@ -5431,13 +5432,12 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 
 			LASSERT(shortest != NULL);
 			hops = shortest_hops;
-			if (srcnidp != NULL) {
+			if (srcnid) {
 				struct lnet_net *net;
 				net = lnet_get_net_locked(shortest->lr_lnet);
 				LASSERT(net);
 				ni = lnet_get_next_ni_locked(net, NULL);
-				/* FIXME support large-addr nids */
-				*srcnidp = lnet_nid_to_nid4(&ni->ni_nid);
+				*srcnid = ni->ni_nid;
 			}
 			if (orderp != NULL)
 				*orderp = order;

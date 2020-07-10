@@ -50,7 +50,7 @@ struct uuid_nid_data {
 static LIST_HEAD(g_uuid_list);
 static DEFINE_SPINLOCK(g_uuid_lock);
 
-int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
+int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid, int index)
 {
 	struct uuid_nid_data *data;
 	struct obd_uuid tmp;
@@ -64,7 +64,7 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
 				break;
 
 			rc = 0;
-			*peer_nid = data->un_nids[index];
+			lnet_nid4_to_nid(data->un_nids[index], peer_nid);
 			break;
 		}
 	}
