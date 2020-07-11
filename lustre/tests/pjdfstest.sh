@@ -164,6 +164,6 @@ complete $SECONDS
 check_and_cleanup_lustre
 exit_status
 TAIL
-} > run_pjdfstest.sh
-bash run_pjdfstest.sh
+} > $TMP/run_pjdfstest.sh
+bash $TMP/run_pjdfstest.sh
 
