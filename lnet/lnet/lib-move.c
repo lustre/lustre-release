@@ -2104,7 +2104,6 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 			     struct lnet_peer **gw_peer)
 {
 	int rc;
-	__u32 local_lnet;
 	struct lnet_peer *gw;
 	struct lnet_peer *lp;
 	struct lnet_peer_net *lpn;
@@ -2133,10 +2132,8 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 		if (gwni) {
 			gw = gwni->lpni_peer_net->lpn_peer;
 			lnet_peer_ni_decref_locked(gwni);
-			if (gw->lp_rtr_refcount) {
-				local_lnet = LNET_NIDNET(sd->sd_rtr_nid);
+			if (gw->lp_rtr_refcount)
 				route_found = true;
-			}
 		} else {
 			CWARN("No peer NI for gateway %s. Attempting to find an alternative route.\n",
 			       libcfs_nid2str(sd->sd_rtr_nid));
@@ -2252,7 +2249,6 @@ use_lpn:
 
 		gw = best_route->lr_gateway;
 		LASSERT(gw == gwni->lpni_peer_net->lpn_peer);
-		local_lnet = best_route->lr_lnet;
 	}
 
 	/*
@@ -2260,22 +2256,20 @@ use_lpn:
 	 * This means we might delay the message until discovery has
 	 * completed
 	 */
-	sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
 	rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_cpt);
 	if (rc)
 		return rc;
 
-	if (!sd->sd_best_ni)
-		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, gw,
-					lnet_peer_get_net_locked(gw,
-								 local_lnet),
-					sd->sd_md_cpt);
-
 	if (!sd->sd_best_ni) {
-		CERROR("Internal Error. Expected local ni on %s but non found :%s\n",
-		       libcfs_net2str(local_lnet),
-		       libcfs_nid2str(sd->sd_src_nid));
-		return -EFAULT;
+		lpn = gwni->lpni_peer_net;
+		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, gw, lpn,
+							       sd->sd_md_cpt);
+		if (!sd->sd_best_ni) {
+			CERROR("Internal Error. Expected local ni on %s but non found: %s\n",
+			       libcfs_net2str(lpn->lpn_net_id),
+			       libcfs_nid2str(sd->sd_src_nid));
+			return -EFAULT;
+		}
 	}
 
 	*gw_lpni = gwni;
