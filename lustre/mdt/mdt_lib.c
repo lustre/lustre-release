@@ -166,7 +166,7 @@ static void ucred_set_audit_enabled(struct mdt_thread_info *info,
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
-			  void *buf, bool drop_fs_cap)
+			  void *buf)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_device *mdt = info->mti_mdt;
@@ -324,11 +324,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	/* process root_squash here. */
 	mdt_root_squash(info, peernid);
 
-	/* remove fs privilege for non-root user. */
-	if (ucred->uc_fsuid && drop_fs_cap)
-		ucred->uc_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
-	else
-		ucred->uc_cap = pud->pud_cap;
+	ucred->uc_cap = pud->pud_cap;
 	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
@@ -462,8 +458,7 @@ out:
 }
 
 static int old_init_ucred_common(struct mdt_thread_info *info,
-				 struct lu_nodemap *nodemap,
-				 bool drop_fs_cap)
+				 struct lu_nodemap *nodemap)
 {
 	struct lu_ucred		*uc = mdt_ucred(info);
 	struct mdt_device	*mdt = info->mti_mdt;
@@ -500,9 +495,6 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	/* process root_squash here. */
 	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
-	/* remove fs privilege for non-root user. */
-	if (uc->uc_fsuid && drop_fs_cap)
-		uc->uc_cap &= ~CFS_CAP_FS_MASK;
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
@@ -514,7 +506,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 }
 
 static int old_init_ucred(struct mdt_thread_info *info,
-			  struct mdt_body *body, bool drop_fs_cap)
+			  struct mdt_body *body)
 {
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct lu_nodemap *nodemap;
@@ -545,7 +537,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_ginfo = NULL;
 	uc->uc_cap = body->mbo_capability;
 
-	rc = old_init_ucred_common(info, nodemap, drop_fs_cap);
+	rc = old_init_ucred_common(info, nodemap);
 	nodemap_putref(nodemap);
 
 	RETURN(rc);
@@ -574,15 +566,14 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
 	uc->uc_ginfo = NULL;
 
-	rc = old_init_ucred_common(info, nodemap, true); /* drop_fs_cap=true */
+	rc = old_init_ucred_common(info, nodemap);
 	nodemap_putref(nodemap);
 
 	RETURN(rc);
 }
 
 static inline int __mdt_init_ucred(struct mdt_thread_info *info,
-				   struct mdt_body *body,
-				   bool drop_fs_cap)
+				   struct mdt_body *body)
 {
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	struct lu_ucred		*uc  = mdt_ucred(info);
@@ -594,25 +585,14 @@ static inline int __mdt_init_ucred(struct mdt_thread_info *info,
 	mdt_exit_ucred(info);
 
 	if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
-		return old_init_ucred(info, body, drop_fs_cap);
+		return old_init_ucred(info, body);
 	else
-		return new_init_ucred(info, BODY_INIT, body, drop_fs_cap);
+		return new_init_ucred(info, BODY_INIT, body);
 }
 
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 {
-	return __mdt_init_ucred(info, body, true);
-}
-
-/* LU-6528 when "no_subtree_check" is set for NFS export, nfsd_set_fh_dentry()
- * doesn't set correct fsuid explicitely, but raise capability to allow
- * exportfs_decode_fh() to reconnect disconnected dentry into dcache. So for
- * lookup (i.e. intent_getattr), we should keep FS capability, otherwise it
- * will fail permission check. */
-int mdt_init_ucred_intent_getattr(struct mdt_thread_info *info,
-				  struct mdt_body *body)
-{
-	return __mdt_init_ucred(info, body, false);
+	return __mdt_init_ucred(info, body);
 }
 
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
@@ -635,7 +615,7 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 	if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
 		return old_init_ucred_reint(info);
 	else
-		return new_init_ucred(info, REC_INIT, NULL, true);
+		return new_init_ucred(info, REC_INIT, NULL);
 }
 
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */

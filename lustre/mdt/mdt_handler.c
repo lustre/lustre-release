@@ -2162,37 +2162,38 @@ unlock_parent:
 static int mdt_getattr_name(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
-        struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_CHILD];
-        struct mdt_body        *reqbody;
-        struct mdt_body        *repbody;
-        int rc, rc2;
-        ENTRY;
+	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_CHILD];
+	struct mdt_body	*reqbody;
+	struct mdt_body	*repbody;
+	int rc, rc2;
 
-        reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(reqbody != NULL);
-        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody != NULL);
+	ENTRY;
+
+	reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	LASSERT(reqbody != NULL);
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	LASSERT(repbody != NULL);
 
 	info->mti_cross_ref = !!(reqbody->mbo_valid & OBD_MD_FLCROSSREF);
 	repbody->mbo_eadatasize = 0;
 	repbody->mbo_aclsize = 0;
 
-        rc = mdt_init_ucred_intent_getattr(info, reqbody);
-        if (unlikely(rc))
-                GOTO(out_shrink, rc);
+	rc = mdt_init_ucred(info, reqbody);
+	if (unlikely(rc))
+		GOTO(out_shrink, rc);
 
-        rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
-        if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
-                ldlm_lock_decref(&lhc->mlh_reg_lh, lhc->mlh_reg_mode);
-                lhc->mlh_reg_lh.cookie = 0;
-        }
-        mdt_exit_ucred(info);
-        EXIT;
+	rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
+	if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+		ldlm_lock_decref(&lhc->mlh_reg_lh, lhc->mlh_reg_mode);
+		lhc->mlh_reg_lh.cookie = 0;
+	}
+	mdt_exit_ucred(info);
+	EXIT;
 out_shrink:
-        mdt_client_compatibility(info);
-        rc2 = mdt_fix_reply(info);
-        if (rc == 0)
-                rc = rc2;
+	mdt_client_compatibility(info);
+	rc2 = mdt_fix_reply(info);
+	if (rc == 0)
+		rc = rc2;
 	mdt_thread_info_fini(info);
 	return rc;
 }
@@ -4259,7 +4260,7 @@ static int mdt_intent_getattr(enum ldlm_intent_flags it_opc,
 		GOTO(out_shrink, rc = -EINVAL);
 	}
 
-	rc = mdt_init_ucred_intent_getattr(info, reqbody);
+	rc = mdt_init_ucred(info, reqbody);
 	if (rc)
 		GOTO(out_shrink, rc);
 

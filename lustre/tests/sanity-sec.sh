@@ -3725,6 +3725,45 @@ test_50() {
 }
 run_test 50 "DoM encrypted file"
 
+test_51() {
+	[ "$MDS1_VERSION" -gt $(version_code 2.13.53) ] ||
+		skip "Need MDS version at least 2.13.53"
+
+	mkdir $DIR/$tdir || error "mkdir $tdir"
+
+	touch $DIR/$tdir/$tfile || error "touch $tfile"
+	cp $(which chown) $DIR/$tdir || error "cp chown"
+	$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile &&
+		error "chown $tfile should fail"
+	setcap 'CAP_CHOWN=ep' $DIR/$tdir/chown || error "setcap CAP_CHOWN"
+	$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile ||
+		error "chown $tfile"
+	rm $DIR/$tdir/$tfile || error "rm $tfile"
+
+	touch $DIR/$tdir/$tfile || error "touch $tfile"
+	cp $(which touch) $DIR/$tdir || error "cp touch"
+	$RUNAS_CMD -u $ID0 $DIR/$tdir/touch $DIR/$tdir/$tfile &&
+		error "touch should fail"
+	setcap 'CAP_FOWNER=ep' $DIR/$tdir/touch || error "setcap CAP_FOWNER"
+	$RUNAS_CMD -u $ID0 $DIR/$tdir/touch $DIR/$tdir/$tfile ||
+		error "touch $tfile"
+	rm $DIR/$tdir/$tfile || error "rm $tfile"
+
+	local cap
+	for cap in "CAP_DAC_OVERRIDE" "CAP_DAC_READ_SEARCH"; do
+		touch $DIR/$tdir/$tfile || error "touch $tfile"
+		chmod 600 $DIR/$tdir/$tfile || error "chmod $tfile"
+		cp $(which cat) $DIR/$tdir || error "cp cat"
+		$RUNAS_CMD -u $ID0 $DIR/$tdir/cat $DIR/$tdir/$tfile &&
+			error "cat should fail"
+		setcap $cap=ep $DIR/$tdir/cat || error "setcap $cap"
+		$RUNAS_CMD -u $ID0 $DIR/$tdir/cat $DIR/$tdir/$tfile ||
+			error "cat $tfile"
+		rm $DIR/$tdir/$tfile || error "rm $tfile"
+	done
+}
+run_test 51 "FS capabilities ==============="
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
