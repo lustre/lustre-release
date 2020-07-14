@@ -4213,68 +4213,6 @@ lnet_msgtyp2str (int type)
 	}
 }
 
-void
-lnet_print_hdr(struct lnet_hdr *hdr)
-{
-	struct lnet_process_id src = {
-		.nid = hdr->src_nid,
-		.pid = hdr->src_pid,
-	};
-	struct lnet_process_id dst = {
-		.nid = hdr->dest_nid,
-		.pid = hdr->dest_pid,
-	};
-	char *type_str = lnet_msgtyp2str(hdr->type);
-
-	CWARN("P3 Header at %p of type %s\n", hdr, type_str);
-	CWARN("    From %s\n", libcfs_id2str(src));
-	CWARN("    To	%s\n", libcfs_id2str(dst));
-
-	switch (hdr->type) {
-	default:
-		break;
-
-	case LNET_MSG_PUT:
-		CWARN("    Ptl index %d, ack md %#llx.%#llx, "
-		      "match bits %llu\n",
-		      hdr->msg.put.ptl_index,
-		      hdr->msg.put.ack_wmd.wh_interface_cookie,
-		      hdr->msg.put.ack_wmd.wh_object_cookie,
-		      hdr->msg.put.match_bits);
-		CWARN("    Length %d, offset %d, hdr data %#llx\n",
-		      hdr->payload_length, hdr->msg.put.offset,
-		      hdr->msg.put.hdr_data);
-		break;
-
-	case LNET_MSG_GET:
-		CWARN("    Ptl index %d, return md %#llx.%#llx, "
-		      "match bits %llu\n", hdr->msg.get.ptl_index,
-		      hdr->msg.get.return_wmd.wh_interface_cookie,
-		      hdr->msg.get.return_wmd.wh_object_cookie,
-		      hdr->msg.get.match_bits);
-		CWARN("    Length %d, src offset %d\n",
-		      hdr->msg.get.sink_length,
-		      hdr->msg.get.src_offset);
-		break;
-
-	case LNET_MSG_ACK:
-		CWARN("    dst md %#llx.%#llx, "
-		      "manipulated length %d\n",
-		      hdr->msg.ack.dst_wmd.wh_interface_cookie,
-		      hdr->msg.ack.dst_wmd.wh_object_cookie,
-		      hdr->msg.ack.mlength);
-		break;
-
-	case LNET_MSG_REPLY:
-		CWARN("    dst md %#llx.%#llx, "
-		      "length %d\n",
-		      hdr->msg.reply.dst_wmd.wh_interface_cookie,
-		      hdr->msg.reply.dst_wmd.wh_object_cookie,
-		      hdr->payload_length);
-	}
-
-}
-
 int
 lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	   void *private, int rdma_req)
