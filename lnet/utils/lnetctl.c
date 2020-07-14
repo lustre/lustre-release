@@ -221,9 +221,7 @@ command_t set_cmds[] = {
 
 command_t peer_cmds[] = {
 	{"add", jt_add_peer_nid, 0, "add a peer NID\n"
-	 "\t--prim_nid: Primary NID of the peer. If not provided then the first\n"
-	 "\t            NID in the list becomes the Primary NID of a newly created\n"
-	 "\t            peer. \n"
+	 "\t--prim_nid: Primary NID of the peer.\n"
 	 "\t--nid: one or more peer NIDs\n"
 	 "\t--non_mr: create this peer as not Multi-Rail capable\n"
 	 "\t--ip2nets: specify a range of nids per peer"},
@@ -1682,13 +1680,11 @@ static int jt_export(int argc, char **argv)
 
 static int jt_peer_nid_common(int argc, char **argv, int cmd)
 {
-	int rc = LUSTRE_CFG_RC_NO_ERR, opt, num_nids, num_nidstrs, i;
+	int rc = LUSTRE_CFG_RC_NO_ERR, opt;
 	bool is_mr = true;
 	char *prim_nid = NULL, *nidstr = NULL;
 	char err_str[LNET_MAX_STR_LEN] = "Error";
-	char *nidstrarray[LNET_MAX_STR_LEN];
 	struct cYAML *err_rc = NULL;
-	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
 
 	const char *const short_opts = "k:mn:";
 	const struct option long_opts[] = {
@@ -1715,7 +1711,7 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 				rc = LUSTRE_CFG_RC_BAD_PARAM;
 				snprintf(err_str, LNET_MAX_STR_LEN,
 					 "Unrecognized option '-%c'", opt);
-				goto out;
+				goto build_error;
 			}
 			is_mr = false;
 			break;
@@ -1727,63 +1723,19 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 		}
 	}
 
-	if (!(nidstr || prim_nid)) {
-		rc = LUSTRE_CFG_RC_BAD_PARAM;
-		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "--prim_nid or --nid (or both) must be specified");
-		goto out;
-	}
-
-	if (!nidstr) {
-		/* We were only provided a primary nid */
-		num_nids = 0;
-		if (cmd == LNETCTL_ADD_CMD)
-			rc = lustre_lnet_config_peer_nidlist(prim_nid,
-							     lnet_nidlist,
-							     num_nids, is_mr,
-							     -1, &err_rc);
-		else
-			rc = lustre_lnet_del_peer_nidlist(prim_nid,
-							  lnet_nidlist,
-							  num_nids, -1,
-							  &err_rc);
-
-		goto out;
-	}
-
-	rc = tokenize_nidstr(nidstr, &nidstrarray[0], err_str);
-	if (rc <= 0)
+	rc = lustre_lnet_modify_peer(prim_nid, nidstr, is_mr, cmd,
+				     -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		goto out;
 
-	num_nidstrs = rc;
-
-	for (i = 0; i < num_nidstrs; i++) {
-		rc = lustre_lnet_parse_nidstr(nidstrarray[i], lnet_nidlist,
-					      LNET_MAX_NIDS_PER_PEER, err_str);
-		if (rc < 0)
-			goto out;
-
-		num_nids = rc;
-
-		if (cmd == LNETCTL_ADD_CMD)
-			rc = lustre_lnet_config_peer_nidlist(prim_nid,
-							     lnet_nidlist,
-							     num_nids, is_mr,
-							     -1, &err_rc);
-		else
-			rc = lustre_lnet_del_peer_nidlist(prim_nid,
-							  lnet_nidlist,
-							  num_nids, -1,
-							  &err_rc);
-	}
+build_error:
+	cYAML_build_error(rc, -1, "peer",
+			  cmd == LNETCTL_ADD_CMD ? "add" : "del",
+			  err_str, &err_rc);
 
 out:
-	if (rc != LUSTRE_CFG_RC_NO_ERR) {
-		cYAML_build_error(rc, -1, "peer",
-				  cmd == LNETCTL_ADD_CMD ? "add" : "del",
-				  err_str, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
-	}
 
 	cYAML_free_tree(err_rc);
 

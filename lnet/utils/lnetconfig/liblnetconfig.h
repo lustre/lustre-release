@@ -75,8 +75,6 @@ struct lnet_dlc_intf_descr {
 /* forward declaration of the cYAML structure. */
 struct cYAML;
 
-int tokenize_nidstr(char *nidstr, char *out[LNET_MAX_STR_LEN], char *err_str);
-
 /*
  * lustre_lnet_config_lib_init()
  *   Initialize the Library to enable communication with the LNET kernel
@@ -521,45 +519,35 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc);
 
 /*
- * lustre_lnet_config_peer_nidlist
- *  Add a peer NID to a peer with primary NID pnid. If a pnid is not provided
- *  then the first NID in the NID list becomes the primary NID for a newly
- *  created peer.
- *  Otherwise, if the provided primary NID is unique, then a new peer is
+ * lustre_lnet_modify_peer
+ *  Handle a peer config or delete operation.
+ *
+ *  Config Operation:
+ *  Add a peer NID to a peer with primary NID pnid. 
+ *  If the provided primary NID is unique, then a new peer is
  *  created with this primary NID, and the NIDs in the NID list are added as
  *  secondary NIDs to this new peer.
  *  If any of the NIDs in the NID list are not unique then the operation
  *  fails. Some peer NIDs might have already been added. It's the responsibility
  *  of the caller of this API to remove the added NIDs if so desired.
  *
- *	pnid - The desired primary NID of a new peer, or the primary NID of
- *	       an existing peer.
- *	lnet_nidlist - List of LNet NIDs to add to the peer
- *	num_nids - The number of LNet NIDs in the lnet_nidlist array
- *	mr - Specifies whether this peer is MR capable.
- *	seq_no - sequence number of the command
- *	err_rc - YAML structure of the resultant return code
- */
-int lustre_lnet_config_peer_nidlist(char *pnid, lnet_nid_t *lnet_nidlist,
-				    int num_nids, bool mr, int seq_no,
-				    struct cYAML **err_rc);
-
-/*
- * lustre_lnet_del_peer_nidlist
+ *  Delete Operation:
  *  Delete the NIDs given in the NID list from the peer with the primary NID
  *  pnid. If pnid is NULL, or it doesn't identify a peer, the operation fails,
  *  and no change happens to the system.
  *  The operation is aborted on the first NID that fails to be deleted.
  *
- *	pnid - The primary NID of the peer to be modified
- *	lnet_nidlist - The list of LNet NIDs to delete from the peer
- *	num_nids - the number of nids in the lnet_nidlist array
+ *	prim_nid - The desired primary NID of a new peer, or the primary NID of
+ *		   an existing peer.
+ *	nids - a comma separated string of nids
+ *	is_mr - Specifies whether this peer is MR capable.
+ *	cmd - CONFIG or DELETE
  *	seq_no - sequence number of the command
  *	err_rc - YAML structure of the resultant return code
  */
-int lustre_lnet_del_peer_nidlist(char *pnid, lnet_nid_t *lnet_nidlist,
-				 int num_nids, int seq_no,
-				 struct cYAML **err_rc);
+int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr,
+			    int cmd, int seq_no, struct cYAML **err_rc);
+
 /*
  * lustre_lnet_show_peer
  *   Show the peer identified by nid, knid. If knid is NULL all
