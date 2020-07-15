@@ -107,8 +107,6 @@ void lov_tgts_putref(struct obd_device *obd)
 	}
 }
 
-static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
-			      enum obd_notify_event ev);
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 		      enum obd_notify_event ev);
 
@@ -349,30 +347,29 @@ out:
  *  any >= 0 : is log target index
  */
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
-                              enum obd_notify_event ev)
+			      enum obd_notify_event ev)
 {
-        struct lov_obd *lov = &obd->u.lov;
-        struct lov_tgt_desc *tgt;
-        int index, activate, active;
-        ENTRY;
+	struct lov_obd *lov = &obd->u.lov;
+	struct lov_tgt_desc *tgt;
+	int index;
+	bool activate, active;
+	ENTRY;
 
-        CDEBUG(D_INFO, "Searching in lov %p for uuid %s event(%d)\n",
-               lov, uuid->uuid, ev);
+	CDEBUG(D_INFO, "Searching in lov %p for uuid %s event(%d)\n",
+	       lov, uuid->uuid, ev);
 
 	lov_tgts_getref(obd);
 	for (index = 0; index < lov->desc.ld_tgt_count; index++) {
 		tgt = lov->lov_tgts[index];
-		if (!tgt)
-			continue;
-		if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
+		if (tgt && obd_uuid_equals(uuid, &tgt->ltd_uuid))
 			break;
-        }
+	}
 
-        if (index == lov->desc.ld_tgt_count)
-                GOTO(out, index = -EINVAL);
+	if (index == lov->desc.ld_tgt_count)
+		GOTO(out, index = -EINVAL);
 
-        if (ev == OBD_NOTIFY_DEACTIVATE || ev == OBD_NOTIFY_ACTIVATE) {
-                activate = (ev == OBD_NOTIFY_ACTIVATE) ? 1 : 0;
+	if (ev == OBD_NOTIFY_DEACTIVATE || ev == OBD_NOTIFY_ACTIVATE) {
+		activate = (ev == OBD_NOTIFY_ACTIVATE);
 
 		/*
 		 * LU-642, initially inactive OSC could miss the obd_connect,
@@ -385,39 +382,37 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 			rc = obd_connect(NULL, &tgt->ltd_exp, tgt->ltd_obd,
 					 &lov_osc_uuid, &lov->lov_ocd,
 					 lov->lov_cache);
-			if (rc || tgt->ltd_exp == NULL)
+			if (rc || !tgt->ltd_exp)
 				GOTO(out, index = rc);
 		}
 
-                if (lov->lov_tgts[index]->ltd_activate == activate) {
-                        CDEBUG(D_INFO, "OSC %s already %sactivate!\n",
-                               uuid->uuid, activate ? "" : "de");
-                } else {
-                        lov->lov_tgts[index]->ltd_activate = activate;
-                        CDEBUG(D_CONFIG, "%sactivate OSC %s\n",
-                               activate ? "" : "de", obd_uuid2str(uuid));
-                }
+		if (lov->lov_tgts[index]->ltd_activate == activate) {
+			CDEBUG(D_INFO, "OSC %s already %sactivate!\n",
+			       uuid->uuid, activate ? "" : "de");
+		} else {
+			lov->lov_tgts[index]->ltd_activate = activate;
+			CDEBUG(D_CONFIG, "%sactivate OSC %s\n",
+			       activate ? "" : "de", obd_uuid2str(uuid));
+		}
+	} else if (ev == OBD_NOTIFY_INACTIVE || ev == OBD_NOTIFY_ACTIVE) {
+		active = (ev == OBD_NOTIFY_ACTIVE);
 
-        } else if (ev == OBD_NOTIFY_INACTIVE || ev == OBD_NOTIFY_ACTIVE) {
-                active = (ev == OBD_NOTIFY_ACTIVE) ? 1 : 0;
+		if (lov->lov_tgts[index]->ltd_active == active) {
+			CDEBUG(D_INFO, "OSC %s already %sactive!\n",
+			       uuid->uuid, active ? "" : "in");
+			GOTO(out, index);
+		}
+		CDEBUG(D_CONFIG, "Marking OSC %s %sactive\n",
+		       obd_uuid2str(uuid), active ? "" : "in");
 
-                if (lov->lov_tgts[index]->ltd_active == active) {
-                        CDEBUG(D_INFO, "OSC %s already %sactive!\n",
-                               uuid->uuid, active ? "" : "in");
-                        GOTO(out, index);
-                } else {
-                        CDEBUG(D_CONFIG, "Marking OSC %s %sactive\n",
-                               obd_uuid2str(uuid), active ? "" : "in");
-                }
-
-                lov->lov_tgts[index]->ltd_active = active;
-                if (active) {
-                        lov->desc.ld_active_tgt_count++;
-                        lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
-                } else {
-                        lov->desc.ld_active_tgt_count--;
-                        lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
-                }
+		lov->lov_tgts[index]->ltd_active = active;
+		if (active) {
+			lov->desc.ld_active_tgt_count++;
+			lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
+		} else {
+			lov->desc.ld_active_tgt_count--;
+			lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
+		}
 	} else {
 		CERROR("%s: unknown event %d for uuid %s\n", obd->obd_name,
 		       ev, uuid->uuid);
