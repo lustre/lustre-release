@@ -258,20 +258,20 @@ static int lov_connect(const struct lu_env *env,
 
 static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 {
-        struct lov_obd *lov = &obd->u.lov;
-        struct obd_device *osc_obd;
-        int rc;
-        ENTRY;
+	struct lov_obd *lov = &obd->u.lov;
+	struct obd_device *osc_obd;
+	int rc;
+	ENTRY;
 
-        osc_obd = class_exp2obd(tgt->ltd_exp);
-        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
-               obd->obd_name, osc_obd->obd_name);
+	osc_obd = class_exp2obd(tgt->ltd_exp);
+	CDEBUG(D_CONFIG, "%s: disconnecting target %s\n", obd->obd_name,
+	       osc_obd ? osc_obd->obd_name : "<no obd>");
 
-        if (tgt->ltd_active) {
-                tgt->ltd_active = 0;
-                lov->desc.ld_active_tgt_count--;
-                tgt->ltd_exp->exp_obd->obd_inactive = 1;
-        }
+	if (tgt->ltd_active) {
+		tgt->ltd_active = 0;
+		lov->desc.ld_active_tgt_count--;
+		tgt->ltd_exp->exp_obd->obd_inactive = 1;
+	}
 
 	if (osc_obd) {
 		if (lov->lov_tgts_kobj)
@@ -291,17 +291,17 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 						  lov->targets_proc_entry);
 	}
 
-        obd_register_observer(osc_obd, NULL);
+	obd_register_observer(osc_obd, NULL);
 
-        rc = obd_disconnect(tgt->ltd_exp);
-        if (rc) {
-                CERROR("Target %s disconnect error %d\n",
-                       tgt->ltd_uuid.uuid, rc);
-                rc = 0;
-        }
+	rc = obd_disconnect(tgt->ltd_exp);
+	if (rc) {
+		CERROR("Target %s disconnect error %d\n",
+		       tgt->ltd_uuid.uuid, rc);
+		rc = 0;
+	}
 
-        tgt->ltd_exp = NULL;
-        RETURN(0);
+	tgt->ltd_exp = NULL;
+	RETURN(0);
 }
 
 static int lov_disconnect(struct obd_export *exp)
@@ -1101,46 +1101,46 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_FREE_PTR(oqctl);
                 break;
         }
-        default: {
-                int set = 0;
+	default: {
+		int set = 0;
 
-                if (count == 0)
-                        RETURN(-ENOTTY);
+		if (count == 0)
+			RETURN(-ENOTTY);
 
-                for (i = 0; i < count; i++) {
-                        int err;
-                        struct obd_device *osc_obd;
+		for (i = 0; i < count; i++) {
+			int err;
+			struct obd_device *osc_obd;
 
-                        /* OST was disconnected */
-                        if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
-                                continue;
+			/* OST was disconnected */
+			if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
+				continue;
 
 			/* ll_umount_begin() sets force on lov, pass to osc */
 			osc_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
-			osc_obd->obd_force = obd->obd_force;
+			if (osc_obd)
+				osc_obd->obd_force = obd->obd_force;
 			err = obd_iocontrol(cmd, lov->lov_tgts[i]->ltd_exp,
 					    len, karg, uarg);
 			if (err) {
-                                if (lov->lov_tgts[i]->ltd_active) {
-                                        CDEBUG(err == -ENOTTY ?
-                                               D_IOCTL : D_WARNING,
-                                               "iocontrol OSC %s on OST "
-                                               "idx %d cmd %x: err = %d\n",
-                                               lov_uuid2str(lov, i),
-                                               i, cmd, err);
-                                        if (!rc)
-                                                rc = err;
-                                }
-                        } else {
-                                set = 1;
-                        }
-                }
-                if (!set && !rc)
-                        rc = -EIO;
-        }
-        }
+				if (lov->lov_tgts[i]->ltd_active) {
+					CDEBUG(err == -ENOTTY ?
+					       D_IOCTL : D_WARNING,
+					       "iocontrol OSC %s on OST idx %d cmd %x: err = %d\n",
+					       lov_uuid2str(lov, i),
+					       i, cmd, err);
+					if (!rc)
+						rc = err;
+				}
+			} else {
+				set = 1;
+			}
+		}
+		if (!set && !rc)
+			rc = -EIO;
+	}
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
