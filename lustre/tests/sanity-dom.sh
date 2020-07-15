@@ -170,17 +170,31 @@ test_6() {
 run_test 6 "Race two writes, check file size"
 
 test_7() {
+	dd if=/dev/zero of=$DIR1/$tfile bs=1000 count=1
+	cancel_lru_locks
+
+	$MULTIOP $DIR1/$tfile or1000c
+	dd if=/dev/urandom of=$DIR2/$tfile bs=1000 count=1
+	local md5_1=$(md5sum $DIR/$tfile | awk '{ print $1 }')
+	local md5_2=$(md5sum $DIR2/$tfile | awk '{ print $1 }')
+	[[ $md5_1 == $md5_2 ]] ||
+		error "Client reads stale page"
+}
+run_test 7 "Stale pages after read-on-open"
+
+test_8() {
 	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 || error "write 10k"
 	$TRUNCATE $DIR1/$tfile 123456 || error "truncate up to 123456"
 	$TRUNCATE $DIR2/$tfile 55555 || error "truncate down to 55555"
 	$CHECKSTAT -t file -s 55555 $DIR1/$tfile || error "stat"
 	$CHECKSTAT -t file -s 55555 $DIR2/$tfile || error "stat"
-	dd if=/dev/zero of=$DIR1/$tfile bs=10k count=1 seek=10 conv=notrunc || error "write 10k@1M"
+	dd if=/dev/zero of=$DIR1/$tfile bs=10k count=1 seek=10 conv=notrunc ||
+		error "write 10k@1M"
 	$CHECKSTAT -t file -s 112640 $DIR1/$tfile || error "stat"
 	$CHECKSTAT -t file -s 112640 $DIR2/$tfile || error "stat"
 	rm $DIR1/$tfile
 }
-run_test 7 "truncate up, truncate down on another mount, write in between"
+run_test 8 "truncate up, truncate down on another mount, write in between"
 
 test_fsx() {
 	local file1=$DIR1/$tfile

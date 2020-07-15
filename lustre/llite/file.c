@@ -407,9 +407,10 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	return 0;
 }
 
-void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
-			struct lookup_intent *it)
+void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 {
+	struct lu_env *env;
+	struct cl_io *io;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
 	struct address_space *mapping = inode->i_mapping;
@@ -419,6 +420,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	char *data;
 	unsigned long index, start;
 	struct niobuf_local lnb;
+	__u16 refcheck;
+	int rc;
 
 	ENTRY;
 
@@ -452,6 +455,16 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 		RETURN_EXIT;
 	}
 
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN_EXIT;
+	io = vvp_env_thread_io(env);
+	io->ci_obj = obj;
+	io->ci_ignore_layout = 1;
+	rc = cl_io_init(env, io, CIT_MISC, obj);
+	if (rc)
+		GOTO(out_io, rc);
+
 	CDEBUG(D_INFO, "Get data along with open at %llu len %i, size %llu\n",
 	       rnb->rnb_offset, rnb->rnb_len, body->mbo_dom_size);
 
@@ -463,6 +476,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	LASSERT(lnb.lnb_file_offset % PAGE_SIZE == 0);
 	lnb.lnb_page_offset = 0;
 	do {
+		struct cl_page *page;
+
 		lnb.lnb_data = data + (index << PAGE_SHIFT);
 		lnb.lnb_len = rnb->rnb_len - (index << PAGE_SHIFT);
 		if (lnb.lnb_len > PAGE_SIZE)
@@ -478,9 +493,33 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 			      PTR_ERR(vmpage));
 			break;
 		}
+		lock_page(vmpage);
+		if (vmpage->mapping == NULL) {
+			unlock_page(vmpage);
+			put_page(vmpage);
+			/* page was truncated */
+			break;
+		}
+		/* attach VM page to CL page cache */
+		page = cl_page_find(env, obj, vmpage->index, vmpage,
+				    CPT_CACHEABLE);
+		if (IS_ERR(page)) {
+			ClearPageUptodate(vmpage);
+			unlock_page(vmpage);
+			put_page(vmpage);
+			break;
+		}
+		cl_page_export(env, page, 1);
+		cl_page_put(env, page);
+		unlock_page(vmpage);
 		put_page(vmpage);
 		index++;
 	} while (rnb->rnb_len > (index << PAGE_SHIFT));
+
+out_io:
+	cl_io_fini(env, io);
+	cl_env_put(env, &refcheck);
+
 	EXIT;
 }
 
@@ -562,27 +601,22 @@ retry:
 	rc = ll_prep_inode(&de->d_inode, req, NULL, itp);
 
 	if (!rc && itp->it_lock_mode) {
-		struct lustre_handle handle = {.cookie = itp->it_lock_handle};
-		struct ldlm_lock *lock;
-		bool has_dom_bit = false;
+		__u64 bits = 0;
 
 		/* If we got a lock back and it has a LOOKUP bit set,
 		 * make sure the dentry is marked as valid so we can find it.
 		 * We don't need to care about actual hashing since other bits
 		 * of kernel will deal with that later.
 		 */
-		lock = ldlm_handle2lock(&handle);
-		if (lock) {
-			has_dom_bit = ldlm_has_dom(lock);
-			if (lock->l_policy_data.l_inodebits.bits &
-			    MDS_INODELOCK_LOOKUP)
-				d_lustre_revalidate(de);
+		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, &bits);
+		if (bits & MDS_INODELOCK_LOOKUP)
+			d_lustre_revalidate(de);
 
-			LDLM_LOCK_PUT(lock);
-		}
-		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, NULL);
-		if (has_dom_bit)
-			ll_dom_finish_open(de->d_inode, req, itp);
+		/* if DoM bit returned along with LAYOUT bit then there
+		 * can be read-on-open data returned.
+		 */
+		if (bits & MDS_INODELOCK_DOM && bits & MDS_INODELOCK_LAYOUT)
+			ll_dom_finish_open(de->d_inode, req);
 	}
 
 out:

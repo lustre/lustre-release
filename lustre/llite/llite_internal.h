@@ -997,8 +997,7 @@ ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
 			struct lov_user_md **kbuf);
 void ll_open_cleanup(struct super_block *sb, struct ptlrpc_request *open_req);
 
-void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
-			struct lookup_intent *it);
+void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req);
 
 /* Compute expected user md size when passing in a md from user space */
 static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
