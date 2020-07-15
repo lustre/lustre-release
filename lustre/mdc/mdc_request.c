@@ -2951,7 +2951,7 @@ static int __init mdc_init(void)
 		goto out_dev;
 	}
 
-	rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
+	rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, true,
 				 LUSTRE_MDC_NAME, &mdc_device_type);
 	if (rc)
 		goto out_class;

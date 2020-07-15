@@ -3117,7 +3117,7 @@ static int __init obdecho_init(void)
 	if (rc != 0)
 		goto failed_0;
 
-	rc = class_register_type(&echo_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&echo_obd_ops, NULL, true,
 				 LUSTRE_ECHO_NAME, &echo_srv_type);
 	if (rc != 0)
 		goto failed_1;
@@ -3126,7 +3126,7 @@ static int __init obdecho_init(void)
 	rc = lu_kmem_init(echo_caches);
 	if (rc == 0) {
 		rc = class_register_type(&echo_client_obd_ops, NULL, false,
-					 NULL, LUSTRE_ECHO_CLIENT_NAME,
+					 LUSTRE_ECHO_CLIENT_NAME,
 					 &echo_device_type);
 		if (rc)
 			lu_kmem_fini(echo_caches);

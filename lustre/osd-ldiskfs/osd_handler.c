@@ -8369,7 +8369,7 @@ static int __init osd_init(void)
 		(void *)kallsyms_lookup_name("security_file_alloc");
 #endif
 
-	rc = class_register_type(&osd_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
 	if (rc) {
 		lu_kmem_fini(ldiskfs_caches);

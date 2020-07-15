@@ -2021,7 +2021,7 @@ static int __init mdd_init(void)
 	changelog_orig_logops = llog_common_cat_ops;
 	changelog_orig_logops.lop_write_rec = mdd_changelog_write_rec;
 
-	rc = class_register_type(&mdd_obd_device_ops, NULL, false, NULL,
+	rc = class_register_type(&mdd_obd_device_ops, NULL, false,
 				 LUSTRE_MDD_NAME, &mdd_device_type);
 	if (rc)
 		lu_kmem_fini(mdd_caches);

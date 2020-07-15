@@ -2223,7 +2223,7 @@ static int __init lod_init(void)
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&lod_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&lod_obd_device_ops, NULL, true,
 				 LUSTRE_LOD_NAME, &lod_device_type);
 	if (rc) {
 		lu_kmem_fini(lod_caches);

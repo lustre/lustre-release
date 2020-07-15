@@ -2279,7 +2279,7 @@ static const struct obd_ops mgc_obd_ops = {
 
 static int __init mgc_init(void)
 {
-	return class_register_type(&mgc_obd_ops, NULL, false, NULL,
+	return class_register_type(&mgc_obd_ops, NULL, false,
 				   LUSTRE_MGC_NAME, NULL);
 }
 

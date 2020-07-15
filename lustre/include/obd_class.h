@@ -74,7 +74,6 @@ struct obd_type *class_add_symlinks(const char *name, bool enable_proc);
 #endif
 int class_register_type(const struct obd_ops *dt_ops,
 			const struct md_ops *md_ops, bool enable_proc,
-			struct ldebugfs_vars *module_vars,
 			const char *nm, struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 

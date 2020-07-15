@@ -1647,7 +1647,7 @@ static int __init osd_init(void)
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&osd_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 LUSTRE_OSD_ZFS_NAME, &osd_device_type);
 	if (rc)
 		lu_kmem_fini(osd_caches);

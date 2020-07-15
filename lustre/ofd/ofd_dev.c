@@ -3266,7 +3266,7 @@ static int __init ofd_init(void)
 	if (rc)
 		goto out_caches;
 
-	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&ofd_obd_ops, NULL, true,
 				 LUSTRE_OST_NAME, &ofd_device_type);
 	if (rc)
 		goto out_ofd_access_log;

@@ -223,7 +223,7 @@ EXPORT_SYMBOL(class_add_symlinks);
 
 int class_register_type(const struct obd_ops *dt_ops,
 			const struct md_ops *md_ops,
-			bool enable_proc, struct ldebugfs_vars *vars,
+			bool enable_proc,
 			const char *name, struct lu_device_type *ldt)
 {
 	struct obd_type *type;
@@ -278,7 +278,6 @@ dir_exist:
 	}
 #endif
 	type->typ_debugfs_entry = debugfs_create_dir(name, debugfs_lustre_root);
-	ldebugfs_add_vars(type->typ_debugfs_entry, vars, type);
 
 	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
 	if (rc)

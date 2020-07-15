@@ -484,7 +484,7 @@ int qmt_glb_init(void)
 	int rc;
 	ENTRY;
 
-	rc = class_register_type(&qmt_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&qmt_obd_ops, NULL, true,
 				 LUSTRE_QMT_NAME, &qmt_device_type);
 	RETURN(rc);
 }

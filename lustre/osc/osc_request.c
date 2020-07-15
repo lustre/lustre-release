@@ -3652,7 +3652,7 @@ static int __init osc_init(void)
 	if (rc)
 		RETURN(rc);
 
-	rc = class_register_type(&osc_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&osc_obd_ops, NULL, true,
 				 LUSTRE_OSC_NAME, &osc_device_type);
 	if (rc)
 		GOTO(out_kmem, rc);

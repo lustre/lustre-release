@@ -1372,7 +1372,7 @@ static int __init lov_init(void)
                 return -ENOMEM;
         }
 
-	rc = class_register_type(&lov_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&lov_obd_ops, NULL, true,
 				 LUSTRE_LOV_NAME, &lov_device_type);
         if (rc) {
 		kmem_cache_destroy(lov_oinfo_slab);

@@ -684,7 +684,7 @@ static const struct obd_ops mds_obd_device_ops = {
 
 int mds_mod_init(void)
 {
-	return class_register_type(&mds_obd_device_ops, NULL, false, NULL,
+	return class_register_type(&mds_obd_device_ops, NULL, false,
 				   LUSTRE_MDS_NAME, &mds_device_type);
 }
 

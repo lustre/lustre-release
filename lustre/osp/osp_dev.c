@@ -1901,14 +1901,14 @@ static int __init osp_init(void)
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&osp_obd_device_ops, NULL, false, NULL,
+	rc = class_register_type(&osp_obd_device_ops, NULL, false,
 				 LUSTRE_OSP_NAME, &osp_device_type);
 	if (rc != 0) {
 		lu_kmem_fini(osp_caches);
 		return rc;
 	}
 
-	rc = class_register_type(&lwp_obd_device_ops, NULL, false, NULL,
+	rc = class_register_type(&lwp_obd_device_ops, NULL, false,
 				 LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
 		class_unregister_type(LUSTRE_OSP_NAME);

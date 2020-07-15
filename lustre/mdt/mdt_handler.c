@@ -7400,7 +7400,7 @@ static int __init mdt_init(void)
 	if (rc)
 		GOTO(lu_fini, rc);
 
-	rc = class_register_type(&mdt_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&mdt_obd_device_ops, NULL, true,
 				 LUSTRE_MDT_NAME, &mdt_device_type);
 	if (rc)
 		GOTO(mds_fini, rc);
