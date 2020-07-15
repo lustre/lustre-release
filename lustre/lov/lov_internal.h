@@ -182,27 +182,7 @@ struct lsm_operations {
 	struct lov_stripe_md *(*lsm_unpackmd)(struct lov_obd *, void *, size_t);
 };
 
-extern const struct lsm_operations lsm_v1_ops;
-extern const struct lsm_operations lsm_v3_ops;
-extern const struct lsm_operations lsm_comp_md_v1_ops;
-extern const struct lsm_operations lsm_foreign_ops;
-static inline const struct lsm_operations *lsm_op_find(int magic)
-{
-	switch (magic) {
-	case LOV_MAGIC_V1:
-		return &lsm_v1_ops;
-	case LOV_MAGIC_V3:
-		return &lsm_v3_ops;
-	case LOV_MAGIC_COMP_V1:
-		return &lsm_comp_md_v1_ops;
-	case LOV_MAGIC_FOREIGN:
-		return &lsm_foreign_ops;
-	default:
-		CERROR("unrecognized lsm_magic %08x\n", magic);
-		return NULL;
-	}
-}
-
+const struct lsm_operations *lsm_op_find(int magic);
 void lsm_free(struct lov_stripe_md *lsm);
 
 /* lov_do_div64(a, b) returns a % b, and a = a / b.

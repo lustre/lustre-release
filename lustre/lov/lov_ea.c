@@ -364,7 +364,7 @@ lsm_unpackmd_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 	return lsm_unpackmd_v1v3(lov, buf, buf_size, NULL, lmm->lmm_objects);
 }
 
-const struct lsm_operations lsm_v1_ops = {
+static const struct lsm_operations lsm_v1_ops = {
 	.lsm_unpackmd		= lsm_unpackmd_v1,
 };
 
@@ -377,7 +377,7 @@ lsm_unpackmd_v3(struct lov_obd *lov, void *buf, size_t buf_size)
 				 lmm->lmm_objects);
 }
 
-const struct lsm_operations lsm_v3_ops = {
+static const struct lsm_operations lsm_v3_ops = {
 	.lsm_unpackmd		= lsm_unpackmd_v3,
 };
 
@@ -564,8 +564,8 @@ out_lsm:
 	RETURN(ERR_PTR(rc));
 }
 
-const struct lsm_operations lsm_comp_md_v1_ops = {
-	.lsm_unpackmd         = lsm_unpackmd_comp_md_v1,
+static const struct lsm_operations lsm_comp_md_v1_ops = {
+	.lsm_unpackmd		= lsm_unpackmd_comp_md_v1,
 };
 
 static struct
@@ -602,9 +602,26 @@ lov_stripe_md *lsm_unpackmd_foreign(struct lov_obd *lov, void *buf,
 	return lsm;
 }
 
-const struct lsm_operations lsm_foreign_ops = {
-	.lsm_unpackmd         = lsm_unpackmd_foreign,
+static const struct lsm_operations lsm_foreign_ops = {
+	.lsm_unpackmd		= lsm_unpackmd_foreign,
 };
+
+const struct lsm_operations *lsm_op_find(int magic)
+{
+	switch (magic) {
+	case LOV_MAGIC_V1:
+		return &lsm_v1_ops;
+	case LOV_MAGIC_V3:
+		return &lsm_v3_ops;
+	case LOV_MAGIC_COMP_V1:
+		return &lsm_comp_md_v1_ops;
+	case LOV_MAGIC_FOREIGN:
+		return &lsm_foreign_ops;
+	default:
+		CERROR("unrecognized lsm_magic %08x\n", magic);
+		return NULL;
+	}
+}
 
 void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 {
