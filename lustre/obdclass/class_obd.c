@@ -209,7 +209,7 @@ static int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 }
 
 /* buffer MUST be at least the size of obd_ioctl_hdr */
-int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
+int obd_ioctl_getdata(struct obd_ioctl_data **datap, int *len, void __user *arg)
 {
 	struct obd_ioctl_hdr hdr;
 	struct obd_ioctl_data *data;
@@ -241,23 +241,22 @@ int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
 	 * obdfilter-survey is an example, which relies on ioctl. So we'd
 	 * better avoid vmalloc on ioctl path. LU-66
 	 */
-	OBD_ALLOC_LARGE(*buf, hdr.ioc_len);
-	if (!*buf) {
+	OBD_ALLOC_LARGE(data, hdr.ioc_len);
+	if (!data) {
 		CERROR("Cannot allocate control buffer of len %d\n",
 		       hdr.ioc_len);
 		RETURN(-EINVAL);
 	}
 	*len = hdr.ioc_len;
-	data = (struct obd_ioctl_data *)*buf;
 
-	if (copy_from_user(*buf, arg, hdr.ioc_len)) {
-		OBD_FREE_LARGE(*buf, hdr.ioc_len);
+	if (copy_from_user(data, arg, hdr.ioc_len)) {
+		OBD_FREE_LARGE(data, hdr.ioc_len);
 		RETURN(-EFAULT);
 	}
 
 	if (obd_ioctl_is_invalid(data)) {
 		CERROR("ioctl not correctly formatted\n");
-		OBD_FREE_LARGE(*buf, hdr.ioc_len);
+		OBD_FREE_LARGE(data, hdr.ioc_len);
 		RETURN(-EINVAL);
 	}
 
@@ -279,24 +278,24 @@ int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
 	if (data->ioc_inllen4)
 		data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
 
+	*datap = data;
+
 	RETURN(0);
 }
 EXPORT_SYMBOL(obd_ioctl_getdata);
 
 int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 {
-	char *buf = NULL;
 	struct obd_ioctl_data *data;
 	struct obd_device *obd = NULL;
 	int err = 0, len = 0;
 
 	ENTRY;
 	CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
-	if (obd_ioctl_getdata(&buf, &len, (void __user *)arg)) {
+	if (obd_ioctl_getdata(&data, &len, (void __user *)arg)) {
 		CERROR("OBD ioctl: data error\n");
 		RETURN(-EINVAL);
 	}
-	data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
         case OBD_IOC_PROCESS_CFG: {
@@ -471,7 +470,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 	if (copy_to_user((void __user *)arg, data, len))
 		err = -EFAULT;
 out:
-	OBD_FREE_LARGE(buf, len);
+	OBD_FREE_LARGE(data, len);
 	RETURN(err);
 } /* class_handle_ioctl */
 

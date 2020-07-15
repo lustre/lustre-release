@@ -1008,51 +1008,48 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			RETURN(-EFAULT);
 		break;
         }
-        case OBD_IOC_LOV_GET_CONFIG: {
-                struct obd_ioctl_data *data;
-                struct lov_desc *desc;
-                char *buf = NULL;
-                __u32 *genp;
+	case OBD_IOC_LOV_GET_CONFIG: {
+		struct obd_ioctl_data *data = NULL;
+		struct lov_desc *desc;
+		__u32 *genp;
 
-                len = 0;
-		if (obd_ioctl_getdata(&buf, &len, uarg))
-                        RETURN(-EINVAL);
+		len = 0;
+		if (obd_ioctl_getdata(&data, &len, uarg))
+			RETURN(-EINVAL);
 
-                data = (struct obd_ioctl_data *)buf;
+		if (sizeof(*desc) > data->ioc_inllen1) {
+			OBD_FREE_LARGE(data, len);
+			RETURN(-EINVAL);
+		}
 
-                if (sizeof(*desc) > data->ioc_inllen1) {
-			OBD_FREE_LARGE(buf, len);
-                        RETURN(-EINVAL);
-                }
+		if (sizeof(uuidp->uuid) * count > data->ioc_inllen2) {
+			OBD_FREE_LARGE(data, len);
+			RETURN(-EINVAL);
+		}
 
-                if (sizeof(uuidp->uuid) * count > data->ioc_inllen2) {
-			OBD_FREE_LARGE(buf, len);
-                        RETURN(-EINVAL);
-                }
+		if (sizeof(__u32) * count > data->ioc_inllen3) {
+			OBD_FREE_LARGE(data, len);
+			RETURN(-EINVAL);
+		}
 
-                if (sizeof(__u32) * count > data->ioc_inllen3) {
-			OBD_FREE_LARGE(buf, len);
-                        RETURN(-EINVAL);
-                }
+		desc = (struct lov_desc *)data->ioc_inlbuf1;
+		memcpy(desc, &lov->desc, sizeof(*desc));
 
-                desc = (struct lov_desc *)data->ioc_inlbuf1;
-                memcpy(desc, &(lov->desc), sizeof(*desc));
+		uuidp = (struct obd_uuid *)data->ioc_inlbuf2;
+		genp = (__u32 *)data->ioc_inlbuf3;
+		/* the uuid will be empty for deleted OSTs */
+		for (i = 0; i < count; i++, uuidp++, genp++) {
+			if (!lov->lov_tgts[i])
+				continue;
+			*uuidp = lov->lov_tgts[i]->ltd_uuid;
+			*genp = lov->lov_tgts[i]->ltd_gen;
+		}
 
-                uuidp = (struct obd_uuid *)data->ioc_inlbuf2;
-                genp = (__u32 *)data->ioc_inlbuf3;
-                /* the uuid will be empty for deleted OSTs */
-                for (i = 0; i < count; i++, uuidp++, genp++) {
-                        if (!lov->lov_tgts[i])
-                                continue;
-                        *uuidp = lov->lov_tgts[i]->ltd_uuid;
-                        *genp = lov->lov_tgts[i]->ltd_gen;
-                }
-
-		if (copy_to_user(uarg, buf, len))
-                        rc = -EFAULT;
-		OBD_FREE_LARGE(buf, len);
-                break;
-        }
+		if (copy_to_user(uarg, data, len))
+			rc = -EFAULT;
+		OBD_FREE_LARGE(data, len);
+		break;
+	}
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl = karg;
                 struct lov_tgt_desc *tgt = NULL;

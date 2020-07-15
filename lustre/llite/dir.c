@@ -1350,7 +1350,7 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct dentry *dentry = file_dentry(file);
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct obd_ioctl_data *data;
+	struct obd_ioctl_data *data = NULL;
 	int rc = 0;
 	ENTRY;
 
@@ -1388,14 +1388,12 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		return 0;
 	}
 	case IOC_MDC_LOOKUP: {
-				     int namelen, len = 0;
-		char *buf = NULL;
+		int namelen, len = 0;
 		char *filename;
 
-		rc = obd_ioctl_getdata(&buf, &len, (void __user *)arg);
+		rc = obd_ioctl_getdata(&data, &len, (void __user *)arg);
 		if (rc != 0)
 			RETURN(rc);
-		data = (void *)buf;
 
 		filename = data->ioc_inlbuf1;
 		namelen = strlen(filename);
@@ -1411,12 +1409,11 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			GOTO(out_free, rc);
 		}
 out_free:
-		OBD_FREE_LARGE(buf, len);
-                return rc;
-        }
+		OBD_FREE_LARGE(data, len);
+		return rc;
+	}
 	case LL_IOC_LMV_SETSTRIPE: {
 		struct lmv_user_md  *lum;
-		char		*buf = NULL;
 		char		*filename;
 		int		 namelen = 0;
 		int		 lumlen = 0;
@@ -1424,11 +1421,10 @@ out_free:
 		int		 len;
 		int		 rc;
 
-		rc = obd_ioctl_getdata(&buf, &len, (void __user *)arg);
+		rc = obd_ioctl_getdata(&data, &len, (void __user *)arg);
 		if (rc)
 			RETURN(rc);
 
-		data = (void *)buf;
 		if (data->ioc_inlbuf1 == NULL || data->ioc_inlbuf2 == NULL ||
 		    data->ioc_inllen1 == 0 || data->ioc_inllen2 == 0)
 			GOTO(lmv_out_free, rc = -EINVAL);
@@ -1467,7 +1463,7 @@ out_free:
 		mode = data->ioc_type;
 		rc = ll_dir_setdirstripe(dentry, lum, lumlen, filename, mode);
 lmv_out_free:
-		OBD_FREE_LARGE(buf, len);
+		OBD_FREE_LARGE(data, len);
 		RETURN(rc);
 
 	}
@@ -2095,17 +2091,15 @@ out_hur:
 	}
 	case LL_IOC_MIGRATE: {
 		struct lmv_user_md *lum;
-		char *buf = NULL;
 		int len;
 		char *filename;
 		int namelen = 0;
 		int rc;
 
-		rc = obd_ioctl_getdata(&buf, &len, (void __user *)arg);
+		rc = obd_ioctl_getdata(&data, &len, (void __user *)arg);
 		if (rc)
 			RETURN(rc);
 
-		data = (struct obd_ioctl_data *)buf;
 		if (data->ioc_inlbuf1 == NULL || data->ioc_inlbuf2 == NULL ||
 		    data->ioc_inllen1 == 0 || data->ioc_inllen2 == 0)
 			GOTO(migrate_free, rc = -EINVAL);
@@ -2129,7 +2123,7 @@ out_hur:
 
 		rc = ll_migrate(inode, file, lum, filename);
 migrate_free:
-		OBD_FREE_LARGE(buf, len);
+		OBD_FREE_LARGE(data, len);
 
 		RETURN(rc);
 	}

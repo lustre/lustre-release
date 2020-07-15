@@ -1862,7 +1862,8 @@ struct root_squash_info {
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);
 
 /* linux-module.c */
-int obd_ioctl_getdata(char **buf, int *len, void __user *arg);
+struct obd_ioctl_data;
+int obd_ioctl_getdata(struct obd_ioctl_data **data, int *len, void __user *arg);
 int class_procfs_init(void);
 int class_procfs_clean(void);
 

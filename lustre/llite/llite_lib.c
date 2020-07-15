@@ -2996,44 +2996,44 @@ out:
 
 int ll_obd_statfs(struct inode *inode, void __user *arg)
 {
-        struct ll_sb_info *sbi = NULL;
-        struct obd_export *exp;
-        char *buf = NULL;
-        struct obd_ioctl_data *data = NULL;
-        __u32 type;
-        int len = 0, rc;
+	struct ll_sb_info *sbi = NULL;
+	struct obd_export *exp;
+	struct obd_ioctl_data *data = NULL;
+	__u32 type;
+	int len = 0, rc;
 
-        if (!inode || !(sbi = ll_i2sbi(inode)))
-                GOTO(out_statfs, rc = -EINVAL);
+	if (inode)
+		sbi = ll_i2sbi(inode);
+	if (!sbi)
+		GOTO(out_statfs, rc = -EINVAL);
 
-        rc = obd_ioctl_getdata(&buf, &len, arg);
-        if (rc)
-                GOTO(out_statfs, rc);
+	rc = obd_ioctl_getdata(&data, &len, arg);
+	if (rc)
+		GOTO(out_statfs, rc);
 
-        data = (void*)buf;
-        if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2 ||
-            !data->ioc_pbuf1 || !data->ioc_pbuf2)
-                GOTO(out_statfs, rc = -EINVAL);
+	if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2 ||
+	    !data->ioc_pbuf1 || !data->ioc_pbuf2)
+		GOTO(out_statfs, rc = -EINVAL);
 
-        if (data->ioc_inllen1 != sizeof(__u32) ||
-            data->ioc_inllen2 != sizeof(__u32) ||
-            data->ioc_plen1 != sizeof(struct obd_statfs) ||
-            data->ioc_plen2 != sizeof(struct obd_uuid))
-                GOTO(out_statfs, rc = -EINVAL);
+	if (data->ioc_inllen1 != sizeof(__u32) ||
+	    data->ioc_inllen2 != sizeof(__u32) ||
+	    data->ioc_plen1 != sizeof(struct obd_statfs) ||
+	    data->ioc_plen2 != sizeof(struct obd_uuid))
+		GOTO(out_statfs, rc = -EINVAL);
 
-        memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
+	memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
 	if (type & LL_STATFS_LMV)
-                exp = sbi->ll_md_exp;
+		exp = sbi->ll_md_exp;
 	else if (type & LL_STATFS_LOV)
-                exp = sbi->ll_dt_exp;
-        else
-                GOTO(out_statfs, rc = -ENODEV);
+		exp = sbi->ll_dt_exp;
+	else
+		GOTO(out_statfs, rc = -ENODEV);
 
-	rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, NULL);
-        if (rc)
-                GOTO(out_statfs, rc);
+	rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, data, NULL);
+	if (rc)
+		GOTO(out_statfs, rc);
 out_statfs:
-	OBD_FREE_LARGE(buf, len);
+	OBD_FREE_LARGE(data, len);
 	return rc;
 }
 
