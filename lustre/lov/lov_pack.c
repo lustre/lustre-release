@@ -90,34 +90,6 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 			     le16_to_cpu(lmm->lmm_stripe_count));
 }
 
-void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
-{
-	lov_dump_lmm_common(level, lmm);
-	CDEBUG_LIMIT(level, "pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
-	lov_dump_lmm_objects(level, lmm->lmm_objects,
-			     le16_to_cpu(lmm->lmm_stripe_count));
-}
-
-void lov_dump_lmm(int level, void *lmm)
-{
-	int magic;
-
-	magic = le32_to_cpu(((struct lov_mds_md *)lmm)->lmm_magic);
-	switch (magic) {
-	case LOV_MAGIC_V1:
-		lov_dump_lmm_v1(level, (struct lov_mds_md_v1 *)lmm);
-		break;
-	case LOV_MAGIC_V3:
-		lov_dump_lmm_v3(level, (struct lov_mds_md_v3 *)lmm);
-		break;
-	default:
-		CDEBUG_LIMIT(level, "unrecognized lmm_magic %x, assuming %x\n",
-			     magic, LOV_MAGIC_V1);
-		lov_dump_lmm_common(level, lmm);
-		break;
-	}
-}
-
 /**
  * Pack LOV striping metadata for disk storage format (in little
  * endian byte order).
@@ -126,8 +98,8 @@ void lov_dump_lmm(int level, void *lmm)
  * then return the size needed. If \a buf_size is too small then
  * return -ERANGE. Otherwise return the size of the result.
  */
-ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
-			  size_t buf_size)
+static ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
+				 size_t buf_size)
 {
 	struct lov_mds_md_v1 *lmmv1 = buf;
 	struct lov_mds_md_v3 *lmmv3 = buf;
@@ -183,8 +155,8 @@ ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
 	RETURN(lmm_size);
 }
 
-ssize_t lov_lsm_pack_foreign(const struct lov_stripe_md *lsm, void *buf,
-			     size_t buf_size)
+static ssize_t lov_lsm_pack_foreign(const struct lov_stripe_md *lsm, void *buf,
+				    size_t buf_size)
 {
 	struct lov_foreign_md *lfm = buf;
 	size_t lfm_size;
