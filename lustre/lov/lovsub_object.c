@@ -48,13 +48,12 @@
  *
  */
 
-int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
-		       const struct lu_object_conf *conf)
+static int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
+			      const struct lu_object_conf *conf)
 {
 	struct lovsub_device *dev = lu2lovsub_dev(obj->lo_dev);
 	struct lu_object *below;
 	struct lu_device *under;
-
 	int result;
 
 	ENTRY;

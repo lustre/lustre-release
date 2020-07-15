@@ -596,15 +596,6 @@ extern struct kmem_cache *lov_session_kmem;
 
 extern struct kmem_cache *lovsub_object_kmem;
 
-int   lov_object_init     (const struct lu_env *env, struct lu_object *obj,
-                           const struct lu_object_conf *conf);
-int   lovsub_object_init  (const struct lu_env *env, struct lu_object *obj,
-                           const struct lu_object_conf *conf);
-int   lov_lock_init       (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_lock *lock, const struct cl_io *io);
-int   lov_io_init         (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_io *io);
-
 int   lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
                            struct cl_lock *lock, const struct cl_io *io);
 int   lov_lock_init_empty (const struct lu_env *env, struct cl_object *obj,
@@ -619,8 +610,6 @@ int   lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
                                int stripe);
 
-int   lov_page_init       (const struct lu_env *env, struct cl_object *ob,
-			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_empty (const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
@@ -635,7 +624,6 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
                                       const struct lu_object_header *hdr,
                                       struct lu_device *dev);
 
-struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov);
 int lov_page_stripe(const struct cl_page *page);
 bool lov_page_is_empty(const struct cl_page *page);
 int lov_lsm_entry(const struct lov_stripe_md *lsm, __u64 offset);
