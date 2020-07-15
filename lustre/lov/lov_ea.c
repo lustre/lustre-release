@@ -344,7 +344,7 @@ out_lsme:
 	return ERR_PTR(rc);
 }
 
-static inline struct lov_stripe_md *
+static struct lov_stripe_md *
 lsm_unpackmd_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 {
 	struct lov_mds_md_v1 *lmm = buf;
@@ -353,12 +353,11 @@ lsm_unpackmd_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 }
 
 const struct lsm_operations lsm_v1_ops = {
-        .lsm_unpackmd           = lsm_unpackmd_v1,
+	.lsm_unpackmd		= lsm_unpackmd_v1,
 };
 
-static inline
-struct lov_stripe_md *lsm_unpackmd_v3(struct lov_obd *lov, void *buf,
-				      size_t buf_size)
+static struct lov_stripe_md *
+lsm_unpackmd_v3(struct lov_obd *lov, void *buf, size_t buf_size)
 {
 	struct lov_mds_md_v3 *lmm = buf;
 
@@ -367,7 +366,7 @@ struct lov_stripe_md *lsm_unpackmd_v3(struct lov_obd *lov, void *buf,
 }
 
 const struct lsm_operations lsm_v3_ops = {
-	.lsm_unpackmd           = lsm_unpackmd_v3,
+	.lsm_unpackmd		= lsm_unpackmd_v3,
 };
 
 static int lsm_verify_comp_md_v1(struct lov_comp_md_v1 *lcm,
