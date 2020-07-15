@@ -2,33 +2,40 @@
 <preface xmlns="http://docbook.org/ns/docbook"
  xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
   <title>Preface</title>
-  <para>The <emphasis role="italic">Lustre<superscript>*</superscript>Software Release 2.x
-      Operations Manual</emphasis> provides detailed information and procedures to install,
-    configure and tune a Lustre file system. The manual covers topics such as failover, quotas,
-    striping, and bonding. This manual also contains troubleshooting information and tips to improve
+  <para>The <emphasis role="italic">Lustre<superscript>*</superscript>Software
+    Release 2.x Operations Manual</emphasis> provides detailed information and
+    procedures to install, configure and tune a Lustre file system. The manual
+    covers topics such as failover, quotas, striping, and bonding. This manual
+    also contains troubleshooting information and tips to improve
     the operation and performance of a Lustre file system.</para>
   <section remap="h2">
     <title>About this Document</title>
     <para>This document is maintained by Whamcloud in Docbook format. The
     canonical version is available at
-    <link xl:href="http://wiki.whamcloud.com/display/PUB/Documentation">http://wiki.whamcloud.com/display/PUB/Documentation</link>. </para>
+    <link xl:href="https://wiki.whamcloud.com/display/PUB/Documentation">
+      https://wiki.whamcloud.com/display/PUB/Documentation
+    </link>. </para>
 
     <section remap="h2">
       <title>UNIX<superscript>*</superscript> Commands</title>
-      <para>This document may not contain information about basic UNIX<superscript>*</superscript>
-        operating system commands and procedures such as shutting down the system, booting the
-        system, and configuring devices. Refer to the following for this information:</para>
+      <para>This document does not contain information about basic
+        UNIX<superscript>*</superscript> operating system commands and
+        procedures such as shutting down the system, booting the system, and
+        configuring devices. Refer to the following for this information:</para>
       <itemizedlist>
         <listitem>
-          <para> Software documentation that you received with your system</para>
+          <para>Software documentation that you received with your system</para>
         </listitem>
         <listitem>
-          <para> Red Hat<superscript>*</superscript> Enterprise Linux<superscript>*</superscript>
-            documentation, which is at: <link xl:href="http://docs.redhat.com/docs/en-US/index.html"
-              >http://docs.redhat.com/docs/en-US/index.html</link></para>
-  <note><para> The Lustre client module is available for many different Linux<superscript>*</superscript>
-              versions and distributions. The Red Hat Enterprise Linux distribution is the best
-              supported and tested platform for Lustre servers. </para></note>
+          <para>Red Hat<superscript>*</superscript> Enterprise
+            Linux<superscript>*</superscript> documentation, which is at:
+            <link xl:href="https://docs.redhat.com/docs/en-US/index.html">
+            https://docs.redhat.com/docs/en-US/index.html</link>
+          </para>
+          <note><para>The Lustre client module is available for many different
+            Linux<superscript>*</superscript> versions and distributions. The
+            Red Hat Enterprise Linux distribution is the best supported and
+            tested platform for Lustre servers.</para></note>
         </listitem>
       </itemizedlist>
     </section>
@@ -146,8 +153,8 @@
               </entry>
               <entry>
                 <para> Online at <link
-                    xl:href="http://wiki.whamcloud.com/display/PUB/Documentation"
-                    >http://wiki.whamcloud.com/display/PUB/Documentation</link></para>
+                    xl:href="https://wiki.whamcloud.com/display/PUB/Documentation"
+                    >https://wiki.whamcloud.com/display/PUB/Documentation</link></para>
               </entry>
             </row>
             <row>
@@ -164,8 +171,8 @@
               </entry>
               <entry>
                 <para> Online at <link
-                    xl:href="http://wiki.whamcloud.com/display/PUB/Documentation"
-                    >http://wiki.whamcloud.com/display/PUB/Documentation</link></para>
+                    xl:href="https://wiki.whamcloud.com/display/PUB/Documentation"
+                    >https://wiki.whamcloud.com/display/PUB/Documentation</link></para>
               </entry>
             </row>
           </tbody>
@@ -177,11 +184,11 @@
       <para>These web sites provide additional resources:</para>
       <itemizedlist>
         <listitem>
-					<para> Documentation
-						<link xl:href="http://wiki.whamcloud.com/display/PUB/Documentation">
-						http://wiki.whamcloud.com/display/PUB/Documentation</link>
-						<link xl:href="http://www.lustre.org">
-						http://www.lustre.org</link></para>
+          <para> Documentation
+          <link xl:href="https://wiki.whamcloud.com/display/PUB/Documentation">
+            https://wiki.whamcloud.com/display/PUB/Documentation</link>
+          <link xl:href="https://www.lustre.org">https://www.lustre.org</link>
+          </para>
         </listitem>
         <listitem>
           <para> Support <link xl:href="https://jira.whamcloud.com/">https://jira.whamcloud.com/</link></para>
@@ -189,7 +196,7 @@
       </itemizedlist>
     </section>
   </section>
-    <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
 </preface>
 <!--
   vim:expandtab:shiftwidth=2:tabstop=8:

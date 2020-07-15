@@ -229,7 +229,7 @@ XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
       always be safely specified.</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.50438194_57420">
+  <section xml:id="failover_ost">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -802,7 +802,7 @@ osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438194_41817">
+  <section xml:id="failover_nids">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -1049,8 +1049,8 @@ Inode      Pathname
     <note>
       <para>To find the Lustre file from a disk LBA, follow the steps listed in
       the document at this URL: 
-      <link xl:href="http://smartmontools.sourceforge.net/badblockhowto.html">
-      http://smartmontools.sourceforge.net/badblockhowto.html</link>. Then,
+      <link xl:href="https://www.smartmontools.org/wiki/BadBlockHowto">
+      https://www.smartmontools.org/wiki/BadBlockHowto</link>. Then,
       follow the steps above to resolve the Lustre filename.</para>
     </note>
   </section>

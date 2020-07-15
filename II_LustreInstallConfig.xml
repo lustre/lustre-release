@@ -50,17 +50,22 @@
       </itemizedlist>
   </partintro>
 
-
-  <xi:include href="InstallOverview.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpLustreSystem.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringStorage.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpBonding.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="InstallingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLNet.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
+  <xi:include href="InstallOverview.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="SettingUpLustreSystem.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ConfiguringStorage.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="SettingUpBonding.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="InstallingLustre.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ConfiguringLNet.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ConfiguringLustre.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ConfiguringFailover.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
 <!--

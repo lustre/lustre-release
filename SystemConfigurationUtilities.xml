@@ -42,10 +42,10 @@
       <para><xref linkend="dbdoclet.50438219_63667"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_75432"/></para>
+      <para><xref linkend="mkfs.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_12635"/></para>
+      <para><xref linkend="mount.lustre"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438219_82679"/></para>
@@ -54,17 +54,18 @@
       <para><xref linkend="dbdoclet.50438219_51496"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_39574"/></para>
+      <para><xref linkend="tunefs.lustre"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438219_99928"/></para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438219_55923">
-      <title><indexterm><primary>e2scan</primary></indexterm>
-                  e2scan</title>
+      <title><indexterm><primary>e2scan</primary></indexterm>e2scan</title>
     <para>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
-    <para><link xl:href="http://downloads.whamcloud.com/public/e2fsprogs/latest/">http://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
+    <para>
+    <link xl:href="https://downloads.whamcloud.com/public/e2fsprogs/latest/">
+      https://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>e2scan [options] [-f file] block_device</screen>
@@ -794,16 +795,18 @@ lctl &gt; quit</screen>
       <title>See Also</title>
       <itemizedlist>
         <listitem>
-          <para> <xref linkend="dbdoclet.50438219_75432"/> </para>
+          <para> <xref linkend="mkfs.lustre"/>
+          </para>
         </listitem>
         <listitem>
-          <para> <xref linkend="dbdoclet.50438219_12635"/> </para>
+          <para> <xref linkend="mount.lustre"/>
+          </para>
         </listitem>
         <listitem>
           <para> <xref linkend="dbdoclet.50438219_38274"/> </para>
         </listitem>
         <listitem>
-          <para> <xref linkend="dbdoclet.50438206_94597"/> </para>
+          <para> <xref linkend="userutilities.lfs"/> </para>
         </listitem>
       </itemizedlist>
     </section>
@@ -830,7 +833,7 @@ ll_decode_filter_fid</title>
         and is not accessed or modified by Lustre after that time.</para>
       <para>The OST object ID (objid) may be useful in case of OST directory
         corruption, though LFSCK can normally reconstruct the entire OST object
-	directory tree, see <xref linkend="dbdoclet.lfsckadmin" /> for details.
+        directory tree, see <xref linkend="dbdoclet.lfsckadmin" /> for details.
         The MDS FID can be useful to determine which MDS inode an OST object
         is (or was) used by. The stripe index can be used in conjunction with
         other OST objects to reconstruct the layout of a file even if the MDT
@@ -921,7 +924,7 @@ llog_reader /tmp/tfs-client</screen>
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.50438219_39574"/></para>
+      <para><xref linkend="tunefs.lustre"/></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438219_23232">
@@ -1456,10 +1459,10 @@ Changelog records consumed: 42</screen>
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.50438206_94597"/></para>
+      <para><xref linkend="userutilities.lfs"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_75432">
+  <section xml:id="mkfs.lustre">
     <title><indexterm><primary>mkfs.lustre</primary></indexterm>
 mkfs.lustre</title>
     <para>The <literal>mkfs.lustre</literal> utility formats a disk for a Lustre service.</para>
@@ -1577,12 +1580,15 @@ mkfs.lustre</title>
               </entry>
             </row>
             <row>
-              <entry nameend="c2" namest="c1"
-                    ><literal>--servicenode=<replaceable>nid,...</replaceable></literal></entry>
-              <entry>Sets the NID(s) of all service nodes, including primary and failover partner
-                service nodes. The <literal>--servicenode</literal> option cannot be used with
-                  <literal>--failnode</literal> option. See <xref
-                  xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/> for
+              <entry nameend="c2" namest="c1">
+              <literal>--servicenode=<replaceable>nid,...</replaceable></literal>
+              </entry>
+              <entry>Sets the NID(s) of all service nodes, including primary
+                and failover partner service nodes. The
+                <literal>--servicenode</literal> option cannot be used with
+                <literal>--failnode</literal> option. See
+                <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_setup"/> for
                 more details.</entry>
             </row>
             <row>
@@ -1593,11 +1599,12 @@ mkfs.lustre</title>
                 <para>Sets the NID(s) of a failover service node for a primary server for a target.
                   The <literal>--failnode</literal> option cannot be used with
                     <literal>--servicenode</literal> option. See <xref
-                    xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/>
+                    xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="failover_setup"/>
                   for more details.<note>
                     <para>When the <literal>--failnode</literal> option is used, certain
                       restrictions apply (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                        linkend="dbdoclet.50438188_92688"/>).</para>
+                        linkend="failover_setup"/>).</para>
                   </note></para>
               </entry>
             </row>
@@ -1769,18 +1776,22 @@ mkfs.lustre</title>
       <title>See Also</title>
       <itemizedlist>
         <listitem>
-          <para><xref linkend="dbdoclet.50438219_75432"/>mkfs.lustre, </para>
+          <para>
+            <xref linkend="mkfs.lustre"/>
+            mkfs.lustre, </para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.50438219_12635"/>mount.lustre, </para>
+          <para>
+            <xref linkend="mount.lustre"/>
+            mount.lustre, </para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.50438206_94597"/>lfs</para>
+          <para><xref linkend="userutilities.lfs"/>lfs</para>
         </listitem>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_12635">
+  <section xml:id="mount.lustre">
     <title><indexterm><primary>mount.lustre</primary></indexterm>
 mount.lustre</title>
     <para>The mount.lustre utility starts a Lustre client or target service.</para>
@@ -2260,16 +2271,17 @@ mount.lustre</title>
       <title>See Also</title>
       <itemizedlist>
         <listitem>
-          <para>  <xref linkend="dbdoclet.50438219_75432"/></para>
+          <para><xref linkend="mkfs.lustre"/>
+	  </para>
         </listitem>
         <listitem>
-          <para>  <xref linkend="dbdoclet.50438219_39574"/></para>
+          <para>  <xref linkend="tunefs.lustre"/></para>
         </listitem>
         <listitem>
           <para>  <xref linkend="dbdoclet.50438219_38274"/></para>
         </listitem>
         <listitem>
-          <para>  <xref linkend="dbdoclet.50438206_94597"/></para>
+          <para>  <xref linkend="userutilities.lfs"/></para>
         </listitem>
       </itemizedlist>
     </section>
@@ -2506,7 +2518,7 @@ M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
       <screen>/proc/sys/lnet/stats</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_39574">
+  <section xml:id="tunefs.lustre">
     <title><indexterm><primary>tunefs.lustre</primary></indexterm>
 tunefs.lustre</title>
     <para>The tunefs.lustre utility modifies configuration information on a Lustre target disk.</para>
@@ -2572,8 +2584,9 @@ tunefs.lustre</title>
                 <literal>--servicenode=<replaceable>nid,...</replaceable></literal></entry>
               <entry>Sets the NID(s) of all service nodes, including primary and failover partner
                 service nodes. The <literal>--servicenode</literal> option cannot be used with
-                  <literal>--failnode</literal> option. See <xref
-                  xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/> for
+                  <literal>--failnode</literal> option. See
+                  <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                   linkend="failover_setup"/> for
                 more details.</entry>
             </row>
             <row>
@@ -2581,15 +2594,16 @@ tunefs.lustre</title>
                 <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
               </entry>
               <entry>
-                <para>Sets the NID(s) of a failover service node for a primary server for a target.
-                  The <literal>--failnode</literal> option cannot be used with
-                    <literal>--servicenode</literal> option. See <xref
-                    xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/>
-                  for more details.<note>
-                    <para>When the <literal>--failnode</literal> option is used, certain
-                      restrictions apply (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                        linkend="dbdoclet.50438188_92688"/>).</para>
-                  </note></para>
+                <para>Sets the NID(s) of a failover service node for a primary
+                  server for a target.  The <literal>--failnode</literal>
+                  option cannot be used with <literal>--servicenode</literal>
+                  option. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="failover_setup"/> for more details.
+                  <note><para>When the <literal>--failnode</literal> option
+                    is used, certain restrictions apply (see
+                    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                     linkend="failover_setup"/>).</para></note>
+                </para>
               </entry>
             </row>
             <row>
@@ -2717,16 +2731,18 @@ tunefs.lustre</title>
       <title>See Also</title>
       <itemizedlist>
         <listitem>
-          <para><xref linkend="dbdoclet.50438219_75432"/></para>
+          <para><xref linkend="mkfs.lustre"/>
+          </para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.50438219_12635"/></para>
+          <para><xref linkend="mount.lustre"/>
+          </para>
         </listitem>
         <listitem>
           <para><xref linkend="dbdoclet.50438219_38274"/></para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.50438206_94597"/></para>
+          <para><xref linkend="userutilities.lfs"/></para>
         </listitem>
       </itemizedlist>
     </section>

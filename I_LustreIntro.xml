@@ -11,28 +11,32 @@
   <itemizedlist>
       <listitem>
           <para>
-              <xref linkend='understandinglustre' endterm='understandinglustre.title'/>
+              <xref linkend='understandinglustre'
+               endterm='understandinglustre.title'/>
           </para>
       </listitem>
       <listitem>
           <para>
-              <xref linkend='understandinglustrenetworking' endterm='understandinglustrenetworking.title'/>
+              <xref linkend='understandinglustrenetworking'
+               endterm='understandinglustrenetworking.title'/>
           </para>
       </listitem>
       <listitem>
           <para>
-              <xref linkend='understandingfailover' endterm='understandingfailover.title'/>
+              <xref linkend='understandingfailover'
+               endterm='understandingfailover.title'/>
           </para>
       </listitem>
   </itemizedlist>
 
   </partintro>
 
-  <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-  <xi:include href="UnderstandingLustreNetworking.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UnderstandingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
+  <xi:include href="UnderstandingLustre.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="UnderstandingLustreNetworking.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="UnderstandingFailover.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
 <!--

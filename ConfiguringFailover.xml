@@ -9,19 +9,22 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_82389"/></para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+         linkend="high_availability"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+       linkend="failover_setup"
         /></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_tnq_kbr_xl"/></para>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+       linkend="administering_failover"/></para>
     </listitem>
   </itemizedlist>
   <para>For an overview of failover functionality in a Lustre file system, see <xref
       xmlns:xlink="http://www.w3.org/1999/xlink" linkend="understandingfailover"/>.</para>
-  <section xml:id="dbdoclet.50438188_82389">
+  <section xml:id="high_availability">
     <title><indexterm>
         <primary>High availability</primary>
         <see>failover</see>
@@ -41,15 +44,16 @@
           <primary>failover</primary>
           <secondary>power control device</secondary>
         </indexterm>Selecting Power Equipment</title>
-      <para>Failover in a Lustre file system requires the use of a remote power control (RPC)
-        mechanism, which comes in different configurations. For example, Lustre server nodes may be
-        equipped with IPMI/BMC devices that allow remote power control. In the past, software or
-        even “sneakerware” has been used, but these are not recommended. For recommended devices,
-        refer to the list of supported RPC devices on the website for the PowerMan cluster power
-        management utility:</para>
+      <para>Failover in a Lustre file system requires the use of a remote
+        power control (RPC) mechanism, which comes in different configurations.
+        For example, Lustre server nodes may be equipped with IPMI/BMC devices
+        that allow remote power control. In the past, software or even
+        “sneakerware” has been used, but these are not recommended. For
+        recommended devices, refer to the list of supported RPC devices on the
+        website for the PowerMan cluster power management utility:</para>
       <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
-          xlink:href="http://code.google.com/p/powerman/wiki/SupportedDevs"
-          >http://code.google.com/p/powerman/wiki/SupportedDevs</link></para>
+             xlink:href="https://linux.die.net/man/7/powerman-devices">
+        https://linux.die.net/man/7/powerman-devices</link></para>
     </section>
     <section remap="h3">
       <title><indexterm>
@@ -61,13 +65,14 @@
         nodes and the risk of unrecoverable data corruption. A variety of power management tools
         will work. Two packages that have been commonly used with the Lustre software are PowerMan
         and Linux-HA (aka. STONITH ).</para>
-      <para>The PowerMan cluster power management utility is used to control RPC devices from a
-        central location. PowerMan provides native support for several RPC varieties and Expect-like
-        configuration simplifies the addition of new devices. The latest versions of PowerMan are
+      <para>The PowerMan cluster power management utility is used to control
+        RPC devices from a central location. PowerMan provides native support
+        for several RPC varieties and Expect-like configuration simplifies
+        the addition of new devices. The latest versions of PowerMan are
         available at: </para>
       <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
-          xlink:href="http://code.google.com/p/powerman/"
-        >http://code.google.com/p/powerman/</link></para>
+             xlink:href="https://github.com/chaos/powerman">
+          https://github.com/chaos/powerman</link></para>
       <para>STONITH, or “Shoot The Other Node In The Head”, is a set of power management tools
         provided with the Linux-HA package prior to Red Hat Enterprise Linux 6. Linux-HA has native
         support for many power control devices, is extensible (uses Expect scripts to automate
@@ -87,22 +92,23 @@
         up failover with Pacemaker, see:</para>
       <itemizedlist>
         <listitem>
-          <para>Pacemaker Project website:  <link xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="http://clusterlabs.org/"><link xlink:href="http://clusterlabs.org/"
-                >http://clusterlabs.org/</link></link></para>
+          <para>Pacemaker Project website:
+            <link xmlns:xlink="http://www.w3.org/1999/xlink"
+             xlink:href="https://clusterlabs.org/">https://clusterlabs.org/
+            </link></para>
         </listitem>
         <listitem>
-          <para>Article <emphasis role="italic">Using Pacemaker with a Lustre File
-            System</emphasis>:  <link xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System"
-                ><link
-                xlink:href="https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System"
-                >https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System</link></link></para>
+          <para>Article
+            <emphasis role="italic">Using Pacemaker with a Lustre File System
+            </emphasis>:
+            <link xmlns:xlink="http://www.w3.org/1999/xlink"
+             xlink:href="https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System">
+              https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System</link></para>
         </listitem>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438188_92688">
+  <section xml:id="failover_setup">
     <title><indexterm>
         <primary>failover</primary>
         <secondary>setup</secondary>
@@ -138,10 +144,12 @@
               /dev/sdb</screen></para>
     <para>More than two potential service nodes can be designated for a target. The target can then
       be mounted on any of the designated service nodes.</para>
-    <para>When HA is configured on a storage target, the Lustre software enables multi-mount
-      protection (MMP) on that storage target. MMP prevents multiple nodes from simultaneously
-      mounting and thus corrupting the data on the target. For more about MMP, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="managingfailover"/>.</para>
+    <para>When HA is configured on a storage target, the Lustre software
+      enables multi-mount protection (MMP) on that storage target. MMP prevents
+      multiple nodes from simultaneously mounting and thus corrupting the data
+      on the target. For more about MMP, see
+      <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+      linkend="managingfailover"/>.</para>
     <para>If the MGT has been formatted with multiple service nodes designated, this information
       must be conveyed to the Lustre client in the mount command used to mount the file system. In
       the example below, NIDs for two MGSs that have been designated as service nodes for the MGT
@@ -153,23 +161,26 @@
       the client attempts to access data on a target, it will try the NID for each specified service
       node until it connects to the target.</para>
   </section>
-  <section xml:id="section_tnq_kbr_xl">
+  <section xml:id="administering_failover">
     <title>Administering Failover in a Lustre File System</title>
     <para>For additional information about administering failover features in a Lustre file system, see:<itemizedlist>
         <listitem>
-          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438194_57420"
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_ost" /></para>
+        </listitem>
+        <listitem>
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_nids"
             /></para>
         </listitem>
         <listitem>
-          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438194_41817"
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="lustremaint.ChangeAddrFailoverNode"
             /></para>
         </listitem>
         <listitem>
-          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="lustremaint.ChangeAddrFailoverNode"
-            /></para>
-        </listitem>
-        <listitem>
-          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438219_75432"
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="mkfs.lustre"
             /></para>
         </listitem>
       </itemizedlist></para>

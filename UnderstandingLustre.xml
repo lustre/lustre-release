@@ -67,7 +67,7 @@
       <para>Lustre file systems run on a variety of vendor's kernels. For more
       details, see the Lustre Test Matrix
       <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-      linkend="dbdoclet.50438261_99193" />.</para>
+       linkend="preparing_installation" />.</para>
       <para>A Lustre installation can be scaled up or down with respect to the
       number of client nodes, disk storage and bandwidth. Scalability and
       performance are dependent on available disk and network bandwidth and the

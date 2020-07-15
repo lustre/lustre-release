@@ -27,7 +27,7 @@
     configuration, as are user-defined interface-section policies.</para>
     <para>The following link contains a detailed high-level design for the
     feature:
-    <link xl:href="http://wiki.lustre.org/images/b/bb/Multi-Rail_High-Level_Design_20150119.pdf">
+    <link xl:href="https://wiki.lustre.org/images/b/bb/Multi-Rail_High-Level_Design_20150119.pdf">
     Multi-Rail High-Level Design</link></para>
   </section>
   <section xml:id="dbdoclet.mrconfiguring">

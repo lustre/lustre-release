@@ -196,7 +196,9 @@ options bond0 mode=balance-alb miimon=100
           below includes detailed instructions for other configuration methods, instructions to use
           DHCP with bonding, and other setup details. We strongly recommend you use this
           website.</para>
-        <para><link xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding">http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link></para>
+        <para>
+        <link xl:href="https://wiki.linuxfoundation.org/networking/bonding">
+          http://www.linuxfoundation.org/networking/bonding</link></para>
       </listitem>
       <listitem>
         <para>Check /proc/net/bonding to determine status on bonding. There should be a file there for each bond interface.</para>
@@ -329,19 +331,16 @@ Interrupt:9 Base address:0x1400</screen>
             <literal>documentation/networking/bonding.txt</literal></para>
       </listitem>
       <listitem>
-        <para><link xl:href="http://linux-ip.net/html/ether-bonding.html"
-            >http://linux-ip.net/html/ether-bonding.html</link>.</para>
+        <para><link xl:href="http://linux-ip.net/html/ether-bonding.html">
+          http://linux-ip.net/html/ether-bonding.html</link>.</para>
       </listitem>
       <listitem>
-        <para><link xl:href="http://www.sourceforge.net/projects/bonding"
-            >http://www.sourceforge.net/projects/bonding</link>.</para>
-      </listitem>
-      <listitem>
-        <para>Linux Foundation bonding website: <link
-            xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding"
-            >http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link>. This
-          is the most extensive reference and we highly recommend it. This website includes
-          explanations of more complicated setups, including the use of DHCP with bonding.</para>
+        <para>Linux Foundation bonding website:
+        <link xl:href="https://www.linuxfoundation.org/networking/bonding">
+          https://www.linuxfoundation.org/networking/bonding</link>. This
+          is the most extensive reference and we highly recommend it. This
+          website includes explanations of more complicated setups, including
+          the use of DHCP with bonding.</para>
       </listitem>
     </itemizedlist>
   </section>

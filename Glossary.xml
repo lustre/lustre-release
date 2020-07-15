@@ -277,7 +277,7 @@
         to interact with Lustre software features, such as setting or checking
         file striping or per-target free space. For more details, see 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="dbdoclet.50438206_94597" />.</para>
+         linkend="userutilities.lfs" />.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="lfsck">

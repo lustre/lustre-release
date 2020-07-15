@@ -118,7 +118,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         necessary, to reduce the outage window.</para>
       </listitem>
     </orderedlist>
-    <section xml:id="dbdoclet.50438225_13916">
+    <section xml:id="orphan_objects">
       <title>
       <indexterm>
         <primary>recovery</primary>
@@ -1493,9 +1493,9 @@ lctl set_param obdfilter.${FSNAME}-${OST_target}.lfsck_speed_limit=
           below.</para>
           <para>There is also a
           <literal>noscrub</literal> mount option (see
-          <xref linkend="dbdoclet.50438219_12635" />) which can be used to
-          disable automatic OI scrub upon detection of a file-level backup at
-          mount time. If the
+          <xref linkend="mount.lustre" />) which
+          can be used to disable automatic OI scrub upon detection of a
+          file-level backup at mount time. If the
           <literal>noscrub</literal> mount option is specified,
           <literal>auto_scrub</literal> will also be disabled, so OI scrub will
           not be triggered when an OI inconsistency is detected. Auto scrub can

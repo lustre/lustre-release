@@ -13,7 +13,11 @@
 
     <para>Contact your local Intel sales office or your distributor to obtain the latest specifications and before placing your product order.</para>
 
-    <para>Copies of documents which have an order number and are referenced in this document, or other Intel literature, may be obtained by calling 1-800-548-4725, or go to: http://www.intel.com/design/literature.htm</para>
+    <para>Copies of documents which have an order number and are referenced
+    in this document, or other Intel literature, may be obtained by calling
+    1-800-548-4725, or go to:
+    https://www.intel.com/content/www/us/en/design/resource-design-center.html
+    </para>
 
     <para>Intel and the Intel logo are trademarks of Intel Corporation in the U.S. and/or other countries. Lustre is a registered trademark of Oracle Corporation.</para>
 
@@ -29,8 +33,14 @@
 
     <para>The information contained herein is subject to change without notice and is not warranted to be error-free.  If you find any errors, please report them to us in writing.</para>
 
-    <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit Creative Commons Attribution-Share Alike 3.0 United States [http://creativecommons.org/licenses/by-sa/3.0/us] or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
-
+    <para>This work is licensed under a Creative Commons Attribution-Share
+      Alike 3.0 United States License. To view a copy of this license and
+      obtain more information about Creative Commons licensing, visit
+      <link xl:href="http://creativecommons.org/licenses/by-sa/3.0/us">
+      Creative Commons Attribution-Share Alike 3.0 United States</link>
+      or send a letter to Creative Commons, 171 2nd Street, Suite 300,
+      San Francisco, California 94105, USA.
+    </para>
 </legalnotice>
 <!--
   vim:expandtab:shiftwidth=2:tabstop=8:

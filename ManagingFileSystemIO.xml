@@ -283,19 +283,14 @@ $ lfs getstripe -m ./remotedir/file.*.txt<lineannotation>check files are on MDT0
       </caution>
       <para>To create a new pool, run:</para>
       <screen>
-mgs# lctl pool_new 
-<replaceable>fsname</replaceable>.
-<replaceable>poolname</replaceable>
+mgs# lctl pool_new <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable>
 </screen>
       <note>
         <para>The pool name is an ASCII string up to 15 characters.</para>
       </note>
       <para>To add the named OST to a pool, run:</para>
       <screen>
-mgs# lctl pool_add 
-<replaceable>fsname</replaceable>.
-<replaceable>poolname</replaceable> 
-<replaceable>ost_list</replaceable>
+mgs# lctl pool_add <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable> <replaceable>ost_list</replaceable>
 </screen>
       <para>Where:</para>
       <itemizedlist>

@@ -233,7 +233,8 @@
         </listitem>
         <listitem>
           <para>Submit a ticket to the <link xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="https://jira.whamcloud.com/secure/Dashboard.jspa">Jira</link><abbrev><superscript>*</superscript></abbrev>
+              xlink:href="https://jira.whamcloud.com/">Jira</link>
+              <abbrev><superscript>*</superscript></abbrev>
            bug tracking and project management tool used for the Lustre project.
            If you are a first-time user, you'll need to open an account by
            clicking on <emphasis role="bold">Sign up</emphasis> on the

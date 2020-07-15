@@ -213,7 +213,7 @@
         (e2fsprogs is not needed with ZFS backend). In general, we recommend
         to use the latest e2fsprogs version available on
         <link xl:href="https://downloads.whamcloud.com/public/e2fsprogs/">
-        http://downloads.whamcloud.com/public/e2fsprogs/</link>.</para>
+        https://downloads.whamcloud.com/public/e2fsprogs/</link>.</para>
         <para>The ldiskfs OSD relies on the standard Linux quota to maintain
         accounting information on disk. As a consequence, the Linux kernel
         running on the Lustre servers using ldiskfs backend must have

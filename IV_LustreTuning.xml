@@ -28,13 +28,12 @@
   </partintro>
 
 
-  <xi:include href="LNetSelfTest.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="BenchmarkingTests.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
-
-
+  <xi:include href="LNetSelfTest.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="BenchmarkingTests.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreTuning.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
 <!--

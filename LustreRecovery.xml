@@ -63,7 +63,7 @@
       <xref linkend="metadatereplay"/>. For information on recovering from a
       corrupt file system, see <xref linkend="commitonshare"/>. For
       information on resolving orphaned objects, a common issue after recovery,
-      see <xref linkend="dbdoclet.50438225_13916"/>. For information on
+      see <xref linkend="orphan_objects"/>. For information on
       imperative recovery see <xref linkend="imperativerecovery"/>
     </para>
     <section remap="h3">

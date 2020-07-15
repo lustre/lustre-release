@@ -8,7 +8,7 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438261_99193" />
+        <xref linkend="preparing_installation" />
       </para>
     </listitem>
     <listitem>
@@ -20,7 +20,7 @@
   <para>For hardware and system requirements and hardware configuration
   information, see
   <xref linkend="settinguplustresystem" />.</para>
-  <section xml:id="dbdoclet.50438261_99193">
+  <section xml:id="preparing_installation">
     <title>
     <indexterm>
       <primary>installing</primary>
@@ -43,16 +43,16 @@
           <emphasis role="bold">
             <emphasis role="italic">Lustre server packages</emphasis>
           </emphasis>. The required packages for Lustre 2.9 EL7 servers are
-	  listed in the table below, where
+          listed in the table below, where
           <replaceable>ver</replaceable> refers to the Lustre release and
-	  kernel version (e.g., 2.9.0-1.el7) and
+          kernel version (e.g., 2.9.0-1.el7) and
           <replaceable>arch</replaceable> refers to the processor architecture
           (e.g., x86_64). These packages are available in the
           <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
           Lustre Releases</link> repository, and may differ depending on
-	  your distro and version.</para>
+          your distro and version.</para>
           <para>
-            <table frame="all" xml:id="table_cnh_5m3_gk">
+            <table frame="all" xml:id="table.installed_server_pkg">
               <title>Packages Installed on Lustre Servers</title>
               <tgroup cols="2">
                 <colspec colname="c1" colnum="1" colwidth="1.18*" />
@@ -150,7 +150,7 @@
           <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
           Lustre Releases</link> repository.</para>
           <para>
-            <table frame="all" xml:id="table_j3r_ym3_gk">
+            <table frame="all" xml:id="table.installed_client_pkg">
               <title>Packages Installed on Lustre Clients</title>
               <tgroup cols="2">
                 <colspec colname="c1" colnum="1" colwidth="1*" />
@@ -206,7 +206,7 @@
           see 
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="understandinglustrenetworking" />.</para>
-          <table frame="all" xml:id="table_bkx_dn3_gk">
+          <table frame="all" xml:id="supported_network_types">
             <title>Network Types Supported by Lustre LNDs</title>
             <tgroup cols="2">
               <colspec colname="c1" colnum="1" colwidth="1*" />
@@ -249,7 +249,7 @@
               <emphasis role="italic">High availability software</emphasis>
             </emphasis>. If needed, install third party high-availability
             software. For more information, see 
-            <xref linkend="dbdoclet.50438188_92688" />.</para>
+            <xref linkend="failover_setup" />.</para>
           </listitem>
           <listitem>
             <para>
@@ -345,7 +345,7 @@
           timestamps. We recommend that you use Network Time Protocol (NTP) to
           keep client and server clocks in sync with each other. For more
           information about NTP, see: 
-          <link xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
+          <link xl:href="https://www.ntp.org/">https://www.ntp.org</link>.</para>
         </listitem>
         <listitem>
           <para>
@@ -385,7 +385,7 @@
           <listitem>
             <para>For software and environmental requirements, see the section 
             <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="dbdoclet.50438261_99193" />above.</para>
+             linkend="preparing_installation" />above.</para>
           </listitem>
         </itemizedlist>
       </listitem>
@@ -400,7 +400,8 @@
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
         Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
+         linkend="table.installed_server_pkg" />for a list of required packages.
+        </para>
       </listitem>
       <listitem xml:id="dbdoclet.50438261_88296">
         <para>Install the Lustre server and 
@@ -441,7 +442,8 @@ rpm -qa|egrep "lustre|wc"|sort
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
         Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
+         linkend="table.installed_client_pkg" />for a list of required packages.
+        </para>
       </listitem>
       <listitem>
         <para>Install the Lustre client packages on all Lustre clients.

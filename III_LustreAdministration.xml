@@ -88,26 +88,46 @@
     </tip>
     </partintro>
 
-    <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreOperations.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreMaintenance.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingLNet.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LNetMultiRail.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="UpgradingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="BackupAndRestore.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingStripingFreeSpace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="DataOnMDT.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LazySizeOnMDT.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="FileLevelRedundancy.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingFileSystemIO.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreHSM.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="PersistentClientCache.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreNodemap.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreSharedSecretKey.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ZFSSnapshots.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreMonitoring.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreOperations.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreMaintenance.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ManagingLNet.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LNetMultiRail.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="UpgradingLustre.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="BackupAndRestore.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ManagingStripingFreeSpace.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="DataOnMDT.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LazySizeOnMDT.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="FileLevelRedundancy.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ManagingFileSystemIO.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ManagingFailover.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ConfiguringQuotas.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreHSM.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="PersistentClientCache.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreNodemap.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreSharedSecretKey.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ManagingSecurity.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="ZFSSnapshots.xml"
+     xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
 <!--

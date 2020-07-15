@@ -167,8 +167,8 @@
     active (using 
     <literal>tunefs.lustre</literal>). For explanations of these utilities, see
     
-    <xref linkend="dbdoclet.50438219_75432" />and 
-    <xref linkend="dbdoclet.50438219_39574" />.</para>
+    <xref linkend="mkfs.lustre" />and 
+    <xref linkend="tunefs.lustre" />.</para>
     <para>Failover capability in a Lustre file system can be used to upgrade
     the Lustre software between successive minor versions without cluster
     downtime. For more information, see 

@@ -4,7 +4,7 @@
  xmlns:xi="http://www.w3.org/2001/XInclude" xml:id="userutilities">
   <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities.</para>
-  <section xml:id="dbdoclet.50438206_94597">
+  <section xml:id="userutilities.lfs">
     <title>
       <indexterm>
         <primary>lfs</primary>
@@ -1254,7 +1254,7 @@ $ lfs find /test -obd test-OST0004 -size +4G -mtime +1 | lfs_migrate -y
     <section remap="h5">
       <title>See Also</title>
       <para>
-        <xref linkend="dbdoclet.50438206_94597" />
+        <xref linkend="userutilities.lfs" />
       </para>
     </section>
   </section>

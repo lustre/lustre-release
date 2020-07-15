@@ -31,11 +31,12 @@
 version=2.10.5
 </screen>
     </para></note>
-		
+
     <para>Only the latest revision of this document is made readily available
       because changes are continually arriving. The current and latest revision
       of this manual is available from links maintained at:
-      <link xl:href="http://lustre.opensfs.org/documentation/">http://lustre.opensfs.org/documentation/</link>.
+      <link xl:href="http://lustre.opensfs.org/documentation/">
+       http://lustre.opensfs.org/documentation/</link>.
 
         <revhistory>
             <revision>

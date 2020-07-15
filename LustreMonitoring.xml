@@ -909,14 +909,14 @@ Configure Auto-cleanup Interval</title>
         <primary>monitoring</primary>
         <secondary>Lustre Monitoring Tool</secondary>
       </indexterm> Lustre Monitoring Tool (LMT)</title>
-    <para>The Lustre Monitoring Tool (LMT) is a Python-based, distributed system that provides a
-        <literal>top</literal>-like display of activity on server-side nodes (MDS, OSS and portals
-      routers) on one or more Lustre file systems. It does not provide support for monitoring
-      clients. For more information on LMT, including the setup procedure, see:</para>
-    <para><link xl:href="http://code.google.com/p/lmt/"
-      >https://github.com/chaos/lmt/wiki</link></para>
-    <para>LMT questions can be directed to:</para>
-    <para><link xl:href="mailto:lmt-discuss@googlegroups.com">lmt-discuss@googlegroups.com</link></para>
+    <para>The Lustre Monitoring Tool (LMT) is a Python-based, distributed
+      system that provides a <literal>top</literal>-like display of activity
+      on server-side nodes (MDS, OSS and portals routers) on one or more
+      Lustre file systems. It does not provide support for monitoring
+      clients. For more information on LMT, including the setup procedure,
+      see:</para>
+    <para><link xl:href="https://github.com/chaos/lmt/wiki">
+      https://github.com/chaos/lmt/wiki</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_80593">
     <title>
@@ -928,9 +928,11 @@ Configure Auto-cleanup Interval</title>
       played back at a later time. It can also be converted to a format suitable for
       plotting.</para>
     <para>For more information about <literal>CollectL</literal>, see:</para>
-    <para><link xl:href="http://collectl.sourceforge.net">http://collectl.sourceforge.net</link></para>
+    <para><link xl:href="http://collectl.sourceforge.net">
+    http://collectl.sourceforge.net</link></para>
     <para>Lustre-specific documentation is also available. See:</para>
-    <para><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
+    <para><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">
+      http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_44185">
     <title><indexterm><primary>monitoring</primary><secondary>additional tools</secondary></indexterm>

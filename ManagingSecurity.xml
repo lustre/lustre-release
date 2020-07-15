@@ -41,7 +41,7 @@
         finer-grained permissions to this model, allowing for more complicated
         permission schemes. For a detailed explanation of ACLs on a Linux
         operating system, refer to the SUSE Labs article
-        <link xl:href="http://wiki.lustre.org/images/5/57/PosixAccessControlInLinux.pdf">
+        <link xl:href="https://www.usenix.org/legacyurl/posix-access-control-lists-linux">
           Posix Access Control Lists on Linux</link>.</para>
       <para>We have implemented ACLs according to this model. The Lustre
         software works with the standard Linux ACL tools, setfacl, getfacl, and
