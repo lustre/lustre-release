@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
-  xml:lang="en-US" xml:id="lustreproc">
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustreproc">
   <title xml:id="lustreproc.title">Lustre Parameters</title>
   <para>The <literal>/proc</literal> and <literal>/sys</literal> file systems
   acts as an interface to internal data structures in the kernel. This chapter
@@ -2890,3 +2891,4 @@ notify                          16 samples [reqs]</screen>
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

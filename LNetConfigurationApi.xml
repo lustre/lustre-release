@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetconfigurationapi">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lnetconfigurationapi">
   <title xml:id="lnetconfigurationapi.title">LNet Configuration C-API</title>
   <para>This section describes the LNet Configuration C-API library. This
   API allows the developer to programatically configure LNet. It provides
@@ -801,3 +804,4 @@ int main(int argc, char **argv)
       </section>
     </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="upgradinglustre">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="upgradinglustre">
   <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
   <para>This chapter describes interoperability between Lustre software
   releases. It also provides procedures for upgrading from Lustre software
@@ -414,3 +414,4 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
     how to get help.</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

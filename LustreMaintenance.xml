@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustremaintenance">
   <title xml:id="lustremaintenance.title">Lustre Maintenance</title>
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
   <itemizedlist>
@@ -873,3 +876,4 @@ mds# lctl set_param mdt.fs-MDT0000.readonly=0
 mdt.fs-MDT0000.readonly=0</screen>
     </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

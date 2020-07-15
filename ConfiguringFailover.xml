@@ -1,7 +1,11 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringfailover">
-  <title xml:id="configuringfailover.title">Configuring Failover in a Lustre File System</title>
-  <para>This chapter describes how to configure failover in a Lustre file system. It
-    includes:</para>
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configuringfailover">
+  <title xml:id="configuringfailover.title">Configuring Failover in a Lustre
+  File System</title>
+  <para>This chapter describes how to configure failover in a Lustre file
+  system. It includes:</para>
   <itemizedlist>
     <listitem>
       <para>
@@ -190,3 +194,4 @@
       </itemizedlist></para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremonitoring">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustremonitoring">
   <title xml:id="lustremonitoring.title">Monitoring a Lustre File System</title>
   <para>This chapter provides information on monitoring a Lustre file system and includes the
     following sections:</para>
@@ -956,3 +959,4 @@ Other Monitoring Options</title>
       the Lustre software.</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

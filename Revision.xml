@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<section xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
-    <title>Revisions</title>
-	<para>The Lustre* File System Release 2.x Operations Manual is a community
-maintained work. Versions of the manual are continually built as suggestions for
-changes and improvements arrive. Suggestions for improvements can be submitted
-through the ticketing system maintained at <link
-xl:href="https://jira.whamcloud.com/browse/LUDOC">https://jira.whamcloud.com/browse/LUDOC</link>.
-Instructions for providing a patch to the existing manual are available at:
-<link
-xl:href="http://wiki.lustre.org/Lustre_Manual_Changes">http://wiki.lustre.org/Lustre_Manual_Changes</link>.</para>
+<section xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+  <title>Revisions</title>
+    <para>The Lustre* File System Release 2.x Operations Manual is a
+    community maintained work. Versions of the manual are continually
+    built as suggestions for changes and improvements arrive. Suggestions
+    for improvements can be submitted through the ticketing system
+    maintained at <link xl:href="https://jira.whamcloud.com/browse/LUDOC">
+    https://jira.whamcloud.com/browse/LUDOC</link>.  Instructions for
+    providing a patch to the existing manual are available at:
+    <link xl:href="http://wiki.lustre.org/Lustre_Manual_Changes">
+    http://wiki.lustre.org/Lustre_Manual_Changes</link>.</para>
 
       <para condition="l28">This manual covers a range of Lustre 2.x software
         releases.  Features that are specific to individual releases are
@@ -44,3 +46,4 @@ version=2.10.5
         </revhistory>
     </para>
 </section>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,5 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lsom"
-    condition="l2C">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lsom" condition="l2C">
   <title xml:id="lsom.title">Lazy Size on MDT (LSoM)</title>
   <para>This chapter describes Lazy Size on MDT (LSoM).</para>
   <section xml:id="dbdoclet.lsomintro">
@@ -265,3 +267,4 @@
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

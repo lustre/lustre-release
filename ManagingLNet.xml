@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managinglnet">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="managinglnet">
   <title xml:id="managinglnet.title">Managing Lustre Networking (LNet)</title>
   <para>This chapter describes some tools for managing Lustre networking (LNet) and includes the
     following sections:</para>
@@ -299,3 +302,4 @@ tcp1: { gateway: 10.1.1.4@tcp0 }</literal></screen>
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

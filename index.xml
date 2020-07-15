@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<book xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude" version="5.0" xml:lang="en-US">
+<book xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink"
+ xmlns:xi="http://www.w3.org/2001/XInclude" version="5.0" xml:lang="en-US">
   <info>
     <title>Lustre<superscript>*</superscript> Software Release 2.x</title>
     <subtitle>Operations Manual</subtitle>
@@ -34,3 +36,4 @@
    <xi:include href="Glossary.xml"/>
    <xi:include href="ix.xml"/>
 </book>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

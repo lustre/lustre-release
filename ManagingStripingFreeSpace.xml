@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingstripingfreespace">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="managingstripingfreespace">
   <title xml:id="managingstripingfreespace.title">Managing File Layout (Striping) and Free
     Space</title>
   <para>This chapter describes file layout (striping) and I/O options, and includes the following
@@ -2213,3 +2216,4 @@ File 4: OST6, OST7, OST0</screen>
     </para></note>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="backupandrestore">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="backupandrestore">
   <title xml:id="backupandrestore.title">Backing Up and Restoring a File
   System</title>
   <para>This chapter describes how to backup and restore at the file
@@ -1098,3 +1098,4 @@ fstab  passwds
       </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

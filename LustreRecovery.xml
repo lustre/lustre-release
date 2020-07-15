@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustrerecovery">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustrerecovery">
   <title xml:id="lustrerecovery.title">Lustre File System Recovery</title>
   <para>This chapter describes how recovery is implemented in a Lustre file system and includes the
     following sections:</para>
@@ -714,3 +717,4 @@ $ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
   </section>
 
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

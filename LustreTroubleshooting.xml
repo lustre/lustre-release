@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretroubleshooting">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustretroubleshooting">
   <title xml:id="lustretroubleshooting.title">Lustre File System Troubleshooting</title>
   <para>This chapter provides information about troubleshooting a Lustre file system, submitting a
     bug to the Jira bug tracking system, and Lustre file system performance tips. It includes the
@@ -764,3 +767,4 @@ server now claims 791)!
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

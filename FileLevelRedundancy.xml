@@ -1,5 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="flr"
-    condition="l2B">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="flr" condition="l2B">
   <title xml:id="flr.title">File Level Redundancy (FLR)</title>
   <para>This chapter describes File Level Redundancy (FLR).</para>
   <section xml:id="flr.intro">
@@ -1296,3 +1298,4 @@ cat: /mnt/testfs/mirrored_file: Operation not supported</screen>
 cat: /mnt/testfs/mirrored_file: Operation not supported</screen>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringstorage">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configuringstorage">
   <title xml:id="configuringstorage.title">Configuring Storage on a Lustre File System</title>
   <para>This chapter describes best practices for storage selection and file system options to optimize performance on RAID, and includes the following sections:</para>
   <itemizedlist>
@@ -196,3 +199,4 @@
     </itemizedlist>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

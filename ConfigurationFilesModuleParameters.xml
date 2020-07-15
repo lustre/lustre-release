@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configurationfilesmoduleparameters">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configurationfilesmoduleparameters">
     <title xml:id="configurationfilesmoduleparameters.title">Configuration Files and Module Parameters</title>
   <para>This section describes configuration files and module parameters and includes the following sections:</para>
   <itemizedlist>
@@ -560,3 +563,4 @@ forwarding (&quot;&quot;)</title>
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

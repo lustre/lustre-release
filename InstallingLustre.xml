@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="installinglustre">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="installinglustre">
   <title xml:id="installinglustre.title">Installing the Lustre Software</title>
   <para>This chapter describes how to install the Lustre software from RPM
   packages. It includes:</para>
@@ -489,3 +489,4 @@ rpm -qa|egrep "lustre|wc"|sort
     <xref linkend="configuringlustre" />.</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

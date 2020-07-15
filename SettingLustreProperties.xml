@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settinglustreproperties">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="settinglustreproperties">
   <title xml:id="settinglustreproperties.title">Setting Lustre Properties in a C Program (<literal>llapi</literal>)</title>
   <para>This chapter describes the <literal>llapi</literal> library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
   <itemizedlist>
@@ -1283,3 +1286,4 @@ cp lustredemo /mnt/lustre/ftest/
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

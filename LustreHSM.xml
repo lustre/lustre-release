@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustrehsm" condition='l25'>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustrehsm" condition='l25'>
   <title xml:id="lustrehsm.title">Hierarchical Storage Management (HSM)</title>
   <para>This chapter describes how to bind Lustre to a Hierarchical Storage Management (HSM) solution.</para>
   <section xml:id="hsm_introduction">
@@ -475,3 +477,4 @@ view of file system content through a web interface and command line tools.</par
 	</section>
 
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

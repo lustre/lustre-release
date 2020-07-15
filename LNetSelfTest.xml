@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetselftest">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lnetselftest">
   <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNet Self-Test)</title>
   <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNet
     self-test, which is used by site administrators to confirm that Lustre Networking (LNet) has
@@ -1129,3 +1132,4 @@ Total 1 error nodes in clients</screen>
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

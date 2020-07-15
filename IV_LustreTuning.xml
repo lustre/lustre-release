@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
   <info>
     <title>Tuning a Lustre File System for Performance</title>
   </info>
@@ -36,3 +37,4 @@
 
 
 </part>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<legalnotice xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+<legalnotice xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
 
     <title>Important Notice from Oracle</title>
 
@@ -36,3 +37,4 @@
       <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit <link xl:href="http://creativecommons.org/licenses/by-sa/3.0/us">Creative Commons Attribution-Share Alike 3.0 United States</link> or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
 
 </legalnotice>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

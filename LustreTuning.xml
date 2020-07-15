@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="lustretuning">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustretuning">
   <title xml:id="lustretuning.title">Tuning a Lustre File System</title>
   <para>This chapter contains information about tuning a Lustre file system for
   better performance.</para>
@@ -2416,3 +2416,4 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
     client is more likely to become CPU-bound during reads than writes.</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

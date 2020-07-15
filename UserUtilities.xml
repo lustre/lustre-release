@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="userutilities"
-xmlns:xi="http://www.w3.org/2001/XInclude">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xmlns:xi="http://www.w3.org/2001/XInclude" xml:id="userutilities">
   <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities.</para>
   <section xml:id="dbdoclet.50438206_94597">
@@ -1595,3 +1594,4 @@ RPC:/0/0 rc 0
 </screen>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

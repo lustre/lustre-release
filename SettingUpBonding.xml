@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settingupbonding">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="settingupbonding">
   <title xml:id="settingupbonding.title">Setting Up Network Interface Bonding</title>
   <para>This chapter describes how to use multiple network interfaces in parallel to increase bandwidth and/or redundancy. Topics include:</para>
   <itemizedlist>
@@ -343,3 +346,4 @@ Interrupt:9 Base address:0x1400</screen>
     </itemizedlist>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

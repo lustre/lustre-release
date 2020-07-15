@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingfailover">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="managingfailover">
   <title xml:id="managingfailover.title">Lustre File System Failover and Multiple-Mount Protection</title>
   <para>This chapter describes the multiple-mount protection (MMP) feature, which protects the file
     system from being mounted simultaneously to more than one node. It includes the following
@@ -66,3 +69,4 @@ filetype extent mmp sparse_super large_file uninit_bg</screen>
       system is currently mounted.</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

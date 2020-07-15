@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
-
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <title>Troubleshooting a Lustre File System</title>
 
 <partintro>
@@ -34,3 +34,4 @@
   <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="understandinglustrenetworking">
   <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNet)</title>
   <para>This chapter introduces Lustre networking (LNet). It includes the following sections:</para>
   <itemizedlist>
@@ -117,3 +119,4 @@
     </itemizedlist>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

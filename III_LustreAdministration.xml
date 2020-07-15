@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part3'>
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id='part3'>
     <title xml:id='adminlustrepart3'>Administering Lustre</title>
     <partintro>
         <para>Part III provides information about tools and procedures to use to administer a Lustre file system. You will find information in this section about:</para>
@@ -108,3 +110,4 @@
     <xi:include href="ZFSSnapshots.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

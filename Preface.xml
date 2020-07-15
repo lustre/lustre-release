@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<preface xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+<preface xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
   <title>Preface</title>
   <para>The <emphasis role="italic">Lustre<superscript>*</superscript>Software Release 2.x
       Operations Manual</emphasis> provides detailed information and procedures to install,
@@ -190,3 +191,4 @@
   </section>
     <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
 </preface>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

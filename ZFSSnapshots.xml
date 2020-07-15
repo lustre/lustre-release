@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="zfssnapshots">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="zfssnapshots" condition='l2A'>
   <title xml:id="zfssnapshots.title">Lustre ZFS Snapshots</title>
   <para>This chapter describes the ZFS Snapshot feature support in Lustre and
       contains following sections:</para>
@@ -801,3 +804,4 @@ lss_2_0 successfully with force &lt;disable&gt;</screen>
       <para>Usage:  erase_lcfg &lt;fsname&gt;</para>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

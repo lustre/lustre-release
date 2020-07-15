@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:id="lustrenodemap" xml:lang="en-US"
-         condition='l29'
-         xmlns="http://docbook.org/ns/docbook">
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustrenodemap" condition='l29'>
   <title xml:id="lustrenodemap.title">Mapping UIDs and GIDs with
   Nodemap</title>
 
@@ -519,3 +519,4 @@ oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceabl
     </itemizedlist>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook"
-xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="configuringlustre">
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configuringlustre">
   <title xml:id="configuringlustre.title">Configuring a Lustre File
   System</title>
   <para>This chapter shows how to configure a simple Lustre file system
@@ -1077,3 +1077,4 @@ total 8.0M
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

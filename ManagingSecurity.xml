@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingsecurity">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="managingsecurity">
   <title xml:id="managingsecurity.title">Managing Security in a Lustre File System</title>
   <para>This chapter describes security features of the Lustre file system and
     includes the following sections:</para>
@@ -526,3 +529,4 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

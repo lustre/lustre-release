@@ -1,4 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreprogramminginterfaces">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustreprogramminginterfaces">
   <title xml:id="lustreprogramminginterfaces.title">Programming Interfaces</title>
   <para>This chapter describes public programming interfaces to that can be
     used to control various aspects of a Lustre file system from userspace.
@@ -116,3 +119,4 @@ struct identity_downcall_data{
     </section>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

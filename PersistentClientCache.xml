@@ -1,5 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="pcc"
-    condition="l2D">
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="pcc" condition="l2D">
   <title xml:id="pcc.title">Persistent Client Cache (PCC)</title>
   <para>This chapter describes Persistent Client Cache (PCC).</para>
   <section xml:id="pcc.intro">
@@ -501,3 +503,4 @@ client2# lfs pcc detach /mnt/lustre/test</screen>
     </orderedlist>
   </section>
 </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->

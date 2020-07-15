@@ -1,5 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configuringlnet">
   <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNet)</title>
   <para>This chapter describes how to configure Lustre Networking (LNet). It
     includes the following sections:</para>
@@ -1130,3 +1133,4 @@ pt11 192.168.0.[92,96] # comment</screen></para>
     </section>
   </section>
  </chapter>
+<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
