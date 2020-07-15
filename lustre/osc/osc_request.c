@@ -1023,12 +1023,19 @@ void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_avail_grant = ocd->ocd_grant;
 	if (cli->cl_import->imp_state != LUSTRE_IMP_EVICTED) {
-		cli->cl_avail_grant -= cli->cl_reserved_grant;
+		unsigned long consumed = cli->cl_reserved_grant;
+
 		if (OCD_HAS_FLAG(ocd, GRANT_PARAM))
-			cli->cl_avail_grant -= cli->cl_dirty_grant;
+			consumed += cli->cl_dirty_grant;
 		else
-			cli->cl_avail_grant -=
-					cli->cl_dirty_pages << PAGE_SHIFT;
+			consumed += cli->cl_dirty_pages << PAGE_SHIFT;
+		if (cli->cl_avail_grant < consumed) {
+			CERROR("%s: granted %ld but already consumed %ld\n",
+			       cli_name(cli), cli->cl_avail_grant, consumed);
+			cli->cl_avail_grant = 0;
+		} else {
+			cli->cl_avail_grant -= consumed;
+		}
 	}
 
 	if (OCD_HAS_FLAG(ocd, GRANT_PARAM)) {
