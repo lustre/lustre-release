@@ -1434,6 +1434,11 @@ int mdc_object_prune(const struct lu_env *env, struct cl_object *obj)
 static int mdc_object_flush(const struct lu_env *env, struct cl_object *obj,
 			    struct ldlm_lock *lock)
 {
+	/* if lock cancel is initiated from llite then it is combined
+	 * lock with DOM bit and it may have no l_ast_data initialized yet,
+	 * so init it here with given osc_object.
+	 */
+	mdc_set_dom_lock_data(lock, cl2osc(obj));
 	RETURN(mdc_dlm_blocking_ast0(env, lock, LDLM_CB_CANCELING));
 }
 

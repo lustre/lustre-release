@@ -155,6 +155,19 @@ test_6() {
 }
 run_test 6 "Race two writes, check file size"
 
+test_7() {
+	dd if=/dev/zero of=$DIR1/$tfile bs=1000 count=1
+	cancel_lru_locks
+
+	$MULTIOP $DIR1/$tfile or1000c
+	dd if=/dev/urandom of=$DIR2/$tfile bs=1000 count=1
+	local md5_1=$(md5sum $DIR/$tfile | awk '{ print $1 }')
+	local md5_2=$(md5sum $DIR2/$tfile | awk '{ print $1 }')
+	[[ $md5_1 == $md5_2 ]] ||
+		error "Client reads stale page"
+}
+run_test 7 "Stale pages after read-on-open"
+
 test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
