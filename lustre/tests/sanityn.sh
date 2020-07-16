@@ -5295,6 +5295,30 @@ test_106c() {
 }
 run_test 106c "Verify statx attributes mask"
 
+test_107() { # LU-1031
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=10
+	local gid1=14091995
+	local gid2=16022000
+
+	$LFS getstripe $DIR1/$tfile
+
+	multiop_bg_pause $DIR1/$tfile OG${gid1}_g${gid1}c || return 1
+	local MULTIPID1=$!
+	multiop_bg_pause $DIR2/$tfile O_G${gid2}r10g${gid2}c || return 2
+	local MULTIPID2=$!
+	kill -USR1 $MULTIPID2
+	sleep 2
+	if [[ `ps h -o comm -p $MULTIPID2` == "" ]]; then
+		error "First grouplock does not block second one"
+	else
+		echo "First grouplock blocks second one"
+	fi
+	kill -USR1 $MULTIPID1
+	wait $MULTIPID1
+	wait $MULTIPID2
+}
+run_test 107 "Basic grouplock conflict"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

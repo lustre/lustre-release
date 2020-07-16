@@ -289,22 +289,15 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
 							NULL : work_list;
 	int rc;
-
 	ENTRY;
 
+	*err = ELDLM_LOCK_ABORTED;
 	LASSERT(!ldlm_is_granted(lock));
 	check_res_locked(res);
 
 	if (intention == LDLM_PROCESS_RESCAN) {
-		struct list_head *bl_list;
-
-		if (*flags & LDLM_FL_BLOCK_NOWAIT) {
-			bl_list = NULL;
-			*err = ELDLM_LOCK_WOULDBLOCK;
-		} else {
-			bl_list = work_list;
-			*err = ELDLM_LOCK_ABORTED;
-		}
+		struct list_head *bl_list =
+			*flags & LDLM_FL_BLOCK_NOWAIT ? NULL : work_list;
 
 		LASSERT(lock->l_policy_data.l_inodebits.bits != 0);
 
@@ -355,9 +348,10 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 	if (rc != 2) {
 		/* if there were only bits to try and all are conflicting */
 		if ((lock->l_policy_data.l_inodebits.bits |
-		     lock->l_policy_data.l_inodebits.try_bits) == 0) {
-			*err = ELDLM_LOCK_WOULDBLOCK;
-		} else {
+		     lock->l_policy_data.l_inodebits.try_bits)) {
+			/* There is no sense to set LDLM_FL_NO_TIMEOUT to @flags
+			 * for DOM lock while they are enqueued through intents,
+			 * i.e. @lock here is local which does not timeout. */
 			*err = ELDLM_OK;
 		}
 	} else {

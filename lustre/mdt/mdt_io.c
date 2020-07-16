@@ -1267,17 +1267,21 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 	struct mdt_device *mdt = info->mti_mdt;
 	union ldlm_policy_data *policy = &info->mti_policy;
 	struct ldlm_res_id *res_id = &info->mti_res_id;
+	__u64 open_flags = info->mti_spec.sp_cr_flags;
 	struct lustre_handle lockh;
 	enum ldlm_mode mode;
 	struct ldlm_lock *lock;
+	enum ldlm_mode lm;
 	bool rc;
 
 	policy->l_inodebits.bits = MDS_INODELOCK_DOM;
 	fid_build_reg_res_name(fid, res_id);
 
+
+	lm = (open_flags & MDS_FMODE_WRITE) ? LCK_PW : LCK_PR | LCK_PW;
 	mode = ldlm_lock_match(mdt->mdt_namespace, LDLM_FL_BLOCK_GRANTED |
 			       LDLM_FL_TEST_LOCK, res_id, LDLM_IBITS, policy,
-			       LCK_PW, &lockh, 0);
+			       lm, &lockh, 0);
 
 	/* There is no other PW lock on this object; finished. */
 	if (mode == 0)

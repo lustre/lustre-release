@@ -144,6 +144,13 @@ check_swap_layouts_support()
 		skip "Does not support layout lock."
 }
 
+check_swap_layout_no_dom()
+{
+	local FOLDER=$1
+	local SUPP=$(lfs getstripe $FOLDER | grep "pattern:       mdt" | wc -l)
+	[ $SUPP -eq 0 ] || skip "layout swap does not support DOM files so far"
+}
+
 check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
@@ -9116,28 +9123,6 @@ test_81b() { # LU-456
 }
 run_test 81b "OST should return -ENOSPC when retry still fails ======="
 
-test_82() { # LU-1031
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10
-	local gid1=14091995
-	local gid2=16022000
-
-	multiop_bg_pause $DIR/$tfile OG${gid1}_g${gid1}c || return 1
-	local MULTIPID1=$!
-	multiop_bg_pause $DIR/$tfile O_G${gid2}r10g${gid2}c || return 2
-	local MULTIPID2=$!
-	kill -USR1 $MULTIPID2
-	sleep 2
-	if [[ `ps h -o comm -p $MULTIPID2` == "" ]]; then
-		error "First grouplock does not block second one"
-	else
-		echo "Second grouplock blocks first one"
-	fi
-	kill -USR1 $MULTIPID1
-	wait $MULTIPID1
-	wait $MULTIPID2
-}
-run_test 82 "Basic grouplock test"
-
 test_99() {
 	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs"
 
@@ -15916,6 +15901,7 @@ test_184c() {
 	local cmpn_arg=$(cmp -n 2>&1 | grep "invalid option")
 	[ -n "$cmpn_arg" ] && skip_env "cmp does not support -n"
 	check_swap_layouts_support
+	check_swap_layout_no_dom $DIR
 
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
@@ -15963,6 +15949,7 @@ run_test 184c "Concurrent write and layout swap"
 
 test_184d() {
 	check_swap_layouts_support
+	check_swap_layout_no_dom $DIR
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
 		skip_env "no getfattr command"
 
@@ -15999,6 +15986,7 @@ test_184e() {
 	[[ $MDS1_VERSION -ge $(version_code 2.6.94) ]] ||
 		skip "Need MDS version at least 2.6.94"
 	check_swap_layouts_support
+	check_swap_layout_no_dom $DIR
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
 		skip_env "no getfattr command"
 
@@ -22192,6 +22180,7 @@ test_405() {
 			skip "Layout swap lock is not supported"
 
 	check_swap_layouts_support
+	check_swap_layout_no_dom $DIR
 
 	test_mkdir $DIR/$tdir
 	swap_lock_test -d $DIR/$tdir ||

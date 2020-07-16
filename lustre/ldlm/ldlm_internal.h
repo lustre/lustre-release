@@ -125,6 +125,8 @@ extern struct kmem_cache *ldlm_interval_tree_slab;
 
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
+void ldlm_resource_insert_lock_before(struct ldlm_lock *original,
+				      struct ldlm_lock *new);
 
 /* ldlm_lock.c */
 

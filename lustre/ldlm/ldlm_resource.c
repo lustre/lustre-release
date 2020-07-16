@@ -1553,15 +1553,12 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 }
 EXPORT_SYMBOL(ldlm_resource_putref);
 
-/**
- * Add a lock into a given resource into specified lock list.
- */
-void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
-			    struct ldlm_lock *lock)
+static void __ldlm_resource_add_lock(struct ldlm_resource *res,
+				     struct list_head *head,
+				     struct ldlm_lock *lock,
+				     bool tail)
 {
 	check_res_locked(res);
-
-	LDLM_DEBUG(lock, "About to add this lock");
 
 	if (ldlm_is_destroyed(lock)) {
 		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1570,36 +1567,53 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 
 	LASSERT(list_empty(&lock->l_res_link));
 
-	list_add_tail(&lock->l_res_link, head);
+	if (tail)
+		list_add_tail(&lock->l_res_link, head);
+	else
+		list_add(&lock->l_res_link, head);
 
 	if (res->lr_type == LDLM_IBITS)
 		ldlm_inodebits_add_lock(res, head, lock);
+
+	ldlm_resource_dump(D_INFO, res);
+}
+
+/**
+ * Add a lock into a given resource into specified lock list.
+ */
+void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
+			    struct ldlm_lock *lock)
+{
+	LDLM_DEBUG(lock, "About to add this lock");
+
+	__ldlm_resource_add_lock(res, head, lock, true);
 }
 
 /**
  * Insert a lock into resource after specified lock.
- *
- * Obtain resource description from the lock we are inserting after.
  */
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 				     struct ldlm_lock *new)
 {
-	struct ldlm_resource *res = original->l_resource;
+	LASSERT(!list_empty(&original->l_res_link));
 
-	check_res_locked(res);
-
-	ldlm_resource_dump(D_INFO, res);
 	LDLM_DEBUG(new, "About to insert this lock after %p: ", original);
+	__ldlm_resource_add_lock(original->l_resource,
+				 &original->l_res_link,
+				 new, false);
+}
 
-	if (ldlm_is_destroyed(new)) {
-		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
-		goto out;
-	}
+/**
+ * Insert a lock into resource before the specified lock.
+ */
+void ldlm_resource_insert_lock_before(struct ldlm_lock *original,
+                                      struct ldlm_lock *new)
+{
+	LASSERT(!list_empty(&original->l_res_link));
 
-	LASSERT(list_empty(&new->l_res_link));
-
-	list_add(&new->l_res_link, &original->l_res_link);
- out:;
+	LDLM_DEBUG(new, "About to insert this lock before %p: ", original);
+	__ldlm_resource_add_lock(original->l_resource,
+				 original->l_res_link.prev, new, false);
 }
 
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
