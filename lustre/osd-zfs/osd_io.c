@@ -1219,7 +1219,7 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	RETURN(result);
 }
 
-struct dt_body_operations osd_body_ops = {
+const struct dt_body_operations osd_body_ops = {
 	.dbo_read			= osd_read,
 	.dbo_declare_write		= osd_declare_write,
 	.dbo_write			= osd_write,
@@ -1237,7 +1237,7 @@ struct dt_body_operations osd_body_ops = {
 	.dbo_lseek			= osd_lseek,
 };
 
-struct dt_body_operations osd_body_scrub_ops = {
+const struct dt_body_operations osd_body_scrub_ops = {
 	.dbo_read			= osd_read_no_record,
 	.dbo_declare_write		= osd_declare_write,
 	.dbo_write			= osd_write,

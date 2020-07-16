@@ -392,10 +392,10 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 	RETURN(NULL);
 }
 
-static struct lu_device_type_operations lwp_device_type_ops = {
-	.ldto_device_alloc   = lwp_device_alloc,
-	.ldto_device_free    = lwp_device_free,
-	.ldto_device_fini    = lwp_device_fini
+static const struct lu_device_type_operations lwp_device_type_ops = {
+	.ldto_device_alloc	= lwp_device_alloc,
+	.ldto_device_free	= lwp_device_free,
+	.ldto_device_fini	= lwp_device_fini
 };
 
 struct lu_device_type lwp_device_type = {

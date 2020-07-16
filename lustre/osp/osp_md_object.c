@@ -1061,7 +1061,7 @@ int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-struct dt_object_operations osp_md_obj_ops = {
+const struct dt_object_operations osp_md_obj_ops = {
 	.do_read_lock         = osp_md_read_lock,
 	.do_write_lock        = osp_md_write_lock,
 	.do_read_unlock       = osp_md_read_unlock,
@@ -1317,7 +1317,7 @@ out_update:
 }
 
 /* These body operation will be used to write symlinks during migration etc */
-struct dt_body_operations osp_md_body_ops = {
+const struct dt_body_operations osp_md_body_ops = {
 	.dbo_declare_write	= osp_md_declare_write,
 	.dbo_write		= osp_md_write,
 	.dbo_read		= osp_md_read,

@@ -7386,10 +7386,10 @@ int mdt_cos_is_enabled(struct mdt_device *mdt)
         return mdt->mdt_opts.mo_cos != 0;
 }
 
-static struct lu_device_type_operations mdt_device_type_ops = {
-        .ldto_device_alloc = mdt_device_alloc,
-        .ldto_device_free  = mdt_device_free,
-        .ldto_device_fini  = mdt_device_fini
+static const struct lu_device_type_operations mdt_device_type_ops = {
+	.ldto_device_alloc = mdt_device_alloc,
+	.ldto_device_free  = mdt_device_free,
+	.ldto_device_fini  = mdt_device_fini
 };
 
 static struct lu_device_type mdt_device_type = {

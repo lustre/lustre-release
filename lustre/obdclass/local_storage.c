@@ -69,7 +69,7 @@ static void ls_object_free(const struct lu_env *env, struct lu_object *o)
 	kfree_rcu(obj, ls_header.loh_rcu);
 }
 
-static struct lu_object_operations ls_lu_obj_ops = {
+static const struct lu_object_operations ls_lu_obj_ops = {
 	.loo_object_init  = ls_object_init,
 	.loo_object_free  = ls_object_free,
 };
@@ -101,7 +101,7 @@ static struct lu_object *ls_object_alloc(const struct lu_env *env,
 	}
 }
 
-static struct lu_device_operations ls_lu_dev_ops = {
+static const struct lu_device_operations ls_lu_dev_ops = {
 	.ldo_object_alloc =	ls_object_alloc
 };
 
@@ -130,7 +130,7 @@ struct ls_device *ls_find_dev(struct dt_device *dev)
 	return ls;
 }
 
-static struct lu_device_type_operations ls_device_type_ops = {
+static const struct lu_device_type_operations ls_device_type_ops = {
 	.ldto_start = NULL,
 	.ldto_stop  = NULL,
 };

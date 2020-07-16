@@ -103,8 +103,8 @@
 #define zfs_refcount_add	refcount_add
 #endif
 
-extern struct dt_body_operations osd_body_scrub_ops;
-extern struct dt_body_operations osd_body_ops;
+extern const struct dt_body_operations osd_body_scrub_ops;
+extern const struct dt_body_operations osd_body_ops;
 extern struct kmem_cache *osd_object_kmem;
 
 /**
@@ -471,8 +471,8 @@ struct osd_object {
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *,
 	       struct obd_statfs_info *);
 extern const struct dt_index_operations osd_acct_index_ops;
-extern struct lu_device_operations  osd_lu_ops;
-extern struct dt_index_operations osd_dir_ops;
+extern const struct lu_device_operations  osd_lu_ops;
+extern const struct dt_index_operations osd_dir_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      qid_t uid, qid_t gid, qid_t projid, long long space,
 		      struct osd_thandle *oh,

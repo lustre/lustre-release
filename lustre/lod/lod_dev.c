@@ -2048,17 +2048,17 @@ LU_CONTEXT_KEY_DEFINE(lod, LCT_MD_THREAD);
 
 LU_TYPE_INIT_FINI(lod, &lod_thread_key);
 
-static struct lu_device_type_operations lod_device_type_ops = {
-	.ldto_init           = lod_type_init,
-	.ldto_fini           = lod_type_fini,
+static const struct lu_device_type_operations lod_device_type_ops = {
+	.ldto_init		= lod_type_init,
+	.ldto_fini		= lod_type_fini,
 
-	.ldto_start          = lod_type_start,
-	.ldto_stop           = lod_type_stop,
+	.ldto_start		= lod_type_start,
+	.ldto_stop		= lod_type_stop,
 
-	.ldto_device_alloc   = lod_device_alloc,
-	.ldto_device_free    = lod_device_free,
+	.ldto_device_alloc	= lod_device_alloc,
+	.ldto_device_free	= lod_device_free,
 
-	.ldto_device_fini    = lod_device_fini
+	.ldto_device_fini	= lod_device_fini
 };
 
 static struct lu_device_type lod_device_type = {

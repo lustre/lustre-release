@@ -699,7 +699,7 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	RETURN(0);
 }
 
-static struct dt_device_operations osd_dt_ops = {
+static const struct dt_device_operations osd_dt_ops = {
 	.dt_root_get		= osd_root_get,
 	.dt_statfs		= osd_statfs,
 	.dt_trans_create	= osd_trans_create,
@@ -1581,7 +1581,7 @@ static int osd_fid_alloc(const struct lu_env *env, struct lu_device *d,
 	return seq_client_alloc_fid(env, osd->od_cl_seq, fid);
 }
 
-struct lu_device_operations osd_lu_ops = {
+const struct lu_device_operations osd_lu_ops = {
 	.ldo_object_alloc	= osd_object_alloc,
 	.ldo_process_config	= osd_process_config,
 	.ldo_recovery_complete	= osd_recovery_complete,
@@ -1597,7 +1597,7 @@ static void osd_type_stop(struct lu_device_type *t)
 {
 }
 
-static struct lu_device_type_operations osd_device_type_ops = {
+static const struct lu_device_type_operations osd_device_type_ops = {
 	.ldto_init		= osd_type_init,
 	.ldto_fini		= osd_type_fini,
 

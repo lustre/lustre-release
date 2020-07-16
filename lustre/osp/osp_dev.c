@@ -934,7 +934,7 @@ out:
 	RETURN(rc);
 }
 
-const struct dt_device_operations osp_dt_ops = {
+static const struct dt_device_operations osp_dt_ops = {
 	.dt_statfs	 = osp_statfs,
 	.dt_sync	 = osp_sync,
 	.dt_trans_create = osp_trans_create,
@@ -1843,7 +1843,7 @@ struct lu_context_key osp_txn_key = {
 };
 LU_TYPE_INIT_FINI(osp, &osp_thread_key, &osp_txn_key);
 
-static struct lu_device_type_operations osp_device_type_ops = {
+static const struct lu_device_type_operations osp_device_type_ops = {
 	.ldto_init           = osp_type_init,
 	.ldto_fini           = osp_type_fini,
 

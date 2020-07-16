@@ -507,7 +507,7 @@ static int ofd_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_OST_NAME"-object@%p", o);
 }
 
-static struct lu_object_operations ofd_obj_ops = {
+static const struct lu_object_operations ofd_obj_ops = {
 	.loo_object_init	= ofd_object_init,
 	.loo_object_free	= ofd_object_free,
 	.loo_object_print	= ofd_object_print
@@ -703,7 +703,7 @@ static int ofd_recovery_complete(const struct lu_env *env,
 /**
  * lu_device_operations matrix for OFD device.
  */
-static struct lu_device_operations ofd_lu_ops = {
+static const struct lu_device_operations ofd_lu_ops = {
 	.ldo_object_alloc	= ofd_object_alloc,
 	.ldo_process_config	= ofd_process_config,
 	.ldo_recovery_complete	= ofd_recovery_complete,
@@ -3225,7 +3225,7 @@ static struct lu_device *ofd_device_alloc(const struct lu_env *env,
 /* type constructor/destructor: ofd_type_init(), ofd_type_fini() */
 LU_TYPE_INIT_FINI(ofd, &ofd_thread_key);
 
-static struct lu_device_type_operations ofd_device_type_ops = {
+static const struct lu_device_type_operations ofd_device_type_ops = {
 	.ldto_init		= ofd_type_init,
 	.ldto_fini		= ofd_type_fini,
 

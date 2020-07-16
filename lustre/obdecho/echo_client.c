@@ -618,7 +618,7 @@ static struct lu_object *echo_object_alloc(const struct lu_env *env,
 	RETURN(obj);
 }
 
-static struct lu_device_operations echo_device_lu_ops = {
+static const struct lu_device_operations echo_device_lu_ops = {
 	.ldo_object_alloc   = echo_object_alloc,
 };
 

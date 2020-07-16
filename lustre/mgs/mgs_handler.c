@@ -1482,7 +1482,7 @@ static int mgs_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_MGS_NAME"-object@%p", o);
 }
 
-static struct lu_object_operations mgs_lu_obj_ops = {
+static const struct lu_object_operations mgs_lu_obj_ops = {
 	.loo_object_init	= mgs_object_init,
 	.loo_object_free	= mgs_object_free,
 	.loo_object_print	= mgs_object_print,
@@ -1602,7 +1602,7 @@ LU_TYPE_INIT_FINI(mgs, &mgs_thread_key);
 
 LU_CONTEXT_KEY_DEFINE(mgs, LCT_MG_THREAD);
 
-static struct lu_device_type_operations mgs_device_type_ops = {
+static const struct lu_device_type_operations mgs_device_type_ops = {
 	.ldto_init		= mgs_type_init,
 	.ldto_fini		= mgs_type_fini,
 

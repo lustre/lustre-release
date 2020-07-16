@@ -326,10 +326,9 @@ struct osp_object {
 	struct rw_semaphore	opo_invalidate_sem;
 };
 
-extern struct lu_object_operations osp_lu_obj_ops;
-extern const struct dt_device_operations osp_dt_ops;
-extern struct dt_object_operations osp_md_obj_ops;
-extern struct dt_body_operations osp_md_body_ops;
+extern const struct lu_object_operations osp_lu_obj_ops;
+extern const struct dt_object_operations osp_md_obj_ops;
+extern const struct dt_body_operations osp_md_body_ops;
 
 struct osp_thread_info {
 	struct lu_buf		 osi_lb;

@@ -1943,17 +1943,17 @@ static const struct md_device_operations mdd_ops = {
 	.mdo_dtconf_get     = mdd_dtconf_get,
 };
 
-static struct lu_device_type_operations mdd_device_type_ops = {
-        .ldto_init = mdd_type_init,
-        .ldto_fini = mdd_type_fini,
+static const struct lu_device_type_operations mdd_device_type_ops = {
+	.ldto_init		= mdd_type_init,
+	.ldto_fini		= mdd_type_fini,
 
-        .ldto_start = mdd_type_start,
-        .ldto_stop  = mdd_type_stop,
+	.ldto_start		= mdd_type_start,
+	.ldto_stop		= mdd_type_stop,
 
-        .ldto_device_alloc = mdd_device_alloc,
-        .ldto_device_free  = mdd_device_free,
+	.ldto_device_alloc	= mdd_device_alloc,
+	.ldto_device_free	= mdd_device_free,
 
-        .ldto_device_fini    = mdd_device_fini
+	.ldto_device_fini	= mdd_device_fini
 };
 
 static struct lu_device_type mdd_device_type = {

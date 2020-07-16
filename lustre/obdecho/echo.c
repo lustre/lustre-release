@@ -713,7 +713,7 @@ static struct tgt_opc_slice esd_common_slice[] = {
  * this device is just serving incoming requests immediately
  * without building a stack of lu_devices.
  */
-static struct lu_device_operations echo_srv_lu_ops = { 0 };
+static const struct lu_device_operations echo_srv_lu_ops = { 0 };
 
 /**
  * Initialize Echo Server device with parameters in the config log \a cfg.

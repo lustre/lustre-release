@@ -355,7 +355,7 @@ LU_CONTEXT_KEY_DEFINE(qmt, LCT_MD_THREAD);
 /*
  * lu device type operations associated with the master target.
  */
-static struct lu_device_type_operations qmt_device_type_ops = {
+static const struct lu_device_type_operations qmt_device_type_ops = {
 	.ldto_init		= qmt_type_init,
 	.ldto_fini		= qmt_type_fini,
 

@@ -2213,7 +2213,7 @@ static int osp_index_try(const struct lu_env *env,
 	return 0;
 }
 
-static struct dt_object_operations osp_obj_ops = {
+static const struct dt_object_operations osp_obj_ops = {
 	.do_declare_attr_get	= osp_declare_attr_get,
 	.do_attr_get		= osp_attr_get,
 	.do_declare_attr_set	= osp_declare_attr_set,
@@ -2389,7 +2389,7 @@ static int osp_object_invariant(const struct lu_object *o)
 	LBUG();
 }
 
-struct lu_object_operations osp_lu_obj_ops = {
+const struct lu_object_operations osp_lu_obj_ops = {
 	.loo_object_init	= osp_object_init,
 	.loo_object_free	= osp_object_free,
 	.loo_object_release	= osp_object_release,

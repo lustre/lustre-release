@@ -1700,7 +1700,7 @@ static int osd_dir_it_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
-struct dt_index_operations osd_dir_ops = {
+const struct dt_index_operations osd_dir_ops = {
 	.dio_lookup         = osd_dir_lookup,
 	.dio_declare_insert = osd_declare_dir_insert,
 	.dio_insert         = osd_dir_insert,
@@ -1997,7 +1997,7 @@ static int osd_index_it_load(const struct lu_env *env, const struct dt_it *di,
 	RETURN(rc);
 }
 
-static struct dt_index_operations osd_index_ops = {
+static const struct dt_index_operations osd_index_ops = {
 	.dio_lookup		= osd_index_lookup,
 	.dio_declare_insert	= osd_declare_index_insert,
 	.dio_insert		= osd_index_insert,

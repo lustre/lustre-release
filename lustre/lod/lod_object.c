@@ -344,7 +344,7 @@ static int lod_it_key_rec(const struct lu_env *env, const struct dt_it *di,
 							 key_rec);
 }
 
-static struct dt_index_operations lod_index_ops = {
+static const struct dt_index_operations lod_index_ops = {
 	.dio_lookup		= lod_lookup,
 	.dio_declare_insert	= lod_declare_insert,
 	.dio_insert		= lod_insert,
@@ -787,7 +787,7 @@ static int lod_striped_it_load(const struct lu_env *env,
 	return next->do_index_ops->dio_it.load(env, it->lit_it, hash);
 }
 
-static struct dt_index_operations lod_striped_index_ops = {
+static const struct dt_index_operations lod_striped_index_ops = {
 	.dio_lookup		= lod_striped_lookup,
 	.dio_declare_insert	= lod_declare_insert,
 	.dio_insert		= lod_insert,
@@ -8368,7 +8368,7 @@ static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-struct dt_object_operations lod_obj_ops = {
+const struct dt_object_operations lod_obj_ops = {
 	.do_read_lock		= lod_read_lock,
 	.do_write_lock		= lod_write_lock,
 	.do_read_unlock		= lod_read_unlock,
@@ -8469,7 +8469,7 @@ static int lod_punch(const struct lu_env *env, struct dt_object *dt,
  * body_ops themselves will check file type inside, see lod_read/write/punch for
  * details.
  */
-const struct dt_body_operations lod_body_ops = {
+static const struct dt_body_operations lod_body_ops = {
 	.dbo_read		= lod_read,
 	.dbo_declare_write	= lod_declare_write,
 	.dbo_write		= lod_write,
@@ -8707,7 +8707,7 @@ static int lod_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_LOD_NAME"-object@%p", o);
 }
 
-struct lu_object_operations lod_lu_obj_ops = {
+const struct lu_object_operations lod_lu_obj_ops = {
 	.loo_object_init	= lod_object_init,
 	.loo_object_free	= lod_object_free,
 	.loo_object_release	= lod_object_release,
