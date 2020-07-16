@@ -21649,6 +21649,56 @@ test_300r() {
 }
 run_test 300r "test -1 striped directory"
 
+test_300s_helper() {
+	local count=$1
+
+	local stripe_dir=$DIR/$tdir/striped_dir.$count
+
+	$LFS mkdir -c $count $stripe_dir ||
+		error "lfs mkdir -c error"
+
+	$LFS getdirstripe $stripe_dir ||
+		error "lfs getdirstripe fails"
+
+	local stripe_count
+	stripe_count=$($LFS getdirstripe $stripe_dir |
+		      awk '/lmv_stripe_count:/ { print $2 }')
+
+	[ $count -ne $stripe_count ] &&
+		error_noexit "bad stripe count $stripe_count expected $count"
+
+	local dupe_stripes
+	dupe_stripes=$($LFS getdirstripe $stripe_dir |
+		awk '/0x/ {count[$1] += 1}; END {
+			for (idx in count) {
+				if (count[idx]>1) {
+					print "index " idx " count " count[idx]
+				}
+			}
+		}')
+
+	if [[ -n "$dupe_stripes" ]] ; then
+		lfs getdirstripe $stripe_dir
+		error_noexit "Dupe MDT above: $dupe_stripes "
+	fi
+
+	rm -rf $stripe_dir ||
+		error_noexit "unlink $stripe_dir fails"
+}
+
+test_300s() {
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	for count in $(seq 2 $MDSCOUNT); do
+		test_300s_helper $count
+	done
+}
+run_test 300s "test lfs mkdir -c without -i"
+
+
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
 		error "create remote source failed"
