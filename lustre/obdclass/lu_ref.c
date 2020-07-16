@@ -360,7 +360,7 @@ static int lu_ref_seq_show(struct seq_file *seq, void *p)
 	return 0;
 }
 
-static struct seq_operations lu_ref_seq_ops = {
+static const struct seq_operations lu_ref_seq_ops = {
 	.start = lu_ref_seq_start,
 	.stop  = lu_ref_seq_stop,
 	.next  = lu_ref_seq_next,

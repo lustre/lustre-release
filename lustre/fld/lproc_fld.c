@@ -262,7 +262,7 @@ static int fldb_seq_show(struct seq_file *p, void *v)
 	return rc;
 }
 
-struct seq_operations fldb_sops = {
+static const struct seq_operations fldb_sops = {
 	.start = fldb_seq_start,
 	.stop = fldb_seq_stop,
 	.next = fldb_seq_next,

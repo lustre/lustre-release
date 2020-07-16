@@ -541,11 +541,11 @@ static void vvp_pgcache_stop(struct seq_file *f, void *v)
         /* Nothing to do */
 }
 
-static struct seq_operations vvp_pgcache_ops = {
-        .start = vvp_pgcache_start,
-        .next  = vvp_pgcache_next,
-        .stop  = vvp_pgcache_stop,
-        .show  = vvp_pgcache_show
+static const struct seq_operations vvp_pgcache_ops = {
+	.start = vvp_pgcache_start,
+	.next  = vvp_pgcache_next,
+	.stop  = vvp_pgcache_stop,
+	.show  = vvp_pgcache_show
 };
 
 static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)

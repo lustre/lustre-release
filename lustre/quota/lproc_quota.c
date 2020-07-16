@@ -263,7 +263,7 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 	return 0;
 }
 
-struct seq_operations lprocfs_quota_seq_sops = {
+static const struct seq_operations lprocfs_quota_seq_sops = {
 	.start	= lprocfs_quota_seq_start,
 	.stop	= lprocfs_quota_seq_stop,
 	.next	= lprocfs_quota_seq_next,

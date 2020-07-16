@@ -499,7 +499,7 @@ kgnilnd_mdd_seq_show(struct seq_file *s, void *iter)
 	return 0;
 }
 
-static struct seq_operations kgn_mdd_sops = {
+static const struct seq_operations kgn_mdd_sops = {
 	.start = kgnilnd_mdd_seq_start,
 	.stop  = kgnilnd_mdd_seq_stop,
 	.next  = kgnilnd_mdd_seq_next,
@@ -712,7 +712,7 @@ kgnilnd_smsg_seq_show(struct seq_file *s, void *iter)
 	return 0;
 }
 
-static struct seq_operations kgn_smsg_sops = {
+static const struct seq_operations kgn_smsg_sops = {
 	.start = kgnilnd_smsg_seq_start,
 	.stop  = kgnilnd_smsg_seq_stop,
 	.next  = kgnilnd_smsg_seq_next,
@@ -935,7 +935,7 @@ kgnilnd_conn_seq_show(struct seq_file *s, void *iter)
 	return 0;
 }
 
-static struct seq_operations kgn_conn_sops = {
+static const struct seq_operations kgn_conn_sops = {
 	.start = kgnilnd_conn_seq_start,
 	.stop  = kgnilnd_conn_seq_stop,
 	.next  = kgnilnd_conn_seq_next,
@@ -1288,7 +1288,7 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 	return 0;
 }
 
-static struct seq_operations kgn_peer_sops = {
+static const struct seq_operations kgn_peer_sops = {
 	.start = kgnilnd_peer_seq_start,
 	.stop  = kgnilnd_peer_seq_stop,
 	.next  = kgnilnd_peer_seq_next,
