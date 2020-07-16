@@ -4017,6 +4017,14 @@ lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 	if (atomic_read(&lpni->lpni_healthv) == LNET_MAX_HEALTH_VALUE)
 		return;
 
+	if (!lpni->lpni_last_alive) {
+		CDEBUG(D_NET,
+		       "lpni %s(%p) not eligible for recovery last alive %lld\n",
+		       libcfs_nid2str(lpni->lpni_nid), lpni,
+		       lpni->lpni_last_alive);
+		return;
+	}
+
 	if (now > lpni->lpni_last_alive + lnet_recovery_limit) {
 		CDEBUG(D_NET, "lpni %s aged out last alive %lld\n",
 		       libcfs_nid2str(lpni->lpni_nid),
