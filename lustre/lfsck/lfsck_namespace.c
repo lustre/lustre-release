@@ -5227,7 +5227,7 @@ static int lfsck_namespace_query(const struct lu_env *env,
 	return rc;
 }
 
-static struct lfsck_operations lfsck_namespace_ops = {
+static const struct lfsck_operations lfsck_namespace_ops = {
 	.lfsck_reset		= lfsck_namespace_reset,
 	.lfsck_fail		= lfsck_namespace_fail,
 	.lfsck_close_dir	= lfsck_namespace_close_dir,
@@ -6828,7 +6828,7 @@ out:
 	EXIT;
 }
 
-struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
+const struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
 	.la_handler_p1		= lfsck_namespace_assistant_handler_p1,
 	.la_handler_p2		= lfsck_namespace_assistant_handler_p2,
 	.la_fill_pos		= lfsck_namespace_assistant_fill_pos,

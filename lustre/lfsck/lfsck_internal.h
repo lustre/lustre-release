@@ -552,7 +552,7 @@ struct lfsck_component {
 	struct lfsck_instance	*lc_lfsck;
 	struct dt_object	*lc_obj;
 	struct lfsck_sub_trace_obj lc_sub_trace_objs[LFSCK_STF_COUNT];
-	struct lfsck_operations *lc_ops;
+	const struct lfsck_operations *lc_ops;
 	void			*lc_file_ram;
 	void			*lc_file_disk;
 	void			*lc_data;
@@ -849,7 +849,7 @@ struct lfsck_assistant_data {
 	struct ptlrpc_thread			 lad_thread;
 	struct task_struct			*lad_task;
 
-	struct lfsck_assistant_operations	*lad_ops;
+	const struct lfsck_assistant_operations	*lad_ops;
 
 	struct cfs_bitmap				*lad_bitmap;
 
@@ -960,7 +960,7 @@ void lfsck_control_speed(struct lfsck_instance *lfsck);
 void lfsck_control_speed_by_self(struct lfsck_component *com);
 void lfsck_thread_args_fini(struct lfsck_thread_args *lta);
 struct lfsck_assistant_data *
-lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
+lfsck_assistant_data_init(const struct lfsck_assistant_operations *lao,
 			  const char *name);
 struct lfsck_assistant_object *
 lfsck_assistant_object_init(const struct lu_env *env, const struct lu_fid *fid,

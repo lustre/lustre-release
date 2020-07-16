@@ -1957,7 +1957,7 @@ void lfsck_thread_args_fini(struct lfsck_thread_args *lta)
 }
 
 struct lfsck_assistant_data *
-lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
+lfsck_assistant_data_init(const struct lfsck_assistant_operations *lao,
 			  const char *name)
 {
 	struct lfsck_assistant_data *lad;

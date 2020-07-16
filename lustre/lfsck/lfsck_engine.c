@@ -1583,7 +1583,7 @@ int lfsck_assistant_engine(void *args)
 	struct lfsck_assistant_data	  *lad     = com->lc_data;
 	struct ptlrpc_thread		  *mthread = &lfsck->li_thread;
 	struct ptlrpc_thread		  *athread = &lad->lad_thread;
-	struct lfsck_assistant_operations *lao     = lad->lad_ops;
+	const struct lfsck_assistant_operations *lao     = lad->lad_ops;
 	struct lfsck_assistant_req	  *lar;
 	int				   rc      = 0;
 	int				   rc1	   = 0;

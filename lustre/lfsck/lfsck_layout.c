@@ -6808,7 +6808,7 @@ static int lfsck_layout_slave_join(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static struct lfsck_operations lfsck_layout_master_ops = {
+static const struct lfsck_operations lfsck_layout_master_ops = {
 	.lfsck_reset		= lfsck_layout_reset,
 	.lfsck_fail		= lfsck_layout_fail,
 	.lfsck_checkpoint	= lfsck_layout_master_checkpoint,
@@ -6824,7 +6824,7 @@ static struct lfsck_operations lfsck_layout_master_ops = {
 	.lfsck_query		= lfsck_layout_query,
 };
 
-static struct lfsck_operations lfsck_layout_slave_ops = {
+static const struct lfsck_operations lfsck_layout_slave_ops = {
 	.lfsck_reset		= lfsck_layout_reset,
 	.lfsck_fail		= lfsck_layout_fail,
 	.lfsck_checkpoint	= lfsck_layout_slave_checkpoint,
@@ -6862,7 +6862,7 @@ static void lfsck_layout_assistant_fill_pos(const struct lu_env *env,
 	pos->lp_oit_cookie = llr->llr_lar.lar_parent->lso_oit_cookie - 1;
 }
 
-struct lfsck_assistant_operations lfsck_layout_assistant_ops = {
+const struct lfsck_assistant_operations lfsck_layout_assistant_ops = {
 	.la_handler_p1		= lfsck_layout_assistant_handler_p1,
 	.la_handler_p2		= lfsck_layout_assistant_handler_p2,
 	.la_fill_pos		= lfsck_layout_assistant_fill_pos,
