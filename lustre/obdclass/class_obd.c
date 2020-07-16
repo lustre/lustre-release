@@ -502,7 +502,7 @@ static struct file_operations obd_psdev_fops = {
 };
 
 /* modules setup */
-struct miscdevice obd_psdev = {
+static struct miscdevice obd_psdev = {
 	.minor	= MISC_DYNAMIC_MINOR,
 	.name	= OBD_DEV_NAME,
 	.fops	= &obd_psdev_fops,
