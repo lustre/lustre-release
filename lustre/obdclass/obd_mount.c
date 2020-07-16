@@ -1395,6 +1395,9 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		} else if (strncmp(s1, "writeconf", 9) == 0) {
 			lmd->lmd_flags |= LMD_FLG_WRITECONF;
 			clear++;
+		} else if (strncmp(s1, "nolocallogs", 11) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NO_LOCAL_LOGS;
+			clear++;
 		} else if (strncmp(s1, "update", 6) == 0) {
 			lmd->lmd_flags |= LMD_FLG_UPDATE;
 			clear++;

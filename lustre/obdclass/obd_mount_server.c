@@ -1553,6 +1553,8 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	 */
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
 		LDD_F_WRITECONF : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_LOCAL_LOGS) ?
+		LDD_F_NO_LOCAL_LOGS : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
 		LDD_F_VIRGIN : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_UPDATE) ?

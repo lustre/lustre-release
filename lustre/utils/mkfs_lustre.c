@@ -156,6 +156,7 @@ void usage(FILE *out)
 		"\t\t--erase-param <key>: erase all instances of a parameter\n"
 		"\t\t--erase-params: erase all old parameter settings\n"
 		"\t\t--writeconf: erase all config logs for this fs.\n"
+		"\t\t--nolocallogs: use logs from MGS, not local ones.\n"
 		"\t\t--quota: enable space accounting on old 2.x device.\n"
 		"\t\t--rename: rename the filesystem name\n"
 #endif
@@ -187,7 +188,7 @@ void print_ldd(char *str, struct mkfs_opts *mop)
 	printf("Lustre FS:  %s\n", ldd->ldd_fsname);
 	printf("Mount type: %s\n", MT_STR(ldd));
 	printf("Flags:      %#x\n", ldd->ldd_flags);
-	printf("              (%s%s%s%s%s%s%s%s)\n",
+	printf("              (%s%s%s%s%s%s%s%s%s)\n",
 	       IS_MDT(ldd) ? "MDT " : "",
 	       IS_OST(ldd) ? "OST " : "",
 	       IS_MGS(ldd) ? "MGS " : "",
@@ -195,7 +196,8 @@ void print_ldd(char *str, struct mkfs_opts *mop)
 	       ldd->ldd_flags & LDD_F_VIRGIN     ? "first_time " : "",
 	       ldd->ldd_flags & LDD_F_UPDATE     ? "update " : "",
 	       ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf " : "",
-	       ldd->ldd_flags & LDD_F_NO_PRIMNODE ? "no_primnode " : "");
+	       ldd->ldd_flags & LDD_F_NO_PRIMNODE ? "no_primnode " : "",
+	       ldd->ldd_flags & LDD_F_NO_LOCAL_LOGS ? "nolocallogs " : "");
 	printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
 	osd_print_ldd_params(mop);
 	if (ldd->ldd_userdata[0])
@@ -228,10 +230,11 @@ static bool server_make_name(__u32 flags, __u16 index, const char *fs,
 	if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
 		if (!(flags & LDD_F_SV_ALL))
 			snprintf(name_buf, name_buf_size, "%.8s%c%s%04x", fs,
-				 (flags & LDD_F_VIRGIN) ? ':' :
-				 ((flags & LDD_F_WRITECONF) ? '=' : '-'),
-				 (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
-				  index);
+				(flags & LDD_F_VIRGIN) ? ':' :
+				((flags & LDD_F_WRITECONF) ? '=' :
+				((flags & LDD_F_NO_LOCAL_LOGS) ? '+' : '-')),
+				(flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+				index);
 	} else if (flags & LDD_F_SV_TYPE_MGS) {
 		snprintf(name_buf, name_buf_size, "MGS");
 	} else {
@@ -399,6 +402,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	{ .val = 'E',	.name =  "erase-param",	.has_arg = required_argument},
 	{ .val = 'e',	.name =  "erase-params",
 						.has_arg = no_argument},
+	{ .val = 'l',	.name =  "nolocallogs", .has_arg = no_argument},
 	{ .val = 'Q',	.name =  "quota",	.has_arg = no_argument},
 	{ .val = 'R',	.name =  "rename",	.has_arg = optional_argument},
 	{ .val = 'w',	.name =  "writeconf",	.has_arg = no_argument},
@@ -408,7 +412,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 #ifndef TUNEFS
 			  "b:c:d:k:MOrR";
 #else
-			  "E:eQR::w";
+			  "E:elQR::w";
 #endif
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
@@ -737,6 +741,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'w':
 			ldd->ldd_flags |= LDD_F_WRITECONF;
 			break;
+		case 'l':
+			if (ldd->ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+				fprintf(stderr, "Can not apply nolocallogs to the target that was writeconfed or never been registered\n");
+				return EINVAL;
+			}
+			ldd->ldd_flags |= LDD_F_NO_LOCAL_LOGS;
+			break;
 #endif /* !TUNEFS */
 		default:
 			if (opt != '?') {
@@ -870,7 +881,8 @@ int main(int argc, char *const argv[])
 	}
 
 	strscpy(old_fsname, ldd->ldd_fsname, sizeof(ldd->ldd_fsname));
-	ldd->ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN);
+	ldd->ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN |
+			    LDD_F_NO_LOCAL_LOGS);
 
 	/* svname of the form lustre:OST1234 means never registered */
 	ret = strlen(ldd->ldd_svname);
@@ -880,6 +892,9 @@ int main(int argc, char *const argv[])
 	} else if (ldd->ldd_svname[ret - 8] == '=') {
 		ldd->ldd_svname[ret - 8] = '-';
 		ldd->ldd_flags |= LDD_F_WRITECONF;
+	} else if (ldd->ldd_svname[ret - 8] == '+') {
+		ldd->ldd_svname[ret - 8] = '-';
+		ldd->ldd_flags |= LDD_F_NO_LOCAL_LOGS;
 	}
 
 	if (strstr(ldd->ldd_params, PARAM_MGSNODE))
@@ -1007,8 +1022,11 @@ int main(int argc, char *const argv[])
 		goto out;
 	}
 
-	if (check_mtab_entry(mop.mo_device, mop.mo_device, NULL, NULL))
+	if (check_mtab_entry(mop.mo_device, mop.mo_device, NULL, NULL)) {
+		fprintf(stderr, "%s: is currently mounted, exiting without any change\n",
+			mop.mo_device);
 		return EEXIST;
+	}
 
 	/* Create the loopback file */
 	if (mop.mo_flags & MO_IS_LOOP) {
@@ -1062,6 +1080,15 @@ int main(int argc, char *const argv[])
 		opts.mo_ldd = *ldd;
 		opts.mo_source = mop.mo_device;
 		(void)osd_label_lustre(&opts);
+	}
+
+	/* update svname with '+' to force remote logs */
+	if (ldd->ldd_flags & LDD_F_NO_LOCAL_LOGS) {
+		struct mount_opts opts;
+
+		opts.mo_ldd = *ldd;
+		opts.mo_source = mop.mo_device;
+		(void) osd_label_lustre(&opts);
 	}
 
 	/* Rename filesystem fsname */

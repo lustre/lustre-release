@@ -134,6 +134,19 @@ Correct order of operations is:
 .br
 * Mount clients
 .TP
+.BI \--nolocallogs
+Use configuration logs from the MGS, not local ones.
+.br
+There is feature that starts a target with a local copy of
+the config log in order to avoid a delay in communicating with
+the MGS and to load MGS log updates later on.
+However, that feature is not always useful.
+.br
+replace_nids changes config logs on the server side and local copies
+become invalid. --nolocallogs sets the nolocallogs mount flag,
+which causes the local copy of the config log to be ignored.
+The flag is reset once new logs are downloaded from MGS.
+.TP
 .BI \--quota
 Enable space accounting on old 2.x devices.
 

@@ -109,6 +109,7 @@ struct lustre_mount_data {
 #define LMD_FLG_NO_PRECREATE	0x10000	/* do not allow OST object creation */
 #define LMD_FLG_LOCAL_RECOV	0x20000 /* force recovery for local clients */
 #define LMD_FLG_ABORT_RECOV_MDT	0x40000 /* Abort recovery between MDTs */
+#define LMD_FLG_NO_LOCAL_LOGS	0x80000 /* Use config logs from MGS */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 

@@ -560,7 +560,8 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 		clear_update_ondisk(source, ldd);
 
 	/* Since we never rewrite ldd, ignore temp flags */
-	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_WRITECONF);
+	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_WRITECONF |
+			    LDD_F_NO_LOCAL_LOGS);
 
 	/* This is to make sure default options go first */
 	temp_options = strdup(options);
@@ -588,6 +589,9 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 		} else if (ldd->ldd_svname[rc - 8] == '=') {
 			ldd->ldd_svname[rc - 8] = '-';
 			ldd->ldd_flags |= LDD_F_WRITECONF;
+		} else if (ldd->ldd_svname[rc - 8] == '+') {
+			ldd->ldd_svname[rc - 8] = '-';
+			ldd->ldd_flags |= LDD_F_NO_LOCAL_LOGS;
 		}
 	}
 	/* backend osd type */
@@ -631,6 +635,11 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 	}
 	if (ldd->ldd_flags & LDD_F_WRITECONF) {
 		rc = append_option(options, options_len, "writeconf", NULL);
+		if (rc != 0)
+			return rc;
+	}
+	if (ldd->ldd_flags & LDD_F_NO_LOCAL_LOGS) {
+		rc = append_option(options, options_len, "nolocallogs", NULL);
 		if (rc != 0)
 			return rc;
 	}
@@ -804,7 +813,8 @@ static void label_lustre(struct mount_opts *mop)
 	if (mop->mo_nosvc)
 		return;
 
-	if (mop->mo_ldd.ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+	if (mop->mo_ldd.ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF |
+	    LDD_F_NO_LOCAL_LOGS)) {
 		(void)osd_label_lustre(mop);
 	} else {
 		struct lustre_disk_data ldd;
