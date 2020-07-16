@@ -105,8 +105,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 		RETURN(PTR_ERR(sub));
 
 	subobj = lovsub2cl(r0->lo_sub[stripe]);
-	list_for_each_entry(o, &subobj->co_lu.lo_header->loh_layers,
-			    co_lu.lo_linkage) {
+	cl_object_for_each(o, subobj) {
 		if (o->co_ops->coo_page_init) {
 			rc = o->co_ops->coo_page_init(sub->sub_env, o, page,
 						      cl_index(subobj, suboff));

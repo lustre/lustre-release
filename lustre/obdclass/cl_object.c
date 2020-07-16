@@ -199,18 +199,16 @@ EXPORT_SYMBOL(cl_object_attr_unlock);
  * top-to-bottom to fill in parts of \a attr that this layer is responsible
  * for.
  */
-int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
+int cl_object_attr_get(const struct lu_env *env, struct cl_object *top,
 			struct cl_attr *attr)
 {
-	struct lu_object_header *top;
-	int result;
+	struct cl_object *obj;
+	int result = 0;
 
-	assert_spin_locked(cl_object_attr_guard(obj));
+	assert_spin_locked(cl_object_attr_guard(top));
 	ENTRY;
 
-	top = obj->co_lu.lo_header;
-	result = 0;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+	cl_object_for_each(obj, top) {
 		if (obj->co_ops->coo_attr_get != NULL) {
 			result = obj->co_ops->coo_attr_get(env, obj, attr);
 			if (result != 0) {
@@ -231,18 +229,16 @@ EXPORT_SYMBOL(cl_object_attr_get);
  * updated. Calls cl_object_operations::coo_upd_attr() on every layer, bottom
  * to top.
  */
-int cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
+int cl_object_attr_update(const struct lu_env *env, struct cl_object *top,
 			  const struct cl_attr *attr, unsigned v)
 {
-	struct lu_object_header *top;
-	int result;
+	struct cl_object *obj;
+	int result = 0;
 
-	assert_spin_locked(cl_object_attr_guard(obj));
+	assert_spin_locked(cl_object_attr_guard(top));
 	ENTRY;
 
-	top = obj->co_lu.lo_header;
-	result = 0;
-	list_for_each_entry_reverse(obj, &top->loh_layers, co_lu.lo_linkage) {
+	cl_object_for_each_reverse(obj, top) {
 		if (obj->co_ops->coo_attr_update != NULL) {
 			result = obj->co_ops->coo_attr_update(env, obj, attr,
 							      v);
@@ -265,70 +261,63 @@ EXPORT_SYMBOL(cl_object_attr_update);
  *
  * \see cl_lock_operations::clo_glimpse()
  */
-int cl_object_glimpse(const struct lu_env *env, struct cl_object *obj,
-                      struct ost_lvb *lvb)
+int cl_object_glimpse(const struct lu_env *env, struct cl_object *top,
+		      struct ost_lvb *lvb)
 {
-        struct lu_object_header *top;
-        int result;
+	struct cl_object *obj;
+	int result = 0;
 
-        ENTRY;
-        top = obj->co_lu.lo_header;
-        result = 0;
-	list_for_each_entry_reverse(obj, &top->loh_layers, co_lu.lo_linkage) {
-                if (obj->co_ops->coo_glimpse != NULL) {
-                        result = obj->co_ops->coo_glimpse(env, obj, lvb);
-                        if (result != 0)
-                                break;
-                }
-        }
-        LU_OBJECT_HEADER(D_DLMTRACE, env, lu_object_top(top),
+	ENTRY;
+	cl_object_for_each_reverse(obj, top) {
+		if (obj->co_ops->coo_glimpse != NULL) {
+			result = obj->co_ops->coo_glimpse(env, obj, lvb);
+			if (result != 0)
+				break;
+		}
+	}
+	LU_OBJECT_HEADER(D_DLMTRACE, env, lu_object_top(top->co_lu.lo_header),
 			 "size: %llu mtime: %llu atime: %llu "
 			 "ctime: %llu blocks: %llu\n",
-                         lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
-                         lvb->lvb_ctime, lvb->lvb_blocks);
-        RETURN(result);
+			 lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
+			 lvb->lvb_ctime, lvb->lvb_blocks);
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_object_glimpse);
 
 /**
  * Updates a configuration of an object \a obj.
  */
-int cl_conf_set(const struct lu_env *env, struct cl_object *obj,
-                const struct cl_object_conf *conf)
+int cl_conf_set(const struct lu_env *env, struct cl_object *top,
+		const struct cl_object_conf *conf)
 {
-        struct lu_object_header *top;
-        int result;
+	struct cl_object *obj;
+	int result = 0;
 
-        ENTRY;
-        top = obj->co_lu.lo_header;
-        result = 0;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-                if (obj->co_ops->coo_conf_set != NULL) {
-                        result = obj->co_ops->coo_conf_set(env, obj, conf);
-                        if (result != 0)
-                                break;
-                }
-        }
-        RETURN(result);
+	ENTRY;
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_conf_set != NULL) {
+			result = obj->co_ops->coo_conf_set(env, obj, conf);
+			if (result)
+				break;
+		}
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_conf_set);
 
 /**
  * Prunes caches of pages and locks for this object.
  */
-int cl_object_prune(const struct lu_env *env, struct cl_object *obj)
+int cl_object_prune(const struct lu_env *env, struct cl_object *top)
 {
-	struct lu_object_header *top;
-	struct cl_object *o;
-	int result;
+	struct cl_object *obj;
+	int result = 0;
 	ENTRY;
 
-	top = obj->co_lu.lo_header;
-	result = 0;
-	list_for_each_entry(o, &top->loh_layers, co_lu.lo_linkage) {
-		if (o->co_ops->coo_prune != NULL) {
-			result = o->co_ops->coo_prune(env, o);
-			if (result != 0)
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_prune != NULL) {
+			result = obj->co_ops->coo_prune(env, obj);
+			if (result)
 				break;
 		}
 	}
@@ -340,19 +329,18 @@ EXPORT_SYMBOL(cl_object_prune);
 /**
  * Get stripe information of this object.
  */
-int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
+int cl_object_getstripe(const struct lu_env *env, struct cl_object *top,
 			struct lov_user_md __user *uarg, size_t size)
 {
-	struct lu_object_header	*top;
-	int			result = 0;
+	struct cl_object *obj;
+	int result = 0;
 	ENTRY;
 
-	top = obj->co_lu.lo_header;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_getstripe != NULL) {
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_getstripe) {
 			result = obj->co_ops->coo_getstripe(env, obj, uarg,
 							    size);
-			if (result != 0)
+			if (result)
 				break;
 		}
 	}
@@ -372,20 +360,19 @@ EXPORT_SYMBOL(cl_object_getstripe);
  * \retval 0	success
  * \retval < 0	error
  */
-int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
+int cl_object_fiemap(const struct lu_env *env, struct cl_object *top,
 		     struct ll_fiemap_info_key *key,
 		     struct fiemap *fiemap, size_t *buflen)
 {
-	struct lu_object_header	*top;
-	int			result = 0;
+	struct cl_object *obj;
+	int result = 0;
 	ENTRY;
 
-	top = obj->co_lu.lo_header;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_fiemap != NULL) {
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_fiemap) {
 			result = obj->co_ops->coo_fiemap(env, obj, key, fiemap,
 							 buflen);
-			if (result != 0)
+			if (result)
 				break;
 		}
 	}
@@ -393,14 +380,14 @@ int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_object_fiemap);
 
-int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
+int cl_object_layout_get(const struct lu_env *env, struct cl_object *top,
 			 struct cl_layout *cl)
 {
-	struct lu_object_header	*top = obj->co_lu.lo_header;
+	struct cl_object *obj;
 	ENTRY;
 
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_layout_get != NULL)
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_layout_get)
 			return obj->co_ops->coo_layout_get(env, obj, cl);
 	}
 
@@ -408,14 +395,14 @@ int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_object_layout_get);
 
-loff_t cl_object_maxbytes(struct cl_object *obj)
+loff_t cl_object_maxbytes(struct cl_object *top)
 {
-	struct lu_object_header	*top = obj->co_lu.lo_header;
+	struct cl_object *obj;
 	loff_t maxbytes = LLONG_MAX;
 	ENTRY;
 
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_maxbytes != NULL)
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_maxbytes)
 			maxbytes = min_t(loff_t, obj->co_ops->coo_maxbytes(obj),
 					 maxbytes);
 	}
@@ -424,14 +411,14 @@ loff_t cl_object_maxbytes(struct cl_object *obj)
 }
 EXPORT_SYMBOL(cl_object_maxbytes);
 
-int cl_object_flush(const struct lu_env *env, struct cl_object *obj,
+int cl_object_flush(const struct lu_env *env, struct cl_object *top,
 			 struct ldlm_lock *lock)
 {
-	struct lu_object_header *top = obj->co_lu.lo_header;
+	struct cl_object *obj;
 	int rc = 0;
 	ENTRY;
 
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+	cl_object_for_each(obj, top) {
 		if (obj->co_ops->coo_object_flush) {
 			rc = obj->co_ops->coo_object_flush(env, obj, lock);
 			if (rc)

@@ -268,7 +268,7 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 			      enum cl_page_type type)
 {
 	struct cl_page *cl_page;
-	struct lu_object_header *head;
+	struct cl_object *head;
 
 	ENTRY;
 
@@ -293,9 +293,8 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		cl_page->cp_inode = NULL;
 		INIT_LIST_HEAD(&cl_page->cp_batch);
 		lu_ref_init(&cl_page->cp_reference);
-		head = o->co_lu.lo_header;
-		list_for_each_entry(o, &head->loh_layers,
-				    co_lu.lo_linkage) {
+		head = o;
+		cl_object_for_each(o, head) {
 			if (o->co_ops->coo_page_init != NULL) {
 				result = o->co_ops->coo_page_init(env, o,
 							cl_page, ind);
