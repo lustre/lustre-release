@@ -228,7 +228,7 @@ struct lquota_site {
 
 	/* Vector of operations which can be done on lquota entry belonging to
 	 * this quota site */
-	struct lquota_entry_operations	*lqs_ops;
+	const struct lquota_entry_operations	*lqs_ops;
 
 	/* Backpointer to parent structure, either QMT pool info for master or
 	 * QSD for slave */
@@ -445,8 +445,9 @@ const struct dt_index_features *glb_idx_feature(struct lu_fid *);
 
 /* lquota_entry.c */
 /* site create/destroy */
-struct lquota_site *lquota_site_alloc(const struct lu_env *, void *, bool,
-				      short, struct lquota_entry_operations *);
+struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
+				      bool master, short qtype,
+				      const struct lquota_entry_operations *op);
 void lquota_site_free(const struct lu_env *, struct lquota_site *);
 /* quota entry operations */
 #define lqe_locate(env, site, id) lqe_locate_find(env, site, id, false)

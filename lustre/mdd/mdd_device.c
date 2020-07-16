@@ -845,7 +845,7 @@ static int mdd_obf_create(const struct lu_env *env, struct md_object *pobj,
 	RETURN(-EPERM);
 }
 
-static struct md_dir_operations mdd_obf_dir_ops = {
+static const struct md_dir_operations mdd_obf_dir_ops = {
 	.mdo_lookup = obf_lookup,
 	.mdo_create = mdd_obf_create,
 	.mdo_rename = mdd_dummy_rename,
@@ -853,7 +853,7 @@ static struct md_dir_operations mdd_obf_dir_ops = {
 	.mdo_unlink = mdd_dummy_unlink
 };
 
-static struct md_dir_operations mdd_lpf_dir_ops = {
+static const struct md_dir_operations mdd_lpf_dir_ops = {
 	.mdo_lookup = mdd_lookup,
 	.mdo_create = mdd_dummy_create,
 	.mdo_rename = mdd_dummy_rename,

@@ -1314,7 +1314,7 @@ static void mdc_io_data_version_end(const struct lu_env *env,
 	EXIT;
 }
 
-static struct cl_io_operations mdc_io_ops = {
+static const struct cl_io_operations mdc_io_ops = {
 	.op = {
 		[CIT_READ] = {
 			.cio_iter_init = osc_io_rw_iter_init,

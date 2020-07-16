@@ -2727,7 +2727,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req);
 int llog_origin_handle_read_header(struct ptlrpc_request *req);
 
 /* ptlrpc/llog_client.c */
-extern struct llog_operations llog_client_ops;
+extern const struct llog_operations llog_client_ops;
 /** @} net */
 
 #endif

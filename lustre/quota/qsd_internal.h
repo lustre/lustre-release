@@ -333,7 +333,7 @@ static inline int qsd_wait_timeout(struct qsd_instance *qsd)
 }
 
 /* qsd_entry.c */
-extern struct lquota_entry_operations qsd_lqe_ops;
+extern const struct lquota_entry_operations qsd_lqe_ops;
 int qsd_refresh_usage(const struct lu_env *, struct lquota_entry *);
 int qsd_update_index(const struct lu_env *, struct qsd_qtype_info *,
 		     union lquota_id *, bool, __u64, void *);

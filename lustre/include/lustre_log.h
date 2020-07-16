@@ -172,7 +172,7 @@ int llog_cat_reverse_process(const struct lu_env *env,
 /* llog_obd.c */
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,
-	       struct obd_device *disk_obd, struct llog_operations *op);
+	       struct obd_device *disk_obd, const struct llog_operations *op);
 int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt);
 int llog_cleanup(const struct lu_env *env, struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
@@ -282,7 +282,7 @@ struct llog_handle {
 	} u;
 	char			*lgh_name;
 	void			*private_data;
-	struct llog_operations	*lgh_logops;
+	const struct llog_operations	*lgh_logops;
 	refcount_t		 lgh_refcount;
 
 	int			lgh_max_size;
@@ -290,8 +290,8 @@ struct llog_handle {
 };
 
 /* llog_osd.c */
-extern struct llog_operations llog_osd_ops;
-extern struct llog_operations llog_common_cat_ops;
+extern const struct llog_operations llog_osd_ops;
+extern const struct llog_operations llog_common_cat_ops;
 int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 			  int idx, int count, struct llog_catid *idarray,
 			  const struct lu_fid *fid);
@@ -307,17 +307,17 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 #define LLOG_CTXT_FLAG_NORMAL_FID	 0x00000004
 
 struct llog_ctxt {
-        int                      loc_idx; /* my index the obd array of ctxt's */
-        struct obd_device       *loc_obd; /* points back to the containing obd*/
-        struct obd_llog_group   *loc_olg; /* group containing that ctxt */
-        struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
-        struct obd_import       *loc_imp; /* to use in RPC's: can be backward
-                                             pointing import */
-	struct llog_operations  *loc_logops;
-	struct llog_handle      *loc_handle;
+	int			 loc_idx; /* my index the obd array of ctxt's */
+	struct obd_device	*loc_obd; /* points back to the containing obd*/
+	struct obd_llog_group	*loc_olg; /* group containing that ctxt */
+	struct obd_export	*loc_exp; /* parent "disk" export (e.g. MDS) */
+	struct obd_import	*loc_imp; /* to use in RPC's: can be backward
+					   * pointing import */
+	const struct llog_operations  *loc_logops;
+	struct llog_handle	*loc_handle;
 	struct mutex		 loc_mutex; /* protect loc_imp */
-	atomic_t                 loc_refcount;
-	long                     loc_flags; /* flags, see above defines */
+	atomic_t		 loc_refcount;
+	long			 loc_flags; /* flags, see above defines */
 	struct dt_object	*loc_dir;
 	struct local_oid_storage *loc_los_nameless;
 	struct local_oid_storage *loc_los_named;
@@ -331,20 +331,20 @@ struct llog_ctxt {
 #define LLOG_DEL_PLAIN  0x0003
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
-                               struct llog_operations **lop)
+			       const struct llog_operations **lop)
 {
-        if (ctxt == NULL)
-                return -ENOTCONN;
+	if (ctxt == NULL)
+		return -ENOTCONN;
 
-        *lop = ctxt->loc_logops;
-        if (*lop == NULL)
-                return -EOPNOTSUPP;
+	*lop = ctxt->loc_logops;
+	if (*lop == NULL)
+		return -EOPNOTSUPP;
 
-        return 0;
+	return 0;
 }
 
 static inline int llog_handle2ops(struct llog_handle *loghandle,
-                                  struct llog_operations **lop)
+				  const struct llog_operations **lop)
 {
 	if (loghandle == NULL || loghandle->lgh_logops == NULL)
 		return -EINVAL;
@@ -355,7 +355,7 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
 
 static inline int llog_data_len(int len)
 {
-        return cfs_size_round(len);
+	return cfs_size_round(len);
 }
 
 static inline int llog_get_size(struct llog_handle *loghandle)
@@ -449,7 +449,7 @@ static inline int llog_next_block(const struct lu_env *env,
 				  int next_idx, __u64 *cur_offset, void *buf,
 				  int len)
 {
-	struct llog_operations *lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -469,7 +469,7 @@ static inline int llog_prev_block(const struct lu_env *env,
 				  struct llog_handle *loghandle,
 				  int prev_idx, void *buf, int len)
 {
-	struct llog_operations *lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -488,8 +488,8 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
 			       struct llog_logid *logid, struct llog_gen *gen,
 			       struct obd_uuid *uuid)
 {
-	struct llog_operations	*lop;
-	int			 rc;
+	const struct llog_operations *lop;
+	int rc;
 
 	ENTRY;
 

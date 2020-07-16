@@ -104,7 +104,7 @@ int llog_handle_put(const struct lu_env *env, struct llog_handle *loghandle)
 	int rc = 0;
 
 	if (refcount_dec_and_test(&loghandle->lgh_refcount)) {
-		struct llog_operations *lop;
+		const struct llog_operations *lop;
 
 		rc = llog_handle2ops(loghandle, &lop);
 		if (!rc) {
@@ -122,7 +122,7 @@ static int llog_declare_destroy(const struct lu_env *env,
 				struct llog_handle *handle,
 				struct thandle *th)
 {
-	struct llog_operations *lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -141,7 +141,7 @@ static int llog_declare_destroy(const struct lu_env *env,
 int llog_trans_destroy(const struct lu_env *env, struct llog_handle *handle,
 		       struct thandle *th)
 {
-	struct llog_operations	*lop;
+	const struct llog_operations *lop;
 	int rc;
 	ENTRY;
 
@@ -162,9 +162,9 @@ int llog_trans_destroy(const struct lu_env *env, struct llog_handle *handle,
 
 int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 {
-	struct llog_operations	*lop;
-	struct dt_device	*dt;
-	struct thandle		*th;
+	const struct llog_operations *lop;
+	struct dt_device *dt;
+	struct thandle *th;
 	int rc;
 
 	ENTRY;
@@ -339,7 +339,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		     const struct obd_uuid *uuid)
 {
-	struct llog_operations *lop;
+	const struct llog_operations *lop;
 	int rc;
 	ENTRY;
 
@@ -1024,8 +1024,8 @@ EXPORT_SYMBOL(llog_reverse_process);
  */
 int llog_exist(struct llog_handle *loghandle)
 {
-	struct llog_operations	*lop;
-	int			 rc;
+	const struct llog_operations *lop;
+	int rc;
 
 	ENTRY;
 
@@ -1044,7 +1044,7 @@ int llog_declare_create(const struct lu_env *env,
 			struct llog_handle *loghandle, struct thandle *th)
 {
 	const struct cred *old_cred;
-	struct llog_operations	*lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -1065,7 +1065,7 @@ int llog_create(const struct lu_env *env, struct llog_handle *handle,
 		struct thandle *th)
 {
 	const struct cred *old_cred;
-	struct llog_operations	*lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -1088,7 +1088,7 @@ int llog_declare_write_rec(const struct lu_env *env,
 			   struct thandle *th)
 {
 	const struct cred *old_cred;
-	struct llog_operations	*lop;
+	const struct llog_operations *lop;
 	int rc;
 
 	ENTRY;
@@ -1111,7 +1111,7 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		   int idx, struct thandle *th)
 {
 	const struct cred *old_cred;
-	struct llog_operations	*lop;
+	const struct llog_operations *lop;
 	int rc, buflen;
 
 	ENTRY;

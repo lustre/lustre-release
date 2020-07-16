@@ -400,8 +400,8 @@ static void echo_lock_fini(const struct lu_env *env,
 	OBD_SLAB_FREE_PTR(ecl, echo_lock_kmem);
 }
 
-static struct cl_lock_operations echo_lock_ops = {
-	.clo_fini      = echo_lock_fini,
+static const struct cl_lock_operations echo_lock_ops = {
+	.clo_fini	= echo_lock_fini,
 };
 
 /** @} echo_lock */

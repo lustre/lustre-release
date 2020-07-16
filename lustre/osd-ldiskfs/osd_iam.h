@@ -410,36 +410,36 @@ struct iam_leaf_operations {
  * Parameters, describing a flavor of iam container.
  */
 struct iam_descr {
-        /*
-         * Size of a key in this container, in bytes.
-         */
-         size_t       id_key_size;
-        /*
-         * Size of a key in index nodes, in bytes.
-         */
-         size_t       id_ikey_size;
-        /*
-         * Size of a pointer to the next level (stored in index nodes), in
-         * bytes.
-         */
-        size_t       id_ptr_size;
-        /*
-         * Size of a record (stored in leaf nodes), in bytes.
-         */
-        size_t       id_rec_size;
-        /*
-         * Size of unused (by iam) space at the beginning of every non-root
-         * node, in bytes. Used for compatibility with ldiskfs.
-         */
-        size_t       id_node_gap;
-        /*
-         * Size of unused (by iam) space at the beginning of root node, in
-         * bytes. Used for compatibility with ldiskfs.
-         */
-        size_t       id_root_gap;
+	/*
+	 * Size of a key in this container, in bytes.
+	 */
+	size_t       id_key_size;
+	/*
+	 * Size of a key in index nodes, in bytes.
+	 */
+	size_t       id_ikey_size;
+	/*
+	 * Size of a pointer to the next level (stored in index nodes), in
+	 * bytes.
+	 */
+	size_t       id_ptr_size;
+	/*
+	 * Size of a record (stored in leaf nodes), in bytes.
+	 */
+	size_t       id_rec_size;
+	/*
+	 * Size of unused (by iam) space at the beginning of every non-root
+	 * node, in bytes. Used for compatibility with ldiskfs.
+	 */
+	size_t       id_node_gap;
+	/*
+	 * Size of unused (by iam) space at the beginning of root node, in
+	 * bytes. Used for compatibility with ldiskfs.
+	 */
+	size_t       id_root_gap;
 
-        struct iam_operations           *id_ops;
-        struct iam_leaf_operations      *id_leaf_ops;
+	const struct iam_operations           *id_ops;
+	const struct iam_leaf_operations      *id_leaf_ops;
 };
 
 enum {
@@ -792,10 +792,10 @@ static inline struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf)
         return iam_leaf_container(leaf)->ic_descr;
 }
 
-static inline struct iam_leaf_operations *
+static inline const struct iam_leaf_operations *
 iam_leaf_ops(const struct iam_leaf *leaf)
 {
-        return iam_leaf_descr(leaf)->id_leaf_ops;
+	return iam_leaf_descr(leaf)->id_leaf_ops;
 }
 
 static inline void iam_reccpy(const struct iam_leaf *leaf,
@@ -1063,7 +1063,7 @@ int iam_leaf_can_add(const struct iam_leaf *l,
 struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
 struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
 struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf);
-struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
+const struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
 
 
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,

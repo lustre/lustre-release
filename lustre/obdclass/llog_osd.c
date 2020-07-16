@@ -1949,7 +1949,7 @@ static int llog_osd_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt)
 	return 0;
 }
 
-struct llog_operations llog_osd_ops = {
+const struct llog_operations llog_osd_ops = {
 	.lop_next_block		= llog_osd_next_block,
 	.lop_prev_block		= llog_osd_prev_block,
 	.lop_read_header	= llog_osd_read_header,
@@ -1967,7 +1967,7 @@ struct llog_operations llog_osd_ops = {
 };
 EXPORT_SYMBOL(llog_osd_ops);
 
-struct llog_operations llog_common_cat_ops = {
+const struct llog_operations llog_common_cat_ops = {
 	.lop_next_block		= llog_osd_next_block,
 	.lop_prev_block		= llog_osd_prev_block,
 	.lop_read_header	= llog_osd_read_header,

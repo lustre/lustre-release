@@ -199,7 +199,7 @@ retry:
  */
 struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 				      bool is_master, short qtype,
-				      struct lquota_entry_operations *ops)
+				      const struct lquota_entry_operations *ops)
 {
 	struct lquota_site	*site;
 	char			 hashname[15];

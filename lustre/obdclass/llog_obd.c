@@ -143,7 +143,7 @@ EXPORT_SYMBOL(llog_cleanup);
 
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,
-	       struct obd_device *disk_obd, struct llog_operations *op)
+	       struct obd_device *disk_obd, const struct llog_operations *op)
 {
 	struct llog_ctxt *ctxt;
 	int rc = 0;

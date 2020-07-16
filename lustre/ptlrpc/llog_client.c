@@ -343,7 +343,7 @@ static int llog_client_close(const struct lu_env *env,
 	return 0;
 }
 
-struct llog_operations llog_client_ops = {
+const struct llog_operations llog_client_ops = {
 	.lop_next_block		= llog_client_next_block,
 	.lop_prev_block		= llog_client_prev_block,
 	.lop_read_header	= llog_client_read_header,

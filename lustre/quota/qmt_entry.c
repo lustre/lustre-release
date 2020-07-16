@@ -186,7 +186,7 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 /*
  * Vector of quota entry operations supported on the master
  */
-struct lquota_entry_operations qmt_lqe_ops = {
+const struct lquota_entry_operations qmt_lqe_ops = {
 	.lqe_init	= qmt_lqe_init,
 	.lqe_read	= qmt_lqe_read,
 	.lqe_debug	= qmt_lqe_debug,

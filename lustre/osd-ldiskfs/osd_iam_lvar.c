@@ -770,7 +770,7 @@ static int lvar_leaf_empty(struct iam_leaf *leaf)
 	return h_used(n_head(leaf)) == sizeof(struct lvar_leaf_header);
 }
 
-static struct iam_leaf_operations lvar_leaf_ops = {
+static const struct iam_leaf_operations lvar_leaf_ops = {
 	.init           = lvar_init,
 	.init_new       = lvar_init_new,
 	.fini           = lvar_fini,
@@ -1044,7 +1044,7 @@ out:
 	return result;
 }
 
-static struct iam_operations lvar_ops = {
+static const struct iam_operations lvar_ops = {
 	.id_root_ptr    = lvar_root_ptr,
 	.id_node_read   = iam_node_read,
 	.id_node_init   = lvar_node_init,

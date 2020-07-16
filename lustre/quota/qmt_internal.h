@@ -462,7 +462,7 @@ int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx);
 unsigned int qmt_sarr_count(struct qmt_pool_info *qpi);
 
 /* qmt_entry.c */
-extern struct lquota_entry_operations qmt_lqe_ops;
+extern const struct lquota_entry_operations qmt_lqe_ops;
 int qmt_lqe_set_default(const struct lu_env *env, struct qmt_pool_info *pool,
 			struct lquota_entry *lqe, bool create_record);
 struct thandle *qmt_trans_start_with_slv(const struct lu_env *,
