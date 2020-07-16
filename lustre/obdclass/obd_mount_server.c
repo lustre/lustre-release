@@ -1779,7 +1779,7 @@ int server_show_options(struct seq_file *seq, struct dentry *dentry)
 /** The operations we support directly on the superblock:
  * mount, umount, and df.
  */
-static struct super_operations server_ops = {
+static const struct super_operations server_ops = {
 	.put_super	= server_put_super,
 	.umount_begin	= server_umount_begin, /* umount -f */
 	.statfs		= server_statfs,

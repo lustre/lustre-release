@@ -523,12 +523,12 @@ kgnilnd_mdd_seq_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static struct file_operations kgn_mdd_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_mdd_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+static const struct file_operations kgn_mdd_fops = {
+	.owner		= THIS_MODULE,
+	.open		= kgnilnd_mdd_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 typedef struct {
@@ -735,12 +735,12 @@ kgnilnd_smsg_seq_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static struct file_operations kgn_smsg_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_smsg_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+static const struct file_operations kgn_smsg_fops = {
+	.owner		= THIS_MODULE,
+	.open		= kgnilnd_smsg_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 typedef struct {
@@ -1088,12 +1088,12 @@ kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static struct file_operations kgn_conn_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_conn_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+static const struct file_operations kgn_conn_fops = {
+	.owner		= THIS_MODULE,
+	.open		= kgnilnd_conn_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 typedef struct {
@@ -1310,12 +1310,12 @@ kgnilnd_peer_seq_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static struct file_operations kgn_peer_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_peer_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+static const struct file_operations kgn_peer_fops = {
+	.owner		= THIS_MODULE,
+	.open		= kgnilnd_peer_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 static struct proc_dir_entry *kgn_proc_root;

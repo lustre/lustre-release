@@ -5315,7 +5315,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 }
 
 /* -o localflock - only provides locally consistent flock locks */
-struct file_operations ll_file_operations = {
+const struct file_operations ll_file_operations = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5344,7 +5344,7 @@ struct file_operations ll_file_operations = {
 	.fallocate	= ll_fallocate,
 };
 
-struct file_operations ll_file_operations_flock = {
+const struct file_operations ll_file_operations_flock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5376,7 +5376,7 @@ struct file_operations ll_file_operations_flock = {
 };
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
-struct file_operations ll_file_operations_noflock = {
+const struct file_operations ll_file_operations_noflock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5407,7 +5407,7 @@ struct file_operations ll_file_operations_noflock = {
 	.fallocate	= ll_fallocate,
 };
 
-struct inode_operations ll_file_inode_operations = {
+const struct inode_operations ll_file_inode_operations = {
 	.setattr	= ll_setattr,
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,

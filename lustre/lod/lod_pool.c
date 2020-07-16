@@ -317,7 +317,7 @@ static int pool_proc_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static struct file_operations pool_proc_operations = {
+const static struct file_operations pool_proc_operations = {
 	.open		= pool_proc_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,

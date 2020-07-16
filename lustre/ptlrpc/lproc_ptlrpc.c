@@ -1209,14 +1209,14 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 		  .fops = &ptlrpc_lprocfs_req_buffers_max_fops,
 		  .data = svc },
 		{ NULL }
-        };
-        static struct file_operations req_history_fops = {
-                .owner       = THIS_MODULE,
-                .open        = ptlrpc_lprocfs_svc_req_history_open,
-                .read        = seq_read,
-                .llseek      = seq_lseek,
-                .release     = lprocfs_seq_release,
-        };
+	};
+	static const struct file_operations req_history_fops = {
+		.owner		= THIS_MODULE,
+		.open		= ptlrpc_lprocfs_svc_req_history_open,
+		.read		= seq_read,
+		.llseek		= seq_lseek,
+		.release	= lprocfs_seq_release,
+	};
 
 	ptlrpc_ldebugfs_register(entry, svc->srv_name, "stats",
 				 &svc->srv_debugfs_entry, &svc->srv_stats);

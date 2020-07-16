@@ -718,15 +718,15 @@ struct ll_sb_info {
 	struct dentry		*ll_debugfs_entry;
 	struct lu_fid		 ll_root_fid; /* root object fid */
 
-        int                       ll_flags;
+	int                       ll_flags;
 	unsigned int		  ll_xattr_cache_enabled:1,
 				  ll_xattr_cache_set:1, /* already set to 0/1 */
 				  ll_client_common_fill_super_succeeded:1,
 				  ll_checksum_set:1;
 
-        struct lustre_client_ocd  ll_lco;
+	struct lustre_client_ocd  ll_lco;
 
-        struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
+	struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
 	/* Used to track "unstable" pages on a client, and maintain a
 	 * LRU list of clean pages. An "unstable" page is defined as
@@ -734,24 +734,24 @@ struct ll_sb_info {
 	 * but is uncommitted to stable storage. */
 	struct cl_client_cache	 *ll_cache;
 
-        struct lprocfs_stats     *ll_ra_stats;
+	struct lprocfs_stats     *ll_ra_stats;
 
-        struct ll_ra_info         ll_ra_info;
-        unsigned int              ll_namelen;
-        struct file_operations   *ll_fop;
+	struct ll_ra_info         ll_ra_info;
+	unsigned int              ll_namelen;
+	const struct file_operations *ll_fop;
 
-        struct lu_site           *ll_site;
-        struct cl_device         *ll_cl;
-        /* Statistics */
-        struct ll_rw_extents_info ll_rw_extents_info;
-        int                       ll_extent_process_count;
-        struct ll_rw_process_info ll_rw_process_info[LL_PROCESS_HIST_MAX];
-        unsigned int              ll_offset_process_count;
-        struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
-        unsigned int              ll_rw_offset_entry_count;
-        int                       ll_stats_track_id;
-        enum stats_track_type     ll_stats_track_type;
-        int                       ll_rw_stats_on;
+	struct lu_site           *ll_site;
+	struct cl_device         *ll_cl;
+	/* Statistics */
+	struct ll_rw_extents_info ll_rw_extents_info;
+	int                       ll_extent_process_count;
+	struct ll_rw_process_info ll_rw_process_info[LL_PROCESS_HIST_MAX];
+	unsigned int              ll_offset_process_count;
+	struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
+	unsigned int              ll_rw_offset_entry_count;
+	int                       ll_stats_track_id;
+	enum stats_track_type     ll_stats_track_type;
+	int                       ll_rw_stats_on;
 
 	/* metadata stat-ahead */
 	unsigned int		  ll_sa_running_max;/* max concurrent
@@ -1104,10 +1104,10 @@ struct ll_cl_context *ll_cl_find(struct file *file);
 extern const struct address_space_operations ll_aops;
 
 /* llite/file.c */
-extern struct file_operations ll_file_operations;
-extern struct file_operations ll_file_operations_flock;
-extern struct file_operations ll_file_operations_noflock;
-extern struct inode_operations ll_file_inode_operations;
+extern const struct file_operations ll_file_operations;
+extern const struct file_operations ll_file_operations_flock;
+extern const struct file_operations ll_file_operations_noflock;
+extern const struct inode_operations ll_file_inode_operations;
 extern int ll_have_md_lock(struct inode *inode, __u64 *bits,
 			   enum ldlm_mode l_req_mode);
 extern enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
@@ -1199,7 +1199,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
                             struct lookup_intent *it, struct dentry *de);
 
 /* llite/llite_lib.c */
-extern struct super_operations lustre_super_operations;
+extern const struct super_operations lustre_super_operations;
 
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
@@ -1271,14 +1271,14 @@ static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
 }
 
 /* llite/llite_nfs.c */
-extern struct export_operations lustre_export_operations;
+extern const struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
 struct inode *search_inode_for_lustre(struct super_block *sb,
 				      const struct lu_fid *fid);
 int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid);
 
 /* llite/symlink.c */
-extern struct inode_operations ll_fast_symlink_inode_operations;
+extern const struct inode_operations ll_fast_symlink_inode_operations;
 
 /**
  * IO arguments for various VFS I/O interfaces.

@@ -405,12 +405,12 @@ static int lu_ref_seq_release(struct inode *inode, struct file *file)
 	return seq_release(inode, file);
 }
 
-static struct file_operations lu_ref_dump_fops = {
-	.owner   = THIS_MODULE,
-	.open    = lu_ref_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = lu_ref_seq_release
+static const struct file_operations lu_ref_dump_fops = {
+	.owner		= THIS_MODULE,
+	.open		= lu_ref_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= lu_ref_seq_release
 };
 
 #endif /* CONFIG_PROC_FS */
