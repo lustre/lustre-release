@@ -846,38 +846,27 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 		GOTO(out, rc = -ENOMEM);
 
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANTED_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "granted", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "granted", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "grant", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "grant", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_CANCEL_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "cancel", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "cancel", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_RATE_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "grant_rate", "locks/s");
+			     LPROCFS_CNTR_AVGMINMAX, "grant_rate", "locks/s");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_CANCEL_RATE_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "cancel_rate", "locks/s");
+			     LPROCFS_CNTR_AVGMINMAX, "cancel_rate", "locks/s");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANT_PLAN_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "grant_plan", "locks/s");
+			     LPROCFS_CNTR_AVGMINMAX, "grant_plan", "locks/s");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_SLV_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "slv", "slv");
+			     LPROCFS_CNTR_AVGMINMAX, "slv", "slv");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_SHRINK_REQTD_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "shrink_request", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "shrink_request", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_SHRINK_FREED_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "shrink_freed", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "shrink_freed", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_RECALC_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "recalc_freed", "locks");
+			     LPROCFS_CNTR_AVGMINMAX, "recalc_freed", "locks");
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_TIMING_STAT,
-			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
-			     "recalc_timing", "sec");
+			     LPROCFS_CNTR_AVGMINMAX, "recalc_timing", "sec");
 	debugfs_create_file("stats", 0644, pl->pl_debugfs_entry,
 			    pl->pl_stats, &ldebugfs_stats_seq_fops);
 
