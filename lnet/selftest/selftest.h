@@ -127,14 +127,18 @@ enum lnet_selftest_group_nodelist_prop_attrs {
 
 #define LNET_SELFTEST_GROUP_NODELIST_PROP_MAX	(__LNET_SELFTEST_GROUP_NODELIST_PROP_MAX_PLUS_ONE - 1)
 
-#define SWI_STATE_NEWBORN                  0
-#define SWI_STATE_REPLY_SUBMITTED          1
-#define SWI_STATE_REPLY_SENT               2
-#define SWI_STATE_REQUEST_SUBMITTED        3
-#define SWI_STATE_REQUEST_SENT             4
-#define SWI_STATE_REPLY_RECEIVED           5
-#define SWI_STATE_BULK_STARTED             6
-#define SWI_STATE_DONE                     10
+enum lsr_swi_state {
+	SWI_STATE_DONE = 0,
+	SWI_STATE_NEWBORN,
+	SWI_STATE_REPLY_SUBMITTED,
+	SWI_STATE_REPLY_SENT,
+	SWI_STATE_REQUEST_SUBMITTED,
+	SWI_STATE_REQUEST_SENT,
+	SWI_STATE_REPLY_RECEIVED,
+	SWI_STATE_BULK_STARTED,
+	SWI_STATE_RUNNING,
+	SWI_STATE_PAUSE,
+};
 
 /* forward refs */
 struct srpc_service;
@@ -243,13 +247,13 @@ struct srpc_buffer {
 };
 
 struct swi_workitem;
-typedef int (*swi_action_t)(struct swi_workitem *);
+typedef void (*swi_action_t)(struct swi_workitem *);
 
 struct swi_workitem {
-	struct cfs_wi_sched	*swi_sched;
-	struct cfs_workitem	swi_workitem;
-        swi_action_t         swi_action;
-        int                  swi_state;
+	struct workqueue_struct	*swi_wq;
+	struct work_struct	swi_work;
+	swi_action_t		swi_action;
+	enum lsr_swi_state	swi_state;
 };
 
 /* server-side state of a RPC */
@@ -526,7 +530,7 @@ void srpc_free_bulk(struct srpc_bulk *bk);
 struct srpc_bulk *srpc_alloc_bulk(int cpt, unsigned int off,
 				  unsigned int bulk_npg, unsigned int bulk_len,
 				  int sink);
-int srpc_send_rpc(struct swi_workitem *wi);
+void srpc_send_rpc(struct swi_workitem *wi);
 int srpc_send_reply(struct srpc_server_rpc *rpc);
 int srpc_add_service(struct srpc_service *sv);
 int srpc_remove_service(struct srpc_service *sv);
@@ -537,8 +541,8 @@ int srpc_service_add_buffers(struct srpc_service *sv, int nbuffer);
 void srpc_service_remove_buffers(struct srpc_service *sv, int nbuffer);
 void srpc_get_counters(struct srpc_counters *cnt);
 
-extern struct cfs_wi_sched *lst_sched_serial;
-extern struct cfs_wi_sched **lst_sched_test;
+extern struct workqueue_struct *lst_serial_wq;
+extern struct workqueue_struct **lst_test_wq;
 
 static inline int
 srpc_serv_is_framework(struct srpc_service *svc)
@@ -546,41 +550,36 @@ srpc_serv_is_framework(struct srpc_service *svc)
 	return svc->sv_id < SRPC_FRAMEWORK_SERVICE_MAX_ID;
 }
 
-static inline int
-swi_wi_action(struct cfs_workitem *wi)
+static void
+swi_wi_action(struct work_struct *wi)
 {
 	struct swi_workitem *swi;
 
-	swi = container_of(wi, struct swi_workitem, swi_workitem);
-	return swi->swi_action(swi);
+	swi = container_of(wi, struct swi_workitem, swi_work);
+	swi->swi_action(swi);
 }
 
 static inline void
 swi_init_workitem(struct swi_workitem *swi,
-		  swi_action_t action, struct cfs_wi_sched *sched)
+		  swi_action_t action, struct workqueue_struct *wq)
 {
-	swi->swi_sched  = sched;
+	swi->swi_wq = wq;
 	swi->swi_action = action;
 	swi->swi_state  = SWI_STATE_NEWBORN;
-	cfs_wi_init(&swi->swi_workitem, swi_wi_action);
+	INIT_WORK(&swi->swi_work, swi_wi_action);
 }
 
 static inline void
 swi_schedule_workitem(struct swi_workitem *wi)
 {
-	cfs_wi_schedule(wi->swi_sched, &wi->swi_workitem);
-}
-
-static inline void
-swi_exit_workitem(struct swi_workitem *swi)
-{
-	cfs_wi_exit(swi->swi_sched, &swi->swi_workitem);
+	queue_work(wi->swi_wq, &wi->swi_work);
 }
 
 static inline int
-swi_deschedule_workitem(struct swi_workitem *swi)
+swi_cancel_workitem(struct swi_workitem *swi)
 {
-	return cfs_wi_deschedule(swi->swi_sched, &swi->swi_workitem);
+	swi->swi_state = SWI_STATE_DONE;
+	return cancel_work_sync(&swi->swi_work);
 }
 
 int sfw_startup(void);
@@ -615,7 +614,7 @@ srpc_init_client_rpc(struct srpc_client_rpc *rpc, struct lnet_process_id peer,
 
 	INIT_LIST_HEAD(&rpc->crpc_list);
 	swi_init_workitem(&rpc->crpc_wi, srpc_send_rpc,
-			  lst_sched_test[lnet_cpt_of_nid(peer.nid, NULL)]);
+			  lst_test_wq[lnet_cpt_of_nid(peer.nid, NULL)]);
 	spin_lock_init(&rpc->crpc_lock);
 	atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 
