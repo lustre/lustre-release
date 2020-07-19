@@ -1222,7 +1222,7 @@ jt_ptl_print_routes(int argc, char **argv)
 		net     = data.cfg_net;
 		hops    = data.cfg_config_u.cfg_route.rtr_hop;
 		nid     = data.cfg_nid;
-		alive   = data.cfg_config_u.cfg_route.rtr_flags;
+		alive   = data.cfg_config_u.cfg_route.rtr_flags & LNET_RT_ALIVE;
 		pri     = data.cfg_config_u.cfg_route.rtr_priority;
 
 		printf("net %18s hops %u gw %32s %s pri %u\n",
