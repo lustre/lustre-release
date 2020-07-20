@@ -749,14 +749,6 @@ struct obd_uuid {
             </row>
             <row>
               <entry>
-                <para> <literal>EBUSY</literal></para>
-              </entry>
-              <entry>
-                <para>Cannot process during quotacheck.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
                 <para> <literal>ENOENT</literal></para>
               </entry>
               <entry>

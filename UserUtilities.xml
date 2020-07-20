@@ -50,11 +50,6 @@ lfs pool_list <replaceable>filesystem</replaceable>[.<replaceable>pool</replacea
 lfs quota [-q] [-v] [-h] [-o <replaceable>obd_uuid</replaceable>|-I <replaceable>ost_idx</replaceable>|-i <replaceable>mdt_idx</replaceable>]
           [-u <replaceable>username|uid|-g</replaceable> <replaceable>group|gid</replaceable>|-p <replaceable>projid</replaceable>] <replaceable>/mount_point</replaceable>
 lfs quota -t -u|-g|-p <replaceable>/mount_point</replaceable>
-lfs quotacheck [-ug] <replaceable>/mount_point</replaceable>
-lfs quotachown [-i] <replaceable>/mount_point</replaceable>
-lfs quotainv [-ug] [-f] <replaceable>/mount_point</replaceable>
-lfs quotaon [-ugf] <replaceable>/mount_point</replaceable>
-lfs quotaoff [-ug] <replaceable>/mount_point</replaceable>
 lfs setquota {-u|--user|-g|--group|-p|--project} <replaceable>uname|uid|gname|gid|projid</replaceable>
              [--block-softlimit <replaceable>block_softlimit</replaceable>]
              [--block-hardlimit <replaceable>block_hardlimit</replaceable>]
@@ -90,6 +85,12 @@ lfs help
         <literal>-v</literal> option with 
         <literal>lfs quota</literal>.</para>
       </note>
+      <para condition="l24">
+       The <literal>quotacheck</literal>, <literal>quotaon</literal> and <literal>quotaoff</literal>
+       sub-commands were deprecated in the Lustre 2.4 release, and removed completely in
+       the Lustre 2.8 release.  See <xref linkend="enabling_disk_quotas"/> for details on
+       configuring and checking quotas.
+      </para>
     </section>
     <section remap="h5">
       <title>Description</title>
@@ -824,85 +825,6 @@ lfs help
             <row>
               <entry nameend="c2" namest="c1">
                 <para>
-                  <literal>quotachown</literal>
-                </para>
-              </entry>
-              <entry>
-                <para>Changes the file's owner and group on OSTs of the
-                specified file system.</para>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para>
-                  <literal>quotacheck [-ugf] 
-                  <replaceable>/mount_point</replaceable></literal>
-                </para>
-              </entry>
-              <entry>
-                <para>Scans the specified file system for disk usage, and
-                creates or updates quota files. Options specify quota for users
-                (
-                <literal>-u</literal>), groups (
-                <literal>-g</literal>), and force (
-                <literal>-f</literal>).</para>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para>
-                  <literal>quotaon [-ugf] 
-                  <replaceable>/mount_point</replaceable></literal>
-                </para>
-              </entry>
-              <entry>
-                <para>Turns on file system quotas. Options specify quota for
-                users (
-                <literal>-u</literal>), groups (
-                <literal>-g</literal>), and force (
-                <literal>-f</literal>).</para>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para>
-                  <literal>quotaoff [-ugf] 
-                  <replaceable>/mount_point</replaceable></literal>
-                </para>
-              </entry>
-              <entry>
-                <para>Turns off file system quotas. Options specify quota for
-                users (
-                <literal>-u</literal>), groups (
-                <literal>-g</literal>), and force (
-                <literal>-f</literal>).</para>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para>
-                  <literal>quotainv [-ug] [-f] 
-                  <replaceable>/mount_point</replaceable></literal>
-                </para>
-              </entry>
-              <entry>
-                <para>Clears quota files (administrative quota files if used
-                without 
-                <literal>-f</literal>, operational quota files otherwise), all
-                of their quota entries for users (
-                <literal>-u</literal>) or groups (
-                <literal>-g</literal>). After running 
-                <literal>quotainv</literal>, you must run 
-                <literal>quotacheck</literal> before using quotas.</para>
-                <caution>
-                  <para>Use extreme caution when using this command; its
-                  results cannot be undone.</para>
-                </caution>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para>
                   <literal>setquota {-u|-g|-p
                   <replaceable>uname|uid|gname|gid|projid}</replaceable>
                   [--block-softlimit
@@ -1048,23 +970,6 @@ $ lfs quota -p 1 /mnt/lustre
       <literal>/mnt/lustre</literal>.</para>
       <screen>
 $ lfs quota -t -u /mnt/lustre
-</screen>
-      <para>Changes file owner and group.</para>
-      <screen>
-$ lfs quotachown -i /mnt/lustre
-</screen>
-      <para>Checks quotas for user and group. Turns on quotas after making the
-      check.</para>
-      <screen>
-$ lfs quotacheck -ug /mnt/lustre
-</screen>
-      <para>Turns on quotas of user and group.</para>
-      <screen>
-$ lfs quotaon -ug /mnt/lustre
-</screen>
-      <para>Turns off quotas of user and group.</para>
-      <screen>
-$ lfs quotaoff -ug /mnt/lustre
 </screen>
       <para>Sets quotas of user 'bob', with a 1 GB block quota hardlimit and a
       2 GB block quota softlimit.</para>

@@ -146,6 +146,7 @@
     </xsl:variable>
 	<xsl:variable name="versionstr">
 		<xsl:choose>
+			<xsl:when test="@condition = 'l24'">Introduced in Lustre 2.4</xsl:when>
 			<xsl:when test="@condition = 'l25'">Introduced in Lustre 2.5</xsl:when>
 			<xsl:when test="@condition = 'l26'">Introduced in Lustre 2.6</xsl:when>
 			<xsl:when test="@condition = 'l27'">Introduced in Lustre 2.7</xsl:when>
