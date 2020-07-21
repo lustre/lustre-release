@@ -926,7 +926,7 @@ test_1e() {
 	# Now write to file with a stripe on OST0, that doesn't belong to qpool1
 	log "Write..."
 	$RUNAS $DD of=$testfile2 count=20 ||
-		quota_error $short_qtype $TSTUSR \
+		quota_error u $TSTUSR \
 			"$qtype write failure, but expect success"
 
 	rm -f $testfile
@@ -998,6 +998,69 @@ test_1f() {
 	cleanup_quota_test
 }
 run_test 1f "Quota pools: correct qunit after removing/adding OST"
+
+test_1g() {
+	local limit=10  # 10M
+	local global_limit=20  # 20M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+	local mdmb_param="osc.*.max_dirty_mb"
+	local max_dirty_mb=$($LCTL get_param -n $mdmb_param | head -1)
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+	$LCTL set_param $mdmb_param=1
+	stack_trap "$LCTL set_param $mdmb_param=$max_dirty_mb" EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	$LFS setstripe $testfile -C 200 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	log "Write..."
+	$RUNAS $DD of=$testfile count=$((limit/2)) ||
+		quota_error u $TSTUSR \
+			"$qtype write failure, but expect success"
+	log "Write out of block quota ..."
+	# this time maybe cache write,  ignore it's failure
+	$RUNAS $DD of=$testfile count=$((limit/2)) seek=$((limit/2)) || true
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+	$RUNAS $DD of=$testfile count=$OSTCOUNT seek=$limit &&
+		quota_error u $TSTUSR \
+			"user write success, but expect EDQUOT"
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	used=$(getquota -u $TSTUSR global curspace $qpool)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	return 0
+}
+run_test 1g "Quota pools: Block hard limit with wide striping"
 
 # test inode hardlimit
 test_2() {
@@ -4476,7 +4539,7 @@ test_71a()
 
 	# write to the 2nd component
 	$RUNAS $DD of=$testfile count=$limit seek=10 ||
-		quota_error $short_qtype $TSTUSR \
+		quota_error u $TSTUSR \
 			"write failure, but expect success"
 	# this time maybe cache write,  ignore it's failure
 	$RUNAS $DD of=$testfile count=$((2*limit)) seek=10 || true
