@@ -2058,9 +2058,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 			struct brw_page *pg = aa->aa_ppga[idx];
 
 			/* do not decrypt if page is all 0s */
-			if (memcmp(page_address(pg->pg),
-				   page_address(ZERO_PAGE(0)),
-				   PAGE_SIZE) == 0) {
+			if (memchr_inv(page_address(pg->pg), 0,
+				       PAGE_SIZE) == NULL) {
 				/* if page is empty forward info to upper layers
 				 * (ll_io_zero_page) by clearing PagePrivate2
 				 */
