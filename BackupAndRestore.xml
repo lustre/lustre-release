@@ -518,8 +518,9 @@ Changelog records consumed: 42</screen>
           <primary>backup</primary>
           <secondary>OST and MDT</secondary>
         </indexterm>Backing Up an OST or MDT</title>
-      <para>If backing up an MDT, substitute <literal>mdt</literal> for
-        <literal>ost</literal> in the instructions below.</para>
+      <para>The below examples show backing up an OST filesystem. When backing
+        up an MDT, substitute <literal>mdt</literal> for <literal>ost</literal>
+        in the instructions below.</para>
       <orderedlist>
         <listitem>
           <para><emphasis role="bold">Umount the target</emphasis></para>

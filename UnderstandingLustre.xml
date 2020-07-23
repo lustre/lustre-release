@@ -342,12 +342,6 @@
           systems that would otherwise cause file system corruption.</para>
         </listitem>
         <listitem>
-          <para>It is possible to configure active/active failover of multiple
-	    MDTs. This allows scaling the metadata performance of Lustre
-	    filesystems with the addition of MDT storage devices and MDS nodes.
-	  </para>
-        </listitem>
-        <listitem>
           <para>
           <emphasis role="bold">Security:</emphasis>By default TCP connections
           are only allowed from privileged ports. UNIX group membership is
@@ -505,22 +499,22 @@
         <listitem>
           <para>
           <emphasis role="bold">Metadata Targets (MDT</emphasis>) - Each
-	  filesystem has at least one MDT. The
+          filesystem has at least one MDT, which holds the root directory. The
           MDT stores metadata (such as filenames, directories, permissions and
           file layout) on storage attached to an MDS. Each file system has one
           MDT. An MDT on a shared storage target can be available to multiple
           MDSs, although only one can access it at a time. If an active MDS
-          fails, a standby MDS can serve the MDT and make it available to
+          fails, a second MDS node can serve the MDT and make it available to
           clients. This is referred to as MDS failover.</para>
-          <para>Multiple MDTs are supported in the Distributed Namespace
-	  Environment (DNE).
+          <para>Multiple MDTs are supported with the Distributed Namespace
+          Environment (<xref linkend="DNE"/>).
           In addition to the primary MDT that holds the filesystem root, it
           is possible to add additional MDS nodes, each with their own MDTs,
           to hold sub-directory trees of the filesystem.</para>
           <para condition="l28">Since Lustre software release 2.8, DNE also
           allows the filesystem to distribute files of a single directory over
           multiple MDT nodes. A directory which is distributed across multiple
-          MDTs is known as a <emphasis>striped directory</emphasis>.</para>
+          MDTs is known as a <emphasis><xref linkend="stripeddirectory"/></emphasis>.</para>
         </listitem>
         <listitem>
           <para>
@@ -701,28 +695,29 @@
       <primary>Lustre</primary>
       <secondary>I/O</secondary>
     </indexterm>Lustre File System Storage and I/O</title>
-    <para>Lustre uses file identifiers (FIDs) to replace UNIX inode numbers
-      for identifying files or objects.  A FID is a 128-bit identifier that
-      contains a unique 64-bit sequence number, a 32-bit object ID (OID), and
-      a 32-bit version number. The sequence number is unique across all Lustre
-      targets in a file system (OSTs and MDTs). This allows Lustre to identify
-      files on multiple MDTs independent of the underlying filesystem type.
-    </para>
-    <para>The LFSCK file system consistency checking tool verifies the
-    consistency of file objects between MDTs and OSTs. It includes the
-    following functionality:
+    <para>Lustre File IDentifiers (FIDs) are used internally for identifying
+    files or objects, similar to inode numbers in local filesystems.  A FID
+    is a 128-bit identifier, which contains a unique 64-bit sequence number
+    (SEQ), a 32-bit object ID (OID), and a 32-bit version number. The sequence
+    number is unique across all Lustre targets in a file system (OSTs and
+    MDTs). This allows multiple MDTs and OSTs to uniquely identify objects
+    without depending on identifiers in the underlying filesystem (e.g. inode
+    numbers) that are likely to be duplicated between targets.  The FID SEQ
+    number also allows mapping a FID to a particular MDT or OST.</para>
+    <para>The LFSCK file system consistency checking tool provides
+    functionality that enables FID-in-dirent for existing files. It
+    includes the following functionality:
     <itemizedlist>
       <listitem>
-        <para>Verifies the FID-in-dirent for each file and regenerates the
-        FID-in-dirent if it is invalid or missing.</para>
+        <para>Verifies the FID stored with each directory entry and regenerates
+        it from the inode if it is invalid or missing.</para>
       </listitem>
       <listitem>
-        <para>Verifies the linkEA entry for each and regenerates the linkEA
-        if it is invalid or missing. The
-        <emphasis role="italic">linkEA</emphasis> consists of the file name and
-        parent FID. It is stored as an extended attribute in the file
-        itself. Thus, the linkEA can be used to reconstruct the full path name
-	of a file.</para>
+        <para>Verifies the linkEA entry for each inode and regenerates it if
+        invalid or missing. The <emphasis role="italic">linkEA</emphasis>
+        stores of the file name and parent FID. It is stored as an extended
+        attribute in each inode. Thus, the linkEA can be used to
+        reconstruct the full path name of a file from only the FID.</para>
       </listitem>
     </itemizedlist></para>
     <para>Information about where file data is located on the OST(s) is stored
@@ -867,6 +862,11 @@
       31.25 PiB for ldiskfs or 8EiB with ZFS. Note that a Lustre file system can
       support files up to 2^63 bytes (8EiB), limited only by the space available
       on the OSTs.</para>
+      <note>
+        <para>ldiskfs filesystems without the <literal>ea_inode</literal>
+        feature limit the maximum stripe count for a single file to 160 OSTs.
+        </para>
+      </note>
       <para>Although a single file can only be striped over 2000 objects,
       Lustre file systems can have thousands of OSTs. The I/O bandwidth to
       access a single file is the aggregated I/O bandwidth to the objects in a

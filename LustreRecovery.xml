@@ -406,13 +406,17 @@
   </section>
    <section xml:id="imperativerecovery">
     <title><indexterm><primary>imperative recovery</primary></indexterm>Imperative Recovery</title>
-	<para>Large-scale Lustre file system implementations have historically experienced problems
-      recovering in a timely manner after a server failure. This is due to the way that clients
-      detect the server failure and how the servers perform their recovery. Many of the processes
-      are driven by the RPC timeout, which must be scaled with system size to prevent false
-      diagnosis of server death. The purpose of imperative recovery is to reduce the recovery window
-      by actively informing clients of server failure. The resulting reduction in the recovery
-      window will minimize target downtime and therefore increase overall system availability.
+      <para>Large-scale Lustre filesystems will experience server hardware
+      failures over their lifetime, and it is important that servers can
+      recover in a timely manner after such failures.  High Availability
+      software can move storage targets over to a backup server automatically.
+      Clients can detect the server failure by RPC timeouts, which must be
+      scaled with system size to prevent false diagnosis of server death in
+      cases of heavy load. The purpose of imperative recovery is to reduce
+      the recovery window by actively informing clients of server failure.
+      The resulting reduction in the recovery window will minimize target
+      downtime and therefore increase overall system availability.</para>
+      <para>
       Imperative Recovery does not remove previous recovery mechanisms, and client timeout-based
       recovery actions can occur in a cluster when IR is enabled as each client can still
       independently disconnect and reconnect from a target. In case of a mix of IR and non-IR

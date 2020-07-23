@@ -59,6 +59,11 @@
         <literal>grpquota</literal> options to mount. Space accounting is
         enabled by default and quota enforcement can be enabled/disabled on
         a per-filesystem basis with <literal>lctl conf_param</literal>.</para>
+        <para condition="l28">It is worth noting that the
+        <literal>lfs quotaon</literal>, <literal>lfs quotaoff</literal>,
+	<literal>lfs quotacheck</literal> and <literal>quota_type</literal>
+	sub-commands are deprecated as of Lustre 2.4.0, and removed completely
+	in Lustre 2.8.0.</para>
       </listitem>
     </itemizedlist>
     <caution>
@@ -156,7 +161,9 @@
           to fix the quota files when the QUOTA feature flag is present. The
           project quota feature is disabled by default, and
           <literal>tune2fs</literal> needs to be run to enable every target
-          manually.</para>
+          manually.  If user, group, and project quota usage is inconsistent,
+          run <literal>e2fsck -f</literal> on all unmounted MDTs and OSTs.
+          </para>
         </listitem>
         <listitem>
           <para>For ZFS backend, <emphasis>the project quota feature is not
@@ -186,6 +193,11 @@
         </listitem>
       </itemizedlist>
       <note>
+      <para>To (re-)enable space usage quota on ldiskfs filesystems, run
+      <literal>tune2fs -O quota</literal> against all targets. This command
+      sets the QUOTA feature flag in the superblock and runs e2fsck internally.
+      As a result, the target must be offline to build the per-UID/GID disk
+      usage database.</para>
       <para condition="l2A">Lustre filesystems formatted with a Lustre release
       prior to 2.10 can be still safely upgraded to release 2.10, but will not
       have project quota usage reporting functional until
@@ -200,7 +212,7 @@
         to be installed on the server nodes when using the ldiskfs backend
         (e2fsprogs is not needed with ZFS backend). In general, we recommend
         to use the latest e2fsprogs version available on
-        <link xl:href="http://downloads.whamcloud.com/e2fsprogs/">
+        <link xl:href="https://downloads.whamcloud.com/public/e2fsprogs/">
         http://downloads.whamcloud.com/public/e2fsprogs/</link>.</para>
         <para>The ldiskfs OSD relies on the standard Linux quota to maintain
         accounting information on disk. As a consequence, the Linux kernel

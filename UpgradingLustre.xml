@@ -4,12 +4,11 @@
  xml:id="upgradinglustre">
   <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
   <para>This chapter describes interoperability between Lustre software
-  releases. It also provides procedures for upgrading from Lustre software
-  release 1.8 to Lustre software release 2.x , from a Lustre software release
-  2.x to a more recent Lustre software release 2.x (major release upgrade), and
-  from a a Lustre software release 2.x.y to a more recent Lustre software
-  release 2.x.y (minor release upgrade). It includes the following
-  sections:</para>
+  releases. It also provides procedures for upgrading from older Lustre 2.x
+  software releases to a more recent 2.y Lustre release a (major release
+  upgrade), and from a Lustre software release 2.x.y to a more recent
+  Lustre software release 2.x.z (minor release upgrade). It includes the
+  following sections:</para>
   <itemizedlist>
     <listitem>
       <para>
@@ -52,7 +51,7 @@
         <listitem>
           <para>All servers must be be upgraded to a Linux kernel supported by
           the Lustre software. See the Lustre Release Notes for your Lustre
-	  version for a list of tested Linux distributions.</para>
+          version for a list of tested Linux distributions.</para>
         </listitem>
         <listitem>
           <para>Clients to be upgraded must be running a compatible Linux
@@ -94,11 +93,6 @@
     <indexterm>
       <primary>ea_inode</primary>
       <secondary>large_xattr</secondary>
-    </indexterm>
-    <indexterm>
-      <primary>wide striping</primary>
-      <secondary>ea_inode</secondary>
-      <tertiary>large_xattr</tertiary>
     </indexterm>Upgrading to Lustre Software Release 2.x (Major
     Release)</title>
     <para>The procedure for upgrading from a Lustre software release 2.x to a
@@ -127,9 +121,8 @@
         (tested) Linux distribution and reboot.</para>
       </listitem>
       <listitem>
-        <para>Upgrade the Linux operating system on all clients to Red Hat
-        Enterprise Linux 6 or other compatible (tested) distribution and
-        reboot.</para>
+        <para>Upgrade the Linux operating system on all clients to a
+        compatible (tested) distribution and reboot.</para>
       </listitem>
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
@@ -206,18 +199,14 @@
         </orderedlist>
       </listitem>
       <listitem>
-        <para condition="l2D">Lustre allows striping a single file across up to
-          2000 OSTs. Before Lustre 2.13, the "wide striping" feature that
-          allowed creating files with more than 160 stripes was not enabled by
-          default. From the 2.13 release onward, the <literal>ea_inode</literal>
-	  feature is enabled for newly-formatted MDTs.  The feature can also
-	  be enabled by the <literal>tune2fs</literal> command on existing MDTs:
-        <screen>mds# tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
-        </para>
-        <para>For more information about wide striping, see 
-        <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping" />.</para>
-      </listitem>
-      <listitem>
+        <para>The DNE feature allows using multiple MDTs within a single
+        filesystem namespace, and each MDT can each serve one or more remote
+        sub-directories in the file system. The <literal>root</literal>
+        directory is always located on MDT0.</para>
+        <para>Note that clients running a release prior to the Lustre software
+        release 2.4 can only see the namespace hosted by MDT0 and will return an
+        IO error if an attempt is made to access a directory on another
+        MDT.</para>
         <para>(Optional) To format an additional MDT, complete these steps:
         <orderedlist numeration="loweralpha">
           <listitem>
@@ -229,28 +218,42 @@
             <para>In this example, the next available index is 1.</para>
           </listitem>
           <listitem>
-            <para>Add the new block device as a new MDT at the next available
-            index by entering (on one line):
+            <para>Format the new block device as a new MDT at the next
+            available MDT index by entering (on one line):
             <screen>mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt \
-    --mgsnode=<replaceable>mgsnode</replaceable> --index <replaceable>1</replaceable> 
+    --mgsnode=<replaceable>mgsnode</replaceable> --index <replaceable>new_mdt_index</replaceable> 
 <replaceable>/dev/mdt1_device</replaceable></screen></para>
           </listitem>
         </orderedlist></para>
       </listitem>
       <listitem>
-        <para>(Optional) If you are upgrading before Lustre software release
+        <para>(Optional) If you are upgrading from a release before Lustre
         2.10, to enable the project quota feature enter the following on every
-        ldiskfs backend target:
+        ldiskfs backend target while unmounted:
         <screen>tune2fs –O project /dev/<replaceable>dev</replaceable></screen>
         </para>
         <note><para>Enabling the <literal>project</literal> feature will prevent
             the filesystem from being used by older versions of ldiskfs, so it
-            should only be enabled if the project quota feature is required and/or
-            after it is known that the upgraded release does not need to be
-            downgraded.</para></note>
+            should only be enabled if the project quota feature is required
+            and/or after it is known that the upgraded release does not need
+            to be downgraded.</para></note>
+      </listitem>
+      <listitem>
         <para>When setting up the file system, enter:
         <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
 conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
+      </listitem>
+      <listitem>
+        <para condition="l2D">(Optional) If upgrading an ldiskfs MDT formatted
+          prior to Lustre 2.13, the "wide striping" feature that allows files
+          to have more than 160 stripes and store other large xattrs was not
+          enabled by default.  This feature can be enabled on existing MDTs
+          by running the following command on all MDT devices:
+        <screen>mds# tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
+        </para>
+        <para>For more information about wide striping, see 
+        <xref xmlns:xlink="https://www.w3.org/1999/xlink"
+         linkend="wide_striping" />.</para>
       </listitem>
       <listitem>
         <para>Start the Lustre file system by starting the components in the
@@ -282,6 +285,42 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
             <screen>client# mount -a -t lustre</screen>
           </listitem>
         </orderedlist>
+      </listitem>
+      <listitem>
+        <para condition='l27'>(Optional) If you are upgrading from a release before Lustre
+          2.7, to enable OST FIDs to also store the OST index (to improve
+          reliability of LFSCK and debug messages), <emphasis>after</emphasis>
+          the OSTs are mounted run once on each OSS:
+        <screen>oss# lctl set_param osd-ldiskfs.*.osd_index_in_idif=1</screen>
+        </para>
+        <note><para>Enabling the <literal>index_in_idif</literal> feature will
+          prevent the OST from being used by older versions of Lustre, so it
+          should only be enabled once it is known there is no need for the
+          OST to be downgraded to an earlier release.</para></note>
+      </listitem>
+      <listitem>
+        <para>If a new MDT was added to the filesystem, the new MDT must be
+          attached into the namespace by creating one or more
+          <emphasis>new</emphasis> DNE subdirectories with the
+          <literal>lfs mkdir</literal> command that use the new MDT:
+<screen>
+client# lfs mkdir -i <replaceable>new_mdt_index /testfs/new_dir</replaceable>
+</screen>
+        </para>
+        <para condition='l28'>In Lustre 2.8 and later, it is possible to
+          split a new directory across multiple MDTs by creating it with
+	  multiple stripes:
+<screen>
+client# lfs mkdir -c 2 <replaceable>/testfs/new_striped_dir</replaceable>
+</screen>
+        </para>
+        <para condition='l2D'>In Lustre 2.13 and later, it is possible to set
+          the default striping on <emphasis>existing</emphasis> directories
+          so that new remote subdirectories are created on less-full MDTs:
+<screen>
+client# lfs setdirstripe -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
+</screen>
+        </para>
       </listitem>
     </orderedlist>
     <note>

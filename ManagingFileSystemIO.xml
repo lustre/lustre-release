@@ -591,21 +591,24 @@ osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
       </section>
     </section>
     <section remap="h3">
-      <title>Ptlrpc Thread Pool</title>
-      <para>The increasing use of large SMP nodes for Lustre servers requires
-        good scaling of many application threads generating large amounts of IO.
-        Lustre implements a ptlrpc thread pool, so
-      that multiple threads can be created to serve asynchronous RPC requests.
-      The number of threads spawned is controlled at module load time using
-      module options. By default one thread is spawned per CPU, with a minimum
-      of 2 threads spawned irrespective of module options.</para>
+      <title>PtlRPC Client Thread Pool</title>
+      <para>The use of large SMP nodes for Lustre clients
+      requires significant parallelism within the kernel to avoid
+      cases where a single CPU would be 100% utilized and other CPUs would be
+      relativity idle. This is especially noticeable when a single thread
+      traverses a large directory.</para>
+      <para>The Lustre client implements a PtlRPC daemon thread pool, so that
+      multiple threads can be created to serve asynchronous RPC requests, even
+      if only a single userspace thread is running.  The number of ptlrpcd
+      threads spawned is controlled at module load time using module options.
+      By default two service threads are spawned per CPU socket.</para>
       <para>One of the issues with thread operations is the cost of moving a
       thread context from one CPU to another with the resulting loss of CPU
-      cache warmth. To reduce this cost, ptlrpc threads can be bound to a CPU.
+      cache warmth. To reduce this cost, PtlRPC threads can be bound to a CPU.
       However, if the CPUs are busy, a bound thread may not be able to respond
       quickly, as the bound CPU may be busy with other tasks and the thread
       must wait to schedule.</para>
-      <para>Because of these considerations, the pool of ptlrpc threads can be
+      <para>Because of these considerations, the pool of ptlrpcd threads can be
       a mixture of bound and unbound threads. The system operator can balance
       the thread mixture based on system size and workload.</para>
       <section>
@@ -615,11 +618,11 @@ osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
         <literal>etc/modprobe.d</literal> directory, as options for the ptlrpc
         module. 
         <screen>
-options ptlrpcd max_ptlrpcds=XXX
+options ptlrpcd ptlrpcd_per_cpt_max=XXX
 </screen></para>
-        <para>Sets the number of ptlrpcd threads created at module load time.
-        The default if not specified is one thread per CPU, including
-        hyper-threaded CPUs. The lower bound is 2 (old prlrpcd behaviour) 
+        <para>Sets the number of ptlrpcd threads created per socket.
+        The default if not specified is two threads per CPU socket, including
+        hyper-threaded CPUs. The lower bound is 2 threads per socket.
         <screen>
 options ptlrpcd ptlrpcd_bind_policy=[1-4]
 </screen></para>

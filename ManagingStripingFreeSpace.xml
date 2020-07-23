@@ -2210,6 +2210,9 @@ File 4: OST6, OST7, OST0</screen>
     <literal>ea_inode</literal> feature on the MDT:
     <screen>tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
     </para>
+    <note condition='l2D'><para>Since Lustre 2.13 the
+    <literal>ea_inode</literal> feature is enabled by default on all newly
+    formatted ldiskfs MDT filesystems.</para></note>
     <note><para>The maximum stripe count for a single file does not limit the 
     maximum number of OSTs that are in the filesystem as a whole, only the
     maximum possible size and maximum aggregate bandwidth for the file.

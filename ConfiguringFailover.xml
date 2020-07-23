@@ -152,25 +152,6 @@
       associated with each target and the service node on which the target is mounted. Later, when
       the client attempts to access data on a target, it will try the NID for each specified service
       node until it connects to the target.</para>
-    <para>Previous to Lustre software release 2.0, the <literal>--failnode</literal> option to
-        <literal>mkfs.lustre</literal> was used to designate a failover service node for a primary
-      server for a target. When the <literal>--failnode</literal> option is used, certain
-      restrictions apply:<itemizedlist>
-        <listitem>
-          <para>The target must be initially mounted on the primary service node, not the failover
-            node designated by the <literal>--failnode</literal> option.</para>
-        </listitem>
-        <listitem>
-          <para>If the <literal>tunefs.lustre –-writeconf</literal> option is used to erase and
-            regenerate the configuration log for the file system, a target cannot be initially
-            mounted on a designated failnode.</para>
-        </listitem>
-        <listitem>
-          <para>If a <literal>--failnode</literal> option is added to a target to designate a
-            failover server for the target, the target must be re-mounted on the primary node before
-            the <literal>--failnode</literal> option takes effect</para>
-        </listitem>
-      </itemizedlist></para>
   </section>
   <section xml:id="section_tnq_kbr_xl">
     <title>Administering Failover in a Lustre File System</title>

@@ -80,7 +80,7 @@
       </glossdef>
     </glossentry>
     <glossentry xml:id="DNE">
-      <glossterm>Distributed namespace (DNE)</glossterm>
+      <glossterm>Distributed Namespace Environment (DNE)</glossterm>
       <glossdef>
         <para>A collection of metadata targets serving a single file
           system namespace. Without DNE, Lustre file systems are limited to a
@@ -104,7 +104,7 @@
       <glossterm>EA</glossterm>
       <glossdef>
         <para>Extended attribute. A small amount of data that can be retrieved
-        through a name (EA or attr) associated with a particular inode. A
+        through a name (EA or xattr) associated with a particular inode. A
         Lustre file system uses EAs to store striping information (indicating
         the location of file data on OSTs). Examples of extended attributes are
         ACLs, striping information, and the FID of the file.</para>

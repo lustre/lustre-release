@@ -55,12 +55,14 @@
       </listitem>
     </itemizedlist>
     </warning>
-    <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are
-      typically used for testing to match expected customer usage and avoid limitations due to the 4
-      GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs.
-      Also, due to kernel API limitations, performing backups of Lustre software release 2.x. file
-      systems on 32-bit clients may cause backup tools to confuse files that have the same 32-bit
-      inode number.</para>
+    <para>Only servers running on 64-bit CPUs are tested and supported.
+      64-bit CPU clients are typically used for testing to match expected
+      customer usage and avoid limitations due to the 4 GB limit for RAM
+      size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit
+      CPUs.  Also, due to kernel API limitations, performing backups of Lustre
+      filesystems on 32-bit clients may cause backup tools to confuse files
+      that report the same 32-bit inode number, if the backup tools depend
+      on the inode number for correct operation.</para>
     <para>The storage attached to the servers typically uses RAID to provide fault tolerance and can
       optionally be organized with logical volume management (LVM), which is then formatted as a
       Lustre file system. Lustre OSS and MDS servers read, write and modify data in the format
@@ -523,8 +525,8 @@
       <note>
         <para>OSTs formatted with ldiskfs can use a maximum of approximately
         320 million objects per MDT, up to a maximum of 4 billion inodes.
-	Specifying a very small bytes-per-inode ratio for a large OST that
-	exceeds this limit can cause either premature out-of-space errors and prevent
+        Specifying a very small bytes-per-inode ratio for a large OST that
+        exceeds this limit can cause either premature out-of-space errors and prevent
         the full OST space from being used, or will waste space and slow down
         e2fsck more than necessary.  The default inode ratios are chosen to
         ensure that the total number of inodes remain below this limit.
@@ -598,10 +600,13 @@
               <para>256</para>
             </entry>
             <entry>
-              <para>A single MDS can host
-              multiple MDTs, either for separate file systems, or up to 255
-              additional MDTs can be added to the filesystem and attached into
-              the namespace with DNE remote or striped directories.</para>
+              <para>A single MDS can host one or more MDTs, either for separate
+              filesystems, or aggregated into a single namespace. Each
+              filesystem requires a separate MDT for the filesystem root
+	      directory.
+              Up to 255 more MDTs can be added to the filesystem and are
+              attached into the filesystem namespace with creation of DNE
+              remote or striped directories.</para>
             </entry>
           </row>
           <row>

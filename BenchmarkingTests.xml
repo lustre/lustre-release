@@ -409,16 +409,16 @@
           <screen>$ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey</screen>
         </listitem>
         <listitem>
-		      <para>Performance measurements for write, rewrite, read etc are
+           <para>Performance measurements for write, rewrite, read etc are
           provided below:</para>
-		      <screen># example output
+           <screen># example output
 Fri Sep 25 11:14:03 EDT 2015 Obdfilter-survey for case=disk from hds1fnb6123
 ost 10 sz 167772160K rsz 1024K obj   10 thr   10 write 10982.73 [ 601.97,2912.91] rewrite 15696.54 [1160.92,3450.85] read 12358.60 [ 938.96,2634.87] 
 ...</screen>
-		      <para>The file
+            <para>The file
           <literal>./lustre-iokit/obdfilter-survey/README.obdfilter-survey
           </literal>provides an explaination for the output as follows:</para>
-		      <screen>ost 10          is the total number of OSTs under test.
+            <screen>ost 10          is the total number of OSTs under test.
 sz 167772160K   is the total amount of data read or written (in bytes).
 rsz 1024K       is the record size (size of each echo_client I/O, in bytes).
 obj    10       is the total number of objects over all OSTs
@@ -473,7 +473,7 @@ over all OSTs.</screen>
           (<literal>nobjhi</literal>), up to two threads (
           <literal>thrhi</literal>), and 1024 Mb (size) transfer size:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;lustre-OST0001 \
-	   lustre-OST0002&quot; sh obdfilter-survey</screen>
+          lustre-OST0002&quot; sh obdfilter-survey</screen>
         </listitem>
       </orderedlist>
     </section>
@@ -510,7 +510,7 @@ over all OSTs.</screen>
           <literal>targets=<replaceable>hostname|ip_of_server</replaceable>
           </literal>. For example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;oss0 oss1&quot; \
-	   case=network sh obdfilter-survey</screen>
+            case=network sh obdfilter-survey</screen>
         </listitem>
         <listitem>
           <para>On the server side, view the statistics at:</para>
@@ -826,9 +826,9 @@ Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time
       <secondary>MDS performance</secondary></indexterm>
     Testing MDS Performance (<literal>mds-survey</literal>)</title>
       <para>The <literal>mds-survey</literal> script tests the local
-        metadata performance using the echo_client to drive different layers of
-        the MDS stack: mdd, mdt, osd (the Lustre software only supports mdd
-        stack). It can be used with the following classes of operations:</para>
+        metadata performance using the <literal>echo_client</literal> to
+	drive the MDD layer of the MDS stack.
+        It can be used with the following classes of operations:</para>
     <itemizedlist>
       <listitem>
         <para><literal>Open-create/mkdir/create</literal></para>

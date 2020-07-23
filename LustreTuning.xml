@@ -158,12 +158,6 @@ lctl {get,set}_param {service}.thread_{min,max,started}
           in providing the read page service. The read page service handles
           file close and readdir operations.</para>
         </listitem>
-        <listitem>
-          <para>
-          <literal>mds_attr_num_threads</literal> controls the number of threads
-          in providing the setattr service to clients running Lustre software
-          release 1.8.</para>
-        </listitem>
       </itemizedlist>
     </section>
   </section>
@@ -201,14 +195,8 @@ lctl {get,set}_param {service}.thread_{min,max,started}
         to 
         <literal>CPT4</literal>.</para>
       </listitem>
-      <listitem>
-        <para>
-        <literal>mds_attr_num_cpts=[EXPRESSION]</literal> binds the setattr
-        service threads to CPTs defined by 
-        <literal>EXPRESSION</literal>.</para>
-      </listitem>
     </itemizedlist>
-	<para>Parameters must be set before module load in the file 
+    <para>Parameters must be set before module load in the file 
     <literal>/etc/modprobe.d/lustre.conf</literal>. For example:
     <example><title>lustre.conf</title>
     <screen>options lnet networks=tcp0(eth0)
@@ -615,6 +603,13 @@ cpu_partition_table=
     <literal>ksocklnd</literal> using the 
     <literal>nscheds</literal> parameter. This adjusts the number of threads for
     each partition, not the overall number of threads on the LND.</para>
+    <note>
+      <para>The default number of threads for 
+      <literal>ko2iblnd</literal> and 
+      <literal>ksocklnd</literal> are automatically set and are chosen to
+      work well across a number of typical scenarios, for systems with both
+      high and low core counts.</para>
+    </note>
     <section>
 	<title>ko2iblnd Tuning</title>
 	<para>The following table outlines the ko2iblnd module parameters to be used

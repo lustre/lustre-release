@@ -84,10 +84,11 @@ lfs help
         <literal>-v</literal> option with 
         <literal>lfs quota</literal>.</para>
       </note>
-      <para condition="l24">
-       The <literal>quotacheck</literal>, <literal>quotaon</literal> and <literal>quotaoff</literal>
-       sub-commands were deprecated in the Lustre 2.4 release, and removed completely in
-       the Lustre 2.8 release.  See <xref linkend="enabling_disk_quotas"/> for details on
+      <para condition="l28">
+       The <literal>quotacheck</literal>, <literal>quotaon</literal> and
+       <literal>quotaoff</literal> sub-commands were deprecated in the
+       Lustre 2.4 release, and removed completely in the Lustre 2.8 release.
+       See <xref linkend="enabling_disk_quotas"/> for details on
        configuring and checking quotas.
       </para>
     </section>

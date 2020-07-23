@@ -86,9 +86,27 @@
 				<xsl:with-param name='content' select="$content"/>
 			</xsl:call-template>
 		</xsl:when>
+		<xsl:when test="@condition = 'l2E'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.14'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l2F'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.15'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l2G'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.16'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
 		<xsl:when test="@condition != ''">
 			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced before Lustre 2.3'"/>
+				<xsl:with-param name='version' select="'Introduced before Lustre 2.5'"/>
 				<xsl:with-param name='content' select="$content"/>
 			</xsl:call-template>
 		</xsl:when>
@@ -181,6 +199,15 @@
 		</xsl:when>
 		<xsl:when test="$condition = 'l2D'">
 			<span class='floatright'>L 2.13 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2E'">
+			<span class='floatright'>L 2.14 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2F'">
+			<span class='floatright'>L 2.15 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2G'">
+			<span class='floatright'>L 2.16 </span>
 		</xsl:when>
 		<xsl:when test="$condition != ''">
 			<span class='floatright'>L ?.? </span>

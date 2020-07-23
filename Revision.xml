@@ -12,18 +12,21 @@
     <link xl:href="http://wiki.lustre.org/Lustre_Manual_Changes">
     http://wiki.lustre.org/Lustre_Manual_Changes</link>.</para>
 
-      <para condition="l28">This manual covers a range of Lustre 2.x software
-        releases.  Features that are specific to individual releases are
-        identified within the table of contents using a short hand notation
-        (i.e. this paragraph is tagged for a Lustre 2.8 specific feature),
-        and within the text using a distinct box.  For example:</para>
+    <para condition="l25">This manual covers a range of Lustre 2.x software
+      releases, currently starting with the 2.5 release.  Features specific
+      to individual releases are identified within the table of contents
+      using a shorthand notation (e.g. this paragraph is tagged as a Lustre
+      2.5 specific feature so that it will be updated when the 2.5-specific
+      tagging is removed), and within the text using a distinct box.
+    </para>
 
-    <note xml:id="whichversion"><title>which version?</title>
+    <note xml:id="whichversion"><title>Which version amd I running?</title>
     <indexterm><primary>version</primary>
     <secondary>which version of Lustre am I running?</secondary></indexterm>
 
     <para>The current version of Lustre that is in use on the node can be found
-    using the command <literal>lctl get_param version</literal>, for example:
+    using the command <literal>lctl get_param version</literal> on any Lustre
+    client or server, for example:
     <screen>$ lctl get_param version
 version=2.10.5
 </screen>

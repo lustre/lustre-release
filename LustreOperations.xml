@@ -161,12 +161,12 @@ XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
 [154523.177714] Lustre: Unmounted testfs-client</screen></para>
           </listitem>
           <listitem><para>Unmount the MDT and MGT</para>
-	      <para>On the MGS and MDS node(s), use the <literal>umount</literal>
-              command:</para>
+              <para>On the MGS and MDS node(s), run the
+              <literal>umount</literal> command:</para>
               <para><literal>umount -a -t lustre</literal></para>
               <para>The example below shows the unmount of the MDT and MGT for
-	      the <literal>testfs</literal> filesystem on a combined MGS/MDS:
-	      </para>
+              the <literal>testfs</literal> filesystem on a combined MGS/MDS:
+              </para>
               <para><screen>[root@mds1 ~]# mount |grep lustre
 /dev/sda on /mnt/mgt type lustre (ro)
 /dev/sdb on /mnt/mdt type lustre (ro)
@@ -175,7 +175,7 @@ XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
 [155263.566230] Lustre: Failing over testfs-MDT0000
 [155263.775355] Lustre: server umount testfs-MDT0000 complete
 [155269.843862] Lustre: server umount MGS complete</screen></para>
-	  <para>For a seperate MGS and MDS, the same command is used, first on
+          <para>For a seperate MGS and MDS, the same command is used, first on
           the MDS and then followed by the MGS.</para>
           </listitem>
           <listitem><para>Unmount all the OSTs</para>
@@ -183,8 +183,8 @@ XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
               </para>
               <para><literal>umount -a -t lustre</literal></para>
               <para>The example below shows the unmount of all OSTs for the
-	      <literal>testfs</literal> filesystem on server
-	      <literal>OSS1</literal>:
+              <literal>testfs</literal> filesystem on server
+              <literal>OSS1</literal>:
               </para>
               <para><screen>[root@oss1 ~]# mount |grep lustre
 /dev/sda on /mnt/ost0 type lustre (ro)
@@ -966,7 +966,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
 </screen></para>
         <para>The command output is: 
         <screen>
-debugfs 1.42.3.wc3 (15-Aug-2012)
+debugfs 1.45.6.wc1 (20-Mar-2020)
 /dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitmaps
 Inode: 352365   Type: regular    Mode:  0666   Flags: 0x80000
 Generation: 2393149953    Version: 0x0000002a:00005f81
@@ -982,25 +982,23 @@ Size of extra inode fields: 24
 Extended attributes stored in inode body:
   fid = "b9 da 24 00 00 00 00 00 6a fa 0d 3f 01 00 00 00 eb 5b 0b 00 00 00 0000
 00 00 00 00 00 00 00 00 " (32)
-  fid: objid=34976 seq=0 parent=[0x24dab9:0x3f0dfa6a:0x0] stripe=1
+  fid: objid=34976 seq=0 parent=[0x200000400:0x122:0x0] stripe=1
 EXTENTS:
 (0-64):4620544-4620607
 </screen></para>
       </listitem>
       <listitem>
-        <para>For Lustre software release 2.x file systems, the parent FID will
-        be of the form [0x200000400:0x122:0x0] and can be resolved directly
-        using the 
-        <literal>lfs fid2path [0x200000404:0x122:0x0]
-        /mnt/lustre</literal> command on any Lustre client, and the process is
+        <para>The parent FID will be of the form
+        <literal>[0x200000400:0x122:0x0]</literal> and can be resolved directly
+        using the command <literal>lfs fid2path [0x200000404:0x122:0x0]
+        /mnt/lustre</literal> on any Lustre client, and the process is
         complete.</para>
       </listitem>
       <listitem>
-        <para>In this example the parent inode FID is an upgraded 1.x inode
-        (due to the first part of the FID being below 0x200000400), the MDT
-        inode number is 
+        <para>In cases of an upgraded 1.x inode (if the first part of the
+        FID is below 0x200000400), the MDT inode number is 
         <literal>0x24dab9</literal> and generation 
-        <literal>0x3f0dfa6a</literal> and the pathname needs to be resolved
+        <literal>0x3f0dfa6a</literal> and the pathname can also be resolved
         using 
         <literal>debugfs</literal>.</para>
       </listitem>
@@ -1013,7 +1011,7 @@ EXTENTS:
 </screen>
         <para>Here is the command output:</para>
         <screen>
-debugfs 1.42.3.wc2 (15-Aug-2012)
+debugfs 1.42.3.wc3 (15-Aug-2012)
 /dev/lustre/mdt_test: catastrophic mode - not reading inode or group bitmap\
 s
 Inode      Pathname
