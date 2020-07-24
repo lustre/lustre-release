@@ -6208,9 +6208,14 @@ error_noexit() {
 
 exit_status () {
 	local status=0
-	local log=$TESTSUITELOG
+	local logs="$TESTSUITELOG $1"
 
-	[ -f "$log" ] && grep -qw FAIL $log && status=1
+	for log in $logs; do
+		if [ -f "$log" ]; then
+			grep -qw FAIL $log && status=1
+		fi
+	done
+
 	exit $status
 }
 
