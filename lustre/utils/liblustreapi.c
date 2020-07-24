@@ -5683,6 +5683,9 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 	rc = ioctl(root, OBD_IOC_QUOTACTL, qctl);
 	if (rc < 0)
 		rc = -errno;
+	if (rc == -ENOENT && LUSTRE_Q_CMD_IS_POOL(qctl->qc_cmd))
+		llapi_error(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO, rc,
+			    "Cannot find pool '%s'", qctl->qc_poolname);
 
 	close(root);
 	return rc;
