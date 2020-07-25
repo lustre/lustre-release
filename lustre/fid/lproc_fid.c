@@ -426,6 +426,7 @@ static ssize_t fldb_seq_write(struct file *file, const char __user *buf,
 	int			 rc = 0;
 	char			 _buffer[MAX_FID_RANGE_STRLEN];
 	char			*buffer = _buffer;
+	char *tmp;
 	ENTRY;
 
 	param = seq->private;
@@ -446,23 +447,36 @@ static ssize_t fldb_seq_write(struct file *file, const char __user *buf,
 		GOTO(out, rc = -EINVAL);
 	buffer++;
 
-	range.lsr_start = simple_strtoull(buffer, &buffer, 0);
-	if (*buffer != '-')
+	tmp = strchr(buffer, '-');
+	if (!tmp)
 		GOTO(out, rc = -EINVAL);
-	buffer++;
+	*tmp++ = '\0';
+	rc = kstrtoull(buffer, 0, &range.lsr_start);
+	if (rc)
+		GOTO(out, rc);
+	buffer = tmp;
 
-	range.lsr_end = simple_strtoull(buffer, &buffer, 0);
-	if (*buffer != ')')
+	tmp = strchr(buffer, ')');
+	if (!tmp)
 		GOTO(out, rc = -EINVAL);
-	buffer++;
+	*tmp++ = '\0';
+	rc = kstrtoull(buffer, 0, &range.lsr_end);
+	if (rc)
+		GOTO(out, rc);
+	buffer = tmp;
+
 	if (*buffer != ':')
 		GOTO(out, rc = -EINVAL);
 	buffer++;
 
-	range.lsr_index = simple_strtoul(buffer, &buffer, 0);
-	if (*buffer != ':')
+	tmp = strchr(buffer, ':');
+	if (!tmp)
 		GOTO(out, rc = -EINVAL);
-	buffer++;
+	*tmp++ = '\0';
+	rc = kstrtouint(buffer, 0, &range.lsr_index);
+	if (rc)
+		GOTO(out, rc);
+	buffer = tmp;
 
 	if (strncmp(buffer, "mdt", 3) == 0)
 		range.lsr_flags = LU_SEQ_RANGE_MDT;
