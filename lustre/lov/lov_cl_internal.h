@@ -151,7 +151,8 @@ static inline char *llt2str(enum lov_layout_type llt)
 static inline __u32 lov_entry_type(struct lov_stripe_md_entry *lsme)
 {
 	if ((lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_RAID0) ||
-	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT))
+	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT) ||
+	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_FOREIGN))
 		return lov_pattern(lsme->lsme_pattern &
 				   ~LOV_PATTERN_OVERSTRIPING);
 	return 0;
@@ -239,8 +240,10 @@ struct lov_mirror_entry {
 	unsigned short	lre_mirror_id;
 	unsigned short	lre_preferred:1,
 			lre_stale:1,	/* set if any components is stale */
-			lre_valid:1;	/* set if at least one of components
+			lre_valid:1,	/* set if at least one of components
 					 * in this mirror is valid */
+			lre_foreign:1;	/* set if it is a foreign component */
+
 	unsigned short	lre_start;	/* index to lo_entries, start index of
 					 * this mirror */
 	unsigned short	lre_end;	/* end index of this mirror */

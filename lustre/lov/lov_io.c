@@ -408,6 +408,9 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		if (!lre->lre_valid)
 			continue;
 
+		if (lre->lre_foreign)
+			continue;
+
 		lov_foreach_mirror_layout_entry(obj, lle, lre) {
 			if (!lle->lle_valid)
 				continue;
@@ -815,6 +818,9 @@ static int lov_io_iter_init(const struct lu_env *env,
 			continue;
 		}
 
+		if (lsm_entry_is_foreign(lsm, index))
+			continue;
+
 		if (!le->lle_valid && !ios->cis_io->ci_designated_mirror) {
 			CERROR("I/O to invalid component: %d, mirror: %d\n",
 			       index, lio->lis_mirror_index);
@@ -948,6 +954,9 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 		RETURN(io->ci_type == CIT_READ ? -EAGAIN : -EIO);
 
 	lse = lov_lse(lio->lis_object, index);
+
+	if (lsme_is_foreign(lse))
+		RETURN(-EINVAL);
 
 	next = MAX_LFS_FILESIZE;
 	if (lse->lsme_stripe_count > 1) {
@@ -1135,7 +1144,8 @@ static int lov_io_read_ahead(const struct lu_env *env,
 
 	offset = cl_offset(obj, start);
 	index = lov_io_layout_at(lio, offset);
-	if (index < 0 || !lsm_entry_inited(loo->lo_lsm, index))
+	if (index < 0 || !lsm_entry_inited(loo->lo_lsm, index) ||
+	    lsm_entry_is_foreign(loo->lo_lsm, index))
 		RETURN(-ENODATA);
 
 	/* avoid readahead to expand to stale components */
@@ -1807,6 +1817,8 @@ int lov_io_layout_at(struct lov_io *lio, __u64 offset)
 
 	for (i = start_index; i <= end_index; i++) {
 		struct lov_layout_entry *lle = lov_entry(lov, i);
+
+		LASSERT(!lsme_is_foreign(lle->lle_lsme));
 
 		if ((offset >= lle->lle_extent->e_start &&
 		     offset < lle->lle_extent->e_end) ||

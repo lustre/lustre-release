@@ -95,6 +95,17 @@ struct lov_stripe_md {
 
 #define lsm_foreign(lsm) (lsm->lsm_entries[0])
 
+static inline bool lsme_is_foreign(const struct lov_stripe_md_entry *lsme)
+{
+	return lsme->lsme_magic == LOV_MAGIC_FOREIGN;
+}
+
+static inline bool lsm_entry_is_foreign(const struct lov_stripe_md *lsm,
+					int index)
+{
+	return lsme_is_foreign(lsm->lsm_entries[index]);
+}
+
 static inline bool lsme_inited(const struct lov_stripe_md_entry *lsme)
 {
 	return lsme->lsme_flags & LCME_FL_INIT;
@@ -125,7 +136,8 @@ static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 
 	LASSERT(lsm->lsm_magic == LOV_MAGIC_COMP_V1);
 
-	size = sizeof(struct lov_comp_md_v1);
+	size = sizeof(struct lov_comp_md_v1) +
+	       sizeof(struct lov_comp_md_entry_v1) * lsm->lsm_entry_count;
 	for (entry = 0; entry < lsm->lsm_entry_count; entry++) {
 		u16 stripe_count;
 
@@ -136,7 +148,6 @@ static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 		else
 			stripe_count = 0;
 
-		size += sizeof(*lsme);
 		size += lov_mds_md_size(stripe_count,
 					lsme->lsme_magic);
 	}

@@ -707,6 +707,7 @@ struct fsxattr {
 #define LOV_PATTERN_RAID1		0x002
 #define LOV_PATTERN_MDT			0x100
 #define LOV_PATTERN_OVERSTRIPING	0x200
+#define LOV_PATTERN_FOREIGN		0x400
 
 #define LOV_PATTERN_F_MASK	0xffff0000
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */

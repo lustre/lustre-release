@@ -121,10 +121,23 @@ out:
 
 static void lsme_free(struct lov_stripe_md_entry *lsme)
 {
-	unsigned int stripe_count = lsme->lsme_stripe_count;
+	unsigned int stripe_count;
 	unsigned int i;
 	size_t lsme_size;
 
+	if (lsme->lsme_magic == LOV_MAGIC_FOREIGN) {
+		/*
+		 * TODO: In addition to HSM foreign layout, It needs to add
+		 * support for other kinds of foreign layout types such as
+		 * DAOS, S3. When add these supports, it will use non-inline
+		 * @lov_hsm_base to store layout information, and need to
+		 * free extra allocated buffer.
+		 */
+		OBD_FREE_LARGE(lsme, sizeof(*lsme));
+		return;
+	}
+
+	stripe_count = lsme->lsme_stripe_count;
 	if (!lsme_inited(lsme) ||
 	    lsme->lsme_pattern & LOV_PATTERN_F_RELEASED)
 		stripe_count = 0;
@@ -184,8 +197,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	else
 		stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
 
-	if (buf_size < (magic == LOV_MAGIC_V1 ? sizeof(struct lov_mds_md_v1) :
-						sizeof(struct lov_mds_md_v3))) {
+	if (buf_size < lov_mds_md_size(stripe_count, magic)) {
 		CERROR("LOV EA %s too small: %zu, need %u\n",
 		       magic == LOV_MAGIC_V1 ? "V1" : "V3", buf_size,
 		       lov_mds_md_size(stripe_count, magic == LOV_MAGIC_V1 ?
@@ -406,35 +418,60 @@ static int lsm_verify_comp_md_v1(struct lov_comp_md_v1 *lcm,
 }
 
 static struct lov_stripe_md_entry *
+lsme_unpack_foreign(struct lov_obd *lov, void *buf, size_t buf_size,
+		    bool inited, loff_t *maxbytes)
+{
+	struct lov_stripe_md_entry *lsme;
+	struct lov_foreign_md *lfm = buf;
+	__u32 magic;
+
+	ENTRY;
+
+	magic = le32_to_cpu(lfm->lfm_magic);
+	if (magic != LOV_MAGIC_FOREIGN)
+		RETURN(ERR_PTR(-EINVAL));
+
+	OBD_ALLOC_LARGE(lsme, sizeof(*lsme));
+	if (!lsme)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	lsme->lsme_magic = magic;
+	lsme->lsme_pattern = LOV_PATTERN_FOREIGN;
+	lsme->lsme_flags = 0;
+
+	if (maxbytes)
+		*maxbytes = MAX_LFS_FILESIZE;
+
+	RETURN(lsme);
+}
+
+static struct lov_stripe_md_entry *
 lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 		 size_t lmm_buf_size, bool inited, loff_t *maxbytes)
 {
 	unsigned int magic;
-	unsigned int stripe_count;
-
-	stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-	if (stripe_count == 0 &&
-	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT)
-		RETURN(ERR_PTR(-EINVAL));
-	/* un-instantiated lmm contains no ost id info, i.e. lov_ost_data_v1 */
-	if (!inited)
-		stripe_count = 0;
 
 	magic = le32_to_cpu(lmm->lmm_magic);
-	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)
+	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
+	    magic != LOV_MAGIC_FOREIGN)
 		RETURN(ERR_PTR(-EINVAL));
 
-	if (lmm_buf_size < lov_mds_md_size(stripe_count, magic))
+	if (magic != LOV_MAGIC_FOREIGN &&
+	    le16_to_cpu(lmm->lmm_stripe_count) == 0 &&
+	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT)
 		RETURN(ERR_PTR(-EINVAL));
 
 	if (magic == LOV_MAGIC_V1) {
 		return lsme_unpack(lov, lmm, lmm_buf_size, NULL,
 				   inited, lmm->lmm_objects, maxbytes);
-	} else {
+	} else if (magic == LOV_MAGIC_V3) {
 		struct lov_mds_md_v3 *lmm3 = (struct lov_mds_md_v3 *)lmm;
 
 		return lsme_unpack(lov, lmm, lmm_buf_size, lmm3->lmm_pool_name,
 				   inited, lmm3->lmm_objects, maxbytes);
+	} else { /* LOV_MAGIC_FOREIGN */
+		return lsme_unpack_foreign(lov, lmm, lmm_buf_size,
+					   inited, maxbytes);
 	}
 }
 
