@@ -647,6 +647,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LARGE_STRIPE		0x1703
 #define OBD_FAIL_OUT_ENOSPC             0x1704
 #define OBD_FAIL_INVALIDATE_UPDATE	0x1705
+#define OBD_FAIL_OUT_UPDATE_DROP        0x1707
 
 /* MIGRATE */
 #define OBD_FAIL_MIGRATE_ENTRIES		0x1801

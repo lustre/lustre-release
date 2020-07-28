@@ -3036,6 +3036,46 @@ test_143() {
 }
 run_test 143 "orphan cleanup thread shouldn't be blocked even delete failed"
 
+test_145() {
+	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs"
+	[ $(facet_active_host mds2) = $(facet_active_host mds3) ] &&
+		skip "needs mds2 and mds3 on separate nodes"
+
+	replay_barrier mds1
+
+	touch $DIR/$tfile
+
+#define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
+	echo block mds_connect from mds2
+	do_facet mds2 "$LCTL set_param fail_loc=0x507"
+
+#define OBD_FAIL_OUT_UPDATE_DROP	0x1707
+	echo block recovery updates from mds3
+	do_facet mds3 "$LCTL set_param fail_loc=0x1707"
+
+	local hard_timeout=\
+$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_time_hard)
+
+	fail mds1 &
+
+	local get_soft_timeout_cmd=\
+"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_time_soft 2>/dev/null"
+
+	echo wait until mds1 recovery_time_soft is $hard_timeout
+	wait_update $(facet_host mds1) "$get_soft_timeout_cmd" \
+"$hard_timeout" $hard_timeout
+
+	echo unblock mds_connect from mds2
+	do_facet mds2 "$LCTL set_param fail_loc=0"
+
+	echo upblock recovery updates from mds3
+	do_facet mds3 "$LCTL set_param fail_loc=0"
+
+	wait
+	[ -f $DIR/$tfile ] || error "$DIR/$tfile does not exist"
+}
+run_test 145 "connect mdtlovs and process update logs after recovery expire"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

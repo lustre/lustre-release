@@ -713,6 +713,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
 		RETURN(0);
 
+	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DELAY_RECOV) &&
+		     lustre_msg_get_opc(request->rq_reqmsg) == MDS_CONNECT &&
+		     strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) == 0)) {
+		RETURN(0);
+	}
+
 	LASSERT(request->rq_type == PTL_RPC_MSG_REQUEST);
 	LASSERT(request->rq_wait_ctx == 0);
 

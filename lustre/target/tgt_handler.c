@@ -419,6 +419,11 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 		     OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET)))
 		RETURN(0);
 
+	/* drop OUT_UPDATE rpc */
+	if (unlikely(lustre_msg_get_opc(req->rq_reqmsg) == OUT_UPDATE &&
+		     OBD_FAIL_CHECK(OBD_FAIL_OUT_UPDATE_DROP)))
+		RETURN(0);
+
 	rc = tgt_request_preprocess(tsi, h, req);
 	/* pack reply if reply format is fixed */
 	if (rc == 0 && h->th_flags & HAS_REPLY) {

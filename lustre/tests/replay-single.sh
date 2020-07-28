@@ -8,11 +8,12 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
+# bug number for skipped test: LU-13614
+ALWAYS_EXCEPT+="               59"
 
 if [ "$mds1_FSTYPE" = zfs ]; then
 	# bug number for skipped test: LU-11388
 	ALWAYS_EXCEPT+="               131b"
-	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 fi
 if $SHARED_KEY; then
 	# bug number for skipped tests: LU-9795 (all below)
@@ -21,6 +22,7 @@ if $SHARED_KEY; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	85b	86	88	89	90"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	93a	100a	100b	120"
 fi
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 build_test_filter
 
