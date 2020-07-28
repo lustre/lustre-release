@@ -935,6 +935,12 @@ test_7b()
 }
 run_test 7b "non-stopped LFSCK should auto restarts after MDS remount (2)"
 
+namespace_error()
+{
+	$SHOW_NAMESPACE
+	error $@
+}
+
 test_8()
 {
 	echo "formatall"
@@ -946,7 +952,7 @@ test_8()
 
 	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "init" ] ||
-		error "(2) Expect 'init', but got '$STATUS'"
+		namespace_error "(2) Expect 'init', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_LINKEA_CRASH	0x1603
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1603
@@ -962,23 +968,25 @@ test_8()
 
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_val=2 fail_loc=0x1601
-	$START_NAMESPACE || error "(4) Fail to start LFSCK for namespace!"
+	$START_NAMESPACE ||
+		namespace_error "(4) Fail to start LFSCK for namespace!"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(5) Expect 'scanning-phase1', but got '$STATUS'"
+		namespace_error "(5) Expect 'scanning-phase1', but got '$STATUS'"
 
-	$STOP_LFSCK || error "(6) Fail to stop LFSCK!"
+	$STOP_LFSCK || namespace_error "(6) Fail to stop LFSCK!"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "stopped" ] ||
-		error "(7) Expect 'stopped', but got '$STATUS'"
+		namespace_error "(7) Expect 'stopped', but got '$STATUS'"
 
-	$START_NAMESPACE || error "(8) Fail to start LFSCK for namespace!"
+	$START_NAMESPACE ||
+		namespace_error "(8) Fail to start LFSCK for namespace!"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(9) Expect 'scanning-phase1', but got '$STATUS'"
+		namespace_error "(9) Expect 'scanning-phase1', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_FATAL2		0x1609
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001609
@@ -986,30 +994,31 @@ test_8()
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "failed" 32 || {
 		$SHOW_NAMESPACE
-		error "(10) unexpected status"
+		namespace_error "(10) unexpected status"
 	}
 
 	#define OBD_FAIL_LFSCK_DELAY1		0x1600
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1600
-	$START_NAMESPACE || error "(11) Fail to start LFSCK for namespace!"
+	$START_NAMESPACE ||
+		namespace_error "(11) Fail to start LFSCK for namespace!"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(12) Expect 'scanning-phase1', but got '$STATUS'"
+		namespace_error "(12) Expect 'scanning-phase1', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_CRASH		0x160a
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160a
 	sleep 5
 
 	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(13) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || namespace_error "(13) Fail to stop MDS!"
 
 	#define OBD_FAIL_LFSCK_NO_AUTO		0x160b
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160b
 
 	echo "start $SINGLEMDS"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(14) Fail to start MDS!"
+		namespace_error "(14) Fail to start MDS!"
 
 	local timeout=$(max_recovery_time)
 	local timer=0
@@ -1023,20 +1032,24 @@ test_8()
 		timer=$((timer + 1))
 	done
 
-	[ $timer != $timeout ] ||
+	[ $timer != $timeout ] || (
+		do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status"
 		error "(14.1) recovery timeout"
+		)
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "crashed" ] ||
-		error "(15) Expect 'crashed', but got '$STATUS'"
+		namespace_error "(15) Expect 'crashed', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
-	$START_NAMESPACE || error "(16) Fail to start LFSCK for namespace!"
+	$START_NAMESPACE ||
+		namespace_error "(16) Fail to start LFSCK for namespace!"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(17) Expect 'scanning-phase1', but got '$STATUS'"
+		namespace_error "(17) Expect 'scanning-phase1', but got '$STATUS'"
 
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(18) Fail to stop MDS!"
@@ -1058,12 +1071,15 @@ test_8()
 		timer=$((timer + 1))
 	done
 
-	[ $timer != $timeout ] ||
+	[ $timer != $timeout ] || (
+		do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status"
 		error "(19.1) recovery timeout"
+		)
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "paused" ] ||
-		error "(20) Expect 'paused', but got '$STATUS'"
+		namespace_error "(20) Expect 'paused', but got '$STATUS'"
 
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(20.1) Fail to stop MDS!"
@@ -1082,22 +1098,26 @@ test_8()
 		timer=$((timer + 1))
 	done
 
-	[ $timer != $timeout ] ||
+	[ $timer != $timeout ] || (
+		do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status"
 		error "(20.3) recovery timeout"
+		)
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "paused" ] ||
-		error "(20.4) Expect 'paused', but got '$STATUS'"
+		namespace_error "(20.4) Expect 'paused', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_DELAY3		0x1602
 	do_facet $SINGLEMDS $LCTL set_param fail_val=2 fail_loc=0x1602
 
-	$START_NAMESPACE || error "(21) Fail to start LFSCK for namespace!"
+	$START_NAMESPACE ||
+		namespace_error "(21) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 32 || {
 		$SHOW_NAMESPACE
-		error "(22) unexpected status"
+		namespace_error "(22) unexpected status"
 	}
 
 	# wait to process one inode at least (OBD_FAIL_LFSCK_DELAY3)
@@ -1105,18 +1125,19 @@ test_8()
 
 	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
 	[ "$FLAGS" == "scanned-once,inconsistent" ] ||
-		error "(23) Expect 'scanned-once,inconsistent',but got '$FLAGS'"
+		namespace_error "(23) Expect 'scanned-once,inconsistent',but got '$FLAGS'"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
-		error "(24) unexpected status"
+		namespace_error "(24) unexpected status"
 	}
 
 	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(25) Expect empty flags, but got '$FLAGS'"
+	[ -z "$FLAGS" ] ||
+		namespace_error "(25) Expect empty flags, but got '$FLAGS'"
 }
 run_test 8 "LFSCK state machine"
 
