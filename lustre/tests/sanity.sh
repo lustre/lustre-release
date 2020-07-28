@@ -18398,6 +18398,9 @@ test_230q() {
 	local stripe_index
 	local nr_files
 
+	# test with fewer files on ZFS
+	[ "$mds1_FSTYPE" == "zfs" ] && threshold=40
+
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		    mdt.*.dir_split_count=$saved_threshold"
 	stack_trap "do_nodes $mdts $LCTL set_param \
