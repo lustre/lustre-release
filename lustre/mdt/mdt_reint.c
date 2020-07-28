@@ -1739,9 +1739,6 @@ static int mdt_migrate_object_lock(struct mdt_thread_info *info,
 		if (S_ISDIR(lu_object_attr(&obj->mot_obj))) {
 			struct md_attr *ma = &info->mti_attr;
 
-			ma->ma_lmv = info->mti_big_lmm;
-			ma->ma_lmv_size = info->mti_big_lmmsize;
-			ma->ma_valid = 0;
 			rc = mdt_stripe_get(info, obj, ma, XATTR_NAME_LMV);
 			if (rc) {
 				mdt_object_unlock(info, obj, lh, rc);
@@ -2011,16 +2008,6 @@ static int mdt_reint_migrate(struct mdt_thread_info *info,
 	if (IS_ERR(pobj))
 		GOTO(unlock_rename, rc = PTR_ERR(pobj));
 
-	if (unlikely(!info->mti_big_lmm)) {
-		info->mti_big_lmmsize = lmv_mds_md_size(64, LMV_MAGIC);
-		OBD_ALLOC(info->mti_big_lmm, info->mti_big_lmmsize);
-		if (!info->mti_big_lmm)
-			GOTO(put_parent, rc = -ENOMEM);
-	}
-
-	ma->ma_lmv = info->mti_big_lmm;
-	ma->ma_lmv_size = info->mti_big_lmmsize;
-	ma->ma_valid = 0;
 	rc = mdt_stripe_get(info, pobj, ma, XATTR_NAME_LMV);
 	if (rc)
 		GOTO(put_parent, rc);
@@ -2056,9 +2043,6 @@ static int mdt_reint_migrate(struct mdt_thread_info *info,
 
 	/* TODO: DoM migration is not supported yet */
 	if (S_ISREG(lu_object_attr(&sobj->mot_obj))) {
-		ma->ma_lmm = info->mti_big_lmm;
-		ma->ma_lmm_size = info->mti_big_lmmsize;
-		ma->ma_valid = 0;
 		rc = mdt_stripe_get(info, sobj, ma, XATTR_NAME_LOV);
 		if (rc)
 			GOTO(put_source, rc);
@@ -2226,10 +2210,6 @@ static int mdt_rename_determine_lock_order(struct mdt_thread_info *info,
 		return 0;
 
 	/* check whether sobj and tobj are sibling stripes */
-	ma->ma_need = MA_LMV;
-	ma->ma_valid = 0;
-	ma->ma_lmv = (union lmv_mds_md *)info->mti_xattr_buf;
-	ma->ma_lmv_size = sizeof(info->mti_xattr_buf);
 	rc = mdt_stripe_get(info, sobj, ma, XATTR_NAME_LMV);
 	if (rc)
 		return rc;

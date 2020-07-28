@@ -921,8 +921,8 @@ int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 	RETURN(rc);
 }
 
-int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
-		   struct md_attr *ma, const char *name)
+int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		     struct md_attr *ma, const char *name)
 {
 	struct md_object *next = mdt_object_child(o);
 	struct lu_buf    *buf = &info->mti_buf;
@@ -994,6 +994,40 @@ got:
 			goto got;
 		}
 	}
+
+	return rc;
+}
+
+int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		   struct md_attr *ma, const char *name)
+{
+	int rc;
+
+	if (!info->mti_big_lmm) {
+		OBD_ALLOC(info->mti_big_lmm, PAGE_SIZE);
+		if (!info->mti_big_lmm)
+			return -ENOMEM;
+		info->mti_big_lmmsize = PAGE_SIZE;
+	}
+
+	if (strcmp(name, XATTR_NAME_LOV) == 0) {
+		ma->ma_lmm = info->mti_big_lmm;
+		ma->ma_lmm_size = info->mti_big_lmmsize;
+		ma->ma_valid &= ~MA_LOV;
+	} else if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		ma->ma_lmv = info->mti_big_lmm;
+		ma->ma_lmv_size = info->mti_big_lmmsize;
+		ma->ma_valid &= ~MA_LMV;
+	} else {
+		LBUG();
+	}
+
+	LASSERT(!info->mti_big_lmm_used);
+	rc = __mdt_stripe_get(info, o, ma, name);
+	/* since big_lmm is always used here, clear 'used' flag to avoid
+	 * assertion in mdt_big_xattr_get().
+	 */
+	info->mti_big_lmm_used = 0;
 
 	return rc;
 }
@@ -1082,19 +1116,19 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	}
 
 	if (need & MA_LOV && (S_ISREG(mode) || S_ISDIR(mode))) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
 		if (rc)
 			GOTO(out, rc);
 	}
 
 	if (need & MA_LMV && S_ISDIR(mode)) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
 		if (rc != 0)
 			GOTO(out, rc);
 	}
 
 	if (need & MA_LMV_DEF && S_ISDIR(mode)) {
-		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
+		rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
 		if (rc != 0)
 			GOTO(out, rc);
 	}

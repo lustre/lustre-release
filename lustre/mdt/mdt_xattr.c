@@ -345,14 +345,6 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 	    mdt->mdt_enable_remote_dir_gid != -1)
 		RETURN(-EPERM);
 
-	/* mti_big_lmm is used to save LMV, but it may be uninitialized. */
-	if (unlikely(!info->mti_big_lmm)) {
-		info->mti_big_lmmsize = lmv_mds_md_size(64, LMV_MAGIC);
-		OBD_ALLOC(info->mti_big_lmm, info->mti_big_lmmsize);
-		if (!info->mti_big_lmm)
-			RETURN(-ENOMEM);
-	}
-
 	obj = mdt_object_find(env, mdt, rr->rr_fid1);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
@@ -396,9 +388,6 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 	if (rc)
 		GOTO(unlock_pobj, rc);
 
-	ma->ma_lmv = info->mti_big_lmm;
-	ma->ma_lmv_size = info->mti_big_lmmsize;
-	ma->ma_valid = 0;
 	rc = mdt_stripe_get(info, obj, ma, XATTR_NAME_LMV);
 	if (rc)
 		GOTO(unlock_obj, rc);

@@ -835,6 +835,8 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
 int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 		      const char *name);
+int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		     struct md_attr *ma, const char *name);
 int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		   struct md_attr *ma, const char *name);
 int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
