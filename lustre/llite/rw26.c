@@ -346,6 +346,11 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		int iot = rw == READ ? CRT_READ : CRT_WRITE;
 
 		atomic_add(io_pages, &anchor->csi_sync_nr);
+		/*
+		 * Avoid out-of-order execution of adding inflight
+		 * modifications count and io submit.
+		 */
+		smp_mb();
 		rc = cl_io_submit_rw(env, io, iot, queue);
 		if (rc == 0) {
 			cl_page_list_splice(&queue->c2_qout,

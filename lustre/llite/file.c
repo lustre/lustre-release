@@ -1538,6 +1538,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	int rc = 0;
 	unsigned int retried = 0, ignore_lockless = 0;
 	bool is_aio = false;
+	struct cl_dio_aio *ci_aio = NULL;
 
 	ENTRY;
 
@@ -1545,9 +1546,20 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		file_dentry(file)->d_name.name,
 		iot == CIT_READ ? "read" : "write", *ppos, count);
 
+	io = vvp_env_thread_io(env);
+	if (args->via_io_subtype == IO_NORMAL &&
+	    file->f_flags & O_DIRECT) {
+		if (!is_sync_kiocb(args->u.normal.via_iocb))
+			is_aio = true;
+		ci_aio = cl_aio_alloc(args->u.normal.via_iocb);
+		if (!ci_aio)
+			GOTO(out, rc = -ENOMEM);
+	}
+
 restart:
 	io = vvp_env_thread_io(env);
 	ll_io_init(io, file, iot, args);
+	io->ci_aio = ci_aio;
 	io->ci_ignore_lockless = ignore_lockless;
 	io->ci_ndelay_tried = retried;
 
@@ -1566,13 +1578,6 @@ restart:
 		case IO_NORMAL:
 			vio->vui_iter = args->u.normal.via_iter;
 			vio->vui_iocb = args->u.normal.via_iocb;
-			if (file->f_flags & O_DIRECT) {
-				if (!is_sync_kiocb(vio->vui_iocb))
-					is_aio = true;
-				io->ci_aio = cl_aio_alloc(vio->vui_iocb);
-				if (!io->ci_aio)
-					GOTO(out, rc = -ENOMEM);
-			}
 			/* Direct IO reads must also take range lock,
 			 * or multiple reads will try to work on the same pages
 			 * See LU-6227 for details. */
@@ -1618,29 +1623,18 @@ restart:
 	 * EIOCBQUEUED to the caller, So we could only return
 	 * number of bytes in non-AIO case.
 	 */
-	if (io->ci_nob > 0 && !is_aio) {
-		result += io->ci_nob;
-		count  -= io->ci_nob;
-		*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
+	if (io->ci_nob > 0) {
+		if (!is_aio) {
+			result += io->ci_nob;
+			*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
+		}
+		count -= io->ci_nob;
 
 		/* prepare IO restart */
 		if (count > 0 && args->via_io_subtype == IO_NORMAL)
 			args->u.normal.via_iter = vio->vui_iter;
 	}
 out:
-	if (io->ci_aio) {
-		/**
-		 * Drop one extra reference so that end_io() could be
-		 * called for this IO context, we could call it after
-		 * we make sure all AIO requests have been proceed.
-		 */
-		cl_sync_io_note(env, &io->ci_aio->cda_sync,
-				rc == -EIOCBQUEUED ? 0 : rc);
-		if (!is_aio) {
-			cl_aio_free(io->ci_aio);
-			io->ci_aio = NULL;
-		}
-	}
 	cl_io_fini(env, io);
 
 	CDEBUG(D_VFSTRACE,
@@ -1659,6 +1653,20 @@ out:
 		retried = io->ci_ndelay_tried;
 		ignore_lockless = io->ci_ignore_lockless;
 		goto restart;
+	}
+
+	if (io->ci_aio) {
+		/**
+		 * Drop one extra reference so that end_io() could be
+		 * called for this IO context, we could call it after
+		 * we make sure all AIO requests have been proceed.
+		 */
+		cl_sync_io_note(env, &io->ci_aio->cda_sync,
+				rc == -EIOCBQUEUED ? 0 : rc);
+		if (!is_aio) {
+			cl_aio_free(io->ci_aio);
+			io->ci_aio = NULL;
+		}
 	}
 
 	if (iot == CIT_READ) {
