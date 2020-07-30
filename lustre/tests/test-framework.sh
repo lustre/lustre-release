@@ -6545,10 +6545,8 @@ run_one_logged() {
 	local testmsg=$2
 	export tfile=f${testnum}.${TESTSUITE}
 	export tdir=d${testnum}.${TESTSUITE}
-	local name=$TESTSUITE.$TESTNAME.test_log.$(hostname -s).log
-	local test_log=$LOGDIR/$name
-	local zfs_log_name=$TESTSUITE.$TESTNAME.zfs_log
-	local zfs_debug_log=$LOGDIR/$zfs_log_name
+	local test_log=$TESTLOG_PREFIX.$TESTNAME.test_log.$(hostname -s).log
+	local zfs_debug_log=$TESTLOG_PREFIX.$TESTNAME.zfs_log
 	local SAVE_UMASK=$(umask)
 	local rc=0
 	umask 0022
