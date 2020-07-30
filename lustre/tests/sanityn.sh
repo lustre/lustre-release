@@ -588,16 +588,16 @@ test_19() { # bug3811
 run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
-	test_mkdir $DIR1/d20
+	test_mkdir $DIR1/$tdir
 	cancel_lru_locks
-	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
-	$MULTIOP $DIR1/f20 Ow8190c
-	$MULTIOP $DIR2/f20 Oz8194w8190c
-	$MULTIOP $DIR1/f20 Oz0r8190c
+	CNT=$($LCTL get_param -n llite.*.dump_page_cache | wc -l)
+	$MULTIOP $DIR1/$tdir/$tfile Ow8190c
+	$MULTIOP $DIR2/$tdir/$tfile Oz8194w8190c
+	$MULTIOP $DIR1/$tdir/$tfile Oz0r8190c
 	cancel_lru_locks
-	CNTD=$((`lctl get_param -n llite.*.dump_page_cache | wc -l` - $CNT))
-	[ $CNTD -gt 0 ] && \
-	    error $CNTD" page left in cache after lock cancel" || true
+	CNT2=$($LCTL get_param -n llite.*.dump_page_cache | wc -l)
+	[[ $CNT2 == $CNT ]] ||
+		error $((CNT2 - CNT))" page left in cache after lock cancel"
 }
 run_test 20 "test extra readahead page left in cache ===="
 

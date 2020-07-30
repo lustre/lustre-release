@@ -179,10 +179,13 @@ run_test fsx "Dual-mount fsx with DoM files"
 
 test_sanity()
 {
+	SANITY_ONLY=${SANITY_ONLY:-"36 39 40 41 42d 42e 43 46 56r 101e 119a \
+				    131 150 155a 155b 155c 155d 207 241 251"}
+	SANITY_REPEAT=${SANITY_REPEAT:-1}
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed
-	ONLY="36 39 40 41 42d 42e 43 46 56r 101e 119a 131 150 155a 155b 155c \
-		155d 207 241 251" OSC="mdc" DOM="yes" bash sanity.sh
+	ONLY=$SANITY_ONLY ONLY_REPEAT=$SANITY_REPEAT OSC="mdc" DOM="yes" \
+		bash sanity.sh
 
 	return 0
 }
@@ -190,9 +193,12 @@ run_test sanity "Run sanity with Data-on-MDT files"
 
 test_sanityn()
 {
+	SANITYN_ONLY=${SANITYN_ONLY:-"1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 \
+				      23 27 39 51a 51c 51d"}
+	SANITYN_REPEAT=${SANITYN_REPEAT:-1}
 	# XXX: to fix 60
-	ONLY="1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 23 27 39 51a 51c 51d" \
-		OSC="mdc" DOM="yes" bash sanityn.sh
+	ONLY=$SANITYN_ONLY ONLY_REPEAT=$SANITYN_REPEAT OSC="mdc" DOM="yes" \
+		bash sanityn.sh
 
 	return 0
 }
