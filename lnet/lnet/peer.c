@@ -605,7 +605,7 @@ lnet_peer_table_del_rtrs_locked(struct lnet_net *net,
 			gw_nid = lp->lpni_peer_net->lpn_peer->lp_primary_nid;
 
 			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_del_route(LNET_NIDNET(LNET_NID_ANY), gw_nid);
+			lnet_del_route(LNET_NET_ANY, gw_nid);
 			lnet_net_lock(LNET_LOCK_EX);
 		}
 	}

@@ -292,7 +292,7 @@ int ptl_initialize(int argc, char **argv)
 int jt_ptl_network(int argc, char **argv)
 {
 	struct libcfs_ioctl_data data;
-	__u32 net = LNET_NIDNET(LNET_NID_ANY);
+	__u32 net = LNET_NET_ANY;
 	int rc;
 
 	if (argc != 2) {
@@ -335,7 +335,7 @@ int jt_ptl_network(int argc, char **argv)
 	}
 
 	net = libcfs_str2net(argv[1]);
-	if (net == LNET_NIDNET(LNET_NID_ANY)) {
+	if (net == LNET_NET_ANY) {
 		fprintf(stderr, "Can't parse net %s\n", argv[1]);
 		return -1;
 	}
@@ -1128,7 +1128,7 @@ jt_ptl_del_route(int argc, char **argv)
 	}
 
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
-	data.cfg_net = g_net_set ? g_net : LNET_NIDNET(LNET_NID_ANY);
+	data.cfg_net = g_net_set ? g_net : LNET_NET_ANY;
 	data.cfg_nid = nid;
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_ROUTE, &data);
@@ -1247,7 +1247,7 @@ fault_attr_nid_parse(char *str, lnet_nid_t *nid_p)
 	/* NB: can't support range ipaddress except * and *@net */
 	if (strlen(str) > 2 && str[0] == '*' && str[1] == '@') {
 		net = libcfs_str2net(str + 2);
-		if (net == LNET_NIDNET(LNET_NID_ANY))
+		if (net == LNET_NET_ANY)
 			goto failed;
 
 		nid = LNET_MKNID(net, LNET_NIDADDR(LNET_NID_ANY));

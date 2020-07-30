@@ -1414,10 +1414,9 @@ lnet_find_best_lpni(struct lnet_ni *lni, lnet_nid_t dst_nid,
 		    struct lnet_peer *peer, __u32 net_id)
 {
 	struct lnet_peer_net *peer_net;
-	__u32 any_net = LNET_NIDNET(LNET_NID_ANY);
 
 	/* find the best_lpni on any local network */
-	if (net_id == any_net) {
+	if (net_id == LNET_NET_ANY) {
 		struct lnet_peer_ni *best_lpni = NULL;
 		struct lnet_peer_net *lpn;
 		list_for_each_entry(lpn, &peer->lp_peer_nets, lpn_peer_nets) {

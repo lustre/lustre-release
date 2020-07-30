@@ -671,7 +671,7 @@ libcfs_str2net(const char *str)
 	if (libcfs_str2net_internal(str, &net) != NULL)
 		return net;
 
-	return LNET_NIDNET(LNET_NID_ANY);
+	return LNET_NET_ANY;
 }
 
 lnet_nid_t

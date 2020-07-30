@@ -682,7 +682,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 
 	if (gateway == LNET_NID_ANY ||
 	    gateway == LNET_NID_LO_0 ||
-	    net == LNET_NIDNET(LNET_NID_ANY) ||
+	    net == LNET_NET_ANY ||
 	    LNET_NETTYP(net) == LOLND ||
 	    LNET_NIDNET(gateway) == net ||
 	    (hops != LNET_UNDEFINED_HOPS && (hops < 1 || hops > 255)))
@@ -865,7 +865,7 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 		lnet_peer_ni_decref_locked(lpni);
 	}
 
-	if (net != LNET_NIDNET(LNET_NID_ANY)) {
+	if (net != LNET_NET_ANY) {
 		rnet = lnet_find_rnet_locked(net);
 		if (!rnet) {
 			lnet_net_unlock(LNET_LOCK_EX);
@@ -923,7 +923,7 @@ delete_zombies:
 void
 lnet_destroy_routes (void)
 {
-	lnet_del_route(LNET_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
+	lnet_del_route(LNET_NET_ANY, LNET_NID_ANY);
 }
 
 int lnet_get_rtr_pool_cfg(int cpt, struct lnet_ioctl_pool_cfg *pool_cfg)

@@ -801,7 +801,7 @@ int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
 	}
 
 	rnet = libcfs_str2net(nw);
-	if (rnet == LNET_NIDNET(LNET_NID_ANY)) {
+	if (rnet == LNET_NET_ANY) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
 			 "\"cannot parse remote net %s\"", nw);
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
@@ -918,7 +918,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 	lnet_nid_t gateway_nid;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	int l_errno = 0;
-	__u32 net = LNET_NIDNET(LNET_NID_ANY);
+	__u32 net = LNET_NET_ANY;
 	int i;
 	struct cYAML *root = NULL, *route = NULL, *item = NULL;
 	struct cYAML *first_seq = NULL;
@@ -927,7 +927,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 
 	if (nw != NULL) {
 		net = libcfs_str2net(nw);
-		if (net == LNET_NIDNET(LNET_NID_ANY)) {
+		if (net == LNET_NET_ANY) {
 			snprintf(err_str,
 				 sizeof(err_str),
 				 "\"cannot parse net '%s'\"", nw);
@@ -937,7 +937,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 
 	} else {
 		/* show all routes without filtering on net */
-		net = LNET_NIDNET(LNET_NID_ANY);
+		net = LNET_NET_ANY;
 	}
 
 	if (gw != NULL) {
@@ -985,7 +985,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 		}
 
 		/* filter on provided data */
-		if (net != LNET_NIDNET(LNET_NID_ANY) &&
+		if (net != LNET_NET_ANY &&
 		    net != data.cfg_net)
 			continue;
 
@@ -1663,7 +1663,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		goto out;
 	}
 
-	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
+	if (nw_descr->nw_id == LNET_NET_ANY) {
 		snprintf(err_str,
 			sizeof(err_str),
 			"\"cannot parse net '%s'\"",
@@ -1739,7 +1739,7 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
 		return LUSTRE_CFG_RC_NO_ERR;
 
-	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
+	if (nw_descr->nw_id == LNET_NET_ANY) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"cannot parse net '%s'\"",
@@ -1903,8 +1903,8 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_element_stats *stats;
 	struct lnet_ioctl_element_msg_stats msg_stats;
 	struct lnet_ioctl_local_ni_hstats hstats;
-	__u32 net = LNET_NIDNET(LNET_NID_ANY);
-	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
+	__u32 net = LNET_NET_ANY;
+	__u32 prev_net = LNET_NET_ANY;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
 	int l_errno = 0;
 	struct cYAML *root = NULL, *tunables = NULL,
@@ -1928,7 +1928,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 	if (nw != NULL) {
 		net = libcfs_str2net(nw);
-		if (net == LNET_NIDNET(LNET_NID_ANY)) {
+		if (net == LNET_NET_ANY) {
 			snprintf(err_str,
 				 sizeof(err_str),
 				 "\"cannot parse net '%s'\"", nw);
@@ -1967,7 +1967,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		rc_net = LNET_NIDNET(ni_data->lic_nid);
 
 		/* filter on provided data */
-		if (net != LNET_NIDNET(LNET_NID_ANY) &&
+		if (net != LNET_NET_ANY &&
 		    net != rc_net)
 			continue;
 

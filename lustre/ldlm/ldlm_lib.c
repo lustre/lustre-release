@@ -541,7 +541,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (lustre_cfg_buf(lcfg, 4)) {
 		__u32 refnet = libcfs_str2net(lustre_cfg_string(lcfg, 4));
 
-		if (refnet == LNET_NIDNET(LNET_NID_ANY)) {
+		if (refnet == LNET_NET_ANY) {
 			rc = -EINVAL;
 			CERROR("%s: bad mount option 'network=%s': rc = %d\n",
 			       obd->obd_name, lustre_cfg_string(lcfg, 4),
