@@ -1768,6 +1768,7 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, enum ldlm_lru_flags lru_flags)
  *   redundant unused locks are canceled locally;
  * - also cancel locally unused aged locks;
  * - do not cancel more than \a max locks;
+ * - if some locks are cancelled, try to cancel at least \a batch locks
  * - GET the found locks and add them into the \a cancels list.
  *
  * A client lock can be added to the l_bl_ast list only when it is
@@ -1792,7 +1793,8 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, enum ldlm_lru_flags lru_flags)
  *				 discard those pages.
  */
 static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
-				 struct list_head *cancels, int min, int max,
+				 struct list_head *cancels,
+				 int min, int max, int batch,
 				 enum ldlm_lru_flags lru_flags)
 {
 	ldlm_cancel_lru_policy_t pf;
@@ -1800,10 +1802,26 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 	int no_wait = lru_flags & LDLM_LRU_FLAG_NO_WAIT;
 	ENTRY;
 
+	/*
+	 * Let only 1 thread to proceed. However, not for those which have the
+	 * @max limit given (ELC), as LRU may be left not cleaned up in full.
+	 */
+	if (max == 0) {
+		if (test_and_set_bit(LDLM_LRU_CANCEL, &ns->ns_flags))
+			RETURN(0);
+	} else if (test_bit(LDLM_LRU_CANCEL, &ns->ns_flags))
+		RETURN(0);
+
 	LASSERT(ergo(max, min <= max));
+	/* No sense to give @batch for ELC */
+	LASSERT(ergo(max, batch == 0));
 
 	if (!ns_connect_lru_resize(ns))
 		min = max_t(int, min, ns->ns_nr_unused - ns->ns_max_unused);
+
+	/* If at least 1 lock is to be cancelled, cancel at least @batch locks */
+	if (min && min < batch)
+		min = batch;
 
 	pf = ldlm_cancel_lru_policy(ns, lru_flags);
 	LASSERT(pf != NULL);
@@ -1937,7 +1955,14 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		unlock_res_and_lock(lock);
 		lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 		added++;
+		/* Once a lock added, batch the requested amount */
+		if (min == 0)
+			min = batch;
 	}
+
+	if (max == 0)
+		clear_bit(LDLM_LRU_CANCEL, &ns->ns_flags);
+
 	RETURN(added);
 }
 
@@ -1948,7 +1973,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
 {
 	int added;
 
-	added = ldlm_prepare_lru_list(ns, cancels, min, max, lru_flags);
+	added = ldlm_prepare_lru_list(ns, cancels, min, max, 0, lru_flags);
 	if (added <= 0)
 		return added;
 
@@ -1976,7 +2001,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int min,
 	 * Just prepare the list of locks, do not actually cancel them yet.
 	 * Locks are cancelled later in a separate thread.
 	 */
-	count = ldlm_prepare_lru_list(ns, &cancels, min, 0, lru_flags);
+	count = ldlm_prepare_lru_list(ns, &cancels, min, 0, 0, lru_flags);
 	rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, cancel_flags);
 	if (rc == 0)
 		RETURN(count);
