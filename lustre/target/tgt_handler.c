@@ -684,8 +684,15 @@ static int process_req_last_xid(struct ptlrpc_request *req)
 	 * replay request will have the larger xid than "exp_last_xid"
 	 */
 	if (req->rq_export->exp_conn_cnt >
-	    lustre_msg_get_conn_cnt(req->rq_reqmsg))
+	    lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
+		CDEBUG(D_RPCTRACE,
+		       "Dropping request %llu from an old epoch %u/%u\n",
+		       req->rq_xid,
+		       lustre_msg_get_conn_cnt(req->rq_reqmsg),
+		       req->rq_export->exp_conn_cnt);
+		req->rq_no_reply = 1;
 		GOTO(out, rc = -ESTALE);
+	}
 
 	/* try to release in-memory reply data */
 	if (tgt_is_multimodrpcs_client(exp)) {
