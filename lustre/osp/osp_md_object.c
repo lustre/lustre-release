@@ -164,7 +164,12 @@ int osp_md_create(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	LASSERT(attr->la_valid & LA_TYPE);
+	if (!(attr->la_valid & LA_TYPE)) {
+		CERROR("%s: create type not specified: valid %llx\n",
+		       dt->do_lu.lo_dev->ld_obd->obd_name, attr->la_valid);
+		GOTO(out, rc = -EINVAL);
+	}
+
 	rc = OSP_UPDATE_RPC_PACK(env, out_create_pack, update,
 				 lu_object_fid(&dt->do_lu), attr, hint, dof);
 	if (rc != 0)

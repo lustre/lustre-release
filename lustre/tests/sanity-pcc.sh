@@ -483,7 +483,7 @@ test_2a() {
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 	file=$DIR/$tdir/multiop
-	mkdir -p $DIR/$tdir
+	$LFS mkdir -i -1 -c $MDSCOUNT $DIR/$tdir
 	rm -f $file
 
 	do_facet $SINGLEAGT $LFS project -sp $project_id $DIR/$tdir ||
