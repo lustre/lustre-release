@@ -4212,8 +4212,7 @@ static int str2quotaid(__u32 *id, const char *arg)
 	projid_tmp = strtoul(arg, &endptr, 10);
 	if (*endptr != '\0')
 		return -EINVAL;
-	if (projid_tmp > UINT32_MAX ||
-	    (projid_tmp == ULONG_MAX && (errno == ERANGE)))
+	if (projid_tmp >= UINT32_MAX)
 		return -ERANGE;
 
 	*id = projid_tmp;
