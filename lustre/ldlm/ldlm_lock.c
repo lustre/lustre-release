@@ -844,14 +844,15 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock,
  */
 void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 {
-        struct ldlm_namespace *ns;
-        ENTRY;
+	struct ldlm_namespace *ns;
 
-        lock_res_and_lock(lock);
+	ENTRY;
 
-        ns = ldlm_lock_to_ns(lock);
+	lock_res_and_lock(lock);
 
-        ldlm_lock_decref_internal_nolock(lock, mode);
+	ns = ldlm_lock_to_ns(lock);
+
+	ldlm_lock_decref_internal_nolock(lock, mode);
 
 	if ((ldlm_is_local(lock) || lock->l_req_mode == LCK_GROUP) &&
 	    !lock->l_readers && !lock->l_writers) {
@@ -868,52 +869,49 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 	}
 
 	if (!lock->l_readers && !lock->l_writers && ldlm_is_cbpending(lock)) {
+		unsigned int mask = D_DLMTRACE;
+
 		/* If we received a blocked AST and this was the last reference,
 		 * run the callback. */
 		if (ldlm_is_ns_srv(lock) && lock->l_export)
-                        CERROR("FL_CBPENDING set on non-local lock--just a "
-                               "warning\n");
+			mask |= D_WARNING;
+		LDLM_DEBUG_LIMIT(mask, lock,
+				 "final decref done on %sCBPENDING lock",
+				 mask & D_WARNING ? "non-local " : "");
 
-                LDLM_DEBUG(lock, "final decref done on cbpending lock");
-
-                LDLM_LOCK_GET(lock); /* dropped by bl thread */
-                ldlm_lock_remove_from_lru(lock);
-                unlock_res_and_lock(lock);
+		LDLM_LOCK_GET(lock); /* dropped by bl thread */
+		ldlm_lock_remove_from_lru(lock);
+		unlock_res_and_lock(lock);
 
 		if (ldlm_is_fail_loc(lock))
-                        OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+			OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
 		if (ldlm_is_atomic_cb(lock) ||
                     ldlm_bl_to_thread_lock(ns, NULL, lock) != 0)
-                        ldlm_handle_bl_callback(ns, NULL, lock);
+			ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns_is_client(ns) &&
-                   !lock->l_readers && !lock->l_writers &&
+		   !lock->l_readers && !lock->l_writers &&
 		   !ldlm_is_no_lru(lock) &&
 		   !ldlm_is_bl_ast(lock) &&
 		   !ldlm_is_converting(lock)) {
 
-                LDLM_DEBUG(lock, "add lock into lru list");
-
-                /* If this is a client-side namespace and this was the last
-                 * reference, put it on the LRU. */
-                ldlm_lock_add_to_lru(lock);
-                unlock_res_and_lock(lock);
+		/* If this is a client-side namespace and this was the last
+		 * reference, put it on the LRU.
+		 */
+		ldlm_lock_add_to_lru(lock);
+		unlock_res_and_lock(lock);
+		LDLM_DEBUG(lock, "add lock into lru list");
 
 		if (ldlm_is_fail_loc(lock))
-                        OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+			OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
-                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE
-                 * are not supported by the server, otherwise, it is done on
-                 * enqueue. */
-                if (!exp_connect_cancelset(lock->l_conn_export) &&
-                    !ns_connect_lru_resize(ns))
-			ldlm_cancel_lru(ns, 0, LCF_ASYNC, 0);
-        } else {
-                LDLM_DEBUG(lock, "do not add lock into lru list");
-                unlock_res_and_lock(lock);
-        }
+		ldlm_cancel_lru(ns, 0, LCF_ASYNC, 0);
+	} else {
+		LDLM_DEBUG(lock, "do not add lock into lru list");
+		unlock_res_and_lock(lock);
+	}
 
-        EXIT;
+	EXIT;
 }
 
 /**

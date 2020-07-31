@@ -2001,7 +2001,8 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int min,
 	 * Just prepare the list of locks, do not actually cancel them yet.
 	 * Locks are cancelled later in a separate thread.
 	 */
-	count = ldlm_prepare_lru_list(ns, &cancels, min, 0, 0, lru_flags);
+	count = ldlm_prepare_lru_list(ns, &cancels, min, 0,
+				      ns->ns_cancel_batch, lru_flags);
 	rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, cancel_flags);
 	if (rc == 0)
 		RETURN(count);

@@ -6060,9 +6060,9 @@ cancel_lru_locks() {
 
 default_lru_size()
 {
-        NR_CPU=$(grep -c "processor" /proc/cpuinfo)
-        DEFAULT_LRU_SIZE=$((100 * NR_CPU))
-        echo "$DEFAULT_LRU_SIZE"
+	local nr_cpu=$(grep -c "processor" /proc/cpuinfo)
+
+	echo $((100 * nr_cpu))
 }
 
 lru_resize_enable()
@@ -6072,7 +6072,10 @@ lru_resize_enable()
 
 lru_resize_disable()
 {
-    lctl set_param ldlm.namespaces.*$1*.lru_size $(default_lru_size)
+	local dev=${1}
+	local lru_size=${2:-$(default_lru_size)}
+
+	$LCTL set_param ldlm.namespaces.*$dev*.lru_size=$lru_size
 }
 
 flock_is_enabled()

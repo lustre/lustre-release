@@ -23371,6 +23371,41 @@ test_424() {
 }
 run_test 424 "simulate ENOMEM in ptl_send_rpc bulk reply ME attach"
 
+test_425() {
+	test_mkdir -c -1 $DIR/$tdir
+	$LFS setstripe -c -1 $DIR/$tdir
+
+	lru_resize_disable "" 100
+	stack_trap "lru_resize_enable" EXIT
+
+	sleep 5
+
+	for i in $(seq $((MDSCOUNT * 125))); do
+		local t=$DIR/$tdir/$tfile_$i
+
+		dd if=/dev/zero of=$t bs=4K count=1 > /dev/null 2>&1 ||
+			error_noexit "Create file $t"
+	done
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+
+	for oscparam in $($LCTL list_param ldlm.namespaces.*osc-[-0-9a-f]*); do
+		local lru_size=$($LCTL get_param -n $oscparam.lru_size)
+		local lock_count=$($LCTL get_param -n $oscparam.lock_count)
+
+		[ $lock_count -le $lru_size ] ||
+			error "osc lock count $lock_count > lru size $lru_size"
+	done
+
+	for mdcparam in $($LCTL list_param ldlm.namespaces.*mdc-*); do
+		local lru_size=$($LCTL get_param -n $mdcparam.lru_size)
+		local lock_count=$($LCTL get_param -n $mdcparam.lock_count)
+
+		[ $lock_count -le $lru_size ] ||
+			error "mdc lock count $lock_count > lru size $lru_size"
+	done
+}
+run_test 425 "lock count should not exceed lru size"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

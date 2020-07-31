@@ -68,6 +68,7 @@ extern struct kset *ldlm_svc_kset;
  * client shows interest in that lock, e.g. glimpse is occured. */
 #define LDLM_DIRTY_AGE_LIMIT (10)
 #define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024
+#define LDLM_DEFAULT_LRU_SHRINK_BATCH (16)
 
 /**
  * LDLM non-error return states
@@ -442,6 +443,12 @@ struct ldlm_namespace {
 	 * controlled by available memory on this client and on server.
 	 */
 	unsigned int		ns_max_unused;
+
+	/**
+	 * Cancel batch, if unused lock count exceed lru_size
+	 * Only be used if LRUR disable.
+	 */
+	unsigned int            ns_cancel_batch;
 
 	/** Maximum allowed age (last used time) for locks in the LRU.  Set in
 	 * seconds from userspace, but stored in ns to avoid repeat conversions.
