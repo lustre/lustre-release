@@ -2917,6 +2917,13 @@ static int osd_inode_setattr(const struct lu_env *env,
 		/* always keep S_NOCMTIME */
 		inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
 				 S_NOCMTIME;
+#if defined(S_ENCRYPTED)
+		/* Always remove S_ENCRYPTED, because ldiskfs must not be
+		 * aware of encryption status. It is just stored into LMA
+		 * so that it can be forwared to client side.
+		 */
+		inode->i_flags &= ~S_ENCRYPTED;
+#endif
 		/*
 		 * Ext4 did not transfer inherit flags from
 		 * @inode->i_flags to raw inode i_flags when writing
