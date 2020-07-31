@@ -254,8 +254,9 @@ struct ldlm_pool {
 	__u64			pl_server_lock_volume;
 	/** Current biggest client lock volume. Protected by pl_lock. */
 	__u64			pl_client_lock_volume;
-	/** Lock volume factor. SLV on client is calculated as following:
-	 *  server_slv * lock_volume_factor. */
+	/** Lock volume factor, shown in percents in procfs, but internally
+	 *  Client SLV calculated as: server_slv * lock_volume_factor >> 8.
+	 */
 	atomic_t		pl_lock_volume_factor;
 	/** Time when last SLV from server was obtained. */
 	time64_t		pl_recalc_time;

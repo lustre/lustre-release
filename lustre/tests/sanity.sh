@@ -11814,18 +11814,18 @@ test_124a() {
 		skip "Limit is too small $LIMIT"
 	fi
 
-        # Make LVF so higher that sleeping for $SLEEP is enough to _start_
-        # killing locks. Some time was spent for creating locks. This means
-        # that up to the moment of sleep finish we must have killed some of
-        # them (10-100 locks). This depends on how fast ther were created.
-        # Many of them were touched in almost the same moment and thus will
-        # be killed in groups.
-        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP * $LIMIT / $LRU_SIZE))
+	# Make LVF so higher that sleeping for $SLEEP is enough to _start_
+	# killing locks. Some time was spent for creating locks. This means
+	# that up to the moment of sleep finish we must have killed some of
+	# them (10-100 locks). This depends on how fast ther were created.
+	# Many of them were touched in almost the same moment and thus will
+	# be killed in groups.
+	local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP * $LIMIT / $LRU_SIZE * 100))
 
-        # Use $LRU_SIZE_B here to take into account real number of locks
-        # created in the case of CMD, LRU_SIZE_B != $NR in most of cases
-        local LRU_SIZE_B=$LRU_SIZE
-        log "LVF=$LVF"
+	# Use $LRU_SIZE_B here to take into account real number of locks
+	# created in the case of CMD, LRU_SIZE_B != $NR in most of cases
+	local LRU_SIZE_B=$LRU_SIZE
+	log "LVF=$LVF"
 	local OLD_LVF=$($LCTL get_param -n $NSDIR.pool.lock_volume_factor)
 	log "OLD_LVF=$OLD_LVF"
 	$LCTL set_param -n $NSDIR.pool.lock_volume_factor $LVF

@@ -1679,7 +1679,7 @@ static enum ldlm_policy_res ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
 	lvf = ldlm_pool_get_lvf(pl);
 	la = div_u64(ktime_to_ns(ktime_sub(cur, lock->l_last_used)),
 		     NSEC_PER_SEC);
-	lv = lvf * la * ns->ns_nr_unused;
+	lv = lvf * la * ns->ns_nr_unused >> 8;
 
 	/* Inform pool about current CLV to see it via debugfs. */
 	ldlm_pool_set_clv(pl, lv);
