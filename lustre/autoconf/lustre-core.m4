@@ -393,6 +393,13 @@ No openssl-devel headers found, unable to build l_getsepol and SELinux status ch
 AC_MSG_RESULT([$enable_getsepol])
 ]) # LC_OPENSSL_GETSEPOL
 
+# LC_HAVE_LIBAIO
+AC_DEFUN([LC_HAVE_LIBAIO], [
+	AC_CHECK_HEADER([libaio.h],
+		enable_libaio="yes",
+		AC_MSG_WARN([libaio is not installed in the system]))
+]) # LC_HAVE_LIBAIO
+
 AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
 LB_CHECK_COMPILE([if get_projid exists],
 get_projid, [
@@ -2795,6 +2802,7 @@ AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 AM_CONDITIONAL(SELINUX, test "$SELINUX" = "-lselinux")
 AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes)
 AM_CONDITIONAL(LLCRYPT, test x$enable_llcrypt = xyes)
+AM_CONDITIONAL(LIBAIO, test x$enable_libaio = xyes)
 ]) # LC_CONDITIONALS
 
 #

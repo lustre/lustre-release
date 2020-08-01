@@ -21866,6 +21866,20 @@ test_398c() { # LU-4198
 }
 run_test 398c "run fio to test AIO"
 
+test_398d() { #  LU-13846
+	test -f aiocp || skip_env "no aiocp installed"
+	local aio_file=$DIR/aio_file
+
+	$LFS setstripe -c -1 -S 1M $DIR/$tfile $aio_file
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=64
+	aiocp -a $PAGE_SIZE -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file
+
+	diff $DIR/$tfile $aio_file || "file diff after aiocp"
+	rm -rf $DIR/$tfile $aio_file
+}
+run_test 398d "run aiocp to verify block size > stripe size"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

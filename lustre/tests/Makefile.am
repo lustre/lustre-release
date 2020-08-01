@@ -77,6 +77,9 @@ THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 THETESTS += create_foreign_file parse_foreign_file
 THETESTS += create_foreign_dir parse_foreign_dir
 THETESTS += check_fallocate
+if LIBAIO
+THETESTS += aiocp
+endif
 
 if TESTS
 if MPITESTS
@@ -110,6 +113,9 @@ ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
+if LIBAIO
+aiocp_LDADD= -laio
+endif
 if UBUNTU
 statx_CPPFLAGS := -I/usr/include/libiberty
 endif
