@@ -155,26 +155,44 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         RETURN(inode);
 }
 
-static void ll_invalidate_negative_children(struct inode *dir)
+/* mark negative sub file dentries invalid and prune unused dentries */
+static void ll_prune_negative_children(struct inode *dir)
 {
-	struct dentry *dentry, *tmp_subdir;
+	struct dentry *dentry;
+	struct dentry *child;
 
+	ENTRY;
+
+restart:
 	spin_lock(&dir->i_lock);
 	hlist_for_each_entry(dentry, &dir->i_dentry, d_alias) {
 		spin_lock(&dentry->d_lock);
-		if (!list_empty(&dentry->d_subdirs)) {
-			struct dentry *child;
+		list_for_each_entry(child, &dentry->d_subdirs, d_child) {
+			if (child->d_inode)
+				continue;
 
-			list_for_each_entry_safe(child, tmp_subdir,
-						 &dentry->d_subdirs,
-						 d_child) {
-				if (child->d_inode == NULL)
-					d_lustre_invalidate(child, 1);
+			spin_lock_nested(&child->d_lock, DENTRY_D_LOCK_NESTED);
+			__d_lustre_invalidate(child);
+			if (!ll_d_count(child)) {
+				dget_dlock(child);
+				__d_drop(child);
+				spin_unlock(&child->d_lock);
+				spin_unlock(&dentry->d_lock);
+				spin_unlock(&dir->i_lock);
+
+				CDEBUG(D_DENTRY, "prune negative dentry %pd\n",
+				       child);
+
+				dput(child);
+				goto restart;
 			}
+			spin_unlock(&child->d_lock);
 		}
 		spin_unlock(&dentry->d_lock);
 	}
 	spin_unlock(&dir->i_lock);
+
+	EXIT;
 }
 
 int ll_test_inode_by_fid(struct inode *inode, void *opaque)
@@ -343,18 +361,18 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 							ll_test_inode_by_fid,
 							(void *)&lli->lli_pfid);
 			if (master_inode) {
-				ll_invalidate_negative_children(master_inode);
+				ll_prune_negative_children(master_inode);
 				iput(master_inode);
 			}
 		} else {
-			ll_invalidate_negative_children(inode);
+			ll_prune_negative_children(inode);
 		}
 	}
 
 	if ((bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM)) &&
 	    inode->i_sb->s_root != NULL &&
 	    inode != inode->i_sb->s_root->d_inode)
-		ll_invalidate_aliases(inode);
+		ll_prune_aliases(inode);
 
 	if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM))
 		forget_all_cached_acls(inode);

@@ -1145,7 +1145,7 @@ int ll_d_init(struct dentry *de);
 extern const struct dentry_operations ll_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
-void ll_invalidate_aliases(struct inode *);
+void ll_prune_aliases(struct inode *inode);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 int ll_revalidate_it_finish(struct ptlrpc_request *request,
                             struct lookup_intent *it, struct dentry *de);
@@ -1613,28 +1613,18 @@ static inline void __d_lustre_invalidate(struct dentry *dentry)
 
 /*
  * Mark dentry INVALID, if dentry refcount is zero (this is normally case for
- * ll_md_blocking_ast), unhash this dentry, and let dcache to reclaim it later;
- * else dput() of the last refcount will unhash this dentry and kill it.
+ * ll_md_blocking_ast), it will be pruned by ll_prune_aliases() and
+ * ll_prune_negative_children(); otherwise dput() of the last refcount will
+ * unhash this dentry and kill it.
  */
-static inline void d_lustre_invalidate(struct dentry *dentry, int nested)
+static inline void d_lustre_invalidate(struct dentry *dentry)
 {
 	CDEBUG(D_DENTRY, "invalidate dentry %pd (%p) parent %p inode %p refc %d\n",
 	       dentry, dentry,
 	       dentry->d_parent, dentry->d_inode, ll_d_count(dentry));
 
-	spin_lock_nested(&dentry->d_lock,
-			 nested ? DENTRY_D_LOCK_NESTED : DENTRY_D_LOCK_NORMAL);
+	spin_lock(&dentry->d_lock);
 	__d_lustre_invalidate(dentry);
-	/*
-	 * We should be careful about dentries created by d_obtain_alias().
-	 * These dentries are not put in the dentry tree, instead they are
-	 * linked to sb->s_anon through dentry->d_hash.
-	 * shrink_dcache_for_umount() shrinks the tree and sb->s_anon list.
-	 * If we unhashed such a dentry, unmount would not be able to find
-	 * it and busy inodes would be reported.
-	 */
-	if (ll_d_count(dentry) == 0 && !(dentry->d_flags & DCACHE_DISCONNECTED))
-		__d_drop(dentry);
 	spin_unlock(&dentry->d_lock);
 }
 
