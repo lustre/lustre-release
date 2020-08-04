@@ -3559,7 +3559,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct ldlm_extent *)0)->gid));
 
 	/* Checks for struct ldlm_inodebits */
-	LASSERTF((int)sizeof(struct ldlm_inodebits) == 16, "found %lld\n",
+	LASSERTF((int)sizeof(struct ldlm_inodebits) == 24, "found %lld\n",
 		 (long long)(int)sizeof(struct ldlm_inodebits));
 	LASSERTF((int)offsetof(struct ldlm_inodebits, bits) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_inodebits, bits));
@@ -3569,6 +3569,11 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_inodebits, try_bits));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->try_bits) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->try_bits));
+	LASSERTF((int)offsetof(struct ldlm_inodebits, li_gid) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_inodebits, li_gid));
+	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_gid) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->li_gid));
+
 
 	/* Checks for struct ldlm_flock_wire */
 	LASSERTF((int)sizeof(struct ldlm_flock_wire) == 32, "found %lld\n",

@@ -1623,7 +1623,7 @@ static void __ldlm_resource_add_lock(struct ldlm_resource *res,
 		list_add(&lock->l_res_link, head);
 
 	if (res->lr_type == LDLM_IBITS)
-		ldlm_inodebits_add_lock(res, head, lock);
+		ldlm_inodebits_add_lock(res, head, lock, tail);
 
 	ldlm_resource_dump(D_INFO, res);
 }
@@ -1655,6 +1655,11 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 
 /**
  * Insert a lock into resource before the specified lock.
+ *
+ * IBITS waiting locks are to be inserted to the ibit lists as well, and only
+ * the insert-after operation is supported for them, because the set of bits
+ * of the previous and the new locks must match. Therefore, get the previous
+ * lock and insert after.
  */
 void ldlm_resource_insert_lock_before(struct ldlm_lock *original,
                                       struct ldlm_lock *new)

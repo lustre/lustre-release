@@ -208,7 +208,7 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
 
 int ldlm_inodebits_alloc_lock(struct ldlm_lock *lock);
 void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
-			     struct ldlm_lock *lock);
+			     struct ldlm_lock *lock, bool tail);
 void ldlm_inodebits_unlink_lock(struct ldlm_lock *lock);
 
 /* ldlm_flock.c */

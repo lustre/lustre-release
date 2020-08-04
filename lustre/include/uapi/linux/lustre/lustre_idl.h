@@ -2438,6 +2438,7 @@ struct ldlm_inodebits {
 		__u64 try_bits; /* optional bits to try */
 		__u64 cancel_bits; /* for lock convert */
 	};
+	__u64 li_gid;
 };
 
 struct ldlm_flock_wire {

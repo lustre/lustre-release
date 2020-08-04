@@ -1225,7 +1225,8 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	/* resent case */
 	if (!lustre_handle_is_used(&lhc->mlh_reg_lh)) {
 		mdt_lock_handle_init(lhc);
-		mdt_lock_reg_init(lhc, (*lockp)->l_req_mode);
+		mdt_lh_reg_init(lhc, *lockp);
+
 		/* This will block MDT thread but it should be fine until
 		 * client caches small amount of data for DoM, which should be
 		 * smaller than one BRW RPC and should be able to be

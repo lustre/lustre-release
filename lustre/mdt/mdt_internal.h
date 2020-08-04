@@ -371,6 +371,7 @@ struct mdt_lock_handle {
 	/* Regular lock */
 	struct lustre_handle	mlh_reg_lh;
 	enum ldlm_mode		mlh_reg_mode;
+	__u64			mlh_gid;
 
 	/* Pdirops lock */
 	struct lustre_handle	mlh_pdo_lh;
@@ -780,6 +781,7 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 		       const struct lu_name *lname);
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, enum ldlm_mode lm);
+void mdt_lh_reg_init(struct mdt_lock_handle *lh, struct ldlm_lock *lock);
 
 int mdt_lock_setup(struct mdt_thread_info *info, struct mdt_object *mo,
 		   struct mdt_lock_handle *lh);

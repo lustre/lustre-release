@@ -1513,6 +1513,7 @@ check_ldlm_inodebits(void)
 	CHECK_STRUCT(ldlm_inodebits);
 	CHECK_MEMBER(ldlm_inodebits, bits);
 	CHECK_MEMBER(ldlm_inodebits, try_bits);
+	CHECK_MEMBER(ldlm_inodebits, li_gid);
 }
 
 static void

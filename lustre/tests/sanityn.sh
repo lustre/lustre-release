@@ -5295,7 +5295,7 @@ test_106c() {
 }
 run_test 106c "Verify statx attributes mask"
 
-test_107() { # LU-1031
+test_107a() { # LU-1031
 	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=10
 	local gid1=14091995
 	local gid2=16022000
@@ -5308,7 +5308,7 @@ test_107() { # LU-1031
 	local MULTIPID2=$!
 	kill -USR1 $MULTIPID2
 	sleep 2
-	if [[ `ps h -o comm -p $MULTIPID2` == "" ]]; then
+	if [[ $(ps h -o comm -p $MULTIPID2) == "" ]]; then
 		error "First grouplock does not block second one"
 	else
 		echo "First grouplock blocks second one"
@@ -5317,7 +5317,55 @@ test_107() { # LU-1031
 	wait $MULTIPID1
 	wait $MULTIPID2
 }
-run_test 107 "Basic grouplock conflict"
+run_test 107a "Basic grouplock conflict"
+
+test_107b() {
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=10
+	local gid1=14091995
+	local gid2=16022000
+
+	$LFS getstripe $DIR1/$tfile
+
+	multiop_bg_pause $DIR1/$tfile OG${gid1}_g${gid1}c || return 1
+	local MULTIPID1=$!
+	multiop $DIR2/$tfile Or10c &
+	local MULTIPID2=$!
+	sleep 2
+
+	if [[ $(ps h -o comm -p $MULTIPID2) == "" ]]; then
+		error "Grouplock does not block IO"
+	else
+		echo "Grouplock blocks IO"
+	fi
+
+	multiop $DIR2/$tfile OG${gid2}_g${gid2}c &
+	local MULTIPID3=$!
+	sleep 2
+	if [[ $(ps h -o comm -p $MULTIPID3) == "" ]]; then
+		error "First grouplock does not block second one"
+	else
+		echo "First grouplock blocks second one"
+	fi
+
+	kill -USR1 $MULTIPID1
+	sleep 2
+
+	if [[ $(ps h -o comm -p $MULTIPID3) == "" ]]; then
+		error "Second grouplock thread disappeared"
+	fi
+
+	if [[ $(ps h -o comm -p $MULTIPID2) == "" ]]; then
+		error "Second grouplock does not block IO"
+	else
+		echo "Second grouplock blocks IO"
+	fi
+
+	kill -USR1 $MULTIPID3
+	wait $MULTIPID1
+	wait $MULTIPID2
+	wait $MULTIPID3
+}
+run_test 107b "Grouplock is added to the head of waiting list"
 
 log "cleanup: ======================================================"
 
