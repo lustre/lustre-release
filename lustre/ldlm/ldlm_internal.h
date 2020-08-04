@@ -94,17 +94,6 @@ void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *,
 struct ldlm_namespace *ldlm_namespace_first_locked(enum ldlm_side);
 
 /* ldlm_request.c */
-/* Cancel lru flag, it indicates we cancel aged locks. */
-enum ldlm_lru_flags {
-	LDLM_LRU_FLAG_NO_WAIT	= 0x1, /* Cancel locks w/o blocking (neither
-					* sending nor waiting for any RPCs) */
-	LDLM_LRU_FLAG_CLEANUP	= 0x2, /* Used when clearing lru, tells
-					* prepare_lru_list to set discard flag
-					* on PR extent locks so we don't waste
-					* time saving pages that will be
-					* discarded momentarily */
-};
-
 int ldlm_cancel_lru(struct ldlm_namespace *ns, int min,
 		    enum ldlm_cancel_flags cancel_flags,
 		    enum ldlm_lru_flags lru_flags);
@@ -185,6 +174,7 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns,
 			   struct ldlm_lock_desc *ld,
 			   struct list_head *cancels, int count,
 			   enum ldlm_cancel_flags cancel_flags);
+int ldlm_bl_to_thread_ns(struct ldlm_namespace *ns);
 int ldlm_bl_thread_wakeup(void);
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,

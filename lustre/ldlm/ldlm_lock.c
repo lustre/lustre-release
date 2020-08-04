@@ -905,7 +905,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 		if (ldlm_is_fail_loc(lock))
 			OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
-		ldlm_cancel_lru(ns, 0, LCF_ASYNC, 0);
+		ldlm_pool_recalc(&ns->ns_pool, true);
 	} else {
 		LDLM_DEBUG(lock, "do not add lock into lru list");
 		unlock_res_and_lock(lock);

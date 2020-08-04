@@ -332,19 +332,19 @@ static void ldlm_srv_pool_push_slv(struct ldlm_pool *pl)
  *
  * \pre ->pl_lock is not locked.
  */
-static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
+static int ldlm_srv_pool_recalc(struct ldlm_pool *pl, bool force)
 {
 	timeout_t recalc_interval_sec;
 
 	ENTRY;
 
 	recalc_interval_sec = ktime_get_seconds() - pl->pl_recalc_time;
-	if (recalc_interval_sec < pl->pl_recalc_period)
+	if (!force && recalc_interval_sec < pl->pl_recalc_period)
 		RETURN(0);
 
 	spin_lock(&pl->pl_lock);
 	recalc_interval_sec = ktime_get_seconds() - pl->pl_recalc_time;
-	if (recalc_interval_sec < pl->pl_recalc_period) {
+	if (!force && recalc_interval_sec < pl->pl_recalc_period) {
 		spin_unlock(&pl->pl_lock);
 		RETURN(0);
 	}
@@ -471,7 +471,7 @@ static void ldlm_cli_pool_pop_slv(struct ldlm_pool *pl)
 /**
  * Recalculates client size pool \a pl according to current SLV and Limit.
  */
-static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
+static int ldlm_cli_pool_recalc(struct ldlm_pool *pl, bool force)
 {
 	timeout_t recalc_interval_sec;
 	int ret;
@@ -479,7 +479,7 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 	ENTRY;
 
 	recalc_interval_sec = ktime_get_seconds() - pl->pl_recalc_time;
-	if (recalc_interval_sec < pl->pl_recalc_period)
+	if (!force && recalc_interval_sec < pl->pl_recalc_period)
 		RETURN(0);
 
 	spin_lock(&pl->pl_lock);
@@ -487,7 +487,7 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 	 * Check if we need to recalc lists now.
 	 */
 	recalc_interval_sec = ktime_get_seconds() - pl->pl_recalc_time;
-	if (recalc_interval_sec < pl->pl_recalc_period) {
+	if (!force && recalc_interval_sec < pl->pl_recalc_period) {
 		spin_unlock(&pl->pl_lock);
 		RETURN(0);
 	}
@@ -571,7 +571,7 @@ static struct ldlm_pool_ops ldlm_cli_pool_ops = {
  *
  * \retval		time in seconds for the next recalc of this pool
  */
-time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl, bool force)
 {
 	timeout_t recalc_interval_sec;
 	int count;
@@ -597,7 +597,7 @@ time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
 	}
 
 	if (pl->pl_ops->po_recalc != NULL) {
-		count = pl->pl_ops->po_recalc(pl);
+		count = pl->pl_ops->po_recalc(pl, force);
 		lprocfs_counter_add(pl->pl_stats, LDLM_POOL_RECALC_STAT,
 				    count);
 	}
@@ -991,7 +991,7 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 	 * with too long call paths.
 	 */
 	if (ns_is_server(ldlm_pl2ns(pl)))
-		ldlm_pool_recalc(pl);
+		ldlm_pool_recalc(pl, false);
 }
 
 /**
@@ -1016,7 +1016,7 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 	lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_CANCEL_STAT);
 
 	if (ns_is_server(ldlm_pl2ns(pl)))
-		ldlm_pool_recalc(pl);
+		ldlm_pool_recalc(pl, false);
 }
 
 /**
@@ -1333,7 +1333,8 @@ static time64_t ldlm_pools_recalc_delay(enum ldlm_side side)
 		 * After setup is done - recalc the pool.
 		 */
 		if (!skip) {
-			delay = min(delay, ldlm_pool_recalc(&ns->ns_pool));
+			delay = min(delay,
+				    ldlm_pool_recalc(&ns->ns_pool, false));
 			ldlm_namespace_put(ns);
 		}
 	}
@@ -1472,7 +1473,7 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
 	return 0;
 }
 
-time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl, bool force)
 {
 	return 0;
 }

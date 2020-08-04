@@ -2214,6 +2214,11 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 	return ldlm_bl_to_thread(ns, ld, NULL, cancels, count, cancel_flags);
 }
 
+int ldlm_bl_to_thread_ns(struct ldlm_namespace *ns)
+{
+	return ldlm_bl_to_thread(ns, NULL, NULL, NULL, 0, LCF_ASYNC);
+}
+
 int ldlm_bl_thread_wakeup(void)
 {
 	wake_up(&ldlm_state->ldlm_bl_pool->blp_waitq);
@@ -2832,10 +2837,17 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 						   LCF_BL_AST);
 		ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL,
 				     blwi->blwi_flags);
-	} else {
+	} else if (blwi->blwi_lock) {
 		ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
 					blwi->blwi_lock);
+	} else {
+		ldlm_pool_recalc(&blwi->blwi_ns->ns_pool, true);
+		spin_lock(&blwi->blwi_ns->ns_lock);
+		blwi->blwi_ns->ns_rpc_recalc = 0;
+		spin_unlock(&blwi->blwi_ns->ns_lock);
+		ldlm_namespace_put(blwi->blwi_ns);
 	}
+
 	if (blwi->blwi_mem_pressure)
 		memalloc_noreclaim_restore(mpflags);
 
