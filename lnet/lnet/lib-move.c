@@ -2767,6 +2767,8 @@ again:
 		 * try to send it via non-multi-rail criteria
 		 */
 		if (!IS_ERR(src_lpni)) {
+			/* Drop ref taken by lnet_nid2peerni_locked() */
+			lnet_peer_ni_decref_locked(src_lpni);
 			src_lp = lpni->lpni_peer_net->lpn_peer;
 			if (lnet_peer_is_multi_rail(src_lp) &&
 			    !lnet_is_peer_ni_alive(lpni))
