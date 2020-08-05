@@ -54,17 +54,6 @@ static inline const char *xattr_prefix(const struct xattr_handler *handler)
 }
 #endif
 
-#ifdef HAVE_LINUX_SELINUX_IS_ENABLED
-# define test_xattr_is_selinux_disabled(handler, name) \
-		((handler)->flags == XATTR_SECURITY_T && \
-		!selinux_is_enabled() && \
-		strcmp((name), "selinux") == 0)
-#else
-# define test_xattr_is_selinux_disabled(handler, name) \
-		((handler)->flags == XATTR_SECURITY_T && \
-		strcmp((name), "selinux") == 0)
-#endif
-
 const struct xattr_handler *get_xattr_type(const char *name)
 {
 	int i;
@@ -152,7 +141,8 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 		RETURN(0);
 
 	/* LU-549:  Disable security.selinux when selinux is disabled */
-	if (test_xattr_is_selinux_disabled(handler, name))
+	if (handler->flags == XATTR_SECURITY_T && !selinux_is_enabled() &&
+	    strcmp(name, "selinux") == 0)
 		RETURN(-EOPNOTSUPP);
 
 	/*
@@ -455,7 +445,8 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 		RETURN(rc);
 
 	/* LU-549:  Disable security.selinux when selinux is disabled */
-	if (test_xattr_is_selinux_disabled(handler, name))
+	if (handler->flags == XATTR_SECURITY_T && !selinux_is_enabled() &&
+	    !strcmp(name, "selinux"))
 		RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
