@@ -1,19 +1,39 @@
 Add a proc interface for max_dir_size.
 
-Index: b/fs/ext4/sysfs.c
-===================================================================
+---
+ fs/ext4/sysfs.c |   23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
 --- a/fs/ext4/sysfs.c
 +++ b/fs/ext4/sysfs.c
-@@ -170,6 +170,8 @@ EXT4_ATTR_FUNC(reserved_clusters, 0644);
+@@ -25,6 +25,7 @@ typedef enum {
+ 	attr_trigger_test_error,
+ 	attr_feature,
+ 	attr_pointer_ui,
++	attr_pointer_kb,
+ 	attr_pointer_atomic,
+ } attr_id_t;
+ 
+@@ -150,6 +151,9 @@ static struct ext4_attr ext4_attr_##_nam
+ #define EXT4_RW_ATTR_SBI_UI(_name,_elname)	\
+ 	EXT4_ATTR_OFFSET(_name, 0644, pointer_ui, ext4_sb_info, _elname)
+ 
++#define EXT4_RW_ATTR_SBI_KB(_name,_elname)	\
++	EXT4_ATTR_OFFSET(_name, 0644, pointer_kb, ext4_sb_info, _elname)
++
+ #define EXT4_ATTR_PTR(_name,_mode,_id,_ptr) \
+ static struct ext4_attr ext4_attr_##_name = {			\
+ 	.attr = {.name = __stringify(_name), .mode = _mode },	\
+@@ -170,6 +174,8 @@ EXT4_ATTR_FUNC(reserved_clusters, 0644);
  EXT4_ATTR_OFFSET(inode_readahead_blks, 0644, inode_readahead,
  		 ext4_sb_info, s_inode_readahead_blks);
  EXT4_RW_ATTR_SBI_UI(inode_goal, s_inode_goal);
-+EXT4_RW_ATTR_SBI_UI(max_dir_size, s_max_dir_size_kb);
++EXT4_RW_ATTR_SBI_KB(max_dir_size, s_max_dir_size_kb);
 +EXT4_RW_ATTR_SBI_UI(max_dir_size_kb, s_max_dir_size_kb);
  EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
  EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
-@@ -199,6 +201,8 @@ static struct attribute *ext4_attrs[] =
+@@ -198,6 +204,8 @@ static struct attribute *ext4_attrs[] =
  	ATTR_LIST(reserved_clusters),
  	ATTR_LIST(inode_readahead_blks),
  	ATTR_LIST(inode_goal),
@@ -22,3 +42,32 @@ Index: b/fs/ext4/sysfs.c
  	ATTR_LIST(mb_stats),
  	ATTR_LIST(mb_max_to_scan),
  	ATTR_LIST(mb_min_to_scan),
+@@ -283,6 +291,12 @@ static ssize_t ext4_attr_show(struct kob
+ 		else
+ 			return snprintf(buf, PAGE_SIZE, "%u\n",
+ 					*((unsigned int *) ptr));
++	case attr_pointer_kb:
++		/* Stored in kb, reported in bytes. */
++		if (!ptr)
++			return 0;
++		return snprintf(buf, PAGE_SIZE, "%u\n",
++				*((unsigned int *) ptr) * 1024);
+ 	case attr_pointer_atomic:
+ 		if (!ptr)
+ 			return 0;
+@@ -320,6 +334,15 @@ static ssize_t ext4_attr_store(struct ko
+ 		else
+ 			*((unsigned int *) ptr) = t;
+ 		return len;
++	case attr_pointer_kb:
++		/* Stored in kb, reported in bytes. */
++		if (!ptr)
++			return 0;
++		ret = kstrtoul(skip_spaces(buf), 0, &t);
++		if (ret)
++			return ret;
++		*((unsigned int *) ptr) = t / 1024;
++		return len;
+ 	case attr_inode_readahead:
+ 		return inode_readahead_blks_store(a, sbi, buf, len);
+ 	case attr_trigger_test_error:
