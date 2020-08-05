@@ -663,8 +663,14 @@ LC_CONFIG_CRYPTO
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 
+AS_IF([test "x$enable_utils" = xyes], [
+	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
+	LC_OPENSSL_SSK
+	LC_OPENSSL_GETSEPOL
+])
 AS_IF([test "x$enable_tests" = xyes], [
 	LC_HAVE_LIBAIO
+	LC_GLIBC_SUPPORT_FHANDLES
 ])
 
 LIBCFS_CONFIG_CDEBUG
