@@ -4703,6 +4703,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			}
 		}
 		if (lnet_drop_asym_route && for_me && !found) {
+			/* Drop ref taken by lnet_nid2peerni_locked() */
+			lnet_peer_ni_decref_locked(lpni);
 			lnet_net_unlock(cpt);
 			/* we would not use from_nid to route a message to
 			 * src_nid
