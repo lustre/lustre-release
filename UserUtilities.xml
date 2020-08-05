@@ -272,17 +272,25 @@ lfs help
                 guarantee that 
                 <literal>atime</literal> is kept coherent across the
                 cluster.)</para>
-                <para>OSTs store a transient 
+                <para>OSTs by default only hold a transient 
                 <literal>atime</literal> that is updated when clients do read
                 requests. Permanent 
-                <literal>atime</literal> is written to the MDS when the file is
+                <literal>atime</literal> is written to the MDT when the file is
                 closed. However, on-disk atime is only updated if it is more
                 than 60 seconds old (
-                <literal>/proc/fs/lustre/mds/*/max_atime_diff</literal>). The
-                Lustre software considers the latest 
-                <literal>atime</literal> from all OSTs. If a 
+                <literal>mdd.*.atime_diff</literal>).
+                </para>
+                <para condition='l2D'>In Lustre 2.14, it is possible to set
+                the OSTs to persistently store atime with each object, in
+                order to get more accurate persistent atime updates for files
+                that are open for a long time via the similarly-named
+                <literal>obdfilter.*.atime_diff</literal> parameter.
+                </para>
+                <para>
+                The client considers the latest <literal>atime</literal> from
+                all OSTs and MDTs. If a 
                 <literal>setattr</literal> is set by user, then it is updated on
-                both the MDS and OST, allowing the 
+                both the MDT and OST, allowing the 
                 <literal>atime</literal> to go backward.</para>
               </entry>
             </row>

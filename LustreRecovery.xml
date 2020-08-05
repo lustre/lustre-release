@@ -703,20 +703,31 @@ $ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
     </itemizedlist>
     <section remap="h3">
     <title><indexterm><primary>pings</primary><secondary>suppress_pings</secondary></indexterm>"suppress_pings" Kernel Module Parameter</title>
-      <para>The new option that controls whether pings are suppressed is implemented as the ptlrpc kernel module parameter "suppress_pings".  Setting it to "1" on a server turns on ping suppressing for all targets on that server, while leaving it with the default value "0" gives previous pinging behavior.  The parameter is ignored on clients and the MGS.  While the parameter is recommended to be set persistently via the modprobe.conf(5) mechanism, it also accept online changes through sysfs.  Note that an online change only affects connections established later; existing connections' pinging behaviors stay the same.</para>
+      <para>The new option that controls whether pings are suppressed is
+        implemented as the ptlrpc kernel module parameter "suppress_pings".
+        Setting it to "1" on a server turns on ping suppressing for all
+        targets on that server, while leaving it with the default value "0"
+        gives previous pinging behavior.  The parameter is ignored on clients
+        and the MGS.  While the parameter is recommended to be set persistently
+        via the modprobe.conf(5) mechanism, it also accept online changes
+        through sysfs.  Note that an online change only affects connections
+        established later; existing connections' pinging behaviors stay the same.
+      </para>
     </section>
     <section remap="h3">
     <title><indexterm><primary>pings</primary><secondary>evict_client</secondary></indexterm>Client Death Notification</title>
-      <para>The required external client death notification shall write UUIDs of dead clients into targets' "evict_client" procfs entries like</para>
-      <screen>
-/proc/fs/lustre/obdfilter/testfs-OST0000/evict_client
-/proc/fs/lustre/obdfilter/testfs-OST0001/evict_client
-/proc/fs/lustre/mdt/testfs-MDT0000/evict_client
-      </screen>
-      <para>Clients' UUIDs can be obtained from their "uuid" procfs entries like</para>
-      <screen>
-/proc/fs/lustre/llite/testfs-ffff8800612bf800/uuid
-      </screen>
+      <para>The required external client death notification shall write UUIDs
+      of dead clients into targets' <literal>evict_client</literal> procfs
+      entries in order to remove stale clients from recovery.</para>
+      <para>A client UUID can be obtained from their <literal>uuid</literal>
+      procfs entry and that UUID can be used to evict the client, like:
+      </para>
+<screen>
+client$ lctl get_param llite.testfs-*.uuid
+llite.testfs-ffff991ae1992000.uuid=dd599d28-0a85-a9e4-82cd-dc6357a42c77
+oss# lctl set_param obdfilter.testfs-*.evict_client=dd599d28-0a85-a9e4-82cd-dc6357a42c77
+mds# lctl set_param mdt.testfs-*.evict_client=dd599d28-0a85-a9e4-82cd-dc6357a42c77
+</screen>
     </section>
   </section>
 

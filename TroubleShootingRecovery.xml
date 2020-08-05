@@ -218,7 +218,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       is enhanced to support verify and repair inconsistencies between multiple
       MDTs.</para>
     <para>Control and monitoring of LFSCK is through LFSCK and the
-    <literal>/proc</literal> file system interfaces. LFSCK supports three types
+    <literal>lctl get_param</literal> command. LFSCK supports three types
     of interface: switch interface, status interface, and adjustment interface.
     These interfaces are detailed below.</para>
     <section>

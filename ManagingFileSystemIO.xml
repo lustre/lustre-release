@@ -480,8 +480,8 @@ oss# mount -t lustre /dev/sda /mnt/testfs/ost12
       </listitem>
     </orderedlist>
     <para>If a Lustre file system administrator wants to explore this approach
-    further, per-OST disk-usage statistics can be found under 
-    <literal>/proc/fs/lustre/osc/*/rpc_stats</literal></para>
+    further, per-OST disk-usage statistics can be found in the
+    <literal>osc.*.rpc_stats</literal> parameter file.</para>
   </section>
   <section xml:id="dbdoclet.50438211_80295">
     <title>

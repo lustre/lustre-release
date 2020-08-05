@@ -193,8 +193,10 @@ l_getidentity</title>
     </section>
     <section remap="h5">
       <title>Files</title>
-      <para>The l_getidentity files are located at:</para>
-      <screen>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</screen>
+      <para>The parameter to set the <literal>l_getidentity</literal> path is:
+      </para>
+<screen>mds# lctl set_param -P mdt.*-MDT*.identity_upcall=<replaceable>path</replaceable>
+</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438219_38274">
@@ -220,15 +222,32 @@ quit</screen>
     </section>
     <section remap="h5">
       <title>Setting Parameters with lctl</title>
-      <para>Lustre parameters are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set}_param .</para>
-      <para>When the file system is running, use the <literal>lctl set_param</literal> command on the affected node(s) to <emphasis>temporarily</emphasis> set parameters (mapping to items in /proc/{fs,sys}/{lnet,lustre}). The <literal>lctl set_param</literal> command uses this syntax:</para>
+      <para>Lustre parameters are not always accessible using the procfs
+      interface, as it is platform-specific. As a solution,
+      <literal>lctl {get,set}_param</literal> provides a platform-independent
+      interface to the Lustre tunables. Avoid any direct references to
+      <literal>/proc</literal> and <literal>/sys</literal> files in scripts.
+      For future portability, instead use lctl {get,set}_param, which handles
+      these details internally.</para>
+      <para>When the file system is running, use the
+      <literal>lctl set_param</literal> command on the affected node(s) to
+      <emphasis>temporarily</emphasis> set parameters (mapping to items in).
+      The <literal>lctl set_param</literal> command uses this syntax:</para>
       <screen>lctl set_param [-n] [-P] [-d] <replaceable>obdtype.obdname.property</replaceable>=<replaceable>value</replaceable></screen>
       <para>For example:</para>
-      <screen>mds# lctl set_param mdt.testfs-MDT0000.identity_upcall=NONE</screen>
-      <para condition='l25'>Use <literal>-P</literal> option to set parameters permanently. Option <literal>-d </literal>deletes permanent parameters. For example:
-	      <screen>mgs# lctl set_param -P mdt.testfs-MDT0000.identity_upcall=NONE
+<screen>mds# lctl set_param mdt.testfs-MDT0000.identity_upcall=NONE</screen>
+      <para condition='l25'>Use <literal>-P</literal> option to set parameters
+      permanently. Option <literal>-d </literal>deletes permanent parameters.
+      For example:
+<screen>
+mgs# lctl set_param -P mdt.testfs-MDT0000.identity_upcall=NONE
 mgs# lctl set_param -P -d mdt.testfs-MDT0000.identity_upcall</screen></para>
-      <para>Many permanent parameters can be set with <literal>lctl conf_param</literal>. In general, <literal>lctl conf_param</literal> can be used to specify any OBD device parameter settable in a /proc/fs/lustre file. The <literal>lctl conf_param</literal> command must be run on the MGS node, and uses this syntax:</para>
+      <para>Many permanent parameters can be set with the
+      <literal>lctl conf_param</literal> utility. In general,
+      <literal>lctl conf_param</literal> can be used to specify any OBD
+      device parameter settable in a /proc/fs/lustre file. The
+      <literal>lctl conf_param</literal> command must be run on the MGS node,
+      and uses this syntax:</para>
       <screen><replaceable>obd|fsname</replaceable>.obdtype.property=<replaceable>value</replaceable>) </screen>
       <para>For example:</para>
       <screen>mgs# lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
@@ -2724,21 +2743,20 @@ Application Profiling Utilities</title>
       <para>The lustre_req_history.sh utility (run from a client), assembles as much Lustre RPC request history as possible from the local node and from the servers that were contacted, providing a better picture of the coordinated network activity.</para>
     </section>
     <section remap="h3">
-      <title>More /proc Statistics for Application Profiling</title>
+      <title>More Statistics for Application Profiling</title>
       <para>The following utilities provide additional statistics.</para>
       <para><literal>vfs_ops_stats</literal></para>
-      <para>The client vfs_ops_stats utility tracks Linux VFS operation calls into Lustre for a single PID, PPID, GID or everything.</para>
-      <screen>/proc/fs/lustre/llite/*/vfs_ops_stats
-/proc/fs/lustre/llite/*/vfs_track_[pid|ppid|gid]
-</screen>
+      <para>The client vfs_ops_stats utility tracks Linux VFS operation calls
+      into Lustre for a single PID, PPID, GID or everything.</para>
+      <screen>llite.*.vfs_ops_stats llite.*.vfs_track_[pid|ppid|gid]</screen>
       <para><literal>extents_stats</literal></para>
-      <para>The client extents_stats utility shows the size distribution of I/O calls from the client (cumulative and by process).</para>
-      <screen>/proc/fs/lustre/llite/*/extents_stats, extents_stats_per_process
-</screen>
+      <para>The client extents_stats utility shows the size distribution of
+      I/O calls from the client (cumulative and by process).</para>
+      <screen>llite.*.{extents_stats,extents_stats_per_process}</screen>
       <para><literal>offset_stats</literal></para>
-      <para>The client offset_stats utility shows the read/write seek activity of a client by offsets and ranges.</para>
-      <screen>/proc/fs/lustre/llite/*/offset_stats
-</screen>
+      <para>The client offset_stats utility shows the read/write seek activity
+      of a client by offsets and ranges.</para>
+      <screen>llite.*.offset_stats</screen>
       <para>Lustre includes per-client and improved MDT statistics:</para>
       <itemizedlist>
         <listitem>
@@ -2748,7 +2766,7 @@ Application Profiling Utilities</title>
       <para>Each MDS and OSS now tracks LDLM and operations statistics for
       every connected client, for comparisons and simpler collection of
       distributed job statistics.</para>
-      <screen>/proc/fs/lustre/mds|obdfilter/*/exports/
+      <screen>{mds,obdfilter}.*.exports
 </screen>
       <itemizedlist>
         <listitem>
@@ -2757,7 +2775,7 @@ Application Profiling Utilities</title>
       </itemizedlist>
       <para>More detailed MDT operations statistics are collected for better
       profiling.</para>
-      <screen>/proc/fs/lustre/mdt/*/md_stats
+      <screen>mdt.*.md_stats
 </screen>
     </section>
     <section remap="h3">

@@ -204,7 +204,8 @@
           <para>Which server node it was communicating with, and so on.</para>
         </listitem>
       </itemizedlist>
-      <para>Lustre logs are dumped to <literal>/proc/sys/lnet/debug_path</literal>.</para>
+      <para>Lustre logs are dumped to the pathname stored in the parameter
+      <literal>lnet.debug_path</literal>.</para>
       <para>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
       <para>Another Lustre debug log holds information for a short period of time for action by the
         Lustre software, which, in turn, depends on the processes on the Lustre node. Use the
@@ -376,7 +377,7 @@
       <para>If the SCSI devices are inaccessible to the Lustre file system
         at the block device level, then <literal>ldiskfs</literal> remounts
         the device read-only to prevent file system corruption. This is a normal
-        behavior. The status in <literal>/proc/fs/lustre/health_check</literal>
+        behavior. The status in the parameter <literal>health_check</literal>
         also shows &quot;not healthy&quot; on the affected nodes.</para>
       <para>To determine what caused the &quot;not healthy&quot; condition:</para>
       <itemizedlist>

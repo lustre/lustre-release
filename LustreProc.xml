@@ -3,10 +3,11 @@
  xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
  xml:id="lustreproc">
   <title xml:id="lustreproc.title">Lustre Parameters</title>
-  <para>The <literal>/proc</literal> and <literal>/sys</literal> file systems
-  acts as an interface to internal data structures in the kernel. This chapter
-  describes parameters and tunables that are useful for optimizing and
-  monitoring aspects of a Lustre file system. It includes these sections:</para>
+  <para>There are many parameters for Lustre that can tune client and server
+  performance, change behavior of the system, and report statistics about
+  various subsystems.  This chapter describes the various parameters and
+  tunables that are useful for optimizing and monitoring aspects of a Lustre
+  file system.  It includes these sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438271_83523"/></para>
@@ -24,9 +25,11 @@
     </para>
     <para>Typically, metrics are accessed via <literal>lctl get_param</literal>
     files and settings are changed by via <literal>lctl set_param</literal>.
-    While it is possible to access parameters in <literal>/proc</literal>
+    They allow getting and setting multiple parameters with a single command,
+    through the use of wildcards in one or more part of the parameter name.
+    While each of these parameters maps to files in <literal>/proc</literal>
     and <literal>/sys</literal> directly, the location of these parameters may
-    change between releases, so it is recommended to always use
+    change between Lustre releases, so it is recommended to always use
     <literal>lctl</literal> to access the parameters from userspace scripts.
     Some data is server-only, some data is client-only, and some data is
     exported from the client to the server and is thus duplicated in both
@@ -35,24 +38,29 @@
       <para>In the examples in this chapter, <literal>#</literal> indicates
       a command is entered as root.  Lustre servers are named according to the
       convention <literal><replaceable>fsname</replaceable>-<replaceable>MDT|OSTnumber</replaceable></literal>.
-        The standard UNIX wildcard designation (*) is used.</para>
+      The standard UNIX wildcard designation (*) is used to represent any
+      part of a single component of the parameter name, excluding
+      "<literal>.</literal>" and "<literal>/</literal>".
+      It is also possible to use brace <literal>{}</literal>expansion
+      to specify a list of parameter names efficiently.</para>
     </note>
     <para>Some examples are shown below:</para>
     <itemizedlist>
       <listitem>
-        <para> To obtain data from a Lustre client:</para>
-        <screen># lctl list_param osc.*
-osc.testfs-OST0000-osc-ffff881071d5cc00
-osc.testfs-OST0001-osc-ffff881071d5cc00
-osc.testfs-OST0002-osc-ffff881071d5cc00
-osc.testfs-OST0003-osc-ffff881071d5cc00
-osc.testfs-OST0004-osc-ffff881071d5cc00
-osc.testfs-OST0005-osc-ffff881071d5cc00
-osc.testfs-OST0006-osc-ffff881071d5cc00
-osc.testfs-OST0007-osc-ffff881071d5cc00
-osc.testfs-OST0008-osc-ffff881071d5cc00</screen>
+        <para> To list available OST targets on a Lustre client:</para>
+        <screen># lctl list_param -F osc.*
+osc.testfs-OST0000-osc-ffff881071d5cc00/
+osc.testfs-OST0001-osc-ffff881071d5cc00/
+osc.testfs-OST0002-osc-ffff881071d5cc00/
+osc.testfs-OST0003-osc-ffff881071d5cc00/
+osc.testfs-OST0004-osc-ffff881071d5cc00/
+osc.testfs-OST0005-osc-ffff881071d5cc00/
+osc.testfs-OST0006-osc-ffff881071d5cc00/
+osc.testfs-OST0007-osc-ffff881071d5cc00/
+osc.testfs-OST0008-osc-ffff881071d5cc00/</screen>
         <para>In this example, information about OST connections available
-        on a client is displayed (indicated by "osc").</para>
+        on a client is displayed (indicated by "osc").  Each of these
+        connections may have numerous sub-parameters as well.</para>
       </listitem>
     </itemizedlist>
     <itemizedlist>
@@ -68,6 +76,16 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.contention_seconds
 osc.testfs-OST0000-osc-ffff881071d5cc00.cur_dirty_bytes
 ...
 osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
+      </listitem>
+    </itemizedlist>
+    <itemizedlist>
+      <listitem>
+        <para> To see a specific subset of parameters, use braces, like:
+<screen># lctl list_param osc.*.{checksum,connect}*
+osc.testfs-OST0000-osc-ffff881071d5cc00.checksum_type
+osc.testfs-OST0000-osc-ffff881071d5cc00.checksums
+osc.testfs-OST0000-osc-ffff881071d5cc00.connect_flags
+</screen></para>
       </listitem>
     </itemizedlist>
     <itemizedlist>
@@ -90,31 +108,14 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
     version and the Lustre version being used.  The <literal>lctl</literal>
     command insulates scripts from these changes and is preferred over direct
     file access, unless as part of a high-performance monitoring system.
-    In the <literal>cat</literal> command:</para>
-    <itemizedlist>
-      <listitem>
-        <para>Replace the dots in the path with slashes.</para>
-      </listitem>
-      <listitem>
-        <para>Prepend the path with the appropriate directory component:
-          <screen>/{proc,sys}/{fs,sys}/{lustre,lnet}</screen></para>
-      </listitem>
-    </itemizedlist>
-    <para>For example, an <literal>lctl get_param</literal> command may look like
-      this:<screen># lctl get_param osc.*.uuid
-osc.testfs-OST0000-osc-ffff881071d5cc00.uuid=594db456-0685-bd16-f59b-e72ee90e9819
-osc.testfs-OST0001-osc-ffff881071d5cc00.uuid=594db456-0685-bd16-f59b-e72ee90e9819
-...</screen></para>
-    <para>The equivalent <literal>cat</literal> command may look like this:
-     <screen># cat /proc/fs/lustre/osc/*/uuid
-594db456-0685-bd16-f59b-e72ee90e9819
-594db456-0685-bd16-f59b-e72ee90e9819
-...</screen></para>
-    <para>or like this:
-     <screen># cat /sys/fs/lustre/osc/*/uuid
-594db456-0685-bd16-f59b-e72ee90e9819
-594db456-0685-bd16-f59b-e72ee90e9819
-...</screen></para>
+    </para>
+    <note condition='l2c'><para>Starting in Lustre 2.12, there is
+    <literal>lctl get_param</literal> and <literal>lctl set_param</literal>
+    command can provide <emphasis>tab completion</emphasis> when using an
+    interactive shell with <literal>bash-completion</literal> installed.
+    This simplifies the use of <literal>get_param</literal> significantly,
+    since it provides an interactive list of available parameters.
+    </para></note>
     <para>The <literal>llstat</literal> utility can be used to monitor some
     Lustre file system I/O activity over a specified time period. For more
     details, see
@@ -2310,19 +2311,19 @@ nid                    refs   peer    max   tx    min
     <itemizedlist>
       <listitem>
         <para>To enable automatic LRU sizing, set the
-	<literal>lru_size</literal> parameter to 0. In this case, the
-	<literal>lru_size</literal> parameter shows the current number of locks
+        <literal>lru_size</literal> parameter to 0. In this case, the
+        <literal>lru_size</literal> parameter shows the current number of locks
         being used on the client. Dynamic LRU resizing is enabled by default.
-	</para>
+        </para>
       </listitem>
       <listitem>
         <para>To specify a maximum number of locks, set the
-	<literal>lru_size</literal> parameter to a value other than zero.
-	A good default value for compute nodes is around
-	<literal>100 * <replaceable>num_cpus</replaceable></literal>.
+        <literal>lru_size</literal> parameter to a value other than zero.
+        A good default value for compute nodes is around
+        <literal>100 * <replaceable>num_cpus</replaceable></literal>.
         It is recommended that you only set <literal>lru_size</literal>
-	to be signifivantly larger on a few login nodes where multiple
-	users access the file system interactively.</para>
+        to be signifivantly larger on a few login nodes where multiple
+        users access the file system interactively.</para>
       </listitem>
     </itemizedlist>
     <para>To clear the LRU on a single client, and, as a result, flush client
@@ -2335,7 +2336,7 @@ nid                    refs   peer    max   tx    min
     <note>
       <para>The <literal>lru_size</literal> parameter can only be set
         temporarily using <literal>lctl set_param</literal>, it cannot be set
-	permanently.</para>
+        permanently.</para>
     </note>
     <para>To disable dynamic LRU resizing on the clients, run for example:
     </para>
@@ -2461,15 +2462,18 @@ ldlm.namespaces.myth-MDT0000-mdc-ffff8804296c2800.lru_max_age=900000
         <screen># lctl set_param <replaceable>service</replaceable>.threads_<replaceable>min|max|started=num</replaceable> </screen>
         </listitem>
       <listitem>
-        <para>To permanently set this tunable, run:</para>
-	<screen># lctl conf_param <replaceable>obdname|fsname.obdtype</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
-	<para condition='l25'>For version 2.5 or later, run:
-		<screen># lctl set_param -P <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></screen></para>
+        <para>To permanently set this tunable, run the following command on
+        the MGS:
+        <screen>mgs# lctl set_param -P <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></screen></para>
+        <para condition='l25'>For Lustre 2.5 or earlier, run:
+        <screen>mgs# lctl conf_param <replaceable>obdname|fsname.obdtype</replaceable>.threads_<replaceable>min|max|started</replaceable></screen>
+        </para>
       </listitem>
     </itemizedlist>
-      <para>The following examples show how to set thread counts and get the number of running threads
-        for the service <literal>ost_io</literal>  using the tunable
-	<literal><replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></literal>.</para>
+      <para>The following examples show how to set thread counts and get the
+        number of running threads for the service <literal>ost_io</literal>
+        using the tunable
+        <literal><replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></literal>.</para>
     <itemizedlist>
       <listitem>
         <para>To get the number of running threads, run:</para>

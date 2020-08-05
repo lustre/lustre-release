@@ -635,8 +635,12 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
         <title>Setting Temporary Parameters</title>
         <para>Use 
         <literal>lctl set_param</literal> to set temporary parameters on the
-        node where it is run. These parameters map to items in 
-        <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
+        node where it is run. These parameters internally map to corresponding
+        items in the kernel <literal>/proc/{fs,sys}/{lnet,lustre}</literal> and
+        <literal>/sys/{fs,kernel/debug}/lustre</literal> virtual filesystems.
+        However, since the mapping between a particular parameter name and the
+        underlying virtual pathname may change, it is <emphasis>not</emphasis>
+        recommended to access the virtual pathname directly. The 
         <literal>lctl set_param</literal> command uses this syntax:</para>
         <screen>
 lctl set_param [-n] [-P]
@@ -661,11 +665,9 @@ osc.myth-OST0004-osc.max_dirty_mb=32
         <literal>lctl conf_param</literal> command to set permanent parameters.
         In general, the 
         <literal>lctl conf_param</literal> command can be used to specify any
-        parameter settable in a 
-        <literal>/proc/fs/lustre</literal> file, with its own OBD device. The 
-        <literal>lctl conf_param</literal> command uses this syntax (same as the
-        
-        <literal>mkfs.lustre</literal> and 
+        settable parameter with its own OBD device. The 
+        <literal>lctl conf_param</literal> command uses the following syntax
+        (the same as the <literal>mkfs.lustre</literal> and 
         <literal>tunefs.lustre</literal> commands):</para>
         <screen>
 <replaceable>obdname|fsname</replaceable>.
@@ -673,6 +675,9 @@ osc.myth-OST0004-osc.max_dirty_mb=32
 <replaceable>proc_file_name</replaceable>=
 <replaceable>value</replaceable>) 
 </screen>
+        <note><para>The <literal>lctl conf_param</literal> and
+        <literal>lctl set_param</literal> syntax is <emphasis>not</emphasis>
+        the same.</para></note>
         <para>Here are a few examples of 
         <literal>lctl conf_param</literal> commands:</para>
         <screen>
@@ -693,11 +698,12 @@ $ lctl conf_param testfs.sys.timeout=40
       <section xml:id="dbdoclet.setparamp" condition='l25'>
         <title>Setting Permanent Parameters with lctl set_param -P</title>
         <para>The <literal>lctl set_param -P</literal> command can also
-          set parameters permanently. This command must be issued on the MGS.
+          set parameters permanently using the same syntax as
+          <literal>lctl set_param</literal> and <literal>lctl
+          get_param</literal> commands. This command must be issued on the MGS.
           The given parameter is set on every host using 
-          <literal>lctl</literal> upcall. Parameters map to items in 
-          <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
-          <literal>lctl set_param</literal> command uses this syntax:</para>
+          <literal>lctl</literal> upcall.  The <literal>lctl set_param</literal>
+          command uses the following syntax:</para>
         <screen>
 lctl set_param -P 
 <replaceable>obdtype</replaceable>.
@@ -721,12 +727,19 @@ osc.myth-OST0004-osc.max_dirty_mb=32
 lctl set_param -P -d
 <replaceable>obdtype</replaceable>.
 <replaceable>obdname</replaceable>.
-<replaceable>proc_file_name</replaceable>
+<replaceable>parameter_name</replaceable>
 </screen>
         <para>For example:</para>
         <screen>
 # lctl set_param -P -d osc.*.max_dirty_mb 
 </screen>
+        <note condition='l2c'><para>Starting in Lustre 2.12, there is
+        <literal>lctl get_param</literal> command can provide
+        <emphasis>tab completion</emphasis> when using an interactive shell
+        with <literal>bash-completion</literal> installed.  This simplifies
+        the use of <literal>get_param</literal> significantly, since it
+        provides an interactive list of available parameters.
+        </para></note>
       </section>
       <section xml:id="dbdoclet.50438194_88217">
         <title>Listing Parameters</title>
@@ -764,6 +777,13 @@ lctl get_param [-n]
 <replaceable>obdname</replaceable>.
 <replaceable>proc_file_name</replaceable>
 </screen>
+        <note condition='l2c'><para>Starting in Lustre 2.12, there is
+        <literal>lctl get_param</literal> command can provide
+        <emphasis>tab completion</emphasis> when using an interactive shell
+        with <literal>bash-completion</literal> installed.  This simplifies
+        the use of <literal>get_param</literal> significantly, since it
+        provides an interactive list of available parameters.
+        </para></note>
         <para>This example reports data on RPC service times.</para>
         <screen>
 oss# lctl get_param -n ost.*.ost_io.timeouts

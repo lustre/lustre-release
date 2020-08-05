@@ -384,9 +384,8 @@ lnet large_router_buffers=8192
       events across all CPTs. This may balance load better across the CPU but
       can incur a cross CPU overhead.</para>
       <para>The current policy can be changed by an administrator with 
-      <literal>echo 
-      <replaceable>value</replaceable>&gt;
-      /proc/sys/lnet/portal_rotor</literal>. There are four options for 
+      <literal>lctl set_param portal_rotor=value</literal>. 
+      There are four options for 
       <literal>
         <replaceable>value</replaceable>
       </literal>:</para>
@@ -2096,9 +2095,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
         <para>
           <emphasis role="bold">Client-side:</emphasis>
         </para>
-        <screen>
-/proc/fs/lustre/llite/lustre-*
-</screen>
+        <screen>llite.<replaceable>fsname</replaceable>-*</screen>
         <para>
         <literal>contention_seconds</literal>- 
         <literal>llite</literal> inode remembers its contended state for the
@@ -2109,8 +2106,8 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           <emphasis role="bold">Client-side statistics:</emphasis>
         </para>
         <para>The 
-        <literal>/proc/fs/lustre/llite/lustre-*/stats</literal> file has new
-        rows for lockless I/O statistics.</para>
+        <literal>llite.<replaceable>fsname</replaceable>-*.stats</literal>
+        parameter has several entries for lockless I/O statistics.</para>
         <para>
         <literal>lockless_read_bytes</literal> and 
         <literal>lockless_write_bytes</literal>- To count the total bytes read
