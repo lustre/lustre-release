@@ -1129,6 +1129,11 @@ LNetPrimaryNID(lnet_nid_t nid)
 	lp = lpni->lpni_peer_net->lpn_peer;
 
 	while (!lnet_peer_is_uptodate(lp)) {
+		spin_lock(&lp->lp_lock);
+		/* force a full discovery cycle */
+		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH;
+		spin_unlock(&lp->lp_lock);
+
 		rc = lnet_discover_peer_locked(lpni, cpt, true);
 		if (rc)
 			goto out_decref;
@@ -2498,6 +2503,10 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 			delnis[ndelnis++] = curnis[i];
 	}
 
+	rc = 0;
+	if (lnet_is_discovery_disabled(lp))
+		goto out;
+
 	for (i = 0; i < naddnis; i++) {
 		rc = lnet_peer_add_nid(lp, addnis[i], flags);
 		if (rc) {
@@ -2602,6 +2611,18 @@ lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
 	return 0;
 }
 
+static bool lnet_is_nid_in_ping_info(lnet_nid_t nid, struct lnet_ping_info *pinfo)
+{
+	int i;
+
+	for (i = 0; i < pinfo->pi_nnis; i++) {
+		if (pinfo->pi_ni[i].ns_nid == nid)
+			return true;
+	}
+
+	return false;
+}
+
 /*
  * Update a peer using the data received.
  */
@@ -2669,7 +2690,9 @@ __must_hold(&lp->lp_lock)
 		rc = lnet_peer_set_primary_nid(lp, nid, flags);
 		if (!rc)
 			rc = lnet_peer_merge_data(lp, pbuf);
-	} else if (lp->lp_primary_nid == nid) {
+	} else if (lp->lp_primary_nid == nid ||
+		   (lnet_is_nid_in_ping_info(lp->lp_primary_nid, &pbuf->pb_info) &&
+		    lnet_is_discovery_disabled(lp))) {
 		rc = lnet_peer_merge_data(lp, pbuf);
 	} else {
 		lpni = lnet_find_peer_ni_locked(nid);
@@ -2841,6 +2864,21 @@ __must_hold(&lp->lp_lock)
 	return rc ? rc : LNET_REDISCOVER_PEER;
 }
 
+/*
+ * Mark the peer as discovered.
+ */
+static int lnet_peer_discovered(struct lnet_peer *lp)
+__must_hold(&lp->lp_lock)
+{
+	lp->lp_state |= LNET_PEER_DISCOVERED;
+	lp->lp_state &= ~(LNET_PEER_DISCOVERING |
+			  LNET_PEER_REDISCOVER);
+
+	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
+
+	return 0;
+}
+
 /* Active side of push. */
 static int lnet_peer_send_push(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -2854,6 +2892,12 @@ __must_hold(&lp->lp_lock)
 	/* Don't push to a non-multi-rail peer. */
 	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
 		lp->lp_state &= ~LNET_PEER_FORCE_PUSH;
+		/* if peer's NIDs are uptodate then peer is discovered */
+		if (lp->lp_state & LNET_PEER_NIDS_UPTODATE) {
+			rc = lnet_peer_discovered(lp);
+			return rc;
+		}
+
 		return 0;
 	}
 
@@ -2944,21 +2988,6 @@ static void lnet_peer_discovery_error(struct lnet_peer *lp, int error)
 	lp->lp_state &= ~LNET_PEER_DISCOVERING;
 	lp->lp_state |= LNET_PEER_REDISCOVER;
 	spin_unlock(&lp->lp_lock);
-}
-
-/*
- * Mark the peer as discovered.
- */
-static int lnet_peer_discovered(struct lnet_peer *lp)
-__must_hold(&lp->lp_lock)
-{
-	lp->lp_state |= LNET_PEER_DISCOVERED;
-	lp->lp_state &= ~(LNET_PEER_DISCOVERING |
-			  LNET_PEER_REDISCOVER);
-
-	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
-
-	return 0;
 }
 
 /*
