@@ -48,6 +48,12 @@ struct pcc_match_id {
 	struct list_head	pmi_linkage;
 };
 
+/* Lazy file size */
+struct pcc_match_size {
+	__u64			pms_size;
+	struct list_head	pms_linkage;
+};
+
 /* wildcard file name */
 struct pcc_match_fname {
 	char			*pmf_name;
@@ -59,13 +65,29 @@ enum pcc_field {
 	PCC_FIELD_GID,
 	PCC_FIELD_PROJID,
 	PCC_FIELD_FNAME,
+	PCC_FIELD_SIZE,
+	PCC_FIELD_MTIME,
 	PCC_FIELD_MAX
 };
 
+enum pcc_field_op {
+	PCC_FIELD_OP_EQ		= 0,
+	PCC_FIELD_OP_LT		= 1,
+	PCC_FIELD_OP_GT		= 2,
+	PCC_FIELD_OP_MAX	= 3,
+	PCC_FIELD_OP_INV	= PCC_FIELD_MAX,
+};
+
 struct pcc_expression {
-	enum pcc_field		pe_field;
-	struct list_head	pe_cond;
 	struct list_head	pe_linkage;
+	enum pcc_field		pe_field;
+	enum pcc_field_op	pe_opc;
+	union {
+		struct list_head	pe_cond;
+		__u64			pe_size;  /* file size in bytes */
+		__u64			pe_mtime; /* relative age in seconds */
+		__u32			pe_id;    /* UID/GID/PROJID */
+	};
 };
 
 struct pcc_conjunction {
@@ -87,6 +109,8 @@ struct pcc_matcher {
 	__u32		 pm_uid;
 	__u32		 pm_gid;
 	__u32		 pm_projid;
+	__u64		 pm_size;
+	__u64		 pm_mtime;
 	struct qstr	*pm_name;
 };
 

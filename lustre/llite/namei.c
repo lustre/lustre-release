@@ -1223,6 +1223,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			item.pm_gid = from_kgid(&init_user_ns, current_gid());
 			item.pm_projid = ll_i2info(dir)->lli_projid;
 			item.pm_name = &dentry->d_name;
+			item.pm_size = 0;
+			item.pm_mtime = ktime_get_seconds();
 			dataset = pcc_dataset_match_get(&sbi->ll_pcc_super,
 							LU_PCC_READWRITE,
 							&item);

@@ -59,6 +59,7 @@ if [[ -r /etc/redhat-release ]]; then
 	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
 		always_except EX-8739 6 7a 7b 23    # PCC-RW
 		always_except LU-17289 102          # fio io_uring
+		always_except LU-17781 33	    # inconsistent LSOM
 	fi
 fi
 
@@ -193,7 +194,7 @@ setup_pcc_mapping() {
 
 	[ -z "$param" ] && param="projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
 	stack_trap "cleanup_pcc_mapping $facet" EXIT
-	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param ||
+	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p "$param" ||
 		error "Setup PCC backend $hsm_root on $MOUNT failed"
 }
 
@@ -2788,6 +2789,127 @@ test_32() {
 }
 run_test 32 "Test for RO-PCC when PCC copy is deleted"
 
+test_33() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/myfile.doc
+	local file2=$DIR2/myfile.doc
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	stack_trap "restore_opencache" EXIT
+	disable_opencache
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.doc}\&size\<{1M}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	touch $file || error "touch $file failed"
+	$TRUNCATE $file $((1048576 * 2)) || error "Truncate $file failed"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	$TRUNCATE $file $((1048576 / 2)) || error "Truncate $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.doc}\&size\<{5M}\&size\>{3M}\ roid=5\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	check_lpcc_state $file "none"
+	$TRUNCATE $file2 $((1048576 * 6)) || error "Truncate $file2 failed"
+	check_lpcc_state $file "none"
+	$TRUNCATE $file2 $((1048576 * 4)) || error "Truncate $file2 failed"
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.doc}\&size={5M\ 3M}\ roid=5\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+	check_lpcc_state $file "none"
+	$TRUNCATE $file $((1048576 * 5)) || error "Truncate $file failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	$TRUNCATE $file $((1048576 * 4)) || error "Truncate $file failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+	check_lpcc_state $file "none"
+	$TRUNCATE $file $((1048576 * 3)) || error "Truncate $file failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+}
+run_test 33 "Cache rule with comparator (>, =, <) for file size"
+
+test_34() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	! is_project_quota_supported &&
+		skip "project quota is not supported"
+
+	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+
+	setup_pcc_mapping $SINGLEAGT \
+		"projid\>{100}\ roid=5\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT "echo -n QQQQQ > $file" ||
+		error "failed to write $file"
+	check_lpcc_state $file "none"
+	$LFS project -p 99 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "none"
+	$LFS project -p 101 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+
+	setup_pcc_mapping $SINGLEAGT \
+		"projid\<{100}\ roid=5\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	check_lpcc_state $file "none"
+	$LFS project -p 102 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "none"
+	$LFS project -p 99 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+
+	setup_pcc_mapping $SINGLEAGT \
+		"projid\<{120}\&projid\>{110}\ roid=5\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	check_lpcc_state $file "none"
+	$LFS project -p 105 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "none"
+	$LFS project -p 121 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "none"
+	$LFS project -p 115 $file || error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "readonly"
+	cleanup_pcc_mapping
+}
+run_test 34 "Cache rule with comparator (>, <) for Project ID range"
+
 test_36_base() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
@@ -2830,6 +2952,34 @@ test_36b() {
 	test_36_base
 }
 run_test 36b "Stale RO-PCC copy should be deleted after remove the PCC backend"
+
+test_41() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"mtime\>{1m}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	echo "pcc_ro_data" > $file || error "echo $file failed"
+	do_facet $SINGLEAGT cat $file || error "cat $file failed"
+	check_lpcc_state $file "none"
+
+	local mtime=$(date -d "2min ago" +%s)
+
+	do_facet $SINGLEAGT touch -m -d @$mtime $file ||
+		error "failed to change mtime for $file $mtime"
+	do_facet $SINGLEAGT cat $file || error "cat $file failed"
+	check_lpcc_state $file "readonly"
+}
+run_test 41 "Test mtime rule for PCC-RO open attach with O_RDONLY mode"
 
 #test 101: containers and PCC
 #LU-15170: Test mount namespaces with PCC

@@ -130,24 +130,39 @@ int pcc_super_init(struct pcc_super *super)
 }
 
 /* Rule based auto caching */
-static void pcc_id_list_free(struct list_head *id_list)
+static void pcc_id_list_free(struct pcc_expression *expr)
 {
 	struct pcc_match_id *id, *n;
 
-	list_for_each_entry_safe(id, n, id_list, pmi_linkage) {
-		list_del_init(&id->pmi_linkage);
-		OBD_FREE_PTR(id);
+	if (expr->pe_opc == PCC_FIELD_OP_EQ) {
+		list_for_each_entry_safe(id, n, &expr->pe_cond, pmi_linkage) {
+			list_del_init(&id->pmi_linkage);
+			OBD_FREE_PTR(id);
+		}
 	}
 }
 
-static void pcc_fname_list_free(struct list_head *fname_list)
+static void pcc_fname_list_free(struct pcc_expression *expr)
 {
 	struct pcc_match_fname *fname, *n;
 
-	list_for_each_entry_safe(fname, n, fname_list, pmf_linkage) {
+	LASSERT(expr->pe_opc == PCC_FIELD_OP_EQ);
+	list_for_each_entry_safe(fname, n, &expr->pe_cond, pmf_linkage) {
 		OBD_FREE(fname->pmf_name, strlen(fname->pmf_name) + 1);
 		list_del_init(&fname->pmf_linkage);
 		OBD_FREE_PTR(fname);
+	}
+}
+
+static void pcc_size_list_free(struct pcc_expression *expr)
+{
+	struct pcc_match_size *sz, *n;
+
+	if (expr->pe_opc == PCC_FIELD_OP_EQ) {
+		list_for_each_entry_safe(sz, n, &expr->pe_cond, pms_linkage) {
+			list_del_init(&sz->pms_linkage);
+			OBD_FREE_PTR(sz);
+		}
 	}
 }
 
@@ -159,10 +174,15 @@ static void pcc_expression_free(struct pcc_expression *expr)
 	case PCC_FIELD_UID:
 	case PCC_FIELD_GID:
 	case PCC_FIELD_PROJID:
-		pcc_id_list_free(&expr->pe_cond);
+		pcc_id_list_free(expr);
 		break;
 	case PCC_FIELD_FNAME:
-		pcc_fname_list_free(&expr->pe_cond);
+		pcc_fname_list_free(expr);
+		break;
+	case PCC_FIELD_SIZE:
+		pcc_size_list_free(expr);
+		break;
+	case PCC_FIELD_MTIME:
 		break;
 	default:
 		LBUG();
@@ -207,7 +227,9 @@ static void pcc_cmd_fini(struct pcc_cmd *cmd)
 
 #define PCC_DISJUNCTION_DELIM	(",")
 #define PCC_CONJUNCTION_DELIM	("&")
-#define PCC_EXPRESSION_DELIM	("=")
+#define PCC_EXPRESSION_DELIM_EQ	("=")
+#define PCC_EXPRESSION_DELIM_LT	("<")
+#define PCC_EXPRESSION_DELIM_GT	(">")
 
 static int
 pcc_fname_list_add(char *id, struct list_head *fname_list)
@@ -230,39 +252,32 @@ pcc_fname_list_add(char *id, struct list_head *fname_list)
 }
 
 static int
-pcc_fname_list_parse(char *str, struct list_head *fname_list)
+pcc_fname_list_parse(char *str, struct pcc_expression *expr)
 {
 	int rc = 0;
 
 	ENTRY;
 
-	INIT_LIST_HEAD(fname_list);
 	while (rc == 0 && str) {
 		char *fname = strsep(&str, " ");
 
 		if (*fname)
-			rc = pcc_fname_list_add(fname, fname_list);
+			rc = pcc_fname_list_add(fname, &expr->pe_cond);
 	}
-	if (list_empty(fname_list))
+	if (list_empty(&expr->pe_cond))
 		rc = -EINVAL;
 	if (rc)
-		pcc_fname_list_free(fname_list);
+		pcc_fname_list_free(expr);
 	RETURN(rc);
 }
 
 static int
-pcc_id_list_parse(char *str, struct list_head *id_list,
-		  enum pcc_field type)
+pcc_id_list_parse(char *str, struct pcc_expression *expr)
 {
 	int rc = 0;
 
 	ENTRY;
 
-	if (type != PCC_FIELD_UID && type != PCC_FIELD_GID &&
-	    type != PCC_FIELD_PROJID)
-		RETURN(-EINVAL);
-
-	INIT_LIST_HEAD(id_list);
 	while (str) {
 		char *num;
 		struct pcc_match_id *id;
@@ -280,20 +295,185 @@ pcc_id_list_parse(char *str, struct list_head *id_list,
 			GOTO(out, rc = -ENOMEM);
 
 		id->pmi_id = id_val;
-		list_add_tail(&id->pmi_linkage, id_list);
+		list_add_tail(&id->pmi_linkage, &expr->pe_cond);
 	}
-	if (list_empty(id_list))
+	if (list_empty(&expr->pe_cond))
 		rc = -EINVAL;
 out:
 	if (rc)
-		pcc_id_list_free(id_list);
+		pcc_id_list_free(expr);
 	RETURN(rc);
+}
+
+static int
+pcc_expr_id_parse(char *str, struct pcc_expression *expr)
+{
+	int rc;
+
+	ENTRY;
+
+	if (expr->pe_field != PCC_FIELD_UID &&
+	    expr->pe_field != PCC_FIELD_GID &&
+	    expr->pe_field != PCC_FIELD_PROJID)
+		RETURN(-EINVAL);
+
+	if (expr->pe_opc >= PCC_FIELD_OP_MAX)
+		RETURN(-EINVAL);
+
+	if (expr->pe_opc == PCC_FIELD_OP_EQ)
+		rc = pcc_id_list_parse(str, expr);
+	else {
+		unsigned long id;
+
+		rc = kstrtoul(str, 10, &id);
+		if (rc != 0)
+			RETURN(-EINVAL);
+
+		if (id <= 0 || id >= (u32)~0U)
+			RETURN(-EINVAL);
+
+		expr->pe_id = id;
+	}
+
+	RETURN(rc);
+}
+
+static int
+pcc_size_list_parse(char *str, struct pcc_expression *expr)
+{
+	int rc = 0;
+
+	ENTRY;
+
+	while (rc == 0 && str) {
+		char *sz_str;
+		struct pcc_match_size *sz;
+		__u64 sz_val;
+
+		sz_str = strsep(&str, " ");
+		if (!*sz_str)
+			continue;
+
+		rc = sysfs_memparse(sz_str, strlen(sz_str), &sz_val, "MiB");
+		if (rc < 0)
+			GOTO(out, rc);
+
+		OBD_ALLOC_PTR(sz);
+		if (sz == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		sz->pms_size = sz_val;
+		list_add_tail(&sz->pms_linkage, &expr->pe_cond);
+	}
+	if (list_empty(&expr->pe_cond))
+		rc = -EINVAL;
+out:
+	if (rc)
+		pcc_id_list_free(expr);
+	RETURN(rc);
+}
+
+static int
+pcc_expr_size_parse(char *str, struct pcc_expression *expr)
+{
+	if (expr->pe_opc == PCC_FIELD_OP_EQ)
+		return pcc_size_list_parse(str, expr);
+	else
+		return sysfs_memparse(str, strlen(str), &expr->pe_size, "MiB");
+}
+
+/*
+ * Parse relative file age timestamp, allowing suffix for ease of use:
+ * s = seconds, m = minutes, h = hours, d = days, w = weeks, y = years
+ */
+static int pcc_expr_time_parse(char *str, struct pcc_expression *expr)
+{
+	unsigned long mtime;
+	int len = strlen(str);
+	unsigned int mult = 1;
+	char buf[10];
+	int rc;
+
+	if (expr->pe_opc == PCC_FIELD_OP_EQ)
+		return -EOPNOTSUPP;
+
+	/* 1B seconds is enough, and avoids the need for overflow checking */
+	if (len > 10)
+		return -EOVERFLOW;
+
+	strncpy(buf, str, sizeof(buf));
+	rc = strspn(buf, "0123456789");
+	if (rc < len) {
+		switch (str[rc]) {
+		case 'y':
+			mult *= 52;
+			fallthrough;
+		case 'w':
+			mult *= 7;
+			fallthrough;
+		case 'd':
+			mult *= 24;
+			fallthrough;
+		case 'h':
+			mult *= 60;
+			fallthrough;
+		case 'm':
+			mult *= 60;
+			fallthrough;
+		case 's':
+			break;
+		default:
+			return -EINVAL;
+		}
+		buf[rc] = '\0';
+	}
+	rc = kstrtoul(buf, 10, &mtime);
+	if (!rc)
+		expr->pe_mtime = mtime * mult;
+
+	return rc;
+}
+
+static inline char *
+pcc_get_opcode_delim(enum pcc_field_op opc)
+{
+	switch (opc) {
+	case PCC_FIELD_OP_EQ:
+		return PCC_EXPRESSION_DELIM_EQ;
+	case PCC_FIELD_OP_LT:
+		return PCC_EXPRESSION_DELIM_LT;
+	case PCC_FIELD_OP_GT:
+		return PCC_EXPRESSION_DELIM_GT;
+	default:
+		LBUG();
+	}
+}
+
+static enum pcc_field_op
+pcc_get_field_opcode(char **src, char **field)
+{
+	int i;
+
+	ENTRY;
+
+	for (i = PCC_FIELD_OP_EQ; i < PCC_FIELD_OP_MAX; i++) {
+		char *tmp = *src;
+
+		*field = strim(strsep(&tmp, pcc_get_opcode_delim(i)));
+		if (**field && tmp) {
+			*src = tmp;
+			RETURN(i);
+		}
+	}
+
+	RETURN(PCC_FIELD_OP_INV);
 }
 
 static int
 pcc_expression_parse(char *str, struct list_head *cond_list)
 {
 	struct pcc_expression *expr;
+	enum pcc_field_op opc;
 	char *field;
 	int len;
 	int rc = 0;
@@ -302,8 +482,8 @@ pcc_expression_parse(char *str, struct list_head *cond_list)
 	if (expr == NULL)
 		return -ENOMEM;
 
-	field = strim(strsep(&str, PCC_EXPRESSION_DELIM));
-	if (!*field || !str)
+	opc = pcc_get_field_opcode(&str, &field);
+	if (opc == PCC_FIELD_OP_INV)
 		/* No LHS or no '=' */
 		GOTO(out, rc = -EINVAL);
 	str = skip_spaces(str);
@@ -315,31 +495,34 @@ pcc_expression_parse(char *str, struct list_head *cond_list)
 	str[len - 1] = '\0';
 	str += 1;
 
+	expr->pe_opc = opc;
+	INIT_LIST_HEAD(&expr->pe_cond);
 	if (strcmp(field, "uid") == 0) {
-		if (pcc_id_list_parse(str,
-				      &expr->pe_cond,
-				      PCC_FIELD_UID) < 0)
-			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_UID;
+		rc = pcc_expr_id_parse(str, expr);
 	} else if (strcmp(field, "gid") == 0) {
-		if (pcc_id_list_parse(str,
-				      &expr->pe_cond,
-				      PCC_FIELD_GID) < 0)
-			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_GID;
+		rc = pcc_expr_id_parse(str, expr);
 	} else if (strcmp(field, "projid") == 0) {
-		if (pcc_id_list_parse(str,
-				      &expr->pe_cond,
-				      PCC_FIELD_PROJID) < 0)
-			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_PROJID;
-	} else if (strcmp(field, "fname") == 0) {
-		if (pcc_fname_list_parse(str, &expr->pe_cond) < 0)
+		rc = pcc_expr_id_parse(str, expr);
+	} else if (strcmp(field, "size") == 0) {
+		expr->pe_field = PCC_FIELD_SIZE;
+		rc = pcc_expr_size_parse(str, expr);
+	} else if (strcmp(field, "mtime") == 0) {
+		expr->pe_field = PCC_FIELD_MTIME;
+		rc = pcc_expr_time_parse(str, expr);
+	} else if (strcmp(field, "fname") == 0 ||
+		   strcmp(field, "filename") == 0) {
+		if (opc != PCC_FIELD_OP_EQ)
 			GOTO(out, rc = -EINVAL);
 		expr->pe_field = PCC_FIELD_FNAME;
+		rc = pcc_fname_list_parse(str, expr);
 	} else {
 		GOTO(out, rc = -EINVAL);
 	}
+	if (rc < 0)
+		GOTO(out, rc);
 
 	list_add_tail(&expr->pe_linkage, cond_list);
 	return 0;
@@ -601,15 +784,68 @@ pcc_fname_list_match(struct list_head *fname_list, const char *name)
 }
 
 static int
+pcc_expr_id_match(struct pcc_expression *expr, __u32 id)
+{
+	switch (expr->pe_opc) {
+	case PCC_FIELD_OP_EQ:
+		return pcc_id_list_match(&expr->pe_cond, id);
+	case PCC_FIELD_OP_LT:
+		return id < expr->pe_id;
+	case PCC_FIELD_OP_GT:
+		return id > expr->pe_id;
+	default:
+		return 0;
+	}
+}
+
+static int
+pcc_size_list_match(struct list_head *id_list, __u64 sz_val)
+{
+	struct pcc_match_size *sz;
+
+	list_for_each_entry(sz, id_list, pms_linkage) {
+		if (sz->pms_size == sz_val)
+			return 1;
+	}
+	return 0;
+}
+
+static int
+pcc_expr_size_match(struct pcc_expression *expr, __u64 sz)
+{
+	switch (expr->pe_opc) {
+	case PCC_FIELD_OP_EQ:
+		return pcc_size_list_match(&expr->pe_cond, sz);
+	case PCC_FIELD_OP_LT:
+		return sz < expr->pe_size;
+	case PCC_FIELD_OP_GT:
+		return sz > expr->pe_size;
+	default:
+		return 0;
+	}
+}
+
+static inline int
+pcc_expr_time_match(struct pcc_expression *expr, __u64 time)
+{
+	/* pe_mtime and pe_size are both __u64 in the same union */
+	return pcc_expr_size_match(expr, ktime_get_real_seconds() - time);
+}
+
+static int
 pcc_expression_match(struct pcc_expression *expr, struct pcc_matcher *matcher)
 {
 	switch (expr->pe_field) {
 	case PCC_FIELD_UID:
-		return pcc_id_list_match(&expr->pe_cond, matcher->pm_uid);
+		return pcc_expr_id_match(expr, matcher->pm_uid);
 	case PCC_FIELD_GID:
-		return pcc_id_list_match(&expr->pe_cond, matcher->pm_gid);
+		return pcc_expr_id_match(expr, matcher->pm_gid);
 	case PCC_FIELD_PROJID:
-		return pcc_id_list_match(&expr->pe_cond, matcher->pm_projid);
+		return pcc_expr_id_match(expr, matcher->pm_projid);
+	case PCC_FIELD_SIZE:
+		return pcc_expr_size_match(expr, matcher->pm_size);
+	case PCC_FIELD_MTIME:
+		return pcc_expr_time_match(expr, matcher->pm_mtime);
 	case PCC_FIELD_FNAME:
 		return pcc_fname_list_match(&expr->pe_cond,
 					    matcher->pm_name->name);
@@ -1451,6 +1687,8 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 	item.pm_gid = from_kgid(&init_user_ns, current_gid());
 	item.pm_projid = ll_i2info(inode)->lli_projid;
 	item.pm_name = &dentry->d_name;
+	item.pm_size = ll_i2info(inode)->lli_lazysize;
+	item.pm_mtime = inode->i_mtime.tv_sec;
 	dataset = pcc_dataset_match_get(&ll_i2sbi(inode)->ll_pcc_super,
 					LU_PCC_READONLY, &item);
 	if (dataset == NULL)

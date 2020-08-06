@@ -27,6 +27,15 @@ example rule means that new files are only auto cached if the project ID is 500
 and the suffix of the file name is "h5". "rwid" represents the read-write
 attach id (2) which value is same as the archive ID of the copytool agent
 running on this PCC node.
+In addition to the equal (=) operator, it also supports greater than (>) and
+less than (<) comparison operators.
+The following rule expressions are supported:
+- "projid={100}&size>{1M}&size<{500G}"
+- "projid>{100}&projid<{110}"
+- "uid<{1500}&uid>{1000}"
+Currently each PCC backend only has one rule which is configed when setup PCC
+backend on a client. If a user wants to change the rule, the PCC backend needs
+to be removed first and then added back with a new rule.
 .TP
 .B lctl pcc del [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR> <\fIpccpath\fR>
 Delete a PCC backend specified by path

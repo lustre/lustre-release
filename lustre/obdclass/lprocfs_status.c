@@ -1882,7 +1882,9 @@ int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 	char tmp_buf[23];
 	int rc;
 
-	count = strlen(buffer);
+	if (count > strlen(buffer))
+		count = strlen(buffer);
+
 	while (count > 0 && isspace(buffer[count - 1]))
 		count--;
 
