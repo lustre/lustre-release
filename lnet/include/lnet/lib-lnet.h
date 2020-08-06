@@ -969,6 +969,8 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 {
 	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL))
 		return false;
+	if (lp->lp_state & LNET_PEER_MARK_DELETED)
+		return false;
 	if (lp->lp_state & LNET_PEER_FORCE_PUSH)
 		return true;
 	if (lp->lp_state & LNET_PEER_NO_DISCOVERY)
