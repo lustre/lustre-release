@@ -3132,7 +3132,7 @@ __must_hold(&lp->lp_lock)
 		rc = lnet_peer_merge_data(lp, pbuf);
 	} else {
 		lpni = lnet_find_peer_ni_locked(nid);
-		if (!lpni) {
+		if (!lpni || lp == lpni->lpni_peer_net->lpn_peer) {
 			rc = lnet_peer_set_primary_nid(lp, nid, flags);
 			if (rc) {
 				CERROR("Primary NID error %s versus %s: %d\n",
@@ -3141,6 +3141,8 @@ __must_hold(&lp->lp_lock)
 			} else {
 				rc = lnet_peer_merge_data(lp, pbuf);
 			}
+			if (lpni)
+				lnet_peer_ni_decref_locked(lpni);
 		} else {
 			struct lnet_peer *new_lp;
 			new_lp = lpni->lpni_peer_net->lpn_peer;
@@ -3149,10 +3151,22 @@ __must_hold(&lp->lp_lock)
 			 * should have discovery/MR enabled as well, since
 			 * it's the same peer, which we're about to merge
 			 */
+			spin_lock(&lp->lp_lock);
+			spin_lock(&new_lp->lp_lock);
 			if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
 				new_lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
 			if (lp->lp_state & LNET_PEER_MULTI_RAIL)
 				new_lp->lp_state |= LNET_PEER_MULTI_RAIL;
+			/* If we're processing a ping reply then we may be
+			 * about to send a push to the peer that we ping'd.
+			 * Since the ping reply that we're processing was
+			 * received by lp, we need to set the discovery source
+			 * NID for new_lp to the NID stored in lp.
+			 */
+			if (lp->lp_disc_src_nid != LNET_NID_ANY)
+				new_lp->lp_disc_src_nid = lp->lp_disc_src_nid;
+			spin_unlock(&new_lp->lp_lock);
+			spin_unlock(&lp->lp_lock);
 
 			rc = lnet_peer_set_primary_data(new_lp, pbuf);
 			lnet_consolidate_routes_locked(lp, new_lp);
