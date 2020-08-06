@@ -191,4 +191,6 @@
   </section>
     <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
 </preface>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

@@ -110,4 +110,6 @@
     <xi:include href="ZFSSnapshots.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

@@ -2416,4 +2416,6 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
     client is more likely to become CPU-bound during reads than writes.</para>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

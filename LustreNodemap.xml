@@ -519,4 +519,6 @@ oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceabl
     </itemizedlist>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

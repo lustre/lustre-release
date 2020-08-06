@@ -659,4 +659,6 @@ options ptlrpcd ptlrpcd_bind_policy=[1-4]
     </section>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

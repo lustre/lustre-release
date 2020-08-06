@@ -901,4 +901,6 @@ adjust_qunit                               1 samples [us]  70 70 70
     </section>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

@@ -466,4 +466,6 @@ mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
       </section>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

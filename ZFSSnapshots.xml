@@ -804,4 +804,6 @@ lss_2_0 successfully with force &lt;disable&gt;</screen>
       <para>Usage:  erase_lcfg &lt;fsname&gt;</para>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

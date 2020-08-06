@@ -2880,4 +2880,6 @@ fid2path: error on FID [0x200000400:0x2:0x0]: No such file or directory</screen>
     </section>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

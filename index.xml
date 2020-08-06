@@ -36,4 +36,6 @@
    <xi:include href="Glossary.xml"/>
    <xi:include href="ix.xml"/>
 </book>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

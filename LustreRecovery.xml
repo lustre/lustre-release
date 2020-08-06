@@ -717,4 +717,6 @@ $ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
   </section>
 
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

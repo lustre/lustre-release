@@ -69,4 +69,6 @@ filetype extent mmp sparse_super large_file uninit_bg</screen>
       system is currently mounted.</para>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

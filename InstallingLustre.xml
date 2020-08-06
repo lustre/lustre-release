@@ -489,4 +489,6 @@ rpm -qa|egrep "lustre|wc"|sort
     <xref linkend="configuringlustre" />.</para>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

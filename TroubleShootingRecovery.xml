@@ -1544,4 +1544,6 @@ lctl set_param obdfilter.${FSNAME}-${OST_target}.lfsck_speed_limit=
     </section>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

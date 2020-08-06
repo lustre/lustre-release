@@ -1298,4 +1298,6 @@ cat: /mnt/testfs/mirrored_file: Operation not supported</screen>
 cat: /mnt/testfs/mirrored_file: Operation not supported</screen>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

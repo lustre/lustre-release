@@ -414,4 +414,6 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
     how to get help.</para>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

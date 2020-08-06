@@ -503,4 +503,6 @@ client2# lfs pcc detach /mnt/lustre/test</screen>
     </orderedlist>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

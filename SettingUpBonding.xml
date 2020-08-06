@@ -346,4 +346,6 @@ Interrupt:9 Base address:0x1400</screen>
     </itemizedlist>
   </section>
 </chapter>
-<!--vim:expandtab:shiftwidth=2:tabstop=8:-->
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->
