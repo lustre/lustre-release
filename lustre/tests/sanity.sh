@@ -8601,6 +8601,8 @@ test_74c() {
 run_test 74c "ldlm_lock_create error path, (shouldn't LBUG)"
 
 num_inodes() {
+	[ -f /sys/kernel/slab/lustre_inode_cache/shrink ] &&
+		echo 1 > /sys/kernel/slab/lustre_inode_cache/shrink
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
 }
 
@@ -16608,6 +16610,8 @@ test_209() {
 	sync; sleep 5; sync;
 
 	echo 3 > /proc/sys/vm/drop_caches
+	[ -f /sys/kernel/slab/ptlrpc_cache/shrink ] &&
+		echo 1 > /sys/kernel/slab/ptlrpc_cache/shrink
 	req_before=$(awk '/ptlrpc_cache / { print $2 }' /proc/slabinfo)
 
 	# open/close 500 times
@@ -16616,6 +16620,8 @@ test_209() {
 	done
 
 	echo 3 > /proc/sys/vm/drop_caches
+	[ -f /sys/kernel/slab/ptlrpc_cache/shrink ] &&
+		echo 1 > /sys/kernel/slab/ptlrpc_cache/shrink
 	req_after=$(awk '/ptlrpc_cache / { print $2 }' /proc/slabinfo)
 
 	echo "before: $req_before, after: $req_after"
