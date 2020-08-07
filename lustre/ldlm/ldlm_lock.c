@@ -1723,14 +1723,10 @@ static enum ldlm_error ldlm_lock_enqueue_helper(struct ldlm_lock *lock,
 	ENTRY;
 
 	policy = ldlm_get_processing_policy(res);
-restart:
 	policy(lock, flags, LDLM_PROCESS_ENQUEUE, &rc, &rpc_list);
 	if (rc == ELDLM_OK && lock->l_granted_mode != lock->l_req_mode &&
-	    res->lr_type != LDLM_FLOCK) {
+	    res->lr_type != LDLM_FLOCK)
 		rc = ldlm_handle_conflict_lock(lock, flags, &rpc_list);
-		if (rc == -ERESTART)
-			GOTO(restart, rc);
-	}
 
 	if (!list_empty(&rpc_list))
 		ldlm_discard_bl_list(&rpc_list);
@@ -2034,6 +2030,9 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 	    !ns_is_client(ldlm_res_to_ns(res)))
 		class_fail_export(lock->l_export);
 
+	if (rc == -ERESTART)
+		ldlm_reprocess_all(res, NULL);
+
 	lock_res(res);
 	if (rc == -ERESTART) {
 		/* 15715: The lock was granted and destroyed after
@@ -2053,10 +2052,8 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 			 * freed. Then we will fail at
 			 * ldlm_extent_add_lock() */
 			*flags &= ~LDLM_FL_BLOCKED_MASK;
-			RETURN(0);
 		}
 
-		RETURN(rc);
 	}
 	*flags |= LDLM_FL_BLOCK_GRANTED;
 
