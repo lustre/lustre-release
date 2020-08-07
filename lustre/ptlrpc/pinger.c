@@ -74,19 +74,20 @@ int ptlrpc_obd_ping(struct obd_device *obd)
 {
 	int rc;
 	struct ptlrpc_request *req;
+	struct obd_import *imp;
 
 	ENTRY;
 
-	req = ptlrpc_prep_ping(obd->u.cli.cl_import);
-	if (!req)
-		RETURN(-ENOMEM);
-
-	req->rq_send_state = LUSTRE_IMP_FULL;
-
-	rc = ptlrpc_queue_wait(req);
-
-	ptlrpc_req_finished(req);
-
+	with_imp_locked(obd, imp, rc) {
+		req = ptlrpc_prep_ping(imp);
+		if (!req) {
+			rc = -ENOMEM;
+			continue;
+		}
+		req->rq_send_state = LUSTRE_IMP_FULL;
+		rc = ptlrpc_queue_wait(req);
+		ptlrpc_req_finished(req);
+	}
 	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_obd_ping);

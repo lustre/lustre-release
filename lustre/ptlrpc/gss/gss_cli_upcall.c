@@ -230,13 +230,13 @@ struct lgssd_ioctl_param {
 
 int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 {
-        struct obd_import        *imp;
-        struct ptlrpc_request    *req;
-        struct lgssd_ioctl_param  param;
-        struct obd_device        *obd;
-        char                      obdname[64];
-        long                      lsize;
-        int                       rc;
+	struct obd_import *imp, *imp0;
+	struct ptlrpc_request *req;
+	struct lgssd_ioctl_param param;
+	struct obd_device *obd;
+	char obdname[64];
+	long lsize;
+	int rc;
 
         if (count != sizeof(param)) {
                 CERROR("ioctl size %lu, expect %lu, please check lgss_keyring "
@@ -289,14 +289,12 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
-	down_read(&obd->u.cli.cl_sem);
-	if (obd->u.cli.cl_import == NULL) {
+	with_imp_locked(obd, imp0, rc)
+		imp = class_import_get(imp0);
+	if (rc) {
 		CERROR("obd %s: import has gone\n", obd->obd_name);
-		up_read(&obd->u.cli.cl_sem);
 		RETURN(-EINVAL);
 	}
-	imp = class_import_get(obd->u.cli.cl_import);
-	up_read(&obd->u.cli.cl_sem);
 
         if (imp->imp_deactive) {
                 CERROR("import has been deactivated\n");

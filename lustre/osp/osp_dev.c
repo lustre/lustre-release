@@ -1530,19 +1530,18 @@ static int osp_obd_statfs(const struct lu_env *env, struct obd_export *exp,
 {
 	struct obd_statfs	*msfs;
 	struct ptlrpc_request	*req;
-	struct obd_import	*imp = NULL;
+	struct obd_import	*imp = NULL, *imp0;
 	int			 rc;
 
 	ENTRY;
 
 	/* Since the request might also come from lprocfs, so we need
-	 * sync this with client_disconnect_export Bug15684 */
-	down_read(&exp->exp_obd->u.cli.cl_sem);
-	if (exp->exp_obd->u.cli.cl_import)
-		imp = class_import_get(exp->exp_obd->u.cli.cl_import);
-	up_read(&exp->exp_obd->u.cli.cl_sem);
-	if (!imp)
-		RETURN(-ENODEV);
+	 * sync this with client_disconnect_export Bug15684
+	 */
+	with_imp_locked(exp->exp_obd, imp0, rc)
+		imp = class_import_get(imp0);
+	if (rc)
+		RETURN(rc);
 
 	req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
 

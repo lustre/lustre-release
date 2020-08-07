@@ -634,23 +634,25 @@ static inline int obd_cleanup(struct obd_device *obd)
 
 static inline void obd_cleanup_client_import(struct obd_device *obd)
 {
-        ENTRY;
+	ENTRY;
 
-        /* If we set up but never connected, the
-           client import will not have been cleaned. */
+	/* If we set up but never connected, the client import will not
+	 * have been cleaned.
+	 */
 	down_write(&obd->u.cli.cl_sem);
-        if (obd->u.cli.cl_import) {
-                struct obd_import *imp;
-                imp = obd->u.cli.cl_import;
-                CDEBUG(D_CONFIG, "%s: client import never connected\n",
-                       obd->obd_name);
-                ptlrpc_invalidate_import(imp);
-                client_destroy_import(imp);
-                obd->u.cli.cl_import = NULL;
-        }
+	if (obd->u.cli.cl_import) {
+		struct obd_import *imp;
+
+		imp = obd->u.cli.cl_import;
+		CDEBUG(D_CONFIG, "%s: client import never connected\n",
+		       obd->obd_name);
+		ptlrpc_invalidate_import(imp);
+		client_destroy_import(imp);
+		obd->u.cli.cl_import = NULL;
+	}
 	up_write(&obd->u.cli.cl_sem);
 
-        EXIT;
+	EXIT;
 }
 
 static inline int obd_process_config(struct obd_device *obd, int datalen,

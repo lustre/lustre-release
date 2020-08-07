@@ -80,7 +80,7 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
-	struct obd_import *imp;
+	struct obd_import *imp, *imp0;
 	bool val;
 	int rc;
 
@@ -88,15 +88,18 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	with_imp_locked(obd, imp, rc) {
-		/* opposite senses */
-		if (obd->u.cli.cl_import->imp_deactive == val)
-			rc = ptlrpc_set_import_active(imp, val);
-		else
-			CDEBUG(D_CONFIG,
-			       "activate %u: ignoring repeat request\n",
-			       (unsigned int)val);
-	}
+	with_imp_locked(obd, imp0, rc)
+		imp = class_import_get(imp0);
+	if (rc)
+		return rc;
+	/* opposite senses */
+	if (imp->imp_deactive == val)
+		rc = ptlrpc_set_import_active(imp, val);
+	else
+		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",
+		       (unsigned int)val);
+
+	class_import_put(imp);
 
 	return rc ?: count;
 }
@@ -758,11 +761,9 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
-	struct obd_import *imp;
 	int rc;
 
-	with_imp_locked(obd, imp, rc)
-		rc = ptlrpc_obd_ping(obd);
+	rc = ptlrpc_obd_ping(obd);
 
 	return rc;
 }

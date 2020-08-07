@@ -655,7 +655,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
 	struct file_lock *getlk = lock->l_ast_data;
 	struct obd_device *obd;
-	struct obd_import *imp = NULL;
 	enum ldlm_error err;
 	int rc = 0;
 	ENTRY;
@@ -687,10 +686,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	LDLM_DEBUG(lock,
 		   "client-side enqueue returned a blocked lock, sleeping");
 	obd = class_exp2obd(lock->l_conn_export);
-
-	/* if this is a local lock, there is no import */
-	if (obd)
-		imp = obd->u.cli.cl_import;
 
 	/* Go to sleep until the lock is granted. */
 	rc = l_wait_event_abortable(lock->l_waitq,

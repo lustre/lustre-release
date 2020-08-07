@@ -1426,6 +1426,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		int   entry_len = sizeof(*entry);
 		int   is_ost;
 		struct obd_device *obd;
+		struct obd_import *imp;
 		char *obdname;
 		char *cname;
 		char *params;
@@ -1460,119 +1461,116 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		if (entry->mne_length < entry_len)
 			break;
 
-                off     += entry->mne_length;
-                datalen -= entry->mne_length;
-                if (datalen < 0)
-                        break;
+		off     += entry->mne_length;
+		datalen -= entry->mne_length;
+		if (datalen < 0)
+			break;
 
-                if (entry->mne_version > max_version) {
-                        CERROR("entry index(%lld) is over max_index(%lld)\n",
-                               entry->mne_version, max_version);
-                        break;
-                }
+		if (entry->mne_version > max_version) {
+			CERROR("entry index(%lld) is over max_index(%lld)\n",
+			       entry->mne_version, max_version);
+			break;
+		}
 
-                if (prev_version >= entry->mne_version) {
-                        CERROR("index unsorted, prev %lld, now %lld\n",
-                               prev_version, entry->mne_version);
-                        break;
-                }
-                prev_version = entry->mne_version;
+		if (prev_version >= entry->mne_version) {
+			CERROR("index unsorted, prev %lld, now %lld\n",
+			       prev_version, entry->mne_version);
+			break;
+		}
+		prev_version = entry->mne_version;
 
-                /*
-                 * Write a string with format "nid::instance" to
-                 * lustre/<osc|mdc>/<target>-<osc|mdc>-<instance>/import.
-                 */
+		/*
+		 * Write a string with format "nid::instance" to
+		 * lustre/<osc|mdc>/<target>-<osc|mdc>-<instance>/import.
+		 */
 
-                is_ost = entry->mne_type == LDD_F_SV_TYPE_OST;
-                memset(buf, 0, bufsz);
-                obdname = buf;
-                pos = 0;
+		is_ost = entry->mne_type == LDD_F_SV_TYPE_OST;
+		memset(buf, 0, bufsz);
+		obdname = buf;
+		pos = 0;
 
-                /* lustre-OST0001-osc-<instance #> */
-                strcpy(obdname, cld->cld_logname);
-                cname = strrchr(obdname, '-');
-                if (cname == NULL) {
-                        CERROR("mgc %s: invalid logname %s\n",
-                               mgc->obd_name, obdname);
-                        break;
-                }
+		/* lustre-OST0001-osc-<instance #> */
+		strcpy(obdname, cld->cld_logname);
+		cname = strrchr(obdname, '-');
+		if (cname == NULL) {
+			CERROR("mgc %s: invalid logname %s\n",
+			       mgc->obd_name, obdname);
+			break;
+		}
 
-                pos = cname - obdname;
-                obdname[pos] = 0;
-                pos += sprintf(obdname + pos, "-%s%04x",
-                                  is_ost ? "OST" : "MDT", entry->mne_index);
+		pos = cname - obdname;
+		obdname[pos] = 0;
+		pos += sprintf(obdname + pos, "-%s%04x",
+			       is_ost ? "OST" : "MDT", entry->mne_index);
 
-                cname = is_ost ? "osc" : "mdc",
-                pos += sprintf(obdname + pos, "-%s-%s", cname, inst);
-                lustre_cfg_bufs_reset(&bufs, obdname);
+		cname = is_ost ? "osc" : "mdc",
+			pos += sprintf(obdname + pos, "-%s-%s", cname, inst);
+		lustre_cfg_bufs_reset(&bufs, obdname);
 
-                /* find the obd by obdname */
-                obd = class_name2obd(obdname);
-                if (obd == NULL) {
-                        CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
-                               mgc->obd_name, obdname);
+		/* find the obd by obdname */
+		obd = class_name2obd(obdname);
+		if (obd == NULL) {
+			CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
+			       mgc->obd_name, obdname);
 			rc = 0;
-                        /* this is a safe race, when the ost is starting up...*/
-                        continue;
-                }
+			/* this is a safe race, when the ost is starting up...*/
+			continue;
+		}
 
-                /* osc.import = "connection=<Conn UUID>::<target instance>" */
-                ++pos;
-                params = buf + pos;
-                pos += sprintf(params, "%s.import=%s", cname, "connection=");
-                uuid = buf + pos;
+		/* osc.import = "connection=<Conn UUID>::<target instance>" */
+		++pos;
+		params = buf + pos;
+		pos += sprintf(params, "%s.import=%s", cname, "connection=");
+		uuid = buf + pos;
 
-		down_read(&obd->u.cli.cl_sem);
-		if (obd->u.cli.cl_import == NULL) {
+		with_imp_locked(obd, imp, rc) {
+			/* iterate all nids to find one */
+			/* find uuid by nid */
+			/* create import entries if they don't exist */
+			rc = client_import_add_nids_to_conn(
+				imp, entry->u.nids, entry->mne_nid_count,
+				(struct obd_uuid *)uuid);
+
+			if (rc == -ENOENT && dynamic_nids) {
+				/* create a new connection for this import */
+				char *primary_nid =
+					libcfs_nid2str(entry->u.nids[0]);
+				int prim_nid_len = strlen(primary_nid) + 1;
+				struct obd_uuid server_uuid;
+
+				if (prim_nid_len > UUID_MAX)
+					goto fail;
+				strncpy(server_uuid.uuid, primary_nid,
+					prim_nid_len);
+
+				CDEBUG(D_INFO, "Adding a connection for %s\n",
+				       primary_nid);
+
+				rc = client_import_dyn_add_conn(
+					imp, &server_uuid, entry->u.nids[0], 1);
+				if (rc < 0) {
+					CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
+					       obd->obd_name, primary_nid, rc);
+					goto fail;
+				}
+				rc = client_import_add_nids_to_conn(
+					imp, entry->u.nids,
+					entry->mne_nid_count,
+					(struct obd_uuid *)uuid);
+				if (rc < 0) {
+					CERROR("%s: failed to lookup UUID: rc = %d\n",
+					       obd->obd_name, rc);
+					goto fail;
+				}
+			}
+fail:;
+		}
+		if (rc == -ENODEV) {
 			/* client does not connect to the OST yet */
-			up_read(&obd->u.cli.cl_sem);
 			rc = 0;
 			continue;
 		}
 
-		/* iterate all nids to find one */
-		/* find uuid by nid */
-		/* create import entries if they don't exist */
-		rc = -ENOENT;
-		rc = client_import_add_nids_to_conn(obd->u.cli.cl_import,
-						    entry->u.nids,
-						    entry->mne_nid_count,
-						    (struct obd_uuid *)uuid);
-
-		if (rc == -ENOENT && dynamic_nids) {
-			/* create a new connection for this import */
-			char *primary_nid = libcfs_nid2str(entry->u.nids[0]);
-			int prim_nid_len = strlen(primary_nid) + 1;
-			struct obd_uuid server_uuid;
-
-			if (prim_nid_len > UUID_MAX)
-				goto fail;
-			strncpy(server_uuid.uuid, primary_nid, prim_nid_len);
-
-			CDEBUG(D_INFO, "Adding a connection for %s\n",
-			       primary_nid);
-
-			rc = client_import_dyn_add_conn(obd->u.cli.cl_import,
-							&server_uuid,
-							entry->u.nids[0], 1);
-			if (rc < 0) {
-				CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
-				       obd->obd_name, primary_nid, rc);
-				goto fail;
-			}
-			rc = client_import_add_nids_to_conn(obd->u.cli.cl_import,
-							entry->u.nids,
-							entry->mne_nid_count,
-							(struct obd_uuid *)uuid);
-			if (rc < 0) {
-				CERROR("%s: failed to lookup UUID: rc = %d\n",
-				       obd->obd_name, rc);
-				goto fail;
-			}
-		}
-
-fail:
-		up_read(&obd->u.cli.cl_sem);
 		if (rc < 0 && rc != -ENOSPC) {
 			CERROR("mgc: cannot find UUID by nid '%s': rc = %d\n",
 			       libcfs_nid2str(entry->u.nids[0]), rc);
@@ -1582,11 +1580,11 @@ fail:
 		CDEBUG(D_INFO, "Found UUID '%s' by NID '%s'\n",
 		       uuid, libcfs_nid2str(entry->u.nids[0]));
 
-                pos += strlen(uuid);
-                pos += sprintf(buf + pos, "::%u", entry->mne_instance);
-                LASSERT(pos < bufsz);
+		pos += strlen(uuid);
+		pos += sprintf(buf + pos, "::%u", entry->mne_instance);
+		LASSERT(pos < bufsz);
 
-                lustre_cfg_bufs_set_string(&bufs, 1, params);
+		lustre_cfg_bufs_set_string(&bufs, 1, params);
 
 		OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount,
 					       bufs.lcfg_buflen));
@@ -1597,17 +1595,17 @@ fail:
 		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
 		CDEBUG(D_INFO, "ir apply logs %lld/%lld for %s -> %s\n",
-                       prev_version, max_version, obdname, params);
+		       prev_version, max_version, obdname, params);
 
-                rc = class_process_config(lcfg);
+		rc = class_process_config(lcfg);
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 					      lcfg->lcfg_buflens));
-                if (rc)
-                        CDEBUG(D_INFO, "process config for %s error %d\n",
-                               obdname, rc);
+		if (rc)
+			CDEBUG(D_INFO, "process config for %s error %d\n",
+			       obdname, rc);
 
-                /* continue, even one with error */
-        }
+		/* continue, even one with error */
+	}
 
 	OBD_FREE(inst, PAGE_SIZE);
         RETURN(rc);
