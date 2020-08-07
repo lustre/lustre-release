@@ -78,7 +78,9 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 	rc = ioctl(fd, LL_IOC_LADVISE, ladvise_hdr);
 	if (rc < 0) {
 		llapi_error(LLAPI_MSG_ERROR, -errno, "cannot give advice");
-		return -1;
+		goto out;
+	} else {
+		rc = 0;
 	}
 
 	/* Copy results back in to caller provided structs */
@@ -92,6 +94,8 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 					ladvise_iter->lla_lockahead_result;
 	}
 
-	return 0;
+out:
+	free(ladvise_hdr);
+	return rc;
 }
 
