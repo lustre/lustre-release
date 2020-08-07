@@ -4482,6 +4482,7 @@ lnet_msgtyp2str (int type)
 		return ("<UNKNOWN>");
 	}
 }
+EXPORT_SYMBOL(lnet_msgtyp2str);
 
 int
 lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,

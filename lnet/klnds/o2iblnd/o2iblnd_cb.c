@@ -1644,6 +1644,15 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	/* Thread context */
 	LASSERT (!in_interrupt());
 
+	tx = kiblnd_get_idle_tx(ni, target.nid);
+	if (tx == NULL) {
+		CERROR("Can't allocate %s txd for %s\n",
+			lnet_msgtyp2str(type),
+			libcfs_nid2str(target.nid));
+		return -ENOMEM;
+	}
+	ibmsg = tx->tx_msg;
+
 	switch (type) {
 	default:
 		LBUG();
@@ -1659,17 +1668,9 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
                 /* is the REPLY message too small for RDMA? */
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[lntmsg->msg_md->md_length]);
-                if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
-                        break;                  /* send IMMEDIATE */
+		if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
+			break;                  /* send IMMEDIATE */
 
-		tx = kiblnd_get_idle_tx(ni, target.nid);
-		if (tx == NULL) {
-			CERROR("Can't allocate txd for GET to %s\n",
-			       libcfs_nid2str(target.nid));
-			return -ENOMEM;
-		}
-
-		ibmsg = tx->tx_msg;
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
 					  lntmsg->msg_md->md_niov,
@@ -1697,25 +1698,18 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			return -EIO;
 		}
 
-                tx->tx_lntmsg[0] = lntmsg;      /* finalise lntmsg[0,1] on completion */
-                tx->tx_waiting = 1;             /* waiting for GET_DONE */
-                kiblnd_launch_tx(ni, tx, target.nid);
-                return 0;
+		/* finalise lntmsg[0,1] on completion */
+		tx->tx_lntmsg[0] = lntmsg;
+		tx->tx_waiting = 1;             /* waiting for GET_DONE */
+		kiblnd_launch_tx(ni, tx, target.nid);
+		return 0;
 
-        case LNET_MSG_REPLY:
-        case LNET_MSG_PUT:
-                /* Is the payload small enough not to need RDMA? */
+	case LNET_MSG_REPLY:
+	case LNET_MSG_PUT:
+		/* Is the payload small enough not to need RDMA? */
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
-                        break;                  /* send IMMEDIATE */
-
-		tx = kiblnd_get_idle_tx(ni, target.nid);
-                if (tx == NULL) {
-                        CERROR("Can't allocate %s txd for %s\n",
-                               type == LNET_MSG_PUT ? "PUT" : "REPLY",
-                               libcfs_nid2str(target.nid));
-                        return -ENOMEM;
-                }
+		if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
+			break;                  /* send IMMEDIATE */
 
 		rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
 					  payload_niov, payload_kiov,
@@ -1727,31 +1721,24 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			return -EIO;
 		}
 
-                ibmsg = tx->tx_msg;
-                ibmsg->ibm_u.putreq.ibprm_hdr = *hdr;
-                ibmsg->ibm_u.putreq.ibprm_cookie = tx->tx_cookie;
+		ibmsg->ibm_u.putreq.ibprm_hdr = *hdr;
+		ibmsg->ibm_u.putreq.ibprm_cookie = tx->tx_cookie;
 		kiblnd_init_tx_msg(ni, tx, IBLND_MSG_PUT_REQ,
 				   sizeof(struct kib_putreq_msg));
 
-                tx->tx_lntmsg[0] = lntmsg;      /* finalise lntmsg on completion */
-                tx->tx_waiting = 1;             /* waiting for PUT_{ACK,NAK} */
-                kiblnd_launch_tx(ni, tx, target.nid);
-                return 0;
-        }
+		/* finalise lntmsg[0,1] on completion */
+		tx->tx_lntmsg[0] = lntmsg;
+		tx->tx_waiting = 1;             /* waiting for PUT_{ACK,NAK} */
+		kiblnd_launch_tx(ni, tx, target.nid);
+		return 0;
+	}
 
 	/* send IMMEDIATE */
 	LASSERT(offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[payload_nob])
 		<= IBLND_MSG_SIZE);
 
-	tx = kiblnd_get_idle_tx(ni, target.nid);
-        if (tx == NULL) {
-                CERROR ("Can't send %d to %s: tx descs exhausted\n",
-                        type, libcfs_nid2str(target.nid));
-                return -ENOMEM;
-        }
-
-        ibmsg = tx->tx_msg;
-        ibmsg->ibm_u.immediate.ibim_hdr = *hdr;
+	ibmsg = tx->tx_msg;
+	ibmsg->ibm_u.immediate.ibim_hdr = *hdr;
 
 	lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
 			    offsetof(struct kib_msg,
@@ -1760,11 +1747,14 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			    payload_offset, payload_nob);
 
 	nob = offsetof(struct kib_immediate_msg, ibim_payload[payload_nob]);
-        kiblnd_init_tx_msg(ni, tx, IBLND_MSG_IMMEDIATE, nob);
 
-        tx->tx_lntmsg[0] = lntmsg;              /* finalise lntmsg on completion */
-        kiblnd_launch_tx(ni, tx, target.nid);
-        return 0;
+	kiblnd_init_tx_msg(ni, tx, IBLND_MSG_IMMEDIATE, nob);
+
+	/* finalise lntmsg on completion */
+	tx->tx_lntmsg[0] = lntmsg;
+
+	kiblnd_launch_tx(ni, tx, target.nid);
+	return 0;
 }
 
 static void
