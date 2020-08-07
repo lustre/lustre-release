@@ -15778,7 +15778,8 @@ obdecho_test() {
 test_180a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-	if ! module_loaded obdecho; then
+	if ! [ -d /sys/fs/lustre/echo_client ] &&
+	   ! module_loaded obdecho; then
 		load_module obdecho/obdecho &&
 			stack_trap "rmmod obdecho" EXIT ||
 			error "unable to load obdecho on client"
