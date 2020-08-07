@@ -18,6 +18,9 @@
     <listitem>
       <para><xref linkend="managingSecurity.sepol"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.clientencryption"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="managingSecurity.acl">
     <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
@@ -158,10 +161,10 @@ other::---</screen>
       root squash feature also enables the Lustre file system administrator to
       specify a set of client for which UID/GID re-mapping does not apply.
     </para>
-		<note><para>Nodemaps (<xref linkend="lustrenodemap.title" />) are an
-		alternative to root squash, since it also allows root squash on a per-client
-		basis.  With UID maps, the clients can even have a local root UID without
-		actually having root access to the filesystem itself.</para></note>
+    <note><para>Nodemaps (<xref linkend="lustrenodemap.title" />) are an
+      alternative to root squash, since it also allows root squash on a per-client
+      basis.  With UID maps, the clients can even have a local root UID without
+      actually having root access to the filesystem itself.</para></note>
     <section xml:id="managingSecurity.root_squash.config" remap="h3">
       <title><indexterm>
         <primary>root squash</primary>
@@ -345,12 +348,12 @@ lctl get_param mdt.*.nosquash_nids</screen>
         This can be achieved by having physical hardware and/or network
         security, so that client nodes have well-known NIDs. It is also possible
         to make use of strong authentication with Kerberos or Shared-Secret Key
-	(see <xref linkend="lustressk" />).
-	Kerberos prevents NID spoofing, as every client needs its own
-	credentials, based on its NID, in order to connect to the servers.
-	Shared-Secret Key also prevents tenant impersonation, because keys
-	can be linked to a specific nodemap. See
-	<xref linkend="ssknodemaprole" /> for detailed explanations.
+        (see <xref linkend="lustressk" />).
+        Kerberos prevents NID spoofing, as every client needs its own
+        credentials, based on its NID, in order to connect to the servers.
+        Shared-Secret Key also prevents tenant impersonation, because keys
+        can be linked to a specific nodemap. See
+        <xref linkend="ssknodemaprole" /> for detailed explanations.
 </para>
     </section>
     <section xml:id="managingSecurity.isolation.configuring" remap="h3">
@@ -358,20 +361,20 @@ lctl get_param mdt.*.nosquash_nids</screen>
         configuring</secondary></indexterm>Configuring Isolation</title>
       <para>Isolation on Lustre can be achieved by setting the
         <literal>fileset</literal> parameter on a nodemap entry. All clients
-	belonging to this nodemap entry will automatically mount this fileset
-	instead of the root directory. For example:</para>
+        belonging to this nodemap entry will automatically mount this fileset
+        instead of the root directory. For example:</para>
       <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'</screen>
       <para>So all clients matching the <literal>tenant1</literal> nodemap will
         be automatically presented the fileset <literal>/dir1</literal> when
-	mounting. This means these clients are doing an implicit subdirectory
-	mount on the subdirectory <literal>/dir1</literal>.
+        mounting. This means these clients are doing an implicit subdirectory
+        mount on the subdirectory <literal>/dir1</literal>.
       </para>
       <note>
         <para>
-	  If subdirectory defined as fileset does not exist on the file system,
-	  it will prevent any client belonging to the nodemap from mounting
-	  Lustre.
-	</para>
+          If subdirectory defined as fileset does not exist on the file system,
+          it will prevent any client belonging to the nodemap from mounting
+          Lustre.
+        </para>
       </note>
       <para>To delete the fileset parameter, just set it to an empty string:
       </para>
@@ -435,51 +438,51 @@ mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</screen>
       </title>
       <para>A string that represents the SELinux Status info will be used by
         servers as a reference, to check if clients are enforcing SELinux
-	properly. This reference string can be obtained on a client node known
-	to enforce the right SELinux policy, by calling the
-	<literal>l_getsepol</literal> command line utility:</para>
-	<screen>client# l_getsepol
+        properly. This reference string can be obtained on a client node known
+        to enforce the right SELinux policy, by calling the
+        <literal>l_getsepol</literal> command line utility:</para>
+        <screen>client# l_getsepol
 SELinux status info: 1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</screen>
-	<para>The string describing the SELinux policy has the following
-	  syntax:</para>
-	<para><literal>mode:name:version:hash</literal></para>
-	<para>where:</para>
-	  <itemizedlist>
-	    <listitem>
-	      <para><literal>mode</literal> is a digit telling if SELinux is in
-	        Permissive mode (0) or Enforcing mode (1)</para>
-	    </listitem>
-	    <listitem>
-	      <para><literal>name</literal> is the name of the SELinux policy
-	      </para>
-	    </listitem>
-	    <listitem>
-	      <para><literal>version</literal> is the version of the SELinux
-	      policy</para>
-	    </listitem>
-	    <listitem>
-	      <para><literal>hash</literal> is the computed hash of the binary
-	        representation of the policy, as exported in
-	        /etc/selinux/<literal>name</literal>/policy/policy.
-		<literal>version</literal></para>
-	    </listitem>
-	  </itemizedlist>
+        <para>The string describing the SELinux policy has the following
+          syntax:</para>
+        <para><literal>mode:name:version:hash</literal></para>
+        <para>where:</para>
+          <itemizedlist>
+            <listitem>
+              <para><literal>mode</literal> is a digit telling if SELinux is in
+                Permissive mode (0) or Enforcing mode (1)</para>
+            </listitem>
+            <listitem>
+              <para><literal>name</literal> is the name of the SELinux policy
+              </para>
+            </listitem>
+            <listitem>
+              <para><literal>version</literal> is the version of the SELinux
+              policy</para>
+            </listitem>
+            <listitem>
+              <para><literal>hash</literal> is the computed hash of the binary
+                representation of the policy, as exported in
+                /etc/selinux/<literal>name</literal>/policy/policy.
+                <literal>version</literal></para>
+            </listitem>
+          </itemizedlist>
     </section>
     <section xml:id="managingSecurity.sepol.configuring" remap="h3">
       <title><indexterm><primary>selinux policy check</primary><secondary>
         enforcing</secondary></indexterm>Enforcing SELinux Policy Check</title>
       <para>SELinux policy check can be enforced by setting the
         <literal>sepol</literal> parameter on a nodemap entry. All clients
-	belonging to this nodemap entry must enforce the SELinux policy
-	described by this parameter, otherwise they are denied access to the
-	Lustre file system. For example:</para>
+        belonging to this nodemap entry must enforce the SELinux policy
+        described by this parameter, otherwise they are denied access to the
+        Lustre file system. For example:</para>
       <screen>mgs# lctl nodemap_set_sepol --name restricted
      --sepol '1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f'</screen>
       <para>So all clients matching the <literal>restricted</literal> nodemap
         must enforce the SELinux policy which description matches
-	<literal>1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</literal>.
-	If not, they will get Permission Denied when trying to mount or access
-	files on the Lustre file system.</para>
+        <literal>1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</literal>.
+        If not, they will get Permission Denied when trying to mount or access
+        files on the Lustre file system.</para>
       <para>To delete the <literal>sepol</literal> parameter, just set it to an
         empty string:</para>
       <screen>mgs# lctl nodemap_set_sepol --name restricted --sepol ''</screen>
@@ -489,7 +492,7 @@ SELinux status info: 1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc
     <section xml:id="managingSecurity.sepol.permanent" remap="h3">
       <title><indexterm><primary>selinux policy check</primary><secondary>
         making permanent</secondary></indexterm>Making SELinux Policy Check
-	Permanent</title>
+        Permanent</title>
       <para>In order to make SELinux Policy check permanent, the sepol parameter
         on the nodemap has to be set with <literal>lctl set_param</literal> with
         the <literal>-P</literal> option.</para>
@@ -502,30 +505,423 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
     <section xml:id="managingSecurity.sepol.client" remap="h3">
       <title><indexterm><primary>selinux policy check</primary><secondary>
         sending client</secondary></indexterm>Sending SELinux Status Info from
-	Clients</title>
+        Clients</title>
       <para>In order for Lustre clients to send their SELinux status
-	information, in	case SELinux is enabled locally, the
-	<literal>send_sepol</literal> ptlrpc kernel module's parameter has to be
-	set to a non-zero value. <literal>send_sepol</literal> accepts various
-	values:</para>
-	<itemizedlist>
-	    <listitem>
-	      <para>0: do not send SELinux policy info;</para>
-	    </listitem>
-	    <listitem>
-	      <para>-1: fetch SELinux policy info for every request;</para>
-	    </listitem>
-	    <listitem>
-	      <para>N > 0: only fetch SELinux policy info every N seconds. Use
-	        <literal>N = 2^31-1</literal> to have SELinux policy info
-		fetched only at mount time.</para>
-	    </listitem>
-	</itemizedlist>
-	<para>Clients that are part of a nodemap on which
-	  <literal>sepol</literal> is defined must send SELinux status info.
-	  And the SELinux policy they enforce must match the representation
-	  stored into the nodemap. Otherwise they will be denied access to the
-	  Lustre file system.</para>
+        information, in	case SELinux is enabled locally, the
+        <literal>send_sepol</literal> ptlrpc kernel module's parameter has to be
+        set to a non-zero value. <literal>send_sepol</literal> accepts various
+        values:</para>
+        <itemizedlist>
+            <listitem>
+              <para>0: do not send SELinux policy info;</para>
+            </listitem>
+            <listitem>
+              <para>-1: fetch SELinux policy info for every request;</para>
+            </listitem>
+            <listitem>
+              <para>N > 0: only fetch SELinux policy info every N seconds. Use
+                <literal>N = 2^31-1</literal> to have SELinux policy info
+                fetched only at mount time.</para>
+            </listitem>
+        </itemizedlist>
+        <para>Clients that are part of a nodemap on which
+          <literal>sepol</literal> is defined must send SELinux status info.
+          And the SELinux policy they enforce must match the representation
+          stored into the nodemap. Otherwise they will be denied access to the
+          Lustre file system.</para>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.clientencryption" condition='l2E'>
+    <title><indexterm><primary>Client-side encryption</primary></indexterm>
+    Encrypting files and directories</title>
+    <para>The purpose that client-side encryption wants to serve is to be able
+      to provide a special directory for each user, to safely store sensitive
+      files. The goals are to protect data in transit between clients and
+      servers, and protect data at rest.</para>
+    <para>This feature is implemented directly at the Lustre client level.
+      Lustre client-side encryption relies on kernel <literal>fscrypt</literal>.
+      <literal>fscrypt</literal> is a library which filesystems can hook into to
+      support transparent encryption of files and directories. As a consequence,
+      the key points described below are extracted from
+    <literal>fscrypt</literal> documentation.</para>
+    <para>For full details, please refer to documentation available with the
+      Lustre sources, under the
+      <literal>Documentation/client_side_encryption</literal> directory.
+    </para>
+    <note><para>The client-side encryption feature is available on Lustre
+      clients running a Linux distribution with at least kernel 5.4, or have
+      backported the <literal>fscrypt</literal> v2 support, including:</para>
+     <itemizedlist>
+       <listitem><para>CentOS/RHEL 8.1 and later;</para></listitem>
+       <listitem><para>Ubuntu 18.04 and later;</para></listitem>
+       <listitem><para>SLES 15 SP2 and later.</para></listitem>
+     </itemizedlist>
+    </note>
+    <section xml:id="managingSecurity.clientencryption.semantics" remap="h3">
+      <title><indexterm><primary>encryption access semantics</primary>
+      </indexterm>Client-side encryption access semantics</title>
+      <para>Only Lustre clients need access to encryption master keys. Keys are
+        added to the filesystem-level encryption keyring on the Lustre client.
+        <itemizedlist>
+          <listitem>
+            <para><emphasis role="bold">With the key</emphasis></para>
+            <para>With the encryption key, encrypted regular files, directories,
+              and symlinks behave very similarly to their unencrypted
+              counterparts --- after all, the encryption is intended to be
+              transparent. However, astute users may notice some differences in
+              behavior:</para>
+            <itemizedlist>
+              <listitem>
+                <para>Unencrypted files, or files encrypted with a different
+                  encryption policy (i.e. different key, modes, or flags),
+                  cannot be renamed or linked into an encrypted directory.
+                  However, encrypted files can be renamed within an encrypted
+                  directory, or into an unencrypted directory.</para>
+                <note><para>"moving" an unencrypted file into an encrypted
+                  directory, e.g. with the <literal>mv</literal> program, is
+                  implemented in userspace by a copy followed by a delete.  Be
+                  aware the original unencrypted data may remain recoverable
+                  from free space on the disk; it is best to keep all files
+                  encrypted from the very beginning.</para></note>
+              </listitem>
+              <listitem><para>On Lustre, Direct I/O is supported for encrypted
+                files.</para>
+              </listitem>
+              <listitem><para>The <literal>fallocate()</literal> operations
+                <literal>FALLOC_FL_COLLAPSE_RANGE</literal>,
+                <literal>FALLOC_FL_INSERT_RANGE</literal>, and
+                <literal>FALLOC_FL_ZERO_RANGE</literal> are not
+                supported on encrypted files and will fail with
+                <literal>EOPNOTSUPP</literal>.
+                </para>
+              </listitem>
+              <listitem><para>DAX (Direct Access) is not supported on encrypted
+                files.</para>
+              </listitem>
+              <listitem><para><literal>mmap</literal> is supported.  This is
+                possible because the pagecache for an encrypted file contains
+                the plaintext, not the ciphertext.</para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Without the key</emphasis></para>
+            <para>Some filesystem operations may be performed on encrypted
+              regular files, directories, and symlinks even before their
+              encryption key has been added, or after their encryption key has
+              been removed:</para>
+            <itemizedlist>
+              <listitem>
+                <para>File metadata may be read, e.g. using
+                  <literal>stat()</literal>.</para>
+              </listitem>
+              <listitem>
+                <para>Directories may be listed, and the whole namespace tree
+                  may be walked through.
+                </para>
+              </listitem>
+              <listitem>
+                <para>Files may be deleted.  That is, nondirectory files may be
+                  deleted with <literal>unlink()</literal> as usual, and empty
+                  directories may be deleted with <literal>rmdir()</literal> as
+                  usual. Therefore, <literal>rm</literal> and
+                  <literal>rm -r</literal> will work as expected.</para>
+              </listitem>
+              <listitem>
+                <para>Symlink targets may be read and followed, but they will
+                  be presented in encrypted form, similar to filenames in
+                  directories. Hence, they are unlikely to point to anywhere
+                  useful.</para>
+              </listitem>
+            </itemizedlist>
+            <para>Without the key, regular files cannot be opened or truncated.
+              Attempts to do so will fail with <literal>ENOKEY</literal>. This
+              implies that any regular file operations that require a file
+              descriptor, such as <literal>read()</literal>,
+              <literal>write()</literal>, <literal>mmap()</literal>,
+              <literal>fallocate()</literal>, and <literal>ioctl()</literal>,
+              are also forbidden.</para>
+            <para>Also without the key, files of any type (including
+              directories) cannot be created or linked into an encrypted
+              directory, nor can a name in an encrypted directory be the source
+              or target of a rename, nor can an <literal>O_TMPFILE</literal>
+              temporary file be created in an encrypted directory. All such
+              operations will fail with <literal>ENOKEY</literal>.</para>
+            <para>It is not currently possible to backup and restore encrypted
+              files without the encryption key.  This would require special
+              APIs which have not yet been implemented.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Encryption policy enforcement
+              </emphasis></para>
+            <para>After an encryption policy has been set on a directory, all
+             regular files, directories, and symbolic links created in that
+             directory (recursively) will inherit that encryption policy.
+             Special files --- that is, named pipes, device nodes, and UNIX
+             domain sockets --- will not be encrypted.</para>
+           <para>Except for those special files, it is forbidden to have
+             unencrypted files, or files encrypted with a different encryption
+             policy, in an encrypted directory tree.</para>
+           </listitem>
+         </itemizedlist>
+      </para>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.keyhierarchy" remap="h3">
+      <title><indexterm><primary>encryption key hierarchy</primary>
+      </indexterm>Client-side encryption key hierarchy</title>
+      <para>Each encrypted directory tree is protected by a master key.</para>
+      <para>To "unlock" an encrypted directory tree, userspace must provide the
+       appropriate master key.  There can be any number of master keys, each
+       of which protects any number of directory trees on any number of
+       filesystems.</para>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.modes" remap="h3">
+      <title><indexterm><primary>encryption modes usage</primary>
+      </indexterm>Client-side encryption modes and usage</title>
+      <para><literal>fscrypt</literal> allows one encryption mode to be
+       specified for file contents and one encryption mode to be specified for
+       filenames. Different directory trees are permitted to use different
+       encryption modes. Currently, the following pairs of encryption modes are
+       supported:</para>
+       <itemizedlist>
+         <listitem>
+           <para>AES-256-XTS for contents and AES-256-CTS-CBC for filenames
+           </para>
+         </listitem>
+         <listitem>
+           <para>AES-128-CBC for contents and AES-128-CTS-CBC for filenames
+           </para>
+         </listitem>
+       </itemizedlist>
+       <para>If unsure, you should use the (AES-256-XTS, AES-256-CTS-CBC) pair.
+      </para>
+      <warning><para>In Lustre 2.14, client-side encryption only supports
+       content encryption, and not filename encryption. As a consequence, only
+       content encryption mode will be taken into account, and filename
+       encryption mode will be ignored to leave filenames in clear text.</para>
+      </warning>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.threatmodel" remap="h3">
+      <title><indexterm><primary>encryption threat model</primary>
+      </indexterm>Client-side encryption threat model</title>
+      <itemizedlist>
+        <listitem>
+          <para><emphasis role="bold">Offline attacks</emphasis></para>
+          <para>For the Lustre case, block devices are Lustre targets attached
+            to the Lustre servers. Manipulating the filesystem offline means
+            accessing the filesystem on these targets while Lustre is offline.
+          </para>
+          <para>Provided that a strong encryption key is chosen,
+            <literal>fscrypt</literal> protects the confidentiality of file
+            contents in the event of a single point-in-time permanent offline
+            compromise of the block device content.
+            Lustre client-side encryption does not protect the confidentiality
+            of metadata, e.g. file names, file sizes, file permissions, file
+            timestamps, and extended attributes.  Also, the existence and
+            location of holes (unallocated blocks which logically contain all
+            zeroes) in files is not protected.</para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Online attacks</emphasis></para>
+          <itemizedlist>
+            <listitem>
+              <para>On Lustre client</para>
+              <para>After an encryption key has been added,
+                <literal>fscrypt</literal> does not hide the plaintext file
+                contents or filenames from other users on the same node.
+                Instead, existing access control mechanisms such as file mode
+                bits, POSIX ACLs, LSMs, or namespaces should be used for this
+                purpose.</para>
+              <para>For the Lustre case, it means plaintext file contents or
+                filenames are not hidden from other users on the same Lustre
+                client.</para>
+              <para>An attacker who compromises the system enough to read from
+                arbitrary memory, e.g. by exploiting a kernel security
+                vulnerability, can compromise all encryption keys that are
+                currently in use.
+                However, <literal>fscrypt</literal> allows encryption keys to
+                be removed from the kernel, which may protect them from later
+                compromise. Key removal can be carried out by non-root users.
+                In more detail, the key removal will wipe the master encryption
+                key from kernel memory.  Moreover, it will try to evict all
+                cached inodes which had been "unlocked" using the key, thereby
+                wiping their per-file keys and making them once again appear
+                "locked", i.e. in ciphertext or encrypted form.</para>
+            </listitem>
+            <listitem>
+              <para>On Lustre server</para>
+              <para>An attacker on a Lustre server who compromises the system
+                enough to read arbitrary memory, e.g. by exploiting a kernel
+                security vulnerability, cannot compromise Lustre files content.
+                Indeed, encryption keys are not forwarded to the Lustre servers,
+                and servers do not carry out decryption or encryption.
+                Moreover, bulk RPCs received by servers contain encrypted data,
+                which is written as-is to the underlying filesystem.</para>
+            </listitem>
+          </itemizedlist>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.fscrypt" remap="h3">
+      <title><indexterm><primary>encryption fscrypt policy</primary>
+      </indexterm>Manage encryption on directories</title>
+      <para>By default, Lustre client-side encryption is enabled, letting users
+       define encryption policies on a per-directory basis.</para>
+      <note><para>Administrators can decide to prevent a Lustre client
+       mount-point from using encryption by specifying the
+       <literal>noencrypt</literal> client mount option. This can be also
+       enforced from server side thanks to the
+       <literal>forbid_encryption</literal> property on nodemaps. See
+       <xref linkend="alteringproperties"/> for how to manage nodemaps.
+      </para></note>
+      <para><literal>fscrypt</literal> userspace tool can be used to manage
+       encryption policies. See https://github.com/google/fscrypt for
+       comprehensive explanations. Below are examples on how to use this tool
+       with Lustre. If not told otherwise, commands must be run on Lustre
+       client side.</para>
+      <itemizedlist>
+        <listitem>
+          <para>Two preliminary steps are required before actually deciding
+            which directories to encrypt, and this is the only
+            functionality which requires root privileges. Administrator has to
+            run:</para>
+          <screen># fscrypt setup
+Customizing passphrase hashing difficulty for this system...
+Created global config file at "/etc/fscrypt.conf".
+Metadata directories created at "/.fscrypt".</screen>
+          <para>This first command has to be run on all clients that want to use
+            encryption, as it sets up global fscrypt parameters outside of
+            Lustre.</para>
+          <screen># fscrypt setup /mnt/lustre
+Metadata directories created at "/mnt/lustre/.fscrypt"</screen>
+          <para>This second command has to be run on just one Lustre
+            client.</para>
+          <note><para>The file <literal>/etc/fscrypt.conf</literal> can be
+            edited. It is strongly recommended to set
+            <literal>policy_version</literal> to 2, so that
+            <literal>fscrypt</literal> wipes files from memory when the
+            encryption key is removed.</para></note>
+        </listitem>
+        <listitem>
+          <para>Now a regular user is able to select a directory to
+            encrypt:</para>
+            <screen>$ fscrypt encrypt /mnt/lustre/vault
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: shield
+Enter custom passphrase for protector "shield":
+Confirm passphrase:
+"/mnt/lustre/vault" is now encrypted, unlocked, and ready for use.</screen>
+          <para>Starting from here, all files and directories created under
+            <literal>/mnt/lustre/vault</literal> will be encrypted, according
+            to the policy defined at the previsous step.</para>
+          <note><para>The encryption policy is inherited by all subdirectories.
+            It is not possible to change the policy for a subdirectory.</para>
+          </note>
+        </listitem>
+        <listitem>
+          <para>Another user can decide to encrypt a different directory with
+            its own protector:</para>
+            <screen>$ fscrypt encrypt /mnt/lustre/private
+Should we create a new protector? [y/N] Y
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: armor
+Enter custom passphrase for protector "armor":
+Confirm passphrase:
+"/mnt/lustre/private" is now encrypted, unlocked, and ready for use.</screen>
+        </listitem>
+        <listitem>
+          <para>Users can decide to lock an encrypted directory at any
+            time:</para>
+          <screen>$ fscrypt lock /mnt/lustre/vault
+"/mnt/lustre/vault" is now locked.</screen>
+          <para>This action prevents access to encrypted content, and by
+            removing the key from memory, it also wipes files from memory if
+            they are not still open.</para>
+        </listitem>
+        <listitem>
+          <para>Users regain access to the encrypted directory with the command:
+          </para>
+          <screen>$ fscrypt unlock /mnt/lustre/vault
+Enter custom passphrase for protector "shield":
+"/mnt/lustre/vault" is now unlocked and ready for use.</screen>
+        </listitem>
+        <listitem>
+          <para>Actually, <literal>fscrypt</literal> does not give direct access
+            to master keys, but to protectors that are used to encrypt them.
+            This mechanism gives the ability to change a passphrase:</para>
+            <screen>$ fscrypt status /mnt/lustre
+lustre filesystem "/mnt/lustre" has 2 protectors and 2 policies
+
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+e691ae7a1990fc2a  No      custom protector "armor"
+
+POLICY                            UNLOCKED  PROTECTORS
+52b2b5aff0e59d8e0d58f962e715862e  No        deacab807bf0e788
+374e8944e4294b527e50363d86fc9411  No        e691ae7a1990fc2a
+
+$ fscrypt metadata change-passphrase --protector=/mnt/lustre:deacab807bf0e788
+Enter old custom passphrase for protector "shield":
+Enter new custom passphrase for protector "shield":
+Confirm passphrase:
+Passphrase for protector deacab807bf0e788 successfully changed.</screen>
+          <para>It makes also possible to have multiple protectors for the same
+            policy. This is really useful when several users share an encrypted
+            directory, because it avoids the need to share any secret between
+            them.</para>
+           <screen>$ fscrypt status /mnt/lustre/vault
+"/mnt/lustre/vault" is encrypted with fscrypt.
+
+Policy:   52b2b5aff0e59d8e0d58f962e715862e
+Options:  padding:32 contents:AES_256_XTS filenames:AES_256_CTS policy_version:2
+Unlocked: No
+
+Protected with 1 protector:
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+
+$ fscrypt metadata create protector /mnt/lustre
+Create new protector on "/mnt/lustre" [Y/n] Y
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: bunker
+Enter custom passphrase for protector "bunker":
+Confirm passphrase:
+Protector f3cc1b5cf9b8f41c created on filesystem "/mnt/lustre".
+
+$ fscrypt metadata add-protector-to-policy
+          --protector=/mnt/lustre:f3cc1b5cf9b8f41c
+          --policy=/mnt/lustre:52b2b5aff0e59d8e0d58f962e715862e
+WARNING: All files using this policy will be accessible with this protector!!
+Protect policy 52b2b5aff0e59d8e0d58f962e715862e with protector f3cc1b5cf9b8f41c? [Y/n] Y
+Enter custom passphrase for protector "bunker":
+Enter custom passphrase for protector "shield":
+Protector f3cc1b5cf9b8f41c now protecting policy 52b2b5aff0e59d8e0d58f962e715862e.
+
+$ fscrypt status /mnt/lustre/vault
+"/mnt/lustre/vault" is encrypted with fscrypt.
+
+Policy:   52b2b5aff0e59d8e0d58f962e715862e
+Options:  padding:32 contents:AES_256_XTS filenames:AES_256_CTS policy_version:2
+Unlocked: No
+
+Protected with 2 protectors:
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+f3cc1b5cf9b8f41c  No      custom protector "bunker"</screen>
+        </listitem>
+      </itemizedlist>
     </section>
   </section>
 </chapter>
