@@ -2949,6 +2949,68 @@ static bool lnet_is_nid_in_ping_info(lnet_nid_t nid, struct lnet_ping_info *pinf
 	return false;
 }
 
+/* Delete a peer that has been marked for deletion. NB: when this peer was added
+ * to the discovery queue a reference was taken that will prevent the peer from
+ * actually being freed by this function. After this function exits the
+ * discovery thread should call lnet_peer_discovery_complete() which will
+ * drop that reference as well as wake any waiters that may also be holding a
+ * ref on the peer
+ */
+static int lnet_peer_deletion(struct lnet_peer *lp)
+__must_hold(&lp->lp_lock)
+{
+	struct list_head rlist;
+	struct lnet_route *route, *tmp;
+	int sensitivity = lp->lp_health_sensitivity;
+
+	INIT_LIST_HEAD(&rlist);
+
+	lp->lp_state &= ~(LNET_PEER_DISCOVERING | LNET_PEER_FORCE_PING |
+			  LNET_PEER_FORCE_PUSH);
+	CDEBUG(D_NET, "peer %s(%p) state %#x\n",
+	       libcfs_nid2str(lp->lp_primary_nid), lp, lp->lp_state);
+
+	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
+		return -ESHUTDOWN;
+
+	spin_unlock(&lp->lp_lock);
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	/* remove the peer from the discovery work
+	 * queue if it's on there in preparation
+	 * of deleting it.
+	 */
+	if (!list_empty(&lp->lp_dc_list))
+		list_del(&lp->lp_dc_list);
+	list_for_each_entry_safe(route, tmp,
+				 &lp->lp_routes,
+				 lr_gwlist)
+		lnet_move_route(route, NULL, &rlist);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	/* lnet_peer_del() deletes all the peer NIs owned by this peer */
+	lnet_peer_del(lp);
+
+	list_for_each_entry_safe(route, tmp,
+				 &rlist, lr_list) {
+		/* re-add these routes */
+		lnet_add_route(route->lr_net,
+			       route->lr_hops,
+			       route->lr_nid,
+			       route->lr_priority,
+			       sensitivity);
+		LIBCFS_FREE(route, sizeof(*route));
+	}
+
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	spin_lock(&lp->lp_lock);
+
+	return 0;
+}
+
 /*
  * Update a peer using the data received.
  */
@@ -3526,7 +3588,9 @@ static int lnet_peer_discovery(void *arg)
 			CDEBUG(D_NET, "peer %s(%p) state %#x\n",
 				libcfs_nid2str(lp->lp_primary_nid), lp,
 				lp->lp_state);
-			if (lp->lp_state & LNET_PEER_DATA_PRESENT)
+			if (lp->lp_state & LNET_PEER_MARK_DELETION)
+				rc = lnet_peer_deletion(lp);
+			else if (lp->lp_state & LNET_PEER_DATA_PRESENT)
 				rc = lnet_peer_data_present(lp);
 			else if (lp->lp_state & LNET_PEER_PING_FAILED)
 				rc = lnet_peer_ping_failed(lp);
@@ -3559,49 +3623,6 @@ static int lnet_peer_discovery(void *arg)
 			if (the_lnet.ln_dc_state == LNET_DC_STATE_STOPPING)
 				break;
 
-			if (lp->lp_state & LNET_PEER_MARK_DELETION) {
-				struct list_head rlist;
-				struct lnet_route *route, *tmp;
-				int sensitivity = lp->lp_health_sensitivity;
-
-				INIT_LIST_HEAD(&rlist);
-
-				/*
-				 * remove the peer from the discovery work
-				 * queue if it's on there in preparation
-				 * of deleting it.
-				 */
-				if (!list_empty(&lp->lp_dc_list))
-					list_del(&lp->lp_dc_list);
-
-				lnet_net_unlock(LNET_LOCK_EX);
-
-				mutex_lock(&the_lnet.ln_api_mutex);
-
-				lnet_net_lock(LNET_LOCK_EX);
-				list_for_each_entry_safe(route, tmp,
-							 &lp->lp_routes,
-							 lr_gwlist)
-					lnet_move_route(route, NULL, &rlist);
-				lnet_net_unlock(LNET_LOCK_EX);
-
-				/* delete the peer */
-				lnet_peer_del(lp);
-
-				list_for_each_entry_safe(route, tmp,
-							 &rlist, lr_list) {
-					/* re-add these routes */
-					lnet_add_route(route->lr_net,
-						       route->lr_hops,
-						       route->lr_nid,
-						       route->lr_priority,
-						       sensitivity);
-					LIBCFS_FREE(route, sizeof(*route));
-				}
-				mutex_unlock(&the_lnet.ln_api_mutex);
-
-				lnet_net_lock(LNET_LOCK_EX);
-			}
 		}
 
 		lnet_net_unlock(LNET_LOCK_EX);
