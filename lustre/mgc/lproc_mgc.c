@@ -74,10 +74,46 @@ LUSTRE_RO_ATTR(conn_uuid);
 
 LUSTRE_RW_ATTR(ping);
 
+ssize_t dynamic_nids_show(struct kobject *kobj, struct attribute *attr,
+			  char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	ssize_t count;
+
+	ENTRY;
+	count = snprintf(buf, PAGE_SIZE, "%u\n", obd->obd_dynamic_nids);
+
+	RETURN(count);
+}
+
+ssize_t dynamic_nids_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	ENTRY;
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&obd->obd_dev_lock);
+	obd->obd_dynamic_nids = val;
+	spin_unlock(&obd->obd_dev_lock);
+
+	RETURN(count);
+}
+
+LUSTRE_RW_ATTR(dynamic_nids);
+
 static struct attribute *mgc_attrs[] = {
 	&lustre_attr_mgs_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,
+	&lustre_attr_dynamic_nids.attr,
 	NULL,
 };
 

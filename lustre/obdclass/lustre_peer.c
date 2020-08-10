@@ -40,13 +40,11 @@
 #include <lustre_net.h>
 #include <lprocfs_status.h>
 
-#define NIDS_MAX        32
-
 struct uuid_nid_data {
 	struct list_head	un_list;
 	struct obd_uuid		un_uuid;
 	int			un_nid_count;
-	lnet_nid_t		un_nids[NIDS_MAX];
+	lnet_nid_t		un_nids[MTI_NIDS_MAX];
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -107,7 +105,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 					break;
 
 			if (i == entry->un_nid_count) {
-				LASSERT(entry->un_nid_count < NIDS_MAX);
+				LASSERT(entry->un_nid_count < MTI_NIDS_MAX);
 				entry->un_nids[entry->un_nid_count++] = nid;
 			}
 			break;
@@ -126,6 +124,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(class_add_uuid);
 
 /* Delete the nids for one uuid if specified, otherwise delete all */
 int class_del_uuid(const char *uuid)
@@ -167,6 +166,38 @@ int class_del_uuid(const char *uuid)
 	}
 	return 0;
 }
+
+int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
+			   int nid_count)
+{
+	struct uuid_nid_data *entry;
+	int i;
+
+	ENTRY;
+
+	if (nid_count >= MTI_NIDS_MAX) {
+		CDEBUG(D_NET, "too many NIDs (%d) for UUID '%s'\n",
+			nid_count, obd_uuid2str(uuid));
+		return -ENOSPC;
+	}
+
+	spin_lock(&g_uuid_lock);
+	list_for_each_entry(entry, &g_uuid_list, un_list) {
+		CDEBUG(D_NET, "Comparing %s with %s\n",
+		       obd_uuid2str(uuid), obd_uuid2str(&entry->un_uuid));
+
+		if (!obd_uuid_equals(&entry->un_uuid, uuid))
+			continue;
+		CDEBUG(D_NET, "Updating UUID '%s'\n", obd_uuid2str(uuid));
+		for (i = 0; i < nid_count; i++)
+			entry->un_nids[i] = nids[i];
+		entry->un_nid_count = nid_count;
+		break;
+	}
+	spin_unlock(&g_uuid_lock);
+	RETURN(0);
+}
+EXPORT_SYMBOL(class_add_nids_to_uuid);
 
 /* check if @nid exists in nid list of @uuid */
 int class_check_uuid(struct obd_uuid *uuid, __u64 nid)

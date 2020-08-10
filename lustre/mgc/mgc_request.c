@@ -1386,10 +1386,14 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	int pos = 0;
 	int rc  = 0;
 	int off = 0;
+	unsigned long dynamic_nids;
 
 	ENTRY;
 	LASSERT(cfg->cfg_instance != 0);
 	LASSERT(ll_get_cfg_instance(cfg->cfg_sb) == cfg->cfg_instance);
+
+	/* get dynamic nids setting */
+	dynamic_nids = mgc->obd_dynamic_nids;
 
 	OBD_ALLOC(inst, PAGE_SIZE);
 	if (inst == NULL)
@@ -1414,36 +1418,36 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 #endif /* HAVE_SERVER_SUPPORT */
 	}
 
-        ++pos;
-        buf   = inst + pos;
+	++pos;
+	buf   = inst + pos;
 	bufsz = PAGE_SIZE - pos;
 
-        while (datalen > 0) {
-                int   entry_len = sizeof(*entry);
-		int   is_ost, i;
-                struct obd_device *obd;
-                char *obdname;
-                char *cname;
-                char *params;
-                char *uuid;
+	while (datalen > 0) {
+		int   entry_len = sizeof(*entry);
+		int   is_ost;
+		struct obd_device *obd;
+		char *obdname;
+		char *cname;
+		char *params;
+		char *uuid;
 
-                rc = -EINVAL;
-                if (datalen < sizeof(*entry))
-                        break;
+		rc = -EINVAL;
+		if (datalen < sizeof(*entry))
+			break;
 
-                entry = (typeof(entry))(data + off);
+		entry = (typeof(entry))(data + off);
 
-                /* sanity check */
-                if (entry->mne_nid_type != 0) /* only support type 0 for ipv4 */
-                        break;
-                if (entry->mne_nid_count == 0) /* at least one nid entry */
-                        break;
-                if (entry->mne_nid_size != sizeof(lnet_nid_t))
-                        break;
+		/* sanity check */
+		if (entry->mne_nid_type != 0) /* only support type 0 for ipv4 */
+			break;
+		if (entry->mne_nid_count == 0) /* at least one nid entry */
+			break;
+		if (entry->mne_nid_size != sizeof(lnet_nid_t))
+			break;
 
-                entry_len += entry->mne_nid_count * entry->mne_nid_size;
-                if (datalen < entry_len) /* must have entry_len at least */
-                        break;
+		entry_len += entry->mne_nid_count * entry->mne_nid_size;
+		if (datalen < entry_len) /* must have entry_len at least */
+			break;
 
 		/* Keep this swab for normal mixed endian handling. LU-1644 */
 		if (mne_swab)
@@ -1528,24 +1532,55 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
 		/* iterate all nids to find one */
 		/* find uuid by nid */
+		/* create import entries if they don't exist */
 		rc = -ENOENT;
-		for (i = 0; i < entry->mne_nid_count; i++) {
-			rc = client_import_find_conn(obd->u.cli.cl_import,
-						     entry->u.nids[i],
-						     (struct obd_uuid *)uuid);
-			if (rc == 0)
-				break;
+		rc = client_import_add_nids_to_conn(obd->u.cli.cl_import,
+						    entry->u.nids,
+						    entry->mne_nid_count,
+						    (struct obd_uuid *)uuid);
+
+		if (rc == -ENOENT && dynamic_nids) {
+			/* create a new connection for this import */
+			char *primary_nid = libcfs_nid2str(entry->u.nids[0]);
+			int prim_nid_len = strlen(primary_nid) + 1;
+			struct obd_uuid server_uuid;
+
+			if (prim_nid_len > UUID_MAX)
+				goto fail;
+			strncpy(server_uuid.uuid, primary_nid, prim_nid_len);
+
+			CDEBUG(D_INFO, "Adding a connection for %s\n",
+			       primary_nid);
+
+			rc = client_import_dyn_add_conn(obd->u.cli.cl_import,
+							&server_uuid,
+							entry->u.nids[0], 1);
+			if (rc < 0) {
+				CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
+				       obd->obd_name, primary_nid, rc);
+				goto fail;
+			}
+			rc = client_import_add_nids_to_conn(obd->u.cli.cl_import,
+							entry->u.nids,
+							entry->mne_nid_count,
+							(struct obd_uuid *)uuid);
+			if (rc < 0) {
+				CERROR("%s: failed to lookup UUID: rc = %d\n",
+				       obd->obd_name, rc);
+				goto fail;
+			}
 		}
 
+fail:
 		up_read(&obd->u.cli.cl_sem);
-                if (rc < 0) {
-                        CERROR("mgc: cannot find uuid by nid %s\n",
-                               libcfs_nid2str(entry->u.nids[0]));
-                        break;
-                }
+		if (rc < 0 && rc != -ENOSPC) {
+			CERROR("mgc: cannot find UUID by nid '%s': rc = %d\n",
+			       libcfs_nid2str(entry->u.nids[0]), rc);
+			break;
+		}
 
-                CDEBUG(D_INFO, "Find uuid %s by nid %s\n",
-                       uuid, libcfs_nid2str(entry->u.nids[0]));
+		CDEBUG(D_INFO, "Found UUID '%s' by NID '%s'\n",
+		       uuid, libcfs_nid2str(entry->u.nids[0]));
 
                 pos += strlen(uuid);
                 pos += sprintf(buf + pos, "::%u", entry->mne_instance);

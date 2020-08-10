@@ -141,6 +141,51 @@ int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 }
 EXPORT_SYMBOL(client_import_add_conn);
 
+int client_import_dyn_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+			       lnet_nid_t prim_nid, int priority)
+{
+	struct ptlrpc_connection *ptlrpc_conn;
+	int rc;
+
+	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, prim_nid);
+	if (!ptlrpc_conn) {
+		const char *str_uuid = obd_uuid2str(uuid);
+
+		rc = class_add_uuid(str_uuid, prim_nid);
+		if (rc) {
+			CERROR("%s: failed to add UUID '%s': rc = %d\n",
+			       imp->imp_obd->obd_name, str_uuid, rc);
+			return rc;
+		}
+	}
+	return import_set_conn(imp, uuid, priority, 1);
+}
+EXPORT_SYMBOL(client_import_dyn_add_conn);
+
+int client_import_add_nids_to_conn(struct obd_import *imp, lnet_nid_t *nids,
+				   int nid_count, struct obd_uuid *uuid)
+{
+	struct obd_import_conn *conn;
+	int rc = -ENOENT;
+
+	ENTRY;
+	if (nid_count <= 0 || !nids)
+		return rc;
+
+	spin_lock(&imp->imp_lock);
+	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+		if (class_check_uuid(&conn->oic_uuid, nids[0])) {
+			*uuid = conn->oic_uuid;
+			rc = class_add_nids_to_uuid(&conn->oic_uuid, nids,
+						    nid_count);
+			break;
+		}
+	}
+	spin_unlock(&imp->imp_lock);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(client_import_add_nids_to_conn);
+
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 {
 	struct obd_import_conn *imp_conn;
