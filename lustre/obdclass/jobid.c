@@ -697,26 +697,19 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 		rc = jobid_interpret_string(obd_jobid_name, jobid, joblen);
 	} else if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
 		rc = jobid_interpret_string("%e.%u", jobid, joblen);
-	} else if (strcmp(obd_jobid_var, JOBSTATS_SESSION) == 0) {
-		char *jid;
-
-		rcu_read_lock();
-		jid = jobid_current();
-		if (jid)
-			strlcpy(jobid, jid, sizeof(jobid));
-		rcu_read_unlock();
-	} else if (jobid_name_is_valid(current->comm)) {
+	} else if (strcmp(obd_jobid_var, JOBSTATS_SESSION) == 0 ||
+		   jobid_name_is_valid(current->comm)) {
 		/*
-		 * obd_jobid_var holds the jobid environment variable name.
-		 * Skip initial check if obd_jobid_name already uses "%j",
-		 * otherwise try just "%j" first, then fall back to whatever
-		 * is in obd_jobid_name if obd_jobid_var is not found.
+		 * per-process jobid wanted, either from environment or from
+		 * per-session setting.
+		 * If obd_jobid_name contains "%j" or if getting the pre-process
+		 * jobid directly fails, fall back to using obd_jobid_name.
 		 */
 		rc = -EAGAIN;
 		if (!strnstr(obd_jobid_name, "%j", joblen))
 			rc = jobid_get_from_cache(jobid, joblen);
 
-		/* fall back to jobid_node if jobid_var not in environment */
+		/* fall back to jobid_node if jobid_var not available */
 		if (rc < 0) {
 			int rc2 = jobid_interpret_string(obd_jobid_name,
 							 jobid, joblen);

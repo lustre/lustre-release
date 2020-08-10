@@ -16566,11 +16566,25 @@ test_205a() { # Job stats
 			error "Unexpected jobids when jobid_var=$JOBENV"
 	fi
 
-	lctl set_param jobid_var=USER jobid_name="S.%j.%e.%u.%h.E"
-	JOBENV="JOBCOMPLEX"
-	JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname).E"
+	# test '%j' access to environment variable - if supported
+	if lctl set_param jobid_var=USER jobid_name="S.%j.%e.%u.%h.E"; then
+		JOBENV="JOBCOMPLEX"
+		JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname).E"
 
-	verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+		verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+	fi
+
+	# test '%j' access to per-session jobid - if supported
+	if lctl list_param jobid_this_session > /dev/null 2>&1
+	then
+		lctl set_param jobid_var=session jobid_name="S.%j.%e.%u.%h.E"
+		lctl set_param jobid_this_session=$USER
+
+		JOBENV="JOBCOMPLEX"
+		JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname).E"
+
+		verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+	fi
 }
 run_test 205a "Verify job stats"
 
@@ -16578,7 +16592,9 @@ run_test 205a "Verify job stats"
 test_205b() {
 	job_stats="mdt.*.job_stats"
 	$LCTL set_param $job_stats=clear
-	$LCTL set_param jobid_var=USER jobid_name="%e.%u"
+	# Setting jobid_var to USER might not be supported
+	$LCTL set_param jobid_var=USER || true
+	$LCTL set_param jobid_name="%e.%u"
 	env -i USERTESTJOBSTATS=foolish touch $DIR/$tfile.1
 	do_facet $SINGLEMDS $LCTL get_param $job_stats |
 		grep "job_id:.*foolish" &&
@@ -22220,70 +22236,92 @@ test_401a() { #LU-7437
 run_test 401a "Verify if 'lctl list_param -R' can list parameters recursively"
 
 test_401b() {
-	local save=$($LCTL get_param -n jobid_var)
-	local tmp=testing
+	# jobid_var may not allow arbitrary values, so use jobid_name
+	# if available
+	if $LCTL list_param jobid_name > /dev/null 2>&1; then
+		local testname=jobid_name tmp='testing%p'
+	else
+		local testname=jobid_var tmp=testing
+	fi
 
-	$LCTL set_param foo=bar jobid_var=$tmp bar=baz &&
+	local save=$($LCTL get_param -n $testname)
+
+	$LCTL set_param foo=bar $testname=$tmp bar=baz &&
 		error "no error returned when setting bad parameters"
 
-	local jobid_new=$($LCTL get_param -n foe jobid_var baz)
+	local jobid_new=$($LCTL get_param -n foe $testname baz)
 	[[ "$jobid_new" == "$tmp" ]] || error "jobid tmp $jobid_new != $tmp"
 
-	$LCTL set_param -n fog=bam jobid_var=$save bat=fog
-	local jobid_old=$($LCTL get_param -n foe jobid_var bag)
+	$LCTL set_param -n fog=bam $testname=$save bat=fog
+	local jobid_old=$($LCTL get_param -n foe $testname bag)
 	[[ "$jobid_old" == "$save" ]] || error "jobid new $jobid_old != $save"
 }
 run_test 401b "Verify 'lctl {get,set}_param' continue after error"
 
 test_401c() {
-	local jobid_var_old=$($LCTL get_param -n jobid_var)
+	# jobid_var may not allow arbitrary values, so use jobid_name
+	# if available
+	if $LCTL list_param jobid_name > /dev/null 2>&1; then
+		local testname=jobid_name
+	else
+		local testname=jobid_var
+	fi
+
+	local jobid_var_old=$($LCTL get_param -n $testname)
 	local jobid_var_new
 
-	$LCTL set_param jobid_var= &&
+	$LCTL set_param $testname= &&
 		error "no error returned for 'set_param a='"
 
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_old" == "$jobid_var_new" ]] ||
-		error "jobid_var was changed by setting without value"
+		error "$testname was changed by setting without value"
 
-	$LCTL set_param jobid_var &&
+	$LCTL set_param $testname &&
 		error "no error returned for 'set_param a'"
 
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_old" == "$jobid_var_new" ]] ||
-		error "jobid_var was changed by setting without value"
+		error "$testname was changed by setting without value"
 }
 run_test 401c "Verify 'lctl set_param' without value fails in either format."
 
 test_401d() {
-	local jobid_var_old=$($LCTL get_param -n jobid_var)
-	local jobid_var_new
-	local new_value="foo=bar"
+	# jobid_var may not allow arbitrary values, so use jobid_name
+	# if available
+	if $LCTL list_param jobid_name > /dev/null 2>&1; then
+		local testname=jobid_name new_value='foo=bar%p'
+	else
+		local testname=jobid_var new_valuie=foo=bar
+	fi
 
-	$LCTL set_param jobid_var=$new_value ||
+	local jobid_var_old=$($LCTL get_param -n $testname)
+	local jobid_var_new
+
+	$LCTL set_param $testname=$new_value ||
 		error "'set_param a=b' did not accept a value containing '='"
 
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_new" == "$new_value" ]] ||
 		error "'set_param a=b' failed on a value containing '='"
 
-	# Reset the jobid_var to test the other format
-	$LCTL set_param jobid_var=$jobid_var_old
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	# Reset the $testname to test the other format
+	$LCTL set_param $testname=$jobid_var_old
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_new" == "$jobid_var_old" ]] ||
-		error "failed to reset jobid_var"
+		error "failed to reset $testname"
 
-	$LCTL set_param jobid_var $new_value ||
+	$LCTL set_param $testname $new_value ||
 		error "'set_param a b' did not accept a value containing '='"
 
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_new" == "$new_value" ]] ||
 		error "'set_param a b' failed on a value containing '='"
 
-	$LCTL set_param jobid_var $jobid_var_old
-	jobid_var_new=$($LCTL get_param -n jobid_var)
+	$LCTL set_param $testname $jobid_var_old
+	jobid_var_new=$($LCTL get_param -n $testname)
 	[[ "$jobid_var_new" == "$jobid_var_old" ]] ||
-		error "failed to reset jobid_var"
+		error "failed to reset $testname"
 }
 run_test 401d "Verify 'lctl set_param' accepts values containing '='"
 
