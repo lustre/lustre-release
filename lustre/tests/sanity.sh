@@ -22356,6 +22356,8 @@ test_410()
 {
 	[[ $CLIENT_VERSION -lt $(version_code 2.9.59) ]] &&
 		skip "Need client version at least 2.9.59"
+	[ -f $LUSTRE/tests/kernel/kinode.ko ] ||
+		skip "Need MODULES build"
 
 	# Create a file, and stat it from the kernel
 	local testfile=$DIR/$tfile
