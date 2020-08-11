@@ -3967,6 +3967,81 @@ test_53() {
 }
 run_test 53 "Mixed PAGE_SIZE clients"
 
+test_54() {
+	local testdir=$DIR/$tdir/$ID0
+	local testfile=$testdir/$tfile
+	local testfile2=$testdir/${tfile}2
+	local tmpfile=$TMP/${tfile}.tmp
+	local resfile=$TMP/${tfile}.res
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	which fscrypt || skip "This test needs fscrypt userspace tool"
+
+	fscrypt setup --force --verbose || error "fscrypt global setup failed"
+	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+		/etc/fscrypt.conf
+	fscrypt setup --verbose $MOUNT || error "fscrypt setup $MOUNT failed"
+	mkdir -p $testdir
+	chown -R $ID0:$ID0 $testdir
+
+	echo -e 'mypass\nmypass' | su - $USER0 -c "fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector $testdir" ||
+		error "fscrypt encrypt failed"
+
+	echo -e 'mypass\nmypass' | su - $USER0 -c "fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector2 $testdir" &&
+		error "second fscrypt encrypt should have failed"
+
+	mkdir -p ${testdir}2 || error "mkdir ${testdir}2 failed"
+	touch ${testdir}2/f || error "mkdir ${testdir}2/f failed"
+	cancel_lru_locks
+
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector3 ${testdir}2 &&
+		error "fscrypt encrypt on non-empty dir should have failed"
+
+	$RUNAS dd if=/dev/urandom of=$testfile bs=127 count=1 conv=fsync ||
+		error "write to encrypted file $testfile failed"
+	cp $testfile $tmpfile
+	$RUNAS dd if=/dev/urandom of=$testfile2 bs=127 count=1 conv=fsync ||
+		error "write to encrypted file $testfile2 failed"
+
+	$RUNAS fscrypt lock --verbose $testdir ||
+		error "fscrypt lock $testdir failed (1)"
+
+	$RUNAS hexdump -C $testfile &&
+		error "reading $testfile should have failed without key"
+
+	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
+		error "fscrypt unlock $testdir failed (1)"
+
+	$RUNAS cat $testfile > $resfile ||
+		error "reading $testfile failed"
+
+	cmp -bl $tmpfile $resfile || error "file read differs from file written"
+
+	$RUNAS fscrypt lock --verbose $testdir ||
+		error "fscrypt lock $testdir failed (2)"
+
+	$RUNAS hexdump -C $testfile2 &&
+		error "reading $testfile2 should have failed without key"
+
+	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
+		error "fscrypt unlock $testdir failed (2)"
+
+	rm -rf $testdir/*
+	$RUNAS fscrypt lock --verbose $testdir ||
+		error "fscrypt lock $testdir failed (3)"
+
+	rm -f $tmpfile $resfile
+}
+run_test 54 "Encryption policies with fscrypt"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

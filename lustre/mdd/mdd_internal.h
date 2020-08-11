@@ -620,19 +620,23 @@ static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
 				int fl, struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
-	int rc;
+	int rc = 0;
 
 	if (!mdd_object_exists(obj))
 		return -ENOENT;
 
-	rc = dt_xattr_set(env, next, buf, name, fl, handle);
-	if (rc >= 0 && strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) {
+	if ((strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) &&
+	    (!S_ISDIR(mdd_object_type(obj)) ||
+	     (rc = mdd_dir_is_empty(env, obj)) == 0)) {
 		struct lu_attr la = { 0 };
 
 		la.la_valid = LA_FLAGS;
 		la.la_flags = LUSTRE_ENCRYPT_FL;
 		rc = dt_attr_set(env, next, &la, handle);
 	}
+	if (rc >= 0)
+		rc = dt_xattr_set(env, next, buf, name, fl, handle);
+
 	return rc;
 }
 
