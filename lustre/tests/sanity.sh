@@ -22048,6 +22048,11 @@ test_398d() { #  LU-13846
 	aiocp -a $PAGE_SIZE -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file
 
 	diff $DIR/$tfile $aio_file || "file diff after aiocp"
+
+	# make sure we don't crash and fail properly
+	aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file &&
+		error "aio not aligned with PAGE SIZE should fail"
+
 	rm -rf $DIR/$tfile $aio_file
 }
 run_test 398d "run aiocp to verify block size > stripe size"

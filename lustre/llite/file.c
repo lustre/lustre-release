@@ -1668,6 +1668,13 @@ out:
 	}
 
 	if (io->ci_aio) {
+		/*
+		 * VFS will call aio_complete() if no -EIOCBQUEUED
+		 * is returned for AIO, so we can not call aio_complete()
+		 * in our end_io().
+		 */
+		if (rc != -EIOCBQUEUED)
+			io->ci_aio->cda_no_aio_complete = 1;
 		/**
 		 * Drop one extra reference so that end_io() could be
 		 * called for this IO context, we could call it after

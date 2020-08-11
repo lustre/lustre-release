@@ -1185,7 +1185,7 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		cl_page_put(env, page);
 	}
 
-	if (!is_sync_kiocb(aio->cda_iocb))
+	if (!is_sync_kiocb(aio->cda_iocb) && !aio->cda_no_aio_complete)
 		aio_complete(aio->cda_iocb, ret ?: aio->cda_bytes, 0);
 
 	EXIT;
@@ -1205,6 +1205,7 @@ struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb)
 				       NULL : aio, cl_aio_end);
 		cl_page_list_init(&aio->cda_pages);
 		aio->cda_iocb = iocb;
+		aio->cda_no_aio_complete = 0;
 	}
 	return aio;
 }
