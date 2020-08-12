@@ -2228,10 +2228,12 @@ kiblnd_destroy_tx_pool(struct kib_pool *pool)
 		if (tx->tx_wrq != NULL)
 			CFS_FREE_PTR_ARRAY(tx->tx_wrq,
 					   IBLND_MAX_RDMA_FRAGS);
-		if (tx->tx_sge != NULL)
+		if (tx->tx_sge != NULL) {
+			/* +1 is for the lnet header/message itself */
 			CFS_FREE_PTR_ARRAY(tx->tx_sge,
-					   IBLND_MAX_RDMA_FRAGS *
-					   wrq_sge);
+					   (IBLND_MAX_RDMA_FRAGS *
+					   wrq_sge + 1));
+		}
 		if (tx->tx_rd != NULL)
 			LIBCFS_FREE(tx->tx_rd,
 				    offsetof(struct kib_rdma_desc,
@@ -2318,8 +2320,9 @@ kiblnd_create_tx_pool(struct kib_poolset *ps, int size, struct kib_pool **pp_po)
 		if (tx->tx_wrq == NULL)
 			break;
 
+		/* +1 is for the lnet header/message itself */
 		LIBCFS_CPT_ALLOC(tx->tx_sge, lnet_cpt_table(), ps->ps_cpt,
-				 IBLND_MAX_RDMA_FRAGS * wrq_sge *
+				 (IBLND_MAX_RDMA_FRAGS * wrq_sge + 1) *
 				 sizeof(*tx->tx_sge));
 		if (tx->tx_sge == NULL)
 			break;
