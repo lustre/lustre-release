@@ -192,6 +192,10 @@ enum kib_dev_caps {
 #endif
 };
 
+#define IS_FAST_REG_DEV(dev) \
+	((dev)->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)
+
+
 struct kib_dev {
 	struct list_head	ibd_list;	/* chain on kib_devs */
 	struct list_head	ibd_fail_list;	/* chain on kib_failed_devs */

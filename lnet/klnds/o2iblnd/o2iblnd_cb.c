@@ -40,8 +40,11 @@
 static void kiblnd_peer_alive(struct kib_peer_ni *peer_ni);
 static void kiblnd_peer_connect_failed(struct kib_peer_ni *peer_ni, int active,
 				       int error);
-static void kiblnd_init_tx_msg(struct lnet_ni *ni, struct kib_tx *tx,
-			       int type, int body_nob);
+static struct ib_rdma_wr *
+kiblnd_init_tx_msg_payload(struct lnet_ni *ni, struct kib_tx *tx,
+			       int type, int body_nob, int payload_nob);
+#define kiblnd_init_tx_msg(ni, tx, type, body) \
+	kiblnd_init_tx_msg_payload(ni, tx, type, body, 0)
 static int kiblnd_init_rdma(struct kib_conn *conn, struct kib_tx *tx, int type,
 			    int resid, struct kib_rdma_desc *dstrd, u64 dstcookie);
 static void kiblnd_queue_tx_locked(struct kib_tx *tx, struct kib_conn *conn);
@@ -582,7 +585,7 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 	 * in trying to map the memory, because it'll just fail. So
 	 * preemptively fail with an appropriate message
 	 */
-	if ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED) &&
+	if (IS_FAST_REG_DEV(dev) &&
 	    !(dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) &&
 	    tx->tx_gaps) {
 		CERROR("Using FastReg with no GAPS support, but tx has gaps. "
@@ -633,7 +636,7 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 	    ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
 	     && !tx->tx_gaps) ||
 #endif
-	    (dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)) {
+	    IS_FAST_REG_DEV(dev)) {
 		/* FMR requires zero based address */
 #ifdef HAVE_FMR_POOL_API
 		if (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
@@ -689,8 +692,7 @@ kiblnd_find_rd_dma_mr(struct lnet_ni *ni, struct kib_rdma_desc *rd)
 	 * memory regions. If that's not available either, then you're
 	 * dead in the water and fail the operation.
 	 */
-	if (tunables->lnd_map_on_demand &&
-	    (net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED
+	if (tunables->lnd_map_on_demand && (IS_FAST_REG_DEV(net->ibn_dev)
 #ifdef HAVE_FMR_POOL_API
 	     || net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED
 #endif
@@ -1118,9 +1120,9 @@ kiblnd_init_tx_sge(struct kib_tx *tx, u64 addr, unsigned int len)
 	tx->tx_nsge++;
 }
 
-static void
-kiblnd_init_tx_msg(struct lnet_ni *ni, struct kib_tx *tx, int type,
-		   int body_nob)
+static struct ib_rdma_wr *
+kiblnd_init_tx_msg_payload(struct lnet_ni *ni, struct kib_tx *tx, int type,
+		   int body_nob, int payload)
 {
 	struct ib_rdma_wr *wrq;
 	int nob = offsetof(struct kib_msg, ibm_u) + body_nob;
@@ -1129,7 +1131,7 @@ kiblnd_init_tx_msg(struct lnet_ni *ni, struct kib_tx *tx, int type,
 	LASSERT(tx->tx_nwrq < IBLND_MAX_RDMA_FRAGS + 1);
 	LASSERT(nob <= IBLND_MSG_SIZE);
 
-	kiblnd_init_msg(tx->tx_msg, type, body_nob);
+	kiblnd_init_msg(tx->tx_msg, type, body_nob + payload);
 
 	wrq = &tx->tx_wrq[tx->tx_nwrq];
 
@@ -1146,6 +1148,7 @@ kiblnd_init_tx_msg(struct lnet_ni *ni, struct kib_tx *tx, int type,
 	kiblnd_init_tx_sge(tx, tx->tx_msgaddr, nob);
 
 	tx->tx_nwrq++;
+	return wrq;
 }
 
 static int
@@ -1634,6 +1637,7 @@ kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx, lnet_nid_t nid)
 int
 kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
+	struct kib_dev *dev = ((struct kib_net *)ni->ni_data)->ibn_dev;
 	struct lnet_hdr *hdr = &lntmsg->msg_hdr;
 	int               type = lntmsg->msg_type;
 	struct lnet_processid *target = &lntmsg->msg_target;
@@ -1756,15 +1760,43 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	ibmsg = tx->tx_msg;
 	lnet_hdr_to_nid4(hdr, &ibmsg->ibm_u.immediate.ibim_hdr);
 
-	lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
-			    offsetof(struct kib_msg,
-				     ibm_u.immediate.ibim_payload),
-			    payload_niov, payload_kiov,
-			    payload_offset, payload_nob);
+	if (IS_FAST_REG_DEV(dev) && payload_nob)  {
+		struct ib_rdma_wr *wrq;
+		int i;
 
-	nob = offsetof(struct kib_immediate_msg, ibim_payload[payload_nob]);
+		nob = offsetof(struct kib_immediate_msg, ibim_payload[0]);
+		wrq = kiblnd_init_tx_msg_payload(ni, tx, IBLND_MSG_IMMEDIATE,
+						 nob, payload_nob);
 
-	kiblnd_init_tx_msg(ni, tx, IBLND_MSG_IMMEDIATE, nob);
+		rd = tx->tx_rd;
+		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
+					  payload_niov, payload_kiov,
+					  payload_offset, payload_nob);
+		if (rc != 0) {
+			CERROR("Can't setup IMMEDIATE src for %s: %d\n",
+			       libcfs_nidstr(&target->nid), rc);
+			kiblnd_tx_done(tx);
+			return -EIO;
+		}
+
+		/* lets generate a SGE chain */
+		for (i = 0; i < rd->rd_nfrags; i++) {
+			kiblnd_init_tx_sge(tx, rd->rd_frags[i].rf_addr,
+					   rd->rd_frags[i].rf_nob);
+			wrq->wr.num_sge++;
+		}
+	} else {
+		lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
+				    offsetof(struct kib_msg,
+					     ibm_u.immediate.ibim_payload),
+				    payload_niov, payload_kiov,
+				    payload_offset, payload_nob);
+
+		nob = offsetof(struct kib_immediate_msg,
+			       ibim_payload[payload_nob]);
+
+		kiblnd_init_tx_msg(ni, tx, IBLND_MSG_IMMEDIATE, nob);
+	}
 
 	/* finalise lntmsg on completion */
 	tx->tx_lntmsg[0] = lntmsg;

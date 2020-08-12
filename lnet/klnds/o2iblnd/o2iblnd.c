@@ -700,10 +700,9 @@ static unsigned int kiblnd_send_wrs(struct kib_conn *conn)
 	 */
 	int ret;
 	int multiplier = 1 + conn->ibc_max_frags;
-	enum kib_dev_caps dev_caps = conn->ibc_hdev->ibh_dev->ibd_dev_caps;
 
 	/* FastReg needs two extra WRs for map and invalidate */
-	if (dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)
+	if (IS_FAST_REG_DEV(conn->ibc_hdev->ibh_dev))
 		multiplier += 2;
 
 	/* account for a maximum of ibc_queue_depth in-flight transfers */
