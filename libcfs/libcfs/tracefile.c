@@ -49,7 +49,6 @@
 #include <libcfs/libcfs.h>
 
 #define CFS_TRACE_CONSOLE_BUFFER_SIZE	1024
-#define TCD_MAX_TYPES			8
 
 enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_PROC = 0,
@@ -58,7 +57,7 @@ enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_CNT
 };
 
-union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
+union cfs_trace_data_union (*cfs_trace_data[CFS_TCD_TYPE_CNT])[NR_CPUS] __cacheline_aligned;
 
 char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_CNT];
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
@@ -109,13 +108,13 @@ void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 }
 
 #define cfs_tcd_for_each(tcd, i, j)					\
-	for (i = 0; cfs_trace_data[i]; i++)				\
+	for (i = 0; i < CFS_TCD_TYPE_CNT && cfs_trace_data[i]; i++)	\
 		for (j = 0, ((tcd) = &(*cfs_trace_data[i])[j].tcd);	\
 		     j < num_possible_cpus();				\
 		     j++, (tcd) = &(*cfs_trace_data[i])[j].tcd)
 
 #define cfs_tcd_for_each_type_lock(tcd, i, cpu)				\
-	for (i = 0; cfs_trace_data[i] &&				\
+	for (i = 0; i < CFS_TCD_TYPE_CNT && cfs_trace_data[i] &&	\
 	     (tcd = &(*cfs_trace_data[i])[cpu].tcd) &&			\
 	     cfs_trace_lock_tcd(tcd, 1); cfs_trace_unlock_tcd(tcd, 1), i++)
 
@@ -1326,7 +1325,7 @@ static void cfs_trace_cleanup(void)
 			cfs_trace_console_buffers[i][j] = NULL;
 		}
 
-	for (i = 0; cfs_trace_data[i]; i++) {
+	for (i = 0; i < CFS_TCD_TYPE_CNT && cfs_trace_data[i]; i++) {
 		kfree(cfs_trace_data[i]);
 		cfs_trace_data[i] = NULL;
 	}
