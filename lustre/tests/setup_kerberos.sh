@@ -133,7 +133,7 @@ is_part_of() {
         return
     fi
 
-    if [[ " $list " == *\ $name\ * ]]; then
+    if [[ " $list " == *" $name "* ]]; then
         true
     else
         false
