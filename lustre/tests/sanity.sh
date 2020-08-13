@@ -6257,8 +6257,13 @@ test_56ra() {
 	[[ $MDS1_VERSION -gt $(version_code 2.12.58) ]] ||
 		skip "MDS < 2.12.58 doesn't return LSOM data"
 	local dir=$DIR/$tdir
+	local old_agl=$($LCTL get_param -n llite.*.statahead_agl)
 
-	[[ $OSC == "mdc" ]] && skip "DoM files" && return
+	[[ $OSC == "mdc" ]] && skip "statahead not needed for DoM files"
+
+	# statahead_agl may cause extra glimpse which confuses results. LU-13017
+	$LCTL set_param -n llite.*.statahead_agl=0
+	stack_trap "$LCTL set_param -n llite.*.statahead_agl=$old_agl"
 
 	setup_56 $dir $NUMFILES $NUMDIRS "-c 1"
 	# open and close all files to ensure LSOM is updated

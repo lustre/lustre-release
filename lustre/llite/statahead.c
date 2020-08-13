@@ -132,7 +132,7 @@ sa_unhash(struct ll_statahead_info *sai, struct sa_entry *entry)
 static inline int agl_should_run(struct ll_statahead_info *sai,
 				 struct inode *inode)
 {
-	return (inode && S_ISREG(inode->i_mode) && sai->sai_agl_valid);
+	return inode && S_ISREG(inode->i_mode) && sai->sai_agl_task;
 }
 
 static inline struct ll_inode_info *
@@ -432,7 +432,6 @@ static void ll_agl_add(struct ll_statahead_info *sai,
 {
 	struct ll_inode_info *child  = ll_i2info(inode);
 	struct ll_inode_info *parent = ll_i2info(sai->sai_dentry->d_inode);
-	int                   added  = 0;
 
 	spin_lock(&child->lli_agl_lock);
 	if (child->lli_agl_index == 0) {
@@ -441,13 +440,15 @@ static void ll_agl_add(struct ll_statahead_info *sai,
 
 		LASSERT(list_empty(&child->lli_agl_list));
 
-		igrab(inode);
 		spin_lock(&parent->lli_agl_lock);
-		if (agl_list_empty(sai))
-			added = 1;
-		list_add_tail(&child->lli_agl_list, &sai->sai_agls);
-		if (added && sai->sai_agl_task)
-			wake_up_process(sai->sai_agl_task);
+		/* Re-check under the lock */
+		if (agl_should_run(sai, inode)) {
+			if (agl_list_empty(sai))
+				wake_up_process(sai->sai_agl_task);
+			igrab(inode);
+			list_add_tail(&child->lli_agl_list, &sai->sai_agls);
+		} else
+			child->lli_agl_index = 0;
 		spin_unlock(&parent->lli_agl_lock);
 	} else {
 		spin_unlock(&child->lli_agl_lock);
@@ -957,7 +958,6 @@ static void ll_stop_agl(struct ll_statahead_info *sai)
 	kthread_stop(agl_task);
 
 	spin_lock(&plli->lli_agl_lock);
-	sai->sai_agl_valid = 0;
 	while (!agl_list_empty(sai)) {
 		clli = agl_first_entry(sai);
 		list_del_init(&clli->lli_agl_list);
@@ -989,11 +989,9 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 				      plli->lli_opendir_pid);
 	if (IS_ERR(task)) {
 		CERROR("can't start ll_agl thread, rc: %ld\n", PTR_ERR(task));
-		sai->sai_agl_valid = 0;
 		RETURN_EXIT;
 	}
 	sai->sai_agl_task = task;
-	LASSERT(sai->sai_agl_valid == 1);
 	atomic_inc(&ll_i2sbi(d_inode(parent))->ll_agl_total);
 	/* Get an extra reference that the thread holds */
 	ll_sai_get(d_inode(parent));
@@ -1588,7 +1586,6 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 		GOTO(out, rc = -ENOMEM);
 
 	sai->sai_ls_all = (first == LS_FIRST_DOT_DE);
-	sai->sai_agl_valid = agl;
 
 	/*
 	 * if current lli_opendir_key was deauthorized, or dir re-opened by
@@ -1659,10 +1656,11 @@ static inline bool ll_statahead_started(struct inode *dir, bool agl)
 
 	spin_lock(&lli->lli_sa_lock);
 	sai = lli->lli_sai;
-	if (sai && sai->sai_agl_valid != agl)
+	if (sai && (sai->sai_agl_task != NULL) != agl)
 		CDEBUG(D_READA,
 		       "%s: Statahead AGL hint changed from %d to %d\n",
-		       ll_i2sbi(dir)->ll_fsname, sai->sai_agl_valid, agl);
+		       ll_i2sbi(dir)->ll_fsname,
+		       sai->sai_agl_task != NULL, agl);
 	spin_unlock(&lli->lli_sa_lock);
 
 	return !!sai;
