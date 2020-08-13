@@ -4880,6 +4880,8 @@ test_43A() { # was test_43
 
 	$DIR/$tdir/$tfile && error "execute $DIR/$tdir/$tfile succeeded" || true
 	kill -USR1 $pid
+	# Wait for multiop to exit
+	wait $pid
 }
 run_test 43A "execution of file opened for write should return -ETXTBSY"
 
