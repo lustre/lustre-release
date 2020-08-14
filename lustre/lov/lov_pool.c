@@ -65,7 +65,7 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 	return strcmp(pool_name, pool->pool_name);
 }
 
-const struct rhashtable_params pools_hash_params = {
+static const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
 	.key_offset	= offsetof(struct pool_desc, pool_name),
 	.head_offset	= offsetof(struct pool_desc, pool_hash),
@@ -456,6 +456,22 @@ out_err:
 	OBD_FREE_PTR(new_pool);
 
 	return rc;
+}
+
+struct pool_desc *lov_pool_find(struct obd_device *obd, char *poolname)
+{
+	struct pool_desc *pool;
+	struct lov_obd *lov = &obd->u.lov;
+
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lov->lov_pools_hash_body,
+				 poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+
+	return pool;
 }
 
 int lov_pool_del(struct obd_device *obd, char *poolname)

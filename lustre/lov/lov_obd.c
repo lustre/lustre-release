@@ -1282,13 +1282,7 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
 	}
 
 	if (oqctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) {
-		rcu_read_lock();
-		pool = rhashtable_lookup(&lov->lov_pools_hash_body,
-					 oqctl->qc_poolname,
-					 pools_hash_params);
-		if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
-			pool = NULL;
-		rcu_read_unlock();
+		pool = lov_pool_find(obd, oqctl->qc_poolname);
 		if (!pool)
 			RETURN(-ENOENT);
 		/* Set Q_GETOQUOTA back as targets report it's own

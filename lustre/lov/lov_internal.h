@@ -389,6 +389,6 @@ static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
 	}
 }
 
-extern const struct rhashtable_params pools_hash_params;
-extern void lov_pool_putref(struct pool_desc *pool);
+struct pool_desc *lov_pool_find(struct obd_device *obd, char *poolname);
+void lov_pool_putref(struct pool_desc *pool);
 #endif
