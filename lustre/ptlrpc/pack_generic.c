@@ -1384,12 +1384,12 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg, __u32 buf)
 		__u32 len = lustre_msg_buflen(msg, buf);
 		__u32 crc;
 
-		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
 #if IS_ENABLED(CONFIG_CRC32)
 		/* about 10x faster than crypto_hash for small buffers */
 		crc = crc32_le(~(__u32)0, (unsigned char *)pb, len);
 #elif IS_ENABLED(CONFIG_CRYPTO_CRC32)
 		unsigned int hsize = 4;
+
 		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32, (unsigned char *)pb,
 				       len, NULL, 0, (unsigned char *)&crc,
 				       &hsize);
