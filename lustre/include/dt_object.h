@@ -88,6 +88,7 @@ struct dt_device_param {
 	unsigned int	   ddp_brw_size;	/* optimal RPC size */
 	/* T10PI checksum type, zero if not supported */
 	enum cksum_types   ddp_t10_cksum_type;
+	bool		   ddp_has_lseek_data_hole;
 };
 
 /**

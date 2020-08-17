@@ -1141,4 +1141,11 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 #define inode_timespec_t timestruc_t
 #endif
 
+#ifdef HAVE_DMU_OFFSET_NEXT
+#define osd_dmu_offset_next(os, obj, hole, res) \
+	dmu_offset_next((os), (obj), (hole), (res))
+#else
+#define osd_dmu_offset_next(os, obj, hole, res) (EBUSY)
+#endif
+
 #endif /* _OSD_INTERNAL_H */

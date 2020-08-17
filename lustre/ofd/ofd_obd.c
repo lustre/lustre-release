@@ -360,6 +360,9 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		}
 	}
 
+	if (!ofd->ofd_lut.lut_dt_conf.ddp_has_lseek_data_hole)
+		data->ocd_connect_flags2 &= ~OBD_CONNECT2_LSEEK;
+
 	RETURN(0);
 }
 

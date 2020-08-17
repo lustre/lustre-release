@@ -2335,15 +2335,18 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode);
+	LASSERT(offset >= 0);
 
 	file = osd_quasi_file(env, inode);
 	result = file->f_op->llseek(file, offset, whence);
-	/* when result is out of file range then it must be virtual hole
-	 * at the end of file, but this is not real file end, so return
-	 * just -ENXIO and LOV will merge all results
+
+	/*
+	 * If 'offset' is beyond end of object file then treat it as not error
+	 * but valid case for SEEK_HOLE and return 'offset' as result.
+	 * LOV will decide if it is beyond real end of file or not.
 	 */
-	if (result == i_size_read(inode))
-		result = -ENXIO;
+	if (whence == SEEK_HOLE && result == -ENXIO)
+		result = offset;
 
 	CDEBUG(D_INFO, "seek %s from %lld: %lld\n", whence == SEEK_HOLE ?
 		       "hole" : "data", offset, result);

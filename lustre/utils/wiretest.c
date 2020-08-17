@@ -41,8 +41,8 @@
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
 #ifdef CONFIG_FS_POSIX_ACL
-#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
 #include <linux/posix_acl_xattr.h>
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
 # define posix_acl_xattr_header struct posix_acl_xattr_header
 # define posix_acl_xattr_entry  struct posix_acl_xattr_entry
 #endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
@@ -51,12 +51,18 @@
 #include <linux/lustre/lustre_cfg.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
-#define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}
+#define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__); ret = 1; }
 /*
  * BUILD_BUG_ON() is Compile-time check which verifies correctness at
- * compile-time rather than runtime.
+ * compile-time rather than runtime. If "cond" is true, then there are two
+ * identical cases ("0" and "0"), which is an error that causes the compiler to
+ * complain. If "cond" is false, then there are two different cases
+ * ("(non-zero)" and "0").
+ *
  */
-#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) do {switch (0) {case (cond): case 1: break; } } while (0)
+#endif
 
 int ret;
 
@@ -132,7 +138,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)OST_LADVISE);
 	LASSERTF(OST_FALLOCATE == 22, "found %lld\n",
 		 (long long)OST_FALLOCATE);
-	LASSERTF(OST_LAST_OPC == 23, "found %lld\n",
+	LASSERTF(OST_SEEK == 23, "found %lld\n",
+		 (long long)OST_SEEK);
+	LASSERTF(OST_LAST_OPC == 24, "found %lld\n",
 		 (long long)OST_LAST_OPC);
 	LASSERTF(OBD_OBJECT_EOF == 0xffffffffffffffffULL, "found 0x%.16llxULL\n",
 		 OBD_OBJECT_EOF);
@@ -478,7 +486,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LMAI_ORPHAN == 0x00000010UL, "found 0x%.8xUL\n",
 		(unsigned)LMAI_ORPHAN);
 	LASSERTF(LMAI_ENCRYPT == 0x00000020UL, "found 0x%.8xUL\n",
-		 (unsigned)LMAI_ENCRYPT);
+		(unsigned)LMAI_ENCRYPT);
 
 	/* Checks for struct lustre_ost_attrs */
 	LASSERTF((int)sizeof(struct lustre_ost_attrs) == 64, "found %lld\n",
@@ -1399,10 +1407,12 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_ASYNC_DISCARD);
 	LASSERTF(OBD_CONNECT2_ENCRYPT == 0x8000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_ENCRYPT);
-	LASSERTF(OBD_CONNECT2_FIDMAP== 0x10000ULL, "found 0x%.16llxULL\n",
+	LASSERTF(OBD_CONNECT2_FIDMAP == 0x10000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_FIDMAP);
-	LASSERTF(OBD_CONNECT2_GETATTR_PFID== 0x20000ULL, "found 0x%.16llxULL\n",
+	LASSERTF(OBD_CONNECT2_GETATTR_PFID == 0x20000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_GETATTR_PFID);
+	LASSERTF(OBD_CONNECT2_LSEEK == 0x40000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_LSEEK);
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);
 	LASSERTF(OBD_CKSUM_ADLER == 0x00000002UL, "found 0x%.8xUL\n",
@@ -2608,7 +2618,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LUSTRE_SET_SYNC_FL == 0x00040000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_SET_SYNC_FL);
 	LASSERTF(LUSTRE_ENCRYPT_FL == 0x00800000UL, "found 0x%.8xUL\n",
-		 (unsigned)LUSTRE_ENCRYPT_FL);
+		(unsigned)LUSTRE_ENCRYPT_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_INODELOCK_LOOKUP);
 	LASSERTF(MDS_INODELOCK_UPDATE == 0x00000002UL, "found 0x%.8xUL\n",

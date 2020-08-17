@@ -210,6 +210,7 @@ extern struct req_format RQF_OST_GET_INFO_LAST_FID;
 extern struct req_format RQF_OST_SET_INFO_LAST_FID;
 extern struct req_format RQF_OST_GET_INFO_FIEMAP;
 extern struct req_format RQF_OST_LADVISE;
+extern struct req_format RQF_OST_SEEK;
 
 /* LDLM req_format */
 extern struct req_format RQF_LDLM_ENQUEUE;

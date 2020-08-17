@@ -5436,6 +5436,7 @@ TGT_OST_HDL_HP(HAS_BODY | HAS_REPLY | IS_MUTABLE,
 					 OST_PUNCH,	mdt_punch_hdl,
 					 		mdt_hp_punch),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SYNC,	mdt_data_sync),
+TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SEEK, tgt_lseek),
 };
 
 static struct tgt_handler mdt_sec_ctx_ops[] = {
@@ -6328,6 +6329,9 @@ static int mdt_connect_internal(const struct lu_env *env,
 		atomic_inc(&mdt->mdt_mds_mds_conns);
 		mdt_enable_slc(mdt);
 	}
+
+	if (!mdt->mdt_lut.lut_dt_conf.ddp_has_lseek_data_hole)
+		data->ocd_connect_flags2 &= ~OBD_CONNECT2_LSEEK;
 
 	return 0;
 }

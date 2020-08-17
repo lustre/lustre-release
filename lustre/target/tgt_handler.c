@@ -1678,13 +1678,6 @@ int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 }
 EXPORT_SYMBOL(tgt_mdt_data_lock);
 
-void tgt_mdt_data_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
-{
-	LASSERT(lustre_handle_is_used(lh));
-	ldlm_lock_decref(lh, mode);
-}
-EXPORT_SYMBOL(tgt_mdt_data_unlock);
-
 /**
  * Helper function for getting server side [start, start+count] DLM lock
  * if asked by client.
@@ -1722,30 +1715,41 @@ int tgt_extent_lock(const struct lu_env *env, struct ldlm_namespace *ns,
 }
 EXPORT_SYMBOL(tgt_extent_lock);
 
-void tgt_extent_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
+static int tgt_data_lock(const struct lu_env *env, struct obd_export *exp,
+			 struct ldlm_res_id *res_id, __u64 start, __u64 end,
+			 struct lustre_handle *lh, enum ldlm_mode mode)
+{
+	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	__u64 flags = 0;
+
+	/* MDT IO for data-on-mdt */
+	if (exp->exp_connect_data.ocd_connect_flags & OBD_CONNECT_IBITS)
+		return tgt_mdt_data_lock(ns, res_id, lh, mode, &flags);
+
+	return tgt_extent_lock(env, ns, res_id, start, end, lh, mode, &flags);
+}
+
+void tgt_data_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	LASSERT(lustre_handle_is_used(lh));
 	ldlm_lock_decref(lh, mode);
 }
-EXPORT_SYMBOL(tgt_extent_unlock);
+EXPORT_SYMBOL(tgt_data_unlock);
 
 static int tgt_brw_lock(const struct lu_env *env, struct obd_export *exp,
 			struct ldlm_res_id *res_id, struct obd_ioobj *obj,
 			struct niobuf_remote *nb, struct lustre_handle *lh,
 			enum ldlm_mode mode)
 {
-	struct ldlm_namespace	*ns = exp->exp_obd->obd_namespace;
-	__u64			 flags = 0;
-	int			 nrbufs = obj->ioo_bufcnt;
-	int			 i;
-	int			 rc;
+	int nrbufs = obj->ioo_bufcnt;
+	int i;
 
 	ENTRY;
 
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
 	LASSERT(!lustre_handle_is_used(lh));
 
-	if (ns->ns_obd->obd_recovering)
+	if (exp->exp_obd->obd_recovering)
 		RETURN(0);
 
 	if (nrbufs == 0 || !(nb[0].rnb_flags & OBD_BRW_SRVLOCK))
@@ -1755,15 +1759,9 @@ static int tgt_brw_lock(const struct lu_env *env, struct obd_export *exp,
 		if (!(nb[i].rnb_flags & OBD_BRW_SRVLOCK))
 			RETURN(-EFAULT);
 
-	/* MDT IO for data-on-mdt */
-	if (exp->exp_connect_data.ocd_connect_flags & OBD_CONNECT_IBITS)
-		rc = tgt_mdt_data_lock(ns, res_id, lh, mode, &flags);
-	else
-		rc = tgt_extent_lock(env, ns, res_id, nb[0].rnb_offset,
-				     nb[nrbufs - 1].rnb_offset +
-				     nb[nrbufs - 1].rnb_len - 1,
-				     lh, mode, &flags);
-	RETURN(rc);
+	return tgt_data_lock(env, exp, res_id, nb[0].rnb_offset,
+			     nb[nrbufs - 1].rnb_offset +
+			     nb[nrbufs - 1].rnb_len - 1, lh, mode);
 }
 
 static void tgt_brw_unlock(struct obd_export *exp, struct obd_ioobj *obj,
@@ -1778,7 +1776,7 @@ static void tgt_brw_unlock(struct obd_export *exp, struct obd_ioobj *obj,
 		lustre_handle_is_used(lh));
 
 	if (lustre_handle_is_used(lh))
-		tgt_extent_unlock(lh, mode);
+		tgt_data_unlock(lh, mode);
 	EXIT;
 }
 
@@ -2769,6 +2767,72 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_brw_write);
+
+/**
+ * Common request handler for OST_SEEK RPC.
+ *
+ * Unified request handling for OST_SEEK RPC.
+ * It takes object by its FID, does needed lseek and packs result
+ * into reply. Only SEEK_HOLE and SEEK_DATA are supported.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+int tgt_lseek(struct tgt_session_info *tsi)
+{
+	struct lustre_handle lh = { 0 };
+	struct dt_object *dob;
+	struct ost_body *repbody;
+	loff_t offset = tsi->tsi_ost_body->oa.o_size;
+	int whence = tsi->tsi_ost_body->oa.o_mode;
+	bool srvlock;
+	int rc = 0;
+
+	ENTRY;
+
+	if (whence != SEEK_HOLE && whence != SEEK_DATA)
+		RETURN(-EPROTO);
+
+	/* Negative offset is prohibited on wire and must be handled on client
+	 * prior sending RPC.
+	 */
+	if (offset < 0)
+		RETURN(-EPROTO);
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+	repbody->oa = tsi->tsi_ost_body->oa;
+
+	srvlock = tsi->tsi_ost_body->oa.o_valid & OBD_MD_FLFLAGS &&
+		  tsi->tsi_ost_body->oa.o_flags & OBD_FL_SRVLOCK;
+	if (srvlock) {
+		rc = tgt_data_lock(tsi->tsi_env, tsi->tsi_exp, &tsi->tsi_resid,
+				   offset, OBD_OBJECT_EOF, &lh, LCK_PR);
+		if (rc)
+			RETURN(rc);
+	}
+
+	dob = dt_locate(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, &tsi->tsi_fid);
+	if (IS_ERR(dob))
+		GOTO(out, rc = PTR_ERR(dob));
+
+	if (!dt_object_exists(dob))
+		GOTO(obj_put, rc = -ENOENT);
+
+	repbody->oa.o_size = dt_lseek(tsi->tsi_env, dob, offset, whence);
+	rc = 0;
+obj_put:
+	dt_object_put(tsi->tsi_env, dob);
+out:
+	if (srvlock)
+		tgt_data_unlock(&lh, LCK_PR);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_lseek);
 
 /* Check if request can be reconstructed from saved reply data
  * A copy of the reply data is returned in @trd if the pointer is not NULL

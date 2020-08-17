@@ -837,6 +837,7 @@ static struct req_format *req_formats[] = {
 	&RQF_OST_SET_INFO_LAST_FID,
 	&RQF_OST_GET_INFO_FIEMAP,
 	&RQF_OST_LADVISE,
+	&RQF_OST_SEEK,
 	&RQF_LDLM_ENQUEUE,
 	&RQF_LDLM_ENQUEUE_LVB,
 	&RQF_LDLM_CONVERT,
@@ -1739,6 +1740,10 @@ EXPORT_SYMBOL(RQF_OST_PUNCH);
 struct req_format RQF_OST_FALLOCATE =
 	DEFINE_REQ_FMT0("OST_FALLOCATE", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_FALLOCATE);
+
+struct req_format RQF_OST_SEEK =
+	DEFINE_REQ_FMT0("OST_SEEK", ost_body_only, ost_body_only);
+EXPORT_SYMBOL(RQF_OST_SEEK);
 
 struct req_format RQF_OST_SYNC =
         DEFINE_REQ_FMT0("OST_SYNC", ost_body_capa, ost_body_only);

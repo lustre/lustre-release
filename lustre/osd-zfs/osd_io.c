@@ -1192,33 +1192,31 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
+	LASSERT(offset >= 0);
 
-	if (offset < 0 || offset >= size)
-		RETURN(-ENXIO);
+	/* for SEEK_HOLE treat 'offset' beyond the end of file as in real
+	 * hole. LOV to decide after all if that real hole or not.
+	 */
+	if (offset >= size)
+		RETURN(hole ? offset : -ENXIO);
 
-#ifdef HAVE_DMU_OFFSET_NEXT
-	rc = dmu_offset_next(osd_obj2dev(obj)->od_os, obj->oo_dn->dn_object,
-			     hole, &result);
+	rc = osd_dmu_offset_next(osd_obj2dev(obj)->od_os,
+				 obj->oo_dn->dn_object, hole, &result);
 	if (rc == ESRCH)
 		RETURN(-ENXIO);
-#else
-	/*
-	 * In absence of dmu_offset_next() just do nothing but
-	 * return EBUSY as does dmu_offset_next() and that means
-	 * generic approach should be used.
-	 */
-	rc = EBUSY;
-#endif
-	/* file was dirty, so fall back to using generic logic */
-	if (rc == EBUSY && hole)
-		RETURN(-ENXIO); /* see comment below */
 
-	/* when result is out of file range then it must be virtual hole
-	 * at the end of file, but this is not real file end, so return
-	 * just -ENXIO and LOV will translate it properly.
+	/* file was dirty, so fall back to using generic logic:
+	 * For HOLE return file size, for DATA the result is set
+	 * already to the 'offset' parameter value.
 	 */
-	if (result >= size)
-		RETURN(-ENXIO);
+	if (rc == EBUSY && hole)
+		result = size;
+
+	/* dmu_offset_next() only works on whole blocks so may return SEEK_HOLE
+	 * result as end of the last block instead of logical EOF which we need
+	 */
+	if (result > size)
+		result = size;
 
 	RETURN(result);
 }

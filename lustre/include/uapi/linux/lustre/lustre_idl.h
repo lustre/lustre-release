@@ -849,6 +849,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ENCRYPT		0x8000ULL /* client-to-disk encrypt */
 #define OBD_CONNECT2_FIDMAP	       0x10000ULL /* FID map */
 #define OBD_CONNECT2_GETATTR_PFID      0x20000ULL /* pack parent FID in getattr */
+#define OBD_CONNECT2_LSEEK	       0x40000ULL /* SEEK_HOLE/DATA RPC */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
@@ -907,7 +908,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_PCC | \
 				OBD_CONNECT2_CRUSH | \
 				OBD_CONNECT2_ENCRYPT | \
-				OBD_CONNECT2_GETATTR_PFID)
+				OBD_CONNECT2_GETATTR_PFID |\
+				OBD_CONNECT2_LSEEK)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -929,7 +931,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_SHORTIO | OBD_CONNECT_FLAGS2)
 
 #define OST_CONNECT_SUPPORTED2 (OBD_CONNECT2_LOCKAHEAD | OBD_CONNECT2_INC_XID |\
-				OBD_CONNECT2_ENCRYPT)
+				OBD_CONNECT2_ENCRYPT | OBD_CONNECT2_LSEEK)
 
 #define ECHO_CONNECT_SUPPORTED (OBD_CONNECT_FID)
 #define ECHO_CONNECT_SUPPORTED2 0
@@ -1058,6 +1060,7 @@ enum ost_cmd {
 	OST_QUOTA_ADJUST_QUNIT = 20, /* not used since 2.4 */
 	OST_LADVISE    = 21,
 	OST_FALLOCATE  = 22,
+	OST_SEEK       = 23,
 	OST_LAST_OPC /* must be < 33 to avoid MDS_GETATTR */
 };
 #define OST_FIRST_OPC  OST_REPLY

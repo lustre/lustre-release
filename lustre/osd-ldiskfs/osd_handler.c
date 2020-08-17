@@ -2354,6 +2354,8 @@ static void osd_conf_get(const struct lu_env *env,
 			       d->od_svname, name);
 		}
 	}
+
+	param->ddp_has_lseek_data_hole = true;
 }
 
 static struct super_block *osd_mnt_sb_get(const struct dt_device *d)

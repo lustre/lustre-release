@@ -642,6 +642,12 @@ static void osd_conf_get(const struct lu_env *env,
 		param->ddp_brw_size = osd->od_max_blksz;
 	else
 		param->ddp_brw_size = ONE_MB_BRW_SIZE;
+
+#ifdef HAVE_DMU_OFFSET_NEXT
+	param->ddp_has_lseek_data_hole = true;
+#else
+	param->ddp_has_lseek_data_hole = false;
+#endif
 }
 
 /*

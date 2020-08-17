@@ -53,7 +53,7 @@
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__); ret = 1; }
 /*
- * BUILD_BUG_ON() is Compile-time LASSERT, which verifies correctness at
+ * BUILD_BUG_ON() is Compile-time check which verifies correctness at
  * compile-time rather than runtime. If "cond" is true, then there are two
  * identical cases ("0" and "0"), which is an error that causes the compiler to
  * complain. If "cond" is false, then there are two different cases
