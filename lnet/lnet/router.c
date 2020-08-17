@@ -619,6 +619,7 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 	unsigned int offset = 0;
 	unsigned int len = 0;
 	struct list_head *e;
+	time64_t now;
 
 	lnet_shuffle_seed();
 
@@ -641,9 +642,10 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 	 * force a router check on the gateway to make sure the route is
 	 * alive
 	 */
+	now = ktime_get_real_seconds();
 	list_for_each_entry(lpn, &route->lr_gateway->lp_peer_nets,
 			    lpn_peer_nets) {
-		lpn->lpn_rtrcheck_timestamp = 0;
+		lpn->lpn_next_ping = now;
 	}
 
 	the_lnet.ln_remote_nets_version++;
@@ -1137,12 +1139,13 @@ bool lnet_router_checker_active(void)
 void
 lnet_check_routers(void)
 {
-	struct lnet_peer_net *first_lpn = NULL;
+	struct lnet_peer_net *first_lpn;
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
 	struct list_head *entry;
 	struct lnet_peer *rtr;
 	bool push = false;
+	bool needs_ping;
 	bool found_lpn;
 	__u64 version;
 	__u32 net_id;
@@ -1158,15 +1161,18 @@ rescan:
 		rtr = list_entry(entry, struct lnet_peer,
 				 lp_rtr_list);
 
+		/* If we're currently discovering the peer then don't
+		 * issue another discovery
+		 */
+		if (rtr->lp_state & LNET_PEER_RTR_DISCOVERY)
+			continue;
+
 		now = ktime_get_real_seconds();
 
-		/*
-		 * only discover the router if we've passed
-		 * alive_router_check_interval seconds. Some of the router
-		 * interfaces could be down and in that case they would be
-		 * undergoing recovery separately from this discovery.
-		 */
-		/* find next peer net which is also local */
+		/* find the next local peer net which needs to be ping'd */
+		needs_ping = false;
+		first_lpn = NULL;
+		found_lpn = false;
 		net_id = rtr->lp_disc_net_id;
 		do {
 			lpn = lnet_get_next_peer_net_locked(rtr, net_id);
@@ -1175,13 +1181,27 @@ rescan:
 				libcfs_nid2str(rtr->lp_primary_nid));
 				break;
 			}
+
+			/* We looped back to the first peer net */
 			if (first_lpn == lpn)
 				break;
 			if (!first_lpn)
 				first_lpn = lpn;
-			found_lpn = lnet_islocalnet_locked(lpn->lpn_net_id);
+
 			net_id = lpn->lpn_net_id;
-		} while (!found_lpn);
+			if (!lnet_islocalnet_locked(net_id))
+				continue;
+
+			found_lpn = true;
+
+			CDEBUG(D_NET, "rtr %s(%p) %s(%p) next ping %lld\n",
+			       libcfs_nid2str(rtr->lp_primary_nid), rtr,
+			       libcfs_net2str(net_id), lpn,
+			       lpn->lpn_next_ping);
+
+			needs_ping = now >= lpn->lpn_next_ping;
+
+		} while (!needs_ping);
 
 		if (!found_lpn || !lpn) {
 			CERROR("no local network found for gateway %s\n",
@@ -1189,19 +1209,10 @@ rescan:
 			continue;
 		}
 
-		if (now - lpn->lpn_rtrcheck_timestamp <
-		    alive_router_check_interval / lnet_current_net_count)
-		       continue;
-
-		/*
-		 * If we're currently discovering the peer then don't
-		 * issue another discovery
-		 */
-		spin_lock(&rtr->lp_lock);
-		if (rtr->lp_state & LNET_PEER_RTR_DISCOVERY) {
-			spin_unlock(&rtr->lp_lock);
+		if (!needs_ping)
 			continue;
-		}
+
+		spin_lock(&rtr->lp_lock);
 		/* make sure we fully discover the router */
 		rtr->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
 		rtr->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH |
@@ -1225,16 +1236,16 @@ rescan:
 		       libcfs_nid2str(lpni->lpni_nid), cpt);
 		rc = lnet_discover_peer_locked(lpni, cpt, false);
 
-		/* decrement ref count acquired by find_peer_ni_locked() */
+		/* drop ref taken above */
 		lnet_peer_ni_decref_locked(lpni);
 
 		if (!rc)
-			lpn->lpn_rtrcheck_timestamp = now;
+			lpn->lpn_next_ping = now + alive_router_check_interval;
 		else
 			CERROR("Failed to discover router %s\n",
 			       libcfs_nid2str(rtr->lp_primary_nid));
 
-		/* NB dropped lock */
+		/* NB cpt lock was dropped in lnet_discover_peer_locked() */
 		if (version != the_lnet.ln_routers_version) {
 			/* the routers list has changed */
 			goto rescan;
