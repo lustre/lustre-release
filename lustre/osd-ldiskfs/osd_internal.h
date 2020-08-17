@@ -1153,6 +1153,43 @@ struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
         return child_dentry;
 }
 
+/* build quasi file structure when it is needed to call an inode i_fop */
+static inline struct file *osd_quasi_file_init(const struct lu_env *env,
+					       struct dentry *dentry,
+					       struct inode *inode)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	info->oti_file.f_path.dentry = dentry;
+	info->oti_file.f_mapping = inode->i_mapping;
+	info->oti_file.f_op = inode->i_fop;
+	info->oti_file.f_inode = inode;
+	info->oti_file.f_pos = 0;
+	info->oti_file.private_data = NULL;
+	info->oti_file.f_cred = current_cred();
+	info->oti_file.f_flags = O_NOATIME;
+	info->oti_file.f_mode = FMODE_64BITHASH | FMODE_NONOTIFY;
+
+	return &info->oti_file;
+}
+
+static inline struct file *osd_quasi_file(const struct lu_env *env,
+					  struct inode *inode)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	info->oti_obj_dentry.d_inode = inode;
+	info->oti_obj_dentry.d_sb = inode->i_sb;
+
+	return osd_quasi_file_init(env, &info->oti_obj_dentry, inode);
+}
+
+static inline struct file *osd_quasi_file_by_dentry(const struct lu_env *env,
+						    struct dentry *dentry)
+{
+	return osd_quasi_file_init(env, dentry, dentry->d_inode);
+}
+
 extern int osd_trans_declare_op2rb[];
 extern int ldiskfs_track_declares_assert;
 void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th);

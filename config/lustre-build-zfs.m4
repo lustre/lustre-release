@@ -736,6 +736,19 @@ your distribution.
 			AC_DEFINE(HAVE_DMU_OBJSET_DISOWN_3ARG, 1,
 				[Have dmu_objset_disown() with 3 args])
 		])
+		dnl #
+		dnl # ZFS exports dmu_offet_next
+		dnl #
+		AC_CACHE_CHECK([if ZFS exports 'dmu_offset_next'],
+		[lb_cv_dmu_offset_next], [
+		lb_cv_dmu_offset_next="no"
+		AS_IF([grep -q -E "EXPORT_SYMBOL.*\(dmu_offset_next\)" "$zfssrc/module/zfs/dmu.c" 2>/dev/null],
+			[lb_cv_dmu_offset_next="yes"])
+		])
+		AS_IF([test "x$lb_cv_dmu_offset_next" = "xyes"], [
+			AC_DEFINE(HAVE_DMU_OFFSET_NEXT, 1,
+				[Have dmu_offset_next() exported])
+		])
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [

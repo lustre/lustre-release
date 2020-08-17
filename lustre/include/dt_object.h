@@ -1457,6 +1457,19 @@ struct dt_body_operations {
 			    __u64 end,
 			    int mode,
 			    struct thandle *th);
+	/**
+	 * Do SEEK_HOLE/SEEK_DATA request on object
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] offset	the offset to start seek from
+	 * \param[in] whence	seek mode, SEEK_HOLE or SEEK_DATA
+	 *
+	 * \retval hole/data offset	on success
+	 * \retval negative		negated errno on error
+	 */
+	loff_t (*dbo_lseek)(const struct lu_env *env, struct dt_object *dt,
+			    loff_t offset, int whence);
 };
 
 /**
@@ -2605,6 +2618,17 @@ static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
 	if (d->do_body_ops->dbo_fiemap_get == NULL)
 		return -EOPNOTSUPP;
         return d->do_body_ops->dbo_fiemap_get(env, d, fm);
+}
+
+static inline loff_t dt_lseek(const struct lu_env *env, struct dt_object *d,
+			      loff_t offset, int whence)
+{
+	LASSERT(d);
+	if (d->do_body_ops == NULL)
+		return -EPROTO;
+	if (d->do_body_ops->dbo_lseek == NULL)
+		return -EOPNOTSUPP;
+	return d->do_body_ops->dbo_lseek(env, d, offset, whence);
 }
 
 static inline int dt_statfs_info(const struct lu_env *env,

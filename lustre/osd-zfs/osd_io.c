@@ -1177,6 +1177,50 @@ static int osd_declare_fallocate(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
+			loff_t offset, int whence)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	uint64_t size = obj->oo_attr.la_size;
+	uint64_t result = offset;
+	int rc;
+	boolean_t hole = whence == SEEK_HOLE;
+
+	ENTRY;
+
+	LASSERT(dt_object_exists(dt));
+	LASSERT(osd_invariant(obj));
+
+	if (offset < 0 || offset >= size)
+		RETURN(-ENXIO);
+
+#ifdef HAVE_DMU_OFFSET_NEXT
+	rc = dmu_offset_next(osd_obj2dev(obj)->od_os, obj->oo_dn->dn_object,
+			     hole, &result);
+	if (rc == ESRCH)
+		RETURN(-ENXIO);
+#else
+	/*
+	 * In absence of dmu_offset_next() just do nothing but
+	 * return EBUSY as does dmu_offset_next() and that means
+	 * generic approach should be used.
+	 */
+	rc = EBUSY;
+#endif
+	/* file was dirty, so fall back to using generic logic */
+	if (rc == EBUSY && hole)
+		RETURN(-ENXIO); /* see comment below */
+
+	/* when result is out of file range then it must be virtual hole
+	 * at the end of file, but this is not real file end, so return
+	 * just -ENXIO and LOV will translate it properly.
+	 */
+	if (result >= size)
+		RETURN(-ENXIO);
+
+	RETURN(result);
+}
+
 struct dt_body_operations osd_body_ops = {
 	.dbo_read			= osd_read,
 	.dbo_declare_write		= osd_declare_write,
@@ -1192,6 +1236,7 @@ struct dt_body_operations osd_body_ops = {
 	.dbo_ladvise			= osd_ladvise,
 	.dbo_declare_fallocate		= osd_declare_fallocate,
 	.dbo_fallocate			= osd_fallocate,
+	.dbo_lseek			= osd_lseek,
 };
 
 struct dt_body_operations osd_body_scrub_ops = {
