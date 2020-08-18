@@ -146,7 +146,7 @@ enum ldlm_mode mdc_lock_match(struct obd_export *exp, __u64 flags,
 	/* LU-4405: Clear bits not supported by server */
 	policy->l_inodebits.bits &= exp_connect_ibits(exp);
 	rc = ldlm_lock_match(class_exp2obd(exp)->obd_namespace, flags,
-			     &res_id, type, policy, mode, lockh, 0);
+			     &res_id, type, policy, mode, lockh);
 	RETURN(rc);
 }
 
@@ -1189,7 +1189,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 
 		memcpy(&old_lock, lockh, sizeof(*lockh));
 		if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-				   LDLM_IBITS, &policy, LCK_NL, &old_lock, 0)) {
+				   LDLM_IBITS, &policy, LCK_NL, &old_lock)) {
 			ldlm_lock_decref_and_cancel(lockh, it->it_lock_mode);
 			memcpy(lockh, &old_lock, sizeof(old_lock));
 			it->it_lock_handle = lockh->cookie;

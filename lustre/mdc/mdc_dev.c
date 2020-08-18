@@ -91,7 +91,8 @@ int mdc_dom_lock_match(const struct lu_env *env, struct obd_export *exp,
 		       struct ldlm_res_id *res_id, enum ldlm_type type,
 		       union ldlm_policy_data *policy, enum ldlm_mode mode,
 		       __u64 *flags, struct osc_object *obj,
-		       struct lustre_handle *lockh, int unref)
+		       struct lustre_handle *lockh,
+		       enum ldlm_match_flags match_flags)
 {
 	struct obd_device *obd = exp->exp_obd;
 	__u64 lflags = *flags;
@@ -99,8 +100,9 @@ int mdc_dom_lock_match(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
-	rc = ldlm_lock_match(obd->obd_namespace, lflags,
-			     res_id, type, policy, mode, lockh, unref);
+	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, 0,
+			     res_id, type, policy, mode, lockh, match_flags);
+
 	if (rc == 0 || lflags & LDLM_FL_TEST_LOCK)
 		RETURN(rc);
 
@@ -140,6 +142,7 @@ struct ldlm_lock *mdc_dlmlock_at_pgoff(const struct lu_env *env,
 	struct ldlm_lock *lock = NULL;
 	enum ldlm_mode mode;
 	__u64 flags;
+	enum ldlm_match_flags match_flags = 0;
 
 	ENTRY;
 
@@ -150,6 +153,12 @@ struct ldlm_lock *mdc_dlmlock_at_pgoff(const struct lu_env *env,
 	if (dap_flags & OSC_DAP_FL_TEST_LOCK)
 		flags |= LDLM_FL_TEST_LOCK;
 
+	if (dap_flags & OSC_DAP_FL_AST)
+		match_flags |= LDLM_MATCH_AST;
+
+	if (dap_flags & OSC_DAP_FL_CANCELING)
+		match_flags |= LDLM_MATCH_UNREF;
+
 again:
 	/* Next, search for already existing extent locks that will cover us */
 	/* If we're trying to read, we also search for an existing PW lock.  The
@@ -157,8 +166,7 @@ again:
 	 * writers can share a single PW lock. */
 	mode = mdc_dom_lock_match(env, osc_export(obj), resname, LDLM_IBITS,
 				  policy, LCK_PR | LCK_PW | LCK_GROUP, &flags,
-				  obj, &lockh,
-				  dap_flags & OSC_DAP_FL_CANCELING);
+				  obj, &lockh, match_flags);
 	if (mode != 0) {
 		lock = ldlm_handle2lock(&lockh);
 		/* RACE: the lock is cancelled so let's try again */
@@ -186,7 +194,7 @@ static bool mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 
 		/* refresh non-overlapped index */
 		tmp = mdc_dlmlock_at_pgoff(env, osc, index,
-					   OSC_DAP_FL_TEST_LOCK);
+					   OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_AST);
 		if (tmp != NULL) {
 			info->oti_fn_index = CL_PAGE_EOF;
 			LDLM_LOCK_PUT(tmp);
@@ -709,7 +717,7 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 	 * such locks should be skipped.
 	 */
 	mode = ldlm_lock_match(obd->obd_namespace, match_flags, res_id,
-			       einfo->ei_type, policy, mode, &lockh, 0);
+			       einfo->ei_type, policy, mode, &lockh);
 	if (mode) {
 		struct ldlm_lock *matched;
 

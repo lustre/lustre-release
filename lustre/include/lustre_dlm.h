@@ -978,6 +978,12 @@ struct ldlm_lock {
 	struct list_head	l_exp_list;
 };
 
+enum ldlm_match_flags {
+	LDLM_MATCH_UNREF   = BIT(0),
+	LDLM_MATCH_AST     = BIT(1),
+	LDLM_MATCH_AST_ANY = BIT(2),
+};
+
 /**
  * Describe the overlap between two locks.  itree_overlap_cb data.
  */
@@ -988,8 +994,7 @@ struct ldlm_match_data {
 	union ldlm_policy_data	*lmd_policy;
 	__u64			 lmd_flags;
 	__u64			 lmd_skip_flags;
-	int			 lmd_unref;
-	bool			 lmd_has_ast_data;
+	enum ldlm_match_flags    lmd_match;
 };
 
 /** For uncommitted cross-MDT lock, store transno this lock belongs to */
@@ -1549,6 +1554,7 @@ void ldlm_lock_fail_match_locked(struct ldlm_lock *lock);
 void ldlm_lock_fail_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock);
+
 enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 __u64 flags, __u64 skip_flags,
 					 const struct ldlm_res_id *res_id,
@@ -1556,18 +1562,17 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 union ldlm_policy_data *policy,
 					 enum ldlm_mode mode,
 					 struct lustre_handle *lh,
-					 int unref);
+					 enum ldlm_match_flags match_flags);
 static inline enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns,
 					     __u64 flags,
 					     const struct ldlm_res_id *res_id,
 					     enum ldlm_type type,
 					     union ldlm_policy_data *policy,
 					     enum ldlm_mode mode,
-					     struct lustre_handle *lh,
-					     int unref)
+					     struct lustre_handle *lh)
 {
 	return ldlm_lock_match_with_skip(ns, flags, 0, res_id, type, policy,
-					 mode, lh, unref);
+					 mode, lh, 0);
 }
 struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data);

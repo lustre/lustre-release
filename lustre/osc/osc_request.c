@@ -2735,7 +2735,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 	if (intent != 0)
 		match_flags |= LDLM_FL_BLOCK_GRANTED;
 	mode = ldlm_lock_match(obd->obd_namespace, match_flags, res_id,
-			       einfo->ei_type, policy, mode, &lockh, 0);
+			       einfo->ei_type, policy, mode, &lockh);
 	if (mode) {
 		struct ldlm_lock *matched;
 
@@ -2841,7 +2841,7 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 		   struct ldlm_res_id *res_id, enum ldlm_type type,
 		   union ldlm_policy_data *policy, enum ldlm_mode mode,
 		   __u64 *flags, struct osc_object *obj,
-		   struct lustre_handle *lockh, int unref)
+		   struct lustre_handle *lockh, enum ldlm_match_flags match_flags)
 {
 	struct obd_device *obd = exp->exp_obd;
 	__u64 lflags = *flags;
@@ -2856,15 +2856,17 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 	policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
 	policy->l_extent.end |= ~PAGE_MASK;
 
-        /* Next, search for already existing extent locks that will cover us */
-        /* If we're trying to read, we also search for an existing PW lock.  The
-         * VFS and page cache already protect us locally, so lots of readers/
+	/* Next, search for already existing extent locks that will cover us */
+	/* If we're trying to read, we also search for an existing PW lock.  The
+	 * VFS and page cache already protect us locally, so lots of readers/
          * writers can share a single PW lock. */
-        rc = mode;
-        if (mode == LCK_PR)
-                rc |= LCK_PW;
-        rc = ldlm_lock_match(obd->obd_namespace, lflags,
-                             res_id, type, policy, rc, lockh, unref);
+	rc = mode;
+	if (mode == LCK_PR)
+		rc |= LCK_PW;
+
+	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, 0,
+					res_id, type, policy, rc, lockh,
+					match_flags);
 	if (rc == 0 || lflags & LDLM_FL_TEST_LOCK)
 		RETURN(rc);
 

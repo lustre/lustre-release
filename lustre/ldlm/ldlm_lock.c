@@ -1179,7 +1179,7 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 	if (ldlm_is_cbpending(lock) &&
 	    !(data->lmd_flags & LDLM_FL_CBPENDING))
 		return INTERVAL_ITER_CONT;
-	if (!data->lmd_unref && ldlm_is_cbpending(lock) &&
+	if (!(data->lmd_match & LDLM_MATCH_UNREF) && ldlm_is_cbpending(lock) &&
 	    lock->l_readers == 0 && lock->l_writers == 0)
 		return INTERVAL_ITER_CONT;
 
@@ -1189,11 +1189,12 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 	/* When we search for ast_data, we are not doing a traditional match,
 	 * so we don't worry about IBITS or extent matching.
 	 */
-	if (data->lmd_has_ast_data) {
+	if (data->lmd_match & (LDLM_MATCH_AST | LDLM_MATCH_AST_ANY)) {
 		if (!lock->l_ast_data)
 			return INTERVAL_ITER_CONT;
 
-		goto matched;
+		if (data->lmd_match & LDLM_MATCH_AST_ANY)
+			goto matched;
 	}
 
 	match = lock->l_req_mode;
@@ -1223,7 +1224,7 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 
 	/* We match if we have existing lock with same or wider set
 	   of bits. */
-	if (!data->lmd_unref && LDLM_HAVE_MASK(lock, GONE))
+	if (!(data->lmd_match & LDLM_MATCH_UNREF) && LDLM_HAVE_MASK(lock, GONE))
 		return INTERVAL_ITER_CONT;
 
 	if (!equi(data->lmd_flags & LDLM_FL_LOCAL_ONLY, ldlm_is_local(lock)))
@@ -1404,7 +1405,8 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 enum ldlm_type type,
 					 union ldlm_policy_data *policy,
 					 enum ldlm_mode mode,
-					 struct lustre_handle *lockh, int unref)
+					 struct lustre_handle *lockh,
+					 enum ldlm_match_flags match_flags)
 {
 	struct ldlm_match_data data = {
 		.lmd_old = NULL,
@@ -1413,8 +1415,7 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 		.lmd_policy = policy,
 		.lmd_flags = flags,
 		.lmd_skip_flags = skip_flags,
-		.lmd_unref = unref,
-		.lmd_has_ast_data = false,
+		.lmd_match = match_flags,
 	};
 	struct ldlm_resource *res;
 	struct ldlm_lock *lock;

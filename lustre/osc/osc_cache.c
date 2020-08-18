@@ -3126,7 +3126,7 @@ static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 
 		/* refresh non-overlapped index */
 		tmp = osc_dlmlock_at_pgoff(env, osc, index,
-					   OSC_DAP_FL_TEST_LOCK);
+					   OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_AST);
 		if (tmp != NULL) {
 			__u64 end = tmp->l_policy_data.l_extent.end;
 			/* Cache the first-non-overlapped index so as to skip

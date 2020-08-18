@@ -280,7 +280,7 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
 			       LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY,
 			       &resid, LDLM_EXTENT, &policy,
-			       LCK_PR | LCK_PW, &lockh, 0);
+			       LCK_PR | LCK_PW, &lockh);
 	if (mode) { /* lock is cached on client */
 		if (mode != LCK_PR) {
 			ldlm_lock_addref(&lockh, LCK_PR);

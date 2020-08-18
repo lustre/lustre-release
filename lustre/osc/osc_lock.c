@@ -582,8 +582,7 @@ int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 	matchdata.lmd_mode = &mode;
 	matchdata.lmd_policy = &policy;
 	matchdata.lmd_flags = LDLM_FL_TEST_LOCK | LDLM_FL_CBPENDING;
-	matchdata.lmd_unref = 1;
-	matchdata.lmd_has_ast_data = true;
+	matchdata.lmd_match = LDLM_MATCH_UNREF | LDLM_MATCH_AST_ANY;
 
 	LDLM_LOCK_GET(dlmlock);
 
@@ -1277,6 +1276,7 @@ struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 	struct ldlm_lock *lock = NULL;
 	enum ldlm_mode mode;
 	__u64 flags;
+	enum ldlm_match_flags match_flags = 0;
 
 	ENTRY;
 
@@ -1287,6 +1287,13 @@ struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 	flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
 	if (dap_flags & OSC_DAP_FL_TEST_LOCK)
 		flags |= LDLM_FL_TEST_LOCK;
+
+	if (dap_flags & OSC_DAP_FL_AST)
+		match_flags |= LDLM_MATCH_AST;
+
+	if (dap_flags & OSC_DAP_FL_CANCELING)
+		match_flags |= LDLM_MATCH_UNREF;
+
 	/*
 	 * It is fine to match any group lock since there could be only one
 	 * with a uniq gid and it conflicts with all other lock modes too
@@ -1294,7 +1301,7 @@ struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 again:
 	mode = osc_match_base(env, osc_export(obj), resname, LDLM_EXTENT,
 			      policy, LCK_PR | LCK_PW | LCK_GROUP, &flags,
-			      obj, &lockh, dap_flags & OSC_DAP_FL_CANCELING);
+			      obj, &lockh, match_flags);
 	if (mode != 0) {
 		lock = ldlm_handle2lock(&lockh);
 		/* RACE: the lock is cancelled so let's try again */
