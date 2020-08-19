@@ -334,6 +334,18 @@ static ssize_t cur_lost_grant_bytes_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(cur_lost_grant_bytes);
 
+static ssize_t cur_dirty_grant_bytes_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cli->cl_dirty_grant);
+}
+LUSTRE_RO_ATTR(cur_dirty_grant_bytes);
+
 static ssize_t grant_shrink_interval_show(struct kobject *kobj,
 					  struct attribute *attr,
 					  char *buf)
@@ -943,6 +955,7 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_contention_seconds.attr,
 	&lustre_attr_cur_dirty_bytes.attr,
 	&lustre_attr_cur_lost_grant_bytes.attr,
+	&lustre_attr_cur_dirty_grant_bytes.attr,
 	&lustre_attr_destroys_in_flight.attr,
 	&lustre_attr_grant_shrink_interval.attr,
 	&lustre_attr_lockless_truncate.attr,
