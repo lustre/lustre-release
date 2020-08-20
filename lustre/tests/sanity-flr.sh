@@ -2906,6 +2906,24 @@ test_204f() {
 }
 run_test 204f "FLR write/stale/resync sel w/forced extension"
 
+function test_205() {
+	local tf=$DIR/$tfile
+	local mirrors
+
+	$LFS setstripe -c1 $tf
+	$LFS mirror extend -N $tf
+	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
+	(( $mirrors == 2 )) || error "no new mirror was created?"
+
+	$LFS mirror extend -N --flags=prefer $tf
+	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
+	(( $mirrors == 3 )) || error "no new mirror was created?"
+
+	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q prefer) ||
+		error "prefer flag was not set on the new mirror"
+}
+run_test 205 "lfs mirror extend to set prefer flag"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

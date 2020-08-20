@@ -1766,7 +1766,7 @@ out:
 }
 
 static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
-				bool inherit)
+				bool inherit, uint32_t flags)
 {
 	struct llapi_layout *f_layout = NULL;
 	struct ll_ioc_lease *data = NULL;
@@ -1794,6 +1794,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 			goto out;
 		}
 	}
+	llapi_layout_comp_flags_set(m_layout, flags);
 	rc = migrate_open_files(name, 0, NULL, m_layout, &fd, &fdv);
 	if (rc < 0)
 		goto out;
@@ -1863,7 +1864,8 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			while (mirror_count > 0) {
 				rc = mirror_extend_layout(fname,
 							mirror_list->m_layout,
-							mirror_list->m_inherit);
+							mirror_list->m_inherit,
+							mirror_list->m_flags);
 				if (rc)
 					break;
 
