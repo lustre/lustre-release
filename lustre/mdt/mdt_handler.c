@@ -6790,8 +6790,6 @@ static int mdt_path_current(struct mdt_thread_info *info,
 			GOTO(out, rc);
 		}
 
-		rc = 0;
-
 		/* Pack the name in the end of the buffer */
 		ptr -= tmpname->ln_namelen;
 		if (ptr - 1 <= fp->gf_u.gf_path)
@@ -6806,6 +6804,9 @@ static int mdt_path_current(struct mdt_thread_info *info,
 
 		first = false;
 	}
+
+	/* non-zero will be treated as an error */
+	rc = 0;
 
 remote_out:
 	ptr++; /* skip leading / */

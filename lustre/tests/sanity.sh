@@ -17214,6 +17214,34 @@ test_226b () {
 }
 run_test 226b "call path2fid and fid2path on files of all type under remote dir"
 
+test_226c () {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -ge $(version_code 2.13.55) ]] ||
+		skip "Need MDS version at least 2.13.55"
+
+	local submnt=/mnt/submnt
+	local srcfile=/etc/passwd
+	local dstfile=$submnt/passwd
+	local path
+	local fid
+
+	rm -rf $DIR/$tdir
+	rm -rf $submnt
+	$LFS setdirstripe -c -1 -i 1 $DIR/$tdir ||
+		error "create remote directory failed"
+	mkdir -p $submnt || error "create $submnt failed"
+	$MOUNT_CMD $MGSNID:/$FSNAME/$tdir $submnt ||
+		error "mount $submnt failed"
+	stack_trap "umount $submnt" EXIT
+
+	cp $srcfile $dstfile
+	fid=$($LFS path2fid $dstfile)
+	path=$($LFS fid2path $submnt "$fid")
+	[ "$path" = "$dstfile" ] ||
+		error "fid2path $submnt $fid failed ($path != $dstfile)"
+}
+run_test 226c "call path2fid and fid2path under remote dir with subdir mount"
+
 # LU-1299 Executing or running ldd on a truncated executable does not
 # cause an out-of-memory condition.
 test_227() {
