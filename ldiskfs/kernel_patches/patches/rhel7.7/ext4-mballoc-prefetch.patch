@@ -62,10 +62,12 @@
 
  #define EXT4_MB_GRP_NEED_INIT(grp)	\
  	(test_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &((grp)->bb_state)))
-@@ -3065,6 +3070,8 @@ struct ext4_group_info {
+@@ -3065,6 +3070,10 @@ struct ext4_group_info {
  	(set_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
  #define EXT4_MB_GRP_CLEAR_TRIMMED(grp)	\
  	(clear_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
++#define EXT4_MB_GRP_TEST(grp)	\
++	(test_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
 +#define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
 +	(test_and_set_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
  
@@ -128,7 +130,7 @@
 +	while (nr-- > 0) {
 +		grp = ext4_get_group_info(sb, group);
 +		/* prevent expensive getblk() on groups w/ IO in progress */
-+		if (EXT4_MB_GRP_TEST_AND_SET_READ(grp))
++		if (EXT4_MB_GRP_TEST(grp) || EXT4_MB_GRP_TEST_AND_SET_READ(grp))
 +			goto next;
 +
 +		/* ignore empty groups - those will be skipped
