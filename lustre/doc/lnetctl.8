@@ -261,6 +261,12 @@ Set the behavior of response tracking\.
   Note: Regardless of the value of the response_tracking parameter LNet
         pings and discovery pushes always utilize response tracking\.
 .
+.TP
+\fBlnetctl set\fR recovery_limit \fIvalue\fR
+Set how long LNet will attempt to recover unhealthy peer interfaces\.
+  0 - Recover indefinitely (default)\.
+  >0 - Recover for the specified number of seconds\.
+.
 .SS "Import and Export YAML Configuration Files"
 LNet configuration can be represented in YAML format\. A YAML configuration
 file can be passed to the lnetctl utility via the \fBimport\fR command\. The

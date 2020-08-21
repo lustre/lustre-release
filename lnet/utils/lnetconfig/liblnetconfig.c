@@ -2421,6 +2421,36 @@ int lustre_lnet_config_response_tracking(int val, int seq_no,
 	return rc;
 }
 
+int lustre_lnet_config_recovery_limit(int val, int seq_no,
+				      struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val_str[LNET_MAX_STR_LEN];
+
+	if (val < 0) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "\"Must be greater than or equal to 0\"");
+	} else {
+		snprintf(err_str, sizeof(err_str), "\"success\"");
+
+		snprintf(val_str, sizeof(val_str), "%d", val);
+
+		rc = write_sysfs_file(modparam_path, "lnet_recovery_limit",
+				      val_str, 1, strlen(val_str) + 1);
+		if (rc)
+			snprintf(err_str, sizeof(err_str),
+				 "\"cannot configure recovery limit: %s\"",
+				 strerror(errno));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "recovery_limit", err_str,
+			  err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3511,6 +3541,31 @@ int lustre_lnet_show_response_tracking(int seq_no, struct cYAML **show_rc,
 				       show_rc, err_rc, l_errno);
 }
 
+int lustre_lnet_show_recovery_limit(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int recov_limit = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_recovery_limit", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get lnet_recovery_limit value: %d\"", rc);
+	} else {
+		recov_limit = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "recovery_limit", recov_limit,
+				       show_rc, err_rc, l_errno);
+}
+
 int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc)
 {
@@ -4498,7 +4553,8 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking;
+		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking,
+		     *recov_limit;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4572,6 +4628,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 							: -1,
 						     err_rc);
 
+	recov_limit = cYAML_get_object_item(tree, "recovery_limit");
+	if (recov_limit)
+		rc = lustre_lnet_config_recovery_limit(recov_limit->cy_valueint,
+						       seq_no ? seq_no->cy_valueint
+							: -1,
+						       err_rc);
+
 	return rc;
 }
 
@@ -4619,7 +4682,8 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking;
+		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking,
+		     *recov_limit;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4683,6 +4747,13 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 							seq_no->cy_valueint :
 							-1,
 							show_rc, err_rc);
+
+	recov_limit = cYAML_get_object_item(tree, "recovery_limit");
+	if (recov_limit)
+		rc = lustre_lnet_show_recovery_limit(seq_no ?
+						     seq_no->cy_valueint :
+						     -1,
+						     show_rc, err_rc);
 
 	return rc;
 }
