@@ -42,6 +42,7 @@
 /lockahead_test
 /logs
 /lovstripe
+/lseek_test
 /mcreate
 /memhog
 /mirror_io

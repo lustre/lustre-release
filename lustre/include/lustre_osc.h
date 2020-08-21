@@ -694,6 +694,10 @@ int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 void osc_io_fsync_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
 void osc_read_ahead_release(const struct lu_env *env, void *cbdata);
+int osc_io_lseek_start(const struct lu_env *env,
+		       const struct cl_io_slice *slice);
+void osc_io_lseek_end(const struct lu_env *env,
+		      const struct cl_io_slice *slice);
 
 /* osc_lock.c */
 void osc_lock_to_lockless(const struct lu_env *env, struct osc_lock *ols,

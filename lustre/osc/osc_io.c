@@ -1053,6 +1053,130 @@ void osc_io_end(const struct lu_env *env, const struct cl_io_slice *slice)
 }
 EXPORT_SYMBOL(osc_io_end);
 
+struct osc_lseek_args {
+	struct osc_io *lsa_oio;
+};
+
+static int osc_lseek_interpret(const struct lu_env *env,
+			       struct ptlrpc_request *req,
+			       void *arg, int rc)
+{
+	struct ost_body *reply;
+	struct osc_lseek_args *lsa = arg;
+	struct osc_io *oio = lsa->lsa_oio;
+	struct cl_io *io = oio->oi_cl.cis_io;
+	struct cl_lseek_io *lsio = &io->u.ci_lseek;
+
+	ENTRY;
+
+	if (rc != 0)
+		GOTO(out, rc);
+
+	reply = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+	if (reply == NULL)
+		GOTO(out, rc = -EPROTO);
+
+	lsio->ls_result = reply->oa.o_size;
+out:
+	osc_async_upcall(&oio->oi_cbarg, rc);
+	RETURN(rc);
+}
+
+int osc_io_lseek_start(const struct lu_env *env,
+		       const struct cl_io_slice *slice)
+{
+	struct cl_io *io = slice->cis_io;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct cl_object *obj = slice->cis_obj;
+	struct lov_oinfo *loi = cl2osc(obj)->oo_oinfo;
+	struct cl_lseek_io *lsio = &io->u.ci_lseek;
+	struct obdo *oa = &oio->oi_oa;
+	struct osc_async_cbargs	*cbargs = &oio->oi_cbarg;
+	struct obd_export *exp = osc_export(cl2osc(obj));
+	struct ptlrpc_request *req;
+	struct ost_body *body;
+	struct osc_lseek_args *lsa;
+	int rc = 0;
+
+	ENTRY;
+
+	/* No negative values at this point */
+	LASSERT(lsio->ls_start >= 0);
+	LASSERT(lsio->ls_whence == SEEK_HOLE || lsio->ls_whence == SEEK_DATA);
+
+	/* with IO lock taken we have object size in LVB and can check
+	 * boundaries prior sending LSEEK RPC
+	 */
+	if (lsio->ls_start >= loi->loi_lvb.lvb_size) {
+		/* consider area beyond end of object as hole */
+		if (lsio->ls_whence == SEEK_HOLE)
+			lsio->ls_result = lsio->ls_start;
+		else
+			lsio->ls_result = -ENXIO;
+		RETURN(0);
+	}
+
+	/* if LSEEK RPC is not supported by server, consider whole stripe
+	 * object is data with hole after end of object
+	 */
+	if (!exp_connect_lseek(exp)) {
+		if (lsio->ls_whence == SEEK_HOLE)
+			lsio->ls_result = loi->loi_lvb.lvb_size;
+		else
+			lsio->ls_result = lsio->ls_start;
+		RETURN(0);
+	}
+
+	memset(oa, 0, sizeof(*oa));
+	oa->o_oi = loi->loi_oi;
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	oa->o_size = lsio->ls_start;
+	oa->o_mode = lsio->ls_whence;
+	if (oio->oi_lockless) {
+		oa->o_flags = OBD_FL_SRVLOCK;
+		oa->o_valid |= OBD_MD_FLFLAGS;
+	}
+
+	init_completion(&cbargs->opc_sync);
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_SEEK);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SEEK);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
+	ptlrpc_request_set_replen(req);
+	req->rq_interpret_reply = osc_lseek_interpret;
+	lsa = ptlrpc_req_async_args(lsa, req);
+	lsa->lsa_oio = oio;
+
+	ptlrpcd_add_req(req);
+	cbargs->opc_rpc_sent = 1;
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(osc_io_lseek_start);
+
+void osc_io_lseek_end(const struct lu_env *env,
+		      const struct cl_io_slice *slice)
+{
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct osc_async_cbargs	*cbargs = &oio->oi_cbarg;
+	int rc = 0;
+
+	if (cbargs->opc_rpc_sent) {
+		wait_for_completion(&cbargs->opc_sync);
+		rc = cbargs->opc_rc;
+	}
+	slice->cis_io->ci_result = rc;
+}
+EXPORT_SYMBOL(osc_io_lseek_end);
+
 static const struct cl_io_operations osc_io_ops = {
 	.op = {
 		[CIT_READ] = {
@@ -1093,6 +1217,11 @@ static const struct cl_io_operations osc_io_ops = {
 		[CIT_LADVISE] = {
 			.cio_start  = osc_io_ladvise_start,
 			.cio_end    = osc_io_ladvise_end,
+			.cio_fini   = osc_io_fini
+		},
+		[CIT_LSEEK] = {
+			.cio_start  = osc_io_lseek_start,
+			.cio_end    = osc_io_lseek_end,
 			.cio_fini   = osc_io_fini
 		},
 		[CIT_MISC] = {

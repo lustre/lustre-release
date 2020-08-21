@@ -4080,28 +4080,79 @@ out_state:
 	}
 }
 
+loff_t ll_lseek(struct inode *inode, loff_t offset, int whence)
+{
+	struct lu_env *env;
+	struct cl_io *io;
+	struct cl_lseek_io *lsio;
+	__u16 refcheck;
+	int rc;
+	loff_t retval;
+
+	ENTRY;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	io = vvp_env_thread_io(env);
+	io->ci_obj = ll_i2info(inode)->lli_clob;
+
+	lsio = &io->u.ci_lseek;
+	lsio->ls_start = offset;
+	lsio->ls_whence = whence;
+	lsio->ls_result = -ENXIO;
+
+	do {
+		rc = cl_io_init(env, io, CIT_LSEEK, io->ci_obj);
+		if (!rc)
+			rc = cl_io_loop(env, io);
+		else
+			rc = io->ci_result;
+		retval = rc ? : lsio->ls_result;
+		cl_io_fini(env, io);
+	} while (unlikely(io->ci_need_restart));
+
+	cl_env_put(env, &refcheck);
+
+	RETURN(retval);
+}
+
 static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file_inode(file);
-	loff_t retval, eof = 0;
+	loff_t retval = offset, eof = 0;
 	ktime_t kstart = ktime_get();
 
 	ENTRY;
-	retval = offset + ((origin == SEEK_END) ? i_size_read(inode) :
-			   (origin == SEEK_CUR) ? file->f_pos : 0);
+
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), to=%llu=%#llx(%d)\n",
 	       PFID(ll_inode2fid(inode)), inode, retval, retval,
 	       origin);
 
-	if (origin == SEEK_END || origin == SEEK_HOLE || origin == SEEK_DATA) {
+	if (origin == SEEK_END) {
 		retval = ll_glimpse_size(inode);
 		if (retval != 0)
 			RETURN(retval);
 		eof = i_size_read(inode);
 	}
 
-	retval = generic_file_llseek_size(file, offset, origin,
-					  ll_file_maxbytes(inode), eof);
+	if (origin == SEEK_HOLE || origin == SEEK_DATA) {
+		if (offset < 0)
+			return -ENXIO;
+
+		/* flush local cache first if any */
+		cl_sync_file_range(inode, offset, OBD_OBJECT_EOF,
+				   CL_FSYNC_LOCAL, 0);
+
+		retval = ll_lseek(inode, offset, origin);
+		if (retval < 0)
+			return retval;
+		retval = vfs_setpos(file, retval, ll_file_maxbytes(inode));
+	} else {
+		retval = generic_file_llseek_size(file, offset, origin,
+						  ll_file_maxbytes(inode), eof);
+	}
 	if (retval >= 0)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK,
 				   ktime_us_delta(ktime_get(), kstart));

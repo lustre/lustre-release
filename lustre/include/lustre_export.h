@@ -480,6 +480,11 @@ static inline int exp_connect_encrypt(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_ENCRYPT);
 }
 
+static inline int exp_connect_lseek(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LSEEK);
+}
+
 enum {
 	/* archive_ids in array format */
 	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,

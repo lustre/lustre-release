@@ -540,6 +540,12 @@ static int lov_io_slice_init(struct lov_io *lio,
 		break;
 	}
 
+	case CIT_LSEEK: {
+		lio->lis_pos = io->u.ci_lseek.ls_start;
+		lio->lis_endpos = OBD_OBJECT_EOF;
+		break;
+	}
+
 	case CIT_GLIMPSE:
 		lio->lis_pos = 0;
 		lio->lis_endpos = OBD_OBJECT_EOF;
@@ -727,6 +733,12 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		io->u.ci_ladvise.li_fid = parent->u.ci_ladvise.li_fid;
 		io->u.ci_ladvise.li_advice = parent->u.ci_ladvise.li_advice;
 		io->u.ci_ladvise.li_flags = parent->u.ci_ladvise.li_flags;
+		break;
+	}
+	case CIT_LSEEK: {
+		io->u.ci_lseek.ls_start = start;
+		io->u.ci_lseek.ls_whence = parent->u.ci_lseek.ls_whence;
+		io->u.ci_lseek.ls_result = parent->u.ci_lseek.ls_result;
 		break;
 	}
 	case CIT_GLIMPSE:
@@ -1298,6 +1310,83 @@ static void lov_io_fsync_end(const struct lu_env *env,
 	RETURN_EXIT;
 }
 
+static void lov_io_lseek_end(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct cl_io *io = lio->lis_cl.cis_io;
+	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	struct lov_io_sub *sub;
+	loff_t offset = -ENXIO;
+	bool seek_hole = io->u.ci_lseek.ls_whence == SEEK_HOLE;
+
+	ENTRY;
+
+	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+		struct cl_io *subio = &sub->sub_io;
+		int index = lov_comp_entry(sub->sub_subio_index);
+		int stripe = lov_comp_stripe(sub->sub_subio_index);
+		loff_t sub_off, lov_off;
+
+		lov_io_end_wrapper(sub->sub_env, subio);
+
+		if (io->ci_result == 0)
+			io->ci_result = sub->sub_io.ci_result;
+
+		if (io->ci_result)
+			continue;
+
+		CDEBUG(D_INFO, DFID": entry %x stripe %u: SEEK_%s from %lld\n",
+		       PFID(lu_object_fid(lov2lu(lio->lis_object))),
+		       index, stripe, seek_hole ? "HOLE" : "DATA",
+		       subio->u.ci_lseek.ls_start);
+
+		/* first subio with positive result is what we need */
+		sub_off = subio->u.ci_lseek.ls_result;
+		/* Expected error, offset is out of stripe file size */
+		if (sub_off == -ENXIO)
+			continue;
+		/* Any other errors are not expected with ci_result == 0 */
+		if (sub_off < 0) {
+			CDEBUG(D_INFO, "unexpected error: rc = %lld\n",
+			       sub_off);
+			io->ci_result = sub_off;
+			continue;
+		}
+		lov_off = lov_stripe_size(lsm, index, sub_off + 1, stripe) - 1;
+		if (lov_off < 0) {
+			/* the only way to get negatove lov_off here is too big
+			 * result. Return -EOVERFLOW then.
+			 */
+			io->ci_result = -EOVERFLOW;
+			CDEBUG(D_INFO, "offset %llu is too big: rc = %d\n",
+			       (u64)lov_off, io->ci_result);
+			continue;
+		}
+		if (lov_off < io->u.ci_lseek.ls_start) {
+			io->ci_result = -EINVAL;
+			CDEBUG(D_INFO, "offset %lld < start %lld: rc = %d\n",
+			       sub_off, io->u.ci_lseek.ls_start, io->ci_result);
+			continue;
+		}
+		/* resulting offset can be out of component range if stripe
+		 * object is full and its file size was returned as virtual
+		 * hole start. Skip this result, the next component will give
+		 * us correct lseek result.
+		 */
+		if (lov_off >= lsm->lsm_entries[index]->lsme_extent.e_end)
+			continue;
+
+		CDEBUG(D_INFO, "SEEK_%s: %lld->%lld/%lld: rc = %d\n",
+		       seek_hole ? "HOLE" : "DATA",
+		       subio->u.ci_lseek.ls_start, sub_off, lov_off,
+		       sub->sub_io.ci_result);
+		offset = min_t(__u64, offset, lov_off);
+	}
+	io->u.ci_lseek.ls_result = offset;
+	RETURN_EXIT;
+}
+
 static const struct cl_io_operations lov_io_ops = {
 	.op = {
 		[CIT_READ] = {
@@ -1362,6 +1451,15 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_unlock    = lov_io_unlock,
 			.cio_start     = lov_io_start,
 			.cio_end       = lov_io_end
+		},
+		[CIT_LSEEK] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_start,
+			.cio_end       = lov_io_lseek_end
 		},
 		[CIT_GLIMPSE] = {
 			.cio_fini      = lov_io_fini,
@@ -1503,6 +1601,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 		break;
 	case CIT_FSYNC:
 	case CIT_LADVISE:
+	case CIT_LSEEK:
 	case CIT_SETATTR:
 	case CIT_DATA_VERSION:
 		result = +1;
@@ -1567,6 +1666,7 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	case CIT_READ:
 	case CIT_WRITE:
 	case CIT_FAULT:
+	case CIT_LSEEK:
 		io->ci_restore_needed = 1;
 		result = -ENODATA;
 		break;

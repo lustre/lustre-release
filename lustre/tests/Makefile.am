@@ -76,7 +76,8 @@ THETESTS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
 THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 THETESTS += create_foreign_file parse_foreign_file
 THETESTS += create_foreign_dir parse_foreign_dir
-THETESTS += check_fallocate splice-test
+THETESTS += check_fallocate splice-test lseek_test
+
 if LIBAIO
 THETESTS += aiocp
 endif

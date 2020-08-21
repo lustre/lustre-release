@@ -126,6 +126,7 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 	case CIT_GLIMPSE:
 		break;
 	case CIT_LADVISE:
+	case CIT_LSEEK:
 		break;
 	default:
 		LBUG();

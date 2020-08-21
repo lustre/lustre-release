@@ -23591,6 +23591,204 @@ test_426() {
 }
 run_test 426 "splice test on Lustre"
 
+lseek_test_430() {
+	local offset
+	local file=$1
+
+	# data at [200K, 400K)
+	dd if=/dev/urandom of=$file bs=256K count=1 seek=1 ||
+		error "256K->512K dd fails"
+	# data at [2M, 3M)
+	dd if=/dev/urandom of=$file bs=1M count=1 seek=2 ||
+		error "2M->3M dd fails"
+	# data at [4M, 5M)
+	dd if=/dev/urandom of=$file bs=1M count=1 seek=4 ||
+		error "4M->5M dd fails"
+	echo "Data at 256K...512K, 2M...3M and 4M...5M"
+	# start at first component hole #1
+	printf "Seeking hole from 1000 ... "
+	offset=$(lseek_test -l 1000 $file)
+	echo $offset
+	[[ $offset == 1000 ]] || error "offset $offset != 1000"
+	printf "Seeking data from 1000 ... "
+	offset=$(lseek_test -d 1000 $file)
+	echo $offset
+	[[ $offset == 262144 ]] || error "offset $offset != 262144"
+
+	# start at first component data block
+	printf "Seeking hole from 300000 ... "
+	offset=$(lseek_test -l 300000 $file)
+	echo $offset
+	[[ $offset == 524288 ]] || error "offset $offset != 524288"
+	printf "Seeking data from 300000 ... "
+	offset=$(lseek_test -d 300000 $file)
+	echo $offset
+	[[ $offset == 300000 ]] || error "offset $offset != 300000"
+
+	# start at the first component but beyond end of object size
+	printf "Seeking hole from 1000000 ... "
+	offset=$(lseek_test -l 1000000 $file)
+	echo $offset
+	[[ $offset == 1000000 ]] || error "offset $offset != 1000000"
+	printf "Seeking data from 1000000 ... "
+	offset=$(lseek_test -d 1000000 $file)
+	echo $offset
+	[[ $offset == 2097152 ]] || error "offset $offset != 2097152"
+
+	# start at second component stripe 2 (empty file)
+	printf "Seeking hole from 1500000 ... "
+	offset=$(lseek_test -l 1500000 $file)
+	echo $offset
+	[[ $offset == 1500000 ]] || error "offset $offset != 1500000"
+	printf "Seeking data from 1500000 ... "
+	offset=$(lseek_test -d 1500000 $file)
+	echo $offset
+	[[ $offset == 2097152 ]] || error "offset $offset != 2097152"
+
+	# start at second component stripe 1 (all data)
+	printf "Seeking hole from 3000000 ... "
+	offset=$(lseek_test -l 3000000 $file)
+	echo $offset
+	[[ $offset == 3145728 ]] || error "offset $offset != 3145728"
+	printf "Seeking data from 3000000 ... "
+	offset=$(lseek_test -d 3000000 $file)
+	echo $offset
+	[[ $offset == 3000000 ]] || error "offset $offset != 3000000"
+
+	dd if=/dev/urandom of=$file bs=640K count=1 seek=1 ||
+		error "2nd dd fails"
+	echo "Add data block at 640K...1280K"
+
+	# start at before new data block, in hole
+	printf "Seeking hole from 600000 ... "
+	offset=$(lseek_test -l 600000 $file)
+	echo $offset
+	[[ $offset == 600000 ]] || error "offset $offset != 600000"
+	printf "Seeking data from 600000 ... "
+	offset=$(lseek_test -d 600000 $file)
+	echo $offset
+	[[ $offset == 655360 ]] || error "offset $offset != 655360"
+
+	# start at the first component new data block
+	printf "Seeking hole from 1000000 ... "
+	offset=$(lseek_test -l 1000000 $file)
+	echo $offset
+	[[ $offset == 1310720 ]] || error "offset $offset != 1310720"
+	printf "Seeking data from 1000000 ... "
+	offset=$(lseek_test -d 1000000 $file)
+	echo $offset
+	[[ $offset == 1000000 ]] || error "offset $offset != 1000000"
+
+	# start at second component stripe 2, new data
+	printf "Seeking hole from 1200000 ... "
+	offset=$(lseek_test -l 1200000 $file)
+	echo $offset
+	[[ $offset == 1310720 ]] || error "offset $offset != 1310720"
+	printf "Seeking data from 1200000 ... "
+	offset=$(lseek_test -d 1200000 $file)
+	echo $offset
+	[[ $offset == 1200000 ]] || error "offset $offset != 1200000"
+
+	# start beyond file end
+	printf "Using offset > filesize ... "
+	lseek_test -l 4000000 $file && error "lseek should fail"
+	printf "Using offset > filesize ... "
+	lseek_test -d 4000000 $file && error "lseek should fail"
+
+	printf "Done\n\n"
+}
+
+test_430a() {
+	$LCTL get_param mdc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "MDT does not support SEEK_HOLE"
+
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1M -L mdt -E eof -c2 $file
+	# OST stripe #1 will have continuous data at [1M, 3M)
+	# OST stripe #2 is empty
+	echo "Component #1: 1M DoM, component #2: EOF, 2 stripes 1M"
+	lseek_test_430 $file
+	rm $file
+	$LFS setstripe -E 1M -c2 -S 64K -E 10M -c2 -S 1M $file
+	echo "Component #1: 1M, 2 stripes 64K, component #2: EOF, 2 stripes 1M"
+	lseek_test_430 $file
+	rm $file
+	$LFS setstripe -c2 -S 512K $file
+	echo "Two stripes, stripe size 512K"
+	lseek_test_430 $file
+	rm $file
+	# FLR with stale mirror
+	$LFS setstripe -N -E 512K -c1 -S 64K -E eof -c2 -S 512K \
+		       -N -c2 -S 1M $file
+	echo "Mirrored file:"
+	echo "Component #1: 512K, stripe 64K, component #2: EOF, 2 stripes 512K"
+	echo "Plain 2 stripes 1M"
+	lseek_test_430 $file
+	rm $file
+}
+run_test 430a "lseek: SEEK_DATA/SEEK_HOLE basic functionality"
+
+test_430b() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local offset
+	local file=$DIR/$tdir/$tfile
+
+	mkdir -p $DIR/$tdir
+	# Empty layout lseek should fail
+	$MCREATE $file
+	# seek from 0
+	printf "Seeking hole from 0 ... "
+	lseek_test -l 0 $file && error "lseek should fail"
+	printf "Seeking data from 0 ... "
+	lseek_test -d 0 $file && error "lseek should fail"
+	rm $file
+
+	# 1M-hole file
+	$LFS setstripe -E 1M -c2 -E eof $file
+	$TRUNCATE $file 1048576
+	printf "Seeking hole from 1000000 ... "
+	offset=$(lseek_test -l 1000000 $file)
+	echo $offset
+	[[ $offset == 1000000 ]] || error "offset $offset != 1000000"
+	printf "Seeking data from 1000000 ... "
+	lseek_test -d 1000000 $file && error "lseek should fail"
+	# full first component, non-inited second one
+	dd if=/dev/urandom of=$file bs=1M count=1
+	printf "Seeking hole from 1000000 ... "
+	offset=$(lseek_test -l 1000000 $file)
+	echo $offset
+	[[ $offset == 1048576 ]] || error "offset $offset != 1048576"
+	printf "Seeking hole from 1048576 ... "
+	lseek_test -l 1048576 $file && error "lseek should fail"
+	# init second component and truncate back
+	echo "123" >> $file
+	$TRUNCATE $file 1048576
+	ls -lia $file
+	printf "Seeking hole from 1000000 ... "
+	offset=$(lseek_test -l 1000000 $file)
+	echo $offset
+	[[ $offset == 1048576 ]] || error "offset $offset != 1048576"
+	printf "Seeking hole from 1048576 ... "
+	lseek_test -l 1048576 $file && error "lseek should fail"
+	# boundary checks for big values
+	dd if=/dev/urandom of=$file.10g bs=1 count=1 seek=10G
+	offset=$(lseek_test -d 0 $file.10g)
+	[[ $offset == 10737418240 ]] || error "offset $offset != 10737418240"
+	dd if=/dev/urandom of=$file.100g bs=1 count=1 seek=100G
+	offset=$(lseek_test -d 0 $file.100g)
+	[[ $offset == 107374182400 ]] || error "offset $offset != 107374182400"
+	return 0
+}
+run_test 430b "lseek: SEEK_DATA/SEEK_HOLE special cases"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

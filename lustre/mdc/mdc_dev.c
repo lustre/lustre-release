@@ -1326,6 +1326,10 @@ static struct cl_io_operations mdc_io_ops = {
 			.cio_start = mdc_io_fsync_start,
 			.cio_end   = osc_io_fsync_end,
 		},
+		[CIT_LSEEK] = {
+			.cio_start  = osc_io_lseek_start,
+			.cio_end    = osc_io_lseek_end,
+		},
 	},
 	.cio_read_ahead   = mdc_io_read_ahead,
 	.cio_submit	  = osc_io_submit,

@@ -1411,6 +1411,11 @@ enum cl_io_type {
 	 * To give advice about access of a file
 	 */
 	CIT_LADVISE,
+	/**
+	 * SEEK_HOLE/SEEK_DATA handling to search holes or data
+	 * across all file objects
+	 */
+	CIT_LSEEK,
         CIT_OP_NR
 };
 
@@ -1882,6 +1887,11 @@ struct cl_io {
 			enum lu_ladvise_type	 li_advice;
 			__u64			 li_flags;
 		} ci_ladvise;
+		struct cl_lseek_io {
+			loff_t			 ls_start;
+			loff_t			 ls_result;
+			int			 ls_whence;
+		} ci_lseek;
         } u;
         struct cl_2queue     ci_queue;
         size_t               ci_nob;

@@ -1340,6 +1340,26 @@ test_12q() {
 }
 run_test 12q "file attributes are refreshed after restore"
 
+test_12r() {
+	# test needs a running copytool
+	copytool setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+
+	$LFS hsm_archive $f || error "archive of $f failed"
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "release of $f failed"
+
+	offset=$(lseek_test -d 7 $f)
+
+	# we check we had a restore done
+	wait_request_state $fid RESTORE SUCCEED
+	[[ $offset == 7 ]] || error "offset $offset != 7"
+}
+run_test 12r "lseek restores released file"
+
 test_13() {
 	local -i i j k=0
 	for i in {1..10}; do

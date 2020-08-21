@@ -1596,6 +1596,51 @@ static int vvp_io_read_ahead(const struct lu_env *env,
 	RETURN(result);
 }
 
+static int vvp_io_lseek_lock(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct cl_io *io = ios->cis_io;
+	__u64 lock_start = io->u.ci_lseek.ls_start;
+	__u64 lock_end = OBD_OBJECT_EOF;
+	__u32 enqflags = CEF_MUST; /* always take client lock */
+
+	return vvp_io_one_lock(env, io, enqflags, CLM_READ,
+			       lock_start, lock_end);
+}
+
+static int vvp_io_lseek_start(const struct lu_env *env,
+			      const struct cl_io_slice *ios)
+{
+	struct cl_io *io = ios->cis_io;
+	struct inode *inode = vvp_object_inode(io->ci_obj);
+	__u64 start = io->u.ci_lseek.ls_start;
+
+	inode_lock(inode);
+	inode_dio_wait(inode);
+
+	/* At the moment we have DLM lock so just update inode
+	 * to know the file size.
+	 */
+	ll_merge_attr(env, inode);
+	if (start >= i_size_read(inode)) {
+		io->u.ci_lseek.ls_result = -ENXIO;
+		return -ENXIO;
+	}
+	return 0;
+}
+
+static void vvp_io_lseek_end(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct cl_io *io = ios->cis_io;
+	struct inode *inode = vvp_object_inode(io->ci_obj);
+
+	if (io->u.ci_lseek.ls_result > i_size_read(inode))
+		io->u.ci_lseek.ls_result = -ENXIO;
+
+	inode_unlock(inode);
+}
+
 static const struct cl_io_operations vvp_io_ops = {
 	.op = {
 		[CIT_READ] = {
@@ -1641,6 +1686,12 @@ static const struct cl_io_operations vvp_io_ops = {
 		},
 		[CIT_LADVISE] = {
 			.cio_fini	= vvp_io_fini
+		},
+		[CIT_LSEEK] = {
+			.cio_fini      = vvp_io_fini,
+			.cio_lock      = vvp_io_lseek_lock,
+			.cio_start     = vvp_io_lseek_start,
+			.cio_end       = vvp_io_lseek_end,
 		},
 	},
 	.cio_read_ahead = vvp_io_read_ahead
