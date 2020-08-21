@@ -560,6 +560,9 @@ extern void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
 extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 void lnet_peer_ni_set_selection_priority(struct lnet_peer_ni *lpni,
 					 __u32 priority);
+extern void lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
+					    struct list_head *queue,
+					    time64_t now);
 
 void lnet_router_debugfs_init(void);
 void lnet_router_debugfs_fini(void);
@@ -1001,6 +1004,12 @@ lnet_peer_ni_set_next_ping(struct lnet_peer_ni *lpni, time64_t now)
 {
 	lpni->lpni_next_ping =
 		lnet_get_next_recovery_ping(lpni->lpni_ping_count, now);
+}
+
+static inline void
+lnet_ni_set_next_ping(struct lnet_ni *ni, time64_t now)
+{
+	ni->ni_next_ping = lnet_get_next_recovery_ping(ni->ni_ping_count, now);
 }
 
 /*

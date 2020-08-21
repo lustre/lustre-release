@@ -473,6 +473,13 @@ struct lnet_ni {
 	/* Recovery state. Protected by lnet_ni_lock() */
 	__u32			ni_recovery_state;
 
+	/* When to send the next recovery ping */
+	time64_t                ni_next_ping;
+	/* How many pings sent during current recovery period did not receive
+	 * a reply. NB: reset whenever _any_ message arrives on this NI
+	 */
+	unsigned int		ni_ping_count;
+
 	/* per NI LND tunables */
 	struct lnet_lnd_tunables ni_lnd_tunables;
 

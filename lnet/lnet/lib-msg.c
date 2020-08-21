@@ -449,6 +449,31 @@ lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
 	}
 }
 
+/* must hold net_lock/0 */
+void
+lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
+				struct list_head *recovery_queue, time64_t now)
+{
+	if (!list_empty(&ni->ni_recovery))
+		return;
+
+	if (atomic_read(&ni->ni_healthv) == LNET_MAX_HEALTH_VALUE)
+		return;
+
+	/* This NI is going on the recovery queue, so take a ref on it */
+	lnet_ni_addref_locked(ni, 0);
+
+	lnet_ni_set_next_ping(ni, now);
+
+	CDEBUG(D_NET, "%s added to recovery queue. ping count: %u next ping: %lld health :%d\n",
+	       libcfs_nid2str(ni->ni_nid),
+	       ni->ni_ping_count,
+	       ni->ni_next_ping,
+	       atomic_read(&ni->ni_healthv));
+
+	list_add_tail(&ni->ni_recovery, recovery_queue);
+}
+
 static void
 lnet_handle_local_failure(struct lnet_ni *local_ni)
 {
@@ -464,22 +489,8 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 	}
 
 	lnet_dec_healthv_locked(&local_ni->ni_healthv, lnet_health_sensitivity);
-	/*
-	 * add the NI to the recovery queue if it's not already there
-	 * and it's health value is actually below the maximum. It's
-	 * possible that the sensitivity might be set to 0, and the health
-	 * value will not be reduced. In this case, there is no reason to
-	 * invoke recovery
-	 */
-	if (list_empty(&local_ni->ni_recovery) &&
-	    atomic_read(&local_ni->ni_healthv) < LNET_MAX_HEALTH_VALUE) {
-		CDEBUG(D_NET, "ni %s added to recovery queue. Health = %d\n",
-			libcfs_nid2str(local_ni->ni_nid),
-			atomic_read(&local_ni->ni_healthv));
-		list_add_tail(&local_ni->ni_recovery,
-			      &the_lnet.ln_mt_localNIRecovq);
-		lnet_ni_addref_locked(local_ni, 0);
-	}
+	lnet_ni_add_to_recoveryq_locked(local_ni, &the_lnet.ln_mt_localNIRecovq,
+					ktime_get_seconds());
 	lnet_net_unlock(0);
 }
 
@@ -873,6 +884,8 @@ lnet_health_check(struct lnet_msg *msg)
 		 * faster recovery.
 		 */
 		lnet_inc_healthv(&ni->ni_healthv, lnet_health_sensitivity);
+		lnet_net_lock(0);
+		ni->ni_ping_count = 0;
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
 		 * case. Only increment the peer's health if we're
@@ -888,7 +901,6 @@ lnet_health_check(struct lnet_msg *msg)
 			 * I'm a router, then set that lpni's health to
 			 * maximum so we can commence communication
 			 */
-			lnet_net_lock(0);
 			if (lnet_isrouter(lpni) || the_lnet.ln_routing) {
 				lnet_set_lpni_healthv_locked(lpni,
 					LNET_MAX_HEALTH_VALUE);
@@ -909,8 +921,8 @@ lnet_health_check(struct lnet_msg *msg)
 						&the_lnet.ln_mt_peerNIRecovq,
 						ktime_get_seconds());
 			}
-			lnet_net_unlock(0);
 		}
+		lnet_net_unlock(0);
 
 		/* we can finalize this message */
 		return -1;
