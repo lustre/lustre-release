@@ -124,6 +124,11 @@ module_param_call(lnet_recovery_interval, recovery_interval_set, param_get_int,
 MODULE_PARM_DESC(lnet_recovery_interval,
 		"Interval to recover unhealthy interfaces in seconds");
 
+unsigned int lnet_recovery_limit;
+module_param(lnet_recovery_limit, uint, 0644);
+MODULE_PARM_DESC(lnet_recovery_limit,
+		 "How long to attempt recovery of unhealthy peer interfaces in seconds. Set to 0 to allow indefinite recovery");
+
 static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
 static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
 
