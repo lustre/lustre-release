@@ -1399,7 +1399,7 @@ static bool ldlm_resource_extent_new(struct ldlm_resource *res)
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		res->lr_itree[idx].lit_size = 0;
 		res->lr_itree[idx].lit_mode = BIT(idx);
-		res->lr_itree[idx].lit_root = NULL;
+		res->lr_itree[idx].lit_root = INTERVAL_TREE_ROOT;
 	}
 	return true;
 }

@@ -483,6 +483,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 		INIT_HLIST_NODE(&lock->l_exp_flock_hash);
 		break;
 	case LDLM_EXTENT:
+		RB_CLEAR_NODE(&lock->l_rb);
+		break;
 	case LDLM_MAX_TYPE:
 		break;
 	}
@@ -1305,28 +1307,28 @@ matched:
 struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data)
 {
-	struct interval_node_extent ext = {
-		.start     = data->lmd_policy->l_extent.start,
-		.end       = data->lmd_policy->l_extent.end
-	};
 	int idx;
+	__u64 end = data->lmd_policy->l_extent.end;
 
 	data->lmd_lock = NULL;
 
 	if (data->lmd_match & LDLM_MATCH_RIGHT)
-		ext.end = OBD_OBJECT_EOF;
+		end = OBD_OBJECT_EOF;
 
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		struct ldlm_interval_tree *tree = &res->lr_itree[idx];
 
-		if (tree->lit_root == NULL)
+		if (INTERVAL_TREE_EMPTY(&tree->lit_root))
 			continue;
 
 		if (!(tree->lit_mode & *data->lmd_mode))
 			continue;
 
-		ldlm_extent_search(tree->lit_root, &ext,
+		ldlm_extent_search(&tree->lit_root,
+				   data->lmd_policy->l_extent.start,
+				   end,
 				   lock_matches, data);
+
 		if (data->lmd_lock)
 			return data->lmd_lock;
 	}

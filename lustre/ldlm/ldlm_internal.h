@@ -204,8 +204,8 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 #endif
 void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
-void ldlm_extent_search(struct interval_node *root,
-			struct interval_node_extent *ext,
+void ldlm_extent_search(struct interval_tree_root *root,
+			u64 start, u64 end,
 			bool (*matches)(struct ldlm_lock *lock, void *data),
 			void *data);
 

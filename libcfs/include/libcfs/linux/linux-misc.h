@@ -170,10 +170,12 @@ void cfs_arch_exit(void);
 #define interval_tree_root rb_root_cached
 #define interval_tree_first rb_first_cached
 #define INTERVAL_TREE_ROOT RB_ROOT_CACHED
+#define INTERVAL_TREE_EMPTY(_root) RB_EMPTY_ROOT(&(_root)->rb_root)
 #else
 #define interval_tree_root rb_root
 #define interval_tree_first rb_first
 #define INTERVAL_TREE_ROOT RB_ROOT
+#define INTERVAL_TREE_EMPTY(_root) RB_EMPTY_ROOT(_root)
 #endif /* HAVE_INTERVAL_TREE_CACHED */
 
 /* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")

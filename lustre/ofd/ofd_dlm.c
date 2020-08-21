@@ -97,22 +97,20 @@ struct ofd_intent_args {
  * \param[in] n		interval node
  * \param[in,out] args	intent arguments, gl work list for identified locks
  *
- * \retval		INTERVAL_ITER_STOP if the interval is lower than
+ * \retval		true if the interval is lower than
  *			file size, caller stops execution
- * \retval		INTERVAL_ITER_CONT if callback finished successfully
+ * \retval		false if callback finished successfully
  *			and caller may continue execution
  */
-static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
+static bool ofd_intent_cb(struct ldlm_lock *lock, struct ofd_intent_args *arg)
 {
-	struct ldlm_lock *lock = container_of(n, struct ldlm_lock, l_tree_node);
-	struct ofd_intent_args *arg = args;
-	__u64 size = arg->size;
+	__u64			  size = arg->size;
 	struct ldlm_glimpse_work *gl_work = NULL;
-	int rc = 0;
+	bool rc;
 
 	/* If the interval is lower than the current file size, just break. */
-	if (interval_high(n) <= size)
-		GOTO(out, rc = INTERVAL_ITER_STOP);
+	if (lock->l_policy_data.l_extent.end <= size)
+		GOTO(out, rc = true);
 
 	/*
 	 * This check is for lock taken in ofd_destroy_by_fid() that does
@@ -124,7 +122,7 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	if (lock->l_glimpse_ast == NULL) {
 		LDLM_DEBUG(lock, "no l_glimpse_ast");
 		arg->no_glimpse_ast = true;
-		GOTO(out, rc = INTERVAL_ITER_STOP);
+		GOTO(out, rc = true);
 	}
 
 	/* If NO_EXPANSION is not set, this is an active lock, and we don't need
@@ -132,9 +130,9 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	 * lock.  So set us up to stop.  See comment above this function.
 	 */
 	if (!(lock->l_flags & LDLM_FL_NO_EXPANSION))
-		rc = INTERVAL_ITER_STOP;
+		rc = true;
 	else
-		rc = INTERVAL_ITER_CONT;
+		rc = false;
 
 	/* Check to see if we're already set up to send a glimpse to this
 	 * client; if so, don't add this lock to the glimpse list - We need
@@ -153,7 +151,7 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 
 	if (!gl_work) {
 		arg->error = -ENOMEM;
-		GOTO(out, rc = INTERVAL_ITER_STOP);
+		GOTO(out, rc = true);
 	}
 
 	/* Populate the gl_work structure. */
@@ -194,6 +192,7 @@ out:
  * \retval		ELDLM_LOCK_ABORTED in other cases except error
  * \retval		negative errno on error
  */
+
 int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 		      struct ldlm_lock **lockp, void *req_cookie,
 		      enum ldlm_mode mode, __u64 flags, void *data)
@@ -305,11 +304,18 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 	/* Check for PW locks beyond the size in the LVB, build the list
 	 * of locks to glimpse (arg.gl_list) */
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
+		struct ldlm_lock *lck;
+
 		tree = &res->lr_itree[idx];
 		if (tree->lit_mode == LCK_PR)
 			continue;
 
-		interval_iterate_reverse(tree->lit_root, ofd_intent_cb, &arg);
+		for (lck = extent_last(tree);
+		     lck;
+		     lck = extent_prev(lck))
+			if (ofd_intent_cb(lck, &arg))
+				break;
+
 		if (arg.error) {
 			unlock_res(res);
 			GOTO(out, rc = arg.error);

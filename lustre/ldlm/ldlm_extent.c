@@ -54,6 +54,12 @@
 #include <lustre_lib.h>
 
 #include "ldlm_internal.h"
+#include <linux/interval_tree_generic.h>
+
+#define START(node) ((node)->l_policy_data.l_extent.start)
+#define LAST(node) ((node)->l_policy_data.l_extent.end)
+INTERVAL_TREE_DEFINE(struct ldlm_lock, l_rb, u64, l_subtree_last,
+		     START, LAST, static, extent);
 
 #ifdef HAVE_SERVER_SUPPORT
 # define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
@@ -131,10 +137,6 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 	__u64 req_start = req->l_req_extent.start;
 	__u64 req_end = req->l_req_extent.end;
 	struct ldlm_interval_tree *tree;
-	struct interval_node_extent limiter = {
-		.start	= new_ex->start,
-		.end	= new_ex->end,
-	};
 	int conflicting = 0;
 	int idx;
 
@@ -144,32 +146,40 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 
 	/* Using interval tree to handle the LDLM extent granted locks. */
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
-		struct interval_node_extent ext = {
-			.start	= req_start,
-			.end	= req_end,
-		};
-
 		tree = &res->lr_itree[idx];
 		if (lockmode_compat(tree->lit_mode, req_mode))
 			continue;
 
 		conflicting += tree->lit_size;
-		if (conflicting > 4)
-			limiter.start = req_start;
 
-		if (interval_is_overlapped(tree->lit_root, &ext))
-			CDEBUG(D_INFO,
-			       "req_mode = %d, tree->lit_mode = %d, tree->lit_size = %d\n",
-			       req_mode, tree->lit_mode, tree->lit_size);
-		interval_expand(tree->lit_root, &ext, &limiter);
-		limiter.start = max(limiter.start, ext.start);
-		limiter.end = min(limiter.end, ext.end);
-		if (limiter.start == req_start && limiter.end == req_end)
+		if (!INTERVAL_TREE_EMPTY(&tree->lit_root)) {
+			struct ldlm_lock *lck = NULL;
+
+			LASSERTF(!extent_iter_first(&tree->lit_root,
+						    req_start, req_end),
+				 "req_mode=%d, start=%llu, end=%llu\n",
+				 req_mode, req_start, req_end);
+			/*
+			 * If any tree is non-empty we don't bother
+			 * expanding backwards, it won't be worth
+			 * the effort.
+			 */
+			new_ex->start = req_start;
+
+			if (req_end < (U64_MAX - 1))
+				/* lck is the lock with the lowest endpoint
+				 * which covers anything after 'req'
+				 */
+				lck = extent_iter_first(&tree->lit_root,
+							req_end + 1, U64_MAX);
+			if (lck)
+				new_ex->end = min(new_ex->end, START(lck) - 1);
+		}
+
+		if (new_ex->start == req_start && new_ex->end == req_end)
 			break;
 	}
 
-	new_ex->start = limiter.start;
-	new_ex->end = limiter.end;
 	LASSERT(new_ex->start <= req_start);
 	LASSERT(new_ex->end >= req_end);
 
@@ -342,10 +352,8 @@ struct ldlm_extent_compat_args {
 	int *compat;
 };
 
-static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
-						void *data)
+static bool ldlm_extent_compat_cb(struct ldlm_lock *lock, void *data)
 {
-	struct ldlm_lock *lock = container_of(n, struct ldlm_lock, l_tree_node);
 	struct ldlm_extent_compat_args *priv = data;
 	struct list_head *work_list = priv->work_list;
 	struct ldlm_lock *enq = priv->lock;
@@ -368,7 +376,7 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
 	if (priv->compat)
 		*priv->compat = 0;
 
-	RETURN(INTERVAL_ITER_CONT);
+	RETURN(false);
 }
 
 /**
@@ -403,19 +411,15 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	/* Using interval tree for granted lock */
 	if (queue == &res->lr_granted) {
 		struct ldlm_interval_tree *tree;
-		struct ldlm_extent_compat_args data = {
-			.work_list = work_list,
-			.lock = req,
-			.locks = contended_locks,
-			.compat = &compat };
-		struct interval_node_extent ex = {
-			.start = req_start,
-			.end = req_end };
-		int idx, rc;
+		struct ldlm_extent_compat_args data = {.work_list = work_list,
+						       .lock = req,
+						       .locks = contended_locks,
+						       .compat = &compat };
+		int idx;
 
 		for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 			tree = &res->lr_itree[idx];
-			if (tree->lit_root == NULL) /* empty tree, skipped */
+			if (INTERVAL_TREE_EMPTY(&tree->lit_root))
 				continue;
 
 			data.mode = tree->lit_mode;
@@ -428,9 +432,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				/* group lock, grant it immediately if
 				 * compatible
 				 */
-				lock = container_of(tree->lit_root,
-						    struct ldlm_lock,
-						    l_tree_node);
+				lock = extent_top(tree);
 				if (req->l_policy_data.l_extent.gid ==
 				    lock->l_policy_data.l_extent.gid)
 					RETURN(2);
@@ -446,12 +448,14 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				if (!work_list)
 					RETURN(0);
 
-				/* if work list is not NULL,add all
-				 * locks in the tree to work list
+				/* if work list is not NULL, add all
+				 * locks in the tree to work list.
 				 */
 				compat = 0;
-				interval_iterate(tree->lit_root,
-						 ldlm_extent_compat_cb, &data);
+				for (lock = extent_first(tree);
+				     lock;
+				     lock = extent_next(lock))
+					ldlm_extent_compat_cb(lock, &data);
 				continue;
 			}
 
@@ -464,9 +468,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			 * fail if any conflicting lock is found.
 			 */
 			if (!work_list || (*flags & LDLM_FL_SPECULATIVE)) {
-				rc = interval_is_overlapped(tree->lit_root,
-							    &ex);
-				if (rc) {
+				if (extent_iter_first(&tree->lit_root,
+						      req_start, req_end)) {
 					if (!work_list) {
 						RETURN(0);
 					} else {
@@ -475,8 +478,10 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					}
 				}
 			} else {
-				interval_search(tree->lit_root, &ex,
-						ldlm_extent_compat_cb, &data);
+				ldlm_extent_search(&tree->lit_root,
+						   req_start, req_end,
+						   ldlm_extent_compat_cb,
+						   &data);
 				if (!list_empty(work_list) && compat)
 					compat = 0;
 			}
@@ -495,10 +500,10 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			/* locks are compatible, overlap doesn't matter */
 			if (lockmode_compat(lock->l_req_mode, req_mode)) {
 				if (req_mode == LCK_PR &&
-				((lock->l_policy_data.l_extent.start <=
-				req->l_policy_data.l_extent.start) &&
-				(lock->l_policy_data.l_extent.end >=
-				req->l_policy_data.l_extent.end))) {
+				    ((lock->l_policy_data.l_extent.start <=
+				      req->l_policy_data.l_extent.start) &&
+				     (lock->l_policy_data.l_extent.end >=
+				      req->l_policy_data.l_extent.end))) {
 					/* If we met a PR lock just like us or
 					 * wider, and nobody down the list
 					 * conflicted with it, that means we
@@ -518,9 +523,9 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 					/* There IS a case where such flag is
 					 * not set for a lock, yet it blocks
-					 * something. Luckily for us this is
+					 * something.  Luckily for us this is
 					 * only during destroy, so lock is
-					 * exclusive. So here we are safe
+					 * exclusive.  So here we are safe
 					 */
 					if (!ldlm_is_ast_sent(lock))
 						RETURN(compat);
@@ -579,12 +584,14 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			    !ldlm_is_granted(lock))) {
 				compat = 0;
 				if (lock->l_req_mode != LCK_GROUP) {
-					/* Ok, we hit non-GROUP lock, there
-					 * should be no more GROUP locks later
-					 * on, queue in front of first
+					/* Ok, we hit non-GROUP lock,
+					 * there
+					 * should be no more GROUP
+					 * locks later
+					 * on, queue in
+					 * front of first
 					 * non-GROUP lock
 					 */
-
 					ldlm_resource_insert_lock_before(lock,
 									 req);
 					break;
@@ -611,7 +618,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			} else if (lock->l_req_extent.end < req_start ||
 				   lock->l_req_extent.start > req_end) {
 				/* false contention, the requests doesn't
-				 * really overlap */
+				 * really overlap
+				 */
 				check_contention = 0;
 			}
 
@@ -639,9 +647,11 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	}
 
 	if (ldlm_check_contention(req, *contended_locks) &&
-	    compat == 0 && (*flags & LDLM_FL_DENY_ON_CONTENTION) &&
-	     req->l_req_mode != LCK_GROUP && req_end - req_start <=
-	      ldlm_res_to_ns(req->l_resource)->ns_max_nolock_size)
+	    compat == 0 &&
+	    (*flags & LDLM_FL_DENY_ON_CONTENTION) &&
+	    req->l_req_mode != LCK_GROUP &&
+	    req_end - req_start <=
+	    ldlm_res_to_ns(req->l_resource)->ns_max_nolock_size)
 		GOTO(destroylock, compat = -EUSERS);
 
 	RETURN(compat);
@@ -686,15 +696,14 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 }
 EXPORT_SYMBOL(ldlm_lock_prolong_one);
 
-static enum interval_iter ldlm_resource_prolong_cb(struct interval_node *n,
-						   void *data)
+static bool ldlm_resource_prolong_cb(struct ldlm_lock *lock, void *data)
 {
-	struct ldlm_lock *lock = container_of(n, struct ldlm_lock, l_tree_node);
 	struct ldlm_prolong_args *arg = data;
 
 	ENTRY;
 	ldlm_lock_prolong_one(lock, arg);
-	RETURN(INTERVAL_ITER_CONT);
+
+	RETURN(false);
 }
 
 /**
@@ -706,8 +715,6 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 {
 	struct ldlm_interval_tree *tree;
 	struct ldlm_resource *res;
-	struct interval_node_extent ex = { .start = arg->lpa_extent.start,
-					.end = arg->lpa_extent.end };
 	int idx;
 
 	ENTRY;
@@ -723,7 +730,7 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 	lock_res(res);
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		tree = &res->lr_itree[idx];
-		if (tree->lit_root == NULL) /* empty tree, skipped */
+		if (INTERVAL_TREE_EMPTY(&tree->lit_root))
 			continue;
 
 		/* There is no possibility to check for the groupID
@@ -734,8 +741,9 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 		if (!(tree->lit_mode & arg->lpa_mode))
 			continue;
 
-		interval_search(tree->lit_root, &ex,
-				ldlm_resource_prolong_cb, arg);
+		ldlm_extent_search(&tree->lit_root, arg->lpa_extent.start,
+				 arg->lpa_extent.end,
+				 ldlm_resource_prolong_cb, arg);
 	}
 	unlock_res(res);
 	ldlm_resource_putref(res);
@@ -825,52 +833,6 @@ out:
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
-struct ldlm_kms_shift_args {
-	__u64	old_kms;
-	__u64	kms;
-	bool    complete;
-};
-
-/* Callback for interval_iterate functions, used by ldlm_extent_shift_Kms */
-static enum interval_iter ldlm_kms_shift_cb(struct interval_node *n,
-					    void *args)
-{
-	struct ldlm_lock *lock = container_of(n, struct ldlm_lock, l_tree_node);
-	struct ldlm_kms_shift_args *arg = args;
-
-	ENTRY;
-	/* Since all locks in an interval have the same extent, we can just
-	 * use the lock without kms_ignore set.
-	 */
-	if (ldlm_is_kms_ignore(lock))
-		RETURN(INTERVAL_ITER_CONT);
-
-	/* If we find a lock with a greater or equal kms, we are not the
-	 * highest lock (or we share that distinction with another lock), and
-	 * don't need to update KMS.  Return old_kms and stop looking.
-	 */
-	if (lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF ||
-	lock->l_policy_data.l_extent.end + 1 >= arg->old_kms) {
-		arg->kms = arg->old_kms;
-		arg->complete = true;
-		RETURN(INTERVAL_ITER_STOP);
-	}
-
-	if (lock->l_policy_data.l_extent.end + 1 > arg->kms)
-		arg->kms = lock->l_policy_data.l_extent.end + 1;
-
-	/* Since interval_iterate_reverse starts with the highest lock and
-	 * works down, for PW locks, we only need to check if we should update
-	 * the kms, then stop walking the tree.  PR locks are not exclusive, so
-	 * the highest start does not imply the highest end and we must
-	 * continue. (Only one group lock is allowed per resource, so this is
-	 * irrelevant for group locks.)*/
-	if (lock->l_granted_mode == LCK_PW)
-		RETURN(INTERVAL_ITER_STOP);
-	else
-		RETURN(INTERVAL_ITER_CONT);
-}
-
 /* When a lock is cancelled by a client, the KMS may undergo change if this
  * is the "highest lock".  This function returns the new KMS value, updating
  * it only if we were the highest lock.
@@ -883,22 +845,22 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	struct ldlm_interval_tree *tree;
-	struct ldlm_kms_shift_args args;
+	struct ldlm_lock *lck;
+	__u64 kms = 0;
 	int idx = 0;
+	bool complete = false;
 
 	ENTRY;
 
-	args.old_kms = old_kms;
-	args.kms = 0;
-	args.complete = false;
-
 	/* don't let another thread in ldlm_extent_shift_kms race in
 	 * just after we finish and take our lock into account in its
-	 * calculation of the kms */
+	 * calculation of the kms
+	 */
 	ldlm_set_kms_ignore(lock);
 
-	/* We iterate over the lock trees, looking for the largest kms smaller
-	 * than the current one. */
+	/* We iterate over the lock trees, looking for the largest kms
+	 * smaller than the current one.
+	 */
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		tree = &res->lr_itree[idx];
 
@@ -906,22 +868,52 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
 		 * this tree, we don't need to check this tree, because
 		 * the kms from a tree can be lower than in_max_high (due to
 		 * kms_ignore), but it can never be higher. */
-		if (!tree->lit_root || args.kms >= tree->lit_root->in_max_high)
+		lck = extent_top(tree);
+		if (!lck || kms >= lck->l_subtree_last)
 			continue;
 
-		interval_iterate_reverse(tree->lit_root, ldlm_kms_shift_cb,
-					 &args);
+		for (lck = extent_last(tree);
+		     lck;
+		     lck = extent_prev(lck)) {
+			if (ldlm_is_kms_ignore(lck))
+				continue;
 
-		/* this tells us we're not the highest lock, so we don't need
-		 * to check the remaining trees */
-		if (args.complete)
+			/* If this lock has a greater or equal kms, we are not
+			 * the highest lock (or we share that distinction
+			 * with another lock), and don't need to update KMS.
+			 * Record old_kms and stop looking.
+			 */
+			if (lck->l_policy_data.l_extent.end == OBD_OBJECT_EOF ||
+			    lck->l_policy_data.l_extent.end + 1 >= old_kms) {
+				kms = old_kms;
+				complete = true;
+				break;
+			}
+			if (lck->l_policy_data.l_extent.end + 1 > kms)
+				kms = lck->l_policy_data.l_extent.end + 1;
+
+			/* Since we start with the highest lock and work
+			 * down, for PW locks, we only need to check if we
+			 * should update the kms, then stop walking the tree.
+			 * PR locks are not exclusive, so the highest start
+			 * does not imply the highest end and we must
+			 * continue.  (Only one group lock is allowed per
+			 * resource, so this is irrelevant for group locks.)
+			 */
+			if (lck->l_granted_mode == LCK_PW)
+				break;
+		}
+
+		/* This tells us we're not the highest lock, so we don't need
+		 * to check the remaining trees
+		 */
+		if (complete)
 			break;
 	}
 
-	LASSERTF(args.kms <= args.old_kms, "kms %llu old_kms %llu\n", args.kms,
-		 args.old_kms);
+	LASSERTF(kms <= old_kms, "kms %llu old_kms %llu\n", kms, old_kms);
 
-	RETURN(args.kms);
+	RETURN(kms);
 }
 EXPORT_SYMBOL(ldlm_extent_shift_kms);
 
@@ -940,30 +932,24 @@ static inline int ldlm_mode_to_index(enum ldlm_mode mode)
 void ldlm_extent_add_lock(struct ldlm_resource *res,
 			  struct ldlm_lock *lock)
 {
-	struct interval_node **root;
-	struct ldlm_extent *extent;
-	int idx, rc;
+	struct ldlm_interval_tree *tree;
+	int idx;
 
 	LASSERT(ldlm_is_granted(lock));
 
-	LASSERT(!interval_is_intree(&lock->l_tree_node));
+	LASSERT(RB_EMPTY_NODE(&lock->l_rb));
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
 	LASSERT(lock->l_granted_mode == BIT(idx));
 	LASSERT(lock->l_granted_mode == res->lr_itree[idx].lit_mode);
 
-	/* node extent initialize */
-	extent = &lock->l_policy_data.l_extent;
-
-	rc = interval_set(&lock->l_tree_node, extent->start, extent->end);
-	LASSERT(!rc);
-
-	root = &res->lr_itree[idx].lit_root;
-	interval_insert(&lock->l_tree_node, root);
-	res->lr_itree[idx].lit_size++;
+	tree = &res->lr_itree[idx];
+	extent_insert(lock, &tree->lit_root);
+	tree->lit_size++;
 
 	/* even though we use interval tree to manage the extent lock, we also
-	 * add the locks into grant list, for debug purpose, .. */
+	 * add the locks into grant list, for debug purpose, ..
+	 */
 	ldlm_resource_add_lock(res, &res->lr_granted, lock);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_GRANT_CHECK)) {
@@ -995,17 +981,18 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 	struct ldlm_interval_tree *tree;
 	int idx;
 
-	if (!interval_is_intree(&lock->l_tree_node)) /* duplicate unlink */
+	if (RB_EMPTY_NODE(&lock->l_rb)) /* duplicate unlink */
 		return;
 
 	idx = ldlm_mode_to_index(lock->l_granted_mode);
 	LASSERT(lock->l_granted_mode == BIT(idx));
 	tree = &res->lr_itree[idx];
 
-	LASSERT(tree->lit_root != NULL); /* assure the tree is not null */
+	LASSERT(!INTERVAL_TREE_EMPTY(&tree->lit_root));
 
 	tree->lit_size--;
-	interval_erase(&lock->l_tree_node, &tree->lit_root);
+	extent_remove(lock, &tree->lit_root);
+	RB_CLEAR_NODE(&lock->l_rb);
 }
 
 void ldlm_extent_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
@@ -1024,29 +1011,16 @@ void ldlm_extent_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_extent.end = lpolicy->l_extent.end;
 	wpolicy->l_extent.gid = lpolicy->l_extent.gid;
 }
-struct cb {
-	void *arg;
-	bool (*found)(struct ldlm_lock *lock, void *arg);
-};
-
-static enum interval_iter itree_overlap_cb(struct interval_node *in, void *arg)
-{
-	struct cb *cb = arg;
-	struct ldlm_lock *lock = container_of(in, struct ldlm_lock,
-					      l_tree_node);
-
-	return cb->found(lock, cb->arg) ?
-		INTERVAL_ITER_STOP : INTERVAL_ITER_CONT;
-}
-
-void ldlm_extent_search(struct interval_node *root,
-			struct interval_node_extent *ext,
+void ldlm_extent_search(struct interval_tree_root *root,
+			u64 start, u64 end,
 			bool (*matches)(struct ldlm_lock *lock, void *data),
 			void *data)
 {
-	struct cb cb = {
-		.arg = data,
-		.found = matches,
-	};
-	interval_search(root, ext, itree_overlap_cb, &cb);
+	struct ldlm_lock *lock;
+
+	for (lock = extent_iter_first(root, start, end);
+	     lock;
+	     lock = extent_iter_next(lock, start, end))
+		if (matches(lock, data))
+			break;
 }
