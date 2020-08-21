@@ -813,8 +813,7 @@ static int lov_cleanup(struct obd_device *obd)
 				continue;
 
 			/* Inactive targets may never have connected */
-			if (lov->lov_tgts[i]->ltd_active ||
-			    atomic_read(&lov->lov_refcount))
+			if (lov->lov_tgts[i]->ltd_active)
 				/* We should never get here - these
 				 * should have been removed in the
 				 * disconnect. */
