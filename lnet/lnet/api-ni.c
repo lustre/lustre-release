@@ -122,7 +122,7 @@ module_param_call(lnet_recovery_interval, recovery_interval_set, param_get_int,
 		  &lnet_recovery_interval, S_IRUGO|S_IWUSR);
 #endif
 MODULE_PARM_DESC(lnet_recovery_interval,
-		"Interval to recover unhealthy interfaces in seconds");
+		"DEPRECATED - Interval to recover unhealthy interfaces in seconds");
 
 unsigned int lnet_recovery_limit;
 module_param(lnet_recovery_limit, uint, 0644);
@@ -311,30 +311,7 @@ sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 static int
 recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
 {
-	int rc;
-	unsigned *interval = (unsigned *)kp->arg;
-	unsigned long value;
-
-	rc = kstrtoul(val, 0, &value);
-	if (rc) {
-		CERROR("Invalid module parameter value for 'lnet_recovery_interval'\n");
-		return rc;
-	}
-
-	if (value < 1) {
-		CERROR("lnet_recovery_interval must be at least 1 second\n");
-		return -EINVAL;
-	}
-
-	/*
-	 * The purpose of locking the api_mutex here is to ensure that
-	 * the correct value ends up stored properly.
-	 */
-	mutex_lock(&the_lnet.ln_api_mutex);
-
-	*interval = value;
-
-	mutex_unlock(&the_lnet.ln_api_mutex);
+	CWARN("'lnet_recovery_interval' has been deprecated\n");
 
 	return 0;
 }
