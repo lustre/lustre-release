@@ -986,6 +986,28 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	return false;
 }
 
+#define LNET_RECOVERY_INTERVAL_MAX 900
+static inline unsigned int
+lnet_get_next_recovery_ping(unsigned int ping_count, time64_t now)
+{
+	unsigned int interval;
+
+	/* 2^9 = 512, 2^10 = 1024 */
+	if (ping_count > 9)
+		interval = LNET_RECOVERY_INTERVAL_MAX;
+	else
+		interval = 1 << ping_count;
+
+	return now + interval;
+}
+
+static inline void
+lnet_peer_ni_set_next_ping(struct lnet_peer_ni *lpni, time64_t now)
+{
+	lpni->lpni_next_ping =
+		lnet_get_next_recovery_ping(lpni->lpni_ping_count, now);
+}
+
 /*
  * A peer NI is alive if it satisfies the following two conditions:
  *  1. peer NI health >= LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage

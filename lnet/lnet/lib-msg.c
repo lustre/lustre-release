@@ -867,8 +867,11 @@ lnet_health_check(struct lnet_msg *msg)
 	switch (hstatus) {
 	case LNET_MSG_STATUS_OK:
 		/*
-		 * increment the local ni health weather we successfully
+		 * increment the local ni health whether we successfully
 		 * received or sent a message on it.
+		 *
+		 * Ping counts are reset to 0 as appropriate to allow for
+		 * faster recovery.
 		 */
 		lnet_inc_healthv(&ni->ni_healthv, lnet_health_sensitivity);
 		/*
@@ -880,6 +883,7 @@ lnet_health_check(struct lnet_msg *msg)
 		 * as indication that the router is fully healthy.
 		 */
 		if (lpni && msg->msg_rx_committed) {
+			lpni->lpni_ping_count = 0;
 			/*
 			 * If we're receiving a message from the router or
 			 * I'm a router, then set that lpni's health to

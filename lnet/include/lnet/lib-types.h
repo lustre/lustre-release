@@ -586,6 +586,12 @@ struct lnet_peer_ni {
 	atomic_t		lpni_healthv;
 	/* recovery ping mdh */
 	struct lnet_handle_md	lpni_recovery_ping_mdh;
+	/* When to send the next recovery ping */
+	time64_t		lpni_next_ping;
+	/* How many pings sent during current recovery period did not receive
+	 * a reply. NB: reset whenever _any_ message arrives from this peer NI
+	 */
+	unsigned int		lpni_ping_count;
 	/* CPT this peer attached on */
 	int			lpni_cpt;
 	/* state flags -- protected by lpni_lock */
