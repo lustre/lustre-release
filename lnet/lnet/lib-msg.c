@@ -484,19 +484,12 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 	lnet_net_unlock(0);
 }
 
+/* must hold net_lock/0 */
 void
 lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 {
 	__u32 sensitivity = lnet_health_sensitivity;
 	__u32 lp_sensitivity;
-
-	/*
-	 * NO-OP if:
-	 * 1. lpni could be NULL if we're in the LOLND case
-	 * 2. this is a recovery message
-	 */
-	if (!lpni)
-		return;
 
 	/*
 	 * If there is a health sensitivity in the peer then use that
@@ -518,7 +511,9 @@ lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 	 * value will not be reduced. In this case, there is no reason to
 	 * invoke recovery
 	 */
-	lnet_peer_ni_add_to_recoveryq_locked(lpni);
+	lnet_peer_ni_add_to_recoveryq_locked(lpni,
+					     &the_lnet.ln_mt_peerNIRecovq,
+					     ktime_get_seconds());
 }
 
 static void
@@ -901,6 +896,15 @@ lnet_health_check(struct lnet_msg *msg)
 				lnet_inc_lpni_healthv_locked(lpni,
 					(sensitivity) ? sensitivity :
 					lnet_health_sensitivity);
+				/* This peer NI may have previously aged out
+				 * of recovery. Now that we've received a
+				 * message from it, we can continue recovery
+				 * if its health value is still below the
+				 * maximum.
+				 */
+				lnet_peer_ni_add_to_recoveryq_locked(lpni,
+						&the_lnet.ln_mt_peerNIRecovq,
+						ktime_get_seconds());
 			}
 			lnet_net_unlock(0);
 		}

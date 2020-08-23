@@ -556,7 +556,9 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
 			      struct lnet_process_id __user *ids);
 extern void lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all);
-extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni);
+extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
+						 struct list_head *queue,
+						 time64_t now);
 extern int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 extern void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
 extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);

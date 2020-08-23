@@ -3610,6 +3610,7 @@ lnet_recover_peer_nis(void)
 	lnet_nid_t nid;
 	int healthv;
 	int rc;
+	time64_t now;
 
 	/*
 	 * Always use cpt 0 for locking across all interactions with
@@ -3619,6 +3620,8 @@ lnet_recover_peer_nis(void)
 	list_splice_init(&the_lnet.ln_mt_peerNIRecovq,
 			 &local_queue);
 	lnet_net_unlock(0);
+
+	now = ktime_get_seconds();
 
 	list_for_each_entry_safe(lpni, tmp, &local_queue,
 				 lpni_recovery) {
@@ -3700,29 +3703,21 @@ lnet_recover_peer_nis(void)
 			}
 
 			lpni->lpni_recovery_ping_mdh = mdh;
-			/*
-			 * While we're unlocked the lpni could've been
-			 * readded on the recovery queue. In this case we
-			 * don't need to add it to the local queue, since
-			 * it's already on there and the thread that added
-			 * it would've incremented the refcount on the
-			 * peer, which means we need to decref the refcount
-			 * that was implicitly grabbed by find_peer_ni_locked.
-			 * Otherwise, if the lpni is still not on
-			 * the recovery queue, then we'll add it to the
-			 * processed list.
-			 */
-			if (list_empty(&lpni->lpni_recovery))
-				list_add_tail(&lpni->lpni_recovery, &processed_list);
-			else
-				lnet_peer_ni_decref_locked(lpni);
-			lnet_net_unlock(0);
 
-			spin_lock(&lpni->lpni_lock);
-			if (rc)
+			lnet_peer_ni_add_to_recoveryq_locked(lpni,
+							     &processed_list,
+							     now);
+			if (rc) {
+				spin_lock(&lpni->lpni_lock);
 				lpni->lpni_state &= ~LNET_PEER_NI_RECOVERY_PENDING;
-		}
-		spin_unlock(&lpni->lpni_lock);
+				spin_unlock(&lpni->lpni_lock);
+			}
+
+			/* Drop the ref taken by lnet_find_peer_ni_locked() */
+			lnet_peer_ni_decref_locked(lpni);
+			lnet_net_unlock(0);
+		} else
+			spin_unlock(&lpni->lpni_lock);
 	}
 
 	list_splice_init(&processed_list, &local_queue);
@@ -4650,8 +4645,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		}
 	}
 
-	if (the_lnet.ln_routing)
-		lpni->lpni_last_alive = ktime_get_seconds();
+	lpni->lpni_last_alive = ktime_get_seconds();
 
 	msg->msg_rxpeer = lpni;
 	msg->msg_rxni = ni;
