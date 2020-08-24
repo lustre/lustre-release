@@ -55,7 +55,8 @@ fi
 
 cleanup_testsuite() {
 	trap "" EXIT
-	rm -f $TMP/sanity-dlc*
+	# Cleanup any tmp files created by the sub tests
+	rm -f $TMP/sanity-lnet*
 	cleanup_netns
 	cleanup_lnet
 	if $restore_mounts; then
@@ -1187,7 +1188,7 @@ test_104() {
 
 	echo "Set < 0;  Should fail"
 	do_lnetctl set response_tracking -1 &&
-		 error "should have failed $?"
+		error "should have failed $?"
 
 	reinit_dlc || return $?
 	cat <<EOF > $tyaml
@@ -1202,7 +1203,7 @@ EOF
 	for ((i = 0; i < 4; i++)); do
 		reinit_dlc || return $?
 		do_lnetctl set response_tracking $i ||
-			 error "should have succeeded $?"
+			error "should have succeeded $?"
 		$LNETCTL global show | grep -q "response_tracking: $i" ||
 			error "Failed to set response_tracking to $i"
 		reinit_dlc || return $?
@@ -1219,7 +1220,7 @@ EOF
 	reinit_dlc || return $?
 	echo "Set > 3; Should fail"
 	do_lnetctl set response_tracking 4 &&
-		 error "should have failed $?"
+		error "should have failed $?"
 
 	reinit_dlc || return $?
 	cat <<EOF > $tyaml
@@ -1410,7 +1411,7 @@ test_204() {
 		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 	done
 
 	lnet_health_post
@@ -1438,7 +1439,7 @@ test_205() {
 		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1458,7 +1459,7 @@ test_205() {
 		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1490,7 +1491,7 @@ test_206() {
 		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 	done
 
 	lnet_health_post
@@ -1521,7 +1522,7 @@ test_207() {
 		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1543,7 +1544,7 @@ test_207() {
 		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
 		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
 			error "Should have failed"
-		$LCTL net_drop_del *
+		$LCTL net_drop_del -a
 
 		lnet_health_post
 
@@ -1688,6 +1689,176 @@ test_209() {
 	return 0
 }
 run_test 209 "Check health, but not resends, for network timeout"
+
+check_nid_in_recovq() {
+	local recovq=$($LNETCTL debug recovery $1)
+	local expect="$2"
+	local nids=$($LCTL list_nids | xargs echo)
+	local found=false
+	local nid=""
+
+	echo "Check recovery queue"
+	echo "$recovq"
+	if [[ $(grep -c 'nid-'<<<$recovq) -ne $expect ]]; then
+		error "Expect $expect NIDs found: \"$recovq\""
+	fi
+
+	[[ $expect -eq 0 ]] && return 0
+
+	for nid in ${nids}; do
+		grep -q "nid-0: $nid"<<<$recovq &&
+			found=true
+	done
+
+	if ! $found; then
+		error "Didn't find local NIDs in recovery queue: \"$recovq\""
+	fi
+
+	return 0
+}
+
+# First enqueue happens at time 0.
+# 2nd at 0 + 2^0 = 1
+# 3rd at 1 + 2^1 = 3
+# 4th at 3 + 2^2 = 7
+# 5th at 7 + 2^3 = 15
+# e.g. after 10 seconds we would expect to have seen the 4th enqueue,
+# (3 pings sent, 4th about to happen) and the 5th enqueue is yet to
+# happen
+# If the recovery limit is 10 seconds, then when the 5th enqueue happens
+# we expect the peer NI to have aged out, so it will not actually be
+# queued.
+check_ping_count() {
+	local queue="$1"
+	local expect="$2"
+
+	echo "Check ping counts:"
+	local ping_count
+	if [[ $queue == "ni" ]]; then
+		$LNETCTL net show -v 2 | egrep 'nid|health value|ping'
+		ping_count=( $($LNETCTL net show -v 2 |
+				awk '/ping_count/{print $NF}') )
+	elif [[ $queue == "peer_ni" ]]; then
+		$LNETCTL peer show -v 2 | egrep 'nid|health value|ping'
+		ping_count=( $($LNETCTL peer show -v 2 |
+				awk '/ping_count/{print $NF}') )
+	else
+		error "Unrecognized queue \"$queue\""
+		return 1
+	fi
+
+	local count
+	local found=false
+	for count in ${ping_count[@]}; do
+		if [[ $count -eq $expect ]]; then
+			if [[ $expect -ne 0 ]] && $found ; then
+				error "Found more than one interface matching \"$expect\" ping count"
+				return 1
+			else
+				echo "Expect ping count \"$expect\" found \"$count\""
+				found=true;
+			fi
+		elif [[ $count -ne 0 ]]; then
+			error "Found interface with ping count \"$count\" but expect \"$expect\""
+			return 1
+		fi
+	done
+
+	return 0
+}
+
+test_210() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	add_net "tcp1" "eth0" || return $?
+
+	local prim_nid=$($LCTL list_nids | head -n 1)
+
+	do_lnetctl discover $prim_nid ||
+		error "failed to discover myself"
+
+	# Set recovery limit to 10 seconds.
+	do_lnetctl set recovery_limit 10 ||
+		error "failed to set recovery_limit"
+
+	$LCTL set_param debug=+net
+	# Use local_error so LNet doesn't attempt to resend the discovery ping
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e local_error
+	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e local_error
+	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		error "Expected discovery to fail"
+
+	sleep 5
+	check_nid_in_recovq "-l" 1
+	check_ping_count "ni" "2"
+
+	sleep 5
+
+	check_nid_in_recovq "-l" 1
+	check_ping_count "ni" "3"
+
+	$LCTL net_drop_del -a
+
+	return 0
+}
+run_test 210 "Local NI recovery checks"
+
+test_211() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	add_net "tcp1" "eth0" || return $?
+
+	local prim_nid=$($LCTL list_nids | head -n 1)
+
+	do_lnetctl discover $prim_nid ||
+		error "failed to discover myself"
+
+	# Set recovery limit to 10 seconds.
+	do_lnetctl set recovery_limit 10 ||
+		error "failed to set recovery_limit"
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e remote_error
+	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e remote_error
+
+	# Set health to 0 on one interface. This forces it onto the recovery
+	# queue.
+	$LNETCTL peer set --nid $prim_nid --health 0
+
+	# After 5 seconds, we expect the peer NI to still be in recovery
+	sleep 5
+	check_nid_in_recovq "-p" 1
+	check_ping_count "peer_ni" "2"
+
+	# After 15 seconds, the peer NI should have been fully processed out of
+	# the recovery queue. We'll allow a total of 17 seconds to account for
+	# differences in sleeping for whole seconds vs. the more accurate time
+	# keeping that is done in the recovery code.
+	sleep 12
+	check_nid_in_recovq "-p" 0
+	check_ping_count "peer_ni" "4"
+
+	$LCTL net_drop_del -a
+
+	# Set health to force it back onto the recovery queue. Set to 500 means
+	# in 5 seconds it should be back at maximum value. We'll wait a couple
+	# more seconds than that to be safe.
+	# NB: we need to increase the recovery limit so the peer NI is
+	# eligible again
+	do_lnetctl set recovery_limit 50 ||
+		error "failed to set recovery_limit"
+
+	$LNETCTL peer set --nid $prim_nid --health 500
+
+	sleep 7
+
+	check_nid_in_recovq "-p" 0
+	check_ping_count "peer_ni" "0"
+
+	return 0
+}
+run_test 211 "Remote NI recovery checks"
 
 test_300() {
 	# LU-13274
