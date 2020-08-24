@@ -40,6 +40,7 @@
 #include <libcfs/libcfs_hash.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
+#include <linux/interval_tree_generic.h>
 #include "mdt_internal.h"
 
 static unsigned int
@@ -121,79 +122,41 @@ void dump_requests(char *prefix, struct coordinator *cdt)
 	up_read(&cdt->cdt_request_lock);
 }
 
-struct req_interval_data {
-	struct cdt_req_progress	*crp;
-	__u64			 done_sz;
+/* Interval tree to track reported progress.
+ * Intervals stored are non-overlapping and non-adjacent.
+ * When a new interval is added, all intervals that might overlap
+ * or be adjacent are first removed, with any extra length added to
+ * the new interval.
+ */
+struct progress_node {
+	__u64		pn_offset;
+	__u64		pn_end;
+	__u64		pn_subtree_last;
+	struct rb_node	pn_rb;
 };
 
-/**
- * interval tree cb, used to go through all the tree of extent done
- */
-static enum interval_iter req_interval_cb(struct interval_node *node,
-					  void *args)
-{
-	struct req_interval_data	*data;
-	ENTRY;
+#define START(node) ((node)->pn_offset)
+#define LAST(node) ((node)->pn_end)
 
-	data = args;
-	data->done_sz += node->in_extent.end - node->in_extent.start;
-	RETURN(INTERVAL_ITER_CONT);
-}
+INTERVAL_TREE_DEFINE(struct progress_node, pn_rb, __u64, pn_subtree_last,
+		     START, LAST, static, progress)
 
-/**
- * scan the interval tree associated to a request
- * to compute the amount of work done
- * \param car [IN] request
- * \param done_sz [OUT] will be set to the size of work done
- */
-void mdt_cdt_get_work_done(struct cdt_agent_req *car, __u64 *done_sz)
-{
-	struct req_interval_data	 rid;
-	struct cdt_req_progress		*crp = &car->car_progress;
+#define progress_first(root) rb_entry_safe(interval_tree_first(root),	\
+					   struct progress_node, pn_rb)
 
-	mutex_lock(&crp->crp_lock);
-
-	rid.crp = crp;
-	rid.done_sz = 0;
-	interval_iterate(crp->crp_root, req_interval_cb, &rid);
-	*done_sz = rid.done_sz;
-
-	mutex_unlock(&crp->crp_lock);
-}
-
-#define NODE_VECTOR_SZ 256
-/**
+/*
  * free the interval tree associated to a request
  */
 static void mdt_cdt_free_request_tree(struct cdt_req_progress *crp)
 {
-	struct interval_node	*node, *vn;
-	int			 i;
+	struct progress_node *node;
 	ENTRY;
 
-	mutex_lock(&crp->crp_lock);
-
-	if (crp->crp_max == 0)
-		goto out;
-
-	/* remove all nodes from tree */
-	for (i = 0 ; i < crp->crp_cnt ; i++) {
-		vn = crp->crp_node[i / NODE_VECTOR_SZ];
-		node = &vn[i % NODE_VECTOR_SZ];
-		interval_erase(node, &crp->crp_root);
+	while ((node = progress_first(&crp->crp_root)) != NULL) {
+		progress_remove(node, &crp->crp_root);
+		OBD_FREE_PTR(node);
 	}
-	/* free all sub vectors */
-	for (i = 0 ; i <= crp->crp_max / NODE_VECTOR_SZ ; i++)
-		OBD_FREE_PTR_ARRAY(crp->crp_node[i], NODE_VECTOR_SZ);
 
-	/* free main vector */
-	OBD_FREE_PTR_ARRAY(crp->crp_node,
-			   (crp->crp_max / NODE_VECTOR_SZ + 1));
-
-	crp->crp_cnt = 0;
-	crp->crp_max = 0;
-out:
-	mutex_unlock(&crp->crp_lock);
 	EXIT;
 }
 
@@ -203,66 +166,45 @@ out:
 static int hsm_update_work(struct cdt_req_progress *crp,
 			   const struct hsm_extent *extent)
 {
-	int			  rc, osz, nsz;
-	struct interval_node	**new_vv;
-	struct interval_node	 *v, *node;
-	__u64			  end;
+	struct progress_node *node;
+	struct progress_node *overlap;
+	__u64 end;
+	__u64 total;
 	ENTRY;
 
-	end = extent->offset + extent->length;
-	if (end <= extent->offset)
+	end = extent->offset + extent->length - 1;
+	if (end < extent->offset)
 		RETURN(-EINVAL);
 
-	mutex_lock(&crp->crp_lock);
-	/* new node index */
+	OBD_ALLOC_PTR(node);
+	if (!node)
+		RETURN(-ENOMEM);
+	node->pn_offset = extent->offset;
+	node->pn_end = end;
 
-	if (crp->crp_cnt >= crp->crp_max) {
-		/* no more room */
-		/* allocate a new vector */
-		OBD_ALLOC_PTR_ARRAY(v, NODE_VECTOR_SZ);
-		if (v == NULL)
-			GOTO(out, rc = -ENOMEM);
-
-		if (crp->crp_max == 0)
-			osz = 0;
-		else
-			osz = sizeof(new_vv[0]) *
-			      (crp->crp_max / NODE_VECTOR_SZ + 1);
-
-		nsz = osz + sizeof(new_vv[0]);
-		/* increase main vector size */
-		OBD_ALLOC(new_vv, nsz);
-		if (new_vv == NULL) {
-			OBD_FREE_PTR_ARRAY(v, NODE_VECTOR_SZ);
-			GOTO(out, rc = -ENOMEM);
-		}
-
-		if (osz == 0) {
-			crp->crp_max = NODE_VECTOR_SZ - 1;
-		} else {
-			memcpy(new_vv, crp->crp_node, osz);
-			OBD_FREE(crp->crp_node, osz);
-			crp->crp_max += NODE_VECTOR_SZ;
-		}
-
-		crp->crp_node = new_vv;
-		crp->crp_node[crp->crp_max / NODE_VECTOR_SZ] = v;
+	spin_lock(&crp->crp_lock);
+	total = crp->crp_total;
+	/* Search just before and just after the target interval
+	 * to find intervals that would be adjacent.  Remove them
+	 * too and add their extra length to 'node'.
+	 */
+	while ((overlap = progress_iter_first(&crp->crp_root,
+					      (node->pn_offset == 0 ?
+					       0 : node->pn_offset - 1),
+					      (node->pn_end == LUSTRE_EOF ?
+					       LUSTRE_EOF : node->pn_end + 1)))
+	       != NULL) {
+		node->pn_offset = min(node->pn_offset, overlap->pn_offset);
+		node->pn_end = max(node->pn_end, overlap->pn_end);
+		progress_remove(overlap, &crp->crp_root);
+		total -= overlap->pn_end - overlap->pn_offset + 1;
+		OBD_FREE_PTR(overlap);
 	}
-
-	v = crp->crp_node[crp->crp_cnt / NODE_VECTOR_SZ];
-	node = &v[crp->crp_cnt % NODE_VECTOR_SZ];
-	rc = interval_set(node, extent->offset, end);
-	if (rc)
-		GOTO(out, rc);
-	/* try to insert, if entry already exist ignore the new one
-	 * it can happen if ct sends 2 times the same progress */
-	if (interval_insert(node, &crp->crp_root) == NULL)
-		crp->crp_cnt++;
-
-	rc = 0;
-out:
-	mutex_unlock(&crp->crp_lock);
-	RETURN(rc);
+	progress_insert(node, &crp->crp_root);
+	total += node->pn_end - node->pn_offset + 1;
+	crp->crp_total = total;
+	spin_unlock(&crp->crp_lock);
+	RETURN(0);
 }
 
 /**
@@ -270,10 +212,11 @@ out:
  */
 static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 {
-	mutex_init(&crp->crp_lock);
-	crp->crp_root = NULL;
-	crp->crp_cnt = 0;
-	crp->crp_max = 0;
+	spin_lock_init(&crp->crp_lock);
+	crp->crp_root = INTERVAL_TREE_ROOT;
+	if (0)
+		/* Silence a warning about unused function */
+		progress_iter_next(NULL, 0, 0);
 }
 
 /** Allocate/init an agent request and its sub-structures.
@@ -561,14 +504,12 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 	struct list_head	*pos = v;
 	struct cdt_agent_req	*car;
 	char			 buf[12];
-	__u64			 data_moved;
 	ENTRY;
 
 	if (pos == SEQ_START_TOKEN)
 		RETURN(0);
 
 	car = list_entry(pos, struct cdt_agent_req, car_request_list);
-	mdt_cdt_get_work_done(car, &data_moved);
 
 	seq_printf(s, "fid="DFID" dfid="DFID
 		   " compound/cookie=%#llx/%#llx"
@@ -585,7 +526,7 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 		   car->car_hai->hai_gid,
 		   hai_dump_data_field(car->car_hai, buf, sizeof(buf)),
 		   car->car_canceled, obd_uuid2str(&car->car_uuid),
-		   data_moved);
+		   car->car_progress.crp_total);
 	RETURN(0);
 }
 

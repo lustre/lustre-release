@@ -1021,6 +1021,41 @@ void test112(void)
 	helper_archiving(test112_progress, length);
 }
 
+/* Archive, with 9 reports, each covering 20%, so many overlap. */
+static void test113_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	int i;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	for (i = 0; i < 9; i++) {
+		he.offset = i*length/10;
+		he.length = 2*length/10;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+
+		rc = llapi_hsm_current_action(testfile, &hca);
+		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+			strerror(-rc));
+		ASSERTF(hca.hca_state == HPS_RUNNING,
+			"hca_state=%u", hca.hca_state);
+		ASSERTF(hca.hca_action == HUA_ARCHIVE,
+			"hca_state=%u", hca.hca_action);
+		ASSERTF(hca.hca_location.length == (i+2)*length/10,
+			"i=%d, length=%llu",
+			i, (unsigned long long)hca.hca_location.length);
+	}
+}
+
+void test113(void)
+{
+	const size_t length = 1000;
+
+	helper_archiving(test113_progress, length);
+}
+
 static void usage(char *prog)
 {
 	fprintf(stderr, "Usage: %s [-d lustre_dir]\n", prog);
@@ -1091,6 +1126,7 @@ int main(int argc, char *argv[])
 	PERFORM(test110);
 	PERFORM(test111);
 	PERFORM(test112);
+	PERFORM(test113);
 
 	return EXIT_SUCCESS;
 }

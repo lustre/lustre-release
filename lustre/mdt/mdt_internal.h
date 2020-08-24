@@ -573,14 +573,10 @@ static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
 }
 
 struct cdt_req_progress {
-	struct mutex		 crp_lock;	/**< protect tree */
-	struct interval_node	*crp_root;	/**< tree to track extent
+	spinlock_t		 crp_lock;	/**< protect tree */
+	struct interval_tree_root crp_root;	/**< tree to track extent
 						 *   moved */
-	struct interval_node	**crp_node;	/**< buffer for tree nodes
-						 *   vector of fixed size
-						 *   vectors */
-	int			 crp_cnt;	/**< # of used nodes */
-	int			 crp_max;	/**< # of allocated nodes */
+	__u64			 crp_total;
 };
 
 struct cdt_agent_req {
@@ -1083,7 +1079,6 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
 void mdt_cdt_free_request(struct cdt_agent_req *car);
 int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car);
 struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt, u64 cookie);
-void mdt_cdt_get_work_done(struct cdt_agent_req *car, __u64 *done_sz);
 void mdt_cdt_get_request(struct cdt_agent_req *car);
 void mdt_cdt_put_request(struct cdt_agent_req *car);
 struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,

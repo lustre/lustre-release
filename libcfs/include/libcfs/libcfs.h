@@ -132,9 +132,11 @@ void libcfs_vfree_atomic(const void *addr);
 
 #ifdef HAVE_INTERVAL_TREE_CACHED
 #define interval_tree_root rb_root_cached
+#define interval_tree_first rb_first_cached
 #define INTERVAL_TREE_ROOT RB_ROOT_CACHED
 #else
 #define interval_tree_root rb_root
+#define interval_tree_first rb_first
 #define INTERVAL_TREE_ROOT RB_ROOT
 #endif /* HAVE_INTERVAL_TREE_CACHED */
 

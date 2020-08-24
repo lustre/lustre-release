@@ -533,15 +533,12 @@ int mdt_hsm_get_action(struct mdt_thread_info *mti,
 		RETURN(0);
 
 	car = mdt_cdt_find_request(cdt, hgad.hgad_hai.hai_cookie);
-	if (car != NULL) {
-		__u64 data_moved;
-
-		mdt_cdt_get_work_done(car, &data_moved);
-		/* this is just to give the volume of data moved
-		 * it means data_moved data have been moved from the
-		 * original request but we do not know which one
+	if (car) {
+		/* This is just to give the volume of data moved.
+		 * It means 'car_progress' data have been moved from the
+		 * original request but we do not know which one.
 		 */
-		extent->length = data_moved;
+		extent->length = car->car_progress.crp_total;
 		mdt_cdt_put_request(car);
 	}
 
