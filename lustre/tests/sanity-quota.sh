@@ -671,7 +671,7 @@ test_1b() {
 	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -700,7 +700,7 @@ test_1b() {
 	$LFS setquota -g $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
 		error "set group quota failed"
 
-	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M --pool $qpool $DIR ||
 		error "set group quota failed"
 
 	testfile="$DIR/$tdir/$tfile-1"
@@ -739,7 +739,7 @@ test_1b() {
 	$LFS setquota -p $TSTPRJID -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
-	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M --pool $qpool $DIR ||
 		error "set project quota failed"
 
 
@@ -786,10 +786,10 @@ test_1c() {
 
 	# create pools without hard limit
 	# initially such case raised several bugs
-	$LFS setquota -u $TSTUSR -B 0M -o $qpool1 $DIR ||
+	$LFS setquota -u $TSTUSR -B 0M --pool $qpool1 $DIR ||
 		error "set user quota failed"
 
-	$LFS setquota -u $TSTUSR -B 0M -o $qpool2 $DIR ||
+	$LFS setquota -u $TSTUSR -B 0M --pool $qpool2 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -848,10 +848,10 @@ test_1d() {
 	pool_add_targets $qpool2 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
 		error "set user quota failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit2}M -o $qpool2 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit2}M --pool $qpool2 $DIR ||
 	error "set user quota failed"
 
 	# make sure the system is clean
@@ -908,7 +908,7 @@ test_1e() {
 	pool_add_targets $qpool1 1 1 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -966,7 +966,7 @@ test_1f() {
 	pool_add_targets $qpool1 0 0 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -1025,7 +1025,7 @@ test_1g() {
 	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -1365,11 +1365,11 @@ test_3b() {
 	$LFS setquota -t -u --block-grace $glbl_grace --inode-grace \
 		$MAX_IQ_TIME $DIR || error "set user grace time failed"
 	$LFS setquota -t -u --block-grace $grace \
-		-o $qpool $DIR || error "set user grace time failed"
+		--pool $qpool $DIR || error "set user grace time failed"
 
 	$LFS setquota -u $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
 		error "set user quota failed"
-	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	test_block_soft $testfile $grace $limit "u" $qpool
@@ -1383,11 +1383,11 @@ test_3b() {
 	$LFS setquota -t -g --block-grace $glbl_grace --inode-grace \
 		$MAX_IQ_TIME $DIR || error "set group grace time failed"
 	$LFS setquota -t -g --block-grace $grace \
-		-o $qpool $DIR || error "set group grace time failed"
+		--pool $qpool $DIR || error "set group grace time failed"
 
 	$LFS setquota -g $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
 		error "set group quota failed"
-	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
 		error "set group quota failed"
 
 	test_block_soft $testfile $grace $limit "g" $qpool
@@ -1404,31 +1404,32 @@ test_3b() {
 			$MAX_IQ_TIME $DIR ||
 				error "set project grace time failed"
 		$LFS setquota -t -p --block-grace $grace \
-			-o $qpool $DIR || error "set project grace time failed"
+			--pool $qpool $DIR ||
+				error "set project grace time failed"
 
 		$LFS setquota -p $TSTPRJID -b ${glbl_limit}M -B 0 -i 0 -I 0 \
 			$DIR || error "set project quota failed"
-		$LFS setquota -p $TSTPRJID -b ${limit}M -B 0 -o $qpool $DIR ||
-			error "set project quota failed"
+		$LFS setquota -p $TSTPRJID -b ${limit}M -B 0 \
+			--pool $qpool $DIR || error "set project quota failed"
 
 		test_block_soft $testfile $grace $limit "p" $qpool
 		resetquota -p $TSTPRJID
 		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
 			$MAX_IQ_TIME $DIR ||
 				error "restore project grace time failed"
-		$LFS setquota -t -p --block-grace $MAX_DQ_TIME -o $qpool $DIR ||
-			error "set project grace time failed"
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --pool $qpool \
+			$DIR ||	error "set project grace time failed"
 	fi
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
 		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
-		-o $qpool $DIR || error "restore user grace time failed"
+		--pool $qpool $DIR || error "restore user grace time failed"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
 		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME \
-		-o $qpool $DIR || error "restore group grace time failed"
+		--pool $qpool $DIR || error "restore group grace time failed"
 }
 run_test 3b "Quota pools: Block soft limit (start timer, expires, stop timer)"
 
@@ -1472,19 +1473,19 @@ test_3c() {
 	$LFS setquota -t -u --block-grace $glbl_grace --inode-grace \
 		$MAX_IQ_TIME $DIR || error "set user grace time failed"
 	$LFS setquota -t -u --block-grace $grace1 \
-		-o $qpool $DIR || error "set user grace time failed"
+		--pool $qpool $DIR || error "set user grace time failed"
 	$LFS setquota -t -u --block-grace $grace2 \
-		-o $qpool2 $DIR || error "set user grace time failed"
+		--pool $qpool2 $DIR || error "set user grace time failed"
 
 	$LFS setquota -u $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
 		error "set user quota failed"
-	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
 		error "set user quota failed"
 	# qpool has minimum soft limit, but it's grace is grater than
 	# grace period of qpool2. Thus write shouldn't fail when
 	# hit qpool soft limit - only when reaches up qpool2 limit
 	# after grace2 seconds.
-	$LFS setquota -u $TSTUSR -b ${limit2}M -B 0 -o $qpool2 $DIR ||
+	$LFS setquota -u $TSTUSR -b ${limit2}M -B 0 --pool $qpool2 $DIR ||
 		error "set user quota failed"
 
 	test_block_soft $testfile $grace2 $limit2 "u" $qpool2
@@ -1493,9 +1494,9 @@ test_3c() {
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
 		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
-		-o $qpool $DIR || error "restore user grace time failed"
+		--pool $qpool $DIR || error "restore user grace time failed"
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
-		-o $qpool2 $DIR || error "restore user grace time failed"
+		--pool $qpool2 $DIR || error "restore user grace time failed"
 }
 run_test 3c "Quota pools: check block soft limit on different pools"
 
@@ -4400,7 +4401,7 @@ test_69()
 		error "set user quota failed"
 
 	log "User quota (block hardlimit:$limit MB)"
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 oflag=sync ||
@@ -4452,7 +4453,7 @@ test_70()
 	pool_add $qpool || error "pool_add failed"
 	pool_add_targets $qpool 0 0 || error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR
 	rc=$?
 	[ $rc -eq $err ] || error "setquota res $rc != $err"
 
@@ -4499,14 +4500,14 @@ test_71a()
 	pool_add_targets $qpool 0 1 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	pool_add $qpool2 || error "pool_add failed"
 	pool_add_targets $qpool2 1 1 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool2 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool2 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -4584,14 +4585,14 @@ test_71b()
 	pool_add_targets $qpool 0 1 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	pool_add $qpool2 || error "pool_add failed"
 	pool_add_targets $qpool2 1 1 ||
 		error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit2}M -o $qpool2 $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit2}M --pool $qpool2 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
@@ -4645,7 +4646,7 @@ test_72()
 	pool_add $qpool || error "pool_add failed"
 	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
 
-	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
