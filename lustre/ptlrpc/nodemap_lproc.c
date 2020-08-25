@@ -118,7 +118,6 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap		*nodemap;
 	struct lu_nid_range		*range;
-	struct interval_node_extent	ext;
 	char				start_nidstr[LNET_NIDSTR_SIZE];
 	char				end_nidstr[LNET_NIDSTR_SIZE];
 	bool				cont = false;
@@ -140,9 +139,8 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 		if (cont)
 			seq_printf(m, ",\n");
 		cont = 1;
-		ext = range->rn_node.in_extent;
-		libcfs_nid2str_r(ext.start, start_nidstr, sizeof(start_nidstr));
-		libcfs_nid2str_r(ext.end, end_nidstr, sizeof(end_nidstr));
+		libcfs_nid2str_r(range->rn_start, start_nidstr, sizeof(start_nidstr));
+		libcfs_nid2str_r(range->rn_end, end_nidstr, sizeof(end_nidstr));
 		seq_printf(m, " { id: %u, start_nid: %s, end_nid: %s }",
 			   range->rn_id, start_nidstr, end_nidstr);
 	}

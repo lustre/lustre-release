@@ -178,8 +178,9 @@ struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
 #ifdef HAVE_SERVER_SUPPORT
+
 struct nodemap_range_tree {
-	struct interval_node *nmrt_range_interval_root;
+	struct interval_tree_root nmrt_range_interval_root;
 	unsigned int nmrt_range_highest_id;
 };
 

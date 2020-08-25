@@ -1019,8 +1019,8 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 					 rn_list) {
 			lnet_nid_t nid[2] = {
-				range->rn_node.in_extent.start,
-				range->rn_node.in_extent.end
+				range->rn_start,
+				range->rn_end
 			};
 			nodemap_range_key_init(&nk, nodemap->nm_id,
 					       range->rn_id);

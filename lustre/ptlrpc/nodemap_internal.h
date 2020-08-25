@@ -31,7 +31,7 @@
 #define _NODEMAP_INTERNAL_H
 
 #include <lustre_nodemap.h>
-#include <interval_tree.h>
+#include <linux/rbtree.h>
 
 #define DEFAULT_NODEMAP "default"
 
@@ -58,7 +58,10 @@ struct lu_nid_range {
 	/* list for nodemap */
 	struct list_head	 rn_list;
 	/* nid interval tree */
-	struct interval_node	 rn_node;
+	lnet_nid_t		 rn_start,
+				 rn_end,
+				 rn_subtree_last;
+	struct rb_node		 rn_rb;
 };
 
 struct lu_idmap {

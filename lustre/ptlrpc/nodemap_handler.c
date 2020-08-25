@@ -1622,6 +1622,8 @@ struct nodemap_config *nodemap_config_alloc(void)
 
 	init_rwsem(&config->nmc_range_tree_lock);
 
+	config->nmc_range_tree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
+
 	return config;
 }
 EXPORT_SYMBOL(nodemap_config_alloc);

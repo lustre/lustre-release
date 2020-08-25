@@ -128,4 +128,14 @@ do {									\
 /* atomic-context safe vfree */
 void libcfs_vfree_atomic(const void *addr);
 
+/* interval tree */
+
+#ifdef HAVE_INTERVAL_TREE_CACHED
+#define interval_tree_root rb_root_cached
+#define INTERVAL_TREE_ROOT RB_ROOT_CACHED
+#else
+#define interval_tree_root rb_root
+#define INTERVAL_TREE_ROOT RB_ROOT
+#endif /* HAVE_INTERVAL_TREE_CACHED */
+
 #endif /* _LIBCFS_LIBCFS_H_ */
