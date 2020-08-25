@@ -187,7 +187,7 @@ nid_export_exit(void *vexport, void *data)
 	class_export_put(exp);
 }
 
-const struct rhashtable_params nid_hash_params = {
+static const struct rhashtable_params nid_hash_params = {
 	.key_len		= sizeof(lnet_nid_t),
 	.head_offset		= offsetof(struct obd_export, exp_nid_hash),
 	.obj_hashfn		= nid_keyhash,

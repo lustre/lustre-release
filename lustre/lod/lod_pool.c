@@ -122,7 +122,7 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 	return strcmp(pool_name, pool->pool_name);
 }
 
-const struct rhashtable_params pools_hash_params = {
+static const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
 	.key_offset	= offsetof(struct pool_desc, pool_name),
 	.head_offset	= offsetof(struct pool_desc, pool_hash),
@@ -130,7 +130,6 @@ const struct rhashtable_params pools_hash_params = {
 	.obj_cmpfn	= pool_cmpfn,
 	.automatic_shrinking = true,
 };
-EXPORT_SYMBOL(pools_hash_params);
 
 /*
  * Methods for /proc seq_file iteration of the defined pools.
