@@ -37,51 +37,41 @@
 #define _RANGE_LOCK_H
 
 #include <libcfs/libcfs.h>
-#include <interval_tree.h>
 
 #define RL_FMT "[%llu, %llu]"
-#define RL_PARA(range)				\
-	(range)->rl_node.in_extent.start,	\
-	(range)->rl_node.in_extent.end
+#define RL_PARA(range)					\
+	(unsigned long long)(range)->rl_start,	\
+	(unsigned long long)(range)->rl_end
 
 struct range_lock {
-	struct interval_node	rl_node;
+	__u64				rl_start,
+					rl_end,
+					rl_subtree_last;
+	struct rb_node			rl_rb;
 	/**
 	 * Process to enqueue this lock.
 	 */
-	struct task_struct	*rl_task;
-	/**
-	 * List of locks with the same range.
-	 */
-	struct list_head	rl_next_lock;
-	/**
-	 * Number of locks in the list rl_next_lock
-	 */
-	unsigned int		rl_lock_count;
+	struct task_struct		*rl_task;
 	/**
 	 * Number of ranges which are blocking acquisition of the lock
 	 */
-	unsigned int		rl_blocking_ranges;
+	unsigned int			rl_blocking_ranges;
 	/**
 	 * Sequence number of range lock. This number is used to get to know
-	 * the order the locks are queued; this is required for range_cancel().
+	 * the order the locks are queued.  One lock can only block another
+	 * if it has a higher rl_sequence.
 	 */
-	__u64			rl_sequence;
+	__u64				rl_sequence;
 };
 
-static inline struct range_lock *node2rangelock(const struct interval_node *n)
-{
-	return container_of(n, struct range_lock, rl_node);
-}
-
 struct range_lock_tree {
-	struct interval_node	*rlt_root;
-	spinlock_t		 rlt_lock;
-	__u64			 rlt_sequence;
+	struct interval_tree_root	rlt_root;
+	spinlock_t			rlt_lock;
+	__u64				rlt_sequence;
 };
 
 void range_lock_tree_init(struct range_lock_tree *tree);
-int  range_lock_init(struct range_lock *lock, __u64 start, __u64 end);
+void range_lock_init(struct range_lock *lock, __u64 start, __u64 end);
 int  range_lock(struct range_lock_tree *tree, struct range_lock *lock);
 void range_unlock(struct range_lock_tree *tree, struct range_lock *lock);
 #endif

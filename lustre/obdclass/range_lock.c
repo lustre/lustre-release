@@ -36,8 +36,15 @@
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>
 #endif
+#include <linux/interval_tree_generic.h>
 #include <uapi/linux/lustre/lustre_user.h>
 #include <range_lock.h>
+
+#define START(node)	((node)->rl_start)
+#define LAST(node)	((node)->rl_end)
+
+INTERVAL_TREE_DEFINE(struct range_lock, rl_rb, __u64, rl_subtree_last,
+		     START, LAST, static, range_lock)
 
 /**
  * Initialize a range lock tree
@@ -49,7 +56,7 @@
  */
 void range_lock_tree_init(struct range_lock_tree *tree)
 {
-	tree->rlt_root = NULL;
+	tree->rlt_root = INTERVAL_TREE_ROOT;
 	tree->rlt_sequence = 0;
 	spin_lock_init(&tree->rlt_lock);
 }
@@ -65,62 +72,19 @@ EXPORT_SYMBOL(range_lock_tree_init);
  * Pre:  Caller should have allocated the range lock node.
  * Post: The range lock node is meant to cover [start, end] region
  */
-int range_lock_init(struct range_lock *lock, __u64 start, __u64 end)
+void range_lock_init(struct range_lock *lock, __u64 start, __u64 end)
 {
-	int rc;
-
-	interval_init(&lock->rl_node);
+	start >>= PAGE_SHIFT;
 	if (end != LUSTRE_EOF)
 		end >>= PAGE_SHIFT;
-	rc = interval_set(&lock->rl_node, start >> PAGE_SHIFT, end);
-	if (rc)
-		return rc;
+	lock->rl_start = start;
+	lock->rl_end = end;
 
-	INIT_LIST_HEAD(&lock->rl_next_lock);
 	lock->rl_task = NULL;
-	lock->rl_lock_count = 0;
 	lock->rl_blocking_ranges = 0;
 	lock->rl_sequence = 0;
-	return rc;
 }
 EXPORT_SYMBOL(range_lock_init);
-
-static inline struct range_lock *next_lock(struct range_lock *lock)
-{
-	return list_entry(lock->rl_next_lock.next, typeof(*lock), rl_next_lock);
-}
-
-/**
- * Helper function of range_unlock()
- *
- * \param node [in]	a range lock found overlapped during interval node
- *			search
- * \param arg [in]	the range lock to be tested
- *
- * \retval INTERVAL_ITER_CONT	indicate to continue the search for next
- *				overlapping range node
- * \retval INTERVAL_ITER_STOP	indicate to stop the search
- */
-static enum interval_iter range_unlock_cb(struct interval_node *node, void *arg)
-{
-	struct range_lock *lock = arg;
-	struct range_lock *overlap = node2rangelock(node);
-	struct range_lock *iter;
-	ENTRY;
-
-	list_for_each_entry(iter, &overlap->rl_next_lock, rl_next_lock) {
-		if (iter->rl_sequence > lock->rl_sequence) {
-			--iter->rl_blocking_ranges;
-			LASSERT(iter->rl_blocking_ranges > 0);
-		}
-	}
-	if (overlap->rl_sequence > lock->rl_sequence) {
-		--overlap->rl_blocking_ranges;
-		if (overlap->rl_blocking_ranges == 0)
-			wake_up_process(overlap->rl_task);
-	}
-	RETURN(INTERVAL_ITER_CONT);
-}
 
 /**
  * Unlock a range lock, wake up locks blocked by this lock.
@@ -130,67 +94,35 @@ static enum interval_iter range_unlock_cb(struct interval_node *node, void *arg)
  *
  * If this lock has been granted, relase it; if not, just delete it from
  * the tree or the same region lock list. Wake up those locks only blocked
- * by this lock through range_unlock_cb().
+ * by this lock.
  */
 void range_unlock(struct range_lock_tree *tree, struct range_lock *lock)
 {
+	struct range_lock *overlap;
 	ENTRY;
 
 	spin_lock(&tree->rlt_lock);
-	if (!list_empty(&lock->rl_next_lock)) {
-		struct range_lock *next;
 
-		if (interval_is_intree(&lock->rl_node)) { /* first lock */
-			/* Insert the next same range lock into the tree */
-			next = next_lock(lock);
-			next->rl_lock_count = lock->rl_lock_count - 1;
-			interval_erase(&lock->rl_node, &tree->rlt_root);
-			interval_insert(&next->rl_node, &tree->rlt_root);
-		} else {
-			/* find the first lock in tree */
-			list_for_each_entry(next, &lock->rl_next_lock,
-					    rl_next_lock) {
-				if (!interval_is_intree(&next->rl_node))
-					continue;
+	range_lock_remove(lock, &tree->rlt_root);
 
-				LASSERT(next->rl_lock_count > 0);
-				next->rl_lock_count--;
-				break;
-			}
+	for (overlap = range_lock_iter_first(&tree->rlt_root,
+					     lock->rl_start,
+					     lock->rl_end);
+	     overlap;
+	     overlap = range_lock_iter_next(overlap,
+					    lock->rl_start,
+					    lock->rl_end))
+		if (overlap->rl_sequence > lock->rl_sequence) {
+			--overlap->rl_blocking_ranges;
+			if (overlap->rl_blocking_ranges == 0)
+				wake_up_process(overlap->rl_task);
 		}
-		list_del_init(&lock->rl_next_lock);
-	} else {
-		LASSERT(interval_is_intree(&lock->rl_node));
-		interval_erase(&lock->rl_node, &tree->rlt_root);
-	}
 
-	interval_search(tree->rlt_root, &lock->rl_node.in_extent,
-			range_unlock_cb, lock);
 	spin_unlock(&tree->rlt_lock);
 
 	EXIT;
 }
 EXPORT_SYMBOL(range_unlock);
-
-/**
- * Helper function of range_lock()
- *
- * \param node [in]	a range lock found overlapped during interval node
- *			search
- * \param arg [in]	the range lock to be tested
- *
- * \retval INTERVAL_ITER_CONT	indicate to continue the search for next
- *				overlapping range node
- * \retval INTERVAL_ITER_STOP	indicate to stop the search
- */
-static enum interval_iter range_lock_cb(struct interval_node *node, void *arg)
-{
-	struct range_lock *lock = (struct range_lock *)arg;
-	struct range_lock *overlap = node2rangelock(node);
-
-	lock->rl_blocking_ranges += overlap->rl_lock_count + 1;
-	RETURN(INTERVAL_ITER_CONT);
-}
 
 /**
  * Lock a region
@@ -207,7 +139,7 @@ static enum interval_iter range_lock_cb(struct interval_node *node, void *arg)
  */
 int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 {
-	struct interval_node *node;
+	struct range_lock *overlap;
 	int rc = 0;
 	ENTRY;
 
@@ -216,20 +148,16 @@ int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 	 * We need to check for all conflicting intervals
 	 * already in the tree.
 	 */
-	interval_search(tree->rlt_root, &lock->rl_node.in_extent,
-			range_lock_cb, lock);
-	/*
-	 * Insert to the tree if I am unique, otherwise I've been linked to
-	 * the rl_next_lock of another lock which has the same range as mine
-	 * in range_lock_cb().
-	 */
-	node = interval_insert(&lock->rl_node, &tree->rlt_root);
-	if (node != NULL) {
-		struct range_lock *tmp = node2rangelock(node);
+	for (overlap = range_lock_iter_first(&tree->rlt_root,
+					     lock->rl_start,
+					     lock->rl_end);
+	     overlap;
+	     overlap = range_lock_iter_next(overlap,
+					    lock->rl_start,
+					    lock->rl_end))
+		lock->rl_blocking_ranges += 1;
 
-		list_add_tail(&lock->rl_next_lock, &tmp->rl_next_lock);
-		tmp->rl_lock_count++;
-	}
+	range_lock_insert(lock, &tree->rlt_root);
 	lock->rl_sequence = ++tree->rlt_sequence;
 
 	while (lock->rl_blocking_ranges > 0) {
