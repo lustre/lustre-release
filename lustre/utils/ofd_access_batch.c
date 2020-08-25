@@ -334,7 +334,7 @@ int sort_compare(const void *a1, const void *a2)
 
 static void alre_printf(FILE *f, struct alr_entry *alre, int d)
 {
-	fprintf(f, "%s "DFID" %lld %llu %llu %llu %llu %llu %c\n",
+	fprintf(f, "o=%s f="DFID" t=%lld b=%llu e=%llu s=%llu g=%llu n=%llu d=%c\n",
 		alre->alre_obd_name,
 		PFID(&alre->alre_fid_hash_node.fhn_fid),
 		(long long)alre->alre_time[d],
