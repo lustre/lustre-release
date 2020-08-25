@@ -743,7 +743,10 @@ ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 	struct sockaddr_storage peer;
 
 	rc = lnet_sock_getaddr(sock, true, &peer);
-	LASSERT(rc == 0);		/* we succeeded before */
+	if (rc != 0) {
+		CERROR("Can't determine new connection's address\n");
+		return rc;
+	}
 
 	LIBCFS_ALLOC(cr, sizeof(*cr));
 	if (cr == NULL) {
