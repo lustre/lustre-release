@@ -1621,16 +1621,6 @@ static void osd_index_fini(struct osd_object *o)
 	}
 }
 
-/*
- * Concurrency: no concurrent access is possible that late in object
- * life-cycle (for all existing callers, that is. New callers have to provide
- * their own locking.)
- */
-static int osd_inode_unlinked(const struct inode *inode)
-{
-	return inode->i_nlink == 0;
-}
-
 enum {
 	OSD_TXN_OI_DELETE_CREDITS    = 20,
 	OSD_TXN_INODE_DELETE_CREDITS = 20
@@ -3672,8 +3662,10 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	if (S_ISDIR(inode->i_mode)) {
-		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1 ||
-			inode->i_nlink == 2);
+		if (inode->i_nlink > 2)
+			CERROR("%s: directory "DFID" ino %lu link count is %u at unlink. run e2fsck to repair\n",
+			       osd_name(osd), PFID(fid), inode->i_ino,
+			       inode->i_nlink);
 
 		spin_lock(&obj->oo_guard);
 		clear_nlink(inode);
@@ -4220,6 +4212,9 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(osd_is_write_locked(env, obj));
 	LASSERT(th != NULL);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_REF_DEL))
+		return -EIO;
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle != NULL);

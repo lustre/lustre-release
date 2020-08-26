@@ -5131,6 +5131,27 @@ test_48e() { # bug 4134
 }
 run_test 48e "Access to recreated parent subdir (should return errors)"
 
+test_48f() {
+	[[ $MDS1_VERSION -ge $(version_code 2.13.55) ]] ||
+		skip "need MDS >= 2.13.55"
+	[[ $MDSCOUNT -ge 2 ]] || skip "needs >= 2 MDTs"
+	[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
+		skip "needs different host for mdt1 mdt2"
+	[[ $(facet_fstype mds1) == ldiskfs ]] || skip "ldiskfs only"
+
+	$LFS mkdir -i0 $DIR/$tdir
+	$LFS mkdir -i 1 $DIR/$tdir/sub1 $DIR/$tdir/sub2 $DIR/$tdir/sub3
+
+	for d in sub1 sub2 sub3; do
+		#define OBD_FAIL_OSD_REF_DEL	0x19c
+		do_facet mds1 $LCTL set_param fail_loc=0x8000019c
+		rm -rf $DIR/$tdir/$d && error "rm $d should fail"
+	done
+
+	rm -d --interactive=never $DIR/$tdir || error "rm $tdir fail"
+}
+run_test 48f "non-zero nlink dir unlink won't LBUG()"
+
 test_49() { # LU-1030
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
