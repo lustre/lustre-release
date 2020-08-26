@@ -8630,36 +8630,45 @@ test_74c() {
 }
 run_test 74c "ldlm_lock_create error path, (shouldn't LBUG)"
 
-num_inodes() {
-	[ -f /sys/kernel/slab/lustre_inode_cache/shrink ] &&
-		echo 1 > /sys/kernel/slab/lustre_inode_cache/shrink
-	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
+slab_lic=/sys/kernel/slab/lustre_inode_cache
+num_objects() {
+	[ -f $slab_lic/shrink ] && echo 1 > $slab_lic/shrink
+	[ -f $slab_lic/objects ] && awk '{ print $1 }' $slab_lic/objects ||
+		awk '/lustre_inode_cache/ { print $2; exit }' /proc/slabinfo
 }
 
-test_76() { # Now for bug 20433, added originally in bug 1443
+test_76() { # Now for b=20433, added originally in b=1443
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	cancel_lru_locks osc
+	# there may be some slab objects cached per core
 	local cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
-	local before=$(num_inodes)
+	local before=$(num_objects)
 	local count=$((512 * cpus))
-	[ "$SLOW" = "no" ] && count=$((64 * cpus))
+	[ "$SLOW" = "no" ] && count=$((128 * cpus))
+	local margin=$((count / 10))
+	if [[ -f $slab_lic/aliases ]]; then
+		local aliases=$(cat $slab_lic/aliases)
+		(( aliases > 0 )) && margin=$((margin * aliases))
+	fi
 
-	echo "before inodes: $before"
+	echo "before slab objects: $before"
 	for i in $(seq $count); do
 		touch $DIR/$tfile
 		rm -f $DIR/$tfile
 	done
 	cancel_lru_locks osc
-	local after=$(num_inodes)
-	echo "after inodes: $after"
-	while (( after > before + 8 * ${cpus:-1} )); do
+	local after=$(num_objects)
+	echo "created: $count, after slab objects: $after"
+	# shared slab counts are not very accurate, allow significant margin
+	# the main goal is that the cache growth is not permanently > $count
+	while (( after > before + margin )); do
 		sleep 1
-		after=$(num_inodes)
+		after=$(num_objects)
 		wait=$((wait + 1))
-		(( wait % 5 == 0 )) && echo "wait $wait seconds inodes: $after"
-		if (( wait > 30 )); then
-			error "inode slab grew from $before to $after"
+		(( wait % 5 == 0 )) && echo "wait $wait seconds objects: $after"
+		if (( wait > 60 )); then
+			error "inode slab grew from $before+$margin to $after"
 		fi
 	done
 }
