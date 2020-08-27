@@ -504,8 +504,8 @@ static ssize_t dirty_age_limit_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%llu\n",
-			ktime_divns(ns->ns_dirty_age_limit, NSEC_PER_SEC));
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			 ktime_divns(ns->ns_dirty_age_limit, NSEC_PER_SEC));
 }
 
 static ssize_t dirty_age_limit_store(struct kobject *kobj,
@@ -532,7 +532,7 @@ static ssize_t ctime_age_limit_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", ns->ns_ctime_age_limit);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ns->ns_ctime_age_limit);
 }
 
 static ssize_t ctime_age_limit_store(struct kobject *kobj,

@@ -163,7 +163,7 @@ static ssize_t atime_diff_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return snprintf(buf, PAGE_SIZE, "%lld\n", ofd->ofd_atime_diff);
+	return scnprintf(buf, PAGE_SIZE, "%lld\n", ofd->ofd_atime_diff);
 }
 
 /**
@@ -304,7 +304,7 @@ static ssize_t no_precreate_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_no_precreate);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_no_precreate);
 }
 
 /**
@@ -695,7 +695,7 @@ static ssize_t access_log_mask_show(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return snprintf(buf, PAGE_SIZE, "%s%s%s\n",
+	return scnprintf(buf, PAGE_SIZE, "%s%s%s\n",
 		(ofd->ofd_access_log_mask == 0) ? "0" : "",
 		(ofd->ofd_access_log_mask & OFD_ACCESS_READ) ? "r" : "",
 		(ofd->ofd_access_log_mask & OFD_ACCESS_WRITE) ? "w" : "");
@@ -739,7 +739,7 @@ static ssize_t access_log_size_show(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_access_log_size);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_access_log_size);
 }
 
 static ssize_t access_log_size_store(struct kobject *kobj,

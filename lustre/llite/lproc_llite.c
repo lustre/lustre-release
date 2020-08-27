@@ -723,7 +723,7 @@ static ssize_t statahead_running_max_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, 16, "%u\n", sbi->ll_sa_running_max);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_sa_running_max);
 }
 
 static ssize_t statahead_running_max_store(struct kobject *kobj,
@@ -874,7 +874,7 @@ static ssize_t statfs_max_age_show(struct kobject *kobj, struct attribute *attr,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_statfs_max_age);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_statfs_max_age);
 }
 
 static ssize_t statfs_max_age_store(struct kobject *kobj,
@@ -912,8 +912,8 @@ static ssize_t max_easize_show(struct kobject *kobj,
 		return rc;
 
 	/* Limit xattr size returned to userspace based on kernel maximum */
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
 }
 LUSTRE_RO_ATTR(max_easize);
 
@@ -942,8 +942,8 @@ static ssize_t default_easize_show(struct kobject *kobj,
 		return rc;
 
 	/* Limit xattr size returned to userspace based on kernel maximum */
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
 }
 
 /**
@@ -1088,8 +1088,8 @@ static ssize_t max_read_ahead_async_active_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			sbi->ll_ra_info.ra_async_max_active);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 sbi->ll_ra_info.ra_async_max_active);
 }
 
 static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
@@ -1133,8 +1133,8 @@ static ssize_t read_ahead_async_file_threshold_mb_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%lu\n",
-	     PAGES_TO_MiB(sbi->ll_ra_info.ra_async_pages_per_file_threshold));
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", PAGES_TO_MiB(
+			 sbi->ll_ra_info.ra_async_pages_per_file_threshold));
 }
 
 static ssize_t
@@ -1254,8 +1254,8 @@ static ssize_t file_heat_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			!!(sbi->ll_flags & LL_SBI_FILE_HEAT));
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 !!(sbi->ll_flags & LL_SBI_FILE_HEAT));
 }
 
 static ssize_t file_heat_store(struct kobject *kobj,
@@ -1290,8 +1290,8 @@ static ssize_t heat_decay_percentage_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-		       (sbi->ll_heat_decay_weight * 100 + 128) / 256);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 (sbi->ll_heat_decay_weight * 100 + 128) / 256);
 }
 
 static ssize_t heat_decay_percentage_store(struct kobject *kobj,
@@ -1324,7 +1324,7 @@ static ssize_t heat_period_second_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_heat_period_second);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_heat_period_second);
 }
 
 static ssize_t heat_period_second_store(struct kobject *kobj,

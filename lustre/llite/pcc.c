@@ -1060,15 +1060,15 @@ void pcc_inode_free(struct inode *inode)
 #define MAX_PCC_DATABASE_PATH (6 * 5 + FID_NOBRACE_LEN + 1)
 static int pcc_fid2dataset_path(char *buf, int sz, struct lu_fid *fid)
 {
-	return snprintf(buf, sz, "%04x/%04x/%04x/%04x/%04x/%04x/"
-			DFID_NOBRACE,
-			(fid)->f_oid       & 0xFFFF,
-			(fid)->f_oid >> 16 & 0xFFFF,
-			(unsigned int)((fid)->f_seq       & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			PFID(fid));
+	return scnprintf(buf, sz, "%04x/%04x/%04x/%04x/%04x/%04x/"
+			 DFID_NOBRACE,
+			 (fid)->f_oid       & 0xFFFF,
+			 (fid)->f_oid >> 16 & 0xFFFF,
+			 (unsigned int)((fid)->f_seq       & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
+			 PFID(fid));
 }
 
 static inline const struct cred *pcc_super_cred(struct super_block *sb)
@@ -1140,16 +1140,16 @@ static int pcc_get_layout_info(struct inode *inode, struct cl_layout *clt)
 static int pcc_fid2dataset_fullpath(char *buf, int sz, struct lu_fid *fid,
 				    struct pcc_dataset *dataset)
 {
-	return snprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
-			DFID_NOBRACE,
-			dataset->pccd_pathname,
-			(fid)->f_oid       & 0xFFFF,
-			(fid)->f_oid >> 16 & 0xFFFF,
-			(unsigned int)((fid)->f_seq       & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			PFID(fid));
+	return scnprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
+			 DFID_NOBRACE,
+			 dataset->pccd_pathname,
+			 (fid)->f_oid       & 0xFFFF,
+			 (fid)->f_oid >> 16 & 0xFFFF,
+			 (unsigned int)((fid)->f_seq       & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
+			 PFID(fid));
 }
 
 /* Must be called with pcci->pcci_lock held */

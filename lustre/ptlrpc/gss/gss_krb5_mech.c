@@ -1525,15 +1525,15 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
 }
 
 int gss_display_kerberos(struct gss_ctx        *ctx,
-                         char                  *buf,
-                         int                    bufsize)
+			 char                  *buf,
+			 int                    bufsize)
 {
-        struct krb5_ctx    *kctx = ctx->internal_ctx_id;
-        int                 written;
+	struct krb5_ctx    *kctx = ctx->internal_ctx_id;
+	int                 written;
 
-        written = snprintf(buf, bufsize, "krb5 (%s)",
-                           enctype2str(kctx->kc_enctype));
-        return written;
+	written = scnprintf(buf, bufsize, "krb5 (%s)",
+			    enctype2str(kctx->kc_enctype));
+	return written;
 }
 
 static struct gss_api_ops gss_kerberos_ops = {

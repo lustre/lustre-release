@@ -548,7 +548,7 @@ static ssize_t append_stripe_count_show(struct kobject *kobj,
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", mdd->mdd_append_stripe_count);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", mdd->mdd_append_stripe_count);
 }
 
 /**
@@ -601,7 +601,7 @@ static ssize_t append_pool_show(struct kobject *kobj,
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
 
-	return snprintf(buf, LOV_MAXPOOLNAME + 1, "%s\n", mdd->mdd_append_pool);
+	return scnprintf(buf, PAGE_SIZE, "%s\n", mdd->mdd_append_pool);
 }
 
 /**

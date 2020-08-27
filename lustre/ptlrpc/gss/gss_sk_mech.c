@@ -886,7 +886,7 @@ void gss_delete_sec_context_sk(void *internal_context)
 
 int gss_display_sk(struct gss_ctx *gss_context, char *buf, int bufsize)
 {
-	return snprintf(buf, bufsize, "sk");
+	return scnprintf(buf, bufsize, "sk");
 }
 
 static struct gss_api_ops gss_sk_ops = {

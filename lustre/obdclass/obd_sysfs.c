@@ -280,7 +280,7 @@ static ssize_t jobid_var_show(struct kobject *kobj, struct attribute *attr,
 	int rc = 0;
 
 	if (strlen(obd_jobid_var))
-		rc = snprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_var);
+		rc = scnprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_var);
 	return rc;
 }
 
@@ -307,7 +307,7 @@ static ssize_t jobid_name_show(struct kobject *kobj, struct attribute *attr,
 	int rc = 0;
 
 	if (strlen(obd_jobid_name))
-		rc = snprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_name);
+		rc = scnprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_name);
 	return rc;
 }
 
@@ -349,7 +349,7 @@ static ssize_t jobid_this_session_show(struct kobject *kobj,
 	rcu_read_lock();
 	jid = jobid_current();
 	if (jid)
-		ret = snprintf(buf, PAGE_SIZE, "%s\n", jid);
+		ret = scnprintf(buf, PAGE_SIZE, "%s\n", jid);
 	rcu_read_unlock();
 	return ret;
 }

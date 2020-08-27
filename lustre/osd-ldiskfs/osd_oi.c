@@ -368,8 +368,8 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 		RETURN(-EROFS);
 
 	for (i = 0; i < OSD_OI_FID_NR_MAX; i++) {
-		namelen = snprintf(name, sizeof(name), "%s.%d",
-				   OSD_OI_NAME_BASE, i);
+		namelen = scnprintf(name, sizeof(name), "%s.%d",
+				    OSD_OI_NAME_BASE, i);
 		rc = osd_remove_oi_one(osd, osd_sb(osd)->s_root, name, namelen);
 		if (rc != 0) {
 			CERROR(
@@ -379,7 +379,7 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 		}
 	}
 
-	namelen = snprintf(name, sizeof(name), "%s", OSD_OI_NAME_BASE);
+	namelen = scnprintf(name, sizeof(name), "%s", OSD_OI_NAME_BASE);
 	rc = osd_remove_oi_one(osd, osd_sb(osd)->s_root, name, namelen);
 	if (rc != 0)
 		CERROR("%s: fail to remove the stale OI file %s: rc = %d\n",

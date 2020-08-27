@@ -851,22 +851,22 @@ static int ct_copy_xattr(const char *src, const char *dst, int src_fd,
 static int ct_path_lustre(char *buf, int sz, const char *mnt,
 			  const struct lu_fid *fid)
 {
-	return snprintf(buf, sz, "%s/%s/fid/"DFID_NOBRACE, mnt,
-			dot_lustre_name, PFID(fid));
+	return scnprintf(buf, sz, "%s/%s/fid/"DFID_NOBRACE, mnt,
+			 dot_lustre_name, PFID(fid));
 }
 
 static int ct_path_archive(char *buf, int sz, const char *archive_dir,
 			   const struct lu_fid *fid)
 {
-	return snprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
-			DFID_NOBRACE, archive_dir,
-			(fid)->f_oid       & 0xFFFF,
-			(fid)->f_oid >> 16 & 0xFFFF,
-			(unsigned int)((fid)->f_seq       & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			(unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			PFID(fid));
+	return scnprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
+			 DFID_NOBRACE, archive_dir,
+			 (fid)->f_oid       & 0xFFFF,
+			 (fid)->f_oid >> 16 & 0xFFFF,
+			 (unsigned int)((fid)->f_seq       & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
+			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
+			 PFID(fid));
 }
 
 static bool ct_is_retryable(int err)

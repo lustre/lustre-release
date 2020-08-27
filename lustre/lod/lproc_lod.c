@@ -52,8 +52,8 @@ static ssize_t dom_stripesize_show(struct kobject *kobj,
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			lod->lod_dom_stripesize_max_kb << 10);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 lod->lod_dom_stripesize_max_kb << 10);
 }
 
 static inline int dom_stripesize_max_kb_update(struct lod_device *lod,
@@ -113,8 +113,8 @@ static ssize_t dom_stripesize_max_kb_show(struct kobject *kobj,
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			lod->lod_dom_stripesize_max_kb);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 lod->lod_dom_stripesize_max_kb);
 }
 
 /**
@@ -150,7 +150,8 @@ static ssize_t dom_stripesize_cur_kb_show(struct kobject *kobj,
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", lod->lod_dom_stripesize_cur_kb);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 lod->lod_dom_stripesize_cur_kb);
 }
 
 LUSTRE_RO_ATTR(dom_stripesize_cur_kb);
@@ -164,8 +165,8 @@ static ssize_t dom_threshold_free_mb_show(struct kobject *kobj,
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%llu\n",
-			lod->lod_dom_threshold_free_mb);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			 lod->lod_dom_threshold_free_mb);
 }
 
 /**
@@ -212,8 +213,8 @@ static ssize_t stripesize_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%llu\n",
-			lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			 lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size);
 }
 
 static ssize_t stripesize_store(struct kobject *kobj, struct attribute *attr,
@@ -247,7 +248,7 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%lld\n",
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
 		lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_offset);
 }
 
@@ -293,7 +294,7 @@ static ssize_t __stripetype_show(struct kobject *kobj, struct attribute *attr,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", ltd->ltd_lov_desc.ld_pattern);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ltd->ltd_lov_desc.ld_pattern);
 }
 
 static ssize_t mdt_stripetype_show(struct kobject *kobj, struct attribute *attr,
@@ -365,8 +366,8 @@ static ssize_t __stripecount_show(struct kobject *kobj, struct attribute *attr,
 	struct lov_desc *desc = is_mdt ? &lod->lod_mdt_descs.ltd_lov_desc :
 					 &lod->lod_ost_descs.ltd_lov_desc;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-		      (s16)(desc->ld_default_stripe_count + 1) - 1);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 (s16)(desc->ld_default_stripe_count + 1) - 1);
 }
 
 static ssize_t mdt_stripecount_show(struct kobject *kobj,
@@ -438,7 +439,8 @@ static ssize_t __numobd_show(struct kobject *kobj, struct attribute *attr,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", ltd->ltd_lov_desc.ld_tgt_count);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ltd->ltd_lov_desc.ld_tgt_count);
 }
 
 static ssize_t mdt_numobd_show(struct kobject *kobj, struct attribute *attr,
@@ -468,8 +470,8 @@ static ssize_t __activeobd_show(struct kobject *kobj, struct attribute *attr,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			ltd->ltd_lov_desc.ld_active_tgt_count);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ltd->ltd_lov_desc.ld_active_tgt_count);
 }
 
 static ssize_t mdt_activeobd_show(struct kobject *kobj, struct attribute *attr,
@@ -497,8 +499,8 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%s\n",
-		       lod->lod_ost_descs.ltd_lov_desc.ld_uuid.uuid);
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 lod->lod_ost_descs.ltd_lov_desc.ld_uuid.uuid);
 }
 LUSTRE_RO_ATTR(desc_uuid);
 
@@ -520,8 +522,8 @@ static ssize_t __qos_prio_free_show(struct kobject *kobj,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%d%%\n",
-		       (ltd->ltd_qos.lq_prio_free * 100 + 255) >> 8);
+	return scnprintf(buf, PAGE_SIZE, "%d%%\n",
+			 (ltd->ltd_qos.lq_prio_free * 100 + 255) >> 8);
 }
 
 static ssize_t mdt_qos_prio_free_show(struct kobject *kobj,
@@ -599,8 +601,8 @@ static ssize_t __qos_threshold_rr_show(struct kobject *kobj,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%d%%\n",
-		       (ltd->ltd_qos.lq_threshold_rr * 100 + 255) >> 8);
+	return scnprintf(buf, PAGE_SIZE, "%d%%\n",
+			 (ltd->ltd_qos.lq_threshold_rr * 100 + 255) >> 8);
 }
 
 static ssize_t mdt_qos_threshold_rr_show(struct kobject *kobj,
@@ -690,8 +692,8 @@ static ssize_t __qos_maxage_show(struct kobject *kobj, struct attribute *attr,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return snprintf(buf, PAGE_SIZE, "%u Sec\n",
-		       ltd->ltd_lov_desc.ld_qos_maxage);
+	return scnprintf(buf, PAGE_SIZE, "%u Sec\n",
+			 ltd->ltd_lov_desc.ld_qos_maxage);
 }
 
 static ssize_t mdt_qos_maxage_show(struct kobject *kobj, struct attribute *attr,
@@ -946,7 +948,7 @@ static ssize_t lmv_failout_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", lod->lod_lmv_failout ? 1 : 0);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", lod->lod_lmv_failout ? 1 : 0);
 }
 
 /**
@@ -987,7 +989,7 @@ static ssize_t mdt_hash_show(struct kobject *kobj, struct attribute *attr,
 	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return snprintf(buf, PAGE_SIZE, "%s\n",
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
 		mdt_hash_name[lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern]);
 }
 

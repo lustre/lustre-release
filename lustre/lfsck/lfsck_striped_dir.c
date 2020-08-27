@@ -1998,9 +1998,9 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 			continue;
 
 		lnr->lnr_fid = *cfid;
-		lnr->lnr_namelen = snprintf(lnr->lnr_name,
-					    lnr->lnr_size - sizeof(*lnr),
-					    DFID":%u", PFID(cfid), i);
+		lnr->lnr_namelen = scnprintf(lnr->lnr_name,
+					     lnr->lnr_size - sizeof(*lnr),
+					     DFID":%u", PFID(cfid), i);
 		cname = lfsck_name_get_const(env, lnr->lnr_name,
 					     lnr->lnr_namelen);
 		obj = lfsck_object_find_bottom(env, lfsck, cfid);

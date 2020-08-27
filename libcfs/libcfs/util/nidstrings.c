@@ -1306,10 +1306,10 @@ cfs_print_network(char *buffer, int count, struct nidrange *nr)
 	struct netstrfns *nf = nr->nr_netstrfns;
 
 	if (nr->nr_netnum == 0)
-		return snprintf(buffer, count, "@%s", nf->nf_name);
+		return scnprintf(buffer, count, "@%s", nf->nf_name);
 	else
-		return snprintf(buffer, count, "@%s%u",
-				    nf->nf_name, nr->nr_netnum);
+		return scnprintf(buffer, count, "@%s%u",
+				 nf->nf_name, nr->nr_netnum);
 }
 
 
