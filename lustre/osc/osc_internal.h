@@ -48,7 +48,7 @@ void osc_update_next_shrink(struct client_obd *cli);
 int lru_queue_work(const struct lu_env *env, void *data);
 int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		      int sent, int rc);
-int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
+void osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard);
 
@@ -93,7 +93,6 @@ extern struct lu_kmem_descr osc_caches[];
 
 unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock);
 
-int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 
 int osc_tunables_init(struct obd_device *obd);

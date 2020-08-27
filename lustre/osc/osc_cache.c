@@ -576,11 +576,10 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 /**
  * Drop user count of osc_extent, and unplug IO asynchronously.
  */
-int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
+void osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 {
 	struct osc_object *obj = ext->oe_obj;
 	struct client_obd *cli = osc_cli(obj);
-	int rc = 0;
 	ENTRY;
 
 	LASSERT(atomic_read(&ext->oe_users) > 0);
@@ -627,7 +626,8 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 		osc_io_unplug_async(env, cli, obj);
 	}
 	osc_extent_put(env, ext);
-	RETURN(rc);
+
+	RETURN_EXIT;
 }
 
 /**
