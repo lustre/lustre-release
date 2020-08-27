@@ -405,7 +405,6 @@ struct lov_obd {
 							   array */
 	struct mutex		lov_lock;
 	struct obd_connect_data	lov_ocd;
-	struct proc_dir_entry  *targets_proc_entry;
 	atomic_t		lov_refcount;
 	__u32			lov_death_row;	/* tgts scheduled to be deleted */
 	__u32			lov_tgt_size;	/* size of tgts array */

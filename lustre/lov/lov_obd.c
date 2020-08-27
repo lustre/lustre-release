@@ -283,10 +283,6 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 		osc_obd->obd_force = obd->obd_force;
 		osc_obd->obd_fail = obd->obd_fail;
 		osc_obd->obd_no_recov = obd->obd_no_recov;
-
-		if (lov->targets_proc_entry != NULL)
-			lprocfs_remove_proc_entry(osc_obd->obd_name,
-						  lov->targets_proc_entry);
 	}
 
 	obd_register_observer(osc_obd, NULL);

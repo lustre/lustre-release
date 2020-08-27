@@ -231,28 +231,6 @@ const static struct file_operations pool_proc_operations = {
 };
 #endif /* CONFIG_PROC_FS */
 
-void lov_dump_pool(int level, struct pool_desc *pool)
-{
-        int i;
-
-        lov_pool_getref(pool);
-
-        CDEBUG(level, "pool "LOV_POOLNAMEF" has %d members\n",
-               pool->pool_name, pool->pool_obds.op_count);
-	down_read(&pool_tgt_rw_sem(pool));
-
-        for (i = 0; i < pool_tgt_count(pool) ; i++) {
-                if (!pool_tgt(pool, i) || !(pool_tgt(pool, i))->ltd_exp)
-                        continue;
-                CDEBUG(level, "pool "LOV_POOLNAMEF"[%d] = %s\n",
-                       pool->pool_name, i,
-                       obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
-        }
-
-	up_read(&pool_tgt_rw_sem(pool));
-        lov_pool_putref(pool);
-}
-
 static void pools_hash_exit(void *vpool, void *data)
 {
 	struct pool_desc *pool = vpool;
