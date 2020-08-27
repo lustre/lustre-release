@@ -556,9 +556,6 @@ extern void lprocfs_remove_proc_entry(const char *name,
                                       struct proc_dir_entry *parent);
 extern int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
-#ifdef HAVE_SERVER_SUPPORT
-extern const struct file_operations lprocfs_evict_client_fops;
-#endif
 
 extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 			      mode_t mode,
