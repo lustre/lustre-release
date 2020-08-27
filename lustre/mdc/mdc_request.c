@@ -507,9 +507,10 @@ out:
 	return rc;
 }
 
-int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      struct obd_export *dt_exp, struct obd_export *md_exp,
-                      struct lustre_md *md)
+static int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
+			     struct obd_export *dt_exp,
+			     struct obd_export *md_exp,
+			     struct lustre_md *md)
 {
         struct req_capsule *pill = &req->rq_pill;
         int rc;
@@ -624,10 +625,10 @@ out:
 	return rc;
 }
 
-int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
+static int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
 {
-        ENTRY;
-        RETURN(0);
+	ENTRY;
+	RETURN(0);
 }
 
 void mdc_replay_open(struct ptlrpc_request *req)
@@ -812,18 +813,18 @@ static void mdc_free_open(struct md_open_data *mod)
 		ptlrpc_request_committed(mod->mod_close_req, committed);
 }
 
-int mdc_clear_open_replay_data(struct obd_export *exp,
-                               struct obd_client_handle *och)
+static int mdc_clear_open_replay_data(struct obd_export *exp,
+				      struct obd_client_handle *och)
 {
-        struct md_open_data *mod = och->och_mod;
-        ENTRY;
+	struct md_open_data *mod = och->och_mod;
+	ENTRY;
 
-        /**
-         * It is possible to not have \var mod in a case of eviction between
-         * lookup and ll_file_open().
-         **/
-        if (mod == NULL)
-                RETURN(0);
+	/**
+	 * It is possible to not have \var mod in a case of eviction between
+	 * lookup and ll_file_open().
+	 **/
+	if (mod == NULL)
+		RETURN(0);
 
 	LASSERT(mod != LP_POISON);
 	LASSERT(mod->mod_open_req != NULL);
@@ -835,11 +836,11 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
 	spin_unlock(&mod->mod_open_req->rq_lock);
 	mdc_free_open(mod);
 
-        mod->mod_och = NULL;
-        och->och_mod = NULL;
-        obd_mod_put(mod);
+	mod->mod_och = NULL;
+	och->och_mod = NULL;
+	obd_mod_put(mod);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,

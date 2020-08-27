@@ -61,7 +61,6 @@ void mdc_file_encctx_pack(struct ptlrpc_request *req,
 void mdc_file_sepol_pack(struct ptlrpc_request *req);
 
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
-void mdc_getxattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		     const char *old, size_t oldlen,
@@ -102,18 +101,10 @@ int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg);
 
 struct obd_client_handle;
 
-int mdc_get_lustre_md(struct obd_export *md_exp, struct ptlrpc_request *req,
-                      struct obd_export *dt_exp, struct obd_export *lmv_exp,
-                      struct lustre_md *md);
-
-int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
-
 int mdc_set_open_replay_data(struct obd_export *exp,
 			     struct obd_client_handle *och,
 			     struct lookup_intent *it);
 
-int mdc_clear_open_replay_data(struct obd_export *exp,
-                               struct obd_client_handle *och);
 void mdc_commit_open(struct ptlrpc_request *req);
 void mdc_replay_open(struct ptlrpc_request *req);
 
