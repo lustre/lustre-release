@@ -149,13 +149,8 @@ static int mdc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *obd = m->private;
 	struct client_obd *cli = &obd->u.cli;
-	unsigned long val;
 
-	spin_lock(&cli->cl_loi_list_lock);
-	val = PAGES_TO_MiB(cli->cl_dirty_max_pages);
-	spin_unlock(&cli->cl_loi_list_lock);
-
-	seq_printf(m, "%lu\n", val);
+	seq_printf(m, "%lu\n", PAGES_TO_MiB(cli->cl_dirty_max_pages));
 	return 0;
 }
 

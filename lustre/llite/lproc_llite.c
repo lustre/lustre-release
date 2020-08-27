@@ -324,13 +324,9 @@ static ssize_t max_read_ahead_mb_show(struct kobject *kobj,
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
-	unsigned long ra_max_mb;
 
-	spin_lock(&sbi->ll_lock);
-	ra_max_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages);
-	spin_unlock(&sbi->ll_lock);
-
-	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_mb);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages));
 }
 
 static ssize_t max_read_ahead_mb_store(struct kobject *kobj,
@@ -371,13 +367,9 @@ static ssize_t max_read_ahead_per_file_mb_show(struct kobject *kobj,
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
-	unsigned long ra_max_file_mb;
 
-	spin_lock(&sbi->ll_lock);
-	ra_max_file_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file);
-	spin_unlock(&sbi->ll_lock);
-
-	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_file_mb);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file));
 }
 
 static ssize_t max_read_ahead_per_file_mb_store(struct kobject *kobj,
@@ -415,13 +407,9 @@ static ssize_t max_read_ahead_whole_mb_show(struct kobject *kobj,
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
-	unsigned long ra_max_whole_mb;
 
-	spin_lock(&sbi->ll_lock);
-	ra_max_whole_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_read_ahead_whole_pages);
-	spin_unlock(&sbi->ll_lock);
-
-	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_whole_mb);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 PAGES_TO_MiB(sbi->ll_ra_info.ra_max_read_ahead_whole_pages));
 }
 
 static ssize_t max_read_ahead_whole_mb_store(struct kobject *kobj,
