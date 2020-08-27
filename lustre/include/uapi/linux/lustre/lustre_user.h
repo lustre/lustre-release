@@ -1533,7 +1533,7 @@ enum changelog_rec_type {
 };
 
 static inline const char *changelog_type2str(int type) {
-	static const char *changelog_str[] = {
+	static const char *const changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
 		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",

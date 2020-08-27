@@ -948,7 +948,7 @@ void lfsck_component_cleanup(const struct lu_env *env,
 			     struct lfsck_component *com);
 void lfsck_instance_cleanup(const struct lu_env *env,
 			    struct lfsck_instance *lfsck);
-void lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
+void lfsck_bits_dump(struct seq_file *m, int bits, const char *const names[],
 		     const char *prefix);
 void lfsck_time_dump(struct seq_file *m, time64_t time, const char *name);
 void lfsck_pos_dump(struct seq_file *m, struct lfsck_position *pos,
@@ -1103,8 +1103,8 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck);
 
 extern const char dot[];
 extern const char dotdot[];
-extern const char *lfsck_flags_names[];
-extern const char *lfsck_param_names[];
+extern const char *const lfsck_flags_names[];
+extern const char *const lfsck_param_names[];
 extern struct lu_context_key lfsck_thread_key;
 
 static inline struct dt_device *lfsck_obj2dev(struct dt_object *obj)

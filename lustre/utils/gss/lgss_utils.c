@@ -251,7 +251,7 @@ gss_OID_desc skoid = {
 
 loglevel_t g_log_level = LL_WARN;
 
-static const char *log_prefix[] = {
+static const char *const log_prefix[] = {
 	[LL_ERR]        = "ERROR",
 	[LL_WARN]       = "WARNING",
 	[LL_INFO]       = "INFO",

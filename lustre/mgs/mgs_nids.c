@@ -693,7 +693,7 @@ out:
 
 static int lprocfs_ir_set_state(struct fs_db *fsdb, const char *buf)
 {
-	const char *strings[] = IR_STRINGS;
+	const char *const strings[] = IR_STRINGS;
 	int state = -1;
 	int i;
 
@@ -805,7 +805,7 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 {
 	struct fs_db *fsdb = data;
 	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
-	const char *ir_strings[] = IR_STRINGS;
+	const char *const ir_strings[] = IR_STRINGS;
 	struct timespec64 ts_max;
 	struct timespec64 ts;
 

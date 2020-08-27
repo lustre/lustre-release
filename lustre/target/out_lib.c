@@ -43,7 +43,7 @@
 
 const char *update_op_str(__u16 opc)
 {
-	static const char *opc_str[] = {
+	static const char *const opc_str[] = {
 		[OUT_START] = "start",
 		[OUT_CREATE] = "create",
 		[OUT_DESTROY] = "destroy",

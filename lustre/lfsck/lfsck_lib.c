@@ -68,7 +68,7 @@ static LIST_HEAD(lfsck_ost_orphan_list);
 static LIST_HEAD(lfsck_mdt_orphan_list);
 static DEFINE_SPINLOCK(lfsck_instance_lock);
 
-const char *lfsck_flags_names[] = {
+const char *const lfsck_flags_names[] = {
 	"scanned-once",
 	"inconsistent",
 	"upgrade",
@@ -77,7 +77,7 @@ const char *lfsck_flags_names[] = {
 	NULL
 };
 
-const char *lfsck_param_names[] = {
+const char *const lfsck_param_names[] = {
 	NULL,
 	"failout",
 	"dryrun",
@@ -1778,7 +1778,7 @@ static inline int lfsck_instance_add(struct lfsck_instance *lfsck)
 	return 0;
 }
 
-void lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
+void lfsck_bits_dump(struct seq_file *m, int bits, const char *const names[],
 		     const char *prefix)
 {
 	int flag;

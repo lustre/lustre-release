@@ -989,7 +989,7 @@ LUSTRE_RW_ATTR(default_easize);
 
 static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 {
-	const char *str[] = LL_SBI_FLAGS;
+	const char *const str[] = LL_SBI_FLAGS;
 	struct super_block *sb = m->private;
 	int flags = ll_s2sbi(sb)->ll_flags;
 	int i = 0;
@@ -1647,7 +1647,7 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, long count)
 }
 EXPORT_SYMBOL(ll_stats_ops_tally);
 
-static const char *ra_stat_string[] = {
+static const char *const ra_stat_string[] = {
 	[RA_STAT_HIT] = "hits",
 	[RA_STAT_MISS] = "misses",
 	[RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",

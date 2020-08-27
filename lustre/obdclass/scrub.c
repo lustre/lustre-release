@@ -329,7 +329,7 @@ void scrub_stop(struct lustre_scrub *scrub)
 }
 EXPORT_SYMBOL(scrub_stop);
 
-const char *scrub_status_names[] = {
+const char *const scrub_status_names[] = {
 	"init",
 	"scanning",
 	"completed",
@@ -340,7 +340,7 @@ const char *scrub_status_names[] = {
 	NULL
 };
 
-const char *scrub_flags_names[] = {
+const char *const scrub_flags_names[] = {
 	"recreated",
 	"inconsistent",
 	"auto",
@@ -348,13 +348,14 @@ const char *scrub_flags_names[] = {
 	NULL
 };
 
-const char *scrub_param_names[] = {
+const char *const scrub_param_names[] = {
 	"failout",
 	"dryrun",
 	NULL
 };
 
-static void scrub_bits_dump(struct seq_file *m, int bits, const char *names[],
+static void scrub_bits_dump(struct seq_file *m, int bits,
+			    const char *const names[],
 			    const char *prefix)
 {
 	int flag;

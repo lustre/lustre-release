@@ -550,7 +550,7 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 	flag2str(imp, connect_tried);
 }
 
-static const char *obd_connect_names[] = {
+static const char *const obd_connect_names[] = {
 	/* flags names  */
 	"read_only",
 	"lov_index",

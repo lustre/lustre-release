@@ -3068,7 +3068,7 @@ enum llapi_layout_comp_sanity_error {
 	LSE_LAST,
 };
 
-const char *llapi_layout_strerror[] =
+const char *const llapi_layout_strerror[] =
 {
 	[LSE_OK] = "",
 	[LSE_INCOMPLETE_MIRROR] =
