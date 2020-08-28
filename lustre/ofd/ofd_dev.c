@@ -2482,7 +2482,7 @@ static void ofd_prolong_extent_locks(struct tgt_session_info *tsi,
 
 	ENTRY;
 
-	data->lpa_timeout = prolong_timeout(tgt_ses_req(tsi));
+	data->lpa_req = tgt_ses_req(tsi);
 	data->lpa_export = tsi->tsi_exp;
 	data->lpa_resid = tsi->tsi_resid;
 

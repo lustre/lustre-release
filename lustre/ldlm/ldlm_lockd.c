@@ -648,6 +648,54 @@ timeout_t ldlm_bl_timeout(struct ldlm_lock *lock)
 EXPORT_SYMBOL(ldlm_bl_timeout);
 
 /**
+ * Calculate the per-export Blocking timeout by the given RPC (covering the
+ * reply to this RPC and the next RPC). The next RPC could be still not CANCEL,
+ * but having the lock refresh mechanism it is enough.
+ *
+ * Used for lock refresh timeout when we are in the middle of the process -
+ * BL AST is sent, CANCEL is ahead - it is still 1 reply for the current RPC
+ * and at least 1 RPC (which will trigger another refresh if it will be not
+ * CANCEL) - but more accurate than ldlm_bl_timeout as the timeout is taken
+ * from the RPC (i.e. the view of the client on the current AT) is taken into
+ * account.
+ *
+ * \param[in] req     req which export needs the timeout calculation
+ *
+ * \retval            timeout in seconds to wait for the next client's RPC
+ */
+timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req)
+{
+	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
+	timeout_t timeout, req_timeout, at_timeout, netl;
+
+	if (AT_OFF)
+		return obd_timeout / 2;
+
+	/* A blocked lock means somebody in the cluster is waiting, and we
+	 * should not consider the worst ever case, consisting of a chain of
+	 * failures on each step, however this timeout should survive a
+	 * recovery of at least 1 failure, let this one to be the worst one:
+	 * in case a server NID is dead first re-connect is done through the
+	 * same router and also times out.
+	 *
+	 * Either this on the next RPC times out, take the max.
+	 * Considering the current RPC, take just the left time.
+	 */
+	netl = at_get(&req->rq_export->exp_imp_reverse->imp_at.iat_net_latency);
+	req_timeout = req->rq_deadline - ktime_get_real_seconds() + netl;
+	at_timeout = at_est2timeout(at_get(&svcpt->scp_at_estimate)) + netl;
+	req_timeout = max(req_timeout, at_timeout);
+
+	/* Take 1 re-connect failure and 1 re-connect success into account. */
+	timeout = at_timeout + INITIAL_CONNECT_TIMEOUT + netl + req_timeout;
+
+	/* Client's timeout is calculated as at_est2timeout(), let's be a bit
+	 * more conservative than client */
+	return max(timeout + (timeout >> 4), (timeout_t)ldlm_enqueue_min);
+}
+EXPORT_SYMBOL(ldlm_bl_timeout_by_rpc);
+
+/**
  * Perform lock cleanup if AST sending failed.
  */
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
