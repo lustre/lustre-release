@@ -7239,8 +7239,6 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 
 				rc = osd_ea_fid_get(env, obj, ino, fid, id);
 			}
-		} else {
-			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
 	}
 
@@ -7249,15 +7247,6 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			   it->oie_dirent->oied_name,
 			   it->oie_dirent->oied_namelen,
 			   it->oie_dirent->oied_type, attr);
-
-	if (rc < 0)
-		RETURN(rc);
-
-	if (osd_remote_fid(env, dev, fid))
-		RETURN(0);
-
-	if (likely(!(attr & (LUDA_IGNORE | LUDA_UNKNOWN)) && rc == 0))
-		osd_add_oi_cache(oti, dev, id, fid);
 
 	RETURN(rc > 0 ? 0 : rc);
 }
