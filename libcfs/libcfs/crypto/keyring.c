@@ -25,6 +25,7 @@
 #include <crypto/skcipher.h>
 #include <linux/key-type.h>
 #include <linux/seq_file.h>
+#include <libcfs/linux/linux-misc.h>
 
 #include "llcrypt_private.h"
 
@@ -157,7 +158,7 @@ static struct key *search_llcrypt_keyring(struct key *keyring,
 }
 
 #define LLCRYPT_FS_KEYRING_DESCRIPTION_SIZE	\
-	(CONST_STRLEN("llcrypt-") + FIELD_SIZEOF(struct super_block, s_id))
+	(CONST_STRLEN("llcrypt-") + sizeof_field(struct super_block, s_id))
 
 #define LLCRYPT_MK_DESCRIPTION_SIZE	(2 * LLCRYPT_KEY_IDENTIFIER_SIZE + 1)
 

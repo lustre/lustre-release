@@ -139,4 +139,13 @@ void cfs_arch_init(void);
 		((type *)(__mptr - offsetof(type, member))); })
 #endif
 
+/*
+ * Linux v4.15-rc2-5-g4229a470175b added sizeof_field()
+ * Linux v5.5-rc4-1-g1f07dcc459d5 removed FIELD_SIZEOF()
+ * Proved a sizeof_field in terms of FIELD_SIZEOF() when one is not provided
+ */
+#ifndef sizeof_field
+#define sizeof_field(type, member)	FIELD_SIZEOF(type, member)
+#endif
+
 #endif /* __LIBCFS_LINUX_MISC_H__ */

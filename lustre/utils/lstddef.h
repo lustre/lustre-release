@@ -33,7 +33,6 @@
 #define round_up(x, y) ((((x) - 1) | __round_mask(x, y)) + 1)
 #define round_down(x, y) ((x) & ~__round_mask(x, y))
 
-#define FIELD_SIZEOF(t, f) (sizeof(((t *)0)->f))
 #define DIV_ROUND_UP __USER_DIV_ROUND_UP
 
 #define DIV_ROUND_DOWN_ULL(ll, d) \
