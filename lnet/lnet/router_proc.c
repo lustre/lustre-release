@@ -85,8 +85,7 @@ static int __proc_lnet_stats(void *data, int write,
 	struct lnet_counters *ctrs;
 	struct lnet_counters_common common;
 	int		 len;
-	char		*tmpstr;
-	const int	 tmpsiz = 256; /* 7 %u and 4 __u64 */
+	char tmpstr[256]; /* 7 %u and 4 u64 */
 
 	if (write) {
 		lnet_counters_reset();
@@ -99,16 +98,13 @@ static int __proc_lnet_stats(void *data, int write,
 	if (ctrs == NULL)
 		return -ENOMEM;
 
-	LIBCFS_ALLOC(tmpstr, tmpsiz);
-	if (tmpstr == NULL) {
-		LIBCFS_FREE(ctrs, sizeof(*ctrs));
-		return -ENOMEM;
-	}
+	rc = lnet_counters_get(ctrs);
+	if (rc)
+		goto out_no_ctrs;
 
-	lnet_counters_get(ctrs);
 	common = ctrs->lct_common;
 
-	len = scnprintf(tmpstr, tmpsiz,
+	len = scnprintf(tmpstr, sizeof(tmpstr),
 			"%u %u %u %u %u %u %u %llu %llu "
 			"%llu %llu",
 			common.lcc_msgs_alloc, common.lcc_msgs_max,
@@ -123,8 +119,7 @@ static int __proc_lnet_stats(void *data, int write,
 	else
 		rc = cfs_trace_copyout_string(buffer, nob,
 					      tmpstr + pos, "\n");
-
-	LIBCFS_FREE(tmpstr, tmpsiz);
+out_no_ctrs:
 	LIBCFS_FREE(ctrs, sizeof(*ctrs));
 	return rc;
 }

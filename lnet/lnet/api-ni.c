@@ -926,15 +926,16 @@ lnet_unregister_lnd(const struct lnet_lnd *lnd)
 }
 EXPORT_SYMBOL(lnet_unregister_lnd);
 
-void
-lnet_counters_get_common(struct lnet_counters_common *common)
+static void
+lnet_counters_get_common_locked(struct lnet_counters_common *common)
 {
 	struct lnet_counters *ctr;
 	int i;
 
+	/* FIXME !!! Their is no assert_lnet_net_locked() to ensure this
+	 * actually called under the protection of the lnet_net_lock.
+	 */
 	memset(common, 0, sizeof(*common));
-
-	lnet_net_lock(LNET_LOCK_EX);
 
 	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
 		common->lcc_msgs_max     += ctr->lct_common.lcc_msgs_max;
@@ -949,22 +950,32 @@ lnet_counters_get_common(struct lnet_counters_common *common)
 		common->lcc_route_length += ctr->lct_common.lcc_route_length;
 		common->lcc_drop_length  += ctr->lct_common.lcc_drop_length;
 	}
+}
+
+void
+lnet_counters_get_common(struct lnet_counters_common *common)
+{
+	lnet_net_lock(LNET_LOCK_EX);
+	lnet_counters_get_common_locked(common);
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 EXPORT_SYMBOL(lnet_counters_get_common);
 
-void
+int
 lnet_counters_get(struct lnet_counters *counters)
 {
 	struct lnet_counters *ctr;
 	struct lnet_counters_health *health = &counters->lct_health;
-	int		i;
+	int i, rc = 0;
 
 	memset(counters, 0, sizeof(*counters));
 
-	lnet_counters_get_common(&counters->lct_common);
-
 	lnet_net_lock(LNET_LOCK_EX);
+
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		GOTO(out_unlock, rc = -ENODEV);
+
+	lnet_counters_get_common_locked(&counters->lct_common);
 
 	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
 		health->lch_rst_alloc    += ctr->lct_health.lch_rst_alloc;
@@ -992,7 +1003,9 @@ lnet_counters_get(struct lnet_counters *counters)
 		health->lch_network_timeout_count +=
 				ctr->lct_health.lch_network_timeout_count;
 	}
+out_unlock:
 	lnet_net_unlock(LNET_LOCK_EX);
+	return rc;
 }
 EXPORT_SYMBOL(lnet_counters_get);
 
@@ -1004,9 +1017,12 @@ lnet_counters_reset(void)
 
 	lnet_net_lock(LNET_LOCK_EX);
 
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		goto avoid_reset;
+
 	cfs_percpt_for_each(counters, i, the_lnet.ln_counters)
 		memset(counters, 0, sizeof(struct lnet_counters));
-
+avoid_reset:
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
@@ -3751,9 +3767,9 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_counters_get(&lnet_stats->st_cntrs);
+		rc = lnet_counters_get(&lnet_stats->st_cntrs);
 		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
+		return rc;
 	}
 
 	case IOC_LIBCFS_CONFIG_RTR:
