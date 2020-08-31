@@ -1,0 +1,93 @@
+"""
+@PRIMARY: N/A
+@PRIMARY_DESC: Verify that providing incorrect parameters to UDSP lnetctl results in an error
+@SECONDARY: N/A
+@DESIGN: N/A
+@TESTCASE:
+- configure LNet
+- attempt to add udsp rule providing incorrect parameters
+- verify that attempts fail with an error
+"""
+
+import os
+import yaml
+import lnetconfig
+from lutf import agents, me
+from lutf_basetest import *
+from lnet import TheLNet
+from lutf_exception import LUTFError
+from lnet_helpers import LNetHelpers
+from lutf_cmd import lutf_exec_local_cmd
+
+
+test_action_list = [{'udsp_cmd': "add --src abcd",
+                     'fail_res': "ailed to parse src"},
+		    {'udsp_cmd': "add --src tcppp",
+                     'fail_res': "ailed to parse src"},
+		    {'udsp_cmd': "add --src t",
+                     'fail_res': "ailed to parse src"},
+                    {'udsp_cmd': "add --src o2ibbb",
+                     'fail_res': "ailed to parse src"},
+                    {'udsp_cmd': "add --src o2i",
+                     'fail_res': "ailed to parse src"},
+		    {'udsp_cmd': "add --src 10000000000000000000000000000001",
+                     'fail_res': "ailed to parse src"},
+		    {'udsp_cmd': "add --dst abcd",
+                     'fail_res': "ailed to parse dst"},
+                    {'udsp_cmd': "add --dst tcppp",
+                     'fail_res': "ailed to parse dst"},
+                    {'udsp_cmd': "add --dst t",
+                     'fail_res': "ailed to parse dst"},
+                    {'udsp_cmd': "add --dst o2ibbb",
+                     'fail_res': "ailed to parse dst"},
+                    {'udsp_cmd': "add --dst o2i",
+                     'fail_res': "ailed to parse dst"},
+                    {'udsp_cmd': "add --dst 10000000000000000000000000000001",
+                     'fail_res': "ailed to parse dst"},
+		    {'udsp_cmd': "add --rte abcd --dst tcp",
+                     'fail_res': "ailed to parse rte"},
+                    {'udsp_cmd': "add --rte tcppp --dst tcp",
+                     'fail_res': "ailed to parse rte"},
+                    {'udsp_cmd': "add --rte t --dst tcp",
+                     'fail_res': "ailed to parse rte"},
+                    {'udsp_cmd': "add --rte o2ibbb --dst tcp",
+                     'fail_res': "ailed to parse rte"},
+                    {'udsp_cmd': "add --rte o2i --dst tcp",
+                     'fail_res': "ailed to parse rte"},
+                    {'udsp_cmd': "add --rte 10000000000000000000000000000001 --dst tcp",
+                     'fail_res': "ailed to parse rte"}]
+
+def run():
+	la = agents.keys()
+	if len(la) < 1:
+		return lutfrc(LUTF_TEST_SKIP, "No agents to run test")
+	try:
+		t = LNetHelpers(target=la[0])
+		t.configure_lnet()
+		if not t.check_udsp_present():
+			return lutfrc(LUTF_TEST_SKIP, "UDSP feature is missing")
+		rc = t.check_udsp_empty()
+		if not rc:
+                        return lutfrc(LUTF_TEST_FAIL)
+		count = 0
+		for test_action in test_action_list:
+			count+=1
+			print("Test action: ", count)
+			"""
+			Expect the command to fail with an exception.
+			Look for the specific error message.
+			"""
+			try:
+				rc = t.exec_udsp_cmd(test_action['udsp_cmd'])
+				return lutfrc(LUTF_TEST_FAIL)
+			except Exception as e:
+				if test_action['fail_res'] not in e.msg:
+					return lutfrc(LUTF_TEST_FAIL)
+
+		rc = t.cleanup_udsp()
+		return lutfrc(LUTF_TEST_PASS)
+	except Exception as e:
+		t.uninit()
+		raise e
+
+

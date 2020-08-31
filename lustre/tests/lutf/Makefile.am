@@ -20,6 +20,8 @@ nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_dlc/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_samples/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_multi-rail/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_dynamic-discovery/*.py)
+nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_udsp/*.py)
+nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_routing/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_dynamic-nids/*.py)
 EXTRA_DIST=$(nobase_noinst_DATA) $(nobase_noinst_SCRIPTS)
 
