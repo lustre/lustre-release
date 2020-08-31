@@ -1223,12 +1223,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	if (IS_ERR(mp))
 		RETURN(PTR_ERR(mp));
 
-	if (!mdt_object_remote(mp)) {
-		rc = mdt_version_get_check_save(info, mp, 0);
-		if (rc)
-			GOTO(put_parent, rc);
-	}
-
 	if (!uc->uc_rbac_fscrypt_admin &&
 	    mp->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD)
 		GOTO(put_parent, rc = -EPERM);
@@ -1239,6 +1233,12 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	rc = mdt_parent_lock(info, mp, parent_lh, &rr->rr_name, LCK_PW);
 	if (rc != 0)
 		GOTO(put_parent, rc);
+
+	if (!mdt_object_remote(mp)) {
+		rc = mdt_version_get_check_save(info, mp, 0);
+		if (rc)
+			GOTO(unlock_parent, rc);
+	}
 
 	if (info->mti_spec.sp_rm_entry) {
 		if (!mdt_is_dne_client(req->rq_export))
@@ -1468,14 +1468,6 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	if (IS_ERR(mp))
 		RETURN(PTR_ERR(mp));
 
-	rc = mdt_version_get_check_save(info, mp, 0);
-	if (rc)
-		GOTO(put_parent, rc);
-
-	rc = mdt_check_enc(info, mp);
-	if (rc)
-		GOTO(put_parent, rc);
-
 	/* step 2: find source */
 	ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
 	if (IS_ERR(ms))
@@ -1493,6 +1485,14 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	rc = mdt_parent_lock(info, mp, lhp, &rr->rr_name, LCK_PW);
 	if (rc != 0)
 		GOTO(put_source, rc);
+
+	rc = mdt_version_get_check_save(info, mp, 0);
+	if (rc)
+		GOTO(unlock_parent, rc);
+
+	rc = mdt_check_enc(info, mp);
+	if (rc)
+		GOTO(unlock_parent, rc);
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
@@ -2883,8 +2883,6 @@ lock_parents:
 	}
 
 	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mold));
-	/* save version after locking */
-	mdt_version_get_save(info, mold, 2);
 
 	/* find mnew object:
 	 * mnew target object may not exist now
@@ -2964,6 +2962,9 @@ lock_parents:
 		if (rc < 0)
 			GOTO(out_unlock_new, rc);
 
+		/* save version after locking */
+		mdt_version_get_save(info, mold, 2);
+
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking.
 		 */
@@ -3006,6 +3007,7 @@ lock_parents:
 		if (rc != 0)
 			GOTO(out_put_old, rc);
 
+		mdt_version_get_save(info, mold, 2);
 		mdt_enoent_version_save(info, 3);
 	}
 
