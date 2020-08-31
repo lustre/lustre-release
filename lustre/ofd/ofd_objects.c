@@ -64,8 +64,6 @@ static int ofd_version_get_check(struct ofd_thread_info *info,
 {
 	dt_obj_version_t curr_version;
 
-	LASSERT(ofd_object_exists(fo));
-
 	if (info->fti_exp == NULL)
 		RETURN(0);
 
@@ -1021,14 +1019,14 @@ int ofd_destroy(const struct lu_env *env, struct ofd_object *fo,
 
 	ofd_write_lock(env, fo);
 	if (!ofd_object_exists(fo))
-		GOTO(stop, rc = -ENOENT);
+		GOTO(unlock, rc = -ENOENT);
 
 	tgt_fmd_drop(ofd_info(env)->fti_exp, &fo->ofo_header.loh_fid);
 
 	dt_ref_del(env, ofd_object_child(fo), th);
 	dt_destroy(env, ofd_object_child(fo), th);
+unlock:
 	ofd_write_unlock(env, fo);
-
 stop:
 	rc2 = ofd_trans_stop(env, ofd, th, rc);
 	if (rc2)
