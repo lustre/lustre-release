@@ -2407,7 +2407,11 @@ kiblnd_reject(struct rdma_cm_id *cmid, struct kib_rej *rej)
 {
         int          rc;
 
+#ifdef HAVE_RDMA_REJECT_4ARGS
+	rc = rdma_reject(cmid, rej, sizeof(*rej), IB_CM_REJ_CONSUMER_DEFINED);
+#else
         rc = rdma_reject(cmid, rej, sizeof(*rej));
+#endif
 
         if (rc != 0)
                 CWARN("Error %d sending reject\n", rc);

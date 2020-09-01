@@ -570,6 +570,29 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	# 5.1
 	LN_IB_SG_DMA_ADDRESS_EXISTS
 
+	# A reason argument was added to rdma_reject() in Linux 5.8,
+	# commit 8094ba0ace7f6cd1e31ea8b151fba3594cadfa9a
+	LB_CHECK_COMPILE([if 4arg 'rdma_reject' exists],
+	rdma_reject, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+		#include <rdma/ib_cm.h>
+		#include <rdma/rdma_cm.h>
+	],[
+		rdma_reject(NULL, NULL, 0, 0);
+	],[
+		AC_DEFINE(HAVE_RDMA_REJECT_4ARGS, 1,
+			[rdma_reject has 4 arguments])
+	])
+
 	EXTRA_CHECK_INCLUDE=""
 ]) # ENABLEO2IB != "no"
 ]) # LN_CONFIG_O2IB
