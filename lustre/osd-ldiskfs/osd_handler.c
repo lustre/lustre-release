@@ -4631,8 +4631,8 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 		dquot_initialize(inode);
 		rc = ll_vfs_removexattr(dentry, inode, XATTR_NAME_FID);
 		if (rc == -ENODATA) {
-			if ((fl & LU_XATTR_REPLACE) && !(fl & LU_XATTR_CREATE))
-				RETURN(rc);
+			/* XATTR_NAME_FID is already absent */
+			rc = 0;
 		} else if (rc) {
 			RETURN(rc);
 		}
