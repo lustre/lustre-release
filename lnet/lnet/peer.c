@@ -1328,6 +1328,51 @@ lnet_is_discovery_disabled(struct lnet_peer *lp)
 	return rc;
 }
 
+int
+LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
+{
+	lnet_nid_t pnid = 0;
+	bool mr;
+	int i, rc;
+
+	if (!nids || num_nids < 1)
+		return -EINVAL;
+
+	rc = LNetNIInit(LNET_PID_ANY);
+	if (rc < 0)
+		return rc;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	mr = lnet_peer_discovery_disabled == 0;
+
+	rc = 0;
+	for (i = 0; i < num_nids; i++) {
+		if (nids[i] == LNET_NID_LO_0)
+			continue;
+
+		if (!pnid) {
+			pnid = nids[i];
+			rc = lnet_add_peer_ni(pnid, LNET_NID_ANY, mr, true);
+		} else if (lnet_peer_discovery_disabled) {
+			rc = lnet_add_peer_ni(nids[i], LNET_NID_ANY, mr, true);
+		} else {
+			rc = lnet_add_peer_ni(pnid, nids[i], mr, true);
+		}
+
+		if (rc && rc != -EEXIST)
+			goto unlock;
+	}
+
+unlock:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	LNetNIFini();
+
+	return rc == -EEXIST ? 0 : rc;
+}
+EXPORT_SYMBOL(LNetAddPeer);
+
 lnet_nid_t
 LNetPrimaryNID(lnet_nid_t nid)
 {
@@ -1548,6 +1593,11 @@ lnet_peer_add(lnet_nid_t nid, unsigned flags)
 			else if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL)
 				rc = -EPERM;
 			goto out;
+		} else if (!(flags & LNET_PEER_CONFIGURED)) {
+			if (lp->lp_primary_nid == nid) {
+				rc = -EEXIST;
+				goto out;
+			}
 		}
 		/* Delete and recreate as a configured peer. */
 		lnet_peer_del(lp);
@@ -1786,17 +1836,19 @@ out:
  * being created/modified/deleted by a different thread.
  */
 int
-lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr)
+lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr, bool temp)
 {
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_ni *lpni;
-	unsigned flags;
+	unsigned int flags = 0;
 
 	/* The prim_nid must always be specified */
 	if (prim_nid == LNET_NID_ANY)
 		return -EINVAL;
 
-	flags = LNET_PEER_CONFIGURED;
+	if (!temp)
+		flags = LNET_PEER_CONFIGURED;
+
 	if (mr)
 		flags |= LNET_PEER_MULTI_RAIL;
 
@@ -1815,7 +1867,7 @@ lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr)
 	lp = lpni->lpni_peer_net->lpn_peer;
 
 	/* Peer must have been configured. */
-	if (!(lp->lp_state & LNET_PEER_CONFIGURED)) {
+	if (!temp && !(lp->lp_state & LNET_PEER_CONFIGURED)) {
 		CDEBUG(D_NET, "peer %s was not configured\n",
 		       libcfs_nid2str(prim_nid));
 		return -ENOENT;
