@@ -1158,8 +1158,8 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 
 	/* already get lease, handle lease lock */
 	ll_set_lock_data(sbi->ll_md_exp, inode, &it, NULL);
-	if (it.it_lock_mode == 0 ||
-	    it.it_lock_bits != MDS_INODELOCK_OPEN) {
+	if (!it.it_lock_mode ||
+	    !(it.it_lock_bits & MDS_INODELOCK_OPEN)) {
 		/* open lock must return for lease */
 		CERROR(DFID "lease granted but no open lock, %d/%llu.\n",
 			PFID(ll_inode2fid(inode)), it.it_lock_mode,
