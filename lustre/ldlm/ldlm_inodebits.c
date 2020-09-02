@@ -178,6 +178,11 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	if ((req_bits | *try_bits) == 0)
 		RETURN(0);
 
+	/* Group lock could be only DOM */
+	if (unlikely(req_mode == LCK_GROUP &&
+		     (req_bits | *try_bits) != MDS_INODELOCK_DOM))
+		RETURN(-EPROTO);
+
 	list_for_each(tmp, queue) {
 		struct list_head *mode_tail;
 
@@ -284,6 +289,18 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 					if (*ldlm_flags & LDLM_FL_BLOCK_NOWAIT)
 						RETURN(-EWOULDBLOCK);
+
+					/* Combined DOM lock came across GROUP
+					 * DOM lock, it makes the thread to be
+					 * blocked for a long time, not allowed,
+					 * the trybits to be used instead.
+					 * Not combined DOM lock is requested by
+					 * client, and have to wait for long
+					 * until re-worked to a non-intent
+					 * request). */
+					if ((req_bits & MDS_INODELOCK_DOM) &&
+					    (req_bits & ~MDS_INODELOCK_DOM))
+						RETURN(-EPROTO);
 
 					goto skip_work_list;
 				}

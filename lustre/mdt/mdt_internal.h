@@ -197,6 +197,7 @@ struct coordinator {
 enum {
 	NO_DOM_LOCK_ON_OPEN = 0,
 	TRYLOCK_DOM_ON_OPEN = 1,
+	/* not used anymore, left here for compatibility */
 	ALWAYS_DOM_LOCK_ON_OPEN = 2,
 	NUM_DOM_LOCK_ON_OPEN_MODES
 };

@@ -981,6 +981,9 @@ static ssize_t dom_lock_store(struct kobject *kobj, struct attribute *attr,
 			return rc;
 	}
 
+	if (val == ALWAYS_DOM_LOCK_ON_OPEN)
+		val = TRYLOCK_DOM_ON_OPEN;
+
 	if (val < 0 || val >= NUM_DOM_LOCK_ON_OPEN_MODES)
 		return -EINVAL;
 
