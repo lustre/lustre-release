@@ -1617,6 +1617,22 @@ set_default_debug_facet () {
 	set_default_debug_nodes $node "$debug" "$subsys" $debug_size
 }
 
+set_params_nodes () {
+	[[ $# -ge 2 ]] || return 0
+
+	local nodes=$1
+	shift
+	do_nodes $nodes $LCTL set_param $@
+}
+
+set_params_clients () {
+	local clients=${1:-$CLIENTS}
+	local params=${2:-$CLIENT_LCTL_SETPARAM_PARAM}
+
+	[[ -n $params ]] || return 0
+	set_params_nodes $clients $params
+}
+
 set_hostid () {
     local hostid=${1:-$(hostid)}
 
@@ -2329,6 +2345,7 @@ zconf_mount() {
 	fi
 
 	set_default_debug_nodes $client
+	set_params_clients $client
 
 	return 0
 }
@@ -2555,6 +2572,7 @@ exit \\\$rc" || return ${PIPESTATUS[0]}
 	do_nodes $clients "mount | grep $mnt' '"
 
 	set_default_debug_nodes $clients
+	set_params_clients $clients
 
 	return 0
 }
@@ -5448,17 +5466,18 @@ check_and_setup_lustre() {
         export I_MOUNTED2=yes
     fi
 
-    if $do_check; then
-        # FIXME: what to do if check_config failed?
-        # i.e. if:
-        # 1) remote client has mounted other Lustre fs?
-        # 2) lustre is mounted on remote_clients atall ?
-        check_config_clients $MOUNT
-        init_facets_vars
-        init_param_vars
+	if $do_check; then
+		# FIXME: what to do if check_config failed?
+		# i.e. if:
+		# 1) remote client has mounted other Lustre fs?
+		# 2) lustre is mounted on remote_clients atall ?
+		check_config_clients $MOUNT
+		init_facets_vars
+		init_param_vars
 
-        set_default_debug_nodes $(comma_list $(nodes_list))
-    fi
+		set_default_debug_nodes $(comma_list $(nodes_list))
+		set_params_clients
+	fi
 
 	if [ -z "$CLIENTONLY" -a $(lower $OSD_TRACK_DECLARES_LBUG) == 'yes' ]; then
 		local facets=""
