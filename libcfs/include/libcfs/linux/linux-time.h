@@ -214,7 +214,7 @@ static inline ktime_t timespec64_to_ktime(struct timespec64 ts)
 
 static inline unsigned long cfs_time_seconds(time64_t seconds)
 {
-	return nsecs_to_jiffies(seconds * NSEC_PER_SEC);
+	return nsecs_to_jiffies64(seconds * NSEC_PER_SEC);
 }
 
 #ifdef HAVE_NEW_DEFINE_TIMER
