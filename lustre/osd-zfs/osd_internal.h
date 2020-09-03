@@ -963,6 +963,24 @@ static inline void osd_dnode_rele(dnode_t *dn)
 	dmu_buf_rele(&db->db, osd_obj_tag);
 }
 
+static inline uint64_t osd_db_dirty_txg(dmu_buf_impl_t *db)
+{
+	dbuf_dirty_record_t *dr;
+	uint64_t txg = 0;
+
+	mutex_enter(&db->db_mtx);
+#ifdef HAVE_DB_DIRTY_RECORDS_LIST
+	dr = list_head(&db->db_dirty_records);
+#else
+	dr = db->db_last_dirty;
+#endif
+	if (dr != NULL)
+		txg = dr->dr_txg;
+	mutex_exit(&db->db_mtx);
+
+	return txg;
+}
+
 #ifdef HAVE_DMU_USEROBJ_ACCOUNTING
 
 #define OSD_DMU_USEROBJ_PREFIX		DMU_OBJACCT_PREFIX

@@ -698,11 +698,14 @@ your distribution.
 				[Have inode_timespec_t])
 		])
 		dnl # ZFS 0.7.12/0.8.x uses zfs_refcount_add() instead of
-		dnl # refcount_add().
+		dnl # refcount_add().  ZFS 2.0 renamed sys/refcount.h to
+		dnl # sys/zfs_refcount.h, rather the add another check to
+		dnl # determine the correct header name include it
+		dnl # indirectly through sys/dnode.h.
 		dnl #
 		LB_CHECK_COMPILE([if ZFS has 'zfs_refcount_add'],
 		zfs_refcount_add, [
-			#include <sys/refcount.h>
+			#include <sys/dnode.h>
 		],[
 			zfs_refcount_add((zfs_refcount_t *) NULL, NULL);
 		],[
@@ -748,6 +751,21 @@ your distribution.
 		AS_IF([test "x$lb_cv_dmu_offset_next" = "xyes"], [
 			AC_DEFINE(HAVE_DMU_OFFSET_NEXT, 1,
 				[Have dmu_offset_next() exported])
+		])
+		dnl #
+		dnl # ZFS 2.0 replaced .db_last_dirty / .dr_next with a list_t
+		dnl # and list_node_t named .db_dirty_records / .dr_dbuf_node.
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'db_dirty_records' list_t],
+		db_dirty_records, [
+			#include <sys/dbuf.h>
+		],[
+			dmu_buf_impl_t db;
+			dbuf_dirty_record_t *dr;
+			dr = list_head(&db.db_dirty_records);
+		],[
+			AC_DEFINE(HAVE_DB_DIRTY_RECORDS_LIST, 1,
+				[Have db_dirty_records list_t])
 		])
 	])
 

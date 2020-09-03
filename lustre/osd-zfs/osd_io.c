@@ -141,14 +141,14 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	size_t size = buf->lb_len;
-	ktime_t start;
+	hrtime_t start = gethrtime();
 	s64 delta_ms;
 	int rc;
 
-	start = ktime_get();
 	record_start_io(osd, READ, 0);
 	rc = __osd_read(env, dt, buf, pos, &size);
-	delta_ms = ktime_ms_delta(ktime_get(), start);
+	delta_ms = gethrtime() - start;
+	do_div(delta_ms, NSEC_PER_MSEC);
 	record_end_io(osd, READ, delta_ms, size, size >> PAGE_SHIFT);
 
 	return rc;
@@ -334,7 +334,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	int rc, i, numbufs, npages = 0, drop_cache = 0;
-	ktime_t start = ktime_get();
+	hrtime_t start = gethrtime();
 	dmu_buf_t **dbp;
 	s64 delta_ms;
 
@@ -422,7 +422,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 		dmu_buf_rele_array(dbp, numbufs, osd_0copy_tag);
 	}
 
-	delta_ms = ktime_ms_delta(ktime_get(), start);
+	delta_ms = gethrtime() - start;
+	do_div(delta_ms, NSEC_PER_MSEC);
 	record_end_io(osd, READ, delta_ms, npages * PAGE_SIZE, npages);
 
 	RETURN(npages);

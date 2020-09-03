@@ -2124,18 +2124,13 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 			   __u64 start, __u64 end)
 {
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
-	struct dmu_buf_impl *db = osd_dt_obj(dt)->oo_dn->dn_dbuf;
 	uint64_t txg = 0;
 	ENTRY;
 
 	if (osd->od_dt_dev.dd_rdonly)
 		RETURN(0);
 
-	mutex_enter(&db->db_mtx);
-	if (db->db_last_dirty)
-		txg = db->db_last_dirty->dr_txg;
-	mutex_exit(&db->db_mtx);
-
+	txg = osd_db_dirty_txg(osd_dt_obj(dt)->oo_dn->dn_dbuf);
 	if (txg) {
 		/* the object is dirty or being synced */
 		if (osd_object_sync_delay_us < 0)
