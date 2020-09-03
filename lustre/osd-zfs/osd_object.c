@@ -696,11 +696,8 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 	dt_object_fini(&obj->oo_dt);
 	/* obj doesn't contain an lu_object_header, so we don't need call_rcu */
 	OBD_SLAB_FREE_PTR(obj, osd_object_kmem);
-	if (unlikely(h)) {
-		lu_object_header_fini(h);
-		OBD_FREE_PRE(h, sizeof(*h), "kfreed");
-		kfree_rcu(h, loh_rcu);
-	}
+	if (unlikely(h))
+		lu_object_header_free(h);
 }
 
 static int

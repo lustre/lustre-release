@@ -669,6 +669,7 @@ int  lu_device_init       (struct lu_device *d, struct lu_device_type *t);
 void lu_device_fini       (struct lu_device *d);
 int  lu_object_header_init(struct lu_object_header *h);
 void lu_object_header_fini(struct lu_object_header *h);
+void lu_object_header_free(struct lu_object_header *h);
 int  lu_object_init       (struct lu_object *o,
                            struct lu_object_header *h, struct lu_device *d);
 void lu_object_fini       (struct lu_object *o);

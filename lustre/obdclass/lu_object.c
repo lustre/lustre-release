@@ -1389,6 +1389,17 @@ void lu_object_header_fini(struct lu_object_header *h)
 EXPORT_SYMBOL(lu_object_header_fini);
 
 /**
+ * Free lu_object_header with proper RCU handling
+ */
+void lu_object_header_free(struct lu_object_header *h)
+{
+	lu_object_header_fini(h);
+	OBD_FREE_PRE(h, sizeof(*h), "kfreed");
+	kfree_rcu(h, loh_rcu);
+}
+EXPORT_SYMBOL(lu_object_header_free);
+
+/**
  * Given a compound object, find its slice, corresponding to the device type
  * \a dtype.
  */

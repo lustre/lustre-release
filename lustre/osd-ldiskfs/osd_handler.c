@@ -1583,11 +1583,8 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 		ldiskfs_htree_lock_head_free(obj->oo_hl_head);
 	/* obj doesn't contain an lu_object_header, so we don't need call_rcu */
 	OBD_FREE_PTR(obj);
-	if (unlikely(h)) {
-		lu_object_header_fini(h);
-		OBD_FREE_PRE(h, sizeof(*h), "kfreed");
-		kfree_rcu(h, loh_rcu);
-	}
+	if (unlikely(h))
+		lu_object_header_free(h);
 }
 
 /*
