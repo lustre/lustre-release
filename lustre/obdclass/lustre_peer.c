@@ -79,6 +79,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 {
 	struct uuid_nid_data *data, *entry;
 	int found = 0;
+	int rc;
 
 	LASSERT(nid != 0);  /* valid newconfig NID is never zero */
 
@@ -117,10 +118,17 @@ int class_add_uuid(const char *uuid, __u64 nid)
 	if (found) {
 		CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
 		       libcfs_nid2str(nid), entry->un_nid_count);
+		rc = LNetAddPeer(entry->un_nids, entry->un_nid_count);
+		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
+		       libcfs_nid2str(data->un_nids[0]), rc);
 		OBD_FREE(data, sizeof(*data));
 	} else {
 		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+		rc = LNetAddPeer(data->un_nids, data->un_nid_count);
+		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
+		       libcfs_nid2str(data->un_nids[0]), rc);
 	}
+
 	return 0;
 }
 EXPORT_SYMBOL(class_add_uuid);
@@ -169,7 +177,8 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 			   int nid_count)
 {
 	struct uuid_nid_data *entry;
-	int i;
+	int i, rc;
+	bool matched = false;
 
 	ENTRY;
 
@@ -186,6 +195,8 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 
 		if (!obd_uuid_equals(&entry->un_uuid, uuid))
 			continue;
+
+		matched = true;
 		CDEBUG(D_NET, "Updating UUID '%s'\n", obd_uuid2str(uuid));
 		for (i = 0; i < nid_count; i++)
 			entry->un_nids[i] = nids[i];
@@ -193,6 +204,12 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, lnet_nid_t *nids,
 		break;
 	}
 	spin_unlock(&g_uuid_lock);
+	if (matched) {
+		rc = LNetAddPeer(entry->un_nids, entry->un_nid_count);
+		CDEBUG(D_INFO, "Add peer %s rc = %d\n",
+		       libcfs_nid2str(entry->un_nids[0]), rc);
+	}
+
 	RETURN(0);
 }
 EXPORT_SYMBOL(class_add_nids_to_uuid);

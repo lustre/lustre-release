@@ -175,9 +175,10 @@ int client_import_add_nids_to_conn(struct obd_import *imp, lnet_nid_t *nids,
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
 		if (class_check_uuid(&conn->oic_uuid, nids[0])) {
 			*uuid = conn->oic_uuid;
+			spin_unlock(&imp->imp_lock);
 			rc = class_add_nids_to_uuid(&conn->oic_uuid, nids,
 						    nid_count);
-			break;
+			RETURN(rc);
 		}
 	}
 	spin_unlock(&imp->imp_lock);
