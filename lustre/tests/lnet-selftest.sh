@@ -49,6 +49,9 @@ case $lst_CHECK in
 	none) check="";;
 	*) error Unknown flag $lst_CHECK;;
 esac
+
+LOAD_MODULES_REMOTE=true load_modules
+
 nodes=$(comma_list "$(osts_nodes) $(mdts_nodes)")
 lst_SERVERS=${lst_SERVERS:-$(comma_list "$(host_nids_address $nodes $NETTYPE)")}
 lst_CLIENTS=${lst_CLIENTS:-$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")}
