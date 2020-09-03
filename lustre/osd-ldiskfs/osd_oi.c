@@ -226,6 +226,7 @@ static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
 	inode = osd_oi_index_open(info, osd, name, &oi_feat, create);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
+	ldiskfs_set_inode_state(inode, LDISKFS_STATE_IAM);
 
 	if (!osd->od_dt_dev.dd_rdonly) {
 		/* 'What the @fid is' is not imporatant, because these objects
