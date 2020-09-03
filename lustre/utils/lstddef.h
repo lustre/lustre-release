@@ -1,8 +1,11 @@
 #ifndef _LSTDDEF_H
 #define _LSTDDEF_H
 
+#include <unistd.h>
 #include <linux/types.h>
 #include <sys/param.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 
 #define __ALIGN_LSTDDEF_MASK(x, mask) (((x) + (mask)) & ~(mask))
 #define __ALIGN_LSTDDEF(x, a) __ALIGN_LSTDDEF_MASK(x, (typeof(x))(a) - 1)
