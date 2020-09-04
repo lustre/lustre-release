@@ -1294,9 +1294,9 @@ osc.myth-OST0001-osc-ffff8804296c2800.checksum_type
             </para>
           </listitem>
           <listitem>
-            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_cache_mb</literal>
+            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_cached_mb</literal>
               - Maximum amount of read+write data cached by the client.  The
-              default value is 3/4 of the client RAM.
+              default value is 1/2 of the client RAM.
             </para>
           </listitem>
         </itemizedlist>
