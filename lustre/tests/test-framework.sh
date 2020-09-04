@@ -2706,19 +2706,26 @@ remount_facet() {
 
 reboot_facet() {
 	local facet=$1
+	local node=$(facet_active_host $facet)
+
 	if [ "$FAILURE_MODE" = HARD ]; then
-		reboot_node $(facet_active_host $facet)
+		boot_node $node
 	else
 		sleep 10
 	fi
 }
 
 boot_node() {
-    local node=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-       reboot_node $node
-       wait_for_host $node
-    fi
+	local node=$1
+
+	if [ "$FAILURE_MODE" = HARD ]; then
+		reboot_node $node
+		wait_for_host $node
+		if $LOAD_MODULES_REMOTE; then
+			echo "loading modules on $node: $facet"
+			do_rpc_nodes $node load_modules_local
+		fi
+	fi
 }
 
 facets_hosts () {
