@@ -1237,17 +1237,11 @@ extern struct inode_operations ll_fast_symlink_inode_operations;
  */
 struct vvp_io_args {
         /** normal/sendfile/splice */
-        enum vvp_io_subtype via_io_subtype;
-
         union {
                 struct {
                         struct kiocb      *via_iocb;
 			struct iov_iter   *via_iter;
                 } normal;
-                struct {
-                        struct pipe_inode_info  *via_pipe;
-                        unsigned int       via_flags;
-                } splice;
         } u;
 };
 
@@ -1283,14 +1277,9 @@ static inline struct ll_thread_info *ll_env_info(const struct lu_env *env)
 	return lti;
 }
 
-static inline struct vvp_io_args *ll_env_args(const struct lu_env *env,
-					      enum vvp_io_subtype type)
+static inline struct vvp_io_args *ll_env_args(const struct lu_env *env)
 {
-	struct vvp_io_args *via = &ll_env_info(env)->lti_args;
-
-	via->via_io_subtype = type;
-
-	return via;
+	return &ll_env_info(env)->lti_args;
 }
 
 void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,

@@ -46,13 +46,6 @@ struct obd_device;
 struct obd_export;
 struct page;
 
-enum vvp_io_subtype {
-	/** normal IO */
-	IO_NORMAL,
-	/** io started from splice_{read|write} */
-	IO_SPLICE,
-};
-
 /**
  * IO state private to VVP layer.
  */
@@ -91,10 +84,6 @@ struct vvp_io {
 			struct cl_page_list	 ft_queue;
 		} fault;
 		struct {
-			struct pipe_inode_info	*vui_pipe;
-			unsigned int		 vui_flags;
-		} splice;
-		struct {
 			struct cl_page_list vui_queue;
 			unsigned long vui_written;
 			unsigned long vui_read;
@@ -102,8 +91,6 @@ struct vvp_io {
 			int vui_to;
 		} readwrite; /* normal io */
 	} u;
-
-	enum vvp_io_subtype	vui_io_subtype;
 
 	/**
 	 * Layout version when this IO is initialized

@@ -1547,6 +1547,19 @@ fop_iterate_shared, [
 ]) # LC_FOP_ITERATE_SHARED
 
 #
+# LC_EXPORT_DEFAULT_FILE_SPLICE_READ
+#
+# 4.8-rc8 commit 82c156f853840645604acd7c2cebcb75ed1b6652 switched
+# generic_file_splice_read() to using ->read_iter. We can test this
+# change since default_file_splice_read() is no longer exported.
+#
+AC_DEFUN([LC_EXPORT_DEFAULT_FILE_SPLICE_READ], [
+LB_CHECK_EXPORT([default_file_splice_read], [fs/splice.c],
+	[AC_DEFINE(HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT, 1,
+			[default_file_splice_read is exported])])
+]) # LC_EXPORT_DEFAULT_FILE_SPLCE_READ
+
+#
 # LC_HAVE_POSIX_ACL_VALID_USER_NS
 #
 # 4.8 posix_acl_valid takes struct user_namespace
@@ -2387,6 +2400,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_FOP_ITERATE_SHARED
 
 	# 4.8
+	LC_EXPORT_DEFAULT_FILE_SPLICE_READ
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
 	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS

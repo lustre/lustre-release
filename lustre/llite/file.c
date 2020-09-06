@@ -1481,8 +1481,8 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 					   IS_SYNC(inode));
 #ifdef HAVE_GENERIC_WRITE_SYNC_2ARGS
 		io->u.ci_wr.wr_sync  |= !!(args &&
-					   args->via_io_subtype == IO_NORMAL &&
-					   args->u.normal.via_iocb->ki_flags & IOCB_DSYNC);
+					   (args->u.normal.via_iocb->ki_flags &
+					    IOCB_DSYNC));
 #endif
 	}
 
@@ -1559,8 +1559,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		iot == CIT_READ ? "read" : "write", *ppos, count);
 
 	io = vvp_env_thread_io(env);
-	if (args->via_io_subtype == IO_NORMAL &&
-	    file->f_flags & O_DIRECT) {
+	if (file->f_flags & O_DIRECT) {
 		if (!is_sync_kiocb(args->u.normal.via_iocb))
 			is_aio = true;
 		ci_aio = cl_aio_alloc(args->u.normal.via_iocb);
@@ -1584,34 +1583,22 @@ restart:
 			range_lock_init(&range, *ppos, *ppos + count - 1);
 
 		vio->vui_fd  = file->private_data;
-		vio->vui_io_subtype = args->via_io_subtype;
+		vio->vui_iter = args->u.normal.via_iter;
+		vio->vui_iocb = args->u.normal.via_iocb;
+		/* Direct IO reads must also take range lock,
+		 * or multiple reads will try to work on the same pages
+		 * See LU-6227 for details.
+		 */
+		if (((iot == CIT_WRITE) ||
+		    (iot == CIT_READ && (file->f_flags & O_DIRECT))) &&
+		    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+			CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
+			       RL_PARA(&range));
+			rc = range_lock(&lli->lli_write_tree, &range);
+			if (rc < 0)
+				GOTO(out, rc);
 
-		switch (vio->vui_io_subtype) {
-		case IO_NORMAL:
-			vio->vui_iter = args->u.normal.via_iter;
-			vio->vui_iocb = args->u.normal.via_iocb;
-			/* Direct IO reads must also take range lock,
-			 * or multiple reads will try to work on the same pages
-			 * See LU-6227 for details. */
-			if (((iot == CIT_WRITE) ||
-			    (iot == CIT_READ && (file->f_flags & O_DIRECT))) &&
-			    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-				CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
-				       RL_PARA(&range));
-				rc = range_lock(&lli->lli_write_tree, &range);
-				if (rc < 0)
-					GOTO(out, rc);
-
-				range_locked = true;
-			}
-			break;
-		case IO_SPLICE:
-			vio->u.splice.vui_pipe = args->u.splice.via_pipe;
-			vio->u.splice.vui_flags = args->u.splice.via_flags;
-			break;
-		default:
-			CERROR("unknown IO subtype %u\n", vio->vui_io_subtype);
-			LBUG();
+			range_locked = true;
 		}
 
 		ll_cl_add(file, env, io, LCC_RW);
@@ -1643,7 +1630,7 @@ restart:
 		count -= io->ci_nob;
 
 		/* prepare IO restart */
-		if (count > 0 && args->via_io_subtype == IO_NORMAL)
+		if (count > 0)
 			args->u.normal.via_iter = vio->vui_iter;
 	}
 out:
@@ -1822,7 +1809,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if (IS_ERR(env))
 		return PTR_ERR(env);
 
-	args = ll_env_args(env, IO_NORMAL);
+	args = ll_env_args(env);
 	args->u.normal.via_iter = to;
 	args->u.normal.via_iocb = iocb;
 
@@ -1957,7 +1944,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (IS_ERR(env))
 		return PTR_ERR(env);
 
-	args = ll_env_args(env, IO_NORMAL);
+	args = ll_env_args(env);
 	args->u.normal.via_iter = from;
 	args->u.normal.via_iocb = iocb;
 
@@ -2128,46 +2115,6 @@ static ssize_t ll_file_write(struct file *file, const char __user *buf,
 	RETURN(result);
 }
 #endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-
-/*
- * Send file content (through pagecache) somewhere with helper
- */
-static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
-                                   struct pipe_inode_info *pipe, size_t count,
-                                   unsigned int flags)
-{
-	struct lu_env *env;
-	struct vvp_io_args *args;
-	ssize_t result;
-	__u16 refcheck;
-	bool cached;
-
-	ENTRY;
-
-	result = pcc_file_splice_read(in_file, ppos, pipe,
-				      count, flags, &cached);
-	if (cached)
-		RETURN(result);
-
-	ll_ras_enter(in_file, *ppos, count);
-
-	env = cl_env_get(&refcheck);
-	if (IS_ERR(env))
-		RETURN(PTR_ERR(env));
-
-	args = ll_env_args(env, IO_SPLICE);
-	args->u.splice.via_pipe = pipe;
-	args->u.splice.via_flags = flags;
-
-	result = ll_file_io_generic(env, args, in_file, CIT_READ, ppos, count);
-	cl_env_put(env, &refcheck);
-
-	if (result > 0)
-		ll_rw_stats_tally(ll_i2sbi(file_inode(in_file)), current->pid,
-				  in_file->private_data, *ppos, result,
-				  READ);
-	RETURN(result);
-}
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 			     __u64 flags, struct lov_user_md *lum, int lum_size)
@@ -5289,7 +5236,11 @@ struct file_operations ll_file_operations = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-	.splice_read	= ll_file_splice_read,
+#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
+	.splice_read	= generic_file_splice_read,
+#else
+	.splice_read	= pcc_file_splice_read,
+#endif
 	.fsync		= ll_fsync,
 	.flush		= ll_flush,
 	.fallocate	= ll_fallocate,
@@ -5314,7 +5265,11 @@ struct file_operations ll_file_operations_flock = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-	.splice_read	= ll_file_splice_read,
+#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
+	.splice_read	= generic_file_splice_read,
+#else
+	.splice_read	= pcc_file_splice_read,
+#endif
 	.fsync		= ll_fsync,
 	.flush		= ll_flush,
 	.flock		= ll_file_flock,
@@ -5342,7 +5297,11 @@ struct file_operations ll_file_operations_noflock = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-	.splice_read	= ll_file_splice_read,
+#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
+	.splice_read	= generic_file_splice_read,
+#else
+	.splice_read	= pcc_file_splice_read,
+#endif
 	.fsync		= ll_fsync,
 	.flush		= ll_flush,
 	.flock		= ll_file_noflock,

@@ -1793,36 +1793,34 @@ out:
 	RETURN(rc);
 }
 
+#ifdef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
 ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 			     struct pipe_inode_info *pipe,
-			     size_t count, unsigned int flags,
-			     bool *cached)
+			     size_t count, unsigned int flags)
 {
 	struct inode *inode = file_inode(in_file);
 	struct ll_file_data *fd = in_file->private_data;
 	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
+	bool cached = false;
 	ssize_t result;
 
 	ENTRY;
 
-	*cached = false;
-	if (!pcc_file)
+	if (!pcc_file) {
+		RETURN(default_file_splice_read(in_file, ppos, pipe,
+		       count, flags));
+	}
+
+	pcc_io_init(inode, PIT_SPLICE_READ, &cached);
+	if (!cached)
 		RETURN(0);
 
-	if (!file_inode(pcc_file)->i_fop->splice_read)
-		RETURN(-ENOTSUPP);
-
-	pcc_io_init(inode, PIT_SPLICE_READ, cached);
-	if (!*cached)
-		RETURN(0);
-
-	result = file_inode(pcc_file)->i_fop->splice_read(pcc_file,
-							  ppos, pipe, count,
-							  flags);
+	result = default_file_splice_read(pcc_file, ppos, pipe, count, flags);
 
 	pcc_io_fini(inode);
 	RETURN(result);
 }
+#endif /* HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT */
 
 int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	      int datasync, bool *cached)

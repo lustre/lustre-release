@@ -627,7 +627,6 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 		memcpy(ll_i2info(inode)->lli_jobid, work->lrw_jobid,
 		       sizeof(work->lrw_jobid));
 
-	vvp_env_io(env)->vui_io_subtype = IO_NORMAL;
 	vvp_env_io(env)->vui_fd = fd;
 	io->ci_state = CIS_LOCKED;
 	io->ci_async_readahead = true;
