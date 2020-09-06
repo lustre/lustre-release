@@ -2,6 +2,7 @@
 /*.xml
 /Makefile.in
 /XMLCONFIG
+/aiocp
 /badarea_io
 /check_fallocate
 /check_fhandle_syscalls
@@ -78,6 +79,7 @@
 /sleeptest
 /small_write
 /smalliomany
+/splice-test
 /stat
 /statmany
 /statone

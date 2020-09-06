@@ -23449,6 +23449,14 @@ test_425() {
 }
 run_test 425 "lock count should not exceed lru size"
 
+test_426() {
+	splice-test -r $DIR/$tfile
+	splice-test -rd $DIR/$tfile
+	splice-test $DIR/$tfile
+	splice-test -d $DIR/$tfile
+}
+run_test 426 "splice test on Lustre"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
