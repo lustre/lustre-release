@@ -137,6 +137,8 @@ enum pcc_dataset_flags {
 	PCC_DATASET_PCC_DEFAULT	= PCC_DATASET_PCCRO,
 	/* Move pagecache from mapping of PCC copy to Lustre file for mmap */
 	PCC_DATASET_MMAP_CONV	= 0x40,
+	/* Set the project ID for the PCC copy */
+	PCC_DATASET_PROJ_QUOTA	= 0x80,
 };
 
 struct pcc_dataset {

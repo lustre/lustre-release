@@ -216,7 +216,7 @@ setup_loopdev() {
 	local size=${4:-50}
 
 	do_facet $facet mkdir -p $mntpt || error "mkdir -p $mntpt failed"
-	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
+	stack_trap "do_facet $facet rmdir $mntpt" EXIT
 	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
 	stack_trap "do_facet $facet rm -f $file" EXIT
 	do_facet $facet mount
@@ -228,6 +228,25 @@ setup_loopdev() {
 	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
 		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
 	stack_trap "umount_loopdev $facet $mntpt" EXIT
+}
+
+setup_loopdev_project() {
+	local facet=$1
+	local file=$2
+	local mntpt=$3
+	local size=${4:-50}
+
+	do_facet $facet mkdir -p $mntpt || error "mkdir -p $mntpt failed"
+	stack_trap "do_facet $facet rmdir $mntpt" EXIT
+	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
+	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet mkfs.ext4 -O project,quota $file ||
+		error "mkfs.ext4 -O project,quota $file failed"
+	do_facet $facet file $file
+	do_facet $facet mount -t ext4 -o loop,prjquota $file $mntpt ||
+		error "mount -o loop,prjquota $file $mntpt failed"
+	stack_trap "umount_loopdev $facet $mntpt" EXIT
+	do_facet $facet mount | grep $mntpt
 }
 
 lpcc_rw_test() {
@@ -411,8 +430,7 @@ test_1f() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 
-	! is_project_quota_supported &&
-		skip "project quota is not supported"
+	is_project_quota_supported || skip "project quota is not supported"
 
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
@@ -507,8 +525,7 @@ test_2a() {
 	local hsm_root="$mntpt/$tdir"
 	local agt_host=$(facet_active_host $SINGLEAGT)
 
-	! is_project_quota_supported &&
-		skip "project quota is not supported" && return
+	is_project_quota_supported || skip "project quota is not supported"
 
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
@@ -773,8 +790,7 @@ test_4() {
 	local hsm_root="$mntpt/$tdir"
 	local excepts="-e 7 -e 8 -e 9"
 
-	! is_project_quota_supported &&
-		skip "project quota is not supported" && return
+	is_project_quota_supported || skip "project quota is not supported"
 
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
@@ -1318,8 +1334,7 @@ test_13c() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 
-	! is_project_quota_supported &&
-		echo "Skip project quota is not supported" && return 0
+	is_project_quota_supported || skip "project quota is not supported"
 
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
@@ -2886,8 +2901,7 @@ test_34() {
 	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
 		skip "Server does not support PCC-RO"
 
-	! is_project_quota_supported &&
-		skip "project quota is not supported"
+	is_project_quota_supported || skip "project quota is not supported"
 
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
@@ -3108,6 +3122,56 @@ test_38() {
 	check_lpcc_state $file "none"
 }
 run_test 38 "Verify LFS pcc state does not trigger prefetch for auto PCC-RO"
+
+test_39() {
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	quotaon --help |& grep -q 'project quotas' ||
+		skip "Not support project quota on local filesystem"
+
+	is_project_quota_supported || skip "project quota is not supported"
+
+	enable_project_quota
+
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local id=100
+
+	setup_loopdev_project $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT quotaon -Ppv $mntpt
+	do_facet $SINGLEAGT setquota -P $id 0 4096 0 0 $mntpt ||
+		error "setquota -P $id on $mntpt failed"
+	do_facet $SINGLEAGT repquota -Pvs $mntpt
+
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={$id}\ roid=$HSM_ARCHIVE_NUMBER\ proj_quota=1\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT mkdir -p $dir || error "mkdir $dir failed"
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=2 ||
+		error "Write $file failed"
+	$LFS project -p $id $file || error "failed to set project for $file"
+	$LFS project -d $file
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=2 ||
+		error "Read $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT repquota -Pvs $mntpt
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=5 ||
+		error "Write $file failed"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=5 ||
+		error "Read $file failed"
+	do_facet $SINGLEAGT repquota -Pvs $mntpt
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "none"
+}
+run_test 39 "Test Project quota on loop PCC device"
 
 test_41() {
 	local loopfile="$TMP/$tfile"

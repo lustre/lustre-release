@@ -110,6 +110,10 @@
 #include <lustre_compat.h>
 #include "llite_internal.h"
 
+#ifdef HAVE_FILEATTR_GET
+#include <linux/fileattr.h>
+#endif
+
 struct kmem_cache *pcc_inode_slab;
 
 int pcc_super_init(struct pcc_super *super)
@@ -619,41 +623,53 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 			return -EINVAL;
 		cmd->u.pccc_add.pccc_roid = id;
 	} else if (strcmp(key, "auto_attach") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id == 0)
+		if (enable)
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_AUTO_ATTACH;
+		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_AUTO_ATTACH;
 	} else if (strcmp(key, "open_attach") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id == 0)
+		if (enable)
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_OPEN_ATTACH;
+		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_OPEN_ATTACH;
 	} else if (strcmp(key, "io_attach") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id == 0)
+		if (enable)
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_IO_ATTACH;
+		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_IO_ATTACH;
 	} else if (strcmp(key, "stat_attach") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id == 0)
+		if (enable)
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_STAT_ATTACH;
+		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_STAT_ATTACH;
 	} else if (strcmp(key, "rwpcc") == 0 || strcmp(key, "pccrw") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id > 0)
+		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRW;
+		else
+			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PCCRW;
 	} else if (strcmp(key, "ropcc") == 0 || strcmp(key, "pccro") == 0) {
-		rc = kstrtoul(val, 10, &id);
+		rc = kstrtobool(val, &enable);
 		if (rc)
 			return rc;
-		if (id > 0)
+		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRO;
+		else
+			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PCCRO;
 	} else if (strcmp(key, "mmap_conv") == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
@@ -666,6 +682,14 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 #endif
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_MMAP_CONV;
+	} else if (strcmp(key, "proj_quota") == 0) {
+		rc = kstrtobool(val, &enable);
+		if (rc)
+			return rc;
+		if (enable)
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PROJ_QUOTA;
+		else
+			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PROJ_QUOTA;
 	} else if (strcmp(key, "hsmtool") == 0) {
 		cmd->u.pccc_add.pccc_hsmtool_type = hsmtool_string2type(val);
 		if (cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V1 &&
@@ -688,8 +712,9 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 	switch (cmd->pccc_cmd) {
 	case PCC_ADD_DATASET:
 		cmd->u.pccc_add.pccc_hsmtool_type = HSMTOOL_UNKNOWN;
-		/* Enable auto attach by default */
-		cmd->u.pccc_add.pccc_flags |= PCC_DATASET_AUTO_ATTACH;
+		/* Enable these features by default */
+		cmd->u.pccc_add.pccc_flags |= PCC_DATASET_AUTO_ATTACH |
+					      PCC_DATASET_PROJ_QUOTA;
 		break;
 	case PCC_DEL_DATASET:
 	case PCC_CLEAR_ALL:
@@ -1789,12 +1814,17 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached,
 		RETURN(-EINVAL);
 	}
 
-	if (clt.cl_is_released)
+	if (clt.cl_is_released) {
 		rc = pcc_try_datasets_attach(inode, iot, clt.cl_layout_gen,
 					     LU_PCC_READWRITE, cached);
-	else if (clt.cl_is_rdonly)
+	} else if (clt.cl_is_rdonly) {
+		/* Not try read-only attach for data modification operations */
+		if (iot == PIT_WRITE || iot == PIT_SETATTR)
+			RETURN(0);
+
 		rc = pcc_try_datasets_attach(inode, iot, clt.cl_layout_gen,
 					     LU_PCC_READONLY, cached);
+	}
 
 	RETURN(rc);
 }
@@ -3039,7 +3069,6 @@ out:
 
 /*
  * Reset uid, gid or size for the PCC copy masked by @valid.
- * TODO: Set the project ID for PCC copy.
  */
 static int pcc_inode_reset_iattr(struct dentry *dentry, unsigned int valid,
 				 kuid_t uid, kgid_t gid, loff_t size)
@@ -3059,6 +3088,84 @@ static int pcc_inode_reset_iattr(struct dentry *dentry, unsigned int valid,
 	rc = notify_change(&nop_mnt_idmap, dentry, &attr, NULL);
 	inode_unlock(inode);
 
+	RETURN(rc);
+}
+
+static int __pcc_file_reset_projid(struct file *file, __u32 projid)
+{
+#ifdef HAVE_FILEATTR_GET
+	struct fileattr fa = { .fsx_projid = projid };
+	struct dentry *dentry = file->f_path.dentry;
+	struct inode *inode = d_inode(dentry);
+	int rc;
+
+	/* project quota not supported on backing filesystem */
+	if (!inode->i_op->fileattr_set)
+		return -EOPNOTSUPP;
+
+	rc = inode->i_op->fileattr_set(&init_user_ns, dentry, &fa);
+#else
+	struct fsxattr fsx = { .fsx_projid = projid };
+	mm_segment_t old_fs;
+	int rc;
+
+	/* project quota not supported on backing filesystem */
+	if (!file->f_op->unlocked_ioctl)
+		return -EOPNOTSUPP;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	rc = file->f_op->unlocked_ioctl(file, FS_IOC_FSSETXATTR,
+					(unsigned long)&fsx);
+	set_fs(old_fs);
+#endif
+	return rc;
+}
+
+/* Set the project ID for PCC copy.*/
+static int pcc_file_reset_projid(struct pcc_dataset *dataset, struct file *file,
+				 __u32 projid)
+{
+	int rc;
+
+	ENTRY;
+
+	if (!(dataset->pccd_flags & PCC_DATASET_PROJ_QUOTA))
+		RETURN(0);
+
+	rc = __pcc_file_reset_projid(file, projid);
+	if (rc == -EOPNOTSUPP || rc == -ENOTTY) {
+		CWARN("%s: cache fs project quota off, disabling: rc = %d\n",
+		      dataset->pccd_pathname, rc);
+		dataset->pccd_flags &= ~PCC_DATASET_PROJ_QUOTA;
+		RETURN(0);
+	}
+
+	RETURN(rc);
+}
+
+static int pcc_inode_reset_projid(struct pcc_dataset *dataset,
+				  struct dentry *dentry, __u32 projid)
+{
+	struct path path;
+	struct file *file;
+	int rc;
+
+	ENTRY;
+
+	if (!(dataset->pccd_flags & PCC_DATASET_PROJ_QUOTA))
+		RETURN(0);
+
+	path.mnt = dataset->pccd_path.mnt;
+	path.dentry = dentry;
+	file = dentry_open(&path, O_WRONLY | O_LARGEFILE, current_cred());
+	if (IS_ERR_OR_NULL(file)) {
+		rc = file == NULL ? -EINVAL : PTR_ERR(file);
+		RETURN(rc);
+	}
+
+	rc = pcc_file_reset_projid(dataset, file, projid);
+	fput(file);
 	RETURN(rc);
 }
 
@@ -3103,6 +3210,11 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 
 	rc = pcc_inode_reset_iattr(pcc_dentry, ATTR_UID | ATTR_GID,
 				   old_cred->suid, old_cred->sgid, 0);
+	if (rc)
+		GOTO(out_put, rc);
+
+	rc = pcc_inode_reset_projid(pca->pca_dataset, pcc_dentry,
+				    ll_i2info(inode)->lli_projid);
 	if (rc)
 		GOTO(out_put, rc);
 
@@ -3276,6 +3388,11 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 
 	rc = pcc_inode_reset_iattr(*dentry, ATTR_UID | ATTR_GID,
 				   old_cred->uid, old_cred->gid, 0);
+	if (rc)
+		GOTO(out_fput, rc);
+
+	rc = pcc_file_reset_projid(dataset, pcc_filp,
+				    ll_i2info(inode)->lli_projid);
 	if (rc)
 		GOTO(out_fput, rc);
 
