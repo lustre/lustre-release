@@ -1445,6 +1445,23 @@ test_24F () {
 }
 run_test 24F "hash order vs readdir (LU-11330)"
 
+test_24G () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	local ino1
+	local ino2
+
+	$LFS mkdir -i 0 $DIR/$tdir-0 || error "mkdir $tdir-0"
+	$LFS mkdir -i 1 $DIR/$tdir-1 || error "mkdir $tdir-1"
+	touch $DIR/$tdir-0/f1 || error "touch f1"
+	ln -s $DIR/$tdir-0/f1 $DIR/$tdir-0/s1 || error "ln s1"
+	ino1=$(stat -c%i $DIR/$tdir-0/s1)
+	mv $DIR/$tdir-0/s1 $DIR/$tdir-1 || error "mv s1"
+	ino2=$(stat -c%i $DIR/$tdir-1/s1)
+	[ $ino1 -ne $ino2 ] || error "s1 should be migrated"
+}
+run_test 24G "migrate symlink in rename"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 

@@ -2763,49 +2763,6 @@ out_free:
 	return rc;
 }
 
-/*
- * Get locks on parents in proper order
- * RETURN: < 0 - error, rename_order if successful
- */
-enum rename_order {
-        MDD_RN_SAME,
-        MDD_RN_SRCTGT,
-        MDD_RN_TGTSRC
-};
-
-static int mdd_rename_order(const struct lu_env *env,
-			    struct mdd_device *mdd,
-			    struct mdd_object *src_pobj,
-			    const struct lu_attr *pattr,
-			    struct mdd_object *tgt_pobj)
-{
-	/* order of locking, 1 - tgt-src, 0 - src-tgt*/
-	int rc;
-
-	ENTRY;
-	if (src_pobj == tgt_pobj)
-		RETURN(MDD_RN_SAME);
-
-	/* compared the parent child relationship of src_p & tgt_p */
-	if (lu_fid_eq(&mdd->mdd_root_fid, mdd_object_fid(src_pobj))) {
-		rc = MDD_RN_SRCTGT;
-	} else if (lu_fid_eq(&mdd->mdd_root_fid, mdd_object_fid(tgt_pobj))) {
-		rc = MDD_RN_TGTSRC;
-	} else {
-		rc = mdd_is_parent(env, mdd, src_pobj, pattr,
-				   mdd_object_fid(tgt_pobj));
-		if (rc == -EREMOTE)
-			rc = 0;
-
-		if (rc == 1)
-			rc = MDD_RN_TGTSRC;
-		else if (rc == 0)
-			rc = MDD_RN_SRCTGT;
-	}
-
-	RETURN(rc);
-}
-
 /* has not mdd_write{read}_lock on any obj yet. */
 static int mdd_rename_sanity_check(const struct lu_env *env,
                                    struct mdd_object *src_pobj,
@@ -2978,6 +2935,16 @@ static int mdd_declare_rename(const struct lu_env *env,
         return rc;
 }
 
+static int mdd_migrate_object(const struct lu_env *env,
+			      struct mdd_object *spobj,
+			      struct mdd_object *tpobj,
+			      struct mdd_object *sobj,
+			      struct mdd_object *tobj,
+			      const struct lu_name *sname,
+			      const struct lu_name *tname,
+			      struct md_op_spec *spec,
+			      struct md_attr *ma);
+
 /* src object can be remote that is why we use only fid and type of object */
 static int mdd_rename(const struct lu_env *env,
                       struct md_object *src_pobj, struct md_object *tgt_pobj,
@@ -3022,6 +2989,31 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc)
 		GOTO(out_pending, rc);
 
+	/* if rename is cross MDTs, migrate symlink if it doesn't have other
+	 * hard links, and target doesn't exist.
+	 */
+	if (mdd_object_remote(mdd_sobj) && S_ISLNK(cattr->la_mode) &&
+	    cattr->la_nlink == 1 && !tobj) {
+		struct md_op_spec *spec = &mdd_env_info(env)->mti_spec;
+		struct lu_device *ld = &mdd->mdd_md_dev.md_lu_dev;
+		struct lu_fid tfid;
+
+		rc = ld->ld_ops->ldo_fid_alloc(env, ld, &tfid, &tgt_pobj->mo_lu,
+					       NULL);
+		if (rc < 0)
+			GOTO(out_pending, rc);
+
+		mdd_tobj = mdd_object_find(env, mdd, &tfid);
+		if (IS_ERR(mdd_tobj))
+			GOTO(out_pending, rc = PTR_ERR(mdd_tobj));
+
+		memset(spec, 0, sizeof(*spec));
+		rc = mdd_migrate_object(env, mdd_spobj, mdd_tpobj, mdd_sobj,
+					mdd_tobj, lsname, ltname, spec, ma);
+		mdd_object_put(env, mdd_tobj);
+		GOTO(out_pending, rc);
+	}
+
 	rc = mdd_la_get(env, mdd_spobj, pattr);
 	if (rc)
 		GOTO(out_pending, rc);
@@ -3047,11 +3039,6 @@ static int mdd_rename(const struct lu_env *env,
 		GOTO(out_pending, rc);
 
 	rc = mdd_name_check(mdd, ltname);
-	if (rc < 0)
-		GOTO(out_pending, rc);
-
-	/* FIXME: Should consider tobj and sobj too in rename_lock. */
-	rc = mdd_rename_order(env, mdd, mdd_spobj, pattr, mdd_tpobj);
 	if (rc < 0)
 		GOTO(out_pending, rc);
 
@@ -3643,7 +3630,8 @@ static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 				      struct mdd_object *spobj,
 				      struct mdd_object *tpobj,
 				      struct mdd_object *sobj,
-				      const struct lu_name *lname,
+				      const struct lu_name *sname,
+				      const struct lu_name *tname,
 				      const struct lu_attr *attr,
 				      struct linkea_data *ldata)
 {
@@ -3653,8 +3641,8 @@ static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 	ENTRY;
 
 	memset(ldata, 0, sizeof(*ldata));
-	rc = mdd_linkea_prepare(env, sobj, mdd_object_fid(spobj), lname,
-				mdd_object_fid(tpobj), lname, 1, 0, ldata);
+	rc = mdd_linkea_prepare(env, sobj, mdd_object_fid(spobj), sname,
+				mdd_object_fid(tpobj), tname, 1, 0, ldata);
 	if (rc)
 		RETURN(rc);
 
@@ -3680,7 +3668,7 @@ static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	rc = mdd_iterate_linkea(env, sobj, NULL, lname, mdd_object_fid(tpobj),
+	rc = mdd_iterate_linkea(env, sobj, NULL, tname, mdd_object_fid(tpobj),
 				ldata, &source_mdt_index, NULL,
 				mdd_is_link_on_source_mdt);
 	RETURN(rc);
@@ -3690,7 +3678,8 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 				      struct mdd_object *spobj,
 				      struct mdd_object *tpobj,
 				      struct mdd_object *obj,
-				      const struct lu_name *lname,
+				      const struct lu_name *sname,
+				      const struct lu_name *tname,
 				      struct lu_attr *attr,
 				      struct lu_attr *spattr,
 				      struct lu_attr *tpattr,
@@ -3702,7 +3691,7 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 	struct lu_attr *la = &info->mti_la_for_fix;
 	int rc;
 
-	rc = mdo_declare_index_delete(env, spobj, lname->ln_name, handle);
+	rc = mdo_declare_index_delete(env, spobj, sname->ln_name, handle);
 	if (rc)
 		return rc;
 
@@ -3714,7 +3703,7 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 
 	rc = mdo_declare_index_insert(env, tpobj, mdd_object_fid(obj),
 				      attr->la_mode & S_IFMT,
-				      lname->ln_name, handle);
+				      tname->ln_name, handle);
 	if (rc)
 		return rc;
 
@@ -3747,7 +3736,8 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct mdd_object *tpobj,
 				      struct mdd_object *sobj,
 				      struct mdd_object *tobj,
-				      const struct lu_name *lname,
+				      const struct lu_name *sname,
+				      const struct lu_name *tname,
 				      struct lu_attr *spattr,
 				      struct lu_attr *tpattr,
 				      struct lu_attr *attr,
@@ -3784,7 +3774,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	mdd_object_make_hint(env, tpobj, tobj, attr, spec, hint);
 
 	rc = mdd_declare_create(env, mdo2mdd(&tpobj->mod_obj), tpobj, tobj,
-				lname, attr, handle, spec, ldata, NULL, NULL,
+				tname, attr, handle, spec, ldata, NULL, NULL,
 				NULL, hint);
 	if (rc)
 		return rc;
@@ -3844,7 +3834,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	}
 
 	if (!S_ISDIR(attr->la_mode)) {
-		rc = mdd_iterate_linkea(env, sobj, tobj, lname,
+		rc = mdd_iterate_linkea(env, sobj, tobj, tname,
 					mdd_object_fid(tpobj), ldata, NULL,
 					handle, mdd_declare_update_link);
 		if (rc)
@@ -3867,8 +3857,9 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			return rc;
 	}
 
-	rc = mdd_declare_migrate_update(env, spobj, tpobj, tobj, lname, attr,
-					spattr, tpattr, ldata, ma, handle);
+	rc = mdd_declare_migrate_update(env, spobj, tpobj, tobj, sname, tname,
+					attr, spattr, tpattr, ldata, ma,
+					handle);
 	return rc;
 }
 
@@ -3879,7 +3870,8 @@ static int mdd_migrate_update(const struct lu_env *env,
 			      struct mdd_object *spobj,
 			      struct mdd_object *tpobj,
 			      struct mdd_object *obj,
-			      const struct lu_name *lname,
+			      const struct lu_name *sname,
+			      const struct lu_name *tname,
 			      struct lu_attr *attr,
 			      struct lu_attr *spattr,
 			      struct lu_attr *tpattr,
@@ -3893,18 +3885,18 @@ static int mdd_migrate_update(const struct lu_env *env,
 
 	ENTRY;
 
-	CDEBUG(D_INFO, "update "DFID"/%s to "DFID"/"DFID"\n",
-	       PFID(mdd_object_fid(spobj)), lname->ln_name,
-	       PFID(mdd_object_fid(tpobj)), PFID(mdd_object_fid(obj)));
+	CDEBUG(D_INFO, "update "DFID" from "DFID"/%s to "DFID"/%s\n",
+	       PFID(mdd_object_fid(obj)), PFID(mdd_object_fid(spobj)),
+	       sname->ln_name, PFID(mdd_object_fid(tpobj)), tname->ln_name);
 
-	rc = __mdd_index_delete(env, spobj, lname->ln_name,
+	rc = __mdd_index_delete(env, spobj, sname->ln_name,
 				S_ISDIR(attr->la_mode), handle);
 	if (rc)
 		RETURN(rc);
 
 	rc = __mdd_index_insert(env, tpobj, mdd_object_fid(obj),
 				attr->la_mode & S_IFMT,
-				lname->ln_name, handle);
+				tname->ln_name, handle);
 	if (rc)
 		RETURN(rc);
 
@@ -3960,7 +3952,8 @@ static int mdd_migrate_create(const struct lu_env *env,
 			      struct mdd_object *tpobj,
 			      struct mdd_object *sobj,
 			      struct mdd_object *tobj,
-			      const struct lu_name *lname,
+			      const struct lu_name *sname,
+			      const struct lu_name *tname,
 			      struct lu_attr *spattr,
 			      struct lu_attr *tpattr,
 			      struct lu_attr *attr,
@@ -4032,7 +4025,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 
 	/* update links FID */
 	if (!S_ISDIR(attr->la_mode)) {
-		rc = mdd_iterate_linkea(env, sobj, tobj, lname,
+		rc = mdd_iterate_linkea(env, sobj, tobj, tname,
 					mdd_object_fid(tpobj), ldata,
 					NULL, handle, mdd_update_link);
 		if (rc)
@@ -4054,7 +4047,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	rc = mdd_migrate_update(env, spobj, tpobj, tobj, lname, attr,
+	rc = mdd_migrate_update(env, spobj, tpobj, tobj, sname, tname, attr,
 				spattr, tpattr, ldata, ma, handle);
 
 	RETURN(rc);
@@ -4103,13 +4096,181 @@ static int mdd_migrate_cmd_check(struct mdd_device *mdd,
 }
 
 /**
- * Migrate directory or file.
+ * Internal function to migrate directory or file between MDTs.
  *
  * migrate source to target in following steps:
  *   1. create target, append source stripes after target's if it's directory,
  *      migrate xattrs and update fid of source links.
  *   2. update namespace: migrate dirent from source parent to target parent,
  *      update file linkea, and destroy source if it's not needed any more.
+ *
+ * \param[in] env	execution environment
+ * \param[in] spobj	source parent object
+ * \param[in] tpobj	target parent object
+ * \param[in] sobj	source object
+ * \param[in] tobj	target object
+ * \param[in] sname	source file name
+ * \param[in] tname	target file name
+ * \param[in] spec	target creation spec
+ * \param[in] ma	used to update \a pobj mtime and ctime
+ *
+ * \retval		0 on success
+ * \retval		-errno on failure
+ */
+static int mdd_migrate_object(const struct lu_env *env,
+			      struct mdd_object *spobj,
+			      struct mdd_object *tpobj,
+			      struct mdd_object *sobj,
+			      struct mdd_object *tobj,
+			      const struct lu_name *sname,
+			      const struct lu_name *tname,
+			      struct md_op_spec *spec,
+			      struct md_attr *ma)
+{
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct mdd_device *mdd = mdo2mdd(&spobj->mod_obj);
+	struct lu_attr *spattr = &info->mti_pattr;
+	struct lu_attr *tpattr = &info->mti_tpattr;
+	struct lu_attr *attr = &info->mti_cattr;
+	struct linkea_data *ldata = &info->mti_link_data;
+	struct dt_allocation_hint *hint = &info->mti_hint;
+	struct lu_buf sbuf = { NULL };
+	struct lmv_mds_md_v1 *lmv;
+	struct thandle *handle;
+	int rc;
+
+	ENTRY;
+
+	rc = mdd_la_get(env, sobj, attr);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_la_get(env, spobj, spattr);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_la_get(env, tpobj, tpattr);
+	if (rc)
+		RETURN(rc);
+
+	if (S_ISDIR(attr->la_mode) && !spec->sp_migrate_nsonly) {
+		struct lmv_user_md_v1 *lum = spec->u.sp_ea.eadata;
+
+		LASSERT(lum);
+
+		/* if user use default value '0' for stripe_count, we need to
+		 * adjust it to '1' to create a 1-stripe directory.
+		 */
+		if (lum->lum_stripe_count == 0)
+			lum->lum_stripe_count = cpu_to_le32(1);
+
+		rc = mdd_stripe_get(env, sobj, &sbuf, XATTR_NAME_LMV);
+		if (rc && rc != -ENODATA)
+			GOTO(out, rc);
+
+		lmv = sbuf.lb_buf;
+		if (lmv) {
+			if (!lmv_is_sane(lmv))
+				GOTO(out, rc = -EBADF);
+			if (lmv_is_migrating(lmv)) {
+				rc = mdd_migrate_cmd_check(mdd, lmv, lum,
+							   sname);
+				GOTO(out, rc);
+			}
+		}
+	} else if (!S_ISDIR(attr->la_mode)) {
+		if (spobj == tpobj)
+			GOTO(out, rc = -EALREADY);
+
+		/* update namespace only if @sobj is on MDT where @tpobj is. */
+		if (!mdd_object_remote(tpobj) && !mdd_object_remote(sobj))
+			spec->sp_migrate_nsonly = true;
+
+		if (S_ISLNK(attr->la_mode)) {
+			lu_buf_check_and_alloc(&sbuf, attr->la_size + 1);
+			if (!sbuf.lb_buf)
+				GOTO(out, rc = -ENOMEM);
+
+			rc = mdd_readlink(env, &sobj->mod_obj, &sbuf);
+			if (rc <= 0) {
+				rc = rc ?: -EFAULT;
+				CERROR("%s: "DFID" readlink failed: rc = %d\n",
+				       mdd2obd_dev(mdd)->obd_name,
+				       PFID(mdd_object_fid(sobj)), rc);
+				GOTO(out, rc);
+			}
+		}
+	}
+
+	/* linkea needs update upon FID or parent stripe change */
+	rc = mdd_migrate_linkea_prepare(env, mdd, spobj, tpobj, sobj, sname,
+					tname, attr, ldata);
+	if (rc > 0)
+		/* update namespace only if @sobj has link on its MDT. */
+		spec->sp_migrate_nsonly = true;
+	else if (rc < 0)
+		GOTO(out, rc);
+
+	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
+				      spattr, tpattr, attr);
+	if (rc)
+		GOTO(out, rc);
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		GOTO(out, rc = PTR_ERR(handle));
+
+	if (spec->sp_migrate_nsonly)
+		rc = mdd_declare_migrate_update(env, spobj, tpobj, sobj, sname,
+						tname, attr, spattr, tpattr,
+						ldata, ma, handle);
+	else
+		rc = mdd_declare_migrate_create(env, spobj, tpobj, sobj, tobj,
+						sname, tname, spattr, tpattr,
+						attr, &sbuf, ldata, ma, spec,
+						hint, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_declare_changelog_store(env, mdd, CL_MIGRATE, tname, sname,
+					 handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	if (spec->sp_migrate_nsonly)
+		rc = mdd_migrate_update(env, spobj, tpobj, sobj, sname, tname,
+					attr, spattr, tpattr, ldata, ma,
+					handle);
+	else
+		rc = mdd_migrate_create(env, spobj, tpobj, sobj, tobj, sname,
+					tname, spattr, tpattr, attr, &sbuf,
+					ldata, ma, spec, hint, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0,
+				    spec->sp_migrate_nsonly ? sobj : tobj,
+				    mdd_object_fid(spobj), mdd_object_fid(sobj),
+				    mdd_object_fid(tpobj), tname, sname,
+				    handle);
+	if (rc)
+		GOTO(stop, rc);
+	EXIT;
+
+stop:
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+out:
+	lu_buf_free(&sbuf);
+
+	return rc;
+}
+
+/**
+ * Migrate directory or file between MDTs.
  *
  * \param[in] env	execution environment
  * \param[in] md_pobj	parent master object
@@ -4127,31 +4288,19 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 		       struct md_object *md_tobj, struct md_op_spec *spec,
 		       struct md_attr *ma)
 {
-	struct mdd_device *mdd = mdo2mdd(md_pobj);
 	struct mdd_thread_info *info = mdd_env_info(env);
+	struct mdd_device *mdd = mdo2mdd(md_pobj);
 	struct mdd_object *pobj = md2mdd_obj(md_pobj);
 	struct mdd_object *sobj = md2mdd_obj(md_sobj);
 	struct mdd_object *tobj = md2mdd_obj(md_tobj);
 	struct mdd_object *spobj = NULL;
 	struct mdd_object *tpobj = NULL;
-	struct lu_attr *spattr = &info->mti_pattr;
-	struct lu_attr *tpattr = &info->mti_tpattr;
-	struct lu_attr *attr = &info->mti_cattr;
-	struct linkea_data *ldata = &info->mti_link_data;
-	struct dt_allocation_hint *hint = &info->mti_hint;
-	struct lu_fid *fid = &info->mti_fid2;
 	struct lu_buf pbuf = { NULL };
-	struct lu_buf sbuf = { NULL };
+	struct lu_fid *fid = &info->mti_fid2;
 	struct lmv_mds_md_v1 *lmv;
-	struct thandle *handle;
-	bool nsonly = false;
 	int rc;
 
 	ENTRY;
-
-	rc = mdd_la_get(env, sobj, attr);
-	if (rc)
-		RETURN(rc);
 
 	/* locate source and target stripe on pobj, which are the real parent */
 	rc = mdd_stripe_get(env, pobj, &pbuf, XATTR_NAME_LMV);
@@ -4200,7 +4349,6 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 					GOTO(out, rc = -EINVAL);
 				GOTO(out, rc = -EALREADY);
 			}
-			nsonly = spec->sp_migrate_nsonly;
 		} else {
 			spobj = tpobj;
 			mdd_object_get(spobj);
@@ -4212,128 +4360,15 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 		mdd_object_get(spobj);
 	}
 
-	rc = mdd_la_get(env, spobj, spattr);
-	if (rc)
-		GOTO(out, rc);
+	rc = mdd_migrate_object(env, spobj, tpobj, sobj, tobj, lname, lname,
+				spec, ma);
+	GOTO(out, rc);
 
-	rc = mdd_la_get(env, tpobj, tpattr);
-	if (rc)
-		GOTO(out, rc);
-
-	if (S_ISDIR(attr->la_mode) && !nsonly) {
-		struct lmv_user_md_v1 *lum = spec->u.sp_ea.eadata;
-
-		LASSERT(lum);
-
-		/* if user use default value '0' for stripe_count, we need to
-		 * adjust it to '1' to create a 1-stripe directory.
-		 */
-		if (lum->lum_stripe_count == 0)
-			lum->lum_stripe_count = cpu_to_le32(1);
-
-		rc = mdd_stripe_get(env, sobj, &sbuf, XATTR_NAME_LMV);
-		if (rc && rc != -ENODATA)
-			GOTO(out, rc);
-
-		lmv = sbuf.lb_buf;
-		if (lmv) {
-			if (!lmv_is_sane(lmv))
-				GOTO(out, rc = -EBADF);
-			if (lmv_is_migrating(lmv)) {
-				rc = mdd_migrate_cmd_check(mdd, lmv, lum,
-							   lname);
-				GOTO(out, rc);
-			}
-		}
-	} else if (!S_ISDIR(attr->la_mode)) {
-		if (spobj == tpobj)
-			GOTO(out, rc = -EALREADY);
-
-		/* update namespace only if @sobj is on MDT where @tpobj is. */
-		if (!mdd_object_remote(tpobj))
-			nsonly = true;
-
-		if (S_ISLNK(attr->la_mode)) {
-			lu_buf_check_and_alloc(&sbuf, attr->la_size + 1);
-			if (!sbuf.lb_buf)
-				GOTO(out, rc = -ENOMEM);
-
-			rc = mdd_readlink(env, &sobj->mod_obj, &sbuf);
-			if (rc <= 0) {
-				rc = rc ?: -EFAULT;
-				CERROR("%s: "DFID" readlink failed: rc = %d\n",
-				       mdd2obd_dev(mdd)->obd_name,
-				       PFID(mdd_object_fid(sobj)), rc);
-				GOTO(out, rc);
-			}
-		}
-	}
-
-	/* linkea needs update upon FID or parent stripe change */
-	rc = mdd_migrate_linkea_prepare(env, mdd, spobj, tpobj, sobj, lname,
-					attr, ldata);
-	if (rc > 0)
-		/* update namespace only if @sobj has link on its MDT. */
-		nsonly = true;
-	else if (rc < 0)
-		GOTO(out, rc);
-
-	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
-				      spattr, tpattr, attr);
-	if (rc)
-		GOTO(out, rc);
-
-	handle = mdd_trans_create(env, mdd);
-	if (IS_ERR(handle))
-		GOTO(out, rc = PTR_ERR(handle));
-
-	if (nsonly)
-		rc = mdd_declare_migrate_update(env, spobj, tpobj, sobj, lname,
-						attr, spattr, tpattr, ldata, ma,
-						handle);
-	else
-		rc = mdd_declare_migrate_create(env, spobj, tpobj, sobj, tobj,
-						lname, spattr, tpattr, attr,
-						&sbuf, ldata, ma, spec, hint,
-						handle);
-	if (rc)
-		GOTO(stop_trans, rc);
-
-	rc = mdd_declare_changelog_store(env, mdd, CL_MIGRATE, lname, NULL,
-					 handle);
-	if (rc)
-		GOTO(stop_trans, rc);
-
-	rc = mdd_trans_start(env, mdd, handle);
-	if (rc)
-		GOTO(stop_trans, rc);
-
-	if (nsonly)
-		rc = mdd_migrate_update(env, spobj, tpobj, sobj, lname, attr,
-					spattr, tpattr, ldata, ma, handle);
-	else
-		rc = mdd_migrate_create(env, spobj, tpobj, sobj, tobj, lname,
-					spattr, tpattr, attr, &sbuf, ldata, ma,
-					spec, hint, handle);
-	if (rc)
-		GOTO(stop_trans, rc);
-
-	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0,
-				    nsonly ? sobj : tobj, mdd_object_fid(spobj),
-				    mdd_object_fid(sobj), mdd_object_fid(tpobj),
-				    lname, lname, handle);
-	if (rc)
-		GOTO(stop_trans, rc);
-	EXIT;
-
-stop_trans:
-	rc = mdd_trans_stop(env, mdd, rc, handle);
 out:
 	if (!IS_ERR_OR_NULL(spobj))
 		mdd_object_put(env, spobj);
 	if (!IS_ERR_OR_NULL(tpobj))
 		mdd_object_put(env, tpobj);
-	lu_buf_free(&sbuf);
 	lu_buf_free(&pbuf);
 
 	return rc;
