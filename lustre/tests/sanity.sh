@@ -57,8 +57,8 @@ if [[ $(uname -m) = aarch64 ]]; then
 	ALWAYS_EXCEPT+=" 45	  101c	   103a	    317      810"
 fi
 
-# skip nfs tests on kernels >= 4.14.0 until they are fixed
-if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ]; then
+# skip nfs tests on kernels >= 4.12.0 until they are fixed
+if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
 	# bug number:	LU-12661
 	ALWAYS_EXCEPT+=" 817"
 fi
