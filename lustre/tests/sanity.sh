@@ -13415,6 +13415,51 @@ test_150d() {
 }
 run_test 150d "Verify fallocate Size and Blocks - Non zero start"
 
+test_150e() {
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -ge $(version_code 2.13.55) ] ||
+		skip "Need OST version at least 2.13.55"
+
+	echo "df before:"
+	$LFS df
+	$LFS setstripe -c${OSTCOUNT} $DIR/$tfile ||
+		error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
+
+	# Find OST with Minimum Size
+	min_size_ost=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+		       sort -un | head -1)
+
+	# Get 90% of the available space
+	local space=$(((min_size_ost * 90)/100 * OSTCOUNT))
+
+	fallocate -l${space}k $DIR/$tfile ||
+		error "fallocate ${space}k $DIR/$tfile failed"
+	echo "'fallocate -l ${space}k $DIR/$tfile' succeeded"
+
+	# get size immediately after fallocate. This should be correctly
+	# updated
+	local size=$(stat -c '%s' $DIR/$tfile)
+	local used=$(( $(stat -c '%b * %B' $DIR/$tfile) / 1024))
+
+	# Sleep for a while for statfs to get updated. And not pull from cache.
+	sleep 2
+
+	echo "df after fallocate:"
+	$LFS df
+
+	(( size / 1024 == space )) || error "size $size != requested $space"
+	[ "$ost1_FSTYPE" != ldiskfs ] || (( used >= space )) ||
+		error "used $used < space $space"
+
+	rm $DIR/$tfile || error "rm failed"
+	sync
+	wait_delete_completed
+
+	echo "df after unlink:"
+	$LFS df
+}
+run_test 150e "Verify 90% of available OST space consumed by fallocate"
+
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
 	local list=$(comma_list $(osts_nodes))

@@ -38,6 +38,8 @@
  *
  */
 
+#define DEBUG_SUBSYSTEM	S_OSD
+
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
@@ -1888,36 +1890,116 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_fallocate(const struct lu_env *env,
-				 struct dt_object *dt, struct thandle *th)
+				 struct dt_object *dt, __u64 start, __u64 end,
+				 int mode, struct thandle *th)
 {
-	struct osd_thandle *oh;
-	struct inode *inode;
+	struct osd_thandle *oh = container_of(th, struct osd_thandle, ot_super);
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	long long quota_space = 0;
+	/* 5 is max tree depth. (inode + 4 index blocks) */
+	int depth = 5;
 	int rc;
+
 	ENTRY;
 
-	LASSERT(th);
-	oh = container_of(th, struct osd_thandle, ot_super);
+	/*
+	 * Only mode == 0 (which is standard prealloc) is supported now.
+	 * Rest of mode options is not supported yet.
+	 */
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		RETURN(-EOPNOTSUPP);
 
-	osd_trans_declare_op(env, oh, OSD_OT_PREALLOC,
-			     osd_dto_credits_noquota[DTO_WRITE_BLOCK]);
-	inode = osd_dt_obj(dt)->oo_inode;
+	LASSERT(th);
 	LASSERT(inode);
 
+	/* quota space for metadata blocks
+	 * approximate metadata estimate should be good enough.
+	 */
+	quota_space += PAGE_SIZE;
+	quota_space += depth * LDISKFS_BLOCK_SIZE(osd_sb(osd));
+
+	/* quota space should be reported in 1K blocks */
+	quota_space = toqb(quota_space) + toqb(end - start) +
+		      LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
+
+	/* We don't need to reserve credits for whole fallocate here.
+	 * We reserve space only for metadata. Fallocate credits are
+	 * extended as required
+	 */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
-				   NULL, OSD_QID_BLK);
+				   i_projid_read(inode), quota_space, oh,
+				   osd_dt_obj(dt), NULL, OSD_QID_BLK);
 	RETURN(rc);
+}
+
+/* Borrow @ext4_chunk_trans_blocks */
+static int osd_chunk_trans_blocks(struct inode *inode, int nrblocks)
+{
+	ldiskfs_group_t groups;
+	int gdpblocks;
+	int idxblocks;
+	int depth;
+	int ret;
+
+	depth = ext_depth(inode);
+	idxblocks = depth * 2;
+
+	/*
+	 * Now let's see how many group bitmaps and group descriptors need
+	 * to account.
+	 */
+	groups = idxblocks + 1;
+	gdpblocks = groups;
+	if (groups > LDISKFS_SB(inode->i_sb)->s_groups_count)
+		groups = LDISKFS_SB(inode->i_sb)->s_groups_count;
+	if (gdpblocks > LDISKFS_SB(inode->i_sb)->s_gdb_count)
+		gdpblocks = LDISKFS_SB(inode->i_sb)->s_gdb_count;
+
+	/* bitmaps and block group descriptor blocks */
+	ret = idxblocks + groups + gdpblocks;
+
+	/* Blocks for super block, inode, quota and xattr blocks */
+	ret += LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
+
+	return ret;
+}
+
+static int osd_extend_restart_trans(handle_t *handle, int needed)
+{
+	int rc;
+
+	if (ldiskfs_handle_has_enough_credits(handle, needed))
+		return 0;
+
+	rc = ldiskfs_journal_extend(handle, needed - handle->h_buffer_credits);
+	if (rc <= 0)
+		return rc;
+
+	rc = ldiskfs_journal_restart(handle, needed);
+
+	return rc;
 }
 
 static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 			 __u64 start, __u64 end, int mode, struct thandle *th)
 {
+	struct osd_thandle *oh = container_of(th, struct osd_thandle, ot_super);
+	handle_t *handle = ldiskfs_journal_current_handle();
+	unsigned int save_credits = oh->ot_credits;
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct inode *inode = obj->oo_inode;
-	struct file *file;
+	struct ldiskfs_map_blocks map;
+	unsigned int credits;
+	ldiskfs_lblk_t blen;
+	ldiskfs_lblk_t boff;
+	loff_t new_size = 0;
+	int depth = 0;
+	int flags;
 	int rc = 0;
 
 	ENTRY;
+
 	/*
 	 * Only mode == 0 (which is standard prealloc) is supported now.
 	 * Rest of mode options is not supported yet.
@@ -1928,17 +2010,105 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
+
+	CDEBUG(D_INODE, "fallocate: inode #%lu: start %llu end %llu mode %d\n",
+	       inode->i_ino, start, end, mode);
+
 	dquot_initialize(inode);
 
 	LASSERT(th);
 
-	osd_trans_exec_op(env, th, OSD_OT_PREALLOC);
+	boff = start >> inode->i_blkbits;
+	blen = (ALIGN(end, 1 << inode->i_blkbits) >> inode->i_blkbits) - boff;
+
+	flags = LDISKFS_GET_BLOCKS_CREATE;
+	if (mode & FALLOC_FL_KEEP_SIZE)
+		flags |= LDISKFS_GET_BLOCKS_KEEP_SIZE;
+
+	inode_lock(inode);
 
 	/*
-	 * Because f_op->fallocate() does not have an inode arg
+	 * We only support preallocation for extent-based file only.
 	 */
-	file = osd_quasi_file(env, inode);
-	rc = file->f_op->fallocate(file, mode, start, end - start);
+	if (!(ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)))
+		GOTO(out, rc = -EOPNOTSUPP);
+
+	if (!(mode & FALLOC_FL_KEEP_SIZE) && (end > i_size_read(inode) ||
+	    end > LDISKFS_I(inode)->i_disksize)) {
+		new_size = end;
+		rc = inode_newsize_ok(inode, new_size);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	inode_dio_wait(inode);
+
+	map.m_lblk = boff;
+	map.m_len = blen;
+
+	/*
+	 * Don't normalize the request if it can fit in one extent so
+	 * that it doesn't get unnecessarily split into multiple
+	 * extents.
+	 */
+	if (blen <= EXT_UNWRITTEN_MAX_LEN)
+		flags |= LDISKFS_GET_BLOCKS_NO_NORMALIZE;
+
+	/*
+	 * credits to insert 1 extent into extent tree.
+	 */
+	credits = osd_chunk_trans_blocks(inode, blen);
+	depth = ext_depth(inode);
+
+	while (rc >= 0 && blen) {
+		loff_t epos;
+
+		/*
+		 * Recalculate credits when extent tree depth changes.
+		 */
+		if (depth != ext_depth(inode)) {
+			credits = osd_chunk_trans_blocks(inode, blen);
+			depth = ext_depth(inode);
+		}
+
+		/* TODO: quota check */
+		rc = osd_extend_restart_trans(handle, credits);
+		if (rc)
+			break;
+
+		rc = ldiskfs_map_blocks(handle, inode, &map, flags);
+		if (rc <= 0) {
+			CDEBUG(D_INODE,
+			       "inode #%lu: block %u: len %u: ldiskfs_map_blocks returned %d\n",
+			       inode->i_ino, map.m_lblk, map.m_len, rc);
+			ldiskfs_mark_inode_dirty(handle, inode);
+			break;
+		}
+
+		map.m_lblk += rc;
+		map.m_len = blen = blen - rc;
+		epos = (loff_t)map.m_lblk << inode->i_blkbits;
+		inode->i_ctime = current_time(inode);
+		if (new_size) {
+			if (epos > end)
+				epos = end;
+			if (ldiskfs_update_inode_size(inode, epos) & 0x1)
+				inode->i_mtime = inode->i_ctime;
+		} else {
+			if (epos > inode->i_size)
+				ldiskfs_set_inode_flag(inode,
+						       LDISKFS_INODE_EOFBLOCKS);
+		}
+
+		ldiskfs_mark_inode_dirty(handle, inode);
+	}
+
+out:
+	inode_unlock(inode);
+
+	/* extand credits if needed for operations such as attribute set */
+	if (rc >= 0)
+		rc = osd_extend_restart_trans(handle, save_credits);
 
 	RETURN(rc);
 }

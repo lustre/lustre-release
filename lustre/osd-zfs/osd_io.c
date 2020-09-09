@@ -1166,7 +1166,8 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_fallocate(const struct lu_env *env,
-				 struct dt_object *dt, struct thandle *th)
+				 struct dt_object *dt, __u64 start, __u64 end,
+				 int mode, struct thandle *th)
 {
 	int rc = -EOPNOTSUPP;
 	ENTRY;

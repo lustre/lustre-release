@@ -558,6 +558,28 @@ test_1_check_write() {
 			"user write success, but expect EDQUOT"
 }
 
+check_write_fallocate() {
+	local testfile="$1"
+	local qtype="$2"
+	local limit=$3
+	local short_qtype=${qtype:0:1}
+
+	count=$((limit/2))
+	log "Write ${count}MiB Using Fallocate"
+	$RUNAS fallocate -l${count}MiB $testfile ||
+		quota_error $short_qtype $TSTUSR "Write ${count}MiB fail"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 2
+
+	count=$((limit + 1))
+	log "Write ${count}MiB Using Fallocate"
+	$RUNAS fallocate -l${count}MiB $testfile &&
+		quota_error $short_qtype $TSTUSR \
+		"Write success, expect EDQUOT" || true
+}
+
 # test block hardlimit
 test_1a() {
 	local limit=10  # 10M
@@ -1061,6 +1083,44 @@ test_1g() {
 	return 0
 }
 run_test 1g "Quota pools: Block hard limit with wide striping"
+
+test_1h() {
+	local limit=10  # 10M
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need OST version at least 2.13.53"
+
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	check_write_fallocate $testfile "user" $limit
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+}
+run_test 1h "Block hard limit test using fallocate"
 
 # test inode hardlimit
 test_2() {
