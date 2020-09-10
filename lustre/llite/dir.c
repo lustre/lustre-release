@@ -1141,12 +1141,14 @@ int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 	case LUSTRE_Q_SETDEFAULT:
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
+	case LUSTRE_Q_SETDEFAULT_POOL:
 		if (!capable(CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 		break;
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
 	case LUSTRE_Q_GETQUOTAPOOL:
+	case LUSTRE_Q_GETDEFAULT_POOL:
 		if (check_owner(type, id) &&
 		    (!capable(CAP_SYS_ADMIN)))
 			RETURN(-EPERM);

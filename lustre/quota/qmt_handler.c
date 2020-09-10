@@ -156,7 +156,7 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 	__u64 ver;
 	bool dirtied = false;
 	int rc = 0;
-	int need_id_notify = 0;
+	bool need_id_notify = false;
 	ENTRY;
 
 	/* need to write back to global quota file? */
@@ -206,7 +206,7 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 quota_set:
 		/* recompute qunit in case it was never initialized */
 		if (qmt_revalidate(env, lqe))
-			need_id_notify = 1;
+			need_id_notify = true;
 
 		/* clear grace time */
 		if (lqe->lqe_softlimit == 0 ||
@@ -252,8 +252,8 @@ quota_set:
 
 		/* compute new qunit value now that we have modified the quota
 		 * settings or clear/set edquot flag if needed */
-		if (qmt_adjust_qunit(env, lqe) || qmt_adjust_edquot(lqe, now))
-			need_id_notify |= 1;
+		need_id_notify |= qmt_adjust_qunit(env, lqe);
+		need_id_notify |= qmt_adjust_edquot(lqe, now);
 	}
 	EXIT;
 out:
@@ -272,14 +272,14 @@ out_nolock:
 			LQUOTA_DEBUG(lqe, "notify all lqe with default quota");
 			iter_data.qeid_env = env;
 			iter_data.qeid_qmt = qmt;
-			cfs_hash_for_each_safe(lqe->lqe_site->lqs_hash,
+			cfs_hash_for_each(lqe->lqe_site->lqs_hash,
 					       qmt_entry_iter_cb, &iter_data);
 			/* Always notify slaves with default values. Don't
 			 * care about overhead as will be sent only not changed
 			 * values(see qmt_id_lock_cb for details).*/
-			need_id_notify = 1;
+			need_id_notify = true;
 		}
-		if (need_id_notify && !is_updated)
+		if (need_id_notify)
 			qmt_set_id_notify(env, qmt, lqe);
 	}
 
@@ -403,6 +403,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		break;
 
 	case LUSTRE_Q_GETDEFAULT:
+	case LUSTRE_Q_GETDEFAULT_POOL:
 		is_default = true;
 		/* fallthrough */
 
@@ -437,6 +438,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		break;
 
 	case LUSTRE_Q_SETDEFAULT:
+	case LUSTRE_Q_SETDEFAULT_POOL:
 		is_default = true;
 		/* fallthrough */
 

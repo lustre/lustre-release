@@ -392,8 +392,8 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
-	CDEBUG(D_QUOTA, "type %d name %p index %d\n",
-	       rtype, pool_name, idx);
+	CDEBUG(D_QUOTA, "type %d name %s index %d\n",
+	       rtype, pool_name ?: "<none>", idx);
 	/* Now just find a pool with correct type in a list. Further we need
 	 * to go through the list and find a pool that includes requested OST
 	 * or MDT. Possibly this would return a list of pools that includes

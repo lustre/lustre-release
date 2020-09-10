@@ -7255,8 +7255,6 @@ quota_type:
 		case LFS_POOL_OPT:
 			if (lfs_verify_poolarg(optarg))
 				return -1;
-			fprintf(stdout,
-				"Trying to set grace for pool %s\n", optarg);
 			strncpy(qctl->qc_poolname, optarg, LOV_MAXPOOLNAME);
 			qctl->qc_cmd  = LUSTRE_Q_SETINFOPOOL;
 			break;
@@ -7457,10 +7455,10 @@ quota_type_def:
 				rc = -1;
 				goto out;
 			}
-			fprintf(stdout,
-				"Trying to set quota for pool %s\n", optarg);
 			strncpy(qctl->qc_poolname, optarg, LOV_MAXPOOLNAME);
-			qctl->qc_cmd  = LUSTRE_Q_SETQUOTAPOOL;
+			qctl->qc_cmd = qctl->qc_cmd == LUSTRE_Q_SETDEFAULT ?
+						LUSTRE_Q_SETDEFAULT_POOL :
+						LUSTRE_Q_SETQUOTAPOOL;
 			break;
 		default:
 			fprintf(stderr,
@@ -7521,6 +7519,9 @@ quota_type_def:
 		dqb->dqb_itime = 0;
 		dqb->dqb_btime = 0;
 		dqb->dqb_valid |= QIF_LIMITS | QIF_TIMES;
+		/* do not set inode limits for Pool Quotas */
+		if (qctl->qc_cmd  == LUSTRE_Q_SETDEFAULT_POOL)
+			dqb->dqb_valid ^= QIF_ILIMITS | QIF_ITIME;
 	} else if ((!(limit_mask & BHLIMIT) ^ !(limit_mask & BSLIMIT)) ||
 		   (!(limit_mask & IHLIMIT) ^ !(limit_mask & ISLIMIT))) {
 		/* sigh, we can't just set blimits/ilimits */
@@ -7675,7 +7676,8 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 
 	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA || qctl->qc_cmd == Q_GETOQUOTA ||
 	    qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ||
-	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT) {
+	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT ||
+	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL) {
 		int bover = 0, iover = 0;
 		struct obd_dqblk *dqb = &qctl->qc_dqblk;
 		char numbuf[3][STRBUF_LEN];
@@ -7943,6 +7945,7 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 
 	if ((qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
 	     qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ||
+	     qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL ||
 	     qctl->qc_cmd == LUSTRE_Q_GETDEFAULT) && !quiet)
 		print_quota_title(name, qctl, human_readable, show_default);
 
@@ -8323,7 +8326,9 @@ quota_type:
 			}
 		} else {
 			qctl->qc_valid = QC_GENERAL;
-			qctl->qc_cmd = LUSTRE_Q_GETDEFAULT;
+			qctl->qc_cmd = qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ?
+					LUSTRE_Q_GETDEFAULT_POOL :
+					LUSTRE_Q_GETDEFAULT;
 			qctl->qc_id = 0;
 		}
 
