@@ -1888,8 +1888,7 @@ static void lod_avoid_guide_fini(struct lod_avoid_guide *lag)
 	if (lag->lag_oss_avoid_array)
 		OBD_FREE_PTR_ARRAY(lag->lag_oss_avoid_array,
 				   lag->lag_oaa_size);
-	if (lag->lag_ost_avoid_bitmap)
-		CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
+	bitmap_free(lag->lag_ost_avoid_bitmap);
 }
 
 /**

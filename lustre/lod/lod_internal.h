@@ -87,7 +87,8 @@ struct lod_avoid_guide {
 	/* number of allocated array items */
 	unsigned int		lag_oaa_size;
 	/* bitmap of OSTs avoid guidance */
-	struct cfs_bitmap	*lag_ost_avoid_bitmap;
+	unsigned long		*lag_ost_avoid_bitmap;
+	u32			lag_ost_avoid_size;
 	/* how many OSTs are available for alloc */
 	__u32			lag_ost_avail;
 };

@@ -607,7 +607,7 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 		return false;
 
 	/* if the OSS has been used, check whether the OST has been used */
-	if (!cfs_bitmap_check(lag->lag_ost_avoid_bitmap, index))
+	if (!test_bit(index, lag->lag_ost_avoid_bitmap))
 		used = false;
 	else
 		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
@@ -2320,7 +2320,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
-	struct cfs_bitmap *bitmap = NULL;
+	unsigned long *bitmap = NULL;
 	__u32 *new_oss = NULL;
 
 	lag->lag_ost_avail = lod->lod_ost_count;
@@ -2336,16 +2336,17 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 
 	/* init OST avoid guide bitmap */
 	if (lag->lag_ost_avoid_bitmap) {
-		if (lod->lod_ost_count <= lag->lag_ost_avoid_bitmap->size) {
-			CFS_RESET_BITMAP(lag->lag_ost_avoid_bitmap);
+		if (lod->lod_ost_count <= lag->lag_ost_avoid_size) {
+			bitmap_zero(lag->lag_ost_avoid_bitmap,
+				    lag->lag_ost_avoid_size);
 		} else {
-			CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
+			bitmap_free(lag->lag_ost_avoid_bitmap);
 			lag->lag_ost_avoid_bitmap = NULL;
 		}
 	}
 
 	if (!lag->lag_ost_avoid_bitmap) {
-		bitmap = CFS_ALLOCATE_BITMAP(lod->lod_ost_count);
+		bitmap = bitmap_zalloc(lod->lod_ost_count, GFP_KERNEL);
 		if (!bitmap)
 			return -ENOMEM;
 	}
@@ -2359,7 +2360,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 		 */
 		OBD_ALLOC_PTR_ARRAY(new_oss, lod->lod_ost_count);
 		if (!new_oss) {
-			CFS_FREE_BITMAP(bitmap);
+			bitmap_free(bitmap);
 			return -ENOMEM;
 		}
 	}
@@ -2368,8 +2369,10 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 		lag->lag_oss_avoid_array = new_oss;
 		lag->lag_oaa_size = lod->lod_ost_count;
 	}
-	if (bitmap)
+	if (bitmap) {
 		lag->lag_ost_avoid_bitmap = bitmap;
+		lag->lag_ost_avoid_size = lod->lod_ost_count;
+	}
 
 	return 0;
 }
@@ -2383,7 +2386,7 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[comp_idx];
-	struct cfs_bitmap *bitmap = lag->lag_ost_avoid_bitmap;
+	unsigned long *bitmap = lag->lag_ost_avoid_bitmap;
 	int i, j;
 
 	/* iterate mirrors */
@@ -2430,12 +2433,12 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 				ost = OST_TGT(lod, comp->llc_ost_indices[j]);
 				lsq = ost->ltd_qos.ltq_svr;
 
-				if (cfs_bitmap_check(bitmap, ost->ltd_index))
+				if (test_bit(ost->ltd_index, bitmap))
 					continue;
 
 				QOS_DEBUG("OST%d used in conflicting mirror "
 					  "component\n", ost->ltd_index);
-				cfs_bitmap_set(bitmap, ost->ltd_index);
+				set_bit(ost->ltd_index, bitmap);
 				lag->lag_ost_avail--;
 
 				for (k = 0; k < lag->lag_oaa_count; k++) {
