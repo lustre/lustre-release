@@ -347,7 +347,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	if (!mdt->mdt_enable_dir_migration)
 		RETURN(-EPERM);
 
-	if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
+	if (!md_capable(uc, CAP_SYS_ADMIN) &&
 	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 	    mdt->mdt_enable_remote_dir_gid != -1)
 		RETURN(-EPERM);
@@ -577,7 +577,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 			}
 		}
 
-		if (!md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN))
+		if (!md_capable(mdt_ucred(info), CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		if (strcmp(xattr_name, XATTR_NAME_LOV) == 0 ||

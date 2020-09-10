@@ -685,7 +685,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(0);
 
 	if (is_project_state_change(oattr, la)) {
-		if (!md_capable(uc, CFS_CAP_SYS_RESOURCE) &&
+		if (!md_capable(uc, CAP_SYS_RESOURCE) &&
 		    !lustre_in_group_p(uc, ma->ma_enable_chprojid_gid) &&
 		    !(ma->ma_enable_chprojid_gid == -1 &&
 		      mdd_permission_internal(env, obj, oattr, MAY_WRITE)))
@@ -727,13 +727,13 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 
 		if ((uc->uc_fsuid != oattr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CAP_FOWNER))
 			RETURN(-EPERM);
 
 		/* The IMMUTABLE and APPEND_ONLY flags can
 		 * only be changed by the relevant capability. */
 		if ((oldflags ^ newflags) &&
-		    !md_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
+		    !md_capable(uc, CAP_LINUX_IMMUTABLE))
 			RETURN(-EPERM);
 
 		if (!S_ISDIR(oattr->la_mode)) {
@@ -758,7 +758,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
 	    !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
 		if ((uc->uc_fsuid != oattr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER)) {
+		    !md_capable(uc, CAP_FOWNER)) {
 			rc = mdd_permission_internal(env, obj, oattr,
 						     MAY_WRITE);
 			if (rc)
@@ -791,7 +791,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if (la->la_valid & LA_MODE) {
 		if (!(flags & MDS_PERM_BYPASS) &&
 		    (uc->uc_fsuid != oattr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CAP_FOWNER))
 			RETURN(-EPERM);
 
 		if (la->la_mode == (umode_t) -1)
@@ -803,7 +803,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		/* Also check the setgid bit! */
 		if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ?
 				       la->la_gid : oattr->la_gid) &&
-		    !md_capable(uc, CFS_CAP_FSETID))
+		    !md_capable(uc, CAP_FSETID))
 			la->la_mode &= ~S_ISGID;
 	} else {
 	       la->la_mode = oattr->la_mode;
@@ -815,7 +815,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 			la->la_uid = oattr->la_uid;
 		if (((uc->uc_fsuid != oattr->la_uid) ||
 		     (la->la_uid != oattr->la_uid)) &&
-		    !md_capable(uc, CFS_CAP_CHOWN))
+		    !md_capable(uc, CAP_CHOWN))
 			RETURN(-EPERM);
 
 		/* If the user or group of a non-directory has been
@@ -841,7 +841,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		if (((uc->uc_fsuid != oattr->la_uid) ||
 		     ((la->la_gid != oattr->la_gid) &&
 		      !lustre_in_group_p(uc, la->la_gid))) &&
-		    !md_capable(uc, CFS_CAP_CHOWN))
+		    !md_capable(uc, CAP_CHOWN))
 			RETURN(-EPERM);
 
 		/* Likewise, if the user or group of a non-directory
@@ -1352,11 +1352,11 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 		 * can write attributes. */
 		if (S_ISDIR(attr->la_mode) && (attr->la_mode & S_ISVTX) &&
 		    (uc->uc_fsuid != attr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CAP_FOWNER))
 			RETURN(-EPERM);
 	} else if (strcmp(name, XATTR_NAME_SOM) != 0 &&
 		   (uc->uc_fsuid != attr->la_uid) &&
-		   !md_capable(uc, CFS_CAP_FOWNER)) {
+		   !md_capable(uc, CAP_FOWNER)) {
 		RETURN(-EPERM);
 	}
 

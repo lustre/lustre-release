@@ -1414,7 +1414,7 @@ static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
 
 	uc = mdt_ucred(info);
 	is_admin = (uc->uc_uid == 0 && uc->uc_gid == 0 &&
-		    md_capable(uc, CFS_CAP_SYS_ADMIN));
+		    md_capable(uc, CAP_SYS_ADMIN));
 
 	mdt_exit_ucred(info);
 

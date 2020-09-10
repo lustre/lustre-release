@@ -415,7 +415,7 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 	}
 	spin_unlock(&imp->imp_lock);
 
-	if (cfs_capable(CFS_CAP_SYS_RESOURCE))
+	if (cfs_capable(CAP_SYS_RESOURCE))
 		oio->oi_cap_sys_resource = 1;
 
 	RETURN(rc);

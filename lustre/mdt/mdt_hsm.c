@@ -91,7 +91,7 @@ static inline bool mdt_hsm_is_admin(struct mdt_thread_info *info)
 	if (rc < 0)
 		return false;
 
-	is_admin = md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN);
+	is_admin = md_capable(mdt_ucred(info), CAP_SYS_ADMIN);
 
 	mdt_exit_ucred(info);
 
@@ -318,7 +318,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	/* Non-root users are forbidden to set or clear flags which are
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
-	    !md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN)) {
+	    !md_capable(mdt_ucred(info), CAP_SYS_ADMIN)) {
 		CDEBUG(D_HSM, "Incompatible masks provided (set %#llx"
 		       ", clear %#llx) vs unprivileged set (%#x).\n",
 		       hss->hss_setmask, hss->hss_clearmask, HSM_USER_MASK);

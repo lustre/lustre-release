@@ -62,7 +62,7 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 
 	th = mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
 	if (!IS_ERR(th) && uc)
-		th->th_ignore_quota = !!md_capable(uc, CFS_CAP_SYS_RESOURCE);
+		th->th_ignore_quota = !!md_capable(uc, CAP_SYS_RESOURCE);
 
 	return th;
 }

@@ -239,7 +239,7 @@ hsm_action_permission(struct mdt_thread_info *mti,
 	if (hsma != HSMA_RESTORE && mdt_rdonly(mti->mti_exp))
 		RETURN(-EROFS);
 
-	if (md_capable(uc, CFS_CAP_SYS_ADMIN))
+	if (md_capable(uc, CAP_SYS_ADMIN))
 		RETURN(0);
 
 	ma->ma_need = MA_INODE;
@@ -313,7 +313,7 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 			/* In case of REMOVE and CANCEL a Lustre file
 			 * is not mandatory, but restrict this
 			 * exception to admins. */
-			if (md_capable(mdt_ucred(mti), CFS_CAP_SYS_ADMIN) &&
+			if (md_capable(mdt_ucred(mti), CAP_SYS_ADMIN) &&
 			    (hai->hai_action == HSMA_REMOVE ||
 			     hai->hai_action == HSMA_CANCEL))
 				goto record;

@@ -304,12 +304,12 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 check_capabilities:
 	if (!(mask & MAY_EXEC) ||
 	    (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
-		if (md_capable(uc, CFS_CAP_DAC_OVERRIDE))
+		if (md_capable(uc, CAP_DAC_OVERRIDE))
 			RETURN(0);
 
 	if ((mask == MAY_READ) ||
 	    (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
-		if (md_capable(uc, CFS_CAP_DAC_READ_SEARCH))
+		if (md_capable(uc, CAP_DAC_READ_SEARCH))
 			RETURN(0);
 
 	CDEBUG(D_SEC, "permission denied, mode %x, fsuid %u, uid %u\n",
@@ -352,7 +352,7 @@ int mdd_permission(const struct lu_env *env, struct md_object *pobj,
 			uc = lu_ucred_assert(env);
 
 		if (cattr->la_uid != uc->uc_fsuid &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CAP_FOWNER))
 			rc = -EPERM;
 	}
 
