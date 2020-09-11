@@ -1475,7 +1475,7 @@ run_test 205 "Check health and resends for multi-rail local failures"
 
 # See lnet/lnet/lib-msg.c:lnet_health_check()
 LNET_REMOTE_RESEND_STATUSES="remote_dropped"
-LNET_REMOTE_NO_RESEND_STATUSES="remote_error remote_timeout network_timeout"
+LNET_REMOTE_NO_RESEND_STATUSES="remote_error remote_timeout"
 test_206() {
 	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
@@ -1642,6 +1642,55 @@ test_208() {
 	cleanup_lnet
 }
 run_test 208 "Test various kernel ip2nets configurations"
+
+test_209() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+
+	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+		error "failed to discover myself"
+
+	echo "Simulate network_timeout w/SR config"
+	lnet_health_pre
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e network_timeout
+	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		error "Should have failed"
+	$LCTL net_drop_del -a
+
+	lnet_health_post
+
+	check_no_resends || return $?
+	check_no_local_health || return $?
+	check_no_remote_health || return $?
+
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	add_net "tcp1" "eth0" || return $?
+
+	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
+		error "failed to discover myself"
+
+	echo "Simulate network_timeout w/MR config"
+	lnet_health_pre
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e network_timeout
+	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e network_timeout
+	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		error "Should have failed"
+	$LCTL net_drop_del -a
+
+	lnet_health_post
+
+	check_no_resends || return $?
+	check_local_health || return $?
+	check_remote_health || return $?
+
+	return 0
+}
+run_test 209 "Check health, but not resends, for network timeout"
 
 test_300() {
 	# LU-13274

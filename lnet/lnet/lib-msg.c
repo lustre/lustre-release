@@ -929,9 +929,14 @@ lnet_health_check(struct lnet_msg *msg)
 		break;
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
+		if (handle_remote_health)
+			lnet_handle_remote_failure(lpni);
+		return -1;
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
 		if (handle_remote_health)
 			lnet_handle_remote_failure(lpni);
+		if (handle_local_health)
+			lnet_handle_local_failure(ni);
 		return -1;
 	default:
 		LBUG();
