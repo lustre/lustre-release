@@ -473,7 +473,7 @@ test_20b() { # bug 10480
 
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
 	while [ ! -e $DIR/$tfile ] ; do
-		usleep 60			# give dd a chance to start
+		sleep 0.01			# give dd a chance to start
 	done
 
 	$LFS getstripe $DIR/$tfile || error "$LFS getstripe $DIR/$tfile failed"

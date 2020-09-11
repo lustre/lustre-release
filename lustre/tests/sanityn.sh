@@ -753,7 +753,7 @@ test_27() {
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!
-	usleep 50
+	sleep 0.5
 	log "dd 1 started"
 
 	dd if=/dev/zero of=$DIR1/$tfile bs=$((16384-1024))k conv=notrunc count=1 seek=4 &

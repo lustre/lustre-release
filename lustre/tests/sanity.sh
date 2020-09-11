@@ -7717,7 +7717,7 @@ test_60g() {
 
 		do_facet mds$index $LCTL set_param fail_loc=0x8000019a \
 			> /dev/null
-		usleep 100
+		sleep 0.01
 	done
 
 	kill -9 $pid

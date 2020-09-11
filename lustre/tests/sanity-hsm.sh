@@ -92,7 +92,7 @@ wait_copytools() {
 	local wait_timeout=200
 	local wait_start=$SECONDS
 	local wait_end=$((wait_start + wait_timeout))
-	local sleep_time=100000 # 0.1 second
+	local sleep_time=1
 
 	while ((SECONDS < wait_end)); do
 		if ! search_copytools $hosts; then
@@ -101,9 +101,8 @@ wait_copytools() {
 		fi
 
 		echo "copytools still running on $hosts"
-		usleep $sleep_time
-		[ $sleep_time -lt 32000000 ] && # 3.2 seconds
-			sleep_time=$(bc <<< "$sleep_time * 2")
+		sleep $sleep_time
+		[ $sleep_time -lt 5 ] && sleep_time=$((sleep_time + 1))
 	done
 
 	# try to dump Copytool's stack
