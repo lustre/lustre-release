@@ -3374,7 +3374,7 @@ kiblnd_check_conns (int idx)
 
 	if (!list_empty(&timedout_txs))
 		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT,
-				   LNET_MSG_STATUS_LOCAL_TIMEOUT);
+				   LNET_MSG_STATUS_NETWORK_TIMEOUT);
 
 	/* Handle timeout by closing the whole
 	 * connection. We can only be sure RDMA activity
