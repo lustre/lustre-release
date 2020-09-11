@@ -5982,6 +5982,8 @@ test_newerXY_base() {
 		ref=$DIR/$tfile.newer.$x$y
 		touch $ref || error "touch $ref failed"
 	fi
+
+	echo "before = $ref"
 	sleep 2
 	setup_56 $dir $NUMFILES $NUMDIRS "-i0 -c1" "-i0 -c1"
 	sleep 2
@@ -5996,28 +5998,28 @@ test_newerXY_base() {
 		touch $negref || error "touch $negref failed"
 	fi
 
+	echo "after = $negref"
 	local cmd="$LFS find $dir -newer$x$y $ref"
 	local nums=$(eval $cmd | wc -l)
 	local expected=$(((NUMFILES + 2) * NUMDIRS + 1))
 
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
+	[ $nums -eq $expected ] || { ls -lauR --full-time $dir ;
+		error "'$cmd' wrong: found $nums newer, expected $expected"  ; }
 
 	cmd="$LFS find $dir ! -newer$x$y $negref"
 	nums=$(eval $cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
+	[ $nums -eq $expected ] || { ls -lauR --full-time $dir ;
+		error "'$cmd' wrong: found $nums older, expected $expected"  ; }
 
 	cmd="$LFS find $dir -newer$x$y $ref ! -newer$x$y $negref"
 	nums=$(eval $cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
+	[ $nums -eq $expected ] || { ls -lauR --full-time $dir ;
+		error "'$cmd' wrong: found $nums between, expected $expected"; }
 
 	rm -rf $DIR/*
 }
 
 test_56oc() {
-	test_newerXY_base "b" "t"
 	test_newerXY_base "a" "a"
 	test_newerXY_base "a" "m"
 	test_newerXY_base "a" "c"
@@ -6027,10 +6029,19 @@ test_56oc() {
 	test_newerXY_base "c" "a"
 	test_newerXY_base "c" "m"
 	test_newerXY_base "c" "c"
-	test_newerXY_base "b" "b"
+
+	[[ -n "$sles_version" ]] &&
+		echo "skip timestamp tests on SLES, LU-13665" && return 0
+
 	test_newerXY_base "a" "t"
 	test_newerXY_base "m" "t"
 	test_newerXY_base "c" "t"
+
+	[[ $MDS1_VERSION -lt $(version_code 2.13.54) ||
+	   $CLIENT_VERSION -lt $(version_code 2.13.54) ]] &&
+		! btime_supported && echo "btime unsupported" && return 0
+
+	test_newerXY_base "b" "b"
 	test_newerXY_base "b" "t"
 }
 run_test 56oc "check lfs find -newerXY work"
@@ -15545,6 +15556,9 @@ test_165a() {
 	local rc
 	local count
 
+	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
+		skip "OFD access log unsupported"
+
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
 	setup_165
 	sleep 5
@@ -15578,10 +15592,14 @@ test_165b() {
 	local size
 	local flags
 
+	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
+		skip "OFD access log unsupported"
+
 	setup_165
 
 	lfs setstripe -c 1 -i 0 "${file}"
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
+		error "cannot create '${file}'"
 	do_facet ost1 ofd_access_log_reader --list
 
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
@@ -15620,7 +15638,8 @@ test_165b() {
 	fi
 
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r524288c || error "cannot read '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r524288c ||
+		error "cannot read '${file}'"
 	sleep 5
 	do_facet ost1 killall -TERM ofd_access_log_reader
 	wait
@@ -15654,6 +15673,10 @@ run_test 165b "ofd access log entries are produced and consumed"
 
 test_165c() {
 	local file="${DIR}/${tdir}/${tfile}"
+
+	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
+		skip "OFD access log unsupported"
+
 	test_mkdir "${DIR}/${tdir}"
 
 	setup_165
@@ -15662,7 +15685,8 @@ test_165c() {
 
 	# 4096 / 64 = 64. Create twice as many entries.
 	for ((i = 0; i < 128; i++)); do
-		$MULTIOP "${file}-${i}" oO_CREAT:O_WRONLY:w512c || error "cannot create file"
+		$MULTIOP "${file}-${i}" oO_CREAT:O_WRONLY:w512c ||
+			error "cannot create file"
 	done
 
 	sync
@@ -15672,7 +15696,8 @@ test_165c() {
 run_test 165c "full ofd access logs do not block IOs"
 
 oal_peek_entry_count() {
-	do_facet ost1 ofd_access_log_reader --list | awk '$1 == "_entry_count:" { print $2; }'
+	do_facet ost1 ofd_access_log_reader --list |
+		awk '$1 == "_entry_count:" { print $2; }'
 }
 
 oal_expect_entry_count() {
@@ -15693,37 +15718,49 @@ test_165d() {
 	local file="${DIR}/${tdir}/${tfile}"
 	local param="obdfilter.${FSNAME}-OST0000.access_log_mask"
 	local entry_count
+
+	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
+		skip "OFD access log unsupported"
+
 	test_mkdir "${DIR}/${tdir}"
 
 	setup_165
 	lfs setstripe -c 1 -i 0 "${file}"
 
 	do_facet ost1 lctl set_param "${param}=rw"
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
+		error "cannot create '${file}'"
 	oal_expect_entry_count 1
 
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
+		error "cannot read '${file}'"
 	oal_expect_entry_count 2
 
 	do_facet ost1 lctl set_param "${param}=r"
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
+		error "cannot create '${file}'"
 	oal_expect_entry_count 2
 
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
+		error "cannot read '${file}'"
 	oal_expect_entry_count 3
 
 	do_facet ost1 lctl set_param "${param}=w"
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
+		error "cannot create '${file}'"
 	oal_expect_entry_count 4
 
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
+		error "cannot read '${file}'"
 	oal_expect_entry_count 4
 
 	do_facet ost1 lctl set_param "${param}=0"
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c || error "cannot create '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
+		error "cannot create '${file}'"
 	oal_expect_entry_count 4
 
-	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c || error "cannot read '${file}'"
+	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
+		error "cannot read '${file}'"
 	oal_expect_entry_count 4
 }
 run_test 165d "ofd_access_log mask works"
@@ -15731,11 +15768,13 @@ run_test 165d "ofd_access_log mask works"
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"
-	$MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	$MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c ||
+		error "multiop failed while creating a file"
 	log "starting reads"
 	dd if=$DIR/$tfile of=/dev/null bs=4096 &
 	log "truncating the file"
-	$MULTIOP $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	$MULTIOP $DIR/$tfile oO_TRUNC:c ||
+		error "multiop failed while truncating the file"
 	log "killing dd"
 	kill %+ || true # reads might have finished
 	echo "wait until dd is finished"
