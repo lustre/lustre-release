@@ -2209,8 +2209,12 @@ kiblnd_peer_connect_failed(struct kib_peer_ni *peer_ni, int active,
 	CNETERR("Deleting messages for %s: connection failed\n",
 		libcfs_nid2str(peer_ni->ibp_nid));
 
-	kiblnd_txlist_done(&zombies, error,
-			   LNET_MSG_STATUS_LOCAL_DROPPED);
+	if (error == -EHOSTUNREACH || error == -ETIMEDOUT)
+		kiblnd_txlist_done(&zombies, error,
+				   LNET_MSG_STATUS_NETWORK_TIMEOUT);
+	else
+		kiblnd_txlist_done(&zombies, error,
+				   LNET_MSG_STATUS_LOCAL_DROPPED);
 }
 
 static void
