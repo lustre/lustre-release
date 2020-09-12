@@ -94,6 +94,10 @@ void obdo_from_la(struct obdo *dst, const struct lu_attr *la, u64 valid)
 		dst->o_flags = la->la_flags;
 		newvalid |= OBD_MD_FLFLAGS;
 	}
+	if (valid & LA_NLINK) {
+		dst->o_nlink = la->la_nlink;
+		newvalid |= OBD_MD_FLNLINK;
+	}
 	dst->o_valid |= newvalid;
 }
 EXPORT_SYMBOL(obdo_from_la);
@@ -150,6 +154,10 @@ void la_from_obdo(struct lu_attr *dst, const struct obdo *obdo, u64 valid)
 	if (valid & OBD_MD_FLFLAGS) {
 		dst->la_flags = obdo->o_flags;
 		newvalid |= LA_FLAGS;
+	}
+	if (valid & OBD_MD_FLNLINK) {
+		dst->la_nlink = obdo->o_nlink;
+		newvalid |= LA_NLINK;
 	}
 	dst->la_valid = newvalid;
 }
