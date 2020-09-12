@@ -126,35 +126,35 @@ $msg"
 #
 # In the second usage the new value is appended to the old.
 setmodopts() {
-        local _append=false
+	local _append=false
 
-        if [ "$1" = -a ]; then
-            _append=true
-            shift
-        fi
+	if [ "$1" = -a ]; then
+		_append=true
+		shift
+	fi
 
-        local _var=MODOPTS_$1
-        local _newvalue=$2
-        local _savevar=$3
-        local _oldvalue
+	local _var=MODOPTS_$1
+	local _newvalue=$2
+	local _savevar=$3
+	local _oldvalue
 
-        # Dynamic naming of variables is a pain in bash.  In ksh93 we could
-        # write "nameref opts_var=${modname}_MODOPTS" then assign directly
-        # to opts_var.  Associative arrays would also help, alternatively.
-        # Alas, we're stuck with eval until all distros move to a more recent
-        # version of bash.  Fortunately we don't need to eval unset and export.
+	# Dynamic naming of variables is a pain in bash.  In ksh93 we could
+	# write "nameref opts_var=${modname}_MODOPTS" then assign directly
+	# to opts_var.  Associative arrays would also help, alternatively.
+	# Alas, we're stuck with eval until all distros move to a more recent
+	# version of bash.  Fortunately we don't need to eval unset and export.
 
-        if [ -z "$_newvalue" ]; then
-            unset $_var
-            return 0
-        fi
+	if [ -z "$_newvalue" ]; then
+		unset $_var
+		return 0
+	fi
 
-        _oldvalue=${!var}
-        $_append && _newvalue="$_oldvalue $_newvalue"
-        export $_var="$_newvalue"
-        echo setmodopts: ${_var}=${_newvalue}
+	_oldvalue=${!_var}
+	$_append && _newvalue="$_oldvalue $_newvalue"
+	export $_var="$_newvalue"
+	echo setmodopts: ${_var}=${_newvalue}
 
-        [ -n "$_savevar" ] && eval $_savevar=\""$_oldvalue"\"
+	[ -n "$_savevar" ] && eval $_savevar=\""$_oldvalue"\"
 }
 
 echoerr () { echo "$@" 1>&2 ; }
