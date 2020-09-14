@@ -2966,11 +2966,12 @@ test_140b() {
 	replay_barrier mds1
 	umount_mds_client
 	fail mds1
+	# Lustre: tfs-MDT0000: Recovery over after 0:03, of 2 clients 2 rec...
 	local recovery=$(do_facet mds1 dmesg |
-			 awk -F: '/Recovery over after/ { print $4 }' |
-			 cut -d, -f1 | tail -1)
-	(( $recovery < $TIMEOUT*2 )) ||
-		error "recovery took too long $recovery > $((TIMEOUT * 2))"
+			 awk '/Recovery over after/ { print $6 }' | tail -1 |
+			 awk -F: '{ print $1 * 60 + $2 }')
+	(( recovery < TIMEOUT * 2 + 5 )) ||
+		error "recovery took too long $recovery > $((TIMEOUT * 2 + 5))"
 }
 run_test 140b "local mount is excluded from recovery"
 
