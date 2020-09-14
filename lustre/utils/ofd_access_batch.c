@@ -350,6 +350,7 @@ struct alr_thread_arg {
 	struct list_head list;
 	int fraction;
 	FILE *file;
+	pthread_mutex_t *file_mutex;
 };
 
 void *alr_sort_and_print_thread(void *arg)
@@ -357,7 +358,8 @@ void *alr_sort_and_print_thread(void *arg)
 	struct alr_entry *alre, *next;
 	struct alr_thread_arg *aa = arg;
 	struct list_head *tmp = &aa->list;
-	int *sa, d, i, nr = 0;
+	int *sa = NULL;
+	int rc, d, i, nr = 0;
 	unsigned long cut;
 
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
@@ -366,72 +368,98 @@ void *alr_sort_and_print_thread(void *arg)
 		if (alre->alre_count[1] > 0)
 			nr++;
 	}
-	if (nr) {
-		sa = calloc(sizeof(int), nr);
-		if (!sa) {
-			fprintf(stderr, "cannot allocate memory for sorting\n");
-			exit(1);
-		}
-		i = 0;
-		list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
-			if (alre->alre_count[0] > 0)
-				sa[i++] = alre->alre_count[0];
-			if (alre->alre_count[1] > 0)
-				sa[i++] = alre->alre_count[1];
-		}
-		qsort(sa, nr, sizeof(int), sort_compare);
-		i = nr * aa->fraction / 100;
-		if (i > 0)
-			i--;
-		cut = sa[i];
-		if (cut < 1)
-			cut = 1;
-		free(sa);
 
-		/* there might be lots of items at @cut, but we want to limit total
-		 * output. so the first loop dumps all items > @cut and the second
-		 * loop dumps items=@cut so that total number (@i) is not exceeeded.
-		 * XXX: possible optimization - move items=@cut to another list, so
-		 * that 2nd pass takes < O(n) */
-		list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
-			for (d = 0; d < 2; d++) {
-				if (alre->alre_count[d] <= cut)
-					continue;
-				alre_printf(aa->file, alre, d);
-				i--;
-			}
-		}
-		list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
-			for (d = 0; d < 2 && i > 0; d++) {
-				if (alre->alre_count[d] != cut)
-					continue;
-				alre_printf(aa->file, alre, d);
-				i--;
-			}
-			alre_del_init(alre);
-			free(alre);
+	if (nr == 0)
+		goto out;
+
+	sa = calloc(nr, sizeof(*sa));
+	if (!sa) {
+		fprintf(stderr, "cannot allocate memory for sorting\n");
+		exit(1);
+	}
+
+	i = 0;
+	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
+		if (alre->alre_count[0] > 0)
+			sa[i++] = alre->alre_count[0];
+		if (alre->alre_count[1] > 0)
+			sa[i++] = alre->alre_count[1];
+	}
+
+	qsort(sa, nr, sizeof(*sa), sort_compare);
+	i = nr * aa->fraction / 100;
+	if (i > 0)
+		i--;
+	cut = sa[i];
+	if (cut < 1)
+		cut = 1;
+	free(sa);
+
+	/* Prevent jumbled output from multiple concurrent sort and
+	 * print threads. */
+	rc = pthread_mutex_lock(aa->file_mutex);
+	if (rc != 0) {
+		fprintf(stderr, "cannot lock batch file: %s\n",
+			strerror(rc));
+		exit(1);
+	}
+
+	/* there might be lots of items at @cut, but we want to limit total
+	 * output. so the first loop dumps all items > @cut and the second
+	 * loop dumps items=@cut so that total number (@i) is not exceeeded.
+	 * XXX: possible optimization - move items=@cut to another list, so
+	 * that 2nd pass takes < O(n) */
+	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
+		for (d = 0; d < 2; d++) {
+			if (alre->alre_count[d] <= cut)
+				continue;
+			alre_printf(aa->file, alre, d);
+			i--;
 		}
 	}
 
-	free(aa);
-	pthread_exit((void *)0);
+	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
+		for (d = 0; d < 2 && i > 0; d++) {
+			if (alre->alre_count[d] != cut)
+				continue;
+			alre_printf(aa->file, alre, d);
+			i--;
+		}
+	}
 
-	return 0;
+	rc = pthread_mutex_unlock(aa->file_mutex);
+	if (rc != 0) {
+		fprintf(stderr, "cannot unlock batch file: %s\n",
+			strerror(rc));
+		exit(1);
+	}
+
+out:
+	list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
+		alre_del_init(alre);
+		free(alre);
+	}
+
+	free(aa);
+
+	return NULL;
 }
 
 /* Print, clear, and resize the batch. */
-int alr_batch_print(struct alr_batch *alrb, FILE *file, int fraction)
+int alr_batch_print(struct alr_batch *alrb, FILE *file,
+		    pthread_mutex_t *file_mutex, int fraction)
 {
 	unsigned int new_hash_shift;
-	struct alr_thread_arg *aa;
+	pthread_attr_t attr, *pattr = NULL;
+	struct alr_thread_arg *aa = NULL;
 	pthread_t pid;
 	int i, rc;
 
 	if (alrb == NULL)
 		return 0;
 
-	aa = malloc(sizeof(*aa));
-	if (!aa)
+	aa = calloc(1, sizeof(*aa));
+	if (aa == NULL)
 		return -ENOMEM;
 
 	/* move all collected items to the temp list */
@@ -443,12 +471,27 @@ int alr_batch_print(struct alr_batch *alrb, FILE *file, int fraction)
 		INIT_LIST_HEAD(&alrb->alrb_hash[i]);
 	}
 	aa->file = file;
+	aa->file_mutex = file_mutex;
 	aa->fraction = fraction;
+
+	rc = pthread_attr_init(&attr);
+	if (rc != 0)
+		goto out;
+
+	pattr = &attr;
+
+	rc = pthread_attr_setdetachstate(pattr, PTHREAD_CREATE_DETACHED);
+	if (rc != 0)
+		goto out;
 
 	/* as sorting may take time and we don't want to lose access
 	 * records we better do sorting and printing in a different thread */
-	rc = pthread_create(&pid, NULL, alr_sort_and_print_thread, aa);
+	rc = pthread_create(&pid, pattr, &alr_sort_and_print_thread, aa);
+	if (rc != 0)
+		goto out;
 
+	aa = NULL; /* Sort and print thread owns it now. */
+out:
 	/* Resize hash based on previous count. */
 	new_hash_shift = alrb->alrb_hash_shift;
 
@@ -460,6 +503,24 @@ int alr_batch_print(struct alr_batch *alrb, FILE *file, int fraction)
 			new_hash_shift);
 
 	alrb->alrb_count = 0;
+
+	if (pattr != NULL)
+		pthread_attr_destroy(pattr);
+
+	if (aa != NULL) {
+		struct alr_entry *alre, *next;
+
+		list_for_each_entry_safe(alre, next, &aa->list,
+					 alre_fid_hash_node.fhn_node) {
+			alre_del_init(alre);
+			free(alre);
+		}
+	}
+
+	free(aa);
+
+	if (rc > 0)
+		rc = -rc; /* Fixup pthread return conventions. */
 
 	return rc;
 }
