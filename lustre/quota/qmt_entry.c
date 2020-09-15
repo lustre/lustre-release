@@ -801,8 +801,9 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 	if (!lqe_gl->lqe_glbl_data &&
 	    (req_has_rep(qb_flags) || req_is_rel(qb_flags))) {
 		if (need_reseed)
-			CWARN("%s: can't notify - lge_glbl_data is not set",
-			      qmt->qmt_svname);
+			CDEBUG(D_QUOTA,
+			       "%s: can not notify - lge_glbl_data is not set\n",
+			       qmt->qmt_svname);
 		return need_reseed;
 	}
 
