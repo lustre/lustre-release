@@ -1041,7 +1041,7 @@ run_rr_alloc() {
 	# Save mdt values, set threshold to 100% i.e always Round Robin,
 	# restore the saved values again after creating files...
 	save_lustre_params mds1 \
-		"lov.$FSNAME-MDT0000*.qos_threshold_rr" > $qos_prec_objs
+		"lod.$FSNAME-MDT0000*.qos_threshold_rr" > $qos_prec_objs
 	save_lustre_params mds1 \
 		"osp.$FSNAME-OST*-osc-MDT0000.create_count" >> $qos_prec_objs
 
@@ -1057,10 +1057,20 @@ run_rr_alloc() {
 
 	foeo_calc=$((rr_alloc_NFILES * total_MNTPTS / OSTCOUNT))
 	local create_count=$((2 * foeo_calc))
-	do_facet mds1 "$LCTL set_param -n \
-		lov.$FSNAME-MDT0000*.qos_threshold_rr 100 \
-		osp.$FSNAME-OST*-osc-MDT0000.create_count $create_count" ||
-		error "failed while setting qos_threshold_rr & creat_count"
+
+	# create_count accepted values:
+	#   [OST_MIN_PRECREATE=32, OST_MAX_PRECREATE=20000]
+	# values outside this range are ignored and -ERANGE is returned.
+	# NOTE: actual maximum value is 16384 (2^14)
+	[[ $create_count -lt 32 ]] && create_count=32
+	[[ $create_count -gt 20000 ]] && create_count=20000
+	local i
+	for i in $(seq $MDSCOUNT); do
+		do_facet mds$i "$LCTL set_param -n \
+			lod.$FSNAME-MDT0000*.qos_threshold_rr=100 \
+			osp.$FSNAME-OST*-osc-MDT0000.create_count=$create_count" ||
+			error "failed while setting qos_threshold_rr & creat_count"
+	done
 
 	# Create few temporary files in order to increase the precreated objects
 	# to a desired value, before starting 'rr_alloc' app. Due to default
