@@ -18,6 +18,7 @@ nobase_noinst_SCRIPTS += $(wildcard python/tests/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests-infra/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_dlc/*.py)
 nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_samples/*.py)
+nobase_noinst_SCRIPTS += $(wildcard python/tests/suite_dynamic-nids/*.py)
 EXTRA_DIST=$(nobase_noinst_DATA) $(nobase_noinst_SCRIPTS)
 
 noinst_testdir = $(libdir)/lustre/tests/lutf
