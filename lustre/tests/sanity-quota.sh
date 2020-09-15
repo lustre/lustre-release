@@ -1000,8 +1000,8 @@ test_1f() {
 run_test 1f "Quota pools: correct qunit after removing/adding OST"
 
 test_1g() {
-	local limit=10  # 10M
-	local global_limit=20  # 20M
+	local limit=20  # 20M
+	local global_limit=40  # 40M
 	local testfile="$DIR/$tdir/$tfile-0"
 	local qpool="qpool1"
 	local mdmb_param="osc.*.max_dirty_mb"
