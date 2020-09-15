@@ -74,6 +74,12 @@ enum {
 	/* /dev/lustre-access-log/OBDNAME ioctl: populate struct
 	 * lustre_access_log_info_v1 for the current device. */
 	LUSTRE_ACCESS_LOG_IOCTL_INFO = _IOR('O', 0x84, struct lustre_access_log_info_v1),
+
+	/* /dev/lustre-access-log/OBDNAME ioctl: only entries whose
+	 * PFID MDT index is equal to arg will be added to the log. A
+	 * value of 0xfffffffff ((__u32)-1) will disable filtering
+	 * which is the default.  Added in V2. */
+	LUSTRE_ACCESS_LOG_IOCTL_FILTER = _IOW('O', 0x85, __u32),
 };
 
 #endif /* _LUSTRE_ACCESS_LOG_H */

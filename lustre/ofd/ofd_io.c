@@ -628,7 +628,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
 
-	ofd_access(ofd,
+	ofd_access(env, ofd,
 		&(struct lu_fid) {
 			.f_seq = oa->o_parent_seq,
 			.f_oid = oa->o_parent_oid,
@@ -831,7 +831,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_read_unlock(env, fo);
 
-	ofd_access(ofd,
+	ofd_access(env, ofd,
 		&(struct lu_fid) {
 			.f_seq = oa->o_parent_seq,
 			.f_oid = oa->o_parent_oid,

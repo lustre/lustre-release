@@ -304,7 +304,7 @@ void ofd_access_log_module_exit(void);
 struct ofd_access_log;
 struct ofd_access_log *ofd_access_log_create(const char *ofd_name, size_t size);
 void ofd_access_log_delete(struct ofd_access_log *oal);
-void ofd_access(struct ofd_device *m,
+void ofd_access(const struct lu_env *env, struct ofd_device *m,
 		const struct lu_fid *parent_fid, __u64 begin, __u64 end,
 		unsigned int size, unsigned int segment_count, int rw);
 

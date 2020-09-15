@@ -119,17 +119,20 @@ struct alr_log {
 	char *alr_buf;
 	size_t alr_buf_size;
 	size_t alr_entry_size;
+	size_t alr_read_count;
 	dev_t alr_rdev;
 };
 
 static struct alr_log *alr_log[1 << 20]; /* 20 == MINORBITS */
 static int oal_version; /* FIXME ... major version, minor version */
+static __u32 alr_filter = 0xffffffff; /* no filter by default */
 static unsigned int oal_log_major;
 static unsigned int oal_log_minor_max;
 static struct alr_batch *alr_batch;
 static FILE *alr_batch_file;
 static pthread_mutex_t alr_batch_file_mutex = PTHREAD_MUTEX_INITIALIZER;
 static const char *alr_batch_file_path;
+static const char *alr_stats_file_path;
 static int alr_print_fraction = 100;
 
 #define D_ALR_DEV "%s %d"
@@ -213,6 +216,8 @@ static int alr_log_io(int epoll_fd, struct alr_dev *ad, unsigned int mask)
 	}
 
 	DEBUG("read "D_ALR_LOG", count = %zd\n", P_ALR_LOG(al), count);
+
+	al->alr_read_count += count / al->alr_entry_size;
 
 	for (i = 0; i < count; i += al->alr_entry_size) {
 		struct ofd_access_entry_v1 *oae =
@@ -305,6 +310,12 @@ static int alr_log_add(int epoll_fd, const char *path)
 		rc = 0;
 		goto out;
 	}
+	rc = ioctl(fd, LUSTRE_ACCESS_LOG_IOCTL_FILTER, alr_filter);
+	if (rc < 0) {
+		ERROR("cannot set filter '%s': %s\n",
+			path, strerror(errno));
+		goto out;
+	}
 
 	al = calloc(1, sizeof(*al));
 	if (al == NULL)
@@ -371,6 +382,94 @@ out:
 		close(fd);
 
 	return rc;
+}
+
+/* Call LUSTRE_ACCESS_LOG_IOCTL_INFO to get access log info and print
+ * YAML formatted info to stdout. */
+static int alr_log_info(struct alr_log *al)
+{
+	struct lustre_access_log_info_v1 lali;
+	int rc;
+
+	rc = ioctl(al->alr_dev.alr_fd, LUSTRE_ACCESS_LOG_IOCTL_INFO, &lali);
+	if (rc < 0) {
+		ERROR("cannot get info for device '%s': %s\n",
+			al->alr_dev.alr_name, strerror(errno));
+		return -1;
+	}
+
+	printf("- name: %s\n"
+	       "  version: %#x\n"
+	       "  type: %#x\n"
+	       "  log_size: %u\n"
+	       "  entry_size: %u\n",
+	       lali.lali_name,
+	       lali.lali_version,
+	       lali.lali_type,
+	       lali.lali_log_size,
+	       lali.lali_entry_size);
+
+	return 0;
+}
+
+static int alr_log_stats(FILE *file, struct alr_log *al)
+{
+	struct lustre_access_log_info_v1 lali;
+	int rc;
+
+	rc = ioctl(al->alr_dev.alr_fd, LUSTRE_ACCESS_LOG_IOCTL_INFO, &lali);
+	if (rc < 0) {
+		ERROR("cannot get info for device '%s': %s\n",
+			al->alr_dev.alr_name, strerror(errno));
+		return -1;
+	}
+
+#define X(m) \
+	fprintf(file, "STATS %s %s %u\n", lali.lali_name, #m, lali.m)
+
+	X(_lali_head);
+	X(_lali_tail);
+	X(_lali_entry_space);
+	X(_lali_entry_count);
+	X(_lali_drop_count);
+	X(_lali_is_closed);
+#undef X
+
+	fprintf(file, "STATS %s %s %zu\n",
+		lali.lali_name,	"alr_read_count", al->alr_read_count);
+
+	return 0;
+}
+
+static void alr_log_stats_all(void)
+{
+	FILE *stats_file;
+	int m;
+
+	if (alr_stats_file_path == NULL) {
+		stats_file = stderr;
+	} else if (strcmp(alr_stats_file_path, "-") == 0) {
+		stats_file = stdout;
+	} else {
+		stats_file = fopen(alr_stats_file_path, "a");
+		if (stats_file == NULL) {
+			ERROR("cannot open '%s': %s\n",
+			      alr_stats_file_path, strerror(errno));
+			return;
+		}
+	}
+
+	for (m = 0; m <= oal_log_minor_max; m++) {
+		if (alr_log[m] == NULL)
+			continue;
+
+		alr_log_stats(stats_file, alr_log[m]);
+	}
+
+	if (stats_file == stdout || stats_file == stderr)
+		fflush(stats_file);
+	else
+		fclose(stats_file);
 }
 
 /* Scan /dev/lustre-access-log/ for new access log devices and add to
@@ -478,6 +577,18 @@ static int alr_signal_io(int epoll_fd, struct alr_dev *sd, unsigned int mask)
 	case SIGINT:
 	case SIGTERM:
 		return ALR_EXIT_SUCCESS;
+	case SIGUSR1:
+		alr_log_stats_all();
+
+		return ALR_OK;
+	case SIGUSR2:
+		if (debug_file == NULL)
+			debug_file = stderr;
+
+		if (trace_file == NULL)
+			trace_file = stderr;
+
+		return ALR_OK;
 	default:
 		return ALR_OK;
 	}
@@ -512,46 +623,6 @@ out:
 	/* Failed writes will leave alr_batch_file (pipe) in a
 	 * weird state so make that fatal. */
 	return (rc < 0) ? ALR_EXIT_FAILURE : ALR_OK;
-}
-
-/* Call LUSTRE_ACCESS_LOG_IOCTL_INFO to get access log info and print
- * YAML formatted info to stdout. */
-static int alr_log_info(struct alr_log *al)
-{
-	struct lustre_access_log_info_v1 lali;
-	int rc;
-
-	rc = ioctl(al->alr_dev.alr_fd, LUSTRE_ACCESS_LOG_IOCTL_INFO, &lali);
-	if (rc < 0) {
-		ERROR("cannot get info for device '%s': %s\n",
-			al->alr_dev.alr_name, strerror(errno));
-		return -1;
-	}
-
-	printf("- name: %s\n"
-	       "  version: %#x\n"
-	       "  type: %#x\n"
-	       "  log_size: %u\n"
-	       "  entry_size: %u\n"
-	       "  _head: %u\n"
-	       "  _tail: %u\n"
-	       "  _entry_space: %u\n"
-	       "  _entry_count: %u\n"
-	       "  _drop_count: %u\n"
-	       "  _is_closed: %u\n",
-	       lali.lali_name,
-	       lali.lali_version,
-	       lali.lali_type,
-	       lali.lali_log_size,
-	       lali.lali_entry_size,
-	       lali._lali_head,
-	       lali._lali_tail,
-	       lali._lali_entry_space,
-	       lali._lali_entry_count,
-	       lali._lali_drop_count,
-	       lali._lali_is_closed);
-
-	return 0;
 }
 
 static struct alr_dev *alr_dev_create(int epoll_fd, int fd, const char *name,
@@ -595,11 +666,14 @@ void usage(void)
 "\n"
 "Mandatory arguments to long options are mandatory for short options too.\n"
 "  -f, --batch-file=FILE          print batch to file (default stdout)\n"
+"  -F, --batch-fraction=P         set batch printing fraction to P/100\n"
 "  -i, --batch-interval=INTERVAL  print batch every INTERVAL seconds\n"
 "  -o, --batch-offset=OFFSET      print batch at OFFSET seconds\n"
-"  -d, --debug[=FILE]             print debug messages to FILE (stderr)\n"
+"  -I, --mdt-index-filter=INDEX   set log MDT index filter to INDEX\n"
 "  -h, --help                     display this help and exit\n"
 "  -l, --list                     print YAML list of available access logs\n"
+"  -d, --debug[=FILE]             print debug messages to FILE (stderr)\n"
+"  -s, --stats=FILE		  print stats messages to FILE (stderr)\n"
 "  -t, --trace[=FILE]             print trace messages to FILE (stderr)\n",
 		program_invocation_short_name);
 }
@@ -621,17 +695,19 @@ int main(int argc, char *argv[])
 
 	static struct option options[] = {
 		{ .name = "batch-file", .has_arg = required_argument, .val = 'f', },
+		{ .name = "batch-fraction", .has_arg = required_argument, .val = 'F', },
 		{ .name = "batch-interval", .has_arg = required_argument, .val = 'i', },
 		{ .name = "batch-offset", .has_arg = required_argument, .val = 'o', },
+		{ .name = "mdt-index-filter", .has_arg = required_argument, .val = 'I' },
 		{ .name = "debug", .has_arg = optional_argument, .val = 'd', },
 		{ .name = "help", .has_arg = no_argument, .val = 'h', },
-		{ .name = "fraction", .has_arg = required_argument, .val = 'F', },
 		{ .name = "list", .has_arg = no_argument, .val = 'l', },
+		{ .name = "stats", .has_arg = required_argument, .val = 's', },
 		{ .name = "trace", .has_arg = optional_argument, .val = 't', },
 		{ .name = NULL, },
 	};
 
-	while ((c = getopt_long(argc, argv, "d::f:F:hi:lt::", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d::f:F:hi:I:ls:t::", options, NULL)) != -1) {
 		switch (c) {
 		case 'f':
 			alr_batch_file_path = optarg;
@@ -671,8 +747,14 @@ int main(int argc, char *argv[])
 			if (alr_print_fraction < 1 || alr_print_fraction > 100)
 				FATAL("invalid batch offset '%s'\n", optarg);
 			break;
+		case 'I':
+			alr_filter = strtoll(optarg, NULL, 0);
+			break;
 		case 'l':
 			list_info = 1;
+			break;
+		case 's':
+			alr_stats_file_path = optarg;
 			break;
 		case 't':
 			if (optarg == NULL) {
@@ -720,6 +802,8 @@ int main(int argc, char *argv[])
 	sigemptyset(&signal_mask);
 	sigaddset(&signal_mask, SIGINT);
 	sigaddset(&signal_mask, SIGTERM);
+	sigaddset(&signal_mask, SIGUSR1);
+	sigaddset(&signal_mask, SIGUSR2);
 	rc = sigprocmask(SIG_BLOCK, &signal_mask, NULL);
 	if (rc < 0)
 		FATAL("cannot set process signal mask: %s\n", strerror(errno));

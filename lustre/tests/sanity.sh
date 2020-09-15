@@ -15553,8 +15553,8 @@ test_165a() {
 	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
 		skip "OFD access log unsupported"
 
-	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
 	setup_165
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
 	sleep 5
 
 	do_facet ost1 ofd_access_log_reader --list
@@ -15590,13 +15590,15 @@ test_165b() {
 		skip "OFD access log unsupported"
 
 	setup_165
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	sleep 5
+
+	do_facet ost1 ofd_access_log_reader --list
 
 	lfs setstripe -c 1 -i 0 "${file}"
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
 		error "cannot create '${file}'"
-	do_facet ost1 ofd_access_log_reader --list
 
-	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
 	sleep 5
 	do_facet ost1 killall -TERM ofd_access_log_reader
 	wait
@@ -15632,9 +15634,12 @@ test_165b() {
 	fi
 
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	sleep 5
+
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r524288c ||
 		error "cannot read '${file}'"
 	sleep 5
+
 	do_facet ost1 killall -TERM ofd_access_log_reader
 	wait
 	rc=$?
@@ -15666,6 +15671,7 @@ test_165b() {
 run_test 165b "ofd access log entries are produced and consumed"
 
 test_165c() {
+	local trace="/tmp/${tfile}.trace"
 	local file="${DIR}/${tdir}/${tfile}"
 
 	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
@@ -15674,6 +15680,8 @@ test_165c() {
 	test_mkdir "${DIR}/${tdir}"
 
 	setup_165
+	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	sleep 5
 
 	lfs setstripe -c 1 -i 0 "${DIR}/${tdir}"
 
@@ -15684,34 +15692,53 @@ test_165c() {
 	done
 
 	sync
-	do_facet ost1 ofd_access_log_reader --list
+
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+
 	unlinkmany  "${file}-%d" 128
 }
 run_test 165c "full ofd access logs do not block IOs"
 
-oal_peek_entry_count() {
-	do_facet ost1 ofd_access_log_reader --list |
-		awk '$1 == "_entry_count:" { print $2; }'
+oal_get_read_count() {
+	local stats="$1"
+
+	# STATS lustre-OST0001 alr_read_count 1
+
+	do_facet ost1 cat "${stats}" |
+	awk '$1 == "STATS" && $3 == "alr_read_count" { count = $4; }
+	     END { print count; }'
 }
 
-oal_expect_entry_count() {
-	local entry_count=$(oal_peek_entry_count)
-	local expect="$1"
+oal_expect_read_count() {
+	local stats="$1"
+	local count
+	local expect="$2"
 
-	if ((entry_count == expect)); then
+	# Ask ofd_access_log_reader to write stats.
+	do_facet ost1 killall -USR1 ofd_access_log_reader
+
+	# Allow some time for things to happen.
+	sleep 1
+
+	count=$(oal_get_read_count "${stats}")
+	if ((count == expect)); then
 		return 0
 	fi
 
-	error_noexit "bad entry count, got ${entry_count}, expected ${expect}"
-	do_facet ost1 ofd_access_log_reader --list >&2
+	error_noexit "bad read count, got ${count}, expected ${expect}"
+	do_facet ost1 cat "${stats}" >&2
 	exit 1
 }
 
 test_165d() {
-	local trace="/tmp/${tfile}.trace"
+	local stats="/tmp/${tfile}.stats"
 	local file="${DIR}/${tdir}/${tfile}"
 	local param="obdfilter.${FSNAME}-OST0000.access_log_mask"
-	local entry_count
 
 	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
 		skip "OFD access log unsupported"
@@ -15719,45 +15746,94 @@ test_165d() {
 	test_mkdir "${DIR}/${tdir}"
 
 	setup_165
+	do_facet ost1 ofd_access_log_reader --stats="${stats}" &
+	sleep 5
+
 	lfs setstripe -c 1 -i 0 "${file}"
 
 	do_facet ost1 lctl set_param "${param}=rw"
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
 		error "cannot create '${file}'"
-	oal_expect_entry_count 1
+	oal_expect_read_count "${stats}" 1
 
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
 		error "cannot read '${file}'"
-	oal_expect_entry_count 2
+	oal_expect_read_count "${stats}" 2
 
 	do_facet ost1 lctl set_param "${param}=r"
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
 		error "cannot create '${file}'"
-	oal_expect_entry_count 2
+	oal_expect_read_count "${stats}" 2
 
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
 		error "cannot read '${file}'"
-	oal_expect_entry_count 3
+	oal_expect_read_count "${stats}" 3
 
 	do_facet ost1 lctl set_param "${param}=w"
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
 		error "cannot create '${file}'"
-	oal_expect_entry_count 4
+	oal_expect_read_count "${stats}" 4
 
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
 		error "cannot read '${file}'"
-	oal_expect_entry_count 4
+	oal_expect_read_count "${stats}" 4
 
 	do_facet ost1 lctl set_param "${param}=0"
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_WRONLY:w1048576c ||
 		error "cannot create '${file}'"
-	oal_expect_entry_count 4
+	oal_expect_read_count "${stats}" 4
 
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r1048576c ||
 		error "cannot read '${file}'"
-	oal_expect_entry_count 4
+	oal_expect_read_count "${stats}" 4
+
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
 }
 run_test 165d "ofd_access_log mask works"
+
+test_165e() {
+	local stats="/tmp/${tfile}.stats"
+	local file0="${DIR}/${tdir}-0/${tfile}"
+	local file1="${DIR}/${tdir}-1/${tfile}"
+
+	(( $OST1_VERSION >= $(version_code 2.13.54) )) ||
+		skip "OFD access log unsupported"
+
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+
+	test_mkdir -c 1 -i 0 "${DIR}/${tdir}-0"
+	test_mkdir -c 1 -i 1 "${DIR}/${tdir}-1"
+
+	lfs setstripe -c 1 -i 0 "${file0}"
+	lfs setstripe -c 1 -i 0 "${file1}"
+
+	setup_165
+	do_facet ost1 ofd_access_log_reader -I 1 --stats="${stats}" &
+	sleep 5
+
+	$MULTIOP "${file0}" oO_CREAT:O_WRONLY:w512c ||
+		error "cannot create '${file0}'"
+	sync
+	oal_expect_read_count "${stats}" 0
+
+	$MULTIOP "${file1}" oO_CREAT:O_WRONLY:w512c ||
+		error "cannot create '${file1}'"
+	sync
+	oal_expect_read_count "${stats}" 1
+
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+}
+run_test 165e "ofd_access_log MDT index filter works"
 
 test_169() {
 	# do directio so as not to populate the page cache
