@@ -75,24 +75,19 @@ yml_code_review() {
 }
 
 release() {
-	if [ -r /etc/SuSE-release ]; then
-		name=$(awk '/SUSE/ { printf("%s %s %s %s", $1, $2, $3, $4) }' \
-			/etc/SuSE-release)
-		version=$(sed -n -e 's/^VERSION = //p' /etc/SuSE-release)
-		level=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-		dist="${name} ${version}.${level}"
+	rhel_pat=".*release \([[:digit:]]\+\.[[:digit:]]\+\).*"
+
+	if [ -r /etc/centos-release ]; then
+		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/centos-release)
+		dist="CentOS ${version}"
+	elif [ -r /etc/redhat-release ]; then
+		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/redhat-release)
+		dist="RHEL ${version}"
 	elif [ -r /etc/os-release ]; then
 		name=$(sed -n -e 's/"//g' -e 's/^NAME=//p' /etc/os-release)
 		version=$(sed -n -e 's/"//g' -e 's/^VERSION_ID=//p' \
-			/etc/os-release)
+		/etc/os-release)
 		dist="${name} ${version}"
-	elif [ -r /etc/system-release ]; then
-		dist=$(awk '/release/ \
-			{ printf("%s %s %s", $1, $2, $3) }' \
-			/etc/system-release)
-	elif [ -r /etc/*-release ]; then
-		dist=$(find /etc/ -maxdepth 1 -name '*release' 2> /dev/null | \
-			sed -e 's/\/etc\///' -e 's/-release//' | head -n1)
 	else
 		dist="UNKNOWN"
 	fi
@@ -112,10 +107,10 @@ cat <<EOF
     architecture: $(uname -m)
     os: $(uname -o)
     os_distribution: $TEST_DISTRO
-    lustre_version: $LUSTRE_VERSION
-    lustre_build: $LUSTRE_BUILD
-    lustre_branch: $LUSTRE_BRANCH
-    lustre_revision: $LUSTRE_REVISION
+    version: $LUSTRE_VERSION
+    build: $LUSTRE_BUILD
+    branch: $LUSTRE_BRANCH
+    revision: $LUSTRE_REVISION
     kernel_version: $(uname -r)
     file_system: ${FILE_SYSTEM:-"NA"}
 EOF
