@@ -780,6 +780,11 @@ static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep)
 			mdt_set_disposition(info, rep, (DISP_IT_EXECD |
 							DISP_LOOKUP_EXECD |
 							DISP_LOOKUP_POS));
+			if ((open_flags & MDS_OPEN_EXCL) &&
+			    (open_flags & MDS_OPEN_CREAT))
+				mdt_set_disposition(info, rep,
+						    DISP_OPEN_CREATE);
+
 			mdt_prep_ma_buf_from_rep(info, o, ma);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc == 0)

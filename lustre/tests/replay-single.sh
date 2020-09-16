@@ -134,6 +134,23 @@ test_2d() {
 }
 run_test 2d "setdirstripe replay"
 
+test_2e() {
+	testid=$(echo $TESTNAME | tr '_' ' ')
+	#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x8000013b"
+	openfile -f O_CREAT:O_EXCL $DIR/$tfile &
+	sleep 1
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	wait
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	dmesg | tac | sed "/$testid/,$ d" | \
+		grep "Open request replay failed with -17" &&
+		error "open replay failed" || true
+}
+run_test 2e "O_CREAT|O_EXCL create replay"
+
 test_3a() {
 	local file=$DIR/$tfile
 	replay_barrier $SINGLEMDS
