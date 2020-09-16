@@ -388,8 +388,6 @@ void *alr_sort_and_print_thread(void *arg)
 
 	qsort(sa, nr, sizeof(*sa), sort_compare);
 	i = nr * aa->fraction / 100;
-	if (i > 0)
-		i--;
 	cut = sa[i];
 	if (cut < 1)
 		cut = 1;
