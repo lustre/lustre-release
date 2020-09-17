@@ -508,14 +508,6 @@ static int alr_batch_timer_io(int epoll_fd, struct alr_dev *td, unsigned int mas
 			alr_batch_file_path, strerror(errno));
 		goto out;
 	}
-
-	/* FIXME: blocking write to batch file. */
-	rc = fflush(alr_batch_file);
-	if (rc < 0) {
-		ERROR("cannot write to '%s': %s\n",
-			alr_batch_file_path, strerror(errno));
-		goto out;
-	}
 out:
 	/* Failed writes will leave alr_batch_file (pipe) in a
 	 * weird state so make that fatal. */

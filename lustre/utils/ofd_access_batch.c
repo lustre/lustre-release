@@ -433,6 +433,8 @@ void *alr_sort_and_print_thread(void *arg)
 	}
 
 out:
+	fflush(aa->file);
+
 	list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
 		alre_del_init(alre);
 		free(alre);
