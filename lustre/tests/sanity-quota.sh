@@ -4862,6 +4862,61 @@ test_73()
 }
 run_test 73 "default limits at OST Pool Quotas"
 
+test_74()
+{
+	local global_limit=200 # 200M
+	local limit=10 # 10M
+	local limit2=50 # 50M
+	local qpool="qpool1"
+	local qpool2="qpool2"
+	local tmp=0
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 1 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit2}M --pool $qpool2 $DIR ||
+		error "set user quota failed"
+
+	tmp=$(getquota -u $TSTUSR global bhardlimit)
+	[ $tmp -eq $((global_limit * 1024)) ] ||
+		error "wrong global limit $global_limit"
+
+	tmp=$(getquota -u $TSTUSR global bhardlimit $qpool)
+	[ $tmp -eq $((limit * 1024)) ] || error "wrong limit $tmp for $qpool"
+
+	tmp=$(getquota -u $TSTUSR global bhardlimit $qpool2)
+	[ $tmp -eq $((limit2 * 1024)) ] || error "wrong limit $tmp for $qpool2"
+
+	# check limits in pools
+	tmp=$($LFS quota -u $TSTUSR --pool $DIR | \
+	      grep -A4 $qpool | awk 'NR == 4{print $4}')
+	echo "pool limit for $qpool $tmp"
+	[ $tmp -eq $((limit * 1024)) ] || error "wrong limit:tmp for $qpool"
+	tmp=$($LFS quota -u $TSTUSR --pool $DIR | \
+	      grep -A4 $qpool2 | awk 'NR == 4{print $4}')
+	echo "pool limit for $qpool2 $tmp"
+	[ $tmp -eq $((limit2 * 1024)) ] || error "wrong limit:$tmp for $qpool2"
+}
+run_test 74 "check quota pools per user"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

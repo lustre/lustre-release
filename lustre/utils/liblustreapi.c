@@ -1699,6 +1699,34 @@ free_path:
 /* wrapper for lfs.c and obd.c */
 int llapi_poollist(const char *name)
 {
+	int poolcount, rc, i;
+	char *buf, **pools;
+
+	rc = llapi_get_poolbuf(name, &buf, &pools, &poolcount);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < poolcount; i++)
+		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", pools[i]);
+	free(buf);
+
+	return 0;
+}
+
+/**
+ * Get buffer that holds uuids and the list of pools in a filesystem.
+ *
+ * \param name		filesystem name or path
+ * \param buf		bufffer that has to be freed if function returns 0
+ * \param pools		pointer to the list of pools in buffer
+ * \param poolcount	number of pools
+ *
+ * \return 0 when found at least 1 pool, i.e. poolcount  > 0
+ * \retval -error failure
+ */
+int llapi_get_poolbuf(const char *name, char **buf,
+		      char ***pools, int *poolcount)
+{
 	/*
 	 * list of pool names (assume that pool count is smaller
 	 * than OST count)
@@ -1706,7 +1734,7 @@ int llapi_poollist(const char *name)
 	char **list, *buffer = NULL, *fsname = (char *)name;
 	char *poolname = NULL, *tmp = NULL, data[16];
 	enum param_filter type = FILTER_BY_PATH;
-	int obdcount, bufsize, rc, nb, i;
+	int obdcount, bufsize, rc, nb;
 
 	if (name == NULL)
 		return -EINVAL;
@@ -1758,11 +1786,15 @@ retry_get_pools:
 		goto retry_get_pools;
 	}
 
-	for (i = 0; i < nb; i++)
-		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", list[i]);
 	rc = (nb < 0 ? nb : 0);
+	if (!rc) {
+		*buf = buffer;
+		*pools = list;
+		*poolcount = nb;
+	}
 err:
-	if (buffer)
+	/* Don't free buffer, it will be used later */
+	if (rc && buffer)
 		free(buffer);
 	if (fsname != NULL && type == FILTER_BY_FS_NAME)
 		free(fsname);

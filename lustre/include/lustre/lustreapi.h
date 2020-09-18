@@ -166,6 +166,8 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
 			 unsigned long long stripe_size, int stripe_offset,
 			 int stripe_count, int stripe_pattern, char *pool_name);
 int llapi_poollist(const char *name);
+int llapi_get_poolbuf(const char *name, char **buf,
+		      char ***poolist, int *poolcount);
 int llapi_get_poollist(const char *name, char **poollist, int list_size,
 		       char *buffer, int buffer_size);
 int llapi_get_poolmembers(const char *poolname, char **members, int list_size,

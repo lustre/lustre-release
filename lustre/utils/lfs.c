@@ -8449,9 +8449,13 @@ static int lfs_quota(int argc, char **argv)
 	bool human_readable = false;
 	bool show_default = false;
 	int qtype;
+	bool show_pools = false;
 	struct option long_opts[] = {
-	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = optional_argument },
 	{ .name = NULL } };
+	char **poollist = NULL;
+	char *buf = NULL;
+	int poolcount, i;
 
 	qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
 	if (!qctl)
@@ -8527,14 +8531,26 @@ quota_type:
 			human_readable = true;
 			break;
 		case LFS_POOL_OPT:
-			if (lfs_verify_poolarg(optarg)) {
-				rc = -1;
-				goto out;
+			if ((!optarg) && (argv[optind] != NULL) &&
+				(argv[optind][0] != '-') &&
+				(argv[optind][0] != '/')) {
+				optarg = argv[optind++];
+				if (lfs_verify_poolarg(optarg)) {
+					rc = -EINVAL;
+					goto out;
+				}
+				strncpy(qctl->qc_poolname, optarg,
+					LOV_MAXPOOLNAME);
+				if (qctl->qc_cmd == LUSTRE_Q_GETINFO)
+					qctl->qc_cmd = LUSTRE_Q_GETINFOPOOL;
+				else
+					qctl->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
+				break;
 			}
-			strncpy(qctl->qc_poolname, optarg, LOV_MAXPOOLNAME);
-			qctl->qc_cmd = qctl->qc_cmd == LUSTRE_Q_GETINFO ?
-						LUSTRE_Q_GETINFOPOOL :
-						LUSTRE_Q_GETQUOTAPOOL;
+
+			/* optarg is NULL */
+			show_pools = true;
+			qctl->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
 			break;
 		default:
 			fprintf(stderr, "%s quota: unrecognized option '%s'\n",
@@ -8626,9 +8642,37 @@ quota_type:
 	}
 
 	mnt = argv[optind];
+	if (show_pools) {
+		char *p;
+
+		i = 0;
+		rc = llapi_get_poolbuf(mnt, &buf, &poollist, &poolcount);
+		if (rc)
+			goto out;
+
+		for (i = 0; i < poolcount; i++) {
+			p = memchr(poollist[i], '.', MAXNAMLEN);
+			if (!p) {
+				fprintf(stderr, "bad string format %.*s\n",
+					MAXNAMLEN, poollist[i]);
+				rc = -EINVAL;
+				goto out;
+			}
+			p++;
+			printf("Quotas for pool: %s\n", p);
+			strncpy(qctl->qc_poolname, p, LOV_MAXPOOLNAME);
+			rc = get_print_quota(mnt, name, qctl, verbose, quiet,
+					     human_readable, show_default);
+			if (rc)
+				break;
+		}
+		goto out;
+	}
+
 	rc = get_print_quota(mnt, name, qctl, verbose, quiet,
 			     human_readable, show_default);
 out:
+	free(buf);
 	free(qctl);
 	return rc;
 }
