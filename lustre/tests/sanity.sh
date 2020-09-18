@@ -26859,6 +26859,45 @@ test_432() {
 }
 run_test 432 "mv dir from outside Lustre"
 
+test_433() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	[[ -n "$($LCTL list_param llite.*.inode_cache 2>/dev/null)" ]] ||
+		skip "inode cache not supported"
+
+	$LCTL set_param llite.*.inode_cache=0
+	stack_trap "$LCTL set_param llite.*.inode_cache=1"
+
+	local count=256
+	local before
+	local after
+
+	cancel_lru_locks mdc
+	test_mkdir $DIR/$tdir || error "mkdir $tdir"
+	createmany -m $DIR/$tdir/f $count
+	createmany -d $DIR/$tdir/d $count
+	ls -l $DIR/$tdir > /dev/null
+	stack_trap "rm -rf $DIR/$tdir"
+
+	before=$(num_objects)
+	cancel_lru_locks mdc
+	after=$(num_objects)
+
+	# sometimes even @before is less than 2 * count
+	while (( before - after < count )); do
+		sleep 1
+		after=$(num_objects)
+		wait=$((wait + 1))
+		(( wait % 5 == 0 )) && echo "wait $wait seconds objects: $after"
+		if (( wait > 60 )); then
+			error "inode slab grew from $before to $after"
+		fi
+	done
+
+	echo "lustre_inode_cache $before objs before lock cancel, $after after"
+}
+run_test 433 "ldlm lock cancel releases dentries and inodes"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

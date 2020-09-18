@@ -1472,6 +1472,36 @@ static ssize_t opencache_max_ms_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(opencache_max_ms);
 
+static ssize_t inode_cache_show(struct kobject *kobj,
+				struct attribute *attr,
+				char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_inode_cache_enabled);
+}
+
+static ssize_t inode_cache_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer,
+				 size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_inode_cache_enabled = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(inode_cache);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -1728,6 +1758,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_opencache_threshold_count.attr,
 	&lustre_attr_opencache_threshold_ms.attr,
 	&lustre_attr_opencache_max_ms.attr,
+	&lustre_attr_inode_cache.attr,
 	NULL,
 };
 

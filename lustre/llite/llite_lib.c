@@ -452,6 +452,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	sb->s_blocksize_bits = log2(osfs->os_bsize);
 	sb->s_magic = LL_SUPER_MAGIC;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
+	sbi->ll_inode_cache_enabled = 1;
 	sbi->ll_namelen = osfs->os_namelen;
 	sbi->ll_mnt.mnt = current->fs->root.mnt;
 	sbi->ll_mnt_ns = current->nsproxy->mnt_ns;

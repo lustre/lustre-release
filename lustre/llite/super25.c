@@ -73,8 +73,13 @@ static void ll_destroy_inode(struct inode *inode)
 
 static int ll_drop_inode(struct inode *inode)
 {
-	int drop = generic_drop_inode(inode);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	int drop;
 
+	if (!sbi->ll_inode_cache_enabled)
+		return 1;
+
+	drop = generic_drop_inode(inode);
 	if (!drop)
 		drop = llcrypt_drop_inode(inode);
 
