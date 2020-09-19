@@ -2234,22 +2234,25 @@ kiblnd_connreq_done(struct kib_conn *conn, int status)
 		 (conn->ibc_state == IBLND_CONN_PASSIVE_WAIT &&
 		  peer_ni->ibp_accepting > 0));
 
-        LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
-        conn->ibc_connvars = NULL;
+	LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+	conn->ibc_connvars = NULL;
 
-        if (status != 0) {
-                /* failed to establish connection */
-                kiblnd_peer_connect_failed(peer_ni, active, status);
-                kiblnd_finalise_conn(conn);
-                return;
-        }
+	if (status != 0) {
+		/* failed to establish connection */
+		kiblnd_peer_connect_failed(peer_ni, active, status);
+		kiblnd_finalise_conn(conn);
+		return;
+	}
 
-        /* connection established */
+	/* connection established */
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
+	/* reset retry count */
+	peer_ni->ibp_retries = 0;
+
 	conn->ibc_last_send = ktime_get();
-        kiblnd_set_conn_state(conn, IBLND_CONN_ESTABLISHED);
-        kiblnd_peer_alive(peer_ni);
+	kiblnd_set_conn_state(conn, IBLND_CONN_ESTABLISHED);
+	kiblnd_peer_alive(peer_ni);
 
 	/* Add conn to peer_ni's list and nuke any dangling conns from a different
 	 * peer_ni instance... */
@@ -2695,10 +2698,15 @@ kiblnd_check_reconnect(struct kib_conn *conn, int version,
 		goto out;
 	}
 
-        switch (why) {
-        default:
-                reason = "Unknown";
-                break;
+	if (peer_ni->ibp_retries > *kiblnd_tunables.kib_retry_count) {
+		reason = "retry count exceeded due to no listener";
+		goto out;
+	}
+
+	switch (why) {
+	default:
+		reason = "Unknown";
+		break;
 
 	case IBLND_REJECT_RDMA_FRAGS: {
 		struct lnet_ioctl_config_o2iblnd_tunables *tunables;
@@ -2792,13 +2800,14 @@ kiblnd_rejected(struct kib_conn *conn, int reason, void *priv, int priv_nob)
 				       IBLND_REJECT_CONN_STALE, NULL);
 		break;
 
-        case IB_CM_REJ_INVALID_SERVICE_ID:
+	case IB_CM_REJ_INVALID_SERVICE_ID:
+		peer_ni->ibp_retries++;
 		kiblnd_check_reconnect(conn, IBLND_MSG_VERSION, 0,
 				       IBLND_REJECT_INVALID_SRV_ID, NULL);
-                CNETERR("%s rejected: no listener at %d\n",
-                        libcfs_nid2str(peer_ni->ibp_nid),
-                        *kiblnd_tunables.kib_service);
-                break;
+		CNETERR("%s rejected: no listener at %d\n",
+			libcfs_nid2str(peer_ni->ibp_nid),
+			*kiblnd_tunables.kib_service);
+		break;
 
         case IB_CM_REJ_CONSUMER_DEFINED:
 		if (priv_nob >= offsetof(struct kib_rej, ibr_padding)) {
