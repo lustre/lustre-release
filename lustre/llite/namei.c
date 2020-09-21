@@ -1122,16 +1122,17 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 
 	if (ll_sbi_has_encrypt(ll_i2sbi(dir)) && IS_ENCRYPTED(dir)) {
-		/* we know that we are going to create a regular file because
+		/* in case of create, this is going to be a regular file because
 		 * we set S_IFREG bit on it->it_create_mode above
 		 */
 		rc = llcrypt_get_encryption_info(dir);
 		if (rc)
 			GOTO(out_release, rc);
-		if (!llcrypt_has_encryption_key(dir))
-			GOTO(out_release, rc = -ENOKEY);
-		encrypt = true;
-		rc = 0;
+		if (open_flags & O_CREAT) {
+			if (!llcrypt_has_encryption_key(dir))
+				GOTO(out_release, rc = -ENOKEY);
+			encrypt = true;
+		}
 	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE2, cfs_fail_val);

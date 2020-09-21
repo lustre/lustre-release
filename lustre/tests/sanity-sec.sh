@@ -4010,12 +4010,21 @@ test_54() {
 	cp $testfile $tmpfile
 	$RUNAS dd if=/dev/urandom of=$testfile2 bs=127 count=1 conv=fsync ||
 		error "write to encrypted file $testfile2 failed"
+	$RUNAS mkdir $testdir/subdir || error "mkdir subdir failed"
+	$RUNAS touch $testdir/subdir/subfile || error "mkdir subdir failed"
 
 	$RUNAS fscrypt lock --verbose $testdir ||
 		error "fscrypt lock $testdir failed (1)"
 
+	$RUNAS ls -R $testdir || error "ls -R $testdir failed"
+	local filecount=$($RUNAS find $testdir -type f | wc -l)
+	[ $filecount -eq 3 ] || error "found $filecount files"
+
 	$RUNAS hexdump -C $testfile &&
 		error "reading $testfile should have failed without key"
+
+	$RUNAS touch ${testfile}.nokey &&
+		error "touch ${testfile}.nokey should have failed without key"
 
 	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
 		error "fscrypt unlock $testdir failed (1)"
