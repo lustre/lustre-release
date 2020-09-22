@@ -8642,7 +8642,7 @@ num_objects() {
 		awk '/lustre_inode_cache/ { print $2; exit }' /proc/slabinfo
 }
 
-test_76() { # Now for b=20433, added originally in b=1443
+test_76a() { # Now for b=20433, added originally in b=1443
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	cancel_lru_locks osc
@@ -8677,8 +8677,36 @@ test_76() { # Now for b=20433, added originally in b=1443
 		fi
 	done
 }
-run_test 76 "confirm clients recycle inodes properly ===="
+run_test 76a "confirm clients recycle inodes properly ===="
 
+test_76b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $CLIENT_VERSION -ge $(version_code 2.13.55) ] || skip "not supported"
+
+	local count=512
+	local before=$(num_objects)
+
+	for i in $(seq $count); do
+		mkdir $DIR/$tdir
+		rmdir $DIR/$tdir
+	done
+
+	local after=$(num_objects)
+	local wait=0
+
+	while (( after > before )); do
+		sleep 1
+		after=$(num_objects)
+		wait=$((wait + 1))
+		(( wait % 5 == 0 )) && echo "wait $wait seconds objects: $after"
+		if (( wait > 60 )); then
+			error "inode slab grew from $before to $after"
+		fi
+	done
+
+	echo "slab objects before: $before, after: $after"
+}
+run_test 76b "confirm clients recycle directory inodes properly ===="
 
 export ORIG_CSUM=""
 set_checksums()
