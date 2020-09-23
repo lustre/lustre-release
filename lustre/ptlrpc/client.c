@@ -2001,6 +2001,27 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					GOTO(interpret, req->rq_status);
 				}
 
+				/* don't resend too fast in case of network
+				 * errors.
+				 */
+				if (ktime_get_real_seconds() < (req->rq_sent + 1)
+				    && req->rq_net_err && req->rq_timedout) {
+
+					DEBUG_REQ(D_INFO, req,
+						  "throttle request");
+					/* Don't try to resend RPC right away
+					 * as it is likely it will fail again
+					 * and ptlrpc_check_set() will be
+					 * called again, keeping this thread
+					 * busy. Instead, wait for the next
+					 * timeout. Flag it as resend to
+					 * ensure we don't wait to long.
+					 */
+					req->rq_resend = 1;
+					spin_unlock(&imp->imp_lock);
+					continue;
+				}
+
 				list_move_tail(&req->rq_list,
 					       &imp->imp_sending_list);
 
