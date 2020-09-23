@@ -19360,7 +19360,7 @@ ladvise_willread_performance()
 		return 0
 
 	lowest_speedup=$(bc <<<"scale=2; $average_cache / 2")
-	[ ${average_ladvise%.*} -gt $lowest_speedup ] ||
+	[[ ${average_ladvise%.*} > $lowest_speedup ]] ||
 		error_not_in_vm "Speedup with willread is less than " \
 			"$lowest_speedup%, got $average_ladvise%"
 }
