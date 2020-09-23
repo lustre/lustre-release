@@ -7028,7 +7028,7 @@ test_56xc() {
 		error "cannot setstripe 20MB file"
 	echo "done"
 	echo -n "Sizing 20MB test file..."
-	truncate "$dir/20mb" 20971520 || error "cannot create 20MB test file"
+	$TRUNCATE "$dir/20mb" 20971520 || error "cannot create 20MB test file"
 	echo "done"
 	echo -n "Verifying small file autostripe count is 1..."
 	$LFS_MIGRATE -y -A -C 1 "$dir/20mb" ||
@@ -7048,7 +7048,7 @@ test_56xc() {
 	echo "done"
 	echo -n "Sizing 1GB test file..."
 	# File size is 1GB + 3KB
-	truncate "$dir/1gb" 1073744896 || error "cannot create 1GB test file"
+	$TRUNCATE "$dir/1gb" 1073744896 || error "cannot create 1GB test file"
 	echo "done"
 
 	# need at least 512MB per OST for 1GB file to fit in 2 stripes
@@ -22099,7 +22099,7 @@ test_fake_rw() {
 	[ $blocks -gt 1000 ] && blocks=1000 # 1G in maximum
 
 	if [ "$read_write" = "read" ]; then
-		truncate -s $(expr 1048576 \* $blocks) $DIR/$tfile
+		$TRUNCATE $DIR/$tfile $(expr 1048576 \* $blocks)
 	fi
 
 	local start_time=$(date +%s.%N)

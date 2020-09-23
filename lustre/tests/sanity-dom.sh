@@ -67,14 +67,14 @@ test_3() {
 	# Write on one node to the DoM stripe and then truncate to over DoM size
 	dd if=/dev/zero of=$DIR1/$tfile bs=$((DOM_SIZE-100)) count=1 ||
 		return 1
-	truncate $DIR1/$tfile $((DOM_SIZE+700)) || return 2
+	$TRUNCATE $DIR1/$tfile $((DOM_SIZE+700)) || return 2
 	# read on the second node inside DoM stripe to take a lock data from
 	# the first client
 	dd if=$DIR2/$tfile of=/dev/null bs=4096 count=1 seek=1 || return 3
 	$CHECKSTAT -t file -s $((DOM_SIZE+700)) $DIR2/$tfile ||
 		error "Wrong size after first truncate $tfile on first node"
 	# now do local truncate over DoM size and check size is correct
-	truncate $DIR2/$tfile $((DOM_SIZE+500)) || return 4
+	$TRUNCATE $DIR2/$tfile $((DOM_SIZE+500)) || return 4
 	$CHECKSTAT -t file -s $((DOM_SIZE+500)) $DIR2/$tfile ||
 		error "Wrong size after second truncate on the same node"
 	$CHECKSTAT -t file -s $((DOM_SIZE+500)) $DIR1/$tfile ||
