@@ -16022,8 +16022,9 @@ test_184c() {
 	dd if=$ref1 of=$file1 bs=16k &
 	local DD_PID=$!
 
-	# Make sure dd starts to copy file
-	while [ ! -f $file1 ]; do sleep 0.1; done
+	# Make sure dd starts to copy file, but wait at most 5 seconds
+	local loops=0
+	while [ ! -s $file1 -a $((loops++)) -lt 50 ]; do sleep 0.1; done
 
 	$LFS swap_layouts $file1 $file2
 	local rc=$?
