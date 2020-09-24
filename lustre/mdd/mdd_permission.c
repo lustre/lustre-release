@@ -270,7 +270,8 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 	/*
 	 * Nobody gets write access to an immutable file.
 	 */
-	if (mask & MAY_WRITE && la->la_flags & LUSTRE_IMMUTABLE_FL)
+	if ((mask & MAY_WRITE) && (la->la_valid & LA_FLAGS) &&
+	    (la->la_flags & LUSTRE_IMMUTABLE_FL))
 		RETURN(-EACCES);
 
 	LASSERT(la != NULL);

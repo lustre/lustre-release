@@ -1935,6 +1935,8 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* we may fix some attributes, better do not change the source */
 	obj->oo_attr = *attr;
+	obj->oo_attr.la_size = 0;
+	obj->oo_attr.la_nlink = 0;
 	obj->oo_attr.la_valid |= LA_SIZE | LA_NLINK | LA_TYPE;
 
 #ifdef ZFS_PROJINHERIT
