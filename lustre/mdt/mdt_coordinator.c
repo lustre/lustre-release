@@ -1071,11 +1071,12 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
  */
 static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 {
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
 	struct mdt_thread_info *cdt_mti;
-	int			 rc;
-	void			*ptr;
-	struct task_struct	*task;
+	unsigned int i = 0;
+	int rc;
+	void *ptr;
+	struct task_struct *task;
 	ENTRY;
 
 	/* functions defined but not yet used
@@ -1103,6 +1104,14 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	cdt->cdt_user_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_other_request_mask = (1UL << HSMA_RESTORE);
+
+	/* wait until MDD initialize hsm actions llog */
+	while (!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state) && i < obd_timeout) {
+		schedule_timeout_interruptible(cfs_time_seconds(1));
+		i++;
+	}
+	if (!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state))
+		CWARN("%s: trying to init HSM before MDD\n", mdt_obd_name(mdt));
 
 	/* to avoid deadlock when start is made through sysfs
 	 * sysfs entries are created by the coordinator thread
