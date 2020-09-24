@@ -1384,7 +1384,7 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 	optstr = opc == LNET_CTL_DROP_ADD ? "s:d:o:r:i:p:m:e:nx" : "s:d:o:r:l:p:m:";
 	memset(&attr, 0, sizeof(attr));
 	while (1) {
-		char c = getopt_long(argc, argv, optstr, opts, NULL);
+		int c = getopt_long(argc, argv, optstr, opts, NULL);
 
 		if (c == -1)
 			break;
@@ -1566,7 +1566,7 @@ fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
 
 	memset(&attr, 0, sizeof(attr));
 	while (1) {
-		char c = getopt_long(argc, argv, "s:d:a", opts, NULL);
+		int c = getopt_long(argc, argv, "s:d:a", opts, NULL);
 
 		if (c == -1 || all)
 			break;
