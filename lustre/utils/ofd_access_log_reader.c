@@ -625,7 +625,23 @@ out:
 	return (rc < 0) ? ALR_EXIT_FAILURE : ALR_OK;
 }
 
+/* batch file (stdout) poll callback: detect remote pipe close and exit. */
+static int alr_batch_file_io(int epoll_fd, struct alr_dev *ad, unsigned int mask)
+{
+	TRACE("%s\n", __func__);
+	DEBUG_U(mask);
+
+	if (mask & EPOLLHUP)
+		return ALR_EXIT_SUCCESS;
+
+	if (mask & EPOLLERR)
+		return ALR_EXIT_FAILURE;
+
+	return ALR_OK;
+}
+
 static struct alr_dev *alr_dev_create(int epoll_fd, int fd, const char *name,
+			uint32_t events,
 			int (*io)(int, struct alr_dev *, unsigned int),
 			void (*destroy)(struct alr_dev *))
 {
@@ -646,7 +662,7 @@ static struct alr_dev *alr_dev_create(int epoll_fd, int fd, const char *name,
 	alr->alr_fd = fd;
 
 	struct epoll_event event = {
-		.events = EPOLLIN | EPOLLHUP,
+		.events = events,
 		.data.ptr = alr,
 	};
 
@@ -683,6 +699,7 @@ int main(int argc, char *argv[])
 	const char ctl_path[] = "/dev/"LUSTRE_ACCESS_LOG_DIR_NAME"/control";
 	struct alr_dev *alr_signal = NULL;
 	struct alr_dev *alr_batch_timer = NULL;
+	struct alr_dev *alr_batch_file_hup = NULL;
 	struct alr_dev *alr_ctl = NULL;
 	time_t batch_interval = 0;
 	time_t batch_offset = 0;
@@ -812,7 +829,8 @@ int main(int argc, char *argv[])
 	if (signal_fd < 0)
 		FATAL("cannot create signalfd: %s\n", strerror(errno));
 
-	alr_signal = alr_dev_create(epoll_fd, signal_fd, "signal", &alr_signal_io, NULL);
+	alr_signal = alr_dev_create(epoll_fd, signal_fd, "signal", EPOLLIN,
+				&alr_signal_io, NULL);
 	if (alr_signal == NULL)
 		FATAL("cannot register signalfd: %s\n", strerror(errno));
 
@@ -843,11 +861,24 @@ int main(int argc, char *argv[])
 		FATAL("cannot arm timerfd: %s\n", strerror(errno));
 
 	alr_batch_timer = alr_dev_create(epoll_fd, timer_fd, "batch_timer",
-					&alr_batch_timer_io, NULL);
+					EPOLLIN, &alr_batch_timer_io, NULL);
 	if (alr_batch_timer == NULL)
 		FATAL("cannot register batch timerfd: %s\n", strerror(errno));
 
 	timer_fd = -1;
+
+	int batch_fd = dup(fileno(alr_batch_file));
+	if (batch_fd < 0)
+		FATAL("cannot duplicate batch file descriptor: %s\n",
+		      strerror(errno));
+
+	/* We pass events = 0 since we only care about EPOLLHUP. */
+	alr_batch_file_hup = alr_dev_create(epoll_fd, batch_fd, "batch_file", 0,
+					&alr_batch_file_io, NULL);
+	if (alr_batch_file_hup == NULL)
+		FATAL("cannot register batch file HUP: %s\n", strerror(errno));
+
+	batch_fd = -1;
 
 	/* Open control device. */
 	int ctl_fd = open(ctl_path, O_RDONLY|O_NONBLOCK|O_CLOEXEC);
@@ -869,7 +900,8 @@ int main(int argc, char *argv[])
 	DEBUG_D(oal_log_major);
 
 	/* Add control device to epoll set. */
-	alr_ctl = alr_dev_create(epoll_fd, ctl_fd, "control", &alr_ctl_io, NULL);
+	alr_ctl = alr_dev_create(epoll_fd, ctl_fd, "control", EPOLLIN,
+				&alr_ctl_io, NULL);
 	if (alr_ctl == NULL)
 		FATAL("cannot register control device: %s\n", strerror(errno));
 
@@ -935,6 +967,7 @@ out:
 	alr_dev_free(epoll_fd, alr_ctl);
 	alr_dev_free(epoll_fd, alr_signal);
 	alr_dev_free(epoll_fd, alr_batch_timer);
+	alr_dev_free(epoll_fd, alr_batch_file_hup);
 	close(epoll_fd);
 
 	alr_batch_destroy(alr_batch);
