@@ -111,25 +111,25 @@ struct pool_iterator {
 
 static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 {
-        struct pool_iterator *iter = (struct pool_iterator *)s->private;
-        int prev_idx;
+	struct pool_iterator *iter = (struct pool_iterator *)s->private;
+	int prev_idx;
 
 	LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X\n", iter->magic);
 
-        /* test if end of file */
-        if (*pos >= pool_tgt_count(iter->pool))
-                return NULL;
+	(*pos)++;
+	/* test if end of file */
+	if (*pos > pool_tgt_count(iter->pool))
+		return NULL;
 
-        /* iterate to find a non empty entry */
-        prev_idx = iter->idx;
-        iter->idx++;
+	/* iterate to find a non empty entry */
+	prev_idx = iter->idx;
+	iter->idx++;
 	if (iter->idx >= pool_tgt_count(iter->pool)) {
-                iter->idx = prev_idx; /* we stay on the last entry */
-                return NULL;
-        }
-        (*pos)++;
-        /* return != NULL to continue */
-        return iter;
+		iter->idx = prev_idx; /* we stay on the last entry */
+		return NULL;
+	}
+	/* return != NULL to continue */
+	return iter;
 }
 
 static void *pool_proc_start(struct seq_file *s, loff_t *pos)

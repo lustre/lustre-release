@@ -278,6 +278,7 @@ static void *fldb_seq_next(struct seq_file *p, void *v, loff_t *pos)
 	const struct dt_it_ops	*iops;
 	int			rc;
 
+	++*pos;
 	if (param == NULL || param->fsp_stop)
 		return NULL;
 

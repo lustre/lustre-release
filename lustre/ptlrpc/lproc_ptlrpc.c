@@ -965,6 +965,7 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 	}
 
 	OBD_FREE(srhi, sizeof(*srhi));
+	++*pos;
 	return NULL;
 }
 

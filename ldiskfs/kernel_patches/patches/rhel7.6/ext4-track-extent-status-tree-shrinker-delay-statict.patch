@@ -227,7 +227,7 @@ index 3ef7f932..7dfed27b 100644
  	trace_ext4_es_shrink_enter(sbi->s_sb, nr_to_scan, ret);
  
  	if (!nr_to_scan)
-@@ -1034,23 +1069,149 @@ static int ext4_es_shrink(struct shrinker *shrink, struct shrink_control *sc)
+@@ -1034,23 +1069,150 @@ static int ext4_es_shrink(struct shrinker *shrink, struct shrink_control *sc)
  
  	nr_shrunk = __ext4_es_shrink(sbi, nr_to_scan, NULL);
  
@@ -246,6 +246,7 @@ index 3ef7f932..7dfed27b 100644
 +static void *
 +ext4_es_seq_shrinker_info_next(struct seq_file *seq, void *v, loff_t *pos)
 +{
++	++*pos;
 +	return NULL;
 +}
 +

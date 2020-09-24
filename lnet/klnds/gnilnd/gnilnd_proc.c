@@ -457,10 +457,10 @@ kgnilnd_mdd_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 	loff_t                  next = *pos + 1;
 
 	rc = kgnilnd_mdd_seq_seek(gseq, next);
+	*pos = next;
 	if (rc != 0) {
 		return NULL;
 	}
-	*pos = next;
 	return gseq;
 }
 
@@ -646,11 +646,11 @@ kgnilnd_smsg_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 	loff_t                  next = *pos + 1;
 
 	rc = kgnilnd_smsg_seq_seek(gseq, next);
+	*pos = next;
 	if (rc != 0) {
 		LIBCFS_FREE(gseq, sizeof(*gseq));
 		return NULL;
 	}
-	*pos = next;
 	return gseq;
 }
 
@@ -862,11 +862,11 @@ kgnilnd_conn_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 	loff_t                  next = *pos + 1;
 
 	rc = kgnilnd_conn_seq_seek(gseq, next);
+	*pos = next;
 	if (rc != 0) {
 		LIBCFS_FREE(gseq, sizeof(*gseq));
 		return NULL;
 	}
-	*pos = next;
 	return gseq;
 }
 
@@ -1215,11 +1215,11 @@ kgnilnd_peer_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 	loff_t                  next = *pos + 1;
 
 	rc = kgnilnd_peer_seq_seek(gseq, next);
+	*pos = next;
 	if (rc != 0) {
 		LIBCFS_FREE(gseq, sizeof(*gseq));
 		return NULL;
 	}
-	*pos = next;
 	return gseq;
 }
 

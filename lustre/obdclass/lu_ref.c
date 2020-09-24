@@ -309,15 +309,15 @@ static void *lu_ref_seq_next(struct seq_file *seq, void *p, loff_t *pos)
 	LASSERT(seq->private == p);
 	LASSERT(!list_empty(&ref->lf_linkage));
 
+	(*pos)++;
 	spin_lock(&lu_ref_refs_guard);
 	next = list_entry(ref->lf_linkage.next, struct lu_ref, lf_linkage);
-	if (&next->lf_linkage == &lu_ref_refs) {
+	if (&next->lf_linkage == &lu_ref_refs)
 		p = NULL;
-	} else {
-		(*pos)++;
+	else
 		list_move(&ref->lf_linkage, &next->lf_linkage);
-	}
 	spin_unlock(&lu_ref_refs_guard);
+
 	return p;
 }
 
