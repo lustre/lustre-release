@@ -1576,7 +1576,6 @@ static int distribute_txn_commit_thread(void *_arg)
 		       tdtd->tdtd_committed_batchid);
 		/* update globally committed on a storage */
 		if (batchid > tdtd->tdtd_committed_batchid) {
-			__set_current_state(TASK_RUNNING);
 			rc = distribute_txn_commit_batchid_update(env, tdtd,
 							     batchid);
 			if (rc == 0)
