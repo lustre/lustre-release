@@ -9941,18 +9941,6 @@ static void lod_object_free(const struct lu_env *env, struct lu_object *o)
 }
 
 /*
- * Implementation of lu_object_operations::loo_object_release.
- *
- * see lu_object_operations::loo_object_release() in the API description
- * for details.
- */
-static void lod_object_release(const struct lu_env *env, struct lu_object *o)
-{
-	/* XXX: shouldn't we release everything here in case if object
-	 * creation failed before? */
-}
-
-/*
  * Implementation of lu_object_operations::loo_object_print.
  *
  * see lu_object_operations::loo_object_print() in the API description
@@ -9969,6 +9957,5 @@ static int lod_object_print(const struct lu_env *env, void *cookie,
 const struct lu_object_operations lod_lu_obj_ops = {
 	.loo_object_init	= lod_object_init,
 	.loo_object_free	= lod_object_free,
-	.loo_object_release	= lod_object_release,
 	.loo_object_print	= lod_object_print,
 };

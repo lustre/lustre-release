@@ -2509,7 +2509,6 @@ static const struct cl_object_operations lov_ops = {
 static const struct lu_object_operations lov_lu_obj_ops = {
 	.loo_object_init	= lov_object_init,
 	.loo_object_delete	= lov_object_delete,
-	.loo_object_release	= NULL,
 	.loo_object_free	= lov_object_free,
 	.loo_object_print	= lov_object_print,
 	.loo_object_invariant	= NULL,

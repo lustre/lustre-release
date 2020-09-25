@@ -1677,7 +1677,6 @@ static void mdc_object_free(const struct lu_env *env, struct lu_object *obj)
 static const struct lu_object_operations mdc_lu_obj_ops = {
 	.loo_object_init = mdc_object_init,
 	.loo_object_delete = NULL,
-	.loo_object_release = NULL,
 	.loo_object_free = mdc_object_free,
 	.loo_object_print = osc_object_print,
 	.loo_object_invariant = NULL

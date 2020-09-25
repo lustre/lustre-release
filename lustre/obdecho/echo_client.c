@@ -322,7 +322,6 @@ static int echo_object_print(const struct lu_env *env, void *cookie,
 static const struct lu_object_operations echo_lu_obj_ops = {
 	.loo_object_init      = echo_object_init,
 	.loo_object_delete    = echo_object_delete,
-	.loo_object_release   = NULL,
 	.loo_object_free      = echo_object_free,
 	.loo_object_print     = echo_object_print,
 	.loo_object_invariant = NULL

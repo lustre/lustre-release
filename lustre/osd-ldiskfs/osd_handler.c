@@ -2558,17 +2558,20 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
  * Concurrency: ->loo_object_release() is called under site spin-lock.
  */
 static void osd_object_release(const struct lu_env *env,
-			       struct lu_object *l)
+			       struct lu_object *lo)
 {
-	struct osd_object *o = osd_obj(l);
+	struct osd_object *obj = osd_obj(lo);
 
 	/*
 	 * nobody should be releasing a non-destroyed object with nlink=0
 	 * the API allows this, but ldiskfs doesn't like and then report
 	 * this inode as deleted
 	 */
-	LASSERT(!(o->oo_destroyed == 0 && o->oo_inode &&
-		  o->oo_inode->i_nlink == 0));
+	if (unlikely(!obj->oo_destroyed && obj->oo_inode &&
+		     !obj->oo_inode->i_nlink))
+		CERROR("%s: undestroyed object "DFID" (%lu) with nlink = 0\n",
+		       osd_ino2name(obj->oo_inode), PFID(lu_object_fid(lo)),
+		       obj->oo_inode->i_ino);
 }
 
 /*

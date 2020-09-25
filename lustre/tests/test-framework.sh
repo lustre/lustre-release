@@ -10694,8 +10694,8 @@ check_mount_and_prep()
 
 	rm -rf $DIR/[df][0-9]* || error "Fail to cleanup the env!"
 	mkdir_on_mdt0 $DIR/$tdir || error "Fail to mkdir $DIR/$tdir."
-	for idx in $(seq $MDSCOUNT); do
-		local name="MDT$(printf '%04x' $((idx - 1)))"
+	for ((mdtidx = 0; mdtidx < $MDSCOUNT; mdtidx++)); do
+		local name="MDT$(printf '%04x' $mdtidx)"
 		rm -rf $MOUNT/.lustre/lost+found/$name/*
 	done
 }

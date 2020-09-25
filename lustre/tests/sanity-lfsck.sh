@@ -5543,10 +5543,10 @@ test_33()
 }
 run_test 33 "check LFSCK paramters"
 
-test_34()
+test_34a()
 {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ "$mds1_FSTYPE" != zfs ] && skip "Only valid for ZFS backend"
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	[[ "$mds1_FSTYPE" == zfs ]] || skip "Only valid for ZFS backend"
 
 	lfsck_prep 1 1
 
@@ -5566,22 +5566,61 @@ test_34()
 
 	local repaired=$($SHOW_NAMESPACE |
 			 awk '/^dirent_repaired/ { print $2 }')
-	[ $repaired -eq 1 ] ||
+	(( $repaired == 1 )) ||
 		error "(4) Fail to repair the lost agent object: $repaired"
 
 	$START_NAMESPACE -r || error "(5) Fail to start LFSCK for namespace!"
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_namespace |
+	wait_update_facet $SINGLEMDS \
+		"$LCTL get_param -n mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(6) unexpected status"
 	}
 
 	repaired=$($SHOW_NAMESPACE | awk '/^dirent_repaired/ { print $2 }')
-	[ $repaired -eq 0 ] ||
+	(( $repaired == 0 )) ||
 		error "(7) Unexpected repairing: $repaired"
 }
-run_test 34 "LFSCK can rebuild the lost agent object"
+run_test 34a "LFSCK can rebuild the lost agent object"
+
+test_34b() { # LU-13980
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	check_mount_and_prep # creates $DIR/$tdir on MDT0000
+	stack_trap stopall
+
+	# need to create files on OST0000 for "rm" step to be easy
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile || error "create $tfile"
+	do_facet ost1 "mkdir $TMP/$tdir"
+	stack_trap "do_facet ost1 rmdir $TMP/$tdir"
+	mount_ldiskfs ost1 $TMP/$tdir || error "mount -t ldiskfs ost1 failed"
+	stack_trap "do_facet ost1 umount $TMP/$tdir"
+
+	$LFS getstripe $DIR/$tdir/$tfile
+	local ostfid=$($LFS getstripe -y $DIR/$tdir/$tfile |
+		       awk '/l_fid:/ { print $2 }')
+	local objpath=$(ost_fid2_objpath ost1 $ostfid)
+	do_facet ost1 "rm $TMP/$tdir/$objpath" ||
+		error "cannot remove $ostfid from ost1"
+
+	$START_LAYOUT -r -o || error "(5) Fail to start LFSCK for layout!"
+
+	for ((k = 1; k <= $OSTCOUNT; k++ )); do
+		local svc=$(facet_svc ost$k)
+		wait_update_facet ost$k \
+			"$LCTL get_param -n obdfilter.$svc.lfsck_layout |
+				awk '/^status/ { print \\\$2 }'" "completed" ||
+		{
+			local st=$($SHOW_LAYOUT | awk '/^status/ { print $2 }')
+
+			$SHOW_LAYOUT
+			error "$svc unexpected status '$st'"
+		}
+	done
+	cat $DIR/$tdir/$tfile
+	unlink $DIR/$tdir/$tfile
+}
+run_test 34b "on-disk deletion of object on live OST doesn't crash"
 
 test_35()
 {

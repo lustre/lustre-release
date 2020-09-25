@@ -911,14 +911,6 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 }
 
 /*
- * Concurrency: ->loo_object_release() is called under site spin-lock.
- */
-static void osd_object_release(const struct lu_env *env,
-			       struct lu_object *l)
-{
-}
-
-/*
  * Concurrency: shouldn't matter.
  */
 static int osd_object_print(const struct lu_env *env, void *cookie,
@@ -2201,7 +2193,6 @@ static const struct dt_object_operations osd_obj_ops = {
 static const struct lu_object_operations osd_lu_obj_ops = {
 	.loo_object_init	= osd_object_init,
 	.loo_object_delete	= osd_object_delete,
-	.loo_object_release	= osd_object_release,
 	.loo_object_free	= osd_object_free,
 	.loo_object_print	= osd_object_print,
 	.loo_object_invariant	= osd_object_invariant,
