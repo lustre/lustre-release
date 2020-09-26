@@ -5109,7 +5109,7 @@ check_mdt_xtimes()
 	local mdt_xtimes=($(get_mdt_xtimes $mdtdev))
 
 	echo "STAT a|m|ctime ${xtimes[*]}"
-	echo "MDT a|m|ctime ${xtimes[*]}"
+	echo "MDT a|m|ctime ${mdt_xtimes[*]}"
 	[[ ${xtimes[0]} == ${mdt_xtimes[0]} ]] ||
 		error "$DIR/$tfile atime (${xtimes[0]}:${mdt_xtimes[0]}) diff"
 	[[ ${xtimes[1]} == ${mdt_xtimes[1]} ]] ||
