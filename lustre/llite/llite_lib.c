@@ -1588,30 +1588,27 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 			}
 			up_write(&lli->lli_lsm_sem);
 		}
-	} else if (lli->lli_default_lsm_md) {
-		/* update default lsm if it changes */
+		return;
+	}
+
+	if (lli->lli_default_lsm_md) {
+		/* do nonthing if default lsm isn't changed */
 		down_read(&lli->lli_lsm_sem);
 		if (lli->lli_default_lsm_md &&
-		    !lsm_md_eq(lli->lli_default_lsm_md, md->default_lmv)) {
+		    lsm_md_eq(lli->lli_default_lsm_md, md->default_lmv)) {
 			up_read(&lli->lli_lsm_sem);
-			down_write(&lli->lli_lsm_sem);
-			if (lli->lli_default_lsm_md)
-				lmv_free_memmd(lli->lli_default_lsm_md);
-			lli->lli_default_lsm_md = md->default_lmv;
-			lsm_md_dump(D_INODE, md->default_lmv);
-			md->default_lmv = NULL;
-			up_write(&lli->lli_lsm_sem);
-		} else {
-			up_read(&lli->lli_lsm_sem);
+			return;
 		}
-	} else {
-		/* init default lsm */
-		down_write(&lli->lli_lsm_sem);
-		lli->lli_default_lsm_md = md->default_lmv;
-		lsm_md_dump(D_INODE, md->default_lmv);
-		md->default_lmv = NULL;
-		up_write(&lli->lli_lsm_sem);
+		up_read(&lli->lli_lsm_sem);
 	}
+
+	down_write(&lli->lli_lsm_sem);
+	if (lli->lli_default_lsm_md)
+		lmv_free_memmd(lli->lli_default_lsm_md);
+	lli->lli_default_lsm_md = md->default_lmv;
+	lsm_md_dump(D_INODE, md->default_lmv);
+	md->default_lmv = NULL;
+	up_write(&lli->lli_lsm_sem);
 }
 
 static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
