@@ -5587,6 +5587,8 @@ run_e2fsck() {
 	local log=$TMP/e2fsck.log
 	local rc=0
 
+	# turn on pfsck if it is supported
+	do_node $node $E2FSCK -h 2>&1 | grep -qw -- -m && cmd+=" -m8"
 	echo $cmd
 	do_node $node $cmd 2>&1 | tee $log
 	rc=${PIPESTATUS[0]}

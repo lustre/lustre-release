@@ -407,11 +407,12 @@ mount_after_reboot() {
 # Run e2fsck on the Lustre server target.
 run_e2fsck() {
 	local facet=$1
-	shift
-	local device=$1
-	shift
+	local device=$2
+	shift 2
 	local opts="$@"
 
+	# turn on pfsck if it is supported
+	do_facet $facet $E2FSCK -h 2>&1 | grep -qw -- -m && opts+=" -m8"
 	echo "Running e2fsck on the device $device on $facet..."
 	do_facet $facet "$E2FSCK $opts $device"
 	return ${PIPESTATUS[0]}
