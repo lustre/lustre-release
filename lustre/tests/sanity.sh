@@ -15851,6 +15851,28 @@ test_165e() {
 }
 run_test 165e "ofd_access_log MDT index filter works"
 
+test_165f() {
+	local trace="/tmp/${tfile}.trace"
+	local rc
+	local count
+
+	setup_165
+	do_facet ost1 timeout 60 ofd_access_log_reader \
+		--exit-on-close --debug=- --trace=- > "${trace}" &
+	sleep 5
+	stop ost1
+
+	wait
+	rc=$?
+
+	if ((rc != 0)); then
+		error_noexit "ofd_access_log_reader exited with rc = '${rc}'"
+		cat "${trace}"
+		exit 1
+	fi
+}
+run_test 165f "ofd_access_log_reader --exit-on-close works"
+
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"

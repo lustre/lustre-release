@@ -123,6 +123,7 @@ struct alr_log {
 	dev_t alr_rdev;
 };
 
+static unsigned int alr_log_count;
 static struct alr_log *alr_log[1 << 20]; /* 20 == MINORBITS */
 static int oal_version; /* FIXME ... major version, minor version */
 static __u32 alr_filter = 0xffffffff; /* no filter by default */
@@ -256,6 +257,7 @@ static void alr_log_destroy(struct alr_dev *ad)
 	free(al->alr_buf);
 	al->alr_buf = NULL;
 	al->alr_buf_size = 0;
+	alr_log_count--;
 }
 
 /* Add an access log (identified by path) to the epoll set. */
@@ -322,6 +324,7 @@ static int alr_log_add(int epoll_fd, const char *path)
 		FATAL("cannot allocate struct alr_dev of size %zu: %s\n",
 			sizeof(*al), strerror(errno));
 
+	alr_log_count++;
 	al->alr_dev.alr_io = &alr_log_io;
 	al->alr_dev.alr_destroy = &alr_log_destroy;
 	al->alr_dev.alr_fd = fd;
@@ -685,6 +688,7 @@ void usage(void)
 "  -F, --batch-fraction=P         set batch printing fraction to P/100\n"
 "  -i, --batch-interval=INTERVAL  print batch every INTERVAL seconds\n"
 "  -o, --batch-offset=OFFSET      print batch at OFFSET seconds\n"
+"  -e, --exit-on-close            exit on close of all log devices\n"
 "  -I, --mdt-index-filter=INDEX   set log MDT index filter to INDEX\n"
 "  -h, --help                     display this help and exit\n"
 "  -l, --list                     print YAML list of available access logs\n"
@@ -701,6 +705,7 @@ int main(int argc, char *argv[])
 	struct alr_dev *alr_batch_timer = NULL;
 	struct alr_dev *alr_batch_file_hup = NULL;
 	struct alr_dev *alr_ctl = NULL;
+	int exit_on_close = 0;
 	time_t batch_interval = 0;
 	time_t batch_offset = 0;
 	unsigned int m;
@@ -715,6 +720,7 @@ int main(int argc, char *argv[])
 		{ .name = "batch-fraction", .has_arg = required_argument, .val = 'F', },
 		{ .name = "batch-interval", .has_arg = required_argument, .val = 'i', },
 		{ .name = "batch-offset", .has_arg = required_argument, .val = 'o', },
+		{ .name = "exit-on-close", .has_arg = no_argument, .val = 'e', },
 		{ .name = "mdt-index-filter", .has_arg = required_argument, .val = 'I' },
 		{ .name = "debug", .has_arg = optional_argument, .val = 'd', },
 		{ .name = "help", .has_arg = no_argument, .val = 'h', },
@@ -724,8 +730,11 @@ int main(int argc, char *argv[])
 		{ .name = NULL, },
 	};
 
-	while ((c = getopt_long(argc, argv, "d::f:F:hi:I:ls:t::", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d::ef:F:hi:I:ls:t::", options, NULL)) != -1) {
 		switch (c) {
+		case 'e':
+			exit_on_close = 1;
+			break;
 		case 'f':
 			alr_batch_file_path = optarg;
 			break;
@@ -944,6 +953,12 @@ int main(int argc, char *argv[])
 			default:
 				break;
 			}
+		}
+
+		if (exit_on_close && alr_log_count == 0) {
+			DEBUG("no open logs devices, exiting\n");
+			exit_status = EXIT_SUCCESS;
+			goto out;
 		}
 	} while (!list_info);
 
