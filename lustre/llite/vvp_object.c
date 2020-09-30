@@ -135,6 +135,7 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 
 		ll_layout_version_set(lli, CL_LAYOUT_GEN_NONE);
 
+		pcc_layout_invalidate(conf->coc_inode);
 		/* Clean up page mmap for this inode.
 		 * The reason for us to do this is that if the page has
 		 * already been installed into memory space, the process
@@ -146,7 +147,6 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 		 */
 		unmap_mapping_range(conf->coc_inode->i_mapping,
 				    0, OBD_OBJECT_EOF, 0);
-		pcc_layout_invalidate(conf->coc_inode);
 	}
 	return 0;
 }

@@ -472,11 +472,12 @@ static int vvp_mmap_locks(const struct lu_env *env,
 
 		mmap_read_lock(mm);
 		while ((vma = our_vma(mm, addr, bytes)) != NULL) {
-			struct dentry *de = file_dentry(vma->vm_file);
+			struct file *file = pcc_vma_file(vma);
+			struct dentry *de = file_dentry(file);
 			struct inode *inode = de->d_inode;
 			int flags = CEF_MUST;
 
-			if (ll_file_nolock(vma->vm_file)) {
+			if (ll_file_nolock(file)) {
 				/* For no lock case is not allowed for mmap */
 				result = -EINVAL;
 				break;
@@ -1033,7 +1034,8 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 	struct page *page = fbatch_at_pg(fbatch, 0, 0);
 	int count = folio_batch_count(fbatch);
 	int i;
-#if !defined(HAVE_FOLIO_BATCH) || defined(HAVE_KALLSYMS_LOOKUP_NAME)
+#if !defined(HAVE_FOLIO_BATCH) || !defined(HAVE_FILEMAP_GET_FOLIOS) || \
+	defined(HAVE_KALLSYMS_LOOKUP_NAME)
 	int pg, npgs;
 #endif
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
@@ -1060,7 +1062,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 #ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
 	if (!vvp_account_page_dirtied) {
 		for (i = 0; i < count; i++) {
-#ifdef HAVE_FOLIO_BATCH
+#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
 			filemap_dirty_folio(page->mapping, fbatch->folios[i]);
 #else
 			npgs = fbatch_at_npgs(fbatch, i);

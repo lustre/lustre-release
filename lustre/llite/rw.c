@@ -1914,10 +1914,12 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	struct inode *inode = file_inode(file);
 	struct cl_object *clob = ll_i2info(inode)->lli_clob;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct super_block *sb = inode->i_sb;
 	const struct lu_env *env = NULL;
 	struct cl_read_ahead ra = { 0 };
 	struct ll_cl_context *lcc;
 	struct cl_io *io = NULL;
+	bool ra_assert = false;
 	struct cl_page *page;
 	struct vvp_io *vio;
 	int result;
@@ -1929,6 +1931,20 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		unlock_page(vmpage);
 		CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
 		lock_page(vmpage);
+	}
+
+	/*
+	 * This is not a Lustre file handle, and should be a file handle of the
+	 * PCC copy. It is from PCC mmap readahead I/O path and the PCC copy
+	 * was invalidated.
+	 * Here return error code directly as it is from readahead I/O path for
+	 * the PCC copy.
+	 */
+	if (inode->i_op != &ll_file_inode_operations) {
+		CERROR("%s: readpage() on invalidated PCC inode %lu: rc=%d\n",
+		       sb->s_id, inode->i_ino, -EIO);
+		unlock_page(vmpage);
+		RETURN(-EIO);
 	}
 
 	/*
@@ -2069,6 +2085,36 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			}
 		}
 	}
+
+	/* this is a sequence of checks verifying that kernel readahead is
+	 * truly disabled
+	 */
+	if (lcc && lcc->lcc_type == LCC_MMAP) {
+		if (io->u.ci_fault.ft_index != vmpage->index) {
+			CERROR("%s: ft_index %lu, vmpage index %lu\n",
+			       sbi->ll_fsname, io->u.ci_fault.ft_index,
+			       vmpage->index);
+			ra_assert = true;
+		}
+	}
+
+	if (ra_assert || sb->s_bdi->ra_pages != 0 || file->f_ra.ra_pages != 0) {
+		CERROR("%s: sbi ra pages %lu, file ra pages %d\n",
+		       sbi->ll_fsname, sb->s_bdi->ra_pages,
+		       file->f_ra.ra_pages);
+		ra_assert = true;
+	}
+
+
+#ifdef HAVE_BDI_IO_PAGES
+	if (ra_assert || sb->s_bdi->io_pages != 0) {
+		CERROR("%s: bdi io_pages %lu\n",
+		       sbi->ll_fsname, sb->s_bdi->io_pages);
+		ra_assert = true;
+	}
+#endif
+	if (ra_assert)
+		LASSERT(!ra_assert);
 
 	vio = vvp_env_io(env);
 	/*

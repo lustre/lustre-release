@@ -595,6 +595,7 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 {
 	char *key, *val;
 	unsigned long id;
+	bool enable;
 	int rc;
 
 	val = buffer;
@@ -653,6 +654,18 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 			return rc;
 		if (id > 0)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRO;
+	} else if (strcmp(key, "mmap_conv") == 0) {
+		rc = kstrtobool(val, &enable);
+		if (rc)
+			return rc;
+		if (enable)
+#ifdef HAVE_ADD_TO_PAGE_CACHE_LOCKED
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_MMAP_CONV;
+#else
+			CWARN("mmap convert is not supported, ignored it.\n");
+#endif
+		else
+			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_MMAP_CONV;
 	} else if (strcmp(key, "hsmtool") == 0) {
 		cmd->u.pccc_add.pccc_hsmtool_type = hsmtool_string2type(val);
 		if (cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V1 &&
@@ -1277,7 +1290,12 @@ static void pcc_inode_init(struct pcc_inode *pcci, struct ll_inode_info *lli)
 
 static void pcc_inode_fini(struct pcc_inode *pcci)
 {
+	struct inode *pcc_inode = pcci->pcci_path.dentry->d_inode;
 	struct ll_inode_info *lli = pcci->pcci_lli;
+
+	/* The PCC file was once mmaped? */
+	if (pcc_inode && pcc_inode->i_mapping != &pcc_inode->i_data)
+		pcc_inode->i_mapping = &pcc_inode->i_data;
 
 	path_put(&pcci->pcci_path);
 	pcci->pcci_type = LU_PCC_NONE;
@@ -1707,6 +1725,11 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 			       PFID(&ll_i2info(inode)->lli_fid), rc);
 			/* ignore the error during auto PCC-RO attach. */
 			rc = 0;
+		} else {
+			CDEBUG(D_CACHE,
+			       "PCC-RO attach %pd "DFID" with size %llu\n",
+			       dentry, PFID(ll_inode2fid(inode)),
+			       i_size_read(inode));
 		}
 	}
 
@@ -1813,6 +1836,208 @@ static inline bool pcc_may_auto_attach(struct inode *inode,
 	RETURN(lli->lli_pcc_dsflags & PCC_DATASET_IO_ATTACH);
 }
 
+static void __pcc_layout_invalidate(struct pcc_inode *pcci)
+{
+	pcci->pcci_type = LU_PCC_NONE;
+	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
+	if (atomic_read(&pcci->pcci_active_ios) == 0)
+		return;
+
+	CDEBUG(D_CACHE, "Waiting for IO completion: %d\n",
+		       atomic_read(&pcci->pcci_active_ios));
+	wait_event_idle(pcci->pcci_waitq,
+			atomic_read(&pcci->pcci_active_ios) == 0);
+}
+
+static inline void pcc_inode_mmap_get(struct inode *inode)
+{
+	pcc_inode_lock(inode);
+	atomic_inc(&ll_i2info(inode)->lli_pcc_mapcnt);
+	pcc_inode_unlock(inode);
+}
+
+static inline void pcc_inode_mapping_reset(struct inode *inode)
+{
+	struct pcc_inode *pcci = ll_i2pcci(inode);
+	struct inode *pcc_inode = pcci->pcci_path.dentry->d_inode;
+	struct address_space *mapping = inode->i_mapping;
+	int rc;
+
+	/* Did we mmap this file? */
+	if (pcc_inode->i_mapping == &pcc_inode->i_data)
+		return;
+
+	LASSERT(mapping == pcc_inode->i_mapping && mapping->host == pcc_inode);
+
+	/*
+	 * FIXME: As PCC mmap replaces the inode mapping of the PCC copy on the
+	 * PCC backend filesystem with the one of the Lustre file, it may
+	 * contain some vmas from the users (i.e. root) directly do mmap on the
+	 * file under the PCC backend filesystem. At this time, the mapping may
+	 * contain vmas from both Lustre users and users directly performed mmap
+	 * on PCC backend filesystem.
+	 * Thus, It needs a mechanism to forbid users to access the PCC copy
+	 * directly from the user space and the PCC copy can only be accessed
+	 * from Lustre PCC hook.
+	 * One solution is to use flock() to lock the PCC copy when the file
+	 * is once attached into PCC and unlock it when the file is detached
+	 * from PCC. By this way, the PCC copy is blocking on access from user
+	 * space directly when it is valid cached on PCC.
+	 */
+
+	if (pcc_inode_has_layout(pcci))
+		return;
+
+	/*
+	 * The file is detaching, firstly write out all dirty pages and then
+	 * unmap and remove all pagecache associated with the PCC backend.
+	 */
+	rc = filemap_write_and_wait_range(mapping, 0, LUSTRE_EOF);
+	if (rc)
+		CWARN("%s: Failed to write out data for file fid="DFID"\n",
+		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)));
+
+	truncate_pagecache_range(inode, 0, LUSTRE_EOF);
+	mapping->a_ops = &ll_aops;
+	/*
+	 * Please note the mapping host (@mapping->host) for the Lustre file is
+	 * replaced with the PCC copy in case of mmap() on the PCC cached file.
+	 * This may result in the setting of @ra_pages of the Lustre file
+	 * handle with the one of the PCC copy wrongly in the kernel:
+	 * ->do_dentry_open()->file_ra_state_init()
+	 * And this is the last step of the open() call and is not under the
+	 * control inside the Lustre file system.
+	 * Thus to avoid the setting of @ra_pages wrongly we set @ra_pages with
+	 * zero explictly in all read I/O path.
+	 */
+	mapping->host = inode;
+	pcc_inode->i_mapping = &pcc_inode->i_data;
+
+	CDEBUG(D_CACHE, "Reset mapping for inode %p fid="DFID" mapping %p\n",
+	       inode, PFID(ll_inode2fid(inode)), inode->i_mapping);
+}
+
+static inline void pcc_inode_mmap_put(struct inode *inode)
+{
+	pcc_inode_lock(inode);
+	if (atomic_dec_and_test(&ll_i2info(inode)->lli_pcc_mapcnt))
+		pcc_inode_mapping_reset(inode);
+	pcc_inode_unlock(inode);
+}
+
+/* Call with inode lock held. */
+static inline void pcc_inode_detach(struct inode *inode)
+{
+	__pcc_layout_invalidate(ll_i2pcci(inode));
+	pcc_inode_mapping_reset(inode);
+}
+
+static inline void pcc_inode_detach_put(struct inode *inode)
+{
+	struct pcc_inode *pcci = ll_i2pcci(inode);
+
+	pcc_inode_detach(inode);
+	LASSERT(pcci != NULL);
+	pcc_inode_put(pcci);
+}
+
+void pcc_layout_invalidate(struct inode *inode)
+{
+	struct pcc_inode *pcci;
+
+	ENTRY;
+
+	pcc_inode_lock(inode);
+	pcci = ll_i2pcci(inode);
+	if (pcci && pcc_inode_has_layout(pcci)) {
+		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
+
+		CDEBUG(D_CACHE, "Invalidate "DFID" layout gen %d\n",
+		       PFID(&ll_i2info(inode)->lli_fid), pcci->pcci_layout_gen);
+
+		pcc_inode_detach_put(inode);
+	}
+	pcc_inode_unlock(inode);
+
+	EXIT;
+}
+
+/* Tolerate the IO failure on PCC and fall back to normal Lustre IO path */
+static bool pcc_io_tolerate(struct pcc_inode *pcci,
+			    enum pcc_io_type iot, int rc)
+{
+	if (pcci->pcci_type == LU_PCC_READWRITE) {
+		if (iot == PIT_WRITE && (rc == -ENOSPC || rc == -EDQUOT))
+			return false;
+		/* Handle the ->page_mkwrite failure tolerance separately
+		 * in pcc_page_mkwrite().
+		 */
+	} else if (pcci->pcci_type == LU_PCC_READONLY) {
+		/*
+		 * For async I/O engine such as libaio and io_uring, PCC read
+		 * should not tolerate -EAGAIN/-EIOCBQUEUED errors, return
+		 * the error code to the caller directly.
+		 */
+		if ((iot == PIT_READ || iot == PIT_GETATTR ||
+		     iot == PIT_SPLICE_READ) && rc < 0 && rc != -ENOMEM &&
+		    rc != -EAGAIN && rc != -EIOCBQUEUED)
+			return false;
+		if (iot == PIT_FAULT && (rc & VM_FAULT_SIGBUS) &&
+		    !(rc & VM_FAULT_OOM))
+			return false;
+	}
+
+	return true;
+}
+
+static void pcc_io_init(struct inode *inode, enum pcc_io_type iot,
+			bool *cached)
+{
+	struct pcc_inode *pcci;
+
+	pcc_inode_lock(inode);
+	pcci = ll_i2pcci(inode);
+	if (pcci && pcc_inode_has_layout(pcci)) {
+		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
+		if (pcci->pcci_type == LU_PCC_READONLY &&
+		    (iot == PIT_WRITE || iot == PIT_SETATTR)) {
+			/* Detach from PCC. Fall back to normal I/O path */
+			*cached = false;
+			pcc_inode_detach_put(inode);
+		} else {
+			atomic_inc(&pcci->pcci_active_ios);
+			*cached = true;
+		}
+	} else {
+		*cached = false;
+		/*
+		 * FIXME: Forbid auto PCC attach if the file has still been
+		 * mmapped in PCC.
+		 */
+		if (pcc_may_auto_attach(inode, iot)) {
+			(void) pcc_try_auto_attach(inode, cached, iot);
+			if (*cached) {
+				pcci = ll_i2pcci(inode);
+				LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
+				atomic_inc(&pcci->pcci_active_ios);
+			}
+		}
+	}
+	pcc_inode_unlock(inode);
+}
+
+static void pcc_io_fini(struct inode *inode, enum pcc_io_type iot,
+			int rc, bool *cached)
+{
+	struct pcc_inode *pcci = ll_i2pcci(inode);
+
+	LASSERT(pcci && atomic_read(&pcci->pcci_active_ios) > 0 && *cached);
+
+	*cached = pcc_io_tolerate(pcci, iot, rc);
+	if (atomic_dec_and_test(&pcci->pcci_active_ios))
+		wake_up_all(&pcci->pcci_waitq);
+}
+
 int pcc_file_open(struct inode *inode, struct file *file)
 {
 	struct pcc_inode *pcci;
@@ -1856,7 +2081,8 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	WARN_ON(pccf->pccf_file);
 
 	path = &pcci->pcci_path;
-	CDEBUG(D_CACHE, "opening pcc file '%pd'\n", path->dentry);
+	CDEBUG(D_CACHE, "opening pcc file '%pd' - %pd\n",
+	       path->dentry, file->f_path.dentry);
 
 	pcc_file = dentry_open(path, file->f_flags,
 			       pcc_super_cred(inode->i_sb));
@@ -1895,88 +2121,14 @@ void pcc_file_release(struct inode *inode, struct file *file)
 	path = &pcci->pcci_path;
 	CDEBUG(D_CACHE, "releasing pcc file \"%pd\"\n", path->dentry);
 	pcc_inode_put(pcci);
+
+	LASSERT(file_count(pccf->pccf_file) > 0);
 	fput(pccf->pccf_file);
 	pccf->pccf_file = NULL;
+
 out:
 	pcc_inode_unlock(inode);
 	RETURN_EXIT;
-}
-
-/* Tolerate the IO failure on PCC and fall back to normal Lustre IO path */
-static bool pcc_io_tolerate(struct pcc_inode *pcci,
-			    enum pcc_io_type iot, int rc)
-{
-	if (pcci->pcci_type == LU_PCC_READWRITE) {
-		if (iot == PIT_WRITE && (rc == -ENOSPC || rc == -EDQUOT))
-			return false;
-		/* Handle the ->page_mkwrite failure tolerance separately
-		 * in pcc_page_mkwrite().
-		 */
-	} else if (pcci->pcci_type == LU_PCC_READONLY) {
-		/*
-		 * For async I/O engine such as libaio and io_uring, PCC read
-		 * should not tolerate -EAGAIN/-EIOCBQUEUED errors, return
-		 * the error code to the caller directly.
-		 */
-		if ((iot == PIT_READ || iot == PIT_GETATTR ||
-		     iot == PIT_SPLICE_READ) && rc < 0 && rc != -ENOMEM &&
-		     rc != -EAGAIN && rc != -EIOCBQUEUED)
-			return false;
-		if (iot == PIT_FAULT && (rc & VM_FAULT_SIGBUS) &&
-		    !(rc & VM_FAULT_OOM))
-			return false;
-	}
-
-	return true;
-}
-
-static void pcc_io_init(struct inode *inode, enum pcc_io_type iot, bool *cached)
-{
-	struct pcc_inode *pcci;
-
-	pcc_inode_lock(inode);
-	pcci = ll_i2pcci(inode);
-	if (pcci && pcc_inode_has_layout(pcci)) {
-		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
-		if (pcci->pcci_type == LU_PCC_READONLY &&
-		    (iot == PIT_WRITE || iot == PIT_SETATTR ||
-		     iot == PIT_PAGE_MKWRITE)) {
-			/* Fall back to normal I/O path */
-			*cached = false;
-			/* For mmap write, we need to detach the file from
-			 * RO-PCC, release the page got from ->fault(), and
-			 * then retry the memory fault handling (->fault()
-			 * and ->page_mkwrite()).
-			 * These are done in pcc_page_mkwrite();
-			 */
-		} else {
-			atomic_inc(&pcci->pcci_active_ios);
-			*cached = true;
-		}
-	} else {
-		*cached = false;
-		if (pcc_may_auto_attach(inode, iot)) {
-			(void) pcc_try_auto_attach(inode, cached, iot);
-			if (*cached) {
-				pcci = ll_i2pcci(inode);
-				LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
-				atomic_inc(&pcci->pcci_active_ios);
-			}
-		}
-	}
-	pcc_inode_unlock(inode);
-}
-
-static void pcc_io_fini(struct inode *inode, enum pcc_io_type iot,
-			int rc, bool *cached)
-{
-	struct pcc_inode *pcci = ll_i2pcci(inode);
-
-	LASSERT(pcci && atomic_read(&pcci->pcci_active_ios) > 0 && *cached);
-
-	*cached = pcc_io_tolerate(pcci, iot, rc);
-	if (atomic_dec_and_test(&pcci->pcci_active_ios))
-		wake_up_all(&pcci->pcci_waitq);
 }
 
 static ssize_t
@@ -2018,13 +2170,13 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 			   struct iov_iter *iter, bool *cached)
 {
 	struct file *file = iocb->ki_filp;
-	struct ll_file_data *fd = file->private_data;
-	struct pcc_file *pccf = &fd->fd_pcc_file;
 	struct inode *inode = file_inode(file);
+	struct pcc_file *pccf = ll_file2pccf(file);
 	ssize_t result;
 
 	ENTRY;
 
+	file->f_ra.ra_pages = 0;
 	if (pccf->pccf_file == NULL) {
 		*cached = false;
 		RETURN(0);
@@ -2089,9 +2241,8 @@ ssize_t pcc_file_write_iter(struct kiocb *iocb,
 			    struct iov_iter *iter, bool *cached)
 {
 	struct file *file = iocb->ki_filp;
-	struct ll_file_data *fd = file->private_data;
-	struct pcc_file *pccf = &fd->fd_pcc_file;
 	struct inode *inode = file_inode(file);
+	struct pcc_file *pccf = ll_file2pccf(file);
 	ssize_t result;
 
 	ENTRY;
@@ -2099,11 +2250,6 @@ ssize_t pcc_file_write_iter(struct kiocb *iocb,
 	if (pccf->pccf_file == NULL) {
 		*cached = false;
 		RETURN(0);
-	}
-
-	if (pccf->pccf_type != LU_PCC_READWRITE) {
-		*cached = false;
-		RETURN(-EAGAIN);
 	}
 
 	pcc_io_init(inode, PIT_WRITE, cached);
@@ -2235,13 +2381,13 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 			     size_t count, unsigned int flags)
 {
 	struct inode *inode = file_inode(in_file);
-	struct ll_file_data *fd = in_file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
+	struct file *pcc_file = ll_file2pccf(in_file)->pccf_file;
 	bool cached = false;
 	ssize_t result;
 
 	ENTRY;
 
+	in_file->f_ra.ra_pages = 0;
 	if (!pcc_file)
 		RETURN(default_file_splice_read(in_file, ppos, pipe,
 						count, flags));
@@ -2262,8 +2408,7 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	      int datasync, bool *cached)
 {
 	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct pcc_file *pccf = &fd->fd_pcc_file;
+	struct pcc_file *pccf = ll_file2pccf(file);
 	struct file *pcc_file = pccf->pccf_file;
 	int rc;
 
@@ -2287,7 +2432,7 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	 */
 	if (pccf->pccf_type == LU_PCC_READONLY) {
 		*cached = false;
-		RETURN(-EAGAIN);
+		RETURN(0);
 	}
 
 	pcc_io_init(inode, PIT_FSYNC, cached);
@@ -2301,35 +2446,257 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	RETURN(rc);
 }
 
+static inline void pcc_vma_file_reset(struct inode *inode,
+				      struct vm_area_struct *vma)
+{
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+
+	LASSERT(pccv);
+	if (vma->vm_file != pccv->pccv_file) {
+		struct pcc_file *pccf = ll_file2pccf(pccv->pccv_file);
+
+		LASSERT(vma->vm_file == pccf->pccf_file);
+		LASSERT(vma->vm_file->f_mapping == inode->i_mapping);
+		vma->vm_file = pccv->pccv_file;
+
+		get_file(vma->vm_file);
+		fput(pccf->pccf_file);
+
+		CDEBUG(D_CACHE,
+		       DFID" mapcnt %d vm_file %p:%ld lu_file %p:%ld vma %p\n",
+		       PFID(ll_inode2fid(inode)),
+		       atomic_read(&ll_i2info(inode)->lli_pcc_mapcnt),
+		       vma->vm_file, file_count(vma->vm_file), pccv->pccv_file,
+		       file_count(pccv->pccv_file), vma);
+	}
+}
+
+static void pcc_mmap_vma_reset(struct inode *inode, struct vm_area_struct *vma)
+{
+	pcc_inode_lock(inode);
+	pcc_vma_file_reset(inode, vma);
+	pcc_inode_unlock(inode);
+}
+
+static void pcc_mmap_io_init(struct inode *inode, enum pcc_io_type iot,
+			     struct vm_area_struct *vma, bool *cached)
+{
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct pcc_inode *pcci;
+
+	LASSERT(pccv);
+
+	pcc_inode_lock(inode);
+	pcci = ll_i2pcci(inode);
+	if (pcci && pcc_inode_has_layout(pcci)) {
+		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
+		if (pcci->pcci_type == LU_PCC_READONLY &&
+		    iot == PIT_PAGE_MKWRITE) {
+			pcc_inode_detach_put(inode);
+			pcc_vma_file_reset(inode, vma);
+			*cached = false;
+		} else {
+			atomic_inc(&pcci->pcci_active_ios);
+			*cached = true;
+		}
+	} else {
+		*cached = false;
+		pcc_vma_file_reset(inode, vma);
+	}
+	pcc_inode_unlock(inode);
+}
+
+static int pcc_mmap_pages_convert(struct inode *inode,
+				  struct inode *pcc_inode)
+{
+#ifdef HAVE_ADD_TO_PAGE_CACHE_LOCKED
+	struct folio_batch fbatch;
+	pgoff_t index = 0;
+	unsigned nr;
+	int rc = 0;
+
+	ll_folio_batch_init(&fbatch, 0);
+	for ( ; ; ) {
+		struct page *page;
+		int i;
+
+		nr = ll_filemap_get_folios(pcc_inode->i_mapping,
+					   index, ~0UL, &fbatch);
+		if (nr == 0)
+			break;
+
+		for (i = 0; i < nr; i++) {
+#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
+			page = &fbatch.folios[i]->page;
+#else
+			page = fbatch.pages[i];
+#endif
+			lock_page(page);
+			wait_on_page_writeback(page);
+
+			/*
+			 * FIXME: Special handling for shadow or DAX entries.
+			 * i.e. the PCC backend FS is using DAX access
+			 * (ext4-dax) for performance reason on the NVMe
+			 * hardware.
+			 */
+			/* Remove the page from the mapping of the PCC copy. */
+			cfs_delete_from_page_cache(page);
+			/* Add the page into the mapping of the Lustre file. */
+			rc = add_to_page_cache_locked(page, inode->i_mapping,
+						      page->index, GFP_KERNEL);
+			if (rc) {
+				unlock_page(page);
+				folio_batch_release(&fbatch);
+				return rc;
+			}
+
+			unlock_page(page);
+		}
+
+		index = page->index + 1;
+		folio_batch_release(&fbatch);
+		cond_resched();
+	}
+
+	return rc;
+#else
+	return 0;
+#endif /* HAVE_ADD_TO_PAGE_CACHE_LOCKED */
+}
+
+static int pcc_mmap_mapping_set(struct inode *inode, struct inode *pcc_inode)
+{
+	struct address_space *mapping = inode->i_mapping;
+	struct pcc_inode *pcci = ll_i2pcci(inode);
+	int rc;
+
+	ENTRY;
+
+	if (pcc_inode->i_mapping == mapping) {
+		LASSERT(mapping->host == pcc_inode);
+		LASSERT(mapping->a_ops == pcc_inode->i_mapping->a_ops);
+		RETURN(0);
+	}
+
+	if (pcc_inode->i_mapping != &pcc_inode->i_data)
+		RETURN(-EBUSY);
+	/*
+	 * Write out all dirty pages and drop all pagecaches before switch the
+	 * mapping from the PCC copy to the Lustre file for PCC mmap().
+	 */
+
+	rc = filemap_write_and_wait_range(mapping, 0, LUSTRE_EOF);
+	if (rc)
+		return rc;
+
+	truncate_inode_pages(mapping, 0);
+
+	/* Wait all active I/Os on the PCC copy finished. */
+	wait_event_idle(pcci->pcci_waitq,
+			atomic_read(&pcci->pcci_active_ios) == 0);
+
+	rc = filemap_write_and_wait_range(pcc_inode->i_mapping, 0, LUSTRE_EOF);
+	if (rc)
+		return rc;
+
+	if (ll_i2info(inode)->lli_pcc_dsflags & PCC_DATASET_MMAP_CONV) {
+		/*
+		 * Move and convert all pagecache on the mapping of the PCC copy
+		 * to the Lustre file.
+		 */
+		rc = pcc_mmap_pages_convert(inode, pcc_inode);
+		if (rc)
+			return rc;
+	} else {
+		/* Drop all pagecache on the PCC copy directly. */
+		truncate_inode_pages(pcc_inode->i_mapping, 0);
+	}
+
+	mapping->a_ops = pcc_inode->i_mapping->a_ops;
+	mapping->host = pcc_inode;
+	pcc_inode->i_mapping = mapping;
+
+	RETURN(rc);
+}
+
 int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 		  bool *cached)
 {
+	struct file *pcc_file = ll_file2pccf(file)->pccf_file;
 	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
 	struct pcc_inode *pcci;
 	int rc = 0;
 
 	ENTRY;
 
-	if (!pcc_file || !file_inode(pcc_file)->i_fop->mmap) {
-		*cached = false;
+	/* With PCC, the files are cached in an unusual way, then we do some
+	 * special magic with mmap to allow Lustre and PCC to share the page
+	 * mapping, and the @ra_pages may set with the backing device of PCC
+	 * wrongly in this case. So we must manually set the @ra_pages with
+	 * zero, otherwise it may result in kernel readahead occurring (which
+	 * Lustre does not support).
+	 */
+	file->f_ra.ra_pages = 0;
+
+	*cached = false;
+	if (!pcc_file || !file_inode(pcc_file)->i_fop->mmap)
 		RETURN(0);
-	}
 
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 	if (pcci && pcc_inode_has_layout(pcci)) {
+		struct inode *pcc_inode = file_inode(pcc_file);
+		struct pcc_vma *pccv;
+
 		LASSERT(atomic_read(&pcci->pcci_refcount) > 1);
 		*cached = true;
-		vma->vm_file = pcc_file;
+
+		rc = pcc_mmap_mapping_set(inode, pcc_inode);
+		if (rc)
+			GOTO(out, rc);
+
+		OBD_ALLOC_PTR(pccv);
+		if (pccv == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		pcc_file->f_mapping = file->f_mapping;
+		vma->vm_file = get_file(pcc_file);
 		rc = file_inode(pcc_file)->i_fop->mmap(pcc_file, vma);
-		vma->vm_file = file;
+		if (rc || vma->vm_private_data) {
+			/*
+			 * Check whether vma->vm_private_data is NULL.
+			 * We have used vm_private_data in our PCC mmap design,
+			 * it will cause conflict if the underlying PCC backend
+			 * filesystem is also using this private data structure.
+			 */
+			if (vma->vm_private_data)
+				rc = -EOPNOTSUPP;
+			/*
+			 * If call ->mmap() fails, our caller will put Lustre
+			 * file so we should drop the reference to the PCC file
+			 * copy that we got.
+			 */
+			fput(pcc_file);
+			OBD_FREE_PTR(pccv);
+			GOTO(out, rc);
+		}
+
 		/* Save the vm ops of backend PCC */
-		vma->vm_private_data = (void *)vma->vm_ops;
+		pccv->pccv_vm_ops = vma->vm_ops;
+		pccv->pccv_file = file;
+		atomic_set(&pccv->pccv_refcnt, 0);
+		vma->vm_private_data = pccv;
+
+		CDEBUG(D_CACHE,
+		       DFID" vma %p size %llu len %lu pgoff %lu flags %lx\n",
+		       PFID(ll_inode2fid(inode)), vma, i_size_read(inode),
+		       vma->vm_end - vma->vm_start, vma->vm_pgoff,
+		       vma->vm_flags);
 	} else {
 		*cached = false;
 	}
+out:
 	pcc_inode_unlock(inode);
 
 	RETURN(rc);
@@ -2337,78 +2704,91 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 
 void pcc_vm_open(struct vm_area_struct *vma)
 {
-	struct pcc_inode *pcci;
-	struct file *file = vma->vm_file;
-	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
-	struct vm_operations_struct *pcc_vm_ops = vma->vm_private_data;
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct vvp_object *vob;
+	struct pcc_file *pccf;
+	struct inode *inode;
 
 	ENTRY;
 
-	if (!pcc_file || !pcc_vm_ops || !pcc_vm_ops->open)
+	if (!pccv)
 		RETURN_EXIT;
 
-	pcc_inode_lock(inode);
-	pcci = ll_i2pcci(inode);
-	if (pcci && pcc_inode_has_layout(pcci)) {
-		vma->vm_file = pcc_file;
-		pcc_vm_ops->open(vma);
-		vma->vm_file = file;
-	}
-	pcc_inode_unlock(inode);
+	inode = file_inode(pccv->pccv_file);
+	vob = cl_inode2vvp(inode);
+	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+	atomic_inc(&vob->vob_mmap_cnt);
+
+	pccf = ll_file2pccf(pccv->pccv_file);
+	atomic_inc(&pccv->pccv_refcnt);
+	if (pccv->pccv_vm_ops->open)
+		pccv->pccv_vm_ops->open(vma);
+
+	pcc_inode_mmap_get(inode);
+
 	EXIT;
 }
 
 void pcc_vm_close(struct vm_area_struct *vma)
 {
-	struct file *file = vma->vm_file;
-	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
-	struct vm_operations_struct *pcc_vm_ops = vma->vm_private_data;
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct vvp_object *vob;
+	struct pcc_file *pccf;
+	struct inode *inode;
 
 	ENTRY;
 
-	if (!pcc_file || !pcc_vm_ops || !pcc_vm_ops->close)
+	if (!pccv)
 		RETURN_EXIT;
 
-	pcc_inode_lock(inode);
-	/* Layout lock maybe revoked here */
-	vma->vm_file = pcc_file;
-	pcc_vm_ops->close(vma);
-	vma->vm_file = file;
-	pcc_inode_unlock(inode);
+	inode = file_inode(pccv->pccv_file);
+	LASSERT(ll_i2info(inode) != NULL);
+	vob = cl_inode2vvp(inode);
+	atomic_dec(&vob->vob_mmap_cnt);
+	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+
+	if (pccv->pccv_vm_ops && pccv->pccv_vm_ops->close)
+		pccv->pccv_vm_ops->close(vma);
+
+	pccf = ll_file2pccf(pccv->pccv_file);
+	pcc_inode_mmap_put(inode);
+	if (atomic_dec_and_test(&pccv->pccv_refcnt)) {
+		fput(pccv->pccv_file);
+		CDEBUG(D_CACHE,
+		      "release pccv "DFID" vm_file %p:%ld lu_file %p:%ld\n",
+		       PFID(ll_inode2fid(inode)),
+		       vma->vm_file, file_count(vma->vm_file),
+		       pccv->pccv_file, file_count(pccv->pccv_file));
+		OBD_FREE_PTR(pccv);
+	}
+
 	EXIT;
 }
 
 int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		     bool *cached)
 {
-	struct page *page = vmf->page;
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
 	struct mm_struct *mm = vma->vm_mm;
-	struct file *file = vma->vm_file;
-	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
-	struct vm_operations_struct *pcc_vm_ops = vma->vm_private_data;
+	struct inode *inode;
 	int rc;
 
 	ENTRY;
 
-	if (!pcc_file || !pcc_vm_ops) {
+	if (!pccv || !pccv->pccv_vm_ops) {
 		*cached = false;
 		RETURN(0);
 	}
 
-	if (!pcc_vm_ops->page_mkwrite &&
-	    page->mapping == pcc_file->f_mapping) {
+	inode = file_inode(pccv->pccv_file);
+	if (!pccv->pccv_vm_ops->page_mkwrite) {
 		__u32 flags = PCC_DETACH_FL_UNCACHE;
 
 		CDEBUG(D_MMAP,
 		       "%s: PCC backend fs not support ->page_mkwrite()\n",
 		       ll_i2sbi(inode)->ll_fsname);
 		(void) pcc_ioctl_detach(inode, &flags);
+		pcc_mmap_vma_reset(inode, vma);
 		mmap_read_unlock(mm);
 		*cached = true;
 		RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
@@ -2416,7 +2796,7 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 	/* Pause to allow for a race with concurrent detach */
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_PCC_MKWRITE_PAUSE, cfs_fail_val);
 
-	pcc_io_init(inode, PIT_PAGE_MKWRITE, cached);
+	pcc_mmap_io_init(inode, PIT_PAGE_MKWRITE, vma, cached);
 	if (!*cached) {
 		/* This happens when the file is detached from PCC after got
 		 * the fault page via ->fault() on the inode of the PCC copy.
@@ -2434,16 +2814,14 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		 * VM_FAULT_NOPAGE | VM_FAULT_RETRY to the caller
 		 * __do_page_fault and retry the memory fault handling.
 		 */
-		if (page->mapping == pcc_file->f_mapping) {
-			__u32 flags = PCC_DETACH_FL_UNCACHE;
 
-			pcc_ioctl_detach(inode, &flags);
-			*cached = true;
-			mmap_read_unlock(mm);
-			RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
-		}
+		LASSERT(vma->vm_file == pccv->pccv_file);
+		if (vmf->page->mapping == &inode->i_data)
+			RETURN(0);
 
-		RETURN(0);
+		*cached = true;
+		mmap_read_unlock(mm);
+		RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
 	}
 
 	/*
@@ -2453,13 +2831,11 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_DETACH_MKWRITE))
 		GOTO(out, rc = VM_FAULT_SIGBUS);
 
-	vma->vm_file = pcc_file;
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-	rc = pcc_vm_ops->page_mkwrite(vmf);
+	rc = pccv->pccv_vm_ops->page_mkwrite(vmf);
 #else
-	rc = pcc_vm_ops->page_mkwrite(vma, vmf);
+	rc = pccv->pccv_vm_ops->page_mkwrite(vma, vmf);
 #endif
-	vma->vm_file = file;
 
 out:
 	pcc_io_fini(inode, PIT_PAGE_MKWRITE, rc, cached);
@@ -2472,6 +2848,7 @@ out:
 		__u32 flags = PCC_DETACH_FL_UNCACHE;
 
 		(void) pcc_ioctl_detach(inode, &flags);
+		pcc_mmap_vma_reset(inode, vma);
 		mmap_read_unlock(mm);
 		RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
 	}
@@ -2481,26 +2858,24 @@ out:
 int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	      bool *cached)
 {
-	struct file *file = vma->vm_file;
-	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd = file->private_data;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
-	struct vm_operations_struct *pcc_vm_ops = vma->vm_private_data;
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct inode *inode;
 	int rc;
 
 	ENTRY;
 
-	if (!pcc_file || !pcc_vm_ops || !pcc_vm_ops->fault) {
+	if (!pccv) {
 		*cached = false;
 		RETURN(0);
 	}
 
+	inode = file_inode(pccv->pccv_file);
 	if (!S_ISREG(inode->i_mode)) {
 		*cached = false;
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_FAULT, cached);
+	pcc_mmap_io_init(inode, PIT_FAULT, vma, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2508,51 +2883,25 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_FAKE_ERROR))
 		GOTO(out, rc = VM_FAULT_SIGBUS);
 
-	vma->vm_file = pcc_file;
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-	rc = pcc_vm_ops->fault(vmf);
+	rc = pccv->pccv_vm_ops->fault(vmf);
 #else
-	rc = pcc_vm_ops->fault(vma, vmf);
+	rc = pccv->pccv_vm_ops->fault(vma, vmf);
 #endif
-	vma->vm_file = file;
+
 out:
 	pcc_io_fini(inode, PIT_FAULT, rc, cached);
-	RETURN(rc);
-}
 
-static void __pcc_layout_invalidate(struct pcc_inode *pcci)
-{
-	pcci->pcci_type = LU_PCC_NONE;
-	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
-	if (atomic_read(&pcci->pcci_active_ios) == 0)
-		return;
+	if ((rc & VM_FAULT_SIGBUS) && !(rc & VM_FAULT_OOM)) {
+		__u32 flags = PCC_DETACH_FL_UNCACHE;
 
-	CDEBUG(D_CACHE, "Waiting for IO completion: %d\n",
-		       atomic_read(&pcci->pcci_active_ios));
-	wait_event_idle(pcci->pcci_waitq,
-			atomic_read(&pcci->pcci_active_ios) == 0);
-}
-
-void pcc_layout_invalidate(struct inode *inode)
-{
-	struct pcc_inode *pcci;
-
-	ENTRY;
-
-	pcc_inode_lock(inode);
-	pcci = ll_i2pcci(inode);
-	if (pcci && pcc_inode_has_layout(pcci)) {
-		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
-		__pcc_layout_invalidate(pcci);
-
-		CDEBUG(D_CACHE, "Invalidate "DFID" layout gen %d\n",
-		       PFID(&ll_i2info(inode)->lli_fid), pcci->pcci_layout_gen);
-
-		pcc_inode_put(pcci);
+		CDEBUG(D_CACHE, "PCC fault failed: fid = "DFID" rc = %d\n",
+		       PFID(ll_inode2fid(inode)), rc);
+		(void) pcc_ioctl_detach(inode, &flags);
+		pcc_mmap_vma_reset(inode, vma);
 	}
-	pcc_inode_unlock(inode);
 
-	EXIT;
+	RETURN(rc);
 }
 
 static int pcc_inode_remove(struct inode *inode, struct dentry *pcc_dentry)
@@ -3332,10 +3681,9 @@ int pcc_ioctl_detach(struct inode *inode, __u32 *flags)
 			lli->lli_pcc_dsflags = PCC_DATASET_NONE;
 		}
 
-		__pcc_layout_invalidate(pcci);
-		pcc_inode_put(pcci);
+		pcc_inode_detach_put(inode);
 	} else if (pcci->pcci_type == LU_PCC_READONLY) {
-		__pcc_layout_invalidate(pcci);
+		pcc_inode_detach(inode);
 
 		if (*flags & PCC_DETACH_FL_UNCACHE && !pcci->pcci_unlinked) {
 			old_cred =  override_creds(pcc_super_cred(inode->i_sb));

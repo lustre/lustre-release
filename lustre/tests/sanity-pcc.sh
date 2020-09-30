@@ -57,7 +57,7 @@ fi
 if [[ -r /etc/redhat-release ]]; then
 	rhel_version=$(sed -e 's/[^0-9.]*//g' /etc/redhat-release)
 	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
-		always_except EX-8739 6 7a 7b 23    # PCC-RW
+		always_except EX-8739 6 7a 7b 23 35 # PCC-RW
 		always_except LU-17289 102          # fio io_uring
 		always_except LU-17781 33	    # inconsistent LSOM
 	fi
@@ -768,7 +768,7 @@ test_4() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
-	local excepts="-e 6 -e 7 -e 8 -e 9"
+	local excepts="-e 7 -e 8 -e 9"
 
 	! is_project_quota_supported &&
 		skip "project quota is not supported" && return
@@ -784,16 +784,14 @@ test_4() {
 
 	# 1. mmap_sanity tst7 failed on the local ext4 filesystem.
 	#    It seems that Lustre filesystem does special process for tst 7.
-	# 2. There is a mmap problem for PCC when multiple clients read/write
-	#    on a shared mmapped file for mmap_sanity tst 6.
-	# 3. Current CentOS8 kernel does not strictly obey POSIX syntax for
+	# 2. Current CentOS8 kernel does not strictly obey POSIX syntax for
 	#    mmap() within the maping but beyond current end of the underlying
 	#    files: It does not send SIGBUS signals to the process.
-	# 4. For negative file offset, sanity_mmap also failed on 48 bits
+	# 3. For negative file offset, sanity_mmap also failed on 48 bits
 	#    ldiksfs backend due to too large offset: "Value too large for
 	#    defined data type".
 	# mmap_sanity tst7/tst8/tst9 all failed on Lustre and local ext4.
-	# Thus, we exclude sanity tst6/tst7/tst8/tst9 from the PCC testing.
+	# Thus, we exclude sanity tst7/tst8/tst9 from the PCC testing.
 	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir $excepts ||
 		error "mmap_sanity test failed"
 	sync; sleep 1; sync
@@ -2324,7 +2322,7 @@ test_25() {
 		error "failed to fall back to Lustre I/O path for mmap-read"
 	# Above mmap read will return VM_FAULT_SIGBUS failure and
 	# retry the IO on normal IO path.
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "ro_fake_mmap_cat_err"
 
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -2909,6 +2907,39 @@ test_34() {
 	cleanup_pcc_mapping
 }
 run_test 34 "Cache rule with comparator (>, <) for Project ID range"
+
+test_35() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local -a lpcc_path
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	echo "pccro_mmap_data" > $file
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to PCC-RO attach file $file"
+	check_lpcc_state $file "readonly"
+	check_lpcc_data $SINGLEAGT $lpcc_path $file "pccro_mmap_data"
+
+	local content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+
+	[[ $content == "pccro_mmap_data" ]] ||
+		error "mmap_cat data mismatch: $content"
+	check_lpcc_state $file "readonly"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to PCC-RO detach $file"
+	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+	[[ $content == "pccro_mmap_data" ]] ||
+		error "mmap_cat data mismatch: $content"
+	check_lpcc_state $file "none"
+}
+run_test 35 "mmap fault test"
 
 test_36_base() {
 	local loopfile="$TMP/$tfile"

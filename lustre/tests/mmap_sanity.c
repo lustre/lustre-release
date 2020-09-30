@@ -37,6 +37,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -367,7 +368,9 @@ static int mmap_tst4(char *mnt)
 	if (rc)
 		goto out_unmap;
 
-	memset(ptr, '1', region);
+	memset(ptr, '1', region / 2);
+	sleep(2);
+	memset(ptr + region / 2, '1', region / 2);
 
 	rc = write(fdw, ptr, region);
 	if (rc <= 0) {
@@ -419,7 +422,9 @@ static int remote_tst4(char *mnt)
 		goto out_close;
 	}
 
-	memset(ptr, '2', region);
+	memset(ptr, '2', region / 2);
+	sleep(2);
+	memset(ptr + region / 2, '2', region / 2);
 
 	rc = write(fdw, ptr, region);
 	if (rc <= 0) {
@@ -806,7 +811,192 @@ out:
 	return rc;
 }
 
+#define NUM_THREADS	8
+#define BUF_SIZE	4096
+#define MAX_LEN		1048576
+#define MAX_FILESIZE	(NUM_THREADS * MAX_LEN)
+
+struct thread_data {
+	int	 td_tid;
+	char	*td_buf;
+	size_t	 td_len;
+	int	 td_fd;
+};
+
+static int mmap_create_file(char *fname, size_t size)
+{
+	char buf[BUF_SIZE];
+	ssize_t written = 0;
+	int rc = 0;
+	int fd;
+
+	fd = open(fname, O_WRONLY | O_CREAT, 0666);
+	if (fd == -1) {
+		perror("open");
+		return -errno;
+	}
+
+	memset(buf, 'Q', sizeof(buf));
+	while (written < size) {
+		ssize_t ret;
+
+		ret = write(fd, buf, BUF_SIZE);
+		if (ret != BUF_SIZE) {
+			fprintf(stderr, "failed to write %s: %s\n",
+				fname, strerror(errno));
+			rc = -errno;
+			goto out;
+		}
+
+		written += ret;
+	}
+
+out:
+	close(fd);
+	return rc;
+}
+
+static void *tst10_thread(void *arg)
+{
+	struct thread_data *data = (struct thread_data *)arg;
+	size_t size = data->td_len;
+	int fd = data->td_fd;
+	char buf[BUF_SIZE];
+	loff_t offset = 0;
+	char *ptr;
+	int rc;
+
+	ptr = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (ptr == MAP_FAILED) {
+		rc = errno;
+		perror("mmap()");
+		exit(rc);
+	}
+
+	do {
+		memcpy(buf, ptr + offset, sizeof(buf));
+		offset += sizeof(buf);
+	} while (offset < size);
+
+	rc = munmap(ptr, size);
+	if (rc == -1) {
+		rc = errno;
+		perror("nunmap");
+		exit(rc);
+	}
+
+	return NULL;
+}
+
 static int mmap_tst10(char *mnt)
+{
+	pthread_t thread[NUM_THREADS];
+	struct thread_data data;
+	char fname[PATH_MAX];
+	int rc = 0;
+	int fd;
+	int i;
+
+	if (snprintf(fname, PATH_MAX, "%s/mmap_tst10", mnt) >= PATH_MAX) {
+		fprintf(stderr, "file name too long\n");
+		return -ENAMETOOLONG;
+	}
+
+	rc = mmap_create_file(fname, MAX_FILESIZE);
+	if (rc)
+		return rc;
+
+	fd = open(fname, O_RDONLY | O_DIRECT, 0644);
+	if (fd == -1) {
+		rc = -errno;
+		perror("open");
+		return rc;
+	}
+
+	data.td_fd = fd;
+	data.td_len = MAX_FILESIZE;
+	for (i = 0; i < NUM_THREADS; i++)
+		pthread_create(&thread[i], NULL, tst10_thread, &data);
+
+	for (i = 0; i < NUM_THREADS; i++)
+		pthread_join(thread[i], NULL);
+
+	close(fd);
+	unlink(fname);
+	return rc;
+}
+
+static void *tst11_thread(void *arg)
+{
+	struct thread_data *data = (struct thread_data *)arg;
+	char *ptr = data->td_buf;
+	char buf[BUF_SIZE];
+	loff_t offset = 0;
+
+	do {
+		memcpy(buf, ptr + offset, sizeof(buf));
+		offset += sizeof(buf);
+	} while (offset < data->td_len);
+
+	return NULL;
+}
+
+static int mmap_tst11(char *mnt)
+{
+	pthread_t thread[NUM_THREADS];
+	struct thread_data data[NUM_THREADS];
+	char fname[PATH_MAX];
+	char *ptr;
+	int rc = 0;
+	int fd;
+	int i;
+
+	if (snprintf(fname, PATH_MAX, "%s/mmap_tst11", mnt) >= PATH_MAX) {
+		fprintf(stderr, "file name too long\n");
+		return -ENAMETOOLONG;
+	}
+
+	rc = mmap_create_file(fname, MAX_FILESIZE);
+	if (rc)
+		return rc;
+
+	fd = open(fname, O_RDONLY | O_DIRECT, 0644);
+	if (fd == -1) {
+		rc = -errno;
+		perror("open");
+		return rc;
+	}
+
+	ptr = mmap(NULL, MAX_FILESIZE, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (ptr == MAP_FAILED) {
+		rc = errno;
+		perror("mmap()");
+		exit(rc);
+	}
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		data[i].td_tid = i;
+		data[i].td_len = MAX_LEN;
+		data[i].td_buf = ptr + i * MAX_LEN;
+		pthread_create(&thread[i], NULL, tst11_thread, &data[i]);
+	}
+
+	for (i = 0; i < NUM_THREADS; i++)
+		pthread_join(thread[i], NULL);
+
+	rc = munmap(ptr, MAX_FILESIZE);
+	if (rc == -1) {
+		rc = errno;
+		perror("nunmap");
+		exit(rc);
+	}
+
+	close(fd);
+	unlink(fname);
+	return rc;
+}
+
+static int mmap_tst12(char *mnt)
 {
 	char *buf = MAP_FAILED;
 	char *buffer[256];
@@ -951,8 +1141,20 @@ struct test_case tests[] = {
 	},
 	{
 		.tc		= 10,
-		.desc		= "mmap test10: mtime not change for readonly mmap access",
+		.desc		= "mmap test10: multi-thread mmap access",
 		.test_fn	= mmap_tst10,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 11,
+		.desc		= "mmap test11: multi-thread shared mmap",
+		.test_fn	= mmap_tst11,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 12,
+		.desc		= "mmap test10: mtime not change for readonly mmap access",
+		.test_fn	= mmap_tst12,
 		.node_cnt	= 1
 	},
 	{

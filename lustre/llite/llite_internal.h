@@ -279,6 +279,8 @@ struct ll_inode_info {
 
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
+			atomic_t		 lli_pcc_mapcnt;
+
 			/*
 			 * @lli_pcc_generation saves the gobal PCC generation
 			 * when the file was successfully attached into PCC.
@@ -2071,6 +2073,11 @@ static inline struct pcc_super *ll_i2pccs(struct inode *inode)
 static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
 {
 	return ll_i2pccs(ll_info2i(lli));
+}
+
+static inline struct pcc_file *ll_file2pccf(struct file *file)
+{
+	return &((struct ll_file_data *)file->private_data)->fd_pcc_file;
 }
 
 /* crypto.c */

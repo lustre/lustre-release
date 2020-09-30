@@ -135,6 +135,8 @@ enum pcc_dataset_flags {
 	PCC_DATASET_PCC_ALL	= PCC_DATASET_PCCRW | PCC_DATASET_PCCRO,
 	/* Default PCC caching mode: PCC-RO mode */
 	PCC_DATASET_PCC_DEFAULT	= PCC_DATASET_PCCRO,
+	/* Move pagecache from mapping of PCC copy to Lustre file for mmap */
+	PCC_DATASET_MMAP_CONV	= 0x40,
 };
 
 struct pcc_dataset {
@@ -195,6 +197,12 @@ struct pcc_file {
 	struct file		*pccf_file;
 	/* Whether readonly or readwrite PCC */
 	enum lu_pcc_type	 pccf_type;
+};
+
+struct pcc_vma {
+	atomic_t				 pccv_refcnt;
+	struct file				*pccv_file;
+	const struct vm_operations_struct	*pccv_vm_ops;
 };
 
 enum pcc_io_type {
@@ -296,4 +304,18 @@ struct pcc_dataset *pcc_dataset_match_get(struct pcc_super *super,
 void pcc_dataset_put(struct pcc_dataset *dataset);
 void pcc_inode_free(struct inode *inode);
 void pcc_layout_invalidate(struct inode *inode);
+
+static inline struct file *pcc_vma_file(struct vm_area_struct *vma)
+{
+	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct file *file;
+
+	if (pccv)
+		file = pccv->pccv_file;
+	else
+		file = vma->vm_file;
+
+	return file;
+}
+
 #endif /* LLITE_PCC_H */

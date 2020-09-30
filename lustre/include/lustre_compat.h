@@ -897,8 +897,10 @@ static inline struct page *ll_read_cache_page(struct address_space *mapping,
 #endif /* HAVE_READ_CACHE_PAGE_WANTS_FILE */
 }
 
-#ifdef HAVE_FOLIO_BATCH
+#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
 # define ll_folio_batch_init(batch, n)	folio_batch_init(batch)
+# define ll_filemap_get_folios(m, s, e, fbatch) \
+	 filemap_get_folios(m, &s, e, fbatch)
 # define fbatch_at(fbatch, f)		((fbatch)->folios[(f)])
 # define fbatch_at_npgs(fbatch, f)	folio_nr_pages((fbatch)->folios[(f)])
 # define fbatch_at_pg(fbatch, f, pg)	folio_page((fbatch)->folios[(f)], (pg))
@@ -911,7 +913,7 @@ static inline void folio_batch_reinit(struct folio_batch *fbatch)
 }
 # endif /* HAVE_FOLIO_BATCH_REINIT */
 
-#else /* !HAVE_FOLIO_BATCH */
+#else /* !HAVE_FOLIO_BATCH && !HAVE_FILEMAP_GET_FOLIOS */
 
 # ifdef HAVE_PAGEVEC
 #  define folio_batch			pagevec
@@ -929,10 +931,17 @@ static inline void folio_batch_reinit(struct folio_batch *fbatch)
 # else
 #  define ll_folio_batch_init(pvec, n)	pagevec_init(pvec, n)
 # endif
+#ifdef HAVE_PAGEVEC_LOOKUP_THREE_PARAM
+# define ll_filemap_get_folios(m, s, e, pvec) \
+	 pagevec_lookup(pvec, m, &s)
+#else
+# define ll_filemap_get_folios(m, s, e, pvec) \
+	 pagevec_lookup(pvec, m, s, PAGEVEC_SIZE)
+#endif
 # define fbatch_at(pvec, n)		((pvec)->pages[(n)])
 # define fbatch_at_npgs(pvec, n)	1
 # define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
-#endif /* HAVE_FOLIO_BATCH */
+#endif /* HAVE_FOLIO_BATCH && HAVE_FILEMAP_GET_FOLIOS */
 
 #ifndef HAVE_FLUSH___WORKQUEUE
 #define __flush_workqueue(wq)	flush_scheduled_work()

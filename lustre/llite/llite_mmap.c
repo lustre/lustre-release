@@ -398,7 +398,7 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	result = pcc_fault(vma, vmf, &cached);
 	if (cached)
-		goto out;
+		return result;
 
 	CDEBUG(D_MMAP|D_IOTRACE,
 	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
@@ -450,7 +450,6 @@ restart:
 	}
 	sigprocmask(SIG_SETMASK, &old, NULL);
 
-out:
 	if (vmf->page && result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, vma->vm_file->private_data,
@@ -494,7 +493,7 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)
-		goto out;
+		return result;
 
 	file_update_time(vma->vm_file);
 	do {
@@ -531,7 +530,6 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 		break;
 	}
 
-out:
 	if (result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, vma->vm_file->private_data,
@@ -556,13 +554,18 @@ out:
  */
 static void ll_vm_open(struct vm_area_struct *vma)
 {
-	struct inode *inode    = file_inode(vma->vm_file);
-	struct vvp_object *vob = cl_inode2vvp(inode);
-
 	ENTRY;
-	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
-	atomic_inc(&vob->vob_mmap_cnt);
-	pcc_vm_open(vma);
+
+	if (vma->vm_private_data == NULL) {
+		struct inode *inode = file_inode(vma->vm_file);
+		struct vvp_object *vob = cl_inode2vvp(inode);
+
+		LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+		atomic_inc(&vob->vob_mmap_cnt);
+	} else {
+		pcc_vm_open(vma);
+	}
+
 	EXIT;
 }
 
@@ -571,13 +574,18 @@ static void ll_vm_open(struct vm_area_struct *vma)
  */
 static void ll_vm_close(struct vm_area_struct *vma)
 {
-	struct inode      *inode = file_inode(vma->vm_file);
-	struct vvp_object *vob   = cl_inode2vvp(inode);
-
 	ENTRY;
-	atomic_dec(&vob->vob_mmap_cnt);
-	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
-	pcc_vm_close(vma);
+
+	if (vma->vm_private_data == NULL) {
+		struct inode *inode = file_inode(vma->vm_file);
+		struct vvp_object *vob = cl_inode2vvp(inode);
+
+		atomic_dec(&vob->vob_mmap_cnt);
+		LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+	} else {
+		pcc_vm_close(vma);
+	}
+
 	EXIT;
 }
 

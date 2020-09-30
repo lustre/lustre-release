@@ -2488,6 +2488,23 @@ AC_DEFUN([LC_PAGEVEC_INIT_ONE_PARAM], [
 ]) # LC_PAGEVEC_INIT_ONE_PARAM
 
 #
+# LC_PAGEVEC_LOOKUP_THREE_PARAM
+#
+# 4.14 pagevec_lookup takes three parameters
+#
+AC_DEFUN([LC_PAGEVEC_LOOKUP_THREE_PARAM], [
+LB_CHECK_COMPILE([if 'pagevec_lookup' takes three parameter],
+pagevec_lookup, [
+	#include <linux/pagevec.h>
+],[
+	pagevec_lookup(NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_PAGEVEC_LOOKUP_THREE_PARAM, 1,
+		['pagevec_lookup' takes three parameters])
+])
+]) # LC_PAGEVEC_LOOKUP_THREE_PARAM
+
+#
 # LC_BI_BDEV
 #
 # 4.14 replaced bi_bdev to bi_disk
@@ -3750,6 +3767,30 @@ AC_DEFUN([LC_DQUOT_TRANSFER_WITH_USER_NS], [
 ]) # LC_DQUOT_TRANSFER_WITH_USER_NS
 
 #
+# LC_HAVE_FILEMAP_GET_FOLIOS
+#
+# Linux commit v5.19-rc3-342-gbe0ced5e9cb8
+#  filemap: Add filemap_get_folios()
+#
+AC_DEFUN([LC_SRC_HAVE_FILEMAP_GET_FOLIOS], [
+	LB2_LINUX_TEST_SRC([filemap_get_folios], [
+		#include <linux/pagemap.h>
+	],[
+		struct address_space *m = NULL;
+		pgoff_t start = 0;
+		struct folio_batch *fbatch = NULL;
+		(void)filemap_get_folios(m, &start, ULONG_MAX, fbatch);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FILEMAP_GET_FOLIOS], [
+	AC_MSG_CHECKING([if filemap_get_folios() exists])
+	LB2_LINUX_TEST_RESULT([filemap_get_folios], [
+		AC_DEFINE(HAVE_FILEMAP_GET_FOLIOS, 1,
+			[filemap_get_folios() exists])
+	])
+]) # LC_HAVE_FILEMAP_GET_FOLIOS
+
+#
 # LC_HAVE_ADDRESS_SPACE_OPERATIONS_MIGRATE_FOLIO
 #
 # Linux commit v5.19-rc3-392-g5490da4f06d1
@@ -3945,6 +3986,19 @@ AC_DEFUN([LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL], [
 			[filldir_t return type is bool or int])
 	])
 ]) # LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
+
+#
+# LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
+#
+# Linux version v6.0 commit: 2bb876b58d593d7f2522ec0f41f20a74fde76822
+# filemap: Remove add_to_page_cache() and add_to_page_cache_locked()
+# add_to_page_cache_locked() no longer exported.
+#
+AC_DEFUN([LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED], [
+LB_CHECK_EXPORT([add_to_page_cache_locked], [mm/filemap.c],
+	[AC_DEFINE(HAVE_ADD_TO_PAGE_CACHE_LOCKED, 1,
+			[add_to_page_cache_locked is exported by the kernel])])
+]) # LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
 
 #
 # LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
@@ -4787,6 +4841,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 	LC_SRC_HAVE_LSMCONTEXT_INIT
 	LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
+	LC_SRC_HAVE_FILEMAP_GET_FOLIOS
 
 	# 6.0
 	LC_SRC_HAVE_NO_LLSEEK
@@ -4796,6 +4851,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
 	LC_SRC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 	LC_SRC_HAVE_USER_BACKED_ITER
+	LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
 
 	# 6.1
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
@@ -5006,6 +5062,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 4.14
 	LC_PAGEVEC_INIT_ONE_PARAM
+	LC_PAGEVEC_LOOKUP_THREE_PARAM
 	LC_BI_BDEV
 	LC_INTERVAL_TREE_CACHED
 
@@ -5100,6 +5157,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 	LC_HAVE_LSMCONTEXT_INIT
 	LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
+	LC_HAVE_FILEMAP_GET_FOLIOS
 
 	# 6.0
 	LC_HAVE_NO_LLSEEK
