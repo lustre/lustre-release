@@ -33,6 +33,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/workqueue.h>
 #include <libcfs/libcfs.h>
 
 struct cfs_var_array {
@@ -170,3 +171,62 @@ cfs_array_alloc(int count, unsigned int size)
 	return (void *)&arr->va_ptrs[0];
 }
 EXPORT_SYMBOL(cfs_array_alloc);
+
+/*
+ * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
+ * minimum changes needed to work on older kernels too.
+ */
+
+#ifndef raw_cpu_ptr
+#define raw_cpu_ptr(p) __this_cpu_ptr(p)
+#endif
+
+#ifndef llist_for_each_safe
+#define llist_for_each_safe(pos, n, node)                       \
+        for ((pos) = (node); (pos) && ((n) = (pos)->next, true); (pos) = (n))
+#endif
+
+struct vfree_deferred {
+	struct llist_head list;
+	struct work_struct wq;
+};
+static DEFINE_PER_CPU(struct vfree_deferred, vfree_deferred);
+
+static void free_work(struct work_struct *w)
+{
+	struct vfree_deferred *p = container_of(w, struct vfree_deferred, wq);
+	struct llist_node *t, *llnode;
+
+	llist_for_each_safe(llnode, t, llist_del_all(&p->list))
+		vfree((void *)llnode);
+}
+
+void libcfs_vfree_atomic(const void *addr)
+{
+	struct vfree_deferred *p = raw_cpu_ptr(&vfree_deferred);
+
+	if (!addr)
+		return;
+
+	if (llist_add((struct llist_node *)addr, &p->list))
+		schedule_work(&p->wq);
+}
+EXPORT_SYMBOL(libcfs_vfree_atomic);
+
+void __init init_libcfs_vfree_atomic(void)
+{
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct vfree_deferred *p;
+
+		p = &per_cpu(vfree_deferred, i);
+		init_llist_head(&p->list);
+		INIT_WORK(&p->wq, free_work);
+	}
+}
+
+void __exit exit_libcfs_vfree_atomic(void)
+{
+	flush_scheduled_work();
+}
