@@ -1594,6 +1594,18 @@ int target_handle_disconnect(struct ptlrpc_request *req)
 	if (rc)
 		RETURN(rc);
 
+	/* In case of target disconnect, updating sec ctx immediately is
+	 * required in order to record latest sequence number used.
+	 * Sequence is normally updated on export destroy, but this event
+	 * can occur too late, ie after a new target connect request has
+	 * been processed.
+	 * Maintaining correct sequence when client connection becomes idle
+	 * ensures that GSS does not erroneously consider requests as replays.
+	 */
+	rc = sptlrpc_export_update_ctx(req->rq_export);
+	if (rc)
+		RETURN(rc);
+
 	/* Keep the rq_export around so we can send the reply. */
 	req->rq_status = obd_disconnect(class_export_get(req->rq_export));
 
