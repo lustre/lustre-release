@@ -1131,8 +1131,16 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 static
 int gss_cli_ctx_refresh_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        /* upcall is already on the way */
-        return 0;
+	/* upcall is already on the way */
+	struct gss_cli_ctx *gctx = ctx ? ctx2gctx(ctx) : NULL;
+
+	/* record latest sequence number in buddy svcctx */
+	if (gctx && !rawobj_empty(&gctx->gc_svc_handle) &&
+	    sec_is_reverse(gctx->gc_base.cc_sec)) {
+		return gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
+					     (__u32)atomic_read(&gctx->gc_seq));
+	}
+	return 0;
 }
 
 static

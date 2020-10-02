@@ -711,12 +711,12 @@ again:
         sptlrpc_sec_put(sec);
 
         if (cli_ctx_is_eternal(ctx))
-                RETURN(0);
+		RETURN(0);
 
 	if (unlikely(test_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags))) {
-                LASSERT(ctx->cc_ops->refresh);
-                ctx->cc_ops->refresh(ctx);
-        }
+		if (ctx->cc_ops->refresh)
+			ctx->cc_ops->refresh(ctx);
+	}
 	LASSERT(test_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags) == 0);
 
         LASSERT(ctx->cc_ops->validate);
@@ -838,7 +838,30 @@ again:
                 RETURN(rc);
         }
 
-        goto again;
+	goto again;
+}
+
+/* Bring ptlrpc_sec context up-to-date */
+int sptlrpc_export_update_ctx(struct obd_export *exp)
+{
+	struct obd_import *imp = exp ? exp->exp_imp_reverse : NULL;
+	struct ptlrpc_sec *sec = NULL;
+	struct ptlrpc_cli_ctx *ctx = NULL;
+	int rc = 0;
+
+	if (imp)
+		sec = sptlrpc_import_sec_ref(imp);
+	if (sec) {
+		ctx = get_my_ctx(sec);
+		sptlrpc_sec_put(sec);
+	}
+
+	if (ctx) {
+		if (ctx->cc_ops->refresh)
+			rc = ctx->cc_ops->refresh(ctx);
+		sptlrpc_cli_ctx_put(ctx, 1);
+	}
+	return rc;
 }
 
 /**
