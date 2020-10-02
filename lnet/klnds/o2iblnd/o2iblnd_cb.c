@@ -1293,13 +1293,16 @@ kiblnd_queue_tx(struct kib_tx *tx, struct kib_conn *conn)
 	spin_unlock(&conn->ibc_lock);
 }
 
-static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
-                               struct sockaddr_in *srcaddr,
-                               struct sockaddr_in *dstaddr,
-                               int timeout_ms)
+static int
+kiblnd_resolve_addr_cap(struct rdma_cm_id *cmid,
+			struct sockaddr_in *srcaddr,
+			struct sockaddr_in *dstaddr,
+			int timeout_ms)
 {
         unsigned short port;
         int rc;
+
+	LASSERT(capable(CAP_NET_BIND_SERVICE));
 
         /* allow the port to be reused */
         rc = rdma_set_reuseaddr(cmid, 1);
@@ -1328,6 +1331,33 @@ static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
 
         CERROR("Failed to bind to a free privileged port\n");
         return rc;
+}
+
+static int
+kiblnd_resolve_addr(struct rdma_cm_id *cmid,
+		    struct sockaddr_in *srcaddr,
+		    struct sockaddr_in *dstaddr,
+		    int timeout_ms)
+{
+	const struct cred *old_creds = NULL;
+	struct cred *new_creds;
+	int rc;
+
+	if (!capable(CAP_NET_BIND_SERVICE)) {
+		new_creds = prepare_creds();
+		if (!new_creds)
+			return -ENOMEM;
+
+		cap_raise(new_creds->cap_effective, CAP_NET_BIND_SERVICE);
+		old_creds = override_creds(new_creds);
+	}
+
+	rc = kiblnd_resolve_addr_cap(cmid, srcaddr, dstaddr, timeout_ms);
+
+	if (old_creds)
+		revert_creds(old_creds);
+
+	return rc;
 }
 
 static void
