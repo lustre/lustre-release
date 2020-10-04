@@ -6690,18 +6690,13 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 	filp->f_cred = current_cred();
 	rc = osd_security_file_alloc(filp);
 	if (rc)
-		RETURN(rc);
+		GOTO(unlock, rc);
 
 	filp->f_flags |= O_NOATIME;
 	filp->f_mode |= FMODE_NONOTIFY;
 	rc = iterate_dir(filp, &buf.ctx);
 	if (rc)
-		RETURN(rc);
-
-	if (hlock != NULL)
-		ldiskfs_htree_unlock(hlock);
-	else
-		up_read(&obj->oo_ext_idx_sem);
+		GOTO(unlock, rc);
 
 	if (it->oie_rd_dirent == 0) {
 		/*
@@ -6715,6 +6710,11 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 		it->oie_dirent = it->oie_buf;
 		it->oie_it_dirent = 1;
 	}
+unlock:
+	if (hlock != NULL)
+		ldiskfs_htree_unlock(hlock);
+	else
+		up_read(&obj->oo_ext_idx_sem);
 
 	RETURN(rc);
 }
