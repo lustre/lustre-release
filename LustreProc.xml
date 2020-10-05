@@ -2090,7 +2090,7 @@ nid                refs   state  max  rtr  min   tx    min   queue
                       <literal>rtr </literal></para>
                   </entry>
                   <entry>
-                    <para>Number of routing buffer credits.</para>
+                    <para>Number of available routing buffer credits.</para>
                   </entry>
                 </row>
                 <row>
@@ -2108,7 +2108,7 @@ nid                refs   state  max  rtr  min   tx    min   queue
                       <literal>tx </literal></para>
                   </entry>
                   <entry>
-                    <para>Number of send credits.</para>
+                    <para>Number of available send credits.</para>
                   </entry>
                 </row>
                 <row>
@@ -2132,27 +2132,41 @@ nid                refs   state  max  rtr  min   tx    min   queue
               </tbody>
             </tgroup>
           </informaltable>
-          <para>Credits are initialized to allow a certain number of operations (in the example
-            above the table, eight as shown in the <literal>max</literal> column. LNet keeps track
-            of the minimum number of credits ever seen over time showing the peak congestion that
-            has occurred during the time monitored. Fewer available credits indicates a more
-            congested resource. </para>
-          <para>The number of credits currently in flight (number of transmit credits) is shown in
-            the <literal>tx</literal> column. The maximum number of send credits available is shown
-            in the <literal>max</literal> column and never changes. The number of router buffers
-            available for consumption by a peer is shown in the <literal>rtr</literal>
-            column.</para>
-          <para>Therefore, <literal>rtr</literal> – <literal>tx</literal> is the number of transmits
-            in flight. Typically, <literal>rtr == max</literal>, although a configuration can be set
-            such that <literal>max >= rtr</literal>. The ratio of routing buffer credits to send
-            credits (<literal>rtr/tx</literal>) that is less than <literal>max</literal> indicates
-            operations are in progress. If the ratio <literal>rtr/tx</literal> is greater than
-              <literal>max</literal>, operations are blocking.</para>
-          <para>LNet also limits concurrent sends and number of router buffers allocated to a single
-            peer so that no peer can occupy all these resources.</para>
+          <para>Credits are initialized to allow a certain number of operations
+            (in the example above the table, eight as shown in the
+            <literal>max</literal> column. LNet keeps track of the minimum
+            number of credits ever seen over time showing the peak congestion
+            that has occurred during the time monitored. Fewer available credits
+            indicates a more congested resource. </para>
+          <para>The number of credits currently available is shown in the
+            <literal>tx</literal> column. The maximum number of send credits is
+            shown in the <literal>max</literal> column and never changes. The
+            number of currently active transmits can be derived by
+            <literal>(max - tx)</literal>, as long as
+            <literal>tx</literal> is greater than or equal to 0. Once
+            <literal>tx</literal> is less than 0, it indicates the number of
+            transmits on that peer which have been queued for lack of credits.
+          </para>
+          <para>The number of router buffer credits available for consumption
+            by a peer is shown in <literal>rtr</literal> column. The number of
+            routing credits can be configured separately at the LND level or at
+            the LNet level by using the <literal>peer_buffer_credits</literal>
+            module parameter for the appropriate module. If the routing credits
+            is not set explicitly, it'll default to the maximum transmit credits
+            defined by <literal>peer_credits</literal> module parameter.
+            Whenever a gateway routes a message from a peer, it decrements the
+            number of available routing credits for that peer. If that value
+            goes to zero, then messages will be queued. Negative values show the
+            number of queued message waiting to be routed. The number of
+            messages which are currently being routed from a peer can be derived
+            by <literal>(max_rtr_credits - rtr)</literal>.</para>
+          <para>LNet also limits concurrent sends and number of router buffers
+            allocated to a single peer so that no peer can occupy all resources.
+          </para>
         </listitem>
         <listitem>
-          <para><literal>nis</literal> - Shows the current queue health on this node.</para>
+          <para><literal>nis</literal> - Shows current queue health on the node.
+          </para>
           <para>Example:</para>
           <screen># lctl get_param nis
 nid                    refs   peer    max   tx    min
