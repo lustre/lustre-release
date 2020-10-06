@@ -3287,8 +3287,9 @@ test_45() {
 	$MULTIOP $tmpfile OSMWUc || error "$MULTIOP $tmpfile failed"
 	$MMAP_CAT $tmpfile > ${tmpfile}2
 
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cancel_lru_locks
 
+	$MULTIOP $testfile OSMRUc
 	$MMAP_CAT $testfile > ${testfile}2
 	cmp -bl ${tmpfile}2 ${testfile}2 ||
 		error "file $testfile is corrupted"
