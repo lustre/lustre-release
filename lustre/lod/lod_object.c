@@ -3206,13 +3206,13 @@ static int lod_layout_convert(struct lod_thread_info *info)
 	}
 
 	lcm = info->lti_ea_store;
+	memset(lcm, 0, sizeof(*lcm) + sizeof(*lcme));
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_size = cpu_to_le32(size);
 	lcm->lcm_layout_gen = cpu_to_le32(le16_to_cpu(
 						lmm_save->lmm_layout_gen));
 	lcm->lcm_flags = cpu_to_le16(LCM_FL_NONE);
 	lcm->lcm_entry_count = cpu_to_le16(1);
-	lcm->lcm_mirror_count = 0;
 
 	lcme = &lcm->lcm_entries[0];
 	lcme->lcme_flags = cpu_to_le32(LCME_FL_INIT);
