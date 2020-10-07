@@ -16,8 +16,8 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT "
 if $SHARED_KEY; then
-# bug number for skipped tests: LU-9795 LU-9795
-	ALWAYS_EXCEPT+="	13      402b "
+# bug number for skipped tests: LU-9795
+	ALWAYS_EXCEPT+="	402b "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 fi
 

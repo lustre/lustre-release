@@ -21,11 +21,6 @@ ALWAYS_EXCEPT+="                14b     21b     26 "
 # bug number for skipped test:        LU-2230
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21b"
 
-if $SHARED_KEY; then
-# bug number for skipped tests:  LU-9795 LU-9795
-	ALWAYS_EXCEPT+="         0a      0b "
-fi
-
 #                                   7  (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="21b "
 

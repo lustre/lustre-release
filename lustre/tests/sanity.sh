@@ -44,11 +44,6 @@ ALWAYS_EXCEPT+="               42a     42b     42c "
 # bug number:    LU-8411 LU-9054
 ALWAYS_EXCEPT+=" 407     312"
 
-if $SHARED_KEY; then
-	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
-	ALWAYS_EXCEPT+=" 17n     60a     133g    300f"
-fi
-
 selinux_status=$(getenforce)
 if [ "$selinux_status" != "Disabled" ]; then
 	# bug number:
@@ -24295,8 +24290,6 @@ run_test 810 "partial page writes on ZFS (LU-11663)"
 test_812a() {
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
-	[ "$SHARED_KEY" = true ] &&
-		skip "OSC connections never go IDLE with Shared-Keys enabled"
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
@@ -24318,8 +24311,6 @@ run_test 812a "do not drop reqs generated when imp is going to idle (LU-11951)"
 test_812b() { # LU-12378
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
-	[ "$SHARED_KEY" = true ] &&
-		skip "OSC connections never go IDLE with Shared-Keys enabled"
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "setstripe failed"
 	# ensure ost1 is connected
@@ -24527,9 +24518,6 @@ test_815()
 run_test 815 "zero byte tiny write doesn't hang (LU-12382)"
 
 test_816() {
-	[ "$SHARED_KEY" = true ] &&
-		skip "OSC connections never go IDLE with Shared-Keys enabled"
-
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
 	stat $DIR/$tfile >/dev/null || error "can't stat"

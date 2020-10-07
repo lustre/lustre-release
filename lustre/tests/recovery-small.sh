@@ -9,11 +9,6 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
-if $SHARED_KEY; then
-	# bug number for skipped test: LU-12896
-	ALWAYS_EXCEPT+="               110k"
-	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-fi
 
 build_test_filter
 
