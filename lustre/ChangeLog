@@ -20,6 +20,7 @@ TBD Whamcloud
        * Client primary kernels built and tested during release cycle:
          3.10.0-1062.18.1.el7 (RHEL7.7)
          3.10.0-1127.19.1.el7 (RHEL7.8)
+         3.10.0-1160.2.1.el7  (RHEL7.9)
          4.12.14-95.48        (SLES12 SP4)
          4.12.14-122.20       (SLES12 SP5)
          4.12.14-197.37       (SLES15 SP1)
