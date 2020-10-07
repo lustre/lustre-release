@@ -2901,8 +2901,8 @@ kiblnd_base_shutdown(void)
 
 	LASSERT(list_empty(&kiblnd_data.kib_devs));
 
-        CDEBUG(D_MALLOC, "before LND base cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before LND base cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
         switch (kiblnd_data.kib_init) {
         default:
@@ -2948,8 +2948,8 @@ kiblnd_base_shutdown(void)
 	if (kiblnd_data.kib_scheds != NULL)
 		cfs_percpt_free(kiblnd_data.kib_scheds);
 
-        CDEBUG(D_MALLOC, "after LND base cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after LND base cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	kiblnd_data.kib_init = IBLND_INIT_NOTHING;
 	module_put(THIS_MODULE);
@@ -2967,8 +2967,8 @@ kiblnd_shutdown(struct lnet_ni *ni)
         if (net == NULL)
                 goto out;
 
-        CDEBUG(D_MALLOC, "before LND net cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before LND net cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	write_lock_irqsave(g_lock, flags);
 	net->ibn_shutdown = 1;
@@ -3009,8 +3009,8 @@ kiblnd_shutdown(struct lnet_ni *ni)
                 break;
         }
 
-        CDEBUG(D_MALLOC, "after LND net cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after LND net cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
         net->ibn_init = IBLND_INIT_NOTHING;
         ni->ni_data = NULL;

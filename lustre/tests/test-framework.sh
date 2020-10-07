@@ -809,16 +809,16 @@ load_modules () {
 }
 
 check_mem_leak () {
-    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
-    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-        echo "$LEAK_LUSTRE" 1>&2
-        echo "$LEAK_PORTALS" 1>&2
-        mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        echo "Memory leaks detected"
-        [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
-        return 1
-    fi
+	LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
+	LEAK_PORTALS=$(dmesg | tail -n 20 | egrep -i "libcfs.*memory leaked" || true)
+	if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
+		echo "$LEAK_LUSTRE" 1>&2
+		echo "$LEAK_PORTALS" 1>&2
+		mv $TMP/debug $TMP/debug-leak.`date +%s` || true
+		echo "Memory leaks detected"
+		[ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
+		return 1
+	fi
 }
 
 unload_modules() {

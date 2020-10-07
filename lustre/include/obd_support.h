@@ -726,7 +726,7 @@ extern char obd_jobid_var[];
 #define LUT_FAIL_MDT				LUT_FAIL_CLASS(OBD_FAIL_MDS)
 #define LUT_FAIL_OST				LUT_FAIL_CLASS(OBD_FAIL_OST)
 
-extern atomic_t libcfs_kmemory;
+extern atomic64_t libcfs_kmem;
 
 #ifdef CONFIG_PROC_FS
 #define obd_memory_add(size)                                                  \
@@ -829,8 +829,8 @@ do {									      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
 		       (int)(size));                                          \
-		CERROR("%llu total bytes allocated by Lustre, %d by LNET\n", \
-		       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
+		CERROR("%llu total bytes allocated by Lustre, %lld by LNET\n",\
+		       obd_memory_sum(), libcfs_kmem_read());\
 	} else {                                                              \
 		OBD_ALLOC_POST(ptr, size, "vmalloced");                       \
 	}                                                                     \

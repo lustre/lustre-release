@@ -565,8 +565,8 @@ ksocknal_process_transmit(struct ksock_conn *conn, struct ksock_tx *tx,
 
 		counter++;   /* exponential backoff warnings */
 		if ((counter & (-counter)) == counter)
-			CWARN("%u ENOMEM tx %p (%u allocated)\n",
-			      counter, conn, atomic_read(&libcfs_kmemory));
+			CWARN("%u ENOMEM tx %p (%lld allocated)\n",
+			      counter, conn, libcfs_kmem_read());
 
 		/* Queue on ksnd_enomem_conns for retry after a timeout */
 		spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);

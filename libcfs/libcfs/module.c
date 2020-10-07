@@ -531,10 +531,10 @@ static struct ctl_table lnet_table[] = {
 	},
 	{
 		.procname	= "lnet_memused",
-		.data		= (int *)&libcfs_kmemory.counter,
-		.maxlen		= sizeof(int),
+		.data		= (u64 *)&libcfs_kmem.counter,
+		.maxlen		= sizeof(u64),
 		.mode		= 0444,
-		.proc_handler	= &proc_dointvec,
+		.proc_handler	= &proc_doulongvec_minmax,
 	},
 	{
 		.procname	= "catastrophe",
@@ -788,8 +788,8 @@ static void __exit libcfs_exit(void)
 	debugfs_remove_recursive(lnet_debugfs_root);
 	lnet_debugfs_root = NULL;
 
-	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	llcrypt_exit();
 
@@ -806,9 +806,9 @@ static void __exit libcfs_exit(void)
 	cfs_cpu_fini();
 
 	/* the below message is checked in test-framework.sh check_mem_leak() */
-	if (atomic_read(&libcfs_kmemory) != 0)
-		CERROR("Portals memory leaked: %d bytes\n",
-		       atomic_read(&libcfs_kmemory));
+	if (libcfs_kmem_read() != 0)
+		CERROR("Portals memory leaked: %lld bytes\n",
+		       libcfs_kmem_read());
 
 	rc = libcfs_debug_cleanup();
 	if (rc)

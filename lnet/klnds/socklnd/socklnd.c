@@ -2221,8 +2221,8 @@ ksocknal_base_shutdown(void)
 	struct ksock_peer_ni *peer_ni;
 	int i;
 
-	CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-	       atomic_read (&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before NAL cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 	LASSERT (ksocknal_data.ksnd_nnets == 0);
 
 	switch (ksocknal_data.ksnd_init) {
@@ -2274,8 +2274,8 @@ ksocknal_base_shutdown(void)
 		break;
 	}
 
-	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-	       atomic_read (&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	module_put(THIS_MODULE);
 }

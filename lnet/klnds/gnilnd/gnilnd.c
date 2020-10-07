@@ -2117,7 +2117,7 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 int kgnilnd_base_startup(void)
 {
 	struct timeval       tv;
-	int                  pkmem = atomic_read(&libcfs_kmemory);
+	long long	     pkmem = libcfs_kmem_read();
 	int                  rc;
 	int                  i;
 	kgn_device_t        *dev;
@@ -2410,7 +2410,7 @@ int kgnilnd_base_startup(void)
 	kgnilnd_data.kgn_init = GNILND_INIT_ALL;
 	/*****************************************************/
 
-	CDEBUG(D_MALLOC, "initial kmem %d\n", pkmem);
+	CDEBUG(D_MALLOC, "initial kmem %lld\n", pkmem);
 	RETURN(0);
 
 failed:
@@ -2582,8 +2582,8 @@ kgnilnd_base_shutdown(void)
 		kfree(kgnilnd_data.kgn_cksum_map_pages);
 	}
 
-	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	kgnilnd_data.kgn_init = GNILND_INIT_NOTHING;
 	module_put(THIS_MODULE);
@@ -2704,8 +2704,8 @@ kgnilnd_shutdown(struct lnet_ni *ni)
 
 	/* Serialize with startup. */
 	mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
-	CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before NAL cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	if (net == NULL) {
 		CERROR("got NULL net for ni %p\n", ni);
@@ -2783,8 +2783,8 @@ out:
 			kgnilnd_base_shutdown();
 		}
 	}
-	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-	       atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %lld\n",
+	       libcfs_kmem_read());
 
 	mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	EXIT;

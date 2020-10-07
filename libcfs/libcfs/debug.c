@@ -244,8 +244,8 @@ unsigned int libcfs_panic_on_lbug = 1;
 module_param(libcfs_panic_on_lbug, uint, 0644);
 MODULE_PARM_DESC(libcfs_panic_on_lbug, "Lustre kernel panic on LBUG");
 
-atomic_t libcfs_kmemory = ATOMIC_INIT(0);
-EXPORT_SYMBOL(libcfs_kmemory);
+atomic64_t libcfs_kmem = ATOMIC64_INIT(0);
+EXPORT_SYMBOL(libcfs_kmem);
 
 static DECLARE_COMPLETION(debug_complete);
 
