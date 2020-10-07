@@ -842,6 +842,7 @@ lnet_wait_known_routerstate(void)
 
 	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING);
 
+	/* the_lnet.ln_api_mutex must be locked */
 	for (;;) {
 		int cpt = lnet_net_lock_current();
 
@@ -865,8 +866,10 @@ lnet_wait_known_routerstate(void)
 		if (all_known)
 			return;
 
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(cfs_time_seconds(1));
+		mutex_lock(&the_lnet.ln_api_mutex);
 	}
 }
 
