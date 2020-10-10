@@ -1143,7 +1143,6 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
 			 * but for old MDTs (< 2.4), permission is covered
 			 * by LOOKUP lock, so it needs to match all bits here.*/
 			policy.l_inodebits.bits = MDS_INODELOCK_UPDATE |
-						  MDS_INODELOCK_LOOKUP |
 						  MDS_INODELOCK_PERM;
 			break;
 		case IT_READDIR:

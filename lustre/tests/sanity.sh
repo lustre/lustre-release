@@ -21105,7 +21105,7 @@ test_802() {
 }
 run_test 802 "simulate readonly device"
 
-test_803() {
+test_803a() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $MDS1_VERSION -lt $(version_code 2.10.54) ] &&
 		skip "MDS needs to be newer than 2.10.54"
@@ -21153,7 +21153,39 @@ test_803() {
 	[ $after_used -le $((before_used + 1)) ] ||
 		error "after ($after_used) > before ($before_used) + 1"
 }
-run_test 803 "verify agent object for remote object"
+run_test 803a "verify agent object for remote object"
+
+test_803b() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.13.56) ] &&
+		skip "MDS needs to be newer than 2.13.56"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		$LFS mkdir -i $i $DIR/$tdir.$i || error "mkdir $tdir.$i"
+	done
+
+	local before=0
+	local after=0
+
+	local tmp
+
+	stat $DIR/$tdir.* >/dev/null || error "stat $tdir.*"
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		tmp=$(do_facet mds$i $LCTL get_param mdt.*-MDT000$i.md_stats |
+			awk '/getattr/ { print $2 }')
+		before=$((before + tmp))
+	done
+	stat $DIR/$tdir.* >/dev/null || error "stat $tdir.*"
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		tmp=$(do_facet mds$i $LCTL get_param mdt.*-MDT000$i.md_stats |
+			awk '/getattr/ { print $2 }')
+		after=$((after + tmp))
+	done
+
+	[ $before -eq $after ] || error "getattr count $before != $after"
+}
+run_test 803b "remote object can getattr from cache"
 
 test_804() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
