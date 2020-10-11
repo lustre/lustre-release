@@ -200,7 +200,6 @@ BuildRequires: pkg-config
 %endif
 %if %{with gss}
 BuildRequires: krb5-devel openssl-devel
-Requires: krb5-libs openssl-libs
 %endif
 %if %{with servers}
 Requires: lustre-osd
