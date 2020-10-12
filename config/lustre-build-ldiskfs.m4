@@ -13,6 +13,7 @@ esac
 AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
+	79)	LDISKFS_SERIES="3.10-rhel7.9.series"	;;
 	78)	LDISKFS_SERIES="3.10-rhel7.8.series"	;;
 	77)	LDISKFS_SERIES="3.10-rhel7.7.series"	;;
 	76)	LDISKFS_SERIES="3.10-rhel7.6.series"	;;
