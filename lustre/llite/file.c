@@ -4710,23 +4710,30 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 	};
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
+	const char *name = NULL;
+	size_t namelen = 0;
 	int rc = 0;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p),name=%s\n",
 	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
 
-	if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID)
+	if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID) {
 		parent = dentry->d_parent->d_inode;
-	else
+		name = dentry->d_name.name;
+		namelen = dentry->d_name.len;
+	} else {
 		parent = inode;
+	}
 
-	/* Call getattr by fid, so do not provide name at all. */
-	op_data = ll_prep_md_op_data(NULL, parent, inode, NULL, 0, 0,
+	op_data = ll_prep_md_op_data(NULL, parent, inode, name, namelen, 0,
 				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
+	/* Call getattr by fid */
+	if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID)
+		op_data->op_flags = MF_GETATTR_BY_FID;
 	rc = md_intent_lock(exp, op_data, &oit, &req, &ll_md_blocking_ast, 0);
 	ll_finish_md_op_data(op_data);
 	if (rc < 0) {

@@ -1543,6 +1543,9 @@ static struct lu_tgt_desc *lmv_locate_tgt_rr(struct lmv_obd *lmv, __u32 *mdt)
 	RETURN(ERR_PTR(-ENODEV));
 }
 
+/* locate MDT by file name, for striped directory, the file name hash decides
+ * which stripe its dirent is stored.
+ */
 static struct lmv_tgt_desc *
 lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
 		       const char *name, int namelen, struct lu_fid *fid,
@@ -1593,9 +1596,10 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
  *
  * For plain direcotry, it just locate the MDT of op_data->op_fid1.
  *
- * \param[in] lmv	LMV device
- * \param[in] op_data	client MD stack parameters, name, namelen
- *                      mds_num etc.
+ * \param[in] lmv		LMV device
+ * \param[in/out] op_data	client MD stack parameters, name, namelen etc,
+ *                      	op_mds and op_fid1 will be updated if op_mea1
+ *                      	indicates fid1 represents a striped directory.
  *
  * retval		pointer to the lmv_tgt_desc if succeed.
  *                      ERR_PTR(errno) if failed.

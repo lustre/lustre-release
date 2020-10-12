@@ -2911,7 +2911,9 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		if (namelen > ll_i2sbi(i1)->ll_namelen)
 			return ERR_PTR(-ENAMETOOLONG);
 
-		if (!lu_name_is_valid_2(name, namelen))
+		/* "/" is not valid name, but it's allowed */
+		if (!lu_name_is_valid_2(name, namelen) &&
+		    strncmp("/", name, namelen) != 0)
 			return ERR_PTR(-EINVAL);
 	}
 
