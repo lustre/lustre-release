@@ -822,6 +822,7 @@ enum md_op_flags {
 	MF_MDC_CANCEL_FID3	= 1 << 2,
 	MF_MDC_CANCEL_FID4	= 1 << 3,
 	MF_GET_MDT_IDX		= 1 << 4,
+	MF_GETATTR_BY_FID	= 1 << 5,
 };
 
 enum md_cli_flags {

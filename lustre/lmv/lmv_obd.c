@@ -1619,10 +1619,11 @@ __lmv_locate_tgt(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
  *
  * For normal direcotry, it will locate MDS by FID directly.
  *
- * \param[in] lmv	LMV device
- * \param[in] op_data	client MD stack parameters, name, namelen
- *                      mds_num etc.
- * \param[in] fid	object FID used to locate MDS.
+ * \param[in] lmv		LMV device
+ * \param[in/out] op_data	client MD stack parameters, name, namelen etc,
+ *                      	op_mds and op_fid1 will be updated if op_mea1
+ *                      	indicates fid1 represents a striped directory.
+ * \param[out] fid		object FID used to locate MDS.
  *
  * retval		pointer to the lmv_tgt_desc if succeed.
  *                      ERR_PTR(errno) if failed.

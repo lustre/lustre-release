@@ -429,13 +429,29 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 
 retry:
-	if (op_data->op_name) {
+	if (op_data->op_flags & MF_GETATTR_BY_FID) {
+		/* getattr by FID, replace fid1 with stripe FID */
+		LASSERT(op_data->op_name);
+		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+		if (IS_ERR(tgt))
+			RETURN(PTR_ERR(tgt));
+
+		/* name is used to locate stripe target, clear it here
+		 * to avoid packing name in request, so that MDS knows
+		 * it's getattr by FID.
+		 */
+		op_data->op_name = NULL;
+		op_data->op_namelen = 0;
+
+		/* getattr request is sent to MDT where fid2 inode is */
+		tgt = lmv_find_target(lmv, &op_data->op_fid2);
+	} else if (op_data->op_name) {
+		/* getattr by name */
 		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
 		if (!fid_is_sane(&op_data->op_fid2))
 			fid_zero(&op_data->op_fid2);
-	} else if (fid_is_sane(&op_data->op_fid2)) {
-		tgt = lmv_find_target(lmv, &op_data->op_fid2);
 	} else {
+		/* old way to getattr by FID, parent FID not packed */
 		tgt = lmv_find_target(lmv, &op_data->op_fid1);
 	}
 	if (IS_ERR(tgt))
