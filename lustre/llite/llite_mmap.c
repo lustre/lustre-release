@@ -280,16 +280,22 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	if (ll_sbi_has_fast_read(ll_i2sbi(file_inode(vma->vm_file)))) {
 		/* do fast fault */
+		bool has_retry = vmf->flags & FAULT_FLAG_RETRY_NOWAIT;
+
+		/* To avoid loops, instruct downstream to not drop mmap_sem */
+		vmf->flags |= FAULT_FLAG_RETRY_NOWAIT;
 		ll_cl_add(vma->vm_file, env, NULL, LCC_MMAP);
 		fault_ret = ll_filemap_fault(vma, vmf);
 		ll_cl_remove(vma->vm_file, env);
+		if (!has_retry)
+			vmf->flags &= ~FAULT_FLAG_RETRY_NOWAIT;
 
 		/* - If there is no error, then the page was found in cache and
 		 *   uptodate;
 		 * - If VM_FAULT_RETRY is set, the page existed but failed to
-		 *   lock. It will return to kernel and retry;
+		 *   lock. We will try slow path to avoid loops.
 		 * - Otherwise, it should try normal fault under DLM lock. */
-		if ((fault_ret & VM_FAULT_RETRY) ||
+		if (!(fault_ret & VM_FAULT_RETRY) &&
 		    !(fault_ret & VM_FAULT_ERROR))
 			GOTO(out, result = 0);
 
