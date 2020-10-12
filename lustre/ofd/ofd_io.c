@@ -234,8 +234,8 @@ out_unlocked:
 	spin_lock(&ofd->ofd_inconsistency_lock);
 out:
 	thread_set_flags(thread, SVC_STOPPED);
-	wake_up_all(&thread->t_ctl_waitq);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
+	wake_up_all(&thread->t_ctl_waitq);
 	lu_env_fini(&env);
 
 	return rc;
