@@ -144,6 +144,17 @@ EXPORT_SYMBOL(lprocfs_evict_client_seq_write);
 
 #undef BUFLEN
 
+ssize_t eviction_count_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 atomic_read(&obd->obd_eviction_count));
+}
+EXPORT_SYMBOL(eviction_count_show);
+
 ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {

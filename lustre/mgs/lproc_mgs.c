@@ -216,6 +216,7 @@ static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 };
 
 LUSTRE_RO_ATTR(num_exports);
+LUSTRE_RO_ATTR(eviction_count);
 
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
@@ -252,6 +253,7 @@ LUSTRE_RO_ATTR(mntdev);
 static struct attribute *mgs_attrs[] = {
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
+	&lustre_attr_eviction_count.attr,
 	&lustre_attr_num_exports.attr,
 	NULL,
 };

@@ -3212,6 +3212,22 @@ $(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_time_hard)
 }
 run_test 145 "connect mdtlovs and process update logs after recovery expire"
 
+test_146() {
+	local prev_count=$(do_facet $SINGLEMDS \
+		$LCTL get_param -n "mdt.${mds1_svc}.eviction_count")
+
+	mds_evict_client
+
+	client_reconnect
+
+	local next_count=$(do_facet $SINGLEMDS \
+		$LCTL get_param -n "mdt.${mds1_svc}.eviction_count")
+
+	[ "$prev_count" -lt "$next_count" ] ||
+		error "wrong eviction count ($prev_count >= $next_count)"
+}
+run_test 146 "test eviction is counted properly"
+
 test_147() {
 	local obd_timeout=200
 	local old=$($LCTL get_param -n timeout)

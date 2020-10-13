@@ -910,6 +910,7 @@ LUSTRE_RO_ATTR(instance);
 
 LUSTRE_RO_ATTR(num_exports);
 LUSTRE_RW_ATTR(grant_check_threshold);
+LUSTRE_RO_ATTR(eviction_count);
 
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"last_id",
@@ -990,6 +991,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_ir_factor.attr,
 	&lustre_attr_num_exports.attr,
 	&lustre_attr_grant_check_threshold.attr,
+	&lustre_attr_eviction_count.attr,
 	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_grant_precreate.attr,
 	&lustre_attr_precreate_batch.attr,

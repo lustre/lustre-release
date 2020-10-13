@@ -1564,6 +1564,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 			continue;
 		}
 		exp->exp_failed = 1;
+		atomic_inc(&exp->exp_obd->obd_eviction_count);
 		spin_unlock(&exp->exp_lock);
 
 		list_move(&exp->exp_obd_chain, &work_list);
@@ -1599,6 +1600,8 @@ void class_fail_export(struct obd_export *exp)
                        exp, exp->exp_client_uuid.uuid);
                 return;
         }
+
+	atomic_inc(&exp->exp_obd->obd_eviction_count);
 
         CDEBUG(D_HA, "disconnecting export %p/%s\n",
                exp, exp->exp_client_uuid.uuid);
