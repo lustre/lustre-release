@@ -2673,11 +2673,6 @@ struct timeout_item;
 typedef int (*timeout_cb_t)(struct timeout_item *, void *);
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
-int ptlrpc_add_timeout_client(time64_t time, enum timeout_event event,
-			      timeout_cb_t cb, void *data,
-			      struct list_head *obd_list);
-int ptlrpc_del_timeout_client(struct list_head *obd_list,
-                              enum timeout_event event);
 struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
 int ptlrpc_obd_ping(struct obd_device *obd);
 void ping_evictor_start(void);
