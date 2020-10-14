@@ -58,6 +58,11 @@ void request_out_callback(struct lnet_event *ev)
 
 	DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
 
+	/* Do not update imp_next_ping for connection request */
+	if (lustre_msg_get_opc(req->rq_reqmsg) !=
+	    req->rq_import->imp_connect_op)
+		ptlrpc_pinger_sending_on_import(req->rq_import);
+
 	sptlrpc_request_out_callback(req);
 
 	spin_lock(&req->rq_lock);
