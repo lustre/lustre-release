@@ -1695,6 +1695,7 @@ static void osd_trans_commit_cb(struct super_block *sb,
 	struct osd_thandle *oh = container_of(jcb, struct osd_thandle, ot_jcb);
 	struct thandle *th = &oh->ot_super;
 	struct lu_device *lud = &th->th_dev->dd_lu_dev;
+	struct osd_device *osd = osd_dev(lud);
 	struct dt_txn_commit_cb *dcb, *tmp;
 
 	LASSERT(oh->ot_handle == NULL);
@@ -1714,7 +1715,8 @@ static void osd_trans_commit_cb(struct super_block *sb,
 	}
 
 	lu_ref_del_at(&lud->ld_reference, &oh->ot_dev_link, "osd-tx", th);
-	lu_device_put(lud);
+	if (atomic_dec_and_test(&osd->od_commit_cb_in_flight))
+		wake_up(&osd->od_commit_cb_done);
 	th->th_dev = NULL;
 
 	OBD_FREE_PTR(oh);
@@ -1897,7 +1899,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		oh->ot_handle = jh;
 		LASSERT(oti->oti_txns == 0);
 
-		lu_device_get(&d->dd_lu_dev);
+		atomic_inc(&dev->od_commit_cb_in_flight);
 		lu_ref_add_at(&d->dd_lu_dev.ld_reference, &oh->ot_dev_link,
 			      "osd-tx", th);
 		oti->oti_txns++;
@@ -7579,6 +7581,8 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 	if (o->od_mnt != NULL) {
 		shrink_dcache_sb(osd_sb(o));
 		osd_sync(env, &o->od_dt_dev);
+		wait_event(o->od_commit_cb_done,
+			  !atomic_read(&o->od_commit_cb_in_flight));
 
 		mntput(o->od_mnt);
 		o->od_mnt = NULL;
@@ -7816,6 +7820,7 @@ static int osd_device_init0(const struct lu_env *env,
 	spin_lock_init(&o->od_lock);
 	o->od_index_backup_policy = LIBP_NONE;
 	o->od_t10_type = 0;
+	init_waitqueue_head(&o->od_commit_cb_done);
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;

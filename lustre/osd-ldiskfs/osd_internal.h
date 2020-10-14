@@ -343,6 +343,8 @@ struct osd_device {
 	int			 od_index_backup_stop;
 	/* T10PI type, zero if not supported  */
 	enum osd_t10_type	 od_t10_type;
+	atomic_t		 od_commit_cb_in_flight;
+	wait_queue_head_t	 od_commit_cb_done;
 };
 
 static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
