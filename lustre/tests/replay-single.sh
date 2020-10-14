@@ -4939,6 +4939,51 @@ test_134() {
 }
 run_test 134 "replay creation of a file created in a pool"
 
+# LU-14027
+test_135() {
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# All files to ost1
+	$LFS setstripe -S $((128 * 1024)) -i 0 $DIR/$tdir
+
+	replay_barrier ost1
+
+	# Create 20 files so we have 20 ost locks
+	for i in $(seq 20) ; do
+		echo blah > $DIR/$tdir/file.${i}
+	done
+
+	shutdown_facet ost1
+	reboot_facet ost1
+	change_active ost1
+	wait_for_facet ost1
+
+	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x32d
+	# Make sure lock replay server side never completes and errors out.
+	do_facet ost1 "$LCTL set_param fail_val=20"
+	do_facet ost1 "$LCTL set_param fail_loc=0x32d"
+
+	mount_facet ost1
+
+	# Now make sure we notice
+	(sync;sync;sync) &
+	local PID=$?
+	sleep 20 # should we do something proactive to make reconnects go?
+	kill -0 $PID || error "Unexpected sync success"
+
+	shutdown_facet ost1
+	reboot_facet ost1
+	change_active ost1
+	wait_for_facet ost1
+
+	do_facet ost1 "$LCTL set_param fail_loc=0"
+	mount_facet ost1
+	echo blah > $DIR/$tdir/file.test2
+
+	rm -rf $DIR/$tdir
+}
+run_test 135 "Server failure in lock replay phase"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

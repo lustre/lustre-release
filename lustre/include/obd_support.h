@@ -388,6 +388,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LDLM_GRANT_CHECK        0x32a
 #define OBD_FAIL_LDLM_PROLONG_PAUSE	 0x32b
 #define OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE 0x32c
+#define OBD_FAIL_LDLM_LOCK_REPLAY	 0x32d
 
 /* LOCKLESS IO */
 #define OBD_FAIL_LDLM_SET_CONTENTION     0x385
