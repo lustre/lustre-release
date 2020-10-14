@@ -8905,6 +8905,12 @@ test_124()
 	[ -z $mds2failover_HOST ] && skip "needs MDT failover setup"
 
 	setup
+	do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+		grep 1.2.3.4@tcp && error "Should not be fake nid"
+	do_facet mgs $LCTL conf_param $FSNAME-MDT0001.failover.node=1.2.3.4@tcp\
+		|| error "Set params error"
+	do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+		grep 1.2.3.4@tcp || error "Fake nid should be added"
 	cleanup
 
 	load_modules

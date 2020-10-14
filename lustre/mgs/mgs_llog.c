@@ -1025,10 +1025,19 @@ static int check_markers(struct lustre_cfg *lcfg,
 			LASSERT(!(marker->cm_flags & CM_START) ||
 				!(marker->cm_flags & CM_END));
 			if (marker->cm_flags & CM_START) {
-				mrd->state = REPLACE_UUID;
-				mrd->failover = NULL;
+				if (!strncmp(marker->cm_comment,
+					     "add failnid", 11)) {
+					mrd->state = REPLACE_SKIP;
+				} else {
+					mrd->state = REPLACE_UUID;
+					mrd->failover = NULL;
+				}
 			} else if (marker->cm_flags & CM_END)
 				mrd->state = REPLACE_COPY;
+
+			if (!strncmp(marker->cm_comment,
+				"add failnid", 11))
+				return 1;
 		}
 	}
 
@@ -1222,6 +1231,11 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		mrd->state = REPLACE_DONE;
 		return rc ? rc : 1;
 	}
+
+	/* All new UUID are added. Skip. */
+	if (mrd->state == REPLACE_SETUP &&
+		lcfg->lcfg_command == LCFG_ADD_UUID)
+		return 1;
 
 	/* Another commands in target device block */
 	return 0;
