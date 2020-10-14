@@ -2450,9 +2450,11 @@ int __ldlm_replay_locks(struct obd_import *imp, bool rate_limit)
 
 	list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
 		list_del_init(&lock->l_pending_chain);
-		if (rc) {
+		/* If we disconnected in the middle - cleanup and let
+		 * reconnection to happen again. LU-14027 */
+		if (rc || (imp->imp_state != LUSTRE_IMP_REPLAY_LOCKS)) {
 			LDLM_LOCK_RELEASE(lock);
-			continue; /* or try to do the rest? */
+			continue;
 		}
 		rc = replay_one_lock(imp, lock);
 		LDLM_LOCK_RELEASE(lock);

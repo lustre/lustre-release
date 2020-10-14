@@ -2589,6 +2589,11 @@ static int target_recovery_thread(void *arg)
 		LASSERT(trd->trd_processing_task == current_pid());
 		DEBUG_REQ(D_HA, req, "processing lock from %s: ",
 			  libcfs_nid2str(req->rq_peer.nid));
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_LOCK_REPLAY)) {
+			req->rq_status = -ENODEV;
+			target_request_copy_put(req);
+			continue;
+		}
 		handle_recovery_req(thread, req,
 				    trd->trd_recovery_handler);
 		target_request_copy_put(req);
