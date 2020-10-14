@@ -159,6 +159,56 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 	EXIT;
 }
 
+static int ldlm_enqueue_hpreq_check(struct ptlrpc_request *req)
+{
+	struct ldlm_request *dlm_req;
+	int rc = 0;
+	ENTRY;
+
+	if ((lustre_msg_get_flags(req->rq_reqmsg) & (MSG_REPLAY|MSG_RESENT)) !=
+	    MSG_RESENT)
+		RETURN(0);
+
+	req_capsule_init(&req->rq_pill, req, RCL_SERVER);
+	req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
+	dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+	if (dlm_req == NULL)
+		RETURN(-EFAULT);
+
+	if (dlm_req->lock_count > 0) {
+		struct ldlm_lock *lock;
+
+		lock = cfs_hash_lookup(req->rq_export->exp_lock_hash,
+                                       (void *)&dlm_req->lock_handle[0]);
+
+		DEBUG_REQ(D_RPCTRACE, req, "lock %p cookie 0x%llx",
+			lock, dlm_req->lock_handle[0].cookie);
+		if (lock != NULL) {
+			rc = lock->l_granted_mode == lock->l_req_mode;
+			if (rc)
+				LDLM_DEBUG(lock, "hpreq resend");
+			LDLM_LOCK_RELEASE(lock);
+		}
+	}
+
+	RETURN(rc);
+}
+
+static struct ptlrpc_hpreq_ops ldlm_enqueue_hpreq_ops = {
+	.hpreq_lock_match = NULL,
+	.hpreq_check      = ldlm_enqueue_hpreq_check,
+	.hpreq_fini       = NULL,
+};
+
+static int mds_hpreq_handler(struct ptlrpc_request *req)
+{
+	if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_ENQUEUE)
+		req->rq_ops = &ldlm_enqueue_hpreq_ops;
+	else
+		ptlrpc_hpreq_handler(req);
+	return 0;
+}
+
 static int mds_start_ptlrpc_service(struct mds_device *m)
 {
 	static struct ptlrpc_service_conf conf;
@@ -203,7 +253,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
-			.so_hpreq_handler	= ptlrpc_hpreq_handler,
+			.so_hpreq_handler	= mds_hpreq_handler,
 		},
 	};
 	m->mds_regular_service = ptlrpc_register_service(&conf, &obd->obd_kset,
