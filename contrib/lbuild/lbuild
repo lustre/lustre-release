@@ -816,7 +816,8 @@ unpack_ofed() {
 				return 1
 			fi
 			[ -d OFED ] || ln -sf MLNX_OFED_SRC-[0-9].[0-9]* OFED
-			if compare_version $ofed_version 4.7; then
+			if compare_version $ofed_version 4.7 ||
+			   compare_version 5.1 $ofed_version; then
 				[ -d OFED_RPMS ] || ln -sf ${file}/RPMS OFED_RPMS
 			else
 				[ -d OFED_RPMS ] || ln -sf ${file}/RPMS/MLNX_LIBS OFED_RPMS
@@ -1340,7 +1341,13 @@ EOF
 		fi
 		# now that we have the kernel rpms, we need to lib rpms too
 		# we don't have to rebuild since MOFED include the binaries
-		cp -f OFED_RPMS/{libibmad-*,libibverbs-*,libibumad-*,librdmacm*,ibutils*,opensm-*}.${TARGET_ARCH}.rpm \
+		# Starting from MOFED 5.1, rdma-core is required for libib*
+		if compare_version 5.1 $ofed_version; then
+			cp -f OFED_RPMS/rdma-core-*.${TARGET_ARCH}.rpm \
+			${TOPDIR}/RPMS/${TARGET_ARCH} || \
+			fatal 1 "Failed to copy MOFED rpms"
+		fi
+		cp -f OFED_RPMS/{libib*,librdmacm*,ibutils*,opensm-*,infiniband-diags*}.${TARGET_ARCH}.rpm \
 			${TOPDIR}/RPMS/${TARGET_ARCH} || \
 			fatal 1 "Failed to copy MOFED rpms"
 		;;
@@ -1650,7 +1657,8 @@ build_ofed() {
             create_rpmbuild_dirs
         fi
         # build it
-	build_kernel_ib "${linux}" "${pre_prefix}${kib_prefix}" "${kib_rpm}" "${ofed_type}"
+	build_kernel_ib "${linux}" "${pre_prefix}${kib_prefix}" "${kib_rpm}" \
+			"${ofed_type}" "${ofed_version}"
 
         if [ -z "$REUSE_SIGNATURE" ]; then
             echo "No reuse signature was caculated so not storing the built ofed"
