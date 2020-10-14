@@ -1135,6 +1135,7 @@ static int mdc_io_read_ahead(const struct lu_env *env,
 			     pgoff_t start, struct cl_read_ahead *ra)
 {
 	struct osc_object *osc = cl2osc(ios->cis_obj);
+	struct osc_io *oio = cl2osc_io(env, ios);
 	struct ldlm_lock *dlmlock;
 
 	ENTRY;
@@ -1143,6 +1144,7 @@ static int mdc_io_read_ahead(const struct lu_env *env,
 	if (dlmlock == NULL)
 		RETURN(-ENODATA);
 
+	oio->oi_is_readahead = 1;
 	if (dlmlock->l_req_mode != LCK_PR) {
 		struct lustre_handle lockh;
 
@@ -1154,7 +1156,8 @@ static int mdc_io_read_ahead(const struct lu_env *env,
 	ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
 	ra->cra_end_idx = CL_PAGE_EOF;
 	ra->cra_release = osc_read_ahead_release;
-	ra->cra_cbdata = dlmlock;
+	ra->cra_dlmlock = dlmlock;
+	ra->cra_oio = oio;
 
 	RETURN(0);
 }
@@ -1317,12 +1320,12 @@ static void mdc_io_data_version_end(const struct lu_env *env,
 static const struct cl_io_operations mdc_io_ops = {
 	.op = {
 		[CIT_READ] = {
-			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_init = osc_io_iter_init,
 			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start     = osc_io_read_start,
 		},
 		[CIT_WRITE] = {
-			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_init = osc_io_iter_init,
 			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start     = osc_io_write_start,
 			.cio_end       = osc_io_end,
@@ -1353,6 +1356,7 @@ static const struct cl_io_operations mdc_io_ops = {
 		},
 	},
 	.cio_read_ahead   = mdc_io_read_ahead,
+	.cio_lru_reserve  = osc_io_lru_reserve,
 	.cio_submit	  = osc_io_submit,
 	.cio_commit_async = osc_io_commit_async,
 	.cio_extent_release = osc_io_extent_release,

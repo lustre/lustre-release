@@ -129,7 +129,9 @@ struct osc_io {
 	/** true if this io is counted as active IO */
 			   oi_is_active:1,
 	/** true if this io has CAP_SYS_RESOURCE */
-			   oi_cap_sys_resource:1;
+			   oi_cap_sys_resource:1,
+	/** true if this io issued by readahead */
+			   oi_is_readahead:1;
 	/** how many LRU pages are reserved for this IO */
 	unsigned long	   oi_lru_reserved;
 
@@ -684,8 +686,6 @@ void osc_io_extent_release(const struct lu_env *env,
 int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios);
 void osc_io_iter_fini(const struct lu_env *env,
 		      const struct cl_io_slice *ios);
-int osc_io_rw_iter_init(const struct lu_env *env,
-			const struct cl_io_slice *ios);
 void osc_io_rw_iter_fini(const struct lu_env *env,
 			    const struct cl_io_slice *ios);
 int osc_io_fault_start(const struct lu_env *env, const struct cl_io_slice *ios);
@@ -700,11 +700,13 @@ int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 		  struct cl_fsync_io *fio);
 void osc_io_fsync_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
-void osc_read_ahead_release(const struct lu_env *env, void *cbdata);
+void osc_read_ahead_release(const struct lu_env *env, struct cl_read_ahead *ra);
 int osc_io_lseek_start(const struct lu_env *env,
 		       const struct cl_io_slice *slice);
 void osc_io_lseek_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
+int osc_io_lru_reserve(const struct lu_env *env, const struct cl_io_slice *ios,
+		       loff_t pos, size_t count);
 
 /* osc_lock.c */
 void osc_lock_to_lockless(const struct lu_env *env, struct osc_lock *ols,

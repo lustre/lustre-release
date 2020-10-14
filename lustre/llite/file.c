@@ -1542,6 +1542,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct vvp_io *vio = vvp_env_io(env);
 	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ll_file_data *fd  = file->private_data;
 	struct range_lock range;
 	struct cl_io *io;
@@ -1550,12 +1551,20 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	unsigned int retried = 0, dio_lock = 0;
 	bool is_aio = false;
 	struct cl_dio_aio *ci_aio = NULL;
+	size_t per_bytes;
+	bool partial_io = false;
+	size_t max_io_pages, max_cached_pages;
 
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "%s: %s ppos: %llu, count: %zu\n",
 		file_dentry(file)->d_name.name,
 		iot == CIT_READ ? "read" : "write", *ppos, count);
+
+	max_io_pages = PTLRPC_MAX_BRW_PAGES * OBD_MAX_RIF_DEFAULT;
+	max_cached_pages = sbi->ll_cache->ccc_lru_max;
+	if (max_io_pages > (max_cached_pages >> 2))
+		max_io_pages = max_cached_pages >> 2;
 
 	io = vvp_env_thread_io(env);
 	if (file->f_flags & O_DIRECT) {
@@ -1567,19 +1576,29 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	}
 
 restart:
+	/**
+	 * IO block size need be aware of cached page limit, otherwise
+	 * if we have small max_cached_mb but large block IO issued, io
+	 * could not be finished and blocked whole client.
+	 */
+	if (file->f_flags & O_DIRECT)
+		per_bytes = count;
+	else
+		per_bytes = min(max_io_pages << PAGE_SHIFT, count);
+	partial_io = per_bytes < count;
 	io = vvp_env_thread_io(env);
 	ll_io_init(io, file, iot, args);
 	io->ci_aio = ci_aio;
 	io->ci_dio_lock = dio_lock;
 	io->ci_ndelay_tried = retried;
 
-	if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
+	if (cl_io_rw_init(env, io, iot, *ppos, per_bytes) == 0) {
 		bool range_locked = false;
 
 		if (file->f_flags & O_APPEND)
 			range_lock_init(&range, 0, LUSTRE_EOF);
 		else
-			range_lock_init(&range, *ppos, *ppos + count - 1);
+			range_lock_init(&range, *ppos, *ppos + per_bytes - 1);
 
 		vio->vui_fd  = file->private_data;
 		vio->vui_iter = args->u.normal.via_iter;
@@ -1631,6 +1650,16 @@ restart:
 		/* prepare IO restart */
 		if (count > 0)
 			args->u.normal.via_iter = vio->vui_iter;
+
+		if (partial_io) {
+			/**
+			 * Reexpand iov count because it was zero
+			 * after IO finish.
+			 */
+			iov_iter_reexpand(vio->vui_iter, count);
+			if (per_bytes == io->ci_nob)
+				io->ci_need_restart = 1;
+		}
 	}
 out:
 	cl_io_fini(env, io);

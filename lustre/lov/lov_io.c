@@ -1206,6 +1206,60 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	RETURN(0);
 }
 
+int lov_io_lru_reserve(const struct lu_env *env,
+		       const struct cl_io_slice *ios, loff_t pos, size_t bytes)
+{
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	struct lov_io_sub *sub;
+	struct lu_extent ext;
+	int index;
+	int rc = 0;
+
+	ENTRY;
+
+	ext.e_start = pos;
+	ext.e_end = pos + bytes;
+	lov_foreach_io_layout(index, lio, &ext) {
+		struct lov_layout_entry *le = lov_entry(lio->lis_object, index);
+		struct lov_layout_raid0 *r0 = &le->lle_raid0;
+		u64 start;
+		u64 end;
+		int stripe;
+
+		if (!lsm_entry_inited(lsm, index))
+			continue;
+
+		if (!le->lle_valid && !ios->cis_io->ci_designated_mirror) {
+			CERROR(DFID": I/O to invalid component: %d, mirror: %d\n",
+			       PFID(lu_object_fid(lov2lu(lio->lis_object))),
+			       index, lio->lis_mirror_index);
+			RETURN(-EIO);
+		}
+
+		for (stripe = 0; stripe < r0->lo_nr; stripe++) {
+			if (!lov_stripe_intersects(lsm, index, stripe,
+						   &ext, &start, &end))
+				continue;
+
+			if (unlikely(!r0->lo_sub[stripe]))
+				RETURN(-EIO);
+
+			sub = lov_sub_get(env, lio,
+					  lov_comp_index(index, stripe));
+			if (IS_ERR(sub))
+				return PTR_ERR(sub);
+
+			rc = cl_io_lru_reserve(sub->sub_env, &sub->sub_io, start,
+					       end - start + 1);
+			if (rc != 0)
+				RETURN(rc);
+		}
+	}
+
+	RETURN(0);
+}
+
 /**
  * lov implementation of cl_operations::cio_submit() method. It takes a list
  * of pages in \a queue, splits it into per-stripe sub-lists, invokes
@@ -1618,6 +1672,7 @@ static const struct cl_io_operations lov_io_ops = {
 		}
 	},
 	.cio_read_ahead                = lov_io_read_ahead,
+	.cio_lru_reserve	       = lov_io_lru_reserve,
 	.cio_submit                    = lov_io_submit,
 	.cio_commit_async              = lov_io_commit_async,
 };

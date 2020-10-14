@@ -1482,9 +1482,13 @@ struct cl_read_ahead {
 	unsigned long	cra_rpc_pages;
 	/* Release callback. If readahead holds resources underneath, this
 	 * function should be called to release it. */
-	void		(*cra_release)(const struct lu_env *env, void *cbdata);
+	void		(*cra_release)(const struct lu_env *env,
+				       struct cl_read_ahead *ra);
+
 	/* Callback data for cra_release routine */
-	void		*cra_cbdata;
+	void		*cra_dlmlock;
+	void		*cra_oio;
+
 	/* whether lock is in contention */
 	bool		cra_contention;
 };
@@ -1493,7 +1497,7 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 					 struct cl_read_ahead *ra)
 {
 	if (ra->cra_release != NULL)
-		ra->cra_release(env, ra->cra_cbdata);
+		ra->cra_release(env, ra);
 	memset(ra, 0, sizeof(*ra));
 }
 
@@ -1616,6 +1620,13 @@ struct cl_io_operations {
 	int (*cio_read_ahead)(const struct lu_env *env,
 			      const struct cl_io_slice *slice,
 			      pgoff_t start, struct cl_read_ahead *ra);
+	/**
+	 *
+	 * Reserve LRU slots before IO.
+	 */
+	int (*cio_lru_reserve) (const struct lu_env *env,
+				const struct cl_io_slice *slice,
+				loff_t pos, size_t bytes);
         /**
          * Optional debugging helper. Print given io slice.
          */
@@ -2421,6 +2432,8 @@ int   cl_io_commit_async (const struct lu_env *env, struct cl_io *io,
 			  struct cl_page_list *queue, int from, int to,
 			  cl_commit_cbt cb);
 void  cl_io_extent_release (const struct lu_env *env, struct cl_io *io);
+int cl_io_lru_reserve(const struct lu_env *env, struct cl_io *io,
+		      loff_t pos, size_t bytes);
 int   cl_io_read_ahead   (const struct lu_env *env, struct cl_io *io,
 			  pgoff_t start, struct cl_read_ahead *ra);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,

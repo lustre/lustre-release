@@ -24270,6 +24270,32 @@ test_427() {
 }
 run_test 427 "Failed DNE2 update request shouldn't corrupt updatelog"
 
+test_428() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	local cache_limit=$CACHE_MAX
+
+	stack_trap "$LCTL set_param -n llite.*.max_cached_mb=$cache_limit"
+	$LCTL set_param -n llite.*.max_cached_mb=64
+
+	mkdir $DIR/$tdir
+	$LFS setstripe -c 1 $DIR/$tdir
+	eval touch $DIR/$tdir/$tfile.{1..$OSTCOUNT}
+	stack_trap "rm -f $DIR/$tdir/$tfile.*"
+	#test write
+	for f in $(seq 4); do
+		dd if=/dev/zero of=$DIR/$tdir/$tfile.$f bs=128M count=1 &
+	done
+	wait
+
+	cancel_lru_locks osc
+	# Test read
+	for f in $(seq 4); do
+		dd if=$DIR/$tdir/$tfile.$f of=/dev/null bs=128M count=1 &
+	done
+	wait
+}
+run_test 428 "large block size IO should not hang"
+
 lseek_test_430() {
 	local offset
 	local file=$1

@@ -58,11 +58,13 @@ static void osc_io_fini(const struct lu_env *env, const struct cl_io_slice *io)
 {
 }
 
-void osc_read_ahead_release(const struct lu_env *env, void *cbdata)
+void osc_read_ahead_release(const struct lu_env *env, struct cl_read_ahead *ra)
 {
-	struct ldlm_lock *dlmlock = cbdata;
+	struct ldlm_lock *dlmlock = ra->cra_dlmlock;
+	struct osc_io *oio = ra->cra_oio;
 	struct lustre_handle lockh;
 
+	oio->oi_is_readahead = 0;
 	ldlm_lock2handle(dlmlock, &lockh);
 	ldlm_lock_decref(&lockh, LCK_PR);
 	LDLM_LOCK_PUT(dlmlock);
@@ -73,11 +75,14 @@ static int osc_io_read_ahead(const struct lu_env *env,
 			     const struct cl_io_slice *ios,
 			     pgoff_t start, struct cl_read_ahead *ra)
 {
-	struct osc_object	*osc = cl2osc(ios->cis_obj);
-	struct ldlm_lock	*dlmlock;
-	int			result = -ENODATA;
+	struct osc_object *osc = cl2osc(ios->cis_obj);
+	struct osc_io *oio = cl2osc_io(env, ios);
+	struct ldlm_lock *dlmlock;
+	int result = -ENODATA;
+
 	ENTRY;
 
+	oio->oi_is_readahead = true;
 	dlmlock = osc_dlmlock_at_pgoff(env, osc, start, 0);
 	if (dlmlock != NULL) {
 		LASSERT(dlmlock->l_ast_data == osc);
@@ -92,7 +97,8 @@ static int osc_io_read_ahead(const struct lu_env *env,
 		ra->cra_end_idx = cl_index(osc2cl(osc),
 					   dlmlock->l_policy_data.l_extent.end);
 		ra->cra_release = osc_read_ahead_release;
-		ra->cra_cbdata = dlmlock;
+		ra->cra_dlmlock = dlmlock;
+		ra->cra_oio = oio;
 		if (ra->cra_end_idx != CL_PAGE_EOF)
 			ra->cra_contention = true;
 		result = 0;
@@ -398,6 +404,7 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct obd_import *imp = osc_cli(osc)->cl_import;
 	struct osc_io *oio = osc_env_io(env);
 	int rc = -EIO;
+
 	ENTRY;
 
 	spin_lock(&imp->imp_lock);
@@ -421,28 +428,6 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(osc_io_iter_init);
-
-int osc_io_rw_iter_init(const struct lu_env *env,
-			const struct cl_io_slice *ios)
-{
-	struct cl_io *io = ios->cis_io;
-	struct osc_io *oio = osc_env_io(env);
-	struct osc_object *osc = cl2osc(ios->cis_obj);
-	unsigned long npages;
-	ENTRY;
-
-	if (cl_io_is_append(io))
-		RETURN(osc_io_iter_init(env, ios));
-
-	npages = io->u.ci_rw.crw_count >> PAGE_SHIFT;
-	if (io->u.ci_rw.crw_pos & ~PAGE_MASK)
-		++npages;
-
-	oio->oi_lru_reserved = osc_lru_reserve(osc_cli(osc), npages);
-
-	RETURN(osc_io_iter_init(env, ios));
-}
-EXPORT_SYMBOL(osc_io_rw_iter_init);
 
 void osc_io_iter_fini(const struct lu_env *env,
 		      const struct cl_io_slice *ios)
@@ -1190,16 +1175,42 @@ void osc_io_lseek_end(const struct lu_env *env,
 }
 EXPORT_SYMBOL(osc_io_lseek_end);
 
+int osc_io_lru_reserve(const struct lu_env *env,
+		       const struct cl_io_slice *ios,
+		       loff_t pos, size_t bytes)
+{
+	struct osc_object *osc = cl2osc(ios->cis_obj);
+	struct osc_io *oio = osc_env_io(env);
+	unsigned long npages = 0;
+	size_t page_offset;
+
+	ENTRY;
+
+	page_offset = pos & ~PAGE_MASK;
+	if (page_offset) {
+		++npages;
+		if (bytes > PAGE_SIZE - page_offset)
+			bytes -= (PAGE_SIZE - page_offset);
+		else
+			bytes = 0;
+	}
+	npages += (bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	oio->oi_lru_reserved = osc_lru_reserve(osc_cli(osc), npages);
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(osc_io_lru_reserve);
+
 static const struct cl_io_operations osc_io_ops = {
 	.op = {
 		[CIT_READ] = {
-			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_init = osc_io_iter_init,
 			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start  = osc_io_read_start,
 			.cio_fini   = osc_io_fini
 		},
 		[CIT_WRITE] = {
-			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_init = osc_io_iter_init,
 			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start  = osc_io_write_start,
 			.cio_end    = osc_io_end,
@@ -1242,6 +1253,7 @@ static const struct cl_io_operations osc_io_ops = {
 		}
 	},
 	.cio_read_ahead		    = osc_io_read_ahead,
+	.cio_lru_reserve	    = osc_io_lru_reserve,
 	.cio_submit                 = osc_io_submit,
 	.cio_commit_async           = osc_io_commit_async,
 	.cio_extent_release         = osc_io_extent_release

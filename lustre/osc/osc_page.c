@@ -794,6 +794,13 @@ static int osc_lru_alloc(const struct lu_env *env, struct client_obd *cli,
 			break;
 		if (rc > 0)
 			continue;
+		/* IO issued by readahead, don't try hard */
+		if (oio->oi_is_readahead) {
+			if (atomic_long_read(cli->cl_lru_left) > 0)
+				continue;
+			rc = -EBUSY;
+			break;
+		}
 
 		cond_resched();
 		rc = l_wait_event_abortable(
@@ -826,16 +833,23 @@ unsigned long osc_lru_reserve(struct client_obd *cli, unsigned long npages)
 	unsigned long reserved = 0;
 	unsigned long max_pages;
 	unsigned long c;
+	int rc;
 
-	/* reserve a full RPC window at most to avoid that a thread accidentally
-	 * consumes too many LRU slots */
-	max_pages = cli->cl_max_pages_per_rpc * cli->cl_max_rpcs_in_flight;
-	if (npages > max_pages)
-		npages = max_pages;
-
+again:
 	c = atomic_long_read(cli->cl_lru_left);
 	if (c < npages && osc_lru_reclaim(cli, npages) > 0)
 		c = atomic_long_read(cli->cl_lru_left);
+
+	if (c < npages) {
+		/*
+		 * Trigger writeback in the hope some LRU slot could
+		 * be freed.
+		 */
+		rc = ptlrpcd_queue_work(cli->cl_writeback_work);
+		if (rc)
+			return 0;
+	}
+
 	while (c >= npages) {
 		if (c == atomic_long_cmpxchg(cli->cl_lru_left, c, c - npages)) {
 			reserved = npages;
@@ -843,6 +857,16 @@ unsigned long osc_lru_reserve(struct client_obd *cli, unsigned long npages)
 		}
 		c = atomic_long_read(cli->cl_lru_left);
 	}
+
+	if (reserved != npages) {
+		cond_resched();
+		rc = l_wait_event_abortable(
+			osc_lru_waitq,
+			atomic_long_read(cli->cl_lru_left) > 0);
+		goto again;
+	}
+
+	max_pages = cli->cl_max_pages_per_rpc * cli->cl_max_rpcs_in_flight;
 	if (atomic_long_read(cli->cl_lru_left) < max_pages) {
 		/* If there aren't enough pages in the per-OSC LRU then
 		 * wake up the LRU thread to try and clear out space, so
