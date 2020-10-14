@@ -179,22 +179,19 @@ cleanup_network () {
 	local clean_srv_OSS=$1
 
 	$lctl <<-EOF
-		cfg_device echotmp
-		cleanup
-		detach
+		--device echotmp cleanup
+		--device echotmp detach
 	EOF
 	remote_shell "root@$server_nid" \
 	"$lctl <<-EOF
-		cfg_device echo_srv
-		cleanup
-		detach
+		--device echo_srv cleanup
+		--device echo_srv detach
 	EOF"
 	if [ $clean_srv_OSS ]; then
 		remote_shell "root@$server_nid" \
 		"$lctl <<-EOF
-			cfg_device OSS
-			cleanup
-			detach
+			--device OSS cleanup
+			--device OSS detach
 		EOF"
 	fi
 }
@@ -298,18 +295,17 @@ get_ec_devno () {
 # create echo client using server nid.
 ec_using_srv_nid () {
 	local server_nid=$1
-	local ocsname=$2
+	local oscname=$2
 	local oscuuid=$3
 
 	$lctl add_uuid echo_UUID $server_nid@$NETTYPE >/dev/null 2>&1
 	$lctl <<-EOF
-		attach osc $ocsname $oscuuid
-		cfg_device $ocsname
-		setup echo_srv_UUID echo_UUID
+		attach osc $oscname $oscuuid
+		--device $oscname setup echo_srv_UUID echo_UUID
 	EOF
 	$lctl <<-EOF
-		attach echo_client ${ocsname}_ecc $oscuuid
-		setup $ocsname
+		attach echo_client ${oscname}_ecc $oscuuid
+		--device ${oscname}_ecc setup $oscname
 	EOF
 }
 
@@ -321,8 +317,7 @@ setup_srv_obd () {
 	remote_shell "root@$server_nid" \
 	"$lctl <<-EOF
 		attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
-		cfg_device $test_ostfsnm
-		setup
+		--device $test_ostfsnm setup
 	EOF"
 }
 
@@ -333,8 +328,7 @@ setup_OSS () {
 	remote_shell "root@$server_nid" \
 	"$lctl <<-EOF
 		attach ost OSS OSS_UUID
-		cfg_device OSS
-		setup
+		--device OSS setup
 	EOF"
 }
 
@@ -347,9 +341,8 @@ teardown_ec_devno () {
 
 	remote_shell $host \
 	"$lctl <<-EOF
-		cfg $client_name
-		cleanup
-		detach
+		--device $client_name cleanup
+		--device $client_name detach
 	EOF"
 }
 
