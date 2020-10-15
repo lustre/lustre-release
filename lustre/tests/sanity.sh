@@ -1641,7 +1641,7 @@ test_27ce() {
 	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
 		skip "server does not support overstriping"
 	# We do one more stripe than we have OSTs
-	[ $OSTCOUNT -ge 159 ] || large_xattr_enabled ||
+	[ $OSTCOUNT -lt 159 ] || large_xattr_enabled ||
 		skip_env "ea_inode feature disabled"
 
 	test_mkdir -p $DIR/$tdir
@@ -2448,7 +2448,7 @@ test_27Cb() {
 
 	test_mkdir -p $DIR/$tdir
 	local setcount=$(($OSTCOUNT * 2))
-	[ $setcount -ge 160 ] || large_xattr_enabled ||
+	[ $setcount -lt 160 ] || large_xattr_enabled ||
 		skip_env "ea_inode feature disabled"
 
 	$LFS setstripe -C $setcount $DIR/$tdir/$tfile ||
@@ -2474,7 +2474,7 @@ test_27Cc() {
 	test_mkdir -p $DIR/$tdir
 	local setcount=$(($OSTCOUNT - 1))
 
-	[ $setcount -ge 160 ] || large_xattr_enabled ||
+	[ $setcount -lt 160 ] || large_xattr_enabled ||
 		skip_env "ea_inode feature disabled"
 
 	$LFS setstripe -C $setcount $DIR/$tdir/$tfile ||
@@ -2554,7 +2554,7 @@ test_27Cf() {
 	test_mkdir -p $DIR/$tdir
 
 	local setcount=$(($OSTCOUNT * 2))
-	[ $setcount -ge 160 ] || large_xattr_enabled ||
+	[ $setcount -lt 160 ] || large_xattr_enabled ||
 		skip_env "ea_inode feature disabled"
 
 	$LFS setstripe  -C $setcount $DIR/$tdir/ ||
