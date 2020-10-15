@@ -3194,10 +3194,8 @@ static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 		}
 
 		if (lmv_dir_striped(lsm)) {
-			for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
-				if (lsm->lsm_md_oinfo[i].lmo_root)
-					iput(lsm->lsm_md_oinfo[i].lmo_root);
-			}
+			for (i = 0; i < lsm->lsm_md_stripe_count; i++)
+				iput(lsm->lsm_md_oinfo[i].lmo_root);
 			lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
 		} else {
 			lsm_size = lmv_stripe_md_size(0);

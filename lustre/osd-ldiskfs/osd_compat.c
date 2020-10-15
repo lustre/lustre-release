@@ -610,10 +610,8 @@ static int osd_index_backup_dir_init(const struct lu_env *env,
 
 static void osd_index_backup_dir_fini(struct osd_device *dev)
 {
-	if (dev->od_index_backup_inode) {
-		iput(dev->od_index_backup_inode);
-		dev->od_index_backup_inode = NULL;
-	}
+	iput(dev->od_index_backup_inode);
+	dev->od_index_backup_inode = NULL;
 }
 
 int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)

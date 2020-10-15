@@ -274,8 +274,7 @@ sa_kill(struct ll_statahead_info *sai, struct sa_entry *entry)
 	list_del_init(&entry->se_list);
 	spin_unlock(&lli->lli_sa_lock);
 
-	if (entry->se_inode)
-		iput(entry->se_inode);
+	iput(entry->se_inode);
 
 	sa_free(sai, entry);
 }

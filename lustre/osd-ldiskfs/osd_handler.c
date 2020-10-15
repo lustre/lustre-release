@@ -5869,8 +5869,7 @@ trigger:
 	GOTO(out, rc);
 
 out:
-	if (inode)
-		iput(inode);
+	iput(inode);
 
 	RETURN(rc);
 }

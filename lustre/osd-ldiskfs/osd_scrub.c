@@ -429,7 +429,7 @@ out:
 				OI_KNOWN_ON_OST : 0, NULL);
 	up_write(&scrub->os_rwsem);
 
-	if (inode != NULL && !IS_ERR(inode))
+	if (!IS_ERR(inode))
 		iput(inode);
 
 	if (oii != NULL) {

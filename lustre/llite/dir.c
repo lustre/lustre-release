@@ -542,8 +542,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	}
 
 out_inode:
-	if (inode != NULL)
-		iput(inode);
+	iput(inode);
 out_request:
 	ptlrpc_req_finished(request);
 out_op_data:
