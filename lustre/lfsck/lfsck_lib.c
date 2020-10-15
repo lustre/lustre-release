@@ -1090,7 +1090,7 @@ static int lfsck_create_lpf(const struct lu_env *env,
 	la->la_atime = la->la_mtime = la->la_ctime = ktime_get_real_seconds();
 	la->la_mode = S_IFDIR | S_IRWXU;
 	la->la_valid = LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
-		       LA_UID | LA_GID;
+		       LA_UID | LA_GID | LA_TYPE;
 	memset(dof, 0, sizeof(*dof));
 	dof->dof_type = dt_mode_to_dft(S_IFDIR);
 

@@ -2014,7 +2014,7 @@ int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 		if (IS_ERR(th))
 			GOTO(out, rc = PTR_ERR(th));
 
-		lgi->lgi_attr.la_valid = LA_MODE;
+		lgi->lgi_attr.la_valid = LA_MODE | LA_TYPE;
 		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
