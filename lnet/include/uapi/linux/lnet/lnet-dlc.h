@@ -191,6 +191,8 @@ struct lnet_ioctl_local_ni_hstats {
 	__u32 hlni_local_timeout;
 	__u32 hlni_local_error;
 	__s32 hlni_health_value;
+	__u32 hlni_ping_count;
+	__u64 hlni_next_ping;
 };
 
 struct lnet_ioctl_peer_ni_hstats {
@@ -199,6 +201,8 @@ struct lnet_ioctl_peer_ni_hstats {
 	__u32 hlpni_remote_error;
 	__u32 hlpni_network_timeout;
 	__s32 hlpni_health_value;
+	__u32 hlpni_ping_count;
+	__u64 hlpni_next_ping;
 };
 
 struct lnet_ioctl_element_msg_stats {

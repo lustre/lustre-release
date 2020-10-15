@@ -4018,6 +4018,8 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		  atomic_read(&lpni->lpni_hstats.hlt_remote_error);
 		lpni_hstats->hlpni_health_value =
 		  atomic_read(&lpni->lpni_healthv);
+		lpni_hstats->hlpni_ping_count = lpni->lpni_ping_count;
+		lpni_hstats->hlpni_next_ping = lpni->lpni_next_ping;
 		if (copy_to_user(bulk, lpni_hstats, sizeof(*lpni_hstats)))
 			goto out_free_hstats;
 		bulk += sizeof(*lpni_hstats);
@@ -4112,7 +4114,7 @@ lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 			lnet_net_unlock(LNET_LOCK_EX);
 			return;
 		}
-		atomic_set(&lpni->lpni_healthv, value);
+		lnet_set_lpni_healthv_locked(lpni, value);
 		lnet_peer_ni_add_to_recoveryq_locked(lpni,
 					     &the_lnet.ln_mt_peerNIRecovq, now);
 		lnet_peer_ni_decref_locked(lpni);
@@ -4133,7 +4135,8 @@ lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 			list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
 				list_for_each_entry(lpni, &lpn->lpn_peer_nis,
 						    lpni_peer_nis) {
-					atomic_set(&lpni->lpni_healthv, value);
+					lnet_set_lpni_healthv_locked(lpni,
+								     value);
 					lnet_peer_ni_add_to_recoveryq_locked(lpni,
 					     &the_lnet.ln_mt_peerNIRecovq, now);
 				}
