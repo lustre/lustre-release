@@ -944,7 +944,7 @@ void qti_lqes_fini(const struct lu_env *env)
 			 qti->qti_lqes_num * sizeof(struct lquota_entry *));
 }
 
-inline int qti_lqes_min_qunit(const struct lu_env *env)
+int qti_lqes_min_qunit(const struct lu_env *env)
 {
 	int i, min, qunit;
 
@@ -957,7 +957,7 @@ inline int qti_lqes_min_qunit(const struct lu_env *env)
 	return min;
 }
 
-inline int qti_lqes_edquot(const struct lu_env *env)
+int qti_lqes_edquot(const struct lu_env *env)
 {
 	int i;
 
@@ -969,7 +969,7 @@ inline int qti_lqes_edquot(const struct lu_env *env)
 	return 0;
 }
 
-inline int qti_lqes_restore_init(const struct lu_env *env)
+int qti_lqes_restore_init(const struct lu_env *env)
 {
 	int rc = 0;
 
@@ -983,14 +983,14 @@ inline int qti_lqes_restore_init(const struct lu_env *env)
 	return rc;
 }
 
-inline void qti_lqes_restore_fini(const struct lu_env *env)
+void qti_lqes_restore_fini(const struct lu_env *env)
 {
 	if (qti_lqes_cnt(env) > QMT_MAX_POOL_NUM)
 		OBD_FREE(qmt_info(env)->qti_lqes_rstr,
 			 qti_lqes_cnt(env) * sizeof(struct qmt_lqe_restore));
 }
 
-inline void qti_lqes_write_lock(const struct lu_env *env)
+void qti_lqes_write_lock(const struct lu_env *env)
 {
 	int i;
 
@@ -998,7 +998,7 @@ inline void qti_lqes_write_lock(const struct lu_env *env)
 		lqe_write_lock(qti_lqes(env)[i]);
 }
 
-inline void qti_lqes_write_unlock(const struct lu_env *env)
+void qti_lqes_write_unlock(const struct lu_env *env)
 {
 	int i;
 

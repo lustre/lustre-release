@@ -1128,8 +1128,7 @@ void lnet_wait_router_start(void)
  * This function is called from the monitor thread to check if there are
  * any active routers that need to be checked.
  */
-inline bool
-lnet_router_checker_active(void)
+bool lnet_router_checker_active(void)
 {
 	/* Router Checker thread needs to run when routing is enabled in
 	 * order to call lnet_update_ni_status_locked() */

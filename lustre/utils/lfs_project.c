@@ -341,26 +341,26 @@ static int lfs_project_iterate(const char *pathname,
 }
 
 
-inline int lfs_project_check(const char *pathname,
-			     struct project_handle_control *phc)
+int lfs_project_check(const char *pathname,
+		      struct project_handle_control *phc)
 {
 	return lfs_project_iterate(pathname, phc, project_check_one);
 }
 
-inline int lfs_project_clear(const char *pathname,
-			     struct project_handle_control *phc)
+int lfs_project_clear(const char *pathname,
+		      struct project_handle_control *phc)
 {
 	return lfs_project_iterate(pathname, phc, project_clear_one);
 }
 
-inline int lfs_project_set(const char *pathname,
-			   struct project_handle_control *phc)
+int lfs_project_set(const char *pathname,
+		    struct project_handle_control *phc)
 {
 	return lfs_project_iterate(pathname, phc, project_set_one);
 }
 
-inline int lfs_project_list(const char *pathname,
-			    struct project_handle_control *phc)
+int lfs_project_list(const char *pathname,
+		     struct project_handle_control *phc)
 {
 	return lfs_project_iterate(pathname, phc, project_list_one);
 }

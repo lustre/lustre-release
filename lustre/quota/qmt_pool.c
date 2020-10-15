@@ -1564,7 +1564,7 @@ static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx)
 	}
 }
 
-inline struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi)
+struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi)
 {
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
@@ -1576,7 +1576,7 @@ inline struct rw_semaphore *qmt_sarr_rwsem(struct qmt_pool_info *qpi)
 	}
 }
 
-inline int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx)
+int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx)
 {
 
 	if (qmt_pool_global(qpi))
@@ -1595,7 +1595,7 @@ inline int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx)
 }
 
 /* Number of slaves in a pool */
-inline unsigned int qmt_sarr_count(struct qmt_pool_info *qpi)
+unsigned int qmt_sarr_count(struct qmt_pool_info *qpi)
 {
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:

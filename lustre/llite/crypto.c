@@ -113,13 +113,13 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	return ll_set_encflags(inode, (void *)ctx, len, false);
 }
 
-inline void llcrypt_free_ctx(void *encctx, __u32 size)
+void llcrypt_free_ctx(void *encctx, __u32 size)
 {
 	if (encctx)
 		OBD_FREE(encctx, size);
 }
 
-inline bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
+bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
 {
 	return unlikely(sbi->ll_flags & LL_SBI_TEST_DUMMY_ENCRYPTION);
 }
@@ -131,12 +131,12 @@ static bool ll_dummy_context(struct inode *inode)
 	return sbi ? ll_sbi_has_test_dummy_encryption(sbi) : false;
 }
 
-inline bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
+bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
 {
 	return sbi->ll_flags & LL_SBI_ENCRYPT;
 }
 
-inline void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
+void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 {
 	if (set)
 		sbi->ll_flags |= LL_SBI_ENCRYPT;
@@ -172,21 +172,21 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 	return 0;
 }
 
-inline void llcrypt_free_ctx(void *encctx, __u32 size)
+void llcrypt_free_ctx(void *encctx, __u32 size)
 {
 }
 
-inline bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
-{
-	return false;
-}
-
-inline bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
+bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
 {
 	return false;
 }
 
-inline void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
+bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
+{
+	return false;
+}
+
+void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 {
 }
 #endif

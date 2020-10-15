@@ -617,7 +617,7 @@ int llcrypt_drop_inode(struct inode *inode)
 }
 EXPORT_SYMBOL_GPL(llcrypt_drop_inode);
 
-inline bool llcrypt_has_encryption_key(const struct inode *inode)
+bool llcrypt_has_encryption_key(const struct inode *inode)
 {
 	/* pairs with cmpxchg_release() in llcrypt_get_encryption_info() */
 	return READ_ONCE(llcrypt_info_nocast(inode)) != NULL;

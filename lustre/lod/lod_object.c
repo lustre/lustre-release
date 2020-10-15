@@ -2636,8 +2636,8 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 	RETURN(rc);
 }
 
-inline __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
-					 int comp_idx, bool is_dir)
+__u16 lod_comp_entry_stripe_count(struct lod_object *lo,
+				  int comp_idx, bool is_dir)
 {
 	struct lod_device *lod = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_layout_component *entry;
