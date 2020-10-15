@@ -13,7 +13,18 @@ source ${LBUILD_DIR}/lbuild-sles
 
 kernel_srpm_location() {
     local site
-    site="http://mgmt/cobbler/repo_mirror/updates-sles15.1-src"
+    local kdir
+
+    case $lnxmaj in
+    4.12)
+        kdir=updates-sles15.1-src
+        ;;
+    5.3)
+        kdir=updates-sles15.2-src
+        ;;
+    esac
+
+    site="http://mgmt/cobbler/repo_mirror/$kdir"
     echo "$site/src/"
 }
 
@@ -23,12 +34,24 @@ edit_specs() {
     (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
     for spec in $RPMSMPTYPE source syms; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
+        case $lnxmaj in
+        4.12)
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e '/^%setup /a\
-cp  %_sourcedir/linux-4.12-lustre.patch %_builddir/%{name}-%{version}/intel.lustre.patch\
-grep -q intel.lustre.patch %_sourcedir/series.conf || echo -e "\\n\\tintel.lustre.patch" >> %_sourcedir/series.conf' \
+cp  %_sourcedir/linux-4.12-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
           SOURCES/kernel-${spec}.spec || \
             fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        ;;
+        5.3)
+        sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
+               -e '/^%setup /a\
+cp  %_sourcedir/linux-5.3-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        ;;
+        esac
 
         if $KERNEL_LUSTRE_NAMING; then
             # these are all of the changes needed because we change the package names
@@ -99,13 +122,28 @@ find_linux_rpm-sles15() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
     local wanted_kernel_org="$wanted_kernel"
+    local base_site
+    local base_dir
+    local dev_site
+    local dev_dir
 
     if [ "x$rpmfix_diff" != "x" ] && [ $wanted_kernel != "${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}" ]; then
         wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}"
     fi
 
-    local base_site="http://mgmt/cobbler/repo_mirror/updates-basesystem-sles15.1-x86_64"
-    local dev_site="http://mgmt/cobbler/repo_mirror/updates-devtools-sles15.1-x86_64"
+    case $lnxmaj in
+    4.12)
+        base_dir=updates-basesystem-sles15.1-x86_64
+        dev_dir=updates-devtools-sles15.1-x86_64
+        ;;
+    5.3)
+        base_dir=updates-basesystem-sles15.2-x86_64
+        dev_dir=updates-devtools-sles15.2-x86_64
+        ;;
+    esac
+
+    base_site="http://mgmt/cobbler/repo_mirror/$base_dir"
+    dev_site="http://mgmt/cobbler/repo_mirror/$dev_dir"
 
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
         fetch_url "$base_site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
