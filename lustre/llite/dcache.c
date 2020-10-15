@@ -128,7 +128,7 @@ static int ll_ddelete(const struct dentry *de)
 	LASSERT(de);
 
 	CDEBUG(D_DENTRY, "%s dentry %pd (%p, parent %p, inode %p) %s%s\n",
-	       d_lustre_invalid((struct dentry *)de) ? "deleting" : "keeping",
+	       d_lustre_invalid(de) ? "deleting" : "keeping",
 	       de, de, de->d_parent, de->d_inode,
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
@@ -136,7 +136,7 @@ static int ll_ddelete(const struct dentry *de)
 	/* kernel >= 2.6.38 last refcount is decreased after this function. */
 	LASSERT(ll_d_count(de) == 1);
 
-	if (d_lustre_invalid((struct dentry *)de))
+	if (d_lustre_invalid(de))
 		RETURN(1);
 	RETURN(0);
 }
