@@ -258,25 +258,21 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 {
-        LASSERT(it != NULL);
-        LASSERT(dentry != NULL);
+	LASSERT(it != NULL);
+	LASSERT(dentry != NULL);
 
 	if (it->it_lock_mode && dentry->d_inode != NULL) {
-                struct inode *inode = dentry->d_inode;
-                struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
+		struct inode *inode = dentry->d_inode;
+		struct ll_sb_info *sbi = ll_i2sbi(inode);
 
 		CDEBUG(D_DLMTRACE, "setting l_data to inode "DFID"(%p)\n",
 		       PFID(ll_inode2fid(inode)), inode);
-                ll_set_lock_data(sbi->ll_md_exp, inode, it, NULL);
-        }
+		ll_set_lock_data(sbi->ll_md_exp, inode, it, NULL);
+	}
 
-        /* drop lookup or getattr locks immediately */
-        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) {
-                /* on 2.6 there are situation when several lookups and
-                 * revalidations may be requested during single operation.
-                 * therefore, we don't release intent here -bzzz */
-                ll_intent_drop_lock(it);
-        }
+	/* drop lookup or getattr locks immediately */
+	if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
+		ll_intent_drop_lock(it);
 }
 
 static int ll_revalidate_dentry(struct dentry *dentry,
