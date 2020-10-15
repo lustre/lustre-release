@@ -1011,7 +1011,6 @@ static int ll_statahead_thread(void *arg)
 	struct ll_statahead_info *sai = lli->lli_sai;
 	int first = 0;
 	struct md_op_data *op_data;
-	struct ll_dir_chain chain;
 	struct page *page = NULL;
 	__u64 pos = 0;
 	int rc = 0;
@@ -1025,7 +1024,6 @@ static int ll_statahead_thread(void *arg)
 	if (!op_data)
 		GOTO(out, rc = -ENOMEM);
 
-	ll_dir_chain_init(&chain);
 	while (pos != MDS_DIR_END_OFF && sai->sai_task) {
 		struct lu_dirpage *dp;
 		struct lu_dirent  *ent;
@@ -1038,7 +1036,7 @@ static int ll_statahead_thread(void *arg)
 		}
 
 		sai->sai_in_readpage = 1;
-		page = ll_get_dir_page(dir, op_data, pos, &chain);
+		page = ll_get_dir_page(dir, op_data, pos);
 		ll_unlock_md_op_lsm(op_data);
 		sai->sai_in_readpage = 0;
 		if (IS_ERR(page)) {
@@ -1151,7 +1149,6 @@ static int ll_statahead_thread(void *arg)
 			break;
 		}
 	}
-	ll_dir_chain_fini(&chain);
 	ll_finish_md_op_data(op_data);
 
 	if (rc < 0) {
@@ -1277,7 +1274,6 @@ enum {
 /* file is first dirent under @dir */
 static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 {
-	struct ll_dir_chain   chain;
 	struct qstr          *target = &dentry->d_name;
 	struct md_op_data    *op_data;
 	int                   dot_de;
@@ -1295,8 +1291,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	 *FIXME choose the start offset of the readdir
 	 */
 
-	ll_dir_chain_init(&chain);
-	page = ll_get_dir_page(dir, op_data, 0, &chain);
+	page = ll_get_dir_page(dir, op_data, 0);
 
 	while (1) {
 		struct lu_dirpage *dp;
@@ -1385,12 +1380,11 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			 */
 			ll_release_page(dir, page, le32_to_cpu(dp->ldp_flags) &
 					      LDF_COLLIDE);
-			page = ll_get_dir_page(dir, op_data, pos, &chain);
+			page = ll_get_dir_page(dir, op_data, pos);
 		}
 	}
 	EXIT;
 out:
-	ll_dir_chain_fini(&chain);
 	ll_finish_md_op_data(op_data);
 
 	return rc;

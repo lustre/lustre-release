@@ -103,16 +103,18 @@
  * returned page, page hash collision has to be handled. Pages in the
  * hash chain, except first one, are termed "overflow pages".
  *
- * Solution to index uniqueness problem is to not cache overflow
- * pages. Instead, when page hash collision is detected, all overflow pages
- * from emerging chain are immediately requested from the server and placed in
- * a special data structure (struct ll_dir_chain). This data structure is used
- * by ll_readdir() to process entries from overflow pages. When readdir
- * invocation finishes, overflow pages are discarded. If page hash collision
- * chain weren't completely processed, next call to readdir will again detect
- * page hash collision, again read overflow pages in, process next portion of
- * entries and again discard the pages. This is not as wasteful as it looks,
- * because, given reasonable hash, page hash collisions are extremely rare.
+ * Proposed (unimplimented) solution to index uniqueness problem is to
+ * not cache overflow pages.  Instead, when page hash collision is
+ * detected, all overflow pages from emerging chain should be
+ * immediately requested from the server and placed in a special data
+ * structure.  This data structure can be used by ll_readdir() to
+ * process entries from overflow pages.  When readdir invocation
+ * finishes, overflow pages are discarded.  If page hash collision chain
+ * weren't completely processed, next call to readdir will again detect
+ * page hash collision, again read overflow pages in, process next
+ * portion of entries and again discard the pages.  This is not as
+ * wasteful as it looks, because, given reasonable hash, page hash
+ * collisions are extremely rare.
  *
  * 1. directory positioning
  *
@@ -141,7 +143,7 @@
  *
  */
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
-			     __u64 offset, struct ll_dir_chain *chain)
+			     __u64 offset)
 {
 	struct md_callback	cb_op;
 	struct page		*page;
@@ -190,14 +192,11 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 	bool                  is_api32 = ll_need_32bit_api(sbi);
 	bool                  is_hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
 	struct page          *page;
-	struct ll_dir_chain   chain;
 	bool                  done = false;
 	int                   rc = 0;
 	ENTRY;
 
-	ll_dir_chain_init(&chain);
-
-	page = ll_get_dir_page(inode, op_data, pos, &chain);
+	page = ll_get_dir_page(inode, op_data, pos);
 
 	while (rc == 0 && !done) {
 		struct lu_dirpage *dp;
@@ -271,8 +270,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 					le32_to_cpu(dp->ldp_flags) &
 					LDF_COLLIDE);
 			next = pos;
-			page = ll_get_dir_page(inode, op_data, pos,
-					       &chain);
+			page = ll_get_dir_page(inode, op_data, pos);
 		}
 	}
 #ifdef HAVE_DIR_CONTEXT
@@ -280,7 +278,6 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 #else
 	*ppos = pos;
 #endif
-	ll_dir_chain_fini(&chain);
 	RETURN(rc);
 }
 

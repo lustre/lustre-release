@@ -1047,17 +1047,6 @@ enum get_default_layout_type {
 	GET_DEFAULT_LAYOUT_ROOT = 1,
 };
 
-struct ll_dir_chain {
-};
-
-static inline void ll_dir_chain_init(struct ll_dir_chain *chain)
-{
-}
-
-static inline void ll_dir_chain_fini(struct ll_dir_chain *chain)
-{
-}
-
 extern const struct file_operations ll_dir_operations;
 extern const struct inode_operations ll_dir_inode_operations;
 #ifdef HAVE_DIR_CONTEXT
@@ -1070,7 +1059,7 @@ int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 int ll_get_mdt_idx(struct inode *inode);
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
-			     __u64 offset, struct ll_dir_chain *chain);
+			     __u64 offset);
 void ll_release_page(struct inode *inode, struct page *page, bool remove);
 int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl);
 
