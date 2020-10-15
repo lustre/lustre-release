@@ -155,7 +155,7 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	 */
 	if (handler->flags == XATTR_SECURITY_T &&
 	    !strcmp(name, "c") &&
-	    !ll_file_test_and_clear_flag(ll_i2info(inode), LLIF_SET_ENC_CTX))
+	    !test_and_clear_bit(LLIF_SET_ENC_CTX, &ll_i2info(inode)->lli_flags))
 		RETURN(-EPERM);
 
 	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);

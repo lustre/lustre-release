@@ -157,14 +157,14 @@ static bool should_preserve_foreign_file(struct lov_foreign_md *lfm,
 
 	if (unset)
 		if (lfm->lfm_type == LU_FOREIGN_TYPE_SYMLINK) {
-			ll_file_set_flag(lli, LLIF_FOREIGN_REMOVABLE);
+			set_bit(LLIF_FOREIGN_REMOVABLE, &lli->lli_flags);
 			return true;
 		} else {
 			return false;
 		}
 	else
 		return lfm->lfm_type == LU_FOREIGN_TYPE_SYMLINK &&
-		       !ll_file_test_flag(lli, LLIF_FOREIGN_REMOVABLE);
+			!test_bit(LLIF_FOREIGN_REMOVABLE, &lli->lli_flags);
 }
 
 static bool should_preserve_foreign_dir(struct lmv_foreign_md *lfm,
@@ -174,14 +174,14 @@ static bool should_preserve_foreign_dir(struct lmv_foreign_md *lfm,
 
 	if (unset)
 		if (lfm->lfm_type == LU_FOREIGN_TYPE_SYMLINK) {
-			ll_file_set_flag(lli, LLIF_FOREIGN_REMOVABLE);
+			set_bit(LLIF_FOREIGN_REMOVABLE, &lli->lli_flags);
 			return true;
 		} else {
 			return false;
 		}
 	else
 		return lfm->lfm_type == LU_FOREIGN_TYPE_SYMLINK &&
-		       !ll_file_test_flag(lli, LLIF_FOREIGN_REMOVABLE);
+			!test_bit(LLIF_FOREIGN_REMOVABLE, &lli->lli_flags);
 }
 
 /* XXX

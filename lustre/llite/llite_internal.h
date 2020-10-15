@@ -410,30 +410,6 @@ enum ll_file_flags {
 
 };
 
-static inline void ll_file_set_flag(struct ll_inode_info *lli,
-				    enum ll_file_flags flag)
-{
-	set_bit(flag, &lli->lli_flags);
-}
-
-static inline void ll_file_clear_flag(struct ll_inode_info *lli,
-				      enum ll_file_flags flag)
-{
-	clear_bit(flag, &lli->lli_flags);
-}
-
-static inline bool ll_file_test_flag(struct ll_inode_info *lli,
-				     enum ll_file_flags flag)
-{
-	return test_bit(flag, &lli->lli_flags);
-}
-
-static inline bool ll_file_test_and_clear_flag(struct ll_inode_info *lli,
-					       enum ll_file_flags flag)
-{
-	return test_and_clear_bit(flag, &lli->lli_flags);
-}
-
 int ll_xattr_cache_destroy(struct inode *inode);
 
 int ll_xattr_cache_get(struct inode *inode,

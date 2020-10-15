@@ -2084,7 +2084,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		 */
 		xvalid |= OP_XVALID_OWNEROVERRIDE;
 		op_data->op_bias |= MDS_DATA_MODIFIED;
-		ll_file_clear_flag(lli, LLIF_DATA_MODIFIED);
+		clear_bit(LLIF_DATA_MODIFIED, &lli->lli_flags);
 	}
 
 	if (attr->ia_valid & ATTR_FILE) {
@@ -2169,7 +2169,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	 * LLIF_DATA_MODIFIED is not set(see vvp_io_setattr_fini()).
 	 * This way we can save an RPC for common open + trunc
 	 * operation. */
-	if (ll_file_test_and_clear_flag(lli, LLIF_DATA_MODIFIED)) {
+	if (test_and_clear_bit(LLIF_DATA_MODIFIED, &lli->lli_flags)) {
 		struct hsm_state_set hss = {
 			.hss_valid = HSS_SETMASK,
 			.hss_setmask = HS_DIRTY,
@@ -2416,9 +2416,9 @@ void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags)
 	ext_flags |= ll_inode_to_ext_flags(inode->i_flags) & LUSTRE_ENCRYPT_FL;
 	inode->i_flags = ll_ext_to_inode_flags(ext_flags);
 	if (ext_flags & LUSTRE_PROJINHERIT_FL)
-		ll_file_set_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT);
+		set_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags);
 	else
-		ll_file_clear_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT);
+		clear_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags);
 }
 
 int ll_update_inode(struct inode *inode, struct lustre_md *md)
@@ -2534,9 +2534,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		 * glimpsing updated attrs
 		 */
 		if (body->mbo_t_state & MS_RESTORE)
-			ll_file_set_flag(lli, LLIF_FILE_RESTORING);
+			set_bit(LLIF_FILE_RESTORING, &lli->lli_flags);
 		else
-			ll_file_clear_flag(lli, LLIF_FILE_RESTORING);
+			clear_bit(LLIF_FILE_RESTORING, &lli->lli_flags);
 	}
 
 	return 0;

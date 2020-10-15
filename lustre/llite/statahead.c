@@ -577,7 +577,7 @@ static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
 	 * the MDT holds the layout lock so the glimpse will block up to the
 	 * end of restore (statahead/agl will block)
 	 */
-	if (ll_file_test_flag(lli, LLIF_FILE_RESTORING)) {
+	if (test_bit(LLIF_FILE_RESTORING, &lli->lli_flags)) {
 		lli->lli_agl_index = 0;
 		iput(inode);
 		RETURN_EXIT;

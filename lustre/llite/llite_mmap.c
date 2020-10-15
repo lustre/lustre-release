@@ -207,7 +207,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
                 }
 
 		if (result == 0)
-			ll_file_set_flag(lli, LLIF_DATA_MODIFIED);
+			set_bit(LLIF_DATA_MODIFIED, &lli->lli_flags);
         }
         EXIT;
 

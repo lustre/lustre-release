@@ -112,12 +112,12 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	op_data->op_xvalid |= OP_XVALID_CTIME_SET;
 	op_data->op_attr_blocks = inode->i_blocks;
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode->i_flags);
-	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT))
+	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags))
 		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
 	op_data->op_open_handle = och->och_open_handle;
 
 	if (och->och_flags & FMODE_WRITE &&
-	    ll_file_test_and_clear_flag(ll_i2info(inode), LLIF_DATA_MODIFIED))
+	    test_and_clear_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags))
 		/* For HSM: if inode data has been modified, pack it so that
 		 * MDT can set data dirty flag in the archive. */
 		op_data->op_bias |= MDS_DATA_MODIFIED;
@@ -1365,7 +1365,7 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	 * POSIX. Solving this problem needs to send an RPC to MDT for each
 	 * read, this will hurt performance.
 	 */
-	if (ll_file_test_and_clear_flag(lli, LLIF_UPDATE_ATIME) ||
+	if (test_and_clear_bit(LLIF_UPDATE_ATIME, &lli->lli_flags) ||
 	    inode->i_atime.tv_sec < lli->lli_atime)
 		inode->i_atime.tv_sec = lli->lli_atime;
 
@@ -1883,7 +1883,7 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 		ll_heat_add(inode, CIT_WRITE, result);
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
 				   result);
-		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
+		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 	}
 
 	CDEBUG(D_VFSTRACE, "result: %zu, original count %zu\n", result, count);
@@ -3229,7 +3229,7 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 		RETURN(-EFAULT);
 
 	fsxattr.fsx_xflags = ll_inode_flags_to_xflags(inode->i_flags);
-	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT))
+	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags))
 		fsxattr.fsx_xflags |= FS_XFLAG_PROJINHERIT;
 	fsxattr.fsx_projid = ll_i2info(inode)->lli_projid;
 	if (copy_to_user((struct fsxattr __user *)arg,
@@ -3252,7 +3252,7 @@ int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
 	if (ll_i2info(inode)->lli_projid != fa->fsx_projid)
 		return -EINVAL;
 
-	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT)) {
+	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags)) {
 		if (!(fa->fsx_xflags & FS_XFLAG_PROJINHERIT))
 			return -EINVAL;
 	} else {
@@ -4930,7 +4930,7 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		 * restore the MDT holds the layout lock so the glimpse will
 		 * block up to the end of restore (getattr will block)
 		 */
-		if (!ll_file_test_flag(lli, LLIF_FILE_RESTORING)) {
+		if (!test_bit(LLIF_FILE_RESTORING, &lli->lli_flags)) {
 			rc = ll_glimpse_size(inode);
 			if (rc < 0)
 				RETURN(rc);

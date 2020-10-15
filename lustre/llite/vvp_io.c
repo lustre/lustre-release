@@ -352,8 +352,8 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			/* today successful restore is the only possible
 			 * case */
 			/* restore was done, clear restoring state */
-			ll_file_clear_flag(ll_i2info(vvp_object_inode(obj)),
-					   LLIF_FILE_RESTORING);
+			clear_bit(LLIF_FILE_RESTORING,
+				  &ll_i2info(vvp_object_inode(obj))->lli_flags);
 		}
 		GOTO(out, 0);
 	}
@@ -780,7 +780,7 @@ static void vvp_io_setattr_fini(const struct lu_env *env,
 
 	if (restore_needed && !ios->cis_io->ci_restore_needed) {
 		/* restore finished, set data modified flag for HSM */
-		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
+		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 	}
 }
 
@@ -1304,7 +1304,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 		vio->vui_iocb->ki_pos = pos + io->ci_nob - nob;
 	}
 	if (result > 0 || result == -EIOCBQUEUED) {
-		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
+		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 
 		if (result != -EIOCBQUEUED && result < cnt)
 			io->ci_continue = 0;
