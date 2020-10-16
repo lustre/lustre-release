@@ -3710,7 +3710,7 @@ int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 	}
 
 	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
-				       "max_intf", max_intf, show_rc,
+				       "max_interfaces", max_intf, show_rc,
 				       err_rc, l_errno);
 }
 
@@ -4735,7 +4735,9 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	max_intf = cYAML_get_object_item(tree, "max_intf");
+	max_intf = cYAML_get_object_item(tree, "max_interfaces");
+	if (!max_intf) /* try legacy name */
+		max_intf = cYAML_get_object_item(tree, "max_intf");
 	if (max_intf)
 		rc = lustre_lnet_config_max_intf(max_intf->cy_valueint,
 						 seq_no ? seq_no->cy_valueint
@@ -4823,7 +4825,9 @@ static int handle_yaml_del_global_settings(struct cYAML *tree,
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	max_intf = cYAML_get_object_item(tree, "max_intf");
+	max_intf = cYAML_get_object_item(tree, "max_interfaces");
+	if (!max_intf) /* try legacy name */
+		max_intf = cYAML_get_object_item(tree, "max_intf");
 	if (max_intf)
 		rc = lustre_lnet_config_max_intf(LNET_INTERFACES_MAX_DEFAULT,
 						 seq_no ? seq_no->cy_valueint
@@ -4864,7 +4868,9 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	max_intf = cYAML_get_object_item(tree, "max_intf");
+	max_intf = cYAML_get_object_item(tree, "max_interfaces");
+	if (!max_intf) /* try legacy name */
+		max_intf = cYAML_get_object_item(tree, "max_intf");
 	if (max_intf)
 		rc = lustre_lnet_show_max_intf(seq_no ? seq_no->cy_valueint
 							: -1,
