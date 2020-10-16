@@ -2482,6 +2482,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
 	/* We're part of recovery, so don't wait for it. */
 	req->rq_send_state = LUSTRE_IMP_REPLAY_LOCKS;
+	/* If the state changed while we were prepared, don't wait */
+	req->rq_no_delay = 1;
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 	ldlm_lock2desc(lock, &body->lock_desc);
