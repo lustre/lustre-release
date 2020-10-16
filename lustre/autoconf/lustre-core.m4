@@ -996,6 +996,23 @@ aio_complete, [
 ]) # LC_HAVE_AIO_COMPLETE
 
 #
+# LC_HAVE_IS_ROOT_INODE
+#
+# 3.19 kernel adds is_root_inode()
+# Commit a7400222e3eb ("new helper: is_root_inode()")
+#
+AC_DEFUN([LC_HAVE_IS_ROOT_INODE], [
+LB_CHECK_COMPILE([if kernel has is_root_inode() ],
+is_root_inode, [
+	#include <linux/fs.h>
+],[
+	is_root_inode(NULL);
+],[
+	AC_DEFINE(HAVE_IS_ROOT_INODE, 1, [is_root_inode defined])
+])
+]) # LC_HAVE_IS_ROOT_INODE
+
+#
 # LC_BACKING_DEV_INFO_REMOVAL
 #
 # 3.20 kernel removed backing_dev_info from address_space
@@ -2369,6 +2386,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_KIOCB_HAS_NBYTES
 	LC_HAVE_DQUOT_QC_DQBLK
 	LC_HAVE_AIO_COMPLETE
+	LC_HAVE_IS_ROOT_INODE
 
 	# 3.20
 	LC_BACKING_DEV_INFO_REMOVAL

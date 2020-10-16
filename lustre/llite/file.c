@@ -393,7 +393,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd)
 		ll_deauthorize_statahead(inode, fd);
 
-	if (inode->i_sb->s_root == file_dentry(file)) {
+	if (is_root_inode(inode)) {
 		file->private_data = NULL;
 		ll_file_data_put(fd);
 		GOTO(out, rc = 0);
@@ -413,7 +413,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 		libcfs_debug_dumplog();
 
 out:
-	if (!rc && inode->i_sb->s_root != file_dentry(file))
+	if (!rc && !is_root_inode(inode))
 		ll_stats_ops_tally(sbi, LPROC_LL_RELEASE,
 				   ktime_us_delta(ktime_get(), kstart));
 	RETURN(rc);
@@ -785,7 +785,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode))
 		ll_authorize_statahead(inode, fd);
 
-	if (inode->i_sb->s_root == file_dentry(file)) {
+	if (is_root_inode(inode)) {
 		file->private_data = fd;
 		RETURN(0);
 	}
@@ -2462,26 +2462,26 @@ out:
  */
 int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
 {
-        struct inode *inode = dentry->d_inode;
-        struct obd_client_handle *och;
-        int rc;
-        ENTRY;
+	struct inode *inode = dentry->d_inode;
+	struct obd_client_handle *och;
+	int rc;
+	ENTRY;
 
-        LASSERT(inode);
+	LASSERT(inode);
 
-        /* Root ? Do nothing. */
-        if (dentry->d_inode->i_sb->s_root == dentry)
-                RETURN(0);
+	/* Root ? Do nothing. */
+	if (is_root_inode(inode))
+		RETURN(0);
 
-        /* No open handle to close? Move away */
-        if (!it_disposition(it, DISP_OPEN_OPEN))
-                RETURN(0);
+	/* No open handle to close? Move away */
+	if (!it_disposition(it, DISP_OPEN_OPEN))
+		RETURN(0);
 
-        LASSERT(it_open_error(DISP_OPEN_OPEN, it) == 0);
+	LASSERT(it_open_error(DISP_OPEN_OPEN, it) == 0);
 
-        OBD_ALLOC(och, sizeof(*och));
-        if (!och)
-                GOTO(out, rc = -ENOMEM);
+	OBD_ALLOC(och, sizeof(*och));
+	if (!och)
+		GOTO(out, rc = -ENOMEM);
 
 	rc = ll_och_fill(ll_i2sbi(inode)->ll_md_exp, it, och);
 	if (rc)
@@ -4560,7 +4560,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	 * by checking the migrate FID against the FID of the
 	 * filesystem root.
 	 */
-	if (child_inode == parent->i_sb->s_root->d_inode)
+	if (is_root_inode(child_inode))
 		GOTO(out_iput, rc = -EINVAL);
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
@@ -5263,7 +5263,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 	 * need to do it before permission check.
 	 */
 
-	if (inode == inode->i_sb->s_root->d_inode) {
+	if (is_root_inode(inode)) {
 		rc = ll_inode_revalidate(inode->i_sb->s_root, IT_LOOKUP);
 		if (rc)
 			RETURN(rc);

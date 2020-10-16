@@ -1068,7 +1068,7 @@ static inline void osd_object_put(const struct lu_env *env,
 
 static inline int osd_object_is_root(const struct osd_object *obj)
 {
-        return osd_sb(osd_obj2dev(obj))->s_root->d_inode == obj->oo_inode;
+	return obj->oo_inode && is_root_inode(obj->oo_inode);
 }
 
 static inline struct osd_object *osd_obj(const struct lu_object *o)

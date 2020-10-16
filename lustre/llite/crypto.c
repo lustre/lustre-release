@@ -101,7 +101,7 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	}
 
 	/* Encrypting the root directory is not allowed */
-	if (inode->i_ino == inode->i_sb->s_root->d_inode->i_ino)
+	if (is_root_inode(inode))
 		return -EPERM;
 
 	dentry = (struct dentry *)fs_data;

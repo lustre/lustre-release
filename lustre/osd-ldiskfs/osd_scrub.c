@@ -1929,7 +1929,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 		    osd_index_need_recreate(info->oti_env, dev, inode)) {
 			struct lu_fid *pfid = &info->oti_fid3;
 
-			if (parent == osd_sb(dev)->s_root->d_inode) {
+			if (is_root_inode(parent)) {
 				lu_local_obj_fid(pfid, OSD_FS_ROOT_OID);
 			} else {
 				rc = osd_scrub_get_fid(info, dev, parent, pfid,

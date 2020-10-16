@@ -1500,7 +1500,7 @@ lmv_out_free:
 		if (copy_from_user(&lumv1, lumv1p, sizeof(lumv1)))
 			RETURN(-EFAULT);
 
-		if (inode->i_sb->s_root == file_dentry(file))
+		if (is_root_inode(inode))
 			set_default = 1;
 
 		switch (lumv1.lmm_magic) {

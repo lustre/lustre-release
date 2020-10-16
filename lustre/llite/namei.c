@@ -370,8 +370,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 	}
 
 	if ((bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM)) &&
-	    inode->i_sb->s_root != NULL &&
-	    inode != inode->i_sb->s_root->d_inode)
+	    !is_root_inode(inode))
 		ll_prune_aliases(inode);
 
 	if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM))

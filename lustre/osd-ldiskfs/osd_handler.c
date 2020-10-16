@@ -559,7 +559,7 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 		if (!rc2) {
 			fid = &loa->loa_lma.lma_self_fid;
 		} else if (rc2 == -ENODATA) {
-			if (unlikely(parent == inode->i_sb->s_root->d_inode)) {
+			if (unlikely(is_root_inode(parent))) {
 				fid = &info->oti_fid3;
 				lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
 			} else if (!osd->od_is_ost && osd->od_index == 0) {
@@ -604,7 +604,7 @@ osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	if (!rc) {
 		*fid = loa->loa_lma.lma_self_fid;
 	} else if (rc == -ENODATA) {
-		if (unlikely(inode == osd_sb(dev)->s_root->d_inode))
+		if (unlikely(is_root_inode(inode)))
 			lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
 		else
 			lu_igif_build(fid, inode->i_ino, inode->i_generation);
@@ -5584,8 +5584,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	LASSERT(pobj->oo_inode);
 
 	ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
-	if (unlikely(pobj->oo_inode ==
-		     osd_sb(osd_obj2dev(pobj))->s_root->d_inode))
+	if (unlikely(osd_object_is_root(pobj)))
 		ldp->edp_magic = 0;
 	else
 		osd_get_ldiskfs_dirent_param(ldp, fid);
