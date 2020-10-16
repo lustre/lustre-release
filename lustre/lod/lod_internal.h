@@ -446,6 +446,7 @@ struct lod_thread_info {
 	struct lu_attr			lti_layout_attr;
 	/* object allocation avoid guide info */
 	struct lod_avoid_guide		lti_avoid;
+	struct dt_allocation_hint	lti_ah;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
