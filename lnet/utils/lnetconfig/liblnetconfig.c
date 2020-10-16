@@ -393,9 +393,7 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
 	struct libcfs_ioctl_data data;
 	unsigned int opc;
 	int rc;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"Success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"Success\"";
 
 	LIBCFS_IOC_INIT(data);
 
@@ -789,12 +787,9 @@ int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
 {
 	int rc, num_nids, idx;
 	__u32 rnet;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"generic error\"";
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
-
-	memset(err_str, 0, LNET_MAX_STR_LEN);
-	snprintf(err_str, LNET_MAX_STR_LEN, "\"generic error\"");
 
 	if (nw == NULL || nidstr == NULL) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
@@ -867,9 +862,7 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 			     int sen, int seq_no, struct cYAML **err_rc)
 {
 	int rc;
-	char err_str[LNET_MAX_STR_LEN];
-	memset(err_str, 0, LNET_MAX_STR_LEN);
-	snprintf(err_str, LNET_MAX_STR_LEN, "\"generic error\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"generic error\"";
 
 	if (hops == -1) {
 		hops = LNET_UNDEFINED_HOPS;
@@ -929,11 +922,8 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 	int i;
 	struct cYAML *root = NULL, *route = NULL, *item = NULL;
 	struct cYAML *first_seq = NULL;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	bool exist = false;
-
-	snprintf(err_str, sizeof(err_str),
-		 "\"out of memory\"");
 
 	if (nw != NULL) {
 		net = libcfs_str2net(nw);
@@ -1178,7 +1168,6 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 	if (nw == NULL || nids == NULL) {
 		snprintf(err_str, str_len,
 			 "\"unexpected parameters to lustre_lnet_intf2nids()\"");
-		err_str[str_len - 1] = '\0';
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 
@@ -1193,7 +1182,6 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 	if (*nids == NULL) {
 		snprintf(err_str, str_len,
 			 "\"out of memory\"");
-		err_str[str_len - 1] = '\0';
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 	}
 	/*
@@ -1207,7 +1195,6 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 		if (rc) {
 			snprintf(err_str, str_len,
 				 "\"cannot read gni nid\"");
-			err_str[str_len - 1] = '\0';
 			goto failed;
 		}
 		gni_num = atoi(val);
@@ -1227,7 +1214,6 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 				snprintf(err_str, str_len,
 					 "\"couldn't query intf %s\"",
 					 intf->intf_name);
-				err_str[str_len - 1] = '\0';
 				goto failed;
 			}
 			(*nids)[i] = LNET_MKNID(nw->nw_id, num);
@@ -1239,7 +1225,6 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 				snprintf(err_str, str_len,
 					 "\"couldn't query intf %s\"",
 					 intf->intf_name);
-				err_str[str_len - 1] = '\0';
 				goto failed;
 			}
 			(*nids)[i] = LNET_MKNID(nw->nw_id, ip);
@@ -1427,7 +1412,6 @@ static int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 	if (rc < 0) {
 		snprintf(err_str, str_len,
 			 "\"failed to get interface addresses: %d\"", -errno);
-		err_str[str_len - 1] = '\0';
 		return -errno;
 	}
 
@@ -1437,13 +1421,12 @@ static int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 	if (rc != LUSTRE_CFG_RC_MATCH) {
 		snprintf(err_str, str_len,
 			 "\"couldn't match ip to existing interfaces\"");
-		err_str[str_len - 1] = '\0';
 		freeifaddrs(ifa);
 		return rc;
 	}
 
 	rc = lustre_lnet_intf2nids(&ip2nets->ip2nets_net, nids, nnids,
-				   err_str, sizeof(err_str));
+				   err_str, str_len);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		*nids = NULL;
 		*nnids = 0;
@@ -1544,9 +1527,7 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 	lnet_nid_t *nids = NULL;
 	__u32 nnids = 0;
 	int rc;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 
 	if (!ip2nets) {
 		snprintf(err_str,
@@ -1595,15 +1576,13 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
 	char buf[LNET_MAX_STR_LEN];
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	lnet_nid_t *nids = NULL;
 	__u32 nnids = 0;
 	size_t len;
 	int count;
 	struct lnet_dlc_intf_descr *intf_descr, *tmp;
 	__u32 *cpt_array;
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	if (ip2net == NULL && (nw_descr == NULL || nw_descr->nw_id == 0 ||
 	    (list_empty(&nw_descr->nw_intflist) &&
@@ -1742,12 +1721,10 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 {
 	struct lnet_ioctl_config_ni data;
 	int rc = LUSTRE_CFG_RC_NO_ERR, i;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	lnet_nid_t *nids = NULL;
 	__u32 nnids = 0;
 	struct lnet_dlc_intf_descr *intf_descr, *tmp;
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	if (nw_descr == NULL || nw_descr->nw_id == 0) {
 		snprintf(err_str,
@@ -1828,9 +1805,7 @@ lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
 {
 	struct lnet_ioctl_reset_health_cfg data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 
 	LIBCFS_IOC_INIT_V2(data, rh_hdr);
 	data.rh_type = type;
@@ -1940,12 +1915,10 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
 	char *pos;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	bool exist = false, new_net = true;
 	int net_num = 0;
 	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd) + sizeof(*stats);
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
 	buf = calloc(1, buf_size);
 	if (buf == NULL)
@@ -2271,9 +2244,7 @@ int lustre_lnet_enable_routing(int enable, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_data data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
 	data.cfg_config_u.cfg_buffers.buf_enable = (enable) ? 1 : 0;
@@ -2301,9 +2272,7 @@ int ioctl_set_value(__u32 val, int ioc, char *name,
 {
 	struct lnet_ioctl_set_value data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 
 	LIBCFS_IOC_INIT_V2(data, sv_hdr);
 	data.sv_value = val;
@@ -2325,10 +2294,8 @@ int ioctl_set_value(__u32 val, int ioc, char *name,
 int lustre_lnet_config_recov_intrv(int intrv, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", intrv);
 
@@ -2347,10 +2314,8 @@ int lustre_lnet_config_recov_intrv(int intrv, int seq_no, struct cYAML **err_rc)
 int lustre_lnet_config_rtr_sensitivity(int sen, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", sen);
 
@@ -2369,10 +2334,8 @@ int lustre_lnet_config_rtr_sensitivity(int sen, int seq_no, struct cYAML **err_r
 int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", sen);
 
@@ -2391,10 +2354,8 @@ int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
 int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", timeout);
 
@@ -2413,10 +2374,8 @@ int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **er
 int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", count);
 
@@ -2465,10 +2424,8 @@ int lustre_lnet_config_response_tracking(int val, int seq_no,
 int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%d", max);
 
@@ -2487,10 +2444,8 @@ int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 int lustre_lnet_config_discovery(int enable, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%u", (enable) ? 0 : 1);
 
@@ -2511,10 +2466,8 @@ int lustre_lnet_config_drop_asym_route(int drop, int seq_no,
 				       struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 	char val[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	snprintf(val, sizeof(val), "%u", (drop) ? 1 : 0);
 
@@ -2543,9 +2496,7 @@ int lustre_lnet_config_buffers(int tiny, int small, int large, int seq_no,
 {
 	struct lnet_ioctl_config_data data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
 
 	/* -1 indicates to ignore changes to this field */
 	if (tiny < -1 || small < -1 || large < -1) {
@@ -2590,11 +2541,9 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 		     *type_node = NULL, *item = NULL, *cpt = NULL,
 		     *first_seq = NULL, *buffers = NULL;
 	int i, j;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	char node_name[LNET_MAX_STR_LEN];
 	bool exist = false;
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
 	buf = calloc(1, sizeof(*data) + sizeof(*pool_cfg));
 	if (buf == NULL)
@@ -2775,14 +2724,11 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
 		     *msg_statistics = NULL, *statistics = NULL,
 		     *yhstats;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	struct lnet_process_id *list = NULL;
 	void *data = NULL;
 	void *lpni_data;
 	bool exist = false;
-
-	snprintf(err_str, sizeof(err_str),
-		 "\"out of memory\"");
 
 	/* create struct cYAML root object */
 	root = cYAML_create_object(NULL, NULL);
@@ -3086,11 +3032,8 @@ int lustre_lnet_list_peer(int seq_no,
 	int i = 0;
 	int l_errno = 0;
 	struct cYAML *root = NULL, *list_root = NULL, *first_seq = NULL;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	struct lnet_process_id *list = NULL;
-
-	snprintf(err_str, sizeof(err_str),
-		 "\"out of memory\"");
 
 	memset(&peer_info, 0, sizeof(peer_info));
 
@@ -3255,9 +3198,7 @@ static int ioctl_show_global_values(int ioc, int seq_no, char *name,
 	struct lnet_ioctl_set_value data;
 	int rc;
 	int l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	LIBCFS_IOC_INIT_V2(data, sv_hdr);
 
@@ -3280,9 +3221,7 @@ int lustre_lnet_show_recov_intrv(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int intrv = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_recovery_interval", val,
 			     1, sizeof(val));
@@ -3305,9 +3244,7 @@ int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int sen = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_health_sensitivity", val,
 			     1, sizeof(val));
@@ -3330,9 +3267,7 @@ int lustre_lnet_show_rtr_sensitivity(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int sen = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "router_sensitivity_percentage", val,
 			     1, sizeof(val));
@@ -3353,14 +3288,12 @@ int lustre_lnet_show_lnd_timeout(int seq_no, struct cYAML **show_rc,
 				 struct cYAML **err_rc)
 {
 	char val[LNET_MAX_STR_LEN];
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	int lnd_to = -1;
 	int l_errno = 0;
 	int rc;
 	int fd;
 	glob_t path;
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
 	rc = cfs_get_param_paths(&path, "lnet_lnd_timeout");
 	if (rc < 0) {
@@ -3408,9 +3341,7 @@ int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int tto = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_transaction_timeout", val,
 			     1, sizeof(val));
@@ -3433,9 +3364,7 @@ int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int retry_count = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_retry_count", val,
 			     1, sizeof(val));
@@ -3480,9 +3409,7 @@ int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
 	struct lnet_ioctl_recovery_list nid_list;
 	struct cYAML *root = NULL, *nids = NULL;
 	int rc, i;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "failed to print recovery queue\n");
+	char err_str[LNET_MAX_STR_LEN] = "failed to print recovery queue\n";
 
 	LIBCFS_IOC_INIT_V2(nid_list, rlst_hdr);
 	nid_list.rlst_type = type;
@@ -3567,9 +3494,7 @@ int lustre_lnet_show_response_tracking(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int rsp_tracking = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_response_tracking", val,
 			     1, sizeof(val));
@@ -3592,9 +3517,7 @@ int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int max_intf = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_interfaces_max", val,
 			     1, sizeof(val));
@@ -3617,9 +3540,7 @@ int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int discovery = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN]  = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
 			     1, sizeof(val));
@@ -3647,9 +3568,7 @@ int lustre_lnet_show_drop_asym_route(int seq_no, struct cYAML **show_rc,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
 	int drop_asym_route = -1, l_errno = 0;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 
 	rc = read_sysfs_file(modparam_path, "lnet_drop_asym_route", val,
 			     1, sizeof(val));
@@ -3680,10 +3599,8 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 	struct lnet_counters *cntrs;
 	int rc;
 	int l_errno;
-	char err_str[LNET_MAX_STR_LEN];
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	struct cYAML *root = NULL, *stats = NULL;
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
 	LIBCFS_IOC_INIT_V2(data, st_hdr);
 
