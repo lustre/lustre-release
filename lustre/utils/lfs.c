@@ -939,17 +939,19 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 			if (check_file) {
 				rc = check_file(fd_src);
 				if (rc < 0)
-					break;
+					goto out;
 			}
 
 			rsize = read(fd_src, buf, buf_size);
 			if (rsize < 0) {
 				rc = -errno;
-				break;
+				goto out;
 			}
+
 			rpos += rsize;
 			bufoff = 0;
 		}
+
 		/* eof ? */
 		if (rsize == 0)
 			break;
@@ -963,11 +965,13 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 		bufoff += wsize;
 	}
 
-	if (rc == 0) {
-		rc = fsync(fd_dst);
-		if (rc < 0)
-			rc = -errno;
-	}
+	rc = fsync(fd_dst);
+	if (rc < 0)
+		rc = -errno;
+out:
+	/* Try to avoid page cache pollution after migration. */
+	(void)posix_fadvise(fd_src, 0, 0, POSIX_FADV_DONTNEED);
+	(void)posix_fadvise(fd_dst, 0, 0, POSIX_FADV_DONTNEED);
 
 	free(buf);
 	return rc;
@@ -1797,7 +1801,8 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		}
 	}
 	llapi_layout_comp_flags_set(m_layout, flags);
-	rc = migrate_open_files(name, 0, NULL, m_layout, &fd, &fdv);
+	rc = migrate_open_files(name, MIGRATION_NONDIRECT, NULL, m_layout, &fd,
+				&fdv);
 	if (rc < 0)
 		goto out;
 
