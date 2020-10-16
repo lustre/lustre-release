@@ -588,6 +588,7 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 		return -EPROTONOSUPPORT;
 	}
 
+#ifdef HAVE_FMR_POOL_API
 	/*
 	 * FMR does not support gaps but the tx has gaps then
 	 * we should make sure that the number of fragments we'll be sending
@@ -606,6 +607,7 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 			return -EFBIG;
 		}
 	}
+#endif
 
 	fps = net->ibn_fmr_ps[cpt];
 	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->tx_fmr);
@@ -624,11 +626,17 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 	 * for FastReg or FMR with no gaps we can accumulate all
 	 * the fragments in one FastReg or FMR fragment.
 	 */
-	if (((dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED) && !tx->tx_gaps) ||
+	if (
+#ifdef HAVE_FMR_POOL_API
+	    ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
+	     && !tx->tx_gaps) ||
+#endif
 	    (dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)) {
 		/* FMR requires zero based address */
+#ifdef HAVE_FMR_POOL_API
 		if (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
 			rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
+#endif
 		rd->rd_frags[0].rf_nob = nob;
 		rd->rd_nfrags = 1;
 	} else {
@@ -649,7 +657,11 @@ kiblnd_fmr_map_tx(struct kib_net *net, struct kib_tx *tx,
 static void
 kiblnd_unmap_tx(struct kib_tx *tx)
 {
-	if (tx->tx_fmr.fmr_pfmr || tx->tx_fmr.fmr_frd)
+	if (
+#ifdef HAVE_FMR_POOL_API
+		tx->tx_fmr.fmr_pfmr ||
+#endif
+		tx->tx_fmr.fmr_frd)
 		kiblnd_fmr_pool_unmap(&tx->tx_fmr, tx->tx_status);
 
 	if (tx->tx_nfrags != 0) {
@@ -676,8 +688,11 @@ kiblnd_find_rd_dma_mr(struct lnet_ni *ni, struct kib_rdma_desc *rd)
 	 * dead in the water and fail the operation.
 	 */
 	if (tunables->lnd_map_on_demand &&
-	    (net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED ||
-	     net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED))
+	    (net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED
+#ifdef HAVE_FMR_POOL_API
+	     || net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED
+#endif
+	))
 		return NULL;
 
 	/*

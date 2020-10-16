@@ -83,7 +83,9 @@
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
 #include <rdma/ib_verbs.h>
+#ifdef HAVE_FMR_POOL_API
 #include <rdma/ib_fmr_pool.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LND
 
@@ -179,7 +181,9 @@ struct kib_hca_dev;
 enum kib_dev_caps {
 	IBLND_DEV_CAPS_FASTREG_ENABLED		= BIT(0),
 	IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	= BIT(1),
+#ifdef HAVE_FMR_POOL_API
 	IBLND_DEV_CAPS_FMR_ENABLED		= BIT(2),
+#endif
 };
 
 struct kib_dev {
@@ -346,27 +350,35 @@ struct kib_fmr_pool {
 	struct list_head	fpo_list;	/* chain on pool list */
 	struct kib_hca_dev     *fpo_hdev;	/* device for this pool */
 	struct kib_fmr_poolset      *fpo_owner;	/* owner of this pool */
+#ifdef HAVE_FMR_POOL_API
 	union {
 		struct {
 			struct ib_fmr_pool *fpo_fmr_pool; /* IB FMR pool */
 		} fmr;
+#endif
 		struct { /* For fast registration */
 			struct list_head  fpo_pool_list;
 			int		  fpo_pool_size;
 		} fast_reg;
+#ifdef HAVE_FMR_POOL_API
 	};
+	bool			fpo_is_fmr; /* True if FMR pools allocated */
+#endif
 	time64_t		fpo_deadline;	/* deadline of this pool */
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
-	bool			fpo_is_fmr; /* True if FMR pools allocated */
 };
 
 struct kib_fmr {
 	struct kib_fmr_pool		*fmr_pool;	/* pool of FMR */
+#ifdef HAVE_FMR_POOL_API
 	struct ib_pool_fmr		*fmr_pfmr;	/* IB pool fmr */
+#endif /* HAVE_FMR_POOL_API */
 	struct kib_fast_reg_descriptor	*fmr_frd;
 	u32				 fmr_key;
 };
+
+#ifdef HAVE_FMR_POOL_API
 
 #ifdef HAVE_ORACLE_OFED_EXTENSIONS
 #define kib_fmr_pool_map(pool, pgs, n, iov) \
@@ -375,6 +387,8 @@ struct kib_fmr {
 #define kib_fmr_pool_map(pool, pgs, n, iov) \
 	ib_fmr_pool_map_phys((pool), (pgs), (n), (iov))
 #endif
+
+#endif /* HAVE_FMR_POOL_API */
 
 struct kib_net {
 	/* chain on struct kib_dev::ibd_nets */

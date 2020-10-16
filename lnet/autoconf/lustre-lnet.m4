@@ -109,8 +109,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 	for O2IBPATH in $O2IBPATHS; do
 		AS_IF([test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \)], [
+			   -f ${O2IBPATH}/include/rdma/ib_verbs.h \)], [
 			o2ib_found=true
 			break
 		])
@@ -187,13 +186,11 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			#include <rdma/rdma_cm.h>
 			#include <rdma/ib_cm.h>
 			#include <rdma/ib_verbs.h>
-			#include <rdma/ib_fmr_pool.h>
 		],[
 			struct rdma_cm_id      *cm_idi __attribute__ ((unused));
 			struct rdma_conn_param  conn_param __attribute__ ((unused));
 			struct ib_device_attr   device_attr __attribute__ ((unused));
 			struct ib_qp_attr       qp_attr __attribute__ ((unused));
-			struct ib_pool_fmr      pool_fmr __attribute__ ((unused));
 			enum   ib_cm_rej_reason rej_reason __attribute__ ((unused));
 			rdma_destroy_id(NULL);
 		],[
@@ -543,6 +540,18 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	],[
 		AC_DEFINE(HAVE_RDMA_REJECT_4ARGS, 1,
 			[rdma_reject has 4 arguments])
+	])
+
+	# The FMR pool API was removed in Linux 5.8,
+	# commit 4e373d5417ecbb4f438a8500f0379a2fc29c2643
+	LB_CHECK_COMPILE([if FMR pools API available],
+	ib_fmr, [
+		#include <rdma/ib_verbs.h>
+	],[
+		struct ib_fmr fmr = {};
+	],[
+		AC_DEFINE(HAVE_FMR_POOL_API, 1,
+			[FMR pool API is available])
 	])
 
 	EXTRA_CHECK_INCLUDE=""
