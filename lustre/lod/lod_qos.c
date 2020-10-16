@@ -370,8 +370,10 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 						   struct lod_device *d,
 						   __u32 ost_idx,
+						   bool can_block,
 						   struct thandle *th)
 {
+	struct dt_allocation_hint *ah = &lod_env_info(env)->lti_ah;
 	struct lod_tgt_desc *ost;
 	struct lu_object *o, *n;
 	struct lu_device *nd;
@@ -405,7 +407,8 @@ static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 
 	dt = container_of(n, struct dt_object, do_lu);
 
-	rc = lod_sub_declare_create(env, dt, NULL, NULL, NULL, th);
+	ah->dah_can_block = can_block;
+	rc = lod_sub_declare_create(env, dt, NULL, ah, NULL, th);
 	if (rc < 0) {
 		CDEBUG(D_OTHER, "can't declare creation on #%u: %d\n",
 		       ost_idx, rc);
@@ -683,7 +686,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	o = lod_qos_declare_object_on(env, lod, ost_idx, th);
+	o = lod_qos_declare_object_on(env, lod, ost_idx, true, th);
 	if (IS_ERR(o)) {
 		CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 		       ost_idx, (int) PTR_ERR(o));
@@ -1162,7 +1165,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
-		o = lod_qos_declare_object_on(env, m, ost_idx, th);
+		o = lod_qos_declare_object_on(env, m, ost_idx, true, th);
 		if (IS_ERR(o)) {
 			rc = PTR_ERR(o);
 			CDEBUG(D_OTHER,
@@ -1321,7 +1324,7 @@ repeat_find:
 		if (i && !tgt->ltd_statfs.os_fprecreated && !speed)
 			continue;
 
-		o = lod_qos_declare_object_on(env, m, ost_idx, th);
+		o = lod_qos_declare_object_on(env, m, ost_idx, true, th);
 		if (IS_ERR(o)) {
 			CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 			       ost_idx, (int) PTR_ERR(o));
@@ -1423,6 +1426,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	__u32 nfound, good_osts, stripe_count, stripe_count_min;
 	bool overstriped = false;
 	int stripes_per_ost = 1;
+	bool slow = false;
 	int rc = 0;
 	ENTRY;
 
@@ -1528,6 +1532,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 */
 		for (i = 0; i < osts->op_count; i++) {
 			__u32 idx = osts->op_array[i];
+			struct lod_tgt_desc *ost = OST_TGT(lod, idx);
 
 			if (lod_should_avoid_ost(lo, lag, idx))
 				continue;
@@ -1563,7 +1568,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 					continue;
 			}
 
-			o = lod_qos_declare_object_on(env, lod, idx, th);
+			o = lod_qos_declare_object_on(env, lod, idx, slow, th);
 			if (IS_ERR(o)) {
 				QOS_DEBUG("can't declare object on #%u: %d\n",
 					  idx, (int) PTR_ERR(o));
@@ -1578,6 +1583,13 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			nfound++;
 			rc = 0;
 			break;
+		}
+
+		if (rc && !slow && nfound < stripe_count) {
+			/* couldn't allocate using precreated objects
+			 * so try to wait for new precreations */
+			slow = true;
+			rc = 0;
 		}
 
 		if (rc) {

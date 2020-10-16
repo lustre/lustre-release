@@ -1908,6 +1908,57 @@ test_27o() {
 }
 run_test 27o "create file with all full OSTs (should error)"
 
+function create_and_checktime() {
+	local fname=$1
+	local loops=$2
+	local i
+
+	for ((i=0; i < $loops; i++)); do
+		local start=$SECONDS
+		multiop $fname-$i Oc
+		((SECONDS-start < TIMEOUT)) ||
+			error "creation took " $((SECONDS-$start)) && return 1
+	done
+}
+
+test_27oo() {
+	local mdts=$(comma_list $(mdts_nodes))
+
+	[ $MDS1_VERSION -lt $(version_code 2.13.57) ] &&
+		skip "Need MDS version at least 2.13.57"
+
+	local f0=$DIR/${tfile}-0
+	local f1=$DIR/${tfile}-1
+
+	wait_delete_completed
+
+	# refill precreated objects
+	$LFS setstripe -i0 -c1 $f0
+
+	saved=$(do_facet mds1 $LCTL get_param -n lov.*0000*.qos_threshold_rr)
+	# force QoS allocation policy
+	do_nodes $mdts $LCTL set_param lov.*.qos_threshold_rr=0%
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		lov.*.qos_threshold_rr=$saved" EXIT
+	sleep_maxage
+
+	# one OST is unavailable, but still have few objects preallocated
+	stop ost1
+	stack_trap "start ost1 $(ostdevname 1) $OST_MOUNT_OPTS; \
+		rm -rf $f1 $DIR/$tdir*" EXIT
+
+	for ((i=0; i < 7; i++)); do
+		mkdir $DIR/$tdir$i || error "can't create dir"
+		$LFS setstripe -c$((OSTCOUNT-1)) $DIR/$tdir$i ||
+			error "can't set striping"
+	done
+	for ((i=0; i < 7; i++)); do
+		create_and_checktime $DIR/$tdir$i/$tfile 100 &
+	done
+	wait
+}
+run_test 27oo "don't let few threads to reserve too many objects"
+
 test_27p() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

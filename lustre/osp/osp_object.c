@@ -1457,7 +1457,7 @@ static int osp_declare_create(const struct lu_env *env, struct dt_object *dt,
 	 * in declaration we need to reserve object so that we don't block
 	 * awaiting precreation RPC to complete
 	 */
-	rc = osp_precreate_reserve(env, d);
+	rc = osp_precreate_reserve(env, d, !hint || hint->dah_can_block);
 	/*
 	 * we also need to declare update to local "last used id" file for
 	 * recovery if object isn't used for a reason, we need to release

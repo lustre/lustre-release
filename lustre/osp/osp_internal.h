@@ -850,7 +850,8 @@ extern const struct dt_index_operations osp_md_index_ops;
 
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);
-int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d);
+int osp_precreate_reserve(const struct lu_env *env,
+			  struct osp_device *d, bool can_block);
 __u64 osp_precreate_get_id(struct osp_device *d);
 int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 			  struct lu_fid *fid);

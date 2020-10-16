@@ -391,6 +391,7 @@ struct dt_allocation_hint {
 	int			dah_eadata_len;
 	__u32			dah_mode;
 	int			dah_append_stripes;
+	bool			dah_can_block;
 	char			*dah_append_pool;
 };
 
