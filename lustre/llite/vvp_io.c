@@ -464,17 +464,17 @@ static int vvp_mmap_locks(const struct lu_env *env,
 		addr = (unsigned long)iov.iov_base;
 		count = iov.iov_len;
 
-                if (count == 0)
-                        continue;
+		if (count == 0)
+			continue;
 
 		count += addr & ~PAGE_MASK;
 		addr &= PAGE_MASK;
 
-                down_read(&mm->mmap_sem);
-                while((vma = our_vma(mm, addr, count)) != NULL) {
+		mmap_read_lock(mm);
+		while ((vma = our_vma(mm, addr, count)) != NULL) {
 			struct dentry *de = file_dentry(vma->vm_file);
 			struct inode *inode = de->d_inode;
-                        int flags = CEF_MUST;
+			int flags = CEF_MUST;
 
 			if (ll_file_nolock(vma->vm_file)) {
 				/*
@@ -484,24 +484,24 @@ static int vvp_mmap_locks(const struct lu_env *env,
 				break;
 			}
 
-                        /*
-                         * XXX: Required lock mode can be weakened: CIT_WRITE
-                         * io only ever reads user level buffer, and CIT_READ
-                         * only writes on it.
-                         */
-                        policy_from_vma(&policy, vma, addr, count);
-                        descr->cld_mode = vvp_mode_from_vma(vma);
-                        descr->cld_obj = ll_i2info(inode)->lli_clob;
-                        descr->cld_start = cl_index(descr->cld_obj,
-                                                    policy.l_extent.start);
-                        descr->cld_end = cl_index(descr->cld_obj,
-                                                  policy.l_extent.end);
-                        descr->cld_enq_flags = flags;
-                        result = cl_io_lock_alloc_add(env, io, descr);
+			/*
+			 * XXX: Required lock mode can be weakened: CIT_WRITE
+			 * io only ever reads user level buffer, and CIT_READ
+			 * only writes on it.
+			 */
+			policy_from_vma(&policy, vma, addr, count);
+			descr->cld_mode = vvp_mode_from_vma(vma);
+			descr->cld_obj = ll_i2info(inode)->lli_clob;
+			descr->cld_start = cl_index(descr->cld_obj,
+						    policy.l_extent.start);
+			descr->cld_end = cl_index(descr->cld_obj,
+						  policy.l_extent.end);
+			descr->cld_enq_flags = flags;
+			result = cl_io_lock_alloc_add(env, io, descr);
 
-                        CDEBUG(D_VFSTRACE, "lock: %d: [%lu, %lu]\n",
-                               descr->cld_mode, descr->cld_start,
-                               descr->cld_end);
+			CDEBUG(D_VFSTRACE, "lock: %d: [%lu, %lu]\n",
+			       descr->cld_mode, descr->cld_start,
+			       descr->cld_end);
 
 			if (result < 0)
 				break;
@@ -512,7 +512,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			count -= vma->vm_end - addr;
 			addr = vma->vm_end;
 		}
-		up_read(&mm->mmap_sem);
+		mmap_read_unlock(mm);
 		if (result < 0)
 			break;
 	}

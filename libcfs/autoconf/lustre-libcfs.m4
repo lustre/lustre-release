@@ -1312,6 +1312,24 @@ nr_unstable_nfs_exists, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_NR_UNSTABLE_NFS
 
+#
+# LIBCFS_HAVE_MMAP_LOCK
+#
+# kernel v5.8-rc1~83^2~24
+# mmap locking API: rename mmap_sem to mmap_lock
+#
+AC_DEFUN([LIBCFS_HAVE_MMAP_LOCK], [
+LB_CHECK_COMPILE([if mmap_lock API is available],
+mmap_write_lock, [
+	#include <linux/mm.h>
+],[
+	mmap_write_lock(NULL);
+],[
+	AC_DEFINE(HAVE_MMAP_LOCK, 1,
+		[mmap_lock API is available.])
+])
+]) # LIBCFS_HAVE_MMAP_LOCK
+
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [] )
 AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [])
 
@@ -1420,6 +1438,8 @@ LIBCFS_LOOKUP_USER_KEY
 LIBCFS_FORCE_SIG_WITH_TASK
 LIBCFS_CACHE_DETAIL_WRITERS
 LIBCFS_HAVE_NR_UNSTABLE_NFS
+# 5.8
+LIBCFS_HAVE_MMAP_LOCK
 ]) # LIBCFS_PROG_LINUX
 
 #

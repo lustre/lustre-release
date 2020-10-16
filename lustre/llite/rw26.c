@@ -228,10 +228,10 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 	if (*pages == NULL)
 		return -ENOMEM;
 
-	down_read(&current->mm->mmap_sem);
+	mmap_read_lock(current->mm);
 	result = get_user_pages(current, current->mm, addr, page_count,
 				rw == READ, 0, *pages, NULL);
-	up_read(&current->mm->mmap_sem);
+	mmap_read_unlock(current->mm);
 
 	if (unlikely(result != page_count)) {
 		ll_free_user_pages(*pages, page_count);

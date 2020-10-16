@@ -117,11 +117,11 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 	struct page *page;
 	void *old_buf = buf;
 
-	/* Avoid deadlocks on mmap_sem if called from sys_mmap_pgoff(),
-	 * which is already holding mmap_sem for writes.  If some other
+	/* Avoid deadlocks on mmap_lock if called from sys_mmap_pgoff(),
+	 * which is already holding mmap_lock for writes.  If some other
 	 * thread gets the write lock in the meantime, this thread will
 	 * block, but at least it won't deadlock on itself.  LU-1735 */
-	if (down_read_trylock(&mm->mmap_sem) == 0)
+	if (!mmap_read_trylock(mm))
 		return -EDEADLK;
 
 	/* ignore errors, just check how much was successfully transferred */
@@ -159,7 +159,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 		buf += bytes;
 		addr += bytes;
 	}
-	up_read(&mm->mmap_sem);
+	mmap_read_unlock(mm);
 
 	return buf - old_buf;
 }

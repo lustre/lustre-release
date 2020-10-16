@@ -54,21 +54,22 @@ void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
 struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
                                size_t count)
 {
-        struct vm_area_struct *vma, *ret = NULL;
-        ENTRY;
+	struct vm_area_struct *vma, *ret = NULL;
+	ENTRY;
 
-        /* mmap_sem must have been held by caller. */
-        LASSERT(!down_write_trylock(&mm->mmap_sem));
+	/* mmap_lock must have been held by caller. */
+	LASSERT(!mmap_write_trylock(mm));
 
-        for(vma = find_vma(mm, addr);
-            vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
-                if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
-                    vma->vm_flags & VM_SHARED) {
-                        ret = vma;
-                        break;
-                }
-        }
-        RETURN(ret);
+	for (vma = find_vma(mm, addr);
+	     vma != NULL && vma->vm_start < (addr + count);
+	     vma = vma->vm_next) {
+		if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
+		    vma->vm_flags & VM_SHARED) {
+			ret = vma;
+			break;
+		}
+	}
+	RETURN(ret);
 }
 
 /**

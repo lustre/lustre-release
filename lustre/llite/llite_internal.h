@@ -279,11 +279,11 @@ static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
  *
  * We must take lli_trunc_sem in read mode on entry in to various i/o paths
  * in Lustre, in order to exclude truncates.  Some of these paths then need to
- * take the mmap_sem, while still holding the trunc_sem.  The problem is that
- * page faults hold the mmap_sem when calling in to Lustre, and then must also
+ * take the mmap_lock, while still holding the trunc_sem.  The problem is that
+ * page faults hold the mmap_lock when calling in to Lustre, and then must also
  * take the trunc_sem to exclude truncate.
  *
- * This means the locking order for trunc_sem and mmap_sem is sometimes AB,
+ * This means the locking order for trunc_sem and mmap_lock is sometimes AB,
  * sometimes BA.  This is almost OK because in both cases, we take the trunc
  * sem for read, so it doesn't block.
  *
@@ -293,9 +293,9 @@ static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
  *
  * So we have, on our truncate sem, in order (where 'reader' and 'writer' refer
  * to the mode in which they take the semaphore):
- * reader (holding mmap_sem, needs truncate_sem)
+ * reader (holding mmap_lock, needs truncate_sem)
  * writer
- * reader (holding truncate sem, waiting for mmap_sem)
+ * reader (holding truncate sem, waiting for mmap_lock)
  *
  * And so the readers deadlock.
  *
@@ -305,7 +305,7 @@ static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
  * of the order they arrived in.
  *
  * down_read_nowait is only used in the page fault case, where we already hold
- * the mmap_sem.  This is because otherwise repeated read and write operations
+ * the mmap_lock.  This is because otherwise repeated read and write operations
  * (which take the truncate sem) could prevent a truncate from ever starting.
  * This could still happen with page faults, but without an even more complex
  * mechanism, this is unavoidable.
