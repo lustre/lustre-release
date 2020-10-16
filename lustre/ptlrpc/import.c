@@ -1643,12 +1643,16 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 			GOTO(out, rc);
 		ptlrpc_activate_import(imp, true);
 
-		CDEBUG_LIMIT(imp->imp_was_idle ?
-				imp->imp_idle_debug : D_CONSOLE,
-			     "%s: Connection restored to %s (at %s)\n",
-			     imp->imp_obd->obd_name,
-			     obd_uuid2str(&conn->c_remote_uuid),
-			     obd_import_nid2str(imp));
+		/* Reverse import are flagged with dlm_fake == 1.
+		 * They do not do recovery and connection are not "restored".
+		 */
+		if (!imp->imp_dlm_fake)
+			CDEBUG_LIMIT(imp->imp_was_idle ?
+					imp->imp_idle_debug : D_CONSOLE,
+				     "%s: Connection restored to %s (at %s)\n",
+				     imp->imp_obd->obd_name,
+				     obd_uuid2str(&conn->c_remote_uuid),
+				     obd_import_nid2str(imp));
 		spin_lock(&imp->imp_lock);
 		imp->imp_was_idle = 0;
 		spin_unlock(&imp->imp_lock);
