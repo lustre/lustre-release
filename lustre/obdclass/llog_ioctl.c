@@ -48,13 +48,15 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 	start = str;
 	if (start[0] == '[') {
 		struct lu_fid *fid = &logid->lgl_oi.oi_fid;
+		struct lu_fid sfid;
 		int num;
 
 		fid_zero(fid);
 		logid->lgl_ogen = 0;
 		num = sscanf(start + 1, SFID, RFID(fid));
 		CDEBUG(D_INFO, DFID":%x\n", PFID(fid), logid->lgl_ogen);
-		RETURN(num == 3 && fid_is_sane(fid) ? 0 : -EINVAL);
+		logid_to_fid(logid, &sfid);
+		RETURN(num == 3 && fid_is_sane(&sfid) ? 0 : -EINVAL);
 	}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)

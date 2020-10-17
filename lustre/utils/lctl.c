@@ -540,21 +540,21 @@ command_t cmdlist[] = {
 	 "usage: llog_catlist"},
 	{"llog_info", jt_llog_info, 0,
 	 "print log header information.\n"
-	 "usage: llog_info <logname|FID>\n"},
+	 "usage: llog_info <logname|LLOG_ID>\n"},
 	{"llog_print", jt_llog_print, 0,
 	 "print log content information.\n"
-	 "usage: llog_print <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "usage: llog_print <logname|LLOG_ID> [--start <index>] [--end <index>j]\n"
 	 "       print all records by default, or within given index range."},
 	{"llog_cancel", jt_llog_cancel, 0,
 	 "cancel one record in specified log.\n"
-	 "usage:llog_cancel <logname|FID> --log_idx <idx>\n"},
+	 "usage:llog_cancel <logname|LLOG_ID> --log_idx <idx>\n"},
 	{"llog_check", jt_llog_check, 0,
 	 "verify that log content is valid.\n"
-	 "usage: llog_check <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "usage: llog_check <logname|LLOG_ID> [--start <index>] [--end <index>j]\n"
 	 "       check all records from index 1 by default."},
 	{"llog_remove", jt_llog_remove, 0,
 	 "remove one log from catalog or plain log, erase it from disk.\n"
-	 "usage: llog_remove <logname|FID> [--log_id <id>]"},
+	 "usage: llog_remove <logname|LLOG_ID> [--log_id <id>]"},
 	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
 	/* some test scripts still use these */
 	/* saving for sanity 44a */

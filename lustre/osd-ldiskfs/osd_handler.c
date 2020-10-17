@@ -1127,7 +1127,13 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(obj->oo_inode == NULL);
-	LASSERTF(fid_is_sane(fid) || fid_is_idif(fid), DFID"\n", PFID(fid));
+
+	if (fid_is_sane(fid) == 0) {
+		CERROR("%s: invalid FID "DFID"\n", ldev->ld_obd->obd_name,
+		       PFID(fid));
+		dump_stack();
+		RETURN(-EINVAL);
+	}
 
 	dev = osd_dev(ldev);
 	scrub = &dev->od_scrub.os_scrub;
