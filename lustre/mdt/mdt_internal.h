@@ -747,7 +747,7 @@ static inline bool mdt_lmm_comp_overstriping(struct lov_mds_md *lmm)
 
 	comp_v1 = (struct lov_comp_md_v1 *)lmm;
 
-	for (i = 1; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
 		off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
 
