@@ -743,6 +743,32 @@ int server_disconnect_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(server_disconnect_export);
 
+static inline int target_check_recovery_timer(struct obd_device *target)
+{
+	ktime_t remaining;
+	s64 timeout;
+
+	if (!target->obd_recovering || target->obd_recovery_start == 0)
+		return 0;
+
+	remaining = hrtimer_expires_remaining(&target->obd_recovery_timer);
+	timeout = ktime_divns(remaining, NSEC_PER_SEC);
+	if (timeout > -30)
+		return 0;
+
+	/* the recovery timer should expire, but it isn't triggered,
+	 * it's better to abort the recovery of this target to speed up
+	 * the recovery of the whole cluster. */
+	spin_lock(&target->obd_dev_lock);
+	if (target->obd_recovering) {
+		CERROR("%s: Aborting recovery\n", target->obd_name);
+		target->obd_abort_recovery = 1;
+		wake_up(&target->obd_next_transno_waitq);
+	}
+	spin_unlock(&target->obd_dev_lock);
+	return 0;
+}
+
 /* --------------------------------------------------------------------------
  * from old lib/target.c
  * -------------------------------------------------------------------------- */
@@ -805,6 +831,8 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 		int size = 0;
 		int count = 0;
 		char *buf = NULL;
+
+		target_check_recovery_timer(target);
 
 		tdtd = class_exp2tgt(exp)->lut_tdtd;
 		if (tdtd && tdtd->tdtd_show_update_logs_retrievers)
@@ -1272,6 +1300,8 @@ no_export:
 			} else {
 				msg = "already passed deadline";
 				timeout = -left;
+
+				target_check_recovery_timer(target);
 			}
 
 			LCONSOLE_WARN("%s: Denying connection for new client %s (at %s), waiting for %d known clients (%d recovered, %d in progress, and %d evicted) %s %lld:%.02lld\n",
