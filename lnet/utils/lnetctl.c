@@ -1711,6 +1711,42 @@ static int jt_export(int argc, char **argv)
 		err_rc = NULL;
 	}
 
+	rc = lustre_lnet_show_retry_count(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_transaction_to(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_hsensitivity(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_recov_intrv(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_rtr_sensitivity(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_lnd_timeout(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		err_rc = NULL;
+	}
+
 	rc = lustre_lnet_show_response_tracking(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
