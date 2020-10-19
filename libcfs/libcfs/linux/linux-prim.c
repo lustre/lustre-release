@@ -113,7 +113,9 @@ int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 }
 EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
 
+#ifndef HAVE_XARRAY_SUPPORT
 struct kmem_cache (*radix_tree_node_cachep);
+#endif
 
 void __init cfs_arch_init(void)
 {
@@ -122,8 +124,10 @@ void __init cfs_arch_init(void)
 #endif
 	cfs_apply_workqueue_attrs_t =
 		(void *)kallsyms_lookup_name("apply_workqueue_attrs");
+#ifndef HAVE_XARRAY_SUPPORT
 	radix_tree_node_cachep =
 		(void *)kallsyms_lookup_name("radix_tree_node_cachep");
+#endif
 }
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
