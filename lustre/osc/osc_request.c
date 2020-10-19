@@ -1361,8 +1361,11 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 	int i;
 
 	for (i = 0; i < page_count; i++) {
-		if (!pga[i]->pg->mapping)
-			/* bounce pages are unmapped */
+		/* Bounce pages allocated by a call to
+		 * llcrypt_encrypt_pagecache_blocks() in osc_brw_prep_request()
+		 * are identified thanks to the PageChecked flag.
+		 */
+		if (PageChecked(pga[i]->pg))
 			llcrypt_finalize_bounce_page(&pga[i]->pg);
 		pga[i]->count -= pga[i]->bp_count_diff;
 		pga[i]->off += pga[i]->bp_off_diff;
@@ -1445,6 +1448,10 @@ retry_encrypt:
 				ptlrpc_request_free(req);
 				RETURN(rc);
 			}
+			/* Set PageChecked flag on bounce page for
+			 * disambiguation in osc_release_bounce_pages().
+			 */
+			SetPageChecked(data_page);
 			pg->pg = data_page;
 			/* there should be no gap in the middle of page array */
 			if (i == page_count - 1) {
