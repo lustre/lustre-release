@@ -3404,6 +3404,13 @@ test_47() {
 		error "link from encrypted to unencrypted dir should succeed"
 	rm -f $tmpfile
 
+	# check we are limited in the number of hard links
+	# we can create for encrypted files, to what can fit into LinkEA
+	for i in $(seq 1 160); do
+		ln $testfile2 ${testfile}_$i || break
+	done
+	[ $i -lt 160 ] || error "hard link $i should fail"
+
 	mrename $testfile2 $tmpfile &&
 		error "rename from encrypted to unencrypted dir should fail"
 	touch $tmpfile

@@ -830,7 +830,7 @@ static void lfsck_linkea_del_buf(struct linkea_data *ldata,
 
 		ldata->ld_lee = NULL;
 	} else {
-		linkea_del_buf(ldata, lname);
+		linkea_del_buf(ldata, lname, false);
 	}
 }
 
@@ -5883,7 +5883,7 @@ nodata:
 				GOTO(stop, rc);
 		}
 
-		rc = linkea_add_buf(&ldata, cname, pfid);
+		rc = linkea_add_buf(&ldata, cname, pfid, false);
 		if (rc == 0)
 			rc = lfsck_links_write(env, obj, &ldata, handle);
 		if (rc != 0)

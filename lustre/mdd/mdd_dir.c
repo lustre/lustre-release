@@ -1069,6 +1069,8 @@ static int __mdd_links_add(const struct lu_env *env,
 			   const struct lu_fid *pfid,
 			   int first, int check)
 {
+	/* cattr is set in mdd_link */
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	int rc;
 
 	if (ldata->ld_leh == NULL) {
@@ -1096,13 +1098,20 @@ static int __mdd_links_add(const struct lu_env *env,
 
 		*tfid = *pfid;
 		tfid->f_ver = ~0;
-		linkea_add_buf(ldata, lname, tfid);
+		linkea_add_buf(ldata, lname, tfid, false);
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE2))
-		linkea_add_buf(ldata, lname, pfid);
+		linkea_add_buf(ldata, lname, pfid, false);
 
-	return linkea_add_buf(ldata, lname, pfid);
+	/* For encrypted file, we want to limit number of hard links to what
+	 * linkEA can contain. So ask to return error in case of overflow.
+	 * Currently linkEA stores 4KiB of links, that is 14 NAME_MAX links,
+	 * or 119 16-byte names.
+	 */
+	return linkea_add_buf(ldata, lname, pfid,
+			      cattr->la_valid & LA_FLAGS &&
+			      cattr->la_flags & LUSTRE_ENCRYPT_FL);
 }
 
 static int __mdd_links_del(const struct lu_env *env,
@@ -1111,6 +1120,8 @@ static int __mdd_links_del(const struct lu_env *env,
 			   const struct lu_name *lname,
 			   const struct lu_fid *pfid)
 {
+	/* cattr is set in mdd_link */
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	int rc;
 
 	if (ldata->ld_leh == NULL) {
@@ -1123,7 +1134,9 @@ static int __mdd_links_del(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	linkea_del_buf(ldata, lname);
+	linkea_del_buf(ldata, lname,
+		       cattr->la_valid & LA_FLAGS &&
+		       cattr->la_flags & LUSTRE_ENCRYPT_FL);
 	return 0;
 }
 

@@ -61,8 +61,9 @@ void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
 		      const struct lu_fid *pfid);
 int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
-		   const struct lu_fid *pfid);
-void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname);
+		   const struct lu_fid *pfid, bool err_on_overflow);
+void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname,
+		    bool is_encrypted);
 int linkea_links_new(struct linkea_data *ldata, struct lu_buf *buf,
 		     const struct lu_name *cname, const struct lu_fid *pfid);
 int linkea_overflow_shrink(struct linkea_data *ldata);

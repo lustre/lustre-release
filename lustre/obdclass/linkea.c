@@ -130,7 +130,7 @@ EXPORT_SYMBOL(linkea_entry_unpack);
  * Add a record to the end of link ea buf
  **/
 int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
-		   const struct lu_fid *pfid)
+		   const struct lu_fid *pfid, bool err_on_overflow)
 {
 	struct link_ea_header *leh = ldata->ld_leh;
 	int reclen;
@@ -154,7 +154,7 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		CDEBUG(D_INODE, "No enough space to hold linkea entry '"
 		       DFID": %.*s' at %u\n", PFID(pfid), lname->ln_namelen,
 		       lname->ln_name, leh->leh_overflow_time);
-		return 0;
+		return err_on_overflow ? -EOVERFLOW : 0;
 	}
 
 	if (leh->leh_len + reclen > ldata->ld_buf->lb_len) {
@@ -169,14 +169,20 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 	ldata->ld_reclen = linkea_entry_pack(ldata->ld_lee, lname, pfid);
 	leh->leh_len += ldata->ld_reclen;
 	leh->leh_reccount++;
-	CDEBUG(D_INODE, "New link_ea name '"DFID":%.*s' is added\n",
-	       PFID(pfid), lname->ln_namelen, lname->ln_name);
+	if (err_on_overflow)
+		CDEBUG(D_INODE,
+		       "New link_ea name '"DFID":<encrypted (%d)>' is added\n",
+		       PFID(pfid), lname->ln_namelen);
+	else
+		CDEBUG(D_INODE, "New link_ea name '"DFID":%.*s' is added\n",
+		       PFID(pfid), lname->ln_namelen, lname->ln_name);
 	return 0;
 }
 EXPORT_SYMBOL(linkea_add_buf);
 
 /** Del the current record from the link ea buf */
-void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname)
+void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname,
+		    bool is_encrypted)
 {
 	LASSERT(ldata->ld_leh != NULL && ldata->ld_lee != NULL);
 	LASSERT(ldata->ld_leh->leh_reccount > 0);
@@ -186,8 +192,13 @@ void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname)
 	memmove(ldata->ld_lee, (char *)ldata->ld_lee + ldata->ld_reclen,
 		(char *)ldata->ld_leh + ldata->ld_leh->leh_len -
 		(char *)ldata->ld_lee);
-	CDEBUG(D_INODE, "Old link_ea name '%.*s' is removed\n",
-	       lname->ln_namelen, lname->ln_name);
+	if (is_encrypted)
+		CDEBUG(D_INODE,
+		       "Old link_ea name '<encrypted (%d)>' is removed\n",
+		       lname->ln_namelen);
+	else
+		CDEBUG(D_INODE, "Old link_ea name '%.*s' is removed\n",
+		       lname->ln_namelen, lname->ln_name);
 
 	if ((char *)ldata->ld_lee >= ((char *)ldata->ld_leh +
 				      ldata->ld_leh->leh_len))
@@ -202,7 +213,7 @@ int linkea_links_new(struct linkea_data *ldata, struct lu_buf *buf,
 
 	rc = linkea_data_new(ldata, buf);
 	if (!rc)
-		rc = linkea_add_buf(ldata, cname, pfid);
+		rc = linkea_add_buf(ldata, cname, pfid, false);
 
 	return rc;
 }
