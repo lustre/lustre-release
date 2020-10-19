@@ -3071,6 +3071,42 @@ $(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_time_hard)
 }
 run_test 145 "connect mdtlovs and process update logs after recovery expire"
 
+test_147() {
+	local obd_timeout=200
+	local old=$($LCTL get_param -n timeout)
+	local f=$DIR/$tfile
+	local connection_count
+
+	$LFS setstripe -i 0 -c 1 $f
+	stripe_index=$($LFS getstripe -i $f)
+	if [ $stripe_index -ne 0 ]; then
+	       $LFS getstripe $f
+	       error "$f: stripe_index $stripe_index != 0" && return
+	fi
+
+	$LCTL set_param timeout=$obd_timeout
+	stack_trap "$LCTL set_param timeout=$old && client_reconnect" EXIT
+
+	# OBD_FAIL_OST_CONNECT_NET2
+	# lost reply to connect request
+	do_facet ost1 lctl set_param fail_loc=0x00000225 timeout=$obd_timeout
+	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0 timeout=$old" EXIT
+
+
+	ost_evict_client
+	# force reconnect
+	$LFS df $MOUNT > /dev/null 2>&1 &
+	sleep $((obd_timeout * 3 / 4))
+
+	$LCTL get_param osc.$FSNAME-OST0000-osc-*.state
+	connection_count=$($LCTL get_param osc.$FSNAME-OST0000-osc-*.state |
+			   tac |  sed "/FULL/,$ d" | grep CONNECTING | wc -l)
+
+	echo $connection_count
+	(($connection_count >= 6)) || error "Client reconnected too slow"
+}
+run_test 147 "Check client reconnect"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
