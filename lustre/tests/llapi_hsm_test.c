@@ -201,7 +201,7 @@ int test5(void)
 	/* Hopefully there is nothing lingering */
 	for (i = 0; i < 1000; i++) {
 		rc = llapi_hsm_copytool_recv(ctdata, &hal, &msgsize);
-		ASSERTF(rc == -EWOULDBLOCK, "llapi_hsm_copytool_recv error: %s",
+		ASSERTF(rc == -EAGAIN, "llapi_hsm_copytool_recv error: %s",
 			strerror(-rc));
 	}
 
@@ -272,7 +272,7 @@ int test7(void)
 		rc, strerror(errno));
 
 	rc = llapi_hsm_copytool_recv(ctdata, &hal, &msgsize);
-	ASSERTF(rc == -EWOULDBLOCK, "llapi_hsm_copytool_recv error: %s",
+	ASSERTF(rc == -EAGAIN, "llapi_hsm_copytool_recv error: %s",
 		strerror(-rc));
 
 	fds[0].fd = fd;

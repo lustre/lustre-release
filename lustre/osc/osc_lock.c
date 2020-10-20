@@ -309,7 +309,7 @@ static int osc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 		/* Hide the error. */
 		rc = 0;
 	} else if (rc < 0 && oscl->ols_flags & LDLM_FL_NDELAY) {
-		rc = -EWOULDBLOCK;
+		rc = -EAGAIN;
 	}
 
 	if (oscl->ols_owner != NULL)

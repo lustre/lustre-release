@@ -385,7 +385,7 @@ int fld_client_rpc(struct obd_export *exp,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_FLD_QUERY_REQ && req->rq_no_delay)) {
 		/* the same error returned by ptlrpc_import_delay_req */
-		rc = -EWOULDBLOCK;
+		rc = -EAGAIN;
 		req->rq_status = rc;
 	} else {
 		obd_get_request_slot(&exp->exp_obd->u.cli);

@@ -125,7 +125,7 @@ with the register copytool. On error, a negative errno is returned.
 .UNINDENT
 .sp
 \fBllapi_hsm_copytool_recv\fP returns 0 when a message is available. If
-the copytool was set to non\-blocking operation, \-EWOULDBLOCK is
+the copytool was set to non\-blocking operation, \-EAGAIN is
 immediately returned if no message is available. On error, a negative
 errno is returned.
 .SH ERRORS
@@ -139,7 +139,7 @@ registered, ...
 .sp
 \fB\-EPROTO\fP Lustre protocol error.
 .sp
-\fB\-EWOULDBLOCK\fP No HSM message is available, and the copytool was set
+\fB\-EAGAIN\fP No HSM message is available, and the copytool was set
 to not block on receives.
 .SH SEE ALSO
 .sp

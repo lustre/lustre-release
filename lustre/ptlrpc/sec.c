@@ -790,7 +790,7 @@ again:
 	spin_unlock(&ctx->cc_lock);
 
 	if (timeout == 0)
-		RETURN(-EWOULDBLOCK);
+		RETURN(-EAGAIN);
 
 	/* Clear any flags that may be present from previous sends */
 	LASSERT(req->rq_receiving_reply == 0);

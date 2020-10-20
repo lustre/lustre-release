@@ -380,7 +380,7 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
  * \retval 1 if the lock is compatible
  * \retval 2 if \a req is a group lock and it is compatible and requires
  *           no further checking
- * \retval negative error, such as EWOULDBLOCK for group locks
+ * \retval negative error, such as EAGAIN for group locks
  */
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
@@ -434,7 +434,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         if (tree->lit_mode == LCK_GROUP) {
 				if (*flags & (LDLM_FL_BLOCK_NOWAIT |
 					      LDLM_FL_SPECULATIVE)) {
-                                        compat = -EWOULDBLOCK;
+					compat = -EAGAIN;
                                         goto destroylock;
                                 }
 
@@ -463,7 +463,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					if (!work_list) {
 						RETURN(0);
 					} else {
-						compat = -EWOULDBLOCK;
+						compat = -EAGAIN;
 						goto destroylock;
 					}
 				}
@@ -537,7 +537,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                          * immediately */
 					if (*flags & (LDLM_FL_BLOCK_NOWAIT
 						      | LDLM_FL_SPECULATIVE)) {
-                                                compat = -EWOULDBLOCK;
+						compat = -EAGAIN;
                                                 goto destroylock;
                                         }
                                         /* If this group lock is compatible with another
@@ -577,7 +577,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				 * range does not matter */
 				if (*flags & (LDLM_FL_BLOCK_NOWAIT
 					      | LDLM_FL_SPECULATIVE)) {
-                                        compat = -EWOULDBLOCK;
+					compat = -EAGAIN;
                                         goto destroylock;
                                 }
                         } else if (lock->l_policy_data.l_extent.end < req_start ||
@@ -594,7 +594,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 RETURN(0);
 
 			if (*flags & LDLM_FL_SPECULATIVE) {
-				compat = -EWOULDBLOCK;
+				compat = -EAGAIN;
 				goto destroylock;
 			}
 
@@ -760,9 +760,9 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 	*err = ELDLM_OK;
 
 	if (intention == LDLM_PROCESS_RESCAN) {
-		/* Careful observers will note that we don't handle -EWOULDBLOCK
+		/* Careful observers will note that we don't handle -EAGAIN
 		 * here, but it's ok for a non-obvious reason -- compat_queue
-		 * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT |
+		 * can only return -EAGAIN if (flags & BLOCK_NOWAIT |
 		 * SPECULATIVE). flags should always be zero here, and if that
 		 * ever stops being true, we want to find out. */
                 LASSERT(*flags == 0);

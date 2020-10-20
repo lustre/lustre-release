@@ -35,8 +35,8 @@
  * The two translation tables below must define a one-to-one mapping between
  * host and network errnos.
  *
- * EWOULDBLOCK is equal to EAGAIN on all architectures except for parisc, which
- * appears irrelevant.  Thus, existing references to EWOULDBLOCK are fine.
+ * EAGAIN is equal to EAGAIN on all architectures except for parisc, which
+ * appears irrelevant.  Thus, existing references to EAGAIN are fine.
  *
  * EDEADLOCK is equal to EDEADLK on x86 but not on sparc, at least.  A sparc
  * host has no context-free way to determine if a LUSTRE_EDEADLK represents an

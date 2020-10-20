@@ -407,7 +407,7 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 	 */
 	if (ios->cis_io->ci_type == CIT_READ && ios->cis_io->ci_ndelay &&
 	    !ios->cis_io->ci_tried_all_mirrors && osc_import_not_healthy(imp)) {
-		rc = -EWOULDBLOCK;
+		rc = -EAGAIN;
 	} else if (likely(!imp->imp_invalid)) {
 		atomic_inc(&osc->oo_nr_ios);
 		oio->oi_is_active = 1;

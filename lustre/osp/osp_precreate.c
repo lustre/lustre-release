@@ -1636,12 +1636,12 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 	 * XXX: decide how do we do here with resend
 	 * if we don't resend, then client may see wrong file size
 	 * if we do resend, then MDS thread can get stuck for quite long
-	 * and if we don't resend, then client will also get -EWOULDBLOCK !!
+	 * and if we don't resend, then client will also get -EAGAIN !!
 	 * (see LU-7975 and sanity/test_27F use cases)
 	 * but let's decide not to resend/delay this truncate request to OST
 	 * and allow Client to decide to resend, in a less agressive way from
 	 * after_reply(), by returning -EINPROGRESS instead of
-	 * -EAGAIN/-EWOULDBLOCK upon return from ptlrpc_queue_wait() at the
+	 * -EAGAIN/-EAGAIN upon return from ptlrpc_queue_wait() at the
 	 * end of this routine
 	 */
 	req->rq_no_resend = req->rq_no_delay = 1;
@@ -1671,14 +1671,14 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 
 	rc = ptlrpc_queue_wait(req);
 	if (rc) {
-		/* -EWOULDBLOCK/-EAGAIN means OST is unreachable at the moment
+		/* -EAGAIN/-EWOULDBLOCK means OST is unreachable at the moment
 		 * since we have decided not to resend/delay, but this could
 		 * lead to wrong size to be seen at Client side and even process
 		 * trying to open to exit/fail if not itself handling -EAGAIN.
 		 * So it should be better to return -EINPROGRESS instead and
 		 * leave the decision to resend at Client side in after_reply()
 		 */
-		if (rc == -EWOULDBLOCK) {
+		if (rc == -EAGAIN) {
 			rc = -EINPROGRESS;
 			CDEBUG(D_HA, "returning -EINPROGRESS instead of "
 			       "-EWOULDBLOCK/-EAGAIN to allow Client to "

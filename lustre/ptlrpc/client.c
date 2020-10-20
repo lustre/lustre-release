@@ -1291,7 +1291,7 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 		} else if (req->rq_no_delay &&
 			   imp->imp_generation != imp->imp_initiated_at) {
 			/* ignore nodelay for requests initiating connections */
-			*status = -EWOULDBLOCK;
+			*status = -EAGAIN;
 		} else if (req->rq_allow_replay &&
 			   (imp->imp_state == LUSTRE_IMP_REPLAY ||
 			    imp->imp_state == LUSTRE_IMP_REPLAY_LOCKS ||

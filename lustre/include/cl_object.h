@@ -1628,11 +1628,11 @@ struct cl_io_operations {
  * \ingroup cl_lock
  */
 enum cl_enq_flags {
-        /**
-         * instruct server to not block, if conflicting lock is found. Instead
-         * -EWOULDBLOCK is returned immediately.
-         */
-        CEF_NONBLOCK     = 0x00000001,
+	/**
+	 * instruct server to not block, if conflicting lock is found. Instead
+	 * -EAGAIN is returned immediately.
+	 */
+	CEF_NONBLOCK     = 0x00000001,
 	/**
 	 * Tell lower layers this is a glimpse request, translated to
 	 * LDLM_FL_HAS_INTENT at LDLM layer.

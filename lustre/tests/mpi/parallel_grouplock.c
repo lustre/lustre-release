@@ -616,9 +616,9 @@ void grouplock_test4(char *filename, int fd)
 
 /*
  * task0 attempts GR(gid=1) -- granted
- * task1 attempts PR on non-blocking fd -> should return -EWOULDBLOCK
- * task2 attempts PW on non-blocking fd -> should return -EWOULDBLOCK
- * task3 attempts GR(gid=2) on non-blocking fd -> should return -EWOULDBLOCK
+ * task1 attempts PR on non-blocking fd -> should return -EAGAIN
+ * task2 attempts PW on non-blocking fd -> should return -EAGAIN
+ * task3 attempts GR(gid=2) on non-blocking fd -> should return -EAGAIN
  */
 void grouplock_nonblock_test(char *filename, int fd)
 {
@@ -643,14 +643,14 @@ void grouplock_nonblock_test(char *filename, int fd)
 	switch (rank) {
 	case 1:
 		rc = read(fd, buf, sizeof(buf));
-		if ((rc != -1) || (errno != EWOULDBLOCK))
+		if ((rc != -1) || (errno != EAGAIN))
 			FAIL("PR lock succeeded while incompatible GROUP LOCK (gid=1) is still held\n");
 
 		MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
 		break;
 	case 2:
 		rc = write(fd, buf, sizeof(buf));
-		if ((rc != -1) || (errno != EWOULDBLOCK))
+		if ((rc != -1) || (errno != EAGAIN))
 			FAIL("PW lock succeeded while incompatible GROUP LOCK (gid=1) is still held\n");
 
 		MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
@@ -658,7 +658,7 @@ void grouplock_nonblock_test(char *filename, int fd)
 	case 3:
 		gid = 2;
 		rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
-		if ((rc != -1) || (errno != EWOULDBLOCK))
+		if ((rc != -1) || (errno != EAGAIN))
 			FAIL("GROUP_LOCK (gid=2) succeeded while incompatible GROUP LOCK (gid=1) is still held.\n");
 
 		MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);

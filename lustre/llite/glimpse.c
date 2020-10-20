@@ -211,7 +211,7 @@ int cl_glimpse_size0(struct inode *inode, int agl)
 		} else if (result == 0) {
 			result = cl_glimpse_lock(env, io, inode, io->ci_obj,
 						 agl);
-			if (!agl && result == -EWOULDBLOCK)
+			if (!agl && result == -EAGAIN)
 				io->ci_need_restart = 1;
 		}
 

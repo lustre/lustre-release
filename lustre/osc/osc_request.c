@@ -2410,7 +2410,7 @@ static int brw_interpret(const struct lu_env *env,
 	list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
 		list_del_init(&ext->oe_link);
 		osc_extent_finish(env, ext, 1,
-				  rc && req->rq_no_delay ? -EWOULDBLOCK : rc);
+				  rc && req->rq_no_delay ? -EAGAIN : rc);
 	}
 	LASSERT(list_empty(&aa->aa_exts));
 	LASSERT(list_empty(&aa->aa_oaps));
