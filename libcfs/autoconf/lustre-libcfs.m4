@@ -1290,6 +1290,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
 #
+# LIBCFS_VMALLOC_2ARGS
+#
+# kernel v5.8-rc1~201^2~19
+# mm: remove the pgprot argument to __vmalloc
+AC_DEFUN([LIBCFS_VMALLOC_2ARGS], [
+LB_CHECK_COMPILE([if __vmalloc has 2 args],
+vmalloc_2args, [
+	#include <linux/vmalloc.h>
+],[
+	__vmalloc(0, 0);
+],[
+	AC_DEFINE(HAVE_VMALLOC_2ARGS, 1,
+		[__vmalloc only takes 2 args.])
+])
+]) # LIBCFS_VMALLOC_2ARGS
+
+#
 # LIBCFS_HAVE_NR_UNSTABLE_NFS
 #
 # kernel v5.8-rc1~201^2~75
@@ -1461,6 +1478,7 @@ LIBCFS_HAVE_NR_UNSTABLE_NFS
 # 5.8
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
+LIBCFS_VMALLOC_2ARGS
 ]) # LIBCFS_PROG_LINUX
 
 #

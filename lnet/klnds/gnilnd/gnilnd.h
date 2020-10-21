@@ -997,12 +997,10 @@ static inline void *kgnilnd_vzalloc(int size)
 {
 	void *ret;
 	if (*kgnilnd_tunables.kgn_vzalloc_noretry)
-		ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_NORETRY |
-				      __GFP_ZERO,
-				PAGE_KERNEL);
+		ret = __ll_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO |
+				   __GFP_NORETRY);
 	else
-		ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO,
-				PAGE_KERNEL);
+		ret = __ll_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO);
 
 	LIBCFS_ALLOC_POST(ret, size);
 	return ret;

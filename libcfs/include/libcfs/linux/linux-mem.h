@@ -131,4 +131,10 @@ static inline void mmap_read_unlock(struct mm_struct *mm)
 }
 #endif
 
+#ifdef HAVE_VMALLOC_2ARGS
+#define __ll_vmalloc(size, flags) __vmalloc(size, flags)
+#else
+#define __ll_vmalloc(size, flags) __vmalloc(size, flags, PAGE_KERNEL)
+#endif
+
 #endif /* __LINUX_CFS_MEM_H__ */
