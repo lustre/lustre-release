@@ -10,7 +10,7 @@ linux_headers := $(wildcard @LINUX@/include/linux/ext4*.h)
 linux_new_headers := htree_lock.h
 trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
 
-backfs_sources := $(filter-out %.mod.c,$(wildcard @EXT4_SRC_DIR@/*.c))
+backfs_sources := $(filter-out %.mod.c %/inode-test.c,$(wildcard @EXT4_SRC_DIR@/*.c))
 
 new_sources := mmp.c htree_lock.c
 new_headers :=
