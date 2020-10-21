@@ -63,6 +63,11 @@ if [[ $(uname -m) = aarch64 ]]; then
 	ALWAYS_EXCEPT+=" 45	  317"
 fi
 
+# skip splice tests on kernels >= 4.18.0 until they are fixed
+if [ $LINUX_VERSION_CODE -ge $(version_code 4.18.0) ]; then
+	# bug number:	LU-14045
+	ALWAYS_EXCEPT+=" 426"
+fi
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
 	# bug number:	LU-12661
