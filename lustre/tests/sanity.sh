@@ -61,6 +61,8 @@ if [[ $(uname -m) = aarch64 ]]; then
 	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
 	# bug number:	 LU-11671 LU-11667
 	ALWAYS_EXCEPT+=" 45	  317"
+	# bug number:	 LU-14067 LU-14067
+	ALWAYS_EXCEPT+=" 400a	  400b"
 fi
 
 # skip splice tests on kernels >= 4.18.0 until they are fixed

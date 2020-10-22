@@ -12,6 +12,12 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_LNET_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+# skip the grant tests for ARM until they are fixed
+if [[ $(uname -m) = aarch64 ]]; then
+	# bug number:	 LU-14067
+	ALWAYS_EXCEPT+=" 300"
+fi
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
