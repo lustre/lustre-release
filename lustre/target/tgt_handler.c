@@ -1766,20 +1766,22 @@ static int tgt_brw_lock(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
-static void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
+static void tgt_brw_unlock(struct obd_export *exp, struct obd_ioobj *obj,
+			   struct niobuf_remote *niob,
 			   struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	ENTRY;
 
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
-	LASSERT((obj->ioo_bufcnt > 0 &&
-		 (niob[0].rnb_flags & OBD_BRW_SRVLOCK)) ==
+	LASSERT((!exp->exp_obd->obd_recovering && obj->ioo_bufcnt &&
+		 niob[0].rnb_flags & OBD_BRW_SRVLOCK) ==
 		lustre_handle_is_used(lh));
 
 	if (lustre_handle_is_used(lh))
 		tgt_extent_unlock(lh, mode);
 	EXIT;
 }
+
 static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 struct niobuf_local *local_nb, int npages,
 				 int opc, enum cksum_types cksum_type,
@@ -2386,7 +2388,7 @@ out_commitrw:
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_READ, exp, &repbody->oa, 1, ioo,
 			  remote_nb, npages, local_nb, rc);
 out_lock:
-	tgt_brw_unlock(ioo, remote_nb, &lockh, LCK_PR);
+	tgt_brw_unlock(exp, ioo, remote_nb, &lockh, LCK_PR);
 
 	if (desc && !CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))
 		ptlrpc_free_bulk(desc);
@@ -2745,7 +2747,7 @@ out_commitrw:
 		ptlrpc_lprocfs_brw(req, nob);
 	}
 out_lock:
-	tgt_brw_unlock(ioo, remote_nb, &lockh, LCK_PW);
+	tgt_brw_unlock(exp, ioo, remote_nb, &lockh, LCK_PW);
 	if (desc)
 		ptlrpc_free_bulk(desc);
 out:
