@@ -3,12 +3,14 @@
 lfs setquota \- set quota limits or grace time for users, groups or projects.
 .SH SYNOPSIS
 .B lfs setquota {\fB-u|--user|-g|--group|-p|--projid\fR} <\fIuname|uid|gname|gid|projid\fR>
+       [\fB--pool\fR <\fIpname\fR>]
        [\fB--block-softlimit|-b\fR <\fIblock-softlimit\fR>[kMGTPE]]
        [\fB--block-hardlimit|-B\fR <\fIblock-hardlimit\fR>[kMGTPE]]
        [\fB--inode-softlimit|-i\fR <\fIinode-softlimit\fR>[kMGTPE]]
        [\fB--inode-hardlimit|-I\fR <\fIinode-hardlimit\fR>[kMGTPE]] <\fIfilesystem\fR>
 .TP
 .B lfs setquota \fB-t\fR {\fB-u|-g|-p\fR}
+       [\fB--pool\fR <\fIpname\fR>]
        [\fB--block-grace|-b\fR <\fIblock-grace\fR>]
        [\fB--inode-grace|-i\fR <\fIinode-grace\fR>] <\fIfilesystem\fR>
 .TP
@@ -41,6 +43,9 @@ Set group quota for name \fIgname\fR or \fIgid\fR.
 .TP
 .B -p|--project <\fIprojid\fR>
 Set project quota for \fIprojid\fR.
+.TP
+.B --pool <\fIpname\fR>
+Set quota per OST pool \fIpname\fR.
 .TP
 .B -d|--default
 Set user/group/project to use the default quota limits.
@@ -92,6 +97,9 @@ Specify grace time for block quota.
 .TP
 .B -i|--inode-grace 'notify'|<\fIinode-grace\fR>
 Specify grace time for inode quota.
+.TP
+.B --pool <\fIpname\fR>
+Set grace time for user, group or project per OST pool \fIpname\fR.
 .PP
 .BR "lfs setquota " {\fB-U|--default-usr|-G|--default-grp|-P|--default-prj\fR}
 .TP
@@ -123,6 +131,12 @@ Set system default user quota: 1 GB block softlimit and 2 GB block hardlimit
 .B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 \
 days for inode quotas
+.TP
+.B $ lfs setquota -u ivan --pool flash_pool -B 1G /mnt/lustre
+Set hard block limit 1G for user 'ivan' per pool 'flash_pool'
+.TP
+.B $ lfs setquota -t -u --block-grace 1000 --pool flash_pool /mnt/lustre
+Set grace time 1000 seconds for block quotas per pool 'flash_pool'
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-quota(1)
