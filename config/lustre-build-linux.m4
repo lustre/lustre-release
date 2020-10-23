@@ -29,13 +29,22 @@ AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
 		[test -s build/conftest.i],
 		[lb_cv_module_target="M"], [
+	MODULE_TARGET="M"
+	makerule=""
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M58"], [
 			AC_MSG_ERROR([kernel module make failed; check config.log for details])
-	])])])
+	])])])])
 ])
 AS_IF([test -z "$lb_cv_module_target"],
 	[AC_MSG_ERROR([unknown external module build target])],
 [test "x$lb_cv_module_target" = "xM54"],
 	[makerule="$PWD/build"
+	lb_cv_module_target="M"],
+[test "x$lb_cv_module_target" = "xM58"],
+	[makerule=""
 	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM"],
 	[makerule="_module_$PWD/build"])
