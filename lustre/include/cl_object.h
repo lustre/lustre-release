@@ -1952,7 +1952,7 @@ struct cl_io {
 	/**
 	 * Ignore lockless and do normal locking for this io.
 	 */
-			     ci_ignore_lockless:1,
+			     ci_dio_lock:1,
 	/**
 	 * Set if we've tried all mirrors for this read IO, if it's not set,
 	 * the read IO will check to-be-read OSCs' status, and make fast-switch

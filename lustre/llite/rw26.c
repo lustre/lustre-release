@@ -679,12 +679,12 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 			GOTO(out, result = -EBUSY);
 
 		/**
-		 * Direct read can fall back to buffered read, but DIO is done
+		 * Direct write can fall back to buffered read, but DIO is done
 		 * with lockless i/o, and buffered requires LDLM locking, so
 		 * in this case we must restart without lockless.
 		 */
-		if (!io->ci_ignore_lockless) {
-			io->ci_ignore_lockless = 1;
+		if (!io->ci_dio_lock) {
+			io->ci_dio_lock = 1;
 			io->ci_need_restart = 1;
 			GOTO(out, result = -ENOLCK);
 		}

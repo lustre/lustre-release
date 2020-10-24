@@ -22370,6 +22370,13 @@ test_398d() { #  LU-13846
 }
 run_test 398d "run aiocp to verify block size > stripe size"
 
+test_398e() {
+	dd if=/dev/zero of=$DIR/$tfile bs=1234 count=1
+	touch $DIR/$tfile.new
+	dd if=$DIR/$tfile of=$DIR/$tfile.new bs=1M count=1 oflag=direct
+}
+run_test 398e "O_Direct open cleared by fcntl doesn't cause hang"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

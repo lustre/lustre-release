@@ -1714,9 +1714,9 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	 */
 	if (file->f_flags & O_DIRECT &&
 	    lcc && lcc->lcc_type == LCC_RW &&
-	    !io->ci_ignore_lockless) {
+	    !io->ci_dio_lock) {
 		unlock_page(vmpage);
-		io->ci_ignore_lockless = 1;
+		io->ci_dio_lock = 1;
 		io->ci_need_restart = 1;
 		RETURN(-ENOLCK);
 	}

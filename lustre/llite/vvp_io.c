@@ -568,11 +568,11 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 	if (vio->vui_fd) {
 		/* Group lock held means no lockless any more */
 		if (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)
-			io->ci_ignore_lockless = 1;
+			io->ci_dio_lock = 1;
 
 		if (ll_file_nolock(vio->vui_fd->fd_file) ||
-		    (vio->vui_fd->fd_flags & LL_FILE_LOCKLESS_IO &&
-		     !io->ci_ignore_lockless))
+		    (vio->vui_fd->fd_file->f_flags & O_DIRECT &&
+		     !io->ci_dio_lock))
 			ast_flags |= CEF_NEVER;
 	}
 

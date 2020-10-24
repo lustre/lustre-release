@@ -688,7 +688,6 @@ struct fsxattr {
 #define LL_FILE_GROUP_LOCKED    0x00000002
 #define LL_FILE_READAHEA        0x00000004
 #define LL_FILE_LOCKED_DIRECTIO 0x00000008 /* client-side locks with dio */
-#define LL_FILE_LOCKLESS_IO     0x00000010 /* server-side locks with cio */
 #define LL_FILE_FLOCK_WARNING   0x00000020 /* warned about disabled flock */
 
 #define LOV_USER_MAGIC_V1	0x0BD10BD0
