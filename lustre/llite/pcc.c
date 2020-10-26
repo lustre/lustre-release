@@ -1806,14 +1806,14 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 
 	ENTRY;
 
-	if (!pcc_file) {
+	if (!pcc_file)
 		RETURN(default_file_splice_read(in_file, ppos, pipe,
-		       count, flags));
-	}
+						count, flags));
 
 	pcc_io_init(inode, PIT_SPLICE_READ, &cached);
 	if (!cached)
-		RETURN(0);
+		RETURN(default_file_splice_read(in_file, ppos, pipe,
+						count, flags));
 
 	result = default_file_splice_read(pcc_file, ppos, pipe, count, flags);
 
