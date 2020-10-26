@@ -1287,8 +1287,7 @@ LB_CHECK_COMPILE([if kernel has clean_bdev_aliases],
 have_clean_bdev_aliases, [
 	#include <linux/buffer_head.h>
 ],[
-	struct block_device bdev;
-	clean_bdev_aliases(&bdev,1,1);
+	clean_bdev_aliases(NULL,1,1);
 ], [
 	AC_DEFINE(HAVE_CLEAN_BDEV_ALIASES, 1,
 		[kernel has clean_bdev_aliases])
