@@ -190,9 +190,6 @@ static ssize_t oal_read_entry(struct oal_circ_buf *ocb,
 
 	BUG_ON(CIRC_CNT(head, tail, oal->oal_log_size) < oal->oal_entry_size);
 
-	/* Read index before reading contents at that index. */
-	smp_read_barrier_depends();
-
 	/* Extract one entry from the buffer. */
 	rc = min_t(size_t, oal->oal_entry_size, entry_buf_size);
 	memcpy(entry_buf, &circ->buf[tail], rc);
