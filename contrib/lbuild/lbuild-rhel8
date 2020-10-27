@@ -108,15 +108,20 @@ find_linux_rpm-rhel8() {
 }
 
 kernel_srpm_location() {
+	local kdir
 
-    echo "http://vault.centos.org/8.1.1911/BaseOS/Source/SPackages/"
+	case $lnxrel in
+		*8_2) kdir="8.2.2004" ;;
+		*8_1) kdir="8.1.1911" ;;
+		*8_0) kdir="8.0.1905" ;;
+		*) ;;
+	esac
 
+	echo "http://vault.centos.org/$kdir/BaseOS/Source/SPackages/"
 }
 
 kernel_debuginfo_location() {
-
-	echo "http://debuginfo.centos.org/8/x86_64/"
-
+	echo "http://debuginfo.centos.org/8/x86_64/Packages/"
 }
 
 cleanup_rpmmacros() {
