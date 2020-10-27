@@ -101,7 +101,9 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	lustre-dkms_post-build.sh	\
 	LUSTRE-VERSION-GEN		\
 	LUSTRE-VERSION-FILE		\
-	undef.h
+	undef.h				\
+	autogen.sh			\
+	config/lustre-version.m4
 
 # contrib is a directory.  Putting a directory in EXTRA_DIST
 # recursively includes the entire directory contents in the
