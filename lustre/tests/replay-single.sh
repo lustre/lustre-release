@@ -12,8 +12,7 @@ ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 ALWAYS_EXCEPT+="               59"
 
 if [ "$mds1_FSTYPE" = zfs ]; then
-	# bug number for skipped test: LU-11388
-	ALWAYS_EXCEPT+="               131b"
+	ALWAYS_EXCEPT+=""
 fi
 
 if $SHARED_KEY; then
