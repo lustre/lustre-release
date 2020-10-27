@@ -276,7 +276,7 @@ static struct ctl_table kgnilnd_table[] = {
 		.mode     = 0644,
 		.proc_handler = &proc_peer_state,
 	},
-	{ 0 }
+	{ .procname = NULL }
 };
 
 static struct ctl_table kgnilnd_top_table[2] = {
@@ -287,7 +287,7 @@ static struct ctl_table kgnilnd_top_table[2] = {
 		.mode     = 0555,
 		.child    = kgnilnd_table
 	},
-	{ 0 }
+	{ .procname = NULL }
 };
 
 void kgnilnd_insert_sysctl(void)

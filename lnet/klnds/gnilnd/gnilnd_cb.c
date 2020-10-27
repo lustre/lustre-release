@@ -87,9 +87,16 @@ kgnilnd_schedule_device(kgn_device_t *dev)
 	}
 }
 
-void kgnilnd_schedule_device_timer(unsigned long arg)
+void kgnilnd_schedule_device_timer(cfs_timer_cb_arg_t data)
 {
-	kgn_device_t *dev = (kgn_device_t *) arg;
+	kgn_device_t *dev = cfs_from_timer(dev, data, gnd_map_timer);
+
+	kgnilnd_schedule_device(dev);
+}
+
+void kgnilnd_schedule_device_timer_rd(cfs_timer_cb_arg_t data)
+{
+	kgn_device_t *dev = cfs_from_timer(dev, data, gnd_rdmaq_timer);
 
 	kgnilnd_schedule_device(dev);
 }
@@ -869,7 +876,7 @@ kgnilnd_verify_rdma_cksum(kgn_tx_t *tx, __u16 rx_cksum, int put_len)
 				kgnilnd_dump_blob(D_BUFFS, "RDMA payload",
 						  tx->tx_buffer, nob);
 			}
-			/* fall through to dump log */
+			/* fallthrough */
 		case 1:
 			libcfs_debug_dumplog();
 			break;
@@ -953,9 +960,10 @@ kgnilnd_mem_del_map_list(kgn_device_t *dev, kgn_tx_t *tx)
 	    tx->tx_msg.gnm_type == GNILND_MSG_GET_REQ) {
 		atomic64_sub(bytes, &dev->gnd_rdmaq_bytes_out);
 		LASSERTF(atomic64_read(&dev->gnd_rdmaq_bytes_out) >= 0,
-			 "bytes_out negative! %ld\n", atomic64_read(&dev->gnd_rdmaq_bytes_out));
+			 "bytes_out negative! %lld\n",
+			 (s64)atomic64_read(&dev->gnd_rdmaq_bytes_out));
 		GNIDBG_TX(D_NETTRACE, tx, "rdma -- %d to %lld",
-			  bytes, atomic64_read(&dev->gnd_rdmaq_bytes_out));
+			  bytes, (s64)atomic64_read(&dev->gnd_rdmaq_bytes_out));
 	}
 
 	atomic_dec(&dev->gnd_n_mdd);
@@ -1654,7 +1662,8 @@ kgnilnd_queue_tx(kgn_conn_t *conn, kgn_tx_t *tx)
 			/* it was sent, break out of switch to avoid default case of queueing */
 			break;
 		}
-		/* needs to queue to try again, so fall through to default case */
+		/* needs to queue to try again, so... */
+		/* fall through... */
 	case GNILND_MSG_NOOP:
 		/* Just make sure this goes out first for this conn */
 		add_tail = 0;
@@ -2394,7 +2403,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 				case 2:
 					kgnilnd_dump_blob(D_BUFFS, "bad payload checksum",
 							  &rxmsg[1], rxmsg->gnm_payload_len);
-					/* fall through to dump */
+					/* fallthrough */
 				case 1:
 					libcfs_debug_dumplog();
 					break;
@@ -2908,7 +2917,7 @@ kgnilnd_update_reaper_timeout(long timeout)
 }
 
 static void
-kgnilnd_reaper_poke_with_stick(unsigned long arg)
+kgnilnd_reaper_poke_with_stick(cfs_timer_cb_arg_t arg)
 {
 	wake_up(&kgnilnd_data.kgn_reaper_waitq);
 }
@@ -2951,8 +2960,8 @@ kgnilnd_reaper(void *arg)
 			prepare_to_wait(&kgnilnd_data.kgn_reaper_waitq, &wait,
 					TASK_INTERRUPTIBLE);
 			spin_unlock(&kgnilnd_data.kgn_reaper_lock);
-			setup_timer(&timer, kgnilnd_reaper_poke_with_stick,
-				    next_check_time);
+			cfs_timer_setup(&timer, kgnilnd_reaper_poke_with_stick,
+					next_check_time, 0);
 			mod_timer(&timer, (long) jiffies + timeout);
 
 			/* check flag variables before committing */
@@ -3729,7 +3738,7 @@ kgnilnd_process_fmaq(kgn_conn_t *conn)
 	case GNILND_MSG_PUT_REQ:
 	case GNILND_MSG_GET_REQ_REV:
 		tx->tx_msg.gnm_u.putreq.gnprm_cookie = tx->tx_id.txe_cookie;
-
+		/* fallthrough */
 	case GNILND_MSG_PUT_ACK:
 	case GNILND_MSG_PUT_REQ_REV:
 	case GNILND_MSG_GET_ACK_REV:
@@ -3809,10 +3818,9 @@ kgnilnd_process_rdmaq(kgn_device_t *dev)
 			new_ok -= atomic64_read(&dev->gnd_rdmaq_bytes_out);
 			atomic64_set(&dev->gnd_rdmaq_bytes_ok, new_ok);
 
-			CDEBUG(D_NET, "resetting rdmaq bytes to %ld, deadline +%lu -> %lu, "
-				       "current out %ld\n",
-			       atomic64_read(&dev->gnd_rdmaq_bytes_ok), dead_bump, dev->gnd_rdmaq_deadline,
-			       atomic64_read(&dev->gnd_rdmaq_bytes_out));
+			CDEBUG(D_NET, "resetting rdmaq bytes to %lld, deadline +%lu -> %lu, current out %lld\n",
+			       (s64)atomic64_read(&dev->gnd_rdmaq_bytes_ok), dead_bump, dev->gnd_rdmaq_deadline,
+			       (s64)atomic64_read(&dev->gnd_rdmaq_bytes_out));
 		}
 		spin_unlock(&dev->gnd_rdmaq_lock);
 	}
@@ -4103,7 +4111,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	rx->grx_msg = msg;
 	rx->grx_conn = conn;
 	rx->grx_eager = 0;
-	rx->grx_received = current_kernel_time();
+	ktime_get_ts64(&rx->grx_received);
 
 	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_NET_LOOKUP)) {
 		rc = -ENONET;

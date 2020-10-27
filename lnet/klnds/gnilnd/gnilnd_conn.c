@@ -24,6 +24,7 @@
  */
 
 #include "gnilnd.h"
+#include <linux/swap.h>
 
 void
 kgnilnd_setup_smsg_attr(gni_smsg_attr_t *smsg_attr)
@@ -101,11 +102,11 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	 * to memory exhaustion during massive reconnects during a network
 	 * outage. Limit the amount of fma blocks to use by always keeping
 	 * a percent of pages free initially set to 25% of total memory. */
-	if (global_page_state(NR_FREE_PAGES) < kgnilnd_data.free_pages_limit) {
+	if (nr_free_pages() < kgnilnd_data.free_pages_limit) {
 		LCONSOLE_INFO("Exceeding free page limit of %ld. "
 			      "Free pages available %ld\n",
 			      kgnilnd_data.free_pages_limit,
-			      global_page_state(NR_FREE_PAGES));
+			      nr_free_pages());
 		return -ENOMEM;
 	}
 #endif
@@ -2428,13 +2429,17 @@ kgnilnd_repost_wc_dgrams(kgn_device_t *dev)
 	RETURN(did_something);
 }
 
-static void
-kgnilnd_dgram_poke_with_stick(unsigned long arg)
-{
-	int             dev_id = arg;
-	kgn_device_t    *dev = &kgnilnd_data.kgn_devices[dev_id];
+struct kgnilnd_dgram_timer {
+	struct timer_list timer;
+	kgn_device_t *dev;
+};
 
-	wake_up(&dev->gnd_dgram_waitq);
+static void
+kgnilnd_dgram_poke_with_stick(cfs_timer_cb_arg_t arg)
+{
+	struct kgnilnd_dgram_timer *t = cfs_from_timer(t, arg, timer);
+
+	wake_up(&t->dev->gnd_dgram_waitq);
 }
 
 /* use single thread for dgrams - should be sufficient for performance */
@@ -2446,8 +2451,8 @@ kgnilnd_dgram_mover(void *arg)
 	int                      rc, did_something;
 	unsigned long            next_purge_check = jiffies - 1;
 	unsigned long            timeout;
-	struct timer_list        timer;
-	unsigned long		 deadline = 0;
+	struct kgnilnd_dgram_timer timer;
+	unsigned long deadline = 0;
 	DEFINE_WAIT(wait);
 
 	snprintf(name, sizeof(name), "kgnilnd_dg_%02d", dev->gnd_id);
@@ -2515,8 +2520,11 @@ kgnilnd_dgram_mover(void *arg)
 
 		prepare_to_wait(&dev->gnd_dgram_waitq, &wait, TASK_INTERRUPTIBLE);
 
-		setup_timer(&timer, kgnilnd_dgram_poke_with_stick, dev->gnd_id);
-		mod_timer(&timer, (long) jiffies + timeout);
+		cfs_timer_setup(&timer.timer,
+				kgnilnd_dgram_poke_with_stick,
+				dev, 0);
+		timer.dev = dev;
+		mod_timer(&timer.timer, (long) jiffies + timeout);
 
 		/* last second chance for others to poke us */
 		did_something += xchg(&dev->gnd_dgram_ready, GNILND_DGRAM_IDLE);
@@ -2535,7 +2543,7 @@ kgnilnd_dgram_mover(void *arg)
 			deadline = jiffies + cfs_time_seconds(*kgnilnd_tunables.kgn_dgram_timeout);
 		}
 
-		del_singleshot_timer_sync(&timer);
+		del_singleshot_timer_sync(&timer.timer);
 		finish_wait(&dev->gnd_dgram_waitq, &wait);
 	}
 

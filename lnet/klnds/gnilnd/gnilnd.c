@@ -2053,9 +2053,10 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 	LASSERTF(atomic_read(&dev->gnd_n_mdd) == 0 &&
 		 atomic_read(&dev->gnd_n_mdd_held) == 0 &&
 		 atomic64_read(&dev->gnd_nbytes_map) == 0,
-		"%d SMSG mappings of %ld bytes still mapped or held %d\n",
+		 "%d SMSG mappings of %lld bytes still mapped or held %d\n",
 		 atomic_read(&dev->gnd_n_mdd),
-		 atomic64_read(&dev->gnd_nbytes_map), atomic_read(&dev->gnd_n_mdd_held));
+		 (u64)atomic64_read(&dev->gnd_nbytes_map),
+		 atomic_read(&dev->gnd_n_mdd_held));
 
 	LASSERT(list_empty(&dev->gnd_map_list));
 
@@ -2116,7 +2117,7 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 
 int kgnilnd_base_startup(void)
 {
-	struct timeval       tv;
+	struct timespec64    ts;
 	long long	     pkmem = libcfs_kmem_read();
 	int                  rc;
 	int                  i;
@@ -2146,10 +2147,10 @@ int kgnilnd_base_startup(void)
 	 * initialised with seconds + microseconds at startup time.  So we
 	 * rely on NOT creating connections more frequently on average than
 	 * 1MHz to ensure we don't use old connstamps when we reboot. */
-	do_gettimeofday(&tv);
+	ktime_get_ts64(&ts);
 	kgnilnd_data.kgn_connstamp =
 		 kgnilnd_data.kgn_peerstamp =
-			(((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+			(ts.tv_sec * 1000000) + (ts.tv_nsec / 100);
 
 	init_rwsem(&kgnilnd_data.kgn_net_rw_sem);
 
@@ -2194,12 +2195,14 @@ int kgnilnd_base_startup(void)
 		atomic_set(&dev->gnd_ndgrams, 0);
 		atomic_set(&dev->gnd_nwcdgrams, 0);
 		/* setup timer for RDMAQ processing */
-		setup_timer(&dev->gnd_rdmaq_timer, kgnilnd_schedule_device_timer,
-			    (unsigned long)dev);
+		cfs_timer_setup(&dev->gnd_rdmaq_timer,
+				kgnilnd_schedule_device_timer,
+				(unsigned long)dev, 0);
 
 		/* setup timer for mapping processing */
-		setup_timer(&dev->gnd_map_timer, kgnilnd_schedule_device_timer,
-			    (unsigned long)dev);
+		cfs_timer_setup(&dev->gnd_map_timer,
+				kgnilnd_schedule_device_timer,
+				(unsigned long)dev, 0);
 
 	}
 

@@ -207,7 +207,7 @@ static int
 kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 {
 	kgn_device_t           *dev;
-	struct timeval          now;
+	struct timespec64 now;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
 		seq_printf(sf, "kgnilnd is not initialized yet\n");
@@ -219,9 +219,9 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 
 	/* sampling is racy, but so is reading this file! */
 	smp_rmb();
-	do_gettimeofday(&now);
+	ktime_get_ts64(&now);
 
-	seq_printf(sf, "time: %lu.%lu\n"
+	seq_printf(sf, "time: %llu.%lu\n"
 		   "ntx: %d\n"
 		   "npeers: %d\n"
 		   "nconns: %d\n"
@@ -231,12 +231,12 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   "n_mdd: %d\n"
 		   "n_mdd_held: %d\n"
 		   "n_eager_allocs: %d\n"
-		   "GART map bytes: %ld\n"
+		   "GART map bytes: %lld\n"
 		   "TX queued maps: %d\n"
 		   "TX phys nmaps: %d\n"
 		   "TX phys bytes: %lu\n"
-		   "RDMAQ bytes_auth: %ld\n"
-		   "RDMAQ bytes_left: %ld\n"
+		   "RDMAQ bytes_auth: %lld\n"
+		   "RDMAQ bytes_left: %lld\n"
 		   "RDMAQ nstalls: %d\n"
 		   "dev mutex delay: %ld\n"
 		   "dev n_yield: %d\n"
@@ -245,20 +245,20 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   "SMSG fast_ok: %d\n"
 		   "SMSG fast_block: %d\n"
 		   "SMSG ntx: %u\n"
-		   "SMSG tx_bytes: %lu\n"
+		   "SMSG tx_bytes: %llu\n"
 		   "SMSG nrx: %u\n"
-		   "SMSG rx_bytes: %lu\n"
+		   "SMSG rx_bytes: %llu\n"
 		   "RDMA ntx: %u\n"
-		   "RDMA tx_bytes: %lu\n"
+		   "RDMA tx_bytes: %llu\n"
 		   "RDMA nrx: %u\n"
-		   "RDMA rx_bytes: %lu\n"
+		   "RDMA rx_bytes: %llu\n"
 		   "VMAP short: %d\n"
 		   "VMAP cksum: %d\n"
 		   "KMAP short: %d\n"
 		   "RDMA REV length: %d\n"
 		   "RDMA REV offset: %d\n"
 		   "RDMA REV copy: %d\n",
-		   now.tv_sec, now.tv_usec,
+		   (s64)now.tv_sec, now.tv_nsec,
 		   atomic_read(&kgnilnd_data.kgn_ntx),
 		   atomic_read(&kgnilnd_data.kgn_npeers),
 		   atomic_read(&kgnilnd_data.kgn_nconns),
@@ -267,11 +267,11 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   atomic_read(&dev->gnd_nfmablk),
 		   atomic_read(&dev->gnd_n_mdd), atomic_read(&dev->gnd_n_mdd_held),
 		   atomic_read(&kgnilnd_data.kgn_neager_allocs),
-		   atomic64_read(&dev->gnd_nbytes_map),
+		   (s64)atomic64_read(&dev->gnd_nbytes_map),
 		   atomic_read(&dev->gnd_nq_map),
 		   dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,
-		   atomic64_read(&dev->gnd_rdmaq_bytes_out),
-		   atomic64_read(&dev->gnd_rdmaq_bytes_ok),
+		   (s64)atomic64_read(&dev->gnd_rdmaq_bytes_out),
+		   (s64)atomic64_read(&dev->gnd_rdmaq_bytes_ok),
 		   atomic_read(&dev->gnd_rdmaq_nstalls),
 		   dev->gnd_mutex_delay,
 		   atomic_read(&dev->gnd_n_yield),
@@ -280,13 +280,13 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   atomic_read(&dev->gnd_fast_ok),
 		   atomic_read(&dev->gnd_fast_block),
 		   atomic_read(&dev->gnd_short_ntx),
-		   atomic64_read(&dev->gnd_short_txbytes),
+		   (s64)atomic64_read(&dev->gnd_short_txbytes),
 		   atomic_read(&dev->gnd_short_nrx),
-		   atomic64_read(&dev->gnd_short_rxbytes),
+		   (s64)atomic64_read(&dev->gnd_short_rxbytes),
 		   atomic_read(&dev->gnd_rdma_ntx),
-		   atomic64_read(&dev->gnd_rdma_txbytes),
+		   (s64)atomic64_read(&dev->gnd_rdma_txbytes),
 		   atomic_read(&dev->gnd_rdma_nrx),
-		   atomic64_read(&dev->gnd_rdma_rxbytes),
+		   (s64)atomic64_read(&dev->gnd_rdma_rxbytes),
 		   atomic_read(&kgnilnd_data.kgn_nvmap_short),
 		   atomic_read(&kgnilnd_data.kgn_nvmap_cksum),
 		   atomic_read(&kgnilnd_data.kgn_nkmap_short),
@@ -1007,7 +1007,7 @@ kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
 	 * 2012-12-11T16:06:16.966751 123@gni ...
 	 */
 	getnstimeofday(&now);
-	time_to_tm(now.tv_sec, 0, &ctm);
+	time64_to_tm(now.tv_sec, 0, &ctm);
 	jifs = jiffies;
 
 	write_lock(&kgnilnd_data.kgn_peer_conn_lock);

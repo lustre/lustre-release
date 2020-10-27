@@ -386,7 +386,7 @@ AC_DEFUN([LB_CC_NO_STRINGOP_TRUNCATION], [
 	AC_MSG_CHECKING([for -Wno-stringop-truncation support])
 
 	saved_flags="$CFLAGS"
-	CFLAGS="$CFLAGS -Wno-stringop-truncation"
+	CFLAGS="$CFLAGS -Werror -Wno-stringop-truncation"
 
 	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-stringop-truncation"

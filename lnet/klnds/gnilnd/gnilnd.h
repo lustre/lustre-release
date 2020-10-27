@@ -28,6 +28,8 @@
 #ifndef _GNILND_GNILND_H_
 #define _GNILND_GNILND_H_
 
+#define DEBUG_SUBSYSTEM S_LND
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -58,8 +60,6 @@
 #include <net/sock.h>
 #include <linux/in.h>
 #include <linux/nmi.h>
-
-#define DEBUG_SUBSYSTEM S_LND
 
 #include <lnet/lib-lnet.h>
 
@@ -808,7 +808,7 @@ typedef struct kgn_rx {
 	kgn_msg_t               *grx_msg;       /* message */
 	struct lnet_msg              *grx_lntmsg;    /* lnet msg for this rx (eager only) */
 	int                      grx_eager;     /* if eager, we copied msg to somewhere */
-	struct timespec          grx_received;  /* time this msg received */
+	struct timespec64        grx_received;  /* time this msg received */
 } kgn_rx_t;
 
 typedef struct kgn_data {
@@ -1821,7 +1821,8 @@ void kgnilnd_consume_rx(kgn_rx_t *rx);
 
 void kgnilnd_schedule_device(kgn_device_t *dev);
 void kgnilnd_device_callback(__u32 devid, __u64 arg);
-void kgnilnd_schedule_device_timer(unsigned long arg);
+void kgnilnd_schedule_device_timer(cfs_timer_cb_arg_t data);
+void kgnilnd_schedule_device_timer_rd(cfs_timer_cb_arg_t data);
 
 int kgnilnd_reaper(void *arg);
 int kgnilnd_scheduler(void *arg);
