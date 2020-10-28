@@ -3299,12 +3299,12 @@ test_90() {
 	wait_for_grace_delay
 	$LFS hsm_archive --filelist $FILELIST ||
 		error "cannot archive a file list"
-	wait_all_done 100
+	wait_all_done 200
 	$LFS hsm_release --filelist $FILELIST ||
 		error "cannot release a file list"
 	$LFS hsm_restore --filelist $FILELIST ||
 		error "cannot restore a file list"
-	wait_all_done 100
+	wait_all_done 200
 }
 run_test 90 "Archive/restore a file list"
 
