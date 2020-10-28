@@ -763,7 +763,7 @@ granted:
 		if (ldlm_is_test_lock(lock) || ldlm_is_flock_deadlock(lock))
 			mode = getlk->fl_type;
 		else
-			mode = lock->l_granted_mode;
+			mode = lock->l_req_mode;
 
 		if (ldlm_is_flock_deadlock(lock)) {
 			LDLM_DEBUG(lock, "client-side enqueue deadlock "
