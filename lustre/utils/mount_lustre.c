@@ -962,8 +962,15 @@ int main(int argc, char *const argv[])
 #endif /* HAVE_GSS */
 
 	if (!mop.mo_fake) {
-		char *fstype = client ? "lustre" : "lustre_tgt";
+		char *fstype;
 
+		/* Prefer filesystem type given on mount command line
+		 * so it appears correctly in the /proc/mounts output.
+		 */
+		if (strstr(argv[0], "mount.lustre_tgt"))
+			fstype = "lustre_tgt";
+		else
+			fstype = "lustre";
 		/*
 		 * flags and target get to lustre_get_sb(), but not
 		 * lustre_fill_super().  Lustre ignores the flags, but mount
@@ -973,22 +980,24 @@ int main(int argc, char *const argv[])
 			rc = mount(mop.mo_source, mop.mo_target, fstype,
 				   flags, (void *)options);
 			if (rc != 0) {
-				/* Older Lustre without 'lustre_tgt'.
-				 * Try 'lustre' instead
-				 */
-				if (rc == -ENODEV) {
-					fstype = "lustre";
-					i--;
-					continue;
-				}
-
 				if (verbose) {
 					fprintf(stderr,
-						"%s: mount %s at %s failed: %s retries left: %d\n",
-						basename(progname),
+						"%s: mount -t %s %s at %s failed: %s retries left: %d\n",
+						basename(progname), fstype,
 						mop.mo_usource, mop.mo_target,
 						strerror(errno),
 						mop.mo_retry - i);
+				}
+
+				/* Pre-2.13 Lustre without 'lustre_tgt' type?
+				 * Try with 'lustre' instead.  Eventually this
+				 * can be removed (e.g. 2.18 or whenever).
+				 */
+				if (rc == -ENODEV &&
+				    strcmp(fstype, "lustre_tgt") == 0) {
+					fstype = "lustre";
+					i--;
+					continue;
 				}
 
 				if (mop.mo_retry) {
