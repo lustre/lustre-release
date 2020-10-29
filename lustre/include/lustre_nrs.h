@@ -672,9 +672,11 @@ enum {
 };
 
 #include <lustre_nrs_fifo.h>
+#ifdef HAVE_SERVER_SUPPORT
 #include <lustre_nrs_tbf.h>
 #include <lustre_nrs_crr.h>
 #include <lustre_nrs_orr.h>
+#endif /* HAVE_SERVER_SUPPORT */
 #include <lustre_nrs_delay.h>
 
 /**
@@ -712,6 +714,7 @@ struct ptlrpc_nrs_request {
 		 * Fields for the FIFO policy
 		 */
 		struct nrs_fifo_req	fifo;
+#ifdef HAVE_SERVER_SUPPORT
 		/**
 		 * CRR-N request defintion
 		 */
@@ -722,6 +725,7 @@ struct ptlrpc_nrs_request {
 		 * TBF request definition
 		 */
 		struct nrs_tbf_req	tbf;
+#endif /* HAVE_SERVER_SUPPORT */
 		/**
 		 * Fields for the delay policy
 		 */
