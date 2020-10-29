@@ -35,7 +35,6 @@
  * Author: Liang Zhen <liang@whamcloud.com>
  * Author: Nikitas Angelinas <nikitas_angelinas@xyratex.com>
  */
-#ifdef HAVE_SERVER_SUPPORT
 
 /**
  * \addtogoup nrs
@@ -1969,5 +1968,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_trr = {
 /** @} ORR/TRR policy */
 
 /** @} nrs */
-
-#endif /* HAVE_SERVER_SUPPORT */

@@ -31,8 +31,6 @@
  *
  */
 
-#ifdef HAVE_SERVER_SUPPORT
-
 /**
  * \addtogoup nrs
  * @{
@@ -3702,5 +3700,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_tbf = {
 /** @} tbf */
 
 /** @} nrs */
-
-#endif /* HAVE_SERVER_SUPPORT */

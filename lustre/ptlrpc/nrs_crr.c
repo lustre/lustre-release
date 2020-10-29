@@ -38,7 +38,6 @@
  * \addtogoup nrs
  * @{
  */
-#ifdef HAVE_SERVER_SUPPORT
 
 #define DEBUG_SUBSYSTEM S_RPC
 #include <obd_support.h>
@@ -829,5 +828,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_crrn = {
 /** @} CRR-N policy */
 
 /** @} nrs */
-
-#endif /* HAVE_SERVER_SUPPORT */

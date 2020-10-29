@@ -45,13 +45,13 @@ extern int test_req_buffer_pressure;
 extern struct list_head ptlrpc_all_services;
 extern struct mutex ptlrpc_all_services_mutex;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_delay;
 
 #ifdef HAVE_SERVER_SUPPORT
 extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
-extern struct ptlrpc_nrs_pol_conf nrs_conf_delay;
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
