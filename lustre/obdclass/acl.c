@@ -41,10 +41,8 @@
 #include <lustre_acl.h>
 #include <lustre_eacl.h>
 #include <obd_support.h>
-#ifdef HAVE_SERVER_SUPPORT
-# include <lustre_idmap.h>
-# include <md_object.h>
-#endif /* HAVE_SERVER_SUPPORT */
+#include <lustre_idmap.h>
+#include <md_object.h>
 
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 

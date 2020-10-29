@@ -48,24 +48,6 @@
 # include <linux/fs.h>
 # include <lustre_compat.h>
 
-typedef struct {
-        __u16                   e_tag;
-        __u16                   e_perm;
-        __u32                   e_id;
-        __u32                   e_stat;
-} ext_acl_xattr_entry;
-
-typedef struct {
-        __u32                   a_count;
-        ext_acl_xattr_entry     a_entries[0];
-} ext_acl_xattr_header;
-
-#define CFS_ACL_XATTR_SIZE(count, prefix) \
-        (sizeof(prefix ## _header) + (count) * sizeof(prefix ## _entry))
-
-#define CFS_ACL_XATTR_COUNT(size, prefix) \
-        (((size) - sizeof(prefix ## _header)) / sizeof(prefix ## _entry))
-
 #ifdef HAVE_SERVER_SUPPORT
 struct lu_ucred;
 struct lu_attr;

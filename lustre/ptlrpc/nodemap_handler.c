@@ -31,7 +31,6 @@
 #include <uapi/linux/lnet/nidstr.h>
 #include <lustre_net.h>
 #include <lustre_acl.h>
-#include <lustre_eacl.h>
 #include <obd_class.h>
 #include "nodemap_internal.h"
 

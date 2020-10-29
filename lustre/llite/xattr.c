@@ -42,7 +42,6 @@
 
 #include <obd_support.h>
 #include <lustre_dlm.h>
-#include <lustre_eacl.h>
 #include <lustre_swab.h>
 
 #include "llite_internal.h"

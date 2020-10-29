@@ -34,7 +34,6 @@
 #define LLITE_INTERNAL_H
 #include <obd.h>
 #include <lustre_disk.h>  /* for s2sbi */
-#include <lustre_eacl.h>
 #include <lustre_linkea.h>
 
 /* for struct cl_lock_descr and struct cl_io */
