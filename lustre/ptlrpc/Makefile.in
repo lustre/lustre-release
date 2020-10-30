@@ -30,7 +30,7 @@ nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 nodemap_objs += nodemap_storage.o
 
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs) $(TARGET)barrier.o
-@SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs) $(nrs_server_objs)
+@SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs) $(nrs_server_objs) pack_server.o
 
 @GSS_TRUE@obj-m += gss/
 
@@ -54,6 +54,7 @@ barrier.c: @LUSTRE@/target/barrier.c
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
 EXTRA_DIST += $(nodemap_objs:.o=.c) nodemap_internal.h heap.h
 EXTRA_DIST += $(nrs_server_objs:.o=.c)
+EXTRA_DIST += pack_server.c
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm -I@LUSTRE@/target
 

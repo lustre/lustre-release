@@ -128,7 +128,14 @@ int req_capsule_server_grow(struct req_capsule *pill,
 			    __u32 newlen);
 int  req_layout_init(void);
 void req_layout_fini(void);
+#ifdef HAVE_SERVER_SUPPORT
 int req_check_sepol(struct req_capsule *pill);
+#else
+static inline int req_check_sepol(struct req_capsule *pill)
+{
+	return 0;
+}
+#endif
 
 extern struct req_format RQF_OBD_PING;
 extern struct req_format RQF_OBD_SET_INFO;
