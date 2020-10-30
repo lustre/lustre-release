@@ -271,7 +271,7 @@ static inline void badopt(const char *opt, char *type)
 static int erase_param(const char *const buf, const char *const param,
 		       bool withval)
 {
-	char	search[PARAM_MAX + 1] = "";
+	char	search[PARAM_MAX + 8] = "";
 	char	*buffer = (char *)buf;
 	bool	found = false;
 

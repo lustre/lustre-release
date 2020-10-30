@@ -36,7 +36,7 @@
 #include <stdbool.h>
 #include <linux/types.h>
 
-const char	*progname;
+extern const char	*progname;
 
 enum lfs_project_ops_t {
 	LFS_PROJECT_CHECK	= 0,

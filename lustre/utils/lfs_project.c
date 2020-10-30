@@ -51,9 +51,11 @@
 #include "lfs_project.h"
 #include <lustre/lustreapi.h>
 
+const char	*progname;
+
 struct lfs_project_item {
 	struct list_head lpi_list;
-	char lpi_pathname[PATH_MAX];
+	char *lpi_pathname;
 };
 
 static int
@@ -69,8 +71,12 @@ lfs_project_item_alloc(struct list_head *head, const char *pathname)
 		return -ENOMEM;
 	}
 
-	strncpy(lpi->lpi_pathname, pathname, sizeof(lpi->lpi_pathname) - 1);
-	list_add_tail(&lpi->lpi_list, head);
+	lpi->lpi_pathname = strdup(pathname);
+	if (!lpi->lpi_pathname) {
+		free(lpi);
+		return -ENOMEM;
+	} else
+		list_add_tail(&lpi->lpi_list, head);
 
 	return 0;
 }
@@ -334,6 +340,7 @@ static int lfs_project_iterate(const char *pathname,
 					     phc, func);
 		if (!ret && rc)
 			ret = rc;
+		free(lpi->lpi_pathname);
 		free(lpi);
 	}
 
