@@ -877,13 +877,15 @@ test_32a() { # bug 11270
 
 	log "checking cached lockless truncate"
 	$TRUNCATE $DIR1/$tfile 8000000
-	$CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
+	$CHECKSTAT -s 8000000 $DIR2/$tfile ||
+		error "cached truncate - wrong file size"
 	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "cached truncate isn't lockless"
 
 	log "checking not cached lockless truncate"
 	$TRUNCATE $DIR2/$tfile 5000000
-	$CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
+	$CHECKSTAT -s 5000000 $DIR1/$tfile ||
+		error "not cached truncate - wrong file size"
 	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "not cached truncate isn't lockless"
 
@@ -891,7 +893,8 @@ test_32a() { # bug 11270
 	enable_lockless_truncate 0
 	clear_stats $OSC.*.${OSC}_stats
 	$TRUNCATE $DIR2/$tfile 3000000
-	$CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
+	$CHECKSTAT -s 3000000 $DIR1/$tfile ||
+		error "lockless truncate disabled - wrong file size"
 	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -eq 0 ] ||
 		error "lockless truncate disabling failed"
 	rm -f $DIR1/$tfile
