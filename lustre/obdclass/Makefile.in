@@ -3,7 +3,7 @@ MODULES := obdclass llog_test
 default: all
 
 obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o llog_osd.o
-obdclass-all-objs += class_obd.o debug.o genops.o llog_ioctl.o
+obdclass-all-objs += class_obd.o genops.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lprocfs_counters.o
 obdclass-all-objs += lustre_handles.o lustre_peer.o local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o obd_sysfs.o

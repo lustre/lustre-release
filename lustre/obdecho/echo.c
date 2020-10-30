@@ -39,7 +39,6 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
-#include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 

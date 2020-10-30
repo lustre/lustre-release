@@ -47,7 +47,6 @@
 #include <linux/module.h>
 
 #include <llog_swab.h>
-#include <lustre_debug.h>
 #include <lustre_swab.h>
 #include <obd.h>
 #include <obd_support.h>

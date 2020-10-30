@@ -36,7 +36,6 @@
 #include <libcfs/libcfs.h>
 #include <linux/falloc.h>
 #include <lprocfs_status.h>
-#include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include <lustre_ha.h>
