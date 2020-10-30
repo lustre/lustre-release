@@ -73,7 +73,7 @@ svcgssd_run()
 		int save_err;
 
 		while (f == NULL) {
-			f = fopen(gss_rpc_channel_path, "rw");
+			f = fopen(gss_rpc_channel_path, "r+");
 			if (f == NULL) {
 				printerr(4, "failed to open %s: %s\n",
 					 gss_rpc_channel_path, strerror(errno));
