@@ -235,23 +235,6 @@ AS_IF([test "x$enable_gss_keyring" != xno], [
 ]) # LC_CONFIG_GSS_KEYRING
 
 #
-# LC_HAVE_CRED_TGCRED
-#
-# rhel7 struct cred has no member tgcred
-#
-AC_DEFUN([LC_HAVE_CRED_TGCRED], [
-LB_CHECK_COMPILE([if 'struct cred' has member 'tgcred'],
-cred_tgcred, [
-	#include <linux/cred.h>
-],[
-	((struct cred *)0)->tgcred = NULL;
-],[
-	AC_DEFINE(HAVE_CRED_TGCRED, 1,
-		[struct cred has member tgcred])
-])
-]) # LC_HAVE_CRED_TGCRED
-
-#
 # LC_KEY_TYPE_INSTANTIATE_2ARGS
 #
 # rhel7 key_type->instantiate takes 2 args (struct key, struct key_preparsed_payload)
@@ -296,7 +279,6 @@ AC_MSG_RESULT([$enable_gss])
 
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
-	LC_HAVE_CRED_TGCRED
 	LC_KEY_TYPE_INSTANTIATE_2ARGS
 	sunrpc_required=$enable_gss
 	LC_CONFIG_SUNRPC

@@ -60,6 +60,10 @@
 #include "gss_internal.h"
 #include "gss_api.h"
 
+#ifdef HAVE_GET_REQUEST_KEY_AUTH
+#include <keys/request_key_auth-type.h>
+#endif
+
 static struct ptlrpc_sec_policy gss_policy_keyring;
 static struct ptlrpc_ctx_ops gss_keyring_ctxops;
 static struct key_type gss_key_type;
@@ -81,45 +85,6 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 /****************************************
  * internal helpers                     *
  ****************************************/
-
-#define DUMP_PROCESS_KEYRINGS(tsk)					\
-{									\
-	CWARN("DUMP PK: %s[%u,%u/%u](<-%s[%u,%u/%u]): "			\
-	      "a %d, t %d, p %d, s %d, u %d, us %d, df %d\n",		\
-	      tsk->comm, tsk->pid, tsk->uid, tsk->fsuid,		\
-	      tsk->parent->comm, tsk->parent->pid,			\
-	      tsk->parent->uid, tsk->parent->fsuid,			\
-	      tsk->request_key_auth ?					\
-	      tsk->request_key_auth->serial : 0,			\
-	      key_cred(tsk)->thread_keyring ?				\
-	      key_cred(tsk)->thread_keyring->serial : 0,		\
-	      key_tgcred(tsk)->process_keyring ?			\
-	      key_tgcred(tsk)->process_keyring->serial : 0,		\
-	      key_tgcred(tsk)->session_keyring ?			\
-	      key_tgcred(tsk)->session_keyring->serial : 0,		\
-	      key_cred(tsk)->user->uid_keyring ?			\
-	      key_cred(tsk)->user->uid_keyring->serial : 0,		\
-	      key_cred(tsk)->user->session_keyring ?			\
-	      key_cred(tsk)->user->session_keyring->serial : 0,		\
-	      key_cred(tsk)->jit_keyring				\
-	     );								\
-}
-
-#define DUMP_KEY(key)                                                   \
-{                                                                       \
-	CWARN("DUMP KEY: %p(%d) ref %d u%u/g%u desc %s\n",              \
-	      key, key->serial, ll_read_key_usage(key),                 \
-	      key->uid, key->gid,                                       \
-	      key->description ? key->description : "n/a"               \
-	     );							        \
-}
-
-#define key_cred(tsk)   ((tsk)->cred)
-#ifdef HAVE_CRED_TGCRED
-#define key_tgcred(tsk) ((tsk)->cred->tgcred)
-#else
-#define key_tgcred(tsk) key_cred(tsk)
-#endif
 
 static inline void keyring_upcall_lock(struct gss_sec_keyring *gsec_kr)
 {
@@ -651,38 +616,100 @@ static inline int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
 }
 
 /*
+ * kernel 5.3: commit 0f44e4d976f96c6439da0d6717238efa4b91196e
+ * keys: Move the user and user-session keyrings to the user_namespace
+ *
+ * When lookup_user_key is available use the kernel API rather than directly
+ * accessing the uid_keyring and session_keyring via the current process
+ * credentials.
+ */
+#ifdef HAVE_LOOKUP_USER_KEY
+
+/* from Linux security/keys/internal.h: */
+#ifndef KEY_LOOKUP_FOR_UNLINK
+#define KEY_LOOKUP_FOR_UNLINK		0x04
+#endif
+
+static struct key *_user_key(key_serial_t id)
+{
+	key_ref_t ref;
+
+	might_sleep();
+	ref = lookup_user_key(id, KEY_LOOKUP_FOR_UNLINK, 0);
+	if (IS_ERR(ref))
+		return NULL;
+	return key_ref_to_ptr(ref);
+}
+
+static inline struct key *get_user_session_keyring(const struct cred *cred)
+{
+	return _user_key(KEY_SPEC_USER_SESSION_KEYRING);
+}
+
+static inline struct key *get_user_keyring(const struct cred *cred)
+{
+	return _user_key(KEY_SPEC_USER_KEYRING);
+}
+#else
+static inline struct key *get_user_session_keyring(const struct cred *cred)
+{
+	return key_get(cred->user->session_keyring);
+}
+
+static inline struct key *get_user_keyring(const struct cred *cred)
+{
+	return key_get(cred->user->uid_keyring);
+}
+#endif
+
+/*
  * unlink request key from it's ring, which is linked during request_key().
  * sadly, we have to 'guess' which keyring it's linked to.
  *
- * FIXME this code is fragile, depend on how request_key_link() is implemented.
+ * FIXME this code is fragile, it depends on how request_key() is implemented.
  */
 static void request_key_unlink(struct key *key)
 {
-	struct task_struct *tsk = current;
-	struct key *ring;
+	const struct cred *cred = current_cred();
+	struct key *ring = NULL;
 
-	switch (key_cred(tsk)->jit_keyring) {
+	switch (cred->jit_keyring) {
 	case KEY_REQKEY_DEFL_DEFAULT:
+	case KEY_REQKEY_DEFL_REQUESTOR_KEYRING:
+#ifdef HAVE_GET_REQUEST_KEY_AUTH
+		if (cred->request_key_auth) {
+			struct request_key_auth *rka;
+			struct key *authkey = cred->request_key_auth;
+
+			down_read(&authkey->sem);
+			rka = get_request_key_auth(authkey);
+			if (!test_bit(KEY_FLAG_REVOKED, &authkey->flags))
+				ring = key_get(rka->dest_keyring);
+			up_read(&authkey->sem);
+			if (ring)
+				break;
+		}
+#endif
+		/* fall through */
 	case KEY_REQKEY_DEFL_THREAD_KEYRING:
-		ring = key_get(key_cred(tsk)->thread_keyring);
+		ring = key_get(cred->thread_keyring);
 		if (ring)
 			break;
 	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
-		ring = key_get(key_tgcred(tsk)->process_keyring);
+		ring = key_get(cred->process_keyring);
 		if (ring)
 			break;
 	case KEY_REQKEY_DEFL_SESSION_KEYRING:
 		rcu_read_lock();
-		ring = key_get(rcu_dereference(key_tgcred(tsk)
-					       ->session_keyring));
+		ring = key_get(rcu_dereference(cred->session_keyring));
 		rcu_read_unlock();
 		if (ring)
 			break;
 	case KEY_REQKEY_DEFL_USER_SESSION_KEYRING:
-		ring = key_get(key_cred(tsk)->user->session_keyring);
+		ring = get_user_session_keyring(cred);
 		break;
 	case KEY_REQKEY_DEFL_USER_KEYRING:
-		ring = key_get(key_cred(tsk)->user->uid_keyring);
+		ring = get_user_keyring(cred);
 		break;
 	case KEY_REQKEY_DEFL_GROUP_KEYRING:
 	default:
@@ -1308,15 +1335,15 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
          * the session keyring is created upon upcall, and don't change all
          * the way until upcall finished, so rcu lock is not needed here.
          */
-	LASSERT(key_tgcred(current)->session_keyring);
+	LASSERT(current_cred()->session_keyring);
 
 	lockdep_off();
-	rc = key_link(key_tgcred(current)->session_keyring, key);
+	rc = key_link(current_cred()->session_keyring, key);
 	lockdep_on();
 	if (unlikely(rc)) {
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
 		       key->serial,
-		       key_tgcred(current)->session_keyring->serial, rc);
+		       current_cred()->session_keyring->serial, rc);
 		RETURN(rc);
 	}
 

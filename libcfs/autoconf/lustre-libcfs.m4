@@ -1140,6 +1140,58 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_IOV_ITER_TYPE
 
 #
+# LIBCFS_GET_REQUEST_KEY_AUTH
+#
+# kernel 5.0 commit 822ad64d7e46a8e2c8b8a796738d7b657cbb146d
+# keys: Fix dependency loop between construction record and auth key
+#
+# Added <keys/request_key_auth-type.h> and get_request_key_auth()
+# which was propagated to stable
+#
+AC_DEFUN([LIBCFS_GET_REQUEST_KEY_AUTH], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if get_request_key_auth() is available],
+get_request_key_auth_exported, [
+	#include <linux/key.h>
+	#include <linux/keyctl.h>
+	#include <keys/request_key_auth-type.h>
+],[
+	struct key *ring;
+	const struct key *key = NULL;
+	struct request_key_auth *rka = get_request_key_auth(key);
+
+	ring = key_get(rka->dest_keyring);
+],[
+	AC_DEFINE(HAVE_GET_REQUEST_KEY_AUTH, 1,
+		[get_request_key_auth() is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_GET_REQUEST_KEY_AUTH
+
+#
+# LIBCFS_LOOKUP_USER_KEY
+#
+# kernel 5.3 commit 3cf5d076fb4d48979f382bc9452765bf8b79e740
+# signal: Remove task parameter from force_sig
+#
+AC_DEFUN([LIBCFS_LOOKUP_USER_KEY], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if lookup_user_key() is available],
+lookup_user_key_exported, [
+	#include <linux/key.h>
+	#include <linux/keyctl.h>
+],[
+	lookup_user_key(KEY_SPEC_USER_KEYRING, 0, 0);
+],[
+	AC_DEFINE(HAVE_LOOKUP_USER_KEY, 1,
+		[lookup_user_key() is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_LOOKUP_USER_KEY
+
+#
 # LIBCFS_CACHE_DETAIL_WRITERS
 #
 # kernel v5.3-rc2-1-g64a38e840ce5
@@ -1270,7 +1322,10 @@ LIBCFS_WAIT_VAR_EVENT
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
 # 4.20
 LIBCFS_HAVE_IOV_ITER_TYPE
+# 5.0
+LIBCFS_GET_REQUEST_KEY_AUTH
 # 5.3
+LIBCFS_LOOKUP_USER_KEY
 LIBCFS_CACHE_DETAIL_WRITERS
 ]) # LIBCFS_PROG_LINUX
 
