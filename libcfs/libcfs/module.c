@@ -870,12 +870,6 @@ static int __init libcfs_init(void)
 		goto cleanup_cpu;
 	}
 
-	rc = cfs_wi_startup();
-	if (rc) {
-		CERROR("initialize workitem: error %d\n", rc);
-		goto cleanup_deregister;
-	}
-
 	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
 	if (!cfs_rehash_wq) {
 		rc = -ENOMEM;
@@ -887,7 +881,7 @@ static int __init libcfs_init(void)
 	rc = cfs_crypto_register();
 	if (rc) {
 		CERROR("cfs_crypto_regster: error %d\n", rc);
-		goto cleanup_wi;
+		goto cleanup_deregister;
 	}
 
 	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
@@ -904,8 +898,6 @@ static int __init libcfs_init(void)
 	return 0;
 cleanup_crypto:
 	cfs_crypto_unregister();
-cleanup_wi:
-	cfs_wi_shutdown();
 cleanup_deregister:
 	misc_deregister(&libcfs_dev);
 cleanup_cpu:
@@ -936,7 +928,6 @@ static void __exit libcfs_exit(void)
 	}
 
 	cfs_crypto_unregister();
-	cfs_wi_shutdown();
 
 	misc_deregister(&libcfs_dev);
 
