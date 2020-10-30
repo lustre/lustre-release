@@ -3488,7 +3488,7 @@ struct update_op {
 	struct lu_fid	uop_fid;
 	__u16		uop_type;
 	__u16		uop_param_count;
-	__u16		uop_params_off[0];
+	__u16		uop_params_off[];
 } __attribute__((packed));
 
 struct update_ops {

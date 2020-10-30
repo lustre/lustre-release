@@ -5657,8 +5657,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct update_op *)0)->uop_param_count));
 	LASSERTF((int)offsetof(struct update_op, uop_params_off) == 20, "found %lld\n",
 		 (long long)(int)offsetof(struct update_op, uop_params_off));
-	LASSERTF((int)sizeof(((struct update_op *)0)->uop_params_off) == 0, "found %lld\n",
-		 (long long)(int)sizeof(((struct update_op *)0)->uop_params_off));
 
 	/* Checks for struct update_ops */
 	LASSERTF((int)sizeof(struct update_ops) == 0, "found %lld\n",
