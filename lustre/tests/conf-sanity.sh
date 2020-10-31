@@ -6869,7 +6869,7 @@ check_uuid_on_ost() {
 
 check_uuid_on_mdt() {
 	local nid=$1
-	do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.'$nid'.uuid"
+	do_facet $SINGLEMDS "$LCTL get_param mdt.${mds1_svc}*.exports.'$nid'.uuid"
 }
 
 test_91() {
@@ -6913,6 +6913,7 @@ test_91() {
 	echo "evict $nid"
 	do_facet $SINGLEMDS \
 		"$LCTL set_param -n mdt.${mds1_svc}.evict_client nid:$nid"
+	sleep 1 # eviction above is async, give it some time to proceed
 
 	found=$(check_uuid_on_mdt $nid | grep $uuid)
 	[ -n "$found" ] && error "found $uuid $nid on MDT"
