@@ -23789,6 +23789,34 @@ test_430b() {
 }
 run_test 430b "lseek: SEEK_DATA/SEEK_HOLE special cases"
 
+test_430c() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+	local start
+
+	mkdir -p $DIR/$tdir
+	dd if=/dev/urandom of=$file bs=1k count=1 seek=5M
+
+	# cp version 8.33+ prefers lseek over fiemap
+	if [[ $(cp --version | head -n1 | sed "s/[^0-9]//g") -ge 833 ]]; then
+		start=$SECONDS
+		time cp $file /dev/null
+		(( SECONDS - start < 5 )) ||
+			error "cp: too long runtime $((SECONDS - start))"
+
+	fi
+	# tar version 1.29+ supports SEEK_HOLE/DATA
+	if [[ $(tar --version | head -n1 | sed "s/[^0-9]//g") -ge 129 ]]; then
+		start=$SECONDS
+		time tar cS $file - | cat > /dev/null
+		(( SECONDS - start < 5 )) ||
+			error "tar: too long runtime $((SECONDS - start))"
+	fi
+}
+run_test 430c "lseek: external tools check"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
