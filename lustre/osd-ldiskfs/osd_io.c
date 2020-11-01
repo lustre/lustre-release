@@ -2000,13 +2000,6 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
-	/*
-	 * Only mode == 0 (which is standard prealloc) is supported now.
-	 * Rest of mode options is not supported yet.
-	 */
-	if (mode & ~FALLOC_FL_KEEP_SIZE)
-		RETURN(-EOPNOTSUPP);
-
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
@@ -2046,10 +2039,8 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 	map.m_lblk = boff;
 	map.m_len = blen;
 
-	/*
-	 * Don't normalize the request if it can fit in one extent so
-	 * that it doesn't get unnecessarily split into multiple
-	 * extents.
+	/* Don't normalize the request if it can fit in one extent so
+	 * that it doesn't get unnecessarily split into multiple extents.
 	 */
 	if (blen <= EXT_UNWRITTEN_MAX_LEN)
 		flags |= LDISKFS_GET_BLOCKS_NO_NORMALIZE;

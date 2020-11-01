@@ -2587,9 +2587,9 @@ static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
 	return dt->do_body_ops->dbo_ladvise(env, dt, start, end, advice);
 }
 
-static inline int dt_declare_falloc(const struct lu_env *env,
-				    struct dt_object *dt, __u64 start,
-				    __u64 end, int mode, struct thandle *th)
+static inline int dt_declare_fallocate(const struct lu_env *env,
+				       struct dt_object *dt, __u64 start,
+				       __u64 end, int mode, struct thandle *th)
 {
 	LASSERT(dt);
 	if (!dt->do_body_ops)

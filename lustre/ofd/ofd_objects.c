@@ -757,8 +757,8 @@ out:
  * \retval		negative value on error
  */
 int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
-			__u64 start, __u64 end, int mode, struct lu_attr *la,
-			struct obdo *oa)
+			 __u64 start, __u64 end, int mode, struct lu_attr *la,
+			 struct obdo *oa)
 {
 	struct ofd_thread_info *info = ofd_info(env);
 	struct ofd_device *ofd = ofd_obj2dev(fo);
@@ -795,7 +795,7 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = dt_declare_falloc(env, dob, start, end, mode, th);
+	rc = dt_declare_fallocate(env, dob, start, end, mode, th);
 	if (rc)
 		GOTO(stop, rc);
 
