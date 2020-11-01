@@ -15174,8 +15174,7 @@ test_160l() {
 	compare_mtime_changelog $DIR/$tdir/$tfile
 
 	# Test CL_MTIME during close
-	dd if=/dev/urandom of=$DIR/$tdir/${tfile}_2 bs=1M count=64 ||
-		error "cannot create file $DIR/$tdir/${tfile}_2"
+	$MULTIOP $DIR/$tdir/${tfile}_2 O_2w4096c || error "multiop failed"
 	compare_mtime_changelog $DIR/$tdir/${tfile}_2
 }
 run_test 160l "Verify that MTIME changelog records contain the parent FID"
