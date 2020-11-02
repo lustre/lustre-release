@@ -230,15 +230,15 @@ static inline void __rsi_update(struct rsi *new, struct rsi *item)
 
 static void rsi_put(struct kref *ref)
 {
-        struct rsi *rsi = container_of(ref, struct rsi, h.ref);
+	struct rsi *rsi = container_of(ref, struct rsi, h.ref);
 
 #ifdef HAVE_CACHE_HEAD_HLIST
-	LASSERT(rsi->h.cache_list.next == NULL);
+	LASSERT(hlist_unhashed(&rsi->h.cache_list));
 #else
 	LASSERT(rsi->h.next == NULL);
 #endif
-        rsi_free(rsi);
-        OBD_FREE_PTR(rsi);
+	rsi_free(rsi);
+	OBD_FREE_PTR(rsi);
 }
 
 static int rsi_match(struct cache_head *a, struct cache_head *b)
@@ -473,15 +473,15 @@ static inline void __rsc_update(struct rsc *new, struct rsc *tmp)
 
 static void rsc_put(struct kref *ref)
 {
-        struct rsc *rsci = container_of(ref, struct rsc, h.ref);
+	struct rsc *rsci = container_of(ref, struct rsc, h.ref);
 
 #ifdef HAVE_CACHE_HEAD_HLIST
-	LASSERT(rsci->h.cache_list.next == NULL);
+	LASSERT(hlist_unhashed(&rsci->h.cache_list));
 #else
-        LASSERT(rsci->h.next == NULL);
+	LASSERT(rsci->h.next == NULL);
 #endif
-        rsc_free(rsci);
-        OBD_FREE_PTR(rsci);
+	rsc_free(rsci);
+	OBD_FREE_PTR(rsci);
 }
 
 static int rsc_match(struct cache_head *a, struct cache_head *b)
