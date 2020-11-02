@@ -1118,15 +1118,13 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		      unsigned int flags, bool foreign);
-struct posix_acl *ll_get_acl(struct inode *inode, int type);
-#ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+struct posix_acl *ll_get_acl(struct inode *inode, int type);
 int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type);
 #else  /* !CONFIG_LUSTRE_FS_POSIX_ACL */
+#define ll_get_acl NULL
 #define ll_set_acl NULL
 #endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
-
-#endif
 
 static inline int ll_xflags_to_inode_flags(int xflags)
 {
