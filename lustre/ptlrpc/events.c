@@ -56,6 +56,12 @@ void request_out_callback(struct lnet_event *ev)
 	LASSERT(ev->type == LNET_EVENT_SEND || ev->type == LNET_EVENT_UNLINK);
 	LASSERT(ev->unlinked);
 
+	if (unlikely(lustre_msg_get_opc(req->rq_reqmsg) == cfs_fail_val &&
+		     CFS_FAIL_CHECK_RESET(OBD_FAIL_NET_ERROR_RPC,
+					  OBD_FAIL_OSP_PRECREATE_PAUSE |
+					  CFS_FAIL_ONCE)))
+		ev->status = -ECONNABORTED;
+
 	DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
 
 	/* Do not update imp_next_ping for connection request */

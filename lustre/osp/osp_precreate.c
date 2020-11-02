@@ -675,6 +675,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	if (rc) {
 		CERROR("%s: can't precreate: rc = %d\n", d->opd_obd->obd_name,
 		       rc);
+		if (req->rq_net_err)
+			/* have osp_precreate_reserve() to wait for repeat */
+			rc = -ENOTCONN;
 		GOTO(out_req, rc);
 	}
 	LASSERT(req->rq_transno == 0);
@@ -721,6 +724,9 @@ out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
 	wake_up(&d->opd_pre_user_waitq);
+
+	/* pause to let osp_precreate_reserve to go first */
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSP_PRECREATE_PAUSE, 2);
 
 	ptlrpc_req_finished(req);
 	RETURN(rc);
