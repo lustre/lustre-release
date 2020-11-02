@@ -250,12 +250,12 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 
 /* iov_iter_alignment() is introduced in 3.16 similar to HAVE_DIO_ITER */
 #if defined(HAVE_DIO_ITER)
-static unsigned long ll_iov_iter_alignment(const struct iov_iter *i)
+static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
 {
 	return iov_iter_alignment(i);
 }
 #else /* copied from alignment_iovec() */
-static unsigned long ll_iov_iter_alignment(const struct iov_iter *i)
+static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
 {
 	const struct iovec *iov = i->iov;
 	unsigned long res;
@@ -281,6 +281,35 @@ static unsigned long ll_iov_iter_alignment(const struct iov_iter *i)
 	return res;
 }
 #endif
+
+/*
+ * Lustre could relax a bit for alignment, io count is not
+ * necessary page alignment.
+ */
+static unsigned long ll_iov_iter_alignment(struct iov_iter *i)
+{
+	size_t orig_size = i->count;
+	size_t count = orig_size & ~PAGE_MASK;
+	unsigned long res;
+
+	if (!count)
+		return iov_iter_alignment_vfs(i);
+
+	if (orig_size > PAGE_SIZE) {
+		iov_iter_truncate(i, orig_size - count);
+		res = iov_iter_alignment_vfs(i);
+		iov_iter_reexpand(i, orig_size);
+
+		return res;
+	}
+
+	res = iov_iter_alignment_vfs(i);
+	/* start address is page aligned */
+	if ((res & ~PAGE_MASK) == orig_size)
+		return PAGE_SIZE;
+
+	return res;
+}
 
 /** direct IO pages */
 struct ll_dio_pages {
@@ -433,8 +462,8 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		return 0;
 
 	/* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
-	if ((file_offset & ~PAGE_MASK) || (count & ~PAGE_MASK))
-		return -EINVAL;
+	if (file_offset & ~PAGE_MASK)
+		RETURN(-EINVAL);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), size=%zd (max %lu), "
 	       "offset=%lld=%llx, pages %zd (max %lu)\n",
@@ -444,7 +473,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	/* Check that all user buffers are aligned as well */
 	if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
 	lcc = ll_cl_find(file);
 	if (lcc == NULL)
