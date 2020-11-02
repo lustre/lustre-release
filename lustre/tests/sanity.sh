@@ -12875,6 +12875,7 @@ test_123a_base() { # was test 123, statahead(bug 11401)
 		log "testing UP system. Performance may be lower than expected."
 		SLOWOK=1
 	fi
+	running_in_vm && SLOWOK=1
 
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
