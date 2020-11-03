@@ -5600,11 +5600,9 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 		repaired = true;
 	}
 
-	if (unlikely(fid_is_zero(&lnr->lnr_fid))) {
-		if (strcmp(lnr->lnr_name, dotdot) != 0)
-			LBUG();
-		else
-			rc = lfsck_namespace_trace_update(env, com, pfid,
+	if (unlikely(fid_is_zero(&lnr->lnr_fid) &&
+		     strcmp(lnr->lnr_name, dotdot) == 0)) {
+		rc = lfsck_namespace_trace_update(env, com, pfid,
 						LNTF_CHECK_PARENT, true);
 
 		GOTO(out, rc);
