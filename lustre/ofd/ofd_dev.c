@@ -203,6 +203,8 @@ static int ofd_stack_init(const struct lu_env *env,
 	d = m->ofd_osd_exp->exp_obd->obd_lu_dev;
 	LASSERT(d);
 	m->ofd_osd = lu2dt_dev(d);
+	if (m->ofd_osd->dd_rdonly)
+		ofd_obd(m)->obd_read_only = 1;
 
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name),
 		 "%s-osd", lustre_cfg_string(cfg, 0));

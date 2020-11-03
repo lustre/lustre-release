@@ -39,6 +39,7 @@
 #include <lustre_lib.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lprocfs_status.h>
+#include <dt_object.h>
 
 #define OBD_STATFS_NODELAY	0x0001	/* requests should be send without delay
 					 * and resends for avoid deadlocks */
@@ -558,6 +559,9 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 			if (!IS_ERR(dev)) {
 				obd->obd_lu_dev = dev;
 				dev->ld_obd = obd;
+				if (lu_device_is_dt(dev) &&
+				    lu2dt_dev(dev)->dd_rdonly)
+					obd->obd_read_only = 1;
 				rc = 0;
 			} else
 				rc = PTR_ERR(dev);

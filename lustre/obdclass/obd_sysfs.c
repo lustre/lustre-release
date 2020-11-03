@@ -252,6 +252,9 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 		if (obd->obd_stopping)
 			continue;
 
+		if (obd->obd_read_only)
+			continue;
+
 		class_incref(obd, __func__, current);
 		read_unlock(&obd_dev_lock);
 

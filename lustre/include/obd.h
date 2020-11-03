@@ -635,7 +635,8 @@ struct obd_device {
 		obd_no_ir:1,		/* no imperative recovery. */
 		obd_process_conf:1,	/* device is processing mgs config */
 		obd_checksum_dump:1,	/* dump pages upon cksum error */
-		obd_dynamic_nids:1;	/* Allow dynamic NIDs on device */
+		obd_dynamic_nids:1,	/* Allow dynamic NIDs on device */
+		obd_read_only:1;	/* device is read-only */
 #ifdef HAVE_SERVER_SUPPORT
 	/* no committed-transno notification */
 	unsigned long			obd_no_transno:1;
