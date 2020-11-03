@@ -7701,11 +7701,11 @@ static int osd_mount(const struct lu_env *env,
 	const char *name = lustre_cfg_string(cfg, 0);
 	const char *dev = lustre_cfg_string(cfg, 1);
 	const char *opts;
-	unsigned long page, s_flags, lmd_flags = 0;
+	unsigned long page, s_flags = 0, lmd_flags = 0;
 	struct page *__page;
 	struct file_system_type *type;
 	char *options = NULL;
-	char *str;
+	const char *str;
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lu_fid *fid = &info->oti_fid;
 	struct inode *inode;
@@ -7720,11 +7720,9 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-E2BIG);
 	strcpy(o->od_mntdev, dev);
 
-	str = lustre_cfg_string(cfg, 2);
-	s_flags = simple_strtoul(str, NULL, 0);
-	str = strstr(str, ":");
-	if (str)
-		lmd_flags = simple_strtoul(str + 1, NULL, 0);
+	str = lustre_cfg_buf(cfg, 2);
+	sscanf(str, "%lu:%lu", &s_flags, &lmd_flags);
+
 	opts = lustre_cfg_string(cfg, 3);
 #ifdef __BIG_ENDIAN
 	if (opts == NULL || strstr(opts, "bigendian_extents") == NULL) {
