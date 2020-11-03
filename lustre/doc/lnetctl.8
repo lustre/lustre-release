@@ -292,6 +292,9 @@ overwritten by specifying the desired behavior\.
 \-\-show: show configuration
 .
 .br
+\-\-exec: execute command
+.
+.br
 \-\-help: display this help
 .
 .TP
@@ -300,9 +303,12 @@ overwritten by specifying the desired behavior\.
 .
 .TP
 \fBlnetctl export\fR > \fIFILE\fR
-\fBexport\fR command dumps the supported LNet configuration in YAML format to
-stdout, which can be redirected to a normal file\. The output of the
-\fBimport\fR command can be used as input to the \fBexport\fR command\.
+\fBexport\fR command dumps the LNet configuration, state information, and stats
+in YAML format to stdout, which can be redirected to a normal file\. The output
+of the \fBexport\fR command can be used as input to the \fBimport\fR command\.
+.
+.br
+\-\-backup: dump only elements necessary to recreate the current configuration.
 .
 .br
 \-\-help: display this help
