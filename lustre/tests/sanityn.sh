@@ -5567,6 +5567,42 @@ test_108a() {
 }
 run_test 108a "lseek: parallel updates"
 
+# LU-14110
+test_109() {
+	local i
+	local pid1 pid2
+
+	umount_client $MOUNT
+	umount_client $MOUNT2
+
+	echo "Starting race between client mount instances (50 iterations):"
+	for i in {1..50}; do
+		log "Iteration $i"
+
+#define OBD_FAIL_ONCE|OBD_FAIL_LLITE_RACE_MOUNT        0x80001417
+		$LCTL set_param -n fail_loc=0x80001417
+
+		mount_client $MOUNT  & pid1=$!
+		mount_client $MOUNT2 & pid2=$!
+		wait $pid1 || error "Mount $MOUNT fails with $?"
+		wait $pid2 || error "Mount $MOUNT2 fails with $?"
+
+		umount_client $MOUNT  & pid1=$!
+		umount_client $MOUNT2 & pid2=$!
+		wait $pid1 || error "Umount $MOUNT fails with $?"
+		wait $pid2 || error "Umount $MOUNT2 fails with $?"
+
+		$LUSTRE_RMMOD || error "Fail to remove lustre modules"
+		load_modules
+		echo
+	done
+
+	mount_client $MOUNT
+	mount_client $MOUNT2
+}
+
+run_test 109 "Race with several mount instances on 1 node"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

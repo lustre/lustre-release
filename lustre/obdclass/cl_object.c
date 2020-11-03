@@ -874,6 +874,7 @@ void cl_lvb2attr(struct cl_attr *attr, const struct ost_lvb *lvb)
 EXPORT_SYMBOL(cl_lvb2attr);
 
 static struct cl_env cl_env_percpu[NR_CPUS];
+static DEFINE_MUTEX(cl_env_percpu_mutex);
 
 static int cl_env_percpu_init(void)
 {
@@ -938,8 +939,10 @@ static void cl_env_percpu_refill(void)
 {
 	int i;
 
+	mutex_lock(&cl_env_percpu_mutex);
 	for_each_possible_cpu(i)
 		lu_env_refill(&cl_env_percpu[i].ce_lu);
+	mutex_unlock(&cl_env_percpu_mutex);
 }
 
 void cl_env_percpu_put(struct lu_env *env)
