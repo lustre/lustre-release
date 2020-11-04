@@ -1787,19 +1787,22 @@ t32_test() {
 			[[ "$MGS_VERSION" -ge $(version_code 2.3.59) ]] ||
 			skip "LU-2200: Cannot run over IB w/o lctl replace_nids "
 				"(Need MGS version at least 2.3.59)"
-
-			local osthost=$(facet_active_host ost1)
-			local ostnid=$(do_node $osthost $LCTL list_nids | head -1)
-
-			mopts=nosvc
-			if [ "$mds1_FSTYPE" == ldiskfs ]; then
-				mopts="loop,$mopts"
-			fi
-			$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
-			$r $LCTL replace_nids $fsname-OST0000 $ostnid
-			$r $LCTL replace_nids $fsname-MDT0000 $nid
-			$r $UMOUNT $tmp/mnt/mdt
 		fi
+
+		local osthost=$(facet_active_host ost1)
+		local ostnid=$(do_node $osthost $LCTL list_nids | head -1)
+
+		mopts=nosvc
+		if [ "$mds1_FSTYPE" == ldiskfs ]; then
+			mopts="loop,$mopts"
+		fi
+		$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
+		$r $LCTL replace_nids $fsname-OST0000 $ostnid
+		$r $LCTL replace_nids $fsname-MDT0000 $nid
+		if $mdt2_is_available; then
+			$r $LCTL replace_nids $fsname-MDT0001 $nid
+		fi
+		$r $UMOUNT $tmp/mnt/mdt
 
 		mopts=exclude=$fsname-OST0000
 		if [ "$mds1_FSTYPE" == ldiskfs ]; then
