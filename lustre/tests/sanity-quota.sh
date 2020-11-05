@@ -3526,6 +3526,41 @@ test_40c() {
 }
 run_test 40c "Remote child Dir inherit project quota properly"
 
+test_40d() {
+	[ "$MDSCOUNT" -lt "2" ] && skip_env "needs >= 2 MDTs"
+	is_project_quota_supported || skip "Project quota is not supported"
+
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+
+	mkdir -p $dir
+	$LFS setdirstripe -D -c 2 -i -1 $dir || error "setdirstripe failed"
+	change_project -sp $TSTPRJID $dir ||
+		error "change project on $dir failed"
+	for i in $(seq 5); do
+		mkdir -p $dir/d$i/d$i ||
+			error "mkdir $dir/d$i/d$i failed"
+		local projid=$($LFS project -d $dir/d$i/d$i |
+			       awk '{print $1}')
+		[ "$projid" == "$TSTPRJID" ] ||
+			error "projid id expected $TSTPRJID not $projid"
+		touch $dir/d$i/d$i/file
+		#verify inherit works file for stripe dir.
+		local projid=$($LFS project -d $dir/d$i/d$i/file | awk '{print $1}')
+		[ "$projid" == "$TSTPRJID" ] ||
+			error "file under remote dir expected 1 not $projid"
+	done
+
+	# account should be 1 + (2 + 1) *10 + 1 * 5
+	USED=$(getquota -p $TSTPRJID global curinodes)
+	[ "$USED" == "36" ] ||
+		error "file count expected 36 got $USED"
+
+	rm -rf $dir
+	cleanup_quota_test
+}
+run_test 40d "Stripe Directory inherit project quota properly"
+
 test_50() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
