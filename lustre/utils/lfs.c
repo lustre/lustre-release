@@ -190,7 +190,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--extension-size|--ext-size|-z]\n"           \
 	"                 [--layout|-L <pattern>]\n"			\
-	"                 [--mirror_count|-N[mirror_count]]\n"		\
+	"                 [--mirror-count|-N[mirror_count]]\n"		\
 	"                 [--ost|-o <ost_indices>]\n"			\
 	"                 [--pool|-p <pool_name>]\n"			\
 	"                 [--yaml|-y <yaml_template_file>]\n"		\
@@ -436,7 +436,7 @@ command_t cmdlist[] = {
 	 "		   [--component-start[=[+-]comp_start]]\n"
 	 "		   [--component-end[=[+-]comp_end]|-E[[+-]comp_end]]\n"
 	 "		   [[!] --mirror-index=[+-]<index> |\n"
-	 "		    [!] --mirror-id=[+-]<id>]\n"
+	 "		    [!] --mirror-id=[+-]<id>] [--mirror-count|-N]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "Create striped directory on specified MDT, same as mkdir.\n"

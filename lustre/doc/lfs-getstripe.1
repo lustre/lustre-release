@@ -21,7 +21,7 @@ lfs getstripe \- Lustre client command to print layout parameters of a file
       [\fB--raw\fR|\fB-R\fR]
 [\fB--stripe-count\fR|\fB-c\fR]
 [\fB--stripe-index\fR|\fB-i\fR]
-      [\fB--stripe-size\fR|\fB-S\fR]
+      [\fB--stripe-size\fR|\fB-S\fR] [\fB--mirror-count\fR|\fB-N\fR]
       [[\fB!\fR] \fB--mirror-index\fR=[\fB+-\fR]\fI<index>\fR | [\fB!\fR] \fB--mirror-id\fR=[\fB+-\fR]\fI<id>\fR]
       [\fB--verbose\fR|\fB-v\fR]
 [\fB--yaml\fR|\fB-y\fR]
@@ -145,43 +145,6 @@ is used, print components with respectively a larger or smaller
 .I start
 offset.
 .TP
-.BR --mirror-index = [\fB+-\fR]\fR<\fIindex\fR>
-Print only the components of \fI<index>\fR-th mirror, based on the order
-that the mirror components are stored in the file layout, The \fIindex\fR
-starts at 1. If
-.BI + index
-or
-.BI - index
-is used, print components of mirror(s) respectively a later or earlier
-\fIindex\fR-th mirror.
-.RS 1.2i
-.TP
-.B !
-Negates the meaning. Using + before \fIindex\fR means mirror appears 'later
-than \fIindex\fR',
-- before \fIindex\fR means mirror appears 'earlier than \fIindex\fR'. If
-neither is used, it means 'equal to \fIindex\fR'.
-.RE
-.TP
-.BR --mirror-id = [\fB+-\fR]\fR<\fIid\fR>
-Print only the component s of the mirror with ID of \fIid\fR. The mirror IDs
-are assigned to new mirrors as they are created, but may not be sequential if
-some mirrors are removed. If
-.BI + id
-or
-.BI - id
-is used, print components of mirror(s) with respectively a larger or smaller
-mirror ID of
-.I id
-.
-.RS 1.2i
-.TP
-.B !
-Negates the meaning. Using + before \fIid\fR means mirror with ID 'larger
-than \fIid\fR', - before \fIid\fR means mirror with ID 'smaller than \fIid\fR'.
-If neither is used, it means 'equal to \fIid\fR'.
-.RE
-.TP
 .BR --directory | -d
 Get striping information for only the specified directory, like
 .RB ' "ls -d" '.
@@ -208,6 +171,46 @@ Files that have the first data component on an MDT.
 .TP
 .BR --mdt | --mdt-index | -m
 Show the MDT index on which the file or directory inode is located.
+.TP
+.BR --mirror-count | -N
+Print the number of mirrors on the file.
+.TP
+.BR --mirror-index = [\fB+-\fR]\fR<\fIindex\fR>
+Print only the components of \fI<index>\fR-th mirror, based on the order
+that the mirror components are stored in the file layout. The \fIindex\fR
+starts at 1. If
+.BI + index
+or
+.BI - index
+is used, print components of mirror(s) respectively later or earlier than
+the \fIindex\fR-th mirror.
+.RS 1.2i
+.TP
+.B !
+Negates the meaning. Using + before \fIindex\fR means mirror appears 'later
+than \fIindex\fR',
+- before \fIindex\fR means mirror appears 'earlier than \fIindex\fR'. If
+neither is used, it means 'equal to \fIindex\fR'.
+.RE
+.TP
+.BR --mirror-id = [\fB+-\fR]\fR<\fIid\fR>
+Print only the components of the mirror with ID of \fIid\fR. The mirror IDs
+are assigned to new mirrors as they are created, but may not be sequential
+if some mirrors are removed. If
+.BI + id
+or
+.BI - id
+is used, print components of mirror(s) with respectively a larger or smaller
+mirror ID of
+.I id
+.
+.RS 1.2i
+.TP
+.B !
+Negates the meaning. Using + before \fIid\fR means mirror with ID 'larger
+than \fIid\fR', - before \fIid\fR means mirror with ID 'smaller than \fIid\fR'.
+If neither is used, it means 'equal to \fIid\fR'.
+.RE
 .TP
 .BR --ost | -O
 Print the starting OST index for the file layout.
