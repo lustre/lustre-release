@@ -177,8 +177,10 @@ enum seal_alg {
 #define KEY_USAGE_SEED_CHECKSUM		0x99
 #define K5CLENGTH 5
 
+#ifdef HAVE_DES3_SUPPORT
 extern void krb5_enc_des3;
 extern void krb5int_enc_des3;
+#endif
 extern void krb5int_enc_arcfour;
 extern void krb5int_enc_aes128;
 extern void krb5int_enc_aes256;
@@ -209,7 +211,7 @@ derive_key(const krb5_keyblock *in, krb5_keyblock *out, int usage, char extra)
 	void *enc;
 
 	switch (in->enctype) {
-#ifdef ENCTYPE_DES3_CBC_RAW
+#if defined ENCTYPE_DES3_CBC_RAW && defined HAVE_DES3_SUPPORT
 	case ENCTYPE_DES3_CBC_RAW:
 		keylength = 24;
 /* Extra hack, the structure was renamed as rc4 was added... */

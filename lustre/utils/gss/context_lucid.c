@@ -197,7 +197,9 @@ enum seal_alg {
  * structures located in libk5crypto
  */
 extern void *krb5int_enc_arcfour;
+#ifdef HAVE_DES3_SUPPORT
 extern void *krb5int_enc_des3;
+#endif
 extern void *krb5int_enc_aes128;
 extern void *krb5int_enc_aes256;
 
@@ -276,6 +278,7 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 	 * values and structures located in libk5crypto
 	 */
 	switch (in->type) {
+#ifdef HAVE_DES3_SUPPORT
 	case ENCTYPE_DES3_CBC_SHA1:
 #ifdef HAVE_KRB5
 	case ENCTYPE_DES3_CBC_RAW:
@@ -285,6 +288,7 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 		enc = &krb5int_enc_des3;
 #endif
 		break;
+#endif
 	case ENCTYPE_AES128_CTS_HMAC_SHA1_96:
 		keylength = 16;
 #ifdef HAVE_KRB5

@@ -94,6 +94,7 @@ static struct krb5_enctype enctypes[] = {
 		.ke_hash_size	= 16,
 		.ke_conf_size	= 8,
 	},
+#ifdef HAVE_DES3_SUPPORT
 	[ENCTYPE_DES3_CBC_RAW] = {		/* des3-hmac-sha1 */
 		.ke_dispname	= "des3-hmac-sha1",
 		.ke_enc_name	= "cbc(des3_ede)",
@@ -102,6 +103,7 @@ static struct krb5_enctype enctypes[] = {
 		.ke_conf_size	= 8,
 		.ke_hash_hmac	= 1,
 	},
+#endif
 	[ENCTYPE_AES128_CTS_HMAC_SHA1_96] = {	/* aes128-cts */
 		.ke_dispname	= "aes128-cts-hmac-sha1-96",
 		.ke_enc_name	= "cbc(aes)",
