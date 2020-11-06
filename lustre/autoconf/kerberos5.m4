@@ -134,6 +134,17 @@ krb5int_derive_key and krb5_derive_key functions!
 ])
     ])
 
+	dnl Version 1.18 removed support for all DES3 enctypes (des3-cbc-raw,
+	dnl des3-hmac-sha1, des3-cbc-sha1-kd).
+	AC_MSG_CHECKING([for DES3 enctype support by krb5])
+	if test $K5VERS -lt 1180; then
+		AC_DEFINE(HAVE_DES3_SUPPORT, 1,
+			  [DES3 enctype is supported by krb5])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+
     dnl If they specified a directory and it didn't work, give them a warning
     if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then
       AC_MSG_WARN([
