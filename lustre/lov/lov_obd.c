@@ -1067,11 +1067,11 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 					    len, karg, uarg);
 			if (err) {
 				if (lov->lov_tgts[i]->ltd_active) {
-					CDEBUG(err == -ENOTTY ?
-					       D_IOCTL : D_WARNING,
-					       "iocontrol OSC %s on OST idx %d cmd %x: err = %d\n",
-					       lov_uuid2str(lov, i),
-					       i, cmd, err);
+					CDEBUG_LIMIT(err == -ENOTTY ?
+						     D_IOCTL : D_WARNING,
+						     "iocontrol OSC %s on OST idx %d cmd %x: err = %d\n",
+						     lov_uuid2str(lov, i),
+						     i, cmd, err);
 					if (!rc)
 						rc = err;
 				}

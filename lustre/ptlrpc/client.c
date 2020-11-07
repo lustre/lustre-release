@@ -406,10 +406,10 @@ void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 		 * resent time, but server sent back service time of original
 		 * RPC.
 		 */
-		CDEBUG((lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) ?
-		       D_ADAPTTO : D_WARNING,
-		       "Reported service time %u > total measured time %lld\n",
-		       service_timeout, now - req->rq_sent);
+		CDEBUG_LIMIT((lustre_msg_get_flags(req->rq_reqmsg) &
+			      MSG_RESENT) ?  D_ADAPTTO : D_WARNING,
+			     "Reported service time %u > total measured time %lld\n",
+			     service_timeout, now - req->rq_sent);
 		return;
 	}
 

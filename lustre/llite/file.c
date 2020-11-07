@@ -324,8 +324,9 @@ static int ll_md_close(struct inode *inode, struct file *file)
 		/* Usually the lease is not released when the
 		 * application crashed, we need to release here. */
 		rc = ll_lease_close(fd->fd_lease_och, inode, &lease_broken);
-		CDEBUG(rc ? D_ERROR : D_INODE, "Clean up lease "DFID" %d/%d\n",
-			PFID(&lli->lli_fid), rc, lease_broken);
+		CDEBUG_LIMIT(rc ? D_ERROR : D_INODE,
+			     "Clean up lease "DFID" %d/%d\n",
+			     PFID(&lli->lli_fid), rc, lease_broken);
 
 		fd->fd_lease_och = NULL;
 	}

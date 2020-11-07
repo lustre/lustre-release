@@ -920,13 +920,12 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 		/* The ent->lde_name is composed of ${FID}:${index} */
 		if (ent->lde_namelen < len + 1 ||
 		    memcmp(ent->lde_name, name, len) != 0) {
-			CDEBUG(lod->lod_lmv_failout ? D_ERROR : D_INFO,
-			       "%s: invalid shard name %.*s with the FID "DFID
-			       " for the striped directory "DFID", %s\n",
-			       lod2obd(lod)->obd_name, ent->lde_namelen,
-			       ent->lde_name, PFID(&fid),
-			       PFID(lu_object_fid(&obj->do_lu)),
-			       lod->lod_lmv_failout ? "failout" : "skip");
+			CDEBUG_LIMIT(lod->lod_lmv_failout ? D_ERROR : D_INFO,
+				     "%s: invalid shard name %.*s with the FID "DFID" for the striped directory "DFID", %s\n",
+				     lod2obd(lod)->obd_name, ent->lde_namelen,
+				     ent->lde_name, PFID(&fid),
+				     PFID(lu_object_fid(&obj->do_lu)),
+				     lod->lod_lmv_failout ? "failout" : "skip");
 
 			if (lod->lod_lmv_failout)
 				break;
@@ -938,15 +937,15 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 		do {
 			if (ent->lde_name[len] < '0' ||
 			    ent->lde_name[len] > '9') {
-				CDEBUG(lod->lod_lmv_failout ? D_ERROR : D_INFO,
-				       "%s: invalid shard name %.*s with the "
-				       "FID "DFID" for the striped directory "
-				       DFID", %s\n",
-				       lod2obd(lod)->obd_name, ent->lde_namelen,
-				       ent->lde_name, PFID(&fid),
-				       PFID(lu_object_fid(&obj->do_lu)),
-				       lod->lod_lmv_failout ?
-				       "failout" : "skip");
+				CDEBUG_LIMIT(lod->lod_lmv_failout ?
+					     D_ERROR : D_INFO,
+					     "%s: invalid shard name %.*s with the FID "DFID" for the striped directory "DFID", %s\n",
+					     lod2obd(lod)->obd_name,
+					     ent->lde_namelen,
+					     ent->lde_name, PFID(&fid),
+					     PFID(lu_object_fid(&obj->do_lu)),
+					     lod->lod_lmv_failout ?
+					     "failout" : "skip");
 
 				if (lod->lod_lmv_failout)
 					break;

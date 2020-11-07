@@ -203,15 +203,15 @@ void client_bulk_callback(struct lnet_event *ev)
 		ev->type == LNET_EVENT_UNLINK);
 	LASSERT(ev->unlinked);
 
-        if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB, CFS_FAIL_ONCE))
-                ev->status = -EIO;
+	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB, CFS_FAIL_ONCE))
+		ev->status = -EIO;
 
-        if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,CFS_FAIL_ONCE))
-                ev->status = -EIO;
+	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,CFS_FAIL_ONCE))
+		ev->status = -EIO;
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n",
-               ev->type, ev->status, desc);
+	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
+		     "event type %d, status %d, desc %p\n",
+		     ev->type, ev->status, desc);
 
 	spin_lock(&desc->bd_lock);
 	req = desc->bd_req;
@@ -314,24 +314,23 @@ void request_in_callback(struct lnet_event *ev)
 	LASSERT((char *)ev->md_start + ev->offset + ev->mlength <=
 		rqbd->rqbd_buffer + service->srv_buf_size);
 
-	CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-	       "event type %d, status %d, service %s\n",
-	       ev->type, ev->status, service->srv_name);
+	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
+		     "event type %d, status %d, service %s\n",
+		     ev->type, ev->status, service->srv_name);
 
-        if (ev->unlinked) {
-                /* If this is the last request message to fit in the
-                 * request buffer we can use the request object embedded in
-                 * rqbd.  Note that if we failed to allocate a request,
-                 * we'd have to re-post the rqbd, which we can't do in this
-                 * context. */
-                req = &rqbd->rqbd_req;
-                memset(req, 0, sizeof (*req));
-        } else {
-                LASSERT (ev->type == LNET_EVENT_PUT);
-                if (ev->status != 0) {
-                        /* We moaned above already... */
-                        return;
-                }
+	if (ev->unlinked) {
+		/* If this is the last request message to fit in the
+		 * request buffer we can use the request object embedded in
+		 * rqbd.  Note that if we failed to allocate a request,
+		 * we'd have to re-post the rqbd, which we can't do in this
+		 * context.
+		 */
+		req = &rqbd->rqbd_req;
+		memset(req, 0, sizeof(*req));
+	} else {
+		LASSERT(ev->type == LNET_EVENT_PUT);
+		if (ev->status != 0) /* We moaned above already... */
+			return;
 		req = ptlrpc_request_cache_alloc(GFP_ATOMIC);
                 if (req == NULL) {
                         CERROR("Can't allocate incoming request descriptor: "
@@ -459,9 +458,9 @@ void server_bulk_callback(struct lnet_event *ev)
 		(ptlrpc_is_bulk_get_sink(desc->bd_type) &&
 		 ev->type == LNET_EVENT_REPLY));
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n",
-               ev->type, ev->status, desc);
+	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
+		     "event type %d, status %d, desc %p\n",
+		     ev->type, ev->status, desc);
 
 	spin_lock(&desc->bd_lock);
 

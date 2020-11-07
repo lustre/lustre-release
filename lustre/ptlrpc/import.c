@@ -1213,7 +1213,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 			 * with server again
 			 */
 			if ((MSG_CONNECT_RECOVERING & msg_flags)) {
-				CDEBUG(level,
+				CDEBUG_LIMIT(level,
 				       "%s@%s changed server handle from "
 				       "%#llx to %#llx"
 				       " but is still in recovery\n",
