@@ -38,7 +38,7 @@
 
 #include "lov_internal.h"
 
-static loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index)
+loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index)
 {
 	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
 

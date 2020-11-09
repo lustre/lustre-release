@@ -556,7 +556,7 @@ test_10() {
 }
 run_test 10 "Inherit composite template from root"
 
-test_11() {
+test_11a() {
 	local comp_file=$DIR/$tdir/$tfile
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
@@ -607,7 +607,22 @@ test_11() {
 
 	return 0
 }
-run_test 11 "Verify component instantiation with write/truncate"
+run_test 11a "Verify component instantiation with write/truncate"
+
+test_11b() {
+	[ $OSTCOUNT -lt 4 ] && skip "needs >= 4 OSTs"
+
+	local file=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+	rm -f $file
+
+	$LFS setstripe -E 1m -E 1g -c 4 -E eof $DIR/$tdir ||
+		error "setstripe dir $DIR/$tdir failed"
+	expand_truncate_test $file ||
+		error "expand_truncate_test failed on $file"
+}
+run_test 11b "truncate file set file size correctly"
 
 test_12() {
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs"

@@ -763,6 +763,23 @@ static loff_t lov_offset_mod(loff_t val, int delta)
 	return val;
 }
 
+static int lov_io_add_sub(const struct lu_env *env, struct lov_io *lio,
+			  struct lov_io_sub *sub, u64 start, u64 end)
+{
+	int rc;
+
+	end = lov_offset_mod(end, 1);
+	lov_io_sub_inherit(sub, lio, start, end);
+	rc = cl_io_iter_init(sub->sub_env, &sub->sub_io);
+	if (rc != 0) {
+		cl_io_iter_fini(sub->sub_env, &sub->sub_io);
+		return rc;
+	}
+
+	list_add_tail(&sub->sub_linkage, &lio->lis_active);
+
+	return rc;
+}
 static int lov_io_iter_init(const struct lu_env *env,
 			    const struct cl_io_slice *ios)
 {
@@ -784,6 +801,9 @@ static int lov_io_iter_init(const struct lu_env *env,
 		u64 start;
 		u64 end;
 		int stripe;
+		bool tested_trunc_stripe = false;
+
+		r0->lo_trunc_stripeno = -1;
 
 		CDEBUG(D_VFSTRACE, "component[%d] flags %#x\n",
 		       index, lsm->lsm_entries[index]->lsme_flags);
@@ -815,28 +835,79 @@ static int lov_io_iter_init(const struct lu_env *env,
 				continue;
 			}
 
-			end = lov_offset_mod(end, 1);
-			sub = lov_sub_get(env, lio,
-					  lov_comp_index(index, stripe));
-			if (IS_ERR(sub)) {
-				rc = PTR_ERR(sub);
-				break;
+			if (cl_io_is_trunc(ios->cis_io) &&
+			    !tested_trunc_stripe) {
+				int prev;
+				u64 tr_start;
+
+				prev = (stripe == 0) ? r0->lo_nr - 1 :
+							stripe - 1;
+				/**
+				 * Only involving previous stripe if the
+				 * truncate in this component is at the
+				 * beginning of this stripe.
+				 */
+				tested_trunc_stripe = true;
+				if (ext.e_start < lsm->lsm_entries[index]->
+							lsme_extent.e_start) {
+					/* need previous stripe involvement */
+					r0->lo_trunc_stripeno = prev;
+				} else {
+					tr_start = ext.e_start;
+					tr_start = lov_do_div64(tr_start,
+						      stripe_width(lsm, index));
+					/* tr_start %= stripe_swidth */
+					if (tr_start == stripe * lsm->
+							lsm_entries[index]->
+							lsme_stripe_size)
+						r0->lo_trunc_stripeno = prev;
+				}
 			}
 
-			lov_io_sub_inherit(sub, lio, start, end);
-			rc = cl_io_iter_init(sub->sub_env, &sub->sub_io);
-			if (rc != 0)
-				cl_io_iter_fini(sub->sub_env, &sub->sub_io);
+			/* if the last stripe is the trunc stripeno */
+			if (r0->lo_trunc_stripeno == stripe)
+				r0->lo_trunc_stripeno = -1;
+
+			sub = lov_sub_get(env, lio,
+					  lov_comp_index(index, stripe));
+			if (IS_ERR(sub))
+				return PTR_ERR(sub);
+
+			rc = lov_io_add_sub(env, lio, sub, start, end);
 			if (rc != 0)
 				break;
-
-			CDEBUG(D_VFSTRACE, "shrink: %d [%llu, %llu)\n",
-			       stripe, start, end);
-
-			list_add_tail(&sub->sub_linkage, &lio->lis_active);
 		}
 		if (rc != 0)
 			break;
+
+		if (r0->lo_trunc_stripeno != -1) {
+			stripe = r0->lo_trunc_stripeno;
+			if (unlikely(!r0->lo_sub[stripe])) {
+				r0->lo_trunc_stripeno = -1;
+				continue;
+			}
+			sub = lov_sub_get(env, lio,
+					  lov_comp_index(index, stripe));
+			if (IS_ERR(sub))
+				return PTR_ERR(sub);
+
+			/**
+			 * the prev sub could be used by another truncate, we'd
+			 * skip it. LU-14128 happends when expand truncate +
+			 * read get wrong kms.
+			 */
+			if (!list_empty(&sub->sub_linkage)) {
+				r0->lo_trunc_stripeno = -1;
+				continue;
+			}
+
+			(void)lov_stripe_intersects(lsm, index, stripe, &ext,
+						    &start, &end);
+			rc = lov_io_add_sub(env, lio, sub, start, end);
+			if (rc != 0)
+				break;
+
+		}
 	}
 	RETURN(rc);
 }

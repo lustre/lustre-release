@@ -112,6 +112,7 @@ static int lov_sublock_init(const struct lu_env *env,
  * through already created sub-locks (possibly shared with other top-locks).
  */
 static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
+					  const struct cl_io *io,
 					  const struct cl_object *obj,
 					  struct cl_lock *lock)
 {
@@ -138,10 +139,14 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		for (i = 0; i < r0->lo_nr; i++) {
-			if (likely(r0->lo_sub[i]) && /* spare layout */
-			    lov_stripe_intersects(lov->lo_lsm, index, i,
-						  &ext, &start, &end))
-				nr++;
+			if (likely(r0->lo_sub[i])) {/* spare layout */
+				if (lov_stripe_intersects(lov->lo_lsm, index, i,
+							  &ext, &start, &end))
+					nr++;
+				else if (cl_io_is_trunc(io) &&
+					 r0->lo_trunc_stripeno == i)
+					nr++;
+			}
 		}
 	}
 	/**
@@ -162,12 +167,22 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		for (i = 0; i < r0->lo_nr; ++i) {
 			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
 			struct cl_lock_descr *descr = &lls->sub_lock.cll_descr;
+			bool intersect = false;
 
-			if (unlikely(!r0->lo_sub[i]) ||
-			    !lov_stripe_intersects(lov->lo_lsm, index, i,
-						   &ext, &start, &end))
+			if (unlikely(!r0->lo_sub[i]))
 				continue;
 
+			intersect = lov_stripe_intersects(lov->lo_lsm, index, i,
+							  &ext, &start, &end);
+			if (intersect)
+				goto init_sublock;
+
+			if (cl_io_is_trunc(io) && i == r0->lo_trunc_stripeno)
+				goto init_sublock;
+
+			continue;
+
+init_sublock:
 			LASSERT(descr->cld_obj == NULL);
 			descr->cld_obj   = lovsub2cl(r0->lo_sub[i]);
 			descr->cld_start = cl_index(descr->cld_obj, start);
@@ -321,7 +336,7 @@ int lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
 	int result = 0;
 
 	ENTRY;
-	lck = lov_lock_sub_init(env, obj, lock);
+	lck = lov_lock_sub_init(env, io, obj, lock);
 	if (!IS_ERR(lck))
 		cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_lock_ops);
 	else

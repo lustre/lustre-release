@@ -274,6 +274,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
                       struct ost_lvb *lvb, __u64 *kms_place);
 
 /* lov_offset.c */
+loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index);
 u64 lov_stripe_size(struct lov_stripe_md *lsm, int index,
 		    u64 ost_size, int stripeno);
 int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,

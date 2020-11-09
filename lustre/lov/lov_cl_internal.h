@@ -176,6 +176,11 @@ struct lov_comp_layout_entry_ops {
 struct lov_layout_raid0 {
 	unsigned               lo_nr;
 	/**
+	 * record the stripe no before the truncate size, used for setting OST
+	 * object size for truncate. LU-14128.
+	 */
+	int                    lo_trunc_stripeno;
+	/**
 	 * When this is true, lov_object::lo_attr contains
 	 * valid up to date attributes for a top-level
 	 * object. This field is reset to 0 when attributes of
