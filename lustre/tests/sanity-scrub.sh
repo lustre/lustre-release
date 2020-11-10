@@ -911,6 +911,7 @@ test_9() {
 	sleep $RUN_TIME1
 	scrub_check_status 6 completed
 	scrub_check_flags 7 ""
+
 	# OI scrub should run with limited speed under non-inconsistent case
 	scrub_start 8 -s $BASE_SPEED1 -r
 
@@ -943,16 +944,17 @@ test_9() {
 	done
 	sleep $RUN_TIME2
 
-	# MIN_MARGIN = 0.8 = 8 / 10
+	# 30% margin
+	local MARGIN=3
 	local MIN_SPEED=$(((PRE_FETCHED + \
 			    BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
-			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+			   (RUN_TIME1 + RUN_TIME2) * (10 - MARGIN) / 10))
 	# MAX_MARGIN = 1.2 = 12 / 10
 	MAX_SPEED=$(((PRE_FETCHED + \
 		      BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
 		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
-		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+		     (RUN_TIME1 + RUN_TIME2) * (10 + MARGIN) / 10))
 	for n in $(seq $MDSCOUNT); do
 		SPEED=$(scrub_status $n | awk '/^average_speed/ { print $2 }')
 		[ $SPEED -gt $MIN_SPEED ] ||

@@ -339,12 +339,6 @@ iget:
 				GOTO(out, rc = 0);
 		}
 
-		if (!scrub->os_partial_scan) {
-			spin_lock(&scrub->os_lock);
-			scrub->os_full_speed = 1;
-			spin_unlock(&scrub->os_lock);
-		}
-
 		switch (val) {
 		case SCRUB_NEXT_NOLMA:
 			sf->sf_flags |= SF_UPGRADE;
