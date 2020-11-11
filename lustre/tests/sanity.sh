@@ -8389,7 +8389,11 @@ test_65n() {
 
 	local file2_stripe_size=$($LFS getstripe -S $file2)
 	[[ $file2_stripe_size -eq $new_def_stripe_size ]] ||
+	{
+		echo "file2_stripe_size: '$file2_stripe_size'"
+		echo "new_def_stripe_size: '$new_def_stripe_size'"
 		error "$file2 didn't inherit stripe size $new_def_stripe_size"
+	}
 
 	local dir3=$MOUNT/$tdir-3
 	mkdir $dir3 || error "mkdir $dir3 failed"
@@ -8399,7 +8403,11 @@ test_65n() {
 	local dir3_layout=$(get_layout_param $dir3)
 	local root_dir_layout=$(get_layout_param $MOUNT)
 	[[ "$dir3_layout" = "$root_dir_layout" ]] ||
+	{
+		echo "dir3_layout: '$dir3_layout'"
+		echo "root_dir_layout: '$root_dir_layout'"
 		error "$dir3 should show the default layout from $MOUNT"
+	}
 
 	# set OST pool on root directory
 	local pool=$TESTNAME
@@ -8417,7 +8425,7 @@ test_65n() {
 
 	local file3_pool=$($LFS getstripe -p $file3)
 	[[ "$file3_pool" = "$pool" ]] ||
-		error "$file3 didn't inherit OST pool $pool"
+		error "$file3 ('$file3_pool') didn't inherit OST pool '$pool'"
 
 	local dir4=$MOUNT/$tdir-4
 	mkdir $dir4 || error "mkdir $dir4 failed"
@@ -8428,7 +8436,11 @@ test_65n() {
 	echo "$LFS getstripe -d $MOUNT"
 	$LFS getstripe -d $MOUNT
 	[[ "$dir4_layout" = "$root_dir_layout" ]] ||
+	{
+		echo "dir4_layout: '$dir4_layout'"
+		echo "root_dir_layout: '$root_dir_layout'"
 		error "$dir4 should show the default layout from $MOUNT"
+	}
 
 	# new file created in $dir4 should inherit the pool from
 	# the filesystem default
@@ -8437,7 +8449,7 @@ test_65n() {
 
 	local file4_pool=$($LFS getstripe -p $file4)
 	[[ "$file4_pool" = "$pool" ]] ||
-		error "$file4 didn't inherit OST pool $pool"
+		error "$file4 ('$file4_pool') didn't inherit OST pool $pool"
 
 	# new subdirectory under non-root directory should inherit
 	# the default layout from its parent directory
@@ -8450,7 +8462,11 @@ test_65n() {
 	dir4_layout=$(get_layout_param $dir4)
 	local dir5_layout=$(get_layout_param $dir5)
 	[[ "$dir4_layout" = "$dir5_layout" ]] ||
+	{
+		echo "dir4_layout: '$dir4_layout'"
+		echo "dir5_layout: '$dir5_layout'"
 		error "$dir5 should inherit the default layout from $dir4"
+	}
 
 	# though subdir under ROOT doesn't inherit default layout, but
 	# its sub dir/file should be created with default layout.
