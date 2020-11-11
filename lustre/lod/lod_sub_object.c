@@ -936,6 +936,12 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 	obd = dt->dd_lu_dev.ld_obd;
 	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
 	LASSERT(ctxt != NULL);
+	/* concurrent config processing (e.g. setting MDT active)
+	 * can try to initialize llog again before causing double
+	 * initialization. check for this */
+	if (ctxt->loc_handle)
+		GOTO(out_put, rc = 0);
+
 	ctxt->loc_flags |= LLOG_CTXT_FLAG_NORMAL_FID;
 	ctxt->loc_chunk_size = LLOG_MIN_CHUNK_SIZE * 4;
 	if (likely(logid_id(&cid->lci_logid) != 0)) {
