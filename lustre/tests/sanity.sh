@@ -7543,16 +7543,16 @@ test_56wc() {
 run_test 56wc "check unrecognized options for lfs_migrate are passed through"
 
 test_56wd() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
-	local file1=$DIR/$tdir/file1
+	local file1=$DIR/$tdir/$tfile
 
 	echo -n "Creating test dir..."
 	test_mkdir $DIR/$tdir || error "cannot create dir"
 	echo "done."
 
 	echo -n "Creating test file..."
-	touch $file1
+	echo "$tfile" > $file1
 	echo "done."
 
 	# Ensure 'lfs migrate' will fail by using a non-existent option,
@@ -7569,15 +7569,6 @@ test_56wd() {
 		grep -q 'falling back to rsync' &&
 		error "lfs migrate was called with --rsync set"
 	echo "done."
-
-	echo -n "Make sure --rsync and --no-rsync options are exclusive..."
-	$LFS_MIGRATE -y --rsync --no-rsync $file1 2>&1 |
-		grep -q 'at the same time' ||
-		error "--rsync and --no-rsync accepted concurrently"
-	echo "done."
-
-	# Clean up
-	rm -f $file1
 }
 run_test 56wd "check lfs_migrate --rsync and --no-rsync work"
 
@@ -7646,6 +7637,7 @@ test_56xa() {
 run_test 56xa "lfs migration --block support"
 
 check_migrate_links() {
+	[[ "$1" == "--rsync" ]] && local opts="--rsync -y" && shift
 	local dir="$1"
 	local file1="$dir/file1"
 	local begin="$2"
@@ -7695,7 +7687,7 @@ check_migrate_links() {
 	fi
 
 	echo -n "migrating files..."
-	local migrate_out=$($runas $LFS_MIGRATE -y -S '1m' $dir)
+	local migrate_out=$($runas $LFS_MIGRATE $opts -S '1m' $dir)
 	local rc=$?
 	[ $rc -eq 0 ] || error "migrate failed rc = $rc"
 	echo "done"
@@ -7739,20 +7731,20 @@ test_56xb() {
 	test_mkdir "$dir" || error "cannot create dir $dir"
 
 	echo "testing lfs migrate mode when all links fit within xattrs"
-	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 2 99
+	check_migrate_links "$dir" 2 99
 
 	echo "testing rsync mode when all links fit within xattrs"
-	LFS_MIGRATE_RSYNC_MODE=true check_migrate_links "$dir" 2 99
+	check_migrate_links --rsync "$dir" 2 99
 
 	echo "testing lfs migrate mode when all links do not fit within xattrs"
-	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 101 100
+	check_migrate_links "$dir" 101 100
 
 	echo "testing rsync mode when all links do not fit within xattrs"
-	LFS_MIGRATE_RSYNC_MODE=true check_migrate_links "$dir" 101 100
+	check_migrate_links --rsync "$dir" 101 100
 
 	chown -R $RUNAS_ID $dir
 	echo "testing non-root lfs migrate mode when not all links are in xattr"
-	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 101 100 "$RUNAS"
+	check_migrate_links "$dir" 101 100 "$RUNAS"
 
 	# clean up
 	rm -rf $dir

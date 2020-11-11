@@ -13,7 +13,6 @@
 # to be 100% safe the administrator needs to ensure this is safe.
 
 RSYNC=${RSYNC:-rsync}
-OPT_RSYNC=${LFS_MIGRATE_RSYNC_MODE:-false}
 ECHO=echo
 LFS=${LFS:-lfs}
 RSYNC_WITH_HLINKS=false
@@ -65,7 +64,7 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   when -A is set, an OST must contain more available space than
 		   <min_free> KB in order for it to be considered available for
 		   use in the migration
-	--no-rsync do not fall back to rsync mode even if lfs migrate fails
+	--no-rsync do not fall back to rsync even if lfs migrate fails (default)
 	-n         only print the names of files to be migrated
 	-p <pool>  use the specified OST pool for the destination file
 	-q         run quietly (don't print filenames or status)
@@ -79,13 +78,11 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   when -A is set, limit the amount of space on each OST that
 		   can be considered available for the migration to
 		   <max_free> KB
-	-y         answer 'y' to usage question
+	-y         answer 'y' to usage question (only when --rsync used)
 	-0         input file names on stdin are separated by a null character
 
 Options '-A', '-c', and '-R' are mutually exclusive.
 Options '-C', '-M', and '-X' are ignored if '-A' is not set.
-
-The --rsync and --no-rsync options may not be specified at the same time.
 
 If a directory is an argument, all files in the directory are migrated.
 If no file/directory is given, the file list is read from standard input.
@@ -93,10 +90,15 @@ If no file/directory is given, the file list is read from standard input.
 Any arguments that are not explicitly recognized by the script are passed
 through to the 'lfs migrate' utility.
 
+If emptying an active OST, new files may continue to be allocated there.
+To prevent this, on each MDS run the following for each OST being emptied:
+
+    lctl set_param osp.<fsname>-OSTNNNN*.max_create_count=0'
+
 Examples:
       lfs_migrate /mnt/lustre/dir
       lfs_migrate -p newpool /mnt/lustre/dir
-      lfs find /test -O test-OST0004 -size +4G | lfs_migrate -y
+      lfs find /test -O test-OST0004 -size +4G | lfs_migrate
 USAGE
     exit 1
 }
@@ -108,22 +110,24 @@ cleanup() {
 
 trap cleanup EXIT
 
+OPT_AUTOSTRIPE=false
 OPT_CHECK=true
 OPT_DEBUG=false
 OPT_DRYRUN=false
 OPT_FILE=()
 OPT_LAYOUT=()
 OPT_COMP=false
-OPT_NO_RSYNC=false
+OPT_COPY=false
 OPT_NO_DIRECT=false
+OPT_NO_RSYNC=true
 OPT_NULL=false
 OPT_PASSTHROUGH=()
 OPT_POOL=""
 OPT_RESTRIPE=false
-OPT_YES=false
-OPT_AUTOSTRIPE=false
+OPT_RSYNC=false
 OPT_STRIPE_COUNT=""
 OPT_STRIPE_SIZE=""
+OPT_YES=false
 OPT_MINFREE=262144
 OPT_MAXFREE=""
 OPT_CAP=100
@@ -149,8 +153,8 @@ while [ -n "$*" ]; do
 	-b|--block|--non-block|--non-direct|-D|--no-verify)
 	   # Always pass non-layout options to 'lfs migrate'
 	   OPT_PASSTHROUGH+=("$arg");;
-	--rsync) OPT_RSYNC=true;;
-	--no-rsync) OPT_NO_RSYNC=true;;
+	--rsync) OPT_RSYNC=true; OPT_NO_RSYNC=false;;
+	--no-rsync) OPT_NO_RSYNC=true; OPT_RSYNC=false;;
 	--copy|--yaml|--file) OPT_COMP=true;
 	   # these options have files as arguments, pass both through
 	   OPT_LAYOUT+="$arg $2 "; shift;;
@@ -181,21 +185,11 @@ elif $OPT_AUTOSTRIPE && $OPT_RESTRIPE; then
 	exit 1
 fi
 
-if $OPT_RSYNC && $OPT_NO_RSYNC; then
-	echo "$PROG: Options --rsync and --no-rsync may not be" \
-		"specified at the same time." 1>&2
-	exit 1
-fi
-
-if ! $OPT_YES; then
+if $OPT_RSYNC && ! $OPT_YES; then
 	echo ""
-	echo "lfs_migrate is currently NOT SAFE for moving in-use files." 1>&2
+	echo "'lfs_migrate --rsync' is NOT SAFE for moving in-use files." 1>&2
 	echo "Use it only when you are sure migrated files are unused." 1>&2
 	echo "" 1>&2
-	echo "If emptying an OST that is active on the MDS, new files may" 1>&2
-	echo "use it.  To stop allocating any new objects on OSTNNNN run:" 1>&2
-	echo "  lctl set_param osp.<fsname>-OSTNNNN*.max_create_count=0'" 1>&2
-	echo "on each MDS using the OST(s) being emptied." 1>&2
 	echo -n "Continue? (y/n) "
 	read CHECK
 	[ "$CHECK" != "y" -a "$CHECK" != "yes" ] && exit 1

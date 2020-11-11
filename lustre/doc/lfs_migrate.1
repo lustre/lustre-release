@@ -142,7 +142,7 @@ value is specified in KB.  This option is useful for testing, by simulating
 OSTs that are nearly full.
 .TP
 .B \\--yes|-y
-Answer 'y' to usage warning without prompting (for scripts, use with caution).
+Answer 'y' to usage warning without prompt (--rsync only, use with caution).
 .TP
 .B \\-0
 Input file names on stdin are separated by a null character.
@@ -162,7 +162,7 @@ testfs-OST0004 (this is needed on all MDS nodes):
 .IP
 .nf
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=0
-client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -y -A
+client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -A
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=20000
 .fi
 .PP
