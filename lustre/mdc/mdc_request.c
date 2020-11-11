@@ -2709,6 +2709,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (OCD_HAS_FLAG(ocd, GRANT))
 			osc_init_grant(cli, ocd);
 
+		md_init_ea_size(obd->obd_self_export, ocd->ocd_max_easize, 0);
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
 		break;
 	}
