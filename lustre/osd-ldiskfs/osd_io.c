@@ -1154,6 +1154,13 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		quota_space += PAGE_SIZE;
 	}
 
+	credits++; /* inode */
+	/*
+	 * overwrite case, no need to modify tree and
+	 * allocate blocks.
+	 */
+	if (!newblocks)
+		goto out_declare;
 	/*
 	 * each extent can go into new leaf causing a split
 	 * 5 is max tree depth: inode + 4 index blocks
@@ -1167,12 +1174,10 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		depth = ext_depth(inode);
 		depth = max(depth, 1) + 1;
 		newblocks += depth;
-		credits++; /* inode */
 		credits += depth * 2 * extents;
 	} else {
 		depth = 3;
 		newblocks += depth;
-		credits++; /* inode */
 		credits += depth * extents;
 	}
 
@@ -1196,6 +1201,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	else
 		credits += newblocks;
 
+out_declare:
 	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
 
 	/* make sure the over quota flags were not set */
