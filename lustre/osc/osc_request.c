@@ -747,11 +747,20 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 				    ~(PTLRPC_MAX_BRW_SIZE * 4UL));
         }
 	oa->o_grant = cli->cl_avail_grant + cli->cl_reserved_grant;
-        oa->o_dropped = cli->cl_lost_grant;
-        cli->cl_lost_grant = 0;
+	/* o_dropped AKA o_misc is 32 bits, but cl_lost_grant is 64 bits */
+	if (cli->cl_lost_grant > INT_MAX) {
+		CDEBUG(D_CACHE,
+		      "%s: avoided o_dropped overflow: cl_lost_grant %lu\n",
+		      cli_name(cli), cli->cl_lost_grant);
+		oa->o_dropped = INT_MAX;
+	} else {
+		oa->o_dropped = cli->cl_lost_grant;
+	}
+	cli->cl_lost_grant -= oa->o_dropped;
 	spin_unlock(&cli->cl_loi_list_lock);
-	CDEBUG(D_CACHE, "dirty: %llu undirty: %u dropped %u grant: %llu\n",
-               oa->o_dirty, oa->o_undirty, oa->o_dropped, oa->o_grant);
+	CDEBUG(D_CACHE, "%s: dirty: %llu undirty: %u dropped %u grant: %llu"
+	       " cl_lost_grant %lu\n", cli_name(cli), oa->o_dirty,
+	       oa->o_undirty, oa->o_dropped, oa->o_grant, cli->cl_lost_grant);
 }
 
 void osc_update_next_shrink(struct client_obd *cli)
