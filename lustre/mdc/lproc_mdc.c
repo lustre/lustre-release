@@ -378,7 +378,7 @@ static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
 	read_cum = 0;
 	write_cum = 0;
-	for (i = 0; i < OBD_HIST_MAX; i++) {
+	for (i = 1; i < OBD_HIST_MAX; i++) {
 		unsigned long r = cli->cl_read_rpc_hist.oh_buckets[i];
 		unsigned long w = cli->cl_write_rpc_hist.oh_buckets[i];
 
