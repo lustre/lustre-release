@@ -3617,21 +3617,28 @@ static const struct obd_ops osc_obd_ops = {
         .o_quotactl             = osc_quotactl,
 };
 
-static struct shrinker *osc_cache_shrinker;
 LIST_HEAD(osc_shrink_list);
 DEFINE_SPINLOCK(osc_shrink_lock);
 
-#ifndef HAVE_SHRINKER_COUNT
-static int osc_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
+#ifdef HAVE_SHRINKER_COUNT
+static struct shrinker osc_cache_shrinker = {
+	.count_objects	= osc_cache_shrink_count,
+	.scan_objects	= osc_cache_shrink_scan,
+	.seeks		= DEFAULT_SEEKS,
+};
+#else
+static int osc_cache_shrink(struct shrinker *shrinker,
+			    struct shrink_control *sc)
 {
-	struct shrink_control scv = {
-		.nr_to_scan = shrink_param(sc, nr_to_scan),
-		.gfp_mask   = shrink_param(sc, gfp_mask)
-	};
-	(void)osc_cache_shrink_scan(shrinker, &scv);
+	(void)osc_cache_shrink_scan(shrinker, sc);
 
-	return osc_cache_shrink_count(shrinker, &scv);
+	return osc_cache_shrink_count(shrinker, sc);
 }
+
+static struct shrinker osc_cache_shrinker = {
+	.shrink   = osc_cache_shrink,
+	.seeks    = DEFAULT_SEEKS,
+};
 #endif
 
 static int __init osc_init(void)
@@ -3639,8 +3646,6 @@ static int __init osc_init(void)
 	unsigned int reqpool_size;
 	unsigned int reqsize;
 	int rc;
-	DEF_SHRINKER_VAR(osc_shvar, osc_cache_shrink,
-			 osc_cache_shrink_count, osc_cache_shrink_scan);
 	ENTRY;
 
 	/* print an address of _any_ initialized kernel symbol from this
@@ -3657,7 +3662,7 @@ static int __init osc_init(void)
 	if (rc)
 		GOTO(out_kmem, rc);
 
-	osc_cache_shrinker = set_shrinker(DEFAULT_SEEKS, &osc_shvar);
+	register_shrinker(&osc_cache_shrinker);
 
 	/* This is obviously too much memory, only prevent overflow here */
 	if (osc_reqpool_mem_max >= 1 << 12 || osc_reqpool_mem_max == 0)
@@ -3703,7 +3708,7 @@ out_kmem:
 static void __exit osc_exit(void)
 {
 	osc_stop_grant_work();
-	remove_shrinker(osc_cache_shrinker);
+	unregister_shrinker(&osc_cache_shrinker);
 	class_unregister_type(LUSTRE_OSC_NAME);
 	lu_kmem_fini(osc_caches);
 	ptlrpc_free_rq_pool(osc_rq_pool);

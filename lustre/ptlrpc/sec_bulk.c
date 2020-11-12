@@ -115,13 +115,6 @@ static struct ptlrpc_enc_page_pool {
 } page_pools;
 
 /*
- * memory shrinker
- */
-static const int pools_shrinker_seeks = DEFAULT_SEEKS;
-static struct shrinker *pools_shrinker;
-
-
-/*
  * /proc/fs/lustre/sptlrpc/encrypt_page_pools
  */
 int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v)
@@ -275,22 +268,29 @@ static unsigned long enc_pools_shrink_scan(struct shrinker *s,
 	return sc->nr_to_scan;
 }
 
-#ifndef HAVE_SHRINKER_COUNT
+#ifdef HAVE_SHRINKER_COUNT
+static struct shrinker pools_shrinker = {
+	.count_objects	= enc_pools_shrink_count,
+	.scan_objects	= enc_pools_shrink_scan,
+	.seeks		= DEFAULT_SEEKS,
+};
+#else
 /*
  * could be called frequently for query (@nr_to_scan == 0).
  * we try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool.
  */
-static int enc_pools_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
+static int enc_pools_shrink(struct shrinker *shrinker,
+			    struct shrink_control *sc)
 {
-	struct shrink_control scv = {
-		.nr_to_scan = shrink_param(sc, nr_to_scan),
-		.gfp_mask   = shrink_param(sc, gfp_mask)
-	};
-	enc_pools_shrink_scan(shrinker, &scv);
+	enc_pools_shrink_scan(shrinker, sc);
 
-	return enc_pools_shrink_count(shrinker, &scv);
+	return enc_pools_shrink_count(shrinker, sc);
 }
 
+static struct shrinker pools_shrinker = {
+	.shrink  = enc_pools_shrink,
+	.seeks   = DEFAULT_SEEKS,
+};
 #endif /* HAVE_SHRINKER_COUNT */
 
 static inline
@@ -762,9 +762,6 @@ static inline void enc_pools_free(void)
 
 int sptlrpc_enc_pool_init(void)
 {
-	DEF_SHRINKER_VAR(shvar, enc_pools_shrink,
-			 enc_pools_shrink_count, enc_pools_shrink_scan);
-
 	page_pools.epp_max_pages = cfs_totalram_pages() / 8;
 	if (enc_pool_max_memory_mb > 0 &&
 	    enc_pool_max_memory_mb <= (cfs_totalram_pages() >> mult))
@@ -801,11 +798,7 @@ int sptlrpc_enc_pool_init(void)
 	if (page_pools.epp_pools == NULL)
 		return -ENOMEM;
 
-	pools_shrinker = set_shrinker(pools_shrinker_seeks, &shvar);
-	if (pools_shrinker == NULL) {
-		enc_pools_free();
-		return -ENOMEM;
-	}
+	register_shrinker(&pools_shrinker);
 
 	return 0;
 }
@@ -814,11 +807,10 @@ void sptlrpc_enc_pool_fini(void)
 {
 	unsigned long cleaned, npools;
 
-	LASSERT(pools_shrinker);
 	LASSERT(page_pools.epp_pools);
 	LASSERT(page_pools.epp_total_pages == page_pools.epp_free_pages);
 
-	remove_shrinker(pools_shrinker);
+	unregister_shrinker(&pools_shrinker);
 
 	npools = npages_to_npools(page_pools.epp_total_pages);
 	cleaned = enc_pools_cleanup(page_pools.epp_pools, npools);

@@ -2097,8 +2097,6 @@ struct lu_env *lu_env_find(void)
 }
 EXPORT_SYMBOL(lu_env_find);
 
-static struct shrinker *lu_site_shrinker;
-
 typedef struct lu_site_stats{
         unsigned        lss_populated;
         unsigned        lss_max_search;
@@ -2200,7 +2198,14 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
 	return sc->nr_to_scan - remain;
 }
 
-#ifndef HAVE_SHRINKER_COUNT
+#ifdef HAVE_SHRINKER_COUNT
+static struct shrinker lu_site_shrinker = {
+	.count_objects	= lu_cache_shrink_count,
+	.scan_objects	= lu_cache_shrink_scan,
+	.seeks		= DEFAULT_SEEKS,
+};
+
+#else
 /*
  * There exists a potential lock inversion deadlock scenario when using
  * Lustre on top of ZFS. This occurs between one of ZFS's
@@ -2219,22 +2224,24 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
  * objects without taking the lu_sites_guard lock, but this is not
  * possible in the current implementation.
  */
-static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
+static int lu_cache_shrink(struct shrinker *shrinker,
+			   struct shrink_control *sc)
 {
-        int cached = 0;
-	struct shrink_control scv = {
-		 .nr_to_scan = shrink_param(sc, nr_to_scan),
-		 .gfp_mask   = shrink_param(sc, gfp_mask)
-	};
+	int cached = 0;
 
-	CDEBUG(D_INODE, "Shrink %lu objects\n", scv.nr_to_scan);
+	CDEBUG(D_INODE, "Shrink %lu objects\n", sc->nr_to_scan);
 
-	if (scv.nr_to_scan != 0)
-		lu_cache_shrink_scan(shrinker, &scv);
+	if (sc->nr_to_scan != 0)
+		lu_cache_shrink_scan(shrinker, sc);
 
-	cached = lu_cache_shrink_count(shrinker, &scv);
+	cached = lu_cache_shrink_count(shrinker, sc);
 	return cached;
 }
+
+static struct shrinker lu_site_shrinker = {
+	.shrink  = lu_cache_shrink,
+	.seeks   = DEFAULT_SEEKS,
+};
 
 #endif /* HAVE_SHRINKER_COUNT */
 
@@ -2293,43 +2300,39 @@ void lu_context_keys_dump(void)
 int lu_global_init(void)
 {
 	int result;
-	DEF_SHRINKER_VAR(shvar, lu_cache_shrink,
-			 lu_cache_shrink_count, lu_cache_shrink_scan);
 
-        CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
+	CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
 
-        result = lu_ref_global_init();
-        if (result != 0)
-                return result;
+	result = lu_ref_global_init();
+	if (result != 0)
+		return result;
 
-        LU_CONTEXT_KEY_INIT(&lu_global_key);
-        result = lu_context_key_register(&lu_global_key);
-        if (result != 0)
-                return result;
+	LU_CONTEXT_KEY_INIT(&lu_global_key);
+	result = lu_context_key_register(&lu_global_key);
+	if (result != 0)
+		return result;
 
-        /*
-         * At this level, we don't know what tags are needed, so allocate them
-         * conservatively. This should not be too bad, because this
-         * environment is global.
-         */
+	/*
+	 * At this level, we don't know what tags are needed, so allocate them
+	 * conservatively. This should not be too bad, because this
+	 * environment is global.
+	 */
 	down_write(&lu_sites_guard);
-        result = lu_env_init(&lu_shrink_env, LCT_SHRINKER);
+	result = lu_env_init(&lu_shrink_env, LCT_SHRINKER);
 	up_write(&lu_sites_guard);
-        if (result != 0)
-                return result;
+	if (result != 0)
+		return result;
 
-        /*
-         * seeks estimation: 3 seeks to read a record from oi, one to read
-         * inode, one for ea. Unfortunately setting this high value results in
-         * lu_object/inode cache consuming all the memory.
-         */
-	lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, &shvar);
-        if (lu_site_shrinker == NULL)
-                return -ENOMEM;
+	/*
+	 * seeks estimation: 3 seeks to read a record from oi, one to read
+	 * inode, one for ea. Unfortunately setting this high value results in
+	 * lu_object/inode cache consuming all the memory.
+	 */
+	register_shrinker(&lu_site_shrinker);
 
 	result = rhashtable_init(&lu_env_rhash, &lu_env_rhash_params);
 
-        return result;
+	return result;
 }
 
 /**
@@ -2337,24 +2340,21 @@ int lu_global_init(void)
  */
 void lu_global_fini(void)
 {
-        if (lu_site_shrinker != NULL) {
-		remove_shrinker(lu_site_shrinker);
-                lu_site_shrinker = NULL;
-        }
+	unregister_shrinker(&lu_site_shrinker);
 
 	lu_context_key_degister(&lu_global_key);
 
-        /*
-         * Tear shrinker environment down _after_ de-registering
-         * lu_global_key, because the latter has a value in the former.
-         */
+	/*
+	 * Tear shrinker environment down _after_ de-registering
+	 * lu_global_key, because the latter has a value in the former.
+	 */
 	down_write(&lu_sites_guard);
-        lu_env_fini(&lu_shrink_env);
+	lu_env_fini(&lu_shrink_env);
 	up_write(&lu_sites_guard);
 
 	rhashtable_destroy(&lu_env_rhash);
 
-        lu_ref_global_fini();
+	lu_ref_global_fini();
 }
 
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)

@@ -95,60 +95,9 @@ static inline void bitmap_free(const unsigned long *bitmap)
 /*
  * Shrinker
  */
-# define SHRINKER_ARGS(sc, nr_to_scan, gfp_mask)  \
-                       struct shrinker *shrinker, \
-                       struct shrink_control *sc
-# define shrink_param(sc, var) ((sc)->var)
-
-#ifdef HAVE_SHRINKER_COUNT
-struct shrinker_var {
-	unsigned long (*count)(struct shrinker *,
-			       struct shrink_control *sc);
-	unsigned long (*scan)(struct shrinker *,
-			      struct shrink_control *sc);
-};
-# define DEF_SHRINKER_VAR(name, shrink, count_obj, scan_obj) \
-	    struct shrinker_var name = { .count = count_obj, .scan = scan_obj }
-#else
-struct shrinker_var {
-	int (*shrink)(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask));
-};
-# define DEF_SHRINKER_VAR(name, shrinker, count, scan) \
-	    struct shrinker_var name = { .shrink = shrinker }
+#ifndef SHRINK_STOP
 # define SHRINK_STOP (~0UL)
 #endif
-
-static inline
-struct shrinker *set_shrinker(int seek, struct shrinker_var *var)
-{
-        struct shrinker *s;
-
-	s = kzalloc(sizeof(*s), GFP_KERNEL);
-        if (s == NULL)
-                return (NULL);
-
-#ifdef HAVE_SHRINKER_COUNT
-	s->count_objects = var->count;
-	s->scan_objects = var->scan;
-#else
-	s->shrink = var->shrink;
-#endif
-        s->seeks = seek;
-
-        register_shrinker(s);
-
-        return s;
-}
-
-static inline
-void remove_shrinker(struct shrinker *shrinker)
-{
-        if (shrinker == NULL)
-                return;
-
-        unregister_shrinker(shrinker);
-        kfree(shrinker);
-}
 
 #ifndef HAVE_MMAP_LOCK
 static inline void mmap_write_lock(struct mm_struct *mm)

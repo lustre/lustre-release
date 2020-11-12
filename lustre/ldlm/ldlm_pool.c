@@ -1086,9 +1086,6 @@ __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
 	return atomic_read(&pl->pl_lock_volume_factor);
 }
 
-static struct shrinker *ldlm_pools_srv_shrinker;
-static struct shrinker *ldlm_pools_cli_shrinker;
-
 /*
  * count locks from all namespaces (if possible). Returns number of
  * cached locks.
@@ -1212,6 +1209,17 @@ static unsigned long ldlm_pools_cli_scan(struct shrinker *s,
 			       sc->gfp_mask);
 }
 
+static struct shrinker ldlm_pools_srv_shrinker = {
+	.count_objects	= ldlm_pools_srv_count,
+	.scan_objects	= ldlm_pools_srv_scan,
+	.seeks		= DEFAULT_SEEKS,
+};
+
+static struct shrinker ldlm_pools_cli_shrinker = {
+	.count_objects	= ldlm_pools_cli_count,
+	.scan_objects	= ldlm_pools_cli_scan,
+	.seeks		= DEFAULT_SEEKS,
+};
 #else
 /*
  * Cancel \a nr locks from all namespaces (if possible). Returns number of
@@ -1234,20 +1242,29 @@ static int ldlm_pools_shrink(enum ldlm_side client, int nr, gfp_t gfp_mask)
 	return ldlm_pools_scan(client, nr, gfp_mask);
 }
 
-static int ldlm_pools_srv_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
+static int ldlm_pools_srv_shrink(struct shrinker *shrinker,
+				 struct shrink_control *sc)
 {
 	return ldlm_pools_shrink(LDLM_NAMESPACE_SERVER,
-				 shrink_param(sc, nr_to_scan),
-				 shrink_param(sc, gfp_mask));
+				 sc->nr_to_scan, sc->gfp_mask);
 }
 
-static int ldlm_pools_cli_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
+static int ldlm_pools_cli_shrink(struct shrinker *shrinker,
+				 struct shrink_control *sc)
 {
 	return ldlm_pools_shrink(LDLM_NAMESPACE_CLIENT,
-				 shrink_param(sc, nr_to_scan),
-				 shrink_param(sc, gfp_mask));
+				 sc->nr_to_scan, sc->gfp_mask);
 }
 
+static struct shrinker ldlm_pools_srv_shrinker = {
+	.shrink = ldlm_pools_srv_shrink,
+	.seeks = DEFAULT_SEEKS,
+};
+
+static struct shrinker ldlm_pools_cli_shrinker = {
+	.shrink = ldlm_pools_cli_shrink,
+	.seeks = DEFAULT_SEEKS,
+};
 #endif /* HAVE_SHRINKER_COUNT */
 
 static time64_t ldlm_pools_recalc_delay(enum ldlm_side side)
@@ -1424,11 +1441,6 @@ int ldlm_pools_init(void)
 {
 	time64_t delay;
 
-	DEF_SHRINKER_VAR(shsvar, ldlm_pools_srv_shrink,
-			 ldlm_pools_srv_count, ldlm_pools_srv_scan);
-	DEF_SHRINKER_VAR(shcvar, ldlm_pools_cli_shrink,
-			 ldlm_pools_cli_count, ldlm_pools_cli_scan);
-
 #ifdef HAVE_SERVER_SUPPORT
 	delay = min(LDLM_POOL_SRV_DEF_RECALC_PERIOD,
 		    LDLM_POOL_CLI_DEF_RECALC_PERIOD);
@@ -1437,22 +1449,17 @@ int ldlm_pools_init(void)
 #endif
 
 	schedule_delayed_work(&ldlm_pools_recalc_work, delay);
-	ldlm_pools_srv_shrinker = set_shrinker(DEFAULT_SEEKS, &shsvar);
-	ldlm_pools_cli_shrinker = set_shrinker(DEFAULT_SEEKS, &shcvar);
+	register_shrinker(&ldlm_pools_srv_shrinker);
+	register_shrinker(&ldlm_pools_cli_shrinker);
 
 	return 0;
 }
 
 void ldlm_pools_fini(void)
 {
-	if (ldlm_pools_srv_shrinker != NULL) {
-		remove_shrinker(ldlm_pools_srv_shrinker);
-		ldlm_pools_srv_shrinker = NULL;
-	}
-	if (ldlm_pools_cli_shrinker != NULL) {
-		remove_shrinker(ldlm_pools_cli_shrinker);
-		ldlm_pools_cli_shrinker = NULL;
-	}
+	unregister_shrinker(&ldlm_pools_srv_shrinker);
+	unregister_shrinker(&ldlm_pools_cli_shrinker);
+
 	cancel_delayed_work_sync(&ldlm_pools_recalc_work);
 }
 
