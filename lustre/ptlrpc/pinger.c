@@ -49,8 +49,6 @@ MODULE_PARM_DESC(suppress_pings, "Suppress pings");
 struct mutex pinger_mutex;
 static struct list_head pinger_imports =
 		LIST_HEAD_INIT(pinger_imports);
-static struct list_head timeout_list =
-		LIST_HEAD_INIT(timeout_list);
 
 int ptlrpc_pinger_suppress_pings()
 {
@@ -173,19 +171,7 @@ static inline time64_t ptlrpc_next_reconnect(struct obd_import *imp)
 
 static time64_t pinger_check_timeout(time64_t time)
 {
-        struct timeout_item *item;
 	time64_t timeout = PING_INTERVAL;
-
-	/* This list is sorted in increasing timeout order */
-	mutex_lock(&pinger_mutex);
-	list_for_each_entry(item, &timeout_list, ti_chain) {
-		time64_t ti_timeout = item->ti_timeout;
-
-		if (timeout > ti_timeout)
-			timeout = ti_timeout;
-		break;
-	}
-	mutex_unlock(&pinger_mutex);
 
 	return time + timeout - ktime_get_seconds();
 }
@@ -269,7 +255,6 @@ static DECLARE_DELAYED_WORK(ping_work, ptlrpc_pinger_main);
 static void ptlrpc_pinger_main(struct work_struct *ws)
 {
 	time64_t this_ping, time_after_ping, time_to_next_wake;
-	struct timeout_item *item;
 	struct obd_import *imp;
 	struct list_head *iter;
 
@@ -277,8 +262,6 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 		this_ping = ktime_get_seconds();
 
 		mutex_lock(&pinger_mutex);
-		list_for_each_entry(item, &timeout_list, ti_chain)
-			item->ti_cb(item, item->ti_cb_data);
 
 		list_for_each(iter, &pinger_imports) {
 			imp = list_entry(iter, struct obd_import,
@@ -340,15 +323,11 @@ int ptlrpc_start_pinger(void)
 	return 0;
 }
 
-int ptlrpc_pinger_remove_timeouts(void);
-
 int ptlrpc_stop_pinger(void)
 {
 #ifdef ENABLE_PINGER
 	if (!pinger_wq)
 		return -EALREADY;
-
-	ptlrpc_pinger_remove_timeouts();
 
 	cancel_delayed_work_sync(&ping_work);
 	destroy_workqueue(pinger_wq);
@@ -418,124 +397,6 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
 	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
-
-/**
- * Register a timeout callback to the pinger list, and the callback will
- * be called when timeout happens.
- */
-static struct timeout_item *ptlrpc_new_timeout(time64_t time,
-					       enum timeout_event event,
-					       timeout_cb_t cb, void *data)
-{
-        struct timeout_item *ti;
-
-        OBD_ALLOC_PTR(ti);
-        if (!ti)
-                return(NULL);
-
-	INIT_LIST_HEAD(&ti->ti_obd_list);
-	INIT_LIST_HEAD(&ti->ti_chain);
-        ti->ti_timeout = time;
-        ti->ti_event = event;
-        ti->ti_cb = cb;
-        ti->ti_cb_data = data;
-
-        return ti;
-}
-
-/**
- * Register timeout event on the the pinger thread.
- * Note: the timeout list is an sorted list with increased timeout value.
- */
-static struct timeout_item*
-ptlrpc_pinger_register_timeout(time64_t time, enum timeout_event event,
-                               timeout_cb_t cb, void *data)
-{
-	struct timeout_item *item, *tmp;
-
-	LASSERT(mutex_is_locked(&pinger_mutex));
-
-	list_for_each_entry(item, &timeout_list, ti_chain)
-		if (item->ti_event == event)
-			goto out;
-
-	item = ptlrpc_new_timeout(time, event, cb, data);
-	if (item) {
-		list_for_each_entry_reverse(tmp, &timeout_list, ti_chain) {
-			if (tmp->ti_timeout < time) {
-				list_add(&item->ti_chain, &tmp->ti_chain);
-				goto out;
-			}
-		}
-		list_add(&item->ti_chain, &timeout_list);
-	}
-out:
-	return item;
-}
-
-/* Add a client_obd to the timeout event list, when timeout(@time)
- * happens, the callback(@cb) will be called.
- */
-int ptlrpc_add_timeout_client(time64_t time, enum timeout_event event,
-                              timeout_cb_t cb, void *data,
-			      struct list_head *obd_list)
-{
-        struct timeout_item *ti;
-
-	mutex_lock(&pinger_mutex);
-        ti = ptlrpc_pinger_register_timeout(time, event, cb, data);
-        if (!ti) {
-		mutex_unlock(&pinger_mutex);
-                return (-EINVAL);
-        }
-	list_add(obd_list, &ti->ti_obd_list);
-	mutex_unlock(&pinger_mutex);
-        return 0;
-}
-EXPORT_SYMBOL(ptlrpc_add_timeout_client);
-
-int ptlrpc_del_timeout_client(struct list_head *obd_list,
-			      enum timeout_event event)
-{
-	struct timeout_item *ti = NULL, *item;
-
-	if (list_empty(obd_list))
-		return 0;
-	mutex_lock(&pinger_mutex);
-	list_del_init(obd_list);
-	/**
-	 * If there are no obd attached to the timeout event
-	 * list, remove this timeout event from the pinger
-	 */
-	list_for_each_entry(item, &timeout_list, ti_chain) {
-		if (item->ti_event == event) {
-			ti = item;
-			break;
-		}
-	}
-	LASSERTF(ti != NULL, "ti is NULL !\n");
-	if (list_empty(&ti->ti_obd_list)) {
-		list_del(&ti->ti_chain);
-		OBD_FREE_PTR(ti);
-	}
-	mutex_unlock(&pinger_mutex);
-	return 0;
-}
-EXPORT_SYMBOL(ptlrpc_del_timeout_client);
-
-int ptlrpc_pinger_remove_timeouts(void)
-{
-        struct timeout_item *item, *tmp;
-
-	mutex_lock(&pinger_mutex);
-	list_for_each_entry_safe(item, tmp, &timeout_list, ti_chain) {
-		LASSERT(list_empty(&item->ti_obd_list));
-		list_del(&item->ti_chain);
-                OBD_FREE_PTR(item);
-        }
-	mutex_unlock(&pinger_mutex);
-        return 0;
-}
 
 void ptlrpc_pinger_wake_up()
 {
