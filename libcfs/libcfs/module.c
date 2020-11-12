@@ -388,12 +388,149 @@ static int proc_fail_loc(struct ctl_table *table, int write,
 	int rc;
 	long old_fail_loc = cfs_fail_loc;
 
-	rc = proc_doulongvec_minmax(table, write, buffer, lenp, ppos);
+	if (!*lenp || *ppos) {
+		*lenp = 0;
+		return 0;
+	}
+
+	if (write) {
+		char *kbuf = memdup_user_nul(buffer, *lenp);
+
+		if (IS_ERR(kbuf))
+			return PTR_ERR(kbuf);
+		rc = kstrtoul(kbuf, 0, &cfs_fail_loc);
+		kfree(kbuf);
+		*ppos += *lenp;
+	} else {
+		char kbuf[64/3+3];
+
+		rc = scnprintf(kbuf, sizeof(kbuf), "%lu\n", cfs_fail_loc);
+		if (copy_to_user(buffer, kbuf, rc))
+			rc = -EFAULT;
+		else {
+			*lenp = rc;
+			*ppos += rc;
+		}
+	}
+
 	if (old_fail_loc != cfs_fail_loc) {
 		cfs_race_state = 1;
 		wake_up(&cfs_race_waitq);
 	}
 	return rc;
+}
+
+int debugfs_doint(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int rc;
+
+	if (!*lenp || *ppos) {
+		*lenp = 0;
+		return 0;
+	}
+
+	if (write) {
+		char *kbuf = memdup_user_nul(buffer, *lenp);
+		int val;
+
+		if (IS_ERR(kbuf))
+			return PTR_ERR(kbuf);
+
+		rc = kstrtoint(kbuf, 0, &val);
+		kfree(kbuf);
+		if (!rc) {
+			if (table->extra1 && val < *(int *)table->extra1)
+				val = *(int *)table->extra1;
+			if (table->extra2 && val > *(int *)table->extra2)
+				val = *(int *)table->extra2;
+			*(int *)table->data = val;
+		}
+		*ppos += *lenp;
+	} else {
+		char kbuf[64/3+3];
+
+		rc = scnprintf(kbuf, sizeof(kbuf), "%u\n", *(int *)table->data);
+		if (copy_to_user(buffer, kbuf, rc))
+			rc = -EFAULT;
+		else {
+			*lenp = rc;
+			*ppos += rc;
+		}
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(debugfs_doint);
+
+static int debugfs_dou64(struct ctl_table *table, int write,
+			 void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int rc;
+
+	if (!*lenp || *ppos) {
+		*lenp = 0;
+		return 0;
+	}
+
+	if (write) {
+		char *kbuf = memdup_user_nul(buffer, *lenp);
+		unsigned long long val;
+
+		if (IS_ERR(kbuf))
+			return PTR_ERR(kbuf);
+
+		rc = kstrtoull(kbuf, 0, &val);
+		kfree(kbuf);
+		if (!rc)
+			*(u64 *)table->data = val;
+		*ppos += *lenp;
+	} else {
+		char kbuf[64/3+3];
+
+		rc = scnprintf(kbuf, sizeof(kbuf), "%llu\n",
+			       (unsigned long long)*(u64 *)table->data);
+		if (copy_to_user(buffer, kbuf, rc))
+			rc = -EFAULT;
+		else {
+			*lenp = rc;
+			*ppos += rc;
+		}
+	}
+
+	return rc;
+}
+
+static int debugfs_dostring(struct ctl_table *table, int write,
+			    void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int len = *lenp;
+	char *kbuf = table->data;
+
+	if (!len || *ppos) {
+		*lenp = 0;
+		return 0;
+	}
+	if (len > table->maxlen)
+		len = table->maxlen;
+	if (write) {
+		if (copy_from_user(kbuf, buffer, len))
+			return -EFAULT;
+		memset(kbuf+len, 0, table->maxlen - len);
+		*ppos = *lenp;
+	} else {
+		len = strnlen(kbuf, len);
+		if (copy_to_user(buffer, kbuf, len))
+			return -EFAULT;
+		if (len < *lenp) {
+			if (copy_to_user(buffer+len, "\n", 1))
+				return -EFAULT;
+			len += 1;
+		}
+		*ppos += len;
+		*lenp -= len;
+	}
+	return len;
 }
 
 static int __proc_cpt_table(void *data, int write,
@@ -527,21 +664,21 @@ static struct ctl_table lnet_table[] = {
 		.data		= lnet_debug_log_upcall,
 		.maxlen		= sizeof(lnet_debug_log_upcall),
 		.mode		= 0644,
-		.proc_handler	= &proc_dostring,
+		.proc_handler	= &debugfs_dostring,
 	},
 	{
 		.procname	= "lnet_memused",
 		.data		= (u64 *)&libcfs_kmem.counter,
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
-		.proc_handler	= &proc_doulongvec_minmax,
+		.proc_handler	= &debugfs_dou64,
 	},
 	{
 		.procname	= "catastrophe",
 		.data		= &libcfs_catastrophe,
 		.maxlen		= sizeof(int),
 		.mode		= 0444,
-		.proc_handler	= &proc_dointvec,
+		.proc_handler	= &debugfs_doint,
 	},
 	{
 		.procname	= "dump_kernel",
@@ -560,7 +697,7 @@ static struct ctl_table lnet_table[] = {
 		.data		= &libcfs_watchdog_ratelimit,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dointvec_minmax,
+		.proc_handler	= &debugfs_doint,
 		.extra1		= &min_watchdog_ratelimit,
 		.extra2		= &max_watchdog_ratelimit,
 	},
@@ -583,14 +720,14 @@ static struct ctl_table lnet_table[] = {
 		.data		= &cfs_fail_val,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dointvec
+		.proc_handler	= &debugfs_doint
 	},
 	{
 		.procname	= "fail_err",
 		.data		= &cfs_fail_err,
 		.maxlen		= sizeof(cfs_fail_err),
 		.mode		= 0644,
-		.proc_handler	= &proc_dointvec,
+		.proc_handler	= &debugfs_doint,
 	},
 	{
 	}

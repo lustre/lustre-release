@@ -99,6 +99,8 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 void __user *buffer, size_t *lenp,
 			 int (*handler)(void *data, int write, loff_t pos,
 					void __user *buffer, int len));
+int debugfs_doint(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos);
 
 /*
  * Memory
