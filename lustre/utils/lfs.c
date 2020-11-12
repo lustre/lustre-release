@@ -761,9 +761,6 @@ enum {
 	MIGRATION_VERBOSE	= 0x0008,
 };
 
-static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
-				struct llapi_layout *layout);
-
 static int
 migrate_open_files(const char *name, __u64 migration_flags,
 		   const struct llapi_stripe_param *param,
@@ -839,12 +836,17 @@ migrate_open_files(const char *name, __u64 migration_flags,
 		}
 
 		/* create, open a volatile file, use caching (ie no directio) */
-		if (layout)
-			fdv = lfs_component_create(volatile_file, open_flags,
-						   open_mode, layout);
-		else
+		if (layout) {
+			/* Returns -1 and sets errno on error: */
+			fdv = llapi_layout_file_open(volatile_file, open_flags,
+						     open_mode, layout);
+			if (fdv < 0)
+				fdv = -errno;
+		} else {
+			/* Does the right thing on error: */
 			fdv = llapi_file_open_param(volatile_file, open_flags,
 						    open_mode, param);
+		}
 	} while (fdv < 0 && (rc = fdv) == -EEXIST);
 
 	if (rc < 0) {
