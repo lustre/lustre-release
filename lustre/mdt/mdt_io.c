@@ -1280,19 +1280,21 @@ static void mdt_lvb2reply(struct ldlm_resource *res, struct mdt_body *mb,
 
 	lock_res(res);
 	res_lvb = res->lr_lvb_data;
-	if (lvb)
-		*lvb = *res_lvb;
+	if (res_lvb) {
+		if (lvb)
+			*lvb = *res_lvb;
 
-	if (mb) {
-		mb->mbo_dom_size = res_lvb->lvb_size;
-		mb->mbo_dom_blocks = res_lvb->lvb_blocks;
-		mb->mbo_mtime = res_lvb->lvb_mtime;
-		mb->mbo_ctime = res_lvb->lvb_ctime;
-		mb->mbo_atime = res_lvb->lvb_atime;
-		mb->mbo_valid |= OBD_MD_FLATIME | OBD_MD_FLCTIME |
-				 OBD_MD_FLMTIME | OBD_MD_DOM_SIZE;
+		if (mb) {
+			mb->mbo_dom_size = res_lvb->lvb_size;
+			mb->mbo_dom_blocks = res_lvb->lvb_blocks;
+			mb->mbo_mtime = res_lvb->lvb_mtime;
+			mb->mbo_ctime = res_lvb->lvb_ctime;
+			mb->mbo_atime = res_lvb->lvb_atime;
+			mb->mbo_valid |= OBD_MD_FLATIME | OBD_MD_FLCTIME |
+					 OBD_MD_FLMTIME | OBD_MD_DOM_SIZE;
+		}
+		CDEBUG(D_DLMTRACE, "size %llu\n", res_lvb->lvb_size);
 	}
-	CDEBUG(D_DLMTRACE, "size %llu\n", res_lvb->lvb_size);
 	unlock_res(res);
 }
 

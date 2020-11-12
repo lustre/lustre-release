@@ -155,13 +155,10 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 	ENTRY;
 
 	/* Before going further let's check that OBD and export are healthy.
+	 * The condition matches one in ptlrpc_send_reply()
 	 */
-	if (exp != NULL &&
-	    (exp->exp_disconnected || exp->exp_failed ||
-	     exp->exp_obd->obd_stopping)) {
-		CDEBUG(D_INFO, "Skip LVB update, export is %s, obd is %s\n",
-		       exp->exp_failed ? "failed" : "disconnected",
-		       exp->exp_obd->obd_stopping ? "stopping" : "OK");
+	if (exp && exp->exp_obd && exp->exp_obd->obd_fail) {
+		CDEBUG(D_INFO, "Skip LVB update, obd is failing over\n");
 		RETURN(0);
 	}
 
