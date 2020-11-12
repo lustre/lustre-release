@@ -49,15 +49,15 @@ static inline struct dentry *file_dentry(const struct file *file)
 }
 #endif
 
-#ifndef IFSHIFT
-#define IFSHIFT			12
+#ifndef S_DT_SHIFT
+#define S_DT_SHIFT		12
 #endif
 
-#ifndef IFTODT
-#define IFTODT(type)		(((type) & S_IFMT) >> IFSHIFT)
+#ifndef S_DT
+#define S_DT(type)		(((type) & S_IFMT) >> S_DT_SHIFT)
 #endif
 #ifndef DTTOIF
-#define DTTOIF(dirtype)		((dirtype) << IFSHIFT)
+#define DTTOIF(dirtype)		((dirtype) << S_DT_SHIFT)
 #endif
 
 #endif

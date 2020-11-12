@@ -1972,7 +1972,7 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	zde->zde_pad = 0;
 	zde->zde_dnode = dn->dn_object;
-	zde->zde_type = IFTODT(attr->la_mode & S_IFMT);
+	zde->zde_type = S_DT(attr->la_mode & S_IFMT);
 
 	zapid = osd_get_name_n_idx(env, osd, fid, buf,
 				   sizeof(info->oti_str), &zdn);

@@ -233,7 +233,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 				lhash = hash;
 			fid_le_to_cpu(&fid, &ent->lde_fid);
 			ino = cl_fid_build_ino(&fid, is_api32);
-			type = IFTODT(lu_dirent_type_get(ent));
+			type = S_DT(lu_dirent_type_get(ent));
 			/* For ll_nfs_get_name_filldir(), it will try to access
 			 * 'ent' through 'lde_name', so the parameter 'name'
 			 * for 'filldir()' must be part of the 'ent'. */

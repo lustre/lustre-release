@@ -254,9 +254,6 @@ s/\b[cfs_]*flock_set_start(\([^,]*\), \([^)]*\))\b/\1->fl_start = \2/g
 s/\b[cfs_]*flock_end(\([^)]*\))\b/\1->fl_end/g
 s/\b[cfs_]*flock_set_end(\([^,]*\), \([^)]*\))\b/\1->fl_end = \2/g
 s/\bcfs_user_write\b/user_write/g
-s/\bCFS_IFSHIFT\b/IFSHIFT/g
-s/\bCFS_IFTODT\b/IFTODT/g
-s/\bCFS_DTTOIF\b/DTTOIF/g
 
 ################################################################################
 # memory operations

@@ -211,7 +211,7 @@ static int osd_obj_create(const struct lu_env *env, struct osd_device *o,
 
 	zde->zde_dnode = oid;
 	zde->zde_pad = 0;
-	zde->zde_type = IFTODT(isdir ? S_IFDIR : S_IFREG);
+	zde->zde_type = S_DT(isdir ? S_IFDIR : S_IFREG);
 	rc = -zap_add(o->od_os, parent, name, 8, 1, (void *)zde, tx);
 
 	GOTO(commit, rc);

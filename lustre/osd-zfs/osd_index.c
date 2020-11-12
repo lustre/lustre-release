@@ -815,7 +815,7 @@ int osd_add_to_remote_parent(const struct lu_env *env,
 
 	osd_fid2str(name, fid, sizeof(info->oti_str));
 	zde->lzd_reg.zde_dnode = obj->oo_dn->dn_object;
-	zde->lzd_reg.zde_type = IFTODT(S_IFDIR);
+	zde->lzd_reg.zde_type = S_DT(S_IFDIR);
 	zde->lzd_fid = *fid;
 
 	rc = osd_zap_add(osd, osd->od_remote_parent_dir, NULL,
@@ -1042,7 +1042,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	BUILD_BUG_ON(sizeof(*zde) % 8 != 0);
 
 	memset(&zde->lzd_reg, 0, sizeof(zde->lzd_reg));
-	zde->lzd_reg.zde_type = IFTODT(rec1->rec_type & S_IFMT);
+	zde->lzd_reg.zde_type = S_DT(rec1->rec_type & S_IFMT);
 	zde->lzd_fid = *fid;
 
 	if (idc->oic_remote) {
@@ -1502,7 +1502,7 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 			      lu_object_fid(&it->ozi_obj->oo_dt.do_lu));
 		lde->lde_attrs = LUDA_FID;
 		/* append lustre attributes */
-		osd_it_append_attrs(lde, attr, 1, IFTODT(S_IFDIR));
+		osd_it_append_attrs(lde, attr, 1, S_DT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(1, attr));
 		it->ozi_pos = OZI_POS_DOT;
 		RETURN(0);
@@ -1521,7 +1521,7 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		}
 
 		/* append lustre attributes */
-		osd_it_append_attrs(lde, attr, 2, IFTODT(S_IFDIR));
+		osd_it_append_attrs(lde, attr, 2, S_DT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(2, attr));
 		RETURN(0);
 	}
