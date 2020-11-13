@@ -2692,7 +2692,7 @@ cleanup_for_enc_tests() {
 
 cleanup_nodemap_after_enc_tests() {
 	do_facet mgs $LCTL nodemap_modify --name default \
-		--property forbid_encryption --value 1
+		--property forbid_encryption --value 0
 	wait_nm_sync default forbid_encryption
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active
@@ -4051,6 +4051,97 @@ test_54() {
 	rm -f $tmpfile $resfile
 }
 run_test 54 "Encryption policies with fscrypt"
+
+cleanup_55() {
+	# unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	do_facet mgs $LCTL nodemap_del c0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property trusted --value 0
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active 0
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+	fi
+
+	# remount client
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed"
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
+	fi
+}
+
+test_55() {
+	local client_ip
+	local client_nid
+
+	mkdir -p $DIR/$tdir/$USER0/testdir_groups
+	chown root:$ID0 $DIR/$tdir/$USER0
+	chmod 770 $DIR/$tdir/$USER0
+	chmod g+s $DIR/$tdir/$USER0
+	chown $ID0:$ID0 $DIR/$tdir/$USER0/testdir_groups
+	chmod 770 $DIR/$tdir/$USER0/testdir_groups
+	chmod g+s $DIR/$tdir/$USER0/testdir_groups
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	stack_trap cleanup_55 EXIT
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+
+	do_facet mgs $LCTL nodemap_del c0 || true
+	wait_nm_sync c0 id ''
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+	do_facet mgs $LCTL nodemap_add c0
+	do_facet mgs $LCTL nodemap_add_range \
+		 --name c0 --range $client_nid
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property trusted --value 1
+	wait_nm_sync c0 admin_nodemap
+	wait_nm_sync c0 trusted_nodemap
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+		# set some generic fileset to trigger SSK code
+		export FILESET=/
+	fi
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed"
+	unset FILESET
+
+	euid_access $USER0 $DIR/$tdir/$USER0/testdir_groups/file
+}
+run_test 55 "access with seteuid"
 
 log "cleanup: ======================================================"
 
