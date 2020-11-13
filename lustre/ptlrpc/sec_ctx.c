@@ -38,13 +38,8 @@
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
-# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), KERNEL_DS),\
-					      msg)
-# define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), KERNEL_DS), msg)
 #else
 # define ASSERT_CTXT_MAGIC(magic) do {} while(0)
-# define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
-# define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
@@ -74,7 +69,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx)
 	if (new_ctx->dt != NULL)
 		return;
 
-	//ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
 	ASSERT_CTXT_MAGIC(new_ctx->magic);
 	OBD_SET_CTXT_MAGIC(save);
 
@@ -103,7 +97,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx)
 		return;
 
 	ASSERT_CTXT_MAGIC(saved->magic);
-	ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
 
 	LASSERTF(current->fs->pwd.dentry == new_ctx->pwd, "%p != %p\n",
 		 current->fs->pwd.dentry, new_ctx->pwd);
