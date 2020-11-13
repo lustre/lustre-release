@@ -318,14 +318,12 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_gid = pud->pud_gid;
 
 	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid) {
-		ucred->uc_fsuid = nodemap->nm_squash_uid;
-		ucred->uc_fsgid = nodemap->nm_squash_gid;
 		ucred->uc_cap = 0;
 	} else {
-		ucred->uc_fsuid = pud->pud_fsuid;
-		ucred->uc_fsgid = pud->pud_fsgid;
 		ucred->uc_cap = pud->pud_cap;
 	}
+	ucred->uc_fsuid = pud->pud_fsuid;
+	ucred->uc_fsgid = pud->pud_fsgid;
 
 	/* process root_squash here. */
 	mdt_root_squash(info, peernid);
@@ -480,8 +478,6 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		if (nodemap->nmf_deny_unknown)
 			RETURN(-EACCES);
 
-		uc->uc_fsuid = nodemap->nm_squash_uid;
-		uc->uc_fsgid = nodemap->nm_squash_gid;
 		uc->uc_cap = 0;
 		uc->uc_suppgids[0] = -1;
 		uc->uc_suppgids[1] = -1;
