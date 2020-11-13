@@ -18,7 +18,7 @@ nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 nodemap_objs += nodemap_storage.o
 
 -include $(ptlrpc_dir)/../ldlm/Makefile
--include $(ptlrpc_dir)/../target/Makefile
+@SERVER_TRUE@-include $(ptlrpc_dir)/../target/Makefile
 
 ptlrpc-objs := $(ptlrpc_objs)
 ptlrpc-objs += $(patsubst %,$(LDLM)%,$(ldlm_objs))
