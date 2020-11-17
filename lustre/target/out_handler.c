@@ -121,7 +121,7 @@ static int out_create(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(wobdo));
 	}
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		lustre_swab_obdo(wobdo);
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
@@ -134,7 +134,7 @@ static int out_create(struct tgt_session_info *tsi)
 			       tgt_name(tsi->tsi_tgt), PTR_ERR(fid));
 			RETURN(PTR_ERR(fid));
 		}
-		if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+		if (req_capsule_req_need_swab(tsi->tsi_pill))
 			lustre_swab_lu_fid(fid);
 		if (!fid_is_sane(fid)) {
 			CERROR("%s: invalid fid "DFID": rc = %d\n",
@@ -177,7 +177,7 @@ static int out_attr_set(struct tgt_session_info *tsi)
 	attr->la_valid = 0;
 	attr->la_valid = 0;
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		lustre_swab_obdo(wobdo);
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
@@ -443,7 +443,7 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(tmp));
 	}
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		__swab32s(tmp);
 	flag = *tmp;
 
@@ -540,7 +540,7 @@ static int out_index_insert(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(fid));
 	}
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		lustre_swab_lu_fid(fid);
 
 	if (!fid_is_sane(fid)) {
@@ -556,7 +556,7 @@ static int out_index_insert(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(ptype));
 	}
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		__swab32s(ptype);
 
 	rec->rec_fid = fid;
@@ -657,7 +657,7 @@ static int out_write(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(tmp));
 	}
 
-	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
 		__swab64s(tmp);
 	pos = *tmp;
 
@@ -1054,7 +1054,7 @@ int out_handle(struct tgt_session_info *tsi)
 		int				 j;
 
 		our = update_bufs[i];
-		if (ptlrpc_req_need_swab(pill->rc_req))
+		if (req_capsule_req_need_swab(pill))
 			lustre_swab_object_update_request(our, 0);
 
 		if (our->ourq_magic != UPDATE_REQUEST_MAGIC) {
@@ -1071,7 +1071,7 @@ int out_handle(struct tgt_session_info *tsi)
 			update = object_update_request_get(our, j, NULL);
 			if (update == NULL)
 				GOTO(out, rc = err_serious(-EPROTO));
-			if (ptlrpc_req_need_swab(pill->rc_req))
+			if (req_capsule_req_need_swab(pill))
 				lustre_swab_object_update(update);
 
 			if (!fid_is_sane(&update->ou_fid)) {

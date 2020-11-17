@@ -2470,7 +2470,7 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			       tgt_name(tsi->tsi_tgt), vallen);
 			RETURN(-EINVAL);
 		}
-		if (ptlrpc_req_need_swab(req)) {
+		if (req_capsule_req_need_swab(&req->rq_pill)) {
 			__swab64s(&cs->cs_recno);
 			__swab32s(&cs->cs_id);
 		}
@@ -6980,7 +6980,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 	fpin = key + cfs_size_round(sizeof(KEY_FID2PATH));
 	fpout = val;
 
-	if (ptlrpc_req_need_swab(info->mti_pill->rc_req))
+	if (req_capsule_req_need_swab(info->mti_pill))
 		lustre_swab_fid2path(fpin);
 
 	memcpy(fpout, fpin, sizeof(*fpin));
@@ -6991,7 +6991,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 		      sizeof(struct lu_fid)) {
 		/* client sent its root FID, which is normally fileset FID */
 		root_fid = fpin->gf_u.gf_root_fid;
-		if (ptlrpc_req_need_swab(info->mti_pill->rc_req))
+		if (req_capsule_req_need_swab(info->mti_pill))
 			lustre_swab_lu_fid(root_fid);
 
 		if (root_fid != NULL && !fid_is_sane(root_fid))

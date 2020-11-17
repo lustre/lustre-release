@@ -1763,7 +1763,7 @@ again:
 		GOTO(out, rc);
 	}
 
-	mne_swab = ptlrpc_rep_need_swab(req);
+	mne_swab = req_capsule_rep_need_swab(&req->rq_pill);
 
 	/* When a nodemap config is received, we build a new nodemap config,
 	 * with new nodemap structs. We keep track of the most recently added

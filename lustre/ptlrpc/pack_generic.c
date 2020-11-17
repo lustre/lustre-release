@@ -70,25 +70,6 @@ __u32 lustre_msg_hdr_size(__u32 magic, __u32 count)
 	}
 }
 
-void ptlrpc_buf_set_swabbed(struct ptlrpc_request *req, const int inout,
-			    __u32 index)
-{
-	if (inout)
-		lustre_set_req_swabbed(req, index);
-	else
-		lustre_set_rep_swabbed(req, index);
-}
-
-bool ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
-			  __u32 index)
-{
-	if (inout)
-		return (ptlrpc_req_need_swab(req) &&
-			!lustre_req_swabbed(req, index));
-
-	return (ptlrpc_rep_need_swab(req) && !lustre_rep_swabbed(req, index));
-}
-
 static inline int lustre_msg_check_version_v2(struct lustre_msg_v2 *msg,
 					      enum lustre_msg_version version)
 {
@@ -661,7 +642,8 @@ int ptlrpc_unpack_req_msg(struct ptlrpc_request *req, int len)
 
 	rc = __lustre_unpack_msg(req->rq_reqmsg, len);
 	if (rc == 1) {
-		lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+		req_capsule_set_req_swabbed(&req->rq_pill,
+					    MSG_PTLRPC_HEADER_OFF);
 		rc = 0;
 	}
 	return rc;
@@ -673,26 +655,30 @@ int ptlrpc_unpack_rep_msg(struct ptlrpc_request *req, int len)
 
 	rc = __lustre_unpack_msg(req->rq_repmsg, len);
 	if (rc == 1) {
-		lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+		req_capsule_set_rep_swabbed(&req->rq_pill,
+					    MSG_PTLRPC_HEADER_OFF);
 		rc = 0;
 	}
 	return rc;
 }
 
-static inline int lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
-					       const int inout, int offset)
+static inline int
+lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
+			     enum req_location loc, int offset)
 {
 	struct ptlrpc_body *pb;
-	struct lustre_msg_v2 *m = inout ? req->rq_reqmsg : req->rq_repmsg;
+	struct lustre_msg_v2 *m;
+
+	m = loc == RCL_CLIENT ? req->rq_reqmsg : req->rq_repmsg;
 
 	pb = lustre_msg_buf_v2(m, offset, sizeof(struct ptlrpc_body_v2));
 	if (!pb) {
 		CERROR("error unpacking ptlrpc body\n");
 		return -EFAULT;
 	}
-	if (ptlrpc_buf_need_swab(req, inout, offset)) {
+	if (req_capsule_need_swab(&req->rq_pill, loc, offset)) {
 		lustre_swab_ptlrpc_body(pb);
-		ptlrpc_buf_set_swabbed(req, inout, offset);
+		req_capsule_set_swabbed(&req->rq_pill, loc, offset);
 	}
 
 	if ((pb->pb_version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
@@ -700,7 +686,7 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
 		return -EINVAL;
 	}
 
-	if (!inout)
+	if (loc == RCL_SERVER)
 		pb->pb_status = ptlrpc_status_ntoh(pb->pb_status);
 
 	return 0;
@@ -710,7 +696,7 @@ int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset)
 {
 	switch (req->rq_reqmsg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2:
-		return lustre_unpack_ptlrpc_body_v2(req, 1, offset);
+		return lustre_unpack_ptlrpc_body_v2(req, RCL_CLIENT, offset);
 	default:
 		CERROR("bad lustre msg magic: %08x\n",
 		       req->rq_reqmsg->lm_magic);
@@ -722,7 +708,7 @@ int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset)
 {
 	switch (req->rq_repmsg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2:
-		return lustre_unpack_ptlrpc_body_v2(req, 0, offset);
+		return lustre_unpack_ptlrpc_body_v2(req, RCL_SERVER, offset);
 	default:
 		CERROR("bad lustre msg magic: %08x\n",
 		       req->rq_repmsg->lm_magic);
@@ -2747,7 +2733,8 @@ static inline int req_ptlrpc_body_swabbed(struct ptlrpc_request *req)
 
 	switch (req->rq_reqmsg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2:
-		return lustre_req_swabbed(req, MSG_PTLRPC_BODY_OFF);
+		return req_capsule_req_swabbed(&req->rq_pill,
+					       MSG_PTLRPC_BODY_OFF);
 	default:
 		CERROR("bad lustre msg magic: %#08X\n",
 		       req->rq_reqmsg->lm_magic);
@@ -2762,7 +2749,8 @@ static inline int rep_ptlrpc_body_swabbed(struct ptlrpc_request *req)
 
 	switch (req->rq_repmsg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2:
-		return lustre_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
+		return req_capsule_rep_swabbed(&req->rq_pill,
+					       MSG_PTLRPC_BODY_OFF);
 	default:
 		/* uninitialized yet */
 		return 0;
@@ -2784,7 +2772,7 @@ void _debug_req(struct ptlrpc_request *req,
 	if (req->rq_repmsg)
 		rep_ok = true;
 
-	if (ptlrpc_req_need_swab(req)) {
+	if (req_capsule_req_need_swab(&req->rq_pill)) {
 		req_ok = req_ok && req_ptlrpc_body_swabbed(req);
 		rep_ok = rep_ok && rep_ptlrpc_body_swabbed(req);
 	}

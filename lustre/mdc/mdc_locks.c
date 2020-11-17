@@ -351,8 +351,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	lit->opc = (__u64)it->it_op;
 
 	/* pack the intended request */
-	mdc_open_pack(req, op_data, it->it_create_mode, 0, it->it_flags, lmm,
-		      lmmsize);
+	mdc_open_pack(&req->rq_pill, op_data, it->it_create_mode, 0,
+		      it->it_flags, lmm, lmmsize);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     mdt_md_capsule_size);
@@ -492,11 +492,11 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 #endif
 
 	/* pack the intended request */
-	mdc_pack_body(req, &op_data->op_fid1, op_data->op_valid,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, op_data->op_valid,
 		      ea_vals_buf_size, -1, 0);
 
 	/* get SELinux policy info if any */
-	mdc_file_sepol_pack(req);
+	mdc_file_sepol_pack(&req->rq_pill);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
 			     GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM);
@@ -565,7 +565,7 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		easize = obd->u.cli.cl_max_mds_easize;
 
 	/* pack the intended request */
-	mdc_getattr_pack(req, valid, it->it_flags, op_data, easize);
+	mdc_getattr_pack(&req->rq_pill, valid, it->it_flags, op_data, easize);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, easize);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);

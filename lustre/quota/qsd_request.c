@@ -425,7 +425,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 	req_ii = req_capsule_server_get(&req->rq_pill, &RMF_IDX_INFO);
 	*ii = *req_ii;
 
-	*need_swab = ptlrpc_rep_need_swab(req);
+	*need_swab = req_capsule_rep_need_swab(&req->rq_pill);
 
 	EXIT;
 out:

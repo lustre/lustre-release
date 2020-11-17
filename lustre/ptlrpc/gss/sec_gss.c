@@ -760,7 +760,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 RETURN(-EPROTO);
         }
 
-        swabbed = ptlrpc_rep_need_swab(req);
+	swabbed = req_capsule_rep_need_swab(&req->rq_pill);
 
         ghdr = gss_swab_header(msg, 0, swabbed);
         if (ghdr == NULL) {
@@ -969,8 +969,8 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         LASSERT(req->rq_ctx_init == 0);
         LASSERT(msg);
 
-        gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
-        swabbed = ptlrpc_rep_need_swab(req);
+	gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
+	swabbed = req_capsule_rep_need_swab(&req->rq_pill);
 
         ghdr = gss_swab_header(msg, 0, swabbed);
         if (ghdr == NULL) {
@@ -2008,7 +2008,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
                 RETURN(SECSVC_DROP);
         }
 
-        swabbed = ptlrpc_req_need_swab(req);
+	swabbed = req_capsule_req_need_swab(&req->rq_pill);
 
         /* ctx initiate payload is in last segment */
         secdata = lustre_msg_buf(reqbuf, reqbuf->lm_bufcount - 1, 0);
@@ -2134,7 +2134,7 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         }
 
 verified:
-        swabbed = ptlrpc_req_need_swab(req);
+	swabbed = req_capsule_req_need_swab(&req->rq_pill);
 
         /* user descriptor */
         if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
@@ -2333,7 +2333,7 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
                         RETURN(SECSVC_OK);
                 }
                 if (sptlrpc_unpack_user_desc(req->rq_reqbuf, 2,
-                                             ptlrpc_req_need_swab(req))) {
+				req_capsule_req_need_swab(&req->rq_pill))) {
                         CERROR("Mal-formed user descriptor, ignore it\n");
                         RETURN(SECSVC_OK);
                 }
@@ -2361,7 +2361,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
                 RETURN(SECSVC_DROP);
         }
 
-        swabbed = ptlrpc_req_need_swab(req);
+	swabbed = req_capsule_req_need_swab(&req->rq_pill);
 
         ghdr = gss_swab_header(req->rq_reqbuf, 0, swabbed);
         if (ghdr == NULL) {

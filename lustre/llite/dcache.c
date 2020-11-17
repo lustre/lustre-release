@@ -238,21 +238,22 @@ void ll_prune_aliases(struct inode *inode)
 }
 
 int ll_revalidate_it_finish(struct ptlrpc_request *request,
-                            struct lookup_intent *it,
-                            struct dentry *de)
+			    struct lookup_intent *it,
+			    struct dentry *de)
 {
-        int rc = 0;
+	int rc = 0;
+
         ENTRY;
 
-        if (!request)
-                RETURN(0);
+	if (!request)
+		RETURN(0);
 
-        if (it_disposition(it, DISP_LOOKUP_NEG))
-                RETURN(-ENOENT);
+	if (it_disposition(it, DISP_LOOKUP_NEG))
+		RETURN(-ENOENT);
 
-        rc = ll_prep_inode(&de->d_inode, request, NULL, it);
+	rc = ll_prep_inode(&de->d_inode, &request->rq_pill, NULL, it);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)

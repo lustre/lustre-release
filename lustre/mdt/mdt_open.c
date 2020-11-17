@@ -2269,7 +2269,7 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 	if (data == NULL)
 		RETURN(-EPROTO);
 
-	if (ptlrpc_req_need_swab(mdt_info_req(info)))
+	if (req_capsule_req_need_swab(info->mti_pill))
 		lustre_swab_close_data_resync_done(&data->cd_resync);
 
 	if (!fid_is_zero(&data->cd_fid))

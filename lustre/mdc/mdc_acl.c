@@ -24,9 +24,8 @@
 
 #include "mdc_internal.h"
 
-int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
+int mdc_unpack_acl(struct req_capsule *pill, struct lustre_md *md)
 {
-	struct req_capsule *pill = &req->rq_pill;
 	struct mdt_body	*body = md->body;
 	struct posix_acl *acl;
 	void *buf;

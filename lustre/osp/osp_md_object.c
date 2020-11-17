@@ -518,7 +518,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	fid = lbuf->lb_buf;
-	if (ptlrpc_rep_need_swab(req))
+	if (req_capsule_rep_need_swab(&req->rq_pill))
 		lustre_swab_lu_fid(fid);
 	if (!fid_is_sane(fid)) {
 		CERROR("%s: lookup "DFID" %s invalid fid "DFID"\n",

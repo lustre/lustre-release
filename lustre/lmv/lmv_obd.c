@@ -3425,7 +3425,7 @@ lmv_lock_match(struct obd_export *exp, __u64 flags,
 }
 
 static int
-lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
+lmv_get_lustre_md(struct obd_export *exp, struct req_capsule *pill,
 		  struct obd_export *dt_exp, struct obd_export *md_exp,
 		  struct lustre_md *md)
 {
@@ -3435,7 +3435,7 @@ lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 	if (!tgt || !tgt->ltd_exp)
 		return -EINVAL;
 
-	return md_get_lustre_md(tgt->ltd_exp, req, dt_exp, md_exp, md);
+	return md_get_lustre_md(tgt->ltd_exp, pill, dt_exp, md_exp, md);
 }
 
 static int lmv_free_lustre_md(struct obd_export *exp, struct lustre_md *md)

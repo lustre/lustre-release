@@ -1775,7 +1775,7 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	/* cookie doesn't need to be swapped but it has been swapped
 	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs
 	 * restoring. */
-	if (ptlrpc_req_need_swab(mdt_info_req(info)))
+	if (req_capsule_req_need_swab(pill))
 		__swab64s(&rec->rs_lease_handle.cookie);
 	rr->rr_lease_handle = &rec->rs_lease_handle;
 

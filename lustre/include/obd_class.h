@@ -1571,10 +1571,10 @@ static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static inline int md_get_lustre_md(struct obd_export *exp,
-                                   struct ptlrpc_request *req,
-                                   struct obd_export *dt_exp,
-                                   struct obd_export *md_exp,
-                                   struct lustre_md *md)
+				   struct req_capsule *pill,
+				   struct obd_export *dt_exp,
+				   struct obd_export *md_exp,
+				   struct lustre_md *md)
 {
 	int rc;
 
@@ -1582,7 +1582,7 @@ static inline int md_get_lustre_md(struct obd_export *exp,
 	if (rc)
 		return rc;
 
-	return MDP(exp->exp_obd, get_lustre_md)(exp, req, dt_exp, md_exp, md);
+	return MDP(exp->exp_obd, get_lustre_md)(exp, pill, dt_exp, md_exp, md);
 }
 
 static inline int md_free_lustre_md(struct obd_export *exp,

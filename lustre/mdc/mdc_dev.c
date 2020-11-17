@@ -578,12 +578,12 @@ static int mdc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 }
 
 /* This is needed only for old servers (before 2.14) support */
-int mdc_fill_lvb(struct ptlrpc_request *req, struct ost_lvb *lvb)
+int mdc_fill_lvb(struct req_capsule *pill, struct ost_lvb *lvb)
 {
 	struct mdt_body *body;
 
 	/* get LVB data from mdt_body otherwise */
-	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	body = req_capsule_server_get(pill, &RMF_MDT_BODY);
 	if (!body)
 		RETURN(-EPROTO);
 
@@ -607,7 +607,7 @@ int mdc_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
 	/* needed only for glimpse from an old server (< 2.14) */
 	if (glimpse && !exp_connect_dom_lvb(exp))
-		rc = mdc_fill_lvb(req, &ols->ols_lvb);
+		rc = mdc_fill_lvb(&req->rq_pill, &ols->ols_lvb);
 
 	if (glimpse && errcode == ELDLM_LOCK_ABORTED) {
 		struct ldlm_reply *rep;

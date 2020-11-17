@@ -1059,7 +1059,8 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
 	rc = __lustre_unpack_msg(req->rq_repdata, req->rq_repdata_len);
 	switch (rc) {
 	case 1:
-		lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+		req_capsule_set_rep_swabbed(&req->rq_pill,
+					    MSG_PTLRPC_HEADER_OFF);
 	case 0:
 		break;
 	default:
@@ -2231,7 +2232,8 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 	rc = __lustre_unpack_msg(msg, req->rq_reqdata_len);
 	switch (rc) {
 	case 1:
-		lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+		req_capsule_set_req_swabbed(&req->rq_pill,
+					    MSG_PTLRPC_HEADER_OFF);
 	case 0:
 		break;
 	default:

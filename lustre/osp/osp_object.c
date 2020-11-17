@@ -427,7 +427,7 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 		return -EPROTO;
 
 	LASSERT(req != NULL);
-	if (ptlrpc_req_need_swab(req))
+	if (req_capsule_req_need_swab(&req->rq_pill))
 		lustre_swab_obdo(wobdo);
 
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
@@ -1895,7 +1895,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 
 	it->ooi_rec_size = ii->ii_recsize;
 	it->ooi_valid_npages = npages;
-	if (ptlrpc_rep_need_swab(req))
+	if (req_capsule_rep_need_swab(&req->rq_pill))
 		it->ooi_swab = 1;
 
 	it->ooi_next = ii->ii_hash_end;

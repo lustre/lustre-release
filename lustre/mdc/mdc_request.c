@@ -121,7 +121,7 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 	if (fileset != NULL) {
 		char *name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
 
@@ -230,7 +230,7 @@ static int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
         }
 
 again:
-	mdc_pack_body(req, &op_data->op_fid1, op_data->op_valid,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, op_data->op_valid,
 		      op_data->op_mode, -1, 0);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
@@ -286,7 +286,7 @@ static int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
         }
 
 again:
-	mdc_pack_body(req, &op_data->op_fid1, op_data->op_valid,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, op_data->op_valid,
 		      op_data->op_mode, op_data->op_suppgids[0], 0);
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     op_data->op_mode);
@@ -394,7 +394,8 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                 rec->sx_size   = output_size;
                 rec->sx_flags  = flags;
 	} else {
-		mdc_pack_body(req, fid, valid, output_size, suppgid, flags);
+		mdc_pack_body(&req->rq_pill, fid, valid, output_size,
+			      suppgid, flags);
 	}
 
         if (xattr_name) {
@@ -406,7 +407,7 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                 memcpy(tmp, input, input_size);
         }
 
-	mdc_file_sepol_pack(req);
+	mdc_file_sepol_pack(&req->rq_pill);
 
         if (req_capsule_has_field(&req->rq_pill, &RMF_EADATA, RCL_SERVER))
                 req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
@@ -506,12 +507,11 @@ out:
 	return rc;
 }
 
-static int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
+static int mdc_get_lustre_md(struct obd_export *exp, struct req_capsule *pill,
 			     struct obd_export *dt_exp,
 			     struct obd_export *md_exp,
 			     struct lustre_md *md)
 {
-        struct req_capsule *pill = &req->rq_pill;
         int rc;
         ENTRY;
 
@@ -611,7 +611,7 @@ static int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 		 * only when aclsize != 0 there's an actual segment for ACL
 		 * in reply buffer.
 		 */
-		rc = mdc_unpack_acl(req, md);
+		rc = mdc_unpack_acl(pill, md);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -935,7 +935,7 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 		op_data->op_xvalid &= ~(OP_XVALID_LAZYSIZE |
 					OP_XVALID_LAZYBLOCKS);
 
-        mdc_close_pack(req, op_data);
+	mdc_close_pack(&req->rq_pill, op_data);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
@@ -1032,7 +1032,7 @@ restart_bulk:
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
 						 PAGE_SIZE);
 
-	mdc_readdir_pack(req, offset, PAGE_SIZE * npages, fid);
+	mdc_readdir_pack(&req->rq_pill, offset, PAGE_SIZE * npages, fid);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1710,7 +1710,7 @@ static int mdc_ioc_hsm_progress(struct obd_export *exp,
 	if (req == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	/* Copy hsm_progress struct */
 	req_hpk = req_capsule_client_get(&req->rq_pill, &RMF_MDS_HSM_PROGRESS);
@@ -1767,7 +1767,7 @@ static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archive_count,
 		RETURN(-ENOMEM);
 	}
 
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	archive_array = req_capsule_client_get(&req->rq_pill,
 					       &RMF_MDS_HSM_ARCHIVE);
@@ -1809,7 +1809,7 @@ static int mdc_ioc_hsm_current_action(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	mdc_pack_body(req, &op_data->op_fid1, 0, 0,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, 0, 0,
 		      op_data->op_suppgids[0], 0);
 
 	ptlrpc_request_set_replen(req);
@@ -1843,7 +1843,7 @@ static int mdc_ioc_hsm_ct_unregister(struct obd_import *imp)
 	if (req == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	ptlrpc_request_set_replen(req);
 
@@ -1874,7 +1874,7 @@ static int mdc_ioc_hsm_state_get(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	mdc_pack_body(req, &op_data->op_fid1, 0, 0,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, 0, 0,
 		      op_data->op_suppgids[0], 0);
 
 	ptlrpc_request_set_replen(req);
@@ -1915,7 +1915,7 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	mdc_pack_body(req, &op_data->op_fid1, 0, 0,
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, 0, 0,
 		      op_data->op_suppgids[0], 0);
 
 	/* Copy states */
@@ -1963,7 +1963,7 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	/* Copy hsm_request struct */
 	req_hr = req_capsule_client_get(&req->rq_pill, &RMF_MDS_HSM_REQUEST);
@@ -2090,7 +2090,7 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	mdc_swap_layouts_pack(req, op_data);
+	mdc_swap_layouts_pack(&req->rq_pill, op_data);
 
 	payload = req_capsule_client_get(&req->rq_pill, &RMF_SWAP_LAYOUTS);
 	LASSERT(payload);
@@ -2273,7 +2273,7 @@ static int mdc_get_info_rpc(struct obd_export *exp,
 	if (rc == 0 || rc == -EREMOTE) {
 		tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
 		memcpy(val, tmp, vallen);
-		if (ptlrpc_rep_need_swab(req)) {
+		if (req_capsule_rep_need_swab(&req->rq_pill)) {
 			if (KEY_IS(KEY_FID2PATH))
 				lustre_swab_fid2path(val);
 		}
@@ -2542,7 +2542,7 @@ static int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-	mdc_pack_body(req, fid, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, fid, 0, 0, -1, 0);
 
         ptlrpc_request_set_replen(req);
 
@@ -2611,7 +2611,7 @@ static int mdc_rmfid(struct obd_export *exp, struct fid_array *fa,
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_FID_ARRAY);
 	memcpy(tmp, fa->fa_fids, flen);
 
-	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 	b = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
 	b->mbo_ctime = ktime_get_real_seconds();
 

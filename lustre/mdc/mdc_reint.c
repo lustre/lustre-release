@@ -142,7 +142,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		CDEBUG(D_INODE, "setting mtime %lld, ctime %lld\n",
 		       (s64)op_data->op_attr.ia_mtime.tv_sec,
 		       (s64)op_data->op_attr.ia_ctime.tv_sec);
-	mdc_setattr_pack(req, op_data, ea, ealen);
+	mdc_setattr_pack(&req->rq_pill, op_data, ea, ealen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
 
@@ -232,8 +232,8 @@ rebuild:
          * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
          * tgt, for symlinks or lov MD data.
          */
-        mdc_create_pack(req, op_data, data, datalen, mode, uid,
-                        gid, cap_effective, rdev);
+	mdc_create_pack(&req->rq_pill, op_data, data, datalen, mode, uid,
+			gid, cap_effective, rdev);
 
         ptlrpc_request_set_replen(req);
 
@@ -329,7 +329,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(rc);
 	}
 
-	mdc_unlink_pack(req, op_data);
+	mdc_unlink_pack(&req->rq_pill, op_data);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
@@ -387,8 +387,8 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(rc);
 	}
 
-        mdc_link_pack(req, op_data);
-        ptlrpc_request_set_replen(req);
+	mdc_link_pack(&req->rq_pill, op_data);
+	ptlrpc_request_set_replen(req);
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
         *request = req;
@@ -464,9 +464,10 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		ldlm_cli_cancel_list(&cancels, count, req, 0);
 
 	if (op_data->op_cli_flags & CLI_MIGRATE)
-		mdc_migrate_pack(req, op_data, old, oldlen);
+		mdc_migrate_pack(&req->rq_pill, op_data, old, oldlen);
 	else
-		mdc_rename_pack(req, op_data, old, oldlen, new, newlen);
+		mdc_rename_pack(&req->rq_pill, op_data, old, oldlen,
+				new, newlen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);

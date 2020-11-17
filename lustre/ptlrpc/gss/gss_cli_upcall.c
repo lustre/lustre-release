@@ -345,14 +345,14 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
                 goto out_copy;
         }
 
-        LASSERT(req->rq_repdata);
-        lsize = ctx_init_parse_reply(req->rq_repdata,
-                                     ptlrpc_rep_need_swab(req),
-                                     param.reply_buf, param.reply_buf_size);
-        if (lsize < 0) {
-                param.status = (int) lsize;
-                goto out_copy;
-        }
+	LASSERT(req->rq_repdata);
+	lsize = ctx_init_parse_reply(req->rq_repdata,
+				     req_capsule_rep_need_swab(&req->rq_pill),
+				     param.reply_buf, param.reply_buf_size);
+	if (lsize < 0) {
+		param.status = (int) lsize;
+		goto out_copy;
+	}
 
         param.status = 0;
         param.reply_length = lsize;

@@ -672,7 +672,7 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 	if (rc != 1)
 		GOTO(out, rc = -EAGAIN);
 
-	rc = ll_prep_inode(&child, req, dir->i_sb, it);
+	rc = ll_prep_inode(&child, &req->rq_pill, dir->i_sb, it);
 	if (rc)
 		GOTO(out, rc);
 

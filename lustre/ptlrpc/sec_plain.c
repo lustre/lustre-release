@@ -223,7 +223,7 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 		RETURN(-EPROTO);
 	}
 
-	swabbed = ptlrpc_rep_need_swab(req);
+	swabbed = req_capsule_rep_need_swab(&req->rq_pill);
 
 	phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
 	if (phdr == NULL) {
@@ -749,7 +749,7 @@ static int plain_accept(struct ptlrpc_request *req)
 		RETURN(SECSVC_DROP);
 	}
 
-	swabbed = ptlrpc_req_need_swab(req);
+	swabbed = req_capsule_req_need_swab(&req->rq_pill);
 
 	phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
 	if (phdr == NULL) {

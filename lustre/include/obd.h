@@ -1175,7 +1175,7 @@ struct md_ops {
 
 	int (*m_init_ea_size)(struct obd_export *, __u32, __u32);
 
-	int (*m_get_lustre_md)(struct obd_export *, struct ptlrpc_request *,
+	int (*m_get_lustre_md)(struct obd_export *, struct req_capsule *,
 			       struct obd_export *, struct obd_export *,
 			       struct lustre_md *);
 

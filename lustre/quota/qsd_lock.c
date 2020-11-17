@@ -154,7 +154,7 @@ static int qsd_common_glimpse_ast(struct ptlrpc_request *req,
 	if (!*desc)
 		RETURN(-EFAULT);
 
-	if (ptlrpc_req_need_swab(req))
+	if (req_capsule_req_need_swab(&req->rq_pill))
 		lustre_swab_gl_lquota_desc(*desc);
 
 	/* prepare reply */
