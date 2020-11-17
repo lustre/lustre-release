@@ -57,6 +57,7 @@
 #include "lsupport.h"
 #include "gss_oids.h"
 #include "sk_utils.h"
+#include <sys/time.h>
 
 #define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
 #define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
@@ -460,7 +461,7 @@ int handle_sk(struct svc_nego_data *snd)
 	}
 
 redo:
-	rc = sk_gen_params(skc);
+	rc = sk_gen_params(skc, sk_dh_checks);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to generate DH params for responder\n");
 		goto cleanup_partial;

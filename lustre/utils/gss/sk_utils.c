@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <libcfs/util/string.h>
+#include <sys/time.h>
 
 #include "sk_utils.h"
 #include "write_bytes.h"
@@ -676,6 +677,197 @@ out_err:
 	return NULL;
 }
 
+#define SK_GENERATOR 2
+#define DH_NUMBER_ITERATIONS_FOR_PRIME 64
+
+/* OpenSSL 1.1.1c increased the number of rounds used for Miller-Rabin testing
+ * of the prime provided as input parameter to DH_check(). This makes the check
+ * roughly x10 longer, and causes request timeouts when an SSK flavor is being
+ * used.
+ *
+ * Instead, use a dynamic number Miller-Rabin rounds based on the speed of the
+ * check on the current system, evaluated when the lsvcgssd daemon starts, but
+ * at least as many as OpenSSL 1.1.1b used for the same key size. If default
+ * DH_check() duration is OK, use it directly instead of limiting the rounds.
+ *
+ * If \a num_rounds == 0, we just call original DH_check() directly.
+ */
+static bool sk_is_dh_valid(const DH *dh, int num_rounds)
+{
+	const BIGNUM *p, *g;
+	BN_ULONG word;
+	BN_CTX *ctx;
+	BIGNUM *r;
+	bool valid = false;
+	int rc;
+
+	if (num_rounds == 0) {
+		int codes = 0;
+
+		rc = DH_check(dh, &codes);
+		if (rc != 1 || codes) {
+			printerr(0, "DH_check(0) failed: codes=%#x: rc=%d\n",
+				 codes, rc);
+			return false;
+		}
+		return true;
+	}
+
+	DH_get0_pqg(dh, &p, NULL, &g);
+
+	if (!BN_is_word(g, SK_GENERATOR)) {
+		printerr(0, "%s: Diffie-Hellman generator is not %u\n",
+			 program_invocation_short_name, SK_GENERATOR);
+		return false;
+	}
+
+	word = BN_mod_word(p, 24);
+	if (word != 11) {
+		printerr(0, "%s: Diffie-Hellman prime modulo=%lu unsuitable\n",
+			 program_invocation_short_name, word);
+		return false;
+	}
+
+	ctx = BN_CTX_new();
+	if (ctx == NULL) {
+		printerr(0, "%s: Diffie-Hellman error allocating context\n",
+			 program_invocation_short_name);
+		return false;
+	}
+	BN_CTX_start(ctx);
+	r = BN_CTX_get(ctx); /* must be called before "ctx" used elsewhere */
+
+	rc = BN_is_prime_ex(p, num_rounds, ctx, NULL);
+	if (rc == 0)
+		printerr(0, "%s: Diffie-Hellman 'p' not prime in %u rounds\n",
+			 program_invocation_short_name, num_rounds);
+	if (rc <= 0)
+		goto out_free;
+
+	if (!BN_rshift1(r, p)) {
+		printerr(0, "%s: error shifting BigNum 'r' by 'p'\n",
+			 program_invocation_short_name);
+		goto out_free;
+	}
+	rc = BN_is_prime_ex(r, num_rounds, ctx, NULL);
+	if (rc == 0)
+		printerr(0, "%s: Diffie-Hellman 'r' not prime in %u rounds\n",
+			 program_invocation_short_name, num_rounds);
+	if (rc <= 0)
+		goto out_free;
+
+	valid = true;
+
+out_free:
+	BN_CTX_end(ctx);
+	BN_CTX_free(ctx);
+
+	return valid;
+}
+
+#define VALUE_LENGTH 256
+static unsigned char test_prime[VALUE_LENGTH] =
+	"\xf7\xfa\x49\xd8\xec\xb1\x3b\xff\x26\x10\x3f\xc5\x3a\xc5\xcc\x40"
+	"\x4f\xbf\x92\xe1\x8b\x83\xe7\xa2\xba\x0f\x51\x5a\x91\x48\xe0\xa3"
+	"\xf1\x4d\xbc\xbb\x8a\x28\x14\xac\x02\x23\x76\x42\x17\x4d\x3c\xdc"
+	"\x5e\x4f\x80\x1f\xd7\x54\x1c\x50\xac\x3b\x28\x68\x8d\x71\x41\x7f"
+	"\xa7\x1c\x2f\x22\xd3\xa8\x91\xb2\x64\xb6\x84\xa6\xcf\x06\x16\x91"
+	"\x2f\xb8\xb4\x42\x1d\x3a\x4e\x3a\x0c\x7f\x04\x69\x78\xb5\x8f\x92"
+	"\x07\x89\xac\x24\x06\x53\x2c\x23\xec\xaa\x5c\xb4\x7b\x49\xbc\xf4"
+	"\x90\x67\x71\x9c\x24\x2c\x1d\x8d\x76\xc8\x85\x4e\x19\xf1\xf9\x33"
+	"\x45\xbd\x9f\x7d\x0a\x08\x8c\x22\xcc\x35\xf3\x5b\xab\x3f\x24\x9d"
+	"\x61\x70\x86\xbb\xbe\xd8\xb0\xf8\x34\xfa\xeb\x5b\x8e\xf2\x62\x23"
+	"\xd1\xfb\xbb\xb8\x21\x71\x1e\x39\x39\x59\xe0\x82\x98\x41\x84\x40"
+	"\x1f\xd3\x9b\xa3\x73\xdb\xec\xe0\xc0\xde\x2d\x1c\xea\x43\x40\x93"
+	"\x98\x38\x03\x36\x1e\xe1\xe7\x39\x7b\x35\x92\x4a\x51\xa5\x91\x63"
+	"\xd5\x31\x98\x3d\x89\x27\x6f\xcc\x69\xff\xbe\x31\x13\xdc\x2f\x72"
+	"\x2d\xab\x6a\xb7\x13\xd3\x47\xda\xaa\xf3\x3c\xa0\xfd\xaa\x0f\x02"
+	"\x96\x81\x1a\x26\xe8\xf7\x25\x65\x33\x78\xd9\x6b\x6d\xb0\xd9\xfb";
+
+/**
+ * Measure time taken by prime testing routine for a 2048 bit long prime,
+ * depending on the number of check rounds.
+ *
+ * \param[in]	usec_check_max    max time allowed for DH_check completion
+ *
+ * \retval	max number of rounds to keep prime testing under usec_check_max
+ *		return 0 if we should use the default DH_check rounds
+ */
+int sk_speedtest_dh_valid(unsigned int usec_check_max)
+{
+	DH *dh;
+	BIGNUM *p, *g;
+	int num_rounds, prev_rounds = 0;
+
+	dh = DH_new();
+	if (!dh)
+		return 0;
+
+	p = BN_bin2bn(test_prime, VALUE_LENGTH, NULL);
+	if (!p)
+		goto free_dh;
+
+	g = BN_new();
+	if (!g)
+		goto free_p;
+
+	if (!BN_set_word(g, SK_GENERATOR))
+		goto free_g;
+
+	/* "dh" takes over freeing of 'p' and 'g' if this succeeds */
+	if (!DH_set0_pqg(dh, p, NULL, g)) {
+	free_g:
+		BN_free(g);
+	free_p:
+		BN_free(p);
+		goto free_dh;
+	}
+
+	for (num_rounds = 0;
+	     num_rounds <= DH_NUMBER_ITERATIONS_FOR_PRIME;
+	     num_rounds += (num_rounds <= 4 ? 4 : 8)) {
+		unsigned int usec_this;
+		int j;
+
+		/* get max duration of 4 runs at current number of rounds */
+		usec_this = 0;
+		for (j = 0; j < 4; j++) {
+			struct timeval now, prev;
+			unsigned int usec_curr;
+
+			gettimeofday(&prev, NULL);
+			if (!sk_is_dh_valid(dh, num_rounds)) {
+				/* if test_prime is found bad, use default */
+				prev_rounds = 0;
+				goto free_dh;
+			}
+			gettimeofday(&now, NULL);
+			usec_curr = (now.tv_sec - prev.tv_sec) * 1000000 +
+				    now.tv_usec - prev.tv_usec;
+			if (usec_curr > usec_this)
+				usec_this = usec_curr;
+		}
+		printerr(2, "%s: %d rounds: %d usec\n",
+			 program_invocation_short_name, num_rounds, usec_this);
+		if (num_rounds == 0) {
+			if (usec_this <= usec_check_max)
+			/* using original check rounds as implemented in
+			 * DH_check() took less time than the max allowed,
+			 * so just use original DH_check()
+			 */
+				break;
+		} else if (usec_this >= usec_check_max) {
+			break;
+		}
+		prev_rounds = num_rounds;
+	}
+
+free_dh:
+	DH_free(dh);
+
+	return prev_rounds;
+}
+
 /**
  * Populates the DH parameters for the DHKE
  *
@@ -685,12 +877,11 @@ out_err:
  * \retval	GSS_S_COMPLETE	success
  * \retval	GSS_S_FAILURE	failure
  */
-uint32_t sk_gen_params(struct sk_cred *skc)
+uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds)
 {
 	uint32_t random;
 	BIGNUM *p, *g;
 	const BIGNUM *pub_key;
-	int rc;
 
 	/* Random value used by both the request and response as part of the
 	 * key binding material.  This also should ensure we have unqiue
@@ -738,13 +929,8 @@ uint32_t sk_gen_params(struct sk_cred *skc)
 	}
 
 	/* Verify that we have a safe prime and valid generator */
-	if (DH_check(skc->sc_params, &rc) != 1) {
-		printerr(0, "DH_check() failed: %d\n", rc);
+	if (!sk_is_dh_valid(skc->sc_params, num_rounds))
 		return GSS_S_FAILURE;
-	} else if (rc) {
-		printerr(0, "DH_check() returned error codes: 0x%x\n", rc);
-		return GSS_S_FAILURE;
-	}
 
 	if (DH_generate_key(skc->sc_params) != 1) {
 		printerr(0, "Failed to generate public DH key: %s\n",

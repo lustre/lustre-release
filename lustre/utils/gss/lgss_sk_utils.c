@@ -92,7 +92,7 @@ static int lgss_sk_using_cred(struct lgss_cred *cred)
 	uint32_t flags;
 	int rc;
 
-	rc = sk_gen_params(skc);
+	rc = sk_gen_params(skc, 0);
 	if (rc)
 		return rc;
 

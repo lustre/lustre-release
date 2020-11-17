@@ -327,7 +327,8 @@ uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
 			       const uint32_t flags);
-uint32_t sk_gen_params(struct sk_cred *skc);
+int sk_speedtest_dh_valid(unsigned int usec_check_max);
+uint32_t sk_gen_params(struct sk_cred *skc, int num_rounds);
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		 const EVP_MD *hash_alg, gss_buffer_desc *hmac);
 uint32_t sk_verify_hmac(struct sk_cred *skc, gss_buffer_desc *bufs,

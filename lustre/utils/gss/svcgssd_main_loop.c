@@ -47,8 +47,12 @@
 
 #include "svcgssd.h"
 #include "err_util.h"
+#include "sk_utils.h"
 
 #define GSS_RPC_FILE "/proc/net/rpc/auth.sptlrpc.init/channel"
+/* max allowed time for prime testing: 400 ms */
+#define MAX_ALLOWED_TIME_FOR_PRIME 400000
+int sk_dh_checks;
 
 /*
  * nfs4 in-kernel cache implementation make upcall failed directly
@@ -68,6 +72,17 @@ svcgssd_run()
 	FILE			*f = NULL;
 	struct pollfd		pollfd;
 	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
+
+	if (sk_enabled) {
+#if OPENSSL_VERSION_NUMBER >= 0x1010103fL
+		sk_dh_checks =
+			sk_speedtest_dh_valid(MAX_ALLOWED_TIME_FOR_PRIME);
+#else
+		sk_dh_checks = 0;
+#endif
+		printerr(1, "will use %d rounds for prime testing\n",
+			 sk_dh_checks);
+	}
 
 	while (1) {
 		int save_err;

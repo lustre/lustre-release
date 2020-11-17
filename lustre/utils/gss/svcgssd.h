@@ -48,6 +48,7 @@ extern char *oss_local_realm;
 extern int null_enabled;
 extern int krb_enabled;
 extern int sk_enabled;
+extern int sk_dh_checks;
 
 #define GSSD_SERVICE_NAME	"lustre"
 
