@@ -3,10 +3,16 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 9977/LU-7105
-#		LU-7105
-ALWAYS_EXCEPT=" 28	$SANITYN_EXCEPT"
+ALWAYS_EXCEPT="$SANITYN_EXCEPT "
+# bug number for skipped test: LU-7105
+ALWAYS_EXCEPT+="               28 "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+#skip tests for PPC until they are fixed
+if [[ $(uname -m) = ppc64 ]]; then
+	# bug number:    LU-11597 LU-11787
+	ALWAYS_EXCEPT+=" 16a      71a "
+fi
 
 SRCDIR=$(dirname $0)
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
