@@ -115,8 +115,8 @@ int llapi_get_version_string(char *version, unsigned int version_size)
 		return -1;
 	}
 
-	rc = get_lustre_param_value(NULL, NULL, FILTER_BY_NONE, buffer,
-				    "version", sizeof(buffer));
+	rc = get_lustre_param_value(NULL, NULL, FILTER_BY_NONE, "version",
+				    buffer, sizeof(buffer));
 	if (rc < 0) {
 		errno = -rc;
 		return -1;
