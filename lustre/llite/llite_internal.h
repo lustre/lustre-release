@@ -1473,15 +1473,11 @@ struct ll_statahead_info {
 						 * is not a hidden one */
 	unsigned int            sai_skip_hidden;/* skipped hidden dentry count
 						 */
-	unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
+	unsigned int            sai_ls_all:1;   /* "ls -al", do stat-ahead for
 						 * hidden entries */
-				sai_in_readpage:1;/* statahead is in readdir()*/
 	wait_queue_head_t	sai_waitq;	/* stat-ahead wait queue */
 	struct task_struct	*sai_task;	/* stat-ahead thread */
 	struct task_struct	*sai_agl_task;	/* AGL thread */
-	struct list_head	sai_interim_entries; /* entries which got async
-						      * stat reply, but not
-						      * instantiated */
 	struct list_head	sai_entries;    /* completed entries */
 	struct list_head	sai_agls;	/* AGLs to be sent */
 	struct list_head	sai_cache[LL_SA_CACHE_SIZE];

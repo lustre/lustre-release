@@ -47,8 +47,8 @@
 #include "mdc_internal.h"
 
 struct mdc_getattr_args {
-	struct obd_export		*ga_exp;
-	struct md_enqueue_info		*ga_minfo;
+	struct obd_export	*ga_exp;
+	struct md_op_item	*ga_item;
 };
 
 int it_open_error(int phase, struct lookup_intent *it)
@@ -1368,10 +1368,10 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 {
 	struct mdc_getattr_args *ga = args;
 	struct obd_export *exp = ga->ga_exp;
-	struct md_enqueue_info *minfo = ga->ga_minfo;
-	struct ldlm_enqueue_info *einfo = &minfo->mi_einfo;
-	struct lookup_intent *it = &minfo->mi_it;
-	struct lustre_handle *lockh = &minfo->mi_lockh;
+	struct md_op_item *item = ga->ga_item;
+	struct ldlm_enqueue_info *einfo = &item->mop_einfo;
+	struct lookup_intent *it = &item->mop_it;
+	struct lustre_handle *lockh = &item->mop_lockh;
 	struct ldlm_reply *lockrep;
 	__u64 flags = LDLM_FL_HAS_INTENT;
 
@@ -1398,19 +1398,19 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = mdc_finish_intent_lock(exp, req, &minfo->mi_data, it, lockh);
+	rc = mdc_finish_intent_lock(exp, req, &item->mop_data, it, lockh);
 	EXIT;
 
 out:
-	minfo->mi_cb(req, minfo, rc);
+	item->mop_cb(&req->rq_pill, item, rc);
 	return 0;
 }
 
 int mdc_intent_getattr_async(struct obd_export *exp,
-			     struct md_enqueue_info *minfo)
+			     struct md_op_item *item)
 {
-	struct md_op_data *op_data = &minfo->mi_data;
-	struct lookup_intent *it = &minfo->mi_it;
+	struct md_op_data *op_data = &item->mop_data;
+	struct lookup_intent *it = &item->mop_it;
 	struct ptlrpc_request *req;
 	struct mdc_getattr_args *ga;
 	struct ldlm_res_id res_id;
@@ -1440,11 +1440,11 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 	 * to avoid possible races. It is safe to have glimpse handler
 	 * for non-DOM locks and costs nothing.
 	 */
-	if (minfo->mi_einfo.ei_cb_gl == NULL)
-		minfo->mi_einfo.ei_cb_gl = mdc_ldlm_glimpse_ast;
+	if (item->mop_einfo.ei_cb_gl == NULL)
+		item->mop_einfo.ei_cb_gl = mdc_ldlm_glimpse_ast;
 
-	rc = ldlm_cli_enqueue(exp, &req, &minfo->mi_einfo, &res_id, &policy,
-			      &flags, NULL, 0, LVB_T_NONE, &minfo->mi_lockh, 1);
+	rc = ldlm_cli_enqueue(exp, &req, &item->mop_einfo, &res_id, &policy,
+			      &flags, NULL, 0, LVB_T_NONE, &item->mop_lockh, 1);
 	if (rc < 0) {
 		ptlrpc_req_finished(req);
 		RETURN(rc);
@@ -1452,7 +1452,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 
 	ga = ptlrpc_req_async_args(ga, req);
 	ga->ga_exp = exp;
-	ga->ga_minfo = minfo;
+	ga->ga_item = item;
 
 	req->rq_interpret_reply = mdc_intent_getattr_async_interpret;
 	ptlrpcd_add_req(req);

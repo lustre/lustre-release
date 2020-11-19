@@ -949,20 +949,27 @@ struct md_callback {
 			       void *data, int flag);
 };
 
-struct md_enqueue_info;
-/* metadata stat-ahead */
-typedef int (* md_enqueue_cb_t)(struct ptlrpc_request *req,
-                                struct md_enqueue_info *minfo,
-                                int rc);
+struct md_op_item;
+typedef int (*md_op_item_cb_t)(struct req_capsule *pill,
+			       struct md_op_item *item,
+			       int rc);
 
-struct md_enqueue_info {
-	struct md_op_data		mi_data;
-	struct lookup_intent		mi_it;
-	struct lustre_handle		mi_lockh;
-	struct inode		       *mi_dir;
-	struct ldlm_enqueue_info	mi_einfo;
-	md_enqueue_cb_t			mi_cb;
-	void			       *mi_cbdata;
+enum md_opcode {
+	MD_OP_NONE	= 0,
+	MD_OP_GETATTR	= 1,
+	MD_OP_MAX,
+};
+
+struct md_op_item {
+	enum md_opcode			 mop_opc;
+	struct md_op_data		 mop_data;
+	struct lookup_intent		 mop_it;
+	struct lustre_handle		 mop_lockh;
+	struct ldlm_enqueue_info	 mop_einfo;
+	md_op_item_cb_t			 mop_cb;
+	void				*mop_cbdata;
+	struct inode			*mop_dir;
+	__u64				 mop_lock_flags;
 };
 
 struct obd_ops {
@@ -1160,7 +1167,7 @@ struct md_ops {
 			  u64, const char *, size_t, struct ptlrpc_request **);
 
 	int (*m_intent_getattr_async)(struct obd_export *,
-				      struct md_enqueue_info *);
+				      struct md_op_item *);
 
         int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
                                  struct lu_fid *, __u64 *bits);
