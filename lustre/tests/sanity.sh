@@ -23945,7 +23945,10 @@ test_430b() {
 	[[ $offset == 1000000 ]] || error "offset $offset != 1000000"
 	printf "Seeking data from 1000000 ... "
 	lseek_test -d 1000000 $file && error "lseek should fail"
-	# full first component, non-inited second one
+	rm $file
+
+	# full component followed by non-inited one
+	$LFS setstripe -E 1M -c2 -E eof $file
 	dd if=/dev/urandom of=$file bs=1M count=1
 	printf "Seeking hole from 1000000 ... "
 	offset=$(lseek_test -l 1000000 $file)
@@ -23956,7 +23959,6 @@ test_430b() {
 	# init second component and truncate back
 	echo "123" >> $file
 	$TRUNCATE $file 1048576
-	ls -lia $file
 	printf "Seeking hole from 1000000 ... "
 	offset=$(lseek_test -l 1000000 $file)
 	echo $offset

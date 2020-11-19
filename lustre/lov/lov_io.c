@@ -1325,6 +1325,7 @@ static void lov_io_lseek_end(const struct lu_env *env,
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
 	struct lov_io_sub *sub;
 	loff_t offset = -ENXIO;
+	__u64 hole_off = 0;
 	bool seek_hole = io->u.ci_lseek.ls_whence == SEEK_HOLE;
 
 	ENTRY;
@@ -1334,6 +1335,7 @@ static void lov_io_lseek_end(const struct lu_env *env,
 		int index = lov_comp_entry(sub->sub_subio_index);
 		int stripe = lov_comp_stripe(sub->sub_subio_index);
 		loff_t sub_off, lov_off;
+		__u64 comp_end = lsm->lsm_entries[index]->lsme_extent.e_end;
 
 		lov_io_end_wrapper(sub->sub_env, subio);
 
@@ -1379,10 +1381,22 @@ static void lov_io_lseek_end(const struct lu_env *env,
 		/* resulting offset can be out of component range if stripe
 		 * object is full and its file size was returned as virtual
 		 * hole start. Skip this result, the next component will give
-		 * us correct lseek result.
+		 * us correct lseek result but keep possible hole offset in
+		 * case there is no more components ahead
 		 */
-		if (lov_off >= lsm->lsm_entries[index]->lsme_extent.e_end)
+		if (lov_off >= comp_end) {
+			/* must be SEEK_HOLE case */
+			if (likely(seek_hole)) {
+				/* save comp end as potential hole offset */
+				hole_off = max_t(__u64, comp_end, hole_off);
+			} else {
+				io->ci_result = -EINVAL;
+				CDEBUG(D_INFO,
+				       "off %lld >= comp_end %llu: rc = %d\n",
+				       lov_off, comp_end, io->ci_result);
+			}
 			continue;
+		}
 
 		CDEBUG(D_INFO, "SEEK_%s: %lld->%lld/%lld: rc = %d\n",
 		       seek_hole ? "HOLE" : "DATA",
@@ -1390,6 +1404,10 @@ static void lov_io_lseek_end(const struct lu_env *env,
 		       sub->sub_io.ci_result);
 		offset = min_t(__u64, offset, lov_off);
 	}
+	/* no result but some component returns hole as component end */
+	if (seek_hole && offset == -ENXIO && hole_off > 0)
+		offset = hole_off;
+
 	io->u.ci_lseek.ls_result = offset;
 	RETURN_EXIT;
 }
