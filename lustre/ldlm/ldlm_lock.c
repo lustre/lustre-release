@@ -1152,21 +1152,23 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
  * Check if the given @lock meets the criteria for a match.
  * A reference on the lock is taken if matched.
  *
- * \param lock     test-against this lock
- * \param data	   parameters
+ * @lock	test-against this lock
+ * @data	parameters
+ *
+ * RETURN	returns true if @lock matches @data, false otherwise
  */
-static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
+static bool lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 {
 	union ldlm_policy_data *lpol = &lock->l_policy_data;
 	enum ldlm_mode match = LCK_MINMODE;
 
 	if (lock == data->lmd_old)
-		return INTERVAL_ITER_STOP;
+		return true;
 
 	/* Check if this lock can be matched.
 	 * Used by LU-2919(exclusive open) for open lease lock */
 	if (ldlm_is_excl(lock))
-		return INTERVAL_ITER_CONT;
+		return false;
 
 	/* llite sometimes wants to match locks that will be
 	 * canceled when their users drop, but we allow it to match
@@ -1176,20 +1178,21 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 	 * can still happen. */
 	if (ldlm_is_cbpending(lock) &&
 	    !(data->lmd_flags & LDLM_FL_CBPENDING))
-		return INTERVAL_ITER_CONT;
+		return false;
+
 	if (!(data->lmd_match & LDLM_MATCH_UNREF) && ldlm_is_cbpending(lock) &&
 	    lock->l_readers == 0 && lock->l_writers == 0)
-		return INTERVAL_ITER_CONT;
+		return false;
 
 	if (!(lock->l_req_mode & *data->lmd_mode))
-		return INTERVAL_ITER_CONT;
+		return false;
 
 	/* When we search for ast_data, we are not doing a traditional match,
 	 * so we don't worry about IBITS or extent matching.
 	 */
 	if (data->lmd_match & (LDLM_MATCH_AST | LDLM_MATCH_AST_ANY)) {
 		if (!lock->l_ast_data)
-			return INTERVAL_ITER_CONT;
+			return false;
 
 		if (data->lmd_match & LDLM_MATCH_AST_ANY)
 			goto matched;
@@ -1202,12 +1205,12 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 		if (!(data->lmd_match & LDLM_MATCH_RIGHT) &&
 		    (lpol->l_extent.start > data->lmd_policy->l_extent.start ||
 		     lpol->l_extent.end < data->lmd_policy->l_extent.end))
-			return INTERVAL_ITER_CONT;
+			return false;
 
 		if (unlikely(match == LCK_GROUP) &&
 		    data->lmd_policy->l_extent.gid != LDLM_GID_ANY &&
 		    lpol->l_extent.gid != data->lmd_policy->l_extent.gid)
-			return INTERVAL_ITER_CONT;
+			return false;
 		break;
 	case LDLM_IBITS:
 		/* We match if we have existing lock with same or wider set
@@ -1215,13 +1218,13 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 		if ((lpol->l_inodebits.bits &
 		     data->lmd_policy->l_inodebits.bits) !=
 		    data->lmd_policy->l_inodebits.bits)
-			return INTERVAL_ITER_CONT;
+			return false;
 
 		if (unlikely(match == LCK_GROUP) &&
 		    data->lmd_policy->l_inodebits.li_gid != LDLM_GID_ANY &&
 		    lpol->l_inodebits.li_gid !=
 		    data->lmd_policy->l_inodebits.li_gid)
-			return INTERVAL_ITER_CONT;
+			return false;
 		break;
 	default:
 		;
@@ -1230,14 +1233,14 @@ static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 	/* We match if we have existing lock with same or wider set
 	   of bits. */
 	if (!(data->lmd_match & LDLM_MATCH_UNREF) && LDLM_HAVE_MASK(lock, GONE))
-		return INTERVAL_ITER_CONT;
+		return false;
 
 	if (!equi(data->lmd_flags & LDLM_FL_LOCAL_ONLY, ldlm_is_local(lock)))
-		return INTERVAL_ITER_CONT;
+		return false;
 
 	/* Filter locks by skipping flags */
 	if (data->lmd_skip_flags & lock->l_flags)
-		return INTERVAL_ITER_CONT;
+		return false;
 
 matched:
 	if (data->lmd_flags & LDLM_FL_TEST_LOCK) {
@@ -1250,7 +1253,7 @@ matched:
 	*data->lmd_mode = match;
 	data->lmd_lock = lock;
 
-	return INTERVAL_ITER_STOP;
+	return true;
 }
 
 static unsigned int itree_overlap_cb(struct interval_node *in, void *args)
@@ -1258,11 +1261,9 @@ static unsigned int itree_overlap_cb(struct interval_node *in, void *args)
 	struct ldlm_interval *node = to_ldlm_interval(in);
 	struct ldlm_match_data *data = args;
 	struct ldlm_lock *lock;
-	int rc;
 
 	list_for_each_entry(lock, &node->li_group, l_sl_policy) {
-		rc = lock_matches(lock, data);
-		if (rc == INTERVAL_ITER_STOP)
+		if (lock_matches(lock, data))
 			return INTERVAL_ITER_STOP;
 	}
 	return INTERVAL_ITER_CONT;
@@ -1322,15 +1323,12 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
 				      struct ldlm_match_data *data)
 {
 	struct ldlm_lock *lock;
-	int rc;
 
 	data->lmd_lock = NULL;
 
-	list_for_each_entry(lock, queue, l_res_link) {
-		rc = lock_matches(lock, data);
-		if (rc == INTERVAL_ITER_STOP)
+	list_for_each_entry(lock, queue, l_res_link)
+		if (lock_matches(lock, data))
 			return data->lmd_lock;
-	}
 
 	return NULL;
 }
