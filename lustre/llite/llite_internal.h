@@ -1526,20 +1526,22 @@ struct ll_statahead_info {
 						 * is not a hidden one */
 	unsigned int            sai_skip_hidden;/* skipped hidden dentry count
 						 */
-	unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
+	unsigned int            sai_ls_all:1;   /* "ls -al", do stat-ahead for
 						 * hidden entries */
-				sai_in_readpage:1;/* statahead is in readdir()*/
 	wait_queue_head_t	sai_waitq;	/* stat-ahead wait queue */
 	struct task_struct	*sai_task;	/* stat-ahead thread */
 	struct task_struct	*sai_agl_task;	/* AGL thread */
-	struct list_head	sai_interim_entries; /* entries which got async
-						      * stat reply, but not
-						      * instantiated */
 	struct list_head	sai_entries;    /* completed entries */
 	struct list_head	sai_agls;	/* AGLs to be sent */
 	struct list_head	sai_cache[LL_SA_CACHE_SIZE];
 	spinlock_t		sai_cache_lock[LL_SA_CACHE_SIZE];
 	atomic_t		sai_cache_count; /* entry count in cache */
+};
+
+struct ll_interpret_work {
+	struct work_struct	 lpw_work;
+	struct md_op_item	*lpw_item;
+	struct req_capsule	*lpw_pill;
 };
 
 int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,

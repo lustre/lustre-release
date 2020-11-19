@@ -13177,6 +13177,28 @@ test_123c() {
 }
 run_test 123c "Can not initialize inode warning on DNE statahead"
 
+test_123d() {
+	local num=100
+	local swrong
+	local ewrong
+
+	test_mkdir -c -1 $DIR/$tdir || error "test_mkdir $DIR/$tdir failed"
+	$LFS setdirstripe -D -c $MDSCOUNT $DIR/$tdir ||
+		error "setdirstripe $DIR/$tdir failed"
+	createmany -d $DIR/$tdir/$tfile $num || error "createmany $num failed"
+	remount_client $MOUNT
+	$LCTL get_param llite.*.statahead_max
+	swrong=$(lctl get_param -n llite.*.statahead_stats |
+		grep "statahead wrong:" | awk '{print $3}')
+	ls -l $DIR/$tdir || error "ls -l $DIR/$tdir failed"
+	$LCTL get_param -n llite.*.statahead_stats
+	ewrong=$(lctl get_param -n llite.*.statahead_stats |
+		grep "statahead wrong:" | awk '{print $3}')
+	[[ $swrong -eq $ewrong ]] ||
+		log "statahead was stopped, maybe too many locks held!"
+}
+run_test 123d "Statahead on striped directories works correctly"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||

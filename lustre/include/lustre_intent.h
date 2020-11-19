@@ -47,6 +47,8 @@ struct lookup_intent {
 	__u64			 it_remote_lock_handle;
 	struct ptlrpc_request	*it_request;
 	unsigned int		 it_lock_set:1;
+	unsigned int		 it_extra_rpc_check:1;
+	unsigned int		 it_extra_rpc_need:1;
 };
 
 static inline int it_disposition(const struct lookup_intent *it, int flag)
