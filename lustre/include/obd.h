@@ -988,6 +988,8 @@ struct md_op_item {
 	struct inode			*mop_dir;
 	struct req_capsule		*mop_pill;
 	struct work_struct		 mop_work;
+	__u64				 mop_lock_flags;
+	unsigned int			 mop_subpill_allocated:1;
 };
 
 enum lu_batch_flags {

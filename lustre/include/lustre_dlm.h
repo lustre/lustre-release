@@ -1428,6 +1428,8 @@ struct ldlm_callback_suite {
  */
 int ldlm_server_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 			     void *data, int flag);
+int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+		     void *data, int flag);
 int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data);
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
 int ldlm_glimpse_locks(struct ldlm_resource *res,
@@ -1439,9 +1441,9 @@ int ldlm_glimpse_locks(struct ldlm_resource *res,
  * MDT or OST to pass through LDLM requests to LDLM for handling
  * @{
  */
-int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-			 const struct ldlm_request *dlm_req,
-			 const struct ldlm_callback_suite *cbs);
+int ldlm_handle_enqueue(struct ldlm_namespace *ns, struct req_capsule *pill,
+			const struct ldlm_request *dlm_req,
+			const struct ldlm_callback_suite *cbs);
 int ldlm_handle_convert0(struct ptlrpc_request *req,
 			 const struct ldlm_request *dlm_req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
@@ -1732,10 +1734,10 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
 		      struct list_head *cancels, int count);
 
 struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp, int lvb_len);
-int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-			 const struct ldlm_request *dlm_req,
-			 const struct ldlm_callback_suite *cbs);
-int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
+int ldlm_handle_enqueue(struct ldlm_namespace *ns, struct req_capsule *pill,
+			const struct ldlm_request *dlm_req,
+			const struct ldlm_callback_suite *cbs);
+int ldlm_cli_enqueue_fini(struct obd_export *exp, struct req_capsule *pill,
 			  struct ldlm_enqueue_info *einfo, __u8 with_policy,
 			  __u64 *flags, void *lvb, __u32 lvb_len,
 			  const struct lustre_handle *lockh, int rc,
@@ -1751,6 +1753,14 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
 			   const __u64 *client_cookie,
 			   struct lustre_handle *lockh);
+int ldlm_cli_lock_create_pack(struct obd_export *exp,
+			      struct ldlm_request *dlmreq,
+			      struct ldlm_enqueue_info *einfo,
+			      const struct ldlm_res_id *res_id,
+			      union ldlm_policy_data const *policy,
+			      __u64 *flags, void *lvb, __u32 lvb_len,
+			      enum lvb_type lvb_type,
+			      struct lustre_handle *lockh);
 int ldlm_cli_convert_req(struct ldlm_lock *lock, __u32 *flags, __u64 new_bits);
 int ldlm_cli_convert(struct ldlm_lock *lock,
 		     enum ldlm_cancel_flags cancel_flags);

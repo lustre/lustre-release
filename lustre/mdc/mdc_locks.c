@@ -673,13 +673,13 @@ static struct ptlrpc_request *mdc_enqueue_pack(struct obd_export *exp,
 	RETURN(req);
 }
 
-static int mdc_finish_enqueue(struct obd_export *exp,
-			      struct ptlrpc_request *req,
-			      struct ldlm_enqueue_info *einfo,
-			      struct lookup_intent *it,
-			      struct lustre_handle *lockh, int rc)
+int mdc_finish_enqueue(struct obd_export *exp,
+		       struct req_capsule *pill,
+		       struct ldlm_enqueue_info *einfo,
+		       struct lookup_intent *it,
+		       struct lustre_handle *lockh, int rc)
 {
-	struct req_capsule *pill = &req->rq_pill;
+	struct ptlrpc_request *req = pill->rc_req;
 	struct ldlm_request *lockreq;
 	struct ldlm_reply *lockrep;
 	struct ldlm_lock *lock;
@@ -1074,7 +1074,7 @@ resend:
 		goto resend;
 	}
 
-	rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
+	rc = mdc_finish_enqueue(exp, &req->rq_pill, einfo, it, lockh, rc);
 	if (rc < 0) {
 		if (lustre_handle_is_used(lockh)) {
 			ldlm_lock_decref(lockh, einfo->ei_mode);
@@ -1377,6 +1377,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	struct ldlm_enqueue_info *einfo = &item->mop_einfo;
 	struct lookup_intent *it = &item->mop_it;
 	struct lustre_handle *lockh = &item->mop_lockh;
+	struct req_capsule *pill = &req->rq_pill;
 	struct ldlm_reply *lockrep;
 	__u64 flags = LDLM_FL_HAS_INTENT;
 
@@ -1384,7 +1385,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
 		rc = -ETIMEDOUT;
 
-	rc = ldlm_cli_enqueue_fini(exp, req, einfo, 1, &flags, NULL, 0,
+	rc = ldlm_cli_enqueue_fini(exp, pill, einfo, 1, &flags, NULL, 0,
 				   lockh, rc, true);
 	if (rc < 0) {
 		CERROR("%s: ldlm_cli_enqueue_fini() failed: rc = %d\n",
@@ -1393,13 +1394,13 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	lockrep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
 	LASSERT(lockrep != NULL);
 
 	lockrep->lock_policy_res2 =
 		ptlrpc_status_ntoh(lockrep->lock_policy_res2);
 
-	rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
+	rc = mdc_finish_enqueue(exp, pill, einfo, it, lockh, rc);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1407,7 +1408,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	EXIT;
 
 out:
-	item->mop_pill = &req->rq_pill;
+	item->mop_pill = pill;
 	item->mop_cb(item, rc);
 	return 0;
 }

@@ -831,6 +831,14 @@ int mdt_fix_reply(struct mdt_thread_info *info)
                 LASSERT(md_size > md_packed);
                 CDEBUG(D_INFO, "Enlarge reply buffer, need extra %d bytes\n",
                        md_size - md_packed);
+
+		/* FIXME: Grow reply buffer for the batch request. */
+		if (info->mti_batch_env) {
+			body->mbo_valid &= ~(OBD_MD_FLDIREA | OBD_MD_FLEASIZE);
+			info->mti_big_lmm_used = 0;
+			GOTO(check_acl, rc);
+		}
+
                 rc = req_capsule_server_grow(pill, &RMF_MDT_MD, md_size);
                 if (rc) {
                         /* we can't answer with proper LOV EA, drop flags,
@@ -864,9 +872,16 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 		info->mti_big_lmm_used = 0;
 	}
 
+check_acl:
 	if (info->mti_big_acl_used) {
 		CDEBUG(D_INFO, "Enlarge reply ACL buffer to %d bytes\n",
 		       acl_size);
+
+		if (info->mti_batch_env) {
+			body->mbo_valid &= ~OBD_MD_FLACL;
+			info->mti_big_acl_used = 0;
+			RETURN(rc);
+		}
 
 		rc = req_capsule_server_grow(pill, &RMF_ACL, acl_size);
 		if (rc) {

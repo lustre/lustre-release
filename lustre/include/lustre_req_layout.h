@@ -312,6 +312,7 @@ extern struct req_format RQF_LFSCK_NOTIFY;
 extern struct req_format RQF_LFSCK_QUERY;
 
 /* Batch UpdaTe req_format */
+extern struct req_format RQF_BUT_GETATTR;
 extern struct req_format RQF_MDS_BATCH;
 
 extern struct req_msg_field RMF_GENERIC_DATA;

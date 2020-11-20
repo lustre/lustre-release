@@ -2930,7 +2930,9 @@ static void mdt_preset_secctx_size(struct mdt_thread_info *info)
 			/* pre-set size in server part with max size */
 			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
 					     RCL_SERVER,
-					     OBD_MAX_DEFAULT_EA_SIZE);
+					     req_capsule_ptlreq(pill) ?
+					     OBD_MAX_DEFAULT_EA_SIZE :
+					     MAX_MD_SIZE_OLD);
 		else
 			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
 					     RCL_SERVER, 0);
@@ -4229,7 +4231,8 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 		/* Pack reply. */
 		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
-					     DEF_REP_MD_SIZE);
+					     req_capsule_ptlreq(pill) ?
+					     DEF_REP_MD_SIZE : MAX_MD_SIZE_OLD);
 
 		if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_LOGCOOKIES,
@@ -4953,7 +4956,8 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 		RETURN(-EPROTO);
 	}
 
-	req_capsule_extend(pill, it_format);
+	if (!info->mti_batch_env)
+		req_capsule_extend(pill, it_format);
 
 	rc = mdt_unpack_req_pack_rep(info, it_handler_flags);
 	if (rc < 0)
@@ -4971,7 +4975,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	rc = (*it_handler)(it_opc, info, lockp, flags);
 
 	/* Check whether the reply has been packed successfully. */
-	if (req->rq_repmsg != NULL) {
+	if (info->mti_batch_env || req->rq_repmsg != NULL) {
 		rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
 		rep->lock_policy_res2 =
 			ptlrpc_status_hton(rep->lock_policy_res2);
@@ -5013,14 +5017,30 @@ static int mdt_intent_policy(const struct lu_env *env,
 
 	tsi = tgt_ses_info(env);
 
-	info = tsi2mdt_info(tsi);
+	info = mdt_th_info(env);
 	LASSERT(info != NULL);
-	pill = info->mti_pill;
+
+	/* Check whether it is a sub request processing in a batch request */
+	if (info->mti_batch_env) {
+		pill = info->mti_pill;
+		LASSERT(pill == &info->mti_sub_pill);
+	} else {
+		info = tsi2mdt_info(tsi);
+		pill = info->mti_pill;
+	}
+
 	LASSERT(pill->rc_req == req);
 	ldesc = &info->mti_dlm_req->lock_desc;
 
-	if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
-		req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
+	if (info->mti_batch_env ||
+	    req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
+		/*
+		 * For batch processing environment, the request format has
+		 * already been set.
+		 */
+		if (!info->mti_batch_env)
+			req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
+
 		it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
 		if (it != NULL) {
 			mdt_ptlrpc_stats_update(req, it->opc);
@@ -5063,7 +5083,8 @@ static int mdt_intent_policy(const struct lu_env *env,
 			rc = err_serious(rc);
 	}
 
-	mdt_thread_info_fini(info);
+	if (!info->mti_batch_env)
+		mdt_thread_info_fini(info);
 	RETURN(rc);
 }
 

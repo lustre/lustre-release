@@ -1357,8 +1357,8 @@ EXPORT_SYMBOL(tgt_sync);
  * \retval	0 on success
  * \retval	negative number on error
  */
-static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-			    void *data, int flag)
+int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+		     void *data, int flag)
 {
 	struct lu_env		 env;
 	struct lu_target	*tgt;
@@ -1423,6 +1423,7 @@ err:
 	rc = ldlm_server_blocking_ast(lock, desc, data, flag);
 	RETURN(rc);
 }
+EXPORT_SYMBOL(tgt_blocking_ast);
 
 static struct ldlm_callback_suite tgt_dlm_cbs = {
 	.lcs_completion	= ldlm_server_completion_ast,
@@ -1441,8 +1442,8 @@ int tgt_enqueue(struct tgt_session_info *tsi)
 	 * tsi->tsi_dlm_cbs was set by the *_req_handle() function.
 	 */
 	LASSERT(tsi->tsi_dlm_req != NULL);
-	rc = ldlm_handle_enqueue0(tsi->tsi_exp->exp_obd->obd_namespace, req,
-				  tsi->tsi_dlm_req, &tgt_dlm_cbs);
+	rc = ldlm_handle_enqueue(tsi->tsi_exp->exp_obd->obd_namespace,
+				 &req->rq_pill, tsi->tsi_dlm_req, &tgt_dlm_cbs);
 	if (rc)
 		RETURN(err_serious(rc));
 

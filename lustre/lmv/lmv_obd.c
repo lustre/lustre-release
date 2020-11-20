@@ -3997,9 +3997,33 @@ static int lmv_batch_flush(struct obd_export *exp, struct lu_batch *bh,
 static inline struct lmv_tgt_desc *
 lmv_batch_locate_tgt(struct lmv_obd *lmv, struct md_op_item *item)
 {
+	struct md_op_data *op_data = &item->mop_data;
 	struct lmv_tgt_desc *tgt;
 
 	switch (item->mop_opc) {
+	case MD_OP_GETATTR: {
+		struct lmv_tgt_desc *ptgt;
+
+		if (!fid_is_sane(&op_data->op_fid2))
+			RETURN(ERR_PTR(-EINVAL));
+
+		ptgt = lmv_locate_tgt(lmv, op_data);
+		if (IS_ERR(ptgt))
+			RETURN(ptgt);
+
+		tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
+		if (IS_ERR(tgt))
+			RETURN(tgt);
+
+		/*
+		 * Remote object needs two RPCs to lookup and getattr,
+		 * considering the complexity don't support statahead for now.
+		 */
+		if (tgt != ptgt)
+			RETURN(ERR_PTR(-EREMOTE));
+
+		break;
+	}
 	default:
 		tgt = ERR_PTR(-ENOTSUPP);
 	}

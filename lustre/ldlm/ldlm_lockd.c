@@ -1166,6 +1166,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	RETURN(lvb_len < 0 ? lvb_len : rc);
 }
+EXPORT_SYMBOL(ldlm_server_completion_ast);
 
 /**
  * Server side ->l_glimpse_ast handler for client locks.
@@ -1277,10 +1278,10 @@ EXPORT_SYMBOL(ldlm_request_lock);
  * Main server-side entry point into LDLM for enqueue. This is called by ptlrpc
  * service threads to carry out client lock enqueueing requests.
  */
-int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
-			 struct ptlrpc_request *req,
-			 const struct ldlm_request *dlm_req,
-			 const struct ldlm_callback_suite *cbs)
+int ldlm_handle_enqueue(struct ldlm_namespace *ns,
+			struct req_capsule *pill,
+			const struct ldlm_request *dlm_req,
+			const struct ldlm_callback_suite *cbs)
 {
 	struct ldlm_reply *dlm_rep;
 	__u64 flags;
@@ -1289,23 +1290,27 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 	void *cookie = NULL;
 	int rc = 0;
 	struct ldlm_resource *res = NULL;
+	struct ptlrpc_request *req = pill->rc_req;
 	const struct lu_env *env = req->rq_svc_thread->t_env;
 
 	ENTRY;
 
 	LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
-	ldlm_request_cancel(req, dlm_req, LDLM_ENQUEUE_CANCEL_OFF, LATF_SKIP);
-	flags = ldlm_flags_from_wire(dlm_req->lock_flags);
+	LASSERT(req && req->rq_export);
 
-	LASSERT(req->rq_export);
+	if (req_capsule_ptlreq(pill))
+		ldlm_request_cancel(req, dlm_req, LDLM_ENQUEUE_CANCEL_OFF,
+				    LATF_SKIP);
+
+	flags = ldlm_flags_from_wire(dlm_req->lock_flags);
 
 	/* for intent enqueue the stat will be updated inside intent policy */
 	if (ptlrpc_req2svc(req)->srv_stats != NULL &&
 	    !(dlm_req->lock_flags & LDLM_FL_HAS_INTENT))
 		ldlm_svc_get_eopc(dlm_req, ptlrpc_req2svc(req)->srv_stats);
 
-	if (req->rq_export && req->rq_export->exp_nid_stats &&
+	if (req->rq_export->exp_nid_stats &&
 	    req->rq_export->exp_nid_stats->nid_ldlm_stats)
 		lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
 				     LDLM_ENQUEUE - LDLM_FIRST_OPC);
@@ -1426,13 +1431,13 @@ existing_lock:
 		/* based on the assumption that lvb size never changes during
 		 * resource life time otherwise it need resource->lr_lock's
 		 * protection */
-		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
+		req_capsule_set_size(pill, &RMF_DLM_LVB,
 				     RCL_SERVER, ldlm_lvbo_size(lock));
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
 			GOTO(out, rc = -ENOMEM);
 
-		rc = req_capsule_server_pack(&req->rq_pill);
+		rc = req_capsule_server_pack(pill);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -1444,12 +1449,12 @@ existing_lock:
 		GOTO(out, err);
 	}
 
-	dlm_rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	dlm_rep = req_capsule_server_get(pill, &RMF_DLM_REP);
 
 	ldlm_lock2desc(lock, &dlm_rep->lock_desc);
 	ldlm_lock2handle(lock, &dlm_rep->lock_handle);
 
-	if (lock && lock->l_resource->lr_type == LDLM_EXTENT)
+	if (lock->l_resource->lr_type == LDLM_EXTENT)
 		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_BL_EVICT, 6);
 
 	/*
@@ -1515,11 +1520,13 @@ existing_lock:
 
 	EXIT;
 out:
-	req->rq_status = rc ?: err; /* return either error - b=11190 */
-	if (!req->rq_packed_final) {
-		int rc1 = lustre_pack_reply(req, 1, NULL, NULL);
-		if (rc == 0)
-			rc = rc1;
+	if (req_capsule_ptlreq(pill)) {
+		req->rq_status = rc ?: err; /* return either error - b=11190 */
+		if (!req->rq_packed_final) {
+			int rc1 = lustre_pack_reply(req, 1, NULL, NULL);
+			if (rc == 0)
+				rc = rc1;
+		}
 	}
 
 	/*
@@ -1532,18 +1539,17 @@ out:
 			   err, rc);
 
 		if (rc == 0 &&
-		    req_capsule_has_field(&req->rq_pill, &RMF_DLM_LVB,
+		    req_capsule_has_field(pill, &RMF_DLM_LVB,
 					  RCL_SERVER) &&
 		    ldlm_lvbo_size(lock) > 0) {
 			void *buf;
 			int buflen;
 
 retry:
-			buf = req_capsule_server_get(&req->rq_pill,
-						     &RMF_DLM_LVB);
+			buf = req_capsule_server_get(pill, &RMF_DLM_LVB);
 			LASSERTF(buf != NULL, "req %p, lock %p\n", req, lock);
-			buflen = req_capsule_get_size(&req->rq_pill,
-					&RMF_DLM_LVB, RCL_SERVER);
+			buflen = req_capsule_get_size(pill, &RMF_DLM_LVB,
+						      RCL_SERVER);
 			/*
 			 * non-replayed lock, delayed lvb init may
 			 * need to be occur now
@@ -1553,13 +1559,12 @@ retry:
 
 				rc2 = ldlm_lvbo_fill(lock, buf, &buflen);
 				if (rc2 >= 0) {
-					req_capsule_shrink(&req->rq_pill,
-							   &RMF_DLM_LVB,
+					req_capsule_shrink(pill, &RMF_DLM_LVB,
 							   rc2, RCL_SERVER);
 				} else if (rc2 == -ERANGE) {
 					rc2 = req_capsule_server_grow(
-							&req->rq_pill,
-							&RMF_DLM_LVB, buflen);
+							pill, &RMF_DLM_LVB,
+							buflen);
 					if (!rc2) {
 						goto retry;
 					} else {
@@ -1569,8 +1574,7 @@ retry:
 						 * to client.
 						 */
 						req_capsule_shrink(
-							&req->rq_pill,
-							&RMF_DLM_LVB, 0,
+							pill, &RMF_DLM_LVB, 0,
 							RCL_SERVER);
 					}
 				} else {
@@ -1579,8 +1583,7 @@ retry:
 			} else if (flags & LDLM_FL_REPLAY) {
 				/* no LVB resend upon replay */
 				if (buflen > 0)
-					req_capsule_shrink(&req->rq_pill,
-							   &RMF_DLM_LVB,
+					req_capsule_shrink(pill, &RMF_DLM_LVB,
 							   0, RCL_SERVER);
 				else
 					rc = buflen;
@@ -1614,6 +1617,7 @@ retry:
 
 	return rc;
 }
+EXPORT_SYMBOL(ldlm_handle_enqueue);
 
 /*
  * Clear the blocking lock, the race is possible between ldlm_handle_convert0()
