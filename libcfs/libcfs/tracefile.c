@@ -1140,7 +1140,23 @@ int cfs_tracefile_init(int max_pages)
 	cfs_tcd_for_each(tcd, i, j) {
 		int factor = pages_factor[i];
 
-		spin_lock_init(&tcd->tcd_lock);
+		/* Note that we have three separate spin_lock_init()
+		 * calls so that the locks get three separate classes
+		 * and lockdep never thinks they are related.  As they
+		 * are used in different interrupt contexts, lockdep
+		 * would otherwise think that the usage would conflict.
+		 */
+		switch(i) {
+		case CFS_TCD_TYPE_PROC:
+			spin_lock_init(&tcd->tcd_lock);
+			break;
+		case CFS_TCD_TYPE_SOFTIRQ:
+			spin_lock_init(&tcd->tcd_lock);
+			break;
+		case CFS_TCD_TYPE_IRQ:
+			spin_lock_init(&tcd->tcd_lock);
+			break;
+		}
 		tcd->tcd_pages_factor = factor;
 		tcd->tcd_type = i;
 		tcd->tcd_cpu = j;
