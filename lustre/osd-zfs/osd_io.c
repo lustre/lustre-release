@@ -614,11 +614,9 @@ static inline uint64_t osd_roundup2blocksz(uint64_t size,
 	size += offset % blksz;
 
 	if (likely(is_power_of_2(blksz)))
-		return PO2_ROUNDUP_TYPED(size, blksz, uint64_t);
-
-	size += blksz - 1;
-	do_div(size, blksz);
-	return size * blksz;
+		return round_up(size, blksz);
+	else
+		return DIV_ROUND_UP_ULL(size, blksz) * blksz;
 }
 
 static int osd_declare_write_commit(const struct lu_env *env,
