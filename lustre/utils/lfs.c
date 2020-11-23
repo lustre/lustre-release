@@ -925,14 +925,13 @@ out:
 static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 {
 	struct llapi_layout *layout;
-	size_t	 buf_size = 4 * 1024 * 1024;
-	void	*buf = NULL;
-	ssize_t	 rsize = -1;
-	ssize_t	 wsize = 0;
-	size_t	 rpos = 0;
-	size_t	 wpos = 0;
-	off_t	 bufoff = 0;
-	int	 rc;
+	size_t buf_size = 4 * 1024 * 1024;
+	void *buf = NULL;
+	off_t pos = 0;
+	off_t data_end = 0;
+	size_t page_size = sysconf(_SC_PAGESIZE);
+	bool sparse;
+	int rc;
 
 	layout = llapi_layout_get_by_fd(fd_src, 0);
 	if (layout) {
@@ -946,43 +945,76 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 	}
 
 	/* Use a page-aligned buffer for direct I/O */
-	rc = posix_memalign(&buf, getpagesize(), buf_size);
+	rc = posix_memalign(&buf, page_size, buf_size);
 	if (rc != 0)
 		return -rc;
 
+	sparse = llapi_file_is_sparse(fd_src);
+	if (sparse) {
+		rc = ftruncate(fd_dst, pos);
+		if (rc < 0) {
+			rc = -errno;
+			return rc;
+		}
+	}
+
 	while (1) {
-		/*
-		 * read new data only if we have written all
-		 * previously read data
-		 */
-		if (wpos == rpos) {
-			if (check_file) {
-				rc = check_file(fd_src);
+		off_t data_off;
+		size_t to_read, to_write;
+		ssize_t rsize;
+
+		if (sparse && pos >= data_end) {
+			size_t data_size;
+
+			data_off = llapi_data_seek(fd_src, pos, &data_size);
+			if (data_off < 0) {
+				/* Non-fatal, switch to full copy */
+				sparse = false;
+				continue;
+			}
+			/* hole at the end of file, truncate up to it */
+			if (!data_size) {
+				rc = ftruncate(fd_dst, data_off);
 				if (rc < 0)
 					goto out;
 			}
-
-			rsize = read(fd_src, buf, buf_size);
-			if (rsize < 0) {
-				rc = -errno;
-				goto out;
-			}
-
-			rpos += rsize;
-			bufoff = 0;
+			pos = data_off & ~(page_size - 1);
+			data_end = data_off + data_size;
+			to_read = ((data_end - pos - 1) | (page_size - 1)) + 1;
+			to_read = MIN(to_read, buf_size);
+		} else {
+			to_read = buf_size;
 		}
 
-		/* eof ? */
+		if (check_file) {
+			rc = check_file(fd_src);
+			if (rc < 0)
+				goto out;
+		}
+
+		rsize = pread(fd_src, buf, to_read, pos);
+		if (rsize < 0) {
+			rc = -errno;
+			goto out;
+		}
+		/* EOF */
 		if (rsize == 0)
 			break;
 
-		wsize = write(fd_dst, buf + bufoff, rpos - wpos);
-		if (wsize < 0) {
-			rc = -errno;
-			break;
+		to_write = rsize;
+		while (to_write > 0) {
+			ssize_t written;
+
+			written = pwrite(fd_dst, buf, to_write, pos);
+			if (written < 0) {
+				rc = -errno;
+				goto out;
+			}
+			pos += written;
+			to_write -= written;
 		}
-		wpos += wsize;
-		bufoff += wsize;
+		if (rc || rsize < to_read)
+			break;
 	}
 
 	rc = fsync(fd_dst);

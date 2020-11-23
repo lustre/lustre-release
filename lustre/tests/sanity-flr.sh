@@ -2339,7 +2339,7 @@ test_49a() {
 }
 run_test 49a "FIEMAP upon FLR file"
 
-test_50() {	# EX-2179
+test_50A() {	# EX-2179
 	mkdir -p $DIR/$tdir
 
 	local file=$DIR/$tdir/$tfile
@@ -2365,7 +2365,105 @@ test_50() {	# EX-2179
 
 	$LFS getstripe -v $file || error "getstripe $file failed"
 }
-run_test 50 "mirror split update layout generation"
+run_test 50A "mirror split update layout generation"
+
+test_50a() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+	local offset
+	local sum1
+	local sum2
+	local blocks
+
+	mkdir -p $DIR/$tdir
+
+	echo " ** create striped file $file"
+	$LFS setstripe -E 1M -c1 -S 1M -E eof -c2 -S1M $file ||
+		error "cannot create file with PFL layout"
+	echo " ** write 1st data chunk at 1M boundary"
+	dd if=/dev/urandom of=$file bs=1k count=20 seek=1021 ||
+		error "cannot write data at 1M boundary"
+	echo " ** write 2nd data chunk at 2M boundary"
+	dd if=/dev/urandom of=$file bs=1k count=20 seek=2041 ||
+		error "cannot write data at 2M boundary"
+	echo " ** create hole at the file end"
+	$TRUNCATE $file 3700000 || error "truncate fails"
+
+	echo " ** verify sparseness"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	[[ $offset == 1000 ]] &&
+		error "src: data is not expected at offset $offset"
+	offset=$(lseek_test -l 3500000 $file)
+	echo "    hole at the end: $offset"
+	[[ $offset == 3500000 ]] ||
+		error "src: hole is expected at offset $offset"
+
+	echo " ** extend the file with new mirror"
+	# migrate_copy_data() is used
+	$LFS mirror extend -N -E 2M -S 1M -E 1G -S 2M -E eof $file ||
+		error "cannot create mirror"
+	$LFS getstripe $file | grep lcme_flags | grep stale > /dev/null &&
+		error "$file still has stale component"
+
+	# check migrate_data_copy() was correct
+	sum_1=$($LFS mirror read -N 1 $file | md5sum)
+	sum_2=$($LFS mirror read -N 2 $file | md5sum)
+	[[ $sum_1 == $sum_2 ]] ||
+		error "data mismatch: \'$sum_1\' vs. \'$sum_2\'"
+
+	# stale first mirror
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=stale $file
+	$LFS setstripe --comp-set -I0x10002 --comp-flags=stale $file
+
+	echo " ** verify mirror #2 sparseness"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	[[ $offset == 1000 ]] &&
+		error "dst: data is not expected at offset $offset"
+	offset=$(lseek_test -l 3500000 $file)
+	echo "    hole at the end: $offset"
+	[[ $offset == 3500000 ]] ||
+		error "dst: hole is expected at offset $offset"
+
+	echo " ** copy mirror #2 to mirror #1"
+	$LFS mirror copy -i 2 -o 1 $file || error "mirror copy fails"
+	$LFS getstripe $file | grep lcme_flags | grep stale > /dev/null &&
+		error "$file still has stale component"
+
+	# check llapi_mirror_copy_many correctness
+	sum_1=$($LFS mirror read -N 1 $file | md5sum)
+	sum_2=$($LFS mirror read -N 2 $file | md5sum)
+	[[ $sum_1 == $sum_2 ]] ||
+		error "data mismatch: \'$sum_1\' vs. \'$sum_2\'"
+
+	# stale 1st component of mirror #2 before lseek call
+	$LFS setstripe --comp-set -I0x20001 --comp-flags=stale $file
+
+	echo " ** verify mirror #1 sparseness again"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	[[ $offset == 1000 ]] &&
+		error "dst: data is not expected at offset $offset"
+	offset=$(lseek_test -l 3500000 $file)
+	echo "    hole at the end: $offset"
+	[[ $offset == 3500000 ]] ||
+		error "dst: hole is expected at offset $offset"
+
+	cancel_lru_locks osc
+
+	blocks=$(stat -c%b $file)
+	echo " ** final consumed blocks: $blocks"
+	# for 3.5Mb file consumes ~6000 blocks, use 1000 to check
+	# that file is still sparse
+	(( blocks < 1000 )) ||
+		error "Mirrored file consumes $blocks blocks"
+
+	rm $file
+}
+run_test 50a "mirror extend/copy preserves sparseness"
 
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)

@@ -203,6 +203,48 @@ int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
 	return rc;
 }
 
+bool llapi_mirror_is_sparse(int fd, unsigned int id)
+{
+	bool sparse;
+	int rc;
+
+	rc = llapi_mirror_set(fd, id);
+	if (rc < 0)
+		return false;
+
+	sparse = llapi_file_is_sparse(fd);
+	(void) llapi_mirror_clear(fd);
+
+	return sparse;
+}
+
+/**
+ * Seek data in a specified mirror with @id. This function looks for the
+ * first data segment from given offset and returns its offset and length
+ *
+ * \param fd	file descriptor, should be opened with O_DIRECT
+ * \param id	mirror id to be read from
+ * \param pos	position for start data seek from
+ * \param size	size of data segment found
+ *
+ * \result >= 0	Number of bytes has been read
+ * \result < 0	The last seen error
+ */
+off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size)
+{
+	off_t data_off;
+	int rc;
+
+	rc = llapi_mirror_set(fd, id);
+	if (rc < 0)
+		return rc;
+
+	data_off = llapi_data_seek(fd, pos, size);
+	(void) llapi_mirror_clear(fd);
+
+	return data_off;
+}
+
 /**
  * Copy data contents from source mirror @src to multiple destinations
  * pointed by @dst. The destination array @dst will be altered to store
@@ -220,10 +262,12 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 {
 	const size_t buflen = 4 * 1024 * 1024; /* 4M */
 	void *buf;
-	loff_t pos = 0;
+	off_t pos = 0;
+	off_t data_end = 0;
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	ssize_t result = 0;
 	bool eof = false;
+	bool sparse;
 	int nr;
 	int i;
 	int rc;
@@ -235,12 +279,61 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 	if (rc) /* error code is returned directly */
 		return -rc;
 
-	nr = count;
-	while (!eof) {
-		ssize_t bytes_read;
-		size_t to_write;
+	sparse = llapi_mirror_is_sparse(fd, src);
 
-		bytes_read = llapi_mirror_read(fd, src, buf, buflen, pos);
+	nr = count;
+	if (sparse) {
+		/* for sparse src we have to be sure that dst has no
+		 * data in src holes, so truncate it first
+		 */
+		for (i = 0; i < nr; i++) {
+			rc = llapi_mirror_truncate(fd, dst[i], pos);
+			if (rc < 0) {
+				result = rc;
+				/* exclude the failed one */
+				dst[i] = dst[--nr];
+				i--;
+				continue;
+			}
+		}
+		if (!nr)
+			return result;
+	}
+
+	while (!eof) {
+		off_t data_off;
+		ssize_t bytes_read;
+		size_t to_write, to_read;
+
+		if (sparse && pos >= data_end) {
+			size_t data_size;
+
+			data_off = llapi_mirror_data_seek(fd, src, pos,
+							  &data_size);
+			if (data_off < 0) {
+				/* Non-fatal, switch to full copy */
+				sparse = false;
+				continue;
+			}
+			if (!data_size) {
+				/* hole at the end of file, set pos to the
+				 * data_off, so truncate block at the end
+				 * will set final dst size.
+				 */
+				pos = data_off;
+				break;
+			}
+
+			data_end = data_off + data_size;
+			/* align by page */
+			pos = data_off & ~(page_size - 1);
+			data_end = ((data_end - 1) | (page_size - 1)) + 1;
+			to_read = MIN(data_end - pos, buflen);
+		} else {
+			to_read = buflen;
+		}
+
+		bytes_read = llapi_mirror_read(fd, src, buf, to_read, pos);
 		if (!bytes_read) { /* end of file */
 			break;
 		} else if (bytes_read < 0) {
@@ -267,12 +360,10 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 				i--;
 				continue;
 			}
-
 			assert(written == to_write);
 		}
-
 		pos += bytes_read;
-		eof = bytes_read < buflen;
+		eof = bytes_read < to_read;
 	}
 
 	free(buf);
