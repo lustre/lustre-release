@@ -5,4 +5,5 @@ EXTRA_DIST = \
 	udsp.h \
 	lnet_rdma.h \
 	lnet_gds.h \
+	lock.h \
 	socklnd.h
