@@ -36,6 +36,7 @@
 #define PTLRPC_INTERNAL_H
 
 #include "../ldlm/ldlm_internal.h"
+#include "heap.h"
 
 struct ldlm_namespace;
 struct obd_import;

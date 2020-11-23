@@ -13,10 +13,6 @@
  * GNU General Public License version 2 for more details.  A copy is
  * included in the COPYING file that accompanied this code.
 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
  * GPL HEADER END
  */
 /*
@@ -56,17 +52,6 @@
  * are tied to a specific CPT.
  * @{
  */
-
-/**
- * Binary heap node.
- *
- * Objects of this type are embedded into objects of the ordered set that is to
- * be maintained by a \e struct cfs_binheap instance.
- */
-struct cfs_binheap_node {
-	/** Index into the binary tree */
-	unsigned int	chn_index;
-};
 
 #define CBH_SHIFT	9
 #define CBH_SIZE       (1 << CBH_SHIFT)		    /* # ptrs per level */
@@ -162,7 +147,7 @@ struct cfs_binheap {
 void cfs_binheap_destroy(struct cfs_binheap *h);
 struct cfs_binheap *
 cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
-		   unsigned count, void *arg, struct cfs_cpt_table *cptab,
+		   unsigned int count, void *arg, struct cfs_cpt_table *cptab,
 		   int cptid);
 struct cfs_binheap_node *
 cfs_binheap_find(struct cfs_binheap *h, unsigned int idx);

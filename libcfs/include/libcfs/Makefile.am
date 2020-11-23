@@ -14,7 +14,6 @@ EXTRA_DIST = \
 	libcfs_debug.h \
 	libcfs_fail.h \
 	libcfs_hash.h \
-	libcfs_heap.h \
 	libcfs_private.h \
 	libcfs_string.h \
 	libcfs_workitem.h

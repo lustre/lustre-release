@@ -13,10 +13,6 @@
  * GNU General Public License version 2 for more details.  A copy is
  * included in the COPYING file that accompanied this code.
 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
  * GPL HEADER END
  */
 /*
@@ -36,6 +32,8 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
+#include <lustre_net.h>
+#include "heap.h"
 
 #define CBH_ALLOC(ptr, h)						\
 do {									\
@@ -51,7 +49,7 @@ do {									\
 		if ((h)->cbh_flags & CBH_FLAG_ATOMIC_GROW)		\
 			LIBCFS_ALLOC_ATOMIC((ptr), CBH_NOB);		\
 		else							\
-			LIBCFS_ALLOC((ptr), CBH_NOB);   		\
+			LIBCFS_ALLOC((ptr), CBH_NOB);			\
 	}								\
 } while (0)
 
@@ -165,7 +163,7 @@ cfs_binheap_grow(struct cfs_binheap *h)
  */
 struct cfs_binheap *
 cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
-		   unsigned count, void *arg, struct cfs_cpt_table *cptab,
+		   unsigned int count, void *arg, struct cfs_cpt_table *cptab,
 		   int cptid)
 {
 	struct cfs_binheap *h;
@@ -274,8 +272,8 @@ cfs_binheap_pointer(struct cfs_binheap *h, unsigned int idx)
 		return &(h->cbh_elements2[idx >> CBH_SHIFT][idx & CBH_MASK]);
 
 	idx -= CBH_SIZE * CBH_SIZE;
-	return &(h->cbh_elements3[idx >> (2 * CBH_SHIFT)]\
-				 [(idx >> CBH_SHIFT) & CBH_MASK]\
+	return &(h->cbh_elements3[idx >> (2 * CBH_SHIFT)]
+				 [(idx >> CBH_SHIFT) & CBH_MASK]
 				 [idx & CBH_MASK]);
 }
 
