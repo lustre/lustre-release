@@ -82,9 +82,11 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	char			*lwp_name = lwp->lpd_obd->obd_name;
 	char			*server_uuid = NULL;
 	char			*ptr;
+	int			 uuid_len = -1;
 	struct obd_import	*imp;
 	int			 len = strlen(lwp_name) + 1;
 	int			 rc;
+	const char		*lwp_marker = "-" LUSTRE_LWP_NAME "-";
 	ENTRY;
 
 	lwp->lpd_notify_task = NULL;
@@ -97,16 +99,17 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	if (server_uuid == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	snprintf(server_uuid, len, "-%s-", LUSTRE_LWP_NAME);
-	ptr = cfs_strrstr(lwp_name, server_uuid);
-	if (ptr == NULL) {
+	ptr = lwp_name;
+	while (ptr && (ptr = strstr(ptr+1, lwp_marker)) != NULL)
+		uuid_len = ptr - lwp_name;
+
+	if (uuid_len < 0) {
 		CERROR("%s: failed to get server_uuid from lwp_name: rc = %d\n",
 		       lwp_name, -EINVAL);
 		GOTO(out, rc = -EINVAL);
 	}
 
-	strncpy(server_uuid, lwp_name, ptr - lwp_name);
-	server_uuid[ptr - lwp_name] = '\0';
+	strncpy(server_uuid, lwp_name, uuid_len);
 	strlcat(server_uuid, "_UUID", len);
 	lustre_cfg_bufs_reset(bufs, lwp_name);
 	lustre_cfg_bufs_set_string(bufs, 1, server_uuid);
