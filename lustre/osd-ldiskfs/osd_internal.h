@@ -1031,14 +1031,22 @@ static inline struct super_block *osd_sb(const struct osd_device *dev)
 	return dev->od_mnt->mnt_sb;
 }
 
+static inline const char *osd_sb2name(const struct super_block *sb)
+{
+	/* this is LDISKFS_SB(sb), but preserves "const" */
+	const struct ldiskfs_sb_info *sbi = sb->s_fs_info;
+
+	return sbi->s_es->s_volume_name;
+}
+
 static inline const char *osd_dev2name(const struct osd_device *dev)
 {
-	return osd_sb(dev)->s_id;
+	return osd_sb2name(osd_sb(dev));
 }
 
 static inline const char *osd_ino2name(const struct inode *inode)
 {
-	return inode->i_sb->s_id;
+	return osd_sb2name(inode->i_sb);
 }
 
 /**

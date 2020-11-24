@@ -467,12 +467,11 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		lustre_loa_swab(loa, true);
 		/* Check LMA compatibility */
 		if (lma->lma_incompat & ~LMA_INCOMPAT_SUPP) {
-			CWARN("%s: unsupported incompat LMA feature(s) %#x "
-			      "for fid = "DFID", ino = %lu\n",
+			rc = -EOPNOTSUPP;
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for fid = "DFID", ino = %lu: rc = %d\n",
 			      osd_ino2name(inode),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(&lma->lma_self_fid), inode->i_ino);
-			rc = -EOPNOTSUPP;
+			      PFID(&lma->lma_self_fid), inode->i_ino, rc);
 		}
 	} else if (rc == 0) {
 		rc = -ENODATA;
@@ -517,10 +516,11 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);
 	} else if (is_bad_inode(inode)) {
-		CWARN("%s: bad inode: ino = %u\n",
-		      osd_dev2name(dev), id->oii_ino);
+		rc = -ENOENT;
+		CWARN("%s: bad inode: ino = %u: rc = %d\n",
+		      osd_dev2name(dev), id->oii_ino, rc);
 		iput(inode);
-		inode = ERR_PTR(-ENOENT);
+		inode = ERR_PTR(rc);
 	} else if ((rc = osd_attach_jinode(inode))) {
 		iput(inode);
 		inode = ERR_PTR(rc);
@@ -1091,9 +1091,9 @@ again:
 
 out:
 	if (rc < 0)
-		CDEBUG(D_LFSCK, "%s: fail to check LMV EA, inode = %lu/%u,"
-		       DFID": rc = %d\n", osd_ino2name(inode),
-		       inode->i_ino, inode->i_generation,
+		CDEBUG(D_LFSCK,
+		       "%s: cannot check LMV, ino = %lu/%u "DFID": rc = %d\n",
+		       osd_ino2name(inode), inode->i_ino, inode->i_generation,
 		       PFID(&oic->oic_fid), rc);
 	else
 		rc = 0;
@@ -2884,9 +2884,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		bool ignore_edquot = !(attr->la_flags & LUSTRE_SET_SYNC_FL);
 
 		if (!ignore_edquot)
-			CDEBUG(D_QUOTA, "%s: enforce quota on UID %u, GID %u"
-			       "(the quota space is %lld)\n",
-			       obj->oo_inode->i_sb->s_id, attr->la_uid,
+			CDEBUG(D_QUOTA,
+			       "%s: enforce quota on UID %u, GID %u (quota space is %lld)\n",
+			       osd_ino2name(obj->oo_inode), attr->la_uid,
 			       attr->la_gid, bspace);
 
 		/* USERQUOTA */
@@ -3079,9 +3079,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 
 		rc = dquot_transfer(inode, &iattr);
 		if (rc) {
-			CERROR("%s: quota transfer failed: rc = %d. Is quota "
-			       "enforcement enabled on the ldiskfs "
-			       "filesystem?\n", inode->i_sb->s_id, rc);
+			CERROR("%s: quota transfer failed. Is quota enforcement enabled on the ldiskfs filesystem? rc = %d\n",
+			       osd_ino2name(inode), rc);
 			return rc;
 		}
 	}
@@ -3095,9 +3094,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 		rc = -ENOTSUPP;
 #endif
 		if (rc) {
-			CERROR("%s: quota transfer failed: rc = %d. Is project "
-			       "enforcement enabled on the ldiskfs "
-			       "filesystem?\n", inode->i_sb->s_id, rc);
+			CERROR("%s: quota transfer failed. Is project enforcement enabled on the ldiskfs filesystem? rc = %d\n",
+			       osd_ino2name(inode), rc);
 			return rc;
 		}
 	}
@@ -3977,9 +3975,8 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	    i_projid_read(pobj->oo_inode) != 0) {
 		rc = osd_transfer_project(local, 0, th);
 		if (rc) {
-			CERROR("%s: quota transfer failed: rc = %d. Is project "
-			       "quota enforcement enabled on the ldiskfs "
-			       "filesystem?\n", local->i_sb->s_id, rc);
+			CERROR("%s: quota transfer failed:. Is project quota enforcement enabled on the ldiskfs filesystem? rc = %d\n",
+			       osd_ino2name(local), rc);
 			RETURN(ERR_PTR(rc));
 		}
 	}
@@ -5807,8 +5804,7 @@ trigger:
 		rc = osd_scrub_start(oti->oti_env, dev, SS_AUTO_PARTIAL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
 		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
-		       "%s: trigger partial OI scrub for RPC inconsistency "
-		       "checking FID "DFID": rc = %d\n",
+		       "%s: trigger partial OI scrub for RPC inconsistency checking FID "DFID": rc = %d\n",
 		       osd_dev2name(dev), PFID(fid), rc);
 		if (rc == 0 || rc == -EALREADY)
 			goto again;
@@ -6941,11 +6937,10 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	 * That means we lose it!
 	 */
 	if (rc != 0)
-		CDEBUG(D_LFSCK, "%s: fail to reinsert the dirent, "
-		       "dir = %lu/%u, name = %.*s, "DFID": rc = %d\n",
-		       osd_ino2name(inode),
-		       dir->i_ino, dir->i_generation, namelen,
-		       dentry->d_name.name, PFID(fid), rc);
+		CDEBUG(D_LFSCK,
+		       "%s: fail to reinsert the dirent, dir = %lu/%u, name = %.*s, "DFID": rc = %d\n",
+		       osd_ino2name(inode), dir->i_ino, dir->i_generation,
+		       namelen, dentry->d_name.name, PFID(fid), rc);
 
 	RETURN(rc);
 }

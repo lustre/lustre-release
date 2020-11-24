@@ -1918,7 +1918,7 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		if (unlikely(IS_ERR_OR_NULL(bh) && !sync))
 			CWARN(
 			      "%s: adding bh without locking off %llu (block %lu, size %d, offs %llu)\n",
-			      inode->i_sb->s_id,
+			      osd_ino2name(inode),
 			      offset, block, bufsize, *offs);
 
 		if (IS_ERR_OR_NULL(bh)) {
@@ -1952,8 +1952,8 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 
 			CERROR(
 			       "%s: error reading offset %llu (block %lu, size %d, offs %llu), credits %d/%d: rc = %d\n",
-			       inode->i_sb->s_id, offset, block, bufsize, *offs,
-			       credits, handle->h_buffer_credits, err);
+			       osd_ino2name(inode), offset, block, bufsize,
+			       *offs, credits, handle->h_buffer_credits, err);
 			break;
 		}
 

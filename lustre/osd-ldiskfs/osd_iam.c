@@ -166,7 +166,7 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 
 	bh = __ldiskfs_bread(NULL, inode, blk, 0);
 	if (IS_ERR_OR_NULL(bh)) {
-		CERROR("%s: cannot load idle blocks, blk = %u, err = %ld\n",
+		CERROR("%s: cannot load idle blocks, blk = %u: rc = %ld\n",
 		       osd_ino2name(inode), blk, bh ? PTR_ERR(bh) : -EIO);
 		c->ic_idle_failed = 1;
 		if (bh == NULL)
@@ -176,11 +176,14 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 
 	head = (struct iam_idle_head *)(bh->b_data);
 	if (le16_to_cpu(head->iih_magic) != IAM_IDLE_HEADER_MAGIC) {
-		CERROR("%s: invalid idle block head, blk = %u, magic = %d\n",
-		       osd_ino2name(inode), blk, le16_to_cpu(head->iih_magic));
+		int rc = -EBADF;
+
+		CERROR("%s: invalid idle block head, blk = %u, magic = %x: rc = %d\n",
+		       osd_ino2name(inode), blk, le16_to_cpu(head->iih_magic),
+		       rc);
 		brelse(bh);
 		c->ic_idle_failed = 1;
-		return ERR_PTR(-EBADF);
+		return ERR_PTR(rc);
 	}
 
 	return bh;

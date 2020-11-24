@@ -607,7 +607,7 @@ again:
 		/* We should NOT find the same object more than once. */
 		CERROR("%s: scan the same object multiple times at the pos: "
 		       "group = %u, base = %u, offset = %u, start = %u\n",
-		       param->sb->s_id, (__u32)param->bg, param->gbase,
+		       osd_sb2name(param->sb), (__u32)param->bg, param->gbase,
 		       offset, param->start);
 		goto again;
 	}
