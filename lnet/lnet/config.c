@@ -1247,13 +1247,13 @@ lnet_parse_routes(const char *routes, int *im_a_router)
 }
 
 static int
-lnet_match_network_token(char *token, int len, __u32 *ipaddrs, int nip)
+lnet_match_network_token(char *token, __u32 *ipaddrs, int nip)
 {
 	LIST_HEAD(list);
 	int		rc;
 	int		i;
 
-	rc = cfs_ip_addr_parse(token, len, &list);
+	rc = cfs_ip_addr_parse(token, 0, &list);
 	if (rc != 0)
 		return rc;
 
@@ -1272,7 +1272,6 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
 
 	int   matched = 0;
 	int   ntokens = 0;
-	int   len;
 	char *net = NULL;
 	char *sep;
 	char *token;
@@ -1283,32 +1282,23 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
 	/* work on a copy of the string */
 	strcpy(tokens, net_entry);
 	sep = tokens;
-	for (;;) {
+	while (sep) {
 		/* scan for token start */
-		while (isspace(*sep))
-			sep++;
+		sep = skip_spaces(sep);
 		if (*sep == 0)
 			break;
 
-		token = sep++;
-
-		/* scan for token end */
-		while (*sep != 0 && !isspace(*sep))
-			sep++;
-		if (*sep != 0)
-			*sep++ = 0;
+		token = strsep(&sep, " \t\n\r\v\f");
 
 		if (ntokens++ == 0) {
 			net = token;
 			continue;
 		}
 
-		len = strlen(token);
-
-		rc = lnet_match_network_token(token, len, ipaddrs, nip);
+		rc = lnet_match_network_token(token, ipaddrs, nip);
 		if (rc < 0) {
 			lnet_syntax("ip2nets", net_entry,
-				    (int)(token - tokens), len);
+				    (int)(token - tokens), strlen(token));
 			return rc;
 		}
 

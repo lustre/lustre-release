@@ -552,41 +552,32 @@ libcfs_ip_str2addr_size(const char *str, int nob,
 
 /* Used by lnet/config.c so it can't be static */
 int
-cfs_ip_addr_parse(char *str, int len, struct list_head *list)
+cfs_ip_addr_parse(char *str, int len_ignored, struct list_head *list)
 {
 	struct cfs_expr_list *el;
-	struct cfs_lstr src;
-	int rc;
-	int i;
+	int rc = 0;
+	int i = 0;
 
-	src.ls_str = str;
-	src.ls_len = len;
-	i = 0;
+	str = strim(str);
+	while (rc == 0 && str) {
+		char *res;
 
-	while (src.ls_str != NULL) {
-		struct cfs_lstr res;
-
-		if (!cfs_gettok(&src, '.', &res)) {
+		res = strsep(&str, ".");
+		res = strim(res);
+		if (!*res) {
 			rc = -EINVAL;
-			goto out;
+		} else if ((rc = cfs_expr_list_parse(res, strlen(res),
+						   0, 255, &el)) == 0) {
+			list_add_tail(&el->el_link, list);
+			i++;
 		}
-
-		rc = cfs_expr_list_parse(res.ls_str, res.ls_len, 0, 255, &el);
-		if (rc != 0)
-			goto out;
-
-		list_add_tail(&el->el_link, list);
-		i++;
 	}
 
-	if (i == 4)
+	if (rc == 0 && i == 4)
 		return 0;
-
-	rc = -EINVAL;
-out:
 	cfs_expr_list_free_list(list);
 
-	return rc;
+	return rc ?: -EINVAL;
 }
 
 /**
