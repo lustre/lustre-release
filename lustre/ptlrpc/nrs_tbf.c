@@ -921,41 +921,43 @@ static void nrs_tbf_jobid_cmd_fini(struct nrs_tbf_cmd *cmd)
 			 strlen(cmd->u.tc_start.ts_jobids_str) + 1);
 }
 
-static int nrs_tbf_check_id_value(struct cfs_lstr *src, char *key)
+static int nrs_tbf_check_id_value(char **strp, char *key)
 {
-	struct cfs_lstr res;
-	int keylen = strlen(key);
-	int rc;
+	char *str = *strp;
+	char *tok;
+	int len;
 
-	rc = cfs_gettok(src, '=', &res);
-	if (rc == 0 || res.ls_len != keylen ||
-	    strncmp(res.ls_str, key, keylen) != 0 ||
-	    !src->ls_str || src->ls_len <= 2 ||
-	    src->ls_str[0] != '{' || src->ls_str[src->ls_len - 1] != '}')
+	tok = strim(strsep(&str, "="));
+	if (!*tok || !str)
+		/* No LHS or no '=' */
+		return -EINVAL;
+	str = strim(str);
+	len = strlen(str);
+	if (strcmp(tok, key) != 0 ||
+	    str[0] != '{' || str[len-1] != '}')
+		/* Wrong key, or RHS missing {} */
 		return -EINVAL;
 
 	/* Skip '{' and '}' */
-	src->ls_str++;
-	src->ls_len -= 2;
+	str[len-1] = '\0';
+	str += 1;
+	*strp = str;
 	return 0;
 }
 
 static int nrs_tbf_jobid_parse(struct nrs_tbf_cmd *cmd, char *id)
 {
-	struct cfs_lstr src;
 	int rc;
 
-	src.ls_str = id;
-	src.ls_len = strlen(id);
-	rc = nrs_tbf_check_id_value(&src, "jobid");
+	rc = nrs_tbf_check_id_value(&id, "jobid");
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_jobids_str, src.ls_len + 1);
+	OBD_ALLOC(cmd->u.tc_start.ts_jobids_str, strlen(id) + 1);
 	if (cmd->u.tc_start.ts_jobids_str == NULL)
 		return -ENOMEM;
 
-	memcpy(cmd->u.tc_start.ts_jobids_str, src.ls_str, src.ls_len);
+	strcpy(cmd->u.tc_start.ts_jobids_str, id);
 
 	/* parse jobid list */
 	rc = nrs_tbf_jobid_list_parse(cmd->u.tc_start.ts_jobids_str,
@@ -1239,20 +1241,17 @@ static void nrs_tbf_nid_cmd_fini(struct nrs_tbf_cmd *cmd)
 
 static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, char *id)
 {
-	struct cfs_lstr src;
 	int rc;
 
-	src.ls_str = id;
-	src.ls_len = strlen(id);
-	rc = nrs_tbf_check_id_value(&src, "nid");
+	rc = nrs_tbf_check_id_value(&id, "nid");
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_nids_str, src.ls_len + 1);
+	OBD_ALLOC(cmd->u.tc_start.ts_nids_str, strlen(id) + 1);
 	if (cmd->u.tc_start.ts_nids_str == NULL)
 		return -ENOMEM;
 
-	memcpy(cmd->u.tc_start.ts_nids_str, src.ls_str, src.ls_len);
+	strcpy(cmd->u.tc_start.ts_nids_str, id);
 
 	/* parse NID list */
 	if (cfs_parse_nidlist(cmd->u.tc_start.ts_nids_str,
@@ -2275,20 +2274,17 @@ static void nrs_tbf_opcode_cmd_fini(struct nrs_tbf_cmd *cmd)
 
 static int nrs_tbf_opcode_parse(struct nrs_tbf_cmd *cmd, char *id)
 {
-	struct cfs_lstr src;
 	int rc;
 
-	src.ls_str = id;
-	src.ls_len = strlen(id);
-	rc = nrs_tbf_check_id_value(&src, "opcode");
+	rc = nrs_tbf_check_id_value(&id, "opcode");
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_opcodes_str, src.ls_len + 1);
+	OBD_ALLOC(cmd->u.tc_start.ts_opcodes_str, strlen(id) + 1);
 	if (cmd->u.tc_start.ts_opcodes_str == NULL)
 		return -ENOMEM;
 
-	memcpy(cmd->u.tc_start.ts_opcodes_str, src.ls_str, src.ls_len);
+	strcpy(cmd->u.tc_start.ts_opcodes_str, id);
 
 	/* parse opcode list */
 	rc = nrs_tbf_opcode_list_parse(cmd->u.tc_start.ts_opcodes_str,
@@ -2598,25 +2594,21 @@ out:
 
 static int nrs_tbf_ug_id_parse(struct nrs_tbf_cmd *cmd, char *id)
 {
-	struct cfs_lstr src;
 	int rc;
 	enum nrs_tbf_flag tif;
 
 	tif = cmd->u.tc_start.ts_valid_type;
 
-	src.ls_str = id;
-	src.ls_len = strlen(id);
-
-	rc = nrs_tbf_check_id_value(&src,
+	rc = nrs_tbf_check_id_value(&id,
 				    tif == NRS_TBF_FLAG_UID ? "uid" : "gid");
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_ids_str, src.ls_len + 1);
+	OBD_ALLOC(cmd->u.tc_start.ts_ids_str, strlen(id) + 1);
 	if (cmd->u.tc_start.ts_ids_str == NULL)
 		return -ENOMEM;
 
-	strlcpy(cmd->u.tc_start.ts_ids_str, src.ls_str, src.ls_len + 1);
+	strcpy(cmd->u.tc_start.ts_ids_str, id);
 
 	rc = nrs_tbf_id_list_parse(cmd->u.tc_start.ts_ids_str,
 				   &cmd->u.tc_start.ts_ids, tif);
