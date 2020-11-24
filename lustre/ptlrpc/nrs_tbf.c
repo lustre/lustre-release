@@ -1819,73 +1819,66 @@ nrs_tbf_generic_cmd_fini(struct nrs_tbf_cmd *cmd)
 			 strlen(cmd->u.tc_start.ts_conds_str) + 1);
 }
 
-#define NRS_TBF_DISJUNCTION_DELIM	(',')
-#define NRS_TBF_CONJUNCTION_DELIM	('&')
-#define NRS_TBF_EXPRESSION_DELIM	('=')
-
-static inline bool
-nrs_tbf_check_field(struct cfs_lstr *field, char *str)
-{
-	int len = strlen(str);
-
-	return (field->ls_len == len &&
-		strncmp(field->ls_str, str, len) == 0);
-}
+#define NRS_TBF_DISJUNCTION_DELIM	(",")
+#define NRS_TBF_CONJUNCTION_DELIM	("&")
+#define NRS_TBF_EXPRESSION_DELIM	("=")
 
 static int
 nrs_tbf_opcode_list_parse(char *str, int len, unsigned long **bitmaptr);
 static int
-nrs_tbf_id_list_parse(char *str, int len, struct list_head *id_list,
+nrs_tbf_id_list_parse(char *str, struct list_head *id_list,
 		      enum nrs_tbf_flag tif);
 
 static int
-nrs_tbf_expression_parse(struct cfs_lstr *src, struct list_head *cond_list)
+nrs_tbf_expression_parse(char *str, struct list_head *cond_list)
 {
 	struct nrs_tbf_expression *expr;
-	struct cfs_lstr field;
+	char *field;
 	int rc = 0;
+	int len;
 
 	OBD_ALLOC_PTR(expr);
 	if (expr == NULL)
 		return -ENOMEM;
 
-	rc = cfs_gettok(src, NRS_TBF_EXPRESSION_DELIM, &field);
-	if (rc == 0 || !src->ls_str || src->ls_len <= 2 ||
-	    src->ls_str[0] != '{' || src->ls_str[src->ls_len - 1] != '}')
+	field = strim(strsep(&str, NRS_TBF_EXPRESSION_DELIM));
+	if (!*field || !str)
+		/* No LHS or no '=' sign */
+		GOTO(out, rc = -EINVAL);
+	str = strim(str);
+	len = strlen(str);
+	if (len < 2 || str[0] != '{' || str[len-1] != '}')
+		/* No {} around RHS */
 		GOTO(out, rc = -EINVAL);
 
 	/* Skip '{' and '}' */
-	src->ls_str++;
-	src->ls_len -= 2;
+	str[len-1] = '\0';
+	str += 1;
+	len -= 2;
 
-	if (nrs_tbf_check_field(&field, "nid")) {
-		if (cfs_parse_nidlist(src->ls_str,
-				      src->ls_len,
+	if (strcmp(field, "nid") == 0) {
+		if (cfs_parse_nidlist(str, len,
 				      &expr->te_cond) <= 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_NID;
-	} else if (nrs_tbf_check_field(&field, "jobid")) {
-		if (nrs_tbf_jobid_list_parse(src->ls_str,
-					     src->ls_len,
+	} else if (strcmp(field, "jobid") == 0) {
+		if (nrs_tbf_jobid_list_parse(str, len,
 					     &expr->te_cond) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_JOBID;
-	} else if (nrs_tbf_check_field(&field, "opcode")) {
-		if (nrs_tbf_opcode_list_parse(src->ls_str,
-					      src->ls_len,
+	} else if (strcmp(field, "opcode") == 0) {
+		if (nrs_tbf_opcode_list_parse(str, len,
 					      &expr->te_opcodes) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_OPCODE;
-	} else if (nrs_tbf_check_field(&field, "uid")) {
-		if (nrs_tbf_id_list_parse(src->ls_str,
-					  src->ls_len,
+	} else if (strcmp(field, "uid") == 0) {
+		if (nrs_tbf_id_list_parse(str,
 					  &expr->te_cond,
 					  NRS_TBF_FLAG_UID) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_UID;
-	} else if (nrs_tbf_check_field(&field, "gid")) {
-		if (nrs_tbf_id_list_parse(src->ls_str,
-					  src->ls_len,
+	} else if (strcmp(field, "gid") == 0) {
+		if (nrs_tbf_id_list_parse(str,
 					  &expr->te_cond,
 					  NRS_TBF_FLAG_GID) < 0)
 			GOTO(out, rc = -EINVAL);
@@ -1902,10 +1895,9 @@ out:
 }
 
 static int
-nrs_tbf_conjunction_parse(struct cfs_lstr *src, struct list_head *cond_list)
+nrs_tbf_conjunction_parse(char *str, struct list_head *cond_list)
 {
 	struct nrs_tbf_conjunction *conjunction;
-	struct cfs_lstr expr;
 	int rc = 0;
 
 	OBD_ALLOC_PTR(conjunction);
@@ -1915,40 +1907,34 @@ nrs_tbf_conjunction_parse(struct cfs_lstr *src, struct list_head *cond_list)
 	INIT_LIST_HEAD(&conjunction->tc_expressions);
 	list_add_tail(&conjunction->tc_linkage, cond_list);
 
-	while (src->ls_str) {
-		rc = cfs_gettok(src, NRS_TBF_CONJUNCTION_DELIM, &expr);
-		if (rc == 0) {
-			rc = -EINVAL;
-			break;
-		}
-		rc = nrs_tbf_expression_parse(&expr,
+	while (str && !rc) {
+		char *expr = strsep(&str, NRS_TBF_CONJUNCTION_DELIM);
+
+		rc = nrs_tbf_expression_parse(expr,
 					      &conjunction->tc_expressions);
-		if (rc)
-			break;
 	}
 	return rc;
 }
 
 static int
-nrs_tbf_conds_parse(char *str, int len, struct list_head *cond_list)
+nrs_tbf_conds_parse(char *orig, struct list_head *cond_list)
 {
-	struct cfs_lstr src;
-	struct cfs_lstr res;
+	char *str;
 	int rc = 0;
 
-	src.ls_str = str;
-	src.ls_len = len;
+	orig = kstrdup(orig, GFP_KERNEL);
+	if (!orig)
+		return -ENOMEM;
+	str = orig;
+
 	INIT_LIST_HEAD(cond_list);
-	while (src.ls_str) {
-		rc = cfs_gettok(&src, NRS_TBF_DISJUNCTION_DELIM, &res);
-		if (rc == 0) {
-			rc = -EINVAL;
-			break;
-		}
-		rc = nrs_tbf_conjunction_parse(&res, cond_list);
-		if (rc)
-			break;
+	while (str && !rc) {
+		char *term = strsep(&str, NRS_TBF_DISJUNCTION_DELIM);
+
+		rc = nrs_tbf_conjunction_parse(term, cond_list);
 	}
+	kfree(orig);
+
 	return rc;
 }
 
@@ -1965,7 +1951,6 @@ nrs_tbf_generic_parse(struct nrs_tbf_cmd *cmd, const char *id)
 
 	/* Parse hybird NID and JOBID conditions */
 	rc = nrs_tbf_conds_parse(cmd->u.tc_start.ts_conds_str,
-				 strlen(cmd->u.tc_start.ts_conds_str),
 				 &cmd->u.tc_start.ts_conds);
 	if (rc)
 		nrs_tbf_generic_cmd_fini(cmd);
@@ -2056,7 +2041,6 @@ nrs_tbf_rule_init(struct ptlrpc_nrs_policy *policy,
 	INIT_LIST_HEAD(&rule->tr_conds);
 	if (!list_empty(&start->u.tc_start.ts_conds)) {
 		rc = nrs_tbf_conds_parse(rule->tr_conds_str,
-					 strlen(rule->tr_conds_str),
 					 &rule->tr_conds);
 	}
 	if (rc)
@@ -2558,37 +2542,42 @@ static void nrs_tbf_id_cmd_fini(struct nrs_tbf_cmd *cmd)
 }
 
 static int
-nrs_tbf_id_list_parse(char *str, int len, struct list_head *id_list,
+nrs_tbf_id_list_parse(char *orig, struct list_head *id_list,
 		      enum nrs_tbf_flag tif)
 {
-	struct cfs_lstr src;
-	struct cfs_lstr res;
 	int rc = 0;
+	unsigned long val;
+	char *str;
 	struct tbf_id id = { 0 };
 	ENTRY;
 
 	if (tif != NRS_TBF_FLAG_UID && tif != NRS_TBF_FLAG_GID)
 		RETURN(-EINVAL);
 
-	src.ls_str = str;
-	src.ls_len = len;
-	INIT_LIST_HEAD(id_list);
-	while (src.ls_str) {
-		struct nrs_tbf_id *nti_id;
+	orig = kstrdup(orig, GFP_KERNEL);
+	if (!orig)
+		return -ENOMEM;
 
-		if (cfs_gettok(&src, ' ', &res) == 0)
-			GOTO(out, rc = -EINVAL);
+	INIT_LIST_HEAD(id_list);
+	for (str = orig; str ; ) {
+		struct nrs_tbf_id *nti_id;
+		char *tok;
+
+		tok = strsep(&str, " ");
+		if (!*tok)
+			/* Empty token - leading, trailing, or
+			 * multiple spaces in list
+			 */
+			continue;
 
 		id.ti_type = tif;
-		if (tif == NRS_TBF_FLAG_UID) {
-			if (!cfs_str2num_check(res.ls_str, res.ls_len,
-					       &id.ti_uid, 0, (u32)~0U))
-				GOTO(out, rc = -EINVAL);
-		} else {
-			if (!cfs_str2num_check(res.ls_str, res.ls_len,
-					       &id.ti_gid, 0, (u32)~0U))
-				GOTO(out, rc = -EINVAL);
-		}
+		rc = kstrtoul(tok, 0, &val);
+		if (rc < 0)
+			GOTO(out, rc = -EINVAL);
+		if (tif == NRS_TBF_FLAG_UID)
+			id.ti_uid = val;
+		else
+			id.ti_gid = val;
 
 		OBD_ALLOC_PTR(nti_id);
 		if (nti_id == NULL)
@@ -2597,7 +2586,11 @@ nrs_tbf_id_list_parse(char *str, int len, struct list_head *id_list,
 		nti_id->nti_id = id;
 		list_add_tail(&nti_id->nti_linkage, id_list);
 	}
+	if (list_empty(id_list))
+		/* Only white space in the list */
+		GOTO(out, rc = -EINVAL);
 out:
+	kfree(orig);
 	if (rc)
 		nrs_tbf_id_list_free(id_list);
 	RETURN(rc);
@@ -2626,7 +2619,6 @@ static int nrs_tbf_ug_id_parse(struct nrs_tbf_cmd *cmd, char *id)
 	strlcpy(cmd->u.tc_start.ts_ids_str, src.ls_str, src.ls_len + 1);
 
 	rc = nrs_tbf_id_list_parse(cmd->u.tc_start.ts_ids_str,
-				   strlen(cmd->u.tc_start.ts_ids_str),
 				   &cmd->u.tc_start.ts_ids, tif);
 	if (rc)
 		nrs_tbf_id_cmd_fini(cmd);
@@ -2656,7 +2648,6 @@ nrs_tbf_id_rule_init(struct ptlrpc_nrs_policy *policy,
 
 	if (!list_empty(&start->u.tc_start.ts_ids)) {
 		rc = nrs_tbf_id_list_parse(rule->tr_ids_str,
-					   strlen(rule->tr_ids_str),
 					   &rule->tr_ids, tif);
 		if (rc)
 			CERROR("%ss {%s} illegal\n",

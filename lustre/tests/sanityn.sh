@@ -4628,7 +4628,7 @@ test_77q() {
 	for i in {1..50}; do
 		local pid1 pid2
 
-		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_1 uid={500}&gid={500} rate=100'" &
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_1 uid={ 500  11 3}&gid={500 10 33   100 } rate=100'" &
 		pid1=$!
 		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_2 uid={1000}&gid={1000} rate=100'" &
 		pid2=$!
