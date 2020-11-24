@@ -138,34 +138,6 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 }
 EXPORT_SYMBOL(cfs_str2mask);
 
-/* get the first string out of @str */
-char *cfs_firststr(char *str, size_t size)
-{
-	size_t i = 0;
-	char *end;
-
-	/* trim leading spaces */
-	while (i < size && *str && isspace(*str)) {
-		++i;
-		++str;
-	}
-
-	/* string with all spaces */
-	if (*str == '\0')
-		goto out;
-
-	end = str;
-	while (i < size && *end != '\0' && !isspace(*end)) {
-		++i;
-		++end;
-	}
-
-	*end = '\0';
-out:
-	return str;
-}
-EXPORT_SYMBOL(cfs_firststr);
-
 /**
  * Extracts tokens from strings.
  *

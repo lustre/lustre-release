@@ -440,7 +440,8 @@ lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
 	 */
 	if (copy_from_user(kbuf, buf, min_t(unsigned long, BUFLEN - 1, count)))
 		GOTO(out, rc = -EFAULT);
-	tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
+	tmpbuf = skip_spaces(kbuf);
+	tmpbuf = strsep(&tmpbuf, " \t\n\f\v\r");
 
 	if (strncmp(tmpbuf, "nid:", 4) != 0) {
 		count = lprocfs_evict_client_seq_write(file, buf, count, off);

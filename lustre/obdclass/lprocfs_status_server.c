@@ -124,7 +124,8 @@ lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 		count = -EFAULT;
 		goto out;
 	}
-	tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
+	tmpbuf = skip_spaces(kbuf);
+	tmpbuf = strsep(&tmpbuf, " \t\n\f\v\r");
 	class_incref(obd, __func__, current);
 
 	if (strncmp(tmpbuf, "nid:", 4) == 0)
