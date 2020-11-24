@@ -1366,6 +1366,17 @@ int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
 	RETURN(0);
 }
 
+bool osp_check_stale(struct dt_object *dt)
+{
+	struct osp_object *obj = dt2osp_obj(dt);
+
+	if (is_ost_obj(&dt->do_lu) && obj->opo_non_exist)
+		return true;
+
+	return obj->opo_stale;
+}
+
+
 /**
  * Implement OSP layer dt_object_operations::do_declare_create() interface.
  *

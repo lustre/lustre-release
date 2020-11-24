@@ -818,6 +818,7 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *th);
 int osp_invalidate(const struct lu_env *env, struct dt_object *dt);
+bool osp_check_stale(struct dt_object *dt);
 void osp_obj_invalidate_cache(struct osp_object *obj);
 
 int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,

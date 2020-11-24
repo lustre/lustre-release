@@ -1089,6 +1089,7 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_object_lock       = osp_md_object_lock,
 	.do_object_unlock     = osp_md_object_unlock,
 	.do_invalidate	      = osp_invalidate,
+	.do_check_stale	      = osp_check_stale,
 };
 
 /**

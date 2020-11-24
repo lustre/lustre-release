@@ -412,6 +412,9 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		LASSERT(llh->llh_size == reclen);
 	}
 
+	/* return error if osp object is stale */
+	if (idx != LLOG_HEADER_IDX && dt_object_stale(o))
+		RETURN(-ESTALE);
 	rc = dt_attr_get(env, o, &lgi->lgi_attr);
 	if (rc)
 		RETURN(rc);

@@ -1063,6 +1063,18 @@ struct dt_object_operations {
 	int   (*do_invalidate)(const struct lu_env *env, struct dt_object *dt);
 
 	/**
+	 * Check object stale state.
+	 *
+	 * OSP only.
+	 *
+	 * \param[in] dt	object
+	 *
+	 * \retval true		for stale object
+	 * \retval false	for not stale object
+	 */
+	bool (*do_check_stale)(struct dt_object *dt);
+
+	/**
 	 * Declare intention to instaintiate extended layout component.
 	 *
 	 * \param[in] env	execution environment
@@ -2384,6 +2396,15 @@ static inline int dt_write_locked(const struct lu_env *env,
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_write_locked);
         return dt->do_ops->do_write_locked(env, dt);
+}
+
+static inline bool dt_object_stale(struct dt_object *dt)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_check_stale);
+
+	return dt->do_ops->do_check_stale(dt);
 }
 
 static inline int dt_declare_attr_get(const struct lu_env *env,
