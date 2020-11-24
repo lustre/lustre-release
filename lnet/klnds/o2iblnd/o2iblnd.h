@@ -780,6 +780,8 @@ struct kib_peer_ni {
 	__u16			ibp_max_frags;
 	/* max_peer_credits */
 	__u16			ibp_queue_depth;
+	/* reduced value which allows conn to be created if max fails */
+	__u16                   ibp_queue_depth_mod;
 };
 
 #ifndef HAVE_IB_INC_RKEY

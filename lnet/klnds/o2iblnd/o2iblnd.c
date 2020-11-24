@@ -335,6 +335,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	peer_ni->ibp_last_alive = 0;
 	peer_ni->ibp_max_frags = IBLND_MAX_RDMA_FRAGS;
 	peer_ni->ibp_queue_depth = ni->ni_net->net_tunables.lct_peer_tx_credits;
+	peer_ni->ibp_queue_depth_mod = 0;	/* try to use the default */
 	atomic_set(&peer_ni->ibp_refcount, 1);	/* 1 ref for caller */
 
 	INIT_LIST_HEAD(&peer_ni->ibp_list);	/* not in the peer_ni table yet */
@@ -878,14 +879,28 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	init_qp_attr.qp_type = IB_QPT_RC;
 	init_qp_attr.send_cq = cq;
 	init_qp_attr.recv_cq = cq;
-	/*
-	 * kiblnd_send_wrs() can change the connection's queue depth if
-	 * the maximum work requests for the device is maxed out
-	 */
-	init_qp_attr.cap.max_send_wr = kiblnd_send_wrs(conn);
-	init_qp_attr.cap.max_recv_wr = IBLND_RECV_WRS(conn);
 
-	rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd, &init_qp_attr);
+	if (peer_ni->ibp_queue_depth_mod &&
+	    peer_ni->ibp_queue_depth_mod < peer_ni->ibp_queue_depth) {
+		conn->ibc_queue_depth = peer_ni->ibp_queue_depth_mod;
+		CDEBUG(D_NET, "Use reduced queue depth %u (from %u)\n",
+		       peer_ni->ibp_queue_depth_mod,
+		       peer_ni->ibp_queue_depth);
+	}
+
+	do {
+		/* kiblnd_send_wrs() can change the connection's queue depth if
+		 * the maximum work requests for the device is maxed out
+		 */
+		init_qp_attr.cap.max_send_wr = kiblnd_send_wrs(conn);
+		init_qp_attr.cap.max_recv_wr = IBLND_RECV_WRS(conn);
+		rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd,
+				    &init_qp_attr);
+		if (rc != -ENOMEM || conn->ibc_queue_depth < 2)
+			break;
+		conn->ibc_queue_depth--;
+	} while (rc);
+
 	if (rc) {
 		CERROR("Can't create QP: %d, send_wr: %d, recv_wr: %d, "
 		       "send_sge: %d, recv_sge: %d\n",
@@ -898,12 +913,15 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 
 	conn->ibc_sched = sched;
 
-	if (conn->ibc_queue_depth != peer_ni->ibp_queue_depth)
+	if (!peer_ni->ibp_queue_depth_mod &&
+	    conn->ibc_queue_depth != peer_ni->ibp_queue_depth) {
 		CWARN("peer %s - queue depth reduced from %u to %u"
 		      "  to allow for qp creation\n",
 		      libcfs_nid2str(peer_ni->ibp_nid),
 		      peer_ni->ibp_queue_depth,
 		      conn->ibc_queue_depth);
+		peer_ni->ibp_queue_depth_mod = conn->ibc_queue_depth;
+	}
 
 	LIBCFS_CPT_ALLOC(conn->ibc_rxs, lnet_cpt_table(), cpt,
 			 IBLND_RX_MSGS(conn) * sizeof(struct kib_rx));
