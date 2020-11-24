@@ -754,7 +754,8 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 	       dt_obd_name(th->th_dev), arg->u.xattr_set.buf.lb_buf,
 	       arg->u.xattr_set.name, arg->u.xattr_set.flags);
 
-	if (!lu_object_exists(&dt_obj->do_lu)) {
+	if (!lu_object_exists(&dt_obj->do_lu) ||
+	    OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 		rc = -ENOENT;
 	} else {
 		struct linkea_data ldata = { 0 };

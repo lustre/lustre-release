@@ -24088,6 +24088,38 @@ test_426() {
 }
 run_test 426 "splice test on Lustre"
 
+test_427() {
+	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.12.4) )) ||
+		skip "Need MDS version at least 2.12.4"
+	local log
+
+	mkdir $DIR/$tdir
+	mkdir $DIR/$tdir/1
+	mkdir $DIR/$tdir/2
+	test_mkdir -c $MDSCOUNT -i 1 $DIR/$tdir/1/dir
+	test_mkdir -c $MDSCOUNT -i 1 $DIR/$tdir/2/dir2
+
+	$LFS getdirstripe $DIR/$tdir/1/dir
+
+	#first setfattr for creating updatelog
+	setfattr -n user.attr0 -v "some text" $DIR/$tdir/1/dir
+
+#define OBD_FAIL_OUT_OBJECT_MISS        0x1708
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x80001708
+	setfattr -n user.attr1 -v "some text" $DIR/$tdir/1/dir &
+	setfattr -n user.attr2 -v "another attr"  $DIR/$tdir/2/dir2 &
+
+	sleep 2
+	fail mds2
+	wait_recovery_complete mds2 $((2*TIMEOUT))
+
+	log=$(do_facet mds1 dmesg | tac | sed "/${TESTNAME//_/ }/,$ d")
+	echo $log | grep "get update log failed" &&
+		error "update log corruption is detected" || true
+}
+run_test 427 "Failed DNE2 update request shouldn't corrupt updatelog"
+
 lseek_test_430() {
 	local offset
 	local file=$1

@@ -1026,6 +1026,17 @@ stop_master_trans:
 	/* Step 3: write updates to other MDTs */
 	if (write_updates) {
 		struct llog_update_record *lur;
+		if (OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
+			if (cfs_fail_val == 1) {
+				long timeout = cfs_time_seconds(1) / 10;
+
+				OBD_RACE(OBD_FAIL_OUT_OBJECT_MISS);
+				set_current_state(TASK_UNINTERRUPTIBLE);
+				schedule_timeout(schedule_timeout(timeout));
+				cfs_fail_loc = 0;
+			}
+			cfs_fail_val++;
+		}
 
 		/* Stop callback of master will add more updates and also update
 		 * master transno, so merge the parameters and updates into one
@@ -1596,6 +1607,11 @@ static int distribute_txn_commit_thread(void *_arg)
 
 		if (current->state)
 			schedule();
+
+		if (OBD_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(5));
+		}
 	}
 
 	while (({set_current_state(TASK_IDLE);

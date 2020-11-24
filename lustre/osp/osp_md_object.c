@@ -1137,6 +1137,7 @@ static int osp_write_interpreter(const struct lu_env *env,
 	if (rc) {
 		CDEBUG(D_HA, "error "DFID": rc = %d\n",
 		       PFID(lu_object_fid(&obj->opo_obj.do_lu)), rc);
+		OBD_RACE(OBD_FAIL_OUT_OBJECT_MISS);
 		spin_lock(&obj->opo_lock);
 		obj->opo_attr.la_valid = 0;
 		obj->opo_stale = 1;
