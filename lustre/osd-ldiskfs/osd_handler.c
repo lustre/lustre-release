@@ -285,6 +285,76 @@ osd_idc_find_or_init(const struct lu_env *env, struct osd_device *osd,
 	return idc;
 }
 
+static void osd_idc_dump_lma(const struct lu_env *env,
+				struct osd_device *osd,
+				unsigned long ino,
+				bool check_in_oi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
+	const struct lu_fid *fid;
+	struct osd_inode_id lid;
+	struct inode *inode;
+	int rc;
+
+	inode = osd_ldiskfs_iget(osd_sb(osd), ino);
+	if (IS_ERR(inode)) {
+		CERROR("%s: can't get inode %lu: rc = %d\n",
+		       osd->od_svname, ino, (int)PTR_ERR(inode));
+		return;
+	}
+	if (is_bad_inode(inode)) {
+		CERROR("%s: bad inode %lu\n", osd->od_svname, ino);
+		goto put;
+	}
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, loa);
+	if (rc) {
+		CERROR("%s: can't get LMA for %lu: rc = %d\n",
+		       osd->od_svname, ino, rc);
+		goto put;
+	}
+	fid = &loa->loa_lma.lma_self_fid;
+	LCONSOLE(D_INFO, "%s: "DFID" in inode %lu/%u\n", osd->od_svname,
+		      PFID(fid), ino, (unsigned)inode->i_generation);
+	if (!check_in_oi)
+		goto put;
+	rc = osd_oi_lookup(osd_oti_get(env), osd, fid, &lid, 0);
+	if (rc) {
+		CERROR("%s: can't lookup "DFID": rc = %d\n",
+		       osd->od_svname, PFID(fid), rc);
+		goto put;
+	}
+	LCONSOLE(D_INFO, "%s: "DFID" maps to %u/%u\n", osd->od_svname,
+		      PFID(fid), lid.oii_ino, lid.oii_gen);
+put:
+	iput(inode);
+}
+
+static void osd_idc_dump_debug(const struct lu_env *env,
+				struct osd_device *osd,
+				const struct lu_fid *fid,
+				unsigned long ino1,
+				unsigned long ino2)
+{
+	struct osd_inode_id lid;
+
+	int rc;
+
+	rc = osd_oi_lookup(osd_oti_get(env), osd, fid, &lid, 0);
+	if (!rc) {
+		LCONSOLE(D_INFO, "%s: "DFID" maps to %u/%u\n",
+			osd->od_svname, PFID(fid), lid.oii_ino, lid.oii_gen);
+		osd_idc_dump_lma(env, osd, lid.oii_ino, false);
+	} else {
+		CERROR("%s: can't lookup "DFID": rc = %d\n",
+		       osd->od_svname, PFID(fid), rc);
+	}
+	if (ino1)
+		osd_idc_dump_lma(env, osd, ino1, true);
+	if (ino2)
+		osd_idc_dump_lma(env, osd, ino2, true);
+}
+
 /*
  * lookup mapping for given FID and fill it from the given object.
  * the object is lolcal by definition.
@@ -302,7 +372,12 @@ static int osd_idc_find_and_init(const struct lu_env *env,
 		if (obj->oo_inode == NULL)
 			return 0;
 		if (idc->oic_lid.oii_ino != obj->oo_inode->i_ino) {
-			LASSERT(idc->oic_lid.oii_ino == 0);
+			if (idc->oic_lid.oii_ino) {
+				osd_idc_dump_debug(env, osd, fid,
+						   idc->oic_lid.oii_ino,
+						   obj->oo_inode->i_ino);
+				return -EINVAL;
+			}
 			idc->oic_lid.oii_ino = obj->oo_inode->i_ino;
 			idc->oic_lid.oii_gen = obj->oo_inode->i_generation;
 		}
@@ -2040,6 +2115,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	if (unlikely(remove_agents != 0))
 		osd_process_scheduled_agent_removals(env, osd);
 
+	LASSERT(oti->oti_ins_cache_depth > 0);
 	oti->oti_ins_cache_depth--;
 	/* reset OI cache for safety */
 	if (oti->oti_ins_cache_depth == 0)
@@ -4092,6 +4168,7 @@ static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 			       struct thandle *handle)
 {
 	struct osd_thandle *oh;
+	int rc;
 
 	/* it's possible that object doesn't exist yet */
 	LASSERT(handle != NULL);
@@ -4102,9 +4179,10 @@ static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_op(env, oh, OSD_OT_REF_ADD,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
-	osd_idc_find_and_init(env, osd_dev(dt->do_lu.lo_dev), osd_dt_obj(dt));
+	rc = osd_idc_find_and_init(env, osd_dev(dt->do_lu.lo_dev),
+				   osd_dt_obj(dt));
 
-	return 0;
+	return rc;
 }
 
 /*
