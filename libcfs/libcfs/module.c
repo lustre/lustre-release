@@ -28,7 +28,6 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  */
-#include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -63,152 +62,8 @@ struct lnet_debugfs_symlink_def {
 
 static struct dentry *lnet_debugfs_root;
 
-BLOCKING_NOTIFIER_HEAD(libcfs_ioctl_list);
-EXPORT_SYMBOL(libcfs_ioctl_list);
-
-static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
+int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 {
-	size_t len = sizeof(*data);
-
-	len += (data->ioc_inllen1 + 7) & ~7;
-	len += (data->ioc_inllen2 + 7) & ~7;
-	return len;
-}
-
-static bool libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
-{
-	const int maxlen = 1 << 30;
-	if (data->ioc_hdr.ioc_len > maxlen)
-		return true;
-
-	if (data->ioc_inllen1 > maxlen)
-		return true;
-
-	if (data->ioc_inllen2 > maxlen)
-		return true;
-
-	if (data->ioc_inlbuf1 && !data->ioc_inllen1)
-		return true;
-
-	if (data->ioc_inlbuf2 && !data->ioc_inllen2)
-		return true;
-
-	if (data->ioc_pbuf1 && !data->ioc_plen1)
-		return true;
-
-	if (data->ioc_pbuf2 && !data->ioc_plen2)
-		return true;
-
-	if (data->ioc_plen1 && !data->ioc_pbuf1)
-		return true;
-
-	if (data->ioc_plen2 && !data->ioc_pbuf2)
-		return true;
-
-	if (libcfs_ioctl_packlen(data) != data->ioc_hdr.ioc_len)
-		return true;
-
-	if (data->ioc_inllen1 &&
-		data->ioc_bulk[((data->ioc_inllen1 + 7) & ~7) +
-			       data->ioc_inllen2 - 1] != '\0')
-		return true;
-
-	return false;
-}
-
-int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
-{
-	ENTRY;
-
-	if (libcfs_ioctl_is_invalid(data)) {
-		CERROR("libcfs ioctl: parameter not correctly formatted\n");
-		RETURN(-EINVAL);
-	}
-
-	if (data->ioc_inllen1 != 0)
-		data->ioc_inlbuf1 = &data->ioc_bulk[0];
-
-	if (data->ioc_inllen2 != 0)
-		data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-				    round_up(data->ioc_inllen1, 8);
-
-	RETURN(0);
-}
-
-int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
-			 struct libcfs_ioctl_hdr __user *uhdr)
-{
-	struct libcfs_ioctl_hdr hdr;
-	int err;
-
-	ENTRY;
-	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
-		RETURN(-EFAULT);
-
-	if (hdr.ioc_version != LIBCFS_IOCTL_VERSION &&
-	    hdr.ioc_version != LIBCFS_IOCTL_VERSION2) {
-		CERROR("libcfs ioctl: version mismatch expected %#x, got %#x\n",
-		       LIBCFS_IOCTL_VERSION, hdr.ioc_version);
-		RETURN(-EINVAL);
-	}
-
-	if (hdr.ioc_len < sizeof(struct libcfs_ioctl_hdr)) {
-		CERROR("libcfs ioctl: user buffer too small for ioctl\n");
-		RETURN(-EINVAL);
-	}
-
-	if (hdr.ioc_len > LIBCFS_IOC_DATA_MAX) {
-		CERROR("libcfs ioctl: user buffer is too large %d/%d\n",
-		       hdr.ioc_len, LIBCFS_IOC_DATA_MAX);
-		RETURN(-EINVAL);
-	}
-
-	LIBCFS_ALLOC(*hdr_pp, hdr.ioc_len);
-	if (*hdr_pp == NULL)
-		RETURN(-ENOMEM);
-
-	if (copy_from_user(*hdr_pp, uhdr, hdr.ioc_len))
-		GOTO(free, err = -EFAULT);
-
-	if ((*hdr_pp)->ioc_version != hdr.ioc_version ||
-		(*hdr_pp)->ioc_len != hdr.ioc_len) {
-		GOTO(free, err = -EINVAL);
-	}
-
-	RETURN(0);
-
-free:
-	LIBCFS_FREE(*hdr_pp, hdr.ioc_len);
-	RETURN(err);
-}
-
-static int libcfs_ioctl(unsigned long cmd, void __user *uparam)
-{
-	struct libcfs_ioctl_data *data = NULL;
-	struct libcfs_ioctl_hdr  *hdr;
-	int			  err;
-	ENTRY;
-
-	/* 'cmd' and permissions get checked in our arch-specific caller */
-	err = libcfs_ioctl_getdata(&hdr, uparam);
-	if (err != 0) {
-		CDEBUG_LIMIT(D_ERROR,
-			     "libcfs ioctl: data header error %d\n", err);
-		RETURN(err);
-	}
-
-	if (hdr->ioc_version == LIBCFS_IOCTL_VERSION) {
-		/* The libcfs_ioctl_data_adjust() function performs adjustment
-		 * operations on the libcfs_ioctl_data structure to make
-		 * it usable by the code.  This doesn't need to be called
-		 * for new data structures added. */
-		data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
-		err = libcfs_ioctl_data_adjust(data);
-		if (err != 0)
-			GOTO(out, err);
-	}
-
-	CDEBUG(D_IOCTL, "libcfs ioctl cmd %lu\n", cmd);
 	switch (cmd) {
 	case IOC_LIBCFS_CLEAR_DEBUG:
 		libcfs_debug_clear_buffer();
@@ -217,55 +72,17 @@ static int libcfs_ioctl(unsigned long cmd, void __user *uparam)
 		if (data == NULL ||
 		    data->ioc_inlbuf1 == NULL ||
 		    data->ioc_inlbuf1[data->ioc_inllen1 - 1] != '\0')
-			GOTO(out, err = -EINVAL);
+			return -EINVAL;
 
 		libcfs_debug_mark_buffer(data->ioc_inlbuf1);
 		break;
 
 	default:
-		err = blocking_notifier_call_chain(&libcfs_ioctl_list,
-						   cmd, hdr);
-		if (!(err & NOTIFY_STOP_MASK))
-			/* No-one claimed the ioctl */
-			err = -EINVAL;
-		else
-			err = notifier_to_errno(err);
-		if (copy_to_user(uparam, hdr, hdr->ioc_len) && !err)
-			err = -EFAULT;
-		break;
-	}
-out:
-	LIBCFS_FREE(hdr, hdr->ioc_len);
-	RETURN(err);
-}
-
-static long
-libcfs_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (!capable(CAP_SYS_ADMIN))
-		return -EACCES;
-
-	if (_IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
-	    _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  ||
-	    _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR) {
-		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
-		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
 		return -EINVAL;
 	}
-
-	return libcfs_ioctl(cmd, (void __user *)arg);
+	return 0;
 }
-
-static const struct file_operations libcfs_fops = {
-	.owner			= THIS_MODULE,
-	.unlocked_ioctl		= libcfs_psdev_ioctl,
-};
-
-static struct miscdevice libcfs_dev = {
-	.minor			= MISC_DYNAMIC_MINOR,
-	.name			= "lnet",
-	.fops			= &libcfs_fops,
-};
+EXPORT_SYMBOL(libcfs_ioctl);
 
 static int proc_dobitmasks(struct ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
@@ -864,24 +681,18 @@ static int __init libcfs_init(void)
 	if (rc != 0)
 		goto cleanup_debug;
 
-	rc = misc_register(&libcfs_dev);
-	if (rc) {
-		CERROR("misc_register: error %d\n", rc);
-		goto cleanup_cpu;
-	}
-
 	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
 	if (!cfs_rehash_wq) {
 		rc = -ENOMEM;
 		CERROR("libcfs: failed to start rehash workqueue: rc = %d\n",
 		       rc);
-		goto cleanup_deregister;
+		goto cleanup_cpu;
 	}
 
 	rc = cfs_crypto_register();
 	if (rc) {
 		CERROR("cfs_crypto_regster: error %d\n", rc);
-		goto cleanup_deregister;
+		goto cleanup_cpu;
 	}
 
 	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
@@ -898,8 +709,6 @@ static int __init libcfs_init(void)
 	return 0;
 cleanup_crypto:
 	cfs_crypto_unregister();
-cleanup_deregister:
-	misc_deregister(&libcfs_dev);
 cleanup_cpu:
 	cfs_cpu_fini();
 cleanup_debug:
@@ -928,8 +737,6 @@ static void __exit libcfs_exit(void)
 	}
 
 	cfs_crypto_unregister();
-
-	misc_deregister(&libcfs_dev);
 
 	cfs_cpu_fini();
 

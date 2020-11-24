@@ -4542,6 +4542,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (rc < 0)
 			goto report_ping_err;
 		count = rc;
+		rc = 0;
 
 		for (i = 0; i < count; i++) {
 			struct lnet_processid *result;
@@ -4703,7 +4704,7 @@ report_ping_err:
 			rc = ni->ni_net->net_lnd->lnd_ctl(ni, cmd, arg);
 
 		lnet_ni_decref(ni);
-		return rc;
+		return rc <= 0 ? rc : 0;
 	}
 	/* not reached */
 }

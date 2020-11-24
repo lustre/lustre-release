@@ -31,6 +31,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/miscdevice.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 
@@ -182,10 +183,8 @@ lnet_dyn_unconfigure_ni(struct libcfs_ioctl_hdr *hdr)
 }
 
 static int
-lnet_ioctl(struct notifier_block *nb,
-	   unsigned long cmd, void *vdata)
+lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 {
-	struct libcfs_ioctl_hdr *hdr = vdata;
 	int rc;
 
 	switch (cmd) {
@@ -233,11 +232,198 @@ lnet_ioctl(struct notifier_block *nb,
 		}
 		break;
 	}
-	return notifier_from_ioctl_errno(rc);
+	return rc;
+}
+BLOCKING_NOTIFIER_HEAD(lnet_ioctl_list);
+EXPORT_SYMBOL(lnet_ioctl_list);
+
+static inline size_t lnet_ioctl_packlen(struct libcfs_ioctl_data *data)
+{
+	size_t len = sizeof(*data);
+
+	len += (data->ioc_inllen1 + 7) & ~7;
+	len += (data->ioc_inllen2 + 7) & ~7;
+	return len;
 }
 
-static struct notifier_block lnet_ioctl_handler = {
-	.notifier_call = lnet_ioctl,
+static bool lnet_ioctl_is_invalid(struct libcfs_ioctl_data *data)
+{
+	const int maxlen = 1 << 30;
+
+	if (data->ioc_hdr.ioc_len > maxlen)
+		return true;
+
+	if (data->ioc_inllen1 > maxlen)
+		return true;
+
+	if (data->ioc_inllen2 > maxlen)
+		return true;
+
+	if (data->ioc_inlbuf1 && !data->ioc_inllen1)
+		return true;
+
+	if (data->ioc_inlbuf2 && !data->ioc_inllen2)
+		return true;
+
+	if (data->ioc_pbuf1 && !data->ioc_plen1)
+		return true;
+
+	if (data->ioc_pbuf2 && !data->ioc_plen2)
+		return true;
+
+	if (data->ioc_plen1 && !data->ioc_pbuf1)
+		return true;
+
+	if (data->ioc_plen2 && !data->ioc_pbuf2)
+		return true;
+
+	if (lnet_ioctl_packlen(data) != data->ioc_hdr.ioc_len)
+		return true;
+
+	if (data->ioc_inllen1 &&
+		data->ioc_bulk[((data->ioc_inllen1 + 7) & ~7) +
+			       data->ioc_inllen2 - 1] != '\0')
+		return true;
+
+	return false;
+}
+
+static int lnet_ioctl_data_adjust(struct libcfs_ioctl_data *data)
+{
+	ENTRY;
+
+	if (lnet_ioctl_is_invalid(data)) {
+		CERROR("lnet ioctl: parameter not correctly formatted\n");
+		RETURN(-EINVAL);
+	}
+
+	if (data->ioc_inllen1 != 0)
+		data->ioc_inlbuf1 = &data->ioc_bulk[0];
+
+	if (data->ioc_inllen2 != 0)
+		data->ioc_inlbuf2 = (&data->ioc_bulk[0] +
+				     round_up(data->ioc_inllen1, 8));
+
+	RETURN(0);
+}
+
+static int lnet_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
+			      struct libcfs_ioctl_hdr __user *uhdr)
+{
+	struct libcfs_ioctl_hdr hdr;
+	int err;
+
+	ENTRY;
+	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
+		RETURN(-EFAULT);
+
+	if (hdr.ioc_version != LNET_IOCTL_VERSION &&
+	    hdr.ioc_version != LNET_IOCTL_VERSION2) {
+		CERROR("lnet ioctl: version mismatch expected %#x, got %#x\n",
+		       LNET_IOCTL_VERSION, hdr.ioc_version);
+		RETURN(-EINVAL);
+	}
+
+	if (hdr.ioc_len < sizeof(struct libcfs_ioctl_hdr)) {
+		CERROR("lnet ioctl: user buffer too small for ioctl\n");
+		RETURN(-EINVAL);
+	}
+
+	if (hdr.ioc_len > LIBCFS_IOC_DATA_MAX) {
+		CERROR("lnet ioctl: user buffer is too large %d/%d\n",
+		       hdr.ioc_len, LIBCFS_IOC_DATA_MAX);
+		RETURN(-EINVAL);
+	}
+
+	LIBCFS_ALLOC(*hdr_pp, hdr.ioc_len);
+	if (*hdr_pp == NULL)
+		RETURN(-ENOMEM);
+
+	if (copy_from_user(*hdr_pp, uhdr, hdr.ioc_len))
+		GOTO(free, err = -EFAULT);
+
+	if ((*hdr_pp)->ioc_version != hdr.ioc_version ||
+		(*hdr_pp)->ioc_len != hdr.ioc_len) {
+		GOTO(free, err = -EINVAL);
+	}
+
+	RETURN(0);
+
+free:
+	LIBCFS_FREE(*hdr_pp, hdr.ioc_len);
+	RETURN(err);
+}
+
+static long
+lnet_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct libcfs_ioctl_data *data = NULL;
+	struct libcfs_ioctl_hdr  *hdr;
+	int			  err;
+	void __user		 *uparam = (void __user *)arg;
+
+	ENTRY;
+	if (!capable(CAP_SYS_ADMIN))
+		return -EACCES;
+
+	if (_IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
+	    _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  ||
+	    _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR) {
+		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
+		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+		return -EINVAL;
+	}
+
+	/* 'cmd' and permissions get checked in our arch-specific caller */
+	err = lnet_ioctl_getdata(&hdr, uparam);
+	if (err != 0) {
+		CDEBUG_LIMIT(D_ERROR,
+			     "lnet ioctl: data header error %d\n", err);
+		RETURN(err);
+	}
+
+	if (hdr->ioc_version == LNET_IOCTL_VERSION) {
+		/* The lnet_ioctl_data_adjust() function performs adjustment
+		 * operations on the libcfs_ioctl_data structure to make
+		 * it usable by the code.  This doesn't need to be called
+		 * for new data structures added.
+		 */
+		data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
+		err = lnet_ioctl_data_adjust(data);
+		if (err != 0)
+			GOTO(out, err);
+	}
+
+	CDEBUG(D_IOCTL, "lnet ioctl cmd %u\n", cmd);
+
+	err = libcfs_ioctl(cmd, data);
+	if (err == -EINVAL)
+		err = lnet_ioctl(cmd, hdr);
+	if (err == -EINVAL) {
+		err = blocking_notifier_call_chain(&lnet_ioctl_list,
+						   cmd, hdr);
+		if (!(err & NOTIFY_STOP_MASK))
+			/* No-one claimed the ioctl */
+			err = -EINVAL;
+		else
+			err = notifier_to_errno(err);
+	}
+	if (copy_to_user(uparam, hdr, hdr->ioc_len) && !err)
+		err = -EFAULT;
+out:
+	LIBCFS_FREE(hdr, hdr->ioc_len);
+	RETURN(err);
+}
+
+static const struct file_operations lnet_fops = {
+	.owner			= THIS_MODULE,
+	.unlocked_ioctl		= lnet_psdev_ioctl,
+};
+
+static struct miscdevice lnet_dev = {
+	.minor			= MISC_DYNAMIC_MINOR,
+	.name			= "lnet",
+	.fops			= &lnet_fops,
 };
 
 static int __init lnet_init(void)
@@ -247,17 +433,19 @@ static int __init lnet_init(void)
 
 	rc = lnet_lib_init();
 	if (rc != 0) {
-		CERROR("lnet_lib_init: error %d\n", rc);
+		CERROR("lnet_lib_init: rc = %d\n", rc);
+		RETURN(rc);
+	}
+
+	rc = misc_register(&lnet_dev);
+	if (rc) {
+		CERROR("misc_register: rc = %d\n", rc);
 		RETURN(rc);
 	}
 
 	if (live_router_check_interval != INT_MIN ||
 	    dead_router_check_interval != INT_MIN)
 		LCONSOLE_WARN("live_router_check_interval and dead_router_check_interval have been deprecated. Use alive_router_check_interval instead. Ignoring these deprecated parameters.\n");
-
-	rc = blocking_notifier_chain_register(&libcfs_ioctl_list,
-					      &lnet_ioctl_handler);
-	LASSERT(rc == 0);
 
 	if (config_on_load) {
 		/* Have to schedule a separate thread to avoid deadlocking
@@ -270,11 +458,7 @@ static int __init lnet_init(void)
 
 static void __exit lnet_exit(void)
 {
-	int rc;
-
-	rc = blocking_notifier_chain_unregister(&libcfs_ioctl_list,
-						&lnet_ioctl_handler);
-	LASSERT(rc == 0);
+	misc_deregister(&lnet_dev);
 
 	lnet_router_exit();
 	lnet_lib_exit();
