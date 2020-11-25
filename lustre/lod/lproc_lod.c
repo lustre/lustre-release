@@ -835,11 +835,12 @@ static void *lod_tgts_seq_next(struct seq_file *p, void *v, loff_t *pos,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	if (*pos >= ltd->ltd_tgts_size - 1)
+	(*pos)++;
+	if (*pos > ltd->ltd_tgts_size - 1)
 		return NULL;
 
 	*pos = find_next_bit(ltd->ltd_tgt_bitmap,
-			     ltd->ltd_tgts_size, *pos + 1);
+			     ltd->ltd_tgts_size, *pos);
 	if (*pos < ltd->ltd_tgts_size)
 		return LTD_TGT(ltd, *pos);
 	else

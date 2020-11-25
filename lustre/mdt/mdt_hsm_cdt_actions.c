@@ -482,7 +482,8 @@ struct agent_action_iterator {
  */
 static void *mdt_hsm_actions_debugfs_start(struct seq_file *s, loff_t *pos)
 {
-	struct agent_action_iterator	*aai = s->private;
+	struct agent_action_iterator *aai = s->private;
+
 	ENTRY;
 
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
@@ -502,7 +503,6 @@ static void *mdt_hsm_actions_debugfs_start(struct seq_file *s, loff_t *pos)
 		aai->aai_cat_index = 0;
 		aai->aai_index = 0;
 		aai->aai_eof = false;
-		*pos = 1;
 	}
 
 	if (aai->aai_eof)
@@ -514,7 +514,12 @@ static void *mdt_hsm_actions_debugfs_start(struct seq_file *s, loff_t *pos)
 static void *mdt_hsm_actions_debugfs_next(struct seq_file *s, void *v,
 					 loff_t *pos)
 {
-	RETURN(NULL);
+	struct agent_action_iterator *aai = s->private;
+
+	(*pos)++;
+	if (aai->aai_eof)
+		RETURN(NULL);
+	RETURN(aai);
 }
 
 /**
@@ -525,14 +530,14 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 				 struct llog_rec_hdr *hdr,
 				 void *data)
 {
-	struct llog_agent_req_rec    *larr = (struct llog_agent_req_rec *)hdr;
-	struct seq_file		     *s = data;
-	struct agent_action_iterator *aai;
-	int			      sz;
-	char			      buf[12];
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct seq_file *s = data;
+	struct agent_action_iterator *aai = s->private;
+	int sz;
+	char buf[12];
+
 	ENTRY;
 
-	aai = s->private;
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
 		 aai->aai_magic);
 
@@ -577,9 +582,10 @@ static int hsm_actions_show_cb(const struct lu_env *env,
  */
 static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 {
-	struct agent_action_iterator	*aai = s->private;
-	struct coordinator		*cdt = &aai->aai_mdt->mdt_coordinator;
-	int				 rc;
+	struct agent_action_iterator *aai = s->private;
+	struct coordinator *cdt = &aai->aai_mdt->mdt_coordinator;
+	int rc;
+
 	ENTRY;
 
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
@@ -599,6 +605,7 @@ static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 		aai->aai_eof = true;
 	if (rc == LLOG_PROC_BREAK) /* buffer full */
 		rc = 0;
+
 	RETURN(rc);
 }
 
@@ -609,6 +616,7 @@ static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 static void mdt_hsm_actions_debugfs_stop(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator *aai = s->private;
+
 	ENTRY;
 
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",

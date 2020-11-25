@@ -165,8 +165,9 @@ static void *pool_proc_next(struct seq_file *seq, void *v, loff_t *pos)
 
 	LASSERTF(iter->lpi_magic == POOL_IT_MAGIC, "%08X\n", iter->lpi_magic);
 
+	(*pos)++;
 	/* test if end of file */
-	if (*pos >= pool_tgt_count(iter->lpi_pool))
+	if (*pos > pool_tgt_count(iter->lpi_pool))
 		return NULL;
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_LIST_ASSERT, cfs_fail_val);
@@ -178,7 +179,7 @@ static void *pool_proc_next(struct seq_file *seq, void *v, loff_t *pos)
 		iter->lpi_idx = prev_idx; /* we stay on the last entry */
 		return NULL;
 	}
-	(*pos)++;
+
 	/* return != NULL to continue */
 	return iter;
 }
