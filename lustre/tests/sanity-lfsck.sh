@@ -17,54 +17,6 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
-# bug number for skipped test:	LU-4165
-	ALWAYS_EXCEPT+="	2c"
-
-[[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-# bug number for skipped test:	LU-1267
-	ALWAYS_EXCEPT+="	11"
-# bug number for skipped test:	LU-3950
-	ALWAYS_EXCEPT+="	12"
-# bug number for skipped test:	LU-3593
-	ALWAYS_EXCEPT+="	13"
-# bug number for skipped test:	LU-3590
-	ALWAYS_EXCEPT+="	14"
-# bug number for skipped test:	LU-3591
-	ALWAYS_EXCEPT+="	15"
-# bug number for skipped test:	LU-3594	LU-3594
-	ALWAYS_EXCEPT+="	16	17"
-# bug number for skipped test:	LU-3336	LU-3336	LU-3336	LU-3336	LU-3336
-	ALWAYS_EXCEPT+="	18a	18b	18c	18d	18e"
-# bug number for skipped test:	LU-3951	LU-3951
-	ALWAYS_EXCEPT+="	19a	19b"
-# bug number for skipped test:	LU-4887	LU-4887
-	ALWAYS_EXCEPT+="	20	21"
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-# bug number for skipped test:	LU-4788
-	ALWAYS_EXCEPT+="	2d"
-# bug number for skipped test:	LU-5511	LU-5511	LU-5511
-	ALWAYS_EXCEPT+="	2e	22a	22b"
-# bug number for skipped test:	LU-4788
-	ALWAYS_EXCEPT+="	3"
-# bug number for skipped test:	LU-5512	LU-5512	LU-5512
-	ALWAYS_EXCEPT+="	23a	23b	23c"
-# bug number for skipped test:	LU-5513
-	ALWAYS_EXCEPT+="	24"
-# bug number for skipped test:	LU-5515
-	ALWAYS_EXCEPT+="	25"
-# bug number for skipped test:	LU-5516	LU-5516
-	ALWAYS_EXCEPT+="	26a	26b"
-# bug number for skipped test:	LU-5516	LU-5516
-	ALWAYS_EXCEPT+="	27a	27b"
-# bug number for skipped test:	LU-5506
-	ALWAYS_EXCEPT+="	28"
-# bug number for skipped test:	LU-5517	LU-5517	LU-5517
-	ALWAYS_EXCEPT+="	29a	29b	29c"
-# bug number for skipped test:	LU-5518
-	ALWAYS_EXCEPT+="	30"
-
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 build_test_filter
 
@@ -77,8 +29,8 @@ if ! check_versions; then
 	exit 0
 fi
 
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.60) ]] &&
-	skip "Need MDS version at least 2.3.60" && exit 0
+(( $MDS1_VERSION >= $(version_code 2.3.60) )) ||
+	skip "Need MDS version at least 2.3.60"
 
 LTIME=${LTIME:-120}
 
@@ -153,7 +105,7 @@ lfsck_prep() {
 }
 
 run_e2fsck_on_mdt0() {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] && return
+	[ $mds1_FSTYPE == ldiskfs ] || return 0
 
 	stop $SINGLEMDS > /dev/null || error "(0) Fail to the stop MDT0"
 	run_e2fsck $(facet_active_host $SINGLEMDS) $(mdsdevname 1) "-n" |
@@ -452,6 +404,9 @@ run_test 2b "LFSCK can find out and remove invalid linkEA entry"
 
 test_2c()
 {
+	(( $MDS1_VERSION > $(version_code 2.4.90) )) ||
+		skip "MDS older than 2.4.90"
+
 	lfsck_prep 1 1
 
 	#define OBD_FAIL_LFSCK_LINKEA_MORE2	0x1605
@@ -489,6 +444,9 @@ run_test 2c "LFSCK can find out and remove repeated linkEA entry"
 
 test_2d()
 {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-4788"
+
 	lfsck_prep 1 1
 
 	#define OBD_FAIL_LFSCK_NO_LINKEA	0x161d
@@ -526,7 +484,9 @@ run_test 2d "LFSCK can recover the missing linkEA entry"
 
 test_2e()
 {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5511"
 
 	check_mount_and_prep
 
@@ -555,6 +515,9 @@ run_test 2e "namespace LFSCK can verify remote object linkEA"
 
 test_3()
 {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-4788"
+
 	lfsck_prep 4 4
 
 	mkdir $DIR/$tdir/dummy || error "(1) Fail to mkdir"
@@ -1138,7 +1101,7 @@ test_9a() {
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
 			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
-		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		if [ $mds1_FSTYPE != ldiskfs ]; then
 			error_ignore LU-5624 \
 			"(5.1) Got speed $SPEED, expected more than $MIN_SPEED"
 		else
@@ -1236,7 +1199,7 @@ test_9b() {
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
 			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
-		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		if [ $mds1_FSTYPE != ldiskfs ]; then
 			error_ignore LU-5624 \
 			"(9.1) Got speed $SPEED, expected more than $MIN_SPEED"
 		else
@@ -1271,8 +1234,7 @@ run_test 9b "LFSCK speed control (2)"
 
 test_10()
 {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "lookup(..)/linkea on ZFS issue" && return
+	[[ $mds1_FSTYPE == ldiskfs ]] || skip "lookup(..)/linkea on ZFS issue"
 
 	lfsck_prep 1 1
 
@@ -1361,6 +1323,9 @@ ost_remove_lastid() {
 }
 
 test_11a() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-1267"
+
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 	createmany -o $DIR/$tdir/f 64 || error "(0) Fail to create 64 files."
@@ -1402,6 +1367,9 @@ test_11a() {
 run_test 11a "LFSCK can rebuild lost last_id"
 
 test_11b() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-1267"
+
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
@@ -1470,7 +1438,9 @@ test_11b() {
 run_test 11b "LFSCK can rebuild crashed last_id"
 
 test_12a() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3950"
 
 	check_mount_and_prep
 	for k in $(seq $MDSCOUNT); do
@@ -1536,6 +1506,9 @@ test_12a() {
 run_test 12a "single command to trigger LFSCK on all devices"
 
 test_12b() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3950"
+
 	check_mount_and_prep
 
 	echo "Start LFSCK without '-M' specified."
@@ -1559,6 +1532,9 @@ test_12b() {
 run_test 12b "auto detect Lustre device"
 
 test_13() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3593"
+
 	echo "#####"
 	echo "The lmm_oi in layout EA should be consistent with the MDT-object"
 	echo "FID; otherwise, the LFSCK should re-generate the lmm_oi from the"
@@ -1593,6 +1569,9 @@ test_13() {
 run_test 13 "LFSCK can repair crashed lmm_oi"
 
 test_14a() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3590"
+
 	echo "#####"
 	echo "The OST-object referenced by the MDT-object should be there;"
 	echo "otherwise, the LFSCK should re-create the missing OST-object."
@@ -1694,6 +1673,9 @@ test_14a() {
 run_test 14a "LFSCK can repair MDT-object with dangling LOV EA reference (1)"
 
 test_14b() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3590"
+
 	echo "#####"
 	echo "The OST-object referenced by the MDT-object should be there;"
 	echo "otherwise, the LFSCK should re-create the missing OST-object."
@@ -1766,6 +1748,9 @@ test_14b() {
 run_test 14b "LFSCK can repair MDT-object with dangling LOV EA reference (2)"
 
 test_15a() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3591"
+
 	echo "#####"
 	echo "If the OST-object referenced by the MDT-object back points"
 	echo "to some non-exist MDT-object, then the LFSCK should repair"
@@ -1810,6 +1795,9 @@ test_15a() {
 run_test 15a "LFSCK can repair unmatched MDT-object/OST-object pairs (1)"
 
 test_15b() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3591"
+
 	echo "#####"
 	echo "If the OST-object referenced by the MDT-object back points"
 	echo "to other MDT-object that doesn't recognize the OST-object,"
@@ -1857,10 +1845,11 @@ test_15b() {
 run_test 15b "LFSCK can repair unmatched MDT-object/OST-object pairs (2)"
 
 test_15c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.55) ] &&
-		skip "Skip the test after 2.7.55 see LU-6437" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION < $(version_code 2.7.55) )) ||
+		skip "MDS newer than 2.7.55, LU-6475"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3591"
 
 	echo "#####"
 	echo "According to current metadata migration implementation,"
@@ -1906,6 +1895,9 @@ test_15c() {
 run_test 15c "LFSCK can repair unmatched MDT-object/OST-object pairs (3)"
 
 test_16() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3594"
+
 	echo "#####"
 	echo "If the OST-object's owner information does not match the owner"
 	echo "information stored in the MDT-object, then the LFSCK trust the"
@@ -1948,6 +1940,9 @@ test_16() {
 run_test 16 "LFSCK can repair inconsistent MDT-object/OST-object owner"
 
 test_17() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3594"
+
 	echo "#####"
 	echo "If more than one MDT-objects reference the same OST-object,"
 	echo "and the OST-object only recognizes one MDT-object, then the"
@@ -2024,6 +2019,9 @@ run_test 17 "LFSCK can repair multiple references"
 $LCTL set_param debug=+cache > /dev/null
 
 test_18a() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3336"
+
 	echo "#####"
 	echo "The target MDT-object is there, but related stripe information"
 	echo "is lost or partly lost. The LFSCK should regenerate the missing"
@@ -2163,6 +2161,8 @@ run_test 18a "Find out orphan OST-object and repair it (1)"
 
 test_18b() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3336"
 
 	echo "#####"
 	echo "The target MDT-object is lost. The LFSCK should re-create the"
@@ -2322,6 +2322,8 @@ run_test 18b "Find out orphan OST-object and repair it (2)"
 
 test_18c() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3336"
 
 	echo "#####"
 	echo "The target MDT-object is lost, and the OST-object FID is missing."
@@ -2440,6 +2442,9 @@ test_18c() {
 run_test 18c "Find out orphan OST-object and repair it (3)"
 
 test_18d() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3336"
+
 	echo "#####"
 	echo "The target MDT-object layout EA is corrupted, but the right"
 	echo "OST-object is still alive as orphan. The layout LFSCK will"
@@ -2549,6 +2554,8 @@ run_test 18d "Find out orphan OST-object and repair it (4)"
 
 test_18e() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3336"
 
 	echo "#####"
 	echo "The target MDT-object layout EA slot is occpuied by some new"
@@ -2978,6 +2985,9 @@ run_test 18h "LFSCK can repair crashed PFL extent range"
 $LCTL set_param debug=-cache > /dev/null
 
 test_19a() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3951"
+
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
@@ -3006,6 +3016,9 @@ test_19a() {
 run_test 19a "OST-object inconsistency self detect"
 
 test_19b() {
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-3951"
+
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
@@ -3056,6 +3069,8 @@ PATTERN_WITHOUT_HOLE="raid0"
 test_20a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-4887"
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -3396,6 +3411,8 @@ run_test 20a "Handle the orphan with dummy LOV EA slot properly"
 test_20b() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
+		skip "MDS older than 2.5.55, LU-4887"
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -3704,8 +3721,8 @@ test_20b() {
 run_test 20b "Handle the orphan with dummy LOV EA slot properly - PFL case"
 
 test_21() {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.59) ]] &&
-		skip "ignore the test if MDS is older than 2.5.59" && return
+	(( $MDS1_VERSION > $(version_code 2.5.59) )) ||
+		skip "MDS older than 2.5.59, LU-4887"
 
 	check_mount_and_prep
 	createmany -o $DIR/$tdir/f 100 || error "(0) Fail to create 100 files"
@@ -3732,6 +3749,8 @@ run_test 21 "run all LFSCK components by default"
 
 test_22a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5511"
 
 	echo "#####"
 	echo "The parent_A references the child directory via some name entry,"
@@ -3774,6 +3793,8 @@ run_test 22a "LFSCK can repair unmatched pairs (1)"
 
 test_22b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5511"
 
 	echo "#####"
 	echo "The parent_A references the child directory via the name entry_B,"
@@ -3823,6 +3844,8 @@ run_test 22b "LFSCK can repair unmatched pairs (2)"
 
 test_23a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5512"
 
 	echo "#####"
 	echo "The name entry is there, but the MDT-object for such name "
@@ -3875,6 +3898,9 @@ test_23a() {
 run_test 23a "LFSCK can repair dangling name entry (1)"
 
 test_23b() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5512"
+
 	echo "#####"
 	echo "The objectA has multiple hard links, one of them corresponding"
 	echo "to the name entry_B. But there is something wrong for the name"
@@ -3974,6 +4000,9 @@ cleanup_23c() {
 }
 
 test_23c() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5512"
+
 	echo "#####"
 	echo "The objectA has multiple hard links, one of them corresponding"
 	echo "to the name entry_B. But there is something wrong for the name"
@@ -4079,6 +4108,8 @@ run_test 23c "LFSCK can repair dangling name entry (3)"
 test_24() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5513"
 
 	echo "#####"
 	echo "Two MDT-objects back reference the same name entry via their"
@@ -4100,7 +4131,7 @@ test_24() {
 	$LFS path2fid $DIR/$tdir/d0/dummy
 
 	local pfid
-	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+	if [ $mds1_FSTYPE != ldiskfs ]; then
 		pfid=$($LFS path2fid $DIR/$tdir/d0/guard)
 	else
 		pfid=$($LFS path2fid $DIR/$tdir/d0/dummy)
@@ -4153,8 +4184,9 @@ test_24() {
 run_test 24 "LFSCK can repair multiple-referenced name entry"
 
 test_25() {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "ldiskfs only test" && return
+	[[ $mds1_FSTYPE == ldiskfs ]] || skip "only ldiskfs fixes dirent type"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5515"
 
 	echo "#####"
 	echo "The file type in the name entry does not match the file type"
@@ -4194,6 +4226,9 @@ test_25() {
 run_test 25 "LFSCK can repair bad file type in the name entry"
 
 test_26a() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5516"
+
 	echo "#####"
 	echo "The local name entry back referenced by the MDT-object is lost."
 	echo "The namespace LFSCK will add the missing local name entry back"
@@ -4242,7 +4277,9 @@ test_26a() {
 run_test 26a "LFSCK can add the missing local name entry back to the namespace"
 
 test_26b() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5516"
 
 	echo "#####"
 	echo "The remote name entry back referenced by the MDT-object is lost."
@@ -4290,6 +4327,8 @@ run_test 26b "LFSCK can add the missing remote name entry back to the namespace"
 
 test_27a() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5516"
 
 	echo "#####"
 	echo "The local parent referenced by the MDT-object linkEA is lost."
@@ -4343,8 +4382,10 @@ test_27a() {
 run_test 27a "LFSCK can recreate the lost local parent directory as orphan"
 
 test_27b() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5516"
 
 	echo "#####"
 	echo "The remote parent referenced by the MDT-object linkEA is lost."
@@ -4397,7 +4438,9 @@ test_27b() {
 run_test 27b "LFSCK can recreate the lost remote parent directory as orphan"
 
 test_28() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5506"
 
 	echo "#####"
 	echo "The target name entry is lost. The LFSCK should insert the"
@@ -4491,6 +4534,9 @@ test_28() {
 run_test 28 "Skip the failed MDT(s) when handle orphan MDT-objects"
 
 test_29a() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5517"
+
 	echo "#####"
 	echo "The object's nlink attribute is larger than the object's known"
 	echo "name entries count. The LFSCK will repair the object's nlink"
@@ -4536,6 +4582,9 @@ test_29a() {
 #run_test 29a "LFSCK can repair bad nlink count (1)"
 
 test_29b() {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5517"
+
 	echo "#####"
 	echo "The object's nlink attribute is smaller than the object's known"
 	echo "name entries count. The LFSCK will repair the object's nlink"
@@ -4579,6 +4628,9 @@ run_test 29b "LFSCK can repair bad nlink count (2)"
 
 test_29c()
 {
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5517"
+
 	echo "#####"
 	echo "The namespace LFSCK will create many hard links to the target"
 	echo "file as to exceed the linkEA size limitation. Under such case"
@@ -4673,9 +4725,10 @@ test_29c()
 run_test 29c "verify linkEA size limitation"
 
 test_30() {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "ldiskfs only test" && return
+	[[ $mds1_FSTYPE == ldiskfs ]] || skip "only ldiskfs has lost+found"
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5518"
 
 	echo "#####"
 	echo "The namespace LFSCK will move the orphans from backend"
@@ -4759,7 +4812,9 @@ test_30() {
 run_test 30 "LFSCK can recover the orphans from backend /lost+found"
 
 test_31a() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For the name entry under a striped directory, if the name"
@@ -4809,7 +4864,9 @@ test_31a() {
 run_test 31a "The LFSCK can find/repair the name entry with bad name hash (1)"
 
 test_31b() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For the name entry under a striped directory, if the name"
@@ -4861,7 +4918,9 @@ test_31b() {
 run_test 31b "The LFSCK can find/repair the name entry with bad name hash (2)"
 
 test_31c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the master MDT-object of the striped directory"
@@ -4904,7 +4963,9 @@ test_31c() {
 run_test 31c "Re-generate the lost master LMV EA for striped directory"
 
 test_31d() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the master MDT-object of the striped directory"
@@ -4958,7 +5019,9 @@ test_31d() {
 run_test 31d "Set broken striped directory (modified after broken) as read-only"
 
 test_31e() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the slave MDT-object of the striped directory"
@@ -4996,6 +5059,8 @@ run_test 31e "Re-generate the lost slave LMV EA for striped directory (1)"
 
 test_31f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the slave MDT-object of the striped directory"
@@ -5034,6 +5099,8 @@ run_test 31f "Re-generate the lost slave LMV EA for striped directory (2)"
 
 test_31g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the stripe index in the slave LMV EA is"
@@ -5079,6 +5146,8 @@ run_test 31g "Repair the corrupted slave LMV EA"
 
 test_31h() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||
+		skip "MDS older than 2.6.50, LU-5519"
 
 	echo "#####"
 	echo "For some reason, the shard's name entry in the striped"
