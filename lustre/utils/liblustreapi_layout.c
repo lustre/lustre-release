@@ -2909,6 +2909,8 @@ uint32_t llapi_mirror_find(struct llapi_layout *layout,
 		if (rc < 0)
 			return rc;
 	}
+	if (!mirror_id)
+		return -ENOENT;
 
 	return mirror_id;
 }
@@ -2917,11 +2919,12 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			     struct llapi_resync_comp *comp_array,
 			     int comp_size,  uint64_t start, uint64_t end)
 {
-	uint64_t count;
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	const size_t buflen = 4 << 20; /* 4M */
 	void *buf;
 	uint64_t pos = start;
+	uint64_t data_off = pos, data_end = pos;
+	uint32_t src = 0;
 	int i;
 	int rc;
 	int rc2 = 0;
@@ -2930,31 +2933,107 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 	if (rc)
 		return -rc;
 
-	if (end == OBD_OBJECT_EOF)
-		count = OBD_OBJECT_EOF;
-	else
-		count = end - start;
-
-	while (count > 0) {
-		uint32_t src;
-		uint64_t mirror_end = 0;
-		uint64_t bytes_left;
+	while (pos < end) {
+		uint64_t mirror_end;
 		ssize_t bytes_read;
 		size_t to_read;
 		size_t to_write;
 
-		src = llapi_mirror_find(layout, pos, end, &mirror_end);
-		if (src == 0)
-			return -ENOENT;
+		if (pos >= data_end) {
+			off_t tmp_off;
+			size_t data_size;
 
-		if (mirror_end == OBD_OBJECT_EOF) {
-			bytes_left = count;
-		} else {
-			bytes_left = MIN(count, mirror_end - pos);
-			bytes_left = ((bytes_left - 1) | (page_size - 1)) + 1;
+			if (pos >= mirror_end || !src) {
+				rc = llapi_mirror_find(layout, pos, end,
+							&mirror_end);
+				if (rc < 0)
+					return rc;
+				src = rc;
+				/* restrict mirror end by resync end */
+				mirror_end = MIN(end, mirror_end);
+			}
+
+			tmp_off = llapi_mirror_data_seek(fd, src, pos,
+							 &data_size);
+			if (tmp_off < 0) {
+				/* switch to full copy */
+				to_read = mirror_end - pos;
+				goto do_read;
+			}
+			data_off = tmp_off;
+			data_end = data_off + data_size;
+
+			data_off = MIN(data_off, mirror_end);
+			data_end = MIN(data_end, mirror_end);
+
+			/* align by page, if there is data block to copy */
+			if (data_size)
+				data_off &= ~(page_size - 1);
 		}
-		to_read = MIN(buflen, bytes_left);
 
+		if (pos < data_off) {
+			for (i = 0; i < comp_size; i++) {
+				uint64_t cur_pos;
+				size_t to_punch;
+				uint32_t mid = comp_array[i].lrc_mirror_id;
+
+				/* skip non-overlapped component */
+				if (pos >= comp_array[i].lrc_end ||
+				    data_off <= comp_array[i].lrc_start)
+					continue;
+
+				if (pos < comp_array[i].lrc_start)
+					cur_pos = comp_array[i].lrc_start;
+				else
+					cur_pos = pos;
+
+				if (data_off > comp_array[i].lrc_end)
+					to_punch = comp_array[i].lrc_end -
+						   cur_pos;
+				else
+					to_punch = data_off - cur_pos;
+
+				if (comp_array[i].lrc_end == OBD_OBJECT_EOF) {
+					/* the last component can be truncated
+					 * safely
+					 */
+					rc = llapi_mirror_truncate(fd, mid,
+								   cur_pos);
+					/* hole at the end of file, so just
+					 * truncate up to set size.
+					 */
+					if (!rc && data_off == data_end)
+						rc = llapi_mirror_truncate(fd,
+								mid, data_end);
+				} else {
+					rc = llapi_mirror_punch(fd,
+						comp_array[i].lrc_mirror_id,
+						cur_pos, to_punch);
+				}
+				/* if failed then read failed hole range */
+				if (rc < 0) {
+					rc = 0;
+					pos = cur_pos;
+					if (pos + to_punch == data_off)
+						to_read = data_end - pos;
+					else
+						to_read = to_punch;
+					goto do_read;
+				}
+			}
+			pos = data_off;
+		}
+		if (pos == mirror_end)
+			continue;
+		to_read = data_end - pos;
+do_read:
+		if (!to_read)
+			break;
+
+		assert(data_end <= mirror_end);
+
+		to_read = MIN(buflen, to_read);
+		to_read = ((to_read - 1) | (page_size - 1)) + 1;
 		bytes_read = llapi_mirror_read(fd, src, buf, to_read, pos);
 		if (bytes_read == 0) {
 			/* end of file */
@@ -3012,9 +3091,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			}
 			assert(written == to_write2);
 		}
-
 		pos += bytes_read;
-		count -= bytes_read;
 	}
 
 	free(buf);

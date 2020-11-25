@@ -610,6 +610,7 @@ int llapi_group_unlock(int fd, int gid);
 
 bool llapi_file_is_sparse(int fd);
 off_t llapi_data_seek(int src_fd, off_t offset, size_t *length);
+int llapi_hole_punch(int fd, off_t start, size_t length);
 
 /* Ladvise */
 int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
@@ -1157,6 +1158,7 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count);
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 		      off_t pos, size_t count);
 off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size);
+int llapi_mirror_punch(int fd, unsigned int id, off_t start, size_t length);
 
 int llapi_heat_get(int fd, struct lu_heat *heat);
 int llapi_heat_set(int fd, __u64 flags);

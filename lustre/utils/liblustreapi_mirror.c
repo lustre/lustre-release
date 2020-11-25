@@ -203,6 +203,20 @@ int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
 	return rc;
 }
 
+int llapi_mirror_punch(int fd, unsigned int id, off_t start, size_t length)
+{
+	int rc;
+
+	rc = llapi_mirror_set(fd, id);
+	if (rc < 0)
+		return rc;
+
+	rc = llapi_hole_punch(fd, start, length);
+	(void) llapi_mirror_clear(fd);
+
+	return rc;
+}
+
 bool llapi_mirror_is_sparse(int fd, unsigned int id)
 {
 	bool sparse;

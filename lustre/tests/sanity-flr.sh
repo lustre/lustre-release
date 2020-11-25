@@ -2465,6 +2465,117 @@ test_50a() {
 }
 run_test 50a "mirror extend/copy preserves sparseness"
 
+test_50b() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+	local offset
+	local sum1
+	local sum2
+	local blocks
+
+	mkdir -p $DIR/$tdir
+
+	echo " ** create mirrored file $file"
+	$LFS mirror create -N -E1M -c1 -S1M -E eof \
+		-N -E2M -S1M -E eof -S2M $file ||
+		error "cannot create mirrored file"
+	echo " ** write data chunk at 1M boundary"
+	dd if=/dev/urandom of=$file bs=1k count=20 seek=1021 ||
+		error "cannot write data at 1M boundary"
+	echo " ** create hole at the file end"
+	$TRUNCATE $file 3700000 || error "truncate fails"
+
+	echo " ** verify sparseness"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	[[ $offset == 1000 ]] &&
+		error "src: data is not expected at offset $offset"
+	offset=$(lseek_test -l 3500000 $file)
+	echo "    hole at the end: $offset"
+	[[ $offset == 3500000 ]] ||
+		error "src: hole is expected at 3500000"
+
+	echo " ** resync mirror #2 to mirror #1"
+	$LFS mirror resync $file
+
+	# check llapi_mirror_copy_many correctness
+	sum_1=$($LFS mirror read -N 1 $file | md5sum)
+	sum_2=$($LFS mirror read -N 2 $file | md5sum)
+	[[ $sum_1 == $sum_2 ]] ||
+		error "data mismatch: \'$sum_1\' vs. \'$sum_2\'"
+
+	cancel_lru_locks osc
+
+	blocks=$(stat -c%b $file)
+	echo " ** consumed blocks: $blocks"
+	# without full punch() support the first component can be not sparse
+	# but the last one should be, so file should use far fewer blocks
+	(( blocks < 5000 )) ||
+		error "Mirrored file consumes $blocks blocks"
+
+	# stale first component in mirror #1
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=stale,nosync $file
+	echo " ** truncate file down"
+	$TRUNCATE $file 0
+	echo " ** write data chunk at 2M boundary"
+	dd if=/dev/urandom of=$file bs=1k count=20 seek=2041 conv=notrunc ||
+		error "cannot write data at 2M boundary"
+	echo " ** resync mirror #2 to mirror #1 with nosync 1st component"
+	$LFS mirror resync $file || error "mirror rsync fails"
+	# first component is still stale
+	$LFS getstripe $file | grep 'lcme_flags:.*stale' > /dev/null ||
+		error "$file still has no stale component"
+	echo " ** resync mirror #2 to mirror #1 again"
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=stale,^nosync $file
+	$LFS mirror resync $file || error "mirror rsync fails"
+	$LFS getstripe $file | grep 'lcme_flags:.*stale' > /dev/null &&
+		error "$file still has stale component"
+
+	# check llapi_mirror_copy_many correctness
+	sum_1=$($LFS mirror read -N 1 $file | md5sum)
+	sum_2=$($LFS mirror read -N 2 $file | md5sum)
+	[[ $sum_1 == $sum_2 ]] ||
+		error "data mismatch: \'$sum_1\' vs. \'$sum_2\'"
+
+	cancel_lru_locks osc
+
+	blocks=$(stat -c%b $file)
+	echo " ** final consumed blocks: $blocks"
+	# while the first component can lose sparseness, the last one should
+	# not, so whole file should still use far fewer blocks in total
+	(( blocks < 3000 )) ||
+		error "Mirrored file consumes $blocks blocks"
+	rm $file
+}
+run_test 50b "mirror rsync handles sparseness"
+
+test_60a() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+	local old_size=2147483648 # 2GiB
+	local new_size
+
+	mkdir -p $DIR/$tdir
+	dd if=/dev/urandom of=$file bs=4096 count=1 seek=$((134217728 / 4096))
+	$TRUNCATE $file $old_size
+
+	$LFS mirror extend -N -c 1 $file
+	dd if=/dev/urandom of=$file bs=4096 count=1 seek=$((134217728 / 4096)) conv=notrunc
+	$LFS mirror resync $file
+
+	new_size=$(stat --format='%s' $file)
+	if ((new_size != old_size)); then
+		error "new_size ($new_size) is not equal to old_size ($old_size)"
+	fi
+
+	rm $file
+}
+run_test 60a "mirror extend sets correct size on sparse file"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

@@ -33,6 +33,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifndef FALLOC_FL_PUNCH_HOLE
+#include <linux/falloc.h> /* for RHEL7.3 glibc-headers and earlier */
+#endif
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <errno.h>
@@ -108,4 +111,24 @@ off_t llapi_data_seek(int src_fd, off_t offset, size_t *length)
 	}
 	*length = hole_off - data_off;
 	return data_off;
+}
+
+/**
+ * Punch hole in a file.
+ *
+ * \param fd     file descriptor
+ * \param start  offset to start from
+ * \param length hole length
+ *
+ * \retval 0 on success.
+ * \retval -errno on failure to punch hole
+ */
+int llapi_hole_punch(int fd, off_t start, size_t length)
+{
+	int rc;
+
+	rc = fallocate(fd, FALLOC_FL_PUNCH_HOLE, start, length);
+	if (rc)
+		rc = -errno;
+	return rc;
 }
