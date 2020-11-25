@@ -840,8 +840,10 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 	LASSERT(!do_send || msg->msg_tx_delayed);
 	LASSERT(!msg->msg_receiving);
 	LASSERT(msg->msg_tx_committed);
+
 	/* can't get here if we're sending to the loopback interface */
-	LASSERT(lp->lpni_nid != the_lnet.ln_loni->ni_nid);
+	if (the_lnet.ln_loni)
+		LASSERT(lp->lpni_nid != the_lnet.ln_loni->ni_nid);
 
 	/* NB 'lp' is always the next hop */
 	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
@@ -1760,6 +1762,9 @@ lnet_handle_lo_send(struct lnet_send_data *sd)
 {
 	struct lnet_msg *msg = sd->sd_msg;
 	int cpt = sd->sd_cpt;
+
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return -ESHUTDOWN;
 
 	/* No send credit hassles with LOLND */
 	lnet_ni_addref_locked(the_lnet.ln_loni, cpt);
