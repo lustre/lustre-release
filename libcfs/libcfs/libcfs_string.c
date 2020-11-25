@@ -249,59 +249,67 @@ EXPORT_SYMBOL(cfs_str2num_check);
  * -ENOMEM will be returned.
  */
 static int
-cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
+cfs_range_expr_parse(char *src, unsigned int min, unsigned int max,
 		     int bracketed, struct cfs_range_expr **expr)
 {
 	struct cfs_range_expr *re;
-	struct cfs_lstr	tok;
+	char *tok;
+	unsigned int num;
 
 	LIBCFS_ALLOC(re, sizeof(*re));
 	if (re == NULL)
 		return -ENOMEM;
 
-	if (src->ls_len == 1 && src->ls_str[0] == '*') {
+	src = strim(src);
+	if (strcmp(src, "*") == 0) {
 		re->re_lo = min;
 		re->re_hi = max;
 		re->re_stride = 1;
 		goto out;
 	}
 
-	if (cfs_str2num_check(src->ls_str, src->ls_len,
-			      &re->re_lo, min, max)) {
+	if (kstrtouint(src, 0, &num) == 0) {
+		if (num < min || num > max)
+			goto failed;
 		/* <number> is parsed */
+		re->re_lo = num;
 		re->re_hi = re->re_lo;
 		re->re_stride = 1;
 		goto out;
 	}
 
-	if (!bracketed || !cfs_gettok(src, '-', &tok))
+	if (!bracketed)
 		goto failed;
-
-	if (!cfs_str2num_check(tok.ls_str, tok.ls_len,
-			       &re->re_lo, min, max))
+	tok = strim(strsep(&src, "-"));
+	if (!src)
 		goto failed;
+	if (kstrtouint(tok, 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_lo = num;
 
 	/* <number> - */
-	if (cfs_str2num_check(src->ls_str, src->ls_len,
-			      &re->re_hi, min, max)) {
+	if (kstrtouint(strim(src), 0, &num) == 0) {
+		if (num < min || num > max)
+			goto failed;
+		re->re_hi = num;
 		/* <number> - <number> is parsed */
 		re->re_stride = 1;
 		goto out;
 	}
 
 	/* go to check <number> '-' <number> '/' <number> */
-	if (cfs_gettok(src, '/', &tok)) {
-		if (!cfs_str2num_check(tok.ls_str, tok.ls_len,
-				       &re->re_hi, min, max))
-			goto failed;
-
-		/* <number> - <number> / ... */
-		if (cfs_str2num_check(src->ls_str, src->ls_len,
-				      &re->re_stride, min, max)) {
-			/* <number> - <number> / <number> is parsed */
-			goto out;
-		}
-	}
+	tok = strim(strsep(&src, "/"));
+	if (!src)
+		goto failed;
+	if (kstrtouint(tok, 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_hi = num;
+	if (kstrtouint(strim(src), 0, &num) != 0 ||
+	    num < min || num > max)
+		goto failed;
+	re->re_stride = num;
 
 out:
 	*expr = re;
@@ -424,43 +432,44 @@ cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 {
 	struct cfs_expr_list *expr_list;
 	struct cfs_range_expr *expr;
-	struct cfs_lstr	src;
+	char *src;
 	int rc;
 
-	LIBCFS_ALLOC(expr_list, sizeof(*expr_list));
+	CFS_ALLOC_PTR(expr_list);
 	if (expr_list == NULL)
 		return -ENOMEM;
 
-	src.ls_str = str;
-	src.ls_len = len;
+	str = kstrndup(str, len, GFP_KERNEL);
+	if (!str) {
+		CFS_FREE_PTR(expr_list);
+		return -ENOMEM;
+	}
+
+	src = str;
 
 	INIT_LIST_HEAD(&expr_list->el_exprs);
 
-	if (src.ls_str[0] == '[' &&
-	    src.ls_str[src.ls_len - 1] == ']') {
-		src.ls_str++;
-		src.ls_len -= 2;
+	if (src[0] == '[' &&
+	    src[strlen(src) - 1] == ']') {
+		src++;
+		src[strlen(src)-1] = '\0';
 
 		rc = -EINVAL;
-		while (src.ls_str != NULL) {
-			struct cfs_lstr tok;
+		while (src) {
+			char *tok = strim(strsep(&src, ","));
 
-			if (!cfs_gettok(&src, ',', &tok)) {
-				rc = -EINVAL;
-				break;
-			}
-
-			rc = cfs_range_expr_parse(&tok, min, max, 1, &expr);
+			rc = cfs_range_expr_parse(tok, min, max, 1, &expr);
 			if (rc != 0)
 				break;
 
 			list_add_tail(&expr->re_link, &expr_list->el_exprs);
 		}
 	} else {
-		rc = cfs_range_expr_parse(&src, min, max, 0, &expr);
+		rc = cfs_range_expr_parse(src, min, max, 0, &expr);
 		if (rc == 0)
 			list_add_tail(&expr->re_link, &expr_list->el_exprs);
 	}
+	kfree(str);
 
 	if (rc != 0)
 		cfs_expr_list_free(expr_list);
