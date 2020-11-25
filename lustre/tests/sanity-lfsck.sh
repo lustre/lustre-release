@@ -13,15 +13,8 @@ LUSTRE=${LUSTRE:-$(dirname $0)/..}
 init_test_env $@
 init_logging
 
+# bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
-
-# DNE does not support striped directory on zfs-based backend yet.
-[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-
-# bug number for skipped test:	LU-5855	LU-5855	LU-5855	LU-5855
-	ALWAYS_EXCEPT+="	31a	31b	31c	31d"
-# bug number for skipped test:	LU-5855	LU-5855	LU-5855	LU-5855
-	ALWAYS_EXCEPT+="	31e	31f	31g	31h"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
@@ -71,10 +64,6 @@ ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
 	ALWAYS_EXCEPT+="	29a	29b	29c"
 # bug number for skipped test:	LU-5518
 	ALWAYS_EXCEPT+="	30"
-# bug number for skipped test:	LU-5519	LU-5519	LU-5519	LU-5519
-	ALWAYS_EXCEPT+="	31a	31b	31c	31d"
-# bug number for skipped test:	LU-5519	LU-5519	LU-5519	LU-5519
-	ALWAYS_EXCEPT+="	31e	31f	31g	31h"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 build_test_filter
