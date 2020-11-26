@@ -193,7 +193,7 @@ static int llog_test_2(const struct lu_env *env, struct obd_device *obd,
 	logid = lgh->lgh_id;
 
 	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = 0xf02f02;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	/* Check llog header values are correct after record add/cancel */
 	CWARN("2b: write 1 llog records, check llh_count\n");
@@ -592,7 +592,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 	LASSERT(ctxt);
 
 	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = 0xf00f00;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	sprintf(name, "%x", llog_test_rand + 1);
 	CWARN("4a: create a catalog log with name: %s\n", name);
@@ -781,7 +781,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 	LASSERT(ctxt);
 
 	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = 0xf00f00;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	CWARN("5a: re-open catalog by id\n");
 	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
@@ -1202,7 +1202,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	LASSERT(ctxt);
 
 	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = 0xf00f00;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	CWARN("8a: fill the first plain llog\n");
 	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
@@ -1504,7 +1504,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 	LASSERT(ctxt);
 
 	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = 0xf00f00;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	snprintf(name, sizeof(name), "%x", llog_test_rand + 2);
 	CWARN("10a: create a catalog log with name: %s\n", name);

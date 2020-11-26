@@ -2937,6 +2937,7 @@ enum llog_flag {
 	LLOG_F_EXT_X_NID	= 0x80,
 	LLOG_F_EXT_X_OMODE	= 0x100,
 	LLOG_F_EXT_X_XATTR	= 0x200,
+	LLOG_F_RM_ON_ERR	= 0x400,
 
 	/* Note: Flags covered by LLOG_F_EXT_MASK will be inherited from
 	 * catlog to plain log, so do not add LLOG_F_IS_FIXSIZE here,

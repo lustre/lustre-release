@@ -968,9 +968,25 @@ static int llog_osd_next_block(const struct lu_env *env,
 		rec = buf;
 		if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
 			lustre_swab_llog_rec(rec);
-
 		tail = (struct llog_rec_tail *)((char *)buf + rc -
 						sizeof(struct llog_rec_tail));
+
+		if (llog_verify_record(loghandle, rec)) {
+			/*
+			 * the block seems corrupted. make a pad record so the
+			 * caller can skip the block and try with the next one
+			 */
+			rec->lrh_len = rc;
+			rec->lrh_index = next_idx;
+			rec->lrh_type = LLOG_PAD_MAGIC;
+
+			tail = rec_tail(rec);
+			tail->lrt_len = rc;
+			tail->lrt_index = next_idx;
+
+			GOTO(out, rc = 0);
+		}
+
 		/* get the last record in block */
 		last_rec = (struct llog_rec_hdr *)((char *)buf + rc -
 						   tail->lrt_len);
@@ -1007,7 +1023,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 
 		/* sanity check that the start of the new buffer is no farther
 		 * than the record that we wanted.  This shouldn't happen. */
-		if (rec->lrh_index > next_idx) {
+		if (next_idx && rec->lrh_index > next_idx) {
 			if (!force_mini_rec && next_idx > last_idx)
 				goto retry;
 
