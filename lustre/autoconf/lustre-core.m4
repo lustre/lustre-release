@@ -1143,6 +1143,24 @@ account_page_dirtied, [
 ]) # LC_ACCOUNT_PAGE_DIRTIED_3ARGS
 
 #
+# LC_HAVE_CRYPTO_ALLOC_SKCIPHER
+#
+# Kernel version 4.12 commit 7a7ffe65c8c5
+# introduced crypto_alloc_skcipher().
+#
+AC_DEFUN([LC_HAVE_CRYPTO_ALLOC_SKCIPHER], [
+LB_CHECK_COMPILE([if crypto_alloc_skcipher is defined],
+crypto_alloc_skcipher, [
+	#include <crypto/skcipher.h>
+],[
+	crypto_alloc_skcipher(NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_CRYPTO_ALLOC_SKCIPHER, 1,
+		[crypto_alloc_skcipher is defined])
+])
+]) # LC_HAVE_CRYPTO_ALLOC_SKCIPHER
+
+#
 # LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY
 #
 # 4.3 replace interval with interval_exp in 'struct blk_integrity'
@@ -2365,6 +2383,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BIO_ENDIO_USES_ONE_ARG
 	LC_SYMLINK_OPS_USE_NAMEIDATA
 	LC_ACCOUNT_PAGE_DIRTIED_3ARGS
+	LC_HAVE_CRYPTO_ALLOC_SKCIPHER
 
 	# 4.3
 	LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY

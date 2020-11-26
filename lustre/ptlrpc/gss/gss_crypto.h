@@ -26,6 +26,36 @@
 
 #else /* ! SYNC_SKCIPHER_REQUEST_ON_STACK */
 
+#ifdef HAVE_CRYPTO_ALLOC_SKCIPHER
+
+#define crypto_sync_skcipher		crypto_skcipher
+
+#define SYNC_SKCIPHER_REQUEST_ON_STACK	SKCIPHER_REQUEST_ON_STACK
+
+#define skcipher_request_set_sync_tfm	skcipher_request_set_tfm
+
+#define skcipher_request_set_crypt_iv(d)
+
+#define crypto_sync_skcipher_blocksize	crypto_skcipher_blocksize
+
+#define crypto_sync_skcipher_setkey	crypto_skcipher_setkey
+
+#define crypto_alloc_sync_skcipher	crypto_alloc_skcipher
+
+#define crypto_free_sync_skcipher	crypto_free_skcipher
+
+#define crypto_sync_skcipher_ivsize	crypto_skcipher_ivsize
+
+#define crypto_skcipher_encrypt_iv(desc, dst, src, blocksize)	\
+	crypto_skcipher_encrypt((desc))
+
+#define crypto_skcipher_decrypt_iv(desc, dst, src, blocksize)	\
+	crypto_skcipher_decrypt((desc))
+
+#define skcipher_request_zero(req) /* nop */
+
+#else /* ! HAVE_CRYPTO_ALLOC_SKCIPHER */
+
 #define	crypto_sync_skcipher		crypto_blkcipher
 
 #define SYNC_SKCIPHER_REQUEST_ON_STACK(name, tfm)			\
@@ -66,6 +96,7 @@
 
 #define skcipher_request_zero(req) /* nop */
 
+#endif /* HAVE_CRYPTO_ALLOC_SKCIPHER */
 #endif /* SYNC_SKCIPHER_REQUEST_ON_STACK */
 
 struct gss_keyblock {
