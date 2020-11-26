@@ -76,20 +76,57 @@ test_0b() {
 
 	test_mkdir $DIR/$tdir
 
-	# Create file with 1.1*LOV_MAX_STRIPE_COUNT stripes should succeed
-	$LFS setstripe -E 1m -C $((LOV_MAX_STRIPE_COUNT / 10)) -E -1 \
-		-C $LOV_MAX_STRIPE_COUNT $comp_file ||
-	error "Create $comp_file failed"
+	$LFS setstripe -E -1 -C $LOV_MAX_STRIPE_COUNT $comp_file ||
+		error "Create $comp_file failed"
+
+	local count=$($LFS getstripe -I1 -c $comp_file)
+	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
+		error "stripe count of first component is shrinked to $count"
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 
-	# Create file with 2*LOV_MAX_STRIPE_COUNT stripes should fail
-	$LFS setstripe -E 1m -C $LOV_MAX_STRIPE_COUNT -E -1 -C $LOV_MAX_STRIPE_COUNT \
-		$comp_file && error "Create $comp_file succeeded"
+	# Create file with 1.1*LOV_MAX_STRIPE_COUNT stripes should succeed
+	$LFS setstripe -E 1m -C $((LOV_MAX_STRIPE_COUNT / 10)) -E -1 \
+		-C $LOV_MAX_STRIPE_COUNT $comp_file ||
+		error "Create $comp_file failed"
+
+	local count=$($LFS getstripe -I2 -c $comp_file)
+	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
+		error "stripe count of second component is shrinked to $count"
+
+	rm -f $comp_file || error "Delete $comp_file failed"
+
+	# Create file with 3*LOV_MAX_STRIPE_COUNT stripes should fail
+	$LFS setstripe -E 200G -C $LOV_MAX_STRIPE_COUNT \
+		-E 500G -C $LOV_MAX_STRIPE_COUNT \
+		-E -1 -C $LOV_MAX_STRIPE_COUNT $comp_file &&
+		error "Create $comp_file succeeded"
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 }
 run_test 0b "Verify comp stripe count limits"
+
+test_0c() {
+	[[ $($LCTL get_param mdc.*.import |
+		grep "connect_flags:.*overstriping") ]] ||
+		skip "server does not support overstriping"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	large_xattr_enabled || skip_env "no large xattr support"
+
+	local comp_file=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E -1 -C $LOV_MAX_STRIPE_COUNT -z 128M $comp_file ||
+		error "Create $comp_file failed"
+
+	local count=$($LFS getstripe -I1 -c $comp_file)
+	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
+		error "stripe count is shrinked to $count"
+}
+run_test 0c "Verify SEL comp stripe count limits"
 
 test_1a() {
 	local comp_file=$DIR/$tdir/$tfile

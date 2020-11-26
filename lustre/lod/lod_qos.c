@@ -1851,18 +1851,19 @@ unlock:
  *
  * \param[in] lod	LOD device
  * \param[in] lo	The lod_object
+ * \param[in] comp_idx	The component id, which the amount of stripes is
+			calculated for
  * \param[in] stripe_count	count the caller would like to use
  *
  * \retval		the maximum usable stripe count
  */
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
-			   __u16 stripe_count, bool overstriping)
+			   int comp_idx, __u16 stripe_count, bool overstriping)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
 	/* max stripe count is based on OSD ea size */
 	unsigned int easize = lod->lod_osd_max_easize;
 	int i;
-
 
 	if (!stripe_count)
 		stripe_count =
@@ -1887,9 +1888,17 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 				lo->ldo_comp_cnt;
 
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			unsigned int stripes;
+
+			if (i == comp_idx)
+				continue;
+
 			lod_comp = &lo->ldo_comp_entries[i];
-			comp_sz = lov_mds_md_size(lod_comp->llc_stripe_count,
-						  LOV_MAGIC_V3);
+			/* Extension comp is never inited - 0 stripes on disk */
+			stripes = lod_comp->llc_flags & LCME_FL_EXTENSION ? 0 :
+				lod_comp->llc_stripe_count;
+
+			comp_sz = lov_mds_md_size(stripes, LOV_MAGIC_V3);
 			total_comp_sz += comp_sz;
 			if (lod_comp->llc_flags & LCME_FL_INIT)
 				init_comp_sz += comp_sz;
@@ -2500,7 +2509,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		 * could be changed if some OSTs are [de]activated manually.
 		 */
 		lod_qos_statfs_update(env, d, &d->lod_ost_descs);
-		stripe_len = lod_get_stripe_count(d, lo,
+		stripe_len = lod_get_stripe_count(d, lo, comp_idx,
 						  lod_comp->llc_stripe_count,
 						  lod_comp->llc_pattern &
 						  LOV_PATTERN_OVERSTRIPING);

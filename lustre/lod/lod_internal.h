@@ -688,10 +688,9 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, struct thandle *th,
 			int comp_idx, __u64 reserve);
 __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
-				  struct lod_layout_component *entry,
-				  bool is_dir);
+				  int comp_idx, bool is_dir);
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
-			   __u16 stripe_count, bool overstriping);
+			   int comp_idx, __u16 stripe_count, bool overstriping);
 void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 			   struct lu_tgt_descs *ltd);
 

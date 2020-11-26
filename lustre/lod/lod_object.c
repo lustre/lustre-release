@@ -2632,19 +2632,21 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 }
 
 inline __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
-					 struct lod_layout_component *entry,
-					 bool is_dir)
+					 int comp_idx, bool is_dir)
 {
 	struct lod_device *lod = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct lod_layout_component *entry;
 
 	if (is_dir)
 		return  0;
-	else if (lod_comp_inited(entry))
+
+	entry = &lo->ldo_comp_entries[comp_idx];
+	if (lod_comp_inited(entry))
 		return entry->llc_stripe_count;
 	else if ((__u16)-1 == entry->llc_stripe_count)
 		return lod->lod_ost_count;
 	else
-		return lod_get_stripe_count(lod, lo,
+		return lod_get_stripe_count(lod, lo, comp_idx,
 					    entry->llc_stripe_count, false);
 }
 
@@ -2681,8 +2683,7 @@ static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
 		__u16 stripe_count;
 
 		magic = comp_entries[i].llc_pool ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
-		stripe_count = lod_comp_entry_stripe_count(lo, &comp_entries[i],
-							   is_dir);
+		stripe_count = lod_comp_entry_stripe_count(lo, i, is_dir);
 		if (!is_dir && is_composite)
 			lod_comp_shrink_stripe_count(&comp_entries[i],
 						     &stripe_count);

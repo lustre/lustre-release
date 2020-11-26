@@ -704,7 +704,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 			RETURN(-E2BIG);
 		objs = &v3->lmm_objects[0];
 	}
-	stripe_count = lod_comp_entry_stripe_count(lo, lod_comp, is_dir);
+	stripe_count = lod_comp_entry_stripe_count(lo, comp_idx, is_dir);
 	if (stripe_count == 0 && !is_dir &&
 	    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
 	    !(lod_comp->llc_pattern & LOV_PATTERN_MDT))
@@ -1239,7 +1239,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				int j;
 
 				stripe_count = lod_comp_entry_stripe_count(
-							lo, lod_comp, false);
+							lo, i, false);
 				if (stripe_count == 0 &&
 				    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
 				    !(lod_comp->llc_pattern & LOV_PATTERN_MDT))
