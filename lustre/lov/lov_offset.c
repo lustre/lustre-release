@@ -238,7 +238,7 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
  * that is contained within the lov extent.  this returns true if the given
  * stripe does intersect with the lov extent.
  *
- * Closed interval [@obd_start, @obd_end] will be returned.
+ * Closed interval [@obd_start, @obd_end] will be returned if caller needs them.
  */
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 			  struct lu_extent *ext, u64 *obd_start, u64 *obd_end)
@@ -246,9 +246,15 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
 	u64 start, end;
 	int start_side, end_side;
+	u64 loc_start, loc_end;
 
 	if (!lu_extent_is_overlapped(ext, &entry->lsme_extent))
 			return 0;
+
+	if (!obd_start)
+		obd_start = &loc_start;
+	if (!obd_end)
+		obd_end = &loc_end;
 
 	start = max_t(__u64, ext->e_start, entry->lsme_extent.e_start);
 	end = min_t(__u64, ext->e_end, entry->lsme_extent.e_end);

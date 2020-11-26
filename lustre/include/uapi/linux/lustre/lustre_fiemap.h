@@ -43,8 +43,34 @@
 #include <linux/fiemap.h>
 #include <linux/types.h>
 
-/* XXX: We use fiemap_extent::fe_reserved[0] */
+/**
+ * XXX: We use fiemap_extent::fe_reserved[0], notice the high 16bits of it
+ * is used to locate the stripe number starting from the very beginning to
+ * resume the fiemap call.
+ */
 #define fe_device	fe_reserved[0]
+
+static inline int get_fe_device(struct fiemap_extent *fe)
+{
+	return fe->fe_device & 0xffff;
+}
+static inline void set_fe_device(struct fiemap_extent *fe, int devno)
+{
+	fe->fe_device = (fe->fe_device & 0xffff0000) | (devno & 0xffff);
+}
+static inline int get_fe_stripenr(struct fiemap_extent *fe)
+{
+	return fe->fe_device >> 16;
+}
+static inline void set_fe_stripenr(struct fiemap_extent *fe, int nr)
+{
+	fe->fe_device = (fe->fe_device & 0xffff) | (nr << 16);
+}
+static inline void set_fe_device_stripenr(struct fiemap_extent *fe, int devno,
+					  int nr)
+{
+	fe->fe_device = (nr << 16) | (devno & 0xffff);
+}
 
 static inline __kernel_size_t fiemap_count_to_size(__kernel_size_t extent_count)
 {
@@ -64,8 +90,6 @@ static inline unsigned int fiemap_size_to_count(__kernel_size_t array_size)
 #undef FIEMAP_FLAGS_COMPAT
 #endif
 
-/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
-#define FIEMAP_EXTENT_NO_DIRECT 0x40000000 /* Data mapping undefined */
 #define FIEMAP_EXTENT_NET       0x80000000 /* Data stored remotely.
 					    * Sets NO_DIRECT flag */
 

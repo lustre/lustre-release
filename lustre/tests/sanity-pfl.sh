@@ -21,6 +21,10 @@ if [[ $(uname -m) = ppc64 ]]; then
 	ALWAYS_EXCEPT+=" 14       16a      16b      17"
 fi
 
+if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+	# bug #:	LU-1941
+	ALWAYS_EXCEPT+="24a"
+fi
 build_test_filter
 
 check_and_setup_lustre
@@ -2205,6 +2209,66 @@ test_23f() {
 	sel_layout_sanity $comp_file 2
 }
 run_test 23f "Append with low on space: repeat and remove EXT comp"
+
+OLDIFS="$IFS"
+cleanup_24() {
+	trap 0
+	IFS="$OLDIFS"
+}
+
+test_24a() {
+	[ "$OSTCOUNT" -lt "3" ] && skip_env "needs >= 3 OSTs"
+
+	trap cleanup_24 EXIT RETURN
+
+	local file=$DIR/$tfile
+
+	$LFS setstripe -E 1m -c1 -o0 -E eof -c2 -o1,2 $file ||
+		error "setstripe on $file"
+
+	dd if=/dev/zero of=$file bs=1M count=3 || error "dd failed for $file"
+	sync
+
+	filefrag -ves $file || error "filefrag $file failed"
+	filefrag_op=$(filefrag -ve -k $file |
+		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
+
+#Filesystem type is: bd00bd0
+#File size of /mnt/lustre/f24a.sanity-pfl is 3145728 (3072 blocks of 1024 bytes)
+# ext:     device_logical:        physical_offset: length:  dev: flags:
+#   0:        0..    1023:    1572864..   1573887:   1024: 0000: net
+#   1:        0..    1023:    1572864..   1573887:   1024: 0002: net
+#   2:     1024..    2047:    1573888..   1574911:   1024: 0001: last,net
+#/mnt/lustre/f24a.sanity-pfl: 3 extents found
+
+	last_lun=$(echo $filefrag_op | cut -d: -f5)
+
+	IFS=$'\n'
+	tot_len=0
+	num_luns=1
+	for line in $filefrag_op; do
+		frag_lun=$(echo $line | cut -d: -f5)
+		ext_len=$(echo $line | cut -d: -f4)
+		if [[ "$frag_lun" != "$last_lun" ]]; then
+			if (( tot_len != 1024 )); then
+				cleanup_24
+				error "$file: OST$last_lun $tot_len != 1024"
+			else
+				(( num_luns += 1 ))
+				tot_len=0
+			fi
+		fi
+		(( tot_len += ext_len ))
+		last_lun=$frag_lun
+	done
+	if (( num_luns != 3 || tot_len != 1024 )); then
+		cleanup_24
+		error "$file: $num_luns != 3, $tot_len != 1024 on OST$last_lun"
+	fi
+
+	echo "FIEMAP on $file succeeded"
+}
+run_test 24a "FIEMAP upon PFL file"
 
 complete $SECONDS
 check_and_cleanup_lustre

@@ -23,6 +23,11 @@ if [[ $(uname -m) = ppc64 ]]; then
 	skip "Skip FLR testing for PPC clients"
 fi
 
+if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+	# bug #:	LU-1941
+	ALWAYS_EXCEPT+="49a"
+fi
+
 build_test_filter
 
 [[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
@@ -2259,6 +2264,64 @@ test_48() {
 	$LFS getstripe -v --mirror-index=2 $tf
 }
 run_test 48 "Verify snapshot mirror"
+
+OLDIFS="$IFS"
+cleanup_49() {
+	trap 0
+	IFS="$OLDIFS"
+}
+
+test_49a() {
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
+
+	trap cleanup_49 EXIT RETURN
+
+	local file=$DIR/$tfile
+
+	$LFS setstripe -N -E eof -c1 -o1 -N -E eof -c1 -o0 $file ||
+		error "setstripe on $file"
+
+	dd if=/dev/zero of=$file bs=1M count=1 || error "dd failed for $file"
+	$LFS mirror resync $file
+
+	filefrag -ves $file || error "filefrag $file failed"
+	filefrag_op=$(filefrag -ve -k $file |
+		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
+
+#Filesystem type is: bd00bd0
+#File size of /mnt/lustre/f49a.sanity-flr is 1048576 (1024 blocks of 1024 bytes)
+# ext:     device_logical:        physical_offset: length:  dev: flags:
+#   0:        0..    1023:    1572864..   1573887:   1024: 0001: net,eof
+#   1:        0..    1023:    1572864..   1573887:   1024: 0000: last,net,eof
+#/mnt/lustre/f49a.sanity-flr: 2 extents found
+
+	last_lun=$(echo $filefrag_op | cut -d: -f5)
+	IFS=$'\n'
+	tot_len=0
+	num_luns=1
+	for line in $filefrag_op; do
+		frag_lun=$(echo $line | cut -d: -f5)
+		ext_len=$(echo $line | cut -d: -f4)
+		if [[ "$frag_lun" != "$last_lun" ]]; then
+			if (( tot_len != 1024 )); then
+				cleanup_49
+				error "$file: OST$last_lun $tot_len != 1024"
+			else
+				(( num_luns += 1 ))
+				tot_len=0
+			fi
+		fi
+		(( tot_len += ext_len ))
+		last_lun=$frag_lun
+	done
+	if (( num_luns != 2 || tot_len != 1024 )); then
+		cleanup_49
+		error "$file: $num_luns != 2, $tot_len != 1024 on OST$last_lun"
+	fi
+
+	echo "FIEMAP on $file succeeded"
+}
+run_test 49a "FIEMAP upon FLR file"
 
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
