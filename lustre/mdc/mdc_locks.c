@@ -560,7 +560,10 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = (__u64)it->it_op;
 
-	easize = obd->u.cli.cl_default_mds_easize;
+	if (obd->u.cli.cl_default_mds_easize > 0)
+		easize = obd->u.cli.cl_default_mds_easize;
+	else
+		easize = obd->u.cli.cl_max_mds_easize;
 
 	/* pack the intended request */
 	mdc_getattr_pack(req, valid, it->it_flags, op_data, easize);
