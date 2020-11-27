@@ -2318,6 +2318,14 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		}
 	}
 
+	if (last_non_stale_mirror(mirror_id, layout)) {
+		rc = -EUCLEAN;
+		fprintf(stderr,
+			"%s: cannot destroy the last non-stale mirror of file '%s'\n",
+			progname, fname);
+		goto free_layout;
+	}
+
 	if (!victim_file && mflags & MF_DESTROY)
 		/* Allow mirror split even without the key on encrypted files,
 		 * and in this case of a 'split -d', open file with O_DIRECT

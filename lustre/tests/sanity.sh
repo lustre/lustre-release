@@ -20414,6 +20414,36 @@ test_210() {
 }
 run_test 210 "lfs getstripe does not break leases"
 
+function test_211() {
+	local PID
+	local id
+	local rc
+
+	stack_trap "rm -f $DIR/$tfile" EXIT
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE count=10 oflag=direct ||
+		error "can't create file"
+	$LFS mirror extend -N $DIR/$tfile ||
+		error "can't create a replica"
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE count=1 oflag=direct
+	$LFS getstripe $DIR/$tfile
+	stale=$($LFS getstripe $DIR/$tfile | grep stale | wc -l)
+	(( $stale != 1 )) && error "expected 1 stale, found $stale"
+
+	$MULTIOP $DIR/$tfile OeW_E+eUc &
+	PID=$!
+	sleep 0.3
+
+	id=$($LFS getstripe $DIR/$tfile |
+		awk '/lcme_mirror_id:/{id=$2}/lcme_flags.*init$/{print id}')
+	$LFS mirror split -d --mirror-id $id $DIR/$tfile &&
+		error "removed last in-sync replica?"
+
+	kill -USR1 $PID
+	wait $PID
+	(( $? == 0 )) || error "failed split broke the lease"
+}
+run_test 211 "failed mirror split doesn't break write lease"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))
