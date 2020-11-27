@@ -1,0 +1,15 @@
+Index: linux-4.18.0-32.el8/fs/ext4/extents.c
+===================================================================
+--- linux-4.18.0-32.el8/fs.orig/ext4/extents.c	2020-11-27 10:01:19.149710442 +0300
++++ linux-4.18.0-32.el8/fs/ext4/extents.c	2020-11-27 10:01:25.462844639 +0300
+@@ -3431,8 +3431,8 @@ static int ext4_ext_convert_to_initia
+ 	ex = path[depth].p_ext;
+ 	ee_block = le32_to_cpu(ex->ee_block);
+ 	ee_len = ext4_ext_get_actual_len(ex);
+-	zero_ex1.ee_len = 0;
+-	zero_ex2.ee_len = 0;
++	memset(&zero_ex1, 0, sizeof(zero_ex1));
++	memset(&zero_ex2, 0, sizeof(zero_ex2));
+ 
+ 	trace_ext4_ext_convert_to_initialized_enter(inode, map, ex);
+ 
