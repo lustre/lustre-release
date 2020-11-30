@@ -440,7 +440,6 @@ AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
 AM_CONDITIONAL([BUILD_LUTF], [test x$enable_lutf = xyes])
-AM_CONDITIONAL([LIBIBERTY_SUBDIR], [test -d /usr/include/libiberty])
 
 LN_CONDITIONALS
 LC_CONDITIONALS

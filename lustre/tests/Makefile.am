@@ -117,8 +117,5 @@ check_fallocate_LDADD = $(LIBLUSTREAPI)
 if LIBAIO
 aiocp_LDADD= -laio
 endif
-if LIBIBERTY_SUBDIR
-statx_CPPFLAGS := -I/usr/include/libiberty
-endif
-statx_LDADD = $(SELINUX) -liberty
+statx_LDADD = $(SELINUX)
 endif # TESTS

@@ -50,7 +50,6 @@
 #include <inttypes.h>
 #include <fcntl.h>
 #include <locale.h>
-#include <libiberty.h>
 #include <linux/lustre/lustre_user.h>
 
 #ifdef HAVE_SELINUX
@@ -85,6 +84,21 @@ ssize_t statx(int dfd, const char *filename, int flags,
 	return syscall(__NR_statx, dfd, filename, flags, mask, buffer);
 }
 #endif /* HAVE_STATX */
+
+#define xstrdup(str) strdup(str)
+static inline
+char *xasprintf(const char *fmt, const char *old_fmt, const char *str)
+{
+	char *tmp = NULL;
+
+	if (asprintf(&tmp, fmt, old_fmt, str) < 0) {
+		fprintf(stderr, "asprintf allocation failed\n");
+		exit(1);
+	}
+
+	return tmp;
+}
+
 
 /* coreutils/lib/intprops.h */
 #define _GL_SIGNED_TYPE_OR_EXPR(t) TYPE_SIGNED(__typeof__(t))
