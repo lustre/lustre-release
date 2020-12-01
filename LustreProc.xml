@@ -998,12 +998,14 @@ PID: 11429
           <primary>proc</primary>
           <secondary>block I/O</secondary>
         </indexterm>Monitoring the OST Block I/O Stream</title>
-      <para>The <literal>brw_stats</literal> file in the <literal>obdfilter</literal> directory
-        contains histogram data showing statistics for number of I/O requests sent to the disk,
-        their size, and whether they are contiguous on the disk or not.</para>
+      <para>The <literal>brw_stats</literal> parameter file below the
+      <literal>osd-ldiskfs</literal> or <literal>osd-zfs</literal> directory
+        contains histogram data showing statistics for number of I/O requests
+        sent to the disk, their size, and whether they are contiguous on the
+        disk or not.</para>
       <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
-      <para>Enter on the OSS:</para>
-      <screen># lctl get_param obdfilter.testfs-OST0000.brw_stats 
+      <para>Enter on the OSS or MDS:</para>
+      <screen>oss# lctl get_param osd-*.*.brw_stats 
 snapshot_time:         1372775039.769045 (secs.usecs)
                            read      |      write
 pages per bulk r/w     rpcs  % cum % |  rpcs   % cum %
@@ -1073,10 +1075,11 @@ disk I/O size          ios   % cum % |   ios   % cum %
 512K:                    0   0 100   |    24   0   0
 1M:                      0   0 100   | 23142  99 100
 </screen>
-      <para>The tabular data is described in the table below. Each row in the table shows the number
-        of reads and writes occurring for the statistic (<literal>ios</literal>), the relative
-        percentage of total reads or writes (<literal>%</literal>), and the cumulative percentage to
-        that point in the table for the statistic (<literal>cum %</literal>). </para>
+      <para>The tabular data is described in the table below. Each row in the
+        table shows the number of reads and writes occurring for the statistic
+        (<literal>ios</literal>), the relative percentage of total reads or
+        writes (<literal>%</literal>), and the cumulative percentage to that
+        point in the table for the statistic (<literal>cum %</literal>). </para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="40*"/>
@@ -1430,118 +1433,227 @@ write RPCs in flight: 0
       <title><indexterm>
           <primary>proc</primary>
           <secondary>read cache</secondary>
-        </indexterm>Tuning OSS Read Cache</title>
-      <para>The OSS read cache feature provides read-only caching of data on an OSS. This
-        functionality uses the Linux page cache to store the data and uses as much physical memory
+        </indexterm>Tuning Server Read Cache</title>
+      <para>The server read cache feature provides read-only caching of file
+        data on an OSS or MDS (for Data-on-MDT). This functionality uses the
+        Linux page cache to store the data and uses as much physical memory
         as is allocated.</para>
-      <para>OSS read cache improves Lustre file system performance in these situations:</para>
+      <para>The server read cache can improves Lustre file system performance
+        in these situations:</para>
       <itemizedlist>
         <listitem>
-          <para>Many clients are accessing the same data set (as in HPC applications or when
-            diskless clients boot from the Lustre file system).</para>
+          <para>Many clients are accessing the same data set (as in HPC
+            applications or when diskless clients boot from the Lustre file
+            system).</para>
         </listitem>
         <listitem>
-          <para>One client is storing data while another client is reading it (i.e., clients are
-            exchanging data via the OST).</para>
+          <para>One client is writing data while another client is reading
+            it (i.e., clients are exchanging data via the filesystem).</para>
         </listitem>
         <listitem>
           <para>A client has very limited caching of its own.</para>
         </listitem>
       </itemizedlist>
-      <para>OSS read cache offers these benefits:</para>
+      <para>The server read cache offers these benefits:</para>
       <itemizedlist>
         <listitem>
-          <para>Allows OSTs to cache read data more frequently.</para>
+          <para>Allows servers to cache read data more frequently.</para>
         </listitem>
         <listitem>
-          <para>Improves repeated reads to match network speeds instead of disk speeds.</para>
+          <para>Improves repeated reads to match network speeds instead of
+             storage speeds.</para>
         </listitem>
         <listitem>
-          <para>Provides the building blocks for OST write cache (small-write aggregation).</para>
+          <para>Provides the building blocks for server write cache
+            (small-write aggregation).</para>
         </listitem>
       </itemizedlist>
       <section remap="h4">
-        <title>Using OSS Read Cache</title>
-        <para>OSS read cache is implemented on the OSS, and does not require any special support on
-          the client side. Since OSS read cache uses the memory available in the Linux page cache,
-          the appropriate amount of memory for the cache should be determined based on I/O patterns;
-          if the data is mostly reads, then more cache is required than would be needed for mostly
-          writes.</para>
-        <para>OSS read cache is managed using the following tunables:</para>
+        <title>Using Server Read Cache</title>
+        <para>The server read cache is implemented on the OSS and MDS, and does
+          not require any special support on the client side. Since the server
+          read cache uses the memory available in the Linux page cache, the
+          appropriate amount of memory for the cache should be determined based
+          on I/O patterns.  If the data is mostly reads, then more cache is
+          beneficial on the server than would be needed for mostly writes.
+        </para>
+        <para>The server read cache is managed using the following tunables.
+          Many tunables are available for both <literal>osd-ldiskfs</literal>
+          and <literal>osd-zfs</literal>, but in some cases the implementation
+          of <literal>osd-zfs</literal> prevents their use.</para>
         <itemizedlist>
           <listitem>
-            <para><literal>read_cache_enable</literal> - Controls whether data read from disk during
-              a read request is kept in memory and available for later read requests for the same
-              data, without having to re-read it from disk. By default, read cache is enabled
-                (<literal>read_cache_enable=1</literal>).</para>
-            <para>When the OSS receives a read request from a client, it reads data from disk into
-              its memory and sends the data as a reply to the request. If read cache is enabled,
-              this data stays in memory after the request from the client has been fulfilled. When
-              subsequent read requests for the same data are received, the OSS skips reading data
-              from disk and the request is fulfilled from the cached data. The read cache is managed
-              by the Linux kernel globally across all OSTs on that OSS so that the least recently
-              used cache pages are dropped from memory when the amount of free memory is running
-              low.</para>
-            <para>If read cache is disabled (<literal>read_cache_enable=0</literal>), the OSS
-              discards the data after a read request from the client is serviced and, for subsequent
-              read requests, the OSS again reads the data from disk.</para>
-            <para>To disable read cache on all the OSTs of an OSS, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.*.read_cache_enable=0</screen>
-            <para>To re-enable read cache on one OST, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.{OST_name}.read_cache_enable=1</screen>
-            <para>To check if read cache is enabled on all OSTs on an OSS, run:</para>
-            <screen>root@oss1# lctl get_param obdfilter.*.read_cache_enable</screen>
+            <para><literal>read_cache_enable</literal> - High-level control of
+              whether data read from storage during a read request is kept in
+              memory and available for later read requests for the same data,
+              without having to re-read it from storage. By default, read cache
+              is enabled (<literal>read_cache_enable=1</literal>) for HDD OSDs
+              and automatically disabled for flash OSDs
+              (<literal>nonrotational=1</literal>).
+              The read cache cannot be disabled for <literal>osd-zfs</literal>,
+              and as a result this parameter is unavailable for that backend.
+              </para>
+            <para>When the server receives a read request from a client,
+              it reads data from storage into its memory and sends the data
+              to the client. If read cache is enabled for the target,
+              and the RPC and object size also meet the other criterion below,
+              this data may stay in memory after the client request has
+              completed.  If later read requests for the same data are received,
+              if the data is still in cache the server skips reading it from
+              storage. The cache is managed by the Linux kernel globally
+              across all targets on that server so that the infrequently used
+              cache pages are dropped from memory when the free memory is
+              running low.</para>
+            <para>If read cache is disabled
+              (<literal>read_cache_enable=0</literal>), or the read or object
+              is large enough that it will not benefit from caching, the server
+              discards the data after the read request from the client is
+              completed. For subsequent read requests the server again reads
+              the data from storage.</para>
+            <para>To disable read cache on all targets of a server, run:</para>
+            <screen>
+              oss1# lctl set_param osd-*.*.read_cache_enable=0
+            </screen>
+            <para>To re-enable read cache on one target, run:</para>
+            <screen>
+              oss1# lctl set_param osd-*.{target_name}.read_cache_enable=1
+            </screen>
+            <para>To check if read cache is enabled on targets on a server, run:
+            </para>
+            <screen>
+              oss1# lctl get_param osd-*.*.read_cache_enable
+            </screen>
           </listitem>
           <listitem>
-            <para><literal>writethrough_cache_enable</literal> - Controls whether data sent to the
-              OSS as a write request is kept in the read cache and available for later reads, or if
-              it is discarded from cache when the write is completed. By default, the writethrough
-              cache is enabled (<literal>writethrough_cache_enable=1</literal>).</para>
-            <para>When the OSS receives write requests from a client, it receives data from the
-              client into its memory and writes the data to disk. If the writethrough cache is
-              enabled, this data stays in memory after the write request is completed, allowing the
-              OSS to skip reading this data from disk if a later read request, or partial-page write
-              request, for the same data is received.</para>
+            <para><literal>writethrough_cache_enable</literal> - High-level
+              control of whether data sent to the server as a write request is
+              kept in the read cache and available for later reads, or if it is
+              discarded when the write completes. By default, writethrough
+              cache is enabled (<literal>writethrough_cache_enable=1</literal>)
+              for HDD OSDs and automatically disabled for flash OSDs
+              (<literal>nonrotational=1</literal>).
+              The write cache cannot be disabled for <literal>osd-zfs</literal>,
+              and as a result this parameter is unavailable for that backend.
+              </para>
+            <para>When the server receives write requests from a client, it
+              fetches data from the client into its memory and writes the data
+              to storage. If the writethrough cache is enabled for the target,
+              and the RPC and object size meet the other criterion below,
+              this data may stay in memory after the write request has
+              completed. If later read or partial-block write requests for this
+              same data are received, if the data is still in cache the server
+              skips reading it from storage.
+              </para>
             <para>If the writethrough cache is disabled
-                (<literal>writethrough_cache_enabled=0</literal>), the OSS discards the data after
-              the write request from the client is completed. For subsequent read requests, or
-              partial-page write requests, the OSS must re-read the data from disk.</para>
-            <para>Enabling writethrough cache is advisable if clients are doing small or unaligned
-              writes that would cause partial-page updates, or if the files written by one node are
-              immediately being accessed by other nodes. Some examples where enabling writethrough
-              cache might be useful include producer-consumer I/O models or shared-file writes with
-              a different node doing I/O not aligned on 4096-byte boundaries. </para>
-            <para>Disabling the writethrough cache is advisable when files are mostly written to the
-              file system but are not re-read within a short time period, or files are only written
-              and re-read by the same node, regardless of whether the I/O is aligned or not.</para>
-            <para>To disable the writethrough cache on all OSTs of an OSS, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.*.writethrough_cache_enable=0</screen>
+               (<literal>writethrough_cache_enabled=0</literal>), or the
+               write or object is large enough that it will not benefit from
+               caching, the server discards the data after the write request
+               from the client is completed. For subsequent read requests, or
+               partial-page write requests, the server must re-read the data
+               from storage.</para>
+            <para>Enabling writethrough cache is advisable if clients are doing
+              small or unaligned writes that would cause partial-page updates,
+              or if the files written by one node are immediately being read by
+              other nodes. Some examples where enabling writethrough cache
+              might be useful include producer-consumer I/O models or
+              shared-file writes that are not aligned on 4096-byte boundaries.
+            </para>
+            <para>Disabling the writethrough cache is advisable when files are
+              mostly written to the file system but are not re-read within a
+              short time period, or files are only written and re-read by the
+              same node, regardless of whether the I/O is aligned or not.</para>
+            <para>To disable writethrough cache on all targets on a server, run:
+            </para>
+            <screen>
+              oss1# lctl set_param osd-*.*.writethrough_cache_enable=0
+            </screen>
             <para>To re-enable the writethrough cache on one OST, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.{OST_name}.writethrough_cache_enable=1</screen>
+            <screen>
+              oss1# lctl set_param osd-*.{OST_name}.writethrough_cache_enable=1
+            </screen>
             <para>To check if the writethrough cache is enabled, run:</para>
-            <screen>root@oss1# lctl get_param obdfilter.*.writethrough_cache_enable</screen>
+            <screen>
+              oss1# lctl get_param osd-*.*.writethrough_cache_enable
+            </screen>
           </listitem>
           <listitem>
-            <para><literal>readcache_max_filesize</literal> - Controls the maximum size of a file
-              that both the read cache and writethrough cache will try to keep in memory. Files
-              larger than <literal>readcache_max_filesize</literal> will not be kept in cache for
-              either reads or writes.</para>
-            <para>Setting this tunable can be useful for workloads where relatively small files are
-              repeatedly accessed by many clients, such as job startup files, executables, log
-              files, etc., but large files are read or written only once. By not putting the larger
-              files into the cache, it is much more likely that more of the smaller files will
-              remain in cache for a longer time.</para>
-            <para>When setting <literal>readcache_max_filesize</literal>, the input value can be
-              specified in bytes, or can have a suffix to indicate other binary units such as
-                <literal>K</literal> (kilobytes), <literal>M</literal> (megabytes),
-                <literal>G</literal> (gigabytes), <literal>T</literal> (terabytes), or
-                <literal>P</literal> (petabytes).</para>
-            <para>To limit the maximum cached file size to 32 MB on all OSTs of an OSS, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.*.readcache_max_filesize=32M</screen>
-            <para>To disable the maximum cached file size on an OST, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.{OST_name}.readcache_max_filesize=-1</screen>
-            <para>To check the current maximum cached file size on all OSTs of an OSS, run:</para>
-            <screen>root@oss1# lctl get_param obdfilter.*.readcache_max_filesize</screen>
+            <para><literal>readcache_max_filesize</literal> - Controls the
+              maximum size of an object that both the read cache and
+              writethrough cache will try to keep in memory. Objects larger
+              than <literal>readcache_max_filesize</literal> will not be kept
+              in cache for either reads or writes regardless of the
+              <literal>read_cache_enable</literal> or
+              <literal>writethrough_cache_enable</literal> settings.</para>
+            <para>Setting this tunable can be useful for workloads where
+              relatively small objects are repeatedly accessed by many clients,
+              such as job startup objects, executables, log objects, etc., but
+              large objects are read or written only once. By not putting the
+              larger objects into the cache, it is much more likely that more
+              of the smaller objects will remain in cache for a longer time.
+            </para>
+            <para>When setting <literal>readcache_max_filesize</literal>,
+              the input value can be specified in bytes, or can have a suffix
+              to indicate other binary units such as
+                <literal>K</literal> (kibibytes),
+                <literal>M</literal> (mebibytes),
+                <literal>G</literal> (gibibytes),
+                <literal>T</literal> (tebibytes), or
+                <literal>P</literal> (pebibytes).</para>
+            <para>
+              To limit the maximum cached object size to 64 MiB on all OSTs of
+              a server, run:
+            </para>
+            <screen>
+              oss1# lctl set_param osd-*.*.readcache_max_filesize=64M
+            </screen>
+            <para>To disable the maximum cached object size on all targets, run:
+            </para>
+            <screen>
+              oss1# lctl set_param osd-*.*.readcache_max_filesize=-1
+            </screen>
+            <para>
+              To check the current maximum cached object size on all targets of
+              a server, run:
+            </para>
+            <screen>
+              oss1# lctl get_param osd-*.*.readcache_max_filesize
+            </screen>
+          </listitem>
+          <listitem>
+            <para><literal>readcache_max_io_mb</literal> - Controls the maximum
+              size of a single read IO that will be cached in memory. Reads
+              larger than <literal>readcache_max_io_mb</literal> will be read
+              directly from storage and bypass the page cache completely.
+              This avoids significant CPU overhead at high IO rates.
+              The read cache cannot be disabled for <literal>osd-zfs</literal>,
+              and as a result this parameter is unavailable for that backend.
+            </para>
+            <para>When setting <literal>readcache_max_io_mb</literal>, the
+              input value can be specified in mebibytes, or can have a suffix
+              to indicate other binary units such as
+                <literal>K</literal> (kibibytes),
+                <literal>M</literal> (mebibytes),
+                <literal>G</literal> (gibibytes),
+                <literal>T</literal> (tebibytes), or
+                <literal>P</literal> (pebibytes).</para>
+          </listitem>
+          <listitem>
+            <para><literal>writethrough_max_io_mb</literal> - Controls the
+              maximum size of a single writes IO that will be cached in memory.
+              Writes larger than <literal>writethrough_max_io_mb</literal> will
+              be written directly to storage and bypass the page cache entirely.
+              This avoids significant CPU overhead at high IO rates.
+              The write cache cannot be disabled for <literal>osd-zfs</literal>,
+              and as a result this parameter is unavailable for that backend.
+            </para>
+            <para>When setting <literal>writethrough_max_io_mb</literal>, the
+              input value can be specified in mebibytes, or can have a suffix
+              to indicate other binary units such as
+                <literal>K</literal> (kibibytes),
+                <literal>M</literal> (mebibytes),
+                <literal>G</literal> (gibibytes),
+                <literal>T</literal> (tebibytes), or
+                <literal>P</literal> (pebibytes).</para>
           </listitem>
         </itemizedlist>
       </section>
