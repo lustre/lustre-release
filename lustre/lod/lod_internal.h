@@ -238,7 +238,7 @@ struct lod_object {
 			__u16		ldo_mirror_count;
 			struct lod_mirror_entry	*ldo_mirrors;
 			__u32		ldo_is_composite:1,
-					ldo_flr_state:2,
+					ldo_flr_state:4,
 					ldo_comp_cached:1,
 					ldo_is_foreign:1;
 		};

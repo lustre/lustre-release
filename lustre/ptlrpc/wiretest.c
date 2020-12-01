@@ -1867,6 +1867,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)LCM_FL_WRITE_PENDING);
 	LASSERTF(LCM_FL_SYNC_PENDING == 3, "found %lld\n",
 		 (long long)LCM_FL_SYNC_PENDING);
+	LASSERTF(LCM_FL_PCC_RDONLY == 8, "found %lld\n",
+		 (long long)LCM_FL_PCC_RDONLY);
 
 	/* Checks for struct lmv_mds_md_v1 */
 	LASSERTF((int)sizeof(struct lmv_mds_md_v1) == 56, "found %lld\n",
