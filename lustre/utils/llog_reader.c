@@ -1002,6 +1002,28 @@ static void print_setattr64_rec_v2(struct llog_setattr64_rec_v2 *lsr)
 		__le32_to_cpu(lsr->lsr_projid));
 }
 
+static void print_changelog_user_rec(struct llog_changelog_user_rec *rec)
+{
+	struct llog_rec_hdr *lrh = &rec->cur_hdr;
+	bool is_rec_v2 = (__le32_to_cpu(lrh->lrh_type) == CHANGELOG_USER_REC2);
+
+	printf("changelog user record (%s) id:0x%x cur_id:%u cur_endrec:%llu cur_time:%u%s",
+	       is_rec_v2 ? "v2" : "v1",
+	       __le32_to_cpu(lrh->lrh_id),
+	       __le32_to_cpu(rec->cur_id),
+	       __le64_to_cpu(rec->cur_endrec),
+	       __le32_to_cpu(rec->cur_time),
+	       is_rec_v2 ? " " : "\n");
+
+	if (is_rec_v2) {
+		struct llog_changelog_user_rec2 *rec2 = (typeof(rec2)) rec;
+
+		printf("cur_mask:0x%08x cur_name:\"%.*s\"\n",
+			__le32_to_cpu(rec2->cur_mask),
+			(int) sizeof(rec2->cur_name), rec2->cur_name);
+	}
+
+}
 
 static void print_records(struct llog_rec_hdr **recs,
 			  int rec_number, int is_ext)
@@ -1046,8 +1068,9 @@ static void print_records(struct llog_rec_hdr **recs,
 			break;
 		case CHANGELOG_USER_REC:
 		case CHANGELOG_USER_REC2:
-			printf("changelog_user record id:0x%x\n",
-			       __le32_to_cpu(recs[i]->lrh_id));
+			print_changelog_user_rec((struct
+						  llog_changelog_user_rec *)
+						 recs[i]);
 			break;
 		case UPDATE_REC:
 			print_update_rec((struct llog_update_record *)recs[i]);
