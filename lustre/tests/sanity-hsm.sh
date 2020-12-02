@@ -3937,6 +3937,9 @@ test_112() {
 run_test 112 "State of recorded request"
 
 test_113() {
+	(( $MDS1_VERSION >= $(version_code 2.12.3) )) ||
+		skip "Need MDS version at least 2.12.3"
+
 	local file1=$DIR/$tdir/$tfile
 	local file2=$DIR2/$tdir/$tfile
 
