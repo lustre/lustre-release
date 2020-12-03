@@ -1919,6 +1919,13 @@ struct mdt_rec_setattr {
 
 enum mds_op_bias {
 /*	MDS_CHECK_SPLIT		= 1 << 0, obsolete before 2.3.58 */
+	/* used for remote object getattr/open by name: in the original
+	 * getattr/open request, MDT found the object against name is on another
+	 * MDT, then packed FID and LOOKUP lock in reply and returned -EREMOTE,
+	 * and client knew it's a remote object, then set this flag in
+	 * getattr/open request and sent to the corresponding MDT to finish
+	 * getattr/open, which fetched attributes and UPDATE lock/opened file.
+	 */
 	MDS_CROSS_REF		= 1 << 1,
 /*	MDS_VTX_BYPASS		= 1 << 2, obsolete since 2.3.54 */
 	MDS_PERM_BYPASS		= 1 << 3,

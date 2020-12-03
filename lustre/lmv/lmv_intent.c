@@ -152,7 +152,6 @@ out:
 }
 
 int lmv_revalidate_slaves(struct obd_export *exp,
-			  const struct lu_fid *pfid,
 			  const struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags)
@@ -199,11 +198,14 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		 * which is not needed here.
 		 */
 		memset(op_data, 0, sizeof(*op_data));
-		if (exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID)
-			op_data->op_fid1 = *pfid;
-		else
-			op_data->op_fid1 = fid;
+		op_data->op_fid1 = fid;
 		op_data->op_fid2 = fid;
+		/* shard revalidate only needs to fetch attributes and UPDATE
+		 * lock, which is similar to the bottom half of remote object
+		 * getattr, set this flag so that MDT skips checking whether
+		 * it's remote object.
+		 */
+		op_data->op_bias = MDS_CROSS_REF;
 
 		tgt = lmv_tgt(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
 		if (!tgt)
@@ -488,8 +490,7 @@ retry:
 		/* If RPC happens, lsm information will be revalidated
 		 * during update_inode process (see ll_update_lsm_md) */
 		if (lmv_dir_striped(op_data->op_mea2)) {
-			rc = lmv_revalidate_slaves(exp, &op_data->op_fid2,
-						   op_data->op_mea2,
+			rc = lmv_revalidate_slaves(exp, op_data->op_mea2,
 						   cb_blocking,
 						   extra_lock_flags);
 			if (rc != 0)

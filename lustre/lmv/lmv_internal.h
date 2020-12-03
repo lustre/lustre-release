@@ -53,7 +53,6 @@ int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
 
 int lmv_revalidate_slaves(struct obd_export *exp,
-			  const struct lu_fid *pfid,
 			  const struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags);

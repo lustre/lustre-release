@@ -1888,29 +1888,6 @@ static int mdt_fids_different_target(struct mdt_thread_info *info,
 	return index1 != index2;
 }
 
-static bool mdt_object_is_shard(struct mdt_thread_info *info,
-				struct mdt_object *obj)
-{
-	struct lmv_mds_md_v1 *lmv = (struct lmv_mds_md_v1 *)info->mti_xattr_buf;
-	struct lu_buf buf;
-	int rc;
-
-	if (!mdt_object_exists(obj))
-		return false;
-
-	if (!S_ISDIR(lu_object_attr(&obj->mot_obj)))
-		return false;
-
-	buf.lb_buf = lmv;
-	buf.lb_len = sizeof(*lmv);
-	rc = mo_xattr_get(info->mti_env, mdt_object_child(obj), &buf,
-			  XATTR_NAME_LMV);
-	if (rc < 0)
-		return false;
-
-	return lmv->lmv_magic == cpu_to_le32(LMV_MAGIC_STRIPE);
-}
-
 /**
  * Check whether \a child is remote object on \a parent.
  *
@@ -1943,14 +1920,8 @@ int mdt_is_remote_object(struct mdt_thread_info *info,
 		RETURN(0);
 
 	if (likely(parent != child)) {
-		if (mdt_object_remote(parent) ^ mdt_object_remote(child)) {
-			/* don't treat shard as remote object, otherwise client
-			 * need to revalidate shards all the time.
-			 */
-			if (mdt_object_is_shard(info, child))
-				RETURN(0);
+		if (mdt_object_remote(parent) ^ mdt_object_remote(child))
 			RETURN(1);
-		}
 
 		if (!mdt_object_remote(parent) && !mdt_object_remote(child))
 			RETURN(0);

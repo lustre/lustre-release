@@ -4821,7 +4821,7 @@ static int ll_merge_md_attr(struct inode *inode)
 		RETURN(0);
 
 	down_read(&lli->lli_lsm_sem);
-	rc = md_merge_attr(ll_i2mdexp(inode), &lli->lli_fid, lli->lli_lsm_md,
+	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
 			   &attr, ll_md_blocking_ast);
 	up_read(&lli->lli_lsm_sem);
 	if (rc != 0)
