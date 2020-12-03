@@ -173,7 +173,7 @@ nid_keycmp(struct rhashtable_compare_arg *arg, const void *obj)
 	const lnet_nid_t *nid = arg->key;
 	const struct obd_export *exp = obj;
 
-	if (exp->exp_connection->c_peer.nid == *nid && !exp->exp_failed)
+	if (exp->exp_connection->c_peer.nid == *nid)
 		return 0;
 
 	return -ESRCH;
@@ -250,7 +250,7 @@ int obd_nid_export_for_each(struct obd_device *obd, lnet_nid_t nid,
 	}
 
 	rhl_for_each_entry_rcu(exp, tmp, exports, exp_nid_hash) {
-		if (cb(exp, data))
+		if (!exp->exp_failed && cb(exp, data))
 			ret++;
 	}
 

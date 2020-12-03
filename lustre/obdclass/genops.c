@@ -1622,11 +1622,28 @@ void class_fail_export(struct obd_export *exp)
 EXPORT_SYMBOL(class_fail_export);
 
 #ifdef HAVE_SERVER_SUPPORT
+
+static int take_first(struct obd_export *exp, void *data)
+{
+	struct obd_export **expp = data;
+
+	if (*expp)
+		/* already have one */
+		return 0;
+	if (exp->exp_failed)
+		/* Don't want this one */
+		return 0;
+	if (!refcount_inc_not_zero(&exp->exp_handle.h_ref))
+		/* Cannot get a ref on this one */
+		return 0;
+	*expp = exp;
+	return 1;
+}
+
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
 	lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
 	struct obd_export *doomed_exp;
-	struct rhashtable_iter iter;
 	int exports_evicted = 0;
 
 	spin_lock(&obd->obd_dev_lock);
@@ -1638,20 +1655,9 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
-	rhltable_walk_enter(&obd->obd_nid_hash, &iter);
-	rhashtable_walk_start(&iter);
-	while ((doomed_exp = rhashtable_walk_next(&iter)) != NULL) {
-		if (IS_ERR(doomed_exp))
-			continue;
-
-		if (!doomed_exp->exp_connection ||
-		    doomed_exp->exp_connection->c_peer.nid != nid_key)
-			continue;
-
-		if (!refcount_inc_not_zero(&doomed_exp->exp_handle.h_ref))
-			continue;
-
-		rhashtable_walk_stop(&iter);
+	doomed_exp = NULL;
+	while (obd_nid_export_for_each(obd, nid_key,
+				       take_first, &doomed_exp) > 0) {
 
 		LASSERTF(doomed_exp != obd->obd_self_export,
 			 "self-export is hashed by NID?\n");
@@ -1664,16 +1670,14 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 		class_fail_export(doomed_exp);
 		class_export_put(doomed_exp);
 		exports_evicted++;
-
-		rhashtable_walk_start(&iter);
+		doomed_exp = NULL;
 	}
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
 
-        if (!exports_evicted)
-                CDEBUG(D_HA,"%s: can't disconnect NID '%s': no exports found\n",
-                       obd->obd_name, nid);
-        return exports_evicted;
+	if (!exports_evicted)
+		CDEBUG(D_HA,
+		       "%s: can't disconnect NID '%s': no exports found\n",
+		       obd->obd_name, nid);
+	return exports_evicted;
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
 
