@@ -3008,8 +3008,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 					      LDLM_NAMESPACE_SERVER,
 					      LDLM_NAMESPACE_GREEDY,
 					      LDLM_NS_TYPE_OST);
-	if (m->ofd_namespace == NULL)
-		GOTO(err_fini_stack, rc = -ENOMEM);
+	if (IS_ERR(m->ofd_namespace)) {
+		rc = PTR_ERR(m->ofd_namespace);
+		CERROR("%s: unable to create server namespace: rc = %d\n",
+		       obd->obd_name, rc);
+		m->ofd_namespace = NULL;
+		GOTO(err_fini_stack, rc);
+	}
 	/* set obd_namespace for compatibility with old code */
 	obd->obd_namespace = m->ofd_namespace;
 	ldlm_register_intent(m->ofd_namespace, ofd_intent_policy);

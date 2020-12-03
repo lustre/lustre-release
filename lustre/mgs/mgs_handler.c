@@ -1282,8 +1282,13 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 						LDLM_NAMESPACE_SERVER,
 						LDLM_NAMESPACE_MODEST,
 						LDLM_NS_TYPE_MGT);
-	if (obd->obd_namespace == NULL)
-		GOTO(err_ops, rc = -ENOMEM);
+	if (IS_ERR(obd->obd_namespace)) {
+		rc = PTR_ERR(obd->obd_namespace);
+		CERROR("%s: unable to create server namespace: rc = %d\n",
+		       obd->obd_name, rc);
+		obd->obd_namespace = NULL;
+		GOTO(err_ops, rc);
+	}
 
 	/* No recovery for MGCs */
 	obd->obd_replayable = 0;

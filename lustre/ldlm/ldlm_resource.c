@@ -896,19 +896,21 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 
 	rc = ldlm_get_ref();
 	if (rc) {
-		CERROR("ldlm_get_ref failed: %d\n", rc);
-		RETURN(NULL);
+		CERROR("%s: ldlm_get_ref failed: rc = %d\n", name, rc);
+		RETURN(ERR_PTR(rc));
 	}
 
 	if (ns_type >= ARRAY_SIZE(ldlm_ns_hash_defs) ||
 	    ldlm_ns_hash_defs[ns_type].nsd_bkt_bits == 0) {
-		CERROR("Unknown type %d for ns %s\n", ns_type, name);
-		GOTO(out_ref, NULL);
+		rc = -EINVAL;
+		CERROR("%s: unknown namespace type %d: rc = %d\n",
+		       name, ns_type, rc);
+		GOTO(out_ref, rc);
 	}
 
 	OBD_ALLOC_PTR(ns);
 	if (!ns)
-		GOTO(out_ref, NULL);
+		GOTO(out_ref, rc = -ENOMEM);
 
 	ns->ns_rs_hash = cfs_hash_create(name,
 					 ldlm_ns_hash_defs[ns_type].nsd_all_bits,
@@ -922,15 +924,15 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 					 CFS_HASH_BIGNAME |
 					 CFS_HASH_SPIN_BKTLOCK |
 					 CFS_HASH_NO_ITEMREF);
-	if (ns->ns_rs_hash == NULL)
-		GOTO(out_ns, NULL);
+	if (!ns->ns_rs_hash)
+		GOTO(out_ns, rc = -ENOMEM);
 
 	ns->ns_bucket_bits = ldlm_ns_hash_defs[ns_type].nsd_all_bits -
 			     ldlm_ns_hash_defs[ns_type].nsd_bkt_bits;
 
 	OBD_ALLOC_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	if (!ns->ns_rs_buckets)
-		goto out_hash;
+		GOTO(out_hash, rc = -ENOMEM);
 
 	for (idx = 0; idx < (1 << ns->ns_bucket_bits); idx++) {
 		struct ldlm_ns_bucket *nsb = &ns->ns_rs_buckets[idx];
@@ -946,7 +948,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_client = client;
 	ns->ns_name = kstrdup(name, GFP_KERNEL);
 	if (!ns->ns_name)
-		goto out_hash;
+		GOTO(out_hash, rc = -ENOMEM);
 
 	INIT_LIST_HEAD(&ns->ns_list_chain);
 	INIT_LIST_HEAD(&ns->ns_unused_list);
@@ -976,20 +978,20 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 
 	rc = ldlm_namespace_sysfs_register(ns);
 	if (rc) {
-		CERROR("Can't initialize ns sysfs, rc %d\n", rc);
+		CERROR("%s: cannot initialize ns sysfs: rc = %d\n", name, rc);
 		GOTO(out_hash, rc);
 	}
 
 	rc = ldlm_namespace_debugfs_register(ns);
 	if (rc) {
-		CERROR("Can't initialize ns proc, rc %d\n", rc);
+		CERROR("%s: cannot initialize ns proc: rc = %d\n", name, rc);
 		GOTO(out_sysfs, rc);
 	}
 
 	idx = ldlm_namespace_nr_read(client);
 	rc = ldlm_pool_init(&ns->ns_pool, ns, idx, client);
 	if (rc) {
-		CERROR("Can't initialize lock pool, rc %d\n", rc);
+		CERROR("%s: cannot initialize lock pool, rc = %d\n", name, rc);
 		GOTO(out_proc, rc);
 	}
 
@@ -1008,7 +1010,7 @@ out_ns:
         OBD_FREE_PTR(ns);
 out_ref:
 	ldlm_put_ref();
-	RETURN(NULL);
+	RETURN(ERR_PTR(rc));
 }
 EXPORT_SYMBOL(ldlm_namespace_new);
 

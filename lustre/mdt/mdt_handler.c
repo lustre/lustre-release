@@ -5755,8 +5755,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 					      LDLM_NAMESPACE_SERVER,
 					      LDLM_NAMESPACE_GREEDY,
 					      LDLM_NS_TYPE_MDT);
-	if (m->mdt_namespace == NULL)
-		GOTO(err_fini_seq, rc = -ENOMEM);
+	if (IS_ERR(m->mdt_namespace)) {
+		rc = PTR_ERR(m->mdt_namespace);
+		CERROR("%s: unable to create server namespace: rc = %d\n",
+		       obd->obd_name, rc);
+		m->mdt_namespace = NULL;
+		GOTO(err_fini_seq, rc);
+	}
 
 	m->mdt_namespace->ns_lvbp = m;
 	m->mdt_namespace->ns_lvbo = &mdt_lvbo;

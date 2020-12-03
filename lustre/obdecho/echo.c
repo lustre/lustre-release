@@ -768,8 +768,13 @@ static int echo_srv_init0(const struct lu_env *env,
 						LDLM_NAMESPACE_SERVER,
 						LDLM_NAMESPACE_MODEST,
 						LDLM_NS_TYPE_OST);
-	if (!obd->obd_namespace)
-		RETURN(-ENOMEM);
+	if (IS_ERR(obd->obd_namespace)) {
+		rc = PTR_ERR(obd->obd_namespace);
+		CERROR("%s: unable to create server namespace: rc = %d\n",
+		       obd->obd_name, rc);
+		obd->obd_namespace = NULL;
+		RETURN(rc);
+	}
 
 	obd->obd_vars = lprocfs_echo_obd_vars;
 	if (!lprocfs_obd_setup(obd, true) &&
