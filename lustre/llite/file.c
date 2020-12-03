@@ -5113,6 +5113,15 @@ static int ll_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 
 	rc = ll_do_fiemap(inode, fiemap, num_bytes);
 
+	if (IS_ENCRYPTED(inode)) {
+		int i;
+
+		for (i = 0; i < fiemap->fm_mapped_extents; i++)
+			fiemap->fm_extents[i].fe_flags |=
+				FIEMAP_EXTENT_DATA_ENCRYPTED |
+				FIEMAP_EXTENT_ENCODED;
+	}
+
 	fieinfo->fi_flags = fiemap->fm_flags;
 	fieinfo->fi_extents_mapped = fiemap->fm_mapped_extents;
 	if (extent_count > 0 &&

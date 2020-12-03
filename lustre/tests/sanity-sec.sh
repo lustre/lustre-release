@@ -4143,6 +4143,30 @@ test_55() {
 }
 run_test 55 "access with seteuid"
 
+test_56() {
+	local testfile=$DIR/$tdir/$tfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	$LFS setstripe -c2 -i0 -S 1M $testfile
+	dd if=/dev/urandom of=$testfile bs=1M count=3 conv=fsync
+	filefrag -v $testfile || error "filefrag $testfile failed"
+	(( $(filefrag -v $testfile | grep -c encrypted) >= 2 )) ||
+		error "filefrag $testfile does not show encrypted flag"
+	(( $(filefrag -v $testfile | grep -c encoded) >= 2 )) ||
+		error "filefrag $testfile does not show encoded flag"
+}
+run_test 56 "FIEMAP on encrypted file"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
