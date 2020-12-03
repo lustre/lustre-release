@@ -1596,7 +1596,6 @@ static inline int md_free_lustre_md(struct obd_export *exp,
 }
 
 static inline int md_merge_attr(struct obd_export *exp,
-				const struct lu_fid *fid,
 				const struct lmv_stripe_md *lsm,
 				struct cl_attr *attr,
 				ldlm_blocking_callback cb)
@@ -1607,7 +1606,7 @@ static inline int md_merge_attr(struct obd_export *exp,
 	if (rc)
 		return rc;
 
-	return MDP(exp->exp_obd, merge_attr)(exp, fid, lsm, attr, cb);
+	return MDP(exp->exp_obd, merge_attr)(exp, lsm, attr, cb);
 }
 
 static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
