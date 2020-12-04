@@ -683,9 +683,8 @@ struct llapi_layout;
 int llapi_mirror_truncate(int fd, unsigned int id, off_t length);
 ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
 			   size_t count, off_t pos);
-uint32_t llapi_mirror_find(struct llapi_layout *layout,
-			   uint64_t file_start, uint64_t file_end,
-			   uint64_t *endp);
+int llapi_mirror_find(struct llapi_layout *layout, uint64_t file_start,
+		      uint64_t file_end, uint64_t *endp);
 int llapi_layout_get_last_init_comp(struct llapi_layout *layout);
 int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
 				struct llapi_layout *m_layout);

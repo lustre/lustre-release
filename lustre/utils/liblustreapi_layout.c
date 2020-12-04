@@ -2856,9 +2856,8 @@ error:
 }
 
 /* locate @layout to a valid component covering file [file_start, file_end) */
-uint32_t llapi_mirror_find(struct llapi_layout *layout,
-			   uint64_t file_start, uint64_t file_end,
-			   uint64_t *endp)
+int llapi_mirror_find(struct llapi_layout *layout, uint64_t file_start,
+		      uint64_t file_end, uint64_t *endp)
 {
 	uint32_t mirror_id = 0;
 	int rc;
