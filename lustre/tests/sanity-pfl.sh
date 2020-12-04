@@ -276,15 +276,19 @@ test_1c() {
 }
 run_test 1c "Test overstriping w/max stripe count"
 
-test_2() {
+base_test_2() {
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((5 * 1024 * 1024))	# 5M
+	local params=$1
 
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1m -S 1m $comp_file ||
-		error "Create $comp_file failed"
+	multiop $comp_file oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:c ||
+		error "create failed $comp_file"
+
+	$LFS setstripe --component-add $params $comp_file ||
+		error "Add component to $comp_file failed"
 
 	check_component_count $comp_file 1
 
@@ -312,7 +316,16 @@ test_2() {
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 }
-run_test 2 "Add component to existing file"
+
+test_2a() {
+	base_test_2 "-E 1m -S 1m"
+}
+run_test 2a "Add components to existing file"
+
+test_2b () {
+	base_test_2 "-E 1m -L mdt"
+}
+run_test 2b "Add components w/DOM to existing file"
 
 del_comp_and_verify() {
 	local comp_file=$1
@@ -337,14 +350,14 @@ del_comp_and_verify() {
 	$CHECKSTAT -s $size $comp_file || error "size != $size"
 }
 
-test_3() {
+base_test_3() {
 	local comp_file=$DIR/$tdir/$tfile
+	local params=$1
 
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 3 $comp_file ||
-		error "Create $comp_file failed"
+	$LFS setstripe $params $comp_file || error "Create $comp_file failed"
 
 	check_component_count $comp_file 3
 
@@ -365,9 +378,17 @@ test_3() {
 	del_comp_and_verify $comp_file "^init" 1 0
 	del_comp_and_verify $comp_file "init" 0 0
 	rm -f $comp_file || error "Delete second $comp_file failed"
-
 }
-run_test 3 "Delete component from existing file"
+
+test_3a() {
+	base_test_3 "-E 1M -S 1M -E 64M -c 2 -E -1 -c 3"
+}
+run_test 3a "Delete components from existing file"
+
+test_3b() {
+	base_test_3 "-E 1M -L mdt -E 64M -S 1M -c 2 -E -1 -c 3"
+}
+run_test 3b "Delete components w/DOM from existing file"
 
 test_4() {
 	skip "Not supported in PFL"
