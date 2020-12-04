@@ -1697,10 +1697,10 @@ out_rmdir:
 		RETURN(ll_obd_statfs(inode, (void __user *)arg));
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:
-	case LL_IOC_MDC_GETINFO:
-	case LL_IOC_MDC_GETINFO_OLD:
-	case IOC_MDC_GETFILEINFO:
-	case IOC_MDC_GETFILEINFO_OLD:
+	case LL_IOC_MDC_GETINFO_V1:
+	case LL_IOC_MDC_GETINFO_V2:
+	case IOC_MDC_GETFILEINFO_V1:
+	case IOC_MDC_GETFILEINFO_V2:
 	case IOC_MDC_GETFILESTRIPE: {
 		struct ptlrpc_request *request = NULL;
 		struct ptlrpc_request *root_request = NULL;
@@ -1715,8 +1715,8 @@ out_rmdir:
 		struct lu_fid __user *fidp = NULL;
 		int lmmsize;
 
-		if (cmd == IOC_MDC_GETFILEINFO_OLD ||
-		    cmd == IOC_MDC_GETFILEINFO ||
+		if (cmd == IOC_MDC_GETFILEINFO_V1 ||
+		    cmd == IOC_MDC_GETFILEINFO_V2 ||
 		    cmd == IOC_MDC_GETFILESTRIPE) {
 			filename = ll_getname((const char __user *)arg);
 			if (IS_ERR(filename))
@@ -1738,10 +1738,10 @@ out_rmdir:
 			GOTO(out_req, rc);
 		}
 
-		if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
-				       cmd == LL_IOC_MDC_GETINFO ||
-				       cmd == IOC_MDC_GETFILEINFO_OLD ||
-				       cmd == LL_IOC_MDC_GETINFO_OLD)) {
+		if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO_V1 ||
+				       cmd == LL_IOC_MDC_GETINFO_V1 ||
+				       cmd == IOC_MDC_GETFILEINFO_V2 ||
+				       cmd == LL_IOC_MDC_GETINFO_V2)) {
 			lmmsize = 0;
 			rc = 0;
 		}
@@ -1753,8 +1753,8 @@ out_rmdir:
 		    cmd == LL_IOC_LOV_GETSTRIPE ||
 		    cmd == LL_IOC_LOV_GETSTRIPE_NEW) {
 			lump = (struct lov_user_md __user *)arg;
-		} else if (cmd == IOC_MDC_GETFILEINFO_OLD ||
-			   cmd == LL_IOC_MDC_GETINFO_OLD){
+		} else if (cmd == IOC_MDC_GETFILEINFO_V1 ||
+			   cmd == LL_IOC_MDC_GETINFO_V1){
 			struct lov_user_mds_data_v1 __user *lmdp;
 
 			lmdp = (struct lov_user_mds_data_v1 __user *)arg;
@@ -1782,8 +1782,8 @@ out_rmdir:
 			rc = -EOVERFLOW;
 		}
 
-		if (cmd == IOC_MDC_GETFILEINFO_OLD ||
-		    cmd == LL_IOC_MDC_GETINFO_OLD) {
+		if (cmd == IOC_MDC_GETFILEINFO_V1 ||
+		    cmd == LL_IOC_MDC_GETINFO_V1) {
 			lstat_t st = { 0 };
 
 			st.st_dev	= inode->i_sb->s_dev;
@@ -1804,8 +1804,8 @@ out_rmdir:
 
 			if (copy_to_user(statp, &st, sizeof(st)))
 				GOTO(out_req, rc = -EFAULT);
-		} else if (cmd == IOC_MDC_GETFILEINFO ||
-			   cmd == LL_IOC_MDC_GETINFO) {
+		} else if (cmd == IOC_MDC_GETFILEINFO_V2 ||
+			   cmd == LL_IOC_MDC_GETINFO_V2) {
 			lstatx_t stx = { 0 };
 			__u64 valid = body->mbo_valid;
 
@@ -1839,7 +1839,7 @@ out_rmdir:
 			 * However, this whould be better decided by the MDS
 			 * instead of the client.
 			 */
-			if (cmd == LL_IOC_MDC_GETINFO &&
+			if (cmd == LL_IOC_MDC_GETINFO_V2 &&
 			    ll_i2info(inode)->lli_lsm_md != NULL)
 				valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 

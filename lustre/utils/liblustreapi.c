@@ -2003,20 +2003,21 @@ int get_lmd_info_fd(const char *path, int parent_fd, int dir_fd,
 		 * LL_IOC_LOV_GETSTRIPE returns only struct lov_user_md.
 		 */
 		if (type == GET_LMD_INFO)
-			cmd = use_old_ioctl ? LL_IOC_MDC_GETINFO_OLD :
-					      LL_IOC_MDC_GETINFO;
+			cmd = use_old_ioctl ? LL_IOC_MDC_GETINFO_V1 :
+					      LL_IOC_MDC_GETINFO_V2;
 		else
 			cmd = LL_IOC_LOV_GETSTRIPE;
 
 retry_getinfo:
 		ret = ioctl(dir_fd, cmd, lmdbuf);
-		if (ret < 0 && errno == ENOTTY && cmd == LL_IOC_MDC_GETINFO) {
-			cmd = LL_IOC_MDC_GETINFO_OLD;
+		if (ret < 0 && errno == ENOTTY &&
+		    cmd == LL_IOC_MDC_GETINFO_V2) {
+			cmd = LL_IOC_MDC_GETINFO_V1;
 			use_old_ioctl = true;
 			goto retry_getinfo;
 		}
 
-		if (cmd == LL_IOC_MDC_GETINFO_OLD && !ret)
+		if (cmd == LL_IOC_MDC_GETINFO_V1 && !ret)
 			ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
 	} else if (parent_fd >= 0) {
 		const char *fname = strrchr(path, '/');
@@ -2042,21 +2043,21 @@ retry_getinfo:
 			errno = EINVAL;
 		else {
 			if (type == GET_LMD_INFO)
-				cmd = use_old_ioctl ? IOC_MDC_GETFILEINFO_OLD :
-						      IOC_MDC_GETFILEINFO;
+				cmd = use_old_ioctl ? IOC_MDC_GETFILEINFO_V1 :
+						      IOC_MDC_GETFILEINFO_V2;
 			else
 				cmd = IOC_MDC_GETFILESTRIPE;
 
 retry_getfileinfo:
 			ret = ioctl(parent_fd, cmd, lmdbuf);
 			if (ret < 0 && errno == ENOTTY &&
-			    cmd == IOC_MDC_GETFILEINFO) {
-				cmd = IOC_MDC_GETFILEINFO_OLD;
+			    cmd == IOC_MDC_GETFILEINFO_V2) {
+				cmd = IOC_MDC_GETFILEINFO_V1;
 				use_old_ioctl = true;
 				goto retry_getfileinfo;
 			}
 
-			if (cmd == IOC_MDC_GETFILEINFO_OLD && !ret)
+			if (cmd == IOC_MDC_GETFILEINFO_V1 && !ret)
 				ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
 		}
 	}
