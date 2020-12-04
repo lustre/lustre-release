@@ -44,6 +44,11 @@ ALWAYS_EXCEPT+="               42a     42b     42c "
 # bug number:    LU-8411 LU-9054
 ALWAYS_EXCEPT+=" 407     312"
 
+if $SHARED_KEY; then
+	# bug number:    LU-14181 LU-14181
+	ALWAYS_EXCEPT+=" 64e      64f"
+fi
+
 selinux_status=$(getenforce)
 if [ "$selinux_status" != "Disabled" ]; then
 	# bug number:
