@@ -186,7 +186,7 @@ static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
 	if (atomic_dec_and_test(&oxe->oxe_ref)) {
 		LASSERT(list_empty(&oxe->oxe_list));
 
-		OBD_FREE(oxe, oxe->oxe_buflen);
+		OBD_FREE_LARGE(oxe, oxe->oxe_buflen);
 	}
 }
 
@@ -279,7 +279,7 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 	if (oxe)
 		return oxe;
 
-	OBD_ALLOC(oxe, size);
+	OBD_ALLOC_LARGE(oxe, size);
 	if (unlikely(!oxe))
 		return NULL;
 
@@ -300,7 +300,7 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 	spin_unlock(&obj->opo_lock);
 
 	if (tmp) {
-		OBD_FREE(oxe, size);
+		OBD_FREE_LARGE(oxe, size);
 		oxe = tmp;
 	}
 
@@ -332,7 +332,7 @@ osp_oac_xattr_assignment(struct osp_object *obj, struct osp_xattr_entry *oxe,
 	bool unlink_only = false;
 
 	if (oxe->oxe_buflen < size) {
-		OBD_ALLOC(new, size);
+		OBD_ALLOC_LARGE(new, size);
 		if (likely(new)) {
 			INIT_LIST_HEAD(&new->oxe_list);
 			new->oxe_buflen = size;
@@ -2308,7 +2308,7 @@ static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 			 "Still has %d users on the xattr entry %.*s\n",
 			 count-1, (int)oxe->oxe_namelen, oxe->oxe_buf);
 
-		OBD_FREE(oxe, oxe->oxe_buflen);
+		OBD_FREE_LARGE(oxe, oxe->oxe_buflen);
 	}
 	OBD_FREE_PRE(obj, sizeof(*obj), "slab-freed");
 	call_rcu(&obj->opo_header.loh_rcu, osp_object_free_rcu);
