@@ -178,7 +178,7 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 		old_obj = lu_object_locate(&parent->coh_lu, &lov_device_type);
 		LASSERT(old_obj != NULL);
 		old_lov = cl2lov(lu2cl(old_obj));
-		if (old_lov->lo_layout_invalid) {
+		if (test_bit(LO_LAYOUT_INVALID, &old_lov->lo_obj_flags)) {
 			/* the object's layout has already changed but isn't
 			 * refreshed */
 			lu_object_unhash(env, &subobj->co_lu);
@@ -633,7 +633,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	LASSERT(lsm->lsm_entry_count > 0);
 	LASSERT(lov->lo_lsm == NULL);
 	lov->lo_lsm = lsm_addref(lsm);
-	lov->lo_layout_invalid = true;
+	set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
 
 	dump_lsm(D_INODE, lsm);
 
@@ -919,7 +919,8 @@ static void lov_fini_released(const struct lu_env *env, struct lov_object *lov,
 static int lov_print_empty(const struct lu_env *env, void *cookie,
                            lu_printer_t p, const struct lu_object *o)
 {
-        (*p)(env, cookie, "empty %d\n", lu2lov(o)->lo_layout_invalid);
+        (*p)(env, cookie, "empty %d\n",
+	     test_bit(LO_LAYOUT_INVALID, &lu2lov(o)->lo_obj_flags));
         return 0;
 }
 
@@ -932,8 +933,8 @@ static int lov_print_composite(const struct lu_env *env, void *cookie,
 
 	(*p)(env, cookie, "entries: %d, %s, lsm{%p 0x%08X %d %u}:\n",
 	     lsm->lsm_entry_count,
-	     lov->lo_layout_invalid ? "invalid" : "valid", lsm,
-	     lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
+	     test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags) ? "invalid" :
+	     "valid", lsm, lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
 	     lsm->lsm_layout_gen);
 
 	for (i = 0; i < lsm->lsm_entry_count; i++) {
@@ -962,8 +963,8 @@ static int lov_print_released(const struct lu_env *env, void *cookie,
 
 	(*p)(env, cookie,
 		"released: %s, lsm{%p 0x%08X %d %u}:\n",
-		lov->lo_layout_invalid ? "invalid" : "valid", lsm,
-		lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
+		test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags) ? "invalid" :
+		"valid", lsm, lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
 		lsm->lsm_layout_gen);
 	return 0;
 }
@@ -976,7 +977,8 @@ static int lov_print_foreign(const struct lu_env *env, void *cookie,
 
 	(*p)(env, cookie,
 		"foreign: %s, lsm{%p 0x%08X %d %u}:\n",
-		lov->lo_layout_invalid ? "invalid" : "valid", lsm,
+		test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags) ?
+		"invalid" : "valid", lsm,
 		lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
 		lsm->lsm_layout_gen);
 	(*p)(env, cookie,
@@ -1372,14 +1374,14 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 		dump_lsm(D_INODE, lsm);
 	}
 
-	lov_conf_lock(lov);
 	if (conf->coc_opc == OBJECT_CONF_INVALIDATE) {
-		lov->lo_layout_invalid = true;
-		GOTO(out, result = 0);
+		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
+		GOTO(out_lsm, result = 0);
 	}
 
+	lov_conf_lock(lov);
 	if (conf->coc_opc == OBJECT_CONF_WAIT) {
-		if (lov->lo_layout_invalid &&
+		if (test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags) &&
 		    atomic_read(&lov->lo_active_ios) > 0) {
 			lov_conf_unlock(lov);
 			result = lov_layout_wait(env, lov);
@@ -1397,25 +1399,30 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	     (lov->lo_lsm->lsm_entries[0]->lsme_pattern ==
 	      lsm->lsm_entries[0]->lsme_pattern))) {
 		/* same version of layout */
-		lov->lo_layout_invalid = false;
+		clear_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
 		GOTO(out, result = 0);
 	}
 
 	/* will change layout - check if there still exists active IO. */
 	if (atomic_read(&lov->lo_active_ios) > 0) {
-		lov->lo_layout_invalid = true;
+		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
 		GOTO(out, result = -EBUSY);
 	}
 
 	result = lov_layout_change(env, lov, lsm, conf);
-	lov->lo_layout_invalid = result != 0;
+	if (result)
+		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
+	else
+		clear_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
 	EXIT;
 
 out:
 	lov_conf_unlock(lov);
+out_lsm:
 	lov_lsm_put(lsm);
-	CDEBUG(D_INODE, DFID" lo_layout_invalid=%d\n",
-	       PFID(lu_object_fid(lov2lu(lov))), lov->lo_layout_invalid);
+	CDEBUG(D_INODE, DFID" lo_layout_invalid=%u\n",
+	       PFID(lu_object_fid(lov2lu(lov))),
+	       test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags));
 	RETURN(result);
 }
 
@@ -2250,7 +2257,8 @@ static struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov)
 		lsm = lsm_addref(lov->lo_lsm);
 		CDEBUG(D_INODE, "lsm %p addref %d/%d by %p.\n",
 			lsm, atomic_read(&lsm->lsm_refc),
-			lov->lo_layout_invalid, current);
+			test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags),
+			current);
 	}
 	lov_conf_thaw(lov);
 	return lsm;

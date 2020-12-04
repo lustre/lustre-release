@@ -1060,6 +1060,26 @@ test_29() {
 }
 run_test 29 "replay vs update with the same xid"
 
+test_30() {
+	$LFS setstripe -E 1m -L mdt -E -1 $DIR/$tfile
+	#first write to have no problems with grants
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10 ||
+		error "dd on client failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10 seek=10 ||
+		error "dd on client failed"
+
+	#define OBD_FAIL_LDLM_REPLAY_PAUSE	 0x32e
+	lctl set_param fail_loc=0x32e fail_val=4
+	dd of=/dev/null if=$DIR2/$tfile &
+	local pid=$!
+	sleep 1
+
+	fail $SINGLEMDS
+
+	wait $pid || error "dd on client failed"
+}
+run_test 30 "layout lock replay is not blocked on IO"
+
 complete $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

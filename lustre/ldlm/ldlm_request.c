@@ -2531,6 +2531,8 @@ static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 	       "Dropping as many unused locks as possible before replay for namespace %s (%d)\n",
 	       ldlm_ns_name(ns), ns->ns_nr_unused);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_REPLAY_PAUSE, cfs_fail_val);
+
 	/*
 	 * We don't need to care whether or not LRU resize is enabled
 	 * because the LDLM_LRU_FLAG_NO_WAIT policy doesn't use the

@@ -249,6 +249,11 @@ struct lov_mirror_entry {
 	unsigned short	lre_end;	/* end index of this mirror */
 };
 
+enum lov_object_flags {
+	/* Layout is invalid, set when layout lock is lost */
+	LO_LAYOUT_INVALID	= 0x1,
+};
+
 /**
  * lov-specific file state.
  *
@@ -279,10 +284,9 @@ struct lov_object {
 	 */
 	enum lov_layout_type	lo_type;
 	/**
-	 * True if layout is invalid. This bit is cleared when layout lock
-	 * is lost.
+	 * Object flags.
 	 */
-	bool			lo_layout_invalid;
+	unsigned long		lo_obj_flags;
 	/**
 	 * How many IOs are on going on this object. Layout can be changed
 	 * only if there is no active IO.
