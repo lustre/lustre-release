@@ -657,8 +657,6 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	 */
 	timeout = arg->lpa_timeout + (ldlm_bl_timeout(lock) >> 1);
 
-	LDLM_DEBUG(lock, "refreshed to %ds.\n", timeout);
-
 	arg->lpa_blocks_cnt++;
 
 	/* OK. this is a possible lock the user holds doing I/O

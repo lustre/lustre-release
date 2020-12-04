@@ -255,7 +255,7 @@ static int expired_lock_main(void *arg)
 
 				LDLM_ERROR(lock,
 					   "lock callback timer expired after %llds: evicting client at %s ",
-					   ktime_get_real_seconds() -
+					   ktime_get_seconds() -
 					   lock->l_blast_sent,
 					   obd_export_nid2str(export));
 				ldlm_lock_to_ns(lock)->ns_timeouts++;
@@ -377,10 +377,10 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t delay)
 {
 	unsigned long timeout_jiffies = jiffies;
-	time64_t now = ktime_get_seconds();
 	time64_t deadline;
 	timeout_t timeout;
 
+	lock->l_blast_sent = ktime_get_seconds();
 	if (!list_empty(&lock->l_pending_chain))
 		return 0;
 
@@ -388,11 +388,12 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t delay)
 	    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
 		delay = 1;
 
-	deadline = now + delay;
+	deadline = lock->l_blast_sent + delay;
 	if (likely(deadline > lock->l_callback_timestamp))
 		lock->l_callback_timestamp = deadline;
 
-	timeout = clamp_t(timeout_t, lock->l_callback_timestamp - now,
+	timeout = clamp_t(timeout_t,
+			  lock->l_callback_timestamp - lock->l_blast_sent,
 			  0, delay);
 	timeout_jiffies += cfs_time_seconds(timeout);
 
@@ -468,7 +469,6 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 	}
 
 	ldlm_set_waited(lock);
-	lock->l_blast_sent = ktime_get_real_seconds();
 	ret = __ldlm_add_waiting_lock(lock, timeout);
 	if (ret) {
 		/*
@@ -596,7 +596,7 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 	__ldlm_add_waiting_lock(lock, timeout);
 	spin_unlock_bh(&waiting_locks_spinlock);
 
-	LDLM_DEBUG(lock, "refreshed");
+	LDLM_DEBUG(lock, "refreshed to %ds", timeout);
 	return 1;
 }
 EXPORT_SYMBOL(ldlm_refresh_waiting_lock);
@@ -1752,8 +1752,8 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		    lock->l_blast_sent != 0) {
 			timeout_t delay = 0;
 
-			if (ktime_get_real_seconds() > lock->l_blast_sent)
-				delay = ktime_get_real_seconds() -
+			if (ktime_get_seconds() > lock->l_blast_sent)
+				delay = ktime_get_seconds() -
 					lock->l_blast_sent;
 			LDLM_DEBUG(lock,
 				   "server cancels blocked lock after %ds",
