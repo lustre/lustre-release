@@ -230,7 +230,6 @@ int iam_container_init(struct iam_container *c,
 	memset(c, 0, sizeof *c);
 	c->ic_descr = descr;
 	c->ic_object = inode;
-	init_rwsem(&c->ic_sem);
 	dynlock_init(&c->ic_tree_lock);
 	mutex_init(&c->ic_idle_mutex);
 	return 0;
@@ -614,26 +613,6 @@ static int iam_it_get_exact(struct iam_iterator *it, const struct iam_key *k)
 		 */
 		result = -ENOENT;
 	return result;
-}
-
-void iam_container_write_lock(struct iam_container *ic)
-{
-	down_write(&ic->ic_sem);
-}
-
-void iam_container_write_unlock(struct iam_container *ic)
-{
-	up_write(&ic->ic_sem);
-}
-
-void iam_container_read_lock(struct iam_container *ic)
-{
-	down_read(&ic->ic_sem);
-}
-
-void iam_container_read_unlock(struct iam_container *ic)
-{
-	up_read(&ic->ic_sem);
 }
 
 /*

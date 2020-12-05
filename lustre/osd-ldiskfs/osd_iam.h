@@ -472,10 +472,6 @@ struct iam_container {
          * container flavor.
          */
         struct iam_descr    *ic_descr;
-        /*
-         * read-write lock protecting index consistency.
-         */
-	struct rw_semaphore	ic_sem;
 	struct dynlock       ic_tree_lock;
 	/* Protect ic_idle_bh */
 	struct mutex	     ic_idle_mutex;
@@ -989,12 +985,6 @@ void dx_unlock_htree(struct inode *dir, struct dynlock_handle *lh);
 /*
  * external
  */
-void iam_container_write_lock(struct iam_container *c);
-void iam_container_write_unlock(struct iam_container *c);
-
-void iam_container_read_lock(struct iam_container *c);
-void iam_container_read_unlock(struct iam_container *c);
-
 int iam_index_next(struct iam_container *c, struct iam_path *p);
 int iam_read_leaf(struct iam_path *p);
 
