@@ -872,7 +872,7 @@ do {									      \
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
-		vfree(ptr);						      \
+		libcfs_vfree_atomic(ptr);				      \
 		POISON_PTR(ptr);					      \
 	} else {							      \
 		OBD_FREE(ptr, size);					      \

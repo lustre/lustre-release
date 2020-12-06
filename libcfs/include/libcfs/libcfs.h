@@ -149,4 +149,11 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 int (*handler)(void *data, int write, loff_t pos,
 					void __user *buffer, int len));
 
+/* atomic-context safe vfree */
+#ifdef HAVE_LIBCFS_VFREE_ATOMIC
+void libcfs_vfree_atomic(const void *addr);
+#else
+#define libcfs_vfree_atomic(ptr) vfree(ptr)
+#endif
+
 #endif /* _LIBCFS_LIBCFS_H_ */
