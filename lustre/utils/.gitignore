@@ -5,6 +5,7 @@
 /tunefs.lustre
 /lctl
 /lfs
+/lustre.pc
 /wirecheck
 /wiretest
 /llog_reader

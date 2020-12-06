@@ -105,6 +105,9 @@ liblustreapi_la_LDFLAGS = $(LIBREADLINE) -version-info 1:0:0 \
 			  -Wl,--version-script=liblustreapi.map
 liblustreapi_la_LIBADD = $(top_builddir)/libcfs/libcfs/libcfs.la
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = lustre.pc
+
 if UTILS
 LIB_TARGETS =
 if PLUGINS

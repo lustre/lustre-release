@@ -317,6 +317,22 @@ A set of scripts to operate Lustre resources in a High Availablity
 environment for both Pacemaker and rgmanager.
 %endif
 
+%package devel
+Summary: Lustre include headers
+Group: Development/Kernel
+Provides: lustre-devel = %{version}
+Requires: %{lustre_name} = %{version}
+Requires: %{requires_kmod_name} = %{requires_kmod_version}
+
+%description devel
+This package contains the header files needed for building additional
+applications against the Lustre / LNet utilities libraries.
+
+:> lustre-devel.files
+%if %{with lustre_modules}
+find . -type f -name '*.h' | grep uapi | sed 's/.*uapi\//usr\/include\//' >> lustre-devel.files
+%endif
+
 %if %{with lustre_tests}
 %package tests
 Summary: Lustre testing framework
@@ -325,7 +341,7 @@ Provides: lustre-tests = %{version}
 %if %{with lustre_iokit}
 Requires: lustre-iokit
 %endif
-Requires: lustre-client = %{version}
+Requires: lustre-devel = %{version}
 %if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
@@ -550,7 +566,7 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/liblnetconfig.la
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
 %endif
 %if %{with shared}
-echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
+echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre-devel.files
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so.*' >>lustre.files
 %endif
 
@@ -590,6 +606,19 @@ if [ -n "$MPI_BIN" ]; then
 fi
 %endif
 
+%files devel -f lustre-devel.files
+%defattr(-,root,root)
+%{_libdir}/pkgconfig/lustre.pc
+%if %{with static}
+%{_libdir}/liblustreapi.a
+%endif
+%if %{with shared}
+%{_libdir}/liblustreapi.so
+%endif
+%{_includedir}/lustre
+%{_includedir}/linux/lnet
+%{_includedir}/linux/lustre
+
 %files -f lustre.files
 %defattr(-,root,root)
 %{_sbindir}/*
@@ -623,15 +652,9 @@ fi
 %{_mandir}/man?/*
 %endif
 
-%if %{with static}
-%{_libdir}/liblustreapi.a
-%endif
 %if %{with shared}
-%{_libdir}/liblustreapi.so*
+%{_libdir}/liblustreapi.so.*
 %endif
-%{_includedir}/lustre
-%{_includedir}/linux/lnet
-%{_includedir}/linux/lustre
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %if %{with servers}
 %{_sysconfdir}/udev/rules.d/99-lustre-server.rules
