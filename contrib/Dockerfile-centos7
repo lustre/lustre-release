@@ -1,0 +1,81 @@
+# first, build docker image with:
+# $ podman build -t centos7-build -v <path-to-kernel>:/tmp/linux-kernel \
+# 	-f Docker-centos7 .
+# this builds and image without ZFS
+#
+# then use it to build Lustre:
+# $ podman run -it
+#   --mount type=bind,source=<path-to-kernel>,target=/tmp/kernel \
+#   --mount type=bind,source=<path-to-lustre>,target=/tmp/lustre \
+#   centos8-build /bin/bash -c "cd /tmp/lustre; sh autogen.sh; \
+#   ./configure --with-linux=<path-to-kernel> \
+#      --with-linux-obj=<path-to-kernel> --disable-gss \
+#      --disable-shared --disable-crypto; make"
+#
+# TODO:
+#  - add ZFS/SPL 0.7 to image
+#  - configurable zfs repo, zfs version/tag
+#  - move kernel to image
+#
+
+FROM centos:7
+
+RUN yum install -y gcc autoconf libtool which make patch diffutils file \
+	binutils-devel install -y python38 python3-devel elfutils-devel \
+	libselinux-devel libaio-devel libyaml-devel bc libnl3-devel bison \
+	flex libmount-devel
+
+# to build lipe
+RUN yum install -y json-c-devel redhat-lsb-core libssh-devel libattr-devel
+
+# to build ZFS
+RUN yum install -y libtirpc-devel libblkid-devel openssl-devel libuuid-devel
+
+RUN yum install -y git
+
+#build and install latest e2fsprogs
+RUN /bin/bash -c \
+	"git clone git://git.whamcloud.com/tools/e2fsprogs.git e2fsprogs && \
+	cd e2fsprogs && \
+	git checkout -b v1.46.2.wc5 v1.46.2.wc5 && \
+	./configure --with-root-prefix=/usr --enable-elf-shlibs \
+		--disable-uuidd --disable-fsck \
+		--disable-e2initrd-helper \
+		--disable-libblkid --disable-libuuid \
+		--enable-quota --disable-fuse2fs && \
+	make -j8 && make install && cd .. && rm -rf e2fsprogs"
+
+# to build zfs we need the kernel built
+RUN /bin/bash -c \
+	"cd /tmp/linux-kernel; [[ ! -s arch/x86/boot/bzImage ]] && make oldconfig && make -j8 bzImage"
+
+# build and install ZFS
+RUN /bin/bash -c \
+	"git clone https://github.com/zfsonlinux/spl spl && \
+	cd spl && \
+	git checkout -b splbuild spl-0.7.13 && \
+	sed -i 's/CDDL/GPL/' META && \
+	./autogen.sh && \
+	./configure --with-linux=/tmp/linux-kernel \
+		--with-linux-obj=/tmp/linux-kernel \
+		--prefix=/usr && \
+	make -j8 && \
+	make install && \
+	rm -rf spl"
+
+RUN /bin/bash -c \
+	"git clone https://github.com/zfsonlinux/zfs zfs && \
+	cd zfs && \
+	git checkout -b zfsbuild zfs-0.7.13 && \
+	sed -i 's/CDDL/GPL/' META && \
+	./autogen.sh && \
+	./configure --with-linux=/tmp/linux-kernel \
+		--with-linux-obj=/tmp/linux-kernel \
+		--prefix=/usr && \
+	make -j8 && \
+	make install && \
+	rm -rf zfs"
+
+RUN yum remove -y git
+RUN yum clean all
+

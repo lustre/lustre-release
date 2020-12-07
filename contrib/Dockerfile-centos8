@@ -1,0 +1,74 @@
+# first, build docker image with:
+# $ podman build -t centos8-build -v <path-to-kernel>:/tmp/linux-kernel \
+# 	-f Dockerfile-centos8
+# this builds a image with ZFS cloned from original repo
+#
+# then use it to build Lustre:
+# $ podman run -it
+#   --mount type=bind,source=<path-to-kernel>,target=/tmp/kernel \
+#   --mount type=bind,source=<path-to-lustre>,target=/tmp/lustre \
+#   centos8-build /bin/bash -c "cd /tmp/lustre; sh autogen.sh; \
+#   ./configure --with-linux=<path-to-kernel> \
+#      --with-linux-obj=<path-to-kernel> --disable-gss \
+#      --disable-shared --disable-crypto; make"
+#
+# TODO:
+#  - configurable zfs repo, zfs version/tag
+#  - move kernel to image
+#
+
+FROM docker.io/library/centos:8
+
+# Centos8 is EOL
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
+RUN dnf install -y gcc autoconf libtool which make patch diffutils file \
+	binutils-devel python38 python3-devel elfutils-devel e2fsprogs-devel \
+	libselinux-devel libaio-devel dnf-plugins-core bc bison flex
+RUN yum config-manager --set-enabled powertools
+RUN yum install -y libyaml-devel libnl3-devel libmount-devel
+
+# to build lipe
+RUN dnf install -y json-c-devel redhat-lsb libssh-devel libattr-devel
+
+# to build zfs we need the kernel built
+RUN /bin/bash -c \
+	"cd /tmp/linux-kernel; [[ ! -s arch/x86/boot/bzImage ]] && make oldconfig && make -j8 bzImage"
+
+# to build ZFS
+RUN dnf install -y libtirpc-devel libblkid-devel openssl-devel libuuid-devel
+
+RUN dnf install -y git
+
+#build and install latest e2fsprogs
+RUN /bin/bash -c \
+	"git clone git://git.whamcloud.com/tools/e2fsprogs.git e2fsprogs && \
+	cd e2fsprogs && \
+	git checkout -b v1.46.2.wc5 v1.46.2.wc5 && \
+	./configure --with-root-prefix=/usr --enable-elf-shlibs \
+		--disable-uuidd --disable-fsck \
+		--disable-e2initrd-helper \
+		--disable-libblkid --disable-libuuid \
+		--enable-quota --disable-fuse2fs && \
+	make -j8 && make install && cd .. && rm -rf e2fsprogs"
+
+
+# build and install ZFS
+RUN /bin/bash -c \
+	"rm -rf zfs && \
+	git clone https://github.com/zfsonlinux/zfs zfs && \
+	cd zfs && \
+	git checkout -b zfs-2.1.2 zfs-2.1.2 && \
+	sed -i 's/CDDL/GPL/' META && \
+	./autogen.sh && \
+	./configure \
+		--with-linux=/tmp/linux-kernel \
+		--with-linux-obj=/tmp/linux-kernel --prefix=/usr && \
+	make -j8 && \
+	make install && \
+	cd .. && rm -rf zfs"
+
+RUN dnf remove -y git
+RUN dnf clean all
+
