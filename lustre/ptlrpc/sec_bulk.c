@@ -762,6 +762,8 @@ static inline void enc_pools_free(void)
 
 int sptlrpc_enc_pool_init(void)
 {
+	int rc;
+
 	page_pools.epp_max_pages = cfs_totalram_pages() / 8;
 	if (enc_pool_max_memory_mb > 0 &&
 	    enc_pool_max_memory_mb <= (cfs_totalram_pages() >> mult))
@@ -798,9 +800,11 @@ int sptlrpc_enc_pool_init(void)
 	if (page_pools.epp_pools == NULL)
 		return -ENOMEM;
 
-	register_shrinker(&pools_shrinker);
+	rc = register_shrinker(&pools_shrinker);
+	if (rc)
+		enc_pools_free();
 
-	return 0;
+	return rc;
 }
 
 void sptlrpc_enc_pool_fini(void)

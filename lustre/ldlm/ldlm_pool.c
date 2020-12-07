@@ -1437,9 +1437,12 @@ static void ldlm_pools_recalc_task(struct work_struct *ws)
 	schedule_delayed_work(&ldlm_pools_recalc_work, cfs_time_seconds(delay));
 }
 
+static bool ldlm_pools_init_done;
+
 int ldlm_pools_init(void)
 {
 	time64_t delay;
+	int rc;
 
 #ifdef HAVE_SERVER_SUPPORT
 	delay = min(LDLM_POOL_SRV_DEF_RECALC_PERIOD,
@@ -1448,19 +1451,34 @@ int ldlm_pools_init(void)
 	delay = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
 #endif
 
-	schedule_delayed_work(&ldlm_pools_recalc_work, delay);
-	register_shrinker(&ldlm_pools_srv_shrinker);
-	register_shrinker(&ldlm_pools_cli_shrinker);
+	rc = register_shrinker(&ldlm_pools_srv_shrinker);
+	if (rc)
+		goto out;
 
+	rc = register_shrinker(&ldlm_pools_cli_shrinker);
+	if (rc)
+		goto out_shrinker;
+
+	schedule_delayed_work(&ldlm_pools_recalc_work, delay);
+	ldlm_pools_init_done = true;
 	return 0;
+
+out_shrinker:
+	unregister_shrinker(&ldlm_pools_cli_shrinker);
+out:
+	return rc;
 }
 
 void ldlm_pools_fini(void)
 {
-	unregister_shrinker(&ldlm_pools_srv_shrinker);
-	unregister_shrinker(&ldlm_pools_cli_shrinker);
+	if (ldlm_pools_init_done) {
+		unregister_shrinker(&ldlm_pools_srv_shrinker);
+		unregister_shrinker(&ldlm_pools_cli_shrinker);
 
-	cancel_delayed_work_sync(&ldlm_pools_recalc_work);
+		cancel_delayed_work_sync(&ldlm_pools_recalc_work);
+	}
+
+	ldlm_pools_init_done = false;
 }
 
 #else /* !HAVE_LRU_RESIZE_SUPPORT */

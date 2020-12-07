@@ -587,4 +587,8 @@ static inline bool is_root_inode(struct inode *inode)
 }
 #endif
 
+#ifndef HAVE_REGISTER_SHRINKER_RET
+#define register_shrinker(_s) (register_shrinker(_s), 0)
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

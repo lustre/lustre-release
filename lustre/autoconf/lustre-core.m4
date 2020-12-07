@@ -619,6 +619,24 @@ kiocb_ki_left, [
 ]) # LC_KIOCB_KI_LEFT
 
 #
+# LC_REGISTER_SHRINKER_RET
+#
+# v3.11-8748-g1d3d4437eae1 register_shrinker returns a status
+#
+AC_DEFUN([LC_REGISTER_SHRINKER_RET], [
+LB_CHECK_COMPILE([if register_shrinker() returns status],
+register_shrinker_ret, [
+	#include <linux/mm.h>
+],[
+	if (register_shrinker(NULL))
+		unregister_shrinker(NULL);
+],[
+	AC_DEFINE(HAVE_REGISTER_SHRINKER_RET, 1,
+		[register_shrinker() returns status])
+])
+]) # LC_REGISTER_SHRINKER_RET
+
+#
 # LC_VFS_RENAME_5ARGS
 #
 # 3.13 has vfs_rename with 5 args
@@ -2375,6 +2393,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_PTR_ERR_OR_ZERO_MISSING
 	LC_KIOCB_KI_LEFT
+	LC_REGISTER_SHRINKER_RET
 
 	# 3.13
 	LC_VFS_RENAME_5ARGS
