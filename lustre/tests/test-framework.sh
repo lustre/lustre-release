@@ -455,10 +455,10 @@ check_cpt_number() {
 # Return a numeric version code based on a version string.  The version
 # code is useful for comparison two version strings to see which is newer.
 version_code() {
-	# split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
-	eval set -- $(tr "[:punct:]" " " <<< $*)
+	# split arguments like "1.8.6-wc3" into "1", "8", "6", "3"
+	eval set -- $(tr "[:punct:][a-z]" " " <<< $*)
 
-	echo -n $(((${1:-0} << 16) | (${2:-0} << 8) | ${3:-0}))
+	echo -n $(((${1:-0}<<24) | (${2:-0}<<16) | (${3:-0}<<8) | (${4:-0})))
 }
 
 export LINUX_VERSION=$(uname -r | sed -e "s/\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/")

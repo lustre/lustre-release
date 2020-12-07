@@ -241,12 +241,13 @@ test_0d() { # LU-3397
 	[ "$exp_val" == "$imp_val" ] ||
 		error "export flags '$exp_val' != import flags '$imp_val'"
 
-	# Compare the value of client version
+	# Compare client versions.  Only compare top-3 fields for compatibility
 	exp_client_version=$(awk '/target_version:/ { print $2 }' $temp_exp)
-	exp_val=$(version_code $exp_client_version)
-	imp_val=$CLIENT_VERSION
+	exp_val=$(version_code $(cut -d. -f1,2,3 <<<$exp_client_version))
+	imp_val=$(version_code $(lustre_build_version client | cut -d. -f1,2,3))
 	[ "$exp_val" == "$imp_val" ] ||
-		error "export client version '$exp_val' != '$imp_val'"
+		error "exp version '$exp_client_version'($exp_val) != " \
+			"'$(lustre_build_version client)'($imp_val)"
 }
 run_test 0d "check export proc ============================="
 
