@@ -111,6 +111,7 @@ kernel_srpm_location() {
 	local kdir
 
 	case $lnxrel in
+		*8_3) kdir="8.3.2011" ;;
 		*8_2) kdir="8.2.2004" ;;
 		*8_1) kdir="8.1.1911" ;;
 		*8_0) kdir="8.0.1905" ;;

@@ -13,6 +13,7 @@ esac
 AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
+	83)     LDISKFS_SERIES="4.18-rhel8.3.series"    ;;
 	82)     LDISKFS_SERIES="4.18-rhel8.2.series"    ;;
 	81)     LDISKFS_SERIES="4.18-rhel8.1.series"    ;;
 	80)     LDISKFS_SERIES="4.18-rhel8.series"      ;;
@@ -226,6 +227,31 @@ ext4_i_crypt_info, [
 ]) # LB_EXT4_HAVE_I_CRYPT_INFO
 
 #
+# LB_LDISKFS_JOURNAL_ENSURE_CREDITS
+#
+# kernel 4.18.0-240.1.1.el8 and
+# kernel 5.4 commit a413036791d040e33badcc634453a4d0c0705499
+#
+# ext4_journal_ensure_credits was introduced to ensure given handle
+# has at least requested amount of credits available, and possibly
+# restarting transaction if needed.
+#
+AC_DEFUN([LB_LDISKFS_JOURNAL_ENSURE_CREDITS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'ext4_journal_ensure_credits' exists],
+ext4_journal_ensure_credits, [
+	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+],[
+	ext4_journal_ensure_credits(NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS, 1,
+		['ext4_journal_ensure_credits' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_LDISKFS_JOURNAL_ENSURE_CREDITS
+
+#
 # LB_LDISKFS_IGET_HAS_FLAGS_ARG
 #
 # kernel 4.19 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
@@ -417,6 +443,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_BREAD_4ARGS
 	LB_EXT4_HAVE_INFO_DQUOT
 	LB_EXT4_HAVE_I_CRYPT_INFO
+	LB_LDISKFS_JOURNAL_ENSURE_CREDITS
 	LB_LDISKFS_IGET_HAS_FLAGS_ARG
 	LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
 	LB_LDISKFSFS_DIRHASH_WANTS_DIR

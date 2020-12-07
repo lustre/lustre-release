@@ -931,7 +931,23 @@ static int osd_chunk_trans_blocks(struct inode *inode, int nrblocks)
 	return ret;
 }
 
-static int osd_extend_trans(handle_t *handle, int needed)
+#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
+static int osd_extend_trans(handle_t *handle, int needed,
+			    struct inode *inode)
+{
+	return  __ldiskfs_journal_ensure_credits(handle, needed, needed,
+		ldiskfs_trans_default_revoke_credits(inode->i_sb));
+}
+
+static int osd_extend_restart_trans(handle_t *handle, int needed,
+				    struct inode *inode)
+{
+	return ldiskfs_journal_ensure_credits(handle, needed,
+		ldiskfs_trans_default_revoke_credits(inode->i_sb));
+}
+#else
+static int osd_extend_trans(handle_t *handle, int needed,
+			    struct inode *inode)
 {
 	if (ldiskfs_handle_has_enough_credits(handle, needed))
 		return 0;
@@ -940,16 +956,18 @@ static int osd_extend_trans(handle_t *handle, int needed)
 				      needed - handle->h_buffer_credits);
 }
 
-static int osd_extend_restart_trans(handle_t *handle, int needed)
+static int osd_extend_restart_trans(handle_t *handle, int needed,
+				    struct inode *inode)
 {
 
-	int rc = osd_extend_trans(handle, needed);
+	int rc = osd_extend_trans(handle, needed, inode);
 
 	if (rc <= 0)
 		return rc;
 
 	return ldiskfs_journal_restart(handle, needed);
 }
+#endif /* HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS */
 
 static int osd_ldiskfs_map_write(struct inode *inode, struct osd_iobuf *iobuf,
 				 struct osd_device *osd, sector_t start_blocks,
@@ -1054,7 +1072,7 @@ cont_map:
 			 * credits to insert 1 extent into extent tree.
 			 */
 			credits = osd_chunk_trans_blocks(inode, blen);
-			rc = osd_extend_trans(handle, credits);
+			rc = osd_extend_trans(handle, credits, inode);
 			if (rc < 0)
 				GOTO(cleanup, rc);
 			/*
@@ -1069,7 +1087,12 @@ cont_map:
 					count, &disk_size, user_size);
 				if (rc)
 					GOTO(cleanup, rc);
+#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
+				rc = ldiskfs_journal_restart(handle, credits,
+					ldiskfs_trans_default_revoke_credits(inode->i_sb));
+#else
 				rc = ldiskfs_journal_restart(handle, credits);
+#endif
 				if (rc)
 					GOTO(cleanup, rc);
 				start_blocks += count;
@@ -1473,7 +1496,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			handle_t *handle = ldiskfs_journal_current_handle();
 
 			LASSERT(handle != NULL);
-			rc = osd_extend_restart_trans(handle, save_credits);
+			rc = osd_extend_restart_trans(handle, save_credits,
+						      inode);
 		}
 	} else {
 		/* no pages to write, no transno is needed */
@@ -2178,7 +2202,7 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 		}
 
 		/* TODO: quota check */
-		rc = osd_extend_restart_trans(handle, credits);
+		rc = osd_extend_restart_trans(handle, credits, inode);
 		if (rc)
 			break;
 
@@ -2210,11 +2234,11 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 	}
 
 out:
-	inode_unlock(inode);
-
 	/* extand credits if needed for operations such as attribute set */
 	if (rc >= 0)
-		rc = osd_extend_restart_trans(handle, save_credits);
+		rc = osd_extend_restart_trans(handle, save_credits, inode);
+
+	inode_unlock(inode);
 
 	RETURN(rc);
 }

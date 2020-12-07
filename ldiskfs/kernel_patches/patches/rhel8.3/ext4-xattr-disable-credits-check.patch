@@ -1,0 +1,15 @@
+Index: linux-4.18.0-240.1.1.el8/fs/ext4/xattr.c
+===================================================================
+--- linux-4.18.0-240.1.1.el8.orig/fs/ext4/xattr.c
++++ linux-4.18.0-240.1.1.el8/fs/ext4/xattr.c
+@@ -2318,10 +2318,6 @@ ext4_xattr_set_handle(handle_t *handle,
+ 						   flags & XATTR_CREATE);
+ 		brelse(bh);
+ 
+-		if (jbd2_handle_buffer_credits(handle) < credits) {
+-			error = -ENOSPC;
+-			goto cleanup;
+-		}
+ 	}
+ 
+ 	error = ext4_reserve_inode_write(handle, inode, &is.iloc);
