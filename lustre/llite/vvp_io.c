@@ -367,7 +367,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 
 		io->ci_need_write_intent = 0;
 
-		LASSERT(io->ci_type == CIT_WRITE ||
+		LASSERT(io->ci_type == CIT_WRITE || cl_io_is_fallocate(io) ||
 			cl_io_is_trunc(io) || cl_io_is_mkwrite(io));
 
 		CDEBUG(D_VFSTRACE, DFID" write layout, type %u "DEXT"\n",

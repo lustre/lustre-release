@@ -578,6 +578,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 
 	/* check if it needs to instantiate layout */
 	if (!(io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io) ||
+	      cl_io_is_fallocate(io) ||
 	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
 		GOTO(out, result = 0);
 
