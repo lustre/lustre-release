@@ -130,6 +130,9 @@ struct rsi {
 	rawobj_t                in_handle, in_token;
 	rawobj_t                out_handle, out_token;
 	int                     major_status, minor_status;
+#ifdef HAVE_CACHE_HASH_SPINLOCK
+	struct rcu_head		rcu_head;
+#endif
 };
 
 #ifdef HAVE_CACHE_HEAD_HLIST
@@ -228,6 +231,27 @@ static inline void __rsi_update(struct rsi *new, struct rsi *item)
         new->minor_status = item->minor_status;
 }
 
+#ifdef HAVE_CACHE_HASH_SPINLOCK
+static void rsi_free_rcu(struct rcu_head *head)
+{
+	struct rsi *rsi = container_of(head, struct rsi, rcu_head);
+
+#ifdef HAVE_CACHE_HEAD_HLIST
+	LASSERT(hlist_unhashed(&rsi->h.cache_list));
+#else
+	LASSERT(rsi->h.next == NULL);
+#endif
+	rsi_free(rsi);
+	OBD_FREE_PTR(rsi);
+}
+
+static void rsi_put(struct kref *ref)
+{
+	struct rsi *rsi = container_of(ref, struct rsi, h.ref);
+
+	call_rcu(&rsi->rcu_head, rsi_free_rcu);
+}
+#else /* !HAVE_CACHE_HASH_SPINLOCK */
 static void rsi_put(struct kref *ref)
 {
 	struct rsi *rsi = container_of(ref, struct rsi, h.ref);
@@ -240,6 +264,7 @@ static void rsi_put(struct kref *ref)
 	rsi_free(rsi);
 	OBD_FREE_PTR(rsi);
 }
+#endif /* HAVE_CACHE_HASH_SPINLOCK */
 
 static int rsi_match(struct cache_head *a, struct cache_head *b)
 {
@@ -422,6 +447,9 @@ struct rsc {
         struct obd_device      *target;
         rawobj_t                handle;
         struct gss_svc_ctx      ctx;
+#ifdef HAVE_CACHE_HASH_SPINLOCK
+	struct rcu_head		rcu_head;
+#endif
 };
 
 #ifdef HAVE_CACHE_HEAD_HLIST
@@ -463,14 +491,39 @@ static inline void __rsc_init(struct rsc *new, struct rsc *tmp)
 
 static inline void __rsc_update(struct rsc *new, struct rsc *tmp)
 {
-        new->ctx = tmp->ctx;
-        tmp->ctx.gsc_rvs_hdl = RAWOBJ_EMPTY;
-        tmp->ctx.gsc_mechctx = NULL;
+	new->ctx = tmp->ctx;
+	memset(&tmp->ctx, 0, sizeof(tmp->ctx));
+	tmp->ctx.gsc_rvs_hdl = RAWOBJ_EMPTY;
+	tmp->ctx.gsc_mechctx = NULL;
+	tmp->target = NULL;
 
-        memset(&new->ctx.gsc_seqdata, 0, sizeof(new->ctx.gsc_seqdata));
+	memset(&new->ctx.gsc_seqdata, 0, sizeof(new->ctx.gsc_seqdata));
 	spin_lock_init(&new->ctx.gsc_seqdata.ssd_lock);
 }
 
+#ifdef HAVE_CACHE_HASH_SPINLOCK
+static void rsc_free_rcu(struct rcu_head *head)
+{
+	struct rsc *rsci = container_of(head, struct rsc, rcu_head);
+
+#ifdef HAVE_CACHE_HEAD_HLIST
+	LASSERT(hlist_unhashed(&rsci->h.cache_list));
+#else
+	LASSERT(rsci->h.next == NULL);
+#endif
+	rawobj_free(&rsci->handle);
+	OBD_FREE_PTR(rsci);
+}
+
+static void rsc_put(struct kref *ref)
+{
+	struct rsc *rsci = container_of(ref, struct rsc, h.ref);
+
+	rawobj_free(&rsci->ctx.gsc_rvs_hdl);
+	lgss_delete_sec_context(&rsci->ctx.gsc_mechctx);
+	call_rcu(&rsci->rcu_head, rsc_free_rcu);
+}
+#else /* !HAVE_CACHE_HASH_SPINLOCK */
 static void rsc_put(struct kref *ref)
 {
 	struct rsc *rsci = container_of(ref, struct rsc, h.ref);
@@ -483,6 +536,7 @@ static void rsc_put(struct kref *ref)
 	rsc_free(rsci);
 	OBD_FREE_PTR(rsci);
 }
+#endif /* HAVE_CACHE_HASH_SPINLOCK */
 
 static int rsc_match(struct cache_head *a, struct cache_head *b)
 {
@@ -885,7 +939,6 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
         }
 
 	cache_get(&rsip->h); /* take an extra ref */
-	init_waitqueue_head(&rsip->waitq);
 	init_wait(&wait);
 	add_wait_queue(&rsip->waitq, &wait);
 
@@ -1083,10 +1136,18 @@ int __init gss_init_svc_upcall(void)
 	 */
 	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
+#ifdef HAVE_CACHE_HEAD_HLIST
+	for (i = 0; i < rsi_cache.hash_size; i++)
+		INIT_HLIST_HEAD(&rsi_cache.hash_table[i]);
+#endif
 	rc = cache_register_net(&rsi_cache, &init_net);
 	if (rc != 0)
 		return rc;
 
+#ifdef HAVE_CACHE_HEAD_HLIST
+	for (i = 0; i < rsc_cache.hash_size; i++)
+		INIT_HLIST_HEAD(&rsc_cache.hash_table[i]);
+#endif
 	rc = cache_register_net(&rsc_cache, &init_net);
 	if (rc != 0) {
 		cache_unregister_net(&rsi_cache, &init_net);

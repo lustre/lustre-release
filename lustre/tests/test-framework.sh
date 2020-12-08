@@ -1033,6 +1033,16 @@ init_gss() {
 		start_gss_daemons || error_exit "start gss daemon failed! rc=$?"
 	fi
 
+	if $GSS_SK && ! $SK_NO_KEY; then
+		echo "Loading basic SSK keys on all servers"
+		do_nodes $(comma_list $(all_server_nodes)) \
+			"lgss_sk -t server -l $SK_PATH/$FSNAME.key || true"
+		do_nodes $(comma_list $(all_server_nodes)) \
+				"keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+	fi
+
 	if $GSS_SK && $SK_NO_KEY; then
 		local numclients=${1:-$CLIENTCOUNT}
 		local clients=${CLIENTS:-$HOSTNAME}
