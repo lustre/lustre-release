@@ -92,7 +92,6 @@ static struct ll_sb_info *ll_init_sbi(void)
 	unsigned long lru_page_max;
 	struct sysinfo si;
 	int rc;
-	int i;
 
 	ENTRY;
 
@@ -170,13 +169,6 @@ static struct ll_sb_info *ll_init_sbi(void)
 	set_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags);
 #endif
 	set_bit(LL_SBI_LAZYSTATFS, sbi->ll_flags);
-
-        for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
-		spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].
-			       pp_r_hist.oh_lock);
-		spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].
-			       pp_w_hist.oh_lock);
-        }
 
 	/* metadata statahead is enabled by default */
 	sbi->ll_sa_running_max = LL_SA_RUNNING_DEF;
@@ -261,6 +253,7 @@ static void ll_free_sbi(struct super_block *sb)
 				sizeof(struct ll_foreign_symlink_upcall_item));
 			sbi->ll_foreign_symlink_upcall_items = NULL;
 		}
+		ll_free_rw_stats_info(sbi);
 		pcc_super_fini(&sbi->ll_pcc_super);
 		OBD_FREE(sbi, sizeof(*sbi));
 	}
