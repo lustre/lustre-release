@@ -1311,7 +1311,6 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 	sector_t start;
 	struct fiemap_extent_info fei = { 0 };
 	struct fiemap_extent fe = { 0 };
-	mm_segment_t saved_fs;
 	int rc;
 
 	if (block >= cached_extent->start && block < cached_extent->end)
@@ -1327,10 +1326,7 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 	fei.fi_extents_max = 1;
 	fei.fi_extents_start = &fe;
 
-	saved_fs = get_fs();
-	set_fs(KERNEL_DS);
 	rc = inode->i_op->fiemap(inode, &fei, offset, FIEMAP_MAX_OFFSET-offset);
-	set_fs(saved_fs);
 	if (rc != 0)
 		return 0;
 
@@ -2485,7 +2481,6 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	u64 len;
 	int rc;
-	mm_segment_t cur_fs;
 
 	LASSERT(inode);
 	if (inode->i_op->fiemap == NULL)
@@ -2505,17 +2500,9 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
 		filemap_write_and_wait(inode->i_mapping);
 
-	/* Save previous value address limit */
-	cur_fs = get_fs();
-	/* Set the address limit of the kernel */
-	set_fs(KERNEL_DS);
-
 	rc = inode->i_op->fiemap(inode, &fieinfo, fm->fm_start, len);
 	fm->fm_flags = fieinfo.fi_flags;
 	fm->fm_mapped_extents = fieinfo.fi_extents_mapped;
-
-	/* Restore the previous address limt */
-	set_fs(cur_fs);
 
 	return rc;
 }
