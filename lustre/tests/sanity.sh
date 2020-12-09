@@ -20099,6 +20099,9 @@ test_255c() {
 	[ $OST1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "lustre < 2.10.50 does not support lockahead"
 
+	local ost1_imp=$(get_osc_import_name client ost1)
+	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
+			 cut -d'.' -f2)
 	local count
 	local new_count
 	local difference
@@ -20146,7 +20149,7 @@ test_255c() {
 		cancel_lru_locks osc
 
 		count=$($LCTL get_param -n \
-		       ldlm.namespaces.$FSNAME-OST0000*osc-[-0-9a-f]*.lock_unused_count)
+		       ldlm.namespaces.$imp_name.lock_unused_count)
 
 		lockahead_test -d $DIR/$tdir -t $i -f $tfile
 		rc=$?
@@ -20155,7 +20158,7 @@ test_255c() {
 		fi
 
 		new_count=$($LCTL get_param -n \
-		       ldlm.namespaces.$FSNAME-OST0000*osc-[-0-9a-f]*.lock_unused_count)
+		       ldlm.namespaces.$imp_name.lock_unused_count)
 		difference="$((new_count - count))"
 
 		# Test 15 output is divided by 100 to map down to valid return
@@ -22562,6 +22565,10 @@ test_319() {
 run_test 319 "lost lease lock on migrate error"
 
 test_398a() { # LU-4198
+	local ost1_imp=$(get_osc_import_name client ost1)
+	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
+			 cut -d'.' -f2)
+
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	$LCTL set_param ldlm.namespaces.*.lru_size=clear
 
@@ -22570,7 +22577,7 @@ test_398a() { # LU-4198
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
 	local lock_count=$($LCTL get_param -n \
-			   ldlm.namespaces.*-OST0000-osc-ffff*.lru_size)
+			   ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -eq 0 ]] || error "lock should be cancelled by direct IO"
 
 	$LCTL set_param ldlm.namespaces.*-OST0000-osc-ffff*.lru_size=clear
@@ -22578,7 +22585,7 @@ test_398a() { # LU-4198
 	# no lock cached, should use lockless IO and not enqueue new lock
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=direct conv=notrunc
 	lock_count=$($LCTL get_param -n \
-		     ldlm.namespaces.*-OST0000-osc-ffff*.lru_size)
+		     ldlm.namespaces.$imp_name.lru_size)
 	[[ $lock_count -eq 0 ]] || error "no lock should be held by direct IO"
 }
 run_test 398a "direct IO should cancel lock otherwise lockless"
@@ -22610,6 +22617,10 @@ test_398b() { # LU-4198
 run_test 398b "DIO and buffer IO race"
 
 test_398c() { # LU-4198
+	local ost1_imp=$(get_osc_import_name client ost1)
+	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
+			 cut -d'.' -f2)
+
 	which fio || skip_env "no fio installed"
 
 	saved_debug=$($LCTL get_param -n debug)
@@ -22638,8 +22649,7 @@ test_398c() { # LU-4198
 		--filename=$DIR/$tfile
 	[ $? -eq 0 ] || error "fio write error"
 
-	[ $($LCTL get_param -n \
-	 ldlm.namespaces.${FSNAME}-OST0000-osc-ffff*.lock_count) -eq 0 ] ||
+	[ $($LCTL get_param -n ldlm.namespaces.$imp_name.lock_count) -eq 0 ] ||
 		error "Locks were requested while doing AIO"
 
 	# get the percentage of 1-page I/O
@@ -25334,8 +25344,13 @@ test_815()
 run_test 815 "zero byte tiny write doesn't hang (LU-12382)"
 
 test_816() {
+	local ost1_imp=$(get_osc_import_name client ost1)
+	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
+			 cut -d'.' -f2)
+
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
+
 	stat $DIR/$tfile >/dev/null || error "can't stat"
 	wait_osc_import_state client ost1 FULL
 	# no locks, no reqs to let the connection idle
@@ -25344,12 +25359,12 @@ test_816() {
 	local before
 	local now
 	before=$($LCTL get_param -n \
-		 ldlm.namespaces.$FSNAME-OST0000-osc-[^M]*.lru_size)
+		 ldlm.namespaces.$imp_name.lru_size)
 
 	wait_osc_import_state client ost1 IDLE
 	dd if=/dev/null of=$DIR/$tfile bs=1k count=1 conv=sync
 	now=$($LCTL get_param -n \
-	      ldlm.namespaces.$FSNAME-OST0000-osc-[^M]*.lru_size)
+	      ldlm.namespaces.$imp_name.lru_size)
 	[ $before == $now ] || error "lru_size changed $before != $now"
 }
 run_test 816 "do not reset lru_resize on idle reconnect"
