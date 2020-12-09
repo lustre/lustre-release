@@ -32,7 +32,10 @@ else # PATCHLEVEL
 
 # case #3
 ifneq ($(LUSTRE_KERNEL_TEST),)
+# extra-y works prior to 5.10
 extra-y = $(LUSTRE_KERNEL_TEST)
+# always-y works since 5.6
+always-y = $(LUSTRE_KERNEL_TEST)
 endif
 
 obj-m := conftest.o
