@@ -59,7 +59,6 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	OBD_SET_CTXT_MAGIC(newctxt);
 	newctxt->pwdmnt = dev->od_mnt;
 	newctxt->pwd = dev->od_mnt->mnt_root;
-	newctxt->fs = KERNEL_DS;
 	newctxt->umask = current_umask();
 	newctxt->dt = NULL;
 

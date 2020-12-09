@@ -72,7 +72,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx)
 	ASSERT_CTXT_MAGIC(new_ctx->magic);
 	OBD_SET_CTXT_MAGIC(save);
 
-	save->fs = get_fs();
 	LASSERT(ll_d_count(current->fs->pwd.dentry));
 	LASSERT(ll_d_count(new_ctx->pwd));
 	save->pwd = dget(current->fs->pwd.dentry);
@@ -85,7 +84,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx)
 	LASSERT(new_ctx->pwdmnt);
 
 	current->fs->umask = 0; /* umask already applied on client */
-	set_fs(new_ctx->fs);
 	ll_set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 }
 EXPORT_SYMBOL(push_ctxt);
@@ -103,7 +101,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx)
 	LASSERTF(current->fs->pwd.mnt == new_ctx->pwdmnt, "%p != %p\n",
 		 current->fs->pwd.mnt, new_ctx->pwdmnt);
 
-	set_fs(saved->fs);
 	ll_set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
 	dput(saved->pwd);

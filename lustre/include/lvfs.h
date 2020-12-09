@@ -52,7 +52,6 @@ struct dt_device;
 struct lvfs_run_ctxt {
 	struct vfsmount		*pwdmnt;
 	struct dentry		*pwd;
-	mm_segment_t		 fs;
 	int			 umask;
 	struct dt_device	*dt;
 #ifdef OBD_CTXT_DEBUG

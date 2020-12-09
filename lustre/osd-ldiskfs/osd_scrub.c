@@ -2581,7 +2581,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	OBD_SET_CTXT_MAGIC(ctxt);
 	ctxt->pwdmnt = dev->od_mnt;
 	ctxt->pwd = dev->od_mnt->mnt_root;
-	ctxt->fs = KERNEL_DS;
 
 	init_rwsem(&scrub->os_rwsem);
 	spin_lock_init(&scrub->os_lock);
