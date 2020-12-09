@@ -159,7 +159,7 @@ static void free_direct_key(struct llcrypt_direct_key *dk)
 {
 	if (dk) {
 		crypto_free_skcipher(dk->dk_ctfm);
-		kzfree(dk);
+		kfree_sensitive(dk);
 	}
 }
 
@@ -308,7 +308,7 @@ static int setup_v1_file_key_derived(struct llcrypt_info *ci,
 
 	err = llcrypt_set_derived_key(ci, derived_key);
 out:
-	kzfree(derived_key);
+	kfree_sensitive(derived_key);
 	return err;
 }
 

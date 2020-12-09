@@ -137,4 +137,8 @@ static inline void mmap_read_unlock(struct mm_struct *mm)
 #define __ll_vmalloc(size, flags) __vmalloc(size, flags, PAGE_KERNEL)
 #endif
 
+#ifndef HAVE_KFREE_SENSITIVE
+#define kfree_sensitive(x)      kzfree(x)
+#endif
+
 #endif /* __LINUX_CFS_MEM_H__ */

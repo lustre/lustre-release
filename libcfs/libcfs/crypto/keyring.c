@@ -52,7 +52,7 @@ static void free_master_key(struct llcrypt_master_key *mk)
 		crypto_free_skcipher(mk->mk_mode_keys[i]);
 
 	key_put(mk->mk_users);
-	kzfree(mk);
+	kfree_sensitive(mk);
 }
 
 static inline bool valid_key_spec(const struct llcrypt_key_specifier *spec)

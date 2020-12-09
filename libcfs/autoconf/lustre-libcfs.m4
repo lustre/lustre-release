@@ -1378,6 +1378,26 @@ kernel_setsockopt_exists, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_KERNEL_SETSOCKOPT
 
+#
+# LIBCFS_HAVE_KFREE_SENSITIVE
+#
+# kernel v5.10-rc1~3
+# mm: remove kzfree() compatibility definition
+#
+AC_DEFUN([LIBCFS_HAVE_KFREE_SENSITIVE], [
+LB_CHECK_COMPILE([if kfree_sensitive() is available],
+kfree_sensitive_exists, [
+	#include <linux/slab.h>
+
+],[
+	kfree_sensitive(NULL);
+],[
+	AC_DEFINE(HAVE_KFREE_SENSITIVE, 1,
+		[kfree_sensitive() is available.])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_NR_UNSTABLE_NFS
+
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [] )
 AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [])
 
@@ -1492,6 +1512,8 @@ LIBCFS_KALLSYMS_LOOKUP
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
 LIBCFS_VMALLOC_2ARGS
+# 5.10
+LIBCFS_HAVE_KFREE_SENSITIVE
 ]) # LIBCFS_PROG_LINUX
 
 #
