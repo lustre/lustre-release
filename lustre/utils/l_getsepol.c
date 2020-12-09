@@ -329,7 +329,7 @@ int main(int argc, char **argv)
 	int policyver = 0;
 	char pol_bin_path[PATH_MAX + 1];
 	struct stat st;
-	time_t policymtime;
+	time_t policymtime = 0;
 	int enforce;
 	char *policy_type = NULL;
 	unsigned char *mdval = NULL;
@@ -342,7 +342,7 @@ int main(int argc, char **argv)
 	if (rc < 0)
 		goto out;
 
-	/* Version of loaded policy */
+	/* Max version of loaded policy */
 	policyver = security_policyvers();
 	if (policyver < 0) {
 		errlog("unknown policy version: %s\n", strerror(errno));
@@ -350,17 +350,26 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
-	/* Path of binary policy file */
-	snprintf(pol_bin_path, sizeof(pol_bin_path), "%s.%d",
-		 selinux_binary_policy_path(), policyver);
+	while (policymtime == 0) {
+		/* Path of binary policy file */
+		snprintf(pol_bin_path, sizeof(pol_bin_path), "%s.%d",
+			 selinux_binary_policy_path(), policyver);
 
-	/* Stat binary policy file */
-	if (stat(pol_bin_path, &st)) {
-		errlog("can't stat %s: %s\n", pol_bin_path, strerror(errno));
-		rc = -errno;
-		goto out;
+		/* Stat binary policy file */
+		if (stat(pol_bin_path, &st)) {
+			if (policyver > 0) {
+				policyver--;
+			} else {
+				errlog("can't stat %s.*: %s\n",
+				       selinux_binary_policy_path(),
+				       strerror(errno));
+				rc = -errno;
+				goto out;
+			}
+		} else {
+			policymtime = st.st_mtime;
+		}
 	}
-	policymtime = st.st_mtime;
 
 	/* Determine if SELinux is in permissive or enforcing mode */
 	enforce = security_getenforce();

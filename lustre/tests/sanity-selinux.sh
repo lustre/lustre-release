@@ -544,7 +544,9 @@ create_nodemap() {
 	check_nodemap $nm trusted_nodemap 1
 
 	sleep 10
+	l_getsepol || error "cannot get sepol"
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
+	[ -n "$sepol" ] || error "sepol is empty"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.sepol="$sepol"
 
 	check_nodemap $nm sepol $sepol
@@ -749,7 +751,9 @@ test_21b() {
 	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl3 && error "hardlink (3)"
 
 	# reset correct sepol
+	l_getsepol || error "cannot get sepol"
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
+	[ -n "$sepol" ] || error "sepol is empty"
 	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
 	check_nodemap c0 sepol $sepol
 
