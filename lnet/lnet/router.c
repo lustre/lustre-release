@@ -507,11 +507,11 @@ lnet_router_discovery_complete(struct lnet_peer *lp)
 	lp->lp_alive = lp->lp_dc_error == 0;
 	spin_unlock(&lp->lp_lock);
 
-	/* ping replies are being handled when discovery is disabled */
-	if (lnet_is_discovery_disabled_locked(lp))
-		return;
-
 	if (!lp->lp_dc_error) {
+		/* ping replies are being handled when discovery is disabled */
+		if (lnet_is_discovery_disabled_locked(lp))
+			return;
+
 		/*
 		* mark single-hop routes.  If the remote net is not configured on
 		* the gateway we assume this is intentional and we mark the
