@@ -2150,7 +2150,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		goto out;
 	}
 
-	rc = kgnilnd_setup_immediate_buffer(tx, niov, NULL, kiov, offset, nob);
+	rc = kgnilnd_setup_immediate_buffer(tx, niov, kiov, offset, nob);
 	if (rc != 0) {
 		kgnilnd_tx_done(tx, rc);
 		goto out;
