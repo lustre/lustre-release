@@ -242,6 +242,8 @@ EXTRA_KCFLAGS="-Werror"
 LB_CHECK_COMPILE([if 'ext4_journal_ensure_credits' exists],
 ext4_journal_ensure_credits, [
 	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+	int __ext4_journal_ensure_credits(handle_t *handle, int check_cred,
+		int extend_cred, int revoke_cred) { return 0; }
 ],[
 	ext4_journal_ensure_credits(NULL, 0, 0);
 ],[
