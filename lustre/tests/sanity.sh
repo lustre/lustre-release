@@ -46,8 +46,8 @@ ALWAYS_EXCEPT+="                42a     42b     42c     77k"
 ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
 
 if $SHARED_KEY; then
-# bug number for skipped tests:	LU-9795 (all below)
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	17n	60a	133g	300f"
+	# bug number:    LU-9795 LU-9795  LU-14181 LU-14181 LU-9795 LU-9795
+	ALWAYS_EXCEPT+=" 17n     60a      64e      64f      133g    300f"
 fi
 
 if [[ $(uname -m) = aarch64 ]]; then
