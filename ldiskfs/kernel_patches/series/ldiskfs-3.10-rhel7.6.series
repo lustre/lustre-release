@@ -49,3 +49,4 @@ rhel7.6/ext4-cleanup-flag-definitions-for-extent-status-tree.patch
 rhel7.6/ext4-introduce-aging-to-extent-status-tree.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel7.6/ext4-dquot-commit-speedup.patch
+rhel7.7/ext4-ialloc-uid-gid-and-pass-owner-down.patch

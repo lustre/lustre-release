@@ -3226,12 +3226,21 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 	struct osd_thandle *oth;
 	struct dt_object *parent = NULL;
 	struct inode *inode;
-	uid_t owner[2] = {0, 0};
+	struct iattr iattr = {
+		.ia_valid = ATTR_UID | ATTR_GID |
+			    ATTR_CTIME | ATTR_MTIME | ATTR_ATIME,
+		.ia_ctime.tv_sec = attr->la_ctime,
+		.ia_mtime.tv_sec = attr->la_mtime,
+		.ia_atime.tv_sec = attr->la_atime,
+		.ia_uid = GLOBAL_ROOT_UID,
+		.ia_gid = GLOBAL_ROOT_GID,
+	};
+	const struct osd_timespec omit = { .tv_nsec = UTIME_OMIT };
 
 	if (attr->la_valid & LA_UID)
-		owner[0] = attr->la_uid;
+		iattr.ia_uid = make_kuid(&init_user_ns, attr->la_uid);
 	if (attr->la_valid & LA_GID)
-		owner[1] = attr->la_gid;
+		iattr.ia_gid = make_kgid(&init_user_ns, attr->la_gid);
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(obj->oo_inode == NULL);
@@ -3251,10 +3260,18 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 	    !dt_object_remote(hint->dah_parent))
 		parent = hint->dah_parent;
 
+	/* if a time component is not valid set it to UTIME_OMIT */
+	if (!(attr->la_valid & LA_CTIME))
+		iattr.ia_ctime = omit;
+	if (!(attr->la_valid & LA_MTIME))
+		iattr.ia_mtime = omit;
+	if (!(attr->la_valid & LA_ATIME))
+		iattr.ia_atime = omit;
+
 	inode = ldiskfs_create_inode(oth->ot_handle,
 				     parent ? osd_dt_obj(parent)->oo_inode :
 					      osd_sb(osd)->s_root->d_inode,
-				     mode, owner);
+				     mode, &iattr);
 	if (!IS_ERR(inode)) {
 		/* Do not update file c/mtime in ldiskfs. */
 		inode->i_flags |= S_NOCMTIME;
@@ -3945,7 +3962,15 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct inode *local;
 	struct osd_thandle *oh;
-	uid_t own[2] = {0, 0};
+	struct iattr iattr = {
+		.ia_valid = ATTR_UID | ATTR_GID |
+			    ATTR_CTIME | ATTR_MTIME | ATTR_ATIME,
+		.ia_ctime.tv_nsec = UTIME_OMIT,
+		.ia_mtime.tv_nsec = UTIME_OMIT,
+		.ia_atime.tv_nsec = UTIME_OMIT,
+		.ia_uid = GLOBAL_ROOT_UID,
+		.ia_gid = GLOBAL_ROOT_GID,
+	};
 	int rc;
 
 	ENTRY;
@@ -3954,7 +3979,8 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type, own);
+	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode,
+				     type, &iattr);
 	if (IS_ERR(local)) {
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));

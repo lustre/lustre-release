@@ -24,3 +24,4 @@ rhel8/ext4-export-mb-stream-allocator-variables.patch
 ubuntu19/ext4-iget-with-flags.patch
 rhel8/ext4-simple-blockalloc.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
+rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch

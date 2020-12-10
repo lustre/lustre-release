@@ -26,3 +26,4 @@ rhel8/ext4-mballoc-skip-uninit-groups-cr0.patch
 rhel8.1/ext4-mballoc-prefetch.patch
 rhel8.3/ext4-xattr-disable-credits-check.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
+rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
