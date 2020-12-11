@@ -4425,7 +4425,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
 	info->mti_env = req->rq_svc_thread->t_env;
 	info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	info->mti_big_buf = LU_BUF_NULL;
-	info->mti_max_repsize = 0;
 	info->mti_batch_env = 0;
 	info->mti_object = NULL;
 

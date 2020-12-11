@@ -467,11 +467,6 @@ struct mdt_thread_info {
 	 */
 	struct req_capsule	    mti_sub_pill;
 
-	/*
-	 * Max left reply buffer size for the batch request.
-	 */
-	__u32			    mti_max_repsize;
-
 	/* although we have export in req, there are cases when it is not
 	 * available, e.g. closing files upon export destroy */
 	struct obd_export          *mti_exp;

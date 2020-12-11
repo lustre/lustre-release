@@ -2680,24 +2680,65 @@ int req_capsule_server_grow(struct req_capsule *pill,
 			    const struct req_msg_field *field,
 			    __u32 newlen)
 {
-	struct ptlrpc_reply_state *rs = pill->rc_req->rq_reply_state, *nrs;
-	char *from, *to;
-	int rc;
+	struct ptlrpc_request *req = pill->rc_req;
+	struct ptlrpc_reply_state *rs = req->rq_reply_state, *nrs;
+	char *from, *to, *sptr = NULL;
+	__u32 slen = 0, snewlen = 0;
 	__u32 offset, len;
+	int rc;
 
 	LASSERT(pill->rc_fmt != NULL);
 	LASSERT(__req_format_is_sane(pill->rc_fmt));
 	LASSERT(req_capsule_has_field(pill, field, RCL_SERVER));
 	LASSERT(req_capsule_field_present(pill, field, RCL_SERVER));
 
-	len = req_capsule_get_size(pill, field, RCL_SERVER);
-	offset = __req_capsule_offset(pill, field, RCL_SERVER);
+	if (req_capsule_subreq(pill)) {
+		if (!req_capsule_has_field(&req->rq_pill, &RMF_BUT_REPLY,
+					   RCL_SERVER))
+			return -EINVAL;
+
+		if (!req_capsule_field_present(&req->rq_pill, &RMF_BUT_REPLY,
+					       RCL_SERVER))
+			return -EINVAL;
+
+		len = req_capsule_get_size(&req->rq_pill, &RMF_BUT_REPLY,
+					   RCL_SERVER);
+		sptr = req_capsule_server_get(&req->rq_pill, &RMF_BUT_REPLY);
+		slen = req_capsule_get_size(pill, field, RCL_SERVER);
+
+		LASSERT(len >= (char *)pill->rc_repmsg - sptr +
+			       lustre_packed_msg_size(pill->rc_repmsg));
+		if (len >= (char *)pill->rc_repmsg - sptr +
+			   lustre_packed_msg_size(pill->rc_repmsg) - slen +
+			   newlen) {
+			req_capsule_set_size(pill, field, RCL_SERVER, newlen);
+			offset = __req_capsule_offset(pill, field, RCL_SERVER);
+			lustre_grow_msg(pill->rc_repmsg, offset, newlen);
+			return 0;
+		}
+
+		/*
+		 * Currently just increase the reply buffer by 2 * newlen.
+		 * TODO: Enlarge the reply buffer properly according to the
+		 * left SUB requests in the batch PTLRPC request.
+		 */
+		snewlen = newlen;
+		req_capsule_set_size(pill, field, RCL_SERVER, snewlen);
+		newlen = len + cfs_size_round(2 * snewlen);
+		req_capsule_set_size(&req->rq_pill, &RMF_BUT_REPLY, RCL_SERVER,
+				     newlen);
+		offset = __req_capsule_offset(&req->rq_pill, &RMF_BUT_REPLY,
+					      RCL_SERVER);
+	} else {
+		len = req_capsule_get_size(pill, field, RCL_SERVER);
+		offset = __req_capsule_offset(pill, field, RCL_SERVER);
+		req_capsule_set_size(pill, field, RCL_SERVER, newlen);
+	}
 
 	CDEBUG(D_INFO, "Reply packed: %d, allocated: %d, field len %d -> %d\n",
 	       lustre_packed_msg_size(rs->rs_msg), rs->rs_repbuf_len,
 				      len, newlen);
 
-	req_capsule_set_size(pill, field, RCL_SERVER, newlen);
 	/**
 	 * There can be enough space in current reply buffer, make sure
 	 * that rs_repbuf is not a wrapper but real reply msg, otherwise
@@ -2706,21 +2747,26 @@ int req_capsule_server_grow(struct req_capsule *pill,
 	if (rs->rs_msg == rs->rs_repbuf &&
 	    rs->rs_repbuf_len >=
 	    lustre_packed_msg_size(rs->rs_msg) - len + newlen) {
-		pill->rc_req->rq_replen = lustre_grow_msg(rs->rs_msg, offset,
-							  newlen);
+		req->rq_replen = lustre_grow_msg(rs->rs_msg, offset, newlen);
 		return 0;
 	}
 
 	/* Re-allocate replay state */
-	pill->rc_req->rq_reply_state = NULL;
-	rc = req_capsule_server_pack(pill);
+	req->rq_reply_state = NULL;
+	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc) {
 		/* put old values back, the caller should decide what to do */
-		req_capsule_set_size(pill, field, RCL_SERVER, len);
+		if (req_capsule_subreq(pill)) {
+			req_capsule_set_size(&req->rq_pill, &RMF_BUT_REPLY,
+					     RCL_SERVER, len);
+			req_capsule_set_size(pill, field, RCL_SERVER, slen);
+		} else {
+			req_capsule_set_size(pill, field, RCL_SERVER, len);
+		}
 		pill->rc_req->rq_reply_state = rs;
 		return rc;
 	}
-	nrs = pill->rc_req->rq_reply_state;
+	nrs = req->rq_reply_state;
 	LASSERT(lustre_packed_msg_size(nrs->rs_msg) >
 		lustre_packed_msg_size(rs->rs_msg));
 
@@ -2730,7 +2776,17 @@ int req_capsule_server_grow(struct req_capsule *pill,
 	memcpy(to, from,
 	       (char *)rs->rs_msg + lustre_packed_msg_size(rs->rs_msg) - from);
 	lustre_msg_set_buflen(nrs->rs_msg, offset, len);
-	pill->rc_req->rq_replen = lustre_grow_msg(nrs->rs_msg, offset, newlen);
+	req->rq_replen = lustre_grow_msg(nrs->rs_msg, offset, newlen);
+
+	if (req_capsule_subreq(pill)) {
+		char *ptr;
+
+		ptr = req_capsule_server_get(&req->rq_pill, &RMF_BUT_REPLY);
+		pill->rc_repmsg = (struct lustre_msg *)(ptr +
+				  ((char *)pill->rc_repmsg - sptr));
+		offset = __req_capsule_offset(pill, field, RCL_SERVER);
+		lustre_grow_msg(pill->rc_repmsg, offset, snewlen);
+	}
 
         if (rs->rs_difficult) {
                 /* copy rs data */
