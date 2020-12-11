@@ -36,6 +36,7 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/module.h>
+#include <obd_class.h>
 #include <obd.h>
 #ifdef HAVE_SERVER_SUPPORT
 #include <lustre_update.h>
@@ -410,9 +411,10 @@ static int batch_update_interpret(const struct lu_env *env,
 static int batch_send_update_req(const struct lu_env *env,
 				 struct batch_update_head *head)
 {
-	struct lu_batch *bh;
+	struct obd_device *obd;
 	struct ptlrpc_request *req = NULL;
 	struct batch_update_args *aa;
+	struct lu_batch *bh;
 	int rc;
 
 	ENTRY;
@@ -420,6 +422,7 @@ static int batch_send_update_req(const struct lu_env *env,
 	if (head == NULL)
 		RETURN(0);
 
+	obd = class_exp2obd(head->buh_exp);
 	bh = head->buh_batch;
 	rc = batch_prep_update_req(head, &req);
 	if (rc) {
@@ -456,6 +459,8 @@ static int batch_send_update_req(const struct lu_env *env,
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
+	lprocfs_oh_tally_log2(&obd->u.cli.cl_batch_rpc_hist,
+			      head->buh_update_count);
 	RETURN(rc);
 }
 
