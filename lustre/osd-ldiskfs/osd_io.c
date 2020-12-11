@@ -159,7 +159,7 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
 {
-	int error = bio->bi_status;
+	int error = blk_status_to_errno(bio->bi_status);
 #else
 static void dio_complete_routine(struct bio *bio, int error)
 {
