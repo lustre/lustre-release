@@ -1438,7 +1438,10 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 
 	/* Add peer_ni to peer_net */
 	lpni->lpni_peer_net = lpn;
-	list_add_tail(&lpni->lpni_peer_nis, &lpn->lpn_peer_nis);
+	if (lp->lp_primary_nid == lpni->lpni_nid)
+		list_add(&lpni->lpni_peer_nis, &lpn->lpn_peer_nis);
+	else
+		list_add_tail(&lpni->lpni_peer_nis, &lpn->lpn_peer_nis);
 	lnet_update_peer_net_healthv(lpni);
 	lnet_peer_net_addref_locked(lpn);
 
@@ -1446,7 +1449,10 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 	if (!lpn->lpn_peer) {
 		new_lpn = true;
 		lpn->lpn_peer = lp;
-		list_add_tail(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
+		if (lp->lp_primary_nid == lpni->lpni_nid)
+			list_add(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
+		else
+			list_add_tail(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
 		lnet_peer_addref_locked(lp);
 	}
 
@@ -1687,10 +1693,14 @@ lnet_peer_set_primary_nid(struct lnet_peer *lp, lnet_nid_t nid, unsigned flags)
 
 	if (lp->lp_primary_nid == nid)
 		goto out;
-	rc = lnet_peer_add_nid(lp, nid, flags);
-	if (rc)
-		goto out;
+
 	lp->lp_primary_nid = nid;
+
+	rc = lnet_peer_add_nid(lp, nid, flags);
+	if (rc) {
+		lp->lp_primary_nid = old;
+		goto out;
+	}
 out:
 	CDEBUG(D_NET, "peer %s NID %s: %d\n",
 	       libcfs_nid2str(old), libcfs_nid2str(nid), rc);
@@ -2792,6 +2802,7 @@ static void lnet_discovery_event_handler(struct lnet_event *event)
 static int lnet_peer_merge_data(struct lnet_peer *lp,
 				struct lnet_ping_buffer *pbuf)
 {
+	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
 	lnet_nid_t *curnis = NULL;
 	struct lnet_ni_status *addnis = NULL;
@@ -2920,6 +2931,28 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 				goto out;
 		}
 	}
+
+	/* The peer net for the primary NID should be the first entry in the
+	 * peer's lp_peer_nets list, and the peer NI for the primary NID should
+	 * be the first entry in its peer net's lpn_peer_nis list.
+	 */
+	lpni = lnet_find_peer_ni_locked(pbuf->pb_info.pi_ni[1].ns_nid);
+	if (!lpni) {
+		CERROR("Internal error: Failed to lookup peer NI for primary NID: %s\n",
+		       libcfs_nid2str(pbuf->pb_info.pi_ni[1].ns_nid));
+		goto out;
+	}
+
+	lnet_peer_ni_decref_locked(lpni);
+
+	lpn = lpni->lpni_peer_net;
+	if (lpn->lpn_peer_nets.prev != &lp->lp_peer_nets)
+		list_move(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
+
+	if (lpni->lpni_peer_nis.prev != &lpni->lpni_peer_net->lpn_peer_nis)
+		list_move(&lpni->lpni_peer_nis,
+			  &lpni->lpni_peer_net->lpn_peer_nis);
+
 	/*
 	 * Errors other than -ENOMEM are due to peers having been
 	 * configured with DLC. Ignore these because DLC overrides
