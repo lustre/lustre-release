@@ -59,7 +59,6 @@
 #include <libcfs/util/string.h>
 #include <linux/lustre/lustre_fid.h>
 #include <lustre/lustreapi.h>
-#include "lstddef.h"
 
 /* Progress reporting period */
 #define REPORT_INTERVAL_DEFAULT 30
@@ -657,27 +656,6 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		int	chunk = (length - write_total > opt.o_chunk_size) ?
 				 opt.o_chunk_size : length - write_total;
 
-		/* Try the accelerated copy path first. Once LU-10180 lands
-		 * we should deal with holes.
-		 */
-		wsize = copy_file_range(src_fd, NULL, dst_fd, NULL,
-					chunk, 0);
-		if (wsize != -1)
-			goto fini_fastcopy;
-		rc = -errno;
-		/* Before Linux kernel 5.3 copy_file_range only supported
-		 * file copies between filesystems of the same type. In
-		 * that case copy_file_range() will return -EXDEV.
-		 */
-		if (rc != -EXDEV && rc != -ENOSYS) {
-			CT_ERROR(rc, "copy_file_range failed for '%s' to '%s'",
-				 src, dst);
-			break;
-		}
-
-		/* copy_file_range is not avalible or failed
-		 * so use what works.
-		 */
 		rsize = pread(src_fd, buf, chunk, offset);
 		if (rsize == 0)
 			/* EOF */
@@ -695,7 +673,7 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			CT_ERROR(rc, "cannot write to '%s'", dst);
 			break;
 		}
-fini_fastcopy:
+
 		write_total += wsize;
 		offset += wsize;
 
