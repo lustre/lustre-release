@@ -679,6 +679,7 @@ output_line(struct test_file *tf, int op, unsigned int offset,
 		[OP_READ + OP_DIRECT] = "read_OD",
 		[OP_WRITE + OP_DIRECT] = "write_OD",
 		[OP_FALLOCATE] = "fallocate",
+		[OP_PUNCH_HOLE] = "punch from",
 	};
 
 	/* W. */
@@ -689,10 +690,11 @@ output_line(struct test_file *tf, int op, unsigned int offset,
 	    (monitorend == -1 || offset <= monitorend)))))))
 		return;
 
-	prt("%06lu%s %lu.%06u %-10s %#08x %s %#08x\t(0x05%x bytes)\n",
+	prt("%06lu%s %lu.%06u %-10s %#08x %s %#08x\t(0x0%x bytes)\n",
 	    testcalls, fill_tf_buf(tf), tv.tv_sec, (int)tv.tv_usec,
-	    ops[op], offset, op == OP_TRUNCATE ? " to " : "thru",
-	    offset + size - 1, (int)size < 0 ? -(int)size : size);
+	    ops[op], offset, op == OP_TRUNCATE || op == OP_PUNCH_HOLE ?
+	    " to " : "thru", offset + size - 1,
+	     (int)size < 0 ? -(int)size : size);
 }
 
 void output_debug(unsigned int offset, unsigned int size, const char *what)
@@ -1167,7 +1169,6 @@ void
 do_preallocate(unsigned int offset, unsigned int length)
 {
 	off_t end_offset;
-	off_t new_offset;
 	int keep_size;
 	int fd;
 	struct stat statbufs;
@@ -1183,8 +1184,7 @@ do_preallocate(unsigned int offset, unsigned int length)
 
 	keep_size = fl_keep_size && (random() % 2);
 
-	end_offset = keep_size ? 0 : offset + length;
-
+	end_offset = offset + length;
 	if (end_offset > biggest) {
 		biggest = end_offset;
 		if (!quiet && testcalls > simulatedopcount)
@@ -1200,12 +1200,9 @@ do_preallocate(unsigned int offset, unsigned int length)
 	log4(OP_FALLOCATE, offset, length, (end_offset > file_size) ?
 	     (keep_size ? 0 : 1) : 2);
 
-	if (end_offset > file_size) {
+	if (end_offset > file_size && !keep_size) {
 		memset(good_buf + file_size, '\0', end_offset - file_size);
 		file_size = end_offset;
-	} else {
-		new_offset = file_size - (offset + length);
-		length = length + new_offset;
 	}
 
 	if (testcalls <= simulatedopcount)

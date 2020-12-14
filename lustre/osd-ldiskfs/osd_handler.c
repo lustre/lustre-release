@@ -2087,7 +2087,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		if (!rc)
 			rc = rc2;
 
-		osd_process_truncates(&truncates);
+		osd_process_truncates(env, &truncates);
 	} else {
 		osd_trans_stop_cb(oh, th->th_result);
 		OBD_FREE_PTR(oh);

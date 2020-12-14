@@ -1067,6 +1067,9 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 			return rc;
 	}
 
+	if (cl_io_is_fallocate(io))
+		return -EOPNOTSUPP;
+
 	if (oio->oi_lockless == 0) {
 		cl_object_attr_lock(obj);
 		rc = cl_object_attr_get(env, obj, attr);

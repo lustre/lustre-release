@@ -405,8 +405,12 @@ enum osd_op_type {
 struct osd_access_lock {
 	struct list_head	 tl_list;
 	struct osd_object	*tl_obj;
+	loff_t			 tl_start;
+	loff_t			 tl_end;
+	int			 tl_mode;
 	bool			 tl_shared;
 	bool			 tl_truncate;
+	bool			 tl_punch;
 };
 
 struct osd_thandle {
@@ -1540,7 +1544,7 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh,
 		   bool shared);
 void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list);
-void osd_process_truncates(struct list_head *list);
+void osd_process_truncates(const struct lu_env *env, struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG

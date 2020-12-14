@@ -806,6 +806,10 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
 
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
+			       info->fti_xid);
+
 	rc = dt_falloc(env, dob, start, end, mode, th);
 	if (rc)
 		GOTO(unlock, rc);

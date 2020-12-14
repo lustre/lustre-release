@@ -182,7 +182,7 @@ run_test fsx "Dual-mount fsx with DoM files"
 test_sanity()
 {
 	SANITY_ONLY=${SANITY_ONLY:-"36 39 40 41 42d 42e 43 46 56r 101e 119a \
-				    131 150 155a 155b 155c 155d 207 241 251"}
+				    131 150a 155a 155b 155c 155d 207 241 251"}
 	SANITY_REPEAT=${SANITY_REPEAT:-1}
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed

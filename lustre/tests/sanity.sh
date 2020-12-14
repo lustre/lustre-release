@@ -13902,6 +13902,168 @@ test_150e() {
 }
 run_test 150e "Verify 60% of available OST space consumed by fallocate"
 
+test_150f() {
+	local size
+	local blocks
+	local want_size_before=20480 # in bytes
+	local want_blocks_before=40 # 512 sized blocks
+	local want_blocks_after=24  # 512 sized blocks
+	local length=$(((want_blocks_before - want_blocks_after) * 512))
+
+	[[ $OST1_VERSION -ge $(version_code 2.14.0) ]] ||
+		skip "need at least 2.14.0 for fallocate punch"
+
+	if [ "$ost1_FSTYPE" = "zfs" ] || [ "$mds1_FSTYPE" = "zfs" ]; then
+		skip "LU-14160: punch mode is not implemented on OSD ZFS"
+	fi
+
+	check_set_fallocate_or_skip
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+
+	echo "Verify fallocate punch: Range within the file range"
+	yes 'A' | dd of=$DIR/$tfile bs=4096 count=5 ||
+		error "dd failed for bs 4096 and count 5"
+
+	# Call fallocate with punch range which is within the file range
+	fallocate -p --offset 4096 -l $length $DIR/$tfile ||
+		error "fallocate failed: offset 4096 and length $length"
+	# client must see changes immediately after fallocate
+	size=$(stat -c '%s' $DIR/$tfile)
+	blocks=$(stat -c '%b' $DIR/$tfile)
+
+	# Verify punch worked.
+	(( blocks == want_blocks_after )) ||
+		error "punch failed: blocks $blocks != $want_blocks_after"
+
+	(( size == want_size_before )) ||
+		error "punch failed: size $size != $want_size_before"
+
+	# Verify there is hole in file
+	local data_off=$(lseek_test -d 4096 $DIR/$tfile)
+	# precomputed md5sum
+	local expect="4a9a834a2db02452929c0a348273b4aa"
+
+	cksum=($(md5sum $DIR/$tfile))
+	[[ "${cksum[0]}" == "$expect" ]] ||
+		error "unexpected MD5SUM after punch: ${cksum[0]}"
+
+	# Start second sub-case for fallocate punch.
+	echo "Verify fallocate punch: Range overlapping and less than blocksize"
+	yes 'A' | dd of=$DIR/$tfile bs=4096 count=5 ||
+		error "dd failed for bs 4096 and count 5"
+
+	# Punch range less than block size will have no change in block count
+	want_blocks_after=40  # 512 sized blocks
+
+	# Punch overlaps two blocks and less than blocksize
+	fallocate -p --offset 4000 -l 3000 $DIR/$tfile ||
+		error "fallocate failed: offset 4000 length 3000"
+	size=$(stat -c '%s' $DIR/$tfile)
+	blocks=$(stat -c '%b' $DIR/$tfile)
+
+	# Verify punch worked.
+	(( blocks == want_blocks_after )) ||
+		error "punch failed: blocks $blocks != $want_blocks_after"
+
+	(( size == want_size_before )) ||
+		error "punch failed: size $size != $want_size_before"
+
+	# Verify if range is really zero'ed out. We expect Zeros.
+	# precomputed md5sum
+	expect="c57ec5d769c3dbe3426edc3f7d7e11d3"
+	cksum=($(md5sum $DIR/$tfile))
+	[[ "${cksum[0]}" == "$expect" ]] ||
+		error "unexpected MD5SUM after punch: ${cksum[0]}"
+}
+run_test 150f "Verify fallocate punch functionality"
+
+test_150g() {
+	local space
+	local size
+	local blocks
+	local blocks_after
+	local size_after
+	local BS=4096 # Block size in bytes
+
+	[[ $OST1_VERSION -ge $(version_code 2.14.0) ]] ||
+		skip "need at least 2.14.0 for fallocate punch"
+
+	if [ "$ost1_FSTYPE" = "zfs" ] || [ "$mds1_FSTYPE" = "zfs" ]; then
+		skip "LU-14160: punch mode is not implemented on OSD ZFS"
+	fi
+
+	check_set_fallocate_or_skip
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+
+	$LFS setstripe -c${OSTCOUNT} $DIR/$tfile ||
+		error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
+
+	# Get 100MB per OST of the available space to reduce run time
+	# else 60% of the available space if we are running SLOW tests
+	if [ $SLOW == "no" ]; then
+		space=$((1024 * 100 * OSTCOUNT))
+	else
+		# Find OST with Minimum Size
+		space=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+			sort -un | head -1)
+		echo "min size OST: $space"
+		space=$(((space * 60)/100 * OSTCOUNT))
+	fi
+	# space in 1k units, round to 4k blocks
+	local blkcount=$((space * 1024 / $BS))
+
+	echo "Verify fallocate punch: Very large Range"
+	fallocate -l${space}k $DIR/$tfile ||
+		error "fallocate ${space}k $DIR/$tfile failed"
+	# write 1M at the end, start and in the middle
+	yes 'A' | dd of=$DIR/$tfile bs=$BS count=256 ||
+		error "dd failed: bs $BS count 256"
+	yes 'A' | dd of=$DIR/$tfile bs=$BS seek=$((blkcount - 256)) count=256 ||
+		error "dd failed: bs $BS count 256 seek $((blkcount - 256))"
+	yes 'A' | dd of=$DIR/$tfile bs=$BS seek=$((blkcount / 2)) count=1024 ||
+		error "dd failed: bs $BS count 256 seek $((blkcount / 2))"
+
+	# Gather stats.
+	size=$(stat -c '%s' $DIR/$tfile)
+
+	# gather punch length.
+	local punch_size=$((size - (BS * 2)))
+
+	echo "punch_size = $punch_size"
+	echo "size - punch_size: $((size - punch_size))"
+	echo "size - punch_size in blocks: $(((size - punch_size)/BS))"
+
+	# Call fallocate to punch all except 2 blocks. We leave the
+	# first and the last block
+	echo "fallocate -p --offset $BS -l $punch_size $DIR/$tfile"
+	fallocate -p --offset $BS -l $punch_size $DIR/$tfile ||
+		error "fallocate failed: offset $BS length $punch_size"
+
+	size_after=$(stat -c '%s' $DIR/$tfile)
+	blocks_after=$(stat -c '%b' $DIR/$tfile)
+
+	# Verify punch worked.
+	# Size should be kept
+	(( size == size_after )) ||
+		error "punch failed: size $size != $size_after"
+
+	# two 4k data blocks to remain plus possible 1 extra extent block
+	(( blocks_after <= ((BS / 512) * 3) )) ||
+		error "too many blocks remains: $blocks_after"
+
+	# Verify that file has hole between the first and the last blocks
+	local hole_start=$(lseek_test -l 0 $DIR/$tfile)
+	local hole_end=$(lseek_test -d $BS $DIR/$tfile)
+
+	echo "Hole at [$hole_start, $hole_end)"
+	(( hole_start == BS )) ||
+		error "no hole at offset $BS after punch"
+
+	(( hole_end == BS + punch_size )) ||
+		error "data at offset $hole_end < $((BS + punch_size))"
+}
+run_test 150g "Verify fallocate punch on large range"
+
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
 	local list=$(comma_list $(osts_nodes))

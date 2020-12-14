@@ -1969,15 +1969,29 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	 * fallocate start and end are passed in o_size, o_blocks
 	 * on the wire.
 	 */
+	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
+		RETURN(err_serious(-EPROTO));
+
 	start = oa->o_size;
 	end = oa->o_blocks;
 	mode = oa->o_falloc_mode;
 	/*
-	 * Only mode == 0 (which is standard prealloc) is supported now.
-	 * Punch is not supported yet.
+	 * mode == 0 (which is standard prealloc) and PUNCH is supported
+	 * Rest of mode options are not supported yet.
 	 */
-	if (mode & ~FALLOC_FL_KEEP_SIZE)
+	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
 		RETURN(-EOPNOTSUPP);
+
+	/* PUNCH_HOLE mode should always be accompanied with KEEP_SIZE flag
+	 * Check that and add the missing flag for such invalid call with
+	 * warning.
+	 */
+	if (mode & FALLOC_FL_PUNCH_HOLE && !(mode & FALLOC_FL_KEEP_SIZE)) {
+		CWARN("%s: PUNCH mode misses KEEP_SIZE flag, setting it\n",
+		      tsi->tsi_tgt->lut_obd->obd_name);
+		mode |= FALLOC_FL_KEEP_SIZE;
+	}
 
 	repbody->oa.o_oi = oa->o_oi;
 	repbody->oa.o_valid = OBD_MD_FLID;

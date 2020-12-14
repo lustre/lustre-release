@@ -449,14 +449,7 @@ int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 	int rc;
 	ENTRY;
 
-	/*
-	 * Only mode == 0 (which is standard prealloc) is supported now.
-	 * Punch is not supported yet.
-	 */
-	if (mode & ~FALLOC_FL_KEEP_SIZE)
-		RETURN(-EOPNOTSUPP);
 	oa->o_falloc_mode = mode;
-
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_OST_FALLOCATE);
 	if (req == NULL)

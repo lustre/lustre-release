@@ -1869,7 +1869,6 @@ struct cl_io {
 			/* The following are used for fallocate(2) */
 			int			 sa_falloc_mode;
 			loff_t			 sa_falloc_offset;
-			loff_t			 sa_falloc_len;
 			loff_t			 sa_falloc_end;
 		} ci_setattr;
 		struct cl_data_version_io {
