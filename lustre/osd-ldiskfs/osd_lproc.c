@@ -834,7 +834,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 	LASSERT(name);
 	LASSERT(type);
 
-	LCONSOLE_INFO("osd-ldiskfs create tunables for %s\n", name);
+	CDEBUG(D_CONFIG, "%s: register osd-ldiskfs tunable parameters\n", name);
 
 	/* put reference taken by class_search_type */
 	kobject_put(&type->typ_kobj);
