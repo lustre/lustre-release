@@ -105,93 +105,6 @@ out:
 }
 
 /**
- * Decide which checksums both client and OST support, possibly forcing
- * the use of T10PI checksums if the hardware supports this.
- *
- * The clients that have no T10-PI RPC checksum support will use the same
- * mechanism to select checksum type as before, and will not be affected by
- * the following logic.
- *
- * For the clients that have T10-PI RPC checksum support:
- *
- * If the OST supports T10-PI feature and T10-PI checksum is enforced, clients
- * will have no other choice for RPC checksum type other than using the T10PI
- * checksum type. This is useful for enforcing end-to-end integrity in the
- * whole system.
- *
- * If the OST doesn't support T10-PI feature and T10-PI checksum is enforced,
- * together with other checksum with reasonably good speeds (e.g. crc32,
- * crc32c, adler, etc.), all T10-PI checksum types understood by the client
- * (t10ip512, t10ip4K, t10crc512, t10crc4K) will be added to the available
- * checksum types, regardless of the speeds of T10-PI checksums. This is
- * useful for testing T10-PI checksum of RPC.
- *
- * If the OST supports T10-PI feature and T10-PI checksum is NOT enforced,
- * the corresponding T10-PI checksum type will be added to the checksum type
- * list, regardless of the speed of the T10-PI checksum. This provides clients
- * the flexibility to choose whether to enable end-to-end integrity or not.
- *
- * If the OST does NOT supports T10-PI feature and T10-PI checksum is NOT
- * enforced, together with other checksums with reasonably good speeds,
- * all the T10-PI checksum types with good speeds will be added into the
- * checksum type list. Note that a T10-PI checksum type with a speed worse
- * than half of Alder will NOT be added as a option. In this circumstance,
- * T10-PI checksum types has the same behavior like other normal checksum
- * types.
- *
- */
-static void
-ofd_mask_cksum_types(struct ofd_device *ofd, enum cksum_types *cksum_types)
-{
-	bool enforce = ofd->ofd_checksum_t10pi_enforce;
-	enum cksum_types ofd_t10_cksum_type;
-	enum cksum_types client_t10_types = *cksum_types & OBD_CKSUM_T10_ALL;
-	enum cksum_types server_t10_types;
-
-	/*
-	 * The client set in ocd_cksum_types the checksum types it
-	 * supports. We have to mask off the algorithms that we don't
-	 * support. T10PI checksum types will be added later.
-	 */
-	*cksum_types &= (ofd->ofd_cksum_types_supported & ~OBD_CKSUM_T10_ALL);
-	server_t10_types = ofd->ofd_cksum_types_supported & OBD_CKSUM_T10_ALL;
-	ofd_t10_cksum_type = ofd->ofd_lut.lut_dt_conf.ddp_t10_cksum_type;
-
-	/* Quick exit if no T10-PI support on client */
-	if (!client_t10_types)
-		return;
-
-	/*
-	 * This OST has NO T10-PI feature. Add all supported T10-PI checksums
-	 * as options if T10-PI checksum is enforced. If the T10-PI checksum is
-	 * not enforced, only add them as options when speed is good.
-	 */
-	if (ofd_t10_cksum_type == 0) {
-		/*
-		 * Server allows all T10PI checksums, and server_t10_types
-		 * include quick ones.
-		 */
-		if (enforce)
-			*cksum_types |= client_t10_types;
-		else
-			*cksum_types |= client_t10_types & server_t10_types;
-		return;
-	}
-
-	/*
-	 * This OST has T10-PI feature. Disable all other checksum types if
-	 * T10-PI checksum is enforced. If the T10-PI checksum is not enforced,
-	 * add the checksum type as an option.
-	 */
-	if (client_t10_types & ofd_t10_cksum_type) {
-		if (enforce)
-			*cksum_types = ofd_t10_cksum_type;
-		else
-			*cksum_types |= ofd_t10_cksum_type;
-	}
-}
-
-/**
  * Match client and OST server connection feature flags.
  *
  * Compute the compatibility flags for a connection request based on
@@ -323,7 +236,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	if (data->ocd_connect_flags & OBD_CONNECT_CKSUM) {
 		__u32 cksum_types = data->ocd_cksum_types;
 
-		ofd_mask_cksum_types(ofd, &data->ocd_cksum_types);
+		tgt_mask_cksum_types(&ofd->ofd_lut, &data->ocd_cksum_types);
 
 		if (unlikely(data->ocd_cksum_types == 0)) {
 			CERROR("%s: Connect with checksum support but no ocd_cksum_types is set\n",

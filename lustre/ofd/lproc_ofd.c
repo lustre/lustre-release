@@ -811,9 +811,9 @@ static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 
-	return sprintf(buf, "%u\n", ofd->ofd_checksum_t10pi_enforce);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", lut->lut_cksum_t10pi_enforce);
 }
 
 /**
@@ -843,7 +843,7 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 	bool enforce;
 	int rc;
 
@@ -851,9 +851,9 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	spin_lock(&ofd->ofd_flags_lock);
-	ofd->ofd_checksum_t10pi_enforce = enforce;
-	spin_unlock(&ofd->ofd_flags_lock);
+	spin_lock(&lut->lut_flags_lock);
+	lut->lut_cksum_t10pi_enforce = enforce;
+	spin_unlock(&lut->lut_flags_lock);
 	return count;
 }
 LUSTRE_RW_ATTR(checksum_t10pi_enforce);

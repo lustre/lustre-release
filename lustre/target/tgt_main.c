@@ -34,6 +34,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
+#include <obd_cksum.h>
 #include "tgt_internal.h"
 #include "../ptlrpc/ptlrpc_internal.h"
 
@@ -253,6 +254,92 @@ static const struct attribute *tgt_attrs[] = {
 	NULL,
 };
 
+/**
+ * Decide which checksums both client and OST support, possibly forcing
+ * the use of T10PI checksums if the hardware supports this.
+ *
+ * The clients that have no T10-PI RPC checksum support will use the same
+ * mechanism to select checksum type as before, and will not be affected by
+ * the following logic.
+ *
+ * For the clients that have T10-PI RPC checksum support:
+ *
+ * If the target supports T10-PI feature and T10-PI checksum is enforced,
+ * clients will have no other choice for RPC checksum type other than using
+ * the T10PI checksum type. This is useful for enforcing end-to-end integrity
+ * in the whole system.
+ *
+ * If the target doesn't support T10-PI feature and T10-PI checksum is
+ * enforced, together with other checksum with reasonably good speeds (e.g.
+ * crc32, crc32c, adler, etc.), all T10-PI checksum types understood by the
+ * client (t10ip512, t10ip4K, t10crc512, t10crc4K) will be added to the
+ * available checksum types, regardless of the speeds of T10-PI checksums.
+ * This is useful for testing T10-PI checksum of RPC.
+ *
+ * If the target supports T10-PI feature and T10-PI checksum is NOT enforced,
+ * the corresponding T10-PI checksum type will be added to the checksum type
+ * list, regardless of the speed of the T10-PI checksum. This provides clients
+ * the flexibility to choose whether to enable end-to-end integrity or not.
+ *
+ * If the target does NOT supports T10-PI feature and T10-PI checksum is NOT
+ * enforced, together with other checksums with reasonably good speeds,
+ * all the T10-PI checksum types with good speeds will be added into the
+ * checksum type list. Note that a T10-PI checksum type with a speed worse
+ * than half of Alder will NOT be added as a option. In this circumstance,
+ * T10-PI checksum types has the same behavior like other normal checksum
+ * types.
+ */
+void tgt_mask_cksum_types(struct lu_target *lut, enum cksum_types *cksum_types)
+{
+	bool enforce = lut->lut_cksum_t10pi_enforce;
+	enum cksum_types tgt_t10_cksum_type;
+	enum cksum_types client_t10_types = *cksum_types & OBD_CKSUM_T10_ALL;
+	enum cksum_types server_t10_types;
+
+	/*
+	 * The client set in ocd_cksum_types the checksum types it
+	 * supports. We have to mask off the algorithms that we don't
+	 * support. T10PI checksum types will be added later.
+	 */
+	*cksum_types &= (lut->lut_cksum_types_supported & ~OBD_CKSUM_T10_ALL);
+	server_t10_types = lut->lut_cksum_types_supported & OBD_CKSUM_T10_ALL;
+	tgt_t10_cksum_type = lut->lut_dt_conf.ddp_t10_cksum_type;
+
+	/* Quick exit if no T10-PI support on client */
+	if (!client_t10_types)
+		return;
+
+	/*
+	 * This OST has NO T10-PI feature. Add all supported T10-PI checksums
+	 * as options if T10-PI checksum is enforced. If the T10-PI checksum is
+	 * not enforced, only add them as options when speed is good.
+	 */
+	if (tgt_t10_cksum_type == 0) {
+		/*
+		 * Server allows all T10PI checksums, and server_t10_types
+		 * include quick ones.
+		 */
+		if (enforce)
+			*cksum_types |= client_t10_types;
+		else
+			*cksum_types |= client_t10_types & server_t10_types;
+		return;
+	}
+
+	/*
+	 * This OST has T10-PI feature. Disable all other checksum types if
+	 * T10-PI checksum is enforced. If the T10-PI checksum is not enforced,
+	 * add the checksum type as an option.
+	 */
+	if (client_t10_types & tgt_t10_cksum_type) {
+		if (enforce)
+			*cksum_types = tgt_t10_cksum_type;
+		else
+			*cksum_types |= tgt_t10_cksum_type;
+	}
+}
+EXPORT_SYMBOL(tgt_mask_cksum_types);
+
 int tgt_tunables_init(struct lu_target *lut)
 {
 	int rc;
@@ -419,6 +506,9 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 
 	spin_lock_init(&lut->lut_flags_lock);
 	lut->lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
+	lut->lut_cksum_t10pi_enforce = 0;
+	lut->lut_cksum_types_supported =
+		obd_cksum_types_supported_server(obd->obd_name);
 
 	spin_lock_init(&lut->lut_slc_locks_guard);
 	INIT_LIST_HEAD(&lut->lut_slc_locks);

@@ -33,6 +33,7 @@
 
 #include <linux/vfs.h>
 #include <obd_class.h>
+#include <obd_cksum.h>
 #include <lprocfs_status.h>
 #include <lustre_osc.h>
 #include <cl_object.h>
@@ -191,6 +192,127 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(mdc_max_dirty_mb);
+
+DECLARE_CKSUM_NAME;
+
+static int mdc_checksum_type_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *obd = m->private;
+	int i;
+
+	if (obd == NULL)
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+		if ((BIT(i) & obd->u.cli.cl_supp_cksum_types) == 0)
+			continue;
+		if (obd->u.cli.cl_cksum_type == BIT(i))
+			seq_printf(m, "[%s] ", cksum_name[i]);
+		else
+			seq_printf(m, "%s ", cksum_name[i]);
+	}
+	seq_puts(m, "\n");
+
+	return 0;
+}
+
+static ssize_t mdc_checksum_type_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	char kernbuf[10];
+	int rc = -EINVAL;
+	int i;
+
+	if (obd == NULL)
+		return 0;
+
+	if (count > sizeof(kernbuf) - 1)
+		return -EINVAL;
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	if (count > 0 && kernbuf[count - 1] == '\n')
+		kernbuf[count - 1] = '\0';
+	else
+		kernbuf[count] = '\0';
+
+	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+		if (strcmp(kernbuf, cksum_name[i]) == 0) {
+			obd->u.cli.cl_preferred_cksum_type = BIT(i);
+			if (obd->u.cli.cl_supp_cksum_types & BIT(i)) {
+				obd->u.cli.cl_cksum_type = BIT(i);
+				rc = count;
+			} else {
+				rc = -ENOTSUPP;
+			}
+			break;
+		}
+	}
+
+	return rc;
+}
+LPROC_SEQ_FOPS(mdc_checksum_type);
+
+static ssize_t checksums_show(struct kobject *kobj,
+			      struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", !!obd->u.cli.cl_checksum);
+}
+
+static ssize_t checksums_store(struct kobject *kobj,
+			       struct attribute *attr,
+			       const char *buffer,
+			       size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	obd->u.cli.cl_checksum = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(checksums);
+
+static ssize_t checksum_dump_show(struct kobject *kobj,
+				  struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", !!obd->u.cli.cl_checksum_dump);
+}
+
+static ssize_t checksum_dump_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer,
+				   size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	obd->u.cli.cl_checksum_dump = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(checksum_dump);
 
 static ssize_t contention_seconds_show(struct kobject *kobj,
 				       struct attribute *attr,
@@ -500,6 +622,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops =	&mdc_max_dirty_mb_fops		},
 	{ .name	=	"mdc_cached_mb",
 	  .fops	=	&mdc_cached_mb_fops		},
+	{ .name	=	"checksum_type",
+	  .fops	=	&mdc_checksum_type_fops		},
 	{ .name	=	"timeouts",
 	  .fops	=	&mdc_timeouts_fops		},
 	{ .name	=	"import",
@@ -521,6 +645,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 
 static struct attribute *mdc_attrs[] = {
 	&lustre_attr_active.attr,
+	&lustre_attr_checksums.attr,
+	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	&lustre_attr_contention_seconds.attr,

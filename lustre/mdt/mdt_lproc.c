@@ -1230,8 +1230,71 @@ static ssize_t dir_restripe_nsonly_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(dir_restripe_nsonly);
 
+/**
+ * Show if the OFD enforces T10PI checksum.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lu_target *lut = obd->u.obt.obt_lut;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", lut->lut_cksum_t10pi_enforce);
+}
+
+/**
+ * Force specific T10PI checksum modes to be enabled
+ *
+ * If T10PI *is* supported in hardware, allow only the supported T10PI type
+ * to be used. If T10PI is *not* supported by the OSD, setting the enforce
+ * parameter forces all T10PI types to be enabled (even if slower) for
+ * testing.
+ *
+ * The final determination of which algorithm to be used depends whether
+ * the client supports T10PI or not, and is handled at client connect time.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: set T10PI checksums enforced
+ *			0: unset T10PI checksums enforced
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lu_target *lut = obd->u.obt.obt_lut;
+	bool enforce;
+	int rc;
+
+	rc = kstrtobool(buffer, &enforce);
+	if (rc)
+		return rc;
+
+	spin_lock(&lut->lut_flags_lock);
+	lut->lut_cksum_t10pi_enforce = enforce;
+	spin_unlock(&lut->lut_flags_lock);
+	return count;
+}
+LUSTRE_RW_ATTR(checksum_t10pi_enforce);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
+LPROC_SEQ_FOPS_RW_TYPE(mdt, checksum_dump);
 LUSTRE_RW_ATTR(job_cleanup_interval);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
 LUSTRE_RW_ATTR(hsm_control);
@@ -1285,6 +1348,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_dir_split_count.attr,
 	&lustre_attr_dir_split_delta.attr,
 	&lustre_attr_dir_restripe_nsonly.attr,
+	&lustre_attr_checksum_t10pi_enforce.attr,
 	NULL,
 };
 
@@ -1297,6 +1361,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_site_stats_fops			},
 	{ .name =	"evict_client",
 	  .fops =	&mdt_mds_evict_client_fops		},
+	{ .name =	"checksum_dump",
+	  .fops =	&mdt_checksum_dump_fops			},
 	{ .name =	"hash_stats",
 	  .fops =	&mdt_hash_fops				},
 	{ .name =	"root_squash",

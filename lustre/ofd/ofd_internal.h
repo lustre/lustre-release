@@ -135,9 +135,6 @@ struct ofd_device {
 
 	/* preferred BRW size, decided by storage type and capability */
 	__u32			 ofd_brw_size;
-	/* checksum types supported on this node */
-	enum cksum_types	 ofd_cksum_types_supported;
-
 	spinlock_t		 ofd_flags_lock;
 	unsigned long		 ofd_raid_degraded:1,
 				 /* sync journal on writes */
@@ -147,9 +144,7 @@ struct ofd_device {
 				 ofd_record_fid_accessed:1,
 				 ofd_lfsck_verify_pfid:1,
 				 ofd_no_precreate:1,
-				 ofd_skip_lfsck:1,
-				 /* Whether to enforce T10PI checksum of RPC */
-				 ofd_checksum_t10pi_enforce:1;
+				 ofd_skip_lfsck:1;
 	struct seq_server_site	 ofd_seq_site;
 	/* the limit of SOFT_SYNC RPCs that will trigger a soft sync */
 	unsigned int		 ofd_soft_sync_limit;

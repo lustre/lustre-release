@@ -6317,11 +6317,7 @@ static int mdt_connect_internal(const struct lu_env *env,
 	if (OCD_HAS_FLAG(data, CKSUM)) {
 		__u32 cksum_types = data->ocd_cksum_types;
 
-		/* The client set in ocd_cksum_types the checksum types it
-		 * supports. We have to mask off the algorithms that we don't
-		 * support */
-		data->ocd_cksum_types &=
-			obd_cksum_types_supported_server(obd_name);
+		tgt_mask_cksum_types(&mdt->mdt_lut, &data->ocd_cksum_types);
 
 		if (unlikely(data->ocd_cksum_types == 0)) {
 			CERROR("%s: Connect with checksum support but no "

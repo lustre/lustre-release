@@ -173,7 +173,10 @@ struct lu_target {
 				 /* e.g. OST node */
 				 lut_no_reconstruct:1,
 				 /* enforce recovery for local clients */
-				 lut_local_recovery:1;
+				 lut_local_recovery:1,
+				 lut_cksum_t10pi_enforce:1;
+	/* checksum types supported on this node */
+	enum cksum_types	 lut_cksum_types_supported;
 	/** last_rcvd file */
 	struct dt_object	*lut_last_rcvd;
 	/* transaction callbacks */
@@ -506,6 +509,7 @@ struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
 					       __u64 xid);
 int tgt_tunables_init(struct lu_target *lut);
 void tgt_tunables_fini(struct lu_target *lut);
+void tgt_mask_cksum_types(struct lu_target *lut, enum cksum_types *cksum_types);
 
 /* target/tgt_grant.c */
 static inline int exp_grant_param_supp(struct obd_export *exp)
