@@ -4632,7 +4632,8 @@ test_39r() {
 
 	# exceed atime_diff and access file
 	sleep 6
-	dd if=$DIR/$tfile of=/dev/null || error "can't udpate atime"
+	dd if=$DIR/$tfile of=/dev/null bs=4k count=1 ||
+		error "can't udpate atime"
 
 	local atime_cli=$(stat -c %X $DIR/$tfile)
 	echo "client atime: $atime_cli"
