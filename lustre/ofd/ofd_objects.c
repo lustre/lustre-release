@@ -770,26 +770,25 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 
 	ENTRY;
 
-	ofd_write_lock(env, fo);
 	if (!ofd_object_exists(fo))
-		GOTO(unlock, rc = -ENOENT);
+		RETURN(-ENOENT);
 
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
 	if (rc != 0)
-		GOTO(unlock, rc);
+		RETURN(rc);
 
 	if (ff != NULL) {
 		rc = ofd_object_ff_load(env, fo);
 		if (rc == -ENODATA)
 			ff_needed = true;
 		else if (rc < 0)
-			GOTO(unlock, rc);
+			RETURN(rc);
 	}
 
 	th = ofd_trans_create(env, ofd);
 	if (IS_ERR(th))
-		GOTO(unlock, rc = PTR_ERR(th));
+		RETURN(PTR_ERR(th));
 
 	rc = dt_declare_attr_set(env, dob, la, th);
 	if (rc)
@@ -803,13 +802,17 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(stop, rc);
 
+	ofd_write_lock(env, fo);
+	if (!ofd_object_exists(fo))
+		GOTO(unlock, rc = -ENOENT);
+
 	rc = dt_falloc(env, dob, start, end, mode, th);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 
 	rc = dt_attr_set(env, dob, la, th);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 
 	if (ff_needed) {
 		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
@@ -817,10 +820,10 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 		if (!rc)
 			filter_fid_le_to_cpu(&fo->ofo_ff, ff, sizeof(*ff));
 	}
-stop:
-	ofd_trans_stop(env, ofd, th, rc);
 unlock:
 	ofd_write_unlock(env, fo);
+stop:
+	ofd_trans_stop(env, ofd, th, rc);
 	RETURN(rc);
 }
 
