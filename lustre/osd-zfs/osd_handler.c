@@ -643,7 +643,7 @@ static void osd_conf_get(const struct lu_env *env,
 		param->ddp_brw_size = ONE_MB_BRW_SIZE;
 
 #ifdef HAVE_DMU_OFFSET_NEXT
-	param->ddp_has_lseek_data_hole = true;
+	param->ddp_has_lseek_data_hole = osd->od_sync_on_lseek;
 #else
 	param->ddp_has_lseek_data_hole = false;
 #endif
@@ -1289,6 +1289,7 @@ static int osd_device_init0(const struct lu_env *env,
 	sema_init(&o->od_otable_sem, 1);
 	INIT_LIST_HEAD(&o->od_ios_list);
 	o->od_auto_scrub_interval = AS_DEFAULT;
+	o->od_sync_on_lseek = B_TRUE;
 
 	/* ZFS does not support reporting nonrotional status yet, so this flag
 	 * is only set if explicitly set by the user.

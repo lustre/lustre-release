@@ -1180,6 +1180,7 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, int whence)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	uint64_t size = obj->oo_attr.la_size;
 	uint64_t result = offset;
 	int rc;
@@ -1197,17 +1198,40 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	if (offset >= size)
 		RETURN(hole ? offset : -ENXIO);
 
-	rc = osd_dmu_offset_next(osd_obj2dev(obj)->od_os,
-				 obj->oo_dn->dn_object, hole, &result);
+	/* Currently ZFS reports no valid DATA offset if object has dirty data
+	 * and we cannot just switch to generic way with reporting DATA on all
+	 * file offsets and HOLE beyond end of file, because we may get HOLE
+	 * reported correctly at some offset inside file then DATA will find
+	 * dirty state and be reported also at that offset by generic approach.
+	 * This is because for HOLE report ZFS doesn't check dirty state but
+	 * does for DATA.
+	 * The only way to get reliable results is to call txg_wait_synced()
+	 * when ZFS reports EBUSY result and repeat lseek call and that is
+	 * controlled via od_sync_on_lseek option.
+	 */
+	if (!osd->od_sync_on_lseek)
+		result = hole ? size : offset;
+
+again:
+	rc = osd_dmu_offset_next(osd->od_os, obj->oo_dn->dn_object, hole,
+				 &result);
+	/* dirty inode, lseek result is unreliable without sync */
+	if (rc == EBUSY) {
+		txg_wait_synced(dmu_objset_pool(osd->od_os), 0ULL);
+		goto again;
+	}
+
 	if (rc == ESRCH)
 		RETURN(-ENXIO);
 
-	/* file was dirty, so fall back to using generic logic:
-	 * For HOLE return file size, for DATA the result is set
-	 * already to the 'offset' parameter value.
+	/* ZFS is not exported all needed function, so fall back to the
+	 * generic logic: for HOLE return file size, for DATA return
+	 * the current offset
 	 */
-	if (rc == EBUSY && hole)
-		result = size;
+	if (rc == EOPNOTSUPP)
+		result = hole ? size : offset;
+	else if (rc)
+		return -rc;
 
 	/* dmu_offset_next() only works on whole blocks so may return SEEK_HOLE
 	 * result as end of the last block instead of logical EOF which we need

@@ -350,7 +350,8 @@ struct osd_device {
 				 od_is_ost:1,
 				 od_in_init:1,
 				 od_posix_acl:1,
-				 od_nonrotational:1;
+				 od_nonrotational:1,
+				 od_sync_on_lseek:1;
 	unsigned int		 od_dnsize;
 	int			 od_index_backup_stop;
 
@@ -1166,7 +1167,7 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 #define osd_dmu_offset_next(os, obj, hole, res) \
 	dmu_offset_next((os), (obj), (hole), (res))
 #else
-#define osd_dmu_offset_next(os, obj, hole, res) (EBUSY)
+#define osd_dmu_offset_next(os, obj, hole, res) (EOPNOTSUPP)
 #endif
 
 #endif /* _OSD_INTERNAL_H */
