@@ -91,6 +91,9 @@ extern struct kmem_cache *dynlock_cachep;
 #define OSD_STATFS_RESERVED		(1ULL << 23) /* 8MB */
 #define OSD_STATFS_RESERVED_SHIFT	(7) /* reserve 0.78% of all space */
 
+/* Default extent bytes when declaring write commit */
+#define OSD_DEFAULT_EXTENT_BYTES	(1U << 20)
+
 /* check if ldiskfs support project quota */
 #ifndef LDISKFS_IOC_FSSETXATTR
 #undef HAVE_PROJECT_QUOTA
@@ -345,6 +348,7 @@ struct osd_device {
 	enum osd_t10_type	 od_t10_type;
 	atomic_t		 od_commit_cb_in_flight;
 	wait_queue_head_t	 od_commit_cb_done;
+	unsigned int __percpu	*od_extent_bytes_percpu;
 };
 
 static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
@@ -413,6 +417,7 @@ struct osd_thandle {
 	/* Link to the device, for debugging. */
 	struct lu_ref_link      ot_dev_link;
 	unsigned int		ot_credits;
+	unsigned int		oh_declared_ext;
 
 	/* quota IDs related to the transaction */
 	unsigned short		ot_id_cnt;

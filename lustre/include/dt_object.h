@@ -2000,7 +2000,9 @@ struct thandle {
 	 * including OSTs */
 				th_complex:1,
 	/* whether ignore quota */
-				th_ignore_quota:1;
+				th_ignore_quota:1,
+	/* whether restart transaction */
+				th_restart_tran:1;
 };
 
 /**

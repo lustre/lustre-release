@@ -1391,12 +1391,16 @@ struct hsm_state_set {
 			       OBD_BRW_OVER_GRPQUOTA | \
 			       OBD_BRW_OVER_PRJQUOTA)
 
+#define OBD_BRW_DONE	0x40000000UL   /*
+					* osd-ldiskfs inernal,
+					* IO has been issued before
+					*/
 #define OBD_BRW_LOCAL1	0x80000000UL	/*
 					 * osd-ldiskfs internal,
 					 * page mapped to real block
 					 */
 
-#define OBD_BRW_LOCALS (OBD_BRW_LOCAL1)
+#define OBD_BRW_LOCALS (OBD_BRW_LOCAL1 | OBD_BRW_DONE)
 
 #define OBD_MAX_GRANT 0x7fffffffUL /* Max grant allowed to one client: 2 GiB */
 

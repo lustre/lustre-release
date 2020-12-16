@@ -1216,7 +1216,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	int rc = 0;
 	int rc2 = 0;
 	int retries = 0;
-	int i;
+	int i, restart = 0;
 	bool soft_sync = false;
 	bool cb_registered = false;
 	bool fake_write = false;
@@ -1329,8 +1329,10 @@ retry:
 		OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_WR_ATTR_DELAY,
 				       OBD_FAIL_ONCE, cfs_fail_val);
 		rc = dt_write_commit(env, o, lnb, niocount, th, oa->o_size);
-		if (rc)
+		if (rc) {
+			restart = th->th_restart_tran;
 			GOTO(out_unlock, rc);
+		}
 	}
 
 	/* get attr to return */
@@ -1355,7 +1357,7 @@ out_stop:
 			granted = 0;
 	}
 
-	rc2 = ofd_trans_stop(env, ofd, th, rc);
+	rc2 = ofd_trans_stop(env, ofd, th, restart ? 0 : rc);
 	if (!rc)
 		rc = rc2;
 	if (rc == -ENOSPC && retries++ < 3) {
@@ -1364,6 +1366,16 @@ out_stop:
 		goto retry;
 	}
 
+	if (restart) {
+		retries++;
+		restart = 0;
+		if (retries % 10000 == 0)
+			CERROR("%s: restart IO write too many times: %d\n",
+				ofd_name(ofd), retries);
+		CDEBUG(D_INODE, "retry transaction, retries:%d\n",
+		       retries);
+		goto retry;
+	}
 	if (!soft_sync)
 		/* reset fed_soft_sync_count upon non-SOFT_SYNC RPC */
 		atomic_set(&fed->fed_soft_sync_count, 0);

@@ -35,6 +35,7 @@
 
 #include <linux/workqueue.h>
 #include <libcfs/libcfs.h>
+#include <lustre_compat.h>
 
 struct cfs_var_array {
 	unsigned int		va_count;	/* # of buffers */
@@ -176,10 +177,6 @@ EXPORT_SYMBOL(cfs_array_alloc);
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
  * minimum changes needed to work on older kernels too.
  */
-
-#ifndef raw_cpu_ptr
-#define raw_cpu_ptr(p) __this_cpu_ptr(p)
-#endif
 
 #ifndef llist_for_each_safe
 #define llist_for_each_safe(pos, n, node)                       \

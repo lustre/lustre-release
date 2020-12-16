@@ -1832,6 +1832,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	th->th_dev = d;
 	th->th_result = 0;
 	oh->ot_credits = 0;
+	oh->oh_declared_ext = 0;
 	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_trunc_locks);
@@ -7860,6 +7861,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	osd_procfs_fini(o);
 	if (o->od_oi_table != NULL)
 		osd_oi_fini(osd_oti_get(env), o);
+	if (o->od_extent_bytes_percpu)
+		free_percpu(o->od_extent_bytes_percpu);
 	osd_obj_map_fini(o);
 	osd_umount(env, o);
 
@@ -7980,6 +7983,12 @@ static int osd_device_init0(const struct lu_env *env,
 
 		rc = PTR_ERR(o->od_quota_slave_dt);
 		o->od_quota_slave_dt = NULL;
+		GOTO(out_procfs, rc);
+	}
+
+	o->od_extent_bytes_percpu = alloc_percpu(unsigned int);
+	if (!o->od_extent_bytes_percpu) {
+		rc = -ENOMEM;
 		GOTO(out_procfs, rc);
 	}
 
