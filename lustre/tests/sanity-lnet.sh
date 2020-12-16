@@ -849,7 +849,7 @@ peer:
         - nid: 25@gni
 EOF
 	append_global_yaml
-	echo"Add peer with nidrange (gni)"
+	echo "Add peer with nidrange (gni)"
 	compare_peer_add "21@gni" "[22-25]@gni" || error
 	echo "Add peer with nidrange that overlaps primary nid (gni)"
 	compare_peer_add "21@gni" "[21-25]@gni"
