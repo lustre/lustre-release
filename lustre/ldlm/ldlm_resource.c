@@ -355,18 +355,8 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
                 CDEBUG(D_DLMTRACE,
                        "dropping all unused locks from namespace %s\n",
                        ldlm_ns_name(ns));
-                if (ns_connect_lru_resize(ns)) {
-			/* Try to cancel all @ns_nr_unused locks. */
-			ldlm_cancel_lru(ns, ns->ns_nr_unused, 0,
-					LDLM_LRU_FLAG_PASSED |
-					LDLM_LRU_FLAG_CLEANUP);
-		} else {
-			tmp = ns->ns_max_unused;
-			ns->ns_max_unused = 0;
-			ldlm_cancel_lru(ns, 0, 0, LDLM_LRU_FLAG_PASSED |
-					LDLM_LRU_FLAG_CLEANUP);
-			ns->ns_max_unused = tmp;
-		}
+		/* Try to cancel all @ns_nr_unused locks. */
+		ldlm_cancel_lru(ns, INT_MAX, 0, LDLM_LRU_FLAG_CLEANUP);
 		return count;
 	}
 
@@ -389,7 +379,6 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
 		       "changing namespace %s unused locks from %u to %u\n",
 		       ldlm_ns_name(ns), ns->ns_nr_unused,
 		       (unsigned int)tmp);
-		ldlm_cancel_lru(ns, tmp, LCF_ASYNC, LDLM_LRU_FLAG_PASSED);
 
 		if (!lru_resize) {
 			CDEBUG(D_DLMTRACE,
@@ -397,13 +386,12 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
 			       ldlm_ns_name(ns));
 			ns->ns_connect_flags &= ~OBD_CONNECT_LRU_RESIZE;
 		}
+		ldlm_cancel_lru(ns, tmp, LCF_ASYNC, 0);
         } else {
 		CDEBUG(D_DLMTRACE,
 		       "changing namespace %s max_unused from %u to %u\n",
 		       ldlm_ns_name(ns), ns->ns_max_unused,
 		       (unsigned int)tmp);
-		ns->ns_max_unused = (unsigned int)tmp;
-		ldlm_cancel_lru(ns, 0, LCF_ASYNC, LDLM_LRU_FLAG_PASSED);
 
 		/* Make sure that LRU resize was originally supported before
 		 * turning it on here.
@@ -415,6 +403,8 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
                                ldlm_ns_name(ns));
                         ns->ns_connect_flags |= OBD_CONNECT_LRU_RESIZE;
                 }
+		ns->ns_max_unused = (unsigned int)tmp;
+		ldlm_cancel_lru(ns, 0, LCF_ASYNC, 0);
         }
 
         return count;

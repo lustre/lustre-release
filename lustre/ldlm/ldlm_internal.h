@@ -98,24 +98,20 @@ struct ldlm_namespace *ldlm_namespace_first_locked(enum ldlm_side);
 /* ldlm_request.c */
 /* Cancel lru flag, it indicates we cancel aged locks. */
 enum ldlm_lru_flags {
-	LDLM_LRU_FLAG_AGED	= 0x01, /* Cancel aged locks (non LRU resize) */
-	LDLM_LRU_FLAG_PASSED	= 0x02, /* Cancel passed number of locks */
-	LDLM_LRU_FLAG_SHRINK	= 0x04, /* Cancel locks from shrinker */
-	LDLM_LRU_FLAG_LRUR	= 0x08, /* Cancel locks from lru resize */
-	LDLM_LRU_FLAG_NO_WAIT	= 0x10, /* Cancel locks w/o blocking (neither
-					 * sending nor waiting for any RPCs) */
-	LDLM_LRU_FLAG_CLEANUP	= 0x20, /* Used when clearing lru, tells
-					 * prepare_lru_list to set discard flag
-					 * on PR extent locks so we don't waste
-					 * time saving pages that will be
-					 * discarded momentarily */
+	LDLM_LRU_FLAG_NO_WAIT	= 0x1, /* Cancel locks w/o blocking (neither
+					* sending nor waiting for any RPCs) */
+	LDLM_LRU_FLAG_CLEANUP	= 0x2, /* Used when clearing lru, tells
+					* prepare_lru_list to set discard flag
+					* on PR extent locks so we don't waste
+					* time saving pages that will be
+					* discarded momentarily */
 };
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr,
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int min,
 		    enum ldlm_cancel_flags cancel_flags,
 		    enum ldlm_lru_flags lru_flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns,
-			  struct list_head *cancels, int count, int max,
+			  struct list_head *cancels, int min, int max,
 			  enum ldlm_cancel_flags cancel_flags,
 			  enum ldlm_lru_flags lru_flags);
 extern unsigned int ldlm_enqueue_min;
