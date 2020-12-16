@@ -351,6 +351,14 @@ enum ldlm_ns_type {
 	LDLM_NS_TYPE_MGT,		/**< MGT namespace */
 };
 
+enum ldlm_namespace_flags {
+	/**
+	 * Flag to indicate the LRU cancel is in progress.
+	 * Used to limit the process by 1 thread only.
+	 */
+	LDLM_LRU_CANCEL = 0
+};
+
 /**
  * LDLM Namespace.
  *
@@ -531,6 +539,11 @@ struct ldlm_namespace {
 
 	struct kobject		ns_kobj; /* sysfs object */
 	struct completion	ns_kobj_unregister;
+
+	/**
+	 * To avoid another ns_lock usage, a separate bitops field.
+	 */
+	unsigned long		ns_flags;
 };
 
 /**
