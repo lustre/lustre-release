@@ -942,8 +942,15 @@ static int osd_extend_trans(handle_t *handle, int needed,
 static int osd_extend_restart_trans(handle_t *handle, int needed,
 				    struct inode *inode)
 {
-	return ldiskfs_journal_ensure_credits(handle, needed,
+	int rc;
+
+	rc = ldiskfs_journal_ensure_credits(handle, needed,
 		ldiskfs_trans_default_revoke_credits(inode->i_sb));
+	/* this means journal has been restarted */
+	if (rc > 0)
+		rc = 0;
+
+	return rc;
 }
 #else
 static int osd_extend_trans(handle_t *handle, int needed,
