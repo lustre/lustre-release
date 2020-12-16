@@ -2242,9 +2242,13 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		pool_name = NULL;
+		if (def_pool[0] != '\0')
+			pool_name = def_pool;
+
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3 ||
 		    v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
 			v3 = (struct lov_user_md_v3 *)v1;
+
 			if (v3->lmm_pool_name[0] != '\0')
 				pool_name = v3->lmm_pool_name;
 
@@ -2252,11 +2256,10 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 				rc = lod_comp_copy_ost_lists(lod_comp, v3);
 				if (rc)
 					GOTO(free_comp, rc);
+
+				pool_name = NULL;
 			}
 		}
-
-		if (pool_name == NULL && def_pool[0] != '\0')
-			pool_name = def_pool;
 
 		if (v1->lmm_pattern == 0)
 			v1->lmm_pattern = LOV_PATTERN_RAID0;
