@@ -1021,10 +1021,6 @@ static ssize_t mdt_hash_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(mdt_hash);
 
-static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
-	{ NULL }
-};
-
 static const struct file_operations lod_proc_mdt_fops = {
 	.owner   = THIS_MODULE,
 	.open    = lod_mdts_seq_open,
@@ -1078,7 +1074,6 @@ static struct attribute *lod_attrs[] = {
  */
 int lod_procfs_init(struct lod_device *lod)
 {
-	struct ldebugfs_vars ldebugfs_obd_vars[] = { { NULL } };
 	struct obd_device *obd = lod2obd(lod);
 	struct obd_type *type;
 	struct kobject *lov;
@@ -1086,17 +1081,16 @@ int lod_procfs_init(struct lod_device *lod)
 
 	lod->lod_dt_dev.dd_ktype.default_attrs = lod_attrs;
 	rc = dt_tunables_init(&lod->lod_dt_dev, obd->obd_type, obd->obd_name,
-			      ldebugfs_obd_vars);
+			      NULL);
 	if (rc) {
 		CERROR("%s: failed to setup DT tunables: %d\n",
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
 
-	obd->obd_vars = lprocfs_lod_obd_vars;
 	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 					       obd->obd_type->typ_procroot,
-					       obd->obd_vars, obd);
+					       NULL, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("%s: error %d setting up lprocfs\n",
