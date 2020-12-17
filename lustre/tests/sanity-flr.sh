@@ -3015,6 +3015,39 @@ function test_205() {
 }
 run_test 205 "lfs mirror extend to set prefer flag"
 
+function test_206() {
+	# create a new OST pool
+	local pool_name=$TESTNAME
+
+	create_pool $FSNAME.$pool_name ||
+		error "create OST pool $pool_name failed"
+	# add OSTs into the pool
+	pool_add_targets $pool_name 0 1 ||
+		error "add OSTs into pool $pool_name failed"
+
+	$LFS setstripe -c1 --pool=$pool_name $DIR/$tfile ||
+		error "can't setstripe"
+	$LFS mirror extend -N $DIR/$tfile ||
+		error "can't create replica"
+	if $LFS getstripe $DIR/$tfile | grep -q prefer ; then
+		$LFS getstripe $DIR/$tfile
+		error "prefer found"
+	fi
+	$LFS setstripe --comp-set --comp-flags=prefer -p $pool_name $DIR/$tfile || {
+		$LFS getstripe $DIR/$tfile
+		error "can't setstripe prefer"
+	}
+
+	if ! $LFS getstripe $DIR/$tfile | grep -q prefer ; then
+		$LFS getstripe $DIR/$tfile
+		error "no prefer found"
+	fi
+
+	# destroy OST pool
+	destroy_test_pools
+}
+run_test 206 "lfs setstripe -pool .. --comp-flags=.. "
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

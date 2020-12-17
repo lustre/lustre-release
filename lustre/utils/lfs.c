@@ -139,6 +139,13 @@ static int lfs_migrate_to_dom(int fd, int fdv, char *name,
 			      struct llapi_stripe_param *param,
 			      struct llapi_layout *layout);
 
+struct pool_to_id_cbdata {
+	const char *pool;
+	__u32 id;
+};
+static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata);
+static int find_mirror_id_by_pool(struct llapi_layout *layout, void *cbdata);
+
 enum setstripe_origin {
 	SO_SETSTRIPE,
 	SO_MIGRATE,
@@ -1128,13 +1135,58 @@ static int migrate_nonblock(int fd, int fdv)
 	return 0;
 }
 
-static int lfs_component_set(char *fname, int comp_id,
+static
+int lfs_layout_compid_by_pool(char *fname, const char *pool, int *comp_id)
+{
+	struct pool_to_id_cbdata data = { .pool = pool };
+	struct llapi_layout *layout = NULL;
+	int rc;
+
+	layout = llapi_layout_get_by_path(fname, 0);
+	if (!layout) {
+		fprintf(stderr,
+			"error %s: file '%s' couldn't get layout: rc=%d\n",
+			progname, fname, errno);
+		rc = -errno;
+		goto free_layout;
+	}
+	rc = llapi_layout_sanity(layout, false, true);
+	if (rc < 0) {
+		llapi_layout_sanity_perror(errno);
+		goto free_layout;
+	}
+	rc = llapi_layout_comp_iterate(layout, find_comp_id_by_pool, &data);
+	if (rc < 0)
+		goto free_layout;
+
+	*comp_id = data.id;
+	rc = 0;
+
+free_layout:
+	if (layout)
+		llapi_layout_free(layout);
+	return rc;
+}
+
+static int lfs_component_set(char *fname, int comp_id, const char *pool,
 			     __u32 flags, __u32 neg_flags)
 {
 	__u32 ids[2];
 	__u32 flags_array[2];
 	size_t count = 0;
 	int rc;
+
+	if (!comp_id) {
+		if (pool == NULL) {
+			fprintf(stderr,
+				"error %s: neither component id nor pool is specified\n",
+				progname);
+			return -EINVAL;
+		}
+		rc = lfs_layout_compid_by_pool(fname, pool, &comp_id);
+		if (rc)
+			return rc;
+	}
 
 	if (flags) {
 		ids[count] = comp_id;
@@ -1925,10 +1977,26 @@ static int find_comp_id(struct llapi_layout *layout, void *cbdata)
 	return LLAPI_LAYOUT_ITER_CONT;
 }
 
-struct pool_to_id_cbdata {
-	const char *pool;
-	__u32 id;
-};
+static int find_mirror_id_by_pool(struct llapi_layout *layout, void *cbdata)
+{
+	char buf[LOV_MAXPOOLNAME + 1];
+	struct pool_to_id_cbdata *d = (void *)cbdata;
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_pool_name_get(layout, buf, sizeof(buf));
+	if (rc < 0)
+		return rc;
+	if (strcmp(d->pool, buf))
+		return LLAPI_LAYOUT_ITER_CONT;
+
+	rc = llapi_layout_mirror_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+	d->id = id;
+
+	return LLAPI_LAYOUT_ITER_STOP;
+}
 
 static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 {
@@ -1943,7 +2011,7 @@ static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 	if (strcmp(d->pool, buf))
 		return LLAPI_LAYOUT_ITER_CONT;
 
-	rc = llapi_layout_mirror_id_get(layout, &id);
+	rc = llapi_layout_comp_id_get(layout, &id);
 	if (rc < 0)
 		return rc;
 	d->id = id;
@@ -2064,7 +2132,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	if (mflags & MF_COMP_POOL) {
 		struct pool_to_id_cbdata data = { .pool = pool };
 
-		rc = llapi_layout_comp_iterate(layout, find_comp_id_by_pool,
+		rc = llapi_layout_comp_iterate(layout, find_mirror_id_by_pool,
 					       &data);
 		mirror_id = data.id;
 	} else if (mflags & MF_COMP_ID) {
@@ -3826,7 +3894,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	if (comp_set && !comp_id) {
+	if (comp_set && !comp_id && !lsa.lsa_pool_name) {
 		fprintf(stderr,
 			"%s %s: --component-set doesn't have component-id set\n",
 			progname, argv[0]);
@@ -4078,6 +4146,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					     layout);
 		} else if (comp_set != 0) {
 			result = lfs_component_set(fname, comp_id,
+						   lsa.lsa_pool_name,
 						   lsa.lsa_comp_flags,
 						   lsa.lsa_comp_neg_flags);
 		} else if (comp_del != 0) {
