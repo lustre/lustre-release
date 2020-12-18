@@ -198,6 +198,46 @@ $ lfs getstripe -m ./remotedir/file.*.txt<lineannotation>check files are on MDT0
           this migration.  However, you cannot abort a failed migration, or
           migrate to different MDTs from previous migration command.</para>
       </section>
+      <section remap="h3" condition='l2C'>
+        <title><indexterm>
+          <primary>migrating metadata</primary>
+        </indexterm>Directory Restriping</title>
+        <para>Lustre 2.14 includs a feature to change the stripe count of an
+          existing directory. The <literal>lfs setdirstripe -c</literal> command
+          can be performed on an existing directory to change its stripe count.
+          For example, a directory <literal>/testfs/testdir</literal> is becoming
+          large, run the following command to increase its stripe count to
+          <literal>2</literal>:</para>
+          <screen>$ lfs setdirstripe -c 2 /testfs/testdir</screen>
+        <para>By default directory restriping will migrate sub-file dirents only,
+          but it won't move inodes. To enable moving both dirents and inodes, run
+          the following command on all MDS's:</para>
+          <screen>mds$ lctl set_param mdt.*.dir_restripe_nsonly=0</screen>
+        <para>It's not allowed to specify MDTs in directory restriping, instead
+          server will pick MDTs for the added stripes by space and inode usages.
+          During restriping, directory and its sub-files can be accessed like
+          normal ones, which is the same as directory migration. Similarly you
+          cannot abort a failed restriping, and server will resume the failed
+          restriping automatically when it notices an unfinished restriping.</para>
+      </section>
+      <section remap="h3" condition='l2C'>
+        <title><indexterm>
+          <primary>migrating metadata</primary>
+        </indexterm>Directory Auto-Split</title>
+        <para>Lustre 2.14 includs a feature to automatically increase the stripe
+          count of a directory when it becomes large. This can be enabled by the
+          following command:</para>
+          <screen>mds$ lctl set_param mdt.*.enable_dir_auto_split=1</screen>
+        <para>The sub file count that triggers directory auto-split is 50k, and
+          it can be changed by the following command:</para>
+          <screen>mds$ lctl set_param mdt.*.dir_split_count=value</screen>
+        <para>The directory stripe count will be increased from 0 to 4 if it's a
+          plain directory, and from 4 to 8 upon the second split, and so on.
+          However the final stripe count won't exceed total MDT count, and it will
+          stop splitting when it's distributed among all MDTs. This delta value
+          can be changed by the following command:</para>
+          <screen>mds$ lctl set_param mdt.*.dir_split_delta=value</screen>
+      </section>
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_75549">
