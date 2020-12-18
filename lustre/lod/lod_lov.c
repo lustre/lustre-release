@@ -745,11 +745,18 @@ static int lod_gen_component_ea(const struct lu_env *env,
 			RETURN(-E2BIG);
 		objs = &v3->lmm_objects[0];
 	}
+	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	stripe_count = lod_comp_entry_stripe_count(lo, comp_idx, is_dir);
 	if (stripe_count == 0 && !is_dir &&
 	    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
-	    !(lod_comp->llc_pattern & LOV_PATTERN_MDT))
+	    !(lod_comp->llc_pattern & LOV_PATTERN_MDT)) {
+		/* Try again if all active targets are disconnected.
+		 * It is possible when MDS does failover. */
+		if (!lod->lod_ost_active_count &&
+		    lod->lod_ost_count)
+			RETURN(-EAGAIN);
 		RETURN(-E2BIG);
+	}
 
 	if (!is_dir && lo->ldo_is_composite)
 		lod_comp_shrink_stripe_count(lod_comp, &stripe_count);
@@ -758,7 +765,6 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		GOTO(done, rc = 0);
 
 	/* generate ost_idx of this component stripe */
-	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	for (i = 0; i < stripe_count; i++) {
 		struct dt_object *object;
 		__u32 ost_idx = (__u32)-1UL;

@@ -157,6 +157,7 @@ struct lod_device {
 
 #define lod_ost_bitmap		lod_ost_descs.ltd_tgt_bitmap
 #define lod_ost_count		lod_ost_descs.ltd_lov_desc.ld_tgt_count
+#define lod_ost_active_count	lod_ost_descs.ltd_lov_desc.ld_active_tgt_count
 #define lod_remote_mdt_count	lod_mdt_descs.ltd_lmv_desc.ld_tgt_count
 
 struct lod_layout_component {
