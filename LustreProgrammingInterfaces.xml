@@ -84,7 +84,7 @@
               to complete, to avoid MDS threads and clients hanging due to
               errors accessing a remote service node.  The upcall must finish
               within 30s before the MDS will continue without the supplementary
-              data.  The upcall timeout can be set on the MDS using:
+              data.  The upcall timeout in seconds can be set on the MDS using:
               <literal>lctl set_param mdt.*.identity_acquire_expire=<replaceable>seconds</replaceable></literal></para>
           </listitem>
           <listitem>
@@ -98,8 +98,18 @@
             <para>The group downcall data is cached by the kernel to avoid
               repeated upcalls for the same user slowing down the MDS.  This
               cache is expired from the kernel after 1200s (20 minutes) by
-              default.  The cache age can be set on the MDS using:
+              default.  The cache age in seconds can be set on the MDS using:
               <literal>lctl set_param mdt.*.identity_expire=<replaceable>seconds</replaceable></literal></para>
+          </listitem>
+          <listitem>
+            <para>To force eviction of cached identity data (e.g. after adding
+              or removing a user from a supplementary group), the cache entry
+              for a specific numeric UID can be flushed on the MDS using:
+              <literal>lctl set_param mdt.*.identity_flush=<replaceable>UID</replaceable></literal>
+              To flush the cached records for all users from cache, use
+              <literal>-1</literal> for the UID:
+              <literal>lctl set_param mdt.*.identity_flush=-1</literal>
+            </para>
           </listitem>
         </itemizedlist>
       </section>
