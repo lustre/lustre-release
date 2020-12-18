@@ -105,6 +105,16 @@ Specify a numeric bitmask of type-specific layout flags for the foreign layout.
 Specify a string to be used as a foreign (free format) striping.
 .SH NOTE
 .PP
+If neither
+.B -c
+or
+.B -i
+are specified,
+.B lfs mkdir
+will default to
+.B -c 1 -i -1
+and create the directory on an MDT that is less full than the others.
+.PP
 The
 .B lfs setdirstripe
 command is only usable by root unless the

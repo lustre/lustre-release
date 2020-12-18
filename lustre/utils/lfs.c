@@ -6209,10 +6209,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	if (!delete && lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT &&
 	    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT && !foreign_mode) {
-		fprintf(stderr,
-			"%s %s: stripe offset and count must be specified\n",
-			progname, argv[0]);
-		return CMD_HELP;
+		/* if no parameters set, create directory on least-used MDTs */
+		lsa.lsa_stripe_off = -1;
+		lsa.lsa_stripe_count = 1;
 	}
 
 	if (delete &&
