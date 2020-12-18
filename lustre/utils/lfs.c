@@ -571,8 +571,9 @@ command_t cmdlist[] = {
 	 "         clear the project inherit flag and ID on the file or directory\n"
 	},
 #endif
-	{"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
-	 "usage: flushctx [-k] [mountpoint...]"},
+	{"flushctx", lfs_flushctx, 0,
+	 "Flush security context for current user.\n"
+	 "usage: flushctx [-k] [-r] [mountpoint...]"},
 	{"changelog", lfs_changelog, 0,
 	 "Show the metadata changes on an MDT."
 	 "\nusage: changelog <mdtname> [startrec [endrec]]"},
@@ -7925,15 +7926,18 @@ static int flushctx_ioctl(char *mp)
 
 static int lfs_flushctx(int argc, char **argv)
 {
-	int     kdestroy = 0, c;
+	int     kdestroy = 0, reap = 0, c;
 	char    mntdir[PATH_MAX] = {'\0'};
 	int     index = 0;
 	int     rc = 0;
 
-	while ((c = getopt(argc, argv, "k")) != -1) {
+	while ((c = getopt(argc, argv, "kr")) != -1) {
 		switch (c) {
 		case 'k':
 			kdestroy = 1;
+			break;
+		case 'r':
+			reap = 1;
 			break;
 		default:
 			fprintf(stderr,
@@ -7972,6 +7976,15 @@ static int lfs_flushctx(int argc, char **argv)
 				rc = -1;
 		}
 	}
+
+	if (reap) {
+		rc = system("keyctl reap > /dev/null");
+		if (rc != 0) {
+			rc = WEXITSTATUS(rc);
+			fprintf(stderr, "error reaping keyring: %d\n", rc);
+		}
+	}
+
 	return rc;
 }
 

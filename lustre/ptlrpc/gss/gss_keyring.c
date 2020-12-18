@@ -70,6 +70,7 @@ static struct key_type gss_key_type;
 
 static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
                                struct ptlrpc_svc_ctx *svc_ctx);
+static void request_key_unlink(struct key *key);
 
 /*
  * the timeout is only for the case that upcall child process die abnormally.
@@ -377,17 +378,18 @@ static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
  */
 static void unbind_ctx_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        struct key      *key = ctx2gctx_keyring(ctx)->gck_key;
+	struct key      *key = ctx2gctx_keyring(ctx)->gck_key;
 
-        if (key) {
+	if (key) {
 		LASSERT(key_get_payload(key, 0) == ctx);
 
-                key_get(key);
-                down_write(&key->sem);
-                unbind_key_ctx(key, ctx);
-                up_write(&key->sem);
-                key_put(key);
-        }
+		key_get(key);
+		down_write(&key->sem);
+		unbind_key_ctx(key, ctx);
+		up_write(&key->sem);
+		key_put(key);
+		request_key_unlink(key);
+	}
 }
 
 /*

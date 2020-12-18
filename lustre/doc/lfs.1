@@ -45,6 +45,9 @@ lfs \- client utility for Lustre-specific file layout and other attributes
       [[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U
 \fR<\fIuname\fR>|<\fIuid\fR>]
 .br
+.B lfs flushctx
+.RB [ --help | -h "] [" -k "] [" -r "] [" \fIrootpath\fR "]"
+.br
 .B lfs getname
 .RB [ --help | -h "] [" --instance | -i "] [" --fsname | -n "] ["
 .IR path ...]
@@ -175,6 +178,9 @@ data has not been changed during an archive operation or before a release
 operation, and by OST migration, primarily for verifying that file data has not
 been changed during a data copy, when done in non-blocking mode.
 .TP
+.B flushctx
+See lfs-flushctx(1).
+.TP
 .B osts
 .RB [ path ]
 List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
@@ -241,8 +247,8 @@ Turn quotas of user and group off
 .SH NOTES
 The usage of \fBlfs find\fR, \fBlfs getstripe\fR, \fBlfs hsm_*\fR,
 \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs getdirstripe\fR,
-\fBlfs setdirstripe\fR, \fBlfs mkdir\fR, and \fBlfs project\fR are explained
-in separate man pages.
+\fBlfs setdirstripe\fR, \fBlfs mkdir\fR, \fBlfs flushctx\fR
+and \fBlfs project\fR are explained in separate man pages.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
@@ -250,6 +256,7 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs-df (1),
 .BR lfs-fid2path (1),
 .BR lfs-find (1),
+.BR lfs-flushctx (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-getname (1),
 .BR lfs-getstripe (1),
