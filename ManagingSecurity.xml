@@ -548,9 +548,11 @@ mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58c
       Lustre sources, under the
       <literal>Documentation/client_side_encryption</literal> directory.
     </para>
-    <note><para>The client-side encryption feature is available on Lustre
-      clients running a Linux distribution with at least kernel 5.4, or have
-      backported the <literal>fscrypt</literal> v2 support, including:</para>
+    <note><para>The client-side encryption feature is available natively on
+      Lustre clients running a Linux distribution with at least kernel 5.4. It
+      is also available thanks to an additional kernel library provided by
+      Lustre, on clients that run a Linux distribution with basic support for
+      encryption, including:</para>
      <itemizedlist>
        <listitem><para>CentOS/RHEL 8.1 and later;</para></listitem>
        <listitem><para>Ubuntu 18.04 and later;</para></listitem>
