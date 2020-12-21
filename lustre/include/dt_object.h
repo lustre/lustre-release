@@ -298,6 +298,17 @@ struct dt_device_operations {
 		       struct dt_device *dev);
 
 	/**
+	 * Wait pending quota update finish
+	 *
+	 * There might be a window that quota usage has been updated,
+	 * but commit callback to reduce pending write have not been
+	 * finished, this is used to wait all pending update done.
+	 *
+	 * \param[in] dev	dt device
+	 */
+	void (*dt_wait_quota_pending)(struct dt_device *dev);
+
+	/**
 	 * Start transaction commit asynchronously.
 	 *
 
@@ -2695,6 +2706,14 @@ static inline int dt_ro(const struct lu_env *env, struct dt_device *dev)
         LASSERT(dev->dd_ops);
         LASSERT(dev->dd_ops->dt_ro);
         return dev->dd_ops->dt_ro(env, dev);
+}
+
+static inline void dt_wait_quota_pending(struct dt_device *dev)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	if (dev->dd_ops->dt_wait_quota_pending)
+		dev->dd_ops->dt_wait_quota_pending(dev);
 }
 
 static inline int dt_declare_insert(const struct lu_env *env,

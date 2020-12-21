@@ -631,11 +631,14 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
 			long long space, int *ret)
 {
 	int rc = 0, count;
+	int wait_pending = 0;
+	struct qsd_qtype_info *qqi = lqe2qqi(lqe);
+
 	ENTRY;
 
 	for (count = 0; rc == 0; count++) {
 		LQUOTA_DEBUG(lqe, "acquiring:%lld count=%d", space, count);
-
+again:
 		if (lqe2qqi(lqe)->qqi_qsd->qsd_stopping) {
 			rc = -EINPROGRESS;
 			break;
@@ -652,6 +655,16 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
 			/* rc == 0, Wouhou! enough local quota space
 			 * rc < 0, something bad happened */
 			 break;
+		/*
+		 * There might be a window that commit transaction
+		 * have updated usage but pending write doesn't change
+		 * wait for it before acquiring remotely.
+		 */
+		if (lqe->lqe_pending_write >= space && !wait_pending) {
+			wait_pending = 1;
+			dt_wait_quota_pending(qqi->qqi_qsd->qsd_dev);
+			goto again;
+		}
 
 		/* if we have gotten some quota and stil wait more quota,
 		 * it's better to give QMT some time to reclaim from clients */

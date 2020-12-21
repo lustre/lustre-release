@@ -1565,6 +1565,8 @@ test_file_soft() {
 	local LIMIT=$2
 	local grace=$3
 	local qtype=$4
+	local SOFT_LIMIT=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
@@ -1597,12 +1599,8 @@ test_file_soft() {
 	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Create file after timer goes off"
-	# There is a window that space is accounted in the quota usage but
-	# hasn't been decreased from the pending write, if we acquire quota
-	# in this window, we'll acquire more than we needed.
-	$RUNAS touch ${TESTFILE}_after_1 ${TESTFILE}_after_2 || true
-	sync_all_data || true
-	$RUNAS touch ${TESTFILE}_after_3 &&
+	# exceed least soft limit is possible
+	$RUNAS createmany -m ${TESTFILE}_after_3 $((SOFT_LIMIT + 1)) &&
 		quota_error a $TSTUSR "create after timer expired," \
 			"but expect EDQUOT"
 	sync_all_data || true
