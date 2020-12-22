@@ -3404,12 +3404,13 @@ static int lod_declare_layout_split(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	lod_obj_inc_layout_gen(lo);
-	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
-
 	rc = lod_striping_reload(env, lo, mbuf);
 	if (rc)
 		RETURN(rc);
+
+	lod_obj_inc_layout_gen(lo);
+	/* fix on-disk layout gen */
+	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
 
 	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), mbuf,
 				       XATTR_NAME_LOV, LU_XATTR_REPLACE, th);

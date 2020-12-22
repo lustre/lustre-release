@@ -2323,6 +2323,34 @@ test_49a() {
 }
 run_test 49a "FIEMAP upon FLR file"
 
+test_50() {	# EX-2179
+	mkdir -p $DIR/$tdir
+
+	local file=$DIR/$tdir/$tfile
+
+	$LFS setstripe -c1 -i0 $file || error "setstripe $file failed"
+
+	$LFS mirror extend -N -c1 -i1 $file ||
+		error "extending mirror for $file failed"
+
+	local olv=$($LFS getstripe $file | awk '/lcm_layout_gen/{print $2}')
+
+	fail mds1
+
+	$LFS mirror split -d --mirror-id=1 $file || error "split $file failed"
+
+	local flv=$($LFS getstripe $file | awk '/lcm_layout_gen/{print $2}')
+
+	echo "$file layout generation from $olv to $flv"
+	(( $flv != ($olv + 1) )) &&
+		error "split does not increase layout gen from $olv to $flv"
+
+	dd if=/dev/zero of=$file bs=1M count=1 || error "write $file failed"
+
+	$LFS getstripe -v $file || error "getstripe $file failed"
+}
+run_test 50 "mirror split update layout generation"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

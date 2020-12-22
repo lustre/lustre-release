@@ -1138,9 +1138,12 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out, rc = -EINVAL);
 		lo->ldo_layout_gen = le32_to_cpu(comp_v1->lcm_layout_gen);
 		lo->ldo_is_composite = 1;
-		lo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
-					LCM_FL_FLR_MASK;
 		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
+		if (mirror_cnt > 1)
+			lo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
+							LCM_FL_FLR_MASK;
+		else
+			lo->ldo_flr_state = LCM_FL_NONE;
 	} else if (magic == LOV_MAGIC_FOREIGN) {
 		size_t length;
 

@@ -611,10 +611,10 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 	int i, j;
 
 	CDEBUG_LIMIT(level,
-		     "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X, refc: %d, entry: %u, layout_gen %u\n",
+		     "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X, refc: %d, entry: %u, mirror: %u, flags: %u,layout_gen %u\n",
 	       lsm, POSTID(&lsm->lsm_oi), lsm->lsm_maxbytes, lsm->lsm_magic,
 	       atomic_read(&lsm->lsm_refc), lsm->lsm_entry_count,
-	       lsm->lsm_layout_gen);
+	       lsm->lsm_mirror_count, lsm->lsm_flags, lsm->lsm_layout_gen);
 
 	if (lsm->lsm_magic == LOV_MAGIC_FOREIGN) {
 		struct lov_foreign_md *lfm = (void *)lsm_foreign(lsm);
