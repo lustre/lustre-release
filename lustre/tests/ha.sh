@@ -824,6 +824,20 @@ ha_powermanage()
 	return 0
 }
 
+ha_power_down_cmd_fn()
+{
+	local nodes=$1
+	local cmd
+
+	case $ha_power_down_cmd in
+	# format is: POWER_DOWN=sysrqcrash
+	sysrqcrash) cmd="pdsh -S -w $nodes 'echo c > /proc/sysrq-trigger' &" ;;
+	*) cmd="$ha_power_down_cmd $nodes" ;;
+	esac
+
+	eval $cmd
+}
+
 ha_power_down()
 {
 	local nodes=$1
@@ -833,7 +847,7 @@ ha_power_down()
 
 	case $ha_power_down_cmd in
 		*pm*) state=off ;;
-		*sysrq* ) state=off ;;
+		sysrqcrash) state=off ;;
 		*) state=on;;
 	esac
 
@@ -845,7 +859,7 @@ ha_power_down()
 	ha_info "Powering down $nodes : cmd: $ha_power_down_cmd"
 	for (( i=0; i<10; i++ )) {
 		ha_info "attempt: $i"
-		$ha_power_down_cmd $nodes &&
+		ha_power_down_cmd_fn $nodes &&
 			ha_powermanage $nodes $state && rc=0 && break
 		sleep $ha_power_delay
 	}
