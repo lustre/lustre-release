@@ -1921,7 +1921,8 @@ static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
 		++bufsize;
 	}
 
-	dirty_inode = test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
+	/* only the first flag-set matters */
+	dirty_inode = !test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
 				       &ei->i_flags);
 
 	/* sparse checking is racy, but sparse is very rare case, leave as is */
