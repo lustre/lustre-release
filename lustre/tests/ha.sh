@@ -647,6 +647,26 @@ ha_start_nonmpi_loads()
     done
 }
 
+declare ha_bgcmd=${ha_bgcmd:-""}
+declare ha_bgcmd_log=$ha_tmp_dir/bgcmdlog
+
+ha_cmd_bg () {
+	[[ -z "$ha_bgcmd" ]] && return 0
+	ha_bgcmd=${ha_bgcmd//"{}"/$ha_test_dir}
+
+	ha_info "BG cmd: $ha_bgcmd"
+	while [ true ]; do
+		[ -f $ha_stop_file ] &&
+			ha_info "$ha_stop_file found! $ha_bgcmd no started" &&
+			break
+		eval $ha_bgcmd 2>&1 | tee -a $ha_bgcmd_log
+		sleep 1
+	done &
+	CMD_BG_PID=$!
+	ha_info CMD BG PID: $CMD_BG_PID
+	ps aux | grep $CMD_BG_PID
+}
+
 ha_lfsck_bg () {
 	rm -f $ha_lfsck_log
 	rm -f $ha_lfsck_stop
@@ -760,6 +780,7 @@ ha_lfsck_repaired()
 
 ha_start_loads()
 {
+	ha_cmd_bg
 	$ha_lfsck_bg && ha_lfsck_bg
 	trap ha_trap_stop_signals $ha_stop_signals
 	ha_start_nonmpi_loads
@@ -769,6 +790,7 @@ ha_start_loads()
 ha_stop_loads()
 {
 	touch $ha_stop_file
+	[[ -n $CMD_BG_PID ]] && wait $CMD_BG_PID || true
 	# true because of lfsck_bg could be stopped already
 	$ha_lfsck_bg && wait $LFSCK_BG_PID || true
 	trap - $ha_stop_signals
