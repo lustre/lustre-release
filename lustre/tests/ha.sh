@@ -220,6 +220,18 @@ declare     ha_mpi_instances=${ha_mpi_instances:-1}
 declare     ha_mpi_loads=${ha_mpi_loads="ior simul mdtest"}
 declare -a  ha_mpi_load_tags=($ha_mpi_loads)
 declare -a  ha_mpiusers=(${ha_mpi_users="mpiuser"})
+declare -a  ha_users
+declare -A  ha_mpiopts
+
+for ((i=0; i<${#ha_mpiusers[@]}; i++)); do
+	u=${ha_mpiusers[i]%%:*}
+	o=""
+	# user gets empty option if ha_mpi_users does not specify it explicitly
+	[[ ${ha_mpiusers[i]} =~ : ]] && o=${ha_mpiusers[i]##*:}
+	ha_users[i]=$u
+	ha_mpiopts[$u]+=" $o"
+done
+ha_users=(${!ha_mpiopts[@]})
 
 declare     ha_ior_params=${IORP:-'" -b $ior_blockSize -t 2m -w -W -T 1"'}
 declare     ha_simul_params=${SIMULP:-'" -n 10"'}
@@ -337,8 +349,8 @@ ha_on()
 	# -S is to be used here to track the
 	# remote command return values
 	#
-	pdsh -S -w $nodes PATH=/usr/local/sbin:/usr/local/bin:/sbin:\
-/bin:/usr/sbin:/usr/bin "$@" ||
+	pdsh -S -w $nodes "PATH=/usr/local/sbin:/usr/local/bin:/sbin:\
+/bin:/usr/sbin:/usr/bin; $@" ||
 		rc=$?
 	return $rc
 }
@@ -429,6 +441,7 @@ ha_repeat_mpi_load()
 	local stripeparams=$6
 	local mpiuser=$7
 	local mustpass=$8
+	local mpirunoptions=$9
 	local tag=${ha_mpi_load_tags[$load]}
 	local cmd=${ha_mpi_load_cmds[$tag]}
 	local dir=$ha_test_dir/$client-$tag
@@ -442,11 +455,12 @@ ha_repeat_mpi_load()
 	cmd=${cmd//"{params}"/$parameter}
 
 	[[ -n "$ha_postcmd" ]] && ha_postcmd=${ha_postcmd//"{}"/$dir}
+	[[ -n "$ha_precmd" ]] && ha_precmd=${ha_precmd//"{}"/$dir}
 	ha_info "Starting $tag"
 
 	machines="-machinefile $machines"
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
-		ha_info "$client Starts: $cmd" 2>&1 |  tee -a $log
+		ha_info "$client Starts: $mpiuser: $cmd" 2>&1 |  tee -a $log
 		{
 		local mdt_index
 		if $ha_mdt_index_random && [ $ha_mdt_index -ne 0 ]; then
@@ -454,22 +468,24 @@ ha_repeat_mpi_load()
 		else
 			mdt_index=$ha_mdt_index
 		fi
+		[[ -n "$ha_precmd" ]] && ha_info "$ha_precmd" &&
+			ha_on $client "$ha_precmd" >>"$log" 2>&1
 		ha_on $client $LFS mkdir -i$mdt_index -c$ha_dir_stripe_count "$dir" &&
 		ha_on $client $LFS getdirstripe "$dir" &&
 		ha_on $client $LFS setstripe $stripeparams $dir &&
 		ha_on $client $LFS getstripe $dir &&
 		ha_on $client chmod a+xwr $dir &&
-		ha_on $client "su $mpiuser sh -c \" $mpirun $ha_mpirun_options \
+		ha_on $client "su $mpiuser sh -c \" $mpirun $mpirunoptions \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client )) \
 			$machines $cmd \" " || rc=$?
 		[[ -n "$ha_postcmd" ]] && ha_info "$ha_postcmd" &&
-			ha_on $client $ha_postcmd >>"$log" 2>&1
+			ha_on $client "$ha_postcmd" >>"$log" 2>&1
 		(( ((rc == 0)) && (( mustpass != 0 )) )) ||
 		(( ((rc != 0)) && (( mustpass == 0 )) )) &&
 			ha_on $client rm -rf "$dir";
 		} >>"$log" 2>&1 || rc=$?
 
-		ha_info rc=$rc mustpass=$mustpass
+		ha_info $client: rc=$rc mustpass=$mustpass
 
 		# mustpass=0 means that failure is expected
 		if (( rc !=0 )); then
@@ -510,6 +526,7 @@ ha_start_mpi_loads()
 	local m
 	local -a mach
 	local mpiuser
+	local nmpi
 
 	# ha_mpi_instances defines the number of
 	# clients start mpi loads; should be <= ${#ha_clients[@]}
@@ -543,7 +560,8 @@ ha_start_mpi_loads()
 
 	for ((n = 0; n < $inst; n++)); do
 		client=${ha_clients[n]}
-		mpiuser=${ha_mpiusers[$((n % ${#ha_mpiusers[@]}))]}
+		nmpi=$((n % ${#ha_users[@]}))
+		mpiuser=${ha_users[nmpi]}
 		for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
 			tag=${ha_mpi_load_tags[$load]}
 			status=$ha_status_file_prefix-$tag-$client
@@ -562,7 +580,8 @@ ha_start_mpi_loads()
 			[[ $ha_ninstmustfail == 0 ]] ||
 				mustpass=$(( n % ha_ninstmustfail ))
 			ha_repeat_mpi_load $client $load $status "$parameter" \
-				$machines "$stripe" "$mpiuser" "$mustpass" &
+				$machines "$stripe" "$mpiuser" "$mustpass" \
+				"${ha_mpiopts[$mpiuser]} $ha_mpirun_options" &
 				ha_status_files+=("$status")
 		done
 	done
