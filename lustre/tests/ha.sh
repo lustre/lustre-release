@@ -174,6 +174,7 @@ set -eE
 declare     ha_tmp_dir=/tmp/$(basename $0)-$$
 declare     ha_stop_file=$ha_tmp_dir/stop
 declare     ha_fail_file=$ha_tmp_dir/fail
+declare     ha_pm_states=$ha_tmp_dir/ha_pm_states
 declare     ha_status_file_prefix=$ha_tmp_dir/status
 declare -a  ha_status_files
 declare     ha_machine_file=$ha_tmp_dir/machine_file
@@ -191,6 +192,8 @@ declare     ha_lfsck_fail_on_repaired=${LFSCK_FAIL_ON_REPAIRED:-false}
 declare     ha_power_down_cmd=${POWER_DOWN:-"pm -0"}
 declare     ha_power_up_cmd=${POWER_UP:-"pm -1"}
 declare     ha_power_delay=${POWER_DELAY:-60}
+declare     ha_node_up_delay=${NODE_UP_DELAY:-10}
+declare     ha_pm_host=${PM_HOST:-$(hostname)}
 declare     ha_failback_delay=${DELAY:-5}
 declare     ha_failback_cmd=${FAILBACK:-""}
 declare     ha_stripe_params=${STRIPEPARAMS:-"-c 0"}
@@ -200,13 +203,14 @@ declare     ha_mdt_index_random=${MDTINDEXRAND:-false}
 declare -a  ha_clients
 declare -a  ha_servers
 declare -a  ha_victims
+declare -a  ha_victims_pair
 declare     ha_test_dir=/mnt/lustre/$(basename $0)-$$
 declare     ha_start_time=$(date +%s)
 declare     ha_expected_duration=$((60 * 60 * 24))
 declare     ha_max_failover_period=10
 declare     ha_nr_loops=0
 declare     ha_stop_signals="SIGINT SIGTERM SIGHUP"
-declare     ha_load_timeout=$((60 * 10))
+declare     ha_load_timeout=${LOAD_TIMEOUT:-$((60 * 10))}
 declare     ha_workloads_only=false
 declare     ha_workloads_dry_run=false
 declare     ha_simultaneous=false
@@ -256,15 +260,15 @@ declare -A  ha_nonmpi_load_cmds=(
 
 ha_usage()
 {
-    ha_info "Usage: $0 -c HOST[,...] -s HOST[,...]"                         \
-            "-v HOST[,...] [-d DIRECTORY] [-u SECONDS]"
+	ha_info "Usage: $0 -c HOST[,...] -s HOST[,...]" \
+		"-v HOST[,...] -f HOST[,...] [-d DIRECTORY] [-u SECONDS]"
 }
 
 ha_process_arguments()
 {
     local opt
 
-	while getopts hc:s:v:d:p:u:wrm opt; do
+	while getopts hc:s:v:d:p:u:wrmf: opt; do
         case $opt in
         h)
             ha_usage
@@ -296,6 +300,9 @@ ha_process_arguments()
 		;;
 	m)
 		ha_simultaneous=true
+		;;
+	f)
+		ha_victims_pair=(${OPTARG//,/ })
 		;;
         \?)
             ha_usage
@@ -752,7 +759,7 @@ ha_wait_loads()
     local file
     local end=$(($(date +%s) + ha_load_timeout))
 
-    ha_info "Waiting for workload status"
+    ha_info "Waiting $ha_load_timeout sec for workload status..."
     rm -f "${ha_status_files[@]}"
 
 	#
@@ -786,24 +793,125 @@ ha_wait_loads()
 	done
 }
 
+ha_powermanage()
+{
+	local nodes=$1
+	local expected_state=$2
+	local state
+	local -a states
+	local i
+	local rc=0
+
+	# store pm -x -q $nodes results in a file to have
+	# more information about nodes statuses
+	ha_on $ha_pm_host pm -x -q $nodes | awk '{print $2 $3}' > $ha_pm_states
+	rc=${PIPESTATUS[0]}
+	echo pmrc=$rc
+
+	while IFS=": " read node state; do
+		[[ "$state" = "$expected_state" ]] && {
+			nodes=${nodes/$node/}
+			nodes=${nodes//,,/,}
+			nodes=${nodes/#,}
+			nodes=${nodes/%,}
+		}
+	done < $ha_pm_states
+
+	if [ -n "$nodes" ]; then
+		cat $ha_pm_states
+		return 1
+	fi
+	return 0
+}
+
 ha_power_down()
 {
 	local nodes=$1
 	local rc=1
 	local i
+	local state
+
+	case $ha_power_down_cmd in
+		*pm*) state=off ;;
+		*sysrq* ) state=off ;;
+		*) state=on;;
+	esac
 
 	if $ha_lfsck_bg && [[ ${nodes//,/ /} =~ $ha_lfsck_node ]]; then
 		ha_info "$ha_lfsck_node down, delay start LFSCK"
 		ha_lock $ha_lfsck_lock
 	fi
 
-	ha_info "Powering down $nodes"
-	for i in $(seq 1 5); do
-		$ha_power_down_cmd $nodes && rc=0 && break
+	ha_info "Powering down $nodes : cmd: $ha_power_down_cmd"
+	for (( i=0; i<10; i++ )) {
+		ha_info "attempt: $i"
+		$ha_power_down_cmd $nodes &&
+			ha_powermanage $nodes $state && rc=0 && break
 		sleep $ha_power_delay
+	}
+
+	[ $rc -eq 0 ] || {
+		ha_info "Failed Powering down in $i attempts:" \
+			"$ha_power_down_cmd"
+		cat $ha_pm_states
+		exit 1
+	}
+}
+
+ha_get_pair()
+{
+	local node=$1
+	local i
+
+	for ((i=0; i<${#ha_victims[@]}; i++)) {
+		[[ ${ha_victims[i]} == $node ]] && echo ${ha_victims_pair[i]} &&
+			return
+	}
+	[[ $i -ne ${#ha_victims[@]} ]] ||
+		ha_error "No pair found!"
+}
+
+ha_power_up_delay()
+{
+	local nodes=$1
+	local end=$(($(date +%s) + ha_node_up_delay))
+	local rc
+
+	if [[ ${#ha_victims_pair[@]} -eq 0 ]]; then
+		ha_sleep $ha_node_up_delay
+		return 0
+	fi
+
+	# Check CRM status on failover pair
+	while (($(date +%s) <= end)); do
+		rc=0
+		for n in ${nodes//,/ }; do
+			local pair=$(ha_get_pair $n)
+			local status=$(ha_on $pair crm_mon -1rQ | \
+				grep -w $n | head -1)
+
+			ha_info "$n pair: $pair status: $status"
+			[[ "$status" == *OFFLINE* ]] ||
+				rc=$((rc + $?))
+			ha_info "rc: $rc"
+		done
+
+		if [[ $rc -eq 0 ]];  then
+			ha_info "CRM: Got all victims status OFFLINE"
+			return 0
+		fi
+		sleep 60
 	done
 
-	[ $rc -eq 0 ] || ha_info "Failed Powering down in $i attempts"
+	ha_info "$nodes CRM status not OFFLINE"
+	for n in ${nodes//,/ }; do
+		local pair=$(ha_get_pair $n)
+
+		ha_info "CRM --- $n"
+		ha_on $pair crm_mon -1rQ
+	done
+	ha_error "CRM: some of $nodes are not OFFLINE in $ha_node_up_delay sec"
+	exit 1
 }
 
 ha_power_up()
@@ -812,13 +920,20 @@ ha_power_up()
 	local rc=1
 	local i
 
-	ha_info "Powering up $nodes"
-	for i in $(seq 1 5); do
-		$ha_power_up_cmd $nodes && rc=0 && break
+	ha_power_up_delay $nodes
+	ha_info "Powering up $nodes : cmd: $ha_power_up_cmd"
+	for (( i=0; i<10; i++ )) {
+		ha_info "attempt: $i"
+		$ha_power_up_cmd $nodes &&
+			ha_powermanage $nodes on && rc=0 && break
 		sleep $ha_power_delay
-	done
+	}
 
-	[ $rc -eq 0 ] || ha_info "Failed Powering up in $i attempts"
+	[ $rc -eq 0 ] || {
+		ha_info "Failed Powering up in $i attempts: $ha_power_up_cmd"
+		cat $ha_pm_states
+		exit 1
+	}
 }
 
 #
