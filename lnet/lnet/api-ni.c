@@ -71,7 +71,7 @@ MODULE_PARM_DESC(rnet_htable_size, "size of remote network hash table");
 static int use_tcp_bonding = false;
 module_param(use_tcp_bonding, int, 0444);
 MODULE_PARM_DESC(use_tcp_bonding,
-		 "Set to 1 to use socklnd bonding. 0 to use Multi-Rail");
+		 "use_tcp_bonding parameter has been deprecated");
 
 unsigned int lnet_numa_range = 0;
 module_param(lnet_numa_range, uint, 0444);
@@ -2589,6 +2589,9 @@ LNetNIInit(lnet_pid_t requested_pid)
 		rc = -ENOMEM;
 		goto err_empty_list;
 	}
+
+	if (use_tcp_bonding)
+		CWARN("'use_tcp_bonding' option has been deprecated. See LU-13641\n");
 
 	/* If LNet is being initialized via DLC it is possible
 	 * that the user requests not to load module parameters (ones which
