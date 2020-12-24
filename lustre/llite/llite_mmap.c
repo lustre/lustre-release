@@ -513,23 +513,6 @@ static void ll_vm_close(struct vm_area_struct *vma)
 	EXIT;
 }
 
-/* XXX put nice comment here.  talk about __free_pte -> dirty pages and
- * nopage's reference passing to the pte */
-int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
-{
-        int rc = -ENOENT;
-        ENTRY;
-
-	LASSERTF(last > first, "last %llu first %llu\n", last, first);
-        if (mapping_mapped(mapping)) {
-                rc = 0;
-		unmap_mapping_range(mapping, first + PAGE_SIZE - 1,
-				    last - first + 1, 0);
-        }
-
-        RETURN(rc);
-}
-
 static const struct vm_operations_struct ll_file_vm_ops = {
 	.fault			= ll_fault,
 	.page_mkwrite		= ll_page_mkwrite,

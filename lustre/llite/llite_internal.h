@@ -1335,7 +1335,6 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 
 /* llite/llite_mmap.c */
 
-int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
 void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
 		     unsigned long addr, size_t count);
