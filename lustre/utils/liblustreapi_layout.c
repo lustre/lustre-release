@@ -3342,6 +3342,8 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 		} else if (!(comp->llc_flags & LCME_FL_EXTENSION) &&
 			   (comp->llc_stripe_size != LLAPI_LAYOUT_DEFAULT)) {
 			if (comp->llc_extent.e_end != LUSTRE_EOF &&
+			    comp->llc_extent.e_end !=
+			    comp->llc_extent.e_start &&
 			    comp->llc_extent.e_end % comp->llc_stripe_size) {
 				args->lsa_rc = LSE_ALIGN_END;
 				goto out_err;

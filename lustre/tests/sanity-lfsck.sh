@@ -5989,6 +5989,35 @@ test_40a() {
 }
 run_test 40a "LFSCK correctly fixes lmm_oi in composite layout"
 
+test_41()
+{
+	local old_debug=$(do_facet $SINGLEMDS $LCTL get_param -n debug)
+
+	do_facet $SINGLEMDS $LCTL set_param debug=+lfsck
+	$LFS setstripe -E 1G -z 64M -E -1 -z 128M $DIR/$tfile
+	do_facet $SINGLEMDS $LCTL dk > /dev/null
+
+	echo "trigger LFSCK for SEL layout"
+	do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV} -A -t all -r -n on
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_LAYOUT
+		error "(2) unexpected status"
+	}
+
+	local errors=$(do_facet $SINGLEMDS $LCTL dk |
+		       grep "lfsck_layout_verify_header")
+
+	[[ "x$errors" == "x" ]] || {
+		echo "$errors"
+		error "lfsck failed"
+	}
+
+	do_facet $SINGLEMDS "$LCTL set_param debug='$old_debug'"
+}
+run_test 41 "SEL support in LFSCK"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

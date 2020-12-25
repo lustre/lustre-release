@@ -1143,6 +1143,7 @@ void lod_adjust_stripe_size(struct lod_layout_component *comp,
 		}
 		/* check stripe size is multiplier of comp_end */
 		if (comp_end != LUSTRE_EOF &&
+		    comp_end != comp->llc_extent.e_start &&
 		    comp_end % comp->llc_stripe_size) {
 			/* fix that even for defined stripe size but warn
 			 * about the problem, that must not happen

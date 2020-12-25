@@ -2037,7 +2037,7 @@ recheck:
 		if (rc)
 			RETURN(rc);
 
-		if (prev_end == LUSTRE_EOF)
+		if (prev_end == LUSTRE_EOF || ext->e_start == prev_end)
 			continue;
 
 		/* extent end must be aligned with the stripe_size */
