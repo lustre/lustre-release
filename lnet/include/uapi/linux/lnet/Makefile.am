@@ -36,6 +36,7 @@ lnetinclude_HEADERS = \
 	lnetctl.h \
 	lnet-dlc.h \
 	lnetst.h \
+	lnet-idl.h \
 	lnet-types.h \
 	nidstr.h \
 	socklnd.h
@@ -46,6 +47,7 @@ EXTRA_DIST = \
 	lnetctl.h \
 	lnet-dlc.h \
 	lnetst.h \
+	lnet-idl.h \
 	lnet-types.h \
 	nidstr.h \
 	socklnd.h

@@ -3407,6 +3407,164 @@ static const struct lnet_lnd the_o2iblnd = {
 	.lnd_recv	= kiblnd_recv,
 };
 
+static void ko2inlnd_assert_wire_constants(void)
+{
+	BUILD_BUG_ON(IBLND_MSG_MAGIC != 0x0be91b91);
+	BUILD_BUG_ON(IBLND_MSG_VERSION_1 != 0x11);
+	BUILD_BUG_ON(IBLND_MSG_VERSION_2 != 0x12);
+	BUILD_BUG_ON(IBLND_MSG_VERSION != IBLND_MSG_VERSION_2);
+
+	BUILD_BUG_ON(IBLND_MSG_CONNREQ != 0xc0);
+	BUILD_BUG_ON(IBLND_MSG_CONNACK != 0xc1);
+	BUILD_BUG_ON(IBLND_MSG_NOOP != 0xd0);
+	BUILD_BUG_ON(IBLND_MSG_IMMEDIATE != 0xd1);
+	BUILD_BUG_ON(IBLND_MSG_PUT_REQ != 0xd2);
+	BUILD_BUG_ON(IBLND_MSG_PUT_NAK != 0xd3);
+	BUILD_BUG_ON(IBLND_MSG_PUT_ACK != 0xd4);
+	BUILD_BUG_ON(IBLND_MSG_PUT_DONE != 0xd5);
+	BUILD_BUG_ON(IBLND_MSG_GET_REQ != 0xd6);
+	BUILD_BUG_ON(IBLND_MSG_GET_DONE != 0xd7);
+
+	BUILD_BUG_ON(IBLND_REJECT_CONN_RACE != 1);
+	BUILD_BUG_ON(IBLND_REJECT_NO_RESOURCES != 2);
+	BUILD_BUG_ON(IBLND_REJECT_FATAL != 3);
+	BUILD_BUG_ON(IBLND_REJECT_CONN_UNCOMPAT != 4);
+	BUILD_BUG_ON(IBLND_REJECT_CONN_STALE != 5);
+	BUILD_BUG_ON(IBLND_REJECT_RDMA_FRAGS != 6);
+	BUILD_BUG_ON(IBLND_REJECT_MSG_QUEUE_SIZE != 7);
+	BUILD_BUG_ON(IBLND_REJECT_INVALID_SRV_ID != 8);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_connparams) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_connparams, ibcp_queue_depth) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_connparams *)0)->ibcp_queue_depth) != 2);
+	BUILD_BUG_ON((int)offsetof(struct kib_connparams, ibcp_max_frags) != 2);
+	BUILD_BUG_ON((int)sizeof(((struct kib_connparams *)0)->ibcp_max_frags) != 2);
+	BUILD_BUG_ON((int)offsetof(struct kib_connparams, ibcp_max_msg_size) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct kib_connparams *)0)->ibcp_max_msg_size) != 4);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_immediate_msg) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_immediate_msg, ibim_hdr) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_immediate_msg *)0)->ibim_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_immediate_msg, ibim_payload) != 72);
+	BUILD_BUG_ON((int)sizeof(((struct kib_immediate_msg *)0)->ibim_payload) != 0);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_rdma_frag) != 12);
+	BUILD_BUG_ON((int)offsetof(struct kib_rdma_frag, rf_nob) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_frag *)0)->rf_nob) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_rdma_frag, rf_addr) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_frag *)0)->rf_addr) != 8);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_rdma_desc) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_rdma_desc, rd_key) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_desc *)0)->rd_key) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_rdma_desc, rd_nfrags) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_desc *)0)->rd_nfrags) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_rdma_desc, rd_frags) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_desc *)0)->rd_frags) != 0);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_putreq_msg) != 80);
+	BUILD_BUG_ON((int)offsetof(struct kib_putreq_msg, ibprm_hdr) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_putreq_msg *)0)->ibprm_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_putreq_msg, ibprm_cookie) != 72);
+	BUILD_BUG_ON((int)sizeof(((struct kib_putreq_msg *)0)->ibprm_cookie) != 8);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_putack_msg) != 24);
+	BUILD_BUG_ON((int)offsetof(struct kib_putack_msg, ibpam_src_cookie) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_putack_msg *)0)->ibpam_src_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_putack_msg, ibpam_dst_cookie) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct kib_putack_msg *)0)->ibpam_dst_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_putack_msg, ibpam_rd) != 16);
+	BUILD_BUG_ON((int)sizeof(((struct kib_putack_msg *)0)->ibpam_rd) != 8);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_get_msg) != 88);
+	BUILD_BUG_ON((int)offsetof(struct kib_get_msg, ibgm_hdr) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_get_msg *)0)->ibgm_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_get_msg, ibgm_cookie) != 72);
+	BUILD_BUG_ON((int)sizeof(((struct kib_get_msg *)0)->ibgm_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_get_msg, ibgm_rd) != 80);
+	BUILD_BUG_ON((int)sizeof(((struct kib_get_msg *)0)->ibgm_rd) != 8);
+
+	BUILD_BUG_ON((int)sizeof(struct kib_completion_msg) != 12);
+	BUILD_BUG_ON((int)offsetof(struct kib_completion_msg, ibcm_cookie) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_completion_msg *)0)->ibcm_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_completion_msg, ibcm_status) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct kib_completion_msg *)0)->ibcm_status) != 4);
+
+	/* Checks for struct kib_msg */
+	//BUILD_BUG_ON((int)sizeof(struct kib_msg) != 12);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_magic) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_magic) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_version) != 4);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_version) != 2);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_type) != 6);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_type) != 1);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_credits) != 7);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_credits) != 1);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_nob) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_nob) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_cksum) != 12);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_cksum) != 4);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_srcnid) != 16);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_srcnid) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_srcstamp) != 24);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_srcstamp) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_dstnid) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_dstnid) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_dststamp) != 40);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_dststamp) != 8);
+
+	/* Connparams */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.connparams.ibcp_queue_depth) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.connparams.ibcp_queue_depth) != 2);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.connparams.ibcp_max_frags) != 50);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.connparams.ibcp_max_frags) != 2);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.connparams.ibcp_max_msg_size) != 52);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.connparams.ibcp_max_msg_size) != 4);
+
+	/* Immediate message */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.immediate.ibim_hdr) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.immediate.ibim_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.immediate.ibim_payload) != 120);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.immediate.ibim_payload) != 0);
+
+	/* PUT req message */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putreq.ibprm_hdr) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.putreq.ibprm_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putreq.ibprm_cookie) != 120);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.putreq.ibprm_cookie) != 8);
+
+	/* Put ACK */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putack.ibpam_src_cookie) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.putack.ibpam_src_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putack.ibpam_dst_cookie) != 56);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.putack.ibpam_dst_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putack.ibpam_rd) != 64);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.putack.ibpam_rd) != 8);
+
+	/* GET message */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.get.ibgm_hdr) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.get.ibgm_hdr) != 72);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.get.ibgm_cookie) != 120);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.get.ibgm_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.get.ibgm_rd) != 128);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.get.ibgm_rd) != 8);
+
+	/* Completion message */
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.completion.ibcm_cookie) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.completion.ibcm_cookie) != 8);
+	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.completion.ibcm_status) != 56);
+	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.completion.ibcm_status) != 4);
+
+	/* Sanity checks */
+	BUILD_BUG_ON(sizeof(struct kib_msg) > IBLND_MSG_SIZE);
+	BUILD_BUG_ON(offsetof(struct kib_msg,
+		     ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
+		     IBLND_MSG_SIZE);
+	BUILD_BUG_ON(offsetof(struct kib_msg,
+		     ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
+		     IBLND_MSG_SIZE);
+}
+
 static void __exit ko2iblnd_exit(void)
 {
 	lnet_unregister_lnd(&the_o2iblnd);
@@ -3416,13 +3574,7 @@ static int __init ko2iblnd_init(void)
 {
 	int rc;
 
-	BUILD_BUG_ON(sizeof(struct kib_msg) > IBLND_MSG_SIZE);
-	BUILD_BUG_ON(offsetof(struct kib_msg,
-		     ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
-		     IBLND_MSG_SIZE);
-	BUILD_BUG_ON(offsetof(struct kib_msg,
-		     ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
-		     IBLND_MSG_SIZE);
+	ko2inlnd_assert_wire_constants();
 
 	rc = kiblnd_tunables_init();
 	if (rc != 0)

@@ -346,7 +346,7 @@ typedef enum kgn_dgram_type {
   v2:
    * - added checksum to FMA
    * moved seq before paylod
-   * WIRE_ATTR added for alignment
+   * __packed added for alignment
   v3:
    * added gnm_payload_len for FMA payload size
   v4:
@@ -373,12 +373,12 @@ typedef struct kgn_gniparams {
 	__u32            gnpr_host_id;          /* ph. host ID of the NIC */
 	__u32            gnpr_cqid;             /* cqid I want peer to use when sending events to me */
 	gni_smsg_attr_t  gnpr_smsg_attr;        /* my short msg. attributes */
-} WIRE_ATTR kgn_gniparams_t;
+} __packed kgn_gniparams_t;
 
 typedef struct kgn_nak_data {
 	__s32            gnnd_errno;            /* errno reason for NAK */
 
-} WIRE_ATTR kgn_nak_data_t;
+} __packed kgn_nak_data_t;
 
 /* the first bits of the connreq struct CANNOT CHANGE FORM EVER
  * without breaking the ability for us to properly NAK someone */
@@ -400,42 +400,42 @@ typedef struct kgn_connreq {                    /* connection request/response *
 		kgn_gniparams_t   gncr_gnparams;        /* sender's endpoint info */
 		kgn_nak_data_t    gncr_nakdata;         /* data (rc, etc) for NAK */
 	};
-} WIRE_ATTR kgn_connreq_t;
+} __packed kgn_connreq_t;
 
 typedef struct {
 	gni_mem_handle_t  gnrd_key;
 	__u64             gnrd_addr;
 	__u32             gnrd_nob;
-} WIRE_ATTR kgn_rdma_desc_t;
+} __packed kgn_rdma_desc_t;
 
 typedef struct {
 	struct lnet_hdr	  gnim_hdr;             /* LNet header */
 	/* LNet payload is in FMA "Message Data" */
-} WIRE_ATTR kgn_immediate_msg_t;
+} __packed kgn_immediate_msg_t;
 
 typedef struct {
 	struct lnet_hdr   gnprm_hdr;            /* LNet header */
 	__u64             gnprm_cookie;         /* opaque completion cookie */
-} WIRE_ATTR kgn_putreq_msg_t;
+} __packed kgn_putreq_msg_t;
 
 typedef struct {
 	__u64             gnpam_src_cookie;     /* reflected completion cookie */
 	__u64             gnpam_dst_cookie;     /* opaque completion cookie */
 	__u16		  gnpam_payload_cksum;  /* checksum for get msg */
 	kgn_rdma_desc_t   gnpam_desc;           /* sender's sink buffer */
-} WIRE_ATTR kgn_putack_msg_t;
+} __packed kgn_putack_msg_t;
 
 typedef struct {
 	struct lnet_hdr   gngm_hdr;             /* LNet header */
 	__u64             gngm_cookie;          /* opaque completion cookie */
 	__u16		  gngm_payload_cksum;   /* checksum for put msg */
 	kgn_rdma_desc_t   gngm_desc;            /* sender's sink buffer */
-} WIRE_ATTR kgn_get_msg_t;
+} __packed kgn_get_msg_t;
 
 typedef struct {
 	int               gncm_retval;          /* error on NAK, size on REQ */
 	__u64             gncm_cookie;          /* reflected completion cookie */
-} WIRE_ATTR kgn_completion_msg_t;
+} __packed kgn_completion_msg_t;
 
 typedef struct {                                /* NB must fit in FMA "Prefix" */
 	__u32             gnm_magic;            /* I'm an gni message */
@@ -454,7 +454,7 @@ typedef struct {                                /* NB must fit in FMA "Prefix" *
 		kgn_get_msg_t         get;
 		kgn_completion_msg_t  completion;
 	} gnm_u;
-} WIRE_ATTR kgn_msg_t;
+} __packed kgn_msg_t;
 
 /************************************************************************
  * runtime tunable data

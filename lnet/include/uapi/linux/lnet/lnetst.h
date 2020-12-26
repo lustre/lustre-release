@@ -515,6 +515,7 @@ struct lst_test_ping_param {
 	int png_flags;		/* reserved flags */
 };
 
+/* Both struct srpc_counters and struct sfw_counters are sent over the wire */
 struct srpc_counters {
 	__u32 errors;
 	__u32 rpcs_sent;
@@ -523,7 +524,7 @@ struct srpc_counters {
 	__u32 rpcs_expired;
 	__u64 bulk_get;
 	__u64 bulk_put;
-} WIRE_ATTR;
+} __attribute__((packed));
 
 struct sfw_counters {
 	/** milliseconds since current session started */
@@ -532,6 +533,6 @@ struct sfw_counters {
 	__u32 zombie_sessions;
 	__u32 brw_errors;
 	__u32 ping_errors;
-} WIRE_ATTR;
+} __attribute__((packed));
 
 #endif

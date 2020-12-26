@@ -91,6 +91,7 @@
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
+#include "o2iblnd-idl.h"
 
 #define IBLND_PEER_HASH_SIZE		101	/* # peer_ni lists */
 
@@ -469,121 +470,6 @@ struct kib_data {
 #define IBLND_INIT_NOTHING         0
 #define IBLND_INIT_DATA            1
 #define IBLND_INIT_ALL             2
-
-/************************************************************************
- * IB Wire message format.
- * These are sent in sender's byte order (i.e. receiver flips).
- */
-
-struct kib_connparams {
-        __u16             ibcp_queue_depth;
-        __u16             ibcp_max_frags;
-        __u32             ibcp_max_msg_size;
-} WIRE_ATTR;
-
-struct kib_immediate_msg {
-	struct lnet_hdr		ibim_hdr;	/* portals header */
-	char			ibim_payload[0];/* piggy-backed payload */
-} WIRE_ATTR;
-
-struct kib_rdma_frag {
-        __u32             rf_nob;               /* # bytes this frag */
-        __u64             rf_addr;              /* CAVEAT EMPTOR: misaligned!! */
-} WIRE_ATTR;
-
-struct kib_rdma_desc {
-	__u32			rd_key;		/* local/remote key */
-	__u32			rd_nfrags;	/* # fragments */
-	struct kib_rdma_frag	rd_frags[0];	/* buffer frags */
-} WIRE_ATTR;
-
-struct kib_putreq_msg {
-	struct lnet_hdr		ibprm_hdr;	/* portals header */
-	__u64			ibprm_cookie;	/* opaque completion cookie */
-} WIRE_ATTR;
-
-struct kib_putack_msg {
-        __u64             ibpam_src_cookie;     /* reflected completion cookie */
-        __u64             ibpam_dst_cookie;     /* opaque completion cookie */
-	struct kib_rdma_desc	ibpam_rd;	/* sender's sink buffer */
-} WIRE_ATTR;
-
-struct kib_get_msg {
-	struct lnet_hdr		ibgm_hdr;	/* portals header */
-	__u64			ibgm_cookie;	/* opaque completion cookie */
-	struct kib_rdma_desc	ibgm_rd;	/* rdma descriptor */
-} WIRE_ATTR;
-
-struct kib_completion_msg {
-        __u64             ibcm_cookie;          /* opaque completion cookie */
-        __s32             ibcm_status;          /* < 0 failure: >= 0 length */
-} WIRE_ATTR;
-
-struct kib_msg {
-        /* First 2 fields fixed FOR ALL TIME */
-        __u32             ibm_magic;            /* I'm an ibnal message */
-        __u16             ibm_version;          /* this is my version number */
-
-        __u8              ibm_type;             /* msg type */
-        __u8              ibm_credits;          /* returned credits */
-        __u32             ibm_nob;              /* # bytes in whole message */
-        __u32             ibm_cksum;            /* checksum (0 == no checksum) */
-        __u64             ibm_srcnid;           /* sender's NID */
-        __u64             ibm_srcstamp;         /* sender's incarnation */
-        __u64             ibm_dstnid;           /* destination's NID */
-        __u64             ibm_dststamp;         /* destination's incarnation */
-
-        union {
-		struct kib_connparams		connparams;
-		struct kib_immediate_msg	immediate;
-		struct kib_putreq_msg		putreq;
-		struct kib_putack_msg		putack;
-		struct kib_get_msg		get;
-		struct kib_completion_msg	completion;
-        } WIRE_ATTR ibm_u;
-} WIRE_ATTR;
-
-#define IBLND_MSG_MAGIC LNET_PROTO_IB_MAGIC	/* unique magic */
-
-#define IBLND_MSG_VERSION_1         0x11
-#define IBLND_MSG_VERSION_2         0x12
-#define IBLND_MSG_VERSION           IBLND_MSG_VERSION_2
-
-#define IBLND_MSG_CONNREQ           0xc0        /* connection request */
-#define IBLND_MSG_CONNACK           0xc1        /* connection acknowledge */
-#define IBLND_MSG_NOOP              0xd0        /* nothing (just credits) */
-#define IBLND_MSG_IMMEDIATE         0xd1        /* immediate */
-#define IBLND_MSG_PUT_REQ           0xd2        /* putreq (src->sink) */
-#define IBLND_MSG_PUT_NAK           0xd3        /* completion (sink->src) */
-#define IBLND_MSG_PUT_ACK           0xd4        /* putack (sink->src) */
-#define IBLND_MSG_PUT_DONE          0xd5        /* completion (src->sink) */
-#define IBLND_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
-#define IBLND_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
-
-struct kib_rej {
-        __u32            ibr_magic;             /* sender's magic */
-        __u16            ibr_version;           /* sender's version */
-        __u8             ibr_why;               /* reject reason */
-        __u8             ibr_padding;           /* padding */
-        __u64            ibr_incarnation;       /* incarnation of peer_ni */
-	struct kib_connparams	ibr_cp;		/* connection parameters */
-} WIRE_ATTR;
-
-/* connection rejection reasons */
-#define IBLND_REJECT_CONN_RACE       1          /* You lost connection race */
-#define IBLND_REJECT_NO_RESOURCES    2          /* Out of memory/conns etc */
-#define IBLND_REJECT_FATAL           3          /* Anything else */
-
-#define IBLND_REJECT_CONN_UNCOMPAT   4          /* incompatible version peer_ni */
-#define IBLND_REJECT_CONN_STALE      5          /* stale peer_ni */
-
-/* peer_ni's rdma frags doesn't match mine */
-#define IBLND_REJECT_RDMA_FRAGS      6
-/* peer_ni's msg queue size doesn't match mine */
-#define IBLND_REJECT_MSG_QUEUE_SIZE  7
-#define IBLND_REJECT_INVALID_SRV_ID  8
-
-/***********************************************************************/
 
 struct kib_rx {					/* receive message */
 	/* queue for attention */
