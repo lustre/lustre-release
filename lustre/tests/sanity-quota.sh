@@ -1251,6 +1251,8 @@ test_block_soft() {
 	local OFFSET=0
 	local qtype=$4
 	local pool=$5
+	local soft_limit=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit)
 
 	setup_quota_test
 	stack_trap cleanup_quota_test EXIT
@@ -1301,8 +1303,11 @@ test_block_soft() {
 
 	log "Write after timer goes off"
 	# maybe cache write, ignore.
-	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET || true
-	OFFSET=$((OFFSET + 1024))
+	# write up to soft least quint to consume all
+	# possible slave granted space.
+	$RUNAS dd if=/dev/zero of=$testfile bs=1K \
+		count=$soft_limit seek=$OFFSET || true
+	OFFSET=$((OFFSET + soft_limit))
 	cancel_lru_locks osc
 	log "Write after cancel lru locks"
 	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET &&
