@@ -32,6 +32,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#define D_MOUNT (D_SUPER | D_CONFIG/*|D_WARNING */)
+
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/version.h>
@@ -93,6 +95,121 @@ const struct super_operations lustre_super_operations =
 	.remount_fs    = ll_remount_fs,
 	.show_options  = ll_show_options,
 };
+
+/**
+ * This is the entry point for the mount call into Lustre.
+ * This is called when a client is mounted, and this is
+ * where we start setting things up.
+ *
+ * @lmd2data data Mount options (e.g. -o flock,abort_recov)
+ */
+static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
+			     int silent)
+{
+	struct lustre_mount_data *lmd;
+	struct lustre_sb_info *lsi;
+	int rc;
+
+	ENTRY;
+
+	CDEBUG(D_MOUNT|D_VFSTRACE, "VFS Op: sb %p\n", sb);
+
+	lsi = lustre_init_lsi(sb);
+	if (!lsi)
+		RETURN(-ENOMEM);
+	lmd = lsi->lsi_lmd;
+
+	/*
+	 * Disable lockdep during mount, because mount locking patterns are
+	 * 'special'.
+	 */
+	lockdep_off();
+
+	/*
+	 * LU-639: the OBD cleanup of last mount may not finish yet, wait here.
+	 */
+	obd_zombie_barrier();
+
+	/* Figure out the lmd from the mount options */
+	if (lmd_parse(lmd2_data, lmd)) {
+		lustre_put_lsi(sb);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (!lmd_is_client(lmd)) {
+#ifdef HAVE_SERVER_SUPPORT
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 15, 51, 0)
+		static bool printed;
+
+		if (!printed) {
+			LCONSOLE_WARN("%s: mounting server target with '-t lustre' deprecated, use '-t lustre_tgt'\n",
+				      lmd->lmd_profile);
+			printed = true;
+		}
+#endif
+		rc = server_fill_super(sb);
+#else
+		rc = -ENODEV;
+		CERROR("%s: This is client-side-only module, cannot handle server mount: rc = %d\n",
+		       lmd->lmd_profile, rc);
+		lustre_put_lsi(sb);
+#endif
+		GOTO(out, rc);
+	}
+
+	CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
+	rc = lustre_start_mgc(sb);
+	if (rc) {
+		lustre_common_put_super(sb);
+		GOTO(out, rc);
+	}
+	/* Connect and start */
+	rc = ll_fill_super(sb);
+	/* ll_file_super will call lustre_common_put_super on failure,
+	 * which takes care of the module reference.
+	 *
+	 * If error happens in fill_super() call, @lsi will be killed there.
+	 * This is why we do not put it here.
+	 */
+out:
+	if (rc) {
+		CERROR("llite: Unable to mount %s: rc = %d\n",
+		       s2lsi(sb) ? lmd->lmd_dev : "<unknown>", rc);
+	} else {
+		CDEBUG(D_SUPER, "%s: Mount complete\n",
+		       lmd->lmd_dev);
+	}
+	lockdep_on();
+	return rc;
+}
+
+/***************** FS registration ******************/
+static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
+				   const char *devname, void *data)
+{
+	return mount_nodev(fs_type, flags, data, lustre_fill_super);
+}
+
+static void lustre_kill_super(struct super_block *sb)
+{
+	struct lustre_sb_info *lsi = s2lsi(sb);
+
+	if (lsi && !IS_SERVER(lsi))
+		ll_kill_super(sb);
+
+	kill_anon_super(sb);
+}
+
+/** Register the "lustre" fs type
+ */
+static struct file_system_type lustre_fs_type = {
+	.owner		= THIS_MODULE,
+	.name		= "lustre",
+	.mount		= lustre_mount,
+	.kill_sb	= lustre_kill_super,
+	.fs_flags	= FS_RENAME_DOES_D_MOVE,
+};
+MODULE_ALIAS_FS("lustre");
 
 static int __init lustre_init(void)
 {
@@ -161,10 +278,14 @@ static int __init lustre_init(void)
 	if (rc != 0)
 		GOTO(out_inode_fini_env, rc);
 
-	lustre_register_super_ops(THIS_MODULE, ll_fill_super, ll_kill_super);
+	rc = register_filesystem(&lustre_fs_type);
+	if (rc)
+		GOTO(out_xattr, rc);
 
 	RETURN(0);
 
+out_xattr:
+	ll_xattr_fini();
 out_inode_fini_env:
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 out_vvp:
@@ -180,7 +301,7 @@ out_cache:
 
 static void __exit lustre_exit(void)
 {
-	lustre_register_super_ops(NULL, NULL, NULL);
+	unregister_filesystem(&lustre_fs_type);
 
 	llite_tunables_unregister();
 

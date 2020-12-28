@@ -1829,9 +1829,9 @@ void lustre_deregister_lwp_item(struct obd_export **exp);
 struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx);
 void lustre_notify_lwp_list(struct obd_export *exp);
 int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, __u32 idx);
+int lustre_tgt_register_fs(void);
+void lustre_tgt_unregister_fs(void);
 #endif /* HAVE_SERVER_SUPPORT */
-int lustre_register_fs(void);
-int lustre_unregister_fs(void);
 int lustre_check_exclusion(struct super_block *sb, char *svname);
 
 /* lustre_peer.c    */

@@ -23,7 +23,10 @@ GSSLIB =
 endif
 
 # mount only finds helpers in /sbin
-rootsbin_PROGRAMS = mount.lustre mount.lustre_tgt
+rootsbin_PROGRAMS = mount.lustre
+if SERVER
+rootsbin_PROGRAMS += mount.lustre_tgt
+endif
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall

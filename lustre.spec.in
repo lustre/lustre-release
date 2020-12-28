@@ -646,7 +646,9 @@ fi
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
+%if %{with servers}
 /sbin/mount.lustre_tgt
+%endif
 @BASH_COMPLETION_DIR@
 %endif
 

@@ -51,12 +51,6 @@
 #include <uapi/linux/lustre/lustre_param.h>
 #include <libcfs/crypto/llcrypt.h>
 
-static DEFINE_SPINLOCK(client_lock);
-static struct module *client_mod;
-static int (*client_fill_super)(struct super_block *sb);
-
-static void (*kill_super_cb)(struct super_block *sb);
-
 /**************** config llog ********************/
 
 /**
@@ -501,6 +495,7 @@ out_free:
 		OBD_FREE(niduuid, len + 2);
 	RETURN(rc);
 }
+EXPORT_SYMBOL(lustre_start_mgc);
 
 static int lustre_stop_mgc(struct super_block *sb)
 {
@@ -584,7 +579,7 @@ out:
 
 /***************** lustre superblock **************/
 
-static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
+struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi;
 
@@ -610,6 +605,7 @@ static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 
 	RETURN(lsi);
 }
+EXPORT_SYMBOL(lustre_init_lsi);
 
 static int lustre_free_lsi(struct super_block *sb)
 {
@@ -1296,7 +1292,7 @@ static int lmd_parse_nidlist(char *buf, char **endh)
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
  * dev is passed as device=uml1:/lustre by mount.lustre_tgt
  */
-static int lmd_parse(char *options, struct lustre_mount_data *lmd)
+int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
 	char *s1, *s2, *devname = NULL;
 	struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
@@ -1585,15 +1581,17 @@ invalid:
 	CERROR("Bad mount options %s\n", options);
 	RETURN(-EINVAL);
 }
+EXPORT_SYMBOL(lmd_parse);
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * This is the entry point for the mount call into Lustre.
- * This is called when a server or client is mounted,
+ * This is called when a server target is mounted,
  * and this is where we start setting things up.
  * @param data Mount options (e.g. -o flock,abort_recov)
  */
-static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
-			     int silent)
+static int lustre_tgt_fill_super(struct super_block *sb, void *lmd2_data,
+				 int silent)
 {
 	struct lustre_mount_data *lmd;
 	struct lustre_sb_info *lsi;
@@ -1626,54 +1624,25 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 	}
 
 	if (lmd_is_client(lmd)) {
-		bool have_client = false;
-
-		CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
-		if (!client_fill_super)
-			request_module("lustre");
-		spin_lock(&client_lock);
-		if (client_fill_super && try_module_get(client_mod))
-			have_client = true;
-		spin_unlock(&client_lock);
-		if (!have_client) {
-			LCONSOLE_ERROR_MSG(0x165,
-					   "Nothing registered for client mount! Is the 'lustre' module loaded?\n");
-			lustre_put_lsi(sb);
-			rc = -ENODEV;
-		} else {
-			rc = lustre_start_mgc(sb);
-			if (rc) {
-				lustre_common_put_super(sb);
-				GOTO(out, rc);
-			}
-			/* Connect and start */
-			/* (should always be ll_fill_super) */
-			rc = (*client_fill_super)(sb);
-			/* c_f_s will call lustre_common_put_super on failure,
-			 * which takes care of the module reference.
-			 */
-		}
-	} else {
-#ifdef HAVE_SERVER_SUPPORT
-		CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
-		rc = server_fill_super(sb);
-		/*
-		 * s_f_s calls lustre_start_mgc after the mount because we need
-		 * the MGS NIDs which are stored on disk.  Plus, we may
-		 * need to start the MGS first.
-		 */
-		/* s_f_s will call server_put_super on failure */
-#else
-		CERROR("client-side-only module, cannot handle server mount\n");
-		rc = -EINVAL;
-#endif
+		rc = -ENODEV;
+		CERROR("%s: attempting to mount a client with -t lustre_tgt' which is only for server-side mounts: rc = %d\n",
+		       lmd->lmd_dev, rc);
+		lustre_put_lsi(sb);
+		GOTO(out, rc);
 	}
 
+	CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
+	rc = server_fill_super(sb);
 	/*
+	 * server_fill_super calls lustre_start_mgc after the mount
+	 * because we need the MGS NIDs which are stored on disk.
+	 * Plus, we may need to start the MGS first.
+	 *
+	 * server_fill_super will call server_put_super on failure
+	 *
 	 * If error happens in fill_super() call, @lsi will be killed there.
 	 * This is why we do not put it here.
 	 */
-	GOTO(out, rc);
 out:
 	if (rc) {
 		CERROR("Unable to mount %s (%d)\n",
@@ -1686,41 +1655,14 @@ out:
 	return rc;
 }
 
-
-/*
- * We can't call ll_fill_super by name because it lives in a module that
- * must be loaded after this one.
- */
-void lustre_register_super_ops(struct module *mod,
-			       int (*cfs)(struct super_block *sb),
-			       void (*ksc)(struct super_block *sb))
-{
-	spin_lock(&client_lock);
-	client_mod = mod;
-	client_fill_super = cfs;
-	kill_super_cb = ksc;
-	spin_unlock(&client_lock);
-}
-EXPORT_SYMBOL(lustre_register_super_ops);
-
 /***************** FS registration ******************/
-static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
-				   const char *devname, void *data)
+static struct dentry *lustre_tgt_mount(struct file_system_type *fs_type,
+				       int flags, const char *devname,
+				       void *data)
 {
-	return mount_nodev(fs_type, flags, data, lustre_fill_super);
+	return mount_nodev(fs_type, flags, data, lustre_tgt_fill_super);
 }
 
-static void lustre_kill_super(struct super_block *sb)
-{
-	struct lustre_sb_info *lsi = s2lsi(sb);
-
-	if (kill_super_cb && lsi && !IS_SERVER(lsi))
-		(*kill_super_cb)(sb);
-
-	kill_anon_super(sb);
-}
-
-#ifdef HAVE_SERVER_SUPPORT
 /* Register the "lustre_tgt" fs type.
  *
  * Right now this isn't any different than the normal "lustre" filesystem
@@ -1731,53 +1673,23 @@ static void lustre_kill_super(struct super_block *sb)
  *
  * The long-term goal is to disentangle the client and server mount code.
  */
-static struct file_system_type lustre_fs_type_tgt = {
+static struct file_system_type lustre_tgt_fstype = {
 	.owner		= THIS_MODULE,
 	.name		= "lustre_tgt",
-	.mount		= lustre_mount,
-	.kill_sb	= lustre_kill_super,
+	.mount		= lustre_tgt_mount,
+	.kill_sb	= kill_anon_super,
 	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
 };
 MODULE_ALIAS_FS("lustre_tgt");
 
-#define register_filesystem_tgt(fstype)					    \
-do {									    \
-	int _rc;							    \
-									    \
-	_rc = register_filesystem(fstype);				    \
-	if (_rc && _rc != -EBUSY) {					    \
-		/* Don't fail if server code also registers "lustre_tgt" */ \
-		CERROR("obdclass: register fstype '%s' failed: rc = %d\n",  \
-		       (fstype)->name, _rc);				    \
-		return _rc;						    \
-	}								    \
-} while (0)
-#define unregister_filesystem_tgt(fstype) unregister_filesystem(fstype)
-#else
-#define register_filesystem_tgt(fstype)   do {} while (0)
-#define unregister_filesystem_tgt(fstype) do {} while (0)
-#endif
-
-/* Register the "lustre" fs type */
-static struct file_system_type lustre_fs_type = {
-	.owner		= THIS_MODULE,
-	.name		= "lustre",
-	.mount		= lustre_mount,
-	.kill_sb	= lustre_kill_super,
-	.fs_flags	= FS_RENAME_DOES_D_MOVE,
-};
-MODULE_ALIAS_FS("lustre");
-
-int lustre_register_fs(void)
+int lustre_tgt_register_fs(void)
 {
-	register_filesystem_tgt(&lustre_fs_type_tgt);
-
-	return register_filesystem(&lustre_fs_type);
+	return register_filesystem(&lustre_tgt_fstype);
 }
 
-int lustre_unregister_fs(void)
+void lustre_tgt_unregister_fs(void)
 {
-	unregister_filesystem_tgt(&lustre_fs_type_tgt);
-
-	return unregister_filesystem(&lustre_fs_type);
+	unregister_filesystem(&lustre_tgt_fstype);
 }
+
+#endif /* HAVE_SERVER_SUPPORT */

@@ -717,50 +717,52 @@ static int __init obdclass_init(void)
 	if (err != 0)
 		goto cleanup_lu_global;
 
+	err = llog_info_init();
+	if (err)
+		goto cleanup_cl_global;
+
 #ifdef HAVE_SERVER_SUPPORT
 	err = dt_global_init();
 	if (err != 0)
-		goto cleanup_cl_global;
+		goto cleanup_llog_info;
 
 	err = lu_ucred_global_init();
 	if (err != 0)
 		goto cleanup_dt_global;
-#endif /* HAVE_SERVER_SUPPORT */
 
-	err = llog_info_init();
-	if (err)
-#ifdef HAVE_SERVER_SUPPORT
+	err = lustre_tgt_register_fs();
+	if (err && err != -EBUSY) {
+		/* Don't fail if server code also registers "lustre_tgt" */
+		CERROR("obdclass: register fstype 'lustre_tgt' failed: rc = %d\n",
+		       err);
 		goto cleanup_lu_ucred_global;
-#else /* !HAVE_SERVER_SUPPORT */
-		goto cleanup_cl_global;
+	}
 #endif /* HAVE_SERVER_SUPPORT */
-
-	err = lustre_register_fs();
 
 	/* simulate a late OOM situation now to require all
-	 * alloc'ed/initialized resources to be freed */
+	 * alloc'ed/initialized resources to be freed
+	 */
 	if (OBD_FAIL_CHECK(OBD_FAIL_OBDCLASS_MODULE_LOAD)) {
-		/* fake error but filesystem has been registered */
-		lustre_unregister_fs();
 		/* force error to ensure module will be unloaded/cleaned */
 		err = -ENOMEM;
+		goto cleanup_all;
 	}
-
-	if (err)
-		goto cleanup_llog_info;
-
 	return 0;
 
-cleanup_llog_info:
-	llog_info_fini();
-
+cleanup_all:
 #ifdef HAVE_SERVER_SUPPORT
+	/* fake error but filesystem has been registered */
+	lustre_tgt_unregister_fs();
+
 cleanup_lu_ucred_global:
 	lu_ucred_global_fini();
 
 cleanup_dt_global:
 	dt_global_fini();
+
+cleanup_llog_info:
 #endif /* HAVE_SERVER_SUPPORT */
+	llog_info_fini();
 
 cleanup_cl_global:
 	cl_global_fini();
@@ -826,14 +828,13 @@ static void __exit obdclass_exit(void)
 #endif /* CONFIG_PROC_FS */
 	ENTRY;
 
-	lustre_unregister_fs();
-
 	misc_deregister(&obd_psdev);
-	llog_info_fini();
 #ifdef HAVE_SERVER_SUPPORT
+	lustre_tgt_unregister_fs();
 	lu_ucred_global_fini();
 	dt_global_fini();
 #endif /* HAVE_SERVER_SUPPORT */
+	llog_info_fini();
 	cl_global_fini();
 	lu_global_fini();
 

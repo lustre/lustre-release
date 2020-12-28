@@ -1428,8 +1428,6 @@ out_no_sbi:
 
 	cl_env_cache_purge(~0);
 
-	module_put(THIS_MODULE);
-
 	EXIT;
 } /* client_put_super */
 

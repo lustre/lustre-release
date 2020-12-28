@@ -350,16 +350,18 @@ int target_name2index(const char *svname, u32 *idx, const char **endptr);
 int lustre_put_lsi(struct super_block *sb);
 int lustre_start_simple(char *obdname, char *type, char *uuid,
 			char *s1, char *s2, char *s3, char *s4);
-int lustre_start_mgc(struct super_block *sb);
 #endif /* HAVE_SERVER_SUPPORT */
 int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 void obdname2fsname(const char *tgt, char *fsname, size_t fslen);
 
-void lustre_register_super_ops(struct module *mod,
-			       int (*cfs)(struct super_block *sb),
-			       void (*ksc)(struct super_block *sb));
+int lustre_start_mgc(struct super_block *sb);
 int lustre_common_put_super(struct super_block *sb);
 
+struct lustre_sb_info *lustre_init_lsi(struct super_block *sb);
+int lustre_put_lsi(struct super_block *sb);
+int lmd_parse(char *options, struct lustre_mount_data *lmd);
+
+/* mgc_request.c */
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
 int mgc_logname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
 

@@ -2048,6 +2048,7 @@ out_mnt:
 	server_put_super(sb);
 	return rc;
 }
+EXPORT_SYMBOL(server_fill_super);
 
 /*
  * Calculate timeout value for a target.
