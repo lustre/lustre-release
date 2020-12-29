@@ -9039,7 +9039,7 @@ test_125()
 
 		echo "Before: ${facet} ${device} ${pre_max_sectors} ${max_hw_sectors}"
 
-		do_facet ${facet} "libtool execute l_tunedisk ${device}"
+		do_facet ${facet} "l_tunedisk ${device}"
 
 		# Value after l_tunedisk
 		local post_max_sectors=$(get_max_sectors_kb ${facet} ${device})

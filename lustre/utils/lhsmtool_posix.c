@@ -59,6 +59,7 @@
 #include <libcfs/util/string.h>
 #include <linux/lustre/lustre_fid.h>
 #include <lustre/lustreapi.h>
+#include "pid_file.h"
 
 /* Progress reporting period */
 #define REPORT_INTERVAL_DEFAULT 30
@@ -100,6 +101,7 @@ struct options {
 	char			*o_hsm_root;
 	char			*o_src; /* for import, or rebind */
 	char			*o_dst; /* for import, or rebind */
+	char			*o_pid_file;
 };
 
 /* everything else is zeroed */
@@ -124,6 +126,7 @@ static int err_minor;
 
 static char cmd_name[PATH_MAX];
 static char fs_name[MAX_OBD_NAME + 1];
+static int pid_file_fd = -1;
 
 static struct hsm_copytool_private *ctdata;
 
@@ -198,6 +201,7 @@ static void usage(const char *name, int rc)
 	"   -c, --chunk-size <sz>     I/O size used during data copy\n"
 	"                             (unit can be used, default is MB)\n"
 	"   -f, --event-fifo <path>   Write events stream to fifo\n"
+	"   -P, --pid-file=PATH       Lock and write PID to PATH\n"
 	"   -p, --hsm-root <path>     Target HSM mount point\n"
 	"   -q, --quiet               Produce less verbose output\n"
 	"   -u, --update-interval <s> Interval between progress reports sent\n"
@@ -241,6 +245,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	  .flag = &opt.o_copy_xattrs },
 	{ .val = 0,	.name = "no_xattr",	.has_arg = no_argument,
 	  .flag = &opt.o_copy_xattrs },
+	{ .val = 'P',	.name = "pid-file",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "hsm-root",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "hsm_root",	.has_arg = required_argument },
 	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument },
@@ -251,6 +256,7 @@ static int ct_parseopts(int argc, char * const *argv)
 						.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
+
 	unsigned long long value;
 	unsigned long long unit;
 	bool all_id = false;
@@ -265,7 +271,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	if (opt.o_archive_id == NULL)
 		return -ENOMEM;
 repeat:
-	while ((c = getopt_long(argc, argv, "A:b:c:f:hiMp:qru:v",
+	while ((c = getopt_long(argc, argv, "A:b:c:f:hiMp:P:qru:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'A': {
@@ -338,6 +344,9 @@ repeat:
 			break;
 		case 'M':
 			opt.o_action = CA_MAXSEQ;
+			break;
+		case 'P':
+			opt.o_pid_file = optarg;
 			break;
 		case 'p':
 			opt.o_hsm_root = optarg;
@@ -1868,6 +1877,15 @@ static int ct_run(void)
 		if (rc < 0) {
 			rc = -errno;
 			CT_ERROR(rc, "cannot daemonize");
+			return rc;
+		}
+	}
+
+	if (opt.o_pid_file != NULL) {
+		pid_file_fd = create_pid_file(opt.o_pid_file);
+		if (pid_file_fd < 0) {
+			rc = -errno;
+			CT_ERROR(rc, "cannot create PID file");
 			return rc;
 		}
 	}

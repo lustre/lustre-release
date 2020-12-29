@@ -224,7 +224,7 @@ l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la
 l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 
-lhsmtool_posix_SOURCES = lhsmtool_posix.c
+lhsmtool_posix_SOURCES = lhsmtool_posix.c pid_file.c pid_file.h
 lhsmtool_posix_LDADD := liblustreapi.la $(PTHREAD_LIBS)
 lhsmtool_posix_DEPENDENCIES := liblustreapi.la
 

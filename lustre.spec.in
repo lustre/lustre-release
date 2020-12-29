@@ -346,7 +346,7 @@ Requires: lustre-devel = %{version}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 %endif
-Requires: attr, rsync, perl, lsof, libtool, /usr/bin/getconf
+Requires: attr, rsync, perl, lsof, /usr/bin/getconf
 %if %{with mpi}
 %if %{mpi_name} == "mpich"
 BuildRequires: mpich-devel

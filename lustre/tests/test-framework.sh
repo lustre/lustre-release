@@ -10082,10 +10082,15 @@ init_agt_vars() {
 	export SINGLEAGT=${SINGLEAGT:-agt1}
 
 	export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
+	export HSMTOOL_PID_FILE=${HSMTOOL_PID_FILE:-"/var/run/lhsmtool_posix.pid"}
 	export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
 	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
 	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
 	export HSMTOOL_TESTDIR
+
+	if ! [[ $HSMTOOL =~ hsmtool ]]; then
+		echo "HSMTOOL = '$HSMTOOL' does not contain 'hsmtool', GLWT" >&2
+	fi
 
 	HSM_ARCHIVE_NUMBER=2
 
@@ -10119,10 +10124,17 @@ get_mdt_devices() {
 	done
 }
 
+pkill_copytools() {
+	local hosts="$1"
+	local signal="$2"
+
+	do_nodes "$hosts" "pkill --pidfile=$HSMTOOL_PID_FILE --signal=$signal hsmtool"
+}
+
 copytool_continue() {
 	local agents=${1:-$(facet_active_host $SINGLEAGT)}
 
-	do_nodesv $agents "libtool execute pkill -CONT -x $HSMTOOL" || return 0
+	pkill_copytools "$agents" CONT || return 0
 	echo "Copytool is continued on $agents"
 }
 
@@ -10130,7 +10142,7 @@ kill_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
 
 	echo "Killing existing copytools on $hosts"
-	do_nodesv $hosts "libtool execute killall -q $HSMTOOL" || true
+	pkill_copytools "$hosts" TERM || return 0
 	copytool_continue "$hosts"
 }
 
@@ -10178,16 +10190,17 @@ __lhsmtool_import()
 
 __lhsmtool_setup()
 {
-	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --hsm-root \"$hsm_root\""
+	local host="$(facet_host "$facet")"
+	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --pid-file=$HSMTOOL_PID_FILE --hsm-root \"$hsm_root\""
 	[ -n "$bandwidth" ] && cmd+=" --bandwidth $bandwidth"
 	[ -n "$archive_id" ] && cmd+=" --archive $archive_id"
 	[ ${#misc_options[@]} -gt 0 ] &&
 		cmd+=" $(IFS=" " echo "$@")"
 	cmd+=" \"$mountpoint\""
 
-	echo "Starting copytool $facet on $(facet_host $facet)"
-	stack_trap "do_facet $facet libtool execute pkill -x '$HSMTOOL' || true" EXIT
-	do_facet $facet "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
+	echo "Starting copytool '$facet' on '$host'"
+	stack_trap "pkill_copytools $host TERM || true" EXIT
+	do_node "$host" "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
 }
 
 hsm_root() {
