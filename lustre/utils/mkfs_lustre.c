@@ -836,8 +836,11 @@ int main(int argc, char *const argv[])
 	strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
 
 	ret = osd_init();
-	if (ret != 0)
+	if (ret != 0) {
+		fprintf(stderr, "%s: osd_init() failed: %d (%s)\n",
+			progname, ret, strerror(ret));
 		return ret;
+	}
 
 #ifdef TUNEFS
 	/*
