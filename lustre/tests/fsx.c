@@ -1530,12 +1530,13 @@ test_fallocate(int mode)
 			if (!quiet)
 				warn("%s: filesystem does not support fallocate mode 0x%x, disabling!",
 				     __func__, mode);
+		} else {
+			ret = 1;
 		}
 
-		if (ret == 0 && ftruncate(fd, 0) == -1) {
-			ret = 1;
+		/* Call truncate only when fallocate succeeds */
+		if (ret == 1 && ftruncate(fd, 0) == -1)
 			warn("ftruncate to 0 size failed");
-		}
 	}
 	return ret;
 }

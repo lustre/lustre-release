@@ -2218,7 +2218,8 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 	boff = start >> inode->i_blkbits;
 	blen = (ALIGN(end, 1 << inode->i_blkbits) >> inode->i_blkbits) - boff;
 
-	flags = LDISKFS_GET_BLOCKS_CREATE;
+	/* Create and Write zeros to new extents */
+	flags = LDISKFS_GET_BLOCKS_CREATE_ZERO;
 	if (mode & FALLOC_FL_KEEP_SIZE)
 		flags |= LDISKFS_GET_BLOCKS_KEEP_SIZE;
 
