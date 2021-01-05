@@ -4147,6 +4147,8 @@ run_test 55 "access with seteuid"
 test_56() {
 	local testfile=$DIR/$tdir/$tfile
 
+	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
+
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
 
@@ -4158,12 +4160,12 @@ test_56() {
 	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
 
-	$LFS setstripe -c2 -i0 -S 1M $testfile
+	$LFS setstripe -c1 $testfile
 	dd if=/dev/urandom of=$testfile bs=1M count=3 conv=fsync
 	filefrag -v $testfile || error "filefrag $testfile failed"
-	(( $(filefrag -v $testfile | grep -c encrypted) >= 2 )) ||
+	(( $(filefrag -v $testfile | grep -c encrypted) >= 1 )) ||
 		error "filefrag $testfile does not show encrypted flag"
-	(( $(filefrag -v $testfile | grep -c encoded) >= 2 )) ||
+	(( $(filefrag -v $testfile | grep -c encoded) >= 1 )) ||
 		error "filefrag $testfile does not show encoded flag"
 }
 run_test 56 "FIEMAP on encrypted file"
