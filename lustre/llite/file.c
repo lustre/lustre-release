@@ -5083,6 +5083,14 @@ long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FALLOCATE, 1);
 
 	rc = cl_falloc(inode, mode, offset, len);
+	/*
+	 * ENOTSUPP (524) is an NFSv3 specific error code erroneously
+	 * used by Lustre in several places. Retuning it here would
+	 * confuse applications that explicity test for EOPNOTSUPP
+	 * (95) and fall back to ftruncate().
+	 */
+	if (rc == -ENOTSUPP)
+		rc = -EOPNOTSUPP;
 
 	RETURN(rc);
 }
