@@ -3199,6 +3199,7 @@ test_44() {
 	local testfile=$DIR/$tdir/$tfile
 	local tmpfile=$TMP/abc
 	local resfile=$TMP/resfile
+	local pagesz=$(getconf PAGESIZE)
 	local respage
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
@@ -3215,8 +3216,8 @@ test_44() {
 	setup_for_enc_tests
 
 	$LFS setstripe -c1 -i0 $testfile
-	dd if=/dev/urandom of=$tmpfile bs=8192 count=1 conv=fsync
-	dd if=$tmpfile of=$testfile bs=8192 count=1 oflag=direct ||
+	dd if=/dev/urandom of=$tmpfile bs=$pagesz count=2 conv=fsync
+	dd if=$tmpfile of=$testfile bs=$pagesz count=2 oflag=direct ||
 		error "could not write to file with O_DIRECT (1)"
 
 	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
@@ -3225,7 +3226,7 @@ test_44() {
 
 	cancel_lru_locks
 
-	dd if=$testfile of=$resfile bs=8192 count=1 iflag=direct ||
+	dd if=$testfile of=$resfile bs=$pagesz count=2 iflag=direct ||
 		error "could not read from file with O_DIRECT (1)"
 
 	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
@@ -3237,13 +3238,13 @@ test_44() {
 
 	rm -f $resfile
 
-	$TRUNCATE $tmpfile 4096
-	dd if=$tmpfile of=$testfile bs=4096 count=1 seek=13 oflag=direct ||
+	$TRUNCATE $tmpfile $pagesz
+	dd if=$tmpfile of=$testfile bs=$pagesz count=1 seek=13 oflag=direct ||
 		error "could not write to file with O_DIRECT (2)"
 
 	cancel_lru_locks
 
-	dd if=$testfile of=$resfile bs=4096 count=1 skip=13 iflag=direct ||
+	dd if=$testfile of=$resfile bs=$pagesz count=1 skip=13 iflag=direct ||
 		error "could not read from file with O_DIRECT (2)"
 	cmp -bl $tmpfile $resfile ||
 		error "file $testfile is corrupted (2)"
@@ -3251,12 +3252,12 @@ test_44() {
 	rm -f $testfile $resfile
 	$LFS setstripe -c1 -i0 $testfile
 
-	$TRUNCATE $tmpfile 2043
+	$TRUNCATE $tmpfile $((pagesz/2 - 5))
 	cp $tmpfile $testfile
 
 	cancel_lru_locks
 
-	dd if=$testfile of=$resfile bs=4096 count=1 iflag=direct ||
+	dd if=$testfile of=$resfile bs=$pagesz count=1 iflag=direct ||
 		error "could not read from file with O_DIRECT (3)"
 	cmp -bl $tmpfile $resfile ||
 		error "file $testfile is corrupted (3)"
