@@ -22,11 +22,13 @@ index 3b9ec24..64dc5fd 100644
  	spinlock_t s_bal_lock;
  	unsigned long s_mb_buddies_generated;
  	unsigned long long s_mb_generation_time;
-@@ -2563,6 +2569,7 @@ extern void ext4_end_bitmap_read(struct buffer_head *bh, int uptodate);
+@@ -2563,6 +2569,9 @@ extern void ext4_end_bitmap_read(struct buffer_head *bh, int uptodate);
  /* mballoc.c */
  extern const struct file_operations ext4_seq_prealloc_table_fops;
  extern const struct seq_operations ext4_mb_seq_groups_ops;
 +extern const struct file_operations ext4_mb_seq_alloc_fops;
++extern int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
++				  ext4_fsblk_t *blocks);
  extern const struct file_operations ext4_seq_mb_last_group_fops;
  extern int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v);
  extern long ext4_mb_stats;
@@ -189,21 +191,28 @@ index 15c962f..7870406 100644
  int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(m->private);
-@@ -2734,6 +2854,7 @@ static int ext4_groupinfo_create_slab(size_t size)
+@@ -2734,6 +2854,8 @@ static int ext4_groupinfo_create_slab(size_t size)
  	return 0;
  }
  
-+#define THRESHOLD_BLOCKS(ts) (ext4_blocks_count(sbi->s_es) / 100 * ts)
++#define THRESHOLD_BLOCKS(sbi, percent)					\
++	(ext4_blocks_count((sbi)->s_es) / 100 * (percent))
  int ext4_mb_init(struct super_block *sb)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
-@@ -2787,6 +2908,9 @@ int ext4_mb_init(struct super_block *sb)
+@@ -2787,6 +2908,15 @@ int ext4_mb_init(struct super_block *sb)
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
  	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
-+	sbi->s_mb_c1_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C1_THRESHOLD);
-+	sbi->s_mb_c2_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C2_THRESHOLD);
-+	sbi->s_mb_c3_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C3_THRESHOLD);
++	if (!sbi->s_mb_c1_blocks)
++		sbi->s_mb_c1_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C1_THRESHOLD);
++	if (!sbi->s_mb_c2_blocks)
++		sbi->s_mb_c2_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C2_THRESHOLD);
++	if (!sbi->s_mb_c3_blocks)
++		sbi->s_mb_c3_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C3_THRESHOLD);
  	/*
  	 * The default group preallocation is 512, which for 4k block
  	 * sizes translates to 2 megabytes.  However for bigalloc file
@@ -238,6 +247,51 @@ index e00c3b7..d02daaf 100644
  
  /*
   * default group prealloc size 512 blocks
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1450,6 +1450,7 @@ enum {
+ 	Opt_nomblk_io_submit, Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_dioread_nolock, Opt_dioread_lock,
++	Opt_mb_c1_threshold, Opt_mb_c2_threshold, Opt_mb_c3_threshold,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+ 	Opt_max_dir_size_kb, Opt_nojournal_checksum, Opt_nombcache,
+ };
+@@ -1604,6 +1605,9 @@ static const match_table_t tokens = {
+ 	{Opt_init_itable, "init_itable"},
+ 	{Opt_noinit_itable, "noinit_itable"},
+ 	{Opt_max_dir_size_kb, "max_dir_size_kb=%u"},
++	{Opt_mb_c1_threshold, "mb_c1_threshold=%s"},
++	{Opt_mb_c2_threshold, "mb_c2_threshold=%s"},
++	{Opt_mb_c3_threshold, "mb_c3_threshold=%s"},
+ 	{Opt_test_dummy_encryption, "test_dummy_encryption"},
+ 	{Opt_nombcache, "nombcache"},
+ 	{Opt_nombcache, "no_mbcache"},	/* for backward compatibility */
+@@ -1748,6 +1752,9 @@ static const struct mount_opts {
+ 	{Opt_jqfmt_vfsv0, QFMT_VFS_V0, MOPT_QFMT},
+ 	{Opt_jqfmt_vfsv1, QFMT_VFS_V1, MOPT_QFMT},
+ 	{Opt_max_dir_size_kb, 0, MOPT_GTE0},
++	{Opt_mb_c1_threshold, 0, MOPT_STRING},
++	{Opt_mb_c2_threshold, 0, MOPT_STRING},
++	{Opt_mb_c3_threshold, 0, MOPT_STRING},
+ 	{Opt_test_dummy_encryption, 0, MOPT_GTE0},
+ 	{Opt_nombcache, EXT4_MOUNT_NO_MBCACHE, MOPT_SET},
+ 	{Opt_err, 0, 0}
+@@ -1874,6 +1881,12 @@ static const struct mount_opts {
+ 		sbi->s_max_dir_size_kb = arg;
+ 		/* reset s_warning_dir_size and make it re-calculated */
+ 		sbi->s_warning_dir_size = 0;
++	} else if (token == Opt_mb_c1_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c1_blocks);
++	} else if (token == Opt_mb_c2_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c2_blocks);
++	} else if (token == Opt_mb_c3_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c3_blocks);
+ 	} else if (token == Opt_stripe) {
+ 		sbi->s_stripe = arg;
+ 	} else if (token == Opt_resuid) {
 diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
 index 417b33a..f49821e 100644
 --- a/fs/ext4/sysfs.c
@@ -256,10 +310,8 @@ index 417b33a..f49821e 100644
  			task_pid_vnr(sbi->s_journal->j_task));
  }
  
-+#define THRESHOLD_PERCENT(ts) (ts * 100 / ext4_blocks_count(sbi->s_es))
-+
-+static int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
-+				  ext4_fsblk_t *blocks)
++int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
++			   ext4_fsblk_t *blocks)
 +{
 +	unsigned long long val;
 +
@@ -273,6 +325,8 @@ index 417b33a..f49821e 100644
 +	return 0;
 +}
 +
++#define THRESHOLD_PERCENT(sbi, blocks)					\
++	(((blocks) - 1) * 100 / ext4_blocks_count((sbi)->s_es) + 1)
 +static ssize_t mb_threshold_store(struct ext4_sb_info *sbi,
 +				  const char *buf, size_t count,
 +				  ext4_fsblk_t *blocks)
@@ -311,13 +365,13 @@ index 417b33a..f49821e 100644
  		       percpu_counter_sum(&sbi->s_dirtyclusters_counter)));
 +	case attr_mb_c1_threshold:
 +		return scnprintf(buf, PAGE_SIZE, "%llu\n",
-+				 THRESHOLD_PERCENT(sbi->s_mb_c1_blocks));
++				 THRESHOLD_PERCENT(sbi, sbi->s_mb_c1_blocks));
 +	case attr_mb_c2_threshold:
 +		return scnprintf(buf, PAGE_SIZE, "%llu\n",
-+				 THRESHOLD_PERCENT(sbi->s_mb_c2_blocks));
++				 THRESHOLD_PERCENT(sbi, sbi->s_mb_c2_blocks));
 +	case attr_mb_c3_threshold:
 +		return scnprintf(buf, PAGE_SIZE, "%llu\n",
-+				 THRESHOLD_PERCENT(sbi->s_mb_c3_blocks));
++				 THRESHOLD_PERCENT(sbi, sbi->s_mb_c3_blocks));
  	case attr_session_write_kbytes:
  		return session_write_kbytes_show(sbi, buf);
  	case attr_lifetime_write_kbytes:

@@ -158,21 +158,28 @@ Index: linux-stage/fs/ext4/mballoc.c
  #define EXT4_MB_PREALLOC_TABLE          "prealloc_table"
  
  static int ext4_mb_check_and_update_prealloc(struct ext4_sb_info *sbi,
-@@ -2730,6 +2851,7 @@ static int ext4_groupinfo_create_slab(si
+@@ -2730,6 +2851,8 @@ static int ext4_groupinfo_create_slab(si
  	return 0;
  }
  
-+#define THRESHOLD_BLOCKS(ts) (ext4_blocks_count(sbi->s_es) / 100 * ts)
++#define THRESHOLD_BLOCKS(sbi, percent)					\
++	(ext4_blocks_count((sbi)->s_es) / 100 * (percent))
  int ext4_mb_init(struct super_block *sb)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
-@@ -2781,6 +2903,9 @@ int ext4_mb_init(struct super_block *sb)
+@@ -2781,6 +2903,15 @@ int ext4_mb_init(struct super_block *sb)
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
  	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
-+	sbi->s_mb_c1_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C1_THRESHOLD);
-+	sbi->s_mb_c2_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C2_THRESHOLD);
-+	sbi->s_mb_c3_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C3_THRESHOLD);
++	if (!sbi->s_mb_c1_blocks)
++		sbi->s_mb_c1_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C1_THRESHOLD);
++	if (!sbi->s_mb_c2_blocks)
++		sbi->s_mb_c2_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C2_THRESHOLD);
++	if (!sbi->s_mb_c3_blocks)
++		sbi->s_mb_c3_blocks =
++			THRESHOLD_BLOCKS(sbi, MB_DEFAULT_C3_THRESHOLD);
  	/*
  	 * The default group preallocation is 512, which for 4k block
  	 * sizes translates to 2 megabytes.  However for bigalloc file
@@ -234,19 +241,69 @@ Index: linux-stage/fs/ext4/ext4.h
  	spinlock_t s_bal_lock;
  	unsigned long s_mb_buddies_generated;
  	unsigned long long s_mb_generation_time;
+@@ -2115,6 +2121,8 @@ struct ext4_sb_info {
+ extern void ext4_end_bitmap_read(struct buffer_head *bh, int uptodate);
+ 
+ /* mballoc.c */
++extern int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
++				  ext4_fsblk_t *blocks);
+ extern long ext4_mb_stats;
+ extern long ext4_mb_max_to_scan;
+ extern int ext4_mb_init(struct super_block *);
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -2734,6 +2734,73 @@ static ssize_t sbi_deprecated_show(struc
+@@ -1208,6 +1208,7 @@ enum {
+ 	Opt_nomblk_io_submit, Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_dioread_nolock, Opt_dioread_lock,
++	Opt_mb_c1_threshold, Opt_mb_c2_threshold, Opt_mb_c3_threshold,
+ 	Opt_no_mbcache,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+ 	Opt_max_dir_size_kb, Opt_nojournal_checksum,
+@@ -1287,6 +1288,9 @@ static const match_table_t tokens = {
+ 	{Opt_nodiscard, "nodiscard"},
+ 	{Opt_init_itable, "init_itable=%u"},
+ 	{Opt_no_mbcache, "no_mbcache"},
++	{Opt_mb_c1_threshold, "mb_c1_threshold=%s"},
++	{Opt_mb_c2_threshold, "mb_c2_threshold=%s"},
++	{Opt_mb_c3_threshold, "mb_c3_threshold=%s"},
+ 	{Opt_init_itable, "init_itable"},
+ 	{Opt_noinit_itable, "noinit_itable"},
+ 	{Opt_max_dir_size_kb, "max_dir_size_kb=%u"},
+@@ -1449,6 +1453,9 @@ static const struct mount_opts {
+ 	{Opt_auto_da_alloc, EXT4_MOUNT_NO_AUTO_DA_ALLOC, MOPT_CLEAR},
+ 	{Opt_noinit_itable, EXT4_MOUNT_INIT_INODE_TABLE, MOPT_CLEAR},
+ 	{Opt_no_mbcache, EXT4_MOUNT_NO_MBCACHE, MOPT_SET},
++	{Opt_mb_c1_threshold, 0, MOPT_STRING},
++	{Opt_mb_c2_threshold, 0, MOPT_STRING},
++	{Opt_mb_c3_threshold, 0, MOPT_STRING},
+ 	{Opt_commit, 0, MOPT_GTE0},
+ 	{Opt_max_batch_time, 0, MOPT_GTE0},
+ 	{Opt_min_batch_time, 0, MOPT_GTE0},
+@@ -1571,6 +1578,12 @@ static const struct mount_opts {
+ 		sbi->s_max_dir_size_kb = arg;
+ 		/* reset s_warning_dir_size and make it re-calculated */
+ 		sbi->s_warning_dir_size = 0;
++	} else if (token == Opt_mb_c1_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c1_blocks);
++	} else if (token == Opt_mb_c2_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c2_blocks);
++	} else if (token == Opt_mb_c3_threshold) {
++		save_threshold_percent(sbi, args[0].from, &sbi->s_mb_c3_blocks);
+ 	} else if (token == Opt_stripe) {
+ 		sbi->s_stripe = arg;
+ 	} else if (token == Opt_resuid) {
+@@ -2734,6 +2747,74 @@ static ssize_t sbi_deprecated_show(struc
  	return snprintf(buf, PAGE_SIZE, "%d\n", a->u.deprecated_val);
  }
  
-+static int save_threshold(struct ext4_sb_info *sbi, const char *buf,
-+			 ext4_fsblk_t *blocks) {
++int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
++			   ext4_fsblk_t *blocks) {
 +	unsigned long long val;
 +
-+	if (!parse_strtoull(buf, 100, &val)) {
++	if (!parse_strtoull(buf, 100, &val) && val <= 100) {
 +		*blocks = val * ext4_blocks_count(sbi->s_es) / 100;
 +		return 0;
 +	}
@@ -254,14 +311,15 @@ Index: linux-stage/fs/ext4/super.c
 +	return -EINVAL;
 +}
 +
-+#define THRESHOLD_PERCENT(ts) (ts * 100 / ext4_blocks_count(sbi->s_es))
++#define THRESHOLD_PERCENT(sbi, blocks)					\
++	(((blocks) - 1) * 100 / ext4_blocks_count((sbi)->s_es) + 1)
 +static ssize_t mb_c1_threshold_store(struct ext4_attr *a,
 +				    struct ext4_sb_info *sbi,
 +				    const char *buf, size_t count)
 +{
 +	int ret;
 +
-+	ret = save_threshold(sbi, buf, &sbi->s_mb_c1_blocks);
++	ret = save_threshold_percent(sbi, buf, &sbi->s_mb_c1_blocks);
 +
 +	return ret ? ret : count;
 +}
@@ -270,7 +328,7 @@ Index: linux-stage/fs/ext4/super.c
 +				   struct ext4_sb_info *sbi, char *buf)
 +{
 +	return snprintf(buf, PAGE_SIZE, "%llu\n",
-+			THRESHOLD_PERCENT(sbi->s_mb_c1_blocks));
++			THRESHOLD_PERCENT(sbi, sbi->s_mb_c1_blocks));
 +}
 +
 +static ssize_t mb_c2_threshold_store(struct ext4_attr *a,
@@ -279,7 +337,7 @@ Index: linux-stage/fs/ext4/super.c
 +{
 +	int ret;
 +
-+	ret = save_threshold(sbi, buf, &sbi->s_mb_c2_blocks);
++	ret = save_threshold_percent(sbi, buf, &sbi->s_mb_c2_blocks);
 +	return ret ? ret : count;
 +}
 +
@@ -287,7 +345,7 @@ Index: linux-stage/fs/ext4/super.c
 +				   struct ext4_sb_info *sbi, char *buf)
 +{
 +	        return snprintf(buf, PAGE_SIZE, "%llu\n",
-+				THRESHOLD_PERCENT(sbi->s_mb_c2_blocks));
++				THRESHOLD_PERCENT(sbi, sbi->s_mb_c2_blocks));
 +}
 +
 +static ssize_t mb_c3_threshold_store(struct ext4_attr *a,
@@ -296,7 +354,7 @@ Index: linux-stage/fs/ext4/super.c
 +{
 +	int ret;
 +
-+	ret = save_threshold(sbi, buf, &sbi->s_mb_c3_blocks);
++	ret = save_threshold_percent(sbi, buf, &sbi->s_mb_c3_blocks);
 +
 +	return ret ? ret : count;
 +}
@@ -305,7 +363,7 @@ Index: linux-stage/fs/ext4/super.c
 +				   struct ext4_sb_info *sbi, char *buf)
 +{
 +	        return snprintf(buf, PAGE_SIZE, "%llu\n",
-+				THRESHOLD_PERCENT(sbi->s_mb_c3_blocks));
++				THRESHOLD_PERCENT(sbi, sbi->s_mb_c3_blocks));
 +}
 +
 +
