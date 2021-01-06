@@ -924,7 +924,9 @@ int main(int argc, char *const argv[])
 		if (rc)
 			goto out_osd;
 #else
-		rc = -EINVAL;
+		rc = EINVAL;
+		fprintf(stderr, "%s: cannot mount %s: no server support\n",
+			progname, mop.mo_usource);
 		goto out_options;
 #endif
 	}
@@ -993,7 +995,7 @@ int main(int argc, char *const argv[])
 				 * Try with 'lustre' instead.  Eventually this
 				 * can be removed (e.g. 2.18 or whenever).
 				 */
-				if (rc == -ENODEV &&
+				if (errno == ENODEV &&
 				    strcmp(fstype, "lustre_tgt") == 0) {
 					fstype = "lustre";
 					i--;
