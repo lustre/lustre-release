@@ -1259,7 +1259,7 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 	LASSERT(qqi);
 
 	if (!qsd_type_enabled(qsd, qtype) || qqi->qqi_acct_obj == NULL ||
-	    qid->qid_uid == 0)
+	    qid->qid_uid == 0 || qsd->qsd_dev->dd_rdonly)
 		RETURN_EXIT;
 
 	read_lock(&qsd->qsd_lock);

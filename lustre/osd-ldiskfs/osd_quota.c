@@ -76,6 +76,14 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	if (!ldiskfs_has_feature_quota(sb))
 		RETURN(-ENOENT);
 
+	/**
+	 * ldiskfs won't load quota inodes on RO mount,
+	 * So disable it in osd-ldiskfs to keep same behavior
+	 * like lower layer to avoid further confusions.
+	 */
+	if (osd->od_dt_dev.dd_rdonly)
+		RETURN(-ENOENT);
+
 	id->oii_gen = OSD_OII_NOGEN;
 	switch (fid2type(fid)) {
 	case USRQUOTA:
