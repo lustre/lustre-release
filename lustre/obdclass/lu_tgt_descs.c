@@ -300,7 +300,7 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 	int i;
 
 	bitmap_free(ltd->ltd_tgt_bitmap);
-	for (i = 0; i < TGT_PTRS; i++) {
+	for (i = 0; i < ARRAY_SIZE(ltd->ltd_tgt_idx); i++) {
 		if (ltd->ltd_tgt_idx[i])
 			OBD_FREE_PTR(ltd->ltd_tgt_idx[i]);
 	}
@@ -373,6 +373,9 @@ int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 
 	if (index >= ltd->ltd_tgts_size) {
 		__u32 newsize = 1;
+
+		if (index > TGT_PTRS * TGT_PTRS_PER_BLOCK)
+			RETURN(-ENFILE);
 
 		while (newsize < index + 1)
 			newsize = newsize << 1;

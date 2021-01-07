@@ -1584,10 +1584,10 @@ struct lu_tgt_desc {
 			   ltd_connecting:1; /* target is connecting */
 };
 
-/* number of pointers at 1st level */
-#define TGT_PTRS		(PAGE_SIZE / sizeof(void *))
 /* number of pointers at 2nd level */
 #define TGT_PTRS_PER_BLOCK	(PAGE_SIZE / sizeof(void *))
+/* number of pointers at 1st level - only need as many as max OST/MDT count */
+#define TGT_PTRS		((LOV_ALL_STRIPES + 1) / TGT_PTRS_PER_BLOCK)
 
 struct lu_tgt_desc_idx {
 	struct lu_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
@@ -1638,8 +1638,8 @@ struct lu_tgt_descs {
 };
 
 #define LTD_TGT(ltd, index)						\
-	 (ltd)->ltd_tgt_idx[(index) /					\
-	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
+	 (ltd)->ltd_tgt_idx[(index) / TGT_PTRS_PER_BLOCK]->		\
+		ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
 
 u64 lu_prandom_u64_max(u64 ep_ro);
 void lu_qos_rr_init(struct lu_qos_rr *lqr);

@@ -158,7 +158,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 	LASSERTF(ltds->ltd_tgtnr == 0, "tgt count unmatched: %d\n",
 		 ltds->ltd_tgtnr);
 
-	for (idx = 0; idx < TGT_PTRS; idx++) {
+	for (idx = 0; idx < ARRAY_SIZE(ltds->ltd_tgts_idx); idx++) {
 		if (ltds->ltd_tgts_idx[idx] != NULL) {
 			OBD_FREE_PTR(ltds->ltd_tgts_idx[idx]);
 			ltds->ltd_tgts_idx[idx] = NULL;
