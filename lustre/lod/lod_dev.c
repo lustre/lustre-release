@@ -2202,16 +2202,84 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	RETURN(rc);
 }
 
+
+#define QMT0_DEV_NAME_LEN (LUSTRE_MAXFSNAME + sizeof("-QMT0000"))
+static struct obd_device *obd_find_qmt0(char *obd_name)
+{
+	char qmt_name[QMT0_DEV_NAME_LEN];
+	struct obd_device *qmt = NULL;
+
+	if (!server_name2fsname(obd_name, qmt_name, NULL)) {
+		strlcat(qmt_name, "-QMT0000", QMT0_DEV_NAME_LEN);
+		qmt = class_name2obd(qmt_name);
+	}
+
+	return qmt;
+}
+
+static int lod_pool_new_q(struct obd_device *obd, char *poolname)
+{
+	int err = lod_pool_new(obd, poolname);
+
+	if (!err) {
+		obd = obd_find_qmt0(obd->obd_name);
+		if (obd)
+			obd_pool_new(obd, poolname);
+	}
+
+	return err;
+}
+
+static int lod_pool_remove_q(struct obd_device *obd, char *poolname,
+			     char *ostname)
+{
+	int err = lod_pool_remove(obd, poolname, ostname);
+
+	if (!err) {
+		obd = obd_find_qmt0(obd->obd_name);
+		if (obd)
+			obd_pool_rem(obd, poolname, ostname);
+	}
+
+	return err;
+}
+
+static int lod_pool_add_q(struct obd_device *obd, char *poolname, char *ostname)
+{
+	int err = lod_pool_add(obd, poolname, ostname);
+
+	if (!err) {
+		obd = obd_find_qmt0(obd->obd_name);
+		if (obd)
+			obd_pool_add(obd, poolname, ostname);
+	}
+
+	return err;
+}
+
+static int lod_pool_del_q(struct obd_device *obd, char *poolname)
+{
+	int err = lod_pool_del(obd, poolname);
+
+	if (!err) {
+		obd = obd_find_qmt0(obd->obd_name);
+		if (obd)
+			obd_pool_del(obd, poolname);
+	}
+
+	return err;
+}
+
 static const struct obd_ops lod_obd_device_ops = {
 	.o_owner        = THIS_MODULE,
 	.o_connect      = lod_obd_connect,
 	.o_disconnect   = lod_obd_disconnect,
 	.o_get_info     = lod_obd_get_info,
 	.o_set_info_async = lod_obd_set_info_async,
-	.o_pool_new     = lod_pool_new,
-	.o_pool_rem     = lod_pool_remove,
-	.o_pool_add     = lod_pool_add,
-	.o_pool_del     = lod_pool_del,
+	.o_pool_new     = lod_pool_new_q,
+	.o_pool_rem     = lod_pool_remove_q,
+	.o_pool_add     = lod_pool_add_q,
+	.o_pool_del     = lod_pool_del_q,
 };
 
 static int __init lod_init(void)
