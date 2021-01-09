@@ -1814,6 +1814,7 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 	struct ll_sb_info *sbi = ll_i2sbi(src);
 	struct md_op_data *op_data;
 	ktime_t kstart = ktime_get();
+	umode_t mode = 0;
 	int err;
 	ENTRY;
 
@@ -1838,15 +1839,21 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 	if (err)
 		RETURN(err);
 
-	op_data = ll_prep_md_op_data(NULL, src, tgt, NULL, 0, 0,
+	if (src_dchild->d_inode)
+		mode = src_dchild->d_inode->i_mode;
+
+	if (tgt_dchild->d_inode)
+		mode = tgt_dchild->d_inode->i_mode;
+
+	op_data = ll_prep_md_op_data(NULL, src, tgt, NULL, 0, mode,
 				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	if (src_dchild->d_inode != NULL)
+	if (src_dchild->d_inode)
 		op_data->op_fid3 = *ll_inode2fid(src_dchild->d_inode);
 
-	if (tgt_dchild->d_inode != NULL)
+	if (tgt_dchild->d_inode)
 		op_data->op_fid4 = *ll_inode2fid(tgt_dchild->d_inode);
 
 	err = md_rename(sbi->ll_md_exp, op_data,
