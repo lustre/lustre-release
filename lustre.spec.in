@@ -322,7 +322,9 @@ Summary: Lustre include headers
 Group: Development/Kernel
 Provides: lustre-devel = %{version}
 Requires: %{lustre_name} = %{version}
+%if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
+%endif
 
 %description devel
 This package contains the header files needed for building additional
