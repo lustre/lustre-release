@@ -1964,7 +1964,15 @@ struct cl_io {
 	 * the read IO will check to-be-read OSCs' status, and make fast-switch
 	 * another mirror if some of the OSTs are not healthy.
 	 */
-			     ci_tried_all_mirrors:1;
+			     ci_tried_all_mirrors:1,
+	/**
+	 * Random read hints, readahead will be disabled.
+	 */
+			     ci_rand_read:1,
+	/**
+	 * Sequential read hints.
+	 */
+			     ci_seq_read:1;
 	/**
 	 * Bypass quota check
 	 */

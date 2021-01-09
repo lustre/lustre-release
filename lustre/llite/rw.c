@@ -1249,7 +1249,7 @@ static bool index_in_stride_window(struct ll_readahead_state *ras,
  */
 static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 		       struct ll_readahead_state *ras, pgoff_t index,
-		       enum ras_update_flags flags)
+		       enum ras_update_flags flags, struct cl_io *io)
 {
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	bool hit = flags & LL_RAS_HIT;
@@ -1270,6 +1270,18 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	 */
 	if (ras->ras_no_miss_check)
 		GOTO(out_unlock, 0);
+
+	if (io && io->ci_rand_read)
+		GOTO(out_unlock, 0);
+
+	if (io && io->ci_seq_read) {
+		if (!hit) {
+			/* to avoid many small read RPC here */
+			ras->ras_window_pages = sbi->ll_ra_info.ra_range_pages;
+			ll_ra_stats_inc_sbi(sbi, RA_STAT_MMAP_RANGE_READ);
+		}
+		goto skip;
+	}
 
 	if (flags & LL_RAS_MMAP) {
 		unsigned long ra_pages;
@@ -1589,7 +1601,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			flags |= LL_RAS_HIT;
 		if (!vio->vui_ra_valid)
 			flags |= LL_RAS_MMAP;
-		ras_update(sbi, inode, ras, vvp_index(vpg), flags);
+		ras_update(sbi, inode, ras, vvp_index(vpg), flags, io);
 	}
 
 	cl_2queue_init(queue);
@@ -1608,7 +1620,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	io_start_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos);
 	io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
 				io->u.ci_rw.crw_count - 1);
-	if (ll_readahead_enabled(sbi) && ras) {
+	if (ll_readahead_enabled(sbi) && ras && !io->ci_rand_read) {
 		pgoff_t skip_index = 0;
 
 		if (ras->ras_next_readahead_idx < vvp_index(vpg))
@@ -1794,7 +1806,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			/* For fast read, it updates read ahead state only
 			 * if the page is hit in cache because non cache page
 			 * case will be handled by slow read later. */
-			ras_update(sbi, inode, ras, vvp_index(vpg), flags);
+			ras_update(sbi, inode, ras, vvp_index(vpg), flags, io);
 			/* avoid duplicate ras_update() call */
 			vpg->vpg_ra_updated = 1;
 

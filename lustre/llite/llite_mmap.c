@@ -76,13 +76,11 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
  * \param env - corespondent lu_env to processing
  * \param vma - virtual memory area addressed to page fault
  * \param index - page index corespondent to fault.
- * \parm ra_flags - vma readahead flags.
  *
  * \return error codes from cl_io_init.
  */
 static struct cl_io *
-ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
-		 pgoff_t index, unsigned long *ra_flags)
+ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma, pgoff_t index)
 {
 	struct file	       *file = vma->vm_file;
 	struct inode	       *inode = file_inode(file);
@@ -91,30 +89,27 @@ ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
 	int			rc;
 	ENTRY;
 
-        if (ll_file_nolock(file))
-                RETURN(ERR_PTR(-EOPNOTSUPP));
+	if (ll_file_nolock(file))
+		RETURN(ERR_PTR(-EOPNOTSUPP));
 
 restart:
 	io = vvp_env_thread_io(env);
-        io->ci_obj = ll_i2info(inode)->lli_clob;
-        LASSERT(io->ci_obj != NULL);
+	io->ci_obj = ll_i2info(inode)->lli_clob;
+	LASSERT(io->ci_obj != NULL);
 
-        fio = &io->u.ci_fault;
-        fio->ft_index      = index;
-        fio->ft_executable = vma->vm_flags&VM_EXEC;
+	fio = &io->u.ci_fault;
+	fio->ft_index = index;
+	fio->ft_executable = vma->vm_flags & VM_EXEC;
 
-        /*
-         * disable VM_SEQ_READ and use VM_RAND_READ to make sure that
-         * the kernel will not read other pages not covered by ldlm in
-         * filemap_nopage. we do our readahead in ll_readpage.
-         */
-        if (ra_flags != NULL)
-                *ra_flags = vma->vm_flags & (VM_RAND_READ|VM_SEQ_READ);
-        vma->vm_flags &= ~VM_SEQ_READ;
-        vma->vm_flags |= VM_RAND_READ;
+	CDEBUG(D_MMAP,
+	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       PFID(&ll_i2info(inode)->lli_fid), vma, vma->vm_start,
+	       vma->vm_end, vma->vm_flags, fio->ft_index);
 
-        CDEBUG(D_MMAP, "vm_flags: %lx (%lu %d)\n", vma->vm_flags,
-               fio->ft_index, fio->ft_executable);
+	if (vma->vm_flags & VM_SEQ_READ)
+		io->ci_seq_read = 1;
+	else if (vma->vm_flags & VM_RAND_READ)
+		io->ci_rand_read = 1;
 
 	rc = cl_io_init(env, io, CIT_FAULT, io->ci_obj);
 	if (rc == 0) {
@@ -158,7 +153,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = ll_fault_io_init(env, vma, vmpage->index, NULL);
+	io = ll_fault_io_init(env, vma, vmpage->index);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
@@ -268,7 +263,6 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 	struct cl_io            *io;
 	struct vvp_io           *vio = NULL;
 	struct page             *vmpage;
-	unsigned long            ra_flags;
 	int                      result = 0;
 	int                      fault_ret = 0;
 	__u16			 refcheck;
@@ -302,7 +296,7 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 		fault_ret = 0;
 	}
 
-	io = ll_fault_io_init(env, vma, vmf->pgoff, &ra_flags);
+	io = ll_fault_io_init(env, vma, vmf->pgoff);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
@@ -335,8 +329,6 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
         }
 	cl_io_fini(env, io);
 
-	vma->vm_flags |= ra_flags;
-
 out:
 	cl_env_put(env, &refcheck);
 	if (result != 0 && !(fault_ret & VM_FAULT_RETRY))
@@ -365,6 +357,10 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (cached)
 		goto out;
 
+	CDEBUG(D_MMAP, DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx\n",
+	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags);
+
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
 	 * other signals.
@@ -375,6 +371,7 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	/* make sure offset is not a negative number */
 	if (vmf->pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
 		return VM_FAULT_SIGBUS;
+
 restart:
 	result = ll_fault0(vma, vmf);
 	if (vmf->page &&
@@ -547,6 +544,10 @@ int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 	int rc;
 
 	ENTRY;
+	CDEBUG(D_VFSTRACE | D_MMAP,
+	       "VFS_Op: fid="DFID" vma=%p start=%#lx end=%#lx vm_flags=%#lx\n",
+	       PFID(&ll_i2info(inode)->lli_fid),
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags);
 
 	if (ll_file_nolock(file))
 		RETURN(-EOPNOTSUPP);
