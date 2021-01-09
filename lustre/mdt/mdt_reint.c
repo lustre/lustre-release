@@ -2604,11 +2604,22 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 		    mdt_object_remote(msrcdir))
 			GOTO(out_put_tgtdir, rc = -EXDEV);
 
-		rc = mdt_rename_lock(info, &rename_lh);
-		if (rc != 0) {
-			CERROR("%s: can't lock FS for rename: rc = %d\n",
-			       mdt_obd_name(mdt), rc);
-			GOTO(out_put_tgtdir, rc);
+		/* This may be further relaxed in the future for different
+		 * source and target parents. Start with only same-directory
+		 * renames of non-directory files for simplicity and because
+		 * this is by far the most common use case.
+		 */
+		if (msrcdir != mtgtdir || S_ISDIR(ma->ma_attr.la_mode)) {
+			rc = mdt_rename_lock(info, &rename_lh);
+			if (rc != 0) {
+				CERROR("%s: cannot lock for rename: rc = %d\n",
+				       mdt_obd_name(mdt), rc);
+				GOTO(out_put_tgtdir, rc);
+			}
+		} else {
+			CDEBUG(D_INFO, "%s: samedir rename "DFID"/"DNAME"\n",
+			       mdt_obd_name(mdt), PFID(rr->rr_fid1),
+			       PNAME(&rr->rr_name));
 		}
 	}
 
