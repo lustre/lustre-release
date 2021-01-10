@@ -1067,8 +1067,8 @@ run_rr_alloc() {
 	local i
 	for i in $(seq $MDSCOUNT); do
 		do_facet mds$i "$LCTL set_param -n \
-			lod.$FSNAME-MDT0000*.qos_threshold_rr=100 \
-			osp.$FSNAME-OST*-osc-MDT0000.create_count=$create_count" ||
+			lod.$FSNAME-MDT*.qos_threshold_rr=100 \
+			osp.$FSNAME-OST*-osc-MDT*.create_count=$create_count" ||
 			error "failed while setting qos_threshold_rr & creat_count"
 	done
 
