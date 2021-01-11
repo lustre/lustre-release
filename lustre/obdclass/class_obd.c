@@ -482,7 +482,7 @@ static long obd_class_ioctl(struct file *filp, unsigned int cmd,
 
 	ENTRY;
 	/* Allow non-root access for some limited ioctls */
-	if (!cfs_capable(CAP_SYS_ADMIN))
+	if (!capable(CAP_SYS_ADMIN))
 		RETURN(err = -EACCES);
 
 	if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */

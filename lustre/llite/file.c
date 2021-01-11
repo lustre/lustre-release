@@ -2243,7 +2243,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 	int			 rc;
 	ENTRY;
 
-	if (!cfs_capable(CAP_SYS_ADMIN))
+	if (!capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	OBD_ALLOC_LARGE(lump, lum_size);
@@ -2565,7 +2565,7 @@ int ll_fid2path(struct inode *inode, void __user *arg)
 
 	ENTRY;
 
-	if (!cfs_capable(CAP_DAC_READ_SEARCH) &&
+	if (!capable(CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 
@@ -2853,7 +2853,7 @@ int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
 	/* Non-root users are forbidden to set or clear flags which are
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
-	    !cfs_capable(CAP_SYS_ADMIN))
+	    !capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	if (!exp_connect_archive_id_array(exp)) {

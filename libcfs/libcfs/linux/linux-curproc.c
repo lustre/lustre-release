@@ -101,11 +101,6 @@ void cfs_curproc_cap_unpack(cfs_cap_t cap)
         }
 }
 
-int cfs_capable(cfs_cap_t cap)
-{
-        return capable(cfs_cap_unpack(cap));
-}
-
 static int cfs_access_process_vm(struct task_struct *tsk,
 				 struct mm_struct *mm,
 				 unsigned long addr,
@@ -268,7 +263,6 @@ out:
 EXPORT_SYMBOL(cfs_get_environ);
 
 EXPORT_SYMBOL(cfs_curproc_cap_pack);
-EXPORT_SYMBOL(cfs_capable);
 
 /*
  * Local variables:

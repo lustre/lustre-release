@@ -2042,7 +2042,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	/* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
 	if (attr->ia_valid & TIMES_SET_FLAGS) {
 		if ((!uid_eq(current_fsuid(), inode->i_uid)) &&
-		    !cfs_capable(CAP_FOWNER))
+		    !capable(CAP_FOWNER))
 			RETURN(-EPERM);
 	}
 
@@ -3382,7 +3382,7 @@ int ll_getparent(struct file *file, struct getparent __user *arg)
 
 	ENTRY;
 
-	if (!cfs_capable(CAP_DAC_READ_SEARCH) &&
+	if (!capable(CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 

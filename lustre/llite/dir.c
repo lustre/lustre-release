@@ -1138,14 +1138,14 @@ int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 	case LUSTRE_Q_SETDEFAULT:
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 		break;
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
 	case LUSTRE_Q_GETQUOTAPOOL:
 		if (check_owner(type, id) &&
-		    (!cfs_capable(CAP_SYS_ADMIN)))
+		    (!capable(CAP_SYS_ADMIN)))
 			RETURN(-EPERM);
 		break;
 	case Q_GETINFO:
@@ -1274,7 +1274,7 @@ int ll_rmfid(struct file *file, void __user *arg)
 	int i, rc, *rcs = NULL;
 	ENTRY;
 
-	if (!cfs_capable(CAP_DAC_READ_SEARCH) &&
+	if (!capable(CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(file_inode(file))->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 	/* Only need to get the buflen */
@@ -2040,7 +2040,7 @@ out_hur:
 		RETURN(rc);
 	}
 	case LL_IOC_HSM_CT_START:
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 
 		rc = copy_and_ct_start(cmd, sbi->ll_md_exp,

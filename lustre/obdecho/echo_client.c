@@ -2841,7 +2841,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 	switch (cmd) {
 	case OBD_IOC_CREATE:                    /* may create echo object */
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		rc = echo_create_object(env, ed, oa);
@@ -2855,7 +2855,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		int dirlen;
 		__u64 id;
 
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		count = data->ioc_count;
@@ -2880,7 +2880,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		__u64            seq;
 		int              max_count;
 
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		rc = seq_client_get_seq(env, ed->ed_cl_seq, &seq);
@@ -2901,7 +2901,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	}
 #endif /* HAVE_SERVER_SUPPORT */
 	case OBD_IOC_DESTROY:
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		rc = echo_get_object(&eco, ed, oa);
@@ -2922,7 +2922,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 
 	case OBD_IOC_SETATTR:
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		rc = echo_get_object(&eco, ed, oa);
@@ -2933,7 +2933,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 
 	case OBD_IOC_BRW_WRITE:
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		rw = OBD_BRW_WRITE;

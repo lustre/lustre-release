@@ -53,7 +53,6 @@ typedef __u32 cfs_cap_t;
 
 cfs_cap_t cfs_curproc_cap_pack(void);
 void cfs_curproc_cap_unpack(cfs_cap_t cap);
-int cfs_capable(cfs_cap_t cap);
 
 /* __LIBCFS_CURPROC_H__ */
 #endif
