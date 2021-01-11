@@ -1526,7 +1526,8 @@ test_fallocate(int mode)
 	int fd = get_fd();
 
 	if (!lite) {
-		if (fallocate(fd, mode, 0, 1) && errno == EOPNOTSUPP) {
+		/* Must go more than a page away so let's go 4M to be sure */
+		if (fallocate(fd, mode, 0, 4096*1024) && errno == EOPNOTSUPP) {
 			if (!quiet)
 				warn("%s: filesystem does not support fallocate mode 0x%x, disabling!",
 				     __func__, mode);
@@ -1534,8 +1535,10 @@ test_fallocate(int mode)
 			ret = 1;
 		}
 
-		/* Call truncate only when fallocate succeeds */
-		if (ret == 1 && ftruncate(fd, 0) == -1)
+		/* Always call ftruncate since file size might be adjusted
+		 * by fallocate even on error
+		 */
+		if (ftruncate(fd, 0) == -1)
 			warn("ftruncate to 0 size failed");
 	}
 	return ret;
