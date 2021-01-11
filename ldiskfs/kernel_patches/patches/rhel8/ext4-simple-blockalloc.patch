@@ -117,17 +117,17 @@ index 15c962f..7870406 100644
 +	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
 +
 +	seq_printf(seq, "\tuseless_c1_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_failed[0]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]));
 +	seq_printf(seq, "\tuseless_c2_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_failed[1]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]));
 +	seq_printf(seq, "\tuseless_c3_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_failed[2]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]));
 +	seq_printf(seq, "\tskipped_c1_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_skipped[0]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[0]));
 +	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_skipped[1]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]));
 +	seq_printf(seq, "\tskipped_c3_loops: %llu\n",
-+		   atomic64_read(&sbi->s_bal_cX_skipped[2]));
++		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
 +	seq_printf(seq, "\tbuddies_generated: %lu\n",
 +		   sbi->s_mb_buddies_generated);
 +	seq_printf(seq, "\tbuddies_time_used: %llu\n", sbi->s_mb_generation_time);
@@ -213,14 +213,14 @@ index 15c962f..7870406 100644
  				atomic_read(&sbi->s_bal_success));
 +		ext4_msg(sb, KERN_INFO,
 +			"mballoc: (%llu, %llu, %llu) useless c(0,1,2) loops",
-+				atomic64_read(&sbi->s_bal_cX_failed[0]),
-+				atomic64_read(&sbi->s_bal_cX_failed[1]),
-+				atomic64_read(&sbi->s_bal_cX_failed[2]));
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]),
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]),
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]));
 +		ext4_msg(sb, KERN_INFO,
 +			"mballoc: (%llu, %llu, %llu) skipped c(0,1,2) loops",
-+				atomic64_read(&sbi->s_bal_cX_skipped[0]),
-+				atomic64_read(&sbi->s_bal_cX_skipped[1]),
-+				atomic64_read(&sbi->s_bal_cX_skipped[2]));
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[0]),
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]),
++				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
  		ext4_msg(sb, KERN_INFO,
  		      "mballoc: %u extents scanned, %u goal hits, "
  				"%u 2^N hits, %u breaks, %u lost",
