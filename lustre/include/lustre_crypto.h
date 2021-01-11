@@ -51,8 +51,12 @@ void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
 #define llcrypt_has_encryption_key(inode) fscrypt_has_encryption_key(inode)
 #define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
 	fscrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)
+#define llcrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags) \
+	fscrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags)
 #define llcrypt_decrypt_pagecache_blocks(page, len, offs)	\
 	fscrypt_decrypt_pagecache_blocks(page, len, offs)
+#define llcrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)	\
+	fscrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)
 #define llcrypt_inherit_context(parent, child, fs_data, preload)	\
 	fscrypt_inherit_context(parent, child, fs_data, preload)
 #define llcrypt_get_encryption_info(inode) fscrypt_get_encryption_info(inode)
@@ -85,7 +89,11 @@ void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
 #define llcrypt_has_encryption_key(inode) false
 #define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
 	ERR_PTR(-EOPNOTSUPP)
+#define llcrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags) \
+	-EOPNOTSUPP
 #define llcrypt_decrypt_pagecache_blocks(page, len, offs)	-EOPNOTSUPP
+#define llcrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)	\
+	-EOPNOTSUPP
 #define llcrypt_inherit_context(parent, child, fs_data, preload)     -EOPNOTSUPP
 #define llcrypt_get_encryption_info(inode)			-EOPNOTSUPP
 #define llcrypt_put_encryption_info(inode)			do {} while (0)

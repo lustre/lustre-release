@@ -337,7 +337,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	int io_pages    = 0;
 	size_t page_size = cl_page_size(obj);
 	int i;
-	pgoff_t index = offset >> PAGE_SHIFT;
 	ssize_t rc = 0;
 
 	ENTRY;
@@ -360,26 +359,14 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 
 		page->cp_sync_io = anchor;
 		if (inode && IS_ENCRYPTED(inode)) {
-			struct page *vmpage = cl_page_vmpage(page);
-
 			/* In case of Direct IO on encrypted file, we need to
-			 * set the correct page index, and add a reference to
-			 * the mapping. This is required by llcrypt to proceed
-			 * to encryption/decryption, because each block is
-			 * encrypted independently, and each block's IV is set
-			 * to the logical block number within the file.
+			 * add a reference to the inode on the cl_page.
+			 * This info is required by llcrypt to proceed
+			 * to encryption/decryption.
 			 * This is safe because we know these pages are private
-			 * to the thread doing the Direct IO, and despite
-			 * setting a mapping on the pages, cached lookups will
-			 * not find them.
-			 * Set PageChecked to detect special case of Direct IO
-			 * in osc_brw_fini_request().
-			 * Reference to the mapping and PageChecked flag are
-			 * removed in cl_aio_end().
+			 * to the thread doing the Direct IO.
 			 */
-			vmpage->index = index++;
-			vmpage->mapping = inode->i_mapping;
-			SetPageChecked(vmpage);
+			page->cp_inode = inode;
 		}
 		cl_2queue_add(queue, page);
 		/*

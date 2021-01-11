@@ -1168,19 +1168,8 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	/* release pages */
 	while (aio->cda_pages.pl_nr > 0) {
 		struct cl_page *page = cl_page_list_first(&aio->cda_pages);
-		struct page *vmpage = cl_page_vmpage(page);
-		struct inode *inode = vmpage ? page2inode(vmpage) : NULL;
 
 		cl_page_get(page);
-		/* We end up here in case of Direct IO only. For encrypted file,
-		 * mapping was set on pages in ll_direct_rw_pages(), so it has
-		 * to be cleared now before page cleanup.
-		 * PageChecked flag was also set there, so we clean up here.
-		 */
-		if (inode && IS_ENCRYPTED(inode)) {
-			vmpage->mapping = NULL;
-			ClearPageChecked(vmpage);
-		}
 		cl_page_list_del(env, &aio->cda_pages, page);
 		cl_page_delete(env, page);
 		cl_page_put(env, page);

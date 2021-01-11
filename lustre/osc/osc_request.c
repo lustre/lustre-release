@@ -1399,9 +1399,22 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	void *short_io_buf;
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
 	struct inode *inode;
+	bool directio = false;
 
 	ENTRY;
 	inode = page2inode(pga[0]->pg);
+	if (inode == NULL) {
+		/* Try to get reference to inode from cl_page if we are
+		 * dealing with direct IO, as handled pages are not
+		 * actual page cache pages.
+		 */
+		struct osc_async_page *oap = brw_page2oap(pga[0]);
+		struct cl_page *clpage = oap2cl_page(oap);
+
+		inode = clpage->cp_inode;
+		if (inode)
+			directio = true;
+	}
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
 		RETURN(-ENOMEM); /* Recoverable */
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ2))
@@ -1426,6 +1439,8 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			bool retried = false;
 			bool lockedbymyself;
 			u32 nunits = (pg->off & ~PAGE_MASK) + pg->count;
+			struct address_space *map_orig = NULL;
+			pgoff_t index_orig;
 
 retry_encrypt:
 			if (nunits & ~LUSTRE_ENCRYPTION_MASK)
@@ -1441,10 +1456,20 @@ retry_encrypt:
 			 * which means only once the page is fully processed.
 			 */
 			lockedbymyself = trylock_page(pg->pg);
+			if (directio) {
+				map_orig = pg->pg->mapping;
+				pg->pg->mapping = inode->i_mapping;
+				index_orig = pg->pg->index;
+				pg->pg->index = pg->off >> PAGE_SHIFT;
+			}
 			data_page =
 				llcrypt_encrypt_pagecache_blocks(pg->pg,
 								 nunits, 0,
 								 GFP_NOFS);
+			if (directio) {
+				pg->pg->mapping = map_orig;
+				pg->pg->index = index_orig;
+			}
 			if (lockedbymyself)
 				unlock_page(pg->pg);
 			if (IS_ERR(data_page)) {
@@ -1904,6 +1929,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 	struct ost_body *body;
 	u32 client_cksum = 0;
 	struct inode *inode;
+	unsigned int blockbits = 0, blocksize = 0;
 
 	ENTRY;
 
@@ -2093,6 +2119,19 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 	}
 
 	inode = page2inode(aa->aa_ppga[0]->pg);
+	if (inode == NULL) {
+		/* Try to get reference to inode from cl_page if we are
+		 * dealing with direct IO, as handled pages are not
+		 * actual page cache pages.
+		 */
+		struct osc_async_page *oap = brw_page2oap(aa->aa_ppga[0]);
+
+		inode = oap2cl_page(oap)->cp_inode;
+		if (inode) {
+			blockbits = inode->i_blkbits;
+			blocksize = 1 << blockbits;
+		}
+	}
 	if (inode && IS_ENCRYPTED(inode)) {
 		int idx;
 
@@ -2117,18 +2156,36 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					break;
 				}
 
-				/* The page is already locked when we arrive here,
-				 * except when we deal with a twisted page for
-				 * specific Direct IO support, in which case
-				 * PageChecked flag is set on page.
-				 */
-				if (PageChecked(pg->pg))
-					lock_page(pg->pg);
-				rc = llcrypt_decrypt_pagecache_blocks(pg->pg,
-						    LUSTRE_ENCRYPTION_UNIT_SIZE,
-								      offs);
-				if (PageChecked(pg->pg))
-					unlock_page(pg->pg);
+				if (blockbits) {
+					/* This is direct IO case. Directly call
+					 * decrypt function that takes inode as
+					 * input parameter. Page does not need
+					 * to be locked.
+					 */
+					u64 lblk_num =
+						((u64)(pg->off >> PAGE_SHIFT) <<
+						     (PAGE_SHIFT - blockbits)) +
+						       (offs >> blockbits);
+					unsigned int i;
+
+					for (i = offs;
+					     i < offs +
+						    LUSTRE_ENCRYPTION_UNIT_SIZE;
+					     i += blocksize, lblk_num++) {
+						rc =
+						  llcrypt_decrypt_block_inplace(
+							  inode, pg->pg,
+							  blocksize, i,
+							  lblk_num);
+						if (rc)
+							break;
+					}
+				} else {
+					rc = llcrypt_decrypt_pagecache_blocks(
+						pg->pg,
+						LUSTRE_ENCRYPTION_UNIT_SIZE,
+						offs);
+				}
 				if (rc)
 					GOTO(out, rc);
 

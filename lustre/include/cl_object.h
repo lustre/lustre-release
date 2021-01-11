@@ -741,6 +741,12 @@ struct cl_page {
 	struct cl_object	*cp_obj;
 	/** vmpage */
 	struct page		*cp_vmpage;
+	/**
+	 * Assigned if doing direct IO, because in this case cp_vmpage is not
+	 * a valid page cache page, hence the inode cannot be inferred from
+	 * cp_vmpage->mapping->host.
+	 */
+	struct inode		*cp_inode;
 	/** Linkage of pages within group. Pages must be owned */
 	struct list_head	cp_batch;
 	/** array of slices offset. Immutable after creation. */
