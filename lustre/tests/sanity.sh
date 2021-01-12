@@ -13517,8 +13517,13 @@ test_150e() {
 	min_size_ost=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
 		       sort -un | head -1)
 
-	# Get 90% of the available space
-	local space=$(((min_size_ost * 90)/100 * OSTCOUNT))
+	# Get 100MB per OST of the available space to reduce run time
+	# else 60% of the available space if we are running SLOW tests
+	if [ $SLOW == "no" ]; then
+		local space=$((1024 * 100 * OSTCOUNT))
+	else
+		local space=$(((min_size_ost * 60)/100 * OSTCOUNT))
+	fi
 
 	fallocate -l${space}k $DIR/$tfile ||
 		error "fallocate ${space}k $DIR/$tfile failed"
@@ -13546,7 +13551,7 @@ test_150e() {
 	echo "df after unlink:"
 	$LFS df
 }
-run_test 150e "Verify 90% of available OST space consumed by fallocate"
+run_test 150e "Verify 60% of available OST space consumed by fallocate"
 
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
