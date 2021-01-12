@@ -13433,9 +13433,8 @@ test_150a() {
 run_test 150a "truncate/append tests"
 
 test_150b() {
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need OST version at least 2.13.53"
+	check_for_fallocate
+
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	check_fallocate $DIR/$tfile || error "fallocate failed"
@@ -13443,28 +13442,33 @@ test_150b() {
 run_test 150b "Verify fallocate (prealloc) functionality"
 
 test_150bb() {
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need OST version at least 2.13.53"
+	check_for_fallocate
+
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=20 || error "dd failed"
 	> $DIR/$tfile
 	fallocate -l $((1048576 * 20)) $DIR/$tfile || error "fallocate failed"
-	local sum=($(md5sum $DIR/$tfile))
+	# precomputed md5sum for 20MB of zeroes
 	local expect="8f4e33f3dc3e414ff94e5fb6905cba8c"
+	local sum=($(md5sum $DIR/$tfile))
 
-	[[ "${sum[0]}" == "$expect" ]] || error "fallocated file is not zero"
+	[[ "${sum[0]}" == "$expect" ]] || error "fallocate unwritten is not zero"
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		"$LCTL set_param osd-ldiskfs.*.fallocate_zero_blocks=1" ||
+		error "set osd-ldiskfs.*.fallocate_zero_blocks=1"
+
+	> $DIR/$tfile
+	fallocate -l $((1048576 * 20)) $DIR/$tfile || error "fallocate failed"
+	sum=($(md5sum $DIR/$tfile))
+
+	[[ "${sum[0]}" == "$expect" ]] || error "fallocate zero is not zero"
 }
-run_test 150bb "Verify fallocate zeroes space"
+run_test 150bb "Verify fallocate modes both zero space"
 
 test_150c() {
-	local bytes
-	local want
-
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need OST version at least 2.13.53"
+	check_for_fallocate
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tfile || error "setstripe failed"
@@ -13488,8 +13492,8 @@ test_150c() {
 	sync; sync_all_data
 	cancel_lru_locks $OSC
 	sleep 5
-	bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
-	want=$((1024 * 1048576))
+	local bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
+	local want=$((1024 * 1048576))
 
 	# Must allocate all requested space, not more than 5% extra
 	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
@@ -13498,12 +13502,7 @@ test_150c() {
 run_test 150c "Verify fallocate Size and Blocks"
 
 test_150d() {
-	local bytes
-	local want
-
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need OST version at least 2.13.53"
+	check_for_fallocate
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
@@ -13511,8 +13510,8 @@ test_150d() {
 	sync; sync_all_data
 	cancel_lru_locks $OSC
 	sleep 5
-	bytes=$(($(stat -c '%b * %B' $DIR/$tdir)))
-	want=$((OSTCOUNT * 1048576))
+	local bytes=$(($(stat -c '%b * %B' $DIR/$tdir)))
+	local want=$((OSTCOUNT * 1048576))
 
 	# Must allocate all requested space, not more than 5% extra
 	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
@@ -13521,9 +13520,7 @@ test_150d() {
 run_test 150d "Verify fallocate Size and Blocks - Non zero start"
 
 test_150e() {
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -ge $(version_code 2.13.55) ] ||
-		skip "Need OST version at least 2.13.55"
+	check_for_fallocate
 
 	echo "df before:"
 	$LFS df

@@ -273,7 +273,10 @@ struct osd_device {
 				  od_in_init:1,
 				  od_index_in_idif:1,
 	/* Other flags */
+				  od_read_cache:1,
+				  od_writethrough_cache:1,
 				  od_nonrotational:1;
+
 
 	__s64			  od_auto_scrub_interval;
 	__u32			  od_dirent_journal;
@@ -283,6 +286,7 @@ struct osd_device {
 
 	spinlock_t		  od_osfs_lock;
 
+	int			  od_fallocate_zero_blocks;
 	int			  od_connects;
 	struct lu_site		  od_site;
 
@@ -300,9 +304,6 @@ struct osd_device {
 	/* writes > od_writethough_max_iosize will be
 	 * served bypassing pagecache unless already cached */
 	unsigned long		od_writethrough_max_iosize;
-
-	int			od_read_cache;
-	int			od_writethrough_cache;
 
 	struct brw_stats	od_brw_stats;
 	atomic_t		od_r_in_flight;

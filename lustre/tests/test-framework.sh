@@ -10559,3 +10559,17 @@ function unlinkmany() {
 		do_nodes $list "$LCTL set_param debug=\\\"$saved_debug\\\""
 	return $rc
 }
+
+function check_for_fallocate()
+{
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	local osts=$(comma_list $(osts_nodes))
+	local fa_mode="osd-ldiskfs.*.fallocate_zero_blocks"
+	local old_mode=$(do_facet ost1 $LCTL get_param -n $fa_mode 2>/dev/null|
+			 head -n 1)
+
+	[ -n "$old_mode" ] || skip "need at least 2.13.57 for fallocate"
+	stack_trap "do_nodes $osts $LCTL set_param $fa_mode=$old_mode"
+	do_nodes $osts $LCTL set_param $fa_mode=0 || error "set $fa_mode=0"
+}
+

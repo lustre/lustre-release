@@ -285,7 +285,7 @@ static ssize_t read_cache_enable_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	osd->od_read_cache = val;
+	osd->od_read_cache = !!val;
 	return count;
 }
 LUSTRE_RW_ATTR(read_cache_enable);
@@ -324,10 +324,57 @@ static ssize_t writethrough_cache_enable_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	osd->od_writethrough_cache = val;
+	osd->od_writethrough_cache = !!val;
 	return count;
 }
 LUSTRE_RW_ATTR(writethrough_cache_enable);
+
+static ssize_t fallocate_zero_blocks_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", osd->od_fallocate_zero_blocks);
+}
+
+/*
+ * Set how fallocate() interacts with the backing filesystem:
+ * -1: fallocate is disabled and returns -EOPNOTSUPP
+ *  0: fallocate allocates unwritten extents (like ext4)
+ *  1: fallocate zeroes allocated extents on disk
+ */
+static ssize_t fallocate_zero_blocks_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	long val;
+	int rc;
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	rc = kstrtol(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < -1 || val > 1)
+		return -EINVAL;
+
+	osd->od_fallocate_zero_blocks = val;
+	return count;
+}
+LUSTRE_RW_ATTR(fallocate_zero_blocks);
 
 ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 			 const char *buffer, size_t count)
@@ -809,6 +856,7 @@ static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_writethrough_cache_enable.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
+	&lustre_attr_fallocate_zero_blocks.attr,
 	&lustre_attr_force_sync.attr,
 	&lustre_attr_nonrotational.attr,
 	&lustre_attr_index_backup.attr,

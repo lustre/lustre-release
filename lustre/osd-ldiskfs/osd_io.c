@@ -2170,6 +2170,10 @@ static int osd_declare_fallocate(const struct lu_env *env,
 	if (mode & ~FALLOC_FL_KEEP_SIZE)
 		RETURN(-EOPNOTSUPP);
 
+	/* disable fallocate completely */
+	if (osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks < 0)
+		RETURN(-EOPNOTSUPP);
+
 	LASSERT(th);
 	LASSERT(inode);
 
@@ -2226,8 +2230,10 @@ static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
 	boff = start >> inode->i_blkbits;
 	blen = (ALIGN(end, 1 << inode->i_blkbits) >> inode->i_blkbits) - boff;
 
-	/* Create and Write zeros to new extents */
-	flags = LDISKFS_GET_BLOCKS_CREATE_ZERO;
+	/* Create and mark new extents as either zero or unwritten */
+	flags = osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks ?
+		LDISKFS_GET_BLOCKS_CREATE_ZERO :
+		LDISKFS_GET_BLOCKS_CREATE_UNWRIT_EXT;
 	if (mode & FALLOC_FL_KEEP_SIZE)
 		flags |= LDISKFS_GET_BLOCKS_KEEP_SIZE;
 

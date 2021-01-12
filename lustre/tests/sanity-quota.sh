@@ -1088,9 +1088,7 @@ test_1h() {
 	local limit=10  # 10M
 	local testfile="$DIR/$tdir/$tfile-0"
 
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need OST version at least 2.13.53"
+	check_for_fallocate
 
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
