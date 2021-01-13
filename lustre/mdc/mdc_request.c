@@ -2260,6 +2260,13 @@ static int mdc_get_info_rpc(struct obd_export *exp,
                              RCL_SERVER, vallen);
         ptlrpc_request_set_replen(req);
 
+	/* if server failed to resolve FID, and OI scrub not able to fix it, it
+	 * will return -EINPROGRESS, ptlrpc_queue_wait() will keep retrying,
+	 * set request interruptible to avoid deadlock.
+	 */
+	if (KEY_IS(KEY_FID2PATH))
+		req->rq_allow_intr = 1;
+
 	rc = ptlrpc_queue_wait(req);
 	/* -EREMOTE means the get_info result is partial, and it needs to
 	 * continue on another MDT, see fid2path part in lmv_iocontrol */
