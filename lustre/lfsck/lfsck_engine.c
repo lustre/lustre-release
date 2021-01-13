@@ -93,17 +93,6 @@ static void lfsck_di_dir_put(const struct lu_env *env, struct lfsck_instance *lf
 	iops->put(env, di);
 }
 
-static int lfsck_parent_fid(const struct lu_env *env, struct dt_object *obj,
-			    struct lu_fid *fid)
-{
-	if (unlikely(!S_ISDIR(lfsck_object_type(obj)) ||
-		     !dt_try_as_dir(env, obj)))
-		return -ENOTDIR;
-
-	return dt_lookup(env, obj, (struct dt_rec *)fid,
-			 (const struct dt_key *)"..");
-}
-
 /**
  * Check whether needs to scan the directory or not.
  *
@@ -217,7 +206,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 		if (rc < 0 && rc != -ENODATA)
 			GOTO(out, rc);
 
-		rc = lfsck_parent_fid(env, obj, fid);
+		rc = dt_lookup_dir(env, obj, dotdot, fid);
 		if (depth > 0)
 			lfsck_object_put(env, obj);
 

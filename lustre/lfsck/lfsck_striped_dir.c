@@ -1552,8 +1552,7 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
-	rc = dt_lookup(env, shard, (struct dt_rec *)pfid,
-		       (const struct dt_key *)dotdot);
+	rc = dt_lookup_dir(env, shard, dotdot, pfid);
 	if (rc != 0 || !fid_is_sane(pfid))
 		GOTO(log, rc);
 
@@ -1762,8 +1761,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	rc = dt_lookup(env, obj, (struct dt_rec *)pfid,
-		       (const struct dt_key *)dotdot);
+	rc = dt_lookup_dir(env, obj, dotdot, pfid);
 	if (rc != 0 || !fid_is_sane(pfid)) {
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 					LNTF_UNCERTAIN_LMV, true);
@@ -1843,8 +1841,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)name2);
+	rc = dt_lookup_dir(env, parent, name2, &tfid);
 	if (rc != 0 || !lu_fid_eq(cfid, &tfid))
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 						  LNTF_UNCERTAIN_LMV, true);

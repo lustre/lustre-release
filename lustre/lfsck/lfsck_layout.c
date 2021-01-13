@@ -2386,8 +2386,7 @@ again:
 	do {
 		snprintf(name, NAME_MAX, DFID"%s-%s-%d", PFID(pfid), infix,
 			 type, idx++);
-		rc = dt_lookup(env, lfsck->li_lpf_obj, (struct dt_rec *)tfid,
-			       (const struct dt_key *)name);
+		rc = dt_lookup_dir(env, lfsck->li_lpf_obj, name, tfid);
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(log, rc);
 	} while (rc == 0);
@@ -2399,8 +2398,7 @@ again:
 
 	/* Re-check whether the name conflict with othrs after taken
 	 * the ldlm lock. */
-	rc = dt_lookup(env, lfsck->li_lpf_obj, (struct dt_rec *)tfid,
-		       (const struct dt_key *)name);
+	rc = dt_lookup_dir(env, lfsck->li_lpf_obj, name, tfid);
 	if (unlikely(rc == 0)) {
 		lfsck_unlock(llh);
 		goto again;

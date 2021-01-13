@@ -596,8 +596,7 @@ int lfsck_namespace_check_exist(const struct lu_env *env,
 	if (unlikely(lfsck_is_dead_obj(obj)))
 		RETURN(LFSCK_NAMEENTRY_DEAD);
 
-	rc = dt_lookup(env, dir, (struct dt_rec *)fid,
-		       (const struct dt_key *)name);
+	rc = dt_lookup_dir(env, dir, name, fid);
 	if (rc == -ENOENT)
 		RETURN(LFSCK_NAMEENTRY_REMOVED);
 
@@ -946,8 +945,7 @@ again:
 	do {
 		namelen = snprintf(info->lti_key, NAME_MAX, DFID"%s-%s-%d",
 				   PFID(cfid), infix, type, idx++);
-		rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-			       (const struct dt_key *)info->lti_key);
+		rc = dt_lookup_dir(env, parent, info->lti_key, &tfid);
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(log, rc);
 
@@ -962,8 +960,7 @@ again:
 
 	/* Re-check whether the name conflict with othrs after taken
 	 * the ldlm lock. */
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)info->lti_key);
+	rc = dt_lookup_dir(env, parent, info->lti_key, &tfid);
 	if (rc == 0) {
 		if (!lu_fid_eq(cfid, &tfid)) {
 			exist = false;
@@ -1474,9 +1471,7 @@ static int lfsck_namespace_create_orphan_dir(const struct lu_env *env,
 			GOTO(log, rc = idx);
 
 		snprintf(name, 8, "MDT%04x", idx);
-		rc = dt_lookup(env, lfsck->li_lpf_root_obj,
-			       (struct dt_rec *)&tfid,
-			       (const struct dt_key *)name);
+		rc = dt_lookup_dir(env, lfsck->li_lpf_root_obj, name, &tfid);
 		if (rc != 0)
 			GOTO(log, rc = (rc == -ENOENT ? -ENXIO : rc));
 
@@ -1503,8 +1498,7 @@ again:
 	do {
 		namelen = snprintf(name, 31, DFID"-P-%d",
 				   PFID(cfid), idx++);
-		rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-			       (const struct dt_key *)name);
+		rc = dt_lookup_dir(env, parent, name, &tfid);
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(log, rc);
 	} while (rc == 0);
@@ -1516,8 +1510,7 @@ again:
 
 	/* Re-check whether the name conflict with othrs after taken
 	 * the ldlm lock. */
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)name);
+	rc = dt_lookup_dir(env, parent, name, &tfid);
 	if (unlikely(rc == 0)) {
 		lfsck_unlock(llh);
 		goto again;
@@ -1989,8 +1982,7 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 		goto replace;
 	}
 
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)name);
+	rc = dt_lookup_dir(env, parent, name, &tfid);
 	if (rc == -ENOENT) {
 		exist = false;
 		goto replace;
@@ -2276,8 +2268,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 
 
 	dt_write_lock(env, parent, 0);
-	rc = dt_lookup(env, dt_object_child(parent), (struct dt_rec *)&tfid,
-		       (const struct dt_key *)name);
+	rc = dt_lookup_dir(env, dt_object_child(parent), name, &tfid);
 	/* Someone has removed the bad name entry by race. */
 	if (rc == -ENOENT)
 		GOTO(unlock2, rc = 0);
@@ -2675,8 +2666,7 @@ lost_parent:
 		GOTO(out, rc);
 	}
 
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)cname->ln_name);
+	rc = dt_lookup_dir(env, parent, cname->ln_name, &tfid);
 	if (rc == -ENOENT) {
 		/* If the LFSCK is marked as LF_INCOMPLETE, then means some MDT
 		 * has ever tried to verify some remote MDT-object that resides
@@ -2916,8 +2906,7 @@ again:
 			continue;
 		}
 
-		rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-			       (const struct dt_key *)cname->ln_name);
+		rc = dt_lookup_dir(env, parent, cname->ln_name, &tfid);
 		*pfid2 = *lfsck_dto2fid(parent);
 		if (rc == -ENOENT) {
 			lfsck_object_put(env, parent);
@@ -3276,8 +3265,7 @@ lock:
 		GOTO(out, rc = 0);
 	}
 
-	rc = dt_lookup(env, child, (struct dt_rec *)pfid,
-		       (const struct dt_key *)dotdot);
+	rc = dt_lookup_dir(env, child, dotdot, pfid);
 	if (rc != 0) {
 		if (rc != -ENOENT && rc != -ENODATA && rc != -EINVAL) {
 			dt_read_unlock(env, child);
@@ -3867,8 +3855,7 @@ lost_parent:
 			continue;
 		}
 
-		rc = dt_lookup(env, parent, (struct dt_rec *)cfid,
-			       (const struct dt_key *)cname->ln_name);
+		rc = dt_lookup_dir(env, parent, cname->ln_name, cfid);
 		if (rc != 0 && rc != -ENOENT) {
 			lfsck_object_put(env, parent);
 
