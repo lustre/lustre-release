@@ -13406,6 +13406,7 @@ test_150a() {
 
 	local TF="$TMP/$tfile"
 
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
 	cp $TF $DIR/$tfile
 	cancel_lru_locks $OSC
@@ -13428,9 +13429,6 @@ test_150a() {
 	echo "12345" >>$DIR/$tfile
 	cancel_lru_locks $OSC
 	cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
-
-	rm -f $TF
-	true
 }
 run_test 150a "truncate/append tests"
 
@@ -13439,9 +13437,26 @@ test_150b() {
 	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
 		skip "Need OST version at least 2.13.53"
 	touch $DIR/$tfile
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	check_fallocate $DIR/$tfile || error "fallocate failed"
 }
 run_test 150b "Verify fallocate (prealloc) functionality"
+
+test_150bb() {
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need OST version at least 2.13.53"
+	touch $DIR/$tfile
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=20 || error "dd failed"
+	> $DIR/$tfile
+	fallocate -l $((1048576 * 20)) $DIR/$tfile || error "fallocate failed"
+	local sum=($(md5sum $DIR/$tfile))
+	local expect="8f4e33f3dc3e414ff94e5fb6905cba8c"
+
+	[[ "${sum[0]}" == "$expect" ]] || error "fallocated file is not zero"
+}
+run_test 150bb "Verify fallocate zeroes space"
 
 test_150c() {
 	local bytes
@@ -13451,6 +13466,7 @@ test_150c() {
 	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
 		skip "Need OST version at least 2.13.53"
 
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tfile || error "setstripe failed"
 	fallocate -l ${OSTCOUNT}m $DIR/$tfile || error "fallocate failed"
 	sync; sync_all_data
@@ -13489,6 +13505,7 @@ test_150d() {
 	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
 		skip "Need OST version at least 2.13.53"
 
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
 	fallocate -o 1G -l ${OSTCOUNT}m $DIR/$tdir || error "fallocate failed"
 	sync; sync_all_data
@@ -13510,6 +13527,7 @@ test_150e() {
 
 	echo "df before:"
 	$LFS df
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c${OSTCOUNT} $DIR/$tfile ||
 		error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
 

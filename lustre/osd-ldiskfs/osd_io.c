@@ -1156,6 +1156,14 @@ cont_map:
 					total++;
 					break;
 				}
+				if ((map.m_flags & LDISKFS_MAP_UNWRITTEN) &&
+				    !create) {
+					/* don't try to read allocated, but
+					 * unwritten blocks, instead fill the
+					 * patches with zeros in osd_do_bio() */
+					*(blocks + total) = 0;
+					continue;
+				}
 				*(blocks + total) = map.m_pblk + c;
 				/* unmap any possible underlying
 				 * metadata from the block device
