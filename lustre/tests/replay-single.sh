@@ -4982,6 +4982,9 @@ run_test 134 "replay creation of a file created in a pool"
 
 # LU-14027
 test_135() {
+	local PID
+	local old_replay
+
 	# make sure we are using the primary server
 	[[ $(facet_active ost1) == "ost1" ]] || fail ost1
 
@@ -4990,31 +4993,34 @@ test_135() {
 	# All files to ost1
 	$LFS setstripe -S $((128 * 1024)) -i 0 $DIR/$tdir
 
+	# Init all the clients connections (write lastrcv on the OST)
+	clients_up
 	replay_barrier ost1
+
+	old_replay=$($LCTL get_param ldlm.cancel_unused_locks_before_replay)
+	$LCTL set_param ldlm.cancel_unused_locks_before_replay=0
+	stack_trap "$LCTL set_param $old_replay" EXIT
 
 	# Create 20 files so we have 20 ost locks
 	for i in $(seq 20) ; do
-		echo blah > $DIR/$tdir/file.${i}
+		echo blah > $DIR/$tdir/file.${i} & PID+="$! "
 	done
+	wait $PID
 
-	shutdown_facet ost1
-	reboot_facet ost1
+	stop ost1
 	change_active ost1
 	wait_for_facet ost1
 
-	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x32d
+	#define OBD_FAIL_LDLM_LOCK_REPLAY	0x32d
 	# Make sure lock replay server side never completes and errors out.
 	do_rpc_nodes $(facet_active_host ost1) \
 		load_module ../libcfs/libcfs/libcfs
-	do_facet ost1 "$LCTL set_param fail_val=20"
-	do_facet ost1 "$LCTL set_param fail_loc=0x32d"
-
+	do_facet ost1 "$LCTL set_param fail_loc=0x32d fail_val=20"
 	mount_facet ost1
 
 	# Now make sure we notice
-	(sync;sync;sync) &
-	local PID=$?
-	sleep 20 # should we do something proactive to make reconnects go?
+	(sync;sync;sync;echo "End of sync") & PID=$!
+	wait_clients_import_state ${HOSTNAME} ost1 REPLAY_LOCKS
 	kill -0 $PID || error "Unexpected sync success"
 
 	shutdown_facet ost1
@@ -5029,6 +5035,8 @@ test_135() {
 	unmountoss
 	mountoss
 	clients_up || clients_up || error "$LFS df $MOUNT failed"
+
+	wait $PID || error "Fail to sync"
 	echo blah > $DIR/$tdir/file.test2
 
 	rm -rf $DIR/$tdir
