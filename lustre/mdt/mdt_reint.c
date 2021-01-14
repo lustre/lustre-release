@@ -2608,12 +2608,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 		    mdt_object_remote(msrcdir))
 			GOTO(out_put_tgtdir, rc = -EXDEV);
 
-		/* This may be further relaxed in the future for different
-		 * source and target parents. Start with only same-directory
-		 * renames of non-directory files for simplicity and because
-		 * this is by far the most common use case.
+		/* This might be further relaxed in the future for regular file
+		 * renames in different source and target parents. Start with
+		 * only same-directory renames for simplicity and because this
+		 * is by far the most the common use case.
 		 */
-		if (msrcdir != mtgtdir || S_ISDIR(ma->ma_attr.la_mode)) {
+		if (msrcdir != mtgtdir) {
 			rc = mdt_rename_lock(info, &rename_lh);
 			if (rc != 0) {
 				CERROR("%s: cannot lock for rename: rc = %d\n",
