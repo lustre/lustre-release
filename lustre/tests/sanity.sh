@@ -13703,6 +13703,83 @@ test_123ac() {
 }
 run_test 123ac "verify statahead work by using statx without glimpse RPCs"
 
+test_batch_statahead() {
+	local max=$1
+	local batch_max=$2
+	local num=10000
+	local batch_rpcs
+	local unbatch_rpcs
+	local hit_total
+
+	echo -e "\nbatching: statahead_max=$max statahead_batch_max=$batch_max"
+	$LCTL set_param mdc.*.batch_stats=0
+	$LCTL set_param llite.*.statahead_max=$max
+	$LCTL set_param llite.*.statahead_batch_max=$batch_max
+	# Verify that batched statahead is faster than one without statahead
+	test_123a_base "ls -l"
+
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+	mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+	createmany -o $DIR/$tdir/$tfile $num || error "failed to create files"
+
+	# unbatched statahead
+	$LCTL set_param llite.*.statahead_batch_max=0
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.stats=clear
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	time ls -l $DIR/$tdir | wc -l
+	unbatch_rpcs=$(calc_stats mdc.*.stats ldlm_ibits_enqueue)
+	sleep 2
+	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
+		    awk '/hit.total:/ { print $NF }')
+	# hit ratio should be larger than 75% (7500).
+	(( $hit_total > 7500 )) ||
+		error "unbatched statahead hit count ($hit_total) is too low"
+
+	# batched statahead
+	$LCTL set_param llite.*.statahead_batch_max=$batch_max
+	$LCTL set_param llite.*.statahead_stats=clear
+	$LCTL set_param mdc.*.batch_stats=clear
+	$LCTL set_param mdc.*.stats=clear
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	time ls -l $DIR/$tdir | wc -l
+	batch_rpcs=$(calc_stats mdc.*.stats mds_batch)
+	# wait for statahead thread to quit and update statahead stats
+	sleep 2
+	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
+		    awk '/hit.total:/ { print $NF }')
+	# hit ratio should be larger than 75% (7500).
+	(( $hit_total > 7500 )) ||
+		error "batched statahead hit count ($hit_total) is too low"
+
+	echo "unbatched RPCs: $unbatch_rpcs, batched RPCs: $batch_rpcs"
+	(( $unbatch_rpcs > $batch_rpcs )) ||
+		error "batched statahead does not reduce RPC count"
+	$LCTL get_param mdc.*.batch_stats
+}
+
+test_123ad() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	(( $MDS1_VERSION >= $(version_code 2.15.53) )) ||
+		skip "Need server version at least 2.15.53"
+
+	local max
+	local batch_max
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max" EXIT
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max" EXIT
+
+	test_batch_statahead 32 32
+	test_batch_statahead 2048 256
+}
+run_test 123ad "Verify batching statahead works correctly"
+
 test_123b () { # statahead(bug 15027)
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
