@@ -2882,8 +2882,20 @@ again:
 		}
 
 		parent = lfsck_object_find_bottom(env, lfsck, &tfid);
-		if (IS_ERR(parent))
-			RETURN(PTR_ERR(parent));
+		if (IS_ERR(parent)) {
+			rc = PTR_ERR(parent);
+			/* if @pfid doesn't have a valid OI mapping, it will
+			 * trigger OI scrub, and -ENONET is is returned if it's
+			 * remote, -EINPROGRESS if local.
+			 */
+			if ((rc == -ENOENT || rc == -EINPROGRESS) &&
+			    ldata->ld_leh->leh_reccount > 1) {
+				lfsck_linkea_del_buf(ldata, cname);
+				continue;
+			}
+
+			RETURN(rc);
+		}
 
 		if (!dt_object_exists(parent)) {
 			lfsck_object_put(env, parent);
@@ -3770,8 +3782,18 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 		}
 
 		parent = lfsck_object_find_bottom(env, lfsck, pfid);
-		if (IS_ERR(parent))
-			GOTO(out, rc = PTR_ERR(parent));
+		if (IS_ERR(parent)) {
+			rc = PTR_ERR(parent);
+			/* if @pfid doesn't have a valid OI mapping, it will
+			 * trigger OI scrub, and -ENONET is is returned if it's
+			 * remote, -EINPROGRESS if local.
+			 */
+			if ((rc == -ENOENT || rc == -EINPROGRESS) &&
+			    ldata.ld_leh->leh_reccount > 1)
+				rc = lfsck_namespace_shrink_linkea(env, com,
+					child, &ldata, cname, pfid, true);
+			GOTO(out, rc);
+		}
 
 		if (!dt_object_exists(parent)) {
 
@@ -5562,8 +5584,8 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	struct lustre_handle	    lh       = { 0 };
 	bool			    repaired = false;
 	bool			    dtlocked = false;
-	bool			    remove;
-	bool			    newdata;
+	bool			    remove = false;
+	bool			    newdata = false;
 	bool			    log      = false;
 	bool			    bad_hash = false;
 	bool			    bad_linkea = false;
@@ -5948,6 +5970,17 @@ out:
 		if (obj != NULL && count == 1 &&
 		    S_ISREG(lfsck_object_type(obj)))
 			dt_attr_get(env, obj, la);
+
+		/* if new linkea entry is added, the old entry may be stale,
+		 * check it in phase 2. Sigh, linkea check can only be done
+		 * locally.
+		 */
+		if (bad_linkea && !remove && !newdata &&
+		    !dt_object_remote(obj) && count > 1)
+			rc = lfsck_namespace_trace_update(env, com,
+							  &lnr->lnr_fid,
+							  LNTF_CHECK_LINKEA,
+							  true);
 	}
 
 trace:

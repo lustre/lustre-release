@@ -324,6 +324,70 @@ test_1c() {
 }
 run_test 1c "LFSCK can find out and repair lost FID-in-dirent"
 
+test_1d() {
+	[ $MDS1_VERSION -lt $(version_code 2.13.57) ] &&
+		skip "MDS older than 2.13.57"
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	check_mount_and_prep
+
+	touch $DIR/$tdir/$tfile
+	mkdir $DIR/$tdir/subdir
+	$LFS mkdir -i 1 $DIR/$tdir/remotedir
+	$LFS path2fid $DIR/$tdir
+	ll_decode_linkea $DIR/$tdir/$tfile
+	ll_decode_linkea $DIR/$tdir/subdir
+	ll_decode_linkea $DIR/$tdir/remotedir
+
+	local mntpt=$(facet_mntpt mds1)
+
+	# unlink OI files to remove the stale entry
+	local saved_opts=$MDS_MOUNT_OPTS
+
+	stopall
+	mount_fstype mds1 $mntpt
+	# increase $tdir FID oid in LMA
+	do_facet mds1 "getfattr -d -m trusted.lma -e hex \
+		--absolute-names $mntpt/ROOT/$tdir | \
+		sed -E 's/0(.{8})$/1\1/' | setfattr --restore=-"
+	unmount_fstype mds1 $mntpt
+	setupall
+
+	# the FID oid in LMA was increased above, and it's not in OI table,
+	# run scrub first to generate mapping in OI, so the following namespace
+	# check can fix linkea correctly, this is not necessary normally.
+	do_facet mds1 $LCTL lfsck_start -M ${MDT_DEV} -t scrub ||
+		error "failed to start LFSCK for scrub!"
+	wait_update_facet mds1 "$LCTL get_param -n \
+		osd-*.$(facet_svc mds1).oi_scrub |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+		error "unexpected status"
+
+	$START_NAMESPACE -r -A || error "fail to start LFSCK for namespace!"
+	wait_update_facet mds1 "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "unexpected status"
+	}
+	$LFS path2fid $DIR/$tdir
+	ll_decode_linkea $DIR/$tdir/$tfile
+	ll_decode_linkea $DIR/$tdir/subdir
+	ll_decode_linkea $DIR/$tdir/remotedir
+
+	local pfid
+	local fid
+
+	fid=$($LFS path2fid $DIR/$tdir)
+	for f in $tfile subdir remotedir; do
+		pfid=$(ll_decode_linkea $DIR/$tdir/$f |
+			awk '/pfid/ { print $3 }')
+		pfid=${pfid%,}
+		[ "$pfid" == "$fid" ] || error "$fid in LMA != $pfid in linkea"
+	done
+}
+run_test 1d "LFSCK can fix mismatch of FID in LMA and FID in child linkea"
+
 test_2a() {
 	lfsck_prep 1 1
 
