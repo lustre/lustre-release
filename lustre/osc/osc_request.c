@@ -699,7 +699,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 
 	oa->o_valid |= bits;
 	spin_lock(&cli->cl_loi_list_lock);
-	if (OCD_HAS_FLAG(&cli->cl_import->imp_connect_data, GRANT_PARAM))
+	if (cli->cl_ocd_grant_param)
 		oa->o_dirty = cli->cl_dirty_grant;
 	else
 		oa->o_dirty = cli->cl_dirty_pages << PAGE_SHIFT;
@@ -730,13 +730,12 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		nrpages *= cli->cl_max_rpcs_in_flight + 1;
 		nrpages = max(nrpages, cli->cl_dirty_max_pages);
 		undirty = nrpages << PAGE_SHIFT;
-		if (OCD_HAS_FLAG(&cli->cl_import->imp_connect_data,
-				 GRANT_PARAM)) {
+		if (cli->cl_ocd_grant_param) {
 			int nrextents;
 
 			/* take extent tax into account when asking for more
 			 * grant space */
-			nrextents = (nrpages + cli->cl_max_extent_pages - 1)  /
+			nrextents = (nrpages + cli->cl_max_extent_pages - 1) /
 				     cli->cl_max_extent_pages;
 			undirty += nrextents * cli->cl_grant_extent_tax;
 		}
@@ -1062,10 +1061,10 @@ void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 					     ~chunk_mask) & chunk_mask;
 		/* determine maximum extent size, in #pages */
 		size = (u64)ocd->ocd_grant_max_blks << ocd->ocd_grant_blkbits;
-		cli->cl_max_extent_pages = size >> PAGE_SHIFT;
-		if (cli->cl_max_extent_pages == 0)
-			cli->cl_max_extent_pages = 1;
+		cli->cl_max_extent_pages = (size >> PAGE_SHIFT) ?: 1;
+		cli->cl_ocd_grant_param = 1;
 	} else {
+		cli->cl_ocd_grant_param = 0;
 		cli->cl_grant_extent_tax = 0;
 		cli->cl_chunkbits = PAGE_SHIFT;
 		cli->cl_max_extent_pages = DT_MAX_BRW_PAGES;
