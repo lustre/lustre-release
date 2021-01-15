@@ -4,7 +4,6 @@
 DIR="$1"
 MAX_FILES=${MAX_FILES:-20}
 DURATION=${DURATION:-$((60*5))}
-MDSCOUNT=${MDSCOUNT:-1}
 
 NUM_THREADS=${NUM_THREADS:-$2}
 NUM_THREADS=${NUM_THREADS:-3}
@@ -16,6 +15,15 @@ mkdir -p $DIR
 RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
 file_list file_concat file_exec file_chown file_chmod file_mknod file_truncate \
 file_delxattr file_getxattr file_setxattr"
+
+# allow e.g. RACER_EXTRA=dir_create:5,file_link:10 to launch extra tasks
+for PROG in ${RACER_EXTRA//,/ }; do
+	prog=(${PROG/:/ })
+	count=${prog[1]:-1}
+	for ((i = 0; i < count; i++)); do
+		RACER_PROGS+=" ${prog[0]}"
+	done
+done
 
 if $RACER_ENABLE_REMOTE_DIRS || $RACER_ENABLE_STRIPED_DIRS; then
 	RACER_PROGS+=' dir_remote'
