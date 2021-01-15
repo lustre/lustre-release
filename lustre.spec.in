@@ -54,14 +54,16 @@
 %if %{defined kdir}
 	%define _take_kver 1
 %endif
+%if %{defined kobjdir}
+	%define _take_kobj 1
+%endif
 %{!?kdir:    %global kdir    /lib/modules/%{_kver}/source}
 %{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{_kver}/source" ]; then echo "/lib/modules/%{_kver}/build"; else echo "%{kdir}"; fi)}
 
-
-%if 0%{?suse_version} >= 1310
-	%define _flavor %(basename %{kobjdir})
+%if 0%{?suse_version} >= 1310 && %{defined _take_kobj}
+	%global _flavor %(basename "%{kobjdir}")
 %else
-	%define _flavor default
+	%global _flavor default
 %endif
 
 %if %{defined _take_kver}
@@ -122,7 +124,7 @@
 
 %global modules_fs_path /lib/modules/%{_kver}/%{kmoddir}
 # requires want to set a version including epoch
-%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//' -e s/%{_flavor}//)
+%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//' -e 's/-%{_flavor}//')
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_kmod_name kmod-%{lustre_name}
@@ -143,12 +145,6 @@
 		%global requires_kmod_version %{version}_%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
 	%endif
 %endif
-%endif
-
-%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
-	%global requires_yaml_name libyaml
-%else	#for Suse
-	%global requires_yaml_name libyaml-0-2
 %endif
 
 # RHEL >= 7 comes with systemd
@@ -189,13 +185,11 @@ BuildRoot: %{_tmppath}/lustre-%{version}-root
 %if %{with lustre_modules}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 %endif
-Requires: zlib
-Requires: %{requires_yaml_name}
 %if %{with lustre_tests_lutf}
 Requires: python3 >= 3.6.0
 BuildRequires: python3-devel >= 3.6.0, swig
 %endif
-BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel binutils-devel
+BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig
