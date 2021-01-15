@@ -223,7 +223,9 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 			   lvb->lvb_atime, oinfo->loi_lvb.lvb_size,
 			   oinfo->loi_lvb.lvb_blocks, oinfo->loi_lvb.lvb_ctime,
 			   oinfo->loi_lvb.lvb_mtime, oinfo->loi_lvb.lvb_atime);
-		LASSERT(oinfo->loi_lvb.lvb_size >= oinfo->loi_kms);
+		LASSERTF(oinfo->loi_lvb.lvb_size >= oinfo->loi_kms,
+			 "lvb_size %#llx, loi_kms %#llx\n",
+			 oinfo->loi_lvb.lvb_size, oinfo->loi_kms);
 
 		cl_object_attr_lock(&osc->oo_cl);
 		memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));

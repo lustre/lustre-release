@@ -661,7 +661,7 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 			enqflags = CEF_DISCARD_DATA;
 	} else if (cl_io_is_fallocate(io)) {
 		lock_start = io->u.ci_setattr.sa_falloc_offset;
-		lock_end = lock_start + io->u.ci_setattr.sa_attr.lvb_size;
+		lock_end = io->u.ci_setattr.sa_falloc_end;
 	} else {
 		unsigned int valid = io->u.ci_setattr.sa_avalid;
 

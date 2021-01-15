@@ -688,17 +688,16 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 					parent->u.ci_setattr.sa_parent_fid;
 		/* For SETATTR(fallocate) pass the subtype to lower IO */
 		io->u.ci_setattr.sa_subtype = parent->u.ci_setattr.sa_subtype;
-		if (cl_io_is_trunc(io)) {
+		if (cl_io_is_fallocate(io)) {
+			io->u.ci_setattr.sa_falloc_offset = start;
+			io->u.ci_setattr.sa_falloc_end = end;
+		}
+		if (cl_io_is_trunc(io) || cl_io_is_fallocate(io)) {
 			loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
 
 			new_size = lov_size_to_stripe(lsm, index, new_size,
 						      stripe);
 			io->u.ci_setattr.sa_attr.lvb_size = new_size;
-		} else if (cl_io_is_fallocate(io)) {
-			io->u.ci_setattr.sa_falloc_offset = start;
-			io->u.ci_setattr.sa_falloc_end = end;
-			io->u.ci_setattr.sa_attr.lvb_size =
-				parent->u.ci_setattr.sa_attr.lvb_size;
 		}
 		lov_lsm2layout(lsm, lsm->lsm_entries[index],
 			       &io->u.ci_setattr.sa_layout);

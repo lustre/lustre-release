@@ -574,8 +574,14 @@ static int osc_io_setattr_start(const struct lu_env *env,
 			unsigned int cl_valid = 0;
 
 			if (ia_avalid & ATTR_SIZE) {
-				attr->cat_size = size;
-				attr->cat_kms = size;
+				if (io_is_falloc) {
+					attr->cat_size =
+					      io->u.ci_setattr.sa_attr.lvb_size;
+					attr->cat_kms = attr->cat_size;
+				} else {
+					attr->cat_size = size;
+					attr->cat_kms = size;
+				}
 				cl_valid = (CAT_SIZE | CAT_KMS);
 			}
 			if (ia_avalid & ATTR_MTIME_SET) {
@@ -715,22 +721,17 @@ void osc_io_setattr_end(const struct lu_env *env,
 	}
 
 	if (cl_io_is_fallocate(io)) {
-		cl_object_attr_lock(obj);
+		if (result == 0) {
+			cl_object_attr_lock(obj);
+			/* update blocks */
+			if (oa->o_valid & OBD_MD_FLBLOCKS) {
+				attr->cat_blocks = oa->o_blocks;
+				cl_valid |= CAT_BLOCKS;
+			}
 
-		/* update blocks */
-		if (oa->o_valid & OBD_MD_FLBLOCKS) {
-			attr->cat_blocks = oa->o_blocks;
-			cl_valid |= CAT_BLOCKS;
+			cl_object_attr_update(env, obj, attr, cl_valid);
+			cl_object_attr_unlock(obj);
 		}
-
-		/* update size */
-		if (oa->o_valid & OBD_MD_FLSIZE) {
-			attr->cat_size = oa->o_size;
-			cl_valid |= CAT_SIZE;
-		}
-
-		cl_object_attr_update(env, obj, attr, cl_valid);
-		cl_object_attr_unlock(obj);
 	}
 }
 EXPORT_SYMBOL(osc_io_setattr_end);
