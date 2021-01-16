@@ -837,11 +837,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 	/* Leave this on forever */
 	obd->obd_stopping = 1;
-	/*
-	 * function can't return error after that point, so clear setup flag
-	 * as early as possible to avoid finding via obd_devs / hash
-	 */
-	obd->obd_set_up = 0;
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* wait for already-arrived-connections to finish. */
