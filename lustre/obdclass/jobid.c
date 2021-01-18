@@ -304,6 +304,7 @@ out:
  *   %e = executable
  *   %g = gid
  *   %h = hostname
+ *   %H = short hostname
  *   %j = jobid from environment
  *   %p = pid
  *   %u = uid
@@ -320,7 +321,7 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 	char c;
 
 	while ((c = *jobfmt++) && joblen > 1) {
-		char f;
+		char f, *p;
 		int l;
 
 		if (isspace(c)) /* Don't allow embedded spaces */
@@ -330,6 +331,7 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			*jobid = c;
 			joblen--;
 			jobid++;
+			*jobid = '\0';
 			continue;
 		}
 
@@ -344,6 +346,15 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 		case 'h': /* hostname */
 			l = snprintf(jobid, joblen, "%s",
 				     init_utsname()->nodename);
+			break;
+		case 'H': /* short hostname. Cut at first dot */
+			l = snprintf(jobid, joblen, "%s",
+				     init_utsname()->nodename);
+			p = strnchr(jobid, joblen, '.');
+			if (p) {
+				*p = '\0';
+				l = p - jobid;
+			}
 			break;
 		case 'j': /* jobid stored in process environment */
 			l = jobid_get_from_cache(jobid, joblen);

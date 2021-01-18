@@ -15405,6 +15405,13 @@ test_205a() { # Job stats
 	JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname).E"
 
 	verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+
+	if lctl set_param jobid_var=USER jobid_name="S.%j.%e.%u.%H.E"; then
+		JOBENV="JOBCOMPLEX"
+		JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname -s).E"
+
+		verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+	fi
 }
 run_test 205a "Verify job stats"
 
