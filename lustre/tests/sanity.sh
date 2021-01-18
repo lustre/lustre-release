@@ -16893,6 +16893,13 @@ test_205a() { # Job stats
 		verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
 	fi
 
+	if lctl set_param jobid_var=USER jobid_name="S.%j.%e.%u.%H.E"; then
+		JOBENV="JOBCOMPLEX"
+		JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname -s).E"
+
+		verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
+	fi
+
 	# test '%j' access to per-session jobid - if supported
 	if lctl list_param jobid_this_session > /dev/null 2>&1
 	then
