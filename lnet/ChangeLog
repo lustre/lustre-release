@@ -1,3 +1,28 @@
+18-01-2021 Whamcloud, Inc.
+	* version 2.14.0
+	* Support for networks:
+	 socklnd - any kernel supported by Lustre
+	 o2iblnd - OFED from any kernels supported by Lustre
+	 o2iblnd - MLNX_OFED 4.5-1.0.1.0, MLNX_OFED 4.6-1.0.1.1
+		   MLNX_OFED 4.7-1.0.0.1, MLNX_OFED 4.7-3.2.9.0
+		   MLNX_OFED 4.9-0.1.7.0, MLNX_OFED 4.9-2.2.4.0
+		   MLNX_OFED 5.0-2.1.8.0, MLNX_OFED 5.1-0.6.6.0
+		   MLNX_OFED 5.1-2.3.7.1, MLNX_OFED 5.1-2.5.8.0
+		   MLNX_OFED 5.2-1.0.4.0
+
+	* Features:
+	  MR Routing: This feature aligns the LNET Multi-Rail behavior
+		      with routing. A gateway now is viewed as a Multi-Rail
+		      capable node. When a route is added only one entry
+		      per gateway should be used. That route entry should
+		      be added using a reachable nid of the gateway.
+		      The multi-rail selection algorithm is then run when
+		      sending to the gateway to select the best interface
+		      to send to. The gateway aliveness is now kept via
+		      the health mechanism.
+
+-------------------------------------------------------------------------------
+
 11-05-2018 Whamcloud, Inc.
 	* version 2.12.0
 	* Support for networks:
