@@ -355,34 +355,48 @@ wait_grace_time() {
 	case $flavour in
 		block)
 			time=$(lfs quota -$qtype $qarg $parg $DIR|
-				   awk 'NR == 3{ print $5 }'| sed 's/s$//')
+				   awk 'NR == 3{ print $5 }')
 			;;
 		file)
 			time=$(lfs quota -$qtype $qarg $DIR|
-				   awk 'NR == 3{ print $9 }'| sed 's/s$//')
+				   awk 'NR == 3{ print $9 }')
 			;;
 		*)
 			error "Unknown quota type: $flavour"
 			;;
 	esac
 
+	local sleep_seconds=0
+	local orig_time=$time
+
+	echo "Grace time is $time"
 	# from lfs.c:__sec2str()
 	# const char spec[] = "smhdw";
 	# {1, 60, 60*60, 24*60*60, 7*24*60*60};
-	[[ $time == *m* ]] && time=${time//m/} && time=$((time*60));
-	[[ $time == *h* ]] && time=${time//h/} && time=$((time*60*60));
-	[[ $time == *d* ]] && time=${time//d/} && time=$((time*24*60*60));
-	[[ $time == *w* ]] && time=${time//w/} && time=$((time*7*24*60*60));
+	[[ $time == *w* ]] && w_time=${time%w*} &&
+		let sleep_seconds+=$((w_time*7*24*60*60));
+	time=${time#*w}
+	[[ $time == *d* ]] && d_time=${time%d*} &&
+		let sleep_seconds+=$((d_time*24*60*60));
+	time=${time#*d}
+	[[ $time == *h* ]] && h_time=${time%h*} &&
+		let sleep_seconds+=$((h_time*60*60));
+	time=${time#*h}
+	[[ $time == *m* ]] && m_time=${time%m*} &&
+		let sleep_seconds+=$((m_time*60));
+	time=${time#*m}
+	[[ $time == *s* ]] && s_time=${time%s*} &&
+		let sleep_seconds+=$s_time
 
 	echo "Sleep through grace ..."
-	[ "$time" == "-" ] &&
+	[ "$orig_time" == "-" ] &&
 	    error "Grace timeout was not set or quota not exceeded"
-	if [ "$time" == "none" ]; then
+	if [ "$orig_time" == "none" ]; then
 	    echo "...Grace timeout already expired"
 	else
-		let time+=$extrasleep
-		echo "...sleep $time seconds"
-		sleep $time
+		let sleep_seconds+=$extrasleep
+		echo "...sleep $sleep_seconds seconds"
+		sleep $sleep_seconds
 	fi
 }
 
