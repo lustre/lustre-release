@@ -252,7 +252,8 @@ struct thandle *qmt_trans_start_with_slv(const struct lu_env *env,
 
 	if (slv_obj != NULL) {
 		/* reserve credits for slave index update */
-		rc = lquota_disk_declare_write(env, th, slv_obj, &lqe->lqe_id);
+		rc = lquota_disk_declare_write(env, th, slv_obj,
+					       &lqes[0]->lqe_id);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -267,7 +268,7 @@ out:
 	if (rc) {
 		dt_trans_stop(env, qmt->qmt_child, th);
 		th = ERR_PTR(rc);
-		LQUOTA_ERROR(lqe, "failed to slv declare write for "DFID
+		LQUOTA_ERROR(lqes[0], "failed to slv declare write for "DFID
 			     ", rc:%d", PFID(lu_object_fid(&slv_obj->do_lu)),
 			     rc);
 	} else {
