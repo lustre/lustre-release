@@ -1318,20 +1318,6 @@ devicelabel() {
 	echo -n $label
 }
 
-mdsdevlabel() {
-	local num=$1
-	local device=$(mdsdevname $num)
-	local label=$(devicelabel mds$num ${device} | grep -v "CMD: ")
-	echo -n $label
-}
-
-ostdevlabel() {
-	local num=$1
-	local device=$(ostdevname $num)
-	local label=$(devicelabel ost$num ${device} | grep -v "CMD: ")
-	echo -n $label
-}
-
 #
 # Get the device of a facet.
 #
@@ -2996,35 +2982,6 @@ stop_client_loads() {
 }
 # End recovery-scale functions
 
-# verify that lustre actually cleaned up properly
-cleanup_check() {
-	VAR=$(lctl get_param -n catastrophe 2>&1)
-	if [ $? = 0 ] ; then
-		if [ $VAR != 0 ]; then
-			error "LBUG/LASSERT detected"
-		fi
-	fi
-	BUSY=$(dmesg | grep -i destruct || true)
-	if [ -n "$BUSY" ]; then
-		echo "$BUSY" 1>&2
-		[ -e $TMP/debug ] && mv $TMP/debug $TMP/debug-busy.$(date +%s)
-		exit 205
-	fi
-
-	check_mem_leak || exit 204
-
-	[[ $($LCTL dl 2>/dev/null | wc -l) -gt 0 ]] && $LCTL dl &&
-		echo "$TESTSUITE: lustre didn't clean up..." 1>&2 &&
-		return 202 || true
-
-	if module_loaded lnet || module_loaded libcfs; then
-		echo "$TESTSUITE: modules still loaded..." 1>&2
-		/sbin/lsmod 1>&2
-		return 203
-	fi
-	return 0
-}
-
 ##
 # wait for a command to return the expected result
 #
@@ -3675,10 +3632,6 @@ facet_failover() {
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
 		fi
 	done
-}
-
-obd_name() {
-    local facet=$1
 }
 
 replay_barrier() {
@@ -5430,27 +5383,6 @@ is_mounted () {
 	echo $mounted' ' | grep -w -q $mntpt' '
 }
 
-is_empty_dir() {
-	[ $(find $1 -maxdepth 1 -print | wc -l) = 1 ] && return 0
-	return 1
-}
-
-# empty lustre filesystem may have empty directories lost+found and .lustre
-is_empty_fs() {
-	# exclude .lustre & lost+found
-	[ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
-		-print | wc -l) = 1 ] || return 1
-	[ ! -d $1/lost+found ] || is_empty_dir $1/lost+found || return 1
-	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.4.0) ]; then
-		# exclude .lustre/fid (LU-2780)
-		[ $(find $1/.lustre -maxdepth 1 -name fid -prune -o \
-			-print | wc -l) = 1 ] || return 1
-	else
-		[ ! -d $1/.lustre ] || is_empty_dir $1/.lustre || return 1
-	fi
-	return 0
-}
-
 check_and_setup_lustre() {
 	sanitize_parameters
 	nfs_client_mode && return
@@ -5564,51 +5496,6 @@ cleanup_and_setup_lustre() {
         fi
     fi
     check_and_setup_lustre
-}
-
-# Get all of the server target devices from a given server node and type.
-get_mnt_devs() {
-	local node=$1
-	local type=$2
-	local devs
-	local dev
-
-	if [ "$type" == ost ]; then
-		devs=$(get_osd_param $node "" mntdev)
-	else
-		devs=$(do_node $node $LCTL get_param -n osd-*.$FSNAME-M*.mntdev)
-	fi
-	for dev in $devs; do
-		case $dev in
-		*loop*) do_node $node "losetup $dev" | \
-				sed -e "s/.*(//" -e "s/).*//" ;;
-		*) echo $dev ;;
-		esac
-	done
-}
-
-# Get all of the server target devices.
-get_svr_devs() {
-	local node
-	local i
-
-	# Master MDS parameters used by lfsck
-	MDTNODE=$(facet_active_host $SINGLEMDS)
-	MDTDEV=$(echo $(get_mnt_devs $MDTNODE mdt) | awk '{print $1}')
-
-	# MDT devices
-	i=0
-	for node in $(mdts_nodes); do
-		MDTDEVS[i]=$(get_mnt_devs $node mdt)
-		i=$((i + 1))
-	done
-
-	# OST devices
-	i=0
-	for node in $(osts_nodes); do
-		OSTDEVS[i]=$(get_mnt_devs $node ost)
-		i=$((i + 1))
-	done
 }
 
 # Run e2fsck on MDT or OST device.
@@ -5934,10 +5821,6 @@ at_get() {
 
 at_max_get() {
     at_get $1 at_max
-}
-
-at_min_get() {
-	at_get $1 at_min
 }
 
 at_max_set() {
@@ -6680,10 +6563,6 @@ skip_logged(){
 	log_sub_test_end "SKIP" "0" "0" "$@"
 }
 
-canonical_path() {
-	(cd $(dirname $1); echo $PWD/$(basename $1))
-}
-
 grant_from_clients() {
 	local nodes="$1"
 
@@ -6927,11 +6806,6 @@ osts_nodes () {
 	echo -n $(facets_nodes $(get_facets OST))
 }
 
-# Get all of the active AGT (HSM agent) nodes.
-agts_nodes () {
-	echo -n $(facets_nodes $(get_facets AGT))
-}
-
 # Get all of the client nodes and active server nodes.
 nodes_list () {
 	local nodes=$HOSTNAME
@@ -7071,12 +6945,6 @@ get_node_count() {
     echo $nodes | wc -w || true
 }
 
-mixed_ost_devs () {
-    local nodes=$(osts_nodes)
-    local osscount=$(get_node_count "$nodes")
-    [ ! "$OSTCOUNT" = "$osscount" ]
-}
-
 mixed_mdt_devs () {
     local nodes=$(mdts_nodes)
     local mdtcount=$(get_node_count "$nodes")
@@ -7099,23 +6967,6 @@ get_stripe () {
 	touch $file
 	$LFS getstripe -v $file || error "getstripe $file failed"
 	rm -f $file
-}
-
-setstripe_nfsserver () {
-	local dir=$1
-	local nfsexportdir=$2
-	shift
-	shift
-
-	local -a nfsexport=($(awk '"'$dir'" ~ $2 && $3 ~ "nfs" && $2 != "/" \
-		{ print $1 }' /proc/mounts | cut -f 1 -d :))
-
-	# check that only one nfs mounted
-	[[ -z $nfsexport ]] && echo "$dir is not nfs mounted" && return 1
-	(( ${#nfsexport[@]} == 1 )) ||
-		error "several nfs mounts found for $dir: ${nfsexport[@]} !"
-
-	do_nodev ${nfsexport[0]} lfs setstripe $nfsexportdir "$@"
 }
 
 # Check and add a test group.
@@ -7374,11 +7225,6 @@ mdsrate_cleanup () {
 	fi
 }
 
-delayed_recovery_enabled () {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS lctl get_param -n mdd.${!var}.stale_export_age > /dev/null 2>&1
-}
-
 ########################
 
 convert_facet2label() {
@@ -7401,20 +7247,6 @@ convert_facet2label() {
 
 get_clientosc_proc_path() {
 	echo "${1}-osc-[-0-9a-f]*"
-}
-
-# If the 2.0 MDS was mounted on 1.8 device, then the OSC and LOV names
-# used by MDT would not be changed.
-# mdt lov: fsname-mdtlov
-# mdt osc: fsname-OSTXXXX-osc
-mds_on_old_device() {
-    local mds=${1:-"$SINGLEMDS"}
-
-    if [ $(lustre_version_code $mds) -gt $(version_code 1.9.0) ]; then
-        do_facet $mds "lctl list_param osc.$FSNAME-OST*-osc \
-            > /dev/null 2>&1" && return 0
-    fi
-    return 1
 }
 
 get_mdtosc_proc_path() {
@@ -8541,94 +8373,6 @@ run_llverfs()
         llverfs $partial_arg $llverfs_opts $dir
 }
 
-#Remove objects from OST
-remove_ost_objects() {
-	local facet=$1
-	local ostdev=$2
-	local group=$3
-	shift 3
-	local objids="$@"
-	local mntpt=$(facet_mntpt $facet)
-	local opts=$OST_MOUNT_OPTS
-	local i
-	local rc
-
-	echo "removing objects from $ostdev on $facet: $objids"
-	if ! test -b $ostdev; then
-		opts=$(csa_add "$opts" -o loop)
-	fi
-	mount -t $(facet_fstype $facet) $opts $ostdev $mntpt ||
-		return $?
-	rc=0
-	for i in $objids; do
-		rm $mntpt/O/$group/d$((i % 32))/$i || { rc=$?; break; }
-	done
-	umount -f $mntpt || return $?
-	return $rc
-}
-
-#Remove files from MDT
-remove_mdt_files() {
-	local facet=$1
-	local mdtdev=$2
-	shift 2
-	local files="$@"
-	local mntpt=$(facet_mntpt $facet)
-	local opts=$MDS_MOUNT_OPTS
-
-	echo "removing files from $mdtdev on $facet: $files"
-	if [ $(facet_fstype $facet) == ldiskfs ] &&
-	   ! do_facet $facet test -b $mdtdev; then
-		opts=$(csa_add "$opts" -o loop)
-	fi
-	mount -t $(facet_fstype $facet) $opts $mdtdev $mntpt ||
-		return $?
-	rc=0
-	for f in $files; do
-		rm $mntpt/ROOT/$f || { rc=$?; break; }
-	done
-	umount -f $mntpt || return $?
-	return $rc
-}
-
-duplicate_mdt_files() {
-	local facet=$1
-	local mdtdev=$2
-	shift 2
-	local files="$@"
-	local mntpt=$(facet_mntpt $facet)
-	local opts=$MDS_MOUNT_OPTS
-
-	echo "duplicating files on $mdtdev on $facet: $files"
-	mkdir -p $mntpt || return $?
-	if [ $(facet_fstype $facet) == ldiskfs ] &&
-	   ! do_facet $facet test -b $mdtdev; then
-		opts=$(csa_add "$opts" -o loop)
-	fi
-	mount -t $(facet_fstype $facet) $opts $mdtdev $mntpt ||
-		return $?
-
-    do_umount() {
-        trap 0
-        popd > /dev/null
-        rm $tmp
-        umount -f $mntpt
-    }
-    trap do_umount EXIT
-
-    tmp=$(mktemp $TMP/setfattr.XXXXXXXXXX)
-    pushd $mntpt/ROOT > /dev/null || return $?
-    rc=0
-    for f in $files; do
-        touch $f.bad || return $?
-        getfattr -n trusted.lov $f | sed "s#$f#&.bad#" > $tmp
-        rc=${PIPESTATUS[0]}
-        [ $rc -eq 0 ] || return $rc
-        setfattr --restore $tmp || return $?
-    done
-    do_umount
-}
-
 run_sgpdd () {
     local devs=${1//,/ }
     shift
@@ -8714,17 +8458,6 @@ get_block_count() {
 	[ -z "$CLIENTONLY" ] && count=$(do_facet $facet "$DUMPE2FS -h $device 2>&1" |
 		awk '/^Block count:/ {print $3}')
 	echo -n ${count:-0}
-}
-
-# Get the block size of the filesystem.
-get_block_size() {
-	local facet=$1
-	local device=$2
-	local size
-
-	[ -z "$CLIENTONLY" ] && size=$(do_facet $facet "$DUMPE2FS -h $device 2>&1" |
-		awk '/^Block size:/ {print $3}')
-	echo -n ${size:-0}
 }
 
 # Check whether the "ea_inode" feature is enabled or not, to allow
