@@ -1361,11 +1361,14 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 				     dlm_req->lock_desc.l_resource.lr_type,
 				     &dlm_req->lock_desc.l_policy_data,
 				     &lock->l_policy_data);
-	if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
+	if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT) {
 		lock->l_req_extent = lock->l_policy_data.l_extent;
-	else if (dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS)
+	} else if (dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) {
 		lock->l_policy_data.l_inodebits.try_bits =
 			dlm_req->lock_desc.l_policy_data.l_inodebits.try_bits;
+		lock->l_policy_data.l_inodebits.li_gid =
+			dlm_req->lock_desc.l_policy_data.l_inodebits.li_gid;
+	}
 
 existing_lock:
 	cookie = req;
