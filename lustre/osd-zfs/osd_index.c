@@ -1568,7 +1568,8 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 				lde->lde_attrs |= LUDA_UNKNOWN;
 		}
 
-		GOTO(pack_attr, rc = 0);
+		if (!(attr & (LUDA_VERIFY | LUDA_VERIFY_DRYRUN)))
+			GOTO(pack_attr, rc = 0);
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
@@ -1579,6 +1580,10 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		lde->lde_attrs = LUDA_UNKNOWN;
 		GOTO(pack_attr, rc = 0);
 	}
+
+	if (za->za_num_integers >= 3 && fid_is_sane(&zde->lzd_fid) &&
+	    lu_fid_eq(&zde->lzd_fid, fid))
+		GOTO(pack_attr, rc = 0);
 
 	if (!(attr & LUDA_VERIFY)) {
 		fid_cpu_to_le(&lde->lde_fid, fid);
