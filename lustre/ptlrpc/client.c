@@ -259,7 +259,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 
 	LASSERT(desc != NULL);
 	LASSERT(desc->bd_iov_count != LI_POISON); /* not freed already */
-	LASSERT(desc->bd_md_count == 0);         /* network hands off */
+	LASSERT(desc->bd_refs == 0);         /* network hands off */
 	LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
 	LASSERT(desc->bd_frag_ops != NULL);
 
