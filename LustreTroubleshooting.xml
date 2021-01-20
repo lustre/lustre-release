@@ -607,7 +607,7 @@ filesystem_summary:      1910263     1910263           0 100% /myth
         such as <literal>No space left on device</literal>. The numeric
         error message may also appear in the system log.</para>
       <para>For more information about the <literal>lfs df</literal> command,
-        see <xref linkend="dbdoclet.checking_free_space"/>.</para>
+        see <xref linkend="file_striping.checking_free_space"/>.</para>
       <para>You can also use the <literal>lctl get_param</literal> command to
         monitor the space and object usage on the OSTs and MDTs from any
         client:</para>

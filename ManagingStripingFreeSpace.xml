@@ -8,25 +8,25 @@
     sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438209_79324"/></para>
+      <para><xref linkend="file_striping.how_it_works"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438209_48033"/></para>
+      <para><xref linkend="file_striping.considerations"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438209_78664"/></para>
+      <para><xref linkend="file_striping.lfs_setstripe"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438209_44776"/></para>
+      <para><xref linkend="file_striping.lfs_getstripe"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438209_10424"/></para>
+      <para><xref linkend="file_striping.managing_free_space"/></para>
     </listitem>
     <listitem>
       <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438209_79324">
+  <section xml:id="file_striping.how_it_works">
       <title>
       <indexterm>
         <primary>space</primary>
@@ -56,17 +56,18 @@
       default), the MDS then uses weighted random allocations with a preference for allocating
       objects on OSTs with more free space. (This can reduce I/O performance until space usage is
       rebalanced again.) For a more detailed description of how striping is allocated, see <xref
-        linkend="dbdoclet.50438209_10424"/>.</para>
+        linkend="file_striping.managing_free_space"/>.</para>
     <para>Files can only be striped over a finite number of OSTs, based on the
     maximum size of the attributes that can be stored on the MDT. If the MDT
     is ldiskfs-based without the <literal>ea_inode</literal> feature, a file
     can be striped across at most 160 OSTs.  With a ZFS-based MDT, or if the
-    <literal>ea_inode</literal> feature is enabled for an ldiskfs-based MDT,
+    <literal>ea_inode</literal> feature is enabled for an ldiskfs-based MDT
+    (the default since Lustre 2.13.0),
     a file can be striped across up to 2000 OSTs. For more information, see
     <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping"/>.
     </para>
   </section>
-  <section xml:id="dbdoclet.50438209_48033">
+  <section xml:id="file_striping.considerations">
       <title><indexterm>
         <primary>file layout</primary>
         <secondary>See striping</secondary>
@@ -181,7 +182,7 @@
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438209_78664">
+  <section xml:id="file_striping.lfs_setstripe">
       <title><indexterm>
         <primary>striping</primary>
         <secondary>configuration</secondary>
@@ -233,14 +234,16 @@
         <literal>pool_name</literal>
       </emphasis>
       </para>
-    <para>The <literal>pool_name</literal> specifies the OST pool to which the file will be written.
-      This allows limiting the OSTs used to a subset of all OSTs in the file system. For more
-      details about using OST pools, see <link xl:href="ManagingFileSystemIO.html#50438211_75549"
-        >Creating and Managing OST Pools</link>.</para>
+    <para>The <literal>pool_name</literal> specifies the OST pool to which the
+      file will be written.  This allows limiting the OSTs used to a subset of
+      all OSTs in the file system. For more details about using OST pools, see
+      <link xl:href="managingfilesystemio.managing_ost_pools">
+        Creating and Managing OST Pools
+      </link>.</para>
     <section remap="h3">
       <title>Specifying a File Layout (Striping Pattern) for a Single File</title>
       <para>It is possible to specify the file layout when a new file is created using the command <literal>lfs setstripe</literal>. This allows users to override the file system default parameters to tune the file layout more optimally for their application. Execution of an <literal>lfs setstripe</literal> command fails if the file already exists.</para>
-      <section xml:id="dbdoclet.50438209_60155">
+      <section xml:id="file_striping.stripe_size">
         <title>Setting the Stripe Size</title>
         <para>The command to create a new file with a specified stripe size is similar to:</para>
         <screen>[client]# lfs setstripe -s 4M /mnt/lustre/new_file</screen>
@@ -263,7 +266,8 @@ obdidx     objid        objid           group
         <para>The command below creates a new file with a stripe count of <literal>-1</literal> to
           specify striping over all available OSTs:</para>
         <screen>[client]# lfs setstripe -c -1 /mnt/lustre/full_stripe</screen>
-        <para>The example below indicates that the file <literal>full_stripe</literal> is striped
+        <para>The example below indicates that the file
+          <literal>full_stripe</literal> is striped
           over all six active OSTs in the configuration:</para>
         <screen>[client]# lfs getstripe /mnt/lustre/full_stripe
 /mnt/lustre/full_stripe
@@ -274,8 +278,9 @@ obdidx     objid        objid           group
   3        5       0x5     0
   4        4       0x4     0
   5        2       0x2     0</screen>
-        <para> This is in contrast to the output in <xref linkend="dbdoclet.50438209_60155"/>, which
-          shows only a single object for the file.</para>
+        <para> This is in contrast to the output in
+          <xref linkend="file_striping.stripe_size"/>,
+          which shows only a single object for the file.</para>
       </section>
     </section>
     <section remap="h3">
@@ -332,7 +337,7 @@ lmm_stripe_offset:  0
      0         37364   0x91f4   0</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438209_44776">
+  <section xml:id="file_striping.lfs_getstripe">
     <title><indexterm><primary>striping</primary><secondary>getting information</secondary></indexterm>Retrieving File Layout/Striping Information (<literal>getstripe</literal>)</title>
     <para>The <literal>lfs getstripe</literal> command is used to display information that shows
       over which OSTs a file is distributed. For each OST, the index and UUID is displayed, along
@@ -1962,7 +1967,7 @@ STRIPE OPTIONS:
     </section>
   </section>
 
-  <section xml:id="dbdoclet.50438209_10424">
+  <section xml:id="file_striping.managing_free_space">
     <title><indexterm>
         <primary>space</primary>
         <secondary>free space</secondary>
@@ -1991,16 +1996,17 @@ STRIPE OPTIONS:
       <literal>lctl set_param</literal> command, for example the next command reserve 1GB space
       for all OSTs.
       <screen>lctl set_param -P osp.*.reserved_mb_low=1024</screen></para>
-    <para>This section describes how to check available free space on disks and how free space is
-      allocated. It then describes how to set the threshold and weighting factors for the allocation
-      algorithms.</para>
-    <section xml:id="dbdoclet.checking_free_space">
+    <para>This section describes how to check available free space on disks
+      and how free space is allocated. It then describes how to set the
+      threshold and weighting factors for the allocation algorithms.</para>
+    <section xml:id="file_striping.checking_free_space">
       <title>Checking File System Free Space</title>
-      <para>Free space is an important consideration in assigning file stripes. The <literal>lfs
-          df</literal> command can be used to show available disk space on the mounted Lustre file
-        system and space consumption per OST. If multiple Lustre file systems are mounted, a path
-        may be specified, but is not required. Options to the <literal>lfs df</literal> command are
-        shown below.</para>
+      <para>Free space is an important consideration in assigning file stripes.
+        The <literal>lfs df</literal> command can be used to show available
+        disk space on the mounted Lustre file system and space consumption per
+        OST. If multiple Lustre file systems are mounted, a path may be
+        specified, but is not required. Options to the <literal>lfs df</literal>
+        command are shown below.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -2018,10 +2024,25 @@ STRIPE OPTIONS:
           <tbody>
             <row>
               <entry>
-                <para> <literal>-h</literal></para>
+                <para>
+                  <literal>-h</literal>, <literal>--human-readable</literal>
+                </para>
               </entry>
               <entry>
-                <para> Displays sizes in human readable format (for example: 1K, 234M, 5G).</para>
+                <para> Displays sizes in human readable format (for example: 1K,
+                234M, 5G) using base-2 (binary) values (i.e. 1G = 1024M).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>-H</literal>, <literal>--si</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>Like <literal>-h</literal>, this displays counts in human
+                readable format, but using base-10 (decimal) values
+                (i.e. 1G = 1000M).</para>
               </entry>
             </row>
             <row>
@@ -2032,46 +2053,151 @@ STRIPE OPTIONS:
                 <para> Lists inodes instead of block usage.</para>
               </entry>
             </row>
+            <row>
+              <entry>
+                <para> <literal role="bold">-l, --lazy</literal></para>
+              </entry>
+              <entry>
+                <para>Do not attempt to contact any OST or MDT not currently
+                  connected to the client.  This avoids blocking the
+                  <literal>lfs df</literal> output if a target is offline or
+                  unreachable, and only returns the space on OSTs that can
+                  currently be accessed.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal role="bold">-p, --pool</literal></para>
+              </entry>
+              <entry>
+                <para>Limit the usage to report only OSTs that are in the
+                  specified <replaceable>pool</replaceable>.  If multiple
+                  Lustre filesystems are mounted, list the OSTs in
+                  <replaceable>pool</replaceable> for each filesystem, or
+                  limit the display to only a pool for a specific filesystem
+                  if <replaceable>fsname.pool</replaceable> is given.
+                  Specifying both <replaceable>fsname</replaceable> and
+                  <replaceable>pool</replaceable> is equivalent to providing
+                  a specific mountpoint.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>-v</literal>, <literal>--verbose</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>Display verbose status of MDTs and OSTs.  This may
+                  include one or more optional flags at the end of each line.
+                </para>
+              </entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
+      <para>
+        <literal>lfs df</literal> may also report additional target status
+        as the last column in the display, if there are issues with that target.
+        Target states include:
+      </para>
+      <itemizedlist>
+        <listitem><para>
+          <literal>D</literal>: OST/MDT is <literal>Degraded</literal>.
+          The target has a failed drive in the RAID device, or is
+          undergoing RAID reconstruction.  This state is marked on
+          the server automatically for ZFS targets via
+          <literal>zed</literal>, or a (user-supplied) script that
+          monitors the target device and sets
+          "<literal>lctl set_param obdfilter.<replaceable>target</replaceable>.degraded=1</literal>"
+          on the OST.  This target will be avoided for new
+          allocations, but will still be used to read existing files
+          located there or if there are not enough non-degraded OSTs
+          to make up a widely-striped file.
+        </para></listitem>
+        <listitem><para>
+          <literal>R</literal>: OST/MDT is <literal>Read-only</literal>.
+          The target filesystem is marked read-only due to filesystem
+          corruption detected by ldiskfs or ZFS.  No modifications
+          are allowed on this OST, and it needs to be unmounted and
+          <literal>e2fsck</literal> or <literal>zpool scrub</literal>
+          run to repair the underlying filesystem.
+        </para></listitem>
+        <listitem><para>
+          <literal>N</literal>: OST/MDT is <literal>No-precreate</literal>.
+          The target is configured to deny object precreation set by
+          "<literal>lctl set_param obdfilter.<replaceable>target</replaceable>.no_precreate=1</literal>"
+          parameter or the "<literal>-o no_precreate</literal>" mount option.
+          This may be done to add an OST to the filesystem without allowing
+          objects to be allocated on it yet, or for other reasons.
+        </para></listitem>
+        <listitem><para>
+          <literal>S</literal>: OST/MDT is out of <literal>Space</literal>.
+          The target filesystem has less than the minimum required
+          free space and will not be used for new object allocations
+          until it has more free space.
+        </para></listitem>
+        <listitem><para>
+          <literal>I</literal>: OST/MDT is out of <literal>Inodes</literal>.
+          The target filesystem has less than the minimum required
+          free inodes and will not be used for new object allocations
+          until it has more free inodes.
+        </para></listitem>
+        <listitem><para>
+          <literal>f</literal>: OST/MDT is on <literal>flash</literal>.
+          The target filesystem is using a flash (non-rotational)
+          storage device.  This is normally detected from the
+          underlying Linux block device, but can be set manually
+          with "<literal>lctl set_param osd-*.*.nonrotational=1</literal>
+          on the respective OSTs.  This lower-case status is only
+          shown in conjunction with the <literal>-v</literal> option,
+          since it is not an error condition.
+        </para></listitem>
+      </itemizedlist>
       <note>
-        <para>The <literal>df -i</literal> and <literal>lfs df -i</literal> commands show the
-            <emphasis role="italic">minimum</emphasis> number of inodes that can be created in the
-          file system at the current time. If the total number of objects available across all of
-          the OSTs is smaller than those available on the MDT(s), taking into account the default
-          file striping, then <literal>df -i</literal> will also report a smaller number of inodes
-          than could be created. Running <literal>lfs df -i</literal> will report the actual number
-          of inodes that are free on each target.</para>
-        <para>For ZFS file systems, the number of inodes that can be created is dynamic and depends
-          on the free space in the file system. The Free and Total inode counts reported for a ZFS
-          file system are only an estimate based on the current usage for each target. The Used
-          inode count is the actual number of inodes used by the file system.</para>
+        <para>The <literal>df -i</literal> and <literal>lfs df -i</literal>
+          commands show the <emphasis role="italic">minimum</emphasis> number
+          of inodes that can be created in the file system at the current time.
+          If the total number of objects available across all of the OSTs is
+          smaller than those available on the MDT(s), taking into account the
+          default file striping, then <literal>df -i</literal> will also
+          report a smaller number of inodes than could be created. Running
+          <literal>lfs df -i</literal> will report the actual number of inodes
+          that are free on each target.
+        </para>
+        <para>For ZFS file systems, the number of inodes that can be created
+          is dynamic and depends on the free space in the file system. The
+          Free and Total inode counts reported for a ZFS file system are only
+          an estimate based on the current usage for each target. The Used
+          inode count is the actual number of inodes used by the file system.
+        </para>
       </note>
       <para><emphasis role="bold">Examples</emphasis></para>
-      <screen>[client1] $ lfs df
-UUID                1K-blockS  Used      Available Use% Mounted on
-mds-lustre-0_UUID   9174328    1020024   8154304   11%  /mnt/lustre[MDT:0]
-ost-lustre-0_UUID   94181368   56330708  37850660  59%  /mnt/lustre[OST:0]
-ost-lustre-1_UUID   94181368   56385748  37795620  59%  /mnt/lustre[OST:1]
-ost-lustre-2_UUID   94181368   54352012  39829356  57%  /mnt/lustre[OST:2]
-filesystem summary: 282544104  167068468 39829356  57%  /mnt/lustre
+      <screen>client$ lfs df
+UUID                 1K-blocks       Used Available Use%  Mounted on
+testfs-OST0000_UUID    9174328    1020024   8154304  11%  /mnt/lustre[MDT:0]
+testfs-OST0000_UUID   94181368   56330708  37850660  59%  /mnt/lustre[OST:0]
+testfs-OST0001_UUID   94181368   56385748  37795620  59%  /mnt/lustre[OST:1]
+testfs-OST0002_UUID   94181368   54352012  39829356  57%  /mnt/lustre[OST:2]
+filesystem summary:  282544104  167068468  39829356  57%  /mnt/lustre
  
-[client1] $ lfs df -h
-UUID                bytes    Used    Available   Use%  Mounted on
-mds-lustre-0_UUID   8.7G     996.1M  7.8G        11%   /mnt/lustre[MDT:0]
-ost-lustre-0_UUID   89.8G    53.7G   36.1G       59%   /mnt/lustre[OST:0]
-ost-lustre-1_UUID   89.8G    53.8G   36.0G       59%   /mnt/lustre[OST:1]
-ost-lustre-2_UUID   89.8G    51.8G   38.0G       57%   /mnt/lustre[OST:2]
-filesystem summary: 269.5G   159.3G  110.1G      59%   /mnt/lustre
+[client1] $ lfs df -hv
+UUID                    bytes        Used Available Use%  Mounted on
+testfs-MDT0000_UUID      8.7G      996.1M      7.8G  11%  /mnt/lustre[MDT:0]
+testfs-OST0000_UUID     89.8G       53.7G     36.1G  59%  /mnt/lustre[OST:0] f
+testfs-OST0001_UUID     89.8G       53.8G     36.0G  59%  /mnt/lustre[OST:1] f
+testfs-OST0002_UUID     89.8G       51.8G     38.0G  57%  /mnt/lustre[OST:2] f
+filesystem summary:    269.5G      159.3G    110.1G  59%  /mnt/lustre
  
-[client1] $ lfs df -i 
-UUID                Inodes  IUsed IFree   IUse% Mounted on
-mds-lustre-0_UUID   2211572 41924 2169648 1%    /mnt/lustre[MDT:0]
-ost-lustre-0_UUID   737280  12183 725097  1%    /mnt/lustre[OST:0]
-ost-lustre-1_UUID   737280  12232 725048  1%    /mnt/lustre[OST:1]
-ost-lustre-2_UUID   737280  12214 725066  1%    /mnt/lustre[OST:2]
-filesystem summary: 2211572 41924 2169648 1%    /mnt/lustre[OST:2]</screen>
+[client1] $ lfs df -iH
+UUID                   Inodes       IUsed    IFree IUse%  Mounted on
+testfs-MDT0000_UUID     2.21M       41.9k     2.17M   1%  /mnt/lustre[MDT:0]
+testfs-OST0000_UUID    737.3k       12.1k    725.1k   1%  /mnt/lustre[OST:0]
+testfs-OST0001_UUID    737.3k       12.2k    725.0k   1%  /mnt/lustre[OST:1]
+testfs-OST0002_UUID    737.3k       12.2k    725.0k   1%  /mnt/lustre[OST:2]
+filesystem summary:     2.21M       41.9k     2.17M   1%  /mnt/lustre[OST:2]
+</screen>
     </section>
     <section remap="h3">
         <title><indexterm>

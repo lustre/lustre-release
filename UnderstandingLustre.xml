@@ -810,7 +810,7 @@
       ability to stripe is also useful when a single OST does not have enough
       free space to hold an entire file. For more information about benefits
       and drawbacks of file striping, see
-      <xref linkend="dbdoclet.50438209_48033" />.</para>
+      <xref linkend="file_striping.considerations" />.</para>
       <para>Striping allows segments or 'chunks' of data in a file to be stored
       on different OSTs, as shown in
       <xref linkend="understandinglustre.fig.filestripe" />. In the Lustre file
@@ -830,7 +830,7 @@
       for
       <literal>stripe_size</literal> is 1MB. The user may change these values on
       a per directory or per file basis. For more details, see
-      <xref linkend="dbdoclet.50438209_78664" />.</para>
+      <xref linkend="file_striping.lfs_setstripe" />.</para>
       <para>
       <xref linkend="understandinglustre.fig.filestripe" />, the
       <literal>stripe_size</literal> for File C is larger than the

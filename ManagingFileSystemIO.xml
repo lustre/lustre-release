@@ -240,7 +240,7 @@ $ lfs getstripe -m ./remotedir/file.*.txt<lineannotation>check files are on MDT0
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438211_75549">
+  <section xml:id="managingfilesystemio.managing_ost_pools">
     <title>
     <indexterm>
       <primary>I/O</primary>

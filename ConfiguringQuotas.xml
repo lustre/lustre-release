@@ -595,7 +595,7 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
     <literal>lctl get_param *.*.filestotal</literal>). For more information on
     using the
     <literal>lfs df -i</literal> command and the command output, see
-    <xref linkend="dbdoclet.checking_free_space" />.</para>
+    <xref linkend="file_striping.checking_free_space" />.</para>
     <para>Unfortunately, the
     <literal>statfs</literal> interface does not report the free inode count
     directly, but instead reports the total inode and used inode counts. The

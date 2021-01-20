@@ -2416,8 +2416,9 @@ nid                    refs   peer    max   tx    min
           space is more than this. The default is 0.2% of total OST size.</para>
       </listitem>
     </itemizedlist>
-    <para>For more information about monitoring and managing free space, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438209_10424"/>.</para>
+    <para>For more information about monitoring and managing free space, see
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="file_striping.managing_free_space"/>.</para>
   </section>
   <section remap="h3">
     <title><indexterm>
