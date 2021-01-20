@@ -2,9 +2,11 @@
 .SH NAME
 lfs df \- report Lustre filesystem disk usage
 .SH SYNOPSIS
-.BR "lfs df" " [" -i "] [" -h "] [" --lazy "] [" --pool | -p
+.BR "lfs df" " [" -i "] [" -h | -H ]
+.RB [ --lazy | -l ]
+.RB [ --pool | -p
 .IR <fsname> [. <pool> ]]
-.RB [ -v ]
+.RB [ --verbose | -v ]
 .RI [ path ]
 .SH DESCRIPTION
 .B lfs df
@@ -51,10 +53,18 @@ RAID reconstruction.  This state is marked on the server automatically
 for ZFS targets via
 .BR zed (8),
 or a (user-supplied) script that monitors the target device and sets
-.B lctl set_param obdfilter.\fI<target>\fB.degraded=1
+.B 'lctl set_param obdfilter.\fI<target>\fB.degraded=1'
 on the OST.  This target will be avoided for new allocations, but
 will still be used for existing files located there or if there are
 not enough non-degraded OSTs to make up a widely-striped file.
+.TP
+.B N: no-precreate
+The target is configured to deny object precreation by the
+.B 'lctl set_param obdfilter.\fI<target>\fB.no_precreate=1'
+parameter or
+.B '-o no_precreate'
+mount option.  This may be done to add an OST to the filesystem without
+allowing objects to be allocated on it yet, or for other reasons.
 .TP
 .B R: read-only
 The target filesystem is marked read-only due to filesystem
@@ -72,6 +82,12 @@ will not be used for new object allocations until it has more free space.
 .B I: out-of-inodes
 The target filesystem has less than the minimum required free inodes and
 will not be used for new object allocations until it has more free inodes.
+.TP
+.B f: flash
+The target filesystem is using a flash (non-rotational) storage device.
+This lower-case status is only shown in conjunction with the
+.B -v
+option, since it is not an error condition.
 .RE
 .SH OPTIONS
 The various options supported by
@@ -80,7 +96,12 @@ are listed and explained below:
 .TP
 .BR -h ", " --human-readable
 Print output in a human readable format (e.g. 16.3T, 4.25P).
-Suffixes are SI base-2 units (i.e. 1 GiB = 1024 MiB).
+Suffixes are base-2 units (i.e. 1 GiB = 1024 MiB).
+.TP
+.BR -H ", " --si
+Like
+.BR -h ,
+but suffixes are SI base-10 units (i.e. 1 GB = 1000 MB).
 .TP
 .BR -i ", " --inodes
 Print information about the inode usage and totals for the MDTs and
@@ -131,12 +152,13 @@ is equivalent to specifying the mountpoint for the given
 .BI "lfs df --pool=" "pool /mnt/fsname"
 .TP
 .BR -v ", " --verbose
-Show deactivated MDTs and OSTs in the listing.  By default, any
+Show deactivated MDTs and OSTs in the listing, along with any
+additional status flags for each MDT and OST.  By default, any
 MDTs and OSTs that are deactivated by the administrator are not shown.
 However, targets that are only temporarily inaccessible are still shown.
 .SH EXAMPLES
 .TP
-.B $ lfs df -h /mnt/testfs
+.B $ lfs df -hv /mnt/testfs
 Lists space usage per OST and MDT for the
 .B testfs
 filesystem in human readable format.
@@ -175,33 +197,33 @@ or they were never added to the filesystem.  The
 and
 .B testfs-OST0002
 targets are currently marked
-.B degraded
+.BR D egraded
 (perhaps they both share the same underlying storage controller),
 while
 .B testfs-OST0002
 is also marked
-.B read-only
-after detecting non-recoverable corruption in the filesystem.
+.BR R ead-only,
+after detecting non-recoverable corruption in the backing filesystem.
 .TP
-.B $ lfs df -i
+.B $ lfs df -iH
 List inode usage per OST and MDT for all mounted Lustre filesystems.
 .RS 0.75i
 UUID                Inodes  IUsed  IFree IUse% Mounted on
 .br
-testfs-MDT0000_UUID 932160 884609  47551  95% /testfs[MDT:0]
+testfs-MDT0000_UUID 932.2k 884.6k  47.6k  95% /testfs[MDT:0]
 .br
-testfs-OST0000_UUID 267456 179649  87807  67% /testfs[OST:0]
+testfs-OST0000_UUID 267.5k 179.6k  87.8k  67% /testfs[OST:0]
 .br
-testfs-OST0001_UUID 268864 173466  95398  64% /testfs[OST:1] D
+testfs-OST0001_UUID 268.9k 173.5k  95.4k  64% /testfs[OST:1] D
 .br
-testfs-OST0002_UUID 267456 169575  97881  63% /testfs[OST:2] DR
+testfs-OST0002_UUID 267.5k 169.6k  97.9k  63% /testfs[OST:2] DR
 .br
 OST0003           : inactive device
 .br
-testfs-OST0006_UUID 426144 377448  48696  88% /testfs[OST:3]
+testfs-OST0006_UUID 426.1k 377.4k  48.7k  88% /testfs[OST:3]
 .br
 
-filesystem_summary: 932160 884609  47551  95% /testfs
+filesystem_summary: 932.1k 884.6k  47.6k  95% /testfs
 .br
 .RE
 .TP

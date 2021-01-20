@@ -5860,13 +5860,14 @@ enum mntdf_flags {
 	MNTDF_LAZY	= 0x0004,
 	MNTDF_VERBOSE	= 0x0008,
 	MNTDF_SHOW	= 0x0010,
+	MNTDF_DECIMAL	= 0x0020,
 };
 
-#define COOK(value)						\
+#define COOK(value, base)					\
 ({								\
 	int radix = 0;						\
-	while (value > 1024) {					\
-		value /= 1024;					\
+	while (value > base) {					\
+		value /= base;					\
 		radix++;					\
 	}							\
 	radix;							\
@@ -5924,7 +5925,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 {
 	long long avail, used, total;
 	int ratio = 0;
-	char *suffix = "KMGTPEZY";
+	char *suffix = flags & MNTDF_DECIMAL ? "kMGTPEZY" : "KMGTPEZY";
 	/* Note if we have >2^64 bytes/fs these buffers will need to be grown */
 	char tbuf[3 * sizeof(__u64)];
 	char ubuf[3 * sizeof(__u64)];
@@ -5952,11 +5953,12 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 		ratio = obd_statfs_ratio(stat, flags & MNTDF_INODES);
 
 		if (flags & MNTDF_COOKED) {
-			int i;
+			int base = flags & MNTDF_DECIMAL ? 1000 : 1024;
 			double cook_val;
+			int i;
 
 			cook_val = (double)total;
-			i = COOK(cook_val);
+			i = COOK(cook_val, base);
 			if (i > 0)
 				snprintf(tbuf, sizeof(tbuf), HDF, cook_val,
 					 suffix[i - 1]);
@@ -5964,7 +5966,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 				snprintf(tbuf, sizeof(tbuf), CDF, total);
 
 			cook_val = (double)used;
-			i = COOK(cook_val);
+			i = COOK(cook_val, base);
 			if (i > 0)
 				snprintf(ubuf, sizeof(ubuf), HDF, cook_val,
 					 suffix[i - 1]);
@@ -5972,7 +5974,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 				snprintf(ubuf, sizeof(ubuf), CDF, used);
 
 			cook_val = (double)avail;
-			i = COOK(cook_val);
+			i = COOK(cook_val, base);
 			if (i > 0)
 				snprintf(abuf, sizeof(abuf), HDF, cook_val,
 					 suffix[i - 1]);
@@ -6648,18 +6650,21 @@ static int lfs_df(int argc, char **argv)
 	int c, rc = 0, index = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	struct option long_opts[] = {
-	{ .val = 'h',	.name = "human-readable",
-						.has_arg = no_argument },
+	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
+	{ .val = 'H',	.name = "si",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inodes",	.has_arg = no_argument },
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL} };
 
-	while ((c = getopt_long(argc, argv, "hilp:v", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hHilp:v", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'h':
-			flags |= MNTDF_COOKED;
+			flags = (flags & ~MNTDF_DECIMAL) | MNTDF_COOKED;
+			break;
+		case 'H':
+			flags |= MNTDF_COOKED | MNTDF_DECIMAL;
 			break;
 		case 'i':
 			flags |= MNTDF_INODES;
