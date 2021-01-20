@@ -127,6 +127,12 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned nfrags, unsigned max_brw,
 		(ptlrpc_is_bulk_desc_kvec(type) &&
 		 ops->add_iov_frag != NULL));
 
+	if (max_brw > PTLRPC_BULK_OPS_COUNT)
+		RETURN(NULL);
+
+	if (nfrags > LNET_MAX_IOV * max_brw)
+		RETURN(NULL);
+
 	OBD_ALLOC_PTR(desc);
 	if (desc == NULL)
 		return NULL;
@@ -149,6 +155,7 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned nfrags, unsigned max_brw,
 	desc->bd_portal = portal;
 	desc->bd_type = type;
 	desc->bd_md_count = 0;
+	desc->bd_nob_last = LNET_MTU;
 	desc->bd_frag_ops = (struct ptlrpc_bulk_frag_ops *) ops;
 	LASSERT(max_brw > 0);
 	desc->bd_md_max_brw = min(max_brw, PTLRPC_BULK_OPS_COUNT);
@@ -215,7 +222,15 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
 	kiov = &BD_GET_KIOV(desc, desc->bd_iov_count);
+	if (((desc->bd_iov_count % LNET_MAX_IOV) == 0) ||
+	     ((desc->bd_nob_last + len) > LNET_MTU)) {
+		desc->bd_mds_off[desc->bd_md_count] = desc->bd_iov_count;
+		desc->bd_md_count++;
+		desc->bd_nob_last = 0;
+		LASSERT(desc->bd_md_count <= PTLRPC_BULK_OPS_COUNT);
+	}
 
+	desc->bd_nob_last += len;
 	desc->bd_nob += len;
 
 	if (pin)
@@ -241,7 +256,15 @@ int ptlrpc_prep_bulk_frag(struct ptlrpc_bulk_desc *desc,
 	LASSERT(ptlrpc_is_bulk_desc_kvec(desc->bd_type));
 
 	iovec = &BD_GET_KVEC(desc, desc->bd_iov_count);
+	if (((desc->bd_iov_count % LNET_MAX_IOV) == 0) ||
+	     ((desc->bd_nob_last + len) > LNET_MTU)) {
+		desc->bd_mds_off[desc->bd_md_count] = desc->bd_iov_count;
+		desc->bd_md_count++;
+		desc->bd_nob_last = 0;
+		LASSERT(desc->bd_md_count <= PTLRPC_BULK_OPS_COUNT);
+	}
 
+	desc->bd_nob_last += len;
 	desc->bd_nob += len;
 
 	iovec->iov_base = frag;
@@ -3329,8 +3352,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 	/* For multi-bulk RPCs, rq_mbits is the last mbits needed for bulks so
 	 * that server can infer the number of bulks that were prepared,
 	 * see LU-1431 */
-	req->rq_mbits += ((bd->bd_iov_count + LNET_MAX_IOV - 1) /
-			  LNET_MAX_IOV) - 1;
+	req->rq_mbits += bd->bd_md_count - 1;
 
 	/* Set rq_xid as rq_mbits to indicate the final bulk for the old
 	 * server which does not support OBD_CONNECT_BULK_MBITS. LU-6808.
