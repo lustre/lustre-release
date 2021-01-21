@@ -1337,7 +1337,7 @@ void ldlm_lock_fail_match_locked(struct ldlm_lock *lock)
 {
 	if ((lock->l_flags & LDLM_FL_FAIL_NOTIFIED) == 0) {
 		lock->l_flags |= LDLM_FL_FAIL_NOTIFIED;
-		wake_up_all(&lock->l_waitq);
+		wake_up(&lock->l_waitq);
 	}
 }
 EXPORT_SYMBOL(ldlm_lock_fail_match_locked);
@@ -1359,7 +1359,7 @@ void ldlm_lock_fail_match(struct ldlm_lock *lock)
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock)
 {
 	ldlm_set_lvb_ready(lock);
-	wake_up_all(&lock->l_waitq);
+	wake_up(&lock->l_waitq);
 }
 EXPORT_SYMBOL(ldlm_lock_allow_match_locked);
 
@@ -2448,7 +2448,7 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
 
 		/* only canceller can set bl_done bit */
 		ldlm_set_bl_done(lock);
-		wake_up_all(&lock->l_waitq);
+		wake_up(&lock->l_waitq);
 	} else if (!ldlm_is_bl_done(lock)) {
 		/* The lock is guaranteed to have been canceled once
 		 * returning from this function. */

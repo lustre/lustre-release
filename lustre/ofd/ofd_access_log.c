@@ -571,9 +571,8 @@ void ofd_access_log_delete(struct ofd_access_log *oal)
 
 	oal->oal_is_closed = 1;
 	down_read(&oal->oal_buf_list_sem);
-	list_for_each_entry(ocb, &oal->oal_circ_buf_list, ocb_list) {
-		wake_up_all(&ocb->ocb_read_wait_queue);
-	}
+	list_for_each_entry(ocb, &oal->oal_circ_buf_list, ocb_list)
+		wake_up(&ocb->ocb_read_wait_queue);
 	up_read(&oal->oal_buf_list_sem);
 	cdev_device_del(&oal->oal_cdev, &oal->oal_device);
 }

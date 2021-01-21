@@ -2956,8 +2956,8 @@ kiblnd_base_shutdown(void)
 		cfs_percpt_for_each(sched, i, kiblnd_data.kib_scheds)
 			wake_up_all(&sched->ibs_waitq);
 
-		wake_up_all(&kiblnd_data.kib_connd_waitq);
-		wake_up_all(&kiblnd_data.kib_failover_waitq);
+		wake_up(&kiblnd_data.kib_connd_waitq);
+		wake_up(&kiblnd_data.kib_failover_waitq);
 
 		wait_var_event_warning(&kiblnd_data.kib_nthreads,
 				       !atomic_read(&kiblnd_data.kib_nthreads),

@@ -385,7 +385,7 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 out:
 	rsi_free(&rsii);
 	if (rsip) {
-		wake_up_all(&rsip->waitq);
+		wake_up(&rsip->waitq);
 		cache_put(&rsip->h, &rsi_cache);
 	} else {
 		status = -ENOMEM;

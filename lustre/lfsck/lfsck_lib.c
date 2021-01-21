@@ -2592,7 +2592,7 @@ void lfsck_post_generic(const struct lu_env *env,
 	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s post, rc = %d\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
 
-	wake_up_all(&athread->t_ctl_waitq);
+	wake_up(&athread->t_ctl_waitq);
 	wait_event_idle(mthread->t_ctl_waitq,
 			(*result > 0 && list_empty(&lad->lad_req_list)) ||
 			thread_is_stopped(athread));
@@ -2620,7 +2620,7 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 	       "status %d\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, status);
 
-	wake_up_all(&athread->t_ctl_waitq);
+	wake_up(&athread->t_ctl_waitq);
 	wait_event_idle(mthread->t_ctl_waitq,
 			test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) ||
 			thread_is_stopped(athread));
@@ -2643,7 +2643,7 @@ void lfsck_quit_generic(const struct lu_env *env,
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
 
 	set_bit(LAD_EXIT, &lad->lad_flags);
-	wake_up_all(&athread->t_ctl_waitq);
+	wake_up(&athread->t_ctl_waitq);
 	wait_event_idle(mthread->t_ctl_waitq,
 			thread_is_init(athread) ||
 			thread_is_stopped(athread));
@@ -3323,7 +3323,7 @@ trigger:
 			thread_is_stopped(thread));
 	if (start == NULL || !(start->ls_flags & LPF_BROADCAST)) {
 		lfsck->li_start_unplug = 1;
-		wake_up_all(&thread->t_ctl_waitq);
+		wake_up(&thread->t_ctl_waitq);
 
 		GOTO(out, rc = 0);
 	}
@@ -3342,13 +3342,13 @@ trigger:
 			spin_unlock(&lfsck->li_lock);
 
 			lfsck->li_start_unplug = 1;
-			wake_up_all(&thread->t_ctl_waitq);
+			wake_up(&thread->t_ctl_waitq);
 			wait_event_idle(thread->t_ctl_waitq,
 					thread_is_stopped(thread));
 		}
 	} else {
 		lfsck->li_start_unplug = 1;
-		wake_up_all(&thread->t_ctl_waitq);
+		wake_up(&thread->t_ctl_waitq);
 	}
 
 	GOTO(put, rc);
@@ -3430,7 +3430,7 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		}
 	}
 
-	wake_up_all(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	spin_unlock(&lfsck->li_lock);
 	if (stop && stop->ls_flags & LPF_BROADCAST)
 		rc1 = lfsck_stop_all(env, lfsck, stop);

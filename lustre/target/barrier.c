@@ -272,7 +272,7 @@ void barrier_exit(struct dt_device *key)
 		smp_mb();
 
 		if (unlikely(barrier->bi_status == BS_FREEZING_P1))
-			wake_up_all(&barrier->bi_waitq);
+			wake_up(&barrier->bi_waitq);
 		barrier_instance_put(barrier);
 	}
 }

@@ -2140,7 +2140,7 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 	spin_lock(&lp->lp_lock);
 	list_splice_init(&lp->lp_dc_pendq, &pending_msgs);
 	spin_unlock(&lp->lp_lock);
-	wake_up_all(&lp->lp_dc_waitq);
+	wake_up(&lp->lp_dc_waitq);
 
 	if (lp->lp_rtr_refcount > 0)
 		lnet_router_discovery_complete(lp);

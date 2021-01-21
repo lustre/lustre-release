@@ -440,7 +440,7 @@ void osc_io_iter_fini(const struct lu_env *env,
 		oio->oi_is_active = 0;
 		LASSERT(atomic_read(&osc->oo_nr_ios) > 0);
 		if (atomic_dec_and_test(&osc->oo_nr_ios))
-			wake_up_all(&osc->oo_io_waitq);
+			wake_up(&osc->oo_io_waitq);
 	}
 }
 EXPORT_SYMBOL(osc_io_iter_fini);

@@ -2537,7 +2537,7 @@ kgnilnd_dgram_mover(void *arg)
 		    !kgnilnd_data.kgn_quiesce_trigger) {
 			CDEBUG(D_INFO, "schedule timeout %ld (%lu sec)\n",
 			       timeout, cfs_duration_sec(timeout));
-			wake_up_all(&dev->gnd_dgping_waitq);
+			wake_up(&dev->gnd_dgping_waitq);
 			schedule();
 			CDEBUG(D_INFO, "awake after schedule\n");
 			deadline = jiffies + cfs_time_seconds(*kgnilnd_tunables.kgn_dgram_timeout);

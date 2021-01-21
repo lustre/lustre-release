@@ -1292,7 +1292,7 @@ ksocknal_terminate_conn(struct ksock_conn *conn)
 		/* extra ref for scheduler */
 		ksocknal_conn_addref(conn);
 
-		wake_up (&sched->kss_waitq);
+		wake_up(&sched->kss_waitq);
 	}
 
 	spin_unlock_bh(&sched->kss_lock);
@@ -1793,7 +1793,7 @@ ksocknal_base_shutdown(void)
 		/* flag threads to terminate; wake and wait for them to die */
 		ksocknal_data.ksnd_shuttingdown = 1;
 		wake_up_all(&ksocknal_data.ksnd_connd_waitq);
-		wake_up_all(&ksocknal_data.ksnd_reaper_waitq);
+		wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 		if (ksocknal_data.ksnd_schedulers != NULL) {
 			cfs_percpt_for_each(sched, i,

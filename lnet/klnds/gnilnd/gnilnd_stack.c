@@ -107,15 +107,15 @@ kgnilnd_quiesce_wait(char *reason)
 
 		/* morning sunshine */
 		spin_lock(&kgnilnd_data.kgn_reaper_lock);
-		wake_up_all(&kgnilnd_data.kgn_reaper_waitq);
+		wake_up(&kgnilnd_data.kgn_reaper_waitq);
 		spin_unlock(&kgnilnd_data.kgn_reaper_lock);
 
 		for (i = 0; i < kgnilnd_data.kgn_ndevs; i++) {
 			kgn_device_t *dev = &kgnilnd_data.kgn_devices[i];
 
-			wake_up_all(&dev->gnd_waitq);
-			wake_up_all(&dev->gnd_dgram_waitq);
-			wake_up_all(&dev->gnd_dgping_waitq);
+			wake_up(&dev->gnd_waitq);
+			wake_up(&dev->gnd_dgram_waitq);
+			wake_up(&dev->gnd_dgping_waitq);
 		}
 
 		kgnilnd_wakeup_rca_thread();

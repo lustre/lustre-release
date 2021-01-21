@@ -688,7 +688,7 @@ static int osp_update_interpret(const struct lu_env *env,
 	}
 
 	if (oaua->oaua_count != NULL && atomic_dec_and_test(oaua->oaua_count))
-		wake_up_all(oaua->oaua_waitq);
+		wake_up(oaua->oaua_waitq);
 
 	if (oth != NULL) {
 		/* oth and osp_update_requests will be destoryed in

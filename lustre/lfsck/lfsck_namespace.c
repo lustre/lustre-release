@@ -4366,7 +4366,7 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	lad->lad_prefetched++;
 	spin_unlock(&lad->lad_lock);
 	if (wakeup)
-		wake_up_all(&lad->lad_thread.t_ctl_waitq);
+		wake_up(&lad->lad_thread.t_ctl_waitq);
 
 	EXIT;
 }
@@ -4711,7 +4711,7 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	lad->lad_prefetched++;
 	spin_unlock(&lad->lad_lock);
 	if (wakeup)
-		wake_up_all(&lad->lad_thread.t_ctl_waitq);
+		wake_up(&lad->lad_thread.t_ctl_waitq);
 
 	down_write(&com->lc_sem);
 	com->lc_new_checked++;
@@ -5153,7 +5153,7 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 		stop->ls_flags = lr->lr_param & ~LPF_BROADCAST;
 		lfsck_stop(env, lfsck->li_bottom, stop);
 	} else if (lfsck_phase2_next_ready(lad)) {
-		wake_up_all(&lad->lad_thread.t_ctl_waitq);
+		wake_up(&lad->lad_thread.t_ctl_waitq);
 	}
 
 	RETURN(0);

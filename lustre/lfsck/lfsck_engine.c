@@ -1070,7 +1070,7 @@ int lfsck_master_engine(void *args)
 
 	thread_set_flags(thread, SVC_RUNNING);
 	spin_unlock(&lfsck->li_lock);
-	wake_up_all(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	wait_event_idle(thread->t_ctl_waitq,
 			lfsck->li_start_unplug ||
@@ -1117,7 +1117,7 @@ fini_args:
 	thread_set_flags(thread, SVC_STOPPED);
 	lfsck->li_task = NULL;
 	spin_unlock(&lfsck->li_lock);
-	wake_up_all(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	lfsck_thread_args_fini(lta);
 	return rc;
 }
@@ -1598,7 +1598,7 @@ int lfsck_assistant_engine(void *args)
 	lad->lad_task = current;
 	thread_set_flags(athread, SVC_RUNNING);
 	spin_unlock(&lad->lad_lock);
-	wake_up_all(&mthread->t_ctl_waitq);
+	wake_up(&mthread->t_ctl_waitq);
 
 	while (1) {
 		while (!list_empty(&lad->lad_req_list)) {
@@ -1627,7 +1627,7 @@ int lfsck_assistant_engine(void *args)
 				wakeup = true;
 			spin_unlock(&lad->lad_lock);
 			if (wakeup)
-				wake_up_all(&mthread->t_ctl_waitq);
+				wake_up(&mthread->t_ctl_waitq);
 
 			lao->la_req_fini(env, lar);
 			if (rc < 0 && bk->lb_param & LPF_FAILOUT)
@@ -1657,7 +1657,7 @@ int lfsck_assistant_engine(void *args)
 			LASSERT(lad->lad_post_result > 0);
 
 			/* Wakeup the master engine to go ahead. */
-			wake_up_all(&mthread->t_ctl_waitq);
+			wake_up(&mthread->t_ctl_waitq);
 
 			memset(lr, 0, sizeof(*lr));
 			lr->lr_event = LE_PHASE1_DONE;
@@ -1674,7 +1674,7 @@ int lfsck_assistant_engine(void *args)
 			clear_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags);
 			atomic_inc(&lfsck->li_double_scan_count);
 			set_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags);
-			wake_up_all(&mthread->t_ctl_waitq);
+			wake_up(&mthread->t_ctl_waitq);
 
 			com->lc_new_checked = 0;
 			com->lc_new_scanned = 0;
@@ -1844,7 +1844,7 @@ fini:
 	       lad->lad_assistant_status);
 
 	lfsck_thread_args_fini(lta);
-	wake_up_all(&mthread->t_ctl_waitq);
+	wake_up(&mthread->t_ctl_waitq);
 
 	return rc;
 }

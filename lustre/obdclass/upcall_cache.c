@@ -125,7 +125,7 @@ static int check_unlink_entry(struct upcall_cache *cache,
 			return 0;
 
 		UC_CACHE_SET_EXPIRED(entry);
-		wake_up_all(&entry->ue_waitq);
+		wake_up(&entry->ue_waitq);
 	} else if (!UC_CACHE_IS_INVALID(entry)) {
 		UC_CACHE_SET_EXPIRED(entry);
 	}
@@ -202,7 +202,7 @@ find_again:
 		if (rc < 0) {
 			UC_CACHE_CLEAR_ACQUIRING(entry);
 			UC_CACHE_SET_INVALID(entry);
-			wake_up_all(&entry->ue_waitq);
+			wake_up(&entry->ue_waitq);
 			if (unlikely(rc == -EREMCHG)) {
 				put_entry(cache, entry);
 				GOTO(out, entry = ERR_PTR(rc));
@@ -350,7 +350,7 @@ out:
 	}
 	UC_CACHE_CLEAR_ACQUIRING(entry);
 	spin_unlock(&cache->uc_lock);
-	wake_up_all(&entry->ue_waitq);
+	wake_up(&entry->ue_waitq);
 	put_entry(cache, entry);
 
 	RETURN(rc);

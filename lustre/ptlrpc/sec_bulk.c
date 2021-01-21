@@ -475,7 +475,7 @@ static inline void enc_pools_wakeup(void)
 
 	if (unlikely(page_pools.epp_waitqlen)) {
 		LASSERT(waitqueue_active(&page_pools.epp_waitq));
-		wake_up_all(&page_pools.epp_waitq);
+		wake_up(&page_pools.epp_waitq);
 	}
 }
 

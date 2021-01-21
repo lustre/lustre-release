@@ -5577,7 +5577,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 		lad->lad_prefetched++;
 		spin_unlock(&lad->lad_lock);
 		if (wakeup)
-			wake_up_all(&athread->t_ctl_waitq);
+			wake_up(&athread->t_ctl_waitq);
 
 next:
 		down_write(&com->lc_sem);
@@ -6305,7 +6305,7 @@ done:
 			(rc > 0 && lo->ll_flags & LF_INCOMPLETE) ? 0 : rc);
 	lfsck_layout_slave_quit(env, com);
 	if (atomic_dec_and_test(&lfsck->li_double_scan_count))
-		wake_up_all(&lfsck->li_thread.t_ctl_waitq);
+		wake_up(&lfsck->li_thread.t_ctl_waitq);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave phase2 scan finished, "
 	       "status %d: rc = %d\n",
@@ -6561,7 +6561,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		stop->ls_flags = lr->lr_param & ~LPF_BROADCAST;
 		lfsck_stop(env, lfsck->li_bottom, stop);
 	} else if (lfsck_phase2_next_ready(lad)) {
-		wake_up_all(&lad->lad_thread.t_ctl_waitq);
+		wake_up(&lad->lad_thread.t_ctl_waitq);
 	}
 
 	RETURN(0);
@@ -6645,7 +6645,7 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 							      true);
 			if (llst != NULL) {
 				lfsck_layout_llst_put(llst);
-				wake_up_all(&lfsck->li_thread.t_ctl_waitq);
+				wake_up(&lfsck->li_thread.t_ctl_waitq);
 			}
 		}
 
@@ -6667,7 +6667,7 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 
 	lfsck_layout_llst_put(llst);
 	if (list_empty(&llsd->llsd_master_list))
-		wake_up_all(&lfsck->li_thread.t_ctl_waitq);
+		wake_up(&lfsck->li_thread.t_ctl_waitq);
 
 	if (lr->lr_event == LE_PEER_EXIT &&
 	    (lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT ||

@@ -301,7 +301,7 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq, __u64 seqnr,
 	}
 
 	--seq->lcs_update;
-	wake_up_all(&seq->lcs_waitq);
+	wake_up(&seq->lcs_waitq);
 }
 
 /**

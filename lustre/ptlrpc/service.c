@@ -3013,7 +3013,7 @@ static void ptlrpc_stop_hr_threads(void)
 		if (hrp->hrp_thrs == NULL)
 			continue; /* uninitialized */
 		for (j = 0; j < hrp->hrp_nthrs; j++)
-			wake_up_all(&hrp->hrp_thrs[j].hrt_waitq);
+			wake_up(&hrp->hrp_thrs[j].hrt_waitq);
 	}
 
 	cfs_percpt_for_each(hrp, i, ptlrpc_hr.hr_partitions) {

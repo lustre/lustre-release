@@ -414,7 +414,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 	}
 
 	if (waitqueue_active(wq))
-		wake_up_all(wq);
+		wake_up(wq);
 }
 
 /**

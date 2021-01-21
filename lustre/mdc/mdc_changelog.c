@@ -260,7 +260,7 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 	crs->crs_rec_count++;
 	mutex_unlock(&crs->crs_lock);
 
-	wake_up_all(&crs->crs_waitq_cons);
+	wake_up(&crs->crs_waitq_cons);
 
 	RETURN(0);
 }
@@ -349,7 +349,7 @@ err_out:
 	if (rc < 0)
 		crs->crs_err = rc;
 
-	wake_up_all(&crs->crs_waitq_cons);
+	wake_up(&crs->crs_waitq_cons);
 
 	if (llh != NULL)
 		llog_cat_close(NULL, llh);
@@ -421,7 +421,7 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 
 	if (written_total > 0) {
 		rc = written_total;
-		wake_up_all(&crs->crs_waitq_prod);
+		wake_up(&crs->crs_waitq_prod);
 	} else if (rc == 0) {
 		rc = crs->crs_err;
 	}
@@ -464,7 +464,7 @@ static int chlg_set_start_offset(struct chlg_reader_state *crs, __u64 offset)
 	}
 
 	mutex_unlock(&crs->crs_lock);
-	wake_up_all(&crs->crs_waitq_prod);
+	wake_up(&crs->crs_waitq_prod);
 	return 0;
 }
 

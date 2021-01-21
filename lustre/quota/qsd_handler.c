@@ -65,7 +65,7 @@ static inline void qsd_request_exit(struct lquota_entry *lqe)
 	}
 	lqe->lqe_pending_req--;
 	lqe->lqe_pending_rel = 0;
-	wake_up_all(&lqe->lqe_waiters);
+	wake_up(&lqe->lqe_waiters);
 }
 
 /**

@@ -82,9 +82,8 @@ kgnilnd_schedule_device(kgn_device_t *dev)
 	 * has come around and set ready to zero */
 	already_live = cmpxchg(&dev->gnd_ready, GNILND_DEV_IDLE, GNILND_DEV_IRQ);
 
-	if (!already_live) {
-		wake_up_all(&dev->gnd_waitq);
-	}
+	if (!already_live)
+		wake_up(&dev->gnd_waitq);
 }
 
 void kgnilnd_schedule_device_timer(cfs_timer_cb_arg_t data)

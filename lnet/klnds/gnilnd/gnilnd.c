@@ -2488,13 +2488,13 @@ kgnilnd_base_shutdown(void)
 		kgnilnd_unmap_fma_blocks(dev);
 
 		kgnilnd_schedule_device(dev);
-		wake_up_all(&dev->gnd_dgram_waitq);
-		wake_up_all(&dev->gnd_dgping_waitq);
+		wake_up(&dev->gnd_dgram_waitq);
+		wake_up(&dev->gnd_dgping_waitq);
 		LASSERT(list_empty(&dev->gnd_connd_peers));
 	}
 
 	spin_lock(&kgnilnd_data.kgn_reaper_lock);
-	wake_up_all(&kgnilnd_data.kgn_reaper_waitq);
+	wake_up(&kgnilnd_data.kgn_reaper_waitq);
 	spin_unlock(&kgnilnd_data.kgn_reaper_lock);
 
 	if (atomic_read(&kgnilnd_data.kgn_nthreads))

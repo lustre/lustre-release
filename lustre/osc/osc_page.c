@@ -679,7 +679,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	atomic_dec(&cli->cl_lru_shrinkers);
 	if (count > 0) {
 		atomic_long_add(count, cli->cl_lru_left);
-		wake_up_all(&osc_lru_waitq);
+		wake_up(&osc_lru_waitq);
 	}
 	RETURN(count > 0 ? count : rc);
 }
@@ -890,7 +890,7 @@ again:
 void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
 {
 	atomic_long_add(npages, cli->cl_lru_left);
-	wake_up_all(&osc_lru_waitq);
+	wake_up(&osc_lru_waitq);
 }
 
 /**
@@ -993,7 +993,7 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 					   &cli->cl_cache->ccc_unstable_nr);
 	LASSERT(unstable_count >= 0);
 	if (unstable_count == 0)
-		wake_up_all(&cli->cl_cache->ccc_unstable_waitq);
+		wake_up(&cli->cl_cache->ccc_unstable_waitq);
 
 	if (waitqueue_active(&osc_lru_waitq))
 		(void)ptlrpcd_queue_work(cli->cl_lru_work);

@@ -565,7 +565,7 @@ static int mdt_coordinator(void *data)
 	set_cdt_state(cdt, CDT_RUNNING);
 
 	/* Inform mdt_hsm_cdt_start(). */
-	wake_up_all(&cdt->cdt_waitq);
+	wake_up(&cdt->cdt_waitq);
 
 	while (1) {
 		int i;

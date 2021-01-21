@@ -1548,7 +1548,7 @@ static void pcc_io_fini(struct inode *inode)
 
 	LASSERT(pcci && atomic_read(&pcci->pcci_active_ios) > 0);
 	if (atomic_dec_and_test(&pcci->pcci_active_ios))
-		wake_up_all(&pcci->pcci_waitq);
+		wake_up(&pcci->pcci_waitq);
 }
 
 
