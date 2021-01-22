@@ -250,59 +250,6 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int seq_fid_alloc_prep(struct lu_client_seq *seq,
-			      wait_queue_entry_t *link)
-{
-	if (seq->lcs_update) {
-		add_wait_queue(&seq->lcs_waitq, link);
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		mutex_unlock(&seq->lcs_mutex);
-
-		schedule();
-
-		mutex_lock(&seq->lcs_mutex);
-		remove_wait_queue(&seq->lcs_waitq, link);
-		set_current_state(TASK_RUNNING);
-		return -EAGAIN;
-	}
-
-	++seq->lcs_update;
-	mutex_unlock(&seq->lcs_mutex);
-
-	return 0;
-}
-
-static void seq_fid_alloc_fini(struct lu_client_seq *seq, __u64 seqnr,
-			       bool whole)
-{
-	LASSERT(seq->lcs_update == 1);
-
-	mutex_lock(&seq->lcs_mutex);
-	if (seqnr != 0) {
-		CDEBUG(D_INFO, "%s: New sequence [0x%16.16llx]\n",
-		       seq->lcs_name, seqnr);
-
-		seq->lcs_fid.f_seq = seqnr;
-		if (whole) {
-			/*
-			 * Since the caller require the whole seq,
-			 * so marked this seq to be used
-			 */
-			if (seq->lcs_type == LUSTRE_SEQ_METADATA)
-				seq->lcs_fid.f_oid =
-					LUSTRE_METADATA_SEQ_MAX_WIDTH;
-			else
-				seq->lcs_fid.f_oid = LUSTRE_DATA_SEQ_MAX_WIDTH;
-		} else {
-			seq->lcs_fid.f_oid = LUSTRE_FID_INIT_OID;
-		}
-		seq->lcs_fid.f_ver = 0;
-	}
-
-	--seq->lcs_update;
-	wake_up(&seq->lcs_waitq);
-}
-
 /**
  * Allocate the whole non-used seq to the caller.
  *
@@ -316,23 +263,31 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq, __u64 seqnr,
 int seq_client_get_seq(const struct lu_env *env,
 		       struct lu_client_seq *seq, u64 *seqnr)
 {
-	wait_queue_entry_t link;
 	int rc;
 
 	LASSERT(seqnr != NULL);
 
 	mutex_lock(&seq->lcs_mutex);
-	init_wait(&link);
-
-	/* To guarantee that we can get a whole non-used sequence. */
-	while (seq_fid_alloc_prep(seq, &link) != 0)
-		; /* do nothing */
 
 	rc = seq_client_alloc_seq(env, seq, seqnr);
-	seq_fid_alloc_fini(seq, rc ? 0 : *seqnr, true);
-	if (rc)
+	if (rc) {
 		CERROR("%s: Can't allocate new sequence: rc = %d\n",
 		       seq->lcs_name, rc);
+	} else {
+		CDEBUG(D_INFO, "%s: New sequence [0x%16.16llx]\n",
+		       seq->lcs_name, *seqnr);
+		seq->lcs_fid.f_seq = *seqnr;
+		seq->lcs_fid.f_ver = 0;
+		/*
+		 *  The caller require the whole seq,
+		 * so marked this seq to be used
+		 */
+		if (seq->lcs_type == LUSTRE_SEQ_METADATA)
+			seq->lcs_fid.f_oid =
+				LUSTRE_METADATA_SEQ_MAX_WIDTH;
+		else
+			seq->lcs_fid.f_oid = LUSTRE_DATA_SEQ_MAX_WIDTH;
+	}
 	mutex_unlock(&seq->lcs_mutex);
 
 	return rc;
@@ -354,58 +309,47 @@ EXPORT_SYMBOL(seq_client_get_seq);
 int seq_client_alloc_fid(const struct lu_env *env,
 			 struct lu_client_seq *seq, struct lu_fid *fid)
 {
-	wait_queue_entry_t link;
 	int rc;
 	ENTRY;
 
 	LASSERT(seq != NULL);
 	LASSERT(fid != NULL);
 
-	init_wait(&link);
 	mutex_lock(&seq->lcs_mutex);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_EXHAUST))
 		seq->lcs_fid.f_oid = seq->lcs_width;
 
-	while (1) {
+	if (unlikely(!fid_is_zero(&seq->lcs_fid) &&
+		     fid_oid(&seq->lcs_fid) < seq->lcs_width)) {
+		/* Just bump last allocated fid and return to caller. */
+		seq->lcs_fid.f_oid++;
+		rc = 0;
+	} else {
 		u64 seqnr;
 
-		if (unlikely(!fid_is_zero(&seq->lcs_fid) &&
-			     fid_oid(&seq->lcs_fid) < seq->lcs_width)) {
-			/* Just bump last allocated fid and return to caller. */
-			seq->lcs_fid.f_oid++;
-			rc = 0;
-			break;
-		}
-
-		/*
-		 * Release seq::lcs_mutex via seq_fid_alloc_prep() to avoid
-		 * deadlock during seq_client_alloc_seq().
-		 */
-		rc = seq_fid_alloc_prep(seq, &link);
-		if (rc)
-			continue;
-
 		rc = seq_client_alloc_seq(env, seq, &seqnr);
-		/* Re-take seq::lcs_mutex via seq_fid_alloc_fini(). */
-		seq_fid_alloc_fini(seq, rc ? 0 : seqnr, false);
 		if (rc) {
 			if (rc != -EINPROGRESS)
 				CERROR("%s: Can't allocate new sequence: rc = %d\n",
 				       seq->lcs_name, rc);
-			mutex_unlock(&seq->lcs_mutex);
+		} else {
+			CDEBUG(D_INFO, "%s: New sequence [0x%16.16llx]\n",
+			       seq->lcs_name, seqnr);
 
-			RETURN(rc);
+			seq->lcs_fid.f_seq = seqnr;
+			seq->lcs_fid.f_oid = LUSTRE_FID_INIT_OID;
+			seq->lcs_fid.f_ver = 0;
+			rc = 1;
 		}
-
-		rc = 1;
-		break;
 	}
 
-	*fid = seq->lcs_fid;
+	if (rc >= 0) {
+		*fid = seq->lcs_fid;
+		CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name,
+		       PFID(fid));
+	}
 	mutex_unlock(&seq->lcs_mutex);
-
-	CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name,  PFID(fid));
 
 	RETURN(rc);
 }
@@ -417,23 +361,8 @@ EXPORT_SYMBOL(seq_client_alloc_fid);
  */
 void seq_client_flush(struct lu_client_seq *seq)
 {
-	wait_queue_entry_t link;
-
 	LASSERT(seq != NULL);
-	init_wait(&link);
 	mutex_lock(&seq->lcs_mutex);
-
-	while (seq->lcs_update) {
-		add_wait_queue(&seq->lcs_waitq, &link);
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		mutex_unlock(&seq->lcs_mutex);
-
-		schedule();
-
-		mutex_lock(&seq->lcs_mutex);
-		remove_wait_queue(&seq->lcs_waitq, &link);
-		set_current_state(TASK_RUNNING);
-	}
 
 	fid_zero(&seq->lcs_fid);
 	/**
@@ -497,7 +426,6 @@ void seq_client_init(struct lu_client_seq *seq,
 	else
 		seq->lcs_width = LUSTRE_DATA_SEQ_MAX_WIDTH;
 
-	init_waitqueue_head(&seq->lcs_waitq);
 	/* Make sure that things are clear before work is started. */
 	seq_client_flush(seq);
 
