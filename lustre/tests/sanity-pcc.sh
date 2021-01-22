@@ -17,6 +17,7 @@ ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
+HSMTOOL_ARCHIVE_FORMAT=v1
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
@@ -113,21 +114,24 @@ lpcc_fid2path()
 	local lustre_path="$2"
 	local fid=$(path2fid $lustre_path)
 
-	local -a f_seq
-	local -a f_oid
-	local -a f_ver
+	local seq=$(echo $fid | awk -F ':' '{print $1}')
+	local oid=$(echo $fid | awk -F ':' '{print $2}')
+	local ver=$(echo $fid | awk -F ':' '{print $3}')
 
-	f_seq=$(echo $fid | awk -F ':' '{print $1}')
-	f_oid=$(echo $fid | awk -F ':' '{print $2}')
-	f_ver=$(echo $fid | awk -F ':' '{print $3}')
-
-	printf "%s/%04x/%04x/%04x/%04x/%04x/%04x/%s" \
-		$hsm_root $(($f_oid & 0xFFFF)) \
-		$(($f_oid >> 16 & 0xFFFF)) \
-		$(($f_seq & 0xFFFF)) \
-		$(($f_seq >> 16 & 0xFFFF)) \
-		$(($f_seq >> 32 & 0xFFFF)) \
-		$(($f_seq >> 48 & 0xFFFF)) $fid
+	case "$HSMTOOL_ARCHIVE_FORMAT" in
+		v1)
+			printf "%s/%04x/%04x/%04x/%04x/%04x/%04x/%s" \
+				$hsm_root $((oid & 0xFFFF)) \
+				$((oid >> 16 & 0xFFFF)) \
+				$((seq & 0xFFFF)) \
+				$((seq >> 16 & 0xFFFF)) \
+				$((seq >> 32 & 0xFFFF)) \
+				$((seq >> 48 & 0xFFFF)) $fid
+			;;
+		v2)
+			printf "%s/%04x/%s" $hsm_root $(((oid ^ seq) & 0xFFFF)) $fid
+			;;
+	esac
 }
 
 check_lpcc_state()

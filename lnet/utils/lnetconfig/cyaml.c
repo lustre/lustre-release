@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <float.h>
 #include <limits.h>
 #include <ctype.h>
@@ -1302,49 +1303,19 @@ failed:
 	fprintf(stderr, "error:\n\tfatal: out of memory\n");
 }
 
-struct cYAML *cYAML_build_tree(char *yaml_file,
-			       const char *yaml_blk,
-			       size_t yaml_blk_size,
-			       struct cYAML **err_rc,
-			       bool debug)
+static struct cYAML *
+cYAML_parser_to_tree(yaml_parser_t *parser, struct cYAML **err_rc, bool debug)
 {
-	yaml_parser_t parser;
 	yaml_token_t token;
 	struct cYAML_tree_node tree;
 	enum cYAML_handler_error rc;
 	yaml_token_type_t token_type;
 	char err_str[256];
-	FILE *input = NULL;
 	int done = 0;
 
 	memset(&tree, 0, sizeof(struct cYAML_tree_node));
 
 	INIT_LIST_HEAD(&tree.ll);
-
-	/* Create the Parser object. */
-	yaml_parser_initialize(&parser);
-
-	/* file always takes precedence */
-	if (yaml_file != NULL) {
-		/* Set a file input. */
-		input = fopen(yaml_file, "rb");
-		if (input == NULL) {
-			snprintf(err_str, sizeof(err_str),
-				"Failed to open file: %s", yaml_file);
-			cYAML_build_error(-1, -1, "yaml", "builder",
-					  err_str,
-					  err_rc);
-			return NULL;
-		}
-
-		yaml_parser_set_input_file(&parser, input);
-	} else if (yaml_blk != NULL) {
-		yaml_parser_set_input_string(&parser,
-					     (const unsigned char *) yaml_blk,
-					     yaml_blk_size);
-	} else
-		/* assume that we're getting our input froms stdin */
-		yaml_parser_set_input_file(&parser, stdin);
 
 	/* Read the event sequence. */
 	while (!done) {
@@ -1352,7 +1323,7 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 		 * Go through the parser and build a cYAML representation
 		 * of the passed in YAML text
 		 */
-		yaml_parser_scan(&parser, &token);
+		yaml_parser_scan(parser, &token);
 
 		if (debug)
 			fprintf(stderr, "tree.state(%p:%d) = %s, token.type ="
@@ -1380,12 +1351,6 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 		yaml_token_delete(&token);
 	}
 
-	/* Destroy the Parser object. */
-	yaml_parser_delete(&parser);
-
-	if (input != NULL)
-		fclose(input);
-
 	if (token_type == YAML_STREAM_END_TOKEN &&
 	    rc == CYAML_ERROR_NONE)
 		return tree.root;
@@ -1393,4 +1358,67 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 	cYAML_free_tree(tree.root);
 
 	return NULL;
+}
+
+struct cYAML *cYAML_load(FILE *file, struct cYAML **err_rc, bool debug)
+{
+	yaml_parser_t parser;
+	struct cYAML *yaml;
+
+	yaml_parser_initialize(&parser);
+	yaml_parser_set_input_file(&parser, file);
+
+	yaml = cYAML_parser_to_tree(&parser, err_rc, debug);
+
+	yaml_parser_delete(&parser);
+
+	return yaml;
+}
+
+struct cYAML *cYAML_build_tree(char *path,
+			       const char *yaml_blk,
+			       size_t yaml_blk_size,
+			       struct cYAML **err_rc,
+			       bool debug)
+{
+	yaml_parser_t parser;
+	struct cYAML *yaml;
+	char err_str[256];
+	FILE *input = NULL;
+
+	/* Create the Parser object. */
+	yaml_parser_initialize(&parser);
+
+	/* file always takes precedence */
+	if (path != NULL) {
+		/* Set a file input. */
+		input = fopen(path, "rb");
+		if (input == NULL) {
+			snprintf(err_str, sizeof(err_str),
+				"cannot open '%s': %s", path, strerror(errno));
+			cYAML_build_error(-1, -1, "yaml", "builder",
+					  err_str,
+					  err_rc);
+			return NULL;
+		}
+
+		yaml_parser_set_input_file(&parser, input);
+	} else if (yaml_blk != NULL) {
+		yaml_parser_set_input_string(&parser,
+					     (const unsigned char *) yaml_blk,
+					     yaml_blk_size);
+	} else {
+		/* assume that we're getting our input froms stdin */
+		yaml_parser_set_input_file(&parser, stdin);
+	}
+
+	yaml = cYAML_parser_to_tree(&parser, err_rc, debug);
+
+	/* Destroy the Parser object. */
+	yaml_parser_delete(&parser);
+
+	if (input != NULL)
+		fclose(input);
+
+	return yaml;
 }

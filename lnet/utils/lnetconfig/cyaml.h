@@ -77,15 +77,23 @@ typedef void (*cYAML_user_data_free_cb)(void *);
 typedef bool (*cYAML_walk_cb)(struct cYAML *, void *, void**);
 
 /*
+ * cYAML_load()
+ *   Build a tree representation of the YAML formatted text in file.
+ *
+ *   file - YAML file to parse and build tree representation
+ */
+struct cYAML *cYAML_load(FILE *file, struct cYAML **err_rc, bool debug);
+
+/*
  * cYAML_build_tree
  *   Build a tree representation of the YAML formatted text passed in.
  *
- *   yaml_file - YAML file to parse and build tree representation
+ *   path - YAML file to parse and build tree representation
  *   yaml_blk - blk of YAML.  yaml_file takes precedence if both
  *   are defined.
  *   yaml_blk_size - length of the yaml block (obtained via strlen)
  */
-struct cYAML *cYAML_build_tree(char *yaml_file, const char *yaml_blk,
+struct cYAML *cYAML_build_tree(char *path, const char *yaml_blk,
 				size_t yaml_blk_size,
 				struct cYAML **err_str, bool debug);
 

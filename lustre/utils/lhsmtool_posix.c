@@ -58,7 +58,9 @@
 
 #include <libcfs/util/string.h>
 #include <linux/lustre/lustre_fid.h>
+#include <lnetconfig/cyaml.h>
 #include <lustre/lustreapi.h>
+#include "lstddef.h"
 #include "pid_file.h"
 
 /* Progress reporting period */
@@ -78,7 +80,47 @@ enum ct_action {
 	CA_IMPORT = 1,
 	CA_REBIND,
 	CA_MAXSEQ,
+	CA_ARCHIVE_UPGRADE,
 };
+
+enum ct_archive_format {
+	/* v1 (original) using 6 directories (oid & 0xffff)/-/-/-/-/-/FID.
+	 * Places only one FID per directory. See ct_path_archive() below. */
+	CT_ARCHIVE_FORMAT_V1 = 1,
+	/* v2 using 1 directory (oid & 0xffff)/FID. */
+	CT_ARCHIVE_FORMAT_V2 = 2,
+};
+
+static const char *ct_archive_format_name[] = {
+	[CT_ARCHIVE_FORMAT_V1] = "v1",
+	[CT_ARCHIVE_FORMAT_V2] = "v2",
+};
+
+static int
+ct_str_to_archive_format(const char *str, enum ct_archive_format *pctaf)
+{
+	enum ct_archive_format ctaf;
+
+	for (ctaf = 0; ctaf < ARRAY_SIZE(ct_archive_format_name); ctaf++) {
+		if (ct_archive_format_name[ctaf] != NULL &&
+		    strcmp(ct_archive_format_name[ctaf], str) == 0) {
+			*pctaf = ctaf;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
+static const char *ct_archive_format_to_str(enum ct_archive_format ctaf)
+{
+	if (0 <= ctaf &&
+	    ctaf < ARRAY_SIZE(ct_archive_format_name) &&
+	    ct_archive_format_name[ctaf] != NULL)
+		return ct_archive_format_name[ctaf];
+
+	return "null";
+}
 
 struct options {
 	int			 o_copy_attrs;
@@ -88,6 +130,8 @@ struct options {
 	int			 o_shadow_tree;
 	int			 o_verbose;
 	int			 o_copy_xattrs;
+	const char		*o_config_path;
+	enum ct_archive_format	 o_archive_format;
 	int			 o_archive_id_used;
 	int			 o_archive_id_cnt;
 	int			*o_archive_id;
@@ -110,6 +154,7 @@ struct options opt = {
 	.o_shadow_tree = 1,
 	.o_verbose = LLAPI_MSG_INFO,
 	.o_copy_xattrs = 1,
+	.o_archive_format = CT_ARCHIVE_FORMAT_V1,
 	.o_report_int = REPORT_INTERVAL_DEFAULT,
 	.o_chunk_size = ONE_MB,
 };
@@ -193,8 +238,13 @@ static void usage(const char *name, int rc)
 	"       each line of <list_file> consists of <old_FID> <new_FID>\n"
 	"   %s [options] --max-sequence <fsname>\n"
 	"       return the max fid sequence of archived files\n"
+	"   %s [options] --archive-upgrade=VER\n"
+	"      Upgrade or downgrade the archive to version VER\n"
+	"Options:\n"
 	"   --abort-on-error          Abort operation on major error\n"
 	"   -A, --archive <#>         Archive number (repeatable)\n"
+	"   -C, --config=PATH	      Read config from PATH\n"
+	"   -F, --archive-format=VER  Use archive format VER\n"
 	"   -b, --bandwidth <bw>      Limit I/O bandwidth (unit can be used\n,"
 	"                             default is MB)\n"
 	"   --dry-run                 Don't run, just show what would be done\n"
@@ -207,7 +257,7 @@ static void usage(const char *name, int rc)
 	"   -u, --update-interval <s> Interval between progress reports sent\n"
 	"                             to Coordinator\n"
 	"   -v, --verbose             Produce more verbose output\n",
-	cmd_name, cmd_name, cmd_name, cmd_name, cmd_name);
+	cmd_name, cmd_name, cmd_name, cmd_name, cmd_name, cmd_name);
 
 	exit(rc);
 }
@@ -221,10 +271,13 @@ static int ct_parseopts(int argc, char * const *argv)
 	  .flag = &opt.o_abort_on_error,	.has_arg = no_argument },
 	{ .val = 'A',	.name = "archive",	.has_arg = required_argument },
 	{ .val = 'b',	.name = "bandwidth",	.has_arg = required_argument },
+	{ .val = 'C',	.name = "config",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "chunk-size",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "chunk_size",	.has_arg = required_argument },
 	{ .val = 1,	.name = "daemon",	.has_arg = no_argument,
 	  .flag = &opt.o_daemonize },
+	{ .val = 'F',	.name = "archive-format", .has_arg = required_argument },
+	{ .val = 'U',	.name = "archive-upgrade", .has_arg = required_argument },
 	{ .val = 'f',	.name = "event-fifo",	.has_arg = required_argument },
 	{ .val = 'f',	.name = "event_fifo",	.has_arg = required_argument },
 	{ .val = 1,	.name = "dry-run",	.has_arg = no_argument,
@@ -271,7 +324,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	if (opt.o_archive_id == NULL)
 		return -ENOMEM;
 repeat:
-	while ((c = getopt_long(argc, argv, "A:b:c:f:hiMp:P:qru:v",
+	while ((c = getopt_long(argc, argv, "A:b:C:c:F:f:hiMp:P:qrU:u:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'A': {
@@ -334,6 +387,25 @@ repeat:
 			else
 				opt.o_bandwidth = value;
 			break;
+		case 'C':
+			opt.o_config_path = optarg;
+			break;
+		case 'F':
+			rc = ct_str_to_archive_format(optarg, &opt.o_archive_format);
+			if (rc < 0) {
+				CT_ERROR(rc, "invalid archive format '%s'", optarg);
+				return -EINVAL;
+			}
+			break;
+		case 'U':
+			rc = ct_str_to_archive_format(optarg, &opt.o_archive_format);
+			if (rc < 0) {
+				CT_ERROR(rc, "invalid archive format '%s'", optarg);
+				return -EINVAL;
+			}
+			opt.o_action = CA_ARCHIVE_UPGRADE;
+			break;
+
 		case 'f':
 			opt.o_event_fifo = optarg;
 			break;
@@ -407,6 +479,9 @@ repeat:
 		break;
 	}
 
+	if (opt.o_action == CA_ARCHIVE_UPGRADE)
+		return 0;
+
 	if (argc != optind + 1) {
 		rc = -EINVAL;
 		CT_ERROR(rc, "no mount point specified");
@@ -418,12 +493,6 @@ repeat:
 
 	CT_TRACE("action=%d src=%s dst=%s mount_point=%s",
 		 opt.o_action, opt.o_src, opt.o_dst, opt.o_mnt);
-
-	if (opt.o_hsm_root == NULL) {
-		rc = -EINVAL;
-		CT_ERROR(rc, "must specify a root directory for the backend");
-		return rc;
-	}
 
 	if (opt.o_action == CA_IMPORT) {
 		if (opt.o_src && opt.o_src[0] == '/') {
@@ -443,36 +512,62 @@ repeat:
 	return 0;
 }
 
-/* mkdir -p path */
-static int ct_mkdir_p(const char *path)
+static int ct_mkdirat_p(int fd, char *path, mode_t mode)
 {
-	char	*saved, *ptr;
-	int	 rc;
+	char *split;
+	int rc;
 
-	ptr = strdup(path);
-	if (ptr == NULL)
+	if (strlen(path) == 0 || strcmp(path, ".") == 0)
+		return 0;
+
+	rc = mkdirat(fd, path, mode);
+	if (rc == 0 || errno == EEXIST)
+		return 0;
+
+	if (errno != ENOENT)
 		return -errno;
 
-	saved = ptr;
-	while (*ptr == '/')
-		ptr++;
+	split = strrchr(path, '/');
+	if (split == NULL)
+		return -ENOENT;
 
-	while ((ptr = strchr(ptr, '/')) != NULL) {
-		*ptr = '\0';
-		rc = mkdir(saved, DIR_PERM);
-		*ptr = '/';
-		if (rc < 0 && errno != EEXIST) {
-			rc = -errno;
-			CT_ERROR(rc, "cannot mkdir '%s'", path);
-			free(saved);
-			return rc;
-		}
-		ptr++;
+	*split = '\0';
+	rc = ct_mkdirat_p(fd, path, mode);
+	*split = '/';
+	if (rc < 0)
+		return rc;
+
+	rc = mkdirat(fd, path, mode);
+	if (rc == 0 || errno == EEXIST)
+		return 0;
+
+	return -errno;
+}
+
+/* XXX Despite the name, this is 'mkdir -p $(dirname path)' */
+static int ct_mkdir_p(const char *path)
+{
+	char *path2;
+	char *split;
+	int rc;
+
+	path2 = strdup(path);
+	if (path2 == NULL)
+		return -ENOMEM;
+
+	split = strrchr(path2, '/');
+	if (split == NULL) {
+		rc = 0;
+		goto out;
 	}
 
-	free(saved);
+	*split = '\0';
 
-	return 0;
+	rc = ct_mkdirat_p(AT_FDCWD, path2, DIR_PERM);
+out:
+	free(path2);
+
+	return rc;
 }
 
 static int ct_save_stripe(int src_fd, const char *src, const char *dst)
@@ -855,18 +950,41 @@ static int ct_path_lustre(char *buf, int sz, const char *mnt,
 			 dot_lustre_name, PFID(fid));
 }
 
-static int ct_path_archive(char *buf, int sz, const char *archive_dir,
-			   const struct lu_fid *fid)
+static int ct_path_archive_v(char *buf, size_t buf_size,
+			     enum ct_archive_format ctaf,
+			     const char *archive_path,
+			     const struct lu_fid *fid,
+			     const char *suffix)
 {
-	return scnprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
-			 DFID_NOBRACE, archive_dir,
-			 (fid)->f_oid       & 0xFFFF,
-			 (fid)->f_oid >> 16 & 0xFFFF,
-			 (unsigned int)((fid)->f_seq       & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			 PFID(fid));
+	switch (ctaf) {
+	case CT_ARCHIVE_FORMAT_V1:
+		return scnprintf(buf, buf_size,
+				 "%s/%04x/%04x/%04x/%04x/%04x/%04x/"DFID_NOBRACE"%s",
+				 archive_path,
+				 (fid)->f_oid       & 0xFFFF,
+				 (fid)->f_oid >> 16 & 0xFFFF,
+				 (unsigned int)((fid)->f_seq       & 0xFFFF),
+				 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
+				 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
+				 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
+				 PFID(fid),
+				 suffix);
+	case CT_ARCHIVE_FORMAT_V2:
+		return scnprintf(buf, buf_size, "%s/%04x/"DFID_NOBRACE"%s",
+				 archive_path,
+				 (unsigned int)((fid)->f_oid ^ (fid)->f_seq) & 0xFFFF,
+				 PFID(fid),
+				 suffix);
+	default:
+		return -EINVAL;
+	}
+}
+
+static int ct_path_archive(char *buf, size_t buf_size,
+			   const char *archive_path, const struct lu_fid *fid)
+{
+	return ct_path_archive_v(buf, buf_size, opt.o_archive_format,
+				 archive_path, fid, "");
 }
 
 static bool ct_is_retryable(int err)
@@ -1783,6 +1901,178 @@ static int ct_rebind(void)
 	return rc;
 }
 
+static int ct_opendirat(int parent_fd, const char *name, DIR **pdir)
+{
+	DIR *dir = NULL;
+	int fd = -1;
+	int rc;
+
+	fd = openat(parent_fd, name, O_RDONLY|O_DIRECTORY);
+	if (fd < 0)
+		return -errno;
+
+	dir = fdopendir(fd);
+	if (dir == NULL) {
+		rc = -errno;
+		goto out;
+	}
+
+	*pdir = dir;
+	fd = -1;
+	rc = 0;
+out:
+	if (!(fd < 0))
+		close(fd);
+
+	return rc;
+}
+
+static int ct_archive_upgrade_reg(int arc_fd, enum ct_archive_format ctaf,
+				  int old_fd, const char *name)
+{
+	char new_path[PATH_MAX];
+	struct lu_fid fid;
+	char *split;
+	int scan_count;
+	int suffix_offset = -1;
+	int rc;
+
+	/* Formatted fix with optional suffix. We do not inspect
+	 * suffixes. */
+	scan_count = sscanf(name, SFID"%n", RFID(&fid), &suffix_offset);
+	if (scan_count != 3 || suffix_offset < 0) {
+		rc = 0;
+		CT_TRACE("ignoring unexpected file '%s' in archive", name);
+		goto out;
+	}
+
+	ct_path_archive_v(new_path, sizeof(new_path),
+			  ctaf, ".", &fid, name + suffix_offset);
+
+	rc = renameat(old_fd, name, arc_fd, new_path);
+	if (rc == 0)
+		goto out;
+
+	if (errno != ENOENT) {
+		rc = -errno;
+		goto out;
+	}
+
+	/* Create parent directory and try again. */
+	split = strrchr(new_path, '/');
+
+	*split = '\0';
+	rc = ct_mkdirat_p(arc_fd, new_path, DIR_PERM);
+	*split = '/';
+	if (rc < 0)
+		goto out;
+
+	rc = renameat(old_fd, name, arc_fd, new_path);
+	if (rc < 0)
+		rc = -errno;
+out:
+	if (rc < 0)
+		CT_ERROR(rc, "cannot rename '%s' to '%s'", name, new_path);
+	else
+		CT_TRACE("renamed '%s' to '%s'", name, new_path);
+
+	return rc;
+}
+
+static const char *d_type_name(unsigned int type)
+{
+	static const char *name[] = {
+		[DT_UNKNOWN] = "unknown",
+		[DT_FIFO] = "fifo",
+		[DT_CHR] = "chr",
+		[DT_DIR] = "dir",
+		[DT_BLK] = "blk",
+		[DT_REG] = "reg",
+		[DT_LNK] = "lnk",
+		[DT_SOCK] = "sock",
+		[DT_WHT] = "wht",
+	};
+
+	if (type < ARRAY_SIZE(name) && name[type] != NULL)
+		return name[type];
+
+	return name[DT_UNKNOWN];
+}
+
+static int ct_archive_upgrade_dir(int arc_fd, enum ct_archive_format ctaf,
+				  int parent_fd, const char *dir_name)
+{
+	DIR *dir = NULL;
+	struct dirent *d;
+	int rc = 0;
+	int rc2;
+
+	rc = ct_opendirat(parent_fd, dir_name, &dir);
+	if (rc < 0) {
+		CT_ERROR(rc, "cannot open archive dir '%s'", dir_name);
+		goto out;
+	}
+
+	while ((d = readdir(dir)) != NULL) {
+		CT_TRACE("archive upgrade found %s '%s' (%ld)\n",
+			 d_type_name(d->d_type), d->d_name, d->d_ino);
+
+		switch (d->d_type) {
+		case DT_DIR:
+			if (strcmp(d->d_name, ".") == 0 ||
+			    strcmp(d->d_name, "..") == 0)
+				continue;
+
+			if (strlen(d->d_name) != 4 ||
+			    strspn(d->d_name, "0123456789abcdef") != 4)
+				goto ignore;
+
+			rc2 = ct_archive_upgrade_dir(arc_fd, ctaf,
+						     dirfd(dir), d->d_name);
+			if (rc2 < 0) {
+				rc = rc2;
+				CT_ERROR(rc, "cannot upgrade dir '%s' (%ld)",
+					 d->d_name, d->d_ino);
+			}
+
+			rc2 = unlinkat(dirfd(dir), d->d_name, AT_REMOVEDIR);
+			CT_TRACE("unlink dir '%s' (%ld): %s",
+				 d->d_name, d->d_ino, strerror(rc2 < 0 ? errno: 0));
+			if (rc2 < 0 && errno != ENOTEMPTY)
+				rc = -errno;
+
+			break;
+		case DT_REG:
+			rc2 = ct_archive_upgrade_reg(arc_fd, ctaf,
+						     dirfd(dir), d->d_name);
+			if (rc2 < 0)
+				rc = rc2;
+
+			break;
+		default:
+ignore:
+			CT_TRACE("ignoring unexpected %s '%s' (%ld) in archive",
+				 d_type_name(d->d_type), d->d_name, d->d_ino);
+			break;
+		}
+	}
+out:
+	if (dir != NULL)
+		closedir(dir);
+
+	return rc;
+}
+
+/* Recursive inplace upgrade (or downgrade) of archive to format
+ * ctaf. Prunes empty archive subdirectories. Idempotent. */
+static int ct_archive_upgrade(int arc_fd, enum ct_archive_format ctaf)
+{
+	/* FIXME Handle shadow tree. */
+	CT_TRACE("upgrade archive to format %s", ct_archive_format_to_str(ctaf));
+
+	return ct_archive_upgrade_dir(arc_fd, ctaf, arc_fd, ".");
+}
+
 static int ct_dir_level_max(const char *dirpath, __u16 *sub_seqmax)
 {
 	DIR		*dir;
@@ -1988,19 +2278,120 @@ static int ct_run(void)
 	return rc;
 }
 
+static int ct_config_get_str(struct cYAML *obj, const char *key, char **pvalue)
+{
+	struct cYAML *cy;
+	char *value;
+
+	if (obj->cy_type != CYAML_TYPE_OBJECT)
+		return -EINVAL;
+
+	for (cy = obj->cy_child; cy != NULL; cy = cy->cy_next) {
+		if (cy->cy_string != NULL && strcmp(cy->cy_string, key) == 0) {
+			if (cy->cy_type != CYAML_TYPE_STRING)
+				return -EINVAL;
+
+			if (cy->cy_valuestring == NULL)
+				return -EINVAL;
+
+			value = strdup(cy->cy_valuestring);
+			if (value == NULL)
+				return -ENOMEM;
+
+			*pvalue = value;
+
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
+static int ct_config_archive_format(struct cYAML *config)
+{
+	char *value = NULL;
+	int rc;
+
+	rc = ct_config_get_str(config, "archive_format", &value);
+	if (rc < 0)
+		return (rc == -ENOENT) ? 0 : rc;
+
+	rc = ct_str_to_archive_format(value, &opt.o_archive_format);
+	if (rc < 0)
+		goto out;
+
+	CT_TRACE("setting archive format to %s",
+		 ct_archive_format_to_str(opt.o_archive_format));
+
+out:
+	free(value);
+
+	return 0;
+}
+
+static int ct_config_archive_path(struct cYAML *config)
+{
+	int rc;
+
+	rc = ct_config_get_str(config, "archive_path", &opt.o_hsm_root);
+	if (rc < 0)
+		return (rc == -ENOENT) ? 0 : rc;
+
+	CT_TRACE("setting archive path to '%s'", opt.o_hsm_root);
+
+	return 0;
+}
+
+static int ct_config(const char *path)
+{
+	FILE *file = NULL;
+	struct cYAML *config = NULL;
+	int rc;
+
+	if (path == NULL)
+		return 0;
+
+	file = fopen(path, "r");
+	if (file == NULL) {
+		rc = -errno;
+		CT_ERROR(rc, "cannot open '%s'", path);
+		goto out;
+	}
+
+	config = cYAML_load(file, NULL, false);
+	if (config == NULL) {
+		rc = -EINVAL;
+		CT_ERROR(rc, "cannot load archive config from '%s'", path);
+		goto out;
+	}
+
+	rc = ct_config_archive_format(config);
+	if (rc < 0) {
+		CT_ERROR(rc, "cannot load archive format from '%s'", path);
+		goto out;
+	}
+
+	rc = ct_config_archive_path(config);
+	if (rc < 0) {
+		CT_ERROR(rc, "cannot load archive path from '%s'", path);
+		goto out;
+	}
+out:
+	if (config != NULL)
+		cYAML_free_tree(config);
+
+	if (file != NULL)
+		fclose(file);
+
+	return rc;
+}
+
 static int ct_setup(void)
 {
 	int	rc;
 
-	/* set llapi message level */
-	llapi_msg_set_level(opt.o_verbose);
-
-	arc_fd = open(opt.o_hsm_root, O_RDONLY);
-	if (arc_fd < 0) {
-		rc = -errno;
-		CT_ERROR(rc, "cannot open archive at '%s'", opt.o_hsm_root);
-		return rc;
-	}
+	if (opt.o_action == CA_ARCHIVE_UPGRADE)
+		return 0;
 
 	rc = llapi_search_fsname(opt.o_mnt, fs_name);
 	if (rc < 0) {
@@ -2062,6 +2453,25 @@ int main(int argc, char **argv)
 		return -rc;
 	}
 
+	llapi_msg_set_level(opt.o_verbose);
+
+	rc = ct_config(opt.o_config_path);
+	if (rc < 0)
+		return -rc;
+
+	if (opt.o_hsm_root == NULL) {
+		rc = -EINVAL;
+		CT_ERROR(rc, "must specify a root directory for the backend");
+		return -rc;
+	}
+
+	arc_fd = open(opt.o_hsm_root, O_RDONLY);
+	if (arc_fd < 0) {
+		rc = -errno;
+		CT_ERROR(rc, "cannot open archive at '%s'", opt.o_hsm_root);
+		return rc;
+	}
+
 	rc = ct_setup();
 	if (rc < 0)
 		goto error_cleanup;
@@ -2075,6 +2485,9 @@ int main(int argc, char **argv)
 		break;
 	case CA_MAXSEQ:
 		rc = ct_max_sequence();
+		break;
+	case CA_ARCHIVE_UPGRADE:
+		rc = ct_archive_upgrade(arc_fd, opt.o_archive_format);
 		break;
 	default:
 		rc = ct_run();

@@ -10109,6 +10109,7 @@ init_agt_vars() {
 	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
 	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
 	export HSMTOOL_TESTDIR
+	export HSMTOOL_ARCHIVE_FORMAT=${HSMTOOL_ARCHIVE_FORMAT:-v2}
 
 	if ! [[ $HSMTOOL =~ hsmtool ]]; then
 		echo "HSMTOOL = '$HSMTOOL' does not contain 'hsmtool', GLWT" >&2
@@ -10200,27 +10201,27 @@ copytool_logfile()
 
 __lhsmtool_rebind()
 {
-	do_facet $facet $HSMTOOL -p "$hsm_root" --rebind "$@" "$mountpoint"
+	do_facet $facet $HSMTOOL "${hsmtool_options[@]}" --rebind "$@" "$mountpoint"
 }
 
 __lhsmtool_import()
 {
 	mkdir -p "$(dirname "$2")" ||
 		error "cannot create directory '$(dirname "$2")'"
-	do_facet $facet $HSMTOOL -p "$hsm_root" --import "$@" "$mountpoint"
+	do_facet $facet $HSMTOOL "${hsmtool_options[@]}" --import "$@" "$mountpoint"
 }
 
 __lhsmtool_setup()
 {
 	local host="$(facet_host "$facet")"
-	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --pid-file=$HSMTOOL_PID_FILE --hsm-root \"$hsm_root\""
+	local cmd="$HSMTOOL ${hsmtool_options[@]} --daemon --pid-file=$HSMTOOL_PID_FILE"
 	[ -n "$bandwidth" ] && cmd+=" --bandwidth $bandwidth"
 	[ -n "$archive_id" ] && cmd+=" --archive $archive_id"
-	[ ${#misc_options[@]} -gt 0 ] &&
-		cmd+=" $(IFS=" " echo "$@")"
-	cmd+=" \"$mountpoint\""
+#	[ ${#misc_options[@]} -gt 0 ] &&
+#		cmd+=" $(IFS=" " echo "$@")"
+	cmd+=" $@ \"$mountpoint\""
 
-	echo "Starting copytool '$facet' on '$host'"
+	echo "Starting copytool '$facet' on '$host' with cmdline '$cmd'"
 	stack_trap "pkill_copytools $host TERM || true" EXIT
 	do_node "$host" "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
 }
@@ -10255,7 +10256,17 @@ copytool()
 
 	# Parse arguments
 	local fail_on_error=true
-	local -a misc_options
+	local -a hsmtool_options=("--hsm-root=$hsm_root")
+	local -a action_options=()
+
+	if [[ -n "$HSMTOOL_ARCHIVE_FORMAT" ]]; then
+		hsmtool_options+=("--archive-format=$HSMTOOL_ARCHIVE_FORMAT")
+	fi
+
+	if [[ -n "$HSMTOOL_VERBOSE" ]]; then
+		hsmtool_options+=("$HSMTOOL_VERBOSE")
+	fi
+
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		-f|--facet)
@@ -10283,7 +10294,7 @@ copytool()
 			;;
 		*)
 			# Uncommon(/copytool dependent) option
-			misc_options+=("$1")
+			action_options+=("$1")
 			;;
 		esac
 		shift
@@ -10299,7 +10310,7 @@ copytool()
 		;;
 	esac
 
-	__${copytool}_${action} "${misc_options[@]}"
+	__${copytool}_${action} "${action_options[@]}"
 	if [ $? -ne 0 ]; then
 		local error_msg
 
@@ -10309,8 +10320,8 @@ copytool()
 			error_msg="Failed to start copytool $facet on '$host'"
 			;;
 		import)
-			local src="${misc_options[0]}"
-			local dest="${misc_options[1]}"
+			local src="${action_options[0]}"
+			local dest="${action_options[1]}"
 			error_msg="Failed to import '$src' to '$dest'"
 			;;
 		rebind)

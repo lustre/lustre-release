@@ -147,10 +147,13 @@ fid2archive()
 {
 	local fid="$1"
 
-	case "$HSMTOOL" in
-	*lhsmtool_posix)
-		printf "%s" "$(hsm_root)/*/*/*/*/*/*/$fid"
-		;;
+	case "$HSMTOOL_ARCHIVE_FORMAT" in
+		v1)
+			printf "%s" "$(hsm_root)/*/*/*/*/*/*/$fid"
+			;;
+		v2)
+			printf "%s" "$(hsm_root)/*/$fid"
+			;;
 	esac
 }
 
