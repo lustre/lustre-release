@@ -3252,8 +3252,8 @@ run_test 45 "encrypted file access semantics: MMAP"
 test_46() {
 	local testdir=$DIR/$tdir/mydir
 	local testfile=$testdir/myfile
-	local testdir2=$DIR/$tdir/mydir2
-	local testfile2=$testdir/myfile2
+	local testdir2=$DIR/$tdir/mydirwithaveryverylongnametotestcodebehaviour0
+	local testfile2=$testdir/myfilewithaveryverylongnametotestcodebehaviour0
 	local lsfile=$TMP/lsfile
 	local scrambleddir
 	local scrambledfile
@@ -3271,12 +3271,22 @@ test_46() {
 	mkdir $testdir
 	echo test > $testfile
 	echo othertest > $testfile2
+	if [[ $MDSCOUNT -gt 1 ]]; then
+		$LFS setdirstripe -c1 -i1 $testdir2
+	else
+		mkdir $testdir2
+	fi
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
 	# remove fscrypt key from keyring
 	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
 	keyctl reap
 	cancel_lru_locks
+
+	# this is $testdir2
+	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d| grep _)
+	stat $scrambleddir || error "stat $scrambleddir failed"
+	rmdir $scrambleddir || error "rmdir $scrambleddir failed"
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 	ls -1 $scrambleddir > $lsfile || error "ls $testdir failed (1)"
@@ -3998,7 +4008,7 @@ run_test 53 "Mixed PAGE_SIZE clients"
 test_54() {
 	local testdir=$DIR/$tdir/$ID0
 	local testfile=$testdir/$tfile
-	local testfile2=$testdir/${tfile}2
+	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
 	local tmpfile=$TMP/${tfile}.tmp
 	local resfile=$TMP/${tfile}.res
 

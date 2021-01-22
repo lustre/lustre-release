@@ -1327,8 +1327,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		it->it_flags);
 
 	lockh.cookie = 0;
+	/* MDS_FID_OP is not a revalidate case */
 	if (fid_is_sane(&op_data->op_fid2) &&
-	    (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_READDIR))) {
+	    (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_READDIR)) &&
+	    !(op_data->op_bias & MDS_FID_OP)) {
 		/* We could just return 1 immediately, but since we should only
 		 * be called in revalidate_it if we already have a lock, let's
 		 * verify that.

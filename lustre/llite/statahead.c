@@ -1141,14 +1141,16 @@ static int ll_statahead_thread(void *arg)
 			if (IS_ENCRYPTED(dir)) {
 				struct llcrypt_str de_name =
 					LLTR_INIT(ent->lde_name, namelen);
+				struct lu_fid fid;
 
 				rc = llcrypt_fname_alloc_buffer(dir, NAME_MAX,
 								&lltr);
 				if (rc < 0)
 					continue;
 
+				fid_le_to_cpu(&fid, &ent->lde_fid);
 				if (ll_fname_disk_to_usr(dir, 0, 0, &de_name,
-							 &lltr)) {
+							 &lltr, &fid)) {
 					llcrypt_fname_free_buffer(&lltr);
 					continue;
 				}
@@ -1394,9 +1396,11 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			if (IS_ENCRYPTED(dir)) {
 				struct llcrypt_str de_name =
 					LLTR_INIT(ent->lde_name, namelen);
+				struct lu_fid fid;
 
+				fid_le_to_cpu(&fid, &ent->lde_fid);
 				if (ll_fname_disk_to_usr(dir, 0, 0, &de_name,
-							  &lltr))
+							 &lltr, &fid))
 					continue;
 				name = lltr.name;
 				namelen = lltr.len;

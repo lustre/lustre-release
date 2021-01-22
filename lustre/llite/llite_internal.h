@@ -1723,11 +1723,22 @@ static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
 }
 
 /* crypto.c */
+/* The digested form is made of a FID (16 bytes) followed by the second-to-last
+ * ciphertext block (16 bytes), so a total length of 32 bytes.
+ * That way, llcrypt does not compute a digested form of this digest.
+ */
+struct ll_digest_filename {
+	struct lu_fid ldf_fid;
+	char ldf_excerpt[LLCRYPT_FNAME_DIGEST_SIZE];
+};
+
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
-		      int lookup, struct llcrypt_name *fname);
+		      int lookup, struct llcrypt_name *fname,
+		      struct lu_fid *fid);
 int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,
-			 struct llcrypt_str *iname, struct llcrypt_str *oname);
+			 struct llcrypt_str *iname, struct llcrypt_str *oname,
+			 struct lu_fid *fid);
 int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags);
 #ifdef HAVE_LUSTRE_CRYPTO
 extern const struct llcrypt_operations lustre_cryptops;

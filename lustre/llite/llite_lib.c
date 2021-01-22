@@ -3171,6 +3171,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	} else if (name && namelen) {
 		struct qstr dname = QSTR_INIT(name, namelen);
 		struct inode *dir;
+		struct lu_fid *pfid = NULL;
+		struct lu_fid fid;
 		int lookup;
 
 		if (!S_ISDIR(i1->i_mode) && i2 && S_ISDIR(i2->i_mode)) {
@@ -3181,10 +3183,17 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 			dir = i1;
 			lookup = (int)(opc == LUSTRE_OPC_ANY);
 		}
-		rc = ll_setup_filename(dir, &dname, lookup, &fname);
+		if (opc == LUSTRE_OPC_ANY && lookup)
+			pfid = &fid;
+		rc = ll_setup_filename(dir, &dname, lookup, &fname, pfid);
 		if (rc) {
 			ll_finish_md_op_data(op_data);
 			return ERR_PTR(rc);
+		}
+		if (pfid && !fid_is_zero(pfid)) {
+			if (i2 == NULL)
+				op_data->op_fid2 = fid;
+			op_data->op_bias = MDS_FID_OP;
 		}
 		if (fname.disk_name.name &&
 		    fname.disk_name.name != (unsigned char *)name)

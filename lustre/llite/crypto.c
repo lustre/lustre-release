@@ -167,19 +167,64 @@ static bool ll_empty_dir(struct inode *inode)
  *	->lookup() or we're finding the dir_entry for deletion; 0 if we cannot
  *	proceed without the key because we're going to create the dir_entry.
  * @fname: the filename information to be filled in
+ * @fid: fid retrieved from user-provided filename
  *
  * This overlay function is necessary to properly encode @fname after
  * encryption, as it will be sent over the wire.
+ * This overlay function is also necessary to handle the case of operations
+ * carried out without the key. Normally llcrypt makes use of digested names in
+ * that case. Having a digested name works for local file systems that can call
+ * llcrypt_match_name(), but Lustre server side is not aware of encryption.
+ * So for keyless @lookup operations on long names, for Lustre we choose to
+ * present to users the encoded struct ll_digest_filename, instead of a digested
+ * name. FID and name hash can then easily be extracted and put into the
+ * requests sent to servers.
  */
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
-		      int lookup, struct llcrypt_name *fname)
+		      int lookup, struct llcrypt_name *fname,
+		      struct lu_fid *fid)
 {
+	int digested = 0;
+	struct qstr dname;
 	int rc;
 
-	rc = llcrypt_setup_filename(dir, iname, lookup, fname);
+	if (fid && IS_ENCRYPTED(dir) && !llcrypt_has_encryption_key(dir) &&
+	    iname->name[0] == '_')
+		digested = 1;
+
+	dname.name = iname->name + digested;
+	dname.len = iname->len - digested;
+
+	if (fid) {
+		fid->f_seq = 0;
+		fid->f_oid = 0;
+		fid->f_ver = 0;
+	}
+	rc = llcrypt_setup_filename(dir, &dname, lookup, fname);
 	if (rc)
 		return rc;
 
+	if (digested) {
+		/* Without the key, for long names user should have struct
+		 * ll_digest_filename representation of the dentry instead of
+		 * the name. So make sure it is valid, return fid and put
+		 * excerpt of cipher text name in disk_name.
+		 */
+		struct ll_digest_filename *digest;
+
+		if (fname->crypto_buf.len < sizeof(struct ll_digest_filename)) {
+			rc = -EINVAL;
+			goto out_free;
+		}
+		digest = (struct ll_digest_filename *)fname->crypto_buf.name;
+		*fid = digest->ldf_fid;
+		if (!fid_is_sane(fid)) {
+			rc = -EINVAL;
+			goto out_free;
+		}
+		fname->disk_name.name = digest->ldf_excerpt;
+		fname->disk_name.len = LLCRYPT_FNAME_DIGEST_SIZE;
+	}
 	if (IS_ENCRYPTED(dir) &&
 	    !name_is_dot_or_dotdot(fname->disk_name.name,
 				   fname->disk_name.len)) {
@@ -220,40 +265,78 @@ out_free:
  * @minor_hash: minor hash for inode
  * @iname: the user-provided filename needing conversion
  * @oname: the filename information to be filled in
+ * @fid: the user-provided fid for filename
  *
  * The caller must have allocated sufficient memory for the @oname string.
  *
  * This overlay function is necessary to properly decode @iname before
  * decryption, as it comes from the wire.
+ * This overlay function is also necessary to handle the case of operations
+ * carried out without the key. Normally llcrypt makes use of digested names in
+ * that case. Having a digested name works for local file systems that can call
+ * llcrypt_match_name(), but Lustre server side is not aware of encryption.
+ * So for keyless @lookup operations on long names, for Lustre we choose to
+ * present to users the encoded struct ll_digest_filename, instead of a digested
+ * name. FID and name hash can then easily be extracted and put into the
+ * requests sent to servers.
  */
 int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,
-			 struct llcrypt_str *iname, struct llcrypt_str *oname)
+			 struct llcrypt_str *iname, struct llcrypt_str *oname,
+			 struct lu_fid *fid)
 {
 	struct llcrypt_str lltr = LLTR_INIT(iname->name, iname->len);
+	struct ll_digest_filename digest;
+	int digested = 0;
 	char *buf = NULL;
 	int rc;
 
-	if (IS_ENCRYPTED(inode) &&
-	    !name_is_dot_or_dotdot(lltr.name, lltr.len) &&
-	    strnchr(lltr.name, lltr.len, '=')) {
-		/* Only proceed to critical decode if
-		 * iname contains espace char '='.
-		 */
-		int len = lltr.len;
+	if (IS_ENCRYPTED(inode)) {
+		if (!name_is_dot_or_dotdot(lltr.name, lltr.len) &&
+		    strnchr(lltr.name, lltr.len, '=')) {
+			/* Only proceed to critical decode if
+			 * iname contains espace char '='.
+			 */
+			int len = lltr.len;
 
-		buf = kmalloc(len, GFP_NOFS);
-		if (!buf)
-			return -ENOMEM;
+			buf = kmalloc(len, GFP_NOFS);
+			if (!buf)
+				return -ENOMEM;
 
-		len = critical_decode(lltr.name, len, buf);
-		lltr.name = buf;
-		lltr.len = len;
+			len = critical_decode(lltr.name, len, buf);
+			lltr.name = buf;
+			lltr.len = len;
+		}
+		if (lltr.len > LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE &&
+		    !llcrypt_has_encryption_key(inode) &&
+		    likely(llcrypt_policy_has_filename_enc(inode))) {
+			digested = 1;
+			/* Without the key for long names, set the dentry name
+			 * to the representing struct ll_digest_filename. It
+			 * will be encoded by llcrypt for display, and will
+			 * enable further lookup requests.
+			 */
+			if (!fid)
+				return -EINVAL;
+			digest.ldf_fid = *fid;
+			memcpy(digest.ldf_excerpt,
+			       LLCRYPT_FNAME_DIGEST(lltr.name, lltr.len),
+			       LLCRYPT_FNAME_DIGEST_SIZE);
+
+			lltr.name = (char *)&digest;
+			lltr.len = sizeof(digest);
+
+			oname->name[0] = '_';
+			oname->name = oname->name + 1;
+			oname->len--;
+		}
 	}
 
 	rc = llcrypt_fname_disk_to_usr(inode, hash, minor_hash, &lltr, oname);
 
 	kfree(buf);
+	oname->name = oname->name - digested;
+	oname->len = oname->len + digested;
 
 	return rc;
 }
@@ -337,14 +420,22 @@ void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 }
 
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
-		      int lookup, struct llcrypt_name *fname)
+		      int lookup, struct llcrypt_name *fname,
+		      struct lu_fid *fid)
 {
+	if (fid) {
+		fid->f_seq = 0;
+		fid->f_oid = 0;
+		fid->f_ver = 0;
+	}
+
 	return llcrypt_setup_filename(dir, iname, lookup, fname);
 }
 
 int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,
-			 struct llcrypt_str *iname, struct llcrypt_str *oname)
+			 struct llcrypt_str *iname, struct llcrypt_str *oname,
+			 struct lu_fid *fid)
 {
 	return llcrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname);
 }

@@ -44,6 +44,7 @@
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
 #include <lustre_lmv.h>
+#include <lustre_crypto.h>
 
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
 				     struct md_attr *ma)
@@ -1097,31 +1098,36 @@ relock:
 	if (rc != 0)
 		GOTO(put_parent, rc);
 
-	/* lookup child object along with version checking */
-	fid_zero(child_fid);
-	rc = mdt_lookup_version_check(info, mp, &rr->rr_name, child_fid, 1);
-	if (rc != 0) {
-		/* Name might not be able to find during resend of
-		 * remote unlink, considering following case.
-		 * dir_A is a remote directory, the name entry of
-		 * dir_A is on MDT0, the directory is on MDT1,
-		 *
-		 * 1. client sends unlink req to MDT1.
-		 * 2. MDT1 sends name delete update to MDT0.
-		 * 3. name entry is being deleted in MDT0 synchronously.
-		 * 4. MDT1 is restarted.
-		 * 5. client resends unlink req to MDT1. So it can not
-		 *    find the name entry on MDT0 anymore.
-		 * In this case, MDT1 only needs to destory the local
-		 * directory.
-		 */
-		if (mdt_object_remote(mp) && rc == -ENOENT &&
-		    !fid_is_zero(rr->rr_fid2) &&
-		    lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
-			no_name = 1;
-			*child_fid = *rr->rr_fid2;
-		} else {
-			GOTO(unlock_parent, rc);
+	if (info->mti_spec.sp_cr_flags & MDS_OP_WITH_FID) {
+		*child_fid = *rr->rr_fid2;
+	} else {
+		/* lookup child object along with version checking */
+		fid_zero(child_fid);
+		rc = mdt_lookup_version_check(info, mp, &rr->rr_name, child_fid,
+					      1);
+		if (rc != 0) {
+			/* Name might not be able to find during resend of
+			 * remote unlink, considering following case.
+			 * dir_A is a remote directory, the name entry of
+			 * dir_A is on MDT0, the directory is on MDT1,
+			 *
+			 * 1. client sends unlink req to MDT1.
+			 * 2. MDT1 sends name delete update to MDT0.
+			 * 3. name entry is being deleted in MDT0 synchronously.
+			 * 4. MDT1 is restarted.
+			 * 5. client resends unlink req to MDT1. So it can not
+			 *    find the name entry on MDT0 anymore.
+			 * In this case, MDT1 only needs to destory the local
+			 * directory.
+			 */
+			if (mdt_object_remote(mp) && rc == -ENOENT &&
+			    !fid_is_zero(rr->rr_fid2) &&
+			    lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+				no_name = 1;
+				*child_fid = *rr->rr_fid2;
+			} else {
+				GOTO(unlock_parent, rc);
+			}
 		}
 	}
 
@@ -1132,6 +1138,16 @@ relock:
 	mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
 	if (IS_ERR(mc))
 		GOTO(unlock_parent, rc = PTR_ERR(mc));
+
+	if (info->mti_spec.sp_cr_flags & MDS_OP_WITH_FID) {
+		/* In this case, child fid is embedded in the request, and we do
+		 * not have a proper name as rr_name contains an encoded
+		 * hash. So find name that matches provided hash.
+		 */
+		if (!find_name_matching_hash(info, &rr->rr_name,
+					     NULL, mc, false))
+			GOTO(put_child, rc = -ENOENT);
+	}
 
 	if (!cos_incompat) {
 		rc = mdt_object_striped(info, mc);
@@ -1274,6 +1290,9 @@ out_stat:
 unlock_child:
 	mdt_reint_striped_unlock(info, mc, child_lh, einfo, rc);
 put_child:
+	if (info->mti_spec.sp_cr_flags & MDS_OP_WITH_FID &&
+	    info->mti_big_buf.lb_buf)
+		lu_buf_free(&info->mti_big_buf);
 	mdt_object_put(info->mti_env, mc);
 unlock_parent:
 	mdt_object_unlock(info, mp, parent_lh, rc);

@@ -63,6 +63,7 @@
 #include <lustre_barrier.h>
 #include <obd_cksum.h>
 #include <llog_swab.h>
+#include <lustre_crypto.h>
 
 #include "mdt_internal.h"
 
@@ -1902,6 +1903,97 @@ lookup:
 	RETURN(rc);
 }
 
+/**
+ * Find name matching hash
+ *
+ * We search \a child LinkEA for a name whose hash matches \a lname
+ * (it contains an encoded hash).
+ *
+ * \param info mdt thread info
+ * \param lname encoded hash to find
+ * \param parent parent object
+ * \param child object to search with LinkEA
+ * \param force_check true to check hash even if LinkEA has only one entry
+ *
+ * \retval 1 match found
+ * \retval 0 no match found
+ * \retval -ev negative errno upon error
+ */
+int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
+			    struct mdt_object *parent, struct mdt_object *child,
+			    bool force_check)
+{
+	/* Here, lname is an encoded hash of on-disk name, and
+	 * client is doing access without encryption key.
+	 * So we need to get LinkEA, check parent fid is correct and
+	 * compare name hash with the one in the request.
+	 */
+	struct lu_buf *buf = &info->mti_big_buf;
+	struct lu_name name;
+	struct lu_fid pfid;
+	struct linkea_data ldata = { NULL };
+	struct link_ea_header *leh;
+	struct link_ea_entry *lee;
+	struct lu_buf link = { 0 };
+	char *hash = NULL;
+	int reclen, count, rc;
+
+	ENTRY;
+
+	if (lname->ln_namelen < LLCRYPT_FNAME_DIGEST_SIZE)
+		RETURN(-EINVAL);
+
+	buf = lu_buf_check_and_alloc(buf, PATH_MAX);
+	if (!buf->lb_buf)
+		RETURN(-ENOMEM);
+
+	ldata.ld_buf = buf;
+	rc = mdt_links_read(info, child, &ldata);
+	if (rc < 0)
+		RETURN(rc);
+
+	leh = buf->lb_buf;
+	if (force_check || leh->leh_reccount > 1) {
+		hash = kmalloc(lname->ln_namelen, GFP_NOFS);
+		if (!hash)
+			RETURN(-ENOMEM);
+		rc = critical_decode(lname->ln_name, lname->ln_namelen, hash);
+	}
+	lee = (struct link_ea_entry *)(leh + 1);
+	for (count = 0; count < leh->leh_reccount; count++) {
+		linkea_entry_unpack(lee, &reclen, &name, &pfid);
+		if (!force_check && leh->leh_reccount == 1) {
+			/* if there is only one rec, it has to be it */
+			*lname = name;
+			break;
+		}
+		if (!parent || lu_fid_eq(&pfid, mdt_object_fid(parent))) {
+			lu_buf_check_and_alloc(&link, name.ln_namelen);
+			if (!link.lb_buf)
+				GOTO(out_match, rc = -ENOMEM);
+			rc = critical_decode(name.ln_name, name.ln_namelen,
+					     link.lb_buf);
+
+			if (memcmp(LLCRYPT_FNAME_DIGEST(link.lb_buf, rc),
+				   hash, LLCRYPT_FNAME_DIGEST_SIZE) == 0) {
+				*lname = name;
+				break;
+			}
+		}
+		lee = (struct link_ea_entry *) ((char *)lee + reclen);
+	}
+	if (count == leh->leh_reccount)
+		rc = 0;
+	else
+		rc = 1;
+
+out_match:
+	lu_buf_free(&link);
+	kfree(hash);
+
+	RETURN(rc);
+}
+
 /*
  * UPDATE lock should be taken against parent, and be released before exit;
  * child_bits lock should be taken against child, and be returned back:
@@ -1998,7 +2090,30 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	lname = &info->mti_name;
 	mdt_name_unpack(pill, &RMF_NAME, lname, MNF_FIX_ANON);
 
-	if (lu_name_is_valid(lname)) {
+	if (info->mti_body->mbo_valid & OBD_MD_NAMEHASH) {
+		reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
+		if (unlikely(reqbody == NULL))
+			RETURN(err_serious(-EPROTO));
+
+		*child_fid = reqbody->mbo_fid2;
+		if (unlikely(!fid_is_sane(child_fid)))
+			RETURN(err_serious(-EINVAL));
+
+		if (lu_fid_eq(mdt_object_fid(parent), child_fid)) {
+			mdt_object_get(info->mti_env, parent);
+			child = parent;
+		} else {
+			child = mdt_object_find(info->mti_env, info->mti_mdt,
+						child_fid);
+			if (IS_ERR(child))
+				RETURN(PTR_ERR(child));
+		}
+
+		CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
+		       "ldlm_rep = %p\n",
+		       PFID(mdt_object_fid(parent)),
+		       PFID(&reqbody->mbo_fid2), ldlm_rep);
+	} else if (lu_name_is_valid(lname)) {
 		if (mdt_object_remote(parent)) {
 			CERROR("%s: parent "DFID" is on remote target\n",
 			       mdt_obd_name(info->mti_mdt),
@@ -2050,14 +2165,17 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 	mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
-	if (unlikely(!mdt_object_exists(parent)) && lu_name_is_valid(lname)) {
+	if (unlikely(!mdt_object_exists(parent)) &&
+	    !(info->mti_body->mbo_valid & OBD_MD_NAMEHASH) &&
+	    lu_name_is_valid(lname)) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj,
 				"Parent doesn't exist!");
 		GOTO(out_child, rc = -ESTALE);
 	}
 
-	if (lu_name_is_valid(lname)) {
+	if (!(info->mti_body->mbo_valid & OBD_MD_NAMEHASH) &&
+	    lu_name_is_valid(lname)) {
 		if (info->mti_body->mbo_valid == OBD_MD_FLID) {
 			rc = mdt_raw_lookup(info, parent, lname);
 
@@ -2094,6 +2212,19 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 	/* step 3: lock child regardless if it is local or remote. */
 	LASSERT(child);
+
+	if (info->mti_body->mbo_valid & OBD_MD_NAMEHASH) {
+		/* Here, lname is an encoded hash of on-disk name, and
+		 * client is doing access without encryption key.
+		 * So we need to compare name hash with the one in the request.
+		 */
+		if (!find_name_matching_hash(info, lname, parent,
+					     child, true)) {
+			mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
+			mdt_clear_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
+			GOTO(out_child, rc = -ENOENT);
+		}
+	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout * 2);
 	if (!mdt_object_exists(child)) {
@@ -7002,12 +7133,24 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
-	if (mdt_object_remote(obj))
+	if (mdt_object_remote(obj)) {
 		rc = -EREMOTE;
-	else if (!mdt_object_exists(obj))
+	} else if (!mdt_object_exists(obj)) {
 		rc = -ENOENT;
-	else
-		rc = 0;
+	} else {
+		struct lu_attr la = { 0 };
+		struct dt_object *dt = mdt_obj2dt(obj);
+
+		if (dt && dt->do_ops && dt->do_ops->do_attr_get)
+			dt_attr_get(info->mti_env, mdt_obj2dt(obj), &la);
+		if (la.la_valid & LA_FLAGS && la.la_flags & LUSTRE_ENCRYPT_FL)
+			/* path resolution cannot be carried out on server
+			 * side for encrypted files
+			 */
+			rc = -ENODATA;
+		else
+			rc = 0;
+	}
 
 	if (rc < 0) {
 		mdt_object_put(info->mti_env, obj);

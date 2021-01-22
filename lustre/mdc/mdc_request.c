@@ -292,6 +292,15 @@ again:
 			     op_data->op_mode);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
 	ptlrpc_request_set_replen(req);
+	if (op_data->op_bias & MDS_FID_OP) {
+		struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+							    &RMF_MDT_BODY);
+
+		if (b) {
+			b->mbo_valid |= OBD_MD_NAMEHASH;
+			b->mbo_fid2 = op_data->op_fid2;
+		}
+	}
 
 	rc = mdc_getattr_common(exp, req);
 	if (rc) {

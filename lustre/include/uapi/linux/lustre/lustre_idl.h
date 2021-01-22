@@ -1329,6 +1329,9 @@ lov_mds_md_max_stripe_count(__kernel_size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLLAZYBLOCKS  (0x0800000000000000ULL) /* Lazy blocks */
 #define OBD_MD_FLBTIME       (0x1000000000000000ULL) /* birth time */
 #define OBD_MD_ENCCTX        (0x2000000000000000ULL) /* embed encryption ctx */
+#define OBD_MD_NAMEHASH      (0x4000000000000000ULL) /* use hash instead of name
+						      * in case of encryption
+						      */
 
 #define OBD_MD_FLALLQUOTA (OBD_MD_FLUSRQUOTA | \
 			   OBD_MD_FLGRPQUOTA | \
@@ -1958,6 +1961,7 @@ enum mds_op_bias {
 	MDS_CLOSE_UPDATE_TIMES	= 1 << 20,
 	/* setstripe create only, don't restripe if target exists */
 	MDS_SETSTRIPE_CREATE	= 1 << 21,
+	MDS_FID_OP		= 1 << 22,
 };
 
 #define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |         \

@@ -823,7 +823,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	int rc;
 	char secctx_name[XATTR_NAME_MAX + 1];
 	struct llcrypt_name fname;
-
+	struct lu_fid fid;
 	ENTRY;
 
 	if (dentry->d_name.len > ll_i2sbi(parent)->ll_namelen)
@@ -860,7 +860,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	 * not exported function) and call it from ll_revalidate_dentry(), to
 	 * ensure we do not cache stale dentries after a key has been added.
 	 */
-	rc = ll_setup_filename(parent, &dentry->d_name, 1, &fname);
+	rc = ll_setup_filename(parent, &dentry->d_name, 1, &fname, &fid);
 	if ((!rc || rc == -ENOENT) && fname.is_ciphertext_name) {
 		spin_lock(&dentry->d_lock);
 		dentry->d_flags |= DCACHE_ENCRYPTED_NAME;
@@ -876,6 +876,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	if (IS_ERR(op_data)) {
 		llcrypt_free_filename(&fname);
 		RETURN(ERR_CAST(op_data));
+	}
+	if (!fid_is_zero(&fid)) {
+		op_data->op_fid2 = fid;
+		op_data->op_bias = MDS_FID_OP;
+		if (it->it_op & IT_OPEN)
+			it->it_flags |= MDS_OPEN_BY_FID;
 	}
 
 	/* enforce umask if acl disabled or MDS doesn't support umask */
@@ -1882,7 +1888,8 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 	if (dchild->d_inode != NULL)
 		op_data->op_fid3 = *ll_inode2fid(dchild->d_inode);
 
-	op_data->op_fid2 = op_data->op_fid3;
+	if (fid_is_zero(&op_data->op_fid2))
+		op_data->op_fid2 = op_data->op_fid3;
 	rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
 	ll_finish_md_op_data(op_data);
 	if (!rc) {
@@ -1974,7 +1981,8 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 	    ll_i2info(dchild->d_inode)->lli_clob &&
 	    dirty_cnt(dchild->d_inode))
 		op_data->op_cli_flags |= CLI_DIRTY_DATA;
-	op_data->op_fid2 = op_data->op_fid3;
+	if (fid_is_zero(&op_data->op_fid2))
+		op_data->op_fid2 = op_data->op_fid3;
 	rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
 	ll_finish_md_op_data(op_data);
 	if (rc)
@@ -2057,10 +2065,10 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 	if (tgt_dchild->d_inode)
 		op_data->op_fid4 = *ll_inode2fid(tgt_dchild->d_inode);
 
-	err = ll_setup_filename(src, &src_dchild->d_name, 1, &foldname);
+	err = ll_setup_filename(src, &src_dchild->d_name, 1, &foldname, NULL);
 	if (err)
 		RETURN(err);
-	err = ll_setup_filename(tgt, &tgt_dchild->d_name, 1, &fnewname);
+	err = ll_setup_filename(tgt, &tgt_dchild->d_name, 1, &fnewname, NULL);
 	if (err) {
 		llcrypt_free_filename(&foldname);
 		RETURN(err);

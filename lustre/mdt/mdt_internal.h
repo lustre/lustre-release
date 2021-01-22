@@ -920,6 +920,9 @@ void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 		      struct mdt_lock_handle *lhc,
 		      struct md_layout_change *spec);
+int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
+			    struct mdt_object *parent, struct mdt_object *child,
+			    bool force_check);
 int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
