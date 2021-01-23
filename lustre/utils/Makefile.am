@@ -185,10 +185,10 @@ libmount_utils_ldiskfs_a_CPPFLAGS :=
 if PLUGINS
 lib_LTLIBRARIES += libmount_utils_ldiskfs.la
 libmount_utils_ldiskfs.la : libmount_utils_ldiskfs.a
-	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic -lext2fs \
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic \
 			 -o mount_osd_ldiskfs.so \
 			 `$(AR) -t libmount_utils_ldiskfs.a` \
-			 $(MNTMODLIBS)
+			 $(MNTMODLIBS) -lext2fs
 else
 MNTMODLIBS += -lext2fs
 PLUGIN_LIB += libmount_utils_ldiskfs.a
