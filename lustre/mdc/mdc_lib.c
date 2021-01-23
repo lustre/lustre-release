@@ -219,6 +219,11 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	flags = 0;
 	if (op_data->op_bias & MDS_CREATE_VOLATILE)
 		flags |= MDS_OPEN_VOLATILE;
+	if (op_data->op_bias & MDS_SETSTRIPE_CREATE)
+		/* borrow MDS_OPEN_CREATE flag to indicate current setstripe
+		 * create only, and don't restripe if object exists.
+		 */
+		flags |= MDS_OPEN_CREAT;
 	set_mrc_cr_flags(rec, flags);
 	rec->cr_bias     = op_data->op_bias;
 	rec->cr_umask    = current_umask();

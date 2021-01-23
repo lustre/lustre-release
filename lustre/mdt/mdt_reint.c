@@ -531,8 +531,12 @@ static int mdt_create(struct mdt_thread_info *info)
 		    mdt->mdt_enable_remote_dir_gid != -1)
 			RETURN(-EPERM);
 
-		/* restripe if later found dir exists */
-		if (le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT)
+		/* restripe if later found dir exists, MDS_OPEN_CREAT means
+		 * this is create only, don't try restripe.
+		 */
+		if (mdt->mdt_enable_dir_restripe &&
+		    le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT &&
+		    !(spec->sp_cr_flags & MDS_OPEN_CREAT))
 			restripe = true;
 	}
 

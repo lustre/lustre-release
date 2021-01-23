@@ -6602,6 +6602,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
+	if (strcmp(argv[0], "mkdir") == 0)
+		param->lsp_is_create = true;
 	if (lsa.lsa_nr_tgts > 1) {
 		if (lsa.lsa_stripe_count > 0 &&
 		    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&

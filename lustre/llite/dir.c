@@ -399,7 +399,8 @@ out:
  *                      <0 if the creation is failed.
  */
 static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
-			       size_t len, const char *dirname, umode_t mode)
+			       size_t len, const char *dirname, umode_t mode,
+			       bool createonly)
 {
 	struct inode *parent = dparent->d_inode;
 	struct ptlrpc_request *request = NULL;
@@ -505,6 +506,9 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	}
 
 	op_data->op_cli_flags |= CLI_SET_MEA;
+	if (createonly)
+		op_data->op_bias |= MDS_SETSTRIPE_CREATE;
+
 	err = md_create(sbi->ll_md_exp, op_data, lump, len, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
@@ -1410,12 +1414,13 @@ out_free:
 	}
 	case LL_IOC_LMV_SETSTRIPE: {
 		struct lmv_user_md  *lum;
-		char		*filename;
-		int		 namelen = 0;
-		int		 lumlen = 0;
-		umode_t		 mode;
-		int		 len;
-		int		 rc;
+		char *filename;
+		int namelen = 0;
+		int lumlen = 0;
+		umode_t mode;
+		bool createonly = false;
+		int len;
+		int rc;
 
 		rc = obd_ioctl_getdata(&data, &len, (void __user *)arg);
 		if (rc)
@@ -1457,7 +1462,9 @@ out_free:
 		}
 
 		mode = data->ioc_type;
-		rc = ll_dir_setdirstripe(dentry, lum, lumlen, filename, mode);
+		createonly = data->ioc_obdo1.o_flags & OBD_FL_OBDMDEXISTS;
+		rc = ll_dir_setdirstripe(dentry, lum, lumlen, filename, mode,
+					 createonly);
 lmv_out_free:
 		OBD_FREE_LARGE(data, len);
 		RETURN(rc);

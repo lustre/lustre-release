@@ -130,6 +130,7 @@ struct llapi_stripe_param {
 	/* Number of stripes. Size of lsp_osts[] if lsp_specific is true.*/
 	int			lsp_stripe_count;
 	bool			lsp_is_specific;
+	bool			lsp_is_create;
 	__u32			lsp_osts[0];
 };
 

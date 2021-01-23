@@ -1086,6 +1086,9 @@ int llapi_dir_create(const char *name, mode_t mode,
 	data.ioc_inlbuf2 = (char *)lmu;
 	data.ioc_inllen2 = lmu_size;
 	data.ioc_type = mode;
+	if (param->lsp_is_create)
+		/* borrow obdo1.o_flags to store this flag */
+		data.ioc_obdo1.o_flags = OBD_FL_OBDMDEXISTS;
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc,

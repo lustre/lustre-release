@@ -19059,6 +19059,28 @@ test_230r() {
 }
 run_test 230r "migrate with too many local locks"
 
+test_230s() {
+	[ $MDS1_VERSION -ge $(version_code 2.13.57) ] ||
+		skip "Need MDS version at least 2.13.57"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local restripe_status=$(do_facet mds1 $LCTL get_param -n \
+				mdt.*MDT0000.enable_dir_restripe)
+
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    mdt.*.enable_dir_restripe=$restripe_status"
+
+	local st
+	for st in 0 1; do
+		do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=$st"
+		test_mkdir $DIR/$tdir
+		$LFS mkdir $DIR/$tdir |& grep "File exists" ||
+			error "$LFS mkdir doesn't return -EEXIST if target exists"
+		rmdir $DIR/$tdir
+	done
+}
+run_test 230s "lfs mkdir should return -EEXIST if target exists"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
