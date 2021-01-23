@@ -729,6 +729,8 @@ static int __init libcfs_init(void)
 		return (rc);
 	}
 
+	cfs_debug_init();
+
 	rc = cfs_cpu_init();
 	if (rc != 0)
 		goto cleanup_debug;

@@ -298,4 +298,6 @@ int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
 
 #define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
 
+void cfs_debug_init(void);
+
 #endif	/* __LIBCFS_DEBUG_H__ */

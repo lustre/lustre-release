@@ -43,6 +43,7 @@
 #include <linux/kthread.h>
 #include <linux/stacktrace.h>
 #include <linux/utsname.h>
+#include <linux/kallsyms.h>
 #include "tracefile.h"
 
 static char debug_file_name[1024];
@@ -486,6 +487,18 @@ do {									       \
 } while (0)
 #endif
 
+static void cfs_print_stack_trace(unsigned long *entries, unsigned int nr)
+{
+	unsigned int i;
+
+	/* Prefer %pB for backtraced symbolic names since it was added in:
+	 * Linux v2.6.38-6557-g0f77a8d37825
+	 * vsprintf: Introduce %pB format specifier
+	 */
+	for (i = 0; i < nr; i++)
+		pr_info("[<0>] %pB\n", (void *)entries[i]);
+}
+
 #define MAX_ST_ENTRIES	100
 static DEFINE_SPINLOCK(st_lock);
 
@@ -501,15 +514,20 @@ typedef unsigned int (stack_trace_save_tsk_t)(struct task_struct *task,
 static stack_trace_save_tsk_t *task_dump_stack;
 #endif
 
-static void libcfs_call_trace(struct task_struct *tsk)
+void __init cfs_debug_init(void)
 {
 #ifdef CONFIG_ARCH_STACKWALK
-	static unsigned long entries[MAX_ST_ENTRIES];
-	unsigned int i, nr_entries;
+	task_dump_stack = (void *)
+			kallsyms_lookup_name("stack_trace_save_tsk");
 
-	if (!task_dump_stack)
-		task_dump_stack = (stack_trace_save_tsk_t *)
-				  symbol_get("stack_trace_save_tsk");
+#endif
+}
+
+static void libcfs_call_trace(struct task_struct *tsk)
+{
+	static unsigned long entries[MAX_ST_ENTRIES];
+#ifdef CONFIG_ARCH_STACKWALK
+	unsigned int nr_entries;
 
 	spin_lock(&st_lock);
 	pr_info("Pid: %d, comm: %.20s %s %s\n", tsk->pid, tsk->comm,
@@ -517,13 +535,11 @@ static void libcfs_call_trace(struct task_struct *tsk)
 	pr_info("Call Trace TBD:\n");
 	if (task_dump_stack) {
 		nr_entries = task_dump_stack(tsk, entries, MAX_ST_ENTRIES, 0);
-		for (i = 0; i < nr_entries; i++)
-			pr_info("[<0>] %pB\n", (void *)entries[i]);
+		cfs_print_stack_trace(entries, nr_entries);
 	}
 	spin_unlock(&st_lock);
 #else
 	struct stack_trace trace;
-	static unsigned long entries[MAX_ST_ENTRIES];
 
 	trace.nr_entries = 0;
 	trace.max_entries = MAX_ST_ENTRIES;
@@ -535,7 +551,7 @@ static void libcfs_call_trace(struct task_struct *tsk)
 		init_utsname()->release, init_utsname()->version);
 	pr_info("Call Trace:\n");
 	save_stack_trace_tsk(tsk, &trace);
-	print_stack_trace(&trace, 0);
+	cfs_print_stack_trace(trace.entries, trace.nr_entries);
 	spin_unlock(&st_lock);
 #endif
 }
