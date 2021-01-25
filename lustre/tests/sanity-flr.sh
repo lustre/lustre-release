@@ -33,16 +33,16 @@ build_test_filter
 [[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
 	skip "Need MDS version at least 2.10.56"
 
-[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
-	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
-check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
 check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
-
-assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
+
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
+	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+
+check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
+
 
 # global array to store mirror IDs
 declare -a mirror_array
