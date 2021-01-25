@@ -1088,7 +1088,7 @@ test_1h() {
 	local limit=10  # 10M
 	local testfile="$DIR/$tdir/$tfile-0"
 
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT

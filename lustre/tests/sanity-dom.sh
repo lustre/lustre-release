@@ -172,8 +172,10 @@ test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 
+	check_set_fallocate
+
 	touch $file1
-	fsx -c 50 -p 100 -N 1000 -l $((DOM_SIZE*2)) -S 0 -d -d $file1 $file2
+	$FSX -c 50 -p 100 -N 1000 -l $((DOM_SIZE*2)) -S 0 -d -d $file1 $file2
 }
 run_test fsx "Dual-mount fsx with DoM files"
 

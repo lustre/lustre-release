@@ -13433,7 +13433,7 @@ test_150a() {
 run_test 150a "truncate/append tests"
 
 test_150b() {
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
@@ -13442,7 +13442,7 @@ test_150b() {
 run_test 150b "Verify fallocate (prealloc) functionality"
 
 test_150bb() {
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
@@ -13455,9 +13455,7 @@ test_150bb() {
 
 	[[ "${sum[0]}" == "$expect" ]] || error "fallocate unwritten is not zero"
 
-	do_nodes $(comma_list $(osts_nodes)) \
-		"$LCTL set_param osd-ldiskfs.*.fallocate_zero_blocks=1" ||
-		error "set osd-ldiskfs.*.fallocate_zero_blocks=1"
+	check_set_fallocate 1
 
 	> $DIR/$tfile
 	fallocate -l $((1048576 * 20)) $DIR/$tfile || error "fallocate failed"
@@ -13468,7 +13466,7 @@ test_150bb() {
 run_test 150bb "Verify fallocate modes both zero space"
 
 test_150c() {
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tfile || error "setstripe failed"
@@ -13502,7 +13500,7 @@ test_150c() {
 run_test 150c "Verify fallocate Size and Blocks"
 
 test_150d() {
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
@@ -13520,7 +13518,7 @@ test_150d() {
 run_test 150d "Verify fallocate Size and Blocks - Non zero start"
 
 test_150e() {
-	check_for_fallocate
+	check_set_fallocate_or_skip
 
 	echo "df before:"
 	$LFS df

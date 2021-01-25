@@ -389,6 +389,8 @@ test_16a() {
 	local stripe_size=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
+	check_set_fallocate
+
 	# to allocate grant because it may run out due to test_15.
 	$LFS setstripe -c -1 $file1
 	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync
@@ -396,12 +398,12 @@ test_16a() {
 	rm -f $file1
 
 	$LFS setstripe -c -1 $file1 # b=10919
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
 		error "fsx failed"
 	rm -f $file1
 
 	# O_DIRECT reads and writes must be aligned to the device block size.
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r 4096 \
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r 4096 \
 		-w 4096 $file1 $file2 || error "fsx with O_DIRECT failed."
 }
 run_test 16a "$FSXNUM iterations of dual-mount fsx"
@@ -411,6 +413,8 @@ test_16b() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 	local stripe_size=($($LFS getstripe -S $DIR))
+
+	check_set_fallocate
 
 	# to allocate grant because it may run out due to test_15.
 	lfs setstripe -c -1 $file1
@@ -423,7 +427,7 @@ test_16b() {
 	lfs setstripe -c -1 $file1 # b=10919
 	# -o is set to 8192 because writes < 1 page and between 1 and 2 pages
 	# create a mix of tiny writes & normal writes
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 \
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 \
 		$file1 $file2 || error "fsx with tiny write failed."
 }
 run_test 16b "$FSXNUM iterations of dual-mount fsx at small size"
@@ -435,6 +439,8 @@ test_16c() {
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
 	[ "$ost1_FSTYPE" != ldiskfs ] && skip "dio on ldiskfs only"
+
+	check_set_fallocate
 
 	# to allocate grant because it may run out due to test_15.
 	$LFS setstripe -c -1 $file1
@@ -452,7 +458,7 @@ test_16c() {
 	set_osd_param $list '' writethrough_cache_enable 0
 
 	$LFS setstripe -c -1 $file1 # b=10919
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
 		error "fsx failed"
 	rm -f $file1
 
@@ -467,16 +473,17 @@ test_16d() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 	local file3=$DIR1/file
+	local tmpfile=$(mktemp)
 	local stripe_size=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
 	# to allocate grant because it may run out due to test_15.
 	$LFS setstripe -c -1 $file1
+	stack_trap "rm -f $file1 $file2 $file3 $tmpfile"
 	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync
 	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync
 	rm -f $file1
 
-	local tmpfile=`mktemp`
 	$LFS setstripe -c -1 $file1 # b=10919
 	$LCTL set_param ldlm.namespaces.*.lru_size=clear
 	
@@ -497,9 +504,6 @@ test_16d() {
 	# buffer read from another client
 	dd if=$file2 of=$file3 bs=1M count=100
 	diff $file3 $tmpfile || error "file different(3)"
-
-	rm -f $file1 $file2 $file3 $tmpfile
-
 }
 run_test 16d "Verify DIO and buffer IO with two clients"
 

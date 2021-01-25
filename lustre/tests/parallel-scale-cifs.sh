@@ -172,6 +172,8 @@ test_fsx() {
 	local space=$(df -P $SMBCLIMNTPT | tail -n 1 | awk '{ print $4 }')
 	[ $space -lt $((size * nclients)) ] && size=$((space * 3 / 4 / nclients))
 
+	check_set_fallocate
+
 	local cmd="$FSX -c 50 -p 500 -S $seed -P $TMP -l $size -N $numop "
 
 	echo "Using: $cmd"

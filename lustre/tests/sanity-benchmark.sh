@@ -183,13 +183,15 @@ test_fsx() {
 	FSX_COUNT=1000
 	local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 
+	check_set_fallocate
+
 	[ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
 	$DEBUG_OFF
 	FSX_SEED=${FSX_SEED:-$RANDOM}
 	rm -f $testfile
 	$LFS setstripe -c -1 $testfile
-	CMD="fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
-	-N $((FSX_COUNT * 100)) $FSXOPT $testfile"
+	CMD="$FSX -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
+	     -N $((FSX_COUNT * 100)) $FSXOPT $testfile"
 	echo "Using: $CMD"
 	$CMD || error "fsx failed"
 	rm -f $testfile

@@ -10560,16 +10560,31 @@ function unlinkmany() {
 	return $rc
 }
 
-function check_for_fallocate()
+# Check if fallocate supported on OSTs, enable if unset, default mode=0
+# Optionally pass the OST fallocate mode (0=unwritten extents, 1=zero extents)
+function check_set_fallocate()
 {
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	local new_mode="$1"
 	local osts=$(comma_list $(osts_nodes))
 	local fa_mode="osd-ldiskfs.*.fallocate_zero_blocks"
 	local old_mode=$(do_facet ost1 $LCTL get_param -n $fa_mode 2>/dev/null|
 			 head -n 1)
 
-	[ -n "$old_mode" ] || skip "need at least 2.13.57 for fallocate"
+	[[ -n "$old_mode" ]] || { echo "fallocate not supported"; return 1; }
+	[[ -z "$new_mode" && "$old_mode" != "-1" ]] &&
+		{ echo "keep default fallocate mode: $old_mode"; return 0; }
+	[[ "$new_mode" && "$old_mode" == "$new_mode" ]] &&
+		{ echo "keep current fallocate mode: $old_mode"; return 0; }
+
 	stack_trap "do_nodes $osts $LCTL set_param $fa_mode=$old_mode"
-	do_nodes $osts $LCTL set_param $fa_mode=0 || error "set $fa_mode=0"
+	do_nodes $osts $LCTL set_param $fa_mode=${new_mode:-0} ||
+		error "set $fa_mode=$new_mode"
+}
+
+# Check if fallocate supported on OSTs, enable if unset, skip if unavailable
+function check_set_fallocate_or_skip()
+{
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	check_set_fallocate || skip "need at least 2.13.57 for fallocate"
 }
 
