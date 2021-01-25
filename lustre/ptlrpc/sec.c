@@ -407,8 +407,11 @@ static int import_sec_validate_get(struct obd_import *imp,
 
 	*sec = sptlrpc_import_sec_ref(imp);
 	if (*sec == NULL) {
-		CERROR("import %p (%s) with no sec\n",
-			imp, ptlrpc_import_state_name(imp->imp_state));
+		/* Only output an error when the import is still active */
+		if (!test_bit(WORK_STRUCT_PENDING_BIT,
+			      work_data_bits(&imp->imp_zombie_work)))
+			CERROR("import %p (%s) with no sec\n",
+			       imp, ptlrpc_import_state_name(imp->imp_state));
 		return -EACCES;
 	}
 
