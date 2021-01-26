@@ -198,36 +198,36 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"                 [--copy=<lustre_src>]\n"
 
 #define SSM_HELP_COMMON \
-	"\tstripe_count: Number of OSTs to stripe over (0=fs default, -1 all)\n" \
-	"\t		 Using -C instead of -c allows overstriping, which\n" \
-	"\t		 will place more than one stripe per OST if\n" \
-	"\t		 stripe_count is greater than the number of OSTs\n" \
+	"\tstripe_count: Number of OSTs to stripe on (0=fs default, -1 all)\n" \
+	"\t              Using -C instead of -c allows overstriping, which\n"  \
+	"\t              will place more than one stripe per OST if\n"	       \
+	"\t              stripe_count is greater than the number of OSTs.\n"   \
 	"\tstart_ost_idx: OST index of first stripe (-1=default round robin)\n"\
-	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n" \
-	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
-	"\t              respectively)\n"				\
-	"\textension_size:\n"						\
+	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n"	       \
+	"\t              Optional K, M, or G suffix (for KB, MB, GB\n"         \
+	"\t              respectively).  Must be a multiple of 64KiB.\n"       \
+	"\textension_size:\n"						       \
 	"\t              Number of bytes the previous component is extended\n" \
-	"\t              each time. Can be specified with K, M, G (for KB,\n" \
-	"\t              MB, GB respectively)\n"			\
-	"\tpool_name:    Name of OST pool to use (default none)\n"	\
-	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"\
+	"\t              each time. Optional K, M, or G suffix (for KB,\n"     \
+	"\t              MB, GB respectively)\n"			       \
+	"\tpool_name:    Name of OST pool to use (default none)\n"	       \
+	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"    \
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
-	"\t              Indices be specified in a format of:\n"	\
-	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
-	"\t              Or:\n"						\
-	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
-	"\t              If --pool is set with --ost then the OSTs\n"	\
-	"\t              must be the members of the pool.\n"		\
-	"\tcomp_end:     Extent end of component, start after previous end.\n"\
-	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
-	"\t              respectively, -1 for EOF). Must be a multiple of\n"\
-	"\t              stripe_size.\n"				      \
-	"\tyaml_template_file:\n"					      \
-	"\t              YAML layout template file, can't be used with -c,\n" \
-	"\t              -i, -S, -p, -o, or -E arguments.\n"		      \
-	"\tlustre_src:   Lustre file/dir whose layout info is used to set\n"  \
-	"\t              another lustre file or directory, can't used with\n" \
+	"\t              Indices be specified in a format of:\n"	       \
+	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	       \
+	"\t              Or:\n"						       \
+	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	       \
+	"\t              If --pool is set with --ost then the OSTs\n"	       \
+	"\t              must be the members of the pool.\n"		       \
+	"\tcomp_end:     Extent end of component, start after previous end.\n" \
+	"\t              Optional K, M, or G suffix (for KiB, MiB, GiB), or\n" \
+	"\t              -1 or 'eof' for max file size). Must be a multiple\n" \
+	"\t              of stripe_size and a multiple of 64KiB.\n"	       \
+	"\tyaml_template_file:\n"					       \
+	"\t              YAML layout template file, can't be used with -c,\n"  \
+	"\t              -i, -S, -p, -o, or -E arguments.\n"		       \
+	"\tlustre_src:   Lustre file/dir whose layout info is used to set\n"   \
+	"\t              another lustre file or directory, can't used with\n"  \
 	"\t              -c, -i, -S, -p, -o, or -E arguments.\n"
 
 #define MIRROR_CREATE_HELP						       \
@@ -3481,9 +3481,13 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				lsa.lsa_comp_end = LUSTRE_EOF;
 			} else {
 				result = llapi_parse_size(optarg,
-							&lsa.lsa_comp_end,
-							&size_units, 0);
-				if (result) {
+							  &lsa.lsa_comp_end,
+							  &size_units, 0);
+				/* assume units of KB if too small */
+				if (lsa.lsa_comp_end < 4096)
+					lsa.lsa_comp_end *= 1024;
+				if (result ||
+				    lsa.lsa_comp_end & (LOV_MIN_STRIPE_SIZE - 1)) {
 					fprintf(stderr,
 						"%s %s: invalid component end '%s'\n",
 						progname, argv[0], optarg);
@@ -3696,7 +3700,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'S':
 			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,
 						  &size_units, 0);
-			if (result) {
+			/* assume units of KB if too small to be valid */
+			if (lsa.lsa_stripe_size < 4096)
+				lsa.lsa_stripe_size *= 1024;
+			if (result ||
+			    lsa.lsa_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
 				fprintf(stderr,
 					"%s %s: invalid stripe size '%s'\n",
 					progname, argv[0], optarg);
@@ -4667,6 +4675,9 @@ static int lfs_find(int argc, char **argv)
 				rc = llapi_parse_size(optarg,
 						&param.fp_comp_end,
 						&param.fp_comp_end_units, 0);
+				/* assume units of KB if too small */
+				if (param.fp_comp_end < 4096)
+					param.fp_comp_end *= 1024;
 			}
 			if (rc) {
 				fprintf(stderr,
@@ -5073,6 +5084,9 @@ err_free:
 
 			ret = llapi_parse_size(optarg, &param.fp_stripe_size,
 					       &param.fp_stripe_size_units, 0);
+			/* assume units of KB if too small to be valid */
+			if (param.fp_stripe_size < 4096)
+				param.fp_stripe_size *= 1024;
 			if (ret) {
 				fprintf(stderr, "error: bad stripe_size '%s'\n",
 					optarg);
@@ -5415,6 +5429,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 					rc = llapi_parse_size(tmp,
 						&param->fp_comp_end,
 						&param->fp_comp_end_units, 0);
+					/* assume units of KB if too small */
+					if (param->fp_comp_end < 4096)
+						param->fp_comp_end *= 1024;
 				}
 				if (rc != 0) {
 					fprintf(stderr,

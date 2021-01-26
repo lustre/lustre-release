@@ -1136,6 +1136,12 @@ void lod_adjust_stripe_size(struct lod_layout_component *comp,
 		else
 			comp->llc_stripe_size = comp_end & ~(comp_end - 1);
 	} else {
+		if (comp_end != LUSTRE_EOF &&
+		    comp_end & (LOV_MIN_STRIPE_SIZE - 1)) {
+			CWARN("Component end %llu is not a multiple of min size %u\n",
+			      comp_end, LOV_MIN_STRIPE_SIZE);
+			comp_end = round_up(comp_end, LOV_MIN_STRIPE_SIZE);
+		}
 		/* check stripe size is multiplier of comp_end */
 		if (comp_end != LUSTRE_EOF &&
 		    comp_end % comp->llc_stripe_size) {
@@ -1144,7 +1150,6 @@ void lod_adjust_stripe_size(struct lod_layout_component *comp,
 			 */
 			CWARN("Component end %llu is not aligned by the stripe size %u\n",
 			      comp_end, comp->llc_stripe_size);
-			dump_stack();
 			comp->llc_stripe_size = comp_end & ~(comp_end - 1);
 		}
 	}

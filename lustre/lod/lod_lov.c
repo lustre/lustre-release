@@ -1186,7 +1186,26 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			ext = &comp_v1->lcm_entries[i].lcme_extent;
 			lod_comp->llc_extent.e_start =
 				le64_to_cpu(ext->e_start);
+			if (lod_comp->llc_extent.e_start &
+			    (LOV_MIN_STRIPE_SIZE - 1)) {
+				CDEBUG(D_LAYOUT,
+				       "extent start %llu is not a multiple of min size %u\n",
+				       lod_comp->llc_extent.e_start,
+				       LOV_MIN_STRIPE_SIZE);
+				GOTO(out, rc = -EINVAL);
+			}
+
 			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
+			if (lod_comp->llc_extent.e_end != LUSTRE_EOF &&
+			    lod_comp->llc_extent.e_end &
+			    (LOV_MIN_STRIPE_SIZE - 1)) {
+				CDEBUG(D_LAYOUT,
+				       "extent end %llu is not a multiple of min size %u\n",
+				       lod_comp->llc_extent.e_end,
+				       LOV_MIN_STRIPE_SIZE);
+				GOTO(out, rc = -EINVAL);
+			}
+
 			lod_comp->llc_flags =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
 			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
@@ -1914,7 +1933,10 @@ recheck:
 	for_each_comp_entry_v1(comp_v1, ent) {
 		ext = &ent->lcme_extent;
 
-		if (le64_to_cpu(ext->e_start) > le64_to_cpu(ext->e_end)) {
+		if (le64_to_cpu(ext->e_start) > le64_to_cpu(ext->e_end) ||
+		    le64_to_cpu(ext->e_start) & (LOV_MIN_STRIPE_SIZE - 1) ||
+		    (le64_to_cpu(ext->e_end) != LUSTRE_EOF &&
+		    le64_to_cpu(ext->e_end) & (LOV_MIN_STRIPE_SIZE - 1))) {
 			CDEBUG(D_LAYOUT, "invalid extent "DEXT"\n",
 			       le64_to_cpu(ext->e_start),
 			       le64_to_cpu(ext->e_end));

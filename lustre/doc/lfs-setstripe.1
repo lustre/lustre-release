@@ -163,7 +163,7 @@ means the file should use the filesystem-wide default stripe_size
 .BR G ibibytes.
 The
 .I stripe_size
-must be a multiple of 64KiB in size.
+must be a multiple of 64KiB.  Values below 4096 are assumed to be in KiB units.
 .TP
 .B -i\fR, \fB--stripe-index \fR<\fIstart_ost_index\fR>
 The OST index (starting at 0) on which to start striping for this file.  A
@@ -297,7 +297,10 @@ or
 means the following options extend to the end of the file.  The first
 component starts at offset 0, and each subsequent component starts at
 the end of the previous component, so they must be specified in increasing
-file offset order.
+file offset order, and must be a multiple of 64KiB to align with the
+minimum
+.I stripe_size
+value.  Values below 4096 are assumed to be in KiB units.
 .PP
 .RS
 The first component specified will inherit default parameters from the

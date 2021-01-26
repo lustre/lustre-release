@@ -128,6 +128,61 @@ test_0c() {
 }
 run_test 0c "Verify SEL comp stripe count limits"
 
+test_0d() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local comp_end
+	local stripe_size
+
+	# Create parent directory
+	test_mkdir $td
+
+	# Component end must be a multiple of stripe size
+	# and a multiple of 64KiB to align with the minimum
+	# stripe size value.
+	# Values below 4096 are assumed to be in KiB units.
+	$LFS setstripe -E 127 $tf-1 > /dev/null 2>&1 &&
+		error "creating $tf-1 with '-E 127' should fail"
+
+	$LFS setstripe -E 128 -S 512 $tf-1 > /dev/null 2>&1 &&
+		error "creating $tf-1 with '-E 128 -S 512' should fail"
+
+	$LFS setstripe -E 128 $tf-1 ||
+		error "creating $tf-1 failed"
+
+	yes | dd bs=1K count=129 iflag=fullblock of=$tf-1 &&
+		error "writing to $tf-1 should fail"
+
+	yes | dd bs=1K count=128 iflag=fullblock of=$tf-1 ||
+		error "writing to $tf-1 failed"
+
+	comp_end=$($LFS getstripe -I1 -E $tf-1)
+	stripe_size=$($LFS getstripe -I1 -S $tf-1)
+
+	[[ $comp_end == $((128 * 1024)) ]] ||
+		error "incorrect component end '$comp_end' for $tf-1"
+
+	[[ $stripe_size == $((128 * 1024)) ]] ||
+		error "incorrect stripe size '$stripe_size' for $tf-1"
+
+	rm $tf-1 || error "removing $tf-1 failed"
+
+	# The stripe size must be a multiple of 64KiB.
+	# Values below 4096 are assumed to be in KiB units.
+	$LFS setstripe -E -1 -S 2047 $tf-2 > /dev/null 2>&1 &&
+		error "creating $tf-2 with '-S 2047' should fail"
+
+	$LFS setstripe -E -1 -S 2048 $tf-2 ||
+		error "creating $tf-2 failed"
+
+	stripe_size=$($LFS getstripe -I1 -S $tf-2)
+	[[ $stripe_size == $((2048 * 1024)) ]] ||
+		error "incorrect stripe size '$stripe_size' for $tf-2"
+
+	rm $tf-2 || error "removing $tf-2 failed"
+}
+run_test 0d "Verify comp end and stripe size"
+
 test_1a() {
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
