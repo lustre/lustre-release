@@ -699,15 +699,6 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	RETURN(0);
 }
 
-static void osd_wait_quota_pending(struct dt_device *d)
-{
-	struct osd_device  *o = osd_dt_dev(d);
-
-	if (o->od_quota_slave_md != NULL ||
-	    o->od_quota_slave_dt != NULL)
-		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
-}
-
 static struct dt_device_operations osd_dt_ops = {
 	.dt_root_get		= osd_root_get,
 	.dt_statfs		= osd_statfs,
@@ -719,7 +710,6 @@ static struct dt_device_operations osd_dt_ops = {
 	.dt_sync		= osd_sync,
 	.dt_commit_async	= osd_commit_async,
 	.dt_ro			= osd_ro,
-	.dt_wait_quota_pending	= osd_wait_quota_pending,
 };
 
 /*

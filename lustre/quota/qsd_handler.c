@@ -662,7 +662,7 @@ again:
 		 */
 		if (lqe->lqe_pending_write >= space && !wait_pending) {
 			wait_pending = 1;
-			dt_wait_quota_pending(qqi->qqi_qsd->qsd_dev);
+			dt_sync(env, qqi->qqi_qsd->qsd_dev);
 			goto again;
 		}
 
