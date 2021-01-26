@@ -15164,8 +15164,8 @@ test_160j() {
 	umount $MOUNT
 	stack_trap "mount_client $MOUNT" EXIT
 
-	# read changelog
-	cat <&4 >/dev/null || error "read changelog failed"
+	# read changelog, which may or may not fail, but should not crash
+	cat <&4 >/dev/null
 
 	# clear changelog
 	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
@@ -15174,7 +15174,7 @@ test_160j() {
 
 	printf 'clear:'$cl_user':0' >&3
 }
-run_test 160j "client can be umounted  while its chanangelog is being used"
+run_test 160j "client can be umounted while its chanangelog is being used"
 
 test_160k() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
