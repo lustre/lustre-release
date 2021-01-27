@@ -2565,20 +2565,41 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 		goto out;
 	}
 
-
 	/*
 	 * The peer may have discovery disabled at its end. Set
 	 * NO_DISCOVERY as appropriate.
 	 */
-	if ((pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY) &&
-	    !lnet_peer_discovery_disabled) {
+	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY) ||
+	    lnet_peer_discovery_disabled) {
+		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
+		       libcfs_nid2str(lp->lp_primary_nid));
+
+		/* Detect whether this peer has toggled discovery from on to
+		 * off and whether we can delete and re-create the peer. Peers
+		 * that were manually configured cannot be deleted by discovery.
+		 * We need to delete this peer and re-create it if the peer was
+		 * not configured manually, is currently considered DD capable,
+		 * and either:
+		 * 1. We've already discovered the peer (the peer has toggled
+		 *    the discovery feature from on to off), or
+		 * 2. The peer is considered MR, but it was not user configured
+		 *    (this was a "temporary" peer created via the kernel APIs
+		 *     that we're discovering for the first time)
+		 */
+		if (!(lp->lp_state & (LNET_PEER_CONFIGURED |
+				      LNET_PEER_NO_DISCOVERY)) &&
+		    (lp->lp_state & (LNET_PEER_DISCOVERED |
+				     LNET_PEER_MULTI_RAIL))) {
+			CDEBUG(D_NET, "Marking %s:0x%x for deletion\n",
+			       libcfs_nid2str(lp->lp_primary_nid),
+			       lp->lp_state);
+			lp->lp_state |= LNET_PEER_MARK_DELETION;
+		}
+		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
+	} else {
 		CDEBUG(D_NET, "Peer %s has discovery enabled\n",
 		       libcfs_nid2str(lp->lp_primary_nid));
 		lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
-	} else {
-		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
-		       libcfs_nid2str(lp->lp_primary_nid));
-		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
 	}
 
 	/*
@@ -3099,7 +3120,7 @@ __must_hold(&lp->lp_lock)
 	 * of deleting it.
 	 */
 	if (!list_empty(&lp->lp_dc_list))
-		list_del(&lp->lp_dc_list);
+		list_del_init(&lp->lp_dc_list);
 	list_for_each_entry_safe(route, tmp,
 				 &lp->lp_routes,
 				 lr_gwlist)
