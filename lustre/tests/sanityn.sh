@@ -508,6 +508,11 @@ test_16d() {
 run_test 16d "Verify DIO and buffer IO with two clients"
 
 test_16e() { # LU-13227
+	# issue:	LU-14314
+
+	(( "$MDS1_VERSION" >= $(version_code 2.13.53) )) ||
+		skip "Need MDS version at least 2.13.53"
+
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 
