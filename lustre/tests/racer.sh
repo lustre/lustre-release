@@ -38,30 +38,28 @@ if $RACER_FAILOVER; then
 	echo Victim facets ${victims[@]}
 fi
 
-#LU-4684
-RACER_ENABLE_MIGRATION=false
-
-if ((MDSCOUNT > 1 && "$MDS1_VERSION" >= $(version_code 2.8.0))); then
-	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
-	RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-true}
-	RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-true}
-elif ((MDSCOUNT > 1 && "$MDS1_VERSION" >= $(version_code 2.5.0))); then
-	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
+if ((MDSCOUNT > 1)); then
+	(( $MDS1_VERSION >= $(version_code 2.5.0) )) &&
+		RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
+	(( $MDS1_VERSION >= $(version_code 2.8.0) )) &&
+		RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-true}
+	(( $MDS1_VERSION >= $(version_code 2.13.57) )) &&
+		RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-true}
 fi
 
-[[ "$MDS1_VERSION" -lt $(version_code 2.9.54) ||
-   $(facet_fstype mgs) != zfs ]] && RACER_ENABLE_SNAPSHOT=false
+[[ "$MDS1_VERSION" -lt $(version_code 2.9.54) || $mgs_FSTYPE != zfs ]] &&
+	RACER_ENABLE_SNAPSHOT=false
 
-[[ "$MDS1_VERSION" -le $(version_code 2.9.55) ]] &&
+(( "$MDS1_VERSION" <= $(version_code 2.9.55) )) &&
 	RACER_ENABLE_PFL=false
 
-[[ "$MDS1_VERSION" -le $(version_code 2.10.53) ]] &&
+(( "$MDS1_VERSION" <= $(version_code 2.10.53) )) &&
 	RACER_ENABLE_DOM=false
 
-[[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ]] &&
+(( "$MDS1_VERSION" < $(version_code 2.10.55) )) &&
 	RACER_ENABLE_FLR=false
 
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.12.0) ]] &&
+(( $MDS1_VERSION < $(version_code 2.12.0) )) &&
 	RACER_ENABLE_SEL=false
 
 RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-false}
