@@ -53,8 +53,7 @@ while /bin/true; do
 
 		if $RACER_ENABLE_FILE_MIGRATE && (( RANDOM % 20 == 0 )); then
 			if [ "$pattern" = "flr" ]; then
-				# LU-13730 crashes server when adding mirror
-				: # opt=${opt/create/extend}
+				opt=${opt/create/extend}
 			else
 				opt=${opt/setstripe/migrate}
 				(( file % 8 == 0 )) && opt+=" --block"
