@@ -3980,6 +3980,10 @@ test_default_quota() {
 	fi
 
 	log "Increase default quota"
+
+	# LU-4505: sleep 5 seconds to enable quota acquire
+	sleep 5
+
 	# increase default quota
 	$LFS setquota $qdtype $qs $((LIMIT*3)) $qh $((LIMIT*3)) $DIR ||
 		error "set default quota failed"
@@ -4015,6 +4019,10 @@ test_default_quota() {
 	fi
 
 	log "Set to use default quota again"
+
+	# LU-4505: sleep 5 seconds to enable quota acquire
+	sleep 5
+
 	$LFS setquota $qtype $qid -d $DIR ||
 		error "set $qid to use default quota failed"
 
