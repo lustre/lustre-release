@@ -210,11 +210,15 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 		/* statfs data are quite recent, don't need to refresh it */
 		RETURN_EXIT;
 
-	down_write(&ltd->ltd_qos.lq_rw_sem);
+	if (test_and_set_bit(LQ_SF_PROGRESS, &ltd->ltd_qos.lq_flags))
+		RETURN_EXIT;
 
-	if (obd->obd_osfs_age > max_age)
-		goto out;
-
+	if (obd->obd_osfs_age > max_age) {
+		/* statfs data are quite recent, don't need to refresh it */
+		clear_bit(LQ_SF_PROGRESS, &ltd->ltd_qos.lq_flags);
+		RETURN_EXIT;
+	}
+	lod_getref(ltd);
 	ltd_foreach_tgt(ltd, tgt) {
 		avail = tgt->ltd_statfs.os_bavail;
 		if (lod_statfs_and_check(env, lod, ltd, tgt, 0))
@@ -224,10 +228,10 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 			/* recalculate weigths */
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 	}
+	lod_putref(lod, ltd);
 	obd->obd_osfs_age = ktime_get_seconds();
 
-out:
-	up_write(&ltd->ltd_qos.lq_rw_sem);
+	clear_bit(LQ_SF_PROGRESS, &ltd->ltd_qos.lq_flags);
 	EXIT;
 }
 

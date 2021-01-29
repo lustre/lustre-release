@@ -1548,6 +1548,7 @@ enum lq_flag {
 	LQ_SAME_SPACE,	     /* the OSTs all have approx.
 			      * the same space avail */
 	LQ_RESET,	     /* zero current penalties */
+	LQ_SF_PROGRESS,      /* statfs op in progress */
 };
 
 #ifdef HAVE_SERVER_SUPPORT
