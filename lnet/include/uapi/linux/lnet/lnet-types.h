@@ -393,6 +393,7 @@ struct lnet_md {
 	 *   regardless of the value of the lnet_response_tracking param.
 	 * - LNET_MD_NO_TRACK_RESPONSE: Disable response tracking on this MD
 	 *   regardless of the value of the lnet_response_tracking param.
+	 * - LNET_MD_GNILND: Disable warning about exceeding LNET_MAX_IOV.
 	 *
 	 * Note:
 	 * - LNET_MD_KIOV allows for a scatter/gather capability for memory
@@ -457,6 +458,8 @@ struct lnet_md {
 #define LNET_MD_TRACK_RESPONSE	     (1 << 10)
 /** See struct lnet_md::options. */
 #define LNET_MD_NO_TRACK_RESPONSE    (1 << 11)
+/** See struct lnet_md::options. */
+#define LNET_MD_GNILND               (1 << 12)
 
 /** Infinite threshold on MD operations. See struct lnet_md::threshold */
 #define LNET_MD_THRESH_INF	 (-1)

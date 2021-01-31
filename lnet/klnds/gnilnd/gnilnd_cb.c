@@ -259,7 +259,7 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 	if (tx->tx_phys != NULL) {
 		kmem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
 		CDEBUG(D_MALLOC, "slab-freed 'tx_phys': %lu at %p.\n",
-		       LNET_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
+		       GNILND_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
 	}
 
 	/* Only free the buffer if we used it */
@@ -639,7 +639,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, struct bio_vec *kiov,
 	}
 
 	CDEBUG(D_MALLOC, "slab-alloced 'tx->tx_phys': %lu at %p.\n",
-	       LNET_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
+	       GNILND_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
 
 	/* if loops changes, please change kgnilnd_cksum_kiov
 	 *   and kgnilnd_setup_immediate_buffer */
@@ -686,7 +686,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, struct bio_vec *kiov,
 			GOTO(error, rc);
 		}
 
-		if ((phys - tx->tx_phys) == LNET_MAX_IOV) {
+		if ((phys - tx->tx_phys) == GNILND_MAX_IOV) {
 			CERROR ("payload too big (%d)\n", (int)(phys - tx->tx_phys));
 			rc = -EMSGSIZE;
 			GOTO(error, rc);
@@ -2040,7 +2040,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	LASSERTF(nob == 0 || niov > 0,
 		"lntmsg %p nob %d niov %d\n", lntmsg, nob, niov);
-	LASSERTF(niov <= LNET_MAX_IOV,
+	LASSERTF(niov <= GNILND_MAX_IOV,
 		"lntmsg %p niov %d\n", lntmsg, niov);
 
 	if (msg_vmflush)

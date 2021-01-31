@@ -148,6 +148,8 @@ static inline time_t cfs_duration_sec(long duration_jiffies)
 
 /* need sane upper bound to limit copy overhead */
 #define GNILND_MAX_IMMEDIATE      (64<<10)
+/* allow for 4M transfers over gni. Note 2.5M used by DVS */
+#define GNILND_MAX_IOV            1024
 
 /* Max number of connections to keep in purgatory per peer */
 #define GNILND_PURGATORY_MAX	  5

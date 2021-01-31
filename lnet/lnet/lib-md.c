@@ -251,6 +251,9 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 			pa += plen;
 			i += 1;
 		}
+		WARN(!(lmd->md_options  & LNET_MD_GNILND) && i > LNET_MAX_IOV,
+			"Max IOV exceeded: %d should be < %d\n",
+			i, LNET_MAX_IOV);
 		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->max_size < 0 ||
 		     umd->max_size > (int)umd->length)) { /* illegal max_size */

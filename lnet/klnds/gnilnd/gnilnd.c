@@ -2268,7 +2268,7 @@ int kgnilnd_base_startup(void)
 
 	kgnilnd_data.kgn_tx_phys_cache =
 		kmem_cache_create("kgn_tx_phys",
-				   LNET_MAX_IOV * sizeof(gni_mem_segment_t),
+				   GNILND_MAX_IOV * sizeof(gni_mem_segment_t),
 				   0, 0, NULL);
 	if (kgnilnd_data.kgn_tx_phys_cache == NULL) {
 		CERROR("Can't create slab for kgn_tx_phys\n");
@@ -2294,7 +2294,7 @@ int kgnilnd_base_startup(void)
 		kgnilnd_data.kgn_cksum_npages * sizeof (struct page *));
 
 	for (i = 0; i < kgnilnd_data.kgn_cksum_npages; i++) {
-		kgnilnd_data.kgn_cksum_map_pages[i] = kmalloc(LNET_MAX_IOV * sizeof (struct page *),
+		kgnilnd_data.kgn_cksum_map_pages[i] = kmalloc(GNILND_MAX_IOV * sizeof (struct page *),
 							      GFP_KERNEL);
 		if (kgnilnd_data.kgn_cksum_map_pages[i] == NULL) {
 			CERROR("Can't allocate vmap cksum pages for cpu %d\n", i);

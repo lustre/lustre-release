@@ -48,15 +48,15 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	__u16                    cksum, cksum2;
 	__u64                    mbytes;
 
-	CFS_ALLOC_PTR_ARRAY(src, LNET_MAX_IOV);
-	CFS_ALLOC_PTR_ARRAY(dest, LNET_MAX_IOV);
+	CFS_ALLOC_PTR_ARRAY(src, GNILND_MAX_IOV);
+	CFS_ALLOC_PTR_ARRAY(dest, GNILND_MAX_IOV);
 
 	if (src == NULL || dest == NULL) {
 		CERROR("couldn't allocate iovs\n");
 		GOTO(unwind, rc = -ENOMEM);
 	}
 
-	for (i = 0; i < LNET_MAX_IOV; i++) {
+	for (i = 0; i < GNILND_MAX_IOV; i++) {
 		src[i].bv_offset = 0;
 		src[i].bv_len = PAGE_SIZE;
 		src[i].bv_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
@@ -78,9 +78,9 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 	/* add extra 2 pages - one for offset of src, 2nd to allow dest offset */
 	niov = (nob / PAGE_SIZE) + 2;
-	if (niov > LNET_MAX_IOV) {
+	if (niov > GNILND_MAX_IOV) {
 		CERROR("bytes %d too large, requires niov %d > %d\n",
-			nob, niov, LNET_MAX_IOV);
+			nob, niov, GNILND_MAX_IOV);
 		GOTO(unwind, rc = -E2BIG);
 	}
 
@@ -151,9 +151,9 @@ unwind:
 	}
 
 	if (src != NULL)
-		CFS_FREE_PTR_ARRAY(src, LNET_MAX_IOV);
+		CFS_FREE_PTR_ARRAY(src, GNILND_MAX_IOV);
 	if (dest != NULL)
-		CFS_FREE_PTR_ARRAY(dest, LNET_MAX_IOV);
+		CFS_FREE_PTR_ARRAY(dest, GNILND_MAX_IOV);
 	return rc;
 }
 
