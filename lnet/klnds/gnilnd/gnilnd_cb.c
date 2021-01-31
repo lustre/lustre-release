@@ -535,10 +535,9 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 		tx->tx_buffer = NULL;
 	} else {
 
-		if ((niov > 0) && unlikely(niov > (nob/PAGE_SIZE))) {
-			niov = round_up(nob + offset + kiov->bv_offset,
-					PAGE_SIZE);
-		}
+		if (niov && niov > (nob >> PAGE_SHIFT))
+			niov = DIV_ROUND_UP(nob + offset + kiov->bv_offset,
+					    PAGE_SIZE);
 
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
 			"bad niov %d msg %p kiov %p offset %d nob%d\n",
