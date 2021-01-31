@@ -861,7 +861,7 @@ static int lov_delete_composite(const struct lu_env *env,
 	lov_layout_wait(env, lov);
 	if (comp->lo_entries)
 		lov_foreach_layout_entry(lov, entry) {
-			if (lsme_is_foreign(entry->lle_lsme))
+			if (entry->lle_lsme && lsme_is_foreign(entry->lle_lsme))
 				continue;
 
 			lov_delete_raid0(env, lov, entry);
