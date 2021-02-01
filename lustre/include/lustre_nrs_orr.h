@@ -106,7 +106,7 @@ struct nrs_orr_key {
  */
 struct nrs_orr_data {
 	struct ptlrpc_nrs_resource	od_res;
-	struct cfs_binheap	       *od_binheap;
+	struct binheap	       *od_binheap;
 	struct cfs_hash		       *od_obj_hash;
 	struct kmem_cache	       *od_cache;
 	/**

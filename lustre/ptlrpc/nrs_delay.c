@@ -76,8 +76,8 @@
  * \retval 0 start_time(e1) > start_time(e2)
  * \retval 1 start_time(e1) <= start_time(e2)
  */
-static int delay_req_compare(struct cfs_binheap_node *e1,
-			     struct cfs_binheap_node *e2)
+static int delay_req_compare(struct binheap_node *e1,
+			     struct binheap_node *e2)
 {
 	struct ptlrpc_nrs_request *nrq1;
 	struct ptlrpc_nrs_request *nrq2;
@@ -89,7 +89,7 @@ static int delay_req_compare(struct cfs_binheap_node *e1,
 	       nrq2->nr_u.delay.req_start_time;
 }
 
-static struct cfs_binheap_ops nrs_delay_heap_ops = {
+static struct binheap_ops nrs_delay_heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= delay_req_compare,
@@ -120,7 +120,7 @@ static int nrs_delay_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	if (delay_data == NULL)
 		RETURN(-ENOMEM);
 
-	delay_data->delay_binheap = cfs_binheap_create(&nrs_delay_heap_ops,
+	delay_data->delay_binheap = binheap_create(&nrs_delay_heap_ops,
 						       CBH_FLAG_ATOMIC_GROW,
 						       4096, NULL,
 						       nrs_pol2cptab(policy),
@@ -155,9 +155,9 @@ static void nrs_delay_stop(struct ptlrpc_nrs_policy *policy)
 
 	LASSERT(delay_data != NULL);
 	LASSERT(delay_data->delay_binheap != NULL);
-	LASSERT(cfs_binheap_is_empty(delay_data->delay_binheap));
+	LASSERT(binheap_is_empty(delay_data->delay_binheap));
 
-	cfs_binheap_destroy(delay_data->delay_binheap);
+	binheap_destroy(delay_data->delay_binheap);
 
 	OBD_FREE_PTR(delay_data);
 }
@@ -212,10 +212,10 @@ struct ptlrpc_nrs_request *nrs_delay_req_get(struct ptlrpc_nrs_policy *policy,
 					     bool peek, bool force)
 {
 	struct nrs_delay_data *delay_data = policy->pol_private;
-	struct cfs_binheap_node *node;
+	struct binheap_node *node;
 	struct ptlrpc_nrs_request *nrq;
 
-	node = cfs_binheap_root(delay_data->delay_binheap);
+	node = binheap_root(delay_data->delay_binheap);
 	nrq = unlikely(node == NULL) ? NULL :
 	      container_of(node, struct ptlrpc_nrs_request, nr_node);
 
@@ -224,7 +224,7 @@ struct ptlrpc_nrs_request *nrs_delay_req_get(struct ptlrpc_nrs_policy *policy,
 		    ktime_get_real_seconds() < nrq->nr_u.delay.req_start_time)
 			nrq = NULL;
 		else if (likely(!peek))
-			cfs_binheap_remove(delay_data->delay_binheap,
+			binheap_remove(delay_data->delay_binheap,
 					   &nrq->nr_node);
 	}
 
@@ -262,7 +262,7 @@ static int nrs_delay_req_add(struct ptlrpc_nrs_policy *policy,
 					 prandom_u32_max(delay_data->max_delay - delay_data->min_delay + 1) +
 					 delay_data->min_delay;
 
-	return cfs_binheap_insert(delay_data->delay_binheap, &nrq->nr_node);
+	return binheap_insert(delay_data->delay_binheap, &nrq->nr_node);
 }
 
 /**
@@ -276,7 +276,7 @@ static void nrs_delay_req_del(struct ptlrpc_nrs_policy *policy,
 {
 	struct nrs_delay_data *delay_data = policy->pol_private;
 
-	cfs_binheap_remove(delay_data->delay_binheap, &nrq->nr_node);
+	binheap_remove(delay_data->delay_binheap, &nrq->nr_node);
 }
 
 /**

@@ -72,7 +72,7 @@
  * \retval 1 e1 <= e2
  */
 static int
-crrn_req_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
+crrn_req_compare(struct binheap_node *e1, struct binheap_node *e2)
 {
 	struct ptlrpc_nrs_request *nrq1;
 	struct ptlrpc_nrs_request *nrq2;
@@ -88,7 +88,7 @@ crrn_req_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
 	return nrq1->nr_u.crr.cr_sequence < nrq2->nr_u.crr.cr_sequence;
 }
 
-static struct cfs_binheap_ops nrs_crrn_heap_ops = {
+static struct binheap_ops nrs_crrn_heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= crrn_req_compare,
@@ -153,7 +153,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	if (net == NULL)
 		RETURN(-ENOMEM);
 
-	net->cn_binheap = cfs_binheap_create(&nrs_crrn_heap_ops,
+	net->cn_binheap = binheap_create(&nrs_crrn_heap_ops,
 					     CBH_FLAG_ATOMIC_GROW, 4096, NULL,
 					     nrs_pol2cptab(policy),
 					     nrs_pol2cptid(policy));
@@ -182,7 +182,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	RETURN(rc);
 
 out_binheap:
-	cfs_binheap_destroy(net->cn_binheap);
+	binheap_destroy(net->cn_binheap);
 out_net:
 	OBD_FREE_PTR(net);
 
@@ -205,10 +205,10 @@ static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
 
 	LASSERT(net != NULL);
 	LASSERT(net->cn_binheap != NULL);
-	LASSERT(cfs_binheap_is_empty(net->cn_binheap));
+	LASSERT(binheap_is_empty(net->cn_binheap));
 
 	rhashtable_free_and_destroy(&net->cn_cli_hash, nrs_crrn_exit, NULL);
-	cfs_binheap_destroy(net->cn_binheap);
+	binheap_destroy(net->cn_binheap);
 
 	OBD_FREE_PTR(net);
 }
@@ -376,7 +376,7 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 					    bool peek, bool force)
 {
 	struct nrs_crrn_net	  *net = policy->pol_private;
-	struct cfs_binheap_node	  *node = cfs_binheap_root(net->cn_binheap);
+	struct binheap_node	  *node = binheap_root(net->cn_binheap);
 	struct ptlrpc_nrs_request *nrq;
 
 	nrq = unlikely(node == NULL) ? NULL :
@@ -393,7 +393,7 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 
 		LASSERT(nrq->nr_u.crr.cr_round <= cli->cc_round);
 
-		cfs_binheap_remove(net->cn_binheap, &nrq->nr_node);
+		binheap_remove(net->cn_binheap, &nrq->nr_node);
 		cli->cc_active--;
 
 		CDEBUG(D_RPCTRACE,
@@ -402,7 +402,7 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 		       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
 
 		/** Peek at the next request to be served */
-		node = cfs_binheap_root(net->cn_binheap);
+		node = binheap_root(net->cn_binheap);
 
 		/** No more requests */
 		if (unlikely(node == NULL)) {
@@ -497,7 +497,7 @@ static int nrs_crrn_req_add(struct ptlrpc_nrs_policy *policy,
 	nrq->nr_u.crr.cr_round = cli->cc_round;
 	nrq->nr_u.crr.cr_sequence = cli->cc_sequence;
 
-	rc = cfs_binheap_insert(net->cn_binheap, &nrq->nr_node);
+	rc = binheap_insert(net->cn_binheap, &nrq->nr_node);
 	if (rc == 0) {
 		cli->cc_active++;
 		if (--cli->cc_quantum == 0)
@@ -527,9 +527,9 @@ static void nrs_crrn_req_del(struct ptlrpc_nrs_policy *policy,
 
 	LASSERT(nrq->nr_u.crr.cr_round <= cli->cc_round);
 
-	is_root = &nrq->nr_node == cfs_binheap_root(net->cn_binheap);
+	is_root = &nrq->nr_node == binheap_root(net->cn_binheap);
 
-	cfs_binheap_remove(net->cn_binheap, &nrq->nr_node);
+	binheap_remove(net->cn_binheap, &nrq->nr_node);
 	cli->cc_active--;
 
 	/**
@@ -538,7 +538,7 @@ static void nrs_crrn_req_del(struct ptlrpc_nrs_policy *policy,
 	 */
 	if (unlikely(is_root)) {
 		/** Peek at the next request to be served */
-		struct cfs_binheap_node *node = cfs_binheap_root(net->cn_binheap);
+		struct binheap_node *node = binheap_root(net->cn_binheap);
 
 		/** No more requests */
 		if (unlikely(node == NULL)) {

@@ -48,7 +48,7 @@ struct nrs_delay_data {
 	 * Delayed requests are stored in this binheap until they are
 	 * removed for handling.
 	 */
-	struct cfs_binheap		*delay_binheap;
+	struct binheap		*delay_binheap;
 
 	/**
 	 * Minimum service time

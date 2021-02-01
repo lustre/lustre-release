@@ -138,8 +138,8 @@ nrs_tbf_cli_reset_value(struct nrs_tbf_head *head,
 	cli->tc_rule_generation = rule->tr_generation;
 
 	if (cli->tc_in_heap)
-		cfs_binheap_relocate(head->th_binheap,
-				     &cli->tc_node);
+		binheap_relocate(head->th_binheap,
+				 &cli->tc_node);
 }
 
 static void
@@ -511,7 +511,7 @@ nrs_tbf_command(struct ptlrpc_nrs_policy *policy,
  * \retval 1 e1 < e2
  */
 static int
-tbf_cli_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
+tbf_cli_compare(struct binheap_node *e1, struct binheap_node *e2)
 {
 	struct nrs_tbf_client *cli1;
 	struct nrs_tbf_client *cli2;
@@ -536,7 +536,7 @@ tbf_cli_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
 /**
  * TBF binary heap operations
  */
-static struct cfs_binheap_ops nrs_tbf_heap_ops = {
+static struct binheap_ops nrs_tbf_heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= tbf_cli_compare,
@@ -2784,10 +2784,10 @@ static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	head->th_ops = ops;
 	head->th_type_flag = type;
 
-	head->th_binheap = cfs_binheap_create(&nrs_tbf_heap_ops,
-					      CBH_FLAG_ATOMIC_GROW, 4096, NULL,
-					      nrs_pol2cptab(policy),
-					      nrs_pol2cptid(policy));
+	head->th_binheap = binheap_create(&nrs_tbf_heap_ops,
+					  CBH_FLAG_ATOMIC_GROW, 4096, NULL,
+					  nrs_pol2cptab(policy),
+					  nrs_pol2cptid(policy));
 	if (head->th_binheap == NULL)
 		GOTO(out_free_head, rc = -ENOMEM);
 
@@ -2803,7 +2803,7 @@ static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	policy->pol_private = head;
 	return 0;
 out_free_heap:
-	cfs_binheap_destroy(head->th_binheap);
+	binheap_destroy(head->th_binheap);
 out_free_head:
 	OBD_FREE_PTR(head);
 out:
@@ -2836,8 +2836,8 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 	}
 	LASSERT(list_empty(&head->th_list));
 	LASSERT(head->th_binheap != NULL);
-	LASSERT(cfs_binheap_is_empty(head->th_binheap));
-	cfs_binheap_destroy(head->th_binheap);
+	LASSERT(binheap_is_empty(head->th_binheap));
+	binheap_destroy(head->th_binheap);
 	OBD_FREE_PTR(head);
 	nrs->nrs_throttling = 0;
 	wake_up(&policy->pol_nrs->nrs_svcpt->scp_waitq);
@@ -3042,14 +3042,14 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_head	  *head = policy->pol_private;
 	struct ptlrpc_nrs_request *nrq = NULL;
 	struct nrs_tbf_client     *cli;
-	struct cfs_binheap_node	  *node;
+	struct binheap_node	  *node;
 
 	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	if (!peek && policy->pol_nrs->nrs_throttling)
 		return NULL;
 
-	node = cfs_binheap_root(head->th_binheap);
+	node = binheap_root(head->th_binheap);
 	if (unlikely(node == NULL))
 		return NULL;
 
@@ -3099,14 +3099,14 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 			cli->tc_check_time = now;
 			list_del_init(&nrq->nr_u.tbf.tr_list);
 			if (list_empty(&cli->tc_list)) {
-				cfs_binheap_remove(head->th_binheap,
-						   &cli->tc_node);
+				binheap_remove(head->th_binheap,
+					       &cli->tc_node);
 				cli->tc_in_heap = false;
 			} else {
 				if (!(rule->tr_flags & NTRS_REALTIME))
 					cli->tc_deadline = now + cli->tc_nsecs;
-				cfs_binheap_relocate(head->th_binheap,
-						     &cli->tc_node);
+				binheap_relocate(head->th_binheap,
+						 &cli->tc_node);
 			}
 			CDEBUG(D_RPCTRACE,
 			       "TBF dequeues: class@%p rate %u gen %llu "
@@ -3121,9 +3121,9 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 			if (rule->tr_flags & NTRS_REALTIME) {
 				cli->tc_deadline = deadline;
 				cli->tc_nsecs_resid = old_resid;
-				cfs_binheap_relocate(head->th_binheap,
-						     &cli->tc_node);
-				if (node != cfs_binheap_root(head->th_binheap))
+				binheap_relocate(head->th_binheap,
+						 &cli->tc_node);
+				if (node != binheap_root(head->th_binheap))
 					return nrs_tbf_req_get(policy,
 							       peek, force);
 			}
@@ -3163,7 +3163,7 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 	if (list_empty(&cli->tc_list)) {
 		LASSERT(!cli->tc_in_heap);
 		cli->tc_deadline = cli->tc_check_time + cli->tc_nsecs;
-		rc = cfs_binheap_insert(head->th_binheap, &cli->tc_node);
+		rc = binheap_insert(head->th_binheap, &cli->tc_node);
 		if (rc == 0) {
 			cli->tc_in_heap = true;
 			nrq->nr_u.tbf.tr_sequence = head->th_sequence++;
@@ -3224,12 +3224,12 @@ static void nrs_tbf_req_del(struct ptlrpc_nrs_policy *policy,
 	LASSERT(!list_empty(&nrq->nr_u.tbf.tr_list));
 	list_del_init(&nrq->nr_u.tbf.tr_list);
 	if (list_empty(&cli->tc_list)) {
-		cfs_binheap_remove(head->th_binheap,
-				   &cli->tc_node);
+		binheap_remove(head->th_binheap,
+			       &cli->tc_node);
 		cli->tc_in_heap = false;
 	} else {
-		cfs_binheap_relocate(head->th_binheap,
-				     &cli->tc_node);
+		binheap_relocate(head->th_binheap,
+				 &cli->tc_node);
 	}
 }
 

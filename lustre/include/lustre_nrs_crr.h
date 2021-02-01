@@ -45,7 +45,7 @@
  */
 struct nrs_crrn_net {
 	struct ptlrpc_nrs_resource	cn_res;
-	struct cfs_binheap	       *cn_binheap;
+	struct binheap	       *cn_binheap;
 	/* CRR-N NRS - NID hash body */
 	struct rhashtable		cn_cli_hash;
 	/**
