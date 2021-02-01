@@ -181,7 +181,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)MDS_SWAP_LAYOUTS);
 	LASSERTF(MDS_RMFID == 62, "found %lld\n",
 		 (long long)MDS_RMFID);
-	LASSERTF(MDS_LAST_OPC == 63, "found %lld\n",
+	LASSERTF(MDS_BATCH == 63, "found %lld\n",
+		 (long long)MDS_BATCH);
+	LASSERTF(MDS_LAST_OPC == 64, "found %lld\n",
 		 (long long)MDS_LAST_OPC);
 	LASSERTF(REINT_SETATTR == 1, "found %lld\n",
 		 (long long)REINT_SETATTR);
@@ -820,10 +822,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lustre_msg_v2, lm_flags));
 	LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_flags) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_flags));
-	LASSERTF((int)offsetof(struct lustre_msg_v2, lm_padding_2) == 24, "found %lld\n",
-		 (long long)(int)offsetof(struct lustre_msg_v2, lm_padding_2));
-	LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_2) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_2));
+	LASSERTF((int)offsetof(struct lustre_msg_v2, lm_opc) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_msg_v2, lm_opc));
+	LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_opc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_opc));
 	LASSERTF((int)offsetof(struct lustre_msg_v2, lm_padding_3) == 28, "found %lld\n",
 		 (long long)(int)offsetof(struct lustre_msg_v2, lm_padding_3));
 	LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_3) == 4, "found %lld\n",

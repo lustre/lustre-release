@@ -575,7 +575,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
 		__swab32s(&m->lm_repsize);
 		__swab32s(&m->lm_cksum);
 		__swab32s(&m->lm_flags);
-		BUILD_BUG_ON(offsetof(typeof(*m), lm_padding_2) == 0);
+		__swab32s(&m->lm_opc);
 		BUILD_BUG_ON(offsetof(typeof(*m), lm_padding_3) == 0);
 	}
 
@@ -2893,6 +2893,39 @@ void lustre_swab_hsm_request(struct hsm_request *hr)
 	__swab32s(&hr->hr_itemcount);
 	__swab32s(&hr->hr_data_len);
 }
+
+/* TODO: swab each sub request message */
+void lustre_swab_batch_update_request(struct batch_update_request *bur)
+{
+	__swab32s(&bur->burq_magic);
+	__swab16s(&bur->burq_count);
+	__swab16s(&bur->burq_padding);
+}
+
+/* TODO: swab each sub reply message. */
+void lustre_swab_batch_update_reply(struct batch_update_reply *bur)
+{
+	__swab32s(&bur->burp_magic);
+	__swab16s(&bur->burp_count);
+	__swab16s(&bur->burp_padding);
+}
+
+void lustre_swab_but_update_header(struct but_update_header *buh)
+{
+	__swab32s(&buh->buh_magic);
+	__swab32s(&buh->buh_count);
+	__swab32s(&buh->buh_inline_length);
+	__swab32s(&buh->buh_reply_size);
+	__swab32s(&buh->buh_update_count);
+}
+EXPORT_SYMBOL(lustre_swab_but_update_header);
+
+void lustre_swab_but_update_buffer(struct but_update_buffer *bub)
+{
+	__swab32s(&bub->bub_size);
+	__swab32s(&bub->bub_padding);
+}
+EXPORT_SYMBOL(lustre_swab_but_update_buffer);
 
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl)
 {

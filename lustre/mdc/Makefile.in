@@ -6,7 +6,8 @@ mdc-objs-y :=	mdc_request.o \
 		mdc_lib.o \
 		mdc_locks.o \
 		mdc_changelog.o \
-		mdc_dev.o
+		mdc_dev.o	\
+		mdc_batch.o
 
 mdc-objs-$(CONFIG_FS_POSIX_ACL) += mdc_acl.o
 

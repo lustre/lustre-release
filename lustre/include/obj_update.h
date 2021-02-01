@@ -112,4 +112,26 @@ object_update_result_get(const struct object_update_reply *reply,
 
 	return ptr;
 }
+
+static inline struct lustre_msg *
+batch_update_reqmsg_next(struct batch_update_request *bur,
+			 struct lustre_msg *reqmsg)
+{
+	if (reqmsg)
+		return (struct lustre_msg *)((char *)reqmsg +
+					     lustre_packed_msg_size(reqmsg));
+	else
+		return &bur->burq_reqmsg[0];
+}
+
+static inline struct lustre_msg *
+batch_update_repmsg_next(struct batch_update_reply *bur,
+			 struct lustre_msg *repmsg)
+{
+	if (repmsg)
+		return (struct lustre_msg *)((char *)repmsg +
+					     lustre_packed_msg_size(repmsg));
+	else
+		return &bur->burp_repmsg[0];
+}
 #endif

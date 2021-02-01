@@ -1827,6 +1827,54 @@ static inline int md_rmfid(struct obd_export *exp, struct fid_array *fa,
 	return MDP(exp->exp_obd, rmfid)(exp, fa, rcs, set);
 }
 
+static inline struct lu_batch *
+md_batch_create(struct obd_export *exp, enum lu_batch_flags flags,
+		__u32 max_count)
+{
+	int rc;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return ERR_PTR(rc);
+
+	return MDP(exp->exp_obd, batch_create)(exp, flags, max_count);
+}
+
+static inline int md_batch_stop(struct obd_export *exp, struct lu_batch *bh)
+{
+	int rc;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return rc;
+
+	return MDP(exp->exp_obd, batch_stop)(exp, bh);
+}
+
+static inline int md_batch_flush(struct obd_export *exp, struct lu_batch *bh,
+				 bool wait)
+{
+	int rc;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return rc;
+
+	return MDP(exp->exp_obd, batch_flush)(exp, bh, wait);
+}
+
+static inline int md_batch_add(struct obd_export *exp, struct lu_batch *bh,
+			       struct md_op_item *item)
+{
+	int rc;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return rc;
+
+	return MDP(exp->exp_obd, batch_add)(exp, bh, item);
+}
+
 /* OBD Metadata Support */
 
 extern int obd_init_caches(void);

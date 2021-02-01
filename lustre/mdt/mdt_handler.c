@@ -4166,6 +4166,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
 					     DEF_REP_MD_SIZE);
+
 		if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_LOGCOOKIES,
 					     RCL_SERVER, 0);
@@ -4205,6 +4206,30 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
         LASSERT(!lustre_handle_is_used(&lh->mlh_pdo_lh));
 }
 
+void mdt_thread_info_reset(struct mdt_thread_info *info)
+{
+	memset(&info->mti_attr, 0, sizeof(info->mti_attr));
+	info->mti_body = NULL;
+	info->mti_dlm_req = NULL;
+	info->mti_cross_ref = 0;
+	info->mti_opdata = 0;
+	info->mti_big_lmm_used = 0;
+	info->mti_big_acl_used = 0;
+	info->mti_som_strict = 0;
+
+	info->mti_spec.no_create = 0;
+	info->mti_spec.sp_rm_entry = 0;
+	info->mti_spec.sp_permitted = 0;
+
+	info->mti_spec.u.sp_ea.eadata = NULL;
+	info->mti_spec.u.sp_ea.eadatalen = 0;
+
+	if (info->mti_batch_env && info->mti_object != NULL) {
+		mdt_object_put(info->mti_env, info->mti_object);
+		info->mti_object = NULL;
+	}
+}
+
 /*
  * Initialize fields of struct mdt_thread_info. Other fields are left in
  * uninitialized state, because it's too expensive to zero out whole
@@ -4229,24 +4254,12 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
                 info->mti_mdt = NULL;
 	info->mti_env = req->rq_svc_thread->t_env;
 	info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
-
-        memset(&info->mti_attr, 0, sizeof(info->mti_attr));
 	info->mti_big_buf = LU_BUF_NULL;
-	info->mti_body = NULL;
-        info->mti_object = NULL;
-        info->mti_dlm_req = NULL;
-        info->mti_cross_ref = 0;
-        info->mti_opdata = 0;
-	info->mti_big_lmm_used = 0;
-	info->mti_big_acl_used = 0;
-	info->mti_som_strict = 0;
+	info->mti_max_repsize = 0;
+	info->mti_batch_env = 0;
+	info->mti_object = NULL;
 
-        info->mti_spec.no_create = 0;
-	info->mti_spec.sp_rm_entry = 0;
-	info->mti_spec.sp_permitted = 0;
-
-	info->mti_spec.u.sp_ea.eadata = NULL;
-	info->mti_spec.u.sp_ea.eadatalen = 0;
+	mdt_thread_info_reset(info);
 }
 
 void mdt_thread_info_fini(struct mdt_thread_info *info)
@@ -4985,6 +4998,7 @@ static int mdt_intent_policy(const struct lu_env *env,
 		if (rc)
 			rc = err_serious(rc);
 	}
+
 	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
@@ -5720,6 +5734,7 @@ TGT_MDT_HDL(HAS_KEY | HAS_BODY | HAS_REPLY | IS_MUTABLE,
 	    MDS_SWAP_LAYOUTS,
 	    mdt_swap_layouts),
 TGT_MDT_HDL(IS_MUTABLE,		MDS_RMFID,	mdt_rmfid),
+TGT_MDT_HDL(IS_MUTABLE,		MDS_BATCH,	mdt_batch),
 };
 
 static struct tgt_handler mdt_io_ops[] = {

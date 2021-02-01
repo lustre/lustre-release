@@ -79,12 +79,21 @@ void req_capsule_init(struct req_capsule *pill, struct ptlrpc_request *req,
 void req_capsule_fini(struct req_capsule *pill);
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt);
+void req_capsule_subreq_init(struct req_capsule *pill,
+			     const struct req_format *fmt,
+			     struct ptlrpc_request *req,
+			     struct lustre_msg *reqmsg,
+			     struct lustre_msg *repmsg,
+			     enum req_location loc);
+
 void req_capsule_client_dump(struct req_capsule *pill);
 void req_capsule_server_dump(struct req_capsule *pill);
 void req_capsule_init_area(struct req_capsule *pill);
 size_t req_capsule_filled_sizes(struct req_capsule *pill,
 				enum req_location loc);
 int  req_capsule_server_pack(struct req_capsule *pill);
+int  req_capsule_client_pack(struct req_capsule *pill);
+void req_capsule_set_replen(struct req_capsule *pill);
 
 void *req_capsule_client_get(struct req_capsule *pill,
                              const struct req_msg_field *field);
@@ -155,22 +164,6 @@ static inline bool req_capsule_rep_swabbed(struct req_capsule *pill,
 {
 	LASSERT(index < sizeof(pill->rc_rep_swab_mask) * 8);
 	return pill->rc_rep_swab_mask & BIT(index);
-}
-
-/**
- * Returns true if request needs to be swabbed into local cpu byteorder
- */
-static inline bool req_capsule_req_need_swab(struct req_capsule *pill)
-{
-	return req_capsule_req_swabbed(pill, MSG_PTLRPC_HEADER_OFF);
-}
-
-/**
- * Returns true if request reply needs to be swabbed into local cpu byteorder
- */
-static inline bool req_capsule_rep_need_swab(struct req_capsule *pill)
-{
-	return req_capsule_rep_swabbed(pill, MSG_PTLRPC_HEADER_OFF);
 }
 
 /**
@@ -318,6 +311,9 @@ extern struct req_format RQF_CONNECT;
 extern struct req_format RQF_LFSCK_NOTIFY;
 extern struct req_format RQF_LFSCK_QUERY;
 
+/* Batch UpdaTe req_format */
+extern struct req_format RQF_MDS_BATCH;
+
 extern struct req_msg_field RMF_GENERIC_DATA;
 extern struct req_msg_field RMF_PTLRPC_BODY;
 extern struct req_msg_field RMF_MDT_BODY;
@@ -416,6 +412,11 @@ extern struct req_msg_field RMF_OUT_UPDATE;
 extern struct req_msg_field RMF_OUT_UPDATE_REPLY;
 extern struct req_msg_field RMF_OUT_UPDATE_HEADER;
 extern struct req_msg_field RMF_OUT_UPDATE_BUF;
+
+/* Batch UpdaTe format */
+extern struct req_msg_field RMF_BUT_REPLY;
+extern struct req_msg_field RMF_BUT_HEADER;
+extern struct req_msg_field RMF_BUT_BUF;
 
 /* LFSCK format */
 extern struct req_msg_field RMF_LFSCK_REQUEST;

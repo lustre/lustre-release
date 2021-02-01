@@ -1182,6 +1182,42 @@ static inline bool ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
 }
 /** @} nrs */
 
+static inline bool req_capsule_ptlreq(struct req_capsule *pill)
+{
+	struct ptlrpc_request *req = pill->rc_req;
+
+	return req != NULL && pill == &req->rq_pill;
+}
+
+static inline bool req_capsule_subreq(struct req_capsule *pill)
+{
+	struct ptlrpc_request *req = pill->rc_req;
+
+	return req == NULL || pill != &req->rq_pill;
+}
+
+/**
+ * Returns true if request needs to be swabbed into local cpu byteorder
+ */
+static inline bool req_capsule_req_need_swab(struct req_capsule *pill)
+{
+	struct ptlrpc_request *req = pill->rc_req;
+
+	return req && req_capsule_req_swabbed(&req->rq_pill,
+					      MSG_PTLRPC_HEADER_OFF);
+}
+
+/**
+ * Returns true if request reply needs to be swabbed into local cpu byteorder
+ */
+static inline bool req_capsule_rep_need_swab(struct req_capsule *pill)
+{
+	struct ptlrpc_request *req = pill->rc_req;
+
+	return req && req_capsule_rep_swabbed(&req->rq_pill,
+					      MSG_PTLRPC_HEADER_OFF);
+}
+
 /**
  * Convert numerical request phase value \a phase into text string description
  */

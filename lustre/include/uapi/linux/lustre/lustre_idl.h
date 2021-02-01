@@ -609,7 +609,7 @@ struct lustre_msg_v2 {
 	__u32 lm_repsize;	/* size of preallocated reply buffer */
 	__u32 lm_cksum;		/* CRC32 of ptlrpc_body early reply messages */
 	__u32 lm_flags;		/* enum lustre_msghdr MSGHDR_* flags */
-	__u32 lm_padding_2;	/* unused */
+	__u32 lm_opc;		/* SUB request opcode in a batch request */
 	__u32 lm_padding_3;	/* unused */
 	__u32 lm_buflens[0];	/* length of additional buffers in bytes,
 				 * padded to a multiple of 8 bytes. */
@@ -618,6 +618,9 @@ struct lustre_msg_v2 {
 	 * padded to a multiple of 8 bytes each to align contents.
 	 */
 };
+
+/* The returned result of the SUB request in a batch request */
+#define lm_result	lm_opc
 
 /* ptlrpc_body packet pb_types */
 #define PTL_RPC_MSG_REQUEST	4711	/* normal RPC request message */
@@ -907,6 +910,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_LSEEK | OBD_CONNECT2_DOM_LVB |\
 				OBD_CONNECT2_REP_MBITS | \
 				OBD_CONNECT2_ATOMIC_OPEN_LOCK | \
+				OBD_CONNECT2_BATCH_RPC | \
 				OBD_CONNECT2_ENCRYPT_NAME)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
@@ -1674,6 +1678,7 @@ enum mds_cmd {
 	MDS_HSM_CT_UNREGISTER	= 60,
 	MDS_SWAP_LAYOUTS	= 61,
 	MDS_RMFID		= 62,
+	MDS_BATCH		= 63,
 	MDS_LAST_OPC
 };
 
@@ -3488,6 +3493,80 @@ struct out_read_reply {
 	__u32	orr_padding;
 	__u64	orr_offset;
 	char	orr_data[0];
+};
+
+#define BUT_REQUEST_MAGIC	0xBADE0001
+/* Hold batched updates sending to the remote target in a single RPC */
+struct batch_update_request {
+	/* Magic number: BUT_REQUEST_MAGIC. */
+	__u32			burq_magic;
+	/* Number of sub requests packed in this batched RPC: burq_reqmsg[]. */
+	__u16			burq_count;
+	/* Unused padding field. */
+	__u16			burq_padding;
+	/*
+	 * Sub request message array. As message feild buffers for each sub
+	 * request are packed after padded lustre_msg.lm_buflens[] arrary, thus
+	 * it can locate the next request message via the function
+	 * @batch_update_reqmsg_next() in lustre/include/obj_update.h
+	 */
+	struct lustre_msg	burq_reqmsg[0];
+};
+
+#define BUT_HEADER_MAGIC	0xBADF0001
+/* Header for Batched UpdaTes request */
+struct but_update_header {
+	/* Magic number: BUT_HEADER_MAGIC */
+	__u32	buh_magic;
+	/*
+	 * When the total request buffer length is less than MAX_INLINE_SIZE,
+	 * @buh_count is set with 1 and the batched RPC reqeust can be packed
+	 * inline.
+	 * Otherwise, @buh_count indicates the IO vector count transferring in
+	 * bulk I/O.
+	 */
+	__u32	buh_count;
+	/* inline buffer length when the batched RPC can be packed inline. */
+	__u32	buh_inline_length;
+	/* The reply buffer size the client prepared. */
+	__u32	buh_reply_size;
+	/* Sub request count in this batched RPC. */
+	__u32	buh_update_count;
+	/* Unused padding field. */
+	__u32	buh_padding;
+	/* Inline buffer used when the RPC request can be packed inline. */
+	__u32	buh_inline_data[0];
+};
+
+struct but_update_buffer {
+	__u32	bub_size;
+	__u32	bub_padding;
+};
+
+#define BUT_REPLY_MAGIC	0x00AD0001
+/* Batched reply received from a remote targer in a batched RPC. */
+struct batch_update_reply {
+	/* Magic number: BUT_REPLY_MAGIC. */
+	__u32			burp_magic;
+	/* Successful returned sub requests. */
+	__u16			burp_count;
+	/* Unused padding field. */
+	__u16			burp_padding;
+	/*
+	 * Sub reply message array.
+	 * It can locate the next reply message buffer via the function
+	 * @batch_update_repmsg_next() in lustre/include/obj_update.h
+	 */
+	struct lustre_msg	burp_repmsg[0];
+};
+
+/**
+ * Batch update opcode.
+ */
+enum batch_update_cmd {
+	BUT_GETATTR	= 1,
+	BUT_LAST_OPC,
+	BUT_FIRST_OPC	= BUT_GETATTR,
 };
 
 /** layout swap request structure

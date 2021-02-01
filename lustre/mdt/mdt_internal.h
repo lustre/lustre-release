@@ -457,6 +457,16 @@ struct mdt_thread_info {
 	 */
 	struct req_capsule        *mti_pill;
 
+	/*
+	 * SUB request pill in a batch request.
+	 */
+	struct req_capsule	    mti_sub_pill;
+
+	/*
+	 * Max left reply buffer size for the batch request.
+	 */
+	__u32			    mti_max_repsize;
+
 	/* although we have export in req, there are cases when it is not
 	 * available, e.g. closing files upon export destroy */
 	struct obd_export          *mti_exp;
@@ -500,7 +510,9 @@ struct mdt_thread_info {
 	/* big_lmm buffer was used and must be used in reply */
 				   mti_big_lmm_used:1,
 				   mti_big_acl_used:1,
-				   mti_som_strict:1;
+				   mti_som_strict:1,
+	/* Batch processing environment */
+				   mti_batch_env:1;
 
 	/* opdata for mdt_reint_open(), has the same as
 	 * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
@@ -957,6 +969,7 @@ int mdt_lookup_version_check(struct mdt_thread_info *info,
 			     struct mdt_object *p,
 			     const struct lu_name *lname,
 			     struct lu_fid *fid, int idx);
+void mdt_thread_info_reset(struct mdt_thread_info *info);
 void mdt_thread_info_init(struct ptlrpc_request *req,
 			  struct mdt_thread_info *mti);
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
@@ -1027,6 +1040,9 @@ __u32 mdt_identity_get_perm(struct md_identity *, lnet_nid_t);
 
 /* mdt/mdt_recovery.c */
 __u64 mdt_req_from_lrd(struct ptlrpc_request *req, struct tg_reply_data *trd);
+
+/* mdt/mdt_batch.c */
+int mdt_batch(struct tgt_session_info *tsi);
 
 /* mdt/mdt_hsm.c */
 int mdt_hsm_state_get(struct tgt_session_info *tsi);

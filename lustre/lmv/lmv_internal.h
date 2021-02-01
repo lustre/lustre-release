@@ -40,6 +40,18 @@
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
 
+struct lmvsub_batch {
+	struct lu_batch		*sbh_sub;
+	struct lmv_tgt_desc	*sbh_tgt;
+	struct list_head	 sbh_sub_item;
+};
+
+struct lmv_batch {
+	struct lu_batch			 lbh_super;
+	struct ptlrpc_request_set	*lbh_rqset;
+	struct list_head		 lbh_sub_batch_list;
+};
+
 int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		    struct lookup_intent *it, struct ptlrpc_request **reqp,
 		    ldlm_blocking_callback cb_blocking,
