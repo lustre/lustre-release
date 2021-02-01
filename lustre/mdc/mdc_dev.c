@@ -34,6 +34,7 @@
 
 #include <obd_class.h>
 #include <lustre_osc.h>
+#include <linux/falloc.h>
 #include <uapi/linux/lustre/lustre_param.h>
 
 #include "mdc_internal.h"
@@ -1057,10 +1058,12 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 					      &oio->oi_trunc);
 		if (rc < 0)
 			return rc;
+	} else if (cl_io_is_fallocate(io) &&
+		   io->u.ci_setattr.sa_falloc_mode & FALLOC_FL_PUNCH_HOLE) {
+		rc = osc_punch_start(env, io, obj);
+		if (rc < 0)
+			return rc;
 	}
-
-	if (cl_io_is_fallocate(io))
-		return -EOPNOTSUPP;
 
 	if (oio->oi_lockless == 0) {
 		cl_object_attr_lock(obj);
@@ -1093,7 +1096,7 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 			return rc;
 	}
 
-	if (!(ia_avalid & ATTR_SIZE))
+	if (!(ia_avalid & ATTR_SIZE) && !cl_io_is_fallocate(io))
 		return 0;
 
 	memset(oa, 0, sizeof(*oa));
@@ -1101,12 +1104,10 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 	oa->o_mtime = attr->cat_mtime;
 	oa->o_atime = attr->cat_atime;
 	oa->o_ctime = attr->cat_ctime;
-
-	oa->o_size = size;
-	oa->o_blocks = OBD_OBJECT_EOF;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
 		      OBD_MD_FLCTIME | OBD_MD_FLMTIME | OBD_MD_FLSIZE |
 		      OBD_MD_FLBLOCKS;
+
 	if (oio->oi_lockless) {
 		oa->o_flags = OBD_FL_SRVLOCK;
 		oa->o_valid |= OBD_MD_FLFLAGS;
@@ -1118,9 +1119,19 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 	}
 
 	init_completion(&cbargs->opc_sync);
+	if (cl_io_is_fallocate(io)) {
+		int falloc_mode = io->u.ci_setattr.sa_falloc_mode;
 
-	rc = osc_punch_send(osc_export(cl2osc(obj)), oa,
-			    mdc_async_upcall, cbargs);
+		oa->o_size = io->u.ci_setattr.sa_falloc_offset;
+		oa->o_blocks = io->u.ci_setattr.sa_falloc_end;
+		rc = osc_fallocate_base(osc_export(cl2osc(obj)), oa,
+					mdc_async_upcall, cbargs, falloc_mode);
+	} else {
+		oa->o_size = size;
+		oa->o_blocks = OBD_OBJECT_EOF;
+		rc = osc_punch_send(osc_export(cl2osc(obj)), oa,
+				    mdc_async_upcall, cbargs);
+	}
 	cbargs->opc_rpc_sent = rc == 0;
 	return rc;
 }

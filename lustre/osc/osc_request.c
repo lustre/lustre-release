@@ -467,7 +467,7 @@ int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 
 	ptlrpc_request_set_replen(req);
 
-	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_setattr_interpret;
+	req->rq_interpret_reply = osc_setattr_interpret;
 	BUILD_BUG_ON(sizeof(*sa) > sizeof(req->rq_async_args));
 	sa = ptlrpc_req_async_args(sa, req);
 	sa->sa_oa = oa;
@@ -478,6 +478,7 @@ int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_fallocate_base);
 
 static int osc_sync_interpret(const struct lu_env *env,
 			      struct ptlrpc_request *req, void *args, int rc)

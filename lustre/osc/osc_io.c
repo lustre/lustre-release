@@ -553,8 +553,8 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
  * if server doesn't support fallocate punch, we also need these data to be
  * flushed first to prevent re-ordering with the punch
  */
-static int osc_punch_start(const struct lu_env *env, struct cl_io *io,
-			   struct cl_object *obj)
+int osc_punch_start(const struct lu_env *env, struct cl_io *io,
+		    struct cl_object *obj)
 {
 	struct osc_object *osc = cl2osc(obj);
 	pgoff_t pg_start = cl_index(obj, io->u.ci_setattr.sa_falloc_offset);
@@ -570,6 +570,7 @@ static int osc_punch_start(const struct lu_env *env, struct cl_io *io,
 			     osc);
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_punch_start);
 
 static int osc_io_setattr_start(const struct lu_env *env,
                                 const struct cl_io_slice *slice)

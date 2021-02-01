@@ -2285,7 +2285,8 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 	blen = (ALIGN(end, 1 << inode->i_blkbits) >> inode->i_blkbits) - boff;
 
 	/* Create and mark new extents as either zero or unwritten */
-	flags = osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks ?
+	flags = (osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks ||
+		 !ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)) ?
 		LDISKFS_GET_BLOCKS_CREATE_ZERO :
 		LDISKFS_GET_BLOCKS_CREATE_UNWRIT_EXT;
 #ifndef HAVE_LDISKFS_GET_BLOCKS_KEEP_SIZE
@@ -2293,12 +2294,6 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		flags |= LDISKFS_GET_BLOCKS_KEEP_SIZE;
 #endif
 	inode_lock(inode);
-
-	/*
-	 * We only support preallocation for extent-based file only.
-	 */
-	if (!(ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)))
-		GOTO(out, rc = -EOPNOTSUPP);
 
 	if (!(mode & FALLOC_FL_KEEP_SIZE) && (end > i_size_read(inode) ||
 	    end > LDISKFS_I(inode)->i_disksize)) {

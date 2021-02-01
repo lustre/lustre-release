@@ -1297,6 +1297,7 @@ enum mdt_stat_idx {
 	LPROC_MDT_IO_WRITE,
 	LPROC_MDT_IO_PUNCH,
 	LPROC_MDT_MIGRATE,
+	LPROC_MDT_FALLOCATE,
 	LPROC_MDT_LAST,
 };
 
@@ -1355,6 +1356,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		     struct niobuf_remote *rnb, int npages,
 		     struct niobuf_local *lnb, int old_rc);
 int mdt_punch_hdl(struct tgt_session_info *tsi);
+int mdt_fallocate_hdl(struct tgt_session_info *tsi);
 int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 			struct ldlm_lock **lockp, __u64 flags);
 int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,
@@ -1365,7 +1367,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info, struct mdt_object *mo);
 int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
 			     struct ldlm_resource *res, bool increase_only);
 void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
-			    bool increase_only);
+			    struct obdo *oa, bool increase_only);
 int mdt_dom_lvb_alloc(struct ldlm_resource *res);
 
 static inline bool mdt_dom_check_for_discard(struct mdt_thread_info *mti,

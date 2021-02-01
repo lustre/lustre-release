@@ -14184,31 +14184,30 @@ run_test 150bb "Verify fallocate modes both zero space"
 
 test_150c() {
 	check_set_fallocate_or_skip
+	local striping="-c2"
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tfile || error "setstripe failed"
 	fallocate -l ${OSTCOUNT}m $DIR/$tfile || error "fallocate failed"
-	sync; sync_all_data
-	cancel_lru_locks $OSC
-	sleep 5
-	bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
-	want=$((OSTCOUNT * 1048576))
+	local bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
+	local want=$((OSTCOUNT * 1048576))
 
 	# Must allocate all requested space, not more than 5% extra
 	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
 		error "bytes $bytes is not $want"
 
 	rm -f $DIR/$tfile
-	# verify fallocate on PFL file
-	$LFS setstripe -E1M -c1 -E16M -c3 -Eeof -c 4 $DIR/$tfile ||
+
+	echo "verify fallocate on PFL file"
+
+	[[ "x$DOM" == "xyes" ]] && striping="-L mdt"
+
+	$LFS setstripe -E1M $striping -E16M -c3 -Eeof -c 4 $DIR/$tfile ||
 		error "Create $DIR/$tfile failed"
-	fallocate -l $((1048576 * 1024)) $DIR/$tfile ||
+	fallocate -l $((1048576 * 512)) $DIR/$tfile ||
 			error "fallocate failed"
-	sync; sync_all_data
-	cancel_lru_locks $OSC
-	sleep 5
-	local bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
-	local want=$((1024 * 1048576))
+	bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
+	want=$((512 * 1048576))
 
 	# Must allocate all requested space, not more than 5% extra
 	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
@@ -14218,13 +14217,14 @@ run_test 150c "Verify fallocate Size and Blocks"
 
 test_150d() {
 	check_set_fallocate_or_skip
+	local striping="-c2"
+
+	[[ "x$DOM" == "xyes" ]] && striping="-L mdt"
 
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
-	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
+	$LFS setstripe -E1M $striping -E eof -c $OSTCOUNT -S1M $DIR/$tdir ||
+		error "setstripe failed"
 	fallocate -o 1G -l ${OSTCOUNT}m $DIR/$tdir || error "fallocate failed"
-	sync; sync_all_data
-	cancel_lru_locks $OSC
-	sleep 5
 	local bytes=$(($(stat -c '%b * %B' $DIR/$tdir)))
 	local want=$((OSTCOUNT * 1048576))
 
@@ -14301,6 +14301,9 @@ test_150f() {
 	check_set_fallocate_or_skip
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 
+	[[ "x$DOM" == "xyes" ]] &&
+		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
+
 	echo "Verify fallocate punch: Range within the file range"
 	yes 'A' | dd of=$DIR/$tfile bs=4096 count=5 ||
 		error "dd failed for bs 4096 and count 5"
@@ -14376,8 +14379,13 @@ test_150g() {
 	check_set_fallocate_or_skip
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 
-	$LFS setstripe -c${OSTCOUNT} $DIR/$tfile ||
-		error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
+	if [[ "x$DOM" == "xyes" ]]; then
+		$LFS setstripe -E2M -L mdt -E eof -c${OSTCOUNT} $DIR/$tfile ||
+			error "$LFS setstripe DoM + ${OSTCOUNT} OST failed"
+	else
+		$LFS setstripe -c${OSTCOUNT} $DIR/$tfile ||
+			error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
+	fi
 
 	# Get 100MB per OST of the available space to reduce run time
 	# else 60% of the available space if we are running SLOW tests

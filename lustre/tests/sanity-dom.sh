@@ -183,6 +183,10 @@ test_sanity()
 {
 	SANITY_ONLY=${SANITY_ONLY:-"36 39 40 41 42d 42e 43 46 56r 101e 119a \
 				    131 150a 155a 155b 155c 155d 207 241 251"}
+	# Fallocate tests
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) &&
+		SANITY_ONLY+=" 150b 150bb 150c 150d 150f 150g"
+
 	SANITY_REPEAT=${SANITY_REPEAT:-1}
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed

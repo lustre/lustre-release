@@ -746,7 +746,7 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
 	if (rc != 0)
 		GOTO(out_unlock, rc);
-	mdt_dom_obj_lvb_update(info->mti_env, mo, false);
+	mdt_dom_obj_lvb_update(info->mti_env, mo, NULL, false);
 	EXIT;
 out_unlock:
 	mdt_reint_striped_unlock(info, mo, lh, einfo, rc);

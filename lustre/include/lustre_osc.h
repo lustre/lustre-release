@@ -669,6 +669,8 @@ int osc_reconnect(const struct lu_env *env, struct obd_export *exp,
 int osc_disconnect(struct obd_export *exp);
 int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 		   obd_enqueue_update_f upcall, void *cookie);
+int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
+		       obd_enqueue_update_f upcall, void *cookie, int mode);
 
 /* osc_io.c */
 int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
@@ -703,6 +705,8 @@ void osc_io_lseek_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
 int osc_io_lru_reserve(const struct lu_env *env, const struct cl_io_slice *ios,
 		       loff_t pos, size_t count);
+int osc_punch_start(const struct lu_env *env, struct cl_io *io,
+		    struct cl_object *obj);
 
 /* osc_lock.c */
 void osc_lock_to_lockless(const struct lu_env *env, struct osc_lock *ols,

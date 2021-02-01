@@ -31,6 +31,8 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <dt_object.h>
+#include <linux/falloc.h>
+
 #include "mdt_internal.h"
 
 /* functions below are stubs for now, they will be implemented with
@@ -714,7 +716,7 @@ out:
 }
 
 void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
-			    bool increase_only)
+			    struct obdo *oa, bool increase_only)
 {
 	struct mdt_device *mdt = mdt_dev(mo->mot_obj.lo_dev);
 	struct ldlm_res_id resid;
@@ -727,8 +729,23 @@ void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
 		return;
 
 	/* Update lvbo data if exists. */
-	if (mdt_dom_lvb_is_valid(res))
+	if (mdt_dom_lvb_is_valid(res)) {
 		mdt_dom_disk_lvbo_update(env, mo, res, increase_only);
+		if (oa) {
+			struct ost_lvb *res_lvb = res->lr_lvb_data;
+
+			lock_res(res);
+			oa->o_valid |= OBD_MD_FLBLOCKS | OBD_MD_FLSIZE |
+				       OBD_MD_FLMTIME | OBD_MD_FLATIME |
+				       OBD_MD_FLCTIME;
+			oa->o_blocks = res_lvb->lvb_blocks;
+			oa->o_size = res_lvb->lvb_size;
+			oa->o_atime = res_lvb->lvb_atime;
+			oa->o_mtime = res_lvb->lvb_mtime;
+			oa->o_ctime = res_lvb->lvb_ctime;
+			unlock_res(res);
+		}
+	}
 	ldlm_resource_putref(res);
 }
 
@@ -769,7 +786,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		else
 			obdo_from_la(oa, la, LA_GID | LA_UID);
 
-		mdt_dom_obj_lvb_update(env, mo, false);
+		mdt_dom_obj_lvb_update(env, mo, NULL, false);
 		/* don't report overquota flag if we failed before reaching
 		 * commit */
 		if (old_rc == 0 && (rc == 0 || rc == -EDQUOT)) {
@@ -803,7 +820,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * atime and we should update the lvb so that other glimpses
 		 * will also get the updated value. bug 5972 */
 		if (oa)
-			mdt_dom_obj_lvb_update(env, mo, true);
+			mdt_dom_obj_lvb_update(env, mo, NULL, true);
 		rc = mdt_commitrw_read(env, mdt, mo, objcount, npages, lnb);
 		if (old_rc)
 			rc = old_rc;
@@ -812,6 +829,175 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	}
 	mdt_thread_info_fini(info);
 	RETURN(rc);
+}
+
+int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
+			 struct dt_object *dob, __u64 start, __u64 end,
+			 int mode, struct lu_attr *la)
+{
+	struct thandle *th;
+	int rc;
+
+	ENTRY;
+
+	if (!dt_object_exists(dob))
+		RETURN(-ENOENT);
+
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_attr_set(env, dob, la, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_declare_fallocate(env, dob, start, end, mode, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	tgt_vbr_obj_set(env, dob);
+	rc = dt_trans_start(env, dt, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	dt_write_lock(env, dob, 0);
+	rc = dt_falloc(env, dob, start, end, mode, th);
+	if (rc)
+		GOTO(unlock, rc);
+	rc = dt_attr_set(env, dob, la, th);
+	if (rc)
+		GOTO(unlock, rc);
+unlock:
+	dt_write_unlock(env, dob);
+stop:
+	th->th_result = rc;
+	dt_trans_stop(env, dt, th);
+	RETURN(rc);
+}
+
+/**
+ * MDT request handler for OST_FALLOCATE RPC.
+ *
+ * This is part of request processing. Validate request fields,
+ * preallocate the given MDT object and pack reply.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+int mdt_fallocate_hdl(struct tgt_session_info *tsi)
+{
+	struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct ost_body *repbody;
+	struct mdt_thread_info *info;
+	struct ldlm_namespace *ns = tsi->tsi_tgt->lut_obd->obd_namespace;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
+	struct mdt_object *mo;
+	struct dt_object *dob;
+	struct lu_attr *la;
+	__u64 flags = 0;
+	struct lustre_handle lh = { 0, };
+	int rc, mode;
+	__u64 start, end;
+	bool srvlock;
+	ktime_t kstart = ktime_get();
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(err_serious(-ENOMEM));
+
+	/*
+	 * fallocate start and end are passed in o_size, o_blocks
+	 * on the wire.
+	 */
+	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
+		RETURN(err_serious(-EPROTO));
+
+	start = oa->o_size;
+	end = oa->o_blocks;
+	mode = oa->o_falloc_mode;
+
+	CDEBUG(D_INODE,
+	       "fallocate: "DFID", mode = %#x, start = %lld, end = %lld\n",
+	       PFID(&tsi->tsi_fid), mode, start, end);
+
+	/*
+	 * mode == 0 (which is standard prealloc) and PUNCH is supported
+	 * Rest of mode options are not supported yet.
+	 */
+	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
+		RETURN(-EOPNOTSUPP);
+
+	if (mode & FALLOC_FL_PUNCH_HOLE && !(mode & FALLOC_FL_KEEP_SIZE)) {
+		CWARN("%s: PUNCH mode misses KEEP_SIZE flag, setting it\n",
+		      tsi->tsi_tgt->lut_obd->obd_name);
+		mode |= FALLOC_FL_KEEP_SIZE;
+	}
+
+	info = tsi2mdt_info(tsi);
+	la = &info->mti_attr.ma_attr;
+
+	repbody->oa.o_oi = oa->o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID;
+
+	srvlock = oa->o_valid & OBD_MD_FLFLAGS &&
+		  oa->o_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock) {
+		rc = tgt_mdt_data_lock(ns, &tsi->tsi_resid, &lh, LCK_PW,
+				       &flags);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
+
+	mo = mdt_object_find(tsi->tsi_env, mdt, &tsi->tsi_fid);
+	if (IS_ERR(mo))
+		GOTO(out_unlock, rc = PTR_ERR(mo));
+
+	if (!mdt_object_exists(mo))
+		GOTO(out_put, rc = -ENOENT);
+
+	/* Shouldn't happen on dirs */
+	if (S_ISDIR(lu_object_attr(&mo->mot_obj))) {
+		rc = -EPERM;
+		CERROR("%s: fallocate on dir "DFID": rc = %d\n",
+		       exp->exp_obd->obd_name, PFID(&tsi->tsi_fid), rc);
+		GOTO(out_put, rc);
+	}
+
+	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
+
+	mdt_dom_write_lock(mo);
+	dob = mdt_obj2dt(mo);
+
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(tsi->tsi_exp, &tsi->tsi_fid,
+			       tgt_ses_req(tsi)->rq_xid);
+
+	rc = mdt_object_fallocate(tsi->tsi_env, mdt->mdt_bottom, dob, start,
+				  end, mode, la);
+	mdt_dom_write_unlock(mo);
+	if (rc)
+		GOTO(out_put, rc);
+
+	mdt_dom_obj_lvb_update(tsi->tsi_env, mo, &repbody->oa, false);
+
+	mdt_counter_incr(req, LPROC_MDT_FALLOCATE,
+			 ktime_us_delta(ktime_get(), kstart));
+
+	EXIT;
+out_put:
+	lu_object_put(tsi->tsi_env, &mo->mot_obj);
+out_unlock:
+	if (srvlock)
+		tgt_data_unlock(&lh, LCK_PW);
+out:
+	mdt_thread_info_fini(info);
+	return rc;
 }
 
 int mdt_object_punch(const struct lu_env *env, struct dt_device *dt,
@@ -955,7 +1141,8 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 	if (rc)
 		GOTO(out_put, rc);
 
-	mdt_dom_obj_lvb_update(tsi->tsi_env, mo, false);
+	mdt_dom_obj_lvb_update(tsi->tsi_env, mo, &repbody->oa, false);
+
 	mdt_counter_incr(req, LPROC_MDT_IO_PUNCH,
 			 ktime_us_delta(ktime_get(), kstart));
 	EXIT;
