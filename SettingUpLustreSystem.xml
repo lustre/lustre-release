@@ -919,84 +919,91 @@
       </itemizedlist>
       <section remap="h4">
         <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>MDS</tertiary></indexterm>Calculating MDS Memory Requirements</title>
-        <para>By default, 4096 MB are used for the ldiskfs filesystem journal. Additional
-	RAM is used for caching file data for the larger working set, which is not
-	actively in use by clients but should be kept &quot;hot&quot; for improved
-	access times. Approximately 1.5 KB per file is needed to keep a file in cache
-	without a lock.</para>
-        <para>For example, for a single MDT on an MDS with 1,024 clients, 12 interactive
-	login nodes, and a 6 million file working set (of which 4M files are cached
-	on the clients):</para>
+        <para>By default, 4096 MB are used for the ldiskfs filesystem journal.
+          Additional RAM is used for caching file data for the larger working
+          set, which is not actively in use by clients but should be kept
+          &quot;hot&quot; for improved access times. Approximately 1.5 KB per
+          file is needed to keep a file in cache without a lock.</para>
+        <para>For example, for a single MDT on an MDS with 1,024 compute nodes,
+          12 interactive login nodes, and a 20 million file working set (of
+          which 9 million files are cached on the clients at one time):</para>
         <informalexample>
-          <para>Operating system overhead = 1024 MB</para>
+          <para>Operating system overhead = 4096 MB (RHEL8)</para>
           <para>File system journal = 4096 MB</para>
-          <para>1024 * 4-core clients * 1024 files/core * 2kB = 4096 MB</para>
-          <para>12 interactive clients * 100,000 files * 2kB = 2400 MB</para>
-          <para>2M file extra working set * 1.5kB/file = 3096 MB</para>
+          <para>1024 * 32-core clients * 256 files/core * 2KB = 16384 MB</para>
+          <para>12 interactive clients * 100,000 files * 2KB = 2400 MB</para>
+          <para>20 million file working set * 1.5KB/file = 30720 MB</para>
         </informalexample>
-        <para>Thus, the minimum requirement for an MDT with this configuration is at least
-	16 GB of RAM. Additional memory may significantly improve performance.</para>
-        <para>For directories containing 1 million or more files, more memory can provide
-	a significant benefit. For example, in an environment where clients randomly
-	access one of 10 million files, having extra memory for the cache significantly
-	improves performance.</para>
+        <para>Thus, a reasonable MDS configuration for this workload is
+          at least 60 GB of RAM.  For active-active DNE MDT failover pairs,
+          each MDS should have at least 96 GB of RAM.  The additional memory
+          can be used during normal operation to allow more metadata and locks
+          to be cached and improve performance, depending on the workload.
+        </para>
+        <para>For directories containing 1 million or more files, more memory
+          can provide a significant benefit. For example, in an environment
+          where clients randomly a single directory with 10 million files can
+          consume as much as 35GB of RAM on the MDS.</para>
       </section>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>OSS Memory Requirements</title>
-      <para>When planning the hardware for an OSS node, consider the memory usage of
-      several components in the Lustre file system (i.e., journal, service threads,
-      file system metadata, etc.). Also, consider the effect of the OSS read cache
-      feature, which consumes memory as it caches data on the OSS node.</para>
+      <para>When planning the hardware for an OSS node, consider the memory
+        usage of several components in the Lustre file system (i.e., journal,
+        service threads, file system metadata, etc.). Also, consider the
+        effect of the OSS read cache feature, which consumes memory as it
+        caches data on the OSS node.</para>
       <para>In addition to the MDS memory requirements mentioned above,
-      the OSS requirements also include:</para>
+        the OSS requirements also include:</para>
       <itemizedlist>
         <listitem>
           <para><emphasis role="bold">Service threads</emphasis>:
-	  The service threads on the OSS node pre-allocate an RPC-sized MB I/O buffer
-	  for each ost_io service thread, so these buffers do not need to be allocated
-	  and freed for each I/O request.</para>
+	    The service threads on the OSS node pre-allocate an RPC-sized MB
+            I/O buffer for each <literal>ost_io</literal> service thread, so
+            these large buffers do not need to be allocated and freed for
+            each I/O request.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">OSS read cache</emphasis>:
-	  OSS read cache provides read-only caching of data on an OSS, using the regular
-	  Linux page cache to store the data. Just like caching from a regular file
-	  system in the Linux operating system, OSS read cache uses as much physical
-	  memory as is available.</para>
+	    OSS read cache provides read-only caching of data on an HDD-based
+            OSS, using the regular Linux page cache to store the data. Just
+            like caching from a regular file system in the Linux operating
+            system, OSS read cache uses as much physical memory as is available.
+          </para>
         </listitem>
       </itemizedlist>
-      <para>The same calculation applies to files accessed from the OSS as for the MDS,
-      but the load is distributed over many more OSSs nodes, so the amount of memory
-      required for locks, inode cache, etc. listed under MDS is spread out over the
-      OSS nodes.</para>
-      <para>Because of these memory requirements, the following calculations should be
-      taken as determining the absolute minimum RAM required in an OSS node.</para>
+      <para>The same calculation applies to files accessed from the OSS as for
+        the MDS, but the load is typically distributed over more OSS nodes, so
+        the amount of memory required for locks, inode cache, etc. listed for
+        the MDS is spread out over the OSS nodes.</para>
+      <para>Because of these memory requirements, the following calculations
+        should be taken as determining the minimum RAM required in an OSS node.
+      </para>
       <section remap="h4">
         <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>Calculating OSS Memory Requirements</title>
-        <para>The minimum recommended RAM size for an OSS with eight OSTs is:</para>
+        <para>The minimum recommended RAM size for an OSS with eight OSTs,
+          handling objects for 1/4 of the active files for the MDS:</para>
         <informalexample>
-          <para>Linux kernel and userspace daemon memory = 1024 MB</para>
+          <para>Linux kernel and userspace daemon memory = 4096 MB</para>
           <para>Network send/receive buffers (16 MB * 512 threads) = 8192 MB</para>
           <para>1024 MB ldiskfs journal size * 8 OST devices = 8192 MB</para>
           <para>16 MB read/write buffer per OST IO thread * 512 threads = 8192 MB</para>
           <para>2048 MB file system read cache * 8 OSTs = 16384 MB</para>
-          <para>1024 * 4-core clients * 1024 files/core * 2kB/file = 8192 MB</para>
-          <para>12 interactive clients * 100,000 files * 2kB/file = 2400 MB</para>
-          <para>2M file extra working set * 2kB/file = 4096 MB</para>
-          <para>DLM locks + file cache TOTAL = 31072 MB</para>
-          <para>Per OSS DLM locks + file system metadata = 31072 MB/4 OSS = 7768 MB (approx.)</para>
-          <para>Per OSS RAM minimum requirement = 32 GB (approx.)</para>
+          <para>1024 * 32-core clients * 64 objects/core * 2KB/object = 4096 MB</para>
+          <para>12 interactive clients * 25,000 objects * 2KB/object = 600 MB</para>
+          <para>5 million object working set * 1.5KB/object = 7500 MB</para>
         </informalexample>
-        <para>This consumes about 16 GB just for pre-allocated buffers, and an
-	additional 1 GB for minimal file system and kernel usage. Therefore, for a
-	non-failover configuration, the minimum RAM would be about 32 GB for an OSS node
-	with eight OSTs. Adding additional memory on the OSS will improve the performance
-	of reading smaller, frequently-accessed files.</para>
-        <para>For a failover configuration, the minimum RAM would be at least 48 GB,
-	as some of the memory is per-node. When the OSS is not handling any failed-over
-	OSTs the extra RAM will be used as a read cache.</para>
-        <para>As a reasonable rule of thumb, about 8 GB of base memory plus 3 GB per OST
-	can be used. In failover configurations, about 6 GB per OST is needed.</para>
+        <para> For a non-failover configuration, the minimum RAM would be about
+          60 GB for an OSS node with eight OSTs. Additional memory on the OSS
+          will improve the performance of reading smaller, frequently-accessed
+          files.</para>
+        <para>For a failover configuration, the minimum RAM would be about
+          90 GB, as some of the memory is per-node. When the OSS is not handling
+          any failed-over OSTs the extra RAM will be used as a read cache.
+          </para>
+        <para>As a reasonable rule of thumb, about 24 GB of base memory plus
+          4 GB per OST can be used. In failover configurations, about 8 GB per
+          primary OST is needed.</para>
       </section>
     </section>
   </section>
