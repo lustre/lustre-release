@@ -388,7 +388,7 @@
       <para>The number of inodes on the MDT is determined at format time
       based on the total size of the file system to be created. The default
       <emphasis role="italic">bytes-per-inode</emphasis> ratio ("inode ratio")
-      for an ldiskfs MDT is optimized at one inode for every 2048 bytes of file
+      for an ldiskfs MDT is optimized at one inode for every 2560 bytes of file
       system space.</para>
       <para>This setting takes into account the space needed for additional
       ldiskfs filesystem-wide metadata, such as the journal (up to 4 GB),
@@ -404,7 +404,7 @@
       the bytes-per-inode ratio to have enough space on the MDT for small files,
       as described below.
       </para>
-      <para>It is possible to change the recommended 2048 bytes
+      <para>It is possible to change the recommended default of 2560 bytes
       per inode for an ldiskfs MDT when it is first formatted by adding the
       <literal>--mkfsoptions="-i bytes-per-inode"</literal> option to
       <literal>mkfs.lustre</literal>.  Decreasing the inode ratio tunable
@@ -412,9 +412,9 @@
       MDT size, but will leave less space for extra per-file metadata and is
       not recommended.  The inode ratio must always be strictly larger than
       the MDT inode size, which is 1024 bytes by default.  It is recommended
-      to use an inode ratio at least 1024 bytes larger than the inode size to
+      to use an inode ratio at least 1536 bytes larger than the inode size to
       ensure the MDT does not run out of space.  Increasing the inode ratio
-      to include enough space for the most common file data (e.g. 5120 or 65560
+      with enough space for the most commonly file size (e.g. 5632 or 66560
       bytes if 4KB or 64KB files are widely used) is recommended for DoM.</para>
       <para>The size of the inode may be changed at format time by adding the
       <literal>--stripe-count-hint=N</literal> to have
