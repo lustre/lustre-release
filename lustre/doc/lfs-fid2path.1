@@ -2,28 +2,31 @@
 .SH NAME
 lfs fid2path \- print the pathname(s) for a file identifier
 .SH SYNOPSIS
-.BR "lfs fid2path " [ --current | -c "] [" --link | -l
-.RI < linkno ">] <" fsname | rootpath "> <" fid "> ...
+.BR "lfs fid2path "
+[\fI\,OPTION\/\fR]... <\fI\,FSNAME\/\fR|\fI\,MOUNT_POINT\/\fR> <\fI\,FID\/\fR>...
 .SH DESCRIPTION
 .B lfs fid2path
 maps a numeric Lustre File IDentifier (FID) to one or more pathnames that
 have hard links to that file.  This allows resolving filenames for FIDs used
 in console error messages, and resolving all of the pathnames for a file
 that has multiple hard links.  Pathnames are resolved relative to the
-.I rootpath
-specified, or relative to the filesystem mountpoint if
-.I fsname
+.I MOUNT_POINT
+specified, or relative to the filesystem mount point if
+.I FSNAME
 is provided.
 .SH OPTIONS
 .TP
-.BR --current | -c
+\fB\-f\fR, \fB\-\-print\-fid\fR
+Print the FID with the path.
+.TP
+\fB\-c\fR, \fB\-\-print\-link\fR
 Print the current link number with each pathname or parent directory.
 .TP
-.BR --link | -l
-If a file has multiple hard links, then print only the specified link number,
+\fB\-l\fR, \fB\-\-link\fR=\fI\,LINK\/\fR
+If a file has multiple hard links, then print only the specified LINK,
 starting at link 0.  If multiple FIDs are given, but only one
 pathname is needed for each file, use
-.BR "--link 0" .
+.BR "--link=0" .
 .SH EXAMPLES
 .TP
 .B $ lfs fid2path /mnt/testfs [0x200000403:0x11f:0x0]

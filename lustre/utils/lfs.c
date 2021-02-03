@@ -598,7 +598,8 @@ command_t cmdlist[] = {
 	{"fid2path", lfs_fid2path, 0,
 	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
 	 "specify link number <linkno>.\n"
-	 "usage: fid2path [-c] [--link|-l <linkno>] <fsname|root> <fid> ..."},
+	 "usage: fid2path [--print-fid|-f] [--print-link|-c] [--link|-l <linkno>] "
+	 "<fsname|root> <fid>..."},
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
@@ -8312,28 +8313,44 @@ static int lfs_changelog_clear(int argc, char **argv)
 	return rc;
 }
 
+static void rstripc(char *str, int c)
+{
+	char *end = str + strlen(str);
+
+	for (; str < end && end[-1] == c; --end)
+		end[-1] = '\0';
+}
+
 static int lfs_fid2path(int argc, char **argv)
 {
 	struct option long_opts[] = {
 		{ .val = 'c',	.name = "cur",	.has_arg = no_argument },
+		{ .val = 'c',	.name = "current",	.has_arg = no_argument },
+		{ .val = 'c',	.name = "print-link",	.has_arg = no_argument },
+		{ .val = 'f',	.name = "print-fid",	.has_arg = no_argument },
 		{ .val = 'l',	.name = "link",	.has_arg = required_argument },
-		{ .val = 'r',	.name = "rec",	.has_arg = required_argument },
 		{ .name = NULL } };
-	char short_opts[] = "cl:r:";
-	char mntdir[PATH_MAX];
-	char *device, *fid, *path, *rootpath;
+	char short_opts[] = "cfl:pr:";
+	bool print_link = false;
+	bool print_fid = false;
+	bool print_mnt_dir;
+	char mnt_dir[PATH_MAX] = "";
+	int mnt_fd = -1;
+	char *path_or_fsname;
 	long long recno = -1;
 	int linkno = -1;
-	int lnktmp;
-	int printcur = 0;
-	int rc = 0;
 	char *endptr = NULL;
+	int rc = 0;
+	int c;
+	int i;
 
-	while ((rc = getopt_long(argc, argv, short_opts,
-		long_opts, NULL)) != -1) {
-		switch (rc) {
+	while ((c = getopt_long(argc, argv, short_opts, long_opts, NULL)) != -1) {
+		switch (c) {
 		case 'c':
-			printcur++;
+			print_link = true;
+			break;
+		case 'f':
+			print_fid = true;
 			break;
 		case 'l':
 			linkno = strtol(optarg, &endptr, 10);
@@ -8345,6 +8362,10 @@ static int lfs_fid2path(int argc, char **argv)
 			}
 			break;
 		case 'r':
+			/* recno is something to do with changelogs
+			 * that was never implemented. We just pass it
+			 * through for the MDT to ignore.
+			 */
 			recno = strtoll(optarg, &endptr, 10);
 			if (*endptr != '\0') {
 				fprintf(stderr,
@@ -8361,78 +8382,110 @@ static int lfs_fid2path(int argc, char **argv)
 		}
 	}
 
-	if (argc < 3) {
+	if (argc - optind < 2) {
 		fprintf(stderr,
-			"%s fid2path: <fsname|rootpath> and <fid>... must be specified\n",
+			"Usage: %s fid2path FSNAME|ROOT FID...\n",
 			progname);
 		return CMD_HELP;
 	}
 
-	device = argv[optind++];
-	path = calloc(1, PATH_MAX);
-	if (!path) {
-		rc = -errno;
+	path_or_fsname = argv[optind];
+
+	if (*path_or_fsname == '/') {
+		print_mnt_dir = true;
+		rc = llapi_search_mounts(path_or_fsname, 0, mnt_dir, NULL);
+	} else {
+		print_mnt_dir = false;
+		rc = llapi_search_rootpath(mnt_dir, path_or_fsname);
+	}
+
+	if (rc < 0) {
 		fprintf(stderr,
-			"%s fid2path: cannot allocate memory for path: %s\n",
-			progname, strerror(-rc));
-		return rc;
+			"%s fid2path: cannot resolve mount point for '%s': %s\n",
+			progname, path_or_fsname, strerror(-rc));
+		goto out;
 	}
 
-	rc = 0;
-	/* in case that device is not the mountpoint */
-	if (device[0] == '/') {
-		rc = llapi_search_mounts(device, 0, mntdir, NULL);
-		if (rc == 0) {
-			rootpath = mntdir;
-		} else {
+	mnt_fd = open(mnt_dir, O_RDONLY | O_DIRECTORY);
+	if (mnt_fd < 0) {
+		fprintf(stderr,
+			"%s fid2path: cannot open mount point for '%s': %s\n",
+			progname, path_or_fsname, strerror(-rc));
+		goto out;
+	}
+
+	/* Strip trailing slashes from mnt_dir. */
+	rstripc(mnt_dir + 1, '/');
+
+	for (i = optind + 1; i < argc; i++) {
+		const char *fid_str = argv[i];
+		struct lu_fid fid;
+		int rc2;
+
+		rc2 = llapi_fid_parse(fid_str, &fid, NULL);
+		if (rc2 < 0) {
 			fprintf(stderr,
-				"%s fid2path: %s has no mountpoint: %s\n",
-				progname, device, strerror(-rc));
-			goto out;
+				"%s fid2path: invalid FID '%s'\n",
+				progname, fid_str);
+			if (rc == 0)
+				rc = rc2;
+
+			continue;
 		}
-	}
-	while (optind < argc) {
-		fid = argv[optind++];
 
-		lnktmp = (linkno >= 0) ? linkno : 0;
+		int linktmp = (linkno >= 0) ? linkno : 0;
 		while (1) {
-			int oldtmp = lnktmp;
+			int oldtmp = linktmp;
 			long long rectmp = recno;
-			int rc2;
+			char path_buf[PATH_MAX];
 
-			rc2 = llapi_fid2path(device, fid, path, PATH_MAX,
-					     &rectmp, &lnktmp);
+			rc2 = llapi_fid2path_at(mnt_fd, &fid,
+				path_buf, sizeof(path_buf), &rectmp, &linktmp);
 			if (rc2 < 0) {
 				fprintf(stderr,
 					"%s fid2path: cannot find %s %s: %s\n",
-					progname, device, fid,
-					strerror(errno = -rc2));
+					progname, path_or_fsname, fid_str,
+					strerror(-rc2));
 				if (rc == 0)
 					rc = rc2;
 				break;
 			}
 
-			if (printcur)
-				fprintf(stdout, "%lld ", rectmp);
-			if (device[0] == '/') {
-				fprintf(stdout, "%s", rootpath);
-				if (rootpath[strlen(rootpath) - 1] != '/')
-					fprintf(stdout, "/");
-			} else if (path[0] == '\0') {
-				fprintf(stdout, "/");
-			}
-			fprintf(stdout, "%s\n", path);
+			if (print_fid)
+				printf("%s ", fid_str);
+
+			if (print_link)
+				printf("%d ", linktmp);
+
+			/* You may think this looks wrong or weird (and it is!)
+			 * but we are actually trying to preserve the old quirky
+			 * behaviors (enforced by our old quirky tests!) that
+			 * make lfs so much fun to work on:
+			 *
+			 *   lustre 0x200000007:0x1:0x0 => "/"
+			 *   /mnt/lustre 0x200000007:0x1:0x0 => "/mnt/lustre//"
+			 *
+			 * Note that llapi_fid2path() returns "" for the root
+			 * FID. */
+
+			printf("%s%s%s\n",
+			       print_mnt_dir ? mnt_dir : "",
+			       (print_mnt_dir || *path_buf == '\0') ? "/" : "",
+			       path_buf);
 
 			if (linkno >= 0)
 				/* specified linkno */
 				break;
-			if (oldtmp == lnktmp)
+
+			if (oldtmp == linktmp)
 				/* no more links */
 				break;
 		}
 	}
 out:
-	free(path);
+	if (!(mnt_fd < 0))
+		close(mnt_fd);
+
 	return rc;
 }
 
