@@ -25601,6 +25601,28 @@ test_812b() { # LU-12378
 }
 run_test 812b "do not drop no resend request for idle connect"
 
+test_812c() {
+	local old
+
+	old=$($LCTL get_param -n osc.*.idle_timeout | head -n 1)
+
+	$LFS setstripe -c 1 -o 0 $DIR/$tfile
+	$LFS getstripe $DIR/$tfile
+	$LCTL set_param osc.*.idle_timeout=10
+	stack_trap "$LCTL set_param osc.*.idle_timeout=$old" EXIT
+	# ensure ost1 is connected
+	stat $DIR/$tfile >/dev/null || error "can't stat"
+	wait_osc_import_state client ost1 FULL
+	# no locks, no reqs to let the connection idle
+	cancel_lru_locks osc
+
+#define OBD_FAIL_PTLRPC_IDLE_RACE	 0x533
+	$LCTL set_param fail_loc=0x80000533
+	sleep 15
+	dd if=/dev/zero of=$DIR/$tfile count=1 conv=sync || error "dd failed"
+}
+run_test 812c "idle import vs lock enqueue race"
+
 test_813() {
 	local file_heat_sav=$($LCTL get_param -n llite.*.file_heat 2>/dev/null)
 	[ -z "$file_heat_sav" ] && skip "no file heat support"

@@ -134,8 +134,9 @@ static int ptlrpc_ping(struct obd_import *imp)
 
 	ENTRY;
 
-	if (ptlrpc_check_import_is_idle(imp))
-		RETURN(ptlrpc_disconnect_and_idle_import(imp));
+	if (ptlrpc_check_import_is_idle(imp) &&
+	    ptlrpc_disconnect_and_idle_import(imp) == 1)
+			RETURN(0);
 
 	req = ptlrpc_prep_ping(imp);
 	if (!req) {

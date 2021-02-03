@@ -1695,7 +1695,6 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 	req->rq_timeout = min_t(timeout_t, req->rq_timeout,
 				INITIAL_CONNECT_TIMEOUT);
 
-	import_set_state(imp, LUSTRE_IMP_CONNECTING);
 	req->rq_send_state =  LUSTRE_IMP_CONNECTING;
 	ptlrpc_request_set_replen(req);
 
@@ -1744,14 +1743,18 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 			rc = -EINTR;
 	}
 
-	spin_lock(&imp->imp_lock);
-	if (imp->imp_state != LUSTRE_IMP_FULL)
-		GOTO(out, rc);
-	spin_unlock(&imp->imp_lock);
-
 	req = ptlrpc_disconnect_prep_req(imp);
 	if (IS_ERR(req))
 		GOTO(set_state, rc = PTR_ERR(req));
+
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state != LUSTRE_IMP_FULL) {
+		ptlrpc_req_finished_with_imp_lock(req);
+		GOTO(out, rc);
+	}
+	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
+	spin_unlock(&imp->imp_lock);
+
 	rc = ptlrpc_queue_wait(req);
 	ptlrpc_req_finished(req);
 
@@ -1832,6 +1835,21 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 	return 0;
 }
 
+static bool ptlrpc_can_idle(struct obd_import *imp)
+{
+	struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+
+	/* one request for disconnect rpc */
+	if (atomic_read(&imp->imp_reqs) > 1)
+		return false;
+
+	/* any lock increases ns_bref being a resource holder */
+	if (ns && atomic_read(&ns->ns_bref) > 0)
+		return false;
+
+	return true;
+}
+
 int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 {
 	struct ptlrpc_request *req;
@@ -1843,30 +1861,38 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 	if (ptlrpc_import_in_recovery(imp))
 		RETURN(0);
 
-	spin_lock(&imp->imp_lock);
-	if (imp->imp_state != LUSTRE_IMP_FULL) {
-		spin_unlock(&imp->imp_lock);
-		RETURN(0);
-	}
-	spin_unlock(&imp->imp_lock);
-
 	req = ptlrpc_disconnect_prep_req(imp);
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
+
+	req->rq_interpret_reply = ptlrpc_disconnect_idle_interpret;
+
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_IDLE_RACE)) {
+		__u32 idx;
+
+		server_name2index(imp->imp_obd->obd_name, &idx, NULL);
+		if (idx == 0)
+			OBD_RACE(OBD_FAIL_PTLRPC_IDLE_RACE);
+	}
+
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state != LUSTRE_IMP_FULL || !ptlrpc_can_idle(imp)) {
+		ptlrpc_req_finished_with_imp_lock(req);
+		spin_unlock(&imp->imp_lock);
+		RETURN(0);
+	}
+	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
+	/* don't make noise at reconnection */
+	imp->imp_was_idle = 1;
+	spin_unlock(&imp->imp_lock);
 
 	CDEBUG_LIMIT(imp->imp_idle_debug, "%s: disconnect after %llus idle\n",
 		     imp->imp_obd->obd_name,
 		     ktime_get_real_seconds() - imp->imp_last_reply_time);
 
-	/* don't make noise at reconnection */
-	spin_lock(&imp->imp_lock);
-	imp->imp_was_idle = 1;
-	spin_unlock(&imp->imp_lock);
-
-	req->rq_interpret_reply = ptlrpc_disconnect_idle_interpret;
 	ptlrpcd_add_req(req);
 
-	RETURN(0);
+	RETURN(1);
 }
 EXPORT_SYMBOL(ptlrpc_disconnect_and_idle_import);
 
