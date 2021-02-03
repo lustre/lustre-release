@@ -1263,6 +1263,40 @@ test_16() {
 }
 run_test 16 "Initial OI scrub can rebuild crashed index objects"
 
+test_18() {
+	local n
+	local fids=()
+	local opts=$(csa_add "$MOUNT_OPTS_SCRUB" -o resetoi)
+
+	scrub_prep 10
+	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
+	mount_client $MOUNT || error "(2) Fail to start client!"
+	for n in $(seq $MDSCOUNT); do
+		fids+=($($LFS path2fid $DIR/$tdir/mds$n/test-framework.sh))
+	done
+	cleanup_mount $MOUNT > /dev/null || error "(3) Fail to stop client!"
+	for n in $(seq $MDSCOUNT); do
+		stop mds$n > /dev/null || error "(4) Fail to stop MDS$n!"
+	done
+	scrub_start_mds 5 "$opts"
+	do_facet mds1 dmesg | grep "reset Object Index" ||
+		error "(6) reset log not found"
+	mount_client $MOUNT || error "(7) Fail to start client!"
+	scrub_check_data 7
+
+	local fid
+	local path
+	for n in $(seq $MDSCOUNT); do
+		path=$($LFS fid2path $DIR ${fids[$((n - 1))]})
+		[ "$path" == "$DIR/$tdir/mds$n/test-framework.sh" ] ||
+			error "path mismatch $path != $DIR/$tdir/mds$n/test-framework.sh"
+		fid=$($LFS path2fid $DIR/$tdir/mds$n/test-framework.sh)
+		[ "${fids[$((n - 1))]}" == "$fid" ] ||
+			error "$DIR/$tdir/mds$n/test-framework.sh FID mismatch ${fids[$((n - 1))]} != $fid"
+	done
+}
+run_test 18 "test mount -o resetoi to recreate OI files"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}
