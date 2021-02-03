@@ -160,100 +160,31 @@ out:
 	return rc;
 }
 
-/* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
- * format must have %s%s, buf must be > 16
- * Eg: if name = "lustre-MDT0000", "lustre", or "lustre-MDT0000_UUID"
- *     then buf = "lustre-MDT0000"
- */
-static int get_mdtname(char *name, char *format, char *buf)
-{
-	char suffix[] = "-MDT0000";
-	int len = strlen(name);
-
-	if (len > 5 && strncmp(name + len - 5, "_UUID", 5) == 0) {
-		name[len - 5] = '\0';
-		len -= 5;
-	}
-
-	if (len > 8) {
-		if ((len <= 16) && strncmp(name + len - 8, "-MDT", 4) == 0) {
-			suffix[0] = '\0';
-		} else {
-			/* Not enough room to add suffix */
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "Invalid MDT name |%s|", name);
-			return -EINVAL;
-		}
-	}
-
-	return sprintf(buf, format, name, suffix);
-}
-
-/** ioctl on filsystem root, with mdtindex sent as data
- * \param mdtname path, fsname, or mdtname (lutre-MDT0004)
- * \param mdtidxp pointer to integer within data to be filled in with the
- *    mdt index (0 if no mdt is specified).  NULL won't be filled.
- */
-int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
-	       int want_error)
-{
-	char fsname[20];
-	char *ptr;
-	int fd, rc;
-	long index;
-
-	/* Take path, fsname, or MDTname.  Assume MDT0000 in former cases.
-	 * Open root and parse mdt index.
-	 */
-	if (mdtname[0] == '/') {
-		index = 0;
-		rc = get_root_path(WANT_FD | want_error, NULL, &fd,
-				   (char *)mdtname, -1);
-	} else {
-		if (get_mdtname((char *)mdtname, "%s%s", fsname) < 0)
-			return -EINVAL;
-		ptr = fsname + strlen(fsname) - 8;
-		*ptr = '\0';
-		index = strtol(ptr + 4, NULL, 16);
-		rc = get_root_path(WANT_FD | want_error, fsname, &fd, NULL, -1);
-	}
-	if (rc < 0) {
-		if (want_error)
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "Can't open %s: %d\n", mdtname, rc);
-		return rc;
-	}
-
-	if (mdtidxp)
-		*mdtidxp = index;
-
-	rc = ioctl(fd, opc, data);
-	if (rc == -1)
-		rc = -errno;
-	else
-		rc = 0;
-	close(fd);
-	return rc;
-}
-
-int llapi_fid2path(const char *device, const char *fidstr, char *path,
+int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		   int pathlen, long long *recno, int *linkno)
 {
 	struct lu_fid fid;
-	struct getinfo_fid2path *gf;
+	struct getinfo_fid2path *gf = NULL;
+	int mnt_fd = -1;
 	int rc;
 
-	if (!path || pathlen <= 1) {
+	if (path_or_device == NULL || *path_or_device == '\0') {
 		rc = -EINVAL;
 		goto out;
 	}
 
-	rc = llapi_fid_parse(fidstr, &fid, NULL);
-	if (!rc && !fid_is_sane(&fid)) {
-		rc = -EINVAL;
+	if (*path_or_device == '/')
+		rc = get_root_path(WANT_FD, NULL, &mnt_fd,
+				   (char *)path_or_device, -1);
+	else
+		rc = get_root_path(WANT_FD, (char *)path_or_device,
+				   &mnt_fd, NULL, -1);
+
+	if (rc < 0)
 		goto out;
-	}
-	if (rc) {
+
+	rc = llapi_fid_parse(fidstr, &fid, NULL);
+	if (rc < 0) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "bad FID format '%s', should be [seq:oid:ver] (e.g. "DFID")\n",
 				  fidstr,
@@ -261,7 +192,7 @@ int llapi_fid2path(const char *device, const char *fidstr, char *path,
 		goto out;
 	}
 
-	gf = malloc(sizeof(*gf) + pathlen);
+	gf = calloc(1, sizeof(*gf) + pathlen);
 	if (gf == NULL) {
 		rc = -ENOMEM;
 		goto out;
@@ -274,22 +205,28 @@ int llapi_fid2path(const char *device, const char *fidstr, char *path,
 		gf->gf_linkno = *linkno;
 	gf->gf_pathlen = pathlen;
 
-	/* Take path or fsname */
-	rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
-	if (rc)
-		goto out_free;
+	rc = ioctl(mnt_fd, OBD_IOC_FID2PATH, gf);
+	if (rc < 0) {
+		rc = -errno;
+		goto out;
+	}
 
 	rc = copy_strip_dne_path(gf->gf_u.gf_path, path, pathlen);
 
 	if (recno)
 		*recno = gf->gf_recno;
+
 	if (linkno)
 		*linkno = gf->gf_linkno;
 
-out_free:
-	free(gf);
 out:
+	if (!(mnt_fd < 0))
+		close(mnt_fd);
+
+	free(gf);
+
 	errno = -rc;
+
 	return rc;
 }
 
