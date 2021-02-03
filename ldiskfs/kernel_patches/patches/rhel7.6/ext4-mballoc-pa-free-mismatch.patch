@@ -28,7 +28,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
  	ext4_get_group_no_and_offset(sb, pa->pa_pstart, &group, &bit);
  	grp_blk_start = pa->pa_pstart - EXT4_C2B(sbi, bit);
  	BUG_ON(group != e4b->bd_group && pa->pa_len != 0);
-@@ -3891,12 +3895,18 @@ ext4_mb_release_inode_pa(struct ext4_bud
+@@ -3891,12 +3895,19 @@ ext4_mb_release_inode_pa(struct ext4_bud
  		mb_free_blocks(pa->pa_inode, e4b, bit, next - bit);
  		bit = next + 1;
  	}
@@ -41,7 +41,8 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
 +
 +	/* "free < pa->pa_free" means we maybe double alloc the same blocks,
 +	 * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
-+	if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {
++	if (((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) &&
++	    atomic_read(&sb->s_active) > 0) {
 +		ext4_error(sb, "pa free mismatch: [pa %p] "
 +				"[phy %lu] [logic %lu] [len %u] [free %u] "
 +				"[error %u] [inode %lu] [freed %u]", pa,
@@ -58,7 +59,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
  		 */
  	}
 +	/* do not verify if the file system is being umounted */
-+	BUG_ON(atomic_read(&sb->s_active) > 0 && pa->pa_free != free);
++	BUG_ON(pa->pa_free != free && atomic_read(&sb->s_active) > 0);
  	atomic_add(free, &sbi->s_mb_discarded);
  
  	return err;

@@ -124,9 +124,9 @@ Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/mballoc.c
  	}
  	return 0;
 @@ -4016,16 +4023,8 @@ ext4_mb_release_inode_pa(struct ext4_bud
- 	/* "free < pa->pa_free" means we maybe double alloc the same blocks,
  	 * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
- 	if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {
+ 	if (((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) &&
+ 	    atomic_read(&sb->s_active) > 0) {
 -		ext4_error(sb, "pa free mismatch: [pa %p] "
 -				"[phy %lu] [logic %lu] [len %u] [free %u] "
 -				"[error %u] [inode %lu] [freed %u]", pa,
