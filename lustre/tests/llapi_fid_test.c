@@ -80,7 +80,8 @@
 static char mainpath[PATH_MAX];
 static const char *maindir = "llapi_fid_test_name_9585766";
 
-static char fsmountdir[PATH_MAX];	/* Lustre mountpoint */
+static char mnt_dir[PATH_MAX];	/* Lustre mountpoint */
+static int mnt_fd = -1;
 static char *lustre_dir;		/* Test directory inside Lustre */
 
 /* Cleanup our test directory. */
@@ -146,6 +147,23 @@ static void helper_fid2path(const char *filename, int fd)
 	ASSERTF(linkno1 == linkno2, "linknos are different: %d / %d",
 		linkno1, linkno2);
 
+	/* Use llapi_fid2path_at() */
+	recno2 = -1;
+	linkno2 = 0;
+	rc = llapi_fid2path_at(mnt_fd, &fid, path2, sizeof(path2),
+			       &recno2, &linkno2);
+	ASSERTF(rc == 0, "llapi_fid2path failed for fid %s: %s",
+		fidstr, strerror(-rc));
+
+	/* Make sure both calls to llapi_fid2path returned the same
+	 * data. */
+	ASSERTF(strcmp(path1, path2) == 0, "paths are different: '%s' / '%s'",
+		path1, path2);
+	ASSERTF(recno1 == recno2, "recnos are different: %lld / %lld",
+		recno1, recno2);
+	ASSERTF(linkno1 == linkno2, "linknos are different: %d / %d",
+		linkno1, linkno2);
+
 	/* Try fd2fid and check that the result is still the same. */
 	if (fd != -1) {
 		rc = llapi_fd2fid(fd, &fid3);
@@ -158,7 +176,7 @@ static void helper_fid2path(const char *filename, int fd)
 
 	/* Pass the result back to fid2path and ensure the fid stays
 	 * the same. */
-	rc = snprintf(path3, sizeof(path3), "%s/%s", fsmountdir, path1);
+	rc = snprintf(path3, sizeof(path3), "%s/%s", mnt_dir, path1);
 	ASSERTF((rc > 0 && rc < sizeof(path3)), "invalid name");
 	rc = llapi_path2fid(path3, &fid2);
 	ASSERTF(rc == 0, "llapi_path2fid failed for '%s': %s",
@@ -426,7 +444,7 @@ static void test30(void)
 		ASSERTF(rc == 0, "llapi_fid2path failed for fid %s: %s",
 			fidstr, strerror(-rc));
 
-		snprintf(buf2, sizeof(buf2), "%s/%s", fsmountdir, buf);
+		snprintf(buf2, sizeof(buf2), "%s/%s", mnt_dir, buf);
 
 		if (past_link_limit == false) {
 			/* Find the name in the links that were created */
@@ -705,12 +723,15 @@ int main(int argc, char *argv[])
 	if (lustre_dir == NULL)
 		lustre_dir = "/mnt/lustre";
 
-	rc = llapi_search_mounts(lustre_dir, 0, fsmountdir, fsname);
+	rc = llapi_search_mounts(lustre_dir, 0, mnt_dir, fsname);
 	if (rc != 0) {
 		fprintf(stderr, "Error: %s: not a Lustre filesystem\n",
 			lustre_dir);
 		return EXIT_FAILURE;
 	}
+
+	mnt_fd = open(mnt_dir, O_RDONLY|O_DIRECTORY);
+	ASSERTF(!(mnt_fd < 0), "cannot open '%s': %s\n", mnt_dir, strerror(errno));
 
 	/* Play nice with Lustre test scripts. Non-line buffered output
 	 * stream under I/O redirection may appear incorrectly. */

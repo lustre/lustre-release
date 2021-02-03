@@ -160,11 +160,51 @@ out:
 	return rc;
 }
 
+int llapi_fid2path_at(int mnt_fd, const struct lu_fid *fid,
+		      char *path_buf, int path_buf_size,
+		      long long *recno, int *linkno)
+{
+	struct getinfo_fid2path *gf = NULL;
+	int rc;
+
+	gf = calloc(1, sizeof(*gf) + path_buf_size);
+	if (gf == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	gf->gf_fid = *fid;
+	if (recno != NULL)
+		gf->gf_recno = *recno;
+
+	if (linkno != NULL)
+		gf->gf_linkno = *linkno;
+
+	gf->gf_pathlen = path_buf_size;
+
+	rc = ioctl(mnt_fd, OBD_IOC_FID2PATH, gf);
+	if (rc) {
+		rc = -errno;
+		goto out;
+	}
+
+	rc = copy_strip_dne_path(gf->gf_u.gf_path, path_buf, path_buf_size);
+
+	if (recno != NULL)
+		*recno = gf->gf_recno;
+
+	if (linkno != NULL)
+		*linkno = gf->gf_linkno;
+out:
+	free(gf);
+
+	return rc;
+}
+
 int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		   int pathlen, long long *recno, int *linkno)
 {
 	struct lu_fid fid;
-	struct getinfo_fid2path *gf = NULL;
 	int mnt_fd = -1;
 	int rc;
 
@@ -192,40 +232,10 @@ int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		goto out;
 	}
 
-	gf = calloc(1, sizeof(*gf) + pathlen);
-	if (gf == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
-
-	gf->gf_fid = fid;
-	if (recno)
-		gf->gf_recno = *recno;
-	if (linkno)
-		gf->gf_linkno = *linkno;
-	gf->gf_pathlen = pathlen;
-
-	rc = ioctl(mnt_fd, OBD_IOC_FID2PATH, gf);
-	if (rc < 0) {
-		rc = -errno;
-		goto out;
-	}
-
-	rc = copy_strip_dne_path(gf->gf_u.gf_path, path, pathlen);
-
-	if (recno)
-		*recno = gf->gf_recno;
-
-	if (linkno)
-		*linkno = gf->gf_linkno;
-
+	rc = llapi_fid2path_at(mnt_fd, &fid, path, pathlen, recno, linkno);
 out:
 	if (!(mnt_fd < 0))
 		close(mnt_fd);
-
-	free(gf);
-
-	errno = -rc;
 
 	return rc;
 }
