@@ -1086,17 +1086,19 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		int		 depth = 0;
 		ssize_t		 sz;
 
-		sprintf(buf, DFID, PFID(&hai->hai_fid));
 		sprintf(src, "%s/shadow/", opt.o_hsm_root);
 
 		ptr = opt.o_hsm_root;
 		while (*ptr)
 			(*ptr++ == '/') ? depth-- : 0;
 
-		rc = llapi_fid2path(opt.o_mnt, buf, src + strlen(src),
-				    sizeof(src) - strlen(src), &recno, &linkno);
+		rc = llapi_fid2path_at(opt.o_mnt_fd, &hai->hai_fid,
+				       src + strlen(src),
+				       sizeof(src) - strlen(src),
+				       &recno, &linkno);
 		if (rc < 0) {
-			CT_ERROR(rc, "cannot get FID of '%s'", buf);
+			CT_ERROR(rc, "cannot get FID of "DFID,
+				 PFID(&hai->hai_fid));
 			rcf = rcf ? rcf : rc;
 			goto fini_minor;
 		}
@@ -1350,19 +1352,19 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 
 	if (opt.o_verbose >= LLAPI_MSG_INFO || opt.o_dry_run) {
 		/* Print the original path */
-		char		fid[128];
 		char		path[PATH_MAX];
 		long long	recno = -1;
 		int		linkno = 0;
 
-		sprintf(fid, DFID, PFID(&hai->hai_fid));
-		CT_TRACE("'%s' action %s reclen %d, cookie=%#jx",
-			 fid, hsm_copytool_action2name(hai->hai_action),
+		CT_TRACE(DFID" action %s reclen %d, cookie=%#jx",
+			 PFID(&hai->hai_fid),
+			 hsm_copytool_action2name(hai->hai_action),
 			 hai->hai_len, (uintmax_t)hai->hai_cookie);
-		rc = llapi_fid2path(opt.o_mnt, fid, path,
-				    sizeof(path), &recno, &linkno);
+		rc = llapi_fid2path_at(opt.o_mnt_fd, &hai->hai_fid, path,
+				       sizeof(path), &recno, &linkno);
 		if (rc < 0)
-			CT_ERROR(rc, "cannot get path of FID %s", fid);
+			CT_ERROR(rc, "cannot get path of "DFID,
+				 PFID(&hai->hai_fid));
 		else
 			CT_TRACE("processing file '%s'", path);
 	}

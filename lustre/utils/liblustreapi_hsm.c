@@ -412,8 +412,9 @@ static int llapi_hsm_log_ct_progress(struct hsm_copyaction_private **phcp,
 	/* lustre_path isn't available after a restore completes */
 	/* total_bytes isn't available after a restore or archive completes */
 	if (progress_type != CT_FINISH) {
-		rc = llapi_fid2path(hcp->ct_priv->mnt, strfid, lustre_path,
-				    sizeof(lustre_path), &recno, &linkno);
+		rc = llapi_fid2path_at(hcp->ct_priv->mnt_fd, &hai->hai_dfid,
+				       lustre_path, sizeof(lustre_path),
+				       &recno, &linkno);
 		if (rc < 0)
 			goto err;
 
@@ -937,25 +938,22 @@ out_err:
  * \param parent_len Destination buffer size.
  * \return 0 on success.
  */
-static int fid_parent(const char *mnt, const struct lu_fid *fid, char *parent,
-		      size_t parent_len)
+static int fid_parent(const struct hsm_copytool_private *ct,
+		      const struct lu_fid *fid, char *parent, size_t parent_len)
 {
 	int		 rc;
 	int		 linkno = 0;
 	long long	 recno = -1;
 	char		 file[PATH_MAX];
-	char		 strfid[FID_NOBRACE_LEN + 1];
 	char		*ptr;
 
-	snprintf(strfid, sizeof(strfid), DFID_NOBRACE, PFID(fid));
-
-	rc = llapi_fid2path(mnt, strfid, file, sizeof(file),
-			    &recno, &linkno);
+	rc = llapi_fid2path_at(ct->mnt_fd, fid, file, sizeof(file),
+			       &recno, &linkno);
 	if (rc < 0)
 		return rc;
 
 	/* fid2path returns a relative path */
-	rc = snprintf(parent, parent_len, "%s/%s", mnt, file);
+	rc = snprintf(parent, parent_len, "%s/%s", ct->mnt, file);
 	if (rc >= parent_len)
 		return -ENAMETOOLONG;
 
@@ -1039,19 +1037,19 @@ out:
 static int create_restore_volatile(struct hsm_copyaction_private *hcp,
 				   int mdt_index, int open_flags)
 {
-	int			 rc;
-	int			 fd;
-	char			 parent[PATH_MAX + 1];
-	const char		*mnt = hcp->ct_priv->mnt;
-	struct hsm_action_item	*hai = &hcp->copy.hc_hai;
+	const struct hsm_copytool_private *ct = hcp->ct_priv;
+	struct hsm_action_item *hai = &hcp->copy.hc_hai;
+	char parent[PATH_MAX + 1];
+	int fd;
+	int rc;
 
-	rc = fid_parent(mnt, &hai->hai_fid, parent, sizeof(parent));
+	rc = fid_parent(ct, &hai->hai_fid, parent, sizeof(parent));
 	if (rc < 0) {
 		/* fid_parent() failed, try to keep on going */
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "cannot get parent path to restore "DFID" "
-			    "using '%s'", PFID(&hai->hai_fid), mnt);
-		snprintf(parent, sizeof(parent), "%s", mnt);
+			    "using '%s'", PFID(&hai->hai_fid), ct->mnt);
+		snprintf(parent, sizeof(parent), "%s", ct->mnt);
 	}
 
 	fd = llapi_create_volatile_idx(parent, mdt_index, open_flags);
