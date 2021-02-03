@@ -798,7 +798,8 @@ char *osd_lf_fid2name(const struct lu_fid *fid);
 int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 		    __u32 flags);
 void osd_scrub_stop(struct osd_device *dev);
-int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
+		    bool restored);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_oii_insert(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id, int insert);

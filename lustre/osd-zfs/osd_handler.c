@@ -1070,12 +1070,14 @@ osd_unlinked_drain(const struct lu_env *env, struct osd_device *osd)
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
-	char			*mntdev = lustre_cfg_string(cfg, 1);
-	char			*str	= lustre_cfg_string(cfg, 2);
-	char			*svname = lustre_cfg_string(cfg, 4);
+	char *mntdev = lustre_cfg_string(cfg, 1);
+	char *str = lustre_cfg_string(cfg, 2);
+	char *svname = lustre_cfg_string(cfg, 4);
 	dnode_t *rootdn;
-	const char		*opts;
-	int			 rc;
+	const char *opts;
+	bool resetoi = false;
+	int rc;
+
 	ENTRY;
 
 	if (o->od_os != NULL)
@@ -1091,6 +1093,8 @@ static int osd_mount(const struct lu_env *env,
 	rc = strlcpy(o->od_svname, svname, sizeof(o->od_svname));
 	if (rc >= sizeof(o->od_svname))
 		RETURN(-E2BIG);
+
+	opts = lustre_cfg_string(cfg, 3);
 
 	o->od_index_backup_stop = 0;
 	o->od_index = -1; /* -1 means index is invalid */
@@ -1162,8 +1166,11 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
+	if (opts && strstr(opts, "resetoi"))
+		resetoi = true;
+
 	o->od_in_init = 1;
-	rc = osd_scrub_setup(env, o);
+	rc = osd_scrub_setup(env, o, resetoi);
 	o->od_in_init = 0;
 	if (rc)
 		GOTO(err, rc);
@@ -1206,7 +1213,6 @@ static int osd_mount(const struct lu_env *env,
 #endif
 
 	/* parse mount option "noacl", and enable ACL by default */
-	opts = lustre_cfg_string(cfg, 3);
 	if (opts == NULL || strstr(opts, "noacl") == NULL)
 		o->od_posix_acl = 1;
 

@@ -228,6 +228,65 @@ out:
 	return rc;
 }
 
+static int osd_oi_destroy(const struct lu_env *env, struct osd_device *o,
+			  const char *name)
+{
+	struct osd_oi oi;
+	dmu_tx_t *tx;
+	dnode_t *rootdn;
+	uint64_t oid;
+	int rc;
+
+	ENTRY;
+
+	if (o->od_dt_dev.dd_rdonly)
+		RETURN(-EROFS);
+
+	rc = osd_oi_lookup(env, o, o->od_rootid, name, &oi);
+	if (rc == -ENOENT)
+		RETURN(0);
+	if (rc)
+		RETURN(rc);
+
+	oid = oi.oi_zapid;
+
+	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
+	if (rc)
+		RETURN(rc);
+
+	tx = dmu_tx_create(o->od_os);
+	dmu_tx_mark_netfree(tx);
+	dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
+	osd_tx_hold_zap(tx, oid, rootdn, FALSE, NULL);
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (rc) {
+		dmu_tx_abort(tx);
+		GOTO(out, rc);
+	}
+
+	rc = -dmu_object_free(o->od_os, oid, tx);
+	if (rc) {
+		CERROR("%s: failed to free %s %llu: rc = %d\n",
+		       o->od_svname, name, oid, rc);
+		GOTO(commit, rc);
+	}
+
+	rc = osd_zap_remove(o, o->od_rootid, rootdn, name, tx);
+	if (rc) {
+		CERROR("%s: zap_remove %s failed: rc = %d\n",
+		       o->od_svname, name, rc);
+		GOTO(commit, rc);
+	}
+
+	EXIT;
+commit:
+	dmu_tx_commit(tx);
+out:
+	osd_dnode_rele(rootdn);
+
+	return rc;
+}
+
 static int
 osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
 		      uint64_t parent, const char *name, uint64_t *child)
@@ -844,7 +903,7 @@ osd_oi_init_remote_parent(const struct lu_env *env, struct osd_device *o)
 /**
  * Initialize the OIs by either opening or creating them as needed.
  */
-int osd_oi_init(const struct lu_env *env, struct osd_device *o)
+int osd_oi_init(const struct lu_env *env, struct osd_device *o, bool reset)
 {
 	struct lustre_scrub *scrub = &o->od_scrub;
 	struct scrub_file *sf = &scrub->os_file;
@@ -871,7 +930,7 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 		GOTO(out, rc = count);
 
 	if (count > 0) {
-		if (count == sf->sf_oi_count)
+		if (count == sf->sf_oi_count && !reset)
 			goto open;
 
 		if (sf->sf_oi_count == 0) {
@@ -908,11 +967,20 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 	if (rc)
 		GOTO(out, rc);
 
+	if (reset)
+		LCONSOLE_WARN("%s: reset Object Index mappings\n",
+			      osd_name(o));
+
 	for (i = 0; i < count; i++) {
 		LASSERT(sizeof(osd_oti_get(env)->oti_buf) >= 32);
 
 		snprintf(key, sizeof(osd_oti_get(env)->oti_buf) - 1,
 			 "%s.%d", DMU_OSD_OI_NAME_BASE, i);
+		if (reset) {
+			rc = osd_oi_destroy(env, o, key);
+			if (rc)
+				GOTO(out, rc);
+		}
 		rc = osd_oi_find_or_create(env, o, o->od_root, key, &sdb);
 		if (rc)
 			GOTO(out, rc);

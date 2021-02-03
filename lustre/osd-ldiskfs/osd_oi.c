@@ -405,6 +405,8 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 	}
 
 	if (restored) {
+		LCONSOLE_WARN("%s: reset Object Index mappings\n",
+			      osd_dev2name(osd));
 		rc = osd_remove_ois(info, osd);
 		if (rc)
 			RETURN(rc);

@@ -633,7 +633,7 @@ int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 		       uint64_t oid, dnode_t **dnp);
 
 /* osd_oi.c */
-int osd_oi_init(const struct lu_env *env, struct osd_device *o);
+int osd_oi_init(const struct lu_env *env, struct osd_device *o, bool reset);
 void osd_oi_fini(const struct lu_env *env, struct osd_device *o);
 int osd_fid_lookup(const struct lu_env *env,
 		   struct osd_device *, const struct lu_fid *, uint64_t *);
@@ -690,7 +690,8 @@ int __osd_xattr_load_by_oid(struct osd_device *osd, uint64_t oid,
 			    nvlist_t **sa);
 
 /* osd_scrub.c */
-int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
+		    bool resetoi);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 		    __u32 flags);

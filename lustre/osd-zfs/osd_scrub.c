@@ -1402,7 +1402,8 @@ void osd_scrub_stop(struct osd_device *dev)
 
 static const char osd_scrub_name[] = "OI_scrub";
 
-int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
+		    bool resetoi)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lustre_scrub *scrub = &dev->od_scrub;
@@ -1485,7 +1486,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	/* Initialize OI files. */
-	rc = osd_oi_init(env, dev);
+	rc = osd_oi_init(env, dev, resetoi);
 	if (rc < 0)
 		GOTO(cleanup_obj, rc);
 

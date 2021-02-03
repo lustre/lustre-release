@@ -2559,7 +2559,8 @@ void osd_scrub_stop(struct osd_device *dev)
 
 static const char osd_scrub_name[] = "OI_scrub";
 
-int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
+		    bool restored)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
@@ -2573,7 +2574,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	struct osd_inode_id *id = &info->oti_id;
 	struct dt_object *obj;
 	bool dirty = false;
-	bool restored = false;
 	int rc = 0;
 	ENTRY;
 

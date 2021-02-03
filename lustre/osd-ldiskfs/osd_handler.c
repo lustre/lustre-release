@@ -7791,6 +7791,7 @@ static int osd_mount(const struct lu_env *env,
 			"force_over_256tb",
 			"force_over_512tb",
 			"force_over_1024tb",
+			"resetoi",
 			NULL
 		};
 		strncat(options, opts, PAGE_SIZE);
@@ -7922,8 +7923,10 @@ static int osd_device_init0(const struct lu_env *env,
 {
 	struct lu_device *l = osd2lu_dev(o);
 	struct osd_thread_info *info;
-	int rc;
 	int cplen = 0;
+	char *opts = NULL;
+	bool restored = false;
+	int rc;
 
 	/* if the module was re-loaded, env can loose its keys */
 	rc = lu_env_refill((struct lu_env *)env);
@@ -7990,10 +7993,14 @@ static int osd_device_init0(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out_site, rc);
 
+	opts = lustre_cfg_string(cfg, 3);
+	if (opts && strstr(opts, "resetoi"))
+		restored = true;
+
 	INIT_LIST_HEAD(&o->od_ios_list);
 	/* setup scrub, including OI files initialization */
 	o->od_in_init = 1;
-	rc = osd_scrub_setup(env, o);
+	rc = osd_scrub_setup(env, o, restored);
 	o->od_in_init = 0;
 	if (rc < 0)
 		GOTO(out_site, rc);
