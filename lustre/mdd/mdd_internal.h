@@ -630,8 +630,19 @@ static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
 	if (!mdd_object_exists(obj))
 		return -ENOENT;
 
+	/* If we are about to set the LL_XATTR_NAME_ENCRYPTION_CONTEXT
+	 * xattr, it means the file/dir is encrypted. In that case we want
+	 * to set the LUSTRE_ENCRYPT_FL flag as well: it will be stored
+	 * into the LMA, making it more efficient to recognise we are
+	 * dealing with an encrypted file/dir, as LMA info is cached upon
+	 * object init.
+	 * However, marking a dir as encrypted is only possible if it is
+	 * being created or migrated (LU_XATTR_CREATE flag not set), or
+	 * if it is empty.
+	 */
 	if ((strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) &&
 	    (!S_ISDIR(mdd_object_type(obj)) ||
+	     !(fl & LU_XATTR_CREATE) ||
 	     (rc = mdd_dir_is_empty(env, obj)) == 0)) {
 		struct lu_attr la = { 0 };
 

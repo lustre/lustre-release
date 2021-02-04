@@ -406,6 +406,8 @@ enum ll_file_flags {
 	LLIF_UPDATE_ATIME	= 4,
 	/* foreign file/dir can be unlinked unconditionnaly */
 	LLIF_FOREIGN_REMOVABLE	= 5,
+	/* setting encryption context in progress */
+	LLIF_SET_ENC_CTX	= 6,
 
 };
 

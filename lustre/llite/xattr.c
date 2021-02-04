@@ -148,6 +148,17 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 			RETURN(-EPERM);
 	}
 
+	/* Setting LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr is only allowed
+	 * when defining an encryption policy on a directory, ie when it
+	 * comes from ll_set_context().
+	 * When new files/dirs are created in an encrypted dir, the xattr
+	 * is set directly in the create request.
+	 */
+	if (handler->flags == XATTR_SECURITY_T &&
+	    !strcmp(name, "c") &&
+	    !ll_file_test_and_clear_flag(ll_i2info(inode), LLIF_SET_ENC_CTX))
+		RETURN(-EPERM);
+
 	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);
 	if (!fullname)
 		RETURN(-ENOMEM);

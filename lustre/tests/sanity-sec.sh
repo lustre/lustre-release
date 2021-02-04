@@ -3575,12 +3575,13 @@ trace_cmd() {
 	local cmd="$@"
 	local xattr_name="security.c"
 
-	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cancel_lru_locks
 	$LCTL set_param debug=+info
 	$LCTL clear
 
 	echo $cmd
 	eval $cmd
+	[ $? -eq 0 ] || error "$cmd failed"
 
 	$LCTL dk | grep -E "get xattr '${xattr_name}'|get xattrs"
 	[ $? -ne 0 ] || error "get xattr event was triggered"
@@ -3608,21 +3609,29 @@ test_49() {
 	trace_cmd $TRUNCATE $dirname/f1 10240
 	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
 	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
-	trace_cmd $LFS setdirstripe -i 1 $dirname/d2
-	trace_cmd $LFS migrate -m 0 $dirname/d2
 
-	$LFS setdirstripe -i 1 -c 1 $dirname/d3
-	dirname=$dirname/d3/subdir
-	mkdir $dirname
+	if [[ $MDSCOUNT -gt 1 ]]; then
+		trace_cmd $LFS setdirstripe -i 1 $dirname/d2
+		trace_cmd $LFS migrate -m 0 $dirname/d2
+		touch $dirname/d2/subf
+		# migrate a non-empty encrypted dir
+		trace_cmd $LFS migrate -m 1 $dirname/d2
 
-	trace_cmd stat $dirname
-	trace_cmd touch $dirname/f1
-	trace_cmd stat $dirname/f1
-	trace_cmd cat $dirname/f1
-	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
-	trace_cmd $TRUNCATE $dirname/f1 10240
-	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
-	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
+		$LFS setdirstripe -i 1 -c 1 $dirname/d3
+		dirname=$dirname/d3/subdir
+		mkdir $dirname
+
+		trace_cmd stat $dirname
+		trace_cmd touch $dirname/f1
+		trace_cmd stat $dirname/f1
+		trace_cmd cat $dirname/f1
+		dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
+		trace_cmd $TRUNCATE $dirname/f1 10240
+		trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
+		trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
+	else
+		skip_noexit "2nd part needs >= 2 MDTs"
+	fi
 }
 run_test 49 "Avoid getxattr for encryption context"
 
@@ -4169,6 +4178,41 @@ test_56() {
 		error "filefrag $testfile does not show encoded flag"
 }
 run_test 56 "FIEMAP on encrypted file"
+
+test_57() {
+	local testdir=$DIR/$tdir/mytestdir
+	local testfile=$DIR/$tdir/$tfile
+
+	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	mkdir $DIR/$tdir
+	mkdir $testdir
+	setfattr -n security.c -v myval $testdir &&
+		error "setting xattr on $testdir should have failed (1)"
+	touch $testfile
+	setfattr -n security.c -v myval $testfile &&
+		error "setting xattr on $testfile should have failed (1)"
+
+	rm -rf $DIR/$tdir
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	mkdir $testdir
+	setfattr -n security.c -v myval $testdir &&
+		error "setting xattr on $testdir should have failed (2)"
+	touch $testfile
+	setfattr -n security.c -v myval $testfile &&
+		error "setting xattr on $testfile should have failed (2)"
+	return 0
+}
+run_test 57 "security.c xattr protection"
 
 log "cleanup: ======================================================"
 
