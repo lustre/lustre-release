@@ -162,6 +162,11 @@ struct ksock_tunables {
 #if SOCKNAL_VERSION_DEBUG
         int              *ksnd_protocol;        /* protocol version */
 #endif
+	int              *ksnd_conns_per_peer;  /* for typed mode, yields:
+						 * 1 + 2*conns_per_peer total
+						 * for untyped:
+						 * conns_per_peer total
+						 */
 };
 
 struct ksock_net {
@@ -371,6 +376,8 @@ struct ksock_conn {
 	time64_t		ksnc_tx_last_post;
 };
 
+#define SOCKNAL_CONN_COUNT_MAX_BITS	8	/* max conn count bits */
+
 struct ksock_route {
 	struct list_head   ksnr_list;		/* chain on peer_ni route list */
 	struct list_head   ksnr_connd_list;	/* chain on ksnr_connd_routes */
@@ -385,6 +392,9 @@ struct ksock_route {
         unsigned int          ksnr_connecting:1;/* connection establishment in progress */
         unsigned int          ksnr_connected:4; /* connections established by type */
         unsigned int          ksnr_deleted:1;   /* been removed from peer_ni? */
+	unsigned int	      ksnr_ctrl_conn_count:1; /* # conns by type */
+	unsigned int	      ksnr_blki_conn_count:8;
+	unsigned int	      ksnr_blko_conn_count:8;
         unsigned int          ksnr_share_count; /* created explicitly? */
         int                   ksnr_conn_count;  /* # conns established by this route */
 };
@@ -587,6 +597,11 @@ ksocknal_peer_decref(struct ksock_peer_ni *peer_ni)
 	LASSERT (atomic_read (&peer_ni->ksnp_refcount) > 0);
 	if (atomic_dec_and_test(&peer_ni->ksnp_refcount))
 		ksocknal_destroy_peer(peer_ni);
+}
+
+static inline int ksocknal_conns_per_peer(void)
+{
+	return *ksocknal_tunables.ksnd_conns_per_peer ?: 1;
 }
 
 int ksocknal_startup(struct lnet_ni *ni);
