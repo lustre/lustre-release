@@ -620,6 +620,11 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
     <emphasis role="bold">servers may be required to use a patched kernel,
     </emphasis> for more information see
     <xref linkend="enabling_disk_quotas"/>.</para>
+    <para condition="l2E"><literal>df</literal> and <literal>lfs df</literal>
+    will return the amount of space available to that project rather than the
+    total filesystem space, if the project quota limit is smaller.
+    <emphasis role="bold"> Only client need be upgraded to Lustre
+    release 2.14 or later to apply this new behavior</emphasis>.</para>
   </section>
   <section xml:id="granted_cache_and_quota_limits">
     <title>
