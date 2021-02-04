@@ -5236,7 +5236,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 }
 
 /* -o localflock - only provides locally consistent flock locks */
-const struct file_operations ll_file_operations = {
+static const struct file_operations ll_file_operations = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5265,7 +5265,7 @@ const struct file_operations ll_file_operations = {
 	.fallocate	= ll_fallocate,
 };
 
-const struct file_operations ll_file_operations_flock = {
+static const struct file_operations ll_file_operations_flock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5297,7 +5297,7 @@ const struct file_operations ll_file_operations_flock = {
 };
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
-const struct file_operations ll_file_operations_noflock = {
+static const struct file_operations ll_file_operations_noflock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 # ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
@@ -5344,6 +5344,18 @@ const struct inode_operations ll_file_inode_operations = {
 	.set_acl	= ll_set_acl,
 #endif
 };
+
+const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi)
+{
+	const struct file_operations *fops = &ll_file_operations_noflock;
+
+	if (sbi->ll_flags & LL_SBI_FLOCK)
+		fops = &ll_file_operations_flock;
+	else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
+		fops = &ll_file_operations;
+
+	return fops;
+}
 
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 {

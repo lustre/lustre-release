@@ -1093,10 +1093,8 @@ struct ll_cl_context *ll_cl_find(struct file *file);
 extern const struct address_space_operations ll_aops;
 
 /* llite/file.c */
-extern const struct file_operations ll_file_operations;
-extern const struct file_operations ll_file_operations_flock;
-extern const struct file_operations ll_file_operations_noflock;
 extern const struct inode_operations ll_file_inode_operations;
+const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi);
 extern int ll_have_md_lock(struct inode *inode, __u64 *bits,
 			   enum ldlm_mode l_req_mode);
 extern enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,

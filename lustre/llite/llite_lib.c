@@ -361,13 +361,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	 */
 	sb->s_flags |= SB_NOSEC;
 #endif
-
-	if (sbi->ll_flags & LL_SBI_FLOCK)
-		sbi->ll_fop = &ll_file_operations_flock;
-	else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
-		sbi->ll_fop = &ll_file_operations;
-	else
-		sbi->ll_fop = &ll_file_operations_noflock;
+	sbi->ll_fop = ll_select_file_operations(sbi);
 
 	/* always ping even if server suppress_pings */
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
