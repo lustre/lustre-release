@@ -8021,6 +8021,20 @@ static int lod_prepare_resync(const struct lu_env *env, struct lod_object *lo,
 	return need_sync ? 0 : -EALREADY;
 }
 
+static int lod_layout_pccro_check(const struct lu_env *env,
+				  struct dt_object *dt,
+				  struct md_layout_change *mlc)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
+
+	rc = lod_striping_load(env, lo);
+	if (rc)
+		return rc;
+
+	return lo->ldo_flr_state & LCM_FL_PCC_RDONLY ? -EALREADY : 0;
+}
+
 static struct lod_layout_component *
 lod_locate_comp_hsm(struct lod_object *lo, int *hsm_mirror_id)
 {
@@ -9423,6 +9437,7 @@ const struct dt_object_operations lod_obj_ops = {
 	.do_invalidate		= lod_invalidate,
 	.do_declare_layout_change = lod_declare_layout_change,
 	.do_layout_change	= lod_layout_change,
+	.do_layout_pccro_check	= lod_layout_pccro_check,
 };
 
 /**

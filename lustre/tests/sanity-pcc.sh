@@ -219,6 +219,9 @@ setup_loopdev() {
 	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
 	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
 	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet mount
+	do_facet $facet $UMOUNT $mntpt
+	do_facet $facet mount
 	do_facet $facet mkfs.ext4 $file ||
 		error "mkfs.ext4 $file failed"
 	do_facet $facet file $file
@@ -2983,6 +2986,49 @@ test_36b() {
 	test_36_base
 }
 run_test 36b "Stale RO-PCC copy should be deleted after remove the PCC backend"
+
+test_37() {
+	local loopfile="$TMP/$tfile"
+	local loopfile2="$TMP/$tfile.2"
+	local mntpt="/mnt/pcc.$tdir"
+	local mntpt2="/mnt/pcc.$tdir.2"
+	local file=$DIR/$tdir/$tfile
+	local file2=$DIR2/$tdir/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $file
+
+	setup_loopdev client $loopfile $mntpt 50
+	setup_loopdev client $loopfile2 $mntpt2 50
+	$LCTL pcc add $MOUNT $mntpt -p \
+		"projid={2} roid=$HSM_ARCHIVE_NUMBER auto_attach=0 pccro=1" ||
+		error "failed to config PCC for $MOUNT $mntpt"
+	$LCTL pcc add $MOUNT2 $mntpt2 -p \
+		"projid={2} roid=$HSM_ARCHIVE_NUMBER auto_attach=0 pccro=1" ||
+		error "failed to config PCC for $MOUNT2 $mntpt2"
+	$LCTL pcc list $MOUNT
+	$LCTL pcc list $MOUNT2
+
+	cancel_lru_locks mdc
+#define CFS_FAIL_ONCE | OBD_FAIL_MDS_LL_PCCRO
+	$LCTL set_param -n fail_loc=0x80000176 fail_val=10
+	$LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file &
+	sleep 2
+	$LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file2
+	wait
+	$LFS pcc state $file
+	$LFS pcc state $file2
+
+	check_lpcc_state $file "readonly" client
+	check_lpcc_state $file2 "readonly" client
+
+	$LCTL pcc clear $MOUNT
+	$LCTL pcc clear $MOUNT2
+}
+run_test 37 "Multiple readers on a shared file with PCC-RO mode"
 
 test_41() {
 	local loopfile="$TMP/$tfile"

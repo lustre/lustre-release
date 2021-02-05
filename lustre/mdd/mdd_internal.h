@@ -757,6 +757,13 @@ mdo_layout_change(const struct lu_env *env, struct mdd_object *obj,
 	return dt_layout_change(env, mdd_object_child(obj), mlc, handle);
 }
 
+static inline int
+mdo_layout_pccro_check(const struct lu_env *env, struct mdd_object *obj,
+		       struct md_layout_change *mlc)
+{
+	return dt_layout_pccro_check(env, mdd_object_child(obj), mlc);
+}
+
 static inline
 int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 			     const struct lu_fid *fid, __u32 type,

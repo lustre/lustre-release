@@ -1794,6 +1794,8 @@ int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 		rc = mdt_object_lock(info, obj, lhc, lockpart, LCK_EX);
 		if (rc)
 			RETURN(rc);
+
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LL_PCCRO, cfs_fail_val);
 	}
 
 	mutex_lock(&obj->mot_som_mutex);
@@ -4862,6 +4864,35 @@ out_shrink:
 	return rc;
 }
 
+static int mdt_layout_change_pccro(struct mdt_thread_info *info,
+				   struct mdt_object *obj,
+				   struct mdt_lock_handle *lhc,
+				   struct md_layout_change *layout)
+{
+	int rc;
+
+	ENTRY;
+
+	if (!mdt_object_exists(obj))
+		RETURN(-ENOENT);
+
+	if (!S_ISREG(lu_object_attr(&obj->mot_obj)))
+		RETURN(-EINVAL);
+
+	rc = mdt_object_lock(info, obj, lhc, MDS_INODELOCK_LAYOUT, LCK_CR);
+	if (rc)
+		RETURN(rc);
+
+	rc = mo_layout_pccro_check(info->mti_env,
+				   mdt_object_child(obj), layout);
+	if (rc == -EALREADY)
+		RETURN(0);
+
+	mdt_object_unlock(info, obj, lhc, 1);
+	rc = mdt_layout_change(info, obj, lhc, layout);
+	RETURN(rc);
+}
+
 static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 			     struct mdt_thread_info *info,
 			     struct ldlm_lock **lockp,
@@ -4984,11 +5015,25 @@ static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 	mdt_intent_fixup_resent(info, *lockp, lhc, flags);
 	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
 
-	/*
-	 * Instantiate some layout components, if @buf contains lovea, then it's
-	 * a replay of the layout intent write RPC.
-	 */
-	rc = mdt_layout_change(info, obj, lhc, &layout);
+	if (intent->lai_opc == LAYOUT_INTENT_PCCRO_SET)
+		/*
+		 * Take a CR layout lock against the file object first to check
+		 * whether the file is already PCC-RO cached. If so, return
+		 * immediately; Otherwise, take an EX layout lock on the file
+		 * to update the FLR PCC-RO state accordingly. By this check,
+		 * it can avoid heavy lock contention and unnecessary revocation
+		 * of the layout lock granted to the other clients when multiple
+		 * processes from many clients perform read-only attach on a
+		 * shared file object simultaneously.
+		 */
+		rc = mdt_layout_change_pccro(info, obj, lhc, &layout);
+	else
+		/*
+		 * Instantiate some layout components, if @buf contains lovea,
+		 * then it's a replay of the layout intent write RPC.
+		 */
+		rc = mdt_layout_change(info, obj, lhc, &layout);
+
 	ldlm_rep->lock_policy_res2 = clear_serious(rc);
 
 	if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {

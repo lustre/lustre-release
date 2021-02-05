@@ -3439,6 +3439,16 @@ out:
 
 /*  Update the layout for PCC-RO. */
 static int
+mdd_layout_pccro_check(const struct lu_env *env, struct md_object *o,
+		       struct md_layout_change *mlc)
+{
+	return mdo_layout_pccro_check(env, md2mdd_obj(o), mlc);
+}
+
+/**
+ *  Update the layout for PCC-RO.
+ */
+static int
 mdd_layout_update_pccro(const struct lu_env *env, struct md_object *o,
 			struct md_layout_change *mlc)
 {
@@ -4221,4 +4231,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_object_lock	= mdd_object_lock,
 	.moo_object_unlock	= mdd_object_unlock,
 	.moo_layout_change	= mdd_layout_change,
+	.moo_layout_pccro_check	= mdd_layout_pccro_check,
 };

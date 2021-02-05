@@ -3518,8 +3518,12 @@ static int pcc_readonly_ioctl_attach(struct file *file,
 		RETURN(-EOPNOTSUPP);
 
 	rc = pcc_attach_allowed_check(inode);
-	if (rc)
+	if (rc) {
+		CDEBUG(D_CACHE,
+		       "PCC-RO caching for "DFID" not allowed, rc = %d\n",
+		       PFID(ll_inode2fid(inode)), rc);
 		RETURN(rc);
+	}
 
 	rc = pcc_layout_rdonly_set(inode, &gen);
 	if (rc)
@@ -3538,8 +3542,11 @@ static int pcc_readonly_ioctl_attach(struct file *file,
 	pcc_inode_lock(inode);
 	old_cred = override_creds(super->pccs_cred);
 	lli->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
-	if (gen != ll_layout_version_get(lli))
+	if (gen != ll_layout_version_get(lli)) {
+		CDEBUG(D_CACHE, "L.Gen mismatch %u:%u\n",
+		       gen, ll_layout_version_get(lli));
 		GOTO(out_put_unlock, rc = -ESTALE);
+	}
 
 	pcci = ll_i2pcci(inode);
 	if (!pcci) {
