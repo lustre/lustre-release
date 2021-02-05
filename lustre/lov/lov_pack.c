@@ -363,7 +363,6 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	struct lov_user_md_v1 lum;
 	size_t lmmk_size, lum_size = 0;
 	ssize_t lmm_size;
-	static bool printed;
 	int rc = 0;
 
 	ENTRY;
@@ -374,14 +373,6 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 		CERROR("bad LSM MAGIC: 0x%08X != 0x%08X nor 0x%08X\n",
 		       lsm->lsm_magic, LOV_MAGIC_V1, LOV_MAGIC_V3);
 		GOTO(out, rc = -EIO);
-	}
-
-	if (!printed) {
-		LCONSOLE_WARN("%s: using old ioctl(LL_IOC_LOV_GETSTRIPE) on "
-			      DFID", use llapi_layout_get_by_path()\n",
-			      current->comm,
-			      PFID(&obj->lo_cl.co_lu.lo_header->loh_fid));
-		printed = true;
 	}
 
 	lmmk_size = lov_comp_md_size(lsm);
