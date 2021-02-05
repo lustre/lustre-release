@@ -21,6 +21,9 @@
     <listitem>
       <para><xref linkend="managingSecurity.clientencryption"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.kerberos"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="managingSecurity.acl">
     <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
@@ -924,6 +927,586 @@ deacab807bf0e788  No      custom protector "shield"
 f3cc1b5cf9b8f41c  No      custom protector "bunker"</screen>
         </listitem>
       </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.kerberos">
+    <title><indexterm><primary>Kerberos</primary></indexterm>
+    Configuring Kerberos (KRB) Security</title>
+    <para>This chapter describes how to use Kerberos with Lustre.</para>
+    <section xml:id="managingSecurity.kerberos.whatisit">
+      <title>What Is Kerberos?</title>
+      <para>Kerberos is a mechanism for authenticating all entities (such as
+        users and servers) on an &quot;unsafe&quot; network. Each of these
+        entities, known as &quot;principals&quot;, negotiate a runtime key with
+        the Kerberos server. This key enables principals to verify that messages
+        from the Kerberos server are authentic. By trusting the Kerberos server,
+        users and services can authenticate one another.</para>
+      <para>Setting up Lustre with Kerberos can provide advanced security
+        protections for the Lustre network. Broadly, Kerberos offers three types
+        of benefit:</para>
+      <itemizedlist>
+        <listitem>
+          <para>Allows Lustre connection peers (MDS, OSS and clients) to
+            authenticate one another.</para>
+        </listitem>
+        <listitem>
+          <para>Protects the integrity of PTLRPC messages from being modified
+            during network transfer.</para>
+        </listitem>
+        <listitem>
+          <para>Protects the privacy of the PTLRPC message from being
+            eavesdropped during network transfer.</para>
+        </listitem>
+      </itemizedlist>
+      <para>Kerberos uses the “kernel keyring” client upcall mechanism.</para>
+    </section>
+    <section xml:id="managingSecurity.kerberos.securityflavor">
+      <title>Security Flavor</title>
+      <para>
+        A security flavor is a string to describe what kind authentication
+        and data transformation be performed upon a PTLRPC connection. It
+        covers both RPC message and BULK data.
+      </para>
+      <para>
+        The supported flavors are described in following table:
+      </para>
+      <informaltable>
+        <tgroup cols="5">
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <thead>
+            <row>
+              <entry>
+                Base Flavor
+              </entry>
+              <entry>
+                Authentication
+              </entry>
+              <entry>
+                RPC Message Protection
+              </entry>
+              <entry>
+                Bulk Data Protection
+              </entry>
+              <entry>
+                Notes
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">null</emphasis></emphasis>
+              </entry>
+              <entry>
+                N/A
+              </entry>
+              <entry>
+                N/A
+              </entry>
+              <entry>
+                N/A
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5n</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                null
+              </entry>
+              <entry>
+                checksum
+              </entry>
+              <entry>
+                No protection of RPC message, checksum protection
+                of bulk data, light performance overhead.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5a</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                partial integrity (krb5)
+              </entry>
+              <entry>
+                checksum
+              </entry>
+              <entry>
+                Only header of RPC message is integrity protected, and
+                checksum protection of bulk data, more performance
+                overhead compare to krb5n.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5i</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                integrity (krb5)
+              </entry>
+              <entry>
+                integrity (krb5)
+              </entry>
+              <entry>
+                transformation algorithm is determined by actual Kerberos
+                algorithms enforced by KDC and principals; heavy performance
+                penalty.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5p</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                privacy (krb5)
+              </entry>
+              <entry>
+                privacy (krb5)
+              </entry>
+              <entry>
+                transformation privacy protection algorithm is determined
+                by actual Kerberos algorithms enforced by KDC and principals;
+                the heaviest performance penalty.
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section xml:id="managingSecurity.kerberos.kerberossetup">
+      <title>Kerberos Setup</title>
+      <section xml:id="managingSecurity.kerberos.kerberossetup.distribution">
+        <title>Distribution</title>
+        <para>We only support MIT Kerberos 5, from version 1.3.</para>
+        <para>For environmental requirements in general, and clock
+         synchronization in particular, please refer to section
+         <xref linkend="section_rh2_d4w_gk"/>.</para>
+      </section>
+      <section xml:id="managingSecurity.kerberos.kerberossetup.configuration">
+        <title>Principals Configuration</title>
+        <itemizedlist>
+          <listitem>
+            <para>Configure client nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each client node, create a <literal>lustre_root</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_root/client_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_root/client_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the client node.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure MGS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each MGS node, create a <literal>lustre_mgs</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_mgs/mgs_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_mds/mgs_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the MGS nodes.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure MDS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each MDS node, create a <literal>lustre_mds</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_mds/mds_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_mds/mds_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the MDS nodes.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure OSS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each OSS node, create a <literal>lustre_oss</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_oss/oss_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_oss/oss_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the client node.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+        </itemizedlist>
+        <note>
+          <itemizedlist>
+            <listitem>
+              <para>The <emphasis>host.domain</emphasis> should be the FQDN in
+              your network, otherwise server might not recognize any GSS
+              request.</para>
+            </listitem>
+            <listitem>
+              <para>
+                As an alternative for the client keytab, if you want to save
+                the trouble of assigning unique keytab for each client node,
+                you can create a general lustre_root principal and its
+                keytab, and install the same keytab on as many client nodes
+                as you want. <emphasis role="strong">Be aware that in
+                this way one compromised client means all clients are
+                insecure</emphasis>.
+              </para>
+              <screen>kadmin&gt; addprinc -randkey lustre_root@REALM</screen>
+              <screen>kadmin&gt; ktadd lustre_root@REALM</screen>
+            </listitem>
+            <listitem>
+              <para>
+                Lustre support following <emphasis>enctypes</emphasis> for
+                MIT Kerberos 5 version 1.3 or higher:
+              </para>
+              <itemizedlist>
+                <listitem>
+                  <para>
+                    <emphasis>aes128-cts</emphasis>
+                  </para>
+                </listitem>
+                <listitem>
+                  <para>
+                    <emphasis>aes256-cts</emphasis>
+                  </para>
+                </listitem>
+              </itemizedlist>
+            </listitem>
+          </itemizedlist>
+        </note>
+      </section>
+    </section>
+    <section xml:id="managingSecurity.kerberos.network">
+      <title>Networking</title>
+      <para>On networks for which name resolution to IP address is possible,
+        like TCP or InfiniBand, the names used in the principals must be the
+        ones that resolve to the IP addresses used by the Lustre NIDs.</para>
+      <para>If you are using a network which is
+        <emphasis role="strong">NOT</emphasis> TCP or InfiniBand (e.g.
+        PTL4LND), you need to have a <literal>/etc/lustre/nid2hostname</literal>
+        script on <emphasis role="strong">each</emphasis> node, which purpose is
+        to translate NID into hostname.
+        Following is a possible example for PTL4LND:</para>
+      <screen>#!/bin/bash
+set -x
+
+# convert a NID for a LND to a hostname
+
+# called with thre arguments: lnd netid nid
+#   $lnd is the string "PTL4LND", etc.
+#   $netid is the network identifier in hex string format
+#   $nid is the NID in hex format
+# output the corresponding hostname,
+# or error message leaded by a '@' for error logging.
+
+lnd=$1
+netid=$2
+# convert hex NID number to decimal
+nid=$((0x$3))
+
+case $lnd in
+    PTL4LND)   # simply add 'node' at the beginning
+        echo "node$nid"
+        ;;
+    *)
+	echo "@unknown LND: $lnd"
+        ;;
+esac</screen>
+    </section>
+    <section xml:id="managingSecurity.kerberos.requiredpackages">
+      <title>Required packages</title>
+      <para>
+        Every node should have following packages installed:
+      </para>
+      <itemizedlist>
+        <listitem>
+          <para>krb5-workstation</para>
+        </listitem>
+        <listitem>
+          <para>krb5-libs</para>
+        </listitem>
+        <listitem>
+          <para>keyutils</para>
+        </listitem>
+        <listitem>
+          <para>keyutils-libs</para>
+        </listitem>
+      </itemizedlist>
+      <para>On the node used to build Lustre with GSS support, following
+        packages should be installed:</para>
+      <itemizedlist>
+        <listitem>
+          <para>krb5-devel</para>
+        </listitem>
+        <listitem>
+          <para>keyutils-libs-devel</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.kerberos.buildlustre">
+      <title>Build Lustre</title>
+      <para>
+        Enable GSS at configuration time:
+      </para>
+      <screen>./configure --enable-gss --other-options</screen>
+    </section>
+    <section xml:id="managingSecurity.kerberos.running">
+      <title>Running</title>
+      <section xml:id="managingSecurity.kerberos.running.gssdaemons">
+        <title>GSS Daemons</title>
+        <para>
+          Make sure to start the daemon process
+          <literal>lsvcgssd</literal> on each server node (MGS, MDS and OSS)
+          before starting Lustre. The command syntax is:
+        </para>
+        <screen>lsvcgssd [-f] [-v] [-g] [-m] [-o] -k</screen>
+        <itemizedlist>
+          <listitem>
+            <para>-f: run in foreground, instead of as daemon</para>
+          </listitem>
+          <listitem>
+            <para>-v: increase verbosity by 1. For example, to set the verbose
+             level to 3, run 'lsvcgssd -vvv'. Verbose logging can help you make
+             sure Kerberos is set up correctly.
+            </para>
+          </listitem>
+          <listitem>
+            <para>-g: service MGS</para>
+          </listitem>
+          <listitem>
+            <para>-m: service MDS</para>
+          </listitem>
+          <listitem>
+            <para>-o: service OSS</para>
+          </listitem>
+          <listitem>
+            <para>-k: enable kerberos support</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.settingsecurityflavors">
+        <title>Setting Security Flavors</title>
+        <para>
+          Security flavors can be set by defining sptlrpc rules on the MGS.
+          These rules are persistent, and are in the form:
+          <literal>&lt;spec&gt;=&lt;flavor&gt;</literal>
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>To add a rule:</para>
+            <screen>mgs&gt; lctl conf_param &lt;spec&gt;=&lt;flavor&gt;</screen>
+            <para>
+              If there is an existing rule on &lt;spec&gt;, it will be
+              overwritten.</para>
+          </listitem>
+          <listitem>
+            <para>To delete a rule:</para>
+            <screen>mgs&gt; lctl conf_param -d &lt;spec&gt;</screen>
+          </listitem>
+          <listitem>
+            <para>To list existing rules:</para>
+            <screen>msg&gt; lctl get_param mgs.MGS.live.&lt;fs-name&gt; | grep "srpc.flavor"</screen>
+          </listitem>
+        </itemizedlist>
+        <note>
+          <itemizedlist>
+            <listitem>
+              <para>If nothing is specified, by default all RPC connections will
+                use <literal>null</literal> flavor, which means no security.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                After you change a rule, it usually takes a few minutes to apply
+                the new rule to all nodes, depending on global system load.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                Before you change a rule, make sure affected nodes are ready
+                for the new security flavor. E.g. if you change flavor from
+                <literal>null</literal> to <literal>krb5p</literal>
+                but GSS/Kerberos environment is not properly configured on
+                affected nodes, those nodes might be evicted because they cannot
+                communicate with each other.
+              </para>
+            </listitem>
+          </itemizedlist>
+        </note>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.rulessyntaxexamples">
+        <title>Rules Syntax &amp; Examples</title>
+        <para>
+          The general syntax is:
+        <literal>
+          &lt;target&gt;.srpc.flavor.&lt;network&gt;[.&lt;direction&gt;]=flavor
+        </literal></para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              <literal>&lt;target&gt;</literal> can be filesystem name, or
+              specific MDT/OST device name. For example
+              <literal>testfs</literal>,
+              <literal>testfs-MDT0000</literal>,
+              <literal>testfs-OST0001</literal>.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              <literal>&lt;network&gt;</literal> is the LNet network name, for
+              example <literal>tcp0</literal>, <literal>o2ib0</literal>, or
+              <literal>default</literal> to not filter on LNet network.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              <literal>&lt;direction&gt;</literal> can be one of
+              <emphasis>cli2mdt</emphasis>, <emphasis>cli2ost</emphasis>,
+              <emphasis>mdt2mdt</emphasis>, <emphasis>mdt2ost</emphasis>.
+              Direction is optional.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <para>
+          Examples:
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Apply <literal>krb5i</literal> on
+              <emphasis role="strong">ALL</emphasis> connections for file system
+              <literal>testfs</literal>:
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.default=krb5i</screen>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Nodes in network <literal>tcp0</literal> use
+              <literal>krb5p</literal>; all other nodes use
+              <literal>null</literal>.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.tcp0=krb5p
+mgs&gt; lctl conf_param testfs.srpc.flavor.default=null</screen>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Nodes in network <literal>tcp0</literal> use
+              <literal>krb5p</literal>; nodes in
+              <literal>o2ib0</literal> use <literal>krb5n</literal>;
+              among other nodes, clients use <literal>krb5i</literal>
+              to MDT/OST, MDTs use <literal>null</literal> to other MDTs,
+              MDTs use <literal>krb5a</literal> to OSTs.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.tcp0=krb5p
+mgs&gt; lctl conf_param testfs.srpc.flavor.o2ib0=krb5n
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.cli2mdt=krb5i
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.cli2ost=krb5i
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.mdt2mdt=null
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.mdt2ost=krb5a</screen>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.authenticatenormalusers">
+        <title>Regular Users Authentication</title>
+        <para>
+          On client nodes, non-root users need to issue
+          <literal>kinit</literal> before accessing Lustre, just like other
+           Kerberized applications.
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Required by kerberos, the user&apos;s principal
+              (<literal>username@REALM</literal>) should be added to the KDC.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Client and MDT nodes should have the same user database
+              used for name and uid/gid translation.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <para>
+          Regular users can destroy the established security contexts before
+          logging out, by issuing:
+        </para>
+        <screen>lfs flushctx -k -r &lt;mount point&gt;</screen>
+        <para>
+          Here <literal>-k</literal> is to destroy the on-disk Kerberos
+          credential cache, similar to <literal>kdestroy</literal>, and
+          <literal>-r</literal> is to reap the revoked keys from the keyring
+          when flushing the GSS context. Otherwise it only destroys established
+          contexts in kernel memory.
+        </para>
+      </section>
+    </section>
+    <section xml:id="managingSecurity.kerberos.securemgsconnection">
+      <title>Secure MGS connection</title>
+      <para>
+        Each node can specify which flavor to use to connect to the MGS, by
+        using the <literal>mgssec=flavor</literal> mount option.
+        Once a flavor is chosen, it cannot be changed until re-mount.
+      </para>
+      <para>
+        Because a Lustre node only has one connection to the MGS, if there is
+        more than one target or client on the node, they necessarily use the
+        same security flavor to the MGS, being the one enforced when the first
+        connection to the MGS was established.
+      </para>
+      <para>
+        By default, the MGS accepts RPCs with any flavor. But it is possible to
+        configure the MGS to only accept a given flavor. The syntax is identical
+        to what is explained in paragraph
+        <xref linkend="managingSecurity.kerberos.running.rulessyntaxexamples"/>,
+        but with special target <literal>_mgs</literal>:
+      </para>
+      <screen>mgs&gt; lctl conf_param _mgs.srpc.flavor.&lt;network&gt;=&lt;flavor&gt;</screen>
     </section>
   </section>
 </chapter>
