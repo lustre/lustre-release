@@ -9397,6 +9397,28 @@ test_131() {
 }
 run_test 131 "MDT backup restore with project ID"
 
+test_132() {
+	local err_cnt
+	local err_cnt2
+
+	reformat
+	combined_mgs_mds || start_mgs || error "unable to start MGS"
+	start_mdt 1 || error "unable to start mdt1"
+
+	err_cnt=$(do_facet mds1 dmesg | grep -c "cannot take the layout locks")
+	stop_mdt 1 || error "stop mdt1 failed"
+
+	[ "$mds1_FSTYPE" == zfs ] && import_zpool mds1
+	do_facet mds1 $TUNEFS --param mdt.hsm_control=enabled $(mdsdevname 1) ||
+		error "tunefs failed"
+	start_mdt 1 || error "cannot start mdt1"
+
+	err_cnt2=$(do_facet mds1 dmesg | grep -c "cannot take the layout locks")
+	[ $err_cnt -eq $err_cnt2 ] || error "Can not take the layout lock"
+	stop_mdt 1 || error "stop mdt1 failed"
+}
+run_test 132 "hsm_actions processed after failover"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
