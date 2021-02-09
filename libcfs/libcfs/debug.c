@@ -637,6 +637,16 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
 	libcfs_panic_in_progress = 1;
 	mb();
 
+#ifdef LNET_DUMP_ON_PANIC
+	/* This is currently disabled because it spews far too much to the
+	 * console on the rare cases it is ever triggered. */
+
+	if (in_interrupt()) {
+		cfs_trace_debug_print();
+	} else {
+		libcfs_debug_dumplog_internal((void *)(long)current->pid);
+	}
+#endif
 	return 0;
 }
 
