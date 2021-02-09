@@ -625,14 +625,45 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
             </listitem>
             <listitem>
               <para>If there is not expected to be a replacement for this OST in
-              the near future, permanently deactivate it on all clients and
-	      the MDS by running the following command on the MGS:
-              <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
+                the near future, permanently deactivate it on all clients and
+	        the MDS by running the following command on the MGS:
+                <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
               <note><para>A deactivated OST still appears in the file system
-                configuration, though a replacement OST can be created using the
+                configuration, though a replacement OST can be created that
+                re-uses the same OST index with the
                 <literal>mkfs.lustre --replace</literal> option, see
                 <xref linkend="lustremaint.restore_ost"/>.
               </para></note>
+              <para>To totally remove the OST from the filesystem configuration,
+                the OST configuration records should be found in the startup
+                logs by running the command
+                "<literal>lctl --device MGS llog_print <replaceable>fsname</replaceable>-client</literal>"
+                on the MGS (and also
+                "<literal>... <replaceable>$fsname</replaceable>-MDT<replaceable>xxxx</replaceable></literal>"
+                for all the MDTs) to list all <literal>attach</literal>,
+                <literal>setup</literal>, <literal>add_osc</literal>,
+                <literal>add_pool</literal>, and other records related to the
+                removed OST(s).  Once the <literal>index</literal> value is
+                known for each configuration record, the command
+                "<literal>lctl --device MGS llog_cancel <replaceable>llog_name</replaceable> -i <replaceable>index</replaceable> </literal>"
+                will drop that record from the configuration log
+                <replaceable>llog_name</replaceable> for each of the
+                <literal><replaceable>fsname</replaceable>-client</literal> and
+                <literal><replaceable>fsname</replaceable>-MDTxxxx</literal>
+                configuration logs so that new mounts will no longer process it.
+                If a whole OSS is being removed, the<literal>add_uuid</literal>
+                records for the OSS should similarly be canceled.
+                <screen>
+mgs# lctl --device MGS llog_print testfs-client | egrep "192.168.10.99@tcp|OST0003"
+- { index: 135, event: add_uuid, nid: 192.168.10.99@tcp(0x20000c0a80a63), node: 192.168.10.99@tcp }
+- { index: 136, event: attach, device: testfs-OST0003-osc, type: osc, UUID: testfs-clilov_UUID }
+- { index: 137, event: setup, device: testfs-OST0003-osc, UUID: testfs-OST0003_UUID, node: 192.168.10.99@tcp }
+- { index: 138, event: add_osc, device: testfs-clilov, ost: testfs-OST0003_UUID, index: 3, gen: 1 }
+mgs# lctl --device MGS llog_cancel testfs-client -i 138
+mgs# lctl --device MGS llog_cancel testfs-client -i 137
+mgs# lctl --device MGS llog_cancel testfs-client -i 136
+                </screen>
+              </para>
             </listitem>
           </orderedlist>
         </listitem>
