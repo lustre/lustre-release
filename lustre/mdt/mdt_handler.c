@@ -6727,18 +6727,20 @@ static int mdt_path_current(struct mdt_thread_info *info,
 			    struct getinfo_fid2path *fp,
 			    struct lu_fid *root_fid)
 {
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct mdt_object	*mdt_obj;
-	struct link_ea_header	*leh;
-	struct link_ea_entry	*lee;
-	struct lu_name		*tmpname = &info->mti_name;
-	struct lu_fid		*tmpfid = &info->mti_tmp_fid1;
-	struct lu_buf		*buf = &info->mti_big_buf;
-	char			*ptr;
-	int			reclen;
-	struct linkea_data	ldata = { NULL };
-	int			rc = 0;
-	bool			first = true;
+	struct mdt_device *mdt = info->mti_mdt;
+	struct lu_name *tmpname = &info->mti_name;
+	struct lu_fid *tmpfid = &info->mti_tmp_fid1;
+	struct lu_buf *buf = &info->mti_big_buf;
+	struct md_attr *ma = &info->mti_attr;
+	struct linkea_data ldata = { NULL };
+	bool first = true;
+	struct mdt_object *mdt_obj;
+	struct link_ea_header *leh;
+	struct link_ea_entry *lee;
+	char *ptr;
+	int reclen;
+	int rc = 0;
+
 	ENTRY;
 
 	/* temp buffer for path element, the buffer will be finally freed
@@ -6754,8 +6756,6 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	*tmpfid = fp->gf_fid = *mdt_object_fid(obj);
 
 	while (!lu_fid_eq(root_fid, &fp->gf_fid)) {
-		struct lu_buf		lmv_buf;
-
 		if (!lu_fid_eq(root_fid, &mdt->mdt_md_root_fid) &&
 		    lu_fid_eq(&mdt->mdt_md_root_fid, &fp->gf_fid))
 			GOTO(out, rc = -ENOENT);
@@ -6803,22 +6803,23 @@ static int mdt_path_current(struct mdt_thread_info *info,
 				fp->gf_linkno++;
 		}
 
-		lmv_buf.lb_buf = info->mti_xattr_buf;
-		lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
 		/* Check if it is slave stripes */
-		rc = mo_xattr_get(info->mti_env, mdt_object_child(mdt_obj),
-				  &lmv_buf, XATTR_NAME_LMV);
+		rc = mdt_stripe_get(info, mdt_obj, ma, XATTR_NAME_LMV);
 		mdt_object_put(info->mti_env, mdt_obj);
-		if (rc > 0) {
-			union lmv_mds_md *lmm = lmv_buf.lb_buf;
+		if (rc < 0)
+			GOTO(out, rc);
+
+		if (ma->ma_valid & MA_LMV) {
+			struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
+
+			if (!lmv_is_sane2(lmv))
+				GOTO(out, rc = -EBADF);
 
 			/* For slave stripes, get its master */
-			if (le32_to_cpu(lmm->lmv_magic) == LMV_MAGIC_STRIPE) {
+			if (le32_to_cpu(lmv->lmv_magic) == LMV_MAGIC_STRIPE) {
 				fp->gf_fid = *tmpfid;
 				continue;
 			}
-		} else if (rc < 0 && rc != -ENODATA) {
-			GOTO(out, rc);
 		}
 
 		/* Pack the name in the end of the buffer */
