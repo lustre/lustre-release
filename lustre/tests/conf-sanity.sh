@@ -2985,7 +2985,7 @@ test_33a() { # bug 12333, was test_33
 		--reformat $mgs_flag $mkfsoptions $fs2mdsdev $fs2mdsvdev ||
 		exit 10
 	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --mgsnode=$MGSNID \
-		--fsname=${FSNAME2} --index=8191 --reformat $fs2ostdev \
+		--fsname=${FSNAME2} --index=0x1fff --reformat $fs2ostdev \
 		$fs2ostvdev || exit 10
 
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
@@ -3007,6 +3007,15 @@ test_33a() { # bug 12333, was test_33
 		error "$LFS getstripe $MOUNT2/hosts failed"
 
 	umount $MOUNT2
+
+	# test lctl del_ost on large index
+	do_facet mgs "$LCTL del_ost -t ${FSNAME2}-OST1fff" ||
+		error "del_ost failed with $?"
+	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || error "$MOUNT_CMD failed"
+	echo "ok."
+	$LFS df | grep -q OST1fff && error "del_ost did not remove OST1fff!"
+	umount $MOUNT2
+
 	stop fs2ost -f
 	stop fs2mds -f
 	cleanup_nocli || error "cleanup_nocli failed with $?"
@@ -9530,6 +9539,61 @@ test_123ag() { # LU-15142
 	(( rec == 0 )) || error "parameter was not deleted, check #2"
 }
 run_test 123ag "llog_print skips values deleted by set_param -P -d"
+
+test_123ah() { #LU-7668 del_ost
+	[ "$MGS_VERSION" -ge $(version_code 2.15.50) -a \
+	   "$MDS1_VERSION" -ge $(version_code 2.15.50) ] ||
+		skip "Need both MGS and MDS version at least 2.15.50"
+
+	[ -d $MOUNT/.lustre ] || setupall
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0" EXIT
+
+	local cmd="--device MGS llog_print"
+
+	cli_llogcnt_orig=$(do_facet mgs $LCTL $cmd $FSNAME-client |
+				grep -c $FSNAME-OST0000)
+	mds1_llogcnt_orig=$(do_facet mgs $LCTL $cmd $FSNAME-MDT0000 |
+				grep -c $FSNAME-OST0000)
+
+	[ $cli_llogcnt_orig -gt 0 ] ||
+		error "$FSNAME-OST0000 not found (client)"
+	[ $mds1_llogcnt_orig -gt 0 ] || error "$FSNAME-OST0000 not found (MDT)"
+
+	# -n/--dryrun should NOT modify catalog
+	do_facet mgs "$LCTL del_ost -n -t $FSNAME-OST0000" ||
+		error "del_ost --dryrun failed with $?"
+
+	local cli_llogcnt=$(do_facet mgs $LCTL $cmd $FSNAME-client |
+			grep -c $FSNAME-OST0000)
+	local mds1_llogcnt=$(do_facet mgs $LCTL $cmd $FSNAME-MDT0000 |
+			grep -c $FSNAME-OST0000)
+
+	[ $cli_llogcnt -eq $cli_llogcnt_orig ] ||
+		error "--dryrun error: $cli_llogcnt != $cli_llogcnt_orig"
+	[ $mds1_llogcnt -eq $mds1_llogcnt_orig ] ||
+		error "--dryrun error: $mds1_llogcnt != $mds1_llogcnt_orig"
+
+	# actual run
+	do_facet mgs "$LCTL del_ost --target $FSNAME-OST0000" ||
+		error "del_ost failed with $?"
+
+	local cli_llogcnt=$(do_facet mgs $LCTL $cmd $FSNAME-client |
+			grep -c $FSNAME-OST0000)
+	local mds1_llogcnt=$(do_facet mgs $LCTL $cmd $FSNAME-MDT0000 |
+			grep -c $FSNAME-OST0000)
+
+	# every catalog entry for OST0000 should have been cancelled
+	[ $cli_llogcnt -eq 0 ] || error "$FSNAME-OST0000 not cancelled (cli)"
+	[ $mds1_llogcnt -eq 0 ] || error "$FSNAME-OST0000 not cancelled (MDT)"
+
+	umount_client $MOUNT
+	mount_client $MOUNT
+
+	$LFS df | grep -q OST0000 && error "del_ost did not remove OST0000!"
+	cleanup
+	reformat_and_config
+}
+run_test 123ah "del_ost cancels config log entries correctly"
 
 test_123F() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"

@@ -157,6 +157,7 @@ int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
 
 int jt_pool_cmd(int argc, char **argv);
+int jt_del_ost(int argc, char **argv);
 #ifdef HAVE_SERVER_SUPPORT
 int jt_barrier_freeze(int argc, char **argv);
 int jt_barrier_thaw(int argc, char **argv);

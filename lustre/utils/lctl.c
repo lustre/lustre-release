@@ -236,6 +236,9 @@ command_t cmdlist[] = {
 		"respectively.\n"
 	 "  -D  Only list directories.\n"
 	 "  -R  Recursively list all parameters under the specified path.\n"},
+	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
+	 "usage: del_ost [--dryrun] --target <$fsname-OSTxxxx>\n"
+	 "Cancel the config records for a specific OST to forget about it.\n"},
 
 	/* Debug commands */
 	{"==== debugging control ====", NULL, 0, "debug"},

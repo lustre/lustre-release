@@ -2688,13 +2688,36 @@ static int llog_default_device(enum llog_default_dev_op op)
 	return rc;
 }
 
-int jt_llog_catlist(int argc, char **argv)
+static int llog_catlist_next(int index, char *buf, size_t buflen)
 {
 	struct obd_ioctl_data data;
+	int rc;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	data.ioc_inllen1 = buflen - __ALIGN_KERNEL(sizeof(data), 8);
+	data.ioc_count = index;
+	memset(buf, 0, buflen);
+	rc = llapi_ioctl_pack(&data, &buf, buflen);
+	if (rc < 0) {
+		fprintf(stderr, "error: invalid llapi_ioctl_pack: %s\n",
+			strerror(errno));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
+	if (rc < 0) {
+		fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
+			strerror(errno));
+		return rc;
+	}
+	return ((struct obd_ioctl_data *)buf)->ioc_count;
+}
+
+int jt_llog_catlist(int argc, char **argv)
+{
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char *tmp = NULL;
 	int start = 0;
-	int rc;
 
 	if (argc != 1)
 		return CMD_HELP;
@@ -2703,37 +2726,19 @@ int jt_llog_catlist(int argc, char **argv)
 		return CMD_INCOMPLETE;
 
 	do {
-		memset(&data, 0, sizeof(data));
-		data.ioc_dev = cur_device;
-		data.ioc_inllen1 = sizeof(rawbuf) -
-				   __ALIGN_KERNEL(sizeof(data), 8);
-		data.ioc_count = start;
-		memset(buf, 0, sizeof(rawbuf));
-		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-		if (rc) {
-			fprintf(stderr, "error: %s: invalid ioctl\n",
-				jt_cmdname(argv[0]));
-			goto err;
-		}
-		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
-		if (rc < 0)
+		start = llog_catlist_next(start, rawbuf, sizeof(rawbuf));
+		if (start < 0)
 			break;
 		tmp = ((struct obd_ioctl_data *)buf)->ioc_bulk;
 		if (strlen(tmp) > 0)
 			fprintf(stdout, "%s", tmp);
 		else
 			break;
-		start = ((struct obd_ioctl_data *)buf)->ioc_count;
 	} while (start);
 
-	if (rc < 0)
-		fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
-			strerror(errno));
-
-err:
 	llog_default_device(LLOG_DFLT_DEV_RESET);
 
-	return rc;
+	return start;
 }
 
 int jt_llog_info(int argc, char **argv)
@@ -3493,6 +3498,113 @@ static int llog_search_ost(char *logname, long last_index, char *ostname)
 	return (rc == 1 ? 1 : 0);
 }
 
+struct llog_del_ost_priv {
+	char *logname;
+	char *ostname;
+	int found;
+	int dryrun;
+};
+
+/**
+ * Callback to search and delete ostname in llog
+ *
+ * \param record[in]	pointer to llog record
+ * \param data[in]	pointer to ostname
+ *
+ * \retval		1 if ostname is found and entry deleted
+ *			0 if ostname is not found
+ *			< 0 if error
+ */
+static int llog_del_ost_cb(const char *record, void *data)
+{
+	char ost_filter[MAX_STRING_SIZE] = {'\0'};
+	char log_idxstr[MAX_STRING_SIZE] = {'\0'};
+	long int log_idx = 0;
+	struct llog_del_ost_priv *priv = data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data ioc_data = { 0 };
+	int rc = 0;
+
+	if (priv->ostname && priv->ostname[0])
+		snprintf(ost_filter, sizeof(ost_filter), " %s", priv->ostname);
+
+	if (!strstr(record, ost_filter))
+		return rc;
+
+	rc = sscanf(record, "- { index: %ld", &log_idx);
+	if (rc < 0) {
+		fprintf(stderr, "error: record without index:\n%s\n",
+			record);
+		return 0;
+	}
+	snprintf(log_idxstr, sizeof(log_idxstr), "%ld", log_idx);
+
+	ioc_data.ioc_dev = cur_device;
+	ioc_data.ioc_inllen1 = strlen(priv->logname) + 1;
+	ioc_data.ioc_inlbuf1 = priv->logname;
+	ioc_data.ioc_inllen3 = strlen(log_idxstr) + 1;
+	ioc_data.ioc_inlbuf3 = log_idxstr;
+
+	rc = llapi_ioctl_pack(&ioc_data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "ioctl_pack for catalog '%s' failed: %s\n",
+			ioc_data.ioc_inlbuf1, strerror(-rc));
+		return rc;
+	}
+
+	if (priv->dryrun) {
+		fprintf(stdout, "[DRY RUN] cancel catalog '%s:%s':\"%s\"\n",
+			ioc_data.ioc_inlbuf1, ioc_data.ioc_inlbuf3, record);
+	} else {
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CANCEL, buf);
+		if (rc)
+			fprintf(stderr, "cancel catalog '%s:%s' failed: %s\n",
+				ioc_data.ioc_inlbuf1, ioc_data.ioc_inlbuf3,
+				strerror(errno));
+		else {
+			fprintf(stdout, "cancel catalog %s log_idx %ld: done\n",
+				priv->logname, log_idx);
+			priv->found++;
+		}
+	}
+	return rc;
+}
+
+/**
+ * Search and delete ost in llog
+ *
+ * \param logname[in]		pointer to config log name
+ * \param last_index[in]	the index of the last llog record
+ * \param ostname[in]		pointer to ost name
+ * \param dryrun[in]		dry run?
+ *
+ * \retval			1 if ostname is found and deleted
+ *				0 if ostname is not found
+ */
+static int llog_del_ost(char *logname, long last_index, char *ostname,
+			int dryrun)
+{
+	long start, end, inc = MAX_IOC_BUFLEN / 128;
+	int rc = 0;
+	struct llog_del_ost_priv priv = { logname, ostname, false, dryrun };
+
+	for (end = last_index; end > 1; end -= inc) {
+		start = end - inc > 0 ? end - inc : 1;
+		rc = jt_llog_print_iter(logname, start, end, llog_del_ost_cb,
+					&priv, true, false);
+		if (rc)
+			break;
+	}
+
+	if (priv.found)
+		fprintf(stdout, "del_ost: cancelled %d catalog entries\n",
+			priv.found);
+	else
+		fprintf(stdout, "del_ost: no catalog entry deleted\n");
+
+	return rc;
+}
+
 struct llog_pool_data {
 	char lpd_fsname[LUSTRE_MAXFSNAME + 1];
 	char lpd_poolname[LOV_MAXPOOLNAME + 1];
@@ -3971,6 +4083,115 @@ out:
 		break;
 	}
 	free(lcfg);
+	return rc;
+}
+
+int jt_del_ost(int argc, char **argv)
+{
+	char *fsname = NULL, *ptr, *logname;
+	char mdtpattern[16], clipattern[16];
+	char ostname[MAX_OBD_NAME + 1];
+	long last_index;
+	__u32 index;
+	int rc, start = 0, dryrun = 0;
+	char c;
+
+	static struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "dryrun",	.has_arg = no_argument },
+	{ .val = 't',	.name = "target",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "hnt:", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 't':
+			fsname = strdup(optarg);
+			break;
+		case 'n':
+			dryrun = 1;
+			break;
+		case 'h':
+		default:
+			free(fsname);
+			return CMD_HELP;
+		}
+	}
+
+	if (fsname == NULL)
+		return CMD_HELP;
+
+	if (llog_default_device(LLOG_DFLT_MGS_SET)) {
+		rc = CMD_INCOMPLETE;
+		goto out;
+	}
+
+	ptr = strstr(fsname, "-OST");
+	if (!ptr) {
+		rc = CMD_HELP;
+		goto err;
+	}
+
+	if (dryrun)
+		fprintf(stdout, "del_ost: dry run for target %s\n", fsname);
+
+	*ptr++ = '\0';
+	rc = sscanf(ptr, "OST%04x", &index);
+	if (rc != 1) {
+		rc = -EINVAL;
+		goto err;
+	}
+
+	if (strlen(ptr) > sizeof(ostname) - 1) {
+		rc = -E2BIG;
+		goto err;
+	}
+
+	snprintf(mdtpattern, sizeof(mdtpattern), "%s-MDT", fsname);
+	snprintf(clipattern, sizeof(clipattern), "%s-client", fsname);
+	snprintf(ostname, sizeof(ostname), "%s-%s", fsname, ptr);
+
+	do {
+		char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+		char *begin, *end;
+
+		start = llog_catlist_next(start, rawbuf, sizeof(rawbuf));
+		if (start < 0)
+			break;
+		begin = ((struct obd_ioctl_data *)buf)->ioc_bulk;
+		if (strlen(begin) == 0)
+			break;
+
+		while ((end = strchr(begin, '\n'))) {
+			*end = '\0';
+			logname = strstr(begin, "config_log: ");
+
+			if (logname && (strstr(logname, mdtpattern) ||
+					strstr(logname, clipattern))) {
+				logname += 12;
+
+				fprintf(stdout, "config_log: %s\n", logname);
+
+				last_index = llog_last_index(logname);
+				if (last_index < 0) {
+					fprintf(stderr,
+						"error with catalog %s: %s\n",
+						logname, strerror(-last_index));
+					rc = -last_index;
+					goto err;
+				}
+				rc = llog_del_ost(logname, last_index, ostname,
+						  dryrun);
+				if (rc < 0)
+					goto err;
+			}
+			begin = end + 1;
+		}
+	} while (start);
+
+err:
+	llog_default_device(LLOG_DFLT_DEV_RESET);
+out:
+	free(fsname);
 	return rc;
 }
 

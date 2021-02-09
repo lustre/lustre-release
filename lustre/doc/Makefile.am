@@ -198,6 +198,7 @@ SERVER_MANFILES =				\
 	lctl-llog_catlist.8			\
 	lctl-llog_info.8			\
 	lctl-llog_print.8			\
+	lctl-del_ost.8				\
 	lctl-nodemap-activate.8			\
 	lctl-nodemap-add-idmap.8		\
 	lctl-nodemap-add-range.8		\
