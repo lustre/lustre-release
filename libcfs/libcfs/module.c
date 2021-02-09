@@ -294,9 +294,9 @@ static int __proc_dobitmasks(void *data, int write,
 	int           is_printk = (mask == &libcfs_printk) ? 1 : 0;
 
 	if (!write) {
-		rc = cfs_trace_allocate_string_buffer(&tmpstr, tmpstrlen);
-		if (rc < 0)
-			return rc;
+		tmpstr = kmalloc(tmpstrlen, GFP_KERNEL | __GFP_ZERO);
+		if (!tmpstr)
+			return -ENOMEM;
 		libcfs_debug_mask2str(tmpstr, tmpstrlen, *mask, is_subsys);
 		rc = strlen(tmpstr);
 
