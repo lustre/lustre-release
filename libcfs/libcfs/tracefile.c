@@ -60,9 +60,8 @@ union cfs_trace_data_union (*cfs_trace_data[CFS_TCD_TYPE_CNT])[NR_CPUS] __cachel
 
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
-static struct tracefiled_ctl trace_tctl;
-static DEFINE_MUTEX(cfs_trace_thread_mutex);
-static int thread_running = 0;
+
+struct task_struct *tctl_task;
 
 static atomic_t cfs_tage_allocated = ATOMIC_INIT(0);
 static DECLARE_RWSEM(cfs_tracefile_sem);
@@ -201,14 +200,15 @@ static void cfs_tage_to_tail(struct cfs_trace_page *tage,
 static struct cfs_trace_page *
 cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 {
-        struct cfs_trace_page *tage;
+	struct cfs_trace_page *tage;
+	struct task_struct *tsk;
 
-        if (tcd->tcd_cur_pages > 0) {
+	if (tcd->tcd_cur_pages > 0) {
 		__LASSERT(!list_empty(&tcd->tcd_pages));
-                tage = cfs_tage_from_list(tcd->tcd_pages.prev);
+		tage = cfs_tage_from_list(tcd->tcd_pages.prev);
 		if (tage->used + len <= PAGE_SIZE)
-                        return tage;
-        }
+			return tage;
+	}
 
 	if (tcd->tcd_cur_pages < tcd->tcd_max_pages) {
 		if (tcd->tcd_cur_stock_pages > 0) {
@@ -232,16 +232,16 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 		list_add_tail(&tage->linkage, &tcd->tcd_pages);
 		tcd->tcd_cur_pages++;
 
-		if (tcd->tcd_cur_pages > 8 && thread_running) {
-			struct tracefiled_ctl *tctl = &trace_tctl;
+		tsk = tctl_task;
+		if (tcd->tcd_cur_pages > 8 && tsk)
 			/*
 			 * wake up tracefiled to process some pages.
 			 */
-			wake_up(&tctl->tctl_waitq);
-		}
+			wake_up_process(tsk);
+
 		return tage;
-        }
-        return NULL;
+	}
+	return NULL;
 }
 
 static void cfs_tcd_shrink(struct cfs_trace_cpu_data *tcd)
@@ -274,14 +274,14 @@ static void cfs_tcd_shrink(struct cfs_trace_cpu_data *tcd)
 
 /* return a page that has 'len' bytes left at the end */
 static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
-                                                 unsigned long len)
+						 unsigned long len)
 {
-        struct cfs_trace_page *tage;
+	struct cfs_trace_page *tage;
 
-        /*
-         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
-         * from here: this will lead to infinite recursion.
-         */
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
 	if (len > PAGE_SIZE) {
 		pr_err("LustreError: cowardly refusing to write %lu bytes in a page\n",
@@ -289,17 +289,17 @@ static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
 		return NULL;
 	}
 
-        tage = cfs_trace_get_tage_try(tcd, len);
-        if (tage != NULL)
-                return tage;
-        if (thread_running)
-                cfs_tcd_shrink(tcd);
-        if (tcd->tcd_cur_pages > 0) {
-                tage = cfs_tage_from_list(tcd->tcd_pages.next);
-                tage->used = 0;
-                cfs_tage_to_tail(tage, &tcd->tcd_pages);
-        }
-        return tage;
+	tage = cfs_trace_get_tage_try(tcd, len);
+	if (tage != NULL)
+		return tage;
+	if (tctl_task)
+		cfs_tcd_shrink(tcd);
+	if (tcd->tcd_cur_pages > 0) {
+		tage = cfs_tage_from_list(tcd->tcd_pages.next);
+		tage->used = 0;
+		cfs_tage_to_tail(tage, &tcd->tcd_pages);
+	}
+	return tage;
 }
 
 static void cfs_set_ptldebug_header(struct ptldebug_header *header,
@@ -1026,7 +1026,6 @@ int cfs_trace_get_debug_mb(void)
 static int tracefiled(void *arg)
 {
 	struct page_collection pc;
-	struct tracefiled_ctl *tctl = arg;
 	struct cfs_trace_page *tage;
 	struct cfs_trace_page *tmp;
 	struct file *filp;
@@ -1034,21 +1033,13 @@ static int tracefiled(void *arg)
 	int last_loop = 0;
 	int rc;
 
-	/* we're started late enough that we pick up init's fs context */
-	/* this is so broken in uml?  what on earth is going on? */
-
-	complete(&tctl->tctl_start);
-
 	pc.pc_want_daemon_pages = 0;
 
 	while (!last_loop) {
-		wait_event_timeout(tctl->tctl_waitq,
-				   ({ collect_pages(&pc);
-				     !list_empty(&pc.pc_pages); }) ||
-				   atomic_read(&tctl->tctl_shutdown),
-				   cfs_time_seconds(1));
-		if (atomic_read(&tctl->tctl_shutdown))
+		schedule_timeout_interruptible(cfs_time_seconds(1));
+		if (kthread_should_stop())
 			last_loop = 1;
+		collect_pages(&pc);
 		if (list_empty(&pc.pc_pages))
 			continue;
 
@@ -1118,48 +1109,39 @@ static int tracefiled(void *arg)
 		}
 		__LASSERT(list_empty(&pc.pc_pages));
 	}
-	complete(&tctl->tctl_stop);
+
 	return 0;
 }
 
 int cfs_trace_start_thread(void)
 {
-        struct tracefiled_ctl *tctl = &trace_tctl;
-        int rc = 0;
+	struct task_struct *tsk;
+	int rc = 0;
 
-	mutex_lock(&cfs_trace_thread_mutex);
-        if (thread_running)
-                goto out;
+	if (tctl_task)
+		return 0;
 
-	init_completion(&tctl->tctl_start);
-	init_completion(&tctl->tctl_stop);
-	init_waitqueue_head(&tctl->tctl_waitq);
-	atomic_set(&tctl->tctl_shutdown, 0);
-
-	if (IS_ERR(kthread_run(tracefiled, tctl, "ktracefiled"))) {
+	tsk = kthread_create(tracefiled, NULL, "ktracefiled");
+	if (IS_ERR(tsk))
 		rc = -ECHILD;
-		goto out;
-	}
+	else if (cmpxchg(&tctl_task, NULL, tsk) != NULL)
+		/* already running */
+		kthread_stop(tsk);
+	else
+		wake_up_process(tsk);
 
-	wait_for_completion(&tctl->tctl_start);
-	thread_running = 1;
-out:
-	mutex_unlock(&cfs_trace_thread_mutex);
-        return rc;
+	return rc;
 }
 
 void cfs_trace_stop_thread(void)
 {
-	struct tracefiled_ctl *tctl = &trace_tctl;
+	struct task_struct *tsk;
 
-	mutex_lock(&cfs_trace_thread_mutex);
-	if (thread_running) {
+	tsk = xchg(&tctl_task, NULL);
+	if (tsk) {
 		pr_info("Lustre: shutting down debug daemon thread...\n");
-		atomic_set(&tctl->tctl_shutdown, 1);
-		wait_for_completion(&tctl->tctl_stop);
-		thread_running = 0;
+		kthread_stop(tsk);
 	}
-	mutex_unlock(&cfs_trace_thread_mutex);
 }
 
 /* percents to share the total debug memory for each type */

@@ -156,16 +156,6 @@ struct page_collection {
 	int			pc_want_daemon_pages;
 };
 
-/* XXX nikita: this declaration is internal to tracefile.c and should probably
- * be moved there */
-struct tracefiled_ctl {
-	struct completion	tctl_start;
-	struct completion	tctl_stop;
-	wait_queue_head_t	tctl_waitq;
-	pid_t			tctl_pid;
-	atomic_t		tctl_shutdown;
-};
-
 /*
  * small data-structure for each page owned by tracefiled.
  */
