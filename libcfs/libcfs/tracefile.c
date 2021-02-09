@@ -873,33 +873,6 @@ void cfs_trace_flush_pages(void)
 	}
 }
 
-int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
-			    const char __user *usr_buffer, int usr_buffer_nob)
-{
-        int    nob;
-
-        if (usr_buffer_nob > knl_buffer_nob)
-                return -EOVERFLOW;
-
-	if (copy_from_user(knl_buffer, usr_buffer, usr_buffer_nob))
-                return -EFAULT;
-
-        nob = strnlen(knl_buffer, usr_buffer_nob);
-	while (--nob >= 0)			/* strip trailing whitespace */
-                if (!isspace(knl_buffer[nob]))
-                        break;
-
-        if (nob < 0)                            /* empty string */
-                return -EINVAL;
-
-        if (nob == knl_buffer_nob)              /* no space to terminate */
-                return -EOVERFLOW;
-
-        knl_buffer[nob + 1] = 0;                /* terminate */
-        return 0;
-}
-EXPORT_SYMBOL(cfs_trace_copyin_string);
-
 int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
                              const char *knl_buffer, char *append)
 {
@@ -939,26 +912,22 @@ int cfs_trace_allocate_string_buffer(char **str, int nob)
 
 int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob)
 {
-        char         *str;
-        int           rc;
+	char *str;
+	char *path;
+	int rc;
 
-        rc = cfs_trace_allocate_string_buffer(&str, usr_str_nob + 1);
-        if (rc != 0)
-                return rc;
+	str = memdup_user_nul(usr_str, usr_str_nob);
+	if (!str)
+		return -ENOMEM;
 
-        rc = cfs_trace_copyin_string(str, usr_str_nob + 1,
-                                     usr_str, usr_str_nob);
-        if (rc != 0)
-                goto out;
-
-        if (str[0] != '/') {
-                rc = -EINVAL;
-                goto out;
-        }
-        rc = cfs_tracefile_dump_all_pages(str);
-out:
+	path = strim(str);
+	if (path[0] != '/')
+		rc = -EINVAL;
+	else
+		rc = cfs_tracefile_dump_all_pages(path);
 	kfree(str);
-        return rc;
+
+	return rc;
 }
 
 int cfs_trace_daemon_command(char *str)
@@ -1002,20 +971,17 @@ int cfs_trace_daemon_command(char *str)
 
 int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob)
 {
-        char *str;
-        int   rc;
+	char *str;
+	int   rc;
 
-        rc = cfs_trace_allocate_string_buffer(&str, usr_str_nob + 1);
-        if (rc != 0)
-                return rc;
+	str = memdup_user_nul(usr_str, usr_str_nob);
+	if (!str)
+		return -ENOMEM;
 
-        rc = cfs_trace_copyin_string(str, usr_str_nob + 1,
-                                 usr_str, usr_str_nob);
-        if (rc == 0)
-                rc = cfs_trace_daemon_command(str);
-
+	rc = cfs_trace_daemon_command(strim(str));
 	kfree(str);
-        return rc;
+
+	return rc;
 }
 
 int cfs_trace_set_debug_mb(int mb)

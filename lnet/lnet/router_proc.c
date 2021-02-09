@@ -796,11 +796,11 @@ static int __proc_lnet_portal_rotor(void *data, int write,
 	int		rc;
 	int		i;
 
-	LIBCFS_ALLOC(buf, buf_len);
-	if (buf == NULL)
-		return -ENOMEM;
-
 	if (!write) {
+		LIBCFS_ALLOC(buf, buf_len);
+		if (buf == NULL)
+			return -ENOMEM;
+
 		lnet_res_lock(0);
 
 		for (i = 0; portal_rotors[i].pr_value >= 0; i++) {
@@ -821,14 +821,16 @@ static int __proc_lnet_portal_rotor(void *data, int write,
 			rc = 0;
 		} else {
 			rc = cfs_trace_copyout_string(buffer, nob,
-					buf + pos, "\n");
+						      buf + pos, "\n");
 		}
-		goto out;
+		LIBCFS_FREE(buf, buf_len);
+
+		return rc;
 	}
 
-	rc = cfs_trace_copyin_string(buf, buf_len, buffer, nob);
-	if (rc < 0)
-		goto out;
+	buf = memdup_user_nul(buffer, nob);
+	if (!buf)
+		return -ENOMEM;
 
 	tmp = strim(buf);
 
@@ -843,8 +845,8 @@ static int __proc_lnet_portal_rotor(void *data, int write,
 		}
 	}
 	lnet_res_unlock(0);
-out:
-	LIBCFS_FREE(buf, buf_len);
+	kfree(buf);
+
 	return rc;
 }
 

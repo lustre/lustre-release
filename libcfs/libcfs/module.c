@@ -287,17 +287,16 @@ static int __proc_dobitmasks(void *data, int write,
 			     loff_t pos, void __user *buffer, int nob)
 {
 	const int     tmpstrlen = 512;
-	char         *tmpstr;
+	char         *tmpstr = NULL;
 	int           rc;
 	unsigned int *mask = data;
 	int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
 	int           is_printk = (mask == &libcfs_printk) ? 1 : 0;
 
-	rc = cfs_trace_allocate_string_buffer(&tmpstr, tmpstrlen);
-	if (rc < 0)
-		return rc;
-
 	if (!write) {
+		rc = cfs_trace_allocate_string_buffer(&tmpstr, tmpstrlen);
+		if (rc < 0)
+			return rc;
 		libcfs_debug_mask2str(tmpstr, tmpstrlen, *mask, is_subsys);
 		rc = strlen(tmpstr);
 
@@ -308,13 +307,11 @@ static int __proc_dobitmasks(void *data, int write,
 						      tmpstr + pos, "\n");
 		}
 	} else {
-		rc = cfs_trace_copyin_string(tmpstr, tmpstrlen, buffer, nob);
-		if (rc < 0) {
-			kfree(tmpstr);
-			return rc;
-		}
+		tmpstr = memdup_user_nul(buffer, nob);
+		if (!tmpstr)
+			return -ENOMEM;
 
-		rc = libcfs_debug_str2mask(mask, tmpstr, is_subsys);
+		rc = libcfs_debug_str2mask(mask, strim(tmpstr), is_subsys);
 		/* Always print LBUG/LASSERT to console, so keep this mask */
 		if (is_printk)
 			*mask |= D_EMERG;
