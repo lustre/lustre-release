@@ -634,7 +634,18 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
                 <literal>mkfs.lustre --replace</literal> option, see
                 <xref linkend="lustremaint.restore_ost"/>.
               </para></note>
-              <para>To totally remove the OST from the filesystem configuration,
+              <para condition="l2G">
+                In Lustre 2.16 and later, it is possible to run the command
+                "<literal>lctl del_ost --target <replaceable>fsname</replaceable>-OST<replaceable>xxxx</replaceable></literal>"
+                on the MGS to totally remove an OST from the MGS configuration
+                logs.  This will cancel the configuration logs for that OST in
+                the client and MDT configuration logs for the named filesystem.
+                This permanently removes the configuration records for that OST
+                from the filesystem, so that it will not be visible on later
+                client and MDT mounts, and should only be run after earlier
+                steps to migrate files off the OST.
+              </para>
+              <para>If the <literal>del_ost</literal> command is not available,
                 the OST configuration records should be found in the startup
                 logs by running the command
                 "<literal>lctl --device MGS llog_print <replaceable>fsname</replaceable>-client</literal>"
@@ -647,9 +658,9 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
                 known for each configuration record, the command
                 "<literal>lctl --device MGS llog_cancel <replaceable>llog_name</replaceable> -i <replaceable>index</replaceable> </literal>"
                 will drop that record from the configuration log
-                <replaceable>llog_name</replaceable> for each of the
-                <literal><replaceable>fsname</replaceable>-client</literal> and
-                <literal><replaceable>fsname</replaceable>-MDTxxxx</literal>
+                <replaceable>llog_name</replaceable>.  This is needed for each
+                of <literal><replaceable>fsname</replaceable>-client</literal>
+                and <literal><replaceable>fsname</replaceable>-MDTxxxx</literal>
                 configuration logs so that new mounts will no longer process it.
                 If a whole OSS is being removed, the<literal>add_uuid</literal>
                 records for the OSS should similarly be canceled.
