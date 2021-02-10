@@ -88,7 +88,6 @@ def walk_array(options):
         for i in xrange(sys_info.CPUS):
             u = cfstd_array[i]
             walk_pages(tmpfd, options, u.tcd.tcd_pages, trace_page_struct)
-            walk_pages(tmpfd, options, u.tcd.tcd_daemon_pages, trace_page_struct)
             walk_pages(tmpfd, options, u.tcd.tcd_stock_pages, trace_page_struct)
 
     tmpfd.close()

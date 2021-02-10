@@ -87,22 +87,7 @@ union cfs_trace_data_union {
 		unsigned long		tcd_cur_pages;
 
 		/*
-		 * pages with trace records already processed by
-		 * tracefiled. These pages are kept in memory, so that some
-		 * portion of log can be written in the event of LBUG. This
-		 * list is maintained in LRU order.
-		 *
-		 * Pages are moved to ->tcd_daemon_pages by tracefiled()
-		 * (put_pages_on_daemon_list()). LRU pages from this list are
-		 * discarded when list grows too large.
-		 */
-		struct list_head	tcd_daemon_pages;
-		/* number of pages on ->tcd_daemon_pages */
-		unsigned long		tcd_cur_daemon_pages;
-
-		/*
-		 * Maximal number of pages allowed on ->tcd_pages and
-		 * ->tcd_daemon_pages each.
+		 * Maximal number of pages allowed on ->tcd_pages
 		 * Always TCD_MAX_PAGES * tcd_pages_factor / 100 in current
 		 * implementation.
 		 */
@@ -147,12 +132,6 @@ union cfs_trace_data_union {
  * be moved there */
 struct page_collection {
 	struct list_head	pc_pages;
-	/*
-	 * if this flag is set, collect_pages() will spill both
-	 * ->tcd_daemon_pages and ->tcd_pages to the ->pc_pages. Otherwise,
-	 * only ->tcd_pages are spilled.
-	 */
-	int			pc_want_daemon_pages;
 };
 
 /*
