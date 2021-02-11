@@ -14922,12 +14922,14 @@ test_160f() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	# use fnv1a because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
 	log "$(date +%s): creating first files"
-	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/$tfile failed"
+	for ((i = 0; i < MDSCOUNT * 2; i++)); do
+		$LFS mkdir -i $((i%MDSCOUNT)) $DIR/$tdir/d$i.$((i/MDSCOUNT)) ||
+			error "create $DIR/$tdir/d$i.$((i/MDSCOUNT)) failed"
+	done
 
 	# check changelogs have been generated
 	local start=$SECONDS
@@ -14955,7 +14957,7 @@ test_160f() {
 
 	# simulate changelog catalog almost full
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
-	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
+	do_nodes $mdts "$LCTL set_param fail_loc=0x1313 fail_val=3"
 
 	for i in $(seq $MDSCOUNT); do
 		cl_users=(${CL_USERS[mds$i]})
@@ -14995,18 +14997,19 @@ test_160f() {
 	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
 	# cl_user1 should be OK because it recently processed records.
 	echo "$(date +%s): creating $((MDSCOUNT * 2)) files"
-	createmany -m $DIR/$tdir/${tfile}b $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}b failed"
+	for ((i = 0; i < MDSCOUNT * 2; i++)); do
+		$LFS mkdir -i $((i%MDSCOUNT)) $DIR/$tdir/d$i.$((i/MDSCOUNT+2))||
+			error "create $DIR/$tdir/d$i.$((i/MDSCOUNT+2)) failed"
+	done
 
 	# ensure gc thread is done
 	for i in $(mdts_nodes); do
-		wait_update $i \
-			"ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+		wait_update $i "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
 			error "$i: GC-thread not done"
 	done
 
 	local first_rec
-	for i in $(seq $MDSCOUNT); do
+	for (( i = 1; i <= MDSCOUNT; i++ )); do
 		# check cl_user1 still registered
 		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
 			error "mds$i: User ${cl_user1[mds$i]} not registered"
@@ -15021,10 +15024,9 @@ test_160f() {
 		first_rec=$($LFS changelog $(facet_svc mds$i) |
 			    awk '{ print $1; exit; }')
 
-		echo "mds$i: verifying first index $user_rec1 + 1 == $first_rec"
+		echo "mds$i: $(date +%s) verify rec $user_rec1+1 == $first_rec"
 		[ $((user_rec1 + 1)) == $first_rec ] ||
-			error "mds$i: first index should be $user_rec1 + 1, " \
-			      "but is $first_rec"
+			error "mds$i: rec $first_rec != $user_rec1 + 1"
 	done
 }
 run_test 160f "changelog garbage collect (timestamped users)"
@@ -15050,20 +15052,20 @@ test_160g() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	# use fnv1a because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
-		error "mkdir $tdir failed"
-	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/$tfile failed"
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
+		error "test_mkdir $tdir failed"
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
+			error "create $DIR/$tdir/d$i.1 failed"
+	done
 
 	# check changelogs have been generated
 	local nbcl=$(changelog_dump | wc -l)
-	[[ $nbcl -eq 0 ]] && error "no changelogs found"
+	(( $nbcl > 0 )) || error "no changelogs found"
 
 	# reduce the max_idle_indexes value to make sure we exceed it
-	max_ndx=$((nbcl / 2 - 1))
-
-	for param in "changelog_max_idle_indexes=$max_ndx" \
+	for param in "changelog_max_idle_indexes=1" \
 		     "changelog_gc=1" \
 		     "changelog_min_gc_interval=2" \
 		     "changelog_min_free_cat_entries=3"; do
@@ -15078,8 +15080,9 @@ test_160g() {
 
 	# simulate changelog catalog almost full
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
-	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
+	do_nodes $mdts "$LCTL set_param fail_loc=0x1313 fail_val=3"
 
+	local start=$SECONDS
 	for i in $(seq $MDSCOUNT); do
 		cl_users=(${CL_USERS[mds$i]})
 		cl_user1[mds$i]="${cl_users[0]}"
@@ -15111,21 +15114,24 @@ test_160g() {
 	done
 
 	# ensure we are past the previous changelog_min_gc_interval set above
-	sleep 2
+	local sleep2=$((start + 2 - SECONDS))
+	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
 
-	# generate one more changelog to trigger fail_loc
-	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}bis failed"
+	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
+	# cl_user1 should be OK because it recently processed records.
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.3 $DIR/$tdir/d$i.4 ||
+			error "create $DIR/$tdir/d$i.3 failed"
+	done
 
 	# ensure gc thread is done
 	for i in $(mdts_nodes); do
-		wait_update $i \
-			"ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+		wait_update $i "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
 			error "$i: GC-thread not done"
 	done
 
 	local first_rec
-	for i in $(seq $MDSCOUNT); do
+	for (( i = 1; i <= MDSCOUNT; i++ )); do
 		# check cl_user1 still registered
 		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
 			error "mds$i: User ${cl_user1[mds$i]} not registered"
@@ -15140,10 +15146,9 @@ test_160g() {
 		first_rec=$($LFS changelog $(facet_svc mds$i) |
 			    awk '{ print $1; exit; }')
 
-		echo "mds$i: verifying first index $user_rec1 + 1 == $first_rec"
+		echo "mds$i: $(date +%s) verify rec $user_rec1+1 == $first_rec"
 		[ $((user_rec1 + 1)) == $first_rec ] ||
-			error "mds$i: first index should be $user_rec1 + 1, " \
-			      "but is $first_rec"
+			error "mds$i: rec $first_rec != $user_rec1 + 1"
 	done
 }
 run_test 160g "changelog garbage collect (old users)"
@@ -15166,11 +15171,13 @@ test_160h() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	# use fnv1a because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
-	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/$tfile failed"
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
+			error "create $DIR/$tdir/d$i.1 failed"
+	done
 
 	# check changelogs have been generated
 	local nbcl=$(changelog_dump | wc -l)
@@ -15317,11 +15324,13 @@ test_160i() {
 	changelog_register || error "first changelog_register failed"
 
 	# generate some changelog records to accumulate on each MDT
-	# use fnv1a because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
-		error "mkdir $tdir failed"
-	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/$tfile failed"
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
+		error "test_mkdir $tdir failed"
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
+			error "create $DIR/$tdir/d$i.1 failed"
+	done
 
 	# check changelogs have been generated
 	local nbcl=$(changelog_dump | wc -l)
@@ -15384,11 +15393,13 @@ test_160j() {
 	stack_trap "changelog_deregister" EXIT
 
 	# generate some changelog
-	# use fnv1a because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "mkdir $tdir failed"
-	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}bis failed"
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
+			error "create $DIR/$tdir/d$i.1 failed"
+	done
 
 	# open the changelog device
 	exec 3>/dev/changelog-$FSNAME-MDT0000
@@ -15434,9 +15445,6 @@ test_160k() {
 	sleep 4
 
 	changelog_dump | grep rmdir || error "rmdir not recorded"
-
-	rm -rf $DIR/$tdir
-	changelog_deregister
 }
 run_test 160k "Verify that changelog records are not lost"
 
@@ -18767,13 +18775,11 @@ test_230o() {
 
 	local mdts=$(comma_list $(mdts_nodes))
 	local timeout=100
-
 	local restripe_status
 	local delta
 	local i
-	local j
 
-	[[ $(facet_fstype mds1) == zfs ]] && timeout=300
+	[[ $mds1_FSTYPE == zfs ]] && timeout=300
 
 	# in case "crush" hash type is not set
 	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
@@ -18791,7 +18797,7 @@ test_230o() {
 		error "create dirs under remote dir failed $i"
 
 	for i in $(seq 2 $MDSCOUNT); do
-		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
 		$LFS setdirstripe -c $i $DIR/$tdir ||
 			error "split -c $i $tdir failed"
 		wait_update $HOSTNAME \
@@ -18799,10 +18805,10 @@ test_230o() {
 			error "dir split not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
-		echo "$delta files migrated when dir split from $((i - 1)) to $i stripes"
+		echo "$delta migrated when dir split $((i - 1)) to $i stripes"
 		# delta is around total_files/stripe_count
-		[ $delta -lt $((200 /(i - 1))) ] ||
-			error "$delta files migrated"
+		(( $delta < 200 / (i - 1) + 4 )) ||
+			error "$delta files migrated >= $((200 / (i - 1) + 4))"
 	done
 }
 run_test 230o "dir split"
@@ -18814,13 +18820,11 @@ test_230p() {
 
 	local mdts=$(comma_list $(mdts_nodes))
 	local timeout=100
-
 	local restripe_status
 	local delta
 	local i
-	local j
 
-	[[ $(facet_fstype mds1) == zfs ]] && timeout=300
+	[[ $mds1_FSTYPE == zfs ]] && timeout=300
 
 	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
 
@@ -18839,7 +18843,7 @@ test_230p() {
 	for i in $(seq $((MDSCOUNT - 1)) -1 1); do
 		local mdt_hash="crush"
 
-		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
 		$LFS setdirstripe -c $i $DIR/$tdir ||
 			error "split -c $i $tdir failed"
 		[ $i -eq 1 ] && mdt_hash="none"
@@ -18848,10 +18852,10 @@ test_230p() {
 			error "dir merge not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
-		echo "$delta files migrated when dir merge from $((i + 1)) to $i stripes"
+		echo "$delta migrated when dir merge $((i + 1)) to $i stripes"
 		# delta is around total_files/stripe_count
-		[ $delta -lt $((200 / i)) ] ||
-			error "$delta files migrated"
+		(( $delta < 200 / i + 4 )) ||
+			error "$delta files migrated >= $((200 / i + 4))"
 	done
 }
 run_test 230p "dir merge"
@@ -18872,6 +18876,7 @@ test_230q() {
 	local stripe_count=0
 	local stripe_index
 	local nr_files
+	local create
 
 	# test with fewer files on ZFS
 	[ "$mds1_FSTYPE" == "zfs" ] && threshold=40
@@ -18890,11 +18895,12 @@ test_230q() {
 	$LFS mkdir -i -1 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
 	stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
 
+	create=$((threshold * 3 / 2))
 	while [ $stripe_count -lt $MDSCOUNT ]; do
-		createmany -m $DIR/$tdir/f $total $((threshold * 3 / 2)) ||
+		createmany -m $DIR/$tdir/f $total $create ||
 			error "create sub files failed"
 		stat $DIR/$tdir > /dev/null
-		total=$((total + threshold * 3 / 2))
+		total=$((total + create))
 		stripe_count=$((stripe_count + delta))
 		[ $stripe_count -gt $MDSCOUNT ] && stripe_count=$MDSCOUNT
 
@@ -18906,13 +18912,13 @@ test_230q() {
 			"$LFS getdirstripe -H $DIR/$tdir" "crush" 200 ||
 			error "stripe hash $($LFS getdirstripe -H $DIR/$tdir) != crush"
 
-		nr_files=$($LFS getstripe -m $DIR/$tdir/* |
-			   grep -w $stripe_index | wc -l)
-		echo "$nr_files files on MDT$stripe_index after split"
-		[ $nr_files -lt $((total / (stripe_count - 1))) ] ||
+		nr_files=$($LFS find -m 1 $DIR/$tdir | grep -c -w $stripe_index)
+		echo "$nr_files/$total files on MDT$stripe_index after split"
+		# allow 10% margin of imbalance with crush hash
+		(( $nr_files <= $total / $stripe_count + $create / 10)) ||
 			error "$nr_files files on MDT$stripe_index after split"
 
-		nr_files=$(ls $DIR/$tdir | wc -w)
+		nr_files=$($LFS find -type f $DIR/$tdir | wc -l)
 		[ $nr_files -eq $total ] ||
 			error "total sub files $nr_files != $total"
 	done
