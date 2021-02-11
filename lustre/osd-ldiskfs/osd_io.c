@@ -1335,6 +1335,16 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 		return 0;
 
 	start = fe.fe_logical >> inode->i_blkbits;
+	if (fei.fi_extents_mapped == 0) {
+		/* a special case - no extent found at this offset and forward.
+		 * we can consider this as a hole to EOF. it's safe to cache
+		 * as other threads can not allocate/punch blocks this thread
+		 * is working on (LDLM). */
+		cached_extent->start = block;
+		cached_extent->end = i_size_read(inode) >> inode->i_blkbits;
+		cached_extent->mapped = 0;
+		return 0;
+	}
 
 	if (start > block) {
 		cached_extent->start = block;
