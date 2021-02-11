@@ -4480,7 +4480,7 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 	struct mgs_direntry	*dirent, *n;
 	char			*out, *suffix, prefix[] = "config_log: ";
 	int			 prefix_len = strlen(prefix);
-	int			 l, remains, start = 0, rc;
+	int			 len, remains, start = 0, rc;
 
 	ENTRY;
 
@@ -4499,8 +4499,8 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 		list_del_init(&dirent->mde_list);
 		suffix = strrchr(dirent->mde_name, '-');
 		if (suffix != NULL) {
-			l = prefix_len + dirent->mde_len + 1;
-			if (remains - 1 < 0) {
+			len = prefix_len + dirent->mde_len + 1;
+			if (remains - len < 0) {
 				/* No enough space for this record */
 				mgs_direntry_free(dirent);
 				goto out;
@@ -4508,15 +4508,15 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 			start++;
 			if (start < data->ioc_count) {
 				mgs_direntry_free(dirent);
-					continue;
+				continue;
 			}
-			l = scnprintf(out, remains, "%s%s\n", prefix,
-				      dirent->mde_name);
-			out += l;
-			remains -= l;
+			len = scnprintf(out, remains, "%s%s\n", prefix,
+					dirent->mde_name);
+			out += len;
+			remains -= len;
 		}
 		mgs_direntry_free(dirent);
-		if (remains == 0)
+		if (remains <= 1)
 			/* Full */
 			goto out;
 	}
