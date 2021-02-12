@@ -10501,6 +10501,21 @@ test_103c() {
 }
 run_test 103c "'cp -rp' won't set empty acl"
 
+test_103e() {
+	(( $MDS1_VERSION >= $(version_code 2.13.59) )) ||
+		skip "MDS needs to be at least 2.13.59"
+
+	mkdir -p $DIR/$tdir
+	# one default ACL will be created for the file owner
+	for U in {2..256}; do
+		setfacl -m default:user:$U:rwx $DIR/$tdir
+		numacl=$(getfacl $DIR/$tdir |& grep -c "default:user")
+		touch $DIR/$tdir/$tfile.$U ||
+			error "failed to create $tfile.$U with $numacl ACLs"
+	done
+}
+run_test 103e "inheritance of big amount of default ACLs"
+
 test_104a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

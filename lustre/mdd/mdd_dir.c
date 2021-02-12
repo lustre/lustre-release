@@ -124,7 +124,7 @@ int mdd_lookup(const struct lu_env *env,
 }
 
 /** Read the link EA into a temp buffer.
- * Uses the mdd_thread_info::mti_big_buf since it is generally large.
+ * Uses the mdd_thread_info::mti_link_buf since it is generally large.
  * A pointer to the buffer is stored in \a ldata::ld_buf.
  *
  * \retval 0 or error
@@ -1254,7 +1254,7 @@ static inline int mdd_links_del(const struct lu_env *env,
 /** Read the link EA into a temp buffer.
  * Uses the name_buf since it is generally large.
  * \retval IS_ERR err
- * \retval ptr to \a lu_buf (always \a mti_big_buf)
+ * \retval ptr to \a lu_buf (always \a mti_link_buf)
  */
 struct lu_buf *mdd_links_get(const struct lu_env *env,
 			     struct mdd_object *mdd_obj)
@@ -2303,6 +2303,7 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 			struct lu_buf *acl_buf)
 {
 	int	rc;
+
 	ENTRY;
 
 	if (S_ISLNK(la->la_mode)) {
@@ -2572,22 +2573,23 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		      const struct lu_name *lname, struct md_object *child,
 		      struct md_op_spec *spec, struct md_attr *ma)
 {
-	struct mdd_thread_info	*info = mdd_env_info(env);
-	struct lu_attr		*la = &info->mti_la_for_fix;
-	struct mdd_object	*mdd_pobj = md2mdd_obj(pobj);
-	struct mdd_object	*son = md2mdd_obj(child);
-	struct mdd_device	*mdd = mdo2mdd(pobj);
-	struct lu_attr		*attr = &ma->ma_attr;
-	struct thandle		*handle;
-	struct lu_attr		*pattr = &info->mti_pattr;
-	struct lu_buf		acl_buf;
-	struct lu_buf		def_acl_buf;
-	struct lu_buf		hsm_buf;
-	struct linkea_data	*ldata = &info->mti_link_data;
-	const char		*name = lname->ln_name;
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_attr *la = &info->mti_la_for_fix;
+	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
+	struct mdd_object *son = md2mdd_obj(child);
+	struct mdd_device *mdd = mdo2mdd(pobj);
+	struct lu_attr *attr = &ma->ma_attr;
+	struct thandle *handle;
+	struct lu_attr *pattr = &info->mti_pattr;
+	struct lu_buf acl_buf;
+	struct lu_buf def_acl_buf;
+	struct lu_buf hsm_buf;
+	struct linkea_data *ldata = &info->mti_link_data;
+	const char *name = lname->ln_name;
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
-	int			 rc;
-	int			 rc2;
+	int acl_size = LUSTRE_POSIX_ACL_MAX_SIZE_OLD;
+	int rc, rc2;
+
 	ENTRY;
 
 	rc = mdd_la_get(env, mdd_pobj, pattr);
@@ -2606,13 +2608,25 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (IS_ERR(handle))
 		GOTO(out_free, rc = PTR_ERR(handle));
 
-	lu_buf_check_and_alloc(&info->mti_xattr_buf,
-			min_t(unsigned int, mdd->mdd_dt_conf.ddp_max_ea_size,
-			      XATTR_SIZE_MAX));
-	acl_buf = info->mti_xattr_buf;
-	def_acl_buf.lb_buf = info->mti_key;
-	def_acl_buf.lb_len = sizeof(info->mti_key);
+use_bigger_buffer:
+	acl_buf = *lu_buf_check_and_alloc(&info->mti_xattr_buf, acl_size);
+	if (!acl_buf.lb_buf)
+		GOTO(out_stop, rc = -ENOMEM);
+	/* mti_big_buf is also used down below in mdd_changelog_ns_store(),
+	 * but def_acl_buf is finished with it before then
+	 */
+	def_acl_buf = *lu_buf_check_and_alloc(&info->mti_big_buf, acl_size);
+	if (!def_acl_buf.lb_buf)
+		GOTO(out_stop, rc = -ENOMEM);
+
 	rc = mdd_acl_init(env, mdd_pobj, attr, &def_acl_buf, &acl_buf);
+	if (unlikely(rc == -ERANGE &&
+		     acl_size == LUSTRE_POSIX_ACL_MAX_SIZE_OLD)) {
+		/* use maximum-sized xattr buffer for too-big default ACL */
+		acl_size = min_t(unsigned int, mdd->mdd_dt_conf.ddp_max_ea_size,
+				 XATTR_SIZE_MAX);
+		goto use_bigger_buffer;
+	}
 	if (rc < 0)
 		GOTO(out_stop, rc);
 
