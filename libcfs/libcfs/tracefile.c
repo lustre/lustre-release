@@ -858,12 +858,12 @@ void cfs_trace_flush_pages(void)
 {
 	struct page_collection pc;
 	struct cfs_trace_page *tage;
-	struct cfs_trace_page *tmp;
 
 	pc.pc_want_daemon_pages = 1;
 	collect_pages(&pc);
-	list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
-
+	while (!list_empty(&pc.pc_pages)) {
+		tage = list_first_entry(&pc.pc_pages,
+					struct cfs_trace_page, linkage);
 		__LASSERT_TAGE_INVARIANT(tage);
 
 		list_del(&tage->linkage);
@@ -1280,7 +1280,6 @@ static void trace_cleanup_on_all_cpus(void)
 {
 	struct cfs_trace_cpu_data *tcd;
 	struct cfs_trace_page *tage;
-	struct cfs_trace_page *tmp;
 	int i, cpu;
 
 	for_each_possible_cpu(cpu) {
@@ -1290,7 +1289,10 @@ static void trace_cleanup_on_all_cpus(void)
 				continue;
 			tcd->tcd_shutting_down = 1;
 
-			list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+			while (!list_empty(&tcd->tcd_pages)) {
+				tage = list_first_entry(&tcd->tcd_pages,
+							struct cfs_trace_page,
+							linkage);
 				__LASSERT_TAGE_INVARIANT(tage);
 
 				list_del(&tage->linkage);
