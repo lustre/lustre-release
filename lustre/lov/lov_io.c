@@ -692,7 +692,7 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 			io->u.ci_setattr.sa_falloc_offset = start;
 			io->u.ci_setattr.sa_falloc_end = end;
 		}
-		if (cl_io_is_trunc(io) || cl_io_is_fallocate(io)) {
+		if (cl_io_is_trunc(io)) {
 			loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
 
 			new_size = lov_size_to_stripe(lsm, index, new_size,
@@ -1475,6 +1475,32 @@ static int lov_io_fault_start(const struct lu_env *env,
 	RETURN(lov_io_start(env, ios));
 }
 
+static int lov_io_setattr_start(const struct lu_env *env,
+				const struct cl_io_slice *ios)
+{
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct cl_io *parent = ios->cis_io;
+	struct lov_io_sub *sub;
+	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+
+	ENTRY;
+
+	if (cl_io_is_fallocate(parent)) {
+		list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+			loff_t size = parent->u.ci_setattr.sa_attr.lvb_size;
+			int index = lov_comp_entry(sub->sub_subio_index);
+			int stripe = lov_comp_stripe(sub->sub_subio_index);
+
+			size = lov_size_to_stripe(lsm, index, size, stripe);
+			sub->sub_io.u.ci_setattr.sa_attr.lvb_size = size;
+			sub->sub_io.u.ci_setattr.sa_avalid =
+						parent->u.ci_setattr.sa_avalid;
+		}
+	}
+
+	RETURN(lov_io_start(env, ios));
+}
+
 static void lov_io_fsync_end(const struct lu_env *env,
 			     const struct cl_io_slice *ios)
 {
@@ -1616,7 +1642,7 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_iter_fini = lov_io_iter_fini,
 			.cio_lock      = lov_io_lock,
 			.cio_unlock    = lov_io_unlock,
-			.cio_start     = lov_io_start,
+			.cio_start     = lov_io_setattr_start,
 			.cio_end       = lov_io_end
 		},
 		[CIT_DATA_VERSION] = {

@@ -5152,11 +5152,6 @@ int cl_falloc(struct inode *inode, int mode, loff_t offset, loff_t len)
 			rc = -EFBIG;
 			goto out;
 		}
-		io->u.ci_setattr.sa_attr.lvb_size = sa_falloc_end;
-		if (!(mode & FALLOC_FL_KEEP_SIZE))
-			io->u.ci_setattr.sa_avalid |= ATTR_SIZE;
-	} else {
-		io->u.ci_setattr.sa_attr.lvb_size = size;
 	}
 
 again:

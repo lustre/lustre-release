@@ -40,6 +40,7 @@
 #include <obd.h>
 #include <linux/pagevec.h>
 #include <linux/memcontrol.h>
+#include <linux/falloc.h>
 
 #include "llite_internal.h"
 #include "vvp_internal.h"
@@ -661,7 +662,7 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 			enqflags = CEF_DISCARD_DATA;
 	} else if (cl_io_is_fallocate(io)) {
 		lock_start = io->u.ci_setattr.sa_falloc_offset;
-		lock_end = io->u.ci_setattr.sa_falloc_end;
+		lock_end = io->u.ci_setattr.sa_falloc_end - 1;
 	} else {
 		unsigned int valid = io->u.ci_setattr.sa_avalid;
 
@@ -729,17 +730,30 @@ static int vvp_io_setattr_time(const struct lu_env *env,
 static int vvp_io_setattr_start(const struct lu_env *env,
 				const struct cl_io_slice *ios)
 {
-	struct cl_io		*io    = ios->cis_io;
-	struct inode		*inode = vvp_object_inode(io->ci_obj);
-	struct ll_inode_info	*lli   = ll_i2info(inode);
+	struct cl_io *io = ios->cis_io;
+	struct inode *inode = vvp_object_inode(io->ci_obj);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	int mode = io->u.ci_setattr.sa_falloc_mode;
 
 	if (cl_io_is_trunc(io)) {
 		trunc_sem_down_write(&lli->lli_trunc_sem);
 		mutex_lock(&lli->lli_setattr_mutex);
 		inode_dio_wait(inode);
 	} else if (cl_io_is_fallocate(io)) {
-		inode_lock(inode);
+		loff_t size;
+
+		trunc_sem_down_write(&lli->lli_trunc_sem);
+		mutex_lock(&lli->lli_setattr_mutex);
 		inode_dio_wait(inode);
+
+		ll_merge_attr(env, inode);
+		size = i_size_read(inode);
+		if (io->u.ci_setattr.sa_falloc_end > size &&
+		    !(mode & FALLOC_FL_KEEP_SIZE)) {
+			size = io->u.ci_setattr.sa_falloc_end;
+			io->u.ci_setattr.sa_avalid |= ATTR_SIZE;
+		}
+		io->u.ci_setattr.sa_attr.lvb_size = size;
 	} else {
 		mutex_lock(&lli->lli_setattr_mutex);
 	}
@@ -764,7 +778,8 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 		mutex_unlock(&lli->lli_setattr_mutex);
 		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else if (cl_io_is_fallocate(io)) {
-		inode_unlock(inode);
+		mutex_unlock(&lli->lli_setattr_mutex);
+		trunc_sem_up_write(&lli->lli_trunc_sem);
 	} else {
 		mutex_unlock(&lli->lli_setattr_mutex);
 	}
