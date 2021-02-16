@@ -267,6 +267,7 @@ S:	Maintained
 F:	lustre/conf/lgssc.conf
 F:	lustre/conf/lsvcgss
 F:	lustre/doc/lgss_sk.8
+F:	lustre/doc/lfs-flushctx.1
 F:	lustre/llite/xattr_security.c
 F:	lustre/ptlrpc/gss
 F:	lustre/ptlrpc/sec*.c

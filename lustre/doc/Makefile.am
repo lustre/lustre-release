@@ -47,6 +47,7 @@ MANFILES =					\
 	lfs-df.1				\
 	lfs-fid2path.1				\
 	lfs-find.1				\
+	lfs-flushctx.1				\
 	lfs-getdirstripe.1			\
 	lfs-getname.1				\
 	lfs-getsom.1				\
