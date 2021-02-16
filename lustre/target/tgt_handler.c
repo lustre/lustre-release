@@ -2074,6 +2074,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * whole page
 		 */
 		if (t10_cksum_type && opc == OST_READ &&
+		    local_nb[i].lnb_len == PAGE_SIZE &&
 		    local_nb[i].lnb_guard_disk) {
 			used = DIV_ROUND_UP(local_nb[i].lnb_len, sector_size);
 			if (used > (guard_number - used_number)) {
