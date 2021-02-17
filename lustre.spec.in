@@ -273,8 +273,8 @@ echo $TMPFILE
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
-BuildRequires: e2fsprogs-devel
-Requires: ldiskfsprogs
+BuildRequires: e2fsprogs-devel >= 1.44.3
+Requires: ldiskfsprogs >= 1.45.6.wc1
 Provides: lustre-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 Group: System Environment/Kernel
