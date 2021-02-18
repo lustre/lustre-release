@@ -1097,6 +1097,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	struct obd_connect_data *data, *tmpdata;
 	int size, tmpsize;
 	lnet_nid_t *client_nid = NULL;
+	struct ptlrpc_connection *pcon = NULL;
 
 	ENTRY;
 
@@ -1476,7 +1477,16 @@ dont_check_exports:
 	 */
 	ptlrpc_request_change_export(req, export);
 
+	pcon = ptlrpc_connection_get(req->rq_peer, req->rq_self, &cluuid);
+	if (pcon == NULL)
+		GOTO(out, rc = -ENOTCONN);
+
 	spin_lock(&export->exp_lock);
+
+	if (export->exp_disconnected) {
+		spin_unlock(&export->exp_lock);
+		GOTO(out, rc = -ENODEV);
+	}
 	if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
 		spin_unlock(&export->exp_lock);
 		CDEBUG(D_RPCTRACE,
@@ -1489,23 +1499,22 @@ dont_check_exports:
 	}
 	LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
 	export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
-	spin_unlock(&export->exp_lock);
 
-	if (export->exp_connection != NULL) {
-		/* Check to see if connection came from another NID. */
-		if (export->exp_connection->c_peer.nid != req->rq_peer.nid)
-			obd_nid_del(export->exp_obd, export);
-
+	/* Check to see if connection came from another NID. */
+	if (export->exp_connection != NULL &&
+	    export->exp_connection->c_peer.nid != req->rq_peer.nid) {
+		obd_nid_del(export->exp_obd, export);
 		ptlrpc_connection_put(export->exp_connection);
+		export->exp_connection = NULL;
 	}
 
-	export->exp_connection = ptlrpc_connection_get(req->rq_peer,
-						       req->rq_self,
-						       &cluuid);
-	if (!export->exp_connection)
-		GOTO(out, rc = -ENOTCONN);
-
+	if (export->exp_connection == NULL) {
+		export->exp_connection = pcon;
+		pcon = NULL;
+	}
 	obd_nid_add(export->exp_obd, export);
+
+	spin_unlock(&export->exp_lock);
 
 	lustre_msg_set_handle(req->rq_repmsg, &conn);
 
@@ -1582,6 +1591,8 @@ out:
 		spin_unlock(&target->obd_dev_lock);
 		class_decref(target, "find", current);
 	}
+	if (pcon)
+		ptlrpc_connection_put(pcon);
 	req->rq_status = rc;
 	RETURN(rc);
 }
