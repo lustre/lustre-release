@@ -37,8 +37,10 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'F':
+			errno = 0;
 			flags = strtoul(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    flags >= UINT32_MAX) {
 				fprintf(stderr,
 					"%s: invalid flags '%s'\n", argv[0],
 					optarg);

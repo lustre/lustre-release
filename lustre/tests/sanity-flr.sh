@@ -683,6 +683,21 @@ run_test 0f "lfs mirror extend composite layout mirrors"
 test_0g() {
 	local tf=$DIR/$tfile
 
+	! $LFS mirror create --flags prefer $tf ||
+		error "creating $tf w/ --flags but w/o -N option should fail"
+
+	! $LFS mirror create -N --flags foo $tf ||
+		error "creating $tf with '--flags foo' should fail"
+
+	! $LFS mirror create -N --flags stale $tf ||
+		error "creating $tf with '--flags stale' should fail"
+
+	! $LFS mirror create -N --flags prefer,init $tf ||
+		error "creating $tf with '--flags prefer,init' should fail"
+
+	! $LFS mirror create -N --flags ^prefer $tf ||
+		error "creating $tf with '--flags ^prefer' should fail"
+
 	$LFS mirror create -N -E 1M -S 1M -o0 --flags=prefer -E eof -o1 \
 			   -N -o1 $tf || error "create mirrored file $tf failed"
 
@@ -730,6 +745,12 @@ test_0h() {
 	verify_comp_attr lcme_flags $tf 0x10002 prefer
 
 	# set flags to the first component
+	! $LFS setstripe --comp-set -I 0x10001 --comp-flags=^prefer,foo $tf ||
+		error "setting '^prefer,foo' flags should fail"
+
+	! $LFS getstripe --component-flags=prefer,foo $tf ||
+		error "getting component(s) with 'prefer,foo' flags should fail"
+
 	$LFS setstripe --comp-set -I 0x10001 --comp-flags=^prefer,stale $tf
 
 	verify_comp_attr lcme_flags $tf 0x10001 stale

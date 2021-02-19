@@ -2721,6 +2721,17 @@ test_27J() {
 	local uuid2=$(cat /proc/sys/kernel/random/uuid)
 
 	# create foreign file (raw way)
+	! $LFS setstripe --flags 0xda08 $DIR/$tdir/$tfile ||
+		error "creating $tfile w/ hex flags w/o --foreign should fail"
+
+	! $LFS setstripe --foreign --flags foo \
+		--xattr ${uuid1}@${uuid2} $DIR/$tdir/$tfile ||
+			error "creating $tfile with '--flags foo' should fail"
+
+	! $LFS setstripe --foreign --flags 0xffffffff \
+		--xattr ${uuid1}@${uuid2} $DIR/$tdir/$tfile ||
+			error "creating $tfile w/ 0xffffffff flags should fail"
+
 	create_foreign_file -f $DIR/$tdir/$tfile -x "${uuid1}@${uuid2}" \
 		-t 1 -F 0xda08 || error "create_foreign_file failed"
 
@@ -2816,6 +2827,17 @@ test_27K() {
 	local uuid2=$(cat /proc/sys/kernel/random/uuid)
 
 	# create foreign dir (raw way)
+	! $LFS setdirstripe --flags 0xda08 $DIR/$tdir/$tdir ||
+		error "creating $tdir w/ hex flags w/o --foreign should fail"
+
+	! $LFS setdirstripe --foreign --flags foo \
+		--xattr ${uuid1}@${uuid2} $DIR/$tdir/$tdir ||
+			error "creating $tdir with '--flags foo' should fail"
+
+	! $LFS setdirstripe --foreign --flags 0xffffffff \
+		--xattr ${uuid1}@${uuid2} $DIR/$tdir/$tdir ||
+			error "creating $tdir w/ 0xffffffff flags should fail"
+
 	create_foreign_dir -d $DIR/$tdir/$tdir -x "${uuid1}@${uuid2}" -t 1 ||
 		error "create_foreign_dir FAILED"
 

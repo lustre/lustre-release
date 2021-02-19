@@ -425,6 +425,12 @@ command_t cmdlist[] = {
 	 "\tcomp_flags:  'init' indicating all instantiated components\n"
 	 "\t             '^init' indicating all uninstantiated components\n"
 	 "\t-I and -F cannot be specified at the same time\n"
+	 " or\n"
+	 "To set or clear flags on a specific component\n"
+	 "(note that this command can only be applied to mirrored files:\n"
+	 "usage: setstripe --comp-set {-I comp_id|--comp-flags=comp_flags}\n"
+	 "                            <filename>\n"
+	 " or\n"
 	 "To create a file with a foreign (free format) layout:\n"
 	 "usage: setstripe --foreign[=<foreign_type>]\n"
 	 "                 --xattr|-x <layout_string> [--flags <hex>]\n"
@@ -493,7 +499,6 @@ command_t cmdlist[] = {
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
-	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --layout|-L released,raid0,mdt]\n"
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
@@ -1396,13 +1401,24 @@ out_closed:
 static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 {
 	char *name;
-
-	if (!string)
-		return -EINVAL;
+	char *dup_string = NULL;
+	int rc = 0;
 
 	*flags = 0;
 	*neg_flags = 0;
-	for (name = strtok(string, ","); name; name = strtok(NULL, ",")) {
+
+	if (!string || !string[0])
+		return -EINVAL;
+
+	dup_string = strdup(string);
+	if (!dup_string) {
+		llapi_printf(LLAPI_MSG_ERROR,
+			     "%s: insufficient memory\n",
+			     progname);
+		return -ENOMEM;
+	}
+
+	for (name = strtok(dup_string, ","); name; name = strtok(NULL, ",")) {
 		bool found = false;
 		int i;
 
@@ -1423,18 +1439,21 @@ static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 			llapi_printf(LLAPI_MSG_ERROR,
 				     "%s: component flag '%s' not supported\n",
 				     progname, name);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto out_free;
 		}
 	}
 
 	if (!*flags && !*neg_flags)
-		return -EINVAL;
+		rc = -EINVAL;
 
 	/* don't allow to set and exclude the same flag */
 	if (*flags & *neg_flags)
-		return -EINVAL;
+		rc = -EINVAL;
 
-	return 0;
+out_free:
+	free(dup_string);
+	return rc;
 }
 
 static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
@@ -3409,11 +3428,19 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 			/* check for numeric flags (foreign and mirror cases) */
 			if (setstripe_mode && !mirror_mode && !last_mirror) {
+				errno = 0;
 				flags = strtoul(optarg, &end, 16);
-				if (*end != '\0') {
+				if (errno != 0 || *end != '\0' ||
+				    flags >= UINT32_MAX) {
 					fprintf(stderr,
-						"%s %s: bad flags '%s'\n",
+						"%s %s: invalid hex flags '%s'\n",
 						progname, argv[0], optarg);
+					return CMD_HELP;
+				}
+				if (!foreign_mode) {
+					fprintf(stderr,
+						"%s %s: hex flags must be specified with --foreign option\n",
+						progname, argv[0]);
 					return CMD_HELP;
 				}
 				break;
@@ -4421,8 +4448,6 @@ static int lfs_find(int argc, char **argv)
 						.has_arg = required_argument },
 	{ .val = LFS_MIRROR_STATE_OPT,
 			.name = "mirror-state",	.has_arg = required_argument },
-	{ .val = LFS_LAYOUT_FOREIGN_OPT,
-			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newer",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
@@ -6208,11 +6233,19 @@ static int lfs_setdirstripe(int argc, char **argv)
 			foreign_mode = true;
 			break;
 		case LFS_LAYOUT_FLAGS_OPT:
+			errno = 0;
 			flags = strtoul(optarg, &end, 16);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    flags >= UINT32_MAX) {
 				fprintf(stderr,
-					"%s %s: bad flags '%s'\n",
+					"%s %s: invalid hex flags '%s'\n",
 					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			if (!foreign_mode) {
+				fprintf(stderr,
+					"%s %s: hex flags must be specified with --foreign option\n",
+					progname, argv[0]);
 				return CMD_HELP;
 			}
 			break;
