@@ -118,9 +118,7 @@ case "$1" in
 	;;
   stop)
 	run_preexec_check "stop"
-	lustre_rmmod ptlrpc || exit 1
-	lnetctl lnet unconfigure || exit 1
-	lustre_rmmod libcfs ldiskfs || exit 1
+	lustre_rmmod || exit 1
 	rm -f /var/lock/subsys/lnet
 	run_postexec_check "stop"
 	;;

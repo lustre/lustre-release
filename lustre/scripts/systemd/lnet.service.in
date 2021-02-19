@@ -12,9 +12,7 @@ RemainAfterExit=true
 ExecStart=/sbin/modprobe lnet
 ExecStart=@sbindir@/lnetctl lnet configure
 ExecStart=@sbindir@/lnetctl import @sysconfdir@/lnet.conf
-ExecStop=@sbindir@/lustre_rmmod ptlrpc
-ExecStop=@sbindir@/lnetctl lnet unconfigure
-ExecStop=@sbindir@/lustre_rmmod libcfs ldiskfs
+ExecStop=@sbindir@/lustre_rmmod
 
 [Install]
 WantedBy=multi-user.target

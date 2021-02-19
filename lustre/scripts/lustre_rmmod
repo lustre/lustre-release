@@ -88,7 +88,10 @@ done
 # unloaded if no parameters are given, or if only the ldiskfs parameter
 # is given. It's ugly, but is needed to emulate the prior functionality
 if [ "${#modules[@]}" -eq 0 ] || [ "${modules[*]}" = "ldiskfs" ]; then
-	modules=('ptlrpc' 'lnet_selftest' 'ldiskfs' 'libcfs')
+	unload_all=true
+	modules=('lnet_selftest' 'ldiskfs' 'libcfs')
+else
+	unload_all=false
 fi
 
 if [ -f /sys/kernel/debug/kmemleak ] ; then
@@ -111,12 +114,13 @@ if $DEBUG; then
 	$LCTL mark "$SCRIPT_NAME : Start debug"
 fi
 
-# LNet may have an internal ref which can prevent LND modules from
-# unloading. Try to drop it before unloading modules.
-# NB: we squelch stderr because lnetctl/lctl may complain about
-# LNet being "busy", but this is normal. We're making a best effort
-# here.
-if lsmod | grep -q lnet; then
+if $unload_all; then
+	unload_dep_modules_inclusive 'ptlrpc' || exit 1
+	# LNet may have an internal ref which can prevent LND modules from
+	# unloading. Try to drop it before unloading modules.
+	# NB: we squelch stderr because lnetctl/lctl may complain about
+	# LNet being "busy", but this is normal. We're making a best effort
+	# here.
 	# Prefer lnetctl if it is present
 	if [ -n "$(which lnetctl 2>/dev/null)" ]; then
 		lnetctl lnet unconfigure 2>/dev/null
