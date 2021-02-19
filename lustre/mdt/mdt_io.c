@@ -63,7 +63,7 @@ static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
 	ENTRY;
 
 	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace, NULL,
-				&arg->lpa_resid, LDLM_EXTENT, 0);
+				&arg->lpa_resid, LDLM_IBITS, 0);
 	if (IS_ERR(res)) {
 		CDEBUG(D_DLMTRACE,
 		       "Failed to get resource for resid %llu/%llu\n",
@@ -76,7 +76,11 @@ static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
 		if (ldlm_has_dom(lock)) {
 			LDLM_DEBUG(lock, "DOM lock to prolong ");
 			ldlm_lock_prolong_one(lock, arg);
-			break;
+			/* only one PW or EX lock can be granted,
+			 * no need to continue search
+			 */
+			if (lock->l_granted_mode & (LCK_PW | LCK_EX))
+				break;
 		}
 	}
 	unlock_res(res);
@@ -137,7 +141,7 @@ static int mdt_rw_hpreq_lock_match(struct ptlrpc_request *req,
 		RETURN(0);
 
 	/* a bulk write can only hold a reference on a PW extent lock. */
-	mode = LCK_PW;
+	mode = LCK_PW | LCK_GROUP;
 	if (opc == OST_READ)
 		/* whereas a bulk read can be protected by either a PR or PW
 		 * extent lock */
@@ -177,7 +181,7 @@ static int mdt_rw_hpreq_check(struct ptlrpc_request *req)
 	LASSERT(rnb != NULL);
 	LASSERT(!(rnb->rnb_flags & OBD_BRW_SRVLOCK));
 
-	pa.lpa_mode = LCK_PW;
+	pa.lpa_mode = LCK_PW | LCK_GROUP;
 	if (opc == OST_READ)
 		pa.lpa_mode |= LCK_PR;
 
@@ -265,7 +269,7 @@ static int mdt_punch_hpreq_lock_match(struct ptlrpc_request *req,
 	if (!fid_res_name_eq(&oa->o_oi.oi_fid, &lock->l_resource->lr_name))
 		RETURN(0);
 
-	if (!(lock->l_granted_mode & LCK_PW))
+	if (!(lock->l_granted_mode & (LCK_PW | LCK_GROUP)))
 		RETURN(0);
 
 	RETURN(1);
@@ -303,13 +307,12 @@ static int mdt_punch_hpreq_check(struct ptlrpc_request *req)
 	LASSERT(!(oa->o_valid & OBD_MD_FLFLAGS &&
 		  oa->o_flags & OBD_FL_SRVLOCK));
 
-	pa.lpa_mode = LCK_PW;
+	pa.lpa_mode = LCK_PW | LCK_GROUP;
 
 	CDEBUG(D_DLMTRACE, "%s: refresh DOM lock for "DFID"\n",
 	       tgt_name(tsi->tsi_tgt), PFID(&tsi->tsi_fid));
 
 	mdt_prolong_dom_lock(tsi, &pa);
-
 
 	if (pa.lpa_blocks_cnt > 0) {
 		CDEBUG(D_DLMTRACE,
