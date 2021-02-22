@@ -212,6 +212,7 @@ lnet_net_lock_current(void)
 extern struct kmem_cache *lnet_mes_cachep;	 /* MEs kmem_cache */
 extern struct kmem_cache *lnet_small_mds_cachep; /* <= LNET_SMALL_MD_SIZE bytes
 						  * MDs kmem_cache */
+extern struct kmem_cache *lnet_udsp_cachep;
 extern struct kmem_cache *lnet_rspt_cachep;
 extern struct kmem_cache *lnet_msg_cachep;
 
@@ -548,6 +549,7 @@ int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg);
 struct lnet_ni *lnet_get_next_ni_locked(struct lnet_net *mynet,
 					struct lnet_ni *prev);
 struct lnet_ni *lnet_get_ni_idx_locked(int idx);
+int lnet_get_net_healthv_locked(struct lnet_net *net);
 
 extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
@@ -555,6 +557,11 @@ extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
 			      struct lnet_process_id __user *ids);
 extern void lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all);
 extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni);
+extern int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+extern void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
+extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+void lnet_peer_ni_set_selection_priority(struct lnet_peer_ni *lpni,
+					 __u32 priority);
 
 void lnet_router_debugfs_init(void);
 void lnet_router_debugfs_fini(void);
@@ -573,6 +580,8 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf);
 int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf);
 int lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
+void lnet_net_clr_pref_rtrs(struct lnet_net *net);
+int lnet_net_add_pref_rtr(struct lnet_net *net, lnet_nid_t gw_nid);
 
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
@@ -712,6 +721,17 @@ bool lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg);
 void lnet_counters_get_common(struct lnet_counters_common *common);
 int lnet_counters_get(struct lnet_counters *counters);
 void lnet_counters_reset(void);
+static inline void
+lnet_ni_set_sel_priority_locked(struct lnet_ni *ni, __u32 priority)
+{
+	ni->ni_sel_priority = priority;
+}
+
+static inline void
+lnet_net_set_sel_priority_locked(struct lnet_net *net, __u32 priority)
+{
+	net->net_sel_priority = priority;
+}
 
 unsigned int lnet_iov_nob(unsigned int niov, struct kvec *iov);
 unsigned int lnet_kiov_nob(unsigned int niov, struct bio_vec *iov);
@@ -878,6 +898,11 @@ void lnet_debug_peer(lnet_nid_t nid);
 struct lnet_peer_net *lnet_peer_get_net_locked(struct lnet_peer *peer,
 					       __u32 net_id);
 bool lnet_peer_is_pref_nid_locked(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
+bool lnet_peer_is_pref_rtr_locked(struct lnet_peer_ni *lpni, lnet_nid_t gw_nid);
+void lnet_peer_clr_pref_rtrs(struct lnet_peer_ni *lpni);
+int lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 int lnet_peer_ni_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 int lnet_add_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid, bool mr);
 int lnet_del_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid);
@@ -889,6 +914,13 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 			  __u32 *peer_tx_qnob);
 int lnet_get_peer_ni_hstats(struct lnet_ioctl_peer_ni_hstats *stats);
+
+static inline void
+lnet_peer_net_set_sel_priority_locked(struct lnet_peer_net *lpn, __u32 priority)
+{
+	lpn->lpn_sel_priority = priority;
+}
+
 
 static inline struct lnet_peer_net *
 lnet_find_peer_net_locked(struct lnet_peer *peer, __u32 net_id)
@@ -1034,6 +1066,18 @@ static inline void
 lnet_inc_healthv(atomic_t *healthv, int value)
 {
 	lnet_atomic_add_unless_max(healthv, value, LNET_MAX_HEALTH_VALUE);
+}
+
+static inline int
+lnet_get_list_len(struct list_head *list)
+{
+	struct list_head *l;
+	int count = 0;
+
+	list_for_each(l, list)
+		count++;
+
+	return count;
 }
 
 void lnet_incr_stats(struct lnet_element_stats *stats,

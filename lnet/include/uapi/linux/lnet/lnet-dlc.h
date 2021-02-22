@@ -293,4 +293,88 @@ struct lnet_ioctl_lnet_stats {
 	struct lnet_counters st_cntrs;
 };
 
+/* An IP, numeric NID or a Net number is composed of 1 or more of these
+ * descriptor structures.
+ */
+struct lnet_range_expr {
+	__u32 re_lo;
+	__u32 re_hi;
+	__u32 re_stride;
+};
+
+/* le_count identifies the number of lnet_range_expr in the bulk
+ * which follows
+ */
+struct lnet_expressions {
+	__u32 le_count;
+};
+
+/* A net descriptor has the net type, IE: O2IBLND, SOCKLND, etc and an
+ * expression describing a net number range.
+ */
+struct lnet_ioctl_udsp_net_descr {
+	__u32 ud_net_type;
+	struct lnet_expressions ud_net_num_expr;
+};
+
+/* The UDSP descriptor header contains the type of matching criteria, SRC,
+ * DST, RTE, etc and how many lnet_expressions compose the LNet portion of
+ * the LNet NID. For example an IP can be
+ * composed of 4 lnet_expressions , a gni can be composed of 1
+ */
+struct lnet_ioctl_udsp_descr_hdr {
+	/* The literals SRC, DST and RTE are encoded
+	 * here.
+	 */
+	__u32 ud_descr_type;
+	__u32 ud_descr_count;
+};
+
+/* each matching expression in the UDSP is described with this.
+ * The bulk format is as follows:
+ *	1. 1x struct lnet_ioctl_udsp_net_descr
+ *		-> the net part of the NID
+ *	2. >=0 struct lnet_expressions
+ *		-> the address part of the NID
+ */
+struct lnet_ioctl_udsp_descr {
+	struct lnet_ioctl_udsp_descr_hdr iud_src_hdr;
+	struct lnet_ioctl_udsp_net_descr iud_net;
+};
+
+/* The cumulative UDSP descriptor
+ * The bulk format is as follows:
+ *	1. >=1 struct lnet_ioctl_udsp_descr
+ *
+ * The size indicated in iou_hdr is the total size of the UDSP.
+ *
+ */
+struct lnet_ioctl_udsp {
+	struct libcfs_ioctl_hdr iou_hdr;
+	__s32 iou_idx;
+	__u32 iou_action_type;
+	__u32 iou_bulk_size;
+	union {
+		__u32 priority;
+	} iou_action;
+	void __user *iou_bulk;
+};
+
+/* structure used to request udsp instantiation information on the
+ * specified construct.
+ *   cud_nid: the NID of the local or remote NI to pull info on.
+ *   cud_nid_priority: NID prio of the requested NID.
+ *   cud_net_priority: net prio of network of the requested NID.
+ *   cud_pref_nid: array of preferred NIDs if it exists.
+ */
+struct lnet_ioctl_construct_udsp_info {
+	struct libcfs_ioctl_hdr cud_hdr;
+	__u32 cud_peer:1;
+	lnet_nid_t cud_nid;
+	__u32 cud_nid_priority;
+	__u32 cud_net_priority;
+	lnet_nid_t cud_pref_nid[LNET_MAX_SHOW_NUM_NID];
+	lnet_nid_t cud_pref_rtr_nid[LNET_MAX_SHOW_NUM_NID];
+};
+
 #endif /* _LNET_DLC_H_ */

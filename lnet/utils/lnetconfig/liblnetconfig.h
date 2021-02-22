@@ -42,6 +42,21 @@
 #define LUSTRE_CFG_RC_MATCH			-7
 #define LUSTRE_CFG_RC_SKIP			-8
 #define LUSTRE_CFG_RC_LAST_ELEM			-9
+#define LUSTRE_CFG_RC_MARSHAL_FAIL		-10
+
+#define CONFIG_CMD		"configure"
+#define UNCONFIG_CMD		"unconfigure"
+#define ADD_CMD			"add"
+#define DEL_CMD			"del"
+#define SHOW_CMD		"show"
+#define DBG_CMD			"dbg"
+#define MANAGE_CMD		"manage"
+
+#define MAX_NUM_IPS		128
+
+#define modparam_path "/sys/module/lnet/parameters/"
+#define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"
+#define gni_nid_path "/proc/cray_xt/"
 
 enum lnetctl_cmd {
 	LNETCTL_CONFIG_CMD	= 1,
@@ -70,6 +85,57 @@ struct lnet_dlc_intf_descr {
 	struct list_head intf_on_network;
 	char intf_name[IFNAMSIZ];
 	struct cfs_expr_list *cpt_expr;
+};
+
+/* This UDSP structures need to match the kernel space structures
+ * in order for the marshall and unmarshall functions to be the same.
+ */
+
+/* Net is described as a
+ *  1. net type
+ *  2. num range
+ */
+struct lnet_ud_net_descr {
+	__u32 udn_net_type;
+	struct list_head udn_net_num_range;
+};
+
+/* each NID range is defined as
+ *  1. net descriptor
+ *  2. address range descriptor
+ */
+struct lnet_ud_nid_descr {
+	struct lnet_ud_net_descr ud_net_id;
+	struct list_head ud_addr_range;
+};
+
+/* a UDSP rule can have up to three user defined NID descriptors
+ *	- src: defines the local NID range for the rule
+ *	- dst: defines the peer NID range for the rule
+ *	- rte: defines the router NID range for the rule
+ *
+ * An action union defines the action to take when the rule
+ * is matched
+ */
+struct lnet_udsp {
+	struct list_head udsp_on_list;
+	__u32 udsp_idx;
+	struct lnet_ud_nid_descr udsp_src;
+	struct lnet_ud_nid_descr udsp_dst;
+	struct lnet_ud_nid_descr udsp_rte;
+	enum lnet_udsp_action_type udsp_action_type;
+	union {
+		__u32 udsp_priority;
+	} udsp_action;
+};
+
+/* This union is passed from lnetctl to fill the action union in udsp
+ * structure
+ * TODO: The idea here is if we add extra actions, ex: drop, it can be
+ * added to the union
+ */
+union lnet_udsp_action {
+	int udsp_priority;
 };
 
 /* forward declaration of the cYAML structure. */
@@ -703,5 +769,41 @@ int lustre_lnet_parse_interfaces(char *intf_str,
  */
 int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 			     int max_nids, char *err_str);
+
+/* lustre_lnet_add_udsp
+ *	Add a selection policy.
+ *	src - source NID descriptor
+ *	dst - destination NID descriptor
+ *	rte - router NID descriptor
+ *	type - action type
+ *	action - union of the action
+ *	idx - the index to delete
+ *	seq_no - sequence number of the request
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *               caller
+ */
+int lustre_lnet_add_udsp(char *src, char *dst, char *rte, char *type,
+			 union lnet_udsp_action *action, int idx,
+			 int seq_no, struct cYAML **err_rc);
+
+/* lustre_lnet_del_udsp
+ *	Delete a net selection policy.
+ *	idx - the index to delete
+ *	seq_no - sequence number of the request
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *	caller
+ */
+int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc);
+
+/* lustre_lnet_show_udsp
+ *	show selection policy.
+ *	idx - the index to show. -1 to show all policies
+ *	seq_no - sequence number of the request
+ *	err_rc - [IN/OUT] struct cYAML tree containing udsp info
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *	caller
+ */
+int lustre_lnet_show_udsp(int idx, int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc);
 
 #endif /* LIB_LNET_CONFIG_API_H */

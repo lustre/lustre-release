@@ -55,20 +55,6 @@
 #include <glob.h>
 #include <libcfs/util/param.h>
 
-#define CONFIG_CMD		"configure"
-#define UNCONFIG_CMD		"unconfigure"
-#define ADD_CMD			"add"
-#define DEL_CMD			"del"
-#define SHOW_CMD		"show"
-#define DBG_CMD			"dbg"
-#define MANAGE_CMD		"manage"
-
-#define MAX_NUM_IPS		128
-
-#define modparam_path "/sys/module/lnet/parameters/"
-#define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"
-#define gni_nid_path "/proc/cray_xt/"
-
 #ifndef HAVE_USRSPC_RDMA_PS_TCP
 #define RDMA_PS_TCP 0x0106
 #endif
@@ -1893,6 +1879,114 @@ get_counts(struct lnet_ioctl_element_msg_stats *msg_stats, int idx)
 	return NULL;
 }
 
+static int
+create_local_udsp_info(struct lnet_ioctl_construct_udsp_info *udsp_info,
+		       struct cYAML *net_node)
+{
+	char tmp[LNET_MAX_STR_LEN];
+	struct cYAML *udsp_net;
+	bool created = false;
+	struct cYAML *pref;
+	int i;
+
+	/* add the UDSP info */
+	udsp_net = cYAML_create_object(net_node, "udsp info");
+	if (!udsp_net)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (!cYAML_create_number(udsp_net, "net priority",
+				 (int) udsp_info->cud_net_priority))
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (!cYAML_create_number(udsp_net, "nid priority",
+				 (int)udsp_info->cud_nid_priority))
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	pref = udsp_net;
+
+	for (i = 0; i < LNET_MAX_SHOW_NUM_NID; i++) {
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		if (udsp_info->cud_pref_rtr_nid[i] == 0)
+			break;
+		if (!created) {
+			pref = cYAML_create_object(udsp_net,
+					"Preferred gateway NIDs");
+			if (!pref)
+				return LUSTRE_CFG_RC_OUT_OF_MEM;
+			created = true;
+		}
+		snprintf(tmp, sizeof(tmp), "NID-%d", i);
+		if (!cYAML_create_string(pref, tmp,
+			libcfs_nid2str(udsp_info->cud_pref_rtr_nid[i])))
+			return LUSTRE_CFG_RC_OUT_OF_MEM;
+	}
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+static int
+create_remote_udsp_info(struct lnet_ioctl_construct_udsp_info *udsp_info,
+			struct cYAML *nid_node)
+{
+	char tmp[LNET_MAX_STR_LEN];
+	struct cYAML *udsp_nid;
+	bool created = false;
+	struct cYAML *pref;
+	int i;
+
+	/* add the UDSP info */
+	udsp_nid = cYAML_create_object(nid_node, "udsp info");
+	if (!udsp_nid)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (!cYAML_create_number(udsp_nid, "net priority",
+				 (int) udsp_info->cud_net_priority))
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (!cYAML_create_number(udsp_nid, "nid priority",
+				 (int) udsp_info->cud_nid_priority))
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	pref = udsp_nid;
+	for (i = 0; i < LNET_MAX_SHOW_NUM_NID; i++) {
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		if (udsp_info->cud_pref_rtr_nid[i] == 0)
+			break;
+		if (!created) {
+			pref = cYAML_create_object(udsp_nid,
+					"Preferred gateway NIDs");
+			if (!pref)
+				return LUSTRE_CFG_RC_OUT_OF_MEM;
+			created = true;
+		}
+		snprintf(tmp, sizeof(tmp), "NID-%d", i);
+		if (!cYAML_create_string(pref, tmp,
+			libcfs_nid2str(udsp_info->cud_pref_rtr_nid[i])))
+			return LUSTRE_CFG_RC_OUT_OF_MEM;
+	}
+
+	pref = udsp_nid;
+	created = false;
+	for (i = 0; i < LNET_MAX_SHOW_NUM_NID; i++) {
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		if (udsp_info->cud_pref_nid[i] == 0)
+			break;
+		if (!created) {
+			pref = cYAML_create_object(udsp_nid,
+					"Preferred source NIDs");
+			if (!pref)
+				return LUSTRE_CFG_RC_OUT_OF_MEM;
+			created = true;
+		}
+		snprintf(tmp, sizeof(tmp), "NID-%d", i);
+		if (!cYAML_create_string(pref, tmp,
+			libcfs_nid2str(udsp_info->cud_pref_nid[i])))
+			return LUSTRE_CFG_RC_OUT_OF_MEM;
+	}
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			 struct cYAML **show_rc, struct cYAML **err_rc,
 			 bool backup)
@@ -1903,6 +1997,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_element_stats *stats;
 	struct lnet_ioctl_element_msg_stats msg_stats;
 	struct lnet_ioctl_local_ni_hstats hstats;
+	struct lnet_ioctl_construct_udsp_info udsp_info;
 	__u32 net = LNET_NET_ANY;
 	__u32 prev_net = LNET_NET_ANY;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -2067,6 +2162,27 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 							== NULL)
 				goto out;
 
+			if (detail < 4)
+				goto continue_without_udsp_info;
+
+			LIBCFS_IOC_INIT_V2(udsp_info, cud_hdr);
+			udsp_info.cud_nid = ni_data->lic_nid;
+			udsp_info.cud_peer = false;
+			rc = l_ioctl(LNET_DEV_ID,
+				     IOC_LIBCFS_GET_CONST_UDSP_INFO,
+				     &udsp_info);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_udsp_info;
+			}
+
+			rc = create_local_udsp_info(&udsp_info, item);
+			if (rc) {
+				l_errno = errno;
+				goto out;
+			}
+
+continue_without_udsp_info:
 			if (detail < 2)
 				goto continue_without_msg_stats;
 
@@ -2744,6 +2860,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *msg_stats;
 	struct lnet_ioctl_peer_ni_hstats *hstats;
+	struct lnet_ioctl_construct_udsp_info udsp_info;
 	lnet_nid_t *nidp;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	int i, j, k;
@@ -2905,6 +3022,27 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			if (backup)
 				continue;
 
+			if (detail < 4)
+				goto continue_without_udsp_info;
+
+			LIBCFS_IOC_INIT_V2(udsp_info, cud_hdr);
+			udsp_info.cud_nid = *nidp;
+			udsp_info.cud_peer = true;
+			rc = l_ioctl(LNET_DEV_ID,
+					IOC_LIBCFS_GET_CONST_UDSP_INFO,
+					&udsp_info);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_udsp_info;
+			}
+
+			rc = create_remote_udsp_info(&udsp_info, peer_ni);
+			if (rc) {
+				l_errno = errno;
+				goto out;
+			}
+
+continue_without_udsp_info:
 			if (cYAML_create_string(peer_ni, "state",
 						lpni_cri->cr_aliveness)
 			    == NULL)
@@ -4548,6 +4686,58 @@ static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
 					   show_rc, err_rc);
 }
 
+static int handle_yaml_del_udsp(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *idx;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	idx = cYAML_get_object_item(tree, "idx");
+
+	return lustre_lnet_del_udsp(idx ? idx->cy_valueint : -1,
+				    seq_no ? seq_no->cy_valueint : -1,
+				    err_rc);
+}
+
+static int handle_yaml_config_udsp(struct cYAML *tree, struct cYAML **show_rc,
+				   struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *src, *rte, *dst, *prio, *idx;
+	union lnet_udsp_action action;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	src = cYAML_get_object_item(tree, "src");
+	rte = cYAML_get_object_item(tree, "rte");
+	dst = cYAML_get_object_item(tree, "dst");
+	prio = cYAML_get_object_item(tree, "priority");
+	idx = cYAML_get_object_item(tree, "idx");
+
+	action.udsp_priority = prio ? prio->cy_valueint : -1;
+
+	return lustre_lnet_add_udsp(src ? src->cy_valuestring : NULL,
+				    dst ? dst->cy_valuestring : NULL,
+				    rte ? rte->cy_valuestring : NULL,
+				    prio ? "priority" : "",
+				    &action,
+				    idx ? idx->cy_valueint : -1,
+				    seq_no ? seq_no->cy_valueint : -1,
+				    err_rc);
+}
+
+static int handle_yaml_show_udsp(struct cYAML *tree, struct cYAML **show_rc,
+				 struct cYAML **err_rc)
+{
+	struct cYAML *seq_no;
+	struct cYAML *idx;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	idx = cYAML_get_object_item(tree, "idx");
+
+	return lustre_lnet_show_udsp(idx ? idx->cy_valueint : -1,
+				     seq_no ? seq_no->cy_valueint : -1,
+				     show_rc, err_rc);
+}
+
 static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
@@ -4810,6 +5000,7 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "numa",	.cb = handle_yaml_config_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = "udsp",	.cb = handle_yaml_config_udsp },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
@@ -4824,6 +5015,7 @@ static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "numa",	.cb = handle_yaml_del_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = "udsp",	.cb = handle_yaml_del_udsp },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
@@ -4838,6 +5030,7 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "numa",	.cb = handle_yaml_show_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = "udsp",	.cb = handle_yaml_show_udsp },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {

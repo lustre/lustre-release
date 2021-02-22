@@ -607,7 +607,7 @@ libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
  * \retval 0 if \a str parsed to numeric address
  * \retval errno otherwise
  */
-static int
+int
 libcfs_num_parse(char *str, int len, struct list_head *list)
 {
 	struct cfs_expr_list *el;
@@ -708,6 +708,72 @@ static struct netstrfns libcfs_netstrfns[] = {
 };
 
 static const size_t libcfs_nnetstrfns = ARRAY_SIZE(libcfs_netstrfns);
+
+static struct netstrfns *
+type2net_info(__u32 net_type)
+{
+	int i;
+
+	for (i = 0; i < libcfs_nnetstrfns; i++) {
+		if (libcfs_netstrfns[i].nf_type == net_type)
+			return &libcfs_netstrfns[i];
+	}
+
+	return NULL;
+}
+
+int
+cfs_match_net(__u32 net_id, __u32 net_type, struct list_head *net_num_list)
+{
+	__u32 net_num;
+
+	if (!net_num_list)
+		return 0;
+
+	if (net_type != LNET_NETTYP(net_id))
+		return 0;
+
+	net_num = LNET_NETNUM(net_id);
+
+	/* if there is a net number but the list passed in is empty, then
+	 * there is no match.
+	 */
+	if (!net_num && list_empty(net_num_list))
+		return 1;
+	else if (list_empty(net_num_list))
+		return 0;
+
+	if (!libcfs_num_match(net_num, net_num_list))
+		return 0;
+
+	return 1;
+}
+
+int
+cfs_match_nid_net(lnet_nid_t nid, __u32 net_type,
+		  struct list_head *net_num_list,
+		  struct list_head *addr)
+{
+	__u32 address;
+	struct netstrfns *nf;
+
+	if (!addr || !net_num_list)
+		return 0;
+
+	nf = type2net_info(LNET_NETTYP(LNET_NIDNET(nid)));
+	if (!nf || !net_num_list || !addr)
+		return 0;
+
+	address = LNET_NIDADDR(nid);
+
+	/* if either the address or net number don't match then no match */
+	if (!nf->nf_match_addr(address, addr) ||
+	    !cfs_match_net(LNET_NIDNET(nid), net_type, net_num_list))
+		return 0;
+
+	return 1;
+}
+EXPORT_SYMBOL(cfs_match_nid_net);
 
 static struct netstrfns *
 libcfs_lnd2netstrfns(__u32 lnd)
