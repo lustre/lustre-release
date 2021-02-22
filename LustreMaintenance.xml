@@ -65,6 +65,9 @@
     <listitem>
       <para><xref linkend="lustremaint.setMDTReadonly"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="lustremaint.tunefallocate"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="lustremaint.inactiveOST">
       <title>
@@ -875,6 +878,25 @@ touch: cannot touch ‘test_file’: Read-only file system
 mds# lctl set_param mdt.fs-MDT0000.readonly=0
 mdt.fs-MDT0000.readonly=0</screen>
     </section>
+    <section xml:id="lustremaint.tunefallocate" condition="l2E">
+      <title><indexterm><primary>maintenance</primary>
+        <secondary>Tune fallocate</secondary></indexterm>
+        Tune Fallocate for ldiskfs</title>
+     <para>This section shows how to tune/enable/disable fallocate for
+     ldiskfs OSTs.</para>
+     <para>The default <literal>mode=0</literal> is the standard
+     "allocate unwritten extents" behavior used by ext4.  This is by far the
+     fastest for space allocation, but requires the unwritten extents to be
+     split and/or zeroed when they are overwritten.</para>
+     <para> The OST fallocate <literal>mode=1</literal> can also be set to use
+     "zeroed extents", which may be handled by "WRITE SAME", "TRIM zeroes data",
+     or other low-level functionality in the underlying block device.</para>
+     <para><literal>mode=-1</literal> completely disables fallocate.</para>
+     <para>Example: To completely disable fallocate</para>
+     <screen>lctl set_param osd-ldiskfs.*.fallocate_zero_blocks=-1</screen>
+     <para>Example: To enable fallocate to use 'zeroed extents'</para>
+     <screen>lctl set_param osd-ldiskfs.*.fallocate_zero_blocks=1</screen>
+     </section>
 </chapter>
 <!--
   vim:expandtab:shiftwidth=2:tabstop=8:
