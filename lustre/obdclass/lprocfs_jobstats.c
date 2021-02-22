@@ -457,8 +457,7 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 			seq_printf(p, ", unit: %5s", cntr_header->lc_units);
 
 		if (cntr_header->lc_config & LPROCFS_CNTR_AVGMINMAX) {
-			seq_printf(p, ", min:%8llu, max:%8llu,"
-				   " sum:%16llu",
+			seq_printf(p, ", min: %8llu, max: %8llu, sum: %16llu",
 				   ret.lc_count ? ret.lc_min : 0,
 				   ret.lc_count ? ret.lc_max : 0,
 				   ret.lc_count ? ret.lc_sum : 0);
