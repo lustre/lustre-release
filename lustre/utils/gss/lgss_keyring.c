@@ -1067,13 +1067,15 @@ int main(int argc, char *argv[])
 #ifdef HAVE_SETNS
 	/* Is caller in different namespace? */
 	snprintf(path, sizeof(path), "/proc/%d/ns/mnt", getpid());
-	if (stat(path, &parent_ns))
-		logmsg(LL_ERR, "cannot stat %s: %s\n", path, strerror(errno));
-	snprintf(path, sizeof(path), "/proc/%d/ns/mnt", uparam.kup_pid);
-	if (stat(path, &caller_ns))
-		logmsg(LL_ERR, "cannot stat %s: %s\n", path, strerror(errno));
-	if (caller_ns.st_ino != parent_ns.st_ino) {
-		other_ns = 1;
+	if (stat(path, &parent_ns)) {
+		logmsg(LL_DEBUG, "cannot stat %s: %s\n", path, strerror(errno));
+	} else {
+		snprintf(path, sizeof(path), "/proc/%d/ns/mnt", uparam.kup_pid);
+		if (stat(path, &caller_ns))
+			logmsg(LL_DEBUG, "cannot stat %s: %s\n",
+			       path, strerror(errno));
+		else if (caller_ns.st_ino != parent_ns.st_ino)
+			other_ns = 1;
 	}
 #endif /* HAVE_SETNS */
 
