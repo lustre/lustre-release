@@ -1290,7 +1290,7 @@ kgnilnd_tx_log_retrans(kgn_conn_t *conn, kgn_tx_t *tx)
 	 * that we fill up our mailbox, we'll keep trying to resend that msg
 	 * until we exceed the max_retrans _or_ gnc_last_rx expires, indicating
 	 * that he hasn't send us any traffic in return */
-	
+
 	/* some reasonable throttling of the debug message */
 	if (log_retrans) {
 		unsigned long now = jiffies;
@@ -2274,8 +2274,8 @@ kgnilnd_eager_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		CERROR("Couldnt find matching peer %p or conn %p / %p\n",
 			peer, conn, found_conn);
 		if (found_conn) {
-			CERROR("Unexpected connstamp %#llx(%#llx expected)"
-				" from %s", rxmsg->gnm_connstamp,
+			CERROR("Unexpected connstamp %#llx(%#llx expected) from %s\n",
+				rxmsg->gnm_connstamp,
 				found_conn->gnc_peer_connstamp,
 				libcfs_nid2str(peer->gnp_nid));
 		}
@@ -4786,7 +4786,7 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 
 		conn = list_first_entry(&dev->gnd_ready_conns, kgn_conn_t, gnc_schedlist);
 		list_del_init(&conn->gnc_schedlist);
-		/* 
+		/*
 		 * Since we are processing conn now, we don't need to be on the delaylist any longer.
 		 */
 

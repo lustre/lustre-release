@@ -1343,7 +1343,7 @@ no_export:
 	} else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
 		   rc != EALREADY) {
 		if (!strstr(cluuid.uuid, "mdt"))
-			LCONSOLE_WARN("%s: Rejecting reconnect from the known client %s (at %s) because it is indicating it is a new client",
+			LCONSOLE_WARN("%s: Rejecting reconnect from the known client %s (at %s) because it is indicating it is a new client\n",
 				      target->obd_name, cluuid.uuid,
 				      libcfs_nid2str(req->rq_peer.nid));
 		GOTO(out, rc = -EALREADY);

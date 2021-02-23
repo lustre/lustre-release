@@ -54,7 +54,7 @@
 	} else {                                                      \
 		CERROR("ctxt->loc_imp == NULL for context idx %d."    \
 		       "Unable to complete MDS/OSS recovery,"         \
-		       "but I'll try again next time.  Not fatal.\n", \
+		       "but I'll try again next time. Not fatal.\n", \
 		       ctxt->loc_idx);                                \
 		imp = NULL;                                           \
 		mutex_unlock(&ctxt->loc_mutex);                       \

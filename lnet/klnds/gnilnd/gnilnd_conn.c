@@ -868,7 +868,7 @@ kgnilnd_unpack_connreq(kgn_dgram_t *dgram)
 		rc = kgnilnd_find_net(connreq->gncr_dstnid, &net);
 
 		if (rc == -ESHUTDOWN) {
-			CERROR("Looking up network: device is in shutdown");
+			CERROR("Looking up network: device is in shutdown\n");
 			return rc;
 		} else if (rc == -ENONET) {
 			CERROR("Connection data from %s: she sent "

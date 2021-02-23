@@ -1222,7 +1222,7 @@ static inline int ldlm_lvbo_fill(struct ldlm_lock *lock, void *buf, int *len)
 		/* init lvb now if not already */
 		rc = ldlm_lvbo_init(lock->l_resource);
 		if (rc < 0) {
-			CERROR("lock %p: delayed lvb init failed (rc %d)",
+			CERROR("lock %p: delayed lvb init failed (rc %d)\n",
 			       lock, rc);
 			return rc;
 		}

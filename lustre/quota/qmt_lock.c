@@ -1016,7 +1016,7 @@ int qmt_start_reba_thread(struct qmt_device *qmt)
 
 	rc = lu_env_init(&args->qra_env, LCT_MD_THREAD);
 	if (rc) {
-		CERROR("%s: failed to init env.", qmt->qmt_svname);
+		CERROR("%s: failed to init env.\n", qmt->qmt_svname);
 		GOTO(out_env, rc);
 	}
 

@@ -589,7 +589,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 			if (cache)
 				obj->opo_non_exist = 1;
 		} else {
-			CERROR("%s:osp_attr_get update error "DFID": rc = %d\n",
+			CERROR("%s: osp_attr_get update error "DFID": rc = %d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
 			       PFID(lu_object_fid(&dt->do_lu)), rc);
 		}

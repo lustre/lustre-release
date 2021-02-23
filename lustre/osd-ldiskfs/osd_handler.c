@@ -2429,13 +2429,12 @@ static void osd_conf_get(const struct lu_env *env,
 					OBD_CKSUM_T10IP512 :
 					OBD_CKSUM_T10IP4K;
 			} else {
-				CERROR("%s: unsupported checksum type of "
-				       "T10PI type '%s'",
+				CERROR("%s: unsupported checksum type of T10PI type '%s'\n",
 				       d->od_svname, name);
 			}
 
 		} else {
-			CERROR("%s: unsupported T10PI type '%s'",
+			CERROR("%s: unsupported T10PI type '%s'\n",
 			       d->od_svname, name);
 		}
 	}
@@ -7851,7 +7850,7 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (lmd_flags & LMD_FLG_DEV_RDONLY) {
-		LCONSOLE_WARN("%s: not support dev_rdonly on this device",
+		LCONSOLE_WARN("%s: not support dev_rdonly on this device\n",
 			      name);
 
 		GOTO(out_mnt, rc = -EOPNOTSUPP);

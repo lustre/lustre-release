@@ -967,7 +967,7 @@ int tgt_adapt_sptlrpc_conf(struct lu_target *tgt)
 	int			 rc;
 
 	if (unlikely(tgt == NULL)) {
-		CERROR("No target passed");
+		CERROR("No target passed\n");
 		return -EINVAL;
 	}
 
