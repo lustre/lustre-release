@@ -8664,28 +8664,29 @@ static int lfs_path2fid(int argc, char **argv)
 
 static int lfs_rmfid_and_show_errors(const char *device, struct fid_array *fa)
 {
-	int rc, rc2 = 0, k;
+	int rc, rc2, k;
 
 	rc = llapi_rmfid(device, fa);
-	if (rc) {
-		fprintf(stderr, "rmfid(): rc = %d\n", rc);
+	if (rc < 0) {
+		fprintf(stderr, "%s rmfid: cannot remove FIDs: %s\n",
+			progname, strerror(-rc));
 		return rc;
 	}
 
 	for (k = 0; k < fa->fa_nr; k++) {
-		rc = (__s32)fa->fa_fids[k].f_ver;
-		if (!IS_ERR_VALUE(rc))
+		rc2 = (__s32)fa->fa_fids[k].f_ver;
+		if (!IS_ERR_VALUE(rc2))
 			continue;
-		if (!rc2 && rc)
-			rc2 = rc;
-		if (!rc)
-			continue;
+
+		if (rc == 0)
+			rc = rc2;
+
 		fa->fa_fids[k].f_ver = 0;
-		fprintf(stderr, "rmfid("DFID"): rc = %d\n",
-			PFID(&fa->fa_fids[k]), rc);
+		fprintf(stderr, "%s rmfid: cannot remove "DFID": %s\n",
+			progname, PFID(&fa->fa_fids[k]), strerror(-rc2));
 	}
 
-	return rc2;
+	return rc;
 }
 
 static int lfs_rmfid(int argc, char **argv)
