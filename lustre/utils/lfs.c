@@ -3414,15 +3414,22 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case LFS_COMP_NO_VERIFY_OPT:
 			mirror_flags |= MF_NO_VERIFY;
 			break;
-		case LFS_MIRROR_ID_OPT:
-			mirror_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || mirror_id == 0) {
+		case LFS_MIRROR_ID_OPT: {
+			unsigned long int id;
+
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' || id == 0 ||
+			    id > UINT16_MAX) {
 				fprintf(stderr,
 					"%s %s: invalid mirror ID '%s'\n",
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
+
+			mirror_id = (__u16)id;
 			break;
+		}
 		case LFS_LAYOUT_FLAGS_OPT: {
 			uint32_t neg_flags;
 
@@ -3488,6 +3495,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 							optarg);
 						return CMD_HELP;
 					}
+				} else if (type >= UINT32_MAX) {
+					fprintf(stderr,
+						"%s %s: invalid foreign type '%s'\n",
+						progname, argv[0], optarg);
+					return CMD_HELP;
 				}
 			}
 			foreign_mode = true;
@@ -3528,8 +3540,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			/* fall through */
 		case 'c':
+			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0'||
+			    lsa.lsa_stripe_count < -1 ||
+			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s %s: invalid stripe count '%s'\n",
 					progname, argv[0], optarg);
@@ -3713,8 +3728,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			mirror_count = 1;
 			if (optarg) {
+				errno = 0;
 				mirror_count = strtoul(optarg, &end, 0);
-				if (*end != '\0' || mirror_count == 0) {
+				if (errno != 0 || *end != '\0' ||
+				    mirror_count == 0 ||
+				    mirror_count > LUSTRE_MIRROR_COUNT_MAX) {
 					fprintf(stderr,
 						"error: %s: bad mirror count: %s\n",
 						progname, optarg);
@@ -4665,8 +4683,10 @@ static int lfs_find(int argc, char **argv)
 				optarg++;
 			}
 
+			errno = 0;
 			param.fp_comp_count = strtoul(optarg, &endptr, 0);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' ||
+			    param.fp_comp_count > UINT32_MAX) {
 				fprintf(stderr,
 					"error: bad component count '%s'\n",
 					optarg);
@@ -4739,8 +4759,10 @@ static int lfs_find(int argc, char **argv)
 				optarg++;
 			}
 
+			errno = 0;
 			param.fp_stripe_count = strtoul(optarg, &endptr, 0);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' ||
+			    param.fp_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"error: bad stripe_count '%s'\n",
 					optarg);
@@ -4800,6 +4822,11 @@ static int lfs_find(int argc, char **argv)
 							optarg);
 						return CMD_HELP;
 					}
+				} else if (type >= UINT32_MAX) {
+					fprintf(stderr,
+						"%s %s: invalid foreign type '%s'\n",
+						progname, argv[0], optarg);
+					return CMD_HELP;
 				}
 			}
 			param.fp_foreign_type = type;
@@ -5017,8 +5044,10 @@ static int lfs_find(int argc, char **argv)
 				optarg++;
 			}
 
+			errno = 0;
 			param.fp_mirror_count = strtoul(optarg, &endptr, 0);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' ||
+			    param.fp_mirror_count > LUSTRE_MIRROR_COUNT_MAX) {
 				fprintf(stderr,
 					"error: bad mirror count '%s'\n",
 					optarg);
@@ -5230,8 +5259,10 @@ err_free:
 				optarg++;
 			}
 
+			errno = 0;
 			param.fp_mdt_count = strtoul(optarg, &endptr, 0);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' ||
+			    param.fp_mdt_count >= UINT32_MAX) {
 				fprintf(stderr, "error: bad mdt_count '%s'\n",
 					optarg);
 				ret = -1;
@@ -5447,7 +5478,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
-		case LFS_MIRROR_INDEX_OPT:
+		case LFS_MIRROR_INDEX_OPT: {
+			unsigned long int mirror_index;
+
 			if (optarg[0] == '+') {
 				param->fp_mirror_index_sign = -1;
 				optarg++;
@@ -5456,14 +5489,19 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				optarg++;
 			}
 
-			param->fp_mirror_index = strtoul(optarg, &end, 0);
-			if (*end != '\0' || (param->fp_mirror_index == 0 &&
+			errno = 0;
+			mirror_index = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' ||
+			    mirror_index > UINT16_MAX || (mirror_index == 0 &&
 			    param->fp_mirror_index_sign == 0 && neg_opt == 0)) {
 				fprintf(stderr,
 					"%s %s: invalid mirror index '%s'\n",
 					progname, argv[0], optarg);
 				return CMD_HELP;
 			}
+
+			param->fp_mirror_index = (__u16)mirror_index;
+
 			if (param->fp_mirror_id != 0) {
 				fprintf(stderr,
 					"%s %s: can't specify both mirror index and mirror ID\n",
@@ -5473,7 +5511,10 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->fp_check_mirror_index = 1;
 			param->fp_exclude_mirror_index = !!neg_opt;
 			break;
-		case LFS_MIRROR_ID_OPT:
+		}
+		case LFS_MIRROR_ID_OPT: {
+			unsigned long int mirror_id;
+
 			if (optarg[0] == '+') {
 				param->fp_mirror_id_sign = -1;
 				optarg++;
@@ -5482,14 +5523,19 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				optarg++;
 			}
 
-			param->fp_mirror_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || (param->fp_mirror_id == 0 &&
+			errno = 0;
+			mirror_id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' ||
+			    mirror_id > UINT16_MAX || (mirror_id == 0 &&
 			    param->fp_mirror_id_sign == 0 && neg_opt == 0)) {
 				fprintf(stderr,
 					"%s %s: invalid mirror ID '%s'\n",
 					progname, argv[0], optarg);
 				return CMD_HELP;
 			}
+
+			param->fp_mirror_id = (__u16)mirror_id;
+
 			if (param->fp_mirror_index != 0) {
 				fprintf(stderr,
 					"%s %s: can't specify both mirror index and mirror ID\n",
@@ -5499,6 +5545,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->fp_check_mirror_id = 1;
 			param->fp_exclude_mirror_id = !!neg_opt;
 			break;
+		}
 		case 'd':
 			param->fp_max_depth = 0;
 			break;
@@ -6199,8 +6246,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 			break;
 		case 'c':
 		case 'T':
+			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    lsa.lsa_stripe_count < -1 ||
+			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s %s: invalid stripe count '%s'\n",
 					progname, argv[0], optarg);
@@ -6228,6 +6278,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 							optarg);
 						return CMD_HELP;
 					}
+				} else if (type >= UINT32_MAX) {
+					fprintf(stderr,
+						"%s %s: invalid foreign type '%s'\n",
+						progname, argv[0], optarg);
+					return CMD_HELP;
 				}
 			}
 			foreign_mode = true;
@@ -6532,8 +6587,10 @@ static int lfs_mv(int argc, char **argv)
 				"warning: '-M' deprecated, use '--mdt-index' or '-m' instead\n");
 #endif
 		case 'm':
+			errno = 0;
 			lmu.lum_stripe_offset = strtoul(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    lmu.lum_stripe_offset >= UINT32_MAX) {
 				fprintf(stderr, "%s mv: bad MDT index '%s'\n",
 					progname, optarg);
 				return CMD_HELP;
@@ -10136,15 +10193,22 @@ static inline int lfs_mirror_read(int argc, char **argv)
 		char *end;
 
 		switch (c) {
-		case 'N':
-			mirror_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || mirror_id == 0) {
+		case 'N': {
+			unsigned long int id;
+
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' || id == 0 ||
+			    id > UINT16_MAX) {
 				fprintf(stderr,
 					"%s %s: invalid mirror ID '%s'\n",
 					progname, argv[0], optarg);
 				return rc;
 			}
+
+			mirror_id = (__u16)id;
 			break;
+		}
 		case 'o':
 			outfile = optarg;
 			break;
@@ -10292,15 +10356,22 @@ static inline int lfs_mirror_write(int argc, char **argv)
 		char *end;
 
 		switch (c) {
-		case 'N':
-			mirror_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || mirror_id == 0) {
+		case 'N': {
+			unsigned long int id;
+
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' || id == 0 ||
+			    id > UINT16_MAX) {
 				fprintf(stderr,
 					"%s %s: invalid mirror ID '%s'\n",
 					progname, argv[0], optarg);
 				return rc;
 			}
+
+			mirror_id = (__u16)id;
 			break;
+		}
 		case 'i':
 			inputfile = optarg;
 			break;
@@ -10516,15 +10587,22 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 		char *end;
 
 		switch (c) {
-		case 'i':
-			read_mirror_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || read_mirror_id == 0) {
+		case 'i': {
+			unsigned long int id;
+
+			errno = 0;
+			id = strtoul(optarg, &end, 0);
+			if (errno != 0 || *end != '\0' || id == 0 ||
+			    id > UINT16_MAX) {
 				fprintf(stderr,
 					"%s %s: invalid read mirror ID '%s'\n",
 					progname, argv[0], optarg);
 				return rc;
 			}
+
+			read_mirror_id = (__u16)id;
 			break;
+		}
 		case 'o':
 			if (!strcmp(optarg, "-1")) {
 				/* specify all other mirrors */
@@ -11495,8 +11573,10 @@ static int lfs_pcc_attach(int argc, char **argv)
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
+			errno = 0;
 			archive_id = strtoul(optarg, &end, 0);
-			if (*end != '\0' || archive_id == 0) {
+			if (errno != 0 || *end != '\0' ||
+			    archive_id == 0 || archive_id > UINT32_MAX) {
 				fprintf(stderr,
 					"error: %s: bad archive ID '%s'\n",
 					argv[0], optarg);
@@ -11567,8 +11647,10 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
+			errno = 0;
 			archive_id = strtoul(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    archive_id > UINT32_MAX) {
 				fprintf(stderr,
 					"error: %s: bad archive ID '%s'\n",
 					argv[0], optarg);
