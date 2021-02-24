@@ -242,13 +242,6 @@ int libcfs_debug_cleanup(void);
 int libcfs_debug_clear_buffer(void);
 int libcfs_debug_mark_buffer(const char *text);
 
-/*
- * allocate a variable array, returned value is an array of pointers.
- * Caller can specify length of array by count.
- */
-void *cfs_array_alloc(int count, unsigned int size);
-void  cfs_array_free(void *vars);
-
 #define LASSERT_ATOMIC_ENABLED          (1)
 
 #if LASSERT_ATOMIC_ENABLED

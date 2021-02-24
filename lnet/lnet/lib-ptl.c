@@ -828,6 +828,7 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 	return -ENOMEM;
 }
 
+#define PORTAL_SIZE (offsetof(struct lnet_portal, ptl_mt_maps[LNET_CPT_NUMBER]))
 void
 lnet_portals_destroy(void)
 {
@@ -837,29 +838,31 @@ lnet_portals_destroy(void)
 		return;
 
 	for (i = 0; i < the_lnet.ln_nportals; i++)
-		lnet_ptl_cleanup(the_lnet.ln_portals[i]);
+		if (the_lnet.ln_portals[i]) {
+			lnet_ptl_cleanup(the_lnet.ln_portals[i]);
+			LIBCFS_FREE(the_lnet.ln_portals[i], PORTAL_SIZE);
+		}
 
-	cfs_array_free(the_lnet.ln_portals);
+	CFS_FREE_PTR_ARRAY(the_lnet.ln_portals, the_lnet.ln_nportals);
 	the_lnet.ln_portals = NULL;
 }
 
 int
 lnet_portals_create(void)
 {
-	int	size;
 	int	i;
 
-	size = offsetof(struct lnet_portal, ptl_mt_maps[LNET_CPT_NUMBER]);
-
 	the_lnet.ln_nportals = MAX_PORTALS;
-	the_lnet.ln_portals = cfs_array_alloc(the_lnet.ln_nportals, size);
+	CFS_ALLOC_PTR_ARRAY(the_lnet.ln_portals, the_lnet.ln_nportals);
 	if (the_lnet.ln_portals == NULL) {
 		CERROR("Failed to allocate portals table\n");
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < the_lnet.ln_nportals; i++) {
-		if (lnet_ptl_setup(the_lnet.ln_portals[i], i)) {
+		LIBCFS_ALLOC(the_lnet.ln_portals[i], PORTAL_SIZE);
+		if (!the_lnet.ln_portals[i] ||
+		    lnet_ptl_setup(the_lnet.ln_portals[i], i)) {
 			lnet_portals_destroy();
 			return -ENOMEM;
 		}

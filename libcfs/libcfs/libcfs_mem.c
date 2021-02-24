@@ -120,58 +120,6 @@ cfs_percpt_number(void *vars)
 }
 EXPORT_SYMBOL(cfs_percpt_number);
 
-/*
- * free variable array, see more detail in cfs_array_alloc
- */
-void
-cfs_array_free(void *vars)
-{
-	struct cfs_var_array	*arr;
-	int			i;
-
-	arr = container_of(vars, struct cfs_var_array, va_ptrs[0]);
-
-	for (i = 0; i < arr->va_count; i++) {
-		if (arr->va_ptrs[i] == NULL)
-			continue;
-
-		LIBCFS_FREE(arr->va_ptrs[i], arr->va_size);
-	}
-	LIBCFS_FREE(arr, offsetof(struct cfs_var_array,
-				  va_ptrs[arr->va_count]));
-}
-EXPORT_SYMBOL(cfs_array_free);
-
-/*
- * allocate a variable array, returned value is an array of pointers.
- * Caller can specify length of array by @count, @size is size of each
- * memory block in array.
- */
-void *
-cfs_array_alloc(int count, unsigned int size)
-{
-	struct cfs_var_array	*arr;
-	int			i;
-
-	LIBCFS_ALLOC(arr, offsetof(struct cfs_var_array, va_ptrs[count]));
-	if (arr == NULL)
-		return NULL;
-
-	arr->va_count	= count;
-	arr->va_size	= size;
-
-	for (i = 0; i < count; i++) {
-		LIBCFS_ALLOC(arr->va_ptrs[i], size);
-
-		if (arr->va_ptrs[i] == NULL) {
-			cfs_array_free((void *)&arr->va_ptrs[0]);
-			return NULL;
-		}
-	}
-
-	return (void *)&arr->va_ptrs[0];
-}
-EXPORT_SYMBOL(cfs_array_alloc);
 
 /*
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
