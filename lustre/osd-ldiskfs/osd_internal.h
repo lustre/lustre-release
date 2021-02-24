@@ -800,8 +800,8 @@ int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 void osd_scrub_stop(struct osd_device *dev);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
-int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
-		   int insert);
+int osd_oii_insert(struct osd_device *dev, const struct lu_fid *fid,
+		   struct osd_inode_id *id, int insert);
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
 void osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
@@ -828,6 +828,13 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 
 int osd_ost_seq_exists(struct osd_thread_info *info, struct osd_device *osd,
 		       __u64 seq);
+int osd_scrub_refresh_mapping(struct osd_thread_info *info,
+			      struct osd_device *dev,
+			      const struct lu_fid *fid,
+			      const struct osd_inode_id *id,
+			      int ops, bool force,
+			      enum oi_check_flags flags, bool *exist);
+
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
                       int type, uint blk, int depth, uint index,

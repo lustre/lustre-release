@@ -55,10 +55,6 @@
 #define OSD_OTABLE_MAX_HASH		((1ULL << 48) - 1)
 #define OTABLE_PREFETCH			256
 
-#define DTO_INDEX_INSERT		1
-#define DTO_INDEX_DELETE		2
-#define DTO_INDEX_UPDATE		3
-
 static inline bool osd_scrub_has_window(struct osd_otable_it *it)
 {
 	return it->ooi_prefetched < OTABLE_PREFETCH;
@@ -71,11 +67,11 @@ static inline bool osd_scrub_has_window(struct osd_otable_it *it)
  * \retval   0, changed successfully
  * \retval -ve, on error
  */
-static int osd_scrub_refresh_mapping(const struct lu_env *env,
-				     struct osd_device *dev,
-				     const struct lu_fid *fid,
-				     uint64_t oid, int ops,
-				     bool force, const char *name)
+int osd_scrub_refresh_mapping(const struct lu_env *env,
+			      struct osd_device *dev,
+			      const struct lu_fid *fid,
+			      uint64_t oid, enum dt_txn_op ops,
+			      bool force, const char *name)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct zpl_direntry *zde = &info->oti_zde.lzd_reg;

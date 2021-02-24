@@ -700,6 +700,23 @@ int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   uint64_t *oid);
 
+/**
+ * Basic transaction credit op
+ */
+enum dt_txn_op {
+	DTO_INDEX_INSERT,
+	DTO_INDEX_DELETE,
+	DTO_INDEX_UPDATE,
+	DTO_NR
+};
+
+int osd_scrub_refresh_mapping(const struct lu_env *env,
+			      struct osd_device *dev,
+			      const struct lu_fid *fid,
+			      uint64_t oid, enum dt_txn_op ops,
+			      bool force, const char *name);
+
+
 /* osd_xattr.c */
 int __osd_sa_xattr_schedule_update(const struct lu_env *env,
 				   struct osd_object *obj,

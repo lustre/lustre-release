@@ -64,12 +64,12 @@ static inline int osd_scrub_has_window(struct lustre_scrub *scrub,
  * \retval   0, changed successfully
  * \retval -ve, on error
  */
-static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
-				     struct osd_device *dev,
-				     const struct lu_fid *fid,
-				     const struct osd_inode_id *id,
-				     int ops, bool force,
-				     enum oi_check_flags flags, bool *exist)
+int osd_scrub_refresh_mapping(struct osd_thread_info *info,
+			      struct osd_device *dev,
+			      const struct lu_fid *fid,
+			      const struct osd_inode_id *id,
+			      int ops, bool force,
+			      enum oi_check_flags flags, bool *exist)
 {
 	handle_t *th;
 	int	  rc;
@@ -3019,8 +3019,8 @@ const struct dt_index_operations osd_otable_ops = {
 
 #define SCRUB_BAD_OIMAP_DECAY_INTERVAL	60
 
-int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
-		   int insert)
+int osd_oii_insert(struct osd_device *dev, const struct lu_fid *fid,
+		   struct osd_inode_id *id, int insert)
 {
 	struct osd_inconsistent_item *oii;
 	struct osd_scrub *oscrub = &dev->od_scrub;
@@ -3033,7 +3033,9 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		RETURN(-ENOMEM);
 
 	INIT_LIST_HEAD(&oii->oii_list);
-	oii->oii_cache = *oic;
+	oii->oii_cache.oic_fid = *fid;
+	oii->oii_cache.oic_lid = *id;
+	oii->oii_cache.oic_dev = dev;
 	oii->oii_insert = insert;
 
 	spin_lock(&lscrub->os_lock);

@@ -933,7 +933,6 @@ struct osd_check_lmv_buf {
 	struct dir_context ctx;
 	struct osd_thread_info *oclb_info;
 	struct osd_device *oclb_dev;
-	struct osd_idmap_cache *oclb_oic;
 	int oclb_items;
 	bool oclb_found;
 };
@@ -959,7 +958,6 @@ static int osd_stripe_dir_filldir(void *buf,
 	struct lu_fid *fid = &oti->oti_fid3;
 	struct osd_inode_id *id = &oti->oti_id3;
 	struct osd_device *dev = oclb->oclb_dev;
-	struct osd_idmap_cache *oic = oclb->oclb_oic;
 	struct inode *inode;
 
 	oclb->oclb_items++;
@@ -982,10 +980,7 @@ static int osd_stripe_dir_filldir(void *buf,
 
 	iput(inode);
 	osd_add_oi_cache(oti, dev, id, fid);
-	oic->oic_fid = *fid;
-	oic->oic_lid = *id;
-	oic->oic_dev = dev;
-	osd_oii_insert(dev, oic, true);
+	osd_oii_insert(dev, fid, id, true);
 	oclb->oclb_found = true;
 
 	return 1;
@@ -1028,7 +1023,7 @@ static int osd_stripe_dir_filldir(void *buf,
  *    the correct OI mapping for the slave MDT-object.
  */
 static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
-			 struct inode *inode, struct osd_idmap_cache *oic)
+			 struct inode *inode)
 {
 	struct lu_buf *buf = &oti->oti_big_buf;
 	struct dentry *dentry = &oti->oti_obj_dentry;
@@ -1038,7 +1033,6 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 		.ctx.actor = osd_stripe_dir_filldir,
 		.oclb_info = oti,
 		.oclb_dev = dev,
-		.oclb_oic = oic,
 		.oclb_found = false,
 	};
 	int rc = 0;
@@ -1092,9 +1086,9 @@ again:
 out:
 	if (rc < 0)
 		CDEBUG(D_LFSCK,
-		       "%s: cannot check LMV, ino = %lu/%u "DFID": rc = %d\n",
+		       "%s: cannot check LMV, ino = %lu/%u: rc = %d\n",
 		       osd_ino2name(inode), inode->i_ino, inode->i_generation,
-		       PFID(&oic->oic_fid), rc);
+		       rc);
 	else
 		rc = 0;
 
@@ -1252,16 +1246,15 @@ trigger:
 		if (scrub->os_partial_scan && !scrub->os_in_join)
 			goto join;
 
-		osd_add_oi_cache(info, dev, id, fid);
 		if (IS_ERR_OR_NULL(inode) || result) {
-			osd_oii_insert(dev, oic, result == -ENOENT);
+			osd_oii_insert(dev, fid, id, result == -ENOENT);
 			GOTO(out, result = -EINPROGRESS);
 		}
 
 		LASSERT(remote);
 		LASSERT(obj->oo_inode == inode);
 
-		osd_oii_insert(dev, oic, true);
+		osd_oii_insert(dev, fid, id, true);
 		goto found;
 	}
 
@@ -1283,16 +1276,15 @@ join:
 	if (rc1 && rc1 != -EALREADY)
 		GOTO(out, result = -EREMCHG);
 
-	osd_add_oi_cache(info, dev, id, fid);
 	if (IS_ERR_OR_NULL(inode) || result) {
-		osd_oii_insert(dev, oic, result == -ENOENT);
+		osd_oii_insert(dev, fid, id, result == -ENOENT);
 		GOTO(out, result = -EINPROGRESS);
 	}
 
 	LASSERT(remote);
 	LASSERT(obj->oo_inode == inode);
 
-	osd_oii_insert(dev, oic, true);
+	osd_oii_insert(dev, fid, id, true);
 	goto found;
 
 check_lma:
@@ -1389,6 +1381,8 @@ check_lma:
 
 	if (saved_ino == id->oii_ino && saved_gen == id->oii_gen) {
 		result = -EREMCHG;
+		osd_scrub_refresh_mapping(info, dev, fid, id, DTO_INDEX_DELETE,
+					  true, 0, NULL);
 		goto trigger;
 	}
 
@@ -1423,7 +1417,7 @@ found:
 
 	if (S_ISDIR(inode->i_mode) &&
 	    (flags & SS_AUTO_PARTIAL || sf->sf_status == SS_SCANNING))
-		osd_check_lmv(info, dev, inode, oic);
+		osd_check_lmv(info, dev, inode);
 
 	result = osd_attach_jinode(inode);
 	if (result)
@@ -5770,11 +5764,9 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 
 static int
 osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
-		      struct osd_idmap_cache *oic)
+		      const struct lu_fid *fid, struct osd_inode_id *id)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
-	struct lu_fid *fid = &oic->oic_fid;
-	struct osd_inode_id *id = &oic->oic_lid;
 	struct inode *inode = NULL;
 	int once = 0;
 	bool insert;
@@ -5837,7 +5829,7 @@ trigger:
 			}
 		}
 
-		rc = osd_oii_insert(dev, oic, insert);
+		rc = osd_oii_insert(dev, fid, id, insert);
 		/*
 		 * There is race condition between osd_oi_lookup and OI scrub.
 		 * The OI scrub finished just after osd_oi_lookup() failure.
@@ -5850,7 +5842,7 @@ trigger:
 		if (!S_ISDIR(inode->i_mode))
 			rc = 0;
 		else
-			rc = osd_check_lmv(oti, dev, inode, oic);
+			rc = osd_check_lmv(oti, dev, inode);
 
 		GOTO(out, rc);
 	}
@@ -5875,10 +5867,10 @@ out:
 
 static int osd_fail_fid_lookup(struct osd_thread_info *oti,
 			       struct osd_device *dev,
-			       struct osd_idmap_cache *oic,
 			       struct lu_fid *fid, __u32 ino)
 {
 	struct lustre_ost_attrs *loa = &oti->oti_ost_attrs;
+	struct osd_idmap_cache *oic = &oti->oti_cache;
 	struct inode *inode;
 	int rc;
 
@@ -6069,13 +6061,12 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	if (!IS_ERR(bh)) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		struct osd_inode_id *id = &oti->oti_id;
-		struct osd_idmap_cache *oic = &oti->oti_cache;
 		struct osd_device *dev = osd_obj2dev(obj);
 
 		ino = le32_to_cpu(de->inode);
 		if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP)) {
 			brelse(bh);
-			rc = osd_fail_fid_lookup(oti, dev, oic, fid, ino);
+			rc = osd_fail_fid_lookup(oti, dev, fid, ino);
 			GOTO(out, rc);
 		}
 
@@ -6103,19 +6094,24 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
 
-		if (rc != 0 || osd_remote_fid(env, dev, fid)) {
-			fid_zero(&oic->oic_fid);
-
+		if (rc != 0 || osd_remote_fid(env, dev, fid))
 			GOTO(out, rc);
-		}
 
-		osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id, fid);
-		rc = osd_consistency_check(oti, dev, oic);
-		if (rc == -ENOENT)
-			fid_zero(&oic->oic_fid);
-		else
+		rc = osd_consistency_check(oti, dev, fid, id);
+		if (rc != -ENOENT) {
 			/* Other error should not affect lookup result. */
 			rc = 0;
+
+			/* Normal file mapping should be added into OI cache
+			 * after FID in LMA check, but for local files like
+			 * hsm_actions, their FIDs are not stored in OI files,
+			 * see osd_initial_OI_scrub(), and here is the only
+			 * place to load mapping into OI cache.
+			 */
+			if (!fid_is_namespace_visible(fid))
+				osd_add_oi_cache(osd_oti_get(env),
+						 osd_obj2dev(obj), id, fid);
+		}
 	} else {
 		rc = PTR_ERR(bh);
 	}

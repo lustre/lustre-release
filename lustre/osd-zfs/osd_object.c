@@ -616,8 +616,11 @@ zget:
 		GOTO(out, rc = 0);
 
 	rc = osd_check_lma(env, obj);
-	if ((!rc && !remote) || (rc != -EREMCHG))
+	if (rc != -EREMCHG)
 		GOTO(out, rc);
+
+	osd_scrub_refresh_mapping(env, osd, fid, oid, DTO_INDEX_DELETE, true,
+				  NULL);
 
 trigger:
 	/* We still have chance to get the valid dnode: for the object that is
