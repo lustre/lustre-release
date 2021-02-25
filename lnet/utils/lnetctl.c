@@ -292,7 +292,7 @@ static int jt_calc_service_id(int argc, char **argv)
 	 * cYAML currently doesn't support printing hex values.
 	 * Therefore just print it locally here
 	 */
-	printf("service id:\n    value: 0x%llx\n", service_id);
+	printf("service id:\n    value: 0x%jx\n", (uintmax_t)service_id);
 
 	return rc;
 }
