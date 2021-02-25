@@ -4911,6 +4911,7 @@ out_detach_free:
 		OBD_FREE_PTR(detach);
 		RETURN(rc);
 	}
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
 	case LL_IOC_PCC_STATE: {
 		struct lu_pcc_state __user *ustate = uarg;
 		struct lu_pcc_state *state;
@@ -4933,6 +4934,7 @@ out_state:
 		OBD_FREE_PTR(state);
 		RETURN(rc);
 	}
+#endif
 	default:
 		rc = ll_iocontrol(inode, file, cmd, uarg);
 		if (rc != -ENOTTY)

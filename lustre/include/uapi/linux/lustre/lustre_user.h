@@ -3027,11 +3027,11 @@ enum lu_pcc_state_flags {
 };
 
 struct lu_pcc_state {
-	__u32	pccs_type; /* enum lu_pcc_type */
-	__u32	pccs_open_count;
-	__u32	pccs_flags; /* enum lu_pcc_state_flags */
-	__u32	pccs_padding;
-	char	pccs_path[PATH_MAX];
+	__u32	pccs_type;		/* OUT: enum lu_pcc_type */
+	__u32	pccs_open_count;	/* OUT: user count */
+	__u32	pccs_flags;		/* OUT: enum lu_pcc_state_flags */
+	__u32	pccs_namelen;		/* IN: file name len */
+	char	pccs_path[PATH_MAX];	/* IN|OUT: file name or path buffer */
 };
 
 enum lu_pcc_cleanup_flags {

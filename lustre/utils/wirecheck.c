@@ -3320,7 +3320,7 @@ static void check_lu_pcc_state(void)
 	CHECK_MEMBER(lu_pcc_state, pccs_type);
 	CHECK_MEMBER(lu_pcc_state, pccs_open_count);
 	CHECK_MEMBER(lu_pcc_state, pccs_flags);
-	CHECK_MEMBER(lu_pcc_state, pccs_padding);
+	CHECK_MEMBER(lu_pcc_state, pccs_namelen);
 	CHECK_MEMBER(lu_pcc_state, pccs_path);
 }
 

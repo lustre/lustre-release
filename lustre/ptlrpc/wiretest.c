@@ -7067,10 +7067,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lu_pcc_state, pccs_flags));
 	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_flags) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_flags));
-	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_padding) == 12, "found %lld\n",
-		 (long long)(int)offsetof(struct lu_pcc_state, pccs_padding));
-	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_padding));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_namelen) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_namelen));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_namelen) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_namelen));
 	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_path) == 16, "found %lld\n",
 		 (long long)(int)offsetof(struct lu_pcc_state, pccs_path));
 	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_path) == 4096, "found %lld\n",

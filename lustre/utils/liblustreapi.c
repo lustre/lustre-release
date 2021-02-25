@@ -1567,7 +1567,7 @@ static int cb_common_fini(char *path, int p, int *dp, void *data,
 }
 
 /* set errno upon failure */
-static int open_parent(const char *path)
+int open_parent(const char *path)
 {
 	char *path_copy;
 	char *parent_path;

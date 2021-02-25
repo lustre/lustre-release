@@ -373,7 +373,7 @@ int llapi_pcc_detach_file(const char *path, __u32 flags)
 /**
  * Return the current PCC state related to a file.
  *
- * \param fd	File handle.
+ * \param fd	File handle for the parent directory.
  * \param state	PCC state info.
  *
  * \return 0 on success, an error code otherwise.
@@ -396,16 +396,38 @@ int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state)
  */
 int llapi_pcc_state_get(const char *path, struct lu_pcc_state *state)
 {
+	char *path_copy;
+	char *filename;
 	int fd;
 	int rc;
 
-	fd = open(path, O_RDONLY | O_NONBLOCK);
-	if (fd < 0)
-		return -errno;
+	fd = open_parent(path);
+	if (fd == -1) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "can not open %s", path);
+		return rc;
+	}
+
+	path_copy = strdup(path);
+	if (path_copy == NULL) {
+		close(fd);
+		return -ENOMEM;
+	}
+
+	filename = basename(path_copy);
+	state->pccs_namelen = strlen(filename) + 1;
+	strncpy(state->pccs_path, filename, sizeof(state->pccs_path) - 1);
 
 	rc = llapi_pcc_state_get_fd(fd, state);
+	if (rc != 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "Get PCC state on %s failed",
+			    path);
+	}
 
 	close(fd);
+	free(path_copy);
+
 	return rc;
 }
 

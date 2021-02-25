@@ -13868,7 +13868,6 @@ static int lfs_pcc_state(int argc, char **argv)
 {
 	int rc = 0;
 	const char *path;
-	char fullpath[PATH_MAX];
 	struct lu_pcc_state state;
 
 	optind = 1;
@@ -13883,15 +13882,7 @@ static int lfs_pcc_state(int argc, char **argv)
 		int rc2;
 
 		path = argv[optind++];
-		if (!realpath(path, fullpath)) {
-			fprintf(stderr, "%s: could not find path '%s': %s\n",
-				argv[0], path, strerror(errno));
-			if (rc == 0)
-				rc = -EINVAL;
-			continue;
-		}
-
-		rc2 = llapi_pcc_state_get(fullpath, &state);
+		rc2 = llapi_pcc_state_get(path, &state);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;

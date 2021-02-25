@@ -2767,6 +2767,81 @@ out_ladvise:
 		OBD_FREE_PTR(ladvise);
 		RETURN(rc);
 	}
+	case LL_IOC_PCC_STATE: {
+		struct lu_pcc_state __user *ustate =
+			(struct lu_pcc_state __user *)arg;
+		struct lu_pcc_state *state;
+		struct dentry *parent = file_dentry(file);
+		struct dentry *dchild = NULL;
+		struct inode *child_inode = NULL;
+		struct qstr qstr;
+		int namelen = 0;
+		char *name;
+
+		OBD_ALLOC_PTR(state);
+		if (state == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(state, ustate, sizeof(*state)))
+			GOTO(out_free, rc = -EFAULT);
+
+		name = state->pccs_path;
+		namelen = strlen(name);
+		if (namelen < 0 || state->pccs_namelen != namelen + 1) {
+			CDEBUG(D_INFO, "IOC_PCC_STATE missing filename\n");
+			GOTO(out_state_free, rc = -EINVAL);
+		}
+
+		/* Get Child from dcache first. */
+		qstr.hash = ll_full_name_hash(parent, name, namelen);
+		qstr.name = name;
+		qstr.len = namelen;
+		dchild = d_lookup(parent, &qstr);
+		if (dchild) {
+			if (dchild->d_inode)
+				child_inode = igrab(dchild->d_inode);
+			dput(dchild);
+		}
+
+		if (!child_inode) {
+			unsigned long ino;
+			struct lu_fid fid;
+
+			rc = ll_get_fid_by_name(parent->d_inode, name, namelen,
+						&fid, NULL);
+			if (rc)
+				GOTO(out_state_free, rc);
+
+			ino = cl_fid_build_ino(&fid, ll_need_32bit_api(sbi));
+			child_inode = ilookup5(inode->i_sb, ino,
+					       ll_test_inode_by_fid, &fid);
+		}
+
+		if (!child_inode) {
+			/*
+			 * Target inode is not in inode cache, the
+			 * corresponding PCC file may be already released,
+			 * return immediately.
+			 */
+			state->pccs_type = LU_PCC_NONE;
+			GOTO(out_copy_to, rc = 0);
+		}
+
+		if (!S_ISREG(child_inode->i_mode))
+			GOTO(out_child_iput, rc = -EINVAL);
+
+		rc = pcc_ioctl_state(NULL, child_inode, state);
+		if (rc)
+			GOTO(out_child_iput, rc);
+out_copy_to:
+		if (copy_to_user(ustate, state, sizeof(*state)))
+			GOTO(out_child_iput, rc = -EFAULT);
+out_child_iput:
+		iput(child_inode);
+out_state_free:
+		OBD_FREE_PTR(state);
+		RETURN(rc);
+	}
 	case LL_IOC_PCC_DETACH_BY_FID: {
 		struct lu_pcc_detach_fid *detach;
 		struct lu_fid *fid;

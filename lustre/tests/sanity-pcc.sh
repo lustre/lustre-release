@@ -1441,12 +1441,18 @@ test_15() {
 	# detached automatically.
 	do_facet $SINGLEAGT $LCTL \
 		set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_lpcc_state $file "none" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT $RUNAS $MULTIOP $file oc ||
+		error "failed to open $file"
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
 	# Detach the file but keep the cache , as the file layout generation
 	# is not changed, so the file is still valid cached in PCC, and can
 	# be reused from PCC cache directly.
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach -k $file ||
 		error "PCC detach $file failed"
+	check_lpcc_state $file "none" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT $RUNAS $MULTIOP $file oc ||
+		error "failed to open $file"
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
 		error "PCC detach $file failed"
@@ -1470,6 +1476,8 @@ test_15() {
 	# and can be reused from PCC cache directly.
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RW-PCC detach $file failed"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $MULTIOP $file oc || error "failed to open $file"
 	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
@@ -1500,6 +1508,8 @@ test_15() {
 	# and can be reused from PCC cache directly.
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RO-PCC detach $file failed"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $MULTIOP $file oc || error "failed to open $file"
 	check_lpcc_state $file "readonly"
 	check_file_data $SINGLEAGT $file "autoattach_data"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -1534,7 +1544,7 @@ test_16() {
 	# Valid PCC cache can be reused
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "PCC detach $file failed"
-	check_lpcc_state $file "readwrite"
+	check_lpcc_state $file "none"
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 
@@ -1556,6 +1566,9 @@ test_16() {
 
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RO-PCC detach $file failed"
+	check_lpcc_state $file "none"
+	# Reading the file will re-attach the file in readonly mode
+	do_facet $SINGLEAGT cat $file || error "cat $file failed"
 	check_lpcc_state $file "readonly"
 
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -1696,7 +1709,7 @@ test_20() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
-	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 120
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
@@ -2473,7 +2486,7 @@ test_27() {
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "detach $file failed"
-	check_lpcc_state $file "readwrite"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "auto_attach_multi_open"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -2490,7 +2503,7 @@ test_27() {
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
 	do_facet $SINGLEAGT $LCTL \
 		set_param ldlm.namespaces.*mdc*.lru_size=clear
-	check_lpcc_state $file "readwrite"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "auto_attach_multi_open"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -2505,7 +2518,7 @@ test_27() {
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "detach $file failed"
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "auto_attach_multi_open"
 	check_lpcc_state $file "readonly"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -2519,7 +2532,7 @@ test_27() {
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
 	do_facet $SINGLEAGT $LCTL \
 		set_param ldlm.namespaces.*mdc*.lru_size=clear
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "auto_attach_multi_open"
 	check_lpcc_state $file "readonly"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
@@ -2599,12 +2612,14 @@ test_29a() {
 	$LFS project -sp $project_id $file ||
 		error "failed to set project for $file"
 	$LFS project -d $file
+	check_file_data $SINGLEAGT $file "ro_uptodate"
 	check_lpcc_state $file "readonly"
 	check_file_data $SINGLEAGT $file "ro_uptodate"
 
 	echo -n Update_ro_data > $file2
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "Update_ro_data"
+	check_lpcc_state $file "readonly"
 
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "failed to detach $file"
@@ -2811,20 +2826,30 @@ test_33() {
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	touch $file || error "touch $file failed"
 	$TRUNCATE $file $((1048576 * 2)) || error "Truncate $file failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	do_facet $SINGLEAGT $LFS pcc state $file
 	$TRUNCATE $file $((1048576 / 2)) || error "Truncate $file failed"
 	do_facet $SINGLEAGT $LFS pcc state $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "readonly"
 	cleanup_pcc_mapping
 
 	setup_pcc_mapping $SINGLEAGT \
 		"fname={*.doc}\&size\<{5M}\&size\>{3M}\ roid=5\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$TRUNCATE $file2 $((1048576 * 6)) || error "Truncate $file2 failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$TRUNCATE $file2 $((1048576 * 4)) || error "Truncate $file2 failed"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "readonly"
 	cleanup_pcc_mapping
 
@@ -2873,39 +2898,59 @@ test_34() {
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file" ||
 		error "failed to write $file"
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 99 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 101 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "readonly"
 	cleanup_pcc_mapping
 
 	setup_pcc_mapping $SINGLEAGT \
 		"projid\<{100}\ roid=5\ ropcc=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 102 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 99 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "readonly"
 	cleanup_pcc_mapping
 
 	setup_pcc_mapping $SINGLEAGT \
 		"projid\<{120}\&projid\>{110}\ roid=5\ ropcc=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 105 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 121 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "none"
 	$LFS project -p 115 $file || error "failed to set project for $file"
 	$LFS project -d $file
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
 	check_lpcc_state $file "readonly"
 	cleanup_pcc_mapping
 }
@@ -3030,6 +3075,40 @@ test_37() {
 }
 run_test 37 "Multiple readers on a shared file with PCC-RO mode"
 
+test_38() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	is_project_quota_supported || skip "project quota is not supported"
+
+	enable_project_quota
+	mkdir $dir || error "mkdir $dir failed"
+	$LFS project -sp 100 $dir ||
+		error "failed to set project for $dir"
+	echo "QQQQQ" > $file
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+
+	do_facet $SINGLEAGT $LFS pcc state $file ||
+		error "failed to get PCC state for $file"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT cat $file || error "cat $file failed"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	check_lpcc_state $file "none"
+}
+run_test 38 "Verify LFS pcc state does not trigger prefetch for auto PCC-RO"
+
 test_41() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
@@ -3042,7 +3121,7 @@ test_41() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
 	setup_pcc_mapping $SINGLEAGT \
-		"mtime\>{1m}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+		"mtime\>{1m}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 
 	echo "pcc_ro_data" > $file || error "echo $file failed"
@@ -3129,12 +3208,18 @@ test_101a() {
 	# Revoke the layout lock, the PCC-cached file will be
 	# detached automatically.
 	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_lpcc_state $file "none" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT $RUNAS $MULTIOP $file oc ||
+		error "failed to open $file"
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
 	# Detach the file but keep the cache, as the file layout generation
 	# is not changed, so the file is still valid cached in PCC, and can
 	# be reused from PCC cache directly.
 	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc detach -k $file ||
 		error "PCC detach $file failed"
+	check_lpcc_state $file "none" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $MULTIOP $file oc ||
+		error "failed to open $file"
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
 	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc detach $file ||
 		error "PCC detach $file failed"
@@ -3167,10 +3252,10 @@ test_101a() {
 	# and can be reused from PCC cache directly.
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RW-PCC detach $file failed"
-	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 	check_file_data $SINGLEAGT $file "autoattach_data" $PID
+	check_lpcc_state $file "readwrite"
 
 	# HSM restore the PCC cached file, the layout generation
 	# was changed, so the file can not be auto attached.

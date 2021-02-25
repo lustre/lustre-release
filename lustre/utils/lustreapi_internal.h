@@ -36,6 +36,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <dirent.h>
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -204,4 +205,6 @@ int get_lmd_info_fd(const char *path, int parentfd, int dirfd,
 		    void *lmd_buf, int lmd_len, enum get_lmd_info_type type);
 
 int lov_comp_md_size(struct lov_comp_md_v1 *lcm);
+
+int open_parent(const char *path);
 #endif /* _LUSTREAPI_INTERNAL_H_ */

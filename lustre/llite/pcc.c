@@ -3730,8 +3730,6 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	char *buf;
 	char *path;
 	int buf_len = sizeof(state->pccs_path);
-	struct ll_file_data *fd = file->private_data;
-	struct pcc_file *pccf = &fd->fd_pcc_file;
 	struct pcc_inode *pcci;
 
 	ENTRY;
@@ -3759,8 +3757,15 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 
 	if (pcc_inode_has_layout(pcci))
 		count--;
-	if (pccf->pccf_file != NULL)
-		count--;
+
+	if (file) {
+		struct ll_file_data *fd = file->private_data;
+		struct pcc_file *pccf = &fd->fd_pcc_file;
+
+		if (pccf->pccf_file != NULL)
+			count--;
+	}
+
 	state->pccs_type = pcci->pcci_type;
 	state->pccs_open_count = count;
 	state->pccs_flags = ll_i2info(inode)->lli_pcc_state;
