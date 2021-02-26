@@ -2317,9 +2317,12 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 			   XATTR_NAME_ACL_DEFAULT);
 	mdd_read_unlock(env, pobj);
 	if (rc > 0) {
+		/* ACL buffer size is not enough, need realloc */
+		if (rc > acl_buf->lb_len)
+			RETURN(-ERANGE);
+
 		/* If there are default ACL, fix mode/ACL by default ACL */
 		def_acl_buf->lb_len = rc;
-		LASSERT(def_acl_buf->lb_len <= acl_buf->lb_len);
 		memcpy(acl_buf->lb_buf, def_acl_buf->lb_buf, rc);
 		acl_buf->lb_len = rc;
 		rc = __mdd_fix_mode_acl(env, acl_buf, &la->la_mode);
