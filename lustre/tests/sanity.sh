@@ -5242,17 +5242,14 @@ test_44A() { # was test_44
 run_test 44A "zero length read from a sparse stripe"
 
 test_44a() {
-	local nstripe=$($LCTL lov_getconfig $DIR | grep default_stripe_count: |
-		awk '{ print $2 }')
+	local nstripe=$($LFS getstripe -c -d $DIR)
 	[ -z "$nstripe" ] && skip "can't get stripe info"
 	[[ $nstripe -gt $OSTCOUNT ]] &&
-		skip "Wrong default_stripe_count: $nstripe OSTCOUNT: $OSTCOUNT"
+		skip "Wrong default stripe_count: $nstripe OSTCOUNT: $OSTCOUNT"
 
-	local stride=$($LCTL lov_getconfig $DIR | grep default_stripe_size: |
-		awk '{ print $2 }')
+	local stride=$($LFS getstripe -S -d $DIR)
 	if [[ $nstripe -eq 0 || $nstripe -eq -1 ]]; then
-		nstripe=$($LCTL lov_getconfig $DIR | grep obd_count: |
-			awk '{ print $2 }')
+		nstripe=$($LFS df $DIR | grep OST: | wc -l)
 	fi
 
 	OFFSETS="0 $((stride/2)) $((stride-1))"

@@ -556,11 +556,6 @@ command_t cmdlist[] = {
 	 "remove one log from catalog or plain log, erase it from disk.\n"
 	 "usage: llog_remove <logname|LLOG_ID> [--log_id <id>]"},
 	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
-	/* some test scripts still use these */
-	/* saving for sanity 44a */
-	{"lov_getconfig", jt_obd_lov_getconfig, 0,
-	 "read lov configuration from an mds device\n"
-	 "usage: lov_getconfig <mountpoint>"},
 	/* network operations */
 	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
 	 "usage: add_interface ip [netmask]"},
