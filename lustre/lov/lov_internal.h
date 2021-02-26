@@ -325,13 +325,6 @@ extern struct lu_device_type lov_device_type;
 
 #define LOV_MDC_TGT_MAX 256
 
-/* lu_tgt_pool methods */
-int lov_ost_pool_init(struct lu_tgt_pool *op, unsigned int count);
-int lov_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
-int lov_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
-int lov_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx);
-int lov_ost_pool_free(struct lu_tgt_pool *op);
-
 /* high level pool methods */
 int lov_pool_new(struct obd_device *obd, char *poolname);
 int lov_pool_del(struct obd_device *obd, char *poolname);

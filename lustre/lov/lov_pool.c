@@ -86,7 +86,7 @@ void lov_pool_putref(struct pool_desc *pool)
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
-		lov_ost_pool_free(&(pool->pool_obds));
+		tgt_pool_free(&(pool->pool_obds));
 		kfree_rcu(pool, pool_rcu);
 		EXIT;
 	}
@@ -253,116 +253,6 @@ void lov_dump_pool(int level, struct pool_desc *pool)
         lov_pool_putref(pool);
 }
 
-#define LOV_POOL_INIT_COUNT 2
-int lov_ost_pool_init(struct lu_tgt_pool *op, unsigned int count)
-{
-	ENTRY;
-
-	if (count == 0)
-		count = LOV_POOL_INIT_COUNT;
-	op->op_array = NULL;
-	op->op_count = 0;
-	init_rwsem(&op->op_rw_sem);
-	op->op_size = count * sizeof(op->op_array[0]);
-	OBD_ALLOC(op->op_array, op->op_size);
-	if (op->op_array == NULL) {
-		op->op_size = 0;
-		RETURN(-ENOMEM);
-	}
-	EXIT;
-	return 0;
-}
-
-/* Caller must hold write op_rwlock */
-int lov_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
-{
-	__u32 *new;
-	__u32 new_size;
-
-	LASSERT(min_count != 0);
-
-	if (op->op_count * sizeof(op->op_array[0]) < op->op_size)
-		return 0;
-
-	new_size = max_t(__u32, min_count * sizeof(op->op_array[0]),
-			 2 * op->op_size);
-	OBD_ALLOC(new, new_size);
-	if (new == NULL)
-		return -ENOMEM;
-
-	/* copy old array to new one */
-	memcpy(new, op->op_array, op->op_size);
-	OBD_FREE(op->op_array, op->op_size);
-	op->op_array = new;
-	op->op_size = new_size;
-	return 0;
-}
-
-int lov_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
-{
-        int rc = 0, i;
-        ENTRY;
-
-	down_write(&op->op_rw_sem);
-
-        rc = lov_ost_pool_extend(op, min_count);
-        if (rc)
-                GOTO(out, rc);
-
-        /* search ost in pool array */
-        for (i = 0; i < op->op_count; i++) {
-                if (op->op_array[i] == idx)
-                        GOTO(out, rc = -EEXIST);
-        }
-        /* ost not found we add it */
-        op->op_array[op->op_count] = idx;
-        op->op_count++;
-        EXIT;
-out:
-	up_write(&op->op_rw_sem);
-        return rc;
-}
-
-int lov_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx)
-{
-        int i;
-        ENTRY;
-
-	down_write(&op->op_rw_sem);
-
-        for (i = 0; i < op->op_count; i++) {
-                if (op->op_array[i] == idx) {
-                        memmove(&op->op_array[i], &op->op_array[i + 1],
-                                (op->op_count - i - 1) * sizeof(op->op_array[0]));
-                        op->op_count--;
-			up_write(&op->op_rw_sem);
-                        EXIT;
-                        return 0;
-                }
-        }
-
-	up_write(&op->op_rw_sem);
-        RETURN(-EINVAL);
-}
-
-int lov_ost_pool_free(struct lu_tgt_pool *op)
-{
-	ENTRY;
-
-	if (op->op_size == 0)
-		RETURN(0);
-
-	down_write(&op->op_rw_sem);
-
-	OBD_FREE(op->op_array, op->op_size);
-	op->op_array = NULL;
-	op->op_count = 0;
-	op->op_size = 0;
-
-	up_write(&op->op_rw_sem);
-	RETURN(0);
-}
-
 static void pools_hash_exit(void *vpool, void *data)
 {
 	struct pool_desc *pool = vpool;
@@ -403,7 +293,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	 * up to deletion
 	 */
 	atomic_set(&new_pool->pool_refcount, 1);
-	rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
+	rc = tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_err, rc);
 
@@ -452,7 +342,7 @@ out_err:
 	lov->lov_pool_count--;
 	spin_unlock(&obd->obd_dev_lock);
         lprocfs_remove(&new_pool->pool_proc_entry);
-	lov_ost_pool_free(&new_pool->pool_obds);
+	tgt_pool_free(&new_pool->pool_obds);
 	OBD_FREE_PTR(new_pool);
 
 	return rc;
@@ -548,7 +438,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
         if (lov_idx == lov->desc.ld_tgt_count)
                 GOTO(out, rc = -EINVAL);
 
-        rc = lov_ost_pool_add(&pool->pool_obds, lov_idx, lov->lov_tgt_size);
+	rc = tgt_pool_add(&pool->pool_obds, lov_idx, lov->lov_tgt_size);
         if (rc)
                 GOTO(out, rc);
 
@@ -601,7 +491,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         if (lov_idx == lov->desc.ld_tgt_count)
                 GOTO(out, rc = -EINVAL);
 
-        lov_ost_pool_remove(&pool->pool_obds, lov_idx);
+	tgt_pool_remove(&pool->pool_obds, lov_idx);
 
         CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
                poolname);
