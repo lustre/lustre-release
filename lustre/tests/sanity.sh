@@ -7756,6 +7756,38 @@ test_56ca() {
 }
 run_test 56ca "check lfs find --mirror-count|-N and --mirror-state"
 
+test_56da() { # LU-14179
+	local path=$DIR/$tdir
+
+	test_mkdir $path
+	cd $path
+
+	local longdir=$(str_repeat 'a' 255)
+
+	for i in {1..15}; do
+		path=$path/$longdir
+		test_mkdir $longdir
+		cd $longdir
+	done
+
+	local len=${#path}
+	local lastdir=$(str_repeat 'a' $((4096 - 1 - $len - 1)))
+
+	test_mkdir $lastdir
+	cd $lastdir
+	# PATH_MAX-1
+	(( ${#PWD} == 4095 )) || error "bad PWD length ${#PWD}, expect 4095"
+
+	# NAME_MAX
+	touch $(str_repeat 'f' 255)
+
+	$LFS find $DIR/$tdir --type d |& grep "lfs find: error" &&
+		error "lfs find reported an error"
+
+	rm -rf $DIR/$tdir
+}
+run_test 56da "test lfs find with long paths"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

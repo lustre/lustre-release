@@ -2220,8 +2220,8 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 		path[len] = 0;
 		if ((len + dent->d_reclen + 2) > size) {
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "error: %s: string buffer too small",
-					  __func__);
+					  "error: %s: string buffer too small for %s",
+					  __func__, path);
 			break;
 		}
 		strcat(path, "/");
@@ -2296,7 +2296,7 @@ static int param_callback(char *path, semantic_func_t sem_init,
 		return ret;
 	}
 
-	buf = (char *)malloc(PATH_MAX + 1);
+	buf = (char *)malloc(2 * PATH_MAX);
 	if (!buf)
 		return -ENOMEM;
 
@@ -2307,8 +2307,8 @@ static int param_callback(char *path, semantic_func_t sem_init,
 
 	param->fp_depth = 0;
 
-	ret = llapi_semantic_traverse(buf, PATH_MAX + 1, -1, sem_init,
-                                      sem_fini, param, NULL);
+	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX, -1, sem_init,
+				      sem_fini, param, NULL);
 out:
 	find_param_fini(param);
 	free(buf);
