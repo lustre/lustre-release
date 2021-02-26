@@ -385,6 +385,117 @@ Show details on configured peer credits
 .br
 \-> Minimum router credits\.
 .
+.SS "UDSP Configuration"
+.
+.TP
+\fBlnetctl udsp\fR add
+Add user-defined selection policy.
+.
+.br
+.
+.TP
+Adding a local network udsp.
+.
+.br
+If multiple local networks are available, each one can be assigned a priority\.
+The one with the highest priority is selected to send on\.
+NID and network matching is using NID-range syntax, please see the manual for more detail\.
+.
+.br
+\-\-src : network in NID-range syntax (e.g. tcp0 or tcp[1-3])
+.
+.br
+\-\-<priority> <priority value>: optional priority value in [0-255], 0 as the highest
+.
+.br
+\-\-<idx>: The index of where to insert the rule\. By default append to the end of the list
+.
+.br
+.
+.TP
+Adding a local NID udsp.
+.
+.br
+Assign priority to local NIDs\. After a local network is chosen, the NI with highest priority is selected\.
+.
+.br
+\-\-src: NID in NID-range syntax (e.g. 10.1.1.2@tcp or 10.1.1.*@tcp)
+.
+.br
+\-\-<priority> <priority value>: optional priority value in [0-255], 0 as the highest
+.
+.br
+\-\-<idx>: The index of where to insert the rule\. By default append to the end of the list
+.
+.br
+.
+.TP
+Adding a peer NID udsp.
+.
+.br
+Assign priority to peer NIDs. Peer NID with highest priority is selected to send to\.
+.
+.br
+\-\-dst: NID in NID-range syntax (e.g. 10.1.1.2@tcp)
+.
+.br
+\-\-<priority> <priority value>: optional priority value in [0-255], 0 as the highest
+.
+.br
+\-\-<idx>: The index of where to insert the rule\. By default append to the end of the list
+.
+.br
+.
+.TP
+Adding a NID pair udsp.
+.
+.br
+The local NIDs which match the rule are added on a list on the peer NIs matching the rule\.
+When selecting the peer NI, the one with the local NID being used on its list is preferred\.
+.
+.br
+\-\-dst: NID in NID-range syntax (e.g. 10.1.1.1@tcp)
+.
+.br
+\-\-src: NID in NID-range syntax (e.g. 10.1.1.2@tcp)
+.
+.br
+\-\-<idx>: The index of where to insert the rule\. By default append to the end of the list
+.
+.br
+.
+.TP
+Adding a Peer Router udsp.
+.
+.br
+The router NIDs matching the rule are added on a list on the peer NIs matching the rule\.
+When sending to a remote peer, the router which has its nid on the peer NI list is preferred\.
+.
+.br
+\-\-dst: peer NID in NID-range syntax (e.g. 10.1.1.1@tcp)
+.
+.br
+\-\-rte: router NID in NID-range syntax (e.g. 10.1.2.1@tcp)
+.
+.br
+\-\-<idx>: The index of where to insert the rule\. By default append to the end of the list
+.
+.br
+.
+.TP
+\fBlnetctl udsp\fR del
+Delete user-defined selection policy.
+.
+.br
+\-\-idx: The index of the rule to delete\.
+.
+.br
+.TP
+\fBlnetctl udsp\fR show
+Show all user-defined selection policies in the system\. The policies are dumped in YAML form\.
+.
+.br
+.
 .SH "OPTIONS"
 .TP
 .B --list-commands
@@ -714,6 +825,53 @@ peer:
 .
 .br
           state: NA
+.
+.br
+.
+.SS "Adding a UDSP"
+.
+.IP "\(bu" 4
+lnetctl udsp add \-\-src tcp \-\-priority 1
+.
+.IP "" 0
+.
+.P
+.
+.SS "Deleting a UDSP"
+.
+.IP "\(bu" 4
+lnetctl udsp del \-\-idx 0
+.
+.IP "" 0
+.
+.P
+.SS "Show UDSPs"
+.
+.IP "\(bu" 4
+lnetctl udsp show
+.
+.IP "" 0
+.
+.P
+udsp:
+.
+.br
+    \- idx: 0
+.
+.br
+    src: tcp
+.
+.br
+    dst: NA
+.
+.br
+    rte: NA
+.
+.br
+    action:
+.
+.br
+        priority: 0
 .
 .br
 

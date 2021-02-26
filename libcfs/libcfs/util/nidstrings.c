@@ -189,6 +189,77 @@ out:
 	return rc;
 }
 
+int
+cfs_expr2str(struct list_head *list, char *str, size_t size)
+{
+	struct cfs_expr_list *expr;
+	struct cfs_range_expr *range;
+	char tmp[LNET_NIDSTR_SIZE];
+	size_t len;
+	bool first;
+	bool bracket = false;
+	char *format;
+	char *tmpc;
+
+	list_for_each_entry(expr, list, el_link) {
+		first = true;
+		list_for_each_entry(range, &expr->el_exprs, re_link) {
+			if (range->re_lo == range->re_hi) {
+				snprintf(tmp,
+					 LNET_NIDSTR_SIZE,
+					 "%u.", range->re_lo);
+			} else if (range->re_lo < range->re_hi) {
+				if (range->re_stride > 1) {
+					if (first)
+						format = "[%u-%u/%u,";
+					else
+						format = "%u-%u/%u,";
+					snprintf(tmp, LNET_NIDSTR_SIZE,
+						format, range->re_lo,
+						range->re_hi, range->re_stride);
+					bracket = true;
+				} else {
+					if (first)
+						format = "[%u-%u,";
+					else
+						format = "%u-%u,";
+					snprintf(tmp, LNET_NIDSTR_SIZE,
+						format, range->re_lo,
+						range->re_hi);
+					bracket = true;
+				}
+			} else {
+				return -EINVAL;
+			}
+			len = strlen(tmp);
+			size -= (len + 1);
+			if (size < 0)
+				return -ENOBUFS;
+
+			strncat(str, tmp, size + len);
+			first = false;
+		}
+		if (bracket) {
+			tmpc = str + (strlen(str) - 1);
+			size -= 1;
+			if (size < 0)
+				return -ENOBUFS;
+			*tmpc = ']';
+			*(tmpc+1) = '.';
+			bracket = false;
+		}
+	}
+
+	/*
+	 * get rid of the trailing '.' at the end of the string
+	 * only if we actually had something on the list passed in.
+	 * otherwise we could write outside the array
+	 */
+	if (!list_empty(list))
+		str[strlen(str)-1] = '\0';
+	return size;
+}
+
 static int
 libcfs_num_addr_range_expand(struct list_head *addrranges, __u32 *addrs,
 			     int max_addrs)
@@ -374,7 +445,7 @@ libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
  * \retval 0 if \a str parsed to numeric address
  * \retval errno otherwise
  */
-static int
+int
 libcfs_num_parse(char *str, int len, struct list_head *list)
 {
 	struct cfs_expr_list *el;
@@ -917,6 +988,138 @@ parse_nidrange(struct cfs_lstr *src, struct list_head *nidlist)
 	return 0;
 }
 
+static __u32
+libcfs_net_str_len(const char *str)
+{
+	int i;
+	struct netstrfns *nf = NULL;
+
+	for (i = 0; i < libcfs_nnetstrfns; i++) {
+		nf = &libcfs_netstrfns[i];
+		if (!strncmp(str, nf->nf_name, strlen(nf->nf_name)))
+			return strlen(nf->nf_name);
+	}
+
+	return 0;
+}
+
+int
+parse_net_range(char *str, __u32 len, struct list_head *net_num,
+		__u32 *net_type)
+{
+	struct cfs_lstr next;
+	__u32 net_type_len;
+	__u32 net;
+	char *bracket;
+	char *star;
+
+	if (!str)
+		return -EINVAL;
+
+	next.ls_str = str;
+	next.ls_len = len;
+
+	net_type_len = libcfs_net_str_len(str);
+
+	if (net_type_len < len) {
+		char c = str[net_type_len];
+
+		str[net_type_len] = '\0';
+		net = libcfs_str2net(str);
+		str[net_type_len] = c;
+	} else {
+		net = libcfs_str2net(str);
+	}
+
+	if (net == LNET_NIDNET(LNET_NID_ANY))
+		return -EINVAL;
+
+	*net_type = LNET_NETTYP(net);
+
+	/*
+	 * the net is either followed with an absolute number, *, or an
+	 * expression enclosed in []
+	 */
+	bracket = strchr(next.ls_str, '[');
+	star = strchr(next.ls_str, '*');
+
+	/* "*[" pattern not allowed */
+	if (bracket && star && star < bracket)
+		return -EINVAL;
+
+	if (!bracket) {
+		next.ls_str = str + net_type_len;
+		next.ls_len = strlen(next.ls_str);
+	} else {
+		next.ls_str = bracket;
+		next.ls_len = strlen(bracket);
+	}
+
+	/* if there is no net number just return */
+	if (next.ls_len == 0)
+		return 0;
+
+	return libcfs_num_parse(next.ls_str, next.ls_len,
+				net_num);
+}
+
+int
+parse_address(struct cfs_lstr *src, const __u32 net_type,
+	      struct list_head *addr)
+{
+	int i;
+	struct netstrfns *nf = NULL;
+
+	for (i = 0; i < libcfs_nnetstrfns; i++) {
+		nf = &libcfs_netstrfns[i];
+		if (net_type == nf->nf_type)
+			return nf->nf_parse_addrlist(src->ls_str, src->ls_len,
+						     addr);
+	}
+
+	return -EINVAL;
+}
+
+int
+cfs_parse_nid_parts(char *str, struct list_head *addr,
+		    struct list_head *net_num, __u32 *net_type)
+{
+	struct cfs_lstr next;
+	struct cfs_lstr addrrange;
+	bool found = false;
+	int rc;
+
+	if (!str)
+		return -EINVAL;
+
+	next.ls_str = str;
+	next.ls_len = strlen(str);
+
+	rc = cfs_gettok(&next, '@', &addrrange);
+	if (!rc)
+		return -EINVAL;
+
+	if (!next.ls_str) {
+		/* only net is present */
+		next.ls_str = str;
+		next.ls_len = strlen(str);
+	} else {
+		found = true;
+	}
+
+	/* assume only net is present */
+	rc = parse_net_range(next.ls_str, next.ls_len, net_num, net_type);
+
+	/*
+	 * if we successfully parsed the net range and there is no
+	 * address, or if we fail to parse the net range then return
+	 */
+	if ((!rc && !found) || rc)
+		return rc;
+
+	return parse_address(&addrrange, *net_type, addr);
+}
+
 /**
  * Frees addrrange structures of \a list.
  *
@@ -1027,6 +1230,71 @@ int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
 	return 0;
 }
 
+static struct netstrfns *
+type2net_info(__u32 net_type)
+{
+	int i;
+
+	for (i = 0; i < libcfs_nnetstrfns; i++) {
+		if (libcfs_netstrfns[i].nf_type == net_type)
+			return &libcfs_netstrfns[i];
+	}
+
+	return NULL;
+}
+
+int
+cfs_match_net(__u32 net_id, __u32 net_type, struct list_head *net_num_list)
+{
+	__u32 net_num;
+
+	if (!net_num_list)
+		return 0;
+
+	if (net_type != LNET_NETTYP(net_id))
+		return 0;
+
+	net_num = LNET_NETNUM(net_id);
+
+	/*
+	 * if there is a net number but the list passed in is empty, then
+	 * there is no match.
+	 */
+	if (!net_num && list_empty(net_num_list))
+		return 1;
+	else if (list_empty(net_num_list))
+		return 0;
+
+	if (!libcfs_num_match(net_num, net_num_list))
+		return 0;
+
+	return 1;
+}
+
+int
+cfs_match_nid_net(lnet_nid_t nid, __u32 net_type,
+		  struct list_head *net_num_list,
+		  struct list_head *addr)
+{
+	__u32 address;
+	struct netstrfns *fns;
+
+	if (!addr || !net_num_list)
+		return 0;
+
+	fns = type2net_info(LNET_NETTYP(LNET_NIDNET(nid)));
+	if (!fns || !net_num_list || !addr)
+		return 0;
+
+	address = LNET_NIDADDR(nid);
+
+	/* if either the address or net number don't match then no match */
+	if (!fns->nf_match_addr(address, addr) ||
+	    !cfs_match_net(LNET_NIDNET(nid), net_type, net_num_list))
+		return 0;
+
+	return 1;
+}
 /**
  * Print the network part of the nidrange \a nr into the specified \a buffer.
  *

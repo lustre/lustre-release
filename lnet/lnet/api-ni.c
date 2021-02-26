@@ -41,6 +41,7 @@
 #include <linux/sched/signal.h>
 #endif
 
+#include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 
 #define D_LNI D_CONSOLE
@@ -604,6 +605,7 @@ lnet_init_locks(void)
 struct kmem_cache *lnet_mes_cachep;	   /* MEs kmem_cache */
 struct kmem_cache *lnet_small_mds_cachep;  /* <= LNET_SMALL_MD_SIZE bytes
 					    *  MDs kmem_cache */
+struct kmem_cache *lnet_udsp_cachep;	   /* udsp cache */
 struct kmem_cache *lnet_rspt_cachep;	   /* response tracker cache */
 struct kmem_cache *lnet_msg_cachep;
 
@@ -622,6 +624,12 @@ lnet_slab_setup(void)
 						  LNET_SMALL_MD_SIZE, 0, 0,
 						  NULL);
 	if (!lnet_small_mds_cachep)
+		return -ENOMEM;
+
+	lnet_udsp_cachep = kmem_cache_create("lnet_udsp",
+					     sizeof(struct lnet_udsp),
+					     0, 0, NULL);
+	if (!lnet_udsp_cachep)
 		return -ENOMEM;
 
 	lnet_rspt_cachep = kmem_cache_create("lnet_rspt", sizeof(struct lnet_rsp_tracker),
@@ -645,10 +653,14 @@ lnet_slab_cleanup(void)
 		lnet_msg_cachep = NULL;
 	}
 
-
 	if (lnet_rspt_cachep) {
 		kmem_cache_destroy(lnet_rspt_cachep);
 		lnet_rspt_cachep = NULL;
+	}
+
+	if (lnet_udsp_cachep) {
+		kmem_cache_destroy(lnet_udsp_cachep);
+		lnet_udsp_cachep = NULL;
 	}
 
 	if (lnet_small_mds_cachep) {
@@ -1228,6 +1240,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	INIT_LIST_HEAD(&the_lnet.ln_dc_expired);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_localNIRecovq);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_peerNIRecovq);
+	INIT_LIST_HEAD(&the_lnet.ln_udsp_list);
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
 	the_lnet.ln_mt_handler = NULL;
 	init_completion(&the_lnet.ln_started);
@@ -1334,6 +1347,7 @@ lnet_unprepare (void)
 		the_lnet.ln_counters = NULL;
 	}
 	lnet_destroy_remote_nets_table();
+	lnet_udsp_destroy(true);
 	lnet_slab_cleanup();
 
 	return 0;
@@ -1384,6 +1398,81 @@ lnet_get_net_locked(__u32 net_id)
 	}
 
 	return NULL;
+}
+
+void
+lnet_net_clr_pref_rtrs(struct lnet_net *net)
+{
+	struct list_head zombies;
+	struct lnet_nid_list *ne;
+	struct lnet_nid_list *tmp;
+
+	INIT_LIST_HEAD(&zombies);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_splice_init(&net->net_rtr_pref_nids, &zombies);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	list_for_each_entry_safe(ne, tmp, &zombies, nl_list) {
+		list_del_init(&ne->nl_list);
+		LIBCFS_FREE(ne, sizeof(*ne));
+	}
+}
+
+int
+lnet_net_add_pref_rtr(struct lnet_net *net,
+		      lnet_nid_t gw_nid)
+__must_hold(&the_lnet.ln_api_mutex)
+{
+	struct lnet_nid_list *ne;
+
+	/* This function is called with api_mutex held. When the api_mutex
+	 * is held the list can not be modified, as it is only modified as
+	 * a result of applying a UDSP and that happens under api_mutex
+	 * lock.
+	 */
+	list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
+		if (ne->nl_nid == gw_nid)
+			return -EEXIST;
+	}
+
+	LIBCFS_ALLOC(ne, sizeof(*ne));
+	if (!ne)
+		return -ENOMEM;
+
+	ne->nl_nid = gw_nid;
+
+	/* Lock the cpt to protect against addition and checks in the
+	 * selection algorithm
+	 */
+	lnet_net_lock(LNET_LOCK_EX);
+	list_add(&ne->nl_list, &net->net_rtr_pref_nids);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	return 0;
+}
+
+bool
+lnet_net_is_pref_rtr_locked(struct lnet_net *net, lnet_nid_t rtr_nid)
+{
+	struct lnet_nid_list *ne;
+
+	CDEBUG(D_NET, "%s: rtr pref emtpy: %d\n",
+	       libcfs_net2str(net->net_id),
+	       list_empty(&net->net_rtr_pref_nids));
+
+	if (list_empty(&net->net_rtr_pref_nids))
+		return false;
+
+	list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
+		CDEBUG(D_NET, "Comparing pref %s with gw %s\n",
+		       libcfs_nid2str(ne->nl_nid),
+		       libcfs_nid2str(rtr_nid));
+		if (rtr_nid == ne->nl_nid)
+			return true;
+	}
+
+	return false;
 }
 
 unsigned int
@@ -3005,6 +3094,21 @@ lnet_get_ni_idx_locked(int idx)
 	return NULL;
 }
 
+int lnet_get_net_healthv_locked(struct lnet_net *net)
+{
+	struct lnet_ni *ni;
+	int best_healthv = 0;
+	int healthv;
+
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		healthv = atomic_read(&ni->ni_healthv);
+		if (healthv > best_healthv)
+			best_healthv = healthv;
+	}
+
+	return best_healthv;
+}
+
 struct lnet_ni *
 lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 {
@@ -3138,12 +3242,13 @@ int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
 static int lnet_add_net_common(struct lnet_net *net,
 			       struct lnet_ioctl_config_lnd_tunables *tun)
 {
-	__u32			net_id;
+	struct lnet_handle_md ping_mdh;
 	struct lnet_ping_buffer *pbuf;
-	struct lnet_handle_md	ping_mdh;
-	int			rc;
 	struct lnet_remotenet *rnet;
-	int			net_ni_count;
+	struct lnet_ni *ni;
+	int net_ni_count;
+	__u32 net_id;
+	int rc;
 
 	lnet_net_lock(LNET_LOCK_EX);
 	rnet = lnet_find_rnet_locked(net->net_id);
@@ -3193,9 +3298,24 @@ static int lnet_add_net_common(struct lnet_net *net,
 
 	lnet_net_lock(LNET_LOCK_EX);
 	net = lnet_get_net_locked(net_id);
-	lnet_net_unlock(LNET_LOCK_EX);
-
 	LASSERT(net);
+
+	/* apply the UDSPs */
+	rc = lnet_udsp_apply_policies_on_net(net);
+	if (rc)
+		CERROR("Failed to apply UDSPs on local net %s\n",
+		       libcfs_net2str(net->net_id));
+
+	/* At this point we lost track of which NI was just added, so we
+	 * just re-apply the policies on all of the NIs on this net
+	 */
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		rc = lnet_udsp_apply_policies_on_ni(ni);
+		if (rc)
+			CERROR("Failed to apply UDSPs on ni %s\n",
+			       libcfs_nid2str(ni->ni_nid));
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	/*
 	 * Start the acceptor thread if this is the first network
@@ -4068,6 +4188,106 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
 		discover->ping_count = rc;
+		return 0;
+	}
+
+	case IOC_LIBCFS_ADD_UDSP: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		__u32 bulk_size = ioc_udsp->iou_hdr.ioc_len;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_udsp_demarshal_add(arg, bulk_size);
+		if (!rc) {
+			rc = lnet_udsp_apply_policies(NULL, false);
+			CDEBUG(D_NET, "policy application returned %d\n", rc);
+			rc = 0;
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_DEL_UDSP: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		int idx = ioc_udsp->iou_idx;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_udsp_del_policy(idx);
+		if (!rc) {
+			rc = lnet_udsp_apply_policies(NULL, false);
+			CDEBUG(D_NET, "policy re-application returned %d\n",
+			       rc);
+			rc = 0;
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_UDSP_SIZE: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		struct lnet_udsp *udsp;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		rc = 0;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		udsp = lnet_udsp_get_policy(ioc_udsp->iou_idx);
+		if (!udsp) {
+			rc = -ENOENT;
+		} else {
+			/* coming in iou_idx will hold the idx of the udsp
+			 * to get the size of. going out the iou_idx will
+			 * hold the size of the UDSP found at the passed
+			 * in index.
+			 */
+			ioc_udsp->iou_idx = lnet_get_udsp_size(udsp);
+			if (ioc_udsp->iou_idx < 0)
+				rc = -EINVAL;
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_UDSP: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		struct lnet_udsp *udsp;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		rc = 0;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		udsp = lnet_udsp_get_policy(ioc_udsp->iou_idx);
+		if (!udsp)
+			rc = -ENOENT;
+		else
+			rc = lnet_udsp_marshal(udsp, ioc_udsp);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_CONST_UDSP_INFO: {
+		struct lnet_ioctl_construct_udsp_info *info = arg;
+
+		if (info->cud_hdr.ioc_len < sizeof(*info))
+			return -EINVAL;
+
+		CDEBUG(D_NET, "GET_UDSP_INFO for %s\n",
+		       libcfs_nid2str(info->cud_nid));
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_udsp_get_construct_info(info);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
 		return 0;
 	}
 
