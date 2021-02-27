@@ -7169,35 +7169,46 @@ add_user() {
 }
 
 check_runas_id_ret() {
-    local myRC=0
-    local myRUNAS_UID=$1
-    local myRUNAS_GID=$2
-    shift 2
-    local myRUNAS=$@
-    if [ -z "$myRUNAS" ]; then
-        error_exit "myRUNAS command must be specified for check_runas_id"
-    fi
-    if $GSS_KRB5; then
-        $myRUNAS krb5_login.sh || \
-            error "Failed to refresh Kerberos V5 TGT for UID $myRUNAS_ID."
-    fi
-    mkdir $DIR/d0_runas_test
-    chmod 0755 $DIR
-    chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
-    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=$?
-    rm -rf $DIR/d0_runas_test
-    return $myRC
+	local myRC=0
+	local myRUNAS_UID=$1
+	local myRUNAS_GID=$2
+	shift 2
+	local myRUNAS=$@
+
+	if [ -z "$myRUNAS" ]; then
+		error_exit "check_runas_id_ret requires myRUNAS argument"
+	fi
+
+	$myRUNAS true ||
+		error "Unable to execute $myRUNAS"
+
+	id $myRUNAS_UID > /dev/null ||
+		error "Invalid RUNAS_ID $myRUNAS_UID. Please set RUNAS_ID to " \
+		      "some UID which exists on MDS and client or add user " \
+		      "$myRUNAS_UID:$myRUNAS_GID on these nodes."
+
+	if $GSS_KRB5; then
+		$myRUNAS krb5_login.sh ||
+			error "Failed to refresh krb5 TGT for UID $myRUNAS_ID."
+	fi
+	mkdir $DIR/d0_runas_test
+	chmod 0755 $DIR
+	chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
+	$myRUNAS -u $myRUNAS_UID -g $myRUNAS_GID touch $DIR/d0_runas_test/f$$ ||
+		myRC=$?
+	rm -rf $DIR/d0_runas_test
+	return $myRC
 }
 
 check_runas_id() {
-    local myRUNAS_UID=$1
-    local myRUNAS_GID=$2
-    shift 2
-    local myRUNAS=$@
-    check_runas_id_ret $myRUNAS_UID $myRUNAS_GID $myRUNAS || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_UID.
-        Please set RUNAS_ID to some UID which exists on MDS and client or
-        add user $myRUNAS_UID:$myRUNAS_GID on these nodes."
+	local myRUNAS_UID=$1
+	local myRUNAS_GID=$2
+	shift 2
+	local myRUNAS=$@
+
+	check_runas_id_ret $myRUNAS_UID $myRUNAS_GID $myRUNAS || \
+		error "unable to write to $DIR/d0_runas_test as " \
+		      "UID $myRUNAS_UID."
 }
 
 # obtain the UID/GID for MPI_USER
