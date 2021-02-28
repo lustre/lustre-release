@@ -388,6 +388,7 @@ struct dt_allocation_hint {
 	struct dt_object	*dah_parent;
 	const void		*dah_eadata;
 	int			dah_eadata_len;
+	int			dah_acl_len;
 	__u32			dah_mode;
 	int			dah_append_stripes;
 	bool			dah_can_block;

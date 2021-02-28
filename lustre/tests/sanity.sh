@@ -10805,17 +10805,60 @@ test_103c() {
 run_test 103c "'cp -rp' won't set empty acl"
 
 test_103e() {
-	(( $MDS1_VERSION >= $(version_code 2.13.59) )) ||
-		skip "MDS needs to be at least 2.13.59"
+	local numacl
+	local fileacl
+	local saved_debug=$($LCTL get_param -n debug)
+
+	(( $MDS1_VERSION >= $(version_code 2.14.0) )) ||
+		skip "MDS needs to be at least 2.14.0"
+
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
 	mkdir -p $DIR/$tdir
-	# one default ACL will be created for the file owner
-	for U in {2..256}; do
-		setfacl -m default:user:$U:rwx $DIR/$tdir
-		numacl=$(getfacl $DIR/$tdir |& grep -c "default:user")
-		touch $DIR/$tdir/$tfile.$U ||
-			error "failed to create $tfile.$U with $numacl ACLs"
+	# add big LOV EA to cause reply buffer overflow earlier
+	$LFS setstripe -C 1000 $DIR/$tdir
+	lctl set_param mdc.*-mdc*.stats=clear
+
+	$LCTL set_param debug=0
+	stack_trap "$LCTL set_param debug=\"$saved_debug\"" EXIT
+	stack_trap "$LCTL get_param mdc.*-mdc*.stats" EXIT
+
+	# add a large number of default ACLs (expect 8000+ for 2.13+)
+	for U in {2..7000}; do
+		setfacl -d -m user:$U:rwx $DIR/$tdir ||
+			error "Able to add just $U default ACLs"
 	done
+	numacl=$(getfacl $DIR/$tdir |& grep -c "default:user")
+	echo "$numacl default ACLs created"
+
+	stat $DIR/$tdir || error "Cannot stat directory"
+	# check file creation
+	touch $DIR/$tdir/$tfile ||
+		error "failed to create $tfile with $numacl default ACLs"
+	stat $DIR/$tdir/$tfile  || error "Cannot stat file"
+	fileacl=$(getfacl $DIR/$tdir/$tfile |& grep -c "user:")
+	echo "$fileacl ACLs were inherited"
+	(( $fileacl == $numacl )) ||
+		error "Not all default ACLs were inherited: $numacl != $fileacl"
+	# check that new ACLs creation adds new ACLs to inherited ACLs
+	setfacl -m user:19000:rwx $DIR/$tdir/$tfile ||
+		error "Cannot set new ACL"
+	numacl=$((numacl + 1))
+	fileacl=$(getfacl $DIR/$tdir/$tfile |& grep -c "user:")
+	(( $fileacl == $numacl )) ||
+		error "failed to add new ACL: $fileacl != $numacl as expected"
+	# adds more ACLs to a file to reach their maximum at 8000+
+	numacl=0
+	for U in {20000..25000}; do
+		setfacl -m user:$U:rwx $DIR/$tdir/$tfile || break
+		numacl=$((numacl + 1))
+	done
+	echo "Added $numacl more ACLs to the file"
+	fileacl=$(getfacl $DIR/$tdir/$tfile |& grep -c "user:")
+	echo "Total $fileacl ACLs in file"
+	stat $DIR/$tdir/$tfile > /dev/null || error "Cannot stat file"
+	rm -f $DIR/$tdir/$tfile || error "Cannot remove file"
+	rmdir $DIR/$tdir || error "Cannot remove directory"
 }
 run_test 103e "inheritance of big amount of default ACLs"
 

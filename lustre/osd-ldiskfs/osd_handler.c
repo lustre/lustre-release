@@ -3435,7 +3435,6 @@ static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 	return result;
 }
 
-
 static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 			struct dt_object *parent, struct dt_object *child,
 			umode_t child_mode)
@@ -3614,6 +3613,8 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 			      struct thandle *handle)
 {
 	struct osd_thandle *oh;
+	struct super_block *sb = osd_sb(osd_dev(dt->do_lu.lo_dev));
+	int credits;
 	int rc;
 
 	ENTRY;
@@ -3628,10 +3629,23 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	 * vs. osd_mkreg: osd_mk_index will create 2 blocks for root_node and
 	 * leaf_node, could involves the block, block bitmap, groups, GDT
 	 * change for each block, so add 4 * 2 credits in that case.
+	 *
+	 * The default ACL initialization may consume an additional 16 blocks
 	 */
-	osd_trans_declare_op(env, oh, OSD_OT_CREATE,
-			     osd_dto_credits_noquota[DTO_OBJECT_CREATE] +
-			     (dof->dof_type == DFT_INDEX) ? 4 * 2 : 0);
+	credits = osd_dto_credits_noquota[DTO_OBJECT_CREATE] +
+		  ((dof->dof_type == DFT_INDEX) ? 4 * 2 : 0);
+
+	/**
+	 * While ldiskfs_new_inode() calls ldiskfs_init_acl() we have to add
+	 * credits for possible default ACL creation in new inode
+	 */
+	if (hint && hint->dah_acl_len)
+		credits += osd_calc_bkmap_credits(sb, NULL, 0, -1,
+				(hint->dah_acl_len + sb->s_blocksize - 1) >>
+				sb->s_blocksize_bits);
+
+	osd_trans_declare_op(env, oh, OSD_OT_CREATE, credits);
+
 	/*
 	 * Reuse idle OI block may cause additional one OI block
 	 * to be changed.

@@ -2148,6 +2148,11 @@ static int mdd_declare_create_object(const struct lu_env *env,
 	const struct lu_buf *buf;
 	int rc;
 
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+	/* ldiskfs OSD needs this information for credit allocation */
+	if (def_acl_buf)
+		hint->dah_acl_len = def_acl_buf->lb_len;
+#endif
 	rc = mdd_declare_create_object_internal(env, p, c, attr, handle, spec,
 						hint);
 	if (rc)
