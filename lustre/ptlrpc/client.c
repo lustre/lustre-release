@@ -3276,7 +3276,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
  */
 void ptlrpc_abort_inflight(struct obd_import *imp)
 {
-	struct ptlrpc_request *req, *n;
+	struct ptlrpc_request *req;
 	ENTRY;
 
 	/*
@@ -3291,7 +3291,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
 	 * locked?  Also, how do we know if the requests on the list are
 	 * being freed at this time?
 	 */
-	list_for_each_entry_safe(req, n, &imp->imp_sending_list, rq_list) {
+	list_for_each_entry(req, &imp->imp_sending_list, rq_list) {
 		DEBUG_REQ(D_RPCTRACE, req, "inflight");
 
 		spin_lock(&req->rq_lock);
@@ -3303,7 +3303,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
 		spin_unlock(&req->rq_lock);
 	}
 
-	list_for_each_entry_safe(req, n, &imp->imp_delayed_list, rq_list) {
+	list_for_each_entry(req, &imp->imp_delayed_list, rq_list) {
 		DEBUG_REQ(D_RPCTRACE, req, "aborting waiting req");
 
 		spin_lock(&req->rq_lock);
@@ -3330,11 +3330,11 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
  */
 void ptlrpc_abort_set(struct ptlrpc_request_set *set)
 {
-	struct ptlrpc_request *req, *tmp;
+	struct ptlrpc_request *req;
 
 	LASSERT(set != NULL);
 
-	list_for_each_entry_safe(req, tmp, &set->set_requests, rq_set_chain) {
+	list_for_each_entry(req, &set->set_requests, rq_set_chain) {
 		spin_lock(&req->rq_lock);
 		if (req->rq_phase != RQ_PHASE_RPC) {
 			spin_unlock(&req->rq_lock);
