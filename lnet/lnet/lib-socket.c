@@ -194,11 +194,17 @@ lnet_sock_create(int interface, struct sockaddr *remaddr,
 	family = AF_INET6;
 	if (remaddr)
 		family = remaddr->sa_family;
+retry:
 #ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	rc = sock_create_kern(ns, family, SOCK_STREAM, 0, &sock);
 #else
 	rc = sock_create_kern(family, SOCK_STREAM, 0, &sock);
 #endif
+	if (rc == -EAFNOSUPPORT && family == AF_INET6 && !remaddr) {
+		family = AF_INET;
+		goto retry;
+	}
+
 	if (rc) {
 		CERROR("Can't create socket: %d\n", rc);
 		return ERR_PTR(rc);
@@ -208,11 +214,11 @@ lnet_sock_create(int interface, struct sockaddr *remaddr,
 
 	if (interface >= 0 || local_port != 0) {
 		struct sockaddr_storage locaddr = {};
-		struct sockaddr_in *sin = (void *)&locaddr;
-		struct sockaddr_in6 *sin6 = (void *)&locaddr;
 
 		switch (family) {
-		case AF_INET:
+		case AF_INET: {
+			struct sockaddr_in *sin = (void *)&locaddr;
+
 			sin->sin_family = AF_INET;
 			sin->sin_addr.s_addr = INADDR_ANY;
 			if (interface >= 0 && remaddr) {
@@ -229,7 +235,11 @@ lnet_sock_create(int interface, struct sockaddr *remaddr,
 			}
 			sin->sin_port = htons(local_port);
 			break;
-		case AF_INET6:
+		}
+#if IS_ENABLED(CONFIG_IPV6)
+		case AF_INET6: {
+			struct sockaddr_in6 *sin6 = (void *)&locaddr;
+
 			sin6->sin6_family = AF_INET6;
 			sin6->sin6_addr = in6addr_any;
 			if (interface >= 0 && remaddr) {
@@ -243,6 +253,8 @@ lnet_sock_create(int interface, struct sockaddr *remaddr,
 			}
 			sin6->sin6_port = htons(local_port);
 			break;
+		}
+#endif /* IS_ENABLED(CONFIG_IPV6) */
 		}
 		rc = kernel_bind(sock, (struct sockaddr *)&locaddr,
 				 sizeof(locaddr));
