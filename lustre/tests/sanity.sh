@@ -21350,6 +21350,17 @@ test_273a() {
 }
 run_test 273a "DoM: layout swapping should fail with DOM"
 
+test_273b() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c -1 $DIR/$tdir
+
+#define OBD_FAIL_MDS_COMMITRW_DELAY      0x16b
+	do_facet mds1 $LCTL set_param fail_loc=0x8000016b fail_val=2
+
+	$MULTIOP $DIR/$tdir/$tfile Ouw2097152c
+}
+run_test 273b "DoM: race writeback and object destroy"
+
 test_275() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $OST1_VERSION -lt $(version_code 2.10.57) ] &&
