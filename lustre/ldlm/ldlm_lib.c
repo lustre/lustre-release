@@ -2715,6 +2715,7 @@ static int target_recovery_thread(void *arg)
 
 	thread->t_env = env;
 	thread->t_id = -1; /* force filter_iobuf_get/put to use local buffers */
+	thread->t_task = current;
 	env->le_ctx.lc_thread = thread;
 	tgt_io_thread_init(thread); /* init thread_big_cache for IO requests */
 
