@@ -67,7 +67,6 @@ extern struct mutex pinger_mutex;
 extern lnet_handler_t ptlrpc_handler;
 extern struct percpu_ref ptlrpc_pending;
 
-int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 /* ptlrpcd.c */
 int ptlrpcd_start(struct ptlrpcd_ctl *pc);
 

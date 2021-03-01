@@ -1162,11 +1162,7 @@ static inline int ptlrpc_req_interpret(const struct lu_env *env,
 /** \addtogroup  nrs
  * @{
  */
-int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf);
-int ptlrpc_nrs_policy_unregister(struct ptlrpc_nrs_pol_conf *conf);
 void ptlrpc_nrs_req_hp_move(struct ptlrpc_request *req);
-void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
-				struct ptlrpc_nrs_pol_info *info);
 
 /*
  * Can the request be moved from the regular NRS head to the high-priority NRS
@@ -2264,9 +2260,7 @@ struct ptlrpc_service *ptlrpc_register_service(
 				struct ptlrpc_service_conf *conf,
 				struct kset *parent,
 				struct dentry *debugfs_entry);
-void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
-int ptlrpc_start_threads(struct ptlrpc_service *svc);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);

@@ -1164,7 +1164,7 @@ again:
  * \retval -ve error
  * \retval   0 success
  */
-int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
+static int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 {
         struct ptlrpc_service	       *svc;
 	struct ptlrpc_nrs_pol_desc     *desc;
@@ -1306,74 +1306,6 @@ fail:
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_nrs_policy_register);
-
-/**
- * Unregisters a previously registered policy with NRS core. All instances of
- * the policy on all NRS heads of all supported services are removed.
- *
- * N.B. This function should only be called from a module's exit() function.
- *	Although it can be used for policies that ship alongside NRS core, the
- *	function is primarily intended for policies that register externally,
- *	from other modules.
- *
- * \param[in] conf configuration information for the policy to unregister
- *
- * \retval -ve error
- * \retval   0 success
- */
-int ptlrpc_nrs_policy_unregister(struct ptlrpc_nrs_pol_conf *conf)
-{
-	struct ptlrpc_nrs_pol_desc	*desc;
-	int				 rc;
-	ENTRY;
-
-	LASSERT(conf != NULL);
-
-	if (conf->nc_flags & PTLRPC_NRS_FL_FALLBACK) {
-		CERROR("Unable to unregister a fallback policy, unless the "
-		       "PTLRPC service is stopping.\n");
-		RETURN(-EPERM);
-	}
-
-	conf->nc_name[NRS_POL_NAME_MAX - 1] = '\0';
-
-	mutex_lock(&nrs_core.nrs_mutex);
-
-	desc = nrs_policy_find_desc_locked(conf->nc_name);
-	if (desc == NULL) {
-		CERROR("Failing to unregister NRS policy %s which has "
-		       "not been registered with NRS core!\n",
-		       conf->nc_name);
-		GOTO(not_exist, rc = -ENOENT);
-	}
-
-	mutex_lock(&ptlrpc_all_services_mutex);
-
-	rc = nrs_policy_unregister_locked(desc);
-	if (rc < 0) {
-		if (rc == -EBUSY)
-			CERROR("Please first stop policy %s on all service "
-			       "partitions and then retry to unregister the "
-			       "policy.\n", conf->nc_name);
-		GOTO(fail, rc);
-	}
-
-	CDEBUG(D_INFO, "Unregistering policy %s from NRS core.\n",
-	       conf->nc_name);
-
-	list_del(&desc->pd_list);
-	OBD_FREE_PTR(desc);
-
-fail:
-	mutex_unlock(&ptlrpc_all_services_mutex);
-
-not_exist:
-	mutex_unlock(&nrs_core.nrs_mutex);
-
-	RETURN(rc);
-}
-EXPORT_SYMBOL(ptlrpc_nrs_policy_unregister);
 
 /**
  * Setup NRS heads on all service partitions of service \a svc, and register

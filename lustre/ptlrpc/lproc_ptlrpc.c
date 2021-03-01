@@ -503,8 +503,8 @@ static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
  * \param[in] policy The policy
  * \param[out] info  Holds returned status information
  */
-void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
-				struct ptlrpc_nrs_pol_info *info)
+static void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
+				       struct ptlrpc_nrs_pol_info *info)
 {
 	LASSERT(policy != NULL);
 	LASSERT(info != NULL);
