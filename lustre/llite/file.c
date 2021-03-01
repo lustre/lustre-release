@@ -5265,7 +5265,6 @@ int ll_inode_permission(struct inode *inode, int mask)
 	struct root_squash_info *squash;
 	struct cred *cred = NULL;
 	const struct cred *old_cred = NULL;
-	cfs_cap_t cap;
 	bool squash_id = false;
 	ktime_t kstart = ktime_get();
 
@@ -5309,10 +5308,9 @@ int ll_inode_permission(struct inode *inode, int mask)
 
 		cred->fsuid = make_kuid(&init_user_ns, squash->rsi_uid);
 		cred->fsgid = make_kgid(&init_user_ns, squash->rsi_gid);
-		for (cap = 0; cap < sizeof(cfs_cap_t) * 8; cap++) {
-			if (BIT(cap) & CFS_CAP_FS_MASK)
-				cap_lower(cred->cap_effective, cap);
-		}
+		cred->cap_effective = cap_drop_nfsd_set(cred->cap_effective);
+		cred->cap_effective = cap_drop_fs_set(cred->cap_effective);
+
 		old_cred = override_creds(cred);
 	}
 
