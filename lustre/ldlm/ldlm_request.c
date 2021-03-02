@@ -1100,6 +1100,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 				ptlrpc_put_mod_rpc_slot(req);
 			failed_lock_cleanup(ns, lock, einfo->ei_mode);
 			LDLM_LOCK_RELEASE(lock);
+			if (!req_passed_in)
+				ptlrpc_req_finished(req);
 			GOTO(out, rc);
 		}
 	}
