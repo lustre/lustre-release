@@ -146,4 +146,11 @@ void cfs_arch_init(void);
 #define sizeof_field(type, member)	FIELD_SIZEOF(type, member)
 #endif
 
+#ifndef HAVE_KALLSYMS_LOOKUP_NAME
+static inline void *kallsyms_lookup_name(char *func)
+{
+	return NULL;
+}
+#endif
+
 #endif /* __LIBCFS_LINUX_MISC_H__ */

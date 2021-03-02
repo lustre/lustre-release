@@ -109,7 +109,9 @@ static int (*cfs_apply_workqueue_attrs_t)(struct workqueue_struct *wq,
 int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 			      const struct workqueue_attrs *attrs)
 {
-	return cfs_apply_workqueue_attrs_t(wq, attrs);
+	if (cfs_apply_workqueue_attrs_t)
+		return cfs_apply_workqueue_attrs_t(wq, attrs);
+	return 0;
 }
 EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
 

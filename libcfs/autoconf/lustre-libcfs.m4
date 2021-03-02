@@ -1290,6 +1290,17 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
 #
+# LIBCFS_KALLSYMS_LOOKUP
+#
+# kernel v5.6-11591-g0bd476e6c671
+# kallsyms: unexport kallsyms_lookup_name() and kallsyms_on_each_symbol()
+AC_DEFUN([LIBCFS_KALLSYMS_LOOKUP], [
+LB_CHECK_EXPORT([kallsyms_lookup_name], [kernel/kallsyms.c],
+	[AC_DEFINE(HAVE_KALLSYMS_LOOKUP_NAME, 1,
+		[kallsyms_lookup_name is exported by kernel])])
+]) # LIBCFS_KALLSYMS_LOOKUP
+
+#
 # LIBCFS_VMALLOC_2ARGS
 #
 # kernel v5.8-rc1~201^2~19
@@ -1475,6 +1486,8 @@ LIBCFS_LOOKUP_USER_KEY
 LIBCFS_FORCE_SIG_WITH_TASK
 LIBCFS_CACHE_DETAIL_WRITERS
 LIBCFS_HAVE_NR_UNSTABLE_NFS
+# 5.7
+LIBCFS_KALLSYMS_LOOKUP
 # 5.8
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
