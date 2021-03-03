@@ -185,33 +185,38 @@ again:
  * Check if page @page is covered by an extra lock or discard it.
  */
 static bool mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
-				     struct osc_page *ops, void *cbdata)
+				     void **pvec, int count, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct osc_object *osc = cbdata;
 	pgoff_t index;
+	int i;
 
-	index = osc_index(ops);
-	if (index >= info->oti_fn_index) {
-		struct ldlm_lock *tmp;
-		struct cl_page *page = ops->ops_cl.cpl_page;
+	for (i = 0; i < count; i++) {
+		struct osc_page *ops = pvec[i];
 
-		/* refresh non-overlapped index */
-		tmp = mdc_dlmlock_at_pgoff(env, osc, index,
-					   OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_AST);
-		if (tmp != NULL) {
-			info->oti_fn_index = CL_PAGE_EOF;
-			LDLM_LOCK_PUT(tmp);
-		} else if (cl_page_own(env, io, page) == 0) {
-			/* discard the page */
-			cl_page_discard(env, io, page);
-			cl_page_disown(env, io, page);
-		} else {
-			LASSERT(page->cp_state == CPS_FREEING);
+		index = osc_index(ops);
+		if (index >= info->oti_fn_index) {
+			struct ldlm_lock *tmp;
+			struct cl_page *page = ops->ops_cl.cpl_page;
+
+			/* refresh non-overlapped index */
+			tmp = mdc_dlmlock_at_pgoff(env, osc, index,
+					OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_AST);
+			if (tmp != NULL) {
+				info->oti_fn_index = CL_PAGE_EOF;
+				LDLM_LOCK_PUT(tmp);
+			} else if (cl_page_own(env, io, page) == 0) {
+				/* discard the page */
+				cl_page_discard(env, io, page);
+				cl_page_disown(env, io, page);
+			} else {
+				LASSERT(page->cp_state == CPS_FREEING);
+			}
 		}
-	}
 
-	info->oti_next_index = index + 1;
+		info->oti_next_index = index + 1;
+	}
 	return true;
 }
 

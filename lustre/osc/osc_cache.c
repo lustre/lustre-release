@@ -3082,11 +3082,10 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		spin_unlock(&osc->oo_tree_lock);
 		tree_lock = false;
 
+		res = (*cb)(env, io, pvec, j, cbdata);
+
 		for (i = 0; i < j; ++i) {
 			ops = pvec[i];
-			if (res)
-				res = (*cb)(env, io, ops, cbdata);
-
 			page = ops->ops_cl.cpl_page;
 			lu_ref_del(&page->cp_reference, "gang_lookup", current);
 			cl_pagevec_put(env, page, pagevec);
@@ -3114,85 +3113,101 @@ EXPORT_SYMBOL(osc_page_gang_lookup);
  * Check if page @page is covered by an extra lock or discard it.
  */
 static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
-				struct osc_page *ops, void *cbdata)
+				 void **pvec, int count, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct osc_object *osc = cbdata;
-	struct cl_page *page = ops->ops_cl.cpl_page;
-	pgoff_t index;
-	bool discard = false;
+	int i;
 
-	index = osc_index(ops);
+	for (i = 0; i < count; i++) {
+		struct osc_page *ops = pvec[i];
+		struct cl_page *page = ops->ops_cl.cpl_page;
+		pgoff_t index = osc_index(ops);
+		bool discard = false;
 
-	/* negative lock caching */
-	if (index < info->oti_ng_index) {
-		discard = true;
-	} else if (index >= info->oti_fn_index) {
-		struct ldlm_lock *tmp;
-		/* refresh non-overlapped index */
-		tmp = osc_dlmlock_at_pgoff(env, osc, index,
-					   OSC_DAP_FL_TEST_LOCK |
-					   OSC_DAP_FL_AST | OSC_DAP_FL_RIGHT);
-		if (tmp != NULL) {
-			__u64 end = tmp->l_policy_data.l_extent.end;
-			__u64 start = tmp->l_policy_data.l_extent.start;
-
-			/* no lock covering this page */
-			if (index < cl_index(osc2cl(osc), start)) {
-				/* no lock at @index, first lock at @start */
-				info->oti_ng_index = cl_index(osc2cl(osc),
-						     start);
-				discard = true;
-			} else {
-				/* Cache the first-non-overlapped index so as to
-				 * skip all pages within [index, oti_fn_index).
-				 * This is safe because if tmp lock is canceled,
-				 * it will discard these pages.
-				 */
-				info->oti_fn_index = cl_index(osc2cl(osc),
-						     end + 1);
-				if (end == OBD_OBJECT_EOF)
-					info->oti_fn_index = CL_PAGE_EOF;
-			}
-			LDLM_LOCK_PUT(tmp);
-		} else {
-			info->oti_ng_index = CL_PAGE_EOF;
+		/* negative lock caching */
+		if (index < info->oti_ng_index) {
 			discard = true;
-		}
-	}
+		} else if (index >= info->oti_fn_index) {
+			struct ldlm_lock *tmp;
+			/* refresh non-overlapped index */
+			tmp = osc_dlmlock_at_pgoff(env, osc, index,
+					OSC_DAP_FL_TEST_LOCK |
+					OSC_DAP_FL_AST |
+					OSC_DAP_FL_RIGHT);
+			if (tmp != NULL) {
+				__u64 end =
+					tmp->l_policy_data.l_extent.end;
+				__u64 start =
+					tmp->l_policy_data.l_extent.start;
 
-	if (discard) {
+				/* no lock covering this page */
+				if (index < cl_index(osc2cl(osc), start)) {
+					/* no lock at @index,
+					 * first lock at @start
+					 */
+					info->oti_ng_index =
+						cl_index(osc2cl(osc), start);
+					discard = true;
+				} else {
+					/* Cache the first-non-overlapped
+					 * index so as to skip all pages
+					 * within [index, oti_fn_index).
+					 * This is safe because if tmp lock
+					 * is canceled, it will discard these
+					 * pages.
+					 */
+					info->oti_fn_index =
+						cl_index(osc2cl(osc), end + 1);
+					if (end == OBD_OBJECT_EOF)
+						info->oti_fn_index =
+							CL_PAGE_EOF;
+				}
+				LDLM_LOCK_PUT(tmp);
+			} else {
+				info->oti_ng_index = CL_PAGE_EOF;
+				discard = true;
+			}
+		}
+
+		if (discard) {
+			if (cl_page_own(env, io, page) == 0) {
+				cl_page_discard(env, io, page);
+				cl_page_disown(env, io, page);
+			} else {
+				LASSERT(page->cp_state == CPS_FREEING);
+			}
+		}
+
+		info->oti_next_index = index + 1;
+	}
+	return true;
+}
+
+bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
+		    void **pvec, int count, void *cbdata)
+{
+	struct osc_thread_info *info = osc_env_info(env);
+	int i;
+
+	for (i = 0; i < count; i++) {
+		struct osc_page *ops = pvec[i];
+		struct cl_page *page = ops->ops_cl.cpl_page;
+
+		/* page is top page. */
+		info->oti_next_index = osc_index(ops) + 1;
 		if (cl_page_own(env, io, page) == 0) {
+			if (!ergo(page->cp_type == CPT_CACHEABLE,
+				  !PageDirty(cl_page_vmpage(page))))
+				CL_PAGE_DEBUG(D_ERROR, env, page,
+					      "discard dirty page?\n");
+
+			/* discard the page */
 			cl_page_discard(env, io, page);
 			cl_page_disown(env, io, page);
 		} else {
 			LASSERT(page->cp_state == CPS_FREEING);
 		}
-	}
-
-	info->oti_next_index = index + 1;
-	return true;
-}
-
-bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
-		   struct osc_page *ops, void *cbdata)
-{
-	struct osc_thread_info *info = osc_env_info(env);
-	struct cl_page *page = ops->ops_cl.cpl_page;
-
-	/* page is top page. */
-	info->oti_next_index = osc_index(ops) + 1;
-	if (cl_page_own(env, io, page) == 0) {
-		if (!ergo(page->cp_type == CPT_CACHEABLE,
-			  !PageDirty(cl_page_vmpage(page))))
-			CL_PAGE_DEBUG(D_ERROR, env, page,
-					"discard dirty page?\n");
-
-		/* discard the page */
-		cl_page_discard(env, io, page);
-		cl_page_disown(env, io, page);
-	} else {
-		LASSERT(page->cp_state == CPS_FREEING);
 	}
 
 	return true;
