@@ -111,7 +111,7 @@ kernel_srpm_location() {
 
 kernel_debuginfo_location() {
 
-	echo "http://debuginfo.centos.org/7/x86_64/"
+	echo "http://mirror.facebook.net/centos-debuginfo/7/x86_64/"
 
 }
 
