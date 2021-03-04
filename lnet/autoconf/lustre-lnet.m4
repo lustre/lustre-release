@@ -554,6 +554,21 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[FMR pool API is available])
 	])
 
+	# rdma_connect_locked() was added in Linux 5.10,
+	# commit 071ba4cc559de47160761b9500b72e8fa09d923d
+	# and in MOFED-5.2-2. rdma_connect_locked() must
+	# be called instead of rdma_connect() in
+	# RDMA_CM_EVENT_ROUTE_RESOLVED handler.
+	LB_CHECK_COMPILE([if 'rdma_connect_locked' exists],
+	rdma_connect_locked, [
+		#include <rdma/rdma_cm.h>
+	],[
+		rdma_connect_locked(NULL, NULL);
+	],[
+		AC_DEFINE(HAVE_RDMA_CONNECT_LOCKED, 1,
+			[rdma_connect_locked is defined])
+	])
+
 	EXTRA_CHECK_INCLUDE=""
 	AC_DEFUN([LN_CONFIG_O2IB_SRC], [])
 	AC_DEFUN([LN_CONFIG_O2IB_RESULTS], [])
