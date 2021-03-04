@@ -27,7 +27,6 @@
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #ifndef _LUSTRE_CL_OBJECT_H
 #define _LUSTRE_CL_OBJECT_H

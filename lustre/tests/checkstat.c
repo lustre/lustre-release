@@ -32,7 +32,6 @@
  * stat(3) should be used in all new tests.
  *
  * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <stdio.h>

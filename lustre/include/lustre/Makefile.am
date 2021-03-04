@@ -29,7 +29,6 @@
 
 #
 # This file is part of Lustre, http://www.lustre.org/
-# Lustre is a trademark of Sun Microsystems, Inc.
 #
 
 pkginclude_HEADERS = lustreapi.h lustre_user.h liblustreapi.h ll_fiemap.h \
