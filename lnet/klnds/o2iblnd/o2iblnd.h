@@ -1153,6 +1153,10 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
         return ib_sg_dma_len(dev, sg);
 }
 
+#ifndef HAVE_RDMA_CONNECT_LOCKED
+#define rdma_connect_locked(cmid, cpp)	rdma_connect(cmid, cpp)
+#endif
+
 /* XXX We use KIBLND_CONN_PARAM(e) as writable buffer, it's not strictly
  * right because OFED1.2 defines it as const, to use it we have to add
  * (void *) cast to overcome "const" */

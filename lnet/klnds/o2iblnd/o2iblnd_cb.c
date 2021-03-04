@@ -3168,8 +3168,7 @@ kiblnd_active_connect(struct rdma_cm_id *cmid)
 
         LASSERT(cmid->context == (void *)conn);
         LASSERT(conn->ibc_cmid == cmid);
-
-        rc = rdma_connect(cmid, &cp);
+	rc = rdma_connect_locked(cmid, &cp);
         if (rc != 0) {
                 CERROR("Can't connect to %s: %d\n",
                        libcfs_nid2str(peer_ni->ibp_nid), rc);
