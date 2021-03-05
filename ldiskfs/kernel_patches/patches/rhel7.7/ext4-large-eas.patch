@@ -783,7 +783,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1494,21 +1838,135 @@ cleanup:
+@@ -1494,21 +1835,140 @@ cleanup:
  }
  
  
@@ -888,7 +888,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	struct buffer_head *bh = NULL;
 +	struct ext4_xattr_ibody_header *header;
 +	struct ext4_inode *raw_inode;
-+	struct ext4_iloc iloc;
++	struct ext4_iloc iloc = { .bh = NULL };
 +	struct ext4_xattr_entry *entry;
 +	int credits = 3, error = 0;
  
@@ -898,7 +898,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +
 +	error = ext4_get_inode_loc(inode, &iloc);
 +	if (error)
-+		goto cleanup;
+ 		goto cleanup;
 +	raw_inode = ext4_raw_inode(&iloc);
 +	header = IHDR(inode, raw_inode);
 +	for (entry = IFIRST(header); !IS_LAST_ENTRY(entry);
@@ -906,25 +906,30 @@ Index: linux-stage/fs/ext4/xattr.c
 +		if (!entry->e_value_inum)
 +			continue;
 +		if (ext4_expand_ino_array(lea_ino_array,
-+					  entry->e_value_inum) != 0) {
-+			brelse(iloc.bh);
++					  entry->e_value_inum) != 0)
 +			goto cleanup;
-+		}
++
++		error = ext4_journal_get_write_access(handle, iloc.bh);
++		if (error)
++			goto cleanup;
 +		entry->e_value_inum = 0;
++		entry->e_value_size = 0;
++		error = ext4_handle_dirty_metadata(handle, inode, iloc.bh);
++		if (error)
++			goto cleanup;
 +	}
-+	brelse(iloc.bh);
 +
 +delete_external_ea:
 +	if (!EXT4_I(inode)->i_file_acl) {
 +		/* add xattr inode to orphan list */
 +		ext4_xattr_inode_orphan_add(handle, inode, credits,
 +						*lea_ino_array);
- 		goto cleanup;
++		goto cleanup;
 +	}
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
  	if (!bh) {
  		EXT4_ERROR_INODE(inode, "block %llu read error",
-@@ -1521,11 +1979,69 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1521,11 +1983,78 @@ ext4_xattr_delete_inode(handle_t *han
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -936,7 +941,15 @@ Index: linux-stage/fs/ext4/xattr.c
 +		if (ext4_expand_ino_array(lea_ino_array,
 +					  entry->e_value_inum) != 0)
 +			goto cleanup;
++
++		error = ext4_journal_get_write_access(handle, bh);
++		if (error)
++			goto cleanup;
 +		entry->e_value_inum = 0;
++		entry->e_value_size = 0;
++		error = ext4_handle_dirty_metadata(handle, inode, bh);
++		if (error)
++			goto cleanup;
 +	}
 +
 +	/* add xattr inode to orphan list */
@@ -964,6 +977,7 @@ Index: linux-stage/fs/ext4/xattr.c
  
  cleanup:
  	brelse(bh);
++	brelse(iloc.bh);
 +
 +	return error;
 +}

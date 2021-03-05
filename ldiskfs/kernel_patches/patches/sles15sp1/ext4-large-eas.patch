@@ -802,7 +802,7 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
  	if (error)
  		goto out;
  
-@@ -1578,21 +1887,135 @@ cleanup:
+@@ -1578,21 +1887,140 @@ cleanup:
  }
  
  
@@ -907,7 +907,7 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
  	struct buffer_head *bh = NULL;
 +	struct ext4_xattr_ibody_header *header;
 +	struct ext4_inode *raw_inode;
-+	struct ext4_iloc iloc;
++	struct ext4_iloc iloc = { .bh = NULL };
 +	struct ext4_xattr_entry *entry;
 +	int credits = 3, error = 0;
  
@@ -917,7 +917,7 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
 +
 +	error = ext4_get_inode_loc(inode, &iloc);
 +	if (error)
-+		goto cleanup;
+ 		goto cleanup;
 +	raw_inode = ext4_raw_inode(&iloc);
 +	header = IHDR(inode, raw_inode);
 +	for (entry = IFIRST(header); !IS_LAST_ENTRY(entry);
@@ -925,25 +925,30 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
 +		if (!entry->e_value_inum)
 +			continue;
 +		if (ext4_expand_ino_array(lea_ino_array,
-+					  entry->e_value_inum) != 0) {
-+			brelse(iloc.bh);
++					  entry->e_value_inum) != 0)
 +			goto cleanup;
-+		}
++
++		error = ext4_journal_get_write_access(handle, iloc.bh);
++		if (error)
++			goto cleanup;
 +		entry->e_value_inum = 0;
++		entry->e_value_size = 0;
++		error = ext4_handle_dirty_metadata(handle, inode, iloc.bh);
++		if (error)
++			goto cleanup;
 +	}
-+	brelse(iloc.bh);
 +
 +delete_external_ea:
 +	if (!EXT4_I(inode)->i_file_acl) {
 +		/* add xattr inode to orphan list */
 +		ext4_xattr_inode_orphan_add(handle, inode, credits,
 +						*lea_ino_array);
- 		goto cleanup;
++		goto cleanup;
 +	}
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
  	if (!bh) {
  		EXT4_ERROR_INODE(inode, "block %llu read error",
-@@ -1605,11 +2028,69 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1605,11 +2028,78 @@ ext4_xattr_delete_inode(handle_t *handle
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -955,7 +960,15 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
 +		if (ext4_expand_ino_array(lea_ino_array,
 +					  entry->e_value_inum) != 0)
 +			goto cleanup;
++
++		error = ext4_journal_get_write_access(handle, bh);
++		if (error)
++			goto cleanup;
 +		entry->e_value_inum = 0;
++		entry->e_value_size = 0;
++		error = ext4_handle_dirty_metadata(handle, inode, bh);
++		if (error)
++			goto cleanup;
 +	}
 +
 +	/* add xattr inode to orphan list */
@@ -983,6 +996,7 @@ Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
  
  cleanup:
  	brelse(bh);
++	brelse(iloc.bh);
 +
 +	return error;
 +}
