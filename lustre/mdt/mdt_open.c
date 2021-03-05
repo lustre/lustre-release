@@ -2036,7 +2036,7 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
 	struct close_data	*data;
 	struct ldlm_lock	*lease;
-	struct mdt_object	*o1 = o, *o2;
+	struct mdt_object	*o1 = o, *o2 = NULL;
 	bool			 lease_broken;
 	bool			 swap_objects;
 	int			 rc;
@@ -2070,10 +2070,11 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 	if (IS_ERR(o2))
 		GOTO(out_lease, rc = PTR_ERR(o2));
 
-	if (!S_ISREG(lu_object_attr(&o2->mot_obj))) {
-		swap_objects = false; /* not swapped yet */
+	if (!mdt_object_exists(o2))
+		GOTO(out_obj, rc = -ENOENT);
+
+	if (!S_ISREG(lu_object_attr(&o2->mot_obj)))
 		GOTO(out_obj, rc = -EINVAL);
-	}
 
 	if (swap_objects)
 		swap(o1, o2);
@@ -2181,7 +2182,9 @@ out_unlock_sem:
 	}
 
 out_obj:
-	mdt_object_put(info->mti_env, swap_objects ? o1 : o2);
+	/* Callee takes care of o, we must put the other one. We know
+	 * that o1 != o2 from check of lu_fid_cmp() above. */
+	mdt_object_put(info->mti_env, o1 != o ? o1 : o2);
 
 	ldlm_reprocess_all(lease->l_resource, lease);
 
