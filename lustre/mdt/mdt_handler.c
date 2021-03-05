@@ -268,6 +268,7 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 {
 	struct mdt_device *mdt = info->mti_mdt;
 	struct lu_name *lname = &info->mti_name;
+	const char *start = fileset;
 	char *filename = info->mti_filename;
 	struct mdt_object *parent;
 	u32 mode;
@@ -282,8 +283,8 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 	 */
 	*fid = mdt->mdt_md_root_fid;
 
-	while (rc == 0 && fileset != NULL && *fileset != '\0') {
-		const char *s1 = fileset;
+	while (rc == 0 && start != NULL && *start != '\0') {
+		const char *s1 = start;
 		const char *s2;
 
 		while (*++s1 == '/')
@@ -295,7 +296,7 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 		if (s2 == s1)
 			break;
 
-		fileset = s2;
+		start = s2;
 
 		lname->ln_namelen = s2 - s1;
 		if (lname->ln_namelen > NAME_MAX) {
@@ -331,9 +332,21 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 			rc = PTR_ERR(parent);
 		else {
 			mode = lu_object_attr(&parent->mot_obj);
-			mdt_object_put(info->mti_env, parent);
-			if (!S_ISDIR(mode))
+			if (!S_ISDIR(mode)) {
 				rc = -ENOTDIR;
+			} else if (mdt_is_remote_object(info, parent, parent)) {
+				if (!mdt->mdt_enable_remote_subdir_mount) {
+					rc = -EREMOTE;
+					LCONSOLE_WARN("%s: subdir mount '%s' refused because 'enable_remote_subdir_mount=0': rc = %d\n",
+						      mdt_obd_name(mdt),
+						      fileset, rc);
+				} else {
+					LCONSOLE_INFO("%s: subdir mount '%s' is remote and may be slow\n",
+						      mdt_obd_name(mdt),
+						      fileset);
+				}
+			}
+			mdt_object_put(info->mti_env, parent);
 		}
 	}
 
@@ -5406,6 +5419,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_dir_gid = 0;
 	m->mdt_enable_chprojid_gid = 0;
 	m->mdt_enable_remote_rename = 1;
+	m->mdt_enable_remote_subdir_mount = 1;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);
 	atomic_set(&m->mdt_async_commit_count, 0);

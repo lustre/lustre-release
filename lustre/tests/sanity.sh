@@ -17103,8 +17103,10 @@ run_test 247e "mount .. as fileset"
 
 test_247f() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.13.52) ] &&
-		skip "Need at least version 2.13.52"
+	[ $MDS1_VERSION -lt $(version_code 2.12.6) ] &&
+		skip "Need at least version 2.12.6"
+	[ $CLIENT_VERSION -lt $(version_code 2.12.6) ] &&
+		skip "Need at least version 2.12.6"
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
 		grep -q subtree ||
 		skip "Fileset feature is not supported"
@@ -17113,25 +17115,77 @@ test_247f() {
 	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/remote ||
 		error "mkdir remote failed"
 	mkdir $DIR/$tdir/remote/subdir || error "mkdir remote/subdir failed"
-	$LFS mkdir -c $MDSCOUNT $DIR/$tdir/striped ||
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir/striped ||
 		error "mkdir striped failed"
 	mkdir $DIR/$tdir/striped/subdir || error "mkdir striped/subdir failed"
 
 	local submount=${MOUNT}_$tdir
 
 	mkdir -p $submount || error "mkdir $submount failed"
+	stack_trap "rmdir $submount"
 
 	local dir
+	local stat
 	local fileset=$FILESET
+	local mdts=$(comma_list $(mdts_nodes))
 
-	for dir in $tdir/remote $tdir/remote/subdir \
-		   $tdir/striped $tdir/striped/subdir $tdir/striped/. ; do
+	stat=$(do_facet mds1 $LCTL get_param -n \
+		mdt.*MDT0000.enable_remote_subdir_mount)
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		mdt.*.enable_remote_subdir_mount=$stat"
+
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=0"
+	stack_trap "umount_client $submount"
+	FILESET="$fileset/$tdir/remote" mount_client $submount &&
+		error "mount remote dir $dir should fail"
+
+	for dir in $tdir/remote/subdir $tdir/striped $tdir/striped/subdir \
+		$tdir/striped/. ; do
 		FILESET="$fileset/$dir" mount_client $submount ||
 			error "mount $dir failed"
 		umount_client $submount
 	done
+
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=1"
+	FILESET="$fileset/$tdir/remote" mount_client $submount ||
+		error "mount $tdir/remote failed"
 }
 run_test 247f "mount striped or remote directory as fileset"
+
+test_247g() {
+	[ $MDSCOUNT -lt 4 ] && skip_env "needs >= 4 MDTs"
+	[ $CLIENT_VERSION -lt $(version_code 2.12.6) ] &&
+		skip "Need at least version 2.12.6"
+
+	$LFS mkdir -i 0 -c 4 -H fnv_1a_64 $DIR/$tdir ||
+		error "mkdir $tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $tfile failed"
+
+	local submount=${MOUNT}_$tdir
+
+	mkdir -p $submount || error "mkdir $submount failed"
+	stack_trap "rmdir $submount"
+
+	FILESET="$fileset/$tdir" mount_client $submount ||
+		error "mount $dir failed"
+	stack_trap "umount $submount"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	local nrpcs
+
+	stat $submount > /dev/null
+	cancel_lru_locks $MDC
+	stat $submount > /dev/null
+	stat $submount/$tfile > /dev/null
+	do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear > /dev/null"
+	stat $submount/$tfile > /dev/null
+	nrpcs=$(do_nodes $mdts "lctl get_param -n mdt.*.md_stats" |
+		awk '/getattr/ {sum += $2} END {print sum}')
+
+	[ -z "$nrpcs" ] || error "$nrpcs extra getattr sent"
+}
+run_test 247g "mount striped directory as fileset caches ROOT lookup lock"
 
 test_248() {
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)

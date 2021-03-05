@@ -1012,6 +1012,36 @@ mdt_enable_chprojid_gid_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_enable_chprojid_gid);
 
+static int
+mdt_enable_remote_subdir_mount_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n",  mdt->mdt_enable_remote_subdir_mount);
+	return 0;
+}
+
+static ssize_t
+mdt_enable_remote_subdir_mount_seq_write(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_remote_subdir_mount = val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_enable_remote_subdir_mount);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
@@ -1101,6 +1131,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_dom_read_open_fops			},
 	{ .name =	"migrate_hsm_allowed",
 	  .fops =	&mdt_migrate_hsm_allowed_fops		},
+	{ .name =	"enable_remote_subdir_mount",
+	  .fops =	&mdt_enable_remote_subdir_mount_fops	},
 	{ NULL }
 };
 

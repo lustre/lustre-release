@@ -445,11 +445,20 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 
 retry:
 	if (op_data->op_flags & MF_GETATTR_BY_FID) {
-		/* getattr by FID, replace fid1 with stripe FID */
+		/* getattr by FID, replace fid1 with stripe FID,
+		 * NB, don't replace if name is "/", because it may be a subtree
+		 * mount, and if it's a striped directory, fid1 will be replaced
+		 * to stripe FID by hash, while fid2 is master object FID, which
+		 * will be treated as a remote object if the two FIDs are
+		 * located on different MDTs, and LOOKUP lock can't be fetched.
+		 */
 		LASSERT(op_data->op_name);
-		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
+		if (op_data->op_namelen != 1 ||
+		    strncmp(op_data->op_name, "/", 1) != 0) {
+			tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+			if (IS_ERR(tgt))
+				RETURN(PTR_ERR(tgt));
+		}
 
 		/* name is used to locate stripe target, clear it here
 		 * to avoid packing name in request, so that MDS knows
