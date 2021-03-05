@@ -173,7 +173,7 @@ static void dio_complete_routine(struct bio *bio, int error)
 	 */
 
 	if (unlikely(iobuf == NULL)) {
-		CERROR("***** bio->bi_private is NULL!  This should never happen.  Normally, I would crash here, but instead I will dump the bio contents to the console.  Please report this to <https://jira.whamcloud.com/> , along with any interesting messages leading up to this point (like SCSI errors, perhaps).  Because bi_private is NULL, I can't wake up the thread that initiated this IO - you will probably have to reboot this node.\n");
+		CERROR("***** bio->bi_private is NULL! Dump the bio contents to the console. Please report this to <https://jira.whamcloud.com/>, and probably have to reboot this node.\n");
 		CERROR("bi_next: %p, bi_flags: %lx, " __stringify(bi_opf)
 		       ": %x, bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, bi_private: %p\n",
 		       bio->bi_next, (unsigned long)bio->bi_flags,

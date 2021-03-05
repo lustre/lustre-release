@@ -117,7 +117,8 @@ int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen)
         len = cfs_size_round4(obj->len);
 
         if (*buflen < 4 + len) {
-                CERROR("buflen %u <  %u\n", *buflen, 4 + len);
+                CERROR("shorter buflen than needed: %u < %u\n",
+                        *buflen, 4 + len);
                 return -EINVAL;
         }
 
@@ -135,7 +136,7 @@ static int __rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen,
         __u32 len;
 
         if (*buflen < sizeof(__u32)) {
-                CERROR("buflen %u\n", *buflen);
+                CERROR("too short buflen: %u\n", *buflen);
                 return -EINVAL;
         }
 
@@ -151,7 +152,8 @@ static int __rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen,
 
         len = local ? obj->len : cfs_size_round4(obj->len);
         if (*buflen < len) {
-                CERROR("buflen %u < %u\n", *buflen, len);
+                CERROR("shorter buflen than object size: %u < %u\n",
+                        *buflen, len);
                 obj->len = 0;
                 return -EINVAL;
         }
@@ -208,7 +210,7 @@ int rawobj_from_netobj_alloc(rawobj_t *rawobj, netobj_t *netobj)
 
         if (netobj->len == 0)
                 return 0;
-                
+
         OBD_ALLOC_LARGE(rawobj->data, netobj->len);
         if (rawobj->data == NULL)
                 return -ENOMEM;
@@ -226,7 +228,8 @@ int buffer_extract_bytes(const void **buf, __u32 *buflen,
                          void *res, __u32 reslen)
 {
         if (*buflen < reslen) {
-                CERROR("buflen %u < %u\n", *buflen, reslen);
+                CERROR("shorter buflen than expected: %u < %u\n",
+                        *buflen, reslen);
                 return -EINVAL;
         }
 

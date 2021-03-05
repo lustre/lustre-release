@@ -342,7 +342,8 @@ static int n_invariant(const struct iam_leaf *leaf)
 			 * locked.
 			 */
 			n_print(leaf);
-			CERROR("%#x < %#x\n", nexthash, starthash);
+			CERROR("invalid hash value less than start hash: %#x < %#x\n",
+				nexthash, starthash);
 			dump_stack();
 			return 0;
 		}

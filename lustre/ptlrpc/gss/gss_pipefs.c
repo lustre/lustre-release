@@ -789,15 +789,16 @@ struct gss_upcall_msg * gss_find_upcall(__u32 mechidx, __u32 seq)
 static
 int simple_get_bytes(char **buf, __u32 *buflen, void *res, __u32 reslen)
 {
-        if (*buflen < reslen) {
-                CERROR("buflen %u < %u\n", *buflen, reslen);
-                return -EINVAL;
-        }
+	if (*buflen < reslen) {
+		CERROR("shorter buflen than needed: %u < %u\n",
+			*buflen, reslen);
+		return -EINVAL;
+	}
 
-        memcpy(res, *buf, reslen);
-        *buf += reslen;
-        *buflen -= reslen;
-        return 0;
+	memcpy(res, *buf, reslen);
+	*buf += reslen;
+	*buflen -= reslen;
+	return 0;
 }
 
 /****************************************
