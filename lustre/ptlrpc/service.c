@@ -3485,7 +3485,23 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 			ptlrpc_server_finish_active_request(svcpt, req);
 		}
 
-		LASSERT(list_empty(&svcpt->scp_rqbd_posted));
+		/*
+		 * The portal may be shared by several services (eg:OUT_PORTAL).
+		 * So the request could be referenced by other target. So we
+		 * have to wait the ptlrpc_server_drop_request invoked.
+		 *
+		 * TODO: move the req_buffer as global rather than per service.
+		 */
+		spin_lock(&svcpt->scp_lock);
+		while (!list_empty(&svcpt->scp_rqbd_posted)) {
+			spin_unlock(&svcpt->scp_lock);
+			wait_event_idle_timeout(svcpt->scp_waitq,
+				list_empty(&svcpt->scp_rqbd_posted),
+				cfs_time_seconds(1));
+			spin_lock(&svcpt->scp_lock);
+		}
+		spin_unlock(&svcpt->scp_lock);
+
 		LASSERT(svcpt->scp_nreqs_incoming == 0);
 		LASSERT(svcpt->scp_nreqs_active == 0);
 		/*
