@@ -1816,6 +1816,8 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	spin_lock_init(&lod->lod_connects_lock);
 	lu_tgt_descs_init(&lod->lod_mdt_descs, true);
 	lu_tgt_descs_init(&lod->lod_ost_descs, false);
+	lu_qos_rr_init(&lod->lod_mdt_descs.ltd_qos.lq_rr);
+	lu_qos_rr_init(&lod->lod_ost_descs.ltd_qos.lq_rr);
 
 	RETURN(0);
 

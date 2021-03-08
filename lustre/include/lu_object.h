@@ -1526,6 +1526,7 @@ enum lq_flag {
 	LQ_RESET,	     /* zero current penalties */
 };
 
+#ifdef HAVE_SERVER_SUPPORT
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
@@ -1535,6 +1536,14 @@ struct lu_qos_rr {
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
 	unsigned long		 lqr_flags;
 };
+
+static inline void lu_qos_rr_init(struct lu_qos_rr *lqr)
+{
+	spin_lock_init(&lqr->lqr_alloc);
+	set_bit(LQ_DIRTY, &lqr->lqr_flags);
+}
+
+#endif /* HAVE_SERVER_SUPPORT */
 
 /* QoS data per MDS/OSS */
 struct lu_svr_qos {
@@ -1600,7 +1609,9 @@ struct lu_qos {
 	__u32			 lq_active_svr_count;
 	unsigned int		 lq_prio_free;   /* priority for free space */
 	unsigned int		 lq_threshold_rr;/* priority for rr */
+#ifdef HAVE_SERVER_SUPPORT
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
+#endif
 	unsigned long		 lq_flags;
 #if 0
 	unsigned long		 lq_dirty:1,     /* recalc qos data */
@@ -1642,7 +1653,6 @@ struct lu_tgt_descs {
 		ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
 
 u64 lu_prandom_u64_max(u64 ep_ro);
-void lu_qos_rr_init(struct lu_qos_rr *lqr);
 int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt);
 
