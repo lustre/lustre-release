@@ -174,11 +174,18 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 
 	key = add_key("user", description, &payload, sizeof(payload),
 		      KEY_SPEC_USER_KEYRING);
-	if (key != -1)
+	if (key != -1) {
+		key_perm_t perm = KEY_POS_ALL | KEY_USR_ALL |
+			KEY_GRP_ALL | KEY_OTH_ALL;
+
+		if (keyctl_setperm(key, perm) < 0)
+			printerr(2, "Failed to set perm 0x%x on key %d\n",
+				 perm, key);
 		printerr(2, "Added key %d with description %s\n", key,
 			 description);
-	else
+	} else {
 		printerr(0, "Failed to add key with %s\n", description);
+	}
 
 	return key;
 }
