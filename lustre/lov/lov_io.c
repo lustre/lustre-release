@@ -1371,11 +1371,50 @@ static int lov_io_fault_start(const struct lu_env *env,
 	struct cl_fault_io *fio;
 	struct lov_io      *lio;
 	struct lov_io_sub  *sub;
+	loff_t offset;
+	int entry;
+	int stripe;
 
 	ENTRY;
 
 	fio = &ios->cis_io->u.ci_fault;
 	lio = cl2lov_io(env, ios);
+
+	/**
+	 * LU-14502: ft_page could be an existing cl_page associated with
+	 * the vmpage covering the fault index, and the page may still
+	 * refer to another mirror of an old IO.
+	 */
+	if (lov_is_flr(lio->lis_object)) {
+		offset = cl_offset(ios->cis_obj, fio->ft_index);
+		entry = lov_io_layout_at(lio, offset);
+		if (entry < 0) {
+			CERROR(DFID": page fault index %lu invalid component: "
+			       "%d, mirror: %d\n",
+			       PFID(lu_object_fid(&ios->cis_obj->co_lu)),
+			       fio->ft_index, entry,
+			       lio->lis_mirror_index);
+			RETURN(-EIO);
+		}
+		stripe = lov_stripe_number(lio->lis_object->lo_lsm,
+					   entry, offset);
+
+		if (fio->ft_page->cp_lov_index !=
+		    lov_comp_index(entry, stripe)) {
+			CDEBUG(D_INFO, DFID": page fault at index %lu, "
+			       "at mirror %u comp entry %u stripe %u, "
+			       "been used with comp entry %u stripe %u\n",
+			       PFID(lu_object_fid(&ios->cis_obj->co_lu)),
+			       fio->ft_index, lio->lis_mirror_index,
+			       entry, stripe,
+			       lov_comp_entry(fio->ft_page->cp_lov_index),
+			       lov_comp_stripe(fio->ft_page->cp_lov_index));
+
+			fio->ft_page->cp_lov_index =
+					lov_comp_index(entry, stripe);
+		}
+	}
+
 	sub = lov_sub_get(env, lio, fio->ft_page->cp_lov_index);
 	sub->sub_io.u.ci_fault.ft_nob = fio->ft_nob;
 
