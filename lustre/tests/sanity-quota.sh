@@ -128,17 +128,20 @@ resetquota() {
 quota_scan() {
 	local local_ugp=$1
 	local local_id=$2
+	local count
 
 	if [ "$local_ugp" == "a" -o "$local_ugp" == "u" ]; then
 		$LFS quota -v -u $local_id $DIR
-		log "Files for user ($local_id):"
+		count=$($LFS find --user $local_id $DIR | wc -l)
+		log "Files for user ($local_id), count=$count:"
 		($LFS find --user $local_id $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
 
 	if [ "$local_ugp" == "a" -o "$local_ugp" == "g" ]; then
 		$LFS quota -v -g $local_id $DIR
-		log "Files for group ($local_id):"
+		count=$($LFS find --group $local_id $DIR | wc -l)
+		log "Files for group ($local_id), count=$count:"
 		($LFS find --group $local_id $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
@@ -146,7 +149,8 @@ quota_scan() {
 	is_project_quota_supported || return 0
 	if [ "$local_ugp" == "a" -o "$local_ugp" == "p" ]; then
 		$LFS quota -v -p $TSTPRJID $DIR
-		log "Files for project ($TSTPRJID):"
+		count=$($LFS find --projid $TSTPRJID $DIR | wc -l)
+		log "Files for project ($TSTPRJID), count=$count:"
 		($LFS find --projid $TSTPRJID $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
@@ -1183,11 +1187,13 @@ test_2() {
 	local testfile="$DIR/$tdir/$tfile-0"
 	local least_qunit=$(do_facet mds1 $LCTL get_param -n \
 		qmt.$FSNAME-QMT0000.md-0x0.info |
-		awk '/least qunit/{ print $3 }')
+		sed -e 's/least qunit/least_qunit/' |
+		awk '/least_qunit/{ print $2 }')
 	local limit
 
 	[ "$SLOW" = "no" ] && limit=$((least_qunit * 2)) ||
 		limit=$((least_qunit * 1024))
+	echo "least_qunit: '$least_qunit', limit: '$limit'"
 
 	local free_inodes=$(mdt_free_inodes 0)
 	echo "$free_inodes free inodes on master MDT"

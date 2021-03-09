@@ -85,8 +85,8 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 	seq_printf(m, "pool:\n"
 		   "    id: %u\n"
 		   "    type: %s\n"
-		   "    ref: %d\n"
-		   "    least qunit: %lu\n",
+		   "    refcount: %d\n"
+		   "    least_qunit: %lu\n",
 		   0,
 		   RES_NAME(pool->qpi_rtype),
 		   atomic_read(&pool->qpi_ref),
@@ -94,8 +94,8 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 
 	for (type = 0; type < LL_MAXQUOTAS; type++)
 		seq_printf(m, "    %s:\n"
-			   "        #slv: %d\n"
-			   "        #lqe: %d\n",
+			   "        quota_servers: %d\n"
+			   "        quota_entries: %d\n",
 			   qtype_name(type),
 			   qpi_slv_nr(pool, type),
 		    atomic_read(&pool->qpi_site[type]->lqs_hash->hs_count));
