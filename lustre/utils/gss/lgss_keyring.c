@@ -902,7 +902,6 @@ out:
 
 static int associate_with_ns(char *path)
 {
-#ifdef HAVE_SETNS
 	int fd, rc = -1;
 
 	fd = open(path, O_RDONLY);
@@ -912,9 +911,6 @@ static int associate_with_ns(char *path)
 	}
 
 	return rc;
-#else
-	return -1;
-#endif /* HAVE_SETNS */
 }
 
 static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
@@ -967,10 +963,8 @@ int main(int argc, char *argv[])
 	char			      path[PATH_MAX] = "";
 	int			      other_ns = 0;
 	int			      rc = 0;
-#ifdef HAVE_SETNS
 	struct stat		      parent_ns = { .st_ino = 0 };
 	struct stat		      caller_ns = { .st_ino = 0 };
-#endif
 
 	set_log_level();
 
@@ -1064,7 +1058,6 @@ int main(int argc, char *argv[])
 	cred->lc_svc_type = uparam.kup_svc_type;
 	cred->lc_self_nid = uparam.kup_selfnid;
 
-#ifdef HAVE_SETNS
 	/* Is caller in different namespace? */
 	snprintf(path, sizeof(path), "/proc/%d/ns/mnt", getpid());
 	if (stat(path, &parent_ns)) {
@@ -1077,7 +1070,6 @@ int main(int argc, char *argv[])
 		else if (caller_ns.st_ino != parent_ns.st_ino)
 			other_ns = 1;
 	}
-#endif /* HAVE_SETNS */
 
 	/*
 	 * if caller's namespace is different, fork a child and associate it
