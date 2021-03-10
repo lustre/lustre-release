@@ -3569,10 +3569,11 @@ static int lod_xattr_del_internal(const struct lu_env *env,
 				  struct dt_object *dt,
 				  const char *name, struct thandle *th)
 {
-	struct dt_object	*next = dt_object_child(dt);
-	struct lod_object	*lo = lod_dt_obj(dt);
-	int			rc;
-	int			i;
+	struct dt_object *next = dt_object_child(dt);
+	struct lod_object *lo = lod_dt_obj(dt);
+	int i;
+	int rc;
+
 	ENTRY;
 
 	rc = lod_sub_xattr_del(env, next, name, th);
@@ -3583,7 +3584,11 @@ static int lod_xattr_del_internal(const struct lu_env *env,
 		RETURN(rc);
 
 	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
-		LASSERT(lo->ldo_stripe[i]);
+		if (!lo->ldo_stripe[i])
+			continue;
+
+		if (!dt_object_exists(lo->ldo_stripe[i]))
+			continue;
 
 		rc = lod_sub_xattr_del(env, lo->ldo_stripe[i], name, th);
 		if (rc != 0)
@@ -4679,6 +4684,9 @@ static int lod_declare_xattr_del(const struct lu_env *env,
 		if (!dto)
 			continue;
 
+		if (!dt_object_exists(dto))
+			continue;
+
 		rc = lod_sub_declare_xattr_del(env, dto, name, th);
 		if (rc != 0)
 			break;
@@ -4698,35 +4706,14 @@ static int lod_declare_xattr_del(const struct lu_env *env,
 static int lod_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			 const char *name, struct thandle *th)
 {
-	struct dt_object	*next = dt_object_child(dt);
-	struct lod_object	*lo = lod_dt_obj(dt);
-	int			rc;
-	int			i;
+	int rc;
+
 	ENTRY;
 
 	if (!strcmp(name, XATTR_NAME_LOV) || !strcmp(name, XATTR_NAME_LMV))
 		lod_striping_free(env, lod_dt_obj(dt));
 
-	rc = lod_sub_xattr_del(env, next, name, th);
-	if (rc != 0 || !S_ISDIR(dt->do_lu.lo_header->loh_attr))
-		RETURN(rc);
-
-	if (!strcmp(name, XATTR_NAME_LMV))
-		RETURN(0);
-
-	if (lo->ldo_dir_stripe_count == 0)
-		RETURN(0);
-
-	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
-		struct dt_object *dto = lo->ldo_stripe[i];
-
-		if (!dto)
-			continue;
-
-		rc = lod_sub_xattr_del(env, dto, name, th);
-		if (rc != 0)
-			break;
-	}
+	rc = lod_xattr_del_internal(env, dt, name, th);
 
 	RETURN(rc);
 }
