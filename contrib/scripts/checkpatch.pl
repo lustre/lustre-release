@@ -457,7 +457,7 @@ our $logFunctions = qr{(?x:
 	printk(?:_ratelimited|_once|_deferred_once|_deferred|)|
 	(?:[a-z0-9]+_){1,2}(?:printk|emerg|alert|crit|err|warning|warn|notice|info|debug|dbg|vdbg|devel|cont|WARN)(?:_ratelimited|_once|)|
 	WARN(?:_RATELIMIT|_ONCE|)|
-	CDEBUG|CERROR|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
+	CDEBUG|CERROR|CNETERR|CEMERG|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
 	panic|
 	MODULE_[A-Z_]+|
 	seq_vprintf|seq_printf|seq_puts
