@@ -994,6 +994,18 @@ test_11b() {
 }
 run_test 11b "Import a deleted file using its FID"
 
+test_11c() {
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 1 1 || error "pool_add_targets failed"
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -p "$TESTNAME" $DIR/$tdir
+
+	copy2archive /etc/hosts $tdir/$tfile
+	copytool import $tdir/$tfile $DIR/$tdir/$tfile
+}
+run_test 11c "Import a file to a directory with a pool"
+
 test_12a() {
 	# test needs a running copytool
 	copytool setup

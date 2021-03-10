@@ -1477,9 +1477,14 @@ static int ct_import_one(const char *src, const char *dst)
 		return 0;
 
 	rc = llapi_hsm_import(dst,
-			      opt.o_archive_id_used ?
-			      opt.o_archive_id[0] : 0,
-			      &st, 0, 0, 0, 0, NULL, &fid);
+			      opt.o_archive_id_used ? opt.o_archive_id[0] : 0,
+			      &st,
+			      0 /* default stripe_size */,
+			      -1 /* default stripe offset */,
+			      0 /* default stripe count */,
+			      0 /* stripe pattern (will be RAID0+RELEASED) */,
+			      NULL /* pool_name */,
+			      &fid);
 	if (rc < 0) {
 		CT_ERROR(rc, "cannot import '%s' from '%s'", dst, src);
 		return rc;
