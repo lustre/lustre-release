@@ -150,6 +150,8 @@ static inline void lmv1_le_to_cpu(struct lmv_mds_md_v1 *lmv_dst,
 				le32_to_cpu(lmv_src->lmv_master_mdt_index);
 	lmv_dst->lmv_hash_type = le32_to_cpu(lmv_src->lmv_hash_type);
 	lmv_dst->lmv_layout_version = le32_to_cpu(lmv_src->lmv_layout_version);
+	if (lmv_src->lmv_stripe_count > LMV_MAX_STRIPE_COUNT)
+		return;
 	for (i = 0; i < lmv_src->lmv_stripe_count; i++)
 		fid_le_to_cpu(&lmv_dst->lmv_stripe_fids[i],
 			      &lmv_src->lmv_stripe_fids[i]);

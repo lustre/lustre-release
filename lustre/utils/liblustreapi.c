@@ -3173,7 +3173,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_STRIPE_COUNT)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
-		llapi_printf(LLAPI_MSG_NORMAL, "%u",
+		llapi_printf(LLAPI_MSG_NORMAL, "%d",
 			     (int)lum->lum_stripe_count);
 		if ((verbose & VERBOSE_STRIPE_OFFSET) && !yaml)
 			separator = " ";

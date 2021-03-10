@@ -21788,7 +21788,7 @@ test_300_check_default_striped_dir()
 
 	echo "checking $dirname $default_count $default_index"
 	$LFS setdirstripe -D -c $default_count -i $default_index \
-				-t all_char $DIR/$tdir/$dirname ||
+				-H all_char $DIR/$tdir/$dirname ||
 		error "set default stripe on striped dir error"
 	stripe_count=$($LFS getdirstripe -D -c $DIR/$tdir/$dirname)
 	[ $stripe_count -eq $default_count ] ||
@@ -21805,8 +21805,9 @@ test_300_check_default_striped_dir()
 	unlinkmany $DIR/$tdir/$dirname/f- 10	|| error "unlink files failed"
 	for dir in $(find $DIR/$tdir/$dirname/*); do
 		stripe_count=$($LFS getdirstripe -c $dir)
-		[ $stripe_count -eq $default_count ] ||
-		[ $stripe_count -eq 0 ] || [ $default_count -eq 1 ] ||
+		(( $stripe_count == $default_count )) ||
+		(( $stripe_count == $MDSCOUNT && $default_count == -1 )) ||
+		(( $stripe_count == 0 )) || (( $default_count == 1 )) ||
 		error "stripe count $default_count != $stripe_count for $dir"
 
 		stripe_index=$($LFS getdirstripe -i $dir)
@@ -21858,7 +21859,7 @@ test_300g() {
 	#check default stripe count/stripe index
 	test_300_check_default_striped_dir normal_dir $MDSCOUNT 1
 	test_300_check_default_striped_dir normal_dir 1 0
-	test_300_check_default_striped_dir normal_dir 2 1
+	test_300_check_default_striped_dir normal_dir -1 1
 	test_300_check_default_striped_dir normal_dir 2 -1
 
 	#delete default stripe information
@@ -21892,7 +21893,7 @@ test_300h() {
 
 	test_300_check_default_striped_dir striped_dir $MDSCOUNT 1
 	test_300_check_default_striped_dir striped_dir 1 0
-	test_300_check_default_striped_dir striped_dir 2 1
+	test_300_check_default_striped_dir striped_dir -1 1
 	test_300_check_default_striped_dir striped_dir 2 -1
 
 	#delete default stripe information
