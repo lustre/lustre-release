@@ -66,6 +66,45 @@ AC_CHECK_FUNCS([copy_file_range],
 ]) # LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 
 #
+# LC_FID2PATH_UNION
+#
+AC_DEFUN([LC_FID2PATH_ANON_UNION], [
+AC_MSG_CHECKING([if 'struct getinfo_fid2path' has anony•mous union])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <linux/lustre/lustre_idl.h>
+
+	int main(void) {
+		struct getinfo_fid2path gf;
+		struct lu_fid root_fid;
+
+		*gf.gf_root_fid = root_fid;
+		return 0;
+	}
+])],[
+	AC_DEFINE(HAVE_FID2PATH_ANON_UNIONS, 1, [union is unnamed])
+	AC_MSG_RESULT("yes")
+])
+]) # LC_FID2PATH_ANON_UNION
+
+#
+# LC_IOC_REMOVE_ENTRY
+#
+AC_DEFUN([LC_IOC_REMOVE_ENTRY], [
+AC_MSG_CHECKING([if ioctl IOC_REMOVE_ENTRY' is supported])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <sys/ioctl.h>
+	#include <linux/lustre/lustre_ioctl.h>
+
+	int main(void) {
+		return ioctl(0, LL_IOC_REMOVE_ENTRY, NULL);
+	}
+])],[
+	AC_DEFINE(HAVE_IOC_REMOVE_ENTRY, 1,
+		[IOC_REMOVE_ENTRY ioctl exists])
+])
+]) # LC_IOC_REMOVE_ENTRY
+
+#
 # LC_STACK_SIZE
 #
 # Ensure the stack size is at least 8k in Lustre server (all kernels)

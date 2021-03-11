@@ -160,6 +160,15 @@ out:
 	return rc;
 }
 
+static inline char *get_gf_path(struct getinfo_fid2path *gf)
+{
+#ifndef HAVE_FID2PATH_ANON_UNIONS
+	return gf->gf_u.gf_path;
+#else
+	return gf->gf_path;
+#endif
+}
+
 int llapi_fid2path_at(int mnt_fd, const struct lu_fid *fid,
 		      char *path_buf, int path_buf_size,
 		      long long *recno, int *linkno)
@@ -188,7 +197,7 @@ int llapi_fid2path_at(int mnt_fd, const struct lu_fid *fid,
 		goto out;
 	}
 
-	rc = copy_strip_dne_path(gf->gf_u.gf_path, path_buf, path_buf_size);
+	rc = copy_strip_dne_path(get_gf_path(gf), path_buf, path_buf_size);
 
 	if (recno != NULL)
 		*recno = gf->gf_recno;

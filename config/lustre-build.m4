@@ -344,8 +344,10 @@ AS_IF([test $target_cpu = powerpc64], [
 	CC="$CC -m64"
 ])
 
-# UAPI headers, libcfs/include for util headers, lustre/include for liblustreapi and friends
-CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lnet/include/uapi -I$PWD/lustre/include -I$PWD/lustre/include/uapi $CPPFLAGS"
+# libcfs/include for util headers, lustre/include for liblustreapi and friends
+# UAPI headers from OpenSFS are included if modules support is enabled, otherwise
+# it will use the native kernel implementation.
+CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lustre/include $CPPFLAGS"
 
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)
@@ -667,6 +669,8 @@ AS_IF([test "x$enable_utils" = xyes], [
 	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
+	LC_FID2PATH_ANON_UNION
+	LC_IOC_REMOVE_ENTRY
 ])
 AS_IF([test "x$enable_tests" = xyes], [
 	LC_HAVE_LIBAIO

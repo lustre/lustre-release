@@ -315,6 +315,7 @@ retry_open:
 
 int llapi_direntry_remove(char *dname)
 {
+#ifdef HAVE_IOC_REMOVE_ENTRY
 	char *dirpath = NULL;
 	char *namepath = NULL;
 	char *dir;
@@ -349,6 +350,9 @@ out:
 	if (fd != -1)
 		close(fd);
 	return rc;
+#else
+	return -ENOTSUP;
+#endif
 }
 
 int llapi_unlink_foreign(char *name)
