@@ -3069,6 +3069,47 @@ function test_206() {
 }
 run_test 206 "lfs setstripe -pool .. --comp-flags=.. "
 
+test_207() {
+       local file=$DIR/$tfile
+       local tmpfile=$DIR/$tfile-tt
+
+	[ $MDS1_VERSION -lt $(version_code 2.14.50) ] &&
+		skip "Need MDS version at least 2.14.50"
+
+	stack_trap "rm -f $tmpfile $file"
+
+	# generate data for verification
+	dd if=/dev/urandom of=$tmpfile bs=1M count=1 ||
+		error "can't generate file with random data"
+
+	# create a mirrored file with one stale replica
+	$LFS mirror create -N -S 4M -c 2 -N -S 1M -c -1 $file ||
+		error "create mirrored file $file failed"
+	get_mirror_ids $file
+	echo "mirror IDs: ${mirror_array[@]}"
+
+	dd if=$tmpfile of=$file bs=1M || error "can't copy"
+	get_mirror_ids $file
+	echo "mirror IDs: ${mirror_array[@]}"
+
+	drop_client_cache
+	cmp $tmpfile $file || error "files don't match"
+	get_mirror_ids $file
+	echo "mirror IDs: ${mirror_array[@]}"
+
+	# mirror creation should work fine
+	$LFS mirror extend -N -S 8M -c -1 $file ||
+		error "mirror extend $file failed"
+
+	get_mirror_ids $file
+	echo "mirror IDs: ${mirror_array[@]}"
+
+	drop_client_cache
+	$LFS mirror verify -v $file || error "verification failed"
+	cmp $tmpfile $file || error "files don't match"
+}
+run_test 207 "create another replica with existing out-of-sync one"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

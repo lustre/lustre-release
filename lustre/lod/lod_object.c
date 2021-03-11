@@ -7459,18 +7459,32 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
 		if (lo->ldo_mirrors[i].lme_stale)
 			continue;
+		if (lo->ldo_mirrors[i].lme_primary == 0)
+			continue;
 
-		LASSERTF(primary < 0, DFID " has multiple primary: %u / %u\n",
-			 PFID(lod_object_fid(lo)),
-			 lo->ldo_mirrors[i].lme_id,
-			 lo->ldo_mirrors[primary].lme_id);
+		if (unlikely(primary >= 0)) {
+			CERROR(DFID " has multiple primary: %u / %u\n",
+			       PFID(lod_object_fid(lo)),
+			       lo->ldo_mirrors[i].lme_id,
+			       lo->ldo_mirrors[primary].lme_id);
+			RETURN(-EIO);
+		}
 
 		primary = i;
 	}
 	if (primary < 0) {
-		CERROR(DFID ": doesn't have a primary mirror\n",
-		       PFID(lod_object_fid(lo)));
-		GOTO(out, rc = -ENODATA);
+		/* no primary, use any in-sync */
+		for (i = 0; i < lo->ldo_mirror_count; i++) {
+			if (lo->ldo_mirrors[i].lme_stale)
+				continue;
+			primary = i;
+			break;
+		}
+		if (primary < 0) {
+			CERROR(DFID ": doesn't have a primary mirror\n",
+			       PFID(lod_object_fid(lo)));
+			GOTO(out, rc = -ENODATA);
+		}
 	}
 
 	CDEBUG(D_LAYOUT, DFID": found primary %u\n",
