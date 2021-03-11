@@ -1069,6 +1069,8 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 
 	check_timeout || return 1
 
+	# make sure all imports are connected and not IDLE
+	do_facet client lfs df > /dev/null
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
 	local before=$(date +%s)
@@ -1079,7 +1081,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	# the loser might have to wait for the next ping.
 	sleep $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
 	do_facet client lctl set_param fail_loc=0x0
-	do_facet client df > /dev/null
+	do_facet client lfs df > /dev/null
 
 	local oscs=$(lctl dl | awk '/-osc-/ {print $4}')
 	check_clients_evicted $before ${oscs[@]}
@@ -1117,10 +1119,9 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# = 9 * PING_INTERVAL + PING_INTERVAL
 	# = 10 PING_INTERVAL = 10 obd_timeout / 4 = 2.5 obd_timeout
 	# let's wait $((TIMEOUT * 3)) # bug 19887
-	local rc=0
-	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 3)) || \
-		error "Client was not evicted by ost" rc=1
-	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 3)) || \
+	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 3)) ||
+		error "Client was not evicted by ost"
+	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 3)) ||
 		error "Client was not evicted by mds"
 }
 run_test 26b "evict dead exports"
