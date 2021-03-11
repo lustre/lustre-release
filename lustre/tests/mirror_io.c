@@ -550,6 +550,8 @@ static void mirror_resync(int argc, char *argv[])
 
 	rc = llapi_lease_set(fd, ioc);
 	syserr(rc <= 0, "llapi_lease_set resync failed");
+	if (rc <= 0)
+		llapi_lease_release(fd);
 
 	free(ioc);
 	close(fd);

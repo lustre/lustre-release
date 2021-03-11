@@ -870,8 +870,10 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	}
 
 	if (la->la_valid & LA_CTIME) {
-		/* The pure setattr, it has the priority over what is
-		 * already set, do not drop it if ctime is equal. */
+		/**
+		 * The pure setattr, it has the priority over what is
+		 * already set, do not drop it if ctime is equal.
+		 */
 		if (la->la_ctime < oattr->la_ctime)
 			la->la_valid &= ~(LA_ATIME | LA_MTIME | LA_CTIME);
 	}

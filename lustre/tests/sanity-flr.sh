@@ -2710,6 +2710,146 @@ test_60b() {
 }
 run_test 60b "mirror merge/split cancel client's in-memory layout gen"
 
+get_times_61() {
+	stat --format='%X %Y %Z' $file || error "$file: cannot get times"
+}
+
+check_times_61() {
+	local file=$1
+	local -a old=( $2 $3 $4 )
+	local -a new
+
+	new=( $(get_times_61 $file) )
+	((${old[0]} == ${new[0]})) ||
+		error "$file: atime: old '${old[0]}' != new '${new[0]}'"
+
+	((${old[1]} == ${new[1]})) ||
+		error "$file: mtime: old '${old[1]}' != new '${new[1]}'"
+}
+
+test_61a() { # LU-14508
+	local file=$DIR/$tdir/$tfile
+	local -a tim
+	local nap=5
+
+	mkdir -p $DIR/$tdir
+	echo "create $file"
+	$LFS setstripe -E1M -Eeof $file || error "setstripe $file failed"
+	echo "create $file-2"
+	$LFS setstripe -E2M -Eeof $file-2 || error "setstripe $file-2 failed"
+
+	echo XXX > $file || error "write $file failed"
+	chown $RUNAS_ID $DIR/$tdir $file || error "chown $file failed"
+
+	echo "sleep $nap seconds, then cat $tfile"
+	sleep $nap
+	cat $file || error "cat $file failed"
+
+	echo "sleep $nap seconds, then re-write $tfile"
+	sleep $nap
+	echo XXXX > $file || error "write $file failed"
+	cp -p $file $file-2 || error "copy $file-2 failed"
+
+	echo "sleep $nap seconds"
+	sleep $nap
+
+	tim=( $(get_times_61 $file) )
+
+	echo "mirror merge $tfile-2 to $tfile and test timestamps"
+	$LFS mirror extend -N -f $file-2 $file ||
+		error "cannot mirror merge $file-2 to $file"
+	check_times_61 $file ${tim[@]}
+
+	echo "mirror extend $tfile and test timestamps"
+	$LFS mirror extend -N -c1 -i1 $file ||
+		error "cannot extend mirror $file"
+	check_times_61 $file ${tim[@]}
+
+	echo "migrate $tfile and test timestamps"
+	$LFS migrate -n $file || error "cannot migrate $file"
+	check_times_61 $file ${tim[@]}
+
+	echo "normal user migrate $tfile and test timestamps"
+	$RUNAS $LFS migrate -n $file || error "cannot migrate $file"
+	check_times_61 $file ${tim[@]}
+}
+run_test 61a "mirror extend and migrate preserve timestamps"
+
+test_61b() { # LU-14508
+	local file=$DIR/$tdir/$tfile
+	local -a tim
+	local nap=5
+
+	mkdir -p $DIR/$tdir
+	echo "create $file"
+	echo XXX > $file || error "create $file failed"
+	chown $RUNAS_ID $DIR/$tdir $file || error "chown $file failed"
+
+	echo "sleep $nap seconds, then cat $tfile"
+	sleep $nap
+	cat $file || error "cat $file failed"
+
+	echo "sleep $nap seconds, then re-write $tfile"
+	sleep $nap
+	echo XXXX > $file || error "write $file failed"
+
+	echo "sleep $nap seconds, then test timestamps"
+	sleep $nap
+
+	tim=( $(get_times_61 $file) )
+
+	echo "mirror extend $tfile and test timestamps"
+	$LFS mirror extend -N -c1 -i1 $file ||
+		error "cannot extend mirror $file"
+	check_times_61 $file ${tim[@]}
+
+	echo "mirror split $tfile and test timestamps"
+	$LFS mirror split -d --mirror-id=1 $file ||
+		error "cannot split mirror 1 off $file"
+	check_times_61 $file ${tim[@]}
+
+	echo "normal user mirror extend $tfile and test timestamps"
+	$RUNAS $LFS mirror extend -N -c1 -i1 $file ||
+		error "cannot extend mirror $file"
+	check_times_61 $file ${tim[@]}
+}
+run_test 61b "mirror extend and split preserve timestamps"
+
+test_61c() { # LU-14508
+	local file=$DIR/$tdir/$tfile
+	local -a tim
+	local nap=5
+
+	mkdir -p $DIR/$tdir
+	echo "create $file"
+	echo XXX > $file || error "create $file failed"
+	chown $RUNAS_ID $DIR/$tdir $file || error "chown $file failed"
+
+	echo "sleep $nap seconds, then cat $tfile"
+	sleep $nap
+	cat $file || error "cat $file failed"
+
+	echo "sleep $nap seconds, then mirror extend $tfile and write it"
+	sleep $nap
+	$LFS mirror extend -N -c1 -i1 $file ||
+		error "cannot extend mirror $file"
+	echo XXXX > $file || error "write $file failed"
+
+	echo "sleep $nap seconds, then resync $tfile and test timestamps"
+	tim=( $(get_times_61 $file) )
+	sleep $nap
+	$LFS mirror resync $file || error "cannot resync mirror $file"
+	check_times_61 $file ${tim[@]}
+
+	echo XXXXXX > $file || error "write $tfile failed"
+
+	echo "normal user resync $tfile and test timestamps"
+	tim=( $(get_times_61 $file) )
+	$RUNAS $LFS mirror resync $file || error "cannot resync mirror $file"
+	check_times_61 $file ${tim[@]}
+}
+run_test 61c "mirror resync preserves timestamps"
+
 test_70() {
 	local tf=$DIR/$tdir/$tfile
 
@@ -2796,8 +2936,8 @@ resync_file_200() {
 		echo -n "resync file $tf with '$cmd' .."
 
 		if [[ $lock_taken = "true" ]]; then
-			flock -x 200 -c "$cmd $tf &> /dev/null" &&
-				echo "done" || echo "failed"
+			flock -x 200
+			$cmd $tf &> /dev/null && echo "done" || echo "failed"
 			flock -u 200
 		else
 			$cmd $tf &> /dev/null && echo "done" || echo "failed"

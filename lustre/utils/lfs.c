@@ -817,7 +817,7 @@ migrate_open_files(const char *name, __u64 migration_flags,
 	/* even if the file is only read, WR mode is nedeed to allow
 	 * layout swap on fd
 	 */
-	rflags = O_RDWR;
+	rflags = O_RDWR | O_NOATIME;
 	if (!(migration_flags & MIGRATION_NONDIRECT))
 		rflags |= O_DIRECT;
 	fd = open(name, rflags);
@@ -1021,28 +1021,29 @@ out:
 	return rc;
 }
 
-static int migrate_copy_timestamps(int fd, int fdv)
+static int migrate_set_timestamps(int fd, const struct stat *st)
 {
-	struct stat st;
+	struct timeval tv[2] = {
+		{.tv_sec = st->st_atime},
+		{.tv_sec = st->st_mtime}
+	};
 
-	if (fstat(fd, &st) == 0) {
-		struct timeval tv[2] = {
-			{.tv_sec = st.st_atime},
-			{.tv_sec = st.st_mtime}
-		};
-
-		return futimes(fdv, tv);
-	}
-
-	return -errno;
+	return futimes(fd, tv);
 }
 
 static int migrate_block(int fd, int fdv)
 {
+	struct stat st;
 	__u64	dv1;
 	int	gid;
 	int	rc;
 	int	rc2;
+
+	rc = fstat(fd, &st);
+	if (rc < 0) {
+		error_loc = "cannot stat source file";
+		return -errno;
+	}
 
 	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
 	if (rc < 0) {
@@ -1072,9 +1073,9 @@ static int migrate_block(int fd, int fdv)
 	}
 
 	/* Make sure we keep original atime/mtime values */
-	rc = migrate_copy_timestamps(fd, fdv);
+	rc = migrate_set_timestamps(fdv, &st);
 	if (rc < 0) {
-		error_loc = "timestamp copy failed";
+		error_loc = "set target file timestamp failed";
 		goto out_unlock;
 	}
 
@@ -1127,9 +1128,16 @@ static int check_lease(int fd)
 
 static int migrate_nonblock(int fd, int fdv)
 {
+	struct stat st;
 	__u64	dv1;
 	__u64	dv2;
 	int	rc;
+
+	rc = fstat(fd, &st);
+	if (rc < 0) {
+		error_loc = "cannot stat source file";
+		return -errno;
+	}
 
 	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
 	if (rc < 0) {
@@ -1156,12 +1164,11 @@ static int migrate_nonblock(int fd, int fdv)
 	}
 
 	/* Make sure we keep original atime/mtime values */
-	rc = migrate_copy_timestamps(fd, fdv);
+	rc = migrate_set_timestamps(fdv, &st);
 	if (rc < 0) {
-		error_loc = "timestamp copy failed";
-		return rc;
+		error_loc = "set target file timestamp failed";
+		return -errno;
 	}
-
 	return 0;
 }
 
@@ -1891,10 +1898,9 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 		goto out;
 	}
 
-	/* Make sure we keep original atime/mtime values */
-	rc = migrate_copy_timestamps(fd, fdv);
+	rc = migrate_set_timestamps(fd, &stbuf);
 	if (rc < 0) {
-		error_loc = "cannot copy timestamp";
+		error_loc = "cannot set source file timestamp";
 		goto out;
 	}
 
@@ -1939,6 +1945,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 {
 	struct llapi_layout *f_layout = NULL;
 	struct ll_ioc_lease *data = NULL;
+	struct stat st;
 	int fd = -1;
 	int fdv = -1;
 	int rc = 0;
@@ -1975,9 +1982,21 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		goto out;
 	}
 
+	rc = fstat(fd, &st);
+	if (rc < 0) {
+		error_loc = "cannot stat source file";
+		goto out;
+	}
+
 	rc = migrate_nonblock(fd, fdv);
 	if (rc < 0) {
 		llapi_lease_release(fd);
+		goto out;
+	}
+
+	rc = migrate_set_timestamps(fd, &st);
+	if (rc < 0) {
+		error_loc = "cannot set source file timestamp";
 		goto out;
 	}
 
@@ -10682,6 +10701,13 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %s.\n",
 			progname, fname, strerror(-rc));
 
+	rc = migrate_set_timestamps(fd, &stbuf);
+	if (rc < 0) {
+		fprintf(stderr, "%s: '%s' cannot set timestamps: %s\n",
+			progname, fname, strerror(-rc));
+		goto free_layout;
+	}
+
 	/* need to do the lease unlock even resync fails */
 	ioc->lil_mode = LL_LEASE_UNLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
@@ -10702,9 +10728,14 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		/* rc2 == 0 means lost lease lock */
 		if (rc2 == 0 && rc == 0)
 			rc = -EBUSY;
+		else
+			rc = rc2;
 		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
 			progname, fname,
 			rc2 == 0 ? "lost lease lock" : strerror(-rc2));
+
+		llapi_lease_release(fd);
+		goto free_layout;
 	}
 
 free_layout:
