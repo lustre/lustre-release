@@ -46,6 +46,7 @@
 #include <linux/uio.h>
 #include <linux/semaphore.h>
 #include <linux/types.h>
+#include <linux/kref.h>
 
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lnet/lnetctl.h>
@@ -580,7 +581,7 @@ struct lnet_peer_ni {
 	/* peer's NID */
 	lnet_nid_t		lpni_nid;
 	/* # refs */
-	atomic_t		lpni_refcount;
+	struct kref		lpni_kref;
 	/* health value for the peer */
 	atomic_t		lpni_healthv;
 	/* recovery ping mdh */

@@ -484,7 +484,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 
 		if (peer != NULL) {
 			lnet_nid_t nid = peer->lpni_nid;
-			int nrefs = atomic_read(&peer->lpni_refcount);
+			int nrefs = kref_read(&peer->lpni_kref);
 			time64_t lastalive = -1;
 			char *aliveness = "NA";
 			int maxcr = (peer->lpni_net) ?

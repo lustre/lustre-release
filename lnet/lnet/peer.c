@@ -169,7 +169,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
 	INIT_LIST_HEAD(&lpni->lpni_rtr_pref_nids);
 	LNetInvalidateMDHandle(&lpni->lpni_recovery_ping_mdh);
-	atomic_set(&lpni->lpni_refcount, 1);
+	kref_init(&lpni->lpni_kref);
 	lpni->lpni_sel_priority = LNET_MAX_SELECTION_PRIORITY;
 
 	spin_lock_init(&lpni->lpni_lock);
@@ -1873,14 +1873,16 @@ lnet_del_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid)
 }
 
 void
-lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lpni)
+lnet_destroy_peer_ni_locked(struct kref *ref)
 {
+	struct lnet_peer_ni *lpni = container_of(ref, struct lnet_peer_ni,
+						 lpni_kref);
 	struct lnet_peer_table *ptable;
 	struct lnet_peer_net *lpn;
 
 	CDEBUG(D_NET, "%p nid %s\n", lpni, libcfs_nid2str(lpni->lpni_nid));
 
-	LASSERT(atomic_read(&lpni->lpni_refcount) == 0);
+	LASSERT(kref_read(&lpni->lpni_kref) == 0);
 	LASSERT(list_empty(&lpni->lpni_txq));
 	LASSERT(lpni->lpni_txqnob == 0);
 	LASSERT(list_empty(&lpni->lpni_peer_nis));
@@ -3803,7 +3805,7 @@ lnet_debug_peer(lnet_nid_t nid)
 		aliveness = (lnet_is_peer_ni_alive(lp)) ? "up" : "down";
 
 	CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
-	       libcfs_nid2str(lp->lpni_nid), atomic_read(&lp->lpni_refcount),
+	       libcfs_nid2str(lp->lpni_nid), kref_read(&lp->lpni_kref),
 	       aliveness, lp->lpni_net->net_tunables.lct_peer_tx_credits,
 	       lp->lpni_rtrcredits, lp->lpni_minrtrcredits,
 	       lp->lpni_txcredits, lp->lpni_mintxcredits, lp->lpni_txqnob);
@@ -3859,7 +3861,7 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 					 lnet_is_peer_ni_alive(lp) ? "up" : "down");
 
 			*nid = lp->lpni_nid;
-			*refcount = atomic_read(&lp->lpni_refcount);
+			*refcount = kref_read(&lp->lpni_kref);
 			*ni_peer_tx_credits =
 				lp->lpni_net->net_tunables.lct_peer_tx_credits;
 			*peer_tx_credits = lp->lpni_txcredits;
@@ -3945,7 +3947,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 			snprintf(lpni_info->cr_aliveness, LNET_MAX_STR_LEN,
 				lnet_is_peer_ni_alive(lpni) ? "up" : "down");
 
-		lpni_info->cr_refcount = atomic_read(&lpni->lpni_refcount);
+		lpni_info->cr_refcount = kref_read(&lpni->lpni_kref);
 		lpni_info->cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
 			lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
 		lpni_info->cr_peer_tx_credits = lpni->lpni_txcredits;

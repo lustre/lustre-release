@@ -375,18 +375,15 @@ lnet_peer_decref_locked(struct lnet_peer *lp)
 static inline void
 lnet_peer_ni_addref_locked(struct lnet_peer_ni *lp)
 {
-	LASSERT(atomic_read(&lp->lpni_refcount) > 0);
-	atomic_inc(&lp->lpni_refcount);
+	kref_get(&lp->lpni_kref);
 }
 
-extern void lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lp);
+extern void lnet_destroy_peer_ni_locked(struct kref *ref);
 
 static inline void
 lnet_peer_ni_decref_locked(struct lnet_peer_ni *lp)
 {
-	LASSERT(atomic_read(&lp->lpni_refcount) > 0);
-	if (atomic_dec_and_test(&lp->lpni_refcount))
-		lnet_destroy_peer_ni_locked(lp);
+	kref_put(&lp->lpni_kref, lnet_destroy_peer_ni_locked);
 }
 
 static inline int
