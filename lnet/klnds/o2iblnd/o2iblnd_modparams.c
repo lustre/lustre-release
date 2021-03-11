@@ -92,7 +92,7 @@ MODULE_PARM_DESC(ipif_name, "IPoIB interface name");
 
 static int retry_count = 5;
 module_param(retry_count, int, 0644);
-MODULE_PARM_DESC(retry_count, "Retransmissions when no ACK received");
+MODULE_PARM_DESC(retry_count, "Number of times to retry connection operations");
 
 static int rnr_retry_count = 6;
 module_param(rnr_retry_count, int, 0644);
