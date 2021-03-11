@@ -2403,16 +2403,19 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 		end_of_loop = *ptr == '\0';
 		*ptr = '\0';
 
+		errno = 0;
 		start_index = strtol(arg, &endptr, 0);
 		if (endptr == arg) /* no data at all */
 			break;
-		if (*endptr != '-' && *endptr != '\0') /* has invalid data */
+		if (errno != 0 || start_index < -1 ||
+		    (*endptr != '-' && *endptr != '\0'))
 			break;
 
 		end_index = start_index;
 		if (*endptr == '-') {
+			errno = 0;
 			end_index = strtol(endptr + 1, &endptr, 0);
-			if (*endptr != '\0')
+			if (errno != 0 || *endptr != '\0' || end_index < -1)
 				break;
 			if (end_index < start_index)
 				break;
@@ -3622,8 +3625,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		case 'i':
+			errno = 0;
 			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' ||
+			    lsa.lsa_stripe_off < -1 ||
+			    lsa.lsa_stripe_off > LOV_V1_INSANE_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s %s: invalid stripe offset '%s'\n",
 					progname, argv[0], optarg);
@@ -4773,7 +4779,15 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_stripe_count = !!neg_opt;
 			break;
 		case 'D':
+			errno = 0;
 			param.fp_max_depth = strtol(optarg, 0, 0);
+			if (errno != 0 || param.fp_max_depth < 0) {
+				fprintf(stderr,
+					"error: bad maxdepth '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
 			break;
 		case 'E':
 			if (optarg[0] == '+') {
@@ -8235,10 +8249,27 @@ static int lfs_changelog(int argc, char **argv)
 	}
 
 	mdd = argv[optind++];
-	if (argc > optind)
+	if (argc > optind) {
+		errno = 0;
 		startrec = strtoll(argv[optind++], NULL, 10);
-	if (argc > optind)
+		if (errno != 0 || startrec < 0) {
+			fprintf(stderr,
+				"%s changelog: bad startrec\n",
+				progname);
+			return CMD_HELP;
+		}
+	}
+
+	if (argc > optind) {
+		errno = 0;
 		endrec = strtoll(argv[optind++], NULL, 10);
+		if (errno != 0 || endrec < 0) {
+			fprintf(stderr,
+				"%s changelog: bad endrec\n",
+				progname);
+			return CMD_HELP;
+		}
+	}
 
 	rc = llapi_changelog_start(&changelog_priv,
 				   CHANGELOG_FLAG_BLOCK |
@@ -8388,7 +8419,14 @@ static int lfs_changelog_clear(int argc, char **argv)
 	if (argc != 4)
 		return CMD_HELP;
 
+	errno = 0;
 	endrec = strtoll(argv[3], NULL, 10);
+	if (errno != 0 || endrec < 0) {
+		fprintf(stderr,
+			"%s: bad endrec '%s'\n",
+			argv[0], argv[3]);
+		return CMD_HELP;
+	}
 
 	rc = llapi_changelog_clear(argv[1], argv[2], endrec);
 
@@ -8448,8 +8486,9 @@ static int lfs_fid2path(int argc, char **argv)
 			print_fid = true;
 			break;
 		case 'l':
+			errno = 0;
 			linkno = strtol(optarg, &endptr, 10);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' || linkno < 0) {
 				fprintf(stderr,
 					"%s fid2path: invalid linkno '%s'\n",
 					progname, optarg);
@@ -8461,8 +8500,9 @@ static int lfs_fid2path(int argc, char **argv)
 			 * that was never implemented. We just pass it
 			 * through for the MDT to ignore.
 			 */
+			errno = 0;
 			recno = strtoll(optarg, &endptr, 10);
-			if (*endptr != '\0') {
+			if (errno != 0 || *endptr != '\0' || recno < 0) {
 				fprintf(stderr,
 					"%s fid2path: invalid recno '%s'\n",
 					progname, optarg);
@@ -8904,8 +8944,9 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 			mask |= HS_EXISTS;
 			break;
 		case 'i':
+			errno = 0;
 			archive_id = strtol(optarg, &end, 10);
-			if (*end != '\0') {
+			if (errno != 0 || *end != '\0' || archive_id < 0) {
 				fprintf(stderr, "invalid archive_id: '%s'\n",
 					end);
 				return CMD_HELP;
