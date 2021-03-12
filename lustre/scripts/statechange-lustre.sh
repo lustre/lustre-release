@@ -29,6 +29,10 @@
 #   2: zpool missing
 #   3: zfs missing
 #   4: Pool status neither "ONLINE" nor "DEGRADED
+#
+# This script is also symlinked as vdev_attach-lustre.sh, vdev_remove-lustre.sh
+# and vdev_clear-lustre.sh, since it needs to take the same action on those
+# ZFS events as well.
 
 [ -f "${ZED_ZEDLET_DIR}/zed.rc" ] && . "${ZED_ZEDLET_DIR}/zed.rc"
 . "${ZED_ZEDLET_DIR}/zed-functions.sh"
