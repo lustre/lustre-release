@@ -68,7 +68,8 @@ ha_SCRIPTS = Lustre.ha_v2
 
 if ZFS_ENABLED
 zedletdir = $(sysconfdir)/zfs/zed.d/
-zedlet_SCRIPTS = statechange-lustre.sh
+zedlet_SCRIPTS = statechange-lustre.sh vdev_attach-lustre.sh \
+		 vdev_remove-lustre.sh vdev_clear-lustre.sh
 endif
 
 scriptlibdir = @libexecdir@/@PACKAGE@
@@ -93,6 +94,7 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
 	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
 	     zfsobj2fid ko2iblnd-probe statechange-lustre.sh \
+	     vdev_attach-lustre.sh vdev_remove-lustre.sh vdev_clear-lustre.sh \
 	     bash-completion/lustre bash-completion/lctl bash-completion/lfs
 
 CLEANFILES = $(genscripts)
