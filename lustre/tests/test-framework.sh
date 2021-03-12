@@ -7569,8 +7569,9 @@ _wait_osc_import_state() {
 		params=$param
 	fi
 
+	local plist=$(comma_list $params)
 	if ! do_rpc_nodes "$(facet_active_host $facet)" \
-			wait_import_state $expected "$params" $maxtime; then
+			wait_import_state $expected $plist $maxtime; then
 		error "$facet: import is not in $expected state after $maxtime"
 		return 1
 	fi
@@ -7625,8 +7626,9 @@ _wait_mgc_import_state() {
 			params=$($LCTL list_param $param 2>/dev/null || true)
 		done
 	fi
+	local plist=$(comma_list $params)
 	if ! do_rpc_nodes "$(facet_active_host $facet)" \
-			wait_import_state $expected "$params" $maxtime \
+			wait_import_state $expected $plist $maxtime \
 					  $error_on_failure; then
 		if [ $error_on_failure -ne 0 ]; then
 		    error "import is not in ${expected} state"

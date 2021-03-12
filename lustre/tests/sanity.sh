@@ -21502,6 +21502,9 @@ test_280() {
 	stop mgs || error "stop mgs failed"
 	#for a race mgs would crash
 	start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "start mgs failed"
+	# make sure we unmount client before remounting
+	wait
+	umount_client $MOUNT
 	mount_client $MOUNT || error "mount client failed"
 }
 run_test 280 "Race between MGS umount and client llog processing"
@@ -22370,7 +22373,7 @@ test_311() {
 		skip "lustre < 2.8.54 does not contain LU-4825 fix"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	local old_iused=$($LFS df -i | grep OST0000 | awk '{ print $3 }')
+	local old_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
 	local mdts=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
@@ -22402,7 +22405,7 @@ test_311() {
 
 	local new_iused
 	for i in $(seq 120); do
-		new_iused=$($LFS df -i | grep OST0000 | awk '{ print $3 }')
+		new_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
 		# system may be too busy to destroy all objs in time, use
 		# a somewhat small value to not fail autotest
 		[ $((old_iused - new_iused)) -gt 400 ] && break
@@ -22648,12 +22651,15 @@ test_317() {
 run_test 317 "Verify blocks get correctly update after truncate"
 
 test_318() {
+	local llite_name="llite.$($LFS getname $MOUNT | awk '{print $1}')"
 	local old_max_active=$($LCTL get_param -n \
-			    llite.*.max_read_ahead_async_active 2>/dev/null)
+			    ${llite_name}.max_read_ahead_async_active \
+			    2>/dev/null)
 
 	$LCTL set_param llite.*.max_read_ahead_async_active=256
 	local max_active=$($LCTL get_param -n \
-			   llite.*.max_read_ahead_async_active 2>/dev/null)
+			   ${llite_name}.max_read_ahead_async_active \
+			   2>/dev/null)
 	[ $max_active -ne 256 ] && error "expected 256 but got $max_active"
 
 	$LCTL set_param llite.*.max_read_ahead_async_active=0 ||
@@ -22661,7 +22667,7 @@ test_318() {
 
 	$LCTL set_param llite.*.max_read_ahead_async_active=512
 	max_active=$($LCTL get_param -n \
-		     llite.*.max_read_ahead_async_active 2>/dev/null)
+		     ${llite_name}.max_read_ahead_async_active 2>/dev/null)
 	[ $max_active -eq 512 ] || error "expected 512 but got $max_active"
 
 	# restore @max_active
@@ -22669,9 +22675,9 @@ test_318() {
 		llite.*.max_read_ahead_async_active=$old_max_active
 
 	local old_threshold=$($LCTL get_param -n \
-		llite.*.read_ahead_async_file_threshold_mb 2>/dev/null)
+		${llite_name}.read_ahead_async_file_threshold_mb 2>/dev/null)
 	local max_per_file_mb=$($LCTL get_param -n \
-		llite.*.max_read_ahead_per_file_mb 2>/dev/null)
+		${llite_name}.max_read_ahead_per_file_mb 2>/dev/null)
 
 	local invalid=$(($max_per_file_mb + 1))
 	$LCTL set_param \
@@ -22683,7 +22689,7 @@ test_318() {
 		llite.*.read_ahead_async_file_threshold_mb=$valid ||
 			error "set $valid should succeed"
 	local threshold=$($LCTL get_param -n \
-		llite.*.read_ahead_async_file_threshold_mb 2>/dev/null)
+		${llite_name}.read_ahead_async_file_threshold_mb 2>/dev/null)
 	[ $threshold -eq $valid ] || error \
 		"expect threshold $valid got $threshold"
 	$LCTL set_param \
@@ -22805,7 +22811,7 @@ test_398c() { # LU-4198
 		error "Locks were requested while doing AIO"
 
 	# get the percentage of 1-page I/O
-	pct=$($LCTL get_param osc.${FSNAME}-OST0000-osc-ffff*.rpc_stats |
+	pct=$($LCTL get_param osc.${imp_name}.rpc_stats |
 		grep -A 1 'pages per rpc' | grep -v 'pages per rpc' |
 		awk '{print $7}')
 	[ $pct -le 50 ] || error "$pct% of I/O are 1-page"
@@ -22872,7 +22878,7 @@ test_fake_rw() {
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 
 	# get ost1 size - $FSNAME-OST0000
-	local ost1_avail_size=$($LFS df | awk /${ost1_svc}/'{ print $4 }')
+	local ost1_avail_size=$($LFS df $DIR | awk /${ost1_svc}/'{ print $4 }')
 	local blocks=$((ost1_avail_size/2/1024)) # half avail space by megabytes
 	[ $blocks -gt 1000 ] && blocks=1000 # 1G in maximum
 
@@ -24063,26 +24069,24 @@ test_421f() {
 	cnt=$(ls -1 $DIR/$tdir | wc -l)
 	[ $cnt == 1 ] || error "unexpected #files after (5): $cnt"
 
-	umount_client $MOUNT || error "failed to umount client"
-	mount_client $MOUNT "$MOUNT_OPTS,user_fid2path" ||
+	tmpdir=$(mktemp -d /tmp/lustre-XXXXXX)
+	stack_trap "rmdir $tmpdir"
+	mount_client $tmpdir "$MOUNT_OPTS,user_fid2path" ||
 		error "failed to mount client'"
+	stack_trap "umount_client $tmpdir"
 
-	$RUNAS $LFS rmfid $DIR $FID || error "rmfid failed"
+	$RUNAS $LFS rmfid $tmpdir $FID || error "rmfid failed"
 	# rmfid should succeed
-	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	cnt=$(ls -1 $tmpdir/$tdir | wc -l)
 	[ $cnt == 0 ] || error "unexpected #files after (6): $cnt"
 
 	# rmfid shouldn't allow to remove files due to dir's permission
-	chmod a+rwx $DIR/$tdir
-	touch $DIR/$tdir/f
-	ls -la $DIR/$tdir
-	FID=$(lfs path2fid $DIR/$tdir/f)
-	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail"
-
-	umount_client $MOUNT || error "failed to umount client"
-	mount_client $MOUNT "$MOUNT_OPTS" ||
-		error "failed to mount client'"
-
+	chmod a+rwx $tmpdir/$tdir
+	touch $tmpdir/$tdir/f
+	ls -la $tmpdir/$tdir
+	FID=$(lfs path2fid $tmpdir/$tdir/f)
+	$RUNAS $LFS rmfid $tmpdir $FID && error "rmfid didn't fail"
+	return 0
 }
 run_test 421f "rmfid checks permissions"
 
