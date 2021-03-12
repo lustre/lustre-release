@@ -1131,7 +1131,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 
 	down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
-		GOTO(out, rc = 0);
+		GOTO(out_sem, rc = 0);
 
 	LASSERT(obj->oo_sa_hdl != NULL);
 	LASSERT(oh->ot_tx != NULL);
@@ -1153,7 +1153,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (!found)
 		dmu_tx_hold_bonus(oh->ot_tx, obj->oo_dn->dn_object);
 	if (oh->ot_tx->tx_err != 0)
-		GOTO(out, rc = -oh->ot_tx->tx_err);
+		GOTO(out_sem, rc = -oh->ot_tx->tx_err);
 
 	if (attr && attr->la_valid & LA_FLAGS) {
 		/* LMA is usually a part of bonus, no need to declare
@@ -1169,6 +1169,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		       osd->od_svname,
 		       attr->la_uid, attr->la_gid, bspace, blksize);
 	}
+	/* to preserve locking order - qsd_transfer() may need to flush
+	 * currently running transaction when we're out of quota. */
+	up_read(&obj->oo_guard);
 
 	if (attr && attr->la_valid & LA_UID) {
 		/* quota enforcement for user */
@@ -1229,6 +1232,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	}
 #endif
 out:
+	RETURN(rc);
+out_sem:
 	up_read(&obj->oo_guard);
 	RETURN(rc);
 }
