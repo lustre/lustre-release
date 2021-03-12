@@ -619,13 +619,6 @@ static void do_requeue(struct config_llog_data *cld)
         EXIT;
 }
 
-/* this timeout represents how many seconds MGC should wait before
- * requeue config and recover lock to the MGS. We need to randomize this
- * in order to not flood the MGS.
- */
-#define MGC_TIMEOUT_MIN_SECONDS   5
-#define MGC_TIMEOUT_RAND_CENTISEC 500
-
 static int mgc_requeue_thread(void *data)
 {
 	int rc = 0;
@@ -639,7 +632,6 @@ static int mgc_requeue_thread(void *data)
 	rq_state |= RQ_RUNNING;
 	while (!(rq_state & RQ_STOP)) {
 		struct config_llog_data *cld, *cld_prev;
-		int rand = prandom_u32_max(MGC_TIMEOUT_RAND_CENTISEC);
 		int to;
 
 		/* Any new or requeued lostlocks will change the state */
@@ -655,11 +647,11 @@ static int mgc_requeue_thread(void *data)
 		 * caused the lock revocation to finish its setup, plus some
 		 * random so everyone doesn't try to reconnect at once.
 		 */
-		to = cfs_time_seconds(MGC_TIMEOUT_MIN_SECONDS * 100 + rand);
-		/* rand is centi-seconds */
+		to = mgc_requeue_timeout_min == 0 ? 1 : mgc_requeue_timeout_min;
+		to = cfs_time_seconds(mgc_requeue_timeout_min) +
+			prandom_u32_max(cfs_time_seconds(to));
 		wait_event_idle_timeout(rq_waitq,
-					rq_state & (RQ_STOP | RQ_PRECLEANUP),
-					to/100);
+					rq_state & (RQ_STOP | RQ_PRECLEANUP), to);
 
 		/*
 		 * iterate & processing through the list. for each cld, process
@@ -2287,6 +2279,40 @@ static const struct obd_ops mgc_obd_ops = {
         .o_import_event = mgc_import_event,
         .o_process_config = mgc_process_config,
 };
+
+static int mgc_param_requeue_timeout_min_set(const char *val,
+				     cfs_kernel_param_arg_t *kp)
+{
+	int rc;
+	unsigned int num;
+
+	rc = kstrtouint(val, 0, &num);
+	if (rc < 0)
+		return rc;
+	if (num > 120)
+		return -EINVAL;
+
+	mgc_requeue_timeout_min = num;
+
+	return 0;
+}
+
+static const struct kernel_param_ops param_ops_requeue_timeout_min = {
+	.set = mgc_param_requeue_timeout_min_set,
+	.get = param_get_uint,
+};
+
+#define param_check_requeue_timeout_min(name, p) \
+		__param_check(name, p, unsigned int)
+
+unsigned int mgc_requeue_timeout_min = MGC_TIMEOUT_MIN_SECONDS;
+#ifdef HAVE_KERNEL_PARAM_OPS
+module_param(mgc_requeue_timeout_min, requeue_timeout_min, 0644);
+#else
+module_param_call(mgc_requeue_timeout_min, mgc_param_requeue_timeout_min_set,
+		  param_get_uint, &param_ops_requeue_timeout_min, 0644);
+#endif
+MODULE_PARM_DESC(mgc_requeue_timeout_min, "Minimal requeue time to refresh logs");
 
 static int __init mgc_init(void)
 {

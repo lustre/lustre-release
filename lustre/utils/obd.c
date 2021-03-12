@@ -3714,7 +3714,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 			if (rc == -ENODEV)
 				return rc;
 			if (rc < 0)
-				sleep(2);
+				sleep(1);
 			cpt--;
 		} while ((rc < 0) && (cpt > 0));
 		if (rc >= 0) {
@@ -3733,7 +3733,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 			if (rc == -ENODEV)
 				return rc;
 			if (rc >= 0)
-				sleep(2);
+				sleep(1);
 			cpt--;
 		} while ((rc >= 0) && (cpt > 0));
 		if (rc < 0) {
@@ -3752,7 +3752,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 			if (rc == -ENODEV)
 				return rc;
 			if (rc != 1)
-				sleep(2);
+				sleep(1);
 			cpt--;
 		} while ((rc != 1) && (cpt > 0));
 		if (rc == 1) {
@@ -3770,7 +3770,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd, char *fsname,
 			if (rc == -ENODEV)
 				return rc;
 			if (rc == 1)
-				sleep(2);
+				sleep(1);
 			cpt--;
 		} while ((rc == 1) && (cpt > 0));
 		if (rc != 1) {

@@ -43,6 +43,14 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 
+/* this timeout represents how many seconds MGC should wait before
+ * requeue config and recover lock to the MGS. We need to randomize this
+ * in order to not flood the MGS.
+ */
+#define MGC_TIMEOUT_MIN_SECONDS		5
+
+extern unsigned int mgc_requeue_timeout_min;
+
 static inline bool cld_is_sptlrpc(struct config_llog_data *cld)
 {
 	return cld->cld_type == MGS_CFG_T_SPTLRPC;

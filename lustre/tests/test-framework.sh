@@ -5270,6 +5270,10 @@ init_param_vars () {
 	TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
 	log "Using TIMEOUT=$TIMEOUT"
 
+	# tune down to speed up testing on (usually) small setups
+	do_nodes $(comma_list $(nodes_list)) \
+		"echo 1 >/sys/module/mgc/parameters/mgc_requeue_timeout_min"
+
 	osc_ensure_active $SINGLEMDS $TIMEOUT
 	osc_ensure_active client $TIMEOUT
 	$LCTL set_param osc.*.idle_timeout=debug
