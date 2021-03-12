@@ -54,6 +54,9 @@ MODULE_PARM_DESC(at_max, "Adaptive timeout maximum (sec)");
 module_param(at_history, int, 0644);
 MODULE_PARM_DESC(at_history,
 		 "Adaptive timeouts remember the slowest event that took place within this period (sec)");
+module_param(at_unhealthy_factor, int, 0644);
+MODULE_PARM_DESC(at_unhealthy_factor,
+		 "Multiple of at_max when delayed RPCs considered unhealthy");
 module_param(at_early_margin, int, 0644);
 MODULE_PARM_DESC(at_early_margin, "How soon before an RPC deadline to send an early reply");
 module_param(at_extra, int, 0644);
@@ -2047,6 +2050,7 @@ ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, bool force)
 	RETURN(NULL);
 
 got_request:
+	svcpt->scp_last_request = ktime_get_real_seconds();
 	svcpt->scp_nreqs_active++;
 	if (req->rq_hp)
 		svcpt->scp_nhreqs_active++;
@@ -3673,42 +3677,69 @@ EXPORT_SYMBOL(ptlrpc_unregister_service);
 /**
  * Returns 0 if the service is healthy.
  *
- * Right now, it just checks to make sure that requests aren't languishing
- * in the queue.  We'll use this health check to govern whether a node needs
- * to be shot, so it's intentionally non-aggressive.
+ * Check whether requests have been waiting in the queue for an excessive
+ * time without being processed.  Individual requests may wait in the queue
+ * for some time due to NRS policies, overloaded storage, etc. but the queue
+ * itself should continue to process some requests on a regular basis.
+ *
+ * We'll use this health check to govern whether a node needs to be shot,
+ * so it's intentionally non-aggressive.
  */
 static int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_request *request = NULL;
-	struct timespec64 right_now;
-	struct timespec64 timediff;
 	struct obd_device *obd = NULL;
+	time64_t right_now;
+	time64_t req_waited;
+	time64_t svc_waited;
+	bool recovering;
+	unsigned int max;
 
-	ktime_get_real_ts64(&right_now);
+	/* quick check without locking to handle the most common case */
+	right_now = ktime_get_real_seconds();
+	if (likely(right_now - svcpt->scp_last_request < obd_get_at_max(NULL)))
+		return 0;
 
 	spin_lock(&svcpt->scp_req_lock);
-	/* How long has the next entry been waiting? */
 	if (ptlrpc_server_high_pending(svcpt, true))
 		request = ptlrpc_nrs_req_peek_nolock(svcpt, true);
 	else if (ptlrpc_server_normal_pending(svcpt, true))
 		request = ptlrpc_nrs_req_peek_nolock(svcpt, false);
 
+	/* if no waiting requests, service idle time is irrelevant */
 	if (request == NULL) {
 		spin_unlock(&svcpt->scp_req_lock);
 		return 0;
 	}
 
-	timediff = timespec64_sub(right_now, request->rq_arrival_time);
-	spin_unlock(&svcpt->scp_req_lock);
-
 	if (request->rq_export)
 		obd = request->rq_export->exp_obd;
 
-	if ((timediff.tv_sec) >
-	    (obd_at_off(obd) ? obd_timeout * 3 / 2 : obd_get_at_max(obd))) {
-		CERROR("%s: unhealthy - request has been waiting %llds\n",
-		       svcpt->scp_service->srv_name, (s64)timediff.tv_sec);
-		return -1;
+	req_waited = right_now - request->rq_arrival_time.tv_sec;
+	svc_waited = right_now - svcpt->scp_last_request;
+	recovering = obd ? obd->obd_recovering : false;
+	spin_unlock(&svcpt->scp_req_lock);
+
+	max = obd_get_at_max(obd);
+	if (min(req_waited, svc_waited) > max && !recovering) {
+		bool unhealthy = false;
+
+		/* if at_unhealthy_factor = 0 then disable unhealthy status but
+		 * at least print a warning if requests are stuck for a while
+		 */
+		if (obd_get_at_unhealthy_factor(obd) &&
+		    svc_waited > max * obd_get_at_unhealthy_factor(obd)) {
+			/* check if other CPTs in svc also unhealthy? */
+			unhealthy = true;
+		}
+
+		CDEBUG_LIMIT(unhealthy ? D_ERROR : D_WARNING,
+			     "%s: %s - request waiting %llus, service %llus\n",
+			     obd ? obd->obd_name : svcpt->scp_service->srv_name,
+			     unhealthy ? "unhealthy" : "notice",
+			     req_waited, svc_waited);
+		if (unhealthy)
+			return -1;
 	}
 
 	return 0;

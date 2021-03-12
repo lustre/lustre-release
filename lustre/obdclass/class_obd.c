@@ -93,6 +93,9 @@ unsigned int at_max = 600;
 EXPORT_SYMBOL(at_max);
 unsigned int at_history = 600;
 EXPORT_SYMBOL(at_history);
+/* Multiple of at_max when service is thought unhealthy and may be STONITH'd */
+unsigned int at_unhealthy_factor = 3;
+EXPORT_SYMBOL(at_unhealthy_factor);
 int at_early_margin = 5;
 EXPORT_SYMBOL(at_early_margin);
 int at_extra = 30;

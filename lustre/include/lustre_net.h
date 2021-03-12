@@ -1766,6 +1766,8 @@ struct ptlrpc_service_part {
 	struct ptlrpc_nrs		scp_nrs_reg;
 	/** NRS head for HP reqs; valid for services that can handle HP reqs */
 	struct ptlrpc_nrs	       *scp_nrs_hp;
+	/** when the last request was handled on this service */
+	time64_t			scp_last_request;
 
 	/** AT stuff */
 	/** @{ */

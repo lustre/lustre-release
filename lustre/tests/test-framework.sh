@@ -8711,7 +8711,7 @@ _wait_osc_import_state() {
 	if [[ $facet == client* ]]; then
 		# During setup time, the osc might not be setup, it need wait
 		# until list_param can return valid value.
-		params=$($LCTL list_param $param 2>/dev/null || true)
+		params=$($LCTL list_param $param 2>/dev/null | head -1)
 		while [ -z "$params" ]; do
 			if [ $i -ge $maxtime ]; then
 				echo "can't get $param in $maxtime secs"
@@ -8719,7 +8719,7 @@ _wait_osc_import_state() {
 			fi
 			sleep 1
 			i=$((i + 1))
-			params=$($LCTL list_param $param 2>/dev/null || true)
+			params=$($LCTL list_param $param 2>/dev/null | head -1)
 		done
 	fi
 

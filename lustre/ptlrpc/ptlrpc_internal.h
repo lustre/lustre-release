@@ -169,7 +169,7 @@ ptlrpc_nrs_req_get_nolock(struct ptlrpc_service_part *svcpt, bool hp,
 static inline struct ptlrpc_request *
 ptlrpc_nrs_req_peek_nolock(struct ptlrpc_service_part *svcpt, bool hp)
 {
-	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, true, false);
+	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, true, true);
 }
 
 void ptlrpc_nrs_req_del_nolock(struct ptlrpc_request *req);

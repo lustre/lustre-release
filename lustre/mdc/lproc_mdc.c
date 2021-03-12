@@ -775,6 +775,7 @@ LUSTRE_RW_ATTR(grant_shrink_interval);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_unhealthy_factor);
 
 static struct attribute *mdc_attrs[] = {
 	&lustre_attr_active.attr,
@@ -792,6 +793,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_history.attr,
+	&lustre_attr_at_unhealthy_factor.attr,
 	NULL,
 };
 

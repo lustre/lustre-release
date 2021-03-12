@@ -63,6 +63,7 @@ extern unsigned int bulk_timeout;
 extern unsigned int at_min;
 extern unsigned int at_max;
 extern unsigned int at_history;
+extern unsigned int at_unhealthy_factor;
 extern int at_early_margin;
 extern int at_extra;
 extern unsigned long obd_max_dirty_pages;

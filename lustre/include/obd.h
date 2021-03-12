@@ -765,6 +765,7 @@ struct obd_device {
 	unsigned int			obd_at_min;
 	unsigned int			obd_at_max;
 	unsigned int			obd_at_history;
+	unsigned int			obd_at_unhealthy_factor;
 	unsigned int			obd_ldlm_enqueue_min;
 };
 
@@ -779,6 +780,11 @@ struct obd_device {
 #define obd_get_at_history(obd) ({ \
 	struct obd_device *_obd = obd; \
 	_obd && _obd->obd_at_history ? _obd->obd_at_history : at_history; \
+})
+#define obd_get_at_unhealthy_factor(obd) ({ \
+	struct obd_device *_obd = obd; \
+	_obd && _obd->obd_at_unhealthy_factor ? _obd->obd_at_unhealthy_factor :\
+						at_unhealthy_factor; \
 })
 extern unsigned int ldlm_enqueue_min;
 #define obd_get_ldlm_enqueue_min(obd) ({ \

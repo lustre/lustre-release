@@ -6784,6 +6784,60 @@ test_116() {
 }
 run_test 116 "DNE: Set default LMV layout from a remote client"
 
+test_200() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
+	local at_max=10
+	local delay=20
+	local old_at=$(do_facet ost1 "$LCTL get_param -n at_max")
+	local old_uf=$(do_facet ost1 "$LCTL get_param -n at_unhealthy_factor")
+	local old_thrds=$(do_facet ost1 \
+		"$LCTL get_param -n ost.OSS.ost_io.threads_max")
+	local thrds=$(do_facet ost1 \
+		"$LCTL get_param -n ost.OSS.ost_io.threads_started")
+
+	if [[ -z "$old_uf" ]]; then
+		skip "no at_unhealthy_factor, skipping"
+	fi
+
+	stack_trap "wait_osc_import_ready client ost1"
+	do_facet ost1 "$LCTL set_param at_max=$at_max at_unhealthy_factor=3 \
+		       ost.OSS.ost_io.threads_max=$thrds"
+	stack_trap "do_facet ost1 $LCTL set_param at_max=$old_at \
+					at_unhealthy_factor=$old_uf \
+					ost.OSS.ost_io.threads_max=$old_thrds"
+
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir
+	# delay for long enough to exceed old UNHEALTHY check, but allow
+	# threads to complete RPCs occasionally to keep service healthy
+	#define OBD_FAIL_OFD_COMMITRW_DELAY 0x1e1
+	do_facet ost1 "$LCTL set_param fail_loc=0x1e1 fail_val=$delay"
+
+	for ((i=0; i < thrds * 2; i++)); do
+		dd if=/dev/urandom of=$DIR/$tdir/$tfile.$i bs=4k count=1 \
+			oflag=direct &
+	done
+	sync &
+	sleep 5
+	# enough time for 2 sets of writes to be blocked for $fail_val
+	local end=$((SECONDS + delay))
+
+	sleep $at_max
+	while ((SECONDS < end)); do
+		local health=$(do_facet ost1 $LCTL get_param -n health_check)
+
+		if [[ "$health" != "healthy" ]]; then
+			echo "OST health=$health"
+			break
+		fi
+		sleep 3
+	done
+	(( SECONDS >= end )) || error "unhealthy state was seen"
+	wait
+}
+run_test 200 "service remains healthy while able to process request"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

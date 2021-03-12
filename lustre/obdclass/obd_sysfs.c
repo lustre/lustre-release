@@ -123,6 +123,7 @@ LUSTRE_STATIC_UINT_ATTR(at_max, &at_max);
 LUSTRE_STATIC_UINT_ATTR(at_extra, &at_extra);
 LUSTRE_STATIC_UINT_ATTR(at_early_margin, &at_early_margin);
 LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
+LUSTRE_STATIC_UINT_ATTR(at_unhealthy_factor, &at_unhealthy_factor);
 LUSTRE_STATIC_UINT_ATTR(enable_stats_header, &obd_enable_stats_header);
 LUSTRE_STATIC_UINT_ATTR(lbug_on_eviction, &obd_lbug_on_eviction);
 LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
@@ -498,6 +499,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_sattr_at_extra.u.attr,
 	&lustre_sattr_at_early_margin.u.attr,
 	&lustre_sattr_at_history.u.attr,
+	&lustre_sattr_at_unhealthy_factor.u.attr,
 	&lustre_attr_memused_max.attr,
 	&lustre_attr_memused.attr,
 #ifdef HAVE_SERVER_SUPPORT
