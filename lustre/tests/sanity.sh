@@ -19311,6 +19311,22 @@ test_230s() {
 }
 run_test 230s "lfs mkdir should return -EEXIST if target exists"
 
+test_230t()
+{
+	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -ge $(version_code 2.14.50) ]] ||
+		skip "Need MDS version at least 2.14.50"
+
+	test_mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	test_mkdir $DIR/$tdir/subdir || error "mkdir subdir failed"
+	$LFS project -p 1 -s $DIR/$tdir ||
+		error "set $tdir project id failed"
+	$LFS project -p 2 -s $DIR/$tdir/subdir ||
+		error "set subdir project id failed"
+	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir || error "migrate failed"
+}
+run_test 230t "migrate directory with project ID set"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

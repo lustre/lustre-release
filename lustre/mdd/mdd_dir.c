@@ -3330,8 +3330,12 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 	if (mdd_object_exists(tobj))
 		RETURN(-EEXIST);
 
-	rc = mdd_rename_sanity_check(env, spobj, spattr, tpobj, tpattr, sobj,
-				     attr, NULL, NULL);
+	rc = mdd_may_delete(env, spobj, spattr, sobj, attr, NULL, 1, 0);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_may_create(env, tpobj, tpattr, NULL, true);
+
 	RETURN(rc);
 }
 
