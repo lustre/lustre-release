@@ -1467,9 +1467,9 @@ existing_lock:
 out:
 	req->rq_status = rc ?: err; /* return either error - b=11190 */
 	if (!req->rq_packed_final) {
-		err = lustre_pack_reply(req, 1, NULL, NULL);
+		int rc1 = lustre_pack_reply(req, 1, NULL, NULL);
 		if (rc == 0)
-			rc = err;
+			rc = rc1;
 	}
 
 	/*
@@ -1547,8 +1547,8 @@ retry:
 				ldlm_resource_unlink_lock(lock);
 				ldlm_lock_destroy_nolock(lock);
 				unlock_res_and_lock(lock);
-
 			}
+			ldlm_reprocess_all(lock->l_resource, lock);
 		}
 
 		if (!err && !ldlm_is_cbpending(lock) &&
