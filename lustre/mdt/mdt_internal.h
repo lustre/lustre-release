@@ -56,7 +56,6 @@
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
 #include <lustre_idmap.h>
-#include <lustre_eacl.h>
 #include <lustre_quota.h>
 #include <lustre_linkea.h>
 #include <lustre_lmv.h>

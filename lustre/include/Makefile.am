@@ -51,7 +51,6 @@ EXTRA_DIST = \
 	lustre_disk.h \
 	lustre_dlm_flags.h \
 	lustre_dlm.h \
-	lustre_eacl.h \
 	lustre_errno.h \
 	lustre_export.h \
 	lustre_fid.h \

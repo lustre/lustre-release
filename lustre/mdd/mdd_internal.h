@@ -39,7 +39,6 @@
 
 #include <lustre_acl.h>
 #include <lustre_compat.h>
-#include <lustre_eacl.h>
 #include <md_object.h>
 #include <dt_object.h>
 #include <lustre_lfsck.h>
@@ -437,6 +436,19 @@ int mdd_changelog_user_purge(const struct lu_env *env, struct mdd_device *mdd,
 
 /* mdd_prepare.c */
 int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
+
+/* acl.c */
+extern int lustre_posix_acl_permission(struct lu_ucred *mu,
+				       const struct lu_attr *la,
+				       unsigned int may_mask,
+				       posix_acl_xattr_entry *entry,
+				       int count);
+extern int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
+				       __u32 mode, int count);
+extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
+					__u32 *pmode, int count);
+extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry,
+				       mode_t *mode_p, int count);
 
 /* inline functions */
 static inline int lu_device_is_mdd(struct lu_device *d)

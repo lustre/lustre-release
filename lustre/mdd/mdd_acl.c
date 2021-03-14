@@ -39,10 +39,10 @@
 #define DEBUG_SUBSYSTEM S_SEC
 #include <lu_object.h>
 #include <lustre_acl.h>
-#include <lustre_eacl.h>
 #include <obd_support.h>
 #include <lustre_idmap.h>
 #include <md_object.h>
+#include "mdd_internal.h"
 
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 
@@ -149,7 +149,6 @@ check_perm:
 
 	return -EACCES;
 }
-EXPORT_SYMBOL(lustre_posix_acl_permission);
 
 /*
  * Modify the ACL for the chmod.
@@ -198,7 +197,6 @@ int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, u32 mode,
 
 	return 0;
 }
-EXPORT_SYMBOL(lustre_posix_acl_chmod_masq);
 
 /*
  * Returns 0 if the acl can be exactly represented in the traditional
@@ -241,7 +239,6 @@ lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
 		*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
 	return not_equiv;
 }
-EXPORT_SYMBOL(lustre_posix_acl_equiv_mode);
 
 /*
  * Modify acl when creating a new object.
@@ -300,5 +297,4 @@ int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, u32 *pmode,
 	*pmode = (*pmode & ~S_IRWXUGO) | mode;
 	return not_equiv;
 }
-EXPORT_SYMBOL(lustre_posix_acl_create_masq);
 #endif
