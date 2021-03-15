@@ -1460,6 +1460,10 @@ again:
 			md.default_lmv->lsm_md_master_mdt_index =
 				lum->lum_stripe_offset;
 			md.default_lmv->lsm_md_hash_type = lum->lum_hash_type;
+			md.default_lmv->lsm_md_max_inherit =
+				lum->lum_max_inherit;
+			md.default_lmv->lsm_md_max_inherit_rr =
+				lum->lum_max_inherit_rr;
 
 			err = ll_update_inode(dir, &md);
 			md_free_lustre_md(sbi->ll_md_exp, &md);

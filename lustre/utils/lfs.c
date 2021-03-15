@@ -287,7 +287,9 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"		[--mdt-count|-c stripe_count>\n"		\
 	"		[--mdt-hash|-H mdt_hash]\n"			\
 	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
-	"		[--default|-D] [--mode|-o mode] <dir>\n"	\
+	"		[--default|-D] [--mode|-o mode]\n"		\
+	"		[--max-inherit|-X max_inherit]\n"		\
+	"		[--max-inherit-rr max_inherit_rr] <dir>\n"		\
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\
 	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
@@ -462,7 +464,9 @@ command_t cmdlist[] = {
 	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
 	 "		      [--mdt-hash|-H] [--obd|-O <uuid>]\n"
 	 "		      [--recursive|-r] [--yaml|-y]\n"
-	 "		      [--verbose|-v] [--default|-D] <dir> ..."},
+	 "		      [--verbose|-v] [--default|-D]\n"
+	 "		      [--max-inherit|-X]\n"
+	 "		      [--max-inherit-rr] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "Create striped directory on specified MDT, same as setdirstripe.\n"
 	 "usage: mkdir [OPTION] <directory>\n"
@@ -3347,6 +3351,7 @@ enum {
 	LFS_LAYOUT_FOREIGN_OPT,
 	LFS_MODE_OPT,
 	LFS_NEWERXY_OPT,
+	LFS_INHERIT_RR_OPT,
 };
 
 /* functions */
@@ -3481,6 +3486,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
+/* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
 	{ .val = 'z',   .name = "ext-size",	.has_arg = required_argument},
 	{ .val = 'z',   .name = "extension-size", .has_arg = required_argument},
@@ -5525,6 +5531,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 /* find	{ .val = 'u',	.name = "uid",		.has_arg = required_argument }*/
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+/* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .val = 'z',	.name = "extension-size", .has_arg = no_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = no_argument },
@@ -5907,23 +5914,26 @@ static int lfs_getdirstripe(int argc, char **argv)
 {
 	struct find_param param = { 0 };
 	struct option long_opts[] = {
-	{ .val = 'c',	.name = "mdt-count",	.has_arg = no_argument },
-	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
-	{ .val = 'H',	.name = "mdt-hash",	.has_arg = no_argument },
-	{ .val = 'i',	.name = "mdt-index",	.has_arg = no_argument },
-	{ .val = 'm',	.name = "mdt-index",	.has_arg = no_argument },
-	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
-	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
-	{ .val = 'T',	.name = "mdt-count",	.has_arg = no_argument },
-	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
-	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
+	{ .val = 'c',	.name = "mdt-count",	 .has_arg = no_argument },
+	{ .val = 'D',	.name = "default",	 .has_arg = no_argument },
+	{ .val = 'H',	.name = "mdt-hash",	 .has_arg = no_argument },
+	{ .val = 'i',	.name = "mdt-index",	 .has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt-index",	 .has_arg = no_argument },
+	{ .val = 'O',	.name = "obd",		 .has_arg = required_argument },
+	{ .val = 'r',	.name = "recursive",	 .has_arg = no_argument },
+	{ .val = 'T',	.name = "mdt-count",	 .has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	 .has_arg = no_argument },
+	{ .val = 'X',	.name = "max-inherit",	 .has_arg = no_argument },
+	{ .val = 'y',	.name = "yaml",		 .has_arg = no_argument },
+	{ .val = LFS_INHERIT_RR_OPT,
+			.name = "max-inherit-rr", .has_arg = no_argument },
 	{ .name = NULL } };
 	int c, rc;
 
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHimO:rtTvy", long_opts, NULL)) != -1) {
+				"cDHimO:rtTvXy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
@@ -5958,6 +5968,12 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 		case 'v':
 			param.fp_verbose |= VERBOSE_DETAIL;
+			break;
+		case 'X':
+			param.fp_verbose |= VERBOSE_INHERIT;
+			break;
+		case LFS_INHERIT_RR_OPT:
+			param.fp_verbose |= VERBOSE_INHERIT_RR;
 			break;
 		case 'y':
 			param.fp_yaml = 1;
@@ -6323,6 +6339,10 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 	return rc;
 }
 
+enum {
+	LAYOUT_INHERIT_UNSET	= -2,
+};
+
 /* functions */
 static int lfs_setdirstripe(int argc, char **argv)
 {
@@ -6340,6 +6360,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 	mode_t previous_mode = 0;
 	char *xattr = NULL;
 	__u32 type = LU_FOREIGN_TYPE_SYMLINK, flags = 0;
+	int max_inherit = LAYOUT_INHERIT_UNSET;
+	int max_inherit_rr = LAYOUT_INHERIT_UNSET;
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
@@ -6367,14 +6389,17 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = 't',	.name = "hash-type",	.has_arg = required_argument },
 #endif
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
-/* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
+	{ .val = 'X',	.name = "max-inherit",	.has_arg = required_argument },
+	{ .val = LFS_INHERIT_RR_OPT,
+			.name = "max-inherit-rr", .has_arg = required_argument},
+/* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
 	int result = 0;
 
 	setstripe_args_init(&lsa);
 
-	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:x:",
+	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:x:X:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -6489,6 +6514,60 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'x':
 			xattr = optarg;
 			break;
+		case 'X':
+			if (!default_stripe) {
+				fprintf(stderr,
+					"%s %s: '--max-inherit' must be specified with '-D'\n",
+					progname, argv[0]);
+				return CMD_HELP;
+			}
+			errno = 0;
+			max_inherit = strtol(optarg, &end, 10);
+			if (errno != 0 || *end != '\0' || max_inherit < -2) {
+				fprintf(stderr,
+					"%s %s: invalid max-inherit '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			if (max_inherit == 0) {
+				max_inherit = LMV_INHERIT_NONE;
+			} else if (max_inherit == -1) {
+				max_inherit = LMV_INHERIT_UNLIMITED;
+			} else if (max_inherit > LMV_INHERIT_MAX) {
+				fprintf(stderr,
+					"%s %s: max-inherit %d exceeds maximum %u\n",
+					progname, argv[0], max_inherit,
+					LMV_INHERIT_MAX);
+				return CMD_HELP;
+			}
+			break;
+		case LFS_INHERIT_RR_OPT:
+			if (!default_stripe) {
+				fprintf(stderr,
+					"%s %s: '--max-inherit-rr' must be specified with '-D'\n",
+					progname, argv[0]);
+				return CMD_HELP;
+			}
+			errno = 0;
+			max_inherit_rr = strtol(optarg, &end, 10);
+			if (errno != 0 || *end != '\0' || max_inherit_rr < -2) {
+				fprintf(stderr,
+					"%s %s: invalid max-inherit-rr '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			if (max_inherit_rr == 0) {
+				max_inherit_rr = LMV_INHERIT_RR_NONE;
+			} else if (max_inherit_rr == -1) {
+				max_inherit_rr = LMV_INHERIT_RR_UNLIMITED;
+			} else if (max_inherit_rr > LMV_INHERIT_RR_MAX) {
+				fprintf(stderr,
+					"%s %s: max-inherit-rr %d exceeds maximum %u\n",
+					progname, argv[0], max_inherit_rr,
+					LMV_INHERIT_RR_MAX);
+				return CMD_HELP;
+			}
+			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
 				progname, argv[0], argv[optind - 1]);
@@ -6552,6 +6631,15 @@ static int lfs_setdirstripe(int argc, char **argv)
 		previous_mode = umask(0);
 	}
 
+	if (max_inherit_rr != LAYOUT_INHERIT_UNSET &&
+	    lsa.lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
+	    lsa.lsa_stripe_off != -1) {
+		fprintf(stderr,
+			"%s %s: max-inherit-rr is meaningless if stripe offset != -1\n",
+			progname, argv[0]);
+		return CMD_HELP;
+	}
+
 	/* foreign LMV/dir case */
 	if (foreign_mode) {
 		if (argc > optind + 1) {
@@ -6602,6 +6690,14 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
+	if (default_stripe) {
+		if (max_inherit == LAYOUT_INHERIT_UNSET)
+			max_inherit = LMV_INHERIT_DEFAULT;
+		if (max_inherit_rr == LAYOUT_INHERIT_UNSET)
+			max_inherit_rr = LMV_INHERIT_RR_DEFAULT;
+		param->lsp_max_inherit = max_inherit;
+		param->lsp_max_inherit_rr = max_inherit_rr;
+	}
 	if (strcmp(argv[0], "mkdir") == 0)
 		param->lsp_is_create = true;
 	if (lsa.lsa_nr_tgts > 1) {

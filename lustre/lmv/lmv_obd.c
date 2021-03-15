@@ -1720,6 +1720,22 @@ int lmv_old_layout_lookup(struct lmv_obd *lmv, struct md_op_data *op_data)
 	return rc;
 }
 
+static inline bool lmv_op_user_qos_mkdir(const struct md_op_data *op_data)
+{
+	const struct lmv_user_md *lum = op_data->op_data;
+
+	return (op_data->op_cli_flags & CLI_SET_MEA) && lum &&
+	       le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC &&
+	       le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT;
+}
+
+static inline bool lmv_op_default_qos_mkdir(const struct md_op_data *op_data)
+{
+	const struct lmv_stripe_md *lsm = op_data->op_default_mea1;
+
+	return lsm && lsm->lsm_md_master_mdt_index == LMV_OFFSET_DEFAULT;
+}
+
 /* mkdir by QoS in two cases:
  * 1. 'lfs mkdir -i -1'
  * 2. parent default LMV master_mdt_index is -1
@@ -1729,25 +1745,36 @@ int lmv_old_layout_lookup(struct lmv_obd *lmv, struct md_op_data *op_data)
  */
 static inline bool lmv_op_qos_mkdir(const struct md_op_data *op_data)
 {
-	const struct lmv_stripe_md *lsm = op_data->op_default_mea1;
-	const struct lmv_user_md *lum = op_data->op_data;
-
 	if (op_data->op_code != LUSTRE_OPC_MKDIR)
 		return false;
 
 	if (lmv_dir_striped(op_data->op_mea1))
 		return false;
 
-	if (op_data->op_cli_flags & CLI_SET_MEA && lum &&
-	    (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
-	     le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) &&
-	    le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT)
+	if (lmv_op_user_qos_mkdir(op_data))
 		return true;
 
-	if (lsm && lsm->lsm_md_master_mdt_index == LMV_OFFSET_DEFAULT)
+	if (lmv_op_default_qos_mkdir(op_data))
 		return true;
 
 	return false;
+}
+
+/* if default LMV is set, and its index is LMV_OFFSET_DEFAULT, and
+ * 1. max_inherit_rr is set and is not LMV_INHERIT_RR_NONE
+ * 2. or parent is ROOT
+ * mkdir roundrobin.
+ * NB, this also needs to check server is balanced, which is checked by caller.
+ */
+static inline bool lmv_op_default_rr_mkdir(const struct md_op_data *op_data)
+{
+	const struct lmv_stripe_md *lsm = op_data->op_default_mea1;
+
+	if (!lmv_op_default_qos_mkdir(op_data))
+		return false;
+
+	return lsm->lsm_md_max_inherit_rr != LMV_INHERIT_RR_NONE ||
+	       fid_is_root(&op_data->op_fid1);
 }
 
 /* 'lfs mkdir -i <specific_MDT>' */
@@ -1771,6 +1798,7 @@ lmv_op_default_specific_mkdir(const struct md_op_data *op_data)
 	       op_data->op_default_mea1->lsm_md_master_mdt_index !=
 			LMV_OFFSET_DEFAULT;
 }
+
 int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		const void *data, size_t datalen, umode_t mode, uid_t uid,
 		gid_t gid, cfs_cap_t cap_effective, __u64 rdev,
@@ -1820,11 +1848,23 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		if (!tgt)
 			RETURN(-ENODEV);
 	} else if (lmv_op_qos_mkdir(op_data)) {
+		struct lmv_tgt_desc *tmp = tgt;
+
 		tgt = lmv_locate_tgt_qos(lmv, &op_data->op_mds);
-		if (tgt == ERR_PTR(-EAGAIN))
-			tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
+		if (tgt == ERR_PTR(-EAGAIN)) {
+			if (ltd_qos_is_balanced(&lmv->lmv_mdt_descs) &&
+			    !lmv_op_default_rr_mkdir(op_data) &&
+			    !lmv_op_user_qos_mkdir(op_data))
+				/* if it's not necessary, don't create remote
+				 * directory.
+				 */
+				tgt = tmp;
+			else
+				tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
+		}
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));
+
 		/*
 		 * only update statfs after QoS mkdir, this means the cached
 		 * statfs may be stale, and current mkdir may not follow QoS
@@ -3161,6 +3201,8 @@ static inline int lmv_unpack_user_md(struct obd_export *exp,
 	lsm->lsm_md_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
 	lsm->lsm_md_master_mdt_index = le32_to_cpu(lmu->lum_stripe_offset);
 	lsm->lsm_md_hash_type = le32_to_cpu(lmu->lum_hash_type);
+	lsm->lsm_md_max_inherit = lmu->lum_max_inherit;
+	lsm->lsm_md_max_inherit_rr = lmu->lum_max_inherit_rr;
 	lsm->lsm_md_pool_name[LOV_MAXPOOLNAME] = 0;
 
 	return 0;

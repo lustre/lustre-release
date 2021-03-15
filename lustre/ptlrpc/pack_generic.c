@@ -2279,7 +2279,10 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 	__swab32s(&lum->lum_stripe_offset);
 	__swab32s(&lum->lum_hash_type);
 	__swab32s(&lum->lum_type);
+	/* lum_max_inherit and lum_max_inherit_rr do not need to be swabbed */
 	BUILD_BUG_ON(offsetof(typeof(*lum), lum_padding1) == 0);
+	BUILD_BUG_ON(offsetof(typeof(*lum), lum_padding2) == 0);
+	BUILD_BUG_ON(offsetof(typeof(*lum), lum_padding3) == 0);
 	switch (lum->lum_magic) {
 	case LMV_USER_MAGIC_SPECIFIC:
 		count = lum->lum_stripe_count;

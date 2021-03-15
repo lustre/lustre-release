@@ -1086,12 +1086,14 @@ extern struct lustre_foreign_type lu_foreign_types[];
 #define LMV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
 #define lmv_user_md lmv_user_md_v1
 struct lmv_user_md_v1 {
-	__u32	lum_magic;	 /* must be the first field */
+	__u32	lum_magic;	   /* must be the first field */
 	__u32	lum_stripe_count;  /* dirstripe count */
 	__u32	lum_stripe_offset; /* MDT idx for default dirstripe */
 	__u32	lum_hash_type;     /* Dir stripe policy */
-	__u32	lum_type;	  /* LMV type: default */
-	__u32	lum_padding1;
+	__u32	lum_type;	   /* LMV type: default */
+	__u8	lum_max_inherit;   /* inherit depth of default LMV */
+	__u8	lum_max_inherit_rr;	/* inherit depth of default LMV to round-robin mkdir */
+	__u16	lum_padding1;
 	__u32	lum_padding2;
 	__u32	lum_padding3;
 	char	lum_pool_name[LOV_MAXPOOLNAME + 1];
@@ -1115,6 +1117,37 @@ static inline __u32 lmv_foreign_to_md_stripes(__u32 size)
  */
 enum lmv_type {
 	LMV_TYPE_DEFAULT = 0x0000,
+};
+
+/* lum_max_inherit will be decreased by 1 after each inheritance if it's not
+ * LMV_INHERIT_UNLIMITED or > LMV_INHERIT_MAX.
+ */
+enum {
+	/* for historical reason, 0 means unlimited inheritance */
+	LMV_INHERIT_UNLIMITED	= 0,
+	/* unlimited lum_max_inherit by default */
+	LMV_INHERIT_DEFAULT	= 0,
+	/* not inherit any more */
+	LMV_INHERIT_END		= 1,
+	/* max inherit depth */
+	LMV_INHERIT_MAX		= 250,
+	/* [251, 254] are reserved */
+	/* not set, or when inherit depth goes beyond end,  */
+	LMV_INHERIT_NONE	= 255,
+};
+
+enum {
+	/* not set, or when inherit_rr depth goes beyond end,  */
+	LMV_INHERIT_RR_NONE		= 0,
+	/* disable lum_max_inherit_rr by default */
+	LMV_INHERIT_RR_DEFAULT		= 0,
+	/* not inherit any more */
+	LMV_INHERIT_RR_END		= 1,
+	/* max inherit depth */
+	LMV_INHERIT_RR_MAX		= 250,
+	/* [251, 254] are reserved */
+	/* unlimited inheritance */
+	LMV_INHERIT_RR_UNLIMITED	= 255,
 };
 
 static inline int lmv_user_md_size(int stripes, int lmm_magic)

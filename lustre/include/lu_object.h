@@ -1677,10 +1677,32 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt);
 void lu_tgt_descs_fini(struct lu_tgt_descs *ltd);
 int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
 void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
-bool ltd_qos_is_usable(struct lu_tgt_descs *ltd);
 int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd);
 int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		   __u64 *total_wt);
+
+/**
+ * Whether MDT inode and space usages are balanced.
+ */
+static inline bool ltd_qos_is_balanced(struct lu_tgt_descs *ltd)
+{
+	return !test_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags) &&
+	       test_bit(LQ_SAME_SPACE, &ltd->ltd_qos.lq_flags);
+}
+
+/**
+ * Whether QoS data is up-to-date and QoS can be applied.
+ */
+static inline bool ltd_qos_is_usable(struct lu_tgt_descs *ltd)
+{
+	if (ltd_qos_is_balanced(ltd))
+		return false;
+
+	if (ltd->ltd_lov_desc.ld_active_tgt_count < 2)
+		return false;
+
+	return true;
+}
 
 static inline struct lu_tgt_desc *ltd_first_tgt(struct lu_tgt_descs *ltd)
 {

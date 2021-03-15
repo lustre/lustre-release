@@ -45,6 +45,8 @@ struct lmv_stripe_md {
 	__u32	lsm_md_stripe_count;
 	__u32	lsm_md_master_mdt_index;
 	__u32	lsm_md_hash_type;
+	__u8	lsm_md_max_inherit;
+	__u8	lsm_md_max_inherit_rr;
 	__u32	lsm_md_layout_version;
 	__u32	lsm_md_migrate_offset;
 	__u32	lsm_md_migrate_hash;
@@ -120,11 +122,11 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 	 * terminated string so only print LOV_MAXPOOLNAME bytes.
 	 */
 	CDEBUG(mask,
-	       "magic %#x stripe count %d master mdt %d hash type %#x version %d migrate offset %d migrate hash %#x pool %.*s\n",
+	       "magic %#x stripe count %d master mdt %d hash type %#x max inherit %hhu version %d migrate offset %d migrate hash %#x pool %.*s\n",
 	       lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
 	       lsm->lsm_md_master_mdt_index, lsm->lsm_md_hash_type,
-	       lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
-	       lsm->lsm_md_migrate_hash,
+	       lsm->lsm_md_max_inherit, lsm->lsm_md_layout_version,
+	       lsm->lsm_md_migrate_offset, lsm->lsm_md_migrate_hash,
 	       LOV_MAXPOOLNAME, lsm->lsm_md_pool_name);
 
 	if (!lmv_dir_striped(lsm))

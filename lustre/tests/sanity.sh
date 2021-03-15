@@ -23755,13 +23755,25 @@ test_qos_mkdir() {
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" EXIT
 
-	echo
-	echo "Mkdir (stripe_count $stripe_count) roundrobin:"
-
 	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
 
 	testdir=$DIR/$tdir-s$stripe_count/rr
+
+	local stripe_index=$($LFS getstripe -m $testdir)
+	local test_mkdir_rr=true
+
+	getfattr -d -m dmv $testdir | grep dmv
+	if [ $? -eq 0 ] && [ $MDS1_VERSION -ge $(version_code 2.14.51) ]; then
+		local inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir)
+
+		(( $inherit_rr == 0 )) && test_mkdir_rr=false
+	fi
+
+	echo
+	$test_mkdir_rr &&
+		echo "Mkdir (stripe_count $stripe_count) roundrobin:" ||
+		echo "Mkdir (stripe_count $stripe_count) on stripe $stripe_index"
 
 	for i in $(seq $((100 * MDSCOUNT))); do
 		eval $mkdir_cmd $testdir/subdir$i ||
@@ -23772,15 +23784,24 @@ test_qos_mkdir() {
 		count=$($LFS getdirstripe -i $testdir/* |
 				grep ^$((i - 1))$ | wc -l)
 		echo "$count directories created on MDT$((i - 1))"
-		[ $count -eq 100 ] || error "subdirs are not evenly distributed"
+		if $test_mkdir_rr; then
+			(( $count == 100 )) ||
+				error "subdirs are not evenly distributed"
+		elif [ $((i - 1)) -eq $stripe_index ]; then
+			(( $count == 100 * MDSCOUNT )) ||
+				error "$count subdirs created on MDT$((i - 1))"
+		else
+			(( $count == 0 )) ||
+				error "$count subdirs created on MDT$((i - 1))"
+		fi
 
-		if [ $stripe_count -gt 1 ]; then
+		if $test_mkdir_rr && [ $stripe_count -gt 1 ]; then
 			count=$($LFS getdirstripe $testdir/* |
 				grep -P "^\s+$((i - 1))\t" | wc -l)
 			echo "$count stripes created on MDT$((i - 1))"
 			# deviation should < 5% of average
-			[ $count -lt $((95 * stripe_count)) ] ||
-			[ $count -gt $((105 * stripe_count)) ] &&
+			(( $count < 95 * stripe_count )) ||
+			(( $count > 105 * stripe_count)) &&
 				error "stripes are not evenly distributed"
 		fi
 	done
@@ -23820,10 +23841,10 @@ test_qos_mkdir() {
 		fi
 	done
 
-	[ ${ffree[min_index]} -eq 0 ] &&
+	(( ${ffree[min_index]} == 0 )) &&
 		skip "no free files in MDT$min_index"
-	[ ${ffree[min_index]} -gt 100000000 ] &&
-		skip "too much free files in MDT$min_index"
+	(( ${ffree[min_index]} > 100000000 )) &&
+		skip "too many free files in MDT$min_index"
 
 	# Check if we need to generate uneven MDTs
 	local threshold=50
@@ -23835,20 +23856,14 @@ test_qos_mkdir() {
 		echo -n "weight diff=$diff% must be > $threshold% ..."
 		count=$((${ffree[min_index]} / 10))
 		# 50 sec per 10000 files in vm
-		[ $count -gt 40000 ] && [ "$SLOW" = "no" ] &&
+		(( $count < 100000 )) || [ "$SLOW" != "no" ] ||
 			skip "$count files to create"
 		echo "Fill MDT$min_index with $count files"
 		[ -d $DIR/$tdir-MDT$min_index ] ||
 			$LFS mkdir -i $min_index $DIR/$tdir-MDT$min_index ||
 			error "mkdir $tdir-MDT$min_index failed"
-		for i in $(seq $count); do
-			$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE \
-				$DIR/$tdir-MDT$min_index/f$j_$i > /dev/null ||
-				error "create f$j_$i failed"
-			setfattr -n user.413b -v $value \
-				$DIR/$tdir-MDT$min_index/f$j_$i ||
-				error "setfattr f$j_$i failed"
-		done
+		createmany -d $DIR/$tdir-MDT$min_index/d $count ||
+			error "create d$count failed"
 
 		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
 		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
@@ -23897,7 +23912,7 @@ test_qos_mkdir() {
 	min=$($LFS getdirstripe -i $testdir/* | grep ^$min_index$ | wc -l)
 
 	# D-value should > 10% of averge
-	[ $((max - min)) -lt 10 ] &&
+	(( $max - $min < 10 )) &&
 		error "subdirs shouldn't be evenly distributed"
 
 	# ditto
@@ -23906,7 +23921,7 @@ test_qos_mkdir() {
 			grep -P "^\s+$max_index\t" | wc -l)
 		min=$($LFS getdirstripe $testdir/* |
 			grep -P "^\s+$min_index\t" | wc -l)
-		[ $((max - min)) -le $((10 * stripe_count)) ] &&
+		(( $max - $min < 10 * $stripe_count )) &&
 			error "stripes shouldn't be evenly distributed"|| true
 	fi
 }
@@ -23936,22 +23951,63 @@ test_413b() {
 	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
 		skip "Need server version at least 2.12.52"
 
+	local testdir
 	local stripe_count
 
 	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
-		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
-		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
-		mkdir $DIR/$tdir-s$stripe_count/qos || error "mkdir failed"
-		$LFS setdirstripe -D -c $stripe_count \
-			$DIR/$tdir-s$stripe_count/rr ||
-			error "setdirstripe failed"
-		$LFS setdirstripe -D -c $stripe_count \
-			$DIR/$tdir-s$stripe_count/qos ||
+		testdir=$DIR/$tdir-s$stripe_count
+		mkdir $testdir || error "mkdir $testdir failed"
+		mkdir $testdir/rr || error "mkdir rr failed"
+		mkdir $testdir/qos || error "mkdir qos failed"
+		$LFS setdirstripe -D -c $stripe_count --max-inherit-rr 2 \
+			$testdir/rr || error "setdirstripe rr failed"
+		$LFS setdirstripe -D -c $stripe_count $testdir/qos ||
 			error "setdirstripe failed"
 		test_qos_mkdir "mkdir" $stripe_count
 	done
 }
 run_test 413b "QoS mkdir under dir whose default LMV starting MDT offset is -1"
+
+test_413c() {
+	[ $MDSCOUNT -ge 2 ] ||
+		skip "We need at least 2 MDTs for this test"
+
+	[ $MDS1_VERSION -ge $(version_code 2.14.51) ] ||
+		skip "Need server version at least 2.14.50"
+
+	local testdir
+	local inherit
+	local inherit_rr
+
+	testdir=$DIR/${tdir}-s1
+	mkdir $testdir || error "mkdir $testdir failed"
+	mkdir $testdir/rr || error "mkdir rr failed"
+	mkdir $testdir/qos || error "mkdir qos failed"
+	# default max_inherit is -1, default max_inherit_rr is 0
+	$LFS setdirstripe -D -c 1 $testdir/rr ||
+		error "setdirstripe rr failed"
+	$LFS setdirstripe -D -c 1 -X 2 --max-inherit-rr 1 $testdir/qos ||
+		error "setdirstripe qos failed"
+	test_qos_mkdir "mkdir" 1
+
+	mkdir $testdir/rr/level1 || error "mkdir rr/level1 failed"
+	inherit=$($LFS getdirstripe -D -X $testdir/rr/level1)
+	(( $inherit == -1 )) || error "rr/level1 inherit $inherit != -1"
+	inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir/rr/level1)
+	(( $inherit_rr == 0 )) ||
+		error "rr/level1 inherit-rr $inherit_rr != 0"
+
+	mkdir $testdir/qos/level1 || error "mkdir qos/level1 failed"
+	inherit=$($LFS getdirstripe -D -X $testdir/qos/level1)
+	(( $inherit == 1 )) || error "qos/level1 inherit $inherit != 1"
+	inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir/qos/level1)
+	(( $inherit_rr == 0 )) ||
+		error "qos/level1 inherit-rr $inherit_rr !=0"
+	mkdir $testdir/qos/level1/level2 || error "mkdir level2 failed"
+	getfattr -d -m dmv $testdir/qos/level1/level2 | grep dmv &&
+		error "level2 shouldn't have default LMV" || true
+}
+run_test 413c "mkdir with default LMV max inherit rr"
 
 test_414() {
 #define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521

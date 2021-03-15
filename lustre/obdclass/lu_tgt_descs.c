@@ -414,22 +414,6 @@ void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 EXPORT_SYMBOL(ltd_del_tgt);
 
 /**
- * Whether QoS data is up-to-date and QoS can be applied.
- */
-bool ltd_qos_is_usable(struct lu_tgt_descs *ltd)
-{
-	if (!test_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags) && 
-	     test_bit(LQ_SAME_SPACE, &ltd->ltd_qos.lq_flags))
-		return false;
-
-	if (ltd->ltd_lov_desc.ld_active_tgt_count < 2)
-		return false;
-
-	return true;
-}
-EXPORT_SYMBOL(ltd_qos_is_usable);
-
-/**
  * Calculate penalties per-tgt and per-server
  *
  * Re-calculate penalties when the configuration changes, active targets

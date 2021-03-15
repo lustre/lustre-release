@@ -2,7 +2,7 @@
 .SH NAME
 lfs getdirstripe \- list the layout pattern of a given directory
 .SH SYNOPSIS
-.BR "lfs getdirstripe" " [" -cDimOrTy "]... " \fIDIR\fR...
+.BR "lfs getdirstripe" " [" -cDimOrTXy "]... " \fIDIR\fR...
 .SH DESCRIPTION
 Get the layout pattern of striped directories. This
 .BR lfs (1)
@@ -35,8 +35,14 @@ can be expanded with
 .BR --recursive ,
 which will recurse into all subdirectories.
 .TP
+.BR \-X ",  " \-\-max-inherit
+Show the inherit depth of default layout.
+.TP
 .BR \-y ", " \-\-yaml
 Show the layout in YAML format for easier parsing.
+.TP
+.BR \-\-max-inherit-rr
+Show the inherit depth of default layout to roundrobin mkdir.
 .SH EXAMPLES
 .TP
 .B $ lfs getdirstripe -O lustre-MDT0001_UUID -r /mnt/lustre/dir1

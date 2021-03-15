@@ -4252,6 +4252,8 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 
 	/* Transfer default LMV striping from the parent */
 	if (lds != NULL && lds->lds_dir_def_striping_set &&
+	    lds->lds_dir_def_max_inherit != LMV_INHERIT_END &&
+	    lds->lds_dir_def_max_inherit != LMV_INHERIT_NONE &&
 	    !(LMVEA_DELETE_VALUES(lds->lds_dir_def_stripe_count,
 				 lds->lds_dir_def_stripe_offset) &&
 	      le32_to_cpu(lds->lds_dir_def_hash_type) !=
@@ -4273,6 +4275,10 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 			cpu_to_le32(lds->lds_dir_def_stripe_offset);
 		v1->lum_hash_type =
 			cpu_to_le32(lds->lds_dir_def_hash_type);
+		v1->lum_max_inherit =
+			lmv_inherit_next(lds->lds_dir_def_max_inherit);
+		v1->lum_max_inherit_rr =
+			lmv_inherit_rr_next(lds->lds_dir_def_max_inherit_rr);
 
 		info->lti_buf.lb_buf = v1;
 		info->lti_buf.lb_len = sizeof(*v1);
@@ -5195,6 +5201,8 @@ static int lod_get_default_lmv_striping(const struct lu_env *env,
 				le32_to_cpu(lmu->lum_stripe_offset);
 		lds->lds_dir_def_hash_type =
 				le32_to_cpu(lmu->lum_hash_type);
+		lds->lds_dir_def_max_inherit = lmu->lum_max_inherit;
+		lds->lds_dir_def_max_inherit_rr = lmu->lum_max_inherit_rr;
 		lds->lds_dir_def_striping_set = 1;
 	}
 

@@ -2,7 +2,7 @@
 .SH NAME
 lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .SH SYNOPSIS
-.B lfs setdirstripe [\fR-cdDHioTx\fR] \fIDIR\fR...
+.B lfs setdirstripe [\fR-cdDHioTxX\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
 Create a striped directory with specified striping pattern. This
@@ -104,6 +104,40 @@ Specify a numeric bitmask of type-specific layout flags for the foreign layout.
 .TP
 .BR \-x ", " \-\-xattr =\fISTRING\fR
 Specify a string to be used as a foreign (free format) striping.
+.TP
+.BR \-X ", " \-\-max-inherit = \fIMAX_INHERIT
+Set the inherit depth of default directory layout. If non-zero, then
+.I MAX_INHERIT
+is the number of subdirectory levels for which this default layout is inherited,
+up to a maximum of 250 levels, and is decremented by one when copying the
+default layout to each new subdirectory, until zero and the default layout is
+no longer copied. A
+.I MAX_INHERIT
+of -1 means the default layout is inherited for all subdirectories.
+.TP
+.BR \-\-max-inherit-rr = \fIMAX_INHERIT_RR
+Set the round-robin inherit depth of the default directory layout, only when
+.I START_MDT_INDEX
+is -1.  If
+.I MAX_INHERIT_RR
+is zero (unset), then new subdirectories are preferentially created on MDTs
+with more free space and inodes if the MDTs are imbalanced.  If non-zero, then
+.I MAX_INHERIT_RR
+is the number of subdirectory levels, up to a maximum of 250 levels, for which
+new subdirectories will be created in a round-robin manner across all available
+MDTs, rather than using MDT space balancing for new subdirectories.  Otherwise,
+.I MAX_INHERIT_RR
+is decremented by one when copying the default layout to each new subdirectory,
+until zero and round-robin is no longer used.  It may be useful to set
+.I MAX_INHERIT_RR
+to 2 or 3 when setting the default directory layout on the root of a
+.B new
+filesystem, so that top-level subdirectories are immediately spread
+across MDTs, rather than waiting for the MDTs to become imbalanced.
+Round-robin subdirectory creation is unlikely to be useful for existing
+filesystems that already have many files and imbalanced MDTs, since space
+balancing will already happen, and this will unnecessarily increase the number
+of remote subdirectories (increasing overhead) without any benefit.
 .SH NOTE
 .PP
 If neither

@@ -182,12 +182,35 @@ struct lod_default_striping {
 	__u32				lds_dir_def_stripe_count;
 	__u32				lds_dir_def_stripe_offset;
 	__u32				lds_dir_def_hash_type;
+	__u8				lds_dir_def_max_inherit;
+	__u8				lds_dir_def_max_inherit_rr;
 					/* default file striping flags (LOV) */
 	__u32				lds_def_striping_set:1,
 					lds_def_striping_is_composite:1,
 					/* default dir striping flags (LMV) */
 					lds_dir_def_striping_set:1;
 };
+
+static inline __u8 lmv_inherit_next(__u8 inherit)
+{
+	if (inherit == LMV_INHERIT_END || inherit == LMV_INHERIT_NONE)
+		return LMV_INHERIT_NONE;
+
+	if (inherit == LMV_INHERIT_UNLIMITED || inherit > LMV_INHERIT_MAX)
+		return inherit;
+
+	return inherit - 1;
+}
+
+static inline __u8 lmv_inherit_rr_next(__u8 inherit_rr)
+{
+	if (inherit_rr == LMV_INHERIT_RR_NONE ||
+	    inherit_rr == LMV_INHERIT_RR_UNLIMITED ||
+	    inherit_rr > LMV_INHERIT_RR_MAX)
+		return inherit_rr;
+
+	return inherit_rr - 1;
+}
 
 struct lod_mirror_entry {
 	__u16	lme_stale:1,

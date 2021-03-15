@@ -962,6 +962,8 @@ static inline void param2lmu(struct lmv_user_md *lmu,
 	lmu->lum_stripe_count = param->lsp_stripe_count;
 	lmu->lum_stripe_offset = param->lsp_stripe_offset;
 	lmu->lum_hash_type = param->lsp_stripe_pattern;
+	lmu->lum_max_inherit = param->lsp_max_inherit;
+	lmu->lum_max_inherit_rr = param->lsp_max_inherit_rr;
 	if (param->lsp_pool != NULL)
 		strncpy(lmu->lum_pool_name, param->lsp_pool, LOV_MAXPOOLNAME);
 	if (param->lsp_is_specific) {
@@ -3215,8 +3217,49 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		if (flags & LMV_HASH_FLAG_LOST_LMV)
 			llapi_printf(LLAPI_MSG_NORMAL, ",lost_lmv");
 
-		separator = "\n";
+		if (verbose & VERBOSE_HASH_TYPE && !yaml)
+			separator = " ";
+		else
+			separator = "\n";
 	}
+
+	if ((verbose & VERBOSE_INHERIT) && lum->lum_magic == LMV_USER_MAGIC) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_INHERIT)
+			llapi_printf(LLAPI_MSG_NORMAL, "lmv_max_inherit: ");
+		if (lum->lum_max_inherit == LMV_INHERIT_UNLIMITED)
+			llapi_printf(LLAPI_MSG_NORMAL, "-1");
+		else if (lum->lum_max_inherit == LMV_INHERIT_NONE)
+			llapi_printf(LLAPI_MSG_NORMAL, "0");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "%hhu",
+				     lum->lum_max_inherit);
+		if (verbose & VERBOSE_INHERIT && !yaml)
+			separator = " ";
+		else
+			separator = "\n";
+	}
+
+	if ((verbose & VERBOSE_INHERIT_RR) &&
+	    lum->lum_magic == LMV_USER_MAGIC &&
+	    lum->lum_stripe_offset == LMV_OFFSET_DEFAULT) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_INHERIT_RR)
+			llapi_printf(LLAPI_MSG_NORMAL, "lmv_max_inherit_rr: ");
+		if (lum->lum_max_inherit_rr == LMV_INHERIT_RR_UNLIMITED)
+			llapi_printf(LLAPI_MSG_NORMAL, "-1");
+		else if (lum->lum_max_inherit_rr == LMV_INHERIT_RR_NONE)
+			llapi_printf(LLAPI_MSG_NORMAL, "0");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "%hhu",
+				     lum->lum_max_inherit_rr);
+		if (verbose & VERBOSE_INHERIT_RR && !yaml)
+			separator = " ";
+		else
+			separator = "\n";
+	}
+
+	separator = "\n";
 
 	if (verbose & VERBOSE_OBJID && lum->lum_magic != LMV_USER_MAGIC) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
