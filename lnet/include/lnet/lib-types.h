@@ -509,10 +509,9 @@ struct lnet_ni {
 	__u32			ni_sel_priority;
 
 	/*
-	 * equivalent interfaces to use
-	 * This is an array because socklnd bonding can still be configured
+	 * equivalent interface to use
 	 */
-	char			*ni_interfaces[LNET_INTERFACES_NUM];
+	char			*ni_interface;
 	struct net		*ni_net_ns;     /* original net namespace */
 };
 

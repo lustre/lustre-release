@@ -72,10 +72,10 @@ static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
 module_param(rnet_htable_size, int, 0444);
 MODULE_PARM_DESC(rnet_htable_size, "size of remote network hash table");
 
-static int use_tcp_bonding = false;
+static int use_tcp_bonding;
 module_param(use_tcp_bonding, int, 0444);
 MODULE_PARM_DESC(use_tcp_bonding,
-		 "use_tcp_bonding parameter has been deprecated");
+		 "use_tcp_bonding parameter has been removed");
 
 unsigned int lnet_numa_range = 0;
 module_param(lnet_numa_range, uint, 0444);
@@ -2557,19 +2557,6 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 	 * After than we want to delete the network being added,
 	 * to avoid a memory leak.
 	 */
-
-	/*
-	 * When a network uses TCP bonding then all its interfaces
-	 * must be specified when the network is first defined: the
-	 * TCP bonding code doesn't allow for interfaces to be added
-	 * or removed.
-	 */
-	if (net_l != net && net_l != NULL && use_tcp_bonding &&
-	    LNET_NETTYP(net_l->net_id) == SOCKLND) {
-		rc = -EINVAL;
-		goto failed0;
-	}
-
 	while (!list_empty(&net->net_ni_added)) {
 		ni = list_entry(net->net_ni_added.next, struct lnet_ni,
 				ni_netlist);
@@ -2578,7 +2565,7 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		/* make sure that the the NI we're about to start
 		 * up is actually unique. if it's not fail. */
 		if (!lnet_ni_unique_net(&net_l->net_ni_list,
-					ni->ni_interfaces[0])) {
+					ni->ni_interface)) {
 			rc = -EEXIST;
 			goto failed1;
 		}
@@ -2822,7 +2809,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 	}
 
 	if (use_tcp_bonding)
-		CWARN("'use_tcp_bonding' option has been deprecated. See LU-13641\n");
+		CWARN("use_tcp_bonding has been removed. Use Multi-Rail and Dynamic Discovery instead, see LU-13641\n");
 
 	/* If LNet is being initialized via DLC it is possible
 	 * that the user requests not to load module parameters (ones which
@@ -2831,8 +2818,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 	 * in this case.  On cleanup in case of failure only clean up
 	 * routes if it has been loaded */
 	if (!the_lnet.ln_nis_from_mod_params) {
-		rc = lnet_parse_networks(&net_head, lnet_get_networks(),
-					 use_tcp_bonding);
+		rc = lnet_parse_networks(&net_head, lnet_get_networks());
 		if (rc < 0)
 			goto err_empty_list;
 	}
@@ -2984,14 +2970,10 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	if (!ni || !cfg_ni || !tun)
 		return;
 
-	if (ni->ni_interfaces[0] != NULL) {
-		for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces); i++) {
-			if (ni->ni_interfaces[i] != NULL) {
-				strncpy(cfg_ni->lic_ni_intf[i],
-					ni->ni_interfaces[i],
-					sizeof(cfg_ni->lic_ni_intf[i]));
-			}
-		}
+	if (ni->ni_interface != NULL) {
+		strncpy(cfg_ni->lic_ni_intf,
+			ni->ni_interface,
+			sizeof(cfg_ni->lic_ni_intf));
 	}
 
 	cfg_ni->lic_nid = ni->ni_nid;
@@ -2999,7 +2981,6 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 		cfg_ni->lic_status = LNET_NI_STATUS_UP;
 	else
 		cfg_ni->lic_status = ni->ni_status->ns_status;
-	cfg_ni->lic_tcp_bonding = use_tcp_bonding;
 	cfg_ni->lic_dev_cpt = ni->ni_dev_cpt;
 
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
@@ -3065,17 +3046,12 @@ lnet_fill_ni_info_legacy(struct lnet_ni *ni,
 	if (!net_config)
 		return;
 
-	BUILD_BUG_ON(ARRAY_SIZE(ni->ni_interfaces) !=
-		     ARRAY_SIZE(net_config->ni_interfaces));
+	if (!ni->ni_interface)
+		return;
 
-	for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces); i++) {
-		if (!ni->ni_interfaces[i])
-			break;
-
-		strncpy(net_config->ni_interfaces[i],
-			ni->ni_interfaces[i],
-			sizeof(net_config->ni_interfaces[i]));
-	}
+	strncpy(net_config->ni_interface,
+		ni->ni_interface,
+		sizeof(net_config->ni_interface));
 
 	config->cfg_nid = ni->ni_nid;
 	config->cfg_config_u.cfg_net.net_peer_timeout =
@@ -3418,7 +3394,7 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 	if (rc < 0)
 		return rc;
 
-	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);
+	rc = lnet_parse_networks(&net_head, nets);
 	if (rc < 0)
 		return rc;
 
@@ -3481,7 +3457,7 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 	}
 
 	ni = lnet_ni_alloc_w_cpt_array(net, conf->lic_cpts, conf->lic_ncpts,
-				       conf->lic_ni_intf[0]);
+				       conf->lic_ni_intf);
 	if (!ni)
 		return -ENOMEM;
 
@@ -3600,7 +3576,7 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 	const char *nets = conf->cfg_config_u.cfg_net.net_intf;
 
 	/* Create a net/ni structures for the network string */
-	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);
+	rc = lnet_parse_networks(&net_head, nets);
 	if (rc <= 0)
 		return rc == 0 ? -EINVAL : rc;
 

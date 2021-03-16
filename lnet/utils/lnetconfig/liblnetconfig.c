@@ -1458,7 +1458,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 		LIBCFS_IOC_INIT_V2(*conf, lic_cfg_hdr);
 		conf->lic_cfg_hdr.ioc_len = len;
 		conf->lic_nid = nids[i];
-		strncpy(conf->lic_ni_intf[0], intf_descr->intf_name,
+		strncpy(conf->lic_ni_intf, intf_descr->intf_name,
 			LNET_MAX_STR_LEN);
 
 		if (intf_descr->cpt_expr != NULL)
@@ -2118,22 +2118,15 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 		/* don't add interfaces unless there is at least one
 		 * interface */
-		if (strlen(ni_data->lic_ni_intf[0]) > 0) {
+		if (strlen(ni_data->lic_ni_intf) > 0) {
 			interfaces = cYAML_create_object(item, "interfaces");
 			if (interfaces == NULL)
 				goto out;
 
-			for (j = 0; j < LNET_INTERFACES_NUM; j++) {
-				if (strlen(ni_data->lic_ni_intf[j]) > 0) {
-					snprintf(str_buf,
-						 sizeof(str_buf), "%d", j);
-					if (cYAML_create_string(interfaces,
-						str_buf,
-						ni_data->lic_ni_intf[j]) ==
-							NULL)
-						goto out;
-				}
-			}
+			snprintf(str_buf, sizeof(str_buf), "%d", 0);
+			if (cYAML_create_string(interfaces, str_buf,
+						ni_data->lic_ni_intf) == NULL)
+				goto out;
 		}
 
 		if (detail) {
@@ -2283,12 +2276,6 @@ continue_without_msg_stats:
 			if (!backup &&
 			    cYAML_create_number(item, "dev cpt",
 						ni_data->lic_dev_cpt) == NULL)
-				goto out;
-
-			if (!backup &&
-			    cYAML_create_number(item, "tcp bonding",
-						ni_data->lic_tcp_bonding)
-							== NULL)
 				goto out;
 
 			/* out put the CPTs in the format: "[x,x,x,...]" */

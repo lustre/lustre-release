@@ -93,7 +93,7 @@ struct lnet_ioctl_config_lnd_tunables {
 };
 
 struct lnet_ioctl_net_config {
-	char ni_interfaces[LNET_INTERFACES_NUM][LNET_MAX_STR_LEN];
+	char ni_interface[LNET_MAX_STR_LEN];
 	__u32 ni_status;
 	__u32 ni_cpts[LNET_MAX_SHOW_NUM_CPT];
 	char cfg_bulk[0];
@@ -222,12 +222,11 @@ struct lnet_ioctl_element_msg_stats {
 struct lnet_ioctl_config_ni {
 	struct libcfs_ioctl_hdr lic_cfg_hdr;
 	lnet_nid_t		lic_nid;
-	char			lic_ni_intf[LNET_INTERFACES_NUM][LNET_MAX_STR_LEN];
+	char			lic_ni_intf[LNET_MAX_STR_LEN];
 	char			lic_legacy_ip2nets[LNET_MAX_STR_LEN];
 	__u32			lic_cpts[LNET_MAX_SHOW_NUM_CPT];
 	__u32			lic_ncpts;
 	__u32			lic_status;
-	__u32			lic_tcp_bonding;
 	__u32			lic_idx;
 	__s32			lic_dev_cpt;
 	char			pad[4];

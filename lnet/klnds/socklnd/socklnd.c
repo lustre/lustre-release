@@ -48,16 +48,12 @@ static struct ksock_interface *
 ksocknal_ip2iface(struct lnet_ni *ni, struct sockaddr *addr)
 {
 	struct ksock_net *net = ni->ni_data;
-	int i;
 	struct ksock_interface *iface;
 
-	for (i = 0; i < net->ksnn_ninterfaces; i++) {
-		LASSERT(i < LNET_INTERFACES_NUM);
-		iface = &net->ksnn_interfaces[i];
+	iface = &net->ksnn_interface;
 
-		if (rpc_cmp_addr((struct sockaddr *)&iface->ksni_addr, addr))
-			return iface;
-	}
+	if (rpc_cmp_addr((struct sockaddr *)&iface->ksni_addr, addr))
+		return iface;
 
 	return NULL;
 }
@@ -66,16 +62,12 @@ static struct ksock_interface *
 ksocknal_index2iface(struct lnet_ni *ni, int index)
 {
 	struct ksock_net *net = ni->ni_data;
-	int i;
 	struct ksock_interface *iface;
 
-	for (i = 0; i < net->ksnn_ninterfaces; i++) {
-		LASSERT(i < LNET_INTERFACES_NUM);
-		iface = &net->ksnn_interfaces[i];
+	iface = &net->ksnn_interface;
 
-		if (iface->ksni_index == index)
-			return iface;
-	}
+	if (iface->ksni_index == index)
+		return iface;
 
 	return NULL;
 }
@@ -437,7 +429,6 @@ ksocknal_add_route_locked(struct ksock_peer_ni *peer_ni, struct ksock_route *rou
 	LASSERT(!route->ksnr_scheduled);
 	LASSERT(!route->ksnr_connecting);
 	LASSERT(route->ksnr_connected == 0);
-	LASSERT(net->ksnn_ninterfaces > 0);
 
 	/* LASSERT(unique) */
 	list_for_each(tmp, &peer_ni->ksnp_routes) {
@@ -456,8 +447,8 @@ ksocknal_add_route_locked(struct ksock_peer_ni *peer_ni, struct ksock_route *rou
 	ksocknal_peer_addref(peer_ni);
 
 	/* set the route's interface to the current net's interface */
-	route->ksnr_myiface = net->ksnn_interfaces[0].ksni_index;
-	net->ksnn_interfaces[0].ksni_nroutes++;
+	route->ksnr_myiface = net->ksnn_interface.ksni_index;
+	net->ksnn_interface.ksni_nroutes++;
 
 	/* peer_ni's routelist takes over my ref on 'route' */
 	list_add_tail(&route->ksnr_list, &peer_ni->ksnp_routes);
@@ -739,333 +730,6 @@ ksocknal_choose_scheduler_locked(unsigned int cpt)
 	return sched;
 }
 
-static int
-ksocknal_local_ipvec(struct lnet_ni *ni, __u32 *ipaddrs)
-{
-	struct ksock_net *net = ni->ni_data;
-	int i, j;
-	int nip;
-
-	read_lock(&ksocknal_data.ksnd_global_lock);
-
-	nip = net->ksnn_ninterfaces;
-	LASSERT(nip <= LNET_INTERFACES_NUM);
-
-	for (i = 0, j = 0; i < nip; i++)
-		if (net->ksnn_interfaces[i].ksni_addr.ss_family == AF_INET) {
-			struct sockaddr_in *sa =
-				(void *)&net->ksnn_interfaces[i].ksni_addr;
-
-			ipaddrs[j] = ntohl(sa->sin_addr.s_addr);
-			LASSERT(ipaddrs[j] != 0);
-			j += 1;
-		}
-	nip = j;
-
-	read_unlock(&ksocknal_data.ksnd_global_lock);
-	/*
-	 * Only offer interfaces for additional connections if I have
-	 * more than one.
-	 */
-	return nip < 2 ? 0 : nip;
-}
-
-static int
-ksocknal_match_peerip(struct ksock_interface *iface, __u32 *ips, int nips)
-{
-	int best_netmatch = 0;
-	int best_xor = 0;
-	int best = -1;
-	int this_xor;
-	int this_netmatch;
-	int i;
-	struct sockaddr_in *sa;
-	__u32 ip;
-
-	sa = (struct sockaddr_in *)&iface->ksni_addr;
-	LASSERT(sa->sin_family == AF_INET);
-	ip = ntohl(sa->sin_addr.s_addr);
-
-	for (i = 0; i < nips; i++) {
-		if (ips[i] == 0)
-			continue;
-
-		this_xor = ips[i] ^ ip;
-		this_netmatch = ((this_xor & iface->ksni_netmask) == 0) ? 1 : 0;
-
-		if (!(best < 0 ||
-		      best_netmatch < this_netmatch ||
-		      (best_netmatch == this_netmatch &&
-		       best_xor > this_xor)))
-			continue;
-
-		best = i;
-		best_netmatch = this_netmatch;
-		best_xor = this_xor;
-	}
-
-	LASSERT(best >= 0);
-	return best;
-}
-
-static int
-ksocknal_select_ips(struct ksock_peer_ni *peer_ni, __u32 *peerips, int n_peerips)
-{
-	rwlock_t *global_lock = &ksocknal_data.ksnd_global_lock;
-	struct ksock_net *net = peer_ni->ksnp_ni->ni_data;
-	struct ksock_interface *iface;
-	struct ksock_interface *best_iface;
-	int n_ips;
-	int i;
-	int j;
-	int k;
-	u32 ip;
-	u32 xor;
-	int this_netmatch;
-	int best_netmatch;
-	int best_npeers;
-
-        /* CAVEAT EMPTOR: We do all our interface matching with an
-         * exclusive hold of global lock at IRQ priority.  We're only
-         * expecting to be dealing with small numbers of interfaces, so the
-         * O(n**3)-ness shouldn't matter */
-
-        /* Also note that I'm not going to return more than n_peerips
-         * interfaces, even if I have more myself */
-
-	write_lock_bh(global_lock);
-
-	LASSERT(n_peerips <= LNET_INTERFACES_NUM);
-	LASSERT(net->ksnn_ninterfaces <= LNET_INTERFACES_NUM);
-
-	/* Only match interfaces for additional connections
-	 * if I have > 1 interface
-	 */
-	n_ips = (net->ksnn_ninterfaces < 2) ? 0 :
-		min(n_peerips, net->ksnn_ninterfaces);
-
-        for (i = 0; peer_ni->ksnp_n_passive_ips < n_ips; i++) {
-                /*              ^ yes really... */
-
-                /* If we have any new interfaces, first tick off all the
-                 * peer_ni IPs that match old interfaces, then choose new
-                 * interfaces to match the remaining peer_ni IPS.
-                 * We don't forget interfaces we've stopped using; we might
-                 * start using them again... */
-
-		if (i < peer_ni->ksnp_n_passive_ips) {
-			/* Old interface. */
-			struct sockaddr_in sa = { .sin_family = AF_INET};
-
-			sa.sin_addr.s_addr =
-				htonl(peer_ni->ksnp_passive_ips[i]);
-			best_iface = ksocknal_ip2iface(peer_ni->ksnp_ni,
-						       (struct sockaddr *)&sa);
-
-			/* peer_ni passive ips are kept up to date */
-			LASSERT(best_iface != NULL);
-                } else {
-                        /* choose a new interface */
-			struct sockaddr_in *sa;
-
-                        LASSERT (i == peer_ni->ksnp_n_passive_ips);
-
-                        best_iface = NULL;
-                        best_netmatch = 0;
-                        best_npeers = 0;
-
-			for (j = 0; j < net->ksnn_ninterfaces; j++) {
-				iface = &net->ksnn_interfaces[j];
-				sa = (void *)&iface->ksni_addr;
-				if (sa->sin_family != AF_INET)
-					continue;
-				ip = ntohl(sa->sin_addr.s_addr);
-
-                                for (k = 0; k < peer_ni->ksnp_n_passive_ips; k++)
-                                        if (peer_ni->ksnp_passive_ips[k] == ip)
-                                                break;
-
-                                if (k < peer_ni->ksnp_n_passive_ips) /* using it already */
-                                        continue;
-
-                                k = ksocknal_match_peerip(iface, peerips, n_peerips);
-                                xor = (ip ^ peerips[k]);
-                                this_netmatch = ((xor & iface->ksni_netmask) == 0) ? 1 : 0;
-
-                                if (!(best_iface == NULL ||
-                                      best_netmatch < this_netmatch ||
-                                      (best_netmatch == this_netmatch &&
-                                       best_npeers > iface->ksni_npeers)))
-                                        continue;
-
-                                best_iface = iface;
-                                best_netmatch = this_netmatch;
-                                best_npeers = iface->ksni_npeers;
-                        }
-
-			LASSERT(best_iface != NULL);
-
-			best_iface->ksni_npeers++;
-			sa = (void *)&best_iface->ksni_addr;
-			ip = ntohl(sa->sin_addr.s_addr);
-			peer_ni->ksnp_passive_ips[i] = ip;
-			peer_ni->ksnp_n_passive_ips = i+1;
-                }
-
-                /* mark the best matching peer_ni IP used */
-                j = ksocknal_match_peerip(best_iface, peerips, n_peerips);
-                peerips[j] = 0;
-        }
-
-        /* Overwrite input peer_ni IP addresses */
-        memcpy(peerips, peer_ni->ksnp_passive_ips, n_ips * sizeof(*peerips));
-
-	write_unlock_bh(global_lock);
-
-        return (n_ips);
-}
-
-static void
-ksocknal_create_routes(struct ksock_peer_ni *peer_ni, int port,
-                       __u32 *peer_ipaddrs, int npeer_ipaddrs)
-{
-	struct ksock_route	*newroute = NULL;
-	rwlock_t		*global_lock = &ksocknal_data.ksnd_global_lock;
-	struct lnet_ni *ni = peer_ni->ksnp_ni;
-	struct ksock_net		*net = ni->ni_data;
-	struct list_head	*rtmp;
-	struct ksock_route		*route;
-	struct ksock_interface	*iface;
-	struct ksock_interface	*best_iface;
-	int			best_netmatch;
-	int			this_netmatch;
-	int			best_nroutes;
-	int			i;
-	int			j;
-
-        /* CAVEAT EMPTOR: We do all our interface matching with an
-         * exclusive hold of global lock at IRQ priority.  We're only
-         * expecting to be dealing with small numbers of interfaces, so the
-         * O(n**3)-ness here shouldn't matter */
-
-	write_lock_bh(global_lock);
-
-        if (net->ksnn_ninterfaces < 2) {
-		/* Only create additional connections
-                 * if I have > 1 interface */
-		write_unlock_bh(global_lock);
-                return;
-        }
-
-	LASSERT(npeer_ipaddrs <= LNET_INTERFACES_NUM);
-
-	for (i = 0; i < npeer_ipaddrs; i++) {
-		if (newroute) {
-			struct sockaddr_in *sa = (void *)&newroute->ksnr_addr;
-
-			memset(sa, 0, sizeof(*sa));
-			sa->sin_family = AF_INET;
-			sa->sin_addr.s_addr = htonl(peer_ipaddrs[i]);
-		} else {
-			struct sockaddr_in sa = {.sin_family = AF_INET};
-
-			write_unlock_bh(global_lock);
-
-			sa.sin_addr.s_addr = htonl(peer_ipaddrs[i]);
-			sa.sin_port = htons(port);
-			newroute =
-				ksocknal_create_route((struct sockaddr *)&sa);
-			if (!newroute)
-				return;
-
-			write_lock_bh(global_lock);
-		}
-
-		if (peer_ni->ksnp_closing) {
-			/* peer_ni got closed under me */
-			break;
-		}
-
-		/* Already got a route? */
-		route = NULL;
-		list_for_each(rtmp, &peer_ni->ksnp_routes) {
-			route = list_entry(rtmp, struct ksock_route, ksnr_list);
-
-			if (rpc_cmp_addr(
-				    (struct sockaddr *)&route->ksnr_addr,
-				    (struct sockaddr *)&newroute->ksnr_addr))
-				break;
-
-			route = NULL;
-		}
-		if (route != NULL)
-			continue;
-
-		best_iface = NULL;
-		best_nroutes = 0;
-		best_netmatch = 0;
-
-		LASSERT(net->ksnn_ninterfaces <= LNET_INTERFACES_NUM);
-
-		/* Select interface to connect from */
-		for (j = 0; j < net->ksnn_ninterfaces; j++) {
-			__u32 iface_ip, route_ip;
-
-			iface = &net->ksnn_interfaces[j];
-
-			/* Using this interface already? */
-			list_for_each(rtmp, &peer_ni->ksnp_routes) {
-				route = list_entry(rtmp, struct ksock_route,
-						   ksnr_list);
-
-				if (route->ksnr_myiface == iface->ksni_index)
-					break;
-
-				route = NULL;
-			}
-			if (route != NULL)
-				continue;
-			if (iface->ksni_addr.ss_family != AF_INET)
-				continue;
-			if (newroute->ksnr_addr.ss_family != AF_INET)
-				continue;
-
-			iface_ip =
-				ntohl(((struct sockaddr_in *)
-				       &iface->ksni_addr)->sin_addr.s_addr);
-			route_ip =
-				ntohl(((struct sockaddr_in *)
-				       &newroute->ksnr_addr)->sin_addr.s_addr);
-
-			this_netmatch = (((iface_ip ^ route_ip) &
-					  iface->ksni_netmask) == 0) ? 1 : 0;
-
-			if (!(best_iface == NULL ||
-			      best_netmatch < this_netmatch ||
-			      (best_netmatch == this_netmatch &&
-			       best_nroutes > iface->ksni_nroutes)))
-				continue;
-
-			best_iface = iface;
-			best_netmatch = this_netmatch;
-			best_nroutes = iface->ksni_nroutes;
-		}
-
-		if (best_iface == NULL)
-			continue;
-
-		newroute->ksnr_myiface = best_iface->ksni_index;
-		best_iface->ksni_nroutes++;
-
-		ksocknal_add_route_locked(peer_ni, newroute);
-		newroute = NULL;
-	}
-
-	write_unlock_bh(global_lock);
-	if (newroute != NULL)
-		ksocknal_route_decref(newroute);
-}
-
 int
 ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 {
@@ -1178,13 +842,13 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_route *route,
          * Passive connections use the listener timeout since the peer_ni sends
          * eagerly */
 
-        if (active) {
-                peer_ni = route->ksnr_peer;
-                LASSERT(ni == peer_ni->ksnp_ni);
+	if (active) {
+		peer_ni = route->ksnr_peer;
+		LASSERT(ni == peer_ni->ksnp_ni);
 
-                /* Active connection sends HELLO eagerly */
-                hello->kshm_nips = ksocknal_local_ipvec(ni, hello->kshm_ips);
-                peerid = peer_ni->ksnp_id;
+		/* Active connection sends HELLO eagerly */
+		hello->kshm_nips = 0;
+		peerid = peer_ni->ksnp_id;
 
 		write_lock_bh(global_lock);
                 conn->ksnc_proto = peer_ni->ksnp_proto;
@@ -1209,15 +873,15 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_route *route,
 
                 /* Passive, get protocol from peer_ni */
                 conn->ksnc_proto = NULL;
-        }
+	}
 
-        rc = ksocknal_recv_hello (ni, conn, hello, &peerid, &incarnation);
-        if (rc < 0)
-                goto failed_1;
+	rc = ksocknal_recv_hello(ni, conn, hello, &peerid, &incarnation);
+	if (rc < 0)
+		goto failed_1;
 
-        LASSERT (rc == 0 || active);
-        LASSERT (conn->ksnc_proto != NULL);
-        LASSERT (peerid.nid != LNET_NID_ANY);
+	LASSERT(rc == 0 || active);
+	LASSERT(conn->ksnc_proto != NULL);
+	LASSERT(peerid.nid != LNET_NID_ANY);
 
 	cpt = lnet_cpt_of_nid(peerid.nid, ni);
 
@@ -1420,15 +1084,8 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_route *route,
 	       &conn->ksnc_myaddr, &conn->ksnc_peeraddr,
 	       incarnation, cpt);
 
-	if (active) {
-		/* additional routes after interface exchange? */
-		ksocknal_create_routes(
-			peer_ni,
-			rpc_get_port((struct sockaddr *)&conn->ksnc_peeraddr),
-			hello->kshm_ips, hello->kshm_nips);
-        } else {
-                hello->kshm_nips = ksocknal_select_ips(peer_ni, hello->kshm_ips,
-                                                       hello->kshm_nips);
+	if (!active) {
+		hello->kshm_nips = 0;
                 rc = ksocknal_send_hello(ni, conn, peerid.nid, hello);
         }
 
@@ -1996,181 +1653,26 @@ ksocknal_push(struct lnet_ni *ni, struct lnet_process_id id)
 	return rc;
 }
 
-static int
-ksocknal_add_interface(struct lnet_ni *ni, __u32 ipaddress, __u32 netmask)
-{
-	struct ksock_net *net = ni->ni_data;
-	struct ksock_interface *iface;
-	struct sockaddr_in sa = { .sin_family = AF_INET };
-	int rc;
-	int i;
-	int j;
-	struct ksock_peer_ni *peer_ni;
-	struct list_head *rtmp;
-	struct ksock_route *route;
-
-	if (ipaddress == 0 ||
-	    netmask == 0)
-		return -EINVAL;
-
-	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-
-	sa.sin_addr.s_addr = htonl(ipaddress);
-	iface = ksocknal_ip2iface(ni, (struct sockaddr *)&sa);
-	if (iface != NULL) {
-		/* silently ignore dups */
-		rc = 0;
-	} else if (net->ksnn_ninterfaces == LNET_INTERFACES_NUM) {
-		rc = -ENOSPC;
-	} else {
-		iface = &net->ksnn_interfaces[net->ksnn_ninterfaces++];
-
-		iface->ksni_index = ksocknal_ip2index((struct sockaddr *)&sa,
-						      ni);
-		rpc_copy_addr((struct sockaddr *)&iface->ksni_addr,
-			      (struct sockaddr *)&sa);
-		iface->ksni_netmask = netmask;
-		iface->ksni_nroutes = 0;
-		iface->ksni_npeers = 0;
-
-		hash_for_each(ksocknal_data.ksnd_peers, i, peer_ni, ksnp_list) {
-			for (j = 0; j < peer_ni->ksnp_n_passive_ips; j++)
-				if (peer_ni->ksnp_passive_ips[j] == ipaddress)
-					iface->ksni_npeers++;
-
-			list_for_each(rtmp, &peer_ni->ksnp_routes) {
-				route = list_entry(rtmp,
-						   struct ksock_route,
-						   ksnr_list);
-
-				if (route->ksnr_myiface ==
-					    iface->ksni_index)
-					iface->ksni_nroutes++;
-			}
-		}
-
-		rc = 0;
-		/* NB only new connections will pay attention to the new
-		 * interface!
-		 */
-	}
-
-	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
-
-	return rc;
-}
-
-static void
-ksocknal_peer_del_interface_locked(struct ksock_peer_ni *peer_ni,
-				   __u32 ipaddr, int index)
-{
-	struct ksock_route *route;
-	struct ksock_route *rnxt;
-	struct ksock_conn *conn;
-	struct ksock_conn *cnxt;
-	int i;
-	int j;
-
-        for (i = 0; i < peer_ni->ksnp_n_passive_ips; i++)
-                if (peer_ni->ksnp_passive_ips[i] == ipaddr) {
-                        for (j = i+1; j < peer_ni->ksnp_n_passive_ips; j++)
-                                peer_ni->ksnp_passive_ips[j-1] =
-                                        peer_ni->ksnp_passive_ips[j];
-                        peer_ni->ksnp_n_passive_ips--;
-                        break;
-                }
-
-	list_for_each_entry_safe(route, rnxt, &peer_ni->ksnp_routes,
-				 ksnr_list) {
-		if (route->ksnr_myiface != index)
-			continue;
-
-		if (route->ksnr_share_count != 0) {
-			/* Manually created; keep, but unbind */
-			route->ksnr_myiface = -1;
-		} else {
-			ksocknal_del_route_locked(route);
-		}
-	}
-
-	list_for_each_entry_safe(conn, cnxt, &peer_ni->ksnp_conns, ksnc_list)
-		if (conn->ksnc_route->ksnr_myiface == index)
-			ksocknal_close_conn_locked (conn, 0);
-}
-
-static int
-ksocknal_del_interface(struct lnet_ni *ni, __u32 ipaddress)
-{
-	struct ksock_net *net = ni->ni_data;
-	int rc = -ENOENT;
-	struct hlist_node *nxt;
-	struct ksock_peer_ni *peer_ni;
-	u32 this_ip;
-	struct sockaddr_in sa = {.sin_family = AF_INET };
-	int index;
-	int i;
-	int j;
-
-	sa.sin_addr.s_addr = htonl(ipaddress);
-	index = ksocknal_ip2index((struct sockaddr *)&sa, ni);
-
-	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-
-	for (i = 0; i < net->ksnn_ninterfaces; i++) {
-		struct sockaddr_in *sa =
-			(void *)&net->ksnn_interfaces[i].ksni_addr;
-
-		if (sa->sin_family != AF_INET)
-			continue;
-		this_ip = ntohl(sa->sin_addr.s_addr);
-
-		if (!(ipaddress == 0 ||
-		      ipaddress == this_ip))
-			continue;
-
-		rc = 0;
-
-		for (j = i+1; j < net->ksnn_ninterfaces; j++)
-			net->ksnn_interfaces[j-1] =
-				net->ksnn_interfaces[j];
-
-		net->ksnn_ninterfaces--;
-
-		hash_for_each_safe(ksocknal_data.ksnd_peers, j,
-				   nxt, peer_ni, ksnp_list) {
-			if (peer_ni->ksnp_ni != ni)
-				continue;
-
-			ksocknal_peer_del_interface_locked(peer_ni,
-							   this_ip, index);
-		}
-	}
-
-	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
-
-	return rc;
-}
-
 int
 ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 {
 	struct lnet_process_id id = {0};
-        struct libcfs_ioctl_data *data = arg;
-        int rc;
+	struct libcfs_ioctl_data *data = arg;
+	int rc;
 
-        switch(cmd) {
-        case IOC_LIBCFS_GET_INTERFACE: {
+	switch(cmd) {
+	case IOC_LIBCFS_GET_INTERFACE: {
 		struct ksock_net *net = ni->ni_data;
 		struct ksock_interface *iface;
 		struct sockaddr_in *sa;
 
 		read_lock(&ksocknal_data.ksnd_global_lock);
 
-                if (data->ioc_count >= (__u32)net->ksnn_ninterfaces) {
+		if (data->ioc_count >= 1) {
                         rc = -ENOENT;
                 } else {
                         rc = 0;
-                        iface = &net->ksnn_interfaces[data->ioc_count];
+			iface = &net->ksnn_interface;
 
 			sa = (void *)&iface->ksni_addr;
 			if (sa->sin_family == AF_INET)
@@ -2183,17 +1685,8 @@ ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 		}
 
 		read_unlock(&ksocknal_data.ksnd_global_lock);
-                return rc;
+		return rc;
         }
-
-        case IOC_LIBCFS_ADD_INTERFACE:
-                return ksocknal_add_interface(ni,
-                                              data->ioc_u32[0], /* IP address */
-                                              data->ioc_u32[1]); /* net mask */
-
-        case IOC_LIBCFS_DEL_INTERFACE:
-                return ksocknal_del_interface(ni,
-                                              data->ioc_u32[0]); /* IP address */
 
         case IOC_LIBCFS_GET_PEER: {
                 __u32            myip = 0;
@@ -2561,7 +2054,6 @@ ksocknal_shutdown(struct lnet_ni *ni)
 		.nid = LNET_NID_ANY,
 		.pid = LNET_PID_ANY,
 	};
-	int i;
 
 	LASSERT(ksocknal_data.ksnd_init == SOCKNAL_INIT_ALL);
 	LASSERT(ksocknal_data.ksnd_nnets > 0);
@@ -2581,10 +2073,8 @@ ksocknal_shutdown(struct lnet_ni *ni)
 			       atomic_read(&net->ksnn_npeers) -
 			       SOCKNAL_SHUTDOWN_BIAS);
 
-	for (i = 0; i < net->ksnn_ninterfaces; i++) {
-		LASSERT(net->ksnn_interfaces[i].ksni_npeers == 0);
-		LASSERT(net->ksnn_interfaces[i].ksni_nroutes == 0);
-	}
+	LASSERT(net->ksnn_interface.ksni_npeers == 0);
+	LASSERT(net->ksnn_interface.ksni_nroutes == 0);
 
 	list_del(&net->ksnn_list);
 	LIBCFS_FREE(net, sizeof(*net));
@@ -2598,40 +2088,29 @@ static int
 ksocknal_search_new_ipif(struct ksock_net *net)
 {
 	int new_ipif = 0;
-	int i;
+	char *ifnam = &net->ksnn_interface.ksni_name[0];
+	char *colon = strchr(ifnam, ':');
+	bool found = false;
+	struct ksock_net *tmp;
 
-	for (i = 0; i < net->ksnn_ninterfaces; i++) {
-		char *ifnam = &net->ksnn_interfaces[i].ksni_name[0];
-		char *colon = strchr(ifnam, ':');
-		bool found  = false;
-		struct ksock_net *tmp;
-		int j;
+	if (colon != NULL)
+		*colon = 0;
 
-		if (colon != NULL) /* ignore alias device */
-			*colon = 0;
+	list_for_each_entry(tmp, &ksocknal_data.ksnd_nets, ksnn_list) {
+		char *ifnam2 = &tmp->ksnn_interface.ksni_name[0];
+		char *colon2 = strchr(ifnam2, ':');
 
-		list_for_each_entry(tmp, &ksocknal_data.ksnd_nets,
-				    ksnn_list) {
-			for (j = 0; !found && j < tmp->ksnn_ninterfaces; j++) {
-				char *ifnam2 = &tmp->ksnn_interfaces[j].\
-					ksni_name[0];
-				char *colon2 = strchr(ifnam2, ':');
+		if (colon2 != NULL)
+			*colon2 = 0;
 
-				if (colon2 != NULL)
-					*colon2 = 0;
-
-				found = strcmp(ifnam, ifnam2) == 0;
-				if (colon2 != NULL)
-					*colon2 = ':';
-			}
-			if (found)
-				break;
-		}
-
-		new_ipif += !found;
-		if (colon != NULL)
-			*colon = ':';
+		found = strcmp(ifnam, ifnam2) == 0;
+		if (colon2 != NULL)
+			*colon2 = ':';
 	}
+
+	new_ipif += !found;
+	if (colon != NULL)
+		*colon = ':';
 
 	return new_ipif;
 }
@@ -2715,25 +2194,22 @@ ksocknal_startup(struct lnet_ni *ni)
 	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 	struct ksock_interface *ksi = NULL;
 	struct lnet_inetdev *ifaces = NULL;
+	struct sockaddr_in *sa;
 	int i = 0;
 	int rc;
 
         LASSERT (ni->ni_net->net_lnd == &the_ksocklnd);
-
         if (ksocknal_data.ksnd_init == SOCKNAL_INIT_NOTHING) {
                 rc = ksocknal_base_startup();
                 if (rc != 0)
                         return rc;
         }
-
 	LIBCFS_ALLOC(net, sizeof(*net));
 	if (net == NULL)
 		goto fail_0;
-
 	net->ksnn_incarnation = ktime_get_real_ns();
 	ni->ni_data = net;
 	net_tunables = &ni->ni_net->net_tunables;
-
 	if (net_tunables->lct_peer_timeout == -1)
 		net_tunables->lct_peer_timeout =
 			*ksocknal_tunables.ksnd_peertimeout;
@@ -2759,81 +2235,30 @@ ksocknal_startup(struct lnet_ni *ni)
 	if (rc < 0)
 		goto fail_1;
 
-	if (!ni->ni_interfaces[0]) {
-		struct sockaddr_in *sa;
+	ksi = &net->ksnn_interface;
 
-		ksi = &net->ksnn_interfaces[0];
-		sa = (void *)&ksi->ksni_addr;
-
-		/* Use the first discovered interface */
-		net->ksnn_ninterfaces = 1;
-		ni->ni_dev_cpt = ifaces[0].li_cpt;
-		memset(sa, 0, sizeof(*sa));
-		sa->sin_family = AF_INET;
-		sa->sin_addr.s_addr = htonl(ifaces[0].li_ipaddr);
-		ksi->ksni_index = ksocknal_ip2index((struct sockaddr *)sa, ni);
-		ksi->ksni_netmask = ifaces[0].li_netmask;
-		strlcpy(ksi->ksni_name, ifaces[0].li_name,
-			sizeof(ksi->ksni_name));
-	} else {
-		/* Before Multi-Rail ksocklnd would manage
-		 * multiple interfaces with its own tcp bonding.
-		 * If we encounter an old configuration using
-		 * this tcp bonding approach then we need to
-		 * handle more than one ni_interfaces.
-		 *
-		 * In Multi-Rail configuration only ONE ni_interface
-		 * should exist. Each IP alias should be mapped to
-		 * each 'struct net_ni'.
-		 */
-		for (i = 0; i < LNET_INTERFACES_NUM; i++) {
-			int j;
-
-			if (!ni->ni_interfaces[i])
+	/* Use the first discovered interface or look in the list */
+	if (ni->ni_interface) {
+		for (i = 0; i < rc; i++)
+			if (strcmp(ifaces[i].li_name, ni->ni_interface) == 0)
 				break;
 
-			for (j = 0; j < LNET_INTERFACES_NUM;  j++) {
-				if (i != j && ni->ni_interfaces[j] &&
-				    strcmp(ni->ni_interfaces[i],
-					   ni->ni_interfaces[j]) == 0) {
-					rc = -EEXIST;
-					CERROR("ksocklnd: found duplicate %s at %d and %d, rc = %d\n",
-					       ni->ni_interfaces[i], i, j, rc);
-					goto fail_1;
-				}
-			}
-
-			for (j = 0; j < rc; j++) {
-				struct sockaddr_in *sa;
-
-				if (strcmp(ifaces[j].li_name,
-					   ni->ni_interfaces[i]) != 0)
-					continue;
-
-				ksi =
-				  &net->ksnn_interfaces[net->ksnn_ninterfaces];
-				sa = (void *)&ksi->ksni_addr;
-				ni->ni_dev_cpt = ifaces[j].li_cpt;
-				memset(sa, 0, sizeof(*sa));
-				sa->sin_family = AF_INET;
-				sa->sin_addr.s_addr =
-					htonl(ifaces[j].li_ipaddr);
-				ksi->ksni_index = ksocknal_ip2index(
-					(struct sockaddr *)sa, ni);
-				ksi->ksni_netmask = ifaces[j].li_netmask;
-				strlcpy(ksi->ksni_name, ifaces[j].li_name,
-					sizeof(ksi->ksni_name));
-				net->ksnn_ninterfaces++;
-				break;
-			}
-		}
-		/* ni_interfaces don't map to all network interfaces */
-		if (!ksi || net->ksnn_ninterfaces != i) {
-			CERROR("ksocklnd: requested %d but only %d interfaces found\n",
-			       i, net->ksnn_ninterfaces);
+		/* ni_interfaces doesn't contain the interface we want */
+		if (i == rc) {
+			CERROR("ksocklnd: failed to find interface %s\n",
+			       ni->ni_interface);
 			goto fail_1;
 		}
 	}
+
+	ni->ni_dev_cpt = ifaces[i].li_cpt;
+	sa = (void *)&ksi->ksni_addr;
+	memset(sa, 0, sizeof(*sa));
+	sa->sin_family = AF_INET;
+	sa->sin_addr.s_addr = htonl(ifaces[i].li_ipaddr);
+	ksi->ksni_index = ksocknal_ip2index((struct sockaddr *)sa, ni);
+	ksi->ksni_netmask = ifaces[i].li_netmask;
+	strlcpy(ksi->ksni_name, ifaces[i].li_name, sizeof(ksi->ksni_name));
 
 	/* call it before add it to ksocknal_data.ksnd_nets */
 	rc = ksocknal_net_start_threads(net, ni->ni_cpts, ni->ni_ncpts);
@@ -2847,7 +2272,6 @@ ksocknal_startup(struct lnet_ni *ni)
 		ntohl(((struct sockaddr_in *)
 		       &ksi->ksni_addr)->sin_addr.s_addr));
 	list_add(&net->ksnn_list, &ksocknal_data.ksnd_nets);
-
 	ksocknal_data.ksnd_nnets++;
 
 	return 0;

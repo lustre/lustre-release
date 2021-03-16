@@ -162,8 +162,7 @@ struct ksock_net {
 	__u64		  ksnn_incarnation;	/* my epoch */
 	struct list_head  ksnn_list;		/* chain on global list */
 	atomic_t	  ksnn_npeers;		/* # peers */
-	int		  ksnn_ninterfaces;	/* IP interfaces */
-	struct ksock_interface ksnn_interfaces[LNET_INTERFACES_NUM];
+	struct ksock_interface ksnn_interface;  /* IP interface */
 };
 /* When the ksock_net is shut down, this (negative) bias is added to
  * ksnn_npeers, which prevents new peers from being added.
