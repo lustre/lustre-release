@@ -2149,44 +2149,45 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct lov_mds_md **lmmp, int *lmm_size,
                              struct ptlrpc_request **request)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct mdt_body  *body;
-        struct lov_mds_md *lmm = NULL;
-        struct ptlrpc_request *req = NULL;
-        struct md_op_data *op_data;
-        int rc, lmmsize;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct mdt_body *body;
+	struct lov_mds_md *lmm = NULL;
+	struct ptlrpc_request *req = NULL;
+	struct md_op_data *op_data;
+	int rc, lmmsize;
+
+	ENTRY;
 
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc)
 		RETURN(rc);
 
-        op_data = ll_prep_md_op_data(NULL, inode, NULL, filename,
-                                     strlen(filename), lmmsize,
-                                     LUSTRE_OPC_ANY, NULL);
-        if (IS_ERR(op_data))
-                RETURN(PTR_ERR(op_data));
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, filename,
+				     strlen(filename), lmmsize,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
 
-        op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
-        rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
-        ll_finish_md_op_data(op_data);
-        if (rc < 0) {
-                CDEBUG(D_INFO, "md_getattr_name failed "
-                       "on %s: rc %d\n", filename, rc);
-                GOTO(out, rc);
-        }
+	op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+	rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
+	ll_finish_md_op_data(op_data);
+	if (rc < 0) {
+		CDEBUG(D_INFO, "md_getattr_name failed "
+		       "on %s: rc %d\n", filename, rc);
+		GOTO(out, rc);
+	}
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        LASSERT(body != NULL); /* checked by mdc_getattr_name */
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	LASSERT(body != NULL); /* checked by mdc_getattr_name */
 
 	lmmsize = body->mbo_eadatasize;
 
 	if (!(body->mbo_valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) ||
-                        lmmsize == 0) {
-                GOTO(out, rc = -ENODATA);
-        }
+	    lmmsize == 0)
+		GOTO(out, rc = -ENODATA);
 
-        lmm = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD, lmmsize);
-        LASSERT(lmm != NULL);
+	lmm = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD, lmmsize);
+	LASSERT(lmm != NULL);
 
 	if (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1) &&
 	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3) &&
@@ -2196,11 +2197,10 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 
 	/*
 	 * This is coming from the MDS, so is probably in
-	 * little endian.  We convert it to host endian before
+	 * little endian. We convert it to host endian before
 	 * passing it to userspace.
 	 */
-	if ((lmm->lmm_magic & __swab32(LOV_MAGIC_MAGIC)) ==
-	    __swab32(LOV_MAGIC_MAGIC)) {
+	if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) {
 		int stripe_count = 0;
 
 		if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
@@ -2209,28 +2209,74 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 			if (le32_to_cpu(lmm->lmm_pattern) &
 			    LOV_PATTERN_F_RELEASED)
 				stripe_count = 0;
-		}
+			lustre_swab_lov_user_md((struct lov_user_md *)lmm, 0);
 
-		lustre_swab_lov_user_md((struct lov_user_md *)lmm, 0);
-
-		/* if function called for directory - we should
-		 * avoid swab not existent lsm objects */
-		if (lmm->lmm_magic == LOV_MAGIC_V1 && S_ISREG(body->mbo_mode))
-			lustre_swab_lov_user_md_objects(
+			/* if function called for directory - we should
+			 * avoid swab not existent lsm objects
+			 */
+			if (lmm->lmm_magic == LOV_MAGIC_V1 &&
+			    S_ISREG(body->mbo_mode))
+				lustre_swab_lov_user_md_objects(
 				((struct lov_user_md_v1 *)lmm)->lmm_objects,
 				stripe_count);
-		else if (lmm->lmm_magic == LOV_MAGIC_V3 &&
-			 S_ISREG(body->mbo_mode))
-			lustre_swab_lov_user_md_objects(
+			else if (lmm->lmm_magic == LOV_MAGIC_V3 &&
+				 S_ISREG(body->mbo_mode))
+				lustre_swab_lov_user_md_objects(
 				((struct lov_user_md_v3 *)lmm)->lmm_objects,
 				stripe_count);
+		} else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_COMP_V1)) {
+			lustre_swab_lov_comp_md_v1(
+				(struct lov_comp_md_v1 *)lmm);
+		}
 	}
 
+	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
+		struct lov_comp_md_v1 *comp_v1 = NULL;
+		struct lov_comp_md_entry_v1 *ent;
+		struct lov_user_md_v1 *v1;
+		__u32 off;
+		int i = 0;
+
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		/* Dump the striping information */
+		for (; i < comp_v1->lcm_entry_count; i++) {
+			ent = &comp_v1->lcm_entries[i];
+			off = ent->lcme_offset;
+			v1 = (struct lov_user_md_v1 *)((char *)lmm + off);
+			CDEBUG(D_INFO,
+			       "comp[%d]: stripe_count=%u, stripe_size=%u\n",
+			       i, v1->lmm_stripe_count, v1->lmm_stripe_size);
+		}
+
+		/**
+		 * Return valid stripe_count and stripe_size instead of 0 for
+		 * DoM files to avoid divide-by-zero for older userspace that
+		 * calls this ioctl, e.g. lustre ADIO driver.
+		 */
+		if (lmm->lmm_stripe_count == 0)
+			lmm->lmm_stripe_count = 1;
+		if (lmm->lmm_stripe_size == 0) {
+			/* Since the first component of the file data is placed
+			 * on the MDT for faster access, the stripe_size of the
+			 * second one is always that applications which are
+			 * doing large IOs.
+			 */
+			if (lmm->lmm_pattern == LOV_PATTERN_MDT)
+				i = comp_v1->lcm_entry_count > 1 ? 1 : 0;
+			else
+				i = comp_v1->lcm_entry_count > 1 ?
+				    comp_v1->lcm_entry_count - 1 : 0;
+			ent = &comp_v1->lcm_entries[i];
+			off = ent->lcme_offset;
+			v1 = (struct lov_user_md_v1 *)((char *)lmm + off);
+			lmm->lmm_stripe_size = v1->lmm_stripe_size;
+		}
+	}
 out:
 	*lmmp = lmm;
 	*lmm_size = lmmsize;
 	*request = req;
-	return rc;
+	RETURN(rc);
 }
 
 static int ll_lov_setea(struct inode *inode, struct file *file,

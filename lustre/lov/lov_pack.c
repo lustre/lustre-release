@@ -468,13 +468,6 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	}
 
 	/**
-	 * Return stripe_count=1 instead of 0 for DoM files to avoid
-	 * divide-by-zero for older userspace that calls this ioctl,
-	 * e.g. lustre ADIO driver.
-	 */
-	if ((lum.lmm_stripe_count == 0) && (lum.lmm_pattern & LOV_PATTERN_MDT))
-		lum.lmm_stripe_count = 1;
-	/**
 	 * User specified limited buffer size, usually the buffer is
 	 * from ll_lov_setstripe(), and the buffer can only hold basic
 	 * layout template info.

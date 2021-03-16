@@ -2398,6 +2398,53 @@ test_24a() {
 }
 run_test 24a "FIEMAP upon PFL file"
 
+test_25() {
+	local pfl_f=$DIR/$tdir/"$tfile"_pfl
+	local dom_f=$DIR/$tdir/"$tfile"_dom
+	local common_f=$DIR/$tdir/"$tfile"_common
+	local stripe_count
+	local stripe_size
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$LFS setstripe -E 10M -S 64k -c -1 -E 20M -S 1M -E -1 -S 2M -c 1 \
+		$pfl_f || error "setstripe $pfl_f failed"
+	$LFS setstripe -E 256k -L mdt -E -1 -S 1M $dom_f ||
+		error "setstripe $dom_f failed"
+	$LFS setstripe -S 512K -c -1 $common_f ||
+		error "setstripe $common_f failed"
+
+	#verify lov_getstripe_old with PFL file
+	stripe_count=$(lov_getstripe_old $pfl_f |
+			awk '/stripe_count/ { print $2 }')
+	stripe_size=$(lov_getstripe_old $pfl_f |
+			awk '/stripe_size/ { print $2 }')
+	[ $stripe_count -eq 1 ] ||
+		error "stripe_count $stripe_count !=1 for $pfl_f"
+	[ $stripe_size -eq 2097152 ] ||
+		error "stripe_size $stripe_size != 2097152 for $pfl_f"
+
+	#verify lov_getstripe_old with DoM file
+	stripe_count=$(lov_getstripe_old $dom_f |
+			awk '/stripe_count/ { print $2 }')
+	stripe_size=$(lov_getstripe_old $dom_f |
+			awk '/stripe_size/ { print $2 }')
+	[ $stripe_count -eq 1 ] ||
+		error "stripe_count $stripe_count !=1 for $dom_f"
+	[ $stripe_size -eq 1048576 ] ||
+		error "stripe_size $stripe_size != 1048576 for $dom_f"
+
+	#verify lov_getstripe_old with common file
+	stripe_count=$(lov_getstripe_old $common_f |
+			awk '/stripe_count/ { print $2 }')
+	stripe_size=$(lov_getstripe_old $common_f |
+			awk '/stripe_size/ { print $2 }')
+	[ $stripe_count -eq $OSTCOUNT ] ||
+		error "stripe_count $stripe_count !=$OSTCOUNT for $common_f"
+	[ $stripe_size -eq 524288 ] ||
+		error "stripe_size $stripe_size != 524288 for $common_f"
+}
+run_test 25 "Verify old lov stripe API with PFL files"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

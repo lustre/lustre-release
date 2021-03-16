@@ -78,7 +78,7 @@ THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 THETESTS += create_foreign_file parse_foreign_file
 THETESTS += create_foreign_dir parse_foreign_dir
 THETESTS += check_fallocate splice-test lseek_test expand_truncate_test
-THETESTS += foreign_symlink_striping
+THETESTS += foreign_symlink_striping lov_getstripe_old
 
 if LIBAIO
 THETESTS += aiocp
@@ -122,6 +122,7 @@ rwv_LDADD = $(LIBLUSTREAPI)
 lockahead_test_LDADD = $(LIBLUSTREAPI)
 mirror_io_LDADD = $(LIBLUSTREAPI)
 ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
+lov_getstripe_old_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
