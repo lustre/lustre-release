@@ -777,6 +777,14 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			vio->vui_ra_start_idx + vio->vui_ra_pages - 1;
 		pages_min = vio->vui_ra_start_idx + vio->vui_ra_pages -
 				ria->ria_start_idx;
+		 /**
+		  * For performance reason, exceeding @ra_max_pages
+		  * are allowed, but this should be limited with RPC
+		  * size in case a large block size read issued. Trim
+		  * to RPC boundary.
+		  */
+		pages_min = min(pages_min, ras->ras_rpc_pages -
+				(ria->ria_start_idx % ras->ras_rpc_pages));
 	}
 
 	/* don't over reserved for mmap range read */

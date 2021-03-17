@@ -458,6 +458,7 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	struct super_block     *sb    = m->private;
 	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
 	struct cl_client_cache *cache = sbi->ll_cache;
+	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	long max_cached_mb;
 	long unused_mb;
 
@@ -465,16 +466,21 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	max_cached_mb = PAGES_TO_MiB(cache->ccc_lru_max);
 	unused_mb = PAGES_TO_MiB(atomic_long_read(&cache->ccc_lru_left));
 	mutex_unlock(&cache->ccc_max_cache_mb_lock);
+
 	seq_printf(m, "users: %d\n"
 		      "max_cached_mb: %ld\n"
 		      "used_mb: %ld\n"
 		      "unused_mb: %ld\n"
-		      "reclaim_count: %u\n",
+		      "reclaim_count: %u\n"
+		      "max_read_ahead_mb: %lu\n"
+		      "used_read_ahead_mb: %d\n",
 		   atomic_read(&cache->ccc_users),
 		   max_cached_mb,
 		   max_cached_mb - unused_mb,
 		   unused_mb,
-		   cache->ccc_lru_shrinkers);
+		   cache->ccc_lru_shrinkers,
+		   PAGES_TO_MiB(ra->ra_max_pages),
+		   PAGES_TO_MiB(atomic_read(&ra->ra_cur_pages)));
 	return 0;
 }
 
