@@ -9,16 +9,16 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438267_50692" />
+        <xref linkend="dbdoclet.lustre_configure" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438267_76752" />
+        <xref linkend="dbdoclet.lustre_configure_additional_options" />
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438267_50692">
+  <section xml:id="dbdoclet.lustre_configure">
     <title>
     <indexterm>
       <primary>Lustre</primary>
@@ -123,7 +123,7 @@ mkfs.lustre --fsname=
 <replaceable>/dev/block_device</replaceable>
 </screen>
           <para>See 
-          <xref linkend="dbdoclet.50438194_88063" />for more details.</para>
+          <xref linkend="dbdoclet.lustre_configure_multiple_fs" />for more details.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.addmdtindex">
@@ -919,7 +919,7 @@ total 8.0M
       use.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438267_76752">
+  <section xml:id="dbdoclet.lustre_configure_additional_options">
     <title>
     <indexterm>
       <primary>Lustre</primary>

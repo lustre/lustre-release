@@ -327,7 +327,7 @@ lctl get_param obdfilter.*.degraded
     <literal>mdadm(8)</literal> command with the <literal>--monitor</literal>
     option to mark an affected device degraded or restored.</para>
   </section>
-  <section xml:id="dbdoclet.50438194_88063">
+  <section xml:id="dbdoclet.lustre_configure_multiple_fs">
     <title>
     <indexterm>
       <primary>operations</primary>
