@@ -127,17 +127,19 @@ void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh)
 		write_lock(&obj->oo_attr_lock);
 		list_del_init(&obj->oo_sa_linkage);
 		write_unlock(&obj->oo_attr_lock);
-		if (obj->oo_late_xattr) {
+		if (obj->oo_late_xattr && obj->oo_destroyed == 0) {
 			/*
 			 * take oo_guard to protect oo_sa_xattr buffer
 			 * from concurrent update by osd_xattr_set()
 			 */
 			LASSERT(oh->ot_assigned != 0);
 			down_write(&obj->oo_guard);
-			if (obj->oo_late_attr_set)
-				__osd_sa_attr_init(env, obj, oh);
-			else if (obj->oo_late_xattr)
-				__osd_sa_xattr_update(env, obj, oh);
+			if (obj->oo_destroyed == 0) {
+				if (obj->oo_late_attr_set)
+					__osd_sa_attr_init(env, obj, oh);
+				else if (obj->oo_late_xattr)
+					__osd_sa_xattr_update(env, obj, oh);
+			}
 			up_write(&obj->oo_guard);
 		}
 		sa_spill_rele(obj->oo_sa_hdl);

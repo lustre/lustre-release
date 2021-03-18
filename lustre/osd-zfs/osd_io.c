@@ -219,6 +219,10 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of(th, struct osd_thandle, ot_super);
 
+	down_read(&obj->oo_guard);
+	if (obj->oo_destroyed)
+		GOTO(out, rc = -ENOENT);
+
 	osd_dmu_write(osd, obj->oo_dn, offset, (uint64_t)buf->lb_len,
 		      buf->lb_buf, oh->ot_tx);
 	write_lock(&obj->oo_attr_lock);
@@ -240,6 +244,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	rc = buf->lb_len;
 
 out:
+	up_read(&obj->oo_guard);
 	RETURN(rc);
 }
 
@@ -876,6 +881,11 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	 * changing the block size.
 	 */
 	down_read(&obj->oo_guard);
+	if (obj->oo_destroyed) {
+		up_read(&obj->oo_guard);
+		RETURN(-ENOENT);
+	}
+
 	for (i = 0; i < npages; i++) {
 		CDEBUG(D_INODE, "write %u bytes at %u\n",
 			(unsigned) lnb[i].lnb_len,
@@ -941,13 +951,13 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		osd_evict_dbufs_after_write(obj, lnb[i].lnb_file_offset,
 					    abufsz);
 	}
-	up_read(&obj->oo_guard);
 
 	if (unlikely(new_size == 0)) {
 		/* no pages to write, no transno is needed */
 		th->th_local = 1;
 		/* it is important to return 0 even when all lnb_rc == -ENOSPC
 		 * since ofd_commitrw_write() retries several times on ENOSPC */
+		up_read(&obj->oo_guard);
 		record_end_io(osd, WRITE, 0, 0, 0);
 		RETURN(0);
 	}
@@ -967,6 +977,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	} else {
 		write_unlock(&obj->oo_attr_lock);
 	}
+
+	up_read(&obj->oo_guard);
 
 	record_end_io(osd, WRITE, 0, iosize, npages);
 
@@ -1082,6 +1094,10 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		len = end - start;
 	write_unlock(&obj->oo_attr_lock);
 
+	down_read(&obj->oo_guard);
+	if (obj->oo_destroyed)
+		GOTO(out, rc = -ENOENT);
+
 	rc = __osd_object_punch(obj, osd->od_os, oh->ot_tx, start, len);
 
 	/* set new size */
@@ -1092,6 +1108,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
 					  &obj->oo_attr.la_size, 8, oh);
 	}
+out:
+	up_read(&obj->oo_guard);
 	RETURN(rc);
 }
 

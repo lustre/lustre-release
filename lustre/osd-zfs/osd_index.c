@@ -662,22 +662,29 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	memset(&oti->oti_zde.lzd_fid, 0, sizeof(struct lu_fid));
+
+	down_read(&obj->oo_guard);
+	if (obj->oo_destroyed)
+		GOTO(out_unlock, rc = -ENOENT);
+
 	rc = osd_zap_lookup(osd, obj->oo_dn->dn_object, obj->oo_dn,
 			    (char *)key, 8, sizeof(oti->oti_zde) / 8,
 			    (void *)&oti->oti_zde);
-	if (rc != 0)
+	if (rc != 0) {
+		up_read(&obj->oo_guard);
 		RETURN(rc);
+	}
 
 	oid = oti->oti_zde.lzd_reg.zde_dnode;
 	if (likely(fid_is_sane(&oti->oti_zde.lzd_fid))) {
 		memcpy(rec, &oti->oti_zde.lzd_fid, sizeof(struct lu_fid));
-		GOTO(out, rc = 0);
+		GOTO(out_unlock, rc = 0);
 	}
 
 	rc = osd_get_fid_by_oid(env, osd, oti->oti_zde.lzd_reg.zde_dnode, fid);
 
-	GOTO(out, rc);
-
+out_unlock:
+	up_read(&obj->oo_guard);
 out:
 	if (!rc && !osd_remote_fid(env, osd, fid)) {
 		/*
