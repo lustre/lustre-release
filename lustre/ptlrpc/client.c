@@ -1697,7 +1697,22 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 	lustre_msg_set_status(req->rq_reqmsg, current->pid);
 
-	rc = sptlrpc_req_refresh_ctx(req, 0);
+	/* If the request to be sent is an LDLM callback, do not try to
+	 * refresh context.
+	 * An LDLM callback is sent by a server to a client in order to make
+	 * it release a lock, on a communication channel that uses a reverse
+	 * context. It cannot be refreshed on its own, as it is the 'reverse'
+	 * (server-side) representation of a client context.
+	 * We do not care if the reverse context is expired, and want to send
+	 * the LDLM callback anyway. Once the client receives the AST, it is
+	 * its job to refresh its own context if it has expired, hence
+	 * refreshing the associated reverse context on server side, before
+	 * being able to send the LDLM_CANCEL requested by the server.
+	 */
+	if (lustre_msg_get_opc(req->rq_reqmsg) != LDLM_BL_CALLBACK &&
+	    lustre_msg_get_opc(req->rq_reqmsg) != LDLM_CP_CALLBACK &&
+	    lustre_msg_get_opc(req->rq_reqmsg) != LDLM_GL_CALLBACK)
+		rc = sptlrpc_req_refresh_ctx(req, 0);
 	if (rc) {
 		if (req->rq_err) {
 			req->rq_status = rc;
