@@ -3056,6 +3056,12 @@ kiblnd_shutdown(struct lnet_ni *ni)
 		list_del(&net->ibn_list);
 		write_unlock_irqrestore(g_lock, flags);
 
+		wake_up_all(&kiblnd_data.kib_connd_waitq);
+		wait_var_event_warning(&net->ibn_nconns,
+				       atomic_read(&net->ibn_nconns) == 0,
+				       "%s: waiting for %d conns to clean\n",
+				       libcfs_nidstr(&ni->ni_nid),
+				       atomic_read(&net->ibn_nconns));
 		fallthrough;
 
         case IBLND_INIT_NOTHING:
