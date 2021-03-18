@@ -209,6 +209,172 @@ static void jobid_prune_expedite(void)
 	}
 }
 
+static int cfs_access_process_vm(struct task_struct *tsk,
+				 struct mm_struct *mm,
+				 unsigned long addr,
+				 void *buf, int len, int write)
+{
+	/* Just copied from kernel for the kernels which doesn't
+	 * have access_process_vm() exported
+	 */
+	struct vm_area_struct *vma;
+	struct page *page;
+	void *old_buf = buf;
+
+	/* Avoid deadlocks on mmap_sem if called from sys_mmap_pgoff(),
+	 * which is already holding mmap_sem for writes.  If some other
+	 * thread gets the write lock in the meantime, this thread will
+	 * block, but at least it won't deadlock on itself.  LU-1735
+	 */
+	if (!mmap_read_trylock(mm))
+		return -EDEADLK;
+
+	/* ignore errors, just check how much was successfully transferred */
+	while (len) {
+		int bytes, rc, offset;
+		void *maddr;
+
+#if defined(HAVE_GET_USER_PAGES_GUP_FLAGS)
+		rc = get_user_pages(addr, 1, write ? FOLL_WRITE : 0, &page,
+				    &vma);
+#elif defined(HAVE_GET_USER_PAGES_6ARG)
+		rc = get_user_pages(addr, 1, write, 1, &page, &vma);
+#else
+		rc = get_user_pages(tsk, mm, addr, 1, write, 1, &page, &vma);
+#endif
+		if (rc <= 0)
+			break;
+
+		bytes = len;
+		offset = addr & (PAGE_SIZE-1);
+		if (bytes > PAGE_SIZE-offset)
+			bytes = PAGE_SIZE-offset;
+
+		maddr = kmap(page);
+		if (write) {
+			copy_to_user_page(vma, page, addr,
+					  maddr + offset, buf, bytes);
+			set_page_dirty_lock(page);
+		} else {
+			copy_from_user_page(vma, page, addr,
+					    buf, maddr + offset, bytes);
+		}
+		kunmap(page);
+		put_page(page);
+		len -= bytes;
+		buf += bytes;
+		addr += bytes;
+	}
+	mmap_read_unlock(mm);
+
+	return buf - old_buf;
+}
+
+/* Read the environment variable of current process specified by @key. */
+static int cfs_get_environ(const char *key, char *value, int *val_len)
+{
+	struct mm_struct *mm;
+	char *buffer;
+	int buf_len = PAGE_SIZE;
+	int key_len = strlen(key);
+	unsigned long addr;
+	int rc;
+	bool skip = false;
+
+	ENTRY;
+	buffer = kmalloc(buf_len, GFP_USER);
+	if (!buffer)
+		RETURN(-ENOMEM);
+
+	mm = get_task_mm(current);
+	if (!mm) {
+		kfree(buffer);
+		RETURN(-EINVAL);
+	}
+
+	addr = mm->env_start;
+	while (addr < mm->env_end) {
+		int this_len, retval, scan_len;
+		char *env_start, *env_end;
+
+		memset(buffer, 0, buf_len);
+
+		this_len = min_t(int, mm->env_end - addr, buf_len);
+		retval = cfs_access_process_vm(current, mm, addr, buffer,
+					       this_len, 0);
+		if (retval < 0)
+			GOTO(out, rc = retval);
+		else if (retval != this_len)
+			break;
+
+		addr += retval;
+
+		/* Parse the buffer to find out the specified key/value pair.
+		 * The "key=value" entries are separated by '\0'.
+		 */
+		env_start = buffer;
+		scan_len = this_len;
+		while (scan_len) {
+			char *entry;
+			int entry_len;
+
+			env_end = memscan(env_start, '\0', scan_len);
+			LASSERT(env_end >= env_start &&
+				env_end <= env_start + scan_len);
+
+			/* The last entry of this buffer cross the buffer
+			 * boundary, reread it in next cycle.
+			 */
+			if (unlikely(env_end - env_start == scan_len)) {
+				/* Just skip the entry larger than page size,
+				 * it can't be jobID env variable.
+				 */
+				if (unlikely(scan_len == this_len))
+					skip = true;
+				else
+					addr -= scan_len;
+				break;
+			} else if (unlikely(skip)) {
+				skip = false;
+				goto skip;
+			}
+			entry = env_start;
+			entry_len = env_end - env_start;
+			CDEBUG(D_INFO, "key: %s, entry: %s\n", key, entry);
+
+			/* Key length + length of '=' */
+			if (entry_len > key_len + 1 &&
+			    entry[key_len] == '='  &&
+			    !memcmp(entry, key, key_len)) {
+				entry += key_len + 1;
+				entry_len -= key_len + 1;
+
+				/* The 'value' buffer passed in is too small.
+				 * Copy what fits, but return -EOVERFLOW.
+				 */
+				if (entry_len >= *val_len) {
+					memcpy(value, entry, *val_len);
+					value[*val_len - 1] = 0;
+					GOTO(out, rc = -EOVERFLOW);
+				}
+
+				memcpy(value, entry, entry_len);
+				*val_len = entry_len;
+				GOTO(out, rc = 0);
+			}
+skip:
+			scan_len -= (env_end - env_start + 1);
+			env_start = env_end + 1;
+		}
+	}
+	GOTO(out, rc = -ENOENT);
+
+out:
+	mmput(mm);
+	kfree((void *)buffer);
+	return rc;
+}
+
 /*
  * Get jobid of current process by reading the environment variable
  * stored in between the "env_start" & "env_end" of task struct.

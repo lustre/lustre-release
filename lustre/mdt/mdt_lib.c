@@ -480,8 +480,12 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
 		if (IS_ERR(identity)) {
+			kernel_cap_t kcap = cap_combine(CAP_FS_SET,
+							CAP_NFSD_SET);
+			u32 cap_mask = kcap.cap[0];
+
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
-				     uc->uc_cap & CFS_CAP_FS_MASK)) {
+				     uc->uc_cap & cap_mask)) {
 				identity = NULL;
 			} else {
 				CDEBUG(D_SEC, "Deny access without identity: "
@@ -607,8 +611,13 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 
 	/* LU-5564: for normal close request, skip permission check */
 	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE &&
-	    !(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP)))
-		uc->uc_cap |= CFS_CAP_FS_MASK;
+	    !(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP))) {
+		kernel_cap_t kcap = { { uc->uc_cap, } };
+
+		kcap = cap_raise_nfsd_set(kcap, CAP_FULL_SET);
+		kcap = cap_raise_fs_set(kcap, CAP_FULL_SET);
+		uc->uc_cap = kcap.cap[0];
+	}
 
 	mdt_exit_ucred(info);
 

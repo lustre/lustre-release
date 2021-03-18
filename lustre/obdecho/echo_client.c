@@ -2246,6 +2246,7 @@ static struct lu_object *echo_resolve_path(const struct lu_env *env,
 static void echo_ucred_init(struct lu_env *env)
 {
 	struct lu_ucred *ucred = lu_ucred(env);
+	kernel_cap_t kcap = current_cap();
 
 	ucred->uc_valid = UCRED_INVALID;
 
@@ -2263,8 +2264,11 @@ static void echo_ucred_init(struct lu_env *env)
 	ucred->uc_cap = cfs_curproc_cap_pack();
 
 	/* remove fs privilege for non-root user. */
-	if (ucred->uc_fsuid)
-		ucred->uc_cap &= ~CFS_CAP_FS_MASK;
+	if (ucred->uc_fsuid) {
+		kcap = cap_drop_nfsd_set(kcap);
+		kcap = cap_drop_fs_set(kcap);
+	}
+	ucred->uc_cap = kcap.cap[0];
 	ucred->uc_valid = UCRED_NEW;
 }
 

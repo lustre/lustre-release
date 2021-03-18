@@ -58,8 +58,6 @@
 #endif
 #endif /* HAVE_IOV_ITER_TYPE */
 
-int cfs_get_environ(const char *key, char *value, int *val_len);
-
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 		     loff_t *pos);
 ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count,

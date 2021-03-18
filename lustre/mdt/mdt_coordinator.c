@@ -922,8 +922,9 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 
 int hsm_init_ucred(struct lu_ucred *uc)
 {
-	ENTRY;
+	kernel_cap_t kcap = cap_combine(CAP_FS_SET, CAP_NFSD_SET);
 
+	ENTRY;
 	uc->uc_valid = UCRED_OLD;
 	uc->uc_o_uid = 0;
 	uc->uc_o_gid = 0;
@@ -935,7 +936,7 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_fsgid = 0;
 	uc->uc_suppgids[0] = -1;
 	uc->uc_suppgids[1] = -1;
-	uc->uc_cap = CFS_CAP_FS_MASK;
+	uc->uc_cap = kcap.cap[0];
 	uc->uc_umask = 0777;
 	uc->uc_ginfo = NULL;
 	uc->uc_identity = NULL;
