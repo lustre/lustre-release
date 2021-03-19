@@ -717,6 +717,8 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
 			     __u32 flags);
 int llapi_pcc_detach_file(const char *path, __u32 flags);
+int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
+			enum lu_pcc_detach_flags flags);
 int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state);
 int llapi_pcc_state_get(const char *path, struct lu_pcc_state *state);
 int llapi_pccdev_set(const char *mntpath, const char *cmd);

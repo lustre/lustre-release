@@ -13825,9 +13825,10 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 	char short_opts[] = "hk";
 	int c;
 	int rc = 0;
-	const char *fid;
+	const char *fidstr;
 	const char *mntpath;
 	__u32 detach_flags = PCC_DETACH_FL_UNCACHE;
+	int dirfd;
 
 	optind = 0;
 	while ((c = getopt_long(argc, argv, short_opts,
@@ -13846,21 +13847,39 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 	}
 
 	mntpath = argv[optind++];
+	dirfd = open(mntpath, O_RDONLY);
+	if (dirfd < 0) {
+		rc = -errno;
+		fprintf(stderr, "%s: cannot open '%s': %s",
+			argv[0], mntpath, strerror(errno));
+		return rc;
+	}
 
 	while (optind < argc) {
+		struct lu_fid fid;
 		int rc2;
 
-		fid = argv[optind++];
+		fidstr = argv[optind++];
+		rc2 = llapi_fid_parse(fidstr, &fid, NULL);
+		if (rc2) {
+			fprintf(stderr, "%s: '%s' is not a valid FID\n",
+				argv[0], fidstr);
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 
-		rc2 = llapi_pcc_detach_fid_str(mntpath, fid, detach_flags);
+		rc2 = llapi_pcc_detach_at(dirfd, &fid, detach_flags);
 		if (rc2 < 0) {
 			fprintf(stderr,
 				"%s: cannot detach '%s' on '%s' from PCC: %s\n",
-				argv[0], fid, mntpath, strerror(-rc2));
+				argv[0], fidstr, mntpath, strerror(-rc2));
 			if (rc == 0)
 				rc = rc2;
 		}
 	}
+
+	close(dirfd);
 	return rc;
 }
 

@@ -43,6 +43,7 @@ struct hsm_scan_control {
 	const char		*hsc_hsmpath;
 	hsm_scan_func_t		 hsc_func;
 	int			 hsc_errnum;
+	int			 hsc_mntfd;
 };
 
 int hsm_scan_process(struct hsm_scan_control *hsc);

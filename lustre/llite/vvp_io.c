@@ -1034,7 +1034,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 	struct page *page = fbatch_at_pg(fbatch, 0, 0);
 	int count = folio_batch_count(fbatch);
 	int i;
-#if !defined(HAVE_FOLIO_BATCH) || !defined(HAVE_FILEMAP_GET_FOLIOS) || \
+#if !defined(HAVE_FOLIO_BATCH) || !defined(HAVE_FILEMAP_GET_FOLIOS) ||	\
 	defined(HAVE_KALLSYMS_LOOKUP_NAME)
 	int pg, npgs;
 #endif

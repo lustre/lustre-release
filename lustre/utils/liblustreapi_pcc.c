@@ -234,16 +234,11 @@ int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
 {
 	int rc;
 	struct lu_fid fid;
-	const char *fidstr_orig = fidstr;
 
-	while (*fidstr == '[')
-		fidstr++;
-	rc = sscanf(fidstr, SFID, RFID(&fid));
-	if (rc != 3) {
+	rc = llapi_fid_parse(fidstr, &fid, NULL);
+	if (rc) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "bad FID format '%s', should be [seq:oid:ver]"
-				  " (e.g. "DFID")\n", fidstr_orig,
-				  (unsigned long long)FID_SEQ_NORMAL, 2, 0);
+				  "PCC: '%s' is not a valid FID", fidstr);
 		return -EINVAL;
 	}
 
@@ -270,6 +265,28 @@ int llapi_pcc_detach_fd(int fd, __u32 flags)
 	/* If error, save errno value */
 	rc = rc ? -errno : 0;
 
+	return rc;
+}
+
+/**
+ * detach PCC cache of a file via FID.
+ *
+ * \param dirfd		Dir file handle.
+ * \param fid		FID of the file.
+ * \param flags		Detach flags.
+ *
+ * \return 0 on success, an error code otherwise.
+ */
+int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
+			enum lu_pcc_detach_flags flags)
+{
+	int rc;
+	struct lu_pcc_detach_fid detach = {
+		.pccd_fid = *fid,
+		.pccd_flags = flags,
+	};
+
+	rc = ioctl(dirfd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	return rc;
 }
 
@@ -326,16 +343,11 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
 {
 	int rc;
 	struct lu_fid fid;
-	const char *fidstr_orig = fidstr;
 
-	while (*fidstr == '[')
-		fidstr++;
-	rc = sscanf(fidstr, SFID, RFID(&fid));
-	if (rc != 3 || !fid_is_sane(&fid)) {
+	rc = llapi_fid_parse(fidstr, &fid, NULL);
+	if (rc) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "bad FID format '%s', should be [seq:oid:ver]"
-				  " (e.g. "DFID")\n", fidstr_orig,
-				  (unsigned long long)FID_SEQ_NORMAL, 2, 0);
+				  "PCC: '%s' is not a valid FID", fidstr);
 		return -EINVAL;
 	}
 
@@ -550,7 +562,6 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 	char fidstr[FID_LEN];
 	const char *fidname;
 	bool lov_file;
-	int fd;
 	int rc;
 
 	/* It is the saved lov file when archive on HSM backend. */
@@ -576,27 +587,16 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 		fidname = fname;
 	}
 
-	rc = sscanf(fidname, SFID, RFID(&detach.pccd_fid));
-	if (rc != 3 || !fid_is_sane(&detach.pccd_fid)) {
+	rc = llapi_fid_parse(fidname, &detach.pccd_fid, NULL);
+	if (rc) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "bad FID format '%s', should be [seq:oid:ver] (e.g. "DFID")\n",
-				  fidname, (unsigned long long)FID_SEQ_NORMAL,
-				  2, 0);
-		return -EINVAL;
+				  "PCC: '%s' is not a valid FID", fidname);
+		return rc;
 	}
 
 	llapi_printf(LLAPI_MSG_DEBUG, "Handle the file: %s\n", fidname);
 
-	rc = llapi_root_path_open(hsc->hsc_mntpath, &fd);
-	if (rc) {
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get root path: %s",
-			    hsc->hsc_mntpath);
-		return rc;
-	}
-
-	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
-	close(fd);
-
+	rc = ioctl(hsc->hsc_mntfd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	if (rc) {
 		rc = -errno;
 		llapi_printf(LLAPI_MSG_DEBUG,
@@ -635,7 +635,14 @@ static int llapi_pcc_del_internal(const char *mntpath, const char *pccpath,
 				  enum hsmtool_type type,
 				  enum lu_pcc_cleanup_flags flags)
 {
-	struct hsm_scan_control hsc;
+	struct hsm_scan_control hsc = {
+		.hsc_type = type,
+		.hsc_mntpath = mntpath,
+		.hsc_hsmpath = pccpath,
+		.hsc_mntfd = -1,
+		.hsc_func = llapi_pcc_scan_detach,
+		.hsc_errnum = 0,
+	};
 	char cmd[PATH_MAX];
 	int rc;
 
@@ -650,12 +657,16 @@ static int llapi_pcc_del_internal(const char *mntpath, const char *pccpath,
 	if (flags & PCC_CLEANUP_FL_KEEP_DATA)
 		return 0;
 
-	hsc.hsc_type = type;
-	hsc.hsc_mntpath = mntpath;
-	hsc.hsc_hsmpath = pccpath;
-	hsc.hsc_func = llapi_pcc_scan_detach;
-	hsc.hsc_errnum = 0;
+	hsc.hsc_mntfd = open(mntpath, O_RDONLY);
+	if (hsc.hsc_mntfd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot open '%s'", mntpath);
+		return rc;
+	}
+
 	rc = hsm_scan_process(&hsc);
+	close(hsc.hsc_mntfd);
 
 	return rc;
 }
