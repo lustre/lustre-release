@@ -875,9 +875,46 @@
       to utilize the full file system bandwidth.</para>
       <para>For more information about striping, see
       <xref linkend="managingstripingfreespace" />.</para>
+      <para>
+        <emphasis role="bold">Extended Attributes(xattrs)</emphasis></para>
+         <para>Lustre uses lov_user_md_v1/lov_user_md_v3 data-structures to
+         maintain its file striping information under xattrs. Extended
+         attributes are created when files and directory are created. Lustre
+         uses <literal>trusted</literal> extended attributes to store its
+         parameters which are root-only accessible. The parameters are:</para>
+      <itemizedlist>
+        <listitem>
+          <para>
+            <emphasis role="bold"><literal>trusted.lov</literal>:</emphasis>
+            Holds layout for a regular file, or default file layout stored
+            on a directory (also accessible as <literal>lustre.lov</literal>
+            for non-root users).
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <emphasis role="bold"><literal>trusted.lma</literal>:</emphasis>
+            Holds FID and extra state flags for current file</para>
+        </listitem>
+        <listitem>
+          <para>
+            <emphasis role="bold"><literal>trusted.lmv</literal>:</emphasis>
+            Holds layout for a striped directory (DNE 2), not present otherwise
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <emphasis role="bold"><literal>trusted.link</literal>:</emphasis>
+            Holds parent directory FID + filename for each link to a file
+            (for <literal>lfs fid2path</literal>)</para>
+        </listitem>
+      </itemizedlist>
+      <para>xattr which are stored and present in the file could be verify
+        using:</para>
+      <para><screen># getfattr -d -m - /mnt/testfs/file></screen></para>
     </section>
   </section>
 </chapter>
 <!--
-  vim:expandtab:shiftwidth=2:tabstop=8:
+  vim:expandtab:shiftwidth=2:tabstop=8:textwidth=80:
   -->
