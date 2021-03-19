@@ -2206,7 +2206,15 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	__u32 mirror_id;
 	int mdt_index;
 	int fd, fdv;
+	bool purge = true; /* delete mirror by setting fdv=fd */
 	int rc;
+
+	if (victim_file && (strcmp(fname, victim_file) == 0)) {
+		fprintf(stderr,
+			"error %s: the source file '%s' and -f file are the same\n",
+			progname, fname);
+		return -EINVAL;
+	}
 
 	/* check fname contains mirror with mirror_id/comp_id */
 	layout = llapi_layout_get_by_path(fname, 0);
@@ -2310,6 +2318,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		goto close_fd;
 	}
 
+again:
 	if (!victim_file) {
 		/* use a temp file to store the splitted layout */
 		if (mflags & MF_DESTROY) {
@@ -2321,8 +2330,17 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 				goto close_fd;
 			}
 
-			fdv = llapi_create_volatile_idx(parent, mdt_index,
-							O_LOV_DELAY_CREATE);
+			if (purge) {
+				/* don't use volatile file for mirror destroy */
+				fdv = fd;
+			} else {
+				/**
+				 * try the old way to delete mirror using
+				 * volatile file.
+				 */
+				fdv = llapi_create_volatile_idx(parent,
+						mdt_index, O_LOV_DELAY_CREATE);
+			}
 		} else {
 			snprintf(victim, sizeof(victim), "%s.mirror~%u",
 				 fname, mirror_id);
@@ -2363,6 +2381,12 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	data->lil_ids[1] = mirror_id;
 	rc = llapi_lease_set(fd, data);
 	if (rc <= 0) {
+		if (rc == -EINVAL && purge) {
+			/* could be old MDS which prohibit fd==fdv */
+			purge = false;
+			goto again;
+
+		}
 		if (rc == 0) /* lost lease lock */
 			rc = -EBUSY;
 		fprintf(stderr,
@@ -2374,7 +2398,8 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	free(data);
 
 close_victim:
-	close(fdv);
+	if (!purge)
+		close(fdv);
 close_fd:
 	close(fd);
 free_layout:
@@ -4313,6 +4338,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				comp_id = mirror_id;
 			else
 				mirror_flags |= MF_COMP_ID;
+			if (has_m_file && !strcmp(fname, mirror_list->m_file)) {
+				fprintf(stderr,
+					"%s: the file specified by -f cannot be same as the source file '%s'\n",
+					progname, fname);
+				goto usage_error;
+			}
 			result = mirror_split(fname, comp_id, lsa.lsa_pool_name,
 					      mirror_flags,
 					      has_m_file ? mirror_list->m_file :

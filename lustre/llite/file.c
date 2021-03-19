@@ -3481,6 +3481,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 		if (!layout_file)
 			GOTO(out_lease_close, rc = -EBADF);
 
+		/* if layout_file == file, it means to destroy the mirror */
 		sp.sp_inode = file_inode(layout_file);
 		sp.sp_mirror_id = (__u16)mirror_id;
 		data = &sp;

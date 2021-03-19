@@ -933,6 +933,7 @@ enum lu_xattr_flags {
 	LU_XATTR_CREATE  = BIT(1),
 	LU_XATTR_MERGE   = BIT(2),
 	LU_XATTR_SPLIT   = BIT(3),
+	LU_XATTR_PURGE   = BIT(4),
 };
 
 /** @} helpers */

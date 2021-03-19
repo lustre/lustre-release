@@ -548,6 +548,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   struct lod_tgt_descs *ltd, char *osp, unsigned int idx,
 		   unsigned int gen);
+int validate_lod_and_idx(struct lod_device *lod, __u32 idx);
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd);
 int lod_striping_load(const struct lu_env *env, struct lod_object *lo);

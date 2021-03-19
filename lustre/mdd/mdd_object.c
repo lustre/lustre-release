@@ -1770,7 +1770,7 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 {
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_object *obj = md2mdd_obj(md_obj);
-	struct mdd_object *vic = md2mdd_obj(mrd->mrd_obj);
+	struct mdd_object *vic = NULL;
 	struct lu_buf *buf = &mdd_env_info(env)->mti_buf[0];
 	struct lu_buf *buf_save = &mdd_env_info(env)->mti_buf[1];
 	struct lu_buf *buf_vic = &mdd_env_info(env)->mti_buf[2];
@@ -1781,21 +1781,33 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 
 	ENTRY;
 
-	rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
-	if (rc == 0) /* same fid */
-		RETURN(-EPERM);
+	/**
+	 * NULL @mrd_obj means mirror deleting, and use NULL vic to indicate
+	 * mirror deleting
+	 */
+	if (mrd->mrd_obj)
+		vic = md2mdd_obj(mrd->mrd_obj);
+
+	if (vic) {
+		/* don't use the same file to save the splitted mirror */
+		rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
+		if (rc == 0)
+			RETURN(-EPERM);
+
+		if (rc > 0) {
+			mdd_write_lock(env, obj, DT_TGT_CHILD);
+			mdd_write_lock(env, vic, DT_TGT_CHILD);
+		} else {
+			mdd_write_lock(env, vic, DT_TGT_CHILD);
+			mdd_write_lock(env, obj, DT_TGT_CHILD);
+		}
+	} else {
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+	}
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
-		RETURN(PTR_ERR(handle));
-
-	if (rc > 0) {
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-	} else {
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-	}
+		GOTO(unlock, rc = PTR_ERR(handle));
 
 	/* get EA of mirrored file */
 	memset(buf_save, 0, sizeof(*buf));
@@ -1809,60 +1821,105 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 
 	/**
 	 * Extract the mirror with specified mirror id, and store the splitted
-	 * mirror layout to the victim file.
+	 * mirror layout to the victim buffer.
 	 */
 	memset(buf, 0, sizeof(*buf));
 	memset(buf_vic, 0, sizeof(*buf_vic));
 	rc = mdd_split_ea(lcm, mrd->mrd_mirror_id, buf, buf_vic);
 	if (rc < 0)
 		GOTO(out, rc);
+	/**
+	 * @buf stores layout w/o the specified mirror, @buf_vic stores the
+	 * splitted mirror
+	 */
 
 	dom_stripe = mdd_lmm_dom_size(buf_vic->lb_buf) > 0;
 
-	rc = mdd_declare_xattr_set(env, mdd, obj, buf, XATTR_NAME_LOV,
-				   LU_XATTR_SPLIT, handle);
-	if (rc)
-		GOTO(out, rc);
-	rc = mdd_declare_xattr_set(env, mdd, vic, buf_vic, XATTR_NAME_LOV,
-				   LU_XATTR_SPLIT, handle);
-	if (rc)
-		GOTO(out, rc);
+	if (vic) {
+		/**
+		 * non delete mirror split
+		 *
+		 * declare obj set remaining layout in @buf, will set obj's
+		 * in-memory layout
+		 */
+		rc = mdd_declare_xattr_set(env, mdd, obj, buf, XATTR_NAME_LOV,
+					   LU_XATTR_SPLIT, handle);
+		if (rc)
+			GOTO(out_restore, rc);
+
+		/* declare vic set splitted layout in @buf_vic */
+		rc = mdd_declare_xattr_set(env, mdd, vic, buf_vic,
+					   XATTR_NAME_LOV, LU_XATTR_SPLIT,
+					   handle);
+		if (rc)
+			GOTO(out_restore, rc);
+	} else {
+		/**
+		 * declare delete mirror objects in @buf_vic, will change obj's
+		 * in-memory layout
+		 */
+		rc = mdd_declare_xattr_set(env, mdd, obj, buf_vic,
+					   XATTR_NAME_LOV, LU_XATTR_PURGE,
+					   handle);
+		if (rc)
+			GOTO(out_restore, rc);
+
+		/* declare obj set remaining layout in @buf */
+		rc = mdd_declare_xattr_set(env, mdd, obj, buf,
+					   XATTR_NAME_LOV, LU_XATTR_SPLIT,
+					   handle);
+		if (rc)
+			GOTO(out_restore, rc);
+	}
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_restore, rc);
 
+	/* set obj's layout in @buf */
 	rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV, LU_XATTR_REPLACE,
 			   handle);
 	if (rc)
-		GOTO(out, rc);
-
-	rc = mdo_xattr_set(env, vic, buf_vic, XATTR_NAME_LOV, LU_XATTR_CREATE,
-			   handle);
-	if (rc)
 		GOTO(out_restore, rc);
+
+	if (vic) {
+		/* set vic's layout in @buf_vic */
+		rc = mdo_xattr_set(env, vic, buf_vic, XATTR_NAME_LOV,
+				   LU_XATTR_CREATE, handle);
+		if (rc)
+			GOTO(out_restore, rc);
+	} else {
+		/* delete mirror objects */
+		rc = mdo_xattr_set(env, obj, buf_vic, XATTR_NAME_LOV,
+				   LU_XATTR_PURGE, handle);
+		if (rc)
+			GOTO(out_restore, rc);
+	}
 
 	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle,
 				      NULL);
 	if (rc)
 		GOTO(out, rc);
 
-	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic, handle,
-				      NULL);
-	if (rc)
-		GOTO(out, rc);
-	EXIT;
+	if (vic) {
+		rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic,
+					      handle, NULL);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 out_restore:
 	if (rc) {
-		/* restore obj's layout */
+		/* restore obj's in-memory and on-disk layout */
 		int rc2 = mdo_xattr_set(env, obj, buf_save, XATTR_NAME_LOV,
 					LU_XATTR_REPLACE, handle);
 		if (rc2)
-			CERROR("%s: failed rollback "DFID" layout: file state unkonwn: rc = %d\n",
+			CERROR("%s: failed rollback "DFID
+			       " layout: file state unknown: rc = %d\n",
 			       mdd_obj_dev_name(obj),
-			       PFID(mdd_object_fid(obj)), rc2);
+			       PFID(mdd_object_fid(obj)), rc);
 	}
+
 out:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
@@ -1870,8 +1927,10 @@ out:
 	if (!rc && dom_stripe)
 		mdd_dom_data_truncate(env, mdd, obj);
 
+unlock:
 	mdd_write_unlock(env, obj);
-	mdd_write_unlock(env, vic);
+	if (vic)
+		mdd_write_unlock(env, vic);
 	lu_buf_free(buf_save);
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
@@ -1931,15 +1990,16 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 		if (buf->lb_len != sizeof(*mrd))
 			RETURN(-EINVAL);
 
-		rc = mdd_layout_merge_allowed(env, obj, victim);
-		if (rc)
-			RETURN(rc);
 
-		if (fl == LU_XATTR_MERGE)
+		if (fl == LU_XATTR_MERGE) {
+			rc = mdd_layout_merge_allowed(env, obj, victim);
+			if (rc)
+				RETURN(rc);
 			/* merge layout of victim as a mirror of obj's. */
 			rc = mdd_xattr_merge(env, obj, victim);
-		else
+		} else {
 			rc = mdd_xattr_split(env, obj, mrd);
+		}
 		RETURN(rc);
 	}
 

@@ -958,7 +958,7 @@ repeat:
  * \retval			0 if the index is present
  * \retval			-EINVAL if not
  */
-static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
+int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 {
 	if (unlikely(idx >= md->lod_ost_descs.ltd_tgts_size ||
 		     !test_bit(idx, md->lod_ost_bitmap))) {
