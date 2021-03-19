@@ -884,6 +884,7 @@ static void tgt_grant_check(const struct lu_env *env, struct obd_export *exp,
  *				have
  * \param[in] left		remaining free space with granted space taken
  *				out
+ * \param[in] chunk		grant allocation unit
  * \param[in] conservative	if set to true, the server should be cautious
  *				and limit how much space is granted back to the
  *				client. Otherwise, the server should try hard to
@@ -964,12 +965,11 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 	tgd->tgd_tot_granted += grant;
 	ted->ted_grant += grant;
 
-	if (ted->ted_grant < 0) {
+	if (unlikely(ted->ted_grant < 0 || ted->ted_grant > want + chunk)) {
 		CERROR("%s: cli %s/%p grant %ld want %llu current %llu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       ted->ted_grant, want, curgrant);
 		spin_unlock(&tgd->tgd_grant_lock);
-		LBUG();
 	}
 
 	CDEBUG(D_CACHE,
@@ -1092,13 +1092,35 @@ void tgt_grant_discard(struct obd_export *exp)
 
 	tgd = &lut->lut_tgd;
 	spin_lock(&tgd->tgd_grant_lock);
-	if (tgd->tgd_tot_granted < ted->ted_grant) {
-		CERROR("%s: tot_granted %llu < cli %s/%p ted_grant %ld\n",
-		       obd->obd_name, tgd->tgd_tot_granted,
-		       exp->exp_client_uuid.uuid, exp, ted->ted_grant);
+	if (unlikely(tgd->tgd_tot_granted < ted->ted_grant ||
+		     tgd->tgd_tot_dirty < ted->ted_dirty)) {
+		struct obd_export *e;
+		u64 ttg = 0;
+		u64 ttd = 0;
+
+		list_for_each_entry(e, &obd->obd_exports, exp_obd_chain) {
+			LASSERT(exp != e);
+			ttg += e->exp_target_data.ted_grant;
+			ttg += e->exp_target_data.ted_pending;
+			ttd += e->exp_target_data.ted_dirty;
+		}
+		if (tgd->tgd_tot_granted < ted->ted_grant)
+			CERROR("%s: cli %s/%p: tot_granted %llu < ted_grant %ld, corrected to %llu",
+			       obd->obd_name,  exp->exp_client_uuid.uuid, exp,
+			       tgd->tgd_tot_granted, ted->ted_grant, ttg);
+		if (tgd->tgd_tot_dirty < ted->ted_dirty)
+			CERROR("%s: cli %s/%p: tot_dirty %llu < ted_dirty %ld, corrected to %llu",
+			       obd->obd_name, exp->exp_client_uuid.uuid, exp,
+			       tgd->tgd_tot_dirty, ted->ted_dirty, ttd);
+		tgd->tgd_tot_granted = ttg;
+		tgd->tgd_tot_dirty = ttd;
+	} else {
+		tgd->tgd_tot_granted -= ted->ted_grant;
+		tgd->tgd_tot_dirty -= ted->ted_dirty;
 	}
-	tgd->tgd_tot_granted -= ted->ted_grant;
 	ted->ted_grant = 0;
+	ted->ted_dirty = 0;
+
 	if (tgd->tgd_tot_pending < ted->ted_pending) {
 		CERROR("%s: tot_pending %llu < cli %s/%p ted_pending %ld\n",
 		       obd->obd_name, tgd->tgd_tot_pending,
@@ -1106,13 +1128,6 @@ void tgt_grant_discard(struct obd_export *exp)
 	}
 	/* tgd_tot_pending is handled in tgt_grant_commit as bulk
 	 * commmits */
-	if (tgd->tgd_tot_dirty < ted->ted_dirty) {
-		CERROR("%s: tot_dirty %llu < cli %s/%p ted_dirty %ld\n",
-		       obd->obd_name, tgd->tgd_tot_dirty,
-		       exp->exp_client_uuid.uuid, exp, ted->ted_dirty);
-	}
-	tgd->tgd_tot_dirty -= ted->ted_dirty;
-	ted->ted_dirty = 0;
 	spin_unlock(&tgd->tgd_grant_lock);
 }
 EXPORT_SYMBOL(tgt_grant_discard);

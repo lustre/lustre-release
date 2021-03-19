@@ -6341,7 +6341,7 @@ check_grant() {
 
 	# sync all the data and make sure no pending data on server
 	do_nodes $clients sync
-	clients_up # initiate all idling connections
+	do_nodes $clients $LFS df # initiate all idling connections
 
 	# get client grant
 	client_grant=$(do_nodes $clients \

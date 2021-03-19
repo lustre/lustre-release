@@ -133,7 +133,7 @@ struct tg_grants_data {
 	int			 tgd_tot_granted_clients;
 	/* shall we grant space to clients not
 	 * supporting OBD_CONNECT_GRANT_PARAM? */
-	int			 tgd_grant_compat_disable;
+	unsigned int		 tgd_grant_compat_disable:1;
 	/* protect all statfs-related counters */
 	spinlock_t		 tgd_osfs_lock;
 	time64_t		 tgd_osfs_age;
