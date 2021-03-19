@@ -456,6 +456,7 @@ static inline void __exit gss_exit_keyring(void) { return; }
 int  __init gss_init_keyring(void);
 void __exit gss_exit_keyring(void);
 #endif
+extern unsigned int gss_check_upcall_ns;
 
 /* gss_pipefs.c */
 #ifndef HAVE_GSS_PIPEFS

@@ -83,6 +83,9 @@ static void request_key_unlink(struct key *key);
  */
 #define KEYRING_UPCALL_TIMEOUT  (obd_timeout + obd_timeout)
 
+/* Check caller's namespace in gss_keyring upcall */
+unsigned int gss_check_upcall_ns = 1;
+
 /****************************************
  * internal helpers                     *
  ****************************************/
@@ -728,47 +731,49 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                                               struct vfs_cred *vcred,
                                               int create, int remove_dead)
 {
-        struct obd_import       *imp = sec->ps_import;
-        struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
-        struct ptlrpc_cli_ctx   *ctx = NULL;
-        unsigned int             is_root = 0, create_new = 0;
-        struct key              *key;
-        char                     desc[24];
-        char                    *coinfo;
-        int                      coinfo_size;
-	const char		*sec_part_flags = "";
-	char			 svc_flag = '-';
-        ENTRY;
+	struct obd_import *imp = sec->ps_import;
+	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
+	struct ptlrpc_cli_ctx *ctx = NULL;
+	unsigned int is_root = 0, create_new = 0;
+	struct key *key;
+	char desc[24];
+	char *coinfo;
+	int coinfo_size;
+	const char *sec_part_flags = "";
+	char svc_flag = '-';
+	pid_t caller_pid;
+	ENTRY;
 
-        LASSERT(imp != NULL);
+	LASSERT(imp != NULL);
 
-        is_root = user_is_root(sec, vcred);
+	is_root = user_is_root(sec, vcred);
 
-        /* a little bit optimization for root context */
-        if (is_root) {
-                ctx = sec_lookup_root_ctx_kr(sec);
-                /*
-                 * Only lookup directly for REVERSE sec, which should
-                 * always succeed.
-                 */
-                if (ctx || sec_is_reverse(sec))
-                        RETURN(ctx);
-        }
+	/* a little bit optimization for root context */
+	if (is_root) {
+		ctx = sec_lookup_root_ctx_kr(sec);
+		/*
+		 * Only lookup directly for REVERSE sec, which should
+		 * always succeed.
+		 */
+		if (ctx || sec_is_reverse(sec))
+			RETURN(ctx);
+	}
 
-        LASSERT(create != 0);
+	LASSERT(create != 0);
 
-        /* for root context, obtain lock and check again, this time hold
-         * the root upcall lock, make sure nobody else populated new root
-         * context after last check. */
-        if (is_root) {
+	/* for root context, obtain lock and check again, this time hold
+	 * the root upcall lock, make sure nobody else populated new root
+	 * context after last check.
+	 */
+	if (is_root) {
 		mutex_lock(&gsec_kr->gsk_root_uc_lock);
 
-                ctx = sec_lookup_root_ctx_kr(sec);
-                if (ctx)
-                        goto out;
+		ctx = sec_lookup_root_ctx_kr(sec);
+		if (ctx)
+			goto out;
 
-                /* update reverse handle for root user */
-                sec2gsec(sec)->gs_rvs_hdl = gss_get_next_ctx_index();
+		/* update reverse handle for root user */
+		sec2gsec(sec)->gs_rvs_hdl = gss_get_next_ctx_index();
 
 		switch (sec->ps_part) {
 		case LUSTRE_SP_MDT:
@@ -786,7 +791,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		case LUSTRE_SP_MGS:
 		default:
 			LBUG();
-                }
+		}
 
 		switch (SPTLRPC_FLVR_SVC(sec->ps_flvr.sf_rpc)) {
 		case SPTLRPC_SVC_NULL:
@@ -840,37 +845,47 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
 	/* Last callout parameter is pid of process whose namespace will be used
 	 * for credentials' retrieval.
-	 * For user's credentials (in which case sec_part_flags is empty), use
-	 * current PID instead of import's reference PID to get reference
-	 * namespace. */
+	 */
+	if (gss_check_upcall_ns) {
+		/* For user's credentials (in which case sec_part_flags is
+		 * empty), use current PID instead of import's reference
+		 * PID to get reference namespace.
+		 */
+		if (sec_part_flags[0] == '\0')
+			caller_pid = current->pid;
+		else
+			caller_pid = imp->imp_sec_refpid;
+	} else {
+		/* Do not switch namespace in gss keyring upcall. */
+		caller_pid = 0;
+	}
 	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx:%d",
 		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
 		 vcred->vc_uid, vcred->vc_gid,
 		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
 		 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name,
-		 imp->imp_connection->c_self,
-		 sec_part_flags[0] == '\0' ?
-		       current->pid : imp->imp_sec_refpid);
+		 imp->imp_connection->c_self, caller_pid);
 
-        CDEBUG(D_SEC, "requesting key for %s\n", desc);
+	CDEBUG(D_SEC, "requesting key for %s\n", desc);
 
-        keyring_upcall_lock(gsec_kr);
-        key = request_key(&gss_key_type, desc, coinfo);
-        keyring_upcall_unlock(gsec_kr);
+	keyring_upcall_lock(gsec_kr);
+	key = request_key(&gss_key_type, desc, coinfo);
+	keyring_upcall_unlock(gsec_kr);
 
-        OBD_FREE(coinfo, coinfo_size);
+	OBD_FREE(coinfo, coinfo_size);
 
-        if (IS_ERR(key)) {
-                CERROR("failed request key: %ld\n", PTR_ERR(key));
-                goto out;
-        }
-        CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
+	if (IS_ERR(key)) {
+		CERROR("failed request key: %ld\n", PTR_ERR(key));
+		goto out;
+	}
+	CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
 
-        /* once payload.data was pointed to a ctx, it never changes until
-         * we de-associate them; but parallel request_key() may return
-         * a key with payload.data == NULL at the same time. so we still
-         * need wirtelock of key->sem to serialize them. */
-        down_write(&key->sem);
+	/* once payload.data was pointed to a ctx, it never changes until
+	 * we de-associate them; but parallel request_key() may return
+	 * a key with payload.data == NULL at the same time. so we still
+	 * need wirtelock of key->sem to serialize them.
+	 */
+	down_write(&key->sem);
 
 	ctx = key_get_payload(key, 0);
 	if (likely(ctx)) {
@@ -879,12 +894,14 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		LASSERT(ll_read_key_usage(key) >= 2);
 
 		/* simply take a ref and return. it's upper layer's
-		 * responsibility to detect & replace dead ctx. */
+		 * responsibility to detect & replace dead ctx.
+		 */
 		atomic_inc(&ctx->cc_refcount);
 	} else {
 		/* pre initialization with a cli_ctx. this can't be done in
 		 * key_instantiate() because we'v no enough information
-		 * there. */
+		 * there.
+		 */
 		ctx = ctx_create_kr(sec, vcred);
 		if (ctx != NULL) {
 			ctx_enlist_kr(ctx, is_root, 0);
@@ -896,23 +913,24 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 			       key, ctx, sec);
 		} else {
 			/* we'd prefer to call key_revoke(), but we more like
-			 * to revoke it within this key->sem locked period. */
+			 * to revoke it within this key->sem locked period.
+			 */
 			key_revoke_locked(key);
 		}
 
 		create_new = 1;
 	}
 
-        up_write(&key->sem);
+	up_write(&key->sem);
 
-        if (is_root && create_new)
-                request_key_unlink(key);
+	if (is_root && create_new)
+		request_key_unlink(key);
 
-        key_put(key);
+	key_put(key);
 out:
-        if (is_root)
+	if (is_root)
 		mutex_unlock(&gsec_kr->gsk_root_uc_lock);
-        RETURN(ctx);
+	RETURN(ctx);
 }
 
 static

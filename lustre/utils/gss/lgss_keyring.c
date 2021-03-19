@@ -1058,16 +1058,23 @@ int main(int argc, char *argv[])
 	cred->lc_self_nid = uparam.kup_selfnid;
 
 	/* Is caller in different namespace? */
-	snprintf(path, sizeof(path), "/proc/%d/ns/mnt", getpid());
-	if (stat(path, &parent_ns)) {
-		logmsg(LL_DEBUG, "cannot stat %s: %s\n", path, strerror(errno));
-	} else {
-		snprintf(path, sizeof(path), "/proc/%d/ns/mnt", uparam.kup_pid);
-		if (stat(path, &caller_ns))
+	/* If passed caller's pid is 0, it means we have to stick
+	 * with current namespace.
+	 */
+	if (uparam.kup_pid) {
+		snprintf(path, sizeof(path), "/proc/%d/ns/mnt", getpid());
+		if (stat(path, &parent_ns)) {
 			logmsg(LL_DEBUG, "cannot stat %s: %s\n",
 			       path, strerror(errno));
-		else if (caller_ns.st_ino != parent_ns.st_ino)
-			other_ns = 1;
+		} else {
+			snprintf(path, sizeof(path), "/proc/%d/ns/mnt",
+				 uparam.kup_pid);
+			if (stat(path, &caller_ns))
+				logmsg(LL_DEBUG, "cannot stat %s: %s\n",
+				       path, strerror(errno));
+			else if (caller_ns.st_ino != parent_ns.st_ino)
+				other_ns = 1;
+		}
 	}
 
 	/*
@@ -1075,7 +1082,7 @@ int main(int argc, char *argv[])
 	 * with caller's namespace to do credentials preparation
 	 */
 	if (other_ns) {
-		logmsg(LL_TRACE, "caller's namespace is diffent\n");
+		logmsg(LL_TRACE, "caller's namespace is different\n");
 
 		/* use pipes to pass info between child and parent processes */
 		if (pipe(req_fd) == -1) {
@@ -1221,7 +1228,10 @@ out_pipe:
 		close(reply_fd[1]);
 		return rc;
 	} else {
-		logmsg(LL_TRACE, "caller's namespace is the same\n");
+		if (uparam.kup_pid)
+			logmsg(LL_TRACE, "caller's namespace is the same\n");
+		else
+			logmsg(LL_TRACE, "stick with current namespace\n");
 
 		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
 		if (rc != 0)
