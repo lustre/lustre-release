@@ -670,8 +670,6 @@ struct kib_peer_ni {
 	unsigned char		ibp_races;
 	/* # consecutive reconnection attempts to this peer */
 	unsigned int		ibp_reconnected;
-	/* number of total active retries */
-	unsigned int		ibp_retries;
 	/* errno on closing this peer_ni */
 	int			ibp_error;
 	/* max map_on_demand */
