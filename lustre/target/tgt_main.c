@@ -533,6 +533,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	tgd->tgd_tot_granted = 0;
 	tgd->tgd_tot_pending = 0;
 	tgd->tgd_grant_compat_disable = 0;
+	tgd->tgd_lbug_on_grant_miscount = 0;
 
 	/* populate cached statfs data */
 	osfs = &tgt_th_info(env)->tti_u.osfs;

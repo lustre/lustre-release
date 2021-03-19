@@ -5343,6 +5343,7 @@ init_param_vars () {
 	(( MDS1_VERSION <= $(version_code 2.13.52) )) ||
 		do_nodes $(comma_list $(mdts_nodes)) \
 			"$LCTL set_param lod.*.mdt_hash=crush"
+	do_node $(mgs_node) "$LCTL set_param -P *.*.lbug_on_grant_miscount=1"
 	return 0
 }
 
@@ -6758,7 +6759,7 @@ check_grant() {
 
 	# sync all the data and make sure no pending data on server
 	do_nodes $clients sync
-	clients_up # initiate all idling connections
+	do_nodes $clients $LFS df # initiate all idling connections
 
 	# get client grant
 	cli_grant=$(grant_from_clients $clients)
