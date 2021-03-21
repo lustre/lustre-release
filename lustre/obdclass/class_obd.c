@@ -36,6 +36,7 @@
 #include <linux/uidgid.h>
 #include <linux/atomic.h>
 #include <linux/list.h>
+#include <linux/oom.h>
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -99,33 +100,49 @@ struct lprocfs_stats *obd_memory = NULL;
 EXPORT_SYMBOL(obd_memory);
 #endif
 
+static int obdclass_oom_handler(struct notifier_block *self,
+				unsigned long notused, void *nfreed)
+{
+#ifdef CONFIG_PROC_FS
+	/* in bytes */
+	pr_info("obd_memory max: %llu, obd_memory current: %llu\n",
+		obd_memory_max(), obd_memory_sum());
+#endif /* CONFIG_PROC_FS */
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block obdclass_oom = {
+	.notifier_call = obdclass_oom_handler
+};
+
 static int class_resolve_dev_name(__u32 len, const char *name)
 {
-        int rc;
-        int dev;
+	int rc;
+	int dev;
 
-        ENTRY;
-        if (!len || !name) {
-                CERROR("No name passed,!\n");
-                GOTO(out, rc = -EINVAL);
-        }
-        if (name[len - 1] != 0) {
-                CERROR("Name not nul terminated!\n");
-                GOTO(out, rc = -EINVAL);
-        }
+	ENTRY;
+	if (!len || !name) {
+		CERROR("No name passed,!\n");
+		GOTO(out, rc = -EINVAL);
+	}
+	if (name[len - 1] != 0) {
+		CERROR("Name not nul terminated!\n");
+		GOTO(out, rc = -EINVAL);
+	}
 
-        CDEBUG(D_IOCTL, "device name %s\n", name);
-        dev = class_name2dev(name);
-        if (dev == -1) {
-                CDEBUG(D_IOCTL, "No device for name %s!\n", name);
-                GOTO(out, rc = -EINVAL);
-        }
+	CDEBUG(D_IOCTL, "device name %s\n", name);
+	dev = class_name2dev(name);
+	if (dev == -1) {
+		CDEBUG(D_IOCTL, "No device for name %s!\n", name);
+		GOTO(out, rc = -EINVAL);
+	}
 
-        CDEBUG(D_IOCTL, "device name %s, dev %d\n", name, dev);
-        rc = dev;
+	CDEBUG(D_IOCTL, "device name %s, dev %d\n", name, dev);
+	rc = dev;
 
 out:
-        RETURN(rc);
+	RETURN(rc);
 }
 
 #define OBD_MAX_IOCTL_BUFFER	8192
@@ -659,6 +676,8 @@ static int __init obdclass_init(void)
 
 	LCONSOLE_INFO("Lustre: Build Version: "LUSTRE_VERSION_STRING"\n");
 
+	register_oom_notifier(&obdclass_oom);
+
 	libcfs_kkuc_init();
 
 	err = obd_init_checks();
@@ -789,6 +808,7 @@ cleanup_obd_memory:
 	lprocfs_free_stats(&obd_memory);
 #endif
 
+	unregister_oom_notifier(&obdclass_oom);
 	return err;
 }
 
@@ -855,6 +875,8 @@ static void __exit obdclass_exit(void)
 	       "obd_memory max: %llu, leaked: %llu\n",
 	       memory_max, memory_leaked);
 #endif /* CONFIG_PROC_FS */
+
+	unregister_oom_notifier(&obdclass_oom);
 
 	EXIT;
 }
