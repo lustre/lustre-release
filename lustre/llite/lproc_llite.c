@@ -612,6 +612,67 @@ out_unlock:
 }
 LDEBUGFS_SEQ_FOPS(ll_max_cached_mb);
 
+static ssize_t pcc_async_threshold_show(struct kobject *kobj,
+					struct attribute *attr, char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+
+	return scnprintf(buffer, PAGE_SIZE, "%llu\n",
+			 super->pccs_async_threshold);
+}
+
+static ssize_t pcc_async_threshold_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+	u64 threshold;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &threshold, "B");
+	if (rc)
+		return rc;
+
+	super->pccs_async_threshold = threshold;
+
+	return count;
+}
+LUSTRE_RW_ATTR(pcc_async_threshold);
+
+static ssize_t pcc_async_affinity_show(struct kobject *kobj,
+				       struct attribute *attr, char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+
+	return scnprintf(buffer, PAGE_SIZE, "%d\n", super->pccs_async_affinity);
+}
+
+static ssize_t pcc_async_affinity_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	super->pccs_async_affinity = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(pcc_async_affinity);
+
 static ssize_t checksums_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
@@ -2215,6 +2276,8 @@ static struct attribute *llite_attrs[] = {
 #if defined(CONFIG_LL_ENCRYPTION) || defined(HAVE_LUSTRE_CRYPTO)
 	&lustre_attr_filename_enc_use_old_base64.attr,
 #endif
+	&lustre_attr_pcc_async_threshold.attr,
+	&lustre_attr_pcc_async_affinity.attr,
 	NULL,
 };
 

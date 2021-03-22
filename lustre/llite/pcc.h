@@ -150,8 +150,10 @@ struct pcc_dataset {
 	struct path		pccd_path;	 /* Root path */
 	struct list_head	pccd_linkage;  /* Linked to pccs_datasets */
 	atomic_t		pccd_refcount; /* Reference count */
-	enum hsmtool_type	pccd_hsmtool_type; /*HSM copytool type */
+	enum hsmtool_type	pccd_hsmtool_type; /* HSM copytool type */
 };
+
+#define PCC_DEFAULT_ASYNC_THRESHOLD	(256 << 20)
 
 struct pcc_super {
 	/* Protect pccs_datasets */
@@ -166,6 +168,9 @@ struct pcc_super {
 	 * parameters for PCC.
 	 */
 	__u64			 pccs_generation;
+	/* Size threshold for asynchrous PCC-RO attach in background. */
+	__u64			 pccs_async_threshold;
+	bool			 pccs_async_affinity;
 };
 
 struct pcc_inode {
@@ -205,6 +210,12 @@ struct pcc_vma {
 	atomic_t				 pccv_refcnt;
 	struct file				*pccv_file;
 	const struct vm_operations_struct	*pccv_vm_ops;
+};
+
+struct pcc_attach_context {
+	struct file		*pccx_file;
+	struct inode		*pccx_inode;
+	__u32			 pccx_attach_id;
 };
 
 enum pcc_io_type {

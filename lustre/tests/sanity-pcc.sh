@@ -240,6 +240,7 @@ setup_loopdev_project() {
 	stack_trap "do_facet $facet rmdir $mntpt" EXIT
 	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
 	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet $UMOUNT $mntpt
 	do_facet $facet mkfs.ext4 -O project,quota $file ||
 		error "mkfs.ext4 -O project,quota $file failed"
 	do_facet $facet file $file
@@ -3172,6 +3173,136 @@ test_39() {
 	check_lpcc_state $file "none"
 }
 run_test 39 "Test Project quota on loop PCC device"
+
+wait_readonly_attach_fini() {
+	local file=$1
+	local facet=${2:-$SINGLEAGT}
+	local cmd="$LFS pcc state $file | grep -E -c 'type: readonly'"
+
+	echo $cmd
+	wait_update_facet $facet "$cmd" "1" 50 ||
+		error "Async attach $file timed out"
+}
+
+calc_stats_facet() {
+	local paramfile="$1"
+	local stat="$2"
+	local facet=${3:-$SINGLEAGT}
+
+	do_facet $facet $LCTL get_param -n $paramfile |
+		awk '/^'$stat'/ { sum += $2 } END { printf("%0.0f", sum) }'
+}
+
+test_40() {
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	is_project_quota_supported || skip "project quota is not supported"
+
+	enable_project_quota
+
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local id=100
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 200
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={$id}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	mkdir -p $dir || error "mkdir $dir failed"
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+		error "Write $file failed"
+
+	$LFS project -p $id $file || error "failed to set project for $file"
+	$LFS project -d $file
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	do_facet $SINGLEAGT $LFS pcc state $file
+
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*osc*.lru_size=clear
+	do_facet $SINGLEAGT $LCTL set_param osc.*.stats=clear
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK
+	set_nodes_failloc "$(osts_nodes)" 0x214 1
+	echo 3 > /proc/sys/vm/drop_caches
+
+	local stime
+	local time1
+	local time2
+	local rpcs_before
+	local rpcs_after
+
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=5MB
+
+	echo "Test open attach with pcc_async_threshold=5MB"
+	stime=$SECONDS
+	# Open with O_RDONLY flag will trigger auto attach
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+
+	rpcs_before=$(calc_stats_facet osc.*.stats ost_read)
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=1 iflag=direct
+	rpcs_after=$(calc_stats_facet osc.*.stats ost_read)
+	echo "Before: $rpcs_before After: $rpcs_after"
+	[ $rpcs_after -gt $rpcs_before ] ||
+		error "should send read RPCs to OSTs $rpcs_before: $rpcs_after"
+	time1=$((SECONDS - stime))
+	do_facet $SINGLEAGT $LFS pcc state $file
+	wait_readonly_attach_fini $file
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	do_facet $SINGLEAGT $LFS pcc state $file
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*osc*.lru_size=clear
+	do_facet $SINGLEAGT $LCTL set_param osc.*.stats=clear
+
+	echo "Test open attach with async_threshold=1G"
+	stime=$SECONDS
+	# Open with O_RDONLY flag will trigger auto attach
+	do_facet $SINGLEAGT $MULTIOP $file oc ||
+		error "failed to readonly open $file"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	rpcs_before=$(calc_stats_facet osc.*.stats ost_read)
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=1 iflag=direct
+	rpcs_after=$(calc_stats_facet osc.*.stats ost_read)
+	time2=$((SECONDS - stime))
+	echo "Before: $rpcs_before After: $rpcs_after"
+	[ $rpcs_after -eq $rpcs_before ] ||
+		error "should not send OST_READ RPCs to OSTs"
+
+	echo "Time1: $time1 Time2: $time2"
+	[ $time1 -le $time2 ] ||
+		error "Total time for async open attach should be smaller"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	do_facet $SINGLEAGT $LFS pcc state $file
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=5MB
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*osc*.lru_size=clear
+
+	echo "Read 1MB data with async_threshold=5MB"
+	stime=$SECONDS
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=1 iflag=direct
+	time1=$((SECONDS - stime))
+	wait_readonly_attach_fini $file
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	do_facet $SINGLEAGT $LFS pcc state $file
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*osc*.lru_size=clear
+
+	echo "Read 1MB data with async_threshold=1G"
+	stime=$SECONDS
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=1 iflag=direct
+	time2=$((SECONDS - stime))
+
+	echo "Time1: $time1 Time2: $time2"
+	[ $time1 -le $time2 ] ||
+		error "Total time for async open attach should be smaller"
+}
+run_test 40 "Test async open attach in the background for PCC-RO file"
 
 test_41() {
 	local loopfile="$TMP/$tfile"

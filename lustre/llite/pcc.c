@@ -129,6 +129,7 @@ int pcc_super_init(struct pcc_super *super)
 	init_rwsem(&super->pccs_rw_sem);
 	INIT_LIST_HEAD(&super->pccs_datasets);
 	super->pccs_generation = 1;
+	super->pccs_async_threshold = PCC_DEFAULT_ASYNC_THRESHOLD;
 
 	return 0;
 }
@@ -1024,6 +1025,8 @@ pcc_dataset_add(struct pcc_super *super, struct pcc_cmd *cmd)
 
 	rc = kern_path(pathname, LOOKUP_DIRECTORY, &dataset->pccd_path);
 	if (unlikely(rc)) {
+		CDEBUG(D_CACHE, "%s: cache path lookup error: rc = %d\n",
+		       pathname, rc);
 		OBD_FREE_PTR(dataset);
 		return rc;
 	}
@@ -1375,6 +1378,8 @@ static int pcc_fid2dataset_path(struct pcc_dataset *dataset, char *buf,
 				(__u32)((fid)->f_oid ^ (fid)->f_seq) & 0XFFFF,
 				PFID(fid));
 	default:
+		CERROR(DFID ": unknown archive format %u: rc = %d\n",
+		       PFID(fid), dataset->pccd_hsmtool_type, -EINVAL);
 		return -EINVAL;
 	}
 }
@@ -1708,8 +1713,159 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 	RETURN(rc);
 }
 
-static int pcc_readonly_ioctl_attach(struct file *file, struct inode *inode,
-				     __u32 roid);
+static struct pcc_attach_context *
+pcc_attach_context_alloc(struct file *file, struct inode *inode, __u32 id)
+{
+	struct pcc_attach_context *pccx;
+
+	OBD_ALLOC_PTR(pccx);
+	if (!pccx)
+		RETURN(NULL);
+
+	pccx->pccx_file = get_file(file);
+	pccx->pccx_inode = inode;
+	pccx->pccx_attach_id = id;
+
+	return pccx;
+}
+
+static inline void pcc_attach_context_free(struct pcc_attach_context *pccx)
+{
+	LASSERT(pccx->pccx_file != NULL);
+	fput(pccx->pccx_file);
+	OBD_FREE_PTR(pccx);
+}
+
+static int pcc_attach_check_set(struct inode *inode)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct pcc_inode *pcci;
+	int rc = 0;
+
+	ENTRY;
+
+	pcc_inode_lock(inode);
+	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING)
+		GOTO(out_unlock, rc = -EINPROGRESS);
+
+	pcci = ll_i2pcci(inode);
+	if (pcci && pcc_inode_has_layout(pcci))
+		GOTO(out_unlock, rc = -EEXIST);
+
+	lli->lli_pcc_state |= PCC_STATE_FL_ATTACHING;
+out_unlock:
+	pcc_inode_unlock(inode);
+	RETURN(rc);
+}
+
+static inline void pcc_readonly_attach_fini(struct inode *inode)
+{
+	pcc_inode_lock(inode);
+	ll_i2info(inode)->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
+	pcc_inode_unlock(inode);
+}
+
+static int pcc_readonly_attach(struct file *file, struct inode *inode,
+			       __u32 roid);
+
+static int pcc_readonly_attach_thread(void *arg)
+{
+	struct pcc_attach_context *pccx = (struct pcc_attach_context *)arg;
+	struct file *file = pccx->pccx_file;
+	int rc;
+
+	ENTRY;
+
+	/*
+	 * For asynchronous open attach, it can not reuse the Lustre file
+	 * handle directly when the file is opening for read as the file
+	 * position in the file handle can not be shared by both user thread
+	 * and asynchronous attach thread in kenerl on the background.
+	 * It must reopen the file without O_DIRECT flag and use this new
+	 * file hanlde to do data copy from Lustre OSTs to the PCC copy.
+	 */
+	file = dentry_open(&file->f_path, file->f_flags & ~O_DIRECT,
+			   pcc_super_cred(pccx->pccx_inode->i_sb));
+	if (IS_ERR_OR_NULL(file))
+		GOTO(out, rc = file == NULL ? -EINVAL : PTR_ERR(file));
+
+	rc = pcc_readonly_attach(file, pccx->pccx_inode,
+				 pccx->pccx_attach_id);
+	fput(file);
+out:
+	pcc_readonly_attach_fini(pccx->pccx_inode);
+	CDEBUG(D_CACHE, "PCC-RO attach in background for %pd "DFID" rc = %d\n",
+	       file_dentry(pccx->pccx_file),
+	       PFID(ll_inode2fid(pccx->pccx_inode)), rc);
+	pcc_attach_context_free(pccx);
+	RETURN(rc);
+}
+
+static int pcc_readonly_attach_async(struct file *file,
+				     struct inode *inode, __u32 roid)
+{
+	struct pcc_attach_context *pccx = NULL;
+	struct task_struct *task;
+	int rc;
+
+	ENTRY;
+
+	rc = pcc_attach_check_set(inode);
+	if (rc)
+		RETURN(rc);
+
+	pccx = pcc_attach_context_alloc(file, inode, roid);
+	if (!pccx)
+		GOTO(out, rc = -ENOMEM);
+
+	if (ll_i2pccs(inode)->pccs_async_affinity) {
+		/* Create a attach kthread on the current node. */
+		task = kthread_create(pcc_readonly_attach_thread, pccx,
+				      "ll_pcc_%u", current->pid);
+	} else {
+		int node = cfs_cpt_spread_node(cfs_cpt_tab, CFS_CPT_ANY);
+
+		task = kthread_create_on_node(pcc_readonly_attach_thread, pccx,
+					      node, "ll_pcc_%u", current->pid);
+	}
+
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("%s: cannot start ll_pcc thread for "DFID": rc = %d\n",
+		       ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)),
+		       rc);
+		GOTO(out, rc);
+	}
+
+	wake_up_process(task);
+	RETURN(0);
+out:
+	if (pccx)
+		pcc_attach_context_free(pccx);
+
+	pcc_readonly_attach_fini(inode);
+	RETURN(rc);
+}
+
+static int pcc_readonly_attach_sync(struct file *file,
+				    struct inode *inode, __u32 roid);
+
+static inline int pcc_do_readonly_attach(struct file *file,
+					 struct inode *inode, __u32 roid)
+{
+	int rc;
+
+	if (max_t(__u64, ll_i2info(inode)->lli_lazysize, i_size_read(inode)) >=
+	    ll_i2pccs(inode)->pccs_async_threshold) {
+		rc = pcc_readonly_attach_async(file, inode, roid);
+		if (!rc || rc == -EINPROGRESS)
+			return rc;
+	}
+
+	rc = pcc_readonly_attach_sync(file, inode, roid);
+
+	return rc;
+}
 
 /* Call with pcci_mutex hold */
 static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
@@ -1726,6 +1882,9 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 	if (!((file->f_flags & O_ACCMODE) == O_RDONLY))
 		RETURN(0);
 
+	if (ll_i2info(inode)->lli_pcc_state & PCC_STATE_FL_ATTACHING)
+		RETURN(-EINPROGRESS);
+
 	item.pm_uid = from_kuid(&init_user_ns, current_uid());
 	item.pm_gid = from_kgid(&init_user_ns, current_gid());
 	item.pm_projid = ll_i2info(inode)->lli_projid;
@@ -1739,7 +1898,7 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 
 	if ((dataset->pccd_flags & PCC_DATASET_PCC_ALL) == PCC_DATASET_PCCRO) {
 		pcc_inode_unlock(inode);
-		rc = pcc_readonly_ioctl_attach(file, inode, dataset->pccd_roid);
+		rc = pcc_do_readonly_attach(file, inode, dataset->pccd_roid);
 		pcc_inode_lock(inode);
 		pcci = ll_i2pcci(inode);
 		if (pcci && pcc_inode_has_layout(pcci))
@@ -3338,28 +3497,6 @@ out_free:
 	RETURN(rc);
 }
 
-static int pcc_attach_allowed_check(struct inode *inode)
-{
-	struct ll_inode_info *lli = ll_i2info(inode);
-	struct pcc_inode *pcci;
-	int rc = 0;
-
-	ENTRY;
-
-	pcc_inode_lock(inode);
-	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING)
-		GOTO(out_unlock, rc = -EBUSY);
-
-	pcci = ll_i2pcci(inode);
-	if (pcci && pcc_inode_has_layout(pcci))
-		GOTO(out_unlock, rc = -EEXIST);
-
-	lli->lli_pcc_state |= PCC_STATE_FL_ATTACHING;
-out_unlock:
-	pcc_inode_unlock(inode);
-	RETURN(rc);
-}
-
 static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 				   struct pcc_dataset *dataset,
 				   struct dentry **dentry)
@@ -3447,7 +3584,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 
 	ENTRY;
 
-	rc = pcc_attach_allowed_check(inode);
+	rc = pcc_attach_check_set(inode);
 	if (rc)
 		RETURN(rc);
 
@@ -3606,18 +3743,9 @@ repeat:
 	RETURN(rc);
 }
 
-static void pcc_readonly_attach_fini(struct inode *inode)
+static int pcc_readonly_attach(struct file *file,
+			       struct inode *inode, __u32 roid)
 {
-	pcc_inode_lock(inode);
-	ll_i2info(inode)->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
-	pcc_inode_unlock(inode);
-}
-
-static int pcc_readonly_ioctl_attach(struct file *file,
-				     struct inode *inode,
-				     __u32 roid)
-{
-	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct pcc_super *super = ll_i2pccs(inode);
 	struct ll_inode_info *lli = ll_i2info(inode);
 	const struct cred *old_cred;
@@ -3631,25 +3759,14 @@ static int pcc_readonly_ioctl_attach(struct file *file,
 
 	ENTRY;
 
-	if (!test_bit(LL_SBI_LAYOUT_LOCK, sbi->ll_flags))
-		RETURN(-EOPNOTSUPP);
-
-	rc = pcc_attach_allowed_check(inode);
-	if (rc) {
-		CDEBUG(D_CACHE,
-		       "PCC-RO caching for "DFID" not allowed, rc = %d\n",
-		       PFID(ll_inode2fid(inode)), rc);
-		RETURN(rc);
-	}
-
 	rc = pcc_layout_rdonly_set(inode, &gen);
 	if (rc)
-		GOTO(out_fini, rc);
+		RETURN(rc);
 
 	dataset = pcc_dataset_get(&ll_s2sbi(inode->i_sb)->ll_pcc_super,
 				  LU_PCC_READONLY, roid);
 	if (dataset == NULL)
-		GOTO(out_fini, rc = -ENOENT);
+		RETURN(-ENOENT);
 
 	rc = pcc_attach_data_archive(file, inode, dataset, &dentry);
 	if (rc)
@@ -3703,9 +3820,30 @@ out_put_unlock:
 	mutex_unlock(&lli->lli_layout_mutex);
 out_dataset_put:
 	pcc_dataset_put(dataset);
-out_fini:
-	pcc_readonly_attach_fini(inode);
 
+	RETURN(rc);
+}
+
+static int pcc_readonly_attach_sync(struct file *file,
+				    struct inode *inode, __u32 roid)
+{
+	int rc;
+
+	ENTRY;
+
+	if (!test_bit(LL_SBI_LAYOUT_LOCK, ll_i2sbi(inode)->ll_flags))
+		RETURN(-EOPNOTSUPP);
+
+	rc = pcc_attach_check_set(inode);
+	if (rc) {
+		CDEBUG(D_CACHE,
+		       "PCC-RO caching for "DFID" not allowed, rc = %d\n",
+		       PFID(ll_inode2fid(inode)), rc);
+		RETURN(rc);
+	}
+
+	rc = pcc_readonly_attach(file, inode, roid);
+	pcc_readonly_attach_fini(inode);
 	RETURN(rc);
 }
 
@@ -3721,8 +3859,7 @@ int pcc_ioctl_attach(struct file *file, struct inode *inode,
 		rc = -EOPNOTSUPP;
 		break;
 	case LU_PCC_READONLY:
-		rc = pcc_readonly_ioctl_attach(file, inode,
-					       attach->pcca_id);
+		rc = pcc_readonly_attach_sync(file, inode, attach->pcca_id);
 		break;
 	default:
 		rc = -EINVAL;
