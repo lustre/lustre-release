@@ -27,7 +27,6 @@
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
  *
  * Low-level ioctl data structures. Kernel ioctl functions declared here,
  * and user space functions are in libcfs/util/ioctl.h.
