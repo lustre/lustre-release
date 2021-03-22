@@ -5036,8 +5036,9 @@ test_69() {
 	if [ $num_create -gt 0 ]; then
 		# Check the number of inodes available on OST0
 		local files=0
-		local ifree=$($LFS df -i $MOUNT | awk '/OST0000/ { print $4 }')
-		log "On OST0, $ifree inodes available. Want $num_create."
+		local ifree=$($LFS df -i $MOUNT |
+			awk '/OST0000/ { print $4 }'; exit ${PIPESTATUS[0]})
+		log "On OST0, $ifree inodes available. Want $num_create. rc=$?"
 
 		$LFS setstripe -i 0 $DIR/$tdir ||
 			error "$LFS setstripe -i 0 $DIR/$tdir failed"
@@ -5073,8 +5074,9 @@ test_69() {
 	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
 
-	local iused=$($LFS df -i $MOUNT | awk '/OST0000/ { print $3 }')
-	log "On OST0, $iused used inodes"
+	local iused=$($LFS df -i $MOUNT |
+		awk '/OST0000/ { print $3 }'; exit ${PIPESTATUS[0]})
+	log "On OST0, $iused used inodes rc=$?"
 	[ $iused -ge $((ost_max_pre/2 + 1000)) ] &&
 		error "OST replacement created too many inodes; $iused"
 	cleanup || error "cleanup failed with $?"
@@ -6021,7 +6023,8 @@ test_82a() { # LU-4665
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 	wait_osts_up
 
-	$LFS df $MOUNT || error "$LFS df $MOUNT failed"
+	$LFS df $MOUNT
+	check_lfs_df_ret_val $? || error "$LFS df $MOUNT failed"
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
@@ -6136,7 +6139,8 @@ test_82b() { # LU-4665
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 
 	wait_osts_up
-	$LFS df $MOUNT || error "$LFS df $MOUNT failed"
+	$LFS df $MOUNT
+	check_lfs_df_ret_val $? || error "$LFS df $MOUNT failed"
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	# Create a new pool and add OSTs into it.
@@ -8743,9 +8747,10 @@ test_122b() {
 
 	# Check the number of inodes available on OST0
 	local files=0
-	local ifree=$($LFS df -i $MOUNT | awk '/OST0000/ { print $4 }')
+	local ifree=$($LFS df -i $MOUNT |
+		awk '/OST0000/ { print $4 }'; exit ${PIPESTATUS[0]})
 
-	log "On OST0, $ifree inodes available. Want $num_create."
+	log "On OST0, $ifree inodes available. Want $num_create. rc=$?"
 
 	if [ $ifree -lt 10000 ]; then
 		files=$(( ifree - 50 ))

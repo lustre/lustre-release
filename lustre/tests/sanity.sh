@@ -6131,6 +6131,47 @@ test_56d() {
 }
 run_test 56d "'lfs df -v' prints only configured devices"
 
+test_56e() {
+	err_enoent=2 # No such file or directory
+	err_eopnotsupp=95 # Operation not supported
+
+	enoent_mnt=/pmt1 # Invalid dentry. Path not present
+	notsup_mnt=/tmp  # Valid dentry, but Not a lustreFS
+
+	# Check for handling of path not exists
+	output=$($LFS df $enoent_mnt 2>&1)
+	ret=$?
+
+	fs=$(echo $output | awk -F: '{print $2}' | awk '{print $3}' | tr -d \')
+	[[ $fs = $enoent_mnt && $ret -eq $err_enoent ]] ||
+		error "expect failure $err_enoent, not $ret"
+
+	# Check for handling of non-Lustre FS
+	output=$($LFS df $notsup_mnt)
+	ret=$?
+
+	fs=$(echo $output | awk '{print $1}' | awk -F: '{print $2}')
+	[[ $fs = $notsup_mnt && $ret -eq $err_eopnotsupp ]] ||
+		error "expect success $err_eopnotsupp, not $ret"
+
+	# Check for multiple LustreFS argument
+	output=$($LFS df $MOUNT $MOUNT $MOUNT | grep -c "filesystem_summary:")
+	ret=$?
+
+	[[ $output -eq 3 && $ret -eq 0 ]] ||
+		error "expect success 3, not $output, rc = $ret"
+
+	# Check for correct non-Lustre FS handling among multiple
+	# LustreFS argument
+	output=$($LFS df $MOUNT $notsup_mnt $MOUNT |
+		grep -c "filesystem_summary:"; exit ${PIPESTATUS[0]})
+	ret=$?
+
+	[[ $output -eq 2 && $ret -eq $err_eopnotsupp ]] ||
+		error "expect success 2, not $output, rc = $ret"
+}
+run_test 56e "'lfs df' Handle non LustreFS & multiple LustreFS"
+
 NUMFILES=3
 NUMDIRS=3
 setup_56() {

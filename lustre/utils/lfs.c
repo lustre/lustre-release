@@ -7248,7 +7248,7 @@ static int lfs_df(int argc, char **argv)
 	char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
 	enum mntdf_flags flags = MNTDF_SHOW;
 	int ops = LL_STATFS_LMV | LL_STATFS_LOV;
-	int c, rc = 0, index = 0;
+	int c, rc = 0, rc1 = 0, index = 0, arg_idx = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
@@ -7285,26 +7285,75 @@ static int lfs_df(int argc, char **argv)
 			return CMD_HELP;
 		}
 	}
-	if (optind < argc && !realpath(argv[optind], path)) {
-		rc = -errno;
-		fprintf(stderr, "%s: invalid path '%s': %s\n",
-			progname, argv[optind], strerror(-rc));
+
+	/* Handle case where path is not specified */
+	if (optind == argc) {
+		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+			/* Check if we have a mount point */
+			if (mntdir[0] == '\0')
+				continue;
+
+			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
+			if (rc || path[0] != '\0')
+				break;
+
+			fsname[0] = '\0'; /* avoid matching in next loop */
+			mntdir[0] = '\0'; /* avoid matching in next loop */
+			path[0] = '\0'; /* clean for next loop */
+		}
 		return rc;
 	}
 
-	while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
-		/* Check if we have a mount point */
-		if (mntdir[0] == '\0')
-			continue;
+	/* Loop through all the remaining arguments. These are Lustre FS
+	 * paths.
+	 */
+	for (arg_idx = optind; arg_idx <= argc - 1; arg_idx++) {
+		bool valid = false;
 
-		rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
-		if (rc || path[0] != '\0')
-			break;
-		fsname[0] = '\0'; /* avoid matching in next loop */
-		mntdir[0] = '\0'; /* avoid matching in next loop */
+		fsname[0] = '\0'; /* start clean */
+		mntdir[0] = '\0'; /* start clean */
+		path[0] = '\0';   /* start clean */
+
+		/* path does not exists at all */
+		if (!realpath(argv[arg_idx], path)) {
+			rc = -errno;
+			fprintf(stderr, "error: invalid path '%s': %s\n",
+				argv[arg_idx], strerror(-rc));
+			/* save first seen error */
+			if (!rc1)
+				rc1 = rc;
+
+			continue;
+		}
+
+		/* path exists but may not be a Lustre filesystem */
+		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+			/* Check if we have a mount point */
+			if (mntdir[0] == '\0')
+				continue;
+
+			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
+			if (rc || path[0] != '\0') {
+				valid = true;
+
+				/* save first seen error */
+				if (!rc1)
+					rc1 = rc;
+				break;
+			}
+		}
+
+		if (!valid) {
+			llapi_printf(LLAPI_MSG_ERROR,
+				     "%s:%s Not a Lustre filesystem\n",
+				     argv[0], argv[arg_idx]);
+			/* save first seen error */
+			if (!rc1)
+				rc1 = -EOPNOTSUPP;
+		}
 	}
 
-	return rc;
+	return rc1;
 }
 
 static int print_instance(const char *mntdir, char *buf, size_t buflen,

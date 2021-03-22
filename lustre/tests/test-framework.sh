@@ -538,6 +538,17 @@ module_loaded () {
 	/sbin/lsmod | grep -q "^\<$1\>"
 }
 
+check_lfs_df_ret_val() {
+	# Ignore only EOPNOTSUPP (which is 95; Operation not supported) error
+	# returned by 'lfs df' for valid dentry but not a lustrefs.
+	#
+	# 'lfs df' historically always returned success(0) instead of
+	# EOPNOTSUPP. This function for compatibility reason, ignores and
+	# masquerades EOPNOTSUPP as success.
+	[[ $1 -eq 95 ]] && return 0
+	return $1
+}
+
 PRLFS=false
 lustre_insmod() {
 	local module=$1
@@ -2218,6 +2229,7 @@ restore_quota() {
 # This will allow fixing the "lfs df" summary line in the future.
 lfs_df() {
 	$LFS df $* | sed -e 's/filesystem /filesystem_/'
+	check_lfs_df_ret_val $?
 }
 
 # Get free inodes on the MDT specified by mdt index, free indoes on
@@ -3522,12 +3534,20 @@ wait_remote_prog () {
 
 lfs_df_check() {
 	local clients=${1:-$CLIENTS}
+	local rc
 
 	if [ -z "$clients" ]; then
-		$LFS df $MOUNT
+		$LFS df $MOUNT > /dev/null
+		rc=$?
 	else
 		$PDSH $clients "$LFS df $MOUNT" > /dev/null
+		rc=$?
 	fi
+
+	check_lfs_df_ret_val $rc
+	rc=$?
+
+	return $rc
 }
 
 clients_up() {
