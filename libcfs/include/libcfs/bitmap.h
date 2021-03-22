@@ -27,7 +27,6 @@
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #ifndef _LIBCFS_BITMAP_H_
 #define _LIBCFS_BITMAP_H_
