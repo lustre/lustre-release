@@ -50,7 +50,9 @@ EOF"
 	do_node $smbsrv "testparm -s >$smbsmall"
 	do_node $smbsrv "testparm -s $smbsmall >$smbconf"
 
-	do_node $smbsrv "echo $smbpasswd | tee - | smbpasswd -a $smbuser -s"
+	do_node $smbsrv "echo $smbpasswd | tee - | smbpasswd -a $smbuser -s" ||
+		do_node $smbsrv "printf '$smbpasswd\n$smbpasswd\n' |\
+			tee - | smbpasswd -a $smbuser -s"
 }
 
 restore_config_smb() {
