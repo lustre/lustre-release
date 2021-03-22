@@ -1882,8 +1882,9 @@ t32_test() {
 			mkfsoptions="--mkfsoptions=\\\"-J size=8\\\""
 		fi
 
-		add $SINGLEMDS $(mkfs_opts mds2 $fs2mdsdev $fsname) --reformat \
-			   $mkfsoptions $fs2mdsdev $fs2mdsvdev > /dev/null || {
+		add $SINGLEMDS $(mds2failover_HOST="" \
+			mkfs_opts mds2 $fs2mdsdev $fsname) --reformat \
+			$mkfsoptions $fs2mdsdev $fs2mdsvdev > /dev/null || {
 			error_noexit "Mkfs new MDT failed"
 			return 1
 		}
