@@ -23,8 +23,10 @@ setup_nfs() {
         mount -t rpc_pipefs sunrpc /var/lib/nfs/rpc_pipefs; }" || return 1
     sleep 5
 
-	do_nodes $LUSTRE_CLIENT "echo $MNTPNT *\($export_opts_v\) \
-				 >> /etc/exports" || return 1
+	# get rid of old $MNTPNT entries in /etc/exports
+	do_nodes $LUSTRE_CLIENT "sed -i '/${MNTPNT##*/}/d' /etc/exports &&
+			echo $MNTPNT *\($export_opts_v\) >> /etc/exports" ||
+			return 1
 
 	# restart nfs server according to distro
 	do_nodes $LUSTRE_CLIENT "{ [[ -e /etc/SuSE-release ]] &&
