@@ -37,6 +37,68 @@ bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi);
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi);
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
 
+/* Encoding/decoding routines inspired from yEnc principles.
+ * We just take care of a few critical characters:
+ * NULL, LF, CR, /, DEL and =.
+ * If such a char is found, it is replaced with '=' followed by
+ * the char value + 64.
+ * All other chars are left untouched.
+ * Efficiency of this encoding depends on the occurences of the
+ * critical chars, but statistically on binary data it can be much higher
+ * than base64 for instance.
+ */
+static inline int critical_encode(const u8 *src, int len, char *dst)
+{
+	u8 *p = (u8 *)src, *q = dst;
+
+	while (p - src < len) {
+		/* escape NULL, LF, CR, /, DEL and = */
+		if (unlikely(*p == 0x0 || *p == 0xA || *p == 0xD ||
+			     *p == '/' || *p == 0x7F || *p == '=')) {
+			*(q++) = '=';
+			*(q++) = *(p++) + 64;
+		} else {
+			*(q++) = *(p++);
+		}
+	}
+
+	return (char *)q - dst;
+}
+
+/* returns the number of chars encoding would produce */
+static inline int critical_chars(const u8 *src, int len)
+{
+	u8 *p = (u8 *)src;
+	int newlen = len;
+
+	while (p - src < len) {
+		/* NULL, LF, CR, /, DEL and = cost an additional '=' */
+		if (unlikely(*p == 0x0 || *p == 0xA || *p == 0xD ||
+			     *p == '/' || *p == 0x7F || *p == '='))
+			newlen++;
+		p++;
+	}
+
+	return newlen;
+}
+
+/* decoding routine - returns the number of chars in output */
+static inline int critical_decode(const u8 *src, int len, char *dst)
+{
+	u8 *p = (u8 *)src, *q = dst;
+
+	while (p - src < len) {
+		if (unlikely(*p == '=')) {
+			*(q++) = *(++p) - 64;
+			p++;
+		} else {
+			*(q++) = *(p++);
+		}
+	}
+
+	return (char *)q - dst;
+}
+
 #ifdef CONFIG_LL_ENCRYPTION
 #include <libcfs/crypto/llcrypt.h>
 #else /* !CONFIG_LL_ENCRYPTION */
@@ -81,39 +143,33 @@ void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
 #define llcrypt_prepare_setattr(dentry, attr)		\
 	fscrypt_prepare_setattr(dentry, attr)
 #define llcrypt_set_ops(sb, cop)	fscrypt_set_ops(sb, cop)
+#define llcrypt_fname_alloc_buffer(inode, max_encrypted_len, crypto_str) \
+	fscrypt_fname_alloc_buffer(inode, max_encrypted_len, crypto_str)
+#define llcrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname) \
+	fscrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname)
+#define llcrypt_fname_free_buffer(crypto_str) \
+	fscrypt_fname_free_buffer(crypto_str)
+#define llcrypt_setup_filename(dir, iname, lookup, fname) \
+	fscrypt_setup_filename(dir, iname, lookup, fname)
+#define llcrypt_free_filename(fname) \
+	fscrypt_free_filename(fname)
+#define llcrypt_prepare_lookup(dir, dentry, fname) \
+	fscrypt_prepare_lookup(dir, dentry, fname)
+#define llcrypt_encrypt_symlink(inode, target, len, disk_link) \
+	fscrypt_encrypt_symlink(inode, target, len, disk_link)
+#define llcrypt_prepare_symlink(dir, target, len, max_len, disk_link)	\
+	fscrypt_prepare_symlink(dir, target, len, max_len, disk_link)
+#define llcrypt_get_symlink(inode, caddr, max_size, done) \
+	fscrypt_get_symlink(inode, caddr, max_size, done)
+#define llcrypt_handle_d_move(dentry) \
+	fscrypt_handle_d_move(dentry)
 #else /* !HAVE_LUSTRE_CRYPTO */
-#undef IS_ENCRYPTED
-#define IS_ENCRYPTED(x)	0
-#define llcrypt_dummy_context_enabled(inode)	NULL
-/* copied from include/linux/fscrypt.h */
-#define llcrypt_has_encryption_key(inode) false
-#define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
-	ERR_PTR(-EOPNOTSUPP)
-#define llcrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags) \
-	-EOPNOTSUPP
-#define llcrypt_decrypt_pagecache_blocks(page, len, offs)	-EOPNOTSUPP
-#define llcrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)	\
-	-EOPNOTSUPP
-#define llcrypt_inherit_context(parent, child, fs_data, preload)     -EOPNOTSUPP
-#define llcrypt_get_encryption_info(inode)			-EOPNOTSUPP
-#define llcrypt_put_encryption_info(inode)			do {} while (0)
-#define llcrypt_free_inode(inode)				do {} while (0)
-#define llcrypt_finalize_bounce_page(pagep)			do {} while (0)
-static inline int llcrypt_file_open(struct inode *inode, struct file *filp)
-{
-	return IS_ENCRYPTED(inode) ? -EOPNOTSUPP : 0;
-}
-#define llcrypt_ioctl_set_policy(filp, arg)			-EOPNOTSUPP
-#define llcrypt_ioctl_get_policy_ex(filp, arg)			-EOPNOTSUPP
-#define llcrypt_ioctl_add_key(filp, arg)			-EOPNOTSUPP
-#define llcrypt_ioctl_remove_key(filp, arg)			-EOPNOTSUPP
-#define llcrypt_ioctl_remove_key_all_users(filp, arg)		-EOPNOTSUPP
-#define llcrypt_ioctl_get_key_status(filp, arg)			-EOPNOTSUPP
-#define llcrypt_drop_inode(inode)				 0
-#define llcrypt_prepare_rename(olddir, olddentry, newdir, newdentry, flags)    0
-#define llcrypt_prepare_link(old_dentry, dir, dentry)		 0
-#define llcrypt_prepare_setattr(dentry, attr)			 0
-#define llcrypt_set_ops(sb, cop)				do {} while (0)
+/* Extracts the second-to-last ciphertext block */
+#define LLCRYPT_FNAME_DIGEST(name, len)                                \
+	((name) + round_down((len) - LL_CRYPTO_BLOCK_SIZE - 1,	       \
+			    LL_CRYPTO_BLOCK_SIZE))
+#define LLCRYPT_FNAME_DIGEST_SIZE      LL_CRYPTO_BLOCK_SIZE
+#include <libcfs/crypto/llcrypt.h>
 #endif /* HAVE_LUSTRE_CRYPTO */
 #endif /* !CONFIG_LL_ENCRYPTION */
 
