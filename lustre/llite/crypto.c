@@ -29,6 +29,7 @@
 #include "llite_internal.h"
 
 #ifdef HAVE_LUSTRE_CRYPTO
+#include <libcfs/libcfs_crypto.h>
 
 static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 {
@@ -158,6 +159,150 @@ static bool ll_empty_dir(struct inode *inode)
 	return true;
 }
 
+/**
+ * ll_setup_filename() - overlay to llcrypt_setup_filename
+ * @dir: the directory that will be searched
+ * @iname: the user-provided filename being searched for
+ * @lookup: 1 if we're allowed to proceed without the key because it's
+ *	->lookup() or we're finding the dir_entry for deletion; 0 if we cannot
+ *	proceed without the key because we're going to create the dir_entry.
+ * @fname: the filename information to be filled in
+ *
+ * This overlay function is necessary to properly encode @fname after
+ * encryption, as it will be sent over the wire.
+ */
+int ll_setup_filename(struct inode *dir, const struct qstr *iname,
+		      int lookup, struct llcrypt_name *fname)
+{
+	int rc;
+
+	rc = llcrypt_setup_filename(dir, iname, lookup, fname);
+	if (rc)
+		return rc;
+
+	if (IS_ENCRYPTED(dir) &&
+	    !name_is_dot_or_dotdot(fname->disk_name.name,
+				   fname->disk_name.len)) {
+		int presented_len = critical_chars(fname->disk_name.name,
+						   fname->disk_name.len);
+		char *buf;
+
+		buf = kmalloc(presented_len + 1, GFP_NOFS);
+		if (!buf) {
+			rc = -ENOMEM;
+			goto out_free;
+		}
+
+		if (presented_len == fname->disk_name.len)
+			memcpy(buf, fname->disk_name.name, presented_len);
+		else
+			critical_encode(fname->disk_name.name,
+					fname->disk_name.len, buf);
+		buf[presented_len] = '\0';
+		kfree(fname->crypto_buf.name);
+		fname->crypto_buf.name = buf;
+		fname->crypto_buf.len = presented_len;
+		fname->disk_name.name = fname->crypto_buf.name;
+		fname->disk_name.len = fname->crypto_buf.len;
+	}
+
+	return rc;
+
+out_free:
+	llcrypt_free_filename(fname);
+	return rc;
+}
+
+/**
+ * ll_fname_disk_to_usr() - overlay to llcrypt_fname_disk_to_usr
+ * @inode: the inode to convert name
+ * @hash: major hash for inode
+ * @minor_hash: minor hash for inode
+ * @iname: the user-provided filename needing conversion
+ * @oname: the filename information to be filled in
+ *
+ * The caller must have allocated sufficient memory for the @oname string.
+ *
+ * This overlay function is necessary to properly decode @iname before
+ * decryption, as it comes from the wire.
+ */
+int ll_fname_disk_to_usr(struct inode *inode,
+			 u32 hash, u32 minor_hash,
+			 struct llcrypt_str *iname, struct llcrypt_str *oname)
+{
+	struct llcrypt_str lltr = LLTR_INIT(iname->name, iname->len);
+	char *buf = NULL;
+	int rc;
+
+	if (IS_ENCRYPTED(inode) &&
+	    !name_is_dot_or_dotdot(lltr.name, lltr.len) &&
+	    strnchr(lltr.name, lltr.len, '=')) {
+		/* Only proceed to critical decode if
+		 * iname contains espace char '='.
+		 */
+		int len = lltr.len;
+
+		buf = kmalloc(len, GFP_NOFS);
+		if (!buf)
+			return -ENOMEM;
+
+		len = critical_decode(lltr.name, len, buf);
+		lltr.name = buf;
+		lltr.len = len;
+	}
+
+	rc = llcrypt_fname_disk_to_usr(inode, hash, minor_hash, &lltr, oname);
+
+	kfree(buf);
+
+	return rc;
+}
+
+/* Copied from llcrypt_d_revalidate, as it is not exported */
+/*
+ * Validate dentries in encrypted directories to make sure we aren't potentially
+ * caching stale dentries after a key has been added.
+ */
+int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
+{
+	struct dentry *dir;
+	int err;
+	int valid;
+
+	/*
+	 * Plaintext names are always valid, since llcrypt doesn't support
+	 * reverting to ciphertext names without evicting the directory's inode
+	 * -- which implies eviction of the dentries in the directory.
+	 */
+	if (!(dentry->d_flags & DCACHE_ENCRYPTED_NAME))
+		return 1;
+
+	/*
+	 * Ciphertext name; valid if the directory's key is still unavailable.
+	 *
+	 * Although llcrypt forbids rename() on ciphertext names, we still must
+	 * use dget_parent() here rather than use ->d_parent directly.  That's
+	 * because a corrupted fs image may contain directory hard links, which
+	 * the VFS handles by moving the directory's dentry tree in the dcache
+	 * each time ->lookup() finds the directory and it already has a dentry
+	 * elsewhere.  Thus ->d_parent can be changing, and we must safely grab
+	 * a reference to some ->d_parent to prevent it from being freed.
+	 */
+
+	if (flags & LOOKUP_RCU)
+		return -ECHILD;
+
+	dir = dget_parent(dentry);
+	err = llcrypt_get_encryption_info(d_inode(dir));
+	valid = !llcrypt_has_encryption_key(d_inode(dir));
+	dput(dir);
+
+	if (err < 0)
+		return err;
+
+	return valid;
+}
+
 const struct llcrypt_operations lustre_cryptops = {
 	.key_prefix		= "lustre:",
 	.get_context		= ll_get_context,
@@ -189,6 +334,24 @@ bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
 
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 {
+}
+
+int ll_setup_filename(struct inode *dir, const struct qstr *iname,
+		      int lookup, struct llcrypt_name *fname)
+{
+	return llcrypt_setup_filename(dir, iname, lookup, fname);
+}
+
+int ll_fname_disk_to_usr(struct inode *inode,
+			 u32 hash, u32 minor_hash,
+			 struct llcrypt_str *iname, struct llcrypt_str *oname)
+{
+	return llcrypt_fname_disk_to_usr(inode, hash, minor_hash, iname, oname);
+}
+
+int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
+{
+	return 1;
 }
 #endif
 

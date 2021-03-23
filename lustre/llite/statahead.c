@@ -343,6 +343,11 @@ __sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 /* finish async stat RPC arguments */
 static void sa_fini_data(struct md_enqueue_info *minfo)
 {
+	struct md_op_data *op_data = &minfo->mi_data;
+
+	if (op_data->op_flags & MF_OPNAME_KMALLOCED)
+		/* allocated via ll_setup_filename called from sa_prep_data */
+		kfree(op_data->op_name);
 	ll_unlock_md_op_lsm(&minfo->mi_data);
 	iput(minfo->mi_dir);
 	OBD_FREE_PTR(minfo);
@@ -1058,6 +1063,7 @@ static int ll_statahead_thread(void *arg)
 			int namelen;
 			char *name;
 			struct lu_fid fid;
+			struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
 
 			hash = le64_to_cpu(ent->lde_hash);
 			if (unlikely(hash < pos))
@@ -1132,7 +1138,27 @@ static int ll_statahead_thread(void *arg)
 			}
 			__set_current_state(TASK_RUNNING);
 
+			if (IS_ENCRYPTED(dir)) {
+				struct llcrypt_str de_name =
+					LLTR_INIT(ent->lde_name, namelen);
+
+				rc = llcrypt_fname_alloc_buffer(dir, NAME_MAX,
+								&lltr);
+				if (rc < 0)
+					continue;
+
+				if (ll_fname_disk_to_usr(dir, 0, 0, &de_name,
+							 &lltr)) {
+					llcrypt_fname_free_buffer(&lltr);
+					continue;
+				}
+
+				name = lltr.name;
+				namelen = lltr.len;
+			}
+
 			sa_statahead(parent, name, namelen, &fid);
+			llcrypt_fname_free_buffer(&lltr);
 		}
 
 		pos = le64_to_cpu(dp->ldp_hash_end);
@@ -1275,12 +1301,13 @@ enum {
 /* file is first dirent under @dir */
 static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 {
-	struct qstr          *target = &dentry->d_name;
-	struct md_op_data    *op_data;
-	int                   dot_de;
-	struct page	     *page = NULL;
-	int                   rc = LS_NOT_FIRST_DE;
-	__u64		      pos = 0;
+	struct qstr *target = &dentry->d_name;
+	struct md_op_data *op_data;
+	int dot_de;
+	struct page *page = NULL;
+	int rc = LS_NOT_FIRST_DE;
+	__u64 pos = 0;
+	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
 
 	ENTRY;
 
@@ -1288,6 +1315,14 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 				     LUSTRE_OPC_ANY, dir);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
+
+	if (IS_ENCRYPTED(dir)) {
+		int rc2 = llcrypt_fname_alloc_buffer(dir, NAME_MAX, &lltr);
+
+		if (rc2 < 0)
+			RETURN(rc2);
+	}
+
 	/**
 	 *FIXME choose the start offset of the readdir
 	 */
@@ -1356,6 +1391,17 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 				continue;
 			}
 
+			if (IS_ENCRYPTED(dir)) {
+				struct llcrypt_str de_name =
+					LLTR_INIT(ent->lde_name, namelen);
+
+				if (ll_fname_disk_to_usr(dir, 0, 0, &de_name,
+							  &lltr))
+					continue;
+				name = lltr.name;
+				namelen = lltr.len;
+			}
+
 			if (target->len != namelen ||
 			    memcmp(target->name, name, namelen) != 0)
 				rc = LS_NOT_FIRST_DE;
@@ -1386,6 +1432,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	}
 	EXIT;
 out:
+	llcrypt_fname_free_buffer(&lltr);
 	ll_finish_md_op_data(op_data);
 
 	return rc;

@@ -840,6 +840,7 @@ enum md_op_flags {
 	MF_GETATTR_BY_FID	= BIT(5),
 	MF_QOS_MKDIR		= BIT(6),
 	MF_RR_MKDIR		= BIT(7),
+	MF_OPNAME_KMALLOCED	= BIT(8),
 };
 
 enum md_cli_flags {
@@ -857,6 +858,9 @@ enum md_op_code {
 	LUSTRE_OPC_MKNOD,
 	LUSTRE_OPC_CREATE,
 	LUSTRE_OPC_ANY,
+	LUSTRE_OPC_LOOKUP,
+	LUSTRE_OPC_OPEN,
+	LUSTRE_OPC_MIGR,
 };
 
 /**

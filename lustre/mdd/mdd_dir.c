@@ -55,11 +55,16 @@ static struct lu_name lname_dotdot = {
 };
 
 static inline int
-mdd_name_check(struct mdd_device *m, const struct lu_name *ln)
+mdd_name_check(const struct lu_env *env, struct mdd_device *m,
+	       const struct lu_name *ln)
 {
+	struct mdd_thread_info *info = mdd_env_info(env);
+	bool enc = info->mdi_pattr.la_valid & LA_FLAGS &&
+		info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
+
 	if (!lu_name_is_valid(ln))
 		return -EINVAL;
-	else if (ln->ln_namelen > m->mdd_dt_conf.ddp_max_name_len)
+	else if (!enc && ln->ln_namelen > m->mdd_dt_conf.ddp_max_name_len)
 		return -ENAMETOOLONG;
 	else
 		return 0;
@@ -628,7 +633,7 @@ static int mdd_link_sanity_check(const struct lu_env *env,
                 RETURN(-ESTALE);
 
         /* Local ops, no lookup before link, check filename length here. */
-	rc = mdd_name_check(m, lname);
+	rc = mdd_name_check(env, m, lname);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -2109,7 +2114,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		cattr->la_valid |= LA_PROJID;
 	}
 
-	rc = mdd_name_check(m, lname);
+	rc = mdd_name_check(env, m, lname);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -3068,7 +3073,7 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc)
 		GOTO(out_pending, rc);
 
-	rc = mdd_name_check(mdd, ltname);
+	rc = mdd_name_check(env, mdd, ltname);
 	if (rc < 0)
 		GOTO(out_pending, rc);
 
@@ -3515,11 +3520,9 @@ static int mdd_update_link(const struct lu_env *env,
 
 	ENTRY;
 
-	LASSERT(lu_name_is_valid(lname));
-
 	/* ignore tobj */
 	if (lu_fid_eq(tpfid, fid) && tname->ln_namelen == lname->ln_namelen &&
-	    !strncmp(tname->ln_name, lname->ln_name, lname->ln_namelen))
+	    !memcmp(tname->ln_name, lname->ln_name, lname->ln_namelen))
 		RETURN(0);
 
 	CDEBUG(D_INFO, "update "DFID"/"DNAME":"DFID"\n",
@@ -3602,7 +3605,7 @@ static int mdd_is_link_on_source_mdt(const struct lu_env *env,
 
 	/* ignore tobj */
 	if (lu_fid_eq(tpfid, fid) && tname->ln_namelen == lname->ln_namelen &&
-	    !strcmp(tname->ln_name, lname->ln_name))
+	    !memcmp(tname->ln_name, lname->ln_name, lname->ln_namelen))
 		return 0;
 
 	rc = mdd_fld_lookup(env, mdd, fid, &link_mdt_index);

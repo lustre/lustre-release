@@ -293,9 +293,14 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 				unsigned int lookup_flags)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
+	int rc;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
 	       dentry->d_name.name, lookup_flags);
+
+	rc = ll_revalidate_d_crypto(dentry, lookup_flags);
+	if (rc != 1)
+		return rc;
 
 	/* If this is intermediate component path lookup and we were able to get
 	 * to this dentry, then its lock has not been revoked and the

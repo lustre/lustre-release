@@ -1037,7 +1037,7 @@ struct req_msg_field RMF_FID_ARRAY =
 EXPORT_SYMBOL(RMF_FID_ARRAY);
 
 struct req_msg_field RMF_SYMTGT =
-        DEFINE_MSGF("symtgt", RMF_F_STRING, -1, NULL, NULL);
+	DEFINE_MSGF("symtgt", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SYMTGT);
 
 struct req_msg_field RMF_TGTUUID =

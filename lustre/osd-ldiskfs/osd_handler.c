@@ -75,6 +75,9 @@
 
 #include <lustre_linkea.h>
 
+/* encoding routines */
+#include <lustre_crypto.h>
+
 /* Maximum EA size is limited by LNET_MTU for remote objects */
 #define OSD_MAX_EA_SIZE 1048364
 
@@ -5358,6 +5361,50 @@ static void osd_take_care_of_agent(const struct lu_env *env,
 }
 
 /**
+ * Utility function to get real name from object name
+ *
+ * \param[in] obj      pointer to the object to be handled
+ * \param[in] name     object name
+ * \param[in] len      object name len
+ * \param[out]ln       pointer to the struct lu_name to hold the real name
+ *
+ * If file is not encrypted, real name is just the object name.
+ * If file is encrypted, object name needs to be decoded. In
+ * this case a new buffer is allocated, and ln->ln_name needs to be freed by
+ * the caller.
+ *
+ * \retval   0, on success
+ * \retval -ve, on error
+ */
+static int obj_name2lu_name(struct osd_object *obj, const char *name,
+			    int len, struct lu_name *ln)
+{
+	struct lu_fid namefid;
+
+	fid_zero(&namefid);
+
+	if (name[0] == '[')
+		sscanf(name + 1, SFID, RFID(&namefid));
+
+	if (fid_is_sane(&namefid) || name_is_dot_or_dotdot(name, len) ||
+	    !(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
+		ln->ln_name = name;
+		ln->ln_namelen = len;
+	} else {
+		char *buf = kmalloc(len, GFP_NOFS);
+
+		if (!buf)
+			return -ENOMEM;
+
+		len = critical_decode(name, len, buf);
+		ln->ln_name = buf;
+		ln->ln_namelen = len;
+	}
+
+	return 0;
+}
+
+/**
  * Index delete function for interoperability mode (b11826).
  * It will remove the directory entry added by osd_index_ea_insert().
  * This entry is needed to maintain name->fid mapping.
@@ -5378,6 +5425,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	struct buffer_head *bh;
 	struct htree_lock *hlock = NULL;
 	struct osd_device *osd = osd_dev(dt->do_lu.lo_dev);
+	struct lu_name ln;
 	int rc;
 
 	ENTRY;
@@ -5389,6 +5437,10 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
+	rc = obj_name2lu_name(obj, (char *)key, strlen((char *)key), &ln);
+	if (rc)
+		RETURN(rc);
+
 	osd_trans_exec_op(env, handle, OSD_OT_DELETE);
 
 	oh = container_of(handle, struct osd_thandle, ot_super);
@@ -5396,8 +5448,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
 	dquot_initialize(dir);
-	dentry = osd_child_dentry_get(env, obj,
-				      (char *)key, strlen((char *)key));
+	dentry = osd_child_dentry_get(env, obj, ln.ln_name, ln.ln_namelen);
 
 	if (obj->oo_hl_head != NULL) {
 		hlock = osd_oti_get(env)->oti_hlock;
@@ -5451,6 +5502,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 out:
 	LASSERT(osd_invariant(obj));
 	osd_trans_exec_check(env, handle, OSD_OT_DELETE);
+	if (ln.ln_name != (char *)key)
+		kfree(ln.ln_name);
 	RETURN(rc);
 }
 
@@ -5625,6 +5678,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	struct ldiskfs_dentry_param *ldp;
 	struct dentry *child;
 	struct osd_thandle *oth;
+	struct lu_name ln;
 	int rc;
 
 	oth = container_of(th, struct osd_thandle, ot_super);
@@ -5632,12 +5686,17 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	LASSERT(oth->ot_handle->h_transaction != NULL);
 	LASSERT(pobj->oo_inode);
 
+	rc = obj_name2lu_name(pobj, name, strlen(name), &ln);
+	if (rc)
+		RETURN(rc);
+
 	ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
 	if (unlikely(osd_object_is_root(pobj)))
 		ldp->edp_magic = 0;
 	else
 		osd_get_ldiskfs_dirent_param(ldp, fid);
-	child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
+	child = osd_child_dentry_get(info->oti_env, pobj,
+				     ln.ln_name, ln.ln_namelen);
 	child->d_fsdata = (void *)ldp;
 	dquot_initialize(pobj->oo_inode);
 	rc = osd_ldiskfs_add_entry(info, osd_obj2dev(pobj), oth->ot_handle,
@@ -5666,6 +5725,8 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 		}
 	}
 
+	if (ln.ln_name != name)
+		kfree(ln.ln_name);
 	RETURN(rc);
 }
 
@@ -6068,6 +6129,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	struct buffer_head *bh;
 	struct lu_fid *fid = (struct lu_fid *)rec;
 	struct htree_lock *hlock = NULL;
+	struct lu_name ln;
 	int ino;
 	int rc;
 
@@ -6076,8 +6138,11 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	LASSERT(dir->i_op != NULL);
 	LASSERT(dir->i_op->lookup != NULL);
 
-	dentry = osd_child_dentry_get(env, obj,
-				      (char *)key, strlen((char *)key));
+	rc = obj_name2lu_name(obj, (char *)key, strlen((char *)key), &ln);
+	if (rc)
+		RETURN(rc);
+
+	dentry = osd_child_dentry_get(env, obj, ln.ln_name, ln.ln_namelen);
 
 	if (obj->oo_hl_head != NULL) {
 		hlock = osd_oti_get(env)->oti_hlock;
@@ -6153,7 +6218,9 @@ out:
 		ldiskfs_htree_unlock(hlock);
 	else
 		up_read(&obj->oo_ext_idx_sem);
-	return rc;
+	if (ln.ln_name != (char *)key)
+		kfree(ln.ln_name);
+	RETURN(rc);
 }
 
 static int osd_index_declare_ea_insert(const struct lu_env *env,
@@ -6785,6 +6852,7 @@ static int osd_ldiskfs_filldir(void *buf,
 	struct osd_it_ea_dirent *ent = it->oie_dirent;
 	struct lu_fid *fid = &ent->oied_fid;
 	struct osd_fid_pack *rec;
+	struct lu_fid namefid;
 
 	ENTRY;
 
@@ -6797,6 +6865,8 @@ static int osd_ldiskfs_filldir(void *buf,
 	if ((void *)ent - it->oie_buf + sizeof(*ent) + namelen >
 	    OSD_IT_EA_BUFSIZE)
 		RETURN(1);
+
+	fid_zero(&namefid);
 
 	/* "." is just the object itself. */
 	if (namelen == 1 && name[0] == '.') {
@@ -6818,12 +6888,27 @@ static int osd_ldiskfs_filldir(void *buf,
 		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
 	}
 
+	if (name[0] == '[')
+		sscanf(name + 1, SFID, RFID(&namefid));
+	if (fid_is_sane(&namefid) || name_is_dot_or_dotdot(name, namelen) ||
+	    !obj || !(obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)) {
+		memcpy(ent->oied_name, name, namelen);
+	} else {
+		int presented_len = critical_chars(name, namelen);
+
+		if (presented_len == namelen)
+			memcpy(ent->oied_name, name, namelen);
+		else
+			namelen = critical_encode(name, namelen,
+						  ent->oied_name);
+
+		ent->oied_name[namelen] = '\0';
+	}
+
 	ent->oied_ino     = ino;
 	ent->oied_off     = offset;
 	ent->oied_namelen = namelen;
 	ent->oied_type    = d_type;
-
-	memcpy(ent->oied_name, name, namelen);
 
 	it->oie_rd_dirent++;
 	it->oie_dirent = (void *)ent + cfs_size_round(sizeof(*ent) + namelen);
@@ -7076,6 +7161,7 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 	int rc;
 	bool dotdot = false;
 	bool dirty = false;
+	struct lu_name ln;
 
 	ENTRY;
 
@@ -7110,8 +7196,11 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 		RETURN(rc);
 	}
 
-	dentry = osd_child_dentry_by_inode(env, dir, ent->oied_name,
-					   ent->oied_namelen);
+	rc = obj_name2lu_name(obj, ent->oied_name, ent->oied_namelen, &ln);
+	if (rc)
+		RETURN(rc);
+
+	dentry = osd_child_dentry_by_inode(env, dir, ln.ln_name, ln.ln_namelen);
 	rc = osd_get_lma(info, inode, dentry, &info->oti_ost_attrs);
 	if (rc == -ENODATA || !fid_is_sane(&lma->lma_self_fid))
 		lma = NULL;
@@ -7384,6 +7473,8 @@ out_inode:
 	iput(inode);
 	if (rc >= 0 && !dirty)
 		dev->od_dirent_journal = 0;
+	if (ln.ln_name != ent->oied_name)
+		kfree(ln.ln_name);
 
 	return rc;
 }

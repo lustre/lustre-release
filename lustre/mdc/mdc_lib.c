@@ -107,9 +107,12 @@ static void mdc_pack_name(struct req_capsule *pill,
 	buf = req_capsule_client_get(pill, field);
 	buf_size = req_capsule_get_size(pill, field, RCL_CLIENT);
 
-	LASSERT(name != NULL && name_len != 0 &&
-		buf != NULL && buf_size == name_len + 1);
+	LASSERT(buf != NULL && buf_size == name_len + 1);
 
+	if (!name) {
+		buf[name_len] = '\0';
+		return;
+	}
 	cpy_len = strlcpy(buf, name, buf_size);
 
 	LASSERT(lu_name_is_valid_2(buf, cpy_len));

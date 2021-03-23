@@ -3252,12 +3252,11 @@ run_test 45 "encrypted file access semantics: MMAP"
 test_46() {
 	local testdir=$DIR/$tdir/mydir
 	local testfile=$testdir/myfile
+	local testdir2=$DIR/$tdir/mydir2
+	local testfile2=$testdir/myfile2
 	local lsfile=$TMP/lsfile
 	local scrambleddir
 	local scrambledfile
-
-	local testfile2=$DIR/$tdir/${tfile}.2
-	local tmpfile=$DIR/junk
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -3268,24 +3267,32 @@ test_46() {
 	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
 
-	touch $DIR/onefile
 	touch $DIR/$tdir/$tfile
 	mkdir $testdir
 	echo test > $testfile
+	echo othertest > $testfile2
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
 	# remove fscrypt key from keyring
 	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
 	keyctl reap
+	cancel_lru_locks
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
-	ls -1 $scrambleddir > $lsfile || error "ls $testdir failed"
+	ls -1 $scrambleddir > $lsfile || error "ls $testdir failed (1)"
 
 	scrambledfile=$scrambleddir/$(head -n 1 $lsfile)
-	stat $scrambledfile || error "stat $scrambledfile failed"
+	stat $scrambledfile || error "stat $scrambledfile failed (1)"
 	rm -f $lsfile
 
-	cat $scrambledfile && error "cat $scrambledfile should have failed"
+	cat $scrambledfile && error "cat $scrambledfile should have failed (1)"
+	rm -f $scrambledfile || error "rm $scrambledfile failed (1)"
+
+	ls -1 $scrambleddir > $lsfile || error "ls $testdir failed (2)"
+	scrambledfile=$scrambleddir/$(head -n 1 $lsfile)
+	stat $scrambledfile || error "stat $scrambledfile failed (2)"
+	rm -f $lsfile
+	cat $scrambledfile && error "cat $scrambledfile should have failed (2)"
 
 	touch $scrambleddir/otherfile &&
 		error "touch otherfile should have failed"
@@ -3294,10 +3301,10 @@ test_46() {
 		error "mkdir otherdir should have failed"
 	ls -d $scrambleddir/otherdir && error "otherdir should not exist"
 
-	rm -f $scrambledfile || error "rm $scrambledfile failed"
+	ls -R $DIR
+	rm -f $scrambledfile || error "rm $scrambledfile failed (2)"
 	rmdir $scrambleddir || error "rmdir $scrambleddir failed"
-
-	rm -f $DIR/onefile
+	ls -R $DIR
 }
 run_test 46 "encrypted file access semantics without key"
 
@@ -3322,7 +3329,7 @@ test_47() {
 		error "rename from unencrypted to encrypted dir should fail"
 
 	ln $tmpfile $testfile &&
-		error "link from unencrypted to encrypted dir should fail"
+		error "link from encrypted to unencrypted dir should fail"
 
 	cp $tmpfile $testfile ||
 		error "cp from unencrypted to encrypted dir should succeed"
@@ -3336,7 +3343,7 @@ test_47() {
 	rm -f $testfile
 
 	ln $testfile2 $tmpfile ||
-		error "link from encrypted to unencrypted dir should succeed"
+		error "link from unencrypted to encrypted dir should succeed"
 	rm -f $tmpfile
 
 	# check we are limited in the number of hard links
@@ -3345,9 +3352,11 @@ test_47() {
 		ln $testfile2 ${testfile}_$i || break
 	done
 	[ $i -lt 160 ] || error "hard link $i should fail"
+	rm -f ${testfile}_*
 
 	mrename $testfile2 $tmpfile &&
 		error "rename from encrypted to unencrypted dir should fail"
+	rm -f $testfile2
 	touch $tmpfile
 
 	dd if=/dev/zero of=$testfile bs=512K count=1
@@ -3357,6 +3366,7 @@ test_47() {
 	# remove fscrypt key from keyring
 	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
 	keyctl reap
+	cancel_lru_locks
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
@@ -4038,8 +4048,9 @@ test_54() {
 	local filecount=$($RUNAS find $testdir -type f | wc -l)
 	[ $filecount -eq 3 ] || error "found $filecount files"
 
-	$RUNAS hexdump -C $testfile &&
-		error "reading $testfile should have failed without key"
+	scrambledfiles=( $(find $testdir/ -maxdepth 1 -type f) )
+	$RUNAS hexdump -C ${scrambledfiles[0]} &&
+		error "reading ${scrambledfiles[0]} should fail without key"
 
 	$RUNAS touch ${testfile}.nokey &&
 		error "touch ${testfile}.nokey should have failed without key"
@@ -4055,8 +4066,8 @@ test_54() {
 	$RUNAS fscrypt lock --verbose $testdir ||
 		error "fscrypt lock $testdir failed (2)"
 
-	$RUNAS hexdump -C $testfile2 &&
-		error "reading $testfile2 should have failed without key"
+	$RUNAS hexdump -C ${scrambledfiles[1]} &&
+		error "reading ${scrambledfiles[1]} should fail without key"
 
 	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
 		error "fscrypt unlock $testdir failed (2)"

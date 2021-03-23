@@ -628,7 +628,7 @@ retry:
 	}
 
 	op_data = ll_prep_md_op_data(NULL, parent->d_inode, de->d_inode,
-				     name, len, 0, LUSTRE_OPC_ANY, NULL);
+				     name, len, 0, LUSTRE_OPC_OPEN, NULL);
 	if (IS_ERR(op_data)) {
 		kfree(name);
 		RETURN(PTR_ERR(op_data));
@@ -2283,7 +2283,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct ptlrpc_request **request)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct mdt_body *body;
+	struct mdt_body  *body;
 	struct lov_mds_md *lmm = NULL;
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
@@ -2305,8 +2305,8 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 	rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
 	ll_finish_md_op_data(op_data);
 	if (rc < 0) {
-		CDEBUG(D_INFO, "md_getattr_name failed "
-		       "on %s: rc %d\n", filename, rc);
+		CDEBUG(D_INFO, "md_getattr_name failed on %s: rc %d\n",
+		       filename, rc);
 		GOTO(out, rc);
 	}
 
@@ -4734,10 +4734,10 @@ int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid,
 		       struct inode **inode)
 {
-	struct md_op_data	*op_data = NULL;
-	struct mdt_body		*body;
-	struct ptlrpc_request	*req;
-	int			rc;
+	struct md_op_data *op_data = NULL;
+	struct mdt_body *body;
+	struct ptlrpc_request *req;
+	int rc;
 	ENTRY;
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen, 0,
@@ -4845,7 +4845,8 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	}
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
-				     child_inode->i_mode, LUSTRE_OPC_ANY, NULL);
+				     child_inode->i_mode, LUSTRE_OPC_MIGR,
+				     NULL);
 	if (IS_ERR(op_data))
 		GOTO(out_iput, rc = PTR_ERR(op_data));
 
@@ -4886,8 +4887,9 @@ again:
 		spin_unlock(&och->och_mod->mod_open_req->rq_lock);
 	}
 
-	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data, name, namelen,
-		       name, namelen, &request);
+	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data,
+		       op_data->op_name, op_data->op_namelen,
+		       op_data->op_name, op_data->op_namelen, &request);
 	if (rc == 0) {
 		LASSERT(request != NULL);
 		ll_update_times(request, parent);

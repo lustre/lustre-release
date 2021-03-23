@@ -55,6 +55,7 @@
 #include <lustre_fid.h>
 #include <lustre_kernelcomm.h>
 #include <lustre_swab.h>
+#include <libcfs/libcfs_crypto.h>
 
 #include "llite_internal.h"
 
@@ -186,14 +187,21 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir)
 {
 #endif
-	struct ll_sb_info    *sbi        = ll_i2sbi(inode);
-	__u64                 pos        = *ppos;
-	bool                  is_api32 = ll_need_32bit_api(sbi);
-	bool                  is_hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
-	struct page          *page;
-	bool                  done = false;
-	int                   rc = 0;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	__u64 pos = *ppos;
+	bool is_api32 = ll_need_32bit_api(sbi);
+	bool is_hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
+	struct page *page;
+	bool done = false;
+	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
+	int rc = 0;
 	ENTRY;
+
+	if (IS_ENCRYPTED(inode)) {
+		rc = llcrypt_fname_alloc_buffer(inode, NAME_MAX, &lltr);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	page = ll_get_dir_page(inode, op_data, pos);
 
@@ -238,9 +246,31 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			 * for 'filldir()' must be part of the 'ent'. */
 #ifdef HAVE_DIR_CONTEXT
 			ctx->pos = lhash;
-			done = !dir_emit(ctx, ent->lde_name, namelen, ino,
-					 type);
+			if (!IS_ENCRYPTED(inode)) {
+				done = !dir_emit(ctx, ent->lde_name, namelen,
+						 ino, type);
+			} else {
+				/* Directory is encrypted */
+				int save_len = lltr.len;
+				struct llcrypt_str de_name =
+					LLTR_INIT(ent->lde_name, namelen);
+
+				rc = ll_fname_disk_to_usr(inode, 0, 0, &de_name,
+							  &lltr);
+				de_name = lltr;
+				lltr.len = save_len;
+				if (rc) {
+					done = 1;
+					break;
+				}
+				done = !dir_emit(ctx, de_name.name, de_name.len,
+						 ino, type);
+			}
 #else
+			/* HAVE_DIR_CONTEXT is defined from kernel 3.11, whereas
+			 * IS_ENCRYPTED is brought by kernel 4.14.
+			 * So there is no need to handle encryption case here.
+			 */
 			done = filldir(cookie, ent->lde_name, namelen, lhash,
 				       ino, type);
 #endif
@@ -277,6 +307,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 #else
 	*ppos = pos;
 #endif
+	llcrypt_fname_free_buffer(&lltr);
 	RETURN(rc);
 }
 
@@ -307,6 +338,12 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	       "VFS Op:inode="DFID"(%p) pos/size%lu/%llu 32bit_api %d\n",
 	       PFID(ll_inode2fid(inode)),
 	       inode, (unsigned long)pos, i_size_read(inode), api32);
+
+	if (IS_ENCRYPTED(inode)) {
+		rc = llcrypt_get_encryption_info(inode);
+		if (rc && rc != -ENOKEY)
+			GOTO(out, rc);
+	}
 
 	if (pos == MDS_DIR_END_OFF)
 		/*

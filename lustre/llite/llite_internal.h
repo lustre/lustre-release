@@ -1722,10 +1722,17 @@ static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
 	return ll_i2pccs(ll_info2i(lli));
 }
 
-#ifdef HAVE_LUSTRE_CRYPTO
 /* crypto.c */
+int ll_setup_filename(struct inode *dir, const struct qstr *iname,
+		      int lookup, struct llcrypt_name *fname);
+int ll_fname_disk_to_usr(struct inode *inode,
+			 u32 hash, u32 minor_hash,
+			 struct llcrypt_str *iname, struct llcrypt_str *oname);
+int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags);
+#ifdef HAVE_LUSTRE_CRYPTO
 extern const struct llcrypt_operations lustre_cryptops;
 #endif
+
 /* llite/llite_foreign.c */
 int ll_manage_foreign(struct inode *inode, struct lustre_md *lmd);
 bool ll_foreign_is_openable(struct dentry *dentry, unsigned int flags);

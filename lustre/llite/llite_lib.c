@@ -3104,6 +3104,9 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      __u32 mode, enum md_op_code opc,
 				      void *data)
 {
+	struct llcrypt_name fname = { 0 };
+	int rc;
+
 	LASSERT(i1 != NULL);
 
 	if (name == NULL) {
@@ -3128,7 +3131,6 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 	ll_i2gids(op_data->op_suppgids, i1, i2);
 	op_data->op_fid1 = *ll_inode2fid(i1);
-	op_data->op_code = opc;
 
 	if (S_ISDIR(i1->i_mode)) {
 		down_read_non_owner(&ll_i2info(i1)->lli_lsm_sem);
@@ -3160,8 +3162,46 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	if (ll_need_32bit_api(ll_i2sbi(i1)))
 		op_data->op_cli_flags |= CLI_API32;
 
-	op_data->op_name = name;
-	op_data->op_namelen = namelen;
+	if (opc == LUSTRE_OPC_LOOKUP || opc == LUSTRE_OPC_CREATE) {
+		/* In case of lookup, ll_setup_filename() has already been
+		 * called in ll_lookup_it(), so just take provided name.
+		 */
+		fname.disk_name.name = (unsigned char *)name;
+		fname.disk_name.len = namelen;
+	} else if (name && namelen) {
+		struct qstr dname = QSTR_INIT(name, namelen);
+		struct inode *dir;
+		int lookup;
+
+		if (!S_ISDIR(i1->i_mode) && i2 && S_ISDIR(i2->i_mode)) {
+			/* special case when called from ll_link() */
+			dir = i2;
+			lookup = 0;
+		} else {
+			dir = i1;
+			lookup = (int)(opc == LUSTRE_OPC_ANY);
+		}
+		rc = ll_setup_filename(dir, &dname, lookup, &fname);
+		if (rc) {
+			ll_finish_md_op_data(op_data);
+			return ERR_PTR(rc);
+		}
+		if (fname.disk_name.name &&
+		    fname.disk_name.name != (unsigned char *)name)
+			/* op_data->op_name must be freed after use */
+			op_data->op_flags |= MF_OPNAME_KMALLOCED;
+	}
+
+	/* In fact LUSTRE_OPC_LOOKUP, LUSTRE_OPC_OPEN, LUSTRE_OPC_MIGR
+	 * are LUSTRE_OPC_ANY
+	 */
+	if (opc == LUSTRE_OPC_LOOKUP || opc == LUSTRE_OPC_OPEN ||
+	    opc == LUSTRE_OPC_MIGR)
+		op_data->op_code = LUSTRE_OPC_ANY;
+	else
+		op_data->op_code = opc;
+	op_data->op_name = fname.disk_name.name;
+	op_data->op_namelen = fname.disk_name.len;
 	op_data->op_mode = mode;
 	op_data->op_mod_time = ktime_get_real_seconds();
 	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
@@ -3182,6 +3222,11 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
 	ll_unlock_md_op_lsm(op_data);
 	ll_security_release_secctx(op_data->op_file_secctx,
 				   op_data->op_file_secctx_size);
+	if (op_data->op_flags & MF_OPNAME_KMALLOCED)
+		/* allocated via ll_setup_filename called
+		 * from ll_prep_md_op_data
+		 */
+		kfree(op_data->op_name);
 	llcrypt_free_ctx(op_data->op_file_encctx, op_data->op_file_encctx_size);
 	OBD_FREE_PTR(op_data);
 }
