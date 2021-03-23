@@ -3670,7 +3670,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'c':
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
-			if (errno != 0 || *end != '\0'||
+			if (errno != 0 || *end != '\0'|| optarg == end ||
 			    lsa.lsa_stripe_count < -1 ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
@@ -3756,7 +3756,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'i':
 			errno = 0;
 			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
-			if (errno != 0 || *end != '\0' ||
+			if (errno != 0 || *end != '\0' || optarg == end ||
 			    lsa.lsa_stripe_off < -1 ||
 			    lsa.lsa_stripe_off > LOV_V1_INSANE_STRIPE_COUNT) {
 				fprintf(stderr,
