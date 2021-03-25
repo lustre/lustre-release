@@ -1817,7 +1817,11 @@ static int mdd_changelog_clear(const struct lu_env *env,
 			      mdd_changelog_clear_cb, (void *)&mcuc,
 			      0, 0);
 
-	if (rc < 0) {
+	if (rc == -EINVAL) {
+		CDEBUG(D_IOCTL, "%s: No changelog recnum <= %llu to clear\n",
+		       mdd2obd_dev(mdd)->obd_name, (unsigned long long) endrec);
+		RETURN(-EINVAL);
+	} else if (rc < 0) {
 		CWARN("%s: Failure to clear the changelog for user %d: %d\n",
 		      mdd2obd_dev(mdd)->obd_name, id, rc);
 	} else if (mcuc.mcuc_flush) {
@@ -1832,7 +1836,7 @@ static int mdd_changelog_clear(const struct lu_env *env,
 						      mcuc.mcuc_minrec);
 		}
 	} else {
-		CWARN("%s: No entry for user %d\n",
+		CDEBUG(D_IOCTL, "%s: No entry for user %d\n",
 		      mdd2obd_dev(mdd)->obd_name, id);
 		rc = -ENOENT;
 	}
