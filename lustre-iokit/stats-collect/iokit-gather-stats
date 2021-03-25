@@ -31,7 +31,7 @@ debug () {
 }
 
 usage() {
-	printf $"Usage: iokit-gather-stats [-help] config_file [start|stop|cleanup] <log_name>\n"
+	printf $"Usage: iokit-gather-stats [--help|-h] config_file [start|stop|cleanup] <log_name>\n"
 	if [ x$1 = x-h ]; then
 		 printf $"
 The distribution script will run on a single node.  It is parameterised
