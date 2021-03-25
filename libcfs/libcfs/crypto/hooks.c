@@ -177,6 +177,9 @@ int __llcrypt_encrypt_symlink(struct inode *inode, const char *target,
 	struct llcrypt_symlink_data *sd;
 	unsigned int ciphertext_len;
 
+	if (unlikely(!llcrypt_policy_has_filename_enc(inode)))
+		return 0;
+
 	err = llcrypt_require_key(inode);
 	if (err)
 		return err;
@@ -266,17 +269,25 @@ const char *llcrypt_get_symlink(struct inode *inode, const void *caddr,
 	 * the ciphertext length, even though this is redundant with i_size.
 	 */
 
-	if (max_size < sizeof(*sd))
-		return ERR_PTR(-EUCLEAN);
-	sd = caddr;
-	cstr.name = (unsigned char *)sd->encrypted_path;
-	cstr.len = le16_to_cpu(sd->len);
+	if (unlikely(!llcrypt_policy_has_filename_enc(inode))) {
+		cstr.name = (unsigned char *)caddr;
+		cstr.len = strlen(cstr.name);
 
-	if (cstr.len == 0)
-		return ERR_PTR(-EUCLEAN);
+		if (cstr.len == 0)
+			return ERR_PTR(-EUCLEAN);
+	} else {
+		if (max_size < sizeof(*sd))
+			return ERR_PTR(-EUCLEAN);
+		sd = caddr;
+		cstr.name = (unsigned char *)sd->encrypted_path;
+		cstr.len = le16_to_cpu(sd->len);
 
-	if (cstr.len + sizeof(*sd) - 1 > max_size)
-		return ERR_PTR(-EUCLEAN);
+		if (cstr.len == 0)
+			return ERR_PTR(-EUCLEAN);
+
+		if (cstr.len + sizeof(*sd) - 1 > max_size)
+			return ERR_PTR(-EUCLEAN);
+	}
 
 	err = llcrypt_fname_alloc_buffer(inode, cstr.len, &pstr);
 	if (err)

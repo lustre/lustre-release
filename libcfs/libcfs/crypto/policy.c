@@ -282,6 +282,25 @@ static int set_encryption_policy(struct inode *inode,
 	return lsi->lsi_cop->set_context(inode, &ctx, ctxsize, NULL);
 }
 
+/* Tell if an inode's encryption policy has filename encryption */
+bool llcrypt_policy_has_filename_enc(struct inode *inode)
+{
+	union llcrypt_policy policy;
+	int err;
+
+	err = llcrypt_get_policy(inode, &policy);
+	if (err)
+		return true;
+
+	if ((policy.version == LLCRYPT_POLICY_V1 &&
+	     policy.v1.filenames_encryption_mode == LLCRYPT_MODE_NULL) ||
+	    (policy.version == LLCRYPT_POLICY_V2 &&
+	     policy.v2.filenames_encryption_mode == LLCRYPT_MODE_NULL))
+		return false;
+	return true;
+}
+EXPORT_SYMBOL(llcrypt_policy_has_filename_enc);
+
 int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 {
 	union llcrypt_policy policy;
@@ -313,21 +332,6 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	if (copy_from_user(&policy, arg, size))
 		return -EFAULT;
 	policy.version = version;
-
-	/* Force file/directory name encryption policy to null.
-	 * This is needed for interoperability with future versions.
-	 * Code to be removed when Lustre supports name encryption.
-	 */
-	CWARN("inode %lu: forcing policy filenames_encryption_mode to null\n",
-	      inode->i_ino);
-	switch (policy.version) {
-	case LLCRYPT_POLICY_V1:
-		policy.v1.filenames_encryption_mode = LLCRYPT_MODE_NULL;
-		break;
-	case LLCRYPT_POLICY_V2:
-		policy.v2.filenames_encryption_mode = LLCRYPT_MODE_NULL;
-		break;
-	}
 
 	if (!inode_owner_or_capable(inode))
 		return -EACCES;

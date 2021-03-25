@@ -132,6 +132,7 @@ static inline int critical_decode(const u8 *src, int len, char *dst)
 #define llcrypt_ioctl_set_policy(filp, arg)  fscrypt_ioctl_set_policy(filp, arg)
 #define llcrypt_ioctl_get_policy_ex(filp, arg)	\
 	fscrypt_ioctl_get_policy_ex(filp, arg)
+#define llcrypt_policy_has_filename_enc(inode) true
 #define llcrypt_ioctl_add_key(filp, arg)	fscrypt_ioctl_add_key(filp, arg)
 #define llcrypt_ioctl_remove_key(filp, arg)  fscrypt_ioctl_remove_key(filp, arg)
 #define llcrypt_ioctl_remove_key_all_users(filp, arg)	\

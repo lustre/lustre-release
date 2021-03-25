@@ -2389,13 +2389,7 @@ fscrypt_support, [
 ],[
 	fscrypt_ioctl_get_policy_ex(NULL, NULL);
 ],[
-	dnl When Lustre supports file name encryption, restore "yes" value
-	dnl for has_fscrypt_support and remove warning message.
-	has_fscrypt_support="no"
-	AC_MSG_WARN([
-This version of Lustre lacks file name encryption support,
-so it cannot make use of in-kernel fscrypt.
-Will use embedded llcrypt if possible.])
+	has_fscrypt_support="yes"
 ])
 ]) # LC_FSCRYPT_SUPPORT
 
@@ -2731,21 +2725,23 @@ AC_SUBST(OSDADDON)
 AC_DEFUN([LC_CONFIG_CRYPTO], [
 AC_MSG_CHECKING([whether to enable Lustre client crypto])
 AC_ARG_ENABLE([crypto],
-	AC_HELP_STRING([--enable-crypto],
-		[enable Lustre client crypto]),
+	AC_HELP_STRING([--enable-crypto=yes|no|in-kernel],
+		[enable Lustre client crypto (default is yes), use 'in-kernel' to force use of in-kernel fscrypt instead of embedded llcrypt]),
 	[], [enable_crypto="auto"])
 AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno], [
 	AC_MSG_RESULT(
 	)
 	LC_IS_ENCRYPTED
 	LC_FSCRYPT_SUPPORT])
-AS_IF([test "x$has_fscrypt_support" = xyes], [
-	AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via in-kernel fscrypt])
-	enable_crypto=yes],
+AS_IF([test "x$enable_crypto" = xin-kernel], [
+	AS_IF([test "x$has_fscrypt_support" = xyes], [
+	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via in-kernel fscrypt])], [
+	      AC_MSG_ERROR([Lustre client crypto cannot be enabled via in-kernel fscrypt.])
+	      enable_crypto=no])],
 	[AS_IF([test "x$has_is_encrypted" = xyes], [
 	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via embedded llcrypt])
 	      AC_DEFINE(CONFIG_LL_ENCRYPTION, 1, [embedded llcrypt])
-	      enable_crypto=yes
+	      enable_crypto="embedded llcrypt"
 	      enable_llcrypt=yes], [
 	      AS_IF([test "x$enable_crypto" = xyes],
 	            [AC_MSG_ERROR([Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.])])

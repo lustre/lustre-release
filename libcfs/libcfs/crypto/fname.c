@@ -196,15 +196,20 @@ bool llcrypt_fname_encrypted_size(const struct inode *inode, u32 orig_len,
 				  u32 max_len, u32 *encrypted_len_ret)
 {
 	const struct llcrypt_info *ci = llcrypt_info(inode);
+	struct crypto_skcipher *tfm = ci->ci_ctfm;
 	int padding = 4 << (llcrypt_policy_flags(&ci->ci_policy) &
 			    LLCRYPT_POLICY_FLAGS_PAD_MASK);
 	u32 encrypted_len;
 
 	if (orig_len > max_len)
 		return false;
-	encrypted_len = max(orig_len, (u32)LL_CRYPTO_BLOCK_SIZE);
-	encrypted_len = round_up(encrypted_len, padding);
-	*encrypted_len_ret = min(encrypted_len, max_len);
+	if (tfm == NULL) {
+		*encrypted_len_ret = orig_len;
+	} else {
+		encrypted_len = max(orig_len, (u32)LL_CRYPTO_BLOCK_SIZE);
+		encrypted_len = round_up(encrypted_len, padding);
+		*encrypted_len_ret = min(encrypted_len, max_len);
+	}
 	return true;
 }
 
@@ -276,11 +281,22 @@ int llcrypt_fname_disk_to_usr(struct inode *inode,
 		return 0;
 	}
 
-	if (iname->len < LL_CRYPTO_BLOCK_SIZE)
-		return -EUCLEAN;
+	if (llcrypt_has_encryption_key(inode)) {
+		struct llcrypt_info *ci = llcrypt_info(inode);
+		struct crypto_skcipher *tfm = ci->ci_ctfm;
 
-	if (llcrypt_has_encryption_key(inode))
+		if (tfm && iname->len < LL_CRYPTO_BLOCK_SIZE)
+			return -EUCLEAN;
+
 		return fname_decrypt(inode, iname, oname);
+	}
+
+	if (unlikely(!llcrypt_policy_has_filename_enc(inode))) {
+		memcpy(oname->name, iname->name, iname->len);
+		oname->name[iname->len] = '\0';
+		oname->len = iname->len;
+		return 0;
+	}
 
 	if (iname->len <= LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE) {
 		oname->len = base64_encode(iname->name, iname->len,
@@ -370,6 +386,13 @@ int llcrypt_setup_filename(struct inode *dir, const struct qstr *iname,
 	}
 	if (!lookup)
 		return -ENOKEY;
+
+	if (unlikely(!llcrypt_policy_has_filename_enc(dir))) {
+		fname->disk_name.name = (unsigned char *)iname->name;
+		fname->disk_name.len = iname->len;
+		return 0;
+	}
+
 	fname->is_ciphertext_name = true;
 
 	/*

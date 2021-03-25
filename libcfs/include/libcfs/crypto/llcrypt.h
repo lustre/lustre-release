@@ -151,6 +151,7 @@ extern int llcrypt_ioctl_get_policy_ex(struct file *, void __user *);
 extern int llcrypt_has_permitted_context(struct inode *, struct inode *);
 extern int llcrypt_inherit_context(struct inode *, struct inode *,
 					void *, bool);
+extern bool llcrypt_policy_has_filename_enc(struct inode *inode);
 /* keyring.c */
 extern void llcrypt_sb_free(struct super_block *sb);
 extern int llcrypt_ioctl_add_key(struct file *filp, void __user *arg);
@@ -403,6 +404,10 @@ static inline int llcrypt_inherit_context(struct inode *parent,
 					  void *fs_data, bool preload)
 {
 	return -EOPNOTSUPP;
+}
+static inline bool llcrypt_policy_has_filename_enc(struct inode *inode)
+{
+	return false;
 }
 
 /* keyring.c */
@@ -747,7 +752,9 @@ static inline int llcrypt_prepare_symlink(struct inode *dir,
 					  unsigned int max_len,
 					  struct llcrypt_str *disk_link)
 {
-	if (IS_ENCRYPTED(dir) || llcrypt_dummy_context_enabled(dir))
+	if ((IS_ENCRYPTED(dir) &&
+	     likely(llcrypt_policy_has_filename_enc(dir))) ||
+	    llcrypt_dummy_context_enabled(dir))
 		return __llcrypt_prepare_symlink(dir, len, max_len, disk_link);
 
 	disk_link->name = (unsigned char *)target;

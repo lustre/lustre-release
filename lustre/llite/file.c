@@ -4819,6 +4819,12 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 			       PFID(ll_inode2fid(child_inode)));
 			GOTO(out_iput, rc = -ENOKEY);
 		}
+		if (unlikely(!llcrypt_policy_has_filename_enc(child_inode))) {
+			CDEBUG(D_SEC,
+			       "cannot migrate old format encrypted "DFID", please move to new enc dir first\n",
+			       PFID(ll_inode2fid(child_inode)));
+			GOTO(out_iput, rc = -EUCLEAN);
+		}
 	}
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
