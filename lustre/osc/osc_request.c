@@ -1782,9 +1782,8 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 	 * file/fid, not during the resends/retries. */
 	snprintf(dbgcksum_file_name, sizeof(dbgcksum_file_name),
 		 "%s-checksum_dump-osc-"DFID":[%llu-%llu]-%x-%x",
-		 (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0 ?
-		  libcfs_debug_file_path_arr :
-		  LIBCFS_DEBUG_FILE_PATH_DEFAULT),
+		 (strncmp(libcfs_debug_file_path, "NONE", 4) != 0 ?
+		  libcfs_debug_file_path : LIBCFS_DEBUG_FILE_PATH_DEFAULT),
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : 0ULL,
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 		 oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,

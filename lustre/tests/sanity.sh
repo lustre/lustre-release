@@ -8049,6 +8049,25 @@ test_60e() {
 }
 run_test 60e "no space while new llog is being created"
 
+test_60f() {
+	local old_path=$($LCTL get_param -n debug_path)
+
+	stack_trap "$LCTL set_param debug_path=$old_path"
+	stack_trap "rm -f $TMP/$tfile*"
+	#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+	$LCTL set_param debug_path=$TMP/$tfile fail_loc=0x8000050e
+	test_mkdir $DIR/$tdir
+	rm -f $TMP/$tfile* 2> /dev/null
+	# retry in case the open is cached and not released
+	for (( i = 0; i < 100 && $(ls $TMP/$tfile* | wc -l) == 0; i++ )); do
+		echo $i > $DIR/$tdir/$tfile.$i && cat $DIR/$tdir/$tfile.$i
+		sleep 0.1
+	done
+	ls $TMP/$tfile*
+	(( $(ls $TMP/$tfile* | wc -l) > 0 )) || error "$TMP/$tfile not dumped"
+}
+run_test 60f "change debug_path works"
+
 test_60g() {
 	local pid
 	local i
