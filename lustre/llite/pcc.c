@@ -458,18 +458,18 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 			return rc;
 		if (id == 0)
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_STAT_ATTACH;
-	} else if (strcmp(key, "rwpcc") == 0) {
+	} else if (strcmp(key, "rwpcc") == 0 || strcmp(key, "pccrw") == 0) {
 		rc = kstrtoul(val, 10, &id);
 		if (rc)
 			return rc;
 		if (id > 0)
-			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_RWPCC;
-	} else if (strcmp(key, "ropcc") == 0) {
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRW;
+	} else if (strcmp(key, "ropcc") == 0 || strcmp(key, "pccro") == 0) {
 		rc = kstrtoul(val, 10, &id);
 		if (rc)
 			return rc;
 		if (id > 0)
-			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_ROPCC;
+			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRO;
 	} else {
 		return -EINVAL;
 	}
@@ -504,37 +504,6 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 			return rc;
 	}
 
-	switch (cmd->pccc_cmd) {
-	case PCC_ADD_DATASET:
-		if (cmd->u.pccc_add.pccc_flags & PCC_DATASET_RWPCC &&
-		    cmd->u.pccc_add.pccc_flags & PCC_DATASET_ROPCC)
-			return -EINVAL;
-		/*
-		 * By default, a PCC backend can provide caching service for
-		 * both PCC-RW and PCC-RO.
-		 */
-		if ((cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCC_ALL) == 0)
-			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCC_ALL;
-
-		if (cmd->u.pccc_add.pccc_rwid == 0 &&
-		    cmd->u.pccc_add.pccc_roid == 0)
-			return -EINVAL;
-
-		if (cmd->u.pccc_add.pccc_rwid == 0 &&
-		    cmd->u.pccc_add.pccc_flags & PCC_DATASET_RWPCC)
-			cmd->u.pccc_add.pccc_rwid = cmd->u.pccc_add.pccc_roid;
-
-		if (cmd->u.pccc_add.pccc_roid == 0 &&
-		    cmd->u.pccc_add.pccc_flags & PCC_DATASET_ROPCC)
-			cmd->u.pccc_add.pccc_roid = cmd->u.pccc_add.pccc_rwid;
-
-		break;
-	case PCC_DEL_DATASET:
-	case PCC_CLEAR_ALL:
-		break;
-	default:
-		return -EINVAL;
-	}
 	return 0;
 }
 
@@ -682,7 +651,7 @@ pcc_dataset_match_get(struct pcc_super *super, struct pcc_matcher *matcher)
 
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
-		if (!(dataset->pccd_flags & PCC_DATASET_RWPCC))
+		if (!(dataset->pccd_flags & PCC_DATASET_PCCRW))
 			continue;
 
 		if (pcc_cond_match(&dataset->pccd_rule, matcher)) {
@@ -701,6 +670,40 @@ pcc_dataset_match_get(struct pcc_super *super, struct pcc_matcher *matcher)
 	return selected;
 }
 
+static int
+pcc_dataset_flags_check(struct pcc_super *super, struct pcc_cmd *cmd)
+{
+	struct ll_sb_info *sbi;
+
+	sbi = container_of(super, struct ll_sb_info, ll_pcc_super);
+
+	/*
+	 * A PCC backend can provide caching service for both PCC-RW and PCC-RO.
+	 * It defaults to readonly PCC as long as the server supports it.
+	 */
+	if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_PCCRO)) {
+		if (cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRO ||
+		    !(cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRW))
+			return -EOPNOTSUPP;
+	} else if ((cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCC_ALL) == 0) {
+		cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCC_DEFAULT;
+	} /* else RWPCC or ROPCC must have been given */
+
+	if (cmd->u.pccc_add.pccc_rwid == 0 &&
+	    cmd->u.pccc_add.pccc_roid == 0)
+		return -EINVAL;
+
+	if (cmd->u.pccc_add.pccc_rwid == 0 &&
+	    cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRW)
+		cmd->u.pccc_add.pccc_rwid = cmd->u.pccc_add.pccc_roid;
+
+	if (cmd->u.pccc_add.pccc_roid == 0 &&
+	    cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRO)
+		cmd->u.pccc_add.pccc_roid = cmd->u.pccc_add.pccc_rwid;
+
+	return 0;
+}
+
 /**
  * pcc_dataset_add - Add a Cache policy to control which files need be
  * cached and where it will be cached.
@@ -716,6 +719,10 @@ pcc_dataset_add(struct pcc_super *super, struct pcc_cmd *cmd)
 	struct pcc_dataset *tmp;
 	bool found = false;
 	int rc;
+
+	rc = pcc_dataset_flags_check(super, cmd);
+	if (rc)
+		return rc;
 
 	OBD_ALLOC_PTR(dataset);
 	if (dataset == NULL)
@@ -777,10 +784,10 @@ pcc_dataset_get(struct pcc_super *super, enum lu_pcc_type type, __u32 id)
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
 		if (type == LU_PCC_READWRITE && (dataset->pccd_rwid != id ||
-		    !(dataset->pccd_flags & PCC_DATASET_RWPCC)))
+		    !(dataset->pccd_flags & PCC_DATASET_PCCRW)))
 			continue;
 		if (type == LU_PCC_READONLY && (dataset->pccd_roid != id ||
-		    !(dataset->pccd_flags & PCC_DATASET_ROPCC)))
+		    !(dataset->pccd_flags & PCC_DATASET_PCCRO)))
 			continue;
 		atomic_inc(&dataset->pccd_refcount);
 		selected = dataset;
@@ -1248,11 +1255,11 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 	ENTRY;
 
 	if (type == LU_PCC_READWRITE &&
-	    !(dataset->pccd_flags & PCC_DATASET_RWPCC))
+	    !(dataset->pccd_flags & PCC_DATASET_PCCRW))
 		RETURN(0);
 
 	if (type == LU_PCC_READONLY &&
-	    !(dataset->pccd_flags & PCC_DATASET_ROPCC))
+	    !(dataset->pccd_flags & PCC_DATASET_PCCRO))
 		RETURN(0);
 
 	rc = pcc_fid2dataset_path(pathname, PCC_DATASET_MAX_PATH,

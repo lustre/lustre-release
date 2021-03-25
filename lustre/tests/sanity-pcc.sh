@@ -54,6 +54,14 @@ else
 	error "No generic nobody group"
 fi
 
+if [[ -r /etc/redhat-release ]]; then
+	rhel_version=$(sed -e 's/[^0-9.]*//g' /etc/redhat-release)
+	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
+		always_except EX-8739 6 7a 7b 23    # PCC-RW
+		always_except LU-17289 102          # fio io_uring
+	fi
+fi
+
 build_test_filter
 
 # if there is no CLIENT1 defined, some tests can be ran on localhost
@@ -184,7 +192,8 @@ setup_pcc_mapping() {
 
 	[ -z "$param" ] && param="projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
 	stack_trap "cleanup_pcc_mapping $facet" EXIT
-	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param
+	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param ||
+		error "Setup PCC backend $hsm_root on $MOUNT failed"
 }
 
 umount_loopdev() {
@@ -238,14 +247,14 @@ lpcc_rw_test() {
 	is_project_quota_supported || project=false
 
 	do_facet $SINGLEAGT $LFS mkdir -i0 -c1 $DIR/$tdir
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	$project && lfs project -sp $project_id $DIR2/$tdir
 
 	do_facet $SINGLEAGT "echo -n attach_origin > $file"
 	if ! $project; then
 		check_lpcc_state $file "none"
-		do_facet $SINGLEAGT $LFS pcc attach -i \
-			$HSM_ARCHIVE_NUMBER $file ||
+		do_facet $SINGLEAGT $LFS pcc attach -w \
+			-i $HSM_ARCHIVE_NUMBER $file ||
 			error "pcc attach $file failed"
 	fi
 
@@ -295,8 +304,8 @@ lpcc_rw_test() {
 	do_facet $SINGLEAGT "echo -n new_data2 > $file"
 	if ! $project; then
 		check_lpcc_state $file "none"
-		do_facet $SINGLEAGT $LFS pcc attach -i \
-			$HSM_ARCHIVE_NUMBER $file ||
+		do_facet $SINGLEAGT $LFS pcc attach -w \
+			-i $HSM_ARCHIVE_NUMBER $file ||
 			error "PCC attach $file failed"
 	fi
 	check_lpcc_state $file "readwrite"
@@ -341,14 +350,14 @@ test_1e() {
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 	$LCTL pcc list $MOUNT
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
 
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
-	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
@@ -378,7 +387,7 @@ test_1e() {
 
 	[[ $perm == "0" ]] || error "PCC file permission ($perm) is not zero"
 
-	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 
@@ -404,7 +413,7 @@ test_1f() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0\ pccrw=1"
 
 	do_facet $SINGLEAGT $LFS mkdir -i0 -c1 $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
@@ -449,7 +458,7 @@ test_1g() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
@@ -458,7 +467,7 @@ test_1g() {
 		error "non-root user can dd write $file"
 	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 &&
 		error "non-root user can dd read $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 &&
@@ -499,7 +508,7 @@ test_2a() {
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	file=$DIR/$tdir/multiop
 	$LFS mkdir -i -1 -c $MDSCOUNT $DIR/$tdir
 	rm -f $file
@@ -556,13 +565,13 @@ test_2b() {
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	file=$DIR/$tdir/multiop
 	mkdir -p $DIR/$tdir
 	rm -f $file
 
 	do_facet $SINGLEAGT "echo -n file_data > $file"
-	do_facet $SINGLEAGT lfs pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT lfs pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -595,12 +604,12 @@ test_2c() {
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	mkdir -p $DIR/$tdir
 	rm -f $file
 
 	do_facet $SINGLEAGT "echo -n file_data > $file"
-	do_facet $SINGLEAGT lfs pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT lfs pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -625,16 +634,19 @@ test_3a() {
 	local file=$DIR/$tdir/$tfile
 	local file2=$DIR2/$tdir/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1\ pccro=1"
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	dd if=/dev/zero of=$file2 bs=1024 count=1 ||
 		error "failed to dd write to $file"
 
 	echo "Start to RW-PCC attach/detach the file: $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
@@ -642,7 +654,7 @@ test_3a() {
 	check_lpcc_state $file "none"
 
 	echo "Repeat to RW-PCC attach/detach the same file: $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
@@ -650,7 +662,7 @@ test_3a() {
 	check_lpcc_state $file "none"
 
 	rm -f $file || error "failed to remove $file"
-	echo "ropcc_data" > $file
+	echo "pccro_data" > $file
 
 	echo "Start to RO-PCC attach/detach the file: $file"
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
@@ -679,7 +691,7 @@ test_3b() {
 	# Start all of the copytools and setup PCC
 	for n in $(seq $AGTCOUNT); do
 		copytool setup -f agt$n -a $n -m $MOUNT -h $(hsm_root agt$n)
-		setup_pcc_mapping agt$n "projid={100}\ rwid=$n\ auto_attach=0"
+		setup_pcc_mapping agt$n "projid={100}\ rwid=$n\ auto_attach=0\ pccrw=1\ pccro=1"
 	done
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -687,7 +699,7 @@ test_3b() {
 		error "failed to dd write to $file"
 
 	echo "Start to RW-PCC attach/detach $file on $agt1_HOST"
-	do_facet agt1 $LFS pcc attach -i 1 $file ||
+	do_facet agt1 $LFS pcc attach -w -i 1 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt1
 	do_facet agt1 $LFS pcc detach -k $file ||
@@ -695,7 +707,7 @@ test_3b() {
 	check_lpcc_state $file "none" agt1
 
 	echo "Repeat to RW-PCC attach/detach $file on $agt2_HOST"
-	do_facet agt2 $LFS pcc attach -i 2 $file ||
+	do_facet agt2 $LFS pcc attach -w -i 2 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt2
 	do_facet agt2 $LFS pcc detach -k $file ||
@@ -703,10 +715,10 @@ test_3b() {
 	check_lpcc_state $file "none" agt2
 
 	echo "Try RW-PCC attach on two agents"
-	do_facet agt1 $LFS pcc attach -i 1 $file ||
+	do_facet agt1 $LFS pcc attach -w -i 1 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt1
-	do_facet agt2 $LFS pcc attach -i 2 $file ||
+	do_facet agt2 $LFS pcc attach -w -i 2 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt2
 	# The later attach PCC agent should succeed,
@@ -762,7 +774,7 @@ test_4() {
 	enable_project_quota
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	lfs project -sp $project_id $DIR/$tdir ||
@@ -800,12 +812,12 @@ test_5() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	do_facet $SINGLEAGT "echo -n attach_mmap_data > $file" ||
 		error "echo $file failed"
 
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 
@@ -833,10 +845,10 @@ test_6() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	echo -n mmap_write_data > $file || error "echo write $file failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 
@@ -869,10 +881,10 @@ test_7a() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	echo "QQQQQ" > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	check_file_data $SINGLEAGT $file "QQQQQ"
@@ -901,10 +913,10 @@ test_7b() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 
 	echo "QQQQQ" > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	check_file_data $SINGLEAGT $file "QQQQQ"
@@ -936,10 +948,10 @@ test_8() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	echo "QQQQQ" > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
 	check_file_data $SINGLEAGT $file "QQQQQ"
@@ -963,11 +975,11 @@ test_9() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMVER" -h "$hsm_root"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 
 	touch $file || error "touch $file failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "fail to attach $file"
 	check_lpcc_state $file "readwrite"
 	# write 60M data, it is larger than the capacity of PCC backend
@@ -982,13 +994,18 @@ test_usrgrp_quota() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
-	local state="readwrite"
+	local state="readonly"
+	local mode="pccro"
 	local ug=$1
-	local ro=$2
+	local rw=$2
 	local id=$RUNAS_ID
 
 	[[ $ug == "g" ]] && id=$RUNAS_GID
-	[[ -z $ro ]] || state="readonly"
+	[[ -z $rw ]] || {
+		state="readwrite"
+		mode="pccrw"
+	}
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	do_facet $SINGLEAGT quotacheck -c$ug $mntpt ||
 		error "quotacheck -c$ug $mntpt failed"
@@ -999,7 +1016,7 @@ test_usrgrp_quota() {
 	do_facet $SINGLEAGT repquota -${ug}vs $mntpt
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMVER" -h "$hsm_root"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ $mode=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -1015,14 +1032,14 @@ test_usrgrp_quota() {
 		error "chown $RUNAS_ID:$RUNAS_GID $file1 failed"
 	chown $RUNAS_ID:$RUNAS_GID $file2 ||
 		error "chown $RUNAS_ID:$RUNAS_GID $file2 failed"
-	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $ro \
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $rw \
 		$file1 || error "attach $file1 failed"
-	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $ro \
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $rw \
 		$file2 && error "attach $file2 should fail due to quota limit"
 	check_lpcc_state $file1 $state
 	check_lpcc_state $file2 "none"
 
-	if [[ -n $ro ]]; then
+	if [[ -z $rw ]]; then
 		do_facet $SINGLEAGT $LFS pcc detach $file1 ||
 			error "detach $file1 failed"
 		return 0
@@ -1036,22 +1053,28 @@ test_usrgrp_quota() {
 }
 
 test_10a() {
-	test_usrgrp_quota "u"
+	test_usrgrp_quota "u" "-w"
 }
 run_test 10a "Test RW-PCC with user quota on loop PCC device"
 
 test_10b() {
-	test_usrgrp_quota "g"
+	test_usrgrp_quota "g" "-w"
 }
 run_test 10b "Test RW-PCC with group quota on loop PCC device"
 
 test_10c() {
-	test_usrgrp_quota "u" "-r"
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	test_usrgrp_quota "u"
 }
 run_test 10c "Test RO-PCC with user quota on loop PCC device"
 
 test_10d() {
-	test_usrgrp_quota "g" "-r"
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	test_usrgrp_quota "g"
 }
 run_test 10d "Test RO-PCC with group quota on loop PCC device"
 
@@ -1065,7 +1088,7 @@ test_11() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file"
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
@@ -1073,7 +1096,7 @@ test_11() {
 	echo "Lustre file: $file LPCC dir: $lpcc_dir"
 	do_facet $SINGLEAGT mkdir -p $lpcc_dir ||
 		error "mkdir -p $lpcc_dir failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach $file"
 	check_lpcc_state $file "readwrite"
 	check_file_data $SINGLEAGT $file "QQQQQ"
@@ -1090,7 +1113,7 @@ test_11() {
 		error "mkdir -p $lpcc_dir failed"
 	do_facet $SINGLEAGT chattr +i $lpcc_dir ||
 		error "chattr +i $lpcc_dir failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
 		error "attach $file with immutable directory should be failed"
 	do_facet $SINGLEAGT chattr -i $lpcc_dir ||
 		error "chattr -i $lpcc_dir failed"
@@ -1101,7 +1124,7 @@ test_11() {
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	do_facet $SINGLEAGT mkdir -p $lpcc_path ||
 		error "mkdir -p $lpcc_path failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
 		error "attach $file should fail as PCC path is a directory"
 	rm $file || error "rm $file failed"
 }
@@ -1115,11 +1138,11 @@ test_12() {
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 
 	echo  -n race_rw_attach_hsmremove > $file
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "detach $file failed"
@@ -1127,7 +1150,7 @@ test_12() {
 	check_hsm_flags $file "0x0000000d"
 	# define OBD_FAIL_LLITE_PCC_ATTACH_PAUSE	0x1414
 	do_facet $SINGLEAGT $LCTL set_param fail_loc=0x1414 fail_val=20
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &
 	pid=$!
 	$LFS hsm_state $file
 	sleep 3
@@ -1148,7 +1171,7 @@ test_rule_id() {
 	local file=$DIR/$tdir/$tfile
 
 	setup_pcc_mapping $SINGLEAGT \
-		"$rule\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"$rule\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 	$LCTL pcc list $MOUNT
 
 	do_facet $SINGLEAGT $LFS mkdir -i 0 $DIR/$tdir
@@ -1188,7 +1211,7 @@ test_13b() {
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"fname={*.h5\ suffix.*\ Mid*dle}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"fname={*.h5\ suffix.*\ Mid*dle}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 	$LCTL pcc list $MOUNT
 
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
@@ -1243,7 +1266,7 @@ test_13c() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100\ 200}\&fname={*.h5},uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rwid=$HSM_ARCHIVE_NUMBER"
+		"projid={100\ 200}\&fname={*.h5},uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 	$LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
@@ -1297,13 +1320,16 @@ run_test 13c "Check auto RW-PCC create caching for UID/GID/ProjID/fname rule"
 test_14() {
 	local file=$DIR/$tdir/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1\ pccro=1"
 
 	mkdir -p $DIR/$tdir || error "mkdir -p $DIR/$tdir failed"
 	do_facet $SINGLEAGT "echo -n autodetach_data > $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -1335,9 +1361,12 @@ test_15() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1\ pccro=1"
 
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
@@ -1345,7 +1374,7 @@ test_15() {
 	echo "Verify open attach for non-root user"
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
-	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "failed to attach file $file"
 	do_facet $SINGLEAGT $RUNAS $LFS pcc state $file
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
@@ -1366,7 +1395,7 @@ test_15() {
 
 	echo "Verify auto attach at open for RW-PCC"
 	do_facet $SINGLEAGT "echo -n autoattach_data > $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -1426,14 +1455,17 @@ test_16() {
 	local file=$DIR/$tfile
 	local -a lpcc_path
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1\ pccro=1"
 
 	echo "Test detach for RW-PCC"
 	do_facet $SINGLEAGT "echo -n detach_data > $file"
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
@@ -1487,12 +1519,12 @@ test_17() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0\ pccrw=1"
 
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 
 	do_facet $SINGLEAGT "echo -n layout_refresh_data > $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -1538,12 +1570,12 @@ test_18() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT dd if=/dev/urandom of=$file bs=1M count=4 ||
 		error "failed to write $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach $file"
 	do_facet $SINGLEAGT $LFS pcc state $file
 	check_lpcc_state $file "readwrite"
@@ -1560,7 +1592,7 @@ test_18() {
 
 	do_facet $SINGLEAGT $LFS pcc state $file
 	check_file_size $SINGLEAGT $lpcc_path 4194304
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach $file"
 	check_lpcc_sizes $SINGLEAGT $lpcc_path $file 1049600
 	newmd5=$(do_facet $SINGLEAGT md5sum $file | awk '{print $1}')
@@ -1580,17 +1612,17 @@ test_19() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file" || error "echo $file failed"
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "Failed to attach $file"
 	check_lpcc_state $file "readwrite"
 	check_lpcc_sizes $SINGLEAGT $file $lpcc_path 5
 	do_facet $SINGLEAGT $LFS pcc detach --keep $file ||
 		error "Failed to detach $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "Failed to attach $file"
 	check_lpcc_sizes $SINGLEAGT $file $lpcc_path 5
 	do_facet $SINGLEAGT $LFS pcc detach --keep $file ||
@@ -1608,11 +1640,11 @@ test_20() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file" ||
 		error "echo $file failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "Failed to attach $file"
 	do_facet $SINGLEAGT "echo 3 > /proc/sys/vm/drop_caches"
 	check_lpcc_state $file "readwrite"
@@ -1629,6 +1661,9 @@ test_21a() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -1668,8 +1703,12 @@ test_21b() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
-	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	do_facet $SINGLEAGT mkdir -p $hsm_root ||
+		error "failed to mkdir $hsm_root"
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
@@ -1710,6 +1749,9 @@ test_21c() {
 	local file2=$DIR2/$tfile
 	local fid
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
@@ -1745,6 +1787,9 @@ test_21d() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
@@ -1771,6 +1816,9 @@ test_21e() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
@@ -1796,6 +1844,9 @@ test_21f() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -1829,6 +1880,9 @@ test_21g() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
@@ -1854,6 +1908,9 @@ test_21h() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -1897,13 +1954,16 @@ test_21i() {
 	local file2=$DIR2/$tfile
 	local fid
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccro=1\ pccrw=1"
 
 	do_facet $SINGLEAGT "echo -n hsm_release_pcc_file > $file"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
@@ -1945,14 +2005,17 @@ test_22() {
 	local file2=$DIR2/$tfile
 	local fid
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1\ pccro=1"
 
 	do_facet $SINGLEAGT "echo -n roattach_data > $file"
 
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
@@ -2013,21 +2076,24 @@ test_23() {
 	local file=$DIR/$tfile
 	local -a lpcc_path
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	echo "ropcc_data" > $file
+	echo "pccro_data" > $file
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to RO-PCC attach file $file"
 	check_lpcc_state $file "readonly"
-	check_lpcc_data $SINGLEAGT $lpcc_path $file "ropcc_data"
+	check_lpcc_data $SINGLEAGT $lpcc_path $file "pccro_data"
 
 	local content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
 
-	[[ $content == "ropcc_data" ]] ||
+	[[ $content == "pccro_data" ]] ||
 		error "mmap_cat data mismatch: $content"
 	check_lpcc_state $file "readonly"
 
@@ -2078,6 +2144,9 @@ test_24a() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 	local -a lpcc_path
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -2130,6 +2199,9 @@ test_24b() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
@@ -2171,6 +2243,9 @@ test_25() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 	local content
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -2225,10 +2300,13 @@ test_26() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER" -h "$hsm_root"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1\ pccro=1"
 
 	echo -n attach_keep_open > $file
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
@@ -2276,7 +2354,7 @@ test_26() {
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "detach $file failed"
 
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
 	check_lpcc_state $file "readwrite"
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
@@ -2295,7 +2373,7 @@ test_26() {
 
 	rm $file || error "rm $file failed"
 	echo -n attach_keep_open > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
 	check_lpcc_state $file "readwrite"
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
@@ -2321,13 +2399,16 @@ test_27() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER" -h "$hsm_root"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1\ pccrw=1\ pccro=1"
 
 	echo -n auto_attach_multi_open > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
 	check_lpcc_state $file "readwrite"
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
@@ -2344,7 +2425,7 @@ test_27() {
 
 	rm $file || error "rm $file failed"
 	echo -n auto_attach_multi_open > $file
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
 	check_lpcc_state $file "readwrite"
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
@@ -2401,14 +2482,14 @@ test_28() {
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER" -h "$hsm_root"
 	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1"
 
 	echo -n rw_attach_hasopen_fail > $file
 	rmultiop_start $agt_host $file O_c || error "multiop $file failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
 		error "attach $file should fail"
 	rmultiop_stop $agt_host || error "multiop $file close failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file should fail"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
@@ -2417,12 +2498,12 @@ test_28() {
 
 	multiop_bg_pause $file2 O_c || error "multiop $file2 failed"
 	multipid=$!
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
 		error "attach $file should fail"
 	kill -USR1 $multipid
 	wait $multipid || error "multiop $file2 close failed"
-	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
-		error "attach $file should fail"
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach $file"
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "detach $file failed"
@@ -2485,7 +2566,7 @@ test_101a() {
 
 	# Finish PCC setup
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1"
 
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
@@ -2493,7 +2574,7 @@ test_101a() {
 	echo "Verify open attach from inside mount namespace"
 	do_facet $SINGLEAGT nsenter -t $PID -U -m dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
-	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach \
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach -w \
 		-i $HSM_ARCHIVE_NUMBER $file || error "cannot attach $file"
 	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc state $file
 
@@ -2524,7 +2605,7 @@ test_101a() {
 	chmod a+rw $DIR/$tdir/$tfile.shell
 	stack_trap 'rm -f $DIR/$tdir/$tfile.shell' EXIT
 	do_facet $SINGLEAGT nsenter -t $PID -U -m "bash $DIR/$tdir/$tfile.shell"
-	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "RW-PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 

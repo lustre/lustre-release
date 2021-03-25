@@ -6594,7 +6594,9 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 	memset(&it, 0, sizeof(it));
 	it.it_op = IT_LAYOUT;
 	if (intent->lai_opc == LAYOUT_INTENT_WRITE ||
-	    intent->lai_opc == LAYOUT_INTENT_TRUNC)
+	    intent->lai_opc == LAYOUT_INTENT_TRUNC ||
+	    intent->lai_opc == LAYOUT_INTENT_PCCRO_SET ||
+	    intent->lai_opc == LAYOUT_INTENT_PCCRO_CLEAR)
 		it.it_open_flags = FMODE_WRITE;
 
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",

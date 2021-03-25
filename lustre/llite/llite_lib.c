@@ -376,7 +376,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_ATOMIC_OPEN_LOCK |
 				   OBD_CONNECT2_BATCH_RPC |
 				   OBD_CONNECT2_DMV_IMP_INHERIT |
-				   OBD_CONNECT2_UNALIGNED_DIO;
+				   OBD_CONNECT2_UNALIGNED_DIO |
+				   OBD_CONNECT2_PCCRO;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))

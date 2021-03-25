@@ -103,12 +103,14 @@ enum pcc_dataset_flags {
 	PCC_DATASET_AUTO_ATTACH	= PCC_DATASET_OPEN_ATTACH |
 				  PCC_DATASET_IO_ATTACH |
 				  PCC_DATASET_STAT_ATTACH,
-	/* PCC backend is only used for RW-PCC */
-	PCC_DATASET_RWPCC	= 0x10,
-	/* PCC backend is only used for RO-PCC */
-	PCC_DATASET_ROPCC	= 0x20,
-	/* PCC backend provides caching services for both RW-PCC and RO-PCC */
-	PCC_DATASET_PCC_ALL	= PCC_DATASET_RWPCC | PCC_DATASET_ROPCC,
+	/* PCC backend is only used for PCC-RW */
+	PCC_DATASET_PCCRW	= 0x10,
+	/* PCC backend is only used for PCC-RO */
+	PCC_DATASET_PCCRO	= 0x20,
+	/* PCC backend provides caching services for both PCC-RW and PCC-RO */
+	PCC_DATASET_PCC_ALL	= PCC_DATASET_PCCRW | PCC_DATASET_PCCRO,
+	/* Default PCC caching mode: PCC-RO mode */
+	PCC_DATASET_PCC_DEFAULT	= PCC_DATASET_PCCRO,
 };
 
 struct pcc_dataset {

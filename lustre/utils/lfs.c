@@ -296,13 +296,17 @@ command_t mirror_cmdlist[] = {
 command_t pcc_cmdlist[] = {
 	{ .pc_name = "attach", .pc_func = lfs_pcc_attach,
 	  .pc_help = "Attach given files to the Persistent Client Cache.\n"
-		"usage: lfs pcc attach <--id|-i NUM> <file> ...\n"
-		"\t-i: archive id for RW-PCC\n" },
+		"usage: lfs pcc attach [--id|-i ID] [--readonly|-r] [--write|-w] <file> ...\n"
+		"\t-i: archive id for PCC\n"
+		"\t-r: readonly attach\n"
+		"\t-w: writeable attach\n" },
 	{ .pc_name = "attach_fid", .pc_func = lfs_pcc_attach_fid,
 	  .pc_help = "Attach given files into PCC by FID(s).\n"
-		"usage: lfs pcc attach_id {--id|-i NUM} {--mnt|-m MOUNTPOINT} FID ...\n"
-		"\t-i: archive id for RW-PCC\n"
-		"\t-m: Lustre mount point\n" },
+		"usage: lfs pcc attach_id [--id|-i ID] {--mnt|-m MOUNTPOINT} [--readonly|-r] [--write|-w] FID ...\n"
+		"\t-i: archive id for PCC\n"
+		"\t-m: Lustre mount point\n"
+		"\t-r: readonly attach\n"
+		"\t-w: writeable attach\n" },
 	{ .pc_name = "state", .pc_func = lfs_pcc_state,
 	  .pc_help = "Display the PCC state for given files.\n"
 		"usage: lfs pcc state <file> ...\n" },
@@ -13552,6 +13556,7 @@ static int lfs_pcc_attach(int argc, char **argv)
 	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
 	{ .val = 'r',	.name = "readonly",	.has_arg = no_argument },
+	{ .val = 'w',	.name = "write",	.has_arg = no_argument },
 	{ .name = NULL } };
 	int c;
 	int rc = 0;
@@ -13559,10 +13564,10 @@ static int lfs_pcc_attach(int argc, char **argv)
 	const char *path;
 	char *end;
 	char fullpath[PATH_MAX];
-	enum lu_pcc_type type = LU_PCC_READWRITE;
+	enum lu_pcc_type type = LU_PCC_READONLY;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hi:r",
+	while ((c = getopt_long(argc, argv, "hi:rw",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
@@ -13578,6 +13583,9 @@ static int lfs_pcc_attach(int argc, char **argv)
 			break;
 		case 'r':
 			type = LU_PCC_READONLY;
+			break;
+		case 'w':
+			type = LU_PCC_READWRITE;
 			break;
 		case '?':
 			return CMD_HELP;
@@ -13631,18 +13639,20 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "id",		.has_arg = required_argument },
 	{ .val = 'r',	.name = "readonly",	.has_arg = no_argument },
+	{ .val = 'w',	.name = "write",	.has_arg = no_argument },
 	{ .val = 'm',	.name = "mnt",		.has_arg = required_argument },
 	{ .name = NULL } };
+	char short_opts[] = "i:m:rw";
 	int c;
 	int rc = 0;
 	__u32 attach_id = 0;
 	char *end;
 	const char *mntpath = NULL;
 	const char *fidstr;
-	enum lu_pcc_type type = LU_PCC_READWRITE;
+	enum lu_pcc_type type = LU_PCC_READONLY;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hi:m:r",
+	while ((c = getopt_long(argc, argv, short_opts,
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
@@ -13658,6 +13668,9 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 			break;
 		case 'r':
 			type = LU_PCC_READONLY;
+			break;
+		case 'w':
+			type = LU_PCC_READWRITE;
 			break;
 		case 'm':
 			mntpath = optarg;
