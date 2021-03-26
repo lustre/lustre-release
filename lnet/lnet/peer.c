@@ -1347,7 +1347,13 @@ LNetPrimaryNID(lnet_nid_t nid)
 	}
 	lp = lpni->lpni_peer_net->lpn_peer;
 
-	while (!lnet_peer_is_uptodate(lp)) {
+	/* If discovery is disabled locally then we needn't bother running
+	 * discovery here because discovery will not modify whatever
+	 * primary NID is currently set for this peer. If the specified peer is
+	 * down then this discovery can introduce long delays into the mount
+	 * process, so skip it if it isn't necessary.
+	 */
+	while (!lnet_peer_discovery_disabled && !lnet_peer_is_uptodate(lp)) {
 		spin_lock(&lp->lp_lock);
 		/* force a full discovery cycle */
 		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH;
@@ -1368,7 +1374,11 @@ LNetPrimaryNID(lnet_nid_t nid)
 		}
 		lp = lpni->lpni_peer_net->lpn_peer;
 
-		/* Only try once if discovery is disabled */
+		/* If we find that the peer has discovery disabled then we will
+		 * not modify whatever primary NID is currently set for this
+		 * peer. Thus, we can break out of this loop even if the peer
+		 * is not fully up to date.
+		 */
 		if (lnet_is_discovery_disabled(lp))
 			break;
 	}
