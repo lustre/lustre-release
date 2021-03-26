@@ -5572,6 +5572,9 @@ test_109() {
 	local i
 	local pid1 pid2
 
+	! local_mode ||
+		skip "Clients need to be on different nodes than the servers"
+
 	umount_client $MOUNT
 	umount_client $MOUNT2
 
