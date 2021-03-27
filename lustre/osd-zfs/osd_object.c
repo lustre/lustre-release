@@ -664,8 +664,9 @@ trigger:
 	/* It is me to trigger the OI scrub. */
 	rc1 = osd_scrub_start(env, osd, SS_CLEAR_DRYRUN |
 			      SS_CLEAR_FAILOUT | SS_AUTO_FULL);
-	LCONSOLE_WARN("%s: trigger OI scrub by RPC for the "DFID": rc = %d\n",
-		      osd_name(osd), PFID(fid), rc1);
+	CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
+		     "%s: trigger OI scrub by RPC for "DFID"/%#llx: rc = %d\n",
+		     osd_name(osd), PFID(fid), oid, rc1);
 	if (!rc) {
 		LASSERT(remote);
 
@@ -854,12 +855,12 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(obj->oo_attr.la_size <= osd_sync_destroy_max_size);
 		rc = -dmu_object_free(osd->od_os, oid, oh->ot_tx);
 		if (rc)
-			CERROR("%s: failed to free %s %llu: rc = %d\n",
+			CERROR("%s: failed to free %s/%#llx: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
 	} else if (obj->oo_destroy == OSD_DESTROY_SYNC) {
 		rc = -dmu_object_free(osd->od_os, oid, oh->ot_tx);
 		if (rc)
-			CERROR("%s: failed to free %s %llu: rc = %d\n",
+			CERROR("%s: failed to free %s/%#llx: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
 	} else { /* asynchronous destroy */
 		char *key = info->oti_key;
@@ -872,7 +873,7 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		rc = osd_zap_add(osd, osd->od_unlinked->dn_object,
 				 osd->od_unlinked, key, 8, 1, &oid, oh->ot_tx);
 		if (rc)
-			CERROR("%s: zap_add_int() failed %s %llu: rc = %d\n",
+			CERROR("%s: zap_add_int() failed %s/%#llx: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
 	}
 
@@ -1016,7 +1017,7 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	}
 	read_unlock(&obj->oo_attr_lock);
 	if (attr->la_valid & LA_FLAGS && attr->la_flags & LUSTRE_ORPHAN_FL)
-		CDEBUG(D_INFO, "%s: set orphan flag on "DFID" (%llx/%x)\n",
+		CDEBUG(D_INFO, "%s: set orphan flag on "DFID" (%#llx/%#x)\n",
 		       osd_obj2dev(obj)->od_svname,
 		       PFID(lu_object_fid(&dt->do_lu)),
 		       attr->la_valid, obj->oo_lma_flags);

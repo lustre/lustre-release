@@ -1271,8 +1271,9 @@ trigger:
 
 join:
 	rc1 = osd_scrub_start(env, dev, flags);
-	LCONSOLE_WARN("%s: trigger OI scrub by RPC for the " DFID" with flags "
-		      "0x%x, rc = %d\n", osd_name(dev), PFID(fid), flags, rc1);
+	CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
+		     "%s: trigger OI scrub by RPC for "DFID"/%u with flags %#x: rc = %d\n",
+		     osd_name(dev), PFID(fid), id->oii_ino, flags, rc1);
 	if (rc1 && rc1 != -EALREADY)
 		GOTO(out, result = -EREMCHG);
 
@@ -5850,9 +5851,9 @@ trigger:
 	if (dev->od_auto_scrub_interval != AS_NEVER && ++once == 1) {
 		rc = osd_scrub_start(oti->oti_env, dev, SS_AUTO_PARTIAL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
-		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
-		       "%s: trigger partial OI scrub for RPC inconsistency checking FID "DFID": rc = %d\n",
-		       osd_dev2name(dev), PFID(fid), rc);
+		CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
+			     "%s: trigger partial OI scrub for RPC inconsistency, checking FID "DFID"/%u: rc = %d\n",
+			     osd_dev2name(dev), PFID(fid), id->oii_ino, rc);
 		if (rc == 0 || rc == -EALREADY)
 			goto again;
 	}

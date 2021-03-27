@@ -623,10 +623,9 @@ trigger:
 	if (osd->od_auto_scrub_interval != AS_NEVER && ++once == 1) {
 		rc = osd_scrub_start(env, osd, SS_AUTO_FULL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
-		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
-		       "%s: trigger partial OI scrub for RPC inconsistency "
-		       "checking FID "DFID": rc = %d\n",
-		       osd_name(osd), PFID(fid), rc);
+		CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
+			     "%s: trigger partial OI scrub for RPC inconsistency, checking FID "DFID"/%#llx): rc = %d\n",
+			     osd_name(osd), PFID(fid), oid, rc);
 		if (!rc)
 			goto again;
 	}
