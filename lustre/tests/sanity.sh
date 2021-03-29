@@ -9453,6 +9453,106 @@ test_104b() {
 }
 run_test 104b "$RUNAS lfs check servers test ===================="
 
+#
+# Verify $1 is within range of $2.
+# Success when $1 is within range. That is, when $1 is >= 2% of $2 and
+# $1 is <= 2% of $2. Else Fail.
+#
+value_in_range() {
+	# Strip all units (M, G, T)
+	actual=$(echo $1 | tr -d A-Z)
+	expect=$(echo $2 | tr -d A-Z)
+
+	expect_lo=$(($expect * 98 / 100)) # 2% below
+	expect_hi=$(($expect * 102 / 100)) # 2% above
+
+	# permit 2% drift above and below
+	(( $actual >= $expect_lo && $actual <= $expect_hi ))
+}
+
+test_104c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ "$ost1_FSTYPE" == "zfs" ] || skip "zfs only test"
+
+	local ost_param="osd-zfs.$FSNAME-OST0000."
+	local mdt_param="osd-zfs.$FSNAME-MDT0000."
+	local ofacets=$(get_facets OST)
+	local mfacets=$(get_facets MDS)
+	local saved_ost_blocks=
+	local saved_mdt_blocks=
+
+	echo "Before recordsize change"
+	lfs_df=($($LFS df -h | grep "filesystem_summary:"))
+	df=($(df -h | grep "/mnt/lustre"$))
+
+	# For checking.
+	echo "lfs output : ${lfs_df[*]}"
+	echo "df  output : ${df[*]}"
+
+	for facet in ${ofacets//,/ }; do
+		if [ -z $saved_ost_blocks ]; then
+			saved_ost_blocks=$(do_facet $facet \
+				lctl get_param -n $ost_param.blocksize)
+			echo "OST Blocksize: $saved_ost_blocks"
+		fi
+		ost=$(do_facet $facet lctl get_param -n $ost_param.mntdev)
+		do_facet $facet zfs set recordsize=32768 $ost
+	done
+
+	# BS too small. Sufficient for functional testing.
+	for facet in ${mfacets//,/ }; do
+		if [ -z $saved_mdt_blocks ]; then
+			saved_mdt_blocks=$(do_facet $facet \
+				lctl get_param -n $mdt_param.blocksize)
+			echo "MDT Blocksize: $saved_mdt_blocks"
+		fi
+		mdt=$(do_facet $facet lctl get_param -n $mdt_param.mntdev)
+		do_facet $facet zfs set recordsize=32768 $mdt
+	done
+
+	# Give new values chance to reflect change
+	sleep 2
+
+	echo "After recordsize change"
+	lfs_df_after=($($LFS df -h | grep "filesystem_summary:"))
+	df_after=($(df -h | grep "/mnt/lustre"$))
+
+	# For checking.
+	echo "lfs output : ${lfs_df_after[*]}"
+	echo "df  output : ${df_after[*]}"
+
+	# Verify lfs df
+	value_in_range ${lfs_df_after[1]%.*} ${lfs_df[1]%.*} ||
+		error "lfs_df bytes: ${lfs_df_after[1]%.*} != ${lfs_df[1]%.*}"
+	value_in_range ${lfs_df_after[2]%.*} ${lfs_df[2]%.*} ||
+		error "lfs_df used: ${lfs_df_after[2]%.*} != ${lfs_df[2]%.*}"
+	value_in_range ${lfs_df_after[3]%.*} ${lfs_df[3]%.*} ||
+		error "lfs_df avail: ${lfs_df_after[3]%.*} != ${lfs_df[3]%.*}"
+
+	# Verify df
+	value_in_range ${df_after[1]%.*} ${df[1]%.*} ||
+		error "df bytes: ${df_after[1]%.*} != ${df[1]%.*}"
+	value_in_range ${df_after[2]%.*} ${df[2]%.*} ||
+		error "df used: ${df_after[2]%.*} != ${df[2]%.*}"
+	value_in_range ${df_after[3]%.*} ${df[3]%.*} ||
+		error "df avail: ${df_after[3]%.*} != ${df[3]%.*}"
+
+	# Restore MDT recordize back to original
+	for facet in ${mfacets//,/ }; do
+		mdt=$(do_facet $facet lctl get_param -n $mdt_param.mntdev)
+		do_facet $facet zfs set recordsize=$saved_mdt_blocks $mdt
+	done
+
+	# Restore OST recordize back to original
+	for facet in ${ofacets//,/ }; do
+		ost=$(do_facet $facet lctl get_param -n $ost_param.mntdev)
+		do_facet $facet zfs set recordsize=$saved_ost_blocks $ost
+	done
+
+	return 0
+}
+run_test 104c "Verify df vs lfs_df stays same after recordsize change"
+
 test_105a() {
 	# doesn't work on 2.4 kernels
 	touch $DIR/$tfile

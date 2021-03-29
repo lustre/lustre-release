@@ -794,6 +794,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	struct obd_device *obd = class_exp2obd(exp);
 	struct ofd_device *ofd = ofd_exp(exp);
 	struct tg_grants_data *tgd = &ofd->ofd_lut.lut_tgd;
+	int current_blockbits;
 	int rc;
 
 	ENTRY;
@@ -802,22 +803,30 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (unlikely(rc))
 		GOTO(out, rc);
 
+	/* tgd_blockbit is recordsize bits set during mkfs.
+	 * This once set does not change. However, 'zfs set'
+	 * can be used to change the OST blocksize. Instead
+	 * of using cached value of 'tgd_blockbit' always
+	 * calculate the blocksize bits which may have
+	 * changed.
+	 */
+	current_blockbits = fls64(osfs->os_bsize) - 1;
+
 	/*
 	 * at least try to account for cached pages.  its still racy and
 	 * might be under-reporting if clients haven't announced their
 	 * caches with brw recently
 	 */
-
 	CDEBUG(D_SUPER | D_CACHE,
 	       "blocks cached %llu granted %llu pending %llu free %llu avail %llu\n",
 	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
 	       tgd->tgd_tot_pending,
-	       osfs->os_bfree << tgd->tgd_blockbits,
-	       osfs->os_bavail << tgd->tgd_blockbits);
+	       osfs->os_bfree << current_blockbits,
+	       osfs->os_bavail << current_blockbits);
 
 	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
 				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
-				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
+				   osfs->os_bsize - 1) >> current_blockbits));
 
 	/*
 	 * The QoS code on the MDS does not care about space reserved for
@@ -828,7 +837,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 
 		ted = &obd->obd_self_export->exp_target_data;
 		osfs->os_granted = min_t(u64, osfs->os_bavail,
-					  ted->ted_grant >> tgd->tgd_blockbits);
+					  ted->ted_grant >> current_blockbits);
 		osfs->os_bavail -= osfs->os_granted;
 	}
 
@@ -853,7 +862,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_state |= OS_STATE_NOPRECREATE;
 
 	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
-	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
+	    current_blockbits > COMPAT_BSIZE_SHIFT) {
 		/*
 		 * clients which don't support OBD_CONNECT_GRANT_PARAM
 		 * should not see a block size > page size, otherwise
@@ -861,10 +870,10 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		 * block size which is the biggest block size known to work
 		 * with all client's page size.
 		 */
-		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_granted <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_blocks <<= current_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bfree  <<= current_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bavail <<= current_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_granted <<= current_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize    = 1 << COMPAT_BSIZE_SHIFT;
 	}
 
