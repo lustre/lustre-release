@@ -2310,23 +2310,29 @@ out:
 
 int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_name)
 {
-	int rc = ioctl(fd, OBD_IOC_GETNAME, lov_name);
+	int rc;
 
+	rc = ioctl(fd, OBD_IOC_GETDTNAME, lov_name);
+	if (rc && errno == ENOTTY)
+		rc = ioctl(fd, OBD_IOC_GETNAME_OLD, lov_name);
 	if (rc) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get lov name");
 	}
+
 	return rc;
 }
 
 int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_name)
 {
-	int rc = ioctl(fd, OBD_IOC_GETMDNAME, lov_name);
+	int rc;
 
+	rc = ioctl(fd, OBD_IOC_GETMDNAME, lov_name);
 	if (rc) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get lmv name.");
 	}
+
 	return rc;
 }
 

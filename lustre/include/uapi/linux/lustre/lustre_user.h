@@ -570,6 +570,7 @@ struct ll_ioc_lease_id {
  * *INFO    - set/get lov_user_mds_data
  */
 /*	lustre_ioctl.h			101-150 */
+/* ioctl codes 128-143 are reserved for fsverity */
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)

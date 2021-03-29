@@ -132,11 +132,6 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
  */
 #define OBD_IOC_DATA_TYPE	long
 
-/*	IOC_LDLM_TEST		_IOWR('f', 40, long) */
-/*	IOC_LDLM_DUMP		_IOWR('f', 41, long) */
-/*	IOC_LDLM_REGRESS_START	_IOWR('f', 42, long) */
-/*	IOC_LDLM_REGRESS_STOP	_IOWR('f', 43, long) */
-
 #define OBD_IOC_CREATE		_IOWR('f', 101, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_DESTROY		_IOW('f', 104, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_PREALLOCATE	_IOWR('f', 105, OBD_IOC_DATA_TYPE) */
@@ -148,25 +143,20 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 
 #define OBD_IOC_STATFS		_IOWR('f', 113, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_SYNC		_IOW('f', 114, OBD_IOC_DATA_TYPE)
-/*	OBD_IOC_READ2		_IOWR('f', 115, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_FORMAT		_IOWR('f', 116, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_PARTITION	_IOWR('f', 117, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_COPY		_IOWR('f', 120, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_MIGR		_IOWR('f', 121, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_PUNCH		_IOWR('f', 122, OBD_IOC_DATA_TYPE) */
 
-/*	OBD_IOC_MODULE_DEBUG	_IOWR('f', 124, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_BRW_READ	_IOWR('f', 125, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_BRW_WRITE	_IOWR('f', 126, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_NAME2DEV	_IOWR('f', 127, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETDTNAME	_IOR('f', 127, char[MAX_OBD_NAME])
+/* ioctl codes 128-143 are reserved for fsverity */
 #define OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETNAME		_IOWR('f', 131, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETNAME_OLD	_IOWR('f', 131, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETMDNAME	_IOR('f', 131, char[MAX_OBD_NAME])
-#define OBD_IOC_GETDTNAME	OBD_IOC_GETNAME
 /*      OBD_IOC_LOV_GET_CONFIG	_IOWR('f', 132, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_CLIENT_RECOVER	_IOW('f', 133, OBD_IOC_DATA_TYPE)
-/* was	OBD_IOC_PING_TARGET	_IOW('f', 136, OBD_IOC_DATA_TYPE) until 2.11 */
-/*	OBD_IOC_DEC_FS_USE_COUNT _IO('f', 139) */
+/* ioctl codes 128-143 are reserved for fsverity */
+/* FS_IOC_ENABLE_VERITY		_IOW('f', 133, struct fsverity_enable_arg) */
+/* FS_IOC_MEASURE_VERITY	_IOW('f', 134, struct fsverity_digest) */
 /* was	OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE) until 2.14 */
 #define OBD_IOC_SET_READONLY	_IOW('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY	_IOR('f', 142, OBD_IOC_DATA_TYPE)
@@ -174,7 +164,7 @@ enum obd_abort_recovery_flags {
 	OBD_FLG_ABORT_RECOV_OST	= 0x00008, /* LMD_FLG_ABORT_RECOV */
 	OBD_FLG_ABORT_RECOV_MDT	= 0x40000, /* LMD_FLG_ABORT_RECOV_MDT */
 };
-/*	OBD_IOC_ROOT_SQUASH	_IOWR('f', 143, OBD_IOC_DATA_TYPE) */
+/* ioctl codes 128-143 are reserved for fsverity */
 #define OBD_GET_VERSION		_IOWR('f', 144, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_GSS_SUPPORT	_IOWR('f', 145, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_CLOSE_UUID	_IOWR('f', 147, OBD_IOC_DATA_TYPE) */
