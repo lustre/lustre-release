@@ -435,6 +435,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	struct mdt_body *reqbody = NULL;
 	struct mdt_statfs_cache *msf;
 	ktime_t kstart = ktime_get();
+	int current_blockbits;
 	int rc;
 
 	ENTRY;
@@ -491,6 +492,15 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 			spin_unlock(&mdt->mdt_lock);
 	}
 
+	/* tgd_blockbit is recordsize bits set during mkfs.
+	 * This once set does not change. However, 'zfs set'
+	 * can be used to change the MDT blocksize. Instead
+	 * of using cached value of 'tgd_blockbit' always
+	 * calculate the blocksize bits which may have
+	 * changed.
+	 */
+	current_blockbits = fls64(osfs->os_bsize) - 1;
+
 	/* at least try to account for cached pages.  its still racy and
 	 * might be under-reporting if clients haven't announced their
 	 * caches with brw recently */
@@ -498,12 +508,12 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	       " pending %llu free %llu avail %llu\n",
 	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
 	       tgd->tgd_tot_pending,
-	       osfs->os_bfree << tgd->tgd_blockbits,
-	       osfs->os_bavail << tgd->tgd_blockbits);
+	       osfs->os_bfree << current_blockbits,
+	       osfs->os_bavail << current_blockbits);
 
 	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
 				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
-				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
+				   osfs->os_bsize - 1) >> current_blockbits));
 
 	tgt_grant_sanity_check(mdt->mdt_lu_dev.ld_obd, __func__);
 	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
@@ -512,15 +522,15 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	       osfs->os_files, osfs->os_ffree, osfs->os_state);
 
 	if (!exp_grant_param_supp(tsi->tsi_exp) &&
-	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
+	    current_blockbits > COMPAT_BSIZE_SHIFT) {
 		/* clients which don't support OBD_CONNECT_GRANT_PARAM
 		 * should not see a block size > page size, otherwise
 		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)
 		 * block size which is the biggest block size known to work
 		 * with all client's page size. */
-		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_blocks <<= current_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bfree  <<= current_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bavail <<= current_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize = 1 << COMPAT_BSIZE_SHIFT;
 	}
 	if (rc == 0)
