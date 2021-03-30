@@ -633,22 +633,24 @@ simulate_error:
 }
 
 static void
-ksocknal_launch_connection_locked(struct ksock_route *route)
+ksocknal_launch_connection_locked(struct ksock_conn_cb *conn_cb)
 {
+	/* called holding write lock on ksnd_global_lock */
 
-        /* called holding write lock on ksnd_global_lock */
+	LASSERT(!conn_cb->ksnr_scheduled);
+	LASSERT(!conn_cb->ksnr_connecting);
+	LASSERT((ksocknal_conn_cb_mask() & ~conn_cb->ksnr_connected) != 0);
 
-        LASSERT (!route->ksnr_scheduled);
-        LASSERT (!route->ksnr_connecting);
-        LASSERT ((ksocknal_route_mask() & ~route->ksnr_connected) != 0);
+	/* scheduling conn for connd */
+	conn_cb->ksnr_scheduled = 1;
 
-        route->ksnr_scheduled = 1;              /* scheduling conn for connd */
-        ksocknal_route_addref(route);           /* extra ref for connd */
+	/* extra ref for connd */
+	ksocknal_conn_cb_addref(conn_cb);
 
 	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 
-	list_add_tail(&route->ksnr_connd_list,
-			  &ksocknal_data.ksnd_connd_routes);
+	list_add_tail(&conn_cb->ksnr_connd_list,
+		      &ksocknal_data.ksnd_connd_routes);
 	wake_up(&ksocknal_data.ksnd_connd_waitq);
 
 	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
@@ -657,17 +659,17 @@ ksocknal_launch_connection_locked(struct ksock_route *route)
 void
 ksocknal_launch_all_connections_locked(struct ksock_peer_ni *peer_ni)
 {
-	struct ksock_route *route;
+	struct ksock_conn_cb *conn_cb;
 
-        /* called holding write lock on ksnd_global_lock */
-        for (;;) {
-                /* launch any/all connections that need it */
-                route = ksocknal_find_connectable_route_locked(peer_ni);
-                if (route == NULL)
-                        return;
+	/* called holding write lock on ksnd_global_lock */
+	for (;;) {
+		/* launch any/all connections that need it */
+		conn_cb = ksocknal_find_connectable_conn_cb_locked(peer_ni);
+		if (conn_cb == NULL)
+			return;
 
-                ksocknal_launch_connection_locked(route);
-        }
+		ksocknal_launch_connection_locked(conn_cb);
+	}
 }
 
 struct ksock_conn *
@@ -827,58 +829,51 @@ ksocknal_queue_tx_locked(struct ksock_tx *tx, struct ksock_conn *conn)
 }
 
 
-struct ksock_route *
-ksocknal_find_connectable_route_locked(struct ksock_peer_ni *peer_ni)
+struct ksock_conn_cb *
+ksocknal_find_connectable_conn_cb_locked(struct ksock_peer_ni *peer_ni)
 {
 	time64_t now = ktime_get_seconds();
-	struct list_head *tmp;
-	struct ksock_route *route;
+	struct ksock_conn_cb *conn_cb;
 
-	list_for_each(tmp, &peer_ni->ksnp_routes) {
-		route = list_entry(tmp, struct ksock_route, ksnr_list);
+	conn_cb = peer_ni->ksnp_conn_cb;
+	if (!conn_cb)
+		return NULL;
 
-                LASSERT (!route->ksnr_connecting || route->ksnr_scheduled);
+	LASSERT(!conn_cb->ksnr_connecting || conn_cb->ksnr_scheduled);
 
-                if (route->ksnr_scheduled)      /* connections being established */
-                        continue;
+	if (conn_cb->ksnr_scheduled)	/* connections being established */
+		return NULL;
 
-                /* all route types connected ? */
-                if ((ksocknal_route_mask() & ~route->ksnr_connected) == 0)
-                        continue;
+	/* all conn types connected ? */
+	if ((ksocknal_conn_cb_mask() & ~conn_cb->ksnr_connected) == 0)
+		return NULL;
 
-		if (!(route->ksnr_retry_interval == 0 || /* first attempt */
-		      now >= route->ksnr_timeout)) {
-			CDEBUG(D_NET,
-			       "Too soon to retry route %pIS (cnted %d, interval %lld, %lld secs later)\n",
-			       &route->ksnr_addr,
-			       route->ksnr_connected,
-			       route->ksnr_retry_interval,
-			       route->ksnr_timeout - now);
-			continue;
-		}
+	if (!(conn_cb->ksnr_retry_interval == 0 || /* first attempt */
+	      now >= conn_cb->ksnr_timeout)) {
+		CDEBUG(D_NET,
+		       "Too soon to retry route %pIS (cnted %d, interval %lld, %lld secs later)\n",
+		       &conn_cb->ksnr_addr,
+		       conn_cb->ksnr_connected,
+		       conn_cb->ksnr_retry_interval,
+		       conn_cb->ksnr_timeout - now);
+		return NULL;
+	}
 
-                return (route);
-        }
-
-        return (NULL);
+	return conn_cb;
 }
 
-struct ksock_route *
-ksocknal_find_connecting_route_locked(struct ksock_peer_ni *peer_ni)
+struct ksock_conn_cb *
+ksocknal_find_connecting_conn_cb_locked(struct ksock_peer_ni *peer_ni)
 {
-	struct list_head *tmp;
-	struct ksock_route *route;
+	struct ksock_conn_cb *conn_cb;
 
-	list_for_each(tmp, &peer_ni->ksnp_routes) {
-		route = list_entry(tmp, struct ksock_route, ksnr_list);
+	conn_cb = peer_ni->ksnp_conn_cb;
+	if (!conn_cb)
+		return NULL;
 
-                LASSERT (!route->ksnr_connecting || route->ksnr_scheduled);
+	LASSERT(!conn_cb->ksnr_connecting || conn_cb->ksnr_scheduled);
 
-                if (route->ksnr_scheduled)
-                        return (route);
-        }
-
-        return (NULL);
+	return conn_cb->ksnr_scheduled ? conn_cb : NULL;
 }
 
 int
@@ -892,26 +887,27 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 	int retry;
 	int rc;
 
-        LASSERT (tx->tx_conn == NULL);
+	LASSERT(tx->tx_conn == NULL);
 
-        g_lock = &ksocknal_data.ksnd_global_lock;
+	g_lock = &ksocknal_data.ksnd_global_lock;
 
-        for (retry = 0;; retry = 1) {
+	for (retry = 0;; retry = 1) {
 		read_lock(g_lock);
-                peer_ni = ksocknal_find_peer_locked(ni, id);
-                if (peer_ni != NULL) {
-                        if (ksocknal_find_connectable_route_locked(peer_ni) == NULL) {
-                                conn = ksocknal_find_conn_locked(peer_ni, tx, tx->tx_nonblk);
-                                if (conn != NULL) {
-                                        /* I've got no routes that need to be
-                                         * connecting and I do have an actual
-                                         * connection... */
+		peer_ni = ksocknal_find_peer_locked(ni, id);
+		if (peer_ni != NULL) {
+			if (ksocknal_find_connectable_conn_cb_locked(peer_ni) == NULL) {
+				conn = ksocknal_find_conn_locked(peer_ni, tx, tx->tx_nonblk);
+				if (conn != NULL) {
+					/* I've got nothing that need to be
+					 * connecting and I do have an actual
+					 * connection...
+					 */
                                         ksocknal_queue_tx_locked (tx, conn);
 					read_unlock(g_lock);
                                         return (0);
-                                }
-                        }
-                }
+				}
+			}
+		}
 
                 /* I'll need a write lock... */
 		read_unlock(g_lock);
@@ -957,8 +953,8 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
                 return (0);
         }
 
-        if (peer_ni->ksnp_accepting > 0 ||
-            ksocknal_find_connecting_route_locked (peer_ni) != NULL) {
+	if (peer_ni->ksnp_accepting > 0 ||
+	    ksocknal_find_connecting_conn_cb_locked(peer_ni) != NULL) {
                 /* the message is going to be pinned to the peer_ni */
 		tx->tx_deadline = ktime_get_seconds() +
 				  ksocknal_timeout();
@@ -967,7 +963,7 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 		list_add_tail(&tx->tx_list, &peer_ni->ksnp_tx_queue);
 		write_unlock_bh(g_lock);
                 return 0;
-        }
+	}
 
 	write_unlock_bh(g_lock);
 
@@ -1900,10 +1896,10 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 }
 
 static bool
-ksocknal_connect(struct ksock_route *route)
+ksocknal_connect(struct ksock_conn_cb *conn_cb)
 {
 	LIST_HEAD(zombies);
-	struct ksock_peer_ni *peer_ni = route->ksnr_peer;
+	struct ksock_peer_ni *peer_ni = conn_cb->ksnr_peer;
 	int type;
 	int wanted;
 	struct socket *sock;
@@ -1915,17 +1911,18 @@ ksocknal_connect(struct ksock_route *route)
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
-	LASSERT(route->ksnr_scheduled);
-	LASSERT(!route->ksnr_connecting);
+	LASSERT(conn_cb->ksnr_scheduled);
+	LASSERT(!conn_cb->ksnr_connecting);
 
-	route->ksnr_connecting = 1;
+	conn_cb->ksnr_connecting = 1;
 
 	for (;;) {
-		wanted = ksocknal_route_mask() & ~route->ksnr_connected;
+		wanted = ksocknal_conn_cb_mask() & ~conn_cb->ksnr_connected;
 
-		/* stop connecting if peer_ni/route got closed under me, or
-		 * route got connected while queued */
-		if (peer_ni->ksnp_closing || route->ksnr_deleted ||
+		/* stop connecting if peer_ni/cb got closed under me, or
+		 * conn cb got connected while queued
+		 */
+		if (peer_ni->ksnp_closing || conn_cb->ksnr_deleted ||
 		    wanted == 0) {
 			retry_later = false;
 			break;
@@ -1959,24 +1956,25 @@ ksocknal_connect(struct ksock_route *route)
 			rc = -ETIMEDOUT;
 			lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
 						   (struct sockaddr *)
-						   &route->ksnr_addr);
+						   &conn_cb->ksnr_addr);
 			goto failed;
 		}
 
 		sock = lnet_connect(peer_ni->ksnp_id.nid,
-				    route->ksnr_myiface,
-				    (struct sockaddr *)&route->ksnr_addr,
+				    conn_cb->ksnr_myiface,
+				    (struct sockaddr *)&conn_cb->ksnr_addr,
 				    peer_ni->ksnp_ni->ni_net_ns);
 		if (IS_ERR(sock)) {
 			rc = PTR_ERR(sock);
 			goto failed;
 		}
 
-		rc = ksocknal_create_conn(peer_ni->ksnp_ni, route, sock, type);
+		rc = ksocknal_create_conn(peer_ni->ksnp_ni, conn_cb, sock,
+					  type);
 		if (rc < 0) {
 			lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
 						   (struct sockaddr *)
-						   &route->ksnr_addr);
+						   &conn_cb->ksnr_addr);
 			goto failed;
 		}
 
@@ -1990,8 +1988,8 @@ ksocknal_connect(struct ksock_route *route)
 		write_lock_bh(&ksocknal_data.ksnd_global_lock);
 	}
 
-	route->ksnr_scheduled = 0;
-	route->ksnr_connecting = 0;
+	conn_cb->ksnr_scheduled = 0;
+	conn_cb->ksnr_connecting = 0;
 
 	if (retry_later) {
 		/* re-queue for attention; this frees me up to handle
@@ -2005,12 +2003,13 @@ ksocknal_connect(struct ksock_route *route)
 			 * the race is resolved quickly usually, so
 			 * min_reconnectms should be good heuristic
 			 */
-			route->ksnr_retry_interval = *ksocknal_tunables.ksnd_min_reconnectms / 1000;
-			route->ksnr_timeout = ktime_get_seconds() +
-				route->ksnr_retry_interval;
+			conn_cb->ksnr_retry_interval =
+				*ksocknal_tunables.ksnd_min_reconnectms / 1000;
+			conn_cb->ksnr_timeout = ktime_get_seconds() +
+						conn_cb->ksnr_retry_interval;
 		}
 
-		ksocknal_launch_connection_locked(route);
+		ksocknal_launch_connection_locked(conn_cb);
 	}
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
@@ -2019,24 +2018,25 @@ ksocknal_connect(struct ksock_route *route)
  failed:
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
-	route->ksnr_scheduled = 0;
-	route->ksnr_connecting = 0;
+	conn_cb->ksnr_scheduled = 0;
+	conn_cb->ksnr_connecting = 0;
 
 	/* This is a retry rather than a new connection */
-	route->ksnr_retry_interval *= 2;
-	route->ksnr_retry_interval =
-		max_t(time64_t, route->ksnr_retry_interval,
+	conn_cb->ksnr_retry_interval *= 2;
+	conn_cb->ksnr_retry_interval =
+		max_t(time64_t, conn_cb->ksnr_retry_interval,
 		      *ksocknal_tunables.ksnd_min_reconnectms / 1000);
-	route->ksnr_retry_interval =
-		min_t(time64_t, route->ksnr_retry_interval,
+	conn_cb->ksnr_retry_interval =
+		min_t(time64_t, conn_cb->ksnr_retry_interval,
 		      *ksocknal_tunables.ksnd_max_reconnectms / 1000);
 
-	LASSERT(route->ksnr_retry_interval);
-	route->ksnr_timeout = ktime_get_seconds() + route->ksnr_retry_interval;
+	LASSERT(conn_cb->ksnr_retry_interval);
+	conn_cb->ksnr_timeout = ktime_get_seconds() +
+				conn_cb->ksnr_retry_interval;
 
 	if (!list_empty(&peer_ni->ksnp_tx_queue) &&
 	    peer_ni->ksnp_accepting == 0 &&
-	    ksocknal_find_connecting_route_locked(peer_ni) == NULL) {
+	    !ksocknal_find_connecting_conn_cb_locked(peer_ni)) {
 		struct ksock_conn *conn;
 
 		/* ksnp_tx_queue is queued on a conn on successful
@@ -2164,25 +2164,28 @@ ksocknal_connd_check_stop(time64_t sec, long *timeout)
                ksocknal_data.ksnd_connd_connecting + SOCKNAL_CONND_RESV;
 }
 
-/* Go through connd_routes queue looking for a route that we can process
+/* Go through connd_cbs queue looking for a conn_cb that we can process
  * right now, @timeout_p can be updated if we need to come back later */
-static struct ksock_route *
-ksocknal_connd_get_route_locked(signed long *timeout_p)
+static struct ksock_conn_cb *
+ksocknal_connd_get_conn_cb_locked(signed long *timeout_p)
 {
 	time64_t now = ktime_get_seconds();
-	struct ksock_route *route;
+	time64_t conn_timeout;
+	struct ksock_conn_cb *conn_cb;
 
 	/* connd_routes can contain both pending and ordinary routes */
-	list_for_each_entry(route, &ksocknal_data.ksnd_connd_routes,
-				 ksnr_connd_list) {
+	list_for_each_entry(conn_cb, &ksocknal_data.ksnd_connd_routes,
+			    ksnr_connd_list) {
 
-		if (route->ksnr_retry_interval == 0 ||
-		    now >= route->ksnr_timeout)
-			return route;
+		conn_timeout = conn_cb->ksnr_timeout;
+
+		if (conn_cb->ksnr_retry_interval == 0 ||
+		    now >= conn_timeout)
+			return conn_cb;
 
 		if (*timeout_p == MAX_SCHEDULE_TIMEOUT ||
-		    *timeout_p > cfs_time_seconds(route->ksnr_timeout - now))
-			*timeout_p = cfs_time_seconds(route->ksnr_timeout - now);
+		    *timeout_p > cfs_time_seconds(conn_timeout - now))
+			*timeout_p = cfs_time_seconds(conn_timeout - now);
 	}
 
 	return NULL;
@@ -2205,7 +2208,7 @@ ksocknal_connd(void *arg)
 	ksocknal_data.ksnd_connd_running++;
 
 	while (!ksocknal_data.ksnd_shuttingdown) {
-		struct ksock_route *route = NULL;
+		struct ksock_conn_cb *conn_cb = NULL;
 		time64_t sec = ktime_get_real_seconds();
 		long timeout = MAX_SCHEDULE_TIMEOUT;
 		bool dropped_lock = false;
@@ -2243,27 +2246,27 @@ ksocknal_connd(void *arg)
 		 * create new connd
 		 */
 		if (ksocknal_data.ksnd_connd_connecting + SOCKNAL_CONND_RESV <
-		    ksocknal_data.ksnd_connd_running) {
-			route = ksocknal_connd_get_route_locked(&timeout);
-		}
-		if (route != NULL) {
-			list_del(&route->ksnr_connd_list);
+		    ksocknal_data.ksnd_connd_running)
+			conn_cb = ksocknal_connd_get_conn_cb_locked(&timeout);
+
+		if (conn_cb) {
+			list_del(&conn_cb->ksnr_connd_list);
 			ksocknal_data.ksnd_connd_connecting++;
 			spin_unlock_bh(connd_lock);
 			dropped_lock = true;
 
-			if (ksocknal_connect(route)) {
+			if (ksocknal_connect(conn_cb)) {
 				/* consecutive retry */
 				if (cons_retry++ > SOCKNAL_INSANITY_RECONN) {
 					CWARN("massive consecutive re-connecting to %pIS\n",
-					      &route->ksnr_addr);
+					      &conn_cb->ksnr_addr);
 					cons_retry = 0;
 				}
 			} else {
 				cons_retry = 0;
 			}
 
-			ksocknal_route_decref(route);
+			ksocknal_conn_cb_decref(conn_cb);
 
 			spin_lock_bh(connd_lock);
 			ksocknal_data.ksnd_connd_connecting--;
