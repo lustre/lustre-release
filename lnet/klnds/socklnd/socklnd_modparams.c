@@ -142,6 +142,10 @@ static unsigned int zc_recv_min_nfrags = 16;
 module_param(zc_recv_min_nfrags, int, 0644);
 MODULE_PARM_DESC(zc_recv_min_nfrags, "minimum # of fragments to enable ZC recv");
 
+static unsigned int conns_per_peer = 1;
+module_param(conns_per_peer, uint, 0444);
+MODULE_PARM_DESC(conns_per_peer, "number of connections per peer");
+
 #ifdef SOCKNAL_BACKOFF
 static int backoff_init = 3;
 module_param(backoff_init, int, 0644);
@@ -201,6 +205,11 @@ int ksocknal_tunables_init(void)
 	ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
 	ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
 	ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
+	if (conns_per_peer > ((1 << SOCKNAL_CONN_COUNT_MAX_BITS)-1)) {
+		CWARN("socklnd conns_per_peer is capped at %u.\n",
+		      (1 << SOCKNAL_CONN_COUNT_MAX_BITS)-1);
+	}
+	ksocknal_tunables.ksnd_conns_per_peer     = &conns_per_peer;
 
 	if (enable_irq_affinity) {
 		CWARN("irq_affinity is removed from socklnd because modern "

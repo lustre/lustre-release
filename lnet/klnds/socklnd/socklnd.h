@@ -156,6 +156,11 @@ struct ksock_tunables {
 #if SOCKNAL_VERSION_DEBUG
         int              *ksnd_protocol;        /* protocol version */
 #endif
+	int              *ksnd_conns_per_peer;  /* for typed mode, yields:
+						 * 1 + 2*conns_per_peer total
+						 * for untyped:
+						 * conns_per_peer total
+						 */
 };
 
 struct ksock_net {
@@ -357,6 +362,8 @@ struct ksock_conn {
 	time64_t		ksnc_tx_last_post;
 };
 
+#define SOCKNAL_CONN_COUNT_MAX_BITS	8	/* max conn count bits */
+
 struct ksock_conn_cb {
 	struct list_head	ksnr_connd_list;/* chain on ksnr_connd_routes */
 	struct ksock_peer_ni   *ksnr_peer;	/* owning peer_ni */
@@ -371,7 +378,11 @@ struct ksock_conn_cb {
 	unsigned int		ksnr_connecting:1;/* connection in progress */
 	unsigned int		ksnr_connected:4;/* connections by type */
 	unsigned int		ksnr_deleted:1;	/* been removed from peer_ni? */
-	int			ksnr_conn_count;/* # conns for this route */
+	unsigned int		ksnr_ctrl_conn_count:1; /* # conns by type */
+	unsigned int		ksnr_blki_conn_count:8;
+	unsigned int		ksnr_blko_conn_count:8;
+	int			ksnr_conn_count;/* total # conns for this cb */
+
 };
 
 #define SOCKNAL_KEEPALIVE_PING          1       /* cookie for keepalive ping */
@@ -557,9 +568,12 @@ ksocknal_peer_decref(struct ksock_peer_ni *peer_ni)
 
 static inline int ksocknal_timeout(void)
 {
-	return *ksocknal_tunables.ksnd_timeout ?
-		*ksocknal_tunables.ksnd_timeout :
-		lnet_get_lnd_timeout();
+	return *ksocknal_tunables.ksnd_timeout ?: lnet_get_lnd_timeout();
+}
+
+static inline int ksocknal_conns_per_peer(void)
+{
+	return *ksocknal_tunables.ksnd_conns_per_peer ?: 1;
 }
 
 int ksocknal_startup(struct lnet_ni *ni);

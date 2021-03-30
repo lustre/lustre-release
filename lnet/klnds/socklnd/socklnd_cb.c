@@ -1943,7 +1943,8 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 			type = SOCKLND_CONN_ANY;
 		} else if ((wanted & BIT(SOCKLND_CONN_CONTROL)) != 0) {
 			type = SOCKLND_CONN_CONTROL;
-		} else if ((wanted & BIT(SOCKLND_CONN_BULK_IN)) != 0) {
+		} else if ((wanted & BIT(SOCKLND_CONN_BULK_IN)) != 0 &&
+			   conn_cb->ksnr_blki_conn_count <= conn_cb->ksnr_blko_conn_count) {
 			type = SOCKLND_CONN_BULK_IN;
 		} else {
 			LASSERT ((wanted & BIT(SOCKLND_CONN_BULK_OUT)) != 0);
