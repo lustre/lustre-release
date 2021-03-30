@@ -2039,6 +2039,42 @@ test_44() {
 }
 run_test 44 "lfs mirror split check"
 
+test_44c() {
+	local tf=$DIR/$tdir/$tfile
+
+	stack_trap "rm -f $tf"
+
+	[ $MDS1_VERSION -ge $(version_code 2.14.52) ] ||
+		skip "Need MDS version at least 2.14.52"
+
+	[ "$FSTYPE" != "zfs" ] || skip "ZFS file's block number is not accurate"
+
+	mkdir -p $DIR/$tdir || error "create directroy failed"
+
+	dd if=/dev/zero of=$tf bs=1M count=10 || error "dd write $tfile failed"
+	sync
+	block1=$(( $(stat -c "%b*%B" $tf) ))
+	echo " ** before mirror ops, file blocks=$((block1/1024)) KiB"
+
+	$LFS mirror extend -N2 -c1 $tf || error "mirror extend $tfile failed"
+	sync
+	block2=$(( $(stat -c "%b*%B" $tf) ))
+	echo " ** after mirror extend, file blocks=$((block2/1024)) KiB"
+
+	$LFS mirror split -d --mirror-id=2 $tf ||
+		error "mirror split $tfile failed"
+	$LFS mirror split -d --mirror-id=3 $tf ||
+		error "mirror split $tfile failed"
+	sync
+	lfs getsom $tf
+	block3=$(( $(stat -c "%b*%B" $tf) ))
+	echo " ** after mirror split, file blocks=$((block3/1024)) KiB"
+
+	[[ $block1 -eq $block3 ]] ||
+		error "mirror split does not reduce block# $block3 != $block1"
+}
+run_test 44c "lfs mirror split reduces block size of a file"
+
 test_45() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 

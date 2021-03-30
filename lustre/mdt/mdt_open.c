@@ -2162,8 +2162,11 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 			mrd.mrd_obj = NULL;
 		}
 
-		if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT)
+		if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT) {
 			mrd.mrd_mirror_id = data->cd_mirror_id;
+			/* set a small enough blocks in the SoM */
+			ma->ma_attr.la_blocks >>= 1;
+		}
 
 		buf->lb_len = sizeof(mrd);
 		buf->lb_buf = &mrd;
@@ -2171,11 +2174,18 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 				  XATTR_LUSTRE_LOV,
 				  ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT ?
 				  LU_XATTR_SPLIT : LU_XATTR_MERGE);
-		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
+		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS |
+						       LA_LSIZE | LA_LBLOCKS)) {
 			int rc2;
+			enum lustre_som_flags lsf;
+
+			if (ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS))
+				lsf = SOM_FL_STRICT;
+			else
+				lsf = SOM_FL_LAZY;
 
 			mutex_lock(&o->mot_som_mutex);
-			rc2 = mdt_set_som(info, o, SOM_FL_STRICT,
+			rc2 = mdt_set_som(info, o, lsf,
 					  ma->ma_attr.la_size,
 					  ma->ma_attr.la_blocks);
 			mutex_unlock(&o->mot_som_mutex);
