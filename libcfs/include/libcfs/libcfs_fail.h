@@ -167,8 +167,14 @@ static inline void cfs_race(__u32 id)
 			int rc;
 			cfs_race_state = 0;
 			CERROR("cfs_race id %x sleeping\n", id);
-			rc = wait_event_interruptible(cfs_race_waitq,
-						      cfs_race_state != 0);
+			/*
+			 * XXX: don't wait forever as there is no guarantee
+			 * that this branch is executed first. for testing
+			 * purposes this construction works good enough
+			 */
+			rc = wait_event_interruptible_timeout(cfs_race_waitq,
+						      cfs_race_state != 0,
+						      cfs_time_seconds(5));
 			CERROR("cfs_fail_race id %x awake: rc=%d\n", id, rc);
 		} else {
 			CERROR("cfs_fail_race id %x waking\n", id);
