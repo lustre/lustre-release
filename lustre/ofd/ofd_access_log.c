@@ -516,6 +516,10 @@ void ofd_access(const struct lu_env *env,
 	unsigned int flags = (rw == READ) ? OFD_ACCESS_READ : OFD_ACCESS_WRITE;
 	struct ofd_access_log *oal = m->ofd_access_log;
 
+	/* obdfilter-survey does not set parent FIDs. */
+	if (fid_is_zero(parent_fid))
+		return;
+
 	if (oal && (flags & m->ofd_access_log_mask)) {
 		struct ofd_access_entry_v1 oae = {
 			.oae_parent_fid = *parent_fid,
@@ -526,12 +530,13 @@ void ofd_access(const struct lu_env *env,
 			.oae_segment_count = segment_count,
 			.oae_flags = flags,
 		};
+		struct lu_seq_range range = {
+			.lsr_flags = LU_SEQ_RANGE_ANY,
+		};
 		struct oal_circ_buf *ocb;
-		struct lu_seq_range range;
 		int rc;
 
 		/* learn target MDT from FID's sequence */
-		range.lsr_flags = LU_SEQ_RANGE_ANY;
 		rc = fld_server_lookup(env, m->ofd_seq_site.ss_server_fld,
 				       fid_seq(parent_fid), &range);
 		if (unlikely(rc))
