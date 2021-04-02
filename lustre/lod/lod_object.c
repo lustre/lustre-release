@@ -6057,8 +6057,8 @@ lod_obj_stripe_destroy_cb(const struct lu_env *env, struct lod_object *lo,
 	else if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
 		 stripe_idx == cfs_fail_val)
 		return lod_sub_destroy(env, dt, th);
-	else
-		return 0;
+
+	return 0;
 }
 
 /**

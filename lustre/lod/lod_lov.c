@@ -1126,10 +1126,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	    magic != LOV_MAGIC_SEL)
 		GOTO(out, rc = -EINVAL);
 
-	if (lo->ldo_is_foreign)
-		lod_free_foreign_lov(lo);
-	else
-		lod_free_comp_entries(lo);
+	lod_striping_free_nolock(env, lo);
 
 	if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_SEL) {
 		comp_v1 = (struct lov_comp_md_v1 *)lmm;
@@ -1462,7 +1459,6 @@ int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
 	ENTRY;
 
 	mutex_lock(&lo->ldo_layout_mutex);
-	lod_striping_free_nolock(env, lo);
 	rc = lod_parse_striping(env, lo, buf);
 	mutex_unlock(&lo->ldo_layout_mutex);
 

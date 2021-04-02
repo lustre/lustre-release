@@ -1740,17 +1740,17 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
+	if (likely(mdd_cobj != NULL))
+		mdd_write_lock(env, mdd_cobj, DT_TGT_CHILD);
+
 	rc = mdd_declare_unlink(env, mdd, mdd_pobj, mdd_cobj,
 				lname, ma, handle, no_name, is_dir);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(cleanup, rc);
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
-		GOTO(stop, rc);
-
-	if (likely(mdd_cobj != NULL))
-		mdd_write_lock(env, mdd_cobj, DT_TGT_CHILD);
+		GOTO(cleanup, rc);
 
 	if (likely(no_name == 0) && !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle);
@@ -1792,7 +1792,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
 	/* Enough for only unlink the entry */
 	if (unlikely(mdd_cobj == NULL))
-		GOTO(stop, rc);
+		GOTO(cleanup, rc);
 
 	if (cattr->la_nlink > 0 || mdd_cobj->mod_count > 0) {
 		/* update ctime of an unlinked file only if it is still
@@ -1841,7 +1841,6 @@ cleanup:
 			lname, NULL, handle);
 	}
 
-stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	return rc;
