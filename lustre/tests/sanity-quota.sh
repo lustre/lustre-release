@@ -13,8 +13,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT "
-# Bug number for skipped test:  LU-5152
-ALWAYS_EXCEPT+="                55"
+# Bug number for skipped test:
+ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Test duration:                   30 min

@@ -698,17 +698,39 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	RETURN(0);
 }
 
+/* reserve or free quota for some operation */
+static int osd_reserve_or_free_quota(const struct lu_env *env,
+				     struct dt_device *dev,
+				     enum quota_type type, __u64 uid,
+				     __u64 gid, __s64 count, bool is_md)
+{
+	int rc;
+	struct osd_device       *osd = osd_dt_dev(dev);
+	struct osd_thread_info  *info = osd_oti_get(env);
+	struct lquota_id_info   *qi = &info->oti_qi;
+	struct qsd_instance     *qsd = NULL;
+
+	if (is_md)
+		qsd = osd->od_quota_slave_md;
+	else
+		qsd = osd->od_quota_slave_dt;
+
+	rc = quota_reserve_or_free(env, qsd, qi, type, uid, gid, count, is_md);
+	RETURN(rc);
+}
+
 static const struct dt_device_operations osd_dt_ops = {
-	.dt_root_get		= osd_root_get,
-	.dt_statfs		= osd_statfs,
-	.dt_trans_create	= osd_trans_create,
-	.dt_trans_start		= osd_trans_start,
-	.dt_trans_stop		= osd_trans_stop,
-	.dt_trans_cb_add	= osd_trans_cb_add,
-	.dt_conf_get		= osd_conf_get,
-	.dt_sync		= osd_sync,
-	.dt_commit_async	= osd_commit_async,
-	.dt_ro			= osd_ro,
+	.dt_root_get		  = osd_root_get,
+	.dt_statfs		  = osd_statfs,
+	.dt_trans_create	  = osd_trans_create,
+	.dt_trans_start		  = osd_trans_start,
+	.dt_trans_stop		  = osd_trans_stop,
+	.dt_trans_cb_add	  = osd_trans_cb_add,
+	.dt_conf_get		  = osd_conf_get,
+	.dt_sync		  = osd_sync,
+	.dt_commit_async	  = osd_commit_async,
+	.dt_ro			  = osd_ro,
+	.dt_reserve_or_free_quota = osd_reserve_or_free_quota,
 };
 
 /*

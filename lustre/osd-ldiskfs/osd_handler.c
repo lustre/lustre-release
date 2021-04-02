@@ -2572,18 +2572,42 @@ const int osd_dto_credits_noquota[DTO_NR] = {
 	[DTO_ATTR_SET_CHOWN] = 0
 };
 
+/* reserve or free quota for some operation */
+static int osd_reserve_or_free_quota(const struct lu_env *env,
+				     struct dt_device *dev,
+				     enum quota_type type, __u64 uid,
+				     __u64 gid, __s64 count, bool is_md)
+{
+	int rc;
+	struct osd_device	*osd = osd_dt_dev(dev);
+	struct osd_thread_info	*info = osd_oti_get(env);
+	struct lquota_id_info	*qi = &info->oti_qi;
+	struct qsd_instance	*qsd = NULL;
+
+	ENTRY;
+
+	if (is_md)
+		qsd = osd->od_quota_slave_md;
+	else
+		qsd = osd->od_quota_slave_dt;
+
+	rc = quota_reserve_or_free(env, qsd, qi, type, uid, gid, count, is_md);
+	RETURN(rc);
+}
+
 static const struct dt_device_operations osd_dt_ops = {
-	.dt_root_get       = osd_root_get,
-	.dt_statfs         = osd_statfs,
-	.dt_trans_create   = osd_trans_create,
-	.dt_trans_start    = osd_trans_start,
-	.dt_trans_stop     = osd_trans_stop,
-	.dt_trans_cb_add   = osd_trans_cb_add,
-	.dt_conf_get       = osd_conf_get,
-	.dt_mnt_sb_get	   = osd_mnt_sb_get,
-	.dt_sync           = osd_sync,
-	.dt_ro             = osd_ro,
-	.dt_commit_async   = osd_commit_async,
+	.dt_root_get		  = osd_root_get,
+	.dt_statfs		  = osd_statfs,
+	.dt_trans_create	  = osd_trans_create,
+	.dt_trans_start		  = osd_trans_start,
+	.dt_trans_stop		  = osd_trans_stop,
+	.dt_trans_cb_add	  = osd_trans_cb_add,
+	.dt_conf_get		  = osd_conf_get,
+	.dt_mnt_sb_get		  = osd_mnt_sb_get,
+	.dt_sync		  = osd_sync,
+	.dt_ro			  = osd_ro,
+	.dt_commit_async	  = osd_commit_async,
+	.dt_reserve_or_free_quota = osd_reserve_or_free_quota,
 };
 
 static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
@@ -2781,7 +2805,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 				struct osd_object *obj,
 				struct osd_thandle *oh, long long bspace,
 				qid_t old_id, qid_t new_id, bool enforce,
-				unsigned int type, bool ignore_edquot)
+				unsigned int type)
 {
 	int rc;
 	struct osd_thread_info *info = osd_oti_get(env);
@@ -2796,7 +2820,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_space      = 1;
 	/* Reserve credits for the new id */
 	rc = osd_declare_qid(env, oh, qi, NULL, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2805,7 +2829,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_id.qid_uid = old_id;
 	qi->lqi_space = -1;
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2821,7 +2845,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	 * to save credit reservation.
 	 */
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2830,7 +2854,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_id.qid_uid = old_id;
 	qi->lqi_space      = -bspace;
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 
 	RETURN(rc);
@@ -2881,20 +2905,11 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	 * space adjustment once the operation is completed.
 	 */
 	if (attr->la_valid & LA_UID || attr->la_valid & LA_GID) {
-		bool ignore_edquot = !(attr->la_flags & LUSTRE_SET_SYNC_FL);
-
-		if (!ignore_edquot)
-			CDEBUG(D_QUOTA,
-			       "%s: enforce quota on UID %u, GID %u (quota space is %lld)\n",
-			       osd_ino2name(obj->oo_inode), attr->la_uid,
-			       attr->la_gid, bspace);
-
 		/* USERQUOTA */
 		uid = i_uid_read(obj->oo_inode);
 		enforce = (attr->la_valid & LA_UID) && (attr->la_uid != uid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
-					  attr->la_uid, enforce, USRQUOTA,
-					  true);
+					  attr->la_uid, enforce, USRQUOTA);
 		if (rc)
 			RETURN(rc);
 
@@ -2903,8 +2918,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		       attr->la_uid, gid, attr->la_gid);
 		enforce = (attr->la_valid & LA_GID) && (attr->la_gid != gid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace, gid,
-					  attr->la_gid, enforce, GRPQUOTA,
-					  ignore_edquot);
+					  attr->la_gid, enforce, GRPQUOTA);
 		if (rc)
 			RETURN(rc);
 
@@ -2917,7 +2931,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 					(attr->la_projid != projid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace,
 					  (qid_t)projid, (qid_t)attr->la_projid,
-					  enforce, PRJQUOTA, true);
+					  enforce, PRJQUOTA);
 		if (rc)
 			RETURN(rc);
 	}
@@ -6213,7 +6227,7 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 		    i_projid_read(inode) != 0)
 			rc = osd_declare_attr_qid(env, osd_dt_obj(dt), oh,
 						  0, i_projid_read(inode),
-						  0, false, PRJQUOTA, true);
+						  0, false, PRJQUOTA);
 #endif
 	}
 

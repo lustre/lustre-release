@@ -1217,7 +1217,9 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
 	struct lu_ucred  *uc;
+	bool quota_reserved = false;
 	bool chrgrp_by_unprivileged_user = false;
+	__s64 quota_size = 0;
 	int rc;
 	ENTRY;
 
@@ -1250,11 +1252,37 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	uc = lu_ucred_check(env);
 	if (S_ISREG(attr->la_mode) && la->la_valid & LA_GID &&
 	    la->la_gid != attr->la_gid && uc != NULL && uc->uc_fsuid != 0) {
-		/* LU-10048: disable synchronous chgrp operation for it will
-		 * cause deadlock between MDT and OST.
-		la_copy->la_valid |= LA_FLAGS;
-		la_copy->la_flags |= LUSTRE_SET_SYNC_FL;
-		 */
+		CDEBUG(D_QUOTA, "%s: reserve quota for changing group: gid=%u size=%llu\n",
+		       mdd2obd_dev(mdd)->obd_name, la->la_gid, la->la_size);
+
+		if (la->la_valid & LA_BLOCKS)
+			quota_size = la->la_blocks << 9;
+		else if (la->la_valid & LA_SIZE)
+			quota_size = la->la_size;
+		/* use local attr gotten above */
+		else if (attr->la_valid & LA_BLOCKS)
+			quota_size = attr->la_blocks << 9;
+		else if (attr->la_valid & LA_SIZE)
+			quota_size = attr->la_size;
+
+		if (quota_size > 0) {
+			rc = dt_reserve_or_free_quota(env, mdd->mdd_bottom,
+						      GRPQUOTA, attr->la_uid,
+						      la->la_gid, quota_size,
+						      false);
+
+			if (rc) {
+				CDEBUG(D_QUOTA, "%s: failed to reserve quota for gid %d size %llu\n",
+				       mdd2obd_dev(mdd)->obd_name,
+				       la->la_gid, quota_size);
+
+				GOTO(out, rc);
+			}
+
+			quota_reserved = true;
+			la_copy->la_valid |= LA_FLAGS;
+		}
+
 		chrgrp_by_unprivileged_user = true;
 
 		/* Flush the possible existing client setattr requests to OSTs
@@ -1329,6 +1357,21 @@ out:
 	if (rc == 0)
 		rc = mdd_attr_set_changelog(env, obj, handle, &ma->ma_pfid,
 					    la_copy->la_valid);
+
+	if (rc == 0 && quota_reserved) {
+		struct thandle *sub_th;
+
+		sub_th = thandle_get_sub_by_dt(env, handle, mdd->mdd_bottom);
+		if (unlikely(IS_ERR(sub_th))) {
+			dt_reserve_or_free_quota(env, mdd->mdd_bottom, GRPQUOTA,
+						 attr->la_uid, la->la_gid,
+						 -quota_size, false);
+		} else {
+			sub_th->th_reserved_quota.qrr_type = GRPQUOTA;
+			sub_th->th_reserved_quota.qrr_id.qid_gid = la->la_gid;
+			sub_th->th_reserved_quota.qrr_count = quota_size;
+		}
+	}
 
 	if (handle != NULL)
 		rc = mdd_trans_stop(env, mdd, rc, handle);

@@ -872,6 +872,30 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	LASSERT(ccb->llcc_tgt != NULL);
 	LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_tgt->lut_obd);
 
+	if (th->th_reserved_quota.qrr_count > 0) {
+		struct lu_env		 temp_env;
+		int rc;
+
+		CDEBUG(D_QUOTA, "free quota %llu %llu\n",
+		       th->th_reserved_quota.qrr_id.qid_gid,
+		       th->th_reserved_quota.qrr_count);
+
+		rc = lu_env_init(&temp_env, LCT_DT_THREAD);
+		if (rc) {
+			CERROR("%s: can't initialize environment: rc = %d\n",
+			       ccb->llcc_tgt->lut_obd->obd_name, rc);
+			goto out;
+		}
+
+		dt_reserve_or_free_quota(&temp_env, th->th_dev,
+					 th->th_reserved_quota.qrr_type,
+					 th->th_reserved_quota.qrr_id.qid_uid,
+					 th->th_reserved_quota.qrr_id.qid_gid,
+					 -th->th_reserved_quota.qrr_count,
+					 false);
+		lu_env_fini(&temp_env);
+	}
+
 	/* error hit, don't update last committed to provide chance to
 	 * replay data after fail */
 	if (err != 0)

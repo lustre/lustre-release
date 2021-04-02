@@ -27,6 +27,7 @@
  * Author: Johann Lombardi <johann@whamcloud.com>
  */
 
+#include <dt_object.h>
 #include <lustre_quota.h>
 #include <obd.h>
 #include "osd_internal.h"

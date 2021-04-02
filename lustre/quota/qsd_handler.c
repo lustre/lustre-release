@@ -1203,3 +1203,98 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 	EXIT;
 }
 EXPORT_SYMBOL(qsd_op_adjust);
+
+/**
+ * Reserve or free quota.
+ *
+ * Currently, It's used to reserve quota space before changing the file's group
+ * for normal user and free the reserved quota after the group change.
+ *
+ * \param env     - the environment passed by the caller
+ * \param qsd     - is the qsd instance associated with the device in charge of
+ *                  the operation.
+ * \param qi      - qid & space required by current operation
+ *
+ * \retval 0            - success
+ * \retval -EDQUOT      - out of quota
+ * \retval -EINPROGRESS - inform client to retry write
+ * \retval -ve          - other appropriate errors
+ */
+int qsd_reserve_or_free_quota(const struct lu_env *env,
+			      struct qsd_instance *qsd,
+			      struct lquota_id_info *qi)
+{
+	struct lquota_entry *lqe;
+	struct qsd_qtype_info  *qqi;
+	int rc = 0;
+	bool is_free = qi->lqi_space < 0;
+
+	ENTRY;
+
+	if (unlikely(qsd == NULL))
+		RETURN(0);
+
+	if (qsd->qsd_dev->dd_rdonly)
+		RETURN(0);
+
+	if (is_free)
+		qi->lqi_space *= -1;
+
+	/* We don't enforce quota until the qsd_instance is started */
+	read_lock(&qsd->qsd_lock);
+	if (!qsd->qsd_started) {
+		read_unlock(&qsd->qsd_lock);
+		RETURN(0);
+	}
+	read_unlock(&qsd->qsd_lock);
+
+	qqi = qsd->qsd_type_array[qi->lqi_type];
+	LASSERT(qqi);
+
+	CDEBUG(D_QUOTA, "type %s, acct %s, free %d, count %llu\n",
+	       qsd_type_enabled(qsd, qi->lqi_type) ? "enabled" : "disabled",
+	       (qsd->qsd_type_array[qi->lqi_type])->qqi_acct_failed ? "failed" :
+	       "succeed", is_free, qi->lqi_space);
+
+	/* ignore quota enforcement request when:
+	 *    - quota isn't enforced for this quota type
+	 * or - the user/group is root
+	 * or - quota accounting isn't enabled
+	 */
+	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0 ||
+	    (qsd->qsd_type_array[qi->lqi_type])->qqi_acct_failed)
+		RETURN(0);
+
+	if (is_free) {
+		/* look up lquota entry associated with qid */
+		lqe = lqe_locate(env, qqi->qqi_site, &qi->lqi_id);
+		if (IS_ERR(lqe))
+			RETURN(PTR_ERR(lqe));
+		if (!lqe->lqe_enforced) {
+			lqe_putref(lqe);
+			RETURN(0);
+		}
+
+		qi->lqi_qentry = lqe;
+
+		/* lqe will be put in qsd_op_end0 */
+		qsd_op_end0(env, qsd->qsd_type_array[qi->lqi_type], qi);
+		qi->lqi_qentry = NULL;
+	} else {
+		/* manage quota enforcement for this ID */
+		rc = qsd_op_begin0(env, qsd->qsd_type_array[qi->lqi_type], qi,
+				   qi->lqi_space, NULL);
+
+		if (qi->lqi_qentry != NULL) {
+			lqe_putref(qi->lqi_qentry);
+			qi->lqi_qentry = NULL;
+		}
+	}
+
+	CDEBUG(D_QUOTA, "%s quota: type %i, uid %llu, gid %llu, space %llu\n",
+	       is_free ? "Free" : "Reserve", qi->lqi_type, qi->lqi_id.qid_uid,
+	       qi->lqi_id.qid_gid, qi->lqi_space);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(qsd_reserve_or_free_quota);

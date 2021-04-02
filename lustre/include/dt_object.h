@@ -312,8 +312,33 @@ struct dt_device_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-         int   (*dt_commit_async)(const struct lu_env *env,
-                                  struct dt_device *dev);
+	int   (*dt_commit_async)(const struct lu_env *env,
+				 struct dt_device *dev);
+
+	/**
+	 * The unit of \a count is byte for block or inodes for metadata.
+	 *
+	 * If \a count > 0, reserve quota in advance of an operation that
+	 * changes the quota assignment, such as chgrp() or rename() into
+	 * a directory with a different group ID.
+	 *
+	 * If \a count < 0, free the reserved quota previously.
+	 *
+	 * \param[in] env       execution environment for this thread
+	 * \param[in] dev       the bottom OSD device to reserve quota
+	 * \param[in] type      quota type (LQUOTA_RES_DT or LQUOTA_RES_MD)
+	 * \param[in] uid       quota uid
+	 * \param[in] gid       quota gid
+	 * \param[in] count     space (bytes or inodes) to reserve or free
+	 * \param[in] md        true for inode, false for block
+	 *
+	 * \retval 0            on success
+	 * \retval negative     negated errno on error
+	 */
+	int   (*dt_reserve_or_free_quota)(const struct lu_env *env,
+					  struct dt_device *dev,
+					  enum quota_type type, __u64 uid,
+					  __u64 gid, __s64 count, bool md);
 };
 
 struct dt_index_features {
@@ -1961,6 +1986,12 @@ static inline struct dt_object *dt_object_child(struct dt_object *o)
 			    struct dt_object, do_lu);
 }
 
+struct dt_quota_reserve_rec {
+	enum quota_type	 qrr_type;
+	union lquota_id	 qrr_id;
+	__u64		 qrr_count;
+};
+
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
@@ -1986,6 +2017,9 @@ struct thandle {
 	 * top thandle here for now, will fix it when we have better
 	 * callback mechanism */
 	struct thandle	*th_top;
+
+	/* reserved quota for this handle */
+	struct dt_quota_reserve_rec th_reserved_quota;
 
 	/** the last operation result in this transaction.
 	 * this value is used in recovery */
@@ -2900,6 +2934,18 @@ static inline int dt_commit_async(const struct lu_env *env,
         LASSERT(dev->dd_ops);
         LASSERT(dev->dd_ops->dt_commit_async);
         return dev->dd_ops->dt_commit_async(env, dev);
+}
+
+static inline int dt_reserve_or_free_quota(const struct lu_env *env,
+					   struct dt_device *dev,
+					   enum quota_type type, __u64 uid,
+					   __u64 gid, int count, bool is_md)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_reserve_or_free_quota);
+	return dev->dd_ops->dt_reserve_or_free_quota(env, dev, type, uid, gid,
+						     count, is_md);
 }
 
 static inline int dt_lookup(const struct lu_env *env,

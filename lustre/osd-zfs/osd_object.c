@@ -1055,7 +1055,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 			       struct qsd_instance *qsd,
 			       struct lquota_trans *trans, int qtype,
 			       __u64 orig_id, __u64 new_id, __u64 bspace,
-			       struct lquota_id_info *qi, bool ignore_edquot)
+			       struct lquota_id_info *qi)
 {
 	int	rc;
 
@@ -1072,7 +1072,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 	qi->lqi_id.qid_uid = new_id;
 	qi->lqi_space      = 1;
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		return rc;
@@ -1094,7 +1094,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 	qi->lqi_id.qid_uid = new_id;
 	qi->lqi_space      = bspace;
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		return rc;
@@ -1181,7 +1181,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, USRQUOTA,
 					  obj->oo_attr.la_uid, attr->la_uid,
-					  bspace, &info->oti_qi, true);
+					  bspace, &info->oti_qi);
 			if (rc)
 				GOTO(out, rc);
 		}
@@ -1192,9 +1192,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, GRPQUOTA,
 					  obj->oo_attr.la_gid, attr->la_gid,
-					  bspace, &info->oti_qi,
-					  !(attr->la_flags &
-							LUSTRE_SET_SYNC_FL));
+					  bspace, &info->oti_qi);
 			if (rc)
 				GOTO(out, rc);
 		}
@@ -1230,7 +1228,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 					  &oh->ot_quota_trans, PRJQUOTA,
 					  obj->oo_attr.la_projid,
 					  attr->la_projid, bspace,
-					  &info->oti_qi, true);
+					  &info->oti_qi);
 			if (rc)
 				GOTO(out, rc);
 		}

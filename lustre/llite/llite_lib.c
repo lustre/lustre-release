@@ -1794,17 +1794,29 @@ void ll_clear_inode(struct inode *inode)
 
 static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 {
-        struct lustre_md md;
-        struct inode *inode = dentry->d_inode;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *request = NULL;
-        int rc, ia_valid;
-        ENTRY;
+	struct lustre_md md;
+	struct inode *inode = dentry->d_inode;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ptlrpc_request *request = NULL;
+	int rc, ia_valid;
 
-        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY, NULL);
-        if (IS_ERR(op_data))
-                RETURN(PTR_ERR(op_data));
+	ENTRY;
+
+	op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
+
+	/* If this is a chgrp of a regular file, we want to reserve enough
+	 * quota to cover the entire file size.
+	 */
+	if (S_ISREG(inode->i_mode) && op_data->op_attr.ia_valid & ATTR_GID &&
+	    from_kgid(&init_user_ns, op_data->op_attr.ia_gid) !=
+	    from_kgid(&init_user_ns, inode->i_gid)) {
+		op_data->op_xvalid |= OP_XVALID_BLOCKS;
+		op_data->op_attr_blocks = inode->i_blocks;
+	}
+
 
 	rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &request);
 	if (rc) {
