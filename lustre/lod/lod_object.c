@@ -1176,10 +1176,10 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 			    struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_layout_component *lod_comp;
-	int i, j, rc;
+	int i, j, rc = 0;
 	ENTRY;
 
-	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
+	mutex_lock(&lo->ldo_layout_mutex);
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
@@ -1199,7 +1199,7 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 		if (data->locd_comp_cb) {
 			rc = data->locd_comp_cb(env, lo, i, data);
 			if (rc)
-				RETURN(rc);
+				GOTO(unlock, rc);
 		}
 
 		/* could used just to do sth about component, not each
@@ -1216,10 +1216,12 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 				continue;
 			rc = data->locd_stripe_cb(env, lo, dt, th, i, j, data);
 			if (rc != 0)
-				RETURN(rc);
+				GOTO(unlock, rc);
 		}
 	}
-	RETURN(0);
+unlock:
+	mutex_unlock(&lo->ldo_layout_mutex);
+	RETURN(rc);
 }
 
 static bool lod_obj_attr_set_comp_skip_cb(const struct lu_env *env,
@@ -2747,10 +2749,15 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	if (magic != LOV_USER_MAGIC_COMP_V1)
 		RETURN(-EINVAL);
 
+	mutex_lock(&lo->ldo_layout_mutex);
+
 	array_cnt = lo->ldo_comp_cnt + comp_v1->lcm_entry_count;
 	OBD_ALLOC_PTR_ARRAY(comp_array, array_cnt);
-	if (comp_array == NULL)
+	if (comp_array == NULL) {
+		mutex_unlock(&lo->ldo_layout_mutex);
 		RETURN(-ENOMEM);
+	}
+
 
 	memcpy(comp_array, lo->ldo_comp_entries,
 	       sizeof(*comp_array) * lo->ldo_comp_cnt);
@@ -2807,6 +2814,8 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	LASSERT(lo->ldo_mirror_count == 1);
 	lo->ldo_mirrors[0].lme_end = array_cnt - 1;
 
+	mutex_unlock(&lo->ldo_layout_mutex);
+
 	RETURN(0);
 
 error:
@@ -2819,6 +2828,8 @@ error:
 		}
 	}
 	OBD_FREE_PTR_ARRAY(comp_array, array_cnt);
+	mutex_unlock(&lo->ldo_layout_mutex);
+
 	RETURN(rc);
 }
 
@@ -2914,6 +2925,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
+	mutex_lock(&lo->ldo_layout_mutex);
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
 		__u32 id = comp_v1->lcm_entries[i].lcme_id;
 		__u32 flags = comp_v1->lcm_entries[i].lcme_flags;
@@ -2923,7 +2935,8 @@ static int lod_declare_layout_set(const struct lu_env *env,
 
 		if (flags & LCME_FL_INIT) {
 			if (changed)
-				lod_striping_free(env, lo);
+				lod_striping_free_nolock(env, lo);
+			mutex_unlock(&lo->ldo_layout_mutex);
 			RETURN(-EINVAL);
 		}
 
@@ -2946,8 +2959,11 @@ static int lod_declare_layout_set(const struct lu_env *env,
 				if (flags) {
 					if ((flags & LCME_FL_STALE) &&
 					    lod_last_non_stale_mirror(mirror_id,
-								      lo))
+								      lo)) {
+						mutex_unlock(
+							&lo->ldo_layout_mutex);
 						RETURN(-EUCLEAN);
+					}
 					lod_comp->llc_flags |= flags;
 				}
 				if (mirror_flag) {
@@ -2960,6 +2976,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 			changed = true;
 		}
 	}
+	mutex_unlock(&lo->ldo_layout_mutex);
 
 	if (!changed) {
 		CDEBUG(D_LAYOUT, "%s: requested component(s) not found.\n",
@@ -3042,9 +3059,13 @@ static int lod_declare_layout_del(const struct lu_env *env,
 		flags = 0;
 	}
 
+	mutex_lock(&lo->ldo_layout_mutex);
+
 	left = lo->ldo_comp_cnt;
-	if (left <= 0)
+	if (left <= 0) {
+		mutex_unlock(&lo->ldo_layout_mutex);
 		RETURN(-EINVAL);
+	}
 
 	for (i = (lo->ldo_comp_cnt - 1); i >= 0; i--) {
 		struct lod_layout_component *lod_comp;
@@ -3061,6 +3082,7 @@ static int lod_declare_layout_del(const struct lu_env *env,
 		if (left != (i + 1)) {
 			CDEBUG(D_LAYOUT, "%s: this deletion will create "
 			       "a hole.\n", lod2obd(d)->obd_name);
+			mutex_unlock(&lo->ldo_layout_mutex);
 			RETURN(-EINVAL);
 		}
 		left--;
@@ -3079,8 +3101,10 @@ static int lod_declare_layout_del(const struct lu_env *env,
 			if (obj == NULL)
 				continue;
 			rc = lod_sub_declare_destroy(env, obj, th);
-			if (rc)
+			if (rc) {
+				mutex_unlock(&lo->ldo_layout_mutex);
 				RETURN(rc);
+			}
 		}
 	}
 
@@ -3088,8 +3112,11 @@ static int lod_declare_layout_del(const struct lu_env *env,
 	if (left == lo->ldo_comp_cnt) {
 		CDEBUG(D_LAYOUT, "%s: requested component id:%#x not found\n",
 		       lod2obd(d)->obd_name, id);
+		mutex_unlock(&lo->ldo_layout_mutex);
 		RETURN(-EINVAL);
 	}
+
+	mutex_unlock(&lo->ldo_layout_mutex);
 
 	memset(attr, 0, sizeof(*attr));
 	attr->la_valid = LA_SIZE;
@@ -3428,6 +3455,7 @@ static int lod_layout_declare_or_purge_mirror(const struct lu_env *env,
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
+	struct lod_object *lo = lod_dt_obj(dt);
 	struct lov_comp_md_v1 *comp_v1 = buf->lb_buf;
 	struct lov_comp_md_entry_v1 *entry;
 	struct lov_mds_md_v1 *lmm;
@@ -3435,6 +3463,12 @@ static int lod_layout_declare_or_purge_mirror(const struct lu_env *env,
 	int rc = 0, i, k, array_count = 0;
 
 	ENTRY;
+
+	/**
+	 * other ops (like lod_declare_destroy) could destroying sub objects
+	 * as well.
+	 */
+	mutex_lock(&lo->ldo_layout_mutex);
 
 	if (!declare) {
 		/* prepare sub-objects array */
@@ -3449,8 +3483,10 @@ static int lod_layout_declare_or_purge_mirror(const struct lu_env *env,
 			array_count += lmm->lmm_stripe_count;
 		}
 		OBD_ALLOC_PTR_ARRAY(sub_objs, array_count);
-		if (sub_objs == NULL)
+		if (sub_objs == NULL) {
+			mutex_unlock(&lo->ldo_layout_mutex);
 			RETURN(-ENOMEM);
+		}
 	}
 
 	k = 0;	/* sub_objs index */
@@ -3550,6 +3586,7 @@ out:
 
 		OBD_FREE_PTR_ARRAY(sub_objs, array_count);
 	}
+	mutex_unlock(&lo->ldo_layout_mutex);
 
 	RETURN(rc);
 }
@@ -4335,7 +4372,7 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 	LASSERT(lo);
 
 	if (lo->ldo_comp_cnt == 0 && !lo->ldo_is_foreign) {
-		lod_striping_free(env, lo);
+		lod_striping_free_nolock(env, lo);
 		rc = lod_sub_xattr_del(env, next, XATTR_NAME_LOV, th);
 		RETURN(rc);
 	}
@@ -4631,6 +4668,8 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(lo->ldo_mirror_count == 1);
 
+	mutex_lock(&lo->ldo_layout_mutex);
+
 	rc = lod_layout_del_prep_layout(env, lo, th);
 	if (rc < 0)
 		GOTO(out, rc);
@@ -4658,7 +4697,10 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 	EXIT;
 out:
 	if (rc)
-		lod_striping_free(env, lo);
+		lod_striping_free_nolock(env, lo);
+
+	mutex_unlock(&lo->ldo_layout_mutex);
+
 	return rc;
 }
 
@@ -5928,6 +5970,8 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 	int	rc = 0, i, j;
 	ENTRY;
 
+	mutex_lock(&lo->ldo_layout_mutex);
+
 	LASSERT((lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL) ||
 		lo->ldo_is_foreign);
 
@@ -5986,15 +6030,20 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 	if (rc)
 		GOTO(out, rc);
 
+	lo->ldo_comp_cached = 1;
+
 	rc = lod_generate_and_set_lovea(env, lo, th);
 	if (rc)
 		GOTO(out, rc);
 
-	lo->ldo_comp_cached = 1;
+	mutex_unlock(&lo->ldo_layout_mutex);
+
 	RETURN(0);
 
 out:
-	lod_striping_free(env, lo);
+	lod_striping_free_nolock(env, lo);
+	mutex_unlock(&lo->ldo_layout_mutex);
+
 	RETURN(rc);
 }
 
@@ -6054,8 +6103,9 @@ lod_obj_stripe_destroy_cb(const struct lu_env *env, struct lod_object *lo,
 {
 	if (data->locd_declare)
 		return lod_sub_declare_destroy(env, dt, th);
-	else if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
-		 stripe_idx == cfs_fail_val)
+
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
+	    stripe_idx == cfs_fail_val)
 		return lod_sub_destroy(env, dt, th);
 
 	return 0;

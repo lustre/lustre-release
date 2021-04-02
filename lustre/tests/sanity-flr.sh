@@ -2597,6 +2597,35 @@ test_60a() {
 }
 run_test 60a "mirror extend sets correct size on sparse file"
 
+test_70() {
+	local tf=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	while true; do
+		rm -f $tf
+		$LFS mirror create -N -E 1M -c -1 -E eof -N $tf
+		echo xxxx > $tf
+	done &
+	c_pid=$!
+	echo "mirror create pid $c_pid"
+
+	while true; do
+		$LFS mirror split -d --mirror-id=1 $tf &> /dev/null
+	done &
+	s_pid=$!
+	echo "mirror split pid $s_pid"
+
+	echo "mirror create and split race for 60 seconds, should not crash"
+	sleep 60
+	kill -9 $c_pid &> /dev/null
+	kill -9 $s_pid &> /dev/null
+
+	rm -f $tf
+	true
+}
+run_test 70 "mirror create and split race"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

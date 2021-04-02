@@ -1787,36 +1787,19 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	if (mrd->mrd_obj)
 		vic = md2mdd_obj(mrd->mrd_obj);
 
-	if (vic) {
-		/* don't use the same file to save the splitted mirror */
-		rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
-		if (rc == 0)
-			RETURN(-EPERM);
-
-		if (rc > 0) {
-			mdd_write_lock(env, obj, DT_TGT_CHILD);
-			mdd_write_lock(env, vic, DT_TGT_CHILD);
-		} else {
-			mdd_write_lock(env, vic, DT_TGT_CHILD);
-			mdd_write_lock(env, obj, DT_TGT_CHILD);
-		}
-	} else {
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-	}
-
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
-		GOTO(unlock, rc = PTR_ERR(handle));
+		RETURN(PTR_ERR(handle));
 
 	/* get EA of mirrored file */
 	memset(buf_save, 0, sizeof(*buf));
 	rc = mdd_stripe_get(env, obj, buf_save, XATTR_NAME_LOV);
 	if (rc < 0)
-		GOTO(out, rc);
+		GOTO(stop, rc);
 
 	lcm = buf_save->lb_buf;
 	if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
-		GOTO(out, rc = -EINVAL);
+		GOTO(stop, rc = -EINVAL);
 
 	/**
 	 * Extract the mirror with specified mirror id, and store the splitted
@@ -1826,7 +1809,7 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	memset(buf_vic, 0, sizeof(*buf_vic));
 	rc = mdd_split_ea(lcm, mrd->mrd_mirror_id, buf, buf_vic);
 	if (rc < 0)
-		GOTO(out, rc);
+		GOTO(stop, rc);
 	/**
 	 * @buf stores layout w/o the specified mirror, @buf_vic stores the
 	 * splitted mirror
@@ -1844,14 +1827,14 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 		rc = mdd_declare_xattr_set(env, mdd, obj, buf, XATTR_NAME_LOV,
 					   LU_XATTR_SPLIT, handle);
 		if (rc)
-			GOTO(out_restore, rc);
+			GOTO(stop, rc);
 
 		/* declare vic set splitted layout in @buf_vic */
 		rc = mdd_declare_xattr_set(env, mdd, vic, buf_vic,
 					   XATTR_NAME_LOV, LU_XATTR_SPLIT,
 					   handle);
 		if (rc)
-			GOTO(out_restore, rc);
+			GOTO(stop, rc);
 	} else {
 		/**
 		 * declare delete mirror objects in @buf_vic, will change obj's
@@ -1861,25 +1844,42 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 					   XATTR_NAME_LOV, LU_XATTR_PURGE,
 					   handle);
 		if (rc)
-			GOTO(out_restore, rc);
+			GOTO(stop, rc);
 
 		/* declare obj set remaining layout in @buf */
 		rc = mdd_declare_xattr_set(env, mdd, obj, buf,
 					   XATTR_NAME_LOV, LU_XATTR_SPLIT,
 					   handle);
 		if (rc)
-			GOTO(out_restore, rc);
+			GOTO(stop, rc);
 	}
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
-		GOTO(out_restore, rc);
+		GOTO(stop, rc);
+
+	if (vic) {
+		/* don't use the same file to save the splitted mirror */
+		rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
+		if (rc == 0)
+			GOTO(stop, rc = -EPERM);
+
+		if (rc > 0) {
+			mdd_write_lock(env, obj, DT_TGT_CHILD);
+			mdd_write_lock(env, vic, DT_TGT_CHILD);
+		} else {
+			mdd_write_lock(env, vic, DT_TGT_CHILD);
+			mdd_write_lock(env, obj, DT_TGT_CHILD);
+		}
+	} else {
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+	}
 
 	/* set obj's layout in @buf */
 	rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV, LU_XATTR_REPLACE,
 			   handle);
 	if (rc)
-		GOTO(out_restore, rc);
+		GOTO(unlock, rc);
 
 	if (vic) {
 		/* set vic's layout in @buf_vic */
@@ -1898,13 +1898,13 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle,
 				      NULL);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_restore, rc);
 
 	if (vic) {
 		rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic,
 					      handle, NULL);
 		if (rc)
-			GOTO(out, rc);
+			GOTO(out_restore, rc);
 	}
 
 out_restore:
@@ -1919,17 +1919,17 @@ out_restore:
 			       PFID(mdd_object_fid(obj)), rc);
 	}
 
-out:
+unlock:
+	mdd_write_unlock(env, obj);
+	if (vic)
+		mdd_write_unlock(env, vic);
+stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	/* Truncate local DOM data if all went well */
 	if (!rc && dom_stripe)
 		mdd_dom_data_truncate(env, mdd, obj);
 
-unlock:
-	mdd_write_unlock(env, obj);
-	if (vic)
-		mdd_write_unlock(env, vic);
 	lu_buf_free(buf_save);
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
