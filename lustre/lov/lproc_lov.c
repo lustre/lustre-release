@@ -38,40 +38,26 @@
 #include <uapi/linux/lustre/lustre_param.h>
 #include "lov_internal.h"
 
-static int lov_stripesize_seq_show(struct seq_file *m, void *v)
+static ssize_t stripesize_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *obd = (struct obd_device *)m->private;
-	struct lov_desc *desc;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lov_desc *desc = &obd->u.lov.desc;
 
-	LASSERT(obd != NULL);
-	desc = &obd->u.lov.desc;
-
-	seq_printf(m, "%llu\n", desc->ld_default_stripe_size);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", desc->ld_default_stripe_size);
 }
 
-static ssize_t lov_stripesize_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
+static ssize_t stripesize_store(struct kobject *kobj, struct attribute *attr,
+				const char *buf, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct lov_desc *desc;
-	char kernbuf[22] = "";
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lov_desc *desc = &obd->u.lov.desc;
 	u64 val;
 	int rc;
 
-	LASSERT(obd != NULL);
-	desc = &obd->u.lov.desc;
-
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	rc = sysfs_memparse(buf, count, &val, "B");
 	if (rc < 0)
 		return rc;
 
@@ -80,7 +66,7 @@ static ssize_t lov_stripesize_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lov_stripesize);
+LUSTRE_RW_ATTR(stripesize);
 
 static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
@@ -271,12 +257,6 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct lprocfs_vars lprocfs_lov_obd_vars[] = {
-	{ .name =	"stripesize",
-	  .fops =	&lov_stripesize_fops	},
-	{ NULL }
-};
-
 static const struct file_operations lov_proc_target_fops = {
 	.owner   = THIS_MODULE,
 	.open    = lov_target_seq_open,
@@ -290,6 +270,7 @@ static struct attribute *lov_attrs[] = {
 	&lustre_attr_activeobd.attr,
 	&lustre_attr_numobd.attr,
 	&lustre_attr_desc_uuid.attr,
+	&lustre_attr_stripesize.attr,
 	&lustre_attr_stripeoffset.attr,
 	&lustre_attr_stripetype.attr,
 	&lustre_attr_stripecount.attr,
@@ -301,7 +282,6 @@ int lov_tunables_init(struct obd_device *obd)
 	struct lov_obd *lov = &obd->u.lov;
 	int rc;
 
-	obd->obd_vars = lprocfs_lov_obd_vars;
 	obd->obd_ktype.default_attrs = lov_attrs;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
