@@ -344,6 +344,7 @@ struct socket *
 lnet_sock_listen(int local_port, int backlog, struct net *ns)
 {
 	struct socket *sock;
+	mm_segment_t oldfs;
 	int val = 0;
 	int rc;
 
@@ -360,8 +361,11 @@ lnet_sock_listen(int local_port, int backlog, struct net *ns)
 	 * This is the default, but it can be overridden so
 	 * we force it back.
 	 */
-	kernel_setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
-			  (char *) &val, sizeof(val));
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	sock->ops->setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
+			      (char __user __force *) &val, sizeof(val));
+	set_fs(oldfs);
 
 	rc = kernel_listen(sock, backlog);
 	if (rc == 0)
