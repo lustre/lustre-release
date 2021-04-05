@@ -845,9 +845,14 @@ out:
 static int lqes_cmp(const void *arg1, const void *arg2)
 {
 	const struct lquota_entry *lqe1, *lqe2;
+
 	lqe1 = *(const struct lquota_entry **)arg1;
 	lqe2 = *(const struct lquota_entry **)arg2;
-	return lqe1->lqe_qunit - lqe2->lqe_qunit;
+	if (lqe1->lqe_qunit > lqe2->lqe_qunit)
+		return 1;
+	if (lqe1->lqe_qunit < lqe2->lqe_qunit)
+		return -1;
+	return 0;
 }
 
 void qmt_lqes_sort(const struct lu_env *env)
