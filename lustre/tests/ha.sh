@@ -479,7 +479,7 @@ ha_repeat_mpi_load()
 		ha_on $client $LFS getstripe $dir &&
 		ha_on $client chmod a+xwr $dir &&
 		ha_on $client "su $mpiuser sh -c \" $mpirun $mpirunoptions \
-			-np $((${#ha_clients[@]} * mpi_threads_per_client )) \
+			-np $((${#ha_clients[@]} * mpi_threads_per_client / ha_nclientsset)) \
 			$machines $cmd \" " || rc=$?
 		[[ -n "$ha_postcmd" ]] && ha_info "$ha_postcmd" &&
 			ha_on $client "$ha_postcmd" >>"$log" 2>&1
