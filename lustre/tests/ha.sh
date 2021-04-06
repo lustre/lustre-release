@@ -197,6 +197,9 @@ declare     ha_pm_host=${PM_HOST:-$(hostname)}
 declare     ha_failback_delay=${DELAY:-5}
 declare     ha_failback_cmd=${FAILBACK:-""}
 declare     ha_stripe_params=${STRIPEPARAMS:-"-c 0"}
+declare     ha_test_dir_stripe_count=${TDSTRIPECOUNT:-"1"}
+declare     ha_test_dir_mdt_index=${TDMDTINDEX:-"0"}
+declare     ha_test_dir_mdt_index_random=${TDMDTINDEXRAND:-false}
 declare     ha_dir_stripe_count=${DSTRIPECOUNT:-"1"}
 declare     ha_mdt_index=${MDTINDEX:-"0"}
 declare     ha_mdt_index_random=${MDTINDEXRAND:-false}
@@ -1092,7 +1095,17 @@ ha_main()
 		"START: $0: $(date +%H:%M:%S' '%s)"
 	trap ha_trap_exit EXIT
 	mkdir "$ha_tmp_dir"
-	ha_on ${ha_clients[0]} mkdir "$ha_test_dir"
+
+	local mdt_index
+	if $ha_test_dir_mdt_index_random &&
+		[ $ha_test_dir_mdt_index -ne 0 ]; then
+		mdt_index=$(ha_rand $ha_test_dir_mdt_index)
+	else
+		mdt_index=$ha_test_dir_mdt_index
+	fi
+	ha_on ${ha_clients[0]} "$LFS mkdir -i$mdt_index \
+		-c$ha_test_dir_stripe_count $ha_test_dir"
+	ha_on ${ha_clients[0]} $LFS getdirstripe $ha_test_dir
 	ha_on ${ha_clients[0]} " \
 		$LFS setstripe $ha_stripe_params $ha_test_dir"
 
