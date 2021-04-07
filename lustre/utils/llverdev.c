@@ -89,6 +89,7 @@
 #define ONE_KB 1024
 #define HALF_KB (ONE_KB / 2)
 #define BLOCKSIZE 4096
+#define MAX_ALLOWED_IO_ERR 100
 
 /* Structure for writting test pattern */
 struct block_data {
@@ -96,13 +97,15 @@ struct block_data {
 	unsigned long long bd_time;
 	unsigned long long bd_inode;
 };
-static char *progname;		/* name by which this program was run. */
-static unsigned verbose = 1;	/* prints offset in kB, operation rate */
-static int readoption;		/* run test in read-only (verify) mode */
-static int writeoption;		/* run test in write_only mode */
-const char *devname;		/* name of device to be tested. */
-static unsigned full = 1;	/* flag to full check */
-static int error_count;		/* number of IO errors hit during run */
+
+static char *progname;		 /* name by which this program was run. */
+static unsigned int verbose = 1; /* prints offset in kB, operation rate */
+static int readoption;		 /* run test in read-only (verify) mode */
+static int writeoption;		 /* run test in write_only mode */
+const char *devname;		 /* name of device to be tested. */
+static unsigned int full = 1;	 /* flag to full check */
+static int error_count;		 /* number of IO errors hit during run */
+static ino_t ino_st;		 /* inode number of file under test */
 static int isatty_flag;
 
 static struct option const long_opts[] = {
@@ -115,6 +118,7 @@ static struct option const long_opts[] = {
 	{ .val = 'p',	.name = "partial",	.has_arg = required_argument },
 	{ .val = 'q',	.name = "quiet",	.has_arg = required_argument },
 	{ .val = 'r',	.name = "read",		.has_arg = no_argument },
+	{ .val = 's',	.name = "size",		.has_arg = required_argument },
 	{ .val = 't',	.name = "timestamp",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .val = 'w',	.name = "write",	.has_arg = no_argument },
@@ -130,19 +134,19 @@ void usage(int status)
 		printf("\nUsage: %s [OPTION]... <device-name> ...\n",
 		       progname);
 		printf("Block device verification tool.\n"
-		       "\t-t {seconds}, --timestamp, "
-		       "set test time  (default=current time())\n"
-		       "\t-o {offset}, --offset, "
-		       "offset in kB of start of test, default=0\n"
-		       "\t-r, --read, run in verify mode\n"
-		       "\t-w, --write, run in test-pattern mode, default=rw\n"
-		       "\t-v, --verbose\n"
-		       "\t-q, --quiet\n"
-		       "\t-l, --long, --full check of device\n"
-		       "\t-p, --partial, for partial check (1GB steps)\n"
-		       "\t-c {bytes}, --chunksize, IO size, default=1048576\n"
-		       "\t-f, --force, force test to run without confirmation\n"
-		       "\t-h, --help, display this help and exit\n");
+		       "\t-c|--chunksize chunk_mb, IO size in MB, default=1\n"
+		       "\t-f|--force, force test to run without confirmation\n"
+		       "\t-h|--help, display this help and exit\n"
+		       "\t-l|--long, --full check of device\n"
+		       "\t-o|--offset, offset in kB from start of file\n"
+		       "\t-p|--partial, for partial check (1GB steps)\n"
+		       "\t-q|--quiet\n"
+		       "\t-r|--read, run in verify mode\n"
+		       "\t-s|--size, file/device size in MB to read/write\n"
+		       "\t-t|--timestamp seconds, set verification timestamp\n"
+		       "\t-v|--verbose\n"
+		       "\t-w|--write, run in test-pattern mode, default=rw\n"
+		       );
 	}
 	exit(status);
 }
@@ -156,7 +160,8 @@ static int open_dev(const char *devname, int mode)
 
 	fd = open(devname, mode | O_EXCL | O_LARGEFILE);
 	if (fd < 0) {
-		fprintf(stderr, "%s: Open failed: %s",progname,strerror(errno));
+		fprintf(stderr, "%s: Open failed: %s\n",
+			progname, strerror(errno));
 		exit(3);
 	}
 	return fd;
@@ -165,15 +170,36 @@ static int open_dev(const char *devname, int mode)
 /*
  * sizeof_dev: Returns size of device in bytes
  */
-static size_t sizeof_dev(int fd)
+static size_t sizeof_dev(int fd, unsigned long long dev_size)
 {
-	size_t numbytes;
+	unsigned long long numbytes = 0;
+	struct stat statbuf;
 
-# if defined BLKGETSIZE64	/* in sys/mount.h */
+	if (fstat(fd, &statbuf) == 0) {
+		ino_st = statbuf.st_ino;
+		if (S_ISREG(statbuf.st_mode)) {
+			if (dev_size)
+				numbytes = dev_size;
+			else if (statbuf.st_size > 1)
+				numbytes = statbuf.st_size;
+			else
+				numbytes = (~0ULL >> 1);
+			goto out;
+		}
+		if (!S_ISBLK(statbuf.st_mode)) {
+			fprintf(stderr, "%s: '%s' not a block device or file\n",
+				progname, devname);
+			goto out;
+		}
+	} else {
+		fprintf(stderr, "%s: error accessing '%s': %s\n",
+			progname, devname, strerror(errno));
+	}
+#if defined BLKGETSIZE64	/* in sys/mount.h */
 	if (ioctl(fd, BLKGETSIZE64, &numbytes) >= 0)
 		goto out;
-# endif
-# if defined BLKGETSIZE		/* in sys/mount.h */
+#endif
+#if defined BLKGETSIZE		/* in sys/mount.h */
 	{
 		unsigned long sectors;
 
@@ -182,25 +208,13 @@ static size_t sizeof_dev(int fd)
 			goto out;
 		}
 	}
-# endif
-	{
-		struct stat statbuf;
-
-		if (fstat(fd, &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
-			numbytes = statbuf.st_size;
-			goto out;
-		}
-	}
+#endif
 	fprintf(stderr, "%s: unable to determine size of %s\n",
 		progname, devname);
-	return 0;
 
 out:
-	if (verbose)
-		printf("%s: %s is %llu bytes (%g GB) in size\n",
-		       progname, devname,
-		       (unsigned long long)numbytes, (double)numbytes / ONE_GB);
-
+	if (dev_size && dev_size < numbytes)
+		numbytes = dev_size;
 	return numbytes;
 }
 
@@ -223,8 +237,8 @@ int verify_chunk(char *chunk_buf, const size_t chunksize,
 		    (bd->bd_inode == inode_st))
 			continue;
 
-		fprintf(stderr, "\n%s: verify %s failed offset/timestamp/inode "
-			"%llu/%llu/%llu: found %llu/%llu/%llu instead\n",
+		fprintf(stderr,
+			"\n%s: verify %s failed offset/timestamp/inode %llu/%llu/%llu: found %llu/%llu/%llu instead\n",
 			progname, file, chunk_off, time_st, inode_st,
 			bd->bd_offset, bd->bd_time, bd->bd_inode);
 		error_count++;
@@ -254,29 +268,42 @@ void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
 	}
 }
 
-void show_rate(char *op, unsigned long long offset, unsigned long long *count)
+void show_rate(char *op, unsigned long long offset, unsigned long long count)
 {
-	static time_t last;
+	static unsigned long long subtot, total;
+	static time_t start, last;
 	time_t now;
 	double diff;
 
 	now = time(NULL);
+	if (!start)
+		start = now;
+	if (count == 0) {
+		subtot = total;
+		last = start;
+	} else {
+		subtot += count;
+		total += count;
+	}
 	diff = now - last;
 
-	if (diff > 4) {
+	if ((verbose > 1 && diff >= (verbose > 3 ? 1 : 5)) || count == 0) {
 		if (last != 0) {
 			if (isatty_flag)
 				printf("\r");
 			printf("%s offset: %14llukB %5g MB/s            ", op,
-			       offset / ONE_KB, (double)(*count) /ONE_MB /diff);
-			if (isatty_flag)
+			       offset / ONE_KB, (double)subtot / ONE_MB / diff);
+			if (isatty_flag && count)
 				fflush(stdout);
 			else
 				printf("\n");
 
-			*count = 0;
+			subtot = 0;
 		}
-		last = now;
+		if (count == 0)
+			subtot = total = start = last = 0;
+		else
+			last = now;
 	}
 }
 
@@ -300,20 +327,21 @@ size_t write_retry(int fd, const char *chunk_buf, size_t nrequested,
 	long nwritten;
 
 retry:
-	nwritten = write(fd, chunk_buf, nrequested);
+	nwritten = pwrite(fd, chunk_buf, nrequested, offset);
 	if (nwritten < 0) {
 		if (errno != ENOSPC) {
 			fprintf(stderr, "\n%s: write %s@%llu+%zi failed: %s\n",
 				progname, file, offset, nrequested,
 				strerror(errno));
-			if (error_count++ < 100)
+			if (error_count++ < MAX_ALLOWED_IO_ERR)
 				return 0;
 		}
 		return -errno;
 	}
 	if (nwritten < nrequested) {
-		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld written\n",
-			progname, file, offset, nrequested, nwritten);
+		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld/%ld\n",
+			progname, file, offset, nrequested, nwritten,
+			nrequested);
 		offset += nwritten;
 		chunk_buf += nwritten;
 		nrequested -= nwritten;
@@ -329,50 +357,31 @@ retry:
  *
  * Returns 0 on success, or -ve error number on failure.
  */
-int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
-		 char *chunk_buf, size_t chunksize, const time_t time_st,
+int write_chunks(int fd, unsigned long long offset,
+		 unsigned long long *write_end, char *chunk_buf,
+		 size_t chunksize, const time_t time_st,
 		 const ino_t inode_st, const char *file)
 {
-	unsigned long long stride, count = 0;
+	unsigned long long stride;
 
-	stride = full ? chunksize : (ONE_GB - chunksize);
-	for (offset = offset & ~(chunksize - 1); offset < write_end;
+	stride = full ? chunksize : ONE_GB;
+	for (offset = offset & ~(chunksize - 1); offset < *write_end;
 	     offset += stride) {
 		int ret;
 
-		if (lseek64(fd, offset, SEEK_SET) == -1) {
-			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
-				progname, file, offset, strerror(errno));
-			return -errno;
-		}
-		if (offset + chunksize > write_end)
-			chunksize = write_end - offset;
-		if (!full && offset > chunksize) {
-			fill_chunk(chunk_buf, chunksize, offset, time_st,
-				   inode_st);
-			ret = write_retry(fd, chunk_buf, chunksize,
-					  offset, file);
-			if (ret < 0)
-				return ret;
-			offset += chunksize;
-			count += chunksize;
-			if (offset + chunksize > write_end)
-				chunksize = write_end - offset;
-		}
+		if (offset + chunksize > *write_end)
+			chunksize = *write_end - offset;
 		fill_chunk(chunk_buf, chunksize, offset, time_st, inode_st);
 		ret = write_retry(fd, chunk_buf, chunksize, offset, file);
-		if (ret < 0)
+		if (ret < 0) {
+			if (ret == -ENOSPC)
+				*write_end = offset - stride;
 			return ret;
+		}
 
-		count += chunksize;
-		if (verbose > 1)
-			show_rate("write", offset, &count);
+		show_rate("write", offset, chunksize);
 	}
 
-	if (verbose > 1) {
-		show_rate("write", offset, &count);
-		printf("\nwrite complete\n");
-	}
 	if (fsync(fd) == -1) {
 		fprintf(stderr, "%s: fsync failed: %s\n", progname,
 			strerror(errno));
@@ -389,111 +398,109 @@ int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
 		char *chunk_buf, size_t chunksize, const time_t time_st,
 		const ino_t inode_st, const char *file)
 {
-	unsigned long long stride, count = 0;
+	unsigned long long stride;
 
-	if (ioctl(fd, BLKFLSBUF, 0) < 0 && verbose)
+	if (ioctl(fd, BLKFLSBUF, 0) < 0 && verbose > 1)
 		fprintf(stderr, "%s: ioctl BLKFLSBUF failed: %s (ignoring)\n",
 			progname, strerror(errno));
 
-	stride = full ? chunksize : (ONE_GB - chunksize);
+	stride = full ? chunksize : ONE_GB;
 	for (offset = offset & ~(chunksize - 1); offset < read_end;
 	     offset += stride) {
-		ssize_t nread;
+		ssize_t nread, rc;
 
-		if (lseek64(fd, offset, SEEK_SET) == -1) {
-			fprintf(stderr, "\n%s: lseek64(%llu) failed: %s\n",
-				progname, offset, strerror(errno));
-			return 1;
-		}
 		if (offset + chunksize > read_end)
 			chunksize = read_end - offset;
 
-		if (!full && offset > chunksize) {
-			nread = read(fd, chunk_buf, chunksize);
-			if (nread < 0) {
-				fprintf(stderr,"\n%s: read %s@%llu+%zi failed: "
-					"%s\n", progname, file, offset,
-					chunksize, strerror(errno));
-				error_count++;
-				return 1;
-			}
-			if (nread < chunksize) {
-				fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
-					"%zi read\n", progname, file, offset,
-					chunksize, nread);
-				error_count++;
-			}
-			if (verify_chunk(chunk_buf, nread, offset, time_st,
-					 inode_st, file) != 0)
-				return 1;
-			offset += chunksize;
-			count += chunksize;
-
-			/* Need to reset position after read error */
-			if (nread < chunksize &&
-			    lseek64(fd, offset, SEEK_SET) == -1) {
-				fprintf(stderr,
-					"\n%s: lseek64(%s@%llu) failed: %s\n",
-					progname, file, offset,strerror(errno));
-				return 1;
-			}
-			if (offset + chunksize >= read_end)
-				chunksize = read_end - offset;
+		nread = 0;
+		/* reset errno before calling pread */
+		errno = 0;
+read_more:
+		rc = pread(fd, chunk_buf + nread, chunksize - nread,
+			   offset + nread);
+		if (rc == 0) {
+			fprintf(stderr, "\n%s: read %s@%llu+%zi no data: %s\n",
+				progname, file, offset + nread,
+				chunksize - nread, strerror(errno));
+			break;
 		}
-
-		nread = read(fd, chunk_buf, chunksize);
-		if (nread < 0) {
-			fprintf(stderr, "\n%s: read failed: %s\n", progname,
-				strerror(errno));
-			error_count++;
-			return 1;
+		if (rc < 0) {
+			fprintf(stderr, "\n%s: read %s@%llu+%zi failed: %s\n",
+				progname, file, offset + nread,
+				chunksize - nread, strerror(errno));
+			if (error_count++ < MAX_ALLOWED_IO_ERR)
+				continue;
+			return -errno;
 		}
+		nread += rc;
 		if (nread < chunksize) {
-			fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
-				"%zi read\n", progname, file, offset,
-				chunksize, nread);
-			error_count++;
+			fprintf(stderr,
+				"\n%s: read %s@%llu+%zi short: %zi/%zi\n",
+				progname, file, offset + nread,
+				chunksize - nread, rc, chunksize);
+			goto read_more;
 		}
 
-		if (verify_chunk(chunk_buf, nread, offset, time_st,
+		if (verify_chunk(chunk_buf, chunksize, offset, time_st,
 				 inode_st, file) != 0)
 			return 1;
 
-		count += chunksize;
-		if (verbose > 1)
-			show_rate("read", offset, &count);
+		show_rate("read", offset, chunksize);
 	}
-	if (verbose > 1) {
-		show_rate("read", offset, &count);
-		printf("\nread complete\n");
+	return 0;
+}
+
+int parse_size(const char *optarg, unsigned long long *size,
+	       unsigned long long size_units)
+{
+	char *end;
+
+	*size = strtoull(optarg, &end, 0);
+	if (*end != '\0') {
+		size_units = 1;
+		switch (*end) {
+		case 'e': case 'E': size_units <<= 10; /* fallthrough */
+		case 'p': case 'P': size_units <<= 10; /* fallthrough */
+		case 't': case 'T': size_units <<= 10; /* fallthrough */
+		case 'g': case 'G': size_units <<= 10; /* fallthrough */
+		case 'm': case 'M': size_units <<= 10; /* fallthrough */
+		case 'k': case 'K': size_units <<= 10; break;
+		default:
+			return -1;
+		}
 	}
+	*size *= size_units;
+
 	return 0;
 }
 
 int main(int argc, char **argv)
 {
-	time_t time_st = 0;		/* Default timestamp */
-	long long offset = 0, offset_orig; /* offset in kB */
-	size_t chunksize = ONE_MB;	/* IO chunk size */
-	char *chunk_buf = NULL;
-	unsigned int force = 0;		/* run test run without confirmation*/
+	unsigned long long chunksize = ONE_MB; /* IO chunk size */
+	unsigned long long offset = 0; /* offset in kB */
 	unsigned long long dev_size = 0;
+	unsigned int force = 0; /* run test run without confirmation*/
+	time_t time_st = 0; /* Default timestamp */
+	char *chunk_buf = NULL;
 	char yesno[4];
-	int mode = O_RDWR;		/* mode which device should be opened */
-	int fd;
+	int mode = O_RDWR; /* mode which device should be opened */
 	int error = 0, c;
+	int fd;
 
-	progname = strrchr(argv[0], '/') == NULL ?
-		argv[0] : strrchr(argv[0], '/') + 1;
-	while ((c = getopt_long(argc, argv, "c:fhlo:pqrt:vw", long_opts,
+	progname = !strrchr(argv[0], '/') ? argv[0] : strrchr(argv[0], '/') + 1;
+	while ((c = getopt_long(argc, argv, "c:fhlo:pqrs:t:vw", long_opts,
 				NULL)) != -1) {
 		switch (c) {
 		case 'c':
-			chunksize = (strtoul(optarg, NULL, 0) * ONE_MB);
-			if (!chunksize) {
+			if (parse_size(optarg, &chunksize, ONE_MB)) {
+				fprintf(stderr, "%s: bad chunksize '%s'\n",
+					progname, optarg);
+				return -1;
+			}
+			if (chunksize > ONE_GB || chunksize < 4096) {
 				fprintf(stderr,
-					"%s: chunk size value should be nonzero and multiple of 1MB\n",
-					progname);
+					"%s: valid chunksize 4KB-1GB, not '%s'\n",
+					progname, optarg);
 				return -1;
 			}
 			break;
@@ -504,7 +511,11 @@ int main(int argc, char **argv)
 			full = 1;
 			break;
 		case 'o':
-			offset = strtoull(optarg, NULL, 0) * ONE_KB;
+			if (parse_size(optarg, &offset, ONE_KB)) {
+				fprintf(stderr, "%s: bad offset '%s'\n",
+					progname, optarg);
+				return -1;
+			}
 			break;
 		case 'p':
 			full = 0;
@@ -515,6 +526,13 @@ int main(int argc, char **argv)
 		case 'r':
 			readoption = 1;
 			mode = O_RDONLY;
+			break;
+		case 's':
+			if (parse_size(optarg, &dev_size, ONE_MB)) {
+				fprintf(stderr, "%s: bad size '%s'\n",
+					progname, optarg);
+				return -1;
+			}
 			break;
 		case 't':
 			time_st = (time_t)strtoul(optarg, NULL, 0);
@@ -528,15 +546,14 @@ int main(int argc, char **argv)
 			break;
 		case 'h':
 		default:
-			usage (1);
+			usage(1);
 			return 0;
 		}
 	}
-	offset_orig = offset;
 	devname = argv[optind];
 	if (!devname) {
 		fprintf(stderr, "%s: device name not given\n", progname);
-		usage (1);
+		usage(1);
 		return -1;
 	}
 
@@ -567,7 +584,11 @@ int main(int argc, char **argv)
 	}
 
 	fd = open_dev(devname, mode);
-	dev_size = sizeof_dev(fd);
+	dev_size = sizeof_dev(fd, dev_size);
+	if (verbose)
+		printf("%s: %s is %llu bytes (%g GB) in size\n",
+		       progname, devname, dev_size, (double)dev_size / ONE_GB);
+
 	if (!dev_size) {
 		fprintf(stderr, "%s: cannot test on device size < 1MB\n",
 			progname);
@@ -575,9 +596,9 @@ int main(int argc, char **argv)
 		goto close_dev;
 	}
 
-	if (dev_size < (offset * 2)) {
-		fprintf(stderr, "%s: device size %llu < offset %llu\n",
-			progname, dev_size, offset);
+	if (offset >= dev_size - chunksize) {
+		fprintf(stderr, "%s: offset %llu >= device size %llu\n",
+			progname, offset, dev_size);
 		error = 6;
 		goto close_dev;
 	}
@@ -587,51 +608,57 @@ int main(int argc, char **argv)
 	isatty_flag = isatty(STDOUT_FILENO);
 
 	if (verbose)
-		printf("Timestamp: %lu\n", time_st);
+		printf("timestamp: %lu chunksize: %llu size: %llu\n",
+		       time_st, chunksize, dev_size);
 
 	chunk_buf = (char *)calloc(chunksize, 1);
-	if (chunk_buf == NULL) {
+	if (!chunk_buf) {
 		fprintf(stderr, "%s: memory allocation failed for chunk_buf\n",
 			progname);
 		error = 4;
 		goto close_dev;
 	}
 	if (writeoption) {
-		c = write_chunks(fd, offset, dev_size, chunk_buf, chunksize,
-				 time_st, 0, devname);
+		c = write_chunks(fd, offset, &dev_size, chunk_buf, chunksize,
+				 time_st, ino_st, devname);
 		if (c < 0 && c != -ENOSPC) {
 			error = 3;
 			goto chunk_buf;
 		}
-		if (!full) { /* end of device aligned to a block */
+		if (!full && c != -ENOSPC) { /* end of device block-aligned */
 			offset = ((dev_size - chunksize + BLOCKSIZE - 1) &
 				  ~(BLOCKSIZE - 1));
-			c = write_chunks(fd, offset, dev_size, chunk_buf,
-					 chunksize, time_st, 0, devname);
+			c = write_chunks(fd, offset, &dev_size, chunk_buf,
+					 chunksize, time_st, ino_st, devname);
 			if (c < 0 && c != -ENOSPC) {
 				error = 3;
 				goto chunk_buf;
 			}
 		}
-		offset = offset_orig;
+		show_rate("write", dev_size, 0);
+		if (verbose > 1)
+			printf("write complete\n");
 	}
 	if (readoption) {
 		if (read_chunks(fd, offset, dev_size, chunk_buf, chunksize,
-				time_st, 0, devname)) {
+				time_st, ino_st, devname)) {
 			error = 2;
 			goto chunk_buf;
 		}
-		if (!full) { /* end of device aligned to a block */
+		if (!full && c != -ENOSPC) { /* end of device block-aligned */
 			offset = ((dev_size - chunksize + BLOCKSIZE - 1) &
 				  ~(BLOCKSIZE - 1));
 			if (read_chunks(fd, offset, dev_size, chunk_buf,
-					chunksize, time_st, 0, devname)) {
+					chunksize, time_st, ino_st, devname)) {
 				error = 2;
 				goto chunk_buf;
 			}
 		}
+		show_rate("read", dev_size, 0);
+		if (verbose > 1)
+			printf("read complete\n");
 		if (verbose)
-			printf("\n%s: data verified successfully\n", progname);
+			printf("%s: data verified successfully\n", progname);
 	}
 	error = error_count;
 chunk_buf:

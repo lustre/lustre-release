@@ -11,8 +11,10 @@ llverdev - verify a block device is functioning properly over its full size
 .IR chunksize ]
 .RB [ -f "] [" -h ]
 .RB [ -o
-.IR offset ]
+.IR offset_kb ]
 .RB [ -l "] [" -p "] [" -r ]
+.RB [ -s
+.IR size_mb ]
 .RB [ -t
 .IR timestamp ]
 .RB [ -v "] [" -w ]
@@ -40,8 +42,8 @@ so it is advisable to start with a partial verification to ensure the
 device is minimally sane before investing the time in a full verification.
 .SH OPTIONS
 .TP
-.BR -c | --chunksize
-IO chunk size in bytes (default=1048576).
+.BR -c | --chunksize " \fIchunk_mb"
+IO chunk size in megabytes (default=1), with optional KMG suffix.
 .TP
 .BR -f | --force
 force test to run without confirmation that the device will be overwritten
@@ -50,12 +52,12 @@ and all data therein will be permanently destroyed.
 .BR -h | --help
 display a brief help message.
 .TP
-.BI -o offset
-offset in kilobytes of start of test (default=0).
-.TP
 .BR -l | --long
 Run a full check, writing and then reading and verifying every block on the
 disk.
+.TP
+.BR -o | --offset " \fIoffset_kb"
+offset of IO start in kilobytes (default=0), with optional KMGTP suffix.
 .TP
 .BR -p | --partial
 Run a partial check, only doing periodic checks across the device (1GB steps).
@@ -65,7 +67,12 @@ Run test in read (verify) mode only, after having run the test in
 .B -w
 mode previously.
 .TP
-.BI -t timestamp
+.BR -s | --size " \fIsize_mb"
+device or file size in megabytes to use for the test, with optional KMGTP
+suffix.  If unspecified, use the actual device or file size (or write until
+an error is hit if 0).
+.TP
+.BR -t | --timestamp " \fItimestamp"
 Set test start time as printed at the start of a previously interrupted test
 to ensure that the validation data is the same across the whole filesystem
 (default=current time())

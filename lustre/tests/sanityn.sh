@@ -3390,6 +3390,24 @@ test_55d()
 }
 run_test 55d "rename file vs link"
 
+test_56a() {
+	$LFS setstripe -c 1 $MOUNT/$tfile || error "creating $MOUNT/$tfile"
+	stack_trap "rm -f $MOUNT/$tfile"
+	echo "run_llverdev $MOUNT/$tfile -p -s $((16000000)) -c 4k"
+	run_llverdev $MOUNT/$tfile -p -s $((16000000)) -c 4k ||
+		error "llverdev failed with rc=$?"
+}
+run_test 56a "test llverdev with single large stripe"
+
+test_56b() {
+	$LFS setstripe -C 2000 $MOUNT/$tfile || error "creating $MOUNT/$tfile"
+	stack_trap "rm -f $MOUNT/$tfile"
+	echo "run_llverdev $MOUNT/$tfile -p -s $((16000000 * OSTCOUNT)) -c 4k"
+	run_llverdev $MOUNT/$tfile -p -s $((16000000 * OSTCOUNT)) -c 4k ||
+		error "llverdev failed with rc=$?"
+}
+run_test 56b "test llverdev and partial verify of wide stripe file"
+
 test_60() {
 	[ $MDS1_VERSION -lt $(version_code 2.3.0) ] &&
 		skip "MDS version must be >= 2.3.0"

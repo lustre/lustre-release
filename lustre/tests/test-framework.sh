@@ -8678,36 +8678,34 @@ log_sub_test_end() {
 
 run_llverdev()
 {
-        local dev=$1
-        local llverdev_opts=$2
-        local devname=$(basename $1)
-        local size=$(grep "$devname"$ /proc/partitions | awk '{print $3}')
-        # loop devices aren't in /proc/partitions
-        [ "x$size" == "x" ] && local size=$(ls -l $dev | awk '{print $5}')
+	local dev=$1; shift
+	local llverdev_opts="$*"
+	local devname=$(basename $dev)
+	local size=$(awk "/$devname$/ {print \$3}" /proc/partitions)
+	# loop devices aren't in /proc/partitions
+	[[ -z "$size" ]] && size=$(stat -c %s $dev)
 
-        size=$(($size / 1024 / 1024)) # Gb
+	local size_gb=$((size / 1024 / 1024)) # Gb
 
-        local partial_arg=""
-        # Run in partial (fast) mode if the size
-        # of a partition > 1 GB
-        [ $size -gt 1 ] && partial_arg="-p"
+	local partial_arg=""
+	# Run in partial (fast) mode if the size of a partition > 1 GB
+	(( $size == 0 || $size_gb > 1 )) && partial_arg="-p"
 
-        llverdev --force $partial_arg $llverdev_opts $dev
+	llverdev --force $partial_arg $llverdev_opts $dev
 }
 
 run_llverfs()
 {
-        local dir=$1
-        local llverfs_opts=$2
-        local use_partial_arg=$3
-        local partial_arg=""
-        local size=$(df -B G $dir |tail -n 1 |awk '{print $2}' |sed 's/G//') #GB
+	local dir=$1
+	local llverfs_opts=$2
+	local use_partial_arg=$3
+	local partial_arg=""
+	local size=$(df -B G $dir |tail -n 1 |awk '{print $2}' |sed 's/G//') #GB
 
-        # Run in partial (fast) mode if the size
-        # of a partition > 1 GB
-        [ "x$use_partial_arg" != "xno" ] && [ $size -gt 1 ] && partial_arg="-p"
+	# Run in partial (fast) mode if the size of a partition > 1 GB
+	[ "x$use_partial_arg" != "xno" ] && [ $size -gt 1 ] && partial_arg="-p"
 
-        llverfs $partial_arg $llverfs_opts $dir
+	llverfs $partial_arg $llverfs_opts $dir
 }
 
 run_sgpdd () {

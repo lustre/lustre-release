@@ -34,15 +34,15 @@ endif
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
-sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ll_decode_linkea \
-		llsom_sync l_foreign_symlink
+sbin_PROGRAMS = lctl l_getidentity llverdev llverfs lustre_rsync \
+		ll_decode_linkea llsom_sync l_foreign_symlink
 
 if TESTS
 sbin_PROGRAMS += wiretest
 endif # TESTS
 
 if SERVER
-sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader lshowmount \
+sbin_PROGRAMS += mkfs.lustre tunefs.lustre lr_reader lshowmount \
 		 ll_decode_filter_fid llog_reader l_tunedisk \
 		 ofd_access_log_reader
 endif
