@@ -1235,6 +1235,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 	return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * Output information about nodemaps.
  * \param	argc		number of args
@@ -1278,6 +1279,7 @@ int jt_nodemap_info(int argc, char **argv)
 	}
 	return rc;
 }
+#endif
 
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {

@@ -69,9 +69,9 @@
 #include <linux/lnet/lnetctl.h>
 #ifdef HAVE_SERVER_SUPPPORT
 #include <linux/lustre/lustre_barrier_user.h>
+#include <linux/lustre/lustre_disk.h>
 #endif
 #include <linux/lustre/lustre_cfg.h>
-#include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ostid.h>
 #include <linux/lustre/lustre_param.h>
@@ -905,7 +905,6 @@ old_ioctl:
 #endif
 	return rc;
 }
-#endif /* HAVE_SERVER_SUPPORT */
 
 int jt_obd_set_readonly(int argc, char **argv)
 {
@@ -973,6 +972,47 @@ int jt_obd_abort_recovery_mdt(int argc, char **argv)
 
 	return obd_abort_recovery(argv[0], OBD_FLG_ABORT_RECOV_MDT);
 }
+#else /* ! HAVE_SERVER_SUPPROT */
+int jt_obd_no_transno(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_obd_set_readonly(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_obd_abort_recovery(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_obd_abort_recovery_mdt(int argc, char **argv)
+{
+	if (argc != 1)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+#endif /* HAVE_SERVER_SUPPORT */
 
 int jt_get_version(int argc, char **argv)
 {
@@ -2331,52 +2371,6 @@ int jt_replace_nids(int argc, char **argv)
 	return rc;
 }
 
-/**
- * Clear config logs for given device or filesystem.
- * lctl clear_conf <devicename|fsname>
- * Command has to be run on MGS node having MGS device mounted with -o
- * nosvc.
- *
- * Configuration logs for filesystem or one particular log is
- * processed. New log is created, original log is read, its records
- * marked SKIP do not get copied to new log. Others are copied as-is.
- * Original file is renamed to log.${time}.bak.
- *
- * \see mgs_clear_configs
- * \see mgs_replace_log
- * \see mgs_clear_config_handler
- **/
-int jt_lcfg_clear(int argc, char **argv)
-{
-	int rc;
-	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	struct obd_ioctl_data data;
-
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = get_mgs_device();
-	if (argc != 2)
-		return CMD_HELP;
-
-	data.ioc_inllen1 = strlen(argv[1]) + 1;
-	data.ioc_inlbuf1 = argv[1];
-
-	memset(buf, 0, sizeof(rawbuf));
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc) {
-		fprintf(stderr, "error: %s: invalid ioctl\n",
-			jt_cmdname(argv[0]));
-		return rc;
-	}
-
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_CONFIGS, buf);
-	if (rc < 0) {
-		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-			strerror(rc = errno));
-	}
-
-	return rc;
-}
-
 int jt_obd_deactivate(int argc, char **argv)
 {
 	return do_activate(argc, argv, 0);
@@ -2477,6 +2471,53 @@ int jt_obd_mdc_lookup(int argc, char **argv)
 	return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
+/**
+ * Clear config logs for given device or filesystem.
+ * lctl clear_conf <devicename|fsname>
+ * Command has to be run on MGS node having MGS device mounted with -o
+ * nosvc.
+ *
+ * Configuration logs for filesystem or one particular log is
+ * processed. New log is created, original log is read, its records
+ * marked SKIP do not get copied to new log. Others are copied as-is.
+ * Original file is renamed to log.${time}.bak.
+ *
+ * \see mgs_clear_configs
+ * \see mgs_replace_log
+ * \see mgs_clear_config_handler
+ **/
+int jt_lcfg_clear(int argc, char **argv)
+{
+	int rc;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = get_mgs_device();
+	if (argc != 2)
+		return CMD_HELP;
+
+	data.ioc_inllen1 = strlen(argv[1]) + 1;
+	data.ioc_inlbuf1 = argv[1];
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_CONFIGS, buf);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
+
+	return rc;
+}
+
 int jt_lcfg_fork(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
@@ -2543,6 +2584,37 @@ int jt_lcfg_erase(int argc, char **argv)
 
 	return rc;
 }
+#else /* !HAVE_SERVER_SUPPORT */
+int jt_lcfg_clear(int argc, char **argv)
+{
+	if (argc != 2)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_lcfg_fork(int argc, char **argv)
+{
+	if (argc != 3)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_lcfg_erase(int argc, char **argv)
+{
+	if (argc != 3)
+		return CMD_HELP;
+
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+#endif /* HAVE_SERVER_SUPPORT */
 
 enum llog_default_dev_op {
 	LLOG_DFLT_MGS_SET = 0,
@@ -3838,6 +3910,7 @@ out:
 	return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * Format and send the ioctl to the MGS.
  *
@@ -4562,6 +4635,98 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 
 	return rc;
 }
+#else /* !HAVE_SERVER_SUPPORT */
+int jt_nodemap_activate(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_add(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_del(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_modify(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_add_range(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_test_nid(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_del_range(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_add_idmap(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_del_idmap(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_test_id(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_set_fileset(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_set_sepol(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_info(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+#endif /* HAVE_SERVER_SUPPORT */
 
 /*
  * this function tranforms a rule [start-end/step] into an array
@@ -5368,6 +5533,7 @@ int jt_get_obj_version(int argc, char **argv)
 	return 0;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 int jt_changelog_register(int argc, char **argv)
 {
 	struct obd_ioctl_data	 data = { 0 };
@@ -5471,6 +5637,21 @@ int jt_changelog_deregister(int argc, char **argv)
 
 	return 0;
 }
+#else /* !HAVE_SERVER_SUPPORT */
+int jt_changelog_register(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_changelog_deregister(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+#endif /* HAVE_SERVER_SUPPORT */
 
 int jt_pcc_add(int argc, char **argv)
 {
