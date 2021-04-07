@@ -4051,7 +4051,7 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 	}
 }
 
-int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
+static int llapi_file_get_stripe1(const char *path, struct lov_user_md *lum)
 {
 	const char *fname;
 	char *dname;
@@ -4090,6 +4090,31 @@ int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
 
 out_free:
 	free(dname);
+	return rc;
+}
+
+int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
+{
+	char *canon_path = NULL;
+	int rc, rc2;
+
+	rc = llapi_file_get_stripe1(path, lum);
+	if (!(rc == -ENOTTY || rc == -ENODATA))
+		goto out;
+
+	/* Handle failure due to symlinks by dereferencing path manually. */
+	canon_path = canonicalize_file_name(path);
+	if (canon_path == NULL)
+		goto out; /* Keep original rc. */
+
+	rc2 = llapi_file_get_stripe1(canon_path, lum);
+	if (rc2 < 0)
+		goto out; /* Keep original rc. */
+
+	rc = 0;
+out:
+	free(canon_path);
+
 	return rc;
 }
 

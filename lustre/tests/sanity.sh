@@ -3319,6 +3319,37 @@ test_27P() {
 }
 run_test 27P "basic ops on foreign dir of foreign_symlink type"
 
+test_27Q() {
+	rm -f $TMP/$tfile $TMP/$tfile.loop $TMP/$tfile.none $TMP/$tfile.broken
+
+	test_mkdir $DIR/$tdir-1
+	test_mkdir $DIR/$tdir-2
+
+	echo 'It is what it is' > $DIR/$tdir-1/$tfile
+	lov_getstripe_old $DIR/$tdir-1/$tfile || error "$DIR/$tdir-1/$tfile: rc = $?"
+
+	ln -s $DIR/$tdir-1/$tfile $DIR/$tdir-2/$tfile
+	lov_getstripe_old $DIR/$tdir-2/$tfile || error "$DIR/$tdir-2/$tfile: rc = $?"
+
+	ln -s $DIR/$tdir-1/$tfile $TMP/$tfile
+	lov_getstripe_old $TMP/$tfile || error "$TMP/$tfile: rc = $?"
+
+	# Create some bad symlinks and ensure that we don't loop
+	# forever or something. These should return ELOOP (40) and
+	# ENOENT (2) but I don't want to test for that because there's
+	# always some weirdo architecture that needs to ruin
+	# everything by defining these error numbers differently.
+
+	ln -s $TMP/$tfile.loop $TMP/$tfile.loop
+	lov_getstripe_old $TMP/$tfile.loop && error "$TMP/$tfile.loop: rc = $?"
+
+	ln -s $TMP/$tfile.none $TMP/$tfile.broken
+	lov_getstripe_old $TMP/$tfile.broken && error "$TMP/$tfile.broken: rc = $?"
+
+	return 0
+}
+run_test 27Q "llapi_file_get_stripe() works on symlinks"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
