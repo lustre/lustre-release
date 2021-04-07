@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>Lustre</short>
+  <description>The Lustre protocol is used to share files via TCP (or IB) networking. You will need to have the Lustre tools installed and properly configure your Lustre server for this option to be useful.</description>
+  <port protocol="tcp" port="988"/>
+</service>

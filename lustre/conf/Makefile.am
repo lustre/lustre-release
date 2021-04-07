@@ -34,7 +34,7 @@
 SUBDIRS = resource
 DIST_SUBDIRS = resource
 
-EXTRA_DIST = lustre.dtd lustre2ldif.xsl top.ldif \
+EXTRA_DIST = lustre.dtd lustre.xml lustre2ldif.xsl top.ldif \
              99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
              lnet_routes.conf lnet.conf lgssc.conf 99-lustre-server.rules
 
@@ -45,6 +45,8 @@ noinst_DATA = top.ldif lustre2ldif.xsl
 sysconf_DATA += lnet_routes.conf
 endif
 
+firewallddir = ${prefix}/lib/firewalld/services
+firewalld_DATA = lustre.xml
 udevrulesdir = $(sysconfdir)/udev/rules.d
 udevrules_DATA = 99-lustre.rules
 
