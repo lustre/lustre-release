@@ -8631,7 +8631,7 @@ test_120() { # LU-11130
 }
 run_test 120 "cross-target rename should not create bad symlinks"
 
-test_122() {
+test_122a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[[ "$OST1_VERSION" -ge $(version_code 2.11.53) ]] ||
 		skip "Need OST version at least 2.11.53"
@@ -8650,7 +8650,68 @@ test_122() {
 
 	cleanup
 }
-run_test 122 "Check OST sequence update"
+run_test 122a "Check OST sequence update"
+
+test_122b() {
+	[[ "$OST1_VERSION" -ge $(version_code 2.11.53) ]] ||
+		skip "Need OST version at least 2.11.53"
+	local err
+
+	reformat
+	LOAD_MODULES_REMOTE=true load_modules
+#define OBD_FAIL_OFD_SET_OID 0x1e0
+	do_facet ost1 $LCTL set_param fail_loc=0x00001e0
+
+	stack_trap cleanup EXIT
+	setup_noconfig
+	do_facet ost1 $LCTL set_param obdfilter.*.precreate_batch=256
+	$LFS mkdir -i0 -c1 $DIR/$tdir || error "failed to create directory"
+	$LFS setstripe -i0 -c1 $DIR/$tdir || error "failed to setstripe"
+	do_facet ost1 $LCTL set_param fail_loc=0
+	# overflow IDIF 32bit and create > OST_MAX_PRECREATE*5
+	# so a new wrong sequence would differ from an original with error
+	#define OST_MAX_PRECREATE 20000
+	local ost_max_precreate=20100
+	local num_create=$(( ost_max_precreate * 5 ))
+
+	# Check the number of inodes available on OST0
+	local files=0
+	local ifree=$($LFS df -i $MOUNT | awk '/OST0000/ { print $4 }')
+
+	log "On OST0, $ifree inodes available. Want $num_create."
+
+	if [ $ifree -lt 10000 ]; then
+		files=$(( ifree - 50 ))
+	else
+		files=10000
+	fi
+
+	local j=$((num_create / files + 1))
+
+	for i in $(seq 1 $j); do
+		createmany -o $DIR/$tdir/$tfile-$i- $files ||
+			error "createmany fail create $files files: $?"
+		unlinkmany $DIR/$tdir/$tfile-$i- $files ||
+			error "unlinkmany failed unlink $files files"
+	done
+	sync
+	do_facet ost1 sync
+	#we need a write req during recovery for ofd_seq_load
+	replay_barrier ost1
+	dd if=/dev/urandom of=$DIR/$tdir/$tfile bs=1024k count=1 oflag=sync ||
+		 error "failed to write file"
+
+	# OBD_FAIL_OST_CREATE_NET 0x204
+	do_facet ost1 $LCTL set_param fail_loc=0x80000204
+	fail ost1
+	createmany -o $DIR/$tdir/file_ 100
+	sync
+
+	err=$(do_facet ost1 dmesg | tac | sed "/Recovery over/,$ d" |
+	      grep "OST replaced or reformatted")
+	[ -z "$err" ] || error $err
+}
+run_test 122b "Check OST sequence wouldn't change when IDIF 32bit overflows"
 
 test_123aa() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"

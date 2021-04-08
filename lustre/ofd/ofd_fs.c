@@ -377,8 +377,11 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	/* if seq is already initialized */
 	oseq = ofd_seq_get(ofd, seq);
-	if (oseq != NULL)
+	if (oseq != NULL) {
+		CDEBUG(D_TRACE, "%s: got sequence %#llx "DOSTID"\n",
+		       ofd_name(ofd), seq, POSTID(&oseq->os_oi));
 		RETURN(oseq);
+	}
 
 	OBD_ALLOC_PTR(oseq);
 	if (oseq == NULL)
@@ -438,6 +441,8 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 			ofd_name(ofd), (__u64)info->fti_attr.la_size, seq);
 		GOTO(cleanup, rc = -EINVAL);
 	}
+
+	CDEBUG(D_HA, "%s: adding sequence %#llx\n", ofd_name(ofd), seq);
 
 	oseq = ofd_seq_add(env, ofd, oseq);
 	RETURN((oseq != NULL) ? oseq : ERR_PTR(-ENOENT));
