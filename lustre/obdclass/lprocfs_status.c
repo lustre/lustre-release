@@ -641,6 +641,7 @@ static const char *const obd_connect_names[] = {
 	"getattr_pfid",		/* 0x20000 */
 	"lseek",		/* 0x40000 */
 	"dom_lvb",		/* 0x80000 */
+	"reply_mbits",		/* 0x100000 */
 	NULL
 };
 

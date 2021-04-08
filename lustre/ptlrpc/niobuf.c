@@ -644,7 +644,8 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 			  LNET_ACK_REQ : LNET_NOACK_REQ,
 			  &rs->rs_cb_id, req->rq_self, req->rq_source,
 			  ptlrpc_req2svc(req)->srv_rep_portal,
-			  req->rq_xid, req->rq_reply_off, NULL);
+			  req->rq_rep_mbits ? req->rq_rep_mbits : req->rq_xid,
+			  req->rq_reply_off, NULL);
 out:
         if (unlikely(rc != 0))
                 ptlrpc_req_drop_rs(req);
@@ -701,7 +702,9 @@ int ptlrpc_error(struct ptlrpc_request *req)
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
 	int rc;
+	__u32 opc;
 	int mpflag = 0;
+	bool rep_mbits = false;
 	struct lnet_handle_md bulk_cookie;
 	struct ptlrpc_connection *connection;
 	struct lnet_me *reply_me = NULL;
@@ -769,8 +772,14 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			  "Allocating new XID for resend on EINPROGRESS");
 	}
 
-	if (request->rq_bulk != NULL) {
-		ptlrpc_set_bulk_mbits(request);
+	opc = lustre_msg_get_opc(request->rq_reqmsg);
+	if (opc != OST_CONNECT && opc != MDS_CONNECT &&
+	    opc != MGS_CONNECT && OCD_HAS_FLAG(&imp->imp_connect_data, FLAGS2))
+		rep_mbits = imp->imp_connect_data.ocd_connect_flags2 &
+			OBD_CONNECT2_REP_MBITS;
+
+	if ((request->rq_bulk != NULL) || rep_mbits) {
+		ptlrpc_set_mbits(request);
 		lustre_msg_set_mbits(request->rq_reqmsg, request->rq_mbits);
 	}
 
@@ -842,8 +851,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		} else {
 			reply_me = LNetMEAttach(request->rq_reply_portal,
 						connection->c_peer,
-						request->rq_xid, 0,
-						LNET_UNLINK, LNET_INS_AFTER);
+						rep_mbits ? request->rq_mbits :
+						request->rq_xid,
+						0, LNET_UNLINK, LNET_INS_AFTER);
 		}
 
 		if (IS_ERR(reply_me)) {

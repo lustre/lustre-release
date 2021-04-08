@@ -3009,7 +3009,9 @@ static int echo_client_setup(const struct lu_env *env,
 				 OBD_CONNECT_BRW_SIZE |
 				 OBD_CONNECT_GRANT | OBD_CONNECT_FULL20 |
 				 OBD_CONNECT_64BITHASH | OBD_CONNECT_LVB_TYPE |
-				 OBD_CONNECT_FID;
+				 OBD_CONNECT_FID | OBD_CONNECT_FLAGS2;
+	ocd->ocd_connect_flags2 = OBD_CONNECT2_REP_MBITS;
+
 	ocd->ocd_brw_size = DT_MAX_BRW_SIZE;
 	ocd->ocd_version = LUSTRE_VERSION_CODE;
 	ocd->ocd_group = FID_SEQ_ECHO;

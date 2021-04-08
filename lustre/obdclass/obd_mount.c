@@ -461,7 +461,9 @@ int lustre_start_mgc(struct super_block *sb)
 	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
 				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
 				  OBD_CONNECT_LVB_TYPE |
-				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER;
+				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER |
+				  OBD_CONNECT_FLAGS2;
+	data->ocd_connect_flags2 = OBD_CONNECT2_REP_MBITS;
 
 	if (lmd_is_client(lsi->lsi_lmd) &&
 	    lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)

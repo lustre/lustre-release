@@ -3421,12 +3421,11 @@ __u64 ptlrpc_next_xid(void)
  * request to ensure previous bulk fails and avoid problems with lost replies
  * and therefore several transfers landing into the same buffer from different
  * sending attempts.
+ * Also, to avoid previous reply landing to a different sending attempt.
  */
-void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
+void ptlrpc_set_mbits(struct ptlrpc_request *req)
 {
-	struct ptlrpc_bulk_desc *bd = req->rq_bulk;
-
-	LASSERT(bd != NULL);
+	int md_count = req->rq_bulk ? req->rq_bulk->bd_md_count : 1;
 
 	/*
 	 * Generate new matchbits for all resend requests, including
@@ -3442,7 +3441,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 		 * 'resend for the -EINPROGRESS resend'. To make it simple,
 		 * we opt to generate mbits for all resend cases.
 		 */
-		if (OCD_HAS_FLAG(&bd->bd_import->imp_connect_data,
+		if (OCD_HAS_FLAG(&req->rq_import->imp_connect_data,
 				 BULK_MBITS)) {
 			req->rq_mbits = ptlrpc_next_xid();
 		} else {
@@ -3456,15 +3455,16 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 			spin_unlock(&req->rq_import->imp_lock);
 			req->rq_mbits = req->rq_xid;
 		}
-		CDEBUG(D_HA, "resend bulk old x%llu new x%llu\n",
+		CDEBUG(D_HA, "resend with new mbits old x%llu new x%llu\n",
 		       old_mbits, req->rq_mbits);
 	} else if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
 		/* Request being sent first time, use xid as matchbits. */
-		if (OCD_HAS_FLAG(&bd->bd_import->imp_connect_data, BULK_MBITS)
-		    || req->rq_mbits == 0) {
+		if (OCD_HAS_FLAG(&req->rq_import->imp_connect_data,
+				 BULK_MBITS) || req->rq_mbits == 0)
+		{
 			req->rq_mbits = req->rq_xid;
 		} else {
-			req->rq_mbits -= bd->bd_md_count - 1;
+			req->rq_mbits -= md_count - 1;
 		}
 	} else {
 		/*
@@ -3479,7 +3479,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 	 * that server can infer the number of bulks that were prepared,
 	 * see LU-1431
 	 */
-	req->rq_mbits += bd->bd_md_count - 1;
+	req->rq_mbits += md_count - 1;
 
 	/*
 	 * Set rq_xid as rq_mbits to indicate the final bulk for the old
@@ -3488,7 +3488,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 	 * It's ok to directly set the rq_xid here, since this xid bump
 	 * won't affect the request position in unreplied list.
 	 */
-	if (!OCD_HAS_FLAG(&bd->bd_import->imp_connect_data, BULK_MBITS))
+	if (!OCD_HAS_FLAG(&req->rq_import->imp_connect_data, BULK_MBITS))
 		req->rq_xid = req->rq_mbits;
 }
 

@@ -5606,6 +5606,48 @@ test_109() {
 
 run_test 109 "Race with several mount instances on 1 node"
 
+test_110() {
+	local before=$(date +%s)
+	local evict
+
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/f1
+	touch $DIR/$tfile
+
+	#define OBD_FAIL_PTLRPC_RESEND_RACE	 0x525
+	do_facet mds1 lctl set_param fail_loc=0x525 fail_val=3
+
+	# disable last_xid logic by dropping link reply
+	ln $DIR/$tdir/f1 $DIR/$tdir/f2 &
+	sleep 1
+
+	#define OBD_FAIL_PTLRPC_ENQ_RESEND	0x534
+	do_facet mds1 lctl set_param fail_loc=0x534
+
+	# RPC will race with its Resend and the Resend will sleep to let
+	# the original lock to get granted & cancelled.
+	#
+	# AST_SENT is set artificially, so an explicit conflict is not needed
+	#
+	# The woken up Resend gets a new lock, but client does not wait for it
+	stat $DIR/$tfile
+	sleep $TIMEOUT
+	do_facet mds1 lctl set_param fail_loc=0 fail_val=0
+
+	# Take a conflict to wait long enough to see the eviction
+	touch $DIR2/$tfile
+
+	# let the client reconnect
+	client_reconnect
+	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
+		    error "eviction happened: $evict before:$before")
+}
+run_test 110 "do not grant another lock on resend"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

@@ -1295,7 +1295,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
 		RETURN(err_serious(-ENOENT));
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE)) {
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE) ||
+	    OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND)) {
 		req->rq_no_reply = 1;
 		RETURN(err_serious(-ENOENT));
 	}

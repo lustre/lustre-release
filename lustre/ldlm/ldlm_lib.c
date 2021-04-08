@@ -982,6 +982,7 @@ static int rev_import_flags_update(struct obd_import *revimp,
 
 	revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
 
+	revimp->imp_connect_data = *data;
 	rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
 	if (rc) {
 		CERROR("%s: cannot get reverse import %s security: rc = %d\n",

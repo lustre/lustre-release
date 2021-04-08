@@ -2130,6 +2130,16 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
 
+		if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND))) {
+			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
+				OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_ENQ_RESEND,
+						 req->rq_deadline -
+						 req->rq_arrival_time.tv_sec +
+						 cfs_fail_val ?: 3);
+			/* Put the lock to the waiting list and force the cancel */
+			ldlm_set_ast_sent(lock);
+		}
+
 		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && child != parent) {
 			mdt_object_put(info->mti_env, child);
