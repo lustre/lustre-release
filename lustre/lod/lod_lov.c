@@ -607,7 +607,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 
 		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
 			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
-			lo->ldo_mirrors[mirror_idx].lme_primary |= preferred;
+			lo->ldo_mirrors[mirror_idx].lme_prefer |= preferred;
 			lo->ldo_mirrors[mirror_idx].lme_end = i;
 			continue;
 		}
@@ -621,7 +621,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 
 		lo->ldo_mirrors[mirror_idx].lme_id = mirror_id;
 		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
-		lo->ldo_mirrors[mirror_idx].lme_primary = preferred;
+		lo->ldo_mirrors[mirror_idx].lme_prefer = preferred;
 		lo->ldo_mirrors[mirror_idx].lme_start = i;
 		lo->ldo_mirrors[mirror_idx].lme_end = i;
 	}

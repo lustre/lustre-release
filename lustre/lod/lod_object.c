@@ -7336,7 +7336,7 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		/* 2nd pick is for the primary mirror containing unavail OST */
-		if (lo->ldo_mirrors[index].lme_primary && second_pick < 0)
+		if (lo->ldo_mirrors[index].lme_prefer && second_pick < 0)
 			second_pick = index;
 
 		/* 3rd pick is for non-primary mirror containing unavail OST */
@@ -7347,7 +7347,7 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 		 * we found a non-primary 1st pick, we'd like to find a
 		 * potential pirmary mirror.
 		 */
-		if (picked >= 0 && !lo->ldo_mirrors[index].lme_primary)
+		if (picked >= 0 && !lo->ldo_mirrors[index].lme_prefer)
 			continue;
 
 		/* check the availability of OSTs */
@@ -7384,7 +7384,7 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 		 * primary with all OSTs are available, this is the perfect
 		 * 1st pick.
 		 */
-		if (lo->ldo_mirrors[index].lme_primary)
+		if (lo->ldo_mirrors[index].lme_prefer)
 			break;
 	} /* for all mirrors */
 
@@ -7628,22 +7628,15 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	LASSERT(mlc->mlc_opc == MD_LAYOUT_WRITE ||
 		mlc->mlc_opc == MD_LAYOUT_RESYNC);
 
-	/* look for the primary mirror */
+	/* look for the first preferred mirror */
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
 		if (lo->ldo_mirrors[i].lme_stale)
 			continue;
-		if (lo->ldo_mirrors[i].lme_primary == 0)
+		if (lo->ldo_mirrors[i].lme_prefer == 0)
 			continue;
 
-		if (unlikely(primary >= 0)) {
-			CERROR(DFID " has multiple primary: %u / %u\n",
-			       PFID(lod_object_fid(lo)),
-			       lo->ldo_mirrors[i].lme_id,
-			       lo->ldo_mirrors[primary].lme_id);
-			RETURN(-EIO);
-		}
-
 		primary = i;
+		break;
 	}
 	if (primary < 0) {
 		/* no primary, use any in-sync */

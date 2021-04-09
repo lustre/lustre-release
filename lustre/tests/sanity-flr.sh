@@ -1894,7 +1894,7 @@ write_file_43() {
 	[ $flags = wp ] || error "file mirror state $flags != wp"
 }
 
-test_43() {
+test_43a() {
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
 
 	local tf=$DIR/$tfile
@@ -1941,7 +1941,28 @@ test_43() {
 	verify_comp_attr lcme_flags $tf 0x20002 init,stale
 	verify_comp_attr lcme_flags $tf 0x30003 init,stale
 }
-run_test 43 "mirror pick on write"
+run_test 43a "mirror pick on write"
+
+test_43b() {
+	local tf=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+	rm -f $tf
+
+	# create 3 mirrors FLR file, the first 2 mirrors are preferred
+	$LFS setstripe -N -Eeof --flags=prefer -N -Eeof --flags=prefer \
+		-N -Eeof $tf || error "create 3 mirrors file $tf failed"
+	verify_flr_state $tf "ro"
+
+	echo " ** write to $tf"
+	dd if=/dev/zero of=$tf bs=1M count=1 || error "write $tf failed"
+	verify_flr_state $tf "wp"
+
+	echo " ** resync $tf"
+	$LFS mirror resync $tf || error "resync $tf failed"
+	verify_flr_state $tf "ro"
+}
+run_test 43b "allow writing to multiple preferred mirror file"
 
 test_44() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
