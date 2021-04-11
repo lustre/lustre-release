@@ -1043,7 +1043,9 @@ enum ost_cmd {
         OST_QUOTACTL   = 19,
 	OST_QUOTA_ADJUST_QUNIT = 20, /* not used since 2.4 */
 	OST_LADVISE    = 21,
-	OST_LAST_OPC /* must be < 33 to avoid MDS_GETATTR */
+	OST_LAST_OPC, /* must be < 33 to avoid MDS_GETATTR */
+	OST_FALLOCATE  = 22,
+	OST_SEEK       = 23,
 };
 #define OST_FIRST_OPC  OST_REPLY
 

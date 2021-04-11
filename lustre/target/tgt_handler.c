@@ -613,8 +613,14 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 
 	/* opcode was not found in slice */
 	if (unlikely(s->tos_hs == NULL)) {
-		CERROR("%s: no handlers for opcode 0x%x\n", tgt_name(tgt),
-		       opc);
+		static bool printed;
+
+		/* don't print error messages for known unhandled RPCs */
+		if (opc != OST_FALLOCATE && opc != OST_SEEK && !printed) {
+			CERROR("%s: no handler for opcode 0x%x from %s\n",
+			       tgt_name(tgt), opc, libcfs_id2str(req->rq_peer));
+			printed = true;
+		}
 		RETURN(ERR_PTR(-ENOTSUPP));
 	}
 
