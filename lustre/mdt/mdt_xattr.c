@@ -502,6 +502,8 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 
 		lmv->lmv_hash_type &= ~LMV_HASH_FLAG_LAYOUT_CHANGE;
 		lmv->lmv_layout_version = cpu_to_le32(++version);
+		lmv->lmv_migrate_offset = 0;
+		lmv->lmv_migrate_hash = 0;
 		buf->lb_buf = lmv;
 		buf->lb_len = sizeof(*lmv);
 		rc = mo_xattr_set(env, mdt_object_child(obj), buf,

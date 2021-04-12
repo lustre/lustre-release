@@ -381,7 +381,7 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	if (ma->ma_valid & MA_LMV) {
 		/* don't allow restripe if parent dir layout is changing */
 		lmv = &ma->ma_lmv->lmv_md_v1;
-		if (!lmv_is_sane(lmv))
+		if (!lmv_is_sane2(lmv))
 			GOTO(unlock_parent, rc = -EBADF);
 
 		if (lmv_is_layout_changing(lmv))
@@ -411,6 +411,18 @@ static int mdt_restripe(struct mdt_thread_info *info,
 		repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
 		GOTO(out_child, rc = -EREMOTE);
 	}
+
+	if (!S_ISDIR(lu_object_attr(&child->mot_obj)))
+		GOTO(out_child, rc = -ENOTDIR);
+
+	rc = mdt_stripe_get(info, child, ma, XATTR_NAME_LMV);
+	if (rc)
+		GOTO(out_child, rc);
+
+	/* race with migrate? */
+	if ((ma->ma_valid & MA_LMV) &&
+	     lmv_is_migrating(&ma->ma_lmv->lmv_md_v1))
+		GOTO(out_child, rc = -EBUSY);
 
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
@@ -2265,6 +2277,15 @@ lock_parent:
 
 		if (ma->ma_valid & MA_LOV && mdt_lmm_dom_stripesize(ma->ma_lmm))
 			info->mti_spec.sp_migrate_nsonly = 1;
+	} else if (S_ISDIR(lu_object_attr(&sobj->mot_obj))) {
+		rc = mdt_stripe_get(info, sobj, ma, XATTR_NAME_LMV);
+		if (rc)
+			GOTO(unlock_links, rc);
+
+		/* race with restripe/auto-split? */
+		if ((ma->ma_valid & MA_LMV) &&
+		    lmv_is_restriping(&ma->ma_lmv->lmv_md_v1))
+			GOTO(unlock_links, rc = -EBUSY);
 	}
 
 	/* if migration HSM is allowed */

@@ -8523,6 +8523,8 @@ static int lod_dir_layout_shrink(const struct lu_env *env,
 			     cpu_to_le32(LMV_HASH_TYPE_MASK);
 	lmv->lmv_layout_version =
 			cpu_to_le32(lo->ldo_dir_layout_version + 1);
+	lmv->lmv_migrate_offset = 0;
+	lmv->lmv_migrate_hash = 0;
 
 	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
 		dto = lo->ldo_stripe[i];

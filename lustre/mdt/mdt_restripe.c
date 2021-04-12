@@ -317,6 +317,10 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 		if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_STRIPE)
 			GOTO(out, rc = -EINVAL);
 
+		/* race with migrate? */
+		if (lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type)))
+			GOTO(out, rc = -EBUSY);
+
 		lmv_stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
 
 		/* save stripe to clear 'restriping' flag in the end to avoid
