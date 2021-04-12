@@ -312,13 +312,19 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 
 out_unlock:
+	if (rc < 0 && subtract_count) {
+		/* restore bitmap while holding a mutex */
+		loghandle->lgh_hdr->llh_count++;
+		subtract_count = false;
+		ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
+	}
 	mutex_unlock(&loghandle->lgh_hdr_mutex);
 	up_write(&loghandle->lgh_lock);
 out_trans:
 	rc1 = dt_trans_stop(env, dt, th);
 	if (rc == 0)
 		rc = rc1;
-	if (rc < 0 && subtract_count) {
+	if (rc1 < 0 && subtract_count) {
 		mutex_lock(&loghandle->lgh_hdr_mutex);
 		loghandle->lgh_hdr->llh_count++;
 		ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
@@ -723,6 +729,12 @@ repeat:
 					rc = llog_cancel_rec(lpi->lpi_env,
 							     loghandle,
 							     rec->lrh_index);
+					/* Allow parallel cancelling, ENOENT
+					 * means record was canceled at another
+					 * processing thread or callback
+					 */
+					if (rc == -ENOENT)
+						rc = 0;
 				}
 				if (rc)
 					GOTO(out, rc);
