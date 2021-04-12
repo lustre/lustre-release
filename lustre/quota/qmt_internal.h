@@ -284,6 +284,7 @@ struct qmt_thread_info *qmt_info(const struct lu_env *env)
 }
 
 #define qti_lqes_num(env)	(qmt_info(env)->qti_lqes_num)
+#define qti_lqes_inited(env)	(qmt_info(env)->qti_lqes_num)
 #define qti_lqes_cnt(env)	(qmt_info(env)->qti_lqes_cnt)
 #define qti_glbl_lqe_idx(env)	(qmt_info(env)->qti_glbl_lqe_idx)
 #define qti_lqes(env)		(qti_lqes_num(env) > QMT_MAX_POOL_NUM ? \

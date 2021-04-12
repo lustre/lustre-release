@@ -279,7 +279,12 @@ out_nolock:
 			 * values(see qmt_id_lock_cb for details).*/
 			need_id_notify = true;
 		}
-		if (need_id_notify)
+		/* qti_lqes_inited > 0 means we came here from another
+		 * qmt_pool_lqes_lookup(qmt_dqacq, intent_policy ...). Thus
+		 * we can't init and add new lqes to don't overwrite already
+		 * added.
+		 */
+		if (!qti_lqes_inited(env) && need_id_notify)
 			qmt_set_id_notify(env, qmt, lqe);
 	}
 

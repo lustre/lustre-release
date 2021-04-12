@@ -4852,7 +4852,7 @@ test_72()
 }
 run_test 72 "lfs quota --pool prints only pool's OSTs"
 
-test_73()
+test_73a()
 {
 	local qpool="qpool1"
 
@@ -4864,7 +4864,44 @@ test_73()
 
 	test_default_quota "-u" "data" "qpool1"
 }
-run_test 73 "default limits at OST Pool Quotas"
+run_test 73a "default limits at OST Pool Quotas"
+
+test_73b()
+{
+	local TESTFILE1="$DIR/$tdir/$tfile-1"
+	local limit=20 #20M
+	local qpool="qpool1"
+
+	mds_supports_qp
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+	quota_init
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# pool quotas don't work properly without global limit
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set global limit failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 $((OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	log "set default quota for $qpool"
+	$LFS setquota -U --pool $qpool -b ${limit}M -B ${limit}M $DIR ||
+		error "set default quota failed"
+
+	log "Write from user that hasn't lqe"
+	# Check that it doesn't cause a panic or a deadlock
+	# due to nested lqe lookups that rewrite 1st lqe in qti_lqes array.
+	# Have to use RUNAS_ID as resetquota creates lqes in
+	# the beginning for TSTUSR/TSTUSR2 when sets limits to 0.
+	runas -u $RUNAS_ID -g $RUNAS_GID $DD of=$TESTFILE1 count=10
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+}
+run_test 73b "default OST Pool Quotas limit for new user"
 
 test_74()
 {

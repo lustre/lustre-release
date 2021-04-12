@@ -942,6 +942,8 @@ void qti_lqes_fini(const struct lu_env *env)
 	if (qti->qti_lqes_num > QMT_MAX_POOL_NUM)
 		OBD_FREE(qti->qti_lqes,
 			 qti->qti_lqes_num * sizeof(struct lquota_entry *));
+
+	qti->qti_lqes_num = 0;
 }
 
 int qti_lqes_min_qunit(const struct lu_env *env)
@@ -1050,6 +1052,8 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 	int			 i, j, idx;
 	ENTRY;
 
+	if (!qti_lqes_cnt(env))
+		RETURN_EXIT;
 	/* lqes array is sorted by qunit - the first entry has minimum qunit.
 	 * Thus start seeding global qunit's array beginning from the 1st lqe
 	 * and appropriate pool. If pools overlapped, slaves from this
