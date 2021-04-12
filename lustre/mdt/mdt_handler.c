@@ -2535,7 +2535,7 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 				exp_max_brw_size(tsi->tsi_exp));
 	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >>
 			  PAGE_SHIFT;
-	OBD_ALLOC_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
+	OBD_ALLOC_PTR_ARRAY_LARGE(rdpg->rp_pages, rdpg->rp_npages);
 	if (rdpg->rp_pages == NULL)
 		RETURN(-ENOMEM);
 
@@ -2559,7 +2559,7 @@ free_rdpg:
 	for (i = 0; i < rdpg->rp_npages; i++)
 		if (rdpg->rp_pages[i] != NULL)
 			__free_page(rdpg->rp_pages[i]);
-	OBD_FREE_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
+	OBD_FREE_PTR_ARRAY_LARGE(rdpg->rp_pages, rdpg->rp_npages);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
 		RETURN(0);

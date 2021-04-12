@@ -2576,13 +2576,13 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 	if (rw == OBD_BRW_WRITE)
 		brw_flags = OBD_BRW_ASYNC;
 
-	OBD_ALLOC_PTR_ARRAY(pga, npages);
+	OBD_ALLOC_PTR_ARRAY_LARGE(pga, npages);
 	if (!pga)
 		RETURN(-ENOMEM);
 
-	OBD_ALLOC_PTR_ARRAY(pages, npages);
+	OBD_ALLOC_PTR_ARRAY_LARGE(pages, npages);
 	if (!pages) {
-		OBD_FREE_PTR_ARRAY(pga, npages);
+		OBD_FREE_PTR_ARRAY_LARGE(pga, npages);
 		RETURN(-ENOMEM);
 	}
 
@@ -2634,8 +2634,8 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 		}
 		__free_page(pgp->pg);
 	}
-	OBD_FREE_PTR_ARRAY(pga, npages);
-	OBD_FREE_PTR_ARRAY(pages, npages);
+	OBD_FREE_PTR_ARRAY_LARGE(pga, npages);
+	OBD_FREE_PTR_ARRAY_LARGE(pages, npages);
 	RETURN(rc);
 }
 

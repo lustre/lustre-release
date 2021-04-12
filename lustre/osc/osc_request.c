@@ -2301,7 +2301,7 @@ static void sort_brw_pages(struct brw_page **array, int num)
 static void osc_release_ppga(struct brw_page **ppga, size_t count)
 {
 	LASSERT(ppga != NULL);
-	OBD_FREE_PTR_ARRAY(ppga, count);
+	OBD_FREE_PTR_ARRAY_LARGE(ppga, count);
 }
 
 static int brw_interpret(const struct lu_env *env,
@@ -2501,7 +2501,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	if (mem_tight)
 		mpflag = memalloc_noreclaim_save();
 
-	OBD_ALLOC_PTR_ARRAY(pga, page_count);
+	OBD_ALLOC_PTR_ARRAY_LARGE(pga, page_count);
 	if (pga == NULL)
 		GOTO(out, rc = -ENOMEM);
 

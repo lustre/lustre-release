@@ -1654,7 +1654,7 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	if (cfg->cfg_last_idx == 0 || cld_is_nodemap(cld))
 		nrpages = CONFIG_READ_NRPAGES_INIT;
 
-	OBD_ALLOC_PTR_ARRAY(pages, nrpages);
+	OBD_ALLOC_PTR_ARRAY_LARGE(pages, nrpages);
 	if (pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -1824,7 +1824,7 @@ out:
 				break;
 			__free_page(pages[i]);
 		}
-		OBD_FREE_PTR_ARRAY(pages, nrpages);
+		OBD_FREE_PTR_ARRAY_LARGE(pages, nrpages);
 	}
 	return rc;
 }
