@@ -1480,12 +1480,15 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 				      const struct lu_fid *fid,
 				      struct lustre_md *md)
 {
-	struct ll_sb_info	*sbi = ll_s2sbi(sb);
-	struct mdt_body		*body = md->body;
-	struct inode		*inode;
-	ino_t			ino;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_inode_info *lli;
+	struct mdt_body *body = md->body;
+	struct inode *inode;
+	ino_t ino;
+
 	ENTRY;
 
+	LASSERT(md->lmv);
 	ino = cl_fid_build_ino(fid, sbi->ll_flags & LL_SBI_32BIT_API);
 	inode = iget_locked(sb, ino);
 	if (inode == NULL) {
@@ -1494,10 +1497,8 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
+	lli = ll_i2info(inode);
 	if (inode->i_state & I_NEW) {
-		struct ll_inode_info *lli = ll_i2info(inode);
-		struct lmv_stripe_md *lsm = md->lmv;
-
 		inode->i_mode = (inode->i_mode & ~S_IFMT) |
 				(body->mbo_mode & S_IFMT);
 		LASSERTF(S_ISDIR(inode->i_mode), "Not slave inode "DFID"\n",
@@ -1518,12 +1519,17 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 		lli->lli_fid = *fid;
 		ll_lli_init(lli);
 
-		LASSERT(lsm != NULL);
 		/* master object FID */
 		lli->lli_pfid = body->mbo_fid1;
 		CDEBUG(D_INODE, "lli %p slave "DFID" master "DFID"\n",
 		       lli, PFID(fid), PFID(&lli->lli_pfid));
 		unlock_new_inode(inode);
+	} else {
+		/* in directory restripe/auto-split, a directory will be
+		 * transformed to a stripe if it's plain, set its pfid here,
+		 * otherwise ll_lock_cancel_bits() can't find the master inode.
+		 */
+		lli->lli_pfid = body->mbo_fid1;
 	}
 
 	RETURN(inode);
@@ -1631,6 +1637,12 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	/* update default LMV */
 	if (md->default_lmv)
 		ll_update_default_lsm_md(inode, md);
+
+	/* after dir migration/restripe, a stripe may be turned into a
+	 * directory, in this case, zero out its lli_pfid.
+	 */
+	if (unlikely(fid_is_norm(&lli->lli_pfid)))
+		fid_zero(&lli->lli_pfid);
 
 	/*
 	 * no striped information from request, lustre_md from req does not
