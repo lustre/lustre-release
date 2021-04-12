@@ -1348,7 +1348,7 @@ write RPCs in flight: 0
         <itemizedlist>
           <listitem>
             <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_read_ahead_mb</literal>
-              - Controls the maximum amount of data readahead on a file.
+              - Controls the maximum amount of data readahead on all files.
               Files are read ahead in RPC-sized chunks (4 MiB, or the size of
               the <literal>read()</literal> call, if larger) after the second
               sequential read on a file descriptor. Random reads are done at
@@ -1367,7 +1367,7 @@ write RPCs in flight: 0
             <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_read_ahead_per_file_mb</literal>
               - Controls the maximum number of megabytes (MiB) of data that
               should be prefetched by the client when sequential reads are
-              detected on a file.  This is the per-file readahead limit and
+              detected on one file.  This is the per-file readahead limit and
               cannot be larger than <literal>max_read_ahead_mb</literal>.
             </para>
           </listitem>
