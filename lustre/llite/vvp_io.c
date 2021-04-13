@@ -959,7 +959,8 @@ static inline void ll_account_page_dirtied(struct page *page,
 #elif defined(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT)
 	account_page_dirtied(page, mapping);
 #else
-	vvp_account_page_dirtied(page, mapping);
+	if (vvp_account_page_dirtied)
+		vvp_account_page_dirtied(page, mapping);
 #endif
 }
 

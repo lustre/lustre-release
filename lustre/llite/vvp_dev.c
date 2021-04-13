@@ -291,8 +291,7 @@ int vvp_global_init(void)
 	 * Kernel v5.2-5678-gac1c3e4 no longer exports account_page_dirtied
 	 */
 	vvp_account_page_dirtied = (void *)
-		kallsyms_lookup_name("account_page_dirtied");
-	BUG_ON(!vvp_account_page_dirtied);
+		cfs_kallsyms_lookup_name("account_page_dirtied");
 #endif
 
 	return 0;

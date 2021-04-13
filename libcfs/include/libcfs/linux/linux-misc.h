@@ -40,6 +40,7 @@
 #include <linux/mutex.h>
 #include <linux/user_namespace.h>
 #include <linux/uio.h>
+#include <linux/kallsyms.h>
 
 #ifndef HAVE_IOV_ITER_TYPE
 #ifdef HAVE_IOV_ITER_HAS_TYPE_MEMBER
@@ -145,8 +146,13 @@ void cfs_arch_init(void);
 #define sizeof_field(type, member)	FIELD_SIZEOF(type, member)
 #endif
 
-#ifndef HAVE_KALLSYMS_LOOKUP_NAME
-static inline void *kallsyms_lookup_name(char *func)
+#ifdef HAVE_KALLSYMS_LOOKUP_NAME
+static inline void *cfs_kallsyms_lookup_name(const char *name)
+{
+	return (void *)kallsyms_lookup_name(name);
+}
+#else
+static inline void *cfs_kallsyms_lookup_name(const char *name)
 {
 	return NULL;
 }

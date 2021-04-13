@@ -8406,7 +8406,7 @@ static int __init osd_init(void)
 
 #ifdef CONFIG_KALLSYMS
 	priv_security_file_alloc =
-		(void *)kallsyms_lookup_name("security_file_alloc");
+		(void *)cfs_kallsyms_lookup_name("security_file_alloc");
 #endif
 
 	rc = class_register_type(&osd_obd_device_ops, NULL, true,

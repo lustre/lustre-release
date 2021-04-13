@@ -31,7 +31,6 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -47,6 +46,7 @@
 
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
+#include <libcfs/linux/linux-misc.h>
 
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)
@@ -124,10 +124,10 @@ void __init cfs_arch_init(void)
 	wait_bit_init();
 #endif
 	cfs_apply_workqueue_attrs_t =
-		(void *)kallsyms_lookup_name("apply_workqueue_attrs");
+		(void *)cfs_kallsyms_lookup_name("apply_workqueue_attrs");
 #ifndef HAVE_XARRAY_SUPPORT
 	radix_tree_node_cachep =
-		(void *)kallsyms_lookup_name("radix_tree_node_cachep");
+		(void *)cfs_kallsyms_lookup_name("radix_tree_node_cachep");
 #endif
 }
 

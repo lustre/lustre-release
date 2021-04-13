@@ -515,7 +515,7 @@ void __init cfs_debug_init(void)
 {
 #ifdef CONFIG_ARCH_STACKWALK
 	task_dump_stack = (void *)
-			kallsyms_lookup_name("stack_trace_save_tsk");
+			cfs_kallsyms_lookup_name("stack_trace_save_tsk");
 
 #endif
 }
