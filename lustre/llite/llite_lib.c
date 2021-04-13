@@ -199,6 +199,11 @@ static struct ll_sb_info *ll_init_sbi(void)
 	/* Per-filesystem file heat */
 	sbi->ll_heat_decay_weight = SBI_DEFAULT_HEAT_DECAY_WEIGHT;
 	sbi->ll_heat_period_second = SBI_DEFAULT_HEAT_PERIOD_SECOND;
+
+	/* Per-fs open heat level before requesting open lock */
+	sbi->ll_oc_thrsh_count = SBI_DEFAULT_OPENCACHE_THRESHOLD_COUNT;
+	sbi->ll_oc_max_ms = SBI_DEFAULT_OPENCACHE_THRESHOLD_MAX_MS;
+	sbi->ll_oc_thrsh_ms = SBI_DEFAULT_OPENCACHE_THRESHOLD_MS;
 	RETURN(sbi);
 out_destroy_ra:
 	if (sbi->ll_foreign_symlink_prefix)

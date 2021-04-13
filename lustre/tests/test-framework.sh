@@ -10628,3 +10628,35 @@ function check_set_fallocate_or_skip()
 	check_set_fallocate || skip "need at least 2.13.57 for fallocate"
 }
 
+function disable_opencache()
+{
+	local state=$($LCTL get_param -n "llite.*.opencache_threshold_count" | head -1)
+
+	test -z "${saved_OPENCACHE_value}" &&
+					export saved_OPENCACHE_value="$state"
+
+	[[ "$state" = "off" ]] && return
+
+	$LCTL set_param -n "llite.*.opencache_threshold_count"=off
+}
+
+function set_opencache()
+{
+	local newvalue="$1"
+	local state=$($LCTL get_param -n "llite.*.opencache_threshold_count")
+
+	[[ -n "$newvalue" ]] || return
+
+	[[ -n "${saved_OPENCACHE_value}" ]] ||
+					export saved_OPENCACHE_value="$state"
+
+	$LCTL set_param -n "llite.*.opencache_threshold_count"=$newvalue
+}
+
+
+
+function restore_opencache()
+{
+	[[ -z "${saved_OPENCACHE_value}" ]] ||
+		$LCTL set_param -n "llite.*.opencache_threshold_count"=${saved_OPENCACHE_value}
+}

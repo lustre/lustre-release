@@ -133,6 +133,12 @@ struct ll_inode_info {
 	__u64				lli_open_fd_read_count;
 	__u64				lli_open_fd_write_count;
 	__u64				lli_open_fd_exec_count;
+
+	/* Number of times this inode was opened */
+	u64				lli_open_fd_count;
+	/* When last close was performed on this inode */
+	ktime_t				lli_close_fd_time;
+
 	/* Protects access to och pointers and their usage counters */
 	struct mutex			lli_och_mutex;
 
@@ -760,6 +766,17 @@ struct ll_sb_info {
 	unsigned int		  ll_heat_decay_weight;
 	unsigned int		  ll_heat_period_second;
 
+	/* Opens of the same inode before we start requesting open lock */
+	u32			  ll_oc_thrsh_count;
+
+	/* Time in ms between last inode close and next open to be considered
+	 * instant back to back and would trigger an open lock request
+	 */
+	u32			  ll_oc_thrsh_ms;
+
+	/* Time in ms after last file close that we no longer count prior opens*/
+	u32			  ll_oc_max_ms;
+
 	/* filesystem fsname */
 	char			  ll_fsname[LUSTRE_MAXFSNAME + 1];
 
@@ -782,6 +799,11 @@ struct ll_sb_info {
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
 #define SBI_DEFAULT_HEAT_PERIOD_SECOND	(60)
+
+#define SBI_DEFAULT_OPENCACHE_THRESHOLD_COUNT	(5)
+#define SBI_DEFAULT_OPENCACHE_THRESHOLD_MS	(100) /* 0.1 second */
+#define SBI_DEFAULT_OPENCACHE_THRESHOLD_MAX_MS	(60000) /* 1 minute */
+
 /*
  * per file-descriptor read-ahead data.
  */
@@ -1015,6 +1037,8 @@ enum {
 	LPROC_LL_REMOVEXATTR,
 	LPROC_LL_INODE_PERM,
 	LPROC_LL_FALLOCATE,
+	LPROC_LL_INODE_OCOUNT,
+	LPROC_LL_INODE_OPCLTM,
 	LPROC_LL_FILE_OPCODES
 };
 
@@ -1081,6 +1105,7 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_real_close(struct inode *inode, fmode_t fmode);
+void ll_track_file_opens(struct inode *inode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                               struct ll_file_data *file, loff_t pos,
                               size_t count, int rw);

@@ -1158,6 +1158,13 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE2, cfs_fail_val);
 
+	/* We can only arrive at this path when we have no inode, so
+	 * we only need to request open lock if it was requested
+	 * for every open
+	 */
+	if (ll_i2sbi(dir)->ll_oc_thrsh_count == 1)
+		it->it_flags |= MDS_OPEN_LOCK;
+
 	/* Dentry added to dcache tree in ll_lookup_it */
 	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &pca, encrypt,
 			  &encctx, &encctxlen);

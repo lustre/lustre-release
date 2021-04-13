@@ -1355,6 +1355,105 @@ static ssize_t heat_period_second_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(heat_period_second);
 
+static ssize_t opencache_threshold_count_show(struct kobject *kobj,
+					      struct attribute *attr,
+					      char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	if (sbi->ll_oc_thrsh_count)
+		return snprintf(buf, PAGE_SIZE, "%u\n",
+				sbi->ll_oc_thrsh_count);
+	else
+		return snprintf(buf, PAGE_SIZE, "off\n");
+}
+
+static ssize_t opencache_threshold_count_store(struct kobject *kobj,
+					       struct attribute *attr,
+					       const char *buffer,
+					       size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc) {
+		bool enable;
+		/* also accept "off" to disable and "on" to always cache */
+		rc = kstrtobool(buffer, &enable);
+		if (rc)
+			return rc;
+		val = enable;
+	}
+	sbi->ll_oc_thrsh_count = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(opencache_threshold_count);
+
+static ssize_t opencache_threshold_ms_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_oc_thrsh_ms);
+}
+
+static ssize_t opencache_threshold_ms_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_oc_thrsh_ms = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(opencache_threshold_ms);
+
+static ssize_t opencache_max_ms_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_oc_max_ms);
+}
+
+static ssize_t opencache_max_ms_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_oc_max_ms = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(opencache_max_ms);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -1572,6 +1671,9 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,
+	&lustre_attr_opencache_threshold_count.attr,
+	&lustre_attr_opencache_threshold_ms.attr,
+	&lustre_attr_opencache_max_ms.attr,
 	NULL,
 };
 
@@ -1607,6 +1709,10 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_LLSEEK,	LPROCFS_TYPE_LATENCY,	"seek" },
 	{ LPROC_LL_FSYNC,	LPROCFS_TYPE_LATENCY,	"fsync" },
 	{ LPROC_LL_READDIR,	LPROCFS_TYPE_LATENCY,	"readdir" },
+	{ LPROC_LL_INODE_OCOUNT,LPROCFS_TYPE_REQS |
+				LPROCFS_CNTR_AVGMINMAX |
+				LPROCFS_CNTR_STDDEV,	"opencount" },
+	{ LPROC_LL_INODE_OPCLTM,LPROCFS_TYPE_LATENCY,	"openclosetime" },
 	/* inode operation */
 	{ LPROC_LL_SETATTR,	LPROCFS_TYPE_LATENCY,	"setattr" },
 	{ LPROC_LL_TRUNC,	LPROCFS_TYPE_LATENCY,	"truncate" },

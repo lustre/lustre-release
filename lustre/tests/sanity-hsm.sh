@@ -5137,6 +5137,9 @@ test_602() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
+	stack_trap "restore_opencache" EXIT
+	disable_opencache
+
 	mkdir -p $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
@@ -5284,6 +5287,9 @@ run_test 604 "NOPEN Changelog entry"
 test_605() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
+
+	stack_trap "restore_opencache" EXIT
+	disable_opencache
 
 	mkdir -p $DIR/$tdir
 

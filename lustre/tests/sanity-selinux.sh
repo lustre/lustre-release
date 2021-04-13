@@ -639,6 +639,9 @@ test_21b() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS >= 2.11.56"
 
+	stack_trap "restore_opencache" EXIT
+	disable_opencache
+
 	local sepol
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"

@@ -24643,6 +24643,52 @@ test_428() {
 }
 run_test 428 "large block size IO should not hang"
 
+test_429() { # LU-7915 / LU-10948
+	local ll_opencache_threshold_count="llite.*.opencache_threshold_count"
+	local testfile=$DIR/$tfile
+	local mdc_rpcstats="mdc.$FSNAME-MDT0000-*.stats"
+	local new_flag=1
+	local first_rpc
+	local second_rpc
+	local third_rpc
+
+	$LCTL get_param $ll_opencache_threshold_count ||
+		skip "client does not have opencache parameter"
+
+	set_opencache $new_flag
+	stack_trap "restore_opencache"
+	[ $($LCTL get_param -n $ll_opencache_threshold_count) == $new_flag ] ||
+		error "enable opencache failed"
+	touch $testfile
+	# drop MDC DLM locks
+	cancel_lru_locks mdc
+	# clear MDC RPC stats counters
+	$LCTL set_param $mdc_rpcstats=clear
+
+	# According to the current implementation, we need to run 3 times
+	# open & close file to verify if opencache is enabled correctly.
+	# 1st, RPCs are sent for lookup/open and open handle is released on
+	#      close finally.
+	# 2nd, RPC is sent for open, MDS_OPEN_LOCK is fetched automatically,
+	#      so open handle won't be released thereafter.
+	# 3rd, No RPC is sent out.
+	$MULTIOP $testfile oc || error "multiop failed"
+	first_rpc=$(calc_stats $mdc_rpcstats ldlm_ibits_enqueue)
+	echo "1st: $first_rpc RPCs in flight"
+
+	$MULTIOP $testfile oc || error "multiop failed"
+	second_rpc=$(calc_stats $mdc_rpcstats ldlm_ibits_enqueue)
+	echo "2nd: $second_rpc RPCs in flight"
+
+	$MULTIOP $testfile oc || error "multiop failed"
+	third_rpc=$(calc_stats $mdc_rpcstats ldlm_ibits_enqueue)
+	echo "3rd: $third_rpc RPCs in flight"
+
+	#verify no MDC RPC is sent
+	[[ $second_rpc == $third_rpc ]] || error "MDC RPC is still sent"
+}
+run_test 429 "verify if opencache flag on client side does work"
+
 lseek_test_430() {
 	local offset
 	local file=$1
@@ -25412,11 +25458,9 @@ run_test 805 "ZFS can remove from full fs"
 check_lsom_data()
 {
 	local file=$1
-	local size=$($LFS getsom -s $file)
 	local expect=$(stat -c %s $file)
 
-	[[ $size == $expect ]] ||
-		error "$file expected size: $expect, got: $size"
+	check_lsom_size $1 $expect
 
 	local blocks=$($LFS getsom -b $file)
 	expect=$(stat -c %b $file)
@@ -25426,9 +25470,12 @@ check_lsom_data()
 
 check_lsom_size()
 {
-	local size=$($LFS getsom -s $1)
+	local size
 	local expect=$2
 
+	cancel_lru_locks mdc
+
+	size=$($LFS getsom -s $1)
 	[[ $size == $expect ]] ||
 		error "$file expected size: $expect, got: $size"
 }

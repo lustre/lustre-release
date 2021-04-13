@@ -43,6 +43,7 @@
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 #include <linux/falloc.h>
+#include <linux/ktime.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <uapi/linux/llcrypt.h>
@@ -407,6 +408,8 @@ int ll_file_release(struct inode *inode, struct file *file)
 		lli->lli_async_rc = 0;
 	}
 
+	lli->lli_close_fd_time = ktime_get();
+
 	rc = ll_md_close(inode, file);
 
 	if (CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_DUMP_LOG, cfs_fail_val))
@@ -740,6 +743,29 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 	RETURN(0);
 }
 
+void ll_track_file_opens(struct inode *inode)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+
+	/* do not skew results with delays from never-opened inodes */
+	if (ktime_to_ns(lli->lli_close_fd_time))
+		ll_stats_ops_tally(sbi, LPROC_LL_INODE_OPCLTM,
+			   ktime_us_delta(ktime_get(), lli->lli_close_fd_time));
+
+	if (ktime_after(ktime_get(),
+			ktime_add_ms(lli->lli_close_fd_time,
+				     sbi->ll_oc_max_ms))) {
+		lli->lli_open_fd_count = 1;
+		lli->lli_close_fd_time = ns_to_ktime(0);
+	} else {
+		lli->lli_open_fd_count++;
+	}
+
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_OCOUNT,
+			   lli->lli_open_fd_count);
+}
+
 /* Open a file, and (for the very first open) create objects on the OSTs at
  * this time.  If opened with O_LOV_DELAY_CREATE, then we don't do the object
  * creation or open until ll_lov_setstripe() ioctl is called.
@@ -785,6 +811,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode))
 		ll_authorize_statahead(inode, fd);
 
+	ll_track_file_opens(inode);
 	if (is_root_inode(inode)) {
 		file->private_data = fd;
 		RETURN(0);
@@ -858,6 +885,7 @@ restart:
 		LASSERT(*och_usecount == 0);
 		if (!it->it_disposition) {
 			struct dentry *dentry = file_dentry(file);
+			struct ll_sb_info *sbi = ll_i2sbi(inode);
 			struct ll_dentry_data *ldd;
 
 			/* We cannot just request lock handle now, new ELC code
@@ -874,20 +902,43 @@ restart:
 			 *    handle to be returned from LOOKUP|OPEN request,
 			 *    for example if the target entry was a symlink.
 			 *
-			 *  Only fetch MDS_OPEN_LOCK if this is in NFS path,
-			 *  marked by a bit set in ll_iget_for_nfs. Clear the
-			 *  bit so that it's not confusing later callers.
+			 * In NFS path we know there's pathologic behavior
+			 * so we always enable open lock caching when coming
+			 * from there. It's detected by setting a flag in
+			 * ll_iget_for_nfs.
 			 *
-			 *  NB; when ldd is NULL, it must have come via normal
-			 *  lookup path only, since ll_iget_for_nfs always calls
-			 *  ll_d_init().
+			 * After reaching number of opens of this inode
+			 * we always ask for an open lock on it to handle
+			 * bad userspace actors that open and close files
+			 * in a loop for absolutely no good reason
 			 */
+
 			ldd = ll_d2d(dentry);
-			if (ldd && ldd->lld_nfs_dentry) {
+			if (filename_is_volatile(dentry->d_name.name,
+						 dentry->d_name.len,
+						 NULL)) {
+				/* There really is nothing here, but this
+				 * make this more readable I think.
+				 * We do not want openlock for volatile
+				 * files under any circumstances
+				 */
+			} else if (ldd && ldd->lld_nfs_dentry) {
+				/* NFS path. This also happens to catch
+				 * open by fh files I guess
+				 */
+				it->it_flags |= MDS_OPEN_LOCK;
+				/* clear the flag for future lookups */
 				ldd->lld_nfs_dentry = 0;
-				if (!filename_is_volatile(dentry->d_name.name,
-							  dentry->d_name.len,
-							  NULL))
+			} else if (sbi->ll_oc_thrsh_count > 0) {
+				/* Take MDS_OPEN_LOCK with many opens */
+				if (lli->lli_open_fd_count >=
+				    sbi->ll_oc_thrsh_count)
+					it->it_flags |= MDS_OPEN_LOCK;
+
+				/* If this is open after we just closed */
+				else if (ktime_before(ktime_get(),
+					    ktime_add_ms(lli->lli_close_fd_time,
+							 sbi->ll_oc_thrsh_ms)))
 					it->it_flags |= MDS_OPEN_LOCK;
 			}
 
