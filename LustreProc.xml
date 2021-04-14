@@ -95,7 +95,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.connect_flags
       </listitem>
     </itemizedlist>
     <para>For more information about using <literal>lctl</literal>, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438194_51490"/>.</para>
+        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.setting_param_with_lctl"/>.</para>
     <para>Data can also be viewed using the <literal>cat</literal> command
     with the full path to the file. The form of the <literal>cat</literal>
     command is similar to that of the <literal>lctl get_param</literal>

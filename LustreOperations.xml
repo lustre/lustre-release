@@ -6,7 +6,7 @@
   <para>Once you have the Lustre file system up and running, you can use the
   procedures in this section to perform these basic Lustre administration
   tasks.</para>
-  <section xml:id="dbdoclet.50438194_42877">
+  <section xml:id="dbdoclet.mount_by_label">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -51,7 +51,7 @@ client# mount -t lustre mds0@tcp0:/short
 <replaceable>/dev/long_mountpoint_name</replaceable>
 </screen>
   </section>
-  <section xml:id="dbdoclet.50438194_24122">
+  <section xml:id="dbdoclet.starting_lustre">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -81,7 +81,7 @@ client# mount -t lustre mds0@tcp0:/short
       </listitem>
     </orderedlist>
   </section>
-  <section xml:id="dbdoclet.50438194_84876">
+  <section xml:id="dbdoclet.mounting_server">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -540,7 +540,7 @@ client# lfs mkdir -c
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438194_88980">
+  <section xml:id="dbdoclet.set_get_lustre_params">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -551,20 +551,20 @@ client# lfs mkdir -c
     <itemizedlist>
       <listitem>
         <para>When creating a file system, use mkfs.lustre. See 
-        <xref linkend="dbdoclet.50438194_17237" />below.</para>
+        <xref linkend="dbdoclet.tuning_params_mkfs_lustre" />below.</para>
       </listitem>
       <listitem>
         <para>When a server is stopped, use tunefs.lustre. See 
-        <xref linkend="dbdoclet.50438194_55253" />below.</para>
+        <xref linkend="dbdoclet.setting_param_tunefs" />below.</para>
       </listitem>
       <listitem>
         <para>When the file system is running, use lctl to set or retrieve
         Lustre parameters. See 
-        <xref linkend="dbdoclet.50438194_51490" />and 
-        <xref linkend="dbdoclet.50438194_63247" />below.</para>
+        <xref linkend="dbdoclet.setting_param_with_lctl" />and 
+        <xref linkend="dbdoclet.reporting_current_param" />below.</para>
       </listitem>
     </itemizedlist>
-    <section xml:id="dbdoclet.50438194_17237">
+    <section xml:id="dbdoclet.tuning_params_mkfs_lustre">
       <title>Setting Tunable Parameters with 
       <literal>mkfs.lustre</literal></title>
       <para>When the file system is first formatted, parameters can simply be
@@ -579,7 +579,7 @@ mds# mkfs.lustre --mdt --param="sys.timeout=50" /dev/sda
       <literal>mkfs.lustre</literal>, see 
       <xref linkend="systemconfigurationutilities" />.</para>
     </section>
-    <section xml:id="dbdoclet.50438194_55253">
+    <section xml:id="dbdoclet.setting_param_tunefs">
       <title>Setting Parameters with 
       <literal>tunefs.lustre</literal></title>
       <para>If a server (OSS or MDS) is stopped, parameters can be added to an
@@ -614,7 +614,7 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
       <literal>tunefs.lustre</literal>, see 
       <xref linkend="systemconfigurationutilities" />.</para>
     </section>
-    <section xml:id="dbdoclet.50438194_51490">
+    <section xml:id="dbdoclet.setting_param_with_lctl">
       <title>Setting Parameters with 
       <literal>lctl</literal></title>
       <para>When the file system is running, the 
@@ -625,7 +625,7 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
       <note>
         <para>The <literal>lctl list_param</literal> command enables users to
           list all parameters that can be set. See 
-        <xref linkend="dbdoclet.50438194_88217" />.</para>
+        <xref linkend="dbdoclet.list_params" />.</para>
       </note>
       <para>For more details about the 
       <literal>lctl</literal> command, see the examples in the sections below
@@ -659,7 +659,7 @@ osc.myth-OST0003-osc.max_dirty_mb=32
 osc.myth-OST0004-osc.max_dirty_mb=32
 </screen>
       </section>
-      <section xml:id="dbdoclet.50438194_64195">
+      <section xml:id="dbdoclet.setting_permanent_params">
         <title>Setting Permanent Parameters</title>
         <para>Use <literal>lctl set_param -P</literal> or
         <literal>lctl conf_param</literal> command to set permanent parameters.
@@ -741,7 +741,7 @@ lctl set_param -P -d
         provides an interactive list of available parameters.
         </para></note>
       </section>
-      <section xml:id="dbdoclet.50438194_88217">
+      <section xml:id="dbdoclet.list_params">
         <title>Listing Parameters</title>
         <para>To list Lustre or LNet parameters that are available to set, use
         the 
@@ -767,7 +767,7 @@ lctl list_param [-FR]
 oss# lctl list_param obdfilter.lustre-OST0000 
 </screen>
       </section>
-      <section xml:id="dbdoclet.50438194_63247">
+      <section xml:id="dbdoclet.reporting_current_param">
         <title>Reporting Current Parameter Values</title>
         <para>To report current Lustre parameter values, use the 
         <literal>lctl get_param</literal> command with this syntax:</para>
@@ -873,7 +873,7 @@ mds1# lctl get_param mdt.testfs-MDT0000.recovery_status
     <xref xmlns:xlink="http://www.w3.org/1999/xlink"
     linkend="configuringfailover" />.</para>
   </section>
-  <section xml:id="dbdoclet.50438194_70905">
+  <section xml:id="dbdoclet.erasing_filesystem">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -926,7 +926,7 @@ $ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=
       them.</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.50438194_16954">
+  <section xml:id="dbdoclet.reclaiming_reserved_disk_space">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -952,7 +952,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
       5%.</para>
     </warning>
   </section>
-  <section xml:id="dbdoclet.50438194_69998">
+  <section xml:id="dbdoclet.replacing_existing_ost_mdt">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -965,7 +965,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
     For more information on removing a MDT, see 
     <xref linkend='lustremaint.rmremotedir' />.</para>
   </section>
-  <section xml:id="dbdoclet.50438194_30872">
+  <section xml:id="dbdoclet.identifying_file_objects">
     <title>
     <indexterm>
       <primary>operations</primary>

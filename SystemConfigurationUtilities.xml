@@ -264,7 +264,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
       <screen>lctl list_param [-R] [-F] <replaceable>obdtype.obdname.*</replaceable></screen>
       <para>For example, to list all of the parameters on the MDT:</para>
       <screen>oss# lctl list_param -RF mdt</screen>
-      <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="dbdoclet.50438194_51490"/>.</para>
+      <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="dbdoclet.setting_param_with_lctl"/>.</para>
       <para><emphasis role="bold">Network Configuration</emphasis></para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -516,7 +516,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
               <entry>
                 <para> Sets a permanent configuration parameter for any device via the MGS. This command must be run on the MGS node.</para>
                 <para>All writeable parameters under <literal>lctl list_param</literal> (e.g. <literal>lctl list_param -F osc.*.* | grep</literal> =) can be permanently set using <literal>lctl conf_param</literal>, but the format is slightly different. For <literal>conf_param</literal>, the device is specified first, then the obdtype. Wildcards are not supported. Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout). For system-wide parameters, <replaceable>device</replaceable> is ignored.</para>
-                <para>For more information on setting permanent parameters and <literal>lctl conf_param</literal> command examples, see <xref linkend="dbdoclet.50438194_64195"/> (Setting Permanent Parameters).</para>
+                <para>For more information on setting permanent parameters and <literal>lctl conf_param</literal> command examples, see <xref linkend="dbdoclet.setting_permanent_params"/> (Setting Permanent Parameters).</para>
               </entry>
             </row>
             <row>
@@ -1530,7 +1530,7 @@ mkfs.lustre</title>
         defined by this command.</para>
       <para>When the file system is created, parameters can simply be added as a
           <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. See <xref
-          linkend="dbdoclet.50438194_17237"/>.</para>
+          linkend="dbdoclet.tuning_params_mkfs_lustre"/>.</para>
       <informaltable frame="all">
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
