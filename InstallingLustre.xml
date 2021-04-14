@@ -13,7 +13,7 @@
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438261_41900" />
+        <xref linkend="dbdoclet.lustre_installation" />
       </para>
     </listitem>
   </itemizedlist>
@@ -363,7 +363,7 @@
       </itemizedlist></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438261_41900">
+  <section xml:id="dbdoclet.lustre_installation">
     <title>Lustre Software Installation Procedure</title>
     <caution>
       <para>Before installing the Lustre software, back up ALL data. The Lustre
@@ -403,7 +403,7 @@
          linkend="table.installed_server_pkg" />for a list of required packages.
         </para>
       </listitem>
-      <listitem xml:id="dbdoclet.50438261_88296">
+      <listitem xml:id="dbdoclet.lustre_server_e2fsprogs_install">
         <para>Install the Lustre server and 
         <literal>e2fsprogs</literal> packages on all Lustre servers (MGS, MDSs,
         and OSSs).
