@@ -8054,10 +8054,10 @@ test_60f() {
 
 	stack_trap "$LCTL set_param debug_path=$old_path"
 	stack_trap "rm -f $TMP/$tfile*"
+	rm -f $TMP/$tfile* 2> /dev/null
 	#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
 	$LCTL set_param debug_path=$TMP/$tfile fail_loc=0x8000050e
 	test_mkdir $DIR/$tdir
-	rm -f $TMP/$tfile* 2> /dev/null
 	# retry in case the open is cached and not released
 	for (( i = 0; i < 100 && $(ls $TMP/$tfile* | wc -l) == 0; i++ )); do
 		echo $i > $DIR/$tdir/$tfile.$i && cat $DIR/$tdir/$tfile.$i
