@@ -8,7 +8,7 @@
     sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438213_13563"/></para>
+      <para><xref linkend="dbdoclet.overview_mmp"/></para>
     </listitem>
     <listitem>
       <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_etn_4zf_tl"/></para>
@@ -18,7 +18,7 @@
     <para>For information about configuring a Lustre file system for failover, see <xref
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="configuringfailover"/></para>
   </note>
-  <section xml:id="dbdoclet.50438213_13563">
+  <section xml:id="dbdoclet.overview_mmp">
       <title>
       <indexterm>
         <primary>multiple-mount protection</primary>
