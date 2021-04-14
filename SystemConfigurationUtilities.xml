@@ -6,7 +6,7 @@
   <para>This chapter includes system configuration utilities and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_55923"/></para>
+      <para><xref linkend="dbdoclet.config_e2scan"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.l_getidentity"/></para>
@@ -15,31 +15,31 @@
       <para><xref linkend="dbdoclet.lctl"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_58217"/></para>
+      <para><xref linkend="dbdoclet.config_ll_decode_filter_fid"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_44971"/></para>
+      <para><xref linkend="dbdoclet.config_recover_lostfound_objs"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_90386"/></para>
+      <para><xref linkend="dbdoclet.config_llog_reader"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_23232"/></para>
+      <para><xref linkend="dbdoclet.config_llstat"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_23648"/></para>
+      <para><xref linkend="dbdoclet.config_llverdev"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_64286"/></para>
+      <para><xref linkend="dbdoclet.config_llshowmount"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_90218"/></para>
+      <para><xref linkend="dbdoclet.config_lst"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_54734"/></para>
+      <para><xref linkend="dbdoclet.config_lustre_rmmod_sh"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_63667"/></para>
+      <para><xref linkend="dbdoclet.lustre_rsync"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="mkfs.lustre"/></para>
@@ -48,19 +48,19 @@
       <para><xref linkend="mount.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_82679"/></para>
+      <para><xref linkend="dbdoclet.plot_llstat"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_51496"/></para>
+      <para><xref linkend="dbdoclet.config_routerstat"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="tunefs.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_99928"/></para>
+      <para><xref linkend="dbdoclet.config_additional_utility"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438219_55923">
+  <section xml:id="dbdoclet.config_e2scan">
       <title><indexterm><primary>e2scan</primary></indexterm>e2scan</title>
     <para>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
     <para>
@@ -811,7 +811,7 @@ lctl &gt; quit</screen>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_58217">
+  <section xml:id="dbdoclet.config_ll_decode_filter_fid">
     <title><indexterm><primary>ll_decode_filter_fid</primary></indexterm>
 ll_decode_filter_fid</title>
     <para>The <literal>ll_decode_filter_fid</literal> utility displays the
@@ -853,10 +853,10 @@ root@oss1# ll_decode_filter_fid #12345[4,5,8]
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.50438219_44971"/></para>
+      <para><xref linkend="dbdoclet.config_recover_lostfound_objs"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_44971" condition='l28'>
+  <section xml:id="dbdoclet.config_recover_lostfound_objs" condition='l28'>
     <title><indexterm><primary>ll_recover_lost_found_objs</primary></indexterm>
 ll_recover_lost_found_objs</title>
     <para>The <literal>ll_recover_lost_found_objs</literal> utility was
@@ -901,7 +901,7 @@ Timestamp Read-delta ReadRate Write-delta WriteRate
       <screen>/proc/fs/lustre/obdfilter/<replaceable>ostname</replaceable>/stats</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_90386">
+  <section xml:id="dbdoclet.config_llog_reader">
     <title><indexterm><primary>llog_reader</primary></indexterm>
 llog_reader</title>
     <para>The llog_reader utility translates a Lustre configuration log into human-readable form.</para>
@@ -927,7 +927,7 @@ llog_reader /tmp/tfs-client</screen>
       <para><xref linkend="tunefs.lustre"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_23232">
+  <section xml:id="dbdoclet.config_llstat">
     <title><indexterm><primary>llstat</primary></indexterm>
 llstat</title>
     <para>The llstat utility displays Lustre statistics.</para>
@@ -1023,7 +1023,7 @@ llstat</title>
 </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_23648">
+  <section xml:id="dbdoclet.config_llverdev">
     <title><indexterm><primary>llverdev</primary></indexterm>
 llverdev</title>
     <para>The llverdev verifies a block device is functioning properly over its full size.</para>
@@ -1161,7 +1161,7 @@ write complete
 read complete </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_64286">
+  <section xml:id="dbdoclet.config_llshowmount">
     <title><indexterm><primary>lshowmount</primary></indexterm>
 lshowmount</title>
     <para>The lshowmount utility shows Lustre exports.</para>
@@ -1233,7 +1233,7 @@ lshowmount</title>
 /proc/fs/lustre/obdfilter/<replaceable>server</replaceable>/exports/<replaceable>uuid</replaceable>/nid</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_90218">
+  <section xml:id="dbdoclet.config_lst">
     <title><indexterm><primary>lst</primary></indexterm>
 lst</title>
     <para>The lst utility starts LNet self-test.</para>
@@ -1283,7 +1283,7 @@ lst stat servers &amp; sleep 30; kill $!
 lst end_session </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_54734">
+  <section xml:id="dbdoclet.config_lustre_rmmod_sh">
     <title><indexterm><primary>lustre_rmmod.sh</primary></indexterm>
 lustre_rmmod.sh</title>
     <para>The lustre_rmmod.sh utility removes all Lustre and LNet modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
@@ -1291,7 +1291,7 @@ lustre_rmmod.sh</title>
       <para>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.50438219_63667">
+  <section xml:id="dbdoclet.lustre_rsync">
     <title><indexterm><primary>lustre_rsync</primary></indexterm>
 lustre_rsync</title>
     <para>The lustre_rsync utility synchronizes (replicates) a Lustre file system to a target file system.</para>
@@ -2286,7 +2286,7 @@ mount.lustre</title>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_82679">
+  <section xml:id="dbdoclet.plot_llstat">
     <title><indexterm><primary>plot-llstat</primary></indexterm>
 plot-llstat</title>
     <para>The plot-llstat utility plots Lustre statistics.</para>
@@ -2348,7 +2348,7 @@ plot-llstat</title>
 plot-llstat log 3</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_51496">
+  <section xml:id="dbdoclet.config_routerstat">
     <title><indexterm><primary>routerstat</primary></indexterm>
 routerstat</title>
     <para>The routerstat utility prints Lustre router statistics.</para>
@@ -2747,7 +2747,7 @@ tunefs.lustre</title>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_99928">
+  <section xml:id="dbdoclet.config_additional_utility">
       <title><indexterm><primary>utilities</primary><secondary>system config</secondary></indexterm>
 Additional System Configuration Utilities</title>
     <para>This section describes additional system configuration utilities for Lustre.</para>

@@ -119,7 +119,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.connect_flags
     <para>The <literal>llstat</literal> utility can be used to monitor some
     Lustre file system I/O activity over a specified time period. For more
     details, see
-    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438219_23232"/></para>
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.config_llstat"/></para>
     <para>Some data is imported from attached clients and is available in a
     directory called <literal>exports</literal> located in the corresponding
     per-service directory on a Lustre server. For example:

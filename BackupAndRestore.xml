@@ -152,7 +152,7 @@
         <literal>lustre_rsync</literal> is run, the user must specify a set of
         parameters for the program to use. These parameters are described in
         the following table and in 
-        <xref linkend="dbdoclet.50438219_63667" />. On subsequent runs, these
+        <xref linkend="dbdoclet.lustre_rsync" />. On subsequent runs, these
         parameters are stored in the the status file, and only the name of the
         status file needs to be passed to 
         <literal>lustre_rsync</literal>.</para>
