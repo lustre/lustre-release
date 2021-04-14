@@ -185,7 +185,7 @@
         </tgroup>
       </informaltable>
     </section>
-    <section xml:id="dbdoclet.50438198_40669">
+    <section xml:id="dbdoclet.troubleshooting">
       <title><indexterm><primary>troubleshooting</primary><secondary>error messages</secondary></indexterm>Viewing Error Messages</title>
       <para>As Lustre software code runs on the kernel, single-digit error codes display to the
         application; these error codes are an indication of the problem. Refer to the kernel console
@@ -288,11 +288,11 @@
               <listitem>
                 <para><emphasis role="italic">Attachments</emphasis> - Attach log sources such as
                   Lustre debug log dumps (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                    linkend="dbdoclet.50438274_15874"/>), syslogs, or console logs. <emphasis
+                  linkend="dbdoclet.debugging_tools"/>), syslogs, or console logs. <emphasis
                     role="italic"><emphasis role="bold">Note:</emphasis></emphasis> Lustre debug
                   logs must be processed using <code>lctl df</code> prior to attaching to a Jira
                   ticket. For more information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                    linkend="dbdoclet.50438274_62472"/>. </para>
+                    linkend="dbdoclet.using_lctl_tool"/>. </para>
               </listitem>
             </itemizedlist>Other fields in the form are used for project tracking and are irrelevant
             to reporting an issue. You can leave these in their default state.</para>

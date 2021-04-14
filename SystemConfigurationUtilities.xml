@@ -12,7 +12,7 @@
       <para><xref linkend="dbdoclet.l_getidentity"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_38274"/></para>
+      <para><xref linkend="dbdoclet.lctl"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438219_58217"/></para>
@@ -200,7 +200,7 @@ l_getidentity</title>
 </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_38274">
+  <section xml:id="dbdoclet.lctl">
     <title><indexterm><primary>lctl</primary></indexterm>
 lctl</title>
     <para>The lctl utility is used for root control and configuration. With lctl you can directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
@@ -803,7 +803,7 @@ lctl &gt; quit</screen>
           </para>
         </listitem>
         <listitem>
-          <para> <xref linkend="dbdoclet.50438219_38274"/> </para>
+          <para> <xref linkend="dbdoclet.lctl"/> </para>
         </listitem>
         <listitem>
           <para> <xref linkend="userutilities.lfs"/> </para>
@@ -2278,7 +2278,7 @@ mount.lustre</title>
           <para>  <xref linkend="tunefs.lustre"/></para>
         </listitem>
         <listitem>
-          <para>  <xref linkend="dbdoclet.50438219_38274"/></para>
+          <para>  <xref linkend="dbdoclet.lctl"/></para>
         </listitem>
         <listitem>
           <para>  <xref linkend="userutilities.lfs"/></para>
@@ -2739,7 +2739,7 @@ tunefs.lustre</title>
           </para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.50438219_38274"/></para>
+          <para><xref linkend="dbdoclet.lctl"/></para>
         </listitem>
         <listitem>
           <para><xref linkend="userutilities.lfs"/></para>

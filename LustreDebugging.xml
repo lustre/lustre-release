@@ -7,16 +7,16 @@
     following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438274_15874"/></para>
+      <para><xref linkend="dbdoclet.debugging_tools"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438274_23607"/></para>
+      <para><xref linkend="dbdoclet.debugging_procedures"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438274_80443"/></para>
+      <para><xref linkend="dbdoclet.debugging_for_devs"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438274_15874">
+  <section xml:id="dbdoclet.debugging_tools">
     <title><indexterm><primary>debugging</primary></indexterm>
 Diagnostic and Debugging Tools</title>
     <para>A variety of diagnostic and analysis tools are available to debug
@@ -76,15 +76,15 @@ Diagnostic and Debugging Tools</title>
             </emphasis> - This tool is used with the debug_kernel option to
             manually dump the Lustre debugging log or post-process debugging
             logs that are dumped automatically. For more information about the
-            lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref
-              linkend="dbdoclet.50438219_38274"/>.</para>
+            lctl tool, see <xref linkend="dbdoclet.using_lctl_tool"/> and <xref
+              linkend="dbdoclet.lctl"/>.</para>
         </listitem>
         <listitem>
           <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes the
             Lustre file system to dump the debug log to the file
                 <literal>/tmp/lustre-log.<replaceable>timestamp</replaceable></literal> where it can
             be retrieved after a reboot. For more information, see <xref
-              linkend="dbdoclet.50438198_40669"/>.</para>
+              linkend="dbdoclet.troubleshooting"/>.</para>
         </listitem>
         <listitem>
           <para>
@@ -99,7 +99,12 @@ Diagnostic and Debugging Tools</title>
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>external tools</secondary></indexterm>External Debugging Tools</title>
-      <para>The tools described in this section are provided in the Linux kernel or are available at an external website. For information about using some of these tools for Lustre debugging, see <xref linkend="dbdoclet.50438274_23607"/> and <xref linkend="dbdoclet.50438274_80443"/>.</para>
+      <para>The tools described in this section are provided in the Linux
+        kernel or are available at an external website. For information about
+        using some of these tools for Lustre debugging, see
+        <xref linkend="dbdoclet.debugging_procedures"/> and
+        <xref linkend="dbdoclet.debugging_for_devs"/>.
+      </para>
       <section remap="h4">
         <title><indexterm><primary>debugging</primary><secondary>admin tools</secondary></indexterm>Tools for Administrators and Developers</title>
         <para>Some general debugging tools provided as a part of the standard Linux distribution
@@ -228,19 +233,23 @@ Diagnostic and Debugging Tools</title>
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438274_23607">
+  <section xml:id="dbdoclet.debugging_procedures">
     <title><indexterm><primary>debugging</primary><secondary>procedure</secondary></indexterm>Lustre Debugging Procedures</title>
-    <para>The procedures below may be useful to administrators or developers debugging a Lustre files system.</para>
+    <para>The procedures below may be useful to administrators or developers
+      debugging a Lustre files system.</para>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>message format</secondary></indexterm>Understanding the Lustre Debug Messaging Format</title>
-      <para>Lustre debug messages are categorized by originating subsystem, message type, and location in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
+      <para>Lustre debug messages are categorized by originating subsystem,
+        message type, and location in the source code. For a list of subsystems
+        and message types, see <xref linkend="dbdoclet.lctl"/>.
+      </para>
       <note>
         <para>For a current list of subsystems and debug message types, see
             <literal>libcfs/include/libcfs/libcfs_debug.h</literal> in the Lustre software
           tree</para>
       </note>
-      <para>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.50438274_57177"/> Format of Lustre Debug Messages.</para>
-      <section xml:id="dbdoclet.50438274_57603">
+      <para>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.lustre_msg_format"/> Format of Lustre Debug Messages.</para>
+      <section xml:id="dbdoclet.lustre_debug_msg">
         <title>Lustre Debug Messages</title>
         <para>Each Lustre debug message has the tag of the subsystem it originated in, the message
           type, and the location in the source code. The subsystems and debug types used are as
@@ -521,7 +530,7 @@ Diagnostic and Debugging Tools</title>
           </listitem>
         </itemizedlist>
       </section>
-      <section xml:id="dbdoclet.50438274_57177">
+      <section xml:id="dbdoclet.lustre_msg_format">
         <title>Format of Lustre Debug Messages</title>
         <para>The Lustre software uses the <literal>CDEBUG()</literal> and
             <literal>CERROR()</literal> macros to print the debug or error messages. To print the
@@ -624,9 +633,12 @@ Diagnostic and Debugging Tools</title>
         <para>Lustre debug messages are maintained in a buffer, with the maximum buffer size specified (in MBs) by the <literal>debug_mb</literal> parameter (<literal>lctl get_param debug_mb</literal>). The buffer is circular, so debug messages are kept until the allocated buffer limit is reached, and then the first messages are overwritten.</para>
       </section>
     </section>
-    <section xml:id="dbdoclet.50438274_62472">
+    <section xml:id="dbdoclet.using_lctl_tool">
       <title><indexterm><primary>debugging</primary><secondary>using lctl</secondary></indexterm>Using the lctl Tool to View Debug Messages</title>
-      <para>The <literal>lctl</literal> tool allows debug messages to be filtered based on subsystems and message types to extract information useful for troubleshooting from a kernel debug log. For a command reference, see <xref linkend="dbdoclet.50438219_38274"/>.</para>
+      <para>The <literal>lctl</literal> tool allows debug messages to be
+        filtered based on subsystems and message types to extract information
+        useful for troubleshooting from a kernel debug log. For a command
+        reference, see <xref linkend="dbdoclet.lctl"/>.</para>
       <para>You can use <literal>lctl</literal> to:</para>
       <itemizedlist>
         <listitem>
@@ -841,7 +853,7 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
       <screen>modinfo libcfs</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438274_80443">
+  <section xml:id="dbdoclet.debugging_for_devs">
     <title><indexterm><primary>debugging</primary><secondary>developers tools</secondary></indexterm>Lustre Debugging for Developers</title>
     <para>The procedures in this section may be useful to developers debugging Lustre source
       code.</para>
@@ -1242,7 +1254,9 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
       <para>Then complete the following steps:</para>
       <orderedlist>
         <listitem>
-          <para>Dump the log into a user-specified log file using lctl (see <xref linkend="dbdoclet.50438274_62472"/>).</para>
+          <para>Dump the log into a user-specified log file using lctl
+            (see <xref linkend="dbdoclet.using_lctl_tool"/>).
+          </para>
         </listitem>
         <listitem>
           <para>Run the leak finder on the newly-created log dump:</para>

@@ -757,7 +757,7 @@ lfs help
               </entry>
               <entry>
                 <para>Name of the pre-defined pool of OSTs (see 
-                <xref linkend="dbdoclet.50438219_38274" />) that will be used
+                <xref linkend="dbdoclet.lctl" />) that will be used
                 for striping. The 
                 <literal>stripe_cnt</literal>, 
                 <literal>stripe_size</literal> and 
@@ -1033,7 +1033,7 @@ $ lfs setstripe --pool my_pool /mnt/lustre/dir
     <section remap="h5">
       <title>See Also</title>
       <para>
-        <xref linkend="dbdoclet.50438219_38274" />
+        <xref linkend="dbdoclet.lctl" />
       </para>
     </section>
   </section>
