@@ -9,17 +9,17 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438225_71141" />
+        <xref linkend="dbdoclet.recover_ldiskfs_errors" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438225_37365" />
+        <xref linkend="dbdoclet.recover_lustreFS_corruption" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438225_12316" />
+        <xref linkend="dbdoclet.recover_unavailable_ost" />
       </para>
     </listitem>
     <listitem>
@@ -28,7 +28,7 @@
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438225_71141">
+  <section xml:id="dbdoclet.recover_ldiskfs_errors">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -93,7 +93,7 @@ root# e2fsck -fn /dev/sda   # don't fix file system, just check for corruption
 :
 root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)</screen>
   </section>
-  <section xml:id="dbdoclet.50438225_37365">
+  <section xml:id="dbdoclet.recover_lustreFS_corruption">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -135,7 +135,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
        identify and process orphan objects found on MDTs as well.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438225_12316">
+  <section xml:id="dbdoclet.recover_unavailable_ost">
     <title>
     <indexterm>
       <primary>recovery</primary>
