@@ -732,7 +732,7 @@
     <emphasis role="italic">striped</emphasis> across the objects using RAID 0,
     and each object is stored on a different OST. (For more information about
     how striping is implemented in a Lustre file system, see
-    <xref linkend="dbdoclet.50438250_89922" />.</para>
+    <xref linkend="dbdoclet.lustre_striping" />.</para>
     <figure xml:id="Fig1.3_LayoutEAonMDT">
       <title>Layout EA on MDT pointing to file data on OSTs</title>
       <mediaobject>
@@ -791,7 +791,7 @@
         available space of all the OSTs.</para>
       </listitem>
     </itemizedlist>
-    <section xml:id="dbdoclet.50438250_89922">
+    <section xml:id="dbdoclet.lustre_striping">
       <title>
       <indexterm>
         <primary>Lustre</primary>
