@@ -12,7 +12,7 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438205_82079" />
+        <xref linkend="dbdoclet.interop_upgrade_requirement" />
       </para>
     </listitem>
     <listitem>
@@ -28,7 +28,7 @@
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438205_82079">
+  <section xml:id="dbdoclet.interop_upgrade_requirement">
     <title>
     <indexterm>
       <primary>Lustre</primary>
