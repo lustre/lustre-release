@@ -6,13 +6,13 @@
   <para>This section describes configuration files and module parameters and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438293_15350"/></para>
+      <para><xref linkend="dbdoclet.tuning_lnet_mod_params"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438293_78010"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438293_15350">
+  <section xml:id="dbdoclet.tuning_lnet_mod_params">
       <title>
           <indexterm><primary>configuring</primary></indexterm>
           <indexterm><primary>LNet</primary><see>configuring</see></indexterm>

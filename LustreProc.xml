@@ -2491,7 +2491,7 @@ nid                    refs   peer    max   tx    min
 ldlm.namespaces.myth-MDT0000-mdc-ffff8804296c2800.lru_max_age=900000
     </screen>
   </section>
-  <section xml:id="dbdoclet.50438271_87260">
+  <section xml:id="dbdoclet.tuning_setting_thread_count">
     <title><indexterm>
         <primary>proc</primary>
         <secondary>thread counts</secondary>

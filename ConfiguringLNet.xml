@@ -446,7 +446,7 @@ route:
         </indexterm>Showing routing information</title>
       <para>When routing is enabled on a node, the tiny, small and large
       routing buffers are allocated. See <xref
-      linkend="dbdoclet.50438272_73839"/> for more details on router
+      linkend="dbdoclet.tuning_lnet_params"/> for more details on router
       buffers. This information can be shown as follows:</para>
       <screen>lnetctl routing show: show routing information
 

@@ -277,7 +277,8 @@ ents&quot;</screen>
       script, since the script only adds extra routes after the router is
       identified.  To ensure that a router is identified correctly, make sure to
       add its local NID in the routes parameter in the modprobe lustre
-      configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
+      configuration file.
+      See <xref linkend='dbdoclet.tuning_lnet_mod_params'/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>LNet</primary></indexterm><literal>lustre_routes_conversion</literal></title>

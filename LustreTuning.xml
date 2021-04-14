@@ -10,7 +10,7 @@
     parameters. These parameters are contained in the 
     <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
   </note>
-  <section xml:id="dbdoclet.50438272_55226">
+  <section xml:id="dbdoclet.tuning_optimizing_service_threads">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -113,7 +113,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
         </listitem>
       </itemizedlist>
       <para>For further details, see 
-      <xref linkend="dbdoclet.50438271_87260" />.</para>
+      <xref linkend="dbdoclet.tuning_setting_thread_count" />.</para>
     </section>
     <section xml:id="dbdoclet.mdstuning">
       <title>
@@ -136,7 +136,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
 </screen>
       </para>
       <para>For details, see 
-      <xref linkend="dbdoclet.50438271_87260" />.</para>
+      <xref linkend="dbdoclet.tuning_setting_thread_count" />.</para>
       <para>The number of MDS service threads started depends on system size
       and the load on the server, and has a default maximum of 64. The
       maximum potential number of threads (<literal>MDS_MAX_THREADS</literal>)
@@ -204,7 +204,7 @@ options mdt mds_num_cpts=[0]</screen>
     </example>
     </para>
   </section>
-  <section xml:id="dbdoclet.50438272_73839">
+  <section xml:id="dbdoclet.tuning_lnet_params">
     <title>
     <indexterm>
       <primary>LNet</primary>
@@ -265,7 +265,7 @@ options ksocklnd enable_irq_affinity=0
       an administrator can bind an interface to one or more CPU partitions.
       Bindings are specified as options to the LNet modules. For more
       information on specifying module options, see 
-      <xref linkend="dbdoclet.50438293_15350" /></para>
+      <xref linkend="dbdoclet.tuning_lnet_mod_params" /></para>
       <para>For example, 
       <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for 
       <literal>o2ib0</literal> will be handled by LND threads executing on 
@@ -2059,7 +2059,7 @@ ost.OSS.ost_io.nrs_delay_pct=hp_delay_pct:5
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438272_25884">
+  <section xml:id="dbdoclet.tuning_lockless_IO">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -2341,7 +2341,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           renegotiate the new maximum RPC size.</para></caution>
       </section>
   </section>
-  <section xml:id="dbdoclet.50438272_80545">
+  <section xml:id="dbdoclet.tuning_IO_small_files">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -2381,7 +2381,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
       </listitem>
     </itemizedlist>
   </section>
-  <section xml:id="dbdoclet.50438272_45406">
+  <section xml:id="dbdoclet.write_vs_read_performance">
     <title>
     <indexterm>
       <primary>tuning</primary>
