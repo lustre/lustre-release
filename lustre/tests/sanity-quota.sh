@@ -5105,6 +5105,22 @@ test_78()
 }
 run_test 78 "Check fallocate increase quota usage"
 
+test_79()
+{
+	local qpool="qpool1"
+	local cmd="$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$qpool.info"
+	local stopf=$TMP/$tfile
+
+	do_facet mds1 "touch $stopf"
+	stack_trap "do_facet mds1 'rm -f $stopf'"
+	do_facet mds1 "while [ -e $stopf ]; do $cmd &>/dev/null; done"&
+	local pid=$!
+	pool_add $qpool || error "pool_add failed"
+	do_facet mds1 "rm $stopf"
+	wait $pid
+}
+run_test 79 "access to non-existed dt-pool/info doesn't cause a panic"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

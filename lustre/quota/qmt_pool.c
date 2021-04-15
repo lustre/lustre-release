@@ -79,6 +79,8 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 	int			 type;
 
 	LASSERT(pool != NULL);
+	if (unlikely(!test_bit(QPI_FLAG_STATE_INITED, &pool->qpi_flags)))
+		return -ENOENT;
 
 	seq_printf(m, "pool:\n"
 		   "    id: %u\n"
@@ -106,6 +108,8 @@ static int qpi_soft_least_qunit_seq_show(struct seq_file *m, void *data)
 {
 	struct qmt_pool_info	*pool = m->private;
 	LASSERT(pool != NULL);
+	if (unlikely(!test_bit(QPI_FLAG_STATE_INITED, &pool->qpi_flags)))
+		return -ENOENT;
 
 	seq_printf(m, "%lu\n", pool->qpi_soft_least_qunit);
 	return 0;
@@ -121,6 +125,8 @@ qpi_soft_least_qunit_seq_write(struct file *file, const char __user *buffer,
 	int rc;
 
 	LASSERT(pool != NULL);
+	if (unlikely(!test_bit(QPI_FLAG_STATE_INITED, &pool->qpi_flags)))
+		return -ENOENT;
 
 	/* Not tuneable for inode limit */
 	if (pool->qpi_rtype != LQUOTA_RES_DT)
@@ -177,6 +183,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	init_rwsem(&pool->qpi_recalc_sem);
 
 	pool->qpi_rtype = pool_type;
+	pool->qpi_flags = 0;
 
 	/* initialize refcount to 1, hash table will then grab an additional
 	 * reference */
@@ -670,6 +677,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 				      qmt->qmt_svname, PFID(&qti->qti_fid), rc);
 #endif
 		}
+		set_bit(QPI_FLAG_STATE_INITED, &pool->qpi_flags);
 		if (name)
 			break;
 	}

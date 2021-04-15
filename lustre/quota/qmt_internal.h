@@ -100,6 +100,7 @@ enum {
 enum {
 	/* set while recalc_thread is working */
 	QPI_FLAG_RECALC_OFFSET,
+	QPI_FLAG_STATE_INITED,
 };
 
 /*
