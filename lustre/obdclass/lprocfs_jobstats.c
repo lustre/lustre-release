@@ -557,13 +557,13 @@ static int lprocfs_jobstats_seq_release(struct inode *inode, struct file *file)
 	return lprocfs_seq_release(inode, file);
 }
 
-static const struct file_operations lprocfs_jobstats_seq_fops = {
-	.owner   = THIS_MODULE,
-	.open    = lprocfs_jobstats_seq_open,
-	.read    = seq_read,
-	.write   = lprocfs_jobstats_seq_write,
-	.llseek  = seq_lseek,
-	.release = lprocfs_jobstats_seq_release,
+static const struct proc_ops lprocfs_jobstats_seq_fops = {
+	PROC_OWNER(THIS_MODULE)
+	.proc_open	= lprocfs_jobstats_seq_open,
+	.proc_read	= seq_read,
+	.proc_write	= lprocfs_jobstats_seq_write,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= lprocfs_jobstats_seq_release,
 };
 
 int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,

@@ -249,12 +249,12 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations lmv_proc_target_fops = {
-        .owner                = THIS_MODULE,
-        .open                 = lmv_target_seq_open,
-        .read                 = seq_read,
-        .llseek               = seq_lseek,
-        .release              = seq_release,
+static const struct proc_ops lmv_proc_target_fops = {
+	PROC_OWNER(THIS_MODULE)
+	.proc_open	= lmv_target_seq_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= seq_release,
 };
 #endif /* CONFIG_PROC_FS */
 

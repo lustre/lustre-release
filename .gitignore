@@ -42,6 +42,7 @@
 *.so
 *.swp
 *.unsigned
+_lpb
 00[0-9][0-9]-*.patch
 autoMakefile
 autoMakefile.in

@@ -1301,6 +1301,32 @@ LB_CHECK_EXPORT([kallsyms_lookup_name], [kernel/kallsyms.c],
 ]) # LIBCFS_KALLSYMS_LOOKUP
 
 #
+# LIBCFS_HAVE_PROC_OPS
+#
+# v5.5-8862-gd56c0d45f0e2
+# proc: decouple proc from VFS with "struct proc_ops"
+#
+AC_DEFUN([LIBCFS_SRC_HAVE_PROC_OPS], [
+	LB2_LINUX_TEST_SRC([proc_ops], [
+		#include <linux/proc_fs.h>
+
+		static struct proc_ops *my_proc;
+	],[
+		my_proc->proc_lseek = NULL;
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_HAVE_PROC_OPS], [
+	AC_MSG_CHECKING([if struct proc_ops exists])
+	LB2_LINUX_TEST_RESULT([proc_ops], [
+		AC_DEFINE(HAVE_PROC_OPS, 1,
+			[struct proc_ops exists])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+]) # LIBCFS_HAVE_PROC_OPS
+
+#
 # LIBCFS_VMALLOC_2ARGS
 #
 # kernel v5.8-rc1~201^2~19
@@ -1398,8 +1424,17 @@ kfree_sensitive_exists, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_NR_UNSTABLE_NFS
 
-AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [] )
-AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [])
+AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
+	LIBCFS_SRC_HAVE_PROC_OPS
+
+	AC_MSG_CHECKING([for available kernel interfaces to libcfs])
+	LB2_LINUX_TEST_COMPILE_ALL([libcfs])
+	AC_MSG_RESULT([done])
+])
+AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
+	# 5.6
+	LIBCFS_HAVE_PROC_OPS
+])
 
 #
 # LIBCFS_PROG_LINUX

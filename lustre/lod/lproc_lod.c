@@ -1015,20 +1015,20 @@ static ssize_t mdt_hash_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(mdt_hash);
 
-static const struct file_operations lod_proc_mdt_fops = {
-	.owner   = THIS_MODULE,
-	.open    = lod_mdts_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = lprocfs_seq_release,
+static const struct proc_ops lod_proc_mdt_fops = {
+	PROC_OWNER(THIS_MODULE)
+	.proc_open	= lod_mdts_seq_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= lprocfs_seq_release,
 };
 
-static const struct file_operations lod_proc_target_fops = {
-	.owner   = THIS_MODULE,
-	.open    = lod_osts_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = lprocfs_seq_release,
+static struct proc_ops lod_proc_target_fops = {
+	PROC_OWNER(THIS_MODULE)
+	.proc_open	= lod_osts_seq_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= lprocfs_seq_release,
 };
 
 static struct attribute *lod_attrs[] = {

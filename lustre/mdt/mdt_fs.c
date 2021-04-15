@@ -36,14 +36,16 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/fs.h>
+#include <libcfs/linux/linux-fs.h>
 #include "mdt_internal.h"
 
-static const struct file_operations mdt_open_files_seq_fops = {
-	.owner   = THIS_MODULE,
-	.open    = lprocfs_mdt_open_files_seq_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+static const struct proc_ops mdt_open_files_seq_fops = {
+	PROC_OWNER(THIS_MODULE)
+	.proc_open		= lprocfs_mdt_open_files_seq_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= seq_release,
 };
 
 /**
