@@ -235,8 +235,10 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 	cl_page_assume(env, io, page);
 	vpg = cl2vvp_page(cl_object_page_slice(clob, page));
 	if (!vpg->vpg_defer_uptodate && !PageUptodate(vmpage)) {
-		vpg->vpg_defer_uptodate = 1;
-		vpg->vpg_ra_used = 0;
+		if (hint == MAYNEED) {
+			vpg->vpg_defer_uptodate = 1;
+			vpg->vpg_ra_used = 0;
+		}
 		cl_page_list_add(queue, page);
 	} else {
 		/* skip completed pages */
