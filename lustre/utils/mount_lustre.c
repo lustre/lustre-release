@@ -104,6 +104,8 @@ void usage(FILE *out)
 		"\t\tnomgs: only start target MDS/OSS, using existing MGS\n"
 		"\t\tnoscrub: do NOT auto start OI scrub unless requested\n"
 		"\t\tskip_lfsck: do NOT auto resume paused/crashed LFSCK\n"
+		"\t\tmax_sectors_kb=<size>: set device max_sectors_kb to size or leaves it untouched if size=0\n"
+		"\t\t\tIf not specified, device max_sectors_kb will be set to max_hw_sectors_kb\n"
 		"\t\tmd_stripe_cache_size=<num>: set MD RAID device stripe cache size\n"
 		"\t<cliopt>: one or more comma separated client options:\n"
 		"\t\texclude=<ostname>[:<ostname>]: list of inactive OSTs (e.g. lustre-OST0001)\n"
