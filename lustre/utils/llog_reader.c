@@ -218,7 +218,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	char *file_buf = NULL, *recs_buf = NULL;
 	struct llog_rec_hdr **recs_pr = NULL;
 	char *ptr = NULL;
-	int i;
+	int i, last_idx;
 
 	rc = fstat(fd, &st);
 	if (rc < 0) {
@@ -275,6 +275,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	ptr = file_buf + __le32_to_cpu((*llog)->llh_hdr.lrh_len);
 	i = 0;
 
+	last_idx = 0;
 	while (ptr < (file_buf + file_size)) {
 		struct llog_rec_hdr *cur_rec;
 		int idx;
@@ -302,11 +303,20 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 			printf("rec #%d type=%x len=%u offset %lu\n", idx,
 			       cur_rec->lrh_type, cur_rec->lrh_len, offset);
 		} else {
-			printf("Bit %d of %d not set\n", idx, recs_num);
 			cur_rec->lrh_id = CANCELLED;
+			if (cur_rec->lrh_type == LLOG_PAD_MAGIC &&
+			   ((offset + cur_rec->lrh_len) & 0x7) != 0)
+				printf("rec #%d wrong padding len=%u offset %lu to 0x%lx\n",
+				       idx, cur_rec->lrh_len, offset,
+				       offset + cur_rec->lrh_len);
 			/* The header counts only set records */
 			i--;
 		}
+		if (last_idx + 1 != idx) {
+			printf("Previous index is %d, current %d, offset %lu\n",
+			       last_idx, idx, offset);
+		}
+		last_idx = idx;
 
 		ptr += __le32_to_cpu(cur_rec->lrh_len);
 		if ((ptr - file_buf) > file_size) {
@@ -344,15 +354,20 @@ void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
 void print_llog_header(struct llog_log_hdr *llog_buf)
 {
 	time_t t;
+	unsigned int lrh_len = __le32_to_cpu(llog_buf->llh_hdr.lrh_len);
+	struct llog_rec_tail *tail = ((struct llog_rec_tail *)((char *)llog_buf+
+				 lrh_len - sizeof(llog_buf->llh_tail)));
 
-	printf("Header size : %u\n",
-	       __le32_to_cpu(llog_buf->llh_hdr.lrh_len));
+	printf("Header size : %u\t llh_size : %u\n", lrh_len,
+	       __le32_to_cpu(llog_buf->llh_size));
 
 	t = __le64_to_cpu(llog_buf->llh_timestamp);
 	printf("Time : %s", ctime(&t));
 
-	printf("Number of records: %u\n",
-	       __le32_to_cpu(llog_buf->llh_count)-1);
+	printf("Number of records: %u\tcat_idx: %u\tlast_idx: %u\n",
+	       __le32_to_cpu(llog_buf->llh_count)-1,
+	       __le32_to_cpu(llog_buf->llh_cat_idx),
+	       __le32_to_cpu(tail->lrt_index));
 
 	printf("Target uuid : %s\n",
 	       (char *)(&llog_buf->llh_tgtuuid));
@@ -754,6 +769,146 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 	printf("\n");
 }
 
+static void lustre_swab_lu_fid(struct lu_fid *fid)
+{
+	__swab64s(&fid->f_seq);
+	__swab32s(&fid->f_oid);
+	__swab32s(&fid->f_ver);
+}
+
+static inline size_t
+update_op_size(unsigned int param_count)
+{
+	return offsetof(struct update_op, uop_params_off[param_count]);
+}
+
+
+static inline struct update_op *
+update_op_next_op(const struct update_op *uop)
+{
+	return (struct update_op *)((char *)uop +
+				update_op_size(uop->uop_param_count));
+}
+
+static void lustre_swab_update_ops(struct update_ops *uops,
+				   unsigned int op_count)
+{
+	unsigned int i;
+	unsigned int j;
+
+	struct update_op *op =
+	       (struct update_op *)((char *)&uops->uops_op[0]);
+
+	for (i = 0; i < op_count; i++, op = update_op_next_op(op)) {
+		lustre_swab_lu_fid(&op->uop_fid);
+		__swab16s(&op->uop_type);
+		__swab16s(&op->uop_param_count);
+		for (j = 0; j < op->uop_param_count; j++)
+			__swab16s(&op->uop_params_off[j]);
+	}
+}
+static const char *update_op_str(__u16 opc)
+{
+	static const char *opc_str[] = {
+		[OUT_START] = "start",
+		[OUT_CREATE] = "create",
+		[OUT_DESTROY] = "destroy",
+		[OUT_REF_ADD] = "ref_add",
+		[OUT_REF_DEL] = "ref_del",
+		[OUT_ATTR_SET] = "attr_set",
+		[OUT_ATTR_GET] = "attr_get",
+		[OUT_XATTR_SET] = "xattr_set",
+		[OUT_XATTR_GET] = "xattr_get",
+		[OUT_XATTR_LIST] = "xattr_list",
+		[OUT_INDEX_LOOKUP] = "lookup",
+		[OUT_INDEX_INSERT] = "insert",
+		[OUT_INDEX_DELETE] = "delete",
+		[OUT_WRITE] = "write",
+		[OUT_XATTR_DEL] = "xattr_del",
+		[OUT_PUNCH] = "punch",
+		[OUT_READ] = "read",
+		[OUT_NOOP] = "noop",
+	};
+
+	if (opc < (sizeof(opc_str) / sizeof((opc_str)[0])) &&
+	    opc_str[opc] != NULL)
+		return opc_str[opc];
+	else
+		return "unknown";
+}
+
+char *buf2str(void *buf, unsigned int size)
+{
+	const char *hex = "0123456789ABCDEF";
+	char *buf_c = buf;
+	static char string[128];
+	int i, j = 0;
+	bool format_hex = false;
+
+	if (size > 0 && buf_c[size - 1] == 0)
+		size--;
+	for (i = 0; i < size; i++) {
+		if (buf_c[i] >= 0x20 && buf_c[i] <= 0x7E) {
+			string[j++] = buf_c[i];
+			format_hex = false;
+		} else if (j < sizeof(string) - 6) {
+			if (!format_hex) {
+				string[j++] = '\\';
+				string[j++] = 'x';
+				format_hex = true;
+			}
+			string[j++] = hex[(buf_c[i] >> 4) & 0xF];
+			string[j++] = hex[buf_c[i] & 0xF];
+		} else {
+			break;
+		}
+		if (j == sizeof(string) - 2)
+			break;
+	}
+	string[j] = 0;
+	return string;
+}
+
+void print_update_rec(struct llog_update_record *lur)
+{
+	struct update_records *rec = &lur->lur_update_rec;
+	unsigned int i, j, up_count, pm_count;
+	struct update_op *op;
+	struct object_update_param *pm;
+
+	up_count = __le32_to_cpu(rec->ur_update_count);
+	pm_count = __le32_to_cpu(rec->ur_param_count);
+	printf("updatelog record master_transno:%llu batchid:%llu flags:0x%x u_index:%d u_count:%d p_count:%d\n",
+	       __le64_to_cpu(rec->ur_master_transno),
+	       __le64_to_cpu(rec->ur_batchid),
+	       __le32_to_cpu(rec->ur_flags),
+	       __le32_to_cpu(rec->ur_index),
+	       up_count,
+	       pm_count);
+
+	op = (struct update_op *)((char *)&rec->ur_ops.uops_op[0] + 0);
+	if (op->uop_type != __le16_to_cpu(op->uop_type))
+		lustre_swab_update_ops(&rec->ur_ops, up_count);
+
+	for (i = 0; i < up_count; i++, op = update_op_next_op(op)) {
+		printf("\t"DFID" type:%s/%d params:%d ",
+		       PFID(&op->uop_fid), update_op_str(op->uop_type),
+		       op->uop_type, op->uop_param_count);
+		for (j = 0; j < op->uop_param_count; j++)
+			printf("p_%d:%d ", j, op->uop_params_off[j]);
+		printf("\n");
+	}
+	pm = (struct object_update_param *) op;
+	for (i = 0; i < pm_count; i++) {
+		printf("\tp_%d - %d/%s\n", i, pm->oup_len,
+		       buf2str(pm->oup_buf, pm->oup_len));
+		pm = (struct object_update_param *)((char *)(pm + 1) +
+		     pm->oup_len);
+	}
+	printf("\n");
+
+}
+
 static void print_records(struct llog_rec_hdr **recs,
 			  int rec_number, int is_ext)
 {
@@ -792,6 +947,9 @@ static void print_records(struct llog_rec_hdr **recs,
 		case CHANGELOG_USER_REC:
 			printf("changelog_user record id:0x%x\n",
 			       __le32_to_cpu(recs[i]->lrh_id));
+			break;
+		case UPDATE_REC:
+			print_update_rec((struct llog_update_record *)recs[i]);
 			break;
 		default:
 			printf("unknown type %x\n", lopt);
