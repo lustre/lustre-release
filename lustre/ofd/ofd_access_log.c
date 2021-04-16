@@ -2,6 +2,7 @@
 #include <linux/circ_buf.h>
 #include <linux/device.h>
 #include <linux/fs.h>
+#include <linux/idr.h>
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>

@@ -35,6 +35,7 @@
 #include <linux/poll.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/idr.h>
 
 #include <lustre_log.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
