@@ -37,6 +37,7 @@
 #include <lustre_update.h>
 #include <lustre_disk.h>
 #include <lustre_lfsck.h>
+#include <lu_object.h>
 
 /* Each one represents a distribute transaction replay
  * operation, and updates on each MDTs are linked to

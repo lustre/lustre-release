@@ -39,7 +39,6 @@
 #include <linux/percpu_counter.h>
 #include <linux/rhashtable.h>
 #include <linux/ctype.h>
-#include <obd_target.h>
 
 struct seq_file;
 struct proc_dir_entry;
@@ -1518,6 +1517,23 @@ static inline bool lu_object_is_cl(const struct lu_object *o)
 {
 	return lu_device_is_cl(o->lo_dev);
 }
+
+/* Generic subset of tgts */
+struct lu_tgt_pool {
+	__u32		   *op_array;	/* array of index of
+					 * lov_obd->lov_tgts
+					 */
+	unsigned int	    op_count;	/* number of tgts in the array */
+	unsigned int	    op_size;	/* allocated size of op_array */
+	struct rw_semaphore op_rw_sem;	/* to protect lu_tgt_pool use */
+};
+
+int tgt_pool_init(struct lu_tgt_pool *op, unsigned int count);
+int tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
+int tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx);
+int tgt_pool_free(struct lu_tgt_pool *op);
+int tgt_check_index(int idx, struct lu_tgt_pool *osts);
+int tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 
 /* bitflags used in rr / qos allocation */
 enum lq_flag {

@@ -43,6 +43,7 @@
 
 #include <obd_target.h>
 #include <obd_support.h>
+#include <lu_object.h>
 
 /**
  * Initialize the pool data structures at startup.
