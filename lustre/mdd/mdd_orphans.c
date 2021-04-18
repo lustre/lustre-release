@@ -292,7 +292,6 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 {
 	struct thandle *th = NULL;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-	bool orphan_exists = true;
 	int rc = 0, rc1 = 0;
 	ENTRY;
 
@@ -305,28 +304,27 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(rc);
 	}
 
-	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdd_orphan_declare_delete(env, obj, th);
-	if (rc == -ENOENT || lu_object_is_dying(obj->mod_obj.mo_lu.lo_header))
-		orphan_exists = false;
-	else if (rc)
-		GOTO(unlock, rc);
+	if (rc && rc != -ENOENT)
+		GOTO(stop, rc);
 
-	if (orphan_exists) {
+	if (rc != -ENOENT) {
 		rc = mdo_declare_destroy(env, obj, th);
-		if (rc)
-			GOTO(unlock, rc);
+		if (rc && rc != -ENOENT)
+			GOTO(stop, rc);
 	}
 
 	rc = mdd_trans_start(env, mdd, th);
 	if (rc)
-		GOTO(unlock, rc);
+		GOTO(stop, rc);
 
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	if (likely(obj->mod_count == 0)) {
 		dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
 		/* We should remove object even dt_delete failed */
-		if (orphan_exists) {
+		if (mdd_object_exists(obj) &&
+		    !lu_object_is_dying(obj->mod_obj.mo_lu.lo_header)) {
 			mdo_ref_del(env, obj, th);
 			if (S_ISDIR(mdd_object_type(obj))) {
 				mdo_ref_del(env, obj, th);
@@ -336,8 +334,8 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 		}
 		dt_write_unlock(env, mdd->mdd_orphans);
 	}
-unlock:
 	mdd_write_unlock(env, obj);
+stop:
 	mdd_trans_stop(env, mdd, 0, th);
 
 	RETURN(rc ? rc : rc1);
