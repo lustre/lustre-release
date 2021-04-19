@@ -191,97 +191,34 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 /* Setstripe and migrate share mostly the same parameters */
 #define SSM_CMD_COMMON(cmd) \
 	"usage: "cmd" [--component-end|-E COMP_END]\n"			\
-	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
+	"                 [--copy=LUSTRE_SRC]\n"			\
+	"                 [--extension-size|--ext-size|-z SIZE]\n"	\
+	"                 [--help|-h] [--layout|-L PATTERN]\n"		\
+	"                 [--layout|-L PATTERN]\n"			\
+	"                 [--mirror-count|-N[MIRROR_COUNT]]\n"		\
+	"                 [--ost|-o OST_INDICES]\n"			\
 	"                 [--overstripe-count|-C STRIPE_COUNT]\n"	\
+	"                 [--pool|-p POOL_NAME]\n"			\
+	"                 [--stripe-count|-c STRIPE_COUNT]\n"		\
 	"                 [--stripe-index|-i START_OST_IDX]\n"		\
 	"                 [--stripe-size|-S STRIPE_SIZE]\n"		\
-	"                 [--extension-size|--ext-size|-z]\n"		\
-	"                 [--help|-h] [--layout|-L PATTERN]\n"		\
-	"                 [--mirror_count|-N[MIRROR_COUNT]]\n"		\
-	"                 [--ost|-o OST_INDICES]\n"			\
-	"                 [--pool|-p POOL_NAME]\n"			\
-	"                 [--yaml|-y YAML_TEMPLATE_FILE]\n"		\
-	"                 [--copy=LUSTRE_SRC]\n"
+	"                 [--yaml|-y YAML_TEMPLATE_FILE]\n"
 
-#define SSM_HELP_COMMON \
-	"\tSTRIPE_COUNT: Number of OSTs to stripe on (0=fs default, -1 all)\n" \
-	"\t              Using -C instead of -c allows overstriping, which\n"  \
-	"\t              will place more than one stripe per OST if\n"	       \
-	"\t              stripe_count is greater than the number of OSTs.\n"   \
-	"\tSTART_OST_IDX: OST index of first stripe (-1=default round robin)\n"\
-	"\tSTRIPE_SIZE:  Number of bytes on each OST (0=fs default)\n"	       \
-	"\t              Optional K, M, or G suffix (for KB, MB, GB\n"         \
-	"\t              respectively).  Must be a multiple of 64KiB.\n"       \
-	"\tEXTENSION_SIZE:\n"						       \
-	"\t              Number of bytes the previous component is extended\n" \
-	"\t              each time. Optional K, M, or G suffix (for KB,\n"     \
-	"\t              MB, GB respectively)\n"			       \
-	"\tPOOL_NAME:    Name of OST pool to use (default none)\n"	       \
-	"\tLAYOUT:       stripe pattern type: raid0, mdt (default raid0)\n"    \
-	"\tOST_INDICES:  List of OST indices, can be repeated multiple times\n"\
-	"\t              Indices be specified in a format of:\n"	       \
-	"\t                -o OST_1,OST_I-OST_J,OST_N\n"		       \
-	"\t              Or:\n"						       \
-	"\t                -o OST_1 -o OST_I-OST_J -o OST_N\n"		       \
-	"\t              If --pool is set with --ost then the OSTs\n"	       \
-	"\t              must be the members of the pool.\n"		       \
-	"\tCOMP_END:     Extent end of component, start after previous end.\n" \
-	"\t              Optional K, M, or G suffix (for KiB, MiB, GiB), or\n" \
-	"\t              -1 or 'eof' for max file size). Must be a multiple\n" \
-	"\t              of stripe_size and a multiple of 64KiB.\n"	       \
-	"\tYAML_TEMPLATE_FILE:\n"					       \
-	"\t              YAML layout template file, can't be used with -c,\n"  \
-	"\t              -i, -S, -p, -o, or -E arguments.\n"		       \
-	"\tLUSTRE_SRC:   Lustre file/dir whose layout info is used to set\n"   \
-	"\t              another lustre file or directory, can't used with\n"  \
-	"\t              -c, -i, -S, -p, -o, or -E arguments.\n"
-
-#define MIRROR_CREATE_HELP						       \
-	"\tMIRROR_COUNT: Number of mirrors to be created with the upcoming\n"  \
-	"\t              setstripe layout options\n"			       \
-	"\t              It defaults to 1 if not specified; if specified,\n"   \
-	"\t              it must follow the option without a space.\n"	       \
-	"\t              The option can also be repeated multiple times to\n"  \
-	"\t              separate mirrors that have different layouts.\n"      \
-	"\tSETSTRIPE_OPTIONS: Mirror layout as with 'setstripe'\n"	       \
-	"\t              It can be a plain layout or a composite layout.\n"    \
-	"\t              If not specified, the stripe options inherited\n"     \
-	"\t              from the previous component will be used.\n"          \
-	"\tFLAGS:        set flags to the component of the current mirror.\n"  \
-	"\t              Only \"prefer\" flag is supported so far.\n"
-
-#define MIRROR_EXTEND_HELP						       \
-	MIRROR_CREATE_HELP						       \
-	"\tVICTIM_FILE:  The layout of victim_file will be split and used\n"   \
-	"\t              as a mirror added to the mirrored file.\n"	       \
-	"\tno-verify:    This option indicates not to verify the mirror(s)\n"  \
-	"\t              from victim file(s) in case the victim file(s)\n"     \
-	"\t              contains the same data as the original mirrored\n"    \
-	"\t              file.\n"
-
-#define MIRROR_EXTEND_USAGE						       \
-	"                 {--mirror-count|-N[mirror_count]}\n"		       \
-	"                 [SETSTRIPE_OPTIONS|-f|--file VICTIM_FILE]\n"	       \
+#define MIRROR_EXTEND_USAGE						\
+	"                 {--mirror-count|-N[MIRROR_COUNT]}\n"		\
+	"                 [SETSTRIPE_OPTIONS|-f|--file VICTIM_FILE]\n"	\
 	"                 [--no-verify]\n"
 
 #define SETSTRIPE_USAGE							\
 	SSM_CMD_COMMON("setstripe")					\
 	MIRROR_EXTEND_USAGE						\
-	"                 <directory|filename>\n"			\
-	SSM_HELP_COMMON							\
-	MIRROR_EXTEND_HELP
+	"                 DIRECTORY|FILENAME\n"
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
 	"                 [--block|-b] [--non-block|-n]\n"		\
 	"                 [--non-direct|-D] [--verbose|-v]\n"		\
-	"                 <filename>\n"					\
-	SSM_HELP_COMMON							\
-	"\n"								\
-	"\tblock:        Block file access during data migration (default)\n" \
-	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
-	"\tnon-direct:   Do not use direct I/O to copy file contents\n"	\
-	"\tverbose:      Print each filename as it is migrated\n"	\
+	"                 FILENAME\n"
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
@@ -290,19 +227,9 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"		[--default|-D] [--mode|-o mode]\n"		\
 	"		[--max-inherit|-X max_inherit]\n"		\
 	"		[--max-inherit-rr max_inherit_rr] <dir>\n"	\
-	"\tstripe_count: stripe count of the striped directory\n"	\
-	"\tmdt_index: MDT index of first stripe\n"			\
-	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
-	"	crush     CRUSH hash algorithm (default)\n" \
-	"	fnv_1a_64 FNV-1a hash algorithm\n"		\
-	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
-	"\tdefault_stripe: set default dirstripe of the directory\n"	\
-	"\tmode: the file access permission of the directory (octal)\n" \
 	"To create dir with a foreign (free format) layout :\n"		\
 	"setdirstripe|mkdir --foreign[=FOREIGN_TYPE] -x|-xattr STRING " \
-		"[--mode|-o MODE] [--flags HEX] <dir>\n" \
-	"\tmode: the file access permissions of the directory\n"	\
-	"\tforeign_type: none, daos, symlink, or numeric value\n"
+	"		[--mode|-o MODE] [--flags HEX] DIRECTORY\n"
 
 /**
  * command_t mirror_cmdlist - lfs mirror commands.
@@ -310,32 +237,24 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 command_t mirror_cmdlist[] = {
 	{ .pc_name = "create", .pc_func = lfs_mirror_create,
 	  .pc_help = "Create a mirrored file.\n"
-		"usage: lfs mirror create {--mirror-count|-N[MIRROR_COUNT]}\n"
-		"\t\t[SETSTRIPE_OPTIONS] <filename|directory> ...\n"
-	  MIRROR_CREATE_HELP },
+		"usage: lfs mirror create --mirror-count|-N[MIRROR_COUNT]\n"
+		"           [SETSTRIPE_OPTIONS] ... FILENAME|DIRECTORY ...\n" },
 	{ .pc_name = "delete", .pc_func = lfs_mirror_delete,
 	  .pc_help = "Delete a mirror from a file.\n"
-	"usage: lfs mirror delete {--mirror-id MIRROR_ID|-p POOL|\n"
-	"\t		  --component-id|--comp-id|-I COMP_ID} <mirror_file>\n"
+	"usage: lfs mirror delete {--mirror-id <mirror_id> |\n"
+	"\t		  --component-id|--comp-id|-I COMP_ID |\n"
+	"\t		  -p <pool>} MIRRORED_FILE ...\n"
 	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
-		"usage: lfs mirror extend {--mirror-count|-N[MIRROR_COUNT]}\n"
-		"\t\t[--no-verify] [SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... <filename> ...\n"
-	  MIRROR_EXTEND_HELP },
+		"usage: lfs mirror extend "
+		"{--mirror-count|-N[MIRROR_COUNT]} [--no-verify] "
+		"[SETSTRIPE_OPTIONS|-f VICTIM_FILE] ... FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
-	"usage: lfs mirror split [--destroy|-d] [-f NEW_FILE] [--help|-h]\n"
-	"\t\t{--mirror-id MIRROR_ID|--component-id|-I COMP_ID|-p POOL}\n"
-	"\t\t<mirrored file> ...\n"
-	"\tMIRROR_ID: The numerical unique identifier for a mirror.\n"
-	"\t           It can be fetched by the 'lfs getstripe' command.\n"
-	"\tCOMP_ID:   Unique component ID within a mirror.\n"
-	"\tPOOL:      Components using specified pool.\n"
-	"\tNEW_FILE:  This option indicates the layout of the split\n"
-	"\t           mirror will be stored into. If not specified,\n"
-	"\t           a new file named <mirrored_file>.mirror~MIRROR_ID\n"
-	"\t           will be used.\n" },
+	"usage: lfs mirror split {--mirror-id MIRROR_ID |\n"
+	"\t		--component-id|-I COMP_ID|-p POOL} [--destroy|-d]\n"
+	"\t		[-f NEW_FILE] MIRRORED_FILE ...\n" },
 	{ .pc_name = "read", .pc_func = lfs_mirror_read,
 	  .pc_help = "Read the content of a specified mirror of a file.\n"
 		"usage: lfs mirror read {--mirror-id|-N MIRROR_ID}\n"
@@ -405,7 +324,6 @@ command_t cmdlist[] = {
 	 " or\n"
 	 "To add component(s) to an existing composite file:\n"
 	 SSM_CMD_COMMON("setstripe --component-add")
-	 SSM_HELP_COMMON
 	 "To totally delete the default striping from an existing directory:\n"
 	 "usage: setstripe [--delete|-d] <directory>\n"
 	 " or\n"
@@ -645,39 +563,15 @@ command_t cmdlist[] = {
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
-	 "migrate a directory between MDTs.\n"
+	 "migrate directories and their inodes between MDTs.\n"
 	 "usage: migrate [--mdt-count|-c STRIPE_COUNT]\n"
 	 "               [--mdt-hash|-H HASH_TYPE]\n"
 	 "               [--mdt-index|-m START_MDT_INDEX] [--verbose|-v]\n"
-	 "               <directory>\n"
-	 "\tmdt:	MDTs to stripe over, if only one MDT is specified\n"
-	 "			it's the MDT index of first stripe\n"
-	 "\tmdt_count:	number of MDTs to stripe a directory over\n"
-	 "\tmdt_hash:	hash type of the striped directory. mdt types:\n"
-	 "		all_char  (type 1)sum of characters % MDT_COUNT\n"
-	 "		fnv_1a_64 (type 2)FNV-1a hash algorithm (default)\n"
-	 "		crush	  (type 3)CRUSH hash algorithm\n"
+	 "		 DIRECTORY\n"
 	 "\n"
-	 "migrate file objects from one OST "
-	 "layout\nto another (may be not safe with concurent writes).\n"
-	 "usage: migrate [--stripe-count|-c STRIPE_COUNT]\n"
-	 "               [--overstripe-count|-C STRIPE_COUNT]\n"
-	 "               [--stripe-index|-i START_OST_INDEX]\n"
-	 "               [--stripe-size|-S STRIPE_SIZE]\n"
-	 "               [--pool|-p <pool_name>] [--ost|-o OST_INDICES]\n"
-	 "               [--block|-b] [--non-block|-n] [--non-direct|-D]\n"
-	 "               <file|directory>\n"
-	 "\tstripe_count:   number of OSTs to stripe a file over\n"
-	 "\t                Using -C instead of -c allows overstriping, which\n"
-	 "\t                will place more than one stripe per OST if\n"
-	 "\t                stripe_count is greater than the number of OSTs\n"
-	 "\tstripe_ost_index: index of the first OST to stripe a file over\n"
-	 "\tstripe_size:      number of bytes to store before moving to the next OST\n"
-	 "\tpool_name:        name of the predefined pool of OSTs\n"
-	 "\tost_indices:      OSTs to stripe over, in order\n"
-	 "\tblock:        Block file access during data migration (default)\n"
-	 "\tnon-block:    Abort migrations if concurrent access is detected\n"
-	 "\tnon-direct:       do not use direct I/O to copy file contents.\n"},
+	 "migrate file objects from one OST layout to another\n"
+	 "(may be not safe with concurent writes).\n"
+	 MIGRATE_USAGE },
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
 	 "use \"migrate\" instead.\n"
