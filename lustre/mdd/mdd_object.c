@@ -1546,24 +1546,16 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[1];
 	struct lov_mds_md *lmm;
 	struct thandle *handle;
-	int rc;
+	int rc, lock_order;
 	ENTRY;
 
-	rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
-	if (rc == 0) /* same fid */
+	lock_order = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
+	if (lock_order == 0) /* same fid */
 		RETURN(-EPERM);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
-
-	if (rc > 0) {
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-	} else {
-		mdd_write_lock(env, vic, DT_TGT_CHILD);
-		mdd_write_lock(env, obj, DT_TGT_CHILD);
-	}
 
 	/* get EA of victim file */
 	memset(buf_vic, 0, sizeof(*buf_vic));
@@ -1571,33 +1563,41 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	if (rc < 0) {
 		if (rc == -ENODATA)
 			rc = 0;
-		GOTO(out, rc);
+		GOTO(stop, rc);
 	}
 
 	/* parse the layout of victim file */
 	lmm = buf_vic->lb_buf;
 	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
-		GOTO(out, rc = -EINVAL);
+		GOTO(stop, rc = -EINVAL);
 
 	/* save EA of target file for restore */
 	memset(buf, 0, sizeof(*buf));
 	rc = mdd_stripe_get(env, obj, buf, XATTR_NAME_LOV);
 	if (rc < 0)
-		GOTO(out, rc);
+		GOTO(stop, rc);
 
 	/* Get rid of the layout from victim object */
 	rc = mdd_declare_xattr_del(env, mdd, vic, XATTR_NAME_LOV, handle);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(stop, rc);
 
 	rc = mdd_declare_xattr_set(env, mdd, obj, buf_vic, XATTR_NAME_LOV,
 				   LU_XATTR_MERGE, handle);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(stop, rc);
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc != 0)
-		GOTO(out, rc);
+		GOTO(stop, rc);
+
+	if (lock_order > 0) {
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
+	} else {
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+	}
 
 	rc = mdo_xattr_set(env, obj, buf_vic, XATTR_NAME_LOV, LU_XATTR_MERGE,
 			   handle);
@@ -1625,9 +1625,10 @@ out_restore:
 	}
 
 out:
-	mdd_trans_stop(env, mdd, rc, handle);
 	mdd_write_unlock(env, obj);
 	mdd_write_unlock(env, vic);
+stop:
+	mdd_trans_stop(env, mdd, rc, handle);
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
 
