@@ -44,6 +44,7 @@
 /* prerequisite for linux/xattr.h */
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/swap.h>
 #include <linux/pagevec.h>
 
 /*
@@ -906,6 +907,8 @@ bypass_checks:
 			GOTO(cleanup, rc = -ENOMEM);
 
 		lnb->lnb_locked = 1;
+		if (cache)
+			mark_page_accessed(lnb->lnb_page);
 	}
 
 #if 0
