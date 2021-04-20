@@ -94,6 +94,13 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
 	 * LRU pages, otherwise, it could cause deadlock.
 	 */
 	pages = min(sbi->ll_cache->ccc_lru_max >> 2, pages);
+	/**
+	 * if this happen, we reserve more pages than needed,
+	 * this will make us leak @ra_cur_pages, because
+	 * ll_ra_count_put() acutally freed @pages.
+	 */
+	if (WARN_ON_ONCE(pages_min > pages))
+		pages_min = pages;
 
 	/*
 	 * If read-ahead pages left are less than 1M, do not do read-ahead,

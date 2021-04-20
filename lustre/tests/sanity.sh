@@ -9885,6 +9885,8 @@ test_101e() {
 		dd if=$file.$i of=/dev/null bs=$bsize count=$size_KB 2>/dev/null
 	done
 
+	$LCTL get_param llite.*.max_cached_mb
+	$LCTL get_param llite.*.read_ahead_stats
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
 		     get_named_value 'misses' | calc_total)
 
