@@ -2741,7 +2741,7 @@ debug=neterror warning error emerg console</screen>
       <title>Interpreting OST Statistics</title>
       <note>
         <para>See also
-            <xref linkend="dbdoclet.50438273_80593"/> (<literal>collectl</literal>).</para>
+            <xref linkend="collectl"/> (<literal>collectl</literal>).</para>
       </note>
       <para>OST <literal>stats</literal> files can be used to provide statistics showing activity
         for each OST. For example:</para>
@@ -3001,7 +3001,7 @@ ost_write    21   2    59   [bytes] 7648424 15019  332725.08 910694 180397.87
       <title>Interpreting MDT Statistics</title>
       <note>
         <para>See also
-            <xref linkend="dbdoclet.50438273_80593"/> (<literal>collectl</literal>).</para>
+            <xref linkend="collectl"/> (<literal>collectl</literal>).</para>
       </note>
       <para>MDT <literal>stats</literal> files can be used to track MDT
       statistics for the MDS. The example below shows sample output from an

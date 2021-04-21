@@ -7,22 +7,22 @@
     following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438273_18711"/>Lustre Changelogs</para>
+      <para><xref linkend="lustre_changelogs"/>Lustre Changelogs</para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.jobstats"/>Lustre Jobstats</para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438273_81684"/>Lustre Monitoring Tool</para>
+      <para><xref linkend="lmt"/>Lustre Monitoring Tool</para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438273_80593"/>CollectL</para>
+      <para><xref linkend="collectl"/>CollectL</para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438273_44185"/>Other Monitoring Options</para>
+      <para><xref linkend="other_monitoring_options"/>Other Monitoring Options</para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438273_18711">
+  <section xml:id="lustre_changelogs">
       <title><indexterm><primary>change logs</primary><see>monitoring</see></indexterm>
 <indexterm><primary>monitoring</primary></indexterm>
 <indexterm><primary>monitoring</primary><secondary>change logs</secondary></indexterm>
@@ -904,7 +904,7 @@ Configure Auto-cleanup Interval</title>
     <para>The <literal>job_cleanup_interval</literal> can be set as 0 to disable the auto-cleanup. Note that if auto-cleanup of Jobstats is disabled, then all statistics will be kept in memory forever, which may eventually consume all memory on the servers. In this case, any monitoring tool should explicitly clear individual job statistics as they are processed, as shown above.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438273_81684">
+  <section xml:id="lmt">
     <title><indexterm>
         <primary>monitoring</primary>
         <secondary>Lustre Monitoring Tool</secondary>
@@ -918,7 +918,7 @@ Configure Auto-cleanup Interval</title>
     <para><link xl:href="https://github.com/chaos/lmt/wiki">
       https://github.com/chaos/lmt/wiki</link></para>
   </section>
-  <section xml:id="dbdoclet.50438273_80593">
+  <section xml:id="collectl">
     <title>
       <literal>CollectL</literal>
     </title>
@@ -934,7 +934,7 @@ Configure Auto-cleanup Interval</title>
     <para><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">
       http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
   </section>
-  <section xml:id="dbdoclet.50438273_44185">
+  <section xml:id="other_monitoring_options">
     <title><indexterm><primary>monitoring</primary><secondary>additional tools</secondary></indexterm>
 Other Monitoring Options</title>
     <para>A variety of standard tools are available publicly including the following:<itemizedlist>
