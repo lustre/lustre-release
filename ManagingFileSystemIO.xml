@@ -4,7 +4,7 @@
  xml:id="managingfilesystemio">
   <title xml:id="managingfilesystemio.title">Managing the File System and
   I/O</title>
-  <section xml:id="dbdoclet.50438211_17536">
+  <section xml:id="handling_full_ost">
     <title>
     <indexterm>
       <primary>I/O</primary>
@@ -462,7 +462,7 @@ client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438211_11204">
+  <section xml:id="adding_ost">
     <title>
     <indexterm>
       <primary>I/O</primary>
@@ -518,7 +518,7 @@ oss# mount -t lustre /dev/sda /mnt/testfs/ost12
     further, per-OST disk-usage statistics can be found in the
     <literal>osc.*.rpc_stats</literal> parameter file.</para>
   </section>
-  <section xml:id="dbdoclet.50438211_80295">
+  <section xml:id="performing_directio">
     <title>
     <indexterm>
       <primary>I/O</primary>
@@ -545,7 +545,7 @@ chattr +i
       <literal>chattr -i</literal></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438211_61024">
+  <section xml:id="other_io_options">
     <title>Other I/O Options</title>
     <para>This section describes other I/O options, including checksums, and
     the ptlrpcd thread pool.</para>
