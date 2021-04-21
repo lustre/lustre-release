@@ -3,22 +3,22 @@
  xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
  xml:id="lnetselftest">
   <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNet Self-Test)</title>
-  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNet
+  <para><anchor xml:id="lnet_selftest_testing" xreflabel=""/>This chapter describes the LNet
     self-test, which is used by site administrators to confirm that Lustre Networking (LNet) has
     been properly installed and configured, and that underlying network software and hardware are
     performing according to expectations. The chapter includes:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438223_91742"/></para>
+      <para><xref linkend="overview_lnet_selftest"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438223_48138"/></para>
+      <para><xref linkend="using_lnet_selftest"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438223_27277"/></para>
+      <para><xref linkend="cmd_reference_lnet_selftest"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438223_91742">
+  <section xml:id="overview_lnet_selftest">
     <title><indexterm><primary>LNet</primary><secondary>self-test</secondary></indexterm>
 LNet Self-Test Overview</title>
     <para>LNet self-test is a kernel module that runs over LNet and the Lustre network drivers (LNDs). It is designed to:</para>
@@ -88,12 +88,12 @@ LNet Self-Test Overview</title>
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438223_48138">
+  <section xml:id="using_lnet_selftest">
     <title>Using LNet Self-Test</title>
     <para>This section describes how to create and run an LNet self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNet routers. In this example, half the clients are reading and half the clients are writing.</para>
     <section remap="h3">
       <title>Creating a Session</title>
-      <para>A <emphasis>session</emphasis> is a set of processes that run on a <emphasis>test node</emphasis>. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (<literal>new_session</literal>, <literal>end_session</literal>, <literal>show_session</literal>). For more about session parameters, see <xref linkend="dbdoclet.50438223_91247"/>.</para>
+      <para>A <emphasis>session</emphasis> is a set of processes that run on a <emphasis>test node</emphasis>. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (<literal>new_session</literal>, <literal>end_session</literal>, <literal>show_session</literal>). For more about session parameters, see <xref linkend="session_cmd"/>.</para>
       <para>Almost all operations should be performed within the context of a session. From the <emphasis>console node</emphasis>, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
       <para>The following commands set the <literal>LST_SESSION</literal> environment variable to identify the session on the console node and create a session called <literal>read_write</literal>:</para>
       <screen>export LST_SESSION=$$
@@ -124,7 +124,7 @@ lst add_group writers 192.168.1.[2-254/2]@o2ib</screen>
         <para>A <emphasis>console node</emphasis> can associate kernel space <emphasis>test nodes</emphasis> with the session by running <literal>lst add_group <replaceable>NIDs</replaceable></literal>, but a userspace test node cannot be actively added to the session. A console node can passively &quot;accept&quot; a test node to associate with a test session while the test node running <literal>lstclient</literal> connects to the console node, i.e: <literal>lstclient --sesid <replaceable>CONSOLE_NID</replaceable> --group <replaceable>NAME</replaceable></literal>).</para>
       </note>
     </section>
-    <section xml:id="dbdoclet.50438223_42848">
+    <section xml:id="running_lnet_selftest">
       <title>Defining and Running the Tests</title>
       <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a
         source group identified using the <literal>--from</literal> parameter and a target group
@@ -152,7 +152,11 @@ lst add_test --batch bulk_rw --from readers --to servers \
   brw read check=simple size=1M
 lst add_test --batch bulk_rw --from writers --to servers \
   brw write check=full size=4K</screen>
-      <para>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend="dbdoclet.50438223_36860"/>.</para>
+      <para>The traffic pattern and test intensity is determined by several
+        properties such as test type, distribution of test nodes, concurrency
+        of test, and RDMA operation type. For more details,
+        see <xref linkend="batch_test_cmd"/>.
+      </para>
     </section>
     <section remap="h3">
       <title>Sample Script</title>
@@ -180,10 +184,10 @@ lst end_session</screen>
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438223_27277">
+  <section xml:id="cmd_reference_lnet_selftest">
     <title>LNet Self-Test Command Reference</title>
     <para>The LNet self-test (<literal>lst</literal>) utility is used to issue LNet self-test commands. The <literal>lst</literal> utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
-    <section xml:id="dbdoclet.50438223_91247">
+    <section xml:id="session_cmd">
       <title>Session Commands</title>
       <para>This section describes <literal>lst</literal> session commands.</para>
       <para><emphasis role="bold">
@@ -553,7 +557,7 @@ Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
       <para><emphasis role="bold">Example:</emphasis></para>
       <screen>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode</screen>
     </section>
-    <section xml:id="dbdoclet.50438223_36860">
+    <section xml:id="batch_test_cmd">
       <title>Batch and Test Commands</title>
       <para>This section describes <literal>lst</literal> batch and test commands.</para>
       <para><literal>add_batch <replaceable>name</replaceable></literal></para>
@@ -634,7 +638,12 @@ add_test --batch <replaceable>batchname</replaceable> [--loop <replaceable>loop_
                 <literal>ping</literal>
               </entry>
               <entry nameend="c3" namest="c2">
-                <para>Sends a small request message, resulting in a small reply message. For more details, see <xref linkend="dbdoclet.50438223_42848"/>. <literal>ping</literal> does not have any additional options.</para>
+                <para>Sends a small request message, resulting in a small
+                  reply message. For more details, see
+                  <xref linkend="running_lnet_selftest"/>.
+                  <literal>ping</literal>
+                  does not have any additional options.
+                </para>
               </entry>
             </row>
             <row>
@@ -642,7 +651,10 @@ add_test --batch <replaceable>batchname</replaceable> [--loop <replaceable>loop_
                 <literal>brw</literal>
               </entry>
               <entry nameend="c3" namest="c2">
-                <para>Sends a small request message followed by a bulk data transfer, resulting in a small reply message. <xref linkend="dbdoclet.50438223_42848"/>. Options are:</para>
+                <para>Sends a small request message followed by a bulk data
+                  transfer, resulting in a small reply message.
+                  <xref linkend="running_lnet_selftest"/>. Options are:
+                </para>
               </entry>
             </row>
             <row>
