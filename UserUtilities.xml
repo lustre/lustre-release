@@ -864,7 +864,7 @@ lfs help
                 2^30, 2^40 and 2^50, respectively. By default, the block limits
                 unit is 1 kilobyte (1,024), and block limits are always
                 kilobyte-grained (even if specified in bytes). See 
-                <xref linkend="dbdoclet.50438206_11903" />.</para>
+                <xref linkend="setquota_grace_time_example" />.</para>
               </entry>
             </row>
             <row>
@@ -881,7 +881,7 @@ lfs help
                 groups. Grace time is specified in '
                 <literal>XXwXXdXXhXXmXXs</literal>' format or as an integer
                 seconds value. See 
-                <xref linkend="dbdoclet.50438206_11903" />.</para>
+                <xref linkend="setquota_grace_time_example" />.</para>
               </entry>
             </row>
             <row>
@@ -910,7 +910,7 @@ lfs help
         </tgroup>
       </informaltable>
     </section>
-    <section remap="h5" xml:id="dbdoclet.50438206_11903">
+    <section remap="h5" xml:id="setquota_grace_time_example">
       <title>Examples</title>
       <para>Creates a file striped on two OSTs with 128 KB on each
       stripe.</para>
@@ -1109,7 +1109,7 @@ lfs_migrate [<replaceable>lfs_setstripe_options</replaceable>]
         reduced fragmentation. The tool 
         <literal>filefrag</literal> can be used to report file fragmentation.
         See 
-        <xref linkend="dbdoclet.50438206_75125" /></para>
+        <xref linkend="filefrag" /></para>
       </note>
       <note>
         <para>As long as a file has extent lengths of tens of megabytes (
@@ -1258,7 +1258,7 @@ $ lfs find /test -obd test-OST0004 -size +4G -mtime +1 | lfs_migrate -y
       </para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438206_75125">
+  <section xml:id="filefrag">
     <title>
       <indexterm>
         <primary>filefrag</primary>
@@ -1429,7 +1429,7 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
 </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438206_86244">
+  <section xml:id="mount">
     <title>
       <indexterm>
         <primary>mount</primary>
@@ -1581,7 +1581,7 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
       </tgroup>
     </informaltable>
   </section>
-  <section xml:id="dbdoclet.50438206_56217">
+  <section xml:id="handling_timeouts">
     <title>Handling Timeouts</title>
     <para>Timeouts are the most common cause of hung applications. After a
     timeout involving an MDS or failover OST, applications attempting to access
