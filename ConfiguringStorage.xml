@@ -7,17 +7,17 @@
   <itemizedlist>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.50438208_60972"/>
+            <xref linkend="selecting_storage_mdt_ost"/>
         </para>
     </listitem>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.50438208_23285"/>
+            <xref linkend="reliability_best_practices"/>
         </para>
     </listitem>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.50438208_40705"/>
+            <xref linkend="performance_tradeoff"/>
         </para>
     </listitem>
     <listitem>
@@ -27,7 +27,7 @@
     </listitem>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.50438208_88516"/>
+            <xref linkend="connecting_san_lustre_file_system"/>
         </para>
     </listitem>
   </itemizedlist>
@@ -36,7 +36,7 @@
         be configured with hardware RAID.</emphasis> The Lustre software does not support redundancy
       at the file system level and RAID is required to protect against disk failure.</para>
   </note>
-  <section xml:id="dbdoclet.50438208_60972">
+  <section xml:id="selecting_storage_mdt_ost">
       <title>
           <indexterm><primary>storage</primary><secondary>configuring</secondary></indexterm>
           Selecting Storage for the MDT and OSTs</title>
@@ -58,12 +58,12 @@
       <para>To maximize performance for small I/O request sizes, storage configured as RAID 1+0 can yield much better results but will increase cost or reduce capacity.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438208_23285">
+  <section xml:id="reliability_best_practices">
     <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>for best practice</tertiary></indexterm>Reliability Best Practices</title>
     <para>RAID monitoring software is recommended to quickly detect faulty disks and allow them to be replaced to avoid double failures and data loss. Hot spare disks are recommended so that rebuilds happen without delays.</para>
     <para>Backups of the metadata file systems are recommended. For details, see <xref linkend="backupandrestore"/>.</para>
   </section>
-  <section xml:id="dbdoclet.50438208_40705">
+  <section xml:id="performance_tradeoff">
     <title><indexterm><primary>storage</primary><secondary>performance tradeoffs</secondary></indexterm>Performance Tradeoffs</title>
     <para>A writeback cache in a RAID storage controller can dramatically
     increase write performance on many types of RAID arrays if the writes
@@ -179,7 +179,7 @@
       </orderedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438208_88516">
+  <section xml:id="connecting_san_lustre_file_system">
     <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>SAN</tertiary></indexterm>Connecting a SAN to a Lustre File System</title>
     <para>Depending on your cluster size and workload, you may want to connect a SAN to a Lustre file system. Before making this connection, consider the following:</para>
     <itemizedlist>
