@@ -644,7 +644,7 @@ int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 	ltq->ltq_penalty += ltq->ltq_penalty_per_obj *
 			    ltd->ltd_lov_desc.ld_active_tgt_count;
 	svr->lsq_penalty += svr->lsq_penalty_per_obj *
-			    ltd->ltd_lov_desc.ld_active_tgt_count;
+			    qos->lq_active_svr_count;
 
 	/* Decrease all MDS penalties */
 	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
