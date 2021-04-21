@@ -7,22 +7,22 @@
     following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438203_51732"/></para>
+      <para><xref linkend="updating_health_status_of_router"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438203_48703"/></para>
+      <para><xref linkend="starting_stoping_lnet"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438203_82542"/></para>
+      <para><xref linkend="multi_rail_configuration_lnet"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438203_78227"/></para>
+      <para><xref linkend="load_balancing_ib_network"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="managinglnet.configuringroutes"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438203_51732">
+  <section xml:id="updating_health_status_of_router">
       <title><indexterm><primary>LNet</primary><secondary>management</secondary></indexterm>
           Updating the Health Status of a Peer or Router</title>
     <para>There are two mechanisms to update the health status of a peer or a router:</para>
@@ -47,7 +47,7 @@
       </listitem>
     </itemizedlist>
   </section>
-  <section xml:id="dbdoclet.50438203_48703">
+  <section xml:id="starting_stoping_lnet">
       <title><indexterm><primary>LNet</primary><secondary>starting/stopping</secondary></indexterm>Starting and Stopping LNet</title>
     <para>The Lustre software automatically starts and stops LNet, but it can also be manually
       started in a standalone manner. This is particularly useful to verify that your networking
@@ -95,7 +95,7 @@ To remove all Lustre modules, run:</para>
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438203_82542">
+  <section xml:id="multi_rail_configuration_lnet">
     <title><indexterm><primary>LNet</primary><secondary>hardware multi-rail
     configuration</secondary></indexterm>Hardware Based Multi-Rail
     Configurations with LNet</title>
@@ -135,7 +135,7 @@ To remove all Lustre modules, run:</para>
       </listitem>
     </itemizedlist>
   </section>
-  <section xml:id="dbdoclet.50438203_78227">
+  <section xml:id="load_balancing_ib_network">
     <title><indexterm>
         <primary>LNet</primary>
         <secondary>InfiniBand load balancing</secondary>
