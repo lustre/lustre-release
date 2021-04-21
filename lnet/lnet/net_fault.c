@@ -534,8 +534,9 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 		lnet_nid_t dst, unsigned int type, unsigned int portal,
 		struct lnet_msg *msg)
 {
-	struct lnet_fault_attr	*attr = &rule->dl_attr;
-	bool			 delay;
+	struct lnet_fault_attr *attr = &rule->dl_attr;
+	bool delay;
+	time64_t now = ktime_get_seconds();
 
 	if (!lnet_fault_attr_match(attr, src, LNET_NID_ANY,
 				   dst, type, portal))
@@ -544,8 +545,6 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 	/* match this rule, check delay rate now */
 	spin_lock(&rule->dl_lock);
 	if (rule->dl_delay_time != 0) { /* time based delay */
-		time64_t now = ktime_get_seconds();
-
 		rule->dl_stat.fs_count++;
 		delay = now >= rule->dl_delay_time;
 		if (delay) {
@@ -587,11 +586,11 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 	rule->dl_stat.u.delay.ls_delayed++;
 
 	list_add_tail(&msg->msg_list, &rule->dl_msg_list);
-	msg->msg_delay_send = ktime_get_seconds() + attr->u.delay.la_latency;
+	msg->msg_delay_send = now + attr->u.delay.la_latency;
 	if (rule->dl_msg_send == -1) {
 		rule->dl_msg_send = msg->msg_delay_send;
 		mod_timer(&rule->dl_timer,
-			  jiffies + cfs_time_seconds(rule->dl_msg_send));
+			  jiffies + cfs_time_seconds(attr->u.delay.la_latency));
 	}
 
 	spin_unlock(&rule->dl_lock);
@@ -637,7 +636,7 @@ delayed_msg_check(struct lnet_delay_rule *rule, bool all,
 	struct lnet_msg *tmp;
 	time64_t now = ktime_get_seconds();
 
-	if (!all && cfs_time_seconds(rule->dl_msg_send) > now)
+	if (!all && rule->dl_msg_send > now)
 		return;
 
 	spin_lock(&rule->dl_lock);
@@ -660,7 +659,8 @@ delayed_msg_check(struct lnet_delay_rule *rule, bool all,
 				 struct lnet_msg, msg_list);
 		rule->dl_msg_send = msg->msg_delay_send;
 		mod_timer(&rule->dl_timer,
-			  jiffies + cfs_time_seconds(rule->dl_msg_send));
+			  jiffies +
+			  cfs_time_seconds(msg->msg_delay_send - now));
 	}
 	spin_unlock(&rule->dl_lock);
 }
@@ -676,6 +676,20 @@ delayed_msg_process(struct list_head *msg_list, bool drop)
 		int		rc;
 
 		msg = list_entry(msg_list->next, struct lnet_msg, msg_list);
+
+		if (msg->msg_sending) {
+			/* Delayed send */
+			list_del_init(&msg->msg_list);
+			ni = msg->msg_txni;
+			CDEBUG(D_NET, "TRACE: msg %p %s -> %s : %s\n", msg,
+			       libcfs_nid2str(ni->ni_nid),
+			       libcfs_nid2str(msg->msg_txpeer->lpni_nid),
+			       lnet_msgtyp2str(msg->msg_type));
+			lnet_ni_send(ni, msg);
+			continue;
+		}
+
+		/* Delayed receive */
 		LASSERT(msg->msg_rxpeer != NULL);
 		LASSERT(msg->msg_rxni != NULL);
 

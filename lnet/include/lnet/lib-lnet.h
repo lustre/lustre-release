@@ -672,6 +672,7 @@ void lnet_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 void lnet_ni_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		  int delayed, unsigned int offset,
 		  unsigned int mlen, unsigned int rlen);
+void lnet_ni_send(struct lnet_ni *ni, struct lnet_msg *msg);
 
 struct lnet_msg *lnet_create_reply_msg(struct lnet_ni *ni,
 				       struct lnet_msg *get_msg);
