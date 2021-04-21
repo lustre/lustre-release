@@ -6,25 +6,25 @@
   <para>This chapter describes the <literal>llapi</literal> library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438215_30970"/></para>
+      <para><xref linkend="llapi_file_create"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438215_50149"/></para>
+      <para><xref linkend="llapi_file_get_stripe"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438215_86607"/></para>
+      <para><xref linkend="llapi_file_open"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438215_12433"/></para>
+      <para><xref linkend="llapi_quotactl"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438215_15718"/></para>
+      <para><xref linkend="llapi_path2fid"/></para>
     </listitem>
   </itemizedlist>
   <note>
     <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
   </note>
-  <section xml:id="dbdoclet.50438215_30970">
+  <section xml:id="llapi_file_create">
     <title>
       <literal>llapi_file_create</literal>
     </title>
@@ -130,7 +130,7 @@ return -1;
 }</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438215_50149">
+  <section xml:id="llapi_file_get_stripe">
     <title>llapi_file_get_stripe</title>
     <para>Use <literal>llapi_file_get_stripe</literal> to get striping information for a file or directory on a Lustre file system.</para>
     <section remap="h5">
@@ -414,7 +414,7 @@ cleanup:
 </programlisting>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438215_86607">
+  <section xml:id="llapi_file_open">
     <title>
       <literal>llapi_file_open</literal>
     </title>
@@ -588,7 +588,7 @@ int main(int argc, char *argv[])
 </programlisting>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438215_12433">
+  <section xml:id="llapi_quotactl">
     <title>
       <literal>llapi_quotactl</literal>
     </title>
@@ -779,7 +779,7 @@ struct obd_uuid {
       </informaltable>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438215_15718">
+  <section xml:id="llapi_path2fid">
     <title>
       <literal>llapi_path2fid</literal>
     </title>
@@ -1047,7 +1047,7 @@ struct llapi_lu_ladvise {
           </para>
       </section>
   </section>
-  <section xml:id="dbdoclet.50438215_marker-1297700">
+  <section xml:id="example_using_llapi">
     <title>Example Using the <literal>llapi</literal> Library</title>
     <para>Use <literal>llapi_file_create</literal> to set Lustre software properties for a new file.
       For a synopsis and description of <literal>llapi_file_create</literal> and examples of how to
@@ -1264,22 +1264,22 @@ cp lustredemo /mnt/lustre/ftest/
       <itemizedlist>
         <listitem>
           <para>
-            <xref linkend="dbdoclet.50438215_30970"/>
+            <xref linkend="llapi_file_create"/>
     </para>
         </listitem>
         <listitem>
           <para>
-            <xref linkend="dbdoclet.50438215_50149"/>
+            <xref linkend="llapi_file_get_stripe"/>
     </para>
         </listitem>
         <listitem>
           <para>
-            <xref linkend="dbdoclet.50438215_86607"/>
+            <xref linkend="llapi_file_open"/>
     </para>
         </listitem>
         <listitem>
           <para>
-            <xref linkend="dbdoclet.50438215_12433"/>
+            <xref linkend="llapi_quotactl"/>
     </para>
         </listitem>
       </itemizedlist>
