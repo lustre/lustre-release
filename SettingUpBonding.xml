@@ -7,46 +7,46 @@
   <itemizedlist>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_95824"/>
+              <xref linkend="network_interface_bonding_overview"/>
           </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_29107"/>
+              <xref linkend="interface_bonding_requirements"/>
           </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_25353"/>
+              <xref linkend="bonding_module_parameters"/>
           </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_26899"/>
+              <xref linkend="setting_up_bonding"/>
           </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_54769"/>
+              <xref linkend="configuring_lustre_with_bonding"/>
           </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438258_92244"/>
+              <xref linkend="bonding_references"/>
           </para>
     </listitem>
   </itemizedlist>
   <note>
     <para>Using network interface bonding is optional.</para>
   </note>
-  <section xml:id="dbdoclet.50438258_95824">
+  <section xml:id="network_interface_bonding_overview">
     <title>Network Interface Bonding Overview</title>
     <para>Bonding, also known as link aggregation, trunking and port trunking, is a method of aggregating multiple physical network links into a single logical link for increased bandwidth.</para>
     <para>Several different types of bonding are available in the Linux distribution. All these
       types are referred to as &apos;modes&apos;, and use the bonding kernel module.</para>
     <para>Modes 0 to 3 allow load balancing and fault tolerance by using multiple interfaces. Mode 4 aggregates a group of interfaces into a single virtual interface where all members of the group share the same speed and duplex settings. This mode is described under IEEE spec 802.3ad, and it is referred to as either &apos;mode 4&apos; or &apos;802.3ad.&apos;</para>
   </section>
-  <section xml:id="dbdoclet.50438258_29107">
+  <section xml:id="interface_bonding_requirements">
     <title>Requirements</title>
     <para>The most basic requirement for successful bonding is that both endpoints of the connection must be capable of bonding. In a normal case, the non-server endpoint is a switch. (Two systems connected via crossover cables can also use bonding.) Any switch used must explicitly handle 802.3ad Dynamic Link Aggregation.</para>
     <para>The kernel must also be configured with bonding. All supported Lustre kernels have bonding functionality. The network driver for the interfaces to be bonded must have the ethtool functionality to determine slave speed and duplex settings. All recent network drivers implement it.</para>
@@ -100,7 +100,7 @@ Settings for eth1:
    /sbin/ifenslave
 </screen>
   </section>
-  <section xml:id="dbdoclet.50438258_25353">
+  <section xml:id="bonding_module_parameters">
     <title>Bonding Module Parameters</title>
     <para>Bonding module parameters control various aspects of bonding.</para>
     <para>Outgoing traffic is mapped across the slave interfaces according to the transmit hash
@@ -116,7 +116,7 @@ Settings for eth1:
     <screen>$ miimon=100</screen>
     <para>For a busy network, increase the timeout.</para>
   </section>
-  <section xml:id="dbdoclet.50438258_26899">
+  <section xml:id="setting_up_bonding">
     <title>Setting Up Bonding</title>
     <para>To set up bonding:</para>
     <orderedlist>
@@ -314,7 +314,7 @@ collisions:0 txqueuelen:100
 Interrupt:9 Base address:0x1400</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438258_54769">
+  <section xml:id="configuring_lustre_with_bonding">
     <title>Configuring a Lustre File System with Bonding</title>
     <para>The Lustre software uses the IP address of the bonded interfaces and requires no special
       configuration. The bonded interface is treated as a regular TCP/IP interface. If needed,
@@ -322,7 +322,7 @@ Interrupt:9 Base address:0x1400</screen>
         <literal>/etc/modprobe</literal>.</para>
     <screen>options lnet networks=tcp(bond0)</screen>
   </section>
-  <section xml:id="dbdoclet.50438258_92244">
+  <section xml:id="bonding_references">
     <title>Bonding References</title>
     <para>We recommend the following bonding references:</para>
     <itemizedlist>
