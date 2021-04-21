@@ -9,16 +9,16 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50540653_59957" />
+        <xref linkend="what_is_failover" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50540653_97944" />
+        <xref linkend="failover_functionality" />
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50540653_59957">
+  <section xml:id="what_is_failover">
     <title>
     <indexterm>
       <primary>failover</primary>
@@ -128,7 +128,7 @@
       storage.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50540653_97944">
+  <section xml:id="failover_functionality">
     <title>
     <indexterm>
       <primary>failover</primary>

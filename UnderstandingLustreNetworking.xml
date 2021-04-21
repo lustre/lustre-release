@@ -7,12 +7,12 @@
   <itemizedlist>
     <listitem>
       <para>
-                <xref linkend="dbdoclet.50438191_22878"/>
+                <xref linkend="understanding_lnet"/>
             </para>
     </listitem>
     <listitem>
       <para>                           
-                <xref linkend="dbdoclet.50438191_19625"/>
+                <xref linkend="lnet_key_feature"/>
             </para>
     </listitem>
     <listitem>
@@ -20,11 +20,11 @@
     </listitem>
     <listitem>
       <para>
-                <xref linkend="dbdoclet.50438191_20721"/>
+                <xref linkend="supported_networks"/>
             </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438191_22878">
+  <section xml:id="understanding_lnet">
     <title><indexterm>
         <primary>LNet</primary>
       </indexterm><indexterm>
@@ -46,7 +46,7 @@
     <para>For information about configuring LNet, see <xref linkend="configuringlnet"/>.</para>
     <para>For information about administering LNet, see <xref linkend="adminlustrepart3"/>.</para>
   </section>
-  <section xml:id="dbdoclet.50438191_19625">
+  <section xml:id="lnet_key_feature">
     <title><indexterm>
         <primary>LNet</primary>
         <secondary>features</secondary>
@@ -97,7 +97,7 @@
       LNet routing is not the same as network routing. For more details about LNet routing, see
         <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="configuringlnet"/></para>
   </section>
-  <section xml:id="dbdoclet.50438191_20721">
+  <section xml:id="supported_networks">
     <title><indexterm>
         <primary>LNet</primary>
         <secondary>supported networks</secondary>

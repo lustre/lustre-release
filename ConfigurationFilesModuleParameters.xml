@@ -9,7 +9,7 @@
       <para><xref linkend="dbdoclet.tuning_lnet_mod_params"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438293_78010"/></para>
+      <para><xref linkend="module_options"/></para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.tuning_lnet_mod_params">
@@ -26,7 +26,7 @@
     <para>LNet configuration parameters can be viewed under <literal>/sys/module/lnet/parameters/</literal>, and LND-specific parameters under the name of the corresponding LND, for example <literal>/sys/module/ksocklnd/parameters/</literal> for the socklnd (TCP) LND.</para>
     <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. Unmarked parameters can only be set when LNet loads for the first time.  Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
   </section>
-  <section xml:id="dbdoclet.50438293_78010">
+  <section xml:id="module_options">
       <title>
           <indexterm><primary>configuring</primary><secondary>module options</secondary></indexterm>
           

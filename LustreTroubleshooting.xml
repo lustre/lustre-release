@@ -8,16 +8,16 @@
     following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438198_11171"/></para>
+      <para><xref linkend="lustre_error_messages"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.reporting_lustre_problem"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438198_93109"/></para>
+      <para><xref linkend="common_lustre_problems"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438198_11171">
+  <section xml:id="lustre_error_messages">
       <title><indexterm><primary>troubleshooting</primary></indexterm>
           <indexterm><primary>lustre</primary><secondary>troubleshooting</secondary><see>troubleshooting</see></indexterm>
           <indexterm><primary>lustre</primary><secondary>errors</secondary><see>troubleshooting</see></indexterm>
@@ -325,7 +325,7 @@
         obd_last_committed failed:</code></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438198_93109">
+  <section xml:id="common_lustre_problems">
     <title><indexterm>
         <primary>troubleshooting</primary>
         <secondary>common problems</secondary>
