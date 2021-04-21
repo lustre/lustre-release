@@ -309,7 +309,7 @@
         required) and creates one instance of <literal>echo_client</literal> for
         each <literal>obdfilter</literal> instance in order to generate I/O
         requests directly to the OST.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_59319"/>.
+        <para>For more details, see <xref linkend="local_disk_performance"/>.
         </para>
       </listitem>
       <listitem>
@@ -369,7 +369,7 @@
       particular, pay attention to the listed maximum values listed for each
       parameter in the script.</para>
     </note>
-    <section xml:id="dbdoclet.50438212_59319">
+    <section xml:id="local_disk_performance">
       <title><indexterm><primary>benchmarking</primary>
         <secondary>local disk</secondary></indexterm>
       Testing Local Disk Performance</title>
@@ -776,7 +776,7 @@ lustre-OST0001-osc-ffff88007754bc00&quot; sh obdfilter-survey</screen>
         <para>It is also useful to monitor and record average disk I/O sizes
         during each test using the &apos;disk io size&apos; histogram in the
         file <literal>lctl get_param obdfilter.*.brw_stats</literal>
-        (see <xref linkend="dbdoclet.50438271_55057"/> for details). These
+        (see <xref linkend="monitor_ost_block_io_stream"/> for details). These
         numbers help identify problems in the system when full-sized I/Os are
         not submitted to the underlying disk. This may be caused by problems in
         the device driver or Linux block layer.</para>

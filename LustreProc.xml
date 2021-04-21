@@ -10,7 +10,7 @@
   file system.  It includes these sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438271_83523"/></para>
+      <para><xref linkend="enabling_interpreting_debugging_logs"/></para>
       <para>.</para>
     </listitem>
   </itemizedlist>
@@ -375,7 +375,7 @@ testfs-MDT0000</screen></para>
         <listitem>
           <para><literal>brw_stats</literal> – Histogram data characterizing I/O requests to the
             OSTs. For more details, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-              linkend="dbdoclet.50438271_55057"/>.</para>
+              linkend="monitor_ost_block_io_stream"/>.</para>
         </listitem>
         <listitem>
           <para><literal>rpc_stats</literal> – Histogram data showing information about RPCs made by
@@ -993,7 +993,7 @@ PID: 11429
           to that point in the table of calls (<literal>cum %</literal>). </para>
       </section>
     </section>
-    <section xml:id="dbdoclet.50438271_55057">
+    <section xml:id="monitor_ost_block_io_stream">
       <title><indexterm>
           <primary>proc</primary>
           <secondary>block I/O</secondary>
@@ -2639,7 +2639,7 @@ ost.OSS.ost_io.threads_max=256</screen>
     </note>
     <para>See also <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="lustretuning"/></para>
   </section>
-  <section xml:id="dbdoclet.50438271_83523">
+  <section xml:id="enabling_interpreting_debugging_logs">
     <title><indexterm>
         <primary>proc</primary>
         <secondary>debug</secondary>
