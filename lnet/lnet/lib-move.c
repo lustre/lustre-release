@@ -753,7 +753,7 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_process_id target,
 	msg->msg_hdr.payload_length = cpu_to_le32(len);
 }
 
-static void
+void
 lnet_ni_send(struct lnet_ni *ni, struct lnet_msg *msg)
 {
 	void *priv = msg->msg_private;
@@ -1022,6 +1022,12 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 			list_add_tail(&msg->msg_list, &tq->tq_delayed);
 			return LNET_CREDIT_WAIT;
 		}
+	}
+
+	if (unlikely(!list_empty(&the_lnet.ln_delay_rules)) &&
+	    lnet_delay_rule_match_locked(&msg->msg_hdr, msg)) {
+		msg->msg_tx_delayed = 1;
+		return LNET_CREDIT_WAIT;
 	}
 
 	/* unset the tx_delay flag as we're going to send it now */
