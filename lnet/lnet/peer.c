@@ -2413,7 +2413,8 @@ static void lnet_discovery_event_handler(struct lnet_event *event)
 
 	/* put peer back at end of request queue, if discovery not already
 	 * done */
-	if (rc == LNET_REDISCOVER_PEER && !lnet_peer_is_uptodate(lp)) {
+	if (rc == LNET_REDISCOVER_PEER && !lnet_peer_is_uptodate(lp) &&
+	    lnet_peer_queue_for_discovery(lp)) {
 		list_move_tail(&lp->lp_dc_list, &the_lnet.ln_dc_request);
 		wake_up(&the_lnet.ln_dc_waitq);
 	}
