@@ -1336,9 +1336,8 @@ ksocknal_finalize_zcreq(struct ksock_conn *conn)
 
 	spin_unlock(&peer_ni->ksnp_lock);
 
-	while (!list_empty(&zlist)) {
-		tx = list_entry(zlist.next, struct ksock_tx, tx_zc_list);
-
+	while ((tx = list_first_entry_or_null(&zlist, struct ksock_tx,
+					      tx_zc_list)) != NULL) {
 		list_del(&tx->tx_zc_list);
 		ksocknal_tx_decref(tx);
 	}
@@ -1822,8 +1821,8 @@ ksocknal_free_buffers (void)
 		list_splice_init(&ksocknal_data.ksnd_idle_noop_txs, &zlist);
 		spin_unlock(&ksocknal_data.ksnd_tx_lock);
 
-		while (!list_empty(&zlist)) {
-			tx = list_entry(zlist.next, struct ksock_tx, tx_list);
+		while ((tx = list_first_entry_or_null(&zlist, struct ksock_tx,
+						      tx_list)) != NULL) {
 			list_del(&tx->tx_list);
 			LIBCFS_FREE(tx, tx->tx_desc_size);
 		}
