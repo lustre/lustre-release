@@ -1860,6 +1860,106 @@ test_211() {
 }
 run_test 211 "Remote NI recovery checks"
 
+test_212() {
+	local rnodes=$(remote_nodes_list)
+	[[ -z $rnodes ]] && skip "Need at least 1 remote node"
+
+	cleanup_lnet || error "Failed to cleanup before test execution"
+
+	# Loading modules should configure LNet with the appropriate
+	# test-framework configuration
+	load_modules || error "Failed to load modules"
+
+	local my_nid=$($LCTL list_nids | head -n 1)
+	[[ -z $my_nid ]] &&
+		error "Failed to get primary NID for local host $HOSTNAME"
+
+	local rnode=$(awk '{print $1}' <<<$rnodes)
+	local rnodenids=$(do_node $rnode $LCTL list_nids | xargs echo)
+	local rloaded=false
+
+	if [[ -z $rnodenids ]]; then
+		do_rpc_nodes $rnode load_modules_local
+		rloaded=true
+		rnodenids=$(do_node $rnode $LCTL list_nids | xargs echo)
+	fi
+
+	local rnodepnid=$(awk '{print $1}' <<< $rnodenids)
+
+	[[ -z $rnodepnid ]] &&
+		error "Failed to get primary NID for remote host $rnode"
+
+	log "Initial discovery"
+	do_lnetctl discover --force $rnodepnid ||
+		error "Failed to discover $rnodepnid"
+
+	do_node $rnode "$LNETCTL discover --force $my_nid" ||
+		error "$rnode failed to discover $my_nid"
+
+	log "Fail local discover ping to set LNET_PEER_REDISCOVER flag"
+	$LCTL net_drop_add -s "*@$NETTYPE" -d "*@$NETTYPE" -r 1 -e local_error
+	do_lnetctl discover --force $rnodepnid &&
+		error "Discovery should have failed"
+	$LCTL net_drop_del -a
+
+	local nid
+	for nid in $rnodenids; do
+		# We need GET (PING) delay just long enough so we can trigger
+		# discovery on the remote peer
+		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -l 3
+		$LCTL net_drop_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -e local_error
+		# We need PUT (PUSH) delay just long enough so we can process
+		# the PING failure
+		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m PUT -l 6
+	done
+
+	log "Force $HOSTNAME to discover $rnodepnid (in background)"
+	# We want to get a PING sent that we know will eventually fail.
+	# The delay rules we added will ensure the ping is not sent until
+	# the PUSH is also in flight (see below), and the drop rule ensures that
+	# when the PING is eventually sent it will error out
+	do_lnetctl discover --force $rnodepnid &
+	local pid1=$!
+
+	# We want a discovery PUSH from rnode to put rnode back on our
+	# discovery queue. This should cause us to try and send a PUSH to rnode
+	# while the PING is still outstanding.
+	log "Force $rnode to discover $my_nid"
+	do_node $rnode $LNETCTL discover --force $my_nid
+
+	# At this point we'll have both PING_SENT and PUSH_SENT set for the
+	# rnode peer. Wait for the PING to error out which should terminate the
+	# discovery process that we backgrounded.
+	log "Wait for $pid1"
+	wait $pid1
+	log "Finished wait on $pid1"
+
+	# The PING send failure clears the PING_SENT flag and puts the peer back
+	# on the discovery queue. When discovery thread processes the peer it
+	# will mistakenly clear the PUSH_SENT flag (and set PUSH_FAILED).
+	# Discovery will then complete for this peer even though we have an
+	# outstanding PUSH.
+	# When PUSH is actually unlinked it will be forced back onto the
+	# discovery queue, but we no longer have a ref on the peer. When
+	# discovery completes again, we'll trip the ASSERT in
+	# lnet_destroy_peer_locked()
+
+	# Delete the delay rules to send the PUSH
+	$LCTL net_delay_del -a
+	# Delete the drop rules
+	$LCTL net_drop_del -a
+
+	unload_modules ||
+		error "Failed to unload modules"
+	if $rloaded; then
+		do_rpc_nodes $rnode unload_modules_local ||
+			error "Failed to unload modules on $rnode"
+	fi
+
+	return 0
+}
+run_test 212 "Check discovery refcount loss bug (LU-14627)"
+
 test_300() {
 	# LU-13274
 	local header
