@@ -3404,8 +3404,9 @@ test_47() {
 		error "link from encrypted to unencrypted dir should succeed"
 	rm -f $tmpfile
 
-	mrename $testfile2 $tmpfile ||
-		error "rename from encrypted to unencrypted dir should succeed"
+	mrename $testfile2 $tmpfile &&
+		error "rename from encrypted to unencrypted dir should fail"
+	touch $tmpfile
 
 	dd if=/dev/zero of=$testfile bs=512K count=1
 	mkdir $DIR/$tdir/mydir
