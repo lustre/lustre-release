@@ -5390,8 +5390,9 @@ test_606() {
 	local entry
 
 	#remount mds1 as ldiskfs or zfs type
-	stack_trap "stop mds1; start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS" EXIT
 	stop mds1 || error "stop mds1 failed"
+	stack_trap "unmount_fstype mds1; start mds1 $(mdsdevname 1)\
+		$MDS_MOUNT_OPTS" EXIT
 	mount_fstype mds1 || error "remount mds1 failed"
 
 	for ((i = 0; i < 1; i++)); do
