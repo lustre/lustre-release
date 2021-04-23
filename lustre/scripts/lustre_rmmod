@@ -111,6 +111,20 @@ if $DEBUG; then
 	$LCTL mark "$SCRIPT_NAME : Start debug"
 fi
 
+# LNet may have an internal ref which can prevent LND modules from
+# unloading. Try to drop it before unloading modules.
+# NB: we squelch stderr because lnetctl/lctl may complain about
+# LNet being "busy", but this is normal. We're making a best effort
+# here.
+if lsmod | grep -q lnet; then
+	# Prefer lnetctl if it is present
+	if [ -n "$(which lnetctl 2>/dev/null)" ]; then
+		lnetctl lnet unconfigure 2>/dev/null
+	elif [ -n "$(which lctl 2>/dev/null)" ]; then
+		lctl net down 2>/dev/null
+	fi
+fi
+
 for mod in ${modules[*]}; do
 	unload_dep_modules_inclusive $mod || exit 1
 done
