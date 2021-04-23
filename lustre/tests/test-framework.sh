@@ -287,6 +287,8 @@ init_test_env() {
 	fi
 	export RSYNC_RSH=${RSYNC_RSH:-rsh}
 
+	export LNETCTL=${LNETCTL:-"$LUSTRE/../lnet/utils/lnetctl"}
+	[ ! -f "$LNETCTL" ] && export LNETCTL=$(which lnetctl 2> /dev/null)
 	export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
 	[ ! -f "$LCTL" ] && export LCTL=$(which lctl)
 	export LFS=${LFS:-"$LUSTRE/utils/lfs"}
@@ -782,9 +784,7 @@ check_mem_leak () {
     fi
 }
 
-unload_modules() {
-	wait_exit_ST client # bug 12845
-
+unload_modules_local() {
 	$LUSTRE_RMMOD ldiskfs || return 2
 
 	[ -f /etc/udev/rules.d/99-lustre-test.rules ] &&
@@ -792,15 +792,23 @@ unload_modules() {
 	udevadm control --reload-rules
 	udevadm trigger
 
+	check_mem_leak || return 254
+
+	return 0
+}
+
+unload_modules() {
+	local rc=0
+
+	wait_exit_ST client # bug 12845
+
+	unload_modules_local || rc=$?
+
 	if $LOAD_MODULES_REMOTE; then
 		local list=$(comma_list $(remote_nodes_list))
 		if [ -n "$list" ]; then
 			echo "unloading modules on: '$list'"
-			do_rpc_nodes "$list" $LUSTRE_RMMOD ldiskfs
-			do_rpc_nodes "$list" check_mem_leak
-			do_rpc_nodes "$list" "rm /etc/udev/rules.d/99-lustre-test.rules"
-			do_rpc_nodes "$list" "udevadm control --reload-rules"
-			do_rpc_nodes "$list" "udevadm trigger"
+			do_rpc_nodes "$list" unload_modules_local
 		fi
 	fi
 
@@ -811,10 +819,9 @@ unload_modules() {
 			rm -f $sbin_mount
 	fi
 
-	check_mem_leak || return 254
+	[[ $rc -eq 0 ]] && echo "modules unloaded."
 
-	echo "modules unloaded."
-	return 0
+	return $rc
 }
 
 fs_log_size() {

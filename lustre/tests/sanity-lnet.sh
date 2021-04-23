@@ -23,9 +23,6 @@ init_logging
 
 build_test_filter
 
-export LNETCTL=${LNETCTL:-"$LUSTRE/../lnet/utils/lnetctl"}
-[ ! -f "$LNETCTL" ] &&
-	export LNETCTL=$(which lnetctl 2> /dev/null)
 [[ -z $LNETCTL ]] && skip "Need lnetctl"
 
 load_lnet() {
