@@ -273,13 +273,21 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 	init_rwsem(&ltd->ltd_qos.lq_rw_sem);
 	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 	set_bit(LQ_RESET, &ltd->ltd_qos.lq_flags);
-	/* Default priority is toward free space balance */
-	ltd->ltd_qos.lq_prio_free = 232;
-	/* Default threshold for rr (roughly 17%) */
-	ltd->ltd_qos.lq_threshold_rr = 43;
 	ltd->ltd_is_mdt = is_mdt;
-	if (is_mdt)
+	/* MDT imbalance threshold is low to balance across MDTs
+	 * relatively quickly, because each directory may result
+	 * in a large number of files/subdirs created therein.
+	 */
+	if (is_mdt) {
 		ltd->ltd_lmv_desc.ld_pattern = LMV_HASH_TYPE_DEFAULT;
+		ltd->ltd_qos.lq_prio_free = LMV_QOS_DEF_PRIO_FREE * 256 / 100;
+		ltd->ltd_qos.lq_threshold_rr =
+			LMV_QOS_DEF_THRESHOLD_RR_PCT * 256 / 100;
+	} else {
+		ltd->ltd_qos.lq_prio_free = LOV_QOS_DEF_PRIO_FREE * 256 / 100;
+		ltd->ltd_qos.lq_threshold_rr =
+			LOV_QOS_DEF_THRESHOLD_RR_PCT * 256 / 100;
+	}
 
 	return 0;
 }

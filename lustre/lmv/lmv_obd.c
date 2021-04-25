@@ -1461,9 +1461,10 @@ static int lmv_close(struct obd_export *exp, struct md_op_data *op_data,
 
 static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv, __u32 *mdt)
 {
-	struct lu_tgt_desc *tgt;
+	struct lu_tgt_desc *tgt, *cur = NULL;
 	__u64 total_weight = 0;
 	__u64 cur_weight = 0;
+	int total_usable = 0;
 	__u64 rand;
 	int rc;
 
@@ -1482,15 +1483,29 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv, __u32 *mdt)
 		GOTO(unlock, tgt = ERR_PTR(rc));
 
 	lmv_foreach_tgt(lmv, tgt) {
-		tgt->ltd_qos.ltq_usable = 0;
-		if (!tgt->ltd_exp || !tgt->ltd_active)
+		if (!tgt->ltd_exp || !tgt->ltd_active) {
+			tgt->ltd_qos.ltq_usable = 0;
 			continue;
+		}
 
 		tgt->ltd_qos.ltq_usable = 1;
 		lu_tgt_qos_weight_calc(tgt);
+		if (tgt->ltd_index == *mdt) {
+			cur = tgt;
+			cur_weight = tgt->ltd_qos.ltq_weight;
+		}
 		total_weight += tgt->ltd_qos.ltq_weight;
+		total_usable++;
 	}
 
+	/* if current MDT has higher-than-average space, stay on same MDT */
+	rand = total_weight / total_usable;
+	if (cur_weight >= rand) {
+		tgt = cur;
+		GOTO(unlock, rc = 0);
+	}
+
+	cur_weight = 0;
 	rand = lu_prandom_u64_max(total_weight);
 
 	lmv_foreach_connected_tgt(lmv, tgt) {

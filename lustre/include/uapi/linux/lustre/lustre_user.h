@@ -718,6 +718,12 @@ struct fsxattr {
 #define LOV_OFFSET_DEFAULT      ((__u16)-1)
 #define LMV_OFFSET_DEFAULT      ((__u32)-1)
 
+#define LOV_QOS_DEF_THRESHOLD_RR_PCT	17
+#define LMV_QOS_DEF_THRESHOLD_RR_PCT	 5
+
+#define LOV_QOS_DEF_PRIO_FREE		90
+#define LMV_QOS_DEF_PRIO_FREE		90
+
 static inline bool lov_pattern_supported(__u32 pattern)
 {
 	return (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_RAID0 ||
