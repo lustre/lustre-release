@@ -1,37 +1,46 @@
 .TH llapi_group_lock 3 "2014 Oct 03" "Lustre User API"
 .SH NAME
-llapi_group_lock, llapi_group_unlock \- get and put a Lustre group lock.
+llapi_group_lock, llapi_group_unlock, llapi_group_lock64, llapi_group_unlock64 \- get and put a Lustre group lock.
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_group_lock(int "fd ", int "gid );
+.BI "int llapi_group_lock64(int "fd ", __u64 "gid );
 
 .BI "int llapi_group_unlock(int "fd ", int "gid );
+.BI "int llapi_group_unlock64(int "fd ", __u64 "gid );
 .fi
 .SH DESCRIPTION
 .PP
-The function
+The functions
 .BR llapi_group_lock()
-takes a group lock on the file descriptor
+and
+.BR llapi_group_lock64()
+take a group lock on the file descriptor
 .I fd
 with group identifier
-.IR gid .
+.IR gid
+(int or __u64 type) .
 
-The function
+The functions
 .BR llapi_group_unlock()
-releases a group lock identified by group identifier
+and
+.BR llapi_group_unlock64()
+release a group lock identified by group identifier
 .I gid
-on the file descriptor
+(int or __u64 type) on the file descriptor
 .IR fd .
 
 The group lock is a whole file lock that blocks concurrent I/O originating from descriptors that have not been locked. Multiple processes can acquire a lock by specifying the same group identifier.
 
 .SH RETURN VALUES
 .LP
-.B llapi_group_lock(\|)
-and
+.B llapi_group_lock(\|),
+.B llapi_group_lock64(\|),
 .B llapi_group_unlock(\|)
+and
+.B llapi_group_unlock64(\|)
 return 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15

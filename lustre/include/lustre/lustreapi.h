@@ -65,6 +65,16 @@ typedef struct statx lstatx_t;
 
 #define lustre_fid struct lu_fid
 
+/*
+ * BUILD_BUG_ON() is Compile-time check which verifies correctness at
+ * compile-time rather than runtime. If "cond" is true, (1 - 2*!!(cond))
+ * will be a negative value, which will cause the compiler to complain.
+ *
+ */
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))
+#endif
+
 /* Currently external applications can access this but in the
  * future this will no longer be exposed for the user. Instead
  * if you want to know if the library is initialized just call
@@ -609,6 +619,8 @@ int llapi_lease_put(int fd); /* obsoleted */
 /* Group lock */
 int llapi_group_lock(int fd, int gid);
 int llapi_group_unlock(int fd, int gid);
+int llapi_group_lock64(int fd, __u64 gid);
+int llapi_group_unlock64(int fd, __u64 gid);
 
 bool llapi_file_is_sparse(int fd);
 off_t llapi_data_seek(int src_fd, off_t offset, size_t *length);

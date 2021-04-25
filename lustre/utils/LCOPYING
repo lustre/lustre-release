@@ -6,6 +6,7 @@ lustre/utils/liblustreapi_layout.c
 lustre/utils/liblustreapi_lease.c
 lustre/utils/liblustreapi_nodemap.c
 lustre/utils/liblustreapi_util.c
+lustre/utils/liblustreapi_swap.c
 lustre/utils/lustreapi_internal.h
 -------------------------------------------------------------------------------
 		  GNU LESSER GENERAL PUBLIC LICENSE

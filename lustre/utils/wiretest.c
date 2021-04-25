@@ -48,20 +48,10 @@
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
+#include <lustre/lustreapi.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__); ret = 1; }
-/*
- * BUILD_BUG_ON() is Compile-time check which verifies correctness at
- * compile-time rather than runtime. If "cond" is true, then there are two
- * identical cases ("0" and "0"), which is an error that causes the compiler to
- * complain. If "cond" is false, then there are two different cases
- * ("(non-zero)" and "0").
- *
- */
-#ifndef BUILD_BUG_ON
-#define BUILD_BUG_ON(cond) do {switch (0) {case (cond): case 1: break; } } while (0)
-#endif
 
 int ret;
 
