@@ -1210,12 +1210,12 @@ cont_map:
 			GOTO(cleanup, rc);
 		/*
 		 * decay extent blocks if we could allocate
-		 * good large(1M) extent.
+		 * good large extent.
 		 */
-		if (previous_total == 0 &&
-		    total >= OSD_DEFAULT_EXTENT_BYTES >> inode->i_blkbits)
+		if (total - previous_total >=
+		    osd_extent_bytes(osd) >> inode->i_blkbits)
 			osd_decay_extent_bytes(osd,
-					       total << inode->i_blkbits);
+				(total - previous_total) << inode->i_blkbits);
 		/* look for next extent */
 		fp = NULL;
 		blocks += blocks_per_page * clen;
@@ -1360,6 +1360,7 @@ static int osd_is_mapped(struct dt_object *dt, __u64 offset,
 	return cached_extent->mapped;
 }
 
+#define MAX_EXTENTS_PER_WRITE 100
 static int osd_declare_write_commit(const struct lu_env *env,
 				    struct dt_object *dt,
 				    struct niobuf_local *lnb, int npages,
@@ -1425,7 +1426,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		if (lnb[i].lnb_file_offset != extent.end || extent.end == 0) {
 			if (extent.end != 0)
 				extents += (extent.end - extent.start +
-					extent_bytes - 1) / extent_bytes;
+					    extent_bytes - 1) / extent_bytes;
 			extent.start = lnb[i].lnb_file_offset;
 			extent.end = lnb[i].lnb_file_offset + lnb[i].lnb_len;
 		} else {
@@ -1445,6 +1446,18 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	extents += (extent.end - extent.start +
 		    extent_bytes - 1) / extent_bytes;
+	/**
+	 * with system space usage growing up, mballoc codes won't
+	 * try best to scan block group to align best free extent as
+	 * we can. So extent bytes per extent could be decayed to a
+	 * very small value, this could make us reserve too many credits.
+	 * We could be more optimistic in the credit reservations, even
+	 * in a case where the filesystem is nearly full, it is extremely
+	 * unlikely that the worst case would ever be hit.
+	 */
+	if (extents > MAX_EXTENTS_PER_WRITE)
+		extents = MAX_EXTENTS_PER_WRITE;
+
 	/*
 	 * each extent can go into new leaf causing a split
 	 * 5 is max tree depth: inode + 4 index blocks
@@ -1486,6 +1499,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		credits += LDISKFS_SB(osd_sb(osd))->s_gdb_count;
 	else
 		credits += extents;
+
+	CDEBUG(D_INODE,
+	       "%s: inode #%lu extent_bytes %u extents %d credits %d\n",
+	       osd_ino2name(inode), inode->i_ino, extent_bytes, extents,
+	       credits);
 
 out_declare:
 	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
