@@ -574,6 +574,24 @@ static ssize_t full_scrub_threshold_rate_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(full_scrub_threshold_rate);
 
+static ssize_t extent_bytes_allocation_show(struct kobject *kobj,
+					    struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *dev = osd_dt_dev(dt);
+	int i;
+	unsigned int min = (unsigned int)(~0), cur;
+
+	for_each_online_cpu(i) {
+		cur = *per_cpu_ptr(dev->od_extent_bytes_percpu, i);
+		if (cur < min)
+			min = cur;
+	}
+	return snprintf(buf, PAGE_SIZE, "%u\n", min);
+}
+LUSTRE_RO_ATTR(extent_bytes_allocation);
+
 static int ldiskfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 {
 	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
@@ -863,6 +881,7 @@ static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_pdo.attr,
 	&lustre_attr_full_scrub_ratio.attr,
 	&lustre_attr_full_scrub_threshold_rate.attr,
+	&lustre_attr_extent_bytes_allocation.attr,
 	NULL,
 };
 
