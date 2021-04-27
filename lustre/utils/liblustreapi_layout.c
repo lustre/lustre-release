@@ -1157,7 +1157,7 @@ int llapi_layout_stripe_count_get(const struct llapi_layout *layout,
  * the old API uses 0 and -1.
  */
 
-static bool llapi_layout_stripe_count_is_valid(int64_t stripe_count)
+bool llapi_layout_stripe_count_is_valid(int64_t stripe_count)
 {
 	return stripe_count == LLAPI_LAYOUT_DEFAULT ||
 		stripe_count == LLAPI_LAYOUT_WIDE ||
@@ -1526,32 +1526,20 @@ int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
  * \retval	-1 if arguments are invalid or pool name is too long
  */
 int llapi_layout_pool_name_set(struct llapi_layout *layout,
-			       const char *pool_name)
+			       char *pool_name)
 {
 	struct llapi_layout_comp *comp;
-	char *ptr;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
 
-	if (pool_name == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	/* Strip off any 'fsname.' portion. */
-	ptr = strchr(pool_name, '.');
-	if (ptr != NULL)
-		pool_name = ptr + 1;
-
-	if (strlen(pool_name) > LOV_MAXPOOLNAME) {
+	if (!llapi_pool_name_is_valid(&pool_name, NULL)) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	strncpy(comp->llc_pool_name, pool_name, sizeof(comp->llc_pool_name));
-
 	return 0;
 }
 
@@ -1586,7 +1574,8 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 	}
 
 	if (layout) {
-		rc = llapi_layout_sanity((struct llapi_layout *)layout, false,
+		rc = llapi_layout_sanity((struct llapi_layout *)layout,
+					 path, false,
 					 !!(layout->llot_mirror_count > 1));
 		if (rc) {
 			llapi_layout_sanity_perror(rc);
@@ -2217,7 +2206,7 @@ int llapi_layout_file_comp_add(const char *path,
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, false, false);
+	rc = llapi_layout_sanity(existing_layout, path, false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -2352,7 +2341,7 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, false, false);
+	rc = llapi_layout_sanity(existing_layout, path, false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -2512,7 +2501,7 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, false, false);
+	rc = llapi_layout_sanity(existing_layout, path, false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -3149,6 +3138,7 @@ enum llapi_layout_comp_sanity_error {
 	LSE_START_GT_END,
 	LSE_ALIGN_END,
 	LSE_ALIGN_EXT,
+	LSE_UNKNOWN_OST,
 	LSE_LAST,
 };
 
@@ -3185,9 +3175,12 @@ const char *const llapi_layout_strerror[] =
 		"The component end must be aligned by the stripe size",
 	[LSE_ALIGN_EXT] =
 		"The extension size must be aligned by the stripe size",
+	[LSE_UNKNOWN_OST] =
+		"An unknown OST idx is specified",
 };
 
 struct llapi_layout_sanity_args {
+	char lsa_fsname[MAX_OBD_NAME + 1];
 	bool lsa_incomplete;
 	bool lsa_flr;
 	bool lsa_ondisk;
@@ -3198,6 +3191,9 @@ struct llapi_layout_sanity_args {
 #define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
 				 LCME_FL_EXTENSION)
 
+/**
+ * When modified, adjust llapi_stripe_param_verify() if needed as well.
+ */
 static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 				  void *arg)
 {
@@ -3364,6 +3360,34 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 		goto out_err;
 	}
 
+	if (args->lsa_fsname[0] != '\0') {
+		int i, rc = 0;
+
+		if (comp->llc_pattern & LLAPI_LAYOUT_SPECIFIC) {
+			assert(comp->llc_stripe_count <=
+			       comp->llc_objects_count);
+
+			for (i = 0; i < comp->llc_stripe_count && rc == 0; i++){
+				if (comp->llc_objects[i].l_ost_idx ==
+				    LLAPI_LAYOUT_IDX_MAX) {
+					args->lsa_rc = -1;
+					goto out_err;
+				}
+				rc = llapi_layout_search_ost(
+					comp->llc_objects[i].l_ost_idx,
+					comp->llc_pool_name, args->lsa_fsname);
+			}
+		} else if (comp->llc_stripe_offset != LLAPI_LAYOUT_DEFAULT) {
+			rc = llapi_layout_search_ost(
+				comp->llc_stripe_offset,
+				comp->llc_pool_name, args->lsa_fsname);
+		}
+		if (rc) {
+			args->lsa_rc = LSE_UNKNOWN_OST;
+			goto out_err;
+		}
+	}
+
 	return LLAPI_LAYOUT_ITER_CONT;
 
 out_err:
@@ -3398,6 +3422,7 @@ void llapi_layout_sanity_perror(int error)
  * components"?
  *
  * \param[in] layout            component layout list.
+ * \param[in] fname		file the layout to be checked for
  * \param[in] incomplete        if layout is complete or not - some checks can
  *                              only be done on complete layouts.
  * \param[in] flr		set when this is called from FLR mirror create
@@ -3405,9 +3430,12 @@ void llapi_layout_sanity_perror(int error)
  * \retval                      0, success, positive: various errors, see
  *                              llapi_layout_sanity_perror, -1, failure
  */
-int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr)
+int llapi_layout_sanity(struct llapi_layout *layout,
+			const char *fname,
+			bool incomplete,
+			bool flr)
 {
-	struct llapi_layout_sanity_args args;
+	struct llapi_layout_sanity_args args = { { 0 } };
 	struct llapi_layout_comp *curr;
 	int rc = 0;
 
@@ -3417,6 +3445,17 @@ int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr)
 	curr = layout->llot_cur_comp;
 	if (!curr)
 		return 0;
+
+	/* Make sure we are on a Lustre file system */
+	if (fname) {
+		rc = llapi_search_fsname(fname, args.lsa_fsname);
+		if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "'%s' is not on a Lustre filesystem",
+				    fname);
+			return rc;
+		}
+	}
 
 	/* Set up args */
 	args.lsa_rc = 0;

@@ -932,7 +932,7 @@ void test21(void)
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
 	fd = llapi_layout_file_create(template, 0, 0640, layout);
-	ASSERTF(fd == -1 && errno == ENOTTY,
+	ASSERTF(fd == -1 && errno == ENOENT,
 		"fd = %d, errno = %d, template = %s", fd, errno, template);
 	llapi_layout_free(layout);
 }
@@ -1366,7 +1366,7 @@ void test30(void)
 	/* set non-contiguous extent will fail */
 	rc = llapi_layout_comp_extent_set(layout, start[1] * 2, end[1]);
 	ASSERTF(rc == 0, "errno %d", errno);
-	rc = llapi_layout_sanity(layout, false, false);
+	rc = llapi_layout_sanity(layout, NULL, false, false);
 	ASSERTF(rc == 12 /*LSE_NOT_ADJACENT_PREV*/, "rc %d", rc);
 
 	rc = llapi_layout_comp_extent_set(layout, start[1], end[1]);
@@ -1734,7 +1734,7 @@ void test34(void)
 	layout = llapi_layout_get_by_path(path, 0);
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	rc = llapi_layout_sanity(layout, false, false);
+	rc = llapi_layout_sanity(layout, NULL, false, false);
 	ASSERTF(rc == 0, "errno %d", errno);
 }
 

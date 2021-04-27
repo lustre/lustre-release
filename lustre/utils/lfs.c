@@ -1189,7 +1189,7 @@ int lfs_layout_compid_by_pool(char *fname, const char *pool, int *comp_id)
 		rc = -errno;
 		goto free_layout;
 	}
-	rc = llapi_layout_sanity(layout, false, true);
+	rc = llapi_layout_sanity(layout, fname, false, true);
 	if (rc < 0) {
 		llapi_layout_sanity_perror(errno);
 		goto free_layout;
@@ -1619,7 +1619,8 @@ enum mirror_flags {
  * Return: 0 on success or a negative error code on failure.
  */
 static int mirror_create_sanity_check(const char *fname,
-				      struct mirror_args *list)
+				      struct mirror_args *list,
+				      bool check_fname)
 {
 	int rc = 0;
 	bool has_m_file = false;
@@ -1628,7 +1629,7 @@ static int mirror_create_sanity_check(const char *fname,
 	if (!list)
 		return -EINVAL;
 
-	if (fname) {
+	if (fname && check_fname) {
 		struct llapi_layout *layout;
 
 		layout = llapi_layout_get_by_path(fname, 0);
@@ -1639,7 +1640,7 @@ static int mirror_create_sanity_check(const char *fname,
 			return -ENODATA;
 		}
 
-		rc = llapi_layout_sanity(layout, false, true);
+		rc = llapi_layout_sanity(layout, fname, false, true);
 
 		llapi_layout_free(layout);
 
@@ -1671,7 +1672,7 @@ static int mirror_create_sanity_check(const char *fname,
 			}
 		}
 
-		rc = llapi_layout_sanity(list->m_layout, false, true);
+		rc = llapi_layout_sanity(list->m_layout, fname, false, true);
 		if (rc) {
 			llapi_layout_sanity_perror(rc);
 			return rc;
@@ -1727,7 +1728,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 	int i = 0;
 	int rc = 0;
 
-	rc = mirror_create_sanity_check(NULL, mirror_list);
+	rc = mirror_create_sanity_check(fname, mirror_list, false);
 	if (rc)
 		return rc;
 
@@ -2028,7 +2029,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 {
 	int rc;
 
-	rc = mirror_create_sanity_check(fname, mirror_list);
+	rc = mirror_create_sanity_check(fname, mirror_list, true);
 	if (rc)
 		return rc;
 
@@ -2229,7 +2230,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		return -EINVAL;
 	}
 
-	rc = llapi_layout_sanity(layout, false, true);
+	rc = llapi_layout_sanity(layout, fname, false, true);
 	if (rc) {
 		llapi_layout_sanity_perror(rc);
 		goto free_layout;
@@ -2644,6 +2645,33 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
 		lsa->lsa_comp_end != 0);
 }
 
+static int lsa_args_stripe_count_check(struct lfs_setstripe_args *lsa)
+{
+	if (lsa->lsa_nr_tgts) {
+		if (lsa->lsa_nr_tgts < 0 ||
+		    lsa->lsa_nr_tgts >= LOV_MAX_STRIPE_COUNT) {
+			fprintf(stderr, "Invalid nr_tgts(%d)\n",
+				lsa->lsa_nr_tgts);
+			errno = EINVAL;
+			return -1;
+		}
+
+		if (lsa->lsa_stripe_count > 0 &&
+		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
+		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
+		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
+			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
+				lsa->lsa_stripe_count,
+				lsa->lsa_nr_tgts);
+			errno = EINVAL;
+			return -1;
+		}
+	}
+
+	return 0;
+
+}
+
 /**
  * comp_args_to_layout() - Create or extend a composite layout.
  * @composite:       Pointer to the composite layout.
@@ -2651,6 +2679,8 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
  *
  * This function creates or extends a composite layout by adding a new
  * component with stripe options from @lsa.
+ *
+ * When modified, adjust llapi_stripe_param_verify() if needed as well.
  *
  * Return: 0 on success or an error code on failure.
  */
@@ -2827,22 +2857,28 @@ new_comp:
 		}
 	}
 
+	rc = lsa_args_stripe_count_check(lsa);
+	if (rc)
+		return rc;
+
 	if (lsa->lsa_nr_tgts > 0) {
-		if (lsa->lsa_stripe_count > 0 &&
-		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
-		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
-		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
-			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
-				lsa->lsa_stripe_count,
-				lsa->lsa_nr_tgts);
-			errno = EINVAL;
-			return -1;
-		}
+		bool found = false;
+
 		for (i = 0; i < lsa->lsa_nr_tgts; i++) {
 			rc = llapi_layout_ost_index_set(layout, i,
 							lsa->lsa_tgts[i]);
 			if (rc)
 				break;
+
+			/* Make sure stripe offset is in OST list. */
+			if (lsa->lsa_tgts[i] == lsa->lsa_stripe_off)
+				found = true;
+		}
+		if (!found) {
+			fprintf(stderr, "Invalid stripe offset '%lld', not in the target list",
+				lsa->lsa_stripe_off);
+			errno = EINVAL;
+			return -1;
 		}
 	} else if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
 		   lsa->lsa_stripe_off != -1) {
@@ -4217,6 +4253,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		migrate_mdt_param.fp_lmv_md = lmu;
 		migrate_mdt_param.fp_migrate = 1;
 	} else if (!layout) {
+		if (lsa_args_stripe_count_check(&lsa))
+			goto usage_error;
+
 		/* initialize stripe parameters */
 		param = calloc(1, offsetof(typeof(*param),
 			       lsp_osts[lsa.lsa_nr_tgts]));
@@ -4250,19 +4289,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 		param->lsp_pool = lsa.lsa_pool_name;
 		param->lsp_is_specific = false;
-		if (lsa.lsa_nr_tgts > 0) {
-			if (lsa.lsa_stripe_count > 0 &&
-			    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
-			    lsa.lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
-			    lsa.lsa_nr_tgts != lsa.lsa_stripe_count) {
-				fprintf(stderr,
-					"error: %s: stripe count %lld doesn't match the number of OSTs: %d\n",
-					argv[0], lsa.lsa_stripe_count,
-					lsa.lsa_nr_tgts);
-				free(param);
-				goto usage_error;
-			}
 
+		if (lsa.lsa_nr_tgts > 0) {
 			param->lsp_is_specific = true;
 			param->lsp_stripe_count = lsa.lsa_nr_tgts;
 			memcpy(param->lsp_osts, tgts,
