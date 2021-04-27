@@ -811,6 +811,8 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #define page_tree i_pages
 #else
 #define i_pages tree_lock
+#define xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
+#define xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
 #define xa_lock_irq(lockp) spin_lock_irq(lockp)
 #define xa_unlock_irq(lockp) spin_unlock_irq(lockp)
 #endif
