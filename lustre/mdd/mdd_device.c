@@ -1270,6 +1270,8 @@ static int mdd_prepare(const struct lu_env *env,
 	struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
 	struct nm_config_file *nodemap_config;
 	struct obd_device_target *obt = &mdd2obd_dev(mdd)->u.obt;
+	struct dt_object *root = NULL;
+	struct thandle *th = NULL;
 	struct lu_fid fid;
 	int rc;
 
@@ -1302,6 +1304,56 @@ static int mdd_prepare(const struct lu_env *env,
 			       mdd2obd_dev(mdd)->obd_name, rc);
 			GOTO(out_los, rc);
 		}
+
+		/* store a default directory layout on the root directory if
+		 * it doesn't already exist to improve MDT space balance.
+		 */
+		root = dt_locate(env, mdd->mdd_bottom, &fid);
+		if (unlikely(IS_ERR(root)))
+			GOTO(out_los, rc = PTR_ERR(root));
+
+		rc = dt_xattr_get(env, root, &LU_BUF_NULL,
+				  XATTR_NAME_DEFAULT_LMV);
+		if (rc == -ENODATA) {
+			struct lu_buf buf;
+			struct lmv_user_md lmv_default = {
+				.lum_magic		= LMV_USER_MAGIC,
+				.lum_stripe_count	= 1,
+				.lum_stripe_offset	= LMV_OFFSET_DEFAULT,
+			};
+
+			th = dt_trans_create(env, mdd->mdd_bottom);
+			if (IS_ERR(th))
+				GOTO(out_root_put, rc = PTR_ERR(th));
+
+			buf.lb_buf = &lmv_default;
+			buf.lb_len = sizeof(lmv_default);
+			rc = dt_declare_xattr_set(env, root, &buf,
+						  XATTR_NAME_DEFAULT_LMV, 0,
+						  th);
+			if (rc)
+				GOTO(out_trans_stop, rc);
+
+			rc = dt_trans_start_local(env, mdd->mdd_bottom, th);
+			if (rc)
+				GOTO(out_trans_stop, rc);
+
+			rc = dt_xattr_set(env, root, &buf,
+					  XATTR_NAME_DEFAULT_LMV, 0, th);
+			if (rc)
+				GOTO(out_trans_stop, rc);
+
+			dt_trans_stop(env, mdd->mdd_bottom, th);
+			th = NULL;
+		} else if (rc < 0 && rc != -ERANGE) {
+			CERROR("%s: get default LMV of root failed: rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, rc);
+
+			GOTO(out_root_put, rc);
+		}
+
+		dt_object_put(env, root);
+		root = NULL;
 
 		mdd->mdd_root_fid = fid;
 		rc = mdd_dot_lustre_setup(env, mdd);
@@ -1373,6 +1425,12 @@ out_orph:
 out_dot:
 	if (mdd_seq_site(mdd)->ss_node_id == 0)
 		mdd_dot_lustre_cleanup(env, mdd);
+out_trans_stop:
+	if (th != NULL)
+		dt_trans_stop(env, mdd->mdd_bottom, th);
+out_root_put:
+	if (root != NULL)
+		dt_object_put(env, root);
 out_los:
 	local_oid_storage_fini(env, mdd->mdd_los);
 	mdd->mdd_los = NULL;

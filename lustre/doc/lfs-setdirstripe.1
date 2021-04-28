@@ -34,9 +34,14 @@ Use the MDT whose index is
 as the master/starting MDT for the directory. If multiple
 .I MDT_INDEX
 values are given, then the stripes will be allocated on the specified
-MDT indices.  If index -1 (default) is used, it will prefer to select
+MDT indices.  If
+.B -1
+(default) is used, the client will round-robin subdirectory creation
+across all MDTs if their free space is within
+.B lod.*.mdt_qos_threshold_rr
+percent of each other, otherwise the client will prefer to select
 .B COUNT
-MDTs proportional to the free space and inodes on each.
+MDT(s) proportional to the free space and inodes on each.
 .TP
 .BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
 Use
@@ -71,16 +76,18 @@ Set the default striping pattern of subdirectories. Newly created
 sub-directories will use the new default striping pattern,
 but existing sub-directories will not be affected.  The newly
 created sub-directories will also inherit the specified default
-striping pattern. Only default stripe count is supported for now.
+striping pattern.
 
 Note that striping all directories across all MDTs by default is
 .B not
 recommended at this time, as the clients will have to do more RPCs to
 create and access each directory, hurting performance rather than
-improving it.  Default striped directories are preferred for parent
-directories
-where large subdirectories will be created (e.g. file-per-process
-job output directories).
+improving it.  Default striped directories are preferred only for
+parent directories where large subdirectories will be created
+(e.g. file-per-process job output directories).  Instead, using
+.B -c 1 -i -1
+on top-level directories balances mkdir therein over MDTs automatically
+without causing all subdirectories to be remote by default.
 .TP
 .BR \-o ", " \-\-mode =\fIMODE\fR
 Set the file access permissions of the new directory to the specified

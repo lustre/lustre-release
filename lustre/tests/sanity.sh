@@ -253,6 +253,35 @@ test_0d() { # LU-3397
 }
 run_test 0d "check export proc ============================="
 
+test_0e() { # LU-13417
+	(( $MDSCOUNT > 1 )) ||
+		skip "We need at least 2 MDTs for this test"
+
+	(( $MDS1_VERSION >= $(version_code 2.14.51) )) ||
+		skip "Need server version at least 2.14.51"
+
+	local default_lmv_count=$($LFS getdirstripe -D -c $MOUNT)
+	local default_lmv_index=$($LFS getdirstripe -D -i $MOUNT)
+
+	[ $default_lmv_count -eq 1 ] ||
+		error "$MOUNT default stripe count $default_lmv_count"
+
+	[ $default_lmv_index -eq -1 ] ||
+		error "$MOUNT default stripe index $default_lmv_index"
+
+	mkdir $MOUNT/$tdir.1 || error "mkdir $MOUNT/$tdir.1 failed"
+	mkdir $MOUNT/$tdir.2 || error "mkdir $MOUNT/$tdir.2 failed"
+
+	local mdt_index1=$($LFS getdirstripe -i $MOUNT/$tdir.1)
+	local mdt_index2=$($LFS getdirstripe -i $MOUNT/$tdir.2)
+
+	[ $mdt_index1 -eq $mdt_index2 ] &&
+		error "directories are on the same MDT $mdt_index1=$mdt_index2"
+
+	rmdir $MOUNT/$tdir.1 $MOUNT/$tdir.2
+}
+run_test 0e "Enable DNE MDT balancing for mkdir in the ROOT"
+
 test_1() {
 	test_mkdir $DIR/$tdir
 	test_mkdir $DIR/$tdir/d2

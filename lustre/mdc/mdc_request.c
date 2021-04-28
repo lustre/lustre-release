@@ -550,6 +550,13 @@ static int mdc_get_lustre_md(struct obd_export *exp, struct req_capsule *pill,
 			GOTO(out, rc = -EPROTO);
 		}
 
+		if (md_exp->exp_obd->obd_type->typ_lu == &mdc_device_type) {
+			CERROR("%s: no LMV, upgrading from old version?\n",
+			       md_exp->exp_obd->obd_name);
+
+			GOTO(out_acl, rc = 0);
+		}
+
 		if (md->body->mbo_valid & OBD_MD_MEA) {
 			lmv_size = md->body->mbo_eadatasize;
 			if (lmv_size == 0) {
@@ -606,6 +613,7 @@ static int mdc_get_lustre_md(struct obd_export *exp, struct req_capsule *pill,
 	}
 	rc = 0;
 
+out_acl:
 	if (md->body->mbo_valid & OBD_MD_FLACL) {
 		/* for ACL, it's possible that FLACL is set but aclsize is zero.
 		 * only when aclsize != 0 there's an actual segment for ACL
