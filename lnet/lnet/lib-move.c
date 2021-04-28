@@ -5242,6 +5242,7 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 	int cpt;
 	__u32 order = 2;
 	struct list_head *rn_list;
+	bool matched_dstnet = false;
 
 	/* if !local_nid_dist_zero, I don't return a distance of 0 ever
 	 * (when lustre sees a distance of 0, it substitutes 0@lo), so I
@@ -5267,23 +5268,38 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 			return local_nid_dist_zero ? 0 : 1;
 		}
 
-		if (LNET_NIDNET(ni->ni_nid) == dstnet) {
-			/* Check if ni was originally created in
-			 * current net namespace.
-			 * If not, assign order above 0xffff0000,
-			 * to make this ni not a priority. */
-			if (current->nsproxy &&
-			    !net_eq(ni->ni_net_ns, current->nsproxy->net_ns))
-					order += 0xffff0000;
-			if (srcnidp != NULL)
+		if (!matched_dstnet && LNET_NIDNET(ni->ni_nid) == dstnet) {
+			matched_dstnet = true;
+			/* We matched the destination net, but we may have
+			 * additional local NIs to inspect.
+			 *
+			 * We record the nid and order as appropriate, but
+			 * they may be overwritten if we match local NI above.
+			 */
+			if (srcnidp)
 				*srcnidp = ni->ni_nid;
-			if (orderp != NULL)
-				*orderp = order;
-			lnet_net_unlock(cpt);
-			return 1;
+
+			if (orderp) {
+				/* Check if ni was originally created in
+				 * current net namespace.
+				 * If not, assign order above 0xffff0000,
+				 * to make this ni not a priority.
+				 */
+				if (current->nsproxy &&
+				    !net_eq(ni->ni_net_ns,
+					    current->nsproxy->net_ns))
+					*orderp = order + 0xffff0000;
+				else
+					*orderp = order;
+			}
 		}
 
 		order++;
+	}
+
+	if (matched_dstnet) {
+		lnet_net_unlock(cpt);
+		return 1;
 	}
 
 	rn_list = lnet_net2rnethash(dstnet);
