@@ -4100,7 +4100,10 @@ static int mdd_migrate_cmd_check(struct mdd_device *mdd,
 				 const struct lu_name *lname)
 {
 	__u32 lum_stripe_count = lum->lum_stripe_count;
-	__u32 lmv_hash_type = lmv->lmv_hash_type;
+	__u32 lum_hash_type = lum->lum_hash_type &
+			      cpu_to_le32(LMV_HASH_TYPE_MASK);
+	__u32 lmv_hash_type = lmv->lmv_hash_type &
+			      cpu_to_le32(LMV_HASH_TYPE_MASK);
 
 	if (!lmv_is_sane(lmv))
 		return -EBADF;
@@ -4109,12 +4112,10 @@ static int mdd_migrate_cmd_check(struct mdd_device *mdd,
 	if (!lum_stripe_count)
 		lum_stripe_count = cpu_to_le32(1);
 
-	lmv_hash_type &= ~cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
-
 	/* TODO: check specific MDTs */
 	if (lum_stripe_count != lmv->lmv_migrate_offset ||
 	    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
-	    (lum->lum_hash_type && lum->lum_hash_type != lmv_hash_type)) {
+	    (lum_hash_type && lum_hash_type != lmv_hash_type)) {
 		CERROR("%s: '"DNAME"' migration was interrupted, run 'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration.\n",
 			mdd2obd_dev(mdd)->obd_name, PNAME(lname),
 			le32_to_cpu(lmv->lmv_master_mdt_index),
@@ -4647,7 +4648,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	if (rc)
 		GOTO(stop_trans, rc);
 
-	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
+	if (le32_to_cpu(lmu->lum_stripe_count) == 1 && !lmv_is_fixed(lmv)) {
 		rc = mdd_declare_1sd_collapse(env, pobj, obj, stripe, attr, mlc,
 					      &lname, handle);
 		if (rc)
@@ -4670,7 +4671,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	if (rc)
 		GOTO(stop_trans, rc);
 
-	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
+	if (le32_to_cpu(lmu->lum_stripe_count) == 1 && !lmv_is_fixed(lmv)) {
 		rc = mdd_1sd_collapse(env, pobj, obj, stripe, attr, mlc, &lname,
 				      handle);
 		if (rc)

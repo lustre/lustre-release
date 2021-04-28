@@ -19613,15 +19613,15 @@ test_230o() {
 run_test 230o "dir split"
 
 test_230p() {
-	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
-	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
 		skip "Need MDS version at least 2.13.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
 	local timeout=100
 	local restripe_status
 	local delta
-	local i
+	local c
 
 	[[ $mds1_FSTYPE == zfs ]] && timeout=300
 
@@ -19635,33 +19635,37 @@ test_230p() {
 
 	test_mkdir -c $MDSCOUNT -H crush $DIR/$tdir
 	createmany -m $DIR/$tdir/f 100 ||
-		error "create files under remote dir failed $i"
+		error "create files under remote dir failed"
 	createmany -d $DIR/$tdir/d 100 ||
-		error "create dirs under remote dir failed $i"
+		error "create dirs under remote dir failed"
 
-	for i in $(seq $((MDSCOUNT - 1)) -1 1); do
+	for c in $(seq $((MDSCOUNT - 1)) -1 1); do
 		local mdt_hash="crush"
 
 		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
-		$LFS setdirstripe -c $i $DIR/$tdir ||
-			error "split -c $i $tdir failed"
-		[ $i -eq 1 ] && mdt_hash="none"
+		$LFS setdirstripe -c $c $DIR/$tdir ||
+			error "split -c $c $tdir failed"
+		if (( MDS1_VERSION >= $(version_code 2.14.51) )); then
+			mdt_hash="$mdt_hash,fixed"
+		elif [ $c -eq 1 ]; then
+			mdt_hash="none"
+		fi
 		wait_update $HOSTNAME \
 			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash $timeout ||
 			error "dir merge not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
-		echo "$delta migrated when dir merge $((i + 1)) to $i stripes"
+		echo "$delta migrated when dir merge $((c + 1)) to $c stripes"
 		# delta is around total_files/stripe_count
-		(( $delta < 200 / i + 4 )) ||
-			error "$delta files migrated >= $((200 / i + 4))"
+		(( delta < 200 / c + 4 )) ||
+			error "$delta files migrated >= $((200 / c + 4))"
 	done
 }
 run_test 230p "dir merge"
 
 test_230q() {
-	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
-	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
+	(( MDSCOUNT > 1)) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
 		skip "Need MDS version at least 2.13.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
@@ -19721,6 +19725,15 @@ test_230q() {
 		[ $nr_files -eq $total ] ||
 			error "total sub files $nr_files != $total"
 	done
+
+	(( MDS1_VERSION >= $(version_code 2.14.51) )) || return 0
+
+	echo "fixed layout directory won't auto split"
+	$LFS migrate -m 0 $DIR/$tdir || error "migrate $tdir failed"
+	wait_update $HOSTNAME "$LFS getdirstripe -H $DIR/$tdir" "crush,fixed" \
+		10 || error "stripe hash $($LFS getdirstripe -H $DIR/$tdir)"
+	wait_update $HOSTNAME "$LFS getdirstripe -c $DIR/$tdir" 1 10 ||
+		error "stripe count $($LFS getdirstripe -c $DIR/$tdir)"
 }
 run_test 230q "dir auto split"
 

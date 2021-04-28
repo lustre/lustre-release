@@ -1020,6 +1020,9 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_CRUSH;
 }
 
+/* fixed layout, such directories won't split automatically */
+/* NB, update LMV_HASH_FLAG_KNOWN when adding new flag */
+#define LMV_HASH_FLAG_FIXED		0x02000000
 #define LMV_HASH_FLAG_MERGE		0x04000000
 #define LMV_HASH_FLAG_SPLIT		0x08000000
 
@@ -1033,6 +1036,8 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 
 #define LMV_HASH_FLAG_LAYOUT_CHANGE	\
 	(LMV_HASH_FLAG_MIGRATION | LMV_HASH_FLAG_SPLIT | LMV_HASH_FLAG_MERGE)
+
+#define LMV_HASH_FLAG_KNOWN		0xfe000000
 
 /* both SPLIT and MIGRATION are set for directory split */
 static inline bool lmv_hash_is_splitting(__u32 hash)

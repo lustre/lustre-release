@@ -1559,8 +1559,12 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 								RCL_CLIENT);
 
 			if (rr->rr_eadatalen > 0) {
-				rr->rr_eadata = req_capsule_client_get(pill,
-								&RMF_EADATA);
+				struct lmv_user_md_v1 *lmu;
+
+				lmu = req_capsule_client_get(pill, &RMF_EADATA);
+				lmu->lum_hash_type |=
+					cpu_to_le32(LMV_HASH_FLAG_FIXED);
+				rr->rr_eadata = lmu;
 				spec->u.sp_ea.eadatalen = rr->rr_eadatalen;
 				spec->u.sp_ea.eadata = rr->rr_eadata;
 				spec->sp_cr_flags |= MDS_OPEN_HAS_EA;

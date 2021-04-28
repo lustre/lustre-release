@@ -2413,9 +2413,11 @@ static int lod_dir_layout_set(const struct lu_env *env,
 		RETURN(-EINVAL);
 
 	/* adjust hash for dir merge, which may not be set in user command */
-	if (lmv_is_merging(lmv) && !lmv->lmv_migrate_hash)
-		lmv->lmv_merge_hash =
-			lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern;
+	if (lmv_is_merging(lmv) &&
+	    !(lmv->lmv_migrate_hash & LMV_HASH_TYPE_MASK))
+		lmv->lmv_merge_hash |=
+			lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern &
+			LMV_HASH_TYPE_MASK;
 
 	LMV_DEBUG(D_INFO, lmv, "set");
 
@@ -8266,9 +8268,9 @@ static int lod_dir_declare_layout_shrink(const struct lu_env *env,
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct dt_object *next = dt_object_child(dt);
 	struct lmv_user_md *lmu = mlc->mlc_buf.lb_buf;
-	__u32 final_stripe_count;
 	char *stripe_name = info->lti_key;
 	struct lu_buf *lmv_buf = &info->lti_buf;
+	__u32 final_stripe_count;
 	struct dt_object *dto;
 	int i;
 	int rc;
@@ -8294,9 +8296,6 @@ static int lod_dir_declare_layout_shrink(const struct lu_env *env,
 			continue;
 
 		if (i < final_stripe_count) {
-			if (final_stripe_count == 1)
-				continue;
-
 			rc = lod_sub_declare_xattr_set(env, dto, lmv_buf,
 						       XATTR_NAME_LMV,
 						       LU_XATTR_REPLACE, th);
@@ -8520,7 +8519,8 @@ static int lod_dir_layout_shrink(const struct lu_env *env,
 	lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_STRIPE);
 	lmv->lmv_stripe_count = cpu_to_le32(final_stripe_count);
 	lmv->lmv_hash_type = cpu_to_le32(lo->ldo_dir_hash_type) &
-			     cpu_to_le32(LMV_HASH_TYPE_MASK);
+			     cpu_to_le32(LMV_HASH_TYPE_MASK |
+					 LMV_HASH_FLAG_FIXED);
 	lmv->lmv_layout_version =
 			cpu_to_le32(lo->ldo_dir_layout_version + 1);
 	lmv->lmv_migrate_offset = 0;
@@ -8532,14 +8532,6 @@ static int lod_dir_layout_shrink(const struct lu_env *env,
 			continue;
 
 		if (i < final_stripe_count) {
-			/* if only one stripe left, no need to update
-			 * LMV because this stripe will replace master
-			 * object and act as a plain directory.
-			 */
-			if (final_stripe_count == 1)
-				continue;
-
-
 			rc = lod_fld_lookup(env, lod,
 					    lu_object_fid(&dto->do_lu),
 					    &mdtidx, &type);

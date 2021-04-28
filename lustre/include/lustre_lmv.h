@@ -504,4 +504,9 @@ static inline bool lmv_is_layout_changing(const struct lmv_mds_md_v1 *lmv)
 	       lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type));
 }
 
+static inline bool lmv_is_fixed(const struct lmv_mds_md_v1 *lmv)
+{
+	return cpu_to_le32(lmv->lmv_hash_type) & LMV_HASH_FLAG_FIXED;
+}
+
 #endif

@@ -1419,6 +1419,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	if (mdt_body_has_lov(la, reqbody)) {
 		u32 stripe_count = 1;
+		bool fixed_layout = false;
 
 		if (ma->ma_valid & MA_LOV) {
 			LASSERT(ma->ma_lmm_size);
@@ -1443,6 +1444,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			repbody->mbo_valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
 
 			stripe_count = le32_to_cpu(lmv->lmv_stripe_count);
+			fixed_layout = lmv_is_fixed(lmv);
 			if (magic == LMV_MAGIC_STRIPE && lmv_is_restriping(lmv))
 				mdt_restripe_migrate_add(info, o);
 			else if (magic == LMV_MAGIC_V1 &&
@@ -1474,7 +1476,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		    !fid_is_root(mdt_object_fid(o)) &&
 		    mdt->mdt_enable_dir_auto_split &&
 		    !o->mot_restriping &&
-		    stripe_count < atomic_read(&mdt->mdt_mds_mds_conns) + 1)
+		    stripe_count < atomic_read(&mdt->mdt_mds_mds_conns) + 1 &&
+		    !fixed_layout)
 			mdt_auto_split_add(info, o);
 	} else if (S_ISLNK(la->la_mode) &&
 		   reqbody->mbo_valid & OBD_MD_LINKNAME) {

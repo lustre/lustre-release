@@ -479,7 +479,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 		}
 
 		if (lmu->lum_hash_type &&
-		    lmu->lum_hash_type !=
+		    (lmu->lum_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) !=
 		    (lmv->lmv_merge_hash & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
 			CERROR("%s: "DFID" merge hash mismatch %u != %u\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),

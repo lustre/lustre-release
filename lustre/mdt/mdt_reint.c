@@ -352,6 +352,7 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	struct mdt_device *mdt = info->mti_mdt;
 	struct lu_fid *fid = &info->mti_tmp_fid2;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 	struct lmv_mds_md_v1 *lmv;
 	struct mdt_object *child;
 	struct mdt_lock_handle *lhp;
@@ -362,6 +363,9 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	ENTRY;
 	if (!mdt->mdt_enable_dir_restripe)
 		RETURN(-EPERM);
+
+	LASSERT(lum);
+	lum->lum_hash_type |= cpu_to_le32(LMV_HASH_FLAG_FIXED);
 
 	rc = mdt_version_get_check_save(info, parent, 0);
 	if (rc)

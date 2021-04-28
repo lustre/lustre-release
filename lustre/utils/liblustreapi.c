@@ -3319,6 +3319,11 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, ",bad_type");
 		if (flags & LMV_HASH_FLAG_LOST_LMV)
 			llapi_printf(LLAPI_MSG_NORMAL, ",lost_lmv");
+		if (flags & LMV_HASH_FLAG_FIXED)
+			llapi_printf(LLAPI_MSG_NORMAL, ",fixed");
+		if (flags & ~LMV_HASH_FLAG_KNOWN)
+			llapi_printf(LLAPI_MSG_NORMAL, ",unknown_%04x",
+				     flags & ~LMV_HASH_FLAG_KNOWN);
 
 		if (verbose & VERBOSE_HASH_TYPE && !yaml)
 			separator = " ";
