@@ -1835,7 +1835,7 @@ __exhaust_precreations() {
 	local FAILIDX=${3:-$OSTIDX}
 	local ofacet=ost$((OSTIDX + 1))
 
-	test_mkdir -p -c1 $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local mfacet=mds$((mdtidx + 1))
 	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
@@ -1991,7 +1991,7 @@ test_27q() {
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
 
-	test_mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
 	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||
 		error "truncate $DIR/$tdir/$tfile failed"
@@ -4766,7 +4766,7 @@ test_39l() {
 	local atime_diff=$(do_facet $SINGLEMDS \
 				lctl get_param -n mdd.*MDT0000*.atime_diff)
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# test setting directory atime to future
 	touch -a -d @$TEST_39_ATIME $DIR/$tdir
@@ -13886,7 +13886,7 @@ test_134a() {
 	[[ $MDS1_VERSION -lt $(version_code 2.7.54) ]] &&
 		skip "Need MDS version at least 2.7.54"
 
-	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	mkdir_on_mdt0 $DIR/$tdir || error "failed to create $DIR/$tdir"
 	cancel_lru_locks mdc
 
 	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
@@ -13922,7 +13922,7 @@ test_134b() {
 	[[ $MDS1_VERSION -lt $(version_code 2.7.54) ]] &&
 		skip "Need MDS version at least 2.7.54"
 
-	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	mkdir_on_mdt0 $DIR/$tdir || error "failed to create $DIR/$tdir"
 	cancel_lru_locks mdc
 
 	local low_wm=$(do_facet mds1 $LCTL get_param -n \
@@ -15282,6 +15282,8 @@ test_160a() {
 	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
 	changelog_users $SINGLEMDS | grep -q $cl_user ||
 		error "User $cl_user not found in changelog_users"
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# change something
 	test_mkdir -p $DIR/$tdir/pics/2008/zachy
@@ -17189,7 +17191,7 @@ test_183() { # LU-2275
 	[[ $MDS1_VERSION -lt $(version_code 2.3.56) ]] &&
 		skip "Need MDS version at least 2.3.56"
 
-	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
+	mkdir_on_mdt0 $DIR/$tdir || error "creating dir $DIR/$tdir"
 	echo aaa > $DIR/$tdir/$tfile
 
 #define OBD_FAIL_MDS_NEGATIVE_POSITIVE  0x148
@@ -17781,7 +17783,7 @@ test_205a() { # Job stats
 
 	local cmd
 	# mkdir
-	cmd="mkdir $DIR/$tdir"
+	cmd="$LFS mkdir -i 0 -c 1 $DIR/$tdir"
 	verify_jobstats "$cmd" "$SINGLEMDS"
 	# rmdir
 	cmd="rmdir $DIR/$tdir"
@@ -17822,7 +17824,7 @@ test_205a() { # Job stats
 	[ $left -ge 0 ] && wait_update_facet $SINGLEMDS \
 		"lctl get_param *.*.job_stats | grep -c 'job_id.*mkdir'" \
 			"0" $left
-	cmd="mkdir $DIR/$tdir.expire"
+	cmd="$LFS mkdir -i 0 -c 1 $DIR/$tdir.expire"
 	verify_jobstats "$cmd" "$SINGLEMDS"
 	[ $(do_facet $SINGLEMDS lctl get_param *.*.job_stats |
 	    grep -c "job_id.*mkdir") -gt 1 ] && error "old jobstats not expired"
@@ -18313,7 +18315,7 @@ test_220() { #LU-325
 	local OSTIDX=0
 
 	# create on MDT0000 so the last_id and next_id are correct
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local OST=$($LFS df $DIR | awk '/OST:'$OSTIDX'/ { print $1 }')
 	OST=${OST%_UUID}
 
@@ -19193,7 +19195,7 @@ test_230e() {
 	local a_fid
 	local b_fid
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir $DIR/$tdir/migrate_dir
 	mkdir $DIR/$tdir/other_dir
 	touch $DIR/$tdir/migrate_dir/a
@@ -20045,7 +20047,7 @@ run_test 241b "dio vs dio"
 test_242() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 
 	#define OBD_FAIL_MDS_READPAGE_PACK	0x105
@@ -20237,7 +20239,7 @@ test_247f() {
 		grep -q subtree ||
 		skip "Fileset feature is not supported"
 
-	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
 	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/remote ||
 		error "mkdir remote failed"
 	mkdir $DIR/$tdir/remote/subdir || error "mkdir remote/subdir failed"
@@ -21015,7 +21017,7 @@ test_256() {
 	changelog_register || error "changelog_register failed"
 
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	changelog_clear 0 || error "changelog_clear failed"
 
@@ -21166,7 +21168,7 @@ test_270a() {
 	local dom=$DIR/$tdir/dom_file
 	local tmp=$DIR/$tdir/tmp_file
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# basic checks for DoM component creation
 	$LFS setstripe -E 1024K -E 2048K -L mdt $dom 2>/dev/null &&
@@ -22305,7 +22307,7 @@ test_300c() {
 
 	local file_count
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setdirstripe -i 0 -c 2 $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
@@ -22515,7 +22517,7 @@ test_300g() {
 	local stripe_count
 	local stripe_index
 
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir $DIR/$tdir/normal_dir
 
 	#Checking when client cache stripe index
@@ -22855,7 +22857,7 @@ test_300p() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	#define OBD_FAIL_OUT_ENOSPC	0x1704
 	do_facet mds2 lctl set_param fail_loc=0x80001704
@@ -25657,7 +25659,7 @@ test_803a() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.54) ] &&
 		skip "MDS needs to be newer than 2.10.54"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	# Create some objects on all MDTs to trigger related logs objects
 	for idx in $(seq $MDSCOUNT); do
 		$LFS mkdir -c $MDSCOUNT -i $((idx % $MDSCOUNT)) \
@@ -25852,7 +25854,7 @@ test_805() {
 	fi
 	do_facet $SINGLEMDS zfs set quota=$(((usedkb+freekb)*1024)) $fsset
 	trap cleanup_805 EXIT
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -E 1M -c2 -E 4M -c2 -E -1 -c2 $DIR/$tdir ||
 		error "Can't set PFL layout"
 	createmany -m $DIR/$tdir/f- 1000000 && error "ENOSPC wasn't met"
@@ -26000,7 +26002,7 @@ test_807() {
 	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
 
 	rm -rf $DIR/$tdir || error "rm $tdir failed"
-	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
 	touch $DIR/$tdir/trunc || error "touch $tdir/trunc failed"
 	$TRUNCATE $DIR/$tdir/trunc 1024 || error "truncate $tdir/trunc failed"
 	$TRUNCATE $DIR/$tdir/trunc 1048576 ||

@@ -1107,7 +1107,7 @@ test_33c() {
 
 	local sync_count
 
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	sync_all_data
 	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
 	# do twice in case transaction is committed before unlock, see LU-8200
@@ -1164,7 +1164,7 @@ test_33d() {
 		skip "DNE CoS not supported"
 
 	# remote directory create
-	op_trigger_cos "mkdir $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
+	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
 	# remote directory unlink
 	op_trigger_cos "$LFS mkdir -i 1 $DIR/$tdir" "rmdir $DIR/$tdir"
 	# striped directory create
@@ -1575,25 +1575,26 @@ check_pdo_conflict() {
 # test 40: check non-blocking operations
 test_40a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	mkdir $DIR2/$tdir
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	touch $DIR2
-	mkdir $DIR1/$tfile &
+	mkdir $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
-	touch $DIR2/$tfile-2
+	touch $DIR2/$tdir/$tfile-2
 	check_pdo_conflict $PID1 || error "create is blocked"
-	mkdir $DIR2/$tfile-3
+	mkdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "mkdir is blocked"
-	link $DIR2/$tfile-2 $DIR2/$tfile-4
+	link $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-4
 	check_pdo_conflict $PID1 || error "link is blocked"
-	mv $DIR2/$tfile-2 $DIR2/$tfile-5
+	mv $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-5
 	check_pdo_conflict $PID1 || error "rename is blocked"
-	stat $DIR2/$tfile-3 $DIR2/$tfile-4 > /dev/null
+	stat $DIR2/$tdir/$tfile-3 $DIR2/$tdir/$tfile-4 > /dev/null
 	check_pdo_conflict $PID1 || error "getattr is blocked"
-	rm $DIR2/$tfile-4 $DIR2/$tfile-5
-	rmdir $DIR2/$tfile-3
+	rm $DIR2/$tdir/$tfile-4 $DIR2/$tdir/$tfile-5
+	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
 	#  all operations above shouldn't wait the first one
@@ -1601,32 +1602,34 @@ test_40a() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
-	rm -rf $DIR/$tfile*
+	rm -rf $DIR/$tdir
 	return 0
 }
 run_test 40a "pdirops: create vs others =============="
 
 test_40b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	mkdir $DIR2/$tdir
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	touch $DIR1/$tfile &
+	touch $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
 	# open|create
-	touch $DIR2/$tfile-2
+	touch $DIR2/$tdir/$tfile-2
 	check_pdo_conflict $PID1 || error "create is blocked"
-	mkdir $DIR2/$tfile-3
+	mkdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "mkdir is blocked"
-	link $DIR2/$tfile-2 $DIR2/$tfile-4
+	link $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-4
 	check_pdo_conflict $PID1 || error "link is blocked"
-	mv $DIR2/$tfile-2 $DIR2/$tfile-5
+	mv $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-5
 	check_pdo_conflict $PID1 || error "rename is blocked"
-	stat $DIR2/$tfile-3 $DIR2/$tfile-4 > /dev/null
+	stat $DIR2/$tdir/$tfile-3 $DIR2/$tdir/$tfile-4 > /dev/null
 	check_pdo_conflict $PID1 || error "getattr is blocked"
-	rm $DIR2/$tfile-4 $DIR2/$tfile-5
-	rmdir $DIR2/$tfile-3
+	rm $DIR2/$tdir/$tfile-4 $DIR2/$tdir/$tfile-5
+	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 	# all operations above shouldn't wait the first one
 
@@ -1634,33 +1637,35 @@ test_40b() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
-	rm -rf $DIR/$tfile*
+	rm -rf $DIR/$tdir
 	return 0
 }
 run_test 40b "pdirops: open|create and others =============="
 
 test_40c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	mkdir $DIR2/$tdir
 	pdo_lru_clear
-	touch $DIR1/$tfile
+	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	link $DIR1/$tfile $DIR1/$tfile-0 &
+	link $DIR1/$tdir/$tfile $DIR1/$tdir/$tfile-0 &
 	PID1=$!; pdo_sched
 	# open|create
-	touch $DIR2/$tfile-2
+	touch $DIR2/$tdir/$tfile-2
 	check_pdo_conflict $PID1 || error "create is blocked"
-	mkdir $DIR2/$tfile-3
+	mkdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "mkdir is blocked"
-	link $DIR2/$tfile-2 $DIR2/$tfile-4
+	link $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-4
 	check_pdo_conflict $PID1 || error "link is blocked"
-	mv $DIR2/$tfile-2 $DIR2/$tfile-5
+	mv $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-5
 	check_pdo_conflict $PID1 || error "rename is blocked"
-	stat $DIR2/$tfile-3 $DIR2/$tfile-4 > /dev/null
+	stat $DIR2/$tdir/$tfile-3 $DIR2/$tdir/$tfile-4 > /dev/null
 	check_pdo_conflict $PID1 || error "getattr is blocked"
-	rm $DIR2/$tfile-4 $DIR2/$tfile-5
-	rmdir $DIR2/$tfile-3
+	rm $DIR2/$tdir/$tfile-4 $DIR2/$tdir/$tfile-5
+	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
         # all operations above shouldn't wait the first one
@@ -1668,33 +1673,35 @@ test_40c() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
-	rm -rf $DIR/$tfile*
+	rm -rf $DIR/$tdir
 	return 0
 }
 run_test 40c "pdirops: link and others =============="
 
 test_40d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	mkdir $DIR2/$tdir
 	pdo_lru_clear
-	touch $DIR1/$tfile
+	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	rm $DIR1/$tfile &
+	rm $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
 	# open|create
-	touch $DIR2/$tfile-2
+	touch $DIR2/$tdir/$tfile-2
 	check_pdo_conflict $PID1 || error "create is blocked"
-	mkdir $DIR2/$tfile-3
+	mkdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "mkdir is blocked"
-	link $DIR2/$tfile-2 $DIR2/$tfile-4
+	link $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-4
 	check_pdo_conflict $PID1 || error "link is blocked"
-	mv $DIR2/$tfile-2 $DIR2/$tfile-5
+	mv $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-5
 	check_pdo_conflict $PID1 || error "rename is blocked"
-	stat $DIR2/$tfile-3 $DIR2/$tfile-4 > /dev/null
+	stat $DIR2/$tdir/$tfile-3 $DIR2/$tdir/$tfile-4 > /dev/null
 	check_pdo_conflict $PID1 || error "getattr is blocked"
-	rm $DIR2/$tfile-4 $DIR2/$tfile-5
-	rmdir $DIR2/$tfile-3
+	rm $DIR2/$tdir/$tfile-4 $DIR2/$tdir/$tfile-5
+	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
 	# all operations above shouldn't wait the first one
@@ -1708,24 +1715,26 @@ run_test 40d "pdirops: unlink and others =============="
 
 test_40e() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	mkdir $DIR2/$tdir
 	pdo_lru_clear
-	touch $DIR1/$tfile
+	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	mv $DIR1/$tfile $DIR1/$tfile-0 &
+	mv $DIR1/$tdir/$tfile $DIR1/$tdir/$tfile-0 &
 	PID1=$!; pdo_sched
 	# open|create
-	touch $DIR2/$tfile-2
+	touch $DIR2/$tdir/$tfile-2
 	check_pdo_conflict $PID1 || error "create is blocked"
-	mkdir $DIR2/$tfile-3
+	mkdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "mkdir is blocked"
-	link $DIR2/$tfile-2 $DIR2/$tfile-4
+	link $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile-4
 	check_pdo_conflict $PID1 || error "link is blocked"
-	stat $DIR2/$tfile-3 $DIR2/$tfile-4 > /dev/null
+	stat $DIR2/$tdir/$tfile-3 $DIR2/$tdir/$tfile-4 > /dev/null
 	check_pdo_conflict $PID1 || error "getattr is blocked"
-	rm $DIR2/$tfile-4 $DIR2/$tfile-2
-	rmdir $DIR2/$tfile-3
+	rm $DIR2/$tdir/$tfile-4 $DIR2/$tdir/$tfile-2
+	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
        # all operations above shouldn't wait the first one
@@ -1733,7 +1742,7 @@ test_40e() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
-	rm -rf $DIR/$tfile*
+	rm -rf $DIR/$tdir
 	return 0
 }
 run_test 40e "pdirops: rename and others =============="
@@ -2048,20 +2057,20 @@ test_42f() {
 run_test 42f "pdirops: mkdir and rename (src) =============="
 
 test_42g() {
+	mkdir_on_mdt0 $DIR1/$tdir
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
-	mkdir $DIR1/$tfile &
+	mkdir $DIR1/$tdir/$tfile &
 	PID1=$! ; pdo_sched
-	stat $DIR2/$tfile > /dev/null &
+	stat $DIR2/$tdir/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
 	do_nodes $(comma_list $(mdts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
-	rm -rf $DIR/$tfile*
-	return 0
+	rm -rf $DIR/$tdir
 }
 run_test 42g "pdirops: mkdir vs getattr =============="
 
@@ -2253,19 +2262,20 @@ test_43j() {
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] &&
 		skip "Need MDS version newer than 2.13.52"
 
+	mkdir $DIR1/$tdir
 	for i in {1..100}; do
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE         0x167
 		do_nodes $(comma_list $(mdts_nodes)) \
 			"lctl set_param -n fail_loc=0x80000167 2>/dev/null ||
 				true"
 		OK=0
-		mkdir $DIR1/$tdir &
+		mkdir $DIR1/$tdir/sub &
 		PID1=$!
-		mkdir $DIR2/$tdir && ((OK++))
+		mkdir $DIR2/$tdir/sub && ((OK++))
 		wait $PID1 && ((OK++))
 		(( OK == 1 )) || error "exactly one mkdir should succeed"
 
-		rmdir $DIR1/$tdir || error "rmdir failed"
+		rmdir $DIR1/$tdir/sub || error "rmdir failed"
 	done
 	return 0
 }
@@ -3277,56 +3287,59 @@ test_54() {
 run_test 54 "rename locking"
 
 test_55a() {
-	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir -p $DIR/$tdir/d1/d2 $DIR/$tdir/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4              0x156
 	do_facet mds1 $LCTL set_param fail_loc=0x80000156
 
-	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	mv -T $DIR/$tdir/d1/d2 $DIR/$tdir/d3/d2 &
 	PID1=$!
 	sleep 1
 
-	rm -r $DIR2/d3
+	rm -r $DIR2/$tdir/d3
 	wait $PID1 && error "(2) mv succeeded"
 
-	rm -rf $DIR/d1
+	rm -rf $DIR/$tdir
 }
 run_test 55a "rename vs unlink target dir"
 
 test_55b()
 {
-	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir -p $DIR/$tdir/d1/d2 $DIR/$tdir/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4             0x156
 	do_facet mds1 $LCTL set_param fail_loc=0x80000156
 
-	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	mv -T $DIR/$tdir/d1/d2 $DIR/$tdir/d3/d2 &
 	PID1=$!
 	sleep 1
 
-	rm -r $DIR2/d1
+	rm -r $DIR2/$tdir/d1
 	wait $PID1 && error "(2) mv succeeded"
 
-	rm -rf $DIR/d3
+	rm -rf $DIR/$tdir
 }
 run_test 55b "rename vs unlink source dir"
 
 test_55c()
 {
-	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir -p $DIR/$tdir/d1/d2 $DIR/$tdir/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4              0x156
 	do_facet mds1 $LCTL set_param fail_loc=0x156
 
-	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	mv -T $DIR/$tdir/d1/d2 $DIR/$tdir/d3/d2 &
 	PID1=$!
 	sleep 1
 
 	# while rename is sleeping, open and remove d3
-	$MULTIOP $DIR2/d3 D_c &
+	$MULTIOP $DIR2/$tdir/d3 D_c &
 	PID2=$!
 	sleep 1
-	rm -rf $DIR2/d3
+	rm -rf $DIR2/$tdir/d3
 	sleep 5
 
 	# while rename is sleeping 2nd time, close d3
@@ -3335,28 +3348,30 @@ test_55c()
 
 	wait $PID1 && error "(2) mv succeeded"
 
-	rm -rf $DIR/d1
+	rm -rf $DIR/$tdir
 }
 run_test 55c "rename vs unlink orphan target dir"
 
 test_55d()
 {
-	touch $DIR/f1
+	mkdir_on_mdt0 $DIR/$tdir
+
+	touch $DIR/$tdir/f1
 
 #define OBD_FAIL_MDS_RENAME3              0x155
 	do_facet mds1 $LCTL set_param fail_loc=0x155
-	mv $DIR/f1 $DIR/$tdir &
+	mv $DIR/$tdir/f1 $DIR/$tdir/$tdir &
 	PID1=$!
 	sleep 2
 
 	# while rename is sleeping, create $tdir, but as a directory
-	mkdir -p $DIR2/$tdir || error "(1) mkdir failed"
+	mkdir -p $DIR2/$tdir/$tdir || error "(1) mkdir failed"
 
 	# link in reverse locking order
-	ln $DIR2/f1 $DIR2/$tdir/
+	ln $DIR2/$tdir/f1 $DIR2/$tdir/$tdir/
 
 	wait $PID1 && error "(2) mv succeeded"
-	rm -rf $DIR/f1
+	rm -rf $DIR/$tdir
 }
 run_test 55d "rename file vs link"
 

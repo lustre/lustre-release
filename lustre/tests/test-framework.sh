@@ -8699,7 +8699,7 @@ check_mount_and_prep()
 	is_mounted $MOUNT || setupall
 
 	rm -rf $DIR/[df][0-9]* || error "Fail to cleanup the env!"
-	mkdir $DIR/$tdir || error "Fail to mkdir $DIR/$tdir."
+	mkdir_on_mdt0 $DIR/$tdir || error "Fail to mkdir $DIR/$tdir."
 	for idx in $(seq $MDSCOUNT); do
 		local name="MDT$(printf '%04x' $((idx - 1)))"
 		rm -rf $MOUNT/.lustre/lost+found/$name/*
@@ -10397,4 +10397,11 @@ function restore_opencache()
 {
 	[[ -z "${saved_OPENCACHE_value}" ]] ||
 		$LCTL set_param -n "llite.*.opencache_threshold_count"=${saved_OPENCACHE_value}
+}
+
+# LU-13417: XXX lots of tests assume the directory to be created under MDT0,
+# using this function to create directory under MDT0 explicitly.
+# Don't use it in new tests, and remove it from old tests.
+mkdir_on_mdt0() {
+	$LFS mkdir -i 0 -c 1 $*
 }
