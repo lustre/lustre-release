@@ -2455,6 +2455,11 @@ static inline int cl_io_is_mkwrite(const struct cl_io *io)
 	return io->ci_type == CIT_FAULT && io->u.ci_fault.ft_mkwrite;
 }
 
+static inline int cl_io_is_fault_writable(const struct cl_io *io)
+{
+	return io->ci_type == CIT_FAULT && io->u.ci_fault.ft_writable;
+}
+
 /**
  * True, iff \a io is a truncate(2).
  */

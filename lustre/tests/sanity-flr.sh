@@ -2608,6 +2608,30 @@ test_50b() {
 }
 run_test 50b "mirror rsync handles sparseness"
 
+test_50c() {
+	local tf=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -N2 -c-1 $tf || error "create FLR $tf failed"
+	verify_flr_state $tf "ro"
+
+	if [[ "$FSTYPE" == "ldiskfs" ]]; then
+		# ZFS does not support fallocate for now
+		fallocate -p -o 1MiB -l 1MiB $tf ||
+			error "punch hole in $tf failed"
+		verify_flr_state $tf "wp"
+	fi
+
+	dd if=/dev/zero of=$tf bs=4096 count=4 || error "write $tf failed"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	verify_flr_state $tf "ro"
+
+	$MULTIOP $tf OSMWUc || error "$MULTIOP $tf failed"
+	verify_flr_state $tf "wp"
+}
+run_test 50c "punch_hole/mmap_write stale other mirrors"
+
 test_60a() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"

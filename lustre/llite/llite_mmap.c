@@ -111,6 +111,9 @@ restart:
 	else if (vma->vm_flags & VM_RAND_READ)
 		io->ci_rand_read = 1;
 
+	if (vma->vm_flags & VM_WRITE)
+		fio->ft_writable = 1;
+
 	rc = cl_io_init(env, io, CIT_FAULT, io->ci_obj);
 	if (rc == 0) {
 		struct vvp_io *vio = vvp_env_io(env);
@@ -123,7 +126,6 @@ restart:
 		io->ci_lockreq = CILR_MANDATORY;
 		vio->vui_fd = fd;
 	} else {
-		LASSERT(rc < 0);
 		cl_io_fini(env, io);
 		if (io->ci_need_restart)
 			goto restart;
