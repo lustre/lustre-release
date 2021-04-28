@@ -173,8 +173,6 @@ struct md_op_spec {
 		     sp_permitted:1, /* do not check permission */
 		     sp_migrate_close:1, /* close the file during migrate */
 		     sp_migrate_nsonly:1; /* migrate dirent only */
-	/** Current lock mode for parent dir where create is performing. */
-	mdl_mode_t sp_cr_mode;
 
 	/** to create directory */
 	const struct dt_index_features *sp_feat;

@@ -1301,7 +1301,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_object *parent;
 	struct mdt_object *child;
-	struct mdt_lock_handle *lh;
+	struct mdt_lock_handle *lh = NULL;
 	struct ldlm_reply *ldlm_rep;
 	struct mdt_body *repbody;
 	struct lu_fid *child_fid = &info->mti_tmp_fid1;
@@ -1403,20 +1403,23 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
 	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
 again_pw:
-	lh = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(lh, lock_mode, &rr->rr_name);
-
-	result = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
-	if (result != 0) {
-		mdt_object_put(info->mti_env, parent);
-		GOTO(out, result);
-	}
 	fid_zero(child_fid);
 
-	result = -ENOENT;
-	if ((open_flags & MDS_OPEN_VOLATILE) == 0)
+	if (open_flags & MDS_OPEN_VOLATILE) {
+		lh = NULL;
+		result = -ENOENT;
+	} else {
+		lh = &info->mti_lh[MDT_LH_PARENT];
+		mdt_lock_pdo_init(lh, lock_mode, &rr->rr_name);
+		result = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
+		if (result != 0) {
+			mdt_object_put(info->mti_env, parent);
+			GOTO(out, result);
+		}
+
 		result = mdo_lookup(info->mti_env, mdt_object_child(parent),
 				    &rr->rr_name, child_fid, &info->mti_spec);
+	}
 
 	LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
 		 "looking for "DFID"/"DNAME", found FID = "DFID"\n",
@@ -1435,7 +1438,9 @@ again_pw:
 		if (mdt_rdonly(req->rq_export))
 			GOTO(out_parent, result = -EROFS);
 
-		if (lock_mode == LCK_PR) {
+		LASSERT(equi(lh == NULL, open_flags & MDS_OPEN_VOLATILE));
+
+		if (lh != NULL && lock_mode == LCK_PR) {
 			/* first pass: get write lock and restart */
 			mdt_object_unlock(info, parent, lh, 1);
 			mdt_clear_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -1482,10 +1487,6 @@ again_pw:
 
 		/* Not found and with MDS_OPEN_CREAT: let's create it. */
 		mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
-
-		/* Let lower layers know what is lock mode on directory. */
-		info->mti_spec.sp_cr_mode =
-			mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
 
 		/* Don't do lookup sanity check. We know name doesn't exist. */
 		info->mti_spec.sp_cr_lookup = 0;
@@ -1639,7 +1640,10 @@ out_child:
 	if (result == 0)
 		mdt_pack_size2body(info, child_fid, &lhc->mlh_reg_lh);
 out_parent:
-	mdt_object_unlock_put(info, parent, lh, result || !created);
+	if (lh != NULL)
+		mdt_object_unlock(info, parent, lh, result || !created);
+
+	mdt_object_put(info->mti_env, parent);
 out:
 	if (result)
 		lustre_msg_set_transno(req->rq_repmsg, 0);
@@ -1682,7 +1686,6 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 
 	spec->sp_cr_lookup = 0;
 	spec->sp_feat = &dt_directory_features;
-	spec->sp_cr_mode = MDL_MINMODE; /* no lock */
 	spec->sp_cr_flags = MDS_OPEN_VOLATILE | fmode;
 	if (attr->ma_valid & MA_LOV) {
 		spec->u.sp_ea.eadata = attr->ma_lmm;

@@ -599,9 +599,6 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (rc)
 		GOTO(put_child, rc);
 
-	/* Let lower layer know current lock mode. */
-	info->mti_spec.sp_cr_mode = mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
-
 	/*
 	 * Do not perform lookup sanity check. We know that name does
 	 * not exist.
