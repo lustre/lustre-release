@@ -2809,6 +2809,12 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 		lustre_som_swab(som);
 		if (som->lsa_valid & SOM_FL_STRICT)
 			fl = LU_XATTR_REPLACE;
+
+		if (mlc->mlc_opc == MD_LAYOUT_WRITE &&
+		    mlc->mlc_intent->li_extent.e_end > som->lsa_size) {
+			som->lsa_size = mlc->mlc_intent->li_extent.e_end + 1;
+			fl = LU_XATTR_REPLACE;
+		}
 	}
 
 	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
@@ -2871,6 +2877,9 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 		struct thandle *handle)
 {
 	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
+	struct lu_buf *som_buf = &mdd_env_info(env)->mti_buf[1];
+	struct lustre_som_attrs *som = &mlc->mlc_som;
+	int fl = 0;
 	int rc;
 	ENTRY;
 
@@ -2883,8 +2892,25 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 		 * resync state. */
 		break;
 	case MD_LAYOUT_WRITE:
-		/* legal race for concurrent write, the file state has been
-		 * changed by another client. */
+		/**
+		 * legal race for concurrent write, the file state has been
+		 * changed by another client. Or a jump over file size and
+		 * write.
+		 */
+		som_buf->lb_buf = som;
+		som_buf->lb_len = sizeof(*som);
+		rc = mdo_xattr_get(env, obj, som_buf, XATTR_NAME_SOM);
+		if (rc < 0 && rc != -ENODATA)
+			RETURN(rc);
+
+		if (rc > 0) {
+			lustre_som_swab(som);
+			if (mlc->mlc_intent->li_extent.e_end > som->lsa_size) {
+				som->lsa_size =
+					mlc->mlc_intent->li_extent.e_end + 1;
+				fl = LU_XATTR_REPLACE;
+			}
+		}
 		break;
 	default:
 		RETURN(-EBUSY);
@@ -2893,6 +2919,13 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
 	if (rc)
 		GOTO(out, rc);
+
+	if (fl) {
+		rc = mdd_declare_xattr_set(env, mdd, obj, som_buf,
+					   XATTR_NAME_SOM, fl, handle);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
@@ -2903,6 +2936,12 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 
 	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
+	if (!rc && fl) {
+		som->lsa_valid = SOM_FL_STALE;
+		lustre_som_swab(som);
+		rc = mdo_xattr_set(env, obj, som_buf, XATTR_NAME_SOM,
+				   fl, handle);
+	}
 	mdd_write_unlock(env, obj);
 	if (rc)
 		GOTO(out, rc);
