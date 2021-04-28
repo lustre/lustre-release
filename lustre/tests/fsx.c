@@ -75,6 +75,9 @@
 #include <libcfs/util/string.h>
 #include <setjmp.h>
 
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <lustre/lustreapi.h>
+
 /*
  * Each test run will work with one or more separate file descriptors for the
  * same file.  This allows testing cache coherency across multiple mountpoints
@@ -116,6 +119,7 @@ int logcount; /* total ops */
 int jmpbuf_good;
 jmp_buf jmpbuf;
 
+unsigned int mirror_ids[LUSTRE_MIRROR_COUNT_MAX];
 /*
  * Define operations
  */
@@ -133,7 +137,19 @@ jmp_buf jmpbuf;
 #define OP_PUNCH_HOLE		6
 #define OP_ZERO_RANGE		7
 #define OP_CLOSEOPEN		8
-#define OP_MAX_FULL		9
+#define OP_MIRROR_OPS		9
+#define OP_MAX_FULL		10
+
+#define MIRROR_EXTEND 0
+#define MIRROR_SPLIT 1
+#define MIRROR_RESYNC 2
+#define MIRROR_OPS 3
+
+char *mirror_op_str[] = {
+	[MIRROR_EXTEND] = "MIRROR_EXTEND",
+	[MIRROR_SPLIT]  = "MIRROR_SPLIT",
+	[MIRROR_RESYNC] = "MIRROR_RESYNC",
+};
 
 #define OP_SKIPPED 101
 #define OP_DIRECT O_DIRECT
@@ -181,6 +197,7 @@ int truncbdy = 1;			/* -t flag */
 int writebdy = 1;			/* -w flag */
 long monitorstart = -1;			/* -m flag */
 long monitorend = -1;			/* -m flag */
+long flrmode;				/* -M flag */
 int lite;				/* -L flag */
 long numops = -1;			/* -N flag */
 int randomoplen = 1;			/* -O flag disables it */
@@ -394,6 +411,17 @@ logdump(void)
 			prt("CLOSE/OPEN%s",
 			    lp->operation & OP_DIRECT ? "_OD" : "   ");
 			break;
+		case OP_MIRROR_OPS: {
+			prt("%s ", mirror_op_str[lp->args[0]]);
+			if (lp->args[0] == MIRROR_EXTEND)
+				prt("to %d mirrors", lp->args[1] + 1);
+			else if (lp->args[0] == MIRROR_SPLIT)
+				prt("mirror %d to %d mirrors", lp->args[2],
+				    lp->args[1] - 1);
+			else if (lp->args[0] == MIRROR_RESYNC)
+				prt("%d mirrors", lp->args[1]);
+			break;
+		}
 		case OP_SKIPPED:
 			prt("SKIPPED (no operation)");
 			break;
@@ -453,6 +481,7 @@ void
 report_failure(int status)
 {
 	logdump();
+	prt("Using seed %d\n", seed);
 
 	if (fsxgoodfd) {
 		if (good_buf) {
@@ -692,6 +721,30 @@ output_line(struct test_file *tf, int op, unsigned int offset,
 	    ops[op], offset, op == OP_TRUNCATE || op == OP_PUNCH_HOLE ?
 	    " to " : "thru", offset + size - 1,
 	     (int)size < 0 ? -(int)size : size);
+}
+
+void
+mirror_output_line(struct test_file *tf, int op, int mirrors, int id)
+{
+	if (!(!quiet &&
+	      ((progressinterval && testcalls % progressinterval == 0) ||
+	       (debug && (monitorstart == -1)))))
+		return;
+
+	prt("%06lu %lu.%06u %-10s ",
+	    testcalls, tv.tv_sec, (int)tv.tv_usec, mirror_op_str[op]);
+
+	switch (op) {
+	case MIRROR_EXTEND:
+		prt("to %d mirrors\n", mirrors + 1);
+		break;
+	case MIRROR_SPLIT:
+		prt("mirror %d to %d mirrors\n", id, mirrors - 1);
+		break;
+	case MIRROR_RESYNC:
+		prt("%d mirrors\n", mirrors);
+		break;
+	}
 }
 
 void output_debug(unsigned int offset, unsigned int size, const char *what)
@@ -1275,6 +1328,162 @@ docloseopen(void)
 		     tf->o_direct ? "open(O_DIRECT) done" : "open done");
 }
 
+static int
+get_mirror_ids(int fd, unsigned int *ids)
+{
+	struct llapi_layout *layout;
+	uint16_t count;
+	int rc;
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL)
+		return 0;
+
+	/* only get mirror count */
+	rc = llapi_layout_mirror_count_get(layout, &count);
+	if (rc < 0)
+		prt("llapi_layout_mirror_count_get: %d\n", rc);
+	if (count == 0)
+		return 0;
+
+	count = 0;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		prt("llapi_layout_comp_use(USE_FIRST): %d\n", rc);
+		goto free;
+	}
+
+	do {
+		unsigned int id;
+
+		rc = llapi_layout_mirror_id_get(layout, &id);
+		if (rc < 0) {
+			prt("llapi_layout_mirror_id_get: %d\n", rc);
+			goto free;
+		}
+
+		if (!count || ids[count - 1] != id)
+			ids[count++] = id;
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			prt("llapi_layout_comp_use(USE_NEXT): %d\n", rc);
+			goto free;
+		}
+	} while (rc == 0);
+
+free:
+	llapi_layout_free(layout);
+
+	return rc < 0 ? rc : count;
+}
+
+void
+do_mirror_ops(int op)
+{
+	int mirror_count;
+	char cmd[PATH_MAX * 2];
+	int i = 0;
+	int rc;
+
+	if (testcalls <= simulatedopcount)
+		return;
+
+	tf = get_tf();
+
+	mirror_count = get_mirror_ids(tf->fd, mirror_ids);
+	if (mirror_count < 0) {
+		prterr("get_mirror_ids");
+		report_failure(182);
+	}
+
+	switch (op) {
+	case MIRROR_EXTEND:
+		if (mirror_count == LUSTRE_MIRROR_COUNT_MAX)
+			return;
+		snprintf(cmd, sizeof(cmd), "lfs mirror extend -N -c-1 %s",
+			 tf->path);
+		break;
+	case MIRROR_SPLIT:
+		if (mirror_count == 0 || mirror_count == 1)
+			return;
+
+		i = random() % mirror_count;
+		if (i == 0)
+			i++;
+
+		snprintf(cmd, sizeof(cmd),
+			 "lfs mirror split -d --mirror-id=%d %s",
+			 mirror_ids[i], tf->path);
+		break;
+	case MIRROR_RESYNC:
+		if (mirror_count < 2)
+			return;
+
+		snprintf(cmd, sizeof(cmd),
+			 "lfs mirror resync %s", tf->path);
+		break;
+	}
+
+	if (close(tf->fd))
+		report_failure(183);
+	output_debug(monitorstart, 0, "close done");
+
+	log4(OP_MIRROR_OPS, op, mirror_count, i);
+
+	mirror_output_line(tf, op, mirror_count, i);
+
+	rc = system(cmd);
+	if (rc < 0) {
+		prt("%s: %d\n", cmd, errno);
+		report_failure(184);
+	} else if (WIFEXITED(rc)) {
+		rc = WEXITSTATUS(rc);
+		if (rc > 0) {
+			prt("%s: %d\n", cmd, rc);
+			report_failure(184);
+		}
+	}
+	output_debug(monitorstart, 0, cmd);
+
+	switch (op) {
+	case MIRROR_SPLIT:
+		if (mirror_count == 2)
+			break;
+	case MIRROR_EXTEND:
+	case MIRROR_RESYNC:
+		/* verify mirror */
+		snprintf(cmd, sizeof(cmd),
+			 "lfs mirror verify %s", tf->path);
+
+		rc = system(cmd);
+		if (rc < 0) {
+			prt("%s: %d\n", cmd, errno);
+			report_failure(184);
+		} else if (WIFEXITED(rc)) {
+			rc = WEXITSTATUS(rc);
+			if (rc > 0) {
+				prt("%s: %d\n", cmd, rc);
+				snprintf(cmd, sizeof(cmd),
+					 "lfs mirror verify -v %s", tf->path);
+				rc = system(cmd);
+				report_failure(184);
+			}
+		}
+	}
+
+	output_debug(monitorstart, 0, cmd);
+
+	tf->fd = open(tf->path, O_RDWR | tf->o_direct, 0);
+	if (tf->fd < 0) {
+		prterr(tf->o_direct ? "open(O_DIRECT)" : "open");
+		report_failure(185);
+	}
+	output_debug(monitorstart, 0,
+		     tf->o_direct ? "open(O_DIRECT) done" : "open done");
+}
+
 #define TRIM_OFF_LEN(off, len, size)	\
 do {					\
 	if (size)			\
@@ -1385,6 +1594,10 @@ test(void)
 		if (closeopen)
 			docloseopen();
 		break;
+	case OP_MIRROR_OPS:
+		if (flrmode)
+			do_mirror_ops(random() % MIRROR_OPS);
+		break;
 	default:
 		prterr("unknown operation %d: Operation not supported");
 		report_failure(42);
@@ -1462,7 +1675,7 @@ usage(void)
 "	    order with 'rotate' or chose them at 'random'.  (default random)\n"
 "	-L: fsxLite - no file creations & no file size changes\n"
 /* OSX: -I: start interactive mode since operation opnum\n\ */
-/* OSX: -M: slow motion mode, wait 1 second before each op\n\ */
+"	-M: mirror file test mode\n"
 "	-N numops: total # operations to do (default infinity)\n"
 "	-O: use oplen (see -o flag) for every op (default random)\n"
 "	-P: save .fsxlog and .fsxgood files in dirpath (default ./)\n"
@@ -1550,7 +1763,7 @@ main(int argc, char **argv)
 	setvbuf(stdout, (char *)0, _IOLBF, 0); /* line buffered stdout */
 
 	while ((ch = getopt(argc, argv,
-			    "b:c:dfl:m:no:p:qr:s:t:w:xyzD:FHI:LN:OP:RS:WZ::"))
+			    "b:c:dfl:m:no:p:qr:s:t:w:xyzD:FHI:LMN:OP:RS:WZ::"))
 	       != EOF)
 		switch (ch) {
 		case 'b':
@@ -1652,6 +1865,9 @@ main(int argc, char **argv)
 			break;
 		case 'L':
 			lite = 1;
+			break;
+		case 'M':
+			flrmode = 1;
 			break;
 		case 'N':
 			numops = getnum(optarg, &endp);

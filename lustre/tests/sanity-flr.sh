@@ -3021,6 +3021,20 @@ test_70() {
 }
 run_test 70 "mirror create and split race"
 
+test_100() {
+	local tf=$DIR/$tdir/$tfile
+
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -N -E1M -c-1 -Eeof -c-1 $tf ||
+		error "setstripe $tf failed"
+
+	FSXNUM=${FSXNUM:-1000}
+	$FSX -p 5 -N $FSXNUM -S 0 -M $tf || error "fsx FLR file $tf failed"
+}
+run_test 100 "flr mode fsx test"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

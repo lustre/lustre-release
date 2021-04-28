@@ -11623,13 +11623,13 @@ void print_chunks(const char *fname, struct verify_chunk *chunks,
  * Return: void.
  */
 static inline
-void print_checksums(struct verify_chunk *chunk, unsigned long *crc)
+void print_checksums(struct verify_chunk *chunk, unsigned long *crc,
+		     unsigned long long pos, unsigned long long len)
 {
 	int i;
 
 	fprintf(stdout,
-		"CRC-32 checksum value for chunk "DEXT":\n",
-		PEXT(&chunk->chunk));
+		"CRC-32 checksum value for chunk "DEXT":\n", pos, pos + len);
 	for (i = 0; i < chunk->mirror_count; i++)
 		fprintf(stdout, "Mirror %u:\t%#lx\n",
 			chunk->mirror_id[i], crc[i]);
@@ -11781,8 +11781,6 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 				goto error;
 			}
 
-			chunks[idx].mirror_id[i] = mirror_id;
-			i++;
 			if (i >= ARRAY_SIZE(chunks[idx].mirror_id)) {
 				fprintf(stderr,
 					"%s: mirror_id array is too small.\n",
@@ -11790,6 +11788,8 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 				rc = -EINVAL;
 				goto error;
 			}
+			chunks[idx].mirror_id[i] = mirror_id;
+			i++;
 
 next:
 			rc = llapi_layout_comp_use(layout,
@@ -11895,7 +11895,7 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 		}
 
 		if (verbose)
-			print_checksums(chunk, crc_array);
+			print_checksums(chunk, crc_array, pos, buflen);
 
 		/* compare CRC-32 checksum values */
 		for (i = 1; i < chunk->mirror_count; i++) {
