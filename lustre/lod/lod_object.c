@@ -1262,9 +1262,11 @@ static bool lod_obj_attr_set_comp_skip_cb(const struct lu_env *env,
 		}
 		break;
 	}
+	case LCM_FL_RDONLY:
+	case LCM_FL_SYNC_PENDING:
+		break;
 	default:
 		LASSERTF(0, "impossible: %d\n", lo->ldo_flr_state);
-	case LCM_FL_SYNC_PENDING:
 		break;
 	}
 
@@ -3270,13 +3272,14 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 		struct dt_object *dt, const struct lu_buf *mbuf,
 		struct thandle *th)
 {
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lu_buf		*buf = &info->lti_buf;
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lov_comp_md_v1	*lcm;
-	struct lov_comp_md_v1	*cur_lcm;
-	struct lov_comp_md_v1	*merge_lcm;
-	struct lov_comp_md_entry_v1	*lcme;
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
+	struct lu_buf *buf = &info->lti_buf;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lov_comp_md_v1 *lcm;
+	struct lov_comp_md_v1 *cur_lcm;
+	struct lov_comp_md_v1 *merge_lcm;
+	struct lov_comp_md_entry_v1 *lcme;
 	struct lov_mds_md_v1 *lmm;
 	size_t size = 0;
 	size_t offset;
@@ -3285,7 +3288,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	__u32 id = 0;
 	__u16 mirror_id = 0;
 	__u32 mirror_count;
-	int	rc, i;
+	int rc, i;
 	bool merge_has_dom;
 
 	ENTRY;
@@ -3404,8 +3407,6 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	}
 
 	/* fixup layout information */
-	lod_obj_inc_layout_gen(lo);
-	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
 	lcm->lcm_size = cpu_to_le32(size);
 	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
@@ -3415,6 +3416,23 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	rc = lod_striping_reload(env, lo, buf);
 	if (rc)
 		GOTO(out, rc);
+
+	lod_obj_inc_layout_gen(lo);
+	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
+
+	/* transfer layout version to OST objects. */
+	if (lo->ldo_mirror_count > 1) {
+		struct lod_obj_stripe_cb_data data = { {0} };
+
+		layout_attr->la_valid = LA_LAYOUT_VERSION;
+		layout_attr->la_layout_version = 0;
+		data.locd_attr = layout_attr;
+		data.locd_declare = true;
+		data.locd_stripe_cb = lod_obj_stripe_attr_set_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), buf,
 					XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
@@ -3431,6 +3449,8 @@ static int lod_declare_layout_split(const struct lu_env *env,
 		struct dt_object *dt, const struct lu_buf *mbuf,
 		struct thandle *th)
 {
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lov_comp_md_v1 *lcm = mbuf->lb_buf;
 	int rc;
@@ -3443,6 +3463,21 @@ static int lod_declare_layout_split(const struct lu_env *env,
 	lod_obj_inc_layout_gen(lo);
 	/* fix on-disk layout gen */
 	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
+
+
+	/* transfer layout version to OST objects. */
+	if (lo->ldo_mirror_count > 1) {
+		struct lod_obj_stripe_cb_data data = { {0} };
+
+		layout_attr->la_valid = LA_LAYOUT_VERSION;
+		layout_attr->la_layout_version = 0;
+		data.locd_attr = layout_attr;
+		data.locd_declare = true;
+		data.locd_stripe_cb = lod_obj_stripe_attr_set_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
+		if (rc)
+			RETURN(rc);
+	}
 
 	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), mbuf,
 				       XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
@@ -4738,7 +4773,10 @@ static int lod_xattr_set(const struct lu_env *env,
 			 const char *name, int fl, struct thandle *th)
 {
 	struct dt_object *next = dt_object_child(dt);
-	int rc;
+	struct lu_attr *layout_attr = &lod_env_info(env)->lti_layout_attr;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lod_obj_stripe_cb_data data = { {0} };
+	int rc = 0;
 
 	ENTRY;
 
@@ -4832,6 +4870,29 @@ static int lod_xattr_set(const struct lu_env *env,
 			lod_striping_free(env, lod_dt_obj(dt));
 
 			rc = lod_sub_xattr_set(env, next, buf, name, fl, th);
+		} else if (fl & LU_XATTR_SPLIT) {
+			rc = lod_sub_xattr_set(env, next, buf, name, fl, th);
+			if (rc)
+				RETURN(rc);
+
+			rc = lod_striping_reload(env, lo, buf);
+			if (rc)
+				RETURN(rc);
+
+			if (lo->ldo_mirror_count > 1 &&
+			    layout_attr->la_valid & LA_LAYOUT_VERSION) {
+				/* mirror split */
+				layout_attr->la_layout_version =
+						lo->ldo_layout_gen;
+				data.locd_attr = layout_attr;
+				data.locd_declare = false;
+				data.locd_stripe_cb =
+						lod_obj_stripe_attr_set_cb;
+				rc = lod_obj_for_each_stripe(env, lo, th,
+							     &data);
+				if (rc)
+					RETURN(rc);
+			}
 		} else if (fl & LU_XATTR_PURGE) {
 			rc = lod_layout_purge(env, dt, buf, th);
 		} else if (dt_object_remote(dt)) {
@@ -4862,6 +4923,23 @@ static int lod_xattr_set(const struct lu_env *env,
 				!lod_dt_obj(dt)->ldo_comp_cached));
 
 			rc = lod_striped_create(env, dt, NULL, NULL, th);
+			if (rc)
+				RETURN(rc);
+
+			if (fl & LU_XATTR_MERGE && lo->ldo_mirror_count > 1 &&
+			    layout_attr->la_valid & LA_LAYOUT_VERSION) {
+				/* mirror merge exec phase */
+				layout_attr->la_layout_version =
+						lo->ldo_layout_gen;
+				data.locd_attr = layout_attr;
+				data.locd_declare = false;
+				data.locd_stripe_cb =
+						lod_obj_stripe_attr_set_cb;
+				rc = lod_obj_for_each_stripe(env, lo, th,
+							     &data);
+				if (rc)
+					RETURN(rc);
+			}
 		}
 		RETURN(rc);
 	} else if (strcmp(name, XATTR_NAME_FID) == 0) {
@@ -7832,6 +7910,7 @@ static int lod_declare_update_sync_pending(const struct lu_env *env,
 		struct thandle *th)
 {
 	struct lod_thread_info  *info = lod_env_info(env);
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
 	unsigned sync_components = 0;
 	unsigned resync_components = 0;
 	int i;
@@ -7903,6 +7982,12 @@ static int lod_declare_update_sync_pending(const struct lu_env *env,
 
 	lo->ldo_flr_state = LCM_FL_RDONLY;
 	lod_obj_inc_layout_gen(lo);
+
+	layout_attr->la_valid = LA_LAYOUT_VERSION;
+	layout_attr->la_layout_version = 0; /* set current version */
+	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
+	if (rc)
+		GOTO(out, rc);
 
 	info->lti_buf.lb_len = lod_comp_md_size(lo, false);
 	rc = lod_sub_declare_xattr_set(env, lod_object_child(lo),

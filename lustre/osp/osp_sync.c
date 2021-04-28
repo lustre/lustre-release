@@ -761,7 +761,8 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	if (body->oa.o_valid & OBD_MD_LAYOUT_VERSION) {
 		OBD_FAIL_TIMEOUT(OBD_FAIL_FLR_LV_DELAY, cfs_fail_val);
 		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_FLR_LV_INC)))
-			++body->oa.o_layout_version;
+			body->oa.o_layout_version = LU_LAYOUT_RESYNC |
+					(body->oa.o_layout_version + 1);
 	}
 
 	osp_sync_send_new_rpc(d, llh, h, req);

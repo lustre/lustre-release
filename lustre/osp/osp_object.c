@@ -753,7 +753,12 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 			osp_update_request_destroy(env, update);
 		} else {
+			struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
+
 			rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
+			/* send layout version to OST ASAP */
+			if (attr->la_valid & LA_LAYOUT_VERSION)
+				wake_up(&osp->opd_sync_waitq);
 			/* XXX: send new uid/gid to OST ASAP? */
 		}
 	} else {

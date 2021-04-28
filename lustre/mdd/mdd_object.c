@@ -1588,7 +1588,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = mdd_declare_xattr_set(env, mdd, obj, buf_vic, XATTR_LUSTRE_LOV,
+	rc = mdd_declare_xattr_set(env, mdd, obj, buf_vic, XATTR_NAME_LOV,
 				   LU_XATTR_MERGE, handle);
 	if (rc)
 		GOTO(out, rc);
@@ -1597,7 +1597,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = mdo_xattr_set(env, obj, buf_vic, XATTR_LUSTRE_LOV, LU_XATTR_MERGE,
+	rc = mdo_xattr_set(env, obj, buf_vic, XATTR_NAME_LOV, LU_XATTR_MERGE,
 			   handle);
 	if (rc)
 		GOTO(out, rc);
@@ -1876,7 +1876,7 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	}
 
 	/* set obj's layout in @buf */
-	rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV, LU_XATTR_REPLACE,
+	rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV, LU_XATTR_SPLIT,
 			   handle);
 	if (rc)
 		GOTO(unlock, rc);
