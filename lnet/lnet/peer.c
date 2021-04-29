@@ -4065,7 +4065,8 @@ lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 		return;
 	}
 
-	if (now > lpni->lpni_last_alive + lnet_recovery_limit) {
+	if (lnet_recovery_limit &&
+	    now > lpni->lpni_last_alive + lnet_recovery_limit) {
 		CDEBUG(D_NET, "lpni %s aged out last alive %lld\n",
 		       libcfs_nid2str(lpni->lpni_nid),
 		       lpni->lpni_last_alive);
