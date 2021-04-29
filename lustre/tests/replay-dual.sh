@@ -621,9 +621,10 @@ test_22a () {
 		return 0
 
 	local MDTIDX=1
-	local remote_dir=${tdir}/remote_dir
+	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
@@ -632,7 +633,7 @@ test_22a () {
 	sleep 1
 
 	fail mds$((MDTIDX + 1))
-	wait $CLIENT_PID || error "lfs mkdir failed"
+	wait $CLIENT_PID || error "lfs mkdir -i $MDTIDX failed"
 
 	replay_barrier mds$MDTIDX
 	create_remote_dir_files_22 || error "Remote creation failed $?"
@@ -650,16 +651,17 @@ test_22b () {
 	local MDTIDX=1
 	local remote_dir=$tdir/remote_dir
 
-	# OBD_FAIL_MDS_REINT_NET_REP       0x119
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 	sleep 1
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
-	wait $CLIENT_PID || error "lfs mkdir failed"
+	wait $CLIENT_PID || error "lfs mkdir -i $MDTIDX failed"
 
 	replay_barrier mds$MDTIDX
 	create_remote_dir_files_22 || error "Remote creation failed $?"
@@ -679,9 +681,10 @@ test_22c () {
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
 		return 0
 	local MDTIDX=1
-	local remote_dir=${tdir}/remote_dir
+	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP    0x1701
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
@@ -691,7 +694,7 @@ test_22c () {
 	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
 	fail mds$MDTIDX
-	wait $CLIENT_PID || error "lfs mkdir failed"
+	wait $CLIENT_PID || error "lfs mkdir -i $MDTIDX failed"
 
 	replay_barrier mds$MDTIDX
 	create_remote_dir_files_22 || error "Remote creation failed $?"
@@ -707,9 +710,10 @@ run_test 22c "c1 lfs mkdir -i 1 d1, M1 drop update & fail M1, c2 mkdir d1/dir"
 test_22d () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local MDTIDX=1
-	local remote_dir=${tdir}/remote_dir
+	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP    0x1701
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
@@ -719,7 +723,7 @@ test_22d () {
 	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
-	wait $CLIENT_PID || error "lfs mkdir failed"
+	wait $CLIENT_PID || error "lfs mkdir -i $MDTIDX failed"
 
 	replay_barrier mds$MDTIDX
 	create_remote_dir_files_22 || error "Remote creation failed $?"
@@ -753,9 +757,10 @@ test_23a () {
 	local MDTIDX=1
 	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
-			error "lfs mkdir failed"
+		error "lfs mkdir -i $MDTIDX failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
@@ -782,9 +787,10 @@ test_23b () {
 	local MDTIDX=1
 	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT/$tdir failed"
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
-			error "lfs mkdir failed"
+		error "lfs mkdir -i $MDTIDX failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
@@ -817,9 +823,10 @@ test_23c () {
 	local MDTIDX=1
 	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
-			error "lfs mkdir failed"
+		error "lfs mkdir -i $MDTIDX failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP    0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
@@ -847,9 +854,10 @@ test_23d () {
 	local MDTIDX=1
 	local remote_dir=$tdir/remote_dir
 
-	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i 0 $MOUNT1/$tdir ||
+		error "lfs mkdir -i 0 $MOUNT1/$tdir failed"
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
-			error "lfs mkdir failed"
+		error "lfs mkdir -i $MDTIDX failed"
 
 	# OBD_FAIL_UPDATE_OBJ_NET    0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
