@@ -3265,7 +3265,7 @@ test_43a() {
 	echo "222" > $DIR/$tfile-rootfile || error "write 2 failed"
 	chmod go-rw $DIR/$tfile-rootfile  || error "chmod 2 faield"
 
-	mkdir $DIR/$tdir-rootdir || error "mkdir failed"
+	mkdir_on_mdt0 $DIR/$tdir-rootdir || error "mkdir failed"
 	chmod go-rwx $DIR/$tdir-rootdir || error "chmod 3 failed"
 	touch $DIR/$tdir-rootdir/tfile-1 || error "touch failed"
 
@@ -3933,7 +3933,7 @@ test_50i() {
 	start_ost2 || error "Unable to start OST2"
 	mount_client $MOUNT || error "client start failed"
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		$PERM_CMD mdc.${FSNAME}-MDT0001-mdc-*.active=0 &&

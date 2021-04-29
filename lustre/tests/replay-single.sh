@@ -1211,8 +1211,8 @@ test_53a() {
 		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
 
 	cancel_lru_locks mdc    # cleanup locks from former test cases
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 	# give multiop a change to open
@@ -1244,8 +1244,8 @@ run_test 53a "|X| close request while two MDC requests in flight"
 test_53b() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop_bg_pause $DIR/${tdir}-1/f O_c ||
 		error "multiop_bg_pause $DIR/${tdir}-1/f failed"
 	close_pid=$!
@@ -1278,8 +1278,8 @@ run_test 53b "|X| open request while two MDC requests in flight"
 test_53c() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 
@@ -1320,8 +1320,8 @@ test_53d() {
 
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 	# give multiop a chance to open
@@ -1350,8 +1350,8 @@ run_test 53d "close reply while two MDC requests in flight"
 test_53e() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 
@@ -1383,8 +1383,8 @@ run_test 53e "|X| open reply while two MDC requests in flight"
 test_53f() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 
@@ -1421,8 +1421,8 @@ run_test 53f "|X| open reply and close reply while two MDC requests in flight"
 test_53g() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 
@@ -1459,8 +1459,8 @@ run_test 53g "|X| drop open reply and close request while close and open are bot
 test_53h() {
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
-	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir_on_mdt0 $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
 	multiop $DIR/${tdir}-1/f O_c &
 	close_pid=$!
 
@@ -4168,6 +4168,7 @@ test_111g() {
 run_test 111g "DNE: unlink striped dir, fail MDT1/MDT2"
 
 test_112_rename_prepare() {
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir -p $DIR/$tdir/src_dir
 	$LFS mkdir -i 1 $DIR/$tdir/src_dir/src_child ||
 		error "create remote source failed"
@@ -4571,7 +4572,7 @@ test_116a() {
 		return 0
 	local fail_index=0
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	replay_barrier mds1
 
 	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
@@ -4596,7 +4597,7 @@ test_116b() {
 		return 0
 	local fail_index=0
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	replay_barrier mds2
 
 	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
@@ -4732,7 +4733,7 @@ test_120() {
 		skip "Do not support large update log before 2.7.64" &&
 		return 0
 
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	replay_barrier_nosync mds1
 	for ((i = 0; i < 20; i++)); do
 		mkdir $DIR/$tdir/dir-$i || {

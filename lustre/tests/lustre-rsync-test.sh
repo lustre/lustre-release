@@ -67,7 +67,8 @@ init_src() {
 	rm -rf $TGT2/$tdir $TGT2/d*.lustre_rsync-test 2> /dev/null
 	rm -rf ${DIR}/$tdir $DIR/d*.lustre_rsync-test ${DIR}/tgt 2> /dev/null
 	rm -f $LREPL_LOG
-	mkdir -p ${DIR}/$tdir || error "Failed to create target: " $DIR/$tdir
+
+	mkdir_on_mdt0 $DIR/$tdir || error "Failed to create target: " $DIR/$tdir
 	mkdir -p ${TGT}/$tdir || error "Failed to create target: " $TGT/$tdir
 	mkdir -p ${TGT2}/$tdir || error "Failed to create target: " $TGT2/$tdir
 }
@@ -229,7 +230,7 @@ test_1a() { # LU-5005
 	init_changelog
 
 	# Directory create
-	mkdir $DIR/root-dir
+	mkdir_on_mdt0 $DIR/root-dir
 
 	# File create
 	touch $DIR/root-file
@@ -240,7 +241,7 @@ test_1a() { # LU-5005
 
 	# File and directory delete
 	touch $DIR/root-file4
-	mkdir $DIR/root-dir1
+	mkdir_on_mdt0 $DIR/root-dir1
 	rm $DIR/root-file4
 	rm -rf $DIR/root-dir1
 

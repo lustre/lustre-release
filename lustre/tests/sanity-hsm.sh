@@ -558,6 +558,8 @@ test_1A() { # was test_1
 run_test 1A "lfs hsm flags root/non-root access"
 
 test_1a() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
 
@@ -602,7 +604,7 @@ test_1bde_base() {
 }
 
 test_1b() {
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
 		error "failed to set default stripe"
 	local f=$DIR/$tdir/$tfile
@@ -675,7 +677,7 @@ test_1d() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.59) ] &&
 		skip "need MDS version at least 2.10.59"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -E 1M -L mdt -E -1 -c 2 $DIR/$tdir ||
 		error "failed to set default stripe"
 	local f=$DIR/$tdir/$tfile
@@ -688,7 +690,7 @@ test_1e() {
 	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -E 1G -z 64M -E 10G -z 512M -E -1 -z 1G $DIR/$tdir ||
 		error "failed to set default stripe"
 	local comp_file=$DIR/$tdir/$tfile
@@ -726,6 +728,7 @@ run_test 1e "Archive, Release and Restore SEL file"
 test_2() {
 	local f=$DIR/$tdir/$tfile
 
+	mkdir_on_mdt0 $DIR/$tdir
 	create_empty_file "$f"
 	# New files are not dirty
 	check_hsm_flags $f "0x00000000"
@@ -752,7 +755,7 @@ test_2() {
 run_test 2 "Check file dirtyness when doing setattr"
 
 test_3() {
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	f=$DIR/$tdir/$tfile
 
 	# New files are not dirty
@@ -820,7 +823,7 @@ test_8() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	$LFS hsm_archive $f
@@ -840,7 +843,8 @@ test_9A() { # was test_9
 	local uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
 	check_agent_registered $uuid
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	$LFS hsm_archive --archive $archive_id $f
@@ -862,6 +866,8 @@ test_9a() {
 		copytool setup --facet agt$n
 	done
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	# archive files
 	for n in $(seq $AGTCOUNT); do
 		file=$DIR/$tdir/$tfile.$n
@@ -878,6 +884,7 @@ test_10a() {
 	# test needs a running copytool
 	copytool setup
 
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir -p $DIR/$tdir/d1
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
@@ -906,7 +913,7 @@ test_10b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_archive $f || error "archive request failed"
@@ -936,7 +943,7 @@ test_10d() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_archive $f || error "cannot archive $f"
@@ -950,7 +957,7 @@ test_10d() {
 run_test 10d "Archive a file on the default archive id"
 
 test_11a() {
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
 
@@ -979,7 +986,7 @@ test_11b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $f ||
@@ -1013,7 +1020,7 @@ test_12a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
@@ -1039,7 +1046,7 @@ test_12b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
@@ -1065,7 +1072,7 @@ test_12c() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -c 2 "$f"
 	local fid=$(create_file "$f" 1M 5)
 
@@ -1085,7 +1092,7 @@ test_12d() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
@@ -1109,7 +1116,7 @@ test_12e() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_archive $f || error "archive request failed"
@@ -1129,7 +1136,7 @@ test_12f() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1152,7 +1159,7 @@ test_12g() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1176,7 +1183,7 @@ test_12h() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1198,7 +1205,7 @@ test_12m() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	$LFS hsm_archive $f || error "archive of $f failed"
@@ -1233,7 +1240,7 @@ test_12o() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1282,7 +1289,7 @@ test_12p() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1306,6 +1313,8 @@ test_12q() {
 
 	# test needs a running copytool
 	copytool setup -m "$MOUNT3"
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local f2=$DIR2/$tdir/$tfile
@@ -1359,7 +1368,7 @@ test_12r() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 
@@ -1411,6 +1420,8 @@ test_14() {
 	# test needs a running copytool
 	copytool setup
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	# archive a file
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
@@ -1438,6 +1449,8 @@ run_test 14 "Rebind archived file to a new fid"
 test_15() {
 	# test needs a running copytool
 	copytool setup
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# archive files
 	local f=$DIR/$tdir/$tfile
@@ -1491,7 +1504,7 @@ test_16() {
 	local goal=20
 	dd if=/dev/zero of=$ref bs=1M count=20
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file $ref $f)
 	rm $ref
@@ -1537,6 +1550,7 @@ run_test 20 "Release is not permitted"
 test_21() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/test_release
 
@@ -1603,6 +1617,7 @@ run_test 21 "Simple release tests"
 test_22() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/test_release
 	local swap=$DIR/$tdir/test_swap
@@ -1628,6 +1643,7 @@ run_test 22 "Could not swap a release file"
 test_23() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/test_mtime
 
@@ -1664,6 +1680,7 @@ test_24a() {
 
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	fid=$(create_small_file $file)
 
@@ -1766,6 +1783,7 @@ test_24b() {
 
 	# Test needs a running copytool.
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# Check that root can do HSM actions on a regular user's file.
 	fid=$(create_small_file $file)
@@ -1811,8 +1829,7 @@ test_24c() {
 
 	# test needs a running copytool
 	copytool setup
-
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# Save the default masks and check that cleanup_24c will
 	# restore the request masks correctly.
@@ -1874,6 +1891,8 @@ test_24d() {
 	local fid1
 	local fid2
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	fid1=$(create_small_file $file1)
 
 	echo $fid1
@@ -1917,6 +1936,7 @@ run_test 24d "check that read-only mounts are respected"
 
 test_24e() {
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -1936,6 +1956,7 @@ run_test 24e "tar succeeds on HSM released files" # LU-6213
 test_24f() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	mkdir -p $DIR/$tdir/d1
 	local f=$DIR/$tdir/$tfile
@@ -1968,7 +1989,7 @@ test_24g() {
 
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	chmod ugo+rwx $DIR/$tdir
 
 	echo "Please listen carefully as our options have changed." | tee $file
@@ -2009,7 +2030,7 @@ test_25b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
@@ -2030,6 +2051,7 @@ run_test 25b "Restore lost file (HS_LOST flag) after release"\
 test_26A() { # was test_26
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -2050,8 +2072,8 @@ test_26a() {
 
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
-	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
@@ -2100,8 +2122,8 @@ run_test 26a "Remove Archive On Last Unlink (RAoLU) policy"
 test_26b() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
-	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
@@ -2132,8 +2154,8 @@ run_test 26b "RAoLU policy when CDT off"
 test_26c() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
-	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
@@ -2179,8 +2201,8 @@ run_test 26c "RAoLU effective when file closed"
 test_26d() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
-	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
 
@@ -2232,6 +2254,7 @@ run_test 27a "Remove the archive of an imported file (Operation not permitted)"
 test_27b() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -2249,6 +2272,7 @@ run_test 27b "Remove the archive of a relased file (Operation not permitted)"
 test_28() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -2288,6 +2312,7 @@ run_test 29a "Tests --mntpath and --archive options"
 test_29b() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
@@ -2305,6 +2330,7 @@ run_test 29b "Archive/delete/remove by FID from the archive."
 test_29c() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local fid1=$(create_small_file $DIR/$tdir/$tfile-1)
 	local fid2=$(create_small_file $DIR/$tdir/$tfile-2)
@@ -2341,6 +2367,8 @@ test_29d() {
 	for n in $(seq $AGTCOUNT); do
 		copytool setup -f agt$n -a $n
 	done
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	# archive files
 	file=$DIR/$tdir/$tfile
@@ -2429,7 +2457,7 @@ test_30b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/true
 	local fid=$(copy_file /bin/true $f)
 	chmod 755 $f
@@ -2457,7 +2485,7 @@ test_30c() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/SLEEP
 	local slp_sum1=$(md5sum /bin/sleep)
 	local fid=$(copy_file /bin/sleep $f)
@@ -2525,6 +2553,7 @@ restore_and_check_size() {
 test_31a() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	create_archive_file $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
@@ -2543,6 +2572,7 @@ run_test 31a "Import a large file and check size during restore"
 test_31b() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1MB 39)
@@ -2561,6 +2591,7 @@ run_test 31b "Restore a large unaligned file and check size during restore"
 test_31c() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1M 39)
@@ -2578,6 +2609,8 @@ run_test 31c "Restore a large aligned file and check size during restore"
 
 test_33() {
 	local f=$DIR/$tdir/$tfile
+
+	mkdir_on_mdt0 $DIR/$tdir
 	local fid=$(create_empty_file "$f")
 
 	copytool setup
@@ -2607,6 +2640,7 @@ run_test 33 "Kill a restore waiting process"
 test_34() {
 	# test needs a running copytool
 	copytool setup -b 1
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -2641,6 +2675,7 @@ run_test 34 "Remove file during restore"
 test_35() {
 	# test needs a running copytool
 	copytool setup -b 1
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local f1=$DIR/$tdir/$tfile-1
@@ -2677,6 +2712,7 @@ run_test 35 "Overwrite file during restore"
 test_36() {
 	# test needs a running copytool
 	copytool setup -b 1
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -2709,6 +2745,7 @@ run_test 36 "Move file during restore"
 test_37() {
 	# LU-5683: check that an archived dirty file can be rearchived.
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2788,7 +2825,7 @@ test_52() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
 
@@ -2813,7 +2850,7 @@ test_53() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
 
@@ -2836,6 +2873,8 @@ test_53() {
 run_test 53 "Opened for read file on an evicted client should not be set dirty"
 
 test_54() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1MB 39)
 
@@ -2860,6 +2899,8 @@ test_54() {
 run_test 54 "Write during an archive cancels it"
 
 test_55() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1MB 39)
 
@@ -2884,6 +2925,8 @@ test_55() {
 run_test 55 "Truncate during an archive cancels it"
 
 test_56() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1MB 39)
 
@@ -2913,7 +2956,7 @@ test_57() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/test_archive_remote
 	# Create a file on a remote node
 	do_node $CLIENT2 "dd if=/dev/urandom of=$f bs=1M "\
@@ -2975,7 +3018,7 @@ test_58() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local sz=$(stat -c %s /etc/passwd)
 
@@ -3009,6 +3052,8 @@ test_60() {
 	# This test validates the fix for LU-4512. Ensure that the -u
 	# option changes the progress reporting interval from the
 	# default (30 seconds) to the user-specified interval.
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_file "$f" 1M 10)
 
@@ -3075,7 +3120,7 @@ test_61() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	cdt_disable
@@ -3142,6 +3187,8 @@ test_71() {
 	stack_trap "cdt_clear_no_retry" EXIT
 	# Just start and stop the copytool to generate events.
 	cdt_clear_no_retry
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file "$f")
@@ -3215,7 +3262,7 @@ test_72() {
 		error "cannot create $test_file on $SINGLEAGT"
 	copy2archive $test_file $tdir/$tfile
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	copytool import $tdir/$tfile $f
 	f=$DIR2/$tdir/$tfile
@@ -3297,7 +3344,7 @@ run_test 72 "Copytool logs JSON restore events to FIFO"
 
 test_90() {
 	file_count=51 # Max number of files constrained by LNET message size
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	local f=$DIR/$tdir/$tfile
 	local FILELIST=/tmp/filelist.txt
 	local i=""
@@ -3387,6 +3434,8 @@ run_test 103 "Purge all requests"
 DATA=CEA
 DATAHEX='[434541]'
 test_104() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -3404,7 +3453,7 @@ run_test 104 "Copy tool data field"
 
 test_105() {
 	local max_requests=$(get_hsm_param max_requests)
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local i=""
 
 	stack_trap "set_hsm_param max_requests $max_requests" EXIT
@@ -3459,7 +3508,7 @@ test_107() {
 	# test needs a running copytool
 	copytool setup
 	# create and archive file
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f1=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f1)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f1
@@ -3514,7 +3563,7 @@ test_110a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	copy2archive /etc/passwd $tdir/$tfile
 
@@ -3541,7 +3590,7 @@ test_110b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
@@ -3567,7 +3616,7 @@ test_111a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
@@ -3596,7 +3645,7 @@ test_111b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	stack_trap cdt_clear_no_retry EXIT
@@ -3621,7 +3670,7 @@ test_112() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 	cdt_disable
@@ -3639,6 +3688,8 @@ test_112() {
 run_test 112 "State of recorded request"
 
 test_113() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local file1=$DIR/$tdir/$tfile
 	local file2=$DIR2/$tdir/$tfile
 
@@ -3675,6 +3726,8 @@ test_113() {
 run_test 113 "wrong stat after restore"
 
 test_200() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -3700,6 +3753,7 @@ run_test 200 "Register/Cancel archive"
 test_201() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	create_archive_file $tdir/$tfile
@@ -3719,6 +3773,8 @@ test_201() {
 run_test 201 "Register/Cancel restore"
 
 test_202() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -3742,7 +3798,7 @@ test_220A() { # was test_220
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
@@ -3761,7 +3817,7 @@ test_220a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
@@ -3790,6 +3846,8 @@ test_220a() {
 run_test 220a "Changelog for failed archive"
 
 test_221() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -3816,7 +3874,7 @@ test_222a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
@@ -3837,7 +3895,7 @@ test_222b() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
@@ -3859,7 +3917,7 @@ test_222c() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
@@ -3893,7 +3951,7 @@ test_222d() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
@@ -3916,6 +3974,7 @@ run_test 222d "Changelog for failed implicit restore"
 test_223a() {
 	# test needs a running copytool
 	copytool setup -b 1
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	create_archive_file $tdir/$tfile
@@ -3937,6 +3996,8 @@ test_223a() {
 run_test 223a "Changelog for restore canceled (import case)"
 
 test_223b() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -3967,7 +4028,7 @@ test_224A() { # was test_224
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
@@ -3988,7 +4049,7 @@ test_224a() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
@@ -4028,6 +4089,7 @@ test_225() {
 
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -4055,7 +4117,7 @@ test_226() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f1=$DIR/$tdir/$tfile-1
 	local f2=$DIR/$tdir/$tfile-2
@@ -4130,6 +4192,7 @@ run_test 227 "changelog when explicit setting of HSM flags"
 test_228() {
 	# test needs a running copytool
 	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local fid=$(create_small_sync_file $DIR/$tfile)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tfile
@@ -4176,6 +4239,9 @@ test_250() {
 
 	# send 1 requests of each kind twice
 	copytool setup
+
+	mkdir_on_mdt0 $DIR/$tdir
+
 	# setup the files
 	for action in archive restore remove; do
 		local filepath="$file"-to-$action
@@ -4224,6 +4290,8 @@ test_250() {
 run_test 250 "Coordinator max request"
 
 test_251() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -4253,6 +4321,8 @@ test_251() {
 run_test 251 "Coordinator request timeout"
 
 test_252() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -4282,7 +4352,7 @@ test_253() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 
 	dd if=/dev/zero of=$f bs=1MB count=10
@@ -4346,6 +4416,8 @@ test_254b()
 		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
 	set_hsm_param max_requests "$request_count"
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local timeout
 	local count
 	for request_type in archive restore remove; do
@@ -4406,6 +4478,8 @@ test_255()
 	[ $MDS1_VERSION -lt $(version_code 2.12.0) ] &&
 		skip "Need MDS version at least 2.12.0"
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local file="$DIR/$tdir/$tfile"
 	local fid=$(create_empty_file "$file")
 
@@ -4462,6 +4536,8 @@ test_260a()
 
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
 	local file
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	for file in "${files[@]}"; do
 		create_small_file "$file"
@@ -4529,6 +4605,8 @@ test_260b()
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
 	local file
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	for file in "${files[@]}"; do
 		create_small_file "$file"
 	done
@@ -4595,6 +4673,8 @@ test_260c()
 
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
 	local file
+
+	mkdir_on_mdt0 $DIR/$tdir
 
 	for file in "${files[@]}"; do
 		create_small_file "$file"
@@ -4745,7 +4825,7 @@ test_400() {
 
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local dir_mdt0=$DIR/$tdir/mdt0
 	local dir_mdt1=$DIR/$tdir/mdt1
@@ -4777,7 +4857,7 @@ test_401() {
 
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local dir_mdt0=$DIR/$tdir/mdt0
 	local dir_mdt1=$DIR/$tdir/mdt1
@@ -4835,7 +4915,7 @@ run_test 402a "Copytool start fails if all MDTs are inactive"
 test_402b() {
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	touch $f || error "touch $f failed"
@@ -4888,7 +4968,7 @@ test_404() {
 	copytool setup
 
 	# create files on both MDT0000 and MDT0001
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local dir_mdt0=$DIR/$tdir/mdt0
 	stack_trap "rm -rf $dir_mdt0" EXIT
@@ -4917,7 +4997,7 @@ test_405() {
 
 	copytool setup
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local striped_dir=$DIR/$tdir/striped_dir
 
@@ -4969,6 +5049,8 @@ test_406() {
 	local fid
 	local mdt_index
 
+	mkdir_on_mdt0 $DIR/$tdir
+
 	fid=$(create_small_file $DIR/$tdir/$tfile)
 	echo "old fid $fid"
 
@@ -5019,6 +5101,8 @@ test_406() {
 run_test 406 "attempting to migrate HSM archived files is safe"
 
 test_407() {
+	mkdir_on_mdt0 $DIR/$tdir
+
 	local f=$DIR/$tdir/$tfile
 	local f2=$DIR2/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
@@ -5212,7 +5296,7 @@ test_604() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 	local f2=$DIR2/$tdir/$tfile
@@ -5378,7 +5462,7 @@ test_606() {
 	[ -z $(do_facet mgs ls -d $llog_reader 2> /dev/null) ] &&
 			skip_env "missing llog_reader"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local f=$DIR/$tdir/$tfile
 

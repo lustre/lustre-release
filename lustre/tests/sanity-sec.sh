@@ -168,7 +168,7 @@ test_1() {
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
 
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	chown $USER0 $DIR/$tdir || error "chown (1)"
 	$RUNAS_CMD -u $ID1 -v $ID0 touch $DIR/$tdir/f0 && error "touch (2)"

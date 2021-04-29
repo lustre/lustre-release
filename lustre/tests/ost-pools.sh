@@ -1452,7 +1452,7 @@ run_test 24 "Independence of pool from other setstripe parameters"
 test_25() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
-	mkdir -p $POOL_ROOT
+	mkdir_on_mdt0 $POOL_ROOT
 
 	for i in $(seq 10); do
 		create_pool_nofail $POOL$i

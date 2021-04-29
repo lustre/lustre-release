@@ -224,7 +224,7 @@ lpcc_rw_test() {
 
 	is_project_quota_supported || project=false
 
-	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	do_facet $SINGLEAGT $LFS mkdir -i0 -c1 $DIR/$tdir
 	setup_pcc_mapping
 	$project && lfs project -sp $project_id $DIR/$tdir
 
@@ -330,7 +330,7 @@ test_1e() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 	$LCTL pcc list $MOUNT
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
 
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
@@ -393,7 +393,7 @@ test_1f() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0"
 
-	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	do_facet $SINGLEAGT $LFS mkdir -i0 -c1 $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
 	$LFS project -sp $project_id $DIR/$tdir ||
 		error "failed to set project for $DIR/$tdir"
@@ -1066,7 +1066,7 @@ test_rule_id() {
 		"$rule\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 	$LCTL pcc list $MOUNT
 
-	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	do_facet $SINGLEAGT $LFS mkdir -i 0 $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
 
 	rm -f $file || error "rm $file failed"
@@ -1241,7 +1241,7 @@ test_15() {
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
 
 	echo "Check open attach for non-root user"

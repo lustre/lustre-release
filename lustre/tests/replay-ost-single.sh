@@ -29,7 +29,7 @@ assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 TDIR=$DIR/d0.${TESTSUITE}
-mkdir -p $TDIR
+mkdir_on_mdt0 $TDIR
 $LFS setstripe $TDIR -i 0 -c 1
 $LFS getstripe $TDIR
 

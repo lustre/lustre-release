@@ -114,7 +114,7 @@ test_1b() { # former test_0b
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
-    do_node $CLIENT1 mkdir -p -m 755 $MOUNT/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
@@ -212,7 +212,7 @@ test_2b() { # former test_0e
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
@@ -260,7 +260,7 @@ test_3b() { # former test_0g
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
     do_node $CLIENT1 mcreate $DIR/$tdir/$tfile
 
     replay_barrier $SINGLEMDS
@@ -530,7 +530,7 @@ test_5a() { # former test_0s
 	local tp_post
 
 	do_node $CLIENT1 mcreate $DIR/$tfile
-	do_node $CLIENT1 mkdir -p $DIR/$tdir
+	do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $DIR/$tdir
 	pre=$(chk_get_version $CLIENT1 $DIR/$tfile)
 	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
 	do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
@@ -554,7 +554,7 @@ test_5b() { # former test_0t
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
     do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
@@ -577,7 +577,7 @@ test_5c() { # former test_0u
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile
-    do_node $CLIENT1 mkdir -p $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
@@ -599,7 +599,7 @@ test_6a() { # former test_0v
 	local tp_post
 
 	do_node $CLIENT1 mcreate $DIR/$tfile
-	do_node $CLIENT1 mkdir -p $DIR/$tdir
+	do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 	sp_pre=$(chk_get_version $CLIENT1 $DIR)
 	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
 	do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
@@ -638,7 +638,7 @@ test_6c() { # former test_0x
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
     do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 777 $MOUNT2
@@ -661,7 +661,7 @@ test_6d() { # former test_0y
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
     do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
@@ -692,7 +692,7 @@ test_7_cycle() {
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mkdir -p $DIR/$tdir
+    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
     replay_barrier $SINGLEMDS
     # first operation
     echo "$cname first: $first"
