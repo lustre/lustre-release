@@ -268,6 +268,18 @@ struct lu_device_type vvp_device_type = {
 #ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
 unsigned int (*vvp_account_page_dirtied)(struct page *page,
 					 struct address_space *mapping);
+
+unsigned int ll_account_page_dirtied(struct page *page,
+				     struct address_space *mapping)
+{
+	/* must use __set_page_dirty, which means unlocking and
+	 * relocking, which hurts performance.
+	 */
+	ll_xa_unlock(&mapping->i_pages);
+	__set_page_dirty(page, mapping, 0);
+	ll_xa_lock(&mapping->i_pages);
+	return 0;
+}
 #endif
 
 /**
@@ -292,6 +304,8 @@ int vvp_global_init(void)
 	 */
 	vvp_account_page_dirtied = (void *)
 		cfs_kallsyms_lookup_name("account_page_dirtied");
+	if (!vvp_account_page_dirtied)
+		vvp_account_page_dirtied = ll_account_page_dirtied;
 #endif
 
 	return 0;
