@@ -2004,9 +2004,11 @@ test_300() {
 	cleanup_lnet || exit 1
 	load_lnet
 
+	local cc_args="-Wall -Werror -std=c99 -c -x c /dev/null -o $out"
 	if ! [[ -d $prefix ]]; then
 		# Assume we're running in tree and fixup the include path.
 		prefix=$LUSTRE/../lnet/include/uapi/linux/lnet
+		cc_args+=" -I $LUSTRE/../lnet/include/uapi"
 	fi
 
 	for header in $prefix/*.h; do
@@ -2014,7 +2016,8 @@ test_300() {
 			continue
 		fi
 
-		$CC -Wall -Werror -std=c99 -include $header -c -x c /dev/null -o $out ||
+		echo "$CC $cc_args -include $header"
+		$CC $cc_args -include $header ||
 			error "cannot compile '$header'"
 	done
 	rm -f $out
