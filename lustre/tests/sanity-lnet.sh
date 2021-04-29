@@ -1844,12 +1844,15 @@ test_211() {
 	# Set health to force it back onto the recovery queue. Set to 500 means
 	# in 5 seconds it should be back at maximum value. We'll wait a couple
 	# more seconds than that to be safe.
-	# NB: we need to increase the recovery limit so the peer NI is
+	# NB: we reset the recovery limit to 0 (indefinite) so the peer NI is
 	# eligible again
-	do_lnetctl set recovery_limit 50 ||
+	do_lnetctl set recovery_limit 0 ||
 		error "failed to set recovery_limit"
 
 	$LNETCTL peer set --nid $prim_nid --health 500
+
+	check_nid_in_recovq "-p" 1
+	check_ping_count "peer_ni" "2"
 
 	sleep 7
 
