@@ -494,14 +494,15 @@ command_t cmdlist[] = {
 	 "     [[!] --newer[XY] <reference>] [[!] --blocks|-b N]\n"
 	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
-	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
+	 "     [[!] --perm [/-]mode] [[!] --pool <pool>] [--print|-P]\n"
+	 "     [--print0|-0] [[!] --projid <projid>]\n"
+	 "     [[!] --size|-s [+-]N[bkMGTPE]]\n"
 	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
 	 "     [[!] --stripe-index|-i <index,...>]\n"
 	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
 	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
-	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
-	 "     [[!] --projid <projid>]\n"
+	 "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
 	 "     [[!] --layout|-L released,raid0,mdt]\n"
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
@@ -3388,6 +3389,7 @@ enum {
 	LFS_MODE_OPT,
 	LFS_NEWERXY_OPT,
 	LFS_INHERIT_RR_OPT,
+	LFS_FIND_PERM,
 };
 
 /* functions */
@@ -4593,6 +4595,234 @@ static int name2layout(__u32 *layout, char *name)
 	return 0;
 }
 
+static int parse_symbolic(const char *input, mode_t *outmode, const char **end)
+{
+	int loop;
+	int user, group, other;
+	int who, all;
+	char c, op;
+	mode_t perm;
+	mode_t usermask;
+	mode_t previous_flags;
+
+	user = group = other = 0;
+	all = 0;
+	loop = 1;
+	perm = 0;
+	previous_flags = 0;
+	*end = input;
+	usermask = 0;
+
+	while (loop) {
+		switch (*input) {
+		case 'u':
+			user = 1;
+			break;
+		case 'g':
+			group = 1;
+			break;
+		case 'o':
+			other = 1;
+			break;
+		case 'a':
+			user = group = other = 1;
+			all = 1;
+			break;
+		default:
+			loop = 0;
+		}
+
+		if (loop)
+			input++;
+	}
+
+	who = user || group || other;
+	if (!who) {
+		/* get the umask */
+		usermask = umask(0022);
+		umask(usermask);
+		usermask &= 07777;
+	}
+
+	if (*input == '-' || *input == '+' || *input == '=')
+		op = *input++;
+	else
+		/* operation is required */
+		return -1;
+
+	/* get the flags in *outmode */
+	switch (*input) {
+	case 'u':
+		previous_flags = (*outmode & 0700);
+		perm |= user  ? previous_flags : 0;
+		perm |= group ? (previous_flags >> 3) : 0;
+		perm |= other ? (previous_flags >> 6) : 0;
+		input++;
+		goto write_perm;
+	case 'g':
+		previous_flags = (*outmode & 0070);
+		perm |= user  ? (previous_flags << 3) : 0;
+		perm |= group ? previous_flags : 0;
+		perm |= other ? (previous_flags >> 3) : 0;
+		input++;
+		goto write_perm;
+	case 'o':
+		previous_flags = (*outmode & 0007);
+		perm |= user  ? (previous_flags << 6) : 0;
+		perm |= group ? (previous_flags << 3) : 0;
+		perm |= other ? previous_flags : 0;
+		input++;
+		goto write_perm;
+	default:
+		break;
+	}
+
+	/* this part is optional,
+	 * if empty perm = 0 and *outmode is not modified
+	 */
+	loop = 1;
+	while (loop) {
+		c = *input;
+		switch (c) {
+		case 'r':
+			perm |= user  ? 0400 : 0;
+			perm |= group ? 0040 : 0;
+			perm |= other ? 0004 : 0;
+			/* set read permission for uog except for umask's
+			 * permissions
+			 */
+			perm |= who   ? 0 : (0444 & ~usermask);
+			break;
+		case 'w':
+			perm |= user  ? 0200 : 0;
+			perm |= group ? 0020 : 0;
+			perm |= other ? 0002 : 0;
+			/* set write permission for uog except for umask'
+			 * permissions
+			 */
+			perm |= who   ? 0 : (0222 & ~usermask);
+			break;
+		case 'x':
+			perm |= user  ? 0100 : 0;
+			perm |= group ? 0010 : 0;
+			perm |= other ? 0001 : 0;
+			/* set execute permission for uog except for umask'
+			 * permissions
+			 */
+			perm |= who   ? 0 : (0111 & ~usermask);
+			break;
+		case 'X':
+			/*
+			 * Adds execute permission to 'u', 'g' and/or 'g' if
+			 * specified and either 'u', 'g' or 'o' already has
+			 * execute permissions.
+			 */
+			if ((*outmode & 0111) != 0) {
+				perm |= user  ? 0100 : 0;
+				perm |= group ? 0010 : 0;
+				perm |= other ? 0001 : 0;
+				perm |= !who  ? 0111 : 0;
+			}
+			break;
+		case 's':
+			/* s is ignored if o is given, but it's not an error */
+			if (other && !group && !user)
+				break;
+			perm |= user  ? S_ISUID : 0;
+			perm |= group ? S_ISGID : 0;
+			break;
+		case 't':
+			/* 't' should be used when 'a' is given
+			 * or who is empty
+			 */
+			perm |= (!who || all) ? S_ISVTX : 0;
+			/* using ugo with t is not an error */
+			break;
+		default:
+			loop = 0;
+			break;
+		}
+		if (loop)
+			input++;
+	}
+
+write_perm:
+	/* uog flags should be only one character long */
+	if (previous_flags && (*input != '\0' && *input != ','))
+		return -1;
+
+	switch (op) {
+	case '-':
+		/* remove the flags from outmode */
+		*outmode &= ~perm;
+		break;
+	case '+':
+		/* add the flags to outmode */
+		*outmode |= perm;
+		break;
+	case '=':
+		/* set the flags of outmode to perm */
+		if (perm != 0)
+			*outmode = perm;
+		break;
+	}
+
+	*end = input;
+	return 0;
+}
+
+static int str2mode_t(const char *input, mode_t *outmode)
+{
+	int ret;
+	const char *iter;
+
+	ret = 0;
+
+	if (*input >= '0' && *input <= '7') {
+		/* parse octal representation */
+		char *end;
+
+		iter = input;
+
+		/* look for invalid digits in octal representation */
+		while (isdigit(*iter))
+			if (*iter++ > '7')
+				return -1;
+
+		errno = 0;
+		*outmode = strtoul(input, &end, 8);
+
+		if (errno != 0 || *outmode > 07777) {
+			*outmode = 0;
+			ret = -1;
+		}
+
+	} else if (*input == '8' || *input == '9') {
+		/* error: invalid octal number */
+		ret = -1;
+	} else {
+		/* parse coma seperated list of symbolic representation */
+		int rc;
+		const char *end;
+
+		*outmode = 0;
+		rc = 0;
+		end = NULL;
+
+		do {
+			rc = parse_symbolic(input, outmode, &end);
+			if (rc)
+				return -1;
+
+			input = end+1;
+		} while (*end == ',');
+
+		if (*end != '\0')
+			ret = -1;
+	}
+	return ret;
+}
+
 static int lfs_find(int argc, char **argv)
 {
 	int c, rc;
@@ -4719,6 +4949,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
 	{ .val = 't',	.name = "type",		.has_arg = required_argument },
+	{ .val = LFS_FIND_PERM,
+			.name = "perm",		.has_arg = required_argument },
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
@@ -5417,6 +5649,24 @@ err_free:
 				ret = CMD_HELP;
 				goto err;
 			};
+			break;
+		case LFS_FIND_PERM:
+			param.fp_exclude_perm = !!neg_opt;
+			param.fp_perm_sign = LFS_FIND_PERM_EXACT;
+			if (*optarg == '/') {
+				param.fp_perm_sign = LFS_FIND_PERM_ANY;
+				optarg++;
+			} else if (*optarg == '-') {
+				param.fp_perm_sign = LFS_FIND_PERM_ALL;
+				optarg++;
+			}
+
+			if (str2mode_t(optarg, &param.fp_perm)) {
+				fprintf(stderr, "error: invalid mode '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
 			break;
 		case 'T':
 			if (optarg[0] == '+') {

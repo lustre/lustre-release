@@ -26,6 +26,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
       [[\fB!\fR] \fB--newer\fR[\fBXY\fR] <\fIreference\fR>]
       [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIindex\fR,...>]
+      [[\fB!\fR] \fB--perm\fR [\fB/-\fR]<\fImode\fR> ]
 [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
 [\fB--print\fR|\fB-P\fR]
       [\fB--print0\fR|\fB-0\fR]
@@ -253,6 +254,16 @@ any of the given OSTs.  Specifying multiple OSTs allows scanning the
 filesystem only once when migrating objects off multiple OSTs for evacuation
 and replacement using
 .BR lfs-migrate (1).
+.TP
+.BR "--perm \fImode\fR"
+File's permission are exactly \fImode\fR (octal or symbolic).
+.TP
+.BR "--perm /\fImode\fR"
+All of the permission bits \fImode\fR are set for the file.
+.TP
+.BR "--perm -\fImode\fR"
+Any of the permission bits \fImode\fR are set for the file. If no permission
+bits in \fImode\fR are set, this test matches any file.
 .TP
 .BR --pool
 Layout was created with the specified

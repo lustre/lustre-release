@@ -221,12 +221,20 @@ enum {
 	NEWERXY_MAX,
 };
 
+enum lfs_find_perm {
+	LFS_FIND_PERM_EXACT = -2,
+	LFS_FIND_PERM_ANY   = -1,
+	LFS_FIND_PERM_OFF   =  0,
+	LFS_FIND_PERM_ALL   =  1,
+};
+
 struct find_param {
 	unsigned int		 fp_max_depth;
 	dev_t			 fp_dev;
 	mode_t			 fp_type; /* S_IFIFO,... */
 	uid_t			 fp_uid;
 	gid_t			 fp_gid;
+	mode_t			 fp_perm;
 	time_t			 fp_atime;
 	time_t			 fp_mtime;
 	time_t			 fp_ctime;
@@ -248,7 +256,7 @@ struct find_param {
 				 fp_mdt_count_sign:2,
 				 fp_blocks_sign:2,
 				 fp_ext_size_sign:2,
-				 fp_unused1_sign:2, /* Fields available to use*/
+				 fp_perm_sign:2,
 				 fp_unused2_sign:2, /* Once used we must add  */
 				 fp_unused3_sign:2, /* a separate flag field  */
 				 fp_unused4_sign:2; /* at end of the struct.  */
@@ -314,12 +322,11 @@ struct find_param {
 				 fp_lazy:1,
 				 fp_newerxy:1,
 				 fp_exclude_btime:1,
-				 fp_unused_bit3:1, /* All of these unused bit */
-				 fp_unused_bit4:1, /* fields available to use.*/
-				 fp_unused_bit5:1, /* Once all unused fields  */
-				 fp_unused_bit6:1, /* are used we need to add */
-				 fp_unused_bit7:1; /* a separate flag field at*/
-						   /* the end of the struct.  */
+				 fp_exclude_perm:1,
+				 fp_unused_bit4:1, /* Once all unused fields  */
+				 fp_unused_bit5:1, /* are used we need to add */
+				 fp_unused_bit6:1, /* a separate flag field at*/
+				 fp_unused_bit7:1; /* the end of the struct.  */
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;

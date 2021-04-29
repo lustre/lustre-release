@@ -7644,6 +7644,94 @@ test_56ab() { # LU-10705
 }
 run_test 56ab "lfs find --blocks"
 
+# LU-11188
+test_56aca() {
+	local dir="$DIR/$tdir"
+	local perms=(001 002 003 004 005 006 007
+		     010 020 030 040 050 060 070
+		     100 200 300 400 500 600 700
+		     111 222 333 444 555 666 777)
+	local perm_minus=(8 8 4 8 4 4 2
+			  8 8 4 8 4 4 2
+			  8 8 4 8 4 4 2
+			  4 4 2 4 2 2 1)
+	local perm_slash=(8  8 12  8 12 12 14
+			  8  8 12  8 12 12 14
+			  8  8 12  8 12 12 14
+			 16 16 24 16 24 24 28)
+
+	test_mkdir "$dir"
+	for perm in ${perms[*]}; do
+		touch "$dir/$tfile.$perm"
+		chmod $perm "$dir/$tfile.$perm"
+	done
+
+	for ((i = 0; i < ${#perms[*]}; i++)); do
+		local num=$($LFS find $dir -perm ${perms[i]} | wc -l)
+		(( $num == 1 )) ||
+			error "lfs find -perm ${perms[i]}:"\
+			      "$num != 1"
+
+		num=$($LFS find $dir -perm -${perms[i]} -type f| wc -l)
+		(( $num == ${perm_minus[i]} )) ||
+			error "lfs find -perm -${perms[i]}:"\
+			      "$num != ${perm_minus[i]}"
+
+		num=$($LFS find $dir -perm /${perms[i]} -type f| wc -l)
+		(( $num == ${perm_slash[i]} )) ||
+			error "lfs find -perm /${perms[i]}:"\
+			      "$num != ${perm_slash[i]}"
+	done
+}
+run_test 56aca "check lfs find -perm with octal representation"
+
+test_56acb() {
+	local dir=$DIR/$tdir
+	# p is the permission of write and execute for user, group and other
+	# without the umask. It is used to test +wx.
+	local p=$(printf "%o" "$((0333 & ~$(umask)))")
+	local perms=(1000 000 2000 4000 $p 644 111 110 100 004)
+	local symbolic=(+t  a+t u+t g+t o+t
+			g+s u+s o+s +s o+sr
+			o=r,ug+o,u+w
+			u+ g+ o+ a+ ugo+
+			u- g- o- a- ugo-
+			u= g= o= a= ugo=
+			o=r,ug+o,u+w u=r,a+u,u+w
+			g=r,ugo=g,u+w u+x,+X +X
+			u+x,u+X u+X u+x,g+X o+r,+X
+			u+x,go+X +wx +rwx)
+
+	test_mkdir $dir
+	for perm in ${perms[*]}; do
+		touch "$dir/$tfile.$perm"
+		chmod $perm "$dir/$tfile.$perm"
+	done
+
+	for (( i = 0; i < ${#symbolic[*]}; i++ )); do
+		local num=$($LFS find $dir -perm ${symbolic[i]} | wc -l)
+
+		(( $num == 1 )) ||
+			error "lfs find $dir -perm ${symbolic[i]}: $num != 1"
+	done
+}
+run_test 56acb "check lfs find -perm with symbolic representation"
+
+test_56acc() {
+	local dir=$DIR/$tdir
+	local tests="17777 787 789 abcd
+		ug=uu ug=a ug=gu uo=ou urw
+		u+xg+x a=r,u+x,"
+
+	test_mkdir $dir
+	for err in $tests; do
+		if $LFS find $dir -perm $err 2>/dev/null; then
+			error "lfs find -perm $err: parsing should have failed"
+		fi
+	done
+}
+run_test 56acc "check parsing error for lfs find -perm"
+
 test_56ba() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "Need MDS version at least 2.10.50"
