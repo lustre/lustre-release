@@ -1017,6 +1017,30 @@ wait_queue_task_list, [
 ]) # LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
 
 #
+# LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS
+#
+# Kernel version v4.12-rc6-23-g76c85ddc4695
+# sched/wait: Standardize wait_bit_queue naming
+#
+# renamed struct wait_bit_queue  => wait_bit_queue_entry
+#
+AC_DEFUN([LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS], [
+LB_CHECK_COMPILE([if struct wait_bit_queue_entry exists],
+struct_wait_bit_queue_entry_exists, [
+	#include <linux/wait.h>
+	#if HAVE_WAIT_BIT_HEADER_H
+		#include <linux/wait_bit.h>
+	#endif
+],[
+	struct wait_bit_queue_entry entry;
+	memset(&entry, 0, sizeof(entry));
+],[
+	AC_DEFINE(HAVE_WAIT_BIT_QUEUE_ENTRY, 1,
+		[if struct wait_bit_queue_entry exists])
+])
+]) # LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS
+
+#
 # LIBCFS_NLA_STRDUP
 #
 # Kernel version 4.13-rc1 commit 2cf0c8b3e6942ecafe6ebb1a6d0328a81641bf39
@@ -1821,6 +1845,7 @@ LIBCFS_UUID_T
 # 4.13
 LIBCFS_NLA_STRDUP
 LIBCFS_WAIT_QUEUE_ENTRY
+LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS
 # 4.14
 LIBCFS_DEFINE_TIMER
 LIBCFS_NEW_KERNEL_WRITE

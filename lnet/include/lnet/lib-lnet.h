@@ -264,7 +264,7 @@ lnet_ni_set_status(struct lnet_ni *ni, __u32 status)
 static inline void lnet_md_wait_handling(struct lnet_libmd *md, int cpt)
 {
 	wait_queue_head_t *wq = __var_waitqueue(md);
-#ifdef HAVE_WAIT_QUEUE_ENTRY
+#if defined(HAVE_WAIT_BIT_QUEUE_ENTRY) || !defined(HAVE_WAIT_VAR_EVENT)
 	struct wait_bit_queue_entry entry;
 	wait_queue_entry_t *wqe = &entry.wq_entry;
 #else

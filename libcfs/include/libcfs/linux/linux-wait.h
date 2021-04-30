@@ -190,12 +190,12 @@ static inline void prepare_to_wait_exclusive_head(
 #define ___wait_event(wq_head, condition, state, exclusive, ret, cmd)	\
 ({									\
 	__label__ __out;						\
-	wait_queue_entry_ __wq_entry;					\
+	wait_queue_entry_t __wq_entry;					\
 	long __ret = ret;	/* explicit shadow */			\
 									\
 	init_wait(&__wq_entry);						\
 	if (exclusive)							\
-		__wq_entry.flags = WQ_FLAG_EXCLUSIVE			\
+		__wq_entry.flags = WQ_FLAG_EXCLUSIVE;			\
 	for (;;) {							\
 		long __int = prepare_to_wait_event(&wq_head,		\
 						  &__wq_entry, state);	\
