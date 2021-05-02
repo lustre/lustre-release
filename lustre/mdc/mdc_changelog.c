@@ -364,6 +364,33 @@ err_out:
 	RETURN(rc);
 }
 
+static int chlg_start_thread(struct file *file)
+{
+	struct chlg_reader_state *crs = file->private_data;
+	struct task_struct *task;
+	int rc = 0;
+
+	if (likely(crs->crs_prod_task))
+		return 0;
+	if (unlikely(file->f_mode & FMODE_READ) == 0)
+		return 0;
+
+	mutex_lock(&crs->crs_lock);
+	if (crs->crs_prod_task == NULL) {
+		task = kthread_run(chlg_load, crs, "chlg_load_thread");
+		if (IS_ERR(task)) {
+			rc = PTR_ERR(task);
+			CERROR("%s: cannot start changelog thread: rc = %d\n",
+			       crs->crs_ced->ced_name, rc);
+			GOTO(out, rc);
+		}
+		crs->crs_prod_task = task;
+	}
+out:
+	mutex_unlock(&crs->crs_lock);
+	return rc;
+}
+
 /**
  * Read handler, dequeues records from the chlg_reader_state if any.
  * No partial records are copied to userland so this function can return less
@@ -395,6 +422,10 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 		else
 			RETURN(-EAGAIN);
 	}
+
+	rc = chlg_start_thread(file);
+	if (rc)
+		RETURN(rc);
 
 	rc = wait_event_interruptible(crs->crs_waitq_cons,
 			crs->crs_rec_count > 0 || crs->crs_eof || crs->crs_err);
@@ -592,8 +623,6 @@ static int chlg_open(struct inode *inode, struct file *file)
 {
 	struct chlg_reader_state *crs;
 	struct chlg_registered_dev *dev;
-	struct task_struct *task;
-	int rc;
 	ENTRY;
 
 	dev = container_of(inode->i_cdev, struct chlg_registered_dev, ced_cdev);
@@ -611,25 +640,10 @@ static int chlg_open(struct inode *inode, struct file *file)
 	INIT_LIST_HEAD(&crs->crs_rec_queue);
 	init_waitqueue_head(&crs->crs_waitq_prod);
 	init_waitqueue_head(&crs->crs_waitq_cons);
-
-	if (file->f_mode & FMODE_READ) {
-		task = kthread_run(chlg_load, crs, "chlg_load_thread");
-		if (IS_ERR(task)) {
-			rc = PTR_ERR(task);
-			CERROR("%s: cannot start changelog thread: rc = %d\n",
-			       dev->ced_name, rc);
-			GOTO(err_crs, rc);
-		}
-		crs->crs_prod_task = task;
-	}
+	crs->crs_prod_task = NULL;
 
 	file->private_data = crs;
 	RETURN(0);
-
-err_crs:
-	kref_put(&dev->ced_refs, chlg_dev_clear);
-	OBD_FREE_PTR(crs);
-	return rc;
 }
 
 /**
@@ -670,6 +684,11 @@ static unsigned int chlg_poll(struct file *file, poll_table *wait)
 {
 	struct chlg_reader_state *crs = file->private_data;
 	unsigned int mask = 0;
+	int rc;
+
+	rc = chlg_start_thread(file);
+	if (rc)
+		RETURN(rc);
 
 	mutex_lock(&crs->crs_lock);
 	poll_wait(file, &crs->crs_waitq_cons, wait);
