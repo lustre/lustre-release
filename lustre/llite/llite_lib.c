@@ -47,7 +47,6 @@
 #include <linux/user_namespace.h>
 #include <linux/delay.h>
 #include <linux/uidgid.h>
-#include <linux/security.h>
 #include <linux/fs_struct.h>
 
 #ifndef HAVE_CPUS_READ_LOCK
@@ -3134,8 +3133,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
 	ll_unlock_md_op_lsm(op_data);
-	security_release_secctx(op_data->op_file_secctx,
-				op_data->op_file_secctx_size);
+	ll_security_release_secctx(op_data->op_file_secctx,
+				   op_data->op_file_secctx_size);
 	llcrypt_free_ctx(op_data->op_file_encctx, op_data->op_file_encctx_size);
 	OBD_FREE_PTR(op_data);
 }

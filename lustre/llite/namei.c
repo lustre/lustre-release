@@ -35,7 +35,6 @@
 #include <linux/quotaops.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
-#include <linux/security.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 
@@ -1180,7 +1179,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			/* Dentry instantiated in ll_create_it. */
 			rc = ll_create_it(dir, dentry, it, secctx, secctxlen,
 					  encrypt, encctx, encctxlen);
-			security_release_secctx(secctx, secctxlen);
+			ll_security_release_secctx(secctx, secctxlen);
 			llcrypt_free_ctx(encctx, encctxlen);
 			if (rc) {
 				/* We dget in ll_splice_alias. */

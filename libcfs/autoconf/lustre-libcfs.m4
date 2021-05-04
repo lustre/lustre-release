@@ -1405,6 +1405,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_KERNEL_SETSOCKOPT
 
 #
+# LIBCFS_SEC_RELEASE_SECCTX
+#
+# kernel linux-hwe-5.8 (5.8.0-22.23~20.04.1)
+# LSM: Use lsmcontext in security_release_secctx
+AC_DEFUN([LIBCFS_SEC_RELEASE_SECCTX], [
+LB_CHECK_COMPILE([if security_release_secctx has 1 arg],
+security_release_secctx_1arg, [
+	#include <linux/security.h>
+],[
+	security_release_secctx(NULL);
+],[
+	AC_DEFINE(HAVE_SEC_RELEASE_SECCTX_1ARG, 1,
+		[security_release_secctx has 1 arg.])
+])
+]) # LIBCFS_SEC_RELEASE_SECCTX
+
+#
 # LIBCFS_HAVE_KFREE_SENSITIVE
 #
 # kernel v5.10-rc1~3
@@ -1547,6 +1564,7 @@ LIBCFS_KALLSYMS_LOOKUP
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
 LIBCFS_VMALLOC_2ARGS
+LIBCFS_SEC_RELEASE_SECCTX
 # 5.10
 LIBCFS_HAVE_KFREE_SENSITIVE
 ]) # LIBCFS_PROG_LINUX

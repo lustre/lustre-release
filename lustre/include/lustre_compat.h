@@ -42,6 +42,7 @@
 #include <linux/workqueue.h>
 #include <linux/blkdev.h>
 #include <linux/slab.h>
+#include <linux/security.h>
 
 #include <libcfs/linux/linux-fs.h>
 #include <obd_support.h>
@@ -593,5 +594,17 @@ static inline bool is_root_inode(struct inode *inode)
 #ifndef HAVE_REGISTER_SHRINKER_RET
 #define register_shrinker(_s) (register_shrinker(_s), 0)
 #endif
+
+static inline void ll_security_release_secctx(char *secdata, u32 seclen)
+{
+#ifdef HAVE_SEC_RELEASE_SECCTX_1ARG
+	struct lsmcontext context = { };
+
+	lsmcontext_init(&context, secdata, seclen, 0);
+	return security_release_secctx(&context);
+#else
+	return security_release_secctx(secdata, seclen);
+#endif
+}
 
 #endif /* _LUSTRE_COMPAT_H */
