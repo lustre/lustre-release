@@ -376,37 +376,32 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 static int
 lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
 {
-	int niface = 0;
+	size_t iface_len = strlen(iface) + 1;
 
 	if (ni == NULL)
 		return -ENOMEM;
 
-	/* Allocate a separate piece of memory and copy
-	 * into it the string, so we don't have
-	 * a depencency on the tokens string.  This way we
-	 * can free the tokens at the end of the function.
-	 * The newly allocated ni_interface can be
-	 * freed when freeing the NI */
-	if (ni->ni_interface != NULL)
-		niface++;
-
-	if (niface >= 1) {
-		LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
-				   "for net %s\n",
-				   libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
+	if (ni->ni_interface != NULL) {
+		LCONSOLE_ERROR_MSG(0x115, "%s: interface %s already set for net %s: rc = %d\n",
+				   iface, ni->ni_interface,
+				   libcfs_net2str(LNET_NIDNET(ni->ni_nid)),
+				   -EINVAL);
 		return -EINVAL;
 	}
 
-	LIBCFS_ALLOC(ni->ni_interface,
-		     strlen(iface) + 1);
+	/* Allocate memory for the interface, so the code parsing input into
+	 * tokens and adding interfaces can free the input safely.
+	 * ni->ni_interface is freed in lnet_ni_free().
+	 */
+	LIBCFS_ALLOC(ni->ni_interface, iface_len);
 
 	if (ni->ni_interface == NULL) {
-		CERROR("Can't allocate net interface name\n");
+		CERROR("%s: cannot allocate net interface name: rc = %d\n",
+			iface, -ENOMEM);
 		return -ENOMEM;
 	}
 
-	strncpy(ni->ni_interface, iface,
-		strlen(iface) + 1);
+	strscpy(ni->ni_interface, iface, iface_len);
 
 	return 0;
 }
