@@ -5263,7 +5263,7 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 	mutex_lock(&fsdb->fsdb_mutex);
 	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
 	mutex_unlock(&fsdb->fsdb_mutex);
-	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
+	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_CONFIG);
 
 out:
 	if (fsdb)
@@ -5362,7 +5362,7 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	mutex_lock(&fsdb->fsdb_mutex);
 	rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params);
 	mutex_unlock(&fsdb->fsdb_mutex);
-	mgs_revoke_lock(mgs, fsdb, CONFIG_T_PARAMS);
+	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_PARAMS);
 	mgs_put_fsdb(mgs, fsdb);
 out:
 	RETURN(rc);
@@ -5700,7 +5700,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	locked = false;
 	name_destroy(&logname);
 	/* request for update */
-	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
+	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_CONFIG);
 
 	GOTO(out_mti, rc);
 

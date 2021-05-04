@@ -261,7 +261,7 @@ struct config_llog_data {
 	struct config_llog_data    *cld_barrier;/* barrier log (for MDT only) */
 	struct obd_export	   *cld_mgcexp;
 	struct mutex		    cld_lock;
-	int			    cld_type;
+	enum mgs_cfg_type	    cld_type;
 	unsigned int		    cld_stopping:1, /* we were told to stop
 						     * watching */
 				    cld_lostlock:1; /* lock not requeued */

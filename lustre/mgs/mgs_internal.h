@@ -235,7 +235,8 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
                   struct lustre_handle *lockh);
 int  mgs_put_lock(struct lustre_handle *lockh);
-void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type);
+void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb,
+		     enum mgs_cfg_type type);
 
 /* mgs_nids.c */
 int  mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,

@@ -1480,7 +1480,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	if (!body)
 		RETURN(-EINVAL);
 
-	if (body->mcb_type != CONFIG_T_NODEMAP)
+	if (body->mcb_type != MGS_CFG_T_NODEMAP)
 		RETURN(-EINVAL);
 
 	rdpg.rp_count = (body->mcb_units << body->mcb_bits);

@@ -129,7 +129,7 @@ static int mgs_barrier_glimpse_lock(const struct lu_env *env,
 
 	LASSERT(fsdb->fsdb_mdt_count > 0);
 
-	rc = mgc_logname2resid(fsdb->fsdb_name, &res_id, CONFIG_T_BARRIER);
+	rc = mgc_logname2resid(fsdb->fsdb_name, &res_id, MGS_CFG_T_BARRIER);
 	if (rc)
 		RETURN(rc);
 
