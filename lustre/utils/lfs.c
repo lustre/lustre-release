@@ -6947,7 +6947,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (!delete && lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT &&
 	    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT && !foreign_mode) {
 		/* if no parameters set, create directory on least-used MDTs */
-		lsa.lsa_stripe_off = -1;
+		lsa.lsa_stripe_off = LMV_OFFSET_DEFAULT;
 		lsa.lsa_stripe_count = 1;
 	}
 
@@ -6973,10 +6973,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	if (max_inherit_rr != LAYOUT_INHERIT_UNSET &&
 	    lsa.lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
-	    lsa.lsa_stripe_off != -1) {
+	    lsa.lsa_stripe_off != LMV_OFFSET_DEFAULT) {
 		fprintf(stderr,
-			"%s %s: max-inherit-rr is meaningless if stripe offset != -1\n",
-			progname, argv[0]);
+			"%s %s: max-inherit-rr needs mdt-index=-1, not %lld\n",
+			progname, argv[0], lsa.lsa_stripe_off);
 		return CMD_HELP;
 	}
 
@@ -7014,14 +7014,14 @@ static int lfs_setdirstripe(int argc, char **argv)
 	}
 
 	/* if "lfs setdirstripe -D -i -1" is used, assume 1-stripe directory */
-	if (default_stripe && lsa.lsa_stripe_off == -1 &&
+	if (default_stripe && lsa.lsa_stripe_off == LMV_OFFSET_DEFAULT &&
 	    (lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT ||
 	     lsa.lsa_stripe_count == 0))
 		lsa.lsa_stripe_count = 1;
 	if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT)
 		param->lsp_stripe_count = lsa.lsa_stripe_count;
 	if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
-		param->lsp_stripe_offset = -1;
+		param->lsp_stripe_offset = LMV_OFFSET_DEFAULT;
 	else
 		param->lsp_stripe_offset = lsa.lsa_stripe_off;
 	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)

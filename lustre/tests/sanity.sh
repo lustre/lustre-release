@@ -24515,11 +24515,11 @@ test_qos_mkdir() {
 	lmv_qos_threshold_rr=${lmv_qos_threshold_rr%%%}
 	lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null" EXIT
+		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null" RETURN
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null" EXIT
+		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null" RETURN
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" EXIT
+		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" RETURN
 
 	lod_qos_prio_free=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
@@ -24530,12 +24530,12 @@ test_qos_mkdir() {
 	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" EXIT
+		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" RETURN
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null" \
-		EXIT
+		RETURN
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" EXIT
+		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" RETURN
 
 	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
@@ -24545,11 +24545,12 @@ test_qos_mkdir() {
 	local stripe_index=$($LFS getstripe -m $testdir)
 	local test_mkdir_rr=true
 
-	getfattr -d -m dmv $testdir | grep dmv
-	if [ $? -eq 0 ] && [ $MDS1_VERSION -ge $(version_code 2.14.51) ]; then
-		local inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir)
-
-		(( $inherit_rr == 0 )) && test_mkdir_rr=false
+	echo "dirstripe: '$($LFS getdirstripe $testdir)'"
+	getfattr -d -m dmv -e hex $testdir | grep dmv
+	if (( $? == 0 && $MDS1_VERSION >= $(version_code 2.14.51) )); then
+		echo "defstripe: '$($LFS getdirstripe -D $testdir)'"
+		(( $($LFS getdirstripe -D --max-inherit-rr $testdir) == 0 )) &&
+			test_mkdir_rr=false
 	fi
 
 	echo
@@ -24557,33 +24558,32 @@ test_qos_mkdir() {
 		echo "Mkdir (stripe_count $stripe_count) roundrobin:" ||
 		echo "Mkdir (stripe_count $stripe_count) on stripe $stripe_index"
 
-	for i in $(seq $((100 * MDSCOUNT))); do
+	for (( i = 0; i < 100 * MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
 
-	for i in $(seq $MDSCOUNT); do
-		count=$($LFS getdirstripe -i $testdir/* |
-				grep ^$((i - 1))$ | wc -l)
-		echo "$count directories created on MDT$((i - 1))"
+	for (( i = 0; i < $MDSCOUNT; i++ )); do
+		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
+		echo "$count directories created on MDT$i"
 		if $test_mkdir_rr; then
 			(( $count == 100 )) ||
 				error "subdirs are not evenly distributed"
-		elif [ $((i - 1)) -eq $stripe_index ]; then
+		elif (( $i == $stripe_index )); then
 			(( $count == 100 * MDSCOUNT )) ||
-				error "$count subdirs created on MDT$((i - 1))"
+				error "$count subdirs created on MDT$i"
 		else
 			(( $count == 0 )) ||
-				error "$count subdirs created on MDT$((i - 1))"
+				error "$count subdirs created on MDT$i"
 		fi
 
 		if $test_mkdir_rr && [ $stripe_count -gt 1 ]; then
 			count=$($LFS getdirstripe $testdir/* |
-				grep -P "^\s+$((i - 1))\t" | wc -l)
-			echo "$count stripes created on MDT$((i - 1))"
+				grep -c -P "^\s+$i\t")
+			echo "$count stripes created on MDT$i"
 			# deviation should < 5% of average
-			(( $count < 95 * stripe_count )) ||
-			(( $count > 105 * stripe_count)) &&
+			(( $count >= 95 * stripe_count &&
+			   $count <= 105 * stripe_count)) ||
 				error "stripes are not evenly distributed"
 		fi
 	done
@@ -24623,9 +24623,9 @@ test_qos_mkdir() {
 		fi
 	done
 
-	(( ${ffree[min_index]} == 0 )) &&
+	(( ${ffree[min_index]} > 0 )) ||
 		skip "no free files in MDT$min_index"
-	(( ${ffree[min_index]} > 100000000 )) &&
+	(( ${ffree[min_index]} < 100000000 )) ||
 		skip "too many free files in MDT$min_index"
 
 	# Check if we need to generate uneven MDTs
@@ -24633,18 +24633,19 @@ test_qos_mkdir() {
 	local diff=$(((max - min) * 100 / min))
 	local value="$(generate_string 1024)"
 
+	i=0
 	while [ $diff -lt $threshold ]; do
 		# generate uneven MDTs, create till $threshold% diff
 		echo -n "weight diff=$diff% must be > $threshold% ..."
-		count=$((${ffree[min_index]} / 10))
-		# 50 sec per 10000 files in vm
-		(( $count < 100000 )) || [ "$SLOW" != "no" ] ||
+		count=$((${ffree[min_index]} / 100))
+		# 8 sec per 10000 files in vm
+		(( $count < 11000 )) || [ "$SLOW" != "no" ] ||
 			skip "$count files to create"
-		echo "Fill MDT$min_index with $count files"
+		echo "Fill MDT$min_index with $count files: loop $i"
 		[ -d $DIR/$tdir-MDT$min_index ] ||
 			$LFS mkdir -i $min_index $DIR/$tdir-MDT$min_index ||
 			error "mkdir $tdir-MDT$min_index failed"
-		createmany -d $DIR/$tdir-MDT$min_index/d $count ||
+		createmany -d $DIR/$tdir-MDT$min_index/d.$i. $count ||
 			error "create d$count failed"
 
 		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
@@ -24654,6 +24655,7 @@ test_qos_mkdir() {
 		min=$(((${ffree[min_index]} >> 8) * \
 			(${bavail[min_index]} * bsize >> 16)))
 		diff=$(((max - min) * 100 / min))
+		i=$((i + 1))
 	done
 
 	echo "MDT filesfree available: ${ffree[@]}"
@@ -24673,39 +24675,60 @@ test_qos_mkdir() {
 
 	testdir=$DIR/$tdir-s$stripe_count/qos
 
-	for i in $(seq $((100 * MDSCOUNT))); do
+	for (( i = 0; i < 100 * $MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
 
-	for i in $(seq $MDSCOUNT); do
-		count=$($LFS getdirstripe -i $testdir/* | grep ^$((i - 1))$ |
-			wc -l)
-		echo "$count directories created on MDT$((i - 1))"
+	for (( i = 0; i < $MDSCOUNT; i++ )); do
+		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
+		echo "$count directories created on MDT$i"
 
 		if [ $stripe_count -gt 1 ]; then
 			count=$($LFS getdirstripe $testdir/* |
-				grep -P "^\s+$((i - 1))\t" | wc -l)
-			echo "$count stripes created on MDT$((i - 1))"
+				grep -c -P "^\s+$i\t")
+			echo "$count stripes created on MDT$i"
 		fi
 	done
 
-	max=$($LFS getdirstripe -i $testdir/* | grep ^$max_index$ | wc -l)
-	min=$($LFS getdirstripe -i $testdir/* | grep ^$min_index$ | wc -l)
+	max=$($LFS getdirstripe -i $testdir/* | grep -c "^$max_index$")
+	min=$($LFS getdirstripe -i $testdir/* | grep -c "^$min_index$")
 
 	# D-value should > 10% of averge
-	(( $max - $min < 10 )) &&
-		error "subdirs shouldn't be evenly distributed"
+	(( $max - $min >= 10 )) ||
+		error "subdirs shouldn't be evenly distributed: $max - $min < 10"
 
 	# ditto
 	if [ $stripe_count -gt 1 ]; then
 		max=$($LFS getdirstripe $testdir/* |
-			grep -P "^\s+$max_index\t" | wc -l)
+		      grep -c -P "^\s+$max_index\t")
 		min=$($LFS getdirstripe $testdir/* |
-			grep -P "^\s+$min_index\t" | wc -l)
-		(( $max - $min < 10 * $stripe_count )) &&
-			error "stripes shouldn't be evenly distributed"|| true
+		      grep -c -P "^\s+$min_index\t")
+		(( $max - $min >= 10 * $stripe_count )) ||
+			error "stripes shouldn't be evenly distributed: $max - $min < 10 * $stripe_count"
 	fi
+}
+
+most_full_mdt() {
+	local ffree
+	local bavail
+	local bsize
+	local min
+	local min_index
+	local tmp
+
+	ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.filesfree))
+	bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.kbytesavail))
+	bsize=$(lctl get_param -n mdc.*MDT0000*.blocksize)
+
+	min=$(((${ffree[0]} >> 8) * (${bavail[0]} * bsize >> 16)))
+	min_index=0
+	for ((i = 1; i < ${#ffree[@]}; i++)); do
+		tmp=$(((${ffree[i]} >> 8) * (${bavail[i]} * bsize >> 16)))
+		(( tmp < min )) && min=$tmp && min_index=$i
+	done
+
+	echo -n $min_index
 }
 
 test_413a() {
@@ -24720,8 +24743,9 @@ test_413a() {
 	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
 		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
 		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
-		mkdir $DIR/$tdir-s$stripe_count/qos || error "mkdir failed"
-		test_qos_mkdir "$LFS mkdir -c $stripe_count" $stripe_count
+		$LFS mkdir -i $(most_full_mdt) $DIR/$tdir-s$stripe_count/qos ||
+			error "mkdir failed"
+		test_qos_mkdir "$LFS mkdir -i -1 -c $stripe_count" $stripe_count
 	done
 }
 run_test 413a "QoS mkdir with 'lfs mkdir -i -1'"
@@ -24740,7 +24764,8 @@ test_413b() {
 		testdir=$DIR/$tdir-s$stripe_count
 		mkdir $testdir || error "mkdir $testdir failed"
 		mkdir $testdir/rr || error "mkdir rr failed"
-		mkdir $testdir/qos || error "mkdir qos failed"
+		$LFS mkdir -i $(most_full_mdt) $testdir/qos ||
+			error "mkdir qos failed"
 		$LFS setdirstripe -D -c $stripe_count --max-inherit-rr 2 \
 			$testdir/rr || error "setdirstripe rr failed"
 		$LFS setdirstripe -D -c $stripe_count $testdir/qos ||
@@ -24751,11 +24776,11 @@ test_413b() {
 run_test 413b "QoS mkdir under dir whose default LMV starting MDT offset is -1"
 
 test_413c() {
-	[ $MDSCOUNT -ge 2 ] ||
+	(( $MDSCOUNT >= 2 )) ||
 		skip "We need at least 2 MDTs for this test"
 
-	[ $MDS1_VERSION -ge $(version_code 2.14.51) ] ||
-		skip "Need server version at least 2.14.50"
+	(( $MDS1_VERSION >= $(version_code 2.14.51) )) ||
+		skip "Need server version at least 2.14.51"
 
 	local testdir
 	local inherit
@@ -24764,11 +24789,11 @@ test_413c() {
 	testdir=$DIR/${tdir}-s1
 	mkdir $testdir || error "mkdir $testdir failed"
 	mkdir $testdir/rr || error "mkdir rr failed"
-	mkdir $testdir/qos || error "mkdir qos failed"
+	$LFS mkdir -i $(most_full_mdt) $testdir/qos || error "mkdir qos failed"
 	# default max_inherit is -1, default max_inherit_rr is 0
 	$LFS setdirstripe -D -c 1 $testdir/rr ||
 		error "setdirstripe rr failed"
-	$LFS setdirstripe -D -c 1 -X 2 --max-inherit-rr 1 $testdir/qos ||
+	$LFS setdirstripe -D -c 1 -i -1 -X 2 --max-inherit-rr 1 $testdir/qos ||
 		error "setdirstripe qos failed"
 	test_qos_mkdir "mkdir" 1
 
@@ -24776,17 +24801,15 @@ test_413c() {
 	inherit=$($LFS getdirstripe -D -X $testdir/rr/level1)
 	(( $inherit == -1 )) || error "rr/level1 inherit $inherit != -1"
 	inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir/rr/level1)
-	(( $inherit_rr == 0 )) ||
-		error "rr/level1 inherit-rr $inherit_rr != 0"
+	(( $inherit_rr == 0 )) || error "rr/level1 inherit-rr $inherit_rr != 0"
 
 	mkdir $testdir/qos/level1 || error "mkdir qos/level1 failed"
 	inherit=$($LFS getdirstripe -D -X $testdir/qos/level1)
 	(( $inherit == 1 )) || error "qos/level1 inherit $inherit != 1"
 	inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir/qos/level1)
-	(( $inherit_rr == 0 )) ||
-		error "qos/level1 inherit-rr $inherit_rr !=0"
+	(( $inherit_rr == 0 )) || error "qos/level1 inherit-rr $inherit_rr != 0"
 	mkdir $testdir/qos/level1/level2 || error "mkdir level2 failed"
-	getfattr -d -m dmv $testdir/qos/level1/level2 | grep dmv &&
+	getfattr -d -m dmv -e hex $testdir/qos/level1/level2 | grep dmv &&
 		error "level2 shouldn't have default LMV" || true
 }
 run_test 413c "mkdir with default LMV max inherit rr"
