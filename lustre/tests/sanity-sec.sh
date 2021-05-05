@@ -52,10 +52,17 @@ ID1=${ID1:-501}
 USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
 USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
 
-NODEMAP_COUNT=16
-NODEMAP_RANGE_COUNT=3
-NODEMAP_IPADDR_LIST="1 10 64 128 200 250"
-NODEMAP_ID_COUNT=10
+if [ "$SLOW" == "yes" ]; then
+	NODEMAP_COUNT=16
+	NODEMAP_RANGE_COUNT=3
+	NODEMAP_IPADDR_LIST="1 10 64 128 200 250"
+	NODEMAP_ID_COUNT=10
+else
+	NODEMAP_COUNT=3
+	NODEMAP_RANGE_COUNT=2
+	NODEMAP_IPADDR_LIST="1 250"
+	NODEMAP_ID_COUNT=3
+fi
 NODEMAP_MAX_ID=$((ID0 + NODEMAP_ID_COUNT))
 
 [ -z "$USER0" ] &&
@@ -1441,18 +1448,26 @@ test_fops_chmod_dir() {
 test_fops() {
 	local mapmode="$1"
 	local single_client="$2"
-	local client_user_list=([0]="0 $((IDBASE+3)) $((IDBASE+4))"
-				[1]="0 $((IDBASE+5)) $((IDBASE+6))")
+	local client_user_list=([0]="0 $((IDBASE+3))"
+				[1]="0 $((IDBASE+5))")
+	local mds_users="-1 0"
 	local mds_i
 	local rc=0
-	local perm_bit_list="0 3 $((0300)) $((0303))"
+	local perm_bit_list="3 $((0300))"
 	# SLOW tests 000-007, 010-070, 100-700 (octal modes)
-	[ "$SLOW" == "yes" ] &&
+	if [ "$SLOW" == "yes" ]; then
 		perm_bit_list="0 $(seq 1 7) $(seq 8 8 63) $(seq 64 64 511) \
 			       $((0303))"
+		client_user_list=([0]="0 $((IDBASE+3)) $((IDBASE+4))"
+				  [1]="0 $((IDBASE+5)) $((IDBASE+6))")
+		mds_users="-1 0 1 2"
+	fi
 
+	# force single_client to speed up test
+	[ "$SLOW" == "yes" ] ||
+		single_client=1
 	# step through mds users. -1 means root
-	for mds_i in -1 0 1 2; do
+	for mds_i in $mds_users; do
 		local user=$((mds_i + IDBASE))
 		local client
 		local x
