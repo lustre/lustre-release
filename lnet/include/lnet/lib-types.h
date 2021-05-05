@@ -803,6 +803,13 @@ struct lnet_peer {
 #define LNET_PEER_MARK_DELETION		BIT(18)
 /* lnet_peer_del()/lnet_peer_del_locked() has been called on the peer */
 #define LNET_PEER_MARK_DELETED		BIT(19)
+/* lock primary NID to what's requested by ULP */
+#define LNET_PEER_LOCK_PRIMARY		BIT(20)
+/* this is for informational purposes only. It is set if a peer gets
+ * configured from Lustre with a primary NID which belongs to another peer
+ * which is also configured by Lustre as the primary NID.
+ */
+#define LNET_PEER_BAD_CONFIG		BIT(21)
 
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
