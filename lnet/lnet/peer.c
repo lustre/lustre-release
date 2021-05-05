@@ -546,6 +546,15 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 	}
 
 	lpni = lnet_peer_ni_find_locked(&nid);
+	/* If we're asked to lock down the primary NID we shouldn't be
+	 * deleting it
+	 */
+	if (lp->lp_state & LNET_PEER_LOCK_PRIMARY &&
+	    nid_same(&primary_nid, &nid)) {
+		rc = -EPERM;
+		goto out;
+	}
+
 	if (!lpni) {
 		rc = -ENOENT;
 		goto out;
@@ -1420,6 +1429,19 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 		if (!pnid) {
 			pnid = nids[i];
 			rc = lnet_add_peer_ni(pnid, LNET_NID_ANY, mr, true);
+			if (rc == -EALREADY) {
+				struct lnet_peer *lp;
+
+				CDEBUG(D_NET, "A peer exists for NID %s\n",
+				       libcfs_nid2str(pnid));
+				rc = 0;
+				/* Adds a refcount */
+				lp = lnet_find_peer4(pnid);
+				LASSERT(lp);
+				pnid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+				/* Drop refcount from lookup */
+				lnet_peer_decref_locked(lp);
+			}
 		} else if (lnet_peer_discovery_disabled) {
 			rc = lnet_add_peer_ni(nids[i], LNET_NID_ANY, mr, true);
 		} else {
@@ -1466,13 +1488,20 @@ LNetPrimaryNID(lnet_nid_t nid)
 	 * down then this discovery can introduce long delays into the mount
 	 * process, so skip it if it isn't necessary.
 	 */
-	while (!lnet_peer_discovery_disabled && !lnet_peer_is_uptodate(lp)) {
-		spin_lock(&lp->lp_lock);
+	spin_lock(&lp->lp_lock);
+	if (!lnet_peer_discovery_disabled &&
+	    (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY) ||
+	     !lnet_peer_is_uptodate_locked(lp))) {
 		/* force a full discovery cycle */
-		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH;
+		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH |
+				LNET_PEER_LOCK_PRIMARY;
 		spin_unlock(&lp->lp_lock);
 
-		rc = lnet_discover_peer_locked(lpni, cpt, true);
+		/* start discovery in the background. Messages to that
+		 * peer will not go through until the discovery is
+		 * complete
+		 */
+		rc = lnet_discover_peer_locked(lpni, cpt, false);
 		if (rc)
 			goto out_decref;
 		/* The lpni (or lp) for this NID may have changed and our ref is
@@ -1486,14 +1515,8 @@ LNetPrimaryNID(lnet_nid_t nid)
 			goto out_unlock;
 		}
 		lp = lpni->lpni_peer_net->lpn_peer;
-
-		/* If we find that the peer has discovery disabled then we will
-		 * not modify whatever primary NID is currently set for this
-		 * peer. Thus, we can break out of this loop even if the peer
-		 * is not fully up to date.
-		 */
-		if (lnet_is_discovery_disabled(lp))
-			break;
+	} else {
+		spin_unlock(&lp->lp_lock);
 	}
 	primary_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 out_decref:
@@ -1530,9 +1553,9 @@ lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
  */
 static int
 lnet_peer_attach_peer_ni(struct lnet_peer *lp,
-				struct lnet_peer_net *lpn,
-				struct lnet_peer_ni *lpni,
-				unsigned flags)
+			 struct lnet_peer_net *lpn,
+			 struct lnet_peer_ni *lpni,
+			 unsigned flags)
 {
 	struct lnet_peer_table *ptable;
 	bool new_lpn = false;
@@ -1599,6 +1622,8 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 			lnet_peer_clr_non_mr_pref_nids(lp);
 		}
 	}
+	if (flags & LNET_PEER_LOCK_PRIMARY)
+		lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
 	spin_unlock(&lp->lp_lock);
 
 	lp->lp_nnis++;
@@ -1661,13 +1686,28 @@ lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
 			else if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL)
 				rc = -EPERM;
 			goto out;
-		} else if (!(flags & LNET_PEER_CONFIGURED)) {
-			if (lnet_nid_to_nid4(&lp->lp_primary_nid) == nid4) {
+		} else if (lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
+			if (nid_same(&lp->lp_primary_nid, &nid)) {
 				rc = -EEXIST;
 				goto out;
 			}
+			/* we're trying to recreate an existing peer which
+			 * has already been created and its primary
+			 * locked. This is likely due to two servers
+			 * existing on the same node. So we'll just refer
+			 * to that node with the primary NID which was
+			 * first added by Lustre
+			 */
+			rc = -EALREADY;
+			goto out;
 		}
-		/* Delete and recreate as a configured peer. */
+		/* Delete and recreate the peer.
+		 * We can get here:
+		 * 1. If the peer is being recreated as a configured NID
+		 * 2. if there already exists a peer which
+		 *    was discovered manually, but is recreated via Lustre
+		 *    with PRIMARY_lock
+		 */
 		rc = lnet_peer_del(lp);
 		if (rc)
 			goto out;
@@ -1760,9 +1800,27 @@ lnet_peer_add_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 		}
 		/* If this is the primary NID, destroy the peer. */
 		if (lnet_peer_ni_is_primary(lpni)) {
-			struct lnet_peer *rtr_lp =
+			struct lnet_peer *lp2 =
 				lpni->lpni_peer_net->lpn_peer;
-			int rtr_refcount = rtr_lp->lp_rtr_refcount;
+			int rtr_refcount = lp2->lp_rtr_refcount;
+
+			/* If the new peer that this NID belongs to is
+			 * a primary NID for another peer which we're
+			 * suppose to preserve the Primary for then we
+			 * don't want to mess with it. But the
+			 * configuration is wrong at this point, so we
+			 * should flag both of these peers as in a bad
+			 * state
+			 */
+			if (lp2->lp_state & LNET_PEER_LOCK_PRIMARY) {
+				spin_lock(&lp->lp_lock);
+				lp->lp_state |= LNET_PEER_BAD_CONFIG;
+				spin_unlock(&lp->lp_lock);
+				spin_lock(&lp2->lp_lock);
+				lp2->lp_state |= LNET_PEER_BAD_CONFIG;
+				spin_unlock(&lp2->lp_lock);
+				goto out_free_lpni;
+			}
 			/*
 			 * if we're trying to delete a router it means
 			 * we're moving this peer NI to a new peer so must
@@ -1770,9 +1828,9 @@ lnet_peer_add_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 			 */
 			if (rtr_refcount > 0) {
 				flags |= LNET_PEER_RTR_NI_FORCE_DEL;
-				lnet_rtr_transfer_to_peer(rtr_lp, lp);
+				lnet_rtr_transfer_to_peer(lp2, lp);
 			}
-			lnet_peer_del(lpni->lpni_peer_net->lpn_peer);
+			lnet_peer_del(lp2);
 			lnet_peer_ni_decref_locked(lpni);
 			lpni = lnet_peer_ni_alloc(&nid);
 			if (!lpni) {
@@ -1830,7 +1888,8 @@ lnet_peer_set_primary_nid(struct lnet_peer *lp, lnet_nid_t nid,
 	if (lnet_nid_to_nid4(&lp->lp_primary_nid) == nid)
 		goto out;
 
-	lnet_nid4_to_nid(nid, &lp->lp_primary_nid);
+	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY))
+		lnet_nid4_to_nid(nid, &lp->lp_primary_nid);
 
 	rc = lnet_peer_add_nid(lp, nid, flags);
 	if (rc) {
@@ -1838,6 +1897,14 @@ lnet_peer_set_primary_nid(struct lnet_peer *lp, lnet_nid_t nid,
 		goto out;
 	}
 out:
+	/* if this is a configured peer or the primary for that peer has
+	 * been locked, then we don't want to flag this scenario as
+	 * a failure
+	 */
+	if (lp->lp_state & LNET_PEER_CONFIGURED ||
+	    lp->lp_state & LNET_PEER_LOCK_PRIMARY)
+		return 0;
+
 	CDEBUG(D_NET, "peer %s NID %s: %d\n",
 	       libcfs_nidstr(&old), libcfs_nid2str(nid), rc);
 
