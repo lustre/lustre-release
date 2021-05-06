@@ -2023,7 +2023,7 @@ kiblnd_fail_poolset(struct kib_poolset *ps, struct list_head *zombies)
 	spin_lock(&ps->ps_lock);
 	while ((po = list_first_entry_or_null(&ps->ps_pool_list,
 					      struct kib_pool,
-					      po_list)) == NULL) {
+					      po_list)) != NULL) {
 		po->po_failed = 1;
 		if (po->po_allocated == 0)
 			list_move(&po->po_list, zombies);
