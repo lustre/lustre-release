@@ -1994,6 +1994,40 @@ int lnet_user_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid, bool 
 	return lnet_add_peer_ni(prim_nid, nid, mr, LNET_PEER_CONFIGURED);
 }
 
+static int
+lnet_reset_peer(struct lnet_peer *lp)
+{
+	struct lnet_peer_net *lpn, *lpntmp;
+	struct lnet_peer_ni *lpni, *lpnitmp;
+	unsigned int flags;
+	int rc;
+
+	lnet_peer_cancel_discovery(lp);
+
+	flags = LNET_PEER_CONFIGURED;
+	if (lp->lp_state & LNET_PEER_MULTI_RAIL)
+		flags |= LNET_PEER_MULTI_RAIL;
+
+	list_for_each_entry_safe(lpn, lpntmp, &lp->lp_peer_nets, lpn_peer_nets) {
+		list_for_each_entry_safe(lpni, lpnitmp, &lpn->lpn_peer_nis,
+					 lpni_peer_nis) {
+			if (nid_same(&lpni->lpni_nid, &lp->lp_primary_nid))
+				continue;
+
+			rc = lnet_peer_del_nid(lp, &lpni->lpni_nid, flags);
+			if (rc) {
+				CERROR("Failed to delete %s from peer %s\n",
+				       libcfs_nidstr(&lpni->lpni_nid),
+				       libcfs_nidstr(&lp->lp_primary_nid));
+			}
+		}
+	}
+
+	/* mark it for discovery the next time we use it */
+	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
+	return 0;
+}
+
 /*
  * Implementation of IOC_LIBCFS_DEL_PEER_NI.
  *
@@ -2037,8 +2071,15 @@ lnet_del_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	if (LNET_NID_IS_ANY(nid) || nid_same(nid, &lp->lp_primary_nid))
-		return lnet_peer_del(lp);
+	if (LNET_NID_IS_ANY(nid) || nid_same(nid, &lp->lp_primary_nid)) {
+		if (lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
+			CERROR("peer %s created by Lustre. Must preserve primary NID, but will remove other NIDs\n",
+			       libcfs_nidstr(&lp->lp_primary_nid));
+			return lnet_reset_peer(lp);
+		} else {
+			return lnet_peer_del(lp);
+		}
+	}
 
 	flags = LNET_PEER_CONFIGURED;
 	if (lp->lp_state & LNET_PEER_MULTI_RAIL)
