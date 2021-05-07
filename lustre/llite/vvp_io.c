@@ -1510,7 +1510,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 			cl_page_assume(env, io, page);
 
 			cl_page_list_init(plist);
-			cl_page_list_add(plist, page);
+			cl_page_list_add(plist, page, true);
 
 			/* size fixup */
 			if (last_index == vvp_index(vpg))
@@ -1530,7 +1530,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 				if (result >= 0) {
 					io->ci_noquota = 1;
 					cl_page_own(env, io, page);
-					cl_page_list_add(plist, page);
+					cl_page_list_add(plist, page, true);
 					lu_ref_add(&page->cp_reference,
 						   "cl_io", io);
 					result = cl_io_commit_async(env, io,

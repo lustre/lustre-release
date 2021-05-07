@@ -478,16 +478,20 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	vpg->vpg_page = vmpage;
 	get_page(vmpage);
 
-	if (page->cp_type == CPT_CACHEABLE) {
+	if (page->cp_type == CPT_TRANSIENT) {
+		/* DIO pages are referenced by userspace, we don't need to take
+		 * a reference on them. (contrast with get_page() call above)
+		 */
+		cl_page_slice_add(page, &vpg->vpg_cl, obj,
+				  &vvp_transient_page_ops);
+	} else {
 		/* in cache, decref in vvp_page_delete */
 		atomic_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
 		vmpage->private = (unsigned long)page;
 		cl_page_slice_add(page, &vpg->vpg_cl, obj,
 				&vvp_page_ops);
-	} else {
-		cl_page_slice_add(page, &vpg->vpg_cl, obj,
-				  &vvp_transient_page_ops);
 	}
+
 	return 0;
 }

@@ -367,7 +367,10 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			 */
 			page->cp_inode = inode;
 		}
-		cl_2queue_add(queue, page);
+		/* We keep the refcount from cl_page_find, so we don't need
+		 * another one here
+		 */
+		cl_2queue_add(queue, page, false);
 		/*
 		 * Set page clip to tell transfer formation engine
 		 * that page has to be sent even if it is beyond KMS.
@@ -376,8 +379,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			cl_page_clip(env, page, 0, size);
 		++io_pages;
 
-		/* drop the reference count for cl_page_find */
-		cl_page_put(env, page);
 		offset += page_size;
 		size -= page_size;
 	}
@@ -873,7 +874,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		lcc->lcc_page = NULL; /* page will be queued */
 
 		/* Add it into write queue */
-		cl_page_list_add(plist, page);
+		cl_page_list_add(plist, page, true);
 		if (plist->pl_nr == 1) /* first page */
 			vio->u.readwrite.vui_from = from;
 		else
