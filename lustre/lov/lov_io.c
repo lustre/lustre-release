@@ -1284,11 +1284,15 @@ static int lov_io_submit(const struct lu_env *env,
 	struct lov_io		*lio = cl2lov_io(env, ios);
 	struct lov_io_sub	*sub;
 	struct cl_page_list	*plist = &lov_env_info(env)->lti_plist;
-	struct cl_page		*page;
+	struct cl_page		*page = cl_page_list_first(qin);
 	struct cl_page		*tmp;
+	bool dio = false;
 	int index;
 	int rc = 0;
 	ENTRY;
+
+	if (page->cp_type == CPT_TRANSIENT)
+		dio = true;
 
 	cl_page_list_init(plist);
 	while (qin->pl_nr > 0) {
@@ -1312,12 +1316,17 @@ static int lov_io_submit(const struct lu_env *env,
 		cl_page_list_move(&cl2q->c2_qin, qin, page);
 
 		index = page->cp_lov_index;
-		cl_page_list_for_each_safe(page, tmp, qin) {
-			/* this page is not on this stripe */
-			if (index != page->cp_lov_index)
-				continue;
+		/* DIO is already split by stripe */
+		if (!dio) {
+			cl_page_list_for_each_safe(page, tmp, qin) {
+				/* this page is not on this stripe */
+				if (index != page->cp_lov_index)
+					continue;
 
-			cl_page_list_move(&cl2q->c2_qin, qin, page);
+				cl_page_list_move(&cl2q->c2_qin, qin, page);
+			}
+		} else {
+			cl_page_list_splice(qin, &cl2q->c2_qin);
 		}
 
 		sub = lov_sub_get(env, lio, index);
