@@ -2581,8 +2581,8 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
-struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb);
-void cl_aio_free(struct cl_dio_aio *aio);
+struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj);
+void cl_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 {
 	cl_sync_io_init_notify(anchor, nr, NULL, NULL);
@@ -2611,6 +2611,7 @@ struct cl_sync_io {
 struct cl_dio_aio {
 	struct cl_sync_io	cda_sync;
 	struct cl_page_list	cda_pages;
+	struct cl_object	*cda_obj;
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
 	unsigned		cda_no_aio_complete:1;

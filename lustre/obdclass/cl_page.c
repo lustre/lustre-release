@@ -203,7 +203,8 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cl_page,
 	cs_pagestate_dec(obj, cl_page->cp_state);
 	lu_object_ref_del_at(&obj->co_lu, &cl_page->cp_obj_ref,
 			     "cl_page", cl_page);
-	cl_object_put(env, obj);
+	if (cl_page->cp_type != CPT_TRANSIENT)
+		cl_object_put(env, obj);
 	lu_ref_fini(&cl_page->cp_reference);
 	__cl_page_free(cl_page, bufsize);
 	EXIT;
@@ -286,7 +287,8 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		BUILD_BUG_ON((1 << CP_TYPE_BITS) < CPT_NR); /* cp_type */
 		atomic_set(&cl_page->cp_ref, 1);
 		cl_page->cp_obj = o;
-		cl_object_get(o);
+		if (type != CPT_TRANSIENT)
+			cl_object_get(o);
 		lu_object_ref_add_at(&o->co_lu, &cl_page->cp_obj_ref,
 				     "cl_page", cl_page);
 		cl_page->cp_vmpage = vmpage;

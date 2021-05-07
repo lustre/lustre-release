@@ -1232,7 +1232,7 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	EXIT;
 }
 
-struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb)
+struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj)
 {
 	struct cl_dio_aio *aio;
 
@@ -1247,15 +1247,19 @@ struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb)
 		cl_page_list_init(&aio->cda_pages);
 		aio->cda_iocb = iocb;
 		aio->cda_no_aio_complete = 0;
+		cl_object_get(obj);
+		aio->cda_obj = obj;
 	}
 	return aio;
 }
 EXPORT_SYMBOL(cl_aio_alloc);
 
-void cl_aio_free(struct cl_dio_aio *aio)
+void cl_aio_free(const struct lu_env *env, struct cl_dio_aio *aio)
 {
-	if (aio)
+	if (aio) {
+		cl_object_put(env, aio->cda_obj);
 		OBD_SLAB_FREE_PTR(aio, cl_dio_aio_kmem);
+	}
 }
 EXPORT_SYMBOL(cl_aio_free);
 
@@ -1301,7 +1305,7 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		 * If anchor->csi_aio is set, we are responsible for freeing
 		 * memory here rather than when cl_sync_io_wait() completes.
 		 */
-		cl_aio_free(aio);
+		cl_aio_free(env, aio);
 	}
 	EXIT;
 }
