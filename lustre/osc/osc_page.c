@@ -299,7 +299,7 @@ EXPORT_SYMBOL(osc_page_init);
  * transfer (i.e., transferred synchronously).
  */
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
-		     enum cl_req_type crt, int brw_flags)
+		     enum cl_req_type crt, int brw_flags, ktime_t submit_time)
 {
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_async_page *oap = &opg->ops_oap;
@@ -319,7 +319,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		oap->oap_cmd |= OBD_BRW_NOQUOTA;
 	}
 
-	opg->ops_submit_time = ktime_get();
+	opg->ops_submit_time = submit_time;
 	osc_page_transfer_get(opg, "transfer\0imm");
 	osc_page_transfer_add(env, opg, crt);
 }

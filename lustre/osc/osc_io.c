@@ -132,6 +132,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	unsigned int max_pages;
 	unsigned int ppc_bits; /* pages per chunk bits */
 	unsigned int ppc;
+	ktime_t submit_time = ktime_get();
 	bool sync_queue = false;
 
 	LASSERT(qin->pl_nr > 0);
@@ -195,7 +196,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 		oap->oap_async_flags |= ASYNC_COUNT_STABLE;
 		spin_unlock(&oap->oap_lock);
 
-		osc_page_submit(env, opg, crt, brw_flags);
+		osc_page_submit(env, opg, crt, brw_flags, submit_time);
 		list_add_tail(&oap->oap_pending_item, &list);
 
 		if (page->cp_sync_io != NULL)
