@@ -983,13 +983,16 @@ int cl_page_prep(const struct lu_env *env, struct cl_io *io,
 	if (crt >= CRT_NR)
 		return -EINVAL;
 
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_own)
-			result = (*slice->cpl_ops->io[crt].cpo_prep)(env,
+	if (cl_page->cp_type != CPT_TRANSIENT) {
+		cl_page_slice_for_each(cl_page, slice, i) {
+			if (slice->cpl_ops->cpo_own)
+				result =
+				 (*slice->cpl_ops->io[crt].cpo_prep)(env,
 								     slice,
 								     io);
-		if (result != 0)
-			break;
+			if (result != 0)
+				break;
+		}
 	}
 
 	if (result >= 0) {
