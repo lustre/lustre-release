@@ -2237,10 +2237,11 @@ int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 EXPORT_SYMBOL(osc_io_unplug0);
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
-			struct page *page, loff_t offset)
+			struct cl_page *page, loff_t offset)
 {
 	struct obd_export     *exp = osc_export(osc);
 	struct osc_async_page *oap = &ops->ops_oap;
+	struct page	      *vmpage = page->cp_vmpage;
 	ENTRY;
 
 	if (!page)
@@ -2250,16 +2251,24 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	oap->oap_cli = &exp->exp_obd->u.cli;
 	oap->oap_obj = osc;
 
-	oap->oap_page = page;
+	oap->oap_page = vmpage;
 	oap->oap_obj_off = offset;
 	LASSERT(!(offset & ~PAGE_MASK));
+
+	/* Count of transient (direct i/o) pages is always stable by the time
+	 * they're submitted.  Setting this here lets us avoid calling
+	 * cl_page_clip later to set this.
+	 */
+	if (page->cp_type == CPT_TRANSIENT)
+		oap->oap_async_flags |= ASYNC_COUNT_STABLE|ASYNC_URGENT|
+					ASYNC_READY;
 
 	INIT_LIST_HEAD(&oap->oap_pending_item);
 	INIT_LIST_HEAD(&oap->oap_rpc_item);
 
 	spin_lock_init(&oap->oap_lock);
-	CDEBUG(D_INFO, "oap %p page %p obj off %llu\n",
-	       oap, page, oap->oap_obj_off);
+	CDEBUG(D_INFO, "oap %p vmpage %p obj off %llu\n",
+	       oap, vmpage, oap->oap_obj_off);
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_prep_async_page);

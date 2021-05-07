@@ -372,7 +372,8 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		 * Set page clip to tell transfer formation engine
 		 * that page has to be sent even if it is beyond KMS.
 		 */
-		cl_page_clip(env, page, 0, min(size, page_size));
+		if (size < page_size)
+			cl_page_clip(env, page, 0, size);
 		++io_pages;
 
 		/* drop the reference count for cl_page_find */

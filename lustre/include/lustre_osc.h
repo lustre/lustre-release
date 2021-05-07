@@ -580,7 +580,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
 			u32 async_flags);
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
-			struct page *page, loff_t offset);
+			struct cl_page *page, loff_t offset);
 int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		       struct osc_page *ops, cl_commit_cbt cb);
 int osc_page_cache_add(const struct lu_env *env, struct osc_page *opg,
