@@ -973,6 +973,7 @@ do {                                                                          \
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
 
+#ifdef HAVE_SERVER_SUPPORT
 /* LUSTRE_LMA_FL_MASKS defines which flags will be stored in LMA */
 
 static inline int lma_to_lustre_flags(__u32 lma_flags)
@@ -986,6 +987,7 @@ static inline int lustre_to_lma_flags(__u32 la_flags)
 	return (((la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0) |
 		((la_flags & LUSTRE_ENCRYPT_FL) ? LMAI_ENCRYPT : 0));
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
  * for the client inode i_flags.  The LUSTRE_*_FL are the Lustre wire

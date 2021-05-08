@@ -50,9 +50,20 @@
 
 #include <uapi/linux/lustre/lustre_idl.h>
 
+#ifdef HAVE_SERVER_SUPPORT
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);
 void lustre_swab_orphan_ent_v3(struct lu_orphan_ent_v3 *ent);
+void lustre_swab_gl_lquota_desc(struct ldlm_gl_lquota_desc *desc);
+void lustre_swab_gl_barrier_desc(struct ldlm_gl_barrier_desc *desc);
+void lustre_swab_object_update(struct object_update *ou);
+int lustre_swab_object_update_request(struct object_update_request *our,
+				      __u32 len);
+void lustre_swab_out_update_header(struct out_update_header *ouh);
+void lustre_swab_out_update_buffer(struct out_update_buffer *oub);
+void lustre_swab_object_update_result(struct object_update_result *our);
+int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len);
+#endif /* HAVE_SERVER_SUPPORT */
 void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 void lustre_swab_connect(struct obd_connect_data *ocd);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
@@ -76,8 +87,6 @@ void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm);
 void lustre_swab_lov_desc(struct lov_desc *ld);
 void lustre_swab_ldlm_res_id(struct ldlm_res_id *id);
 void lustre_swab_ldlm_policy_data(union ldlm_wire_policy_data *d);
-void lustre_swab_gl_lquota_desc(struct ldlm_gl_lquota_desc *);
-void lustre_swab_gl_barrier_desc(struct ldlm_gl_barrier_desc *);
 void lustre_swab_ldlm_intent(struct ldlm_intent *i);
 void lustre_swab_ldlm_resource_desc(struct ldlm_resource_desc *r);
 void lustre_swab_ldlm_lock_desc(struct ldlm_lock_desc *l);
@@ -111,13 +120,6 @@ void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 void lustre_swab_hsm_request(struct hsm_request *hr);
-void lustre_swab_object_update(struct object_update *ou);
-int lustre_swab_object_update_request(struct object_update_request *our,
-				      __u32 len);
-void lustre_swab_out_update_header(struct out_update_header *ouh);
-void lustre_swab_out_update_buffer(struct out_update_buffer *oub);
-void lustre_swab_object_update_result(struct object_update_result *our);
-int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len);
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl);
 void lustre_swab_close_data(struct close_data *data);
 void lustre_swab_close_data_resync_done(struct close_data_resync_done *resync);

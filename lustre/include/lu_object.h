@@ -1588,6 +1588,12 @@ struct lu_tgt_qos {
 };
 
 /* target descriptor */
+#define LOV_QOS_DEF_THRESHOLD_RR_PCT	17
+#define LMV_QOS_DEF_THRESHOLD_RR_PCT	5
+
+#define LOV_QOS_DEF_PRIO_FREE		90
+#define LMV_QOS_DEF_PRIO_FREE		90
+
 struct lu_tgt_desc {
 	union {
 		struct dt_device	*ltd_tgt;

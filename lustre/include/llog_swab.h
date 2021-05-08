@@ -60,7 +60,9 @@ void lustre_swab_llogd_conn_body(struct llogd_conn_body *d);
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec);
 void lustre_swab_llog_id(struct llog_logid *lid);
 void lustre_swab_lu_seq_range(struct lu_seq_range *range);
+#ifdef HAVE_SERVER_SUPPORT
 void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count);
+#endif
 void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 void lustre_swab_cfg_marker(struct cfg_marker *marker,
 			    int swab, int size);

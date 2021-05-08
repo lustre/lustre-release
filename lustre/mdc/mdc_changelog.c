@@ -222,10 +222,9 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		rc = -EINVAL;
-		CERROR("%s: not a changelog rec %x/%d in llog "DFID" rc = %d\n",
+		CERROR("%s: not a changelog rec %x/%d in llog : rc = %d\n",
 		       crs->crs_obd->obd_name, rec->cr_hdr.lrh_type,
-		       rec->cr.cr_type,
-		       PFID(lu_object_fid(&llh->lgh_obj->do_lu)), rc);
+		       rec->cr.cr_type, rc);
 		RETURN(rc);
 	}
 

@@ -306,6 +306,13 @@ static inline int fid_is_name_llog(const struct lu_fid *fid)
 	return fid_seq(fid) == FID_SEQ_LLOG_NAME;
 }
 
+static inline int fid_seq_in_fldb(u64 seq)
+{
+	return fid_seq_is_igif(seq) || fid_seq_is_norm(seq) ||
+	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
+}
+
+#ifdef HAVE_SERVER_SUPPORT
 static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 {
 	const __u64 seq = fid_seq(fid);
@@ -315,12 +322,6 @@ static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 	return (!fid_is_last_id(fid) &&
 		(fid_seq_is_norm(seq) || fid_seq_is_igif(seq))) ||
 	       fid_is_root(fid) || fid_seq_is_dot(seq);
-}
-
-static inline int fid_seq_in_fldb(__u64 seq)
-{
-	return fid_seq_is_igif(seq) || fid_seq_is_norm(seq) ||
-	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
 }
 
 static inline void ost_layout_cpu_to_le(struct ost_layout *dst,
@@ -374,6 +375,7 @@ static inline void filter_fid_le_to_cpu(struct filter_fid *dst,
 
 	/* XXX: Add more if filter_fid is enlarged in the future. */
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
 {

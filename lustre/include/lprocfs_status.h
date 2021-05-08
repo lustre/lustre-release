@@ -318,6 +318,7 @@ static inline int opcode_offset(__u32 opc) {
                         OPC_RANGE(LDLM) +
                         OPC_RANGE(MDS) +
                         OPC_RANGE(OST));
+#ifdef HAVE_SERVER_SUPPORT
 	} else if (opc < OUT_UPDATE_LAST_OPC) {
 		/* update opcode */
 		return (opc - OUT_UPDATE_FIRST_OPC +
@@ -345,25 +346,31 @@ static inline int opcode_offset(__u32 opc) {
 			OPC_RANGE(LDLM) +
 			OPC_RANGE(MDS) +
 			OPC_RANGE(OST));
+#endif /* HAVE_SERVER_SUPPORT */
 	} else {
 		/* Unknown Opcode */
 		return -1;
 	}
 }
 
+#define LUSTRE_MAX_OPCODES_CLIENT (OPC_RANGE(OST)  + \
+				   OPC_RANGE(MDS)  + \
+				   OPC_RANGE(LDLM) + \
+				   OPC_RANGE(MGS)  + \
+				   OPC_RANGE(OBD)  + \
+				   OPC_RANGE(LLOG) + \
+				   OPC_RANGE(SEC)  + \
+				   OPC_RANGE(SEQ)  + \
+				   OPC_RANGE(SEC)  + \
+				   OPC_RANGE(FLD))
 
-#define LUSTRE_MAX_OPCODES (OPC_RANGE(OST)  + \
-                            OPC_RANGE(MDS)  + \
-                            OPC_RANGE(LDLM) + \
-                            OPC_RANGE(MGS)  + \
-                            OPC_RANGE(OBD)  + \
-                            OPC_RANGE(LLOG) + \
-                            OPC_RANGE(SEC)  + \
-                            OPC_RANGE(SEQ)  + \
-                            OPC_RANGE(SEC)  + \
-			    OPC_RANGE(FLD)  + \
+#ifdef HAVE_SERVER_SUPPORT
+#define LUSTRE_MAX_OPCODES (LUSTRE_MAX_OPCODES_CLIENT + \
 			    OPC_RANGE(OUT_UPDATE) + \
 			    OPC_RANGE(LFSCK))
+#else
+#define LUSTRE_MAX_OPCODES LUSTRE_MAX_OPCODES_CLIENT
+#endif
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                             OPC_RANGE(EXTRA))
