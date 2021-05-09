@@ -562,6 +562,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLOG_PROCESS_TIMEOUT		    0x1317
 #define OBD_FAIL_LLOG_PURGE_DELAY		    0x1318
 #define OBD_FAIL_CATLIST			    0x131b
+#define OBD_FAIL_LLOG_PAUSE_AFTER_PAD               0x131c
 
 #define OBD_FAIL_LLITE                              0x1400
 #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE             0x1401

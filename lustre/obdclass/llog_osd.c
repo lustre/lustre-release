@@ -222,15 +222,17 @@ static int llog_osd_read_header(const struct lu_env *env,
 
 	lgi = llog_info(env);
 
+	dt_read_lock(env, o, 0);
+
 	rc = dt_attr_get(env, o, &lgi->lgi_attr);
 	if (rc)
-		RETURN(rc);
+		GOTO(unlock, rc);
 
 	LASSERT(lgi->lgi_attr.la_valid & LA_SIZE);
 
 	if (lgi->lgi_attr.la_size == 0) {
 		CDEBUG(D_HA, "not reading header from 0-byte log\n");
-		RETURN(LLOG_EEMPTY);
+		GOTO(unlock, rc = LLOG_EEMPTY);
 	}
 
 	flags = handle->lgh_hdr->llh_flags;
@@ -249,7 +251,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		if (rc >= 0)
 			rc = -EFAULT;
 
-		RETURN(rc);
+		GOTO(unlock, rc);
 	}
 
 	if (LLOG_REC_HDR_NEEDS_SWABBING(llh_hdr))
@@ -261,7 +263,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_type, LLOG_HDR_MAGIC);
-		RETURN(-EIO);
+		GOTO(unlock, rc = -EIO);
 	} else if (llh_hdr->lrh_len < LLOG_MIN_CHUNK_SIZE ||
 		   llh_hdr->lrh_len > handle->lgh_hdr_size) {
 		CERROR("%s: incorrectly sized log %s "DFID" header: "
@@ -271,7 +273,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_len, LLOG_MIN_CHUNK_SIZE);
-		RETURN(-EIO);
+		GOTO(unlock, rc = -EIO);
 	} else if (LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_index >
 		   LLOG_HDR_BITMAP_SIZE(handle->lgh_hdr) ||
 		   LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len !=
@@ -282,13 +284,16 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len, -EIO);
-		RETURN(-EIO);
+		GOTO(unlock, rc = -EIO);
 	}
 
 	handle->lgh_hdr->llh_flags |= (flags & LLOG_F_EXT_MASK);
 	handle->lgh_last_idx = LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_index;
+	rc = 0;
 
-	RETURN(0);
+unlock:
+	dt_read_unlock(env, o);
+	RETURN(rc);
 }
 
 /**
@@ -381,15 +386,16 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			      struct llog_cookie *reccookie,
 			      int idx, struct thandle *th)
 {
-	struct llog_thread_info	*lgi = llog_info(env);
-	struct llog_log_hdr	*llh;
-	int			 reclen = rec->lrh_len;
-	int			 index, rc;
-	struct llog_rec_tail	*lrt;
-	struct dt_object	*o;
-	__u32			chunk_size;
-	size_t			 left;
-	__u32			orig_last_idx;
+	struct llog_thread_info *lgi = llog_info(env);
+	struct llog_log_hdr *llh;
+	int reclen = rec->lrh_len;
+	int index, rc;
+	struct llog_rec_tail *lrt;
+	struct dt_object *o;
+	__u32 chunk_size;
+	size_t left;
+	__u32 orig_last_idx;
+	bool pad = false;
 	ENTRY;
 
 	llh = loghandle->lgh_hdr;
@@ -581,6 +587,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			RETURN(rc);
 
 		loghandle->lgh_last_idx++; /* for pad rec */
+		pad = true;
 	}
 	/* if it's the last idx in log file, then return -ENOSPC
 	 * or wrap around if a catalog */
@@ -630,6 +637,14 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			llh->llh_size = reclen;
 	}
 
+	/*
+	 * readers (e.g. llog_osd_read_header()) must not find
+	 * llog updated partially (bitmap/counter claims record,
+	 * but a record hasn't been added yet) as this results
+	 * in EIO.
+	 */
+	dt_write_lock(env, o, 0);
+
 	if (lgi->lgi_attr.la_size == 0) {
 		lgi->lgi_off = 0;
 		lgi->lgi_buf.lb_len = llh->llh_hdr.lrh_len;
@@ -671,12 +686,19 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(out_unlock, rc);
 	}
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PAUSE_AFTER_PAD) && pad) {
+		/* a window for concurrent llog reader, see LU-12577 */
+		OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PAUSE_AFTER_PAD,
+				 cfs_fail_val ?: 1);
+	}
 
 out_unlock:
 	/* unlock here for remote object */
 	mutex_unlock(&loghandle->lgh_hdr_mutex);
-	if (rc)
+	if (rc) {
+		dt_write_unlock(env, o);
 		GOTO(out, rc);
+	}
 
 	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
 	   cfs_fail_val == (unsigned int)(loghandle->lgh_id.lgl_oi.oi.oi_id &
@@ -690,8 +712,10 @@ out_unlock:
 		lgi->lgi_off = llh->llh_hdr.lrh_len + (index - 1) * reclen;
 	} else {
 		rc = dt_attr_get(env, o, &lgi->lgi_attr);
-		if (rc)
+		if (rc) {
+			dt_write_unlock(env, o);
 			GOTO(out, rc);
+		}
 
 		LASSERT(lgi->lgi_attr.la_valid & LA_SIZE);
 		lgi->lgi_off = max_t(__u64, lgi->lgi_attr.la_size,
@@ -701,6 +725,8 @@ out_unlock:
 	lgi->lgi_buf.lb_len = reclen;
 	lgi->lgi_buf.lb_buf = rec;
 	rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
+
+	dt_write_unlock(env, o);
 	if (rc < 0)
 		GOTO(out, rc);
 

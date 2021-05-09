@@ -70,8 +70,8 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-#                                  5          12          (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
+#                                  5              12     (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
 	# bug number for skipped test:
@@ -6881,6 +6881,34 @@ test_60h() {
 	done
 }
 run_test 60h "striped directory with missing stripes can be accessed"
+
+function t60i_load() {
+	mkdir $DIR/$tdir
+	#define OBD_FAIL_LLOG_PAUSE_AFTER_PAD		    0x131c
+	$LCTL set_param fail_loc=0x131c fail_val=1
+	for ((i=0; i<5000; i++)); do
+		touch $DIR/$tdir/f$i
+	done
+}
+
+test_60i() {
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+	changelog_chmask "ALL"
+	t60i_load &
+	local PID=$!
+	for((i=0; i<100; i++)); do
+		changelog_dump >/dev/null ||
+			error "can't read changelog"
+	done
+	kill $PID
+	wait $PID
+	changelog_deregister || error "changelog_deregister failed"
+	$LCTL set_param fail_loc=0
+}
+run_test 60i "llog: new record vs reader race"
 
 test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
