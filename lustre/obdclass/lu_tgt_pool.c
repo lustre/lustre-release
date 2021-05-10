@@ -60,7 +60,7 @@
  * \retval		negative error number on failure
  */
 #define POOL_INIT_COUNT 2
-int tgt_pool_init(struct lu_tgt_pool *op, unsigned int count)
+int lu_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count)
 {
 	ENTRY;
 
@@ -78,7 +78,7 @@ int tgt_pool_init(struct lu_tgt_pool *op, unsigned int count)
 	EXIT;
 	return 0;
 }
-EXPORT_SYMBOL(tgt_pool_init);
+EXPORT_SYMBOL(lu_tgt_pool_init);
 
 /**
  * Increase the op_array size to hold more targets in this pool.
@@ -93,7 +93,7 @@ EXPORT_SYMBOL(tgt_pool_init);
  * \retval		0 on success
  * \retval		negative error number on failure.
  */
-int tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
+int lu_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
 {
 	__u32 *new;
 	__u32 new_size;
@@ -117,7 +117,7 @@ int tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
 
 	return 0;
 }
-EXPORT_SYMBOL(tgt_pool_extend);
+EXPORT_SYMBOL(lu_tgt_pool_extend);
 
 /**
  * Add a new target to an existing pool.
@@ -132,7 +132,7 @@ EXPORT_SYMBOL(tgt_pool_extend);
  * \retval		0 if target could be added to the pool
  * \retval		negative error if target \a idx was not added
  */
-int tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
+int lu_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 {
 	unsigned int i;
 	int rc = 0;
@@ -140,7 +140,7 @@ int tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 
 	down_write(&op->op_rw_sem);
 
-	rc = tgt_pool_extend(op, min_count);
+	rc = lu_tgt_pool_extend(op, min_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -157,7 +157,7 @@ out:
 	up_write(&op->op_rw_sem);
 	return rc;
 }
-EXPORT_SYMBOL(tgt_pool_add);
+EXPORT_SYMBOL(lu_tgt_pool_add);
 
 /**
  * Remove an existing pool from the system.
@@ -173,7 +173,7 @@ EXPORT_SYMBOL(tgt_pool_add);
  * \retval		0 on success
  * \retval		negative error number on failure
  */
-int tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
+int lu_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 {
 	unsigned int i;
 	ENTRY;
@@ -195,9 +195,9 @@ int tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 	up_write(&op->op_rw_sem);
 	RETURN(-EINVAL);
 }
-EXPORT_SYMBOL(tgt_pool_remove);
+EXPORT_SYMBOL(lu_tgt_pool_remove);
 
-int tgt_check_index(int idx, struct lu_tgt_pool *osts)
+int lu_tgt_check_index(int idx, struct lu_tgt_pool *osts)
 {
 	int rc, i;
 	ENTRY;
@@ -213,7 +213,7 @@ out:
 	up_read(&osts->op_rw_sem);
 	return rc;
 }
-EXPORT_SYMBOL(tgt_check_index);
+EXPORT_SYMBOL(lu_tgt_check_index);
 
 /**
  * Free the pool after it was emptied and removed from /proc.
@@ -226,7 +226,7 @@ EXPORT_SYMBOL(tgt_check_index);
  *
  * \retval		0 on success or if pool was already freed
  */
-int tgt_pool_free(struct lu_tgt_pool *op)
+int lu_tgt_pool_free(struct lu_tgt_pool *op)
 {
 	ENTRY;
 
@@ -243,4 +243,4 @@ int tgt_pool_free(struct lu_tgt_pool *op)
 	up_write(&op->op_rw_sem);
 	RETURN(0);
 }
-EXPORT_SYMBOL(tgt_pool_free);
+EXPORT_SYMBOL(lu_tgt_pool_free);

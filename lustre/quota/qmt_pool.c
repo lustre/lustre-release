@@ -1510,7 +1510,7 @@ static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi)
 
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
-		return tgt_pool_init(&qpi->qpi_sarr.osts, 0);
+		return lu_tgt_pool_init(&qpi->qpi_sarr.osts, 0);
 	case LQUOTA_RES_MD:
 	default:
 		return 0;
@@ -1521,7 +1521,7 @@ static inline int qmt_sarr_pool_add(struct qmt_pool_info *qpi, int idx, int min)
 {
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
-		return tgt_pool_add(&qpi->qpi_sarr.osts, idx, min);
+		return lu_tgt_pool_add(&qpi->qpi_sarr.osts, idx, min);
 	case LQUOTA_RES_MD:
 	default:
 		return 0;
@@ -1532,7 +1532,7 @@ static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx)
 {
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
-		return tgt_pool_remove(&qpi->qpi_sarr.osts, idx);
+		return lu_tgt_pool_remove(&qpi->qpi_sarr.osts, idx);
 	case LQUOTA_RES_MD:
 	default:
 		return 0;
@@ -1548,7 +1548,7 @@ static inline int qmt_sarr_pool_free(struct qmt_pool_info *qpi)
 	case LQUOTA_RES_DT:
 		if (!qpi->qpi_sarr.osts.op_array)
 			return 0;
-		return tgt_pool_free(&qpi->qpi_sarr.osts);
+		return lu_tgt_pool_free(&qpi->qpi_sarr.osts);
 	case LQUOTA_RES_MD:
 	default:
 		return 0;
@@ -1562,7 +1562,7 @@ static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx)
 
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
-		return tgt_check_index(idx, &qpi->qpi_sarr.osts);
+		return lu_tgt_check_index(idx, &qpi->qpi_sarr.osts);
 	case LQUOTA_RES_MD:
 	default:
 		return 0;

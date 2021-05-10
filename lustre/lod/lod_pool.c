@@ -99,8 +99,8 @@ void lod_pool_putref(struct pool_desc *pool)
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
-		tgt_pool_free(&(pool->pool_rr.lqr_pool));
-		tgt_pool_free(&(pool->pool_obds));
+		lu_tgt_pool_free(&(pool->pool_rr.lqr_pool));
+		lu_tgt_pool_free(&(pool->pool_obds));
 		kfree_rcu(pool, pool_rcu);
 		EXIT;
 	}
@@ -408,13 +408,13 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
 	new_pool->pool_lobd = obd;
 	atomic_set(&new_pool->pool_refcount, 1);
-	rc = tgt_pool_init(&new_pool->pool_obds, 0);
+	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_err, rc);
 
 	lu_qos_rr_init(&new_pool->pool_rr);
 
-	rc = tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
+	rc = lu_tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
 
@@ -465,9 +465,9 @@ out_err:
 
 	lprocfs_remove(&new_pool->pool_proc_entry);
 
-	tgt_pool_free(&new_pool->pool_rr.lqr_pool);
+	lu_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
 out_free_pool_obds:
-	tgt_pool_free(&new_pool->pool_obds);
+	lu_tgt_pool_free(&new_pool->pool_obds);
 	OBD_FREE_PTR(new_pool);
 	return rc;
 }
@@ -560,8 +560,8 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	rc = tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
-			      lod->lod_ost_count);
+	rc = lu_tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
+			     lod->lod_ost_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -624,7 +624,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
+	lu_tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
 	set_bit(LQ_DIRTY, &pool->pool_rr.lqr_flags);
 
 	CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
@@ -654,7 +654,7 @@ int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool)
 	int rc;
 
 	pool_getref(pool);
-	rc = tgt_check_index(idx, &pool->pool_obds);
+	rc = lu_tgt_check_index(idx, &pool->pool_obds);
 	lod_pool_putref(pool);
 	return rc;
 }

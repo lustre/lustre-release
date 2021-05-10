@@ -90,7 +90,7 @@ void lov_tgts_putref(struct obd_device *obd)
                         /* XXX - right now there is a dependency on ld_tgt_count
                          * being the maximum tgt index for computing the
                          * mds_max_easize. So we can't shrink it. */
-			tgt_pool_remove(&lov->lov_packed, i);
+			lu_tgt_pool_remove(&lov->lov_packed, i);
                         lov->lov_tgts[i] = NULL;
                         lov->lov_death_row--;
                 }
@@ -537,7 +537,7 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 RETURN(-ENOMEM);
         }
 
-	rc = tgt_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
+	rc = lu_tgt_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
         if (rc) {
 		mutex_unlock(&lov->lov_lock);
                 OBD_FREE_PTR(tgt);
@@ -755,7 +755,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc)
 		GOTO(out, rc);
 
-	rc = tgt_pool_init(&lov->lov_packed, 0);
+	rc = lu_tgt_pool_init(&lov->lov_packed, 0);
         if (rc)
 		GOTO(out, rc);
 
@@ -792,7 +792,7 @@ static int lov_cleanup(struct obd_device *obd)
                 lov_pool_del(obd, pool->pool_name);
         }
 	lov_pool_hash_destroy(&lov->lov_pools_hash_body);
-	tgt_pool_free(&lov->lov_packed);
+	lu_tgt_pool_free(&lov->lov_packed);
 
 	lprocfs_obd_cleanup(obd);
         if (lov->lov_tgts) {
@@ -1244,7 +1244,7 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
                         continue;
 
 		if (pool &&
-		    tgt_check_index(tgt->ltd_index, &pool->pool_obds))
+		    lu_tgt_check_index(tgt->ltd_index, &pool->pool_obds))
 			continue;
 
 		if (!tgt->ltd_active || tgt->ltd_reap) {
