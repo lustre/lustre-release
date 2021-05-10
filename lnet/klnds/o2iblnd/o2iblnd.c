@@ -525,7 +525,6 @@ kiblnd_get_conn_by_idx(struct lnet_ni *ni, int index)
 {
 	struct kib_peer_ni *peer_ni;
 	struct kib_conn	*conn;
-	struct list_head *ctmp;
 	int i;
 	unsigned long flags;
 
@@ -537,11 +536,11 @@ kiblnd_get_conn_by_idx(struct lnet_ni *ni, int index)
 		if (peer_ni->ibp_ni != ni)
 			continue;
 
-		list_for_each(ctmp, &peer_ni->ibp_conns) {
+		list_for_each_entry(conn, &peer_ni->ibp_conns,
+				    ibc_list) {
 			if (index-- > 0)
 				continue;
 
-			conn = list_entry(ctmp, struct kib_conn, ibc_list);
 			kiblnd_conn_addref(conn);
 			read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					       flags);

@@ -674,16 +674,14 @@ ksocknal_launch_all_connections_locked(struct ksock_peer_ni *peer_ni)
 struct ksock_conn *
 ksocknal_find_conn_locked(struct ksock_peer_ni *peer_ni, struct ksock_tx *tx, int nonblk)
 {
-	struct list_head *tmp;
+	struct ksock_conn *c;
 	struct ksock_conn *conn;
 	struct ksock_conn *typed = NULL;
 	struct ksock_conn *fallback = NULL;
 	int tnob = 0;
 	int fnob = 0;
 
-	list_for_each(tmp, &peer_ni->ksnp_conns) {
-		struct ksock_conn *c = list_entry(tmp, struct ksock_conn,
-						  ksnc_list);
+	list_for_each_entry(c, &peer_ni->ksnp_conns, ksnc_list) {
 		int nob = atomic_read(&c->ksnc_tx_nob) +
 			  c->ksnc_sock->sk->sk_wmem_queued;
 		int rc;
@@ -2303,13 +2301,10 @@ ksocknal_find_timed_out_conn(struct ksock_peer_ni *peer_ni)
 {
         /* We're called with a shared lock on ksnd_global_lock */
 	struct ksock_conn *conn;
-	struct list_head *ctmp;
 	struct ksock_tx *tx;
 
-	list_for_each(ctmp, &peer_ni->ksnp_conns) {
+	list_for_each_entry(conn, &peer_ni->ksnp_conns, ksnc_list) {
 		int error;
-
-		conn = list_entry(ctmp, struct ksock_conn, ksnc_list);
 
                 /* Don't need the {get,put}connsock dance to deref ksnc_sock */
                 LASSERT (!conn->ksnc_closing);

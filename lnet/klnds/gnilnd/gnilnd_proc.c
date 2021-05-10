@@ -754,7 +754,8 @@ typedef struct {
 int
 kgnilnd_conn_seq_seek(kgn_conn_seq_iter_t *gseq, loff_t off)
 {
-	struct list_head       *list, *tmp;
+	struct list_head       *list;
+	kgn_conn_t *conn;
 	loff_t                  here = 0;
 	int                     rc = 0;
 
@@ -793,10 +794,8 @@ kgnilnd_conn_seq_seek(kgn_conn_seq_iter_t *gseq, loff_t off)
 
 start_list:
 
-	list_for_each(tmp, list) {
+	list_for_each_entry(conn, list, gnc_hashlist) {
 		if (here == off) {
-			kgn_conn_t *conn;
-			conn = list_entry(tmp, kgn_conn_t, gnc_hashlist);
 			gseq->gconn_conn = conn;
 			rc = 0;
 			goto out;
@@ -1107,7 +1106,8 @@ typedef struct {
 int
 kgnilnd_peer_seq_seek(kgn_peer_seq_iter_t *gseq, loff_t off)
 {
-	struct list_head       *list, *tmp;
+	struct list_head *list;
+	kgn_peer_t *peer;
 	loff_t                  here = 0;
 	int                     rc = 0;
 
@@ -1146,10 +1146,8 @@ kgnilnd_peer_seq_seek(kgn_peer_seq_iter_t *gseq, loff_t off)
 
 start_list:
 
-	list_for_each(tmp, list) {
+	list_for_each_entry(peer, list, gnp_list) {
 		if (here == off) {
-			kgn_peer_t *peer;
-			peer = list_entry(tmp, kgn_peer_t, gnp_list);
 			gseq->gpeer_peer = peer;
 			rc = 0;
 			goto out;

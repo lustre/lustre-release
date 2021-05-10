@@ -63,8 +63,7 @@ ksocknal_next_tx_carrier(struct ksock_conn *conn)
                 /* no more packets queued */
                 conn->ksnc_tx_carrier = NULL;
         } else {
-		conn->ksnc_tx_carrier = list_entry(tx->tx_list.next,
-						   struct ksock_tx, tx_list);
+		conn->ksnc_tx_carrier = list_next_entry(tx, tx_list);
 		LASSERT(conn->ksnc_tx_carrier->tx_msg.ksm_type ==
 			tx->tx_msg.ksm_type);
         }
@@ -422,8 +421,8 @@ ksocknal_handle_zcack(struct ksock_conn *conn, __u64 cookie1, __u64 cookie2)
 
 	spin_lock(&peer_ni->ksnp_lock);
 
-	list_for_each_entry_safe(tx, tmp,
-                                     &peer_ni->ksnp_zc_req_list, tx_zc_list) {
+	list_for_each_entry_safe(tx, tmp, &peer_ni->ksnp_zc_req_list,
+				 tx_zc_list) {
                 __u64 c = tx->tx_msg.ksm_zc_cookies[0];
 
                 if (c == cookie1 || c == cookie2 || (cookie1 < c && c < cookie2)) {

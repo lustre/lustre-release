@@ -87,16 +87,13 @@ kgnilnd_start_sd_threads(void)
 int
 kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 {
-	kgn_conn_t         *conn;
-	struct list_head   *ctmp, *cnxt;
+	kgn_conn_t *conn, *cnxt;
 	int                 loopback;
 	int                 count = 0;
 
 	loopback = peer->gnp_nid == peer->gnp_net->gnn_ni->ni_nid;
 
-	list_for_each_safe(ctmp, cnxt, &peer->gnp_conns) {
-		conn = list_entry(ctmp, kgn_conn_t, gnc_list);
-
+	list_for_each_entry_safe(conn, cnxt, &peer->gnp_conns, gnc_list) {
 		if (conn->gnc_state != GNILND_CONN_ESTABLISHED)
 			continue;
 
@@ -161,14 +158,12 @@ int
 kgnilnd_conn_isdup_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 {
 	kgn_conn_t       *conn;
-	struct list_head *tmp;
 	int               loopback;
 	ENTRY;
 
 	loopback = peer->gnp_nid == peer->gnp_net->gnn_ni->ni_nid;
 
-	list_for_each(tmp, &peer->gnp_conns) {
-		conn = list_entry(tmp, kgn_conn_t, gnc_list);
+	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
 		CDEBUG(D_NET, "checking conn 0x%p for peer %s"
 			" lo %d new %llu existing %llu"
 			" new peer %llu existing peer %llu"
@@ -560,7 +555,7 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 	     */
 
 		for (i = 0; i < *kgnilnd_tunables.kgn_net_hash_size; i++) {
-			list_for_each_entry(net , &kgnilnd_data.kgn_nets[i], gnn_list) {
+			list_for_each_entry(net, &kgnilnd_data.kgn_nets[i], gnn_list) {
 				/* if gnn_shutdown set for any net shutdown is in progress just return */
 				if (net->gnn_shutdown) {
 					up_read(&kgnilnd_data.kgn_net_rw_sem);
@@ -1322,7 +1317,6 @@ kgnilnd_get_peer_info(int index,
 		      lnet_nid_t *id, __u32 *nic_addr,
 		      int *refcount, int *connecting)
 {
-	struct list_head  *ptmp;
 	kgn_peer_t        *peer;
 	int               i;
 	int               rc = -ENOENT;
@@ -1330,10 +1324,7 @@ kgnilnd_get_peer_info(int index,
 	read_lock(&kgnilnd_data.kgn_peer_conn_lock);
 
 	for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++) {
-
-		list_for_each(ptmp, &kgnilnd_data.kgn_peers[i]) {
-			peer = list_entry(ptmp, kgn_peer_t, gnp_list);
-
+		list_for_each_entry(peer, &kgnilnd_data.kgn_peers[i], gnp_list) {
 			if (index-- > 0)
 				continue;
 
@@ -1509,8 +1500,7 @@ kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command,
 {
 	LIST_HEAD		(souls);
 	LIST_HEAD		(zombies);
-	struct list_head	*ptmp, *pnxt;
-	kgn_peer_t		*peer;
+	kgn_peer_t *peer, *pnxt;
 	int			lo;
 	int			hi;
 	int			i;
@@ -1528,9 +1518,8 @@ kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command,
 	}
 
 	for (i = lo; i <= hi; i++) {
-		list_for_each_safe(ptmp, pnxt, &kgnilnd_data.kgn_peers[i]) {
-			peer = list_entry(ptmp, kgn_peer_t, gnp_list);
-
+		list_for_each_entry_safe(peer, pnxt, &kgnilnd_data.kgn_peers[i],
+					 gnp_list) {
 			LASSERTF(peer->gnp_net != NULL,
 				"peer %p (%s) with NULL net\n",
 				 peer, libcfs_nid2str(peer->gnp_nid));
@@ -1608,21 +1597,14 @@ kgn_conn_t *
 kgnilnd_get_conn_by_idx(int index)
 {
 	kgn_peer_t        *peer;
-	struct list_head  *ptmp;
 	kgn_conn_t        *conn;
-	struct list_head  *ctmp;
 	int                i;
 
 
 	for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++) {
 		read_lock(&kgnilnd_data.kgn_peer_conn_lock);
-		list_for_each(ptmp, &kgnilnd_data.kgn_peers[i]) {
-
-			peer = list_entry(ptmp, kgn_peer_t, gnp_list);
-
-			list_for_each(ctmp, &peer->gnp_conns) {
-				conn = list_entry(ctmp, kgn_conn_t, gnc_list);
-
+		list_for_each_entry(peer, &kgnilnd_data.kgn_peers[i], gnp_list) {
+			list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
 				if (conn->gnc_state != GNILND_CONN_ESTABLISHED)
 					continue;
 

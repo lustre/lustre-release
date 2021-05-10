@@ -486,7 +486,6 @@ static void
 ksocknal_add_conn_cb_locked(struct ksock_peer_ni *peer_ni,
 			    struct ksock_conn_cb *conn_cb)
 {
-	struct list_head *tmp;
 	struct ksock_conn *conn;
 	struct ksock_net *net = peer_ni->ksnp_ni->ni_data;
 
@@ -506,9 +505,7 @@ ksocknal_add_conn_cb_locked(struct ksock_peer_ni *peer_ni,
 	/* peer_ni's route list takes over my ref on 'route' */
 	peer_ni->ksnp_conn_cb = conn_cb;
 
-	list_for_each(tmp, &peer_ni->ksnp_conns) {
-		conn = list_entry(tmp, struct ksock_conn, ksnc_list);
-
+	list_for_each_entry(conn, &peer_ni->ksnp_conns, ksnc_list) {
 		if (!rpc_cmp_addr((struct sockaddr *)&conn->ksnc_peeraddr,
 				  (struct sockaddr *)&conn_cb->ksnr_addr))
 			continue;
@@ -688,7 +685,6 @@ ksocknal_get_conn_by_idx(struct lnet_ni *ni, int index)
 {
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_conn *conn;
-	struct list_head *ctmp;
 	int i;
 
 	read_lock(&ksocknal_data.ksnd_global_lock);
@@ -699,12 +695,11 @@ ksocknal_get_conn_by_idx(struct lnet_ni *ni, int index)
 		if (peer_ni->ksnp_ni != ni)
 			continue;
 
-		list_for_each(ctmp, &peer_ni->ksnp_conns) {
+		list_for_each_entry(conn, &peer_ni->ksnp_conns,
+				    ksnc_list) {
 			if (index-- > 0)
 				continue;
 
-			conn = list_entry(ctmp, struct ksock_conn,
-					  ksnc_list);
 			ksocknal_conn_addref(conn);
 			read_unlock(&ksocknal_data.ksnd_global_lock);
 			return conn;
@@ -785,7 +780,6 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	rwlock_t *global_lock = &ksocknal_data.ksnd_global_lock;
 	LIST_HEAD(zombies);
 	struct lnet_process_id peerid;
-	struct list_head *tmp;
 	u64 incarnation;
 	struct ksock_conn *conn;
 	struct ksock_conn *conn2;
@@ -983,9 +977,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	 * loopback connection */
 	if (!rpc_cmp_addr((struct sockaddr *)&conn->ksnc_peeraddr,
 			  (struct sockaddr *)&conn->ksnc_myaddr)) {
-		list_for_each(tmp, &peer_ni->ksnp_conns) {
-			conn2 = list_entry(tmp, struct ksock_conn, ksnc_list);
-
+		list_for_each_entry(conn2, &peer_ni->ksnp_conns, ksnc_list) {
 			if (!rpc_cmp_addr(
 				    (struct sockaddr *)&conn2->ksnc_peeraddr,
 				    (struct sockaddr *)&conn->ksnc_peeraddr) ||
@@ -1203,7 +1195,6 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_conn_cb *conn_cb;
 	struct ksock_conn *conn2;
-	struct list_head *tmp;
 
 	LASSERT(peer_ni->ksnp_error == 0);
 	LASSERT(!conn->ksnc_closing);
@@ -1225,19 +1216,13 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 			LASSERT((conn_cb->ksnr_connected &
 				BIT(conn->ksnc_type)) != 0);
 
-		conn2 = NULL;
-		list_for_each(tmp, &peer_ni->ksnp_conns) {
-			conn2 = list_entry(tmp, struct ksock_conn, ksnc_list);
-
+		list_for_each_entry(conn2, &peer_ni->ksnp_conns, ksnc_list) {
 			if (conn2->ksnc_conn_cb == conn_cb &&
 			    conn2->ksnc_type == conn->ksnc_type)
-				break;
-
-			conn2 = NULL;
+				goto conn2_found;
 		}
-		if (conn2 == NULL)
-			conn_cb->ksnr_connected &= ~BIT(conn->ksnc_type);
-
+		conn_cb->ksnr_connected &= ~BIT(conn->ksnc_type);
+conn2_found:
 		conn->ksnc_conn_cb = NULL;
 
 		/* drop conn's ref on conn_cb */
@@ -1326,7 +1311,8 @@ ksocknal_finalize_zcreq(struct ksock_conn *conn)
 
 	spin_lock(&peer_ni->ksnp_lock);
 
-	list_for_each_entry_safe(tx, tmp, &peer_ni->ksnp_zc_req_list, tx_zc_list) {
+	list_for_each_entry_safe(tx, tmp, &peer_ni->ksnp_zc_req_list,
+				 tx_zc_list) {
 		if (tx->tx_conn != conn)
 			continue;
 
@@ -1594,7 +1580,6 @@ ksocknal_push_peer(struct ksock_peer_ni *peer_ni)
 {
 	int index;
 	int i;
-	struct list_head *tmp;
 	struct ksock_conn *conn;
 
         for (index = 0; ; index++) {
@@ -1603,10 +1588,8 @@ ksocknal_push_peer(struct ksock_peer_ni *peer_ni)
                 i = 0;
                 conn = NULL;
 
-		list_for_each(tmp, &peer_ni->ksnp_conns) {
+		list_for_each_entry(conn, &peer_ni->ksnp_conns, ksnc_list) {
                         if (i++ == index) {
-				conn = list_entry(tmp, struct ksock_conn,
-						  ksnc_list);
                                 ksocknal_conn_addref(conn);
                                 break;
                         }
@@ -1614,7 +1597,7 @@ ksocknal_push_peer(struct ksock_peer_ni *peer_ni)
 
 		read_unlock(&ksocknal_data.ksnd_global_lock);
 
-                if (conn == NULL)
+		if (i <= index)
                         break;
 
                 ksocknal_lib_push_conn (conn);
