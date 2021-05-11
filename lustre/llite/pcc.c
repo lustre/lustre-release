@@ -2262,8 +2262,7 @@ int pcc_file_open(struct inode *inode, struct file *file)
 		if (rc < 0 || !cached)
 			GOTO(out_unlock, rc);
 
-		if (!pcci)
-			pcci = ll_i2pcci(inode);
+		pcci = ll_i2pcci(inode);
 	}
 
 	pcc_inode_get(pcci);
@@ -3925,8 +3924,12 @@ int pcc_ioctl_detach(struct inode *inode, __u32 *flags)
 
 	pcc_inode_lock(inode);
 	pcci = lli->lli_pcc_inode;
-	if (!pcci || lli->lli_pcc_state & PCC_STATE_FL_ATTACHING ||
-	    !pcc_inode_has_layout(pcci))
+	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING) {
+		*flags |= PCC_DETACH_FL_ATTACHING;
+		GOTO(out_unlock, rc = 0);
+	}
+
+	if (!pcci || !pcc_inode_has_layout(pcci))
 		GOTO(out_unlock, rc = 0);
 
 	LASSERT(atomic_read(&pcci->pcci_refcount) > 0);

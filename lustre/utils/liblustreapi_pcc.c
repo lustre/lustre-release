@@ -609,6 +609,9 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 		llapi_printf(LLAPI_MSG_DEBUG,
 			     "Detach and remove the PCC cached file: %s\n",
 			     fidname);
+	} else if (detach.pccd_flags & PCC_DETACH_FL_ATTACHING) {
+		llapi_printf(LLAPI_MSG_DEBUG,
+			     "'%s' is being attached, skip it", fidname);
 	} else {
 		snprintf(fullname, sizeof(fullname), "%s/%s", pname, fidname);
 		llapi_printf(LLAPI_MSG_DEBUG,

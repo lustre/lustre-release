@@ -3004,6 +3004,8 @@ enum lu_pcc_detach_flags {
 	PCC_DETACH_FL_KNOWN_READONLY	= 0x04,
 	/* Indicate PCC cached copy is removed */
 	PCC_DETACH_FL_CACHE_REMOVED	= 0x08,
+	/* Indicate the file is being attached */
+	PCC_DETACH_FL_ATTACHING		= 0x10,
 };
 
 struct lu_pcc_detach_fid {
