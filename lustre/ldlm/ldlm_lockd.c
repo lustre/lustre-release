@@ -258,7 +258,8 @@ static int expired_lock_main(void *arg)
 					   lock->l_blast_sent,
 					   obd_export_nid2str(export));
 				ldlm_lock_to_ns(lock)->ns_timeouts++;
-				do_dump++;
+				if (do_dump_on_eviction(export->exp_obd))
+					do_dump++;
 				class_fail_export(export);
 			}
 			class_export_lock_put(export, lock);
@@ -272,7 +273,7 @@ static int expired_lock_main(void *arg)
 		}
 		spin_unlock_bh(&waiting_locks_spinlock);
 
-		if (do_dump && obd_dump_on_eviction) {
+		if (do_dump) {
 			CERROR("dump the log upon eviction\n");
 			libcfs_debug_dumplog();
 		}

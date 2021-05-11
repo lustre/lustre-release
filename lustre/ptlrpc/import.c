@@ -1504,25 +1504,24 @@ static int signal_completed_replay(struct obd_import *imp)
  */
 static int ptlrpc_invalidate_import_thread(void *data)
 {
-        struct obd_import *imp = data;
+	struct obd_import *imp = data;
 
-        ENTRY;
-        CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
-               imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
-               imp->imp_connection->c_remote_uuid.uuid);
+	ENTRY;
+	CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
+	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
+	       imp->imp_connection->c_remote_uuid.uuid);
 
-        ptlrpc_invalidate_import(imp);
+	if (do_dump_on_eviction(imp->imp_obd)) {
+		CERROR("dump the log upon eviction\n");
+		libcfs_debug_dumplog();
+	}
 
-        if (obd_dump_on_eviction) {
-                CERROR("dump the log upon eviction\n");
-                libcfs_debug_dumplog();
-        }
-
+	ptlrpc_invalidate_import(imp);
 	import_set_state(imp, LUSTRE_IMP_RECOVER);
-        ptlrpc_import_recovery_state_machine(imp);
+	ptlrpc_import_recovery_state_machine(imp);
 
-        class_import_put(imp);
-        RETURN(0);
+	class_import_put(imp);
+	RETURN(0);
 }
 
 /**
