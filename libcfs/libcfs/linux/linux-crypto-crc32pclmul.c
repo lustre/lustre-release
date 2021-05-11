@@ -169,6 +169,9 @@ static struct shash_alg alg = {
 			.cra_name		= "crc32",
 			.cra_driver_name	= "crc32-pclmul",
 			.cra_priority		= 200,
+#ifdef CRYPTO_ALG_OPTIONAL_KEY
+			.cra_flags		= CRYPTO_ALG_OPTIONAL_KEY,
+#endif
 			.cra_blocksize		= CHKSUM_BLOCK_SIZE,
 			.cra_ctxsize		= sizeof(u32),
 			.cra_module		= NULL,
