@@ -10895,6 +10895,25 @@ test_103e() {
 }
 run_test 103e "inheritance of big amount of default ACLs"
 
+test_103f() {
+	(( $MDS1_VERSION >= $(version_code 2.14.51) )) ||
+		skip "MDS needs to be at least 2.14.51"
+
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+
+	# enable changelog to consume more internal MDD buffers
+	changelog_register
+
+	mkdir -p $DIR/$tdir
+	# add big LOV EA
+	$LFS setstripe -C 1000 $DIR/$tdir
+	setfacl -d -m user:$U:rwx $DIR/$tdir || error "Cannot add default ACLs"
+	mkdir $DIR/$tdir/inherited || error "failed to create subdirectory"
+	rmdir $DIR/$tdir/inherited || error "Cannot remove subdirectory"
+	rmdir $DIR/$tdir || error "Cannot remove directory"
+}
+run_test 103f "changelog doesn't interfere with default ACLs buffers"
+
 test_104a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

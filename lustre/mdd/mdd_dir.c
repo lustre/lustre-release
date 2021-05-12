@@ -761,7 +761,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 		return 0;
 
 	reclen = mdd_llog_record_calc_size(env, tname, sname);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		return -ENOMEM;
 
@@ -1009,7 +1009,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	LASSERT(handle != NULL);
 
 	reclen = mdd_llog_record_calc_size(env, tname, sname);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
@@ -2619,9 +2619,7 @@ use_bigger_buffer:
 	acl_buf = *lu_buf_check_and_alloc(&info->mti_xattr_buf, acl_size);
 	if (!acl_buf.lb_buf)
 		GOTO(out_stop, rc = -ENOMEM);
-	/* mti_big_buf is also used down below in mdd_changelog_ns_store(),
-	 * but def_acl_buf is finished with it before then
-	 */
+
 	def_acl_buf = *lu_buf_check_and_alloc(&info->mti_big_buf, acl_size);
 	if (!def_acl_buf.lb_buf)
 		GOTO(out_stop, rc = -ENOMEM);

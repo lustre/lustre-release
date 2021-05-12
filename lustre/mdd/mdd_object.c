@@ -911,7 +911,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
 			       changelog_rec_offset(clf_flags & CLF_SUPPORTED,
 						    xflags & CLFE_SUPPORTED));
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
