@@ -879,14 +879,14 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 		/*
 		 * per-process jobid wanted, either from environment or from
 		 * per-session setting.
-		 * If obd_jobid_name contains "%j" or if getting the pre-process
+		 * If obd_jobid_name contains "%j" or if getting the per-process
 		 * jobid directly fails, fall back to using obd_jobid_name.
 		 */
 		rc = -EAGAIN;
 		if (!strnstr(obd_jobid_name, "%j", joblen))
 			rc = jobid_get_from_cache(jobid, joblen);
 
-		/* fall back to jobid_node if jobid_var not available */
+		/* fall back to jobid_name if jobid_var not available */
 		if (rc < 0) {
 			int rc2 = jobid_interpret_string(obd_jobid_name,
 							 jobid, joblen);
