@@ -484,23 +484,29 @@ static inline bool lod_obj_is_striped(struct dt_object *dt)
 {
 	struct lod_object *lo = lod_dt_obj(dt);
 	int i;
+	bool rc = false;
 
 	if (!dt_object_exists(dt_object_child(dt)))
 		return false;
 
-	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
-		return lo->ldo_dir_stripe_count != 0;
+	mutex_lock(&lo->ldo_layout_mutex);
 
-	if (lo->ldo_is_foreign)
-		return false;
-
-	for (i = 0; i < lo->ldo_comp_cnt; i++) {
-		if (lo->ldo_comp_entries[i].llc_stripe == NULL)
-			continue;
-		LASSERT(lo->ldo_comp_entries[i].llc_stripe_count > 0);
-		return true;
+	if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
+		rc = lo->ldo_dir_stripe_count != 0;
+	} else if (lo->ldo_is_foreign) {
+		rc = false;
+	} else {
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			if (lo->ldo_comp_entries[i].llc_stripe == NULL)
+				continue;
+			LASSERT(lo->ldo_comp_entries[i].llc_stripe_count > 0);
+			rc = true;
+			break;
+		}
 	}
-	return false;
+
+	mutex_unlock(&lo->ldo_layout_mutex);
+	return rc;
 }
 
 extern struct lu_context_key lod_thread_key;
