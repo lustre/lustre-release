@@ -5893,6 +5893,7 @@ run_test 54e "console/tty device works in lustre ======================"
 
 test_56a() {
 	local numfiles=3
+	local numdirs=2
 	local dir=$DIR/$tdir
 
 	rm -rf $dir
@@ -5932,9 +5933,10 @@ test_56a() {
 
 	#test lfs getstripe with -v prints lmm_fid
 	filenum=$($LFS getstripe -v $dir | grep -c lmm_fid)
-	[[ $filenum -eq $((numfiles * numcomp)) ]] ||
+	local countfids=$((numdirs + numfiles * numcomp))
+	[[ $filenum -eq $countfids ]] ||
 		error "$LFS getstripe -v $dir: "\
-		      "got $filenum want $((numfiles * numcomp)) lmm_fid"
+		      "got $filenum want $countfids lmm_fid"
 	[[ $($LFS getstripe $dir | grep -c lmm_fid) -eq 0 ]] ||
 		error "$LFS getstripe $dir: showed lmm_fid by default"
 	echo "$LFS getstripe --verbose passed"

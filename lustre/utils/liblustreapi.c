@@ -2919,7 +2919,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			     space, prefix,
 			     (uintmax_t)lmm_oi_id(&lum->lmm_oi));
 	}
-	if ((verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) && !is_dir) {
+
+	if (verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) {
 		__u64 seq;
 		__u32 oid;
 		__u32 ver;
@@ -2927,30 +2928,51 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		if (verbose & ~VERBOSE_DFID)
 			llapi_printf(LLAPI_MSG_NORMAL, "%slmm_fid:           ",
 				     space);
-		/*
-		 * This needs a bit of hand-holding since old 1.x lmm_oi
-		 * have { oi.oi_id = mds_inum, oi.oi_seq = 0 } and 2.x lmm_oi
-		 * have { oi.oi_id = mds_oid, oi.oi_seq = mds_seq } instead of
-		 * a real FID.  Ideally the 2.x code would have stored this
-		 * like a FID with { oi_id = mds_seq, oi_seq = mds_oid } so the
-		 * ostid union lu_fid { f_seq = mds_seq, f_oid = mds_oid }
-		 * worked properly (especially since IGIF FIDs use mds_inum as
-		 * the FID SEQ), but unfortunately that didn't happen.
-		 *
-		 * Print it to look like an IGIF FID, even though the fields
-		 * are reversed on disk, so that it makes sense to userspace.
-		 *
-		 * Don't use ostid_id() and ostid_seq(), since they assume the
-		 * oi_fid fields are in the right order.  This is why there are
-		 * separate lmm_oi_seq() and lmm_oi_id() routines for this.
-		 *
-		 * For newer layout types hopefully this will be a real FID.
-		 */
-		seq = lmm_oi_seq(&lum->lmm_oi) == 0 ?
-			lmm_oi_id(&lum->lmm_oi) : lmm_oi_seq(&lum->lmm_oi);
-		oid = lmm_oi_seq(&lum->lmm_oi) == 0 ?
-			0 : (__u32)lmm_oi_id(&lum->lmm_oi);
-		ver = (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32);
+
+		if (is_dir) {
+			struct lu_fid dir_fid;
+
+			rc = llapi_path2fid(path, &dir_fid);
+			if (rc)
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "Cannot determine directory fid.");
+
+			seq = dir_fid.f_seq;
+			oid = dir_fid.f_oid;
+			ver = dir_fid.f_ver;
+		} else {
+			/*
+			 * This needs a bit of hand-holding since old 1.x
+			 * lmm_oi have { oi.oi_id = mds_inum, oi.oi_seq = 0 }
+			 * and 2.x lmm_oi have { oi.oi_id = mds_oid,
+			 * oi.oi_seq = mds_seq } instead of a real FID.
+			 * Ideally the 2.x code would have stored this like a
+			 * FID with { oi_id = mds_seq, oi_seq = mds_oid } so
+			 * the ostid union lu_fid { f_seq = mds_seq,
+			 * f_oid = mds_oid } worked properly (especially since
+			 * IGIF FIDs use mds_inum as the FID SEQ), but
+			 * unfortunately that didn't happen.
+			 *
+			 * Print it to look like an IGIF FID, even though the
+			 * fields are reversed on disk, so that it makes sense
+			 * to userspace.
+			 *
+			 * Don't use ostid_id() and ostid_seq(), since they
+			 * assume the oi_fid fields are in the right order.
+			 * This is why there are separate lmm_oi_seq() and
+			 * lmm_oi_id() routines for this.
+			 *
+			 * For newer layout types hopefully this will be a
+			 * real FID.
+			 */
+			seq = lmm_oi_seq(&lum->lmm_oi) == 0 ?
+				lmm_oi_id(&lum->lmm_oi) :
+				lmm_oi_seq(&lum->lmm_oi);
+			oid = lmm_oi_seq(&lum->lmm_oi) == 0 ?
+			    0 : (__u32)lmm_oi_id(&lum->lmm_oi);
+			ver = (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32);
+		}
+
 		if (yaml)
 			llapi_printf(LLAPI_MSG_NORMAL, DFID_NOBRACE"\n",
 				     (unsigned long long)seq, oid, ver);
