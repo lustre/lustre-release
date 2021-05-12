@@ -905,47 +905,6 @@ count_ost_writes() {
     lctl get_param -n osc.*.stats | awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
 }
 
-#b=2477,2532
-test_40(){
-	# always need connection to MDS to verify layout during IO. LU-2628.
-	lctl get_param mdc.*.connect_flags | grep -q layout_lock &&
-		skip "layout_lock needs MDS connection for IO" && return 0
-
-	$LCTL mark multiop $MOUNT/$tfile OS_c
-	multiop $MOUNT/$tfile OS_c  &
-	PID=$!
-	writeme -s $MOUNT/${tfile}-2 &
-	WRITE_PID=$!
-	sleep 1
-	facet_failover $SINGLEMDS
-	#define OBD_FAIL_MDS_CONNECT_NET         0x117
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000117"
-	kill -USR1 $PID
-	stat1=$(count_ost_writes)
-	sleep $TIMEOUT
-	stat2=$(count_ost_writes)
-	echo "$stat1, $stat2"
-	if [ $stat1 -lt $stat2 ]; then
-		echo "writes continuing during recovery"
-		RC=0
-	else
-		echo "writes not continuing during recovery, bug 2477"
-		RC=4
-	fi
-	echo "waiting for writeme $WRITE_PID"
-	kill $WRITE_PID
-	wait $WRITE_PID
-
-	echo "waiting for multiop $PID"
-	wait $PID || error "multiop $PID failed"
-	do_facet client munlink $MOUNT/$tfile  ||
-		error "munlink $MOUNT/$tfile failed"
-	do_facet client munlink $MOUNT/${tfile}-2  ||
-		error "munlink $MOUNT/$tfile-2 failed"
-	return $RC
-}
-run_test 40 "cause recovery in ptlrpc, ensure IO continues"
-
 #b=2814
 # make sure that a read to one osc doesn't try to double-unlock its page just
 # because another osc is invalid.  trigger_group_io used to mistakenly return
