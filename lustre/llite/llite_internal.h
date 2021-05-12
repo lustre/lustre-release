@@ -280,7 +280,17 @@ struct ll_inode_info {
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
 			atomic_t		 lli_pcc_mapcnt;
-
+			/*
+			 * I/O for a file previously opened before attach into
+			 * PCC or once opened while in ATTACHING state will
+			 * fallback to Lustre OSTs.
+			 * For a later mmap() on the file, the mmap I/O also
+			 * needs to fallback and cannot read from PCC directly
+			 * until all fallback file handles are closed as we
+			 * replace the mmaping of the PCC copy with the one of
+			 * Lustre file when mmaped a file.
+			 */
+			atomic_t		 lli_pcc_mapneg;
 			/*
 			 * @lli_pcc_generation saves the gobal PCC generation
 			 * when the file was successfully attached into PCC.

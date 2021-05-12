@@ -1347,10 +1347,16 @@ void pcc_inode_free(struct inode *inode)
 {
 	struct pcc_inode *pcci = ll_i2pcci(inode);
 
+	if (!pcci)
+		return;
+
+	pcc_inode_lock(inode);
+	pcci = ll_i2pcci(inode);
 	if (pcci) {
 		WARN_ON(atomic_read(&pcci->pcci_refcount) > 1);
 		pcc_inode_put(pcci);
 	}
+	pcc_inode_unlock(inode);
 }
 
 /*
@@ -1950,6 +1956,13 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached,
 	if (list_empty(&super->pccs_datasets))
 		RETURN(0);
 
+	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING)
+		RETURN(0);
+
+	/* Forbid to auto attach the file once mmapped into PCC. */
+	if (atomic_read(&lli->lli_pcc_mapcnt) > 0)
+		RETURN(0);
+
 	/*
 	 * The file layout lock was cancelled. And this open does not
 	 * obtain valid layout lock from MDT (i.e. the file is being
@@ -1959,9 +1972,22 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached,
 		if (ll_layout_version_get(lli) == CL_LAYOUT_GEN_NONE)
 			RETURN(0);
 	} else {
+		struct pcc_inode *pcci;
+
+		pcc_inode_unlock(inode);
 		rc = ll_layout_refresh(inode, &gen);
+		pcc_inode_lock(inode);
 		if (rc)
 			RETURN(rc);
+
+		pcci = ll_i2pcci(inode);
+		if (pcci && pcc_inode_has_layout(pcci)) {
+			*cached = true;
+			RETURN(0);
+		}
+
+		if (atomic_read(&lli->lli_pcc_mapcnt) > 0)
+			RETURN(0);
 	}
 
 	rc = pcc_get_layout_info(inode, &clt);
@@ -2026,10 +2052,8 @@ static inline bool pcc_may_auto_attach(struct inode *inode,
 	RETURN(lli->lli_pcc_dsflags & PCC_DATASET_IO_ATTACH);
 }
 
-static void __pcc_layout_invalidate(struct pcc_inode *pcci)
+static inline void pcc_wait_ios_finish(struct pcc_inode *pcci)
 {
-	pcci->pcci_type = LU_PCC_NONE;
-	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
 	if (atomic_read(&pcci->pcci_active_ios) == 0)
 		return;
 
@@ -2052,6 +2076,8 @@ static inline void pcc_inode_mapping_reset(struct inode *inode)
 	struct inode *pcc_inode = pcci->pcci_path.dentry->d_inode;
 	struct address_space *mapping = inode->i_mapping;
 	int rc;
+
+	pcc_wait_ios_finish(pcci);
 
 	/* Did we mmap this file? */
 	if (pcc_inode->i_mapping == &pcc_inode->i_data)
@@ -2118,7 +2144,10 @@ static inline void pcc_inode_mmap_put(struct inode *inode)
 /* Call with inode lock held. */
 static inline void pcc_inode_detach(struct inode *inode)
 {
-	__pcc_layout_invalidate(ll_i2pcci(inode));
+	struct pcc_inode *pcci = ll_i2pcci(inode);
+
+	pcci->pcci_type = LU_PCC_NONE;
+	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
 	pcc_inode_mapping_reset(inode);
 }
 
@@ -2180,8 +2209,45 @@ static bool pcc_io_tolerate(struct pcc_inode *pcci,
 	return true;
 }
 
+static inline void
+pcc_file_fallback_set(struct ll_inode_info *lli, struct pcc_file *pccf)
+{
+	atomic_inc(&lli->lli_pcc_mapneg);
+	pccf->pccf_fallback = 1;
+}
+
+static inline void
+pcc_file_fallback_reset(struct ll_inode_info *lli, struct pcc_file *pccf)
+{
+	if (pccf->pccf_fallback) {
+		pccf->pccf_fallback = 0;
+		atomic_dec(&lli->lli_pcc_mapneg);
+	}
+}
+
+static inline void
+pcc_file_mapping_reset(struct inode *inode, struct file *file, bool cached)
+{
+	struct file *pcc_file = NULL;
+
+	if (file) {
+		struct pcc_file *pccf = ll_file2pccf(file);
+
+		pcc_file = pccf->pccf_file;
+		if (!cached && !pccf->pccf_fallback)
+			pcc_file_fallback_set(ll_i2info(inode), pccf);
+	}
+
+	if (pcc_file) {
+		struct inode *pcc_inode = file_inode(pcc_file);
+
+		if (pcc_inode->i_mapping == &pcc_inode->i_data)
+			pcc_file->f_mapping = pcc_inode->i_mapping;
+	}
+}
+
 static void pcc_io_init(struct inode *inode, enum pcc_io_type iot,
-			bool *cached)
+			struct file *file, bool *cached)
 {
 	struct pcc_inode *pcci;
 
@@ -2201,8 +2267,8 @@ static void pcc_io_init(struct inode *inode, enum pcc_io_type iot,
 	} else {
 		*cached = false;
 		/*
-		 * FIXME: Forbid auto PCC attach if the file has still been
-		 * mmapped in PCC.
+		 * Forbid to auto PCC attach if the file has still been
+		 * mapped in PCC.
 		 */
 		if (pcc_may_auto_attach(inode, iot)) {
 			(void) pcc_try_auto_attach(inode, cached, iot);
@@ -2213,6 +2279,7 @@ static void pcc_io_init(struct inode *inode, enum pcc_io_type iot,
 			}
 		}
 	}
+	pcc_file_mapping_reset(inode, file, *cached);
 	pcc_inode_unlock(inode);
 }
 
@@ -2250,8 +2317,10 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 
-	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING)
+	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING) {
+		pcc_file_fallback_set(lli, pccf);
 		GOTO(out_unlock, rc = 0);
+	}
 
 	if (!pcci || !pcc_inode_has_layout(pcci)) {
 		if (pcc_may_auto_attach(inode, PIT_OPEN))
@@ -2260,8 +2329,13 @@ int pcc_file_open(struct inode *inode, struct file *file)
 		if (rc == 0 && !cached)
 			rc = pcc_try_readonly_open_attach(inode, file, &cached);
 
-		if (rc < 0 || !cached)
+		if (rc < 0)
 			GOTO(out_unlock, rc);
+
+		if (!cached) {
+			pcc_file_fallback_set(lli, pccf);
+			GOTO(out_unlock, rc);
+		}
 
 		pcci = ll_i2pcci(inode);
 	}
@@ -2302,6 +2376,8 @@ void pcc_file_release(struct inode *inode, struct file *file)
 
 	pccf = &fd->fd_pcc_file;
 	pcc_inode_lock(inode);
+	pcc_file_fallback_reset(ll_i2info(inode), pccf);
+
 	if (pccf->pccf_file == NULL)
 		goto out;
 
@@ -2371,7 +2447,7 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_READ, cached);
+	pcc_io_init(inode, PIT_READ, file, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2441,7 +2517,7 @@ ssize_t pcc_file_write_iter(struct kiocb *iocb,
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_WRITE, cached);
+	pcc_io_init(inode, PIT_WRITE, file, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2477,7 +2553,7 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_SETATTR, cached);
+	pcc_io_init(inode, PIT_SETATTR, NULL, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2519,7 +2595,7 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_GETATTR, cached);
+	pcc_io_init(inode, PIT_GETATTR, NULL, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2581,7 +2657,7 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 		RETURN(default_file_splice_read(in_file, ppos, pipe,
 						count, flags));
 
-	pcc_io_init(inode, PIT_SPLICE_READ, &cached);
+	pcc_io_init(inode, PIT_SPLICE_READ, in_file, &cached);
 	if (!cached)
 		RETURN(default_file_splice_read(in_file, ppos, pipe,
 						count, flags));
@@ -2624,7 +2700,7 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 		RETURN(0);
 	}
 
-	pcc_io_init(inode, PIT_FSYNC, cached);
+	pcc_io_init(inode, PIT_FSYNC, file, cached);
 	if (!*cached)
 		RETURN(0);
 
@@ -2643,13 +2719,17 @@ static inline void pcc_vma_file_reset(struct inode *inode,
 	LASSERT(pccv);
 	if (vma->vm_file != pccv->pccv_file) {
 		struct pcc_file *pccf = ll_file2pccf(pccv->pccv_file);
+		struct file *pcc_file = pccf->pccf_file;
+		struct inode *pcc_inode = file_inode(pcc_file);
 
-		LASSERT(vma->vm_file == pccf->pccf_file);
+		LASSERT(vma->vm_file == pcc_file);
 		LASSERT(vma->vm_file->f_mapping == inode->i_mapping);
 		vma->vm_file = pccv->pccv_file;
 
 		get_file(vma->vm_file);
-		fput(pccf->pccf_file);
+		if (pcc_file->f_mapping != pcc_inode->i_mapping)
+			pcc_file->f_mapping = pcc_inode->i_mapping;
+		fput(pcc_file);
 
 		CDEBUG(D_CACHE,
 		       DFID" mapcnt %d vm_file %p:%ld lu_file %p:%ld vma %p\n",
@@ -2667,23 +2747,49 @@ static void pcc_mmap_vma_reset(struct inode *inode, struct vm_area_struct *vma)
 	pcc_inode_unlock(inode);
 }
 
+static int pcc_mmap_mapping_set(struct inode *inode, struct inode *pcc_inode);
+
 static void pcc_mmap_io_init(struct inode *inode, enum pcc_io_type iot,
 			     struct vm_area_struct *vma, bool *cached)
 {
 	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci;
+	struct pcc_file *pccf;
 
 	LASSERT(pccv);
 
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
+	pccf = ll_file2pccf(pccv->pccv_file);
 	if (pcci && pcc_inode_has_layout(pcci)) {
+		struct inode *pcc_inode = pcci->pcci_path.dentry->d_inode;
+
 		LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
+
 		if (pcci->pcci_type == LU_PCC_READONLY &&
 		    iot == PIT_PAGE_MKWRITE) {
 			pcc_inode_detach_put(inode);
 			pcc_vma_file_reset(inode, vma);
 			*cached = false;
+		} else if (pcc_inode->i_mapping == &pcc_inode->i_data) {
+			if (atomic_read(&lli->lli_pcc_mapneg) > 0) {
+				pcc_inode_detach_put(inode);
+				pcc_vma_file_reset(inode, vma);
+				*cached = false;
+			} else {
+				int rc;
+
+				rc = pcc_mmap_mapping_set(inode, pcc_inode);
+				if (rc) {
+					pcc_inode_detach_put(inode);
+					pcc_vma_file_reset(inode, vma);
+					*cached = false;
+				} else {
+					atomic_inc(&pcci->pcci_active_ios);
+					*cached = true;
+				}
+			}
 		} else {
 			atomic_inc(&pcci->pcci_active_ios);
 			*cached = true;
@@ -2692,6 +2798,10 @@ static void pcc_mmap_io_init(struct inode *inode, enum pcc_io_type iot,
 		*cached = false;
 		pcc_vma_file_reset(inode, vma);
 	}
+
+	if (!*cached && !pccf->pccf_fallback)
+		pcc_file_fallback_set(lli, pccf);
+
 	pcc_inode_unlock(inode);
 }
 
@@ -2812,7 +2922,8 @@ static int pcc_mmap_mapping_set(struct inode *inode, struct inode *pcc_inode)
 int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 		  bool *cached)
 {
-	struct file *pcc_file = ll_file2pccf(file)->pccf_file;
+	struct pcc_file *pccf = ll_file2pccf(file);
+	struct file *pcc_file = pccf->pccf_file;
 	struct inode *inode = file_inode(file);
 	struct pcc_inode *pcci;
 	int rc = 0;
@@ -2835,8 +2946,19 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 	if (pcci && pcc_inode_has_layout(pcci)) {
+		struct ll_inode_info *lli = ll_i2info(inode);
 		struct inode *pcc_inode = file_inode(pcc_file);
 		struct pcc_vma *pccv;
+
+		if (pccf->pccf_fallback) {
+			LASSERT(atomic_read(&lli->lli_pcc_mapneg) > 0);
+			GOTO(out, rc);
+		}
+
+		if (atomic_read(&lli->lli_pcc_mapneg) > 0) {
+			pcc_file_fallback_set(lli, pccf);
+			GOTO(out, rc);
+		}
 
 		LASSERT(atomic_read(&pcci->pcci_refcount) > 1);
 		*cached = true;
@@ -3680,7 +3802,7 @@ out_unlock:
 	RETURN(rc);
 }
 
-static int pcc_layout_rdonly_set(struct inode *inode, __u32 *gen)
+static int pcc_layout_rdonly_set(struct inode *inode, __u32 *gen, bool *cached)
 
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
@@ -3737,7 +3859,21 @@ repeat:
 		if (rc)
 			RETURN(rc);
 	} else { /* Readonly layout */
+		struct pcc_inode *pcci;
+
 		*gen = clt.cl_layout_gen;
+		/*
+		 * The file is already in readonly state, give a chance to
+		 * try auto attach.
+		 */
+		pcc_inode_lock(inode);
+		pcci = ll_i2pcci(inode);
+		if (pcci && pcc_inode_has_layout(pcci))
+			*cached = true;
+		else
+			rc = pcc_try_datasets_attach(inode, PIT_OPEN, *gen,
+						     LU_PCC_READONLY, cached);
+		pcc_inode_unlock(inode);
 	}
 
 	RETURN(rc);
@@ -3750,16 +3886,19 @@ static int pcc_readonly_attach(struct file *file,
 	struct ll_inode_info *lli = ll_i2info(inode);
 	const struct cred *old_cred;
 	struct pcc_dataset *dataset;
-	struct pcc_inode *pcci;
+	struct pcc_inode *pcci = NULL;
 	struct dentry *dentry;
 	bool attached = false;
 	bool unlinked = false;
+	bool cached = false;
 	__u32 gen;
 	int rc;
 
 	ENTRY;
 
-	rc = pcc_layout_rdonly_set(inode, &gen);
+	rc = pcc_layout_rdonly_set(inode, &gen, &cached);
+	if (cached)
+		RETURN(0);
 	if (rc)
 		RETURN(rc);
 
@@ -3772,10 +3911,8 @@ static int pcc_readonly_attach(struct file *file,
 	if (rc)
 		GOTO(out_dataset_put, rc);
 
-	mutex_lock(&lli->lli_layout_mutex);
 	pcc_inode_lock(inode);
 	old_cred = override_creds(super->pccs_cred);
-	lli->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
 	if (gen != ll_layout_version_get(lli)) {
 		CDEBUG(D_CACHE, "L.Gen mismatch %u:%u\n",
 		       gen, ll_layout_version_get(lli));
@@ -3790,6 +3927,17 @@ static int pcc_readonly_attach(struct file *file,
 
 		pcc_inode_attach_set(super, dataset, lli, pcci,
 				     dentry, LU_PCC_READONLY);
+	} else if (pcc_inode_has_layout(pcci)) {
+		/*
+		 * There may be a gap between auto attach and auto open cache:
+		 * ->pcc_file_open()
+		 *  ->pcc_try_auto_attach()
+		 *    The file is re-attach into PCC by other thread.
+		 *  ->pcc_try_readonly_open_attach()
+		 */
+		CWARN("%s: The file (fid@"DFID") is already attached.\n",
+		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)));
+		GOTO(out_put_unlock, rc = -EEXIST);
 	} else {
 		atomic_inc(&pcci->pcci_refcount);
 		path_put(&pcci->pcci_path);
@@ -3817,7 +3965,6 @@ out_put_unlock:
 	}
 	revert_creds(old_cred);
 	pcc_inode_unlock(inode);
-	mutex_unlock(&lli->lli_layout_mutex);
 out_dataset_put:
 	pcc_dataset_put(dataset);
 

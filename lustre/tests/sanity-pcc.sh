@@ -2911,7 +2911,7 @@ test_34() {
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 
 	setup_pcc_mapping $SINGLEAGT \
-		"projid\>{100}\ roid=5\ ropcc=1"
+		"projid\>{100}\ roid=5\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file" ||
 		error "failed to write $file"
@@ -2931,7 +2931,7 @@ test_34() {
 	cleanup_pcc_mapping
 
 	setup_pcc_mapping $SINGLEAGT \
-		"projid\<{100}\ roid=5\ ropcc=1"
+		"projid\<{100}\ roid=5\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT $MULTIOP $file oc ||
 		error "failed to readonly open $file"
@@ -2949,7 +2949,7 @@ test_34() {
 	cleanup_pcc_mapping
 
 	setup_pcc_mapping $SINGLEAGT \
-		"projid\<{120}\&projid\>{110}\ roid=5\ ropcc=1"
+		"projid\<{120}\&projid\>{110}\ roid=5\ pccro=1"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
 	do_facet $SINGLEAGT $MULTIOP $file oc ||
 		error "failed to readonly open $file"
@@ -3333,6 +3333,450 @@ test_41() {
 	check_lpcc_state $file "readonly"
 }
 run_test 41 "Test mtime rule for PCC-RO open attach with O_RDONLY mode"
+
+test_96() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file1=$DIR/$tfile
+	local file2=$DIR2/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+
+	local rpid11
+	local rpid12
+	local rpid13
+	local rpid21
+	local rpid22
+	local rpid23
+	local lpid
+
+	local bs="1M"
+	local count=50
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file1 bs=$bs count=$count ||
+		error "Write $file failed"
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file1 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid11=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file1 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid12=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file1 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid13=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file2 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid21=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file2 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid22=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT dd if=$file2 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid23=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.96.lck ]; do
+			do_facet $SINGLEAGT $LCTL set_param -n ldlm.namespaces.*mdc*.lru_size=clear ||
+				error "cancel_lru_locks mdc failed"
+			sleep 0.5
+		done
+	)&
+	lpid=$!
+
+	sleep 60
+	touch $DIR/sanity-pcc.96.lck
+
+	echo "Finish ========"
+	wait $rpid11 || error "$?: read failed"
+	wait $rpid12 || error "$?: read failed"
+	wait $rpid13 || error "$?: read failed"
+	wait $rpid21 || error "$?: read failed"
+	wait $rpid22 || error "$?: read failed"
+	wait $rpid23 || error "$?: read failed"
+	wait $lpid || error "$?: lock cancel failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $DIR/sanity-pcc.96.lck
+}
+run_test 96 "Auto attach from multiple read process on a node"
+
+test_97() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+
+	local mpid1
+	local mpid2
+	local lpid
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+		error "Write $file failed"
+
+	(
+		while [ ! -e $DIR/sanity-pcc.97.lck ]; do
+			echo "T1. $MMAP_CAT $file ..."
+			do_facet $SINGLEAGT $MMAP_CAT $file > /dev/null ||
+				error "$MMAP_CAT $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	mpid1=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.97.lck ]; do
+			echo "T2. $MMAP_CAT $file ..."
+			do_facet $SINGLEAGT $MMAP_CAT $file > /dev/null ||
+				error "$MMAP_CAT $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	mpid2=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.97.lck ]; do
+			do_facet $SINGLEAGT $LCTL set_param -n ldlm.namespaces.*mdc*.lru_size=clear ||
+				error "cancel_lru_locks mdc failed"
+			sleep 0.1
+		done
+	)&
+	lpid=$!
+
+	sleep 120
+	stack_trap "rm -f $DIR/sanity-pcc.97.lck"
+	touch $DIR/sanity-pcc.97.lck
+	wait $mpid1 || error "$?: mmap1 failed"
+	wait $mpid2 || error "$?: mmap2 failed"
+	wait $lpid || error "$?: cancel locks failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $DIR/sanity-pcc.97.lck
+}
+run_test 97 "two mmap I/O and layout lock cancel"
+
+test_98() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+
+	local rpid1
+	local rpid2
+	local rpid3
+	local mpid1
+	local mpid2
+	local mpid3
+	local lpid1
+	local lpid2
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+		error "Write $file failed"
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid1=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid2=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid3=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT $MMAP_CAT $file > /dev/null ||
+				error "$MMAP_CAT $file failed"
+			sleep 0.$((RANDOM % 2 + 1))
+		done
+	)&
+	mpid1=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT $LCTL set_param -n ldlm.namespaces.*mdc*.lru_size=clear ||
+				error "cancel_lru_locks mdc failed"
+			sleep 0.1
+		done
+	)&
+	lpid1=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.98.lck ]; do
+			do_facet $SINGLEAGT $LCTL set_param -n ldlm.namespaces.*osc*.lru_size=clear ||
+				error "cancel_lru_locks mdc failed"
+			sleep 0.1
+		done
+	)&
+	lpid2=$!
+
+	sleep 60
+	stack_trap "rm -f $DIR/sanity-pcc.98.lck"
+	touch $DIR/sanity-pcc.98.lck
+	wait $rpid1 || error "$?: read failed"
+	wait $rpid2 || error "$?: read failed"
+	wait $rpid3 || error "$?: read failed"
+	wait $mpid1 || error "$?: mmap failed"
+	wait $lpid1 || error "$?: cancel locks failed"
+	wait $lpid2 || error "$?: cancel locks failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $DIR/sanity-pcc.98.lck
+}
+run_test 98 "racer between auto attach and mmap I/O"
+
+test_99() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+		error "Write $file failed"
+
+	local rpid
+	local rpid2
+	local wpid
+	local upid
+	local dpid
+	local lpcc_path
+
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	(
+		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+			do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 conv=notrunc ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	wpid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+			do_facet $SINGLEAGT $MMAP_CAT $file > /dev/null ||
+				error "failed to mmap_cat $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid2=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+			echo "Unlink $lpcc_path"
+			do_facet $SINGLEAGT unlink $lpcc_path
+			sleep 1
+		done
+		true
+	)&
+	upid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.99.lck ]; do
+			echo "Detach $file ..."
+			do_facet $SINGLEAGT $LFS pcc detach $file
+			sleep 0.$((RANDOM % 8 + 1))
+		done
+	)&
+	dpid=$!
+
+	sleep 60
+	stack_trap "rm -f $DIR/sanity-pcc.99.lck"
+	touch $DIR/sanity-pcc.99.lck
+	wait $wpid || error "$?: write failed"
+	wait $rpid || error "$?: read failed"
+	wait $rpid2 || error "$?: read2 failed"
+	wait $upid || error "$?: unlink failed"
+	wait $dpid || error "$?: detach failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $DIR/sanity-pcc.99.lck
+}
+run_test 99 "race among unlink | mmap read | write | detach for PCC-RO file"
+
+test_100() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+		error "Write $file failed"
+
+	local rpid
+	local rpid2
+	local wpid
+	local upid
+	local dpid
+	local lpcc_path
+
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	(
+		while [ ! -e $DIR/sanity-pcc.100.lck ]; do
+			do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=50 ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	wpid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.100.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.100.lck ]; do
+			do_facet $SINGLEAGT dd if=$file of=/dev/null bs=1M count=50 ||
+				error "failed to write $file"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+	)&
+	rpid2=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.100.lck ]; do
+			echo "Unlink $lpcc_path"
+			do_facet $SINGLEAGT unlink $lpcc_path
+			sleep 1
+		done
+		true
+	)&
+	upid=$!
+
+	(
+		while [ ! -e $DIR/sanity-pcc.100.lck ]; do
+			echo "Detach $file ..."
+			do_facet $SINGLEAGT $LFS pcc detach $file
+			sleep 0.$((RANDOM % 8 + 1))
+		done
+	)&
+        dpid=$!
+
+	sleep 60
+	stack_trap "rm -f $DIR/sanity-pcc.100.lck"
+	touch $DIR/sanity-pcc.100.lck
+	wait $wpid || error "$?: write failed"
+	wait $rpid || error "$?: read failed"
+	wait $rpid2 || error "$?: read2 failed"
+	wait $upid || error "$?: unlink failed"
+	wait $dpid || error "$?: detach failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file
+	rm -f $DIR/sanity-pcc.100.lck
+}
+run_test 100 "race among PCC unlink | read | write | detach for PCC-RO file"
 
 #test 101: containers and PCC
 #LU-15170: Test mount namespaces with PCC

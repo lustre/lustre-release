@@ -1301,6 +1301,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_pcc_dsflags = PCC_DATASET_INVALID;
 		lli->lli_pcc_generation = 0;
 		atomic_set(&lli->lli_pcc_mapcnt, 0);
+		atomic_set(&lli->lli_pcc_mapneg, 0);
 		mutex_init(&lli->lli_group_mutex);
 		lli->lli_group_users = 0;
 		lli->lli_group_gid = 0;

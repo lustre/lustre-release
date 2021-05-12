@@ -287,7 +287,7 @@ int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
 	};
 
 	rc = ioctl(dirfd, LL_IOC_PCC_DETACH_BY_FID, &detach);
-	return rc;
+	return rc ? -errno : 0;
 }
 
 /**
@@ -599,9 +599,8 @@ static int llapi_pcc_scan_detach(const char *pname, const char *fname,
 	rc = ioctl(hsc->hsc_mntfd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	if (rc) {
 		rc = -errno;
-		llapi_printf(LLAPI_MSG_DEBUG,
-			     "failed to detach file '%s': rc = %d\n",
-			     fidname, rc);
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "failed to detach file '%s'\n", fidname);
 		return rc;
 	}
 

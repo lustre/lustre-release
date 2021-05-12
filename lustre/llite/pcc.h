@@ -204,6 +204,8 @@ struct pcc_file {
 	struct file		*pccf_file;
 	/* Whether readonly or readwrite PCC */
 	enum lu_pcc_type	 pccf_type;
+	/* I/O especially mmap() I/O must fallback to Lustre OSTs. */
+	__u32			 pccf_fallback:1;
 };
 
 struct pcc_vma {
