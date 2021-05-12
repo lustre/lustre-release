@@ -962,6 +962,8 @@ test_21() {
 
 	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
 
+	stack_trap "rm -f $tf $tf2"
+
 	$LFS setstripe -E EOF -o 0 $tf
 	$LFS setstripe -E EOF -o 1 $tf2
 
@@ -1005,6 +1007,8 @@ get_osc_lock_count() {
 
 test_22() {
 	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
 
 	$LFS setstripe -E EOF -o 0 $tf
 	dd if=/dev/zero of=$tf bs=1M count=$((RANDOM % 20 + 1))
@@ -1069,6 +1073,8 @@ run_test 31 "make sure glimpse request can be retried"
 test_32() {
 	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
 	rm -f $DIR/$tfile $DIR/$tfile-2
+
+	stack_trap "rm -f $DIR/$tfile"
 
 	$LFS setstripe -E EOF -o 0 $DIR/$tfile
 	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=$((RANDOM % 10 + 2))
@@ -1407,6 +1413,8 @@ create_file_36() {
 test_36() {
 	local tf=$DIR/$tfile
 
+	stack_trap "rm -f $tf $tf-2 $tf-3"
+
 	create_file_36 $tf $tf-2 $tf-3
 
 	[ $($LFS getstripe -N $tf) -gt 1 ] || error "wrong mirror count"
@@ -1484,6 +1492,8 @@ test_37()
 	local tf3=$DIR/$tfile-3
 	local tf4=$DIR/$tfile-4
 
+	stack_trap "rm -f $tf $tf2 $tf3 $tf4"
+
 	create_files_37 $((RANDOM + 15 * 1048576)) $tf $tf2 $tf3
 	rm -f $tf4
 	cp $tf $tf4
@@ -1547,6 +1557,8 @@ run_test 37 "mirror I/O API verification"
 test_38() {
 	local tf=$DIR/$tfile
 	local ref=$DIR/${tfile}-ref
+
+	stack_trap "rm -f $tf $ref"
 
 	$LFS setstripe -E 1M -S 1M -c 1 -E 4M -c 2 -E eof -c -1 $tf ||
 		error "creating $tf failed"
@@ -1684,6 +1696,8 @@ run_test 40 "PFLR rdonly state instantiation check"
 test_41() {
 	local tf=$DIR/$tfile
 
+	stack_trap "rm -f $tf $tf-1"
+
 	rm -f $tf $tf-1
 	echo " **create two FLR files $tf $tf-1"
 	$LFS mirror create -N -E 2M -S 1M -E 4M -E -1 \
@@ -1779,6 +1793,8 @@ test_42() {
 	local tf=$td/$tfile
 	local mirror_cmd="$LFS mirror verify"
 	local i
+
+	stack_trap "rm -rf $td"
 
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
@@ -1948,6 +1964,7 @@ test_43b() {
 
 	test_mkdir $DIR/$tdir
 	rm -f $tf
+	stack_trap "rm -rf $tf"
 
 	# create 3 mirrors FLR file, the first 2 mirrors are preferred
 	$LFS setstripe -N -Eeof --flags=prefer -N -Eeof --flags=prefer \
@@ -1970,6 +1987,8 @@ test_44() {
 	rm -rf $DIR/$tdir-1
 	local tf=$DIR/$tdir/$tfile
 	local tf1=$DIR/$tdir-1/$tfile-1
+
+	stack_trap "rm -rf $tf $tf1"
 
 	$LFS setdirstripe -i 0 -c 1 $DIR/$tdir ||
 		error "create directory failed"
