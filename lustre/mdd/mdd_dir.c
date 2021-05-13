@@ -749,25 +749,17 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 				const struct lu_name *sname,
 				struct thandle *handle)
 {
-	struct obd_device		*obd = mdd2obd_dev(mdd);
-	struct llog_ctxt		*ctxt;
-	struct llog_changelog_rec	*rec;
-	struct lu_buf			*buf;
-	struct thandle			*llog_th;
-	int				 reclen;
-	int				 rc;
+	struct obd_device *obd = mdd2obd_dev(mdd);
+	struct llog_ctxt *ctxt;
+	struct llog_rec_hdr rec_hdr;
+	struct thandle *llog_th;
+	int rc;
 
 	if (!mdd_changelog_enabled(env, mdd, type))
 		return 0;
 
-	reclen = mdd_llog_record_calc_size(env, tname, sname);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
-	if (buf->lb_buf == NULL)
-		return -ENOMEM;
-
-	rec = buf->lb_buf;
-	rec->cr_hdr.lrh_len = reclen;
-	rec->cr_hdr.lrh_type = CHANGELOG_REC;
+	rec_hdr.lrh_len = mdd_llog_record_calc_size(env, tname, sname);
+	rec_hdr.lrh_type = CHANGELOG_REC;
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	if (ctxt == NULL)
@@ -777,7 +769,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 	if (IS_ERR(llog_th))
 		GOTO(out_put, rc = PTR_ERR(llog_th));
 
-	rc = llog_declare_add(env, ctxt->loc_handle, &rec->cr_hdr, llog_th);
+	rc = llog_declare_add(env, ctxt->loc_handle, &rec_hdr, llog_th);
 
 out_put:
 	llog_ctxt_put(ctxt);
