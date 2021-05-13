@@ -60,11 +60,11 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 
 	ENTRY;
 
-	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
+	lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_xattr_buf,
 			min_t(unsigned int,
 			      mdd_obj2mdd_dev(o)->mdd_dt_conf.ddp_max_ea_size,
 			      XATTR_SIZE_MAX));
-	buf = mdd_env_info(env)->mti_xattr_buf;
+	buf = mdd_env_info(env)->mdi_xattr_buf;
 	if (buf.lb_buf == NULL)
 		RETURN(-ENOMEM);
 
@@ -216,11 +216,11 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 	int rc;
 	ENTRY;
 
-	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
+	lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_xattr_buf,
 			min_t(unsigned int,
 			      mdd_obj2mdd_dev(obj)->mdd_dt_conf.ddp_max_ea_size,
 			      XATTR_SIZE_MAX));
-	buf = mdd_env_info(env)->mti_xattr_buf;
+	buf = mdd_env_info(env)->mdi_xattr_buf;
 	if (buf.lb_buf == NULL)
 		RETURN(-ENOMEM);
 

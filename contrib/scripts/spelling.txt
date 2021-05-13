@@ -157,6 +157,9 @@ l_wait_condition||wait_event_idle
 \bMIN\(||min_t
 mdo2fid||mdd_object_fid
 mktemp||mkstemp
+mti_chlg_buf||mdi_chlg_buf
+mti_link_buf||mdi_link_buf
+mti_xattr_buf||mdi_xattr_buf
 OS_STATE_DEGRADED||OS_STATFS_DEGRADED
 OS_STATE_READONLY||OS_STATFS_READONLY
 OS_STATE_NOPRECREATE||OS_STATFS_NOPRECREATE

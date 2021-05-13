@@ -123,7 +123,7 @@ int mdd_lookup(const struct lu_env *env,
 }
 
 /** Read the link EA into a temp buffer.
- * Uses the mdd_thread_info::mti_link_buf since it is generally large.
+ * Uses the mdd_thread_info::mdi_link_buf since it is generally large.
  * A pointer to the buffer is stored in \a ldata::ld_buf.
  *
  * \retval 0 or error
@@ -139,7 +139,7 @@ static int __mdd_links_read(const struct lu_env *env,
 
 	/* First try a small buf */
 	LASSERT(env != NULL);
-	ldata->ld_buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_link_buf,
+	ldata->ld_buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_link_buf,
 					       PAGE_SIZE);
 	if (ldata->ld_buf->lb_buf == NULL)
 		return -ENOMEM;
@@ -212,11 +212,11 @@ static inline int mdd_parent_fid(const struct lu_env *env,
 				 const struct lu_attr *attr,
 				 struct lu_fid *fid)
 {
-	struct mdd_thread_info  *info = mdd_env_info(env);
-	struct linkea_data	ldata = { NULL };
-	struct lu_buf		*buf = &info->mti_link_buf;
-	struct lu_name		lname;
-	int			rc = 0;
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct linkea_data ldata = { NULL };
+	struct lu_buf *buf = &info->mdi_link_buf;
+	struct lu_name lname;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1001,7 +1001,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	LASSERT(handle != NULL);
 
 	reclen = mdd_llog_record_calc_size(env, tname, sname);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
@@ -1079,7 +1079,7 @@ static int __mdd_links_add(const struct lu_env *env,
 			if (rc != -ENODATA)
 				return rc;
 			rc = linkea_data_new(ldata,
-					     &mdd_env_info(env)->mti_link_buf);
+					     &mdd_env_info(env)->mdi_link_buf);
 			if (rc)
 				return rc;
 		}
@@ -1258,7 +1258,7 @@ static inline int mdd_links_del(const struct lu_env *env,
 /** Read the link EA into a temp buffer.
  * Uses the name_buf since it is generally large.
  * \retval IS_ERR err
- * \retval ptr to \a lu_buf (always \a mti_link_buf)
+ * \retval ptr to \a lu_buf (always \a mdi_link_buf)
  */
 struct lu_buf *mdd_links_get(const struct lu_env *env,
 			     struct mdd_object *mdd_obj)
@@ -1379,15 +1379,15 @@ static int mdd_declare_link(const struct lu_env *env,
 }
 
 static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
-                    struct md_object *src_obj, const struct lu_name *lname,
-                    struct md_attr *ma)
+		    struct md_object *src_obj, const struct lu_name *lname,
+		    struct md_attr *ma)
 {
-        const char *name = lname->ln_name;
-        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
-        struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
-        struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
-	struct lu_attr	  *cattr = MDD_ENV_VAR(env, cattr);
-	struct lu_attr	  *tattr = MDD_ENV_VAR(env, tattr);
+	const char *name = lname->ln_name;
+	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
+	struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
 	struct mdd_device *mdd = mdo2mdd(src_obj);
 	struct thandle *handle;
 	struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
@@ -2621,11 +2621,11 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_free, rc = PTR_ERR(handle));
 
 use_bigger_buffer:
-	acl_buf = *lu_buf_check_and_alloc(&info->mti_xattr_buf, acl_size);
+	acl_buf = *lu_buf_check_and_alloc(&info->mdi_xattr_buf, acl_size);
 	if (!acl_buf.lb_buf)
 		GOTO(out_stop, rc = -ENOMEM);
 
-	def_acl_buf = *lu_buf_check_and_alloc(&info->mti_big_buf, acl_size);
+	def_acl_buf = *lu_buf_check_and_alloc(&info->mdi_big_buf, acl_size);
 	if (!def_acl_buf.lb_buf)
 		GOTO(out_stop, rc = -ENOMEM);
 
@@ -3386,11 +3386,11 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 	if (list_xsize < 0)
 		RETURN(list_xsize);
 
-	lu_buf_check_and_alloc(&info->mti_big_buf, list_xsize);
-	if (info->mti_big_buf.lb_buf == NULL)
+	lu_buf_check_and_alloc(&info->mdi_big_buf, list_xsize);
+	if (info->mdi_big_buf.lb_buf == NULL)
 		RETURN(-ENOMEM);
 
-	list_xbuf.lb_buf = info->mti_big_buf.lb_buf;
+	list_xbuf.lb_buf = info->mdi_big_buf.lb_buf;
 	list_xbuf.lb_len = list_xsize;
 	rc = mdo_xattr_list(env, sobj, &list_xbuf);
 	if (rc < 0)

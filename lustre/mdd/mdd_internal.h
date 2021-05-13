@@ -199,12 +199,12 @@ struct mdd_thread_info {
 	char			  mti_key[NAME_MAX + 16];
 	int			  mti_flags;
 	char			  mti_name[NAME_MAX + 1];
-	struct lu_buf             mti_buf[4];
+	struct lu_buf             mdi_buf[4];
 	/* persistent buffers, must be handled with lu_buf_alloc/free */
-	struct lu_buf		  mti_big_buf;
-	struct lu_buf		  mti_chlg_buf;
-	struct lu_buf		  mti_link_buf; /* buf for link ea */
-	struct lu_buf		  mti_xattr_buf;
+	struct lu_buf		  mdi_big_buf;
+	struct lu_buf		  mdi_chlg_buf;
+	struct lu_buf		  mdi_link_buf; /* buf for link ea */
+	struct lu_buf		  mdi_xattr_buf;
 	struct obdo               mti_oa;
 	struct dt_allocation_hint mti_hint;
 	struct dt_object_format   mti_dof;

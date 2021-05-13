@@ -250,7 +250,7 @@ struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
 {
 	struct lu_buf *buf;
 
-	buf = &mdd_env_info(env)->mti_buf[0];
+	buf = &mdd_env_info(env)->mdi_buf[0];
 	buf->lb_buf = area;
 	buf->lb_len = len;
 	return buf;
@@ -261,7 +261,7 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
 {
 	struct lu_buf *buf;
 
-	buf = &mdd_env_info(env)->mti_buf[0];
+	buf = &mdd_env_info(env)->mdi_buf[0];
 	buf->lb_buf = (void *)area;
 	buf->lb_len = len;
 	return buf;
@@ -911,7 +911,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
 			       changelog_rec_offset(clf_flags & CLF_SUPPORTED,
 						    xflags & CLFE_SUPPORTED));
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
@@ -1458,7 +1458,7 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	/* Read HSM attrs from disk */
-	current_buf = lu_buf_check_and_alloc(&info->mti_xattr_buf,
+	current_buf = lu_buf_check_and_alloc(&info->mdi_xattr_buf,
 			min_t(unsigned int,
 			      mdd_obj2mdd_dev(mdd_obj)->mdd_dt_conf.ddp_max_ea_size,
 			    XATTR_SIZE_MAX));
@@ -1540,8 +1540,8 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_object *obj = md2mdd_obj(md_obj);
 	struct mdd_object *vic = md2mdd_obj(md_vic);
-	struct lu_buf *buf = &mdd_env_info(env)->mti_buf[0];
-	struct lu_buf *buf_vic = &mdd_env_info(env)->mti_buf[1];
+	struct lu_buf *buf = &mdd_env_info(env)->mdi_buf[0];
+	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[1];
 	struct lov_mds_md *lmm;
 	struct thandle *handle;
 	int rc;
@@ -1770,9 +1770,9 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	struct mdd_device *mdd = mdo2mdd(md_obj);
 	struct mdd_object *obj = md2mdd_obj(md_obj);
 	struct mdd_object *vic = NULL;
-	struct lu_buf *buf = &mdd_env_info(env)->mti_buf[0];
-	struct lu_buf *buf_save = &mdd_env_info(env)->mti_buf[1];
-	struct lu_buf *buf_vic = &mdd_env_info(env)->mti_buf[2];
+	struct lu_buf *buf = &mdd_env_info(env)->mdi_buf[0];
+	struct lu_buf *buf_save = &mdd_env_info(env)->mdi_buf[1];
+	struct lu_buf *buf_vic = &mdd_env_info(env)->mdi_buf[2];
 	struct lov_comp_md_v1 *lcm;
 	struct thandle *handle;
 	int rc;
@@ -2141,7 +2141,7 @@ stop:
 int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
 		   struct lu_buf *lmm_buf, const char *name)
 {
-	struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
+	struct lu_buf *buf = &mdd_env_info(env)->mdi_big_buf;
 	int rc;
 
 	ENTRY;
@@ -2155,9 +2155,9 @@ int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
 repeat:
 	rc = mdo_xattr_get(env, obj, buf, name);
 	if (rc == -ERANGE) {
-		/* mti_big_buf is allocated but is too small
+		/* mdi_big_buf is allocated but is too small
 		 * we need to increase it */
-		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
+		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_big_buf,
 					     buf->lb_len * 2);
 		if (buf->lb_buf == NULL)
 			RETURN(-ENOMEM);
@@ -2174,7 +2174,7 @@ repeat:
 
 	/*
 	 * we don't use lmm_buf directly, because we don't know xattr size, so
-	 * by using mti_big_buf we can avoid calling mdo_xattr_get() twice.
+	 * by using mdi_big_buf we can avoid calling mdo_xattr_get() twice.
 	 */
 	memcpy(lmm_buf->lb_buf, buf->lb_buf, rc);
 
@@ -2386,10 +2386,10 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct lu_attr *snd_la = MDD_ENV_VAR(env, tattr);
 	struct mdd_device *mdd = mdo2mdd(obj1);
 	struct lov_mds_md *fst_lmm, *snd_lmm;
-	struct lu_buf *fst_buf = &info->mti_buf[0];
-	struct lu_buf *snd_buf = &info->mti_buf[1];
-	struct lu_buf *fst_hsm_buf = &info->mti_buf[2];
-	struct lu_buf *snd_hsm_buf = &info->mti_buf[3];
+	struct lu_buf *fst_buf = &info->mdi_buf[0];
+	struct lu_buf *snd_buf = &info->mdi_buf[1];
+	struct lu_buf *fst_hsm_buf = &info->mdi_buf[2];
+	struct lu_buf *snd_hsm_buf = &info->mdi_buf[3];
 	struct ost_id *saved_oi = NULL;
 	struct thandle *handle;
 	struct mdd_object *dom_o = NULL;
@@ -2400,8 +2400,8 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	ENTRY;
 
-	BUILD_BUG_ON(ARRAY_SIZE(info->mti_buf) < 4);
-	memset(info->mti_buf, 0, sizeof(info->mti_buf));
+	BUILD_BUG_ON(ARRAY_SIZE(info->mdi_buf) < 4);
+	memset(info->mdi_buf, 0, sizeof(info->mdi_buf));
 
 	/* we have to sort the 2 obj, so locking will always
 	 * be in the same order, even in case of 2 concurrent swaps */
@@ -2781,7 +2781,7 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 			 struct md_layout_change *mlc, struct thandle *handle)
 {
 	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
-	struct lu_buf *som_buf = &mdd_env_info(env)->mti_buf[1];
+	struct lu_buf *som_buf = &mdd_env_info(env)->mdi_buf[1];
 	struct lustre_som_attrs *som = &mlc->mlc_som;
 	int fl = 0;
 	int rc;
@@ -2877,7 +2877,7 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 		struct thandle *handle)
 {
 	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
-	struct lu_buf *som_buf = &mdd_env_info(env)->mti_buf[1];
+	struct lu_buf *som_buf = &mdd_env_info(env)->mdi_buf[1];
 	struct lustre_som_attrs *som = &mlc->mlc_som;
 	int fl = 0;
 	int rc;
@@ -2969,7 +2969,7 @@ mdd_object_update_sync_pending(const struct lu_env *env, struct mdd_object *obj,
 		struct md_layout_change *mlc, struct thandle *handle)
 {
 	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
-	struct lu_buf *som_buf = &mdd_env_info(env)->mti_buf[1];
+	struct lu_buf *som_buf = &mdd_env_info(env)->mdi_buf[1];
 	int fl = 0;
 	int rc;
 	ENTRY;

@@ -796,7 +796,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	}
 
 	reclen = llog_data_len(sizeof(*rec) + len);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_chlg_buf, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
@@ -2273,10 +2273,10 @@ static void mdd_key_fini(const struct lu_context *ctx,
 {
 	struct mdd_thread_info *info = data;
 
-	lu_buf_free(&info->mti_big_buf);
-	lu_buf_free(&info->mti_link_buf);
-	lu_buf_free(&info->mti_xattr_buf);
-	lu_buf_free(&info->mti_chlg_buf);
+	lu_buf_free(&info->mdi_big_buf);
+	lu_buf_free(&info->mdi_link_buf);
+	lu_buf_free(&info->mdi_xattr_buf);
+	lu_buf_free(&info->mdi_chlg_buf);
 
 	OBD_FREE_PTR(info);
 }
