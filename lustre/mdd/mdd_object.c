@@ -550,7 +550,7 @@ int mdd_declare_create_object_internal(const struct lu_env *env,
 				       const struct md_op_spec *spec,
 				       struct dt_allocation_hint *hint)
 {
-	struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
+	struct dt_object_format *dof = &mdd_env_info(env)->mdi_dof;
 	const struct dt_index_features *feat = spec->sp_feat;
 	int rc;
 	ENTRY;
@@ -582,7 +582,7 @@ int mdd_create_object_internal(const struct lu_env *env, struct mdd_object *p,
 			       const struct md_op_spec *spec,
 			       struct dt_allocation_hint *hint)
 {
-	struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
+	struct dt_object_format *dof = &mdd_env_info(env)->mdi_dof;
 	int rc;
 	ENTRY;
 
@@ -2540,7 +2540,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (fst_lmm != NULL) {
 		struct ost_id temp_oi;
 
-		saved_oi = &info->mti_oa.o_oi;
+		saved_oi = &info->mdi_oa.o_oi;
 		mdd_get_lmm_oi(fst_lmm, saved_oi);
 		mdd_get_lmm_oi(snd_lmm, &temp_oi);
 		mdd_set_lmm_gen(fst_lmm, &snd_gen);

@@ -193,28 +193,25 @@ struct mdd_thread_info {
 	struct lu_attr            mti_la_for_fix;
 	/* Only used in mdd_object_start */
 	struct lu_attr		  mti_la_for_start;
-	/* mti_ent and mti_key must be conjoint,
-	* then mti_ent::lde_name will be mti_key. */
-	struct lu_dirent	  mti_ent;
-	char			  mti_key[NAME_MAX + 16];
-	int			  mti_flags;
-	char			  mti_name[NAME_MAX + 1];
-	struct lu_buf             mdi_buf[4];
+	/* mdi_ent/mdi_key must be together so mdi_ent::lde_name is mdi_key */
+	struct lu_dirent	  mdi_ent;
+	char			  mdi_key[NAME_MAX + 16];
+	int			  mdi_flags;
+	char			  mdi_name[NAME_MAX + 1];
+	struct lu_buf		  mdi_buf[4];
 	/* persistent buffers, must be handled with lu_buf_alloc/free */
 	struct lu_buf		  mdi_big_buf;
 	struct lu_buf		  mdi_chlg_buf;
 	struct lu_buf		  mdi_link_buf; /* buf for link ea */
 	struct lu_buf		  mdi_xattr_buf;
-	struct obdo               mti_oa;
-	struct dt_allocation_hint mti_hint;
-	struct dt_object_format   mti_dof;
-	struct linkea_data	  mti_link_data;
-	struct md_op_spec	  mti_spec;
-	struct dt_insert_rec	  mti_dt_rec;
-	struct lfsck_req_local	  mti_lrl;
-	struct lu_seq_range	  mti_range;
-	union lmv_mds_md	  mti_lmv;
-	struct md_layout_change	  mti_mlc;
+	struct obdo		  mdi_oa;
+	struct dt_allocation_hint mdi_hint;
+	struct dt_object_format	  mdi_dof;
+	struct linkea_data	  mdi_link_data;
+	struct md_op_spec	  mdi_spec;
+	struct dt_insert_rec	  mdi_dt_rec;
+	struct lu_seq_range	  mdi_range;
+	struct md_layout_change	  mdi_mlc;
 };
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
@@ -742,7 +739,7 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 
 	rc = -ENOTDIR;
 	if (dt_try_as_dir(env, next)) {
-		struct dt_insert_rec *rec = &mdd_env_info(env)->mti_dt_rec;
+		struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 
 		rec->rec_fid = fid;
 		rec->rec_type = type;

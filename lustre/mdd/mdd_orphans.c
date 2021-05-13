@@ -57,11 +57,11 @@ enum {
 static struct dt_key *mdd_orphan_key_fill(const struct lu_env *env,
 					  const struct lu_fid *lf)
 {
-	char *key = mdd_env_info(env)->mti_key;
+	char *key = mdd_env_info(env)->mdi_key;
 
 	LASSERT(key);
-	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mti_flags))
-		snprintf(key, sizeof(mdd_env_info(env)->mti_key),
+	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
+		snprintf(key, sizeof(mdd_env_info(env)->mdi_key),
 			 DFID_NOBRACE, PFID(lf));
 
 	return (struct dt_key *)key;
@@ -71,11 +71,11 @@ static struct dt_key *mdd_orphan_key_fill(const struct lu_env *env,
 static struct dt_key *mdd_orphan_key_fill_20(const struct lu_env *env,
 					     const struct lu_fid *lf)
 {
-	char *key = mdd_env_info(env)->mti_key;
+	char *key = mdd_env_info(env)->mdi_key;
 
 	LASSERT(key);
-	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mti_flags))
-		snprintf(key, sizeof(mdd_env_info(env)->mti_key),
+	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
+		snprintf(key, sizeof(mdd_env_info(env)->mdi_key),
 			 ORPHAN_FILE_NAME_FORMAT_20,
 			 fid_seq(lf), fid_oid(lf), fid_ver(lf),
 			 ORPH_OP_UNLINK);
@@ -88,7 +88,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 					struct mdd_object *obj,
 					struct thandle *th)
 {
-	struct dt_insert_rec *rec = &mdd_env_info(env)->mti_dt_rec;
+	struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 	struct dt_object *dor = mdd->mdd_orphans;
 	const struct lu_fid *lf = mdd_object_fid(obj);
 	struct dt_key *key = mdd_orphan_key_fill(env, lf);
@@ -102,7 +102,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 int mdd_orphan_declare_insert(const struct lu_env *env, struct mdd_object *obj,
 			      umode_t mode, struct thandle *th)
 {
-	struct dt_insert_rec *rec = &mdd_env_info(env)->mti_dt_rec;
+	struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
 	struct dt_key *key;
 	int rc;
@@ -159,7 +159,7 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 	struct dt_object *dor = mdd->mdd_orphans;
 	const struct lu_fid *lf_dor = lu_object_fid(&dor->do_lu);
 	struct dt_object *next = mdd_object_child(obj);
-	struct dt_insert_rec *rec = &mdd_env_info(env)->mti_dt_rec;
+	struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 	int rc;
 	ENTRY;
 
@@ -401,7 +401,7 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 {
 	struct mdd_device *mdd = (struct mdd_device *)thread->mgt_data;
 	struct dt_object *dor = mdd->mdd_orphans;
-	struct lu_dirent *ent = &mdd_env_info(env)->mti_ent;
+	struct lu_dirent *ent = &mdd_env_info(env)->mdi_ent;
 	const struct dt_it_ops *iops;
 	struct dt_it *it;
 	struct lu_fid fid;
@@ -428,7 +428,7 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 		GOTO(out_put, rc = -EIO);
 	}
 
-	mdd_env_info(env)->mti_flags |= MTI_KEEP_KEY;
+	mdd_env_info(env)->mdi_flags |= MTI_KEEP_KEY;
 	do {
 		if (thread->mgt_abort)
 			break;

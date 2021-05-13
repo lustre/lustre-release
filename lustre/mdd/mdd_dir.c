@@ -666,15 +666,14 @@ static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *
 static int __mdd_index_insert_only(const struct lu_env *env,
 				   struct mdd_object *pobj,
 				   const struct lu_fid *lf, __u32 type,
-				   const char *name,
-				   struct thandle *handle)
+				   const char *name, struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(pobj);
-	int               rc;
+	int rc;
 	ENTRY;
 
 	if (dt_try_as_dir(env, next)) {
-		struct dt_insert_rec	*rec = &mdd_env_info(env)->mti_dt_rec;
+		struct dt_insert_rec *rec = &mdd_env_info(env)->mdi_dt_rec;
 
 		rec->rec_fid = lf;
 		rec->rec_type = type;
@@ -1194,7 +1193,7 @@ int mdd_links_rename(const struct lu_env *env,
 	ENTRY;
 
 	if (ldata == NULL) {
-		ldata = &mdd_env_info(env)->mti_link_data;
+		ldata = &mdd_env_info(env)->mdi_link_data;
 		memset(ldata, 0, sizeof(*ldata));
 		rc = mdd_linkea_prepare(env, mdd_obj, oldpfid, oldlname,
 					newpfid, newlname, first, check, ldata);
@@ -1391,7 +1390,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	struct mdd_device *mdd = mdo2mdd(src_obj);
 	struct thandle *handle;
 	struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
-	struct linkea_data *ldata = &mdd_env_info(env)->mti_link_data;
+	struct linkea_data *ldata = &mdd_env_info(env)->mdi_link_data;
 	int rc;
 	ENTRY;
 
@@ -1602,7 +1601,7 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 			      struct thandle *handle, int no_name, int is_dir)
 {
 	struct lu_attr	*la = &mdd_env_info(env)->mti_la_for_fix;
-	int		 rc;
+	int rc;
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		if (likely(no_name == 0)) {
@@ -1866,20 +1865,18 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
         RETURN(0);
 }
 
-static int mdd_create_data(const struct lu_env *env,
-			   struct md_object *pobj,
+static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 			   struct md_object *cobj,
-			   const struct md_op_spec *spec,
-			   struct md_attr *ma)
+			   const struct md_op_spec *spec, struct md_attr *ma)
 {
 	struct mdd_device *mdd = mdo2mdd(cobj);
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *son = md2mdd_obj(cobj);
-	struct thandle    *handle;
+	struct thandle *handle;
 	const struct lu_buf *buf;
-	struct lu_attr    *attr = MDD_ENV_VAR(env, cattr);
-	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
-	int		   rc;
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+	struct dt_allocation_hint *hint = &mdd_env_info(env)->mdi_hint;
+	int rc;
 	ENTRY;
 
 	rc = mdd_cd_sanity_check(env, son);
@@ -2596,9 +2593,9 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_buf acl_buf;
 	struct lu_buf def_acl_buf;
 	struct lu_buf hsm_buf;
-	struct linkea_data *ldata = &info->mti_link_data;
+	struct linkea_data *ldata = &info->mdi_link_data;
 	const char *name = lname->ln_name;
-	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
+	struct dt_allocation_hint *hint = &mdd_env_info(env)->mdi_hint;
 	int acl_size = LUSTRE_POSIX_ACL_MAX_SIZE_OLD;
 	int rc, rc2;
 
@@ -2998,7 +2995,7 @@ static int mdd_rename(const struct lu_env *env,
 	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
 	struct lu_attr *tpattr = MDD_ENV_VAR(env, tpattr);
 	struct thandle *handle;
-	struct linkea_data  *ldata = &mdd_env_info(env)->mti_link_data;
+	struct linkea_data  *ldata = &mdd_env_info(env)->mdi_link_data;
 	const struct lu_fid *tpobj_fid = mdd_object_fid(mdd_tpobj);
 	const struct lu_fid *spobj_fid = mdd_object_fid(mdd_spobj);
 	bool is_dir;
@@ -3027,7 +3024,7 @@ static int mdd_rename(const struct lu_env *env,
 	 */
 	if (mdd_object_remote(mdd_sobj) && S_ISLNK(cattr->la_mode) &&
 	    cattr->la_nlink == 1 && !tobj) {
-		struct md_op_spec *spec = &mdd_env_info(env)->mti_spec;
+		struct md_op_spec *spec = &mdd_env_info(env)->mdi_spec;
 		struct lu_device *ld = &mdd->mdd_md_dev.md_lu_dev;
 		struct lu_fid tfid;
 
@@ -3570,7 +3567,7 @@ static inline int mdd_fld_lookup(const struct lu_env *env,
 				 const struct lu_fid *fid,
 				 __u32 *mdt_index)
 {
-	struct lu_seq_range *range = &mdd_env_info(env)->mti_range;
+	struct lu_seq_range *range = &mdd_env_info(env)->mdi_range;
 	struct seq_server_site *ss;
 	int rc;
 
@@ -3626,7 +3623,7 @@ static int mdd_iterate_linkea(const struct lu_env *env,
 			      mdd_linkea_cb cb)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	char *filename = info->mti_name;
+	char *filename = info->mdi_name;
 	struct lu_name lname;
 	struct lu_fid fid;
 	int rc = 0;
@@ -3640,7 +3637,7 @@ static int mdd_iterate_linkea(const struct lu_env *env,
 				    &fid);
 
 		/* Note: lname might miss \0 at the end */
-		snprintf(filename, sizeof(info->mti_name), "%.*s",
+		snprintf(filename, sizeof(info->mdi_name), "%.*s",
 			 lname.ln_namelen, lname.ln_name);
 		lname.ln_name = filename;
 
@@ -3786,7 +3783,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct md_layout_change *mlc = &info->mti_mlc;
+	struct md_layout_change *mlc = &info->mdi_mlc;
 	struct lmv_mds_md_v1 *lmv = sbuf->lb_buf;
 	int rc;
 
@@ -3827,9 +3824,9 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	if (S_ISDIR(attr->la_mode)) {
 		if (!lmv) {
 			/* if sobj is not striped, fake a 1-stripe LMV */
-			LASSERT(sizeof(info->mti_key) >
+			LASSERT(sizeof(info->mdi_key) >
 				lmv_mds_md_size(1, LMV_MAGIC_V1));
-			lmv = (typeof(lmv))info->mti_key;
+			lmv = (typeof(lmv))info->mdi_key;
 			memset(lmv, 0, sizeof(*lmv));
 			lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 			lmv->lmv_stripe_count = cpu_to_le32(1);
@@ -4013,7 +4010,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	 */
 	if (S_ISDIR(attr->la_mode)) {
 		struct mdd_thread_info *info = mdd_env_info(env);
-		struct md_layout_change *mlc = &info->mti_mlc;
+		struct md_layout_change *mlc = &info->mdi_mlc;
 
 		mlc->mlc_opc = MD_LAYOUT_DETACH;
 
@@ -4165,8 +4162,8 @@ static int mdd_migrate_object(const struct lu_env *env,
 	struct lu_attr *spattr = &info->mti_pattr;
 	struct lu_attr *tpattr = &info->mti_tpattr;
 	struct lu_attr *attr = &info->mti_cattr;
-	struct linkea_data *ldata = &info->mti_link_data;
-	struct dt_allocation_hint *hint = &info->mti_hint;
+	struct linkea_data *ldata = &info->mdi_link_data;
+	struct dt_allocation_hint *hint = &info->mdi_hint;
 	struct lu_buf sbuf = { NULL };
 	struct lmv_mds_md_v1 *lmv;
 	struct thandle *handle;
@@ -4600,8 +4597,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	 * to a plain dir, which will cause FID change and namespace update.
 	 */
 	if (le32_to_cpu(lmu->lum_stripe_count) == 1) {
-		struct linkea_data *ldata = &info->mti_link_data;
-		char *filename = info->mti_name;
+		struct linkea_data *ldata = &info->mdi_link_data;
+		char *filename = info->mdi_name;
 
 		rc = mdd_links_read(env, obj, ldata);
 		if (rc)
@@ -4618,7 +4615,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 				    fid);
 
 		/* Note: lname might miss \0 at the end */
-		snprintf(filename, sizeof(info->mti_name), "%.*s",
+		snprintf(filename, sizeof(info->mdi_name), "%.*s",
 			 lname.ln_namelen, lname.ln_name);
 		lname.ln_name = filename;
 
@@ -4706,7 +4703,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 	const struct lu_name *lname = mlc->mlc_name;
 	struct lu_attr *la = &info->mti_la_for_fix;
 	struct lmv_user_md_v1 *lum = mlc->mlc_spec->u.sp_ea.eadata;
-	struct linkea_data *ldata = &info->mti_link_data;
+	struct linkea_data *ldata = &info->mdi_link_data;
 	struct lmv_mds_md_v1 *lmv;
 	__u32 count;
 	int rc;
@@ -4737,7 +4734,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 	 */
 	tobj->mod_obj.mo_lu.lo_header->loh_attr |= S_IFDIR;
 
-	lmv = (typeof(lmv))info->mti_key;
+	lmv = (typeof(lmv))info->mdi_key;
 	memset(lmv, 0, sizeof(*lmv));
 	lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 	lmv->lmv_stripe_count = cpu_to_le32(1);
@@ -4805,7 +4802,7 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 	struct lu_attr *pattr = &info->mti_pattr;
 	struct lu_attr *la = &info->mti_la_for_fix;
 	const struct lu_name *lname = mlc->mlc_name;
-	struct linkea_data *ldata = &info->mti_link_data;
+	struct linkea_data *ldata = &info->mdi_link_data;
 	int rc;
 
 	ENTRY;
@@ -4881,7 +4878,7 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 	struct mdd_object *obj = md2mdd_obj(o);
 	struct mdd_object *pobj = md2mdd_obj(mlc->mlc_parent);
 	struct mdd_object *tobj = md2mdd_obj(mlc->mlc_target);
-	struct dt_allocation_hint *hint = &info->mti_hint;
+	struct dt_allocation_hint *hint = &info->mdi_hint;
 	bool is_plain = false;
 	struct thandle *handle;
 	int rc;
