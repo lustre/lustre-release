@@ -444,23 +444,17 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	    !OBD_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
 		RETURN(-ENOENT);
 
+	/* MDS < 2.14 doesn't support 'crush' hash type, and cannot handle
+	 * unknown hash if client doesn't set a valid one. switch to fnv_1a_64.
+	 */
 	if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_CRUSH)) {
-		if ((lump->lum_hash_type & LMV_HASH_TYPE_MASK) ==
-		     LMV_HASH_TYPE_CRUSH) {
-			/* if server doesn't support 'crush' hash type,
-			 * switch to fnv_1a_64.
-			 */
-			lump->lum_hash_type &= ~LMV_HASH_TYPE_MASK;
-			lump->lum_hash_type |= LMV_HASH_TYPE_FNV_1A_64;
-		} else if ((lump->lum_hash_type & LMV_HASH_TYPE_MASK) ==
-		     LMV_HASH_TYPE_UNKNOWN) {
-			/* from 2.14 MDT will choose default hash type if client
-			 * doesn't set a valid one, while old server doesn't
-			 * handle it.
-			 */
-			lump->lum_hash_type &= ~LMV_HASH_TYPE_MASK;
-			lump->lum_hash_type |= LMV_HASH_TYPE_DEFAULT;
-		}
+		enum lmv_hash_type type = lump->lum_hash_type &
+					  LMV_HASH_TYPE_MASK;
+
+		if (type == LMV_HASH_TYPE_CRUSH ||
+		    type == LMV_HASH_TYPE_UNKNOWN)
+			lump->lum_hash_type = (lump->lum_hash_type ^ type) |
+					      LMV_HASH_TYPE_FNV_1A_64;
 	}
 
 	if (unlikely(!lmv_user_magic_supported(cpu_to_le32(lump->lum_magic))))
