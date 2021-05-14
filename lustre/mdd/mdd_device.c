@@ -185,11 +185,22 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
 static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 			     struct llog_rec_hdr *hdr, void *data)
 {
-	struct mdd_device *mdd = (struct mdd_device *)data;
+	struct mdd_device *mdd = data;
 	struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
 
-	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
-	LASSERT(rec->cr_hdr.lrh_type == CHANGELOG_REC);
+	if (unlikely(!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN))) {
+		CWARN("%s: changelog "DFID" must be a plain llog\n",
+		      mdd2obd_dev(mdd)->obd_name,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
+
+	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
+		CWARN("%s: invalid record at index %#x in log "DFID"\n",
+		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return 0;
+	}
 
 	CDEBUG(D_INFO,
 	       "seeing record at index %d/%d/%llu t=%x %.*s in log"
@@ -209,8 +220,20 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	struct llog_changelog_user_rec *rec =
 		(struct llog_changelog_user_rec *)hdr;
 
-	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
-	LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
+	if (unlikely(!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN))) {
+		CWARN("%s: changelog "DFID" must be a plain llog\n",
+		      mdd2obd_dev(mdd)->obd_name,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
+
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC &&
+	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
+		CWARN("%s: unknown user type %x at index %u in log "DFID"\n",
+		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+		      rec->cur_hdr.lrh_type, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return 0;
+	}
 
 	CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec=%llu"
 	       " in log "DFID"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
@@ -241,7 +264,12 @@ static int changelog_detect_orphan_cb(const struct lu_env *env,
 						      struct llog_changelog_rec,
 						      cr_hdr);
 
-	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+	if (unlikely(!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN))) {
+		CWARN("%s: changelog "DFID" must be a plain llog\n",
+		      mdd2obd_dev(mdd)->obd_name,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
 
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		CWARN("%s: invalid record at index %d in log "DFID"\n",
@@ -273,9 +301,15 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 						struct llog_changelog_user_rec,
 						cur_hdr);
 
-	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+	if (unlikely(!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN))) {
+		CWARN("%s: changelog "DFID" must be a plain llog\n",
+		      mdd2obd_dev(mdd)->obd_name,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
 
-	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC) {
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC &&
+	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
 		CWARN("%s: invalid user at index %d in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
 		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
@@ -315,7 +349,12 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 	ENTRY;
 
 	/* This is always a (sub)log, not the catalog */
-	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+	if (unlikely(!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN))) {
+		CWARN("%s: changelog "DFID" must be a plain llog\n",
+		      mdd2obd_dev(cl_cookie->mdd)->obd_name,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
 
 	/* if current context is GC-thread allow it to stop upon umount
 	 * remaining records cleanup will occur upon next mount
@@ -355,13 +394,19 @@ static int llog_changelog_cancel(const struct lu_env *env,
 				 struct llog_ctxt *ctxt,
 				 struct changelog_cancel_cookie *cookie)
 {
-	struct llog_handle	*cathandle = ctxt->loc_handle;
-	int			 rc;
+	struct llog_handle *cathandle = ctxt->loc_handle;
+	int rc;
 
 	ENTRY;
 
 	/* This should only be called with the catalog handle */
-	LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+	if (unlikely(!(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))) {
+		CWARN("%s: changelog "DFID" must be a catalog llog\n",
+		      mdd2obd_dev(cookie->mdd)->obd_name,
+		      PFID(&cathandle->lgh_id.lgl_oi.oi_fid));
+		return -EINVAL;
+	}
+
 
 	rc = llog_cat_process(env, cathandle, llog_changelog_cancel_cb,
 			      cookie, 0, 0);
