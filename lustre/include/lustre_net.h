@@ -373,6 +373,9 @@
 #define OUT_MAXREQSIZE	(1000 * 1024)
 #define OUT_MAXREPSIZE	MDS_MAXREPSIZE
 
+#define BUT_MAXREQSIZE	OUT_MAXREQSIZE
+#define BUT_MAXREPSIZE	BUT_MAXREQSIZE
+
 /** MDS_BUFSIZE = max_reqsize (w/o LOV EA) + max sptlrpc payload size */
 #define MDS_BUFSIZE		max(MDS_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
 				    8 * 1024)

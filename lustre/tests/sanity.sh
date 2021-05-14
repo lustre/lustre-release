@@ -13771,6 +13771,30 @@ test_123d() {
 }
 run_test 123d "Statahead on striped directories works correctly"
 
+test_123e() {
+	local max
+	local batch_max
+	local dir=$DIR/$tdir
+
+	mkdir $dir || error "mkdir $dir failed"
+	$LFS setstripe -C 32 $dir || error "setstripe $dir failed"
+
+	touch $dir/$tfile.{0..1000} || error "touch 1000 files failed"
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max" EXIT
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max" EXIT
+
+	$LCTL set_param llite.*.statahead_max=2048
+	$LCTL set_param llite.*.statahead_batch_max=1024
+
+	ls -l $dir
+	$LCTL get_param mdc.*.batch_stats
+	$LCTL get_param llite.*.statahead_*
+}
+run_test 123e "statahead with large wide striping"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||

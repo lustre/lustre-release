@@ -365,11 +365,16 @@ static int batch_update_request_fini(struct batch_update_head *head,
 			 */
 			repmsg = NULL;
 			rc1 = -ECANCELED;
+			/*
+			 * TODO: resend the unfinished sub request when the
+			 * return code is -EOVERFLOW.
+			 */
 		}
 
 		if (ouc->ouc_interpret != NULL)
 			ouc->ouc_interpret(req, repmsg, ouc, rc1);
 
+		index++;
 		object_update_callback_fini(ouc);
 		if (rc == 0 && rc1 < 0)
 			rc = rc1;

@@ -2023,17 +2023,59 @@ int req_capsule_server_pack(struct req_capsule *pill)
 				   count, fmt->rf_name);
 		}
 	} else { /* SUB request */
+		struct ptlrpc_request *req = pill->rc_req;
+		__u32 used_len;
 		__u32 msg_len;
 
 		msg_len = lustre_msg_size_v2(count, pill->rc_area[RCL_SERVER]);
-		if (msg_len > pill->rc_reqmsg->lm_repsize) {
+		used_len = (char *)pill->rc_repmsg - (char *)req->rq_repmsg;
+		/* Overflow the reply buffer */
+		if (used_len + msg_len > req->rq_replen) {
+			__u32 len;
+			__u32 max;
+
+			if (!req_capsule_has_field(&req->rq_pill,
+						   &RMF_BUT_REPLY, RCL_SERVER))
+				return -EINVAL;
+
+			if (!req_capsule_field_present(&req->rq_pill,
+						       &RMF_BUT_REPLY,
+						       RCL_SERVER))
+				return -EINVAL;
+
+			if (used_len + msg_len > BUT_MAXREPSIZE)
+				return -EOVERFLOW;
+
+			len = req_capsule_get_size(&req->rq_pill,
+						   &RMF_BUT_REPLY, RCL_SERVER);
+			/*
+			 * Currently just increase the batch reply buffer
+			 * by 2.
+			 */
+			max = BUT_MAXREPSIZE - req->rq_replen;
+			if (used_len + msg_len > len)
+				len = used_len + msg_len;
+
+			if (len > max)
+				len += max;
+			else
+				len += len;
+			rc = req_capsule_server_grow(&req->rq_pill,
+						     &RMF_BUT_REPLY, len);
+			if (rc)
+				return rc;
+
+			pill->rc_repmsg =
+				(struct lustre_msg *)((char *)req->rq_repmsg +
+						      used_len);
+		}
+		if (msg_len > pill->rc_reqmsg->lm_repsize)
 			/* TODO: Check whether there is enough buffer size */
 			CDEBUG(D_INFO,
 			       "Overflow pack %d fields in format '%s' for "
 			       "the SUB request with message len %u:%u\n",
 			       count, fmt->rf_name, msg_len,
 			       pill->rc_reqmsg->lm_repsize);
-		}
 
 		rc = 0;
 		lustre_init_msg_v2(pill->rc_repmsg, count,
@@ -2684,7 +2726,7 @@ int req_capsule_server_grow(struct req_capsule *pill,
 	struct ptlrpc_reply_state *rs = req->rq_reply_state, *nrs;
 	char *from, *to, *sptr = NULL;
 	__u32 slen = 0, snewlen = 0;
-	__u32 offset, len;
+	__u32 offset, len, max, diff;
 	int rc;
 
 	LASSERT(pill->rc_fmt != NULL);
@@ -2718,13 +2760,23 @@ int req_capsule_server_grow(struct req_capsule *pill,
 		}
 
 		/*
-		 * Currently just increase the reply buffer by 2 * newlen.
+		 * Currently first try to increase the reply buffer by
+		 * 2 * newlen with reply buffer limit of BUT_MAXREPSIZE.
 		 * TODO: Enlarge the reply buffer properly according to the
 		 * left SUB requests in the batch PTLRPC request.
 		 */
 		snewlen = newlen;
+		diff = snewlen - slen;
+		max = BUT_MAXREPSIZE - req->rq_replen;
+		if (diff > max)
+			return -EOVERFLOW;
+
+		if (diff * 2 + len < max)
+			newlen = (len + diff) * 2;
+		else
+			newlen = len + max;
+
 		req_capsule_set_size(pill, field, RCL_SERVER, snewlen);
-		newlen = len + cfs_size_round(2 * snewlen);
 		req_capsule_set_size(&req->rq_pill, &RMF_BUT_REPLY, RCL_SERVER,
 				     newlen);
 		offset = __req_capsule_offset(&req->rq_pill, &RMF_BUT_REPLY,
