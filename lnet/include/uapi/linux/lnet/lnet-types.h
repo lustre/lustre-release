@@ -135,7 +135,7 @@ struct lnet_counters {
  * 'me' for match entry). Each type of object is given a unique handle type
  * to enhance type checking.
  */
-#define LNET_WIRE_HANDLE_COOKIE_NONE   (-1)
+#define LNET_WIRE_HANDLE_COOKIE_NONE   (~0ULL)
 
 struct lnet_handle_md {
 	__u64	cookie;
