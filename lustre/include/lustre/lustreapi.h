@@ -1043,7 +1043,7 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
 const char *llapi_layout_flags_string(uint32_t flags);
-const __u16 llapi_layout_string_flags(char *string);
+__u16 llapi_layout_string_flags(char *string);
 
 /**
  * llapi_layout_mirror_count_get() - Get mirror count from the header of

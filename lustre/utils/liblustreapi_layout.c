@@ -1684,7 +1684,7 @@ const char *llapi_layout_flags_string(uint32_t flags)
 	return "0";
 }
 
-const __u16 llapi_layout_string_flags(char *string)
+__u16 llapi_layout_string_flags(char *string)
 {
 	if (strncmp(string, "ro", strlen(string)) == 0)
 		return LCM_FL_RDONLY;
