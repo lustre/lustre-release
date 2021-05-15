@@ -7944,7 +7944,7 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 	}
 }
 
-#define STRBUF_LEN	32
+#define STRBUF_LEN	24
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			int rc, bool h, bool show_default)
 {
@@ -7958,7 +7958,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL) {
 		int bover = 0, iover = 0;
 		struct obd_dqblk *dqb = &qctl->qc_dqblk;
-		char numbuf[3][STRBUF_LEN];
+		char numbuf[3][STRBUF_LEN + 2]; /* 2 for brackets or wildcard */
 		char timebuf[40];
 		char strbuf[STRBUF_LEN];
 
