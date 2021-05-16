@@ -1916,10 +1916,14 @@ int mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
 	return rc;
 }
 
-/* check whether two FIDs belong to different MDT. */
-static int mdt_fids_different_target(struct mdt_thread_info *info,
-				     const struct lu_fid *fid1,
-				     const struct lu_fid *fid2)
+/* check whether two FIDs belong to different MDTs.
+ * \retval	1 on different MDTs.
+ *		0 on the same MDT.
+ *		-ve on error
+ */
+int mdt_fids_different_target(struct mdt_thread_info *info,
+			      const struct lu_fid *fid1,
+			      const struct lu_fid *fid2)
 {
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
@@ -2010,9 +2014,10 @@ int mdt_is_remote_object(struct mdt_thread_info *info,
 	for (i = 0; i < leh->leh_reccount; i++) {
 		linkea_entry_unpack(lee, &reclen, &name, &pfid);
 		lee = (struct link_ea_entry *) ((char *)lee + reclen);
-		if (mdt_fids_different_target(info, &pfid,
-					      mdt_object_fid(child)))
-			RETURN(1);
+		rc = mdt_fids_different_target(info, &pfid,
+					       mdt_object_fid(child));
+		if (rc)
+			RETURN(rc);
 	}
 
 	RETURN(0);

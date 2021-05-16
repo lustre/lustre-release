@@ -88,6 +88,7 @@ trap "
 cd `dirname $0`
 for N in `seq 1 $NUM_THREADS`; do
 	for P in $RACER_PROGS; do
+		RACER_MIGRATE_STRIPE_MAX=$RACER_MIGRATE_STRIPE_MAX \
 		./$P.sh $DIR $MAX_FILES &
 	done
 done

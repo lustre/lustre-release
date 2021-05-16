@@ -348,10 +348,10 @@ struct md_dir_operations {
 			  struct md_object *cobj, const struct lu_name *lname,
 			  struct md_attr *ma, int no_name);
 
-	int (*mdo_migrate)(const struct lu_env *env, struct md_object *pobj,
-			   struct md_object *sobj, const struct lu_name *lname,
-			   struct md_object *tobj, struct md_op_spec *spec,
-			   struct md_attr *ma);
+	int (*mdo_migrate)(const struct lu_env *env, struct md_object *spobj,
+			   struct md_object *tpobj, struct md_object *sobj,
+			   struct md_object *tobj, const struct lu_name *lname,
+			   struct md_op_spec *spec, struct md_attr *ma);
 };
 
 struct md_device_operations {
@@ -638,16 +638,17 @@ static inline int mdo_rename(const struct lu_env *env,
 }
 
 static inline int mdo_migrate(const struct lu_env *env,
-			     struct md_object *pobj,
-			     struct md_object *sobj,
-			     const struct lu_name *lname,
-			     struct md_object *tobj,
-			     struct md_op_spec *spec,
-			     struct md_attr *ma)
+			      struct md_object *spobj,
+			      struct md_object *tpobj,
+			      struct md_object *sobj,
+			      struct md_object *tobj,
+			      const struct lu_name *lname,
+			      struct md_op_spec *spec,
+			      struct md_attr *ma)
 {
-	LASSERT(pobj->mo_dir_ops->mdo_migrate);
-	return pobj->mo_dir_ops->mdo_migrate(env, pobj, sobj, lname, tobj, spec,
-					     ma);
+	LASSERT(spobj->mo_dir_ops->mdo_migrate);
+	return spobj->mo_dir_ops->mdo_migrate(env, spobj, tpobj, sobj, tobj,
+					      lname, spec, ma);
 }
 
 static inline int mdo_is_subdir(const struct lu_env *env,

@@ -1068,6 +1068,13 @@ int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 
 	LASSERT(buf->lb_buf);
 
+	if (!mdt_object_exists(o))
+		return -ENOENT;
+
+	if (mdt_object_remote(o) && S_ISDIR(lu_object_attr(&o->mot_obj)))
+		/* force reload layout for remote dir in case layout changed */
+		mo_invalidate(info->mti_env, mdt_object_child(o));
+
 	rc = mo_xattr_get(info->mti_env, next, buf, name);
 	if (rc > 0) {
 
@@ -2489,7 +2496,7 @@ static int mdt_rmfid_unlink(struct mdt_thread_info *info,
 			    struct mdt_object *obj, s64 ctime)
 {
 	struct lu_fid *child_fid = &info->mti_tmp_fid1;
-	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct mdt_device *mdt = info->mti_mdt;
 	struct md_attr *ma = &info->mti_attr;
 	struct mdt_lock_handle *parent_lh;

@@ -333,7 +333,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	struct md_layout_change *mlc = &info->mti_mlc;
 	struct lmv_mds_md_v1 *lmv;
 	struct md_attr *ma = &info->mti_attr;
-	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct mdt_object *pobj = NULL;
 	struct mdt_object *obj;
 	struct mdt_lock_handle *lhp = NULL;

@@ -582,7 +582,7 @@ struct mdt_thread_info {
 	int			   mti_big_aclsize;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
-	struct ldlm_enqueue_info   mti_einfo[2];
+	struct ldlm_enqueue_info   mti_einfo;
 	/* einfo used by mdt_remote_object_lock_try() */
 	struct ldlm_enqueue_info   mti_remote_einfo;
 	struct tg_reply_data	  *mti_reply_data;
@@ -1493,6 +1493,10 @@ static inline int mdt_check_enc(struct mdt_thread_info *info,
 
 	return rc;
 }
+
+int mdt_fids_different_target(struct mdt_thread_info *info,
+			      const struct lu_fid *fid1,
+			      const struct lu_fid *fid2);
 
 int mdt_reint_migrate(struct mdt_thread_info *info,
 		      struct mdt_lock_handle *unused);

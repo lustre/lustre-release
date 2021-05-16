@@ -4391,6 +4391,11 @@ static int mdd_migrate_object(const struct lu_env *env,
 
 	ENTRY;
 
+	CDEBUG(D_INFO, "migrate %s from "DFID"/"DFID" to "DFID"/"DFID"\n",
+	       sname->ln_name, PFID(mdd_object_fid(spobj)),
+	       PFID(mdd_object_fid(sobj)), PFID(mdd_object_fid(tpobj)),
+	       PFID(mdd_object_fid(tobj)));
+
 	rc = mdd_la_get(env, sobj, attr);
 	if (rc)
 		RETURN(rc);
@@ -4535,7 +4540,8 @@ out:
  * Migrate directory or file between MDTs.
  *
  * \param[in] env	execution environment
- * \param[in] md_pobj	parent master object
+ * \param[in] md_spobj	source parent object
+ * \param[in] md_tpobj	target parent object
  * \param[in] md_sobj	source object
  * \param[in] lname	file name
  * \param[in] md_tobj	target object
@@ -4545,95 +4551,14 @@ out:
  * \retval		0 on success
  * \retval		-errno on failure
  */
-static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
-		       struct md_object *md_sobj, const struct lu_name *lname,
-		       struct md_object *md_tobj, struct md_op_spec *spec,
-		       struct md_attr *ma)
+static int mdd_migrate(const struct lu_env *env, struct md_object *md_spobj,
+		       struct md_object *md_tpobj, struct md_object *md_sobj,
+		       struct md_object *md_tobj, const struct lu_name *lname,
+		       struct md_op_spec *spec, struct md_attr *ma)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
-	struct mdd_device *mdd = mdo2mdd(md_pobj);
-	struct mdd_object *pobj = md2mdd_obj(md_pobj);
-	struct mdd_object *sobj = md2mdd_obj(md_sobj);
-	struct mdd_object *tobj = md2mdd_obj(md_tobj);
-	struct mdd_object *spobj = NULL;
-	struct mdd_object *tpobj = NULL;
-	struct lu_buf pbuf = { NULL };
-	struct lu_fid *fid = &info->mdi_fid2;
-	struct lmv_mds_md_v1 *lmv;
-	int rc;
-
-	ENTRY;
-
-	/* locate source and target stripe on pobj, which are the real parent */
-	rc = mdd_stripe_get(env, pobj, &pbuf, XATTR_NAME_LMV);
-	if (rc < 0 && rc != -ENODATA)
-		RETURN(rc);
-
-	lmv = pbuf.lb_buf;
-	if (lmv) {
-		int index;
-
-		if (!lmv_is_sane(lmv))
-			GOTO(out, rc = -EBADF);
-
-		/* locate target parent stripe */
-		/* fail check here to make sure top dir migration succeed. */
-		if (lmv_is_migrating(lmv) &&
-		    OBD_FAIL_CHECK_RESET(OBD_FAIL_MIGRATE_ENTRIES, 0))
-			GOTO(out, rc = -EIO);
-
-		index = lmv_name_to_stripe_index(lmv, lname->ln_name,
-						 lname->ln_namelen);
-		if (index < 0)
-			GOTO(out, rc = index);
-
-		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[index]);
-		tpobj = mdd_object_find(env, mdd, fid);
-		if (IS_ERR(tpobj))
-			GOTO(out, rc = PTR_ERR(tpobj));
-
-		/* locate source parent stripe */
-		if (lmv_is_layout_changing(lmv)) {
-			index = lmv_name_to_stripe_index_old(lmv,
-							     lname->ln_name,
-							     lname->ln_namelen);
-			if (index < 0)
-				GOTO(out, rc = index);
-
-			fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[index]);
-			spobj = mdd_object_find(env, mdd, fid);
-			if (IS_ERR(spobj))
-				GOTO(out, rc = PTR_ERR(spobj));
-
-			/* parent stripe unchanged */
-			if (spobj == tpobj) {
-				if (!lmv_is_restriping(lmv))
-					GOTO(out, rc = -EINVAL);
-				GOTO(out, rc = -EALREADY);
-			}
-		} else {
-			spobj = tpobj;
-			mdd_object_get(spobj);
-		}
-	} else {
-		tpobj = pobj;
-		spobj = pobj;
-		mdd_object_get(tpobj);
-		mdd_object_get(spobj);
-	}
-
-	rc = mdd_migrate_object(env, spobj, tpobj, sobj, tobj, lname, lname,
-				spec, ma);
-	GOTO(out, rc);
-
-out:
-	if (!IS_ERR_OR_NULL(spobj))
-		mdd_object_put(env, spobj);
-	if (!IS_ERR_OR_NULL(tpobj))
-		mdd_object_put(env, tpobj);
-	lu_buf_free(&pbuf);
-
-	return rc;
+	return mdd_migrate_object(env, md2mdd_obj(md_spobj),
+				  md2mdd_obj(md_tpobj), md2mdd_obj(md_sobj),
+				  md2mdd_obj(md_tobj), lname, lname, spec, ma);
 }
 
 static int mdd_declare_1sd_collapse(const struct lu_env *env,

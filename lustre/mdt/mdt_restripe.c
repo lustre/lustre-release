@@ -278,7 +278,7 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 	struct mdt_object *parent = NULL;
 	struct mdt_object *child = NULL;
 	struct mdt_object *stripe = NULL;
-	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct mdt_lock_handle *lhp;
 	struct mdt_lock_handle *lhc;
 	u32 lmv_stripe_count = 0;
