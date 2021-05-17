@@ -2657,6 +2657,40 @@ test_60a() {
 }
 run_test 60a "mirror extend sets correct size on sparse file"
 
+get_flr_layout_gen() {
+	getfattr -n lustre.lov --only-values $tf 2>/dev/null |
+		od -tx4 | awk '/000000/ { print "0x"$4; exit; }'
+}
+
+check_layout_gen() {
+	local tf=$1
+
+	local v1=$(get_flr_layout_gen $tf)
+	local v2=$($LFS getstripe -v $tf | awk '/lcm_layout_gen/ { print $2 }')
+
+	[[ $v1 -eq $v2 ]] ||
+		error "$tf in-memory layout gen $v1 != $v2 after $2"
+}
+
+test_60b() {
+	local tf=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -Eeof $tf || error "setstripe $tf failed"
+
+	for ((i = 0; i < 20; i++)); do
+		$LFS mirror extend -N $tf ||
+			error "extending mirror for $tf failed"
+		check_layout_gen $tf "extend"
+
+		$LFS mirror split -d --mirror-id=$((i+1)) $tf ||
+			error "split $tf failed"
+		check_layout_gen $tf "split"
+	done
+}
+run_test 60b "mirror merge/split cancel client's in-memory layout gen"
+
 test_70() {
 	local tf=$DIR/$tdir/$tfile
 

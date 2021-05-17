@@ -3589,6 +3589,8 @@ out:
 	case LL_LEASE_LAYOUT_SPLIT:
 		if (layout_file)
 			fput(layout_file);
+
+		ll_layout_refresh(inode, &fd->fd_layout_version);
 		break;
 	case LL_LEASE_PCC_ATTACH:
 		if (!rc)
