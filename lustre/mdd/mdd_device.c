@@ -344,6 +344,28 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 			OBD_RACE(OBD_FAIL_MDS_CHANGELOG_RACE);
 	}
 
+	/* Records folow one by one, cr_index++. We could calculate the
+	 * last cr_index at this plain llog. And if it less then cookie endrec
+	 * cancel the whole file.
+	 */
+	if ((LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - hdr->lrh_index +
+	     rec->cr.cr_index) < cl_cookie->endrec) {
+		int rc;
+
+		if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL))) {
+			if (cfs_fail_val == 0) {
+				cfs_fail_val = (unsigned long)llh & 0xFFFFFFFF;
+				OBD_RACE(OBD_FAIL_MDS_CHANGELOG_DEL);
+			}
+		}
+		rc = llog_destroy(env, llh);
+		if (!rc) {
+			CDEBUG(D_HA, "Changelog destroyed plain "DFID"\n",
+			       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+			RETURN(LLOG_DEL_PLAIN);
+		}
+	}
+
 	/* cancel them one at a time.  I suppose we could store up the cookies
 	 * and cancel them all at once; probably more efficient, but this is
 	 * done as a user call, so who cares... */
