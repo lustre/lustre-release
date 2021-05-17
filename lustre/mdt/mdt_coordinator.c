@@ -2241,15 +2241,18 @@ ssize_t hsm_control_store(struct kobject *kobj, struct attribute *attr,
 			rc = set_cdt_state(cdt, CDT_RUNNING);
 			mdt_hsm_cdt_event(cdt);
 			wake_up(&cdt->cdt_waitq);
+		} else if (cdt->cdt_state == CDT_RUNNING) {
+			rc = 0;
 		} else {
 			rc = mdt_hsm_cdt_start(mdt);
 		}
 	} else if (strncmp(buffer, CDT_STOP_CMD, strlen(CDT_STOP_CMD)) == 0) {
-		if ((cdt->cdt_state == CDT_STOPPING) ||
-		    (cdt->cdt_state == CDT_STOPPED)) {
-			CERROR("%s: Coordinator already stopped\n",
+		if (cdt->cdt_state == CDT_STOPPING) {
+			CERROR("%s: Coordinator is already stopping\n",
 			       mdt_obd_name(mdt));
 			rc = -EALREADY;
+		} else if (cdt->cdt_state == CDT_STOPPED) {
+			rc = 0;
 		} else {
 			rc = mdt_hsm_cdt_stop(mdt);
 		}
