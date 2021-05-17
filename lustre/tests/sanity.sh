@@ -14062,6 +14062,57 @@ test_160m() {
 }
 run_test 160m "Changelog clear race"
 
+test_160n() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $MDS1_VERSION -ge $(version_code 2.12.7) ]] ||
+		skip "Need MDS version at least 2.12.7"
+	local cl_users
+	local cl_user1
+	local cl_user2
+	local pid1
+	local first_rec
+	local last_rec=0
+
+	# Create a user
+	changelog_register || error "first changelog_register failed"
+
+	cl_users=(${CL_USERS[mds1]})
+	cl_user1="${cl_users[0]}"
+
+	# generate some changelog records to accumulate on MDT0
+	test_mkdir -i0 -c1 $DIR/$tdir || error "test_mkdir $tdir failed"
+	first_rec=$(changelog_users $SINGLEMDS |
+			awk '/^current.index:/ { print $NF }')
+	while (( last_rec < (( first_rec + 65000)) )); do
+		createmany -m $DIR/$tdir/$tfile 10000 ||
+			error "create $DIR/$tdir/$tfile failed"
+
+		for i in $(seq 0 10000); do
+			mrename $DIR/$tdir/$tfile$i $DIR/$tdir/$tfile-new$i \
+				> /dev/null
+		done
+
+		unlinkmany $DIR/$tdir/$tfile-new 10000 ||
+			error "unlinkmany failed unlink"
+		last_rec=$(changelog_users $SINGLEMDS |
+			awk '/^current.index:/ { print $NF }')
+		echo last record $last_rec
+		(( last_rec == 0 )) && error "no changelog found"
+	done
+
+#define OBD_FAIL_MDS_CHANGELOG_DEL	 0x16c
+	do_facet mds1 $LCTL set_param fail_loc=0x8000016c fail_val=0
+
+	__changelog_clear mds1 $cl_user1 0 &
+	pid1=$!
+	sleep 2
+	__changelog_clear mds1 $cl_user1 0 ||
+		error "fail to cancel record for $cl_user1"
+	wait $pid1
+	[[ $? -eq 0 ]] || error "fail to cancel record for $cl_user2"
+}
+run_test 160n "Changelog destroy race"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
