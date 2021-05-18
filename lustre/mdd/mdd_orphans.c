@@ -60,7 +60,7 @@ static struct dt_key *mdd_orphan_key_fill(const struct lu_env *env,
 	char *key = mdd_env_info(env)->mdi_key;
 
 	LASSERT(key);
-	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
+	if (!(MDI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
 		snprintf(key, sizeof(mdd_env_info(env)->mdi_key),
 			 DFID_NOBRACE, PFID(lf));
 
@@ -74,7 +74,7 @@ static struct dt_key *mdd_orphan_key_fill_20(const struct lu_env *env,
 	char *key = mdd_env_info(env)->mdi_key;
 
 	LASSERT(key);
-	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
+	if (!(MDI_KEEP_KEY & mdd_env_info(env)->mdi_flags))
 		snprintf(key, sizeof(mdd_env_info(env)->mdi_key),
 			 ORPHAN_FILE_NAME_FORMAT_20,
 			 fid_seq(lf), fid_oid(lf), fid_ver(lf),
@@ -428,7 +428,7 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 		GOTO(out_put, rc = -EIO);
 	}
 
-	mdd_env_info(env)->mdi_flags |= MTI_KEEP_KEY;
+	mdd_env_info(env)->mdi_flags |= MDI_KEEP_KEY;
 	do {
 		if (thread->mgt_abort)
 			break;

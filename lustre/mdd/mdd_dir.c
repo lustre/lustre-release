@@ -278,7 +278,7 @@ static int mdd_is_parent(const struct lu_env *env,
 	int rc;
 
 	LASSERT(!lu_fid_eq(mdd_object_fid(mo), tfid));
-	pfid = &mdd_env_info(env)->mti_fid;
+	pfid = &mdd_env_info(env)->mdi_fid;
 
 	if (mdd_is_root(mdd, mdd_object_fid(mo)))
 		return 0;
@@ -1093,7 +1093,7 @@ static int __mdd_links_add(const struct lu_env *env,
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE)) {
-		struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
+		struct lu_fid *tfid = &mdd_env_info(env)->mdi_fid2;
 
 		*tfid = *pfid;
 		tfid->f_ver = ~0;
@@ -1382,14 +1382,14 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 		    struct md_attr *ma)
 {
 	const char *name = lname->ln_name;
-	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
 	struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
 	struct mdd_device *mdd = mdo2mdd(src_obj);
 	struct thandle *handle;
-	struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
+	struct lu_fid *tfid = &mdd_env_info(env)->mdi_fid2;
 	struct linkea_data *ldata = &mdd_env_info(env)->mdi_link_data;
 	int rc;
 	ENTRY;
@@ -1600,7 +1600,7 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 			      const struct lu_name *name, struct md_attr *ma,
 			      struct thandle *handle, int no_name, int is_dir)
 {
-	struct lu_attr	*la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	int rc;
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
@@ -1699,7 +1699,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	const char *name = lname->ln_name;
 	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
-	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *mdd_cobj = NULL;
 	struct mdd_device *mdd = mdo2mdd(pobj);
@@ -2018,17 +2018,17 @@ static int mdd_object_initialize(const struct lu_env *env,
  *                      under the directory
  */
 static int mdd_create_sanity_check(const struct lu_env *env,
-                                   struct md_object *pobj,
+				   struct md_object *pobj,
 				   const struct lu_attr *pattr,
-                                   const struct lu_name *lname,
+				   const struct lu_name *lname,
 				   struct lu_attr *cattr,
-                                   struct md_op_spec *spec)
+				   struct md_op_spec *spec)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_fid     *fid       = &info->mti_fid;
-	struct mdd_object *obj       = md2mdd_obj(pobj);
-	struct mdd_device *m         = mdo2mdd(pobj);
-	bool		check_perm = true;
+	struct lu_fid *fid = &info->mdi_fid;
+	struct mdd_object *obj = md2mdd_obj(pobj);
+	struct mdd_device *m = mdo2mdd(pobj);
+	bool check_perm = true;
 	int rc;
 	ENTRY;
 
@@ -2272,7 +2272,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc)
 			GOTO(out, rc);
 	} else {
-		struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+		struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 		enum changelog_rec_type type;
 
 		rc = mdo_declare_index_insert(env, p, mdd_object_fid(c),
@@ -2583,13 +2583,13 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		      struct md_op_spec *spec, struct md_attr *ma)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_attr *la = &info->mti_la_for_fix;
+	struct lu_attr *la = &info->mdi_la_for_fix;
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *son = md2mdd_obj(child);
 	struct mdd_device *mdd = mdo2mdd(pobj);
 	struct lu_attr *attr = &ma->ma_attr;
 	struct thandle *handle;
-	struct lu_attr *pattr = &info->mti_pattr;
+	struct lu_attr *pattr = &info->mdi_pattr;
 	struct lu_buf acl_buf;
 	struct lu_buf def_acl_buf;
 	struct lu_buf hsm_buf;
@@ -2857,7 +2857,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 			      struct linkea_data *ldata,
 			      struct thandle *handle)
 {
-	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
 	int rc;
 
 	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
@@ -2984,7 +2984,7 @@ static int mdd_rename(const struct lu_env *env,
 {
 	const char *sname = lsname->ln_name;
 	const char *tname = ltname->ln_name;
-	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr    *la = &mdd_env_info(env)->mdi_la_for_fix;
 	struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj); /* source parent */
 	struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
 	struct mdd_device *mdd = mdo2mdd(src_pobj);
@@ -3722,7 +3722,7 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 				      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_attr *la = &info->mti_la_for_fix;
+	struct lu_attr *la = &info->mdi_la_for_fix;
 	int rc;
 
 	rc = mdo_declare_index_delete(env, spobj, sname->ln_name, handle);
@@ -3914,7 +3914,7 @@ static int mdd_migrate_update(const struct lu_env *env,
 			      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_attr *la = &info->mti_la_for_fix;
+	struct lu_attr *la = &info->mdi_la_for_fix;
 	int rc;
 
 	ENTRY;
@@ -4159,9 +4159,9 @@ static int mdd_migrate_object(const struct lu_env *env,
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
 	struct mdd_device *mdd = mdo2mdd(&spobj->mod_obj);
-	struct lu_attr *spattr = &info->mti_pattr;
-	struct lu_attr *tpattr = &info->mti_tpattr;
-	struct lu_attr *attr = &info->mti_cattr;
+	struct lu_attr *spattr = &info->mdi_pattr;
+	struct lu_attr *tpattr = &info->mdi_tpattr;
+	struct lu_attr *attr = &info->mdi_cattr;
 	struct linkea_data *ldata = &info->mdi_link_data;
 	struct dt_allocation_hint *hint = &info->mdi_hint;
 	struct lu_buf sbuf = { NULL };
@@ -4326,7 +4326,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	struct mdd_object *spobj = NULL;
 	struct mdd_object *tpobj = NULL;
 	struct lu_buf pbuf = { NULL };
-	struct lu_fid *fid = &info->mti_fid2;
+	struct lu_fid *fid = &info->mdi_fid2;
 	struct lmv_mds_md_v1 *lmv;
 	int rc;
 
@@ -4555,8 +4555,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	struct mdd_object *obj = md2mdd_obj(md_obj);
 	struct mdd_object *pobj = NULL;
 	struct mdd_object *stripe = NULL;
-	struct lu_attr *attr = &info->mti_pattr;
-	struct lu_fid *fid = &info->mti_fid2;
+	struct lu_attr *attr = &info->mdi_pattr;
+	struct lu_fid *fid = &info->mdi_fid2;
 	struct lu_name lname = { NULL };
 	struct lu_buf lmv_buf = { NULL };
 	struct lmv_mds_md_v1 *lmv;
@@ -4701,7 +4701,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
 	const struct lu_name *lname = mlc->mlc_name;
-	struct lu_attr *la = &info->mti_la_for_fix;
+	struct lu_attr *la = &info->mdi_la_for_fix;
 	struct lmv_user_md_v1 *lum = mlc->mlc_spec->u.sp_ea.eadata;
 	struct linkea_data *ldata = &info->mdi_link_data;
 	struct lmv_mds_md_v1 *lmv;
@@ -4799,8 +4799,8 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 				struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_attr *pattr = &info->mti_pattr;
-	struct lu_attr *la = &info->mti_la_for_fix;
+	struct lu_attr *pattr = &info->mdi_pattr;
+	struct lu_attr *la = &info->mdi_la_for_fix;
 	const struct lu_name *lname = mlc->mlc_name;
 	struct linkea_data *ldata = &info->mdi_link_data;
 	int rc;

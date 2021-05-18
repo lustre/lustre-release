@@ -177,22 +177,22 @@ struct mdd_object {
 	struct list_head	mod_users;  /**< unique user opens */
 };
 
-#define	MTI_KEEP_KEY	0x01
+#define MDI_KEEP_KEY	0x01
 
 struct mdd_thread_info {
-	struct lu_fid             mti_fid;
-	struct lu_fid             mti_fid2; /* used for be & cpu converting */
+	struct lu_fid		  mdi_fid;
+	struct lu_fid		  mdi_fid2; /* used for be & cpu converting */
 	/**
 	* only be used by MDD interfaces, can be passed into local MDD APIs.
 	*/
-	struct lu_attr            mti_pattr;
-	struct lu_attr            mti_cattr;
-	struct lu_attr            mti_tpattr;
-	struct lu_attr            mti_tattr;
-	/** used to set c/mtime */
-	struct lu_attr            mti_la_for_fix;
+	struct lu_attr		  mdi_pattr;
+	struct lu_attr		  mdi_cattr;
+	struct lu_attr		  mdi_tpattr;
+	struct lu_attr		  mdi_tattr;
+	/** used to set ctime/mtime */
+	struct lu_attr		  mdi_la_for_fix;
 	/* Only used in mdd_object_start */
-	struct lu_attr		  mti_la_for_start;
+	struct lu_attr		  mdi_la_for_start;
 	/* mdi_ent/mdi_key must be together so mdi_ent::lde_name is mdi_key */
 	struct lu_dirent	  mdi_ent;
 	char			  mdi_key[NAME_MAX + 16];
@@ -295,7 +295,7 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
-#define MDD_ENV_VAR(env, var) (&mdd_env_info(env)->mti_##var)
+#define MDD_ENV_VAR(env, var) (&mdd_env_info(env)->mdi_##var)
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,

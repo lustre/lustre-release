@@ -1213,7 +1213,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct mdd_device *mdd = mdo2mdd(obj);
 	struct thandle *handle = NULL;
-	struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la_copy = &mdd_env_info(env)->mdi_la_for_fix;
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
 	struct lu_ucred  *uc;
