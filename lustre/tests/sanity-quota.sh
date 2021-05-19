@@ -490,7 +490,8 @@ reset_quota_settings() {
 
 # enable quota debug
 quota_init() {
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota+trace"
+	do_nodes $(comma_list $(nodes_list)) \
+		"$LCTL set_param -n debug=+quota,trace"
 }
 quota_init
 reset_quota_settings
@@ -4863,7 +4864,8 @@ run_test 73 "default limits at OST Pool Quotas"
 
 quota_fini()
 {
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
+	do_nodes $(comma_list $(nodes_list)) \
+		"lctl set_param -n debug=-quota,trace"
 	if $PQ_CLEANUP; then
 		disable_project_quota
 	fi

@@ -10308,12 +10308,12 @@ function createmany() {
 		local saved_debug=$($LCTL get_param -n debug)
 		local list=$(comma_list $(all_nodes))
 
-		do_nodes $list $LCTL set_param debug=0
+		do_nodes $list $LCTL set_param -n debug=0
 	}
 	$LUSTRE/tests/createmany $*
 	local rc=$?
 	(( count > 100 )) &&
-		do_nodes $list "$LCTL set_param debug=\\\"$saved_debug\\\""
+		do_nodes $list "$LCTL set_param -n debug=\\\"$saved_debug\\\""
 	return $rc
 }
 
@@ -10324,12 +10324,12 @@ function unlinkmany() {
 		local saved_debug=$($LCTL get_param -n debug)
 		local list=$(comma_list $(all_nodes))
 
-		do_nodes $list $LCTL set_param debug=0
+		do_nodes $list $LCTL set_param -n debug=0
 	}
 	$LUSTRE/tests/unlinkmany $*
 	local rc=$?
 	(( count > 100 )) &&
-		do_nodes $list "$LCTL set_param debug=\\\"$saved_debug\\\""
+		do_nodes $list "$LCTL set_param -n debug=\\\"$saved_debug\\\""
 	return $rc
 }
 
