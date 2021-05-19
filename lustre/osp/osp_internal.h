@@ -294,14 +294,15 @@ extern struct kmem_cache *osp_object_kmem;
  * The left part is for value, binary mode. */
 struct osp_xattr_entry {
 	struct list_head	 oxe_list;
-	atomic_t		 oxe_ref;
 	void			*oxe_value;
-	size_t			 oxe_buflen;
-	size_t			 oxe_namelen;
-	size_t			 oxe_vallen;
-	unsigned int		 oxe_exist:1,
-				 oxe_ready:1;
-	char			 oxe_buf[0];
+	atomic_t		 oxe_ref;
+	unsigned int		 oxe_buflen;
+	unsigned int		 oxe_vallen;
+	unsigned short		 oxe_namelen;
+	unsigned short		 oxe_exist:1,
+				 oxe_ready:1,
+				 oxe_largebuf:1;
+	char			 oxe_name[0];
 };
 
 /* this is a top object */
