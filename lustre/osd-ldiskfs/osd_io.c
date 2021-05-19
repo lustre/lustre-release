@@ -2760,6 +2760,22 @@ void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list)
 	}
 }
 
+/* For a partial-page punch, flush punch range to disk immediately */
+static void osd_partial_page_flush_punch(struct osd_device *d,
+					 struct inode *inode, loff_t start,
+					 loff_t end)
+{
+	if (osd_use_page_cache(d)) {
+		filemap_fdatawrite_range(inode->i_mapping, start, end);
+	} else {
+		/* Notice we use "wait" version to ensure I/O is complete */
+		filemap_write_and_wait_range(inode->i_mapping, start,
+					     end);
+		invalidate_mapping_pages(inode->i_mapping, start >> PAGE_SHIFT,
+					 end >> PAGE_SHIFT);
+	}
+}
+
 /*
  * For a partial-page truncate, flush the page to disk immediately to
  * avoid data corruption during direct disk write.  b=17397
@@ -2827,8 +2843,7 @@ void osd_execute_punch(const struct lu_env *env, struct osd_object *obj,
 	struct file *file = osd_quasi_file(env, inode);
 
 	file->f_op->fallocate(file, mode, start, end - start);
-	osd_partial_page_flush(d, inode, start);
-	osd_partial_page_flush(d, inode, end - 1);
+	osd_partial_page_flush_punch(d, inode, start, end - 1);
 }
 
 void osd_process_truncates(const struct lu_env *env, struct list_head *list)

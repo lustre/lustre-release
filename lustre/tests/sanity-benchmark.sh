@@ -199,6 +199,31 @@ test_fsx() {
 }
 run_test fsx "fsx"
 
+test_fsx_partial_punch() {
+	local fsx_count=100000
+	local testfile=$DIR/f0.fsxfile
+	local fsx_size=5407677 # upper bound file size
+	local fsx_seed=7919
+
+	check_set_fallocate
+
+	rm -f $testfile
+	$LFS setstripe -c -1 $testfile
+
+	#
+	# $fsx_seed, $fsx_count and $fsx_size combination almost
+	# always reproduces the LASSERT under LU-14640. Therefore these
+	# constants are used as reproducer vs using a random value and
+	# hoping it hits the error condition
+	#
+	CMD="$FSX -c 50 -p 1000 -S $fsx_seed -P $TMP -l $fsx_size \
+	     -N $fsx_count $testfile"
+	echo "Using: $CMD"
+	$CMD || error "fsx failed"
+	rm -f $testfile
+}
+run_test fsx_partial_punch "Verify fsx with partial punch via fallocate"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
