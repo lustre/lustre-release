@@ -23211,7 +23211,7 @@ test_398b() { # LU-4198
 		--filename=$DIR/$tfile || true
 	wait $bg_pid
 
-	rm -rf $DIR/$tfile
+	rm -f $DIR/$tfile
 }
 run_test 398b "DIO and buffer IO race"
 
@@ -23271,27 +23271,28 @@ test_398c() { # LU-4198
 		--filename=$DIR/$tfile
 	[ $? -eq 0 ] || error "fio large block size failed"
 
-	rm -rf $DIR/$tfile
+	rm -f $DIR/$tfile
 	$LCTL set_param debug="$saved_debug"
 }
 run_test 398c "run fio to test AIO"
 
 test_398d() { #  LU-13846
-	test -f aiocp || skip_env "no aiocp installed"
-	local aio_file=$DIR/aio_file
+	which aiocp || skip_env "no aiocp installed"
+	local aio_file=$DIR/$tfile.aio
 
 	$LFS setstripe -c -1 -S 1M $DIR/$tfile $aio_file
 
 	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=64
 	aiocp -a $PAGE_SIZE -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file
+	stack_trap "rm -f $DIR/$tfile $aio_file"
 
-	diff $DIR/$tfile $aio_file || "file diff after aiocp"
+	diff $DIR/$tfile $aio_file || error "file diff after aiocp"
 
 	# make sure we don't crash and fail properly
 	aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file &&
 		error "aio not aligned with PAGE SIZE should fail"
 
-	rm -rf $DIR/$tfile $aio_file
+	rm -f $DIR/$tfile $aio_file
 }
 run_test 398d "run aiocp to verify block size > stripe size"
 
@@ -23301,6 +23302,26 @@ test_398e() {
 	dd if=$DIR/$tfile of=$DIR/$tfile.new bs=1M count=1 oflag=direct
 }
 run_test 398e "O_Direct open cleared by fcntl doesn't cause hang"
+
+test_398f() { #  LU-14687
+	which aiocp || skip_env "no aiocp installed"
+	local aio_file=$DIR/$tfile.aio
+
+	$LFS setstripe -c -1 -S 1M $DIR/$tfile $aio_file
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=64
+	stack_trap "rm -f $DIR/$tfile $aio_file"
+
+	#define OBD_FAIL_LLITE_PAGE_ALLOC 0x1418
+	$LCTL set_param fail_loc=0x1418
+	# make sure we don't crash and fail properly
+	aiocp -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file &&
+		error "aio with page allocation failure succeeded"
+	$LCTL set_param fail_loc=0
+	diff $DIR/$tfile $aio_file
+	[[ $? != 0 ]] || error "no diff after failed aiocp"
+}
+run_test 398f "verify aio handles ll_direct_rw_pages errors correctly"
 
 test_fake_rw() {
 	local read_write=$1
