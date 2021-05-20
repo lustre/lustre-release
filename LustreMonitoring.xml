@@ -647,24 +647,27 @@ Lustre Jobstats</title>
       </para>
       <itemizedlist>
         <listitem>
-	  <para><emphasis>%e</emphasis> print executable name</para>
+          <para><emphasis>%e</emphasis> print executable name</para>
         </listitem>
         <listitem>
-	  <para><emphasis>%g</emphasis> print group ID number</para>
+          <para><emphasis>%g</emphasis> print group ID number</para>
         </listitem>
         <listitem>
-	  <para><emphasis>%h</emphasis> print hostname</para>
+          <para><emphasis>%h</emphasis> print fully-qualified hostname</para>
         </listitem>
         <listitem>
-	  <para><emphasis>%j</emphasis> print JobID from process environment
-	  variable named by the <emphasis>jobid_var</emphasis> parameter
-	  </para>
+          <para><emphasis>%H</emphasis> print short hostname</para>
         </listitem>
         <listitem>
-	  <para><emphasis>%p</emphasis> print numeric process ID</para>
+          <para><emphasis>%j</emphasis> print JobID from process environment
+          variable named by the <emphasis>jobid_var</emphasis> parameter
+          </para>
         </listitem>
         <listitem>
-	  <para><emphasis>%u</emphasis> print user ID number</para>
+          <para><emphasis>%p</emphasis> print numeric process ID</para>
+        </listitem>
+        <listitem>
+          <para><emphasis>%u</emphasis> print user ID number</para>
         </listitem>
       </itemizedlist>
 
