@@ -9,16 +9,16 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.lustre_configure" />
+        <xref linkend="lustre_configure" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.lustre_configure_additional_options" />
+        <xref linkend="lustre_configure_additional_options" />
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.lustre_configure">
+  <section xml:id="lustre_configure">
     <title>
     <indexterm>
       <primary>Lustre</primary>
@@ -123,10 +123,10 @@ mkfs.lustre --fsname=
 <replaceable>/dev/block_device</replaceable>
 </screen>
           <para>See 
-          <xref linkend="dbdoclet.lustre_configure_multiple_fs" />for more details.</para>
+          <xref linkend="lustre_configure_multiple_fs" />for more details.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.addmdtindex">
+      <listitem xml:id="addmdtindex">
         <para>Optionally add in additional MDTs.</para>
         <screen>
 mkfs.lustre --fsname=
@@ -151,7 +151,7 @@ mount -t lustre
           devices, mount them both.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.format_ost">
+      <listitem xml:id="format_ost">
         <para>Create the OST. On the OSS node, run:</para>
         <screen>
 mkfs.lustre --fsname=
@@ -190,7 +190,7 @@ mkfs.lustre --fsname=
           instead format the whole disk for the file system.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.mount_ost">
+      <listitem xml:id="mount_ost">
         <para>Mount the OST. On the OSS node where the OST was created,
         run:</para>
         <screen>
@@ -200,12 +200,12 @@ mount -t lustre
 </screen>
         <note>
           <para>To create additional OSTs, repeat Step 
-          <xref linkend="dbdoclet.format_ost" />and Step 
-          <xref linkend="dbdoclet.mount_ost" />, specifying the
+          <xref linkend="format_ost" />and Step 
+          <xref linkend="mount_ost" />, specifying the
           next higher OST index number.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.mount_on_client">
+      <listitem xml:id="mount_on_client">
         <para>Mount the Lustre file system on the client. On the client node,
         run:</para>
         <screen>
@@ -216,7 +216,7 @@ mount -t lustre
 </screen>
         <note>
           <para>To mount the filesystem on additional clients, repeat Step 
-          <xref linkend="dbdoclet.mount_on_client" />.</para>
+          <xref linkend="mount_on_client" />.</para>
         </note>
         <note>
           <para>If you have a problem mounting the file system, check the
@@ -704,7 +704,7 @@ Lustre: temp-MDT0000.mdt: set parameter identity_upcall=/usr/sbin/l_getidentity
 Lustre: Server temp-MDT0000 on device /dev/sdb has started 
 </screen>
         </listitem>
-        <listitem xml:id="dbdoclet.create_and_mount_ost">
+        <listitem xml:id="create_and_mount_ost">
           <para>Create and mount 
           <literal>ost0</literal>.</para>
           <para>In this example, the OSTs (
@@ -919,7 +919,7 @@ total 8.0M
       use.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.lustre_configure_additional_options">
+  <section xml:id="lustre_configure_additional_options">
     <title>
     <indexterm>
       <primary>Lustre</primary>
@@ -937,10 +937,10 @@ total 8.0M
       </indexterm>Scaling the Lustre File System</title>
       <para>A Lustre file system can be scaled by adding OSTs or clients. For
       instructions on creating additional OSTs repeat Step 
-      <xref linkend="dbdoclet.create_and_mount_ost" />and Step 
-      <xref linkend="dbdoclet.mount_ost" />above. For mounting
+      <xref linkend="create_and_mount_ost" />and Step 
+      <xref linkend="mount_ost" />above. For mounting
       additional clients, repeat Step 
-      <xref linkend="dbdoclet.mount_on_client" />for each client.</para>
+      <xref linkend="mount_on_client" />for each client.</para>
     </section>
     <section remap="h3">
       <title>

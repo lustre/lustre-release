@@ -10,7 +10,7 @@
     parameters. These parameters are contained in the 
     <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
   </note>
-  <section xml:id="dbdoclet.tuning_optimizing_service_threads">
+  <section xml:id="tuning_optimizing_service_threads">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -97,7 +97,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
       <para>
       This works in a similar fashion to 
       binding of threads on MDS. MDS thread tuning is covered in 
-      <xref linkend="dbdoclet.mdsbinding" />.</para>
+      <xref linkend="mdsbinding" />.</para>
       <itemizedlist>
         <listitem>
           <para>
@@ -113,9 +113,9 @@ lctl {get,set}_param {service}.thread_{min,max,started}
         </listitem>
       </itemizedlist>
       <para>For further details, see 
-      <xref linkend="dbdoclet.tuning_setting_thread_count" />.</para>
+      <xref linkend="tuning_setting_thread_count" />.</para>
     </section>
-    <section xml:id="dbdoclet.mdstuning">
+    <section xml:id="mdstuning">
       <title>
       <indexterm>
         <primary>tuning</primary>
@@ -136,7 +136,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
 </screen>
       </para>
       <para>For details, see 
-      <xref linkend="dbdoclet.tuning_setting_thread_count" />.</para>
+      <xref linkend="tuning_setting_thread_count" />.</para>
       <para>The number of MDS service threads started depends on system size
       and the load on the server, and has a default maximum of 64. The
       maximum potential number of threads (<literal>MDS_MAX_THREADS</literal>)
@@ -161,7 +161,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.mdsbinding">
+  <section xml:id="mdsbinding">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -173,7 +173,7 @@ lctl {get,set}_param {service}.thread_{min,max,started}
     bindings are selected automatically to provide good overall performance for
     a given CPU count. However, an administrator can deviate from these setting
     if they choose.  For details on specifying the mapping of CPU cores to
-    CPTs see <xref linkend="dbdoclet.libcfstuning"/>.
+    CPTs see <xref linkend="libcfstuning"/>.
     </para>
     <itemizedlist>
       <listitem>
@@ -204,7 +204,7 @@ options mdt mds_num_cpts=[0]</screen>
     </example>
     </para>
   </section>
-  <section xml:id="dbdoclet.tuning_lnet_params">
+  <section xml:id="tuning_lnet_params">
     <title>
     <indexterm>
       <primary>LNet</primary>
@@ -265,7 +265,7 @@ options ksocklnd enable_irq_affinity=0
       an administrator can bind an interface to one or more CPU partitions.
       Bindings are specified as options to the LNet modules. For more
       information on specifying module options, see 
-      <xref linkend="dbdoclet.tuning_lnet_mod_params" /></para>
+      <xref linkend="tuning_lnet_mod_params" /></para>
       <para>For example, 
       <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for 
       <literal>o2ib0</literal> will be handled by LND threads executing on 
@@ -509,7 +509,7 @@ lnet large_router_buffers=8192
       be MAX.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.libcfstuning">
+  <section xml:id="libcfstuning">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -590,7 +590,7 @@ cpu_partition_table=
       </para>
     </section>
   </section>
-  <section xml:id="dbdoclet.lndtuning">
+  <section xml:id="lndtuning">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -1033,7 +1033,7 @@ cpu_partition_table=
 	</informaltable>
     </section>
   </section>
-  <section xml:id="dbdoclet.nrstuning">
+  <section xml:id="nrstuning">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -1568,7 +1568,7 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
         </listitem>
       </itemizedlist>
     </section>
-    <section xml:id="dbdoclet.tbftuning" condition='l26'>
+    <section xml:id="tbftuning" condition='l26'>
       <title>
       <indexterm>
         <primary>tuning</primary>
@@ -1687,7 +1687,7 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
 	    <para><emphasis role="bold">JobID based TBF policy</emphasis></para>
             <para>For the JobID, please see
             <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="dbdoclet.jobstats" /> for more details.</para>
+            linkend="jobstats" /> for more details.</para>
 	    <para>Command:</para>
             <screen>lctl set_param x.x.x.nrs_tbf_rule=
 "[reg|hp] start <replaceable>rule_name</replaceable> jobid={<replaceable>jobid_list</replaceable>} rate=<replaceable>rate</replaceable>"
@@ -1913,7 +1913,7 @@ default * 10000, ref 0</screen>
 	</itemizedlist>
       </section>
     </section>
-    <section xml:id="dbdoclet.delaytuning" condition='l2A'>
+    <section xml:id="delaytuning" condition='l2A'>
       <title>
       <indexterm>
         <primary>tuning</primary>
@@ -2059,7 +2059,7 @@ ost.OSS.ost_io.nrs_delay_pct=hp_delay_pct:5
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.tuning_lockless_IO">
+  <section xml:id="tuning_lockless_IO">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -2341,7 +2341,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           renegotiate the new maximum RPC size.</para></caution>
       </section>
   </section>
-  <section xml:id="dbdoclet.tuning_IO_small_files">
+  <section xml:id="tuning_IO_small_files">
     <title>
     <indexterm>
       <primary>tuning</primary>
@@ -2381,7 +2381,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
       </listitem>
     </itemizedlist>
   </section>
-  <section xml:id="dbdoclet.write_vs_read_performance">
+  <section xml:id="write_vs_read_performance">
     <title>
     <indexterm>
       <primary>tuning</primary>

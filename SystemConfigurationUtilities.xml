@@ -6,40 +6,40 @@
   <para>This chapter includes system configuration utilities and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.config_e2scan"/></para>
+      <para><xref linkend="config_e2scan"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.l_getidentity"/></para>
+      <para><xref linkend="l_getidentity"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.lctl"/></para>
+      <para><xref linkend="lctl"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_ll_decode_filter_fid"/></para>
+      <para><xref linkend="config_ll_decode_filter_fid"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_recover_lostfound_objs"/></para>
+      <para><xref linkend="config_recover_lostfound_objs"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_llog_reader"/></para>
+      <para><xref linkend="config_llog_reader"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_llstat"/></para>
+      <para><xref linkend="config_llstat"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_llverdev"/></para>
+      <para><xref linkend="config_llverdev"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_llshowmount"/></para>
+      <para><xref linkend="config_llshowmount"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_lst"/></para>
+      <para><xref linkend="config_lst"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_lustre_rmmod_sh"/></para>
+      <para><xref linkend="config_lustre_rmmod_sh"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.lustre_rsync"/></para>
+      <para><xref linkend="lustre_rsync"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="mkfs.lustre"/></para>
@@ -48,19 +48,19 @@
       <para><xref linkend="mount.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.plot_llstat"/></para>
+      <para><xref linkend="plot_llstat"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_routerstat"/></para>
+      <para><xref linkend="config_routerstat"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="tunefs.lustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.config_additional_utility"/></para>
+      <para><xref linkend="config_additional_utility"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.config_e2scan">
+  <section xml:id="config_e2scan">
       <title><indexterm><primary>e2scan</primary></indexterm>e2scan</title>
     <para>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
     <para>
@@ -130,7 +130,7 @@
       </informaltable>
     </section>
   </section>
-  <section xml:id="dbdoclet.l_getidentity">
+  <section xml:id="l_getidentity">
     <title><indexterm><primary>l_getidentity</primary></indexterm>
 l_getidentity</title>
     <para>The l_getidentity tool normally handles Lustre user/group mapping
@@ -146,7 +146,7 @@ l_getidentity</title>
         values for that UID, and writes this into the
         <literal>mdt.*.identity_info</literal> parameter file.  The list of
         supplementary groups is cached in the kernel to avoid repeated
-        upcalls.  See <xref linkend="dbdoclet.identity_upcall"/> for more
+        upcalls.  See <xref linkend="identity_upcall"/> for more
         details.</para>
       <para>The <literal>l_getidentity</literal> utility can also be run
         directly for debugging purposes to ensure that the UID mapping for a
@@ -200,7 +200,7 @@ l_getidentity</title>
 </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.lctl">
+  <section xml:id="lctl">
     <title><indexterm><primary>lctl</primary></indexterm>
 lctl</title>
     <para>The lctl utility is used for root control and configuration. With lctl you can directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
@@ -264,7 +264,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
       <screen>lctl list_param [-R] [-F] <replaceable>obdtype.obdname.*</replaceable></screen>
       <para>For example, to list all of the parameters on the MDT:</para>
       <screen>oss# lctl list_param -RF mdt</screen>
-      <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="dbdoclet.setting_param_with_lctl"/>.</para>
+      <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="setting_param_with_lctl"/>.</para>
       <para><emphasis role="bold">Network Configuration</emphasis></para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -516,7 +516,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
               <entry>
                 <para> Sets a permanent configuration parameter for any device via the MGS. This command must be run on the MGS node.</para>
                 <para>All writeable parameters under <literal>lctl list_param</literal> (e.g. <literal>lctl list_param -F osc.*.* | grep</literal> =) can be permanently set using <literal>lctl conf_param</literal>, but the format is slightly different. For <literal>conf_param</literal>, the device is specified first, then the obdtype. Wildcards are not supported. Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout). For system-wide parameters, <replaceable>device</replaceable> is ignored.</para>
-                <para>For more information on setting permanent parameters and <literal>lctl conf_param</literal> command examples, see <xref linkend="dbdoclet.setting_permanent_params"/> (Setting Permanent Parameters).</para>
+                <para>For more information on setting permanent parameters and <literal>lctl conf_param</literal> command examples, see <xref linkend="setting_permanent_params"/> (Setting Permanent Parameters).</para>
               </entry>
             </row>
             <row>
@@ -803,7 +803,7 @@ lctl &gt; quit</screen>
           </para>
         </listitem>
         <listitem>
-          <para> <xref linkend="dbdoclet.lctl"/> </para>
+          <para> <xref linkend="lctl"/> </para>
         </listitem>
         <listitem>
           <para> <xref linkend="userutilities.lfs"/> </para>
@@ -811,7 +811,7 @@ lctl &gt; quit</screen>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_ll_decode_filter_fid">
+  <section xml:id="config_ll_decode_filter_fid">
     <title><indexterm><primary>ll_decode_filter_fid</primary></indexterm>
 ll_decode_filter_fid</title>
     <para>The <literal>ll_decode_filter_fid</literal> utility displays the
@@ -833,7 +833,7 @@ ll_decode_filter_fid</title>
         and is not accessed or modified by Lustre after that time.</para>
       <para>The OST object ID (objid) may be useful in case of OST directory
         corruption, though LFSCK can normally reconstruct the entire OST object
-        directory tree, see <xref linkend="dbdoclet.lfsckadmin" /> for details.
+        directory tree, see <xref linkend="lfsckadmin" /> for details.
         The MDS FID can be useful to determine which MDS inode an OST object
         is (or was) used by. The stripe index can be used in conjunction with
         other OST objects to reconstruct the layout of a file even if the MDT
@@ -853,10 +853,10 @@ root@oss1# ll_decode_filter_fid #12345[4,5,8]
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.config_recover_lostfound_objs"/></para>
+      <para><xref linkend="config_recover_lostfound_objs"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_recover_lostfound_objs" condition='l28'>
+  <section xml:id="config_recover_lostfound_objs" condition='l28'>
     <title><indexterm><primary>ll_recover_lost_found_objs</primary></indexterm>
 ll_recover_lost_found_objs</title>
     <para>The <literal>ll_recover_lost_found_objs</literal> utility was
@@ -901,7 +901,7 @@ Timestamp Read-delta ReadRate Write-delta WriteRate
       <screen>/proc/fs/lustre/obdfilter/<replaceable>ostname</replaceable>/stats</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_llog_reader">
+  <section xml:id="config_llog_reader">
     <title><indexterm><primary>llog_reader</primary></indexterm>
 llog_reader</title>
     <para>The llog_reader utility translates a Lustre configuration log into human-readable form.</para>
@@ -927,7 +927,7 @@ llog_reader /tmp/tfs-client</screen>
       <para><xref linkend="tunefs.lustre"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_llstat">
+  <section xml:id="config_llstat">
     <title><indexterm><primary>llstat</primary></indexterm>
 llstat</title>
     <para>The llstat utility displays Lustre statistics.</para>
@@ -1023,7 +1023,7 @@ llstat</title>
 </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_llverdev">
+  <section xml:id="config_llverdev">
     <title><indexterm><primary>llverdev</primary></indexterm>
 llverdev</title>
     <para>The llverdev verifies a block device is functioning properly over its full size.</para>
@@ -1161,7 +1161,7 @@ write complete
 read complete </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_llshowmount">
+  <section xml:id="config_llshowmount">
     <title><indexterm><primary>lshowmount</primary></indexterm>
 lshowmount</title>
     <para>The lshowmount utility shows Lustre exports.</para>
@@ -1233,7 +1233,7 @@ lshowmount</title>
 /proc/fs/lustre/obdfilter/<replaceable>server</replaceable>/exports/<replaceable>uuid</replaceable>/nid</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_lst">
+  <section xml:id="config_lst">
     <title><indexterm><primary>lst</primary></indexterm>
 lst</title>
     <para>The lst utility starts LNet self-test.</para>
@@ -1283,7 +1283,7 @@ lst stat servers &amp; sleep 30; kill $!
 lst end_session </screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_lustre_rmmod_sh">
+  <section xml:id="config_lustre_rmmod_sh">
     <title><indexterm><primary>lustre_rmmod.sh</primary></indexterm>
 lustre_rmmod.sh</title>
     <para>The lustre_rmmod.sh utility removes all Lustre and LNet modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
@@ -1291,7 +1291,7 @@ lustre_rmmod.sh</title>
       <para>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.lustre_rsync">
+  <section xml:id="lustre_rsync">
     <title><indexterm><primary>lustre_rsync</primary></indexterm>
 lustre_rsync</title>
     <para>The lustre_rsync utility synchronizes (replicates) a Lustre file system to a target file system.</para>
@@ -1530,7 +1530,7 @@ mkfs.lustre</title>
         defined by this command.</para>
       <para>When the file system is created, parameters can simply be added as a
           <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. See <xref
-          linkend="dbdoclet.tuning_params_mkfs_lustre"/>.</para>
+          linkend="tuning_params_mkfs_lustre"/>.</para>
       <informaltable frame="all">
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
@@ -2243,7 +2243,7 @@ mount.lustre</title>
                 control over the starting conditions. This mount option also
                 prevents OI scrub from occurring automatically when OI
                 inconsistency is detected (see
-                <xref linkend="dbdoclet.lfsck_auto_scrub"/>).
+                <xref linkend="lfsck_auto_scrub"/>).
                 </para>
               </entry>
             </row>
@@ -2278,7 +2278,7 @@ mount.lustre</title>
           <para>  <xref linkend="tunefs.lustre"/></para>
         </listitem>
         <listitem>
-          <para>  <xref linkend="dbdoclet.lctl"/></para>
+          <para>  <xref linkend="lctl"/></para>
         </listitem>
         <listitem>
           <para>  <xref linkend="userutilities.lfs"/></para>
@@ -2286,7 +2286,7 @@ mount.lustre</title>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.plot_llstat">
+  <section xml:id="plot_llstat">
     <title><indexterm><primary>plot-llstat</primary></indexterm>
 plot-llstat</title>
     <para>The plot-llstat utility plots Lustre statistics.</para>
@@ -2348,7 +2348,7 @@ plot-llstat</title>
 plot-llstat log 3</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_routerstat">
+  <section xml:id="config_routerstat">
     <title><indexterm><primary>routerstat</primary></indexterm>
 routerstat</title>
     <para>The routerstat utility prints Lustre router statistics.</para>
@@ -2739,7 +2739,7 @@ tunefs.lustre</title>
           </para>
         </listitem>
         <listitem>
-          <para><xref linkend="dbdoclet.lctl"/></para>
+          <para><xref linkend="lctl"/></para>
         </listitem>
         <listitem>
           <para><xref linkend="userutilities.lfs"/></para>
@@ -2747,7 +2747,7 @@ tunefs.lustre</title>
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.config_additional_utility">
+  <section xml:id="config_additional_utility">
       <title><indexterm><primary>utilities</primary><secondary>system config</secondary></indexterm>
 Additional System Configuration Utilities</title>
     <para>This section describes additional system configuration utilities for Lustre.</para>

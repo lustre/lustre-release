@@ -95,7 +95,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.connect_flags
       </listitem>
     </itemizedlist>
     <para>For more information about using <literal>lctl</literal>, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.setting_param_with_lctl"/>.</para>
+        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="setting_param_with_lctl"/>.</para>
     <para>Data can also be viewed using the <literal>cat</literal> command
     with the full path to the file. The form of the <literal>cat</literal>
     command is similar to that of the <literal>lctl get_param</literal>
@@ -119,7 +119,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.connect_flags
     <para>The <literal>llstat</literal> utility can be used to monitor some
     Lustre file system I/O activity over a specified time period. For more
     details, see
-    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.config_llstat"/></para>
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="config_llstat"/></para>
     <para>Some data is imported from attached clients and is available in a
     directory called <literal>exports</literal> located in the corresponding
     per-service directory on a Lustre server. For example:
@@ -1720,7 +1720,7 @@ obdfilter.lol-OST0001.sync_journal=0</screen>
       <screen>$ lctl get_param obdfilter.*.sync_on_lock_cancel
 obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
     </section>
-    <section xml:id="dbdoclet.TuningModRPCs" condition='l28'>
+    <section xml:id="TuningModRPCs" condition='l28'>
       <title>
         <indexterm>
           <primary>proc</primary>
@@ -2375,7 +2375,7 @@ nid                    refs   peer    max   tx    min
         </listitem>
       </itemizedlist></para>
   </section>
-  <section remap="h3" xml:id="dbdoclet.balancing_free_space">
+  <section remap="h3" xml:id="balancing_free_space">
     <title><indexterm>
         <primary>proc</primary>
         <secondary>free space</secondary>
@@ -2491,7 +2491,7 @@ nid                    refs   peer    max   tx    min
 ldlm.namespaces.myth-MDT0000-mdc-ffff8804296c2800.lru_max_age=900000
     </screen>
   </section>
-  <section xml:id="dbdoclet.tuning_setting_thread_count">
+  <section xml:id="tuning_setting_thread_count">
     <title><indexterm>
         <primary>proc</primary>
         <secondary>thread counts</secondary>

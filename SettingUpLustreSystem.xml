@@ -9,31 +9,31 @@
   <itemizedlist>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.storage_hardware_considerations"/>
+          <xref linkend="storage_hardware_considerations"/>
       </para>
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.space_requirements"/>
+          <xref linkend="space_requirements"/>
       </para>
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.ldiskfs_mkfs_opts"/>
+          <xref linkend="ldiskfs_mkfs_opts"/>
       </para>
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.mds_oss_memory"/>
+          <xref linkend="mds_oss_memory"/>
       </para>
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.network_considerations"/>
+          <xref linkend="network_considerations"/>
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.storage_hardware_considerations">
+  <section xml:id="storage_hardware_considerations">
       <title><indexterm><primary>setup</primary></indexterm>
   <indexterm><primary>setup</primary><secondary>hardware</secondary></indexterm>        
   <indexterm><primary>design</primary><see>setup</see></indexterm>        
@@ -157,7 +157,7 @@
       results.)</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.space_requirements">
+  <section xml:id="space_requirements">
       <title><indexterm><primary>setup</primary><secondary>space</secondary></indexterm>
           <indexterm><primary>space</primary><secondary>determining requirements</secondary></indexterm>
           Determining Space Requirements</title>
@@ -216,7 +216,7 @@
       The size is determined by the total number of servers in the Lustre
       file system cluster(s) that are managed by the MGS.</para>
     </section>
-    <section xml:id="dbdoclet.mdt_space_requirements">
+    <section xml:id="mdt_space_requirements">
         <title><indexterm>
           <primary>setup</primary>
           <secondary>MDT</secondary>
@@ -260,7 +260,7 @@
         <para>2 KiB/inode x 100 million inodes x 2 = 400 GiB ldiskfs MDT</para>
       </informalexample>
       <para>For details about formatting options for ldiskfs MDT and OST file
-      systems, see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
+      systems, see <xref linkend="ldiskfs_mdt_mkfs"/>.</para>
       <note>
         <para>If the median file size is very small, 4 KB for example, the
         MDT would use as much space for each file as the space used on the OST,
@@ -327,10 +327,10 @@
       specify a different average file size (number of total inodes for a given
       OST size) to reduce file system overhead and minimize file system check
       time.
-      See <xref linkend="dbdoclet.ldiskfs_ost_mkfs"/> for more details.</para>
+      See <xref linkend="ldiskfs_ost_mkfs"/> for more details.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.ldiskfs_mkfs_opts">
+  <section xml:id="ldiskfs_mkfs_opts">
     <title>
       <indexterm>
         <primary>ldiskfs</primary>
@@ -377,7 +377,7 @@
     <screen>--mkfsoptions=&apos;backing fs options&apos;</screen>
     <para>For other <literal>mkfs.lustre</literal> options, see the Linux man page for
         <literal>mke2fs(8)</literal>.</para>
-    <section xml:id="dbdoclet.ldiskfs_mdt_mkfs">
+    <section xml:id="ldiskfs_mdt_mkfs">
       <title><indexterm>
           <primary>inodes</primary>
           <secondary>MDS</secondary>
@@ -430,7 +430,7 @@
       read or written for each MDT inode access.
       </para>
     </section>
-    <section xml:id="dbdoclet.ldiskfs_ost_mkfs">
+    <section xml:id="ldiskfs_ost_mkfs">
       <title><indexterm>
           <primary>inodes</primary>
           <secondary>OST</secondary>
@@ -546,7 +546,7 @@
         if substantial errors are detected and need to be repaired.</para>
       </note>
       <para>For further details about optimizing MDT and OST file systems,
-      see <xref linkend="dbdoclet.ldiskfs_raid_opts"/>.</para>
+      see <xref linkend="ldiskfs_raid_opts"/>.</para>
     </section>
   </section>
   <section remap="h3">
@@ -597,7 +597,7 @@
         <tbody>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_mdt_count" xreflabel=""/>Maximum number of MDTs</para>
+              <para><anchor xml:id="max_mdt_count" xreflabel=""/>Maximum number of MDTs</para>
             </entry>
             <entry>
               <para>256</para>
@@ -614,7 +614,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_ost_count" xreflabel=""/>Maximum number of OSTs</para>
+              <para><anchor xml:id="max_ost_count" xreflabel=""/>Maximum number of OSTs</para>
             </entry>
             <entry>
               <para>8150</para>
@@ -628,7 +628,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_ost_size" xreflabel=""/>Maximum OST size</para>
+              <para><anchor xml:id="max_ost_size" xreflabel=""/>Maximum OST size</para>
             </entry>
             <entry>
               <para>1024TiB (ldiskfs), 1024TiB (ZFS)</para>
@@ -651,7 +651,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_client_count" xreflabel=""/>Maximum number of clients</para>
+              <para><anchor xml:id="max_client_count" xreflabel=""/>Maximum number of clients</para>
             </entry>
             <entry>
               <para>131072</para>
@@ -664,7 +664,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_filesysem_size" xreflabel=""/>Maximum size of a single file system</para>
+              <para><anchor xml:id="max_filesysem_size" xreflabel=""/>Maximum size of a single file system</para>
             </entry>
             <entry>
               <para>2EiB or larger</para>
@@ -678,7 +678,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_stripe_count" xreflabel=""/>Maximum stripe count</para>
+              <para><anchor xml:id="max_stripe_count" xreflabel=""/>Maximum stripe count</para>
             </entry>
             <entry>
               <para>2000</para>
@@ -702,7 +702,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_stripe_size" xreflabel=""/>Maximum stripe size</para>
+              <para><anchor xml:id="max_stripe_size" xreflabel=""/>Maximum stripe size</para>
             </entry>
             <entry>
               <para>&lt; 4 GiB</para>
@@ -714,7 +714,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.min_stripe_size" xreflabel=""/>Minimum stripe size</para>
+              <para><anchor xml:id="min_stripe_size" xreflabel=""/>Minimum stripe size</para>
             </entry>
             <entry>
               <para>64 KiB</para>
@@ -729,7 +729,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_object_size" xreflabel=""/>Maximum single object size</para>
+              <para><anchor xml:id="max_object_size" xreflabel=""/>Maximum single object size</para>
             </entry>
             <entry>
               <para>16TiB (ldiskfs), 256TiB (ZFS)</para>
@@ -744,7 +744,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_file_size" xreflabel=""/>Maximum file size</para>
+              <para><anchor xml:id="max_file_size" xreflabel=""/>Maximum file size</para>
             </entry>
             <entry>
               <para>16 TiB on 32-bit systems</para>
@@ -767,7 +767,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_directory_size" xreflabel=""/>Maximum number of files or subdirectories in a single directory</para>
+              <para><anchor xml:id="max_directory_size" xreflabel=""/>Maximum number of files or subdirectories in a single directory</para>
             </entry>
             <entry>
               <para>600M-3.8B files (ldiskfs), 16T (ZFS)</para>
@@ -791,7 +791,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_file_count" xreflabel=""/>Maximum number of files in the file system</para>
+              <para><anchor xml:id="max_file_count" xreflabel=""/>Maximum number of files in the file system</para>
             </entry>
             <entry>
               <para>4 billion (ldiskfs), 256 trillion (ZFS) <emphasis>per MDT</emphasis></para>
@@ -816,7 +816,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_filename_size" xreflabel=""/>Maximum length of a filename</para>
+              <para><anchor xml:id="max_filename_size" xreflabel=""/>Maximum length of a filename</para>
             </entry>
             <entry>
               <para>255 bytes (filename)</para>
@@ -828,7 +828,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_pathname_size" xreflabel=""/>Maximum length of a pathname</para>
+              <para><anchor xml:id="max_pathname_size" xreflabel=""/>Maximum length of a pathname</para>
             </entry>
             <entry>
               <para>4096 bytes (pathname)</para>
@@ -839,7 +839,7 @@
           </row>
           <row>
             <entry>
-              <para><anchor xml:id="dbdoclet.max_open_files" xreflabel=""/>Maximum number of open files for a Lustre file system</para>
+              <para><anchor xml:id="max_open_files" xreflabel=""/>Maximum number of open files for a Lustre file system</para>
             </entry>
             <entry>
               <para>No limit</para>
@@ -858,7 +858,7 @@
     </table>
     <para>&#160;</para>
   </section>
-  <section xml:id="dbdoclet.mds_oss_memory">
+  <section xml:id="mds_oss_memory">
     <title><indexterm><primary>setup</primary><secondary>memory</secondary></indexterm>Determining Memory Requirements</title>
     <para>This section describes the memory requirements for each Lustre file system component.</para>
     <section remap="h3">
@@ -1007,7 +1007,7 @@
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.network_considerations">
+  <section xml:id="network_considerations">
     <title><indexterm>
         <primary>setup</primary>
         <secondary>network</secondary>

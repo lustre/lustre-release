@@ -11,7 +11,7 @@
       <para><xref linkend="lustre_error_messages"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.reporting_lustre_problem"/></para>
+      <para><xref linkend="reporting_lustre_problem"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="common_lustre_problems"/></para>
@@ -185,7 +185,7 @@
         </tgroup>
       </informaltable>
     </section>
-    <section xml:id="dbdoclet.troubleshooting">
+    <section xml:id="troubleshooting">
       <title><indexterm><primary>troubleshooting</primary><secondary>error messages</secondary></indexterm>Viewing Error Messages</title>
       <para>As Lustre software code runs on the kernel, single-digit error codes display to the
         application; these error codes are an indication of the problem. Refer to the kernel console
@@ -216,7 +216,7 @@
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.reporting_lustre_problem">
+  <section xml:id="reporting_lustre_problem">
       <title><indexterm>
         <primary>troubleshooting</primary>
         <secondary>reporting bugs</secondary>
@@ -246,7 +246,7 @@
             tickets for your issue.
             <emphasis role="italic">For search tips, see
             <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-              linkend="dbdoclet.searching_jira"/>.</emphasis></para>
+              linkend="searching_jira"/>.</emphasis></para>
         </listitem>
         <listitem>
           <para>To create a ticket, click <emphasis role="bold">+Create Issue</emphasis> in the
@@ -288,17 +288,17 @@
               <listitem>
                 <para><emphasis role="italic">Attachments</emphasis> - Attach log sources such as
                   Lustre debug log dumps (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                  linkend="dbdoclet.debugging_tools"/>), syslogs, or console logs. <emphasis
+                  linkend="debugging_tools"/>), syslogs, or console logs. <emphasis
                     role="italic"><emphasis role="bold">Note:</emphasis></emphasis> Lustre debug
                   logs must be processed using <code>lctl df</code> prior to attaching to a Jira
                   ticket. For more information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                    linkend="dbdoclet.using_lctl_tool"/>. </para>
+                    linkend="using_lctl_tool"/>. </para>
               </listitem>
             </itemizedlist>Other fields in the form are used for project tracking and are irrelevant
             to reporting an issue. You can leave these in their default state.</para>
         </listitem>
       </orderedlist></para>
-    <section xml:id="dbdoclet.searching_jira">
+    <section xml:id="searching_jira">
       <title>Searching Jira<superscript>*</superscript>for Duplicate Tickets</title>
       <para>Before submitting a ticket, always search the Jira bug tracker for
         an existing ticket for your issue.  This avoids duplicating effort and
@@ -357,7 +357,7 @@
         then it is possible that you have discovered a programming error that
         allowed the servers to get out of sync.
         Please submit a Jira ticket (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="dbdoclet.reporting_lustre_problem"/>).</para>
+          linkend="reporting_lustre_problem"/>).</para>
       <para>If the reported error is anything else (such as -5,
       &quot;<literal>I/O error</literal>&quot;), it likely indicates a storage
       device failure. The low-level file system returns this error if it is
@@ -441,7 +441,7 @@
         OST in its place or replace it with a newly-formatted OST. In that case,
         the missing objects are created and are read as zero-filled.</para>
     </section>
-    <section xml:id="dbdoclet.repair_ost_lastid">
+    <section xml:id="repair_ost_lastid">
       <title>Fixing a Bad LAST_ID on an OST</title>
       <para>Each OST contains a <literal>LAST_ID</literal> file, which holds
         the last object (pre-)created by the MDS
@@ -751,7 +751,7 @@ server now claims 791)!
         </listitem>
       </itemizedlist>
       <para>For information on determining the MDS memory and OSS memory
-      requirements, see <xref linkend="dbdoclet.mds_oss_memory"/>.</para>
+      requirements, see <xref linkend="mds_oss_memory"/>.</para>
     </section>
     <section remap="h3">
       <title>Setting SCSI I/O Sizes</title>

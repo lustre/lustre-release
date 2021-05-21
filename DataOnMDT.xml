@@ -4,7 +4,7 @@
  xml:id="dataonmdt" condition="l2B">
   <title xml:id="dataonmdt.title">Data on MDT (DoM)</title>
   <para>This chapter describes Data on MDT (DoM).</para>
-  <section xml:id="dbdoclet.domintro">
+  <section xml:id="domintro">
       <title>
       <indexterm>
         <primary>dom</primary>
@@ -32,7 +32,7 @@
       a client writes or truncates the file beyond the size of the MDT
       component.</para>
   </section>
-  <section xml:id="dbdoclet.usercommands">
+  <section xml:id="usercommands">
       <title>
           <indexterm>
               <primary>dom</primary>
@@ -48,7 +48,7 @@
       <literal>lfs find</literal> command can be used to search the directory
       tree rooted at the given directory or file name for the files that match
       the given DoM component parameters, e.g. layout type.</para>
-      <section xml:id="dbdoclet.lfssetstripe">
+      <section xml:id="lfssetstripe">
           <title>
               <indexterm>
                   <primary>dom</primary>
@@ -246,7 +246,7 @@ client$ lfs getstripe /mnt/lustre/domdir/domfile
               lower value.</para></note>
           </section>
       </section>
-      <section xml:id="dbdoclet.domstripesize">
+      <section xml:id="domstripesize">
           <title>
               <indexterm>
                   <primary>dom</primary>
@@ -278,10 +278,10 @@ client$ lfs getstripe /mnt/lustre/domdir/domfile
               It is 1MB by default and can be changed with the
               <literal>lctl</literal> tool.  For more information on setting
               <literal>dom_stripesize</literal> please see
-              <xref linkend="dbdoclet.dom_stripesize" />.</para>
+              <xref linkend="dom_stripesize" />.</para>
           </section>
       </section>
-      <section xml:id="dbdoclet.domlfsgetstripe">
+      <section xml:id="domlfsgetstripe">
           <title>
               <indexterm>
                   <primary>dom</primary>
@@ -327,7 +327,7 @@ client$ lfs getstripe -I1 -L -E /mnt/lustre/domfile
               both can be used to get size on the MDT.</para>
           </section>
       </section>
-      <section xml:id="dbdoclet.domlfsfind">
+      <section xml:id="domlfsfind">
           <title>
               <indexterm>
                   <primary>dom</primary>
@@ -375,7 +375,7 @@ client$ lfs find -L mdt -S +200K -type f /mnt/lustre
               files are found because their DoM size is 1MB.</para>
           </section>
       </section>
-      <section xml:id="dbdoclet.dom_stripesize">
+      <section xml:id="dom_stripesize">
           <title>
               <indexterm>
                   <primary>dom</primary>
@@ -444,7 +444,7 @@ mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
               </para>
           </section>
       </section>
-      <section xml:id="dbdoclet.disabledom">
+      <section xml:id="disabledom">
           <title>
               <indexterm>
                   <primary>dom</primary>

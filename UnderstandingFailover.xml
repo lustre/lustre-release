@@ -219,7 +219,7 @@
         </mediaobject>
       </figure>
     </section>
-    <section xml:id='dbdoclet.mdtactiveactive'>
+    <section xml:id='mdtactiveactive'>
       <title>
       <indexterm>
         <primary>failover</primary>

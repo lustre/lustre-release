@@ -4,7 +4,7 @@
  xml:id="lsom" condition="l2C">
   <title xml:id="lsom.title">Lazy Size on MDT (LSoM)</title>
   <para>This chapter describes Lazy Size on MDT (LSoM).</para>
-  <section xml:id="dbdoclet.lsomintro">
+  <section xml:id="lsomintro">
     <title>
     <indexterm>
       <primary>lsom</primary>
@@ -30,7 +30,7 @@
     Future improvements will allow the LSoM data to be accessed by tools such
     as <literal>lfs find</literal>.</para>
   </section>
-  <section xml:id="dbdoclet.enablelsom">
+  <section xml:id="enablelsom">
     <title><indexterm><primary>lsom</primary>
       <secondary>enablelsom</secondary></indexterm>Enable LSoM</title>
     <para> LSoM is always enabled and nothing needs to be done to enable the
@@ -59,7 +59,7 @@
     extra overhead when accessing files, and is not recommended for normal
     usage.</para>
   </section>
-  <section xml:id="dbdoclet.usercmds">
+  <section xml:id="usercmds">
     <title><indexterm><primary>lsom</primary>
       <secondary>usercommands</secondary></indexterm>User Commands</title>
     <para>Lustre provides the <literal>lfs getsom</literal> command to list
@@ -70,7 +70,7 @@
     Lustre file system mount point. <literal>llsom_sync</literal> uses Lustre
     MDS changelogs and, thus, a changelog user must be registered to use this
     utility.</para>
-    <section xml:id="dbdoclet.lfsgetsom">
+    <section xml:id="lfsgetsom">
       <title><indexterm><primary>lsom</primary>
         <secondary>lfsgetsom</secondary></indexterm>lfs getsom for LSoM data
       </title>

@@ -10,7 +10,7 @@
       <para><xref linkend="lustre_changelogs"/>Lustre Changelogs</para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.jobstats"/>Lustre Jobstats</para>
+      <para><xref linkend="jobstats"/>Lustre Jobstats</para>
     </listitem>
     <listitem>
       <para><xref linkend="lmt"/>Lustre Monitoring Tool</para>
@@ -270,7 +270,7 @@ Lustre Changelogs</title>
       </tgroup>
     </informaltable>
     <note><para>Event types marked with * are not recorded by default. Refer to
-    <xref linkend="dbdoclet.modifyChangelogMask" /> for instructions on
+    <xref linkend="modifyChangelogMask" /> for instructions on
     modifying the Changelogs mask.</para></note>
     <para>FID-to-full-pathname and pathname-to-FID functions are also included
     to map target and parent FIDs into the file system namespace.</para>
@@ -435,7 +435,7 @@ MARK CREAT MKDIR HLINK SLINK MKNOD UNLNK RMDIR RENME RNMTO CLOSE LYOUT \
 TRUNC SATTR XATTR HSM MTIME CTIME MIGRT
 </screen>
       </section>
-      <section xml:id="dbdoclet.modifyChangelogMask" remap="h5">
+      <section xml:id="modifyChangelogMask" remap="h5">
         <title>Setting the Changelog Mask</title>
         <para>To set the current changelog mask on a specific device
 	(<literal>lustre-MDT0000</literal>):</para>
@@ -591,7 +591,7 @@ mdd.seb-MDT0000.changelog_deniednext=120</screen>
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.jobstats">
+  <section xml:id="jobstats">
       <title><indexterm><primary>jobstats</primary><see>monitoring</see></indexterm>
 <indexterm><primary>monitoring</primary></indexterm>
 <indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>

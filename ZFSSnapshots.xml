@@ -7,25 +7,25 @@
       contains following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.zfssnapshotIntro"/></para>
+      <para><xref linkend="zfssnapshotIntro"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.zfssnapshotConfig"/></para>
+      <para><xref linkend="zfssnapshotConfig"/></para>
     </listitem>
     <listitem>
-        <para><xref linkend="dbdoclet.zfssnapshotOps"/></para>
+        <para><xref linkend="zfssnapshotOps"/></para>
     </listitem>
     <listitem>
-        <para><xref linkend="dbdoclet.zfssnapshotBarrier"/></para>
+        <para><xref linkend="zfssnapshotBarrier"/></para>
     </listitem>
     <listitem>
-        <para><xref linkend="dbdoclet.zfssnapshotLogs"/></para>
+        <para><xref linkend="zfssnapshotLogs"/></para>
     </listitem>
     <listitem>
-        <para><xref linkend="dbdoclet.zfssnapshotLustreLogs"/></para>
+        <para><xref linkend="zfssnapshotLustreLogs"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.zfssnapshotIntro">
+  <section xml:id="zfssnapshotIntro">
       <title><indexterm><primary>Introduction</primary>
       </indexterm>Introduction</title>
       <para>Snapshots provide fast recovery of files from a previously created
@@ -42,7 +42,7 @@
       faster than from any offline backup or remote replica. However, note that
       snapshots do not improve storage reliability and are just as exposed to
       hardware failure as any other storage volume.</para>
-      <section xml:id="dbdoclet.zfssnapshotsReq">
+      <section xml:id="zfssnapshotsReq">
           <title><indexterm><primary>Introduction</primary>
               <secondary>Requirements</secondary></indexterm>Requirements
           </title>
@@ -62,7 +62,7 @@
           their system’s actual size and usage.</para>
       </section>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotConfig">
+  <section xml:id="zfssnapshotConfig">
         <title><indexterm><primary>feature overview</primary>
             <secondary>configuration</secondary></indexterm>Configuration
         </title>
@@ -90,10 +90,10 @@ host-ost2 - OST0001 zfs:myfs-ost2/ost2</screen>
         file system setup, you are ready to create a file system snapshot.
         </para>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotOps">
+  <section xml:id="zfssnapshotOps">
       <title><indexterm><primary>operations</primary>
       </indexterm>Snapshot Operations</title>
-  <section xml:id="dbdoclet.zfssnapshotCreate">
+  <section xml:id="zfssnapshotCreate">
       <title><indexterm><primary>operations</primary>
           <secondary>create</secondary></indexterm>Creating a Snapshot
       </title>
@@ -181,7 +181,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
           </tgroup>
       </informaltable>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotDelete">
+  <section xml:id="zfssnapshotDelete">
       <title><indexterm><primary>operations</primary>
           <secondary>delete</secondary></indexterm>Delete a Snapshot
       </title>
@@ -250,7 +250,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
           </tgroup>
       </informaltable>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotMount">
+  <section xml:id="zfssnapshotMount">
       <title><indexterm><primary>operations</primary>
           <secondary>mount</secondary></indexterm>Mounting a Snapshot
       </title>
@@ -332,7 +332,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       <para>Finally, mount the snapshot on the client:</para>
       <screen>mount -t lustre -o ro $MGS_nid:/$ss_fsname $local_mount_point</screen>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotUnmount">
+  <section xml:id="zfssnapshotUnmount">
       <title><indexterm><primary>operations</primary>
           <secondary>unmount</secondary></indexterm>Unmounting a Snapshot
       </title>
@@ -402,7 +402,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       <para>For example:</para>
       <screen>lctl snapshot_umount -F myfs -n snapshot_20170602</screen>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotList">
+  <section xml:id="zfssnapshotList">
       <title><indexterm><primary>operations</primary>
           <secondary>list</secondary></indexterm>List Snapshots
       </title>
@@ -474,7 +474,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
           </tgroup>
       </informaltable>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotModify">
+  <section xml:id="zfssnapshotModify">
       <title><indexterm><primary>operations</primary>
           <secondary>modify</secondary></indexterm>Modify Snapshot Attributes
       </title>
@@ -560,7 +560,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       </informaltable>
   </section>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotBarrier">
+  <section xml:id="zfssnapshotBarrier">
       <title><indexterm><primary>barrier</primary>
       </indexterm>Global Write Barriers</title>
       <para>Snapshots are non-atomic across multiple MDTs and OSTs, which means
@@ -583,7 +583,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       <literal>lctl snapshot_create</literal>. So, explicit use of the barrier
       is not required when using snapshots but included here as an option to
       quiet the file system before a snapshot is created.</para>
-      <section xml:id="dbdoclet.zfssnapshotBarrierImpose">
+      <section xml:id="zfssnapshotBarrierImpose">
           <title><indexterm><primary>barrier</primary>
               <secondary>impose</secondary></indexterm>Impose Barrier
           </title>
@@ -598,7 +598,7 @@ where timeout default is 30.</screen>
           <para>If the command is successful, there will be no output from
           the command.  Otherwise, an error message will be printed.</para>
       </section>
-      <section xml:id="dbdoclet.zfssnapshotBarrierRemove">
+      <section xml:id="zfssnapshotBarrierRemove">
           <title><indexterm><primary>barrier</primary>
                   <secondary>remove</secondary></indexterm>Remove Barrier
               </title>
@@ -612,7 +612,7 @@ where timeout default is 30.</screen>
           <para>If the command is successful, there will be no output from
               the command.  Otherwise, an error message will be printed.</para>
       </section>
-      <section xml:id="dbdoclet.zfssnapshotBarrierQuery">
+      <section xml:id="zfssnapshotBarrierQuery">
           <title><indexterm><primary>barrier</primary>
               <secondary>query</secondary></indexterm>Query Barrier
           </title>
@@ -738,7 +738,7 @@ The barrier will be expired after 7 seconds</screen>
           <para>If the barrier is in ’freezing_p1’, ’freezing_p2’ or ’frozen’
           status, then the remaining lifetime will be returned also.</para>
       </section>
-      <section xml:id="dbdoclet.zfssnapshotBarrierRescan">
+      <section xml:id="zfssnapshotBarrierRescan">
           <title><indexterm><primary>barrier</primary>
               <secondary>rescan</secondary></indexterm>Rescan Barrier
           </title>
@@ -756,7 +756,7 @@ where the default timeout is 30 seconds.</screen>
           error message will be printed.</para>
       </section>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotLogs">
+  <section xml:id="zfssnapshotLogs">
       <title><indexterm><primary>logs</primary>
       </indexterm>Snapshot Logs</title>
       <para>A log of all snapshot activity can be found in the following file:
@@ -780,7 +780,7 @@ Mon Mar 21 19:47:12 2016
 (20897:jt_snapshot_destroy:1312:scratch:ssh): Destroy snapshot
 lss_2_0 successfully with force &lt;disable&gt;</screen>
   </section>
-  <section xml:id="dbdoclet.zfssnapshotLustreLogs">
+  <section xml:id="zfssnapshotLustreLogs">
       <title><indexterm><primary>configlogs</primary>
       </indexterm>Lustre Configuration Logs</title>
       <para>A snapshot is independent from the original file system that it is

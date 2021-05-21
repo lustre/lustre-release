@@ -9,26 +9,26 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.recover_ldiskfs_errors" />
+        <xref linkend="recover_ldiskfs_errors" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.recover_lustreFS_corruption" />
+        <xref linkend="recover_lustreFS_corruption" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.recover_unavailable_ost" />
+        <xref linkend="recover_unavailable_ost" />
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.lfsckadmin" />
+        <xref linkend="lfsckadmin" />
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.recover_ldiskfs_errors">
+  <section xml:id="recover_ldiskfs_errors">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -93,7 +93,7 @@ root# e2fsck -fn /dev/sda   # don't fix file system, just check for corruption
 :
 root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)</screen>
   </section>
-  <section xml:id="dbdoclet.recover_lustreFS_corruption">
+  <section xml:id="recover_lustreFS_corruption">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -135,7 +135,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
        identify and process orphan objects found on MDTs as well.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.recover_unavailable_ost">
+  <section xml:id="recover_unavailable_ost">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -181,7 +181,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       <xref linkend="lustrerecovery" />(Version-based Recovery).</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.lfsckadmin">
+  <section xml:id="lfsckadmin">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -205,7 +205,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       an internal table called the OI Table. An OI Scrub traverses the OI table
       and makes corrections where necessary. An OI Scrub is required after
       restoring from a file-level MDT backup (
-      <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
+      <xref linkend="backup_device" />), or in case the OI Table is
       otherwise corrupted. Later phases of LFSCK will add further checks to the
       Lustre distributed file system state. LFSCK namespace scanning can verify
       and repair the directory FID-in-dirent and LinkEA consistency.</para>
@@ -822,7 +822,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           <title>Description</title>
           <para>The
           <literal>namespace</literal> component is responsible for checks
-          described in <xref linkend="dbdoclet.lfsckadmin" />. The
+          described in <xref linkend="lfsckadmin" />. The
           <literal>procfs</literal> interface for this component is in the
           MDD layer, named
           <literal>lfsck_namespace</literal>. To show the status of this
@@ -1482,7 +1482,7 @@ lctl set_param obdfilter.${FSNAME}-${OST_target}.lfsck_speed_limit=
           </informaltable>
         </section>
       </section>
-      <section xml:id="dbdoclet.lfsck_auto_scrub">
+      <section xml:id="lfsck_auto_scrub">
         <title>Auto scrub</title>
         <section>
           <title>Description</title>

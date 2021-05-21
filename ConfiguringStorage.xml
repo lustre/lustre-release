@@ -22,7 +22,7 @@
     </listitem>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.ldiskfs_raid_opts"/>
+            <xref linkend="ldiskfs_raid_opts"/>
         </para>
     </listitem>
     <listitem>
@@ -84,7 +84,7 @@
     data integrity is critical. You should carefully consider whether the
     benefits of using writeback cache outweigh the risks.</para>
   </section>
-  <section xml:id="dbdoclet.ldiskfs_raid_opts">
+  <section xml:id="ldiskfs_raid_opts">
     <title>
       <indexterm>
         <primary>storage</primary>
@@ -108,7 +108,7 @@
     This is alternately referred to as the RAID stripe size. This is
     applicable to both MDT and OST file systems.</para>
     <para>For more information on how to override the defaults while formatting
-    MDT or OST file systems, see <xref linkend="dbdoclet.ldiskfs_mkfs_opts"/>.</para>
+    MDT or OST file systems, see <xref linkend="ldiskfs_mkfs_opts"/>.</para>
     <section remap="h3">
       <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>for mkfs</tertiary></indexterm>Computing file system parameters for mkfs</title>
       <para>For best results, use RAID 5 with 5 or 9 disks or RAID 6 with 6 or 10 disks, each on a different controller. The stripe width is the optimal minimum I/O size. Ideally, the RAID configuration should allow 1 MB Lustre RPCs to fit evenly on a single RAID stripe without an expensive read-modify-write cycle. Use this formula to determine the

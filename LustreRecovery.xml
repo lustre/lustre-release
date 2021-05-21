@@ -129,7 +129,7 @@
       <para>If multiple MDTs are in use, active-active failover
       is possible (e.g. two MDS nodes, each actively serving one or more
       different MDTs for the same filesystem). See
-      <xref linkend="dbdoclet.mdtactiveactive"/> for more information.</para>
+      <xref linkend="mdtactiveactive"/> for more information.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>OST failure</secondary></indexterm>OST Failure (Failover)</title>

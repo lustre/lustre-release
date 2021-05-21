@@ -8,16 +8,16 @@
     This chapter includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.identity_upcall"/></para>
+      <para><xref linkend="identity_upcall"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.perm_downcall_data"/></para>
+      <para><xref linkend="perm_downcall_data"/></para>
     </listitem>
   </itemizedlist>
   <note>
     <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
   </note>
-  <section xml:id="dbdoclet.identity_upcall">
+  <section xml:id="identity_upcall">
     <title><indexterm>
         <primary>programming</primary>
         <secondary>upcall</secondary>
@@ -48,7 +48,7 @@
         list. This upcall executable opens the
         <literal>mdt.${FSNAME}-MDT{xxxx}.identity_info</literal> parameter file
         and writes the related <literal>identity_downcall_data</literal> data
-        structure (see <xref linkend="dbdoclet.perm_downcall_data"/>). The
+        structure (see <xref linkend="perm_downcall_data"/>). The
         upcall is configured with
         <literal>lctl set_param mdt.${FSNAME}-MDT{xxxx}.identity_upcall</literal>.</para>
       <para>The default identity upcall program installed is
@@ -114,7 +114,7 @@
         </itemizedlist>
       </section>
     </section>
-    <section xml:id="dbdoclet.perm_downcall_data">
+    <section xml:id="perm_downcall_data">
       <title>Data Structures</title>
       <screen>struct perm_downcall_data {
      __u64 pdd_nid;

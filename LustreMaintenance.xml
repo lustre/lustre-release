@@ -418,7 +418,7 @@ Adding a New OST to a Lustre File System</title>
         <listitem>
           <para> Add a new OST by using <literal>mkfs.lustre</literal> as when
 	  the filesystem was first formatted, see
-	  <xref linkend="dbdoclet.format_ost" /> for details.  Each new OST
+	  <xref linkend="format_ost" /> for details.  Each new OST
 	  must have a unique index number, use <literal>lctl dl</literal> to
 	  see a list of all OSTs. For example, to add a new OST at index 12
 	  to the <literal>testfs</literal> filesystem run following commands
@@ -446,7 +446,7 @@ oss# mount -t lustre /dev/sda /mnt/testfs/ost12</screen>
 	  system on <literal>OST0004</literal> that are larger than 4GB in
 	  size to other OSTs, enter:</para>
           <screen>client# lfs find /test --ost test-OST0004 -size +4G | lfs_migrate -y</screen>
-          <para>See <xref linkend="dbdoclet.lfs_migrate"/> for details.</para>
+          <para>See <xref linkend="lfs_migrate"/> for details.</para>
         </listitem>
       </orderedlist>
     </section>
@@ -476,14 +476,14 @@ Removing and Restoring MDTs and OSTs</title>
           <para>A hard drive has failed and a RAID resync/rebuild is underway,
           though the OST can also be marked <emphasis>degraded</emphasis> by
           the RAID system to avoid allocating new files on the slow OST which
-          can reduce performance, see <xref linkend='dbdoclet.degraded_ost' />
+          can reduce performance, see <xref linkend='degraded_ost' />
           for more details.
           </para>
         </listitem>
         <listitem>
           <para>OST is nearing its space capacity, though the MDS will already
           try to avoid allocating new files on overly-full OSTs if possible,
-          see <xref linkend='dbdoclet.balancing_free_space' /> for details.
+          see <xref linkend='balancing_free_space' /> for details.
           </para>
         </listitem>
         <listitem>
@@ -716,7 +716,7 @@ oss# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</scree
         </indexterm> Restoring OST Configuration Files</title>
       <para>If the original OST is still available, it is best to follow the
         OST backup and restore procedure given in either
-        <xref linkend="dbdoclet.backup_device"/>, or
+        <xref linkend="backup_device"/>, or
         <xref linkend="backup_fs_level"/> and
         <xref linkend="backup_fs_level.restore"/>.</para>
       <para>To replace an OST that was removed from service due to corruption
@@ -758,7 +758,7 @@ oss# mount -t ldiskfs <replaceable>/dev/new_ost_dev</replaceable> <replaceable>/
         <listitem>
           <para>Recreate the OST configuration files, if unavailable. </para>
           <para>Follow the procedure in
-            <xref linkend="dbdoclet.repair_ost_lastid"/> to recreate the LAST_ID
+            <xref linkend="repair_ost_lastid"/> to recreate the LAST_ID
             file for this OST index. The <literal>last_rcvd</literal> file
             will be recreated when the OST is first mounted using the default
             parameters, which are normally correct for all file systems. The

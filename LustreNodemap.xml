@@ -201,7 +201,7 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <para>If UID 11002 or GID 11001 do not exist on the Lustre MDS or MGS,
       create them in LDAP or other data sources, or trust clients by setting
       <literal>identity_upcall</literal> to <literal>NONE</literal>. For more
-      information, see <xref linkend="dbdoclet.identity_upcall"/>.</para>
+      information, see <xref linkend="identity_upcall"/>.</para>
 
       <para>Building a larger and more complex configuration is possible by
       iterating through the <literal>lctl</literal> commands above. In

@@ -13,7 +13,7 @@
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.lustre_installation" />
+        <xref linkend="lustre_installation" />
       </para>
     </listitem>
   </itemizedlist>
@@ -317,7 +317,7 @@
             <emphasis role="bold">Use the same user IDs (UID) and group IDs
             (GID) on all clients.</emphasis>
           </emphasis>If use of supplemental groups is required, see 
-          <xref linkend="dbdoclet.identity_upcall" /> for information about
+          <xref linkend="identity_upcall" /> for information about
           supplementary user and group cache upcall (<code>identity_upcall</code>).</para>
         </listitem>
         <listitem>
@@ -363,7 +363,7 @@
       </itemizedlist></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.lustre_installation">
+  <section xml:id="lustre_installation">
     <title>Lustre Software Installation Procedure</title>
     <caution>
       <para>Before installing the Lustre software, back up ALL data. The Lustre
@@ -403,7 +403,7 @@
          linkend="table.installed_server_pkg" />for a list of required packages.
         </para>
       </listitem>
-      <listitem xml:id="dbdoclet.lustre_server_e2fsprogs_install">
+      <listitem xml:id="lustre_server_e2fsprogs_install">
         <para>Install the Lustre server and 
         <literal>e2fsprogs</literal> packages on all Lustre servers (MGS, MDSs,
         and OSSs).

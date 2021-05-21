@@ -7,14 +7,14 @@
   administration.</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.mroverview"/></para>
-      <para><xref linkend="dbdoclet.mrconfiguring"/></para>
-      <para><xref linkend="dbdoclet.mrrouting"/></para>
+      <para><xref linkend="mroverview"/></para>
+      <para><xref linkend="mrconfiguring"/></para>
+      <para><xref linkend="mrrouting"/></para>
       <para><xref linkend="mrrouting.health"/></para>
-      <para><xref linkend="dbdoclet.mrhealth"/></para>
+      <para><xref linkend="mrhealth"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.mroverview">
+  <section xml:id="mroverview">
     <title><indexterm><primary>MR</primary><secondary>overview</secondary>
     </indexterm>Multi-Rail Overview</title>
     <para>In computer networking, multi-rail is an arrangement in which two or
@@ -30,7 +30,7 @@
     <link xl:href="https://wiki.lustre.org/images/b/bb/Multi-Rail_High-Level_Design_20150119.pdf">
     Multi-Rail High-Level Design</link></para>
   </section>
-  <section xml:id="dbdoclet.mrconfiguring">
+  <section xml:id="mrconfiguring">
     <title><indexterm><primary>MR</primary><secondary>configuring</secondary>
     </indexterm>Configuring Multi-Rail</title>
     <para>Every node using multi-rail networking needs to be properly
@@ -50,7 +50,7 @@
     <para>For information on the dynamic peer discovery feature added in
       Lustre Release 2.11.0, see
       <xref linkend="lnet_config.dynamic_discovery" />.</para>
-    <section xml:id="dbdoclet.addinterfaces">
+    <section xml:id="addinterfaces">
       <title><indexterm><primary>MR</primary>
       <secondary>multipleinterfaces</secondary>
       </indexterm>Configure Multiple Interfaces on the Local Node</title>
@@ -114,7 +114,7 @@ net:
           dev cpt: -1
           CPT: "[0]"</screen>
     </section>
-    <section xml:id="dbdoclet.deleteinterfaces">
+    <section xml:id="deleteinterfaces">
       <title><indexterm><primary>MR</primary>
         <secondary>deleteinterfaces</secondary>
         </indexterm>Deleting Network Interfaces</title>
@@ -150,7 +150,7 @@ net:
        interfaces:
            0: eth0</screen>
     </section>
-    <section xml:id="dbdoclet.addremotepeers">
+    <section xml:id="addremotepeers">
       <title><indexterm><primary>MR</primary>
         <secondary>addremotepeers</secondary>
         </indexterm>Adding Remote Peers that are Multi-Rail Capable</title>
@@ -200,7 +200,7 @@ peer:
       peer ni:
         - nid: 192.168.122.31@tcp</screen>
     </section>
-    <section xml:id="dbdoclet.deleteremotepeers">
+    <section xml:id="deleteremotepeers">
       <title><indexterm><primary>MR</primary>
         <secondary>deleteremotepeers</secondary>
         </indexterm>Deleting Remote Peers</title>
@@ -234,7 +234,7 @@ peer:
 % lnetctl import --del &lt; delPeer.yaml</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.mrrouting">
+  <section xml:id="mrrouting">
     <title><indexterm><primary>MR</primary>
       <secondary>mrrouting</secondary>
       </indexterm>Notes on routing with Multi-Rail</title>
@@ -246,13 +246,13 @@ peer:
     the same gateway node but as different routes. This uses the existing route
     monitoring algorithm to guard against interfaces going down.  With the
     <xref linkend="mrrouting.health" /> feature introduced in Lustre 2.13, the
-    new algorithm uses the <xref linkend="dbdoclet.mrhealth" /> feature to
+    new algorithm uses the <xref linkend="mrhealth" /> feature to
     monitor the different interfaces of the gateway and always ensures that the
     healthiest interface is used. Therefore, the configuration described in this
     section applies to releases prior to Lustre 2.13.  It will still work in
     2.13 as well, however it is not required due to the reason mentioned above.
     </para>
-    <section xml:id="dbdoclet.mrroutingex">
+    <section xml:id="mrroutingex">
       <title><indexterm><primary>MR</primary>
         <secondary>mrrouting</secondary>
         <tertiary>routingex</tertiary>
@@ -300,7 +300,7 @@ lnetctl peer add --nid &lt;rtrX-nidA&gt;@o2ib1,&lt;rtrX-nidB&gt;@o2ib1</screen>
       under development and single interface failure will still cause the entire
       router to go down.</para>
     </section>
-    <section xml:id="dbdoclet.mrroutingresiliency">
+    <section xml:id="mrroutingresiliency">
       <title><indexterm><primary>MR</primary>
         <secondary>mrrouting</secondary>
         <tertiary>routingresiliency</tertiary>
@@ -353,7 +353,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.mrroutingmixed">
+    <section xml:id="mrroutingmixed">
       <title><indexterm><primary>MR</primary>
         <secondary>mrrouting</secondary>
         <tertiary>routingmixed</tertiary>
@@ -380,7 +380,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       longer needed. One route per gateway should be configured. Gateway
       interfaces are used according to the Multi-Rail selection criteria.</para>
       </listitem>
-      <listitem><para>Routing now relies on <xref linkend="dbdoclet.mrhealth" />
+      <listitem><para>Routing now relies on <xref linkend="mrhealth" />
       to keep track of the route aliveness.</para></listitem>
       <listitem><para>Router interfaces are monitored via LNet Health.
       If an interface fails other interfaces will be used.</para></listitem>
@@ -549,7 +549,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       </orderedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.mrhealth" condition="l2C">
+  <section xml:id="mrhealth" condition="l2C">
     <title><indexterm><primary>MR</primary><secondary>health</secondary>
     </indexterm>LNet Health</title>
     <para>LNet Multi-Rail has implemented the ability for multiple interfaces
@@ -564,7 +564,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
     monitors the status of the send and receive operations and uses this
     status to increment the interface's health value in case of success and
     decrement it in case of failure.</para>
-    <section xml:id="dbdoclet.mrhealthvalue">
+    <section xml:id="mrhealthvalue">
       <title><indexterm><primary>MR</primary>
         <secondary>mrhealth</secondary>
         <tertiary>value</tertiary>
@@ -576,7 +576,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       The granularity allows the Multi-Rail algorithm to select the interface
       that has the highest likelihood of sending or receiving a message.</para>
     </section>
-    <section xml:id="dbdoclet.mrhealthfailuretypes">
+    <section xml:id="mrhealthfailuretypes">
       <title><indexterm><primary>MR</primary>
         <secondary>mrhealth</secondary>
         <tertiary>failuretypes</tertiary>
@@ -653,7 +653,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
         </tbody></tgroup>
       </informaltable>
     </section>
-    <section xml:id="dbdoclet.mrhealthinterface">
+    <section xml:id="mrhealthinterface">
       <title><indexterm><primary>MR</primary>
         <secondary>mrhealth</secondary>
         <tertiary>interface</tertiary>
@@ -799,12 +799,12 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
         </tgroup>
       </informaltable>
     </section>
-    <section xml:id="dbdoclet.mrhealthdisplay">
+    <section xml:id="mrhealthdisplay">
       <title><indexterm><primary>MR</primary>
         <secondary>mrhealth</secondary>
         <tertiary>display</tertiary>
       </indexterm>Displaying Information</title>
-      <section xml:id="dbdoclet.mrhealthdisplayhealth">
+      <section xml:id="mrhealthdisplayhealth">
         <title>Showing LNet Health Configuration Settings</title>
         <para><literal>lnetctl</literal> can be used to show all the LNet health
         configuration settings using the <literal>lnetctl global show</literal>
@@ -819,7 +819,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       health_sensitivity: 100
       recovery_interval: 1</screen>
       </section>
-      <section xml:id="dbdoclet.mrhealthdisplaystats">
+      <section xml:id="mrhealthdisplaystats">
         <title>Showing LNet Health Statistics</title>
         <para>LNet Health statistics are shown under a higher verbosity
         settings.  To show the local interface health statistics:</para>
@@ -907,7 +907,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
             drop_length: 0</screen>
       </section>
     </section>
-    <section xml:id="dbdoclet.mrhealthinitialsetup">
+    <section xml:id="mrhealthinitialsetup">
       <title><indexterm><primary>MR</primary>
         <secondary>mrhealth</secondary>
         <tertiary>initialsetup</tertiary>

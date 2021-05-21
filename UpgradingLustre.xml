@@ -12,7 +12,7 @@
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.interop_upgrade_requirement" />
+        <xref linkend="interop_upgrade_requirement" />
       </para>
     </listitem>
     <listitem>
@@ -28,7 +28,7 @@
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.interop_upgrade_requirement">
+  <section xml:id="interop_upgrade_requirement">
     <title>
     <indexterm>
       <primary>Lustre</primary>
@@ -114,7 +114,7 @@
       </listitem>
       <listitem>
         <para>Shut down the entire filesystem by following
-        <xref linkend="dbdoclet.shutdownLustre"/></para>
+        <xref linkend="shutdownLustre"/></para>
       </listitem>
       <listitem>
         <para>Upgrade the Linux operating system on all servers to a compatible
@@ -333,7 +333,7 @@ client# lfs setdirstripe -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
     </note>
     <para>If you have a problem upgrading a Lustre file system, see 
       <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-      linkend="dbdoclet.reporting_lustre_problem"/>for ways to get help.</para>
+      linkend="reporting_lustre_problem"/>for ways to get help.</para>
   </section>
   <section xml:id="Upgrading_2.x.x">
     <title>
@@ -453,7 +453,7 @@ client# lfs setdirstripe -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
     </orderedlist>
     <para>If you have a problem upgrading a Lustre file system, see 
     <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-    linkend="dbdoclet.reporting_lustre_problem" />for some suggestions for
+    linkend="reporting_lustre_problem" />for some suggestions for
     how to get help.</para>
   </section>
 </chapter>

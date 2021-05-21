@@ -6,7 +6,7 @@
   <para>Once you have the Lustre file system up and running, you can use the
   procedures in this section to perform these basic Lustre administration
   tasks.</para>
-  <section xml:id="dbdoclet.mount_by_label">
+  <section xml:id="mount_by_label">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -51,7 +51,7 @@ client# mount -t lustre mds0@tcp0:/short
 <replaceable>/dev/long_mountpoint_name</replaceable>
 </screen>
   </section>
-  <section xml:id="dbdoclet.starting_lustre">
+  <section xml:id="starting_lustre">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -81,7 +81,7 @@ client# mount -t lustre mds0@tcp0:/short
       </listitem>
     </orderedlist>
   </section>
-  <section xml:id="dbdoclet.mounting_server">
+  <section xml:id="mounting_server">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -133,7 +133,7 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0
       environment.</para>
     </caution>
   </section>
-  <section xml:id="dbdoclet.shutdownLustre">
+  <section xml:id="shutdownLustre">
       <title>
           <indexterm>
               <primary>operations</primary>
@@ -197,9 +197,9 @@ XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
           </listitem>
       </orderedlist>
       <para>For unmount command syntax for a single OST, MDT, or MGT target
-      please refer to <xref linkend="dbdoclet.umountTarget"/></para>
+      please refer to <xref linkend="umountTarget"/></para>
   </section>
-  <section xml:id="dbdoclet.umountTarget">
+  <section xml:id="umountTarget">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -291,7 +291,7 @@ $ tunefs.lustre --param failover.mode=failout
       </para>
     </note>
   </section>
-  <section xml:id="dbdoclet.degraded_ost">
+  <section xml:id="degraded_ost">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -327,7 +327,7 @@ lctl get_param obdfilter.*.degraded
     <literal>mdadm(8)</literal> command with the <literal>--monitor</literal>
     option to mark an affected device degraded or restored.</para>
   </section>
-  <section xml:id="dbdoclet.lustre_configure_multiple_fs">
+  <section xml:id="lustre_configure_multiple_fs">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -426,7 +426,7 @@ client# mount -t lustre mgsnode@tcp0:/foo /mnt/foo
 client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar
 </screen>
   </section>
-  <section xml:id="dbdoclet.lfsmkdir">
+  <section xml:id="lfsmkdir">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -446,7 +446,7 @@ client# lfs mkdir –i
     <literal>mdt_index</literal>. For more information on adding additional MDTs
     and 
     <literal>mdt_index</literal> see
-    <xref linkend='dbdoclet.addmdtindex' />.</para>
+    <xref linkend='addmdtindex' />.</para>
     <warning>
       <para>An administrator can allocate remote sub-directories to separate
       MDTs. Creating remote sub-directories in parent directories not hosted on
@@ -478,7 +478,7 @@ client# lfs mkdir –i
     <screen>mds# lctl get_param mdt.<replaceable>*</replaceable>.enable_remote_dir_gid</screen>
     </para>
   </section>
-  <section xml:id="dbdoclet.lfsmkdirdne2" condition='l28'>
+  <section xml:id="lfsmkdirdne2" condition='l28'>
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -518,7 +518,7 @@ client# lfs mkdir -c
     <para>The striped directory feature is most useful for distributing
     single large directories (50k entries or more) across multiple MDTs,
     since it incurs more overhead than non-striped directories.</para>
-    <section xml:id="dbdoclet.lfsmkdirbyspace" condition='l2D'>
+    <section xml:id="lfsmkdirbyspace" condition='l2D'>
       <title>Directory creation by space/inode usage</title>
       <para>If the starting MDT is not specified when creating a new directory,
       this directory and its stripes will be distributed on MDTs by space usage.
@@ -540,7 +540,7 @@ client# lfs mkdir -c
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.set_get_lustre_params">
+  <section xml:id="set_get_lustre_params">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -551,20 +551,20 @@ client# lfs mkdir -c
     <itemizedlist>
       <listitem>
         <para>When creating a file system, use mkfs.lustre. See 
-        <xref linkend="dbdoclet.tuning_params_mkfs_lustre" />below.</para>
+        <xref linkend="tuning_params_mkfs_lustre" />below.</para>
       </listitem>
       <listitem>
         <para>When a server is stopped, use tunefs.lustre. See 
-        <xref linkend="dbdoclet.setting_param_tunefs" />below.</para>
+        <xref linkend="setting_param_tunefs" />below.</para>
       </listitem>
       <listitem>
         <para>When the file system is running, use lctl to set or retrieve
         Lustre parameters. See 
-        <xref linkend="dbdoclet.setting_param_with_lctl" />and 
-        <xref linkend="dbdoclet.reporting_current_param" />below.</para>
+        <xref linkend="setting_param_with_lctl" />and 
+        <xref linkend="reporting_current_param" />below.</para>
       </listitem>
     </itemizedlist>
-    <section xml:id="dbdoclet.tuning_params_mkfs_lustre">
+    <section xml:id="tuning_params_mkfs_lustre">
       <title>Setting Tunable Parameters with 
       <literal>mkfs.lustre</literal></title>
       <para>When the file system is first formatted, parameters can simply be
@@ -579,7 +579,7 @@ mds# mkfs.lustre --mdt --param="sys.timeout=50" /dev/sda
       <literal>mkfs.lustre</literal>, see 
       <xref linkend="systemconfigurationutilities" />.</para>
     </section>
-    <section xml:id="dbdoclet.setting_param_tunefs">
+    <section xml:id="setting_param_tunefs">
       <title>Setting Parameters with 
       <literal>tunefs.lustre</literal></title>
       <para>If a server (OSS or MDS) is stopped, parameters can be added to an
@@ -614,7 +614,7 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
       <literal>tunefs.lustre</literal>, see 
       <xref linkend="systemconfigurationutilities" />.</para>
     </section>
-    <section xml:id="dbdoclet.setting_param_with_lctl">
+    <section xml:id="setting_param_with_lctl">
       <title>Setting Parameters with 
       <literal>lctl</literal></title>
       <para>When the file system is running, the 
@@ -625,7 +625,7 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
       <note>
         <para>The <literal>lctl list_param</literal> command enables users to
           list all parameters that can be set. See 
-        <xref linkend="dbdoclet.list_params" />.</para>
+        <xref linkend="list_params" />.</para>
       </note>
       <para>For more details about the 
       <literal>lctl</literal> command, see the examples in the sections below
@@ -659,7 +659,7 @@ osc.myth-OST0003-osc.max_dirty_mb=32
 osc.myth-OST0004-osc.max_dirty_mb=32
 </screen>
       </section>
-      <section xml:id="dbdoclet.setting_permanent_params">
+      <section xml:id="setting_permanent_params">
         <title>Setting Permanent Parameters</title>
         <para>Use <literal>lctl set_param -P</literal> or
         <literal>lctl conf_param</literal> command to set permanent parameters.
@@ -695,7 +695,7 @@ $ lctl conf_param testfs.sys.timeout=40
           file system's configuration file on the MGS.</para>
         </caution>
       </section>
-      <section xml:id="dbdoclet.setparamp" condition='l25'>
+      <section xml:id="setparamp" condition='l25'>
         <title>Setting Permanent Parameters with lctl set_param -P</title>
         <para>The <literal>lctl set_param -P</literal> command can also
           set parameters permanently using the same syntax as
@@ -741,7 +741,7 @@ lctl set_param -P -d
         provides an interactive list of available parameters.
         </para></note>
       </section>
-      <section xml:id="dbdoclet.list_params">
+      <section xml:id="list_params">
         <title>Listing Parameters</title>
         <para>To list Lustre or LNet parameters that are available to set, use
         the 
@@ -767,7 +767,7 @@ lctl list_param [-FR]
 oss# lctl list_param obdfilter.lustre-OST0000 
 </screen>
       </section>
-      <section xml:id="dbdoclet.reporting_current_param">
+      <section xml:id="reporting_current_param">
         <title>Reporting Current Parameter Values</title>
         <para>To report current Lustre parameter values, use the 
         <literal>lctl get_param</literal> command with this syntax:</para>
@@ -873,7 +873,7 @@ mds1# lctl get_param mdt.testfs-MDT0000.recovery_status
     <xref xmlns:xlink="http://www.w3.org/1999/xlink"
     linkend="configuringfailover" />.</para>
   </section>
-  <section xml:id="dbdoclet.erasing_filesystem">
+  <section xml:id="erasing_filesystem">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -926,7 +926,7 @@ $ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=
       them.</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.reclaiming_reserved_disk_space">
+  <section xml:id="reclaiming_reserved_disk_space">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -952,7 +952,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
       5%.</para>
     </warning>
   </section>
-  <section xml:id="dbdoclet.replacing_existing_ost_mdt">
+  <section xml:id="replacing_existing_ost_mdt">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -960,12 +960,12 @@ tune2fs [-m reserved_blocks_percent] /dev/
     </indexterm>Replacing an Existing OST or MDT</title>
     <para>To copy the contents of an existing OST to a new OST (or an old MDT
     to a new MDT), follow the process for either OST/MDT backups in 
-    <xref linkend='dbdoclet.backup_device' />or 
+    <xref linkend='backup_device' />or 
     <xref linkend='backup_fs_level' />.
     For more information on removing a MDT, see 
     <xref linkend='lustremaint.rmremotedir' />.</para>
   </section>
-  <section xml:id="dbdoclet.identifying_file_objects">
+  <section xml:id="identifying_file_objects">
     <title>
     <indexterm>
       <primary>operations</primary>
