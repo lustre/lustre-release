@@ -12,9 +12,10 @@ RACER_MAX_CLEANUP_WAIT=${RACER_MAX_CLEANUP_WAIT:-$DURATION}
 
 mkdir -p $DIR
 
-RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
-file_list file_concat file_exec file_chown file_chmod file_mknod file_truncate \
-file_delxattr file_getxattr file_setxattr"
+RACER_PROGS=${RACER_PROGS:-"file_create dir_create file_rm file_rename \
+file_link file_symlink file_list file_concat file_exec file_chown \
+file_chmod file_mknod file_truncate file_delxattr file_getxattr \
+file_setxattr"}
 
 # allow e.g. RACER_EXTRA=dir_create:5,file_link:10 to launch extra tasks
 for PROG in ${RACER_EXTRA//,/ }; do

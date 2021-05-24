@@ -4,6 +4,7 @@ RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 RACER_ENABLE_SEL=${RACER_ENABLE_SEL:-true}
+RACER_EXTRA_LAYOUT=${RACER_EXTRA_LAYOUT:-""}
 DIR=$1
 MAX=$2
 MAX_MB=${RACER_MAX_MB:-8}
@@ -21,6 +22,7 @@ $RACER_ENABLE_FLR && layout+=(flr flr flr)
 
 # check if it supports PFL layout
 $RACER_ENABLE_SEL && layout+=(sel sel sel)
+[[ -n "$RACER_EXTRA_LAYOUT" ]] && layout+=(extra extra extra)
 
 echo "layout: ${layout[*]}"
 
@@ -41,6 +43,7 @@ while /bin/true; do
 		flr) opt="mirror create -N2 -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
 		sel) opt="setstripe -E 128M -S $stripesize -z 64M -E eof -c $stripecount -S 2M -z 128M" ;;
 		raid0) opt="setstripe -S $stripesize -c $stripecount" ;;
+		extra) opt="setstripe $RACER_EXTRA_LAYOUT" ;;
 		esac
 
 		$LFS $opt $DIR/$file 2> /dev/null || true

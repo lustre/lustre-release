@@ -72,6 +72,7 @@ RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 RACER_ENABLE_SEL=${RACER_ENABLE_SEL:-true}
+RACER_EXTRA_LAYOUT=${RACER_EXTRA_LAYOUT:-""}
 
 fail_random_facet () {
 	local facets=${victims[@]}
@@ -101,13 +102,22 @@ test_1() {
 
 		RDIRS="$RDIRS $d/racer"
 		mkdir -p $d/racer
-	#	lfs setstripe $d/racer -c -1
+		if [[ -n "$RACER_EXTRA_LAYOUT" ]]; then
+			$LFS setstripe $d/racer $RACER_EXTRA_LAYOUT ||
+			error "setstripe $RACER_EXTRA_LAYOUT failed"
+		fi
 		if [ $MDSCOUNT -ge 2 ]; then
 			for i in $(seq $((MDSCOUNT - 1))); do
 				RDIRS="$RDIRS $d/racer$i"
 				if [ ! -e $d/racer$i ]; then
 					$LFS mkdir -i $i $d/racer$i ||
 						error "lfs mkdir $i failed"
+				fi
+				if [[ -n "$RACER_EXTRA_LAYOUT" ]]; then
+					$LFS setstripe $d/racer$i \
+						$RACER_EXTRA_LAYOUT ||
+					error "setstripe \
+						$RACER_EXTRA_LAYOUT failed"
 				fi
 			done
 		fi
@@ -126,6 +136,10 @@ test_1() {
 			RACER_MAX_CLEANUP_WAIT=$RACER_MAX_CLEANUP_WAIT \
 			RACER_ENABLE_SEL=$RACER_ENABLE_SEL \
 			RACER_EXTRA=$RACER_EXTRA \
+			RACER_EXTRA_LAYOUT=\\\"$RACER_EXTRA_LAYOUT\\\" \
+			RACER_PROGS=$RACER_PROGS \
+			NUM_THREADS=$NUM_THREADS \
+			MAX_FILES=$MAX_FILES \
 			LFS=$LFS \
 			LCTL=$LCTL \
 			$racer $rdir $NUM_RACER_THREADS" &
