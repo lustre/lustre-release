@@ -4317,7 +4317,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_lock(&the_lnet.ln_api_mutex);
 		lnet_nid4_to_nid(cfg->prcfg_prim_nid, &prim_nid);
 		lnet_nid4_to_nid(cfg->prcfg_cfg_nid, &nid);
-		rc = lnet_add_peer_ni(&prim_nid, &nid, cfg->prcfg_mr, false);
+		rc = lnet_user_add_peer_ni(&prim_nid, &nid, cfg->prcfg_mr);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
