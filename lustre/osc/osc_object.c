@@ -345,10 +345,6 @@ int osc_object_is_contended(struct osc_object *obj)
         if (!obj->oo_contended)
                 return 0;
 
-	/*
-	 * I like copy-paste. the code is copied from
-	 * ll_file_is_contended.
-	 */
 	retry_time = ktime_add_ns(obj->oo_contention_time,
 				  osc_contention_time * NSEC_PER_SEC);
 	if (ktime_after(ktime_get(), retry_time)) {
