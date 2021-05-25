@@ -652,6 +652,10 @@ int qmt_dqacq0(const struct lu_env *env, struct qmt_device *qmt,
 	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_RECOVERABLE_ERR))
 		RETURN(-cfs_fail_val);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_PREACQ) &&
+	   (req_is_preacq(qb_flags) || req_is_rel(qb_flags)))
+		RETURN(-EAGAIN);
+
 	if (qti_lqes_restore_init(env))
 		RETURN(-ENOMEM);
 

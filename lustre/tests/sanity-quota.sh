@@ -5121,6 +5121,78 @@ test_79()
 }
 run_test 79 "access to non-existed dt-pool/info doesn't cause a panic"
 
+test_80()
+{
+	local dir1="$DIR/$tdir/dir1"
+	local dir2="$DIR/$tdir/dir2"
+	local TESTFILE0="$dir1/$tfile-0"
+	local TESTFILE1="$dir1/$tfile-1"
+	local TESTFILE2="$dir1/$tfile-2"
+	local TESTFILE3="$dir2/$tfile-0"
+	local global_limit=100 # 100M
+	local limit=10 # 10M
+	local qpool="qpool1"
+
+	[ "$OSTCOUNT" -lt "2" ] && skip "needs >= 2 OSTs"
+	mds_supports_qp
+	[ "$ost1_FSTYPE" == zfs ] &&
+		skip "ZFS grants some block space together with inode"
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR is not 0."
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	$LFS setquota -u $TSTUSR -B ${global_limit}M --pool $qpool $DIR ||
+		error "set user quota failed"
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
+		error "set user quota failed"
+
+	mkdir -p $dir1 || error "failed to mkdir"
+	chown $TSTUSR.$TSTUSR $dir1 || error "chown $dir1 failed"
+	mkdir -p $dir2 || error "failed to mkdir"
+	chown $TSTUSR.$TSTUSR $dir2 || error "chown $dir2 failed"
+
+	$LFS setstripe $dir1 -i 1 -c 1|| error "setstripe $testfile failed"
+	$LFS setstripe $dir2 -i 0 -c 1|| error "setstripe $testfile failed"
+	lfs getstripe $dir1
+	lfs getstripe $dir2
+	sleep 3
+
+	$LFS quota -uv $TSTUSR $DIR
+	#define OBD_FAIL_QUOTA_PREACQ            0xA06
+	do_facet mds1 $LCTL set_param fail_loc=0xa06
+	$RUNAS $DD of=$TESTFILE3 count=3 ||
+		quota_error u $TSTUSR "write failed"
+	$RUNAS $DD of=$TESTFILE2 count=7 ||
+		quota_error u $TSTUSR "write failed"
+	$RUNAS $DD of=$TESTFILE1 count=1 oflag=direct ||
+		quota_error u $TSTUSR "write failed"
+	sync
+	sleep 3
+	$LFS quota -uv --pool $qpool $TSTUSR $DIR
+
+	rm -f $TESTFILE2
+	stop ost2
+	do_facet mds1 $LCTL set_param fail_loc=0
+	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS || error "start ost2 failed"
+	$LFS quota -uv $TSTUSR --pool $qpool $DIR
+	# OST0 needs some time to update quota usage after removing TESTFILE2
+	sleep 4
+	$LFS quota -uv $TSTUSR --pool $qpool $DIR
+	$RUNAS $DD of=$TESTFILE0 count=2 oflag=direct ||
+		quota_error u $TSTUSR "write failure, but expect success"
+}
+run_test 80 "check for EDQUOT after OST failover"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

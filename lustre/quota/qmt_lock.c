@@ -287,11 +287,12 @@ static bool qmt_clear_lgeg_arr_nu(struct lquota_entry *lqe, int stype, int idx)
 	return false;
 }
 
-static void qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe,
+static bool qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe,
 			  int stype, int idx)
 {
 	unsigned long least_qunit = lqe2qpi(lqe)->qpi_least_qunit;
 	struct lqe_glbl_data *lgd = lqe->lqe_glbl_data;
+	bool notify = false;
 
 	if (lgd->lqeg_arr[idx].lge_qunit == least_qunit) {
 		int i;
@@ -305,12 +306,13 @@ static void qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe,
 			if (qti_lqes(env)[i]->lqe_qunit == least_qunit) {
 				qti_lqes(env)[i]->lqe_revoke_time =
 							ktime_get_seconds();
-				qmt_adjust_edquot(qti_lqes(env)[i],
+				notify |= qmt_adjust_edquot(qti_lqes(env)[i],
 						  ktime_get_real_seconds());
 			}
 		}
 		qti_lqes_write_unlock(env);
 	}
+	return notify;
 }
 
 /*
@@ -399,8 +401,11 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	if (rc)
 		GOTO(out_exp, rc);
 
-	if (need_revoke)
-		qmt_set_revoke(env, lqe, rc, idx);
+	if (need_revoke && qmt_set_revoke(env, lqe, rc, idx) &&
+	    lqe->lqe_glbl_data) {
+		qmt_seed_glbe_edquot(env, lqe->lqe_glbl_data);
+		qmt_id_lock_notify(qmt, lqe);
+	}
 
 	if (lvb->lvb_id_rel) {
 		LQUOTA_DEBUG(lqe, "releasing:%llu may release:%llu",
