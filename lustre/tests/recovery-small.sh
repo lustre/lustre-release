@@ -3154,6 +3154,35 @@ test_148() {
 }
 run_test 148 "data corruption through resend"
 
+test_149() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	test_mkdir -i 0 -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+
+	# make an orphan striped dir
+	$MULTIOP $DIR/$tdir D_c &
+	local PID=$!
+	sleep 0.3
+	rmdir $DIR/$tdir || error "can't rmdir"
+
+	# stop a slave MDT where one ons stripe is located
+	stop mds2 -f
+
+	# stopping should not cause orphan as another MDT can
+	# be stopped yet
+	stop mds1 -f
+
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "mds1 start fail"
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS || error "mds1 start fail"
+
+	kill -USR1 $PID
+	wait $PID
+
+	clients_up
+	return 0
+}
+run_test 149 "skip orphan removal at umount"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
