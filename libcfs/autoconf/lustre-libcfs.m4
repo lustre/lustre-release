@@ -637,7 +637,7 @@ rhashtable_walk_init, [
 	AC_DEFINE(HAVE_3ARG_RHASHTABLE_WALK_INIT, 1,
 		[rhashtable_walk_init() has 3 args])
 ])
-]) # LIBCFS_RHASHTABLE_REPLACE
+]) # LIBCFS_RHASHTABLE_WALK_INIT_3ARG
 
 #
 # Kernel version 4.8-rc6 commit ca26893f05e86497a86732768ec53cd38c0819ca
@@ -713,7 +713,7 @@ rhashtable_walk_enter, [
 	AC_DEFINE(HAVE_RHASHTABLE_WALK_ENTER, 1,
 		[rhashtable_walk_enter() is available])
 ])
-]) # LIBCFS_RHASHTABLE_REPLACE
+]) # LIBCFS_RHASHTABLE_WALK_ENTER
 
 #
 # Kernel version 4.9 commit 768ae309a96103ed02eb1e111e838c87854d8b51
@@ -804,7 +804,7 @@ kref_read, [
 	AC_DEFINE(HAVE_KREF_READ, 1,
 		[kref_read() is available])
 ])
-]) LIBCFS_KREF_READ
+]) # LIBCFS_KREF_READ
 
 #
 # Kernel version 4.11-rc1 commit da20420f83ea0fbcf3d03afda08d971ea1d8a356
@@ -985,7 +985,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_MM_TOTALRAM_PAGES_FUNC
 
 #
-# LIBCFS_NEW_KERNEL_WRITE
+# LIBCFS_NEW_KERNEL_READ
 #
 # 4.14 commit bdd1d2d3d251c65b74ac4493e08db18971c09240 changed
 # the signature of kernel_read to match other read/write helpers
@@ -1301,8 +1301,6 @@ LB_CHECK_EXPORT([kallsyms_lookup_name], [kernel/kallsyms.c],
 ]) # LIBCFS_KALLSYMS_LOOKUP
 
 #
-# LIBCFS_HAVE_PROC_OPS
-#
 # v5.5-8862-gd56c0d45f0e2
 # proc: decouple proc from VFS with "struct proc_ops"
 #
@@ -1314,7 +1312,7 @@ AC_DEFUN([LIBCFS_SRC_HAVE_PROC_OPS], [
 	],[
 		my_proc->proc_lseek = NULL;
 	],[-Werror])
-])
+]) # LIBCFS_SRC_HAVE_PROC_OPS
 AC_DEFUN([LIBCFS_HAVE_PROC_OPS], [
 	AC_MSG_CHECKING([if struct proc_ops exists])
 	LB2_LINUX_TEST_RESULT([proc_ops], [
@@ -1439,7 +1437,7 @@ kfree_sensitive_exists, [
 		[kfree_sensitive() is available.])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-]) # LIBCFS_HAVE_NR_UNSTABLE_NFS
+]) # LIBCFS_HAVE_KFREE_SENSITIVE
 
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_HAVE_PROC_OPS
