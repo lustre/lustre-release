@@ -47,6 +47,8 @@
 #define LNET_REDISCOVER_PEER	(1)
 
 static int lnet_peer_queue_for_discovery(struct lnet_peer *lp);
+static int lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr,
+			    unsigned int flags);
 
 static void
 lnet_peer_remove_from_remote_list(struct lnet_peer_ni *lpni)
@@ -1428,7 +1430,8 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 
 		if (!pnid) {
 			pnid = nids[i];
-			rc = lnet_add_peer_ni(pnid, LNET_NID_ANY, mr, true);
+			rc = lnet_add_peer_ni(pnid, LNET_NID_ANY, mr,
+					      LNET_PEER_LOCK_PRIMARY);
 			if (rc == -EALREADY) {
 				struct lnet_peer *lp;
 
@@ -1443,9 +1446,11 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 				lnet_peer_decref_locked(lp);
 			}
 		} else if (lnet_peer_discovery_disabled) {
-			rc = lnet_add_peer_ni(nids[i], LNET_NID_ANY, mr, true);
+			rc = lnet_add_peer_ni(nids[i], LNET_NID_ANY, mr,
+					      LNET_PEER_LOCK_PRIMARY);
 		} else {
-			rc = lnet_add_peer_ni(pnid, nids[i], mr, true);
+			rc = lnet_add_peer_ni(pnid, nids[i], mr,
+					      LNET_PEER_LOCK_PRIMARY);
 		}
 
 		if (rc && rc != -EEXIST)
@@ -1977,19 +1982,17 @@ out:
  * The caller must hold ln_api_mutex. This prevents the peer from
  * being created/modified/deleted by a different thread.
  */
-int
-lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr, bool temp)
+static int
+lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr,
+		 unsigned int flags)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_ni *lpni;
-	unsigned int flags = 0;
 
 	/* The prim_nid must always be specified */
 	if (prim_nid == LNET_NID_ANY)
 		return -EINVAL;
-
-	if (!temp)
-		flags = LNET_PEER_CONFIGURED;
 
 	if (mr)
 		flags |= LNET_PEER_MULTI_RAIL;
@@ -2008,13 +2011,6 @@ lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr, bool temp)
 	lnet_peer_ni_decref_locked(lpni);
 	lp = lpni->lpni_peer_net->lpn_peer;
 
-	/* Peer must have been configured. */
-	if (!temp && !(lp->lp_state & LNET_PEER_CONFIGURED)) {
-		CDEBUG(D_NET, "peer %s was not configured\n",
-		       libcfs_nid2str(prim_nid));
-		return -ENOENT;
-	}
-
 	/* Primary NID must match */
 	if (lnet_nid_to_nid4(&lp->lp_primary_nid) != prim_nid) {
 		CDEBUG(D_NET, "prim_nid %s is not primary for peer %s\n",
@@ -2030,7 +2026,22 @@ lnet_add_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr, bool temp)
 		return -EPERM;
 	}
 
+	if ((flags & LNET_PEER_LOCK_PRIMARY) &&
+	    (lnet_peer_is_uptodate(lp) &&
+	     (lp->lp_state & LNET_PEER_LOCK_PRIMARY))) {
+		CDEBUG(D_NET,
+		       "Don't add temporary peer NI for uptodate peer %s\n",
+		       libcfs_nidstr(&lp->lp_primary_nid));
+		return -EINVAL;
+	}
+
 	return lnet_peer_add_nid(lp, nid, flags);
+}
+
+int lnet_user_add_peer_ni(lnet_nid_t prim_nid, struct lnet_nid *nid, bool mr)
+{
+	return lnet_add_peer_ni(prim_nid, lnet_nid_to_nid4(nid), mr,
+				LNET_PEER_CONFIGURED);
 }
 
 /*
