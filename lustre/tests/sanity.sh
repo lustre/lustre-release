@@ -3390,6 +3390,11 @@ run_test 28 "create/mknod/mkdir with bad file types ============"
 test_29() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	[ $MDS1_VERSION -ge $(version_code 2.14.51) ] && {
+		disable_opencache
+		stack_trap "restore_opencache"
+	}
+
 	sync; sleep 1; sync # flush out any dirty pages from previous tests
 	cancel_lru_locks
 	test_mkdir $DIR/d29
