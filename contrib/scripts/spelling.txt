@@ -100,6 +100,8 @@ cfs_time_current_sec||ktime_get_real_seconds
 CLASSERT||BUILD_BUG_ON()
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
+define OBD_CONNECT||see "XXX README XXX" below and contact adilger@whamcloud.com
+__u[136][624] ocd_||see "XXX README XXX" below and contact adilger@whamcloud.com
 EWOULDBLOCK||EAGAIN
 container_of0||container_of_safe
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)

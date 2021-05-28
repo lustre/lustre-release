@@ -555,100 +555,99 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 }
 
 static const char *const obd_connect_names[] = {
-	/* flags names  */
-	"read_only",
-	"lov_index",
-	"connect_from_mds",
-	"write_grant",
-	"server_lock",
-	"version",
-	"request_portal",
-	"acl",
-	"xattr",
-	"create_on_write",
-	"truncate_lock",
-	"initial_transno",
-	"inode_bit_locks",
-	"barrier",
-	"getattr_by_fid",
-	"no_oh_for_devices",
-	"remote_client",
-	"remote_client_by_force",
-	"max_byte_per_rpc",
-	"64bit_qdata",
-	"mds_capability",
-	"oss_capability",
-	"early_lock_cancel",
-	"som",
-	"adaptive_timeouts",
-	"lru_resize",
-	"mds_mds_connection",
-	"real_conn",
-	"change_qunit_size",
-	"alt_checksum_algorithm",
-	"fid_is_enabled",
-	"version_recovery",
-	"pools",
-	"grant_shrink",
-	"skip_orphan",
-	"large_ea",
-	"full20",
-	"layout_lock",
-	"64bithash",
-	"object_max_bytes",
-	"imp_recov",
-	"jobstats",
-	"umask",
-	"einprogress",
-	"grant_param",
-	"flock_owner",
-	"lvb_type",
-	"nanoseconds_times",
-	"lightweight_conn",
-	"short_io",
-	"pingless",
-	"flock_deadlock",
-	"disp_stripe",
-	"open_by_fid",
-	"lfsck",
-	"unknown",
-	"unlink_close",
-	"multi_mod_rpcs",
-	"dir_stripe",
-	"subtree",
-	"lockahead",
-	"bulk_mbits",
-	"compact_obdo",
-	"second_flags",
-	/* flags2 names */
-	"file_secctx",	/* 0x01 */
-	"lockaheadv2",	/* 0x02 */
-	"dir_migrate",	/* 0x04 */
-	"sum_statfs",	/* 0x08 */
-	"overstriping",	/* 0x10 */
-	"flr",		/* 0x20 */
-	"wbc",		/* 0x40 */
-	"lock_convert",  /* 0x80 */
-	"archive_id_array",	/* 0x100 */
-	"increasing_xid",	/* 0x200 */
-	"selinux_policy",	/* 0x400 */
-	"lsom",			/* 0x800 */
-	"pcc",			/* 0x1000 */
-	"crush",		/* 0x2000 */
-	"async_discard",	/* 0x4000 */
-	"client_encryption",	/* 0x8000 */
-	"fidmap",		/* 0x10000 */
-	"getattr_pfid",		/* 0x20000 */
-	"lseek",		/* 0x40000 */
-	"dom_lvb",		/* 0x80000 */
-	"reply_mbits",		/* 0x100000 */
-	"mode_convert",		/* 0x200000 */
-	"batch_rpc",		/* 0x400000 */
-	"pcc_ro",		/* 0x800000 */
-	"mne_nid_type",		/* 0x1000000 */
-	"lock_contend",		/* 0x2000000 */
-	"atomic_open_lock",	/* 0x4000000 */
-	"name_encryption",	/* 0x8000000 */
+	"read_only",			/* 0x01 */
+	"lov_index",			/* 0x02 */
+	"connect_from_mds",		/* 0x03 */
+	"write_grant",			/* 0x04 */
+	"server_lock",			/* 0x10 */
+	"version",			/* 0x20 */
+	"request_portal",		/* 0x40 */
+	"acl",				/* 0x80 */
+	"xattr",			/* 0x100 */
+	"create_on_write",		/* 0x200 */
+	"truncate_lock",		/* 0x400 */
+	"initial_transno",		/* 0x800 */
+	"inode_bit_locks",		/* 0x1000 */
+	"barrier",			/* 0x2000 */
+	"getattr_by_fid",		/* 0x4000 */
+	"no_oh_for_devices",		/* 0x8000 */
+	"remote_client",		/* 0x10000 */
+	"remote_client_by_force",	/* 0x20000 */
+	"max_byte_per_rpc",		/* 0x40000 */
+	"64bit_qdata",			/* 0x80000 */
+	"mds_capability",		/* 0x100000 */
+	"oss_capability",		/* 0x200000 */
+	"early_lock_cancel",		/* 0x400000 */
+	"som",				/* 0x800000 */
+	"adaptive_timeouts",		/* 0x1000000 */
+	"lru_resize",			/* 0x2000000 */
+	"mds_mds_connection",		/* 0x4000000 */
+	"real_conn",			/* 0x8000000 */
+	"change_qunit_size",		/* 0x10000000 */
+	"alt_checksum_algorithm",	/* 0x20000000 */
+	"fid_is_enabled",		/* 0x40000000 */
+	"version_recovery",		/* 0x80000000 */
+	"pools",			/* 0x100000000 */
+	"grant_shrink",			/* 0x200000000 */
+	"skip_orphan",			/* 0x400000000 */
+	"large_ea",			/* 0x800000000 */
+	"full20",			/* 0x1000000000 */
+	"layout_lock",			/* 0x2000000000 */
+	"64bithash",			/* 0x4000000000 */
+	"object_max_bytes",		/* 0x8000000000 */
+	"imp_recov",			/* 0x10000000000 */
+	"jobstats",			/* 0x20000000000 */
+	"umask",			/* 0x40000000000 */
+	"einprogress",			/* 0x80000000000 */
+	"grant_param",			/* 0x100000000000 */
+	"flock_owner",			/* 0x200000000000 */
+	"lvb_type",			/* 0x400000000000 */
+	"nanoseconds_times",		/* 0x800000000000 */
+	"lightweight_conn",		/* 0x1000000000000 */
+	"short_io",			/* 0x2000000000000 */
+	"pingless",			/* 0x4000000000000 */
+	"flock_deadlock",		/* 0x8000000000000 */
+	"disp_stripe",			/* 0x10000000000000 */
+	"open_by_fid",			/* 0x20000000000000 */
+	"lfsck",			/* 0x40000000000000 */
+	"unknown",			/* 0x80000000000000 */
+	"unlink_close",			/* 0x100000000000000 */
+	"multi_mod_rpcs",		/* 0x200000000000000 */
+	"dir_stripe",			/* 0x400000000000000 */
+	"subtree",			/* 0x800000000000000 */
+	"lockahead",			/* 0x1000000000000000 */
+	"bulk_mbits",			/* 0x2000000000000000 */
+	"compact_obdo",			/* 0x4000000000000000 */
+	"second_flags",			/* 0x8000000000000000 */
+	/* ocd_connect_flags2 names */
+	"file_secctx",			/* 0x01 */
+	"lockaheadv2",			/* 0x02 */
+	"dir_migrate",			/* 0x04 */
+	"sum_statfs",			/* 0x08 */
+	"overstriping",			/* 0x10 */
+	"flr",				/* 0x20 */
+	"wbc",				/* 0x40 */
+	"lock_convert",			/* 0x80 */
+	"archive_id_array",		/* 0x100 */
+	"increasing_xid",		/* 0x200 */
+	"selinux_policy",		/* 0x400 */
+	"lsom",				/* 0x800 */
+	"pcc",				/* 0x1000 */
+	"crush",			/* 0x2000 */
+	"async_discard",		/* 0x4000 */
+	"client_encryption",		/* 0x8000 */
+	"fidmap",			/* 0x10000 */
+	"getattr_pfid",			/* 0x20000 */
+	"lseek",			/* 0x40000 */
+	"dom_lvb",			/* 0x80000 */
+	"reply_mbits",			/* 0x100000 */
+	"mode_convert",			/* 0x200000 */
+	"batch_rpc",			/* 0x400000 */
+	"pcc_ro",			/* 0x800000 */
+	"mne_nid_type",			/* 0x1000000 */
+	"lock_contend",			/* 0x2000000 */
+	"atomic_open_lock",		/* 0x4000000 */
+	"name_encryption",		/* 0x8000000 */
 	NULL
 };
 
