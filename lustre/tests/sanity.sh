@@ -162,7 +162,7 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
-MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
+MAXFREE=${MAXFREE:-$((300000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -23565,6 +23565,277 @@ test_398f() { #  LU-14687
 	[[ $? != 0 ]] || error "no diff after failed aiocp"
 }
 run_test 398f "verify aio handles ll_direct_rw_pages errors correctly"
+
+# NB: To get the parallel DIO behavior in LU-13798, there must be > 1
+# stripe and i/o size must be > stripe size
+# Old style synchronous DIO waits after submitting each chunk, resulting in a
+# single RPC in flight.  This test shows async DIO submission is working by
+# showing multiple RPCs in flight.
+test_398g() { #  LU-13798
+	$LFS setstripe -o 0,0 -S 1M $DIR/$tfile
+
+	# We need to do some i/o first to acquire enough grant to put our RPCs
+	# in flight; otherwise a new connection may not have enough grant
+	# available
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=1 oflag=direct ||
+		error "parallel dio failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	# Reduce RPC size to 1M to avoid combination in to larger RPCs
+	local pages_per_rpc=$($LCTL get_param osc.*-OST0000-*.max_pages_per_rpc)
+	$LCTL set_param osc.*-OST0000-*.max_pages_per_rpc=1M
+	stack_trap "$LCTL set_param -n $pages_per_rpc"
+
+	# Recreate file so it's empty
+	rm -f $DIR/$tfile
+	$LFS setstripe -o 0,0 -S 1M $DIR/$tfile
+	#Pause rpc completion to guarantee we see multiple rpcs in flight
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK
+	do_facet ost1 $LCTL set_param fail_loc=0x214 fail_val=2
+	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0"
+
+	# Clear rpc stats
+	$LCTL set_param osc.*.rpc_stats=c
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=1 oflag=direct ||
+		error "parallel dio failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	$LCTL get_param osc.*-OST0000-*.rpc_stats
+	pct=$($LCTL get_param osc.*-OST0000-*.rpc_stats |
+		grep -A 8 'rpcs in flight' | grep -v 'rpcs in flight' |
+		grep "8:" | awk '{print $8}')
+	# We look at the "8 rpcs in flight" field, and verify A) it is present
+	# and B) it includes all RPCs.  This proves we had 8 RPCs in flight,
+	# as expected for an 8M DIO to a file with 1M stripes.
+	[ $pct -eq 100 ] || error "we should see 8 RPCs in flight"
+
+	# Verify turning off parallel dio works as expected
+	# Clear rpc stats
+	$LCTL set_param osc.*.rpc_stats=c
+	$LCTL set_param llite.*.parallel_dio=0
+	stack_trap '$LCTL set_param llite.*.parallel_dio=1'
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=1 oflag=direct ||
+		error "dio with parallel dio disabled failed"
+
+	# Ideally, we would see only one RPC in flight here, but there is an
+	# unavoidable race between i/o completion and RPC in flight counting,
+	# so while only 1 i/o is in flight at a time, the RPC in flight counter
+	# will sometimes exceed 1 (3 or 4 is not rare on VM testing).
+	# So instead we just verify it's always < 8.
+	$LCTL get_param osc.*-OST0000-*.rpc_stats
+	ret=$($LCTL get_param osc.*-OST0000-*.rpc_stats |
+		grep -A 8 'rpcs in flight' | grep -v 'rpcs in flight' |
+		grep '^$' -B1 | grep . | awk '{print $1}')
+	[ $ret != "8:" ] ||
+		error "we should see fewer than 8 RPCs in flight (saw $ret)"
+}
+run_test 398g "verify parallel dio async RPC submission"
+
+test_398h() { #  LU-13798
+	local dio_file=$DIR/$tfile.dio
+
+	$LFS setstripe -C 2 -S 1M $DIR/$tfile $dio_file
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct
+	stack_trap "rm -f $DIR/$tfile $dio_file"
+
+	dd if=$DIR/$tfile of=$dio_file bs=8M count=8 iflag=direct oflag=direct ||
+		error "parallel dio failed"
+	diff $DIR/$tfile $dio_file
+	[[ $? == 0 ]] || error "file diff after aiocp"
+}
+run_test 398h "verify correctness of read & write with i/o size >> stripe size"
+
+test_398i() { #  LU-13798
+	local dio_file=$DIR/$tfile.dio
+
+	$LFS setstripe -C 2 -S 1M $DIR/$tfile $dio_file
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct
+	stack_trap "rm -f $DIR/$tfile $dio_file"
+
+	#define OBD_FAIL_LLITE_PAGE_ALLOC 0x1418
+	$LCTL set_param fail_loc=0x1418
+	# make sure we don't crash and fail properly
+	dd if=$DIR/$tfile of=$dio_file bs=8M count=8 iflag=direct oflag=direct &&
+		error "parallel dio page allocation failure succeeded"
+	diff $DIR/$tfile $dio_file
+	[[ $? != 0 ]] || error "no diff after failed aiocp"
+}
+run_test 398i "verify parallel dio handles ll_direct_rw_pages errors correctly"
+
+test_398j() { #  LU-13798
+	# Stripe size > RPC size but less than i/o size tests split across
+	# stripes and RPCs for individual i/o op
+	$LFS setstripe -o 0,0 -S 4M $DIR/$tfile $DIR/$tfile.2
+
+	# Reduce RPC size to 1M to guarantee split to multiple RPCs per stripe
+	local pages_per_rpc=$($LCTL get_param osc.*-OST0000-*.max_pages_per_rpc)
+	$LCTL set_param osc.*-OST0000-*.max_pages_per_rpc=1M
+	stack_trap "$LCTL set_param -n $pages_per_rpc"
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct ||
+		error "parallel dio write failed"
+	stack_trap "rm -f $DIR/$tfile $DIR/$tfile.2"
+
+	dd if=$DIR/$tfile of=$DIR/$tfile.2 bs=8M count=8 iflag=direct ||
+		error "parallel dio read failed"
+	diff $DIR/$tfile $DIR/$tfile.2
+	[[ $? == 0 ]] || error "file diff after parallel dio read"
+}
+run_test 398j "test parallel dio where stripe size > rpc_size"
+
+test_398k() { #  LU-13798
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	# 4 stripe file; we will cause out of space on OST0
+	$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile
+
+	# Fill OST0 (if it's not too large)
+	ORIGFREE=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
+		   head -n1)
+	if [[ $ORIGFREE -gt $MAXFREE ]]; then
+		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
+	fi
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile.1
+	dd if=/dev/zero of=$DIR/$tfile.1 bs=1024 count=$MAXFREE &&
+		error "dd should fill OST0"
+	stack_trap "rm -f $DIR/$tfile.1"
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct
+	err=$?
+
+	ls -la $DIR/$tfile
+	$CHECKSTAT -t file -s 0 $DIR/$tfile ||
+		error "file is not 0 bytes in size"
+
+	# dd above should not succeed, but don't error until here so we can
+	# get debug info above
+	[[ $err != 0 ]] ||
+		error "parallel dio write with enospc succeeded"
+	stack_trap "rm -f $DIR/$tfile"
+}
+run_test 398k "test enospc on first stripe"
+
+test_398l() { #  LU-13798
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	# 4 stripe file; we will cause out of space on OST0
+	# Note the 1M stripe size and the > 1M i/o size mean this ENOSPC
+	# happens on the second i/o chunk we issue
+	$LFS setstripe -o 1,0,1,0 -S 1M $DIR/$tfile $DIR/$tfile.2
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=2 oflag=direct
+	stack_trap "rm -f $DIR/$tfile"
+
+	# Fill OST0 (if it's not too large)
+	ORIGFREE=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
+		   head -n1)
+	if [[ $ORIGFREE -gt $MAXFREE ]]; then
+		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
+	fi
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile.1
+	dd if=/dev/zero of=$DIR/$tfile.1 bs=1024 count=$MAXFREE &&
+		error "dd should fill OST0"
+	stack_trap "rm -f $DIR/$tfile.1"
+
+	dd if=$DIR/$tfile of=$DIR/$tfile.2 bs=8M count=8 oflag=direct
+	err=$?
+	stack_trap "rm -f $DIR/$tfile.2"
+
+	# Check that short write completed as expected
+	ls -la $DIR/$tfile.2
+	$CHECKSTAT -t file -s 1048576 $DIR/$tfile.2 ||
+		error "file is not 1M in size"
+
+	# dd above should not succeed, but don't error until here so we can
+	# get debug info above
+	[[ $err != 0 ]] ||
+		error "parallel dio write with enospc succeeded"
+
+	# Truncate source file to same length as output file and diff them
+	$TRUNCATE $DIR/$tfile 1048576
+	diff $DIR/$tfile $DIR/$tfile.2
+	[[ $? == 0 ]] || error "data incorrect after short write"
+}
+run_test 398l "test enospc on intermediate stripe/RPC"
+
+test_398m() { #  LU-13798
+	$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile
+
+	lctl set_param *debug=-1 debug_mb=10000
+
+	# Set up failure on OST0, the first stripe:
+	#define OBD_FAIL_OST_BRW_WRITE_BULK     0x20e
+	#NB: Fail val is ost # + 1, because we cannot use cfs_fail_val = 0
+	# So this fail_val specifies OST0
+	do_facet ost1 $LCTL set_param fail_loc=0x20e fail_val=1
+	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0"
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct &&
+		error "parallel dio write with failure on first stripe succeeded"
+	stack_trap "rm -f $DIR/$tfile"
+	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0
+
+	# Place data in file for read
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct ||
+		error "parallel dio write failed"
+
+	# Fail read on OST0, first stripe
+	#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
+	do_facet ost1 $LCTL set_param fail_loc=0x20f fail_val=1
+	dd if=$DIR/$tfile of=$DIR/$tfile.2 bs=8M count=8 iflag=direct &&
+		error "parallel dio read with error on first stripe succeeded"
+	rm -f $DIR/$tfile.2
+	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0
+
+	# Switch to testing on OST1, second stripe
+	# Clear file contents, maintain striping
+	echo > $DIR/$tfile
+	# Set up failure on OST1, second stripe:
+	do_facet ost1 $LCTL set_param fail_loc=0x20e fail_val=2
+	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0"
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct &&
+		error "parallel dio write with failure on first stripe succeeded"
+	stack_trap "rm -f $DIR/$tfile"
+	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0
+
+	# Place data in file for read
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 oflag=direct ||
+		error "parallel dio write failed"
+
+	# Fail read on OST1, second stripe
+	#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
+	do_facet ost2 $LCTL set_param fail_loc=0x20f fail_val=2
+	dd if=$DIR/$tfile of=$DIR/$tfile.2 bs=8M count=8 iflag=direct &&
+		error "parallel dio read with error on first stripe succeeded"
+	rm -f $DIR/$tfile.2
+	do_facet ost2 $LCTL set_param fail_loc=0 fail_val=0
+}
+run_test 398m "test RPC failures with parallel dio"
+
+# Parallel submission of DIO should not cause problems for append, but it's
+# important to verify.
+test_398n() { #  LU-13798
+	$LFS setstripe -C 2 -S 1M $DIR/$tfile
+
+	dd if=/dev/urandom of=$DIR/$tfile bs=8M count=8 ||
+		error "dd to create source file failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	dd if=$DIR/$tfile of=$DIR/$tfile.1 bs=8M count=8 oflag=direct oflag=append ||
+		error "parallel dio write with failure on second stripe succeeded"
+	stack_trap "rm -f $DIR/$tfile $DIR/$tfile.1"
+	diff $DIR/$tfile $DIR/$tfile.1
+	[[ $? == 0 ]] || error "data incorrect after append"
+
+}
+run_test 398n "test append with parallel DIO"
 
 test_fake_rw() {
 	local read_write=$1

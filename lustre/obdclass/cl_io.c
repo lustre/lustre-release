@@ -1297,3 +1297,32 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 	EXIT;
 }
 EXPORT_SYMBOL(cl_sync_io_note);
+
+
+int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
+			    long timeout, int ioret)
+{
+	int rc = 0;
+
+	/*
+	 * @anchor was inited as 1 to prevent end_io to be
+	 * called before we add all pages for IO, so drop
+	 * one extra reference to make sure we could wait
+	 * count to be zero.
+	 */
+	cl_sync_io_note(env, anchor, ioret);
+	/* Wait for completion of normal dio.
+	 * This replaces the EIOCBQEUED return from the DIO/AIO
+	 * path, and this is where AIO and DIO implementations
+	 * split.
+	 */
+	rc = cl_sync_io_wait(env, anchor, timeout);
+	/**
+	 * One extra reference again, as if @anchor is
+	 * reused we assume it as 1 before using.
+	 */
+	atomic_add(1, &anchor->csi_sync_nr);
+
+	return rc;
+}
+EXPORT_SYMBOL(cl_sync_io_wait_recycle);

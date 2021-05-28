@@ -2223,8 +2223,22 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	req->rq_bulk_read = 1;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
-		RETURN(-EIO);
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK)) {
+		/* optionally use cfs_fail_val - 1 to select a specific OST on
+		 * this server to fail requests.
+		 */
+		char fail_ost_name[MAX_OBD_NAME];
+
+		if (cfs_fail_val > 0) {
+			snprintf(fail_ost_name, MAX_OBD_NAME, "OST%04X",
+				 cfs_fail_val - 1);
+
+			if (strstr(obd_name, fail_ost_name))
+				RETURN(err_serious(-EIO));
+		} else {
+			RETURN(err_serious(-EIO));
+		}
+	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
 			 cfs_fail_val : (obd_timeout + 1) / 4);
@@ -2516,7 +2530,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	struct lustre_handle	 lockh = {0};
 	__u32			*rcs;
 	int			 objcount, niocount, npages;
-	int			 rc, i, j;
+	int			 rc = 0;
+	int			 i, j;
 	enum cksum_types cksum_type = OBD_CKSUM_CRC32;
 	bool			 no_reply = false, mmap;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
@@ -2544,9 +2559,25 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	req->rq_bulk_write = 1;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
-		RETURN(err_serious(-EIO));
+		rc = -EIO;
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK2))
-		RETURN(err_serious(-EFAULT));
+		rc = -EFAULT;
+	if (rc < 0) {
+		/* optionally use cfs_fail_val - 1 to select a specific OST on
+		 * this server to fail requests.
+		 */
+		char fail_ost_name[MAX_OBD_NAME];
+
+		if (cfs_fail_val > 0) {
+			snprintf(fail_ost_name, MAX_OBD_NAME, "OST%04X",
+				 cfs_fail_val - 1);
+
+			if (strstr(obd_name, fail_ost_name))
+				RETURN(err_serious(rc));
+		} else {
+			RETURN(err_serious(rc));
+		}
+	}
 
 	/* pause before transaction has been started */
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?

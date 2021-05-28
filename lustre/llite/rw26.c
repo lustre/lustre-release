@@ -512,38 +512,23 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 out:
 	aio->cda_bytes += tot_bytes;
 
-	if (is_sync_kiocb(iocb)) {
-		struct cl_sync_io *anchor = &aio->cda_sync;
+	if (rw == WRITE)
+		vio->u.readwrite.vui_written += tot_bytes;
+	else
+		vio->u.readwrite.vui_read += tot_bytes;
+
+	/* If async dio submission is not allowed, we must wait here. */
+	if (is_sync_kiocb(iocb) && !io->ci_parallel_dio) {
 		ssize_t rc2;
 
-		/**
-		 * @anchor was inited as 1 to prevent end_io to be
-		 * called before we add all pages for IO, so drop
-		 * one extra reference to make sure we could wait
-		 * count to be zero.
-		 */
-		cl_sync_io_note(env, anchor, result);
-
-		rc2 = cl_sync_io_wait(env, anchor, 0);
+		rc2 = cl_sync_io_wait_recycle(env, &aio->cda_sync, 0, 0);
 		if (result == 0 && rc2)
 			result = rc2;
-		/**
-		 * One extra reference again, as if @anchor is
-		 * reused we assume it as 1 before using.
-		 */
-		atomic_add(1, &anchor->csi_sync_nr);
-		if (result == 0) {
-			/* no commit async for direct IO */
-			vio->u.readwrite.vui_written += tot_bytes;
-			result = tot_bytes;
-		}
-	} else {
-		if (rw == WRITE)
-			vio->u.readwrite.vui_written += tot_bytes;
-		else
-			vio->u.readwrite.vui_read += tot_bytes;
+
 		if (result == 0)
-			result = -EIOCBQUEUED;
+			result = tot_bytes;
+	} else if (result == 0) {
+		result = -EIOCBQUEUED;
 	}
 
 	return result;

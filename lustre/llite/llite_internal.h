@@ -639,6 +639,8 @@ enum stats_track_type {
 #define LL_SBI_FOREIGN_SYMLINK	    0x20000000 /* foreign fake-symlink support */
 /* foreign fake-symlink upcall registered */
 #define LL_SBI_FOREIGN_SYMLINK_UPCALL	    0x40000000
+#define LL_SBI_PARALLEL_DIO	0x80000000 /* parallel (async) submission of
+					      RPCs for DIO */
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
 	"checksum",	\
@@ -671,6 +673,7 @@ enum stats_track_type {
 	"noencrypt",	\
 	"foreign_symlink",	\
 	"foreign_symlink_upcall",	\
+	"parallel_dio",	\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect
@@ -987,6 +990,11 @@ static inline bool ll_sbi_has_file_heat(struct ll_sb_info *sbi)
 static inline bool ll_sbi_has_foreign_symlink(struct ll_sb_info *sbi)
 {
 	return !!(sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK);
+}
+
+static inline bool ll_sbi_has_parallel_dio(struct ll_sb_info *sbi)
+{
+	return !!(sbi->ll_flags & LL_SBI_PARALLEL_DIO);
 }
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t count);

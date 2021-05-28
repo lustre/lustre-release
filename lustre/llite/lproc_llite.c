@@ -1086,6 +1086,42 @@ static ssize_t tiny_write_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(tiny_write);
 
+static ssize_t parallel_dio_show(struct kobject *kobj,
+				 struct attribute *attr,
+				 char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		       !!(sbi->ll_flags & LL_SBI_PARALLEL_DIO));
+}
+
+static ssize_t parallel_dio_store(struct kobject *kobj,
+				  struct attribute *attr,
+				  const char *buffer,
+				  size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val)
+		sbi->ll_flags |= LL_SBI_PARALLEL_DIO;
+	else
+		sbi->ll_flags &= ~LL_SBI_PARALLEL_DIO;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(parallel_dio);
+
 static ssize_t max_read_ahead_async_active_show(struct kobject *kobj,
 					       struct attribute *attr,
 					       char *buf)
@@ -1668,6 +1704,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_xattr_cache.attr,
 	&lustre_attr_fast_read.attr,
 	&lustre_attr_tiny_write.attr,
+	&lustre_attr_parallel_dio.attr,
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,

@@ -589,7 +589,7 @@ int osc_teardown_async_page(const struct lu_env *env, struct osc_object *obj,
 			    struct osc_page *ops);
 int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 			 struct osc_page *ops);
-int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
+int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 			 struct osc_object *obj, struct list_head *list,
 			 int brw_flags);
 int osc_cache_truncate_start(const struct lu_env *env, struct osc_object *obj,

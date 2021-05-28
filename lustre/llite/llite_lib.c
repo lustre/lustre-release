@@ -187,6 +187,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_flags |= LL_SBI_AGL_ENABLED;
 	sbi->ll_flags |= LL_SBI_FAST_READ;
 	sbi->ll_flags |= LL_SBI_TINY_WRITE;
+	sbi->ll_flags |= LL_SBI_PARALLEL_DIO;
 	ll_sbi_set_encrypt(sbi, true);
 
 	/* root squash */

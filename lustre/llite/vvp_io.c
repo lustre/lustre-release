@@ -535,6 +535,7 @@ static void vvp_io_advance(const struct lu_env *env,
 	 * of relying on VFS, we move iov iter by ourselves.
 	 */
 	iov_iter_advance(vio->vui_iter, nob);
+	CDEBUG(D_VFSTRACE, "advancing %ld bytes\n", nob);
 	vio->vui_tot_count -= nob;
 	iov_iter_reexpand(vio->vui_iter, vio->vui_tot_count);
 }
