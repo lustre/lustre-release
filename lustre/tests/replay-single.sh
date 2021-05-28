@@ -467,6 +467,7 @@ test_20b() { # bug 10480
 	local n_attempts=1
 
 	sync_all_data
+	save_layout_restore_at_exit $MOUNT
 	$LFS setstripe -i 0 -c 1 $DIR
 
 	local beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
@@ -3328,16 +3329,15 @@ cleanup_90 () {
 }
 
 test_90() { # bug 19494
-    local dir=$DIR/$tdir
-    local ostfail=$(get_random_entry $(get_facets OST))
+	local dir=$DIR/$tdir
+	local ostfail=$(get_random_entry $(get_facets OST))
 
-    if [[ $FAILURE_MODE = HARD ]]; then
-        local affected=$(affected_facets $ostfail);
-        if [[ "$affected" != $ostfail ]]; then
-            skip not functional with FAILURE_MODE=$FAILURE_MODE, affected: $affected
-            return 0
-        fi
-    fi
+	if [[ $FAILURE_MODE = HARD ]]; then
+		local affected=$(affected_facets $ostfail);
+
+		[[ "$affected" == $ostfail ]] ||
+			skip "cannot use FAILURE_MODE=$FAILURE_MODE, affected: $affected"
+	fi
 	# ensure all OSTs are active to allow allocations
 	wait_osts_up
 

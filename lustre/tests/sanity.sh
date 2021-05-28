@@ -8821,8 +8821,7 @@ test_65n() {
 	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
 	which setfattr > /dev/null 2>&1 || skip_env "no setfattr command"
 
-	local root_layout=$(save_layout $MOUNT)
-	stack_trap "restore_layout $MOUNT $root_layout" EXIT
+	save_layout_restore_at_exit $MOUNT
 
 	# new subdirectory under root directory should not inherit
 	# the default layout from root

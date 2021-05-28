@@ -1270,6 +1270,10 @@ repeat_find:
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1)/ost_count + 1;
 
+	/* user specifies bigger stripe count than available ost count */
+	if (lod_comp->llc_stripe_count > ost_count * stripes_per_ost)
+		lod_comp->llc_stripe_count = ost_count * stripes_per_ost;
+
 	for (i = 0; i < ost_count * stripes_per_ost;
 			i++, array_idx = (array_idx + 1) % ost_count) {
 		ost_idx = osts->op_array[array_idx];

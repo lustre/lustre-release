@@ -61,7 +61,7 @@ create_dir() {
 	if [[ -n $idx ]]; then
 		$LFS setstripe -c $count -p $pool -i $idx $dir
 	else
-		$LFS setstripe -c $count -p $pool $dir
+		$LFS setstripe -c $count -p $pool -i -1 $dir
 	fi
 	[[ $? -eq 0 ]] || error "$LFS setstripe -p $pool $dir failed"
 	[[ "$($LFS getstripe --pool $dir)" == "$pool" ]] ||
@@ -209,6 +209,10 @@ ost_pools_init() {
 remote_mds_nodsh && skip "remote MDS with nodsh"
 remote_ost_nodsh && skip "remote OST with nodsh"
 ost_pools_init
+# reset root directory's stripe offset
+$LFS getstripe -d $MOUNT
+save_layout_restore_at_exit $MOUNT
+$LFS setstripe -i -1 $MOUNT
 
 # Tests for new commands added
 test_1a() {
