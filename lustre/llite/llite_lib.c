@@ -2147,8 +2147,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 			 * it is necessary due to possible time
 			 * de-synchronization between MDT inode and OST objects
 			 */
-			if (S_ISREG(inode->i_mode) && IS_ENCRYPTED(inode) &&
-			    attr->ia_valid & ATTR_SIZE) {
+			if (S_ISREG(inode->i_mode) && IS_ENCRYPTED(inode)) {
 				xvalid |= OP_XVALID_FLAGS;
 				flags = LUSTRE_ENCRYPT_FL;
 				/* Call to ll_io_zero_page is not necessary if
@@ -2157,7 +2156,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 				 * In case of Direct IO, all we need is to set
 				 * new size.
 				 */
-				if (attr->ia_size & ~PAGE_MASK &&
+				if (attr->ia_valid & ATTR_SIZE &&
+				    attr->ia_size & ~PAGE_MASK &&
 				    !(attr->ia_valid & ATTR_FILE &&
 				      attr->ia_file->f_flags & O_DIRECT)) {
 					pgoff_t offset =

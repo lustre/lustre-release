@@ -3821,6 +3821,68 @@ test_52() {
 	$LFS mirror verify -v $testfile &&
 		error "mirrors should be different"
 
+	rm -f $testfile $mirror1 $mirror2
+
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=9000 count=1 conv=fsync ||
+		error "write to $testfile failed"
+	$LFS getstripe $testfile
+	cancel_lru_locks
+
+	$LFS migrate -i1 $testfile ||
+		error "migrate $testfile failed"
+	$LFS getstripe $testfile
+	stripe=$($LFS getstripe -i $testfile)
+	[ $stripe -eq 1 ] || error "migrate file $testfile failed"
+
+	cancel_lru_locks
+	cmp -bl $tmpfile $testfile ||
+		error "migrated file is corrupted"
+
+	$LFS mirror extend -N -i0 $testfile ||
+		error "mirror extend $testfile failed"
+	$LFS getstripe $testfile
+	mirror_count=$($LFS getstripe -N $testfile)
+	[ $mirror_count -eq 2 ] ||
+		error "mirror extend file $testfile failed (1)"
+	stripe=$($LFS getstripe --mirror-id=1 -i $testfile)
+	[ $stripe -eq 1 ] || error "mirror extend file $testfile failed (2)"
+	stripe=$($LFS getstripe --mirror-id=2 -i $testfile)
+	[ $stripe -eq 0 ] || error "mirror extend file $testfile failed (3)"
+
+	cancel_lru_locks
+	$LFS mirror verify -v $testfile ||
+		error "mirror verify failed"
+	$LFS mirror read -N 1 -o $mirror1 $testfile ||
+		error "read from mirror 1 failed"
+	cmp -bl $tmpfile $mirror1 ||
+		error "corruption of mirror 1"
+	$LFS mirror read -N 2 -o $mirror2 $testfile ||
+		error "read from mirror 2 failed"
+	cmp -bl $tmpfile $mirror2 ||
+		error "corruption of mirror 2"
+
+	$LFS mirror split --mirror-id 1 -f ${testfile}.mirror $testfile &&
+		error "mirror split -f should fail"
+
+	$LFS mirror split --mirror-id 1 $testfile &&
+		error "mirror split without -d should fail"
+
+	$LFS mirror split --mirror-id 1 -d $testfile ||
+		error "mirror split failed"
+	$LFS getstripe $testfile
+	mirror_count=$($LFS getstripe -N $testfile)
+	[ $mirror_count -eq 1 ] ||
+		error "mirror split file $testfile failed (1)"
+	stripe=$($LFS getstripe --mirror-id=1 -i $testfile)
+	[ -z "$stripe" ] || error "mirror extend file $testfile failed (2)"
+	stripe=$($LFS getstripe --mirror-id=2 -i $testfile)
+	[ $stripe -eq 0 ] || error "mirror extend file $testfile failed (3)"
+
+	cancel_lru_locks
+	cmp -bl $tmpfile $testfile ||
+		error "extended/split file is corrupted"
+
 	rm -f $tmpfile $mirror1 $mirror2
 }
 run_test 52 "Mirrored encrypted file"

@@ -839,8 +839,9 @@ migrate_open_files(const char *name, __u64 migration_flags,
 
 		random_value = random();
 		rc = snprintf(volatile_file, sizeof(volatile_file),
-			      "%s/%s:%.4X:%.4X", parent, LUSTRE_VOLATILE_HDR,
-			      mdt_index, random_value);
+			      "%s/%s:%.4X:%.4X:fd=%.2d", parent,
+			      LUSTRE_VOLATILE_HDR, mdt_index,
+			      random_value, fd);
 		if (rc >= sizeof(volatile_file)) {
 			rc = -ENAMETOOLONG;
 			break;
@@ -2202,6 +2203,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	int mdt_index;
 	int fd, fdv;
 	bool purge = true; /* delete mirror by setting fdv=fd */
+	bool is_encrypted;
 	int rc;
 
 	if (victim_file && (strcmp(fname, victim_file) == 0)) {
@@ -2313,10 +2315,22 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		goto close_fd;
 	}
 
+	rc = llapi_file_is_encrypted(fd);
+	if (rc < 0) {
+		fprintf(stderr, "%s: cannot get flags of '%s': %d\n",
+			progname, fname, rc);
+		goto close_fd;
+	}
+	is_encrypted = rc;
+
 again:
 	if (!victim_file) {
 		/* use a temp file to store the splitted layout */
 		if (mflags & MF_DESTROY) {
+			char file_path[PATH_MAX];
+			unsigned int rnumber;
+			int open_flags;
+
 			if (last_non_stale_mirror(mirror_id, layout)) {
 				rc = -EUCLEAN;
 				fprintf(stderr,
@@ -2333,16 +2347,50 @@ again:
 				 * try the old way to delete mirror using
 				 * volatile file.
 				 */
-				fdv = llapi_create_volatile_idx(parent,
-						mdt_index, O_LOV_DELAY_CREATE);
+				do {
+					rnumber = random();
+					rc = snprintf(file_path,
+						      sizeof(file_path),
+						      "%s/" LUSTRE_VOLATILE_HDR ":%.4X:%.4X:fd=%.2d",
+						      parent, mdt_index,
+						      rnumber, fd);
+					if (rc < 0 ||
+					    rc >= sizeof(file_path)) {
+						fdv = -ENAMETOOLONG;
+						break;
+					}
+
+					open_flags = O_RDWR |
+					     (O_LOV_DELAY_CREATE & ~O_ACCMODE) |
+					     O_CREAT | O_EXCL | O_NOFOLLOW;
+					fdv = open(file_path, open_flags,
+						   S_IRUSR | S_IWUSR);
+					if (fdv < 0)
+						rc = -errno;
+				} while (fdv < 0 && rc == -EEXIST);
 			}
 		} else {
+			if (is_encrypted) {
+				rc = -1;
+				fprintf(stderr,
+					"error %s: not permitted on encrypted file '%s': %d\n",
+					progname, fname, rc);
+				goto close_fd;
+			}
+
 			snprintf(victim, sizeof(victim), "%s.mirror~%u",
 				 fname, mirror_id);
 			fdv = open(victim, flags, S_IRUSR | S_IWUSR);
 		}
 	} else {
 		/* user specified victim file */
+		if (is_encrypted) {
+			rc = -1;
+			fprintf(stderr,
+				"error %s: not permitted on encrypted file '%s': %d\n",
+				progname, fname, rc);
+			goto close_fd;
+		}
 		fdv = open(victim_file, flags, S_IRUSR | S_IWUSR);
 	}
 

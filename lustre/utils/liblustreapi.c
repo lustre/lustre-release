@@ -776,6 +776,18 @@ retry_open:
 	return fd;
 }
 
+int llapi_file_is_encrypted(int fd)
+{
+	unsigned long flags;
+	int rc;
+
+	rc = ioctl(fd, FS_IOC_GETFLAGS, &flags);
+	if (rc == -1)
+		return -errno;
+
+	return !!(flags & LUSTRE_ENCRYPT_FL);
+}
+
 int llapi_file_open_pool(const char *name, int flags, int mode,
 			 unsigned long long stripe_size, int stripe_offset,
 			 int stripe_count, int stripe_pattern, char *pool_name)

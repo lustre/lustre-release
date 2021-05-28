@@ -36,6 +36,9 @@ void llcrypt_free_ctx(void *encctx, __u32 size);
 bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi);
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi);
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);
+/* sizeof(struct fscrypt_context_v2) = 40 */
+#define LLCRYPT_ENC_CTX_SIZE 40
+
 
 /* Encoding/decoding routines inspired from yEnc principles.
  * We just take care of a few critical characters:
