@@ -6665,6 +6665,36 @@ test_56rb() {
 }
 run_test 56rb "check lfs find --size --ost/--mdt works"
 
+test_56rc() {
+	(( MDSCOUNT >= 2 )) || skip "needs at least 2 MDTs"
+	local dir=$DIR/$tdir
+	local found
+
+	test_mkdir -c 2 -H all_char $dir || error "failed to mkdir $dir"
+	$LFS mkdir -c 2 --mdt-hash all_char $dir/$tdir-all{1..10}
+	(( $MDSCOUNT > 2 )) &&
+		$LFS mkdir -c 3 --mdt-hash fnv_1a_64 $dir/$tdir-fnv{1..10}
+	mkdir $dir/$tdir-{1..10}
+	touch $dir/$tfile-{1..10}
+
+	found=$($LFS find $dir --mdt-count 2 | wc -l)
+	expect=11
+	(( $found == $expect )) || error "found $found 2-stripe, expect $expect"
+
+	found=$($LFS find $dir -T +1 | wc -l)
+	(( $MDSCOUNT > 2 )) && expect=$((expect + 10))
+	(( $found == $expect )) || error "found $found 2+stripe, expect $expect"
+
+	found=$($LFS find $dir --mdt-hash all_char | wc -l)
+	expect=11
+	(( $found == $expect )) || error "found $found all_char, expect $expect"
+
+	found=$($LFS find $dir --mdt-hash fnv_1a_64 | wc -l)
+	(( $MDSCOUNT > 2 )) && expect=10 || expect=0
+	(( $found == $expect )) || error "found $found all_char, expect $expect"
+}
+run_test 56rc "check lfs find --mdt-count/--mdt-hash works"
+
 test_56s() { # LU-611 #LU-9369
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
 

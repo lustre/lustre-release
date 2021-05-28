@@ -1806,6 +1806,11 @@ typedef int (semantic_func_t)(char *path, int p, int *d,
 
 #define OBD_NOT_FOUND           (-1)
 
+static bool lmv_is_foreign(__u32 magic)
+{
+	return magic == LMV_MAGIC_FOREIGN;
+}
+
 static void find_param_fini(struct find_param *param)
 {
 	if (param->fp_migrate)
@@ -1903,6 +1908,8 @@ static int cb_get_dirstripe(char *path, int *d, struct find_param *param)
 	int ret;
 	bool did_nofollow = false;
 
+	if (!d || *d < 0)
+		return -ENOTDIR;
 again:
 	param->fp_lmv_md->lum_stripe_count = param->fp_lmv_stripe_count;
 	if (param->fp_get_default_lmv)
@@ -1945,7 +1952,7 @@ again:
 		int lmv_size;
 
 		/* if foreign LMV case, fake stripes number */
-		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
+		if (lmv_is_foreign(param->fp_lmv_md->lum_magic)) {
 			struct lmv_foreign_md *lfm;
 
 			lfm = (struct lmv_foreign_md *)param->fp_lmv_md;
@@ -1981,6 +1988,7 @@ again:
 		}
 		goto again;
 	}
+
 	return ret;
 }
 
@@ -4657,7 +4665,7 @@ static int find_check_foreign(struct find_param *param)
 		struct lmv_foreign_md *lfm;
 
 		lfm = (void *)param->fp_lmv_md;
-		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN) {
+		if (lmv_is_foreign(lfm->lfm_magic)) {
 			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN)
 				return param->fp_exclude_foreign ? 1 : -1;
 			return -1;
@@ -4920,16 +4928,21 @@ static int cb_find_init(char *path, int p, int *dp,
 	}
 
 	/* See if we can check the file type from the dirent. */
-	if (param->fp_type != 0 && de != NULL && de->d_type != DT_UNKNOWN) {
-		checked_type = 1;
+	if (de != NULL && de->d_type != DT_UNKNOWN) {
+		if (param->fp_type != 0) {
+			checked_type = 1;
 
-		if (DTTOIF(de->d_type) == param->fp_type) {
-			if (param->fp_exclude_type)
-				goto decided;
-		} else {
-			if (!param->fp_exclude_type)
-				goto decided;
+			if (DTTOIF(de->d_type) == param->fp_type) {
+				if (param->fp_exclude_type)
+					goto decided;
+			} else {
+				if (!param->fp_exclude_type)
+					goto decided;
+			}
 		}
+		if ((param->fp_check_mdt_count || param->fp_hash_type ||
+		     param->fp_check_hash_flag) && de->d_type != DT_DIR)
+			goto decided;
 	}
 
 	ret = 0;
@@ -4952,23 +4965,66 @@ static int cb_find_init(char *path, int p, int *dp,
 		decision = 0;
 
 	if (decision == 0) {
-		if (d != -1 && (param->fp_check_mdt_count ||
-		    param->fp_hash_type || param->fp_check_foreign ||
-		    param->fp_check_hash_flag)) {
+		if (d != -1 &&
+		    (param->fp_check_mdt_count || param->fp_hash_type ||
+		     param->fp_check_hash_flag || param->fp_check_foreign)) {
 			param->fp_get_lmv = 1;
 			ret = cb_get_dirstripe(path, &d, param);
 			if (ret != 0) {
-				/*
-				 * XXX this works to decide for foreign
-				 * criterion only
-				 */
-				if (errno == ENODATA &&
-				    param->fp_check_foreign) {
-					if (param->fp_exclude_foreign)
-						goto foreign;
-					goto decided;
+				if (errno == ENODATA) {
+					ret = 0;
+					if (param->fp_check_mdt_count ||
+					    param->fp_hash_type ||
+					    param->fp_check_hash_flag) {
+						param->fp_lmv_md->lum_stripe_count = 0;
+						param->fp_lmv_md->lum_hash_type = 0;
+					}
+					if (param->fp_check_foreign) {
+						if (param->fp_exclude_foreign)
+							goto print;
+						goto decided;
+					}
+				} else {
+					return ret;
 				}
-				return ret;
+			}
+
+			if (param->fp_check_mdt_count) {
+				if (lmv_is_foreign(param->fp_lmv_md->lum_magic))
+					goto decided;
+
+				decision = find_value_cmp(param->fp_lmv_md->lum_stripe_count,
+							  param->fp_mdt_count,
+							  param->fp_mdt_count_sign,
+							  param->fp_exclude_mdt_count, 1, 0);
+				if (decision == -1)
+					goto decided;
+			}
+
+			if (param->fp_hash_type) {
+				__u32 found;
+				__u32 type = param->fp_lmv_md->lum_hash_type &
+					LMV_HASH_TYPE_MASK;
+
+				if (lmv_is_foreign(param->fp_lmv_md->lum_magic))
+					goto decided;
+
+				found = (1 << type) & param->fp_hash_type;
+				if ((found && param->fp_exclude_hash_type) ||
+				    (!found && !param->fp_exclude_hash_type))
+					goto decided;
+			}
+
+			if (param->fp_check_hash_flag) {
+				__u32 flags = param->fp_lmv_md->lum_hash_type &
+					~LMV_HASH_TYPE_MASK;
+
+				if (lmv_is_foreign(param->fp_lmv_md->lum_magic))
+					goto decided;
+
+				if (!(flags & param->fp_hash_inflags) ||
+				    (flags & param->fp_hash_exflags))
+					goto decided;
 			}
 		}
 
@@ -5034,6 +5090,10 @@ static int cb_find_init(char *path, int p, int *dp,
 	}
 
 	if (param->fp_type && !checked_type) {
+		if ((param->fp_check_mdt_count || param->fp_check_hash_flag ||
+		     param->fp_hash_type) && !S_ISDIR(lmd->lmd_stx.stx_mode))
+			goto decided;
+
 		if ((lmd->lmd_stx.stx_mode & S_IFMT) == param->fp_type) {
 			if (param->fp_exclude_type)
 				goto decided;
@@ -5097,59 +5157,10 @@ static int cb_find_init(char *path, int p, int *dp,
 			goto decided;
 	}
 
-	if (param->fp_check_mdt_count) {
-		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
-			decision = -1;
-			goto decided;
-		}
-
-		decision = find_value_cmp(
-				param->fp_lmv_md->lum_stripe_count,
-				param->fp_mdt_count,
-				param->fp_mdt_count_sign,
-				param->fp_exclude_mdt_count, 1, 0);
-		if (decision == -1)
-			goto decided;
-	}
-
 	if (param->fp_check_layout) {
 		decision = find_check_layout(param);
 		if (decision == -1)
 			goto decided;
-	}
-
-	if (param->fp_hash_type) {
-		__u32 found;
-		__u32 type = param->fp_lmv_md->lum_hash_type &
-			     LMV_HASH_TYPE_MASK;
-
-		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
-			decision = -1;
-			goto decided;
-		}
-
-		found = (1 << type) & param->fp_hash_type;
-		if ((found && param->fp_exclude_hash_type) ||
-		    (!found && !param->fp_exclude_hash_type)) {
-			decision = -1;
-			goto decided;
-		}
-	}
-
-	if (param->fp_check_hash_flag) {
-		__u32 flags = param->fp_lmv_md->lum_hash_type &
-			      ~LMV_HASH_TYPE_MASK;
-
-		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
-			decision = -1;
-			goto decided;
-		}
-
-		if (!(flags & param->fp_hash_inflags) ||
-		     (flags & param->fp_hash_exflags)) {
-			decision = -1;
-			goto decided;
-		}
 	}
 
 	/* If an OBD UUID is specified but none matches, skip this file. */
@@ -5388,12 +5399,9 @@ obd_matches:
 			goto decided;
 	}
 
-foreign:
-	llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
-	if (param->fp_zero_end)
-		llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');
-	else
-		llapi_printf(LLAPI_MSG_NORMAL, "\n");
+print:
+	llapi_printf(LLAPI_MSG_NORMAL, "%s%c", path,
+		     param->fp_zero_end ? '\0' : '\n');
 
 decided:
 	ret = 0;

@@ -166,9 +166,15 @@ Simple hash function that sums all of the characters in the filename.
 This is mostly for testing, or if it is known that filenames will use
 sequential filenames.
 .RE
+This implicitly selects only directories to be matched, like
+.B -type d
+and not other file types.
 .TP
 .BR --mdt-count | -T
-The DNE striped directory has the given number of MDT shards.
+The DNE striped directory has the given number of MDT shards.  This
+implicitly selects only directories to be matched, like
+.B -type d
+and not other file types.
 .TP
 .BR --mirror-count | -N
 The file has \fIn\fR mirrors in its layout.
