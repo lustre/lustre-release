@@ -4416,6 +4416,19 @@ test_77n() { #LU-10802
 }
 run_test 77n "check wildcard support for TBF JobID NRS policy"
 
+test_77o() {
+	(( $OST1_VERSION > $(version_code 2.14.54) )) ||
+        	skip "need OST > 2.14.54"
+
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="tbf\ nid"
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ name\ nid={192.168.*.*@tcp}\ rate=10000"
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ name1\ nid={192.168.*.*@tcp}\ rate=10000"
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="change\ name1\ rank=name"
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="stop\ name"
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="fifo"
+}
+run_test 77o "Changing rank should not panic"
+
 test_78() { #LU-6673
 	local rc
 

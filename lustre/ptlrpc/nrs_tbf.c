@@ -390,7 +390,8 @@ nrs_tbf_rule_change_rank(struct ptlrpc_nrs_policy *policy,
 	if (!next_rule)
 		GOTO(out_put, rc = -ENOENT);
 
-	list_move(&rule->tr_linkage, next_rule->tr_linkage.prev);
+	/* rules may be adjacent in same list, so list_move() isn't safe here */
+	list_move_tail(&rule->tr_linkage, &next_rule->tr_linkage);
 	nrs_tbf_rule_put(next_rule);
 out_put:
 	nrs_tbf_rule_put(rule);
