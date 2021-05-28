@@ -1388,22 +1388,24 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	struct brw_page *pg_prev;
 	void *short_io_buf;
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
-	struct inode *inode;
+	struct inode *inode = NULL;
 	bool directio = false;
 
 	ENTRY;
-	inode = page2inode(pga[0]->pg);
-	if (inode == NULL) {
-		/* Try to get reference to inode from cl_page if we are
-		 * dealing with direct IO, as handled pages are not
-		 * actual page cache pages.
-		 */
-		struct osc_async_page *oap = brw_page2oap(pga[0]);
-		struct cl_page *clpage = oap2cl_page(oap);
+	if (pga[0]->pg) {
+		inode = page2inode(pga[0]->pg);
+		if (inode == NULL) {
+			/* Try to get reference to inode from cl_page if we are
+			 * dealing with direct IO, as handled pages are not
+			 * actual page cache pages.
+			 */
+			struct osc_async_page *oap = brw_page2oap(pga[0]);
+			struct cl_page *clpage = oap2cl_page(oap);
 
-		inode = clpage->cp_inode;
-		if (inode)
-			directio = true;
+			inode = clpage->cp_inode;
+			if (inode)
+				directio = true;
+		}
 	}
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
 		RETURN(-ENOMEM); /* Recoverable */
@@ -2635,6 +2637,34 @@ out:
 		}
 	}
 	RETURN(rc);
+}
+
+/* This is to refresh our lock in face of no RPCs. */
+void osc_send_empty_rpc(struct osc_object *osc, pgoff_t start)
+{
+	struct ptlrpc_request *req;
+	struct obdo oa;
+	struct brw_page bpg = { .off = start, .count = 1};
+	struct brw_page *pga = &bpg;
+	int rc;
+
+	memset(&oa, 0, sizeof(oa));
+	oa.o_oi = osc->oo_oinfo->loi_oi;
+	oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
+	/* For updated servers - don't do a read */
+	oa.o_flags = OBD_FL_NORPC;
+
+	rc = osc_brw_prep_request(OBD_BRW_READ, osc_cli(osc), &oa, 1, &pga,
+				  &req, 0);
+
+	/* If we succeeded we ship it off, if not there's no point in doing
+	 * anything. Also no resends.
+	 * No interpret callback, no commit callback.
+	 */
+	if (!rc) {
+		req->rq_no_resend = 1;
+		ptlrpcd_add_req(req);
+	}
 }
 
 static int osc_set_lock_data(struct ldlm_lock *lock, void *data)

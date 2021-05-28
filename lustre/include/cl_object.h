@@ -1912,6 +1912,9 @@ struct cl_io {
 			loff_t			 ls_result;
 			int			 ls_whence;
 		} ci_lseek;
+		struct cl_misc_io {
+			time64_t		 lm_next_rpc_time;
+		} ci_misc;
         } u;
         struct cl_2queue     ci_queue;
         size_t               ci_nob;

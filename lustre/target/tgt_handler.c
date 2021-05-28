@@ -2247,6 +2247,10 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	body = tsi->tsi_ost_body;
 	LASSERT(body != NULL);
 
+	if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    body->oa.o_flags & OBD_FL_NORPC)
+		RETURN(0);
+
 	ioo = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_IOOBJ);
 	LASSERT(ioo != NULL); /* must exists after tgt_ost_body_unpack */
 
@@ -2559,6 +2563,11 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	body = tsi->tsi_ost_body;
 	LASSERT(body != NULL);
+
+	if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    body->oa.o_flags & OBD_FL_NORPC)
+		RETURN(0);
+
 
 	ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
 	LASSERT(ioo != NULL); /* must exists after tgt_ost_body_unpack */

@@ -3097,6 +3097,15 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 
 		if (!res)
 			break;
+
+		if (io->ci_type == CIT_MISC &&
+		    io->u.ci_misc.lm_next_rpc_time &&
+		    ktime_get_seconds() > io->u.ci_misc.lm_next_rpc_time) {
+			osc_send_empty_rpc(osc, idx << PAGE_SHIFT);
+			io->u.ci_misc.lm_next_rpc_time = ktime_get_seconds() +
+							 5 * obd_timeout / 16;
+		}
+
 		if (need_resched())
 			cond_resched();
 
@@ -3234,6 +3243,8 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 	io->ci_obj = cl_object_top(osc2cl(osc));
 	io->ci_ignore_layout = 1;
+	io->u.ci_misc.lm_next_rpc_time = ktime_get_seconds() +
+					 5 * obd_timeout / 16;
 	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (result != 0)
 		GOTO(out, result);
