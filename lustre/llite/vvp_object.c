@@ -66,8 +66,7 @@ static int vvp_object_print(const struct lu_env *env, void *cookie,
 	struct inode         *inode = obj->vob_inode;
 	struct ll_inode_info *lli;
 
-	(*p)(env, cookie, "(%d %d) inode: %p ",
-	     atomic_read(&obj->vob_transient_pages),
+	(*p)(env, cookie, "(%d) inode: %p ",
 	     atomic_read(&obj->vob_mmap_cnt),
 	     inode);
 	if (inode) {
@@ -234,7 +233,6 @@ static int vvp_object_init0(const struct lu_env *env,
 			    const struct cl_object_conf *conf)
 {
 	vob->vob_inode = conf->coc_inode;
-	atomic_set(&vob->vob_transient_pages, 0);
 	cl_object_page_init(&vob->vob_cl, sizeof(struct vvp_page));
 	return 0;
 }

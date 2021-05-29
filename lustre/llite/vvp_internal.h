@@ -188,12 +188,6 @@ struct vvp_object {
 	struct inode           *vob_inode;
 
 	/**
-	 * Number of transient pages.  This is no longer protected by i_sem,
-	 * and needs to be atomic.  This is not actually used for anything,
-	 * and can probably be removed.
-	 */
-	atomic_t		vob_transient_pages;
-	/**
 	 * Number of outstanding mmaps on this file.
 	 *
 	 * \see ll_vm_open(), ll_vm_close().
