@@ -3417,14 +3417,15 @@ wait_osts_up() {
 }
 
 wait_destroy_complete () {
-	echo "Waiting for local destroys to complete"
+	echo "Waiting for MDT destroys to complete"
 	# MAX value shouldn't be big as this mean server responsiveness
 	# never increase this just to make test pass but investigate
 	# why it takes so long time
 	local MAX=5
 	local WAIT=0
+	local list=$(comma_list $(mdts_nodes))
 	while [ $WAIT -lt $MAX ]; do
-		local -a RPCs=($($LCTL get_param -n osc.*.destroys_in_flight))
+		local -a RPCs=($(do_nodes $list $LCTL get_param -n osp.*.destroys_in_flight))
 		local con=1
 		local i
 
@@ -3439,7 +3440,7 @@ wait_destroy_complete () {
 		echo "Waiting ${WAIT}s for local destroys to complete"
 		WAIT=$((WAIT + 1))
 	done
-	echo "Local destroys weren't done in $MAX sec."
+	echo "MDT destroys weren't done in $MAX sec."
 	return 1
 }
 
