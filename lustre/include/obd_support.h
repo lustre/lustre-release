@@ -425,6 +425,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSC_DELAY_IO            0x414
 #define OBD_FAIL_OSC_NO_SIZE_DATA        0x415
 #define OBD_FAIL_OSC_DELAY_CANCEL        0x416
+#define OBD_FAIL_OSC_SLOW_PAGE_EVICT	 0x417
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

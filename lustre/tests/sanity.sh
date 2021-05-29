@@ -27238,6 +27238,21 @@ test_902() {
 }
 run_test 902 "test short write doesn't hang lustre"
 
+# LU-14711
+test_903() {
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile $DIR/${tfile}-2
+	echo "blah" > $DIR/${tfile}-2
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=6 conv=fsync
+	#define OBD_FAIL_OSC_SLOW_PAGE_EVICT 0x417
+	$LCTL set_param fail_loc=0x417 fail_val=20
+
+	mv $DIR/${tfile}-2 $DIR/$tfile # Destroys the big object
+	sleep 1 # To start the destroy
+	wait_destroy_complete 150 || error "Destroy taking too long"
+	cat $DIR/$tfile > /dev/null || error "Evicted"
+}
+run_test 903 "Test long page discard does not cause evictions"
+
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

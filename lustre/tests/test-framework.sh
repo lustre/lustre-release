@@ -3438,7 +3438,7 @@ wait_destroy_complete () {
 	# MAX value shouldn't be big as this mean server responsiveness
 	# never increase this just to make test pass but investigate
 	# why it takes so long time
-	local MAX=5
+	local MAX=${1:-5}
 	local WAIT=0
 	local list=$(comma_list $(mdts_nodes))
 	while [ $WAIT -lt $MAX ]; do

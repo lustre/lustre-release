@@ -3119,6 +3119,9 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		if (!res)
 			break;
 
+		OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SLOW_PAGE_EVICT,
+				 cfs_fail_val ?: 20);
+
 		if (io->ci_type == CIT_MISC &&
 		    io->u.ci_misc.lm_next_rpc_time &&
 		    ktime_get_seconds() > io->u.ci_misc.lm_next_rpc_time) {
