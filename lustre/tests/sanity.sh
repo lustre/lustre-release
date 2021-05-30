@@ -3321,6 +3321,7 @@ run_test 27P "basic ops on foreign dir of foreign_symlink type"
 
 test_27Q() {
 	rm -f $TMP/$tfile $TMP/$tfile.loop $TMP/$tfile.none $TMP/$tfile.broken
+	stack_trap "rm -f $TMP/$tfile*"
 
 	test_mkdir $DIR/$tdir-1
 	test_mkdir $DIR/$tdir-2
