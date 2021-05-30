@@ -2241,7 +2241,12 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 
                 if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
                         RETURN (-EINVAL);
-
+		if (index == mti->mti_stripe_index) {
+			CDEBUG(D_INFO,
+			       "attempt to create MDT%04x->MDT%04x osp device\n",
+			       index, index);
+			RETURN(0);
+		}
                 memcpy(tmti->mti_fsname, mti->mti_fsname,
                        strlen(mti->mti_fsname));
                 tmti->mti_stripe_index = index;

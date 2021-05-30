@@ -9248,6 +9248,18 @@ test_128()
 }
 run_test 128 "Force using remote logs with --nolocallogs"
 
+test_130()
+{
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	setupall
+	stop_mdt 2 || error "mdt2 stop failed"
+	do_facet mds2 "$TUNEFS --writeconf $(mdsdevname 2)"
+	start_mdt 2 || error "mdt2 start failed"
+	do_facet mds2 "$LCTL dl" | grep MDT0001-osp-MDT0001 &&
+		error "Illegal OSP device created" || true
+}
+run_test 130 "re-register an MDT after writeconf"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
