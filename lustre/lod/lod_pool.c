@@ -318,10 +318,10 @@ static int pool_proc_open(struct inode *inode, struct file *file)
 }
 
 const static struct proc_ops pool_proc_operations = {
-	.open		= pool_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= seq_release,
+	.proc_open	= pool_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= seq_release,
 };
 
 /**
