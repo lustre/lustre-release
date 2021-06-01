@@ -1576,7 +1576,7 @@ struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
 	len += sizeof(struct hsm_user_item) * itemcount;
 	len += data_len;
 
-	return (struct hsm_user_request *)malloc(len);
+	return (struct hsm_user_request *)calloc(1, len);
 }
 
 /**

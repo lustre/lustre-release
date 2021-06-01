@@ -235,7 +235,6 @@ l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 lhsmtool_posix_SOURCES = lhsmtool_posix.c pid_file.c pid_file.h
 lhsmtool_posix_LDADD := liblustreapi.la $(PTHREAD_LIBS) \
 		$(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
-lhsmtool_posix_DEPENDENCIES := liblustreapi.la
 
 l_getsepol_SOURCES = l_getsepol.c
 l_getsepol_LDADD := liblustreapi.la -lcrypto $(SELINUX)
