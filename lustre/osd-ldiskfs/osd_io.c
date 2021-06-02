@@ -1370,7 +1370,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int			extents = 0;
 	int			depth;
 	int			i;
-	int			newblocks = 0;
+	int			dirty_groups = 0;
 	int			rc = 0;
 	int			credits = 0;
 	long long		quota_space = 0;
@@ -1420,7 +1420,6 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		}
 
 		/* count only unmapped changes */
-		newblocks++;
 		if (lnb[i].lnb_file_offset != extent.end || extent.end == 0) {
 			if (extent.end != 0)
 				extents += (extent.end - extent.start +
@@ -1439,7 +1438,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * overwrite case, no need to modify tree and
 	 * allocate blocks.
 	 */
-	if (!newblocks)
+	if (!extent.end)
 		goto out_declare;
 
 	extents += (extent.end - extent.start +
@@ -1456,6 +1455,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	if (extents > MAX_EXTENTS_PER_WRITE)
 		extents = MAX_EXTENTS_PER_WRITE;
 
+	dirty_groups = extents;
 	/*
 	 * each extent can go into new leaf causing a split
 	 * 5 is max tree depth: inode + 4 index blocks
@@ -1468,11 +1468,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		 */
 		depth = ext_depth(inode);
 		depth = max(depth, 1) + 1;
-		newblocks += depth;
+		dirty_groups += depth;
 		credits += depth * 2 * extents;
 	} else {
 		depth = 3;
-		newblocks += depth;
+		dirty_groups += depth;
 		credits += depth * extents;
 	}
 
@@ -1487,16 +1487,16 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	/* each new block can go in different group (bitmap + gd) */
 
 	/* we can't dirty more bitmap blocks than exist */
-	if (extents > LDISKFS_SB(osd_sb(osd))->s_groups_count)
+	if (dirty_groups > LDISKFS_SB(osd_sb(osd))->s_groups_count)
 		credits += LDISKFS_SB(osd_sb(osd))->s_groups_count;
 	else
-		credits += extents;
+		credits += dirty_groups;
 
 	/* we can't dirty more gd blocks than exist */
 	if (extents > LDISKFS_SB(osd_sb(osd))->s_gdb_count)
 		credits += LDISKFS_SB(osd_sb(osd))->s_gdb_count;
 	else
-		credits += extents;
+		credits += dirty_groups;
 
 	CDEBUG(D_INODE,
 	       "%s: inode #%lu extent_bytes %u extents %d credits %d\n",
