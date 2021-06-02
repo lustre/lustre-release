@@ -16191,6 +16191,41 @@ test_160n() {
 }
 run_test 160n "Changelog destroy race"
 
+test_160p() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $MDS1_VERSION -ge $(version_code 2.14.51) ]] ||
+		skip "Need MDS version at least 2.14.51"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+	local cl_users
+	local cl_user1
+	local entry_count
+
+	# Create a user
+	changelog_register || error "first changelog_register failed"
+
+	cl_users=(${CL_USERS[mds1]})
+	cl_user1="${cl_users[0]}"
+
+	test_mkdir -p -i0 -c1 $DIR/$tdir || error "test_mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile 50 ||
+		error "create $DIR/$tdir/$tfile failed"
+	unlinkmany $DIR/$tdir/$tfile 50 || error "unlinkmany failed"
+	rm -rf $DIR/$tdir
+
+	# check changelogs have been generated
+	entry_count=$(changelog_dump | wc -l)
+	((entry_count != 0)) || error "no changelog entries found"
+
+	# remove changelog_users and check that orphan entries are removed
+	stop mds1
+	do_facet mds1 "$DEBUGFS -w -R 'rm changelog_users' $(mdsdevname 1)"
+	start mds1 || error "cannot start mdt"
+	entry_count=$(changelog_dump | wc -l)
+	((entry_count == 0)) ||
+		error "found $entry_count changelog entries, expected none"
+}
+run_test 160p "Changelog orphan cleanup with no users"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

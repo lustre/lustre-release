@@ -267,7 +267,8 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 					   struct llog_handle *llh,
 					   struct llog_rec_hdr *hdr, void *data)
 {
-	struct mdd_device *mdd = ((struct changelog_orphan_data *)data)->mdd;
+	struct changelog_orphan_data *user_orphan = data;
+	struct mdd_device *mdd = user_orphan->mdd;
 	struct llog_changelog_user_rec *rec = container_of(hdr,
 						struct llog_changelog_user_rec,
 						cur_hdr);
@@ -289,9 +290,7 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 	       rec->cur_hdr.lrh_index, rec->cur_id, rec->cur_endrec,
 	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
-	if (((struct changelog_orphan_data *)data)->index == 0 ||
-	    rec->cur_endrec < ((struct changelog_orphan_data *)data)->index)
-		((struct changelog_orphan_data *)data)->index = rec->cur_endrec;
+	user_orphan->index = min_t(__u64, user_orphan->index, rec->cur_endrec);
 
 	return 0;
 }
@@ -449,11 +448,14 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 {
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	struct llog_ctxt	*ctxt = NULL, *uctxt = NULL;
-	struct changelog_orphan_data changelog_orphan = { .index = 0,
-							  .mdd = mdd },
-				     user_orphan = { .index = 0,
-						     .mdd = mdd };
-	int			 rc;
+	struct changelog_orphan_data changelog_orphan = {
+		.mdd = mdd,
+		.index = -1,
+	}, user_orphan = {
+		.mdd = mdd,
+		.index = -1,
+	};
+	int rc;
 
 	ENTRY;
 

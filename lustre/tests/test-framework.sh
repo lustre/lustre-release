@@ -9471,6 +9471,7 @@ changelog_clear() {
 	# so reorder to get same order than in changelog_register()
 	local cl_facets=$(echo "${!CL_USERS[@]}" | tr " " "\n" | sort |
 			  tr "\n" " ")
+	local cl_user
 
 	for facet in $cl_facets; do
 		for cl_user in ${CL_USERS[$facet]}; do
