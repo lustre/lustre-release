@@ -1156,7 +1156,9 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	 * we only need to request open lock if it was requested
 	 * for every open
 	 */
-	if (ll_i2sbi(dir)->ll_oc_thrsh_count == 1)
+	if (ll_i2sbi(dir)->ll_oc_thrsh_count == 1 &&
+	    exp_connect_flags2(ll_i2mdexp(dir)) &
+	    OBD_CONNECT2_ATOMIC_OPEN_LOCK)
 		it->it_flags |= MDS_OPEN_LOCK;
 
 	/* Dentry added to dcache tree in ll_lookup_it */

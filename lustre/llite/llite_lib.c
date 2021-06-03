@@ -336,7 +336,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_CRUSH | OBD_CONNECT2_LSEEK |
 				   OBD_CONNECT2_GETATTR_PFID |
 				   OBD_CONNECT2_DOM_LVB |
-				   OBD_CONNECT2_REP_MBITS;
+				   OBD_CONNECT2_REP_MBITS |
+				   OBD_CONNECT2_ATOMIC_OPEN_LOCK;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)

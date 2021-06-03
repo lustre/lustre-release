@@ -642,6 +642,12 @@ static const char *const obd_connect_names[] = {
 	"lseek",		/* 0x40000 */
 	"dom_lvb",		/* 0x80000 */
 	"reply_mbits",		/* 0x100000 */
+	"mode_convert",		/* 0x200000 */
+	"batch_rpc",		/* 0x400000 */
+	"pcc_ro",		/* 0x800000 */
+	"mne_nid_type",		/* 0x1000000 */
+	"lock_contend",		/* 0x2000000 */
+	"atomic_open_lock",	/* 0x4000000 */
 	NULL
 };
 
