@@ -858,6 +858,9 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	if (d->opd_connect_mdt)
 		RETURN(0);
 
+	if (d->opd_storage->dd_rdonly)
+		RETURN(0);
+
 	recs = atomic_read(&d->opd_sync_changes);
 	old = atomic64_read(&d->opd_sync_processed_recs);
 
