@@ -1149,6 +1149,46 @@ clear_and_wake_up_bit, [
 ]) # LIBCFS_CLEAR_AND_WAKE_UP_BIT
 
 #
+# LIBCFS_TCP_SOCK_SET_NODELAY
+#
+# kernel 4.18.0-293.el8
+# tcp_sock_set_nodelay() was added
+AC_DEFUN([LIBCFS_TCP_SOCK_SET_NODELAY], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'tcp_sock_set_nodelay()' exists],
+tcp_sock_set_nodelay_exists, [
+	#include <linux/tcp.h>
+],[
+	tcp_sock_set_nodelay(NULL);
+],[
+	AC_DEFINE(HAVE_TCP_SOCK_SET_NODELAY, 1,
+		['tcp_sock_set_nodelay()' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_TCP_SOCK_SET_NODELAY
+
+#
+# LIBCFS_TCP_SOCK_SET_KEEPIDLE
+#
+# kernel 4.18.0-293.el8
+# tcp_sock_set_keepidle() was added
+AC_DEFUN([LIBCFS_TCP_SOCK_SET_KEEPIDLE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'tcp_sock_set_keepidle()' exists],
+tcp_sock_set_keepidle_exists, [
+	#include <linux/tcp.h>
+],[
+	tcp_sock_set_keepidle(NULL, 0);
+],[
+	AC_DEFINE(HAVE_TCP_SOCK_SET_KEEPIDLE, 1,
+		['tcp_sock_set_keepidle()' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_TCP_SOCK_SET_KEEPIDLE
+
+#
 # LIBCFS_XARRAY_SUPPORT
 #
 # 4.19-rc5 kernel commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
@@ -1408,6 +1448,9 @@ LIBCFS_WAIT_VAR_EVENT
 # 4.17
 LIBCFS_BITMAP_ALLOC
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
+# 4.18
+LIBCFS_TCP_SOCK_SET_NODELAY
+LIBCFS_TCP_SOCK_SET_KEEPIDLE
 # 4.19
 LIBCFS_XARRAY_SUPPORT
 # 4.20
