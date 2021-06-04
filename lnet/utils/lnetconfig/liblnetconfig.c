@@ -2209,9 +2209,12 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		}
 
 		if (new_net) {
-			if (!cYAML_create_string(net_node, "net type",
-						 libcfs_net2str(rc_net)))
+			tmp = cYAML_create_string(net_node, "net type", libcfs_net2str(rc_net));
+			if (tmp == NULL)
 				goto out;
+
+			if (first_seq == NULL)
+				first_seq = tmp;
 
 			tmp = cYAML_create_seq(net_node, "local NI(s)");
 			if (tmp == NULL)
@@ -2223,9 +2226,6 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		item = cYAML_create_seq_item(tmp);
 		if (item == NULL)
 			goto out;
-
-		if (first_seq == NULL)
-			first_seq = item;
 
 		if (!backup &&
 		    cYAML_create_string(item, "nid",
@@ -5013,7 +5013,7 @@ static int handle_yaml_show_net(struct cYAML *tree, struct cYAML **show_rc,
 {
 	struct cYAML *net, *detail, *seq_no;
 
-	net = cYAML_get_object_item(tree, "net");
+	net = cYAML_get_object_item(tree, "net type");
 	detail = cYAML_get_object_item(tree, "detail");
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
