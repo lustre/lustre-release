@@ -5022,7 +5022,9 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 
 	lock = ldlm_handle2lock(lockh);
 	LASSERT(lock != NULL);
-	LASSERT(ldlm_has_layout(lock));
+
+	if (!ldlm_has_layout(lock))
+		GOTO(out, rc = -EAGAIN);
 
 	LDLM_DEBUG(lock, "file "DFID"(%p) being reconfigured",
 		   PFID(&lli->lli_fid), inode);
