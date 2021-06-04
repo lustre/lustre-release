@@ -44,8 +44,9 @@ patch_spec_rhel8() {
 Provides: kernel-lustre = %{KVRA}%{?1:.%{1}}\\' \
            -e '/Provides: kernel-devel-uname-r =/a\
 Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
-           -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
-    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
+           -e '/^    find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4\
+    rm -f $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4/ext4-inode-test*' \
           SPECS/$SPEC_NAME 2>&1 ||
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
 }
@@ -111,6 +112,7 @@ kernel_srpm_location() {
 	local kdir
 
 	case $lnxrel in
+		*8_4) kdir="8.4.2105" ;;
 		*8_3) kdir="8.3.2011" ;;
 		*8_2) kdir="8.2.2004" ;;
 		*8_1) kdir="8.1.1911" ;;

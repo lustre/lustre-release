@@ -1,8 +1,12 @@
 lnxmaj="4.18.0"
 lnxrel="305.3.1.el8_4"
+# In https://vault.centos.org/8.4.2105/BaseOS/Source/SPackages/,
+# the kernel src rpm is suffixed with el8.src.rpm instead of
+# el8_4.src.rpm.
+lnxrel_el8="305.3.1.el8"
 
-KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
-SERIES=""
+KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel_el8}.src.rpm
+SERIES=4.18-rhel8.4.series
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 LUSTRE_VERSION=@VERSION@
 
