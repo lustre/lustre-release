@@ -1549,6 +1549,12 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 # define ldiskfs_has_feature_dirdata(sb) \
 	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_DIRDATA)
 # endif
+# ifdef LDISKFS_FEATURE_INCOMPAT_LARGEDIR
+# define ldiskfs_has_feature_largedir(sb) \
+	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_LARGEDIR)
+# define ldiskfs_set_feature_largedir(sb) \
+	LDISKFS_SET_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_LARGEDIR)
+# endif
 # ifdef LDISKFS_FEATURE_COMPAT_HAS_JOURNAL
 # define ldiskfs_has_feature_journal(sb) \
 	LDISKFS_HAS_COMPAT_FEATURE(sb, LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)

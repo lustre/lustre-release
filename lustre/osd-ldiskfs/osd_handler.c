@@ -7756,6 +7756,20 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 	EXIT;
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 53, 0)
+# ifndef LDISKFS_HAS_INCOMPAT_FEATURE
+/* Newer kernels provide the ldiskfs_set_feature_largedir() wrapper already,
+ * which calls ldiskfs_update_dynamic_rev() to update ancient filesystems.
+ * All ldiskfs filesystems are already v2, so it is a no-op and unnecessary.
+ * This avoids maintaining patches to export this otherwise-useless function.
+ */
+void ldiskfs_update_dynamic_rev(struct super_block *sb)
+{
+	/* do nothing */
+}
+# endif
+#endif
+
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
@@ -7900,6 +7914,7 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out_mnt, rc = -EINVAL);
 	}
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 53, 0)
 #ifdef LDISKFS_MOUNT_DIRDATA
 	if (ldiskfs_has_feature_dirdata(o->od_mnt->mnt_sb))
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
@@ -7908,6 +7923,15 @@ static int osd_mount(const struct lu_env *env,
 		      "enabling the dirdata feature. If you do not want to "
 		      "downgrade to Lustre-1.x again, you can enable it via "
 		      "'tune2fs -O dirdata device'\n", name, dev);
+#endif
+	/* enable large_dir on MDTs to avoid REMOTE_PARENT_DIR overflow,
+	 * and on very large OSTs to avoid object directory overflow */
+	if (unlikely(!ldiskfs_has_feature_largedir(o->od_mnt->mnt_sb) &&
+		     !strstr(name, "MGS"))) {
+		ldiskfs_set_feature_largedir(o->od_mnt->mnt_sb);
+		LCONSOLE_INFO("%s: enable 'large_dir' feature on device '%s'\n",
+			      name, dev);
+	}
 #endif
 	inode = osd_sb(o)->s_root->d_inode;
 	lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
