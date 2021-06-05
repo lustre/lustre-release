@@ -74,8 +74,8 @@ while ($line = <INFILE>) {
 
     if (index($type, 'alloced') >= 0) {
         if (defined($memory->{$addr})) {
-            print STDERR "*** Two allocs with the same address ($size bytes at $addr, $file:$func:$lno)\n";
-            print STDERR "    first malloc at $memory->{$addr}->{file}:$memory->{$addr}->{func}:$memory->{$addr}->{lno}, second at $file:$func:$lno\n";
+            print STDOUT "*** Two allocs with the same address ($size bytes at $addr, $file:$func:$lno)\n";
+            print STDOUT "    first malloc at $memory->{$addr}->{file}:$memory->{$addr}->{func}:$memory->{$addr}->{lno}, second at $file:$func:$lno\n";
             next;
         }
 
@@ -92,14 +92,14 @@ while ($line = <INFILE>) {
         }
     } else {
         if (!defined($memory->{$addr})) {
-            print STDERR "*** Free without malloc ($size bytes at $addr, $file:$func:$lno)\n";
+            print STDOUT "*** Free without malloc ($size bytes at $addr, $file:$func:$lno)\n";
             next;
         }
         my ($oldname, $oldsize, $oldfile, $oldfunc, $oldlno) = $memory->{$addr};
 
         if ($memory->{$addr}->{size} != $size) {
-            print STDERR "*** Free different size ($memory->{$addr}->{size} alloced, $size freed).\n";
-            print STDERR "    malloc at $memory->{$addr}->{file}:$memory->{$addr}->{func}:$memory->{$addr}->{lno}, free at $file:$func:$lno\n";
+            print STDOUT "*** Free different size ($memory->{$addr}->{size} alloced, $size freed).\n";
+            print STDOUT "    malloc at $memory->{$addr}->{file}:$memory->{$addr}->{func}:$memory->{$addr}->{lno}, free at $file:$func:$lno\n";
             next;
         }
 
@@ -117,7 +117,7 @@ my @sorted = sort {
 my $key;
 foreach $key (@sorted) {
     my ($oldname, $oldsize, $oldfile, $oldfunc, $oldlno) = $memory->{$key};
-    print STDERR "*** Leak: $memory->{$key}->{size} bytes allocated at $key ($memory->{$key}->{file}:$memory->{$key}->{func}:$memory->{$key}->{lno}, debug file line $memory->{$key}->{debug_line})\n";
+    print STDOUT "*** Leak: $memory->{$key}->{size} bytes allocated at $key ($memory->{$key}->{file}:$memory->{$key}->{func}:$memory->{$key}->{lno}, debug file line $memory->{$key}->{debug_line})\n";
 }
 
-print STDERR "maximum used: $max, amount leaked: $total\n";
+print STDOUT "maximum used: $max, amount leaked: $total\n";
