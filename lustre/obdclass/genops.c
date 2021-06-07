@@ -2337,7 +2337,11 @@ void obd_put_mod_rpc_slot(struct client_obd *cli, __u32 opc, __u16 tag)
 	LASSERT(tag - 1 < OBD_MAX_RIF_MAX);
 	LASSERT(test_and_clear_bit(tag - 1, cli->cl_mod_tag_bitmap) != 0);
 	spin_unlock(&cli->cl_mod_rpcs_lock);
-	wake_up(&cli->cl_mod_rpcs_waitq);
+	/* LU-14741 - to prevent close RPCs stuck behind normal ones */
+	if (close_req)
+		wake_up_all(&cli->cl_mod_rpcs_waitq);
+	else
+		wake_up(&cli->cl_mod_rpcs_waitq);
 }
 EXPORT_SYMBOL(obd_put_mod_rpc_slot);
 
