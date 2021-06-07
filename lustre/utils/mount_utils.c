@@ -526,7 +526,7 @@ int loop_format(struct mkfs_opts *mop)
 #ifdef PLUGIN_DIR
 #define DLSYM(prefix, sym, func)					\
 	do {								\
-		char _fname[64];					\
+		char _fname[PATH_MAX];					\
 		snprintf(_fname, sizeof(_fname), "%s_%s", prefix, #func); \
 		sym->func = (typeof(sym->func))dlsym(sym->dl_handle, _fname); \
 	} while (0)
