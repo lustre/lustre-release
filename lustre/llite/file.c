@@ -3414,8 +3414,17 @@ int ll_ioctl_check_project(struct inode *inode, __u32 xflags,
 	 * namespace. Enforce that restriction only if we are trying to change
 	 * the quota ID state. Everything else is allowed in user namespaces.
 	 */
-	if (current_user_ns() == &init_user_ns)
+	if (current_user_ns() == &init_user_ns) {
+		/*
+		 * Caller is allowed to change the project ID. if it is being
+		 * changed, make sure that the new value is valid.
+		 */
+		if (ll_i2info(inode)->lli_projid != projid &&
+		     !projid_valid(make_kprojid(&init_user_ns, projid)))
+			return -EINVAL;
+
 		return 0;
+	}
 
 	if (ll_i2info(inode)->lli_projid != projid)
 		return -EINVAL;

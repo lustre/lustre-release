@@ -5044,6 +5044,23 @@ test_75()
 }
 run_test 75 "nodemap squashed root respects quota enforcement"
 
+test_76() {
+	! is_project_quota_supported &&
+		skip "skip project quota unsupported"
+
+	setup_quota_test || error "setup quota failed with $?"
+	quota_init
+
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	touch $testfile
+	$LFS project -p 4294967295 $testfile &&
+		error "set project ID should fail"
+
+	cleanup_quota_test
+}
+run_test 76 "project ID 4294967295 should be not allowed"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

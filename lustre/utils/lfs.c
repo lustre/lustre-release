@@ -4577,6 +4577,7 @@ static int str2quotaid(__u32 *id, const char *arg)
 	projid_tmp = strtoul(arg, &endptr, 10);
 	if (*endptr != '\0')
 		return -EINVAL;
+	/* UINT32_MAX is not allowed - see projid_valid()/INVALID_PROJID */
 	if (projid_tmp >= UINT32_MAX)
 		return -ERANGE;
 
