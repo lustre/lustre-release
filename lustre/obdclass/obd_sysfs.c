@@ -62,6 +62,7 @@
 #include <linux/kobject.h>
 
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_crypto.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
@@ -500,6 +501,63 @@ static const struct file_operations obd_device_list_fops = {
 	.release = seq_release,
 };
 
+/* checksum_speed */
+static void *checksum_speed_start(struct seq_file *p, loff_t *pos)
+{
+	return pos;
+}
+
+static void checksum_speed_stop(struct seq_file *p, void *v)
+{
+}
+
+static void *checksum_speed_next(struct seq_file *p, void *v, loff_t *pos)
+{
+	++(*pos);
+	if (*pos >= CFS_HASH_ALG_SPEED_MAX - 1)
+		return NULL;
+
+	return pos;
+}
+
+static int checksum_speed_show(struct seq_file *p, void *v)
+{
+	loff_t index = *(loff_t *)v;
+
+	if (!index || index > CFS_HASH_ALG_SPEED_MAX - 1)
+		return 0;
+
+	seq_printf(p, "%s: %d\n", cfs_crypto_hash_name(index),
+		   cfs_crypto_hash_speeds[index]);
+
+	return 0;
+}
+
+static const struct seq_operations checksum_speed_sops = {
+	.start = checksum_speed_start,
+	.stop = checksum_speed_stop,
+	.next = checksum_speed_next,
+	.show = checksum_speed_show,
+};
+
+static int checksum_speed_open(struct inode *inode, struct file *file)
+{
+	int rc = seq_open(file, &checksum_speed_sops);
+
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static const struct file_operations checksum_speed_fops = {
+	.owner   = THIS_MODULE,
+	.open    = checksum_speed_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};
+
 static int
 health_check_seq_show(struct seq_file *m, void *unused)
 {
@@ -591,6 +649,9 @@ int class_procfs_init(void)
 
 	file = debugfs_create_file("health_check", 0444, debugfs_lustre_root,
 				   NULL, &health_check_fops);
+
+	file = debugfs_create_file("checksum_speed", 0444, debugfs_lustre_root,
+				   NULL, &checksum_speed_fops);
 
 	entry = lprocfs_register("fs/lustre", NULL, NULL, NULL);
 	if (IS_ERR(entry)) {

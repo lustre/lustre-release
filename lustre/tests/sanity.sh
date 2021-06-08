@@ -9596,6 +9596,20 @@ run_test 77l "preferred checksum type is remembered after reconnected"
 rm -f $F77_TMP
 unset F77_TMP
 
+test_77m() {
+	(( $CLIENT_VERSION >= $(version_code 2.14.52) )) ||
+		skip "Need at least version 2.14.52"
+	local param=checksum_speed
+
+	$LCTL get_param $param || error "reading $param failed"
+
+	csum_speeds=$($LCTL get_param -n $param)
+
+	[[ "$csum_speeds" =~ "adler32" && "$csum_speeds" =~ "crc32" ]] ||
+		error "known checksum types are missing"
+}
+run_test 77m "Verify checksum_speed is correctly read"
+
 cleanup_test_78() {
 	trap 0
 	rm -f $DIR/$tfile
