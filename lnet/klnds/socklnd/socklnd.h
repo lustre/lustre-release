@@ -168,6 +168,7 @@ struct ksock_net {
 	struct list_head  ksnn_list;		/* chain on global list */
 	atomic_t	  ksnn_npeers;		/* # peers */
 	struct ksock_interface ksnn_interface;  /* IP interface */
+	struct lnet_ni	  *ksnn_ni;
 };
 /* When the ksock_net is shut down, this (negative) bias is added to
  * ksnn_npeers, which prevents new peers from being added.
@@ -453,6 +454,11 @@ extern const struct ksock_proto ksocknal_protocol_v3x;
 
 #ifndef CPU_MASK_NONE
 #define CPU_MASK_NONE   0UL
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0)
+#undef netdev_notifier_info_to_dev
+#define netdev_notifier_info_to_dev(ndev) ndev
 #endif
 
 static inline __u32 ksocknal_csum(__u32 crc, unsigned char const *p, size_t len)
