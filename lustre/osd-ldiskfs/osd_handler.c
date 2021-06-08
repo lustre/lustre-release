@@ -6602,36 +6602,23 @@ static const struct dt_index_operations osd_index_iam_ops = {
 	}
 };
 
-
-/**
- * Creates or initializes iterator context.
- *
- * \retval struct osd_it_ea, iterator structure on success
- *
- */
-static struct dt_it *osd_it_ea_init(const struct lu_env *env,
-				    struct dt_object *dt,
-				    __u32 attr)
+struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
+				  struct inode *inode, __u32 attr)
 {
-	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_it_ea *oie;
 	struct file *file;
-	struct lu_object *lo = &dt->do_lu;
 	struct dentry *obj_dentry;
 
 	ENTRY;
-
-	if (!dt_object_exists(dt) || obj->oo_destroyed)
-		RETURN(ERR_PTR(-ENOENT));
 
 	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);
 	if (oie == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 	obj_dentry = &oie->oie_dentry;
 
-	obj_dentry->d_inode = obj->oo_inode;
-	obj_dentry->d_sb = osd_sb(osd_obj2dev(obj));
+	obj_dentry->d_inode = inode;
+	obj_dentry->d_sb = inode->i_sb;
 	obj_dentry->d_name.hash = 0;
 
 	oie->oie_rd_dirent       = 0;
@@ -6645,7 +6632,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 		if (oie->oie_buf == NULL)
 			RETURN(ERR_PTR(-ENOMEM));
 	}
-	oie->oie_obj = obj;
+	oie->oie_obj = NULL;
 
 	file = &oie->oie_file;
 
@@ -6655,12 +6642,54 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	else
 		file->f_mode	= FMODE_32BITHASH;
 	file->f_path.dentry	= obj_dentry;
-	file->f_mapping		= obj->oo_inode->i_mapping;
-	file->f_op		= obj->oo_inode->i_fop;
-	file->f_inode = obj->oo_inode;
+	file->f_mapping		= inode->i_mapping;
+	file->f_op		= inode->i_fop;
+	file->f_inode = inode;
 
+	RETURN(oie);
+}
+
+/**
+ * Creates or initializes iterator context.
+ *
+ * \retval struct osd_it_ea, iterator structure on success
+ *
+ */
+static struct dt_it *osd_it_ea_init(const struct lu_env *env,
+				    struct dt_object *dt,
+				    __u32 attr)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct lu_object *lo = &dt->do_lu;
+	struct osd_it_ea *oie;
+
+	ENTRY;
+
+	if (!dt_object_exists(dt) || obj->oo_destroyed)
+		RETURN(ERR_PTR(-ENOENT));
+
+	oie = osd_it_dir_init(env, obj->oo_inode, attr);
+	if (IS_ERR(oie))
+		RETURN((struct dt_it *)oie);
+
+	oie->oie_obj = obj;
 	lu_object_get(lo);
 	RETURN((struct dt_it *)oie);
+}
+
+void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
+		     struct inode *inode)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	ENTRY;
+	oie->oie_file.f_op->release(inode, &oie->oie_file);
+	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
+		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
+	else
+		info->oti_it_ea_buf_used = 0;
+	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
+	EXIT;
 }
 
 /**
@@ -6670,19 +6699,13 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
  */
 static void osd_it_ea_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_it_ea *oie = (struct osd_it_ea *)di;
 	struct osd_object *obj = oie->oie_obj;
 	struct inode *inode = obj->oo_inode;
 
 	ENTRY;
-	oie->oie_file.f_op->release(inode, &oie->oie_file);
+	osd_it_dir_fini(env, (struct osd_it_ea *)di, inode);
 	osd_object_put(env, obj);
-	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
-		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
-	else
-		info->oti_it_ea_buf_used = 0;
-	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
 	EXIT;
 }
 
@@ -6761,7 +6784,8 @@ static int osd_ldiskfs_filldir(void *buf,
 
 	/* "." is just the object itself. */
 	if (namelen == 1 && name[0] == '.') {
-		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
+		if (obj != NULL)
+			*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
 	} else if (d_type & LDISKFS_DIRENT_LUFID) {
 		rec = (struct osd_fid_pack *)(name + namelen + 1);
 		if (osd_fid_unpack(fid, rec) != 0)
@@ -6772,7 +6796,8 @@ static int osd_ldiskfs_filldir(void *buf,
 	d_type &= ~LDISKFS_DIRENT_LUFID;
 
 	/* NOT export local root. */
-	if (unlikely(osd_sb(osd_obj2dev(obj))->s_root->d_inode->i_ino == ino)) {
+	if (obj != NULL &&
+	    unlikely(osd_sb(osd_obj2dev(obj))->s_root->d_inode->i_ino == ino)) {
 		ino = obj->oo_inode->i_ino;
 		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
 	}
@@ -6799,12 +6824,10 @@ static int osd_ldiskfs_filldir(void *buf,
  * \retval -ve on error
  * \retval +1 reach the end of entry
  */
-static int osd_ldiskfs_it_fill(const struct lu_env *env,
-			       const struct dt_it *di)
+int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 {
 	struct osd_it_ea *it = (struct osd_it_ea *)di;
 	struct osd_object *obj = it->oie_obj;
-	struct inode *inode = obj->oo_inode;
 	struct htree_lock *hlock = NULL;
 	struct file *filp = &it->oie_file;
 	int rc = 0;
@@ -6817,12 +6840,15 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 	it->oie_dirent = it->oie_buf;
 	it->oie_rd_dirent = 0;
 
-	if (obj->oo_hl_head != NULL) {
-		hlock = osd_oti_get(env)->oti_hlock;
-		ldiskfs_htree_lock(hlock, obj->oo_hl_head,
-				   inode, LDISKFS_HLOCK_READDIR);
-	} else {
-		down_read(&obj->oo_ext_idx_sem);
+	if (obj) {
+		if (obj->oo_hl_head != NULL) {
+			hlock = osd_oti_get(env)->oti_hlock;
+			ldiskfs_htree_lock(hlock, obj->oo_hl_head,
+					   obj->oo_inode,
+					   LDISKFS_HLOCK_READDIR);
+		} else {
+			down_read(&obj->oo_ext_idx_sem);
+		}
 	}
 
 	filp->f_cred = current_cred();
@@ -6849,10 +6875,12 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 		it->oie_it_dirent = 1;
 	}
 unlock:
-	if (hlock != NULL)
-		ldiskfs_htree_unlock(hlock);
-	else
-		up_read(&obj->oo_ext_idx_sem);
+	if (obj) {
+		if (hlock != NULL)
+			ldiskfs_htree_unlock(hlock);
+		else
+			up_read(&obj->oo_ext_idx_sem);
+	}
 
 	RETURN(rc);
 }

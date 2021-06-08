@@ -243,6 +243,29 @@ update:
 	GOTO(out, rc);
 
 out:
+	if (dev->od_is_ost) {
+		sa_handle_t *hdl;
+		uint64_t nlink, mode;
+
+		rc = -sa_handle_get(dev->od_os, oid, NULL, SA_HDL_PRIVATE,
+				    &hdl);
+		if (rc)
+			GOTO(cleanup, rc);
+
+		rc = -sa_lookup(hdl, SA_ZPL_MODE(dev), &mode, sizeof(mode));
+		if (rc || !S_ISREG(mode)) {
+			sa_handle_destroy(hdl);
+			GOTO(cleanup, rc);
+		}
+
+		rc = -sa_lookup(hdl, SA_ZPL_LINKS(dev), &nlink, sizeof(nlink));
+		if (rc == 0 && nlink > 1)
+			scrub->os_has_ml_file = 1;
+
+		sa_handle_destroy(hdl);
+	}
+
+cleanup:
 	if (nvbuf)
 		nvlist_free(nvbuf);
 
@@ -553,6 +576,9 @@ static int osd_scrub_exec(const struct lu_env *env, struct osd_device *dev,
 	return 0;
 }
 
+static int osd_scan_ml_file_main(const struct lu_env *env,
+				 struct osd_device *dev);
+
 static int osd_scrub_main(void *args)
 {
 	struct lu_env env;
@@ -560,7 +586,7 @@ static int osd_scrub_main(void *args)
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct lu_fid *fid;
 	uint64_t oid;
-	int rc = 0;
+	int rc = 0, ret;
 	ENTRY;
 
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_DT_THREAD);
@@ -617,6 +643,12 @@ static int osd_scrub_main(void *args)
 	GOTO(post, rc);
 
 post:
+	if (scrub->os_has_ml_file) {
+		ret = osd_scan_ml_file_main(&env, dev);
+		if (ret != 0)
+			rc = ret;
+	}
+
 	rc = osd_scrub_post(&env, dev, rc);
 	CDEBUG(D_LFSCK, "%s: OI scrub: stop, pos = %llu: rc = %d\n",
 	       scrub->os_name, scrub->os_pos_current, rc);
@@ -1910,4 +1942,219 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 	spin_unlock(&scrub->os_lock);
 
 	RETURN(ret);
+}
+
+typedef int (*scan_dir_helper_t)(const struct lu_env *env,
+				 struct osd_device *dev, uint64_t dir_oid,
+				 struct osd_zap_it *ozi);
+
+static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
+			uint64_t id, scan_dir_helper_t cb)
+{
+	struct osd_zap_it *it;
+	struct luz_direntry *zde;
+	zap_attribute_t	*za;
+	int rc;
+
+	ENTRY;
+
+	OBD_SLAB_ALLOC_PTR_GFP(it, osd_zapit_cachep, GFP_NOFS);
+	if (it == NULL)
+		RETURN(-ENOMEM);
+
+	rc = osd_zap_cursor_init(&it->ozi_zc, dev->od_os, id, 0);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	za = &it->ozi_za;
+	zde = &it->ozi_zde;
+	while (1) {
+		rc = -zap_cursor_retrieve(it->ozi_zc, za);
+		if (unlikely(rc)) {
+			if (rc == -ENOENT)
+				rc = 0;
+
+			break;
+		}
+
+		if (name_is_dot_or_dotdot(za->za_name, strlen(za->za_name))) {
+			zap_cursor_advance(it->ozi_zc);
+			continue;
+		}
+
+		strncpy(it->ozi_name, za->za_name, sizeof(it->ozi_name));
+		if (za->za_integer_length != 8) {
+			rc = -EIO;
+			break;
+		}
+
+		rc = osd_zap_lookup(dev, it->ozi_zc->zc_zapobj, NULL,
+				    za->za_name, za->za_integer_length,
+				    sizeof(*zde) / za->za_integer_length, zde);
+		if (rc)
+			break;
+
+		rc = cb(env, dev, id, it);
+		if (rc)
+			break;
+
+		zap_cursor_advance(it->ozi_zc);
+	}
+	osd_zap_cursor_fini(it->ozi_zc);
+
+out:
+	OBD_SLAB_FREE_PTR(it, osd_zapit_cachep);
+	RETURN(rc);
+}
+
+static int osd_remove_ml_file(const struct lu_env *env, struct osd_device *dev,
+			      uint64_t dir, uint64_t id, struct lu_fid *fid,
+			      char *name)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dt_object *dt;
+	struct osd_object *obj = NULL;
+	dmu_tx_t *tx;
+	sa_handle_t *hdl;
+	uint64_t nlink;
+	int rc;
+
+	rc = -sa_handle_get(dev->od_os, id, NULL, SA_HDL_PRIVATE, &hdl);
+	if (rc)
+		RETURN(rc);
+
+	dt = lu2dt(lu_object_find_slice(env, osd2lu_dev(dev), fid, NULL));
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
+
+	if (dt) {
+		obj = osd_dt_obj(dt);
+		down_read(&obj->oo_guard);
+	}
+
+	rc = -sa_lookup(hdl, SA_ZPL_LINKS(dev), &nlink, sizeof(nlink));
+	if (rc)
+		GOTO(out, rc);
+
+	if (nlink <= 1) {
+		CERROR("%s: multi-link file O/%s/%s/%s has nlink %llu\n",
+		       osd_name(dev), info->oti_seq_name, info->oti_dir_name,
+		       name, nlink);
+		GOTO(out, rc = 0);
+	}
+
+	tx = dmu_tx_create(dev->od_os);
+	if (!tx) {
+		CERROR("%s: fail to create tx to remove multi-link file!\n",
+		       osd_name(dev));
+		GOTO(out, rc = -ENOMEM);
+	}
+
+	dmu_tx_hold_zap(tx, dir, FALSE, NULL);
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (rc)
+		GOTO(abort, rc);
+
+	nlink--;
+	rc = -sa_update(hdl, SA_ZPL_LINKS(dev), &nlink, sizeof(nlink), tx);
+	if (rc)
+		GOTO(abort, rc);
+
+	rc = -zap_remove(dev->od_os, dir, name, tx);
+	if (rc)
+		GOTO(abort, rc);
+
+	dmu_tx_commit(tx);
+	GOTO(out, rc);
+
+abort:
+	dmu_tx_abort(tx);
+
+out:
+	if (dt) {
+		up_read(&obj->oo_guard);
+		dt_object_put_nocache(env, dt);
+	}
+
+	sa_handle_destroy(hdl);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file(const struct lu_env *env, struct osd_device *dev,
+			    uint64_t dir_oid, struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *fid = &info->oti_fid;
+	struct ost_id *ostid = &info->oti_ostid;
+	char name[32];
+	u64 seq;
+	int rc = 0;
+
+	ENTRY;
+
+	rc = osd_get_fid_by_oid(env, dev, ozi->ozi_zde.lzd_reg.zde_dnode, fid);
+	if (rc)
+		RETURN(rc);
+
+	seq = fid_seq(fid);
+	fid_to_ostid(fid, ostid);
+
+	snprintf(name, sizeof(name), (fid_seq_is_rsvd(seq) ||
+				      fid_seq_is_mdt0(seq)) ? "%llu" : "%llx",
+				      fid_seq_is_idif(seq) ? 0 : seq);
+	if (strcmp(info->oti_seq_name, name) != 0)
+		GOTO(fix, rc);
+
+	snprintf(name, sizeof(name), "d%d",
+		(int)ostid_id(ostid) % OSD_OST_MAP_SIZE);
+	if (strcmp(info->oti_dir_name, name) != 0)
+		GOTO(fix, rc);
+
+	snprintf(name, sizeof(name), "%llu", ostid_id(ostid));
+	if (strcmp(ozi->ozi_name, name) == 0)
+		RETURN(0);
+
+fix:
+	CDEBUG(D_LFSCK, "%s: the file O/%s/%s/%s is corrupted\n",
+	       osd_name(dev), info->oti_seq_name, info->oti_dir_name,
+	       ozi->ozi_name);
+
+	rc = osd_remove_ml_file(env, dev, dir_oid,
+				ozi->ozi_zde.lzd_reg.zde_dnode, fid,
+				ozi->ozi_name);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file_dir(const struct lu_env *env,
+				struct osd_device *dev, uint64_t dir_oid,
+				struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	if (!S_ISDIR(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		return 0;
+
+	info->oti_dir_name = ozi->ozi_name;
+	return osd_scan_dir(env, dev, ozi->ozi_zde.lzd_reg.zde_dnode,
+			    osd_scan_ml_file);
+}
+
+static int osd_scan_ml_file_seq(const struct lu_env *env,
+				struct osd_device *dev, uint64_t dir_oid,
+				struct osd_zap_it *ozi)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+
+	if (!S_ISDIR(cpu_to_le16(DTTOIF(ozi->ozi_zde.lzd_reg.zde_type))))
+		return 0;
+
+	info->oti_seq_name = ozi->ozi_name;
+	return osd_scan_dir(env, dev, ozi->ozi_zde.lzd_reg.zde_dnode,
+			    osd_scan_ml_file_dir);
+}
+
+static int osd_scan_ml_file_main(const struct lu_env *env,
+				 struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_O_id, osd_scan_ml_file_seq);
 }

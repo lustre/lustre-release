@@ -711,6 +711,9 @@ struct osd_thread_info {
 
 	struct page		**oti_dio_pages;
 	int			oti_dio_pages_used;
+
+	struct osd_it_ea_dirent *oti_seq_dirent;
+	struct osd_it_ea_dirent *oti_dir_dirent;
 };
 
 extern int ldiskfs_pdo;
@@ -745,6 +748,17 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 	return ll_vfs_setxattr(dentry, inode, name, buf, buflen, fl);
 }
 
+static inline char *osd_oid_name(char *name, size_t name_size,
+				 const struct lu_fid *fid, u64 id)
+{
+	snprintf(name, name_size,
+		 (fid_seq_is_rsvd(fid_seq(fid)) ||
+		  fid_seq_is_mdt0(fid_seq(fid)) ||
+		  fid_seq_is_idif(fid_seq(fid))) ? "%llu" : "%llx", id);
+
+	return name;
+}
+
 #ifdef CONFIG_PROC_FS
 /* osd_lproc.c */
 extern struct lprocfs_vars lprocfs_osd_obd_vars[];
@@ -765,12 +779,19 @@ osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	     struct osd_inode_id *id, struct lu_fid *fid);
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u32 compat, __u32 incompat);
+struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
+				 struct osd_device *osd, u64 seq);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		struct dentry *dentry, struct lustre_ost_attrs *loa);
 void osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
 		      struct osd_inode_id *id, const struct lu_fid *fid);
 int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 		 struct dentry *dentry, struct lu_fid *fid);
+struct osd_it_ea *osd_it_dir_init(const struct lu_env *env, struct inode *inode,
+				  __u32 attr);
+void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
+		     struct inode *inode);
+int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di);
 
 int osd_obj_map_init(const struct lu_env *env, struct osd_device *osd);
 void osd_obj_map_fini(struct osd_device *dev);
@@ -796,6 +817,9 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
 			handle_t *th);
+int osd_obj_del_entry(struct osd_thread_info *info, struct osd_device *osd,
+		      struct dentry *dird, char *name, int namelen,
+		      handle_t *th);
 
 char *osd_lf_fid2name(const struct lu_fid *fid);
 int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,

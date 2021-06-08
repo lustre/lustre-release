@@ -1044,8 +1044,9 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 				  struct dt_object *child,
 				  const char *name, const char *name2,
 				  __u16 type, bool update, bool dec);
-int lfsck_verify_linkea(const struct lu_env *env, struct dt_object *obj,
-			const struct lu_name *cname, const struct lu_fid *pfid);
+int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
+			struct dt_object *obj, const struct lu_name *cname,
+			const struct lu_fid *pfid);
 int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 			  char *name, struct lu_fid *pfid);
 int lfsck_update_name_entry(const struct lu_env *env,
@@ -1541,5 +1542,20 @@ lfsck_assistant_object_put(const struct lu_env *env,
 {
 	if (atomic_dec_and_test(&lso->lso_ref))
 		OBD_FREE_PTR(lso);
+}
+
+static inline struct thandle*
+lfsck_trans_create(const struct lu_env *env, struct dt_device *dev,
+		   struct lfsck_instance *lfsck)
+{
+	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN) {
+		CERROR("%s: transaction is being created in DRYRUN mode!\n",
+		       lfsck_lfsck2name(lfsck));
+
+		dump_stack();
+		return ERR_PTR(-EINVAL);
+	}
+
+	return dt_trans_create(env, dev);
 }
 #endif /* _LFSCK_INTERNAL_H */

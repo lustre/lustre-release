@@ -1338,6 +1338,50 @@ test_18() {
 }
 run_test 18 "test mount -o resetoi to recreate OI files"
 
+test_19() {
+	local rcmd="do_facet ost${ost}"
+
+	check_mount_and_prep
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+	createmany -o $DIR/$tdir/f 64 || error "(0) Fail to create 32 files."
+
+	echo "stopall"
+	stopall > /dev/null
+
+	# create mulitple link file
+	mount_fstype ost1 || error "(1) Fail to mount ost1"
+	mntpt=$(facet_mntpt ost1)
+
+	local path=$mntpt/O/0/d2
+	local file=$(${rcmd} ls $path | awk '{print $0; exit}')
+
+	# create link to the first file
+	echo "link $path/1 to $path/$file"
+	${rcmd} ln $path/$file $path/1
+	unmount_fstype ost1 || error "(2) Fail to umount ost1"
+
+	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(2) Fail to start ost1"
+
+	$START_SCRUB_ON_OST -r || error "(3) Fail to start OI scrub on OST!"
+
+	wait_update_facet ost1 "$LCTL get_param -n \
+		osd-*.$(facet_svc ost1).oi_scrub |
+		awk '/^status/ { print \\\$2 }'" "completed" 6 ||
+		error "(4) Expected '$expected' on ost1"
+
+	stop ost1
+	mount_fstype ost1 || error "(5) Fail to mount ost1"
+	links=$(do_facet ost1 "stat $path/$file" | awk '/Links:/ { print $6 }')
+	unmount_fstype ost1 || error "(6) Fail to umount ost1"
+
+	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(7) Fail to start ost1"
+
+	(( links == 1)) || error "(8) object links $links != 1 after scrub"
+}
+run_test 19 "LFSCK can fix multiple linked files on OST"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

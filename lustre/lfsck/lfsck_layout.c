@@ -1248,7 +1248,7 @@ lfsck_layout_lastid_create(const struct lu_env *env,
 	memset(dof, 0, sizeof(*dof));
 	dof->dof_type = dt_mode_to_dft(S_IFREG);
 
-	th = dt_trans_create(env, dt);
+	th = lfsck_trans_create(env, dt, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -1363,7 +1363,7 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 			continue;
 		}
 
-		th = dt_trans_create(env, dt);
+		th = lfsck_trans_create(env, dt, lfsck);
 		if (IS_ERR(th)) {
 			rc1 = PTR_ERR(th);
 			CDEBUG(D_LFSCK, "%s: layout LFSCK failed to store "
@@ -1611,7 +1611,7 @@ static int lfsck_layout_ins_dangling_rec(const struct lu_env *env,
 
 	mutex_lock(&com->lc_sub_trace_objs[idx].lsto_mutex);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -1667,7 +1667,7 @@ static int lfsck_layout_del_dangling_rec(const struct lu_env *env,
 
 	mutex_lock(&com->lc_sub_trace_objs[idx].lsto_mutex);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -2203,6 +2203,7 @@ static int lfsck_layout_update_lovea(const struct lu_env *env,
 }
 
 static int __lfsck_layout_update_pfid(const struct lu_env *env,
+				      struct lfsck_component *com,
 				      struct dt_object *child,
 				      const struct lu_fid *pfid,
 				      const struct ost_layout *ol, __u32 offset,
@@ -2225,7 +2226,7 @@ static int __lfsck_layout_update_pfid(const struct lu_env *env,
 	ff->ff_range = cpu_to_le32(range);
 	lfsck_buf_init(&buf, ff, sizeof(*ff));
 
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
@@ -2267,7 +2268,7 @@ static int lfsck_layout_update_pfid(const struct lu_env *env,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	rc = __lfsck_layout_update_pfid(env, child,
+	rc = __lfsck_layout_update_pfid(env, com, child,
 					lu_object_fid(&parent->do_lu),
 					&rec->lor_layout, ea_off,
 					rec->lor_layout_version,
@@ -2463,7 +2464,7 @@ again:
 		GOTO(unlock, rc);
 
 	/* The 1st transaction. */
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -2516,7 +2517,7 @@ again:
 		th = NULL;
 
 		/* The 2nd transaction. */
-		rc = __lfsck_layout_update_pfid(env, cobj, pfid,
+		rc = __lfsck_layout_update_pfid(env, com, cobj, pfid,
 						&rec->lor_layout, ea_off,
 						rec->lor_layout_version,
 						rec->lor_range);
@@ -2663,7 +2664,7 @@ static int lfsck_layout_slave_conditional_destroy(const struct lu_env *env,
 	if (la->la_ctime != 0)
 		GOTO(unlock, rc = -ETXTBSY);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -2782,7 +2783,7 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 	if (lfsck_is_dryrun(com->lc_lfsck))
 		GOTO(unlock, rc = 0);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -2903,7 +2904,7 @@ again:
 	}
 
 	if (!(bk->lb_param & LPF_DRYRUN)) {
-		handle = dt_trans_create(env, dt);
+		handle = lfsck_trans_create(env, dt, lfsck);
 		if (IS_ERR(handle))
 			GOTO(unlock_layout, rc = PTR_ERR(handle));
 
@@ -3526,7 +3527,7 @@ static int __lfsck_layout_repair_dangling(const struct lu_env *env,
 		GOTO(unlock1, rc);
 
 	buf = lfsck_buf_get(env, ff, sizeof(struct filter_fid));
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(handle))
 		GOTO(unlock1, rc = PTR_ERR(handle));
 
@@ -3767,7 +3768,7 @@ static int lfsck_layout_repair_unmatched_pair(const struct lu_env *env,
 
 	buf = lfsck_buf_get(env, ff, sizeof(*ff));
 
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(handle))
 		GOTO(unlock1, rc = PTR_ERR(handle));
 
@@ -3895,7 +3896,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	memset(dof, 0, sizeof(*dof));
 
 	dev = lfsck_obj2dev(child);
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
@@ -3936,7 +3937,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	if (IS_ERR(parent))
 		GOTO(log, rc = PTR_ERR(parent));
 
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
@@ -4058,7 +4059,7 @@ static int lfsck_layout_repair_owner(const struct lu_env *env,
 	tla->la_uid = pla->la_uid;
 	tla->la_gid = pla->la_gid;
 	tla->la_valid = LA_UID | LA_GID;
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
@@ -5171,7 +5172,8 @@ static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 		     lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 0);
 
-	rc = __lfsck_layout_update_pfid(env, obj, &lrl->lrl_ff_client.ff_parent,
+	rc = __lfsck_layout_update_pfid(env, com, obj,
+					&lrl->lrl_ff_client.ff_parent,
 					&lrl->lrl_ff_client.ff_layout,
 					lrl->lrl_ff_client.ff_layout_version,
 					lrl->lrl_ff_client.ff_range,
@@ -5754,7 +5756,7 @@ fix:
 		if (rc != 0)
 			GOTO(out, rc);
 
-		handle = dt_trans_create(env, dev);
+		handle = lfsck_trans_create(env, dev, lfsck);
 		if (IS_ERR(handle))
 			GOTO(out, rc = PTR_ERR(handle));
 
@@ -7108,6 +7110,7 @@ static int lfsck_fid_match_idx(const struct lu_env *env,
 }
 
 static void lfsck_layout_destroy_orphan(const struct lu_env *env,
+					struct lfsck_instance *lfsck,
 					struct dt_object *obj)
 {
 	struct dt_device	*dev	= lfsck_obj2dev(obj);
@@ -7115,7 +7118,7 @@ static void lfsck_layout_destroy_orphan(const struct lu_env *env,
 	int			 rc;
 	ENTRY;
 
-	handle = dt_trans_create(env, dev);
+	handle = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(handle))
 		RETURN_EXIT;
 
@@ -7448,7 +7451,7 @@ again1:
 			 * OST-object there. Destroy it now! */
 			if (unlikely(!(la->la_mode & S_ISUID))) {
 				dt_read_unlock(env, obj);
-				lfsck_layout_destroy_orphan(env, obj);
+				lfsck_layout_destroy_orphan(env, lfsck, obj);
 				lfsck_object_put(env, obj);
 				pos++;
 				goto again1;

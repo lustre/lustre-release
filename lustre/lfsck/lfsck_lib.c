@@ -621,7 +621,7 @@ static int lfsck_lpf_remove_name_entry(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -687,7 +687,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -865,7 +865,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	/* Transaction I: locally */
 
 	dev = lfsck_obj2dev(child);
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -962,7 +962,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	/* Transaction II: remotely */
 
 	dev = lfsck_obj2dev(parent);
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -1280,7 +1280,7 @@ static int lfsck_verify_lpf_pairs(const struct lu_env *env,
 		}
 
 		cname = lfsck_name_get_const(env, name, strlen(name));
-		rc = lfsck_verify_linkea(env, child, cname, &LU_LPF_FID);
+		rc = lfsck_verify_linkea(env, lfsck, child, cname, &LU_LPF_FID);
 		if (rc == 0)
 			rc = lfsck_update_lpf_entry(env, lfsck, parent, child,
 						    name, type);
@@ -1515,7 +1515,8 @@ find_child1:
 		}
 
 		cname = lfsck_name_get_const(env, name, strlen(name));
-		rc = lfsck_verify_linkea(env, child2, cname, &LU_LPF_FID);
+		rc = lfsck_verify_linkea(env, lfsck, child2, cname,
+					 &LU_LPF_FID);
 
 		GOTO(put, rc);
 	}
@@ -3735,7 +3736,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 			cname = lfsck_name_get_const(env, dotlustre,
 						     strlen(dotlustre));
-			rc = lfsck_verify_linkea(env, obj, cname,
+			rc = lfsck_verify_linkea(env, lfsck, obj, cname,
 						 &lfsck->li_global_root_fid);
 			if (rc != 0)
 				GOTO(out, rc);
@@ -3755,7 +3756,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 			cname = lfsck_name_get_const(env, lostfound,
 						     strlen(lostfound));
-			rc = lfsck_verify_linkea(env, obj, cname, pfid);
+			rc = lfsck_verify_linkea(env, lfsck, obj, cname, pfid);
 			if (rc != 0)
 				GOTO(out, rc);
 

@@ -826,10 +826,9 @@ out:
 	return rc;
 }
 
-static int osd_obj_del_entry(struct osd_thread_info *info,
-			     struct osd_device *osd,
-			     struct dentry *dird, char *name,
-			     handle_t *th)
+int osd_obj_del_entry(struct osd_thread_info *info, struct osd_device *osd,
+		      struct dentry *dird, char *name, int namelen,
+		      handle_t *th)
 {
 	struct ldiskfs_dir_entry_2 *de;
 	struct buffer_head *bh;
@@ -845,7 +844,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	child = &info->oti_child_dentry;
 	child->d_name.hash = 0;
 	child->d_name.name = name;
-	child->d_name.len = strlen(name);
+	child->d_name.len = namelen;
 	child->d_parent = dird;
 	child->d_inode = NULL;
 
@@ -928,15 +927,6 @@ static inline void osd_seq_name(char *seq_name, size_t name_size, u64 seq)
 		 fid_seq_is_idif(seq) ? 0 : seq);
 }
 
-static inline void osd_oid_name(char *name, size_t name_size,
-				const struct lu_fid *fid, u64 id)
-{
-	snprintf(name, name_size,
-		 (fid_seq_is_rsvd(fid_seq(fid)) ||
-		  fid_seq_is_mdt0(fid_seq(fid)) ||
-		  fid_seq_is_idif(fid_seq(fid))) ? "%llu" : "%llx", id);
-}
-
 /* external locking is required */
 static int osd_seq_load_locked(struct osd_thread_info *info,
 			       struct osd_device *osd,
@@ -1005,8 +995,8 @@ out_err:
 	RETURN(rc);
 }
 
-static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
-					struct osd_device *osd, u64 seq)
+struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
+				 struct osd_device *osd, u64 seq)
 {
 	struct osd_obj_map *map;
 	struct osd_obj_seq *osd_seq;
@@ -1200,7 +1190,7 @@ int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
 	LASSERT(d);
 
 	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
-	rc = osd_obj_del_entry(info, osd, d, name, th);
+	rc = osd_obj_del_entry(info, osd, d, name, strlen(name), th);
 cleanup:
 	RETURN(rc);
 }

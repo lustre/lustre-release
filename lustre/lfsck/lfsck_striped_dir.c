@@ -208,7 +208,7 @@ static int lfsck_disable_master_lmv(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -1085,7 +1085,7 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 			GOTO(log, rc);
 	}
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 

@@ -531,7 +531,7 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 		GOTO(log, rc);
 	}
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -695,7 +695,7 @@ static int lfsck_namespace_links_remove(const struct lu_env *env,
 
 	LASSERT(dt_object_remote(obj) == 0);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -990,7 +990,7 @@ again:
 
 	lfsck_buf_init(&linkea_buf, ldata2.ld_buf->lb_buf,
 		       ldata2.ld_leh->leh_len);
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -1122,7 +1122,7 @@ static int lfsck_lmv_set(const struct lu_env *env,
 
 	ENTRY;
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -1155,7 +1155,7 @@ static int lfsck_lmv_delete(const struct lu_env *env,
 
 	ENTRY;
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -1320,7 +1320,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(unlock, rc = -ENOTDIR);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
@@ -1538,7 +1538,7 @@ again:
 	if (rc != 0)
 		GOTO(unlock1, rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
@@ -1730,7 +1730,7 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 	}
 
 again:
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
@@ -2045,7 +2045,7 @@ replace:
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(log, rc = 1);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -2131,7 +2131,7 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -2237,7 +2237,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
@@ -2384,7 +2384,7 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -3107,7 +3107,7 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -3467,7 +3467,7 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
@@ -3606,7 +3606,7 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 		if (rc)
 			GOTO(out, rc);
 
-		handle = dt_trans_create(env, dev);
+		handle = lfsck_trans_create(env, dev, lfsck);
 		if (IS_ERR(handle))
 			GOTO(unlock, rc = PTR_ERR(handle));
 
@@ -5388,7 +5388,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	 * the MDT-object without stripes (dof->dof_reg.striped = 0). related
 	 * OST-objects will be created when write open. */
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock_child, rc = PTR_ERR(th));
 
@@ -5730,7 +5730,7 @@ again:
 		if (rc != 0)
 			GOTO(out, rc);
 
-		handle = dt_trans_create(env, dev);
+		handle = lfsck_trans_create(env, dev, lfsck);
 		if (IS_ERR(handle))
 			GOTO(out, rc = PTR_ERR(handle));
 
@@ -6141,7 +6141,7 @@ static int lfsck_namespace_scan_local_lpf_one(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
@@ -6870,8 +6870,9 @@ const struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int lfsck_verify_linkea(const struct lu_env *env, struct dt_object *obj,
-			const struct lu_name *cname, const struct lu_fid *pfid)
+int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
+			struct dt_object *obj, const struct lu_name *cname,
+			const struct lu_fid *pfid)
 {
 	struct dt_device	*dev	= lfsck_obj2dev(obj);
 	struct linkea_data	 ldata	= { NULL };
@@ -6908,7 +6909,7 @@ int lfsck_verify_linkea(const struct lu_env *env, struct dt_object *obj,
 
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -7002,7 +7003,7 @@ int lfsck_update_name_entry(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-	th = dt_trans_create(env, dev);
+	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 

@@ -301,7 +301,8 @@ struct lustre_scrub {
 				os_partial_scan:1,
 				os_in_join:1,
 				os_running:1,	/* scrub thread is running */
-				os_full_scrub:1;
+				os_full_scrub:1,
+				os_has_ml_file:1;
 };
 
 #define INDEX_BACKUP_MAGIC_V1	0x1E41F208

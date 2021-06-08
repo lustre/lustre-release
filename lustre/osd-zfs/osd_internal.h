@@ -127,26 +127,6 @@ enum osd_zap_pos {
 	OZI_POS_REAL = 3,	/* cursor at real entries */
 };
 
-/**
- * Iterator's in-memory data structure for ZAPs
- *
- * ZFS does not store . and .. on a disk, instead they are
- * generated up on request
- * to follow this format we do the same
- */
-struct osd_zap_it {
-	zap_cursor_t		*ozi_zc;
-	struct osd_object	*ozi_obj;
-	unsigned		 ozi_reset:1;	/* 1 -- no need to advance */
-	/* ozi_pos - position of the cursor */
-	enum osd_zap_pos	ozi_pos;
-	union {
-		char		 ozi_name[MAXNAMELEN]; /* file name for dir */
-		__u64		 ozi_key; /* binary key for index files */
-	};
-};
-#define DT_IT2DT(it) (&((struct osd_zap_it *)it)->ozi_obj->oo_dt)
-
 /*
  * regular ZFS direntry
  */
@@ -164,6 +144,27 @@ struct luz_direntry {
 	struct lu_fid		lzd_fid;
 } __attribute__((packed));
 
+/**
+ * Iterator's in-memory data structure for ZAPs
+ *
+ * ZFS does not store . and .. on a disk, instead they are
+ * generated up on request
+ * to follow this format we do the same
+ */
+struct osd_zap_it {
+	zap_cursor_t		*ozi_zc;
+	struct osd_object	*ozi_obj;
+	unsigned		 ozi_reset:1;	/* 1 -- no need to advance */
+	/* ozi_pos - position of the cursor */
+	enum osd_zap_pos	 ozi_pos;
+	struct luz_direntry	 ozi_zde;
+	zap_attribute_t		 ozi_za;
+	union {
+		char		 ozi_name[MAXNAMELEN]; /* file name for dir */
+		__u64		 ozi_key; /* binary key for index files */
+	};
+};
+#define DT_IT2DT(it) (&((struct osd_zap_it *)it)->ozi_obj->oo_dt)
 
 /* cached SA attributes */
 struct osa_attr {
@@ -267,6 +268,9 @@ struct osd_thread_info {
 	struct lu_buf	       oti_xattr_lbuf;
 	zap_cursor_t	       oti_zc;
 	zap_cursor_t	       oti_zc2;
+
+	char			*oti_seq_name;
+	char			*oti_dir_name;
 };
 
 extern struct lu_context_key osd_key;

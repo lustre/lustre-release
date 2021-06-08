@@ -751,6 +751,9 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		RETURN(rc);
 	}
 
+	if (dev->od_is_ost && S_ISREG(inode->i_mode) && inode->i_nlink > 1)
+		dev->od_scrub.os_scrub.os_has_ml_file = 1;
+
 	/* It is an EA inode, no OI mapping for it, skip it. */
 	if (osd_is_ea_inode(inode))
 		GOTO(put, rc = SCRUB_NEXT_CONTINUE);
@@ -1256,12 +1259,15 @@ static int osd_otable_it_preload(const struct lu_env *env,
 	RETURN(rc < 0 ? rc : ooc->ooc_cached_items);
 }
 
+static int osd_scan_ml_file_main(const struct lu_env *env,
+				 struct osd_device *dev);
+
 static int osd_scrub_main(void *args)
 {
 	struct lu_env env;
 	struct osd_device *dev = (struct osd_device *)args;
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
-	int rc;
+	int rc, ret;
 	ENTRY;
 
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_DT_THREAD);
@@ -1302,6 +1308,12 @@ static int osd_scrub_main(void *args)
 		GOTO(out, rc = -EINVAL);
 	}
 
+	if (scrub->os_has_ml_file) {
+		ret = osd_scan_ml_file_main(&env, dev);
+		if (ret != 0)
+			rc = ret;
+	}
+
 	GOTO(post, rc);
 
 post:
@@ -1318,6 +1330,7 @@ out:
 		list_del_init(&oii->oii_list);
 		OBD_FREE_PTR(oii);
 	}
+
 	lu_env_fini(&env);
 
 noenv:
@@ -3109,4 +3122,209 @@ void osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			"inconsistent" : "repaired",
 		   scrub->os_lf_repaired,
 		   scrub->os_lf_failed);
+}
+
+typedef int (*scan_dir_helper_t)(const struct lu_env *env,
+				 struct osd_device *dev, struct inode *dir,
+				 struct osd_it_ea *oie);
+
+static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
+			struct inode *inode, scan_dir_helper_t cb)
+{
+	struct osd_it_ea *oie;
+	int rc;
+
+	ENTRY;
+
+	oie = osd_it_dir_init(env, inode, LUDA_TYPE);
+	if (IS_ERR(oie))
+		RETURN(PTR_ERR(oie));
+
+	oie->oie_file.f_pos = 0;
+	rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
+	if (rc > 0)
+		rc = -ENODATA;
+	if (rc)
+		GOTO(out, rc);
+
+	while (oie->oie_it_dirent <= oie->oie_rd_dirent) {
+		if (!name_is_dot_or_dotdot(oie->oie_dirent->oied_name,
+					   oie->oie_dirent->oied_namelen))
+			cb(env, dev, inode, oie);
+
+		oie->oie_dirent = (void *)oie->oie_dirent +
+				cfs_size_round(sizeof(struct osd_it_ea_dirent) +
+				oie->oie_dirent->oied_namelen);
+
+		oie->oie_it_dirent++;
+		if (oie->oie_it_dirent <= oie->oie_rd_dirent)
+			continue;
+
+		if (oie->oie_file.f_pos ==
+		    ldiskfs_get_htree_eof(&oie->oie_file))
+			break;
+
+		rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
+		if (rc) {
+			if (rc > 0)
+				rc = 0;
+			break;
+		}
+	}
+
+out:
+	osd_it_dir_fini(env, oie, inode);
+	RETURN(rc);
+}
+
+static int osd_remove_ml_file(struct osd_thread_info *info,
+			      struct osd_device *dev, struct inode *dir,
+			      struct inode *inode, struct osd_it_ea *oie)
+{
+	handle_t *th;
+	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
+	struct dentry *dentry;
+	int rc;
+
+	ENTRY;
+
+	if (scrub->os_file.sf_param & SP_DRYRUN)
+		RETURN(0);
+
+	th = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC,
+				  osd_dto_credits_noquota[DTO_INDEX_DELETE] +
+				  osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	dentry = &oie->oie_dentry;
+	dentry->d_inode = dir;
+	dentry->d_sb = dir->i_sb;
+	rc = osd_obj_del_entry(info, dev, dentry, oie->oie_dirent->oied_name,
+			       oie->oie_dirent->oied_namelen, th);
+	drop_nlink(inode);
+	mark_inode_dirty(inode);
+	ldiskfs_journal_stop(th);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file(const struct lu_env *env, struct osd_device *dev,
+			    struct inode *dir, struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_inode_id id;
+	struct inode *inode;
+	struct osd_obj_seq *oseq;
+	struct ost_id *ostid = &info->oti_ostid;
+	struct lu_fid *fid = &oie->oie_dirent->oied_fid;
+	char name[32];
+	int dirn, rc = 0;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+
+	if (!fid_is_sane(fid))
+		inode = osd_iget_fid(info, dev, &id, fid);
+	else
+		inode = osd_iget(info, dev, &id);
+
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	fid_to_ostid(fid, ostid);
+	oseq = osd_seq_load(info, dev, ostid_seq(ostid));
+	if (IS_ERR(oseq))
+		RETURN(PTR_ERR(oseq));
+
+	dirn = ostid_id(ostid) & (oseq->oos_subdir_count - 1);
+	LASSERT(oseq->oos_dirs[dirn] != NULL);
+
+	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
+	if (((strlen(oseq->oos_root->d_name.name) !=
+	      info->oti_seq_dirent->oied_namelen) ||
+	     strncmp(oseq->oos_root->d_name.name,
+		     info->oti_seq_dirent->oied_name,
+		     info->oti_seq_dirent->oied_namelen) != 0) ||
+	    ((strlen(oseq->oos_dirs[dirn]->d_name.name) !=
+	      info->oti_dir_dirent->oied_namelen) ||
+	     strncmp(oseq->oos_dirs[dirn]->d_name.name,
+		     info->oti_dir_dirent->oied_name,
+		     info->oti_dir_dirent->oied_namelen) != 0) ||
+	    ((strlen(name) != oie->oie_dirent->oied_namelen) ||
+	     strncmp(oie->oie_dirent->oied_name, name,
+		     oie->oie_dirent->oied_namelen) != 0)) {
+		CDEBUG(D_LFSCK, "%s: the file O/%s/%s/%s is corrupted\n",
+		       osd_name(dev), info->oti_seq_dirent->oied_name,
+		       info->oti_dir_dirent->oied_name,
+		       oie->oie_dirent->oied_name);
+
+		rc = osd_remove_ml_file(info, dev, dir, inode, oie);
+	}
+
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file_dir(const struct lu_env *env,
+				struct osd_device *dev, struct inode *dir,
+				struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct inode *inode;
+	struct osd_inode_id id;
+	int rc;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, dev, &id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, rc = 0);
+
+	info->oti_dir_dirent = oie->oie_dirent;
+	rc = osd_scan_dir(env, dev, inode, osd_scan_ml_file);
+	info->oti_dir_dirent = NULL;
+
+out:
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file_seq(const struct lu_env *env,
+				struct osd_device *dev, struct inode *dir,
+				struct osd_it_ea *oie)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct inode *inode;
+	struct osd_inode_id id;
+	int rc;
+
+	ENTRY;
+
+	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
+	inode = osd_iget(info, dev, &id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, rc = 0);
+
+	info->oti_seq_dirent = oie->oie_dirent;
+	rc = osd_scan_dir(env, dev, inode, osd_scan_ml_file_dir);
+	info->oti_seq_dirent = NULL;
+
+out:
+	iput(inode);
+	RETURN(rc);
+}
+
+static int osd_scan_ml_file_main(const struct lu_env *env,
+				 struct osd_device *dev)
+{
+	return osd_scan_dir(env, dev, dev->od_ost_map->om_root->d_inode,
+			    osd_scan_ml_file_seq);
 }
