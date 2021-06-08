@@ -2578,6 +2578,9 @@ cleanup_55() {
 }
 
 test_55() {
+	(( $MDS1_VERSION > $(version_code 2.12.6.2) )) ||
+		skip "Need MDS version at least 2.12.6.3"
+
 	local client_ip
 	local client_nid
 
