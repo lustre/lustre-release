@@ -875,7 +875,7 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 {
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_conn *conn;
-	struct sockaddr_in sa;
+	struct sockaddr_storage sa;
 	rwlock_t *g_lock;
 	int retry;
 	int rc;
@@ -925,16 +925,24 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 		}
 
 		memset(&sa, 0, sizeof(sa));
-		sa.sin_family = AF_INET;
-		sa.sin_addr.s_addr = id->nid.nid_addr[0];
-		sa.sin_port = htons(lnet_acceptor_port());
-		{
-			struct lnet_process_id id4 = {
-				.pid = id->pid,
-				.nid = lnet_nid_to_nid4(&id->nid),
-			};
-			rc = ksocknal_add_peer(ni, id4, (struct sockaddr *)&sa);
+		switch (NID_ADDR_BYTES(&id->nid)) {
+			struct sockaddr_in *sin;
+			struct sockaddr_in6 *sin6;
+		case 4:
+			sin = (void *)&sa;
+			sin->sin_family = AF_INET;
+			sin->sin_addr.s_addr = id->nid.nid_addr[0];
+			sin->sin_port = htons(lnet_acceptor_port());
+			break;
+		case 16:
+			sin6 = (void *)&sa;
+			sin6->sin6_family = AF_INET6;
+			memcpy(&sin6->sin6_addr, id->nid.nid_addr,
+			       sizeof(sin6->sin6_addr));
+			sin6->sin6_port = htons(lnet_acceptor_port());
+			break;
 		}
+		rc = ksocknal_add_peer(ni, id, (struct sockaddr *)&sa);
 		if (rc != 0) {
 			CERROR("Can't add peer_ni %s: %d\n",
 			       libcfs_idstr(id), rc);

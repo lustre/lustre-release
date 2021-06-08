@@ -610,23 +610,19 @@ ksocknal_del_conn_cb_locked(struct ksock_conn_cb *conn_cb)
 }
 
 int
-ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id4,
+ksocknal_add_peer(struct lnet_ni *ni, struct lnet_processid *id,
 		  struct sockaddr *addr)
 {
 	struct ksock_peer_ni *peer_ni;
 	struct ksock_peer_ni *peer2;
 	struct ksock_conn_cb *conn_cb;
-	struct lnet_processid id;
 
-	if (id4.nid == LNET_NID_ANY ||
-	    id4.pid == LNET_PID_ANY)
+	if (LNET_NID_IS_ANY(&id->nid) ||
+	    id->pid == LNET_PID_ANY)
 		return (-EINVAL);
 
-	id.pid = id4.pid;
-	lnet_nid4_to_nid(id4.nid, &id.nid);
-
 	/* Have a brand new peer_ni ready... */
-	peer_ni = ksocknal_create_peer(ni, &id);
+	peer_ni = ksocknal_create_peer(ni, id);
 	if (IS_ERR(peer_ni))
 		return PTR_ERR(peer_ni);
 
@@ -642,14 +638,14 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id4,
 	LASSERT(atomic_read(&((struct ksock_net *)ni->ni_data)->ksnn_npeers)
 		>= 0);
 
-	peer2 = ksocknal_find_peer_locked(ni, &id);
+	peer2 = ksocknal_find_peer_locked(ni, id);
 	if (peer2 != NULL) {
 		ksocknal_peer_decref(peer_ni);
 		peer_ni = peer2;
 	} else {
 		/* peer_ni table takes my ref on peer_ni */
 		hash_add(ksocknal_data.ksnd_peers, &peer_ni->ksnp_list,
-			 nidhash(&id.nid));
+			 nidhash(&id->nid));
 	}
 
 	ksocknal_add_conn_cb_locked(peer_ni, conn_cb);
@@ -1814,11 +1810,11 @@ ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 	case IOC_LIBCFS_ADD_PEER: {
 		struct sockaddr_in sa = {.sin_family = AF_INET};
 
-		id4.nid = data->ioc_nid;
-		id4.pid = LNET_PID_LUSTRE;
+		id.pid = LNET_PID_LUSTRE;
+		lnet_nid4_to_nid(data->ioc_nid, &id.nid);
 		sa.sin_addr.s_addr = htonl(data->ioc_u32[0]);
 		sa.sin_port = htons(data->ioc_u32[1]);
-		return ksocknal_add_peer(ni, id4, (struct sockaddr *)&sa);
+		return ksocknal_add_peer(ni, &id, (struct sockaddr *)&sa);
 	}
 	case IOC_LIBCFS_DEL_PEER:
 		id4.nid = data->ioc_nid;
