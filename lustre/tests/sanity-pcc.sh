@@ -3334,6 +3334,27 @@ test_41() {
 }
 run_test 41 "Test mtime rule for PCC-RO open attach with O_RDONLY mode"
 
+test_42() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT echo -n attach_id_not_specified > $file ||
+		error "Write $file failed"
+	do_facet $SINGLEAGT $LFS pcc attach -r $file ||
+		error "PCC attach -r $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readonly"
+}
+run_test 42 "PCC attach without attach ID specified"
+
 test_96() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"

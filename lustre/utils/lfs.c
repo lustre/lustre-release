@@ -13662,11 +13662,6 @@ static int lfs_pcc_attach(int argc, char **argv)
 		}
 	}
 
-	if (attach_id == 0) {
-		fprintf(stderr, "%s: must specify attach ID\n", argv[0]);
-		return CMD_HELP;
-	}
-
 	if (argc <= optind) {
 		fprintf(stderr, "%s: must specify one or more file names\n",
 			argv[0]);
@@ -13746,11 +13741,6 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		case 'h':
 			return CMD_HELP;
 		}
-	}
-
-	if (attach_id == 0) {
-		fprintf(stderr, "%s: must specify an archive ID\n", argv[0]);
-		return CMD_HELP;
 	}
 
 	if (!mntpath) {
@@ -13936,12 +13926,14 @@ static int lfs_pcc_state(int argc, char **argv)
 		printf(", type: %s", pcc_type2string(state.pccs_type));
 		if (state.pccs_type == LU_PCC_NONE &&
 		    state.pccs_open_count == 0) {
+			if (state.pccs_flags & PCC_STATE_FL_ATTACHING)
+				printf(", flags: attaching");
 			printf("\n");
 			continue;
 		}
 
-		printf(", PCC file: %s", state.pccs_path);
-		printf(", user number: %u", state.pccs_open_count);
+		printf(", PCC_file: %s", state.pccs_path);
+		printf(", open_count: %u", state.pccs_open_count);
 		printf(", flags: %x", state.pccs_flags);
 		printf("\n");
 	}

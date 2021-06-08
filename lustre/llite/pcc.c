@@ -1073,20 +1073,20 @@ pcc_dataset_get(struct pcc_super *super, enum lu_pcc_type type, __u32 id)
 	struct pcc_dataset *dataset;
 	struct pcc_dataset *selected = NULL;
 
-	if (id == 0)
-		return NULL;
-
 	/*
 	 * archive ID (read-write ID) or read-only ID is unique in the list,
 	 * we just return last added one as first priority.
+	 * @id == 0, it will select the first one as candidate dataset.
 	 */
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
-		if (type == LU_PCC_READWRITE && (dataset->pccd_rwid != id ||
-		    !(dataset->pccd_flags & PCC_DATASET_PCCRW)))
+		if (type == LU_PCC_READWRITE &&
+		    (!(dataset->pccd_rwid == id || id == 0) ||
+		     !(dataset->pccd_flags & PCC_DATASET_PCCRW)))
 			continue;
-		if (type == LU_PCC_READONLY && (dataset->pccd_roid != id ||
-		    !(dataset->pccd_flags & PCC_DATASET_PCCRO)))
+		if (type == LU_PCC_READONLY &&
+		    (!(dataset->pccd_roid == id || id == 0) ||
+		     !(dataset->pccd_flags & PCC_DATASET_PCCRO)))
 			continue;
 		atomic_inc(&dataset->pccd_refcount);
 		selected = dataset;
@@ -4135,6 +4135,7 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	char *buf;
 	char *path;
 	int buf_len = sizeof(state->pccs_path);
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci;
 
 	ENTRY;
@@ -4150,6 +4151,7 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	pcci = ll_i2pcci(inode);
 	if (pcci == NULL) {
 		state->pccs_type = LU_PCC_NONE;
+		state->pccs_flags = lli->lli_pcc_state;
 		GOTO(out_unlock, rc = 0);
 	}
 
@@ -4173,7 +4175,7 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 
 	state->pccs_type = pcci->pcci_type;
 	state->pccs_open_count = count;
-	state->pccs_flags = ll_i2info(inode)->lli_pcc_state;
+	state->pccs_flags = lli->lli_pcc_state;
 	path = dentry_path_raw(pcci->pcci_path.dentry, buf, buf_len);
 	if (IS_ERR(path))
 		GOTO(out_unlock, rc = PTR_ERR(path));
