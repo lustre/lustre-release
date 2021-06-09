@@ -3417,7 +3417,7 @@ struct object_update_param {
 	__u16	oup_padding;
 	__u32	oup_padding2;
 	char	oup_buf[0];
-};
+} __attribute__((packed));
 
 /* object update */
 struct object_update {

@@ -778,9 +778,9 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 
 static void lustre_swab_lu_fid(struct lu_fid *fid)
 {
-	__swab64s(&fid->f_seq);
-	__swab32s(&fid->f_oid);
-	__swab32s(&fid->f_ver);
+	fid->f_seq = __swab64(fid->f_seq);
+	fid->f_oid = __swab32(fid->f_oid);
+	fid->f_ver = __swab32(fid->f_ver);
 }
 
 static inline size_t
@@ -808,10 +808,10 @@ static void lustre_swab_update_ops(struct update_ops *uops,
 
 	for (i = 0; i < op_count; i++, op = update_op_next_op(op)) {
 		lustre_swab_lu_fid(&op->uop_fid);
-		__swab16s(&op->uop_type);
-		__swab16s(&op->uop_param_count);
+		op->uop_type = __swab16(op->uop_type);
+		op->uop_param_count = __swab16(op->uop_param_count);
 		for (j = 0; j < op->uop_param_count; j++)
-			__swab16s(&op->uop_params_off[j]);
+			op->uop_params_off[j] = __swab16(op->uop_params_off[j]);
 	}
 }
 static const char *update_op_str(__u16 opc)
