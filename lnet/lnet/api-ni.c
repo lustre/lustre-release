@@ -3177,11 +3177,12 @@ int lnet_get_net_healthv_locked(struct lnet_net *net)
 {
 	struct lnet_ni *ni;
 	int best_healthv = 0;
-	int healthv;
+	int healthv, ni_fatal;
 
 	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
 		healthv = atomic_read(&ni->ni_healthv);
-		if (healthv > best_healthv)
+		ni_fatal = atomic_read(&ni->ni_fatal_error_on);
+		if (!ni_fatal && healthv > best_healthv)
 			best_healthv = healthv;
 	}
 
