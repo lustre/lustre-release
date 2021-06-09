@@ -660,7 +660,7 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_processid *id,
 }
 
 static void
-ksocknal_del_peer_locked(struct ksock_peer_ni *peer_ni, __u32 ip)
+ksocknal_del_peer_locked(struct ksock_peer_ni *peer_ni)
 {
 	struct ksock_conn *conn;
 	struct ksock_conn *cnxt;
@@ -683,7 +683,7 @@ ksocknal_del_peer_locked(struct ksock_peer_ni *peer_ni, __u32 ip)
 }
 
 static int
-ksocknal_del_peer(struct lnet_ni *ni, struct lnet_process_id id4, __u32 ip)
+ksocknal_del_peer(struct lnet_ni *ni, struct lnet_processid *id)
 {
 	LIST_HEAD(zombies);
 	struct hlist_node *pnxt;
@@ -692,15 +692,11 @@ ksocknal_del_peer(struct lnet_ni *ni, struct lnet_process_id id4, __u32 ip)
 	int hi;
 	int i;
 	int rc = -ENOENT;
-	struct lnet_processid id;
-
-	id.pid = id4.pid;
-	lnet_nid4_to_nid(id4.nid, &id.nid);
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
-	if (!LNET_NID_IS_ANY(&id.nid)) {
-		lo = hash_min(nidhash(&id.nid),
+	if (id && !LNET_NID_IS_ANY(&id->nid)) {
+		lo = hash_min(nidhash(&id->nid),
 			      HASH_BITS(ksocknal_data.ksnd_peers));
 		hi = lo;
 	} else {
@@ -715,15 +711,15 @@ ksocknal_del_peer(struct lnet_ni *ni, struct lnet_process_id id4, __u32 ip)
 			if (peer_ni->ksnp_ni != ni)
 				continue;
 
-			if (!((LNET_NID_IS_ANY(&id.nid) ||
-			       nid_same(&peer_ni->ksnp_id.nid, &id.nid)) &&
-			      (id.pid == LNET_PID_ANY ||
-			       peer_ni->ksnp_id.pid == id.pid)))
+			if (!((!id || LNET_NID_IS_ANY(&id->nid) ||
+			       nid_same(&peer_ni->ksnp_id.nid, &id->nid)) &&
+			      (!id || id->pid == LNET_PID_ANY ||
+			       peer_ni->ksnp_id.pid == id->pid)))
 				continue;
 
 			ksocknal_peer_addref(peer_ni);	/* a ref for me... */
 
-			ksocknal_del_peer_locked(peer_ni, ip);
+			ksocknal_del_peer_locked(peer_ni);
 
 			if (peer_ni->ksnp_closing &&
 			    !list_empty(&peer_ni->ksnp_tx_queue)) {
@@ -1748,7 +1744,6 @@ ksocknal_push(struct lnet_ni *ni, struct lnet_processid *id)
 int
 ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 {
-	struct lnet_process_id id4 = {};
 	struct lnet_processid id = {};
 	struct libcfs_ioctl_data *data = arg;
 	int rc;
@@ -1815,10 +1810,9 @@ ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 		return ksocknal_add_peer(ni, &id, (struct sockaddr *)&sa);
 	}
 	case IOC_LIBCFS_DEL_PEER:
-		id4.nid = data->ioc_nid;
-		id4.pid = LNET_PID_ANY;
-		return ksocknal_del_peer(ni, id4,
-					 data->ioc_u32[0]); /* IP */
+		lnet_nid4_to_nid(data->ioc_nid, &id.nid);
+		id.pid = LNET_PID_ANY;
+		return ksocknal_del_peer(ni, &id);
 
         case IOC_LIBCFS_GET_CONN: {
                 int           txmem;
@@ -2333,10 +2327,6 @@ void
 ksocknal_shutdown(struct lnet_ni *ni)
 {
 	struct ksock_net *net = ni->ni_data;
-	struct lnet_process_id anyid = {
-		.nid = LNET_NID_ANY,
-		.pid = LNET_PID_ANY,
-	};
 
 	LASSERT(ksocknal_data.ksnd_init == SOCKNAL_INIT_ALL);
 	LASSERT(ksocknal_data.ksnd_nnets > 0);
@@ -2345,7 +2335,7 @@ ksocknal_shutdown(struct lnet_ni *ni)
 	atomic_add(SOCKNAL_SHUTDOWN_BIAS, &net->ksnn_npeers);
 
 	/* Delete all peers */
-	ksocknal_del_peer(ni, anyid, 0);
+	ksocknal_del_peer(ni, NULL);
 
 	/* Wait for all peer_ni state to clean up */
 	wait_var_event_warning(&net->ksnn_npeers,
