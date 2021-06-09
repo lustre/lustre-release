@@ -291,7 +291,7 @@ ksocknal_unlink_peer_locked(struct ksock_peer_ni *peer_ni)
 
 static int
 ksocknal_get_peer_info(struct lnet_ni *ni, int index,
-		       struct lnet_process_id *id, __u32 *myip, __u32 *peer_ip,
+		       struct lnet_processid *id, __u32 *myip, __u32 *peer_ip,
 		       int *port, int *conn_count, int *share_count)
 {
 	struct ksock_peer_ni *peer_ni;
@@ -312,8 +312,7 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 			if (index-- > 0)
 				continue;
 
-			id->pid = peer_ni->ksnp_id.pid;
-			id->nid = lnet_nid_to_nid4(&peer_ni->ksnp_id.nid);
+			*id = peer_ni->ksnp_id;
 			*myip = 0;
 			*peer_ip = 0;
 			*port = 0;
@@ -327,8 +326,7 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 			if (index-- > 0)
 				continue;
 
-			id->pid = peer_ni->ksnp_id.pid;
-			id->nid = lnet_nid_to_nid4(&peer_ni->ksnp_id.nid);
+			*id = peer_ni->ksnp_id;
 			*myip = peer_ni->ksnp_passive_ips[j];
 			*peer_ip = 0;
 			*port = 0;
@@ -344,8 +342,7 @@ ksocknal_get_peer_info(struct lnet_ni *ni, int index,
 
 			conn_cb = peer_ni->ksnp_conn_cb;
 
-			id->pid = peer_ni->ksnp_id.pid;
-			id->nid = lnet_nid_to_nid4(&peer_ni->ksnp_id.nid);
+			*id = peer_ni->ksnp_id;
 			if (conn_cb->ksnr_addr.ss_family == AF_INET) {
 				struct sockaddr_in *sa =
 					(void *)&conn_cb->ksnr_addr;
@@ -1792,18 +1789,19 @@ ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 		int share_count = 0;
 
 		rc = ksocknal_get_peer_info(ni, data->ioc_count,
-					    &id4, &myip, &ip, &port,
+					    &id, &myip, &ip, &port,
 					    &conn_count,  &share_count);
 		if (rc != 0)
 			return rc;
-
-		data->ioc_nid    = id4.nid;
+		if (!nid_is_nid4(&id.nid))
+			return -EINVAL;
+		data->ioc_nid    = lnet_nid_to_nid4(&id.nid);
 		data->ioc_count  = share_count;
 		data->ioc_u32[0] = ip;
 		data->ioc_u32[1] = port;
 		data->ioc_u32[2] = myip;
 		data->ioc_u32[3] = conn_count;
-		data->ioc_u32[4] = id4.pid;
+		data->ioc_u32[4] = id.pid;
 		return 0;
 	}
 
