@@ -2460,7 +2460,7 @@ try_again:
 	/* supposed to be unique */
 	LASSERT(rc != -EEXIST);
 	/* handle hash table resizing */
-	if (rc == -ENOMEM) {
+	if (rc == -ENOMEM || rc == -EBUSY) {
 		msleep(20);
 		goto try_again;
 	}
