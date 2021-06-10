@@ -428,6 +428,8 @@ init_test_env() {
 
 	# Constants used in more than one test script
 	export LOV_MAX_STRIPE_COUNT=2000
+	export DELETE_OLD_POOLS=${DELETE_OLD_POOLS:-false}
+	export KEEP_POOLS=${KEEP_POOLS:-false}
 
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
@@ -5387,6 +5389,46 @@ is_mounted () {
 	echo $mounted' ' | grep -w -q $mntpt' '
 }
 
+create_pools () {
+	local pool=$1
+	local ostsn=${2:-$OSTCOUNT}
+	local npools=${FS_NPOOLS:-$((OSTCOUNT / ostsn))}
+	local n
+
+	echo ostsn=$ostsn npools=$npools
+	if [[ $ostsn -gt $OSTCOUNT ]];  then
+		echo "request to use $ostsn OSTs in the pool, \
+			using max available OSTCOUNT=$OSTCOUNT"
+		ostsn=$OSTCOUNT
+	fi
+	for (( n=0; n < $npools; n++ )); do
+		p=${pool}$n
+		if ! $DELETE_OLD_POOLS; then
+			log "request to not delete old pools: $FSNAME.$p exist?"
+			if ! check_pool_not_exist $FSNAME.$p; then
+				echo "Using existing $FSNAME.$p"
+				$LCTL pool_list $FSNAME.$p
+				continue
+			fi
+		fi
+		create_pool $FSNAME.$p $KEEP_POOLS ||
+			error "create_pool $FSNAME.$p failed"
+
+		local first=$(( (n * ostsn) % OSTCOUNT ))
+		local last=$(( (first + ostsn - 1) % OSTCOUNT ))
+		if [[ $first -le $last ]]; then
+			pool_add_targets $p $first $last ||
+				error "pool_add_targets $p $first $last failed"
+		else
+			pool_add_targets $p $first $(( OSTCOUNT - 1 )) ||
+				error "pool_add_targets $p $first \
+					$(( OSTCOUNT - 1 )) failed"
+			pool_add_targets $p 0 $last ||
+				error "pool_add_targets $p 0 $last failed"
+		fi
+	done
+}
+
 check_and_setup_lustre() {
 	sanitize_parameters
 	nfs_client_mode && return
@@ -5470,6 +5512,13 @@ check_and_setup_lustre() {
 		set_flavor_all null
 	elif $GSS; then
 		set_flavor_all $SEC
+	fi
+
+	if $DELETE_OLD_POOLS; then
+		destroy_all_pools
+	fi
+	if [[ -n "$FS_POOL" ]]; then
+		create_pools $FS_POOL $FS_POOL_NOSTS
 	fi
 
 	if [ "$ONLY" == "setup" ]; then
@@ -7648,6 +7697,7 @@ check_pool_not_exist() {
 create_pool() {
 	local fsname=${1%%.*}
 	local poolname=${1##$fsname.}
+	local keep_pools=${2:-false}
 
 	stack_trap "destroy_test_pools $fsname" EXIT
 	do_facet mgs lctl pool_new $1
@@ -7666,7 +7716,7 @@ create_pool() {
 	wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
 		2>/dev/null || echo foo" "" || error "pool_new failed $1"
 
-	add_pool_to_list $1
+	$keep_pools || add_pool_to_list $1
 	return $RC
 }
 
@@ -7684,8 +7734,16 @@ remove_pool_from_list () {
 	local poolname=${1##$fsname.}
 
 	local listvar=${fsname}_CREATED_POOLS
-	local temp=${listvar}=$(exclude_items_from_list ${!listvar} $poolname)
+	local temp=${listvar}=$(exclude_items_from_list "${!listvar}" $poolname)
 	eval export $temp
+}
+
+# cleanup all pools exist on $FSNAME
+destroy_all_pools () {
+	local i
+	for i in $(list_pool $FSNAME); do
+		destroy_pool $i
+	done
 }
 
 destroy_pool_int() {
@@ -7708,8 +7766,7 @@ destroy_pool() {
 
 	local RC
 
-	check_pool_not_exist $fsname.$poolname
-	[[ $? -eq 0 ]] && return 0
+	check_pool_not_exist $fsname.$poolname && return 0 || true
 
 	destroy_pool_int $fsname.$poolname
 	RC=$?

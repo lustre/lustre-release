@@ -2755,7 +2755,8 @@ test_27I() {
 	save_layout_restore_at_exit $MOUNT
 	$LFS setstripe -c 2 -i 0 $MOUNT
 	pool_add $pool || error "pool_add failed"
-	pool_add_targets $pool $ostrange || "pool_add_targets failed"
+	pool_add_targets $pool $ostrange ||
+		error "pool_add_targets failed"
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -p $pool $DIR/$tdir
 	$MULTIOP $DIR/$tdir/$tfile Oc || error "multiop failed"
