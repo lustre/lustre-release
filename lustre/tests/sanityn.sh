@@ -3198,6 +3198,9 @@ test_51d() {
 run_test 51d "layout lock: losing layout lock should clean up memory map region"
 
 test_51e() {
+	(( $MDS1_VERSION >= $(version_code 2.13.54.148) )) ||
+		skip "MDS version must be at least 2.13.54.148"
+
 	local pid
 
 	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:eW_E+eUc &
