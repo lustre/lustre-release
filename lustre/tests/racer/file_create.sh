@@ -4,6 +4,8 @@ RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 RACER_ENABLE_SEL=${RACER_ENABLE_SEL:-true}
+RACER_ENABLE_OVERSTRIPE=${RACER_ENABLE_OVERSTRIPE:-true}
+RACER_LOV_MAX_STRIPECOUNT=${RACER_LOV_MAX_STRIPECOUNT:-$LOV_MAX_STRIPE_COUNT}
 RACER_EXTRA_LAYOUT=${RACER_EXTRA_LAYOUT:-""}
 DIR=$1
 MAX=$2
@@ -30,19 +32,22 @@ while /bin/true; do
 	file=$((RANDOM % MAX))
 	# $RANDOM is between 0 and 32767, and we want $blockcount in 64kB units
 	blockcount=$((RANDOM * MAX_MB / 32 / 64))
-	stripecount=$((RANDOM % (OSTCOUNT + 1)))
+	$RACER_ENABLE_OVERSTRIPE &&
+		stripecount="-C $((RANDOM %
+			(RACER_LOV_MAX_STRIPECOUNT +  1)))" ||
+		stripecount="-c $((RANDOM % (OSTCOUNT + 1)))"
 
-	[ $stripecount -gt 0 ] && {
+	[ ${stripecount:2} -gt 0 ] && {
 		stripesize=$(((1 << (RANDOM % 5)) * 64))K
 		comp_end=$((${stripesize%K} * (RANDOM % 8 + 1)))K
 		pattern=${layout[$RANDOM % ${#layout[*]}]}
 
 		case $pattern in
-		dom) opt="setstripe -E $stripesize -L mdt -E eof -c $stripecount -S 1M" ;;
-		pfl) opt="setstripe -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
-		flr) opt="mirror create -N2 -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
-		sel) opt="setstripe -E 128M -S $stripesize -z 64M -E eof -c $stripecount -S 2M -z 128M" ;;
-		raid0) opt="setstripe -S $stripesize -c $stripecount" ;;
+		dom) opt="setstripe -E $stripesize -L mdt -E eof $stripecount -S 1M" ;;
+		pfl) opt="setstripe -E $comp_end -S $stripesize -E eof $stripecount -S 2M" ;;
+		flr) opt="mirror create -N2 -E $comp_end -S $stripesize -E eof $stripecount -S 2M" ;;
+		sel) opt="setstripe -E 128M -S $stripesize -z 64M -E eof $stripecount -S 2M -z 128M" ;;
+		raid0) opt="setstripe -S $stripesize $stripecount" ;;
 		extra) opt="setstripe $RACER_EXTRA_LAYOUT" ;;
 		esac
 
