@@ -55,8 +55,7 @@ static int lov_comp_page_print(const struct lu_env *env,
 	struct lov_page *lp = cl2lov_page(slice);
 
 	return (*printer)(env, cookie,
-			  LUSTRE_LOV_NAME"-page@%p, gen: %u\n",
-			  lp, lp->lps_layout_gen);
+			  LUSTRE_LOV_NAME"-page@%p\n", lp);
 }
 
 static const struct cl_page_operations lov_comp_page_ops = {
@@ -75,33 +74,65 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	struct lov_layout_raid0 *r0;
 	loff_t offset;
 	loff_t suboff;
+	bool stripe_cached = false;
 	int entry;
 	int stripe;
 	int rc;
 
 	ENTRY;
 
+	/* Direct i/o (CPT_TRANSIENT) is split strictly to stripes, so we can
+	 * cache the stripe information.  Buffered i/o is differently
+	 * organized, and stripe calculation isn't a significant cost for
+	 * buffered i/o, so we only cache this for direct i/o.
+	 */
+	stripe_cached = lio->lis_cached_entry != LIS_CACHE_ENTRY_NONE &&
+			page->cp_type == CPT_TRANSIENT;
+
 	offset = cl_offset(obj, index);
-	entry = lov_io_layout_at(lio, offset);
+
+	if (stripe_cached) {
+		entry = lio->lis_cached_entry;
+		stripe = lio->lis_cached_stripe;
+		/* Offset can never go backwards in an i/o, so this is valid */
+		suboff = lio->lis_cached_suboff + offset - lio->lis_cached_off;
+	} else {
+		entry = lov_io_layout_at(lio, offset);
+
+		stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
+		rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe,
+				       &suboff);
+		LASSERT(rc == 0);
+		lio->lis_cached_entry = entry;
+		lio->lis_cached_stripe = stripe;
+		lio->lis_cached_off = offset;
+		lio->lis_cached_suboff = suboff;
+	}
+
 	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
 		/* non-existing layout component */
 		lov_page_init_empty(env, obj, page, index);
 		RETURN(0);
 	}
 
-	r0 = lov_r0(loo, entry);
-	stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
-	LASSERT(stripe < r0->lo_nr);
-	rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe, &suboff);
-	LASSERT(rc == 0);
+	CDEBUG(D_PAGE, "offset %llu, entry %d, stripe %d, suboff %llu\n",
+	       offset, entry, stripe, suboff);
 
 	page->cp_lov_index = lov_comp_index(entry, stripe);
-	lpg->lps_layout_gen = loo->lo_lsm->lsm_layout_gen;
 	cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_comp_page_ops);
 
-	sub = lov_sub_get(env, lio, page->cp_lov_index);
-	if (IS_ERR(sub))
-		RETURN(PTR_ERR(sub));
+	if (!stripe_cached) {
+		sub = lov_sub_get(env, lio, page->cp_lov_index);
+		if (IS_ERR(sub))
+			RETURN(PTR_ERR(sub));
+	} else {
+		sub = lio->lis_cached_sub;
+	}
+
+	lio->lis_cached_sub = sub;
+
+	r0 = lov_r0(loo, entry);
+	LASSERT(stripe < r0->lo_nr);
 
 	subobj = lovsub2cl(r0->lo_sub[stripe]);
 	cl_object_for_each(o, subobj) {
