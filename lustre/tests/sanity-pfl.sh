@@ -129,6 +129,9 @@ test_0c() {
 run_test 0c "Verify SEL comp stripe count limits"
 
 test_0d() {
+	(( $MDS1_VERSION > $(version_code 2.14.50.115) )) ||
+		skip_env "Need MDS version at least 2.14.50.115"
+
 	local td=$DIR/$tdir
 	local tf=$td/$tfile
 	local comp_end
