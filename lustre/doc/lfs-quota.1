@@ -24,6 +24,7 @@ lfs quota \- display quota limits and status for users, groups, or projects.
 .TP
 
 Display disk usage and limits for individual users, groups, and projects. \
+An asterisk is displayed when the quota is exceeded. \
 By default the statistics for the entire filesystem are displayed but \
 individual MDTs and OSTs can be specified. \
 A user or group name or an ID can \
@@ -48,7 +49,9 @@ column headers will not be printed.
 .TP
 .B -v
 Verbose. Display per-MDT and per-OST statistics in addition
-to the usual system wide data.
+to the usual system wide data. An asterisk near the OST or MDT means that
+the quota is exceeded only for that specific target. The user is over the
+quota only if an asterisk is near the whole filesystem usage.
 .TP
 .B -u <\fIuname|uid\fR>
 Display user quota information for \fIuname\fR or \fIuid\fR.
