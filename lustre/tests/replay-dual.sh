@@ -13,8 +13,8 @@ init_logging
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
 ALWAYS_EXCEPT="$REPLAY_DUAL_EXCEPT "
-# bug number for skipped test:  LU-2012 LU-8333 LU-7372
-ALWAYS_EXCEPT+="                14b     21b     26 "
+# bug number for skipped test:  LU-2012 LU-8333
+ALWAYS_EXCEPT+="                14b     21b"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [[ "$mds1_FSTYPE" == zfs ]] &&
