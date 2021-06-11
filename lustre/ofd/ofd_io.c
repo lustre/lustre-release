@@ -1461,6 +1461,26 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	if (cmd == OBD_BRW_WRITE) {
 		struct lu_nodemap *nodemap;
+		__u32 mapped_uid, mapped_gid;
+
+		nodemap = nodemap_get_from_exp(exp);
+		mapped_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+					    NODEMAP_FS_TO_CLIENT,
+					    oa->o_uid);
+		mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+					    NODEMAP_FS_TO_CLIENT,
+					    oa->o_gid);
+
+		if (!IS_ERR_OR_NULL(nodemap)) {
+			/* do not bypass quota enforcement if squashed uid */
+			if (unlikely(mapped_uid == nodemap->nm_squash_uid)) {
+				int idx;
+
+				for (idx = 0; idx < npages; idx++)
+					lnb[idx].lnb_flags &= ~OBD_BRW_NOQUOTA;
+			}
+			nodemap_putref(nodemap);
+		}
 
 		valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID |
 			OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
@@ -1525,16 +1545,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		/* Convert back to client IDs. LU-9671.
 		 * nodemap_get_from_exp() may fail due to nodemap deactivated,
 		 * server ID will be returned back to client in that case. */
-		nodemap = nodemap_get_from_exp(exp);
-		if (nodemap != NULL && !IS_ERR(nodemap)) {
-			oa->o_uid = nodemap_map_id(nodemap, NODEMAP_UID,
-						   NODEMAP_FS_TO_CLIENT,
-						   oa->o_uid);
-			oa->o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
-						   NODEMAP_FS_TO_CLIENT,
-						   oa->o_gid);
-			nodemap_putref(nodemap);
-		}
+		oa->o_uid = mapped_uid;
+		oa->o_gid = mapped_gid;
 	} else if (cmd == OBD_BRW_READ) {
 		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);

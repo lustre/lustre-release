@@ -2309,7 +2309,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	}
 
 	/* check if the file's owner/group is over quota */
-	if (!(cmd & OBD_BRW_NOQUOTA)) {
+	if (!io->ci_noquota) {
 		struct cl_object *obj;
 		struct cl_attr   *attr;
 		unsigned int qid[LL_MAXQUOTAS];

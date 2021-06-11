@@ -4921,6 +4921,93 @@ test_74()
 }
 run_test 74 "check quota pools per user"
 
+function cleanup_quota_test_75()
+{
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_uid --value 99
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_gid --value 99
+
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active
+
+	resetquota -u $TSTUSR
+
+	cleanup_quota_test
+}
+
+test_75()
+{
+	local limit=10 # MB
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test_75 EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User $TSTUSR quota block hardlimit:$limit MB"
+	$LFS setquota -u $TSTID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTID global curspace)
+	[ $used -ne 0 ] && error "Used space ($used) for user $TSTUSR not 0."
+
+	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property deny_unknown --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_uid --value $TSTID
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_gid --value $TSTID
+	cancel_lru_locks mdc
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+	wait_nm_sync default squash_uid
+
+	log "Write..."
+	$DD of=$testfile bs=1M count=$((limit/2)) ||
+		quota_error u $TSTID \
+			"root write failure, but expect success"
+
+	log "Write out of block quota ..."
+	# possibly a cache write, ignore failure
+	$DD of=$testfile bs=1M count=$((limit/2)) seek=$((limit/2)) || true
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	# sync forced cache flush, but did not guarantee that slave
+	# got new edquot through glimpse, so wait to make sure
+	sleep 5
+	$DD of=$testfile bs=1M count=1 seek=$limit conv=fsync &&
+		quota_error u $TSTID \
+			"user write success, but expect EDQUOT"
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -eq 0 ] || quota_error u $TSTID \
+		"user quota not released after deletion"
+}
+run_test 75 "nodemap squashed root respects quota enforcement"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
