@@ -17878,6 +17878,9 @@ run_test 205a "Verify job stats"
 
 # LU-13117, LU-13597
 test_205b() {
+	(( $MDS1_VERSION >= $(version_code 2.13.54.91) )) ||
+		skip "Need MDS version at least 2.13.54.91"
+
 	job_stats="mdt.*.job_stats"
 	$LCTL set_param $job_stats=clear
 	# Setting jobid_var to USER might not be supported
