@@ -1680,6 +1680,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	ssize_t result = 0;
 	int rc = 0;
 	int rc2 = 0;
+	int retries = 1000;
 	unsigned int retried = 0, dio_lock = 0;
 	bool is_aio = false;
 	bool is_parallel_dio = false;
@@ -1839,13 +1840,13 @@ out:
 	       file->f_path.dentry->d_name.name,
 	       iot, rc, result, io->ci_need_restart);
 
-	if ((rc == 0 || rc == -ENODATA || rc == -ENOLCK) &&
-	    count > 0 && io->ci_need_restart) {
+	if ((!rc || rc == -ENODATA || rc == -ENOLCK || rc == -EIOCBQUEUED) &&
+	    count > 0 && io->ci_need_restart && retries-- > 0) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: restart %s from %lld, count: %zu, ret: %zd, rc: %d\n",
+		       "%s: restart %s from ppos=%lld count=%zu retries=%u ret=%zd: rc = %d\n",
 		       file_dentry(file)->d_name.name,
 		       iot == CIT_READ ? "read" : "write",
-		       *ppos, count, result, rc);
+		       *ppos, count, retries, result, rc);
 		/* preserve the tried count for FLR */
 		retried = io->ci_ndelay_tried;
 		dio_lock = io->ci_dio_lock;
