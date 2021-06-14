@@ -228,14 +228,15 @@ static inline __u64 tgt_statfs_iavail(struct lu_tgt_desc *tgt)
 void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt)
 {
 	struct lu_tgt_qos *ltq = &tgt->ltd_qos;
-	__u64 temp, temp2;
+	__u64 penalty;
 
-	temp = (tgt_statfs_bavail(tgt) >> 16) * (tgt_statfs_iavail(tgt) >> 8);
-	temp2 = ltq->ltq_penalty + ltq->ltq_svr->lsq_penalty;
-	if (temp < temp2)
+	ltq->ltq_avail = (tgt_statfs_bavail(tgt) >> 16) *
+			 (tgt_statfs_iavail(tgt) >> 8);
+	penalty = ltq->ltq_penalty + ltq->ltq_svr->lsq_penalty;
+	if (ltq->ltq_avail < penalty)
 		ltq->ltq_weight = 0;
 	else
-		ltq->ltq_weight = temp - temp2;
+		ltq->ltq_weight = ltq->ltq_avail - penalty;
 }
 EXPORT_SYMBOL(lu_tgt_qos_weight_calc);
 
