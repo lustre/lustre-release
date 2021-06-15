@@ -1606,7 +1606,7 @@ test_38() {
 	[ -z "$stale_mirror" ] && error "stale mirror doesn't exist"
 	[ -z "$valid_mirror" ] && error "valid mirror doesn't exist"
 
-	mirror_io resync $tf || error "resync failed"
+	$LFS mirror resync $tf || error "resync failed"
 	verify_flr_state $tf "ro"
 
 	mirror_cksum=$($LFS mirror read -N $stale_mirror $tf | md5sum)
@@ -1629,7 +1629,7 @@ test_38() {
 	verify_flr_state $tf "sp"
 
 	# from sync_pending to read_only
-	mirror_io resync $tf || error "resync failed"
+	$LFS mirror resync $tf || error "resync failed"
 	verify_flr_state $tf "ro"
 }
 run_test 38 "resync"
@@ -2868,7 +2868,7 @@ test_200() {
 	rm -f $lock_file
 
 	# resync and verify mirrors
-	mirror_io resync $tf
+	$LFS mirror resync $tf || error "final resync failed"
 	get_mirror_ids $tf
 
 	local csum=$($LFS mirror read -N ${mirror_array[0]} $tf | md5sum)
@@ -2921,7 +2921,7 @@ test_201() {
 
 		[ $now -lt $((ts + delay)) ] && sleep $((ts + delay - now))
 
-		mirror_io resync $file
+		$LFS mirror resync $file
 		echo "$file resync done"
 	done
 
