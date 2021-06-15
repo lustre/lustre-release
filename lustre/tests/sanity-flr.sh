@@ -14,8 +14,8 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT "
-# Bug number for skipped test:    LU-11381
-ALWAYS_EXCEPT+="                  201 "
+# Bug number for skipped test:    LU-14818 LU-11381
+ALWAYS_EXCEPT+="                  6        201 "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skip all tests for PPC until we can get sanity-pfl to pass

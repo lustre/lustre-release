@@ -2799,6 +2799,14 @@ new_comp:
 
 	/* Data-on-MDT component setting */
 	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT) {
+		/* Yaml support */
+		if (lsa->lsa_stripe_count == 0)
+			lsa->lsa_stripe_count = LLAPI_LAYOUT_DEFAULT;
+		if (lsa->lsa_stripe_size == lsa->lsa_comp_end)
+			lsa->lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
+		if (lsa->lsa_stripe_off == -1 ||
+		    lsa->lsa_stripe_off == 0)
+			lsa->lsa_stripe_off = LLAPI_LAYOUT_DEFAULT;
 		/*
 		 * In case of Data-on-MDT patterns the only extra option
 		 * applicable is stripe size option.

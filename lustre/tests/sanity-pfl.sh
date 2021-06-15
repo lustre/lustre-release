@@ -1017,6 +1017,37 @@ test_16c() {
 }
 run_test 16c "Verify setstripe/getstripe for SEL layout with YAML config file"
 
+test_16d() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+
+	local file=$DIR/$tdir/$tfile
+	local dir=$DIR/$tdir/dir
+	local temp=$DIR/$tdir/template
+	rm -rf $DIR/$tdir
+	test_mkdir $DIR/$tdir
+
+	#####################################################################
+	#                           1. DOM file
+	# set stripe for source file
+	$LFS setstripe -E1m -L mdt -E-1 -o1,0 $file ||
+		error "Create $file failed"
+
+	echo "1. DOM file"
+	verify_yaml_layout $file $file.copy $temp "1. DOM file"
+
+	#####################################################################
+	#                           2. DOM dir
+	# set stripe for source dir
+	test_mkdir $dir
+	$LFS setstripe -E1m -L mdt -E-1 -o1,0 $dir || error "Create $dir failed"
+
+	test_mkdir $dir.copy
+	echo "2. DOM dir"
+	verify_yaml_layout $dir $dir.copy $temp.dir "2. DOM dir"
+}
+run_test 16d "Verify setstripe/getstripe for DOM layout with YAML config file"
+
+
 test_17() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	local file=$DIR/$tdir/$tfile
