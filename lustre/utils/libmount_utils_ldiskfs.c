@@ -886,12 +886,12 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	/* Avoid zeroing out the full journal - speeds up mkfs */
 	if (is_e2fsprogs_feature_supp("-E lazy_journal_init=0")) {
 		append_unique(start, ext_opts ? "," : " -E ",
-			      "lazy_journal_init=0", NULL, maxbuflen);
+			      "lazy_journal_init", "0", maxbuflen);
 		ext_opts = 1;
 	}
 	if (is_e2fsprogs_feature_supp("-E lazy_itable_init=0")) {
 		append_unique(start, ext_opts ? "," : "-E",
-			    "lazy_itable_init=0", NULL, maxbuflen);
+			    "lazy_itable_init", "0", maxbuflen);
 		ext_opts = 1;
 	}
 
