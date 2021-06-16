@@ -38,7 +38,9 @@
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/mm.h>
 #endif
+#include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <net/netlink.h>
 
 #if defined(CONFIG_KGDB)
 #include <asm/kgdb.h>
@@ -199,3 +201,22 @@ int kstrtobool_from_user(const char __user *s, size_t count, bool *res)
 }
 EXPORT_SYMBOL(kstrtobool_from_user);
 #endif /* !HAVE_KSTRTOBOOL_FROM_USER */
+
+#ifndef HAVE_NLA_STRDUP
+char *nla_strdup(const struct nlattr *nla, gfp_t flags)
+{
+	size_t srclen = nla_len(nla);
+	char *src = nla_data(nla), *dst;
+
+	if (srclen > 0 && src[srclen - 1] == '\0')
+		srclen--;
+
+	dst = kmalloc(srclen + 1, flags);
+	if (dst != NULL) {
+		memcpy(dst, src, srclen);
+		dst[srclen] = '\0';
+	}
+	return dst;
+}
+EXPORT_SYMBOL(nla_strdup);
+#endif /* !HAVE_NLA_STRDUP */

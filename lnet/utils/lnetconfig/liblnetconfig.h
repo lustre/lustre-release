@@ -27,7 +27,16 @@
 #ifndef LIB_LNET_CONFIG_API_H
 #define LIB_LNET_CONFIG_API_H
 
+#include <errno.h>
 #include <net/if.h>
+#include <stdbool.h>
+#include <sys/socket.h>
+#include <yaml.h>
+#include <netlink/netlink.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
+
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <linux/lnet/lnet-dlc.h>
 #include <linux/lnet/nidstr.h>
@@ -721,6 +730,73 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc,
  */
 int lustre_yaml_exec(char *f, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
+
+/**
+ * yaml_emitter_set_output_netlink
+ *
+ *   Special handling to integrate LNet handling into libyaml.
+ *   This function sets up the ability to take the data stored in @emitter
+ *   and formats into a netlink packet to send to the kernel.
+ *
+ *   emitter	- YAML emitter containing what the user specified
+ *   nl		- Netlink socket to be used by libyaml
+ *   family	- Netlink family
+ *   version	- notify kernel what version user land supports
+ *   cmd	- Netlink command to execute
+ *   flags	- Netlink flags
+ */
+int yaml_emitter_set_output_netlink(yaml_emitter_t *emitter, struct nl_sock *nl,
+				    char *family, int version, int cmd,
+				    int flags);
+
+/**
+ * yaml_parser_set_input_netlink
+ *
+ *   Special handling to LNet handling into libyaml.
+ *   This function sets up the ability to receive the Netlink data
+ *   from the Linux kernel. That data is formated into a YAML document.
+ *
+ *   parser	- YAML parser that is used to present the data received
+ *		  from the kernel in Netlink format.
+ *   nl		- should be the Netlink socket receiving data from
+ *		  the kernel.
+ *   stream	- Handle the case of continuous data coming in.
+ */
+int yaml_parser_set_input_netlink(yaml_parser_t *parser, struct nl_sock *nl,
+				  bool stream);
+
+/**
+ * yaml_parser_get_reader_error
+ *
+ *   By default libyaml reports a generic write error. We need a way
+ *   to report better parser errors so we can track down problems.
+ *
+ *   parser	- YAML parser that has reported an error.
+ */
+const char *yaml_parser_get_reader_error(yaml_parser_t *parser);
+
+/**
+ * yaml_parser_log_error
+ *
+ *   Helper function to report the parser error to @log.
+ *
+ *   parser	- YAML parser that has reported an error.
+ *   log	- file descriptor to write the error message out to.
+ *   errmsg	- Special extra string to append to error message.
+ */
+void yaml_parser_log_error(yaml_parser_t *parser, FILE *log,
+			   const char *errmsg);
+
+/**
+ * yaml_emitter_log_error
+ *
+ *   Helper function to report the emitter error to @log.
+ *
+ *   emitter	- YAML emitter that has reported an error.
+ *   log	- file descriptor to write the error message out to.
+ */
+void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log);
+
 
 /*
  * lustre_lnet_init_nw_descr

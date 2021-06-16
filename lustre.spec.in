@@ -195,7 +195,7 @@ Requires: %{requires_yaml_name}
 Requires: python3 >= 3.6.0
 BuildRequires: python3-devel >= 3.6.0, swig
 %endif
-BuildRequires: libtool libyaml-devel zlib-devel binutils-devel
+BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel binutils-devel
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig

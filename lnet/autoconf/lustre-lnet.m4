@@ -894,6 +894,41 @@ AC_DEFUN([LN_CONFIGURE], [
 AC_MSG_NOTICE([LNet core checks
 ==============================================================================])
 
+# lnet/utils/lnetconfig/liblnetconfig_netlink.c
+AS_IF([test "x$enable_dist" = xno], [
+	PKG_CHECK_MODULES(LIBNL3, [libnl-genl-3.0 >= 3.1])
+])
+
+AC_CHECK_LIB([nl-3], [nla_get_s32], [
+	AC_DEFINE(HAVE_NLA_GET_S32, 1,
+		[libnl3 supports nla_get_s32])
+	], [
+])
+
+AC_CHECK_LIB([nl-3], [nla_get_s64], [
+	AC_DEFINE(HAVE_NLA_GET_S64, 1,
+		[libnl3 supports nla_get_s64])
+	], [
+])
+
+#
+# LN_USR_NLMSGERR
+#
+AC_DEFUN([LN_USR_NLMSGERR], [
+AC_MSG_CHECKING([if 'enum nlmsgerr_attrs' exists])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <linux/netlink.h>
+
+	int main(void) {
+		int x = (int)NLMSGERR_ATTR_MAX;
+		return x;
+	}
+])],[
+	AC_DEFINE(HAVE_USRSPC_NLMSGERR, 1,
+		['enum nlmsgerr_attrs' exists])
+])
+]) # LN_USR_NLMGSERR
+
 # lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h])
 AC_CHECK_FUNCS([gethostbyname])
@@ -920,6 +955,7 @@ AC_SUBST(LIBEFENCE)
 
 LN_CONFIG_DLC
 LN_USR_RDMA
+LN_USR_NLMSGERR
 ]) # LN_CONFIGURE
 
 #

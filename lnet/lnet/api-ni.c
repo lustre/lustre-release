@@ -2650,6 +2650,85 @@ failed:
 	return rc;
 }
 
+static int lnet_genl_parse_list(struct sk_buff *msg,
+				const struct ln_key_list *data[], u16 idx)
+{
+	const struct ln_key_list *list = data[idx];
+	const struct ln_key_props *props;
+	struct nlattr *node;
+	u16 count;
+
+	if (!list)
+		return 0;
+
+	if (!list->lkl_maxattr)
+		return -ERANGE;
+
+	props = list->lkl_list;
+	if (!props)
+		return -EINVAL;
+
+	node = nla_nest_start(msg, LN_SCALAR_ATTR_LIST);
+	if (!node)
+		return -ENOBUFS;
+
+	for (count = 1; count <= list->lkl_maxattr; count++) {
+		struct nlattr *key = nla_nest_start(msg, count);
+
+		if (count == 1)
+			nla_put_u16(msg, LN_SCALAR_ATTR_LIST_SIZE,
+				    list->lkl_maxattr);
+
+		nla_put_u16(msg, LN_SCALAR_ATTR_INDEX, count);
+		if (props[count].lkp_values)
+			nla_put_string(msg, LN_SCALAR_ATTR_VALUE,
+				       props[count].lkp_values);
+		if (props[count].lkp_key_format)
+			nla_put_u16(msg, LN_SCALAR_ATTR_KEY_FORMAT,
+				    props[count].lkp_key_format);
+		nla_put_u16(msg, LN_SCALAR_ATTR_NLA_TYPE,
+			    props[count].lkp_data_type);
+		if (props[count].lkp_data_type == NLA_NESTED) {
+			int rc;
+
+			rc = lnet_genl_parse_list(msg, data, ++idx);
+			if (rc < 0)
+				return rc;
+		}
+
+		nla_nest_end(msg, key);
+	}
+
+	nla_nest_end(msg, node);
+	return 0;
+}
+
+int lnet_genl_send_scalar_list(struct sk_buff *msg, u32 portid, u32 seq,
+			       const struct genl_family *family, int flags,
+			       u8 cmd, const struct ln_key_list *data[])
+{
+	int rc = 0;
+	void *hdr;
+
+	if (!data[0])
+		return -EINVAL;
+
+	hdr = genlmsg_put(msg, portid, seq, family, flags, cmd);
+	if (!hdr)
+		GOTO(canceled, rc = -EMSGSIZE);
+
+	rc = lnet_genl_parse_list(msg, data, 0);
+	if (rc < 0)
+		GOTO(canceled, rc);
+
+	genlmsg_end(msg, hdr);
+canceled:
+	if (rc < 0)
+		genlmsg_cancel(msg, hdr);
+	return rc;
+}
+EXPORT_SYMBOL(lnet_genl_send_scalar_list);
+
 /**
  * Initialize LNet library.
  *

@@ -51,6 +51,11 @@
 #undef NEED_KTIME_GET_REAL_NS
 #endif
 
+#define HAVE_NLA_PUT_U64_64BIT 1
+#define HAVE_NLA_PARSE_6_PARAMS 1
+#define HAVE_NETLINK_EXTACK 1
+
+
 /* MOFED has its own bitmap_alloc backport */
 #define HAVE_BITMAP_ALLOC 1
 
@@ -88,7 +93,6 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include "o2iblnd-idl.h"
 

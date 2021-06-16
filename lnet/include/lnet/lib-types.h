@@ -46,7 +46,9 @@
 #include <linux/semaphore.h>
 #include <linux/types.h>
 #include <linux/kref.h>
+#include <net/genetlink.h>
 
+#include <uapi/linux/lnet/lnet-nl.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lnet/lnetctl.h>
 #include <uapi/linux/lnet/nidstr.h>
@@ -1253,5 +1255,45 @@ struct lnet {
 	/* UDSP list */
 	struct list_head		ln_udsp_list;
 };
+
+static const struct nla_policy scalar_attr_policy[LN_SCALAR_CNT + 1] = {
+	[LN_SCALAR_ATTR_LIST]		= { .type = NLA_NESTED },
+	[LN_SCALAR_ATTR_LIST_SIZE]	= { .type = NLA_U16 },
+	[LN_SCALAR_ATTR_INDEX]		= { .type = NLA_U16 },
+	[LN_SCALAR_ATTR_NLA_TYPE]	= { .type = NLA_U16 },
+	[LN_SCALAR_ATTR_VALUE]		= { .type = NLA_STRING },
+	[LN_SCALAR_ATTR_KEY_FORMAT]	= { .type = NLA_U16 },
+};
+
+int lnet_genl_send_scalar_list(struct sk_buff *msg, u32 portid, u32 seq,
+			       const struct genl_family *family, int flags,
+			       u8 cmd, const struct ln_key_list *data[]);
+
+/* Special workaround for pre-4.19 kernels to send error messages
+ * from dumpit routines. Newer kernels will send message with
+ * NL_SET_ERR_MSG information by default if NETLINK_EXT_ACK is set.
+ */
+static inline int lnet_nl_send_error(struct sk_buff *msg, int portid, int seq,
+				     int error)
+{
+#ifndef HAVE_NL_DUMP_WITH_EXT_ACK
+	struct nlmsghdr *nlh;
+
+	if (!error)
+		return 0;
+
+	nlh = nlmsg_put(msg, portid, seq, NLMSG_ERROR, sizeof(error), 0);
+	if (!nlh)
+		return -ENOMEM;
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	netlink_ack(msg, nlh, error, NULL);
+#else
+	netlink_ack(msg, nlh, error);
+#endif
+	return nlmsg_len(nlh);
+#else
+	return error;
+#endif
+}
 
 #endif

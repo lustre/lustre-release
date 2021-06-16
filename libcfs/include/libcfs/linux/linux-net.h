@@ -23,6 +23,59 @@
 #ifndef __LIBCFS_LINUX_NET_H__
 #define __LIBCFS_LINUX_NET_H__
 
+#include <net/netlink.h>
+
+#ifndef HAVE_NLA_STRDUP
+char *nla_strdup(const struct nlattr *nla, gfp_t flags);
+#endif /* !HAVE_NLA_STRDUP */
+
+#ifndef HAVE_NL_PARSE_WITH_EXT_ACK
+
+#define NL_SET_BAD_ATTR(extack, attr)
+
+/* this can be increased when necessary - don't expose to userland */
+#define NETLINK_MAX_COOKIE_LEN  20
+
+/**
+ * struct netlink_ext_ack - netlink extended ACK report struct
+ * @_msg: message string to report - don't access directly, use
+ *      %NL_SET_ERR_MSG
+ * @bad_attr: attribute with error
+ * @cookie: cookie data to return to userspace (for success)
+ * @cookie_len: actual cookie data length
+ */
+struct netlink_ext_ack {
+	const char *_msg;
+	const struct nlattr *bad_attr;
+	u8 cookie[NETLINK_MAX_COOKIE_LEN];
+	u8 cookie_len;
+};
+
+#define GENL_SET_ERR_MSG(info, msg) NL_SET_ERR_MSG(NULL, msg)
+
+static inline int cfs_nla_parse(struct nlattr **tb, int maxtype,
+				const struct nlattr *head, int len,
+				const struct nla_policy *policy,
+				struct netlink_ext_ack *extack)
+{
+	return nla_parse(tb, maxtype, head, len, policy);
+}
+
+static inline int cfs_nla_parse_nested(struct nlattr *tb[], int maxtype,
+				       const struct nlattr *nla,
+				       const struct nla_policy *policy,
+				       struct netlink_ext_ack *extack)
+{
+	return nla_parse_nested(tb, maxtype, nla, policy);
+}
+
+#else /* !HAVE_NL_PARSE_WITH_EXT_ACK */
+
+#define cfs_nla_parse_nested    nla_parse_nested
+#define cfs_nla_parse           nla_parse
+
+#endif
+
 #ifdef HAVE_KERNEL_SETSOCKOPT
 
 #include <net/tcp.h>

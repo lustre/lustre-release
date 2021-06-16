@@ -7,7 +7,7 @@ SWIG_INCLUDES=-I/usr/include -I/usr/include/linux -I/usr/include/c++/4.4.4/tr1 -
 DLC_SWIG_FLAGS=-D__x86_64__  -D__arch_lib__ -D_LARGEFILE64_SOURCE=1
 DLC_SWIG_INCLUDES=-I/usr/include -I/usr/include/asm -I/usr/include/linux -I/usr/lib64/gcc/i686-pc-mingw32/4.4.6/include/
 DLC_SWIG_INCLUDES+=-I$(top_builddir)/lnet/utils/lnetconfig -I$(top_builddir)/lnet/utils -I$(top_builddir)/lnet/include -I$(top_builddir)/libcfs/include  -I$(top_builddir)/lnet/include/uapi/
-DLC_INCLUDES=-I/usr/include -I$(top_builddir)/lnet/utils/lnetconfig -I$(top_builddir)/lnet/utils -I$(top_builddir)/lnet/include -I$(top_builddir)/libcfs/include -I$(top_builddir)/lnet/include/uapi/
+DLC_INCLUDES=-I/usr/include $(LIBNL3_CFLAGS) -I$(top_builddir)/lnet/utils/lnetconfig -I$(top_builddir)/lnet/utils -I$(top_builddir)/lnet/include -I$(top_builddir)/libcfs/include -I$(top_builddir)/lnet/include/uapi/
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/.libs/libcfs.a
 LIBLNETCONFIG=-L$(top_builddir)/lnet/utils/lnetconfig/.libs/

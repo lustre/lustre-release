@@ -488,6 +488,26 @@ kstrtobool_from_user, [
 ]) # LIBCFS_KSTRTOBOOL_FROM_USER
 
 #
+# LIBCFS_NETLINK_CALLBACK_START
+#
+# Kernel version 4.4-rc3 commit fc9e50f5a5a4e1fa9ba2756f745a13e693cf6a06
+# added a start function callback for struct netlink_callback
+#
+AC_DEFUN([LIBCFS_NETLINK_CALLBACK_START], [
+LB_CHECK_COMPILE([if struct genl_ops has start callback],
+cb_start, [
+	#include <net/genetlink.h>
+],[
+	struct genl_ops ops;
+
+	ops.start = NULL;
+],[
+	AC_DEFINE(HAVE_NETLINK_CALLBACK_START, 1,
+		[struct genl_ops has 'start' callback])
+])
+]) # LIBCFS_NETLINK_CALLBACK_START
+
+#
 # Kernel version 4.5-rc1 commit d12481bc58fba89427565f8592e88446ec084a24
 # added crypto hash helpers
 #
@@ -824,6 +844,26 @@ rht_bucket_var, [
 ]) # LIBCFS_RHT_BUCKET_VAR
 
 #
+# Kernel version 4.11-rc5 commit fceb6435e85298f747fee938415057af837f5a8a
+# began the enhanchement of Netlink with extended ACK struct for advanced
+# error handling. By commit 7ab606d1609dd6dfeae9c8ad0a8a4e051d831e46 we
+# had full support for this new feature.
+#
+AC_DEFUN([LIBCFS_NL_EXT_ACK], [
+LB_CHECK_COMPILE([if Netlink supports netlink_ext_ack],
+netlink_ext_ack, [
+	#include <net/genetlink.h>
+],[
+	struct genl_info info;
+
+	info.extack = NULL;
+],[
+	AC_DEFINE(HAVE_NL_PARSE_WITH_EXT_ACK, 1,
+		[netlink_ext_ack is an argument to nla_parse type function])
+])
+]) # LIBCFS_NL_EXT_ACK
+
+#
 # Kernel version 4.11 commit f9fe1c12d126f9887441fa5bb165046f30ddd4b5
 # introduced rhashtable_lookup_get_insert_fast
 #
@@ -918,6 +958,25 @@ wait_queue_task_list, [
 		[linux wait_queue_head_t list_head is name head])
 ])
 ]) # LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
+
+#
+# LIBCFS_NLA_STRDUP
+#
+# Kernel version 4.13-rc1 commit 2cf0c8b3e6942ecafe6ebb1a6d0328a81641bf39
+# created nla_strdup(). This is needed since push strings can be
+# any size.
+#
+AC_DEFUN([LIBCFS_NLA_STRDUP], [
+LB_CHECK_COMPILE([if 'nla_strdup()' exists],
+nla_strdup, [
+	#include <net/netlink.h>
+],[
+	char *tmp = nla_strdup(NULL, GFP_KERNEL);
+],[
+	AC_DEFINE(HAVE_NLA_STRDUP, 1,
+		['nla_strdup' is available])
+])
+]) # LIBCFS_NLA_STRDUP
 
 #
 # LIBCFS_WAIT_QUEUE_ENTRY
@@ -1209,6 +1268,23 @@ xarray_support, [
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_XARRAY_SUPPORT
+
+#
+# Kernel version 4.19-rc6 commit 4a19edb60d0203cd5bf95a8b46ea8f63fd41194c
+# added extended ACK handling to Netlink dump handlers
+#
+AC_DEFUN([LIBCFS_NL_DUMP_EXT_ACK], [
+LB_CHECK_COMPILE([if Netlink dump handlers support ext_ack],
+netlink_dump_ext_ack, [
+	#include <net/netlink.h>
+],[
+	struct netlink_callback *cb = NULL;
+	cb->extack = NULL;
+],[
+	AC_DEFINE(HAVE_NL_DUMP_WITH_EXT_ACK, 1,
+		[netlink_ext_ack is handled for Netlink dump handlers])
+])
+]) # LIBCFS_NL_DUMP_EXT_ACK
 
 #
 # LIBCFS_HAVE_IOV_ITER_TYPE
@@ -1535,6 +1611,7 @@ LIBCFS_KERNEL_PARAM_LOCK
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 # 4.4
 LIBCFS_KSTRTOBOOL_FROM_USER
+LIBCFS_NETLINK_CALLBACK_START
 # 4.5
 LIBCFS_CRYPTO_HASH_HELPERS
 LIBCFS_EXPORT_KSET_FIND_OBJ
@@ -1566,10 +1643,12 @@ LIBCFS_RHT_BUCKET_VAR
 LIBCFS_HAVE_PROCESSOR_HEADER
 LIBCFS_HAVE_WAIT_BIT_HEADER
 LIBCFS_MEMALLOC_NORECLAIM
+LIBCFS_NL_EXT_ACK
 LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
 LIBCFS_CPUS_READ_LOCK
 LIBCFS_UUID_T
 # 4.13
+LIBCFS_NLA_STRDUP
 LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
 LIBCFS_DEFINE_TIMER
@@ -1589,6 +1668,7 @@ LIBCFS_TCP_SOCK_SET_NODELAY
 LIBCFS_TCP_SOCK_SET_KEEPIDLE
 # 4.19
 LIBCFS_XARRAY_SUPPORT
+LIBCFS_NL_DUMP_EXT_ACK
 # 4.20
 LIBCFS_HAVE_IOV_ITER_TYPE
 # 5.0
