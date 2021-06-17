@@ -37,8 +37,8 @@ MANFILES =					\
 	lctl-list_param.8			\
 	lctl-network.8				\
 	lctl-pcc.8				\
-	lctl-pool_add.8			\
-	lctl-pool_new.8			\
+	lctl-pool_add.8				\
+	lctl-pool_new.8				\
 	lctl-set_param.8			\
 	ldev.8					\
 	ldev.conf.5				\
@@ -50,7 +50,7 @@ MANFILES =					\
 	lfs-getdirstripe.1			\
 	lfs-getname.1				\
 	lfs-getsom.1				\
-	lfs-getstripe.1			\
+	lfs-getstripe.1				\
 	lfs-heat.1				\
 	lfs-hsm.1				\
 	lfs-ladvise.1				\
@@ -67,18 +67,17 @@ MANFILES =					\
 	lfs-mirror-write.1			\
 	lfs-mkdir.1				\
 	lfs-path2fid.1				\
-	lfs-pcc.1				\
 	lfs-pcc-detach.1			\
+	lfs-pcc.1				\
 	lfs-project.1				\
 	lfs-quota.1				\
 	lfs-rmfid.1				\
 	lfs-setdirstripe.1			\
 	lfs-setquota.1				\
 	lfs-setstripe.1				\
+	lgss_sk.8				\
 	lhbadm.8				\
 	ll_decode_linkea.8			\
-	llobdstat.8				\
-	llog_reader.8				\
 	llsom_sync.8				\
 	llstat.8				\
 	lnetctl.8				\
@@ -87,6 +86,7 @@ MANFILES =					\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
+	mount.lustre.8				\
 	nids.5					\
 	plot-llstat.8				\
 	routerstat.8
@@ -181,7 +181,11 @@ LIBMAN = 					\
 	llapi_unlink_foreign.3
 
 SERVER_MANFILES =				\
+	l_getidentity.8				\
+	l_getsepol.8				\
 	lctl-barrier.8				\
+	lctl-changelog_deregister.8		\
+	lctl-changelog_register.8		\
 	lctl-lcfg.8				\
 	lctl-lfsck-query.8			\
 	lctl-lfsck-start.8			\
@@ -191,12 +195,12 @@ SERVER_MANFILES =				\
 	lctl-llog_info.8			\
 	lctl-llog_print.8			\
 	lctl-nodemap-activate.8			\
-	lctl-nodemap-add.8			\
 	lctl-nodemap-add-idmap.8		\
 	lctl-nodemap-add-range.8		\
-	lctl-nodemap-del.8			\
+	lctl-nodemap-add.8			\
 	lctl-nodemap-del-idmap.8		\
 	lctl-nodemap-del-range.8		\
+	lctl-nodemap-del.8			\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap-set-fileset.8		\
 	lctl-nodemap-set-sepol.8		\
@@ -207,22 +211,13 @@ SERVER_MANFILES =				\
 	lctl-snapshot-mount.8			\
 	lctl-snapshot-umount.8			\
 	ll_decode_filter_fid.8			\
+	llobdstat.8				\
+	llog_reader.8				\
 	llverdev.8				\
 	lshowmount.8				\
 	mkfs.lustre.8				\
-	l_getidentity.8				\
-	l_getsepol.8				\
-	lgss_sk.8				\
-	tunefs.lustre.8				\
-	ll_decode_linkea.8			\
-	llobdstat.8				\
-	llog_reader.8				\
-	llsom_sync.8				\
-	llstat.8				\
-	lnetctl.8				\
-	lst.8					\
-	mount.lustre.8				\
-	mount.lustre_tgt.8
+	mount.lustre_tgt.8			\
+	tunefs.lustre.8
 
 if MANPAGES
 man_MANS = $(LIBMAN)

@@ -160,18 +160,21 @@ communication with the failed OST.
 Abort the recovery process on a restarting MDT or OST device
 .PP
 .SS Changelogs
-.TP
-.BI changelog_register " [-n]"
-Register a new changelog user for a particular device.  Changelog entries
-will not be purged beyond any registered users' set point. (See lfs changelog_clear.)
-.br
-.B -n
-Print only the ID of the newly registered user.
-.TP
-.BI changelog_deregister " <id>"
-Unregister an existing changelog user.  If the user's "clear" record number
-is the minimum for the device, changelog records will be purged until the
-next minimum.
+Changelog user can be registered and deregistered on particular device.
+Changelog starts logging when any user is registered.
+
+For more details see:
+
+.PP
+\fBlctl-changelog_register\fR(8)
+.RS 4
+Register a new changelog user on specified MDT device with specified parameters.
+.RE
+.PP
+\fBlctl-changelog_deregister\fR(8)
+.RS 4
+Deregister an existing changelog user on the specified MDT.
+
 .PP
 .SS Nodemap
 An identity mapping feature that facilitates mapping of client UIDs and GIDs to
@@ -432,13 +435,14 @@ is part of the
 .BR lustre (7)
 filesystem package.
 .SH SEE ALSO
+.BR lfs (1)
 .BR lustre (7),
-.BR mkfs.lustre (8),
-.BR mount.lustre (8),
 .BR lctl (8),
 .BR lctl-barrier (8),
-.BR lctl-lcfg (8),
+.BR lctl-changelog_deregister (8),
+.BR lctl-changelog_register (8),
 .BR lctl-get_param (8),
+.BR lctl-lcfg (8),
 .BR lctl-lfsck-start (8),
 .BR lctl-lfsck-stop (8),
 .BR lctl-lfsck-query (8),
@@ -455,12 +459,13 @@ filesystem package.
 .BR lctl-llog_print (8),
 .BR lctl-network (8),
 .BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
 .BR lctl-nodemap-add-idmap (8),
 .BR lctl-nodemap-add-range (8),
-.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
 .BR lctl-nodemap-del-range (8),
-.BR lctl-nodemap-del (8),
 .BR lctl-nodemap-modify (8),
 .BR lctl-pcc (8),
-.BR lfs (1)
+.BR mkfs.lustre (8),
+.BR mount.lustre (8),

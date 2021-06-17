@@ -1,0 +1,54 @@
+.TH LCTL-CHANGELOG_DEREGISTER 8 "2021-06-18" Lustre "configuration utilities"
+.SH NAME
+lctl-changelog_deregister \- deregister existing changelog user.
+.SH SYNOPSIS
+.B lctl changelog_deregister
+.RI [ ID |cl ID ]
+.RB [ --help | -h ]
+.RB [ --user | -u
+.IR USERNAME ]
+.br
+.SH DESCRIPTION
+This command is used to deregister an existing changelog user on selected
+device. User can be deregistered by its \fBID\fR or specific \fBusername\fR
+used on registration.
+.br
+.SH OPTIONS
+.TP
+.BR --help | -h
+Output brief command usage help.
+.TP
+.BR --user | -u \ \fIUSERNAME
+Deregistration by username. If changelog user specified unique name during
+registration then it can be deregistered by \fBusername\fR instead of \fBID\fR.
+.SH EXAMPLES
+.TP
+Deregister changelog user on device \fBtestfs-MDT0000\fR by 'cl<\fBID\fR>':
+.br
+# lctl --device testfs-MDT0000 changelog_deregister cl1
+.br
+testfs-MDT0000: Deregistered changelog user #1
+.TP
+Deregister changelog user by pure \fBID\fR:
+.br
+# lctl --device testfs-MDT0000 changelog_deregister 1
+.br
+testfs-MDT0000: Deregistered changelog user #1
+.TP
+Deregister changelog user by its specific name \fBtestname\fR:
+.br
+# lctl --device testfs-MDT0000 changelog_deregister -u testname
+.br
+testfs-MDT0000: Deregistered changelog user #1
+
+.SH AVAILABILITY
+.B lctl changelog_deregister
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-changelog_register (8)
+

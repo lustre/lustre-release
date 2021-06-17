@@ -1,0 +1,84 @@
+.TH LCTL-CHANGELOG_REGISTER 8 "2021-06-18" Lustre "configuration utilities"
+.SH NAME
+lctl-changelog_register \- register a new changelog user for particular device.
+.SH SYNOPSIS
+.B lctl changelog_register
+.RB [ --help | -h ]
+.RB [ --mask | -m
+.IR MASK ]
+.RB [ --nameonly | -n ]
+.RB [ --user | -u
+.IR USERNAME ]
+.br
+.SH DESCRIPTION
+This command is used to register a new changelog user on selected device. New
+user may set specific \fImask\fR and/or specific unique \fIusername\fR.
+Changelog entries will not be purged beyond any registered users' set point.
+See also \fBlfs changelog_clear\fR.
+.br
+.SH OPTIONS
+.TP
+.BR --help | -h
+Output brief command usage help.
+.TP
+.BR --mask | -m\ \fI MASK
+Sets per-user changelog \fImask\fR. Mask is specified as set of keywords
+in form [+|-]\fImask1\fR[<,|+|->\fImask2\fR...]. Masks are separated by comma
+or '+' to indicate a mask to be added and by '-' to indicate mask to be
+removed. If mask list is started with '+' or '-' then masks are relative
+to the default changelog mask, otherwise mask is absolute. Possible mask
+keywords are:
+.BR mark ", " creat ", " mkdir ", " hlink ", " slink ", " mknod ", "
+.BR unlnk ", " rmdir ", " renme ", " rnmto ", " open ", " close ", "
+.BR lyout ", " trunc ", " sattr ", " xattr ", " hsm ", " mtime ", "
+.BR ctime ", " atime ", " migrt ", " flrw ", " resync ", " gxatr ", " nopen .
+The default changelog mask consists of all masks excluding:
+``atime, open, gxatr, nopen''. Both uppercase and lowercase are accepted for
+keywords.
+.TP
+.BR --nameonly | -n
+The output format modifier. If set then command outputs just changelog user
+name in format 'cl<\fIID\fR>[-<\fIusername\fR>]. Where \fIID\fR stands for
+assigned changelog user \fBID\fR.
+.TP
+.BR --user | -u \ \fI USERNAME
+Specific username assigment. Unique name can be assigned to a new changelog
+user. Name must start with a letter and consist of letters, digits, '-' and
+\'_' symbols with total length limited by 15 symbols.
+.SH EXAMPLES
+.TP
+Simple changelog user register on device \fBtestfs-MDT0000\fR:
+.br
+# lctl --device testfs-MDT0000 changelog_register
+.br
+testfs-MDT0000: Registered changelog userid 'cl1'
+.TP
+Register changelog user with specific name \fBtestname\fR:
+.br
+# lctl --device testfs-MDT0000 changelog_register -u testname
+.br
+lustre-MDT0000: Registered changelog userid 'cl1-testname'
+.TP
+Register changelog user with specific mask:
+.br
+# lctl --device testfs-MDT0000 changelog_register -m +open,atime,-hlink
+.br
+lustre-MDT0000: Registered changelog userid 'cl1'
+.TP
+Register changelog user with terse output:
+.br
+# lctl --device testfs-MDT0000 changelog_register -n
+.br
+cl1
+
+.SH AVAILABILITY
+.B lctl changelog_register
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-changelog_deregister (8)
+
