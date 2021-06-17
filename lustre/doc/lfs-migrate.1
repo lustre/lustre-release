@@ -72,6 +72,11 @@ write operations synchronous.  Using the
 .B --non-direct
 option uses buffered read/write operations, which may improve migration
 speed at the cost of more CPU and memory overhead.
+.br
+This option cannot be used on encrypted files when the encryption key is not
+available. It will result in
+.B
+-ENOKEY.
 .TP
 .BR -v , --verbose
 Print each filename as it is migrated.

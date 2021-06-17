@@ -1441,7 +1441,8 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode)) {
+	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode) &&
+	    llcrypt_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
 			struct page *data_page = NULL;
@@ -1452,9 +1453,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			pgoff_t index_orig;
 
 retry_encrypt:
-			if (nunits & ~LUSTRE_ENCRYPTION_MASK)
-				nunits = (nunits & LUSTRE_ENCRYPTION_MASK) +
-					LUSTRE_ENCRYPTION_UNIT_SIZE;
+			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
 			/* The page can already be locked when we arrive here.
 			 * This is possible when cl_page_assume/vvp_page_assume
 			 * is stuck on wait_on_page_writeback with page lock
@@ -1511,14 +1510,38 @@ retry_encrypt:
 			pg->bp_off_diff = pg->off & ~PAGE_MASK;
 			pg->off = pg->off & PAGE_MASK;
 		}
-	} else if (opc == OST_READ && inode && IS_ENCRYPTED(inode)) {
+	} else if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode)) {
+		struct osc_async_page *oap = brw_page2oap(pga[0]);
+		struct cl_page *clpage = oap2cl_page(oap);
+		struct cl_object *clobj = clpage->cp_obj;
+		struct cl_attr attr = { 0 };
+		struct lu_env *env;
+		__u16 refcheck;
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env)) {
+			rc = PTR_ERR(env);
+			ptlrpc_request_free(req);
+			RETURN(rc);
+		}
+
+		cl_object_attr_lock(clobj);
+		rc = cl_object_attr_get(env, clobj, &attr);
+		cl_object_attr_unlock(clobj);
+		cl_env_put(env, &refcheck);
+		if (rc != 0) {
+			ptlrpc_request_free(req);
+			RETURN(rc);
+		}
+		if (attr.cat_size)
+			oa->o_size = attr.cat_size;
+	} else if (opc == OST_READ && inode && IS_ENCRYPTED(inode) &&
+		   llcrypt_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
 			u32 nunits = (pg->off & ~PAGE_MASK) + pg->count;
 
-			if (nunits & ~LUSTRE_ENCRYPTION_MASK)
-				nunits = (nunits & LUSTRE_ENCRYPTION_MASK) +
-					LUSTRE_ENCRYPTION_UNIT_SIZE;
+			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
 			/* count/off are forced to cover the whole encryption
 			 * unit size so that all encrypted data is stored on the
 			 * OST, so adjust bp_{count,off}_diff for the size of
@@ -1544,7 +1567,8 @@ retry_encrypt:
 
 	for (i = 0; i < page_count; i++) {
 		short_io_size += pga[i]->count;
-		if (!inode || !IS_ENCRYPTED(inode)) {
+		if (!inode || !IS_ENCRYPTED(inode) ||
+		    !llcrypt_has_encryption_key(inode)) {
 			pga[i]->bp_count_diff = 0;
 			pga[i]->bp_off_diff = 0;
 		}

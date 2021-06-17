@@ -131,6 +131,34 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	return ll_set_encflags(inode, (void *)ctx, len, false);
 }
 
+/**
+ * ll_file_open_encrypt() - overlay to llcrypt_file_open
+ * @inode: the inode being opened
+ * @filp: the struct file being set up
+ *
+ * This overlay function is necessary to handle encrypted file open without
+ * the key. We allow this access pattern to applications that know what they
+ * are doing, by using the specific flag O_FILE_ENC.
+ * This flag is only compatible with O_DIRECT IOs, to make sure ciphertext
+ * data is wiped from page cache once IOs are finished.
+ */
+int ll_file_open_encrypt(struct inode *inode, struct file *filp)
+{
+	int rc;
+
+	rc = llcrypt_file_open(inode, filp);
+	if (likely(rc != -ENOKEY))
+		return rc;
+
+	if (rc == -ENOKEY &&
+	    (filp->f_flags & O_FILE_ENC) == O_FILE_ENC &&
+	    filp->f_flags & O_DIRECT)
+		/* allow file open with O_FILE_ENC flag when we have O_DIRECT */
+		rc = 0;
+
+	return rc;
+}
+
 void llcrypt_free_ctx(void *encctx, __u32 size)
 {
 	if (encctx)
@@ -218,6 +246,17 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		fid->f_ver = 0;
 	}
 	rc = llcrypt_setup_filename(dir, &dname, lookup, fname);
+	if (rc == -ENOENT && lookup &&
+	    !llcrypt_has_encryption_key(dir) &&
+	    unlikely(filename_is_volatile(iname->name, iname->len, NULL))) {
+		/* For purpose of migration or mirroring without enc key, we
+		 * allow lookup of volatile file without enc context.
+		 */
+		memset(fname, 0, sizeof(struct llcrypt_name));
+		fname->disk_name.name = (unsigned char *)iname->name;
+		fname->disk_name.len = iname->len;
+		rc = 0;
+	}
 	if (rc)
 		return rc;
 
@@ -416,6 +455,11 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 		    bool preload)
 {
 	return 0;
+}
+
+int ll_file_open_encrypt(struct inode *inode, struct file *filp)
+{
+	return llcrypt_file_open(inode, filp);
 }
 
 void llcrypt_free_ctx(void *encctx, __u32 size)

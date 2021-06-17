@@ -40,10 +40,20 @@ The pool storing a component contained within a mirror.
 .TP
 .BR \-\-destroy\fR|\fB\-d\fR
 This option indicates the split mirror will be destroyed.
+.br
+This option is mandatory on encrypted files when the encryption key is not
+available. Otherwise operation results in
+.B
+-ENOKEY.
 .TP
 .BR \-f\fR\ <\fInew_file\fR>
 This option indicates the layout of the split mirror will be stored into
 <\fInew_file\fR>.
+.br
+This option cannot be used on encrypted files when the encryption key is not
+available. It will result in
+.B
+-ENOKEY.
 .SH EXAMPLES
 .TP
 .B lfs mirror split --mirror-id 1 /mnt/lustre/file1

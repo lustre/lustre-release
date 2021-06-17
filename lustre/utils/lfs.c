@@ -624,12 +624,10 @@ static uint32_t check_foreign_type_name(const char *foreign_type_name)
 
 static const char *error_loc = "syserror";
 
-enum {
-	MIGRATION_NONBLOCK	= 0x0001,
-	MIGRATION_MIRROR	= 0x0002,
-	MIGRATION_NONDIRECT	= 0x0004,
-	MIGRATION_VERBOSE	= 0x0008,
-};
+#define MIGRATION_NONBLOCK	LLAPI_MIGRATION_NONBLOCK
+#define MIGRATION_MIRROR	LLAPI_MIGRATION_MIRROR
+#define MIGRATION_NONDIRECT	LLAPI_MIGRATION_NONDIRECT
+#define MIGRATION_VERBOSE	LLAPI_MIGRATION_VERBOSE
 
 static int
 migrate_open_files(const char *name, __u64 migration_flags,
@@ -672,15 +670,24 @@ migrate_open_files(const char *name, __u64 migration_flags,
 		*ptr = '\0';
 	}
 
-	/* open file, direct io */
 	/* even if the file is only read, WR mode is nedeed to allow
 	 * layout swap on fd
 	 */
-	rflags = O_RDWR | O_NOATIME;
+	/* Allow migrating even without the key on encrypted files */
+	rflags = O_RDWR | O_NOATIME | O_FILE_ENC;
 	if (!(migration_flags & MIGRATION_NONDIRECT))
 		rflags |= O_DIRECT;
+source_open:
 	fd = open(name, rflags);
 	if (fd < 0) {
+		/* If encrypted file without the key,
+		 * retry mirror extend in O_DIRECT.
+		 */
+		if (errno == ENOKEY && !(rflags & O_DIRECT) &&
+		    migration_flags & MIGRATION_MIRROR) {
+			rflags |= O_DIRECT;
+			goto source_open;
+		}
 		rc = -errno;
 		error_loc = "cannot open source file";
 		return rc;
@@ -693,9 +700,13 @@ migrate_open_files(const char *name, __u64 migration_flags,
 	}
 
 	do {
-		int open_flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW;
+		int open_flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW |
+			/* Allow migrating without the key on encrypted files */
+			O_FILE_ENC;
 		mode_t open_mode = S_IRUSR | S_IWUSR;
 
+		if (rflags & O_DIRECT)
+			open_flags |= O_DIRECT;
 		random_value = random();
 		rc = snprintf(volatile_file, sizeof(volatile_file),
 			      "%s/%s:%.4X:%.4X:fd=%.2d", parent,
@@ -1831,8 +1842,8 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		}
 	}
 	llapi_layout_comp_flags_set(m_layout, flags);
-	rc = migrate_open_files(name, MIGRATION_NONDIRECT, NULL, m_layout, &fd,
-				&fdv);
+	rc = migrate_open_files(name, MIGRATION_NONDIRECT | MIGRATION_MIRROR,
+				NULL, m_layout, &fd, &fdv);
 	if (rc < 0)
 		goto out;
 
@@ -2153,7 +2164,15 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		}
 	}
 
-	fd = open(fname, O_RDWR);
+	if (!victim_file && mflags & MF_DESTROY)
+		/* Allow mirror split even without the key on encrypted files,
+		 * and in this case of a 'split -d', open file with O_DIRECT
+		 * (no IOs will be done).
+		 */
+		fd = open(fname, O_RDWR | O_DIRECT | O_FILE_ENC);
+	else
+		fd = open(fname, O_RDWR);
+
 	if (fd < 0) {
 		fprintf(stderr,
 			"error %s: open file '%s' failed: %s\n",
@@ -2237,7 +2256,11 @@ again:
 
 					open_flags = O_RDWR |
 					     (O_LOV_DELAY_CREATE & ~O_ACCMODE) |
-					     O_CREAT | O_EXCL | O_NOFOLLOW;
+					     O_CREAT | O_EXCL | O_NOFOLLOW |
+					     /* O_DIRECT for mirror split -d */
+					     O_DIRECT |
+					     /* Allow split without the key */
+					     O_FILE_ENC;
 					fdv = open(file_path, open_flags,
 						   S_IRUSR | S_IWUSR);
 					if (fdv < 0)
@@ -10582,7 +10605,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		goto error;
 	}
 
-	fd = open(fname, O_DIRECT | O_RDWR);
+	/* Allow mirror resync even without the key on encrypted files */
+	fd = open(fname, O_DIRECT | O_RDWR | O_FILE_ENC);
 	if (fd < 0) {
 		fprintf(stderr, "%s: cannot open '%s': %s.\n",
 			progname, fname, strerror(errno));
@@ -11880,7 +11904,8 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 		goto error;
 	}
 
-	fd = open(fname, O_DIRECT | O_RDONLY);
+	/* Allow mirror verify even without the key on encrypted files */
+	fd = open(fname, O_DIRECT | O_RDONLY | O_FILE_ENC);
 	if (fd < 0) {
 		fprintf(stderr, "%s: cannot open '%s': %s.\n",
 			progname, fname, strerror(errno));

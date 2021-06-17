@@ -866,7 +866,6 @@ enum md_op_code {
 	LUSTRE_OPC_ANY,
 	LUSTRE_OPC_LOOKUP,
 	LUSTRE_OPC_OPEN,
-	LUSTRE_OPC_MIGR,
 };
 
 /**

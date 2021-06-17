@@ -105,7 +105,16 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	op_data->op_attr.ia_atime = inode->i_atime;
 	op_data->op_attr.ia_mtime = inode->i_mtime;
 	op_data->op_attr.ia_ctime = inode->i_ctime;
-	op_data->op_attr.ia_size = i_size_read(inode);
+	/* In case of encrypted file without the key, visible size was rounded
+	 * up to next LUSTRE_ENCRYPTION_UNIT_SIZE, and clear text size was
+	 * stored into lli_lazysize in ll_merge_attr(), so set proper file size
+	 * now that we are closing.
+	 */
+	if (llcrypt_require_key(inode) == -ENOKEY &&
+	    ll_i2info(inode)->lli_attr_valid & OBD_MD_FLLAZYSIZE)
+		op_data->op_attr.ia_size = ll_i2info(inode)->lli_lazysize;
+	else
+		op_data->op_attr.ia_size = i_size_read(inode);
 	op_data->op_attr.ia_valid |= (ATTR_MODE | ATTR_ATIME | ATTR_ATIME_SET |
 				      ATTR_MTIME | ATTR_MTIME_SET |
 				      ATTR_CTIME);
@@ -816,9 +825,12 @@ int ll_file_open(struct inode *inode, struct file *file)
 	file->private_data = NULL; /* prevent ll_local_open assertion */
 
 	if (S_ISREG(inode->i_mode)) {
-		rc = llcrypt_file_open(inode, file);
-		if (rc)
+		rc = ll_file_open_encrypt(inode, file);
+		if (rc) {
+			if (it && it->it_disposition)
+				ll_release_openhandle(file_dentry(file), it);
 			GOTO(out_nofiledata, rc);
+		}
 	}
 
 	fd = ll_file_data_get();
@@ -1467,6 +1479,16 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu\n",
 	       PFID(&lli->lli_fid), attr->cat_size);
 
+	if (llcrypt_require_key(inode) == -ENOKEY) {
+		/* Without the key, round up encrypted file size to next
+		 * LUSTRE_ENCRYPTION_UNIT_SIZE. Clear text size is put in
+		 * lli_lazysize for proper file size setting at close time.
+		 */
+		lli->lli_attr_valid |= OBD_MD_FLLAZYSIZE;
+		lli->lli_lazysize = attr->cat_size;
+		attr->cat_size = round_up(attr->cat_size,
+					  LUSTRE_ENCRYPTION_UNIT_SIZE);
+	}
 	i_size_write(inode, attr->cat_size);
 	inode->i_blocks = attr->cat_blocks;
 
@@ -4420,6 +4442,12 @@ loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 
 	cl_env_put(env, &refcheck);
 
+	/* Without the key, SEEK_HOLE return value has to be
+	 * rounded up to next LUSTRE_ENCRYPTION_UNIT_SIZE.
+	 */
+	if (llcrypt_require_key(inode) == -ENOKEY && whence == SEEK_HOLE)
+		retval = round_up(retval, LUSTRE_ENCRYPTION_UNIT_SIZE);
+
 	RETURN(retval);
 }
 
@@ -4802,6 +4830,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	__u64 data_version = 0;
 	size_t namelen = strlen(name);
 	int lumlen = lmv_user_md_size(lum->lum_stripe_count, lum->lum_magic);
+	bool oldformat = false;
 	int rc;
 	ENTRY;
 
@@ -4852,26 +4881,22 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	if (is_root_inode(child_inode))
 		GOTO(out_iput, rc = -EINVAL);
 
-	if (IS_ENCRYPTED(child_inode)) {
-		rc = llcrypt_get_encryption_info(child_inode);
-		if (rc)
-			GOTO(out_iput, rc);
-		if (!llcrypt_has_encryption_key(child_inode)) {
-			CDEBUG(D_SEC, "no enc key for "DFID"\n",
-			       PFID(ll_inode2fid(child_inode)));
-			GOTO(out_iput, rc = -ENOKEY);
-		}
-		if (unlikely(!llcrypt_policy_has_filename_enc(child_inode))) {
-			CDEBUG(D_SEC,
-			       "cannot migrate old format encrypted "DFID", please move to new enc dir first\n",
-			       PFID(ll_inode2fid(child_inode)));
-			GOTO(out_iput, rc = -EUCLEAN);
-		}
+	if (IS_ENCRYPTED(parent)) {
+		if (unlikely(!llcrypt_policy_has_filename_enc(parent)))
+			oldformat = true;
+	} else if (IS_ENCRYPTED(child_inode) &&
+		   unlikely(!llcrypt_policy_has_filename_enc(child_inode))) {
+		oldformat = true;
+	}
+	if (unlikely(oldformat)) {
+		CDEBUG(D_SEC,
+		       "cannot migrate old format encrypted "DFID", please move to new enc dir first\n",
+		       PFID(ll_inode2fid(child_inode)));
+		GOTO(out_iput, rc = -EUCLEAN);
 	}
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
-				     child_inode->i_mode, LUSTRE_OPC_MIGR,
-				     NULL);
+				     child_inode->i_mode, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		GOTO(out_iput, rc = PTR_ERR(op_data));
 

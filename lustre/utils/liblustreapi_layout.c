@@ -1069,15 +1069,27 @@ struct llapi_layout *llapi_layout_get_by_path(const char *path,
 					      enum llapi_layout_get_flags flags)
 {
 	struct llapi_layout *layout = NULL;
+	bool failed = false;
+	int open_flags;
 	int fd;
 	int tmp;
 
 	if (flags & LLAPI_LAYOUT_GET_EXPECTED)
 		return llapi_layout_expected(path);
 
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		return layout;
+	/* Always get layout in O_DIRECT */
+	/* Allow fetching layout even without the key on encrypted files */
+	open_flags = O_RDONLY | O_DIRECT | O_FILE_ENC;
+do_open:
+	fd = open(path, open_flags);
+	if (fd < 0) {
+		if (errno != EINVAL || failed)
+			return layout;
+		/* EINVAL is because a directory cannot be opened in O_DIRECT */
+		open_flags = O_RDONLY | O_FILE_ENC;
+		failed = true;
+		goto do_open;
+	}
 
 	layout = llapi_layout_get_by_fd(fd, flags);
 	tmp = errno;
@@ -3110,7 +3122,11 @@ do_read:
 		if (comp_array[i].lrc_synced && pos & (page_size - 1)) {
 			rc = llapi_mirror_truncate(fd,
 					comp_array[i].lrc_mirror_id, pos);
-			if (rc < 0)
+			/* Ignore truncate error on encrypted file without the
+			 * key if tried on LUSTRE_ENCRYPTION_UNIT_SIZE boundary.
+			 */
+			if (rc < 0 && (rc != -ENOKEY ||
+				       pos & ~LUSTRE_ENCRYPTION_MASK))
 				comp_array[i].lrc_synced = false;
 		}
 	}

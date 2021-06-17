@@ -51,6 +51,11 @@
 #define WANT_INDEX  0x8
 #define WANT_ERROR  0x10
 
+/* Define a fixed 4096-byte encryption unit size */
+#define LUSTRE_ENCRYPTION_BLOCKBITS   12
+#define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)
+#define LUSTRE_ENCRYPTION_MASK        (~(LUSTRE_ENCRYPTION_UNIT_SIZE - 1))
+
 /* mount point listings in /proc/mounts */
 #ifndef PROC_MOUNTS
 #define PROC_MOUNTS "/proc/mounts"

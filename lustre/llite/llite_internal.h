@@ -1190,6 +1190,8 @@ void ll_kill_super(struct super_block *sb);
 struct inode *ll_inode_from_resource_lock(struct ldlm_lock *lock);
 void ll_dir_clear_lsm_md(struct inode *inode);
 void ll_clear_inode(struct inode *inode);
+int volatile_ref_file(const char *volatile_name, int volatile_len,
+		      struct file **ref_file);
 int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		   enum op_xvalid xvalid, bool hsm_import);
 int ll_setattr(struct dentry *de, struct iattr *attr);
@@ -1718,6 +1720,7 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			 struct llcrypt_str *iname, struct llcrypt_str *oname,
 			 struct lu_fid *fid);
 int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags);
+int ll_file_open_encrypt(struct inode *inode, struct file *filp);
 #ifdef HAVE_LUSTRE_CRYPTO
 extern const struct llcrypt_operations lustre_cryptops;
 #endif

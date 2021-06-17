@@ -148,6 +148,13 @@ struct llapi_stripe_param {
 
 #define lsp_tgts	lsp_osts
 
+enum {
+	LLAPI_MIGRATION_NONBLOCK	= 0x0001,
+	LLAPI_MIGRATION_MIRROR		= 0x0002,
+	LLAPI_MIGRATION_NONDIRECT	= 0x0004,
+	LLAPI_MIGRATION_VERBOSE		= 0x0008,
+};
+
 __u32 llapi_pattern_to_lov(uint64_t pattern);
 
 int llapi_file_open_param(const char *name, int flags, mode_t mode,

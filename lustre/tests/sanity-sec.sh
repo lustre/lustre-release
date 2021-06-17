@@ -2700,6 +2700,18 @@ test_35() {
 }
 run_test 35 "Check permissions when accessing changelogs"
 
+setup_dummy_key() {
+	local mode='\x00\x00\x00\x00'
+	local raw="$(printf ""\\\\x%02x"" {0..63})"
+	local size
+	local key
+
+	[[ $(lscpu) =~ Byte\ Order.*Little ]] && size='\x40\x00\x00\x00' ||
+		size='\x00\x00\x00\x40'
+	key="${mode}${raw}${size}"
+	echo -n -e "${key}" | keyctl padd logon fscrypt:4242424242424242 @s
+}
+
 setup_for_enc_tests() {
 	# remount client with test_dummy_encryption option
 	if is_mounted $MOUNT; then
@@ -2713,7 +2725,7 @@ setup_for_enc_tests() {
 }
 
 cleanup_for_enc_tests() {
-	rm -rf $DIR/$tdir
+	rm -rf $DIR/$tdir $*
 
 	# remount client normally
 	if is_mounted $MOUNT; then
@@ -2913,6 +2925,10 @@ test_40() {
 	local tmpfile=$TMP/abc
 	local tmpfile2=$TMP/abc2
 	local seek
+	local filesz
+	#define LUSTRE_ENCRYPTION_UNIT_SIZE   (1 << 12)
+	local UNIT_SIZE=$((1 << 12))
+	local scrambledfile
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -3036,6 +3052,19 @@ test_40() {
 	# check that file read from server is correct
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted on server (5)"
+
+	filesz=$(stat --format=%s $testfile)
+	filesz=$(((filesz+UNIT_SIZE-1)/UNIT_SIZE * UNIT_SIZE))
+
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+
+	# remove fscrypt key from keyring
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+
+	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
+	[ $(stat --format=%s $scrambledfile) -eq $filesz ] ||
+		error "file size without key should be rounded up"
 
 	rm -f $tmpfile
 }
@@ -3712,34 +3741,44 @@ test_49() {
 	mkdir $dirname
 
 	trace_cmd stat $dirname
-	trace_cmd touch $dirname/f1
+	trace_cmd echo a > $dirname/f1
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 	trace_cmd stat $dirname/f1
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 	trace_cmd cat $dirname/f1
 	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 	MATCHING_STRING="get xattr 'security.c'" \
 		trace_cmd $TRUNCATE $dirname/f1 10240
 	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
 
 	if [[ $MDSCOUNT -gt 1 ]]; then
 		trace_cmd $LFS setdirstripe -i 1 $dirname/d2
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		trace_cmd $LFS migrate -m 0 $dirname/d2
-		touch $dirname/d2/subf
+		echo b > $dirname/d2/subf
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		# migrate a non-empty encrypted dir
 		trace_cmd $LFS migrate -m 1 $dirname/d2
 
 		$LFS setdirstripe -i 1 -c 1 $dirname/d3
 		dirname=$dirname/d3/subdir
 		mkdir $dirname
-
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		trace_cmd stat $dirname
-		trace_cmd touch $dirname/f1
+		trace_cmd echo c > $dirname/f1
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		trace_cmd stat $dirname/f1
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		trace_cmd cat $dirname/f1
 		dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		MATCHING_STRING="get xattr 'security.c'" \
 			trace_cmd $TRUNCATE $dirname/f1 10240
 		trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
+		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
 		trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
 	else
 		skip_noexit "2nd part needs >= 2 MDTs"
@@ -3937,7 +3976,7 @@ test_52() {
 
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
-	stack_trap cleanup_for_enc_tests EXIT
+	stack_trap "cleanup_for_enc_tests $tmpfile $mirror1 $mirror2" EXIT
 	setup_for_enc_tests
 
 	dd if=/dev/urandom of=$tmpfile bs=5000 count=1 conv=fsync
@@ -4036,8 +4075,6 @@ test_52() {
 	cancel_lru_locks
 	cmp -bl $tmpfile $testfile ||
 		error "extended/split file is corrupted"
-
-	rm -f $tmpfile $mirror1 $mirror2
 }
 run_test 52 "Mirrored encrypted file"
 
@@ -4447,6 +4484,209 @@ test_58() {
 	ls -ailR $DIR/$tdir > /dev/null || error "fail to ls"
 }
 run_test 58 "access to enc file's xattrs"
+
+insert_enc_key() {
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	setup_dummy_key
+}
+
+remove_env_key() {
+	cancel_lru_locks
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+}
+
+verify_mirror() {
+	local mirror1=$TMP/$tfile.mirror1
+	local mirror2=$TMP/$tfile.mirror2
+	local testfile=$1
+	local reffile=$2
+
+	$LFS mirror verify -vvv $testfile ||
+		error "verifying mirror failed (1)"
+	if [ $($LFS mirror verify -v $testfile 2>&1 |
+		grep -ci "only valid") -ne 0 ]; then
+		error "verifying mirror failed (2)"
+	fi
+
+	$LFS mirror read -N 1 -o $mirror1 $testfile ||
+		error "read from mirror 1 failed"
+	cmp -bl $reffile $mirror1 ||
+		error "corruption of mirror 1"
+	$LFS mirror read -N 2 -o $mirror2 $testfile ||
+		error "read from mirror 2 failed"
+	cmp -bl $reffile $mirror2 ||
+		error "corruption of mirror 2"
+}
+
+test_59a() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local mirror1=$TMP/$tfile.mirror1
+	local mirror2=$TMP/$tfile.mirror2
+	local scrambledfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	stack_trap "cleanup_for_enc_tests $tmpfile $mirror1 $mirror2" EXIT
+	setup_for_enc_tests
+
+	dd if=/dev/urandom of=$tmpfile bs=5000 count=1 conv=fsync
+
+	$LFS mirror create -N -i0 -N -i1 $testfile ||
+		error "could not create mirror"
+	dd if=$tmpfile of=$testfile bs=5000 count=1 conv=fsync ||
+		error "could not write to $testfile"
+	$LFS getstripe $testfile
+
+	# now, without the key
+	remove_env_key
+	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
+	$LFS mirror resync $scrambledfile ||
+		error "could not resync mirror"
+
+	$LFS mirror verify -vvv $scrambledfile ||
+		error "mirror verify failed (1)"
+	if [ $($LFS mirror verify -v $scrambledfile 2>&1 |
+		grep -ci "only valid") -ne 0 ]; then
+		error "mirror verify failed (2)"
+	fi
+
+	$LFS mirror read -N 1 -o $mirror1 $scrambledfile &&
+		error "read from mirror should fail"
+
+	# now, with the key
+	insert_enc_key
+	verify_mirror $testfile $tmpfile
+}
+run_test 59a "mirror resync of encrypted files without key"
+
+test_59b() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local mirror1=$TMP/$tfile.mirror1
+	local mirror2=$TMP/$tfile.mirror2
+	local scrambledfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	stack_trap "cleanup_for_enc_tests $tmpfile $mirror1 $mirror2" EXIT
+	setup_for_enc_tests
+
+	tr '\0' '2' < /dev/zero |
+		dd of=$tmpfile bs=1 count=9000 conv=fsync
+
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=9000 count=1 conv=fsync ||
+		error "write to $testfile failed"
+	$LFS getstripe $testfile
+
+	# now, without the key
+	remove_env_key
+	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
+	$LFS migrate -i1 $scrambledfile ||
+		error "migrate $scrambledfile failed"
+	$LFS getstripe $scrambledfile
+	stripe=$($LFS getstripe -i $scrambledfile)
+	[ $stripe -eq 1 ] || error "migrate file $scrambledfile failed"
+	cancel_lru_locks
+
+	# now, with the key
+	insert_enc_key
+	cmp -bl $tmpfile $testfile ||
+		error "migrated file is corrupted"
+
+	# now, without the key
+	remove_env_key
+	$LFS mirror extend -N -i0 $scrambledfile ||
+		error "mirror extend $scrambledfile failed (1)"
+	$LFS getstripe $scrambledfile
+	mirror_count=$($LFS getstripe -N $scrambledfile)
+	[ $mirror_count -eq 2 ] ||
+		error "mirror extend file $scrambledfile failed (2)"
+	stripe=$($LFS getstripe --mirror-id=1 -i $scrambledfile)
+	[ $stripe -eq 1 ] ||
+		error "mirror extend file $scrambledfile failed (3)"
+	stripe=$($LFS getstripe --mirror-id=2 -i $scrambledfile)
+	[ $stripe -eq 0 ] ||
+		error "mirror extend file $scrambledfile failed (4)"
+
+	$LFS mirror verify -vvv $scrambledfile ||
+		error "mirror verify failed (1)"
+	if [ $($LFS mirror verify -v $scrambledfile 2>&1 |
+		grep -ci "only valid") -ne 0 ]; then
+		error "mirror verify failed (2)"
+	fi
+
+	# now, with the key
+	insert_enc_key
+	verify_mirror $testfile $tmpfile
+
+	# now, without the key
+	remove_env_key
+	$LFS mirror split --mirror-id 1 -d $scrambledfile ||
+		error "mirror split file $scrambledfile failed (1)"
+	$LFS getstripe $scrambledfile
+	mirror_count=$($LFS getstripe -N $scrambledfile)
+	[ $mirror_count -eq 1 ] ||
+		error "mirror split file $scrambledfile failed (2)"
+	stripe=$($LFS getstripe --mirror-id=1 -i $scrambledfile)
+	[ -z "$stripe" ] || error "mirror split file $scrambledfile failed (3)"
+	stripe=$($LFS getstripe --mirror-id=2 -i $scrambledfile)
+	[ $stripe -eq 0 ] || error "mirror split file $scrambledfile failed (4)"
+
+	# now, with the key
+	insert_enc_key
+	cancel_lru_locks
+	cmp -bl $tmpfile $testfile ||
+		error "extended/split file is corrupted"
+}
+run_test 59b "migrate/extend/split of encrypted files without key"
+
+test_59c() {
+	local dirname=$DIR/$tdir/subdir
+	local scrambleddir
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
+
+	stack_trap "cleanup_for_enc_tests" EXIT
+	setup_for_enc_tests
+
+	$LFS setdirstripe -i 0 $dirname
+	echo b > $dirname/subf
+
+	# now, without the key
+	remove_env_key
+	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
+
+	# migrate a non-empty encrypted dir
+	$LFS migrate -m 1 $scrambleddir ||
+		error "migrate $scrambleddir between MDTs failed (1)"
+
+	stripe=$($LFS getdirstripe -i $scrambleddir)
+	[ $stripe -eq 1 ] ||
+		error "migrate $scrambleddir between MDTs failed (2)"
+}
+run_test 59c "MDT migrate of encrypted files without key"
 
 log "cleanup: ======================================================"
 
