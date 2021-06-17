@@ -859,15 +859,15 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		const char *newer = "newer than client. "
 				    "Consider upgrading client";
 
-		LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
-			      "is much %s (%s)\n",
+		LCONSOLE_WARN("Client version (%s). Server %s version (%d.%d.%d.%d) is much %s\n",
+			      LUSTRE_VERSION_STRING,
 			      obd2cli_tgt(imp->imp_obd),
 			      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
 			      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
 			      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
 			      OBD_OCD_VERSION_FIX(ocd->ocd_version),
 			      ocd->ocd_version > LUSTRE_VERSION_CODE ?
-			      newer : older, LUSTRE_VERSION_STRING);
+			      newer : older);
 		warned = true;
 	}
 
