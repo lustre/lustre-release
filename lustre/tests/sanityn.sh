@@ -3059,12 +3059,12 @@ test_51a() {
 run_test 51a "layout lock: refresh layout should work"
 
 test_51b() {
-	[[ "$MDS1_VERSION" -ge $(version_code 2.3.59) ]] ||
+	(( $MDS1_VERSION >= $(version_code 2.3.59) )) ||
 		skip "Need MDS version at least 2.3.59"
 
 	local tmpfile=`mktemp`
 
-	$LFS setstripe -E 1M -c 1 -E -1 --extension-size 64M $DIR1/$tfile ||
+	$LFS setstripe -E 1m -S 1M -c 1 -E -1 -c 1 $DIR1/$tfile ||
 		error "Create $DIR1/$tfile failed"
 
 	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 conv=notrunc ||
