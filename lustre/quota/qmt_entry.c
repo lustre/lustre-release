@@ -872,7 +872,7 @@ int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 
-	if (qti->qti_lqes_cnt > qti->qti_lqes_num) {
+	if (qti->qti_lqes_cnt >= qti->qti_lqes_num) {
 		struct lquota_entry	**lqes;
 		lqes = qti->qti_lqes;
 		OBD_ALLOC(lqes, sizeof(lqe) * qti->qti_lqes_num * 2);

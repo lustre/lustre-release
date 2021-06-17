@@ -312,7 +312,7 @@ static inline int qti_pools_add(const struct lu_env *env,
 	LASSERTF(qti->qti_pools_num >= QMT_MAX_POOL_NUM,
 		 "Forgot init? %p\n", qti);
 
-	if (qti->qti_pools_cnt > qti->qti_pools_num) {
+	if (qti->qti_pools_cnt >= qti->qti_pools_num) {
 		OBD_ALLOC(pools, sizeof(qpi) * qti->qti_pools_num * 2);
 		if (!pools)
 			return -ENOMEM;
