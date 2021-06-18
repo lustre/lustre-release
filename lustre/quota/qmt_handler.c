@@ -220,10 +220,18 @@ quota_set:
 
 		/* change enforced status based on new parameters */
 		if (lqe->lqe_id.qid_uid == 0 || (lqe->lqe_hardlimit == 0 &&
-		    lqe->lqe_softlimit == 0))
-			lqe->lqe_enforced = false;
-		else
+		    lqe->lqe_softlimit == 0)) {
+			if (lqe->lqe_enforced) {
+				lqe->lqe_enforced = false;
+				/* Clear qunit and edquot as lqe_adjust_edquot
+				 * does not handle not enforced lqes */
+				lqe->lqe_edquot = 0;
+				lqe->lqe_qunit = 0;
+				need_id_notify = true;
+			}
+		} else {
 			lqe->lqe_enforced = true;
+		}
 
 		dirtied = true;
 	}
