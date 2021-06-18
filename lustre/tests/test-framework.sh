@@ -3001,15 +3001,21 @@ stop_client_loads() {
 # If --verbose is passed as the first argument, the result is printed on each
 # value change, otherwise it is only printed after every 10s interval.
 #
+# If --quiet is passed as the first/second argument, the do_node() command
+# will not print the remote command before executing it each time.
+#
 # Using wait_update_cond() or related helper function is preferable to adding
 # a "long enough" wait for some state to change in the background, since
 # "long enough" may be too short due to tunables, system config, or running in
 # a VM, and must by necessity wait too long for most cases or risk failure.
 #
-# usage: wait_update_cond [--verbose] node check cond expect [max_wait]
+# usage: wait_update_cond [--verbose] [--quiet] node check cond expect [max_wait]
 wait_update_cond() {
-	local verbose=false
-	[[ "$1" == "--verbose" ]] && verbose=true && shift
+	local verbose
+	local quiet
+
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
 
 	local node=$1
 	local check="$2"
@@ -3024,7 +3030,7 @@ wait_update_cond() {
 	local print=10
 
 	while (( $waited <= $max_wait )); do
-		result=$(do_node $node "$check")
+		result=$(do_node $quiet $node "$check")
 
 		eval [[ "'$result'" $cond "'$expect'" ]]
 		if [[ $? == 0 ]]; then
@@ -3032,7 +3038,7 @@ wait_update_cond() {
 				echo "Updated after ${waited}s: want '$expect' got '$result'"
 			return 0
 		fi
-		if $verbose && [[ "$result" != "$prev_result" ]]; then
+		if [[ -n "$verbose" && "$result" != "$prev_result" ]]; then
 			[[ -n "$prev_result" ]] &&
 				echo "Changed after ${waited}s: from '$prev_result' to '$result'"
 			prev_result="$result"
@@ -3046,23 +3052,29 @@ wait_update_cond() {
 	return 3
 }
 
-# usage: wait_update [--verbose] node check expect [max_wait]
+# usage: wait_update [--verbose] [--quiet] node check expect [max_wait]
 wait_update() {
-	local verbose=
-	[ "$1" = "--verbose" ] && verbose="$1" && shift
+	local verbose
+	local quiet
+
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
 
 	local node="$1"
 	local check="$2"
 	local expect="$3"
 	local max_wait=$4
 
-	wait_update_cond $verbose $node "$check" "==" "$expect" $max_wait
+	wait_update_cond $verbose $quiet $node "$check" "==" "$expect" $max_wait
 }
 
 # usage: wait_update_facet_cond [--verbose] facet check cond expect [max_wait]
 wait_update_facet_cond() {
-	local verbose=
-	[ "$1" = "--verbose" ] && verbose="$1" && shift
+	local verbose
+	local quiet
+
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
 
 	local node=$(facet_active_host $1)
 	local check="$2"
@@ -3070,20 +3082,23 @@ wait_update_facet_cond() {
 	local expect="$4"
 	local max_wait=$5
 
-	wait_update_cond $verbose $node "$check" "$cond" "$expect" $max_wait
+	wait_update_cond $verbose $quiet $node "$check" "$cond" "$expect" $max_wait
 }
 
 # usage: wait_update_facet [--verbose] facet check expect [max_wait]
 wait_update_facet() {
-	local verbose=
-	[ "$1" = "--verbose" ] && verbose="$1" && shift
+	local verbose
+	local quiet
+
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
 
 	local node=$(facet_active_host $1)
 	local check="$2"
 	local expect="$3"
 	local max_wait=$4
 
-	wait_update_cond $verbose $node "$check" "==" "$expect" $max_wait
+	wait_update_cond $verbose $quiet $node "$check" "==" "$expect" $max_wait
 }
 
 sync_all_data() {
@@ -4010,26 +4025,27 @@ change_active() {
 }
 
 do_node() {
-    local verbose=false
-    # do not stripe off hostname if verbose, bug 19215
-    if [ x$1 = x--verbose ]; then
-        shift
-        verbose=true
-    fi
+	local verbose
+	local quiet
 
-    local HOST=$1
-    shift
-    local myPDSH=$PDSH
-    if [ "$HOST" = "$HOSTNAME" ]; then
-        myPDSH="no_dsh"
-    elif [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ]; then
-        echo "cannot run remote command on $HOST with $myPDSH"
-        return 128
-    fi
-    if $VERBOSE; then
-        echo "CMD: $HOST $@" >&2
-        $myPDSH $HOST "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
-    fi
+	# do not strip off hostname if verbose, b=19215
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
+
+	local HOST=$1
+	shift
+	local myPDSH=$PDSH
+
+	if [ "$HOST" = "$HOSTNAME" ]; then
+		myPDSH="no_dsh"
+	elif [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ]; then
+		echo "cannot run remote command on $HOST with $myPDSH"
+		return 128
+	fi
+	if $VERBOSE && [[ -z "$quiet" ]]; then
+		echo "CMD: $HOST $@" >&2
+		$myPDSH $HOST "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
+	fi
 
 	if [[ "$myPDSH" == "rsh" ]] ||
 	   [[ "$myPDSH" == *pdsh* && "$myPDSH" != *-S* ]]; then
@@ -4046,7 +4062,7 @@ do_node() {
 			return 0
 	fi
 
-    if $verbose ; then
+    if [[ -n "$verbose" ]]; then
         # print HOSTNAME for myPDSH="no_dsh"
         if [[ $myPDSH = no_dsh ]]; then
             $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" sh -c \"$@\")" | sed -e "s/^/${HOSTNAME}: /"
@@ -4059,12 +4075,8 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
-do_nodev() {
-    do_node --verbose "$@"
-}
-
 single_local_node () {
-   [ "$1" = "$HOSTNAME" ]
+	[ "$1" = "$HOSTNAME" ]
 }
 
 # Outputs environment variable assignments that should be passed to remote nodes
@@ -4110,45 +4122,42 @@ get_env_vars() {
 }
 
 do_nodes() {
-    local verbose=false
-    # do not stripe off hostname if verbose, bug 19215
-    if [ x$1 = x--verbose ]; then
-        shift
-        verbose=true
-    fi
+	local verbose
+	local quiet
 
-    local rnodes=$1
-    shift
+	# do not strip off hostname if verbose, b=19215
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
 
-    if single_local_node $rnodes; then
-        if $verbose; then
-           do_nodev $rnodes "$@"
-        else
-           do_node $rnodes "$@"
-        fi
-        return $?
-    fi
+	local rnodes=$1
+	shift
 
-    # This is part from do_node
-    local myPDSH=$PDSH
+	if single_local_node $rnodes; then
+		do_node $verbose $quiet $rnodes "$@"
+		return $?
+	fi
 
-    [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" -o "$myPDSH" = "rsh" ] && \
-        echo "cannot run remote command on $rnodes with $myPDSH" && return 128
+	# This is part from do_node
+	local myPDSH=$PDSH
 
-    export FANOUT=$(get_node_count "${rnodes//,/ }")
-    if $VERBOSE; then
-        echo "CMD: $rnodes $@" >&2
-        $myPDSH $rnodes "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
-    fi
+	[ -z "$myPDSH" -o "$myPDSH" = "no_dsh" -o "$myPDSH" = "rsh" ] &&
+		echo "cannot run remote command on $rnodes with $myPDSH" &&
+		return 128
 
-    # do not replace anything from pdsh output if -N is used
-    # -N     Disable hostname: prefix on lines of output.
-    if $verbose || [[ $myPDSH = *-N* ]]; then
-        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")"
-    else
-        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")" | sed -re "s/^[^:]*: //g"
-    fi
-    return ${PIPESTATUS[0]}
+	export FANOUT=$(get_node_count "${rnodes//,/ }")
+	if $VERBOSE && [[ -z "$quiet" ]]; then
+		echo "CMD: $rnodes $@" >&2
+		$myPDSH $rnodes "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
+	fi
+
+	# do not replace anything from pdsh output if -N is used
+	# -N     Disable hostname: prefix on lines of output.
+	if [[ -n "$verbose" || $myPDSH = *-N* ]]; then
+		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")"
+	else
+		$myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")" | sed -re "s/^[^:]*: //g"
+	fi
+	return ${PIPESTATUS[0]}
 }
 
 ##
@@ -4159,11 +4168,18 @@ do_nodes() {
 #
 # usage: do_facet $facet command [arg ...]
 do_facet() {
+	local verbose
+	local quiet
+
+	[[ "$1" == "--verbose" ]] && verbose="$1" && shift
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
+
 	local facet=$1
 	shift
-	local HOST=$(facet_active_host $facet)
-	[ -z $HOST ] && echo "No host defined for facet ${facet}" && exit 1
-	do_node $HOST "$@"
+	local host=$(facet_active_host $facet)
+
+	[ -z "$host" ] && echo "No host defined for facet ${facet}" && exit 1
+	do_node $verbose $quiet $host "$@"
 }
 
 # Function: do_facet_random_file $FACET $FILE $SIZE
@@ -4186,7 +4202,7 @@ do_facet_create_file() {
 }
 
 do_nodesv() {
-    do_nodes --verbose "$@"
+	do_nodes --verbose "$@"
 }
 
 add() {
@@ -6471,7 +6487,7 @@ check_mds() {
 
 reset_fail_loc () {
 	#echo -n "Resetting fail_loc on all nodes..."
-	do_nodes $(comma_list $(nodes_list)) \
+	do_nodes --quiet $(comma_list $(nodes_list)) \
 		"lctl set_param -n fail_loc=0 fail_val=0 2>/dev/null" || true
 	#echo done.
 }
@@ -6499,7 +6515,7 @@ check_dmesg_for_errors() {
 ldiskfs_check_descriptors: Checksum for group 0 failed\|\
 group descriptors corrupted"
 
-	res=$(do_nodes $(comma_list $(nodes_list)) "dmesg" | grep "$errors")
+	res=$(do_nodes -q $(comma_list $(nodes_list)) "dmesg" | grep "$errors")
 	[ -z "$res" ] && return 0
 	echo "Kernel error detected: $res"
 	return 1
@@ -7267,7 +7283,7 @@ check_node_health() {
 	local nodes=${1:-$(comma_list $(nodes_list))}
 	local health=$TMP/node_health.$$
 
-	do_nodes $nodes "$LCTL get_param catastrophe 2>&1" | tee $health |
+	do_nodes -q $nodes "$LCTL get_param catastrophe 2>&1" | tee $health |
 		grep "catastrophe=1" && error "LBUG/LASSERT detected"
 	# Only check/report network health if get_param isn't reported, since
 	# *clearly* the network is working if get_param returned something.
