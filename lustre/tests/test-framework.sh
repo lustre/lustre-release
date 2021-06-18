@@ -6470,10 +6470,10 @@ check_mds() {
 }
 
 reset_fail_loc () {
-	echo -n "Resetting fail_loc on all nodes..."
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 \
-	    fail_val=0 2>/dev/null" || true
-	echo done.
+	#echo -n "Resetting fail_loc on all nodes..."
+	do_nodes $(comma_list $(nodes_list)) \
+		"lctl set_param -n fail_loc=0 fail_val=0 2>/dev/null" || true
+	#echo done.
 }
 
 
@@ -6482,7 +6482,8 @@ reset_fail_loc () {
 # Also appends a timestamp and prepends the testsuite name.
 #
 
-EQUALS="===================================================================================================="
+# ======================================================== 15:06:12 (1624050372)
+EQUALS="========================================================"
 banner() {
     msg="== ${TESTSUITE} $*"
     last=${msg: -1:1}
@@ -7264,15 +7265,18 @@ restore_lustre_params() {
 
 check_node_health() {
 	local nodes=${1:-$(comma_list $(nodes_list))}
+	local health=$TMP/node_health.$$
 
-	for node in ${nodes//,/ }; do
-		check_network "$node" 5
-		if [ $? -eq 0 ]; then
-			do_node $node "$LCTL get_param catastrophe 2>&1" |
-				grep -q "catastrophe=1" &&
-				error "$node:LBUG/LASSERT detected" || true
-		fi
-	done
+	do_nodes $nodes "$LCTL get_param catastrophe 2>&1" | tee $health |
+		grep "catastrophe=1" && error "LBUG/LASSERT detected"
+	# Only check/report network health if get_param isn't reported, since
+	# *clearly* the network is working if get_param returned something.
+	if (( $(grep -c catastro $health) != $(wc -w <<< ${nodes//,/ }) )); then
+		for node in ${nodes//,/}; do
+			check_network $node 5
+		done
+	fi
+	rm -f $health
 }
 
 mdsrate_cleanup () {
