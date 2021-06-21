@@ -506,7 +506,6 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
 	}
 
-	spin_lock_init(&cli->cl_mod_rpcs_lock);
 	spin_lock_init(&cli->cl_mod_rpcs_hist.oh_lock);
 	cli->cl_max_mod_rpcs_in_flight = 0;
 	cli->cl_mod_rpcs_in_flight = 0;
