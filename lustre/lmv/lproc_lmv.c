@@ -120,10 +120,21 @@ static ssize_t qos_prio_free_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct lmv_obd *lmv = &obd->u.lmv;
+	char buf[6], *tmp;
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint(buffer, 0, &val);
+	/* "100%\n\0" should be largest string */
+	if (count >= sizeof(buf))
+		return -ERANGE;
+
+	strncpy(buf, buffer, sizeof(buf));
+	buf[sizeof(buf) - 1] = '\0';
+	tmp = strchr(buf, '%');
+	if (tmp)
+		*tmp = '\0';
+
+	rc = kstrtouint(buf, 0, &val);
 	if (rc)
 		return rc;
 
@@ -157,10 +168,21 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct lmv_obd *lmv = &obd->u.lmv;
+	char buf[6], *tmp;
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint(buffer, 0, &val);
+	/* "100%\n\0" should be largest string */
+	if (count >= sizeof(buf))
+		return -ERANGE;
+
+	strncpy(buf, buffer, sizeof(buf));
+	buf[sizeof(buf) - 1] = '\0';
+	tmp = strchr(buf, '%');
+	if (tmp)
+		*tmp = '\0';
+
+	rc = kstrtouint(buf, 0, &val);
 	if (rc)
 		return rc;
 

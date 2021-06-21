@@ -24890,6 +24890,33 @@ test_413c() {
 }
 run_test 413c "mkdir with default LMV max inherit rr"
 
+test_413d() {
+	(( MDSCOUNT >= 2 )) ||
+		skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.14.51) )) ||
+		skip "Need server version at least 2.14.51"
+
+	local lmv_qos_threshold_rr
+
+	lmv_qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr |
+		head -n1)
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null" EXIT
+
+	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	getfattr -d -m dmv -e hex $DIR/$tdir | grep dmv &&
+		error "$tdir shouldn't have default LMV"
+	createmany -d $DIR/$tdir/sub $((100 * MDSCOUNT)) ||
+		error "mkdir sub failed"
+
+	local count=$($LFS getstripe -m $DIR/$tdir/* | grep -c ^0)
+
+	(( count == 100 )) || error "$count subdirs on MDT0"
+}
+run_test 413d "inherit ROOT default LMV"
+
 test_413z() {
 	local pids=""
 	local subdir

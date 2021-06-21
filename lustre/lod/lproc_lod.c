@@ -555,15 +555,27 @@ static ssize_t __qos_prio_free_store(struct kobject *kobj,
 	struct lod_device *lod = dt2lod_dev(dt);
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
+	char buf[6], *tmp;
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint(buffer, 0, &val);
+	/* "100%\n\0" should be largest string */
+	if (count >= sizeof(buf))
+		return -ERANGE;
+
+	strncpy(buf, buffer, sizeof(buf));
+	buf[sizeof(buf) - 1] = '\0';
+	tmp = strchr(buf, '%');
+	if (tmp)
+		*tmp = '\0';
+
+	rc = kstrtouint(buf, 0, &val);
 	if (rc)
 		return rc;
 
 	if (val > 100)
 		return -EINVAL;
+
 	ltd->ltd_qos.lq_prio_free = (val << 8) / 100;
 	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 	set_bit(LQ_RESET, &ltd->ltd_qos.lq_flags);

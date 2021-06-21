@@ -2560,6 +2560,22 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	return 0;
 }
 
+/* update directory depth to ROOT, called after LOOKUP lock is fetched. */
+void ll_update_dir_depth(struct inode *dir, struct inode *inode)
+{
+	struct ll_inode_info *lli;
+
+	if (!S_ISDIR(inode->i_mode))
+		return;
+
+	if (inode == dir)
+		return;
+
+	lli = ll_i2info(inode);
+	lli->lli_depth = ll_i2info(dir)->lli_depth + 1;
+	CDEBUG(D_INODE, DFID" depth %hu\n", PFID(&lli->lli_fid), lli->lli_depth);
+}
+
 void ll_truncate_inode_pages_final(struct inode *inode)
 {
 	struct address_space *mapping = &inode->i_data;

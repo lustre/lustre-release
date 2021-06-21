@@ -671,8 +671,11 @@ retry:
 		 * of kernel will deal with that later.
 		 */
 		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, &bits);
-		if (bits & MDS_INODELOCK_LOOKUP)
+		if (bits & MDS_INODELOCK_LOOKUP) {
 			d_lustre_revalidate(de);
+			ll_update_dir_depth(parent->d_inode, de->d_inode);
+		}
+
 		/* if DoM bit returned along with LAYOUT bit then there
 		 * can be read-on-open data returned.
 		 */

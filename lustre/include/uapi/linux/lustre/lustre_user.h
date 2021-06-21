@@ -1150,6 +1150,8 @@ enum {
 	LMV_INHERIT_RR_DEFAULT		= 0,
 	/* not inherit any more */
 	LMV_INHERIT_RR_END		= 1,
+	/* default inherit_rr of ROOT */
+	LMV_INHERIT_RR_ROOT		= 3,
 	/* max inherit depth */
 	LMV_INHERIT_RR_MAX		= 250,
 	/* [251, 254] are reserved */

@@ -469,6 +469,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
+	op_data->op_dir_depth = ll_i2info(parent)->lli_depth;
+
 	if (ll_sbi_has_encrypt(sbi) &&
 	    (IS_ENCRYPTED(parent) ||
 	    unlikely(llcrypt_dummy_context_enabled(parent)))) {

@@ -61,8 +61,8 @@ run_lustre_ext4() {
 	run_pjdfstest $EXT4_MNTPT $pjdfstest $EXT4_LOG
 
 	log "Run $pjdfstest against lustre filesystem"
-	run_pjdfstest $MOUNT $pjdfstest $LUSTRE_LOG
-
+	mkdir_on_mdt0 $MOUNT/pjdfstest
+	run_pjdfstest $MOUNT/pjdfstest $pjdfstest $LUSTRE_LOG
 }
 
 setup_ext4() {

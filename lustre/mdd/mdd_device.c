@@ -1320,6 +1320,8 @@ static int mdd_prepare(const struct lu_env *env,
 				.lum_magic		= LMV_USER_MAGIC,
 				.lum_stripe_count	= 1,
 				.lum_stripe_offset	= LMV_OFFSET_DEFAULT,
+				.lum_max_inherit	= LMV_INHERIT_UNLIMITED,
+				.lum_max_inherit_rr	= LMV_INHERIT_RR_ROOT,
 			};
 
 			th = dt_trans_create(env, mdd->mdd_bottom);

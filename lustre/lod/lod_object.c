@@ -5925,24 +5925,8 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
 				GOTO(out, rc = -EREMOTE);
 
-			if (lo->ldo_dir_stripe_offset == LMV_OFFSET_DEFAULT) {
-				struct lod_default_striping *lds;
-
-				lds = lo->ldo_def_striping;
-				/*
-				 * child and parent should be on the same MDT,
-				 * but if parent has default LMV, and the start
-				 * MDT offset is -1, it's allowed. This check
-				 * is not necessary after 2.12.22 because client
-				 * follows this already, but old client may not.
-				 */
-				if (hint->dah_parent &&
-				    dt_object_remote(hint->dah_parent) && lds &&
-				    lds->lds_dir_def_stripe_offset !=
-				    LMV_OFFSET_DEFAULT)
-					GOTO(out, rc = -EREMOTE);
-			} else if (lo->ldo_dir_stripe_offset !=
-				   ss->ss_node_id) {
+			if (lo->ldo_dir_stripe_offset != LMV_OFFSET_DEFAULT &&
+			    lo->ldo_dir_stripe_offset != ss->ss_node_id) {
 				struct lod_device *lod;
 				struct lu_tgt_desc *mdt = NULL;
 				bool found_mdt = false;

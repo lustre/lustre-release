@@ -1507,8 +1507,11 @@ static int revalidate_statahead_dentry(struct inode *dir,
 			}
 
 			if ((bits & MDS_INODELOCK_LOOKUP) &&
-			    d_lustre_invalid(*dentryp))
+			    d_lustre_invalid(*dentryp)) {
 				d_lustre_revalidate(*dentryp);
+				ll_update_dir_depth(dir, (*dentryp)->d_inode);
+			}
+
 			ll_intent_release(&it);
 		}
 	}
