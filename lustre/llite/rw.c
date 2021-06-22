@@ -89,8 +89,9 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
 
         ENTRY;
 
+	WARN_ON_ONCE(pages_min > pages);
 	/**
-	 * Don't try readahead agreesively if we are limited
+	 * Don't try readahead aggresively if we are limited
 	 * LRU pages, otherwise, it could cause deadlock.
 	 */
 	pages = min(sbi->ll_cache->ccc_lru_max >> 2, pages);
@@ -99,7 +100,7 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
 	 * this will make us leak @ra_cur_pages, because
 	 * ll_ra_count_put() acutally freed @pages.
 	 */
-	if (WARN_ON_ONCE(pages_min > pages))
+	if (unlikely(pages_min > pages))
 		pages_min = pages;
 
 	/*
@@ -823,7 +824,8 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	/* don't over reserved for mmap range read */
 	if (skip_index)
 		pages_min = 0;
-
+	if (pages_min > pages)
+		pages = pages_min;
 	ria->ria_reserved = ll_ra_count_get(ll_i2sbi(inode), ria, pages,
 					    pages_min);
 	if (ria->ria_reserved < pages)
