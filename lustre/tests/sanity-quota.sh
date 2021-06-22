@@ -3839,18 +3839,15 @@ test_57() {
 	local dir="$DIR/$tdir/dir"
 	mkdir -p $dir
 	mkfifo $dir/pipe
-	#try to change pipe file should not hang and return failure
-	wait_update_facet client "$LFS project -sp 1 $dir/pipe 2>&1 |
-		awk -F ':' '{ print \\\$2 }'" \
-			" unable to get xattr for fifo '$dir/pipe'" || return 1
 	#command can process further if it hit some errors
+	$LFS project -sp 1 $dir/pipe
 	touch $dir/aaa $dir/bbb
 	mkdir $dir/subdir -p
 	touch $dir/subdir/aaa $dir/subdir/bbb
 	#create one invalid link file
 	ln -s $dir/not_exist_file $dir/ccc
 	local cnt=$(lfs project -r $dir 2>/dev/null | wc -l)
-	[ $cnt -eq 5 ] || error "expected 5 got $cnt"
+	[ $cnt -eq 7 ] || error "expected 7 got $cnt"
 
 	cleanup_quota_test
 }
@@ -4240,16 +4237,22 @@ test_64() {
 
 	touch $dir1/file
 	ln -s $dir1/file $dir1/file_link
+	mkfifo $dir1/fifo
 
-	$LFS project -sp $TSTPRJID $dir1/file_link >&/dev/null &&
-		error "set symlink file's project should fail"
+	$LFS project -srp $TSTPRJID $dir1 >&/dev/null ||
+		error "set project should succeed"
 
-	$LFS project $TSTPRJID $dir1/file_link >&/dev/null &&
-		error "get symlink file's project should fail"
+	used=$(getquota -p $TSTPRJID global curinodes)
+	[ $used -eq 4 ] || error "expected 4 got $used"
+	$LFS project -rC $dir1 >&/dev/null ||
+		error "clear project should succeed"
+
+	used=$(getquota -p $TSTPRJID global curinodes)
+	[ $used -eq 0 ] || error "expected 0 got $used"
 
 	cleanup_quota_test
 }
-run_test 64 "lfs project on symlink files should fail"
+run_test 64 "lfs project on non dir/files should succeed"
 
 test_65() {
 	local SIZE=10 # MB

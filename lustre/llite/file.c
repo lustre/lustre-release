@@ -3405,7 +3405,8 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 	RETURN(0);
 }
 
-int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
+int ll_ioctl_check_project(struct inode *inode, __u32 xflags,
+			   __u32 projid)
 {
 	/*
 	 * Project Quota ID state is only allowed to change from within the init
@@ -3415,36 +3416,29 @@ int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
 	if (current_user_ns() == &init_user_ns)
 		return 0;
 
-	if (ll_i2info(inode)->lli_projid != fa->fsx_projid)
+	if (ll_i2info(inode)->lli_projid != projid)
 		return -EINVAL;
 
 	if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(inode)->lli_flags)) {
-		if (!(fa->fsx_xflags & FS_XFLAG_PROJINHERIT))
+		if (!(xflags & FS_XFLAG_PROJINHERIT))
 			return -EINVAL;
 	} else {
-		if (fa->fsx_xflags & FS_XFLAG_PROJINHERIT)
+		if (xflags & FS_XFLAG_PROJINHERIT)
 			return -EINVAL;
 	}
 
 	return 0;
 }
 
-int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
-			unsigned long arg)
+static int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 {
 	struct md_op_data *op_data;
 	struct ptlrpc_request *req = NULL;
-	struct fsxattr fsxattr;
 	struct cl_object *obj;
 	unsigned int inode_flags;
 	int rc = 0;
 
-	if (copy_from_user(&fsxattr,
-			   (const struct fsxattr __user *)arg,
-			   sizeof(fsxattr)))
-		RETURN(-EFAULT);
-
-	rc = ll_ioctl_check_project(inode, &fsxattr);
+	rc = ll_ioctl_check_project(inode, xflags, projid);
 	if (rc)
 		RETURN(rc);
 
@@ -3453,11 +3447,11 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	inode_flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
+	inode_flags = ll_xflags_to_inode_flags(xflags);
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode_flags);
-	if (fsxattr.fsx_xflags & FS_XFLAG_PROJINHERIT)
+	if (xflags & FS_XFLAG_PROJINHERIT)
 		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
-	op_data->op_projid = fsxattr.fsx_projid;
+	op_data->op_projid = projid;
 	op_data->op_xvalid |= OP_XVALID_PROJID | OP_XVALID_FLAGS;
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL, 0, &req);
 	ptlrpc_req_finished(req);
@@ -3466,20 +3460,97 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	ll_update_inode_flags(inode, op_data->op_attr_flags);
 
 	/* Avoid OST RPC if this is only ioctl setting project inherit flag */
-	if (fsxattr.fsx_xflags == 0 ||
-	    fsxattr.fsx_xflags == FS_XFLAG_PROJINHERIT)
+	if (xflags == 0 || xflags == FS_XFLAG_PROJINHERIT)
 		GOTO(out_fsxattr, rc);
 
 	obj = ll_i2info(inode)->lli_clob;
 	if (obj) {
 		struct iattr attr = { 0 };
 
-		rc = cl_setattr_ost(obj, &attr, OP_XVALID_FLAGS,
-				    fsxattr.fsx_xflags);
+		rc = cl_setattr_ost(obj, &attr, OP_XVALID_FLAGS, xflags);
 	}
 
 out_fsxattr:
 	ll_finish_md_op_data(op_data);
+	RETURN(rc);
+}
+
+int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
+			unsigned long arg)
+{
+	struct fsxattr fsxattr;
+
+	ENTRY;
+
+	if (copy_from_user(&fsxattr,
+			   (const struct fsxattr __user *)arg,
+			   sizeof(fsxattr)))
+		RETURN(-EFAULT);
+
+	RETURN(ll_set_project(inode, fsxattr.fsx_xflags,
+			      fsxattr.fsx_projid));
+}
+
+int ll_ioctl_project(struct file *file, unsigned int cmd,
+		     unsigned long arg)
+{
+	struct lu_project lu_project;
+	struct dentry *dentry = file_dentry(file);
+	struct inode *inode = file_inode(file);
+	struct dentry *child_dentry = NULL;
+	int rc = 0, name_len;
+
+	if (copy_from_user(&lu_project,
+			   (const struct lu_project __user *)arg,
+			   sizeof(lu_project)))
+		RETURN(-EFAULT);
+
+	/* apply child dentry if name is valid */
+	name_len = strnlen(lu_project.project_name, NAME_MAX);
+	if (name_len > 0 && name_len <= NAME_MAX) {
+		inode_lock(inode);
+		child_dentry = lookup_one_len(lu_project.project_name,
+					      dentry, name_len);
+		inode_unlock(inode);
+		if (IS_ERR(child_dentry)) {
+			rc = PTR_ERR(child_dentry);
+			goto out;
+		}
+		inode = child_dentry->d_inode;
+		if (!inode) {
+			rc = -ENOENT;
+			goto out;
+		}
+	} else if (name_len > NAME_MAX) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	switch (lu_project.project_type) {
+	case LU_PROJECT_SET:
+		rc = ll_set_project(inode, lu_project.project_xflags,
+				    lu_project.project_id);
+		break;
+	case LU_PROJECT_GET:
+		lu_project.project_xflags =
+				ll_inode_flags_to_xflags(inode->i_flags);
+		if (test_bit(LLIF_PROJECT_INHERIT,
+			     &ll_i2info(inode)->lli_flags))
+			lu_project.project_xflags |= FS_XFLAG_PROJINHERIT;
+		lu_project.project_id = ll_i2info(inode)->lli_projid;
+		if (copy_to_user((struct lu_project __user *)arg,
+				 &lu_project, sizeof(lu_project))) {
+			rc = -EFAULT;
+			goto out;
+		}
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+out:
+	if (!IS_ERR_OR_NULL(child_dentry))
+		dput(child_dentry);
 	RETURN(rc);
 }
 
@@ -4134,6 +4205,8 @@ out_ladvise:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));
 	case FS_IOC_FSSETXATTR:
 		RETURN(ll_ioctl_fssetxattr(inode, cmd, arg));
+	case LL_IOC_PROJECT:
+		RETURN(ll_ioctl_project(file, cmd, arg));
 	case BLKSSZGET:
 		RETURN(put_user(PAGE_SIZE, (int __user *)arg));
 	case LL_IOC_HEAT_GET: {

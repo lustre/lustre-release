@@ -1154,11 +1154,13 @@ int ll_migrate(struct inode *parent, struct file *file,
 int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid, struct inode **inode);
 int ll_inode_permission(struct inode *inode, int mask);
-int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa);
+int ll_ioctl_check_project(struct inode *inode, __u32 xflags, __u32 projid);
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
+int ll_ioctl_project(struct file *file, unsigned int cmd,
+		     unsigned long arg);
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 			     __u64 flags, struct lov_user_md *lum,

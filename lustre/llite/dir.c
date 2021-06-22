@@ -2132,6 +2132,8 @@ migrate_free:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));
 	case FS_IOC_FSSETXATTR:
 		RETURN(ll_ioctl_fssetxattr(inode, cmd, arg));
+	case LL_IOC_PROJECT:
+		RETURN(ll_ioctl_project(file, cmd, arg));
 	case LL_IOC_PCC_DETACH_BY_FID: {
 		struct lu_pcc_detach_fid *detach;
 		struct lu_fid *fid;

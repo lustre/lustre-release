@@ -47,6 +47,7 @@
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <sys/ioctl.h>
+#include <libgen.h>
 
 #include "lfs_project.h"
 #include <lustre/lustreapi.h>
@@ -81,57 +82,71 @@ lfs_project_item_alloc(struct list_head *head, const char *pathname)
 	return 0;
 }
 
-static const char *mode_to_type(mode_t mode)
+static int project_get_fsxattr(const char *pathname, struct fsxattr *fsx,
+			     struct stat *st, char *ret_bname)
 {
-	switch (mode & S_IFMT) {
-	case S_IFDIR:	return "dir";
-	case S_IFREG:	return "regular";
-	case S_IFLNK:	return "symlink";
-	case S_IFCHR:	return "char device";
-	case S_IFBLK:	return "block device";
-	case S_IFIFO:	return "fifo";
-	case S_IFSOCK:	return "sock";
-	}
-
-	return "unknown";
-}
-
-static int project_get_xattr(const char *pathname, struct fsxattr *fsx,
-			     struct stat *st)
-{
-	int ret, fd;
+	int ret = 0, fd = -1;
+	char dname_path[PATH_MAX + 1] = { 0 };
+	char bname_path[PATH_MAX + 1] = { 0 };
+	char *dname, *bname;
+	struct lu_project lu_project = { 0 };
 
 	ret = lstat(pathname, st);
 	if (ret) {
 		fprintf(stderr, "%s: failed to stat '%s': %s\n",
 			progname, pathname, strerror(errno));
-		return -errno;
+		ret = -errno;
+		goto out;
 	}
 
 	/* currently, only file and dir supported */
-	if (!S_ISREG(st->st_mode) && !S_ISDIR(st->st_mode)) {
-		errno = ENOTSUP;
-		fprintf(stderr, "%s: unable to get xattr for %s '%s': %s\n",
-				progname, mode_to_type(st->st_mode), pathname,
-				strerror(errno));
-		return -errno;
-	}
+	if (!S_ISREG(st->st_mode) && !S_ISDIR(st->st_mode))
+		goto new_api;
 
 	fd = open(pathname, O_RDONLY | O_NOCTTY | O_NDELAY);
 	if (fd < 0) {
 		fprintf(stderr, "%s: failed to open '%s': %s\n",
 			progname, pathname, strerror(errno));
-		return -errno;
+		ret = -errno;
+		goto out;
 	}
 
 	ret = ioctl(fd, FS_IOC_FSGETXATTR, fsx);
 	if (ret) {
 		fprintf(stderr, "%s: failed to get xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));
-		close(fd);
-		return -errno;
+		ret = -errno;
 	}
-	return fd;
+	goto out;
+new_api:
+	strncpy(dname_path, pathname, PATH_MAX);
+	strncpy(bname_path, pathname, PATH_MAX);
+	dname = dirname(dname_path);
+	bname = basename(bname_path);
+	fd = open(dname, O_RDONLY | O_NOCTTY | O_NDELAY);
+	if (fd < 0) {
+		ret = -errno;
+		goto out;
+	}
+	lu_project.project_type = LU_PROJECT_GET;
+	if (bname) {
+		strncpy(lu_project.project_name, bname, NAME_MAX);
+		if (ret_bname)
+			strncpy(ret_bname, bname, NAME_MAX);
+	}
+	ret = ioctl(fd, LL_IOC_PROJECT, &lu_project);
+	if (ret) {
+		fprintf(stderr, "%s: failed to get xattr for '%s': %s\n",
+			progname, pathname, strerror(errno));
+		ret = -errno;
+	} else {
+		fsx->fsx_xflags = lu_project.project_xflags;
+		fsx->fsx_projid = lu_project.project_id;
+	}
+out:
+	if (ret && fd >= 0)
+		close(fd);
+	return ret ? ret : fd;
 }
 
 static int
@@ -141,7 +156,7 @@ project_check_one(const char *pathname, struct project_handle_control *phc)
 	int ret;
 	struct stat st;
 
-	ret = project_get_xattr(pathname, &fsx, &st);
+	ret = project_get_fsxattr(pathname, &fsx, &st, NULL);
 	if (ret < 0)
 		return ret;
 
@@ -181,7 +196,7 @@ project_list_one(const char *pathname, struct project_handle_control *phc)
 	struct stat st;
 	int ret;
 
-	ret = project_get_xattr(pathname, &fsx, &st);
+	ret = project_get_fsxattr(pathname, &fsx, &st, NULL);
 	if (ret < 0)
 		return ret;
 
@@ -199,8 +214,10 @@ project_set_one(const char *pathname, struct project_handle_control *phc)
 	struct fsxattr fsx;
 	struct stat st;
 	int fd, ret = 0;
+	char bname[NAME_MAX + 1] = { 0 };
+	struct lu_project lp = { 0 };
 
-	fd = project_get_xattr(pathname, &fsx, &st);
+	fd = project_get_fsxattr(pathname, &fsx, &st, bname);
 	if (fd < 0)
 		return fd;
 
@@ -213,11 +230,20 @@ project_set_one(const char *pathname, struct project_handle_control *phc)
 	if (phc->set_projid)
 		fsx.fsx_projid = phc->projid;
 
-	ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
+	if (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode)) {
+		ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
+	} else {
+		lp.project_xflags = fsx.fsx_xflags;
+		lp.project_id = fsx.fsx_projid;
+		lp.project_type = LU_PROJECT_SET;
+		strncpy(lp.project_name, bname, NAME_MAX);
+		lp.project_name[NAME_MAX] = '\0';
+		ret = ioctl(fd, LL_IOC_PROJECT, &lp);
+	}
+out:
 	if (ret)
 		fprintf(stderr, "%s: failed to set xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));
-out:
 	close(fd);
 	return ret;
 }
@@ -228,8 +254,10 @@ project_clear_one(const char *pathname, struct project_handle_control *phc)
 	struct fsxattr fsx;
 	struct stat st;
 	int ret = 0, fd;
+	char bname[NAME_MAX + 1] = { 0 };
+	struct lu_project lp = { 0 };
 
-	fd = project_get_xattr(pathname, &fsx, &st);
+	fd = project_get_fsxattr(pathname, &fsx, &st, bname);
 	if (fd < 0)
 		return fd;
 
@@ -241,7 +269,16 @@ project_clear_one(const char *pathname, struct project_handle_control *phc)
 	if (!phc->keep_projid)
 		fsx.fsx_projid = 0;
 
-	ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
+	if (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode)) {
+		ret = ioctl(fd, FS_IOC_FSSETXATTR, &fsx);
+	} else {
+		lp.project_xflags = fsx.fsx_xflags;
+		lp.project_id = fsx.fsx_projid;
+		lp.project_type = LU_PROJECT_SET;
+		strncpy(lp.project_name, bname, NAME_MAX);
+		lp.project_name[NAME_MAX] = '\0';
+		ret = ioctl(fd, LL_IOC_PROJECT, &lp);
+	}
 	if (ret)
 		fprintf(stderr, "%s: failed to set xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));

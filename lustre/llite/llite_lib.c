@@ -2704,7 +2704,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		if (flags & LUSTRE_PROJINHERIT_FL)
 			fa.fsx_xflags = FS_XFLAG_PROJINHERIT;
 
-		rc = ll_ioctl_check_project(inode, &fa);
+		rc = ll_ioctl_check_project(inode, fa.fsx_xflags,
+					    fa.fsx_projid);
 		if (rc)
 			RETURN(rc);
 
