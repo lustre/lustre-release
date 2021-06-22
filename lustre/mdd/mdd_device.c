@@ -119,11 +119,15 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 {
 	int rc = -EINVAL;
 	const char *dev;
+
 	ENTRY;
 
 	/* LU-8040 Set defaults here, before values configs */
 	mdd->mdd_cl.mc_flags = 0; /* off by default */
-	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
+	/* per-server mask is set via parameters if needed */
+	mdd->mdd_cl.mc_proc_mask = CHANGELOG_MINMASK;
+	/* current mask is calculated from mask above and users masks */
+	mdd->mdd_cl.mc_current_mask = CHANGELOG_MINMASK;
 	mdd->mdd_cl.mc_deniednext = 60; /* 60 secs by default */
 
 	dev = lustre_cfg_string(lcfg, 0);
@@ -195,39 +199,75 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 	       DFID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
 	       rec->cr.cr_index, rec->cr.cr_type, rec->cr.cr_namelen,
 	       changelog_rec_name(&rec->cr), PFID(&llh->lgh_id.lgl_oi.oi_fid));
-
+	spin_lock(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_index = rec->cr.cr_index;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 	return LLOG_PROC_BREAK;
+}
+
+char *mdd_chlg_username(struct llog_changelog_user_rec2 *rec, char *buf,
+			size_t len)
+{
+	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 &&
+	    rec->cur_name[0])
+		snprintf(buf, len, "%s%u-%s",  CHANGELOG_USER_PREFIX,
+			 rec->cur_id, rec->cur_name);
+	else
+		snprintf(buf, len, "%s%u", CHANGELOG_USER_PREFIX, rec->cur_id);
+	return buf;
+}
+
+__u32 mdd_chlg_usermask(struct llog_changelog_user_rec2 *rec)
+{
+	return rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 ?
+	       rec->cur_mask : 0;
 }
 
 static int changelog_user_init_cb(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  struct llog_rec_hdr *hdr, void *data)
 {
-	struct mdd_device *mdd = (struct mdd_device *)data;
-	struct llog_changelog_user_rec *rec =
-		(struct llog_changelog_user_rec *)hdr;
+	struct mdd_device *mdd = data;
+	struct llog_changelog_user_rec2 *rec;
+	char user_name[CHANGELOG_USER_NAMELEN_FULL];
 
 	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
-	LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
 
-	CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec=%llu"
-	       " in log "DFID"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
-	       rec->cur_id, rec->cur_endrec, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC &&
+	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
+		CWARN("%s: unknown user type %x at index %u in log "DFID"\n",
+		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+		      rec->cur_hdr.lrh_type, PFID(&llh->lgh_id.lgl_oi.oi_fid));
+
+		return 0;
+	}
+
+	CDEBUG(D_INFO, "%s: user %s at index %u/%u endrec=%llu in log "DFID"\n",
+	       mdd2obd_dev(mdd)->obd_name, mdd_chlg_username(rec, user_name,
+							     sizeof(user_name)),
+	       hdr->lrh_index, rec->cur_hdr.lrh_index, rec->cur_endrec,
+	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
 	mdd->mdd_cl.mc_users++;
+	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 && rec->cur_mask)
+		mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
+	else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK)
+		mdd->mdd_cl.mc_current_mask |= CHANGELOG_DEFMASK;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
 	if (rec->cur_endrec > mdd->mdd_cl.mc_index)
 		mdd->mdd_cl.mc_index = rec->cur_endrec;
-	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	return LLOG_PROC_BREAK;
 }
 
 struct changelog_orphan_data {
-	__u64 index;
-	struct mdd_device *mdd;
+	__u64			clod_index;
+	struct mdd_device	*clod_mdd;
 };
 
 /* find oldest changelog record index */
@@ -235,13 +275,13 @@ static int changelog_detect_orphan_cb(const struct lu_env *env,
 				      struct llog_handle *llh,
 				      struct llog_rec_hdr *hdr, void *data)
 {
-	struct mdd_device *mdd = ((struct changelog_orphan_data *)data)->mdd;
-	struct llog_changelog_rec *rec = container_of(hdr,
-						      struct llog_changelog_rec,
-						      cr_hdr);
+	struct changelog_orphan_data *clod = data;
+	struct mdd_device *mdd = clod->clod_mdd;
+	struct llog_changelog_rec *rec;
 
 	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
+	rec = container_of(hdr, typeof(*rec), cr_hdr);
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		CWARN("%s: invalid record at index %d in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
@@ -252,13 +292,15 @@ static int changelog_detect_orphan_cb(const struct lu_env *env,
 		return 0;
 	}
 
-	CDEBUG(D_INFO, "%s: seeing record at index %d/%d/%llu t=%x %.*s in log "
-	       DFID"\n", mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+	CDEBUG(D_INFO,
+	       "%s: record at index %d/%d/%llu t=%x %.*s in log "DFID"\n",
+	       mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
 	       rec->cr_hdr.lrh_index, rec->cr.cr_index, rec->cr.cr_type,
 	       rec->cr.cr_namelen, changelog_rec_name(&rec->cr),
 	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
-	((struct changelog_orphan_data *)data)->index = rec->cr.cr_index;
+	clod->clod_index = rec->cr.cr_index;
+
 	return LLOG_PROC_BREAK;
 }
 
@@ -267,30 +309,32 @@ static int changelog_user_detect_orphan_cb(const struct lu_env *env,
 					   struct llog_handle *llh,
 					   struct llog_rec_hdr *hdr, void *data)
 {
-	struct changelog_orphan_data *user_orphan = data;
-	struct mdd_device *mdd = user_orphan->mdd;
-	struct llog_changelog_user_rec *rec = container_of(hdr,
-						struct llog_changelog_user_rec,
-						cur_hdr);
+	struct changelog_orphan_data *clod = data;
+	struct mdd_device *mdd = clod->clod_mdd;
+	struct llog_changelog_user_rec2 *rec;
+	char user_name[CHANGELOG_USER_NAMELEN_FULL];
 
 	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
-	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC) {
-		CWARN("%s: invalid user at index %d in log "DFID"\n",
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC &&
+	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) {
+		CWARN("%s: unknown user type %u at index %u in log "DFID"\n",
 		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
-		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		      rec->cur_hdr.lrh_type, PFID(&llh->lgh_id.lgl_oi.oi_fid));
 		/* try to find some next valid record and thus allow to recover
 		 * from a corrupted LLOG, instead to assert and force a crash
 		 */
 		return 0;
 	}
 
-	CDEBUG(D_INFO, "%s: seeing user at index %d/%d id=%d endrec=%llu in "
-	       "log "DFID"\n", mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
-	       rec->cur_hdr.lrh_index, rec->cur_id, rec->cur_endrec,
-	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+	CDEBUG(D_INFO, "%s: user %s at index %u/%u endrec=%llu in log "DFID"\n",
+	       mdd2obd_dev(mdd)->obd_name, mdd_chlg_username(rec, user_name,
+							     sizeof(user_name)),
+	       hdr->lrh_index, rec->cur_hdr.lrh_index,
+	       rec->cur_endrec, PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
-	user_orphan->index = min_t(__u64, user_orphan->index, rec->cur_endrec);
+	clod->clod_index = min_t(__u64, clod->clod_index, rec->cur_endrec);
 
 	return 0;
 }
@@ -446,14 +490,14 @@ mdd_changelog_off(const struct lu_env *env, struct mdd_device *mdd)
 static int mdd_changelog_llog_init(const struct lu_env *env,
 				   struct mdd_device *mdd)
 {
-	struct obd_device	*obd = mdd2obd_dev(mdd);
-	struct llog_ctxt	*ctxt = NULL, *uctxt = NULL;
-	struct changelog_orphan_data changelog_orphan = {
-		.mdd = mdd,
-		.index = -1,
+	struct obd_device *obd = mdd2obd_dev(mdd);
+	struct llog_ctxt *ctxt = NULL, *uctxt = NULL;
+	struct changelog_orphan_data clod = {
+		.clod_mdd = mdd,
+		.clod_index = -1,
 	}, user_orphan = {
-		.mdd = mdd,
-		.index = -1,
+		.clod_mdd = mdd,
+		.clod_index = -1,
 	};
 	int rc;
 
@@ -526,6 +570,9 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 		GOTO(out_uclose, rc);
 	}
 
+	/* Finally apply per-server mask */
+	mdd->mdd_cl.mc_current_mask |= mdd->mdd_cl.mc_proc_mask;
+
 	/* If we have registered users, assume we want changelogs on */
 	if (mdd->mdd_cl.mc_lastuser > 0) {
 		rc = mdd_changelog_on(env, mdd);
@@ -544,7 +591,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	 * XXX we may need to run end of purge as a separate thread
 	 */
 	rc = llog_cat_process(env, ctxt->loc_handle, changelog_detect_orphan_cb,
-			      &changelog_orphan, 0, 0);
+			      &clod, 0, 0);
 	if (rc < 0) {
 		CERROR("%s: changelog detect orphan failed: rc = %d\n",
 		       obd->obd_name, rc);
@@ -558,15 +605,15 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 		       obd->obd_name, rc);
 		GOTO(out_uclose, rc);
 	}
-	if (unlikely(changelog_orphan.index < user_orphan.index)) {
+	if (unlikely(clod.clod_index < user_orphan.clod_index)) {
 		struct changelog_cancel_cookie cl_cookie = {
-			.endrec = user_orphan.index,
+			.endrec = user_orphan.clod_index,
 			.mdd = mdd,
 		};
 
 		CWARN("%s : orphan changelog records found, starting from "
 		      "index %llu to index %llu, being cleared now\n",
-		      obd->obd_name, changelog_orphan.index, user_orphan.index);
+		      obd->obd_name, clod.clod_index, user_orphan.clod_index);
 
 		/* XXX we may need to run end of purge as a separate thread */
 		rc = llog_changelog_cancel(env, ctxt, &cl_cookie);
@@ -743,7 +790,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 
 	ENTRY;
 
-	if (mdd->mdd_cl.mc_mask & BIT(CL_MARK)) {
+	if (mdd->mdd_cl.mc_current_mask & BIT(CL_MARK)) {
 		mdd->mdd_cl.mc_starttime = ktime_get();
 		RETURN(0);
 	}
@@ -1540,66 +1587,247 @@ static const struct obd_ops mdd_obd_device_ops = {
 	.o_set_info_async = mdd_obd_set_info_async,
 };
 
-static int mdd_changelog_user_register(const struct lu_env *env,
-				       struct mdd_device *mdd, int *id)
+struct mdd_changelog_name_check_data {
+	const char *mcnc_name;
+	__u32	    mcnc_id;
+};
+
+/**
+ * changelog_recalc_mask callback
+ *
+ * Is is called per each registered user and calculates combined mask of
+ * all registered users.
+ */
+static int mdd_changelog_name_check_cb(const struct lu_env *env,
+				       struct llog_handle *llh,
+				       struct llog_rec_hdr *hdr, void *data)
 {
-        struct llog_ctxt *ctxt;
-        struct llog_changelog_user_rec *rec;
-        int rc;
-        ENTRY;
+	struct llog_changelog_user_rec2 *rec;
+	struct mdd_changelog_name_check_data *mcnc = data;
 
-        ctxt = llog_get_context(mdd2obd_dev(mdd),
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
+	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 &&
+	    !strncmp(rec->cur_name, mcnc->mcnc_name, sizeof(rec->cur_name))) {
+		mcnc->mcnc_id = rec->cur_id;
+		return -EEXIST;
+	}
+	return 0;
+}
+
+static int mdd_changelog_name_check(const struct lu_env *env,
+				    struct llog_ctxt *ctxt,
+				    struct mdd_device *mdd, const char *name)
+{
+	struct mdd_changelog_name_check_data mcnc = { .mcnc_name = name, };
+	int chr = 0;
+	int rc;
+
+	ENTRY;
+
+	/* first symbol is a letter */
+	if (!isalpha(name[0])) {
+		rc = -EINVAL;
+		CERROR("%s: first char '%c' in '%s' is not letter: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, name[0], name, rc);
+		RETURN(rc);
+	}
+
+	/* name is valid: contains letters, numbers and '-', '_' only */
+	while (name[++chr]) {
+		if (!(isalnum(name[chr]) || name[chr] == '_' ||
+		      name[chr] == '-')) {
+			rc = -EINVAL;
+			CERROR("%s: wrong char '%c' in name '%s': rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, name[chr], name, rc);
+			RETURN(rc);
+		}
+	}
+
+	if (chr > CHANGELOG_USER_NAMELEN) {
+		rc = -ENAMETOOLONG;
+		CERROR("%s: name '%s' is over %d symbols limit: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, name,
+		       CHANGELOG_USER_NAMELEN, rc);
+		RETURN(rc);
+	}
+
+	rc = llog_cat_process(env, ctxt->loc_handle,
+			      mdd_changelog_name_check_cb, &mcnc, 0, 0);
+	if (rc == -EEXIST)
+		CWARN("%s: changelog name %s exists already: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, name, rc);
+	else if (rc < 0)
+		CWARN("%s: failed user changelog processing: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, rc);
+	RETURN(rc);
+}
+
+static int mdd_changelog_user_register(const struct lu_env *env,
+				       struct mdd_device *mdd, int *id,
+				       const char *name, const char *mask)
+{
+	struct llog_ctxt *ctxt;
+	struct llog_changelog_user_rec2 *rec;
+	char user_name[CHANGELOG_USER_NAMELEN_FULL];
+	int rc;
+
+	ENTRY;
+
+	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-        if (ctxt == NULL)
-                RETURN(-ENXIO);
+	if (ctxt == NULL)
+		RETURN(-ENXIO);
 
-        OBD_ALLOC_PTR(rec);
-        if (rec == NULL) {
-                llog_ctxt_put(ctxt);
-                RETURN(-ENOMEM);
-        }
+	OBD_ALLOC_PTR(rec);
+	if (rec == NULL) {
+		llog_ctxt_put(ctxt);
+		RETURN(-ENOMEM);
+	}
 
 	CFS_RACE(CFS_FAIL_CHLOG_USER_REG_UNREG_RACE);
 
-        rec->cur_hdr.lrh_len = sizeof(*rec);
-        rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
+	rec->cur_hdr.lrh_len = sizeof(*rec);
+	/* keep old record type for users without mask/name for
+	 * compatibility needs
+	 */
+	if (mask || (name && name[0]))
+		rec->cur_hdr.lrh_type = CHANGELOG_USER_REC2;
+	else
+		rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
 		spin_unlock(&mdd->mdd_cl.mc_user_lock);
-		CERROR("Maximum number of changelog users exceeded!\n");
-		GOTO(out, rc = -EOVERFLOW);
+		rc = -EOVERFLOW;
+		CERROR("%s: registering %s user: max ID is exceeded: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name,
+		       (name && name[0]) ? name : "new", rc);
+		GOTO(out, rc);
 	}
 	*id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
 	mdd->mdd_cl.mc_users++;
-	rec->cur_endrec = mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rec->cur_time = (__u32)ktime_get_real_seconds();
 	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
 		rec->cur_time = 0;
 
-	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	rec->cur_endrec = mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
+
+	if (mask) {
+		/* if user will use relative mask apply it on default one */
+		rec->cur_mask = CHANGELOG_DEFMASK;
+		rc = cfs_str2mask(mask, changelog_type2str, &rec->cur_mask,
+				  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
+		if (rc)
+			GOTO(out_users, rc);
+	}
+
+	if (name && name[0]) {
+		rc = mdd_changelog_name_check(env, ctxt, mdd, name);
+		if (rc)
+			GOTO(out_users, rc);
+		strlcpy(rec->cur_name, name, sizeof(rec->cur_name));
+	}
+	mdd_chlg_username(rec, user_name, sizeof(user_name));
 
 	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL);
 	if (rc) {
-		CWARN("%s: Failed to register changelog user %d: rc=%d\n",
-		      mdd2obd_dev(mdd)->obd_name, *id, rc);
-		spin_lock(&mdd->mdd_cl.mc_user_lock);
-		mdd->mdd_cl.mc_users--;
-		spin_unlock(&mdd->mdd_cl.mc_user_lock);
-		GOTO(out, rc);
+		CWARN("%s: failed to register changelog user %s: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, user_name, rc);
+		GOTO(out_users, rc);
 	}
 
-        CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
+	/* apply user mask finally */
+	spin_lock(&mdd->mdd_cl.mc_user_lock);
+	mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+
+	CDEBUG(D_IOCTL, "%s: registered changelog user '%s', mask %#x\n",
+	       mdd2obd_dev(mdd)->obd_name, user_name, rec->cur_mask);
 
 	/* Assume we want it on since somebody registered */
 	rc = mdd_changelog_on(env, mdd);
 	if (rc)
+		/* record is added, so don't decrement users on error */
 		GOTO(out, rc);
-
+out_users:
+	if (rc) {
+		spin_lock(&mdd->mdd_cl.mc_user_lock);
+		mdd->mdd_cl.mc_users--;
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	}
 out:
-        OBD_FREE_PTR(rec);
-        llog_ctxt_put(ctxt);
-        RETURN(rc);
+	OBD_FREE_PTR(rec);
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
+struct mdd_changelog_recalc_mask_data {
+	struct mdd_device *mcrm_mdd;
+	__u32		   mcrm_mask;
+};
+
+/**
+ * changelog_recalc_mask callback
+ *
+ * Is is called per each registered user and calculates combined mask of
+ * all registered users.
+ */
+static int mdd_changelog_recalc_mask_cb(const struct lu_env *env,
+				       struct llog_handle *llh,
+				       struct llog_rec_hdr *hdr, void *data)
+{
+	struct llog_changelog_user_rec2 *rec;
+	struct mdd_changelog_recalc_mask_data *mcrm = data;
+
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
+	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 && rec->cur_mask)
+		mcrm->mcrm_mask |= rec->cur_mask;
+	else if (mcrm->mcrm_mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK)
+		mcrm->mcrm_mask |= CHANGELOG_DEFMASK;
+
+	return 0;
+}
+
+int mdd_changelog_recalc_mask(const struct lu_env *env, struct mdd_device *mdd)
+{
+	struct llog_ctxt *ctxt;
+	struct mdd_changelog_recalc_mask_data mcrm = {
+		.mcrm_mdd = mdd,
+		.mcrm_mask = mdd->mdd_cl.mc_proc_mask,
+	};
+	int rc;
+
+	ENTRY;
+
+	ctxt = llog_get_context(mdd2obd_dev(mdd),
+				LLOG_CHANGELOG_USER_ORIG_CTXT);
+	if (!ctxt)
+		RETURN(-ENXIO);
+
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+		GOTO(out, rc = -ENXIO);
+
+	rc = llog_cat_process(env, ctxt->loc_handle,
+			      mdd_changelog_recalc_mask_cb, &mcrm, 0, 0);
+	if (rc < 0)
+		CWARN("%s: failed user changelog processing: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, rc);
+
+	spin_lock(&mdd->mdd_cl.mc_user_lock);
+	CDEBUG(D_INFO, "%s: recalc changelog mask: %#x -> %#x\n",
+	       mdd2obd_dev(mdd)->obd_name, mdd->mdd_cl.mc_current_mask,
+	       mcrm.mcrm_mask);
+	mdd->mdd_cl.mc_current_mask = mcrm.mcrm_mask;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+
+	EXIT;
+out:
+	llog_ctxt_put(ctxt);
+
+	return rc;
 }
 
 struct mdd_changelog_user_purge {
@@ -1623,24 +1851,23 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
 				       struct llog_handle *llh,
 				       struct llog_rec_hdr *hdr, void *data)
 {
-	struct llog_changelog_user_rec	*rec;
-	struct mdd_changelog_user_purge	*mcup = data;
-	struct llog_cookie               cookie;
-	int				 rc;
+	struct llog_changelog_user_rec2 *rec;
+	struct mdd_changelog_user_purge *mcup = data;
+	struct llog_cookie cookie;
+	int rc;
 
 	ENTRY;
 
 	if ((llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) == 0)
 		RETURN(-ENXIO);
 
-	rec = container_of(hdr, struct llog_changelog_user_rec, cur_hdr);
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
 
 	mcup->mcup_usercount++;
 
 	if (rec->cur_id != mcup->mcup_id) {
 		/* truncate to the lowest endrec that is not this user */
-		mcup->mcup_minrec = min(mcup->mcup_minrec,
-					rec->cur_endrec);
+		mcup->mcup_minrec = min(mcup->mcup_minrec, rec->cur_endrec);
 		RETURN(0);
 	}
 
@@ -1732,6 +1959,7 @@ struct mdd_changelog_user_clear {
 	__u64 mcuc_minrec;
 	__u32 mcuc_id;
 	bool mcuc_flush;
+	struct mdd_device *mcuc_mdd;
 };
 
 /**
@@ -1748,8 +1976,10 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 				  struct llog_rec_hdr *hdr,
 				  void *data)
 {
-	struct llog_changelog_user_rec *rec;
+	struct llog_changelog_user_rec2 *rec;
 	struct mdd_changelog_user_clear *mcuc = data;
+	char user_name[CHANGELOG_USER_NAMELEN_FULL];
+	struct mdd_device *mdd = mcuc->mcuc_mdd;
 	int rc;
 
 	ENTRY;
@@ -1757,8 +1987,7 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 	if ((llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) == 0)
 		RETURN(-ENXIO);
 
-	rec = container_of(hdr, struct llog_changelog_user_rec, cur_hdr);
-
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
 	/* Does the changelog id match the requested id? */
 	if (rec->cur_id != mcuc->mcuc_id) {
 		mcuc->mcuc_minrec = min(mcuc->mcuc_minrec,
@@ -1768,9 +1997,14 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 
 	/* cur_endrec is the oldest purgeable record, make sure we're newer */
 	if (rec->cur_endrec > mcuc->mcuc_endrec) {
-		CDEBUG(D_IOCTL, "Request %llu out of range: %llu\n",
-		       mcuc->mcuc_endrec, rec->cur_endrec);
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CDEBUG(D_IOCTL,
+		       "%s: request %llu > endrec %llu for user %s: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name,
+		       mcuc->mcuc_endrec, rec->cur_endrec,
+		       mdd_chlg_username(rec, user_name, sizeof(user_name)),
+		       rc);
+		RETURN(rc);
 	}
 
 	/* Flag that we've met all the range and user checks.
@@ -1784,8 +2018,10 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 
 	mcuc->mcuc_flush = true;
 
-	CDEBUG(D_IOCTL, "Rewriting changelog user %u endrec to %llu\n",
-	       mcuc->mcuc_id, rec->cur_endrec);
+	CDEBUG(D_IOCTL, "%s: rewriting changelog user %s endrec = %llu\n",
+	       mdd2obd_dev(mdd)->obd_name,
+	       mdd_chlg_username(rec, user_name, sizeof(user_name)),
+	       rec->cur_endrec);
 
 	/* Update the endrec */
 	rc = llog_write(env, llh, hdr, hdr->lrh_index);
@@ -1804,6 +2040,7 @@ static int mdd_changelog_clear(const struct lu_env *env,
 		.mcuc_id = id,
 		.mcuc_minrec = endrec,
 		.mcuc_flush = false,
+		.mcuc_mdd = mdd,
 	};
 	struct llog_ctxt *ctxt;
 	__u64 start_rec;
@@ -1873,6 +2110,51 @@ out:
 	return rc;
 }
 
+static int mdd_changelog_user_deregister(const struct lu_env *env,
+				       struct mdd_device *mdd, int *id,
+				       const char *name)
+{
+	struct llog_ctxt *ctxt;
+	struct mdd_changelog_name_check_data mcnc = {
+		.mcnc_name = name,
+		.mcnc_id = 0,
+	};
+	int rc;
+
+	ENTRY;
+
+	if (name) {
+		ctxt = llog_get_context(mdd2obd_dev(mdd),
+					LLOG_CHANGELOG_USER_ORIG_CTXT);
+		if (!ctxt)
+			RETURN(-ENXIO);
+
+		rc = llog_cat_process(env, ctxt->loc_handle,
+			      mdd_changelog_name_check_cb, &mcnc, 0, 0);
+		llog_ctxt_put(ctxt);
+
+		if (rc != -EEXIST) {
+			CDEBUG(D_IOCTL, "%s: no entry for username %s\n",
+			       mdd2obd_dev(mdd)->obd_name, name);
+			RETURN(-ENOENT);
+		}
+		*id = mcnc.mcnc_id;
+	}
+
+	/* explicitly clear changelog first, to protect from crash in
+	 * the middle of purge that would lead to unregistered consumer
+	 * but pending changelog entries
+	 */
+	rc = mdd_changelog_clear(env, mdd, *id, 0);
+	if (!rc)
+		rc = mdd_changelog_user_purge(env, mdd, *id);
+
+	/* recalc changelog current mask */
+	mdd_changelog_recalc_mask(env, mdd);
+
+	RETURN(rc);
+}
+
 /** mdd_iocontrol
  * May be called remotely from mdt_iocontrol_handle or locally from
  * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce
@@ -1920,10 +2202,6 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 	}
 
 	/* Below ioctls use obd_ioctl_data */
-	if (len != sizeof(*data)) {
-		CERROR("Bad ioctl size %d\n", len);
-		RETURN(-EINVAL);
-	}
 	if (data->ioc_version != OBD_IOCTL_VERSION) {
 		CERROR("Bad magic %x != %x\n", data->ioc_version,
 		       OBD_IOCTL_VERSION);
@@ -1935,21 +2213,17 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 			RETURN(-EINPROGRESS);
 
-		rc = mdd_changelog_user_register(env, mdd, &data->ioc_u32_1);
+		rc = mdd_changelog_user_register(env, mdd, &data->ioc_u32_1,
+						 data->ioc_inlbuf1,
+						 data->ioc_inlbuf2);
 		barrier_exit(mdd->mdd_bottom);
 		break;
 	case OBD_IOC_CHANGELOG_DEREG:
 		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 			RETURN(-EINPROGRESS);
 
-		/* explicitly clear changelog first, to protect from crash in
-		 * the middle of purge that would lead to unregistered consumer
-		 * but pending changelog entries
-		 */
-		rc = mdd_changelog_clear(env, mdd, data->ioc_u32_1, 0);
-		if (!rc)
-			rc = mdd_changelog_user_purge(env,
-						      mdd, data->ioc_u32_1);
+		rc = mdd_changelog_user_deregister(env, mdd, &data->ioc_u32_1,
+						   data->ioc_inlbuf1);
 
 		barrier_exit(mdd->mdd_bottom);
 		break;

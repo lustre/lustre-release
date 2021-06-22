@@ -202,21 +202,28 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		 * Because the tail follows a variable-length structure we need
 		 * to compute its location at runtime
 		 */
-		tail = (struct llog_rec_tail *)((char *)&cr->cr +
-						changelog_rec_size(&cr->cr) +
-						cr->cr.cr_namelen);
+		tail = (struct llog_rec_tail *)((char *)rec +
+						rec->lrh_len - sizeof(*tail));
 		break;
 	}
 
 	case CHANGELOG_USER_REC:
+	case CHANGELOG_USER_REC2:
 	{
-		struct llog_changelog_user_rec *cur =
-			(struct llog_changelog_user_rec *)rec;
+		struct llog_changelog_user_rec2 *cur =
+			(struct llog_changelog_user_rec2 *)rec;
 
 		__swab32s(&cur->cur_id);
 		__swab64s(&cur->cur_endrec);
 		__swab32s(&cur->cur_time);
-		tail = &cur->cur_tail;
+		if (cur->cur_hdr.lrh_type == CHANGELOG_USER_REC2) {
+			__swab32s(&cur->cur_mask);
+			BUILD_BUG_ON(offsetof(typeof(*cur), cur_padding1) == 0);
+			BUILD_BUG_ON(offsetof(typeof(*cur), cur_padding2) == 0);
+			BUILD_BUG_ON(offsetof(typeof(*cur), cur_padding3) == 0);
+		}
+		tail = (struct llog_rec_tail *)((char *)rec +
+						rec->lrh_len - sizeof(*tail));
 		break;
 	}
 

@@ -958,6 +958,7 @@ static void print_records(struct llog_rec_hdr **recs,
 					    recs[i]);
 			break;
 		case CHANGELOG_USER_REC:
+		case CHANGELOG_USER_REC2:
 			printf("changelog_user record id:0x%x\n",
 			       __le32_to_cpu(recs[i]->lrh_id));
 			break;

@@ -966,7 +966,7 @@ static union {
 	struct llog_setattr64_rec_v2	lsr64_v2; /* MDS_SETATTR64_REC */
 	struct llog_size_change_rec	lscr;  /* OST_SZ_REC */
 	struct llog_changelog_rec	lcr;   /* CHANGELOG_REC */
-	struct llog_changelog_user_rec	lcur;  /* CHANGELOG_USER_REC */
+	struct llog_changelog_user_rec2	lcur;  /* CHANGELOG_USER_REC2 */
 	struct llog_gen_rec		lgr;   /* LLOG_GEN_REC */
 } llog_records;
 
@@ -1141,10 +1141,10 @@ static int llog_test_7(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out, rc);
 	}
 
-	CWARN("7f: test llog_changelog_user_rec\n");
+	CWARN("7f: test llog_changelog_user_rec2\n");
 	llog_records.lcur.cur_hdr.lrh_len = sizeof(llog_records.lcur);
 	llog_records.lcur.cur_tail.lrt_len = sizeof(llog_records.lcur);
-	llog_records.lcur.cur_hdr.lrh_type = CHANGELOG_USER_REC;
+	llog_records.lcur.cur_hdr.lrh_type = CHANGELOG_USER_REC2;
 
 	rc = llog_test_7_sub(env, ctxt);
 	if (rc) {
@@ -1406,7 +1406,7 @@ static int llog_test_9(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out, rc);
 	}
 
-	CWARN("9d: test llog_changelog_user_rec\n");
+	CWARN("9d: test llog_changelog_user_rec2\n");
 	llog_records.lcur.cur_hdr.lrh_len = sizeof(llog_records.lcur);
 	llog_records.lcur.cur_tail.lrt_len = sizeof(llog_records.lcur);
 	llog_records.lcur.cur_hdr.lrh_type = CHANGELOG_USER_REC;

@@ -49,6 +49,10 @@
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
 
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))
+#endif
+
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__); ret = 1; }
 

@@ -388,10 +388,15 @@ command_t cmdlist[] = {
 	{"===  Changelogs ==", NULL, 0, "changelog user management"},
 	{"changelog_register", jt_changelog_register, 0,
 	 "register a new persistent changelog user, returns id\n"
-	 "usage: --device <mdtname> changelog_register [-n]"},
+	 "usage: --device <mdtname> changelog_register [--help|-h]\n"
+	 "					       [--mask|-m <[+|-]mask1[<,|+|->mask2...]>]\n"
+	 "					       [--nameonly|-n]\n"
+	 "					       [--user|-u <username>]"},
 	{"changelog_deregister", jt_changelog_deregister, 0,
 	 "deregister an existing changelog user\n"
-	 "usage: --device <mdtname> changelog_deregister <id>"},
+	 "usage: --device <mdtname> changelog_deregister [<id>|cl<id>...]\n"
+	 "						 [--help|-h]\n"
+	 "						 [--user|-u <username>]\n"},
 
 	/* Persistent Client Cache (PCC) commands */
 	{"=== Persistent Client Cache ===", NULL, 0, "PCC user management"},

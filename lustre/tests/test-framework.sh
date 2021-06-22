@@ -9444,8 +9444,8 @@ changelog_register() {
 			error "$mdt: changelog_mask=+hsm failed: $?"
 
 		local cl_user
-		cl_user=$(do_facet $facet \
-				  $LCTL --device $mdt changelog_register -n) ||
+		cl_user=$(do_facet $facet $LCTL --device $mdt \
+			changelog_register -n $@) ||
 			error "$mdt: register changelog user failed: $?"
 		stack_trap "__changelog_deregister $facet $cl_user" EXIT
 

@@ -1567,7 +1567,7 @@ enum changelog_rec_type {
 	CL_RESYNC   = 22, /* FLR: file was resync-ed */
 	CL_GETXATTR = 23,
 	CL_DN_OPEN  = 24, /* denied open */
-	CL_LAST
+	CL_LAST,
 };
 
 static inline const char *changelog_type2str(int type) {

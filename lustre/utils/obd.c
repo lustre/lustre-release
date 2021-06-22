@@ -5536,86 +5536,167 @@ int jt_get_obj_version(int argc, char **argv)
 #ifdef HAVE_SERVER_SUPPORT
 int jt_changelog_register(int argc, char **argv)
 {
-	struct obd_ioctl_data	 data = { 0 };
-	char			 rawbuf[MAX_IOC_BUFLEN] = "";
-	char			*buf = rawbuf;
-	char			*device = lcfg_get_devname();
-	bool			 print_name_only = false;
-	int			 c;
-	int			 rc;
-
-	if (argc > 2)
-		return CMD_HELP;
-
-	while ((c = getopt(argc, argv, "hn")) >= 0) {
-		switch (c) {
-		case 'n':
-			print_name_only = true;
-			break;
-		case 'h':
-		default:
-			return CMD_HELP;
-		}
-	}
+	struct option long_opts[] = {
+	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = 'm', .name = "mask", .has_arg = required_argument },
+	{ .val = 'n', .name = "nameonly", .has_arg = no_argument },
+	{ .val = 'u', .name = "user", .has_arg = required_argument },
+	{ .name = NULL } };
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "";
+	char *buf = rawbuf;
+	char *device = lcfg_get_devname();
+	char *username = NULL, *usermask = NULL;
+	bool print_name_only = false;
+	int c;
+	int rc;
 
 	if (cur_device < 0 || !device)
 		return CMD_HELP;
 
+	while ((c = getopt_long(argc, argv, "hm:nu:", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'm':
+			usermask = strdup(optarg);
+			if (!usermask) {
+				fprintf(stderr,
+					"error: %s: %s: cannot copy '%s'\n",
+					jt_cmdname(argv[0]), strerror(errno),
+					optarg);
+				return -errno;
+			}
+			break;
+		case 'n':
+			print_name_only = true;
+			break;
+		case 'u':
+			username = strdup(optarg);
+			if (!username) {
+				fprintf(stderr,
+					"error: %s: %s: cannot copy '%s'\n",
+					jt_cmdname(argv[0]), strerror(errno),
+					optarg);
+				return -errno;
+			}
+			break;
+		case 'h':
+		default:
+			free(username);
+			free(usermask);
+			return CMD_HELP;
+		}
+	}
+
 	data.ioc_dev = cur_device;
+	if (username) {
+		data.ioc_inlbuf1 = username;
+		data.ioc_inllen1 = strlen(username) + 1;
+	}
+
+	if (usermask) {
+		data.ioc_inlbuf2 = usermask;
+		data.ioc_inllen2 = strlen(usermask) + 1;
+	}
 
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: cannot pack ioctl: %s\n",
 			jt_cmdname(argv[0]), strerror(-rc));
-		return rc;
+		goto out;
 	}
-
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
 	if (rc < 0) {
 		rc = -errno;
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-			strerror(-rc));
-		return rc;
+			rc == -EEXIST ? "User exists" : strerror(-rc));
+		goto out;
 	}
 
 	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
 	if (data.ioc_u32_1 == 0) {
 		fprintf(stderr, "received invalid userid!\n");
-		return -EPROTO;
+		rc = -EPROTO;
+		goto out;
 	}
 
 	if (print_name_only)
-		printf("%s%u\n", CHANGELOG_USER_PREFIX, data.ioc_u32_1);
+		printf("%s%u%s%s\n", CHANGELOG_USER_PREFIX, data.ioc_u32_1,
+		       username ? "-" : "", username ? : "");
 	else
-		printf("%s: Registered changelog userid '%s%u'\n",
-		       device, CHANGELOG_USER_PREFIX, data.ioc_u32_1);
-
-	return 0;
+		printf("%s: Registered changelog userid '%s%u%s%s'\n",
+		       device, CHANGELOG_USER_PREFIX, data.ioc_u32_1,
+		       username ? "-" : "", username ? : "");
+out:
+	free(usermask);
+	free(username);
+	return rc;
 }
 
 int jt_changelog_deregister(int argc, char **argv)
 {
-	struct obd_ioctl_data	 data = { 0 };
-	char			 rawbuf[MAX_IOC_BUFLEN] = "";
-	char			*buf = rawbuf;
-	char			*device = lcfg_get_devname();
-	int			 id;
-	int			 rc;
+	struct option long_opts[] = {
+	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = 'u', .name = "user", .has_arg = required_argument },
+	{ .name = NULL } };
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "";
+	char *buf = rawbuf;
+	char *device = lcfg_get_devname();
+	char *username = NULL;
+	int id = 0;
+	int c, rc;
 
-	if (argc != 2 || cur_device < 0 || !device)
+	if (cur_device < 0 || !device)
 		return CMD_HELP;
 
-	rc = sscanf(argv[1], CHANGELOG_USER_PREFIX"%d", &id);
-	if (rc != 1 || id <= 0) {
-		fprintf(stderr,
-			"error: %s: expected id of the form %s<num> got '%s'\n",
-			jt_cmdname(argv[0]), CHANGELOG_USER_PREFIX, argv[1]);
-		return CMD_HELP;
+	optind = 1;
+	while ((c = getopt_long(argc, argv, "hu:", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'u':
+			username = strdup(optarg);
+			if (!username) {
+				fprintf(stderr,
+					"error: %s: %s: cannot copy '%s'\n",
+					jt_cmdname(argv[0]), strerror(errno),
+					optarg);
+				return -errno;
+			}
+			break;
+		case 'h':
+		default:
+			free(username);
+			return CMD_HELP;
+		}
 	}
+
+	if (1 == optind) {
+		/* first check if pure ID was passed */
+		id = atoi(argv[optind]);
+		/* nameless cl<ID> format or cl<ID>-... format, only ID matters */
+		if (id == 0)
+			sscanf(argv[optind], CHANGELOG_USER_PREFIX"%d", &id);
+
+		/* no valid ID was parsed */
+		if (id <= 0) {
+			rc = -EINVAL;
+			fprintf(stderr,
+				"error: %s: expect <ID> or cl<ID>[-name] got '%s'\n",
+				strerror(-rc), argv[optind]);
+			return CMD_HELP;
+		}
+		optind++;
+	}
+
+	if (optind < argc)
+		return CMD_HELP;
 
 	data.ioc_dev = cur_device;
 	data.ioc_u32_1 = id;
+	if (username) {
+		data.ioc_inlbuf1 = username;
+		data.ioc_inllen1 = strlen(username) + 1;
+	}
 
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
@@ -5626,14 +5707,14 @@ int jt_changelog_deregister(int argc, char **argv)
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
 	if (rc < 0) {
+		rc = -errno;
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-			strerror(rc = errno));
+			rc == -ENOENT ? "User not found" : strerror(-rc));
 		return rc;
 	}
 
 	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	printf("%s: Deregistered changelog user '%s%u'\n",
-	       device, CHANGELOG_USER_PREFIX, data.ioc_u32_1);
+	printf("%s: Deregistered changelog user #%u\n", device, data.ioc_u32_1);
 
 	return 0;
 }

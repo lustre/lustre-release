@@ -95,7 +95,8 @@
 struct mdd_changelog {
 	spinlock_t		mc_lock;	/* for index */
 	int			mc_flags;
-	int			mc_mask;
+	__u32			mc_proc_mask; /* per-server mask set via parameters */
+	__u32			mc_current_mask; /* combined global+users */
 	__u64			mc_index;
 	ktime_t			mc_starttime;
 	spinlock_t		mc_user_lock;
@@ -434,6 +435,10 @@ int mdd_generic_thread_start(struct mdd_generic_thread *thread,
 void mdd_generic_thread_stop(struct mdd_generic_thread *thread);
 int mdd_changelog_user_purge(const struct lu_env *env, struct mdd_device *mdd,
 			     __u32 id);
+char *mdd_chlg_username(struct llog_changelog_user_rec2 *rec, char *buf,
+			size_t len);
+__u32 mdd_chlg_usermask(struct llog_changelog_user_rec2 *rec);
+int mdd_changelog_recalc_mask(const struct lu_env *env, struct mdd_device *mdd);
 
 /* mdd_prepare.c */
 int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
@@ -840,7 +845,7 @@ static inline bool mdd_changelog_enabled(const struct lu_env *env,
 	const struct lu_ucred *uc;
 
 	if ((mdd->mdd_cl.mc_flags & CLM_ON) &&
-	    (mdd->mdd_cl.mc_mask & BIT(type))) {
+	    (mdd->mdd_cl.mc_current_mask & BIT(type))) {
 		uc = lu_ucred_check(env);
 
 		return uc != NULL ? uc->uc_enable_audit : true;

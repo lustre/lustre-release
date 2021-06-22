@@ -309,6 +309,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 	char dev_path[PATH_MAX];
 	char cmd[64];
 	size_t cmd_len = sizeof(cmd);
+	char *dashp, *clidp = NULL;
 	int fd;
 	int rc;
 
@@ -320,17 +321,26 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 
 	chlg_dev_path(dev_path, sizeof(dev_path), mdtname);
 
-	rc = snprintf(cmd, cmd_len, "clear:%s:%lld", idstr, endrec);
-	if (rc >= sizeof(cmd))
-		return -EINVAL;
+	dashp = strchr(idstr, '-');
+	if (dashp) {
+		clidp = strndup(idstr, dashp - idstr);
+		if (!clidp)
+			return -ENOMEM;
+	}
 
+	rc = snprintf(cmd, cmd_len, "clear:%s:%lld", dashp ? clidp : idstr,
+		      endrec);
+	if (rc >= sizeof(cmd)) {
+		rc = -EINVAL;
+		goto out;
+	}
 	cmd_len = rc + 1;
 
 	fd = open(dev_path, O_WRONLY);
 	if (fd < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'", dev_path);
-		return rc;
+		goto out;
 	}
 
 	rc = write(fd, cmd, cmd_len);
@@ -345,6 +355,8 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 
 out_close:
 	close(fd);
+out:
+	free(clidp);
 	return rc;
 }
 

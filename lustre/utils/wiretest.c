@@ -48,7 +48,10 @@
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
-#include <lustre/lustreapi.h>
+
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))
+#endif
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__); ret = 1; }
@@ -3916,18 +3919,19 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_logid, lgl_ogen));
 	LASSERTF((int)sizeof(((struct llog_logid *)0)->lgl_ogen) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_logid *)0)->lgl_ogen));
-	BUILD_BUG_ON(OST_SZ_REC != 274730752);
-	BUILD_BUG_ON(MDS_UNLINK_REC != 274801668);
-	BUILD_BUG_ON(MDS_UNLINK64_REC != 275325956);
-	BUILD_BUG_ON(MDS_SETATTR64_REC != 275325953);
-	BUILD_BUG_ON(OBD_CFG_REC != 274857984);
-	BUILD_BUG_ON(LLOG_GEN_REC != 274989056);
-	BUILD_BUG_ON(CHANGELOG_REC != 275120128);
-	BUILD_BUG_ON(CHANGELOG_USER_REC != 275185664);
-	BUILD_BUG_ON(HSM_AGENT_REC != 275251200);
-	BUILD_BUG_ON(UPDATE_REC != 275382272);
-	BUILD_BUG_ON(LLOG_HDR_MAGIC != 275010873);
-	BUILD_BUG_ON(LLOG_LOGID_MAGIC != 275010875);
+	BUILD_BUG_ON(OST_SZ_REC != 0x10600f00);
+	BUILD_BUG_ON(MDS_UNLINK_REC != 0x10612404);
+	BUILD_BUG_ON(MDS_UNLINK64_REC != 0x10692404);
+	BUILD_BUG_ON(MDS_SETATTR64_REC != 0x10692401);
+	BUILD_BUG_ON(OBD_CFG_REC != 0x10620000);
+	BUILD_BUG_ON(LLOG_GEN_REC != 0x10640000);
+	BUILD_BUG_ON(CHANGELOG_REC != 0x10660000);
+	BUILD_BUG_ON(CHANGELOG_USER_REC != 0x10670000);
+	BUILD_BUG_ON(CHANGELOG_USER_REC2 != 0x10670002);
+	BUILD_BUG_ON(HSM_AGENT_REC != 0x10680000);
+	BUILD_BUG_ON(UPDATE_REC != 0x106a0000);
+	BUILD_BUG_ON(LLOG_HDR_MAGIC != 0x10645539);
+	BUILD_BUG_ON(LLOG_LOGID_MAGIC != 0x1064553b);
 
 	/* Checks for struct llog_catid */
 	LASSERTF((int)sizeof(struct llog_catid) == 32, "found %lld\n",

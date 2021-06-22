@@ -2733,6 +2733,7 @@ enum llog_op_type {
 	/* LLOG_JOIN_REC	= LLOG_OP_MAGIC | 0x50000, obsolete  1.8.0 */
 	CHANGELOG_REC		= LLOG_OP_MAGIC | 0x60000,
 	CHANGELOG_USER_REC	= LLOG_OP_MAGIC | 0x70000,
+	CHANGELOG_USER_REC2	= LLOG_OP_MAGIC | 0x70002,
 	HSM_AGENT_REC		= LLOG_OP_MAGIC | 0x80000,
 	UPDATE_REC		= LLOG_OP_MAGIC | 0xa0000,
 	LLOG_HDR_MAGIC		= LLOG_OP_MAGIC | 0x45539,
@@ -2833,9 +2834,9 @@ struct llog_size_change_rec {
 #define CHANGELOG_MAGIC 0xca103000
 
 /** \a changelog_rec_type's that can't be masked */
-#define CHANGELOG_MINMASK (1 << CL_MARK)
+#define CHANGELOG_MINMASK BIT(CL_MARK)
 /** bits covering all \a changelog_rec_type's */
-#define CHANGELOG_ALLMASK 0XFFFFFFFF
+#define CHANGELOG_ALLMASK (BIT(CL_LAST) - 1)
 /** default \a changelog_rec_type mask. Allow all of them, except
  * CL_ATIME since it can really be time consuming, and not necessary
  * under normal use.
@@ -2843,8 +2844,7 @@ struct llog_size_change_rec {
  * be costly and only necessary for audit purpose.
  */
 #define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & \
-			   ~(1 << CL_ATIME | 1 << CL_OPEN | 1 << CL_GETXATTR | \
-			     1 << CL_DN_OPEN))
+	~(BIT(CL_ATIME) | BIT(CL_OPEN) | BIT(CL_GETXATTR) | BIT(CL_DN_OPEN)))
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
@@ -2862,6 +2862,8 @@ struct llog_changelog_rec {
 } __attribute__((packed));
 
 #define CHANGELOG_USER_PREFIX "cl"
+#define CHANGELOG_USER_NAMELEN 16 /* base name including NUL terminator */
+#define CHANGELOG_USER_NAMELEN_FULL 30 /* basename plus 'cl$ID-' prefix */
 
 struct llog_changelog_user_rec {
 	struct llog_rec_hdr   cur_hdr;
@@ -2871,6 +2873,21 @@ struct llog_changelog_user_rec {
 	__u32                 cur_time;
 	__u64                 cur_endrec;
 	struct llog_rec_tail  cur_tail;
+} __attribute__((packed));
+
+/* this is twice the size of CHANGELOG_USER_REC */
+struct llog_changelog_user_rec2 {
+	struct llog_rec_hdr	cur_hdr;
+	__u32			cur_id;
+	/* only for use in relative time comparisons to detect idle users */
+	__u32			cur_time;
+	__u64			cur_endrec;
+	__u32			cur_mask;
+	__u32			cur_padding1;
+	char			cur_name[CHANGELOG_USER_NAMELEN];
+	__u64			cur_padding2;
+	__u64			cur_padding3;
+	struct llog_rec_tail	cur_tail;
 } __attribute__((packed));
 
 enum agent_req_status {

@@ -83,13 +83,28 @@ static ssize_t atime_diff_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(atime_diff);
 
 /**** changelogs ****/
+static int mdd_changelog_current_mask_seq_show(struct seq_file *m, void *data)
+{
+	struct mdd_device *mdd = m->private;
+	int i = 0;
+
+	while (i < CL_LAST) {
+		if (mdd->mdd_cl.mc_current_mask & BIT(i))
+			seq_printf(m, "%s ", changelog_type2str(i));
+		i++;
+	}
+	seq_putc(m, '\n');
+	return 0;
+}
+LDEBUGFS_SEQ_FOPS_RO(mdd_changelog_current_mask);
+
 static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
 {
 	struct mdd_device *mdd = m->private;
 	int i = 0;
 
 	while (i < CL_LAST) {
-		if (mdd->mdd_cl.mc_mask & BIT(i))
+		if (mdd->mdd_cl.mc_proc_mask & BIT(i))
 			seq_printf(m, "%s ", changelog_type2str(i));
 		i++;
 	}
@@ -105,6 +120,9 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	struct mdd_device *mdd = m->private;
 	char *kernbuf;
 	int rc;
+	int oldmask = mdd->mdd_cl.mc_proc_mask;
+	int newmask = oldmask;
+
 	ENTRY;
 
 	if (count >= PAGE_SIZE)
@@ -116,10 +134,48 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 		GOTO(out, rc = -EFAULT);
 	kernbuf[count] = 0;
 
-	rc = cfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
+	/* if the new mask is relative and proc mask is minimal then assume
+	 * it is relative to DEFMASK, otherwise apply new mask on the current
+	 * proc mask.
+	 */
+	if (oldmask == CHANGELOG_MINMASK) {
+		char *str = kernbuf;
+
+		while (isspace(*str))
+			str++;
+		if (*str == '+' || *str == '-')
+			newmask = CHANGELOG_DEFMASK;
+	}
+
+	rc = cfs_str2mask(kernbuf, changelog_type2str, &newmask,
 			  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
-	if (rc == 0)
+	if (rc)
+		GOTO(out, rc);
+
+	mdd->mdd_cl.mc_proc_mask = newmask;
+
+	/* if mask keeps all bits from oldmask then just extend the current
+	 * mask, otherwise the current mask should be recalculated through
+	 * all user masks.
+	 */
+	if ((newmask & oldmask) == oldmask) {
+		spin_lock(&mdd->mdd_cl.mc_user_lock);
+		mdd->mdd_cl.mc_current_mask |= newmask;
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	} else {
+		struct lu_env env;
+
+		rc = lu_env_init(&env, LCT_LOCAL);
+		if (rc)
+			GOTO(out, rc);
+
+		mdd_changelog_recalc_mask(&env, mdd);
+		lu_env_fini(&env);
+	}
+
+	if (!rc)
 		rc = count;
+
 out:
 	OBD_FREE(kernbuf, PAGE_SIZE);
 	return rc;
@@ -130,16 +186,34 @@ static int lprocfs_changelog_users_cb(const struct lu_env *env,
 				      struct llog_handle *llh,
 				      struct llog_rec_hdr *hdr, void *data)
 {
-	struct llog_changelog_user_rec *rec;
+	struct llog_changelog_user_rec2 *rec;
 	struct seq_file *m = data;
+	char user_name[CHANGELOG_USER_NAMELEN_FULL];
 
 	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
-	rec = (struct llog_changelog_user_rec *)hdr;
+	rec = container_of(hdr, typeof(*rec), cur_hdr);
 
-	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d %llu (%u)\n",
-		   rec->cur_id, rec->cur_endrec, (__u32)get_seconds() -
-						 rec->cur_time);
+	seq_printf(m, "%-24s %10llu (%u)",
+		   mdd_chlg_username(rec, user_name, sizeof(user_name)),
+		   rec->cur_endrec,
+		   (__u32)ktime_get_real_seconds() - rec->cur_time);
+	if (mdd_chlg_usermask(rec)) {
+		char *sep = "";
+		int i;
+
+		seq_puts(m, " mask=");
+		for (i = 0; i < CL_LAST; i++) {
+			if (!(mdd_chlg_usermask(rec) & BIT(i)))
+				continue;
+			if (*sep)
+				seq_puts(m, sep);
+			seq_puts(m, changelog_type2str(i));
+			sep = ",";
+		}
+	}
+	seq_puts(m, "\n");
+
 	return 0;
 }
 
@@ -167,8 +241,8 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 	cur = mdd->mdd_cl.mc_index;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
-	seq_printf(m, "current index: %llu\n", cur);
-	seq_printf(m, "%-5s %s %s\n", "ID", "index", "(idle seconds)");
+	seq_printf(m, "current_index: %llu\n", cur);
+	seq_printf(m, "%-24s %10s %s %s\n", "ID", "index", "(idle)", "mask");
 
 	llog_cat_process(&env, ctxt->loc_handle, lprocfs_changelog_users_cb,
 			 m, 0, 0);
@@ -646,6 +720,8 @@ LUSTRE_RW_ATTR(append_pool);
 static struct ldebugfs_vars ldebugfs_mdd_obd_vars[] = {
 	{ .name =	"changelog_mask",
 	  .fops =	&mdd_changelog_mask_fops	},
+	{ .name =	"changelog_current_mask",
+	  .fops =	&mdd_changelog_current_mask_fops },
 	{ .name =	"changelog_users",
 	  .fops =	&mdd_changelog_users_fops	},
 	{ .name =	"lfsck_namespace",

@@ -15296,8 +15296,6 @@ test_160a() {
 	ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
 	rm $DIR/$tdir/pics/desktop.jpg
 
-	changelog_dump | tail -10
-
 	echo "verifying changelog mask"
 	changelog_chmask "-MKDIR"
 	changelog_chmask "-CLOSE"
@@ -15311,7 +15309,6 @@ test_160a() {
 	test_mkdir -p $DIR/$tdir/pics/2008/sofia		# mkdir 1
 	echo "zzzzzz" > $DIR/$tdir/pics/zach/file		# open 3
 
-	changelog_dump | tail -10
 	MKDIRS=$(changelog_dump | grep -c "MKDIR")
 	CLOSES=$(changelog_dump | grep -c "CLOSE")
 	[ $MKDIRS -eq 1 ] || error "MKDIR changelog mask count $MKDIRS != 1"
@@ -15374,10 +15371,10 @@ test_160a() {
 		error "User '$cl_user' still in changelog_users"
 
 	# lctl get_param -n mdd.*.changelog_users
-	# current index: 144
+	# current_index: 144
 	# ID    index (idle seconds)
-	# cl3   144 (2)
-	if ! changelog_users $SINGLEMDS | grep "^cl"; then
+	# cl3   144   (2) mask=<list>
+	if [ -z "$(changelog_users $SINGLEMDS | grep -v current.index)" ]; then
 		# this is the normal case where all users were deregistered
 		# make sure no new records are added when no users are present
 		local last_rec1=$(changelog_users $SINGLEMDS |
@@ -16195,6 +16192,72 @@ test_160n() {
 	[[ $? -eq 0 ]] || error "fail to cancel record for $cl_user2"
 }
 run_test 160n "Changelog destroy race"
+
+test_160o() {
+	local mdt="$(facet_svc $SINGLEMDS)"
+
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $MDS1_VERSION -ge $(version_code 2.14.52) ] ||
+		skip "Need MDS version at least 2.14.52"
+
+	changelog_register --user test_160o -m unlnk+close+open ||
+		error "changelog_register failed"
+	# drop server mask so it doesn't interfere
+	do_facet $SINGLEMDS $LCTL --device $mdt \
+				changelog_register -u "Tt3_-#" &&
+		error "bad symbols in name should fail"
+
+	do_facet $SINGLEMDS $LCTL --device $mdt \
+				changelog_register -u test_160o &&
+		error "the same name registration should fail"
+
+	do_facet $SINGLEMDS $LCTL --device $mdt \
+			changelog_register -u test_160toolongname &&
+		error "too long name registration should fail"
+
+	changelog_chmask "MARK+HSM"
+	lctl get_param mdd.*.changelog*mask
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+	#verify username
+	echo $cl_user | grep -q test_160o ||
+		error "User $cl_user has no specific name 'test160o'"
+
+	# change something
+	changelog_clear 0 || error "changelog_clear failed"
+	# generate some changelog records to accumulate on MDT0
+	test_mkdir -p -i0 -c1 $DIR/$tdir || error "test_mkdir $tdir failed"
+	touch $DIR/$tdir/$tfile			# open 1
+
+	OPENS=$(changelog_dump | grep -c "OPEN")
+	[[ $OPENS -eq 1 ]] || error "OPEN changelog mask count $OPENS != 1"
+
+	# must be no MKDIR it wasn't set as user mask
+	MKDIR=$(changelog_dump | grep -c "MKDIR")
+	[[ $MKDIR -eq 0 ]] || error "MKDIR changelog mask found $MKDIR > 0"
+
+	oldmask=$(do_facet $SINGLEMDS $LCTL get_param \
+				mdd.$mdt.changelog_current_mask -n)
+	# register maskless user
+	changelog_register || error "changelog_register failed"
+	# effective mask should be not changed because it is not minimal
+	mask=$(do_facet $SINGLEMDS $LCTL get_param \
+				mdd.$mdt.changelog_current_mask -n)
+	[[ $mask == $oldmask ]] || error "mask was changed: $mask vs $oldmask"
+	# set server mask to minimal value
+	changelog_chmask "MARK"
+	# check effective mask again, should be treated as DEFMASK now
+	mask=$(do_facet $SINGLEMDS $LCTL get_param \
+				mdd.$mdt.changelog_current_mask -n)
+	[[ $mask == *"HLINK"* ]] || error "mask is not DEFMASK as expected"
+
+	do_facet $SINGLEMDS $LCTL --device $mdt \
+				changelog_deregister -u test_160o ||
+		error "cannot deregister by name"
+}
+run_test 160o "changelog user name and mask"
 
 test_160p() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
