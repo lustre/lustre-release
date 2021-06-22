@@ -266,8 +266,8 @@ lnet_peer_alloc(lnet_nid_t nid4)
 	init_waitqueue_head(&lp->lp_dc_waitq);
 	spin_lock_init(&lp->lp_lock);
 	lp->lp_primary_nid = nid;
-	lp->lp_disc_src_nid = LNET_NID_ANY;
-	lp->lp_disc_dst_nid = LNET_NID_ANY;
+	lp->lp_disc_src_nid = LNET_ANY_NID;
+	lp->lp_disc_dst_nid = LNET_ANY_NID;
 	if (lnet_peers_start_down())
 		lp->lp_alive = false;
 	else
@@ -2654,8 +2654,8 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 
 	spin_lock(&lp->lp_lock);
 
-	lp->lp_disc_src_nid = ev->target.nid;
-	lp->lp_disc_dst_nid = ev->source.nid;
+	lnet_nid4_to_nid(ev->target.nid, &lp->lp_disc_src_nid);
+	lnet_nid4_to_nid(ev->source.nid, &lp->lp_disc_dst_nid);
 
 	/*
 	 * If some kind of error happened the contents of message
@@ -3388,7 +3388,7 @@ __must_hold(&lp->lp_lock)
 			 * received by lp, we need to set the discovery source
 			 * NID for new_lp to the NID stored in lp.
 			 */
-			if (lp->lp_disc_src_nid != LNET_NID_ANY) {
+			if (!LNET_NID_IS_ANY(&lp->lp_disc_src_nid)) {
 				new_lp->lp_disc_src_nid = lp->lp_disc_src_nid;
 				new_lp->lp_disc_dst_nid = lp->lp_disc_dst_nid;
 			}
@@ -3592,13 +3592,13 @@ __must_hold(&lp->lp_lock)
 	/* Refcount for MD. */
 	lnet_peer_addref_locked(lp);
 	id.pid = LNET_PID_LUSTRE;
-	if (lp->lp_disc_dst_nid != LNET_NID_ANY)
-		id.nid = lp->lp_disc_dst_nid;
+	if (!LNET_NID_IS_ANY(&lp->lp_disc_dst_nid))
+		id.nid = lnet_nid_to_nid4(&lp->lp_disc_dst_nid);
 	else
 		id.nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 	lnet_net_unlock(cpt);
 
-	rc = LNetPut(lp->lp_disc_src_nid, lp->lp_push_mdh,
+	rc = LNetPut(lnet_nid_to_nid4(&lp->lp_disc_src_nid), lp->lp_push_mdh,
 		     LNET_ACK_REQ, id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, 0);
 
@@ -3608,8 +3608,8 @@ __must_hold(&lp->lp_lock)
 	 * get set to a specific NID, if we initiate discovery from the
 	 * scratch
 	 */
-	lp->lp_disc_src_nid = LNET_NID_ANY;
-	lp->lp_disc_dst_nid = LNET_NID_ANY;
+	lp->lp_disc_src_nid = LNET_ANY_NID;
+	lp->lp_disc_dst_nid = LNET_ANY_NID;
 
 	if (rc)
 		goto fail_unlink;
