@@ -707,7 +707,8 @@ static char *strnchr(const char *p, char c, size_t n)
 static int
 clean_path(struct param_opts *popt, char *path)
 {
-	char *nidstr = NULL;
+	char *nidstart = NULL;
+	char *nidend = NULL;
 	char *tmp;
 
 	if (popt == NULL || path == NULL || strlen(path) == 0)
@@ -742,63 +743,38 @@ clean_path(struct param_opts *popt, char *path)
 		}
 	}
 
-	/* Does this path contain a NID string ? */
+	/* Does path contain a NID string?  Skip '.->/' replacement for it. */
 	tmp = strchr(path, '@');
 	if (tmp) {
-		char *find_nid = strdup(path);
-		lnet_nid_t nid;
-
-		if (!find_nid)
-			return -ENOMEM;
-
-		/*
-		 * First we need to chop off rest after nid string.
-		 * Since find_nid is a clone of path it better have '@'
+		/* First find the NID start.  NIDs may have variable (0-4) '.',
+		 * so find the common NID prefixes instead of trying to count
+		 * the dots.  Not great, but there are only two, and faster
+		 * than multiple speculative NID parses and bad DNS lookups.
 		 */
-		tmp = strchr(find_nid, '@');
-		tmp = strchr(tmp, '.');
-		if (tmp)
-			*tmp = '\0';
+		if ((tmp = strstr(path, ".exports.")))
+			nidstart = tmp + strlen(".exports.");
+		else if ((tmp = strstr(path, ".MGC")))
+			nidstart = tmp + 1;
 
-		/* Now chop off the front. */
-		for (tmp = strchr(find_nid, '.'); tmp != NULL;
-		     tmp = strchr(tmp, '.')) {
-			/* Remove MGC to make it NID format */
-			if (!strncmp(++tmp, "MGC", 3))
-				tmp += 3;
-
-			nid = libcfs_str2nid(tmp);
-			if (nid != LNET_NID_ANY) {
-				nidstr = libcfs_nid2str(nid);
-				if (!nidstr)
-					return -EINVAL;
-				break;
-			}
-		}
-		free(find_nid);
+		/* Next, find the end of the NID string. */
+		if (nidstart)
+			nidend = strchrnul(strchr(nidstart, '@'), '.');
 	}
 
 	/* replace param '.' with '/' */
 	for (tmp = strchr(path, '.'); tmp != NULL; tmp = strchr(tmp, '.')) {
 		*tmp++ = '/';
 
-		/* Remove MGC to make it NID format */
-		if (!strncmp(tmp, "MGC", 3))
-			tmp += 3;
-
 		/*
 		 * There exist cases where some of the subdirectories of the
 		 * the parameter tree has embedded in its name a NID string.
 		 * This means that it is possible that these subdirectories
 		 * could have actual '.' in its name. If this is the case we
-		 * don't want to blindly replace the '.' with '/'.
+		 * don't want to blindly replace the '.' with '/', so skip
+		 * over the part of the parameter containing the NID.
 		 */
-		if (nidstr) {
-			char *match = strstr(tmp, nidstr);
-
-			if (tmp == match)
-				tmp += strlen(nidstr);
-		}
+		if (tmp == nidstart)
+			tmp = nidend;
 	}
 
 	return 0;

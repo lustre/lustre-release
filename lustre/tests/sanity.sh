@@ -24167,6 +24167,15 @@ test_401d() {
 }
 run_test 401d "Verify 'lctl set_param' accepts values containing '='"
 
+test_401e() { # LU-14779
+	$LCTL list_param -R "ldlm.namespaces.MGC*" ||
+		error "lctl list_param MGC* failed"
+	$LCTL get_param "ldlm.namespaces.MGC*" || error "lctl get_param failed"
+	$LCTL get_param "ldlm.namespaces.MGC*.lru_size" ||
+		error "lctl get_param lru_size failed"
+}
+run_test 401e "verify 'lctl get_param' works with NID in parameter"
+
 test_402() {
 	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||
 	[[ $MDS1_VERSION -ge $(version_code 2.7.18.4) &&
