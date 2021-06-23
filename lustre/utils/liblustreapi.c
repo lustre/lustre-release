@@ -4892,20 +4892,21 @@ static int fget_projid(int fd, int *projid)
  * Check that the file's permissions in *st matches the one in find_param
  */
 static int check_file_permissions(const struct find_param *param,
-			const lstat_t *st)
+			mode_t mode)
 {
-	const mode_t st_mode = st->st_mode & 07777;
 	int decision = 0;
+
+	mode &= 07777;
 
 	switch (param->fp_perm_sign) {
 	case LFS_FIND_PERM_EXACT:
-		decision = (st_mode == param->fp_perm);
+		decision = (mode == param->fp_perm);
 		break;
 	case LFS_FIND_PERM_ALL:
-		decision = ((st_mode & param->fp_perm) == param->fp_perm);
+		decision = ((mode & param->fp_perm) == param->fp_perm);
 		break;
 	case LFS_FIND_PERM_ANY:
-		decision = ((st_mode & param->fp_perm) != 0);
+		decision = ((mode & param->fp_perm) != 0);
 		break;
 	}
 
@@ -5104,6 +5105,13 @@ static int cb_find_init(char *path, int p, int *dp,
 		} else {
 			stripe_count = find_get_stripe_count(param);
 		}
+	}
+
+	/* Check the file permissions from the stat info */
+	if (param->fp_perm_sign) {
+		decision = check_file_permissions(param, lmd->lmd_stx.stx_mode);
+		if (decision == -1)
+			goto decided;
 	}
 
 	if (param->fp_type && !checked_type) {
@@ -5328,9 +5336,6 @@ obd_matches:
 	      (param->fp_lazy && flags & OBD_MD_FLLAZYBLOCKS)))
 		decision = 0;
 
-	if (param->fp_perm_sign)
-		decision = 0;
-
 	/*
 	 * If file still fits the request, ask ost for updated info.
 	 * The regular stat is almost of the same speed as some new
@@ -5386,13 +5391,6 @@ obd_matches:
 				ret = decision;
 				goto out;
 			}
-		}
-
-		/* Check the file permissions from the stat info */
-		if (param->fp_perm_sign) {
-			decision = check_file_permissions(param, &st);
-			if (decision == -1)
-				goto decided;
 		}
 	}
 
