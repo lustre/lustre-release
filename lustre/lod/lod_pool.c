@@ -440,7 +440,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	atomic_set(&new_pool->pool_refcount, 1);
 	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
-		GOTO(out_err, rc);
+		GOTO(out_free_pool, rc);
 
 	lu_qos_rr_init(&new_pool->pool_rr);
 
@@ -510,6 +510,7 @@ out_err:
 	lu_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
 out_free_pool_obds:
 	lu_tgt_pool_free(&new_pool->pool_obds);
+out_free_pool:
 	OBD_FREE_PTR(new_pool);
 	return rc;
 }

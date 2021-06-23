@@ -273,7 +273,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	atomic_set(&new_pool->pool_refcount, 1);
 	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
-		GOTO(out_err, rc);
+		GOTO(out_free_pool, rc);
 
 #ifdef CONFIG_PROC_FS
 	/* get ref for /proc file */
@@ -321,6 +321,7 @@ out_err:
 	spin_unlock(&obd->obd_dev_lock);
         lprocfs_remove(&new_pool->pool_proc_entry);
 	lu_tgt_pool_free(&new_pool->pool_obds);
+out_free_pool:
 	OBD_FREE_PTR(new_pool);
 
 	return rc;
