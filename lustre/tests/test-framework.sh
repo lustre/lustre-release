@@ -299,6 +299,9 @@ init_test_env() {
 	[ ! -f "$LCTL" ] && export LCTL=$(which lctl)
 	export LFS=${LFS:-"$LUSTRE/utils/lfs"}
 	[ ! -f "$LFS" ] && export LFS=$(which lfs)
+	export KSOCKLND_CONFIG=${KSOCKLND_CONFIG:-"$LUSTRE/scripts/ksocklnd-config"}
+	[ ! -f "$KSOCKLND_CONFIG" ] &&
+		export KSOCKLND_CONFIG=$(which ksocklnd-config 2> /dev/null)
 
 	export PERM_CMD=${PERM_CMD:-"$LCTL conf_param"}
 

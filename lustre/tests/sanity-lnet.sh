@@ -2088,6 +2088,7 @@ test_230() {
 		lnid="$(lctl list_nids | head -n 1)"
 		do_lnetctl ping "$lnid" ||
 			error "failed to ping myself"
+
 		# "lctl --net tcp conn_list" prints the list of active
 		# connections. Since we're pinging ourselves, there should be
 		# 2 Control connections plus 2*conns_per_peer connections
@@ -2120,6 +2121,15 @@ test_230() {
 		error "Did not stay at default"
 }
 run_test 230 "Test setting conns-per-peer"
+
+### Test that linux route is added for each ni
+test_250() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	ip route show table eth0 | grep -q "eth0"
+}
+run_test 250 "test that linux routes are added"
 
 test_300() {
 	# LU-13274

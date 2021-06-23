@@ -90,6 +90,7 @@ static int jt_calc_service_id(int argc, char **argv);
 static int jt_set_response_tracking(int argc, char **argv);
 static int jt_set_recovery_limit(int argc, char **argv);
 static int jt_udsp(int argc, char **argv);
+static int jt_setup_mrrouting(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -112,6 +113,8 @@ command_t cmd_list[] = {
 	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
 	{"service-id", jt_calc_service_id, 0, "Calculate IB Lustre service ID\n"},
 	{"udsp", jt_udsp, 0, "udsp {add | del | help}"},
+	{"setup-mrrouting", jt_setup_mrrouting, 0,
+	 "setup linux routing tables\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -156,7 +159,8 @@ command_t net_cmds[] = {
 	 "\t--peer-buffer-credits: the number of buffer credits per peer\n"
 	 "\t--credits: Network Interface credits\n"
 	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"
-	 "\t--conns-per-peer: number of connections per peer\n"},
+	 "\t--conns-per-peer: number of connections per peer\n"
+	 "\t--skip-mr-route-setup: do not add linux route for the ni\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"},
@@ -297,6 +301,21 @@ static int jt_calc_service_id(int argc, char **argv)
 	 * Therefore just print it locally here
 	 */
 	printf("service id:\n    value: 0x%jx\n", (uintmax_t)service_id);
+
+	return rc;
+}
+
+static int jt_setup_mrrouting(int argc, char **argv)
+{
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = lustre_lnet_setup_mrrouting(&err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
 
 	return rc;
 }
@@ -957,16 +976,19 @@ static int jt_add_ni(int argc, char **argv)
 	struct cfs_expr_list *global_cpts = NULL;
 	struct lnet_ioctl_config_lnd_tunables tunables;
 	bool found = false;
+	bool skip_mr_route_setup = false;
 
 	memset(&tunables, 0, sizeof(tunables));
 	lustre_lnet_init_nw_descr(&nw_descr);
 
-	const char *const short_options = "b:c:i:m:n:p:r:s:t:";
+	const char *const short_options = "b:c:i:k:m:n:p:r:s:t:";
 	static const struct option long_options[] = {
 	{ .name = "peer-buffer-credits",
 				  .has_arg = required_argument, .val = 'b' },
 	{ .name = "peer-credits", .has_arg = required_argument, .val = 'c' },
 	{ .name = "if",		  .has_arg = required_argument, .val = 'i' },
+	{ .name = "skip-mr-route-setup",
+				  .has_arg = no_argument, .val = 'k' },
 	{ .name = "conns-per-peer",
 				  .has_arg = required_argument, .val = 'm' },
 	{ .name = "net",	  .has_arg = required_argument, .val = 'n' },
@@ -1007,6 +1029,9 @@ static int jt_add_ni(int argc, char **argv)
 						&err_rc);
 				goto failed;
 			}
+			break;
+		case 'k':
+			skip_mr_route_setup = true;
 			break;
 		case 'm':
 			rc = parse_long(optarg, &cpp);
@@ -1072,6 +1097,16 @@ failed:
 		cYAML_print_tree2file(stderr, err_rc);
 
 	cYAML_free_tree(err_rc);
+
+	if (rc == LUSTRE_CFG_RC_NO_ERR && !skip_mr_route_setup) {
+		err_rc = NULL;
+		rc = lustre_lnet_setup_mrrouting(&err_rc);
+
+		if (rc != LUSTRE_CFG_RC_NO_ERR)
+			cYAML_print_tree2file(stderr, err_rc);
+
+		cYAML_free_tree(err_rc);
+	}
 
 	return rc;
 }

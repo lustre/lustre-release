@@ -152,6 +152,11 @@ static unsigned int conns_per_peer = DEFAULT_CONNS_PER_PEER;
 module_param(conns_per_peer, uint, 0644);
 MODULE_PARM_DESC(conns_per_peer, "number of connections per peer");
 
+/* By default skip_mr_route_setup is 0 (do not skip) */
+static unsigned int skip_mr_route_setup;
+module_param(skip_mr_route_setup, uint, 0444);
+MODULE_PARM_DESC(skip_mr_route_setup, "skip automatic setup of linux routes for MR");
+
 #ifdef SOCKNAL_BACKOFF
 static int backoff_init = 3;
 module_param(backoff_init, int, 0644);

@@ -3636,6 +3636,142 @@ int lustre_lnet_calc_service_id(__u64 *service_id)
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+int lustre_lnet_setup_mrrouting(struct cYAML **err_rc)
+{
+	char *buf;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i;
+	int l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
+	struct lnet_ioctl_config_ni *ni_data;
+	struct lnet_ioctl_config_lnd_tunables *lnd;
+	struct lnet_ioctl_element_stats *stats;
+	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd) + sizeof(*stats);
+	char ifstr_buf[LNET_INTERFACES_NUM*LNET_MAX_STR_LEN];
+	char *ifstr_ptr, *tmp_ptr, *tmp_ptr2;
+	int if_cnt = 0, prc;
+	char syscmdbuf[LNET_MAX_STR_LEN];
+	char cmdpath[LNET_MAX_STR_LEN];
+	bool use_custom = false;
+
+	buf = calloc(1, buf_size);
+	if (buf == NULL)
+		goto out;
+
+	ni_data = (struct lnet_ioctl_config_ni *)buf;
+
+	ifstr_buf[0] = 0;
+	ifstr_ptr = ifstr_buf;
+
+	for (i = 0;; i++) {
+		__u32 rc_net;
+
+		memset(buf, 0, buf_size);
+
+		LIBCFS_IOC_INIT_V2(*ni_data, lic_cfg_hdr);
+		/* set the ioc_len to the proper value since INIT assumes
+		 * size of data
+		 */
+		ni_data->lic_cfg_hdr.ioc_len = buf_size;
+		ni_data->lic_idx = i;
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_LOCAL_NI, ni_data);
+		if (rc != 0) {
+			l_errno = errno;
+			break;
+		}
+
+		rc_net = LNET_NIDNET(ni_data->lic_nid);
+
+		/* only need to setup routing for tcp */
+		if (LNET_NETTYP(rc_net) != SOCKLND)
+			continue;
+
+		/* don't add interfaces unless there is at least one
+		 * interface
+		 */
+		if (strlen(ni_data->lic_ni_intf) > 0) {
+			if (if_cnt > 0)
+				strcat(ifstr_ptr, ",");
+			strcat(ifstr_ptr, ni_data->lic_ni_intf);
+			if_cnt++;
+		}
+	}
+
+	if (l_errno != ENOENT) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get networks: %s\"",
+			 strerror(l_errno));
+		rc = -l_errno;
+		goto out;
+	} else {
+		rc = LUSTRE_CFG_RC_NO_ERR;
+	}
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	if (if_cnt > 0) {
+		tmp_ptr = getenv("KSOCKLND_CONFIG");
+		if (tmp_ptr) {
+			tmp_ptr2 = strrchr(tmp_ptr, '/');
+			if (tmp_ptr2 && !strcmp(tmp_ptr2, "/ksocklnd-config")) {
+				snprintf(cmdpath, sizeof(cmdpath), "%s",
+					 tmp_ptr);
+				use_custom = true;
+			}
+		}
+
+		if (!use_custom)
+			snprintf(cmdpath, sizeof(cmdpath),
+				 "/usr/sbin/ksocklnd-config");
+
+		prc = snprintf(0, 0, "%s %s", cmdpath, ifstr_ptr);
+
+		if (prc < 0) {
+			l_errno = errno;
+			snprintf(err_str,
+				 sizeof(err_str),
+				 "\"snprintf failed : %s\"",
+				 strerror(l_errno));
+			rc = -l_errno;
+		} else if (prc >= LNET_MAX_STR_LEN) {
+			snprintf(err_str, sizeof(err_str),
+				 "\"ksocklnd-config: argument too long\"");
+		} else {
+			prc = snprintf(syscmdbuf, sizeof(syscmdbuf), "%s %s",
+				       cmdpath, ifstr_ptr);
+
+			if (prc < 0) {
+				l_errno = errno;
+				snprintf(err_str,
+					 sizeof(err_str),
+					 "\"snprintf failed : %s\"",
+					 strerror(l_errno));
+				rc = -l_errno;
+				goto out;
+			}
+
+			rc = system(syscmdbuf);
+			if (rc != 0) {
+				l_errno = errno;
+				snprintf(err_str,
+					 sizeof(err_str),
+					 "\"failed to execute ksocklnd-config : %s\"",
+					 strerror(l_errno));
+				rc = -l_errno;
+			}
+		}
+	}
+out:
+	if (buf)
+		free(buf);
+
+	cYAML_build_error(rc, -1, MANAGE_CMD, "setup-mrrouting", err_str,
+			  err_rc);
+
+	return rc;
+}
+
 int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
 			struct cYAML **show_rc, struct cYAML **err_rc)
 {

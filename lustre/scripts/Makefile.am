@@ -36,7 +36,7 @@ genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start lnet
 
 SUBDIRS = systemd
 
-sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe
+sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe ksocklnd-config
 
 if RHEL
 initdir = $(sysconfdir)/init.d
@@ -92,7 +92,7 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
 	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
-	     zfsobj2fid ko2iblnd-probe statechange-lustre.sh \
+	     zfsobj2fid ko2iblnd-probe ksocklnd-config statechange-lustre.sh \
 	     vdev_attach-lustre.sh vdev_remove-lustre.sh vdev_clear-lustre.sh \
 	     bash-completion/lustre bash-completion/lctl bash-completion/lfs
 

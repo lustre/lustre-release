@@ -1,0 +1,165 @@
+#!/bin/sh
+
+me="${0##*/}"
+
+# convert number of mask bits to x.x.x.x mask format
+cidr2mask() {
+	local i mask=""
+	local full_octets=$(($1/8))
+	local partial_octet=$(($1%8))
+
+	for ((i=0;i<4;i+=1)); do
+		if [ $i -lt $full_octets ]; then
+      			mask+=255
+		elif [ $i -eq $full_octets ]; then
+			mask+=$((256 - 2**(8-$partial_octet)))
+		else
+			mask+=0
+		fi
+		test $i -lt 3 && mask+=.
+	done
+
+	echo $mask
+}
+
+# apply netmask (second argument) to ip address (first argument)
+netcalc() {
+	local ipa=$(echo ${1} | awk -F. '{ print $1 }')
+	local ipb=$(echo ${1} | awk -F. '{ print $2 }')
+	local ipc=$(echo ${1} | awk -F. '{ print $3 }')
+	local ipd=$(echo ${1} | awk -F. '{ print $4 }')
+	local mka=$(echo ${2} | awk -F. '{ print $1 }')
+	local mkb=$(echo ${2} | awk -F. '{ print $2 }')
+	local mkc=$(echo ${2} | awk -F. '{ print $3 }')
+	local mkd=$(echo ${2} | awk -F. '{ print $4 }')
+	local nta="$(( $ipa & $mka ))"
+	local ntb="$(( $ipb & $mkb ))"
+	local ntc="$(( $ipc & $mkc ))"
+	local ntd="$(( $ipd & $mkd ))"
+	echo "$nta.$ntb.$ntc.$ntd"
+}
+
+# Check if the user wants to skip setting the routes
+checkskipcmd=$(cat /sys/module/ksocklnd/parameters/skip_mr_route_setup 2>&-)
+if [ "$checkskipcmd" == "1" ]; then
+	exit 0
+fi
+
+# Extract comma-separated interfaces from the argument
+j=0
+declare -a interfaces
+for i in $(echo $1 | sed "s/,/ /g")
+do
+	# verify that the interface exists
+	#echo "$i"
+	addr=$(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1)
+	linelen=$(echo -n $addr | wc -m)
+	if [[ $linelen -eq 0 ]]; then
+		# there's a problem with this interface, skip it
+		#echo 'bad!'
+		continue
+	fi
+	# check if route is already set up for this interface
+	intfroute=$(/sbin/ip route show table $i 2>&-)
+	if [[ ! -z $intfroute ]]; then
+		# route exists so skip this interface
+		logcmd=(logger "${me}: skip setting up route for ${i}: don\'t overwrite existing route")
+		eval "${logcmd[@]}"
+		continue
+	fi
+	interfaces[$j]=$i
+	j=$((j+1))
+done
+
+# this array will contain the interfaces
+# already listed in rt_tables
+interfaces_listed=()
+
+# flush cache for every interface
+for i in "${interfaces[@]}"
+do
+	# build command
+	redirect="2>&-"
+	flushcmd=(/sbin/ip route flush table ${i} ${redirect} )
+	# execute command
+	eval "${flushcmd[@]}"
+	logcmd=(logger "${me}: ${flushcmd[@]}")
+	eval "${logcmd[@]}"
+done
+
+filename='/etc/iproute2/rt_tables'
+n=1
+max_table_num=0
+while read line; do
+	# reading each line
+	# trim leading and trailing spaces
+	line=`echo $line | sed -e 's/^[[:space:]]*//'`
+	linelen=$(echo -n $line | wc -m)
+	# don't check empty lines
+	if [ $linelen -lt 1 ]; then
+		continue
+	fi
+	# don't check comments
+	if [[ ${line:0:1} == "#" ]]; then
+		continue
+	fi
+	# split using space as separator
+        splitline=( $line )
+	# check the table number and update the max
+	if [ $max_table_num -lt ${splitline[0]} ]; then
+		max_table_num=${splitline[0]}
+	fi
+	# check if any of the interfaces are listed
+	for i in "${interfaces[@]}"
+	do
+		if [[ " ${splitline[@]} " =~ " ${i} " ]]; then
+			if [[ " ${interfaces[@]} " =~ " ${i} " ]]; then
+				interfaces_listed+=($i)
+			fi
+		fi
+	done
+	#echo "Line No. $n : $line: $max_table_num"
+	n=$((n+1))
+done < $filename
+
+# add entries for unlisted interfaces
+for i in "${interfaces[@]}"
+do
+	if [[ ! " ${interfaces_listed[@]} " =~ " ${i} " ]]; then
+		max_table_num=$((max_table_num+1))
+		echo "$max_table_num $i" >> $filename
+	fi
+done
+
+# add the routing entries and rules
+for i in "${interfaces[@]}"
+do
+	# extract ipv4 address and netmask in cidr format
+	addr=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
+	cidrmask=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
+	# convert cidr mask to mask in dot format
+	dotmask=$(cidr2mask ${cidrmask[0]})
+	# apply mask to ip addr
+	net=$(netcalc ${addr[0]} $dotmask)
+	# build and execute route commands
+	routecmd=(/sbin/ip route add ${net}/${cidrmask[0]} dev ${i} proto kernel scope link src ${addr[0]} table ${i})
+	ruledelcmd=(/sbin/ip rule del from ${addr[0]} table ${i} '&>/dev/null')
+	ruleaddcmd=(/sbin/ip rule add from ${addr[0]} table ${i})
+	eval ${routecmd[@]}
+	eval ${ruledelcmd[@]}
+	eval ${ruleaddcmd[@]}
+	logcmd1=(logger "${me}: ${routecmd[@]}")
+	logcmd2=(logger "${me}: ${ruledelcmd[@]}")
+	logcmd3=(logger "${me}: ${ruleaddcmd[@]}")
+	eval "${logcmd1[@]}"
+	eval "${logcmd2[@]}"
+	eval "${logcmd3[@]}"
+done
+
+# flush arp tables
+for i in "${interfaces[@]}"
+do
+	flushcmd=(/sbin/ip neigh flush dev ${i})
+	eval ${flushcmd[@]}
+done
+
