@@ -1998,6 +1998,53 @@ test_213() {
 }
 run_test 213 "Check LNetDist calculation for multiple local NIDs"
 
+function check_ni_status() {
+	local nid="$1"
+	local expect="$2"
+
+	local status=$($LNETCTL net show |
+		       grep -A 1 ${nid} |
+		       awk '/status/{print $NF}')
+
+	echo "NI ${nid} expect status \"${expect}\" found \"${status}\""
+	if [[ $status != $expect ]]; then
+		error "Error: Expect NI status \"$expect\" for NID \"$nid\" but found \"$status\""
+	fi
+
+	return 0
+}
+
+test_214() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+	have_interface "$FAKE_IF" ||
+		error "Expect $FAKE_IF configured but not found"
+
+	reinit_dlc || return $?
+
+	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "$FAKE_IF" || return $?
+
+	local nid1=$(lctl list_nids | head -n 1)
+	local nid2=$(lctl list_nids | tail --lines 1)
+
+	check_ni_status "0@lo" up
+	check_ni_status "$nid1" up
+	check_ni_status "$nid2" up
+
+	echo "Set $FAKE_IF down"
+	echo "ip link set dev $FAKE_IF down"
+	ip link set dev $FAKE_IF down
+	check_ni_status "0@lo" up
+	check_ni_status "$nid1" up
+	check_ni_status "$nid2" down
+}
+run_test 214 "Check local NI status when link is downed"
+
 test_230() {
 	# LU-12815
 	echo "Check valid values; Should succeed"
