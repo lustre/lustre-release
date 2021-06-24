@@ -232,6 +232,20 @@ __must_hold(&ni->ni_lock)
 	return update;
 }
 
+static inline unsigned int
+lnet_ni_get_status_locked(struct lnet_ni *ni)
+__must_hold(&ni->ni_lock)
+{
+	if (ni->ni_nid == LNET_NID_LO_0)
+		return LNET_NI_STATUS_UP;
+	else if (atomic_read(&ni->ni_fatal_error_on))
+		return LNET_NI_STATUS_DOWN;
+	else if (ni->ni_status)
+		return ni->ni_status->ns_status;
+	else
+		return LNET_NI_STATUS_UP;
+}
+
 static inline bool
 lnet_ni_set_status(struct lnet_ni *ni, __u32 status)
 {

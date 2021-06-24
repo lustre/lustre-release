@@ -689,7 +689,7 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 
 			lnet_ni_lock(ni);
 			LASSERT(ni->ni_status != NULL);
-			stat = (ni->ni_status->ns_status ==
+			stat = (lnet_ni_get_status_locked(ni) ==
 				LNET_NI_STATUS_UP) ? "up" : "down";
 			lnet_ni_unlock(ni);
 

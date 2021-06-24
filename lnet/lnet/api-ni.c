@@ -1910,9 +1910,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 			ns->ns_nid = ni->ni_nid;
 
 			lnet_ni_lock(ni);
-			ns->ns_status = (ni->ni_status != NULL) ?
-					 ni->ni_status->ns_status :
-						LNET_NI_STATUS_UP;
+			ns->ns_status = lnet_ni_get_status_locked(ni);
 			ni->ni_status = ns;
 			lnet_ni_unlock(ni);
 
@@ -3010,10 +3008,7 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	}
 
 	cfg_ni->lic_nid = ni->ni_nid;
-	if (ni->ni_nid == LNET_NID_LO_0)
-		cfg_ni->lic_status = LNET_NI_STATUS_UP;
-	else
-		cfg_ni->lic_status = ni->ni_status->ns_status;
+	cfg_ni->lic_status = lnet_ni_get_status_locked(ni);
 	cfg_ni->lic_dev_cpt = ni->ni_dev_cpt;
 
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
@@ -3096,10 +3091,7 @@ lnet_fill_ni_info_legacy(struct lnet_ni *ni,
 	config->cfg_config_u.cfg_net.net_peer_rtr_credits =
 		ni->ni_net->net_tunables.lct_peer_rtr_credits;
 
-	if (ni->ni_nid == LNET_NID_LO_0)
-		net_config->ni_status = LNET_NI_STATUS_UP;
-	else
-		net_config->ni_status = ni->ni_status->ns_status;
+	net_config->ni_status = lnet_ni_get_status_locked(ni);
 
 	if (ni->ni_cpts) {
 		int num_cpts = min(ni->ni_ncpts, LNET_MAX_SHOW_NUM_CPT);
