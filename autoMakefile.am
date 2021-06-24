@@ -234,6 +234,7 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 # In the debs target, first make sure what's in the changelog reflects
 # the software version.
 debs: undef.h
+	cp -v debian/changelog.in debian/changelog ; \
 	lversion=$$(echo @VERSION@ | tr '_' '-'); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
@@ -338,6 +339,7 @@ debs: undef.h
 	   debs/
 
 dkms-debs: undef.h
+	cp -v debian/changelog.in debian/changelog ; \
 	lversion=$$(echo @VERSION@ | tr '_' '-'); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
