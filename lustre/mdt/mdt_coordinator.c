@@ -141,6 +141,8 @@ struct hsm_scan_data {
 	 */
 	bool			 hsd_housekeeping;
 	bool			 hsd_one_restore;
+	u32			 hsd_start_cat_idx;
+	u32			 hsd_start_rec_idx;
 	int			 hsd_action_count;
 	int			 hsd_request_len; /* array alloc len */
 	int			 hsd_request_count; /* array used count */
@@ -158,6 +160,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	struct hsm_action_item *hai;
 	size_t hai_size;
 	u32 archive_id;
+	bool wrapped;
 	int i;
 
 	/* Are agents full? */
@@ -298,6 +301,16 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 		cdt_agent_record_hash_add(cdt, hai->hai_cookie,
 					  llh->lgh_hdr->llh_cat_idx,
 					  larr->arr_hdr.lrh_index);
+	}
+
+	wrapped = llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
+		  llh->lgh_hdr->llh_count > 1;
+	if ((!wrapped && llh->lgh_hdr->llh_cat_idx > hsd->hsd_start_cat_idx) ||
+	    (wrapped && llh->lgh_hdr->llh_cat_idx < hsd->hsd_start_cat_idx) ||
+	    (llh->lgh_hdr->llh_cat_idx == hsd->hsd_start_cat_idx &&
+	     larr->arr_hdr.lrh_index > hsd->hsd_start_rec_idx)) {
+		hsd->hsd_start_cat_idx = llh->lgh_hdr->llh_cat_idx;
+		hsd->hsd_start_rec_idx = larr->arr_hdr.lrh_index;
 	}
 
 	RETURN(0);
@@ -572,6 +585,8 @@ static int mdt_coordinator(void *data)
 		int update_idx = 0;
 		int updates_sz;
 		int updates_cnt;
+		u32 start_cat_idx;
+		u32 start_rec_idx;
 		struct hsm_record_update *updates;
 
 		/* Limit execution of the expensive requests traversal
@@ -605,8 +620,12 @@ static int mdt_coordinator(void *data)
 		    ktime_get_real_seconds()) {
 			last_housekeeping = ktime_get_real_seconds();
 			hsd.hsd_housekeeping = true;
+			start_cat_idx = 0;
+			start_rec_idx = 0;
 		} else if (cdt->cdt_event) {
 			hsd.hsd_housekeeping = false;
+			start_cat_idx = hsd.hsd_start_cat_idx;
+			start_rec_idx = hsd.hsd_start_rec_idx;
 		} else {
 			continue;
 		}
@@ -644,7 +663,8 @@ static int mdt_coordinator(void *data)
 		hsd.hsd_one_restore = false;
 
 		rc = cdt_llog_process(mti->mti_env, mdt, mdt_coordinator_cb,
-				      &hsd, 0, 0, WRITE);
+				      &hsd, start_cat_idx, start_rec_idx,
+				      WRITE);
 		if (rc < 0)
 			goto clean_cb_alloc;
 
@@ -654,6 +674,9 @@ static int mdt_coordinator(void *data)
 		if (list_empty(&cdt->cdt_agents)) {
 			CDEBUG(D_HSM, "no agent available, "
 				      "coordinator sleeps\n");
+			/* reset HSM scanning index range. */
+			hsd.hsd_start_cat_idx = start_cat_idx;
+			hsd.hsd_start_rec_idx = start_rec_idx;
 			goto clean_cb_alloc;
 		}
 
@@ -705,6 +728,15 @@ static int mdt_coordinator(void *data)
 					(rc ? ARS_WAITING : ARS_STARTED);
 				hai = hai_next(hai);
 				update_idx++;
+			}
+
+			/* TODO: narrow down the HSM action range that already
+			 * scanned accroding to the cookies when a failure
+			 * occurs.
+			 */
+			if (rc) {
+				hsd.hsd_start_cat_idx = start_cat_idx;
+				hsd.hsd_start_rec_idx = start_rec_idx;
 			}
 		}
 

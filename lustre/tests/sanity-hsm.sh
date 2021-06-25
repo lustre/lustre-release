@@ -2821,6 +2821,91 @@ test_40() {
 }
 run_test 40 "Parallel archive requests"
 
+hsm_archive_batch() {
+	local files_num=$1
+	local batch_max=$2
+	local filebase=$3
+	local batch_num=0
+	local fileset=""
+	local i=0
+
+	while [ $i -lt $files_num ]; do
+		if [ $batch_num -eq $batch_max ]; then
+			$LFS hsm_archive $fileset || error "HSM archive failed"
+			# Reset the batch container.
+			fileset=""
+			batch_num=0
+		fi
+
+		fileset+="${filebase}$i "
+		batch_num=$(( batch_num + 1 ))
+		i=$(( i + 1 ))
+	done
+
+	if [ $batch_num -ne 0 ]; then
+		$LFS hsm_archive $fileset || error "HSM archive failed"
+		fileset=""
+		batch_num=0
+	fi
+}
+
+test_50() {
+	local dir=$DIR/$tdir
+	local batch_max=50
+
+	set_hsm_param max_requests 1000000
+	mkdir $dir || error "mkdir $dir failed"
+	df -i $MOUNT
+
+	local start
+	local elapsed
+	local files_num
+	local filebase
+
+	files_num=10000
+	filebase="$dir/$tfile.start."
+	createmany -m $filebase $files_num ||
+		error "createmany -m $filebase failed: $?"
+
+	start=$SECONDS
+	hsm_archive_batch $files_num $batch_max "$filebase"
+	elapsed=$((SECONDS - start))
+	do_facet $SINGLEMDS "$LCTL get_param -n \
+		 $HSM_PARAM.actions | grep WAITING | wc -l"
+	unlinkmany $filebase $files_num || error "unlinkmany $filabase failed"
+	echo "Start Phase files_num: $files_num time: $elapsed"
+
+	files_num=20000
+	filebase="$dir/$tfile.in."
+	createmany -m $filebase $files_num ||
+		error "createmany -m $filebase failed: $?"
+	start=$SECONDS
+	hsm_archive_batch  $files_num $batch_max "$filebase"
+	elapsed=$((SECONDS - start))
+	unlinkmany $filebase $files_num || error "unlinkmany $filabase failed"
+	echo "Middle Phase files_num: $files_num time: $elapsed"
+
+	files_num=10000
+	filebase="$dir/$tfile.end."
+	createmany -m $filebase $files_num ||
+		error "createmany -m $filebase failed: $?"
+
+	start=$SECONDS
+	hsm_archive_batch $files_num $batch_max "$filebase"
+	elapsed=$((SECONDS - start))
+	do_facet $SINGLEMDS "$LCTL get_param -n \
+		 $HSM_PARAM.actions | grep WAITING | wc -l"
+
+	unlinkmany $filebase $files_num || error "unlinkmany $filebase failed"
+	echo "End Phase files_num: $files_num time: $elapsed"
+
+	do_facet $SINGLEMDS "$LCTL get_param -n \
+		 $HSM_PARAM.actions | grep WAITING | wc -l"
+
+	cdt_purge
+}
+run_test 50 "Archive with large number of pending HSM actions"
+
 test_52() {
 	# test needs a running copytool
 	copytool setup
