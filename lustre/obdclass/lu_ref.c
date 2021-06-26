@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -37,14 +38,12 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lu_ref.h>
 
-#ifdef USE_LU_REF
-
+#ifdef CONFIG_LUSTRE_DEBUG_LU_REF
 /**
  * Asserts a condition for a given lu_ref. Must be called with
  * lu_ref::lf_guard held.
@@ -152,9 +151,9 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
 	struct lu_ref_link *link;
 
 	link = NULL;
-	if (lu_ref_link_kmem != NULL) {
+	if (lu_ref_link_kmem) {
 		OBD_SLAB_ALLOC_PTR_GFP(link, lu_ref_link_kmem, flags);
-		if (link != NULL) {
+		if (link) {
 			link->ll_ref = ref;
 			link->ll_scope = scope;
 			link->ll_source = source;
@@ -165,7 +164,7 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
 		}
 	}
 
-	if (link == NULL) {
+	if (!link) {
 		spin_lock(&ref->lf_guard);
 		ref->lf_failed++;
 		spin_unlock(&ref->lf_guard);
@@ -215,13 +214,13 @@ static inline int lu_ref_link_eq(const struct lu_ref_link *link,
 /**
  * Maximal chain length seen so far.
  */
-static unsigned lu_ref_chain_max_length = 127;
+static unsigned int lu_ref_chain_max_length = 127;
 
 /**
  * Searches for a lu_ref_link with given [scope, source] within given lu_ref.
  */
 static struct lu_ref_link *lu_ref_find(struct lu_ref *ref, const char *scope,
-                                       const void *source)
+				       const void *source)
 {
 	struct lu_ref_link *link;
 	unsigned int iterations;
@@ -247,7 +246,7 @@ void lu_ref_del(struct lu_ref *ref, const char *scope, const void *source)
 
 	spin_lock(&ref->lf_guard);
 	link = lu_ref_find(ref, scope, source);
-	if (link != NULL) {
+	if (link) {
 		list_del(&link->ll_linkage);
 		ref->lf_refs--;
 		spin_unlock(&ref->lf_guard);
@@ -265,7 +264,7 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const void *source0, const void *source1)
 {
 	spin_lock(&ref->lf_guard);
-	REFASSERT(ref, link != NULL && !IS_ERR(link));
+	REFASSERT(ref, !IS_ERR_OR_NULL(link));
 	REFASSERT(ref, link->ll_ref == ref);
 	REFASSERT(ref, lu_ref_link_eq(link, scope, source0));
 	link->ll_source = source1;
@@ -277,7 +276,7 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope, const void *source)
 {
 	spin_lock(&ref->lf_guard);
-	REFASSERT(ref, link != NULL && !IS_ERR(link));
+	REFASSERT(ref, !IS_ERR_OR_NULL(link));
 	REFASSERT(ref, link->ll_ref == ref);
 	REFASSERT(ref, lu_ref_link_eq(link, scope, source));
 	list_del(&link->ll_linkage);
@@ -360,10 +359,10 @@ static int lu_ref_seq_show(struct seq_file *seq, void *p)
 }
 
 static const struct seq_operations lu_ref_seq_ops = {
-	.start = lu_ref_seq_start,
-	.stop  = lu_ref_seq_stop,
-	.next  = lu_ref_seq_next,
-	.show  = lu_ref_seq_show
+	.start	= lu_ref_seq_start,
+	.stop	= lu_ref_seq_stop,
+	.next	= lu_ref_seq_next,
+	.show	= lu_ref_seq_show
 };
 
 static int lu_ref_seq_open(struct inode *inode, struct file *file)
@@ -443,4 +442,4 @@ void lu_ref_global_fini(void)
 	lu_kmem_fini(lu_ref_caches);
 }
 
-#endif /* USE_LU_REF */
+#endif /* CONFIG_LUSTRE_DEBUG_LU_REF */
