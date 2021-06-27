@@ -1847,6 +1847,7 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 	if (unlikely(pos->lp_oit_cookie == 0))
 		pos->lp_oit_cookie = 1;
 
+	spin_lock(&lfsck->li_lock);
 	if (lfsck->li_di_dir != NULL) {
 		struct dt_object *dto = lfsck->li_obj_dir;
 
@@ -1863,6 +1864,7 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 		fid_zero(&pos->lp_dir_parent);
 		pos->lp_dir_cookie = 0;
 	}
+	spin_unlock(&lfsck->li_lock);
 }
 
 bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
