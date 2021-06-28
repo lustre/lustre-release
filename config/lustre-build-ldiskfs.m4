@@ -50,6 +50,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	)], [LDISKFS_SERIES="5.4.21-ml.series"],
 	    [LDISKFS_SERIES="5.4.21-ml.series"])
 ], [test x$UBUNTU_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.8.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.0.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.15.0],[
@@ -95,7 +96,10 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			[LDISKFS_SERIES="5.4.0-42-ubuntu20.series"]
 		)
 	],
-	[LDISKFS_SERIES="5.4.0-ml.series"])
+	[LDISKFS_SERIES="5.4.0-ml.series"])],
+	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
+	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
+	[LDISKFS_SERIES="5.8.0-ml.series"])
 ])
 ])
 # Not RHEL/SLES or Ubuntu .. probably mainline
@@ -414,6 +418,29 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_JBD2_H_TOTAL_CREDITS
 
 #
+# LB_EXT4_GET_BLOCKS_KEEP_SIZE
+#
+# kernel 5.6-rc4 commit 9e52484c713321e84e8834803a44ca0a001376d2
+# ext4: remove EXT4_GET_BLOCKS_KEEP_SIZE flag
+#
+AC_DEFUN([LB_EXT4_GET_BLOCKS_KEEP_SIZE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if EXT4_GET_BLOCKS_KEEP_SIZE exists],
+ext4_get_blocks_keep_size, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	int f = EXT4_IGET_SPECIAL;
+	(void)f;
+],[
+	AC_DEFINE(HAVE_LDISKFS_GET_BLOCKS_KEEP_SIZE, 1,
+		[EXT4_GET_BLOCKS_KEEP_SIZE hasn't been removed])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_EXT4_GET_BLOCKS_KEEP_SIZE
+
+#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -466,6 +493,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_LDISKFS_FIND_ENTRY_LOCKED_EXISTS
 	LB_LDISKFSFS_DIRHASH_WANTS_DIR
 	LB_JBD2_H_TOTAL_CREDITS
+	LB_EXT4_GET_BLOCKS_KEEP_SIZE
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

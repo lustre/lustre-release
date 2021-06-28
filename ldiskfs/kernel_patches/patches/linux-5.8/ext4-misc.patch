@@ -1,14 +1,16 @@
 ---
  fs/ext4/ext4.h   |   23 ++++++++++++++++++++++-
+ fs/ext4/ext4_jbd2.c | 1 +
  fs/ext4/ialloc.c |    3 ++-
  fs/ext4/inode.c  |   15 +++++++++++++++
  fs/ext4/namei.c  |    9 ++++++---
  fs/ext4/super.c  |   10 ++--------
- 5 files changed, 47 insertions(+), 13 deletions(-)
+ 5 files changed, 48 insertions(+), 13 deletions(-)
 
---- a/fs/ext4/ext4.h
-+++ b/fs/ext4/ext4.h
-@@ -1759,6 +1759,8 @@ static inline bool ext4_verity_in_progre
+diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h	2021-06-28 08:45:39.093954644 -0600
++++ b/fs/ext4/ext4.h	2021-06-28 08:46:06.913523572 -0600
+@@ -1764,6 +1764,8 @@
  
  #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
  
@@ -17,7 +19,7 @@
  /*
   * Codes for operating systems
   */
-@@ -1990,7 +1992,21 @@ static inline bool ext4_has_unknown_ext#
+@@ -1995,7 +1997,21 @@
  
  EXTN_FEATURE_FUNCS(2)
  EXTN_FEATURE_FUNCS(3)
@@ -40,7 +42,7 @@
  
  static inline bool ext4_has_compat_features(struct super_block *sb)
  {
-@@ -3393,6 +3409,11 @@ struct ext4_extent;
+@@ -3399,6 +3415,11 @@
  #define EXT_MAX_BLOCKS	0xffffffff
  
  extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
@@ -52,9 +54,21 @@
  extern int ext4_ext_index_trans_blocks(struct inode *inode, int extents);
  extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
  			       struct ext4_map_blocks *map, int flags);
---- a/fs/ext4/ialloc.c
-+++ b/fs/ext4/ialloc.c
-@@ -115,7 +115,7 @@ verified:
+diff -ur a/fs/ext4/ext4_jbd2.c b/fs/ext4/ext4_jbd2.c
+--- a/fs/ext4/ext4_jbd2.c	2021-06-28 08:45:38.905957595 -0600
++++ b/fs/ext4/ext4_jbd2.c	2021-06-28 08:49:18.306817373 -0600
+@@ -169,6 +169,7 @@
+ 	revoke_cred = max(0, revoke_cred - handle->h_revoke_credits);
+ 	return ext4_journal_extend(handle, extend_cred, revoke_cred);
+ }
++EXPORT_SYMBOL(__ext4_journal_ensure_credits);
+ 
+ static void ext4_journal_abort_handle(const char *caller, unsigned int line,
+ 				      const char *err_fn,
+diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+--- a/fs/ext4/ialloc.c	2021-06-28 08:45:38.993956213 -0600
++++ b/fs/ext4/ialloc.c	2021-06-28 08:46:06.917523511 -0600
+@@ -115,7 +115,7 @@
   *
   * Return buffer_head of bitmap on success, or an ERR_PTR on error.
   */
@@ -63,7 +77,7 @@
  ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
  {
  	struct ext4_group_desc *desc;
-@@ -213,6 +213,7 @@ out:
+@@ -214,6 +214,7 @@
  	put_bh(bh);
  	return ERR_PTR(err);
  }
@@ -71,9 +85,10 @@
  
  /*
   * NOTE! When we get the inode, we're the only people
---- a/fs/ext4/inode.c
-+++ b/fs/ext4/inode.c
-@@ -6065,3 +6065,18 @@ vm_fault_t ext4_filemap_fault(struct vm_
+diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c	2021-06-28 08:45:39.069955021 -0600
++++ b/fs/ext4/inode.c	2021-06-28 08:46:06.921523449 -0600
+@@ -6088,3 +6088,18 @@
  
  	return ret;
  }
@@ -92,8 +107,9 @@
 +EXPORT_SYMBOL(__ext4_std_error);
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
---- a/fs/ext4/namei.c
-+++ b/fs/ext4/namei.c
+diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
+--- a/fs/ext4/namei.c	2021-06-28 08:45:39.093954644 -0600
++++ b/fs/ext4/namei.c	2021-06-28 08:46:06.921523449 -0600
 @@ -50,7 +50,7 @@
  #define NAMEI_RA_BLOCKS  4
  #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
@@ -103,7 +119,7 @@
  					struct inode *inode,
  					ext4_lblk_t *block)
  {
-@@ -181,6 +181,7 @@ static struct buffer_head *__ext4_read_d
+@@ -181,6 +181,7 @@
  	}
  	return bh;
  }
@@ -111,7 +127,7 @@
  
  #ifndef assert
  #define assert(test) J_ASSERT(test)
-@@ -2572,23 +2573,25 @@ EXPORT_SYMBOL(ext4_delete_entry);
+@@ -2584,23 +2585,25 @@
   * for checking S_ISDIR(inode) (since the INODE_INDEX feature will not be set
   * on regular files) and to avoid creating huge/slow non-HTREE directories.
   */
@@ -139,9 +155,10 @@
  
  
  /*
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
-@@ -347,7 +347,7 @@ static void __save_error_info(struct sup
+diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
+--- a/fs/ext4/super.c	2021-06-28 08:45:38.909957532 -0600
++++ b/fs/ext4/super.c	2021-06-28 08:46:06.921523449 -0600
+@@ -348,7 +348,7 @@
  		return;
  	es->s_state |= cpu_to_le16(EXT4_ERROR_FS);
  	ext4_update_tstamp(es, s_last_error_time);
@@ -150,7 +167,7 @@
  	es->s_last_error_line = cpu_to_le32(line);
  	es->s_last_error_ino = cpu_to_le32(ino);
  	es->s_last_error_block = cpu_to_le64(block);
-@@ -408,7 +408,7 @@ static void __save_error_info(struct sup
+@@ -409,7 +409,7 @@
  	if (!es->s_first_error_time) {
  		es->s_first_error_time = es->s_last_error_time;
  		es->s_first_error_time_hi = es->s_last_error_time_hi;
@@ -159,7 +176,7 @@
  			sizeof(es->s_first_error_func));
  		es->s_first_error_line = cpu_to_le32(line);
  		es->s_first_error_ino = es->s_last_error_ino;
-@@ -6315,16 +6315,12 @@ static int __init ext4_init_fs(void)
+@@ -6382,16 +6382,12 @@
  	err = init_inodecache();
  	if (err)
  		goto out1;
@@ -176,7 +193,7 @@
  	destroy_inodecache();
  out1:
  	ext4_exit_mballoc();
-@@ -6347,8 +6343,6 @@ out7:
+@@ -6414,8 +6410,6 @@
  static void __exit ext4_exit_fs(void)
  {
  	ext4_destroy_lazyinit_thread();
