@@ -307,8 +307,8 @@ static int __proc_dobitmasks(void *data, int write,
 		}
 	} else {
 		tmpstr = memdup_user_nul(buffer, nob);
-		if (!tmpstr)
-			return -ENOMEM;
+		if (IS_ERR(tmpstr))
+			return PTR_ERR(tmpstr);
 
 		rc = libcfs_debug_str2mask(mask, strim(tmpstr), is_subsys);
 		/* Always print LBUG/LASSERT to console, so keep this mask */

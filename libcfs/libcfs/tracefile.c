@@ -904,8 +904,8 @@ int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob)
 	int rc;
 
 	str = memdup_user_nul(usr_str, usr_str_nob);
-	if (!str)
-		return -ENOMEM;
+	if (IS_ERR(str))
+		return PTR_ERR(str);
 
 	path = strim(str);
 	if (path[0] != '/')
@@ -962,8 +962,8 @@ int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob)
 	int   rc;
 
 	str = memdup_user_nul(usr_str, usr_str_nob);
-	if (!str)
-		return -ENOMEM;
+	if (IS_ERR(str))
+		return PTR_ERR(str);
 
 	rc = cfs_trace_daemon_command(strim(str));
 	kfree(str);
