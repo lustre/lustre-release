@@ -1315,6 +1315,11 @@ struct ll_cl_context {
 	struct cl_io		*lcc_io;
 	struct cl_page		*lcc_page;
 	enum lcc_type		 lcc_type;
+	/**
+	 * Get encryption context operation in progress,
+	 * allow getxattr of LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr
+	 */
+	unsigned		 lcc_getencctx:1;
 };
 
 struct ll_thread_info {

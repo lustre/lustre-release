@@ -34,10 +34,26 @@
 static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 {
 	struct dentry *dentry = d_find_any_alias(inode);
+	struct lu_env *env;
+	__u16 refcheck;
 	int rc;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		return PTR_ERR(env);
+
+	/* Set lcc_getencctx=1 to allow this thread to read
+	 * LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr, as requested by llcrypt.
+	 */
+	ll_cl_add(inode, env, NULL, LCC_RW);
+	ll_env_info(env)->lti_io_ctx.lcc_getencctx = 1;
 
 	rc = ll_vfs_getxattr(dentry, inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
 			     ctx, len);
+
+	ll_cl_remove(inode, env);
+	cl_env_put(env, &refcheck);
+
 	if (dentry)
 		dput(dentry);
 

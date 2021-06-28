@@ -379,6 +379,19 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 	int rc;
 	ENTRY;
 
+	/* Getting LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr is only allowed
+	 * when it comes from ll_get_context(), ie when llcrypt needs to
+	 * know the encryption context.
+	 * Otherwise, any direct reading of this xattr returns -EPERM.
+	 */
+	if (type == XATTR_SECURITY_T &&
+	    !strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT)) {
+		struct ll_cl_context *lcc = ll_cl_find(inode);
+
+		if (!lcc || !lcc->lcc_getencctx)
+			GOTO(out_xattr, rc = -EPERM);
+	}
+
 	if (sbi->ll_xattr_cache_enabled && type != XATTR_ACL_ACCESS_T &&
 	    (type != XATTR_SECURITY_T || strcmp(name, "security.selinux"))) {
 		rc = ll_xattr_cache_get(inode, name, buffer, size, valid);
@@ -639,9 +652,24 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 	rem = rc;
 
 	while (rem > 0) {
+		bool hide_xattr = false;
+
+		/* Listing xattrs should not expose
+		 * LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr, unless it comes
+		 * from llcrypt.
+		 */
+		if (get_xattr_type(xattr_name)->flags == XATTR_SECURITY_T &&
+		    !strcmp(xattr_name, LL_XATTR_NAME_ENCRYPTION_CONTEXT)) {
+			struct ll_cl_context *lcc = ll_cl_find(inode);
+
+			if (!lcc || !lcc->lcc_getencctx)
+				hide_xattr = true;
+		}
+
 		len = strnlen(xattr_name, rem - 1) + 1;
 		rem -= len;
-		if (!xattr_type_filter(sbi, get_xattr_type(xattr_name))) {
+		if (!xattr_type_filter(sbi, hide_xattr ? NULL :
+				       get_xattr_type(xattr_name))) {
 			/* Skip OK xattr type, leave it in buffer. */
 			xattr_name += len;
 			continue;

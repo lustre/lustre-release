@@ -4287,11 +4287,27 @@ test_57() {
 	setup_for_enc_tests
 
 	mkdir $testdir
-	setfattr -n security.c -v myval $testdir &&
+	if [ $(getfattr -n security.c $testdir 2>&1 |
+	       grep -ci "Operation not permitted") -eq 0 ]; then
+		error "getting xattr on $testdir should have failed"
+	fi
+	getfattr -d -m - $testdir 2>&1 | grep security\.c &&
+		error "listing xattrs on $testdir should not expose security.c"
+	if [ $(setfattr -n security.c -v myval $testdir 2>&1 |
+	       grep -ci "Operation not permitted") -eq 0 ]; then
 		error "setting xattr on $testdir should have failed (2)"
+	fi
 	touch $testfile
-	setfattr -n security.c -v myval $testfile &&
+	if [ $(getfattr -n security.c $testfile 2>&1 |
+	       grep -ci "Operation not permitted") -eq 0 ]; then
+		error "getting xattr on $testfile should have failed"
+	fi
+	getfattr -d -m - $testfile 2>&1 | grep security\.c &&
+		error "listing xattrs on $testfile should not expose security.c"
+	if [ $(setfattr -n security.c -v myval $testfile 2>&1 |
+	       grep -ci "Operation not permitted") -eq 0 ]; then
 		error "setting xattr on $testfile should have failed (2)"
+	fi
 	return 0
 }
 run_test 57 "security.c xattr protection"
