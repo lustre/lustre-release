@@ -253,8 +253,6 @@ static void lnet_set_lnd_timeout(void)
 			   (lnet_retry_count + 1);
 }
 
-unsigned int lnet_current_net_count;
-
 /*
  * This sequence number keeps track of how many times DLC was used to
  * update the local NIs. It is incremented when a NI is added or
@@ -1751,23 +1749,6 @@ lnet_get_ni_count(void)
 	return count;
 }
 
-int
-lnet_get_net_count(void)
-{
-	struct lnet_net *net;
-	int count = 0;
-
-	lnet_net_lock(0);
-
-	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
-		count++;
-	}
-
-	lnet_net_unlock(0);
-
-	return count;
-}
-
 void
 lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
 {
@@ -2591,9 +2572,6 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		list_add_tail(&net->net_list, &the_lnet.ln_nets);
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
-
-	/* update net count */
-	lnet_current_net_count = lnet_get_net_count();
 
 	return ni_count;
 
