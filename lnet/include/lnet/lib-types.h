@@ -492,7 +492,7 @@ struct lnet_ni {
 	struct lnet_net		*ni_net;
 
 	/* my health status */
-	struct lnet_ni_status	*ni_status;
+	u32			*ni_status;
 
 	/* NI FSM. Protected by lnet_ni_lock() */
 	enum lnet_ni_state	ni_state;

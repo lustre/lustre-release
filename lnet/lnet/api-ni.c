@@ -2051,7 +2051,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 
 			lnet_ni_lock(ni);
 			ns->ns_status = lnet_ni_get_status_locked(ni);
-			ni->ni_status = ns;
+			ni->ni_status = &ns->ns_status;
 			lnet_ni_unlock(ni);
 
 			i++;

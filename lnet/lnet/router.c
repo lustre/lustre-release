@@ -1106,7 +1106,7 @@ check_ni_fatal:
 			 */
 			if (atomic_read(&ni->ni_fatal_error_on) &&
 			    ni->ni_status &&
-			    ni->ni_status->ns_status != LNET_NI_STATUS_DOWN &&
+			    *ni->ni_status != LNET_NI_STATUS_DOWN &&
 			    lnet_ni_set_status(ni, LNET_NI_STATUS_DOWN))
 				push = true;
 		}

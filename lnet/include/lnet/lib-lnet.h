@@ -232,11 +232,11 @@ __must_hold(&ni->ni_lock)
 {
 	bool update = false;
 
-	if (ni->ni_status && ni->ni_status->ns_status != status) {
+	if (ni->ni_status && *ni->ni_status != status) {
 		CDEBUG(D_NET, "ni %s status changed from %#x to %#x\n",
 		       libcfs_nidstr(&ni->ni_nid),
-		       ni->ni_status->ns_status, status);
-		ni->ni_status->ns_status = status;
+		       *ni->ni_status, status);
+		*ni->ni_status = status;
 		update = true;
 	}
 
@@ -252,7 +252,7 @@ __must_hold(&ni->ni_lock)
 	else if (atomic_read(&ni->ni_fatal_error_on))
 		return LNET_NI_STATUS_DOWN;
 	else if (ni->ni_status)
-		return ni->ni_status->ns_status;
+		return *ni->ni_status;
 	else
 		return LNET_NI_STATUS_UP;
 }
