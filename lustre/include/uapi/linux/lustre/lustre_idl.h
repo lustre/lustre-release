@@ -3586,7 +3586,7 @@ struct nodemap_cluster_rec {
 	char	ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	__u8	ncr_flags;
 	__u16	ncr_padding1;
-	__u32	ncr_padding2;
+	__u32	ncr_squash_projid;
 	__u32	ncr_squash_uid;
 	__u32	ncr_squash_gid;
 };

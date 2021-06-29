@@ -87,6 +87,17 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 				   "fs_id: %u }", idmap->id_client,
 				   idmap->id_fs);
 	}
+	for (node = rb_first(&nodemap->nm_client_to_fs_projidmap);
+	     node; node = rb_next(node)) {
+		if (cont)
+			seq_printf(m, ",\n");
+		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
+		if (idmap != NULL)
+			seq_printf(m,
+				   " { idtype: projid, client_id: %u, fs_id: %u }",
+				   idmap->id_client,
+				   idmap->id_fs);
+	}
 	up_read(&nodemap->nm_idmap_lock);
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");
@@ -495,6 +506,33 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 }
 
 /**
+ * Reads and prints the squash PROJID for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_squash_projid_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		int rc = PTR_ERR(nodemap);
+
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "%u\n", nodemap->nm_squash_projid);
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
  * Reads and prints the trusted flag for the given nodemap.
  *
  * \param	m		seq file in proc fs
@@ -558,6 +596,7 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
+	bool need_sep = false;
 	int rc;
 
 	mutex_lock(&active_config_lock);
@@ -570,12 +609,21 @@ static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	if (nodemap->nmf_map_uid_only)
-		seq_printf(m, "uid_only\n");
-	else if (nodemap->nmf_map_gid_only)
-		seq_printf(m, "gid_only\n");
-	else
-		seq_printf(m, "both\n");
+	if (nodemap->nmf_map_mode == NODEMAP_MAP_ALL) {
+		seq_puts(m, "all\n");
+	} else {
+		if (nodemap->nmf_map_mode & NODEMAP_MAP_UID) {
+			seq_puts(m, "uid");
+			need_sep = true;
+		}
+		if (nodemap->nmf_map_mode & NODEMAP_MAP_GID) {
+			seq_puts(m, need_sep ? ",gid" : "gid");
+			need_sep = true;
+		}
+		if (nodemap->nmf_map_mode & NODEMAP_MAP_PROJID)
+			seq_puts(m, need_sep ? ",projid" : "projid");
+		seq_puts(m, "\n");
+	}
 
 	nodemap_putref(nodemap);
 	return 0;
@@ -676,6 +724,7 @@ LPROC_SEQ_FOPS_RO(nodemap_trusted);
 LPROC_SEQ_FOPS_RO(nodemap_admin);
 LPROC_SEQ_FOPS_RO(nodemap_squash_uid);
 LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
+LPROC_SEQ_FOPS_RO(nodemap_squash_projid);
 
 LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
 LPROC_SEQ_FOPS_RO(nodemap_map_mode);
@@ -741,6 +790,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 		.fops		= &nodemap_squash_gid_fops,
 	},
 	{
+		.name		= "squash_projid",
+		.fops		= &nodemap_squash_projid_fops,
+	},
+	{
 		.name		= "ranges",
 		.fops		= &nodemap_ranges_fops,
 	},
@@ -789,6 +842,10 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "squash_gid",
 		.fops		= &nodemap_squash_gid_fops,
+	},
+	{
+		.name		= "squash_projid",
+		.fops		= &nodemap_squash_projid_fops,
 	},
 	{
 		.name		= "fileset",

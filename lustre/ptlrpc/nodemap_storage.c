@@ -72,10 +72,11 @@ enum nm_flag_shifts {
 	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
 	NM_FL_TRUST_CLIENT_IDS = 0x2,
 	NM_FL_DENY_UNKNOWN = 0x4,
-	NM_FL_MAP_UID_ONLY = 0x8,
-	NM_FL_MAP_GID_ONLY = 0x10,
+	NM_FL_MAP_UID = 0x8,
+	NM_FL_MAP_GID = 0x10,
 	NM_FL_ENABLE_AUDIT = 0x20,
 	NM_FL_FORBID_ENCRYPT = 0x40,
+	NM_FL_MAP_PROJID = 0x80,
 };
 
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
@@ -93,6 +94,7 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	strncpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nr->ncr.ncr_name));
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
 	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
+	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
 	nr->ncr.ncr_flags = cpu_to_le32(
 		(nodemap->nmf_trust_client_ids ?
 			NM_FL_TRUST_CLIENT_IDS : 0) |
@@ -100,10 +102,12 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 			NM_FL_ALLOW_ROOT_ACCESS : 0) |
 		(nodemap->nmf_deny_unknown ?
 			NM_FL_DENY_UNKNOWN : 0) |
-		(nodemap->nmf_map_uid_only ?
-			NM_FL_MAP_UID_ONLY : 0) |
-		(nodemap->nmf_map_gid_only ?
-			NM_FL_MAP_GID_ONLY : 0) |
+		(nodemap->nmf_map_mode & NODEMAP_MAP_UID ?
+			NM_FL_MAP_UID : 0) |
+		(nodemap->nmf_map_mode & NODEMAP_MAP_GID ?
+			NM_FL_MAP_GID : 0) |
+		(nodemap->nmf_map_mode & NODEMAP_MAP_PROJID ?
+			NM_FL_MAP_PROJID : 0) |
 		(nodemap->nmf_enable_audit ?
 			NM_FL_ENABLE_AUDIT : 0) |
 		(nodemap->nmf_forbid_encryption ?
@@ -118,8 +122,12 @@ static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
 
 	if (id_type == NODEMAP_UID)
 		idx_type = NODEMAP_UIDMAP_IDX;
-	else
+	else if (id_type == NODEMAP_GID)
 		idx_type = NODEMAP_GIDMAP_IDX;
+	else if (id_type == NODEMAP_PROJID)
+		idx_type = NODEMAP_PROJIDMAP_IDX;
+	else
+		idx_type = NODEMAP_EMPTY_IDX;
 
 	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id, idx_type));
 	nk->nk_id_client = cpu_to_le32(id_client);
@@ -476,6 +484,17 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 			rc = rc2;
 	}
 
+	root = nodemap->nm_client_to_fs_projidmap;
+	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+						id_client_to_fs) {
+		nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_PROJID,
+				       idmap->id_client);
+		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
+					 &nk, NULL);
+		if (rc2 < 0)
+			rc = rc2;
+	}
+
 	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 				 rn_list) {
 		nodemap_range_key_init(&nk, nodemap->nm_id, range->rn_id);
@@ -685,7 +704,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 
 	/* find the correct nodemap in the load list */
 	if (type == NODEMAP_RANGE_IDX || type == NODEMAP_UIDMAP_IDX ||
-	    type == NODEMAP_GIDMAP_IDX) {
+	    type == NODEMAP_GIDMAP_IDX || type == NODEMAP_PROJIDMAP_IDX) {
 		struct lu_nodemap *tmp = NULL;
 
 		nodemap = *recent_nodemap;
@@ -746,6 +765,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 				le32_to_cpu(rec->ncr.ncr_squash_uid);
 		nodemap->nm_squash_gid =
 				le32_to_cpu(rec->ncr.ncr_squash_gid);
+		nodemap->nm_squash_projid =
+			le32_to_cpu(rec->ncr.ncr_squash_projid);
 
 		flags = le32_to_cpu(rec->ncr.ncr_flags);
 		nodemap->nmf_allow_root_access =
@@ -754,10 +775,12 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					flags & NM_FL_TRUST_CLIENT_IDS;
 		nodemap->nmf_deny_unknown =
 					flags & NM_FL_DENY_UNKNOWN;
-		nodemap->nmf_map_uid_only =
-					flags & NM_FL_MAP_UID_ONLY;
-		nodemap->nmf_map_gid_only =
-					flags & NM_FL_MAP_GID_ONLY;
+		nodemap->nmf_map_mode = (flags & NM_FL_MAP_UID ?
+					 NODEMAP_MAP_UID : 0) |
+					(flags & NM_FL_MAP_GID ?
+					 NODEMAP_MAP_GID : 0) |
+					(flags & NM_FL_MAP_PROJID ?
+					 NODEMAP_MAP_PROJID : 0);
 		nodemap->nmf_enable_audit =
 					flags & NM_FL_ENABLE_AUDIT;
 		nodemap->nmf_forbid_encryption =
@@ -795,13 +818,18 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		break;
 	case NODEMAP_UIDMAP_IDX:
 	case NODEMAP_GIDMAP_IDX:
+	case NODEMAP_PROJIDMAP_IDX:
 		map[0] = le32_to_cpu(key->nk_id_client);
 		map[1] = le32_to_cpu(rec->nir.nir_id_fs);
 
 		if (type == NODEMAP_UIDMAP_IDX)
 			id_type = NODEMAP_UID;
-		else
+		else if (type == NODEMAP_GIDMAP_IDX)
 			id_type = NODEMAP_GID;
+		else if (type == NODEMAP_PROJIDMAP_IDX)
+			id_type = NODEMAP_PROJID;
+		else
+			GOTO(out, rc = -EINVAL);
 
 		rc = nodemap_add_idmap_helper(nodemap, id_type, map);
 		if (rc != 0)
@@ -1049,6 +1077,18 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 		nm_rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
 							id_client_to_fs) {
 			nodemap_idmap_key_init(&nk, nodemap->nm_id, NODEMAP_GID,
+					       idmap->id_client);
+			nodemap_idmap_rec_init(&nr, idmap->id_fs);
+			rc2 = nodemap_idx_insert(env, o, &nk, &nr);
+			if (rc2 < 0)
+				rc = rc2;
+		}
+
+		root = nodemap->nm_client_to_fs_projidmap;
+		nm_rbtree_postorder_for_each_entry_safe(idmap, id_tmp, &root,
+							id_client_to_fs) {
+			nodemap_idmap_key_init(&nk, nodemap->nm_id,
+					       NODEMAP_PROJID,
 					       idmap->id_client);
 			nodemap_idmap_rec_init(&nr, idmap->id_fs);
 			rc2 = nodemap_idx_insert(env, o, &nk, &nr);

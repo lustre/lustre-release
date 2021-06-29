@@ -313,7 +313,10 @@ delete_range() {
 add_idmaps() {
 	local i
 	local cmd="$LCTL nodemap_add_idmap"
+	local do_proj=true
 	local rc=0
+
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || do_proj=false
 
 	echo "Start to add idmaps ..."
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
@@ -331,6 +334,13 @@ add_idmaps() {
 			if ! do_facet mgs $cmd --name $csum --idtype gid \
 			     --idmap $client_id:$fs_id; then
 				rc=$((rc + 1))
+			fi
+			if $do_proj; then
+				if ! do_facet mgs $cmd --name $csum \
+				     --idtype projid --idmap \
+				     $client_id:$fs_id; then
+					rc=$((rc + 1))
+				fi
 			fi
 		done
 	done
@@ -409,7 +419,10 @@ update_idmaps() { #LU-10040
 delete_idmaps() {
 	local i
 	local cmd="$LCTL nodemap_del_idmap"
+	local do_proj=true
 	local rc=0
+
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || do_proj=false
 
 	echo "Start to delete idmaps ..."
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
@@ -427,6 +440,13 @@ delete_idmaps() {
 			if ! do_facet mgs $cmd --name $csum --idtype gid \
 			     --idmap $client_id:$fs_id; then
 				rc=$((rc + 1))
+			fi
+			if $do_proj; then
+				if ! do_facet mgs $cmd --name $csum \
+				     --idtype projid --idmap \
+				     $client_id:$fs_id; then
+					rc=$((rc + 1))
+				fi
 			fi
 		done
 	done
@@ -469,6 +489,7 @@ squash_id() {
 
 	cmd[0]="$LCTL nodemap_modify --property squash_uid"
 	cmd[1]="$LCTL nodemap_modify --property squash_gid"
+	cmd[2]="$LCTL nodemap_modify --property squash_projid"
 
 	if ! do_facet mgs ${cmd[$3]} --name $1 --value $2; then
 		return 1
@@ -480,6 +501,10 @@ squash_id default 99 0
 wait_nm_sync default squash_uid '' inactive
 squash_id default 99 1
 wait_nm_sync default squash_gid '' inactive
+if [ "$MDS1_VERSION" -ge $(version_code 2.14.50) ]; then
+	squash_id default 99 2
+	wait_nm_sync default squash_projid '' inactive
+fi
 
 test_nid() {
 	local cmd
@@ -899,6 +924,16 @@ test_12() {
 		fi
 	done
 	[[ $rc != 0 ]] && error "nodemap squash_gid with $rc" && return 3
+
+	rc=0
+	if (( $MDS1_VERSION >= $(version_code 2.14.52) )); then
+		for ((i = 0; i < NODEMAP_COUNT; i++)); do
+			if ! squash_id ${HOSTNAME_CHECKSUM}_${i} 88 2; then
+				rc=$((rc + 1))
+			fi
+		done
+	fi
+	[[ $rc != 0 ]] && error "nodemap squash_projid with $rc" && return 5
 
 	rc=0
 	delete_nodemaps

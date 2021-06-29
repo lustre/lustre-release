@@ -35,10 +35,10 @@
 
 #define DEFAULT_NODEMAP "default"
 
-/* Default nobody uid and gid values */
-
+/* Default nobody uid, gid and projid values */
 #define NODEMAP_NOBODY_UID 99
 #define NODEMAP_NOBODY_GID 99
+#define NODEMAP_NOBODY_PROJID 99
 
 struct lprocfs_static_vars;
 
@@ -91,6 +91,7 @@ enum nodemap_idx_type {
 	NODEMAP_RANGE_IDX = 2,		/* nid range assigned to a nm cluster */
 	NODEMAP_UIDMAP_IDX = 3,		/* uid map assigned to a nm cluster */
 	NODEMAP_GIDMAP_IDX = 4,		/* gid map assigned to a nm cluster */
+	NODEMAP_PROJIDMAP_IDX = 5,	/* projid map assigned to nm cluster */
 	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
 };
 

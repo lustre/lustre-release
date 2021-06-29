@@ -814,8 +814,12 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		nid = libcfs_str2nid(nidstr);
 		if (strcmp(idtype_str, "uid") == 0)
 			idtype = NODEMAP_UID;
-		else
+		else if (strcmp(idtype_str, "gid") == 0)
 			idtype = NODEMAP_GID;
+		else if (strcmp(idtype_str, "projid") == 0)
+			idtype = NODEMAP_PROJID;
+		else
+			GOTO(out_lcfg, rc = -EINVAL);
 
 		rc = kstrtoul(client_idstr, 10, &client_id);
 		if (rc != 0)
@@ -839,6 +843,8 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	case LCFG_NODEMAP_DEL_UIDMAP:
 	case LCFG_NODEMAP_ADD_GIDMAP:
 	case LCFG_NODEMAP_DEL_GIDMAP:
+	case LCFG_NODEMAP_ADD_PROJIDMAP:
+	case LCFG_NODEMAP_DEL_PROJIDMAP:
 	case LCFG_NODEMAP_SET_FILESET:
 	case LCFG_NODEMAP_SET_SEPOL:
 		if (lcfg->lcfg_bufcount != 3)
@@ -852,6 +858,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	case LCFG_NODEMAP_DENY_UNKNOWN:
 	case LCFG_NODEMAP_SQUASH_UID:
 	case LCFG_NODEMAP_SQUASH_GID:
+	case LCFG_NODEMAP_SQUASH_PROJID:
 	case LCFG_NODEMAP_MAP_MODE:
 	case LCFG_NODEMAP_AUDIT_MODE:
 	case LCFG_NODEMAP_FORBID_ENCRYPT:

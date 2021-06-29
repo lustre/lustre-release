@@ -14,9 +14,9 @@ modifies a property of the given nodemap.
 .I nodemap_name
 is the name of the nodemap to modify
 
-
 .I property_name
 is one of the following properties:
+.RS 0.3i
 .PP
 admin
 .RS 4
@@ -42,6 +42,11 @@ squash_gid
 Defaults to 99. The group ID that unknown groups (if not trusted) and root (if not admin) should be mapped to.
 .RE
 .PP
+squash_projid
+.RS 4
+Defaults to 99. The project ID that unknown projects (if not trusted) should be mapped to.
+.RE
+.PP
 deny_unknown
 .RS 4
 Defaults to off. If set to on then unknown (squashed) users will be denied
@@ -62,7 +67,15 @@ activated or not.
 The reason not to record file system events from given clients is to prevent
 some nodes (e.g. backup, HSM agent nodes) from flooding the Changelogs.
 .RE
+.PP
+map_mode
+.RS 4
+Defaults to all, which means the nodemap maps UIDs, GIDs, and PROJIDs.
+Other possible values (multiple can be specified, comma separated) are uid to
+map UIDs, gid to map GIDs, both to map UIDs and GIDs, and projid to map PROJIDs.
+.RE
 
+.RE
 .I value
 is the value to set for the property. Should be 0 or 1 for admin and trusted.
 
@@ -70,6 +83,7 @@ is the value to set for the property. Should be 0 or 1 for admin and trusted.
 .nf
 # lctl nodemap_modify --name remotesite --property trusted --value 1
 # lctl nodemap_modify --name remotesite --property admin --value 1
+# lctl nodemap_modify --name remotesite --property map_mode --value uid_only
 # lctl nodemap_modify --name otherremotesite --property squash_uid --value 101
 .fi
 

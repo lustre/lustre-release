@@ -118,6 +118,8 @@ enum lcfg_command_type {
 						 *  id mapping
 						 */
 	LCFG_NODEMAP_ADMIN	  = 0x00ce049, /**< allow cluster to use id 0 */
+	LCFG_NODEMAP_ADD_PROJIDMAP	  = 0x00ce04a, /**< add a projidmap */
+	LCFG_NODEMAP_DEL_PROJIDMAP	  = 0x00ce04b, /**< delete a projidmap */
 	LCFG_NODEMAP_TRUSTED	  = 0x00ce050, /**< trust a clusters ids */
 	LCFG_NODEMAP_SQUASH_UID	  = 0x00ce051, /**< default map uid */
 	LCFG_NODEMAP_SQUASH_GID	  = 0x00ce052, /**< default map gid */
@@ -137,6 +139,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_AUDIT_MODE	  = 0x00ce05a, /**< set the audit mode */
 	LCFG_NODEMAP_SET_SEPOL	  = 0x00ce05b, /**< set SELinux policy */
 	LCFG_NODEMAP_FORBID_ENCRYPT	= 0x00ce05c, /**< forbid encryption */
+	LCFG_NODEMAP_SQUASH_PROJID	= 0x00ce05d, /**< default map projid */
 };
 
 struct lustre_cfg_bufs {

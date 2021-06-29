@@ -3,22 +3,21 @@
 lctl-nodemap_del_idmap \- delete an existing idmap from a nodemap
 .SH SYNOPSIS
 .br
-.B lctl nodemap_del_idmap <--name name> <--idtype [uid|gid]>
-<--idmap clientid:fsid>
+.B lctl nodemap_del_idmap <--name name> <--idtype {uid|gid|projid}>
+.B <--idmap clientid:fsid>
 .br
 .SH DESCRIPTION
 .B nodemap_del_idmap
-deletes an idmap from a nodemap. Users or groups in the nodemap with that ID
-will be squashed, if the trusted flag is not enabled.
+deletes an idmap from a nodemap. Users or groups or projects in the nodemap with
+that ID will be squashed, if the trusted flag is not enabled.
 
 .SH OPTIONS
 .I name
 is the name of the nodemap that this idmap should be deleted from.
 
-
 .I idtype
-is either "uid" or "gid" depending on if it is a user or group mapping that is
-to be removed.
+is either "uid" or "gid" or "projid" depending on if it is a user or group or
+project ID mapping that is to be removed.
 
 .I idmap
 is the identity map to delete.
@@ -27,6 +26,7 @@ is the identity map to delete.
 .nf
 # lctl nodemap_del_idmap --name remotesite --idtype uid --idmap 2001:1001
 # lctl nodemap_del_idmap --name remotesite --idtype gid --idmap 2002:1002
+# lctl nodemap_del_idmap --name remotesite --idtype projid --idmap 33:1
 .fi
 
 .SH AVAILABILITY

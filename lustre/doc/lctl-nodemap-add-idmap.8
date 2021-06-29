@@ -1,23 +1,23 @@
 .TH LCTL-NODEMAP_ADD_IDMAP 8 "2015-01-20" Lustre "configuration utilities"
 .SH NAME
-lctl-nodemap_add_idmap \- define a range of NIDs for a nodemap
+lctl-nodemap_add_idmap \- define ID mappings for a nodemap
 .SH SYNOPSIS
 .br
-.B lctl nodemap_add_idmap <--name name> <--idtype {uid|gid}>
-<--idmap clientid:fsid>
+.B lctl nodemap_add_idmap <--name name> <--idtype {uid|gid|projid}>
+.B <--idmap clientid:fsid>
 .br
 .SH DESCRIPTION
-.B nodemap_add_idmap adds an identity mapping to a nodemap. Clients that are
-members of the given nodemap will have the identities of their users mapped
-accordingly.
+.B nodemap_add_idmap
+adds an identity mapping to a nodemap. Clients that are members of the given
+nodemap will have the identities of their users mapped accordingly.
 
 .SH OPTIONS
 .I name
 is the name of the nodemap that this idmap should be added to.
 
 .I idtype
-is either "uid" or "gid" depending on if it is a user ID or group ID that is to
-be mapped.
+is either "uid" or "gid" or "projid" depending on if it is a user ID or group
+ID or project ID that is to be mapped.
 
 .I idmap
 is the identity to map, and what it should be mapped to. The first digit is the
@@ -28,6 +28,7 @@ that it should map to on the Lustre filesystem.
 .nf
 # lctl nodemap_add_idmap --name remotesite --idtype uid --idmap 2001:1001
 # lctl nodemap_add_idmap --name remotesite --idtype gid --idmap 2002:1002
+# lctl nodemap_add_idmap --name remotesite --idtype projid --idmap 33:1
 .fi
 
 .SH AVAILABILITY

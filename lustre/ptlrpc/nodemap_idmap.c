@@ -102,9 +102,14 @@ struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
 	if (id_type == NODEMAP_UID) {
 		fwd_root = &nodemap->nm_client_to_fs_uidmap;
 		bck_root = &nodemap->nm_fs_to_client_uidmap;
-	} else {
+	} else if (id_type == NODEMAP_GID) {
 		fwd_root = &nodemap->nm_client_to_fs_gidmap;
 		bck_root = &nodemap->nm_fs_to_client_gidmap;
+	} else if (id_type == NODEMAP_PROJID) {
+		fwd_root = &nodemap->nm_client_to_fs_projidmap;
+		bck_root = &nodemap->nm_fs_to_client_projidmap;
+	} else {
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	fwd_node = &fwd_root->rb_node;
@@ -173,15 +178,20 @@ struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
 void idmap_delete(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 		  struct lu_nodemap *nodemap)
 {
-	struct rb_root	*fwd_root;
-	struct rb_root	*bck_root;
+	struct rb_root *fwd_root;
+	struct rb_root *bck_root;
 
 	if (id_type == NODEMAP_UID) {
 		fwd_root = &nodemap->nm_client_to_fs_uidmap;
 		bck_root = &nodemap->nm_fs_to_client_uidmap;
-	} else {
+	} else if (id_type == NODEMAP_GID) {
 		fwd_root = &nodemap->nm_client_to_fs_gidmap;
 		bck_root = &nodemap->nm_fs_to_client_gidmap;
+	} else if (id_type == NODEMAP_PROJID) {
+		fwd_root = &nodemap->nm_client_to_fs_projidmap;
+		bck_root = &nodemap->nm_fs_to_client_projidmap;
+	} else {
+		return;
 	}
 
 	rb_erase(&idmap->id_client_to_fs, fwd_root);
@@ -221,6 +231,10 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 		root = &nodemap->nm_fs_to_client_gidmap;
 	else if (id_type == NODEMAP_GID && tree_type == NODEMAP_CLIENT_TO_FS)
 		root = &nodemap->nm_client_to_fs_gidmap;
+	else if (id_type == NODEMAP_PROJID && tree_type == NODEMAP_FS_TO_CLIENT)
+		root = &nodemap->nm_fs_to_client_projidmap;
+	else if (id_type == NODEMAP_PROJID && tree_type == NODEMAP_CLIENT_TO_FS)
+		root = &nodemap->nm_client_to_fs_projidmap;
 
 	node = root->rb_node;
 
@@ -272,6 +286,12 @@ void idmap_delete_tree(struct lu_nodemap *nodemap)
 	}
 
 	root = nodemap->nm_client_to_fs_gidmap;
+	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
+						id_client_to_fs) {
+		idmap_destroy(idmap);
+	}
+
+	root = nodemap->nm_client_to_fs_projidmap;
 	nm_rbtree_postorder_for_each_entry_safe(idmap, temp, &root,
 						id_client_to_fs) {
 		idmap_destroy(idmap);

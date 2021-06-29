@@ -5501,18 +5501,46 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 							   bool_switch);
 		break;
 	case LCFG_NODEMAP_MAP_MODE:
-		if (strcmp("both", param) == 0)
-			rc = nodemap_set_mapping_mode(nodemap_name,
-						      NODEMAP_MAP_BOTH);
-		else if (strcmp("uid_only", param) == 0)
-			rc = nodemap_set_mapping_mode(nodemap_name,
-						      NODEMAP_MAP_UID_ONLY);
-		else if (strcmp("gid_only", param) == 0)
-			rc = nodemap_set_mapping_mode(nodemap_name,
-						      NODEMAP_MAP_GID_ONLY);
-		else
-			rc = -EINVAL;
+	{
+		char *p;
+		__u8 map_mode = 0;
+
+		if ((p = strstr(param, "all")) != NULL) {
+			if ((p == param || *(p-1) == ',') &&
+			    (*(p+3) == '\0' || *(p+3) == ',')) {
+				map_mode = NODEMAP_MAP_ALL;
+			} else {
+				rc = -EINVAL;
+				break;
+			}
+		} else {
+			while ((p = strsep(&param, ",")) != NULL) {
+				if (!*p)
+					break;
+
+				if (strcmp("both", p) == 0)
+					map_mode |= NODEMAP_MAP_BOTH;
+				else if (strcmp("uid_only", p) == 0 ||
+					 strcmp("uid", p) == 0)
+					map_mode |= NODEMAP_MAP_UID;
+				else if (strcmp("gid_only", p) == 0 ||
+					 strcmp("gid", p) == 0)
+					map_mode |= NODEMAP_MAP_GID;
+				else if (strcmp("projid_only", p) == 0 ||
+					 strcmp("projid", p) == 0)
+					map_mode |= NODEMAP_MAP_PROJID;
+				else
+					break;
+			}
+			if (p) {
+				rc = -EINVAL;
+				break;
+			}
+		}
+
+		rc = nodemap_set_mapping_mode(nodemap_name, map_mode);
 		break;
+	}
 	case LCFG_NODEMAP_TRUSTED:
 		rc = kstrtobool(param, &bool_switch);
 		if (rc)
@@ -5531,29 +5559,47 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 			break;
 		rc = nodemap_set_squash_gid(nodemap_name, int_id);
 		break;
+	case LCFG_NODEMAP_SQUASH_PROJID:
+		rc = kstrtouint(param, 10, &int_id);
+		if (rc)
+			break;
+		rc = nodemap_set_squash_projid(nodemap_name, int_id);
+		break;
 	case LCFG_NODEMAP_ADD_UIDMAP:
 	case LCFG_NODEMAP_ADD_GIDMAP:
+	case LCFG_NODEMAP_ADD_PROJIDMAP:
 		rc = nodemap_parse_idmap(param, idmap);
 		if (rc != 0)
 			break;
 		if (cmd == LCFG_NODEMAP_ADD_UIDMAP)
 			rc = nodemap_add_idmap(nodemap_name, NODEMAP_UID,
 					       idmap);
-		else
+		else if (cmd == LCFG_NODEMAP_ADD_GIDMAP)
 			rc = nodemap_add_idmap(nodemap_name, NODEMAP_GID,
 					       idmap);
+		else if (cmd == LCFG_NODEMAP_ADD_PROJIDMAP)
+			rc = nodemap_add_idmap(nodemap_name, NODEMAP_PROJID,
+					       idmap);
+		else
+			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_DEL_UIDMAP:
 	case LCFG_NODEMAP_DEL_GIDMAP:
+	case LCFG_NODEMAP_DEL_PROJIDMAP:
 		rc = nodemap_parse_idmap(param, idmap);
 		if (rc != 0)
 			break;
 		if (cmd == LCFG_NODEMAP_DEL_UIDMAP)
 			rc = nodemap_del_idmap(nodemap_name, NODEMAP_UID,
 					       idmap);
-		else
+		else if (cmd == LCFG_NODEMAP_DEL_GIDMAP)
 			rc = nodemap_del_idmap(nodemap_name, NODEMAP_GID,
 					       idmap);
+		else if (cmd == LCFG_NODEMAP_DEL_PROJIDMAP)
+			rc = nodemap_del_idmap(nodemap_name, NODEMAP_PROJID,
+					       idmap);
+		else
+			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_SET_FILESET:
 		rc = nodemap_set_fileset(nodemap_name, param);

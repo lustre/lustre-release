@@ -44,6 +44,7 @@
 enum nodemap_id_type {
 	NODEMAP_UID,
 	NODEMAP_GID,
+	NODEMAP_PROJID,
 };
 
 enum nodemap_tree_type {
@@ -52,9 +53,13 @@ enum nodemap_tree_type {
 };
 
 enum nodemap_mapping_modes {
-	NODEMAP_MAP_BOTH,
-	NODEMAP_MAP_UID_ONLY,
-	NODEMAP_MAP_GID_ONLY,
+	NODEMAP_MAP_UID		= 0x01,
+	NODEMAP_MAP_GID		= 0x02,
+	NODEMAP_MAP_BOTH	= 0x03, /* for compatibility */
+	NODEMAP_MAP_PROJID	= 0x04,
+	NODEMAP_MAP_ALL		= NODEMAP_MAP_UID |
+				  NODEMAP_MAP_GID |
+				  NODEMAP_MAP_PROJID,
 };
 
 struct nodemap_pde {
@@ -75,10 +80,11 @@ struct lu_nodemap {
 	bool			 nmf_trust_client_ids:1,
 				 nmf_deny_unknown:1,
 				 nmf_allow_root_access:1,
-				 nmf_map_uid_only:1,
-				 nmf_map_gid_only:1,
 				 nmf_enable_audit:1,
 				 nmf_forbid_encryption:1;
+	/* bitmap for mapping type */
+	enum nodemap_mapping_modes
+				nmf_map_mode;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
@@ -87,6 +93,8 @@ struct lu_nodemap {
 	uid_t			 nm_squash_uid;
 	/* GID to squash unmapped GIDs */
 	gid_t			 nm_squash_gid;
+	/* PROJID to squash unmapped PROJIDs */
+	projid_t		 nm_squash_projid;
 	/* NID range list */
 	struct list_head	 nm_ranges;
 	/* lock for idmap red/black trees */
@@ -99,6 +107,10 @@ struct lu_nodemap {
 	struct rb_root		 nm_fs_to_client_gidmap;
 	/* GID map keyed by remote UID */
 	struct rb_root		 nm_client_to_fs_gidmap;
+	/* PROJID map keyed by local UID */
+	struct rb_root		 nm_fs_to_client_projidmap;
+	/* PROJID map keyed by remote UID */
+	struct rb_root		 nm_client_to_fs_projidmap;
 	/* attached client members of this nodemap */
 	struct mutex		 nm_member_list_lock;
 	struct list_head	 nm_member_list;
@@ -136,9 +148,11 @@ int nodemap_del_range(const char *name, const lnet_nid_t nid[2]);
 int nodemap_set_allow_root(const char *name, bool allow_root);
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
-int nodemap_set_mapping_mode(const char *name, enum nodemap_mapping_modes mode);
+int nodemap_set_mapping_mode(const char *name,
+			     enum nodemap_mapping_modes map_mode);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
+int nodemap_set_squash_projid(const char *name, projid_t projid);
 int nodemap_set_audit_mode(const char *name, bool enable_audit);
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption);
 bool nodemap_can_setquota(const struct lu_nodemap *nodemap);

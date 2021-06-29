@@ -4487,7 +4487,7 @@ int jt_nodemap_modify(int argc, char **argv)
 		fprintf(stderr,
 			"usage: nodemap_modify --name <nodemap_name> --property <property_name> --value <value>\n");
 		fprintf(stderr,
-			"valid properties: admin trusted map_mode squash_uid squash_gid deny_unknown audit_mode forbid_encryption\n");
+			"valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption\n");
 		return -1;
 	}
 
@@ -4501,6 +4501,8 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_SQUASH_UID;
 	} else if (strcmp("squash_gid", param) == 0) {
 		cmd = LCFG_NODEMAP_SQUASH_GID;
+	} else if (strcmp("squash_projid", param) == 0) {
+		cmd = LCFG_NODEMAP_SQUASH_PROJID;
 	} else if (strcmp("map_mode", param) == 0) {
 		cmd = LCFG_NODEMAP_MAP_MODE;
 	} else if (strcmp("audit_mode", param) == 0) {
@@ -4558,7 +4560,7 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 
 	if (!nodemap_name || !idmap || !idtype) {
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid] --idmap <client id>:<filesystem id>\n",
+			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
 			argv[0]);
 		return -1;
 	}
@@ -4567,9 +4569,11 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 		cmd = LCFG_NODEMAP_ADD_UIDMAP;
 	} else if (strcmp("gid", idtype) == 0) {
 		cmd = LCFG_NODEMAP_ADD_GIDMAP;
+	} else if (strcmp("projid", idtype) == 0) {
+		cmd = LCFG_NODEMAP_ADD_PROJIDMAP;
 	} else {
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid] --idmap <client id>:<filesystem id>\n",
+			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
 			argv[0]);
 		return -1;
 	}
@@ -4617,15 +4621,23 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 
 	if (!nodemap_name || !idmap || !idtype) {
 		fprintf(stderr,
-			"usage: %s --name <name> --idtype [uid | gid] --idmap <client id>:<filesystem id>\n",
+			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
 			argv[0]);
 		return -1;
 	}
 
-	if (strcmp("uid", idtype) == 0)
+	if (strcmp("uid", idtype) == 0) {
 		cmd = LCFG_NODEMAP_DEL_UIDMAP;
-	else
+	} else if (strcmp("gid", idtype) == 0) {
 		cmd = LCFG_NODEMAP_DEL_GIDMAP;
+	} else if (strcmp("projid", idtype) == 0) {
+		cmd = LCFG_NODEMAP_DEL_PROJIDMAP;
+	} else {
+		fprintf(stderr,
+			"usage: %s --name <name> --idtype [uid | gid | projid] --idmap <client id>:<filesystem id>\n",
+			argv[0]);
+		return -1;
+	}
 
 	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {

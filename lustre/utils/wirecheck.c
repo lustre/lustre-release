@@ -2547,7 +2547,7 @@ static void check_nodemap_cluster_rec(void)
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1]);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding1);
-	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding2);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_projid);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_uid);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_gid);
 }
@@ -2779,6 +2779,8 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_DEL_GIDMAP);
 	CHECK_VALUE_X(LCFG_NODEMAP_ACTIVATE);
 	CHECK_VALUE_X(LCFG_NODEMAP_ADMIN);
+	CHECK_VALUE_X(LCFG_NODEMAP_ADD_PROJIDMAP);
+	CHECK_VALUE_X(LCFG_NODEMAP_DEL_PROJIDMAP);
 	CHECK_VALUE_X(LCFG_NODEMAP_TRUSTED);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_UID);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_GID);
@@ -2791,6 +2793,8 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_MAP_MODE);
 	CHECK_VALUE_X(LCFG_NODEMAP_AUDIT_MODE);
 	CHECK_VALUE_X(LCFG_NODEMAP_SET_SEPOL);
+	CHECK_VALUE_X(LCFG_NODEMAP_FORBID_ENCRYPT);
+	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_PROJID);
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);

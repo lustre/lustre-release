@@ -633,7 +633,7 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  * mapping function for nodemap idmaps
  *
  * \param	nodemap		lu_nodemap structure defining nodemap
- * \param	node_type	NODEMAP_UID or NODEMAP_GID
+ * \param	node_type	NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
  * \param	tree_type	NODEMAP_CLIENT_TO_FS or
  *				NODEMAP_FS_TO_CLIENT
  * \param	id		id to map
@@ -669,10 +669,16 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (unlikely(nodemap == NULL))
 		goto out;
 
-	if (nodemap->nmf_map_uid_only && id_type == NODEMAP_GID)
+	if (id_type == NODEMAP_UID &&
+	    !(nodemap->nmf_map_mode & NODEMAP_MAP_UID))
 		goto out;
 
-	if (nodemap->nmf_map_gid_only && id_type == NODEMAP_UID)
+	if (id_type == NODEMAP_GID &&
+	    !(nodemap->nmf_map_mode & NODEMAP_MAP_GID))
+		goto out;
+
+	if (id_type == NODEMAP_PROJID &&
+	    !(nodemap->nmf_map_mode & NODEMAP_MAP_PROJID))
 		goto out;
 
 	if (id == 0) {
@@ -705,8 +711,10 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 squash:
 	if (id_type == NODEMAP_UID)
 		RETURN(nodemap->nm_squash_uid);
-	else
+	if (id_type == NODEMAP_GID)
 		RETURN(nodemap->nm_squash_gid);
+	if (id_type == NODEMAP_PROJID)
+		RETURN(nodemap->nm_squash_projid);
 out:
 	RETURN(id);
 }
@@ -1156,6 +1164,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 	nodemap->nm_client_to_fs_uidmap = RB_ROOT;
 	nodemap->nm_fs_to_client_gidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_gidmap = RB_ROOT;
+	nodemap->nm_fs_to_client_projidmap = RB_ROOT;
+	nodemap->nm_client_to_fs_projidmap = RB_ROOT;
 
 	if (is_default) {
 		nodemap->nm_id = LUSTRE_NODEMAP_DEFAULT_ID;
@@ -1169,13 +1179,13 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_trust_client_ids = 0;
 		nodemap->nmf_allow_root_access = 0;
 		nodemap->nmf_deny_unknown = 0;
-		nodemap->nmf_map_uid_only = 0;
-		nodemap->nmf_map_gid_only = 0;
+		nodemap->nmf_map_mode = NODEMAP_MAP_ALL;
 		nodemap->nmf_enable_audit = 1;
 		nodemap->nmf_forbid_encryption = 0;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
+		nodemap->nm_squash_projid = NODEMAP_NOBODY_PROJID;
 		nodemap->nm_fileset[0] = '\0';
 		nodemap->nm_sepol[0] = '\0';
 		if (!is_default)
@@ -1186,19 +1196,15 @@ struct lu_nodemap *nodemap_create(const char *name,
 				default_nodemap->nmf_trust_client_ids;
 		nodemap->nmf_allow_root_access =
 				default_nodemap->nmf_allow_root_access;
-		nodemap->nmf_deny_unknown =
-				default_nodemap->nmf_deny_unknown;
-		nodemap->nmf_map_uid_only =
-				default_nodemap->nmf_map_uid_only;
-		nodemap->nmf_map_gid_only =
-				default_nodemap->nmf_map_gid_only;
-		nodemap->nmf_enable_audit =
-			default_nodemap->nmf_enable_audit;
+		nodemap->nmf_deny_unknown = default_nodemap->nmf_deny_unknown;
+		nodemap->nmf_map_mode = default_nodemap->nmf_map_mode;
+		nodemap->nmf_enable_audit = default_nodemap->nmf_enable_audit;
 		nodemap->nmf_forbid_encryption =
 			default_nodemap->nmf_forbid_encryption;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
+		nodemap->nm_squash_projid = default_nodemap->nm_squash_projid;
 		nodemap->nm_fileset[0] = '\0';
 		nodemap->nm_sepol[0] = '\0';
 	}
@@ -1295,7 +1301,8 @@ out:
 }
 EXPORT_SYMBOL(nodemap_set_trust_client_ids);
 
-int nodemap_set_mapping_mode(const char *name, enum nodemap_mapping_modes mode)
+int nodemap_set_mapping_mode(const char *name,
+			     enum nodemap_mapping_modes map_mode)
 {
 	struct lu_nodemap	*nodemap = NULL;
 	int			rc = 0;
@@ -1306,22 +1313,7 @@ int nodemap_set_mapping_mode(const char *name, enum nodemap_mapping_modes mode)
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 
-	switch (mode) {
-	case NODEMAP_MAP_BOTH:
-		nodemap->nmf_map_uid_only = 0;
-		nodemap->nmf_map_gid_only = 0;
-		break;
-	case NODEMAP_MAP_UID_ONLY:
-		nodemap->nmf_map_uid_only = 1;
-		nodemap->nmf_map_gid_only = 0;
-		break;
-	case NODEMAP_MAP_GID_ONLY:
-		nodemap->nmf_map_uid_only = 0;
-		nodemap->nmf_map_gid_only = 1;
-		break;
-	default:
-		CWARN("cannot set unknown mapping mode, mode = %d\n", mode);
-	}
+	nodemap->nmf_map_mode = map_mode;
 	rc = nodemap_idx_nodemap_update(nodemap);
 
 	nm_member_revoke_locks(nodemap);
@@ -1371,7 +1363,7 @@ EXPORT_SYMBOL(nodemap_set_squash_uid);
  * \param	gid		the new gid to squash unknown gids to
  * \retval	0 on success
  *
- * Update the squash_gid for a nodemap. The squash_uid is the gid
+ * Update the squash_gid for a nodemap. The squash_gid is the gid
  * that the all client gids are mapped to if nodemap is active,
  * the trust_client_ids flag is not set, and the gid is not in
  * the idmap tree.
@@ -1396,6 +1388,39 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_squash_gid);
+
+/**
+ * Update the squash_projid for a nodemap.
+ *
+ * \param	name		nodemap name
+ * \param	gid		the new projid to squash unknown projids to
+ * \retval	0 on success
+ *
+ * Update the squash_projid for a nodemap. The squash_projid is the projid
+ * that the all client projids are mapped to if nodemap is active,
+ * the trust_client_ids flag is not set, and the projid is not in
+ * the idmap tree.
+ */
+int nodemap_set_squash_projid(const char *name, projid_t projid)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	nodemap->nm_squash_projid = projid;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_squash_projid);
 
 /**
  * Returns true if this nodemap has root user access. Always returns true if
