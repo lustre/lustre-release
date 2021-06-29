@@ -596,6 +596,27 @@ test_9() {
 }
 run_test 9 "test ptldebug and subsystem for mkfs"
 
+test_10a() {
+	setup
+
+	if ! combined_mgs_mds; then
+		files=$(do_facet mgs "find /{proc/fs,sys/fs,sys/kernel/debug}/lustre -type l -exec test ! -e {} \; -print")
+		[ -z $files ] || echo "MGS $files is a broken symlink"
+	fi
+
+	files=$(do_facet mds1 "find /{proc/fs,sys/fs,sys/kernel/debug}/lustre -type l -exec test ! -e {} \; -print")
+	[ -z $files ] || echo "MDS $files is a broken symlink"
+
+	files=$(do_facet ost1 "find /{proc/fs,sys/fs,sys/kernel/debug}/lustre -type l -exec test ! -e {} \; -print")
+	[ -z $files ] || echo "OSS $files is a broken symlink"
+
+	files=$(do_facet client "find /{proc/fs,sys/fs,sys/kernel/debug}/lustre -type l -exec test ! -e {} \; -print")
+	[ -z $files ] || echo "clients $files is a broken symlink"
+
+	cleanup || error "cleanup failed with rc $?"
+}
+run_test 10a "find lctl param broken symlinks"
+
 #
 # Test 16 was to "verify that lustre will correct the mode of OBJECTS".
 # But with new MDS stack we don't care about the mode of local objects

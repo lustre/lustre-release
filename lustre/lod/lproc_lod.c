@@ -1131,6 +1131,9 @@ int lod_procfs_init(struct lod_device *lod)
 		       obd->obd_name);
 	kobject_put(lov);
 
+	obd->obd_debugfs_entry = debugfs_create_dir(obd->obd_name,
+						    obd->obd_type->typ_debugfs_entry);
+
 	lod->lod_debugfs = ldebugfs_add_symlink(obd->obd_name, "lov",
 						"../lod/%s", obd->obd_name);
 	if (!lod->lod_debugfs)
