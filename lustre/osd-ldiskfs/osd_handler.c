@@ -1158,6 +1158,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	id = &info->oti_id;
+	memset(id, 0, sizeof(struct osd_inode_id));
 	if (!list_empty(&scrub->os_inconsistent_items)) {
 		/* Search order: 2. OI scrub pending list. */
 		result = osd_oii_lookup(dev, fid, id);
