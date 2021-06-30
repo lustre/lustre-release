@@ -1423,14 +1423,36 @@ out:
 EXPORT_SYMBOL(nodemap_set_squash_projid);
 
 /**
- * Returns true if this nodemap has root user access. Always returns true if
- * nodemaps are not active.
+ * Check if nodemap allows setting quota.
+ *
+ * If nodemap is not active, always allow.
+ * For user and group quota, allow if the nodemap allows root access.
+ * For project quota, allow if project id is not squashed or deny_unknown
+ * is not set.
  *
  * \param	nodemap		nodemap to check access for
+ * \param	qc_type		quota type
+ * \param	id		client id to map
+ * \retval	true is setquota is allowed, false otherwise
  */
-bool nodemap_can_setquota(const struct lu_nodemap *nodemap)
+bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 {
-	return !nodemap_active || (nodemap && nodemap->nmf_allow_root_access);
+	if (!nodemap_active)
+		return true;
+
+	if (!nodemap || !nodemap->nmf_allow_root_access)
+		return false;
+
+	if (qc_type == PRJQUOTA) {
+		id = nodemap_map_id(nodemap, NODEMAP_PROJID,
+				    NODEMAP_CLIENT_TO_FS, id);
+
+		if (id == nodemap->nm_squash_projid &&
+		    nodemap->nmf_deny_unknown)
+			return false;
+	}
+
+	return true;
 }
 EXPORT_SYMBOL(nodemap_can_setquota);
 

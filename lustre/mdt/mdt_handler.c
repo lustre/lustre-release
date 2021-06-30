@@ -831,7 +831,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		b->mbo_nlink = attr->la_nlink;
 		b->mbo_valid |= OBD_MD_FLNLINK;
 	}
-	if (attr->la_valid & (LA_UID|LA_GID)) {
+	if (attr->la_valid & (LA_UID|LA_GID|LA_PROJID)) {
 		nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
 			goto out;
@@ -850,8 +850,9 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 	}
 
 	if (attr->la_valid & LA_PROJID) {
-		/* TODO, nodemap for project id */
-		b->mbo_projid = attr->la_projid;
+		b->mbo_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+					       NODEMAP_FS_TO_CLIENT,
+					       attr->la_projid);
 		b->mbo_valid |= OBD_MD_FLPROJID;
 	}
 
@@ -3143,7 +3144,8 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
 	case LUSTRE_Q_SETDEFAULT_POOL:
-		if (!nodemap_can_setquota(nodemap))
+		if (!nodemap_can_setquota(nodemap, oqctl->qc_type,
+					  oqctl->qc_id))
 			GOTO(out_nodemap, rc = -EPERM);
 		/* fallthrough */
 	case Q_GETINFO:
@@ -3177,8 +3179,8 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 				    NODEMAP_CLIENT_TO_FS, id);
 		break;
 	case PRJQUOTA:
-		/* todo: check/map project id */
-		id = oqctl->qc_id;
+		id = nodemap_map_id(nodemap, NODEMAP_PROJID,
+				    NODEMAP_CLIENT_TO_FS, id);
 		break;
 	default:
 		GOTO(out_nodemap, rc = -EOPNOTSUPP);

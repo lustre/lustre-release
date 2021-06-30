@@ -767,7 +767,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	if (cmd == OBD_BRW_WRITE) {
 		struct lu_nodemap *nodemap;
-		__u32 mapped_uid, mapped_gid;
+		__u32 mapped_uid, mapped_gid, mapped_projid;
 
 		nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
@@ -778,6 +778,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
 					    NODEMAP_FS_TO_CLIENT,
 					    oa->o_gid);
+		mapped_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+					       NODEMAP_FS_TO_CLIENT,
+					       oa->o_projid);
 		if (!IS_ERR_OR_NULL(nodemap)) {
 			/* do not bypass quota enforcement if squashed uid */
 			if (unlikely(mapped_uid == nodemap->nm_squash_uid)) {
@@ -850,6 +853,7 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 */
 		oa->o_uid = mapped_uid;
 		oa->o_gid = mapped_gid;
+		oa->o_projid = mapped_projid;
 	} else if (cmd == OBD_BRW_READ) {
 		/* If oa != NULL then mdt_preprw_read updated the inode
 		 * atime and we should update the lvb so that other glimpses

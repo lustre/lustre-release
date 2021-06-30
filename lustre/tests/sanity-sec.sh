@@ -1032,6 +1032,20 @@ test_15() {
 	rc=$?
 	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
 
+	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_modify --name $csum \
+				--property admin --value 0; then
+			rc=$((rc + 1))
+		fi
+		if ! do_facet mgs $LCTL nodemap_modify --name $csum \
+				--property trusted --value 0; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_modify failed with $rc" && return 1
+
 	rc=0
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		if ! add_range ${HOSTNAME_CHECKSUM}_${i} $i; then
@@ -1940,11 +1954,15 @@ run_test 26 "test transferring very large nodemap"
 nodemap_exercise_fileset() {
 	local nm="$1"
 	local loop=0
+	local check_proj=true
+
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || check_proj=false
 
 	# setup
 	if [ "$nm" == "default" ]; then
 		do_facet mgs $LCTL nodemap_activate 1
 		wait_nm_sync active
+		check_proj=false
 	else
 		nodemap_test_setup
 	fi
@@ -1965,6 +1983,23 @@ nodemap_exercise_fileset() {
 	       error "unable to add fileset info to $nm nodemap for servers"
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/$subdir"
 
+	if $check_proj; then
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			 --property admin --value 1
+		wait_nm_sync $nm admin_nodemap
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			 --property trusted --value 0
+		wait_nm_sync $nm trusted_nodemap
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			 --property map_mode --value projid
+		wait_nm_sync $nm map_mode
+		do_facet mgs $LCTL nodemap_add_idmap --name $nm \
+			 --idtype projid --idmap 1:1
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			 --property deny_unknown --value 1
+		wait_nm_sync $nm deny_unknown
+	fi
+
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount client ${clients_arr[0]}"
@@ -1977,6 +2012,13 @@ nodemap_exercise_fileset() {
 	# test mount point content
 	do_node ${clients_arr[0]} test -f $MOUNT/this_is_$subdir ||
 		error "fileset not taken into account"
+
+	if $check_proj; then
+		$LFS setquota -p 1  -b 10000 -B 11000 -i 0 -I 0 $MOUNT ||
+			error "setquota -p 1 failed"
+		$LFS setquota -p 2  -b 10000 -B 11000 -i 0 -I 0 $MOUNT &&
+			error "setquota -p 2 should have failed"
+	fi
 
 	# re-mount client with sub-subdir
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||

@@ -2388,6 +2388,10 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 		id = nodemap_map_id(nodemap, NODEMAP_GID,
 				    NODEMAP_CLIENT_TO_FS,
 				    repoqc->qc_id);
+	else if (oqctl->qc_type == PRJQUOTA)
+		id = nodemap_map_id(nodemap, NODEMAP_PROJID,
+				    NODEMAP_CLIENT_TO_FS,
+				    repoqc->qc_id);
 
 	nodemap_putref(nodemap);
 

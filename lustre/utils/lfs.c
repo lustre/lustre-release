@@ -8010,9 +8010,13 @@ quota_type_def:
 	if (rc) {
 		if (*obd_type)
 			fprintf(stderr,
-				"%s setquota: cannot quotactl '%s' '%s': %s",
+				"%s setquota: cannot quotactl '%s' '%s': %s\n",
 				progname, obd_type,
 				obd_uuid2str(&qctl->obd_uuid), strerror(-rc));
+		else
+			fprintf(stderr,
+				"%s setquota: quotactl failed: %s\n",
+				progname, strerror(-rc));
 	}
 out:
 	if (rc)

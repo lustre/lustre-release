@@ -265,6 +265,9 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	body->oa.o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
 					NODEMAP_CLIENT_TO_FS,
 					body->oa.o_gid);
+	body->oa.o_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+					   NODEMAP_CLIENT_TO_FS,
+					   body->oa.o_projid);
 	nodemap_putref(nodemap);
 
 	tsi->tsi_ost_body = body;

@@ -1462,7 +1462,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	if (cmd == OBD_BRW_WRITE) {
 		struct lu_nodemap *nodemap;
-		__u32 mapped_uid, mapped_gid;
+		__u32 mapped_uid, mapped_gid, mapped_projid;
 
 		nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
@@ -1473,6 +1473,9 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
 					    NODEMAP_FS_TO_CLIENT,
 					    oa->o_gid);
+		mapped_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+					       NODEMAP_FS_TO_CLIENT,
+					       oa->o_projid);
 
 		if (!IS_ERR_OR_NULL(nodemap)) {
 			/* do not bypass quota enforcement if squashed uid */
@@ -1555,6 +1558,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * server ID will be returned back to client in that case. */
 		oa->o_uid = mapped_uid;
 		oa->o_gid = mapped_gid;
+		oa->o_projid = mapped_projid;
 	} else if (cmd == OBD_BRW_READ) {
 		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);

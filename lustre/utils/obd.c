@@ -4155,7 +4155,7 @@ int jt_nodemap_test_id(int argc, char **argv)
 	}
 
 	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, &rawbuf, sizeof(rawbuf),
-			 argv[0], nidstr, typestr, idstr);
+			 argv[0], nidstr, typestr, idstr, NULL);
 	if (rc == 0)
 		printf("%s\n", (char *)rawbuf);
 

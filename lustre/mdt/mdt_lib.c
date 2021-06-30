@@ -1134,11 +1134,12 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
 
-	la->la_uid   = nodemap_map_id(nodemap, NODEMAP_UID,
-				      NODEMAP_CLIENT_TO_FS, rec->sa_uid);
-	la->la_gid   = nodemap_map_id(nodemap, NODEMAP_GID,
-				      NODEMAP_CLIENT_TO_FS, rec->sa_gid);
-	la->la_projid = rec->sa_projid;
+	la->la_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+				    NODEMAP_CLIENT_TO_FS, rec->sa_uid);
+	la->la_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+				    NODEMAP_CLIENT_TO_FS, rec->sa_gid);
+	la->la_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
+				       NODEMAP_CLIENT_TO_FS, rec->sa_projid);
 	nodemap_putref(nodemap);
 
 	la->la_size  = rec->sa_size;

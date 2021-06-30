@@ -155,7 +155,7 @@ int nodemap_set_squash_gid(const char *name, gid_t gid);
 int nodemap_set_squash_projid(const char *name, projid_t projid);
 int nodemap_set_audit_mode(const char *name, bool enable_audit);
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption);
-bool nodemap_can_setquota(const struct lu_nodemap *nodemap);
+bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id);
 int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
