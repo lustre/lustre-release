@@ -1044,18 +1044,6 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
         return (-EIO);
 }
 
-int
-ksocknal_thread_start(int (*fn)(void *arg), void *arg, char *name)
-{
-	struct task_struct *task = kthread_run(fn, arg, "%s", name);
-
-	if (IS_ERR(task))
-		return PTR_ERR(task);
-
-	atomic_inc(&ksocknal_data.ksnd_nthreads);
-	return 0;
-}
-
 void
 ksocknal_thread_fini (void)
 {
@@ -2068,7 +2056,6 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 static int
 ksocknal_connd_check_start(time64_t sec, long *timeout)
 {
-	char name[16];
         int rc;
         int total = ksocknal_data.ksnd_connd_starting +
                     ksocknal_data.ksnd_connd_running;
@@ -2106,8 +2093,8 @@ ksocknal_connd_check_start(time64_t sec, long *timeout)
 	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 
 	/* NB: total is the next id */
-	snprintf(name, sizeof(name), "socknal_cd%02d", total);
-	rc = ksocknal_thread_start(ksocknal_connd, NULL, name);
+	rc = ksocknal_thread_start(ksocknal_connd, NULL,
+				   "socknal_cd%02d", total);
 
 	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
         if (rc == 0)

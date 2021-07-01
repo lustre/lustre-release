@@ -2045,15 +2045,13 @@ ksocknal_base_startup(void)
         }
 
         for (i = 0; i < *ksocknal_tunables.ksnd_nconnds; i++) {
-		char name[16];
 		spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 		ksocknal_data.ksnd_connd_starting++;
 		spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 
-
-		snprintf(name, sizeof(name), "socknal_cd%02d", i);
 		rc = ksocknal_thread_start(ksocknal_connd,
-					   (void *)((uintptr_t)i), name);
+					   (void *)((uintptr_t)i),
+					   "socknal_cd%02d", i);
 		if (rc != 0) {
 			spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 			ksocknal_data.ksnd_connd_starting--;
@@ -2221,14 +2219,12 @@ ksocknal_start_schedulers(struct ksock_sched *sched)
 
 	for (i = 0; i < nthrs; i++) {
 		long id;
-		char name[20];
 
 		id = KSOCK_THREAD_ID(sched->kss_cpt, sched->kss_nthreads + i);
-		snprintf(name, sizeof(name), "socknal_sd%02d_%02d",
-			 sched->kss_cpt, (int)KSOCK_THREAD_SID(id));
-
-		rc = ksocknal_thread_start(ksocknal_scheduler,
-					   (void *)id, name);
+		rc = ksocknal_thread_start(ksocknal_scheduler, (void *)id,
+					   "socknal_sd%02d_%02d",
+					   sched->kss_cpt,
+					   (int)KSOCK_THREAD_SID(id));
 		if (rc == 0)
 			continue;
 

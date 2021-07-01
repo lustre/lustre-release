@@ -1093,7 +1093,15 @@ int  kiblnd_tunables_init(void);
 
 int  kiblnd_connd (void *arg);
 int  kiblnd_scheduler(void *arg);
-int  kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name);
+#define kiblnd_thread_start(fn, data, namefmt, arg...)			\
+	({								\
+		struct task_struct *__task = kthread_run(fn, data,	\
+							 namefmt, ##arg); \
+		if (!IS_ERR(__task))					\
+			atomic_inc(&kiblnd_data.kib_nthreads);		\
+		PTR_ERR_OR_ZERO(__task);				\
+	})
+
 int  kiblnd_failover_thread (void *arg);
 
 int kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages);

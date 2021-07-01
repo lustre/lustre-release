@@ -3159,12 +3159,11 @@ kiblnd_start_schedulers(struct kib_sched_info *sched)
 	}
 
 	for (i = 0; i < nthrs; i++) {
-		long	id;
-		char	name[20];
-		id = KIB_THREAD_ID(sched->ibs_cpt, sched->ibs_nthreads + i);
-		snprintf(name, sizeof(name), "kiblnd_sd_%02ld_%02ld",
-			 KIB_THREAD_CPT(id), KIB_THREAD_TID(id));
-		rc = kiblnd_thread_start(kiblnd_scheduler, (void *)id, name);
+		long	id = KIB_THREAD_ID(sched->ibs_cpt, sched->ibs_nthreads + i);
+
+		rc = kiblnd_thread_start(kiblnd_scheduler, (void *)id,
+					 "kiblnd_sd_%02ld_%02ld",
+					 KIB_THREAD_CPT(id), KIB_THREAD_TID(id));
 		if (rc == 0)
 			continue;
 

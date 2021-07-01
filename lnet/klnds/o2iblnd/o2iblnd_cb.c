@@ -1931,18 +1931,6 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
         return rc;
 }
 
-int
-kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
-{
-	struct task_struct *task = kthread_run(fn, arg, "%s", name);
-
-	if (IS_ERR(task))
-		return PTR_ERR(task);
-
-	atomic_inc(&kiblnd_data.kib_nthreads);
-	return 0;
-}
-
 static void
 kiblnd_thread_fini (void)
 {
