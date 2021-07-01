@@ -223,6 +223,13 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
         </listitem>
       </orderedlist>
     </section>
+    <section remap="h3" condition='l2F'>
+      <title>Mapping Project IDs</title>
+      <para>Like UIDs and GIDs, PROJIDs can be mapped via nodemaps, from client
+      to file system IDs and conversely. To declare a PROJID mapping, use the
+      <literal>projid</literal> type:</para>
+      <screen>mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype projid --idmap <replaceable>33:1</replaceable></screen>
+    </section>
   </section>
 
   <section xml:id="alteringproperties">
@@ -238,11 +245,22 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
 
       <para>Several properties exist, off by default, which change
       client behavior: <literal>admin</literal>, 
-      <literal>trusted</literal>, <literal>squash_uid</literal>,
-      <literal>squash_gid</literal>, and <literal>deny_unknown</literal>.
+      <literal>trusted</literal>, <literal>map_mode</literal>,
+      <literal>squash_uid</literal>, <literal>squash_gid</literal>,
+      <literal>squash_projid</literal>, <literal>deny_unknown</literal>,
+      <literal>audit_mode</literal> and <literal>forbid_encryption</literal>.
       </para>
 
       <itemizedlist>
+        <listitem>
+          <para>The property <literal>admin</literal> defines whether
+          root is squashed on the policy group. By default, it is
+          squashed, unless this property is enabled. Coupled with the
+          <literal>trusted</literal> property, this will allow unmapped
+          access for backup nodes, transfer points, or other administrative
+          mount points.</para>
+        </listitem>
+
         <listitem>
           <para>The <literal>trusted</literal> property permits members
           of a policy group to see the file system's canonical identifiers.
@@ -252,12 +270,29 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
         </listitem>
 
         <listitem>
-          <para>The property <literal>admin</literal> defines whether
-          root is squashed on the policy group. By default, it is
-          squashed, unless this property is enabled. Coupled with the
-          <literal>trusted</literal> property, this will allow unmapped
-          access for backup nodes, transfer points, or other administrative
-          mount points.</para>
+          <para condition='l2A'>The <literal>map_mode</literal> property lets
+          control the way mapping is carried out. By default it is set to
+          <literal>all</literal> which means the nodemap will map UIDs, GIDs,
+          and PROJIDs. If set to <literal>uid_only</literal> or just
+          <literal>uid</literal>, only UIDs will be mapped. If set to
+          <literal>gid_only</literal> or just <literal>gid</literal>, only GIDs
+          will be mapped. If set to <literal>projid_only</literal> or just
+          <literal>projid</literal>, only PROJIDs will be mapped. If set to
+          <literal>both</literal>, both UIDs and GIDs will be mapped. Multiple
+          values can be specified, comma separated.</para>
+        </listitem>
+
+        <listitem>
+          <para>The properties <literal>squash_uid</literal>, <literal>
+          squash_gid</literal> and <literal>squash_projid</literal> define the
+          default UID, GID and PROJID respectively that users will be squashed
+          to if unmapped, unless the deny_unknown flag is set, in which case
+          access will still be denied.
+          </para>
+          <note>
+            <para>The <literal>squash_projid</literal> property was introduced
+            in Lustre 2.15</para>
+          </note>
         </listitem>
 
         <listitem>
@@ -269,11 +304,20 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
         </listitem>
 
         <listitem>
-          <para>The properties <literal>squash_uid</literal> and <literal>
-          squash_gid</literal> define the default UID and GID that users will
-          be squashed to if unmapped, unless the deny_unknown flag is set, in
-          which case access will still be denied.
-          </para>
+          <para condition='l2B'>The property <literal>audit_mode</literal> lets
+          control which Lustre client nodes can trigger the recording of file
+          system access events to the Changelogs. When this flag is set to 1,
+          clients will be able to record file system access events to the
+          Changelogs, if Changelogs are otherwise activated. When set to 0,
+          events are not logged into the Changelogs, no matter if Changelogs are
+          activated or not. By default, this flag is set to 1 in newly created
+          nodemap entries. And it is also set to 1 in 'default' nodemap.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2E'>The property
+          <literal>forbid_encryption</literal> prevents clients from using
+          encryption.</para>
         </listitem>
       </itemizedlist>
 
@@ -323,6 +367,14 @@ mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --prope
       from accessing the file system. Root access also is denied, if the
       <literal>admin</literal> property is off, and root is not part of any
       mapping.</para>
+
+      <para condition='l2F'>To prevent a client from changing quota settings
+      for a project other than the one assigned to the fileset it is restricted
+      to, you should map the PROJID to itself, set <literal>map_mode</literal>
+      to <literal>projid</literal>, and then <literal>trusted</literal> to
+      0 and <literal>deny_unknown</literal> to 1. This way, only operations on
+      the designated PROJID will be allowed.
+      </para>
 
       <para>When nodemaps are modified, the change events are queued and
       distributed across the cluster. Under normal conditions, these changes
