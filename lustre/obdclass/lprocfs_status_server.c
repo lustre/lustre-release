@@ -79,6 +79,42 @@ no_entry:
 }
 EXPORT_SYMBOL(ldebugfs_add_symlink);
 
+int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct obd_export *exp, *n;
+	int connected;
+
+	if (!obd->obd_recovering ||
+	    atomic_read(&obd->obd_connected_clients) >=
+	    atomic_read(&obd->obd_max_recoverable_clients))
+		/* not in recovery */
+		return 0;
+
+	spin_lock(&obd->obd_dev_lock);
+	list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
+		/* don't count self-export as client */
+		if (obd_uuid_equals(&exp->exp_client_uuid,
+				    &exp->exp_obd->obd_uuid))
+			continue;
+
+		/* don't count clients which have no slot in last_rcvd
+		 * (e.g. lightweight connection)
+		 */
+		if (exp->exp_target_data.ted_lr_idx == -1)
+			continue;
+
+		connected = !exp->exp_failed && (exp->exp_conn_cnt > 0);
+
+		if (!connected)
+			seq_printf(m, "%s\n", exp->exp_client_uuid.uuid);
+	}
+	spin_unlock(&obd->obd_dev_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_recovery_stale_clients_seq_show);
+
 #ifdef CONFIG_PROC_FS
 
 int lprocfs_evict_client_open(struct inode *inode, struct file *f)

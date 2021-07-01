@@ -934,6 +934,14 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ NULL }
 };
 
+LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, recovery_stale_clients);
+
+struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
+	{ .name =	"recovery_stale_clients",
+	  .fops =	&ofd_recovery_stale_clients_fops},
+	{ NULL }
+};
+
 /**
  * Initialize OFD statistics counters
  *
@@ -1040,6 +1048,7 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
+	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_ofd_obd_vars, obd);
 
 	rc = tgt_tunables_init(&ofd->ofd_lut);
 	if (rc) {

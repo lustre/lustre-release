@@ -1605,6 +1605,14 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	{ NULL }
 };
 
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, recovery_stale_clients);
+
+static struct ldebugfs_vars ldebugfs_mdt_obd_vars[] = {
+	{ .name =	"recovery_stale_clients",
+	  .fops =	&mdt_recovery_stale_clients_fops	},
+	{ NULL }
+};
+
 static int
 lprocfs_mdt_print_open_files(struct obd_export *exp, void *v)
 {
@@ -1734,6 +1742,7 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 		       mdt_obd_name(mdt), rc);
 		return rc;
 	}
+	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_mdt_obd_vars, obd);
 
 	rc = tgt_tunables_init(&mdt->mdt_lut);
 	if (rc) {

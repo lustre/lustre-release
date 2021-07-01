@@ -678,6 +678,9 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 /* lprocfs_status.c: recovery status */
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
 
+/* lprocfs: display the uuid of stale clients */
+int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data);
+
 /* lprocfs_status.c: hash statistics */
 int lprocfs_hash_seq_show(struct seq_file *m, void *data);
 
