@@ -744,7 +744,8 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 	if (count < 0)
 		RETURN(-EINVAL);
 	if (count == 0)
-		RETURN(0);
+		/* if not proper ACL, do nothing and return initial size */
+		RETURN(size);
 
 	for (end = entry + count; entry != end; entry++) {
 		__u16 tag = le16_to_cpu(entry->e_tag);

@@ -25741,6 +25741,38 @@ test_431() { # LU-14187
 }
 run_test 431 "Restart transaction for IO"
 
+cleanup_test_432() {
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active
+}
+
+test_432() {
+	local tmpdir=$TMP/dir432
+
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) ||
+		skip "Need MDS version at least 2.14.52"
+
+	stack_trap cleanup_test_432 EXIT
+	mkdir $DIR/$tdir
+	mkdir $tmpdir
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	cancel_lru_locks mdc
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+
+	if [ $(mv $tmpdir $DIR/$tdir/ 2>&1 |
+	       grep -ci "Operation not permitted") -ne 0 ]; then
+		error "mv $tmpdir $DIR/$tdir/ hits 'Operation not permitted'"
+	fi
+}
+run_test 432 "mv dir from outside Lustre"
+
 prep_801() {
 	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
