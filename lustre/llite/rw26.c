@@ -518,10 +518,19 @@ out:
 	else
 		vio->u.readwrite.vui_read += tot_bytes;
 
-	/* If async dio submission is not allowed, we must wait here. */
-	if (is_sync_kiocb(iocb) && !io->ci_parallel_dio) {
+	/* We cannot do async submission - for AIO or regular DIO - unless
+	 * lockless because it causes us to release the lock early.
+	 *
+	 * There are also several circumstances in which we must disable
+	 * parallel DIO, so we check if it is enabled.
+	 *
+	 * The check for "is_sync_kiocb" excludes AIO, which does not need to
+	 * be disabled in these situations.
+	 */
+	if (io->ci_dio_lock || (is_sync_kiocb(iocb) && !io->ci_parallel_dio)) {
 		ssize_t rc2;
 
+		/* Wait here rather than doing async submission */
 		rc2 = cl_sync_io_wait_recycle(env, &aio->cda_sync, 0, 0);
 		if (result == 0 && rc2)
 			result = rc2;
