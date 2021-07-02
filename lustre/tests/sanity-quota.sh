@@ -4528,7 +4528,7 @@ test_69()
 }
 run_test 69 "EDQUOT at one of pools shouldn't affect DOM"
 
-test_70()
+test_70a()
 {
 	local qpool="qpool1"
 	local limit=20 # MB
@@ -4563,7 +4563,31 @@ test_70()
 	rc=$?
 	[ $rc -eq $err ] || error "quota res $rc != $err"
 }
-run_test 70 "check lfs setquota/quota with a pool option"
+run_test 70a "check lfs setquota/quota with a pool option"
+
+test_70b()
+{
+	local glbl_hard=200 # 200M
+	local glbl_soft=100 # 100M
+	local pool_hard=10 # 10M
+	local qpool="qpool1"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 || error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -b ${glbl_soft}M -B ${glbl_hard}M $DIR ||
+		error "set user quota failed"
+	$LFS setquota -u $TSTUSR -B ${pool_hard}M --pool $qpool $DIR ||
+		error "set user quota failed"
+
+	local tmp=$(getquota -u $TSTUSR global bhardlimit $qpool)
+	[ $tmp -eq $((pool_hard * 1024)) ] ||
+		error "wrong block hard limit $tmp for $qpool"
+	local tmp=$(getquota -u $TSTUSR global bsoftlimit $qpool)
+	# soft limit hasn't been set and should be zero
+	[ $tmp -eq 0 ] || error "wrong soft block limit $tmp for $qpool"
+}
+run_test 70b "lfs setquota pool works properly"
 
 test_71a()
 {

@@ -7885,33 +7885,48 @@ quota_type_def:
 	} else if ((!(limit_mask & BHLIMIT) ^ !(limit_mask & BSLIMIT)) ||
 		   (!(limit_mask & IHLIMIT) ^ !(limit_mask & ISLIMIT))) {
 		/* sigh, we can't just set blimits/ilimits */
-		struct if_quotactl tmp_qctl = {.qc_cmd  = LUSTRE_Q_GETQUOTA,
-					       .qc_type = qctl->qc_type,
-					       .qc_id   = qctl->qc_id};
+		struct if_quotactl *tmp_qctl;
 
-		rc = llapi_quotactl(mnt, &tmp_qctl);
-		if (rc < 0)
+		tmp_qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
+		if (!tmp_qctl)
 			goto out;
 
+		if (qctl->qc_cmd == LUSTRE_Q_SETQUOTAPOOL) {
+			tmp_qctl->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
+			strncpy(tmp_qctl->qc_poolname, qctl->qc_poolname,
+				LOV_MAXPOOLNAME);
+		} else {
+			tmp_qctl->qc_cmd  = LUSTRE_Q_GETQUOTA;
+		}
+		tmp_qctl->qc_type = qctl->qc_type;
+		tmp_qctl->qc_id = qctl->qc_id;
+
+		rc = llapi_quotactl(mnt, tmp_qctl);
+		if (rc < 0) {
+			free(tmp_qctl);
+			goto out;
+		}
+
 		if (!(limit_mask & BHLIMIT))
-			dqb->dqb_bhardlimit = tmp_qctl.qc_dqblk.dqb_bhardlimit;
+			dqb->dqb_bhardlimit = tmp_qctl->qc_dqblk.dqb_bhardlimit;
 		if (!(limit_mask & BSLIMIT))
-			dqb->dqb_bsoftlimit = tmp_qctl.qc_dqblk.dqb_bsoftlimit;
+			dqb->dqb_bsoftlimit = tmp_qctl->qc_dqblk.dqb_bsoftlimit;
 		if (!(limit_mask & IHLIMIT))
-			dqb->dqb_ihardlimit = tmp_qctl.qc_dqblk.dqb_ihardlimit;
+			dqb->dqb_ihardlimit = tmp_qctl->qc_dqblk.dqb_ihardlimit;
 		if (!(limit_mask & ISLIMIT))
-			dqb->dqb_isoftlimit = tmp_qctl.qc_dqblk.dqb_isoftlimit;
+			dqb->dqb_isoftlimit = tmp_qctl->qc_dqblk.dqb_isoftlimit;
 
 		/* Keep grace times if we have got no softlimit arguments */
 		if ((limit_mask & BHLIMIT) && !(limit_mask & BSLIMIT)) {
 			dqb->dqb_valid |= QIF_BTIME;
-			dqb->dqb_btime = tmp_qctl.qc_dqblk.dqb_btime;
+			dqb->dqb_btime = tmp_qctl->qc_dqblk.dqb_btime;
 		}
 
 		if ((limit_mask & IHLIMIT) && !(limit_mask & ISLIMIT)) {
 			dqb->dqb_valid |= QIF_ITIME;
-			dqb->dqb_itime = tmp_qctl.qc_dqblk.dqb_itime;
+			dqb->dqb_itime = tmp_qctl->qc_dqblk.dqb_itime;
 		}
+		free(tmp_qctl);
 	}
 
 	dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
