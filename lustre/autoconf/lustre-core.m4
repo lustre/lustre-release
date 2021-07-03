@@ -2186,26 +2186,26 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_INODE_TIMESPEC64
 
 #
-# LC___XA_SET_MARK
+# LC_RADIX_TREE_TAG_SET
 #
 # kernel 4.20 commit v4.19-rc5-248-g9b89a0355144
 # xarray: Add XArray marks - replaced radix_tree_tag_set
 #
-AC_DEFUN([LC___XA_SET_MARK], [
+AC_DEFUN([LC_RADIX_TREE_TAG_SET], [
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if '__xa_set_mark' exists],
-__xa_set_mark, [
+LB_CHECK_COMPILE([if 'radix_tree_tag_set' exists],
+radix_tree_tag_set, [
 	#include <linux/fs.h>
 	#include <linux/radix-tree.h>
 ],[
 	radix_tree_tag_set(NULL, 0, PAGECACHE_TAG_DIRTY);
 ],[
 	AC_DEFINE(HAVE_RADIX_TREE_TAG_SET, 1,
-		[__xa_set_mark exists])
+		[radix_tree_tag_set exists])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-]) # LC___XA_SET_MARK
+]) # LC_RADIX_TREE_TAG_SET
 
 #
 # LC_UAPI_LINUX_MOUNT_H
@@ -2561,7 +2561,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_INODE_TIMESPEC64
 
 	# 4.20
-	LC___XA_SET_MARK
+	LC_RADIX_TREE_TAG_SET
 	LC_UAPI_LINUX_MOUNT_H
 	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
