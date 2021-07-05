@@ -5,7 +5,7 @@
 #include "lutf_listener.h"
 
 extern lutf_config_params_t g_lutf_cfg;
-bool g_py_inited = false;
+bool g_py_inited;
 
 static char *get_path_segment(char *path, int *len, char **more)
 {
@@ -27,14 +27,14 @@ static char *get_path_segment(char *path, int *len, char **more)
 	return str;
 }
 
-static void python_run_interactive_shell(void)
+static lutf_rc_t python_run_interactive_shell(void)
 {
 	char buf[MAX_STR_LEN + 20];
 	char segment[MAX_STR_LEN];
 	char *seg;
 	char *more = g_lutf_cfg.py_path;
 	int len = 0;
-	lutf_rc_t rc;
+	lutf_rc_t rc = EN_LUTF_RC_OK;
 
 	PyRun_SimpleString("import code\n");
 	PyRun_SimpleString("import os\n");
@@ -76,7 +76,8 @@ static void python_run_interactive_shell(void)
 		rc = wait_for_agents(g_lutf_cfg.agents, 20);
 		if (rc == EN_LUTF_RC_TIMEOUT) {
 			PERROR("Not all agents connected. Aborting tests");
-			return;
+			lutf_listener_shutdown();
+			return EN_LUTF_RC_TIMEOUT;
 		}
 
 		/* update the LUTF internal database */
@@ -84,18 +85,32 @@ static void python_run_interactive_shell(void)
 		PDEBUG("Agents reloaded. Dumping");
 		PyRun_SimpleString("agents.dump()");
 
+		/* if a script is specified then a unique suite must be
+		 * specified as well.
+		 * if a suite_list is specified it takes precedence over
+		 * a single suite parameters. A pattern of scripts can be
+		 * provided to run matching scripts.
+		 * If a suite parameter is provided then run that
+		 * particular suite.
+		 * Otherwise just run everything.
+		 */
 		if (g_lutf_cfg.script && strlen(g_lutf_cfg.script) > 0) {
 			snprintf(buf, MAX_STR_LEN,
 				 "suites['%s'].scripts['%s'].run()",
 				 g_lutf_cfg.suite,
 				 g_lutf_cfg.script);
+		} else if (g_lutf_cfg.suite_list &&
+			   strlen(g_lutf_cfg.suite_list) > 0) {
+			snprintf(buf, MAX_STR_LEN,
+				 "suites.run(suite_list='%s', match='%s')",
+				 g_lutf_cfg.suite_list, pattern);
 		} else if (g_lutf_cfg.suite && strlen(g_lutf_cfg.suite) > 0) {
 			snprintf(buf, MAX_STR_LEN,
 				 "suites['%s'].run('%s')",
 				 g_lutf_cfg.suite, pattern);
 		} else {
 			snprintf(buf, MAX_STR_LEN,
-				 "suites.run('%s')", pattern);
+				 "suites.run(match='%s')", pattern);
 		}
 		PDEBUG("%s", buf);
 		PyRun_SimpleString(buf);
@@ -106,7 +121,7 @@ static void python_run_interactive_shell(void)
 		PDEBUG("Shutting down the LUTF");
 		PyRun_SimpleString("me.exit()");
 		lutf_listener_shutdown();
-		return;
+		return EN_LUTF_RC_OK;
 	} else if (g_lutf_cfg.shell == EN_LUTF_RUN_INTERACTIVE) {
 		int rc;
 		char *intro;
@@ -137,36 +152,43 @@ static void python_run_interactive_shell(void)
 		 */
 		PDEBUG("Running in Daemon mode");
 		sprintf(segment, "fname = os.path.join('%s', '%s')\n",
-			g_lutf_cfg.lutf_path, OUT_PY_LOG);
+			g_lutf_cfg.tmp_dir, OUT_PY_LOG);
 		if (PyRun_SimpleString(segment)) {
 			PERROR("Failed to create log file");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		sprintf(segment, "logfile = open(fname, 'w')\n");
 		if (PyRun_SimpleString(segment)) {
 			PERROR("Failed to open log file");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		if (PyRun_SimpleString("sys.stdout = sys.stderr = logfile\n")) {
 			PERROR("Failed to redirect stdout and stderr");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		if (PyRun_SimpleString("from lutf_telnet_sr import LutfTelnetServer\n")) {
 			PERROR("Failed to import LutfTelnetServer");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		sprintf(segment, "tns = LutfTelnetServer(%d)\n",
 			g_lutf_cfg.l_info.hb_info.agent_telnet_port);
 		if (PyRun_SimpleString(segment)) {
 			PERROR("Failed to instantiate LutfTelnetServer");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		if (PyRun_SimpleString("tns.run()\n")) {
 			PERROR("Failed to run LutfTelnetServer instance");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 		if (PyRun_SimpleString("logfile.close()")) {
 			PERROR("Failed to close logfile");
+			rc = EN_LUTF_RC_FAIL;
 			goto python_shutdown;
 		}
 python_shutdown:
@@ -174,6 +196,8 @@ python_shutdown:
 	}
 	g_py_inited = false;
 	lutf_listener_shutdown();
+
+	return rc;
 }
 
 /*
@@ -183,6 +207,7 @@ python_shutdown:
 lutf_rc_t python_init(void)
 {
 	wchar_t program[5];
+	lutf_rc_t rc;
 
 	swprintf(program, 3, L"%hs", "lutf");
 
@@ -199,14 +224,14 @@ lutf_rc_t python_init(void)
 	//PySys_SetPath(new_path);
 	//path = Py_GetPath();
 
-	python_run_interactive_shell();
+	rc = python_run_interactive_shell();
 	PDEBUG("Python finalizing");
 
 	Py_Finalize();
 
 	PDEBUG("Python finalized");
 
-	return EN_LUTF_RC_OK;
+	return rc;
 }
 
 lutf_rc_t python_handle_rpc_request(char *rpc)
@@ -227,10 +252,10 @@ lutf_rc_t python_handle_rpc_request(char *rpc)
 
 	gstate = PyGILState_Ensure();
 
-	str = PyUnicode_FromString((char*)"lutf");
+	str = PyUnicode_FromString((char *)"lutf");
 	lutf = PyImport_Import(str);
-	me = PyObject_GetAttrString(lutf, (char*)"me");
-	handle_rpc_req = PyObject_GetAttrString(me, (char*)"handle_rpc_req");
+	me = PyObject_GetAttrString(lutf, (char *)"me");
+	handle_rpc_req = PyObject_GetAttrString(me, (char *)"handle_rpc_req");
 	args = PyTuple_Pack(1, PyUnicode_FromString(rpc));
 	result = PyObject_CallObject(handle_rpc_req, args);
 

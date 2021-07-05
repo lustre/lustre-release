@@ -24,7 +24,8 @@ static lutf_rc_t doNonBlockingConnect(int iSockFd, struct sockaddr *psSA,
 	fd_set rset, wset;
 	struct timeval tval;
 
-	if ((iN = connect(iSockFd, (struct sockaddr *)psSA, iSAlen)) < 0) {
+	iN = connect(iSockFd, (struct sockaddr *)psSA, iSAlen);
+	if (iN < 0) {
 		if (errno != EINPROGRESS) {
 			PERROR("Connect Failed: %s:%d", strerror(errno), errno);
 			return EN_LUTF_RC_FAIL;
@@ -38,8 +39,9 @@ static lutf_rc_t doNonBlockingConnect(int iSockFd, struct sockaddr *psSA,
 		tval.tv_sec = iNsec;
 		tval.tv_usec = 0;
 
-		if ((iN = select(iSockFd+1, &rset, &wset, NULL,
-				 iNsec ? &tval : NULL)) == 0) {
+		iN = select(iSockFd+1, &rset, &wset, NULL,
+			    iNsec ? &tval : NULL);
+		if (iN == 0) {
 			errno = ETIMEDOUT;
 			PERROR("Select timed out");
 			return EN_LUTF_RC_FAIL;
@@ -50,8 +52,10 @@ static lutf_rc_t doNonBlockingConnect(int iSockFd, struct sockaddr *psSA,
 
 		if (FD_ISSET(iSockFd, &rset) || FD_ISSET(iSockFd, &wset)) {
 			iLen = sizeof(iError);
-			if (getsockopt(iSockFd, SOL_SOCKET, SO_ERROR, &iError, (socklen_t *)&iLen) < 0) {
-				PERROR("getsockopt failed indicating connect failure, errno= %d", errno);
+			if (getsockopt(iSockFd, SOL_SOCKET, SO_ERROR, &iError,
+				       (socklen_t *)&iLen) < 0) {
+				PERROR("getsockopt failed indicating connect failure, errno= %d",
+				       errno);
 				return EN_LUTF_RC_FAIL;
 			}
 		} else {
@@ -81,8 +85,8 @@ int establishTCPConnection(unsigned long uiAddress,
 	lutf_rc_t eRc = EN_LUTF_RC_OK;
 
 	/* Create TCP socket */
-	if ((rsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))
-	     == -1)
+	rsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (rsocket == -1)
 		return EN_LUTF_RC_FAIL;
 
 	/* Turn off Nagle's algorithm for this TCP socket. */
@@ -109,11 +113,9 @@ int establishTCPConnection(unsigned long uiAddress,
 	tm_addr.sin_port = (endian) ? htons(iPort) : iPort;
 	tm_addr.sin_family = AF_INET;
 
-	if ((eRc = doNonBlockingConnect(rsocket,
-					(struct sockaddr *)&tm_addr,
-					sizeof(tm_addr),
-					SOCKET_CONN_TIMEOUT_SEC))
-	    != EN_LUTF_RC_OK) {
+	eRc = doNonBlockingConnect(rsocket, (struct sockaddr *)&tm_addr,
+				   sizeof(tm_addr), SOCKET_CONN_TIMEOUT_SEC);
+	if (eRc != EN_LUTF_RC_OK) {
 		close(rsocket);
 		return eRc;
 	}
@@ -127,7 +129,7 @@ lutf_rc_t closeTcpConnection(int iTcpSocket)
 
 	PDEBUG("closing socket %d", iTcpSocket);
 	rc = close(iTcpSocket);
-	if (!rc && errno != EINPROGRESS && errno != ECONNRESET) {
+	if (rc && errno != EINPROGRESS && errno != ECONNRESET) {
 		PERROR("failed to close %d:%d\n", iTcpSocket, errno);
 		return EN_LUTF_RC_FAIL;
 	}
@@ -275,7 +277,9 @@ lutf_rc_t readTcpMessage(int iFd, char *pcBuffer,
 
 		if (tNread < 0) {
 			if (errno == EINTR) {
-				/*  We were interrupted, but this is not an error condition.  */
+				/* We were interrupted, but this is not an
+				 * error condition.
+				 */
 				tNread = 0;
 			} else if ((errno == EAGAIN) && (!iTimeout)) {
 				return EN_LUTF_RC_SOCKET_FAIL;

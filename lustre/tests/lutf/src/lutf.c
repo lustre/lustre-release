@@ -25,16 +25,11 @@
 
 #define HB_TIMEOUT	2
 
-struct in_addr g_local_ip;
 FILE *out;
 char *outlog;
 
-/*externs needed by getopt lib*/
-extern char *optarg;
-extern int optind;
-
 static void
-lutf_help_usage(const struct option *long_options, const char *description[])
+lutf_help_usage(const struct option *long_options, const char *const description[])
 {
 	int i = 0;
 
@@ -87,7 +82,8 @@ lutf_rc_t hostname_to_ip(char *hostname, char *ip, int len)
 	hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((rv = getaddrinfo(hostname, "http", &hints, &servinfo)) != 0) {
+	rv = getaddrinfo(hostname, "http", &hints, &servinfo);
+	if (rv != 0) {
 		PERROR("getaddrinfo: %s\n", gai_strerror(rv));
 		return EN_LUTF_RC_BAD_ADDR;
 	}
@@ -182,15 +178,14 @@ lutf_rc_t extract_config_parameters(struct cYAML *config_tree,
 				/* maybe it's a host name so let's try
 				 * that out
 				 */
-				rc = EN_LUTF_RC_BAD_ADDR;
-				if ((rc = hostname_to_ip(tmp->cy_valuestring, maddr,
-							 sizeof(maddr)))
-				    != EN_LUTF_RC_OK) {
+				rc = hostname_to_ip(tmp->cy_valuestring, maddr,
+						    sizeof(maddr));
+				if (rc != EN_LUTF_RC_OK) {
 					*elem = "master-address";
 					return rc;
 				} else if (!inet_aton(maddr, &addr)) {
 					*elem = "master-address";
-					return rc;
+					return EN_LUTF_RC_BAD_ADDR;
 				}
 			}
 			cfg->l_info.hb_info.master_address.sin_addr = addr;
@@ -244,8 +239,8 @@ lutf_rc_t extract_config_parameters(struct cYAML *config_tree,
 	tmp = get_value(head, "node-name");
 	if (tmp) {
 		if (tmp->cy_type == CYAML_TYPE_STRING) {
-			strncpy(cfg->l_info.hb_info.node_name, tmp->cy_valuestring,
-				MAX_STR_LEN);
+			strncpy(cfg->l_info.hb_info.node_name,
+				tmp->cy_valuestring, MAX_STR_LEN);
 			cfg->l_info.hb_info.node_name[MAX_STR_LEN - 1] = '\0';
 		} else {
 			*elem = "node-name";
@@ -266,6 +261,19 @@ lutf_rc_t extract_config_parameters(struct cYAML *config_tree,
 	} else if (cfg->l_info.type == EN_LUTF_AGENT) {
 		*elem = "master-name";
 		return EN_LUTF_RC_MISSING_PARAM;
+	}
+
+	tmp = get_value(head, "suite-list");
+	if (tmp && cfg->l_info.type == EN_LUTF_MASTER) {
+		if (tmp->cy_type == CYAML_TYPE_STRING)
+			if (strlen(tmp->cy_valuestring) > 0)
+				cfg->suite_list = tmp->cy_valuestring;
+			else
+				cfg->suite_list = NULL;
+		else {
+			*elem = "suite-list";
+			return EN_LUTF_RC_BAD_PARAM;
+		}
 	}
 
 	tmp = get_value(head, "suite");
@@ -323,7 +331,7 @@ lutf_rc_t extract_config_parameters(struct cYAML *config_tree,
 			return EN_LUTF_RC_BAD_PARAM;
 		}
 	} else {
-		cfg->results_file = "lutf_def_results";
+		cfg->results_file = "/tmp/lutf/lutf_def_results";
 	}
 
 	tmp = get_value(head, "agent-list");
@@ -377,7 +385,7 @@ main(int argc, char *argv[])
 		{NULL, 0, NULL, 0}
 	};
 
-	const char *description[] = {
+	static const char * const description[] = {
 		/*'c'*/":\n\t\tYAML config file",
 		/*'h'*/":\n\t\tPrint this help",
 		NULL

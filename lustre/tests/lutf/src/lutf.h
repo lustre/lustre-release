@@ -74,6 +74,8 @@ typedef struct lutf_config_params_s {
 	char *py_path; /* other python specific paths */
 	char *master_name; /* name of master. Important if I'm an agent */
 	char *suite; /* name of suite to run. Run all if not present */
+	char *suite_list; /* list of suites to run. Takes precedence
+			     over single suite parameter */
 	char *script; /* name of script to run. Suite must be specified */
 	char *pattern; /* file match pattern */
 	char *results_file; /* path to results file */
@@ -85,9 +87,9 @@ typedef struct lutf_config_params_s {
 
 lutf_config_params_t g_lutf_cfg;
 
-static inline char *lutf_rc2str(lutf_rc_t rc)
+static inline const char *lutf_rc2str(lutf_rc_t rc)
 {
-	char *str[] = {
+	static const char * const str[] = {
 		[EN_LUTF_RC_OK] = "RC_OK",
 		[EN_LUTF_RC_FAIL*-1] = "RC_FAIL",
 		[EN_LUTF_RC_SYS_ERR*-1] = "RC_SYSTEM_ERROR",

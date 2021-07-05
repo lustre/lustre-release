@@ -12,7 +12,8 @@ struct cYAML;
 #define LUTF_AGENT_HB_CHANNEL_CONNECTED (1 << 1)
 #define LUTF_AGENT_RPC_CHANNEL_CONNECTED (1 << 2)
 #define LUTF_AGENT_WORK_IN_PROGRESS (1 << 3)
-#define LUTF_AGENT_ZOMBIE (1 << 4)
+#define LUTF_AGENT_NEED_LISTEN_CLEAN (1 << 4)
+#define LUTF_AGENT_STATE_DEAD (1 << 5)
 
 typedef struct lutf_agent_blk_s {
 	pthread_mutex_t mutex;
@@ -88,12 +89,6 @@ lutf_agent_blk_t *find_create_agent_blk_by_addr(struct sockaddr_in *addr);
 lutf_agent_blk_t *find_free_agent_blk(struct sockaddr_in *addr);
 
 /*
- * free_agent_blk
- *	Free an agent blk that no longer is needed
- */
-void free_agent_blk(int id);
-
-/*
  * acquire_agent_blk
  *	acquire the agent for work
  */
@@ -103,20 +98,13 @@ void acquire_agent_blk(lutf_agent_blk_t *agent);
  * release_agent_blk
  *	Release the agent blk
  */
-void release_agent_blk(lutf_agent_blk_t *agent);
+void release_agent_blk(lutf_agent_blk_t *agent, int dead);
 
 /*
  * agent_ip2str
  *	Returns the ip string representation
  */
 char *agent_ip2str(lutf_agent_blk_t *agent);
-
-/*
- * agent_hb_check
- *	Given a time struct insure that the agent doesn't exceed the HB
- *	time.
- */
-void agent_hb_check(struct timeval *t, lutf_type_t whoami);
 
 /*
  * agent_disable_hb
@@ -129,6 +117,12 @@ void agent_disable_hb(void);
  *	Enables the HB
  */
 void agent_enable_hb(void);
+
+/*
+ * agent_get_hb
+ *	Get current HB state
+ */
+int agent_get_hb(void);
 
 /*
  * get the number of registered agents
