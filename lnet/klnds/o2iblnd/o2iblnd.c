@@ -2705,6 +2705,21 @@ kiblnd_dummy_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
         return 0;
 }
 
+static int kiblnd_get_link_status(struct net_device *dev)
+{
+	int ret = -1;
+
+	LASSERT(dev);
+
+	if (!netif_running(dev))
+		ret = 0;
+	/* Some devices may not be providing link settings */
+	else if (dev->ethtool_ops->get_link)
+		ret = dev->ethtool_ops->get_link(dev);
+
+	return ret;
+}
+
 static int
 kiblnd_dev_need_failover(struct kib_dev *dev, struct net *ns)
 {
@@ -2763,30 +2778,31 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	LIST_HEAD(zombie_tpo);
 	LIST_HEAD(zombie_ppo);
 	LIST_HEAD(zombie_fpo);
-        struct rdma_cm_id  *cmid  = NULL;
+	struct rdma_cm_id  *cmid  = NULL;
 	struct kib_hca_dev *hdev  = NULL;
 	struct kib_hca_dev *old;
-        struct ib_pd       *pd;
+	struct ib_pd       *pd;
 	struct kib_net *net;
-        struct sockaddr_in  addr;
-        unsigned long       flags;
-        int                 rc = 0;
+	struct sockaddr_in  addr;
+	struct net_device *netdev;
+	unsigned long       flags;
+	int                 rc = 0;
 	int		    i;
 
-        LASSERT (*kiblnd_tunables.kib_dev_failover > 1 ||
-                 dev->ibd_can_failover ||
-                 dev->ibd_hdev == NULL);
+	LASSERT(*kiblnd_tunables.kib_dev_failover > 1 ||
+		dev->ibd_can_failover ||
+		dev->ibd_hdev == NULL);
 
 	rc = kiblnd_dev_need_failover(dev, ns);
-        if (rc <= 0)
-                goto out;
+	if (rc <= 0)
+		goto out;
 
-        if (dev->ibd_hdev != NULL &&
-            dev->ibd_hdev->ibh_cmid != NULL) {
-                /* XXX it's not good to close old listener at here,
-                 * because we can fail to create new listener.
-                 * But we have to close it now, otherwise rdma_bind_addr
-                 * will return EADDRINUSE... How crap! */
+	if (dev->ibd_hdev != NULL &&
+	    dev->ibd_hdev->ibh_cmid != NULL) {
+		/* XXX it's not good to close old listener at here,
+		 * because we can fail to create new listener.
+		 * But we have to close it now, otherwise rdma_bind_addr
+		 * will return EADDRINUSE... How crap! */
 		write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 		cmid = dev->ibd_hdev->ibh_cmid;
@@ -2795,44 +2811,44 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		dev->ibd_hdev->ibh_cmid  = NULL;
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-                rdma_destroy_id(cmid);
-        }
+		rdma_destroy_id(cmid);
+	}
 
 	cmid = kiblnd_rdma_create_id(ns, kiblnd_cm_callback, dev, RDMA_PS_TCP,
 				     IB_QPT_RC);
-        if (IS_ERR(cmid)) {
-                rc = PTR_ERR(cmid);
-                CERROR("Failed to create cmid for failover: %d\n", rc);
-                goto out;
-        }
+	if (IS_ERR(cmid)) {
+		rc = PTR_ERR(cmid);
+		CERROR("Failed to create cmid for failover: %d\n", rc);
+		goto out;
+	}
 
-        memset(&addr, 0, sizeof(addr));
-        addr.sin_family      = AF_INET;
-        addr.sin_addr.s_addr = (__force u32)htonl(dev->ibd_ifip);
-        addr.sin_port        = htons(*kiblnd_tunables.kib_service);
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family      = AF_INET;
+	addr.sin_addr.s_addr = (__force u32)htonl(dev->ibd_ifip);
+	addr.sin_port        = htons(*kiblnd_tunables.kib_service);
 
-        /* Bind to failover device or port */
-        rc = rdma_bind_addr(cmid, (struct sockaddr *)&addr);
+	/* Bind to failover device or port */
+	rc = rdma_bind_addr(cmid, (struct sockaddr *)&addr);
 	if (rc != 0 || cmid->device == NULL) {
 		CERROR("Failed to bind %s:%pI4h to device(%p): %d\n",
 		       dev->ibd_ifname, &dev->ibd_ifip,
 		       cmid->device, rc);
-                rdma_destroy_id(cmid);
-                goto out;
-        }
+		rdma_destroy_id(cmid);
+		goto out;
+	}
 
 	LIBCFS_ALLOC(hdev, sizeof(*hdev));
-        if (hdev == NULL) {
-                CERROR("Failed to allocate kib_hca_dev\n");
-                rdma_destroy_id(cmid);
-                rc = -ENOMEM;
-                goto out;
-        }
+	if (hdev == NULL) {
+		CERROR("Failed to allocate kib_hca_dev\n");
+		rdma_destroy_id(cmid);
+		rc = -ENOMEM;
+		goto out;
+	}
 
-        atomic_set(&hdev->ibh_ref, 1);
-        hdev->ibh_dev   = dev;
-        hdev->ibh_cmid  = cmid;
-        hdev->ibh_ibdev = cmid->device;
+	atomic_set(&hdev->ibh_ref, 1);
+	hdev->ibh_dev   = dev;
+	hdev->ibh_cmid  = cmid;
+	hdev->ibh_ibdev = cmid->device;
 	hdev->ibh_port  = cmid->port_num;
 
 #ifdef HAVE_IB_ALLOC_PD_2ARGS
@@ -2846,13 +2862,13 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		goto out;
 	}
 
-        hdev->ibh_pd = pd;
+	hdev->ibh_pd = pd;
 
-        rc = rdma_listen(cmid, 0);
-        if (rc != 0) {
-                CERROR("Can't start new listener: %d\n", rc);
-                goto out;
-        }
+	rc = rdma_listen(cmid, 0);
+	if (rc != 0) {
+		CERROR("Can't start new listener: %d\n", rc);
+		goto out;
+	}
 
 	rc = kiblnd_hdev_get_attr(hdev);
 	if (rc != 0) {
@@ -2900,10 +2916,17 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	if (hdev != NULL)
 		kiblnd_hdev_decref(hdev);
 
-	if (rc != 0)
+	if (rc != 0) {
 		dev->ibd_failed_failover++;
-	else
+	} else {
 		dev->ibd_failed_failover = 0;
+
+		rcu_read_lock();
+		netdev = dev_get_by_name_rcu(ns, dev->ibd_ifname);
+		if (netdev && (kiblnd_get_link_status(netdev) == 1))
+			kiblnd_set_ni_fatal_on(dev->ibd_hdev, 0);
+		rcu_read_unlock();
+	}
 
 	return rc;
 }
