@@ -200,7 +200,7 @@
       usage database.</para>
       <para condition="l2A">Lustre filesystems formatted with a Lustre release
       prior to 2.10 can be still safely upgraded to release 2.10, but will not
-      have project quota usage reporting functional until
+      have project quota usage reporting functional until 2.15.0 or
       <literal>tune2fs -O project</literal> is run against all ldiskfs backend
       targets. This command sets the PROJECT feature flag in the superblock and
       runs e2fsck (as a result, the target must be offline). See
@@ -409,9 +409,13 @@ $ lfs quota -g eng /mnt/testfs
     <para>To limit quota usage for a specific project ID on a specific
     directory ("<literal>/mnt/testfs/dir</literal>" in this example), run:</para>
     <screen>
-$ chattr +P /mnt/testfs/dir
-$ chattr -p 1 /mnt/testfs/dir
+$ lfs project -s -p 1 -r /mnt/testfs/dir
 $ lfs setquota -p 1 -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs
+</screen>
+    <para>  Recursively list all descendants'(of the directory) project attribute on
+    directory ("<literal>/mnt/testfs/dir</literal>" in this example), run:</para>
+    <screen>
+$ lfs project -r /mnt/testfs/dir
 </screen>
     <para>Please note that if it is desired to have
     <literal>lfs quota -p</literal> show the space/inode usage under the
