@@ -3946,6 +3946,32 @@ out:
 	return rc;
 }
 
+int lustre_lnet_reset_stats(int seq_no, struct cYAML **err_rc)
+{
+	struct libcfs_ioctl_data data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	int l_errno;
+	char err_str[LNET_MAX_STR_LEN];
+
+	LIBCFS_IOC_INIT(data);
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_RESET_LNET_STATS, &data);
+	if (rc) {
+		l_errno = errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot reset lnet statistics: %s\"",
+			 strerror(l_errno));
+		rc = -l_errno;
+	} else {
+		snprintf(err_str, sizeof(err_str), "\"success\"");
+		rc = LUSTRE_CFG_RC_NO_ERR;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "statistics", err_str, err_rc);
+	return rc;
+}
+
 typedef int (*cmd_handler_t)(struct cYAML *tree,
 			     struct cYAML **show_rc,
 			     struct cYAML **err_rc);

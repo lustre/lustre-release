@@ -3953,6 +3953,14 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 	}
 
+	case IOC_LIBCFS_RESET_LNET_STATS:
+	{
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_counters_reset();
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
+	}
+
 	case IOC_LIBCFS_CONFIG_RTR:
 		config = arg;
 

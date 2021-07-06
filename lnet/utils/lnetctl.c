@@ -60,6 +60,7 @@ static int jt_set_transaction_to(int argc, char **argv);
 static int jt_set_recov_intrv(int argc, char **argv);
 static int jt_set_rtr_sensitivity(int argc, char **argv);
 static int jt_set_hsensitivity(int argc, char **argv);
+static int jt_reset_stats(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
@@ -176,6 +177,7 @@ command_t routing_cmds[] = {
 
 command_t stats_cmds[] = {
 	{"show", jt_show_stats, 0, "show LNET statistics\n"},
+	{"reset", jt_reset_stats, 0, "reset LNET statistics\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -561,6 +563,24 @@ static int jt_set_hsensitivity(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_hsensitivity(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_reset_stats(int argc, char **argv)
+{
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(stats_cmds, "stats", "reset", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = lustre_lnet_reset_stats(-1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 

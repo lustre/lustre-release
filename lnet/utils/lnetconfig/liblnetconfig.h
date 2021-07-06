@@ -602,6 +602,14 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_reset_stats
+ *   Resets internal LNET statistics.
+ *
+ *     err_rc - YAML strucutre of the resultant return code.
+ */
+int lustre_lnet_reset_stats(int seq_no, struct cYAML **err_rc);
+
+/*
  * lustre_lnet_modify_peer
  *  Handle a peer config or delete operation.
  *

@@ -153,7 +153,8 @@ struct libcfs_ioctl_data {
 #define IOC_LIBCFS_GET_UDSP_SIZE	   _IOWR(IOC_LIBCFS_TYPE, 107, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_GET_UDSP		   _IOWR(IOC_LIBCFS_TYPE, 108, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_GET_CONST_UDSP_INFO	   _IOWR(IOC_LIBCFS_TYPE, 109, IOCTL_CONFIG_SIZE)
-#define IOC_LIBCFS_MAX_NR					  109
+#define IOC_LIBCFS_RESET_LNET_STATS	   _IOWR(IOC_LIBCFS_TYPE, 110, IOCTL_CONFIG_SIZE)
+#define IOC_LIBCFS_MAX_NR					  110
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
