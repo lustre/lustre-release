@@ -2600,11 +2600,40 @@ lnet_discovery_event_ack(struct lnet_peer *lp, struct lnet_event *ev)
 	       libcfs_nidstr(&lp->lp_primary_nid), ev->status);
 }
 
+static bool find_primary(struct lnet_nid *nid,
+			 struct lnet_ping_buffer *pbuf)
+{
+	struct lnet_ping_info *pi = &pbuf->pb_info;
+	struct lnet_ping_iter piter;
+	__u32 *stp;
+
+	if (pi->pi_features & LNET_PING_FEAT_PRIMARY_LARGE) {
+		/* First large nid is primary */
+		for (stp = ping_iter_first(&piter, pbuf, nid);
+		     stp;
+		     stp = ping_iter_next(&piter, nid)) {
+			if (nid_is_nid4(nid))
+				continue;
+			/* nid has already been copied in */
+			return true;
+		}
+		/* no large nids ... weird ... ignore the flag
+		 * and use first nid.
+		 */
+	}
+	/* pi_nids[1] is primary */
+	if (pi->pi_nnis < 2)
+		return false;
+	lnet_nid4_to_nid(pbuf->pb_info.pi_ni[1].ns_nid, nid);
+	return true;
+}
+
 /* Handle a Reply message. This is the reply to a Ping message. */
 static void
 lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 {
 	struct lnet_ping_buffer *pbuf;
+	struct lnet_nid primary;
 	int infobytes;
 	int rc;
 	bool ping_feat_disc;
@@ -2747,9 +2776,8 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	 * available if the reply came from a Multi-Rail peer.
 	 */
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL &&
-	    pbuf->pb_info.pi_nnis > 1 &&
-	    lnet_nid_to_nid4(&lp->lp_primary_nid) ==
-	    pbuf->pb_info.pi_ni[1].ns_nid) {
+	    find_primary(&primary, pbuf) &&
+	    nid_same(&lp->lp_primary_nid, &primary)) {
 		if (LNET_PING_BUFFER_SEQNO(pbuf) < lp->lp_peer_seqno)
 			CDEBUG(D_NET, "peer %s: seq# got %u have %u. peer rebooted?\n",
 				libcfs_nidstr(&lp->lp_primary_nid),
@@ -3098,11 +3126,11 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 * peer's lp_peer_nets list, and the peer NI for the primary NID should
 	 * be the first entry in its peer net's lpn_peer_nis list.
 	 */
-	lnet_nid4_to_nid(pbuf->pb_info.pi_ni[1].ns_nid, &nid);
+	find_primary(&nid, pbuf);
 	lpni = lnet_peer_ni_find_locked(&nid);
 	if (!lpni) {
 		CERROR("Internal error: Failed to lookup peer NI for primary NID: %s\n",
-		       libcfs_nid2str(pbuf->pb_info.pi_ni[1].ns_nid));
+		       libcfs_nidstr(&nid));
 		goto out;
 	}
 
@@ -3358,11 +3386,10 @@ __must_hold(&lp->lp_lock)
 	 * primary NID to the correct value here. Moreover, this peer
 	 * can show up with only the loopback NID in the ping buffer.
 	 */
-	if (pbuf->pb_info.pi_nnis <= 1) {
+	if (!find_primary(&nid, pbuf)) {
 		lnet_ping_buffer_decref(pbuf);
 		goto out;
 	}
-	lnet_nid4_to_nid(pbuf->pb_info.pi_ni[1].ns_nid, &nid);
 	if (nid_is_lo0(&lp->lp_primary_nid)) {
 		rc = lnet_peer_set_primary_nid(lp, &nid, flags);
 		if (rc)
