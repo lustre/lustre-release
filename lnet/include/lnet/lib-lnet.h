@@ -1013,7 +1013,7 @@ void lnet_push_update_to_peers(int force);
 void lnet_peer_tables_cleanup(struct lnet_net *net);
 void lnet_peer_uninit(void);
 int lnet_peer_tables_create(void);
-void lnet_debug_peer(lnet_nid_t nid);
+void lnet_debug_peer(struct lnet_nid *nid);
 struct lnet_peer_net *lnet_peer_get_net_locked(struct lnet_peer *peer,
 					       __u32 net_id);
 bool lnet_peer_is_pref_nid_locked(struct lnet_peer_ni *lpni,

@@ -3992,21 +3992,19 @@ void lnet_peer_discovery_stop(void)
 /* Debugging */
 
 void
-lnet_debug_peer(lnet_nid_t nid4)
+lnet_debug_peer(struct lnet_nid *nid)
 {
 	char			*aliveness = "NA";
 	struct lnet_peer_ni	*lp;
 	int			cpt;
-	struct lnet_nid nid;
 
-	lnet_nid4_to_nid(nid4, &nid);
-	cpt = lnet_nid2cpt(&nid, NULL);
+	cpt = lnet_nid2cpt(nid, NULL);
 	lnet_net_lock(cpt);
 
-	lp = lnet_peerni_by_nid_locked(&nid, NULL, cpt);
+	lp = lnet_peerni_by_nid_locked(nid, NULL, cpt);
 	if (IS_ERR(lp)) {
 		lnet_net_unlock(cpt);
-		CDEBUG(D_WARNING, "No peer %s\n", libcfs_nidstr(&nid));
+		CDEBUG(D_WARNING, "No peer %s\n", libcfs_nidstr(nid));
 		return;
 	}
 

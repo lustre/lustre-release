@@ -5345,7 +5345,7 @@ static struct genl_family lnet_family = {
 
 void LNetDebugPeer(struct lnet_processid *id)
 {
-	lnet_debug_peer(lnet_nid_to_nid4(&id->nid));
+	lnet_debug_peer(&id->nid);
 }
 EXPORT_SYMBOL(LNetDebugPeer);
 
