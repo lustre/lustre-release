@@ -344,6 +344,7 @@ struct kib_fast_reg_descriptor { /* For fast registration */
 #endif
 	struct ib_mr			*frd_mr;
 	bool				 frd_valid;
+	bool				 frd_posted;
 };
 
 struct kib_fmr_pool {

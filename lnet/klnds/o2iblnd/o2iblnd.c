@@ -1766,6 +1766,7 @@ kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 
 		if (frd) {
 			frd->frd_valid = false;
+			frd->frd_posted = false;
 			fmr->fmr_frd = NULL;
 			spin_lock(&fps->fps_lock);
 			list_add_tail(&frd->frd_list, &fpo->fast_reg.fpo_pool_list);
@@ -1935,6 +1936,7 @@ again:
 				fmr->fmr_key  = is_rx ? mr->rkey : mr->lkey;
 				fmr->fmr_frd  = frd;
 				fmr->fmr_pool = fpo;
+				frd->frd_posted = false;
 				return 0;
 			}
 			spin_unlock(&fps->fps_lock);
