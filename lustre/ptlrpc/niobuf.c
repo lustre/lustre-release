@@ -188,7 +188,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	 * request, so they are based on the route taken by the
 	 * message.
 	 */
-	lnet_nid4_to_nid(desc->bd_req->rq_self, &self_nid);
+	self_nid = desc->bd_req->rq_self;
 	lnet_pid4_to_pid(desc->bd_req->rq_source, &peer_id);
 
 	/* NB total length may be 0 for a read past EOF, so we send 0
@@ -628,10 +628,10 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 
         ptlrpc_at_set_reply(req, flags);
 
-        if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
-                conn = ptlrpc_connection_get(req->rq_peer, req->rq_self, NULL);
-        else
-                conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
+	if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
+		conn = ptlrpc_connection_get(req->rq_peer, &req->rq_self, NULL);
+	else
+		conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
         if (unlikely(conn == NULL)) {
                 CERROR("not replying on NULL connection\n"); /* bug 9635 */
@@ -648,7 +648,8 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 	rc = ptl_send_buf(&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
 			  (rs->rs_difficult && !rs->rs_no_ack) ?
 			  LNET_ACK_REQ : LNET_NOACK_REQ,
-			  &rs->rs_cb_id, req->rq_self, req->rq_source,
+			  &rs->rs_cb_id, lnet_nid_to_nid4(&req->rq_self),
+			  req->rq_source,
 			  ptlrpc_req2svc(req)->srv_rep_portal,
 			  req->rq_rep_mbits ? req->rq_rep_mbits : req->rq_xid,
 			  req->rq_reply_off, NULL);

@@ -1481,7 +1481,8 @@ dont_check_exports:
 	 */
 	ptlrpc_request_change_export(req, export);
 
-	pcon = ptlrpc_connection_get(req->rq_peer, req->rq_self, &cluuid);
+	pcon = ptlrpc_connection_get(req->rq_peer,
+				     &req->rq_self, &cluuid);
 	if (pcon == NULL)
 		GOTO(out, rc = -ENOTCONN);
 

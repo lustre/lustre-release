@@ -1063,8 +1063,8 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 			   req->rq_history_seq,
 			   req->rq_export && req->rq_export->exp_obd ?
 				req->rq_export->exp_obd->obd_name :
-				libcfs_nid2str_r(req->rq_self, nidstr,
-						 sizeof(nidstr)),
+				libcfs_nidstr_r(&req->rq_self, nidstr,
+						sizeof(nidstr)),
 			   libcfs_id2str(req->rq_peer), req->rq_xid,
 			   req->rq_reqlen, ptlrpc_rqphase2str(req),
 			   (s64)req->rq_arrival_time.tv_sec,

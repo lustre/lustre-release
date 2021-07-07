@@ -76,7 +76,7 @@ static const struct rhashtable_params conn_hash_params = {
 };
 
 struct ptlrpc_connection *
-ptlrpc_connection_get(struct lnet_process_id peer4, lnet_nid_t self,
+ptlrpc_connection_get(struct lnet_process_id peer4, struct lnet_nid *self,
 		      struct obd_uuid *uuid)
 {
 	struct ptlrpc_connection *conn, *conn2;
@@ -96,7 +96,7 @@ ptlrpc_connection_get(struct lnet_process_id peer4, lnet_nid_t self,
 		RETURN(NULL);
 
 	conn->c_peer = peer;
-	lnet_nid4_to_nid(self, &conn->c_self);
+	conn->c_self = *self;
 	atomic_set(&conn->c_refcount, 1);
 	if (uuid)
 		obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
