@@ -2222,6 +2222,10 @@ continue_without_udsp_info:
 			yhstats = cYAML_create_object(item, "health stats");
 			if (!yhstats)
 				goto out;
+			if (cYAML_create_number(yhstats, "fatal_error",
+						hstats.hlni_fatal_error)
+							== NULL)
+				goto out;
 			if (cYAML_create_number(yhstats, "health value",
 						hstats.hlni_health_value)
 							== NULL)

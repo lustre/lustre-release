@@ -190,6 +190,7 @@ struct lnet_ioctl_local_ni_hstats {
 	__u32 hlni_local_no_route;
 	__u32 hlni_local_timeout;
 	__u32 hlni_local_error;
+	__s32 hlni_fatal_error;
 	__s32 hlni_health_value;
 	__u32 hlni_ping_count;
 	__u64 hlni_next_ping;
