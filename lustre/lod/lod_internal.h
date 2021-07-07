@@ -63,10 +63,16 @@ struct pool_desc {
 	struct rcu_head		 pool_rcu;
 	struct proc_dir_entry	*pool_proc_entry;
 	struct obd_device	*pool_lobd;	/* owner */
+	time64_t		 pool_spill_expire;
+	struct proc_dir_entry	*pool_spill_proc_entry;
+	bool			 pool_spill_is_active;
+	unsigned int		 pool_spill_threshold_pct;
+	char			 pool_spill_target[LOV_MAXPOOLNAME + 1];
 };
 
 int lod_pool_hash_init(struct rhashtable *tbl);
 void lod_pool_hash_destroy(struct rhashtable *tbl);
+extern const struct rhashtable_params pools_hash_params;
 
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p)  ((p)->pool_obds.op_array)
@@ -138,6 +144,7 @@ struct lod_device {
 	struct rhashtable	lod_pools_hash_body; /* used for key access */
 	struct list_head	lod_pool_list; /* used for sequential access */
 	struct proc_dir_entry  *lod_pool_proc_entry;
+	struct proc_dir_entry  *lod_spill_proc_entry;
 
 	enum lustre_sec_part   lod_sp_me;
 
@@ -815,4 +822,9 @@ int lod_sub_punch(const struct lu_env *env, struct dt_object *dt,
 
 int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 		      struct dt_device *dt, int index);
+void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
+			      char **poolname);
+void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
+			      struct pool_desc *pool);
+extern struct lprocfs_vars lprocfs_lod_spill_vars[];
 #endif

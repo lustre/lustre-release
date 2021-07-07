@@ -2519,6 +2519,9 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	if (lov_pattern(lod_comp->llc_pattern) == LOV_PATTERN_MDT)
 		RETURN(0);
 
+	if (lod_comp->llc_pool)
+		lod_check_and_spill_pool(env, d, &lod_comp->llc_pool);
+
 	if (likely(lod_comp->llc_stripe == NULL)) {
 		/*
 		 * no striping has been created so far

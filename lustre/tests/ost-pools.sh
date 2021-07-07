@@ -1589,6 +1589,216 @@ test_28() {
 }
 run_test 28 "lfs_migrate with pool name"
 
+function fill_ost_pool() {
+	local pool=$1
+	local threshold=$2
+	local tmpfile=$DIR/$tdir/$tfile-$pool-filler
+
+	mkdir -p $DIR/$tdir
+	lfs setstripe $tmpfile -p $pool -c -1
+
+	local dfa=($(lfs_df -p $pool | grep _summary))
+	local total=${dfa[1]}
+	local used=${dfa[2]}
+	local towrite=$(( (total * (threshold + 1) / 100) - used ))
+
+	echo "total $total, used $used, towrite $towrite"
+	(( towrite > 0 )) && {
+		fallocate -l$((towrite * 1024)) $tmpfile ||
+			error "can't fallocate"
+	}
+}
+
+test_29() {
+	local pool1=${TESTNAME}-1
+	local pool2=${TESTNAME}-2
+	local mdts=$(comma_list $(mdts_nodes))
+	local threshold=10
+	local prefix="lod.$FSNAME-MDT*.pool.$pool1"
+	local cmd="$LCTL get_param -n $prefix"
+
+	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	check_set_fallocate_or_skip
+
+	mkdir -p $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir"
+
+	pool_add $pool1 || error "Pool creation failed"
+	pool_add_targets $pool1 0 1 || error "pool_add_targets failed"
+
+	pool_add $pool2 || error "Pool creation failed"
+	pool_add_targets $pool2 2 3 || error "pool_add_targets failed"
+
+	do_nodes $mdts $LCTL set_param $prefix.spill_target=$pool2
+	do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=$threshold
+	stack_trap "do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=0"
+
+	[[ $(do_facet mds1 "$cmd.spill_target" | uniq) == "$pool2" ]] ||
+		error "spill target wasn't set"
+	[[ $(do_facet mds1 "$cmd.spill_threshold_pct" | uniq) == "$threshold" ]] ||
+		error "spill threshold wasn't set"
+	lfs_df -p $pool1 | grep summary
+	fill_ost_pool $pool1 $threshold
+	cancel_lru_locks osc
+	local delay=$(do_facet mds1 lctl get_param -n lo[vd].*.qos_maxage |
+		      awk '{ print $1 * 2; exit; }')
+	sleep $((delay + 1))
+	lfs_df -p $pool1 | grep summary
+
+	# in a directory with default striping
+	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
+	touch $DIR/$tdir/$tfile-2
+	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-2) == "$pool2" ]] || {
+		$LFS getstripe $DIR/$tdir/$tfile-2
+		error "old pool on $tfile-2"
+	}
+	# when striping is specified explicitly
+	$LFS setstripe -p $pool1 $DIR/$tdir/$tfile-3 || error "can't setstripe"
+	touch $DIR/$tdir/$tfile-3
+	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-3) == "$pool2" ]] || {
+		$LFS getstripe $DIR/$tdir/$tfile-2
+		error "old pool on $tfile-3"
+	}
+
+	# spill is revalidated at object creation
+	wait_update_facet mds1 "$cmd.spill_is_active | uniq" "1" ||
+		error "spilling is still inactive"
+
+	rm -f $DIR/$tdir/$tfile* || error "can't rm $DIR/$tfile*"
+	wait_delete_completed
+	sleep $delay
+	lfs_df -p $pool1
+
+	touch $DIR/$tdir/$tfile-2
+	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-2) == "$pool1" ]] || {
+		$LFS getstripe $DIR/$tdir/$tfile-2
+		error "new pool != $pool1"
+	}
+	# spill is revaluated at object creation
+	wait_update_facet mds1 "$cmd.spill_is_active | uniq" "0" ||
+		error "spilling is still active"
+
+	do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=0
+	[[ $(do_facet mds1 "$cmd.spill_threshold_pct" | uniq) == "0" ]] ||
+		error "spill threshold wasn't reset"
+}
+run_test 29 "check OST pool spilling"
+
+test_30() {
+	local MDT_DEV=$(mdsdevname 1)
+	local mdts=$(comma_list $(mdts_nodes))
+	local pool1=${TESTNAME}-1
+	local pool2=${TESTNAME}-2
+	local threshold=10
+	local spill
+	local prefix="lod.$FSNAME-MDT0000*.pool.$pool1"
+	local cmd="$LCTL get_param -n $prefix"
+
+	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+
+	pool_add $pool1 || error "Pool creation failed"
+	pool_add_targets $pool1 0 1 || error "pool_add_targets failed"
+
+	pool_add $pool2 || error "Pool creation failed"
+	pool_add_targets $pool2 2 3 || error "pool_add_targets failed"
+
+	# feed a poison
+	do_facet mds1 $LCTL set_param $prefix.spill_target="0123456789ABCDEF" &&
+		error "pool name"
+	do_facet mds1 $LCTL set_param $prefix.spill_target="$pool1-2" &&
+		error "non-exising pool"
+	do_facet mds1 $LCTL set_param $prefix.spill_target="$pool1" &&
+		error "poolback"
+	do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct="101" &&
+		error ">100%"
+
+	# set persistent spilling
+	do_facet mgs $LCTL set_param -P $prefix.spill_target="$pool2"
+	do_facet mgs $LCTL set_param -P $prefix.spill_threshold_pct=$threshold
+	wait_update_facet mds1 "$cmd.spill_target" "$pool2" ||
+		error "spill target wasn't set"
+	wait_update_facet mds1 "$cmd.spill_threshold_pct" $threshold ||
+		error "spill target wasn't set"
+
+	stop mds1 || error "Fail to stop MDT."
+	start mds1 $MDT_DEV $MDS_MOUNT_OPTS || error "Fail to start MDT."
+	wait_update_facet mds1 "$cmd.spill_target" "$pool2" ||
+		error "spill target wasn't set after restart"
+	wait_update_facet mds1 "$cmd.spill_threshold_pct" $threshold ||
+		error "spill target wasn't set after restart"
+
+	# now reset spilling
+	do_facet mgs $LCTL set_param -P $prefix.spill_threshold_pct=0
+	wait_update_facet mds1 "$cmd.spill_threshold_pct" 0 ||
+		error "spill target wasn't set"
+
+	stop mds1 || error "Fail to stop MDT."
+	start mds1 $MDT_DEV $MDS_MOUNT_OPTS || error "Fail to start MDT."
+	wait_update_facet mds1 "$cmd.spill_threshold_pct" 0 ||
+		error "spill target wasn't set"
+}
+run_test 30 "persistent OST pool spilling"
+
+test_31() {
+	local MDT_DEV=$(mdsdevname mds1)
+	local mdts=$(comma_list $(mdts_nodes))
+	local pool1=${TESTNAME}-1
+	local pool2=${TESTNAME}-2
+	local pool3=${TESTNAME}-3
+	local pool4=${TESTNAME}-4
+	local threshold=10
+	local spill
+
+	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	check_set_fallocate_or_skip
+
+	pool_add $pool1 || error "Pool creation failed"
+	pool_add_targets $pool1 0 0 || error "pool_add_targets failed"
+
+	pool_add $pool2 || error "Pool creation failed"
+	pool_add_targets $pool2 1 1 || error "pool_add_targets failed"
+
+	pool_add $pool3 || error "Pool creation failed"
+	pool_add_targets $pool3 2 2 || error "pool_add_targets failed"
+
+	pool_add $pool4 || error "Pool creation failed"
+	pool_add_targets $pool4 3 3 || error "pool_add_targets failed"
+
+	fill_ost_pool $pool1 $threshold
+	fill_ost_pool $pool2 $threshold
+	fill_ost_pool $pool3 $threshold
+	cancel_lru_locks osc
+	local delay=$(do_facet mds1 lctl get_param -n lo[vd].*.qos_maxage |
+		      awk '{ print $1 * 2; exit; }')
+	sleep $((delay + 1))
+
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool1.spill_target="$pool2"
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool1.spill_threshold_pct="$threshold"
+
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool2.spill_target="$pool3"
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool2.spill_threshold_pct="$threshold"
+
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_target="$pool4"
+	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_threshold_pct="$threshold"
+
+	do_nodes $mdts $LCTL get_param lod.*.pool.*
+
+	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
+	local tmpfile=$DIR/$tdir/$tfile-2
+	touch $tmpfile
+	$LFS getstripe $tmpfile | grep -q pool.*$pool4 || {
+		$LFS getstripe $tmpfile
+		error "old pool is not $pool4"
+	}
+}
+run_test 31 "OST pool spilling chained"
+
 cd $ORIG_PWD
 
 complete $SECONDS

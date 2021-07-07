@@ -1034,6 +1034,127 @@ static const struct proc_ops lod_proc_mdt_fops = {
 	.proc_release	= lprocfs_seq_release,
 };
 
+static int lod_spill_threshold_pct_seq_show(struct seq_file *m, void *v)
+{
+	struct pool_desc *pool = m->private;
+
+	LASSERT(pool != NULL);
+	seq_printf(m, "%d\n", pool->pool_spill_threshold_pct);
+
+	return 0;
+}
+
+static ssize_t
+lod_spill_threshold_pct_seq_write(struct file *file, const char __user *buffer,
+				  size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct pool_desc *pool = m->private;
+	int rc;
+	int val;
+
+	LASSERT(pool != NULL);
+
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val > 100 || val < 0)
+		return -EINVAL;
+
+	pool->pool_spill_threshold_pct = val;
+	pool->pool_spill_expire = 0;
+	if (pool->pool_spill_threshold_pct == 0)
+		pool->pool_spill_is_active = false;
+
+	return count;
+}
+LPROC_SEQ_FOPS(lod_spill_threshold_pct);
+
+static int lod_spill_target_seq_show(struct seq_file *m, void *v)
+{
+	struct pool_desc *pool = m->private;
+
+	LASSERT(pool != NULL);
+	seq_printf(m, "%s\n", pool->pool_spill_target);
+
+	return 0;
+}
+
+static ssize_t
+lod_spill_target_seq_write(struct file *file, const char __user *buffer,
+			   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct pool_desc *tgt, *pool = m->private;
+	struct lod_device *lod;
+
+	LASSERT(pool != NULL);
+	lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
+
+	if (count == 0) {
+		pool->pool_spill_target[0] = '\0';
+		pool->pool_spill_is_active = false;
+		return count;
+	}
+
+	if (count > LOV_MAXPOOLNAME - 1)
+		return -E2BIG;
+	if (copy_from_user(pool->pool_spill_target, buffer, count))
+		return -EFAULT;
+
+	pool->pool_spill_target[count] = '\0';
+	if (strcmp(pool->pool_name, pool->pool_spill_target) == 0)
+		return -ELOOP;
+	rcu_read_lock();
+	tgt = rhashtable_lookup(&lod->lod_pools_hash_body,
+				pool->pool_spill_target,
+				pools_hash_params);
+	rcu_read_unlock();
+	if (!tgt) {
+		pool->pool_spill_target[0] = '\0';
+		pool->pool_spill_expire = 0;
+		return -ENODEV;
+	}
+
+	return count;
+}
+LPROC_SEQ_FOPS(lod_spill_target);
+
+static int lod_spill_is_active_seq_show(struct seq_file *m, void *v)
+{
+	struct pool_desc *pool = m->private;
+	struct lod_device *lod;
+	struct lu_env env;
+	int rc;
+
+	if (!pool)
+		return -ENODEV;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+
+	lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
+	lod_spill_target_refresh(&env, lod, pool);
+	lu_env_fini(&env);
+
+	seq_printf(m, "%d\n", pool->pool_spill_is_active ? 1 : 0);
+
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lod_spill_is_active);
+
+struct lprocfs_vars lprocfs_lod_spill_vars[] = {
+	{ .name	=	"spill_threshold_pct",
+	  .fops	=	&lod_spill_threshold_pct_fops },
+	{ .name	=	"spill_target",
+	  .fops	=	&lod_spill_target_fops },
+	{ .name	=	"spill_is_active",
+	  .fops	=	&lod_spill_is_active_fops },
+	{ NULL }
+};
+
 static struct proc_ops lod_proc_target_fops = {
 	PROC_OWNER(THIS_MODULE)
 	.proc_open	= lod_osts_seq_open,
@@ -1125,6 +1246,17 @@ int lod_procfs_init(struct lod_device *lod)
 	if (IS_ERR(lod->lod_pool_proc_entry)) {
 		rc = PTR_ERR(lod->lod_pool_proc_entry);
 		lod->lod_pool_proc_entry = NULL;
+		CWARN("%s: Failed to create pools proc file: %d\n",
+		      obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	lod->lod_spill_proc_entry = lprocfs_register("pool",
+						    obd->obd_proc_entry,
+						    NULL, NULL);
+	if (IS_ERR(lod->lod_spill_proc_entry)) {
+		rc = PTR_ERR(lod->lod_spill_proc_entry);
+		lod->lod_spill_proc_entry = NULL;
 		CWARN("%s: Failed to create pool proc file: %d\n",
 		      obd->obd_name, rc);
 		GOTO(out, rc);

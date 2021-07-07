@@ -122,7 +122,7 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 	return strcmp(pool_name, pool->pool_name);
 }
 
-static const struct rhashtable_params pools_hash_params = {
+const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
 	.key_offset	= offsetof(struct pool_desc, pool_name),
 	.head_offset	= offsetof(struct pool_desc, pool_hash),
@@ -406,6 +406,10 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 		RETURN(-ENOMEM);
 
 	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
+	new_pool->pool_spill_expire = 0;
+	new_pool->pool_spill_is_active = false;
+	new_pool->pool_spill_threshold_pct = 0;
+	new_pool->pool_spill_target[0] = '\0';
 	new_pool->pool_lobd = obd;
 	atomic_set(&new_pool->pool_refcount, 1);
 	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
@@ -429,6 +433,17 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 		new_pool->pool_proc_entry = NULL;
 		lod_pool_putref(new_pool);
 	}
+
+	pool_getref(new_pool);
+	new_pool->pool_spill_proc_entry =
+		lprocfs_register(poolname, lod->lod_spill_proc_entry,
+			lprocfs_lod_spill_vars, new_pool);
+	if (IS_ERR(new_pool->pool_spill_proc_entry)) {
+		rc = PTR_ERR(new_pool->pool_spill_proc_entry);
+		new_pool->pool_proc_entry = NULL;
+		lod_pool_putref(new_pool);
+	}
+
 	CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool,
 	       new_pool->pool_proc_entry);
 #endif
@@ -463,6 +478,7 @@ out_err:
 	lod->lod_pool_count--;
 	spin_unlock(&obd->obd_dev_lock);
 
+	lprocfs_remove(&new_pool->pool_spill_proc_entry);
 	lprocfs_remove(&new_pool->pool_proc_entry);
 
 	lu_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
@@ -502,6 +518,11 @@ int lod_pool_del(struct obd_device *obd, char *poolname)
 	if (pool->pool_proc_entry != NULL) {
 		CDEBUG(D_INFO, "proc entry %p\n", pool->pool_proc_entry);
 		lprocfs_remove(&pool->pool_proc_entry);
+		lod_pool_putref(pool);
+	}
+	if (pool->pool_spill_proc_entry != NULL) {
+		CDEBUG(D_INFO, "proc entry %p\n", pool->pool_spill_proc_entry);
+		lprocfs_remove(&pool->pool_spill_proc_entry);
 		lod_pool_putref(pool);
 	}
 
@@ -697,3 +718,91 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 	return pool;
 }
 
+void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
+			      struct pool_desc *pool)
+{
+	__u64 avail_bytes = 0, total_bytes = 0;
+	struct lu_tgt_pool *osts;
+	int i;
+
+	if (ktime_get_seconds() < pool->pool_spill_expire)
+		return;
+
+	if (pool->pool_spill_threshold_pct == 0)
+		return;
+
+	lod_qos_statfs_update(env, lod, &lod->lod_ost_descs);
+
+	down_write(&pool_tgt_rw_sem(pool));
+	if (ktime_get_seconds() < pool->pool_spill_expire)
+		goto out_sem;
+	pool->pool_spill_expire = ktime_get_seconds() +
+		lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage;
+
+	osts = &(pool->pool_obds);
+	for (i = 0; i < osts->op_count; i++) {
+		int idx = osts->op_array[i];
+		struct lod_tgt_desc *tgt;
+		struct obd_statfs *sfs;
+
+		if (!test_bit(idx, lod->lod_ost_bitmap))
+			continue;
+		tgt = OST_TGT(lod, idx);
+		if (tgt->ltd_active == 0)
+			continue;
+		sfs = &tgt->ltd_statfs;
+
+		avail_bytes += sfs->os_bavail * sfs->os_bsize;
+		total_bytes += sfs->os_blocks * sfs->os_bsize;
+	}
+	if (total_bytes - avail_bytes >=
+	    total_bytes * pool->pool_spill_threshold_pct / 100)
+		pool->pool_spill_is_active = true;
+	else
+		pool->pool_spill_is_active = false;
+
+out_sem:
+	up_write(&pool_tgt_rw_sem(pool));
+}
+
+/*
+ * to prevent infinite loops during spilling, lets limit number of passes
+ */
+#define LOD_SPILL_MAX	10
+
+/*
+ * XXX: consider a better schema to detect loops
+ */
+void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
+			      char **poolname)
+{
+	struct pool_desc *pool;
+	int replaced = 0;
+
+	if (!poolname || !*poolname || (*poolname)[0] == '\0')
+		return;
+repeat:
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body, *poolname,
+				 pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	if (!pool)
+		return;
+
+	lod_spill_target_refresh(env, lod, pool);
+	if (pool->pool_spill_is_active) {
+		if (++replaced >= LOD_SPILL_MAX)
+			CWARN("%s: more than %d levels of pool spill for '%s->%s'\n",
+			      lod2obd(lod)->obd_name, LOD_SPILL_MAX,
+			      *poolname, pool->pool_spill_target);
+		lod_set_pool(poolname, pool->pool_spill_target);
+		lod_pool_putref(pool);
+		if (replaced >= LOD_SPILL_MAX)
+			return;
+		goto repeat;
+	}
+
+	lod_pool_putref(pool);
+}
