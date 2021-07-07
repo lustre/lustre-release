@@ -1766,10 +1766,10 @@ kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 
 		if (frd) {
 			frd->frd_valid = false;
+			fmr->fmr_frd = NULL;
 			spin_lock(&fps->fps_lock);
 			list_add_tail(&frd->frd_list, &fpo->fast_reg.fpo_pool_list);
 			spin_unlock(&fps->fps_lock);
-			fmr->fmr_frd = NULL;
 		}
 	}
 	fmr->fmr_pool = NULL;
