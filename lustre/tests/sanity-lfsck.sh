@@ -4186,7 +4186,7 @@ test_24() {
 
 	check_mount_and_prep
 
-	$LFS mkdir -i 1 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	mkdir_on_mdt -i1 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
 
 	mkdir $DIR/$tdir/d0/guard || error "(1) Fail to mkdir guard"
 	$LFS path2fid $DIR/$tdir/d0/guard
@@ -4214,7 +4214,7 @@ test_24() {
 
 	#define OBD_FAIL_LFSCK_MUL_REF		0x1622
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1622
-	$LFS mkdir -i 0 $DIR/$tdir/d0/dummy/foo ||
+	mkdir_on_mdt -i0 $DIR/$tdir/d0/dummy/foo ||
 		error "(4) Fail to mkdir $DIR/$tdir/d0/dummy/foo"
 	$LFS path2fid $DIR/$tdir/d0/dummy/foo
 	local cfid=$($LFS path2fid $DIR/$tdir/d0/dummy/foo)

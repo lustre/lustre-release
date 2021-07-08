@@ -2253,8 +2253,8 @@ test_110k() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.12.55) ]] ||
 		skip "Need MDS version at least 2.12.55"
 
-	stop mds2 || error "stop mds2 failed"
 	umount $MOUNT
+	stop mds2 || error "stop mds2 failed"
 
 #define OBD_FAIL_FLD_QUERY_REQ 0x1103
 	do_facet mds2 lctl set_param fail_loc=0x1103

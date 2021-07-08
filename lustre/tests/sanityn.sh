@@ -1576,7 +1576,7 @@ check_pdo_conflict() {
 test_40a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	mkdir $DIR2/$tdir
+	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
@@ -1610,7 +1610,7 @@ run_test 40a "pdirops: create vs others =============="
 test_40b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	mkdir $DIR2/$tdir
+	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_nodes $(comma_list $(mdts_nodes)) \
@@ -1645,7 +1645,7 @@ run_test 40b "pdirops: open|create and others =============="
 test_40c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	mkdir $DIR2/$tdir
+	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -1681,7 +1681,7 @@ run_test 40c "pdirops: link and others =============="
 test_40d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	mkdir $DIR2/$tdir
+	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -1716,7 +1716,7 @@ run_test 40d "pdirops: unlink and others =============="
 test_40e() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	mkdir $DIR2/$tdir
+	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 	touch $DIR1/$tdir/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -2262,7 +2262,7 @@ test_43j() {
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] &&
 		skip "Need MDS version newer than 2.13.52"
 
-	mkdir $DIR1/$tdir
+	mkdir_on_mdt0 $DIR1/$tdir
 	for i in {1..100}; do
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE         0x167
 		do_nodes $(comma_list $(mdts_nodes)) \

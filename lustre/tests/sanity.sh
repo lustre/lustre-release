@@ -5559,7 +5559,7 @@ test_51b() {
 	# cleanup the directory
 	rm -fr $dir
 
-	test_mkdir -c1 $dir
+	mkdir_on_mdt -i $((RANDOM % MDSCOUNT)) $dir
 
 	$LFS df
 	$LFS df -i
@@ -14865,35 +14865,35 @@ test_154f() {
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 
 	# create parent directory on a single MDT to avoid cross-MDT hardlinks
-	test_mkdir -p -c1 $DIR/$tdir/d
+	mkdir_on_mdt0 $DIR/$tdir
 	# test dirs inherit from its stripe
-	mkdir -p $DIR/$tdir/d/foo1 || error "mkdir error"
-	mkdir -p $DIR/$tdir/d/foo2 || error "mkdir error"
-	cp /etc/hosts $DIR/$tdir/d/foo1/$tfile
-	ln $DIR/$tdir/d/foo1/$tfile $DIR/$tdir/d/foo2/link
+	mkdir -p $DIR/$tdir/foo1 || error "mkdir error"
+	mkdir -p $DIR/$tdir/foo2 || error "mkdir error"
+	cp /etc/hosts $DIR/$tdir/foo1/$tfile
+	ln $DIR/$tdir/foo1/$tfile $DIR/$tdir/foo2/link
 	touch $DIR/f
 
 	# get fid of parents
-	local FID0=$($LFS path2fid $DIR/$tdir/d)
-	local FID1=$($LFS path2fid $DIR/$tdir/d/foo1)
-	local FID2=$($LFS path2fid $DIR/$tdir/d/foo2)
+	local FID0=$($LFS path2fid $DIR/$tdir)
+	local FID1=$($LFS path2fid $DIR/$tdir/foo1)
+	local FID2=$($LFS path2fid $DIR/$tdir/foo2)
 	local FID3=$($LFS path2fid $DIR)
 
 	# check that path2fid --parents returns expected <parent_fid>/name
 	# 1) test for a directory (single parent)
-	local parent=$($LFS path2fid --parents $DIR/$tdir/d/foo1)
+	local parent=$($LFS path2fid --parents $DIR/$tdir/foo1)
 	[ "$parent" == "$FID0/foo1" ] ||
 		error "expected parent: $FID0/foo1, got: $parent"
 
 	# 2) test for a file with nlink > 1 (multiple parents)
-	parent=$($LFS path2fid --parents $DIR/$tdir/d/foo1/$tfile)
+	parent=$($LFS path2fid --parents $DIR/$tdir/foo1/$tfile)
 	echo "$parent" | grep -F "$FID1/$tfile" ||
 		error "$FID1/$tfile not returned in parent list"
 	echo "$parent" | grep -F "$FID2/link" ||
 		error "$FID2/link not returned in parent list"
 
 	# 3) get parent by fid
-	local file_fid=$($LFS path2fid $DIR/$tdir/d/foo1/$tfile)
+	local file_fid=$($LFS path2fid $DIR/$tdir/foo1/$tfile)
 	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
 	echo "$parent" | grep -F "$FID1/$tfile" ||
 		error "$FID1/$tfile not returned in parent list (by fid)"
@@ -14915,7 +14915,7 @@ test_154f() {
 	lctl set_param llite.*.xattr_cache 1
 
 	# 6.1) linkea update on rename
-	mv $DIR/$tdir/d/foo1/$tfile $DIR/$tdir/d/foo2/$tfile.moved
+	mv $DIR/$tdir/foo1/$tfile $DIR/$tdir/foo2/$tfile.moved
 
 	# get parents by fid
 	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
@@ -14927,7 +14927,7 @@ test_154f() {
 		error "$FID2/$tfile.moved is not in parent list"
 
 	# 6.2) linkea update on unlink
-	rm -f $DIR/$tdir/d/foo2/link
+	rm -f $DIR/$tdir/foo2/link
 	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
 	# foo2/link should no longer be returned in parent list
 	echo "$parent" | grep -F "$FID2/link" &&
@@ -14947,7 +14947,7 @@ test_154g()
 	   $CLIENT_VERSION -gt $(version_code 2.6.99) ]] ||
 		skip "Need MDS version at least 2.6.92"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	llapi_fid_test -d $DIR/$tdir
 }
 run_test 154g "various llapi FID tests"
@@ -20336,7 +20336,8 @@ test_247f() {
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
 	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/remote ||
 		error "mkdir remote failed"
-	mkdir $DIR/$tdir/remote/subdir || error "mkdir remote/subdir failed"
+	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/remote/subdir ||
+		error "mkdir remote/subdir failed"
 	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir/striped ||
 		error "mkdir striped failed"
 	mkdir $DIR/$tdir/striped/subdir || error "mkdir striped/subdir failed"
@@ -22647,9 +22648,6 @@ test_300g() {
 		stripe_count=$($LFS getdirstripe -c $dir)
 		[ $stripe_count -eq 0 ] ||
 			error "expect 1 get $stripe_count for $dir"
-		stripe_index=$($LFS getdirstripe -i $dir)
-		[ $stripe_index -eq 0 ] ||
-			error "expect 0 get $stripe_index for $dir"
 	done
 }
 run_test 300g "check default striped directory for normal directory"

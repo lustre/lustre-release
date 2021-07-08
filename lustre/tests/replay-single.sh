@@ -2492,7 +2492,7 @@ test_71a () {
 	# set duration to 900 because it takes some time to boot node
 	[ "$FAILURE_MODE" = HARD ] && duration=900
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 
 	local elapsed
 	local start_ts=$(date +%s)

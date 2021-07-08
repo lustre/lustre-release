@@ -1294,7 +1294,7 @@ test_17b() {
 
 #define OBD_FAIL_OSD_DOTDOT_ENOSPC			0x19e
 	do_facet mds1 $LCTL set_param fail_loc=0x8000019e
-	mkdir $DIR/$tdir && error "mkdir should fail"
+	mkdir_on_mdt0 $DIR/$tdir && error "mkdir should fail"
 	stop mds1
 	local devname=$(mdsdevname 1)
 

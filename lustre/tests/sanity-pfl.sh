@@ -528,7 +528,7 @@ test_8() {
 	local parent=$DIR/$tdir
 
 	rm -fr $parent
-	test_mkdir $parent
+	mkdir_on_mdt0 $parent
 
 	$LFS setstripe -E 2M -c 1 -S 1M -E 16M -c 2 -S 2M \
 		-E -1 -c 4 -S 4M $parent ||

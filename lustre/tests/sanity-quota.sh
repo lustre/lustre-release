@@ -401,10 +401,9 @@ wait_grace_time() {
 }
 
 setup_quota_test() {
-	local mdt=${1:-0}
 	wait_delete_completed
 	echo "Creating test directory"
-	$LFS mkdir -i $mdt -c 1 $DIR/$tdir || return 1
+	mkdir_on_mdt0 $DIR/$tdir || return 1
 	chmod 0777 $DIR/$tdir || return 2
 	# always clear fail_loc in case of fail_loc isn't cleared
 	# properly when previous test failed
@@ -1587,7 +1586,7 @@ test_file_soft() {
 	local SOFT_LIMIT=$(do_facet $SINGLEMDS $LCTL get_param -n \
 		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
 
-	setup_quota_test 0
+	setup_quota_test
 	trap cleanup_quota_test EXIT
 	is_project_quota_supported && change_project -sp $TSTPRJID $DIR/$tdir
 
@@ -3405,7 +3404,7 @@ test_38() {
 
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 
-	setup_quota_test 0 || error "setup quota failed with $?"
+	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
 	# make sure the system is clean
@@ -4299,7 +4298,7 @@ test_66() {
 	stack_trap "do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=0" \
 		EXIT
 
-	test_mkdir -i 0 -c 1 $testdir || error "failed to mkdir"
+	mkdir_on_mdt0 $testdir || error "failed to mkdir"
 	chown -R $TSTID:$TSTID $testdir
 	change_project -sp $TSTPRJID $testdir
 	$RUNAS mkdir $testdir/foo || error "failed to mkdir foo"

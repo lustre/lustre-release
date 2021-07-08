@@ -120,7 +120,7 @@ test_2a() {
 
 	mds_path=${mds_path#/}
 
-	$LFS setdirstripe -i0 -c1 ${DIR}/$tdir || error "create dir failed"
+	mkdir_on_mdt0 ${DIR}/$tdir || error "create dir failed"
 	mkdir $dirname || error "cannot mkdir $dirname"
 
 	local xattrval=$(check_selinux_xattr "mds1" $mds_path)
@@ -644,7 +644,7 @@ test_21b() {
 
 	local sepol
 
-	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	mkdir_on_mdt0 $DIR/$tdir || error "failed to create $DIR/$tdir"
 	echo test > $DIR/$tdir/toopen ||
 		error "failed to write to $DIR/$tdir/toopen"
 	touch $DIR/$tdir/ftoremove ||

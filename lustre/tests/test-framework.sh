@@ -10461,10 +10461,25 @@ function restore_opencache()
 }
 
 # LU-13417: XXX lots of tests assume the directory to be created under MDT0,
-# using this function to create directory under MDT0 explicitly.
-# Don't use it in new tests, and remove it from old tests.
+# created on MDT0, use this function to create directory on specific MDT
+# explicitly, and set default LMV to create subdirs on the same MDT too.
+mkdir_on_mdt() {
+	local mdt
+	local OPTIND=1
+
+	while getopts "i:" opt $*; do
+		case $opt in
+			i) mdt=$OPTARG;;
+		esac
+	done
+
+	shift $((OPTIND - 1))
+
+	$LFS mkdir -i $mdt -c 1 $*
+}
+
 mkdir_on_mdt0() {
-	$LFS mkdir -i 0 -c 1 $*
+	mkdir_on_mdt -i0 $*
 }
 
 # Wait for nodemap synchronization
