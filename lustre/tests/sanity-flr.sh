@@ -516,20 +516,21 @@ test_0d() {
 	# create a mirrored file and extend it
 	$LFS mirror create -N $tf-1 || error "create mirrored file $tf-1 failed"
 	$LFS mirror create -N $tf-2 || error "create mirrored file $tf-2 failed"
+	$LFS mirror create -N $tf-3 || error "create mirrored file $tf-3 failed"
 
-	$mirror_cmd -N -S 4M -N -f $tf-2 $tf-1 &> /dev/null &&
-		error "setstripe options should not be specified with -f option"
+	$mirror_cmd -N -S 4M -N -f $tf-2 $tf-1 ||
+		error "extend mirror with -f failed"
 
-	$mirror_cmd -N$((mirror_count - 1)) $tf-1 ||
-		error "extend mirrored file $tf-1 failed"
-	verify_mirror_count $tf-1 $mirror_count
-	ids=($($LFS getstripe $tf-1 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	$mirror_cmd -N$((mirror_count - 1)) $tf-3 ||
+		error "extend mirrored file $tf-3 failed"
+	verify_mirror_count $tf-3 $mirror_count
+	ids=($($LFS getstripe $tf-3 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	for ((i = 0; i < $mirror_count; i++)); do
-		verify_comp_attrs $tf-1 ${ids[$i]}
-		verify_comp_extent $tf-1 ${ids[$i]} 0 EOF
+		verify_comp_attrs $tf-3 ${ids[$i]}
+		verify_comp_extent $tf-3 ${ids[$i]} 0 EOF
 	done
 
-	$mirror_cmd -N $tf-1 &> /dev/null &&
+	$mirror_cmd -N $tf-3 &> /dev/null &&
 		error "exceeded maximum mirror count $mirror_count" || true
 }
 run_test 0d "lfs mirror extend with -N option"
@@ -934,27 +935,45 @@ test_5() {
 }
 run_test 5 "Make sure init size work for mirrored layout"
 
-# LU=10112: disable dom+flr for phase 1
 test_6() {
+	(( $MDS1_VERSION >= $(version_code 2.12.58) )) ||
+		skip "MDS version older than 2.12.58"
+
 	local tf=$DIR/$tfile
 
-	$LFS mirror create -N -E 1M -S 1M -L mdt -E eof -N -E eof $tf &&
-		error "expect failure to create mirrored file with DoM"
+	$LFS mirror create -N -E 1M -L mdt -E eof -S 1M -N -E eof $tf ||
+		error "failure to create DoM file with mirror"
 
-	$LFS mirror create -N -E 1M -S 1M -E eof -N -E 1M -L mdt -E eof $tf &&
-		error "expect failure to create mirrored file with DoM"
+	$LFS mirror create -N -E 1M -S 1M -E eof -N -E 1M -L mdt -E eof $tf ||
+		error "failure to create mirrored file with DoM"
 
-	$LFS setstripe -E 1M -S 1M -L mdt -E eof $tf
-	$LFS mirror extend -N2 $tf &&
-		error "expect failure to extend mirror with DoM"
+	$LFS setstripe -E 1M -L mdt -E eof -S 1M $tf ||
+		error "failure to create PFL with DoM file"
+	$LFS mirror extend -N2 $tf ||
+		error "failure to extend mirror with DoM"
 
-	$LFS mirror create -N2 -E 1M -S 1M -E eof $tf-2
-	$LFS mirror extend -N -f $tf $tf-2 &&
-		error "expect failure to extend mirrored file with DoM extent"
-
-	true
+	$LFS setstripe -E 1M -L mdt -E eof -S 1M $tf-1 ||
+		error "failure to create PFL with DoM file"
+	$LFS mirror create -N2 -E 1M -S 1M -E eof $tf-2 ||
+		error "failure to create mirrored file"
+	$LFS mirror extend -N -f $tf-1 $tf-2 ||
+		error "failure to extend mirrored file with DoM extent"
 }
-run_test 6 "DoM and FLR won't co-exist for phase 1"
+run_test 6 "DoM and FLR work together"
+
+test_7() {
+	local tf=$DIR/$tfile
+
+	# create DoM with setting stripe_size == component size
+	$LFS mirror create -N -E1M -S1M -L mdt -Eeof $tf ||
+		error "failure to create DoM with stripe_size == comp size"
+	rm -f $tf || error "delete $tf"
+
+	# DoM should not inherit previous component stripe_size
+	$LFS mirror create -N -E4M -S2M -Eeof -N -E1M -L mdt -Eeof $tf ||
+		error "DoM component shouldn't inherit previous stripe_size"
+}
+run_test 7 "Create mirror with DoM component"
 
 test_21() {
 	local tf=$DIR/$tfile

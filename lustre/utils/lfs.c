@@ -1953,6 +1953,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 	if (inherit) {
 		f_layout = llapi_layout_get_by_path(name, 0);
 		if (!f_layout) {
+			rc = -EINVAL;
 			fprintf(stderr, "%s: cannot get layout\n", progname);
 			goto out;
 		}
@@ -2037,11 +2038,7 @@ out:
 static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			 enum mirror_flags mirror_flags)
 {
-	int rc;
-
-	rc = mirror_create_sanity_check(fname, mirror_list, true);
-	if (rc)
-		return rc;
+	int rc = 0;
 
 	while (mirror_list) {
 		if (mirror_list->m_file) {
@@ -2837,7 +2834,8 @@ new_comp:
 			errno = EINVAL;
 			return -1;
 		}
-		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
+		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT &&
+		    lsa->lsa_stripe_size != lsa->lsa_comp_end - prev_end) {
 			fprintf(stderr,
 				"Option 'stripe-size' can't be specified with Data-on-MDT component: %llu\n",
 				lsa->lsa_stripe_size);
@@ -3909,6 +3907,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					goto error;
 				}
 				lsa.lsa_pattern = LLAPI_LAYOUT_MDT;
+				lsa.lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
 			} else if (strcmp(argv[optind - 1], "raid0") != 0) {
 				result = -EINVAL;
 				fprintf(stderr,

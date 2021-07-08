@@ -2756,7 +2756,9 @@ int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
 	if (m_comp == NULL)
 		return -EINVAL;
 
-	m_comp->llc_stripe_size = f_comp->llc_stripe_size;
+	/* DoM component does not inherit stripe size */
+	if (m_comp->llc_pattern != LLAPI_LAYOUT_MDT)
+		m_comp->llc_stripe_size = f_comp->llc_stripe_size;
 	m_comp->llc_stripe_count = f_comp->llc_stripe_count;
 
 	return rc;
