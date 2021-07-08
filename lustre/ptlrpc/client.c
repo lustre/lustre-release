@@ -123,7 +123,7 @@ EXPORT_SYMBOL(ptlrpc_init_client);
  * Return PortalRPC connection for remore uud \a uuid
  */
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
-						    lnet_nid_t nid4refnet)
+						    u32 refnet)
 {
 	struct ptlrpc_connection *c;
 	struct lnet_nid self;
@@ -135,8 +135,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
 	 * before accessing its values.
 	 */
 	/* coverity[uninit_use_in_call] */
-	peer.nid = nid4refnet;
-	err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
+	err = ptlrpc_uuid_to_peer(uuid, &peer, &self, refnet);
 	if (err != 0) {
 		CNETERR("cannot find peer %s!\n", uuid->uuid);
 		return NULL;

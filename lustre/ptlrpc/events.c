@@ -528,7 +528,8 @@ static void ptlrpc_master_callback(struct lnet_event *ev)
 
 int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			struct lnet_process_id *peer,
-			struct lnet_nid *self)
+			struct lnet_nid *self,
+			u32 refnet)
 {
 	int best_dist = 0;
 	__u32 best_order = 0;
@@ -543,8 +544,8 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 
 	/* Choose the matching UUID that's closest */
 	while (lustre_uuid_to_peer(uuid->uuid, &dst_nid, count++) == 0) {
-		if (peer->nid != LNET_NID_ANY && LNET_NIDADDR(peer->nid) == 0 &&
-		    LNET_NID_NET(&dst_nid) != LNET_NIDNET(peer->nid))
+		if (refnet != LNET_NET_ANY &&
+		    LNET_NID_NET(&dst_nid) != refnet)
 			continue;
 
 		dist = LNetDist(&dst_nid, &src_nid, &order);

@@ -60,7 +60,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 {
 	struct ptlrpc_connection *ptlrpc_conn;
 	struct obd_import_conn *imp_conn = NULL, *item;
-	lnet_nid_t nid4refnet = LNET_NID_ANY;
+	u32 refnet = LNET_NET_ANY;
 	int rc = 0;
 
 	ENTRY;
@@ -72,9 +72,9 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 
 	if (imp->imp_connection &&
 	    imp->imp_connection->c_remote_uuid.uuid[0] == 0)
-		/* nid4refnet is used to restrict network connections */
-		nid4refnet = lnet_nid_to_nid4(&imp->imp_connection->c_self);
-	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, nid4refnet);
+		/* refnet is used to restrict network connections */
+		refnet = LNET_NID_NET(&imp->imp_connection->c_self);
+	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, refnet);
 	if (!ptlrpc_conn) {
 		CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
 		RETURN(-ENOENT);
@@ -147,7 +147,7 @@ int client_import_dyn_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 	struct ptlrpc_connection *ptlrpc_conn;
 	int rc;
 
-	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, prim_nid);
+	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, LNET_NIDNET(prim_nid));
 	if (!ptlrpc_conn) {
 		const char *str_uuid = obd_uuid2str(uuid);
 
