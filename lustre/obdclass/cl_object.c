@@ -50,7 +50,6 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
-#include <libcfs/libcfs_hash.h> /* for cfs_hash stuff */
 #include <cl_object.h>
 #include <lu_object.h>
 #include "cl_internal.h"
@@ -554,21 +553,6 @@ EXPORT_SYMBOL(cl_site_stats_print);
  *
  */
 
-/**
- * The most efficient way is to store cl_env pointer in task specific
- * structures. On Linux, it isn't easy to use task_struct->journal_info
- * because Lustre code may call into other fs during memory reclaim, which
- * has certain assumptions about journal_info. There are not currently any
- * fields in task_struct that can be used for this purpose.
- * \note As long as we use task_struct to store cl_env, we assume that once
- * called into Lustre, we'll never call into the other part of the kernel
- * which will use those fields in task_struct without explicitly exiting
- * Lustre.
- *
- * Since there's no space in task_struct is available, hash will be used.
- * bz20044, bz22683.
- */
-
 static unsigned cl_envs_cached_max = 32; /* XXX: prototype: arbitrary limit
 					  * for now. */
 static struct cl_env_cache {
@@ -667,6 +651,9 @@ static void cl_env_fini(struct cl_env *cle)
 	OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
 }
 
+/* Get a cl_env, either from the per-CPU cache for the current CPU, or by
+ * allocating a new one.
+ */
 static struct lu_env *cl_env_obtain(void *debug)
 {
 	struct cl_env *cle;
@@ -713,10 +700,14 @@ static inline struct cl_env *cl_env_container(struct lu_env *env)
 }
 
 /**
- * Returns lu_env: if there already is an environment associated with the
- * current thread, it is returned, otherwise, new environment is allocated.
+ * Returns an lu_env.
  *
- * Allocations are amortized through the global cache of environments.
+ * No link to thread, this returns an env from the cache or
+ * allocates a new one.
+ *
+ * If you need to get the specific environment you created for this thread,
+ * you must either pass the pointer directly or store it in the file/inode
+ * private data and retrieve it from there using ll_cl_add/ll_cl_find.
  *
  * \param refcheck pointer to a counter used to detect environment leaks. In
  * the usual case cl_env_get() and cl_env_put() are called in the same lexical
@@ -804,8 +795,8 @@ EXPORT_SYMBOL(cl_env_cache_purge);
  * Release an environment.
  *
  * Decrement \a env reference counter. When counter drops to 0, nothing in
- * this thread is using environment and it is returned to the allocation
- * cache, or freed straight away, if cache is large enough.
+ * this thread is using environment and it is returned to the per-CPU cache or
+ * freed immediately if the cache is full.
  */
 void cl_env_put(struct lu_env *env, __u16 *refcheck)
 {
