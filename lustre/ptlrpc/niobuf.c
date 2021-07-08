@@ -46,16 +46,13 @@
  */
 static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 			enum lnet_ack_req ack, struct ptlrpc_cb_id *cbid,
-			lnet_nid_t self4, struct lnet_processid *peer_id,
+			struct lnet_nid *self, struct lnet_processid *peer_id,
 			int portal, __u64 xid, unsigned int offset,
 			struct lnet_handle_md *bulk_cookie)
 {
 	int rc;
 	struct lnet_md md;
-	struct lnet_nid self;
 	ENTRY;
-
-	lnet_nid4_to_nid(self4, &self);
 
 	LASSERT(portal != 0);
 	CDEBUG(D_INFO, "peer_id %s\n", libcfs_idstr(peer_id));
@@ -90,7 +87,7 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 
 	percpu_ref_get(&ptlrpc_pending);
 
-	rc = LNetPut(&self, *mdh, ack,
+	rc = LNetPut(self, *mdh, ack,
 		     peer_id, portal, xid, offset, 0);
 	if (unlikely(rc != 0)) {
 		int rc2;
@@ -647,7 +644,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 	rc = ptl_send_buf(&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
 			  (rs->rs_difficult && !rs->rs_no_ack) ?
 			  LNET_ACK_REQ : LNET_NOACK_REQ,
-			  &rs->rs_cb_id, lnet_nid_to_nid4(&req->rq_self),
+			  &rs->rs_cb_id, &req->rq_self,
 			  &req->rq_source,
 			  ptlrpc_req2svc(req)->srv_rep_portal,
 			  req->rq_rep_mbits ? req->rq_rep_mbits : req->rq_xid,
@@ -942,7 +939,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	rc = ptl_send_buf(&request->rq_req_md_h,
 			  request->rq_reqbuf, request->rq_reqdata_len,
 			  LNET_NOACK_REQ, &request->rq_req_cbid,
-			  LNET_NID_ANY,
+			  NULL,
 			  &connection->c_peer,
 			  request->rq_request_portal,
 			  request->rq_xid, 0, &bulk_cookie);
