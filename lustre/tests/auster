@@ -165,6 +165,10 @@ if $client_tests_only; then
 	export OSTCOUNT="$(( $($LFS osts | wc -l) - 1 ))"
 fi
 
+# special return code to stop testing without cleanup
+# used with the --stop-on-error option
+export STOP_NOW_RC=111
+
 if [ $upload_logs = true ] ; then
     upload_script=$(find_script_in_path maloo_upload.sh $PATH:$LUSTRE/tests)
     if [[ -z $upload_script ]]; then

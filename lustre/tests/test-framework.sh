@@ -252,6 +252,11 @@ run_suite() {
 	log_test_status $duration $status
 	[[ ! -f $TF_SKIP ]] || rm -f $TF_SKIP
 
+	# got STOP_NOW_RC, return immediately before reset
+	[[ $rc -eq $STOP_NOW_RC ]] &&
+		echo "stop testing on rc $STOP_NOW_RC" &&
+		return $STOP_NOW_RC
+
 	reset_lustre
 
 	return $rc
@@ -343,6 +348,11 @@ run_suites() {
 					export STOP_AT=$1
 
 					opts+="STOP_AT=$STOP_AT ";;
+				--stop-on-error)
+					shift;
+					export STOP_ON_ERROR=$(split_commas $1)
+
+					opts+="STOP_ON_ERROR=$STOP_ON_ERROR ";;
 				--time-limit)
 					shift;
 					time_limit=$1;;
@@ -358,6 +368,9 @@ run_suites() {
 			run_suite_logged $suite || RC=$?
 			unset first_suite
 			echo $suite returned $RC
+
+			# stop testing immediately if rc is STOP_NOW_RC
+			[[ $RC -eq $STOP_NOW_RC ]] && exit $STOP_NOW_RC
 		fi
 		done
 	if $upload_logs; then
@@ -7144,6 +7157,11 @@ build_test_filter() {
 	for G in ${GRANT_CHECK_LIST//[+,]/ }; do
 		eval GCHECK_ONLY_${G}=true
 	done
+	# similar to $EXCEPT, STOP_ON_ERROR is a list of test numbers,
+	# e.g. [30d, 34a].  Now set variable STOP_ON_ERROR_30d, etc.
+	for T in $STOP_ON_ERROR; do
+		eval STOP_ON_ERROR_${T}=true
+	done
 }
 
 basetest() {
@@ -7441,6 +7459,12 @@ run_one_logged() {
 		fi
 
 		log_sub_test_end $TEST_STATUS $duration_sub "$rc" "$test_error"
+
+		# exit test suite if the failed test is in STOP_ON_ERROR list
+		[[ $TEST_STATUS == "FAIL" ]] &&
+			[[ -v STOP_ON_ERROR_$testnum ]] &&
+			exit $STOP_NOW_RC
+
 		[[ $rc != 0 || "$TEST_STATUS" != "PASS" ]] && break
 	done
 
