@@ -64,7 +64,7 @@
  */
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp,
-				 lnet_nid_t *client_nid)
+				 lnet_nid_t *client_nid4)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
@@ -76,7 +76,13 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		/* Self-export gets no proc entry */
 		RETURN(0);
 
-	rc = lprocfs_exp_setup(exp, client_nid);
+	if (client_nid4) {
+		struct lnet_nid client_nid;
+
+		lnet_nid4_to_nid(*client_nid4, &client_nid);
+		rc = lprocfs_exp_setup(exp, &client_nid);
+	} else
+		rc = lprocfs_exp_setup(exp, NULL);
 	if (rc != 0)
 		/* Mask error for already created /proc entries */
 		RETURN(rc == -EALREADY ? 0 : rc);

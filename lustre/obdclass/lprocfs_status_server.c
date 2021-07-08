@@ -511,7 +511,7 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_seq_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
+int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 {
 	struct nid_stat *new_stat, *old_stat;
 	struct obd_device *obd = NULL;
@@ -527,10 +527,10 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	/* not test against zero because eric say:
 	 * You may only test nid against another nid, or LNET_NID_ANY.
 	 * Anything else is nonsense.*/
-	if (nid == NULL || *nid == LNET_NID_ANY)
+	if (nid == NULL || LNET_NID_IS_ANY(nid))
 		RETURN(-EALREADY);
 
-	libcfs_nid2str_r(*nid, nidstr, sizeof(nidstr));
+	libcfs_nidstr_r(nid, nidstr, sizeof(nidstr));
 
 	spin_lock(&exp->exp_lock);
 	if (exp->exp_nid_stats != NULL) {
@@ -547,7 +547,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	if (new_stat == NULL)
 		RETURN(-ENOMEM);
 
-	lnet_nid4_to_nid(*nid, &new_stat->nid);
+	new_stat->nid = *nid;
 	new_stat->nid_obd = exp->exp_obd;
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
