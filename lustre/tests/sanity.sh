@@ -92,6 +92,8 @@ if [ "$ost1_FSTYPE" = "zfs" ]; then
 	ALWAYS_EXCEPT+="                130a 130b 130c 130d 130e 130f 130g"
 fi
 
+proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
+
 # Get the SLES distro version
 #
 # Returns a version string that should only be used in comparing
@@ -13832,8 +13834,12 @@ test_133f() {
 	$LCTL get_param -R '*' &> /dev/null
 
 	# Verifing writability with badarea_io.
+	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	local skipped_params='force_lbug|changelog_mask|daemon_file'
 	$LCTL list_param -FR '*' | grep '=' | tr -d = |
-		egrep -v 'force_lbug|changelog_mask' | xargs badarea_io ||
+		egrep -v "$skipped_params" |
+		xargs -n 1 find $proc_dirs -name |
+		xargs -n 1 badarea_io ||
 		error "client badarea_io failed"
 
 	# remount the FS in case writes/reads /proc break the FS
@@ -13846,6 +13852,8 @@ test_133g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
+	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	local skipped_params="'force_lbug|changelog_mask|daemon_file'"
 	local facet
 	for facet in mds1 ost1; do
 		local facet_ver=$(lustre_version_code $facet)
@@ -13856,8 +13864,9 @@ test_133g() {
 		fi
 		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
 			do_facet $facet "$LCTL list_param -FR '*' | grep '=' |
-				tr -d = | egrep -v 'force_lbug|changelog_mask' |
-				xargs badarea_io" ||
+				tr -d = | egrep -v $skipped_params |
+				xargs -n 1 find $proc_dirs -name |
+				xargs -n 1 badarea_io" ||
 					error "$facet badarea_io failed"
 		else
 			skip_noexit "$facet: too old lustre for get_param -R"
@@ -24065,7 +24074,6 @@ test_401a() { #LU-7437
 	#count the number of parameters by "list_param -R"
 	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
-	local proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
 	echo "proc_dirs='$proc_dirs'"
 	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
