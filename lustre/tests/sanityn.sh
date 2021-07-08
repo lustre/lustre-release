@@ -5217,8 +5217,28 @@ test_102() {
 	echo "Test file_handle syscalls" > $DIR/$tfile ||
 		error "write failed"
 	check_fhandle_syscalls $DIR/$tfile $DIR2 ||
-		error "check_fhandle_syscalls failed"
-	rm -f $DIR2/$tfile
+		error "check_fhandle_syscalls $tfile failed"
+
+	# test this is working on DNE directories also
+	if (( MDSCOUNT > 1  MDS1_VERSION >= $(version_code 2.14.52) )); then
+		$LFS mkdir -i 1 $DIR/$tdir.remote
+		cancel_lru_locks mdc
+		check_fhandle_syscalls $DIR/$tdir.remote $DIR2 ||
+			error "check_fhandle_syscalls $tdir.remote failed"
+		$LFS mkdir -c -1 $DIR/$tdir.remote/subdir
+		cancel_lru_locks mdc
+		check_fhandle_syscalls $DIR/$tdir.remote/subdir $DIR2 ||
+			error "check_fhandle_syscalls $tdir.remote/subdir fail"
+
+		$LFS mkdir -c -1 $DIR/$tdir.stripe
+		cancel_lru_locks mdc
+		check_fhandle_syscalls $DIR/$tdir.stripe $DIR2 ||
+			error "check_fhandle_syscalls $tdir.stripe failed"
+		$LFS mkdir -c -1 $DIR/$tdir.stripe/subdir
+		cancel_lru_locks mdc
+		check_fhandle_syscalls $DIR/$tdir.stripe/subdir $DIR2 ||
+			error "check_fhandle_syscalls $tdir.stripe/subdir fail"
+	fi
 }
 run_test 102 "Test open by handle of unlinked file"
 

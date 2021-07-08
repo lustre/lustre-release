@@ -57,19 +57,6 @@ void usage(char *prog)
 }
 
 
-#ifndef HAVE_FHANDLE_SYSCALLS
-
-int main(int argc, char **argv)
-{
-	if (argc != 3)
-		usage(argv[0]);
-
-	fprintf(stderr, "HAVE_FHANDLE_SYSCALLS not defined\n");
-	return 0;
-}
-
-#else
-
 #ifndef HAVE_FHANDLE_GLIBC_SUPPORT
 /* Because the kernel supports this functions doesn't mean that glibc does.
  * Just in case we define what we need */
@@ -127,6 +114,14 @@ open_by_handle_at(int mnt_fd, struct file_handle *fh, int mode)
 }
 #endif
 
+static int debug_mark(const char *msg)
+{
+	char cmd[4096] = "";
+
+	snprintf(cmd, sizeof(cmd), "../utils/lctl mark %s", msg);
+	return system(cmd);
+}
+
 /* verify a file contents */
 int check_access(const char *filename,
 		 int mnt_fd, struct file_handle *fh, struct stat *st_orig)
@@ -135,18 +130,25 @@ int check_access(const char *filename,
 	struct stat st;
 	char *readbuf = NULL;
 
+	debug_mark("before open by handle");
 	/* Open the file handle */
-	fd2 = open_by_handle_at(mnt_fd, fh, O_RDONLY);
+	fd2 = open_by_handle_at(mnt_fd, fh, O_RDONLY |
+				(S_ISDIR(st_orig->st_mode) ? O_DIRECTORY : 0));
+	debug_mark("after open by handle");
 	if (fd2 < 0) {
 		fprintf(stderr, "open_by_handle_at(%s) error: %s\n", filename,
 			strerror(errno));
+		if (errno == ESTALE)
+			fprintf(stderr, "second mountpoint not mounted?\n");
 		rc = errno;
 		goto out_f_handle;
 	}
 
 	/* Get file size */
 	bzero(&st, sizeof(struct stat));
+	debug_mark("before stat");
 	rc = fstat(fd2, &st);
+	debug_mark("after stat");
 	if (rc < 0) {
 		fprintf(stderr, "fstat(%s) error: %s\n", filename,
 			strerror(errno));
@@ -157,14 +159,15 @@ int check_access(const char *filename,
 	/* we can't check a ctime due unlink update */
 	if (st_orig->st_size != st.st_size ||
 	    st_orig->st_ino != st.st_ino ||
+	    st_orig->st_mode != st.st_mode ||
 	    st_orig->st_mtime != st.st_mtime) {
-		fprintf(stderr, "stat data does not match between fopen "
-			"and fhandle case\n");
+		fprintf(stderr,
+			"stat data mismatch between fopen and fhandle case\n");
 		rc = EINVAL;
 		goto out_fd2;
 	}
 
-	if (st.st_size) {
+	if (st.st_size && S_ISREG(st.st_mode)) {
 		len = st.st_blksize;
 		readbuf = malloc(len);
 		if (readbuf == NULL) {
@@ -217,7 +220,9 @@ int main(int argc, char **argv)
 	}
 	filename = rindex(file, '/') + 1;
 
+	debug_mark("before first open");
 	fd1 = open(file, O_RDONLY);
+	debug_mark("after first open");
 	if (fd1 < 0) {
 		fprintf(stderr, "open file %s error: %s\n",
 			file, strerror(errno));
@@ -227,7 +232,9 @@ int main(int argc, char **argv)
 
 	/* Get file stats using fd1 from traditional open */
 	bzero(&st, sizeof(struct stat));
+	debug_mark("before first stat");
 	rc = fstat(fd1, &st);
+	debug_mark("after first stat");
 	if (rc < 0) {
 		fprintf(stderr, "fstat(%s) error: %s\n", file,
 			strerror(errno));
@@ -236,7 +243,9 @@ int main(int argc, char **argv)
 	}
 
 	/* Open mount point directory */
+	debug_mark("before directory open");
 	mnt_fd = open(argv[2], O_DIRECTORY);
+	debug_mark("after directory open");
 	if (mnt_fd < 0) {
 		fprintf(stderr, "open(%s) error: %s\n)", argv[2],
 			strerror(errno));
@@ -255,8 +264,10 @@ int main(int argc, char **argv)
 	fh->handle_bytes = MAX_HANDLE_SZ;
 
 	/* Convert name to handle */
+	debug_mark("before get handle");
 	ret = name_to_handle_at(AT_FDCWD, file, fh, &mnt_id,
 				AT_SYMLINK_FOLLOW);
+	debug_mark("after get handle");
 	if (ret) {
 		fprintf(stderr, "name_by_handle_at(%s) error: %s\n", filename,
 			strerror(errno));
@@ -265,8 +276,8 @@ int main(int argc, char **argv)
 	}
 
 	/* Print out the contents of the file handle */
-	fprintf(stdout, "fh_bytes: %u\nfh_type: %d\nfh_data: ",
-		fh->handle_bytes, fh->handle_type);
+	fprintf(stdout, "file: %s\nfh_bytes: %u\nfh_type: %d\nfh_data: ",
+		file, fh->handle_bytes, fh->handle_type);
 	for (i = 0; i < fh->handle_bytes; i++)
 		fprintf(stdout, "%02x ", fh->f_handle[i]);
 	fprintf(stdout, "\n");
@@ -278,23 +289,31 @@ int main(int argc, char **argv)
 	fprintf(stdout, "file's parent FID is "DFID"\n", PFID(parent));
 	fprintf(stdout, "file FID is "DFID"\n", PFID(fid));
 
-	fprintf(stdout, "just access via different mount point - ");
+	fprintf(stdout, "access via mount point '%s' - ", argv[2]);
+	fflush(stdout);
 	rc = check_access(filename, mnt_fd, fh, &st);
 	if (rc != 0)
 		goto out_f_handle;
 	fprintf(stdout, "OK \n");
+	fflush(stdout);
 
-	fprintf(stdout, "access after unlink - ");
-	ret = unlink(file);
-	if (ret < 0) {
-		fprintf(stderr, "can't unlink a file. check permissions?\n");
-		goto out_f_handle;
+	if (S_ISREG(st.st_mode)) {
+		fprintf(stdout, "access after unlink - ");
+		fflush(stdout);
+		ret = unlink(file);
+		if (ret < 0) {
+			fprintf(stderr,
+				"can't unlink '%s'. check permissions?\n",
+				file);
+			goto out_f_handle;
+		}
+
+		rc = check_access(filename, mnt_fd, fh, &st);
+		if (rc != 0)
+			goto out_f_handle;
+		fprintf(stdout, "OK\n");
+		fflush(stdout);
 	}
-
-	rc = check_access(filename, mnt_fd, fh, &st);
-	if (rc != 0)
-		goto out_f_handle;
-	fprintf(stdout, "OK\n");
 
 	rc = 0;
 	fprintf(stdout, "check_fhandle_syscalls test Passed!\n");
@@ -308,5 +327,3 @@ out_fd1:
 out:
 	return rc;
 }
-
-#endif

@@ -270,6 +270,41 @@ static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o
         EXIT;
 }
 
+/**
+ * Check whether \a o is directory stripe object.
+ *
+ * \param[in]  info	thread environment
+ * \param[in]  o	MDT object
+ *
+ * \retval 1	is directory stripe.
+ * \retval 0	isn't directory stripe.
+ * \retval < 1  error code
+ */
+static int mdt_is_dir_stripe(struct mdt_thread_info *info,
+				struct mdt_object *o)
+{
+	struct md_attr *ma = &info->mti_attr;
+	struct lmv_mds_md_v1 *lmv;
+	int rc;
+
+	rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
+	if (rc < 0)
+		return rc;
+
+	if (!(ma->ma_valid & MA_LMV))
+		return 0;
+
+	lmv = &ma->ma_lmv->lmv_md_v1;
+
+	if (!lmv_is_sane2(lmv))
+		return -EBADF;
+
+	if (le32_to_cpu(lmv->lmv_magic) == LMV_MAGIC_STRIPE)
+		return 1;
+
+	return 0;
+}
+
 static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 			      struct lu_fid *fid)
 {
@@ -1808,29 +1843,61 @@ out:
 
 static int mdt_raw_lookup(struct mdt_thread_info *info,
 			  struct mdt_object *parent,
-			  const struct lu_name *lname,
-			  struct ldlm_reply *ldlm_rep)
+			  const struct lu_name *lname)
 {
-	struct lu_fid	*child_fid = &info->mti_tmp_fid1;
-	int		 rc;
+	struct lu_fid *fid = &info->mti_tmp_fid1;
+	struct mdt_body *repbody;
+	bool is_dotdot = false;
+	bool is_old_parent_stripe = false;
+	bool is_new_parent_checked = false;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(!info->mti_cross_ref);
-
-	/* Only got the fid of this obj by name */
-	fid_zero(child_fid);
-	rc = mdo_lookup(info->mti_env, mdt_object_child(info->mti_object),
-			lname, child_fid, &info->mti_spec);
-	if (rc == 0) {
-		struct mdt_body *repbody;
-
-		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-		repbody->mbo_fid1 = *child_fid;
-		repbody->mbo_valid = OBD_MD_FLID;
-		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-	} else if (rc == -ENOENT) {
-		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
+	/* Always allow to lookup ".." */
+	if (lname->ln_namelen == 2 &&
+	    lname->ln_name[0] == '.' && lname->ln_name[1] == '.') {
+		info->mti_spec.sp_permitted = 1;
+		is_dotdot = true;
+		if (mdt_is_dir_stripe(info, parent) == 1)
+			is_old_parent_stripe = true;
 	}
+
+	mdt_object_get(info->mti_env, parent);
+lookup:
+	/* Only got the fid of this obj by name */
+	fid_zero(fid);
+	rc = mdo_lookup(info->mti_env, mdt_object_child(parent), lname, fid,
+			&info->mti_spec);
+	mdt_object_put(info->mti_env, parent);
+	if (rc)
+		RETURN(rc);
+
+	/* getattr_name("..") should return master object FID for striped dir */
+	if (is_dotdot && (is_old_parent_stripe || !is_new_parent_checked)) {
+		parent = mdt_object_find(info->mti_env, info->mti_mdt, fid);
+		if (IS_ERR(parent))
+			RETURN(PTR_ERR(parent));
+
+		/* old client getattr_name("..") with stripe FID */
+		if (unlikely(is_old_parent_stripe)) {
+			is_old_parent_stripe = false;
+			goto lookup;
+		}
+
+		/* ".." may be a stripe */
+		if (unlikely(mdt_is_dir_stripe(info, parent) == 1)) {
+			is_new_parent_checked = true;
+			goto lookup;
+		}
+
+		mdt_object_put(info->mti_env, parent);
+	}
+
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	repbody->mbo_fid1 = *fid;
+	repbody->mbo_valid = OBD_MD_FLID;
 
 	RETURN(rc);
 }
@@ -1991,14 +2058,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	}
 
 	if (lu_name_is_valid(lname)) {
-		/* Always allow to lookup ".." */
-		if (unlikely(lname->ln_namelen == 2 &&
-			     lname->ln_name[0] == '.' &&
-			     lname->ln_name[1] == '.'))
-			info->mti_spec.sp_permitted = 1;
-
 		if (info->mti_body->mbo_valid == OBD_MD_FLID) {
-			rc = mdt_raw_lookup(info, parent, lname, ldlm_rep);
+			rc = mdt_raw_lookup(info, parent, lname);
 
 			RETURN(rc);
 		}
@@ -6743,7 +6804,6 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	struct lu_name *tmpname = &info->mti_name;
 	struct lu_fid *tmpfid = &info->mti_tmp_fid1;
 	struct lu_buf *buf = &info->mti_big_buf;
-	struct md_attr *ma = &info->mti_attr;
 	struct linkea_data ldata = { NULL };
 	bool first = true;
 	struct mdt_object *mdt_obj;
@@ -6816,22 +6876,13 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		}
 
 		/* Check if it is slave stripes */
-		rc = mdt_stripe_get(info, mdt_obj, ma, XATTR_NAME_LMV);
+		rc = mdt_is_dir_stripe(info, mdt_obj);
 		mdt_object_put(info->mti_env, mdt_obj);
 		if (rc < 0)
 			GOTO(out, rc);
-
-		if (ma->ma_valid & MA_LMV) {
-			struct lmv_mds_md_v1 *lmv = &ma->ma_lmv->lmv_md_v1;
-
-			if (!lmv_is_sane2(lmv))
-				GOTO(out, rc = -EBADF);
-
-			/* For slave stripes, get its master */
-			if (le32_to_cpu(lmv->lmv_magic) == LMV_MAGIC_STRIPE) {
-				fp->gf_fid = *tmpfid;
-				continue;
-			}
+		if (rc == 1) {
+			fp->gf_fid = *tmpfid;
+			continue;
 		}
 
 		/* Pack the name in the end of the buffer */

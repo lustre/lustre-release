@@ -1976,7 +1976,11 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 	ENTRY;
 
 retry:
-	tgt = lmv_locate_tgt(lmv, op_data);
+	if (op_data->op_namelen == 2 &&
+	    op_data->op_name[0] == '.' && op_data->op_name[1] == '.')
+		tgt = lmv_fid2tgt(lmv, &op_data->op_fid1);
+	else
+		tgt = lmv_locate_tgt(lmv, op_data);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
