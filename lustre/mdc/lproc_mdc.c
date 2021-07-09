@@ -559,8 +559,6 @@ static int mdc_stats_seq_show(struct seq_file *seq, void *v)
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",
 		   stats->os_lockless_reads);
-	seq_printf(seq, "lockless_truncate\t\t%llu\n",
-		   stats->os_lockless_truncates);
 	return 0;
 }
 

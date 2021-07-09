@@ -107,12 +107,10 @@ struct osc_device {
 	struct osc_stats {
 		uint64_t	os_lockless_writes;    /* by bytes */
 		uint64_t	os_lockless_reads;     /* by bytes */
-		uint64_t	os_lockless_truncates; /* by times */
 	} od_stats;
 
 	/* configuration item(s) */
 	time64_t		od_contention_time;
-	int			od_lockless_truncate;
 };
 
 struct osc_extent;

@@ -804,7 +804,6 @@ void osc_lock_to_lockless(const struct lu_env *env,
 	struct cl_io *io = oio->oi_cl.cis_io;
 	struct cl_object *obj = slice->cls_obj;
 	struct osc_object *oob = cl2osc(obj);
-	const struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
 	struct obd_connect_data *ocd;
 
 	LASSERT(ols->ols_state == OLS_NEW ||
@@ -825,10 +824,7 @@ void osc_lock_to_lockless(const struct lu_env *env,
 					 OBD_CONNECT_SRVLOCK);
 		if (io->ci_lockreq == CILR_NEVER ||
 		    /* lockless IO */
-		    (ols->ols_locklessable && osc_object_is_contended(oob)) ||
-		    /* lockless truncate */
-		    (cl_io_is_trunc(io) && osd->od_lockless_truncate &&
-		     (ocd->ocd_connect_flags & OBD_CONNECT_TRUNCLOCK))) {
+		    (ols->ols_locklessable && osc_object_is_contended(oob))) {
 			ols->ols_locklessable = 1;
 			slice->cls_ops = ols->ols_lockless_ops;
 		}

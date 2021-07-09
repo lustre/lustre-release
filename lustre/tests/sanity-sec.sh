@@ -3431,19 +3431,6 @@ test_48a() {
 	cmp -bl $tmpfile $testfile ||
 		error "file $testfile is corrupted (4)"
 
-	# lockless truncate should be turned into regular truncate for enc file
-	save_lustre_params client "osc.*.lockless_truncate" > $save
-	# restore lockless_truncate default values on exit
-	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
-	cancel_lru_locks osc ; cancel_lru_locks mdc
-	lctl set_param -n osc.*.lockless_truncate 1
-	cancel_lru_locks osc
-	clear_stats osc.*.osc_stats
-	$TRUNCATE $testfile 8000000 || error "truncate failed (1)"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -eq 0 ] ||
-		error "lockless truncate should be turned into regular truncate"
-	lctl set_param -n osc.*.lockless_truncate 0
-
 	# truncate to a smaller, non-multiple of PAGE_SIZE, non-multiple of 16
 	sz=$((sz-7))
 	$TRUNCATE $tmpfile $sz

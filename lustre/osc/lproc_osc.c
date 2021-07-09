@@ -547,38 +547,6 @@ static ssize_t contention_seconds_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(contention_seconds);
 
-static ssize_t lockless_truncate_show(struct kobject *kobj,
-				      struct attribute *attr,
-				      char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct osc_device *od = obd2osc_dev(obd);
-
-	return sprintf(buf, "%u\n", od->od_lockless_truncate);
-}
-
-static ssize_t lockless_truncate_store(struct kobject *kobj,
-				       struct attribute *attr,
-				       const char *buffer,
-				       size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct osc_device *od = obd2osc_dev(obd);
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	od->od_lockless_truncate = val;
-
-	return count;
-}
-LUSTRE_RW_ATTR(lockless_truncate);
-
 static ssize_t destroys_in_flight_show(struct kobject *kobj,
 				       struct attribute *attr,
 				       char *buf)
@@ -898,8 +866,6 @@ static int osc_stats_seq_show(struct seq_file *seq, void *v)
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",
 		   stats->os_lockless_reads);
-	seq_printf(seq, "lockless_truncate\t\t%llu\n",
-		   stats->os_lockless_truncates);
 	return 0;
 }
 
@@ -941,7 +907,6 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_cur_dirty_grant_bytes.attr,
 	&lustre_attr_destroys_in_flight.attr,
 	&lustre_attr_grant_shrink_interval.attr,
-	&lustre_attr_lockless_truncate.attr,
 	&lustre_attr_max_dirty_mb.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_short_io_bytes.attr,

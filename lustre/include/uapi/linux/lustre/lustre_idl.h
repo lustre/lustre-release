@@ -753,7 +753,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_ACL                  0x80ULL /*access control lists */
 #define OBD_CONNECT_XATTR               0x100ULL /*client use extended attr */
 #define OBD_CONNECT_LARGE_ACL		0x200ULL /* more than 32 ACL entries */
-#define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
+/* was OBD_CONNECT_TRUNCLOCK           0x400ULL *locks on server for punch */
 #define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
 #define OBD_CONNECT_IBITS	       0x1000ULL /* not checked in 2.11+ */
 #define OBD_CONNECT_BARRIER	       0x2000ULL /* write barrier */
@@ -885,10 +885,10 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_DISP_STRIPE | OBD_CONNECT_LFSCK | \
 				OBD_CONNECT_OPEN_BY_FID | \
 				OBD_CONNECT_DIR_STRIPE | OBD_CONNECT_GRANT | \
-				OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_SRVLOCK | \
-				OBD_CONNECT_BULK_MBITS | OBD_CONNECT_CKSUM | \
-				OBD_CONNECT_MULTIMODRPCS | \
-				OBD_CONNECT_SUBTREE | OBD_CONNECT_LARGE_ACL | \
+				OBD_CONNECT_SRVLOCK | OBD_CONNECT_BULK_MBITS |\
+				OBD_CONNECT_CKSUM |\
+				OBD_CONNECT_MULTIMODRPCS |\
+				OBD_CONNECT_SUBTREE | OBD_CONNECT_LARGE_ACL |\
 				OBD_CONNECT_GRANT_PARAM | \
 				OBD_CONNECT_SHORTIO | OBD_CONNECT_FLAGS2)
 
@@ -913,7 +913,7 @@ struct ptlrpc_body_v2 {
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-				OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
+				OBD_CONNECT_INDEX | \
 				OBD_CONNECT_BRW_SIZE | OBD_CONNECT_CANCELSET | \
 				OBD_CONNECT_AT | LRU_RESIZE_CONNECT_FLAG | \
 				OBD_CONNECT_CKSUM | OBD_CONNECT_VBR | \

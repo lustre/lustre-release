@@ -866,53 +866,6 @@ test_31b() {
 }
 run_test 31b "voluntary OST cancel / blocking ast race=============="
 
-# enable/disable lockless truncate feature, depending on the arg 0/1
-enable_lockless_truncate() {
-	lctl set_param -n $OSC.*.lockless_truncate $1
-}
-
-test_32a() { # bug 11270
-	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	local stripe_size=$(do_facet $SINGLEMDS \
-		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
-
-	save_lustre_params client "$OSC.*.lockless_truncate" > $save
-	# restore lockless_truncate default values on exit
-	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
-	cancel_lru_locks $OSC
-	enable_lockless_truncate 1
-	rm -f $DIR1/$tfile
-	lfs setstripe -c -1 $DIR1/$tfile
-	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$stripe_size > \
-		/dev/null 2>&1
-	clear_stats $OSC.*.${OSC}_stats
-
-	log "checking cached lockless truncate"
-	$TRUNCATE $DIR1/$tfile 8000000
-	$CHECKSTAT -s 8000000 $DIR2/$tfile ||
-		error "cached truncate - wrong file size"
-	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
-		error "cached truncate isn't lockless"
-
-	log "checking not cached lockless truncate"
-	$TRUNCATE $DIR2/$tfile 5000000
-	$CHECKSTAT -s 5000000 $DIR1/$tfile ||
-		error "not cached truncate - wrong file size"
-	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
-		error "not cached truncate isn't lockless"
-
-	log "disabled lockless truncate"
-	enable_lockless_truncate 0
-	clear_stats $OSC.*.${OSC}_stats
-	$TRUNCATE $DIR2/$tfile 3000000
-	$CHECKSTAT -s 3000000 $DIR1/$tfile ||
-		error "lockless truncate disabled - wrong file size"
-	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -eq 0 ] ||
-		error "lockless truncate disabling failed"
-	rm -f $DIR1/$tfile
-}
-run_test 32a "lockless truncate"
-
 test_32b() { # bug 11270
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
