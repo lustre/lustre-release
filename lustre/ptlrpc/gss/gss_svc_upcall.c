@@ -1167,8 +1167,8 @@ int __init gss_init_svc_upcall(void)
 	}
 
 	if (channel_users(&rsi_cache) == 0)
-		CWARN("Init channel is not opened by lsvcgssd, following "
-		      "request might be dropped until lsvcgssd is active\n");
+		CDEBUG(D_SEC,
+		       "Init channel is not opened by lsvcgssd, following request might be dropped until lsvcgssd is active\n");
 
 	return 0;
 }
