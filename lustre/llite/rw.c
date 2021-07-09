@@ -1566,28 +1566,28 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	RETURN(result);
 }
 
-struct ll_cl_context *ll_cl_find(struct file *file)
+struct ll_cl_context *ll_cl_find(struct inode *inode)
 {
-	struct ll_file_data *fd = file->private_data;
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_cl_context *lcc;
 	struct ll_cl_context *found = NULL;
 
-	read_lock(&fd->fd_lock);
-	list_for_each_entry(lcc, &fd->fd_lccs, lcc_list) {
+	read_lock(&lli->lli_lock);
+	list_for_each_entry(lcc, &lli->lli_lccs, lcc_list) {
 		if (lcc->lcc_cookie == current) {
 			found = lcc;
 			break;
 		}
 	}
-	read_unlock(&fd->fd_lock);
+	read_unlock(&lli->lli_lock);
 
 	return found;
 }
 
-void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
+void ll_cl_add(struct inode *inode, const struct lu_env *env, struct cl_io *io,
 	       enum lcc_type type)
 {
-	struct ll_file_data *fd = file->private_data;
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
 	memset(lcc, 0, sizeof(*lcc));
@@ -1597,19 +1597,19 @@ void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
 	lcc->lcc_io = io;
 	lcc->lcc_type = type;
 
-	write_lock(&fd->fd_lock);
-	list_add(&lcc->lcc_list, &fd->fd_lccs);
-	write_unlock(&fd->fd_lock);
+	write_lock(&lli->lli_lock);
+	list_add(&lcc->lcc_list, &lli->lli_lccs);
+	write_unlock(&lli->lli_lock);
 }
 
-void ll_cl_remove(struct file *file, const struct lu_env *env)
+void ll_cl_remove(struct inode *inode, const struct lu_env *env)
 {
-	struct ll_file_data *fd = file->private_data;
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
-	write_lock(&fd->fd_lock);
+	write_lock(&lli->lli_lock);
 	list_del_init(&lcc->lcc_list);
-	write_unlock(&fd->fd_lock);
+	write_unlock(&lli->lli_lock);
 }
 
 int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
@@ -1824,7 +1824,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	int result;
 	ENTRY;
 
-	lcc = ll_cl_find(file);
+	lcc = ll_cl_find(inode);
 	if (lcc != NULL) {
 		env = lcc->lcc_env;
 		io  = lcc->lcc_io;

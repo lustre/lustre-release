@@ -758,10 +758,6 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 	/* turn off the kernel's read-ahead */
 	file->f_ra.ra_pages = 0;
 
-	/* ll_cl_context initialize */
-	rwlock_init(&fd->fd_lock);
-	INIT_LIST_HEAD(&fd->fd_lccs);
-
 	RETURN(0);
 }
 
@@ -1706,9 +1702,9 @@ restart:
 			range_locked = true;
 		}
 
-		ll_cl_add(file, env, io, LCC_RW);
+		ll_cl_add(inode, env, io, LCC_RW);
 		rc = cl_io_loop(env, io);
-		ll_cl_remove(file, env);
+		ll_cl_remove(inode, env);
 
 		if (range_locked && !is_parallel_dio) {
 			CDEBUG(D_VFSTRACE, "Range unlock "RL_FMT"\n",

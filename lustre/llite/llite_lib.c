@@ -1109,7 +1109,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
 	lli->lli_inode_magic = LLI_INODE_MAGIC;
 	lli->lli_flags = 0;
-	spin_lock_init(&lli->lli_lock);
+	rwlock_init(&lli->lli_lock);
 	lli->lli_posix_acl = NULL;
 	/* Do not set lli_fid, it has been initialized already. */
 	fid_zero(&lli->lli_pfid);
@@ -1161,6 +1161,8 @@ void ll_lli_init(struct ll_inode_info *lli)
 	}
 	mutex_init(&lli->lli_layout_mutex);
 	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
+	/* ll_cl_context initialize */
+	INIT_LIST_HEAD(&lli->lli_lccs);
 }
 
 #define MAX_STRING_SIZE 128

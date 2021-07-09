@@ -466,9 +466,9 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 		struct ll_inode_info *lli = ll_i2info(inode);
 		struct posix_acl *acl;
 
-		spin_lock(&lli->lli_lock);
+		read_lock(&lli->lli_lock);
 		acl = posix_acl_dup(lli->lli_posix_acl);
-		spin_unlock(&lli->lli_lock);
+		read_unlock(&lli->lli_lock);
 
 		if (!acl)
 			RETURN(-ENODATA);

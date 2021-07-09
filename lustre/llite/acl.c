@@ -44,10 +44,10 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type)
 	struct posix_acl *acl = NULL;
 	ENTRY;
 
-	spin_lock(&lli->lli_lock);
+	read_lock(&lli->lli_lock);
 	/* VFS' acl_permission_check->check_acl will release the refcount */
 	acl = posix_acl_dup(lli->lli_posix_acl);
-	spin_unlock(&lli->lli_lock);
+	read_unlock(&lli->lli_lock);
 
 	RETURN(acl);
 }
