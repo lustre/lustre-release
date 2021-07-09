@@ -290,18 +290,7 @@ static int osc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 		osc_lock_granted(env, oscl, lockh);
 
 	/* Error handling, some errors are tolerable. */
-	if (oscl->ols_locklessable && rc == -EUSERS) {
-		/* This is a tolerable error, turn this lock into
-		 * lockless lock.
-		 */
-		osc_object_set_contended(cl2osc(slice->cls_obj));
-		LASSERT(slice->cls_ops != oscl->ols_lockless_ops);
-
-		/* Change this lock to ldlmlock-less lock. */
-		osc_lock_to_lockless(env, oscl, 1);
-		oscl->ols_state = OLS_GRANTED;
-		rc = 0;
-	} else if (oscl->ols_glimpse && rc == -ENAVAIL) {
+	if (oscl->ols_glimpse && rc == -ENAVAIL) {
 		LASSERT(oscl->ols_flags & LDLM_FL_LVB_READY);
 		osc_lock_lvb_update(env, cl2osc(slice->cls_obj),
 				    NULL, &oscl->ols_lvb);
@@ -822,9 +811,7 @@ void osc_lock_to_lockless(const struct lu_env *env,
 					(io->ci_lockreq == CILR_MAYBE) &&
 					(ocd->ocd_connect_flags &
 					 OBD_CONNECT_SRVLOCK);
-		if (io->ci_lockreq == CILR_NEVER ||
-		    /* lockless IO */
-		    (ols->ols_locklessable && osc_object_is_contended(oob))) {
+		if (io->ci_lockreq == CILR_NEVER) {
 			ols->ols_locklessable = 1;
 			slice->cls_ops = ols->ols_lockless_ops;
 		}
@@ -1254,8 +1241,6 @@ int osc_lock_init(const struct lu_env *env,
 	if (!(enqflags & CEF_MUST))
 		/* try to convert this lock to a lockless lock */
 		osc_lock_to_lockless(env, oscl, (enqflags & CEF_NEVER));
-	if (oscl->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
-		oscl->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, oscl);

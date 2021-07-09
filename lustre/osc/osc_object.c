@@ -333,28 +333,6 @@ drop_lock:
 	RETURN(rc);
 }
 
-int osc_object_is_contended(struct osc_object *obj)
-{
-	struct osc_device *dev = lu2osc_dev(obj->oo_cl.co_lu.lo_dev);
-	time64_t osc_contention_time = dev->od_contention_time;
-	ktime_t retry_time;
-
-        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_OBJECT_CONTENTION))
-                return 1;
-
-        if (!obj->oo_contended)
-                return 0;
-
-	retry_time = ktime_add_ns(obj->oo_contention_time,
-				  osc_contention_time * NSEC_PER_SEC);
-	if (ktime_after(ktime_get(), retry_time)) {
-		osc_object_clear_contended(obj);
-		return 0;
-	}
-	return 1;
-}
-EXPORT_SYMBOL(osc_object_is_contended);
-
 /**
  * Implementation of struct cl_object_operations::coo_req_attr_set() for osc
  * layer. osc is responsible for struct obdo::o_id and struct obdo::o_seq

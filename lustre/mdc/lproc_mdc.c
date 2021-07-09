@@ -318,38 +318,6 @@ static ssize_t checksum_dump_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(checksum_dump);
 
-static ssize_t contention_seconds_show(struct kobject *kobj,
-				       struct attribute *attr,
-				       char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct osc_device *od = obd2osc_dev(obd);
-
-	return sprintf(buf, "%lld\n", od->od_contention_time);
-}
-
-static ssize_t contention_seconds_store(struct kobject *kobj,
-					struct attribute *attr,
-					const char *buffer,
-					size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct osc_device *od = obd2osc_dev(obd);
-	time64_t val;
-	int rc;
-
-	rc = kstrtoll(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	od->od_contention_time = val;
-
-	return count;
-}
-LUSTRE_RW_ATTR(contention_seconds);
-
 LUSTRE_ATTR(mds_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
@@ -651,7 +619,6 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
-	&lustre_attr_contention_seconds.attr,
 	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,

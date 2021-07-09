@@ -917,7 +917,8 @@ test_32b() { # bug 11270
 	restore_lustre_params <$p
 	rm -f $p
 }
-run_test 32b "lockless i/o"
+# Disable test 32b prior to full removal
+#run_test 32b "lockless i/o"
 
 print_jbd_stat () {
     local dev

@@ -551,18 +551,7 @@ static int mdc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 		mdc_lock_granted(env, oscl, lockh);
 
 	/* Error handling, some errors are tolerable. */
-	if (oscl->ols_locklessable && rc == -EUSERS) {
-		/* This is a tolerable error, turn this lock into
-		 * lockless lock.
-		 */
-		osc_object_set_contended(cl2osc(slice->cls_obj));
-		LASSERT(slice->cls_ops != oscl->ols_lockless_ops);
-
-		/* Change this lock to ldlmlock-less lock. */
-		osc_lock_to_lockless(env, oscl, 1);
-		oscl->ols_state = OLS_GRANTED;
-		rc = 0;
-	} else if (oscl->ols_glimpse && rc == -ENAVAIL) {
+	if (oscl->ols_glimpse && rc == -ENAVAIL) {
 		LASSERT(oscl->ols_flags & LDLM_FL_LVB_READY);
 		mdc_lock_lvb_update(env, cl2osc(slice->cls_obj),
 				    NULL, &oscl->ols_lvb);
@@ -995,8 +984,6 @@ int mdc_lock_init(const struct lu_env *env, struct cl_object *obj,
 
 	if (!(enqflags & CEF_MUST))
 		osc_lock_to_lockless(env, ols, (enqflags & CEF_NEVER));
-	if (ols->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
-		ols->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, ols);
