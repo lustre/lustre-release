@@ -29,22 +29,28 @@
  * Lustre is a trademark of Oracle Corporation, Inc.
  */
 
+#include <linux/types.h>
+#include <linux/slab.h>
+#include <linux/module.h>
 #include <linux/random.h>
 #include <libcfs/libcfs.h>
 
-unsigned long cfs_fail_loc = 0;
-unsigned int cfs_fail_val = 0;
-int cfs_fail_err;
-DECLARE_WAIT_QUEUE_HEAD(cfs_race_waitq);
-int cfs_race_state;
-
+unsigned long cfs_fail_loc;
 EXPORT_SYMBOL(cfs_fail_loc);
+
+unsigned int cfs_fail_val;
 EXPORT_SYMBOL(cfs_fail_val);
+
+int cfs_fail_err;
 EXPORT_SYMBOL(cfs_fail_err);
+
+DECLARE_WAIT_QUEUE_HEAD(cfs_race_waitq);
 EXPORT_SYMBOL(cfs_race_waitq);
+
+int cfs_race_state;
 EXPORT_SYMBOL(cfs_race_state);
 
-int __cfs_fail_check_set(__u32 id, __u32 value, int set)
+int __cfs_fail_check_set(u32 id, u32 value, int set)
 {
 	static atomic_t cfs_fail_count = ATOMIC_INIT(0);
 
@@ -89,41 +95,43 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 	}
 
 	/* Take into account the current call for FAIL_ONCE for ORSET only,
-	 * as RESET is a new fail_loc, it does not change the current call */
+	 * as RESET is a new fail_loc, it does not change the current call
+	 */
 	if ((set == CFS_FAIL_LOC_ORSET) && (value & CFS_FAIL_ONCE))
 		set_bit(CFS_FAIL_ONCE_BIT, &cfs_fail_loc);
 	/* Lost race to set CFS_FAILED_BIT. */
 	if (test_and_set_bit(CFS_FAILED_BIT, &cfs_fail_loc)) {
 		/* If CFS_FAIL_ONCE is valid, only one process can fail,
-		 * otherwise multi-process can fail at the same time. */
+		 * otherwise multi-process can fail at the same time.
+		 */
 		if (cfs_fail_loc & CFS_FAIL_ONCE)
 			return 0;
 	}
 
 	switch (set) {
-		case CFS_FAIL_LOC_NOSET:
-		case CFS_FAIL_LOC_VALUE:
-			break;
-		case CFS_FAIL_LOC_ORSET:
-			cfs_fail_loc |= value & ~(CFS_FAILED | CFS_FAIL_ONCE);
-			break;
-		case CFS_FAIL_LOC_RESET:
-			cfs_fail_loc = value;
-			atomic_set(&cfs_fail_count, 0);
-			break;
-		default:
-			LASSERTF(0, "called with bad set %u\n", set);
-			break;
+	case CFS_FAIL_LOC_NOSET:
+	case CFS_FAIL_LOC_VALUE:
+		break;
+	case CFS_FAIL_LOC_ORSET:
+		cfs_fail_loc |= value & ~(CFS_FAILED | CFS_FAIL_ONCE);
+		break;
+	case CFS_FAIL_LOC_RESET:
+		cfs_fail_loc = value;
+		atomic_set(&cfs_fail_count, 0);
+		break;
+	default:
+		LASSERTF(0, "called with bad set %u\n", set);
+		break;
 	}
 
 	return 1;
 }
 EXPORT_SYMBOL(__cfs_fail_check_set);
 
-int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
+int __cfs_fail_timeout_set(u32 id, u32 value, int ms, int set)
 {
 	ktime_t till = ktime_add_ms(ktime_get(), ms);
-	int ret = 0;
+	int ret;
 
 	ret = __cfs_fail_check_set(id, value, set);
 	if (ret && likely(ms > 0)) {
