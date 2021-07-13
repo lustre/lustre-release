@@ -2566,7 +2566,8 @@ int __ldlm_replay_locks(struct obd_import *imp, bool rate_limit)
 
 	ENTRY;
 
-	LASSERT(atomic_read(&imp->imp_replay_inflight) == 1);
+	while (atomic_read(&imp->imp_replay_inflight) != 1)
+		cond_resched();
 
 	/* don't replay locks if import failed recovery */
 	if (imp->imp_vbr_failed)
@@ -2621,9 +2622,12 @@ int ldlm_replay_locks(struct obd_import *imp)
 	struct task_struct *task;
 	int rc = 0;
 
-	class_import_get(imp);
 	/* ensure this doesn't fall to 0 before all have been queued */
-	atomic_inc(&imp->imp_replay_inflight);
+	if (atomic_inc_return(&imp->imp_replay_inflight) > 1) {
+		atomic_dec(&imp->imp_replay_inflight);
+		return 0;
+	}
+	class_import_get(imp);
 
 	task = kthread_run(ldlm_lock_replay_thread, imp, "ldlm_lock_replay");
 	if (IS_ERR(task)) {
