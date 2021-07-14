@@ -884,7 +884,6 @@ static int mdt_restriper_main(void *arg)
 int mdt_restriper_start(struct mdt_device *mdt)
 {
 	struct mdt_dir_restriper *restriper = &mdt->mdt_restriper;
-	kernel_cap_t kcap = cap_combine(CAP_FS_SET, CAP_NFSD_SET);
 	struct task_struct *task;
 	struct mdt_thread_info *info;
 	struct lu_ucred *uc;
@@ -932,7 +931,7 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	uc->uc_fsgid = 0;
 	uc->uc_suppgids[0] = -1;
 	uc->uc_suppgids[1] = -1;
-	uc->uc_cap = kcap.cap[0];
+	uc->uc_cap = cap_combine(CAP_FS_SET, CAP_NFSD_SET);
 	uc->uc_umask = 0644;
 	uc->uc_ginfo = NULL;
 	uc->uc_identity = NULL;

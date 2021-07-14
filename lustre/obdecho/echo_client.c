@@ -2260,14 +2260,14 @@ static void echo_ucred_init(struct lu_env *env)
 				from_kuid(&init_user_ns, current_fsuid());
 	ucred->uc_fsgid = ucred->uc_o_fsgid =
 				from_kgid(&init_user_ns, current_fsgid());
-	ucred->uc_cap = cfs_curproc_cap_pack();
+	ucred->uc_cap = current_cap();
 
 	/* remove fs privilege for non-root user. */
 	if (ucred->uc_fsuid) {
 		kcap = cap_drop_nfsd_set(kcap);
 		kcap = cap_drop_fs_set(kcap);
 	}
-	ucred->uc_cap = kcap.cap[0];
+	ucred->uc_cap = kcap;
 	ucred->uc_valid = UCRED_NEW;
 }
 

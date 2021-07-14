@@ -54,7 +54,6 @@
 #include <libcfs/libcfs_workitem.h>
 #include <libcfs/libcfs_hash.h>
 #include <libcfs/libcfs_fail.h>
-#include "curproc.h"
 
 #define LIBCFS_VERSION	"0.7.1"
 

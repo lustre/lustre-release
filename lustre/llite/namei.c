@@ -1567,7 +1567,7 @@ again:
 	err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
-			cfs_curproc_cap_pack(), rdev, &request);
+			current_cap(), rdev, &request);
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 58, 0)
 	/*
 	 * server < 2.12.58 doesn't pack default LMV in intent_getattr reply,

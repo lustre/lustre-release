@@ -7,7 +7,6 @@ libcfsdir = $(includedir)/libcfs
 
 EXTRA_DIST = \
 	bitmap.h \
-	curproc.h \
 	libcfs.h \
 	libcfs_cpu.h \
 	libcfs_crypto.h \

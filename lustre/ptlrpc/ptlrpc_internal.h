@@ -433,7 +433,7 @@ static inline void do_pack_body(struct ptlrpc_request *req)
 	b->mbo_gid = from_kgid(&init_user_ns, current_gid());
 	b->mbo_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	b->mbo_fsgid = from_kgid(&init_user_ns, current_fsgid());
-	b->mbo_capability = cfs_curproc_cap_pack();
+	b->mbo_capability = current_cap().cap[0];
 }
 
 #endif /* PTLRPC_INTERNAL_H */

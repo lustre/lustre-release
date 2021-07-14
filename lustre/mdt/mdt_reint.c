@@ -541,7 +541,7 @@ static int mdt_create(struct mdt_thread_info *info)
 		    LMV_HASH_TYPE_CRUSH)
 			RETURN(-EPROTO);
 
-		if (!md_capable(uc, CAP_SYS_ADMIN) &&
+		if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
 		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 		    mdt->mdt_enable_remote_dir_gid != -1)
 			RETURN(-EPERM);
@@ -763,7 +763,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma)
 {
 	struct lu_ucred *uc = mdt_ucred(info);
-	cfs_cap_t cap_saved;
+	kernel_cap_t cap_saved;
 	int rc;
 
 	ENTRY;
@@ -785,7 +785,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 		 * set the HSM state to dirty.
 		 */
 		cap_saved = uc->uc_cap;
-		uc->uc_cap |= MD_CAP_TO_MASK(CAP_FOWNER);
+		cap_raise(uc->uc_cap, CAP_FOWNER);
 		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
 		uc->uc_cap = cap_saved;
 		if (rc)
@@ -922,7 +922,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			    !mdt->mdt_enable_striped_dir)
 				GOTO(out_put, rc = -EPERM);
 
-			if (!md_capable(uc, CAP_SYS_ADMIN) &&
+			if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
 			    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 			    mdt->mdt_enable_remote_dir_gid != -1)
 				GOTO(out_put, rc = -EPERM);
@@ -1155,7 +1155,7 @@ relock:
 			/* Return -ENOTSUPP for old client */
 			GOTO(put_child, rc = -ENOTSUPP);
 
-		if (!md_capable(uc, CAP_SYS_ADMIN))
+		if (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN))
 			GOTO(put_child, rc = -EPERM);
 
 		ma->ma_need = MA_INODE;
@@ -2193,7 +2193,7 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	if (!mdt->mdt_enable_remote_dir || !mdt->mdt_enable_dir_migration)
 		RETURN(-EPERM);
 
-	if (uc && !md_capable(uc, CAP_SYS_ADMIN) &&
+	if (uc && !cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
 	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 	    mdt->mdt_enable_remote_dir_gid != -1)
 		RETURN(-EPERM);

@@ -1668,7 +1668,7 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 		.ln_namelen = sizeof("i_am_nobody") - 1,
 	};
 	struct lu_ucred *uc;
-	cfs_cap_t uc_cap_save;
+	kernel_cap_t uc_cap_save;
 	int rc;
 	ENTRY;
 
@@ -1697,7 +1697,7 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 
 	uc = lu_ucred(env);
 	uc_cap_save = uc->uc_cap;
-	uc->uc_cap |= BIT(CAP_DAC_OVERRIDE);
+	cap_raise(uc->uc_cap, CAP_DAC_OVERRIDE);
 	rc = mdo_create(env, mdt_object_child(local_root), &lname,
 			mdt_object_child(obj), spec, attr);
 	uc->uc_cap = uc_cap_save;
@@ -1776,7 +1776,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	struct mdt_object      *orphan;
 	struct md_attr         *orp_ma;
 	struct lu_buf          *buf;
-	cfs_cap_t		cap;
+	kernel_cap_t cap;
 	bool			lease_broken;
 	int                     rc;
 	int                     rc2;
@@ -1969,7 +1969,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	/* The orphan has root ownership so we need to raise
 	 * CAP_FOWNER to set the HSM attributes. */
 	cap = uc->uc_cap;
-	uc->uc_cap |= MD_CAP_TO_MASK(CAP_FOWNER);
+	cap_raise(uc->uc_cap, CAP_FOWNER);
 	rc = mo_xattr_set(info->mti_env, mdt_object_child(orphan), buf,
 			  XATTR_NAME_HSM, 0);
 	uc->uc_cap = cap;

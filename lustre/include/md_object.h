@@ -710,7 +710,7 @@ struct lu_ucred {
 	__u32			 uc_fsuid;
 	__u32			 uc_fsgid;
 	__u32			 uc_suppgids[2];
-	cfs_cap_t		 uc_cap;
+	kernel_cap_t		 uc_cap;
 	__u32			 uc_umask;
 	struct group_info	*uc_ginfo;
 	struct md_identity	*uc_identity;
@@ -729,16 +729,10 @@ int lu_ucred_global_init(void);
 
 void lu_ucred_global_fini(void);
 
-#define md_cap_t(x) (x)
-
-#define MD_CAP_TO_MASK(x) BIT(x)
-
-#define md_cap_raised(c, flag) (md_cap_t(c) & MD_CAP_TO_MASK(flag))
-
 /* capable() is copied from linux kernel! */
-static inline int md_capable(struct lu_ucred *uc, cfs_cap_t cap)
+static inline int md_capable(struct lu_ucred *uc, int cap)
 {
-	if (md_cap_raised(uc->uc_cap, cap))
+	if (cap_raised(uc->uc_cap, cap))
 		return 1;
 	return 0;
 }

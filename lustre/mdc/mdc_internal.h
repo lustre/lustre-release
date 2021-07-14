@@ -48,7 +48,7 @@ void mdc_setattr_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		      void *ea, size_t ealen);
 void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		     const void *data, size_t datalen, umode_t mode,
-		     uid_t uid, gid_t gid, cfs_cap_t capability, __u64 rdev);
+		     uid_t uid, gid_t gid, kernel_cap_t capability, u64 rdev);
 void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		   umode_t mode, __u64 rdev, __u64 flags,
 		   const void *data, size_t datalen);
@@ -110,7 +110,7 @@ void mdc_replay_open(struct ptlrpc_request *req);
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 		const void *data, size_t datalen,
 		umode_t mode, uid_t uid, gid_t gid,
-		cfs_cap_t capability, __u64 rdev,
+		kernel_cap_t capability, __u64 rdev,
 		struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request);

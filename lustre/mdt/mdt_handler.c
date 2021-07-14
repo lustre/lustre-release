@@ -2363,7 +2363,7 @@ static int mdt_rmfid_check_permission(struct mdt_thread_info *info,
 	if (la->la_flags & LUSTRE_IMMUTABLE_FL)
 			rc = -EACCES;
 
-	if (md_capable(uc, CAP_DAC_OVERRIDE))
+	if (cap_raised(uc->uc_cap, CAP_DAC_OVERRIDE))
 		RETURN(0);
 	if (uc->uc_fsuid == la->la_uid) {
 		if ((la->la_mode & S_IWUSR) == 0)

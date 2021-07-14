@@ -115,12 +115,12 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 
 	CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
 	       libcfs_nid2str(peernid),
-	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap,
+	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap.cap[0],
 	       squash->rsi_uid, squash->rsi_gid, 0);
 
 	ucred->uc_fsuid = squash->rsi_uid;
 	ucred->uc_fsgid = squash->rsi_gid;
-	ucred->uc_cap = 0;
+	ucred->uc_cap = CAP_EMPTY_SET;
 	ucred->uc_suppgids[0] = -1;
 	ucred->uc_suppgids[1] = -1;
 
@@ -315,11 +315,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_uid = pud->pud_uid;
 	ucred->uc_gid = pud->pud_gid;
 
-	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid) {
-		ucred->uc_cap = 0;
-	} else {
-		ucred->uc_cap = pud->pud_cap;
-	}
+	ucred->uc_cap = CAP_EMPTY_SET;
+	if (!nodemap || ucred->uc_o_uid != nodemap->nm_squash_uid)
+		ucred->uc_cap.cap[0] = pud->pud_cap;
+
 	ucred->uc_fsuid = pud->pud_fsuid;
 	ucred->uc_fsgid = pud->pud_fsgid;
 
@@ -470,7 +469,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		if (nodemap->nmf_deny_unknown)
 			RETURN(-EACCES);
 
-		uc->uc_cap = 0;
+		uc->uc_cap = CAP_EMPTY_SET;
 		uc->uc_suppgids[0] = -1;
 		uc->uc_suppgids[1] = -1;
 	}
@@ -479,12 +478,9 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
 		if (IS_ERR(identity)) {
-			kernel_cap_t kcap = cap_combine(CAP_FS_SET,
-							CAP_NFSD_SET);
-			u32 cap_mask = kcap.cap[0];
-
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
-				     uc->uc_cap & cap_mask)) {
+				     cap_raised(uc->uc_cap,
+						CAP_DAC_READ_SEARCH))) {
 				identity = NULL;
 			} else {
 				CDEBUG(D_SEC, "Deny access without identity: "
@@ -538,7 +534,8 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_suppgids[0] = body->mbo_suppgid;
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
-	uc->uc_cap = body->mbo_capability;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = body->mbo_capability;
 
 	rc = old_init_ucred_common(info, nodemap);
 	nodemap_putref(nodemap);
@@ -611,11 +608,8 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 	/* LU-5564: for normal close request, skip permission check */
 	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE &&
 	    !(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP))) {
-		kernel_cap_t kcap = { { uc->uc_cap, } };
-
-		kcap = cap_raise_nfsd_set(kcap, CAP_FULL_SET);
-		kcap = cap_raise_fs_set(kcap, CAP_FULL_SET);
-		uc->uc_cap = kcap.cap[0];
+		cap_raise_nfsd_set(uc->uc_cap, CAP_FULL_SET);
+		cap_raise_fs_set(uc->uc_cap, CAP_FULL_SET);
 	}
 
 	mdt_exit_ucred(info);
@@ -1126,7 +1120,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->sa_fsuid;
 	uc->uc_fsgid = rec->sa_fsgid;
-	uc->uc_cap   = rec->sa_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->sa_cap;
 	uc->uc_suppgids[0] = rec->sa_suppgid;
 	uc->uc_suppgids[1] = -1;
 
@@ -1287,7 +1282,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->cr_fsuid;
 	uc->uc_fsgid = rec->cr_fsgid;
-	uc->uc_cap   = rec->cr_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->cr_cap;
 	uc->uc_suppgids[0] = rec->cr_suppgid1;
 	uc->uc_suppgids[1] = -1;
 	uc->uc_umask = rec->cr_umask;
@@ -1371,7 +1367,8 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->lk_fsuid;
 	uc->uc_fsgid = rec->lk_fsgid;
-	uc->uc_cap   = rec->lk_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->lk_cap;
 	uc->uc_suppgids[0] = rec->lk_suppgid1;
 	uc->uc_suppgids[1] = rec->lk_suppgid2;
 
@@ -1415,7 +1412,8 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->ul_fsuid;
 	uc->uc_fsgid = rec->ul_fsgid;
-	uc->uc_cap   = rec->ul_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->ul_cap;
 	uc->uc_suppgids[0] = rec->ul_suppgid1;
 	uc->uc_suppgids[1] = -1;
 
@@ -1468,7 +1466,8 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->rn_fsuid;
 	uc->uc_fsgid = rec->rn_fsgid;
-	uc->uc_cap   = rec->rn_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->rn_cap;
 	uc->uc_suppgids[0] = rec->rn_suppgid1;
 	uc->uc_suppgids[1] = rec->rn_suppgid2;
 
@@ -1521,7 +1520,8 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->rn_fsuid;
 	uc->uc_fsgid = rec->rn_fsgid;
-	uc->uc_cap   = rec->rn_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->rn_cap;
 	uc->uc_suppgids[0] = rec->rn_suppgid1;
 	uc->uc_suppgids[1] = rec->rn_suppgid2;
 
@@ -1621,7 +1621,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->cr_fsuid;
 	uc->uc_fsgid = rec->cr_fsgid;
-	uc->uc_cap   = rec->cr_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->cr_cap;
 	uc->uc_suppgids[0] = rec->cr_suppgid1;
 	uc->uc_suppgids[1] = rec->cr_suppgid2;
 	uc->uc_umask = rec->cr_umask;
@@ -1710,7 +1711,8 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid  = rec->sx_fsuid;
 	uc->uc_fsgid  = rec->sx_fsgid;
-	uc->uc_cap    = rec->sx_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->sx_cap;
 	uc->uc_suppgids[0] = rec->sx_suppgid1;
 	uc->uc_suppgids[1] = -1;
 
@@ -1771,7 +1773,8 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->rs_fsuid;
 	uc->uc_fsgid = rec->rs_fsgid;
-	uc->uc_cap   = rec->rs_cap;
+	uc->uc_cap = CAP_EMPTY_SET;
+	uc->uc_cap.cap[0] = rec->rs_cap;
 
 	rr->rr_fid1   = &rec->rs_fid;
 	rr->rr_mirror_id = rec->rs_mirror_id;
