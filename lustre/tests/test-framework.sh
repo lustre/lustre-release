@@ -5271,8 +5271,9 @@ init_param_vars () {
 	log "Using TIMEOUT=$TIMEOUT"
 
 	# tune down to speed up testing on (usually) small setups
+	local mgc_timeout=/sys/module/mgc/parameters/mgc_requeue_timeout_min
 	do_nodes $(comma_list $(nodes_list)) \
-		"echo 1 >/sys/module/mgc/parameters/mgc_requeue_timeout_min"
+		"[ -f $mgc_timeout ] && echo 1 > $mgc_timeout; exit 0"
 
 	osc_ensure_active $SINGLEMDS $TIMEOUT
 	osc_ensure_active client $TIMEOUT
