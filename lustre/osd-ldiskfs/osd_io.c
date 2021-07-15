@@ -1479,7 +1479,12 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * split more than once, but this is really rare.
 	 */
 	if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
+		/*
+		 * many concurrent threads may grow tree by the time
+		 * our transaction starts. so, consider 2 is a min depth.
+		 */
 		depth = ext_depth(inode);
+		depth = min(max(depth, 1) + 1, LDISKFS_MAX_EXTENT_DEPTH);
 		if (extents <= 1) {
 			credits += depth * 2 * extents;
 			new_meta = depth;
@@ -1496,7 +1501,6 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		new_meta = DIV_ROUND_UP(new_blocks,
 				LDISKFS_ADDR_PER_BLOCK(inode->i_sb)) + 4;
 		credits += new_meta;
-		depth = 3;
 	}
 	dirty_groups += (extents + new_meta);
 
@@ -1517,7 +1521,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		credits += dirty_groups;
 
 	/* we can't dirty more gd blocks than exist */
-	if (extents > LDISKFS_SB(osd_sb(osd))->s_gdb_count)
+	if (dirty_groups > LDISKFS_SB(osd_sb(osd))->s_gdb_count)
 		credits += LDISKFS_SB(osd_sb(osd))->s_gdb_count;
 	else
 		credits += dirty_groups;
@@ -1956,7 +1960,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		 * level.
 		 */
 		depth = inode != NULL ? ext_depth(inode) : 0;
-		depth = max(depth, 1) + 1;
+		depth = min(max(depth, 1) + 1, LDISKFS_MAX_EXTENT_DEPTH);
 		credits = depth;
 		/* if not append, then split may need to modify
 		 * existing blocks moving entries into the new ones
