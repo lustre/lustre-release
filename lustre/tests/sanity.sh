@@ -24373,25 +24373,37 @@ run_test 398a "direct IO should cancel lock otherwise lockless"
 
 test_398b() { # LU-4198
 	which fio || skip_env "no fio installed"
-	$LFS setstripe -c -1 $DIR/$tfile
+	$LFS setstripe -c -1 -S 1M $DIR/$tfile
 
-	local size=12
+	local size=48
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$size
 
 	local njobs=4
-	echo "mix direct rw ${size}M to OST0 by fio with $njobs jobs..."
-	fio --name=rand-rw --rw=randrw --bs=$PAGE_SIZE --direct=1 \
-		--numjobs=$njobs --fallocate=none \
-		--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
-		--filename=$DIR/$tfile &
-	bg_pid=$!
+	# Single page, multiple pages, stripe size, 4*stripe size
+	for bsize in $(( $PAGE_SIZE )) $(( 4*$PAGE_SIZE )) 1048576 4194304; do
+		echo "mix direct rw ${bsize} by fio with $njobs jobs..."
+		fio --name=rand-rw --rw=randrw --bs=$bsize --direct=1 \
+			--numjobs=$njobs --fallocate=none \
+			--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+			--filename=$DIR/$tfile &
+		bg_pid=$!
 
-	echo "mix buffer rw ${size}M to OST0 by fio with $njobs jobs..."
-	fio --name=rand-rw --rw=randrw --bs=$PAGE_SIZE \
-		--numjobs=$njobs --fallocate=none \
-		--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
-		--filename=$DIR/$tfile || true
-	wait $bg_pid
+		echo "mix buffer rw ${bsize} by fio with $njobs jobs..."
+		fio --name=rand-rw --rw=randrw --bs=$bsize \
+			--numjobs=$njobs --fallocate=none \
+			--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+			--filename=$DIR/$tfile || true
+		wait $bg_pid
+	done
+
+	evict=$(do_facet client $LCTL get_param \
+		osc.$FSNAME-OST*-osc-*/state |
+	    awk -F"[ [,]" '/EVICTED ]$/ { if (t<$5) {t=$5;} } END { print t }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param \
+			osc.$FSNAME-OST*-osc-*/state;
+		    error "eviction happened: $evict before:$before")
 
 	rm -f $DIR/$tfile
 }
