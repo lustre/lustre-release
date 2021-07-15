@@ -2714,13 +2714,17 @@ out_restore:
 		if (rc2 < 0)
 			goto do_lbug;
 
-		++steps;
-		rc2 = mdd_xattr_hsm_replace(env, fst_o, fst_hsm_buf, handle);
-		if (rc2 < 0)
-			goto do_lbug;
+		if (flags & SWAP_LAYOUTS_MDS_HSM) {
+			++steps;
+			rc2 = mdd_xattr_hsm_replace(env, fst_o, fst_hsm_buf,
+						    handle);
+			if (rc2 < 0)
+				goto do_lbug;
 
-		++steps;
-		rc2 = mdd_xattr_hsm_replace(env, snd_o, snd_hsm_buf, handle);
+			++steps;
+			rc2 = mdd_xattr_hsm_replace(env, snd_o, snd_hsm_buf,
+						    handle);
+		}
 
 	do_lbug:
 		if (rc2 < 0) {
