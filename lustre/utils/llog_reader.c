@@ -916,6 +916,48 @@ void print_update_rec(struct llog_update_record *lur)
 
 }
 
+static void print_unlink_rec(struct llog_unlink_rec *lur)
+{
+	printf("unlink record id:0x%x target %llx:%x:%x\n",
+		__le32_to_cpu(lur->lur_hdr.lrh_id),
+		__le64_to_cpu(lur->lur_oid),
+		__le32_to_cpu(lur->lur_oseq),
+		__le32_to_cpu(lur->lur_count));
+}
+
+static void print_unlink64_rec(struct llog_unlink64_rec *lur)
+{
+	printf("unlink64 record id:0x%x target "DFID"\n",
+		__le32_to_cpu(lur->lur_hdr.lrh_id),
+		PFID(&lur->lur_fid));
+}
+
+static void print_setattr64_rec(struct llog_setattr64_rec *lsr)
+{
+	printf("setattr64 record id:0x%x target "DFID" valid %llx uid %u:%u gid %u:%u\n",
+		__le32_to_cpu(lsr->lsr_hdr.lrh_id),
+		PFID(&lsr->lsr_oi.oi_fid),
+		__le64_to_cpu(lsr->lsr_valid),
+		__le32_to_cpu(lsr->lsr_uid_h),
+		__le32_to_cpu(lsr->lsr_uid),
+		__le32_to_cpu(lsr->lsr_gid_h),
+		__le32_to_cpu(lsr->lsr_gid));
+}
+
+static void print_setattr64_rec_v2(struct llog_setattr64_rec_v2 *lsr)
+{
+	printf("setattr64 v2 record id:0x%x target "DFID" valid %llx uid %u:%u gid %u:%u prj %u\n",
+		__le32_to_cpu(lsr->lsr_hdr.lrh_id),
+		PFID(&lsr->lsr_oi.oi_fid),
+		__le64_to_cpu(lsr->lsr_valid),
+		__le32_to_cpu(lsr->lsr_uid_h),
+		__le32_to_cpu(lsr->lsr_uid),
+		__le32_to_cpu(lsr->lsr_gid_h),
+		__le32_to_cpu(lsr->lsr_gid),
+		__le32_to_cpu(lsr->lsr_projid));
+}
+
+
 static void print_records(struct llog_rec_hdr **recs,
 			  int rec_number, int is_ext)
 {
@@ -964,6 +1006,22 @@ static void print_records(struct llog_rec_hdr **recs,
 			break;
 		case UPDATE_REC:
 			print_update_rec((struct llog_update_record *)recs[i]);
+			break;
+		case MDS_UNLINK_REC:
+			print_unlink_rec((struct llog_unlink_rec *)recs[i]);
+			break;
+		case MDS_UNLINK64_REC:
+			print_unlink64_rec((struct llog_unlink64_rec *)recs[i]);
+			break;
+		case MDS_SETATTR64_REC:
+			if (__le32_to_cpu(recs[i]->lrh_len) >
+				sizeof(struct llog_setattr64_rec)) {
+				print_setattr64_rec_v2(
+				  (struct llog_setattr64_rec_v2 *)recs[i]);
+			} else {
+				print_setattr64_rec(
+					(struct llog_setattr64_rec *)recs[i]);
+			}
 			break;
 		default:
 			printf("unknown type %x\n", lopt);
