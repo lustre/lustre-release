@@ -56,6 +56,11 @@
 #include <libcfs/crypto/llcrypt.h>
 #include "tracefile.h"
 
+struct lnet_debugfs_symlink_def {
+	const char *name;
+	const char *target;
+};
+
 static struct dentry *lnet_debugfs_root;
 
 BLOCKING_NOTIFIER_HEAD(libcfs_ioctl_list);

@@ -85,11 +85,6 @@ int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
 extern struct workqueue_struct *cfs_rehash_wq;
 
-struct lnet_debugfs_symlink_def {
-	const char *name;
-	const char *target;
-};
-
 void lnet_insert_debugfs(struct ctl_table *table);
 void lnet_remove_debugfs(struct ctl_table *table);
 
