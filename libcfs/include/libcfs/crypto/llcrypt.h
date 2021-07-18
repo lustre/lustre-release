@@ -53,6 +53,8 @@ struct llcrypt_name {
 
 /* Maximum value for the third parameter of llcrypt_operations.set_context(). */
 #define LLCRYPT_SET_CONTEXT_MAX_SIZE	40
+#define LLCRYPT_DIGESTED_CHAR_OLD	'_'
+#define LLCRYPT_DIGESTED_CHAR		'+'
 
 #ifdef CONFIG_LL_ENCRYPTION
 /*

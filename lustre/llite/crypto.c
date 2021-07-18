@@ -252,8 +252,15 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 	int rc;
 
 	if (fid && IS_ENCRYPTED(dir) && llcrypt_policy_has_filename_enc(dir) &&
-	    !llcrypt_has_encryption_key(dir) && iname->name[0] == '_')
-		digested = 1;
+	    !llcrypt_has_encryption_key(dir)) {
+		struct lustre_sb_info *lsi = s2lsi(dir->i_sb);
+
+		if ((!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+		     iname->name[0] == LLCRYPT_DIGESTED_CHAR) ||
+		    ((lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+		     iname->name[0] == LLCRYPT_DIGESTED_CHAR_OLD))
+			digested = 1;
+	}
 
 	dname.name = iname->name + digested;
 	dname.len = iname->len - digested;
@@ -394,6 +401,8 @@ int ll_fname_disk_to_usr(struct inode *inode,
 		if (lltr.len > LL_CRYPTO_BLOCK_SIZE * 2 &&
 		    !llcrypt_has_encryption_key(inode) &&
 		    llcrypt_policy_has_filename_enc(inode)) {
+			struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+
 			digested = 1;
 			/* Without the key for long names, set the dentry name
 			 * to the representing struct ll_digest_filename. It
@@ -410,7 +419,10 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			lltr.name = (char *)&digest;
 			lltr.len = sizeof(digest);
 
-			oname->name[0] = '_';
+			if (!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI))
+				oname->name[0] = LLCRYPT_DIGESTED_CHAR;
+			else
+				oname->name[0] = LLCRYPT_DIGESTED_CHAR_OLD;
 			oname->name = oname->name + 1;
 			oname->len--;
 		}

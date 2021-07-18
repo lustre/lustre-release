@@ -526,6 +526,7 @@ retry_connect:
 				      sbi->ll_fsname,
 				      sbi->ll_md_exp->exp_obd->obd_name);
 		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+		lsi->lsi_flags &= ~LSI_FILENAME_ENC_B64_OLD_CLI;
 		ll_sbi_set_name_encrypt(sbi, false);
 	}
 
