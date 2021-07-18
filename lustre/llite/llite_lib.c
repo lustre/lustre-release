@@ -510,6 +510,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				      sbi->ll_fsname,
 				      sbi->ll_md_exp->exp_obd->obd_name);
 		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+		lsi->lsi_flags &= ~LSI_FILENAME_ENC_B64_OLD_CLI;
 		ll_sbi_set_name_encrypt(sbi, false);
 	}
 
@@ -1322,6 +1323,8 @@ int ll_fill_super(struct super_block *sb)
 	else
 		/* filename encryption is disabled by default */
 		lsi->lsi_flags &= ~LSI_FILENAME_ENC;
+	/* Lustre 2.15 uses old-style base64 encoding by default */
+	lsi->lsi_flags |= LSI_FILENAME_ENC_B64_OLD_CLI;
 #endif
 
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */

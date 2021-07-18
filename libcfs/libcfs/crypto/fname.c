@@ -137,10 +137,19 @@ static int fname_decrypt(struct inode *inode,
 	return 0;
 }
 
+/*
+ * Old fashion base64 encoding, taken from Linux 5.4.
+ *
+ * This base64 encoding is specific to fscrypt and has been replaced since then
+ * with an RFC 4648 compliant base64-url encoding, see llcrypt_base64url_*
+ * below.
+ * The old fashion base64 encoding is kept for compatibility with older clients.
+ */
+
 static const char lookup_table[65] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
 
-#define BASE64_CHARS(nbytes)	DIV_ROUND_UP((nbytes) * 4, 3)
+#define LLCRYPT_BASE64_CHARS(nbytes)	DIV_ROUND_UP((nbytes) * 4, 3)
 
 /**
  * base64_encode() -
@@ -150,7 +159,7 @@ static const char lookup_table[65] =
  *
  * Return: length of the encoded string
  */
-static int base64_encode(const u8 *src, int len, char *dst)
+static inline int llcrypt_base64_encode(const u8 *src, int len, char *dst)
 {
 	int i, bits = 0, ac = 0;
 	char *cp = dst;
@@ -169,7 +178,7 @@ static int base64_encode(const u8 *src, int len, char *dst)
 	return cp - dst;
 }
 
-static int base64_decode(const char *src, int len, u8 *dst)
+static inline int llcrypt_base64_decode(const char *src, int len, u8 *dst)
 {
 	int i, bits = 0, ac = 0;
 	const char *p;
@@ -190,6 +199,98 @@ static int base64_decode(const char *src, int len, u8 *dst)
 	if (ac)
 		return -1;
 	return cp - dst;
+}
+
+/*
+ * New fashion base64 encoding, taken from Linux 5.14.
+ *
+ * This base64 encoding is RFC 4648 compliant base64-url encoding.
+ */
+
+static const char base64url_table[] =
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+#define LLCRYPT_BASE64URL_CHARS(nbytes)	DIV_ROUND_UP((nbytes) * 4, 3)
+
+/**
+ * llcrypt_base64url_encode() - base64url-encode some binary data
+ * @src: the binary data to encode
+ * @srclen: the length of @src in bytes
+ * @dst: (output) the base64url-encoded string.  Not NUL-terminated.
+ *
+ * Encodes data using base64url encoding, i.e. the "Base 64 Encoding with URL
+ * and Filename Safe Alphabet" specified by RFC 4648.  '='-padding isn't used,
+ * as it's unneeded and not required by the RFC.  base64url is used instead of
+ * base64 to avoid the '/' character, which isn't allowed in filenames.
+ *
+ * Return: the length of the resulting base64url-encoded string in bytes.
+ *	   This will be equal to LLCRYPT_BASE64URL_CHARS(srclen).
+ */
+static inline int llcrypt_base64url_encode(const u8 *src, int srclen, char *dst)
+{
+	u32 ac = 0;
+	int bits = 0;
+	int i;
+	char *cp = dst;
+
+	for (i = 0; i < srclen; i++) {
+		ac = (ac << 8) | src[i];
+		bits += 8;
+		do {
+			bits -= 6;
+			*cp++ = base64url_table[(ac >> bits) & 0x3f];
+		} while (bits >= 6);
+	}
+	if (bits)
+		*cp++ = base64url_table[(ac << (6 - bits)) & 0x3f];
+	return cp - dst;
+}
+
+/**
+ * llcrypt_base64url_decode() - base64url-decode a string
+ * @src: the string to decode.  Doesn't need to be NUL-terminated.
+ * @srclen: the length of @src in bytes
+ * @dst: (output) the decoded binary data
+ *
+ * Decodes a string using base64url encoding, i.e. the "Base 64 Encoding with
+ * URL and Filename Safe Alphabet" specified by RFC 4648.  '='-padding isn't
+ * accepted, nor are non-encoding characters such as whitespace.
+ *
+ * This implementation hasn't been optimized for performance.
+ *
+ * Return: the length of the resulting decoded binary data in bytes,
+ *	   or -1 if the string isn't a valid base64url string.
+ */
+static inline int llcrypt_base64url_decode(const char *src, int srclen, u8 *dst)
+{
+	u32 ac = 0;
+	int bits = 0;
+	int i;
+	u8 *bp = dst;
+
+	for (i = 0; i < srclen; i++) {
+		const char *p = strchr(base64url_table, src[i]);
+
+		if (p == NULL || src[i] == 0)
+			return -1;
+		ac = (ac << 6) | (p - base64url_table);
+		bits += 6;
+		if (bits >= 8) {
+			bits -= 8;
+			*bp++ = (u8)(ac >> bits);
+		}
+	}
+	if (ac & ((1 << bits) - 1))
+		return -1;
+	return bp - dst;
+}
+
+static inline int base64_chars(struct lustre_sb_info *lsi, int nbytes)
+{
+	if (!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI))
+		return LLCRYPT_BASE64URL_CHARS(nbytes);
+	else
+		return LLCRYPT_BASE64_CHARS(nbytes);
 }
 
 bool llcrypt_fname_encrypted_size(const struct inode *inode, u32 orig_len,
@@ -225,9 +326,11 @@ int llcrypt_fname_alloc_buffer(const struct inode *inode,
 			       u32 max_encrypted_len,
 			       struct llcrypt_str *crypto_str)
 {
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
 	const u32 max_encoded_len =
-		max_t(u32, BASE64_CHARS(LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE),
-		      1 + BASE64_CHARS(sizeof(struct llcrypt_digested_name)));
+		max_t(u32,
+		   base64_chars(lsi, LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE),
+		   1 + base64_chars(lsi, sizeof(struct llcrypt_digested_name)));
 	u32 max_presented_len;
 
 	max_presented_len = max(max_encoded_len, max_encrypted_len);
@@ -271,6 +374,8 @@ int llcrypt_fname_disk_to_usr(struct inode *inode,
 			const struct llcrypt_str *iname,
 			struct llcrypt_str *oname)
 {
+	int (*b64_encode)(const u8 *src, int srclen, char *dst);
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
 	const struct qstr qname = LLTR_TO_QSTR(iname);
 	struct llcrypt_digested_name digested_name;
 
@@ -298,9 +403,13 @@ int llcrypt_fname_disk_to_usr(struct inode *inode,
 		return 0;
 	}
 
+	if (!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI))
+		b64_encode = llcrypt_base64url_encode;
+	else
+		b64_encode = llcrypt_base64_encode;
+
 	if (iname->len <= LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE) {
-		oname->len = base64_encode(iname->name, iname->len,
-					   oname->name);
+		oname->len = b64_encode(iname->name, iname->len, oname->name);
 		return 0;
 	}
 	if (hash) {
@@ -313,9 +422,12 @@ int llcrypt_fname_disk_to_usr(struct inode *inode,
 	memcpy(digested_name.digest,
 	       LLCRYPT_FNAME_DIGEST(iname->name, iname->len),
 	       LLCRYPT_FNAME_DIGEST_SIZE);
-	oname->name[0] = '_';
-	oname->len = 1 + base64_encode((const u8 *)&digested_name,
-				       sizeof(digested_name), oname->name + 1);
+	if (!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI))
+		oname->name[0] = LLCRYPT_DIGESTED_CHAR;
+	else
+		oname->name[0] = LLCRYPT_DIGESTED_CHAR_OLD;
+	oname->len = 1 + b64_encode((const u8 *)&digested_name,
+				    sizeof(digested_name), oname->name + 1);
 	return 0;
 }
 EXPORT_SYMBOL(llcrypt_fname_disk_to_usr);
@@ -347,6 +459,7 @@ EXPORT_SYMBOL(llcrypt_fname_disk_to_usr);
 int llcrypt_setup_filename(struct inode *dir, const struct qstr *iname,
 			      int lookup, struct llcrypt_name *fname)
 {
+	struct lustre_sb_info *lsi = s2lsi(dir->i_sb);
 	int ret;
 	int digested;
 
@@ -399,14 +512,18 @@ int llcrypt_setup_filename(struct inode *dir, const struct qstr *iname,
 	 * We don't have the key and we are doing a lookup; decode the
 	 * user-supplied name
 	 */
-	if (iname->name[0] == '_') {
-		if (iname->len !=
-		    1 + BASE64_CHARS(sizeof(struct llcrypt_digested_name)))
+	if ((!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+	     iname->name[0] == LLCRYPT_DIGESTED_CHAR) ||
+	    ((lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI) &&
+	     iname->name[0] == LLCRYPT_DIGESTED_CHAR_OLD)) {
+		if (iname->len != 1 + base64_chars(lsi,
+					sizeof(struct llcrypt_digested_name))) {
 			return -ENOENT;
+		}
 		digested = 1;
 	} else {
 		if (iname->len >
-		    BASE64_CHARS(LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE))
+		    base64_chars(lsi, LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE))
 			return -ENOENT;
 		digested = 0;
 	}
@@ -418,8 +535,15 @@ int llcrypt_setup_filename(struct inode *dir, const struct qstr *iname,
 	if (fname->crypto_buf.name == NULL)
 		return -ENOMEM;
 
-	ret = base64_decode(iname->name + digested, iname->len - digested,
-			    fname->crypto_buf.name);
+	if (!(lsi->lsi_flags & LSI_FILENAME_ENC_B64_OLD_CLI))
+		ret = llcrypt_base64url_decode(iname->name + digested,
+					       iname->len - digested,
+					       fname->crypto_buf.name);
+	else
+		ret = llcrypt_base64_decode(iname->name + digested,
+					    iname->len - digested,
+					    fname->crypto_buf.name);
+
 	if (ret < 0) {
 		ret = -ENOENT;
 		goto errout;

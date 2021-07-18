@@ -156,6 +156,7 @@ struct lustre_sb_info {
 #define LSI_BDI_INITIALIZED		 0x00400000
 #endif
 #define LSI_FILENAME_ENC		 0x00800000 /* enable name encryption */
+#define LSI_FILENAME_ENC_B64_OLD_CLI	 0x01000000 /* use old style base64 */
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)
