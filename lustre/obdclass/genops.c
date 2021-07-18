@@ -1155,8 +1155,9 @@ EXPORT_SYMBOL(class_unlink_export);
 /* Import management functions */
 static void obd_zombie_import_free(struct obd_import *imp)
 {
-	ENTRY;
+	struct obd_import_conn *imp_conn;
 
+	ENTRY;
 	CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
 	       imp->imp_obd->obd_name);
 
@@ -1164,11 +1165,9 @@ static void obd_zombie_import_free(struct obd_import *imp)
 
 	ptlrpc_connection_put(imp->imp_connection);
 
-	while (!list_empty(&imp->imp_conn_list)) {
-		struct obd_import_conn *imp_conn;
-
-		imp_conn = list_first_entry(&imp->imp_conn_list,
-					    struct obd_import_conn, oic_item);
+	while ((imp_conn = list_first_entry_or_null(&imp->imp_conn_list,
+						    struct obd_import_conn,
+						    oic_item)) != NULL) {
 		list_del_init(&imp_conn->oic_item);
 		ptlrpc_connection_put(imp_conn->oic_conn);
 		OBD_FREE(imp_conn, sizeof(*imp_conn));
@@ -1470,10 +1469,10 @@ static void class_disconnect_export_list(struct list_head *list,
         ENTRY;
 
         /* It's possible that an export may disconnect itself, but
-         * nothing else will be added to this list. */
-	while (!list_empty(list)) {
-		exp = list_first_entry(list, struct obd_export,
-				       exp_obd_chain);
+	 * nothing else will be added to this list.
+	 */
+	while ((exp = list_first_entry_or_null(list, struct obd_export,
+					       exp_obd_chain)) != NULL) {
 		/* need for safe call CDEBUG after obd_disconnect */
 		class_export_get(exp);
 
@@ -2100,12 +2099,12 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 
 	/* We increase the max_rpcs_in_flight, then wakeup some waiters. */
 	for (i = 0; i < diff; i++) {
-		if (list_empty(&cli->cl_flight_waiters))
+		orsw = list_first_entry_or_null(&cli->cl_loi_read_list,
+						struct obd_request_slot_waiter,
+						orsw_entry);
+		if (!orsw)
 			break;
 
-		orsw = list_first_entry(&cli->cl_flight_waiters,
-					struct obd_request_slot_waiter,
-					orsw_entry);
 		list_del_init(&orsw->orsw_entry);
 		cli->cl_rpcs_in_flight++;
 		wake_up(&orsw->orsw_waitq);

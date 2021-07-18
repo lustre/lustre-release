@@ -137,8 +137,8 @@ static inline int agl_should_run(struct ll_statahead_info *sai,
 static inline struct ll_inode_info *
 agl_first_entry(struct ll_statahead_info *sai)
 {
-	return list_entry(sai->sai_agls.next, struct ll_inode_info,
-			  lli_agl_list);
+	return list_first_entry(&sai->sai_agls, struct ll_inode_info,
+				lli_agl_list);
 }
 
 /* statahead window is full */
@@ -921,9 +921,11 @@ static int ll_agl_thread(void *arg)
 	while (({set_current_state(TASK_IDLE);
 		 !kthread_should_stop(); })) {
 		spin_lock(&plli->lli_agl_lock);
-		if (!agl_list_empty(sai)) {
+		clli = list_first_entry_or_null(&sai->sai_agls,
+						struct ll_inode_info,
+						lli_agl_list);
+		if (clli) {
 			__set_current_state(TASK_RUNNING);
-			clli = agl_first_entry(sai);
 			list_del_init(&clli->lli_agl_list);
 			spin_unlock(&plli->lli_agl_lock);
 			ll_agl_trigger(&clli->lli_vfs_inode, sai);
@@ -956,8 +958,9 @@ static void ll_stop_agl(struct ll_statahead_info *sai)
 	kthread_stop(agl_task);
 
 	spin_lock(&plli->lli_agl_lock);
-	while (!agl_list_empty(sai)) {
-		clli = agl_first_entry(sai);
+	while ((clli = list_first_entry_or_null(&sai->sai_agls,
+						struct ll_inode_info,
+						lli_agl_list)) != NULL) {
 		list_del_init(&clli->lli_agl_list);
 		spin_unlock(&plli->lli_agl_lock);
 		clli->lli_agl_index = 0;

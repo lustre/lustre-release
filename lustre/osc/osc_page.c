@@ -598,8 +598,8 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		if (--maxscan < 0)
 			break;
 
-		opg = list_entry(cli->cl_lru_list.next, struct osc_page,
-				 ops_lru);
+		opg = list_first_entry(&cli->cl_lru_list, struct osc_page,
+				       ops_lru);
 		page = opg->ops_cl.cpl_page;
 		if (lru_page_busy(cli, page)) {
 			list_move_tail(&opg->ops_lru, &cli->cl_lru_list);
@@ -734,10 +734,10 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 	list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 
 	max_scans = atomic_read(&cache->ccc_users) - 2;
-	while (--max_scans > 0 && !list_empty(&cache->ccc_lru)) {
-		cli = list_entry(cache->ccc_lru.next, struct client_obd,
-				 cl_lru_osc);
-
+	while (--max_scans > 0 &&
+	       (cli = list_first_entry_or_null(&cache->ccc_lru,
+					       struct client_obd,
+					       cl_lru_osc)) != NULL) {
 		CDEBUG(D_CACHE, "%s: cli %p LRU pages: %ld, busy: %ld.\n",
 			cli_name(cli), cli,
 			atomic_long_read(&cli->cl_lru_in_list),
@@ -1123,10 +1123,9 @@ unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 		return SHRINK_STOP;
 
 	spin_lock(&osc_shrink_lock);
-	while (!list_empty(&osc_shrink_list)) {
-		cli = list_entry(osc_shrink_list.next, struct client_obd,
-				 cl_shrink_list);
-
+	while ((cli = list_first_entry_or_null(&osc_shrink_list,
+					       struct client_obd,
+					       cl_shrink_list)) != NULL) {
 		if (stop_anchor == NULL)
 			stop_anchor = cli;
 		else if (cli == stop_anchor)

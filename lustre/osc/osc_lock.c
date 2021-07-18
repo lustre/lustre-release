@@ -846,16 +846,16 @@ static bool osc_lock_compatible(const struct osc_lock *qing,
 void osc_lock_wake_waiters(const struct lu_env *env, struct osc_object *osc,
 			   struct osc_lock *oscl)
 {
+	struct osc_lock *scan;
+
 	spin_lock(&osc->oo_ol_spin);
 	list_del_init(&oscl->ols_nextlock_oscobj);
 	spin_unlock(&osc->oo_ol_spin);
 
 	spin_lock(&oscl->ols_lock);
-	while (!list_empty(&oscl->ols_waiting_list)) {
-		struct osc_lock *scan;
-
-		scan = list_entry(oscl->ols_waiting_list.next, struct osc_lock,
-				  ols_wait_entry);
+	while ((scan = list_first_entry_or_null(&oscl->ols_waiting_list,
+						struct osc_lock,
+						ols_wait_entry)) != NULL) {
 		list_del_init(&scan->ols_wait_entry);
 
 		cl_sync_io_note(env, scan->ols_owner, 0);

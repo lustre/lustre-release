@@ -280,8 +280,8 @@ lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt)
 		spin_lock(&svcpt->scp_rep_lock);
 	}
 
-	rs = list_entry(svcpt->scp_rep_idle.next,
-			    struct ptlrpc_reply_state, rs_list);
+	rs = list_first_entry(&svcpt->scp_rep_idle,
+			      struct ptlrpc_reply_state, rs_list);
 	list_del(&rs->rs_list);
 
 	spin_unlock(&svcpt->scp_rep_lock);

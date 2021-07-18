@@ -667,8 +667,8 @@ ptlrpc_prep_req_from_pool(struct ptlrpc_request_pool *pool)
 		return NULL;
 	}
 
-	request = list_entry(pool->prp_req_list.next, struct ptlrpc_request,
-			     rq_list);
+	request = list_first_entry(&pool->prp_req_list, struct ptlrpc_request,
+				   rq_list);
 	list_del_init(&request->rq_list);
 	spin_unlock(&pool->prp_lock);
 
@@ -1399,8 +1399,8 @@ __u64 ptlrpc_known_replied_xid(struct obd_import *imp)
 	if (list_empty(&imp->imp_unreplied_list))
 		return 0;
 
-	req = list_entry(imp->imp_unreplied_list.next, struct ptlrpc_request,
-			 rq_unreplied_list);
+	req = list_first_entry(&imp->imp_unreplied_list, struct ptlrpc_request,
+			       rq_unreplied_list);
 	LASSERTF(req->rq_xid >= 1, "XID:%llu\n", req->rq_xid);
 
 	if (imp->imp_known_replied_xid < req->rq_xid - 1)

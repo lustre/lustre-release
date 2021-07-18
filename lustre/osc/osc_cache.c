@@ -1937,9 +1937,9 @@ static unsigned int get_write_extents(struct osc_object *obj,
 	};
 
 	assert_osc_object_is_locked(obj);
-	while (!list_empty(&obj->oo_hp_exts)) {
-		ext = list_entry(obj->oo_hp_exts.next, struct osc_extent,
-				 oe_link);
+	while ((ext = list_first_entry_or_null(&obj->oo_hp_exts,
+					       struct osc_extent,
+					       oe_link)) != NULL) {
 		if (!try_to_add_extent_for_io(cli, ext, &data))
 			return data.erd_page_count;
 		EASSERT(ext->oe_nr_pages <= data.erd_max_pages, ext);
@@ -1947,9 +1947,9 @@ static unsigned int get_write_extents(struct osc_object *obj,
 	if (data.erd_page_count == data.erd_max_pages)
 		return data.erd_page_count;
 
-	while (!list_empty(&obj->oo_urgent_exts)) {
-		ext = list_entry(obj->oo_urgent_exts.next,
-				 struct osc_extent, oe_link);
+	while ((ext = list_first_entry_or_null(&obj->oo_urgent_exts,
+					       struct osc_extent,
+					       oe_link)) != NULL) {
 		if (!try_to_add_extent_for_io(cli, ext, &data))
 			return data.erd_page_count;
 	}
@@ -1960,10 +1960,11 @@ static unsigned int get_write_extents(struct osc_object *obj,
 	 * extents can usually only be added if the rpclist was empty, so if we
 	 * can't add one, we continue on to trying to add normal extents.  This
 	 * is so we don't miss adding extra extents to an RPC containing high
-	 * priority or urgent extents. */
-	while (!list_empty(&obj->oo_full_exts)) {
-		ext = list_entry(obj->oo_full_exts.next,
-				 struct osc_extent, oe_link);
+	 * priority or urgent extents.
+	 */
+	while ((ext = list_first_entry_or_null(&obj->oo_full_exts,
+					       struct osc_extent,
+					       oe_link)) != NULL) {
 		if (!try_to_add_extent_for_io(cli, ext, &data))
 			break;
 	}
@@ -2757,10 +2758,11 @@ again:
 
 	osc_list_maint(cli, obj);
 
-	while (!list_empty(&list)) {
+	while ((ext = list_first_entry_or_null(&list,
+					       struct osc_extent,
+					       oe_link)) != NULL) {
 		int rc;
 
-		ext = list_entry(list.next, struct osc_extent, oe_link);
 		list_del_init(&ext->oe_link);
 
 		/* extent may be in OES_ACTIVE state because inode mutex

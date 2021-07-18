@@ -2533,7 +2533,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	}
 
 	/* first page in the list */
-	oap = list_entry(rpc_list.next, typeof(*oap), oap_rpc_item);
+	oap = list_first_entry(&rpc_list, typeof(*oap), oap_rpc_item);
 
 	crattr = &osc_env_info(env)->oti_req_attr;
 	memset(crattr, 0, sizeof(*crattr));
@@ -2629,10 +2629,11 @@ out:
 			osc_release_ppga(pga, page_count);
 		}
 		/* this should happen rarely and is pretty bad, it makes the
-		 * pending list not follow the dirty order */
-		while (!list_empty(ext_list)) {
-			ext = list_entry(ext_list->next, struct osc_extent,
-					 oe_link);
+		 * pending list not follow the dirty order
+		 */
+		while ((ext = list_first_entry_or_null(ext_list,
+						       struct osc_extent,
+						       oe_link)) != NULL) {
 			list_del_init(&ext->oe_link);
 			osc_extent_finish(env, ext, 0, rc);
 		}

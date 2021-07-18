@@ -114,9 +114,9 @@ static void sec_process_ctx_list(void)
 
 	spin_lock(&sec_gc_ctx_list_lock);
 
-	while (!list_empty(&sec_gc_ctx_list)) {
-		ctx = list_entry(sec_gc_ctx_list.next,
-				     struct ptlrpc_cli_ctx, cc_gc_chain);
+	while ((ctx = list_first_entry_or_null(&sec_gc_ctx_list,
+					       struct ptlrpc_cli_ctx,
+					       cc_gc_chain)) != NULL) {
 		list_del_init(&ctx->cc_gc_chain);
 		spin_unlock(&sec_gc_ctx_list_lock);
 
