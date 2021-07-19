@@ -1204,6 +1204,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			if (!osd->od_projectused_dn)
 				GOTO(out, rc = -EOPNOTSUPP);
 
+			if (!projid_valid(make_kprojid(&init_user_ns, attr->la_projid)))
+				GOTO(out, rc = -EINVAL);
+
 			/* Usually, if project quota is upgradable for the
 			 * device, then the upgrade will be done before or when
 			 * mount the device. So when we come here, this project

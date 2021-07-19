@@ -3088,6 +3088,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 	/* Handle project id transfer here properly */
 	if (attr->la_valid & LA_PROJID &&
 	    attr->la_projid != i_projid_read(inode)) {
+		if (!projid_valid(make_kprojid(&init_user_ns, attr->la_projid)))
+			return -EINVAL;
 #ifdef HAVE_PROJECT_QUOTA
 		rc = osd_transfer_project(inode, attr->la_projid, handle);
 #else
