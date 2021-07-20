@@ -285,8 +285,6 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 }
 EXPORT_SYMBOL(lu_ref_del_at);
 
-#ifdef CONFIG_PROC_FS
-
 static void *lu_ref_seq_start(struct seq_file *seq, loff_t *pos)
 {
 	struct lu_ref *ref = seq->private;
@@ -411,8 +409,6 @@ static const struct file_operations lu_ref_dump_fops = {
 	.release	= lu_ref_seq_release
 };
 
-#endif /* CONFIG_PROC_FS */
-
 int lu_ref_global_init(void)
 {
 	int result;
@@ -421,24 +417,20 @@ int lu_ref_global_init(void)
 	       "lu_ref tracking is enabled. Performance isn't.\n");
 
 	result = lu_kmem_init(lu_ref_caches);
+	if (result)
+		return result;
 
-#ifdef CONFIG_PROC_FS
-	if (result == 0) {
-		result = lprocfs_seq_create(proc_lustre_root, "lu_refs",
-					    0444, &lu_ref_dump_fops, NULL);
-		if (result)
-			lu_kmem_fini(lu_ref_caches);
-	}
-#endif /* CONFIG_PROC_FS */
+	debugfs_create_file("lu_refs", 0444, debugfs_lustre_root,
+			    NULL, &lu_ref_dump_fops);
 
 	return result;
 }
 
 void lu_ref_global_fini(void)
 {
-#ifdef CONFIG_PROC_FS
-	lprocfs_remove_proc_entry("lu_refs", proc_lustre_root);
-#endif /* CONFIG_PROC_FS */
+	/* debugfs file gets cleaned up by debugfs_remove_recursive on
+	 * debugfs_lustre_root
+	 */
 	lu_kmem_fini(lu_ref_caches);
 }
 
