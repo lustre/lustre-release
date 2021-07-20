@@ -886,8 +886,8 @@ void print_update_rec(struct llog_update_record *lur)
 	up_count = __le32_to_cpu(rec->ur_update_count);
 	pm_count = __le32_to_cpu(rec->ur_param_count);
 	printf("updatelog record master_transno:%llu batchid:%llu flags:0x%x u_index:%d u_count:%d p_count:%d\n",
-	       __le64_to_cpu(rec->ur_master_transno),
-	       __le64_to_cpu(rec->ur_batchid),
+	       (unsigned long long)__le64_to_cpu(rec->ur_master_transno),
+	       (unsigned long long)__le64_to_cpu(rec->ur_batchid),
 	       __le32_to_cpu(rec->ur_flags),
 	       __le32_to_cpu(rec->ur_index),
 	       up_count,
