@@ -24493,6 +24493,76 @@ test_412() {
 }
 run_test 412 "mkdir on specific MDTs"
 
+generate_uneven_mdts() {
+	local threshold=$1
+	local ffree
+	local bavail
+	local max
+	local min
+	local max_index
+	local min_index
+	local tmp
+	local i
+
+	echo
+	echo "Check for uneven MDTs: "
+
+	ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.filesfree))
+	bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.kbytesavail))
+	bsize=$(lctl get_param -n mdc.*MDT0000*.blocksize)
+
+	max=$(((${ffree[0]} >> 8) * (${bavail[0]} * bsize >> 16)))
+	min=$(((${ffree[0]} >> 8) * (${bavail[0]} * bsize >> 16)))
+	max_index=0
+	min_index=0
+	for ((i = 1; i < ${#ffree[@]}; i++)); do
+		tmp=$(((${ffree[i]} >> 8) * (${bavail[i]} * bsize >> 16)))
+		if [ $tmp -gt $max ]; then
+			max=$tmp
+			max_index=$i
+		fi
+		if [ $tmp -lt $min ]; then
+			min=$tmp
+			min_index=$i
+		fi
+	done
+
+	# Check if we need to generate uneven MDTs
+	local diff=$(((max - min) * 100 / min))
+	local testdir=$DIR/$tdir-fillmdt
+
+	mkdir -p $testdir
+
+	i=0
+	while (( diff < threshold )); do
+		# generate uneven MDTs, create till $threshold% diff
+		echo -n "weight diff=$diff% must be > $threshold% ..."
+		echo "Fill MDT$min_index with 100 files: loop $i"
+		testdir=$DIR/$tdir-fillmdt/$i
+		[ -d $testdir ] || $LFS mkdir -i $min_index $testdir ||
+			error "mkdir $testdir failed"
+		$LFS setstripe -E 1M -L mdt $testdir ||
+			error "setstripe $testdir failed"
+		for F in f.{0..99}; do
+			dd if=/dev/zero of=$testdir/$F bs=1M count=1 > \
+				/dev/null 2>&1 || error "dd $F failed"
+		done
+
+		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
+		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
+		max=$(((${ffree[max_index]} >> 8) * \
+			(${bavail[max_index]} * bsize >> 16)))
+		min=$(((${ffree[min_index]} >> 8) * \
+			(${bavail[min_index]} * bsize >> 16)))
+		diff=$(((max - min) * 100 / min))
+		i=$((i + 1))
+	done
+
+	echo "MDT filesfree available: ${ffree[@]}"
+	echo "MDT blocks available: ${bavail[@]}"
+	echo "weight diff=$diff%"
+}
+
 test_qos_mkdir() {
 	local mkdir_cmd=$1
 	local stripe_count=$2
@@ -24515,11 +24585,11 @@ test_qos_mkdir() {
 	lmv_qos_threshold_rr=${lmv_qos_threshold_rr%%%}
 	lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null" RETURN
+		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null"
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null" RETURN
+		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null"
 	stack_trap "$LCTL set_param \
-		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" RETURN
+		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null"
 
 	lod_qos_prio_free=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
@@ -24530,12 +24600,11 @@ test_qos_mkdir() {
 	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" RETURN
+		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null"
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null" \
-		RETURN
+		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null"
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" RETURN
+		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null"
 
 	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
@@ -24558,6 +24627,7 @@ test_qos_mkdir() {
 		echo "Mkdir (stripe_count $stripe_count) roundrobin:" ||
 		echo "Mkdir (stripe_count $stripe_count) on stripe $stripe_index"
 
+	stack_trap "unlinkmany -d $testdir/subdir $((100 * MDSCOUNT))"
 	for (( i = 0; i < 100 * MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
@@ -24587,10 +24657,6 @@ test_qos_mkdir() {
 				error "stripes are not evenly distributed"
 		fi
 	done
-
-	$LCTL set_param lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null
-	do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null
 
 	echo
 	echo "Check for uneven MDTs: "
@@ -24628,44 +24694,15 @@ test_qos_mkdir() {
 	(( ${ffree[min_index]} < 100000000 )) ||
 		skip "too many free files in MDT$min_index"
 
-	# Check if we need to generate uneven MDTs
-	local threshold=50
-	local diff=$(((max - min) * 100 / min))
-	local value="$(generate_string 1024)"
-
-	i=0
-	while [ $diff -lt $threshold ]; do
-		# generate uneven MDTs, create till $threshold% diff
-		echo -n "weight diff=$diff% must be > $threshold% ..."
-		count=$((${ffree[min_index]} / 100))
-		# 8 sec per 10000 files in vm
-		(( $count < 11000 )) || [ "$SLOW" != "no" ] ||
-			skip "$count files to create"
-		echo "Fill MDT$min_index with $count files: loop $i"
-		[ -d $DIR/$tdir-MDT$min_index ] ||
-			$LFS mkdir -i $min_index $DIR/$tdir-MDT$min_index ||
-			error "mkdir $tdir-MDT$min_index failed"
-		createmany -d $DIR/$tdir-MDT$min_index/d.$i. $count ||
-			error "create d$count failed"
-
-		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
-		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
-		max=$(((${ffree[max_index]} >> 8) * \
-			(${bavail[max_index]} * bsize >> 16)))
-		min=$(((${ffree[min_index]} >> 8) * \
-			(${bavail[min_index]} * bsize >> 16)))
-		diff=$(((max - min) * 100 / min))
-		i=$((i + 1))
-	done
-
 	echo "MDT filesfree available: ${ffree[@]}"
 	echo "MDT blocks available: ${bavail[@]}"
-	echo "weight diff=$diff%"
-
+	echo "weight diff=$(((max - min) * 100 / min))%"
 	echo
 	echo "Mkdir (stripe_count $stripe_count) with balanced space usage:"
 
+	$LCTL set_param lmv.*.qos_threshold_rr=0 > /dev/null
 	$LCTL set_param lmv.*.qos_prio_free=100 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=0 > /dev/null
 	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_prio_free=100 > /dev/null
 	# decrease statfs age, so that it can be updated in time
 	$LCTL set_param lmv.*.qos_maxage=1 > /dev/null
@@ -24674,8 +24711,10 @@ test_qos_mkdir() {
 	sleep 1
 
 	testdir=$DIR/$tdir-s$stripe_count/qos
+	local num=200
 
-	for (( i = 0; i < 100 * $MDSCOUNT; i++ )); do
+	stack_trap "unlinkmany -d $testdir/subdir $((num * MDSCOUNT))"
+	for (( i = 0; i < num * MDSCOUNT; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
@@ -24695,17 +24734,17 @@ test_qos_mkdir() {
 	min=$($LFS getdirstripe -i $testdir/* | grep -c "^$min_index$")
 
 	# D-value should > 10% of averge
-	(( $max - $min >= 10 )) ||
-		error "subdirs shouldn't be evenly distributed: $max - $min < 10"
+	(( max - min >= num / 10 )) ||
+		error "subdirs shouldn't be evenly distributed: $max - $min < $((num / 10))"
 
-	# ditto
-	if [ $stripe_count -gt 1 ]; then
+	# 5% for stripes
+	if (( stripe_count > 1 )); then
 		max=$($LFS getdirstripe $testdir/* |
 		      grep -c -P "^\s+$max_index\t")
 		min=$($LFS getdirstripe $testdir/* |
-		      grep -c -P "^\s+$min_index\t")
-		(( $max - $min >= 10 * $stripe_count )) ||
-			error "stripes shouldn't be evenly distributed: $max - $min < 10 * $stripe_count"
+			grep -c -P "^\s+$min_index\t")
+		(( max - min >= num * stripe_count / 20 )) ||
+			error "stripes shouldn't be evenly distributed: $max - $min < $((num / 20)) * $stripe_count"
 	fi
 }
 
@@ -24740,6 +24779,7 @@ test_413a() {
 
 	local stripe_count
 
+	generate_uneven_mdts 100
 	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
 		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
 		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
@@ -24760,6 +24800,7 @@ test_413b() {
 	local testdir
 	local stripe_count
 
+	generate_uneven_mdts 100
 	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
 		testdir=$DIR/$tdir-s$stripe_count
 		mkdir $testdir || error "mkdir $testdir failed"
@@ -24813,6 +24854,22 @@ test_413c() {
 		error "level2 shouldn't have default LMV" || true
 }
 run_test 413c "mkdir with default LMV max inherit rr"
+
+test_413z() {
+	local pids=""
+	local subdir
+	local pid
+
+	for subdir in $(\ls -1 -d $DIR/d413*-fillmdt/*); do
+		unlinkmany $subdir/f. 100 &
+		pids="$pids $!"
+	done
+
+	for pid in $pids; do
+		wait $pid
+	done
+}
+run_test 413z "413 test cleanup"
 
 test_414() {
 #define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521
