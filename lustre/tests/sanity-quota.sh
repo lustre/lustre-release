@@ -4979,27 +4979,96 @@ function cleanup_quota_test_75()
 	cleanup_quota_test
 }
 
+test_dom_75() {
+	local dd_failed=false
+	local LIMIT=20480 #20M
+	local qid=$TSTID
+
+	for ((i = 0; i < $((LIMIT/2048-1)); i++)); do
+		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
+			oflag=sync || dd_failed=true
+	done
+
+	$dd_failed && quota_error u $qid "write failed, expect succeed (1)"
+
+	for ((i = $((LIMIT/2048-1)); i < $((LIMIT/1024 + 10)); i++)); do
+		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
+			oflag=sync || dd_failed=true
+	done
+
+	$dd_failed || quota_error u $qid "write succeed, expect EDQUOT (1)"
+
+	rm -f $DIR/$tdir_dom/*
+
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks
+	sync; sync_all_data || true
+
+	dd_failed=false
+
+	$DD of=$DIR/$tdir/file count=$((LIMIT/2048-1)) oflag=sync ||
+		quota_error u $qid "write failed, expect succeed (2)"
+
+	for ((i = 0; i < $((LIMIT/2048 + 10)); i++)); do
+		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
+			oflag=sync || dd_failed=true
+	done
+
+	$dd_failed || quota_error u $TSTID "write succeed, expect EDQUOT (2)"
+
+	rm -f $DIR/$tdir/*
+	rm -f $DIR/$tdir_dom/*
+
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks
+	sync; sync_all_data || true
+
+	dd_failed=false
+
+	for ((i = 0; i < $((LIMIT/2048-1)); i++)); do
+		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
+			oflag=sync || dd_failed=true
+	done
+
+	$dd_failed && quota_error u $qid "write failed, expect succeed (3)"
+
+	$DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) oflag=sync &&
+		quota_error u $qid "write succeed, expect EDQUOT (3)"
+	true
+}
+
 test_75()
 {
-	local limit=10 # MB
+	local soft_limit=10 # MB
+	local hard_limit=20 # MB
+	local limit=$soft_limit
 	local testfile="$DIR/$tdir/$tfile-0"
+	local grace=20 # seconds
+	local tdir_dom=${tdir}_dom
+
+	if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+	    grace=60
+	fi
 
 	setup_quota_test || error "setup quota failed with $?"
 	stack_trap cleanup_quota_test_75 EXIT
 
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
-	# test for user
-	log "User $TSTUSR quota block hardlimit:$limit MB"
-	$LFS setquota -u $TSTID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+	local used=$(getquota -u $TSTID global curspace)
+	$LFS setquota -t -u --block-grace $grace --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set user grace time failed"
+	$LFS setquota -u $TSTUSR -b $((soft_limit+used/1024))M \
+			-B $((hard_limit+used/1024))M -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
-	# make sure the system is clean
-	local used=$(getquota -u $TSTID global curspace)
-	[ $used -ne 0 ] && error "Used space ($used) for user $TSTUSR not 0."
-
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
+	mkdir $DIR/$tdir_dom
+	chmod 777 $DIR/$tdir_dom
+	$LFS setstripe -E 1M -L mdt $DIR/$tdir_dom ||
+		error "setstripe $tdir_dom failed"
 
 	do_facet mgs $LCTL nodemap_activate 1
 	wait_nm_sync active
@@ -5018,10 +5087,33 @@ test_75()
 	wait_nm_sync default trusted_nodemap
 	wait_nm_sync default squash_uid
 
+	# mmap write when over soft limit
+	limit=$soft_limit
+	$DD of=$testfile count=${limit} ||
+		quota_error a  "root write failure, but expect success (1)"
+	OFFSET=$((limit * 1024))
+	cancel_lru_locks osc
+
+	echo "Write to exceed soft limit"
+	dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
+	      quota_error a $TSTUSR "root write failure, but expect success (2)"
+	OFFSET=$((OFFSET + 1024)) # make sure we don't write to same block
+	cancel_lru_locks osc
+
+	echo "mmap write when over soft limit"
+	$MULTIOP $testfile.mmap OT40960SMW ||
+		quota_error a $TSTUSR "mmap write failure, but expect success"
+	cancel_lru_locks osc
+	rm -f $testfile*
+	wait_delete_completed || error "wait_delete_completed failed (1)"
+	sync_all_data || true
+
+	# test for user hard limit
+	limit=$hard_limit
 	log "Write..."
 	$DD of=$testfile bs=1M count=$((limit/2)) ||
 		quota_error u $TSTID \
-			"root write failure, but expect success"
+			"root write failure, but expect success (3)"
 
 	log "Write out of block quota ..."
 	# possibly a cache write, ignore failure
@@ -5036,11 +5128,12 @@ test_75()
 		quota_error u $TSTID \
 			"user write success, but expect EDQUOT"
 	rm -f $testfile
-	wait_delete_completed || error "wait_delete_completed failed"
+	wait_delete_completed || error "wait_delete_completed failed (2)"
 	sync_all_data || true
-	used=$(getquota -u $TSTUSR global curspace)
-	[ $used -eq 0 ] || quota_error u $TSTID \
-		"user quota not released after deletion"
+	[ $(getquota -u $TSTUSR global curspace) -eq $used ] ||
+		quota_error u $TSTID "user quota not released after deletion"
+
+	test_dom_75
 }
 run_test 75 "nodemap squashed root respects quota enforcement"
 

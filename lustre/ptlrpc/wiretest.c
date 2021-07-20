@@ -2346,6 +2346,8 @@ void lustre_assert_wire_constants(void)
 		OBD_BRW_OVER_PRJQUOTA);
 	LASSERTF(OBD_BRW_RDMA_ONLY == 0x20000, "found 0x%.8x\n",
 		OBD_BRW_RDMA_ONLY);
+	LASSERTF(OBD_BRW_SYS_RESOURCE == 0x40000, "found 0x%.8x\n",
+		OBD_BRW_SYS_RESOURCE);
 
 	/* Checks for struct ost_body */
 	LASSERTF((int)sizeof(struct ost_body) == 208, "found %lld\n",

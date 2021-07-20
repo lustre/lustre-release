@@ -664,15 +664,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		/* ignore quota for the whole request if any page is from
 		 * client cache or written by root.
 		 *
-		 * XXX once we drop the 1.8 client support, the checking
-		 * for whether page is from cache can be simplified as:
-		 * !(lnb[i].flags & OBD_BRW_SYNC)
-		 *
 		 * XXX we could handle this on per-lnb basis as done by
 		 * grant. */
 		if ((lnb[i].lnb_flags & OBD_BRW_NOQUOTA) ||
-		    (lnb[i].lnb_flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
-		    OBD_BRW_FROM_GRANT)
+		    (lnb[i].lnb_flags & OBD_BRW_SYS_RESOURCE) ||
+		    !(lnb[i].lnb_flags & OBD_BRW_SYNC))
 			declare_flags |= OSD_QID_FORCE;
 
 		if (size == 0) {

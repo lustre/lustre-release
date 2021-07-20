@@ -1158,7 +1158,8 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         if (p1->flag != p2->flag) {
 		unsigned mask = ~(OBD_BRW_FROM_GRANT | OBD_BRW_NOCACHE |
 				  OBD_BRW_SYNC       | OBD_BRW_ASYNC   |
-				  OBD_BRW_NOQUOTA    | OBD_BRW_SOFT_SYNC);
+				  OBD_BRW_NOQUOTA    | OBD_BRW_SOFT_SYNC |
+				  OBD_BRW_SYS_RESOURCE);
 
                 /* warn if we try to combine flags that we don't know to be
                  * safe to combine */
@@ -1974,8 +1975,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		       "setdq for [%u %u %u] with valid %#llx, flags %x\n",
 		       body->oa.o_uid, body->oa.o_gid, body->oa.o_projid,
 		       body->oa.o_valid, body->oa.o_flags);
-		       osc_quota_setdq(cli, req->rq_xid, qid, body->oa.o_valid,
-				       body->oa.o_flags);
+		osc_quota_setdq(cli, req->rq_xid, qid, body->oa.o_valid,
+				body->oa.o_flags);
 	}
 
 	osc_update_grant(cli, body);
@@ -3512,6 +3513,7 @@ int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out_ptlrpcd_work, rc);
 
 	cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
+	cli->cl_root_squash = 0;
 	osc_update_next_shrink(cli);
 
 	RETURN(rc);

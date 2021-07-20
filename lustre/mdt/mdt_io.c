@@ -32,6 +32,7 @@
 
 #include <dt_object.h>
 #include <linux/falloc.h>
+#include <lustre_nodemap.h>
 
 #include "mdt_internal.h"
 
@@ -760,10 +761,35 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct lu_attr *la = &info->mti_attr.ma_attr;
 	__u64 valid;
 	int rc = 0;
+	int root_squash = 0;
 
 	LASSERT(mo);
 
 	if (cmd == OBD_BRW_WRITE) {
+		struct lu_nodemap *nodemap;
+		__u32 mapped_uid, mapped_gid;
+
+		nodemap = nodemap_get_from_exp(exp);
+		if (IS_ERR(nodemap))
+			RETURN(PTR_ERR(nodemap));
+		mapped_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+					    NODEMAP_FS_TO_CLIENT,
+					    oa->o_uid);
+		mapped_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+					    NODEMAP_FS_TO_CLIENT,
+					    oa->o_gid);
+		if (!IS_ERR_OR_NULL(nodemap)) {
+			/* do not bypass quota enforcement if squashed uid */
+			if (unlikely(mapped_uid == nodemap->nm_squash_uid)) {
+				int idx;
+
+				for (idx = 0; idx < npages; idx++)
+					lnb[idx].lnb_flags &=
+						~OBD_BRW_SYS_RESOURCE;
+				root_squash = 1;
+			}
+			nodemap_putref(nodemap);
+		}
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */
 
@@ -812,9 +838,18 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 					oa->o_flags = OBD_FL_NO_PRJQUOTA;
 			}
 
+			if (root_squash)
+				oa->o_flags |= OBD_FL_ROOT_SQUASH;
+
 			oa->o_valid |= OBD_MD_FLFLAGS | OBD_MD_FLUSRQUOTA |
 				       OBD_MD_FLGRPQUOTA | OBD_MD_FLPRJQUOTA;
 		}
+		/* Convert back to client IDs. LU-9671.
+		 * nodemap_get_from_exp() may fail due to nodemap deactivated,
+		 * server ID will be returned back to client in that case.
+		 */
+		oa->o_uid = mapped_uid;
+		oa->o_gid = mapped_gid;
 	} else if (cmd == OBD_BRW_READ) {
 		/* If oa != NULL then mdt_preprw_read updated the inode
 		 * atime and we should update the lvb so that other glimpses

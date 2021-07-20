@@ -1456,6 +1456,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct ldlm_resource *rs = NULL;
 	__u64 valid;
 	int rc = 0;
+	int root_squash = 0;
 
 	LASSERT(npages > 0);
 
@@ -1464,6 +1465,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		__u32 mapped_uid, mapped_gid;
 
 		nodemap = nodemap_get_from_exp(exp);
+		if (IS_ERR(nodemap))
+			RETURN(PTR_ERR(nodemap));
 		mapped_uid = nodemap_map_id(nodemap, NODEMAP_UID,
 					    NODEMAP_FS_TO_CLIENT,
 					    oa->o_uid);
@@ -1477,7 +1480,9 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				int idx;
 
 				for (idx = 0; idx < npages; idx++)
-					lnb[idx].lnb_flags &= ~OBD_BRW_NOQUOTA;
+					lnb[idx].lnb_flags &=
+						~OBD_BRW_SYS_RESOURCE;
+				root_squash = 1;
 			}
 			nodemap_putref(nodemap);
 		}
@@ -1520,6 +1525,9 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				else
 					oa->o_flags = OBD_FL_NO_PRJQUOTA;
 			}
+
+			if (root_squash)
+				oa->o_flags |= OBD_FL_ROOT_SQUASH;
 
 			oa->o_valid |= OBD_MD_FLFLAGS;
 			oa->o_valid |= OBD_MD_FLALLQUOTA;

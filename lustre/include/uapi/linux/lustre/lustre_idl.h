@@ -1099,6 +1099,7 @@ enum obdo_flags {
         OBD_FL_NOSPC_BLK    = 0x00100000, /* no more block space on OST */
 	OBD_FL_FLUSH	    = 0x00200000, /* flush pages on the OST */
 	OBD_FL_SHORT_IO	    = 0x00400000, /* short io request */
+	OBD_FL_ROOT_SQUASH  = 0x00800000, /* root squash */
 	/* OBD_FL_LOCAL_MASK = 0xF0000000, was local-only flags until 2.10 */
 
 	/*
@@ -1380,7 +1381,7 @@ struct hsm_state_set {
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
 /* OBD_BRW_NOCACHE is currently neither set nor tested */
 #define OBD_BRW_NOCACHE         0x80 /* this page is a part of non-cached IO */
-#define OBD_BRW_NOQUOTA        0x100
+#define OBD_BRW_NOQUOTA        0x100 /* do not enforce quota */
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 #define OBD_BRW_ASYNC          0x400 /* Server may delay commit to disk */
 #define OBD_BRW_MEMALLOC       0x800 /* Client runs in the "kswapd" context */
@@ -1392,6 +1393,7 @@ struct hsm_state_set {
 				      * it to sync quickly */
 #define OBD_BRW_OVER_PRJQUOTA 0x8000 /* Running out of project quota */
 #define OBD_BRW_RDMA_ONLY    0x20000 /* RPC contains RDMA-only pages*/
+#define OBD_BRW_SYS_RESOURCE 0x40000 /* page has CAP_SYS_RESOURCE */
 
 #define OBD_BRW_OVER_ALLQUOTA (OBD_BRW_OVER_USRQUOTA | \
 			       OBD_BRW_OVER_GRPQUOTA | \

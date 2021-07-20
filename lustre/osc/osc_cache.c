@@ -2304,9 +2304,14 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 
 	/* Set the OBD_BRW_SRVLOCK before the page is queued. */
 	brw_flags |= ops->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
-	if (oio->oi_cap_sys_resource || io->ci_noquota) {
+	if (io->ci_noquota) {
 		brw_flags |= OBD_BRW_NOQUOTA;
 		cmd |= OBD_BRW_NOQUOTA;
+	}
+
+	if (oio->oi_cap_sys_resource) {
+		brw_flags |= OBD_BRW_SYS_RESOURCE;
+		cmd |= OBD_BRW_SYS_RESOURCE;
 	}
 
 	/* check if the file's owner/group is over quota */
@@ -2325,8 +2330,20 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		qid[USRQUOTA] = attr->cat_uid;
 		qid[GRPQUOTA] = attr->cat_gid;
 		qid[PRJQUOTA] = attr->cat_projid;
-		if (rc == 0 && osc_quota_chkdq(cli, qid) == -EDQUOT)
-			rc = -EDQUOT;
+		/*
+		 * if EDQUOT returned for root, we double check
+		 * if root squash enabled or not updated from server side.
+		 * without root squash, we should bypass quota for root.
+		 */
+		if (rc == 0 && osc_quota_chkdq(cli, qid) == -EDQUOT) {
+			if (oio->oi_cap_sys_resource &&
+			    !cli->cl_root_squash) {
+				io->ci_noquota = 1;
+				rc = 0;
+			} else {
+				rc = -EDQUOT;
+			}
+		}
 		if (rc)
 			RETURN(rc);
 	}

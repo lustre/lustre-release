@@ -239,6 +239,8 @@ struct client_obd {
 	struct list_head	cl_grant_chain;
 	time64_t		cl_grant_shrink_interval; /* seconds */
 
+	int			cl_root_squash; /* if root squash enabled*/
+
 	/* A chunk is an optimal size used by osc_extent to determine
 	 * the extent size. A chunk is max(PAGE_SIZE, OST block size) */
 	int			cl_chunkbits;

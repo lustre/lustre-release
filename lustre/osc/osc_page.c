@@ -317,8 +317,8 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	oap->oap_brw_flags = OBD_BRW_SYNC | brw_flags;
 
 	if (oio->oi_cap_sys_resource) {
-		oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
-		oap->oap_cmd |= OBD_BRW_NOQUOTA;
+		oap->oap_brw_flags |= OBD_BRW_SYS_RESOURCE;
+		oap->oap_cmd |= OBD_BRW_SYS_RESOURCE;
 	}
 
 	opg->ops_submit_time = submit_time;
