@@ -52,7 +52,7 @@ static void out_reconstruct(const struct lu_env *env, struct dt_device *dt,
 			    struct object_update_reply *reply,
 			    int index)
 {
-	CDEBUG(D_INFO, "%s: fork reply reply %p index %d: rc = %d\n",
+	CDEBUG(D_HA, "%s: fork reply reply %p index %d: rc = %d\n",
 	       dt_obd_name(dt), reply, index, 0);
 
 	object_update_result_insert(reply, NULL, 0, index, 0);
@@ -65,16 +65,10 @@ typedef void (*out_reconstruct_t)(const struct lu_env *env,
 				  struct object_update_reply *reply,
 				  int index);
 
-static inline int out_check_resent(const struct lu_env *env,
-				   struct dt_device *dt,
-				   struct dt_object *obj,
-				   struct ptlrpc_request *req,
-				   out_reconstruct_t reconstruct,
-				   struct object_update_reply *reply,
-				   int index)
+static inline bool out_check_resent(struct ptlrpc_request *req)
 {
 	if (likely(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)))
-		return 0;
+		return false;
 
 	if (req_xid_is_last(req)) {
 		struct lsd_client_data *lcd;
@@ -90,14 +84,12 @@ static inline int out_check_resent(const struct lu_env *env,
 		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
 		lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 
-		DEBUG_REQ(D_RPCTRACE, req, "restoring resent RPC");
-
-		reconstruct(env, dt, obj, reply, index);
-		return 1;
+		DEBUG_REQ(D_HA, req, "reconstruct resent RPC");
+		return true;
 	}
-	DEBUG_REQ(D_HA, req, "no reply for RESENT req (have %lld)",
-		 req->rq_export->exp_target_data.ted_lcd->lcd_last_xid);
-	return 0;
+	DEBUG_REQ(D_HA, req, "reprocess RESENT req, last_xid is %lld",
+		  req->rq_export->exp_target_data.ted_lcd->lcd_last_xid);
+	return false;
 }
 
 static int out_create(struct tgt_session_info *tsi)
@@ -971,6 +963,8 @@ int out_handle(struct tgt_session_info *tsi)
 	int				rc1 = 0;
 	int				ouh_size, reply_size;
 	int				updates;
+	bool need_reconstruct;
+
 	ENTRY;
 
 	req_capsule_set(pill, &RQF_OUT_UPDATE);
@@ -1108,6 +1102,8 @@ int out_handle(struct tgt_session_info *tsi)
 	tti->tti_u.update.tti_update_reply = reply;
 	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
 
+	need_reconstruct = out_check_resent(pill->rc_req);
+
 	/* Walk through updates in the request to execute them */
 	for (i = 0; i < update_buf_count; i++) {
 		struct tgt_handler	*h;
@@ -1155,12 +1151,19 @@ int out_handle(struct tgt_session_info *tsi)
 
 			/* Check resend case only for modifying RPC */
 			if (h->th_flags & MUTABOR) {
-				struct ptlrpc_request *req = tgt_ses_req(tsi);
+				/* sanity check for last XID changing */
+				if (unlikely(!need_reconstruct &&
+					     req_xid_is_last(pill->rc_req))) {
+					DEBUG_REQ(D_ERROR, pill->rc_req,
+						  "unexpected last XID change");
+					GOTO(next, rc = -EINVAL);
+				}
 
-				if (out_check_resent(env, dt, dt_obj, req,
-						     out_reconstruct, reply,
-						     reply_index))
+				if (need_reconstruct) {
+					out_reconstruct(env, dt, dt_obj, reply,
+							reply_index);
 					GOTO(next, rc = 0);
+				}
 
 				if (dt->dd_rdonly)
 					GOTO(next, rc = -EROFS);
@@ -1169,6 +1172,10 @@ int out_handle(struct tgt_session_info *tsi)
 			/* start transaction for modification RPC only */
 			if (h->th_flags & MUTABOR && current_batchid == -1) {
 				current_batchid = update->ou_batchid;
+
+				if (reply_index == 0)
+					CFS_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
+
 				rc = out_tx_start(env, dt, ta, tsi->tsi_exp);
 				if (rc != 0)
 					GOTO(next, rc);

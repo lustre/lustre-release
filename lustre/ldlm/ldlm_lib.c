@@ -1097,14 +1097,14 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	/* Note: lw_client is needed in MDS-MDS failover during update log
 	 * processing, so we needs to allow lw_client to be connected at
-	 * anytime, instead of only the initial connection */
-	lw_client = (data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0;
+	 * anytime, instead of only the initial connection
+	 */
+	lw_client = OCD_HAS_FLAG(data, LIGHTWEIGHT);
 
 	if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) {
 		initial_conn = true;
-		mds_conn = (data->ocd_connect_flags & OBD_CONNECT_MDS) != 0;
-		mds_mds_conn = (data->ocd_connect_flags &
-				OBD_CONNECT_MDS_MDS) != 0;
+		mds_conn = OCD_HAS_FLAG(data, MDS);
+		mds_mds_conn = OCD_HAS_FLAG(data, MDS_MDS);
 
 		/* OBD_CONNECT_MNE_SWAB is defined as OBD_CONNECT_MDS_MDS
 		 * for Imperative Recovery connection from MGC to MGS.
@@ -1161,27 +1161,29 @@ int target_handle_connect(struct ptlrpc_request *req)
 		export = NULL;
 		rc = -EALREADY;
 	} else if ((mds_conn || (lw_client && initial_conn) ||
-		   data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
-		   export->exp_connection != NULL) {
+		   OCD_HAS_FLAG(data, MDS_MDS)) && export->exp_connection) {
 		spin_unlock(&export->exp_lock);
 		if (req->rq_peer.nid != export->exp_connection->c_peer.nid) {
 			/* MDS or LWP reconnected after failover. */
-			LCONSOLE_WARN("%s: Received %s connection from "
-			    "%s, removing former export from %s\n",
-			    target->obd_name, mds_conn ? "MDS" : "LWP",
-			    libcfs_nid2str(req->rq_peer.nid),
-			    libcfs_nid2str(export->exp_connection->c_peer.nid));
+			LCONSOLE_WARN("%s: Received %s connection from %s, removing former export from %s\n",
+				      target->obd_name,
+				      lw_client ? "LWP" : "MDS",
+				      libcfs_nid2str(req->rq_peer.nid),
+				      libcfs_nid2str(export->exp_connection->c_peer.nid));
 		} else {
-			/* New MDS connection from the same NID. */
-			LCONSOLE_WARN("%s: Received new %s connection from "
-				"%s, removing former export from same NID\n",
-				target->obd_name, mds_conn ? "MDS" : "LWP",
-				libcfs_nid2str(req->rq_peer.nid));
+			/* New connection from the same NID. */
+			LCONSOLE_WARN("%s: Received new %s connection from %s, %s former export from same NID\n",
+				      target->obd_name,
+				      lw_client ? "LWP" : "MDS",
+				      libcfs_nid2str(req->rq_peer.nid),
+				      OCD_HAS_FLAG(data, MDS_MDS) ?
+				      "keep" : "remove");
 		}
 
 		if (req->rq_peer.nid == export->exp_connection->c_peer.nid &&
-		    data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) {
-			/* Because exports between MDTs will always be
+		    OCD_HAS_FLAG(data, MDS_MDS)) {
+			/*
+			 * Because exports between MDTs will always be
 			 * kept, let's do not fail such export if they
 			 * come from the same NID, otherwise it might
 			 * cause eviction between MDTs, which might
