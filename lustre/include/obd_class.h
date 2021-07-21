@@ -1731,7 +1731,7 @@ static inline int md_init_ea_size(struct obd_export *exp, __u32 ea_size,
 }
 
 static inline int md_intent_getattr_async(struct obd_export *exp,
-					  struct md_op_item *item)
+					  struct md_enqueue_info *minfo)
 {
 	int rc;
 
@@ -1742,7 +1742,7 @@ static inline int md_intent_getattr_async(struct obd_export *exp,
 	lprocfs_counter_incr(exp->exp_obd->obd_md_stats,
 			     LPROC_MD_INTENT_GETATTR_ASYNC);
 
-	return MDP(exp->exp_obd, intent_getattr_async)(exp, item);
+	return MDP(exp->exp_obd, intent_getattr_async)(exp, minfo);
 }
 
 static inline int md_revalidate_lock(struct obd_export *exp,

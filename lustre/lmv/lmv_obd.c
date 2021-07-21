@@ -3500,9 +3500,9 @@ static int lmv_clear_open_replay_data(struct obd_export *exp,
 }
 
 static int lmv_intent_getattr_async(struct obd_export *exp,
-				    struct md_op_item *item)
+				    struct md_enqueue_info *minfo)
 {
-	struct md_op_data *op_data = &item->mop_data;
+	struct md_op_data *op_data = &minfo->mi_data;
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *ptgt;
@@ -3529,7 +3529,7 @@ static int lmv_intent_getattr_async(struct obd_export *exp,
 	if (ctgt != ptgt)
 		RETURN(-EREMOTE);
 
-	rc = md_intent_getattr_async(ptgt->ltd_exp, item);
+	rc = md_intent_getattr_async(ptgt->ltd_exp, minfo);
 
 	RETURN(rc);
 }
