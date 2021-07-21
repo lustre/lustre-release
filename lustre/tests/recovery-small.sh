@@ -2272,6 +2272,38 @@ test_110k() {
 }
 run_test 110k "FID_QUERY failed during recovery"
 
+test_110m () {
+	(( $(lustre_version_code $SINGLEMDS) >= $(version_code 2.14.52) )) ||
+		skip "Need MDS version at least 2.14.52"
+	(( $MDSCOUNT >= 2 )) || skip "needs at least 2 MDTs"
+	local remote_dir=$DIR/$tdir/remote_dir
+	local mdccli
+	local uuid
+	local diridx
+
+	mkdir_on_mdt0 $DIR/$tdir
+
+#define OBD_FAIL_PTLRPC_RESEND_RACE 0x0525
+	do_facet mds1 $LCTL set_param fail_loc=0x80000525
+	$LFS mkdir -i 1 -c2 $remote_dir &
+	mkdir_pid=$!
+	sleep 3
+	# initiate the re-connect & re-send
+	mdccli=$(do_facet mds2 $LCTL dl |
+		awk '/MDT0000-osp-MDT0001/ {print $4;}')
+	uuid=$(do_facet mds2 $LCTL get_param -n osp.$mdccli.mdt_conn_uuid)
+	echo "conn_uuid=$uuid"
+	do_facet mds2 $LCTL set_param "osp.$mdccli.import=connection=$uuid"
+
+	wait $mkdir_pid
+	(( $? == 0 )) || error "mkdir failed"
+
+	diridx=$($LFS getstripe -m $remote_dir)
+	(( $diridx == 1 )) || error "$diridx != 1"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 110m "update resent vs original RPC race"
+
 # LU-2844 mdt prepare fail should not cause umount oops
 test_111 ()
 {

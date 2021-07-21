@@ -1644,13 +1644,6 @@ ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 		return NULL;
 
 	/*
-	 * bulk request are aborted upon reconnect, don't try to
-	 * find a match
-	 */
-	if (req->rq_bulk_write || req->rq_bulk_read)
-		return NULL;
-
-	/*
 	 * This list should not be longer than max_requests in
 	 * flights on the client, so it is not all that long.
 	 * Also we only hit this codepath in case of a resent
