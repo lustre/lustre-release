@@ -70,7 +70,7 @@ scan_poll_results(int ret)
 	int			i;
 	struct clnt_info	*clp;
 
-	for (clp = clnt_list.tqh_first; clp != NULL; clp = clp->list.tqe_next)
+	for (clp = clnt_list_first_entry(); clp != NULL; clp = clp->list.tqe_next)
 	{
 		i = clp->krb5_poll_index;
 		if (i >= 0 && pollarray[i].revents) {

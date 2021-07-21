@@ -35,8 +35,6 @@
 #include <sys/queue.h>
 #include <gssapi/gssapi.h>
 
-int krb_enabled;
-
 int handle_channel_request(FILE *f);
 void svcgssd_run(void);
 int gssd_prepare_creds(int must_srv_mgs, int must_srv_mds, int must_srv_oss);

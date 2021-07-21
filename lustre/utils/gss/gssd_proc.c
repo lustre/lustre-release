@@ -99,6 +99,8 @@
  *      and rescan the whole {pipefs_nfsdir} when this happens.
  */
 
+TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
+
 struct pollfd * pollarray;
 
 int pollsize;  /* the size of pollaray (in pollfd's) */
@@ -253,6 +255,11 @@ init_client_list(void)
 	/* Eventually plan to grow/shrink poll array: */
 	pollsize = FD_ALLOC_BLOCK;
 	pollarray = calloc(pollsize, sizeof(struct pollfd));
+}
+
+struct clnt_info *clnt_list_first_entry(void)
+{
+	return clnt_list.tqh_first;
 }
 
 /*

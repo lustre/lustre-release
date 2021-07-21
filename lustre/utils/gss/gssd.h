@@ -70,8 +70,6 @@ extern char *ccachedir;
 extern char gethostname_ex[PATH_MAX];
 extern int use_memcache;
 
-TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
-
 struct clnt_info {
 	TAILQ_ENTRY(clnt_info)	list;
 	char			*dirname;
@@ -87,7 +85,7 @@ void init_client_list(void);
 int update_client_list(void);
 void handle_krb5_upcall(struct clnt_info *clp);
 void lgssd_run(void);
-
+struct clnt_info *clnt_list_first_entry(void);
 
 extern int lgssd_mutex_downcall;
 

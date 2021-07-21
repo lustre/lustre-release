@@ -34,7 +34,7 @@
 #include <stdlib.h>
 #include "write_bytes.h"
 
-char *this_realm;
+extern char *this_realm;
 extern gss_cred_id_t	gssd_creds;
 
 void pgsserr(char *msg, u_int32_t maj_stat, u_int32_t min_stat,
