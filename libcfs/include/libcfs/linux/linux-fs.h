@@ -40,6 +40,7 @@
 #include <linux/stat.h>
 #include <linux/mount.h>
 #include <linux/backing-dev.h>
+#include <linux/pagemap.h>
 
 #ifndef HAVE_FILE_DENTRY
 static inline struct dentry *file_dentry(const struct file *file)
@@ -75,5 +76,12 @@ static inline struct dentry *file_dentry(const struct file *file)
 #define proc_mmap			mmap
 #define proc_get_unmapped_area		get_unmapped_area
 #endif
+
+static inline void mapping_clear_exiting(struct address_space *mapping)
+{
+#ifdef HAVE_MAPPING_AS_EXITING_FLAG
+	clear_bit(AS_EXITING, &mapping->flags);
+#endif
+}
 
 #endif
