@@ -1248,6 +1248,66 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_TCP_SOCK_SET_KEEPIDLE
 
 #
+# LIBCFS_TCP_SOCK_SET_QUICKACK
+# kernel v5.7-rc6-2504-gddd061b8daed
+#   tcp: add tcp_sock_set_quickack
+#
+AC_DEFUN([LIBCFS_TCP_SOCK_SET_QUICKACK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'tcp_sock_set_quickack()' exists],
+tcp_sock_set_quickack_exists, [
+	#include <linux/tcp.h>
+],[
+	tcp_sock_set_quickack(NULL, 0);
+],[
+	AC_DEFINE(HAVE_TCP_SOCK_SET_QUICKACK, 1,
+		['tcp_sock_set_quickack()' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_TCP_SOCK_SET_QUICKACK
+
+#
+# LIBCFS_TCP_SOCK_SET_KEEPINTVL
+# v5.7-rc6-2508-gd41ecaac903c
+# tcp: add tcp_sock_set_keepintvl
+#
+AC_DEFUN([LIBCFS_TCP_SOCK_SET_KEEPINTVL], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'tcp_sock_set_keepintvl()' exists],
+tcp_sock_set_keepintvl_exists, [
+	#include <linux/tcp.h>
+],[
+	tcp_sock_set_keepintvl(NULL, 0);
+],[
+	AC_DEFINE(HAVE_TCP_SOCK_SET_KEEPINTVL, 1,
+		['tcp_sock_set_keepintvl()' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_TCP_SOCK_SET_KEEPINTVL
+
+#
+# LIBCFS_TCP_SOCK_SET_KEEPCNT
+# v5.7-rc6-2509-g480aeb9639d6
+# tcp: add tcp_sock_set_keepcnt
+#
+AC_DEFUN([LIBCFS_TCP_SOCK_SET_KEEPCNT], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'tcp_sock_set_keepcnt()' exists],
+tcp_sock_set_keepcnt_exists, [
+	#include <linux/tcp.h>
+],[
+	tcp_sock_set_keepcnt(NULL, 0);
+],[
+	AC_DEFINE(HAVE_TCP_SOCK_SET_KEEPCNT, 1,
+		['tcp_sock_set_keepcnt()' exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_TCP_SOCK_SET_KEEPCNT
+
+#
 # LIBCFS_XARRAY_SUPPORT
 #
 # 4.19-rc5 kernel commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
@@ -1693,6 +1753,9 @@ LIBCFS_CACHE_DETAIL_WRITERS
 LIBCFS_HAVE_NR_UNSTABLE_NFS
 # 5.7
 LIBCFS_KALLSYMS_LOOKUP
+LIBCFS_TCP_SOCK_SET_QUICKACK
+LIBCFS_TCP_SOCK_SET_KEEPINTVL
+LIBCFS_TCP_SOCK_SET_KEEPCNT
 # 5.8
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
