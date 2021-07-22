@@ -13,7 +13,11 @@
  */
 
 #include <crypto/aes.h>
+#ifdef HAVE_CRYPTO_SHA2_HEADER
+#include <crypto/sha2.h>
+#else
 #include <crypto/sha.h>
+#endif
 #include <crypto/skcipher.h>
 #include <linux/key.h>
 

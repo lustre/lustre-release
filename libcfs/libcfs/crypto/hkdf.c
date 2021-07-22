@@ -14,8 +14,11 @@
  */
 
 #include <crypto/hash.h>
+#ifdef HAVE_CRYPTO_SHA2_HEADER
+#include <crypto/sha2.h>
+#else
 #include <crypto/sha.h>
-
+#endif
 #include "llcrypt_private.h"
 
 /*
