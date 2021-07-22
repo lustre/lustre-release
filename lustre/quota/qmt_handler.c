@@ -260,9 +260,11 @@ out:
 	lqe_write_unlock(lqe);
 
 out_nolock:
-	qti_lqes_restore_fini(env);
-	if (th != NULL && !IS_ERR(th))
-		dt_trans_stop(env, qmt->qmt_child, th);
+	if (!is_updated) {
+		if (th != NULL && !IS_ERR(th))
+			dt_trans_stop(env, qmt->qmt_child, th);
+		qti_lqes_restore_fini(env);
+	}
 
 	if (rc == 0 && dirtied) {
 		qmt_glb_lock_notify(env, lqe, ver);
