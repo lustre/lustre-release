@@ -50,6 +50,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include "llog_internal.h"
+
 /*
  * Allocate a new log or catalog handle
  * Used inside llog_open().
@@ -303,7 +304,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			 * be accessed anymore, let's return 0 for now, and
 			 * the orphan will be handled by LFSCK. */
 			CERROR("%s: can't destroy empty llog "DFID": rc = %d\n",
-			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       loghandle2name(loghandle),
 			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), rc);
 			GOTO(out_unlock, rc = 0);
 		}
@@ -398,7 +399,7 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 			     (llh->llh_flags & LLOG_F_IS_CAT &&
 			      flags & LLOG_F_IS_PLAIN))) {
 			CERROR("%s: llog type is %s but initializing %s\n",
-			       handle->lgh_ctxt->loc_obd->obd_name,
+			       loghandle2name(handle),
 			       llh->llh_flags & LLOG_F_IS_CAT ?
 			       "catalog" : "plain",
 			       flags & LLOG_F_IS_CAT ? "catalog" : "plain");
@@ -418,7 +419,7 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		if (unlikely(uuid &&
 			     !obd_uuid_equals(uuid, &llh->llh_tgtuuid))) {
 			CERROR("%s: llog uuid mismatch: %s/%s\n",
-			       handle->lgh_ctxt->loc_obd->obd_name,
+			       loghandle2name(handle),
 			       (char *)uuid->uuid,
 			       (char *)llh->llh_tgtuuid.uuid);
 			GOTO(out, rc = -EEXIST);
@@ -431,8 +432,8 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		llh->llh_flags |= LLOG_F_IS_FIXSIZE;
 	} else if (!(flags & LLOG_F_IS_PLAIN)) {
 		CERROR("%s: unknown flags: %#x (expected %#x or %#x)\n",
-		       handle->lgh_ctxt->loc_obd->obd_name,
-		       flags, LLOG_F_IS_CAT, LLOG_F_IS_PLAIN);
+		       loghandle2name(handle), flags, LLOG_F_IS_CAT,
+		       LLOG_F_IS_PLAIN);
 		rc = -EINVAL;
 	}
 	llh->llh_flags |= fmt;
@@ -444,6 +445,30 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_init_handle);
+
+int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec)
+{
+	int chunk_size = llh->lgh_hdr->llh_hdr.lrh_len;
+
+	if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
+		CERROR("%s: record is too large: %d > %d\n",
+		       loghandle2name(llh), rec->lrh_len, chunk_size);
+		return -EINVAL;
+	}
+	if (rec->lrh_index >= LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr)) {
+		CERROR("%s: index is too high: %d\n",
+		       loghandle2name(llh), rec->lrh_index);
+		return -EINVAL;
+	}
+	if ((rec->lrh_type & LLOG_OP_MASK) != LLOG_OP_MAGIC) {
+		CERROR("%s: magic %x is bad\n",
+		       loghandle2name(llh), rec->lrh_type);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(llog_verify_record);
 
 static int llog_process_thread(void *arg)
 {
@@ -459,6 +484,7 @@ static int llog_process_thread(void *arg)
 	int				 saved_index = 0;
 	int				 last_called_index = 0;
 	bool				 repeated = false;
+	bool				refresh_idx = false;
 
 	ENTRY;
 
@@ -606,15 +632,21 @@ repeat:
 
 			repeated = false;
 
-			if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
-				CWARN("%s: invalid length %d in llog "DFID
-				      "record for index %d/%d\n",
-				       loghandle->lgh_ctxt->loc_obd->obd_name,
-				       rec->lrh_len,
+			rc = llog_verify_record(loghandle, rec);
+			if (rc) {
+				CERROR("%s: invalid record in llog "DFID
+				       " record for index %d/%d: rc = %d\n",
+				       loghandle2name(loghandle),
 				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
-				       rec->lrh_index, index);
-
-				GOTO(out, rc = -EINVAL);
+				       rec->lrh_index, index, rc);
+				/*
+				 * the block seem to be corrupted, let's try
+				 * with the next one. reset rc to go to the
+				 * next chunk.
+				 */
+				refresh_idx = true;
+				index = 0;
+				GOTO(repeat, rc = 0);
 			}
 
 			if (rec->lrh_index < index) {
@@ -624,12 +656,22 @@ repeat:
 			}
 
 			if (rec->lrh_index != index) {
-				CERROR("%s: "DFID" Invalid record: index %u"
-				       " but expected %u\n",
-				       loghandle->lgh_ctxt->loc_obd->obd_name,
-				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
-				       rec->lrh_index, index);
-				GOTO(out, rc = -ERANGE);
+				/*
+				 * the last time we couldn't parse the block due
+				 * to corruption, thus has no idea about the
+				 * next index, take it from the block, once.
+				 */
+				if (refresh_idx) {
+					refresh_idx = false;
+					index = rec->lrh_index;
+				} else {
+					CERROR("%s: "DFID" Invalid record: index"
+					       " %u but expected %u\n",
+					       loghandle2name(loghandle),
+					       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
+					       rec->lrh_index, index);
+					GOTO(out, rc = -ERANGE);
+				}
 			}
 
 			CDEBUG(D_OTHER,
@@ -715,7 +757,7 @@ out:
 			 * retry until the umount or abort recovery, see
 			 * lod_sub_recovery_thread() */
 			CERROR("%s retry remote llog process\n",
-			       loghandle->lgh_ctxt->loc_obd->obd_name);
+			       loghandle2name(loghandle));
 			rc = -EAGAIN;
 		} else {
 			/* something bad happened to the processing of a local
@@ -724,7 +766,7 @@ out:
 			 * discard any remaining bits in the header */
 			CERROR("%s: Local llog found corrupted #"DOSTID":%x"
 			       " %s index %d count %d\n",
-			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       loghandle2name(loghandle),
 			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen,
 			       ((llh->llh_flags & LLOG_F_IS_CAT) ? "catalog" :
@@ -820,7 +862,7 @@ int llog_process_or_fork(const struct lu_env *env,
 		if (IS_ERR(task)) {
 			rc = PTR_ERR(task);
 			CERROR("%s: cannot start thread: rc = %d\n",
-			       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
+			       loghandle2name(loghandle), rc);
 			GOTO(out_lpi, rc);
 		}
 		wait_for_completion(&lpi->lpi_completion);
@@ -1057,12 +1099,11 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		RETURN(-EPROTO);
 	} else if (th == NULL) {
 		CERROR("%s: missed transaction handle\n",
-			handle->lgh_obj->do_lu.lo_dev->ld_obd->obd_name);
+		       loghandle2name(handle));
 		RETURN(-EPROTO);
 	} else if (handle->lgh_hdr == NULL) {
 		CERROR("%s: loghandle %p with no header\n",
-			handle->lgh_obj->do_lu.lo_dev->ld_obd->obd_name,
-			handle);
+		       loghandle2name(handle), handle);
 		RETURN(-EPROTO);
 	}
 
@@ -1434,8 +1475,8 @@ __u64 llog_size(const struct lu_env *env, struct llog_handle *llh)
 	rc = llh->lgh_obj->do_ops->do_attr_get(env, llh->lgh_obj, &la);
 	if (rc) {
 		CERROR("%s: attr_get failed for "DFID": rc = %d\n",
-		       llh->lgh_ctxt->loc_obd->obd_name,
-		       PFID(&llh->lgh_id.lgl_oi.oi_fid), rc);
+		       loghandle2name(llh), PFID(&llh->lgh_id.lgl_oi.oi_fid),
+		       rc);
 		return 0;
 	}
 

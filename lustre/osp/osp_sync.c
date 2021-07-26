@@ -1270,7 +1270,7 @@ next:
 
 		CERROR("%s: llog process with osp_sync_process_queues "
 		       "failed: %d\n", d->opd_obd->obd_name, rc);
-		GOTO(close, rc);
+		GOTO(wait, rc);
 	}
 	LASSERTF(rc == 0 || rc == LLOG_PROC_BREAK,
 		 "%u changes, %u in progress, %u in flight: %d\n",
@@ -1285,6 +1285,7 @@ next:
 		 atomic_read(&d->opd_sync_rpcs_in_progress),
 		 atomic_read(&d->opd_sync_rpcs_in_flight));
 
+wait:
 	/* wait till all the requests are completed */
 	count = 0;
 	while (atomic_read(&d->opd_sync_rpcs_in_progress) > 0) {
@@ -1304,7 +1305,6 @@ next:
 
 	}
 
-close:
 	llog_cat_close(&env, llh);
 	rc = llog_cleanup(&env, ctxt);
 	if (rc)
@@ -1428,7 +1428,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	LASSERT(lgh != NULL);
 	ctxt->loc_handle = lgh;
 
-	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT | LLOG_F_RM_ON_ERR, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 

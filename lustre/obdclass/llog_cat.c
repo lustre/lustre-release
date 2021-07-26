@@ -88,13 +88,12 @@ static int llog_cat_new_log(const struct lu_env *env,
 		if (cathandle->lgh_name == NULL) {
 			CWARN("%s: there are no more free slots in catalog "
 			      DFID":%x\n",
-			      loghandle->lgh_ctxt->loc_obd->obd_name,
+			      loghandle2name(loghandle),
 			      PFID(&cathandle->lgh_id.lgl_oi.oi_fid),
 			      cathandle->lgh_id.lgl_ogen);
 		} else {
 			CWARN("%s: there are no more free slots in "
-			      "catalog %s\n",
-			      loghandle->lgh_ctxt->loc_obd->obd_name,
+			      "catalog %s\n", loghandle2name(loghandle),
 			      cathandle->lgh_name);
 		}
 		RETURN(-ENOSPC);
@@ -153,7 +152,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 		GOTO(out, rc = 0);
 	} else if (rc != 0) {
 		CERROR("%s: can't create new plain llog in catalog: rc = %d\n",
-		       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
+		       loghandle2name(loghandle), rc);
 		GOTO(out, rc);
 	}
 
@@ -375,7 +374,7 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		    ostid_seq(&cgl->lgl_oi) == ostid_seq(&logid->lgl_oi)) {
 			if (cgl->lgl_ogen != logid->lgl_ogen) {
 				CWARN("%s: log "DFID" generation %x != %x\n",
-				      loghandle->lgh_ctxt->loc_obd->obd_name,
+				      loghandle2name(loghandle),
 				      PFID(&logid->lgl_oi.oi_fid),
 				      cgl->lgl_ogen, logid->lgl_ogen);
 				continue;
@@ -383,7 +382,7 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 			*res = llog_handle_get(loghandle);
 			if (!*res) {
 				CERROR("%s: log "DFID" refcount is zero!\n",
-				       loghandle->lgh_ctxt->loc_obd->obd_name,
+				       loghandle2name(loghandle),
 				       PFID(&logid->lgl_oi.oi_fid));
 				continue;
 			}
@@ -398,8 +397,8 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       LLOG_OPEN_EXISTS);
 	if (rc < 0) {
 		CERROR("%s: error opening log id "DFID":%x: rc = %d\n",
-		       cathandle->lgh_ctxt->loc_obd->obd_name,
-		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen, rc);
+		       loghandle2name(cathandle), PFID(&logid->lgl_oi.oi_fid),
+		       logid->lgl_ogen, rc);
 		RETURN(rc);
 	}
 
@@ -445,8 +444,7 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 			if (rc)
 				CERROR("%s: failure destroying log during "
 				       "cleanup: rc = %d\n",
-				       loghandle->lgh_ctxt->loc_obd->obd_name,
-				       rc);
+				       loghandle2name(loghandle), rc);
 
 			index = loghandle->u.phd.phd_cookie.lgc_index;
 			llog_cat_cleanup(env, cathandle, NULL, index);
@@ -532,7 +530,7 @@ next:
 	 * meet this situation. */
 	if (IS_ERR_OR_NULL(cathandle->u.chd.chd_next_log)) {
 		CERROR("%s: next log does not exist!\n",
-		       cathandle->lgh_ctxt->loc_obd->obd_name);
+		       loghandle2name(cathandle));
 		loghandle = ERR_PTR(-EIO);
 		if (cathandle->u.chd.chd_next_log == NULL) {
 			/* Store the error in chd_next_log, so
@@ -609,7 +607,7 @@ retry:
 		if (retried++ == 0)
 			GOTO(retry, rc);
 		CERROR("%s: error on 2nd llog: rc = %d\n",
-		       cathandle->lgh_ctxt->loc_obd->obd_name, rc);
+		       loghandle2name(cathandle), rc);
 	}
 
 	RETURN(rc);
@@ -719,8 +717,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 		rc = llog_cat_id2handle(env, cathandle, &loghandle, lgl);
 		if (rc) {
 			CDEBUG(D_HA, "%s: cannot find llog for handle "DFID":%x"
-			       ": rc = %d\n",
-			       cathandle->lgh_ctxt->loc_obd->obd_name,
+			       ": rc = %d\n", loghandle2name(cathandle),
 			       PFID(&lgl->lgl_oi.oi_fid), lgl->lgl_ogen, rc);
 			failed++;
 			continue;
@@ -735,8 +732,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 			 */
 			lrc = -ENOENT;
 			CDEBUG(D_HA, "%s: llog "DFID":%x does not exist"
-			       ": rc = %d\n",
-			       cathandle->lgh_ctxt->loc_obd->obd_name,
+			       ": rc = %d\n", loghandle2name(cathandle),
 			       PFID(&lgl->lgl_oi.oi_fid), lgl->lgl_ogen, lrc);
 			failed++;
 			if (rc == 0)
@@ -763,8 +759,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 	}
 	if (rc)
 		CERROR("%s: fail to cancel %d of %d llog-records: rc = %d\n",
-		       cathandle->lgh_ctxt->loc_obd->obd_name, failed, count,
-		       rc);
+		       loghandle2name(cathandle), failed, count, rc);
 
 	RETURN(rc);
 }
@@ -783,7 +778,7 @@ static int llog_cat_process_common(const struct lu_env *env,
 	if (rec->lrh_type != le32_to_cpu(LLOG_LOGID_MAGIC)) {
 		rc = -EINVAL;
 		CWARN("%s: invalid record in catalog "DFID":%x: rc = %d\n",
-		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      loghandle2name(cat_llh),
 		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid),
 		      cat_llh->lgh_id.lgl_ogen, rc);
 		RETURN(rc);
@@ -803,7 +798,7 @@ static int llog_cat_process_common(const struct lu_env *env,
 			rc = LLOG_DEL_RECORD;
 		else if (rc)
 			CWARN("%s: can't find llog handle "DFID":%x: rc = %d\n",
-			      cat_llh->lgh_ctxt->loc_obd->obd_name,
+			      loghandle2name(cat_llh),
 			      PFID(&lir->lid_id.lgl_oi.oi_fid),
 			      lir->lid_id.lgl_ogen, rc);
 
@@ -819,7 +814,7 @@ static int llog_cat_process_common(const struct lu_env *env,
 		rc = llog_destroy(env, *llhp);
 		if (rc)
 			CWARN("%s: can't destroy empty log "DFID": rc = %d\n",
-			      (*llhp)->lgh_ctxt->loc_obd->obd_name,
+			      loghandle2name((*llhp)),
 			      PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
 		rc = LLOG_DEL_PLAIN;
 	}
@@ -855,6 +850,16 @@ static int llog_cat_process_cb(const struct lu_env *env,
 	} else {
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
 					  NULL, false);
+	}
+	if (rc == -ENOENT && (cat_llh->lgh_hdr->llh_flags & LLOG_F_RM_ON_ERR)) {
+		/*
+		 * plain llog is reported corrupted, so better to just remove
+		 * it if the caller is fine with that.
+		 */
+		CERROR("%s: remove corrupted/missing llog "DFID"\n",
+		       loghandle2name(cat_llh),
+		       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		rc = LLOG_DEL_PLAIN;
 	}
 
 out:
@@ -895,7 +900,7 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 		struct llog_process_cat_data cd;
 
 		CWARN("%s: catlog "DFID" crosses index zero\n",
-		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      loghandle2name(cat_llh),
 		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 		/*startcat = 0 is default value for general processing */
 		if ((startcat != LLOG_CAT_FIRST &&
@@ -1060,7 +1065,7 @@ int llog_cat_reverse_process(const struct lu_env *env,
 	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
 	    llh->llh_count > 1) {
 		CWARN("%s: catalog "DFID" crosses index zero\n",
-		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      loghandle2name(cat_llh),
 		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
 		cd.lpcd_first_idx = 0;
