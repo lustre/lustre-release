@@ -1782,6 +1782,11 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 				  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
 		if (rc)
 			GOTO(out_users, rc);
+	} else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK) {
+		/* a maskless users means default mask but only if server has
+		 * no specific mask set
+		 */
+		rec->cur_mask = CHANGELOG_DEFMASK;
 	}
 
 	if (name && name[0]) {

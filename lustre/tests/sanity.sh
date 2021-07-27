@@ -16352,7 +16352,7 @@ test_160o() {
 
 	changelog_register --user test_160o -m unlnk+close+open ||
 		error "changelog_register failed"
-	# drop server mask so it doesn't interfere
+
 	do_facet $SINGLEMDS $LCTL --device $mdt \
 				changelog_register -u "Tt3_-#" &&
 		error "bad symbols in name should fail"
@@ -16442,6 +16442,28 @@ test_160p() {
 		error "found $entry_count changelog entries, expected none"
 }
 run_test 160p "Changelog orphan cleanup with no users"
+
+test_160q() {
+	local mdt="$(facet_svc $SINGLEMDS)"
+	local clu
+
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $MDS1_VERSION -ge $(version_code 2.14.54) ] ||
+		skip "Need MDS version at least 2.14.54"
+
+	# set server mask to minimal value like server init does
+	changelog_chmask "MARK"
+	clu=$(do_facet $SINGLEMDS $LCTL --device $mdt changelog_register -n) ||
+		error "changelog_register failed"
+	# check effective mask again, should be treated as DEFMASK now
+	mask=$(do_facet $SINGLEMDS $LCTL get_param \
+				mdd.$mdt.changelog_current_mask -n)
+	do_facet $SINGLEMDS $LCTL --device $mdt changelog_deregister $clu ||
+		error "changelog_deregister failed"
+	[[ $mask == *"HLINK"* ]] || error "mask is not DEFMASK as expected"
+}
+run_test 160q "changelog effective mask is DEFMASK if not set"
 
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
