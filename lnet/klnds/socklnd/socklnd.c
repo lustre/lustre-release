@@ -2367,7 +2367,6 @@ fail_0:
 	return -ENETDOWN;
 }
 
-
 static void __exit ksocklnd_exit(void)
 {
 	lnet_unregister_lnd(&the_ksocklnd);

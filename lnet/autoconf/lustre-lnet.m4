@@ -570,6 +570,17 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[rdma_connect_locked is defined])
 	])
 
+	# ethtool_link_settings was added in Linux 4.6
+	LB_CHECK_COMPILE([if 'ethtool_link_settings' exists],
+	ethtool_link_settings, [
+		#include <linux/ethtool.h>
+	],[
+		struct ethtool_link_ksettings cmd;
+	],[
+		AC_DEFINE(HAVE_ETHTOOL_LINK_SETTINGS, 1,
+			[ethtool_link_settings is defined])
+	])
+
 	EXTRA_CHECK_INCLUDE=""
 	AC_DEFUN([LN_CONFIG_O2IB_SRC], [])
 	AC_DEFUN([LN_CONFIG_O2IB_RESULTS], [])
