@@ -3016,11 +3016,23 @@ test_27M() {
 	test_mkdir $DIR/$tdir
 
 	# Set default striping on directory
-	$LFS setstripe -C 4 $DIR/$tdir
+	local setcount=4
+	local stripe_opt
+
+	# if we run against a 2.12 server which lacks overstring support
+	# then the connect_flag will not report overstriping, even if client
+	# is 2.14+
+	if [[ $($LCTL get_param mdc.*.connect_flags) =~ overstriping ]]; then
+		stripe_opt="-C $setcount"
+	elif (( $OSTCOUNT >= $setcount )); then
+		stripe_opt="-c $setcount"
+	else
+		skip "server does not support overstriping"
+	fi
+	$LFS setstripe $stripe_opt $DIR/$tdir
 
 	echo 1 > $DIR/$tdir/${tfile}.1
 	local count=$($LFS getstripe -c $DIR/$tdir/${tfile}.1)
-	local setcount=4
 	[ $count -eq $setcount ] ||
 		error "(1) stripe count $count, should be $setcount"
 
@@ -3086,11 +3098,11 @@ test_27M() {
 	# Clean up DOM layout
 	$LFS setstripe -d $DIR/$tdir
 
+	save_layout_restore_at_exit $MOUNT
 	# Now test that append striping works when layout is from root
 	$LFS setstripe -c 2 $MOUNT
 	# Make a special directory for this
 	mkdir $DIR/${tdir}/${tdir}.2
-	stack_trap "$LFS setstripe -d $MOUNT" EXIT
 
 	# Verify for normal file
 	setcount=2
