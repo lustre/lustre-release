@@ -1557,6 +1557,12 @@ retry_encrypt:
 	    !imp_connect_shortio(cli->cl_import))
 		short_io_size = 0;
 
+	/* If this is an empty RPC to old server, just ignore it */
+	if (!short_io_size && !pga[0]->pg) {
+		ptlrpc_request_free(req);
+		RETURN(-ENODATA);
+	}
+
 	req_capsule_set_size(pill, &RMF_SHORT_IO, RCL_CLIENT,
 			     opc == OST_READ ? 0 : short_io_size);
 	if (opc == OST_READ)
