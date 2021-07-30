@@ -1225,10 +1225,8 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	while (aio->cda_pages.pl_nr > 0) {
 		struct cl_page *page = cl_page_list_first(&aio->cda_pages);
 
-		cl_page_get(page);
-		cl_page_list_del(env, &aio->cda_pages, page);
 		cl_page_delete(env, page);
-		cl_page_put(env, page);
+		cl_page_list_del(env, &aio->cda_pages, page);
 	}
 
 	if (!aio->cda_no_aio_complete)
