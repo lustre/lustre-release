@@ -440,7 +440,7 @@ static ssize_t osc_checksum_type_seq_write(struct file *file,
 		kernbuf[count] = '\0';
 
 	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
-		if (strcmp(kernbuf, cksum_name[i]) == 0) {
+		if (strcasecmp(kernbuf, cksum_name[i]) == 0) {
 			obd->u.cli.cl_preferred_cksum_type = BIT(i);
 			if (obd->u.cli.cl_supp_cksum_types & BIT(i)) {
 				obd->u.cli.cl_cksum_type = BIT(i);
