@@ -1247,8 +1247,7 @@ struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj)
 		 * Hold one ref so that it won't be released until
 		 * every pages is added.
 		 */
-		cl_sync_io_init_notify(&aio->cda_sync, 1, is_sync_kiocb(iocb) ?
-				       NULL : aio, cl_aio_end);
+		cl_sync_io_init_notify(&aio->cda_sync, 1, aio, cl_aio_end);
 		cl_page_list_init(&aio->cda_pages);
 		aio->cda_iocb = iocb;
 		if (is_sync_kiocb(iocb))
@@ -1304,16 +1303,20 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		wake_up_locked(&anchor->csi_waitq);
 		if (end_io)
 			end_io(env, anchor);
-		if (anchor->csi_aio)
-			aio = anchor->csi_aio;
+
+		aio = anchor->csi_aio;
 
 		spin_unlock(&anchor->csi_waitq.lock);
 
 		/**
-		 * If anchor->csi_aio is set, we are responsible for freeing
-		 * memory here rather than when cl_sync_io_wait() completes.
+		 * For AIO (!is_sync_kiocb), we are responsible for freeing
+		 * memory here.  This is because we are the last user of this
+		 * aio struct, whereas in other cases, we will call
+		 * cl_sync_io_wait to wait after this, and so the memory is
+		 * freed after that call.
 		 */
-		cl_aio_free(env, aio);
+		if (aio && !is_sync_kiocb(aio->cda_iocb))
+			cl_aio_free(env, aio);
 	}
 	EXIT;
 }
