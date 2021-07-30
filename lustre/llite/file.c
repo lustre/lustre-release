@@ -1674,7 +1674,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 			is_parallel_dio = false;
 
 		ci_aio = cl_aio_alloc(args->u.normal.via_iocb,
-				      ll_i2info(inode)->lli_clob);
+				      ll_i2info(inode)->lli_clob, NULL);
 		if (!ci_aio)
 			GOTO(out, rc = -ENOMEM);
 	}

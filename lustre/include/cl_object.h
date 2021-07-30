@@ -2580,7 +2580,8 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
-struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj);
+struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
+				struct cl_dio_aio *ll_aio);
 void cl_aio_free(const struct lu_env *env, struct cl_dio_aio *aio);
 static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
 {
@@ -2613,7 +2614,9 @@ struct cl_dio_aio {
 	struct cl_object	*cda_obj;
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
-	unsigned		cda_no_aio_complete:1;
+	struct cl_dio_aio	*cda_ll_aio;
+	unsigned		cda_no_aio_complete:1,
+				cda_no_aio_free:1;
 };
 
 /** @} cl_sync_io */

@@ -1234,10 +1234,14 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	if (!aio->cda_no_aio_complete)
 		aio_complete(aio->cda_iocb, ret ?: aio->cda_bytes, 0);
 
+	if (aio->cda_ll_aio)
+		cl_sync_io_note(env, &aio->cda_ll_aio->cda_sync, ret);
+
 	EXIT;
 }
 
-struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj)
+struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
+				struct cl_dio_aio *ll_aio)
 {
 	struct cl_dio_aio *aio;
 
@@ -1250,12 +1254,30 @@ struct cl_dio_aio *cl_aio_alloc(struct kiocb *iocb, struct cl_object *obj)
 		cl_sync_io_init_notify(&aio->cda_sync, 1, aio, cl_aio_end);
 		cl_page_list_init(&aio->cda_pages);
 		aio->cda_iocb = iocb;
-		if (is_sync_kiocb(iocb))
+		if (is_sync_kiocb(iocb) || ll_aio)
 			aio->cda_no_aio_complete = 1;
 		else
 			aio->cda_no_aio_complete = 0;
+		/* in the case of a lower level aio struct (ll_aio is set), or
+		 * true AIO (!is_sync_kiocb()), the memory is freed by
+		 * the daemons calling cl_sync_io_note, because they are the
+		 * last users of the aio struct
+		 *
+		 * in other cases, the last user is cl_sync_io_wait, and in
+		 * that case, the caller frees the aio struct after that call
+		 * completes
+		 */
+		if (ll_aio || !is_sync_kiocb(iocb))
+			aio->cda_no_aio_free = 0;
+		else
+			aio->cda_no_aio_free = 1;
+
 		cl_object_get(obj);
 		aio->cda_obj = obj;
+		aio->cda_ll_aio = ll_aio;
+
+		if (ll_aio)
+			atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 	}
 	return aio;
 }
@@ -1278,6 +1300,7 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret)
 {
 	ENTRY;
+
 	if (anchor->csi_sync_rc == 0 && ioret < 0)
 		anchor->csi_sync_rc = ioret;
 	/*
@@ -1308,14 +1331,7 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 
 		spin_unlock(&anchor->csi_waitq.lock);
 
-		/**
-		 * For AIO (!is_sync_kiocb), we are responsible for freeing
-		 * memory here.  This is because we are the last user of this
-		 * aio struct, whereas in other cases, we will call
-		 * cl_sync_io_wait to wait after this, and so the memory is
-		 * freed after that call.
-		 */
-		if (aio && !is_sync_kiocb(aio->cda_iocb))
+		if (aio && !aio->cda_no_aio_free)
 			cl_aio_free(env, aio);
 	}
 	EXIT;
@@ -1326,8 +1342,15 @@ EXPORT_SYMBOL(cl_sync_io_note);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret)
 {
+	bool no_aio_free = anchor->csi_aio->cda_no_aio_free;
 	int rc = 0;
 
+	/* for true AIO, the daemons running cl_sync_io_note would normally
+	 * free the aio struct, but if we're waiting on it, we need them to not
+	 * do that.  This ensures the aio is not freed when we drop the
+	 * reference count to zero in cl_sync_io_note below
+	 */
+	anchor->csi_aio->cda_no_aio_free = 1;
 	/*
 	 * @anchor was inited as 1 to prevent end_io to be
 	 * called before we add all pages for IO, so drop
@@ -1346,6 +1369,8 @@ int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 	 * reused we assume it as 1 before using.
 	 */
 	atomic_add(1, &anchor->csi_sync_nr);
+
+	anchor->csi_aio->cda_no_aio_free = no_aio_free;
 
 	return rc;
 }
