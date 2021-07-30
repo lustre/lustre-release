@@ -5650,7 +5650,6 @@ int jt_changelog_deregister(int argc, char **argv)
 	if (cur_device < 0 || !device)
 		return CMD_HELP;
 
-	optind = 1;
 	while ((c = getopt_long(argc, argv, "hu:", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'u':
@@ -5670,7 +5669,7 @@ int jt_changelog_deregister(int argc, char **argv)
 		}
 	}
 
-	if (1 == optind) {
+	if (1 == optind && argc > 1) {
 		/* first check if pure ID was passed */
 		id = atoi(argv[optind]);
 		/* nameless cl<ID> format or cl<ID>-... format, only ID matters */
@@ -5688,7 +5687,7 @@ int jt_changelog_deregister(int argc, char **argv)
 		optind++;
 	}
 
-	if (optind < argc)
+	if (optind < argc || argc == 1)
 		return CMD_HELP;
 
 	data.ioc_dev = cur_device;

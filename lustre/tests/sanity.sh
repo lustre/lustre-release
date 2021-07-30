@@ -15542,11 +15542,21 @@ test_160e() {
 	# Create a user
 	changelog_register || error "changelog_register failed"
 
-	# Delete a future user (expect fail)
 	local MDT0=$(facet_svc $SINGLEMDS)
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister "cl77"
-	local rc=$?
+	local rc
 
+	# No user (expect fail)
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister
+	rc=$?
+	if [ $rc -eq 0 ]; then
+		error "Should fail without user"
+	elif [ $rc -ne 4 ]; then
+		error "changelog_deregister failed with $rc, expect 4(CMD_HELP)"
+	fi
+
+	# Delete a future user (expect fail)
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister "cl77"
+	rc=$?
 	if [ $rc -eq 0 ]; then
 		error "Deleted non-existant user cl77"
 	elif [ $rc -ne 2 ]; then
