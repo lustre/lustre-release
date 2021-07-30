@@ -52,20 +52,6 @@
  * Page operations.
  *
  */
-
-static void vvp_page_fini_common(struct vvp_page *vpg, struct pagevec *pvec)
-{
-	struct page *vmpage = vpg->vpg_page;
-
-	LASSERT(vmpage != NULL);
-	if (pvec) {
-		if (!pagevec_add(pvec, vmpage))
-			pagevec_release(pvec);
-	} else {
-		put_page(vmpage);
-	}
-}
-
 static void vvp_page_fini(const struct lu_env *env,
 			  struct cl_page_slice *slice,
 			  struct pagevec *pvec)
@@ -78,7 +64,13 @@ static void vvp_page_fini(const struct lu_env *env,
 	 * VPG_FREEING state.
 	 */
 	LASSERT((struct cl_page *)vmpage->private != slice->cpl_page);
-	vvp_page_fini_common(vpg, pvec);
+	LASSERT(vmpage != NULL);
+	if (pvec) {
+		if (!pagevec_add(pvec, vmpage))
+			pagevec_release(pvec);
+	} else {
+		put_page(vmpage);
+	}
 }
 
 static int vvp_page_own(const struct lu_env *env,
@@ -451,18 +443,8 @@ static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
 	return -EBUSY;
 }
 
-static void vvp_transient_page_fini(const struct lu_env *env,
-				    struct cl_page_slice *slice,
-				    struct pagevec *pvec)
-{
-	struct vvp_page *vpg = cl2vvp_page(slice);
-
-	vvp_page_fini_common(vpg, pvec);
-}
-
 static const struct cl_page_operations vvp_transient_page_ops = {
 	.cpo_discard		= vvp_transient_page_discard,
-	.cpo_fini		= vvp_transient_page_fini,
 	.cpo_is_vmlocked	= vvp_transient_page_is_vmlocked,
 	.cpo_print		= vvp_page_print,
 };
@@ -476,7 +458,6 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	vpg->vpg_page = vmpage;
-	get_page(vmpage);
 
 	if (page->cp_type == CPT_TRANSIENT) {
 		/* DIO pages are referenced by userspace, we don't need to take
@@ -485,6 +466,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 		cl_page_slice_add(page, &vpg->vpg_cl, obj,
 				  &vvp_transient_page_ops);
 	} else {
+		get_page(vmpage);
 		/* in cache, decref in vvp_page_delete */
 		atomic_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
