@@ -1451,6 +1451,9 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	if (!S_ISREG(inode->i_mode))
 		RETURN(0);
 
+	if (IS_ENCRYPTED(inode))
+		RETURN(0);
+
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 
