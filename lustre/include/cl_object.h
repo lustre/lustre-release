@@ -2607,6 +2607,19 @@ struct cl_sync_io {
 	struct cl_dio_aio      *csi_aio;
 };
 
+/** direct IO pages */
+struct ll_dio_pages {
+	/*
+	 * page array to be written. we don't support
+	 * partial pages except the last one.
+	 */
+	struct page             **ldp_pages;
+	/** # of pages in the array. */
+	size_t                  ldp_count;
+	/* the file offset of the first page. */
+	loff_t                  ldp_file_offset;
+};
+
 /** To support Direct AIO */
 struct cl_dio_aio {
 	struct cl_sync_io	cda_sync;
@@ -2615,9 +2628,17 @@ struct cl_dio_aio {
 	struct kiocb		*cda_iocb;
 	ssize_t			cda_bytes;
 	struct cl_dio_aio	*cda_ll_aio;
+	struct ll_dio_pages	cda_dio_pages;
 	unsigned		cda_no_aio_complete:1,
 				cda_no_aio_free:1;
 };
+
+#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
+	defined(HAVE_DIRECTIO_2ARGS)
+#define HAVE_DIO_ITER 1
+#endif
+
+void ll_release_user_pages(struct page **pages, int npages);
 
 /** @} cl_sync_io */
 

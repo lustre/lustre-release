@@ -1234,8 +1234,11 @@ static void cl_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	if (!aio->cda_no_aio_complete)
 		aio_complete(aio->cda_iocb, ret ?: aio->cda_bytes, 0);
 
-	if (aio->cda_ll_aio)
+	if (aio->cda_ll_aio) {
+		ll_release_user_pages(aio->cda_dio_pages.ldp_pages,
+				      aio->cda_dio_pages.ldp_count);
 		cl_sync_io_note(env, &aio->cda_ll_aio->cda_sync, ret);
+	}
 
 	EXIT;
 }
@@ -1292,6 +1295,32 @@ void cl_aio_free(const struct lu_env *env, struct cl_dio_aio *aio)
 }
 EXPORT_SYMBOL(cl_aio_free);
 
+/*
+ * ll_release_user_pages - tear down page struct array
+ * @pages: array of page struct pointers underlying target buffer
+ */
+void ll_release_user_pages(struct page **pages, int npages)
+{
+	int i;
+
+	if (npages == 0) {
+		LASSERT(!pages);
+		return;
+	}
+
+	for (i = 0; i < npages; i++) {
+		if (!pages[i])
+			break;
+		put_page(pages[i]);
+	}
+
+#if defined(HAVE_DIO_ITER)
+	kvfree(pages);
+#else
+	OBD_FREE_PTR_ARRAY_LARGE(pages, npages);
+#endif
+}
+EXPORT_SYMBOL(ll_release_user_pages);
 
 /**
  * Indicate that transfer of a single page completed.
