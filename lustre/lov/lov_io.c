@@ -227,8 +227,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	io->ci_need_write_intent = 0;
 
 	if (!(io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io) ||
-	      cl_io_is_fallocate(io) || cl_io_is_trunc(io) ||
-	      cl_io_is_fault_writable(io)))
+	      cl_io_is_fallocate(io) || cl_io_is_trunc(io)))
 		RETURN(0);
 
 	/*
@@ -582,8 +581,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 	/* check if it needs to instantiate layout */
 	if (!(io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io) ||
 	      cl_io_is_fallocate(io) ||
-	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)) ||
-	      cl_io_is_fault_writable(io))
+	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
 		GOTO(out, result = 0);
 
 	/*

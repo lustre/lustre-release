@@ -467,7 +467,7 @@ static int cancel_lru_locks(char *filter)
 		return -EINVAL;
 
 	for (i = 0; i < paths.gl_pathc; i++) {
-		FILE *f = fopen(paths.gl_pathv[i], "r");
+		FILE *f = fopen(paths.gl_pathv[i], "r+");
 
 		if (!f) {
 			rc = -errno;
@@ -806,6 +806,67 @@ out:
 	return rc;
 }
 
+static int mmap_tst10(char *mnt)
+{
+	char *buf = MAP_FAILED;
+	char *buffer[256];
+	struct stat st1, st2;
+	long off;
+	int fd = -1;
+	int rc = 0;
+
+	/* cancel unused locks */
+	rc = cancel_lru_locks("osc");
+	if (rc)
+		goto out;
+
+	fd = open(mmap_sanity, O_RDONLY);
+	if (fd == -1) {
+		perror("open");
+		rc = -errno;
+		goto out;
+	}
+
+	if (fstat(fd, &st1) != 0) {
+		perror("fstat");
+		rc = -errno;
+		goto out;
+	}
+
+	sleep(1);
+
+	buf = mmap(NULL, st1.st_size, PROT_READ | PROT_WRITE,
+		   MAP_PRIVATE | MAP_NORESERVE, fd, 0);
+	if (buf == MAP_FAILED) {
+		perror("mmap");
+		rc = -errno;
+		goto out;
+	}
+
+	/* read some data */
+	for (off = 0; off + 256 <= st1.st_size; off += 256)
+		memcpy(buffer, off + buf, 256);
+
+	if (fstat(fd, &st2) != 0) {
+		perror("fstat");
+		rc = -errno;
+		goto out;
+	}
+
+	if (st1.st_mtime != st2.st_mtime) {
+		fprintf(stderr, "before mmap read mtime(%ld) != after mtime=(%ld)\n",
+			st1.st_mtime, st2.st_mtime);
+		rc = -EINVAL;
+		goto out;
+	}
+out:
+	if (buf != MAP_FAILED)
+		munmap(buf, st1.st_size);
+	if (fd != -1)
+		close(fd);
+	return rc;
+}
+
 static int remote_tst(int tc, char *mnt)
 {
 	int rc = 0;
@@ -886,6 +947,12 @@ struct test_case tests[] = {
 		.tc		= 9,
 		.desc		= "mmap test9: SIGBUS for negative file offset",
 		.test_fn	= mmap_tst9,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 10,
+		.desc		= "mmap test10: mtime not change for readonly mmap access",
+		.test_fn	= mmap_tst10,
 		.node_cnt	= 1
 	},
 	{

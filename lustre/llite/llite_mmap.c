@@ -77,11 +77,13 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
  * \param env - corespondent lu_env to processing
  * \param vma - virtual memory area addressed to page fault
  * \param index - page index corespondent to fault.
+ * \param mkwrite - whether it is mmap write.
  *
  * \return error codes from cl_io_init.
  */
 static struct cl_io *
-ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma, pgoff_t index)
+ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
+		pgoff_t index, bool mkwrite)
 {
 	struct file	       *file = vma->vm_file;
 	struct inode	       *inode = file_inode(file);
@@ -102,6 +104,11 @@ restart:
 	fio->ft_index = index;
 	fio->ft_executable = vma->vm_flags & VM_EXEC;
 
+	if (mkwrite) {
+		fio->ft_mkwrite = 1;
+		fio->ft_writable = 1;
+	}
+
 	CDEBUG(D_MMAP,
 	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
 	       PFID(&ll_i2info(inode)->lli_fid), vma, vma->vm_start,
@@ -111,9 +118,6 @@ restart:
 		io->ci_seq_read = 1;
 	else if (vma->vm_flags & VM_RAND_READ)
 		io->ci_rand_read = 1;
-
-	if (vma->vm_flags & VM_WRITE)
-		fio->ft_writable = 1;
 
 	rc = cl_io_init(env, io, CIT_FAULT, io->ci_obj);
 	if (rc == 0) {
@@ -156,16 +160,13 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = ll_fault_io_init(env, vma, vmpage->index);
+	io = ll_fault_io_init(env, vma, vmpage->index, true);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
 	result = io->ci_result;
 	if (result < 0)
 		GOTO(out_io, result);
-
-	io->u.ci_fault.ft_mkwrite = 1;
-	io->u.ci_fault.ft_writable = 1;
 
 	vio = vvp_env_io(env);
 	vio->u.fault.ft_vma    = vma;
@@ -299,7 +300,7 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 		fault_ret = 0;
 	}
 
-	io = ll_fault_io_init(env, vma, vmf->pgoff);
+	io = ll_fault_io_init(env, vma, vmf->pgoff, false);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
