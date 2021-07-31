@@ -682,9 +682,9 @@ load_modules_local() {
 	# that obviously has nothing to do with this Lustre run
 	# Disable automatic memory scanning to avoid perf hit.
 	if [ -f /sys/kernel/debug/kmemleak ] ; then
-		echo scan=off > /sys/kernel/debug/kmemleak
-		echo scan > /sys/kernel/debug/kmemleak
-		echo clear > /sys/kernel/debug/kmemleak
+		echo scan=off > /sys/kernel/debug/kmemleak || true
+		echo scan > /sys/kernel/debug/kmemleak || true
+		echo clear > /sys/kernel/debug/kmemleak || true
 	fi
 
 	echo Loading modules from $LUSTRE
