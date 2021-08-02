@@ -26,6 +26,8 @@
 #include <asm/hypervisor.h>
 #endif
 
+#define CURRENT_LND_VERSION 1
+
 static int sock_timeout;
 module_param(sock_timeout, int, 0644);
 MODULE_PARM_DESC(sock_timeout, "dead socket timeout (seconds)");
@@ -142,8 +144,8 @@ static unsigned int zc_recv_min_nfrags = 16;
 module_param(zc_recv_min_nfrags, int, 0644);
 MODULE_PARM_DESC(zc_recv_min_nfrags, "minimum # of fragments to enable ZC recv");
 
-static unsigned int conns_per_peer = 1;
-module_param(conns_per_peer, uint, 0444);
+static unsigned int conns_per_peer = DEFAULT_CONNS_PER_PEER;
+module_param(conns_per_peer, uint, 0644);
 MODULE_PARM_DESC(conns_per_peer, "number of connections per peer");
 
 #ifdef SOCKNAL_BACKOFF
@@ -174,9 +176,13 @@ static inline bool is_native_host(void)
 }
 
 struct ksock_tunables ksocknal_tunables;
+static struct lnet_ioctl_config_socklnd_tunables default_tunables;
 
 int ksocknal_tunables_init(void)
 {
+	default_tunables.lnd_version = CURRENT_LND_VERSION;
+	default_tunables.lnd_conns_per_peer = conns_per_peer;
+
 	/* initialize ksocknal_tunables structure */
 	ksocknal_tunables.ksnd_timeout            = &sock_timeout;
 	ksocknal_tunables.ksnd_nscheds		  = &nscheds;
@@ -238,4 +244,47 @@ int ksocknal_tunables_init(void)
 		*ksocknal_tunables.ksnd_zc_min_payload = (16 << 20) + 1;
 
 	return 0;
-};
+}
+
+void ksocknal_tunables_setup(struct lnet_ni *ni)
+{
+	struct lnet_ioctl_config_socklnd_tunables *tunables;
+	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
+
+	/* If no tunables specified, setup default tunables */
+	if (!ni->ni_lnd_tunables_set)
+		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_sock,
+		       &default_tunables, sizeof(*tunables));
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_sock;
+
+	/* Current API version */
+	tunables->lnd_version = CURRENT_LND_VERSION;
+
+	net_tunables = &ni->ni_net->net_tunables;
+
+	if (net_tunables->lct_peer_timeout == -1)
+		net_tunables->lct_peer_timeout =
+			*ksocknal_tunables.ksnd_peertimeout;
+
+	if (net_tunables->lct_max_tx_credits == -1)
+		net_tunables->lct_max_tx_credits =
+			*ksocknal_tunables.ksnd_credits;
+
+	if (net_tunables->lct_peer_tx_credits == -1)
+		net_tunables->lct_peer_tx_credits =
+			*ksocknal_tunables.ksnd_peertxcredits;
+
+	if (net_tunables->lct_peer_tx_credits >
+	    net_tunables->lct_max_tx_credits)
+		net_tunables->lct_peer_tx_credits =
+			net_tunables->lct_max_tx_credits;
+
+	if (net_tunables->lct_peer_rtr_credits == -1)
+		net_tunables->lct_peer_rtr_credits =
+			*ksocknal_tunables.ksnd_peerrtrcredits;
+
+	if (!tunables->lnd_conns_per_peer)
+		tunables->lnd_conns_per_peer = (conns_per_peer) ?
+			conns_per_peer : DEFAULT_CONNS_PER_PEER;
+}

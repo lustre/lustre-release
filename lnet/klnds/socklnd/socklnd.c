@@ -36,6 +36,7 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
+#include <linux/ethtool.h>
 #include <linux/inetdevice.h>
 #include "socklnd.h"
 #include <linux/sunrpc/addr.h>
@@ -134,6 +135,7 @@ ksocknal_create_conn_cb(struct sockaddr *addr)
 	conn_cb->ksnr_ctrl_conn_count = 0;
 	conn_cb->ksnr_blki_conn_count = 0;
 	conn_cb->ksnr_blko_conn_count = 0;
+	conn_cb->ksnr_max_conns = 0;
 
 	return conn_cb;
 }
@@ -393,6 +395,19 @@ ksocknal_get_conn_count_by_type(struct ksock_conn_cb *conn_cb,
 	return count;
 }
 
+static unsigned int
+ksocknal_get_conns_per_peer(struct ksock_peer_ni *peer_ni)
+{
+	struct lnet_ni *ni = peer_ni->ksnp_ni;
+	struct lnet_ioctl_config_socklnd_tunables *tunables;
+
+	LASSERT(ni);
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_sock;
+
+	return tunables->lnd_conns_per_peer;
+}
+
 static void
 ksocknal_incr_conn_count(struct ksock_conn_cb *conn_cb,
 			 int type)
@@ -408,29 +423,25 @@ ksocknal_incr_conn_count(struct ksock_conn_cb *conn_cb,
 		break;
 	case SOCKLND_CONN_BULK_IN:
 		conn_cb->ksnr_blki_conn_count++;
-		if (conn_cb->ksnr_blki_conn_count >=
-		    *ksocknal_tunables.ksnd_conns_per_peer)
+		if (conn_cb->ksnr_blki_conn_count >= conn_cb->ksnr_max_conns)
 			conn_cb->ksnr_connected |= BIT(type);
 		break;
 	case SOCKLND_CONN_BULK_OUT:
 		conn_cb->ksnr_blko_conn_count++;
-		if (conn_cb->ksnr_blko_conn_count >=
-		    *ksocknal_tunables.ksnd_conns_per_peer)
+		if (conn_cb->ksnr_blko_conn_count >= conn_cb->ksnr_max_conns)
 			conn_cb->ksnr_connected |= BIT(type);
 		break;
 	case SOCKLND_CONN_ANY:
-		if (conn_cb->ksnr_conn_count >=
-		    *ksocknal_tunables.ksnd_conns_per_peer)
+		if (conn_cb->ksnr_conn_count >= conn_cb->ksnr_max_conns)
 			conn_cb->ksnr_connected |= BIT(type);
 		break;
 	default:
 		LBUG();
 		break;
-
 	}
 
-	CDEBUG(D_NET, "Add conn type %d, ksnr_connected %x conns_per_peer %d\n",
-	       type, conn_cb->ksnr_connected, *ksocknal_tunables.ksnd_conns_per_peer);
+	CDEBUG(D_NET, "Add conn type %d, ksnr_connected %x ksnr_max_conns %d\n",
+	       type, conn_cb->ksnr_connected, conn_cb->ksnr_max_conns);
 }
 
 static void
@@ -591,6 +602,13 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id,
 	}
 
 	ksocknal_add_conn_cb_locked(peer_ni, conn_cb);
+
+	/* Remember conns_per_peer setting at the time
+	 * of connection initiation. It will define the
+	 * max number of conns per type for this conn_cb
+	 * while it's in use.
+	 */
+	conn_cb->ksnr_max_conns = ksocknal_get_conns_per_peer(peer_ni);
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
@@ -988,7 +1006,13 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 				continue;
 
 			num_dup++;
-			if (num_dup < *ksocknal_tunables.ksnd_conns_per_peer)
+			/* If max conns per type is not registered in conn_cb
+			 * as ksnr_max_conns, use ni's conns_per_peer
+			 */
+			if ((peer_ni->ksnp_conn_cb &&
+			    num_dup < peer_ni->ksnp_conn_cb->ksnr_max_conns) ||
+			    (!peer_ni->ksnp_conn_cb &&
+			    num_dup < ksocknal_get_conns_per_peer(peer_ni)))
 				continue;
 
 			/* Reply on a passive connection attempt so the peer_ni
@@ -1212,7 +1236,7 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 		 * of the given type got created
 		 */
 		if (ksocknal_get_conn_count_by_type(conn_cb, conn->ksnc_type) ==
-		    *ksocknal_tunables.ksnd_conns_per_peer)
+		    conn_cb->ksnr_max_conns)
 			LASSERT((conn_cb->ksnr_connected &
 				BIT(conn->ksnc_type)) != 0);
 
@@ -2268,7 +2292,6 @@ int
 ksocknal_startup(struct lnet_ni *ni)
 {
 	struct ksock_net *net;
-	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 	struct ksock_interface *ksi = NULL;
 	struct lnet_inetdev *ifaces = NULL;
 	struct sockaddr_in *sa;
@@ -2286,27 +2309,8 @@ ksocknal_startup(struct lnet_ni *ni)
 		goto fail_0;
 	net->ksnn_incarnation = ktime_get_real_ns();
 	ni->ni_data = net;
-	net_tunables = &ni->ni_net->net_tunables;
-	if (net_tunables->lct_peer_timeout == -1)
-		net_tunables->lct_peer_timeout =
-			*ksocknal_tunables.ksnd_peertimeout;
 
-	if (net_tunables->lct_max_tx_credits == -1)
-		net_tunables->lct_max_tx_credits =
-			*ksocknal_tunables.ksnd_credits;
-
-	if (net_tunables->lct_peer_tx_credits == -1)
-		net_tunables->lct_peer_tx_credits =
-			*ksocknal_tunables.ksnd_peertxcredits;
-
-	if (net_tunables->lct_peer_tx_credits >
-	    net_tunables->lct_max_tx_credits)
-		net_tunables->lct_peer_tx_credits =
-			net_tunables->lct_max_tx_credits;
-
-	if (net_tunables->lct_peer_rtr_credits == -1)
-		net_tunables->lct_peer_rtr_credits =
-			*ksocknal_tunables.ksnd_peerrtrcredits;
+	ksocknal_tunables_setup(ni);
 
 	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns);
 	if (rc < 0)

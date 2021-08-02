@@ -73,12 +73,22 @@ lustre_o2iblnd_show_tun(struct cYAML *lndparams,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+
+static int
+lustre_socklnd_show_tun(struct cYAML *lndparams,
+			struct lnet_ioctl_config_socklnd_tunables *lnd_cfg)
+{
+	if (cYAML_create_number(lndparams, "conns_per_peer",
+				lnd_cfg->lnd_conns_per_peer) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 int
 lustre_net_show_tunables(struct cYAML *tunables,
 			 struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
 {
-
-
 	if (cYAML_create_number(tunables, "peer_timeout",
 				cmn->lct_peer_timeout)
 					== NULL)
@@ -116,6 +126,9 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 	if (net_type == O2IBLND)
 		rc = lustre_o2iblnd_show_tun(lnd_tunables,
 					     &lnd->lnd_tun_u.lnd_o2ib);
+	else if (net_type == SOCKLND)
+		rc = lustre_socklnd_show_tun(lnd_tunables,
+					     &lnd->lnd_tun_u.lnd_sock);
 
 	return rc;
 }
@@ -160,8 +173,24 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 	conns_per_peer = cYAML_get_object_item(lndparams, "conns_per_peer");
 	lnd_cfg->lnd_conns_per_peer =
 		(conns_per_peer) ? conns_per_peer->cy_valueint : 1;
+
 }
 
+
+static void
+yaml_extract_sock_tun(struct cYAML *tree,
+			 struct lnet_ioctl_config_socklnd_tunables *lnd_cfg)
+{
+	struct cYAML *conns_per_peer = NULL, *lndparams = NULL;
+
+	lndparams = cYAML_get_object_item(tree, "lnd tunables");
+	if (!lndparams)
+		return;
+
+	conns_per_peer = cYAML_get_object_item(lndparams, "conns_per_peer");
+	lnd_cfg->lnd_conns_per_peer =
+		(conns_per_peer) ? conns_per_peer->cy_valueint : 1;
+}
 
 void
 lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
@@ -171,6 +200,9 @@ lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
 	if (net_type == O2IBLND)
 		yaml_extract_o2ib_tun(tree,
 				      &tun->lnd_tun_u.lnd_o2ib);
+	else if (net_type == SOCKLND)
+		yaml_extract_sock_tun(tree,
+				      &tun->lnd_tun_u.lnd_sock);
 
 }
 

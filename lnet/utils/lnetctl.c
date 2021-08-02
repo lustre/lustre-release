@@ -94,7 +94,7 @@ static int jt_udsp(int argc, char **argv);
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
 	{"route", jt_route, 0, "route {add | del | show | help}"},
-	{"net", jt_net, 0, "net {add | del | show | help}"},
+	{"net", jt_net, 0, "net {add | del | show | set | help}"},
 	{"routing", jt_routing, 0, "routing {show | help}"},
 	{"set", jt_set, 0, "set {tiny_buffers | small_buffers | large_buffers"
 			   " | routing | numa_range | max_interfaces"
@@ -107,7 +107,7 @@ command_t cmd_list[] = {
 	{"stats", jt_stats, 0, "stats {show | help}"},
 	{"debug", jt_debug, 0, "debug recovery {local | peer}"},
 	{"global", jt_global, 0, "global {show | help}"},
-	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
+	{"peer", jt_peers, 0, "peer {add | del | show | list | set | help}"},
 	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
 	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
 	{"service-id", jt_calc_service_id, 0, "Calculate IB Lustre service ID\n"},
@@ -155,7 +155,8 @@ command_t net_cmds[] = {
 	 "\t--peer-credits: define the max number of inflight messages\n"
 	 "\t--peer-buffer-credits: the number of buffer credits per peer\n"
 	 "\t--credits: Network Interface credits\n"
-	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"},
+	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"
+	 "\t--conns-per-peer: number of connections per peer\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"},
@@ -166,6 +167,7 @@ command_t net_cmds[] = {
 	{"set", jt_set_ni_value, 0, "set local NI specific parameter\n"
 	 "\t--nid: NI NID to set the\n"
 	 "\t--health: specify health value to set\n"
+	 "\t--conns-per-peer: number of connections per peer\n"
 	 "\t--all: set all NIs value to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
@@ -948,7 +950,7 @@ static int jt_add_route(int argc, char **argv)
 static int jt_add_ni(int argc, char **argv)
 {
 	char *ip2net = NULL;
-	long int pto = -1, pc = -1, pbc = -1, cre = -1;
+	long int pto = -1, pc = -1, pbc = -1, cre = -1, cpp = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt, cpt_rc = -1;
 	struct lnet_dlc_network_descr nw_descr;
@@ -959,17 +961,19 @@ static int jt_add_ni(int argc, char **argv)
 	memset(&tunables, 0, sizeof(tunables));
 	lustre_lnet_init_nw_descr(&nw_descr);
 
-	const char *const short_options = "n:i:p:t:c:b:r:s:";
+	const char *const short_options = "b:c:i:m:n:p:r:s:t:";
 	static const struct option long_options[] = {
-	{ .name = "net",	  .has_arg = required_argument, .val = 'n' },
-	{ .name = "if",		  .has_arg = required_argument, .val = 'i' },
-	{ .name = "ip2net",	  .has_arg = required_argument, .val = 'p' },
-	{ .name = "peer-timeout", .has_arg = required_argument, .val = 't' },
-	{ .name = "peer-credits", .has_arg = required_argument, .val = 'c' },
 	{ .name = "peer-buffer-credits",
 				  .has_arg = required_argument, .val = 'b' },
+	{ .name = "peer-credits", .has_arg = required_argument, .val = 'c' },
+	{ .name = "if",		  .has_arg = required_argument, .val = 'i' },
+	{ .name = "conns-per-peer",
+				  .has_arg = required_argument, .val = 'm' },
+	{ .name = "net",	  .has_arg = required_argument, .val = 'n' },
+	{ .name = "ip2net",	  .has_arg = required_argument, .val = 'p' },
 	{ .name = "credits",	  .has_arg = required_argument, .val = 'r' },
 	{ .name = "cpt",	  .has_arg = required_argument, .val = 's' },
+	{ .name = "peer-timeout", .has_arg = required_argument, .val = 't' },
 	{ .name = NULL } };
 
 	rc = check_cmd(net_cmds, "net", "add", 0, argc, argv);
@@ -979,26 +983,11 @@ static int jt_add_ni(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
 		switch (opt) {
-		case 'n':
-			nw_descr.nw_id = libcfs_str2net(optarg);
-			break;
-		case 'i':
-			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
-			if (rc != 0) {
-				cYAML_build_error(-1, -1, "ni", "add",
-						"bad interface list",
-						&err_rc);
-				goto failed;
-			}
-			break;
-		case 'p':
-			ip2net = optarg;
-			break;
-		case 't':
-			rc = parse_long(optarg, &pto);
+		case 'b':
+			rc = parse_long(optarg, &pbc);
 			if (rc != 0) {
 				/* ignore option */
-				pto = -1;
+				pbc = -1;
 				continue;
 			}
 			break;
@@ -1010,13 +999,29 @@ static int jt_add_ni(int argc, char **argv)
 				continue;
 			}
 			break;
-		case 'b':
-			rc = parse_long(optarg, &pbc);
+		case 'i':
+			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						"bad interface list",
+						&err_rc);
+				goto failed;
+			}
+			break;
+		case 'm':
+			rc = parse_long(optarg, &cpp);
 			if (rc != 0) {
 				/* ignore option */
-				pbc = -1;
+				cpp = -1;
 				continue;
 			}
+			break;
+
+		case 'n':
+			nw_descr.nw_id = libcfs_str2net(optarg);
+			break;
+		case 'p':
+			ip2net = optarg;
 			break;
 		case 'r':
 			rc = parse_long(optarg, &cre);
@@ -1031,6 +1036,14 @@ static int jt_add_ni(int argc, char **argv)
 						     strlen(optarg), 0,
 						     UINT_MAX, &global_cpts);
 			break;
+		case 't':
+			rc = parse_long(optarg, &pto);
+			if (rc != 0) {
+				/* ignore option */
+				pto = -1;
+				continue;
+			}
+			break;
 		case '?':
 			print_help(net_cmds, "net", "add");
 		default:
@@ -1038,7 +1051,7 @@ static int jt_add_ni(int argc, char **argv)
 		}
 	}
 
-	if (pto > 0 || pc > 0 || pbc > 0 || cre > 0) {
+	if (pto > 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {
 		tunables.lt_cmn.lct_peer_timeout = pto;
 		tunables.lt_cmn.lct_peer_tx_credits = pc;
 		tunables.lt_cmn.lct_peer_rtr_credits = pbc;
@@ -1049,7 +1062,7 @@ static int jt_add_ni(int argc, char **argv)
 	rc = lustre_lnet_config_ni(&nw_descr,
 				   (cpt_rc == 0) ? global_cpts: NULL,
 				   ip2net, (found) ? &tunables : NULL,
-				   -1, &err_rc);
+				   cpp, -1, &err_rc);
 
 	if (global_cpts != NULL)
 		cfs_expr_list_free(global_cpts);
@@ -1275,7 +1288,66 @@ static int set_value_helper(int argc, char **argv,
 
 static int jt_set_ni_value(int argc, char **argv)
 {
-	return set_value_helper(argc, argv, lustre_lnet_config_ni_healthv);
+	char *nid = NULL;
+	long int healthv = -1, cpp = -1;
+	bool all = false;
+	int rc, opt;
+	struct cYAML *err_rc = NULL;
+
+	const char *const short_options = "a:m:n:t:";
+	static const struct option long_options[] = {
+	{ .name = "all",	    .has_arg = no_argument,	  .val = 'a' },
+	{ .name = "conns-per-peer", .has_arg = required_argument, .val = 'm' },
+	{ .name = "nid",	    .has_arg = required_argument, .val = 'n' },
+	{ .name = "health",	    .has_arg = required_argument, .val = 't' },
+	{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'a':
+			all = true;
+			break;
+		case 'm':
+			rc = parse_long(optarg, &cpp);
+			if (rc != 0) {
+				/* ignore option */
+				cpp = -1;
+				continue;
+			}
+			break;
+		case 'n':
+			nid = optarg;
+			break;
+		case 't':
+			if (parse_long(optarg, &healthv) != 0) {
+				/* ignore option */
+				healthv = -1;
+				continue;
+			}
+			break;
+		default:
+			return 0;
+		}
+	}
+
+	if (cpp > -1)
+		rc = lustre_lnet_config_ni_conns_per_peer(cpp, all, nid,
+							  -1, &err_rc);
+	if (healthv > -1)
+		rc = lustre_lnet_config_ni_healthv(healthv, all, nid,
+						   -1, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
 }
 
 static int jt_set_peer_ni_value(int argc, char **argv)

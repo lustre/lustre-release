@@ -1555,7 +1555,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 			  struct cfs_expr_list *global_cpts,
 			  char *ip2net,
 			  struct lnet_ioctl_config_lnd_tunables *tunables,
-			  int seq_no, struct cYAML **err_rc)
+			  long int cpp, int seq_no, struct cYAML **err_rc)
 {
 	char *data = NULL;
 	struct lnet_ioctl_config_ni *conf;
@@ -1669,6 +1669,11 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
+
+	if (LNET_NETTYP(nw_descr->nw_id) == SOCKLND && (cpp > -1))
+		tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_conns_per_peer = cpp;
+	else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND && (cpp > -1))
+		tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = cpp;
 
 	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids,
 				   err_str, sizeof(err_str));
@@ -1812,6 +1817,42 @@ lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
 	return rc;
 }
 
+
+static int
+lustre_lnet_config_conns_per_peer(int value, bool all, lnet_nid_t nid,
+				  char *name, int seq_no,
+				  struct cYAML **err_rc)
+{
+	struct lnet_ioctl_reset_conns_per_peer_cfg data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+
+	LIBCFS_IOC_INIT_V2(data, rcpp_hdr);
+	data.rcpp_all = all;
+	data.rcpp_value = value;
+	data.rcpp_nid = nid;
+
+	if (value < 0 || value > 127) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "\"Valid values are: 0-127\"");
+	} else {
+
+		rc = l_ioctl(LNET_DEV_ID,
+			     IOC_LIBCFS_SET_CONNS_PER_PEER, &data);
+		if (rc != 0) {
+			rc = -errno;
+			snprintf(err_str,
+				 sizeof(err_str),
+				 "Can not configure conns_per_peer value: %s",
+				 strerror(errno));
+		}
+	}
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid, int seq_no,
 				  struct cYAML **err_rc)
 {
@@ -1836,6 +1877,20 @@ int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *lpni_nid,
 	return lustre_lnet_config_healthv(value, all, nid,
 					  LNET_HEALTH_TYPE_PEER_NI,
 					  "peer_ni healthv", seq_no, err_rc);
+}
+
+int lustre_lnet_config_ni_conns_per_peer(int value, bool all, char *ni_nid,
+					 int seq_no, struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+
+	if (ni_nid)
+		nid = libcfs_str2nid(ni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_conns_per_peer(value, all, nid,
+						 "ni conns_per_peer",
+						 seq_no, err_rc);
 }
 
 static bool
@@ -2272,18 +2327,19 @@ continue_without_msg_stats:
 			if (rc != LUSTRE_CFG_RC_NO_ERR)
 				goto out;
 
-			rc = lustre_ni_show_tunables(tunables, LNET_NETTYP(rc_net),
-						     &lnd->lt_tun);
-			if (rc != LUSTRE_CFG_RC_NO_ERR &&
-			    rc != LUSTRE_CFG_RC_NO_MATCH)
-				goto out;
-
 			if (rc != LUSTRE_CFG_RC_NO_MATCH) {
 				tunables = cYAML_create_object(item,
 							       "lnd tunables");
 				if (tunables == NULL)
 					goto out;
 			}
+
+			rc = lustre_ni_show_tunables(tunables,
+						     LNET_NETTYP(rc_net),
+						     &lnd->lt_tun);
+			if (rc != LUSTRE_CFG_RC_NO_ERR &&
+			    rc != LUSTRE_CFG_RC_NO_MATCH)
+				goto out;
 
 			if (!backup &&
 			    cYAML_create_number(item, "dev cpt",
@@ -4184,10 +4240,9 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 				      LNET_NETTYP(nw_descr.nw_id));
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
-	rc = lustre_lnet_config_ni(&nw_descr,
-				   global_cpts,
+	rc = lustre_lnet_config_ni(&nw_descr, global_cpts,
 				   (ip2net) ? ip2net->cy_valuestring : NULL,
-				   (found) ? &tunables: NULL,
+				   (found) ? &tunables : NULL, -1,
 				   (seq_no) ? seq_no->cy_valueint : -1,
 				   err_rc);
 

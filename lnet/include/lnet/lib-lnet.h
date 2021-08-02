@@ -78,6 +78,9 @@ extern struct lnet the_lnet;			/* THE network */
 #define DEFAULT_PEER_CREDITS    8
 #define DEFAULT_CREDITS         256
 
+/* default number of connections per peer */
+#define DEFAULT_CONNS_PER_PEER  1
+
 #ifdef HAVE_KERN_SOCK_GETNAME_2ARGS
 #define lnet_kernel_getpeername(sock, addr, addrlen) \
 		kernel_getpeername(sock, addr)

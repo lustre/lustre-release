@@ -39,7 +39,6 @@
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>
 #endif
-
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 
@@ -3730,6 +3729,30 @@ lnet_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
+static void
+lnet_ni_set_conns_per_peer(lnet_nid_t nid, int value, bool all)
+{
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (ni->ni_nid != nid && !all)
+				continue;
+			if (LNET_NETTYP(net->net_id) == SOCKLND)
+				ni->ni_lnd_tunables.lnd_tun_u.lnd_sock.lnd_conns_per_peer = value;
+			else if (LNET_NETTYP(net->net_id) == O2IBLND)
+				ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = value;
+			if (!all) {
+				lnet_net_unlock(LNET_LOCK_EX);
+				return;
+			}
+		}
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
 static int
 lnet_get_local_ni_hstats(struct lnet_ioctl_local_ni_hstats *stats)
 {
@@ -4144,6 +4167,25 @@ LNetCtl(unsigned int cmd, void *arg)
 		else
 			lnet_peer_ni_set_healthv(cfg->rh_nid, value,
 						  cfg->rh_all);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
+	}
+
+	case IOC_LIBCFS_SET_CONNS_PER_PEER: {
+		struct lnet_ioctl_reset_conns_per_peer_cfg *cfg = arg;
+		int value;
+
+		if (cfg->rcpp_hdr.ioc_len < sizeof(*cfg))
+			return -EINVAL;
+		if (cfg->rcpp_value < 0)
+			value = 1;
+		else
+			value = cfg->rcpp_value;
+		CDEBUG(D_NET,
+		       "Setting conns_per_peer to %d for %s. all = %d\n",
+		       value, libcfs_nid2str(cfg->rcpp_nid), cfg->rcpp_all);
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_ni_set_conns_per_peer(cfg->rcpp_nid, value, cfg->rcpp_all);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}

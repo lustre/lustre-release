@@ -245,7 +245,7 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 			  struct cfs_expr_list *global_cpts,
 			  char *ip2net,
 			  struct lnet_ioctl_config_lnd_tunables *tunables,
-			  int seq_no, struct cYAML **err_rc);
+			  long int cpp, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_ni
@@ -331,6 +331,22 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
  */
 int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid,
 				  int seq_no, struct cYAML **err_rc);
+
+
+/* lustre_lnet_config_ni_conns_per_peer
+ *   set the conns_per_peer value of the NI. Valid range is specific to
+ *   network type.
+ *
+ *   value: conns_per_peer value to set.
+ *   all: true to set all local NIs to that value.
+ *   ni_nid: NI NID to set its conns_per_peer value. 'all' parameter always
+ *   takes precedence
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_ni_conns_per_peer(int value, bool all, char *ni_nid,
+					 int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_config_peer_ni_healthv

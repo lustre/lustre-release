@@ -1072,6 +1072,8 @@ net:
               peer_credits: 8
               peer_buffer_credits: 0
               credits: 256
+	  lnd tunables:
+	      conns_per_peer: 1
 route:
     - net: tcp7
       gateway: 7.7.7.7@tcp
@@ -1105,6 +1107,8 @@ net:
               peer_credits: 8
               peer_buffer_credits: 0
               credits: 256
+	  lnd tunables:
+	      conns_per_peer: 1
 route:
     - net: tcp8
       gateway: 8.8.8.10@tcp
@@ -1990,6 +1994,43 @@ test_213() {
 	return 0
 }
 run_test 213 "Check LNetDist calculation for multiple local NIDs"
+
+test_230() {
+	# LU-12815
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	echo "Check valid values; Should succeed"
+	local i
+	local lnid
+	for ((i = 4; i < 16; i+=4)); do
+		reinit_dlc || return $?
+		add_net "tcp" "eth0" || return $?
+		do_lnetctl net set --all --conns-per-peer $i ||
+			error "should have succeeded $?"
+		$LNETCTL net show -v 1 | grep -q "conns_per_peer: $i" ||
+			error "failed to set conns-per-peer to $i"
+		lnid="$(lctl list_nids | head -n 1)"
+		do_lnetctl ping "$lnid" ||
+			error "failed to ping myself"
+		printf 'network tcp\nconn_list\n' | lctl | grep -c "$lnid" | grep -q $((2+i*2)) ||
+			error "expected number of tcp connections $((2+i*2))"
+	done
+
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	echo "Set > 127; Should fail"
+	do_lnetctl net set --all --conns-per-peer 128 &&
+		error "should have failed $?"
+
+	reinit_dlc || return $?
+	add_net "tcp" "eth0" || return $?
+	echo "Set < 0; Should be ignored"
+	do_lnetctl net set --all --conns-per-peer -1 ||
+		error "should have succeeded $?"
+	$LNETCTL net show -v 1 | grep -q "conns_per_peer: 1" ||
+		error "Did not stay at default"
+}
+run_test 230 "Test setting conns-per-peer"
 
 test_300() {
 	# LU-13274

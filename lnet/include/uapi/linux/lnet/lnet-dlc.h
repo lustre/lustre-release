@@ -81,9 +81,16 @@ struct lnet_ioctl_config_o2iblnd_tunables {
 	__u16 lnd_ntx;
 };
 
+struct lnet_ioctl_config_socklnd_tunables {
+	__u32 lnd_version;
+	__u16 lnd_conns_per_peer;
+	__u16 lnd_pad;
+};
+
 struct lnet_lnd_tunables {
 	union {
 		struct lnet_ioctl_config_o2iblnd_tunables lnd_o2ib;
+		struct lnet_ioctl_config_socklnd_tunables lnd_sock;
 	} lnd_tun_u;
 };
 
@@ -278,6 +285,13 @@ struct lnet_ioctl_reset_health_cfg {
 	__u16 rh_all:1;
 	__s16 rh_value;
 	lnet_nid_t rh_nid;
+};
+
+struct lnet_ioctl_reset_conns_per_peer_cfg {
+	struct libcfs_ioctl_hdr rcpp_hdr;
+	__u16 rcpp_all:1;
+	__s16 rcpp_value;
+	lnet_nid_t rcpp_nid;
 };
 
 struct lnet_ioctl_recovery_list {
