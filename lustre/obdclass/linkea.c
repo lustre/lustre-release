@@ -126,6 +126,18 @@ void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 }
 EXPORT_SYMBOL(linkea_entry_unpack);
 
+bool linkea_will_overflow(struct linkea_data *ldata,
+			  const struct lu_name *lname)
+{
+	struct link_ea_header *leh = ldata->ld_leh;
+	int reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
+
+	if (unlikely(leh->leh_len + reclen > MAX_LINKEA_SIZE))
+		return true;
+	return false;
+}
+EXPORT_SYMBOL(linkea_will_overflow);
+
 /**
  * Add a record to the end of link ea buf
  **/

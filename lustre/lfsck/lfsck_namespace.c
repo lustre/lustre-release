@@ -5828,6 +5828,17 @@ again:
 		newdata = true;
 
 nodata:
+		if (rc == -ENOENT &&
+		    linkea_will_overflow(&ldata, cname)) {
+			CDEBUG(D_INODE, "No enough space to hold linkea entry '"
+			       DFID": %.*s' at %u\n", PFID(pfid),
+			       cname->ln_namelen, cname->ln_name,
+			       ldata.ld_leh->leh_overflow_time);
+			log = true;
+			rc = 0;
+			goto stop;
+		}
+
 		if (bk->lb_param & LPF_DRYRUN) {
 			if (rc == -ENODATA)
 				ns->ln_flags |= LF_UPGRADE;

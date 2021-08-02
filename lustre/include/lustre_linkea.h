@@ -60,6 +60,8 @@ void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 			 struct lu_name *lname, struct lu_fid *pfid);
 int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
 		      const struct lu_fid *pfid);
+bool linkea_will_overflow(struct linkea_data *ldata,
+			  const struct lu_name *lname);
 int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		   const struct lu_fid *pfid, bool err_on_overflow);
 void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname,
