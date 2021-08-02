@@ -174,18 +174,19 @@ to allow any user/group to create remote directories.  By default, it is
 .B "0"
 to limit remote/striped directories to only the root user.
 
-The root directory of the file system is on MDT0000, and directories and
-files inherit the MDT of their parent directory unless a different MDT is
-specified with this command.
+The root directory of the file system is on MDT0000, and a filesystem-wide
+default directory layout is set on it by default:
+.B lfs setdirstripe -D -i -1 -c 1 --max-inherit -1 --max-inherit-rr 3
+, which is a space balanced directory layout, therefore new directories will be
+created on all MDTs by inode and space usage, and the top three level of new
+directories will be created in roundrobin mode if system is balanced.  If user
+doesn't want automatic space balance, deleting this default directory layout
+won't work, because it will be recreated if not set, instead user can run
+.B lfs setdirstripe -D -i -1 -c 1 --max-inherit 1 <mountpoint>
+to limit space balance in the top level, or run
+.B lfs setdirstripe -D -i 0 -c 1 --max-inherit 1 <mountpoint>
+to disable it.
 
-By default, only directories on MDT0000 can contain directories that are not on
-the same MDT.  However, if
-.B "mdt.*.enable_remote_dir"
-is set non-zero on an MDT (the default)
-then it will allow creating remote directories that have parents other than
-MDT0000. This is restricted to avoid creating directory trees that have
-intermediate path components on a series different MDTs and become unavailable
-if any of the intermediate MDTs are offline.
 .SH EXAMPLES
 .TP
 .B $ lfs setdirstripe -c 2 -i 1 -H all_char /mnt/lustre/dir1
