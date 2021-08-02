@@ -7644,6 +7644,85 @@ test_56xf() {
 }
 run_test 56xf "FID is not lost during migration of a composite layout file"
 
+check_file_ost_range() {
+	local file="$1"
+	shift
+	local range="$*"
+	local -a file_range
+	local idx
+
+	file_range=($($LFS getstripe -y "$file" |
+		awk '/l_ost_idx:/ { print $NF }'))
+
+	if [[ "${#file_range[@]}" = 0 ]]; then
+		echo "No osts found for $file"
+		return 1
+	fi
+
+	for idx in "${file_range[@]}"; do
+		[[ " $range " =~ " $idx " ]] ||
+			return 1
+	done
+
+	return 0
+}
+
+sub_test_56xg() {
+	local stripe_opt="$1"
+	local pool="$2"
+	shift 2
+	local pool_ostidx="$(seq $* | tr '\n' ' ')"
+
+	$LFS migrate $stripe_opt -p $pool $DIR/$tfile ||
+		error "Fail to migrate $tfile on $pool"
+	[[ "$($LFS getstripe -p $DIR/$tfile)" = "$pool" ]] ||
+		error "$tfile is not in pool $pool"
+	check_file_ost_range "$DIR/$tfile" $pool_ostidx ||
+		error "$tfile osts mismatch with pool $pool (osts $pool_ostidx)"
+}
+
+test_56xg() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	[[ $OSTCOUNT -ge 2 ]] || skip "needs >= 2 OSTs"
+	[[ $MDS1_VERSION -gt $(version_code 2.14.52) ]] ||
+		skip "Need MDS version newer than 2.14.52"
+
+	local -a pool_names=("${TESTNAME}_0" "${TESTNAME}_1" "${TESTNAME}_2")
+	local -a pool_ranges=("0 0" "1 1" "0 1")
+
+	# init pools
+	for i in "${!pool_names[@]}"; do
+		pool_add ${pool_names[$i]} ||
+			error "pool_add failed (pool: ${pool_names[$i]})"
+		pool_add_targets ${pool_names[$i]} ${pool_ranges[$i]} ||
+			error "pool_add_targets failed (pool: ${pool_names[$i]})"
+	done
+
+	# init the file to migrate
+	$LFS setstripe -c1 -i1 $DIR/$tfile ||
+		error "Unable to create $tfile on OST1"
+	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=4 status=none ||
+		error "Unable to write on $tfile"
+
+	echo "1. migrate $tfile on pool ${pool_names[0]}"
+	sub_test_56xg "-c-1" "${pool_names[0]}" ${pool_ranges[0]}
+
+	echo "2. migrate $tfile on pool ${pool_names[2]}"
+	sub_test_56xg "-c-1 -S2M" "${pool_names[2]}" ${pool_ranges[2]}
+
+	echo "3. migrate $tfile on pool ${pool_names[1]}"
+	sub_test_56xg "-n -c-1" "${pool_names[1]}" ${pool_ranges[1]}
+
+	echo "4. migrate $tfile on pool ${pool_names[2]} with default stripe parameters"
+	sub_test_56xg "" "${pool_names[2]}" ${pool_ranges[2]}
+	echo
+
+	# Clean pools
+	destroy_test_pools ||
+		error "pool_destroy failed"
+}
+run_test 56xg "lfs migrate pool support"
+
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"

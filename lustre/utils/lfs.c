@@ -4108,8 +4108,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	/* lfs migrate $filename should keep the file's layout by default */
-	if (migrate_mode && !setstripe_args_specified(&lsa) && !layout &&
-	    !from_yaml)
+	if (migrate_mode && !layout && !from_yaml &&
+	    !setstripe_args_specified(&lsa) && !lsa.lsa_pool_name)
 		from_copy = true;
 
 	if (xattr && !foreign_mode) {
