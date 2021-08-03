@@ -1374,7 +1374,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	struct lustre_cfg *lcfg;
 	struct lustre_cfg_bufs bufs;
 	u64 prev_version = 0;
-	char *inst;
+	char inst[MTI_NAME_MAXLEN + 1];
 	char *buf;
 	int bufsz;
 	int pos = 0;
@@ -1389,32 +1389,25 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	/* get dynamic nids setting */
 	dynamic_nids = mgc->obd_dynamic_nids;
 
-	OBD_ALLOC(inst, PAGE_SIZE);
-	if (inst == NULL)
-		RETURN(-ENOMEM);
-
 	if (!IS_SERVER(lsi)) {
-		pos = snprintf(inst, PAGE_SIZE, "%016lx", cfg->cfg_instance);
-		if (pos >= PAGE_SIZE) {
-			OBD_FREE(inst, PAGE_SIZE);
+		pos = snprintf(inst, sizeof(inst), "%016lx", cfg->cfg_instance);
+		if (pos >= PAGE_SIZE)
 			return -E2BIG;
-		}
 #ifdef HAVE_SERVER_SUPPORT
 	} else {
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
-					PAGE_SIZE);
-		if (rc) {
-			OBD_FREE(inst, PAGE_SIZE);
+					sizeof(inst));
+		if (rc)
 			RETURN(-EINVAL);
-		}
-		pos = strlen(inst);
 #endif /* HAVE_SERVER_SUPPORT */
 	}
 
-	++pos;
-	buf   = inst + pos;
-	bufsz = PAGE_SIZE - pos;
+	OBD_ALLOC(buf, PAGE_SIZE);
+	if (!buf)
+		return -ENOMEM;
+	bufsz = PAGE_SIZE;
+	pos = 0;
 
 	while (datalen > 0) {
 		int   entry_len = sizeof(*entry);
@@ -1498,7 +1491,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			       is_ost ? "OST" : "MDT", entry->mne_index);
 
 		cname = is_ost ? "osc" : "mdc",
-			pos += sprintf(obdname + pos, "-%s-%s", cname, inst);
+			pos += snprintf(obdname + pos, bufsz, "-%s-%s", cname, inst);
 		lustre_cfg_bufs_reset(&bufs, obdname);
 
 		/* find the obd by obdname */
@@ -1601,8 +1594,9 @@ fail:;
 		/* continue, even one with error */
 	}
 
-	OBD_FREE(inst, PAGE_SIZE);
-        RETURN(rc);
+	OBD_FREE(buf, PAGE_SIZE);
+
+	RETURN(rc);
 }
 
 /**
