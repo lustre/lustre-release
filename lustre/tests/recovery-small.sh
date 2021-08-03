@@ -357,7 +357,7 @@ run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-	mkdir -p $DIR/$tdir || { error "mkdir failed: $?"; return 1; }
+	mkdir_on_mdt0 $DIR/$tdir || { error "mkdir failed: $?"; return 1; }
 	touch $DIR/$tdir/newentry || { error "touch failed: $?"; return 2; }
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000104"
@@ -1127,7 +1127,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 run_test 26b "evict dead exports"
 
 test_27() {
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	writemany -q -a $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
@@ -1212,7 +1212,7 @@ test_51() {
 	#define OBD_FAIL_MDS_SYNC_CAPA_SL                    0x1310
 	do_facet ost1 lctl set_param fail_loc=0x00001310
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	# put a load of file creates/writes/deletes
 	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
@@ -1491,7 +1491,7 @@ test_61()
 	do_facet $SINGLEMDS "lctl get_param -n $cflags" |grep -q skip_orphan
 	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
 
-	mkdir -p $DIR/$tdir || error "mkdir dir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir dir $DIR/$tdir failed"
 	# Set the default stripe of $DIR/$tdir to put the files to ost1
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
@@ -2004,7 +2004,7 @@ test_107 () {
 	local CLIENT_PID
 	local close_pid
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	# OBD_FAIL_MDS_REINT_NET_REP   0x119
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x119
 	multiop $DIR/$tdir D_c &
@@ -2054,7 +2054,7 @@ test_110a () {
 				2>/dev/null
 	done
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	drop_request "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
 		error "lfs mkdir failed"
 	local diridx=$($LFS getstripe -m $remote_dir)
@@ -2069,7 +2069,7 @@ test_110b () {
 	local remote_dir=$DIR/$tdir/remote_dir
 	local mdtidx=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	drop_reint_reply "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
 		error "lfs mkdir failed"
 
@@ -2085,7 +2085,7 @@ test_110c () {
 	local remote_dir=$DIR/$tdir/remote_dir
 	local mdtidx=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	drop_update_reply $mdtidx "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
 		error "lfs mkdir failed"
 
@@ -2101,7 +2101,7 @@ test_110d () {
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS mkdir -i $MDTIDX -c2 $remote_dir || error "lfs mkdir failed"
 
 	drop_request "rm -rf $remote_dir" || error "rm remote dir failed"
@@ -2117,7 +2117,7 @@ test_110e () {
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS mkdir -i $MDTIDX -c2 $remote_dir  || error "lfs mkdir failed"
 	drop_reint_reply "rm -rf $remote_dir" || error "rm remote dir failed"
 
@@ -2132,7 +2132,7 @@ test_110f () {
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS mkdir -i $MDTIDX -c2 $remote_dir || error "lfs mkdir failed"
 	drop_update_reply $MDTIDX "rm -rf $remote_dir" ||
 					error "rm remote dir failed"
@@ -2147,7 +2147,7 @@ test_110g () {
 
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 
 	# OBD_FAIL_MDS_REINT_NET_REP	0x119
@@ -2234,7 +2234,7 @@ test_110j () {
 	local local_dir=$DIR/$tdir/local_dir
 	local MDTIDX=1
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir $DIR/$tdir/local_dir
 	$LFS mkdir -i $MDTIDX $remote_dir
 
@@ -2876,29 +2876,31 @@ run_test 136 "changelog_deregister leaving pending records"
 
 test_137() {
 	df $DIR
-	mkdir -p $DIR/d1
-	mkdir -p $DIR/d2
-	dd if=/dev/zero of=$DIR/d1/$tfile bs=4096 count=1
-	dd if=/dev/zero of=$DIR/d2/$tfile bs=4096 count=1
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir $DIR/$tdir/d1
+	mkdir $DIR/$tdir/d2
+	dd if=/dev/zero of=$DIR/$tdir/d1/$tfile bs=4096 count=1
+	dd if=/dev/zero of=$DIR/$tdir/d2/$tfile bs=4096 count=1
 	cancel_lru_locks osc
 
 	#define OBD_FAIL_PTLRPC_RESEND_RACE	 0x525
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000525"
 
 	# RPC1: any reply is to be delayed to disable last_xid logic
-	ln $DIR/d1/$tfile $DIR/d1/f2 &
+	ln $DIR/$tdir/d1/$tfile $DIR/$tdir/d1/f2 &
 	sleep 1
 
 	# RPC2: setattr1 reply is delayed & resent
 	# original reply comes to client; the resend get asleep
-	chmod 666 $DIR/d2/$tfile
+	chmod 666 $DIR/$tdir/d2/$tfile
 
 	# RPC3: setattr2 on the same file; run ahead of RPC2 resend
-	chmod 777 $DIR/d2/$tfile
+	chmod 777 $DIR/$tdir/d2/$tfile
 
 	# RPC2 resend wakes up
 	sleep 5
-	[ $(stat -c "%a" $DIR/d2/$tfile) == 777 ] || error "resend got applied"
+	[ $(stat -c "%a" $DIR/$tdir/d2/$tfile) == 777 ] ||
+		error "resend got applied"
 }
 run_test 137 "late resend must be skipped if already applied"
 

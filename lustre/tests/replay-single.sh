@@ -42,7 +42,7 @@ if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
 fi
 
 test_0a() {	# was test_0
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS
 	fail $SINGLEMDS
 	rmdir $DIR/$tdir
@@ -216,7 +216,7 @@ test_5() {
 run_test 5 "|x| 220 open(O_CREAT)"
 
 test_6a() {	# was test_6
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS
 	mcreate $DIR/$tdir/$tfile
 	fail $SINGLEMDS
@@ -230,7 +230,7 @@ test_6a() {	# was test_6
 run_test 6a "mkdir + contained create"
 
 test_6b() {
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS
 	rm -rf $DIR/$tdir
 	fail $SINGLEMDS
@@ -241,7 +241,7 @@ test_6b() {
 run_test 6b "|X| rmdir"
 
 test_7() {
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS
 	mcreate $DIR/$tdir/$tfile
 	fail $SINGLEMDS
@@ -835,11 +835,12 @@ run_test 36 "don't resend cancel"
 # b=2368
 # directory orphans can't be unlinked from PENDING directory
 test_37() {
-	rmdir $DIR/$tfile 2>/dev/null
-	multiop_bg_pause $DIR/$tfile dD_c ||
-		error "multiop_bg_pause $DIR/$tfile failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	rmdir $DIR/$tdir/$tfile 2>/dev/null
+	multiop_bg_pause $DIR/$tdir/$tfile dD_c ||
+		error "multiop_bg_pause $tfile failed"
 	pid=$!
-	rmdir $DIR/$tfile
+	rmdir $DIR/$tdir/$tfile
 
 	replay_barrier $SINGLEMDS
 	# clear the dmesg buffer so we only see errors from this recovery
@@ -1541,7 +1542,7 @@ cleanup_58() {
 
 #recovery many mds-ost setattr from llog
 test_58a() {
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_MDS_OST_SETATTR       0x12c
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
 	createmany -o $DIR/$tdir/$tfile-%d 2500
@@ -1570,7 +1571,7 @@ test_58b() {
 	local sm_msg=$(printf "%.9s" $orig)
 
 	mount_client $MOUNT2 || error "mount_client on $MOUNT2 failed"
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
 	replay_barrier $SINGLEMDS
 	setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile
@@ -1610,7 +1611,7 @@ test_58c() { # bug 16570
 	local sm_msg1=$(printf "%.9s" $orig1)
 
 	mount_client $MOUNT2 || error "mount_client on $MOUNT2 failed"
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
 	drop_request "setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile" ||
 		error "drop_request for setfattr failed"
@@ -1634,7 +1635,7 @@ run_test 58c "resend/reconstruct setxattr op"
 test_59() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	createmany -o $DIR/$tdir/$tfile-%d 200 ||
 		error "createmany create files failed"
 	sync
@@ -1653,7 +1654,7 @@ run_test 59 "test log_commit_thread vs filter_destroy race"
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	createmany -o $DIR/$tdir/$tfile-%d 200 ||
 		error "createmany create files failed"
 	replay_barrier $SINGLEMDS
@@ -1726,7 +1727,7 @@ test_61d() { # bug 16002 # bug 17466 # bug 22137
 run_test 61d "error in llog_setup should cleanup the llog context correctly"
 
 test_62() { # Bug 15756 - don't mis-drop resent replay
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	replay_barrier $SINGLEMDS
 	createmany -o $DIR/$tdir/$tfile- 25 ||
 		error "createmany create files failed"
@@ -2592,7 +2593,7 @@ test_80a() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2620,7 +2621,7 @@ test_80b() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2651,7 +2652,7 @@ test_80c() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2679,7 +2680,7 @@ test_80d() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2712,7 +2713,7 @@ test_80e() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2743,7 +2744,7 @@ test_80f() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2771,7 +2772,7 @@ test_80g() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2800,7 +2801,7 @@ test_80h() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2833,7 +2834,7 @@ test_81a() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	touch $remote_dir || error "touch $remote_dir failed"
@@ -2864,7 +2865,7 @@ test_81b() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
@@ -2895,7 +2896,7 @@ test_81c() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
@@ -2923,7 +2924,7 @@ test_81d() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
@@ -2955,7 +2956,7 @@ test_81e() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -2987,7 +2988,7 @@ test_81f() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -3018,7 +3019,7 @@ test_81g() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -3046,7 +3047,7 @@ test_81h() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -3195,7 +3196,7 @@ test_87b() {
 run_test 87b "write replay with changed data (checksum resend)"
 
 test_88() { #bug 17485
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	mkdir -p $TMP/$tdir || error "mkdir $TMP/$tdir failed"
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "$LFS setstripe failed"
@@ -3284,7 +3285,7 @@ function calc_osc_kbytes_used() {
 
 test_89() {
 	cancel_lru_locks osc
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	rm -f $DIR/$tdir/$tfile
 	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
 	wait_delete_completed || error "initial wait delete timed out"
@@ -3480,7 +3481,7 @@ test_100a() {
 	local striped_dir=$DIR/$tdir/striped_dir
 	local MDTIDX=1
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	#To make sure MDT1 and MDT0 are connected
 	#otherwise it may create single stripe dir here
@@ -3510,7 +3511,7 @@ test_100b() {
 	local striped_dir=$DIR/$tdir/striped_dir
 	local MDTIDX=1
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	#To make sure MDT1 and MDT0 are connected
 	#otherwise it may create single stripe dir here
@@ -3539,7 +3540,7 @@ test_100c() {
 
 	local striped_dir=$DIR/$tdir/striped_dir
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	#To make sure MDT1 and MDT0 are connected
 	#otherwise it may create single stripe dir here
@@ -4687,7 +4688,7 @@ test_119() {
 	local clients=${CLIENTS:-$HOSTNAME}
 	local time_min=$(recovery_time_min)
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	mkdir $DIR/$tdir/tmp
 	rmdir $DIR/$tdir/tmp
 
@@ -4815,7 +4816,7 @@ test_130b() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
-	mkdir $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tdir
 	replay_barrier $SINGLEMDS
 	touch $DIR/$tdir/$tfile
