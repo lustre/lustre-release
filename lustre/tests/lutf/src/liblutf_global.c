@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include "lutf.h"
 
+lutf_config_params_t g_lutf_cfg;
+
 char *get_lutf_path(void)
 {
 	return g_lutf_cfg.lutf_path;

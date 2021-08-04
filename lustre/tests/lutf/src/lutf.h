@@ -17,10 +17,6 @@ extern char *outlog;
 #define OUT_PY_LOG "lutf_py.log"
 #define LARGE_LOG_FILE 400000000 /* 400 MB */
 
-time_t debugnow;
-int di;
-char debugtimestr[30];
-
 static inline void lutf_log_print(bool error, char *color1, char *color2,
 				  char *file, int line, char *fmt, ...)
 {
@@ -85,7 +81,7 @@ typedef struct lutf_config_params_s {
 			       */
 } lutf_config_params_t;
 
-lutf_config_params_t g_lutf_cfg;
+extern lutf_config_params_t g_lutf_cfg;
 
 static inline const char *lutf_rc2str(lutf_rc_t rc)
 {

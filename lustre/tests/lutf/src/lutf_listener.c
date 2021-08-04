@@ -547,9 +547,11 @@ void *lutf_listener_main(void *usr_data)
 			memcpy(&master->addr,
 			       &info->hb_info.master_address,
 			       sizeof(master->addr));
-			strncpy(master->name, g_lutf_cfg.master_name,
-				MAX_STR_LEN);
-			master->name[MAX_STR_LEN-1] = '\0';
+			if (g_lutf_cfg.master_name) {
+				strncpy(master->name, g_lutf_cfg.master_name,
+					MAX_STR_LEN);
+				master->name[MAX_STR_LEN-1] = '\0';
+			}
 			master->node_type = EN_LUTF_MASTER;
 			gethostname(master->hostname, MAX_STR_LEN);
 			master->telnet_port = info->hb_info.agent_telnet_port;

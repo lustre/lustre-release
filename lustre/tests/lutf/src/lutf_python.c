@@ -42,14 +42,14 @@ static lutf_rc_t python_run_interactive_shell(void)
 	PyRun_SimpleString("import readline\n");
 
 	/* all other paths are figured out within python */
-	snprintf(buf, MAX_STR_LEN,
+	snprintf(buf, sizeof(buf),
 		"sys.path.append(os.path.join('%s', 'python', 'infra'))",
-		g_lutf_cfg.lutf_path);
+		g_lutf_cfg.lutf_path ? : "NULL");
 	PyRun_SimpleString(buf);
 
-	snprintf(buf, MAX_STR_LEN,
+	snprintf(buf, sizeof(buf),
 		"sys.path.append(\"%s/src\")\n",
-		g_lutf_cfg.lutf_path);
+		g_lutf_cfg.lutf_path ? : "NULL");
 	PyRun_SimpleString(buf);
 
 	while (more != NULL) {
@@ -152,7 +152,7 @@ static lutf_rc_t python_run_interactive_shell(void)
 		 */
 		PDEBUG("Running in Daemon mode");
 		sprintf(segment, "fname = os.path.join('%s', '%s')\n",
-			g_lutf_cfg.tmp_dir, OUT_PY_LOG);
+			g_lutf_cfg.tmp_dir ? : "NULL", OUT_PY_LOG);
 		if (PyRun_SimpleString(segment)) {
 			PERROR("Failed to create log file");
 			rc = EN_LUTF_RC_FAIL;
