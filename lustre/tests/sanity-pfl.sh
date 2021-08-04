@@ -987,6 +987,9 @@ test_16b() {
 run_test 16b "Verify setstripe/getstripe with YAML config file + overstriping"
 
 test_16c() {
+	(( $MDS1_VERSION >= $(version_code 2.13.53.205) )) ||
+		skip "need MDS version at least 2.13.53.205"
+
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	local file=$DIR/$tdir/$tfile

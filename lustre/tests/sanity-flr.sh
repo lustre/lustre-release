@@ -2207,6 +2207,10 @@ test_46() {
 
 	verify_46 $dir $dir.copy "6. FLR dir"
 
+	(( $MDS1_VERSION >= $(version_code 2.13.53.205) )) ||
+		echo "server version $MDS1_VERSION does not support SEL" &&
+		return 0
+
 	########################### 7. SEL file ##############################
 	echo "  ** 7. SEL file"
 	rm -f $file
