@@ -78,13 +78,15 @@
 
 #define LNET_PROC_VERSION(v)	((unsigned int)((v) & LNET_PROC_VER_MASK))
 
-static int __proc_lnet_stats(void *data, int write,
-			     loff_t pos, void __user *buffer, int nob)
+static int proc_lnet_stats(struct ctl_table *table, int write,
+			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	int		 rc;
+	int rc;
 	struct lnet_counters *ctrs;
 	struct lnet_counters_common common;
-	int		 len;
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
+	int len;
 	char tmpstr[256]; /* 7 %u and 4 u64 */
 
 	if (write) {
@@ -122,14 +124,6 @@ static int __proc_lnet_stats(void *data, int write,
 out_no_ctrs:
 	LIBCFS_FREE(ctrs, sizeof(*ctrs));
 	return rc;
-}
-
-static int
-proc_lnet_stats(struct ctl_table *table, int write, void __user *buffer,
-		size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_lnet_stats);
 }
 
 static int
@@ -541,9 +535,11 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 	return rc;
 }
 
-static int __proc_lnet_buffers(void *data, int write,
-			       loff_t pos, void __user *buffer, int nob)
+static int proc_lnet_buffers(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
 {
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
 	char		*s;
 	char		*tmpstr;
 	int		tmpsiz;
@@ -597,14 +593,6 @@ static int __proc_lnet_buffers(void *data, int write,
 
 	LIBCFS_FREE(tmpstr, tmpsiz);
 	return rc;
-}
-
-static int
-proc_lnet_buffers(struct ctl_table *table, int write, void __user *buffer,
-		  size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_lnet_buffers);
 }
 
 static int
@@ -787,10 +775,13 @@ static struct lnet_portal_rotors	portal_rotors[] = {
 	},
 };
 
-static int __proc_lnet_portal_rotor(void *data, int write,
-				    loff_t pos, void __user *buffer, int nob)
+static int proc_lnet_portal_rotor(struct ctl_table *table, int write,
+				  void __user *buffer, size_t *lenp,
+				  loff_t *ppos)
 {
 	const int	buf_len	= 128;
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
 	char		*buf;
 	char		*tmp;
 	int		rc;
@@ -849,15 +840,6 @@ static int __proc_lnet_portal_rotor(void *data, int write,
 
 	return rc;
 }
-
-static int
-proc_lnet_portal_rotor(struct ctl_table *table, int write, void __user *buffer,
-		       size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_lnet_portal_rotor);
-}
-
 
 static struct ctl_table lnet_table[] = {
 	/*

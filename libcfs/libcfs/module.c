@@ -267,33 +267,15 @@ static struct miscdevice libcfs_dev = {
 	.fops			= &libcfs_fops,
 };
 
-int lprocfs_call_handler(void *data, int write, loff_t *ppos,
-			 void __user *buffer, size_t *lenp,
-			 int (*handler)(void *data, int write, loff_t pos,
-					void __user *buffer, int len))
-{
-	int rc = handler(data, write, *ppos, buffer, *lenp);
-
-	if (rc < 0)
-		return rc;
-
-	if (write) {
-		*ppos += *lenp;
-	} else {
-		*lenp = rc;
-		*ppos += rc;
-	}
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_call_handler);
-
-static int __proc_dobitmasks(void *data, int write,
-			     loff_t pos, void __user *buffer, int nob)
+static int proc_dobitmasks(struct ctl_table *table, int write,
+			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	const int     tmpstrlen = 512;
 	char         *tmpstr = NULL;
 	int           rc;
-	unsigned int *mask = data;
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
+	unsigned int *mask = table->data;
 	int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
 	int           is_printk = (mask == &libcfs_printk) ? 1 : 0;
 
@@ -325,35 +307,26 @@ static int __proc_dobitmasks(void *data, int write,
 	return rc;
 }
 
-static int proc_dobitmasks(struct ctl_table *table, int write,
-			   void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_dobitmasks);
-}
-
 static int min_watchdog_ratelimit;		/* disable ratelimiting */
 static int max_watchdog_ratelimit = (24*60*60); /* limit to once per day */
 
-static int __proc_dump_kernel(void *data, int write,
-			      loff_t pos, void __user *buffer, int nob)
+static int proc_dump_kernel(struct ctl_table *table, int write,
+			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
+	size_t nob = *lenp;
+
 	if (!write)
 		return 0;
 
 	return cfs_trace_dump_debug_buffer_usrstr(buffer, nob);
 }
 
-static int proc_dump_kernel(struct ctl_table *table, int write,
+static int proc_daemon_file(struct ctl_table *table, int write,
 			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_dump_kernel);
-}
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
 
-static int __proc_daemon_file(void *data, int write,
-			      loff_t pos, void __user *buffer, int nob)
-{
 	if (!write) {
 		int len = strlen(cfs_tracefile);
 
@@ -365,13 +338,6 @@ static int __proc_daemon_file(void *data, int write,
 	}
 
 	return cfs_trace_daemon_command_usrstr(buffer, nob);
-}
-
-static int proc_daemon_file(struct ctl_table *table, int write,
-			    void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_daemon_file);
 }
 
 static int libcfs_force_lbug(struct ctl_table *table, int write,
@@ -534,9 +500,11 @@ static int debugfs_dostring(struct ctl_table *table, int write,
 	return len;
 }
 
-static int __proc_cpt_table(void *data, int write,
-			    loff_t pos, void __user *buffer, int nob)
+static int proc_cpt_table(struct ctl_table *table, int write,
+			  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
 	char *buf = NULL;
 	int   len = 4096;
 	int   rc  = 0;
@@ -573,16 +541,11 @@ out:
 	return rc;
 }
 
-static int proc_cpt_table(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_cpt_distance(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_cpt_table);
-}
-
-static int __proc_cpt_distance(void *data, int write,
-			       loff_t pos, void __user *buffer, int nob)
-{
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
 	char *buf = NULL;
 	int   len = 4096;
 	int   rc  = 0;
@@ -617,13 +580,6 @@ static int __proc_cpt_distance(void *data, int write,
 	if (buf != NULL)
 		LIBCFS_FREE(buf, len);
 	return rc;
-}
-
-static int proc_cpt_distance(struct ctl_table *table, int write,
-			     void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				     __proc_cpt_distance);
 }
 
 static struct ctl_table lnet_table[] = {
@@ -756,13 +712,20 @@ static ssize_t lnet_debugfs_read(struct file *filp, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
 	struct ctl_table *table = filp->private_data;
+	loff_t old_pos = *ppos;
 	ssize_t rc = -EINVAL;
 
-	if (table) {
-		rc = table->proc_handler(table, 0, buf, &count, ppos);
-		if (!rc)
-			rc = count;
-	}
+	if (table)
+		rc = table->proc_handler(table, 0, (void __user *)buf,
+					 &count, ppos);
+	/*
+	 * On success, the length read is either in error or in count.
+	 * If ppos changed, then use count, else use error
+	 */
+	if (!rc && *ppos != old_pos)
+		rc = count;
+	else if (rc > 0)
+		*ppos += rc;
 
 	return rc;
 }
@@ -771,16 +734,19 @@ static ssize_t lnet_debugfs_write(struct file *filp, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
 	struct ctl_table *table = filp->private_data;
+	loff_t old_pos = *ppos;
 	ssize_t rc = -EINVAL;
 
-	if (table) {
+	if (table)
 		rc = table->proc_handler(table, 1, (void __user *)buf, &count,
 					 ppos);
-		if (!rc)
-			rc = count;
-	}
+	if (rc)
+		return rc;
 
-	return rc;
+	if (*ppos == old_pos)
+		*ppos += count;
+
+	return count;
 }
 
 static const struct file_operations lnet_debugfs_file_operations_rw = {

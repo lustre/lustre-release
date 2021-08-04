@@ -88,10 +88,6 @@ void lnet_insert_debugfs(struct ctl_table *table);
 void lnet_remove_debugfs(struct ctl_table *table);
 
 /* helper for sysctl handlers */
-int lprocfs_call_handler(void *data, int write, loff_t *ppos,
-			 void __user *buffer, size_t *lenp,
-			 int (*handler)(void *data, int write, loff_t pos,
-					void __user *buffer, int len));
 int debugfs_doint(struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos);
 
