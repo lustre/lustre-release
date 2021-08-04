@@ -1896,6 +1896,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 		 local_nb[0].lnb_file_offset,
 		 local_nb[count-1].lnb_file_offset +
 		 local_nb[count-1].lnb_len - 1, client_cksum, server_cksum);
+	CWARN("dumping checksum data to %s\n", dbgcksum_file_name);
 	filp = filp_open(dbgcksum_file_name,
 			 O_CREAT | O_EXCL | O_WRONLY | O_LARGEFILE, 0600);
 	if (IS_ERR(filp)) {
@@ -1922,8 +1923,6 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 			}
 			len -= rc;
 			buf += rc;
-			CDEBUG(D_INFO, "%s: wrote %d bytes\n",
-			       dbgcksum_file_name, rc);
 		}
 		kunmap(local_nb[i].lnb_page);
 	}
@@ -1932,6 +1931,8 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	if (rc)
 		CERROR("%s: sync returns %d\n", dbgcksum_file_name, rc);
 	filp_close(filp, NULL);
+
+	libcfs_debug_dumplog();
 }
 
 static int check_read_checksum(struct niobuf_local *local_nb, int npages,
@@ -2009,11 +2010,10 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 }
 
 static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
-				     struct niobuf_local *local_nb,
-				     int npages, int opc,
-				     obd_dif_csum_fn *fn,
-				     int sector_size,
-				     u32 *check_sum)
+				     struct niobuf_local *local_nb, int npages,
+				     int opc, obd_dif_csum_fn *fn,
+				     int sector_size, u32 *check_sum,
+				     bool resend)
 {
 	enum cksum_types t10_cksum_type = tgt->lut_dt_conf.ddp_t10_cksum_type;
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
@@ -2044,7 +2044,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	buffer = kmap(__page);
 	guard_start = (__u16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
+	if (unlikely(resend))
+		CDEBUG(D_PAGE | D_HA, "GRD tags per page = %u\n", guard_number);
 	for (i = 0; i < npages; i++) {
+		bool use_t10_grd;
+
 		/* corrupt the data before we compute the checksum, to
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
@@ -2078,9 +2082,10 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		if (t10_cksum_type && opc == OST_READ &&
-		    local_nb[i].lnb_len == PAGE_SIZE &&
-		    local_nb[i].lnb_guard_disk) {
+		use_t10_grd = t10_cksum_type && opc == OST_READ &&
+			      local_nb[i].lnb_len == PAGE_SIZE &&
+			      local_nb[i].lnb_guard_disk;
+		if (use_t10_grd) {
 			used = DIV_ROUND_UP(local_nb[i].lnb_len, sector_size);
 			if (used > (guard_number - used_number)) {
 				rc = -E2BIG;
@@ -2088,14 +2093,52 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			}
 			memcpy(guard_start + used_number,
 			       local_nb[i].lnb_guards,
-			       used * sizeof(*local_nb[i].lnb_guards));
-		} else {
+			       used * sizeof(*guard_start));
+			if (unlikely(resend))
+				CDEBUG(D_PAGE | D_HA,
+				       "lnb[%u]: used %u off %u+%u lnb checksum: %*phN\n",
+				       i, used,
+				       local_nb[i].lnb_page_offset,
+				       local_nb[i].lnb_len,
+				       (int)(used * sizeof(*guard_start)),
+				       guard_start + used_number);
+		}
+		if (!use_t10_grd || unlikely(resend)) {
+			__u16 guard_tmp[MAX_GUARD_NUMBER];
+			__u16 *guards = guard_start + used_number;
+			int used_tmp = -1, *usedp = &used;
+
+			if (unlikely(use_t10_grd)) {
+				guards = guard_tmp;
+				usedp = &used_tmp;
+			}
 			rc = obd_page_dif_generate_buffer(obd_name,
 				local_nb[i].lnb_page,
 				local_nb[i].lnb_page_offset & ~PAGE_MASK,
-				local_nb[i].lnb_len, guard_start + used_number,
-				guard_number - used_number, &used, sector_size,
+				local_nb[i].lnb_len, guards,
+				guard_number - used_number, usedp, sector_size,
 				fn);
+			if (unlikely(resend)) {
+				bool bad = use_t10_grd &&
+					memcmp(guard_tmp,
+					       local_nb[i].lnb_guards,
+					       used_tmp * sizeof(*guard_tmp));
+
+				if (bad)
+					CERROR("lnb[%u]: used %u/%u off %u+%u tmp checksum: %*phN\n",
+					       i, used, used_tmp,
+					       local_nb[i].lnb_page_offset,
+					       local_nb[i].lnb_len,
+					       (int)(used_tmp * sizeof(*guard_start)),
+					       guard_tmp);
+				CDEBUG_LIMIT(D_PAGE | D_HA | (bad ? D_ERROR : 0),
+				       "lnb[%u]: used %u/%u off %u+%u gen checksum: %*phN\n",
+				       i, used, used_tmp,
+				       local_nb[i].lnb_page_offset,
+				       local_nb[i].lnb_len,
+				       (int)(used * sizeof(*guard_start)),
+				       guard_start + used_number);
+			}
 			if (rc)
 				break;
 		}
@@ -2176,7 +2219,8 @@ out:
 static int tgt_checksum_niobuf_rw(struct lu_target *tgt,
 				  enum cksum_types cksum_type,
 				  struct niobuf_local *local_nb,
-				  int npages, int opc, u32 *check_sum)
+				  int npages, int opc, u32 *check_sum,
+				  bool resend)
 {
 	obd_dif_csum_fn *fn = NULL;
 	int sector_size = 0;
@@ -2188,10 +2232,11 @@ static int tgt_checksum_niobuf_rw(struct lu_target *tgt,
 	if (fn)
 		rc = tgt_checksum_niobuf_t10pi(tgt, local_nb, npages,
 					       opc, fn, sector_size,
-					       check_sum);
+					       check_sum, resend);
 	else
 		rc = tgt_checksum_niobuf(tgt, local_nb, npages, opc,
 					 cksum_type, check_sum);
+
 	RETURN(rc);
 }
 
@@ -2347,6 +2392,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		u32 flag = body->oa.o_valid & OBD_MD_FLFLAGS ?
 			   body->oa.o_flags : 0;
 		enum cksum_types cksum_type = obd_cksum_type_unpack(flag);
+		bool resend = (body->oa.o_valid & OBD_MD_FLFLAGS) &&
+			(body->oa.o_flags & OBD_FL_RECOV_RESEND);
 
 		repbody->oa.o_flags = obd_cksum_type_pack(obd_name,
 							  cksum_type);
@@ -2354,17 +2401,17 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 		rc = tgt_checksum_niobuf_rw(tsi->tsi_tgt, cksum_type,
 					    local_nb, npages_read, OST_READ,
-					    &repbody->oa.o_cksum);
+					    &repbody->oa.o_cksum, resend);
 		if (rc < 0)
 			GOTO(out_commitrw, rc);
-		CDEBUG(D_PAGE, "checksum at read origin: %x\n",
-		       repbody->oa.o_cksum);
+		CDEBUG(D_PAGE | (resend ? D_HA : 0),
+		       "checksum at read origin: %x (%x)\n",
+		       repbody->oa.o_cksum, cksum_type);
 
 		/* if a resend it could be for a cksum error, so check Server
 		 * cksum with returned Client cksum (this should even cover
 		 * zero-cksum case) */
-		if ((body->oa.o_valid & OBD_MD_FLFLAGS) &&
-		    (body->oa.o_flags & OBD_FL_RECOV_RESEND))
+		if (resend)
 			check_read_checksum(local_nb, npages_read, exp,
 					    &body->oa, &req->rq_peer,
 					    body->oa.o_cksum,
@@ -2724,7 +2771,7 @@ skip_transfer:
 
 		rc = tgt_checksum_niobuf_rw(tsi->tsi_tgt, cksum_type,
 					    local_nb, npages, OST_WRITE,
-					    &repbody->oa.o_cksum);
+					    &repbody->oa.o_cksum, false);
 		if (rc < 0)
 			GOTO(out_commitrw, rc);
 
