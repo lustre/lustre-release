@@ -703,7 +703,7 @@ static ssize_t __qos_maxage_show(struct kobject *kobj, struct attribute *attr,
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	return scnprintf(buf, PAGE_SIZE, "%u Sec\n",
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
 			 ltd->ltd_lov_desc.ld_qos_maxage);
 }
 

@@ -24839,6 +24839,8 @@ run_test 412 "mkdir on specific MDTs"
 
 generate_uneven_mdts() {
 	local threshold=$1
+	local lmv_qos_maxage
+	local lod_qos_maxage
 	local ffree
 	local bavail
 	local max
@@ -24847,6 +24849,17 @@ generate_uneven_mdts() {
 	local min_index
 	local tmp
 	local i
+
+	lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
+	$LCTL set_param lmv.*.qos_maxage=1
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" RETURN
+	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
+		lod.$FSNAME-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param \
+		lod.*.mdt_qos_maxage=1
+	stack_trap "do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param \
+		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" RETURN
 
 	echo
 	echo "Check for uneven MDTs: "
@@ -24871,9 +24884,15 @@ generate_uneven_mdts() {
 		fi
 	done
 
+	(( ${ffree[min_index]} > 0 )) ||
+		skip "no free files in MDT$min_index"
+	(( ${ffree[min_index]} < 10000000 )) ||
+		skip "too many free files in MDT$min_index"
+
 	# Check if we need to generate uneven MDTs
 	local diff=$(((max - min) * 100 / min))
 	local testdir=$DIR/$tdir-fillmdt
+	local start
 
 	mkdir -p $testdir
 
@@ -24881,16 +24900,20 @@ generate_uneven_mdts() {
 	while (( diff < threshold )); do
 		# generate uneven MDTs, create till $threshold% diff
 		echo -n "weight diff=$diff% must be > $threshold% ..."
-		echo "Fill MDT$min_index with 100 files: loop $i"
+		echo "Fill MDT$min_index with 1000 files: loop $i"
 		testdir=$DIR/$tdir-fillmdt/$i
 		[ -d $testdir ] || $LFS mkdir -i $min_index $testdir ||
 			error "mkdir $testdir failed"
 		$LFS setstripe -E 1M -L mdt $testdir ||
 			error "setstripe $testdir failed"
-		for F in f.{0..99}; do
-			dd if=/dev/zero of=$testdir/$F bs=1M count=1 > \
+		start=$SECONDS
+		for F in f.{0..999}; do
+			dd if=/dev/zero of=$testdir/$F bs=64K count=1 > \
 				/dev/null 2>&1 || error "dd $F failed"
 		done
+
+		# wait for QOS to update
+		(( SECONDS < start + 1 )) && sleep $((start + 1 - SECONDS))
 
 		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
 		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
@@ -24958,7 +24981,6 @@ test_qos_mkdir() {
 	local stripe_index=$($LFS getstripe -m $testdir)
 	local test_mkdir_rr=true
 
-	echo "dirstripe: '$($LFS getdirstripe $testdir)'"
 	getfattr -d -m dmv -e hex $testdir | grep dmv
 	if (( $? == 0 && $MDS1_VERSION >= $(version_code 2.14.51) )); then
 		echo "defstripe: '$($LFS getdirstripe -D $testdir)'"
@@ -25035,7 +25057,7 @@ test_qos_mkdir() {
 
 	(( ${ffree[min_index]} > 0 )) ||
 		skip "no free files in MDT$min_index"
-	(( ${ffree[min_index]} < 100000000 )) ||
+	(( ${ffree[min_index]} < 10000000 )) ||
 		skip "too many free files in MDT$min_index"
 
 	echo "MDT filesfree available: ${ffree[@]}"
@@ -25063,32 +25085,33 @@ test_qos_mkdir() {
 			error "$mkdir_cmd subdir$i failed"
 	done
 
+	max=0
 	for (( i = 0; i < $MDSCOUNT; i++ )); do
 		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
+		(( count > max )) && max=$count
 		echo "$count directories created on MDT$i"
-
-		if [ $stripe_count -gt 1 ]; then
-			count=$($LFS getdirstripe $testdir/* |
-				grep -c -P "^\s+$i\t")
-			echo "$count stripes created on MDT$i"
-		fi
 	done
 
-	max=$($LFS getdirstripe -i $testdir/* | grep -c "^$max_index$")
 	min=$($LFS getdirstripe -i $testdir/* | grep -c "^$min_index$")
 
 	# D-value should > 10% of averge
-	(( max - min >= num / 10 )) ||
+	(( max - min > num / 10 )) ||
 		error "subdirs shouldn't be evenly distributed: $max - $min < $((num / 10))"
 
-	# 5% for stripes
+	# ditto for stripes
 	if (( stripe_count > 1 )); then
-		max=$($LFS getdirstripe $testdir/* |
-		      grep -c -P "^\s+$max_index\t")
+		max=0
+		for (( i = 0; i < $MDSCOUNT; i++ )); do
+			count=$($LFS getdirstripe $testdir/* |
+				grep -c -P "^\s+$i\t")
+			(( count > max )) && max=$count
+			echo "$count stripes created on MDT$i"
+		done
+
 		min=$($LFS getdirstripe $testdir/* |
 			grep -c -P "^\s+$min_index\t")
-		(( max - min >= num * stripe_count / 20 )) ||
-			error "stripes shouldn't be evenly distributed: $max - $min < $((num / 20)) * $stripe_count"
+		(( max - min > num * stripe_count / 10 )) ||
+			error "stripes shouldn't be evenly distributed: $max - $min < $((num / 10)) * $stripe_count"
 	fi
 }
 
@@ -25232,7 +25255,7 @@ test_413z() {
 	local pid
 
 	for subdir in $(\ls -1 -d $DIR/d413*-fillmdt/*); do
-		unlinkmany $subdir/f. 100 &
+		unlinkmany $subdir/f. 1000 &
 		pids="$pids $!"
 	done
 
