@@ -69,10 +69,13 @@ static struct niobuf_local *find_lnb(struct blk_integrity_exchg *bix)
 
 /*
  * Type 1 and Type 2 protection use the same format: 16 bit guard tag,
- * 16 bit app tag, 32 bit reference tag.
+ * 16 bit app tag, 32 bit reference tag (sector number).
+ *
+ * Type 3 protection has a 16-bit guard tag and 16 + 32 bits of opaque
+ * tag space.
  */
-static void osd_dif_type1_generate(struct blk_integrity_exchg *bix,
-				   obd_dif_csum_fn *fn)
+static void osd_dif_generate(struct blk_integrity_exchg *bix,
+			     obd_dif_csum_fn *fn, enum osd_t10_type type)
 {
 	void *buf = bix->data_buf;
 	struct sd_dif_tuple *sdt = bix->prot_buf;
@@ -81,171 +84,120 @@ static void osd_dif_type1_generate(struct blk_integrity_exchg *bix,
 	sector_t sector = bix->sector;
 	unsigned int i;
 
+	ENTRY;
 	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
 		if (lnb && lnb->lnb_guard_rpc) {
 			sdt->guard_tag = *guard_buf;
 			guard_buf++;
-		} else
+		} else {
 			sdt->guard_tag = fn(buf, bix->sector_size);
-		sdt->ref_tag = cpu_to_be32(sector & 0xffffffff);
+		}
 		sdt->app_tag = 0;
+		if (type == OSD_T10_TYPE1)
+			sdt->ref_tag = cpu_to_be32(sector & 0xffffffff);
+		else /* if (type == OSD_T10_TYPE3) */
+			sdt->ref_tag = 0;
 
 		buf += bix->sector_size;
 		sector++;
 	}
+	RETURN_EXIT;
+}
+
+static int osd_dif_verify(struct blk_integrity_exchg *bix,
+			  obd_dif_csum_fn *fn, enum osd_t10_type type)
+{
+	void *buf = bix->data_buf;
+	struct sd_dif_tuple *sdt = bix->prot_buf;
+	struct niobuf_local *lnb = find_lnb(bix);
+	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
+	sector_t sector = bix->sector;
+	unsigned int i;
+	__u16 csum;
+
+	ENTRY;
+	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
+		if (type == OSD_T10_TYPE1) {
+			/* Unwritten sectors */
+			if (sdt->app_tag == 0xffff)
+				RETURN(0);
+
+			if (be32_to_cpu(sdt->ref_tag) != (sector & 0xffffffff)) {
+				CERROR("%s: ref tag error on sector %lu (rcvd %u): rc = %d\n",
+				       bix->disk_name, (unsigned long)sector,
+				       be32_to_cpu(sdt->ref_tag), -EIO);
+				return -EIO;
+			}
+		} else /* if (type == OSD_T10_TYPE3) */ {
+			/* Unwritten sectors */
+			if (sdt->app_tag == 0xffff &&
+			    sdt->ref_tag == 0xffffffff)
+				RETURN(0);
+		}
+
+		csum = fn(buf, bix->sector_size);
+
+		if (sdt->guard_tag != csum) {
+			CERROR("%s: guard tag error on sector %lu (rcvd %04x, data %04x): rc = %d\n",
+			       bix->disk_name, (unsigned long)sector,
+			       be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum),
+			       -EIO);
+			return -EIO;
+		}
+
+		if (guard_buf) {
+			*guard_buf = csum;
+			guard_buf++;
+		}
+
+		buf += bix->sector_size;
+		sector++;
+	}
+
+	if (lnb)
+		lnb->lnb_guard_disk = 1;
+
+	RETURN(0);
 }
 
 static void osd_dif_type1_generate_crc(struct blk_integrity_exchg *bix)
 {
-	osd_dif_type1_generate(bix, obd_dif_crc_fn);
+	osd_dif_generate(bix, obd_dif_crc_fn, OSD_T10_TYPE1);
 }
 
 static void osd_dif_type1_generate_ip(struct blk_integrity_exchg *bix)
 {
-	osd_dif_type1_generate(bix, obd_dif_ip_fn);
-}
-
-static int osd_dif_type1_verify(struct blk_integrity_exchg *bix,
-				obd_dif_csum_fn *fn)
-{
-	void *buf = bix->data_buf;
-	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct niobuf_local *lnb = find_lnb(bix);
-	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
-	sector_t sector = bix->sector;
-	unsigned int i;
-	__u16 csum;
-
-	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		/* Unwritten sectors */
-		if (sdt->app_tag == 0xffff)
-			return 0;
-
-		if (be32_to_cpu(sdt->ref_tag) != (sector & 0xffffffff)) {
-			CERROR("%s: ref tag error on sector %lu (rcvd %u)\n",
-			       bix->disk_name, (unsigned long)sector,
-			       be32_to_cpu(sdt->ref_tag));
-			return -EIO;
-		}
-
-		csum = fn(buf, bix->sector_size);
-
-		if (sdt->guard_tag != csum) {
-			CERROR("%s: guard tag error on sector %lu " \
-			       "(rcvd %04x, data %04x)\n", bix->disk_name,
-			       (unsigned long)sector,
-			       be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum));
-			return -EIO;
-		}
-
-		if (guard_buf) {
-			*guard_buf = csum;
-			guard_buf++;
-		}
-
-		buf += bix->sector_size;
-		sector++;
-	}
-
-	if (lnb)
-		lnb->lnb_guard_disk = 1;
-	return 0;
-}
-
-static int osd_dif_type1_verify_crc(struct blk_integrity_exchg *bix)
-{
-	return osd_dif_type1_verify(bix, obd_dif_crc_fn);
-}
-
-static int osd_dif_type1_verify_ip(struct blk_integrity_exchg *bix)
-{
-	return osd_dif_type1_verify(bix, obd_dif_ip_fn);
-}
-
-/*
- * Type 3 protection has a 16-bit guard tag and 16 + 32 bits of opaque
- * tag space.
- */
-static void osd_dif_type3_generate(struct blk_integrity_exchg *bix,
-				   obd_dif_csum_fn *fn)
-{
-	void *buf = bix->data_buf;
-	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct niobuf_local *lnb = find_lnb(bix);
-	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
-	unsigned int i;
-
-	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		if (lnb && lnb->lnb_guard_rpc) {
-			sdt->guard_tag = *guard_buf;
-			guard_buf++;
-		} else
-			sdt->guard_tag = fn(buf, bix->sector_size);
-		sdt->ref_tag = 0;
-		sdt->app_tag = 0;
-
-		buf += bix->sector_size;
-	}
+	osd_dif_generate(bix, obd_dif_ip_fn, OSD_T10_TYPE1);
 }
 
 static void osd_dif_type3_generate_crc(struct blk_integrity_exchg *bix)
 {
-	osd_dif_type3_generate(bix, obd_dif_crc_fn);
+	osd_dif_generate(bix, obd_dif_crc_fn, OSD_T10_TYPE3);
 }
 
 static void osd_dif_type3_generate_ip(struct blk_integrity_exchg *bix)
 {
-	osd_dif_type3_generate(bix, obd_dif_ip_fn);
+	osd_dif_generate(bix, obd_dif_ip_fn, OSD_T10_TYPE3);
 }
 
-static int osd_dif_type3_verify(struct blk_integrity_exchg *bix,
-				obd_dif_csum_fn *fn)
+static int osd_dif_type1_verify_crc(struct blk_integrity_exchg *bix)
 {
-	void *buf = bix->data_buf;
-	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct niobuf_local *lnb = find_lnb(bix);
-	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
-	sector_t sector = bix->sector;
-	unsigned int i;
-	__u16 csum;
+	return osd_dif_verify(bix, obd_dif_crc_fn, OSD_T10_TYPE1);
+}
 
-	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		/* Unwritten sectors */
-		if (sdt->app_tag == 0xffff && sdt->ref_tag == 0xffffffff)
-			return 0;
-
-		csum = fn(buf, bix->sector_size);
-
-		if (sdt->guard_tag != csum) {
-			CERROR("%s: guard tag error on sector %lu " \
-			       "(rcvd %04x, data %04x)\n", bix->disk_name,
-			       (unsigned long)sector,
-			       be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum));
-			return -EIO;
-		}
-
-		if (guard_buf) {
-			*guard_buf = csum;
-			guard_buf++;
-		}
-
-		buf += bix->sector_size;
-		sector++;
-	}
-
-	if (lnb)
-		lnb->lnb_guard_disk = 1;
-	return 0;
+static int osd_dif_type1_verify_ip(struct blk_integrity_exchg *bix)
+{
+	return osd_dif_verify(bix, obd_dif_ip_fn, OSD_T10_TYPE1);
 }
 
 static int osd_dif_type3_verify_crc(struct blk_integrity_exchg *bix)
 {
-	return osd_dif_type3_verify(bix, obd_dif_crc_fn);
+	return osd_dif_verify(bix, obd_dif_crc_fn, OSD_T10_TYPE3);
 }
 
 static int osd_dif_type3_verify_ip(struct blk_integrity_exchg *bix)
 {
-	return osd_dif_type3_verify(bix, obd_dif_ip_fn);
+	return osd_dif_verify(bix, obd_dif_ip_fn, OSD_T10_TYPE3);
 }
 
 int osd_get_integrity_profile(struct osd_device *osd,
