@@ -3353,25 +3353,48 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 	RETURN(rc);
 }
 
-typedef int (*mdd_xattr_cb)(const struct lu_env *env,
-			    struct mdd_object *obj,
-			    const struct lu_buf *buf,
-			    const char *name,
-			    int fl, struct thandle *handle);
+struct mdd_xattr_entry {
+	struct list_head	mxe_linkage;
+	char		       *mxe_name;
+	struct lu_buf		mxe_buf;
+};
 
-/* iterate xattrs, but ignore LMA, LMV, and LINKEA if 'skip_linkea' is set. */
-static int mdd_iterate_xattrs(const struct lu_env *env,
-			      struct mdd_object *sobj,
-			      struct mdd_object *tobj,
-			      bool skip_linkea,
-			      struct thandle *handle,
-			      mdd_xattr_cb cb)
+struct mdd_xattrs {
+	struct lu_buf		mx_namebuf;
+	struct list_head	mx_list;
+};
+
+static inline void mdd_xattrs_init(struct mdd_xattrs *xattrs)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
+	INIT_LIST_HEAD(&xattrs->mx_list);
+	xattrs->mx_namebuf.lb_buf = NULL;
+	xattrs->mx_namebuf.lb_len = 0;
+}
+
+static inline void mdd_xattrs_fini(struct mdd_xattrs *xattrs)
+{
+	struct mdd_xattr_entry *entry;
+	struct mdd_xattr_entry *tmp;
+
+	list_for_each_entry_safe(entry, tmp, &xattrs->mx_list, mxe_linkage) {
+		lu_buf_free(&entry->mxe_buf);
+		list_del(&entry->mxe_linkage);
+		OBD_FREE_PTR(entry);
+	}
+
+	lu_buf_free(&xattrs->mx_namebuf);
+}
+
+/* read xattrs into buf, but ignore LMA, LMV, and LINKEA if 'skip_linkea' is
+ * set.
+ */
+static int mdd_xattrs_migrate_prep(const struct lu_env *env,
+				   struct mdd_xattrs *xattrs,
+				   struct mdd_object *sobj,
+				   bool skip_linkea)
+{
+	struct mdd_xattr_entry *entry;
 	char *xname;
-	struct lu_buf list_xbuf;
-	struct lu_buf cbxbuf;
-	struct lu_buf xbuf = { NULL };
 	int list_xsize;
 	int xlen;
 	int rem;
@@ -3380,7 +3403,6 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 
 	ENTRY;
 
-	/* retrieve xattr list from the old object */
 	list_xsize = mdo_xattr_list(env, sobj, &LU_BUF_NULL);
 	if (list_xsize == -ENODATA)
 		RETURN(0);
@@ -3388,69 +3410,84 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 	if (list_xsize < 0)
 		RETURN(list_xsize);
 
-	lu_buf_check_and_alloc(&info->mdi_big_buf, list_xsize);
-	if (info->mdi_big_buf.lb_buf == NULL)
+	lu_buf_alloc(&xattrs->mx_namebuf, list_xsize);
+	if (xattrs->mx_namebuf.lb_buf == NULL)
 		RETURN(-ENOMEM);
 
-	list_xbuf.lb_buf = info->mdi_big_buf.lb_buf;
-	list_xbuf.lb_len = list_xsize;
-	rc = mdo_xattr_list(env, sobj, &list_xbuf);
+	rc = mdo_xattr_list(env, sobj, &xattrs->mx_namebuf);
 	if (rc < 0)
-		RETURN(rc);
+		GOTO(fini, rc);
 
 	rem = rc;
 	rc = 0;
-	xname = list_xbuf.lb_buf;
-	while (rem > 0) {
+	xname = xattrs->mx_namebuf.lb_buf;
+	for (; rem > 0; xname += xlen, rem -= xlen) {
 		xlen = strnlen(xname, rem - 1) + 1;
 		if (strcmp(XATTR_NAME_LMA, xname) == 0 ||
 		    strcmp(XATTR_NAME_LMV, xname) == 0)
-			goto next;
+			continue;
 
 		if (skip_linkea &&
 		    strcmp(XATTR_NAME_LINK, xname) == 0)
-			goto next;
+			continue;
 
 		xsize = mdo_xattr_get(env, sobj, &LU_BUF_NULL, xname);
 		if (xsize == -ENODATA)
-			goto next;
+			continue;
 		if (xsize < 0)
-			GOTO(out, rc = xsize);
+			GOTO(fini, rc = xsize);
 
-		lu_buf_check_and_alloc(&xbuf, xsize);
-		if (xbuf.lb_buf == NULL)
-			GOTO(out, rc = -ENOMEM);
+		OBD_ALLOC_PTR(entry);
+		if (!entry)
+			GOTO(fini, rc = -ENOMEM);
 
-		rc = mdo_xattr_get(env, sobj, &xbuf, xname);
-		if (rc == -ENODATA)
-			goto next;
-		if (rc < 0)
-			GOTO(out, rc);
-
-		cbxbuf = xbuf;
-		cbxbuf.lb_len = xsize;
-repeat:
-		rc = cb(env, tobj, &cbxbuf, xname, 0, handle);
-		if (unlikely(rc == -ENOSPC &&
-			     strcmp(xname, XATTR_NAME_LINK) == 0)) {
-			rc = linkea_overflow_shrink(
-					(struct linkea_data *)(cbxbuf.lb_buf));
-			if (likely(rc > 0)) {
-				cbxbuf.lb_len = rc;
-				goto repeat;
-			}
+		lu_buf_alloc(&entry->mxe_buf, xsize);
+		if (!entry->mxe_buf.lb_buf) {
+			OBD_FREE_PTR(entry);
+			GOTO(fini, rc = -ENOMEM);
 		}
 
-		if (rc)
-			GOTO(out, rc);
-next:
-		xname += xlen;
-		rem -= xlen;
+		rc = mdo_xattr_get(env, sobj, &entry->mxe_buf, xname);
+		if (rc < 0) {
+			lu_buf_free(&entry->mxe_buf);
+			OBD_FREE_PTR(entry);
+			if (rc == -ENODATA)
+				continue;
+			GOTO(fini, rc);
+		}
+
+		entry->mxe_name = xname;
+		list_add_tail(&entry->mxe_linkage, &xattrs->mx_list);
 	}
 
-out:
-	lu_buf_free(&xbuf);
+	RETURN(0);
+fini:
+	mdd_xattrs_fini(xattrs);
 	RETURN(rc);
+}
+
+typedef int (*mdd_xattr_cb)(const struct lu_env *env,
+			    struct mdd_object *obj,
+			    const struct lu_buf *buf,
+			    const char *name,
+			    int fl, struct thandle *handle);
+
+static int mdd_foreach_xattr(const struct lu_env *env,
+			     struct mdd_object *tobj,
+			     struct mdd_xattrs *xattrs,
+			     struct thandle *handle,
+			     mdd_xattr_cb cb)
+{
+	struct mdd_xattr_entry *entry;
+	int rc;
+
+	list_for_each_entry(entry, &xattrs->mx_list, mxe_linkage) {
+		rc = cb(env, tobj, &entry->mxe_buf, entry->mxe_name, 0, handle);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
 }
 
 typedef int (*mdd_linkea_cb)(const struct lu_env *env,
@@ -3780,6 +3817,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct lu_attr *attr,
 				      struct lu_buf *sbuf,
 				      struct linkea_data *ldata,
+				      struct mdd_xattrs *xattrs,
 				      struct md_attr *ma,
 				      struct md_op_spec *spec,
 				      struct dt_allocation_hint *hint,
@@ -3849,8 +3887,8 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			return rc;
 	}
 
-	rc = mdd_iterate_xattrs(env, sobj, tobj, true, handle,
-				mdo_declare_xattr_set);
+	rc = mdd_foreach_xattr(env, tobj, xattrs, handle,
+			       mdo_declare_xattr_set);
 	if (rc)
 		return rc;
 
@@ -3998,6 +4036,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			      struct lu_attr *attr,
 			      const struct lu_buf *sbuf,
 			      struct linkea_data *ldata,
+			      struct mdd_xattrs *xattrs,
 			      struct md_attr *ma,
 			      struct md_op_spec *spec,
 			      struct dt_allocation_hint *hint,
@@ -4035,7 +4074,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 		RETURN(rc);
 
 	mdd_write_lock(env, tobj, DT_TGT_CHILD);
-	rc = mdd_iterate_xattrs(env, sobj, tobj, true, handle, mdo_xattr_set);
+	rc = mdd_foreach_xattr(env, tobj, xattrs, handle, mdo_xattr_set);
 	mdd_write_unlock(env, tobj);
 	if (rc)
 		RETURN(rc);
@@ -4170,6 +4209,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 	struct linkea_data *ldata = &info->mdi_link_data;
 	struct dt_allocation_hint *hint = &info->mdi_hint;
 	struct lu_buf sbuf = { NULL };
+	struct mdd_xattrs xattrs;
 	struct lmv_mds_md_v1 *lmv;
 	struct thandle *handle;
 	int rc;
@@ -4187,6 +4227,13 @@ static int mdd_migrate_object(const struct lu_env *env,
 	rc = mdd_la_get(env, tpobj, tpattr);
 	if (rc)
 		RETURN(rc);
+
+	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
+				      spattr, tpattr, attr);
+	if (rc)
+		RETURN(rc);
+
+	mdd_xattrs_init(&xattrs);
 
 	if (S_ISDIR(attr->la_mode) && !spec->sp_migrate_nsonly) {
 		struct lmv_user_md_v1 *lum = spec->u.sp_ea.eadata;
@@ -4246,10 +4293,14 @@ static int mdd_migrate_object(const struct lu_env *env,
 	else if (rc < 0)
 		GOTO(out, rc);
 
-	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
-				      spattr, tpattr, attr);
-	if (rc)
-		GOTO(out, rc);
+	/* migrate inode will migrate xattrs, prepare xattrs early to avoid
+	 * RPCs inside transaction.
+	 */
+	if (!spec->sp_migrate_nsonly) {
+		rc = mdd_xattrs_migrate_prep(env, &xattrs, sobj, false);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
@@ -4262,8 +4313,8 @@ static int mdd_migrate_object(const struct lu_env *env,
 	else
 		rc = mdd_declare_migrate_create(env, spobj, tpobj, sobj, tobj,
 						sname, tname, spattr, tpattr,
-						attr, &sbuf, ldata, ma, spec,
-						hint, handle);
+						attr, &sbuf, ldata, &xattrs, ma,
+						spec, hint, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -4283,7 +4334,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 	else
 		rc = mdd_migrate_create(env, spobj, tpobj, sobj, tobj, sname,
 					tname, spattr, tpattr, attr, &sbuf,
-					ldata, ma, spec, hint, handle);
+					ldata, &xattrs, ma, spec, hint, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -4299,6 +4350,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 out:
+	mdd_xattrs_fini(&xattrs);
 	lu_buf_free(&sbuf);
 
 	return rc;
@@ -4414,6 +4466,7 @@ static int mdd_declare_1sd_collapse(const struct lu_env *env,
 				    struct mdd_object *obj,
 				    struct mdd_object *stripe,
 				    struct lu_attr *attr,
+				    struct mdd_xattrs *xattrs,
 				    struct md_layout_change *mlc,
 				    struct lu_name *lname,
 				    struct thandle *handle)
@@ -4430,8 +4483,8 @@ static int mdd_declare_1sd_collapse(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdd_iterate_xattrs(env, obj, stripe, false, handle,
-				mdo_declare_xattr_set);
+	rc = mdd_foreach_xattr(env, stripe, xattrs, handle,
+			       mdo_declare_xattr_set);
 	if (rc)
 		return rc;
 
@@ -4473,6 +4526,7 @@ static int mdd_1sd_collapse(const struct lu_env *env,
 			    struct mdd_object *obj,
 			    struct mdd_object *stripe,
 			    struct lu_attr *attr,
+			    struct mdd_xattrs *xattrs,
 			    struct md_layout_change *mlc,
 			    struct lu_name *lname,
 			    struct thandle *handle)
@@ -4499,8 +4553,7 @@ static int mdd_1sd_collapse(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
-	/* copy xattrs including linkea */
-	rc = mdd_iterate_xattrs(env, obj, stripe, false, handle, mdo_xattr_set);
+	rc = mdd_foreach_xattr(env, stripe, xattrs, handle, mdo_xattr_set);
 	if (rc)
 		GOTO(out, rc);
 
@@ -4564,6 +4617,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 	struct lu_fid *fid = &info->mdi_fid2;
 	struct lu_name lname = { NULL };
 	struct lu_buf lmv_buf = { NULL };
+	struct mdd_xattrs xattrs;
 	struct lmv_mds_md_v1 *lmv;
 	struct lmv_user_md *lmu;
 	struct thandle *handle;
@@ -4597,6 +4651,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 		le32_to_cpu(lmv->lmv_stripe_count));
 	LASSERT(!lmv_is_splitting(lmv));
 	LASSERT(lmv_is_migrating(lmv) || lmv_is_merging(lmv));
+
+	mdd_xattrs_init(&xattrs);
 
 	/* if dir stripe count will be shrunk to 1, it needs to be transformed
 	 * to a plain dir, which will cause FID change and namespace update.
@@ -4639,6 +4695,9 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 			pobj = NULL;
 			GOTO(out, rc = PTR_ERR(stripe));
 		}
+
+		if (!lmv_is_fixed(lmv))
+			rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, true);
 	}
 
 	handle = mdd_trans_create(env, mdd);
@@ -4651,8 +4710,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 		GOTO(stop_trans, rc);
 
 	if (le32_to_cpu(lmu->lum_stripe_count) == 1 && !lmv_is_fixed(lmv)) {
-		rc = mdd_declare_1sd_collapse(env, pobj, obj, stripe, attr, mlc,
-					      &lname, handle);
+		rc = mdd_declare_1sd_collapse(env, pobj, obj, stripe, attr,
+					      &xattrs, mlc, &lname, handle);
 		if (rc)
 			GOTO(stop_trans, rc);
 	}
@@ -4674,8 +4733,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 		GOTO(stop_trans, rc);
 
 	if (le32_to_cpu(lmu->lum_stripe_count) == 1 && !lmv_is_fixed(lmv)) {
-		rc = mdd_1sd_collapse(env, pobj, obj, stripe, attr, mlc, &lname,
-				      handle);
+		rc = mdd_1sd_collapse(env, pobj, obj, stripe, attr, &xattrs,
+				      mlc, &lname, handle);
 		if (rc)
 			GOTO(stop_trans, rc);
 	}
@@ -4687,6 +4746,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 stop_trans:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 out:
+	mdd_xattrs_fini(&xattrs);
 	if (pobj) {
 		mdd_object_put(env, stripe);
 		mdd_object_put(env, pobj);
@@ -4700,6 +4760,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 					struct mdd_object *pobj,
 					struct mdd_object *obj,
 					struct mdd_object *tobj,
+					struct mdd_xattrs *xattrs,
 					struct md_layout_change *mlc,
 					struct dt_allocation_hint *hint,
 					struct thandle *handle)
@@ -4753,8 +4814,8 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdd_iterate_xattrs(env, obj, tobj, true, handle,
-				mdo_declare_xattr_set);
+	rc = mdd_foreach_xattr(env, tobj, xattrs, handle,
+			       mdo_declare_xattr_set);
 	if (rc)
 		return rc;
 
@@ -4799,6 +4860,7 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 				struct mdd_object *pobj,
 				struct mdd_object *obj,
 				struct mdd_object *tobj,
+				struct mdd_xattrs *xattrs,
 				struct md_layout_change *mlc,
 				struct dt_allocation_hint *hint,
 				struct thandle *handle)
@@ -4830,7 +4892,7 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	rc = mdd_iterate_xattrs(env, obj, tobj, true, handle, mdo_xattr_set);
+	rc = mdd_foreach_xattr(env, tobj, xattrs, handle, mdo_xattr_set);
 	if (rc)
 		RETURN(rc);
 
@@ -4885,6 +4947,7 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 	struct mdd_object *tobj = md2mdd_obj(mlc->mlc_target);
 	struct dt_allocation_hint *hint = &info->mdi_hint;
 	bool is_plain = false;
+	struct mdd_xattrs xattrs;
 	struct thandle *handle;
 	int rc;
 
@@ -4898,13 +4961,17 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 	else if (rc < 0)
 		RETURN(rc);
 
+	mdd_xattrs_init(&xattrs);
+	if (is_plain)
+		rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, true);
+
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
-		RETURN(PTR_ERR(handle));
+		GOTO(out, rc = PTR_ERR(handle));
 
 	if (is_plain) {
-		rc = mdd_dir_declare_split_plain(env, mdd, pobj, obj, tobj, mlc,
-						 hint, handle);
+		rc = mdd_dir_declare_split_plain(env, mdd, pobj, obj, tobj,
+						 &xattrs, mlc, hint, handle);
 	} else {
 		mlc->mlc_opc = MD_LAYOUT_SPLIT;
 		rc = mdo_declare_layout_change(env, obj, mlc, handle);
@@ -4922,8 +4989,8 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 		GOTO(stop_trans, rc);
 
 	if (is_plain) {
-		rc = mdd_dir_split_plain(env, mdd, pobj, obj, tobj, mlc, hint,
-					 handle);
+		rc = mdd_dir_split_plain(env, mdd, pobj, obj, tobj, &xattrs,
+					 mlc, hint, handle);
 	} else {
 		mdd_write_lock(env, obj, DT_TGT_CHILD);
 		rc = mdo_xattr_set(env, obj, NULL, XATTR_NAME_LMV,
@@ -4942,6 +5009,8 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 
 stop_trans:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
+out:
+	mdd_xattrs_fini(&xattrs);
 
 	return rc;
 }
