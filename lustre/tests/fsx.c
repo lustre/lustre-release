@@ -359,15 +359,15 @@ logdump(void)
 			break;
 		case OP_TRUNCATE:
 			down = lp->args[0] < lp->args[1];
-			prt("TRUNCATE %s\tfrom 0x%05x to 0x%05x",
-			    down ? "DOWN" : "UP", lp->args[1], lp->args[0]);
+			prt("TRUNC%s 0x%05x to 0x%05x",
+			    down ? "_DN" : "_UP", lp->args[1], lp->args[0]);
 			if (badoff >= lp->args[!down] &&
 			    badoff < lp->args[!!down])
-				prt("\t******WWWW");
+				prt("\t******TTTT");
 			break;
 		case OP_FALLOCATE:
 			/* 0: offset 1: length 2: where alloced */
-			prt("FALLOC  \tfrom 0x%05x to 0x%05x\t(0x%05x bytes)%s",
+			prt("FALLOC   0x%05x thru 0x%05x\t(0x%05x bytes)%s",
 			    lp->args[0], lp->args[0] + lp->args[1],
 			    lp->args[1], falloc_type[lp->args[2]]);
 			if (badoff >= lp->args[0] &&
@@ -690,7 +690,7 @@ output_line(struct test_file *tf, int op, unsigned int offset,
 	    (monitorend == -1 || offset <= monitorend)))))))
 		return;
 
-	prt("%06lu%s %lu.%06u %-10s %#08x %s %#08x\t(0x0%x bytes)\n",
+	prt("%06lu%s %lu.%06u %-10s %#08x %s %#08x\t(0x%x bytes)\n",
 	    testcalls, fill_tf_buf(tf), tv.tv_sec, (int)tv.tv_usec,
 	    ops[op], offset, op == OP_TRUNCATE || op == OP_PUNCH_HOLE ?
 	    " to " : "thru", offset + size - 1,
