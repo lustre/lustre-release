@@ -539,6 +539,36 @@ client# lfs mkdir -c
         free inodes/blocks.</para></listitem>
       </itemizedlist>
     </section>
+    <section xml:id="fsdefaultlmv" condition='l2E'>
+      <title>Filesystem-wide default directory striping</title>
+      <para>Similar to file objects allocation, the directory objects are
+      allocated on MDTs by a round-robin algorithm or a weighted algorithm. For
+      the top three level of directories from the root of the filesystem, if the
+      amount of free inodes and blocks is well balanced (i.e., by default, when
+      the free inodes and blocks across MDTs differ by less than 5%), the
+      round-robin algorithm is used to select the next MDT on which a directory
+      is to be created.
+      </para>
+      <para>If the directory is more than three levels below the root directory,
+      or MDTs are not balanced, then the weighted algorithm is used to randomly
+      select an MDT with more free inodes and blocks.
+      </para>
+      <para> To avoid creating unnecessary remote directories, if the MDT where
+      its parent directory is located is not too full (the free inodes and
+      blocks of the parent MDT is not more than 5% full than average of all
+      MDTs), this directory will be created on parent MDT.
+      </para>
+      <para>If administrator wants to change this default filesystem-wide
+      directory striping, run the following command to limit this striping to
+      the top level below the root directory:</para>
+      <screen>lfs setdirstripe -D -i -1 -c 1 --max-inherit 0 &lt;mountpoint&gt;
+      </screen>
+      <para>To revert to the pre-2.15 behavior of all directories being created
+      only on MDT0000 by default (deleting this striping won't work because it
+      will be recreated if missing):</para>
+      <screen>lfs setdirstripe -D -i 0 -c 1 --max-inherit 0 &lt;mountpoint&gt;
+      </screen>
+    </section>
   </section>
   <section xml:id="set_get_lustre_params">
     <title>
