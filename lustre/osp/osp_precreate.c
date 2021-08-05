@@ -262,8 +262,8 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 			       d->opd_obd->obd_name,
 			       atomic_read(&d->opd_sync_changes));
 			osp_sync_add_commit_cb_1s(env, d, th);
-			dt_trans_stop(env, d->opd_storage, th);
 		}
+		dt_trans_stop(env, d->opd_storage, th);
 	}
 
 out:
