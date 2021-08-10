@@ -730,19 +730,3 @@ int libcfs_debug_mark_buffer(const char *text)
 
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_LNET
-
-long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
-{
-	libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
-			 rc, rc, rc);
-	return rc;
-}
-EXPORT_SYMBOL(libcfs_log_return);
-
-void libcfs_log_goto(struct libcfs_debug_msg_data *msgdata, const char *label,
-		     long rc)
-{
-	libcfs_debug_msg(msgdata, "Process leaving via %s (rc=%lu : %ld"
-			 " : %#lx)\n", label, rc, rc, rc);
-}
-EXPORT_SYMBOL(libcfs_log_goto);

@@ -212,10 +212,32 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 #define LCONSOLE_EMERG(format, ...) \
 	CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
+int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
+		     const char *format1, ...)
+	__printf(2, 3);
+
+/* other external symbols that tracefile provides: */
+int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
+			     const char *knl_buffer, char *append);
+
+#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
+
 #if defined(CDEBUG_ENTRY_EXIT)
 
-void libcfs_log_goto(struct libcfs_debug_msg_data *goto_data,
-		     const char *label, long rc);
+static inline long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
+{
+	libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
+			 rc, rc, rc);
+	return rc;
+}
+
+static inline void libcfs_log_goto(struct libcfs_debug_msg_data *msgdata,
+				   const char *label, long rc)
+{
+	libcfs_debug_msg(msgdata,
+			 "Process leaving via %s (rc=%lu : %ld : %#lx)\n",
+			 label, rc, rc, rc);
+}
 
 # define GOTO(label, rc)						      \
 do {									      \
@@ -229,8 +251,6 @@ do {									      \
 	goto label;							      \
 } while (0)
 
-
-long libcfs_log_return(struct libcfs_debug_msg_data *, long rc);
 # if BITS_PER_LONG > 32
 #  define RETURN(rc)							      \
 do {									      \
@@ -284,16 +304,6 @@ do {									\
 	EXIT;								\
 	return;								\
 } while (0)
-
-int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
-		     const char *format1, ...)
-	__printf(2, 3);
-
-/* other external symbols that tracefile provides: */
-int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
-			     const char *knl_buffer, char *append);
-
-#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
 
 void cfs_debug_init(void);
 
