@@ -45,6 +45,28 @@ struct sd_dif_tuple {
        __be32 ref_tag;          /* Target LBA or indirect LBA */
 };
 
+static struct niobuf_local *find_lnb(struct blk_integrity_exchg *bix)
+{
+	struct bio *bio = bix->bio;
+	struct bio_vec *bv = bio_iovec_idx(bio, bix->bi_idx);
+	struct osd_bio_private *bio_private = bio->bi_private;
+	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
+	int index = bio_private->obp_start_page_idx + bix->bi_idx;
+	int i;
+
+	/*
+	 * blocks are contiguous in bio but pages added to bio
+	 * could have a gap comparing to iobuf->dr_pages.
+	 * e.g. a page mapped to a hole in the middle.
+	 */
+	for (i = index; i < iobuf->dr_npages; i++) {
+		if (iobuf->dr_pages[i] == bv->bv_page)
+			return iobuf->dr_lnbs[i];
+	}
+
+	return NULL;
+}
+
 /*
  * Type 1 and Type 2 protection use the same format: 16 bit guard tag,
  * 16 bit app tag, 32 bit reference tag.
@@ -54,17 +76,13 @@ static void osd_dif_type1_generate(struct blk_integrity_exchg *bix,
 {
 	void *buf = bix->data_buf;
 	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct bio *bio = bix->bio;
-	struct osd_bio_private *bio_private = bio->bi_private;
-	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
-	int index = bio_private->obp_start_page_idx + bix->bi_idx;
-	struct niobuf_local *lnb = iobuf->dr_lnbs[index];
-	__u16 *guard_buf = lnb->lnb_guards;
+	struct niobuf_local *lnb = find_lnb(bix);
+	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	sector_t sector = bix->sector;
 	unsigned int i;
 
 	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		if (lnb->lnb_guard_rpc) {
+		if (lnb && lnb->lnb_guard_rpc) {
 			sdt->guard_tag = *guard_buf;
 			guard_buf++;
 		} else
@@ -92,12 +110,8 @@ static int osd_dif_type1_verify(struct blk_integrity_exchg *bix,
 {
 	void *buf = bix->data_buf;
 	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct bio *bio = bix->bio;
-	struct osd_bio_private *bio_private = bio->bi_private;
-	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
-	int index = bio_private->obp_start_page_idx + bix->bi_idx;
-	struct niobuf_local *lnb = iobuf->dr_lnbs[index];
-	__u16 *guard_buf = lnb->lnb_guards;
+	struct niobuf_local *lnb = find_lnb(bix);
+	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	sector_t sector = bix->sector;
 	unsigned int i;
 	__u16 csum;
@@ -124,14 +138,17 @@ static int osd_dif_type1_verify(struct blk_integrity_exchg *bix,
 			return -EIO;
 		}
 
-		*guard_buf = csum;
-		guard_buf++;
+		if (guard_buf) {
+			*guard_buf = csum;
+			guard_buf++;
+		}
 
 		buf += bix->sector_size;
 		sector++;
 	}
 
-	lnb->lnb_guard_disk = 1;
+	if (lnb)
+		lnb->lnb_guard_disk = 1;
 	return 0;
 }
 
@@ -154,16 +171,12 @@ static void osd_dif_type3_generate(struct blk_integrity_exchg *bix,
 {
 	void *buf = bix->data_buf;
 	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct bio *bio = bix->bio;
-	struct osd_bio_private *bio_private = bio->bi_private;
-	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
-	int index = bio_private->obp_start_page_idx + bix->bi_idx;
-	struct niobuf_local *lnb = iobuf->dr_lnbs[index];
-	__u16 *guard_buf = lnb->lnb_guards;
+	struct niobuf_local *lnb = find_lnb(bix);
+	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	unsigned int i;
 
 	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
-		if (lnb->lnb_guard_rpc) {
+		if (lnb && lnb->lnb_guard_rpc) {
 			sdt->guard_tag = *guard_buf;
 			guard_buf++;
 		} else
@@ -190,12 +203,8 @@ static int osd_dif_type3_verify(struct blk_integrity_exchg *bix,
 {
 	void *buf = bix->data_buf;
 	struct sd_dif_tuple *sdt = bix->prot_buf;
-	struct bio *bio = bix->bio;
-	struct osd_bio_private *bio_private = bio->bi_private;
-	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
-	int index = bio_private->obp_start_page_idx + bix->bi_idx;
-	struct niobuf_local *lnb = iobuf->dr_lnbs[index];
-	__u16 *guard_buf = lnb->lnb_guards;
+	struct niobuf_local *lnb = find_lnb(bix);
+	__u16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
 	sector_t sector = bix->sector;
 	unsigned int i;
 	__u16 csum;
@@ -215,14 +224,17 @@ static int osd_dif_type3_verify(struct blk_integrity_exchg *bix,
 			return -EIO;
 		}
 
-		*guard_buf = csum;
-		guard_buf++;
+		if (guard_buf) {
+			*guard_buf = csum;
+			guard_buf++;
+		}
 
 		buf += bix->sector_size;
 		sector++;
 	}
 
-	lnb->lnb_guard_disk = 1;
+	if (lnb)
+		lnb->lnb_guard_disk = 1;
 	return 0;
 }
 

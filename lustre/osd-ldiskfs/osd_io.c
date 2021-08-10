@@ -320,20 +320,27 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 {
 	struct blk_integrity *bi = bdev_get_integrity(bdev);
 	struct bio_integrity_payload *bip = bio->bi_integrity;
-	struct niobuf_local *lnb;
+	struct niobuf_local *lnb = NULL;
 	unsigned short sector_size = blk_integrity_interval(bi);
 	void *bio_prot_buf = page_address(bip->bip_vec->bv_page) +
 		bip->bip_vec->bv_offset;
 	struct bio_vec *bv;
 	sector_t sector = bio_start_sector(bio);
-	unsigned int sectors, total;
+	unsigned int i, sectors, total;
 	DECLARE_BVEC_ITER_ALL(iter_all);
 	__u16 *expected_guard;
 	int rc;
 
 	total = 0;
 	bio_for_each_segment_all(bv, bio, iter_all) {
-		lnb = iobuf->dr_lnbs[index];
+		for (i = index; i < iobuf->dr_npages; i++) {
+			if (iobuf->dr_pages[i] == bv->bv_page) {
+				lnb = iobuf->dr_lnbs[i];
+				break;
+			}
+		}
+		if (!lnb)
+			continue;
 		expected_guard = lnb->lnb_guards;
 		sectors = bv->bv_len / sector_size;
 		if (lnb->lnb_guard_rpc) {
@@ -348,6 +355,7 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 		total += sectors * bi->tuple_size;
 		LASSERT(total <= bip_size(bio->bi_integrity));
 		index++;
+		lnb = NULL;
 	}
 	return 0;
 }

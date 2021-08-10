@@ -9653,6 +9653,51 @@ test_77m() {
 }
 run_test 77m "Verify checksum_speed is correctly read"
 
+check_filefrag_77n() {
+	local nr_ext=0
+	local starts=()
+	local ends=()
+
+	while read extidx a b start end rest; do
+		if [[ "${extidx}" =~ ^[0-9]+: ]]; then
+			nr_ext=$(( $nr_ext + 1 ))
+			starts+=( ${start%..} )
+			ends+=( ${end%:} )
+		fi
+	done < <( filefrag -sv $1 )
+
+	[[ $nr_ext -eq 2 ]] && [[ "${starts[-1]}" == $(( ${ends[0]} + 1 )) ]] && return 0
+	return 1
+}
+
+test_77n() {
+	[[ "$CKSUM_TYPES" =~ t10 ]] || skip "no T10 checksum support on osc"
+
+	touch $DIR/$tfile
+	$TRUNCATE $DIR/$tfile 0
+	dd if=/dev/urandom of=$DIR/$tfile bs=4k conv=notrunc count=1 seek=0
+	dd if=/dev/urandom of=$DIR/$tfile bs=4k conv=notrunc count=1 seek=2
+	check_filefrag_77n $DIR/$tfile ||
+		skip "$tfile blocks not contiguous around hole"
+
+	set_checksums 1
+	stack_trap "set_checksums $ORIG_CSUM" EXIT
+	stack_trap "set_checksum_type $ORIG_CSUM_TYPE" EXIT
+	stack_trap "rm -f $DIR/$tfile"
+
+	for algo in $CKSUM_TYPES; do
+		if [[ "$algo" =~ ^t10 ]]; then
+			set_checksum_type $algo ||
+				error "fail to set checksum type $algo"
+			dd if=$DIR/$tfile of=/dev/null bs=12k count=1 iflag=direct ||
+				error "fail to read $tfile with $algo"
+		fi
+	done
+	rm -f $DIR/$tfile
+	return 0
+}
+run_test 77n "Verify read from a hole inside contiguous blocks with T10PI"
+
 cleanup_test_78() {
 	trap 0
 	rm -f $DIR/$tfile
