@@ -55,7 +55,9 @@
 #include <sys/xattr.h>
 
 #ifdef HAVE_GSS
+#ifdef HAVE_LIBKEYUTILS
 #include <keyutils.h>
+#endif
 #include <lustre/utils/gss/sk_utils.h>
 #endif
 

@@ -154,6 +154,7 @@ ssize_t sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
 
+#ifdef HAVE_GSS_KEYRING
 int sptlrpc_gss_check_upcall_ns_seq_show(struct seq_file *m, void *data)
 {
 	seq_printf(m, "%u\n", gss_check_upcall_ns);
@@ -175,6 +176,7 @@ ssize_t sptlrpc_gss_check_upcall_ns_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(sptlrpc_gss_check_upcall_ns);
+#endif /* HAVE_GSS_KEYRING */
 
 static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
@@ -188,8 +190,10 @@ static struct ldebugfs_vars gss_debugfs_vars[] = {
 static struct lprocfs_vars gss_lprocfs_vars[] = {
 	{ .name	=	"krb5_allow_old_client_csum",
 	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
+#ifdef HAVE_GSS_KEYRING
 	{ .name	=	"gss_check_upcall_ns",
 	  .fops	=	&sptlrpc_gss_check_upcall_ns_fops },
+#endif
 	{ NULL }
 };
 

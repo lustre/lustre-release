@@ -4,10 +4,10 @@ AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
 	     -D_GNU_SOURCE
 
-sbin_PROGRAMS = lsvcgssd l_idmap
+sbin_PROGRAMS = l_idmap
 
 if GSS_KEYRING
-sbin_PROGRAMS += lgss_keyring
+sbin_PROGRAMS += lsvcgssd lgss_keyring
 if GSS_SSK
 sbin_PROGRAMS += lgss_sk
 endif

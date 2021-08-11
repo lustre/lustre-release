@@ -268,7 +268,9 @@ AC_MSG_CHECKING([whether to enable gss keyring backend])
 AC_ARG_ENABLE([gss_keyring],
 	[AC_HELP_STRING([--disable-gss-keyring],
 		[disable gss keyring backend])],
-	[], [enable_gss_keyring="auto"])
+	[], [AS_IF([test "x$enable_gss" != xno], [
+			enable_gss_keyring="yes"], [
+			enable_gss_keyring="auto"])])
 AC_MSG_RESULT([$enable_gss_keyring])
 AS_IF([test "x$enable_gss_keyring" != xno], [
 	LB_CHECK_CONFIG_IM([KEYS], [], [
@@ -287,7 +289,10 @@ AS_IF([test "x$enable_gss_keyring" != xno], [
 		AS_IF([test "x$enable_gss_keyring" = xyes], [
 			AC_MSG_ERROR([Cannot enable gss_keyring. See above for details.])
 		])
+		enable_ssk="no"
 	])
+], [
+	enable_ssk="no"
 ])
 ]) # LC_CONFIG_GSS_KEYRING
 
@@ -380,7 +385,9 @@ AS_IF([test "x$enable_gss" != xno], [
 		enable_gss="no"
 	])
 
-	enable_ssk=$enable_gss
+	AS_IF([test "x$enable_ssk" != xno], [
+		enable_ssk=$enable_gss
+	])
 ], [
 	enable_gss_keyring="no"
 ])

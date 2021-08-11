@@ -29,7 +29,9 @@
 #define SK_UTILS_H
 
 #include <gssapi/gssapi.h>
+#ifdef HAVE_LIBKEYUTILS
 #include <keyutils.h>
+#endif
 #include <linux/lustre/lustre_idl.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
