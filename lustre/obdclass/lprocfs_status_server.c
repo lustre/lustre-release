@@ -702,8 +702,11 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 		goto out;
 	}
 
-	/* sampled unlocked, but really... */
-	if (obd->obd_recovering == 0) {
+	/* There is gap between client data read from storage and setting
+	 * obd_recovering so check obd_recovery_end as well to make sure
+	 * recovery is really finished
+	 */
+	if (obd->obd_recovery_end > 0 && !obd->obd_recovering) {
 		seq_printf(m, "COMPLETE\n");
 		seq_printf(m, "recovery_start: %lld\n",
 			   (s64)ktime_get_real_seconds() -
