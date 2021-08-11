@@ -77,8 +77,8 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-#                                  5              12     8   12  (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 300o"
+#                                  5              12     8   12  15   (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
 	# bug number for skipped test:
