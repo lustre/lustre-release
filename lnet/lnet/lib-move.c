@@ -2977,15 +2977,19 @@ again:
 	/*
 	 * Identify the different send cases
 	 */
-	if (src_nid == LNET_NID_ANY)
+	if (src_nid == LNET_NID_ANY) {
 		send_case |= SRC_ANY;
-	else
+		if (lnet_get_net_locked(LNET_NIDNET(dst_nid)))
+			send_case |= LOCAL_DST;
+		else
+			send_case |= REMOTE_DST;
+	} else {
 		send_case |= SRC_SPEC;
-
-	if (lnet_get_net_locked(LNET_NIDNET(dst_nid)))
-		send_case |= LOCAL_DST;
-	else
-		send_case |= REMOTE_DST;
+		if (LNET_NIDNET(src_nid) == LNET_NIDNET(dst_nid))
+			send_case |= LOCAL_DST;
+		else
+			send_case |= REMOTE_DST;
+	}
 
 	final_hop = false;
 	if (msg->msg_routing && (send_case & LOCAL_DST))

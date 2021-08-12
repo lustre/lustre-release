@@ -2188,6 +2188,14 @@ test_215() {
 		npings=$(($npings * 2))
 	done
 
+	# Ping from nid1 to nid2 should fail
+	do_lnetctl ping --source $nid1 $nid2 &&
+		error "ping from $nid1 to $nid2 should fail"
+
+	# Ping from nid2 to nid1 should fail
+	do_lnetctl ping --source $nid2 $nid1 &&
+		error "ping from $nid2 to $nid1 should fail"
+
 	return 0
 }
 run_test 215 "Test lnetctl ping --source option"
