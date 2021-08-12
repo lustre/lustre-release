@@ -81,14 +81,14 @@ static inline bool CFS_FAIL_PRECHECK(__u32 id)
 	       (cfs_fail_loc & id & CFS_FAULT));
 }
 
-static inline int cfs_fail_check_set(__u32 id, __u32 value,
-				     int set, int quiet)
+static inline int cfs_fail_check_set(__u32 id, __u32 value, int set, int quiet)
 {
+	unsigned long failed_once = cfs_fail_loc & CFS_FAILED; /* ok if racy */
 	int ret = 0;
 
 	if (unlikely(CFS_FAIL_PRECHECK(id) &&
 		     (ret = __cfs_fail_check_set(id, value, set)))) {
-		if (quiet) {
+		if (quiet && failed_once) {
 			CDEBUG(D_INFO, "*** cfs_fail_loc=%x, val=%u***\n",
 			       id, value);
 		} else {

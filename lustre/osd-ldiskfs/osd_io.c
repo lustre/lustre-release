@@ -1698,7 +1698,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		lnb[i].lnb_rc = lnb[i].lnb_len;
 
 		/* Bypass disk read if fail_loc is set properly */
-		if (OBD_FAIL_CHECK(OBD_FAIL_OST_FAKE_RW))
+		if (OBD_FAIL_CHECK_QUIET(OBD_FAIL_OST_FAKE_RW))
 			SetPageUptodate(lnb[i].lnb_page);
 
 		if (PageUptodate(lnb[i].lnb_page)) {
