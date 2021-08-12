@@ -1071,7 +1071,7 @@ int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
 			     __u64 offset);
 void ll_release_page(struct inode *inode, struct page *page, bool remove);
-int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl);
+int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl);
 
 /* llite/namei.c */
 extern const struct inode_operations ll_special_inode_operations;

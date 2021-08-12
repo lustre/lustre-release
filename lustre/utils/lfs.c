@@ -7941,6 +7941,9 @@ quota_type_def:
 				obd_uuid2str(&qctl->obd_uuid), strerror(-rc));
 	}
 out:
+	if (rc)
+		fprintf(stderr, "setquota failed: %s\n", strerror(-rc));
+
 	free(qctl);
 	return rc;
 }

@@ -2342,7 +2342,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 	int ret;
 
 	qctl.qc_id = ll_i2info(inode)->lli_projid;
-	ret = quotactl_ioctl(ll_i2sbi(inode), &qctl);
+	ret = quotactl_ioctl(inode->i_sb, &qctl);
 	if (ret) {
 		/* ignore errors if project ID does not have
 		 * a quota limit or feature unsupported.
