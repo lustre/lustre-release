@@ -2072,6 +2072,126 @@ test_214() {
 }
 run_test 214 "Check local NI status when link is downed"
 
+get_ni_stat() {
+	local nid=$1
+	local stat=$2
+
+	$LNETCTL net show -v 2 |
+		egrep -e nid -e $stat |
+		grep -wA 1 $nid |
+		awk '/'$stat':/{print $NF}'
+}
+
+ni_stats_pre() {
+	local nidvar s
+	for nidvar in nid1 nid2; do
+		for stat in send_count recv_count; do
+			s=$(get_ni_stat ${!nidvar} $stat)
+			eval ${nidvar}_pre_${stat}=$s
+		done
+	done
+}
+
+ni_stats_post() {
+	local nidvar s
+	for nidvar in nid1 nid2; do
+		for stat in send_count recv_count; do
+			s=$(get_ni_stat ${!nidvar} $stat)
+			eval ${nidvar}_post_${stat}=$s
+		done
+	done
+}
+
+ni_stat_changed() {
+	local nidvar=$1
+	local stat=$2
+
+	local pre post
+	eval pre=\${${nidvar}_pre_${stat}}
+	eval post=\${${nidvar}_post_${stat}}
+
+	echo "${!nidvar} pre ${stat} $pre post ${stat} $post"
+
+	[[ $pre -ne $post ]]
+}
+
+test_215() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	reinit_dlc || return $?
+
+	add_net "tcp1" "eth0" || return $?
+	add_net "tcp2" "eth0" || return $?
+
+	local nid1=$($LCTL list_nids | head -n 1)
+	local nid2=$($LCTL list_nids | tail --lines 1)
+
+	do_lnetctl peer add --prim $nid1 --nid $nid2 ||
+		error "Failed to add peer"
+
+	local npings=25
+
+	for nidvarA in nid1 nid2; do
+		src=${!nidvarA}
+		dst=${!nidvarA}
+		for nidvarB in nid1 nid2; do
+			[[ $nidvarA == $nidvarB ]] && continue
+
+			ni_stats_pre
+
+			echo "$LNETCTL ping $dst x $npings"
+			for i in $(seq 1 $npings); do
+				$LNETCTL ping $dst &>/dev/null ||
+					error "$LNETCTL ping $dst failed"
+			done
+
+			ni_stats_post
+
+			# No source specified, sends to either NID should cause
+			# counts to increase across both NIs
+			for nidvar in nid1 nid2; do
+				for stat in send_count recv_count; do
+					ni_stat_changed $nidvar $stat ||
+						error "$stat unchanged for ${!nidvar}"
+				done
+			done
+
+			ni_stats_pre
+
+			echo "$LNETCTL ping --source $src $dst x $npings"
+			for i in $(seq 1 $npings); do
+				$LNETCTL ping --source $src $dst &>/dev/null ||
+					error "$LNETCTL ping --source $src $dst failed"
+			done
+
+			ni_stats_post
+
+			# src nid == dest nid means stats for the _other_ NI
+			# should be unchanged
+			for nidvar in nid1 nid2; do
+				for stat in send_count recv_count; do
+					if [[ ${!nidvar} == $src ]]; then
+						ni_stat_changed $nidvar $stat ||
+							error "$stat unchanged for ${!nidvar}"
+					else
+						ni_stat_changed $nidvar $stat &&
+							error "$stat changed for ${!nidvar}"
+					fi
+				done
+			done
+		done
+		# Double number of pings for next iteration because the net
+		# sequence numbers will have diverged
+		npings=$(($npings * 2))
+	done
+
+	return 0
+}
+run_test 215 "Test lnetctl ping --source option"
+
 test_230() {
 	# LU-12815
 	echo "Check valid values; Should succeed"

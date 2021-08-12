@@ -420,9 +420,9 @@ static int dispatch_peer_ni_cmd(__u32 cmd, struct lnet_ioctl_peer_cfg *data,
 	return rc;
 }
 
-static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
-			  int seq_no, struct cYAML **show_rc,
-			  struct cYAML **err_rc)
+static int infra_ping_nid(char *ping_nids, char *src_nidstr, char *oper,
+			  int param, int ioc_call, int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc)
 {
 	void *data = NULL;
 	struct lnet_ioctl_ping_data ping;
@@ -436,6 +436,7 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	int i;
 	bool flag = false;
+	lnet_nid_t src;
 
 	len = (sizeof(struct lnet_process_id) * LNET_INTERFACES_MAX_DEFAULT);
 
@@ -451,6 +452,21 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 	ping_node = cYAML_create_seq(root, oper);
 	if (ping_node == NULL)
 		goto out;
+
+	if (src_nidstr) {
+		src = libcfs_str2nid(src_nidstr);
+		if (src == LNET_NID_ANY) {
+			snprintf(err_str, sizeof(err_str),
+				 "\"cannot parse source NID '%s'\"",
+				 src_nidstr);
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			cYAML_build_error(rc, seq_no, MANAGE_CMD,
+					  oper, err_str, err_rc);
+			goto out;
+		}
+	} else {
+		src = LNET_NID_ANY;
+	}
 
 	/* tokenise each nid in string ping_nids */
 	token = strtok(ping_nids, ",");
@@ -516,6 +532,7 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 		LIBCFS_IOC_INIT_V2(ping, ping_hdr);
 		ping.ping_hdr.ioc_len = sizeof(ping);
 		ping.ping_id          = id;
+		ping.ping_src	      = src;
 		ping.op_param         = param;
 		ping.ping_count       = LNET_INTERFACES_MAX_DEFAULT;
 		ping.ping_buf         = data;
@@ -591,13 +608,14 @@ out:
 	return rc;
 }
 
-int lustre_lnet_ping_nid(char *ping_nids, int timeout, int seq_no,
-			 struct cYAML **show_rc, struct cYAML **err_rc)
+int lustre_lnet_ping_nid(char *ping_nids, char *src_nidstr, int timeout,
+			 int seq_no, struct cYAML **show_rc,
+			 struct cYAML **err_rc)
 {
 	int rc;
 
-	rc = infra_ping_nid(ping_nids, "ping", timeout, IOC_LIBCFS_PING_PEER,
-			    seq_no, show_rc, err_rc);
+	rc = infra_ping_nid(ping_nids, src_nidstr, "ping", timeout,
+			    IOC_LIBCFS_PING_PEER, seq_no, show_rc, err_rc);
 	return rc;
 }
 
@@ -606,8 +624,8 @@ int lustre_lnet_discover_nid(char *ping_nids, int force, int seq_no,
 {
 	int rc;
 
-	rc = infra_ping_nid(ping_nids, "discover", force, IOC_LIBCFS_DISCOVER,
-			    seq_no, show_rc, err_rc);
+	rc = infra_ping_nid(ping_nids, NULL, "discover", force,
+			    IOC_LIBCFS_DISCOVER, seq_no, show_rc, err_rc);
 	return rc;
 }
 
@@ -5183,13 +5201,15 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 static int handle_yaml_ping(struct cYAML *tree, struct cYAML **show_rc,
 			    struct cYAML **err_rc)
 {
-	struct cYAML *seq_no, *nid, *timeout;
+	struct cYAML *seq_no, *nid, *timeout, *src_nid;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	nid = cYAML_get_object_item(tree, "primary nid");
 	timeout = cYAML_get_object_item(tree, "timeout");
+	src_nid = cYAML_get_object_item(tree, "source_nid");
 
 	return lustre_lnet_ping_nid((nid) ? nid->cy_valuestring : NULL,
+				    (src_nid) ? src_nid->cy_valuestring : NULL,
 				    (timeout) ? timeout->cy_valueint : 1000,
 				    (seq_no) ? seq_no->cy_valueint : -1,
 				    show_rc, err_rc);

@@ -132,6 +132,7 @@ struct lnet_ioctl_ping_data {
 	__u32 mr_info;
 	struct lnet_process_id ping_id;
 	struct lnet_process_id __user *ping_buf;
+	lnet_nid_t ping_src;
 };
 
 struct lnet_ioctl_config_data {

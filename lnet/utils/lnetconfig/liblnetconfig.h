@@ -698,13 +698,14 @@ int lustre_lnet_list_peer(int seq_no,
  *   Ping the nid list, pnids.
  *
  *    pnids - NID list to ping.
+ *    src_nidstr - source NID
  *    timeout - timeout(seconds) for ping.
  *    seq_no - sequence number of the command.
  *    show_rc - YAML structure of the resultant show.
  *    err_rc - YAML strucutre of the resultant return code.
  *
  */
-int lustre_lnet_ping_nid(char *pnid, int timeout, int seq_no,
+int lustre_lnet_ping_nid(char *pnid, char *src_nidstr, int timeout, int seq_no,
 			struct cYAML **show_rc, struct cYAML **err_rc);
 
 /* lustre_lnet_discover_nid
