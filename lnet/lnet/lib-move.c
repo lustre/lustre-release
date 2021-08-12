@@ -2189,13 +2189,19 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	}
 
 	if (!route_found) {
-		if (sd->sd_msg->msg_routing) {
+		if (sd->sd_msg->msg_routing || src_nid != LNET_NID_ANY) {
 			/* If I'm routing this message then I need to find the
 			 * next hop based on the destination NID
+			 *
+			 * We also find next hop based on the destination NID
+			 * if the source NI was specified
 			 */
 			best_rnet = lnet_find_rnet_locked(LNET_NIDNET(sd->sd_dst_nid));
 			if (!best_rnet) {
-				CERROR("Unable to route message to %s - Route table may be misconfigured\n",
+				CERROR("Unable to send message from %s to %s - Route table may be misconfigured\n",
+				       src_nid != LNET_NID_ANY ?
+						libcfs_nid2str(src_nid) :
+						"any local NI",
 				       libcfs_nid2str(sd->sd_dst_nid));
 				return -EHOSTUNREACH;
 			}
