@@ -121,6 +121,13 @@ enum cksum_types obd_cksum_type_select(const char *obd_name,
 	if (preferred & cksum_types)
 		return preferred;
 
+	/*
+	 * Server reporting a single T10 checksum type
+	 * means the target actually supports T10-PI.
+	 */
+	if (hweight32(cksum_types & OBD_CKSUM_T10_ALL) == 1)
+		return cksum_types & OBD_CKSUM_T10_ALL;
+
 	flag = obd_cksum_type_pack(obd_name, cksum_types);
 
 	return obd_cksum_type_unpack(flag);
