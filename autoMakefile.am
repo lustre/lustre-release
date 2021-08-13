@@ -208,6 +208,9 @@ dkms-rpms: dkms-rpm
 
 rpms: srpm
 	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
+		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
+	fi; \
 	$(MAKE) $(AM_MAKEFLAGS) \
 		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
 	$(RPMBUILD) \
@@ -260,6 +263,9 @@ debs: undef.h
 	if test "x@ENABLEO2IB@" != "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} o2ib"; \
 		export O2IB_SRC="@O2IBPATH@"; \
+	fi; \
+	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
+		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
 	fi; \
 	if test "x@ENABLE_GSS@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gss"; \

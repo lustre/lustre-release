@@ -199,6 +199,13 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
 	fi; \
+	# remove env variables from config cache built by initial configure,
+	# and create dedicated cache in temporary build directory
+	if [ -f "$${CONFIG_CACHE_FILE}" ]; then \
+		export TMP_CACHE_FILE=$$(mktemp); \
+		sed "/ac_cv_env/d" "$${CONFIG_CACHE_FILE}" > $${TMP_CACHE_FILE}; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --cache-file=$${TMP_CACHE_FILE}"; \
+	fi; \
 	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	( cd $(BUILDDIR) && \
 		$(SRCDIR)/configure --disable-dependency-tracking \
@@ -485,6 +492,13 @@ kdist_config: prep-deb-files patch-stamp
 		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-crypto"; \
 	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nocrypto"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-crypto"; \
+	fi; \
+	# remove env variables from config cache built by initial configure,
+	# and create dedicated cache in temporary build directory
+	if [ -f "$${CONFIG_CACHE_FILE}" ]; then \
+		export TMP_CACHE_FILE=$$(mktemp --tmpdir newconfig-XXXXXXXX.cache); \
+		sed "/ac_cv_env/d" "$${CONFIG_CACHE_FILE}" > $${TMP_CACHE_FILE}; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --cache-file=$${TMP_CACHE_FILE}"; \
 	fi; \
 	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	./configure --with-linux=$(KSRC_TREE) \

@@ -628,6 +628,19 @@ AC_SUBST(RPMBUILD_BINARY_ARGS)
 ]) # LB_CONFIG_RPMBUILD_OPTIONS
 
 #
+# LB_CONFIG_CACHE_OPTIONS
+#
+# Propagate config cache option
+#
+AC_DEFUN([LB_CONFIG_CACHE_OPTIONS], [
+CONFIG_CACHE_FILE=
+if test -f "$cache_file"; then
+	CONFIG_CACHE_FILE=$(readlink --canonicalize "$cache_file")
+fi
+AC_SUBST(CONFIG_CACHE_FILE)
+]) # LB_CONFIG_CACHE_OPTIONS
+
+#
 # LB_CONFIGURE
 #
 # main configure steps
@@ -706,6 +719,7 @@ MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symver
 AC_SUBST(MOSTLYCLEANFILES)
 
 LB_CONFIG_RPMBUILD_OPTIONS
+LB_CONFIG_CACHE_OPTIONS
 
 AC_OUTPUT
 

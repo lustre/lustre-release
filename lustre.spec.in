@@ -453,6 +453,13 @@ if [ -n "$CONFIGURE_ARGS" ]; then
 	# remove --with-kmp-moddir from configure arguments,
 	# it will be set --with-kmp-moddir=%%kmoddir
 	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]* \?//')
+	# remove env variables from config cache built by initial configure,
+	# and create dedicated cache in temporary build directory
+	if [ -f "$CONFIG_CACHE_FILE" ]; then
+		TMP_CONFIG_CACHE="$(mktemp --tmpdir newconfig-XXXXXXXX.cache)"
+		sed "/ac_cv_env/d" "$CONFIG_CACHE_FILE" > $TMP_CONFIG_CACHE
+		CONFIGURE_ARGS="$CONFIGURE_ARGS --cache-file=$TMP_CONFIG_CACHE"
+	fi
 fi
 
 # we need to eval "configure" because $CONFIGURE_ARGS could have a quoted
