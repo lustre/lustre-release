@@ -2269,6 +2269,7 @@ test_110k() {
 		error "cleanup: start mds2 failed"
 	zconf_mount $(hostname) $MOUNT || error "cleanup: mount failed"
 	client_up || error "post-failover df failed"
+	all_mds_up
 }
 run_test 110k "FID_QUERY failed during recovery"
 

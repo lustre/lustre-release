@@ -3556,6 +3556,19 @@ clients_up() {
 	lfs_df_check
 }
 
+all_mds_up() {
+	(( MDSCOUNT == 1 )) && return
+
+	# wait so that statfs data on MDT expire
+	local delay=$(do_facet $SINGLEMDS lctl \
+		get_param -n osp.*MDT0000*MDT0001.maxage)
+	sleep $delay
+	local nodes=$(comma_list $(mdts_nodes))
+	# initiate statfs RPC, all to all MDTs
+	do_nodes $nodes $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
+	do_nodes $nodes $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
+}
+
 client_up() {
 	# usually checked on particular client or locally
 	sleep 1
@@ -3789,6 +3802,7 @@ fail_abort() {
 	mount_facet $facet -o $abort_type
 	clients_up || echo "first stat failed: $?"
 	clients_up || error "post-failover stat: $?"
+	all_mds_up
 }
 
 host_nids_address() {
