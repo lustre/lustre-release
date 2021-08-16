@@ -329,7 +329,7 @@ bool lnet_is_route_alive(struct lnet_route *route)
 	 * routes the next-hop will not have the remote net.
 	 */
 	if (avoid_asym_router_failure &&
-	    (route->lr_hops == 1 || route->lr_hops == LNET_UNDEFINED_HOPS)) {
+	    (route->lr_hops == 1 || route->lr_single_hop)) {
 		rlpn = lnet_peer_get_net_locked(gw, route->lr_net);
 		if (!rlpn)
 			return false;
@@ -483,8 +483,7 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 
 		route->lr_single_hop = single_hop;
 		if (avoid_asym_router_failure &&
-		    (route->lr_hops == 1 ||
-		     route->lr_hops == LNET_UNDEFINED_HOPS))
+		    (route->lr_hops == 1 || route->lr_single_hop))
 			lnet_set_route_aliveness(route, net_up);
 		else
 			lnet_set_route_aliveness(route, true);
@@ -789,6 +788,14 @@ lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 	 */
 	lnet_peer_ni_decref_locked(lpni);
 	lnet_net_unlock(LNET_LOCK_EX);
+
+	/* If avoid_asym_router_failure is enabled and hop count is not
+	 * set to 1 for a route that is actually single-hop, then the
+	 * feature will fail to prevent the router from being selected
+	 * if it is missing a NI on the remote network due to misconfiguration.
+	 */
+	if (avoid_asym_router_failure && hops == LNET_UNDEFINED_HOPS)
+		CWARN("Use hops = 1 for a single-hop route when avoid_asym_router_failure feature is enabled");
 
 	rc = 0;
 
