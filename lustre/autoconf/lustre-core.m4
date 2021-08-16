@@ -1576,6 +1576,26 @@ lock_page_memcg, [
 ]) # LC_LOCK_PAGE_MEMCG
 
 #
+# LC_D_INIT
+#
+# Kernel version 4.7-rc5 commit 285b102d3b745f3c2c110c9c327741d87e64aacc
+# add new d_init to initialize dentry at allocation time
+#
+AC_DEFUN([LC_D_INIT], [
+LB_CHECK_COMPILE([if dentry operations supports 'd_init'],
+d_init, [
+	#include <linux/dcache.h>
+],[
+	struct dentry_operations ops = { };
+	int rc;
+
+	rc = ops.d_init(NULL);
+],[
+	AC_DEFINE(HAVE_D_INIT, 1, ['d_init' exists])
+])
+]) # LC_D_INIT
+
+#
 # LC_DIRECTIO_2ARGS
 #
 # Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
@@ -2505,6 +2525,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.7
 	LC_D_IN_LOOKUP
+	LC_D_INIT
 	LC_DIRECTIO_2ARGS
 	LC_GENERIC_WRITE_SYNC_2ARGS
 	LC_FOP_ITERATE_SHARED

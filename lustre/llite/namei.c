@@ -171,7 +171,8 @@ restart:
 				continue;
 
 			spin_lock_nested(&child->d_lock, DENTRY_D_LOCK_NESTED);
-			__d_lustre_invalidate(child);
+			if (lld_is_init(child))
+				ll_d2d(child)->lld_invalid = 1;
 			if (!ll_d_count(child)) {
 				dget_dlock(child);
 				__d_drop(child);
@@ -592,16 +593,12 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 {
 	struct dentry *new;
-	int rc;
 
 	if (inode) {
 		new = ll_find_alias(inode, de);
 		if (new) {
-			rc = ll_d_init(new);
-			if (rc < 0) {
-				dput(new);
-				return ERR_PTR(rc);
-			}
+			if (!ll_d_setup(new, true))
+				return ERR_PTR(-ENOMEM);
 			d_move(new, de);
 			iput(inode);
 			CDEBUG(D_DENTRY,
@@ -610,9 +607,8 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 			return new;
 		}
 	}
-	rc = ll_d_init(de);
-	if (rc < 0)
-		return ERR_PTR(rc);
+	if (!ll_d_setup(de, false))
+		return ERR_PTR(-ENOMEM);
 	d_add(de, inode);
 
 	/* this needs only to be done for foreign symlink dirs as

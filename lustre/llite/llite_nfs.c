@@ -137,24 +137,19 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 	/* N.B. d_obtain_alias() drops inode ref on error */
 	result = d_obtain_alias(inode);
 	if (!IS_ERR(result)) {
-		int rc;
+		struct ll_dentry_data *ldd;
 
-		rc = ll_d_init(result);
-		if (rc < 0) {
-			dput(result);
-			result = ERR_PTR(rc);
-		} else {
-			struct ll_dentry_data *ldd = ll_d2d(result);
-
-			/*
-			 * Need to signal to the ll_file_open that
-			 * we came from NFS and so opencache needs to be
-			 * enabled for this one
-			 */
-			spin_lock(&result->d_lock);
-			ldd->lld_nfs_dentry = 1;
-			spin_unlock(&result->d_lock);
-		}
+		if (!ll_d_setup(result, true))
+			RETURN(ERR_PTR(-ENOMEM));
+		ldd = ll_d2d(result);
+		/*
+		 * Need to signal to the ll_file_open that
+		 * we came from NFS and so opencache needs to be
+		 * enabled for this one
+		 */
+		spin_lock(&result->d_lock);
+		ldd->lld_nfs_dentry = 1;
+		spin_unlock(&result->d_lock);
 	}
 
 	RETURN(result);

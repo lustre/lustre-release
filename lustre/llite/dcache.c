@@ -140,36 +140,50 @@ static int ll_ddelete(const struct dentry *de)
 	RETURN(0);
 }
 
-int ll_d_init(struct dentry *de)
+#ifdef HAVE_D_INIT
+static int ll_d_init(struct dentry *de)
 {
-	ENTRY;
-	LASSERT(de != NULL);
+	struct ll_dentry_data *lld;
 
-	CDEBUG(D_DENTRY, "ldd on dentry %pd (%p) parent %p inode %p refc %d\n",
-	       de, de, de->d_parent, de->d_inode,
-	       ll_d_count(de));
-
-	if (de->d_fsdata == NULL) {
-		struct ll_dentry_data *lld;
-
-		OBD_ALLOC_PTR(lld);
-		if (likely(lld != NULL)) {
-			spin_lock(&de->d_lock);
-			if (likely(de->d_fsdata == NULL)) {
-				de->d_fsdata = lld;
-				__d_lustre_invalidate(de);
-			} else {
-				OBD_FREE_PTR(lld);
-			}
-			spin_unlock(&de->d_lock);
-		} else {
-			RETURN(-ENOMEM);
-		}
-	}
-	LASSERT(de->d_op == &ll_d_ops);
-
-	RETURN(0);
+	OBD_ALLOC_PTR(lld);
+	lld->lld_invalid = 1;
+	de->d_fsdata = lld;
+	return 0;
 }
+#else /* !HAVE_D_INIT */
+
+bool ll_d_setup(struct dentry *de, bool do_put)
+{
+	struct ll_dentry_data *lld;
+	bool success = true;
+
+	if (de->d_fsdata)
+		return success;
+
+	OBD_ALLOC_PTR(lld);
+	if (likely(lld)) {
+		spin_lock(&de->d_lock);
+		/* Since the first d_fsdata test was not
+		 * done under the spinlock it could have
+		 * changed by time the memory is allocated.
+		 */
+		if (!de->d_fsdata) {
+			lld->lld_invalid = 1;
+			de->d_fsdata = lld;
+		}
+		spin_unlock(&de->d_lock);
+		/* See if we lost the race to set d_fsdata. */
+		if (de->d_fsdata != lld)
+			OBD_FREE_PTR(lld);
+	} else {
+		success = false;
+		if (do_put)
+			dput(de);
+	}
+
+	return success;
+}
+#endif /* !HAVE_D_INIT */
 
 void ll_intent_drop_lock(struct lookup_intent *it)
 {
@@ -322,8 +336,11 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 }
 
 const struct dentry_operations ll_d_ops = {
+#ifdef HAVE_D_INIT
+	.d_init		= ll_d_init,
+#endif
 	.d_revalidate	= ll_revalidate_dentry,
-        .d_release = ll_release,
-        .d_delete  = ll_ddelete,
-        .d_compare = ll_dcompare,
+	.d_release	= ll_release,
+	.d_delete	= ll_ddelete,
+	.d_compare	= ll_dcompare,
 };
