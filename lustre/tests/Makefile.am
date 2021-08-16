@@ -111,6 +111,7 @@ nobase_test_DATA = $(nobase_noinst_DATA)
 
 LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.la
 
+badarea_io_CFLAGS=-Wno-stringop-overflow
 mmap_sanity_LDADD = $(LIBLUSTREAPI)
 multiop_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 llapi_layout_test_LDADD = $(LIBLUSTREAPI)
