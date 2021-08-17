@@ -515,7 +515,7 @@ static inline int mdd_is_sticky(const struct lu_env *env,
 	if (cattr->la_uid == uc->uc_fsuid)
 		return 0;
 
-	return !md_capable(uc, CAP_FOWNER);
+	return !cap_raised(uc->uc_cap, CAP_FOWNER);
 }
 
 static int mdd_may_delete_entry(const struct lu_env *env,
@@ -2114,7 +2114,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 			   !lustre_in_group_p(uc,
 					      (cattr->la_valid & LA_GID) ?
 					      cattr->la_gid : pattr->la_gid) &&
-			   !md_capable(uc, CAP_FSETID)) {
+			   !cap_raised(uc->uc_cap, CAP_FSETID)) {
 			cattr->la_mode &= ~S_ISGID;
 			cattr->la_valid |= LA_MODE;
 		}

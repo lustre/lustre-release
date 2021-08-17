@@ -729,13 +729,5 @@ int lu_ucred_global_init(void);
 
 void lu_ucred_global_fini(void);
 
-/* capable() is copied from linux kernel! */
-static inline int md_capable(struct lu_ucred *uc, int cap)
-{
-	if (cap_raised(uc->uc_cap, cap))
-		return 1;
-	return 0;
-}
-
 /** @} md */
 #endif /* _LINUX_MD_OBJECT_H */
