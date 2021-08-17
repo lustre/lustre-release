@@ -3721,6 +3721,28 @@ test_31q() {
 }
 run_test 31q "create striped directory on specific MDTs"
 
+#LU-14949
+test_31r() {
+	touch $DIR/$tfile.target
+	touch $DIR/$tfile.source
+
+	#OBD_FAIL_LLITE_OPEN_DELAY 0x1419
+	$LCTL set_param fail_loc=0x1419 fail_val=3
+	cat $DIR/$tfile.target &
+	CATPID=$!
+
+	# Guarantee open is waiting before we get here
+	sleep 1
+	mv $DIR/$tfile.source $DIR/$tfile.target
+
+	wait $CATPID
+	RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "open with cat failed, rc=$RC"
+	fi
+}
+run_test 31r "open-rename(replace) race"
+
 cleanup_test32_mount() {
 	local rc=0
 	trap 0

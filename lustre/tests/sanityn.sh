@@ -866,6 +866,30 @@ test_31b() {
 }
 run_test 31b "voluntary OST cancel / blocking ast race=============="
 
+#LU-14949 - multi-client version of the test 31r in sanity.
+test_31r() {
+	touch $DIR/$tfile.target
+	touch $DIR/$tfile.source
+
+	ls -l $DIR/$tfile.target # cache it for sure
+
+	#OBD_FAIL_LLITE_OPEN_DELAY 0x1419
+	$LCTL set_param fail_loc=0x1419 fail_val=3
+	cat $DIR/$tfile.target &
+	CATPID=$!
+
+	# Guarantee open is waiting before we get here
+	sleep 1
+	mv $DIR2/$tfile.source $DIR2/$tfile.target
+
+	wait $CATPID
+	RC=$?
+	if [[ $RC -ne 0 ]]; then
+		error "open with cat failed, rc=$RC"
+	fi
+}
+run_test 31r "open-rename(replace) race"
+
 test_32b() { # bug 11270
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

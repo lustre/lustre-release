@@ -636,6 +636,8 @@ retry:
 	op_data->op_data = lmm;
 	op_data->op_data_size = lmmsize;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_LLITE_OPEN_DELAY, cfs_fail_val);
+
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
 			    &ll_md_blocking_ast, 0);
 	kfree(name);
@@ -687,14 +689,20 @@ out:
 	ptlrpc_req_finished(req);
 	ll_intent_drop_lock(itp);
 
-	/* We did open by fid, but by the time we got to the server,
-	 * the object disappeared. If this is a create, we cannot really
-	 * tell the userspace that the file it was trying to create
-	 * does not exist. Instead let's return -ESTALE, and the VFS will
-	 * retry the create with LOOKUP_REVAL that we are going to catch
-	 * in ll_revalidate_dentry() and use lookup then.
+	/* We did open by fid, but by the time we got to the server, the object
+	 * disappeared.  This is possible if the object was unlinked, but it's
+	 * also possible if the object was unlinked by a rename.  In the case
+	 * of an object renamed over our existing one, we can't fail this open.
+	 * O_CREAT also goes through this path if we had an existing dentry,
+	 * and it's obviously wrong to return ENOENT for O_CREAT.
+	 *
+	 * Instead let's return -ESTALE, and the VFS will retry the open with
+	 * LOOKUP_REVAL, which we catch in ll_revalidate_dentry and fail to
+	 * revalidate, causing a lookup.  This causes extra lookups in the case
+	 * where we had a dentry in cache but the file is being unlinked and we
+	 * lose the race with unlink, but this should be very rare.
 	 */
-	if (rc == -ENOENT && itp->it_op & IT_CREAT)
+	if (rc == -ENOENT)
 		rc = -ESTALE;
 
 	RETURN(rc);
