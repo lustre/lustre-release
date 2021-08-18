@@ -310,6 +310,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 		struct lu_object *l;
 		struct lu_object_header *h;
 		struct osd_device *o = osd_dev(d);
+		int i;
 
 		l = &mo->oo_dt.do_lu;
 		if (unlikely(o->od_in_init)) {
@@ -336,6 +337,8 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 		init_rwsem(&mo->oo_guard);
 		rwlock_init(&mo->oo_attr_lock);
 		mo->oo_destroy = OSD_DESTROY_NONE;
+		for (i = 0; i < OSD_MAX_DBUFS; i++)
+			mo->oo_dbs[i] = NULL;
 		return l;
 	} else {
 		return NULL;
@@ -902,6 +905,13 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 {
 	struct osd_object *obj = osd_obj(l);
 	const struct lu_fid *fid = lu_object_fid(l);
+	dmu_buf_t **dbs = obj->oo_dbs;
+	int i;
+
+	for (i = 0; i < OSD_MAX_DBUFS; i++) {
+		if (dbs[i])
+			dbuf_rele((dmu_buf_impl_t *)dbs[i], osd_0copy_tag);
+	}
 
 	if (obj->oo_dn) {
 		if (likely(!fid_is_acct(fid))) {
