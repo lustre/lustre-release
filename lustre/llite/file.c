@@ -318,28 +318,39 @@ static int ll_md_close(struct inode *inode, struct file *file)
 	if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED))
 		ll_put_grouplock(inode, file, fd->fd_grouplock.lg_gid);
 
+	mutex_lock(&lli->lli_och_mutex);
 	if (fd->fd_lease_och != NULL) {
 		bool lease_broken;
+		struct obd_client_handle *lease_och;
+
+		lease_och = fd->fd_lease_och;
+		fd->fd_lease_och = NULL;
+		mutex_unlock(&lli->lli_och_mutex);
 
 		/* Usually the lease is not released when the
 		 * application crashed, we need to release here. */
-		rc = ll_lease_close(fd->fd_lease_och, inode, &lease_broken);
+		rc = ll_lease_close(lease_och, inode, &lease_broken);
+
+		mutex_lock(&lli->lli_och_mutex);
+
 		CDEBUG_LIMIT(rc ? D_ERROR : D_INODE,
 			     "Clean up lease "DFID" %d/%d\n",
 			     PFID(&lli->lli_fid), rc, lease_broken);
-
-		fd->fd_lease_och = NULL;
 	}
 
 	if (fd->fd_och != NULL) {
-		rc = ll_close_inode_openhandle(inode, fd->fd_och, 0, NULL);
+		struct obd_client_handle *och;
+
+		och = fd->fd_och;
 		fd->fd_och = NULL;
+		mutex_unlock(&lli->lli_och_mutex);
+
+		rc = ll_close_inode_openhandle(inode, och, 0, NULL);
 		GOTO(out, rc);
 	}
 
         /* Let's see if we have good enough OPEN lock on the file and if
            we can skip talking to MDS */
-	mutex_lock(&lli->lli_och_mutex);
 	if (fd->fd_omode & FMODE_WRITE) {
 		lockmode = LCK_CW;
 		LASSERT(lli->lli_open_fd_write_count);
