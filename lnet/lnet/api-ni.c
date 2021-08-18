@@ -1713,13 +1713,26 @@ lnet_nid_to_ni_addref(struct lnet_nid *nid)
 EXPORT_SYMBOL(lnet_nid_to_ni_addref);
 
 int
-lnet_islocalnid(lnet_nid_t nid)
+lnet_islocalnid4(lnet_nid_t nid)
 {
 	struct lnet_ni	*ni;
 	int		cpt;
 
 	cpt = lnet_net_lock_current();
 	ni = lnet_nid2ni_locked(nid, cpt);
+	lnet_net_unlock(cpt);
+
+	return ni != NULL;
+}
+
+int
+lnet_islocalnid(struct lnet_nid *nid)
+{
+	struct lnet_ni	*ni;
+	int		cpt;
+
+	cpt = lnet_net_lock_current();
+	ni = lnet_nid_to_ni_locked(nid, cpt);
 	lnet_net_unlock(cpt);
 
 	return ni != NULL;
@@ -3922,6 +3935,7 @@ LNetCtl(unsigned int cmd, void *arg)
 	struct lnet_ioctl_config_data *config;
 	struct lnet_process_id	  id = {0};
 	struct lnet_ni		 *ni;
+	struct lnet_nid		  nid;
 	int			  rc;
 
 	BUILD_BUG_ON(sizeof(struct lnet_ioctl_net_config) +
@@ -3949,10 +3963,11 @@ LNetCtl(unsigned int cmd, void *arg)
 			  config->cfg_config_u.cfg_route.rtr_sensitivity;
 		}
 
+		lnet_nid4_to_nid(config->cfg_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_add_route(config->cfg_net,
 				    config->cfg_config_u.cfg_route.rtr_hop,
-				    config->cfg_nid,
+				    &nid,
 				    config->cfg_config_u.cfg_route.
 					rtr_priority, sensitivity);
 		mutex_unlock(&the_lnet.ln_api_mutex);

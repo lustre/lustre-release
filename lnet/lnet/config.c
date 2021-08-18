@@ -1078,8 +1078,8 @@ lnet_parse_route(char *str, int *im_a_router)
 	struct list_head *tmp1;
 	struct list_head *tmp2;
 	__u32 net;
-	lnet_nid_t nid;
-	struct lnet_text_buf *ltb;
+	struct lnet_nid nid;
+	struct lnet_text_buf  *ltb;
 	int rc;
 	char *sep;
 	char *token = str;
@@ -1157,8 +1157,8 @@ lnet_parse_route(char *str, int *im_a_router)
 				if (rc < 0)
 					goto token_error;
 
-				nid = libcfs_str2nid(ltb->ltb_text);
-				if (nid == LNET_NID_ANY || nid == LNET_NID_LO_0)
+				if (libcfs_strnid(&nid, ltb->ltb_text) != 0 ||
+				    nid_is_lo0(&nid))
 					goto token_error;
 			}
 		}
@@ -1179,20 +1179,19 @@ lnet_parse_route(char *str, int *im_a_router)
 
 		list_for_each(tmp2, &gateways) {
 			ltb = list_entry(tmp2, struct lnet_text_buf, ltb_list);
-			nid = libcfs_str2nid(ltb->ltb_text);
-			LASSERT(nid != LNET_NID_ANY);
+			LASSERT(libcfs_strnid(&nid, ltb->ltb_text) == 0);
 
-			if (lnet_islocalnid(nid)) {
+			if (lnet_islocalnid(&nid)) {
 				*im_a_router = 1;
 				continue;
 			}
 
-			rc = lnet_add_route(net, hops, nid, priority, 1);
+			rc = lnet_add_route(net, hops, &nid, priority, 1);
 			if (rc != 0 && rc != -EEXIST && rc != -EHOSTUNREACH) {
 				CERROR("Can't create route "
 				       "to %s via %s\n",
 				       libcfs_net2str(net),
-				       libcfs_nid2str(nid));
+				       libcfs_nidstr(&nid));
 				goto out;
 			}
 		}

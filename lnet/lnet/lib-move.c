@@ -4567,7 +4567,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			return -EPROTO;
 		}
 
-		if (lnet_islocalnid(dest_nid)) {
+		if (lnet_islocalnid4(dest_nid)) {
 			/* dest is another local NI; sender should have used
 			 * this node's NID on its own network */
 			CERROR("%s, src %s: Bad dest nid %s "

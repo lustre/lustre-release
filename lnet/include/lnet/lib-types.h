@@ -883,7 +883,7 @@ struct lnet_route {
 	struct list_head	lr_list;	/* chain on net */
 	struct list_head	lr_gwlist;	/* chain on gateway */
 	struct lnet_peer	*lr_gateway;	/* router node */
-	lnet_nid_t		lr_nid;		/* NID used to add route */
+	struct lnet_nid		lr_nid;		/* NID used to add route */
 	__u32			lr_net;		/* remote network number */
 	__u32			lr_lnet;	/* local network number */
 	int			lr_seq;		/* sequence for round-robin */
