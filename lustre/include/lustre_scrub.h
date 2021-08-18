@@ -346,6 +346,10 @@ void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags);
 int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_file_store(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub);
+int scrub_thread_prep(const struct lu_env *env, struct lustre_scrub *scrub,
+		      uuid_t uuid, u64 start);
+int scrub_thread_post(const struct lu_env *env, struct lustre_scrub *scrub,
+		      int result);
 int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,
 		void *data, __u32 flags);
 void scrub_stop(struct lustre_scrub *scrub);

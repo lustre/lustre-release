@@ -272,6 +272,129 @@ int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub)
 }
 EXPORT_SYMBOL(scrub_checkpoint);
 
+int scrub_thread_prep(const struct lu_env *env, struct lustre_scrub *scrub,
+		      uuid_t uuid, u64 start)
+{
+	struct scrub_file *sf = &scrub->os_file;
+	u32 flags = scrub->os_start_flags;
+	bool drop_dryrun = false;
+	int rc;
+
+	ENTRY;
+	CDEBUG(D_LFSCK, "%s: OI scrub prep, flags = 0x%x\n",
+	       scrub->os_name, flags);
+
+	down_write(&scrub->os_rwsem);
+	if (flags & SS_SET_FAILOUT)
+		sf->sf_param |= SP_FAILOUT;
+	else if (flags & SS_CLEAR_FAILOUT)
+		sf->sf_param &= ~SP_FAILOUT;
+
+	if (flags & SS_SET_DRYRUN) {
+		sf->sf_param |= SP_DRYRUN;
+	} else if (flags & SS_CLEAR_DRYRUN && sf->sf_param & SP_DRYRUN) {
+		sf->sf_param &= ~SP_DRYRUN;
+		drop_dryrun = true;
+	}
+
+	if (flags & SS_RESET)
+		scrub_file_reset(scrub, uuid, 0);
+
+	spin_lock(&scrub->os_lock);
+	scrub->os_partial_scan = 0;
+	if (flags & SS_AUTO_FULL) {
+		scrub->os_full_speed = 1;
+		sf->sf_flags |= SF_AUTO;
+	} else if (flags & SS_AUTO_PARTIAL) {
+		scrub->os_full_speed = 0;
+		scrub->os_partial_scan = 1;
+		sf->sf_flags |= SF_AUTO;
+	} else if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+				   SF_UPGRADE)) {
+		scrub->os_full_speed = 1;
+	} else {
+		scrub->os_full_speed = 0;
+	}
+
+	scrub->os_in_prior = 0;
+	scrub->os_waiting = 0;
+	scrub->os_paused = 0;
+	scrub->os_in_join = 0;
+	scrub->os_full_scrub = 0;
+	spin_unlock(&scrub->os_lock);
+	scrub->os_new_checked = 0;
+	if (drop_dryrun && sf->sf_pos_first_inconsistent != 0)
+		sf->sf_pos_latest_start = sf->sf_pos_first_inconsistent;
+	else if (sf->sf_pos_last_checkpoint != 0)
+		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
+	else
+		sf->sf_pos_latest_start = start;
+
+	scrub->os_pos_current = sf->sf_pos_latest_start;
+	sf->sf_status = SS_SCANNING;
+	sf->sf_time_latest_start = ktime_get_real_seconds();
+	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
+	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
+	rc = scrub_file_store(env, scrub);
+	if (rc == 0) {
+		spin_lock(&scrub->os_lock);
+		scrub->os_running = 1;
+		spin_unlock(&scrub->os_lock);
+		wake_up_var(scrub);
+	}
+	up_write(&scrub->os_rwsem);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(scrub_thread_prep);
+
+int scrub_thread_post(const struct lu_env *env, struct lustre_scrub *scrub,
+		      int result)
+{
+	struct scrub_file *sf = &scrub->os_file;
+	int rc;
+	ENTRY;
+
+	CDEBUG(D_LFSCK, "%s: OI scrub post with result = %d\n",
+	       scrub->os_name, result);
+
+	down_write(&scrub->os_rwsem);
+	spin_lock(&scrub->os_lock);
+	scrub->os_running = 0;
+	spin_unlock(&scrub->os_lock);
+	if (scrub->os_new_checked > 0) {
+		sf->sf_items_checked += scrub->os_new_checked;
+		scrub->os_new_checked = 0;
+		sf->sf_pos_last_checkpoint = scrub->os_pos_current;
+	}
+	sf->sf_time_last_checkpoint = ktime_get_real_seconds();
+	if (result > 0) {
+		sf->sf_status = SS_COMPLETED;
+		if (!(sf->sf_param & SP_DRYRUN)) {
+			memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
+			sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
+					  SF_UPGRADE | SF_AUTO);
+		}
+		sf->sf_time_last_complete = sf->sf_time_last_checkpoint;
+		sf->sf_success_count++;
+	} else if (result == 0) {
+		if (scrub->os_paused)
+			sf->sf_status = SS_PAUSED;
+		else
+			sf->sf_status = SS_STOPPED;
+	} else {
+		sf->sf_status = SS_FAILED;
+	}
+	sf->sf_run_time += ktime_get_seconds() -
+			   scrub->os_time_last_checkpoint;
+
+	rc = scrub_file_store(env, scrub);
+	up_write(&scrub->os_rwsem);
+
+	RETURN(rc < 0 ? rc : result);
+}
+EXPORT_SYMBOL(scrub_thread_post);
+
 int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,
 		void *data, __u32 flags)
 {
