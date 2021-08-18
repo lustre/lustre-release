@@ -1511,7 +1511,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		if (!lnet_is_route_alive(route))
 			continue;
-		gw_pnid = route->lr_gateway->lp_primary_nid;
+		gw_pnid = lnet_nid_to_nid4(&route->lr_gateway->lp_primary_nid);
 
 		/* no protection on below fields, but it's harmless */
 		if (last_route && (last_route->lr_seq - route->lr_seq < 0))
@@ -2137,7 +2137,7 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 	lnet_peer_ni_decref_locked(new_lpni);
 
 	CDEBUG(D_NET, "msg %p delayed. %s pending discovery\n",
-	       msg, libcfs_nid2str(peer->lp_primary_nid));
+	       msg, libcfs_nidstr(&peer->lp_primary_nid));
 
 	return LNET_DC_WAIT;
 }
@@ -5104,7 +5104,8 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 	       libcfs_nidstr(&ni->ni_nid), libcfs_id2str(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
-	msg->msg_initiator = getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid;
+	msg->msg_initiator =
+		lnet_nid_to_nid4(&getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid);
 	msg->msg_from = peer_id.nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;

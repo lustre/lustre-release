@@ -660,7 +660,7 @@ struct lnet_peer {
 	struct list_head	lp_rtr_list;
 
 	/* primary NID of the peer */
-	lnet_nid_t		lp_primary_nid;
+	struct lnet_nid		lp_primary_nid;
 
 	/* source NID to use during discovery */
 	lnet_nid_t		lp_disc_src_nid;

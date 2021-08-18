@@ -319,7 +319,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		if (peer != NULL) {
-			lnet_nid_t nid = peer->lp_primary_nid;
+			struct lnet_nid *nid = &peer->lp_primary_nid;
 			int nrefs     = atomic_read(&peer->lp_refcount);
 			int nrtrrefs  = peer->lp_rtr_refcount;
 			int alive     = lnet_is_gateway_alive(peer);
@@ -328,7 +328,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 				       "%-4d %7d %5s %s\n",
 				       nrefs, nrtrrefs,
 				       alive ? "up" : "down",
-				       libcfs_nid2str(nid));
+				       libcfs_nidstr(nid));
 		}
 
 		lnet_net_unlock(0);

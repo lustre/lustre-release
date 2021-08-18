@@ -1507,8 +1507,8 @@ lnet_net_is_pref_rtr_locked(struct lnet_net *net, lnet_nid_t rtr_nid)
 	return false;
 }
 
-unsigned int
-lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
+static unsigned int
+lnet_nid4_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
 	__u64		key = nid;
 	unsigned int	val;
@@ -1526,12 +1526,33 @@ lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 	return (unsigned int)(key + val + (val >> 1)) % number;
 }
 
+unsigned int
+lnet_nid_cpt_hash(struct lnet_nid *nid, unsigned int number)
+{
+	unsigned int val;
+	u32 h = 0;
+	int i;
+
+	LASSERT(number >= 1 && number <= LNET_CPT_NUMBER);
+
+	if (number == 1)
+		return 0;
+
+	if (nid_is_nid4(nid))
+		return lnet_nid4_cpt_hash(lnet_nid_to_nid4(nid), number);
+
+	for (i = 0; i < 4; i++)
+		h = hash_32(nid->nid_addr[i]^h, 32);
+	val = hash_32(LNET_NID_NET(nid) ^ h, LNET_CPT_BITS);
+	if (val < number)
+		return val;
+	return (unsigned int)(h + val + (val >> 1)) % number;
+}
+
 int
 lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni)
 {
 	struct lnet_net *net;
-	/* FIXME handle long-addr nid */
-	lnet_nid_t nid4 = lnet_nid_to_nid4(nid);
 
 	/* must called with hold of lnet_net_lock */
 	if (LNET_CPT_NUMBER == 1)
@@ -1546,20 +1567,20 @@ lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni)
 	 */
 	if (ni != NULL) {
 		if (ni->ni_cpts != NULL)
-			return ni->ni_cpts[lnet_nid_cpt_hash(nid4,
+			return ni->ni_cpts[lnet_nid_cpt_hash(nid,
 							     ni->ni_ncpts)];
 		else
-			return lnet_nid_cpt_hash(nid4, LNET_CPT_NUMBER);
+			return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 	}
 
 	/* no NI provided so look at the net */
 	net = lnet_get_net_locked(LNET_NID_NET(nid));
 
 	if (net != NULL && net->net_cpts != NULL) {
-		return net->net_cpts[lnet_nid_cpt_hash(nid4, net->net_ncpts)];
+		return net->net_cpts[lnet_nid_cpt_hash(nid, net->net_ncpts)];
 	}
 
-	return lnet_nid_cpt_hash(nid4, LNET_CPT_NUMBER);
+	return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 }
 
 int
@@ -4308,7 +4329,8 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_lock(&the_lnet.ln_api_mutex);
 		lp = lnet_find_peer(ping->ping_id.nid);
 		if (lp) {
-			ping->ping_id.nid = lp->lp_primary_nid;
+			ping->ping_id.nid =
+				lnet_nid_to_nid4(&lp->lp_primary_nid);
 			ping->mr_info = lnet_peer_is_multi_rail(lp);
 			lnet_peer_decref_locked(lp);
 		}
@@ -4331,7 +4353,8 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_lock(&the_lnet.ln_api_mutex);
 		lp = lnet_find_peer(discover->ping_id.nid);
 		if (lp) {
-			discover->ping_id.nid = lp->lp_primary_nid;
+			discover->ping_id.nid =
+				lnet_nid_to_nid4(&lp->lp_primary_nid);
 			discover->mr_info = lnet_peer_is_multi_rail(lp);
 			lnet_peer_decref_locked(lp);
 		}

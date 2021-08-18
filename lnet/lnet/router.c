@@ -180,8 +180,9 @@ lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
 	 * use the gateway's lp_primary_nid to delete the route as the
 	 * lr_nid can be a constituent NID of the peer
 	 */
-	lnet_del_route_from_rnet(route->lr_gateway->lp_primary_nid,
-				 &rnet->lrn_routes, l);
+	lnet_del_route_from_rnet(
+		lnet_nid_to_nid4(&route->lr_gateway->lp_primary_nid),
+		&rnet->lrn_routes, l);
 
 	if (lp) {
 		route = list_first_entry(l, struct lnet_route,
@@ -206,10 +207,11 @@ lnet_rtr_transfer_to_peer(struct lnet_peer *src, struct lnet_peer *target)
 
 	lnet_net_lock(LNET_LOCK_EX);
 	CDEBUG(D_NET, "transfering routes from %s -> %s\n",
-	       libcfs_nid2str(src->lp_primary_nid),
-	       libcfs_nid2str(target->lp_primary_nid));
+	       libcfs_nidstr(&src->lp_primary_nid),
+	       libcfs_nidstr(&target->lp_primary_nid));
 	list_for_each_entry(route, &src->lp_routes, lr_gwlist) {
-		CDEBUG(D_NET, "%s: %s->%s\n", libcfs_nid2str(src->lp_primary_nid),
+		CDEBUG(D_NET, "%s: %s->%s\n",
+		       libcfs_nidstr(&src->lp_primary_nid),
 		       libcfs_net2str(route->lr_net),
 		       libcfs_nid2str(route->lr_nid));
 	}
@@ -340,7 +342,7 @@ bool lnet_is_route_alive(struct lnet_route *route)
 		spin_unlock(&gw->lp_lock);
 		if (gw->lp_rtr_refcount > 0)
 			CERROR("peer %s is being used as a gateway but routing feature is not turned on\n",
-			       libcfs_nid2str(gw->lp_primary_nid));
+			       libcfs_nidstr(&gw->lp_primary_nid));
 		return false;
 	}
 	spin_unlock(&gw->lp_lock);
@@ -382,7 +384,7 @@ lnet_check_route_inconsistency(struct lnet_route *route)
 	    (route->lr_hops == 1 || route->lr_hops == LNET_UNDEFINED_HOPS)) {
 		CWARN("route %s->%s is detected to be multi-hop but hop count is set to %d\n",
 			libcfs_net2str(route->lr_net),
-			libcfs_nid2str(route->lr_gateway->lp_primary_nid),
+			libcfs_nidstr(&route->lr_gateway->lp_primary_nid),
 			(int) route->lr_hops);
 	}
 }
@@ -431,7 +433,7 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 	if (lp_state & LNET_PEER_PING_FAILED ||
 	    pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED) {
 		CDEBUG(D_NET, "Set routes down for gw %s because %s %d\n",
-		       libcfs_nid2str(lp->lp_primary_nid),
+		       libcfs_nidstr(&lp->lp_primary_nid),
 		       lp_state & LNET_PEER_PING_FAILED ? "ping failed" :
 		       "route feature is disabled", lp->lp_ping_error);
 		/* If the ping failed or the peer has routing disabled then
@@ -443,7 +445,7 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 	}
 
 	CDEBUG(D_NET, "Discovery is disabled. Processing reply for gw: %s:%d\n",
-	       libcfs_nid2str(lp->lp_primary_nid), pbuf->pb_info.pi_nnis);
+	       libcfs_nidstr(&lp->lp_primary_nid), pbuf->pb_info.pi_nnis);
 
 	/*
 	 * examine the ping response to determine if the routes on that
@@ -535,7 +537,7 @@ lnet_router_discovery_complete(struct lnet_peer *lp)
 	 * determine otherwise.
 	 */
 	CDEBUG(D_NET, "%s: Router discovery failed %d\n",
-	       libcfs_nid2str(lp->lp_primary_nid), lp->lp_dc_error);
+	       libcfs_nidstr(&lp->lp_primary_nid), lp->lp_dc_error);
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL)
 		lpni->lpni_ns_status = LNET_NI_STATUS_DOWN;
 
@@ -762,7 +764,8 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 		}
 
 		/* our lookups must be true */
-		LASSERT(route2->lr_gateway->lp_primary_nid != gateway);
+		LASSERT(lnet_nid_to_nid4(&route2->lr_gateway->lp_primary_nid) !=
+			gateway);
 	}
 
 	/*
@@ -814,7 +817,7 @@ lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 	list_for_each_entry_safe(route, tmp, route_list, lr_list) {
 		gateway = route->lr_gateway;
 		if (gw_nid != LNET_NID_ANY &&
-		    gw_nid != gateway->lp_primary_nid)
+		    gw_nid != lnet_nid_to_nid4(&gateway->lp_primary_nid))
 			continue;
 
 		/*
@@ -858,7 +861,7 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 	if (lpni) {
 		lp = lpni->lpni_peer_net->lpn_peer;
 		LASSERT(lp);
-		gw_nid = lp->lp_primary_nid;
+		gw_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 		lnet_peer_ni_decref_locked(lpni);
 	}
 
@@ -1178,7 +1181,7 @@ rescan:
 			lpn = lnet_get_next_peer_net_locked(rtr, net_id);
 			if (!lpn) {
 				CERROR("gateway %s has no networks\n",
-				libcfs_nid2str(rtr->lp_primary_nid));
+				libcfs_nidstr(&rtr->lp_primary_nid));
 				break;
 			}
 
@@ -1195,7 +1198,7 @@ rescan:
 			found_lpn = true;
 
 			CDEBUG(D_NET, "rtr %s(%p) %s(%p) next ping %lld\n",
-			       libcfs_nid2str(rtr->lp_primary_nid), rtr,
+			       libcfs_nidstr(&rtr->lp_primary_nid), rtr,
 			       libcfs_net2str(net_id), lpn,
 			       lpn->lpn_next_ping);
 
@@ -1205,7 +1208,7 @@ rescan:
 
 		if (!found_lpn || !lpn) {
 			CERROR("no local network found for gateway %s\n",
-			       libcfs_nid2str(rtr->lp_primary_nid));
+			       libcfs_nidstr(&rtr->lp_primary_nid));
 			continue;
 		}
 
@@ -1220,10 +1223,11 @@ rescan:
 		spin_unlock(&rtr->lp_lock);
 
 		/* find the peer_ni associated with the primary NID */
-		lpni = lnet_peer_get_ni_locked(rtr, rtr->lp_primary_nid);
+		lpni = lnet_peer_get_ni_locked(
+			rtr, lnet_nid_to_nid4(&rtr->lp_primary_nid));
 		if (!lpni) {
 			CDEBUG(D_NET, "Expected to find an lpni for %s, but non found\n",
-			       libcfs_nid2str(rtr->lp_primary_nid));
+			       libcfs_nidstr(&rtr->lp_primary_nid));
 			continue;
 		}
 		lnet_peer_ni_addref_locked(lpni);
@@ -1243,7 +1247,7 @@ rescan:
 			lpn->lpn_next_ping = now + alive_router_check_interval;
 		else
 			CERROR("Failed to discover router %s\n",
-			       libcfs_nid2str(rtr->lp_primary_nid));
+			       libcfs_nidstr(&rtr->lp_primary_nid));
 
 		/* NB cpt lock was dropped in lnet_discover_peer_locked() */
 		if (version != the_lnet.ln_routers_version) {

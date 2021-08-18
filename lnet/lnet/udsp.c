@@ -248,7 +248,8 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 		list_for_each_entry(rnet, rn_list, lrn_list) {
 			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 				/* look if gw nid on the same net matches */
-				gw_prim_nid = route->lr_gateway->lp_primary_nid;
+				gw_prim_nid = lnet_nid_to_nid4(
+					&route->lr_gateway->lp_primary_nid);
 				lpni = NULL;
 				while ((lpni = lnet_get_next_peer_ni_locked(route->lr_gateway,
 									    NULL,
@@ -424,7 +425,8 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 		rn_list = &the_lnet.ln_remote_nets_hash[i];
 		list_for_each_entry(rnet, rn_list, lrn_list) {
 			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
-				gw_nid = route->lr_gateway->lp_primary_nid;
+				gw_nid = lnet_nid_to_nid4(
+					&route->lr_gateway->lp_primary_nid);
 				rc = cfs_match_nid_net(gw_nid,
 					rte_action->ud_net_id.udn_net_type,
 					&rte_action->ud_net_id.udn_net_num_range,
@@ -605,7 +607,7 @@ lnet_udsp_apply_rule_on_lpnis(struct udsp_info *udi)
 		ptable = the_lnet.ln_peer_tables[cpt];
 		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
 			CDEBUG(D_NET, "udsp examining lp %s\n",
-			       libcfs_nid2str(lp->lp_primary_nid));
+			       libcfs_nidstr(&lp->lp_primary_nid));
 			list_for_each_entry(lpn,
 					    &lp->lp_peer_nets,
 					    lpn_peer_nets) {
