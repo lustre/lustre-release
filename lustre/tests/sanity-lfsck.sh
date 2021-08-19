@@ -1100,6 +1100,9 @@ test_8()
 		error "(22) unexpected status"
 	}
 
+	# wait to process one inode at least (OBD_FAIL_LFSCK_DELAY3)
+	sleep 3
+
 	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
 	[ "$FLAGS" == "scanned-once,inconsistent" ] ||
 		error "(23) Expect 'scanned-once,inconsistent',but got '$FLAGS'"
