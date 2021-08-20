@@ -226,7 +226,7 @@ __must_hold(&ni->ni_lock)
 
 	if (ni->ni_status && ni->ni_status->ns_status != status) {
 		CDEBUG(D_NET, "ni %s status changed from %#x to %#x\n",
-		       libcfs_nid2str(ni->ni_nid),
+		       libcfs_nidstr(&ni->ni_nid),
 		       ni->ni_status->ns_status, status);
 		ni->ni_status->ns_status = status;
 		update = true;
@@ -239,7 +239,7 @@ static inline unsigned int
 lnet_ni_get_status_locked(struct lnet_ni *ni)
 __must_hold(&ni->ni_lock)
 {
-	if (ni->ni_nid == LNET_NID_LO_0)
+	if (nid_is_lo0(&ni->ni_nid))
 		return LNET_NI_STATUS_UP;
 	else if (atomic_read(&ni->ni_fatal_error_on))
 		return LNET_NI_STATUS_DOWN;

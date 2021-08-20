@@ -466,7 +466,7 @@ lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
 	lnet_ni_set_next_ping(ni, now);
 
 	CDEBUG(D_NET, "%s added to recovery queue. ping count: %u next ping: %lld health :%d\n",
-	       libcfs_nid2str(ni->ni_nid),
+	       libcfs_nidstr(&ni->ni_nid),
 	       ni->ni_ping_count,
 	       ni->ni_next_ping,
 	       atomic_read(&ni->ni_healthv));
@@ -800,10 +800,11 @@ lnet_health_check(struct lnet_msg *msg)
 	 * if we're sending to the LOLND then the msg_txpeer will not be
 	 * set. So no need to sanity check it.
 	 */
-	if (msg->msg_tx_committed && msg->msg_txni->ni_nid != LNET_NID_LO_0)
+	if (msg->msg_tx_committed &&
+	    !nid_is_lo0(&msg->msg_txni->ni_nid))
 		LASSERT(msg->msg_txpeer);
 	else if (msg->msg_tx_committed &&
-		 msg->msg_txni->ni_nid == LNET_NID_LO_0)
+		 nid_is_lo0(&msg->msg_txni->ni_nid))
 		lo = true;
 
 	if (hstatus != LNET_MSG_STATUS_OK &&
@@ -830,7 +831,7 @@ lnet_health_check(struct lnet_msg *msg)
 		LASSERT(ni);
 
 	CDEBUG(D_NET, "health check: %s->%s: %s: %s\n",
-	       libcfs_nid2str(ni->ni_nid),
+	       libcfs_nidstr(&ni->ni_nid),
 	       (lo) ? "self" : libcfs_nid2str(lpni->lpni_nid),
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(hstatus));
@@ -1112,7 +1113,7 @@ lnet_send_error_simulation(struct lnet_msg *msg,
 
 	CDEBUG(D_NET, "src %s(%s)->dst %s: %s simulate health error: %s\n",
 		libcfs_nid2str(msg->msg_hdr.src_nid),
-		libcfs_nid2str(msg->msg_txni->ni_nid),
+		libcfs_nidstr(&msg->msg_txni->ni_nid),
 		libcfs_nid2str(msg->msg_hdr.dest_nid),
 		lnet_msgtyp2str(msg->msg_type),
 		lnet_health_error2str(*hstatus));

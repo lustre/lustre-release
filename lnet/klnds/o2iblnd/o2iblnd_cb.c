@@ -492,45 +492,45 @@ kiblnd_rx_complete(struct kib_rx *rx, int status, int nob)
 	int rc;
 	int err = -EIO;
 
-        LASSERT (net != NULL);
-        LASSERT (rx->rx_nob < 0);               /* was posted */
-        rx->rx_nob = 0;                         /* isn't now */
+	LASSERT(net);
+	LASSERT(rx->rx_nob < 0);	/* was posted */
+	rx->rx_nob = 0;			/* isn't now */
 
-        if (conn->ibc_state > IBLND_CONN_ESTABLISHED)
-                goto ignore;
+	if (conn->ibc_state > IBLND_CONN_ESTABLISHED)
+		goto ignore;
 
-        if (status != IB_WC_SUCCESS) {
-                CNETERR("Rx from %s failed: %d\n",
-                        libcfs_nid2str(conn->ibc_peer->ibp_nid), status);
-                goto failed;
-        }
+	if (status != IB_WC_SUCCESS) {
+		CNETERR("Rx from %s failed: %d\n",
+			libcfs_nid2str(conn->ibc_peer->ibp_nid), status);
+		goto failed;
+	}
 
-        LASSERT (nob >= 0);
-        rx->rx_nob = nob;
+	LASSERT(nob >= 0);
+	rx->rx_nob = nob;
 
-        rc = kiblnd_unpack_msg(msg, rx->rx_nob);
-        if (rc != 0) {
-                CERROR ("Error %d unpacking rx from %s\n",
-                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                goto failed;
-        }
+	rc = kiblnd_unpack_msg(msg, rx->rx_nob);
+	if (rc != 0) {
+		CERROR("Error %d unpacking rx from %s\n",
+		       rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+		goto failed;
+	}
 
-        if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
-            msg->ibm_dstnid != ni->ni_nid ||
-            msg->ibm_srcstamp != conn->ibc_incarnation ||
-            msg->ibm_dststamp != net->ibn_incarnation) {
-                CERROR ("Stale rx from %s\n",
-                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                err = -ESTALE;
-                goto failed;
-        }
+	if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+	    msg->ibm_dstnid != lnet_nid_to_nid4(&ni->ni_nid) ||
+	    msg->ibm_srcstamp != conn->ibc_incarnation ||
+	    msg->ibm_dststamp != net->ibn_incarnation) {
+		CERROR("Stale rx from %s\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid));
+		err = -ESTALE;
+		goto failed;
+	}
 
-        /* set time last known alive */
-        kiblnd_peer_alive(conn->ibc_peer);
+	/* set time last known alive */
+	kiblnd_peer_alive(conn->ibc_peer);
 
-        /* racing with connection establishment/teardown! */
+	/* racing with connection establishment/teardown! */
 
-        if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
+	if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
 		rwlock_t  *g_lock = &kiblnd_data.kib_global_lock;
 		unsigned long  flags;
 
@@ -542,15 +542,15 @@ kiblnd_rx_complete(struct kib_rx *rx, int status, int nob)
 			return;
 		}
 		write_unlock_irqrestore(g_lock, flags);
-        }
-        kiblnd_handle_rx(rx);
-        return;
+	}
+	kiblnd_handle_rx(rx);
+	return;
 
- failed:
-        CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
-        kiblnd_close_conn(conn, err);
- ignore:
-        kiblnd_drop_rx(rx);                     /* Don't re-post rx. */
+failed:
+	CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
+	kiblnd_close_conn(conn, err);
+ignore:
+	kiblnd_drop_rx(rx);                     /* Don't re-post rx. */
 }
 
 static int
@@ -2467,11 +2467,12 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 		rej.ibr_incarnation = net->ibn_incarnation;
 	}
 
-	if (ni == NULL ||                         /* no matching net */
-	    ni->ni_nid != reqmsg->ibm_dstnid ||   /* right NET, wrong NID! */
-	    net->ibn_dev != ibdev) {              /* wrong device */
+	if (ni == NULL ||			/* no matching net */
+	    lnet_nid_to_nid4(&ni->ni_nid) !=
+	    reqmsg->ibm_dstnid ||		/* right NET, wrong NID! */
+	    net->ibn_dev != ibdev) {		/* wrong device */
 		CERROR("Can't accept conn from %s on %s (%s:%d:%pI4h): bad dst nid %s\n", libcfs_nid2str(nid),
-		       ni ? libcfs_nid2str(ni->ni_nid) : "NA",
+		       ni ? libcfs_nidstr(&ni->ni_nid) : "NA",
 		       ibdev->ibd_ifname, ibdev->ibd_nnets,
 		       &ibdev->ibd_ifip,
 		       libcfs_nid2str(reqmsg->ibm_dstnid));
@@ -2591,8 +2592,8 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 		 * the lower NID connection win so we can move forward.
 		 */
 		if (peer2->ibp_connecting != 0 &&
-		    nid < ni->ni_nid && peer2->ibp_races <
-		    MAX_CONN_RACES_BEFORE_ABORT) {
+		    nid < lnet_nid_to_nid4(&ni->ni_nid) &&
+		    peer2->ibp_races < MAX_CONN_RACES_BEFORE_ABORT) {
 			peer2->ibp_races++;
 			write_unlock_irqrestore(g_lock, flags);
 
@@ -3023,7 +3024,7 @@ kiblnd_check_connreply(struct kib_conn *conn, void *priv, int priv_nob)
         }
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	if (msg->ibm_dstnid == ni->ni_nid &&
+	if (msg->ibm_dstnid == lnet_nid_to_nid4(&ni->ni_nid) &&
 	    msg->ibm_dststamp == net->ibn_incarnation)
 		rc = 0;
 	else
@@ -3658,13 +3659,13 @@ kiblnd_qp_event(struct ib_event *event, void *arg)
 	case IB_EVENT_PORT_ERR:
 	case IB_EVENT_DEVICE_FATAL:
 		CERROR("Fatal device error for NI %s\n",
-		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		       libcfs_nidstr(&conn->ibc_peer->ibp_ni->ni_nid));
 		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 1);
 		return;
 
 	case IB_EVENT_PORT_ACTIVE:
 		CERROR("Port reactivated for NI %s\n",
-		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		       libcfs_nidstr(&conn->ibc_peer->ibp_ni->ni_nid));
 		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 0);
 		return;
 

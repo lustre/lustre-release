@@ -1169,20 +1169,20 @@ do {									\
 		wake_up_var(&kgnilnd_data);				\
 }while (0)
 
-#define kgnilnd_net_addref(net)                                                 \
-do {                                                                            \
-	int     val = atomic_inc_return(&net->gnn_refcount);                    \
-	LASSERTF(val > 1, "net %p refcount %d\n", net, val);                    \
-	CDEBUG(D_NETTRACE, "net %p->%s++ (%d)\n", net,                          \
-		libcfs_nid2str(net->gnn_ni->ni_nid), val);                      \
+#define kgnilnd_net_addref(net)						\
+do {									\
+	int     val = atomic_inc_return(&net->gnn_refcount);		\
+	LASSERTF(val > 1, "net %p refcount %d\n", net, val);		\
+	CDEBUG(D_NETTRACE, "net %p->%s++ (%d)\n", net,			\
+		libcfs_nidstr(&net->gnn_ni->ni_nid), val);		\
 } while (0)
 
-#define kgnilnd_net_decref(net)                                                 \
-do {                                                                            \
-	int     val = atomic_dec_return(&net->gnn_refcount);                    \
-	LASSERTF(val >= 0, "net %p refcount %d\n", net, val);                   \
-	CDEBUG(D_NETTRACE, "net %p->%s-- (%d)\n", net,                          \
-	       libcfs_nid2str(net->gnn_ni->ni_nid), val);                       \
+#define kgnilnd_net_decref(net)						\
+do {									\
+	int     val = atomic_dec_return(&net->gnn_refcount);		\
+	LASSERTF(val >= 0, "net %p refcount %d\n", net, val);		\
+	CDEBUG(D_NETTRACE, "net %p->%s-- (%d)\n", net,			\
+	       libcfs_nidstr(&net->gnn_ni->ni_nid), val);		\
 } while (0)
 
 #define kgnilnd_peer_addref(peer)                                               \
@@ -1376,7 +1376,7 @@ kgnilnd_check_purgatory_conn(kgn_conn_t *conn)
 
 	if (conn->gnc_peer) {
 		loopback = conn->gnc_peer->gnp_nid ==
-		       conn->gnc_peer->gnp_net->gnn_ni->ni_nid;
+			lnet_nid_to_nid4(&conn->gnc_peer->gnp_net->gnn_ni->ni_nid);
 	} else {
 		/* short circuit - a conn that didn't complete
 		 * setup never needs a purgatory hold */
@@ -1744,8 +1744,11 @@ kgnilnd_find_net(lnet_nid_t nid, kgn_net_t **netp)
 		return -ESHUTDOWN;
 	}
 
-	list_for_each_entry(net, kgnilnd_netnum2netlist(LNET_NETNUM(LNET_NIDNET(nid))), gnn_list) {
-		if (!net->gnn_shutdown && LNET_NIDNET(net->gnn_ni->ni_nid) == LNET_NIDNET(nid)) {
+	list_for_each_entry(net,
+			    kgnilnd_netnum2netlist(LNET_NETNUM(LNET_NIDNET(nid))),
+			    gnn_list) {
+		if (!net->gnn_shutdown &&
+		    LNET_NID_NET(&net->gnn_ni->ni_nid) == LNET_NIDNET(nid)) {
 			kgnilnd_net_addref(net);
 			up_read(&kgnilnd_data.kgn_net_rw_sem);
 			*netp = net;

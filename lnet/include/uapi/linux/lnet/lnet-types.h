@@ -32,6 +32,9 @@
 #ifndef __UAPI_LNET_TYPES_H__
 #define __UAPI_LNET_TYPES_H__
 
+#include <linux/string.h>
+#include <asm/byteorder.h>
+
 /** \addtogroup lnet
  * @{ */
 
@@ -51,6 +54,15 @@
 #define LNET_NID_ANY	  ((lnet_nid_t) -1)
 /** wildcard PID that matches any lnet_pid_t */
 #define LNET_PID_ANY	  ((lnet_pid_t) -1)
+
+static inline int LNET_NID_IS_ANY(const struct lnet_nid *nid)
+{
+	/* A NULL pointer can be used to mean "ANY" */
+	return !nid || nid->nid_type == 0xFF;
+}
+
+#define LNET_ANY_NID ((struct lnet_nid)			\
+		      {0xFF, 0xFF, ~0, {~0, ~0, ~0, ~0} })
 
 #define LNET_PID_RESERVED 0xf0000000 /* reserved bits in PID */
 #define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
@@ -81,7 +93,7 @@ static inline __u32 LNET_NETNUM(__u32 net)
 
 static inline __u32 LNET_NETTYP(__u32 net)
 {
-	return (net >> 16) & 0xffff;
+	return (net >> 16) & 0xff;
 }
 
 static inline __u32 LNET_MKNET(__u32 type, __u32 num)
@@ -93,6 +105,58 @@ static inline __u32 LNET_MKNET(__u32 type, __u32 num)
 #define LNET_NID_LO_0 LNET_MKNID(LNET_MKNET(LOLND, 0), 0)
 
 #define LNET_NET_ANY LNET_NIDNET(LNET_NID_ANY)
+
+static inline int nid_is_nid4(const struct lnet_nid *nid)
+{
+	return NID_ADDR_BYTES(nid) == 4;
+}
+
+/* LOLND may not be defined yet, so we cannot use an inline */
+#define nid_is_lo0(__nid)						\
+	((__nid)->nid_type == LOLND &&					\
+	 nid_is_nid4(__nid) &&						\
+	 (__nid)->nid_num == 0 &&					\
+	 (__nid)->nid_addr[0] == 0)
+
+static inline __u32 LNET_NID_NET(const struct lnet_nid *nid)
+{
+	return LNET_MKNET(nid->nid_type, __be16_to_cpu(nid->nid_num));
+}
+
+static inline void lnet_nid4_to_nid(lnet_nid_t nid4, struct lnet_nid *nid)
+{
+	if (nid4 == LNET_NID_ANY) {
+		/* equal to setting to LNET_ANY_NID */
+		memset(nid, 0xff, sizeof(*nid));
+		return;
+	}
+
+	nid->nid_size = 0;
+	nid->nid_type = LNET_NETTYP(LNET_NIDNET(nid4));
+	nid->nid_num = __cpu_to_be16(LNET_NETNUM(LNET_NIDNET(nid4)));
+	nid->nid_addr[0] = __cpu_to_be32(LNET_NIDADDR(nid4));
+	nid->nid_addr[1] = nid->nid_addr[2] = nid->nid_addr[3] = 0;
+}
+
+static inline lnet_nid_t lnet_nid_to_nid4(const struct lnet_nid *nid)
+{
+	if (LNET_NID_IS_ANY(nid))
+		return LNET_NID_ANY;
+
+	return LNET_MKNID(LNET_NID_NET(nid), __be32_to_cpu(nid->nid_addr[0]));
+}
+
+static inline int nid_same(const struct lnet_nid *n1,
+			    const struct lnet_nid *n2)
+{
+	return n1->nid_size == n2->nid_size &&
+		n1->nid_type == n2->nid_type &&
+		n1->nid_num == n2->nid_num &&
+		n1->nid_addr[0] == n2->nid_addr[0] &&
+		n1->nid_addr[1] == n2->nid_addr[1] &&
+		n1->nid_addr[2] == n2->nid_addr[2] &&
+		n1->nid_addr[3] == n2->nid_addr[3];
+}
 
 struct lnet_counters_health {
 	__u32	lch_rst_alloc;

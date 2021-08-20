@@ -455,7 +455,7 @@ struct lnet_ni {
 	__u32			*ni_cpts;
 
 	/* interface's NID */
-	lnet_nid_t		ni_nid;
+	struct lnet_nid		ni_nid;
 
 	/* instance-specific data */
 	void			*ni_data;

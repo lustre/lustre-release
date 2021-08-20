@@ -180,23 +180,24 @@ void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
 {
 	struct kib_net *net = ni->ni_data;
 
-        /* CAVEAT EMPTOR! all message fields not set here should have been
-         * initialised previously. */
-        msg->ibm_magic    = IBLND_MSG_MAGIC;
-        msg->ibm_version  = version;
-        /*   ibm_type */
-        msg->ibm_credits  = credits;
-        /*   ibm_nob */
-        msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = ni->ni_nid;
-        msg->ibm_srcstamp = net->ibn_incarnation;
-        msg->ibm_dstnid   = dstnid;
-        msg->ibm_dststamp = dststamp;
+	/* CAVEAT EMPTOR! all message fields not set here should have been
+	 * initialised previously.
+	 */
+	msg->ibm_magic    = IBLND_MSG_MAGIC;
+	msg->ibm_version  = version;
+	/*   ibm_type */
+	msg->ibm_credits  = credits;
+	/*   ibm_nob */
+	msg->ibm_cksum    = 0;
+	msg->ibm_srcnid   = lnet_nid_to_nid4(&ni->ni_nid);
+	msg->ibm_srcstamp = net->ibn_incarnation;
+	msg->ibm_dstnid   = dstnid;
+	msg->ibm_dststamp = dststamp;
 
-        if (*kiblnd_tunables.kib_cksum) {
-                /* NB ibm_cksum zero while computing cksum */
-                msg->ibm_cksum = kiblnd_cksum(msg, msg->ibm_nob);
-        }
+	if (*kiblnd_tunables.kib_cksum) {
+		/* NB ibm_cksum zero while computing cksum */
+		msg->ibm_cksum = kiblnd_cksum(msg, msg->ibm_nob);
+	}
 }
 
 int kiblnd_unpack_msg(struct kib_msg *msg, int nob)
@@ -397,7 +398,7 @@ kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid)
 		 * created.
 		 */
 		if (peer_ni->ibp_nid != nid ||
-		    peer_ni->ibp_ni->ni_nid != ni->ni_nid)
+		    !nid_same(&peer_ni->ibp_ni->ni_nid, &ni->ni_nid))
 			continue;
 
 		CDEBUG(D_NET, "got peer_ni [%p] -> %s (%d) version: %x\n",
@@ -2522,7 +2523,7 @@ kiblnd_set_ni_fatal_on(struct kib_hca_dev *hdev, int val)
 	list_for_each_entry(net, &hdev->ibh_dev->ibd_nets, ibn_list) {
 		if (val)
 			CDEBUG(D_NETERROR, "Fatal device error for NI %s\n",
-					libcfs_nid2str(net->ibn_ni->ni_nid));
+					libcfs_nidstr(&net->ibn_ni->ni_nid));
 		atomic_set(&net->ibn_ni->ni_fatal_error_on, val);
 	}
 }
@@ -3035,7 +3036,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 		wait_var_event_warning(&net->ibn_npeers,
 				       atomic_read(&net->ibn_npeers) == 0,
 				       "%s: waiting for %d peers to disconnect\n",
-				       libcfs_nid2str(ni->ni_nid),
+				       libcfs_nidstr(&ni->ni_nid),
 				       atomic_read(&net->ibn_npeers));
 
 		kiblnd_net_fini_pools(net);
@@ -3353,7 +3354,7 @@ kiblnd_startup(struct lnet_ni *ni)
 	}
 
 	net->ibn_dev = ibdev;
-	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);
+	ni->ni_nid.nid_addr[0] = cpu_to_be32(ibdev->ibd_ifip);
 
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
 

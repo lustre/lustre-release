@@ -91,7 +91,8 @@ kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 	int                 loopback;
 	int                 count = 0;
 
-	loopback = peer->gnp_nid == peer->gnp_net->gnn_ni->ni_nid;
+	loopback = (peer->gnp_nid ==
+		    lnet_nid_to_nid4(&peer->gnp_net->gnn_ni->ni_nid));
 
 	list_for_each_entry_safe(conn, cnxt, &peer->gnp_conns, gnc_list) {
 		if (conn->gnc_state != GNILND_CONN_ESTABLISHED)
@@ -161,7 +162,8 @@ kgnilnd_conn_isdup_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 	int               loopback;
 	ENTRY;
 
-	loopback = peer->gnp_nid == peer->gnp_net->gnn_ni->ni_nid;
+	loopback = (peer->gnp_nid ==
+		    lnet_nid_to_nid4(&peer->gnp_net->gnn_ni->ni_nid));
 
 	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
 		CDEBUG(D_NET, "checking conn 0x%p for peer %s"
@@ -594,8 +596,9 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 
 			net = nets[i];
 
-			peer_nid = kgnilnd_lnd2lnetnid(net->gnn_ni->ni_nid,
-								 peer->gnp_nid);
+			peer_nid = kgnilnd_lnd2lnetnid(
+				lnet_nid_to_nid4(&net->gnn_ni->ni_nid),
+				peer->gnp_nid);
 
 			CDEBUG(D_NET, "peer 0x%p->%s last_alive %lld (%llds ago)\n",
 				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
@@ -1726,7 +1729,7 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 		/* The nid passed in does not yet contain the net portion.
 		 * Let's build it up now
 		 */
-		nid = LNET_MKNID(LNET_NIDNET(net->gnn_ni->ni_nid), nid);
+		nid = LNET_MKNID(LNET_NID_NET(&net->gnn_ni->ni_nid), nid);
 		rc = kgnilnd_add_peer(net, nid, &new_peer);
 
 		if (rc) {
@@ -1807,7 +1810,8 @@ kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 		 * LNET assumes a conn and peer per net, the LNET_MKNID/LNET_NIDADDR allows us to let Lnet see what it
 		 * wants to see instead of the underlying network that is being used to send the data
 		 */
-		data->ioc_nid    = LNET_MKNID(LNET_NIDNET(ni->ni_nid), LNET_NIDADDR(nid));
+		data->ioc_nid    = LNET_MKNID(LNET_NID_NET(&ni->ni_nid),
+					      LNET_NIDADDR(nid));
 		data->ioc_flags  = peer_connecting;
 		data->ioc_count  = peer_refcount;
 
@@ -1858,7 +1862,8 @@ kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 			/* LNET_MKNID is used to build the correct address based on what LNET wants to see instead of
 			 * the generic connection that is used to send the data
 			 */
-			data->ioc_nid    = LNET_MKNID(LNET_NIDNET(ni->ni_nid), LNET_NIDADDR(conn->gnc_peer->gnp_nid));
+			data->ioc_nid	 = LNET_MKNID(LNET_NID_NET(&ni->ni_nid),
+						      LNET_NIDADDR(conn->gnc_peer->gnp_nid));
 			data->ioc_u32[0] = conn->gnc_device->gnd_id;
 			kgnilnd_conn_decref(conn);
 		}
@@ -1881,12 +1886,12 @@ kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 	}
 	case IOC_LIBCFS_REGISTER_MYNID: {
 		/* Ignore if this is a noop */
-		if (data->ioc_nid == ni->ni_nid) {
+		if (data->ioc_nid == lnet_nid_to_nid4(&ni->ni_nid)) {
 			rc = 0;
 		} else {
 			CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID: %s(%s)\n",
 			       libcfs_nid2str(data->ioc_nid),
-			       libcfs_nid2str(ni->ni_nid));
+			       libcfs_nidstr(&ni->ni_nid));
 			rc = -EINVAL;
 		}
 		break;
@@ -2640,9 +2645,9 @@ kgnilnd_startup(struct lnet_ni *ni)
 	atomic_set(&net->gnn_refcount, 1);
 
 	/* if we have multiple devices, spread the nets around */
-	net->gnn_netnum = LNET_NETNUM(LNET_NIDNET(ni->ni_nid));
+	net->gnn_netnum = LNET_NETNUM(LNET_NID_NET(&ni->ni_nid));
 
-	devno = LNET_NIDNET(ni->ni_nid) % GNILND_MAXDEVS;
+	devno = LNET_NID_NET(&ni->ni_nid) % GNILND_MAXDEVS;
 	net->gnn_dev = &kgnilnd_data.kgn_devices[devno];
 
 	/* allocate a 'dummy' cdm for datagram use. We can only have a single
@@ -2653,10 +2658,10 @@ kgnilnd_startup(struct lnet_ni *ni)
 	/* the instance id for the cdm is the NETNUM offset by MAXDEVS -
 	 * ensuring we'll have a unique id */
 
-
-	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), net->gnn_dev->gnd_nid);
+	ni->ni_nid.nid_addr[0] =
+		cpu_to_be32(LNET_NIDADDR(net->gnn_dev->gnd_nid));
 	CDEBUG(D_NET, "adding net %p nid=%s on dev %d \n",
-		net, libcfs_nid2str(ni->ni_nid), net->gnn_dev->gnd_id);
+		net, libcfs_nidstr(&ni->ni_nid), net->gnn_dev->gnd_id);
 	/* until the gnn_list is set, we need to cleanup ourselves as
 	 * kgnilnd_shutdown is just gonna get confused */
 

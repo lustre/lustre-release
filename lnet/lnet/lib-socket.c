@@ -238,9 +238,50 @@ retry:
 #if IS_ENABLED(CONFIG_IPV6)
 		case AF_INET6: {
 			struct sockaddr_in6 *sin6 = (void *)&locaddr;
+			int val = 0;
 
 			sin6->sin6_family = AF_INET6;
 			sin6->sin6_addr = in6addr_any;
+
+			/* Make sure we get both IPv4 and IPv6 connections.
+			 * This is the default, but it can be overridden so we
+			 * force it back.
+			 */
+#ifdef HAVE_KERNEL_SETSOCKOPT
+			kernel_setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
+					  (char *) &val, sizeof(val));
+#elif defined(_LINUX_SOCKPTR_H)
+			/* sockptr_t was introduced around
+			 * v5.8-rc4-1952-ga7b75c5a8c41 and allows a
+			 * kernel address to be passed to ->setsockopt
+			 */
+			if (ipv6_only_sock(sock->sk)) {
+				sockptr_t optval = KERNEL_SOCKPTR(&val);
+
+				sock->ops->setsockopt(sock,
+						      IPPROTO_IPV6, IPV6_V6ONLY,
+						      optval, sizeof(val));
+			}
+#else
+			/* From v5.7-rc6-2614-g5a892ff2facb when
+			 * kernel_setsockopt() was removed until
+			 * sockptr_t (above) there is no clean way to
+			 * pass kernel address to setsockopt.  We could
+			 * use get_fs()/set_fs(), but in this particular
+			 * situation there is an easier way.  It depends
+			 * on the fact that at least for these few
+			 * kernels a NULL address to ipv6_setsockopt()
+			 * is treated like the address of a zero.
+			 */
+			if (ipv6_only_sock(sock->sk) && !val) {
+				void *optval = NULL;
+
+				sock->ops->setsockopt(sock,
+						      IPPROTO_IPV6, IPV6_V6ONLY,
+						      optval, sizeof(val));
+			}
+#endif /* HAVE_KERNEL_SETSOCKOPT */
+
 			if (interface >= 0 && remaddr) {
 				struct sockaddr_in6 *rem = (void *)remaddr;
 
@@ -343,7 +384,6 @@ struct socket *
 lnet_sock_listen(int local_port, int backlog, struct net *ns)
 {
 	struct socket *sock;
-	int val = 0;
 	int rc;
 
 	sock = lnet_sock_create(-1, NULL, local_port, ns);
@@ -354,39 +394,6 @@ lnet_sock_listen(int local_port, int backlog, struct net *ns)
 			       local_port);
 		return ERR_PTR(rc);
 	}
-
-	/* Make sure we get both IPv4 and IPv6 connections.
-	 * This is the default, but it can be overridden so
-	 * we force it back.
-	 */
-#ifdef HAVE_KERNEL_SETSOCKOPT
-	kernel_setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
-			  (char *) &val, sizeof(val));
-#elif defined(_LINUX_SOCKPTR_H)
-	/* sockptr_t was introduced around v5.8-rc4-1952-ga7b75c5a8c41
-	 * and allows a kernel address to be passed to ->setsockopt
-	 */
-	if (ipv6_only_sock(sock->sk)) {
-		sockptr_t optval = KERNEL_SOCKPTR(&val);
-		sock->ops->setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
-				      optval, sizeof(val));
-	}
-#else
-	/* From v5.7-rc6-2614-g5a892ff2facb when kernel_setsockopt()
-	 * was removed until sockptr_t (above) there is no clean
-	 * way to pass kernel address to setsockopt.  We could use
-	 * get_fs()/set_fs(), but in this particular situation there
-	 * is an easier way.
-	 * It depends on the fact that at least for these few kernels
-	 * a NULL address to ipv6_setsockopt() is treated like the address
-	 * of a zero.
-	 */
-	if (ipv6_only_sock(sock->sk) && !val) {
-		void *optval = NULL;
-		sock->ops->setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
-				optval, sizeof(val));
-	}
-#endif
 
 	rc = kernel_listen(sock, backlog);
 	if (rc == 0)

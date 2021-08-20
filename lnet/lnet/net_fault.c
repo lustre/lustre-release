@@ -682,7 +682,7 @@ delayed_msg_process(struct list_head *msg_list, bool drop)
 			list_del_init(&msg->msg_list);
 			ni = msg->msg_txni;
 			CDEBUG(D_NET, "TRACE: msg %p %s -> %s : %s\n", msg,
-			       libcfs_nid2str(ni->ni_nid),
+			       libcfs_nidstr(&ni->ni_nid),
 			       libcfs_nid2str(msg->msg_txpeer->lpni_nid),
 			       lnet_msgtyp2str(msg->msg_type));
 			lnet_ni_send(ni, msg);

@@ -1704,7 +1704,7 @@ ksocknal_send_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	/* rely on caller to hold a ref on socket so it wouldn't disappear */
 	LASSERT(conn->ksnc_proto != NULL);
 
-	hello->kshm_src_nid         = ni->ni_nid;
+	hello->kshm_src_nid         = lnet_nid_to_nid4(&ni->ni_nid);
 	hello->kshm_dst_nid         = peer_nid;
 	hello->kshm_src_pid         = the_lnet.ln_pid;
 
@@ -1737,16 +1737,16 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		    struct lnet_process_id *peerid,
 		    __u64 *incarnation)
 {
-        /* Return < 0        fatal error
-         *        0          success
-         *        EALREADY   lost connection race
-         *        EPROTO     protocol version mismatch
-         */
+	/* Return < 0        fatal error
+	 *        0          success
+	 *        EALREADY   lost connection race
+	 *        EPROTO     protocol version mismatch
+	 */
 	struct socket        *sock = conn->ksnc_sock;
-        int                  active = (conn->ksnc_proto != NULL);
-        int                  timeout;
-        int                  proto_match;
-        int                  rc;
+	int                  active = (conn->ksnc_proto != NULL);
+	int                  timeout;
+	int                  proto_match;
+	int                  rc;
 	const struct ksock_proto *proto;
 	struct lnet_process_id recv_id;
 
@@ -1754,7 +1754,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	LASSERT(!active == !(conn->ksnc_type != SOCKLND_CONN_NONE));
 
 	timeout = active ? ksocknal_timeout() :
-			    lnet_acceptor_timeout();
+		lnet_acceptor_timeout();
 
 	rc = lnet_sock_read(sock, &hello->kshm_magic,
 			    sizeof(hello->kshm_magic), timeout);
@@ -1777,47 +1777,51 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 
 	rc = lnet_sock_read(sock, &hello->kshm_version,
 			    sizeof(hello->kshm_version), timeout);
-        if (rc != 0) {
+	if (rc != 0) {
 		CERROR("Error %d reading HELLO from %pIS\n",
 		       rc, &conn->ksnc_peeraddr);
 		LASSERT(rc < 0);
-                return rc;
-        }
+		return rc;
+	}
 
-        proto = ksocknal_parse_proto_version(hello);
-        if (proto == NULL) {
-                if (!active) {
-                        /* unknown protocol from peer_ni, tell peer_ni my protocol */
-                        conn->ksnc_proto = &ksocknal_protocol_v3x;
+	proto = ksocknal_parse_proto_version(hello);
+	if (proto == NULL) {
+		if (!active) {
+			/* unknown protocol from peer_ni,
+			 * tell peer_ni my protocol.
+			 */
+			conn->ksnc_proto = &ksocknal_protocol_v3x;
 #if SOCKNAL_VERSION_DEBUG
-                        if (*ksocknal_tunables.ksnd_protocol == 2)
-                                conn->ksnc_proto = &ksocknal_protocol_v2x;
-                        else if (*ksocknal_tunables.ksnd_protocol == 1)
-                                conn->ksnc_proto = &ksocknal_protocol_v1x;
+			if (*ksocknal_tunables.ksnd_protocol == 2)
+				conn->ksnc_proto = &ksocknal_protocol_v2x;
+			else if (*ksocknal_tunables.ksnd_protocol == 1)
+				conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
-                        hello->kshm_nips = 0;
-                        ksocknal_send_hello(ni, conn, ni->ni_nid, hello);
-                }
+			hello->kshm_nips = 0;
+			ksocknal_send_hello(ni, conn,
+					    lnet_nid_to_nid4(&ni->ni_nid),
+					    hello);
+		}
 
 		CERROR("Unknown protocol version (%d.x expected) from %pIS\n",
 		       conn->ksnc_proto->pro_version, &conn->ksnc_peeraddr);
 
-                return -EPROTO;
-        }
+		return -EPROTO;
+	}
 
-        proto_match = (conn->ksnc_proto == proto);
-        conn->ksnc_proto = proto;
+	proto_match = (conn->ksnc_proto == proto);
+	conn->ksnc_proto = proto;
 
-        /* receive the rest of hello message anyway */
-        rc = conn->ksnc_proto->pro_recv_hello(conn, hello, timeout);
-        if (rc != 0) {
+	/* receive the rest of hello message anyway */
+	rc = conn->ksnc_proto->pro_recv_hello(conn, hello, timeout);
+	if (rc != 0) {
 		CERROR("Error %d reading or checking hello from from %pIS\n",
 		       rc, &conn->ksnc_peeraddr);
-                LASSERT (rc < 0);
-                return rc;
-        }
+		LASSERT(rc < 0);
+		return rc;
+	}
 
-        *incarnation = hello->kshm_src_incarnation;
+	*incarnation = hello->kshm_src_incarnation;
 
 	if (hello->kshm_src_nid == LNET_NID_ANY) {
 		CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY from %pIS\n",
@@ -1834,7 +1838,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 			LNET_PID_USERFLAG;
 		LASSERT(conn->ksnc_peeraddr.ss_family == AF_INET);
 		recv_id.nid = LNET_MKNID(
-			LNET_NIDNET(ni->ni_nid),
+			LNET_NID_NET(&ni->ni_nid),
 			ntohl(((struct sockaddr_in *)
 			       &conn->ksnc_peeraddr)->sin_addr.s_addr));
 	} else {
@@ -1842,8 +1846,8 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		recv_id.pid = hello->kshm_src_pid;
 	}
 
-        if (!active) {
-                *peerid = recv_id;
+	if (!active) {
+		*peerid = recv_id;
 
 		/* peer_ni determines type */
 		conn->ksnc_type = ksocknal_invert_type(hello->kshm_ctype);
@@ -1866,10 +1870,10 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 		return -EPROTO;
 	}
 
-        if (hello->kshm_ctype == SOCKLND_CONN_NONE) {
-                /* Possible protocol mismatch or I lost the connection race */
-                return proto_match ? EALREADY : EPROTO;
-        }
+	if (hello->kshm_ctype == SOCKLND_CONN_NONE) {
+		/* Possible protocol mismatch or I lost the connection race */
+		return proto_match ? EALREADY : EPROTO;
+	}
 
 	if (ksocknal_invert_type(hello->kshm_ctype) != conn->ksnc_type) {
 		CERROR("Mismatched types: me %d, %s ip %pIS %d\n",

@@ -910,6 +910,46 @@ libcfs_nid2str_r(lnet_nid_t nid, char *buf, size_t buf_size)
 }
 EXPORT_SYMBOL(libcfs_nid2str_r);
 
+char *
+libcfs_nidstr_r(const struct lnet_nid *nid, char *buf, size_t buf_size)
+{
+	__u32 nnum = be16_to_cpu(nid->nid_num);
+	__u32 lnd  = nid->nid_type;
+	struct netstrfns *nf;
+
+	if (LNET_NID_IS_ANY(nid)) {
+		strncpy(buf, "<?>", buf_size);
+		buf[buf_size - 1] = '\0';
+		return buf;
+	}
+
+	nf = libcfs_lnd2netstrfns(lnd);
+	if (nf && nid_is_nid4(nid)) {
+		size_t addr_len;
+
+		nf->nf_addr2str(ntohl(nid->nid_addr[0]), buf, buf_size);
+		addr_len = strlen(buf);
+		if (nnum == 0)
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s",
+				 nf->nf_name);
+		else
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s%u",
+				 nf->nf_name, nnum);
+	} else {
+		int l = 0;
+		int words = DIV_ROUND_UP(NID_ADDR_BYTES(nid), 4);
+		int i;
+
+		for (i = 0; i < words && i < 4; i++)
+			l = snprintf(buf+l, buf_size-l, "%s%x",
+				     i ? ":" : "", ntohl(nid->nid_addr[i]));
+		snprintf(buf+l, buf_size-l, "@<%u:%u>", lnd, nnum);
+	}
+
+	return buf;
+}
+EXPORT_SYMBOL(libcfs_nidstr_r);
+
 static struct netstrfns *
 libcfs_str2net_internal(const char *str, __u32 *net)
 {

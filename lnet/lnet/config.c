@@ -384,7 +384,7 @@ lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
 	if (ni->ni_interface != NULL) {
 		LCONSOLE_ERROR_MSG(0x115, "%s: interface %s already set for net %s: rc = %d\n",
 				   iface, ni->ni_interface,
-				   libcfs_net2str(LNET_NIDNET(ni->ni_nid)),
+				   libcfs_net2str(LNET_NID_NET(&ni->ni_nid)),
 				   -EINVAL);
 		return -EINVAL;
 	}
@@ -446,7 +446,8 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 
 	ni->ni_net = net;
 	/* LND will fill in the address part of the NID */
-	ni->ni_nid = LNET_MKNID(net->net_id, 0);
+	ni->ni_nid.nid_type = LNET_NETTYP(net->net_id);
+	ni->ni_nid.nid_num = cpu_to_be16(LNET_NETNUM(net->net_id));
 
 	/* Store net namespace in which current ni is being created */
 	if (current->nsproxy && current->nsproxy->net_ns)

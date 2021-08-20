@@ -39,17 +39,41 @@
  * These are sent in sender's byte order (i.e. receiver flips).
  */
 
-/**
- * Address of an end-point in an LNet network.
+/** Address of an end-point in an LNet network.
  *
  * A node can have multiple end-points and hence multiple addresses.
  * An LNet network can be a simple network (e.g. tcp0) or a network of
  * LNet networks connected by LNet routers. Therefore an end-point address
  * has two parts: network ID, and address within a network.
+ * The most-significant-byte in this format is always 0.  A larger value
+ * would imply a larger nid with a larger address.
  *
  * \see LNET_NIDNET, LNET_NIDADDR, and LNET_MKNID.
  */
 typedef __u64 lnet_nid_t;
+
+/*
+ * Address of LNet end-point in extended form
+ *
+ * To support addresses larger than 32bits we have
+ * an extended nid which supports up to 128 bits
+ * of address and is extensible.
+ * If nid_size is 0, then the nid can be stored in an lnet_nid_t,
+ * and the first 8 bytes of the 'struct lnet_nid' are identical to
+ * the lnet_nid_t in big-endian format.
+ * If nid_type == 0xff, then all other fields should be ignored
+ * and this is an ANY wildcard address.  In particular, the nid_size
+ * can be 0xff without making the address too big to fit.
+ */
+struct lnet_nid {
+	__u8	nid_size;	/* total bytes - 8 */
+	__u8	nid_type;
+	__be16	nid_num;
+	__be32	nid_addr[4];
+} __attribute__((packed));
+
+#define NID_BYTES(nid)		((nid)->nid_size + 8)
+#define NID_ADDR_BYTES(nid)	((nid)->nid_size + 4)
 
 /**
  * ID of a process in a node. Shortened as PID to distinguish from

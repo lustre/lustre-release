@@ -290,7 +290,8 @@ lnet_accept(struct socket *sock, __u32 magic)
 
 	ni = lnet_nid2ni_addref(cr.acr_nid);
 	if (ni == NULL ||               /* no matching net */
-	    ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
+	    lnet_nid_to_nid4(&ni->ni_nid) != cr.acr_nid) {
+		/* right NET, wrong NID! */
 		if (ni != NULL)
 			lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x120,

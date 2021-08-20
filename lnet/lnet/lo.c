@@ -38,7 +38,8 @@ lolnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	LASSERT(!lntmsg->msg_routing);
 	LASSERT(!lntmsg->msg_target_is_router);
 
-	return lnet_parse(ni, &lntmsg->msg_hdr, ni->ni_nid, lntmsg, 0);
+	return lnet_parse(ni, &lntmsg->msg_hdr,
+			  lnet_nid_to_nid4(&ni->ni_nid), lntmsg, 0);
 }
 
 static int

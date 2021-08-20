@@ -880,12 +880,13 @@ kgnilnd_unpack_connreq(kgn_dgram_t *dgram)
 			return rc;
 		}
 
-		if (net->gnn_ni->ni_nid != connreq->gncr_dstnid) {
+		if (lnet_nid_to_nid4(&net->gnn_ni->ni_nid) !=
+		    connreq->gncr_dstnid) {
 			CERROR("Bad connection data from %s: she sent "
 			       "dst_nid %s, but I am %s with dgram 0x%p@%s\n",
 			       libcfs_nid2str(connreq->gncr_srcnid),
 			       libcfs_nid2str(connreq->gncr_dstnid),
-			       libcfs_nid2str(net->gnn_ni->ni_nid),
+			       libcfs_nidstr(&net->gnn_ni->ni_nid),
 			       dgram, kgnilnd_dgram_type2str(dgram));
 			kgnilnd_net_decref(net);
 			return -EBADSLT;
@@ -1890,7 +1891,8 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	/* Dont send NOOP if fail_loc is set
 	 */
 	if (!CFS_FAIL_CHECK(CFS_FAIL_GNI_ONLY_NOOP)) {
-		tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP, peer->gnp_net->gnn_ni->ni_nid);
+		tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP,
+					lnet_nid_to_nid4(&peer->gnp_net->gnn_ni->ni_nid));
 		if (tx == NULL) {
 			CNETERR("can't get TX to initiate NOOP to %s\n",
 				libcfs_nid2str(peer->gnp_nid));

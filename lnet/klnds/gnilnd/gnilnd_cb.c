@@ -2074,9 +2074,11 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		       break;
 
 		if ((reverse_rdma_flag & GNILND_REVERSE_GET) == 0)
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_REQ, ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_REQ,
+						lnet_nid_to_nid4(&ni->ni_nid));
 		else
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_REQ_REV, ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_REQ_REV,
+						lnet_nid_to_nid4(&ni->ni_nid));
 
 		if (tx == NULL) {
 			rc = -ENOMEM;
@@ -2118,9 +2120,11 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		       break;
 
 		if ((reverse_rdma_flag & GNILND_REVERSE_PUT) == 0)
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_REQ, ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_REQ,
+						lnet_nid_to_nid4(&ni->ni_nid));
 		else
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_REQ_REV, ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_REQ_REV,
+						lnet_nid_to_nid4(&ni->ni_nid));
 
 		if (tx == NULL) {
 			rc = -ENOMEM;
@@ -2151,7 +2155,8 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	LASSERTF(nob <= *kgnilnd_tunables.kgn_max_immediate,
 		"lntmsg 0x%p too large %d\n", lntmsg, nob);
 
-	tx = kgnilnd_new_tx_msg(GNILND_MSG_IMMEDIATE, ni->ni_nid);
+	tx = kgnilnd_new_tx_msg(GNILND_MSG_IMMEDIATE,
+				lnet_nid_to_nid4(&ni->ni_nid));
 	if (tx == NULL) {
 		rc = -ENOMEM;
 		goto out;
@@ -2202,7 +2207,7 @@ kgnilnd_setup_rdma(struct lnet_ni *ni, kgn_rx_t *rx, struct lnet_msg *lntmsg, in
 		LBUG();
 	}
 
-	tx = kgnilnd_new_tx_msg(done_type, ni->ni_nid);
+	tx = kgnilnd_new_tx_msg(done_type, lnet_nid_to_nid4(&ni->ni_nid));
 	if (tx == NULL)
 		goto failed_0;
 
@@ -2229,7 +2234,8 @@ kgnilnd_setup_rdma(struct lnet_ni *ni, kgn_rx_t *rx, struct lnet_msg *lntmsg, in
 
  failed_1:
 	kgnilnd_tx_done(tx, rc);
-	kgnilnd_nak_rdma(conn, done_type, rc, rxmsg->gnm_u.get.gngm_cookie, ni->ni_nid);
+	kgnilnd_nak_rdma(conn, done_type, rc, rxmsg->gnm_u.get.gngm_cookie,
+			 lnet_nid_to_nid4(&ni->ni_nid));
  failed_0:
 	lnet_finalize(lntmsg, rc);
 }
@@ -2434,13 +2440,14 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					lntmsg == NULL ? -ENOENT : 0,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 lntmsg == NULL ? -ENOENT : 0,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 			RETURN(0);
 		}
 		/* sending ACK with sink buff. info */
-		tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_ACK, ni->ni_nid);
+		tx = kgnilnd_new_tx_msg(GNILND_MSG_PUT_ACK,
+					lnet_nid_to_nid4(&ni->ni_nid));
 		if (tx == NULL) {
 			kgnilnd_consume_rx(rx);
 			RETURN(-ENOMEM);
@@ -2479,7 +2486,9 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 nak_put_req:
 		/* make sure we send an error back when the PUT fails */
-		kgnilnd_nak_rdma(conn, rxmsg->gnm_type, rc, rxmsg->gnm_u.get.gngm_cookie, ni->ni_nid);
+		kgnilnd_nak_rdma(conn, rxmsg->gnm_type, rc,
+				 rxmsg->gnm_u.get.gngm_cookie,
+				 lnet_nid_to_nid4(&ni->ni_nid));
 		kgnilnd_tx_done(tx, rc);
 		kgnilnd_consume_rx(rx);
 
@@ -2494,15 +2503,16 @@ nak_put_req:
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					lntmsg == NULL ? -ENOENT : 0,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 lntmsg == NULL ? -ENOENT : 0,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 			RETURN(0);
 		}
 		/* lntmsg can be null when parsing a LNET_GET */
 		if (lntmsg != NULL) {
 			/* sending ACK with sink buff. info */
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_ACK_REV, ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_GET_ACK_REV,
+						lnet_nid_to_nid4(&ni->ni_nid));
 			if (tx == NULL) {
 				kgnilnd_consume_rx(rx);
 				RETURN(-ENOMEM);
@@ -2536,9 +2546,9 @@ nak_put_req:
 		} else {
 			/* No match */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					-ENOENT,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 -ENOENT,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 		}
 
 		kgnilnd_consume_rx(rx);
@@ -2546,7 +2556,9 @@ nak_put_req:
 
 nak_get_req_rev:
 		/* make sure we send an error back when the GET fails */
-		kgnilnd_nak_rdma(conn, rxmsg->gnm_type, rc, rxmsg->gnm_u.get.gngm_cookie, ni->ni_nid);
+		kgnilnd_nak_rdma(conn, rxmsg->gnm_type, rc,
+				 rxmsg->gnm_u.get.gngm_cookie,
+				 lnet_nid_to_nid4(&ni->ni_nid));
 		kgnilnd_tx_done(tx, rc);
 		kgnilnd_consume_rx(rx);
 
@@ -2563,9 +2575,9 @@ nak_get_req_rev:
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					lntmsg == NULL ? -ENOENT : 0,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 lntmsg == NULL ? -ENOENT : 0,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 			RETURN(0);
 		}
 
@@ -2575,9 +2587,9 @@ nak_get_req_rev:
 		} else {
 			/* No match */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					-ENOENT,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 -ENOENT,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 		}
 		kgnilnd_consume_rx(rx);
 		RETURN(0);
@@ -2588,9 +2600,9 @@ nak_get_req_rev:
 		} else {
 			/* No match */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
-					-ENOENT,
-					rxmsg->gnm_u.get.gngm_cookie,
-					ni->ni_nid);
+					 -ENOENT,
+					 rxmsg->gnm_u.get.gngm_cookie,
+					 lnet_nid_to_nid4(&ni->ni_nid));
 		}
 		kgnilnd_consume_rx(rx);
 		RETURN(0);
@@ -2666,7 +2678,8 @@ kgnilnd_check_conn_timeouts_locked(kgn_conn_t *conn)
 		if (CFS_FAIL_CHECK(CFS_FAIL_GNI_NOOP_SEND))
 			return 0;
 
-		tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP, conn->gnc_peer->gnp_net->gnn_ni->ni_nid);
+		tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP,
+					lnet_nid_to_nid4(&conn->gnc_peer->gnp_net->gnn_ni->ni_nid));
 		if (tx == NULL)
 			return 0;
 		kgnilnd_queue_tx(conn, tx);
@@ -3674,7 +3687,8 @@ kgnilnd_process_fmaq(kgn_conn_t *conn)
 			if (CFS_FAIL_CHECK(CFS_FAIL_GNI_NOOP_SEND))
 				return;
 
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP, conn->gnc_peer->gnp_net->gnn_ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_NOOP,
+						lnet_nid_to_nid4(&conn->gnc_peer->gnp_net->gnn_ni->ni_nid));
 			if (tx != NULL) {
 				int     rc;
 
@@ -4549,7 +4563,8 @@ kgnilnd_send_conn_close(kgn_conn_t *conn)
 		if (conn->gnc_ephandle != NULL) {
 			int rc = 0;
 
-			tx = kgnilnd_new_tx_msg(GNILND_MSG_CLOSE, conn->gnc_peer->gnp_net->gnn_ni->ni_nid);
+			tx = kgnilnd_new_tx_msg(GNILND_MSG_CLOSE,
+						lnet_nid_to_nid4(&conn->gnc_peer->gnp_net->gnn_ni->ni_nid));
 			if (tx != NULL) {
 				tx->tx_msg.gnm_u.completion.gncm_retval = conn->gnc_error;
 				tx->tx_state = GNILND_TX_WAITING_COMPLETION;
