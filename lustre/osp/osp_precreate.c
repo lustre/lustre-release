@@ -447,6 +447,23 @@ out:
 	RETURN(rc);
 }
 
+static void osp_update_fldb_cache(const struct lu_env *env,
+				  struct osp_device *osp,
+				  struct lu_fid *fid)
+{
+	struct lu_seq_range range = { 0 };
+	struct lu_server_fld *server_fld;
+	struct lu_site *site;
+
+	site = osp->opd_storage->dd_lu_dev.ld_site;
+	server_fld = lu_site2seq(site)->ss_server_fld;
+	if (!server_fld)
+		return;
+
+	fld_range_set_type(&range, LU_SEQ_RANGE_ANY);
+	fld_server_lookup(env, server_fld, fid_seq(fid), &range);
+}
+
 /**
  * Switch to another sequence
  *
@@ -505,6 +522,9 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
 	osp->opd_pre_used_fid = *fid;
 	osp->opd_pre_last_created_fid = *fid;
 	spin_unlock(&osp->opd_pre_lock);
+
+	if (!rc)
+		osp_update_fldb_cache(env, osp, fid);
 
 	RETURN(rc);
 }
@@ -712,6 +732,10 @@ out_req:
 	osp_pre_update_status(d, rc);
 
 	ptlrpc_req_finished(req);
+
+	if (!rc)
+		osp_update_fldb_cache(env, d, fid);
+
 	RETURN(rc);
 }
 
