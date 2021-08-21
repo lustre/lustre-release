@@ -35,8 +35,8 @@
 #include <string.h>
 
 #include <linux/lustre/lustre_idl.h>
-#include <linux/lustre/lustre_access_log.h>
 #ifdef HAVE_SERVER_SUPPORT
+#include <linux/lustre/lustre_access_log.h>
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
 #ifdef CONFIG_FS_POSIX_ACL
@@ -48,6 +48,7 @@
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
+#include <lustre/lustreapi.h>
 
 #ifndef BUILD_BUG_ON
 #define BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))

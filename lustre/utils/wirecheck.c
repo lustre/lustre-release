@@ -38,9 +38,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <linux/lustre/lustre_idl.h>
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 #include <linux/lustre/lustre_access_log.h>
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
+#endif
 #include <linux/lustre/lustre_cfg.h>
 
 #define BLANK_LINE()						\
@@ -199,6 +201,7 @@ check_lu_seq_range(void)
 	CHECK_VALUE(LU_SEQ_RANGE_OST);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void
 check_lustre_mdt_attrs(void)
 {
@@ -236,6 +239,17 @@ check_lustre_ost_attrs(void)
 	CHECK_MEMBER(lustre_ost_attrs, loa_comp_end);
 }
 
+static void
+check_hsm_attrs(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_attrs);
+	CHECK_MEMBER(hsm_attrs, hsm_compat);
+	CHECK_MEMBER(hsm_attrs, hsm_flags);
+	CHECK_MEMBER(hsm_attrs, hsm_arch_id);
+	CHECK_MEMBER(hsm_attrs, hsm_arch_ver);
+}
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
 check_som_attrs(void)
@@ -246,17 +260,6 @@ check_som_attrs(void)
 	CHECK_MEMBER(lustre_som_attrs, lsa_reserved);
 	CHECK_MEMBER(lustre_som_attrs, lsa_size);
 	CHECK_MEMBER(lustre_som_attrs, lsa_blocks);
-}
-
-static void
-check_hsm_attrs(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(hsm_attrs);
-	CHECK_MEMBER(hsm_attrs, hsm_compat);
-	CHECK_MEMBER(hsm_attrs, hsm_flags);
-	CHECK_MEMBER(hsm_attrs, hsm_arch_id);
-	CHECK_MEMBER(hsm_attrs, hsm_arch_ver);
 }
 
 static void
@@ -287,9 +290,13 @@ check_ost_id(void)
 	CHECK_VALUE_64X(FID_SEQ_QUOTA);
 	CHECK_VALUE_64X(FID_SEQ_QUOTA_GLB);
 	CHECK_VALUE_64X(FID_SEQ_ROOT);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_64X(FID_SEQ_LAYOUT_RBTREE);
 	CHECK_VALUE_64X(FID_SEQ_UPDATE_LOG);
 	CHECK_VALUE_64X(FID_SEQ_UPDATE_LOG_DIR);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE_64X(FID_SEQ_NORMAL);
 	CHECK_VALUE_64X(FID_SEQ_LOV_DEFAULT);
 
@@ -338,7 +345,11 @@ check_lu_dirpage(void)
 	CHECK_VALUE(LDF_EMPTY);
 	CHECK_VALUE(LDF_COLLIDE);
 	CHECK_VALUE(LU_PAGE_SIZE);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_UNION(lu_page);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* HAVE_NATIVE_LINUX_CLIENT */
 }
 
 static void
@@ -729,7 +740,11 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_FLAGSTATFS);
 	CHECK_DEFINE_64X(OBD_MD_FLCROSSREF);
 	CHECK_DEFINE_64X(OBD_MD_FLGETATTRLOCK);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_DEFINE_64X(OBD_MD_FLOBJCOUNT);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_DEFINE_64X(OBD_MD_FLDATAVERSION);
 	CHECK_DEFINE_64X(OBD_MD_CLOSE_INTENT_EXECED);
 	CHECK_DEFINE_64X(OBD_MD_DEFAULT_MEA);
@@ -863,6 +878,7 @@ check_lov_comp_md_v1(void)
 	CHECK_VALUE(LCM_FL_RDONLY);
 	CHECK_VALUE(LCM_FL_WRITE_PENDING);
 	CHECK_VALUE(LCM_FL_SYNC_PENDING);
+	CHECK_VALUE(LCM_FL_PCC_RDONLY);
 }
 
 static void
@@ -879,7 +895,7 @@ check_lmv_mds_md_v1(void)
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_migrate_hash);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding2);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding3);
-	CHECK_MEMBER(lmv_mds_md_v1, lmv_pool_name[LOV_MAXPOOLNAME]);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_pool_name[LOV_MAXPOOLNAME + 1]);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_stripe_fids[0]);
 
 	CHECK_CDEFINE(LMV_MAGIC_V1);
@@ -943,7 +959,6 @@ check_obd_ioobj(void)
 static void
 check_obd_quotactl(void)
 {
-
 	BLANK_LINE();
 	CHECK_UNION(lquota_id);
 
@@ -985,7 +1000,12 @@ check_obd_quotactl(void)
 	CHECK_DEFINE_X(Q_GETOINFO);
 	CHECK_DEFINE_X(Q_GETOQUOTA);
 	CHECK_DEFINE_X(Q_FINVALIDATE);
+}
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+static void
+check_obd_quotactl_server(void)
+{
 	BLANK_LINE();
 	CHECK_STRUCT(lquota_acct_rec);
 	CHECK_MEMBER(lquota_acct_rec, bspace);
@@ -1001,7 +1021,6 @@ check_obd_quotactl(void)
 	BLANK_LINE();
 	CHECK_STRUCT(lquota_slv_rec);
 	CHECK_MEMBER(lquota_slv_rec, qsr_granted);
-
 }
 
 static void
@@ -1041,6 +1060,7 @@ check_obd_idx_read(void)
 	CHECK_CVALUE_X(II_FL_NONUNQ);
 	CHECK_CVALUE_X(II_FL_NOKEY);
 }
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
 check_niobuf_remote(void)
@@ -1183,11 +1203,19 @@ check_mdt_body(void)
 	CHECK_VALUE_X(LUSTRE_NODUMP_FL);
 	CHECK_VALUE_X(LUSTRE_NOATIME_FL);
 	CHECK_VALUE_X(LUSTRE_INDEX_FL);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_X(LUSTRE_ORPHAN_FL);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE_X(LUSTRE_DIRSYNC_FL);
 	CHECK_VALUE_X(LUSTRE_TOPDIR_FL);
 	CHECK_VALUE_X(LUSTRE_INLINE_DATA_FL);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_X(LUSTRE_SET_SYNC_FL);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE_X(LUSTRE_ENCRYPT_FL);
 
 	CHECK_VALUE_X(MDS_INODELOCK_LOOKUP);
@@ -1519,7 +1547,15 @@ check_ldlm_inodebits(void)
 	BLANK_LINE();
 	CHECK_STRUCT(ldlm_inodebits);
 	CHECK_MEMBER(ldlm_inodebits, bits);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_MEMBER(ldlm_inodebits, try_bits);
+	printf("#else\n");
+#endif
+	CHECK_MEMBER(ldlm_inodebits, cancel_bits);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif
 	CHECK_MEMBER(ldlm_inodebits, li_gid);
 }
 
@@ -1654,6 +1690,7 @@ check_ldlm_gl_lquota_desc(void)
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad2);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void check_ldlm_gl_barrier_desc(void)
 {
 	BLANK_LINE();
@@ -1671,6 +1708,7 @@ static void check_ldlm_barrier_lvb(void)
 	CHECK_MEMBER(barrier_lvb, lvb_index);
 	CHECK_MEMBER(barrier_lvb, lvb_padding);
 }
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
 static void
@@ -1790,10 +1828,12 @@ check_llog_unlink64_rec(void)
 	CHECK_MEMBER(llog_unlink64_rec, lur_padding3);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void
 check_llog_setattr64_rec(void)
 {
 	BLANK_LINE();
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_STRUCT(llog_setattr64_rec);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_oi);
@@ -1817,7 +1857,9 @@ check_llog_setattr64_rec(void)
 	CHECK_MEMBER(llog_setattr64_rec_v2, lsr_padding2);
 	CHECK_MEMBER(llog_setattr64_rec_v2, lsr_padding3);
 	CHECK_MEMBER(llog_setattr64_rec_v2, lsr_tail);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 }
+#endif /* !CONFIG_FS_LUSTRE */
 
 static void
 check_llog_size_change_rec(void)
@@ -1857,14 +1899,18 @@ check_changelog_ext_rename(void)
 	CHECK_MEMBER(changelog_ext_rename, cr_spfid);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void
 check_changelog_ext_jobid(void)
 {
 	BLANK_LINE();
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_STRUCT(changelog_ext_jobid);
 	CHECK_CDEFINE(LUSTRE_JOBID_SIZE);
 	CHECK_MEMBER(changelog_ext_jobid, cr_jobid);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 }
+#endif
 
 static void
 check_changelog_setinfo(void)
@@ -1885,9 +1931,11 @@ check_llog_changelog_rec(void)
 	CHECK_MEMBER(llog_changelog_rec, cr_do_not_use);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void
 check_llog_changelog_user_rec(void)
 {
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	BLANK_LINE();
 	CHECK_STRUCT(llog_changelog_user_rec);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_hdr);
@@ -1895,7 +1943,9 @@ check_llog_changelog_user_rec(void)
 	CHECK_MEMBER(llog_changelog_user_rec, cur_time);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_endrec);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_tail);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 }
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
 check_llog_gen(void)
@@ -1999,9 +2049,11 @@ check_ll_fiemap_info_key(void)
 	CHECK_MEMBER(ll_fiemap_info_key, lfik_fiemap);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void
 check_quota_body(void)
 {
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	BLANK_LINE();
 	CHECK_STRUCT(quota_body);
 	CHECK_MEMBER(quota_body, qb_fid);
@@ -2014,7 +2066,9 @@ check_quota_body(void)
 	CHECK_MEMBER(quota_body, qb_lockh);
 	CHECK_MEMBER(quota_body, qb_glb_lockh);
 	CHECK_MEMBER(quota_body, qb_padding1[4]);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 }
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
 check_mgs_target_info(void)
@@ -2066,8 +2120,12 @@ check_mgs_config_body(void)
 	CHECK_CVALUE(MGS_CFG_T_SPTLRPC);
 	CHECK_CVALUE(MGS_CFG_T_RECOVER);
 	CHECK_CVALUE(MGS_CFG_T_PARAMS);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_CVALUE(MGS_CFG_T_NODEMAP);
 	CHECK_CVALUE(MGS_CFG_T_BARRIER);
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 }
 
 static void
@@ -2088,7 +2146,23 @@ check_getinfo_fid2path(void)
 	CHECK_MEMBER(getinfo_fid2path, gf_recno);
 	CHECK_MEMBER(getinfo_fid2path, gf_linkno);
 	CHECK_MEMBER(getinfo_fid2path, gf_pathlen);
+	printf("#ifdef HAVE_FID2PATH_ANON_UNIONS\n");
+#ifdef HAVE_FID2PATH_ANON_UNIONS
+	CHECK_MEMBER(getinfo_fid2path, gf_path[0]);
+	printf("#else\n");
+	printf("	LASSERTF((int)offsetof(struct getinfo_fid2path, gf_u.gf_path[0]) == 32, \"found %%lld\\n\",\n");
+	printf("		 (long long)(int)offsetof(struct getinfo_fid2path, gf_u.gf_path[0]));\n");
+	printf("	LASSERTF((int)sizeof(((struct getinfo_fid2path *)0)->gf_u.gf_path[0]) == 1, \"found %%lld\\n\",\n");
+	printf("		 (long long)(int)sizeof(((struct getinfo_fid2path *)0)->gf_u.gf_path[0]));\n");
+#else
+	printf("	LASSERTF((int)offsetof(struct getinfo_fid2path, gf_path[0]) == 32, \"found %%lld\\n\",\n");
+	printf("		 (long long)(int)offsetof(struct getinfo_fid2path, gf_path[0]));\n");
+	printf("	LASSERTF((int)sizeof(((struct getinfo_fid2path *)0)->gf_path[0]) == 1, \"found %%lld\\n\",\n");
+	printf("		 (long long)(int)sizeof(((struct getinfo_fid2path *)0)->gf_path[0]));\n");
+	printf("#else\n");
 	CHECK_MEMBER(getinfo_fid2path, gf_u.gf_path[0]);
+#endif
+	printf("#endif /* HAVE_FID2PATH_ANON_UNIONS */\n");
 }
 
 /* We don't control the definitions of posix_acl_xattr_{entry,header}
@@ -2378,6 +2452,7 @@ static void check_hsm_user_import(void)
 	CHECK_MEMBER(hsm_user_import, hui_archive_id);
 }
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 static void check_object_update_param(void)
 {
 	BLANK_LINE();
@@ -2568,11 +2643,9 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_padding_1);
 	CHECK_MEMBER(lfsck_request, lr_padding_2);
 	CHECK_MEMBER(lfsck_request, lr_padding_3);
-	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_X(LFSCK_TYPE_SCRUB);
 	CHECK_VALUE_X(LFSCK_TYPE_LAYOUT);
 	CHECK_VALUE_X(LFSCK_TYPE_NAMESPACE);
-	printf("#endif\n");
 	CHECK_VALUE(LE_LASTID_REBUILDING);
 	CHECK_VALUE(LE_LASTID_REBUILT);
 	CHECK_VALUE(LE_PHASE1_DONE);
@@ -2648,6 +2721,7 @@ static void check_llog_update_record(void)
 	CHECK_MEMBER(llog_update_record, lur_hdr);
 	CHECK_MEMBER(llog_update_record, lur_update_rec);
 }
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 
 static void
 check_lustre_cfg(void)
@@ -2692,6 +2766,8 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_SET_LDLM_TIMEOUT);
 	CHECK_VALUE_X(LCFG_PRE_CLEANUP);
 	CHECK_VALUE_X(LCFG_SET_PARAM);
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_X(LCFG_NODEMAP_ADD);
 	CHECK_VALUE_X(LCFG_NODEMAP_DEL);
 	CHECK_VALUE_X(LCFG_NODEMAP_ADD_RANGE);
@@ -2714,7 +2790,8 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_MAP_MODE);
 	CHECK_VALUE_X(LCFG_NODEMAP_AUDIT_MODE);
 	CHECK_VALUE_X(LCFG_NODEMAP_SET_SEPOL);
-
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);
 	CHECK_VALUE(LUSTRE_CFG_TYPE);
 }
@@ -2863,11 +2940,14 @@ main(int argc, char **argv)
 	CHECK_VALUE(SEQ_FIRST_OPC);
 	CHECK_VALUE(SEQ_LAST_OPC);
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE(LFSCK_NOTIFY);
 	CHECK_VALUE(LFSCK_QUERY);
 	CHECK_VALUE(LFSCK_FIRST_OPC);
 	CHECK_VALUE(LFSCK_LAST_OPC);
-
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(SEQ_ALLOC_SUPER);
 	CHECK_VALUE(SEQ_ALLOC_META);
 
@@ -2901,19 +2981,21 @@ main(int argc, char **argv)
 	CHECK_CVALUE(LUSTRE_RES_ID_SEQ_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_VER_OID_OFF);
 	/* CHECK_CVALUE(LUSTRE_RES_ID_WAS_VER_OFF); packed with OID */
-
-	CHECK_VALUE(OUT_UPDATE);
-	CHECK_VALUE(OUT_UPDATE_LAST_OPC);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_SEQ_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_VER_OID_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_HSH_OFF);
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	CHECK_VALUE(OUT_UPDATE);
+	CHECK_VALUE(OUT_UPDATE_LAST_OPC);
+
 	CHECK_CVALUE(LQUOTA_TYPE_USR);
 	CHECK_CVALUE(LQUOTA_TYPE_GRP);
-
 	CHECK_CVALUE(LQUOTA_RES_MD);
 	CHECK_CVALUE(LQUOTA_RES_DT);
-
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(OBD_PING);
 	CHECK_VALUE(OBD_IDX_READ);
 	CHECK_VALUE(OBD_LAST_OPC);
@@ -2940,6 +3022,9 @@ main(int argc, char **argv)
 	BLANK_LINE();
 	CHECK_STRUCT(obd_uuid);
 	check_lu_seq_range();
+	check_som_attrs();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	check_lustre_mdt_attrs();
 	check_lustre_ost_attrs();
 
@@ -2962,8 +3047,9 @@ main(int argc, char **argv)
 	CHECK_VALUE(OUT_NOOP);
 	CHECK_VALUE(OUT_XATTR_LIST);
 
-	check_som_attrs();
 	check_hsm_attrs();
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_ost_id();
 	check_lu_dirent();
 	check_luda_type();
@@ -2985,7 +3071,12 @@ main(int argc, char **argv)
 	check_obd_statfs();
 	check_obd_ioobj();
 	check_obd_quotactl();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
+	check_obd_quotactl_server();
 	check_obd_idx_read();
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_niobuf_remote();
 	check_ost_body();
 	check_ll_fid();
@@ -3015,8 +3106,12 @@ main(int argc, char **argv)
 	check_ldlm_ost_lvb();
 	check_ldlm_lquota_lvb();
 	check_ldlm_gl_lquota_desc();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	check_ldlm_gl_barrier_desc();
 	check_ldlm_barrier_lvb();
+printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
 	check_mgs_send_param();
 #endif
@@ -3028,21 +3123,29 @@ main(int argc, char **argv)
 	check_llog_logid_rec();
 	check_llog_unlink_rec();
 	check_llog_unlink64_rec();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 	check_llog_setattr64_rec();
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_llog_size_change_rec();
 	check_changelog_rec();
 	check_changelog_ext_rename();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 	check_changelog_ext_jobid();
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_changelog_setinfo();
 	check_llog_changelog_rec();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 	check_llog_changelog_user_rec();
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_llog_gen();
 	check_llog_gen_rec();
 	check_llog_log_hdr();
 	check_llogd_body();
 	check_llogd_conn_body();
 	check_ll_fiemap_info_key();
+#ifndef HAVE_NATIVE_LINUX_CLIENT
 	check_quota_body();
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_mgs_target_info();
 	check_mgs_nidtbl_entry();
 	check_mgs_config_body();
@@ -3068,6 +3171,8 @@ main(int argc, char **argv)
 	check_hsm_user_request();
 	check_hsm_user_import();
 
+#ifndef HAVE_NATIVE_LINUX_CLIENT
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	check_object_update_param();
 	check_object_update();
 	check_object_update_request();
@@ -3093,7 +3198,8 @@ main(int argc, char **argv)
 	check_update_ops();
 	check_update_records();
 	check_llog_update_record();
-
+	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
+#endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_lustre_cfg();
 
 	printf("}\n");

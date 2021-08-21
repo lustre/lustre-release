@@ -281,8 +281,8 @@ enum fid_seq {
 	FID_SEQ_OST_MDT0	= 0,
 	FID_SEQ_LLOG		= 1, /* unnamed llogs */
 	FID_SEQ_ECHO		= 2,
-	FID_SEQ_UNUSED_START	= 3,
-	FID_SEQ_UNUSED_END	= 9,
+	FID_SEQ_UNUSED_START	= 3, /* Unused */
+	FID_SEQ_UNUSED_END	= 9, /* Unused */
 	FID_SEQ_LLOG_NAME	= 10, /* named llogs */
 	FID_SEQ_RSVD		= 11,
 	FID_SEQ_IGIF		= 12,
@@ -756,7 +756,9 @@ struct ptlrpc_body_v2 {
 /* was OBD_CONNECT_TRUNCLOCK           0x400ULL *locks on server for punch */
 #define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
 #define OBD_CONNECT_IBITS	       0x1000ULL /* not checked in 2.11+ */
-#define OBD_CONNECT_BARRIER	       0x2000ULL /* write barrier */
+#define OBD_CONNECT_BARRIER	       0x2000ULL /* write barrier. Resevered to
+						  * avoid use on client.
+						  */
 #define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
 #define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
 #define OBD_CONNECT_RMT_CLIENT        0x10000ULL /* Remote client, never used
@@ -2678,8 +2680,8 @@ enum llog_ctxt_id {
 	/* for multiple changelog consumers */
 	LLOG_CHANGELOG_USER_ORIG_CTXT = 14,
 	LLOG_AGENT_ORIG_CTXT = 15, /**< agent requests generation on cdt */
-	LLOG_UPDATELOG_ORIG_CTXT = 16, /* update log */
-	LLOG_UPDATELOG_REPL_CTXT = 17, /* update log */
+	LLOG_UPDATELOG_ORIG_CTXT = 16, /* update log. reserve for the client */
+	LLOG_UPDATELOG_REPL_CTXT = 17, /* update log. reserve for the client */
 	LLOG_MAX_CTXTS
 };
 
@@ -2723,7 +2725,9 @@ enum llog_op_type {
 	CHANGELOG_USER_REC	= LLOG_OP_MAGIC | 0x70000,
 	CHANGELOG_USER_REC2	= LLOG_OP_MAGIC | 0x70002,
 	HSM_AGENT_REC		= LLOG_OP_MAGIC | 0x80000,
-	UPDATE_REC		= LLOG_OP_MAGIC | 0xa0000,
+	UPDATE_REC		= LLOG_OP_MAGIC | 0xa0000, /* Resevered to avoid
+							    * use on client.
+							    */
 	LLOG_HDR_MAGIC		= LLOG_OP_MAGIC | 0x45539,
 	LLOG_LOGID_MAGIC	= LLOG_OP_MAGIC | 0x4553b,
 };

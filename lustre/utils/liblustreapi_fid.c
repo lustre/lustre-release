@@ -266,6 +266,7 @@ int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 
 static int fid_from_lma(const char *path, int fd, struct lu_fid *fid)
 {
+#ifdef HAVE_SERVER_SUPPORT
 	struct lustre_mdt_attrs	*lma;
 	char buf[512];
 	int rc = -1;
@@ -280,6 +281,9 @@ static int fid_from_lma(const char *path, int fd, struct lu_fid *fid)
 	lma = (struct lustre_mdt_attrs *)buf;
 	memcpy(fid, &lma->lma_self_fid, sizeof(lma->lma_self_fid));
 	return 0;
+#else
+	return -ENOTSUP;
+#endif
 }
 
 int llapi_fd2fid(int fd, struct lu_fid *fid)
