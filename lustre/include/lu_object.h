@@ -885,6 +885,13 @@ static inline __u32 lu_object_attr(const struct lu_object *o)
 	return o->lo_header->loh_attr & S_IFMT;
 }
 
+static inline void lu_object_ref_add_atomic(struct lu_object *o,
+					    const char *scope,
+					    const void *source)
+{
+	lu_ref_add_atomic(&o->lo_header->loh_reference, scope, source);
+}
+
 static inline void lu_object_ref_add(struct lu_object *o,
 				     const char *scope,
 				     const void *source)

@@ -425,7 +425,7 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 				continue;
 
 			priv->vsp_clob = lu2cl(lu_obj);
-			lu_object_ref_add(lu_obj, "dump", current);
+			lu_object_ref_add_atomic(lu_obj, "dump", current);
 			priv->vsp_page_index = 0;
 		}
 
