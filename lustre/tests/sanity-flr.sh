@@ -2674,6 +2674,65 @@ test_50c() {
 }
 run_test 50c "punch_hole/mmap_write stale other mirrors"
 
+test_50d() {
+	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "OST does not support SEEK_HOLE"
+	(( $LINUX_VERSION_CODE > $(version_code 3.0.0) )) ||
+		skip "client kernel does not support SEEK_HOLE"
+
+	local file=$DIR/$tdir/$tfile
+	local offset
+	local prt
+	local rc
+
+	mkdir -p $DIR/$tdir
+
+	echo " ** create mirrored file $file"
+	$LFS mirror create -N -E1M -c1 -S1M -E eof \
+		-N -E2M -S1M -E eof -S2M $file ||
+		error "cannot create mirrored file"
+	echo " ** write data chunk at 1M boundary"
+	dd if=/dev/urandom of=$file bs=1k count=20 seek=1021 ||
+		error "cannot write data at 1M boundary"
+	echo " ** create hole at the file start"
+	prt=$(fallocate -p -o 0 -l 1M $file 2>&1)
+	rc=$?
+
+	if [[ $rc -eq 0 ]]; then
+		verify_flr_state $file "wp"
+	elif [[ ! $prt =~ "unsupported" ]]; then
+		error "punch hole in $file failed: $prt"
+	else
+		skip "Fallocate punch is not supported"
+	fi
+
+	echo " ** verify sparseness"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	(( $offset >= 1024 * 1024 )) ||
+		error "src: data is not expected at offset $offset"
+
+	echo " ** resync mirror #2"
+	$LFS mirror resync $file
+
+	# check llapi_mirror_copy_many correctness
+	sum_1=$($LFS mirror read -N 1 $file | md5sum)
+	sum_2=$($LFS mirror read -N 2 $file | md5sum)
+	[[ $sum_1 == $sum_2 ]] ||
+		error "data mismatch: \'$sum_1\' vs. \'$sum_2\'"
+
+	cancel_lru_locks osc
+
+	# stale first component in mirror #1
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=stale,nosync $file
+	echo " ** verify sparseness of mirror #2"
+	offset=$(lseek_test -d 1000 $file)
+	echo "    first data offset: $offset"
+	(( $offset >= 1024 * 1024 )) ||
+		error "src: data is not expected at offset $offset"
+}
+run_test 50d "mirror rsync keep holes"
+
 test_60a() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"

@@ -331,7 +331,8 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		CDEBUG(D_LAYOUT, "designated I/O mirror state: %d\n",
 		      lov_flr_state(obj));
 
-		if ((cl_io_is_trunc(io) || io->ci_type == CIT_WRITE) &&
+		if ((cl_io_is_trunc(io) || io->ci_type == CIT_WRITE ||
+		     cl_io_is_fallocate(io)) &&
 		    (io->ci_layout_version != obj->lo_lsm->lsm_layout_gen)) {
 			/*
 			 * For resync I/O, the ci_layout_version was the layout

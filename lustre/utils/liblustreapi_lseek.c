@@ -127,7 +127,8 @@ int llapi_hole_punch(int fd, off_t start, size_t length)
 {
 	int rc;
 
-	rc = fallocate(fd, FALLOC_FL_PUNCH_HOLE, start, length);
+	rc = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+		       start, length);
 	if (rc)
 		rc = -errno;
 	return rc;

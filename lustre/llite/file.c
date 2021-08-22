@@ -5335,7 +5335,8 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 }
 #endif
 
-int cl_falloc(struct inode *inode, int mode, loff_t offset, loff_t len)
+int cl_falloc(struct file *file, struct inode *inode, int mode, loff_t offset,
+	      loff_t len)
 {
 	struct lu_env *env;
 	struct cl_io *io;
@@ -5351,6 +5352,8 @@ int cl_falloc(struct inode *inode, int mode, loff_t offset, loff_t len)
 
 	io = vvp_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
+	ll_io_set_mirror(io, file);
+
 	io->ci_verify_layout = 1;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&io->ci_obj->co_lu);
 	io->u.ci_setattr.sa_falloc_mode = mode;
@@ -5389,7 +5392,7 @@ out:
 
 long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	int rc;
 
 	if (offset < 0 || len <= 0)
@@ -5414,7 +5417,7 @@ long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FALLOCATE, 1);
 
-	rc = cl_falloc(inode, mode, offset, len);
+	rc = cl_falloc(filp, inode, mode, offset, len);
 	/*
 	 * ENOTSUPP (524) is an NFSv3 specific error code erroneously
 	 * used by Lustre in several places. Retuning it here would
