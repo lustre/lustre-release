@@ -442,7 +442,6 @@ lutf_rc_t wait_for_agents(struct cYAML *agents, int timeout)
 {
 	struct timeval start;
 	struct timeval now;
-	struct cYAML *a;
 	bool found = false;
 	lutf_agent_blk_t *agent;
 
@@ -457,6 +456,8 @@ lutf_rc_t wait_for_agents(struct cYAML *agents, int timeout)
 	PDEBUG("Start waiting for Agents");
 
 	while (now.tv_sec - start.tv_sec < timeout && !found) {
+		struct cYAML *a = NULL;
+
 		found = true;
 		PDEBUG("Waiting for Agents");
 		while (cYAML_get_next_seq_item(agents, &a) != NULL) {

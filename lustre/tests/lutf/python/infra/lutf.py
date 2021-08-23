@@ -770,7 +770,7 @@ class Myself:
 			self.__lustre_base_path = ''
 		self.alias_list = self.provision_intfs(config_ifs_num)
 		# delete any older test_progress files
-		if os.path.isfile(self.get_test_progress_path()):
+		if os.path.isfile(self.get_test_progress_path()) and self.__lutf_type == EN_LUTF_MASTER:
 			os.remove(self.get_test_progress_path())
 
 	def import_env_vars(self, fpath):

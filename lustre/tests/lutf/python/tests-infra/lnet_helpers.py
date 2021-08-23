@@ -133,7 +133,7 @@ class LNetHelpers(BaseTest):
 
 	def api_config_ni(self, net, device_list=[], global_cpts=None, ip2nets=None,
 			  peer_credits=128, peer_timeout=180, peer_buffer_credits=0,
-			  credits=256):
+			  credits=256, conns_per_peer = -1):
 		tunables = lnetconfig.lnet_ioctl_config_lnd_tunables()
 		tunables.lt_cmn.lct_peer_timeout = peer_timeout
 		tunables.lt_cmn.lct_peer_tx_credits = peer_credits;
@@ -165,7 +165,7 @@ class LNetHelpers(BaseTest):
 				return False, [rc, net, device_list, global_cpts, ip2nets]
 		else:
 			g_cpts = None
-		rc, yaml_err = lnetconfig.lustre_lnet_config_ni(nwd, g_cpts, ip2nets, tunables, -1)
+		rc, yaml_err = lnetconfig.lustre_lnet_config_ni(nwd, g_cpts, ip2nets, tunables, conns_per_peer, -1)
 		#Freeing the g_cpts causes a segmentation fault
 		#if g_cpts:
 		#	lnetconfig.cfs_expr_list_free(g_cpts)

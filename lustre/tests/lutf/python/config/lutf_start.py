@@ -165,10 +165,6 @@ class LUTF:
 			cfg['lutf']['tmp-dir'] = os.environ['LUTF_TMP_DIR']
 		except:
 			pass
-		try:
-			cfg['lutf']['tmp-dir'] = os.environ['LUTF_TMP_DIR']
-		except:
-			pass
 
 		if len(agent_list) > 0:
 			cfg['lutf']['agent-list'] = agent_list
@@ -228,11 +224,11 @@ class LUTF:
 	def __collect_lutf_logs(self, host):
 		if host != os.environ['HOSTNAME']:
 			rfname = "lutf."+host+".tar.gz"
+			tmp_dir = cfg['lutf']['tmp-dir']
 			rfpath = os.path.join(os.sep, 'tmp', rfname)
-			rtardir = os.path.join('tmp', 'lutf')
-			cmd = "tar -czf "+rfpath+" -C "+os.sep+" "+rtardir
+			cmd = "tar -czf "+rfpath+" -C "+os.sep+" "+tmp_dir
 			lutf_exec_remote_cmd(cmd, host);
-			lutf_get_file(host, rfpath, os.path.join(os.sep, 'tmp', 'lutf', rfname))
+			lutf_get_file(host, rfpath, os.path.join(tmp_dir, rfname))
 
 	def run(self):
 		master = ''
