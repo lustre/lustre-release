@@ -263,6 +263,8 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		       fld->lsf_name, seq, -ENOENT);
 		RETURN(-ENOENT);
 	} else {
+		int i;
+
 		if (!fld->lsf_control_exp) {
 			CERROR("%s: lookup %#llx, but not connects to MDT0 yet: rc = %d.\n",
 			       fld->lsf_name, seq, -EIO);
@@ -274,8 +276,13 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		 * replication on all mdt servers.
 		 */
 		range->lsr_start = seq;
-		rc = fld_client_rpc(fld->lsf_control_exp,
-				    range, FLD_QUERY, NULL);
+		for (i = 0; i < 5; i++) {
+			rc = fld_client_rpc(fld->lsf_control_exp,
+					    range, FLD_QUERY, NULL);
+			if (rc != -EAGAIN)
+				break;
+			schedule_timeout_interruptible(cfs_time_seconds(1));
+		}
 		if (rc == 0)
 			fld_cache_insert(fld->lsf_cache, range);
 	}
