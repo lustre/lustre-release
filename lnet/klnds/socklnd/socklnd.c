@@ -1872,11 +1872,15 @@ static int ksocknal_get_link_status(struct net_device *dev)
 
 	LASSERT(dev);
 
-	if (!netif_running(dev))
+	if (!netif_running(dev)) {
 		ret = 0;
+		CDEBUG(D_NET, "device not running\n");
+	}
 	/* Some devices may not be providing link settings */
-	else if (dev->ethtool_ops->get_link)
+	else if (dev->ethtool_ops->get_link) {
 		ret = dev->ethtool_ops->get_link(dev);
+		CDEBUG(D_NET, "get_link returns %u\n", ret);
+	}
 
 	return ret;
 }
@@ -1885,11 +1889,16 @@ static int
 ksocknal_handle_link_state_change(struct net_device *dev,
 				  unsigned char operstate)
 {
-	struct lnet_ni *ni;
+	struct lnet_ni *ni = NULL;
 	struct ksock_net *net;
 	struct ksock_net *cnxt;
 	int ifindex;
 	unsigned char link_down = !(operstate == IF_OPER_UP);
+	struct in_device *in_dev;
+	bool found_ip = false;
+	struct ksock_interface *ksi = NULL;
+	struct sockaddr_in *sa;
+	DECLARE_CONST_IN_IFADDR(ifa);
 
 	ifindex = dev->ifindex;
 
@@ -1898,19 +1907,91 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 
 	list_for_each_entry_safe(net, cnxt, &ksocknal_data.ksnd_nets,
 				 ksnn_list) {
-		if (net->ksnn_interface.ksni_index != ifindex)
+
+		ksi = &net->ksnn_interface;
+		sa = (void *)&ksi->ksni_addr;
+		found_ip = false;
+
+		if (ksi->ksni_index != ifindex ||
+		    strcmp(ksi->ksni_name, dev->name))
 			continue;
+
 		ni = net->ksnn_ni;
-		if (link_down)
+
+		in_dev = __in_dev_get_rtnl(dev);
+		if (!in_dev) {
+			CDEBUG(D_NET, "Interface %s has no IPv4 status.\n",
+			       dev->name);
+			CDEBUG(D_NET, "set link fatal state to 1\n");
+			atomic_set(&ni->ni_fatal_error_on, 1);
+			continue;
+		}
+		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
+			if (sa->sin_addr.s_addr == ifa->ifa_local)
+				found_ip = true;
+		}
+		endfor_ifa(in_dev);
+
+		if (!found_ip) {
+			CDEBUG(D_NET, "Interface %s has no matching ip\n",
+			       dev->name);
+			CDEBUG(D_NET, "set link fatal state to 1\n");
+			atomic_set(&ni->ni_fatal_error_on, 1);
+			continue;
+		}
+
+		if (link_down) {
+			CDEBUG(D_NET, "set link fatal state to 1\n");
 			atomic_set(&ni->ni_fatal_error_on, link_down);
-		else
+		} else {
+			CDEBUG(D_NET, "set link fatal state to %u\n",
+			       (ksocknal_get_link_status(dev) == 0));
 			atomic_set(&ni->ni_fatal_error_on,
 				   (ksocknal_get_link_status(dev) == 0));
+		}
 	}
 out:
 	return 0;
 }
 
+
+static int
+ksocknal_handle_inetaddr_change(struct in_ifaddr *ifa, unsigned long event)
+{
+	struct lnet_ni *ni;
+	struct ksock_net *net;
+	struct ksock_net *cnxt;
+	struct net_device *event_netdev = ifa->ifa_dev->dev;
+	int ifindex;
+	struct ksock_interface *ksi = NULL;
+	struct sockaddr_in *sa;
+
+	if (!ksocknal_data.ksnd_nnets)
+		goto out;
+
+	ifindex = event_netdev->ifindex;
+
+	list_for_each_entry_safe(net, cnxt, &ksocknal_data.ksnd_nets,
+				 ksnn_list) {
+
+		ksi = &net->ksnn_interface;
+		sa = (void *)&ksi->ksni_addr;
+
+		if (ksi->ksni_index != ifindex ||
+		    strcmp(ksi->ksni_name, event_netdev->name))
+			continue;
+
+		if (sa->sin_addr.s_addr == ifa->ifa_local) {
+			CDEBUG(D_NET, "set link fatal state to %u\n",
+			       (event == NETDEV_DOWN));
+			ni = net->ksnn_ni;
+			atomic_set(&ni->ni_fatal_error_on,
+				   (event == NETDEV_DOWN));
+		}
+	}
+out:
+	return 0;
+}
 
 /************************************
  * Net device notifier event handler
@@ -1923,6 +2004,9 @@ static int ksocknal_device_event(struct notifier_block *unused,
 
 	operstate = dev->operstate;
 
+	CDEBUG(D_NET, "devevent: status=%ld, iface=%s ifindex %d state %u\n",
+	       event, dev->name, dev->ifindex, operstate);
+
 	switch (event) {
 	case NETDEV_UP:
 	case NETDEV_DOWN:
@@ -1934,8 +2018,34 @@ static int ksocknal_device_event(struct notifier_block *unused,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block ksocknal_notifier_block = {
+/************************************
+ * Inetaddr notifier event handler
+ ************************************/
+static int ksocknal_inetaddr_event(struct notifier_block *unused,
+				   unsigned long event, void *ptr)
+{
+	struct in_ifaddr *ifa = ptr;
+
+	CDEBUG(D_NET, "addrevent: status %ld ip addr %pI4, netmask %pI4.\n",
+	       event, &ifa->ifa_address, &ifa->ifa_mask);
+
+	switch (event) {
+	case NETDEV_UP:
+	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
+		ksocknal_handle_inetaddr_change(ifa, event);
+		break;
+
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block ksocknal_dev_notifier_block = {
 	.notifier_call = ksocknal_device_event,
+};
+
+static struct notifier_block ksocknal_inetaddr_notifier_block = {
+	.notifier_call = ksocknal_inetaddr_event,
 };
 
 static void
@@ -1949,8 +2059,10 @@ ksocknal_base_shutdown(void)
 	       libcfs_kmem_read());
 	LASSERT (ksocknal_data.ksnd_nnets == 0);
 
-	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_ALL)
-		unregister_netdevice_notifier(&ksocknal_notifier_block);
+	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_ALL) {
+		unregister_netdevice_notifier(&ksocknal_dev_notifier_block);
+		unregister_inetaddr_notifier(&ksocknal_inetaddr_notifier_block);
+	}
 
 	switch (ksocknal_data.ksnd_init) {
 	default:
@@ -2116,7 +2228,8 @@ ksocknal_base_startup(void)
                 goto failed;
         }
 
-	register_netdevice_notifier(&ksocknal_notifier_block);
+	register_netdevice_notifier(&ksocknal_dev_notifier_block);
+	register_inetaddr_notifier(&ksocknal_inetaddr_notifier_block);
 
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
