@@ -1061,16 +1061,13 @@ run_rr_alloc() {
 
 	# create_count accepted values:
 	#   [OST_MIN_PRECREATE=32, OST_MAX_PRECREATE=20000]
-	# values outside this range are ignored and -ERANGE is returned.
-	# NOTE: actual maximum value is 16384 (2^14)
+	# values exceeding OST_MAX_PRECREATE are lowered to the maximum.
 	[[ $create_count -lt 32 ]] && create_count=32
-	[[ $create_count -gt 20000 ]] && create_count=20000
 	local i
 	for i in $(seq $MDSCOUNT); do
 		do_facet mds$i "$LCTL set_param -n \
 			lod.$FSNAME-MDT*.qos_threshold_rr=100 \
-			osp.$FSNAME-OST*-osc-MDT*.create_count=$create_count" ||
-			error "failed while setting qos_threshold_rr & creat_count"
+			osp.$FSNAME-OST*-osc-MDT*.create_count=$create_count"
 	done
 
 	# Create few temporary files in order to increase the precreated objects

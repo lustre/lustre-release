@@ -27395,6 +27395,36 @@ test_822() {
 }
 run_test 822 "test precreate failure"
 
+test_823() {
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local OST_MAX_PRECREATE=20000
+
+	save_lustre_params mds1 \
+		"osp.$FSNAME-OST*-osc-MDT0000.max_create_count" > $p
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		osp.$FSNAME-OST*MDT0000.max_create_count=0"
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		osp.$FSNAME-OST0000*MDT0000.max_create_count=$OST_MAX_PRECREATE"
+
+	stack_trap "restore_lustre_params < $p; rm $p"
+
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		osp.$FSNAME-OST*-osc-MDT*.create_count=100200"
+
+	local count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+		      osp.$FSNAME-OST0000*MDT0000.create_count")
+	local max=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+		    osp.$FSNAME-OST0000*MDT0000.max_create_count")
+	local expect_count=$(((($max/2)/256) * 256))
+
+	log "setting create_count to 100200:"
+	log " -result- count: $count with max: $max, expecting: $expect_count"
+
+	[[ $count -eq expect_count ]] ||
+		error "Create count not set to max precreate."
+}
+run_test 823 "Setting create_count > OST_MAX_PRECREATE is lowered to maximum"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

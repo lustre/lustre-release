@@ -337,11 +337,10 @@ static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
-	int rc, i;
+	int rc;
 
 	if (!osp->opd_pre)
 		return -EINVAL;
-
 
 	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
@@ -353,18 +352,24 @@ static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
 	 * that is the maximum possible number of objects that will
 	 * ever be handled by MDT->OST recovery processing.
 	 *
+	 * The OSP enforces the pre_create_count to amaximum of
+	 * one half of opd_pre_max_create_count.
+	 *
 	 * If the OST ever gets a request to delete more orphans,
 	 * this implies that something has gone badly on the MDT
 	 * and the OST will refuse to delete so much data from the
-	 * filesystem as a safety measure. */
-	if (val < OST_MIN_PRECREATE || val > OST_MAX_PRECREATE)
+	 * filesystem as a safety measure.
+	 */
+	if (val < OST_MIN_PRECREATE)
 		return -ERANGE;
-	if (val > osp->opd_pre_max_create_count)
-		return -ERANGE;
+	if (val > osp->opd_pre_max_create_count / 2)
+		val = osp->opd_pre_max_create_count / 2;
 
-	for (i = 1; (i << 1) <= val; i <<= 1)
-		;
-	osp->opd_pre_create_count = i;
+	/* set to largest value <= 32, 64, 128 or a multiple of 256 */
+	if (val > 256)
+		osp->opd_pre_create_count = val & 0xffffff00;
+	else
+		osp->opd_pre_create_count = rounddown_pow_of_two(val);
 
 	return count;
 }
