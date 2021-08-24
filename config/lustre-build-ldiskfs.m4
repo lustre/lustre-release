@@ -48,7 +48,24 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		esac
 	]
 	)], [LDISKFS_SERIES="5.4.21-ml.series"],
-	    [LDISKFS_SERIES="5.4.21-ml.series"])
+	    [
+		suse_conf=$LINUX_OBJ/include/generated/uapi/linux/suse_version.h
+		suse_vers=$(awk '[$]2 == "SUSE_VERSION" {print [$]3 }' $suse_conf)
+		suse_patchlevel=$(awk '[$]2 == "SUSE_PATCHLEVEL" {print [$]3 }' $suse_conf)
+		echo "$suse_conf $suse_vers $suse_patchlevel  ${suse_vers}sp$suse_patchlevel" >> /tmp/log-nb
+
+		case ${suse_vers}sp${suse_patchlevel} in # (
+		15sp2 ) LDISKFS_SERIES="5.4.21-ml.series"
+		        grep -A3 ext4_update_dx_flag $LINUX/fs/ext4/ext4.h \
+			  | grep ext4_test_inode_flag
+			if test $? -eq 0; then
+				LDISKFS_SERIES="5.4.0-66-ubuntu20.series"
+			fi
+			;; # (
+		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp2.series"
+			;;
+		esac
+	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.8.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.4.0],[
