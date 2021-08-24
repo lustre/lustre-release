@@ -1635,6 +1635,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	int best_healthv;
 	__u32 best_sel_prio;
 	unsigned int best_dev_prio;
+	int best_ni_fatal;
 	unsigned int dev_idx = UINT_MAX;
 	bool gpu = md ? (md->md_flags & LNET_MD_FLAG_GPU) : false;
 
@@ -1657,6 +1658,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		best_dev_prio = UINT_MAX;
 		best_credits = INT_MIN;
 		best_healthv = 0;
+		best_ni_fatal = true;
 	} else {
 		best_dev_prio = lnet_dev_prio_of_md(best_ni, dev_idx);
 		shortest_distance = cfs_cpt_distance(lnet_cpt_table(), md_cpt,
@@ -1664,6 +1666,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		best_credits = atomic_read(&best_ni->ni_tx_credits);
 		best_healthv = atomic_read(&best_ni->ni_healthv);
 		best_sel_prio = best_ni->ni_sel_priority;
+		best_ni_fatal = atomic_read(&best_ni->ni_fatal_error_on);
 	}
 
 	while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
@@ -1701,18 +1704,23 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		 * Select on health, selection policy, direct dma prio,
 		 * shorter distance, available credits, then round-robin.
 		 */
-		if (ni_fatal)
-			continue;
-
 		if (best_ni)
-			CDEBUG(D_NET, "compare ni %s [c:%d, d:%d, s:%d, p:%u, g:%u, h:%d] with best_ni %s [c:%d, d:%d, s:%d, p:%u, g:%u, h:%d]\n",
-			       libcfs_nidstr(&ni->ni_nid), ni_credits, distance,
+			CDEBUG(D_NET, "compare ni %s [f:%s, c:%d, d:%d, s:%d, p:%u, g:%u, h:%d] with best_ni %s [f:%s, c:%d, d:%d, s:%d, p:%u, g:%u, h:%d]\n",
+			       libcfs_nidstr(&ni->ni_nid),
+			       ni_fatal ? "y" : "n", ni_credits, distance,
 			       ni->ni_seq, ni_sel_prio, ni_dev_prio, ni_healthv,
 			       (best_ni) ? libcfs_nidstr(&best_ni->ni_nid)
-			       : "not selected", best_credits, shortest_distance,
+			       : "not selected",
+			       best_ni_fatal ? "y" : "n", best_credits,
+			       shortest_distance,
 			       (best_ni) ? best_ni->ni_seq : 0,
 			       best_sel_prio, best_dev_prio, best_healthv);
 		else
+			goto select_ni;
+
+		if (ni_fatal && !best_ni_fatal)
+			continue;
+		else if (!ni_fatal && best_ni_fatal)
 			goto select_ni;
 
 		if (ni_healthv < best_healthv)
@@ -1750,6 +1758,7 @@ select_ni:
 		best_healthv = ni_healthv;
 		best_ni = ni;
 		best_credits = ni_credits;
+		best_ni_fatal = ni_fatal;
 	}
 
 	CDEBUG(D_NET, "selected best_ni %s\n",
