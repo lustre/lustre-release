@@ -208,6 +208,15 @@ declare -a  ha_servers
 declare -a  ha_victims
 declare -a  ha_victims_pair
 declare     ha_test_dir=/mnt/lustre/$(basename $0)-$$
+declare -a  ha_testdirs=(${ha_test_dirs="$ha_test_dir"})
+
+for ((i=0; i<${#ha_testdirs[@]}; i++)); do
+	echo I=$i ${ha_testdirs[i]}
+	ha_testdirs[i]="${ha_testdirs[i]}/$(basename $0)-$$"
+	echo i=$i ${ha_testdirs[i]}
+done
+
+declare     ha_cleanup=${CLEANUP:-true}
 declare     ha_start_time=$(date +%s)
 declare     ha_expected_duration=$((60 * 60 * 24))
 declare     ha_max_failover_period=10
@@ -363,10 +372,12 @@ ha_trap_exit()
 	touch "$ha_stop_file"
 	trap 0
 	if [ -e "$ha_fail_file" ]; then
-		ha_info "Test directory $ha_test_dir not removed"
+		ha_info "Test directories ${ha_testdirs[@]} not removed"
 		ha_info "Temporary directory $ha_tmp_dir not removed"
 	else
-		ha_on ${ha_clients[0]} rm -rf "$ha_test_dir"
+		$ha_cleanup &&
+			ha_on ${ha_clients[0]} rm -rf ${ha_testdirs[@]} ||
+			ha_info "Test directories ${ha_testdirs[@]} not removed"
 		ha_info "Please find the results in the directory $ha_tmp_dir"
 	fi
 }
@@ -445,9 +456,10 @@ ha_repeat_mpi_load()
 	local mpiuser=$7
 	local mustpass=$8
 	local mpirunoptions=$9
+	local test_dir=${10}
 	local tag=${ha_mpi_load_tags[$load]}
 	local cmd=${ha_mpi_load_cmds[$tag]}
-	local dir=$ha_test_dir/$client-$tag
+	local dir=$test_dir/$client-$tag
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
 	local nr_loops=0
@@ -561,10 +573,13 @@ ha_start_mpi_loads()
 		scp $ha_machine_file* $client:$dirname
 	done
 
+	local ndir
 	for ((n = 0; n < $inst; n++)); do
 		client=${ha_clients[n]}
 		nmpi=$((n % ${#ha_users[@]}))
 		mpiuser=${ha_users[nmpi]}
+		ndir=$((n % ${#ha_testdirs[@]}))
+		test_dir=${ha_testdirs[ndir]}
 		for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
 			tag=${ha_mpi_load_tags[$load]}
 			status=$ha_status_file_prefix-$tag-$client
@@ -584,7 +599,7 @@ ha_start_mpi_loads()
 				mustpass=$(( n % ha_ninstmustfail ))
 			ha_repeat_mpi_load $client $load $status "$parameter" \
 				$machines "$stripe" "$mpiuser" "$mustpass" \
-				"${ha_mpiopts[$mpiuser]} $ha_mpirun_options" &
+				"${ha_mpiopts[$mpiuser]} $ha_mpirun_options" "$test_dir" &
 				ha_status_files+=("$status")
 		done
 	done
@@ -597,7 +612,8 @@ ha_repeat_nonmpi_load()
 	local status=$3
 	local tag=${ha_nonmpi_load_tags[$load]}
 	local cmd=${ha_nonmpi_load_cmds[$tag]}
-	local dir=$ha_test_dir/$client-$tag
+	local test_dir=$4
+	local dir=$test_dir/$client-$tag
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
 	local nr_loops=0
@@ -606,7 +622,7 @@ ha_repeat_nonmpi_load()
 
 	cmd=${cmd//"{}"/$dir}
 
-	ha_info "Starting $tag on $client"
+	ha_info "Starting $tag on $client on $dir"
 
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
 		ha_info "$client Starts: $cmd" 2>&1 |  tee -a $log
@@ -632,19 +648,25 @@ ha_repeat_nonmpi_load()
 
 ha_start_nonmpi_loads()
 {
-    local client
-    local load
-    local tag
-    local status
+	local client
+	local load
+	local tag
+	local status
+	local n
+	local test_dir
+	local ndir
 
-    for client in ${ha_clients[@]}; do
-        for ((load = 0; load < ${#ha_nonmpi_load_tags[@]}; load++)); do
-            tag=${ha_nonmpi_load_tags[$load]}
-            status=$ha_status_file_prefix-$tag-$client
-            ha_repeat_nonmpi_load $client $load $status &
-            ha_status_files+=("$status")
-        done
-    done
+	for (( n = 0; n < ${#ha_clients[@]}; n++)); do
+		client=${ha_clients[n]}
+		ndir=$((n % ${#ha_testdirs[@]}))
+		test_dir=${ha_testdirs[ndir]}
+		for ((load = 0; load < ${#ha_nonmpi_load_tags[@]}; load++)); do
+			tag=${ha_nonmpi_load_tags[$load]}
+			status=$ha_status_file_prefix-$tag-$client
+			ha_repeat_nonmpi_load $client $load $status $test_dir &
+			ha_status_files+=("$status")
+		done
+	done
 }
 
 declare ha_bgcmd=${ha_bgcmd:-""}
@@ -652,7 +674,9 @@ declare ha_bgcmd_log=$ha_tmp_dir/bgcmdlog
 
 ha_cmd_bg () {
 	[[ -z "$ha_bgcmd" ]] && return 0
-	ha_bgcmd=${ha_bgcmd//"{}"/$ha_test_dir}
+	for ((i=0; i<${#ha_testdirs[@]}; i++)); do
+		ha_bgcmd=${ha_bgcmd//"{}"/${ha_testdirs[i]}}
+	done
 
 	ha_info "BG cmd: $ha_bgcmd"
 	while [ true ]; do
@@ -1125,11 +1149,17 @@ ha_main()
 	else
 		mdt_index=$ha_test_dir_mdt_index
 	fi
+
+	local dir
+	test_dir=${ha_testdirs[0]}
 	ha_on ${ha_clients[0]} "$LFS mkdir -i$mdt_index \
-		-c$ha_test_dir_stripe_count $ha_test_dir"
-	ha_on ${ha_clients[0]} $LFS getdirstripe $ha_test_dir
-	ha_on ${ha_clients[0]} " \
-		$LFS setstripe $ha_stripe_params $ha_test_dir"
+		-c$ha_test_dir_stripe_count $test_dir"
+	for ((i=0; i<${#ha_testdirs[@]}; i++)); do
+		test_dir=${ha_testdirs[i]}
+		ha_on ${ha_clients[0]} $LFS getdirstripe $test_dir
+		ha_on ${ha_clients[0]} " \
+			$LFS setstripe $ha_stripe_params $test_dir"
+	done
 
 	ha_start_loads
 	ha_wait_loads
