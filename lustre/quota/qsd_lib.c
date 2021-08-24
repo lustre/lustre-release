@@ -69,7 +69,7 @@ struct lu_kmem_descr qsd_caches[] = {
 
 /* define qsd thread key */
 LU_KEY_INIT_FINI(qsd, struct qsd_thread_info);
-LU_CONTEXT_KEY_DEFINE(qsd, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
+LU_CONTEXT_KEY_DEFINE(qsd, LCT_MD_THREAD | LCT_MG_THREAD | LCT_DT_THREAD | LCT_LOCAL);
 LU_KEY_INIT_GENERIC(qsd);
 
 /* some procfs helpers */
