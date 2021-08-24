@@ -5450,6 +5450,65 @@ create_pools () {
 	done
 }
 
+set_pools_quota () {
+	local u
+	local o
+	local p
+	local i
+	local j
+
+	[[ $ENABLE_QUOTA ]] || error "Required Pool Quotas: \
+		$POOLS_QUOTA_USERS_SET, but ENABLE_QUOTA not set!"
+
+	# POOLS_QUOTA_USERS_SET=
+	#              "quota15_1:20M          -- for all of the found pools
+	#               quota15_2:1G:gpool0
+	#               quota15_3              -- for global limit only
+	#               quota15_4:200M:gpool0
+	#               quota15_4:200M:gpool1"
+
+	declare -a pq_userset=(${POOLS_QUOTA_USERS_SET="mpiuser"})
+	declare -a pq_users
+	declare -A pq_limits
+
+	for ((i=0; i<${#pq_userset[@]}; i++)); do
+		u=${pq_userset[i]%%:*}
+		o=""
+		# user gets no pool limits if
+		# POOLS_QUOTA_USERS_SET does not specify it
+		[[ ${pq_userset[i]} =~ : ]] && o=${pq_userset[i]##$u:}
+		pq_limits[$u]+=" $o"
+	done
+	pq_users=(${!pq_limits[@]})
+
+	declare -a opts
+	local pool
+
+	for ((i=0; i<${#pq_users[@]}; i++)); do
+		u=${pq_users[i]}
+		# set to max limit (_u64)
+		$LFS setquota -u $u -B $((2**24 - 1))T $DIR
+		opts=(${pq_limits[$u]})
+		for ((j=0; j<${#opts[@]}; j++)); do
+			p=${opts[j]##*:}
+			o=${opts[j]%%:*}
+			# Set limit for all existing pools if
+			# no pool specified
+			if [ $p == $o ];  then
+				p=$(list_pool $FSNAME | sed "s/$FSNAME.//")
+				echo "No pool specified for $u,
+					set limit $o for all existing pools"
+			fi
+			for pool in $p; do
+				$LFS setquota -u $u -B $o --pool $pool $DIR ||
+                                        error "setquota -u $u -B $o \
+						--pool $pool failed"
+			done
+		done
+		$LFS quota -uv $u --pool  $DIR
+	done
+}
+
 check_and_setup_lustre() {
 	sanitize_parameters
 	nfs_client_mode && return
@@ -5542,6 +5601,9 @@ check_and_setup_lustre() {
 		create_pools $FS_POOL $FS_POOL_NOSTS
 	fi
 
+	if [[ -n "$POOLS_QUOTA_USERS_SET" ]]; then
+		set_pools_quota
+	fi
 	if [ "$ONLY" == "setup" ]; then
 		exit 0
 	fi
