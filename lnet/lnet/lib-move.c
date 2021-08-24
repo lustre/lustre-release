@@ -4659,10 +4659,10 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 				      cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
-		CERROR("%s, src %s: Dropping %s "
-		       "(error %ld looking up sender)\n",
+		rc = PTR_ERR(lpni);
+		CERROR("%s, src %s: Dropping %s (error %d looking up sender)\n",
 		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
-		       lnet_msgtyp2str(type), PTR_ERR(lpni));
+		       lnet_msgtyp2str(type), rc);
 		lnet_msg_free(msg);
 		if (rc == -ESHUTDOWN)
 			/* We are shutting down.  Don't do anything more */
