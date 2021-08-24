@@ -401,7 +401,10 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 			res = ldlm_resource_get(
 				osc_export(cl2osc(obj))->exp_obd->obd_namespace,
 				NULL, resname, LDLM_EXTENT, 0);
-			ldlm_resource_dump(D_ERROR, res);
+			if (IS_ERR(res))
+				CERROR("No lock resource\n");
+			else
+				ldlm_resource_dump(D_ERROR, res);
 
 			libcfs_debug_dumpstack(NULL);
 			LBUG();

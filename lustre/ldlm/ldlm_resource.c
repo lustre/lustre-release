@@ -1478,7 +1478,7 @@ static void ldlm_resource_free(struct ldlm_resource *res)
  * Return a reference to resource with given name, creating it if necessary.
  * Args: namespace with ns_lock unlocked
  * Locks: takes and releases NS hash-lock and res->lr_lock
- * Returns: referenced, unlocked ldlm_resource or NULL
+ * Returns: referenced, unlocked ldlm_resource or ERR_PTR
  */
 struct ldlm_resource *
 ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
