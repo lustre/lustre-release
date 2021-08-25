@@ -6,6 +6,8 @@ osd_zfs-objs += osd_scrub.o
 @SPL_ENABLED_TRUE@EXTRA_PRE_CFLAGS += -include @SPL_OBJ@/spl_config.h
 @SPL_ENABLED_TRUE@EXTRA_PRE_CFLAGS += -I@SPL@ -I@SPL@/include
 EXTRA_PRE_CFLAGS += -include @ZFS_OBJ@/zfs_config.h
+EXTRA_PRE_CFLAGS += -I@ZFS@/include/os/linux/kernel
+EXTRA_PRE_CFLAGS += -I@ZFS@/include/os/linux/spl -I@ZFS@/include/os/linux/zfs
 EXTRA_PRE_CFLAGS += -I@ZFS@ -I@ZFS@/include
 @SPL_ENABLED_FALSE@EXTRA_PRE_CFLAGS += -I@ZFS@/include/spl
 
