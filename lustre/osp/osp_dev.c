@@ -479,6 +479,11 @@ static int osp_disconnect(struct osp_device *d)
 	 * never added.) */
 	(void)ptlrpc_pinger_del_import(imp);
 
+	/* Send disconnect on healthy import, do force disconnect otherwise */
+	spin_lock(&imp->imp_lock);
+	imp->imp_obd->obd_force = imp->imp_state != LUSTRE_IMP_FULL;
+	spin_unlock(&imp->imp_lock);
+
 	rc = ptlrpc_disconnect_import(imp, 0);
 	if (rc != 0)
 		CERROR("%s: can't disconnect: rc = %d\n", obd->obd_name, rc);
