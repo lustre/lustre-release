@@ -433,6 +433,7 @@ init_test_env() {
 	export LOV_MAX_STRIPE_COUNT=2000
 	export DELETE_OLD_POOLS=${DELETE_OLD_POOLS:-false}
 	export KEEP_POOLS=${KEEP_POOLS:-false}
+	export PARALLEL=${PARALLEL:-"no"}
 
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
