@@ -9840,6 +9840,36 @@ test_77n() {
 }
 run_test 77n "Verify read from a hole inside contiguous blocks with T10PI"
 
+test_77o() {
+	(( $CLIENT_VERSION >= $(version_code 2.14.54) )) ||
+		skip "Need at least version 2.14.54"
+	local ofd=obdfilter
+	local mdt=mdt
+
+	# print OST checksum_type
+	echo "$ofd.$FSNAME-*.checksum_type:"
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL get_param -n $ofd.$FSNAME-*.checksum_type
+
+	# print MDT checksum_type
+	echo "$mdt.$FSNAME-*.checksum_type:"
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL get_param -n $mdt.$FSNAME-*.checksum_type
+
+	local o_count=$(do_nodes $(comma_list $(osts_nodes)) \
+		   $LCTL get_param -n $ofd.$FSNAME-*.checksum_type | wc -l)
+
+	(( $o_count == $OSTCOUNT )) ||
+		error "found $o_count checksums, not \$MDSCOUNT=$OSTCOUNT"
+
+	local m_count=$(do_nodes $(comma_list $(mdts_nodes)) \
+		   $LCTL get_param -n $mdt.$FSNAME-*.checksum_type | wc -l)
+
+	(( $m_count == $MDSCOUNT )) ||
+		error "found $m_count checksums, not \$MDSCOUNT=$MDSCOUNT"
+}
+run_test 77o "Verify checksum_type for server (mdt and ofd(obdfilter))"
+
 cleanup_test_78() {
 	trap 0
 	rm -f $DIR/$tfile

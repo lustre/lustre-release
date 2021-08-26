@@ -56,6 +56,7 @@
 #include <lustre_mds.h>
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
+#include <obd_cksum.h>
 
 /**
  * The rename stats output would be YAML formats, like
@@ -1324,6 +1325,43 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(checksum_t10pi_enforce);
 
+/*
+ * mdt_checksum_type(server) proc handling
+ */
+DECLARE_CKSUM_NAME;
+
+static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct lu_target *lut;
+	enum cksum_types pref;
+	int i;
+
+	if (!obd)
+		return 0;
+
+	lut = obd->u.obt.obt_lut;
+
+	/* select fastest checksum type on the server */
+	pref = obd_cksum_type_select(obd->obd_name,
+				     lut->lut_cksum_types_supported, 0);
+
+	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
+			continue;
+
+		if (pref == BIT(i))
+			seq_printf(m, "[%s] ", cksum_name[i]);
+		else
+			seq_printf(m, "%s ", cksum_name[i]);
+	}
+	seq_puts(m, "\n");
+
+	return 0;
+}
+
+LPROC_SEQ_FOPS_RO(mdt_checksum_type);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, checksum_dump);
@@ -1402,6 +1440,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_root_squash_fops			},
 	{ .name =	"nosquash_nids",
 	  .fops =	&mdt_nosquash_nids_fops			},
+	{ .name =	"checksum_type",
+	  .fops =	&mdt_checksum_type_fops		},
 	{ NULL }
 };
 

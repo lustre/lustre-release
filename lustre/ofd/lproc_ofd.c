@@ -45,6 +45,7 @@
 #include <linux/seq_file.h>
 #include <lustre_lfsck.h>
 #include <uapi/linux/lustre/lustre_access_log.h>
+#include <obd_cksum.h>
 
 #include "ofd_internal.h"
 
@@ -469,6 +470,44 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 	return count;
 }
 LPROC_SEQ_FOPS(ofd_brw_size);
+
+/*
+ * ofd_checksum_type(server) proc handling
+ */
+DECLARE_CKSUM_NAME;
+
+static int ofd_checksum_type_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct lu_target *lut;
+	enum cksum_types pref;
+	int i;
+
+	if (!obd)
+		return 0;
+
+	lut = obd->u.obt.obt_lut;
+
+	/* select fastest checksum type on the server */
+	pref = obd_cksum_type_select(obd->obd_name,
+				     lut->lut_cksum_types_supported, 0);
+
+	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
+			continue;
+
+		if (pref == BIT(i))
+			seq_printf(m, "[%s] ", cksum_name[i]);
+		else
+			seq_printf(m, "%s ", cksum_name[i]);
+	}
+	seq_puts(m, "\n");
+
+	return 0;
+}
+
+LPROC_SEQ_FOPS_RO(ofd_checksum_type);
+
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 static bool sync_on_lock_cancel_warned;
@@ -1017,6 +1056,8 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
 	{ .name =	"site_stats",
 	  .fops =	&ofd_site_stats_fops		},
+	{ .name =	"checksum_type",
+	  .fops =	&ofd_checksum_type_fops		},
 	{ NULL }
 };
 
