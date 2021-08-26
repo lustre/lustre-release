@@ -783,7 +783,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1494,21 +1835,140 @@ cleanup:
+@@ -1496,21 +1840,142 @@ cleanup:
  }
  
  
@@ -860,7 +860,9 @@ Index: linux-stage/fs/ext4/xattr.c
 +				lea_ino_array->xia_inodes[idx], &error);
 +		if (error)
 +			continue;
++		inode_lock(ea_inode);
 +		ext4_orphan_add(handle, ea_inode);
++		inode_unlock(ea_inode);
 +		/* the inode's i_count will be released by caller */
 +	}
 +
