@@ -5682,38 +5682,51 @@ run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 test_51d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
+	local qos_old
 
 	test_mkdir $DIR/$tdir
+	$LFS setstripe -c $OSTCOUNT $DIR/$tdir
+
+	qos_old=$(do_facet mds1 \
+		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=100"
+	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
+		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
+
 	createmany -o $DIR/$tdir/t- 1000
 	$LFS getstripe $DIR/$tdir > $TMP/$tfile
-	for N in $(seq 0 $((OSTCOUNT - 1))); do
-		OBJS[$N]=$(awk -vobjs=0 '($1 == '$N') { objs += 1 } \
-			END { printf("%0.0f", objs) }' $TMP/$tfile)
-		OBJS0[$N]=$(grep -A 1 idx $TMP/$tfile | awk -vobjs=0 \
-			'($1 == '$N') { objs += 1 } \
-			END { printf("%0.0f", objs) }')
-		log "OST$N has ${OBJS[$N]} objects, ${OBJS0[$N]} are index 0"
+	for ((n = 0; n < $OSTCOUNT; n++)); do
+		objs[$n]=$(awk -vobjs=0 '($1 == '$n') { objs += 1 } \
+			   END { printf("%0.0f", objs) }' $TMP/$tfile)
+		objs0[$n]=$(grep -A 1 idx $TMP/$tfile | awk -vobjs=0 \
+			    '($1 == '$n') { objs += 1 } \
+			    END { printf("%0.0f", objs) }')
+		log "OST$n has ${objs[$n]} objects, ${objs0[$n]} are index 0"
 	done
 	unlinkmany $DIR/$tdir/t- 1000
 
-	NLAST=0
-	for N in $(seq 1 $((OSTCOUNT - 1))); do
-		[[ ${OBJS[$N]} -lt $((${OBJS[$NLAST]} - 20)) ]] &&
-			error "OST $N has less objects vs OST $NLAST" \
-			      " (${OBJS[$N]} < ${OBJS[$NLAST]}"
-		[[ ${OBJS[$N]} -gt $((${OBJS[$NLAST]} + 20)) ]] &&
-			error "OST $N has less objects vs OST $NLAST" \
-			      " (${OBJS[$N]} < ${OBJS[$NLAST]}"
+	nlast=0
+	for ((n = 0; n < $OSTCOUNT; n++)); do
+		(( ${objs[$n]} > ${objs[$nlast]} * 4 / 5 )) ||
+			{ $LFS df && $LFS df -i &&
+			error "OST $n has fewer objects vs. OST $nlast" \
+			      " (${objs[$n]} < ${objs[$nlast]}"; }
+		(( ${objs[$n]} < ${objs[$nlast]} * 5 / 4 )) ||
+			{ $LFS df && $LFS df -i &&
+			error "OST $n has fewer objects vs. OST $nlast" \
+			      " (${objs[$n]} < ${objs[$nlast]}"; }
 
-		[[ ${OBJS0[$N]} -lt $((${OBJS0[$NLAST]} - 20)) ]] &&
-			error "OST $N has less #0 objects vs OST $NLAST" \
-			      " (${OBJS0[$N]} < ${OBJS0[$NLAST]}"
-		[[ ${OBJS0[$N]} -gt $((${OBJS0[$NLAST]} + 20)) ]] &&
-			error "OST $N has less #0 objects vs OST $NLAST" \
-			      " (${OBJS0[$N]} < ${OBJS0[$NLAST]}"
-		NLAST=$N
+		(( ${objs0[$n]} > ${objs0[$nlast]} * 4 / 5 )) ||
+			{ $LFS df && $LFS df -i &&
+			error "OST $n has fewer #0 objects vs. OST $nlast" \
+			      " (${objs0[$n]} < ${objs0[$nlast]}"; }
+		(( ${objs0[$n]} < ${objs0[$nlast]} * 5 / 4 )) ||
+			{ $LFS df && $LFS df -i &&
+			error "OST $n has fewer #0 objects vs. OST $nlast" \
+			      " (${objs0[$n]} < ${objs0[$nlast]}"; }
+		nlast=$n
 	done
-	rm -f $TMP/$tfile
 }
 run_test 51d "check object distribution"
 
