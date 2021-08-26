@@ -20389,6 +20389,24 @@ test_230v()
 }
 run_test 230v "subdir migrated to the MDT where its parent is located"
 
+test_230w() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+
+	mkdir -p $DIR/$tdir/sub || error "mkdir failed"
+
+	$LFS migrate -m 1 -c $MDSCOUNT -d $DIR/$tdir ||
+		error "migrate failed"
+
+	(( $($LFS getdirstripe -c $DIR/$tdir) == MDSCOUNT )) ||
+		error "$tdir stripe count mismatch"
+
+	(( $($LFS getdirstripe -c $DIR/$tdir/sub) == 0 )) ||
+		error "$tdir/sub is striped"
+}
+run_test 230w "non-recursive mode dir migration"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

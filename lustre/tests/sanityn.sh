@@ -4516,6 +4516,7 @@ test_80a() {
 	local file
 	local pid
 
+	mkdir_on_mdt0 $DIR1/$tdir
 	mkdir -p $DIR1/$tdir/dir
 	createmany -o $DIR1/$tdir/dir/f 10 ||
 		error "create files under remote dir failed $i"

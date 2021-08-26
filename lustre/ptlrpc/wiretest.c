@@ -2407,6 +2407,12 @@ void lustre_assert_wire_constants(void)
 		(unsigned)MDS_PCC_ATTACH);
 	LASSERTF(MDS_CLOSE_UPDATE_TIMES == 0x00100000UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_CLOSE_UPDATE_TIMES);
+	LASSERTF(MDS_SETSTRIPE_CREATE == 0x00200000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_SETSTRIPE_CREATE);
+	LASSERTF(MDS_FID_OP == 0x00400000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_FID_OP);
+	LASSERTF(MDS_MIGRATE_NSONLY == 0x00800000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_MIGRATE_NSONLY);
 
 	/* Checks for struct mdt_body */
 	LASSERTF((int)sizeof(struct mdt_body) == 216, "found %lld\n",

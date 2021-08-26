@@ -2267,6 +2267,11 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 			tp_tgt = lmv_tgt(lmv, oinfo->lmo_mds);
 			if (!tp_tgt)
 				RETURN(-ENODEV);
+
+			/* parent unchanged and update namespace only */
+			if (lu_fid_eq(&op_data->op_fid4, &op_data->op_fid2) &&
+			    op_data->op_bias & MDS_MIGRATE_NSONLY)
+				RETURN(-EALREADY);
 		}
 	} else {
 		sp_tgt = parent_tgt;

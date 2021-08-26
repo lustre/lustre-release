@@ -5474,6 +5474,9 @@ static int cb_migrate_mdt_init(char *path, int p, int *dp,
 	data.ioc_inlbuf2 = (char *)lmu;
 	data.ioc_inllen2 = lmv_user_md_size(lmu->lum_stripe_count,
 					    lmu->lum_magic);
+	/* reach bottom? */
+	if (param->fp_depth == param->fp_max_depth)
+		data.ioc_type = MDS_MIGRATE_NSONLY;
 	ret = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
 	if (ret != 0) {
 		llapi_error(LLAPI_MSG_ERROR, ret,
@@ -5515,6 +5518,11 @@ migrate:
 	}
 
 out:
+	/* Do not get down anymore? */
+	if (param->fp_depth == param->fp_max_depth)
+		ret = 1;
+	param->fp_depth++;
+
 	if (dp != NULL) {
 		/*
 		 * If the directory is being migration, we need

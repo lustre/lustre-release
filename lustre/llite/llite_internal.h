@@ -1125,7 +1125,7 @@ static inline int ll_inode_flags_to_xflags(int inode_flags)
 }
 
 int ll_migrate(struct inode *parent, struct file *file,
-	       struct lmv_user_md *lum, const char *name);
+	       struct lmv_user_md *lum, const char *name, __u32 flags);
 int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid, struct inode **inode);
 int ll_inode_permission(struct inode *inode, int mask);

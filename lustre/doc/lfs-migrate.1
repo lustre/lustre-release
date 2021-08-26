@@ -8,7 +8,7 @@ lfs migrate \- migrate files or directories between MDTs or OSTs.
 .IR FILE " ..."
 .br
 .B lfs migrate -m \fISTART_MDT_INDEX
-.RB [ -cHv ]
+.RB [ -cdHv ]
 .I DIRECTORY
 .br
 .SH DESCRIPTION
@@ -124,6 +124,11 @@ values are specified in a comma-separated list, then the number of specified
 values must match
 .IR COUNT .
 .TP
+.BR -d , --directory
+Only migrate the specified \fIDIRECTORY\fR and the non-directory inodes that are
+directly located within it.
+Similar to '\fBls -d\fR' and '\fBlfs getstripe -d\fR'.
+.TP
 .BR -H , --mdt-hash=\fIHASH_TYPE\fR
 Use
 .I HASH_TYPE
@@ -192,6 +197,11 @@ Recursively move the subdirectories and inodes contained in directory
 from its current MDT to MDT0000 and MDT0002.  The
 .B testremote
 directory and all of its subdirectories will be striped across both MDTs.
+.TP
+.B $ lfs migrate -m 0,2 -d ./testremote
+Move ./testremote and the first level of sub files from their current MDT
+to the MDT with index 0 and 2. Different from above case, the layout of
+subdirectories under ./testremote won't be changed.
 .TP
 .B # lfs setstripe -E 256M -c 1 -E 16G -c 4 -E eof -c 40 topdir
 Set a default PFL layout (without any DoM component) on the directory

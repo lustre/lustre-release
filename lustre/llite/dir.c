@@ -2144,6 +2144,7 @@ out_hur:
 		int len;
 		char *filename;
 		int namelen = 0;
+		__u32 flags;
 		int rc;
 
 		rc = obd_ioctl_getdata(&data, &len, (void __user *)arg);
@@ -2156,6 +2157,7 @@ out_hur:
 
 		filename = data->ioc_inlbuf1;
 		namelen = data->ioc_inllen1;
+		flags = data->ioc_type;
 
 		if (namelen < 1 || namelen != strlen(filename) + 1) {
 			CDEBUG(D_INFO, "IOC_MDC_LOOKUP missing filename\n");
@@ -2171,7 +2173,7 @@ out_hur:
 			GOTO(migrate_free, rc);
 		}
 
-		rc = ll_migrate(inode, file, lum, filename);
+		rc = ll_migrate(inode, file, lum, filename, flags);
 migrate_free:
 		OBD_FREE_LARGE(data, len);
 

@@ -4790,7 +4790,7 @@ out_req:
 }
 
 int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
-	       const char *name)
+	       const char *name, __u32 flags)
 {
 	struct dentry *dchild = NULL;
 	struct inode *child_inode = NULL;
@@ -4887,6 +4887,11 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	op_data->op_cli_flags |= CLI_MIGRATE | CLI_SET_MEA;
 	op_data->op_data = lum;
 	op_data->op_data_size = lumlen;
+
+	/* migrate dirent only for subdirs if MDS_MIGRATE_NSONLY set */
+	if (S_ISDIR(child_inode->i_mode) && (flags & MDS_MIGRATE_NSONLY) &&
+	    lmv_dir_layout_changing(ll_i2info(parent)->lli_lsm_md))
+		op_data->op_bias |= MDS_MIGRATE_NSONLY;
 
 again:
 	if (S_ISREG(child_inode->i_mode)) {

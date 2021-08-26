@@ -564,7 +564,7 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate directories and their inodes between MDTs.\n"
-	 "usage: migrate [--mdt-count|-c STRIPE_COUNT]\n"
+	 "usage: migrate [--mdt-count|-c STRIPE_COUNT] [--directory|-d]\n"
 	 "               [--mdt-hash|-H HASH_TYPE]\n"
 	 "               [--mdt-index|-m START_MDT_INDEX] [--verbose|-v]\n"
 	 "		 DIRECTORY\n"
@@ -3448,6 +3448,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						.has_arg = required_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
+	/* used with "lfs migrate -m" */
+	{ .val = 'd',	.name = "directory",	.has_arg = no_argument},
 	/* --non-direct is only valid in migrate mode */
 	{ .val = 'D',	.name = "non-direct",	.has_arg = no_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
@@ -3479,7 +3481,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 /* find	{ .val = 'P',	.name = "print",	.has_arg = no_argument }, */
 /* getstripe { .val = 'q', .name = "quiet",	.has_arg = no_argument }, */
-/* getstripe { .val = 'r', .name = "recursive",	.has_arg = no_argument }, */
 /* getstripe { .val = 'R', .name = "raw",	.has_arg = no_argument }, */
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
@@ -3681,16 +3682,20 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE;
 			break;
 		case 'd':
-			/* delete the default striping pattern */
-			delete = 1;
-			if (opc == SO_MIRROR_SPLIT) {
-				if (has_m_file) {
-					fprintf(stderr,
-					      "%s %s: -d cannot used with -f\n",
-						progname, argv[0]);
-					goto usage_error;
+			if (migrate_mode) {
+				migrate_mdt_param.fp_max_depth = 1;
+			} else {
+				/* delete the default striping pattern */
+				delete = 1;
+				if (opc == SO_MIRROR_SPLIT) {
+					if (has_m_file) {
+						fprintf(stderr,
+						      "%s %s: -d cannot used with -f\n",
+							progname, argv[0]);
+						goto usage_error;
+					}
+					mirror_flags |= MF_DESTROY;
 				}
-				mirror_flags |= MF_DESTROY;
 			}
 			break;
 		case 'D':
