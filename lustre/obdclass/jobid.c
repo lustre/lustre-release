@@ -182,6 +182,11 @@ static void jobid_prune(struct work_struct *work)
 	rhashtable_walk_enter(&session_jobids, &iter);
 	rhashtable_walk_start(&iter);
 	while ((sj = rhashtable_walk_next(&iter)) != NULL) {
+		if (IS_ERR(sj)) {
+			if (PTR_ERR(sj) == -EAGAIN)
+				continue;
+			break;
+		}
 		if (!hlist_empty(&sj->sj_session->tasks[PIDTYPE_SID])) {
 			remaining++;
 			continue;

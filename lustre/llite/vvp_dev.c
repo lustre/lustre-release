@@ -411,6 +411,12 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 		struct inode *inode;
 		int nr;
 
+		if (IS_ERR(h)) {
+			if (PTR_ERR(h) == -EAGAIN)
+				continue;
+			break;
+		}
+
 		if (!priv->vsp_clob) {
 			struct lu_object *lu_obj;
 
