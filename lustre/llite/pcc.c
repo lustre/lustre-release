@@ -1910,6 +1910,7 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 		pcci = ll_i2pcci(inode);
 		if (pcci && pcc_inode_has_layout(pcci))
 			*cached = true;
+
 		if (rc) {
 			CDEBUG(D_CACHE,
 			       "Failed to try PCC-RO attach "DFID", rc = %d\n",
@@ -2011,6 +2012,9 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached,
 		rc = pcc_try_datasets_attach(inode, iot, clt.cl_layout_gen,
 					     LU_PCC_READONLY, cached);
 	}
+
+	if (*cached)
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_AUTOAT, 1);
 
 	RETURN(rc);
 }
@@ -2149,6 +2153,7 @@ static inline void pcc_inode_detach(struct inode *inode)
 	pcci->pcci_type = LU_PCC_NONE;
 	pcc_layout_gen_set(pcci, CL_LAYOUT_GEN_NONE);
 	pcc_inode_mapping_reset(inode);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_DETACH, 1);
 }
 
 static inline void pcc_inode_detach_put(struct inode *inode)
@@ -2177,7 +2182,6 @@ void pcc_layout_invalidate(struct inode *inode)
 		pcc_inode_detach_put(inode);
 	}
 	pcc_inode_unlock(inode);
-
 	EXIT;
 }
 
@@ -3004,8 +3008,6 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 		       PFID(ll_inode2fid(inode)), vma, i_size_read(inode),
 		       vma->vm_end - vma->vm_start, vma->vm_pgoff,
 		       vma->vm_flags);
-	} else {
-		*cached = false;
 	}
 out:
 	pcc_inode_unlock(inode);
@@ -3740,6 +3742,8 @@ out_unlock:
 		(void) pcc_inode_remove(inode, dentry);
 		revert_creds(old_cred);
 		dput(dentry);
+	} else {
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH, 1);
 	}
 out_dataset_put:
 	pcc_dataset_put(dataset);
@@ -3856,8 +3860,6 @@ repeat:
 			RETURN(rc);
 
 		rc = ll_layout_refresh(inode, gen);
-		if (rc)
-			RETURN(rc);
 	} else { /* Readonly layout */
 		struct pcc_inode *pcci;
 
@@ -3874,6 +3876,9 @@ repeat:
 			rc = pcc_try_datasets_attach(inode, PIT_OPEN, *gen,
 						     LU_PCC_READONLY, cached);
 		pcc_inode_unlock(inode);
+		if (*cached)
+			ll_stats_ops_tally(ll_i2sbi(inode),
+					   LPROC_LL_PCC_AUTOAT, 1);
 	}
 
 	RETURN(rc);
@@ -3962,6 +3967,8 @@ out_put_unlock:
 			pcc_inode_put(pcci);
 		else
 			dput(dentry);
+	} else {
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH, 1);
 	}
 	revert_creds(old_cred);
 	pcc_inode_unlock(inode);

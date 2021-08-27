@@ -3355,6 +3355,76 @@ test_42() {
 }
 run_test 42 "PCC attach without attach ID specified"
 
+test_44() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local count=50
+	local bs="1M"
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev client $loopfile $mntpt 60
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1\ mmap_conv=0"
+	$LCTL pcc list $MOUNT
+	$LCTL set_param llite.*.pcc_async_threshold=1G
+
+	dd if=/dev/zero of=$file bs=$bs count=$count ||
+		error "Write $file failed"
+
+	local n=16
+	local lpid
+	local -a rpids
+
+	$LFS getstripe -v $file
+	clear_stats llite.*.stats
+
+	for ((i = 0; i < $n; i++)); do
+		(
+		while [ ! -e $DIR/$tfile.lck ]; do
+			dd if=$file of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+		)&
+		rpids[$i]=$!
+	done
+
+	(
+		while [ ! -e $DIR/$tfile.lck ]; do
+			$LCTL set_param -n ldlm.namespaces.*mdc*.lru_size=clear ||
+				error "cancel_lru_locks mdc failed"
+			sleep 0.2
+		done
+	)&
+	lpid=$!
+
+	sleep 60
+	touch $DIR/$tfile.lck
+
+	for ((i = 0; i < $n; i++)); do
+		wait ${rpids[$i]} || error "$?: read failed"
+	done
+	wait $lpid || error "$?: lock cancel failed"
+
+	echo "Finish ========"
+	$LFS getstripe -v $file
+	$LCTL get_param llite.*.stats
+
+	local attach_num=$(calc_stats llite.*.stats pcc_attach)
+	local detach_num=$(calc_stats llite.*.stats pcc_detach)
+	local autoat_num=$(calc_stats llite.*.stats pcc_auto_attach)
+
+	echo "attach $attach_num detach $detach_num auto_attach $autoat_num"
+	(( $attach_num <= 1 )) || error "attach more than 1 time: $attach_num"
+	rm -f $DIR/$tfile.lck
+}
+run_test 44 "Verify valid auto attach without re-fetching the whole files"
+
 test_96() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
@@ -3544,7 +3614,7 @@ test_98() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
-	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=0
 
 	local rpid1
 	local rpid2

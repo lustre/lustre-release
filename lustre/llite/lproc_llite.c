@@ -2341,6 +2341,10 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_LISTXATTR,	LPROCFS_TYPE_LATENCY,	"listxattr" },
 	{ LPROC_LL_REMOVEXATTR,	LPROCFS_TYPE_LATENCY,	"removexattr" },
 	{ LPROC_LL_INODE_PERM,	LPROCFS_TYPE_LATENCY,	"inode_permission" },
+	/* PCC I/O statistics */
+	{ LPROC_LL_PCC_ATTACH,  LPROCFS_TYPE_REQS,	"pcc_attach" },
+	{ LPROC_LL_PCC_DETACH,  LPROCFS_TYPE_REQS,	"pcc_detach" },
+	{ LPROC_LL_PCC_AUTOAT, LPROCFS_TYPE_REQS,	"pcc_auto_attach" },
 	/* hybrid IO switch from buffered I/O (BIO) to direct I/O (DIO) */
 	{ LPROC_LL_HYBRID_NOSWITCH, LPROCFS_TYPE_REQS, "hybrid_noswitch" },
 	{ LPROC_LL_HYBRID_WRITESIZE_SWITCH, LPROCFS_TYPE_REQS,
