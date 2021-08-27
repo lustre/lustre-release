@@ -1837,8 +1837,8 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 * local ni and local net so that we pick the next ones
 	 * in Round Robin.
 	 */
-	best_lpni->lpni_seq++;
 	best_lpni->lpni_peer_net->lpn_seq++;
+	best_lpni->lpni_seq = best_lpni->lpni_peer_net->lpn_seq;
 	best_ni->ni_net->net_seq++;
 	best_ni->ni_seq = best_ni->ni_net->net_seq;
 
