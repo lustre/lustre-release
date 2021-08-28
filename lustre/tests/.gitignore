@@ -21,10 +21,12 @@
 /createmany
 /createtest
 /directio
+/expand_truncate_test
 /fchdir_test
 /flock_deadlock
 /flock_test
 /flocks_test
+/foreign_symlink_striping
 /fsx
 /getdents
 /group_lock_test
@@ -41,6 +43,7 @@
 /llverfs
 /lockahead_test
 /logs
+/lov_getstripe_old
 /lovstripe
 /lseek_test
 /mcreate

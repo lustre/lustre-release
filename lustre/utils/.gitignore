@@ -15,6 +15,7 @@
 /llverdev
 /l_getidentity
 /l_facl
+/l_foreign_symlink
 /mkfs_lustre
 /mount_lustre
 /tunefs_lustre
