@@ -3371,6 +3371,11 @@ test_44() {
 	setup_pcc_mapping client \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1\ mmap_conv=0"
 	$LCTL pcc list $MOUNT
+
+	local thresh=$($LCTL get_param -n llite.*.pcc_async_threshold |
+		       head -n 1)
+
+	stack_trap "$LCTL set_param llite.*.pcc_async_threshold=$thresh"
 	$LCTL set_param llite.*.pcc_async_threshold=1G
 
 	dd if=/dev/zero of=$file bs=$bs count=$count ||
@@ -3425,6 +3430,92 @@ test_44() {
 }
 run_test 44 "Verify valid auto attach without re-fetching the whole files"
 
+test_45() {
+	local loopfile="$TMP/$tfile"
+	local loopfile2="$TMP/$tfile.2"
+	local mntpt="/mnt/pcc.$tdir"
+	local mntpt2="/mnt/pcc.$tdir.2"
+	local file1=$DIR/$tfile
+	local file2=$DIR2/$tfile
+	local count=50
+	local bs="1M"
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev client $loopfile $mntpt 100
+	setup_loopdev client $loopfile2 $mntpt2 100
+	stack_trap "$LCTL pcc clear $MOUNT" EXIT
+	$LCTL pcc add $MOUNT $mntpt -p \
+		"projid={0} roid=$HSM_ARCHIVE_NUMBER ropcc=1" ||
+		error "failed to config PCC for $MOUNT $mntpt"
+	stack_trap "$LCTL pcc clear $MOUNT2" EXIT
+	$LCTL pcc add $MOUNT2 $mntpt2 -p \
+		"projid={0} roid=$HSM_ARCHIVE_NUMBER ropcc=1" ||
+		error "failed to config PCC for $MOUNT2 $mntpt2"
+	$LCTL pcc list $MOUNT
+	$LCTL pcc list $MOUNT2
+
+	local thresh=$(do_facet $SINGLEAGT $LCTL get_param -n \
+		       llite.*.pcc_async_threshold | head -n 1)
+
+	stack_trap "do_facet $SINGLEAGT $LCTL \
+		    set_param llite.*.pcc_async_threshold=$thresh"
+	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=0
+
+	dd if=/dev/zero of=$file1 bs=$bs count=$count ||
+		error "Write $file1 failed"
+
+	local n=16
+	local lpid
+	local -a pids1
+	local -a pids2
+
+	$LFS getstripe -v $file1
+	clear_stats llite.*.stats
+
+	for ((i = 0; i < $n; i++)); do
+		(
+		while [ ! -e $DIR/$tfile.lck ]; do
+			dd if=$file1 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+		)&
+		pids1[$i]=$!
+	done
+
+	for ((i = 0; i < $n; i++)); do
+		(
+		while [ ! -e $DIR/$tfile.lck ]; do
+			dd if=$file2 of=/dev/null bs=$bs count=$count ||
+				error "Read $file failed"
+			sleep 0.$((RANDOM % 4 + 1))
+		done
+		)&
+		pids2[$i]=$!
+	done
+
+	sleep 60
+	touch $DIR/$tfile.lck
+	for ((i = 0; i < $n; i++)); do
+		wait ${pids1[$i]} || error "$?: read failed"
+		wait ${pids2[$i]} || error "$?: read failed"
+	done
+
+	$LFS getstripe -v $file1
+	$LCTL get_param llite.*.stats
+
+	local attach_num=$(calc_stats llite.*.stats pcc_attach)
+	local detach_num=$(calc_stats llite.*.stats pcc_detach)
+	local autoat_num=$(calc_stats llite.*.stats pcc_auto_attach)
+
+	echo "attach $attach_num detach $detach_num auto_attach $autoat_num"
+	(( attach_num <= 2 )) || error "attach more than 2 time: $attach_num"
+	rm -f $DIR/$tfile.lck
+}
+run_test 45 "Concurrent read access from two mount points"
+
 test_96() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
@@ -3440,6 +3531,12 @@ test_96() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	local thresh=$(do_facet $SINGLEAGT $LCTL get_param -n \
+		       llite.*.pcc_async_threshold | head -n 1)
+
+	stack_trap "do_facet $SINGLEAGT $LCTL set_param \
+		    llite.*.pcc_async_threshold=$thresh"
 	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
 
 	local rpid11
@@ -3550,6 +3647,12 @@ test_97() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	local thresh=$(do_facet $SINGLEAGT $LCTL get_param -n \
+		       llite.*.pcc_async_threshold | head -n 1)
+
+	stack_trap "do_facet $SINGLEAGT $LCTL set_param \
+		    llite.*.pcc_async_threshold=$thresh"
 	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=1G
 
 	local mpid1
@@ -3614,6 +3717,12 @@ test_98() {
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1\ mmap_conv=0"
 	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	local thresh=$(do_facet $SINGLEAGT $LCTL get_param -n \
+		       llite.*.pcc_async_threshold | head -n 1)
+
+	stack_trap "do_facet $SINGLEAGT $LCTL set_param \
+		    llite.*.pcc_async_threshold=$thresh"
 	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=0
 
 	local rpid1
@@ -4020,6 +4129,11 @@ test_102() {
 	mkdir $hsm_root || error "mkdir $hsm_root failed"
 	setup_pcc_mapping client \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+
+	local thresh=$($LCTL get_param -n llite.*.pcc_async_threshold)
+
+	stack_trap "do_facet $SINGLEAGT $LCTL set_param \
+		    llite.*.pcc_async_threshold=$thresh"
 	do_facet $SINGLEAGT $LCTL set_param llite.*.pcc_async_threshold=0
 
 	local ioengine="io_uring"
