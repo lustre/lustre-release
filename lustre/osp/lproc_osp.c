@@ -193,6 +193,37 @@ static ssize_t sync_changes_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(sync_changes);
 
+static ssize_t max_sync_changes_show(struct kobject *kobj,
+		struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+
+	return sprintf(buf, "%u\n", osp->opd_sync_max_changes);
+}
+
+
+static ssize_t max_sync_changes_store(struct kobject *kobj,
+		struct attribute *attr, const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	int val;
+	int rc;
+
+	rc = kstrtoint(buffer, 0, &val);
+	if (rc)
+		return rc;
+	if (val <= 0)
+		return -ERANGE;
+	osp->opd_sync_max_changes = val;
+	return count;
+}
+
+LUSTRE_RW_ATTR(max_sync_changes);
+
 /**
  * Show maximum number of RPCs in flight allowed
  *
@@ -1011,6 +1042,7 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_sync_in_flight.attr,
 	&lustre_attr_sync_in_progress.attr,
 	&lustre_attr_sync_changes.attr,
+	&lustre_attr_max_sync_changes.attr,
 	&lustre_attr_force_sync.attr,
 	&lustre_attr_old_sync_processed.attr,
 	&lustre_attr_create_count.attr,

@@ -213,6 +213,8 @@ struct osp_device {
 	struct llog_gen			 opd_sync_generation;
 	/* number of changes to sync, used to wake up sync thread */
 	atomic_t			 opd_sync_changes;
+	/* limit of changes to sync */
+	int				 opd_sync_max_changes;
 	/* processing of changes from previous mount is done? */
 	int				 opd_sync_prev_done;
 	/* found records */

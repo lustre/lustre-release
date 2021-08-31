@@ -27591,6 +27591,48 @@ test_823() {
 }
 run_test 823 "Setting create_count > OST_MAX_PRECREATE is lowered to maximum"
 
+test_831() {
+	local sync_changes=$(do_facet $SINGLEMDS \
+		$LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.sync_changes)
+
+	[ "$sync_changes" -gt 100 ] &&
+		skip "Sync changes $sync_changes > 100 already"
+
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	$LFS mkdir -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	save_lustre_params mds1 \
+		"osp.$FSNAME-OST*-osc-MDT0000.max_sync_changes" > $p
+	save_lustre_params mds1	\
+		"osp.$FSNAME-OST*-osc-MDT0000.max_rpcs_in_progress" >> $p
+
+	do_facet mds1 "$LCTL set_param -n \
+		osp.$FSNAME-OST*-osc-MDT0000.max_sync_changes=100 \
+		osp.$FSNAME-OST*-osc-MDT0000.max_rpcs_in_progress=128"
+	stack_trap "restore_lustre_params < $p" EXIT
+
+	createmany -o $DIR/$tdir/f- 1000
+	unlinkmany $DIR/$tdir/f- 1000 &
+	local UNLINK_PID=$!
+
+	while sleep 1; do
+		sync_changes=$(do_facet mds1 \
+		$LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.sync_changes)
+		# the check in the code is racy, fail the test
+		# if the value above the limit by 10.
+		[ $sync_changes -gt 110 ] && {
+			kill -2 $UNLINK_PID
+			wait
+			error "osp changes throttling failed, $sync_changes>110"
+		}
+		kill -0 $UNLINK_PID 2> /dev/null || break
+	done
+	wait
+}
+run_test 831 "throttling unlink/setattr queuing on OSP"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

@@ -83,6 +83,7 @@
 #define OSP_SYNC_THRESHOLD		10
 #define OSP_MAX_RPCS_IN_FLIGHT		8
 #define OSP_MAX_RPCS_IN_PROGRESS	4096
+#define OSP_MAX_SYNC_CHANGES		2000000000
 
 #define OSP_JOB_MAGIC		0x26112005
 
@@ -309,6 +310,14 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	/* it's a layering violation, to access internals of th,
 	 * but we can do this as a sanity check, for a while */
 	LASSERT(th->th_top != NULL);
+
+	if (atomic_read(&d->opd_sync_changes) > d->opd_sync_max_changes) {
+		/* Attempt to slow sync changes queuing rate */
+		CWARN("%s: queued changes counter exceeds limit %d > %d\n",
+		      d->opd_obd->obd_name, atomic_read(&d->opd_sync_changes),
+		      d->opd_sync_max_changes);
+		RETURN(-EINPROGRESS);
+	}
 	storage_th = thandle_get_sub_by_dt(env, th->th_top, d->opd_storage);
 	if (IS_ERR(storage_th))
 		RETURN(PTR_ERR(storage_th));
@@ -1520,6 +1529,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 
 	d->opd_sync_max_rpcs_in_flight = OSP_MAX_RPCS_IN_FLIGHT;
 	d->opd_sync_max_rpcs_in_progress = OSP_MAX_RPCS_IN_PROGRESS;
+	d->opd_sync_max_changes = OSP_MAX_SYNC_CHANGES;
 	spin_lock_init(&d->opd_sync_lock);
 	init_waitqueue_head(&d->opd_sync_waitq);
 	init_waitqueue_head(&d->opd_sync_barrier_waitq);
