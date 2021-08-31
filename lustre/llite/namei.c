@@ -1537,20 +1537,24 @@ unlock:
 }
 
 static int ll_new_node(struct inode *dir, struct dentry *dchild,
-		       const char *tgt, umode_t mode, int rdev, __u32 opc)
+		       const char *tgt, umode_t mode, __u64 rdev, __u32 opc)
 {
 	struct qstr *name = &dchild->d_name;
 	struct ptlrpc_request *request = NULL;
 	struct md_op_data *op_data = NULL;
 	struct inode *inode = NULL;
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
-	int tgt_len = 0;
+	struct llcrypt_str *disk_link = NULL;
 	bool encrypt = false;
 	int err;
 
 	ENTRY;
-	if (unlikely(tgt != NULL))
-		tgt_len = strlen(tgt) + 1;
+	if (unlikely(tgt != NULL)) {
+		disk_link = (struct llcrypt_str *)rdev;
+		rdev = 0;
+		if (!disk_link)
+			RETURN(-EINVAL);
+	}
 
 again:
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
@@ -1586,9 +1590,41 @@ again:
 		err = llcrypt_inherit_context(dir, NULL, op_data, false);
 		if (err)
 			GOTO(err_exit, err);
+
+		if (S_ISLNK(mode)) {
+			/* llcrypt needs inode to encrypt target name, so create
+			 * a fake inode and associate encryption context got
+			 * from llcrypt_inherit_context.
+			 */
+			struct inode *fakeinode =
+				dchild->d_sb->s_op->alloc_inode(dchild->d_sb);
+
+			if (!fakeinode)
+				GOTO(err_exit, err = -ENOMEM);
+			fakeinode->i_sb = dchild->d_sb;
+			fakeinode->i_mode |= S_IFLNK;
+#ifdef IOP_XATTR
+			fakeinode->i_opflags |= IOP_XATTR;
+#endif
+			err = ll_set_encflags(fakeinode,
+					      op_data->op_file_encctx,
+					      op_data->op_file_encctx_size,
+					      true);
+			if (!err)
+				err = __llcrypt_encrypt_symlink(fakeinode, tgt,
+								strlen(tgt),
+								disk_link);
+
+			ll_xattr_cache_destroy(fakeinode);
+			llcrypt_put_encryption_info(fakeinode);
+			dchild->d_sb->s_op->destroy_inode(fakeinode);
+			if (err)
+				GOTO(err_exit, err);
+		}
 	}
 
-	err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
+	err = md_create(sbi->ll_md_exp, op_data, tgt ? disk_link->name : NULL,
+			tgt ? disk_link->len : 0, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			current_cap(), rdev, &request);
@@ -1691,6 +1727,21 @@ again:
 				      op_data->op_file_encctx_size, true);
 		if (err)
 			GOTO(err_exit, err);
+
+		if (S_ISLNK(mode)) {
+			struct ll_inode_info *lli = ll_i2info(inode);
+
+			/* Cache the plaintext symlink target
+			 * for later use by get_link()
+			 */
+			OBD_ALLOC(lli->lli_symlink_name, strlen(tgt) + 1);
+			/* do not return an error if we cannot
+			 * cache the symlink locally
+			 */
+			if (lli->lli_symlink_name)
+				memcpy(lli->lli_symlink_name,
+				       tgt, strlen(tgt) + 1);
+		}
 	}
 
 	if (!(sbi->ll_flags & LL_SBI_FILE_SECCTX)) {
@@ -1782,14 +1833,24 @@ static int ll_symlink(struct inode *dir, struct dentry *dchild,
 		      const char *oldpath)
 {
 	ktime_t kstart = ktime_get();
+	int len = strlen(oldpath);
+	struct llcrypt_str disk_link;
 	int err;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), target=%.*s\n",
 	       dchild, PFID(ll_inode2fid(dir)), dir, 3000, oldpath);
 
-	err = ll_new_node(dir, dchild, oldpath, S_IFLNK | S_IRWXUGO, 0,
-			  LUSTRE_OPC_SYMLINK);
+	err = llcrypt_prepare_symlink(dir, oldpath, len, dir->i_sb->s_blocksize,
+				      &disk_link);
+	if (err)
+		RETURN(err);
+
+	err = ll_new_node(dir, dchild, oldpath, S_IFLNK | S_IRWXUGO,
+			  (__u64)&disk_link, LUSTRE_OPC_SYMLINK);
+
+	if (disk_link.name != (unsigned char *)oldpath)
+		kfree(disk_link.name);
 
 	if (!err)
 		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_SYMLINK,

@@ -3334,7 +3334,7 @@ test_47() {
 	stack_trap cleanup_for_enc_tests EXIT
 	setup_for_enc_tests
 
-	dd if=/dev/zero of=$tmpfile bs=512K count=1
+	dd if=/dev/urandom of=$tmpfile bs=512K count=1
 	mrename $tmpfile $testfile &&
 		error "rename from unencrypted to encrypted dir should fail"
 
@@ -3350,10 +3350,23 @@ test_47() {
 
 	ln $testfile2 $testfile ||
 		error "link from within encrypted dir should succeed"
+	cmp -bl $testfile2 $testfile ||
+		error "cannot read from hard link (1.1)"
+	echo a >> $testfile || error "cannot write to hard link (1)"
+	cancel_lru_locks
+	cmp -bl $testfile2 $testfile ||
+		error "cannot read from hard link (1.2)"
 	rm -f $testfile
 
 	ln $testfile2 $tmpfile ||
 		error "link from unencrypted to encrypted dir should succeed"
+	cancel_lru_locks
+	cmp -bl $testfile2 $tmpfile ||
+		error "cannot read from hard link (2.1)"
+	echo a >> $tmpfile || error "cannot write to hard link (2)"
+	cancel_lru_locks
+	cmp -bl $testfile2 $tmpfile ||
+		error "cannot read from hard link (2.2)"
 	rm -f $tmpfile
 
 	# check we are limited in the number of hard links
@@ -3367,10 +3380,36 @@ test_47() {
 	mrename $testfile2 $tmpfile &&
 		error "rename from encrypted to unencrypted dir should fail"
 	rm -f $testfile2
-	touch $tmpfile
+	dd if=/dev/urandom of=$tmpfile bs=512K count=1
 
-	dd if=/dev/zero of=$testfile bs=512K count=1
+	dd if=/dev/urandom of=$testfile bs=512K count=1
 	mkdir $DIR/$tdir/mydir
+
+	ln -s $testfile ${testfile}.sym ||
+		error "symlink from within encrypted dir should succeed"
+	cancel_lru_locks
+	cmp -bl $testfile ${testfile}.sym ||
+		error "cannot read from sym link (1.1)"
+	echo a >> ${testfile}.sym || error "cannot write to sym link (1)"
+	cancel_lru_locks
+	cmp -bl $testfile ${testfile}.sym ||
+		error "cannot read from sym link (1.2)"
+	[ $(stat -c %s ${testfile}.sym) -eq ${#testfile} ] ||
+		error "wrong symlink size (1)"
+
+	ln -s $tmpfile ${testfile}.sl ||
+		error "symlink from encrypted to unencrypted dir should succeed"
+	cancel_lru_locks
+	cmp -bl $tmpfile ${testfile}.sl ||
+		error "cannot read from sym link (2.1)"
+	echo a >> ${testfile}.sl || error "cannot write to sym link (2)"
+	cancel_lru_locks
+	cmp -bl $tmpfile ${testfile}.sl ||
+		error "cannot read from sym link (2.2)"
+	[ $(stat -c %s ${testfile}.sl) -eq ${#tmpfile} ] ||
+		error "wrong symlink size (2)"
+	rm -f ${testfile}.sl
+
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
 	# remove fscrypt key from keyring
@@ -3380,6 +3419,7 @@ test_47() {
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
+	scrambledlink=$(find $DIR/$tdir/ -maxdepth 1 -type l)
 	ln $scrambledfile $scrambleddir/linkfile &&
 		error "ln linkfile should have failed"
 	mrename $scrambledfile $DIR/onefile2 &&
@@ -3387,6 +3427,17 @@ test_47() {
 	touch $DIR/onefile
 	mrename $DIR/onefile $scrambleddir/otherfile &&
 		error "mrename to $scrambleddir should have failed"
+	readlink $scrambledlink ||
+		error "link should be read without key"
+	[ $(stat -c %s $scrambledlink) -eq \
+			$(expr length "$(readlink $scrambledlink)") ] ||
+		error "wrong symlink size without key"
+	readlink -e $scrambledlink &&
+		error "link should not point to anywhere useful"
+	ln -s $scrambledfile ${scrambledfile}.sym &&
+		error "symlink without key should fail (1)"
+	ln -s $tmpfile ${scrambledfile}.sl &&
+		error "symlink without key should fail (2)"
 
 	rm -f $tmpfile $DIR/onefile
 }

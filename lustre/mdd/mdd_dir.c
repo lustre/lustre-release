@@ -2120,7 +2120,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 
 	switch (cattr->la_mode & S_IFMT) {
 	case S_IFLNK: {
-		unsigned int symlen = strlen(spec->u.sp_symname) + 1;
+		unsigned int symlen = spec->u.sp_symname.ln_namelen + 1;
 
 		if (symlen > m->mdd_dt_conf.ddp_symlink_max)
 			RETURN(-ENAMETOOLONG);
@@ -2213,8 +2213,8 @@ static int mdd_declare_create_object(const struct lu_env *env,
 	}
 
 	if (S_ISLNK(attr->la_mode)) {
-		const char *target_name = spec->u.sp_symname;
-		int sym_len = strlen(target_name);
+		const char *target_name = spec->u.sp_symname.ln_name;
+		int sym_len = spec->u.sp_symname.ln_namelen;
 		const struct lu_buf *buf;
 
 		buf = mdd_buf_get_const(env, target_name, sym_len);
@@ -2447,8 +2447,8 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 
 	if (S_ISLNK(attr->la_mode)) {
 		struct dt_object *dt = mdd_object_child(son);
-		const char *target_name = spec->u.sp_symname;
-		int sym_len = strlen(target_name);
+		const char *target_name = spec->u.sp_symname.ln_name;
+		int sym_len = spec->u.sp_symname.ln_namelen;
 		loff_t pos = 0;
 
 		buf = mdd_buf_get_const(env, target_name, sym_len);
@@ -3802,7 +3802,9 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 
 		lum->lum_hash_type |= cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
 	} else if (S_ISLNK(attr->la_mode)) {
-		spec->u.sp_symname = sbuf->lb_buf;
+		spec->u.sp_symname.ln_name = sbuf->lb_buf;
+		/* don't count NUL */
+		spec->u.sp_symname.ln_namelen = sbuf->lb_len - 1;
 	} else if (S_ISREG(attr->la_mode)) {
 		spec->sp_cr_flags |= MDS_OPEN_DELAY_CREATE;
 		spec->sp_cr_flags &= ~MDS_OPEN_HAS_EA;

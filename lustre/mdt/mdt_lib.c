@@ -1288,35 +1288,38 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	uc->uc_suppgids[1] = -1;
 	uc->uc_umask = rec->cr_umask;
 
-        rr->rr_fid1 = &rec->cr_fid1;
-        rr->rr_fid2 = &rec->cr_fid2;
-        attr->la_mode = rec->cr_mode;
-        attr->la_rdev  = rec->cr_rdev;
-        attr->la_uid   = rec->cr_fsuid;
-        attr->la_gid   = rec->cr_fsgid;
-        attr->la_ctime = rec->cr_time;
-        attr->la_mtime = rec->cr_time;
-        attr->la_atime = rec->cr_time;
+	rr->rr_fid1 = &rec->cr_fid1;
+	rr->rr_fid2 = &rec->cr_fid2;
+	attr->la_mode = rec->cr_mode;
+	attr->la_rdev  = rec->cr_rdev;
+	attr->la_uid   = rec->cr_fsuid;
+	attr->la_gid   = rec->cr_fsgid;
+	attr->la_ctime = rec->cr_time;
+	attr->la_mtime = rec->cr_time;
+	attr->la_atime = rec->cr_time;
 	attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID | LA_TYPE |
-			 LA_CTIME | LA_MTIME | LA_ATIME;
-        memset(&sp->u, 0, sizeof(sp->u));
-        sp->sp_cr_flags = get_mrc_cr_flags(rec);
+		LA_CTIME | LA_MTIME | LA_ATIME;
+	memset(&sp->u, 0, sizeof(sp->u));
+	sp->sp_cr_flags = get_mrc_cr_flags(rec);
 
 	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
 	if (rc < 0)
 		RETURN(rc);
 
 	if (S_ISLNK(attr->la_mode)) {
-                const char *tgt = NULL;
+		const char *tgt = NULL;
+		int sz;
 
-                req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_SYM);
-                if (req_capsule_get_size(pill, &RMF_SYMTGT, RCL_CLIENT)) {
-                        tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
-                        sp->u.sp_symname = tgt;
-                }
-                if (tgt == NULL)
-                        RETURN(-EFAULT);
-        } else {
+		req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_SYM);
+		sz = req_capsule_get_size(pill, &RMF_SYMTGT, RCL_CLIENT);
+		if (sz) {
+			tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
+			sp->u.sp_symname.ln_name = tgt;
+			sp->u.sp_symname.ln_namelen = sz - 1; /* skip NUL */
+		}
+		if (tgt == NULL)
+			RETURN(-EFAULT);
+	} else {
 		req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_ACL);
 		if (S_ISDIR(attr->la_mode) &&
 		    req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT) > 0) {

@@ -143,7 +143,7 @@ struct md_attr {
 struct md_op_spec {
 	union {
 		/** symlink target */
-		const char *sp_symname;
+		struct lu_name sp_symname;
 		/** eadata for regular files */
 		struct md_spec_reg {
 			void *eadata;
