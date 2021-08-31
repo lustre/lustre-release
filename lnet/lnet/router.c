@@ -120,7 +120,8 @@ MODULE_PARM_DESC(router_sensitivity_percentage,
 
 static void lnet_add_route_to_rnet(struct lnet_remotenet *rnet,
 				   struct lnet_route *route);
-static void lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
+static void lnet_del_route_from_rnet(struct lnet_nid *gw_nid,
+				     struct list_head *route_list,
 				     struct list_head *zombies);
 
 static int
@@ -181,7 +182,7 @@ lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
 	 * lr_nid can be a constituent NID of the peer
 	 */
 	lnet_del_route_from_rnet(
-		lnet_nid_to_nid4(&route->lr_gateway->lp_primary_nid),
+		&route->lr_gateway->lp_primary_nid,
 		&rnet->lrn_routes, l);
 
 	if (lp) {
@@ -813,7 +814,8 @@ lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 }
 
 void
-lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
+lnet_del_route_from_rnet(struct lnet_nid *gw_nid,
+			 struct list_head *route_list,
 			 struct list_head *zombies)
 {
 	struct lnet_peer *gateway;
@@ -822,8 +824,7 @@ lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 
 	list_for_each_entry_safe(route, tmp, route_list, lr_list) {
 		gateway = route->lr_gateway;
-		if (gw_nid != LNET_NID_ANY &&
-		    gw_nid != lnet_nid_to_nid4(&gateway->lp_primary_nid))
+		if (gw_nid && !nid_same(gw_nid, &gateway->lp_primary_nid))
 			continue;
 
 		/*
@@ -843,7 +844,7 @@ lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 }
 
 int
-lnet_del_route(__u32 net, lnet_nid_t gw_nid)
+lnet_del_route(__u32 net, struct lnet_nid *gw)
 {
 	LIST_HEAD(rnet_zombies);
 	struct lnet_remotenet *rnet;
@@ -851,23 +852,28 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 	struct list_head *rn_list;
 	struct lnet_peer_ni *lpni;
 	struct lnet_route *route;
+	struct lnet_nid gw_nid;
 	LIST_HEAD(zombies);
 	struct lnet_peer *lp = NULL;
 	int i = 0;
 
 	CDEBUG(D_NET, "Del route: net %s : gw %s\n",
-	       libcfs_net2str(net), libcfs_nid2str(gw_nid));
+	       libcfs_net2str(net), libcfs_nidstr(gw));
 
 	/* NB Caller may specify either all routes via the given gateway
 	 * or a specific route entry actual NIDs) */
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	lpni = lnet_find_peer_ni_locked(gw_nid);
+	if (gw)
+		lpni = lnet_peer_ni_find_locked(gw);
+	else
+		lpni = NULL;
 	if (lpni) {
 		lp = lpni->lpni_peer_net->lpn_peer;
 		LASSERT(lp);
-		gw_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+		gw_nid = lp->lp_primary_nid;
+		gw = &gw_nid;
 		lnet_peer_ni_decref_locked(lpni);
 	}
 
@@ -877,7 +883,7 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 			lnet_net_unlock(LNET_LOCK_EX);
 			return -ENOENT;
 		}
-		lnet_del_route_from_rnet(gw_nid, &rnet->lrn_routes,
+		lnet_del_route_from_rnet(gw, &rnet->lrn_routes,
 					 &zombies);
 		if (list_empty(&rnet->lrn_routes))
 			list_move(&rnet->lrn_list, &rnet_zombies);
@@ -888,7 +894,7 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 		rn_list = &the_lnet.ln_remote_nets_hash[i];
 
 		list_for_each_entry_safe(rnet, tmp, rn_list, lrn_list) {
-			lnet_del_route_from_rnet(gw_nid, &rnet->lrn_routes,
+			lnet_del_route_from_rnet(gw, &rnet->lrn_routes,
 						 &zombies);
 			if (list_empty(&rnet->lrn_routes))
 				list_move(&rnet->lrn_list, &rnet_zombies);
@@ -927,9 +933,9 @@ delete_zombies:
 }
 
 void
-lnet_destroy_routes (void)
+lnet_destroy_routes(void)
 {
-	lnet_del_route(LNET_NET_ANY, LNET_NID_ANY);
+	lnet_del_route(LNET_NET_ANY, NULL);
 }
 
 int lnet_get_rtr_pool_cfg(int cpt, struct lnet_ioctl_pool_cfg *pool_cfg)

@@ -637,7 +637,7 @@ lnet_peer_table_del_rtrs_locked(struct lnet_net *net,
 {
 	struct lnet_peer_ni	*lp;
 	struct lnet_peer_ni	*tmp;
-	lnet_nid_t		gw_nid;
+	struct lnet_nid		gw_nid;
 	int			i;
 
 	for (i = 0; i < LNET_PEER_HASH_SIZE; i++) {
@@ -649,12 +649,10 @@ lnet_peer_table_del_rtrs_locked(struct lnet_net *net,
 			if (!lnet_isrouter(lp))
 				continue;
 
-			/* FIXME handle large-addr nid */
-			gw_nid = lnet_nid_to_nid4(
-				&lp->lpni_peer_net->lpn_peer->lp_primary_nid);
+			gw_nid = lp->lpni_peer_net->lpn_peer->lp_primary_nid;
 
 			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_del_route(LNET_NET_ANY, gw_nid);
+			lnet_del_route(LNET_NET_ANY, &gw_nid);
 			lnet_net_lock(LNET_LOCK_EX);
 		}
 	}

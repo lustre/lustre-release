@@ -616,7 +616,7 @@ void lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 			time64_t when);
 int lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 		   __u32 priority, __u32 sensitivity);
-int lnet_del_route(__u32 net, lnet_nid_t gw_nid);
+int lnet_del_route(__u32 net, struct lnet_nid *gw_nid);
 void lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
 		     struct list_head *rt_list);
 void lnet_destroy_routes(void);

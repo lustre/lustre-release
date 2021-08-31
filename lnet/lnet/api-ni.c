@@ -3970,8 +3970,9 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
+		lnet_nid4_to_nid(config->cfg_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_del_route(config->cfg_net, config->cfg_nid);
+		rc = lnet_del_route(config->cfg_net, &nid);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
