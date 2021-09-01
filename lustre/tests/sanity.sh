@@ -25145,7 +25145,7 @@ check_lfs_df() {
 	[ "$1" == "blocks" ] && inodes= || inodes="-i"
 
 	for count in {1..100}; do
-		cancel_lru_locks
+		do_rpc_nodes "$CLIENTS" cancel_lru_locks
 		sync; sleep 0.2
 
 		# read the lines of interest
