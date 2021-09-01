@@ -3340,6 +3340,9 @@ test_42() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
 	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
 	setup_pcc_mapping $SINGLEAGT \
@@ -3354,6 +3357,32 @@ test_42() {
 	check_lpcc_state $file "readonly"
 }
 run_test 42 "PCC attach without attach ID specified"
+
+test_43() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 60
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"size\<{100M}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	echo "attach_root_user_data" > $file || error "echo $file failed"
+
+	do_facet $SINGLEAGT $LFS pcc state $file
+	# Attach by non-root user should fail.
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -r $file &&
+		error "PCC attach -r $file should fail for non-root user"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc state $file
+	check_lpcc_state $file "none"
+}
+run_test 43 "Auto attach at open() should add capacity owner check"
 
 test_44() {
 	local loopfile="$TMP/$tfile"
@@ -3515,6 +3544,73 @@ test_45() {
 	rm -f $DIR/$tfile.lck
 }
 run_test 45 "Concurrent read access from two mount points"
+
+test_46() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local fsuuid=$($LFS getname $MOUNT | awk '{print $1}')
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev client $loopfile $mntpt 60
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1\ mmap_conv=0"
+	$LCTL pcc list $MOUNT
+
+	local mode=$($LCTL get_param -n llite.$fsuuid.pcc_mode)
+	$RUNAS id
+
+	echo "Mode: $mode"
+	echo "QQQQQ" > $file || error "write $file failed"
+	chmod 664 $file || error "chomd $file failed"
+
+	$LCTL set_param llite.$fsuuid.pcc_mode="0" ||
+		error "Set PCC mode failed"
+	stack_trap "$LCTL set_param llite.$fsuuid.pcc_mode=$mode" EXIT
+	$RUNAS $LFS pcc attach -r $file &&
+		error "User should not attach $file"
+	$RUNAS cat $file || error "cat $file failed"
+	check_lpcc_state $file "none" client
+
+	$LCTL set_param llite.$fsuuid.pcc_mode="0400" ||
+		error "Set PCC mode failed"
+	stack_trap "$LCTL set_param llite.$fsuuid.pcc_mode=$mode" EXIT
+	$RUNAS $LFS pcc attach -r $file &&
+		error "User should not attach $file"
+	$RUNAS cat $file || error "cat $file failed"
+	check_lpcc_state $file "none" client
+
+	$LCTL set_param llite.$fsuuid.pcc_mode="0004" ||
+		error "Set PCC mode failed"
+	$RUNAS cat $file || error "cat $file failed"
+	$LFS pcc state $file
+	check_lpcc_state $file "readonly" client
+	$RUNAS $LFS pcc detach $file || error "Detach $file failed"
+
+	$RUNAS stat $file || error "stat $file failed"
+	$LFS pcc attach -r $file || error "failed to attach $file"
+	check_lpcc_state $file "readonly" client
+	$RUNAS $LFS pcc detach $file || error "failed to detach $file"
+
+	$LCTL set_param llite.$fsuuid.pcc_mode="0040" ||
+		error "Set PCC mode failed"
+	chmod 660 $file || error "chmod $file failed"
+	$RUNAS cat $file || error "cat $file failed"
+	$LFS pcc state $file
+	check_lpcc_state $file "readonly" client
+	$RUNAS $LFS pcc detach $file || error "failed to detach $file"
+
+	$RUNAS $LFS pcc attach -r $file || error "attach $file failed"
+	stat $file || error "stat $file failed"
+	$LFS pcc state $file
+	check_lpcc_state $file "readonly" client
+	$RUNAS $LFS pcc detach $file || error "Detach $file failed"
+}
+run_test 46 "Verify PCC mode setting works correctly"
 
 test_96() {
 	local loopfile="$TMP/$tfile"

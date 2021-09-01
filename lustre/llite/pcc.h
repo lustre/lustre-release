@@ -171,6 +171,7 @@ struct pcc_super {
 	/* Size threshold for asynchrous PCC-RO attach in background. */
 	__u64			 pccs_async_threshold;
 	bool			 pccs_async_affinity;
+	umode_t			 pccs_mode;
 };
 
 struct pcc_inode {
@@ -286,6 +287,7 @@ int pcc_ioctl_detach(struct inode *inode, __u32 *flags);
 int pcc_ioctl_state(struct file *file, struct inode *inode,
 		    struct lu_pcc_state *state);
 void pcc_file_init(struct pcc_file *pccf);
+bool pcc_inode_permission(struct inode *inode);
 int pcc_file_open(struct inode *inode, struct file *file);
 void pcc_file_release(struct inode *inode, struct file *file);
 ssize_t pcc_file_read_iter(struct kiocb *iocb, struct iov_iter *iter,

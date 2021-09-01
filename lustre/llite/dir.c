@@ -2867,7 +2867,7 @@ out_state_free:
 		if (!S_ISREG(inode2->i_mode))
 			GOTO(out_iput, rc = -EINVAL);
 
-		if (!inode_owner_or_capable(&nop_mnt_idmap, inode2))
+		if (!pcc_inode_permission(inode2))
 			GOTO(out_iput, rc = -EPERM);
 
 		rc = pcc_ioctl_detach(inode2, &detach->pccd_flags);

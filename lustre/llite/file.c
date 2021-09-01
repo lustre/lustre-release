@@ -4866,7 +4866,7 @@ out_ladvise:
 		if (!S_ISREG(inode->i_mode))
 			RETURN(-EINVAL);
 
-		if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
+		if (!pcc_inode_permission(inode))
 			RETURN(-EPERM);
 
 		OBD_ALLOC_PTR(attach);
@@ -4896,7 +4896,7 @@ out_pcc:
 		if (!S_ISREG(inode->i_mode))
 			GOTO(out_detach_free, rc = -EINVAL);
 
-		if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
+		if (!pcc_inode_permission(inode))
 			GOTO(out_detach_free, rc = -EPERM);
 
 		rc = pcc_ioctl_detach(inode, &detach->pccd_flags);

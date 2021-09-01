@@ -130,6 +130,7 @@ int pcc_super_init(struct pcc_super *super)
 	INIT_LIST_HEAD(&super->pccs_datasets);
 	super->pccs_generation = 1;
 	super->pccs_async_threshold = PCC_DEFAULT_ASYNC_THRESHOLD;
+	super->pccs_mode = S_IRUSR;
 
 	return 0;
 }
@@ -2299,6 +2300,16 @@ static void pcc_io_fini(struct inode *inode, enum pcc_io_type iot,
 		wake_up_all(&pcci->pcci_waitq);
 }
 
+bool pcc_inode_permission(struct inode *inode)
+{
+	umode_t mask = inode->i_mode & ll_i2pccs(inode)->pccs_mode;
+
+	return (mask & (S_IRUSR | S_IXUSR) &&
+		inode_owner_or_capable(&nop_mnt_idmap, inode)) ||
+	       (mask & (S_IRGRP | S_IXGRP) && in_group_p(inode->i_gid)) ||
+	       (mask & (S_IROTH | S_IXOTH));
+}
+
 int pcc_file_open(struct inode *inode, struct file *file)
 {
 	struct pcc_inode *pcci;
@@ -2330,7 +2341,7 @@ int pcc_file_open(struct inode *inode, struct file *file)
 		if (pcc_may_auto_attach(inode, PIT_OPEN))
 			rc = pcc_try_auto_attach(inode, &cached, PIT_OPEN);
 
-		if (rc == 0 && !cached)
+		if (rc == 0 && !cached && pcc_inode_permission(inode))
 			rc = pcc_try_readonly_open_attach(inode, file, &cached);
 
 		if (rc < 0)
@@ -3993,6 +4004,9 @@ static int pcc_readonly_attach_sync(struct file *file,
 		CDEBUG(D_CACHE,
 		       "PCC-RO caching for "DFID" not allowed, rc = %d\n",
 		       PFID(ll_inode2fid(inode)), rc);
+		/* Ignore EEXIST error if the file has already attached. */
+		if (rc == -EEXIST)
+			rc = 0;
 		RETURN(rc);
 	}
 

@@ -673,6 +673,38 @@ static ssize_t pcc_async_affinity_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(pcc_async_affinity);
 
+static ssize_t pcc_mode_show(struct kobject *kobj, struct attribute *attr,
+			      char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+
+	return sprintf(buffer, "0%o\n", super->pccs_mode);
+
+}
+
+static ssize_t pcc_mode_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+	__u32 mode;
+	int rc;
+
+	rc = kstrtouint(buffer, 8, &mode);
+	if (rc)
+		return rc;
+
+	if (mode & ~S_IRWXUGO)
+		return -EINVAL;
+
+	super->pccs_mode = mode;
+	return count;
+}
+LUSTRE_RW_ATTR(pcc_mode);
+
 static ssize_t checksums_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
@@ -2306,6 +2338,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_filename_enc_use_old_base64.attr,
 #endif
 	&lustre_attr_pcc_async_threshold.attr,
+	&lustre_attr_pcc_mode.attr,
 	&lustre_attr_pcc_async_affinity.attr,
 	NULL,
 };
