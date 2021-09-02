@@ -1991,6 +1991,10 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh != NULL);
 	LASSERT(oh->ot_handle == NULL);
+	if (unlikely(ldiskfs_track_declares_assert != 0)) {
+		LASSERT(oti->oti_r_locks == 0);
+		LASSERT(oti->oti_w_locks == 0);
+	}
 
 	rc = dt_txn_hook_start(env, d, th);
 	if (rc != 0)
