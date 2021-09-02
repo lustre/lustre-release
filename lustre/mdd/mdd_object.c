@@ -2485,10 +2485,6 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	/* objects are already sorted */
-	mdd_write_lock(env, fst_o, DT_TGT_CHILD);
-	mdd_write_lock(env, snd_o, DT_TGT_CHILD);
-
 	rc = mdd_stripe_get(env, fst_o, fst_buf, XATTR_NAME_LOV);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(stop, rc);
@@ -2662,10 +2658,19 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc != 0)
 		GOTO(stop, rc);
 
+	/* objects are already sorted */
+	mdd_write_lock(env, fst_o, DT_TGT_CHILD);
+	mdd_write_lock(env, snd_o, DT_TGT_CHILD);
+
+	if (!mdd_object_exists(fst_o))
+		GOTO(unlock, rc = -ENOENT);
+	if (!mdd_object_exists(snd_o))
+		GOTO(unlock, rc = -ENOENT);
+
 	if (flags & SWAP_LAYOUTS_MDS_HSM) {
 		rc = mdd_xattr_hsm_replace(env, fst_o, snd_hsm_buf, handle);
 		if (rc < 0)
-			GOTO(stop, rc);
+			GOTO(unlock, rc);
 
 		rc = mdd_xattr_hsm_replace(env, snd_o, fst_hsm_buf, handle);
 		if (rc < 0) {
@@ -2675,13 +2680,13 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 				CERROR("%s: HSM error restoring "DFID": rc = %d/%d\n",
 				       mdd_obj_dev_name(fst_o),
 				       PFID(mdd_object_fid(fst_o)), rc, rc2);
-			GOTO(stop, rc);
+			GOTO(unlock, rc);
 		}
 	}
 
 	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle);
 	if (rc != 0)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 
 	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
 		rc = -EOPNOTSUPP;
@@ -2699,12 +2704,12 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, fst_o, handle,
 				      NULL);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 
 	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, snd_o, handle,
 				      NULL);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 	EXIT;
 
 out_restore:
@@ -2752,15 +2757,16 @@ out_restore:
 		}
 	}
 
+unlock:
+	mdd_write_unlock(env, snd_o);
+	mdd_write_unlock(env, fst_o);
+
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	/* Truncate local DOM data if all went well */
 	if (!rc && dom_o)
 		mdd_dom_data_truncate(env, mdd, dom_o);
-
-	mdd_write_unlock(env, snd_o);
-	mdd_write_unlock(env, fst_o);
 
 	lu_buf_free(fst_buf);
 	lu_buf_free(snd_buf);
