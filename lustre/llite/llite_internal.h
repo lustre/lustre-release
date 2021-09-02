@@ -351,6 +351,8 @@ static inline void trunc_sem_down_write(struct ll_trunc_sem *sem)
 static inline void trunc_sem_up_write(struct ll_trunc_sem *sem)
 {
 	atomic_set(&sem->ll_trunc_readers, 0);
+	/* match the smp_mb() in wait_var_event()->prepare_to_wait() */
+	smp_mb();
 	wake_up_var(&sem->ll_trunc_readers);
 }
 
