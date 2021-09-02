@@ -2000,7 +2000,7 @@ test_43b() {
 }
 run_test 43b "allow writing to multiple preferred mirror file"
 
-test_44() {
+test_44a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	rm -rf $DIR/$tdir
 	rm -rf $DIR/$tdir-1
@@ -2075,7 +2075,62 @@ test_44() {
 	diff $tf $tf.mirror~2 ||
 		error "splited file $tf.mirror~2 diffs from $tf"
 }
-run_test 44 "lfs mirror split check"
+run_test 44a "lfs mirror split check"
+
+test_44b() {
+	rm -rf $DIR/$tdir
+	local tf=$DIR/$tdir/$tfile
+
+	mkdir -p $DIR/$tdir || error "create directory failed"
+
+	echo XXX > $tf
+
+	# create 2 mirrors file
+	$LFS mirror extend -N -c1 $tf
+
+	echo YYY > $tf
+
+	verify_flr_state $tf "wp"
+
+	local str=$(cat $tf)
+
+	[[ $str == "YYY" ]] || error "$tf content is not YYY"
+
+	# get the non-stale mirror id
+	local ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' |
+			tr '\n' ' '))
+	local mirror_ids=($($LFS getstripe $tf |
+			awk '/lcme_mirror_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < 2; i++)); do
+		$LFS getstripe -I${ids[$i]} --component-flags $tf |
+			grep stale > /dev/null || break
+	done
+
+	[[ $i -ge 2 ]] && ( $LFS getstripe $tf; error "no stale mirror" )
+
+	$LFS getstripe $tf
+
+	# split the updated mirror, should fail
+	echo "split mirror_id ${mirror_ids[$i]} id ${ids[$i]}, should fail"
+	$LFS mirror split --mirror-id=${mirror_ids[$i]} $tf &> /dev/null &&
+		error "split --mirror-id=${mirror_ids[$i]} $tf should fail"
+
+	i=$(( 1 - i ))
+	# split the stale mirror
+	echo "split mirror_id ${mirror_ids[$i]} id ${ids[$i]}"
+	$LFS mirror split --mirror-id=${mirror_ids[$i]} -d $tf ||
+		error "mirror split --mirror-id=${mirror_ids[$i]} $tf failed"
+
+	echo "make sure there's no stale comp in the file"
+	# make sure there's no stale comp in the file
+	$LFS getstripe $tf | awk '/lcme_flags/{print $2}' | grep stale &&
+		( $LFS getstripe $tf; error "stale mirror file" )
+
+	str=$(cat $tf)
+	[[ $str == "YYY" ]] ||
+		( cat $tf; error "$tf content is not YYY after split" )
+}
+run_test 44b "mirror split does not create stale file"
 
 test_44c() {
 	local tf=$DIR/$tdir/$tfile

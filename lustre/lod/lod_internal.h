@@ -225,6 +225,10 @@ static inline __u8 lmv_inherit_rr_next(__u8 inherit_rr)
 	return inherit_rr - 1;
 }
 
+enum layout_verify_flags {
+	LVF_ALL_STALE		= BIT(0), /* check not all stale mirrors */
+};
+
 struct lod_mirror_entry {
 	__u16	lme_stale:1,
 		lme_prefer:1;
@@ -596,7 +600,7 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd);
 int lod_striping_load(const struct lu_env *env, struct lod_object *lo);
 int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
-			const struct lu_buf *buf);
+			const struct lu_buf *buf, enum layout_verify_flags lvf);
 void lod_dom_stripesize_recalc(struct lod_device *d);
 
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
@@ -666,7 +670,7 @@ void lod_fix_lmv_desc_pattern(__u32 *val);
 int lod_pools_init(struct lod_device *m, struct lustre_cfg *cfg);
 int lod_pools_fini(struct lod_device *m);
 int lod_parse_striping(const struct lu_env *env, struct lod_object *mo,
-		       const struct lu_buf *buf);
+		       const struct lu_buf *buf, enum layout_verify_flags lvf);
 int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 			   const struct lu_buf *buf);
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,

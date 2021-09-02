@@ -3417,7 +3417,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NONE)
 		lcm->lcm_flags = cpu_to_le32(LCM_FL_RDONLY);
 
-	rc = lod_striping_reload(env, lo, buf);
+	rc = lod_striping_reload(env, lo, buf, 0);
 	if (rc)
 		GOTO(out, rc);
 
@@ -3460,7 +3460,7 @@ static int lod_declare_layout_split(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	rc = lod_striping_reload(env, lo, mbuf);
+	rc = lod_striping_reload(env, lo, mbuf, LVF_ALL_STALE);
 	if (rc)
 		RETURN(rc);
 
@@ -4879,7 +4879,7 @@ static int lod_xattr_set(const struct lu_env *env,
 			if (rc)
 				RETURN(rc);
 
-			rc = lod_striping_reload(env, lo, buf);
+			rc = lod_striping_reload(env, lo, buf, LVF_ALL_STALE);
 			if (rc)
 				RETURN(rc);
 
