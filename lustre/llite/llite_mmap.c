@@ -279,15 +279,23 @@ static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	if (ll_sbi_has_fast_read(ll_i2sbi(inode))) {
 		/* do fast fault */
+		bool allow_retry = vmf->flags & FAULT_FLAG_ALLOW_RETRY;
 		bool has_retry = vmf->flags & FAULT_FLAG_RETRY_NOWAIT;
 
 		/* To avoid loops, instruct downstream to not drop mmap_sem */
-		vmf->flags |= FAULT_FLAG_RETRY_NOWAIT;
+		/**
+		 * only need FAULT_FLAG_ALLOW_RETRY prior to Linux 5.1
+		 * (6b4c9f4469819), where FAULT_FLAG_RETRY_NOWAIT is enough
+		 * to not drop mmap_sem when failed to lock the page.
+		 */
+		vmf->flags |= FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_RETRY_NOWAIT;
 		ll_cl_add(inode, env, NULL, LCC_MMAP);
 		fault_ret = ll_filemap_fault(vma, vmf);
 		ll_cl_remove(inode, env);
 		if (!has_retry)
 			vmf->flags &= ~FAULT_FLAG_RETRY_NOWAIT;
+		if (!allow_retry)
+			vmf->flags &= ~FAULT_FLAG_ALLOW_RETRY;
 
 		/* - If there is no error, then the page was found in cache and
 		 *   uptodate;
