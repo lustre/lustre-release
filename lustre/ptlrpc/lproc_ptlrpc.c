@@ -162,21 +162,23 @@ static struct ll_eopcode {
 
 const char *ll_opcode2str(__u32 opcode)
 {
-        /* When one of the assertions below fail, chances are that:
-         *     1) A new opcode was added in include/lustre/lustre_idl.h,
-         *        but is missing from the table above.
-         * or  2) The opcode space was renumbered or rearranged,
-         *        and the opcode_offset() function in
-         *        ptlrpc_internal.h needs to be modified.
-         */
-        __u32 offset = opcode_offset(opcode);
-        LASSERTF(offset < LUSTRE_MAX_OPCODES,
-                 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
-                 offset, LUSTRE_MAX_OPCODES);
-        LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
-                 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
-                 offset, ll_rpc_opcode_table[offset].opcode, opcode);
-        return ll_rpc_opcode_table[offset].opname;
+	__u32 offset = opcode_offset(opcode);
+
+	/* When one of the assertions below fail, chances are that:
+	 *     1) A new opcode was added in include/lustre/lustre_idl.h,
+	 *        but is missing from the table above.
+	 * or  2) The opcode space was renumbered or rearranged,
+	 *        and the opcode_offset() function in
+	 *        ptlrpc_internal.h needs to be modified.
+	 */
+	LASSERTF(offset < LUSTRE_MAX_OPCODES,
+		 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
+		 offset, LUSTRE_MAX_OPCODES);
+	LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
+		 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
+		 offset, ll_rpc_opcode_table[offset].opcode, opcode);
+
+	return ll_rpc_opcode_table[offset].opname;
 }
 
 const int ll_str2opcode(const char *ops)
@@ -194,8 +196,8 @@ const int ll_str2opcode(const char *ops)
 
 static const char *ll_eopcode2str(__u32 opcode)
 {
-        LASSERT(ll_eopcode_table[opcode].opcode == opcode);
-        return ll_eopcode_table[opcode].opname;
+	LASSERT(ll_eopcode_table[opcode].opcode == opcode);
+	return ll_eopcode_table[opcode].opname;
 }
 
 static void
@@ -215,45 +217,46 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 	svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
 					0);
 	if (!svc_stats)
-                return;
+		return;
 
 	if (dir)
 		svc_debugfs_entry = debugfs_create_dir(dir, root);
 	else
 		svc_debugfs_entry = root;
 
-        lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
-                             svc_counter_config, "req_waittime", "usec");
-        lprocfs_counter_init(svc_stats, PTLRPC_REQQDEPTH_CNTR,
-                             svc_counter_config, "req_qdepth", "reqs");
-        lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
-                             svc_counter_config, "req_active", "reqs");
-        lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
-                             svc_counter_config, "req_timeout", "sec");
-        lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
-                             svc_counter_config, "reqbuf_avail", "bufs");
-        for (i = 0; i < EXTRA_LAST_OPC; i++) {
-                char *units;
+	lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
+			     svc_counter_config, "req_waittime", "usec");
+	lprocfs_counter_init(svc_stats, PTLRPC_REQQDEPTH_CNTR,
+			     svc_counter_config, "req_qdepth", "reqs");
+	lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
+			     svc_counter_config, "req_active", "reqs");
+	lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
+			     svc_counter_config, "req_timeout", "sec");
+	lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
+			     svc_counter_config, "reqbuf_avail", "bufs");
+	for (i = 0; i < EXTRA_LAST_OPC; i++) {
+		char *units;
 
 		switch (i) {
-                case BRW_WRITE_BYTES:
-                case BRW_READ_BYTES:
-                        units = "bytes";
-                        break;
-                default:
-                        units = "reqs";
-                        break;
-                }
-                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
-                                     svc_counter_config,
-                                     ll_eopcode2str(i), units);
-        }
-        for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
-                __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                lprocfs_counter_init(svc_stats,
-                                     EXTRA_MAX_OPCODES + i, svc_counter_config,
-                                     ll_opcode2str(opcode), "usec");
-        }
+		case BRW_WRITE_BYTES:
+		case BRW_READ_BYTES:
+			units = "bytes";
+			break;
+		default:
+			units = "reqs";
+			break;
+		}
+		lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
+				     svc_counter_config,
+				     ll_eopcode2str(i), units);
+	}
+	for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
+		__u32 opcode = ll_rpc_opcode_table[i].opcode;
+
+		lprocfs_counter_init(svc_stats,
+				     EXTRA_MAX_OPCODES + i, svc_counter_config,
+				     ll_opcode2str(opcode), "usec");
+	}
 
 	debugfs_create_file(name, 0644, svc_debugfs_entry, svc_stats,
 			    &ldebugfs_stats_seq_fops);
@@ -264,30 +267,30 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 }
 
 static int
-ptlrpc_lprocfs_req_history_len_seq_show(struct seq_file *m, void *v)
+ptlrpc_lprocfs_req_buffer_history_len_seq_show(struct seq_file *m, void *v)
 {
 	struct ptlrpc_service *svc = m->private;
 	struct ptlrpc_service_part *svcpt;
-	int	total = 0;
-	int	i;
+	int total = 0;
+	int i;
 
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svcpt->scp_hist_nrqbds;
 
 	seq_printf(m, "%d\n", total);
+
 	return 0;
 }
 
-
-LDEBUGFS_SEQ_FOPS_RO(ptlrpc_lprocfs_req_history_len);
+LDEBUGFS_SEQ_FOPS_RO(ptlrpc_lprocfs_req_buffer_history_len);
 
 static int
-ptlrpc_lprocfs_req_history_max_seq_show(struct seq_file *m, void *n)
+ptlrpc_lprocfs_req_buffer_history_max_seq_show(struct seq_file *m, void *n)
 {
 	struct ptlrpc_service *svc = m->private;
 	struct ptlrpc_service_part *svcpt;
-	int	total = 0;
-	int	i;
+	int total = 0;
+	int i;
 
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svc->srv_hist_nrqbds_cpt_max;
@@ -297,9 +300,9 @@ ptlrpc_lprocfs_req_history_max_seq_show(struct seq_file *m, void *n)
 }
 
 static ssize_t
-ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+ptlrpc_lprocfs_req_buffer_history_max_seq_write(struct file *file,
+						const char __user *buffer,
+						size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
 	struct ptlrpc_service *svc = m->private;
@@ -341,7 +344,7 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 	return count;
 }
 
-LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_history_max);
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_buffer_history_max);
 
 static int
 ptlrpc_lprocfs_req_buffers_max_seq_show(struct seq_file *m, void *n)
@@ -529,19 +532,19 @@ static void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
  * Reads and prints policy status information for all policies of a PTLRPC
  * service.
  */
-static int ptlrpc_lprocfs_nrs_seq_show(struct seq_file *m, void *n)
+static int ptlrpc_lprocfs_nrs_policies_seq_show(struct seq_file *m, void *n)
 {
-	struct ptlrpc_service	       *svc = m->private;
-	struct ptlrpc_service_part     *svcpt;
-	struct ptlrpc_nrs	       *nrs;
-	struct ptlrpc_nrs_policy       *policy;
-	struct ptlrpc_nrs_pol_info     *infos;
-	struct ptlrpc_nrs_pol_info	tmp;
-	unsigned			num_pols;
-	unsigned			pol_idx = 0;
-	bool				hp = false;
-	int				i;
-	int				rc = 0;
+	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service_part *svcpt;
+	struct ptlrpc_nrs *nrs;
+	struct ptlrpc_nrs_policy *policy;
+	struct ptlrpc_nrs_pol_info *infos;
+	struct ptlrpc_nrs_pol_info tmp;
+	unsigned int num_pols;
+	unsigned int pol_idx = 0;
+	bool hp = false;
+	int i;
+	int rc = 0;
 	ENTRY;
 
 	/**
@@ -690,14 +693,13 @@ out:
 	RETURN(rc);
 }
 
-
 #define LPROCFS_NRS_WR_MAX_ARG (1024)
 /**
  * The longest valid command string is the maxium policy name size, plus the
  * length of the " reg" substring, plus the lenght of argument
  */
-#define LPROCFS_NRS_WR_MAX_CMD	(NRS_POL_NAME_MAX + sizeof(" reg") - 1 \
-				 + LPROCFS_NRS_WR_MAX_ARG)
+#define LPROCFS_NRS_WR_MAX_CMD (NRS_POL_NAME_MAX + sizeof(" reg") - 1 + \
+				LPROCFS_NRS_WR_MAX_ARG)
 
 /**
  * Starts and stops a given policy on a PTLRPC service.
@@ -707,17 +709,18 @@ out:
  * regular and high-priority (if the service has one) NRS head.
  */
 static ssize_t
-ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char __user *buffer,
-			     size_t count, loff_t *off)
+ptlrpc_lprocfs_nrs_policies_seq_write(struct file *file,
+				      const char __user *buffer,
+				      size_t count, loff_t *off)
 {
-	struct seq_file		       *m = file->private_data;
-	struct ptlrpc_service	       *svc = m->private;
-	enum ptlrpc_nrs_queue_type	queue = PTLRPC_NRS_QUEUE_BOTH;
-	char			       *cmd;
-	char			       *cmd_copy = NULL;
-	char			       *policy_name;
-	char			       *queue_name;
-	int				rc = 0;
+	struct seq_file *m = file->private_data;
+	struct ptlrpc_service *svc = m->private;
+	enum ptlrpc_nrs_queue_type queue = PTLRPC_NRS_QUEUE_BOTH;
+	char *cmd;
+	char *cmd_copy = NULL;
+	char *policy_name;
+	char *queue_name;
+	int rc = 0;
 	ENTRY;
 
 	if (count >= LPROCFS_NRS_WR_MAX_CMD)
@@ -787,7 +790,7 @@ out:
 	RETURN(rc < 0 ? rc : count);
 }
 
-LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs);
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_policies);
 
 /** @} nrs */
 
@@ -807,13 +810,13 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 
 	if (srhi->srhi_req != NULL &&
 	    srhi->srhi_seq > svcpt->scp_hist_seq_culled &&
-            srhi->srhi_seq <= seq) {
-                /* If srhi_req was set previously, hasn't been culled and
-                 * we're searching for a seq on or after it (i.e. more
-                 * recent), search from it onwards.
-                 * Since the service history is LRU (i.e. culled reqs will
-                 * be near the head), we shouldn't have to do long
-                 * re-scans */
+	    srhi->srhi_seq <= seq) {
+		/* If srhi_req was set previously, hasn't been culled and
+		 * we're searching for a seq on or after it (i.e. more
+		 * recent), search from it onwards.
+		 * Since the service history is LRU (i.e. culled reqs will
+		 * be near the head), we shouldn't have to do long re-scans.
+		 */
 		LASSERTF(srhi->srhi_seq == srhi->srhi_req->rq_history_seq,
 			 "%s:%d: seek seq %llu, request seq %llu\n",
 			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
@@ -832,15 +835,15 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 	while (e != &svcpt->scp_hist_reqs) {
 		req = list_entry(e, struct ptlrpc_request, rq_history_list);
 
-                if (req->rq_history_seq >= seq) {
-                        srhi->srhi_seq = req->rq_history_seq;
-                        srhi->srhi_req = req;
-                        return 0;
-                }
-                e = e->next;
-        }
+		if (req->rq_history_seq >= seq) {
+			srhi->srhi_seq = req->rq_history_seq;
+			srhi->srhi_req = req;
+			return 0;
+		}
+		e = e->next;
+	}
 
-        return -ENOENT;
+	return -ENOENT;
 }
 
 /*
@@ -927,10 +930,10 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 static void
 ptlrpc_lprocfs_svc_req_history_stop(struct seq_file *s, void *iter)
 {
-        struct ptlrpc_srh_iterator *srhi = iter;
+	struct ptlrpc_srh_iterator *srhi = iter;
 
-        if (srhi != NULL)
-                OBD_FREE(srhi, sizeof(*srhi));
+	if (srhi != NULL)
+		OBD_FREE(srhi, sizeof(*srhi));
 }
 
 static void *
@@ -974,30 +977,32 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 /* common ost/mdt so_req_printer */
 void target_print_req(void *seq_file, struct ptlrpc_request *req)
 {
-        /* Called holding srv_lock with irqs disabled.
-         * Print specific req contents and a newline.
-         * CAVEAT EMPTOR: check request message length before printing!!!
-         * You might have received any old crap so you must be just as
-         * careful here as the service's request parser!!! */
-        struct seq_file *sf = seq_file;
+	/* Called holding srv_lock with irqs disabled.
+	 * Print specific req contents and a newline.
+	 * CAVEAT EMPTOR: check request message length before printing!!!
+	 * You might have received any old crap so you must be just as
+	 * careful here as the service's request parser!!!
+	 */
+	struct seq_file *sf = seq_file;
 
-        switch (req->rq_phase) {
-        case RQ_PHASE_NEW:
-                /* still awaiting a service thread's attention, or rejected
-                 * because the generic request message didn't unpack */
-                seq_printf(sf, "<not swabbed>\n");
-                break;
-        case RQ_PHASE_INTERPRET:
-                /* being handled, so basic msg swabbed, and opc is valid
-                 * but racing with mds_handle() */
-        case RQ_PHASE_COMPLETE:
-                /* been handled by mds_handle() reply state possibly still
-                 * volatile */
-                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
-                break;
-        default:
-                DEBUG_REQ(D_ERROR, req, "bad phase %d", req->rq_phase);
-        }
+	switch (req->rq_phase) {
+	case RQ_PHASE_NEW:
+		/* still awaiting a service thread's attention, or rejected
+		 * because the generic request message didn't unpack
+		 */
+		seq_printf(sf, "<not swabbed>\n");
+		break;
+	case RQ_PHASE_INTERPRET:
+		/* being handled, so basic msg swabbed, and opc is valid
+		 * but racing with mds_handle().  fallthrough.
+		 */
+	case RQ_PHASE_COMPLETE:
+		/* been handled by mds_handle(), reply state may be volatile */
+		seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
+		break;
+	default:
+		DEBUG_REQ(D_ERROR, req, "bad phase %d", req->rq_phase);
+	}
 }
 EXPORT_SYMBOL(target_print_req);
 
@@ -1195,16 +1200,16 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 {
 	struct ldebugfs_vars ldebugfs_vars[] = {
 		{ .name	= "req_buffer_history_len",
-		  .fops	= &ptlrpc_lprocfs_req_history_len_fops,
+		  .fops	= &ptlrpc_lprocfs_req_buffer_history_len_fops,
 		  .data	= svc },
 		{ .name = "req_buffer_history_max",
-		  .fops	= &ptlrpc_lprocfs_req_history_max_fops,
+		  .fops	= &ptlrpc_lprocfs_req_buffer_history_max_fops,
 		  .data	= svc },
 		{ .name = "timeouts",
 		  .fops = &ptlrpc_lprocfs_timeouts_fops,
 		  .data = svc },
 		{ .name = "nrs_policies",
-		  .fops = &ptlrpc_lprocfs_nrs_fops,
+		  .fops = &ptlrpc_lprocfs_nrs_policies_fops,
 		  .data = svc },
 		{ .name = "req_buffers_max",
 		  .fops = &ptlrpc_lprocfs_req_buffers_max_fops,
@@ -1240,42 +1245,45 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount)
 {
-        struct lprocfs_stats *svc_stats;
-        __u32 op = lustre_msg_get_opc(req->rq_reqmsg);
-        int opc = opcode_offset(op);
+	struct lprocfs_stats *svc_stats;
+	__u32 op = lustre_msg_get_opc(req->rq_reqmsg);
+	int opc = opcode_offset(op);
 
-        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
-        if (svc_stats == NULL || opc <= 0)
-                return;
-        LASSERT(opc < LUSTRE_MAX_OPCODES);
-        if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
-                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, amount);
+	svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+	if (svc_stats == NULL || opc <= 0)
+		return;
+
+	LASSERT(opc < LUSTRE_MAX_OPCODES);
+	if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
+		lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, amount);
 }
 
 void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
 {
-        struct lprocfs_stats *svc_stats;
-        int idx;
+	struct lprocfs_stats *svc_stats;
+	int idx;
 
-        if (!req->rq_import)
-                return;
-        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
-        if (!svc_stats)
-                return;
-        idx = lustre_msg_get_opc(req->rq_reqmsg);
-        switch (idx) {
-        case OST_READ:
-                idx = BRW_READ_BYTES + PTLRPC_LAST_CNTR;
-                break;
-        case OST_WRITE:
-                idx = BRW_WRITE_BYTES + PTLRPC_LAST_CNTR;
-                break;
-        default:
-                LASSERTF(0, "unsupported opcode %u\n", idx);
-                break;
-        }
+	if (!req->rq_import)
+		return;
 
-        lprocfs_counter_add(svc_stats, idx, bytes);
+	svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+	if (!svc_stats)
+		return;
+
+	idx = lustre_msg_get_opc(req->rq_reqmsg);
+	switch (idx) {
+	case OST_READ:
+		idx = BRW_READ_BYTES + PTLRPC_LAST_CNTR;
+		break;
+	case OST_WRITE:
+		idx = BRW_WRITE_BYTES + PTLRPC_LAST_CNTR;
+		break;
+	default:
+		LASSERTF(0, "unsupported opcode %u\n", idx);
+		break;
+	}
+
+	lprocfs_counter_add(svc_stats, idx, bytes);
 }
 
 EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
