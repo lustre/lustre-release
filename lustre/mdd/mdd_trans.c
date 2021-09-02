@@ -39,6 +39,9 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 	if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 		return ERR_PTR(-EINPROGRESS);
 
+	if (mdd->mdd_child->dd_rdonly)
+		return ERR_PTR(-EROFS);
+
 	th = mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
 	if (IS_ERR(th)) {
 		barrier_exit(mdd->mdd_bottom);

@@ -2581,6 +2581,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	struct md_object *next = mdt_object_child(o);
 	struct md_attr *ma = &info->mti_attr;
 	struct lu_fid *ofid = &info->mti_tmp_fid1;
+	bool rdonly = mdt_rdonly(info->mti_exp);
 	int rc = 0;
 	int rc2;
 	u64 open_flags;
@@ -2639,7 +2640,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	}
 
 	if (S_ISREG(lu_object_attr(&o->mot_obj)) &&
-	    ma->ma_attr.la_valid & (LA_LSIZE | LA_LBLOCKS)) {
+	    ma->ma_attr.la_valid & (LA_LSIZE | LA_LBLOCKS) && !rdonly) {
 		rc2 = mdt_lsom_update(info, o, false);
 		if (rc2 < 0) {
 			CDEBUG(D_INODE,
@@ -2662,7 +2663,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	     open_flags & MDS_FMODE_WRITE) && (ma->ma_valid & MA_INODE) &&
 	    (ma->ma_attr.la_valid & LA_ATIME ||
 	     ma->ma_attr.la_valid & LA_MTIME ||
-	     ma->ma_attr.la_valid & LA_CTIME)) {
+	     ma->ma_attr.la_valid & LA_CTIME) && !rdonly) {
 		ma->ma_valid = MA_INODE;
 		ma->ma_attr_flags |= MDS_CLOSE_UPDATE_TIMES;
 		ma->ma_attr.la_valid &= (LA_ATIME | LA_MTIME | LA_CTIME);
