@@ -810,7 +810,7 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 
 	/* look up ldlm resource associated with global index */
 	fid_build_reg_res_name(&qti->qti_fid, &qti->qti_resid);
-	res = ldlm_resource_get(pool->qpi_qmt->qmt_ns, NULL, &qti->qti_resid,
+	res = ldlm_resource_get(pool->qpi_qmt->qmt_ns, &qti->qti_resid,
 				LDLM_PLAIN, 0);
 	if (IS_ERR(res)) {
 		/* this might happen if no slaves have enqueued global quota
@@ -869,8 +869,7 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 
 	lquota_generate_fid(&qti->qti_fid, pool->qpi_rtype, lqe_qtype(lqe));
 	fid_build_quota_res_name(&qti->qti_fid, &lqe->lqe_id, &qti->qti_resid);
-	res = ldlm_resource_get(qmt->qmt_ns, NULL, &qti->qti_resid, LDLM_PLAIN,
-				0);
+	res = ldlm_resource_get(qmt->qmt_ns, &qti->qti_resid, LDLM_PLAIN, 0);
 	if (IS_ERR(res)) {
 		/* this might legitimately happens if slaves haven't had the
 		 * opportunity to enqueue quota lock yet. */

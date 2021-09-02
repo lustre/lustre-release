@@ -698,7 +698,7 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 
 	ENTRY;
 
-	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace, NULL,
+	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace,
 				&arg->lpa_resid, LDLM_EXTENT, 0);
 	if (IS_ERR(res)) {
 		CDEBUG(D_DLMTRACE, "Failed to get resource for resid %llu/%llu\n",

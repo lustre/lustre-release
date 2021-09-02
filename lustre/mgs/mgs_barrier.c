@@ -133,7 +133,7 @@ static int mgs_barrier_glimpse_lock(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	res = ldlm_resource_get(mgs->mgs_obd->obd_namespace, NULL, &res_id,
+	res = ldlm_resource_get(mgs->mgs_obd->obd_namespace, &res_id,
 				LDLM_PLAIN, 0);
 	if (IS_ERR(res))
 		RETURN(PTR_ERR(res));

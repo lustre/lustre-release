@@ -65,7 +65,7 @@ static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
 
 	ENTRY;
 
-	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace, NULL,
+	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace,
 				&arg->lpa_resid, LDLM_IBITS, 0);
 	if (IS_ERR(res)) {
 		CDEBUG(D_DLMTRACE,
@@ -713,8 +713,7 @@ void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
 	struct ldlm_resource *res;
 
 	fid_build_reg_res_name(mdt_object_fid(mo), &resid);
-	res = ldlm_resource_get(mdt->mdt_namespace, NULL, &resid,
-				LDLM_IBITS, 1);
+	res = ldlm_resource_get(mdt->mdt_namespace, &resid, LDLM_IBITS, 1);
 	if (IS_ERR(res))
 		return;
 
@@ -1341,8 +1340,7 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 	ENTRY;
 
 	fid_build_reg_res_name(fid, &resid);
-	res = ldlm_resource_get(mdt->mdt_namespace, NULL, &resid,
-				LDLM_IBITS, 1);
+	res = ldlm_resource_get(mdt->mdt_namespace, &resid, LDLM_IBITS, 1);
 	if (IS_ERR(res))
 		RETURN(-ENOENT);
 

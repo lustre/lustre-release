@@ -1025,8 +1025,9 @@ static int mdc_get_lock_handle(const struct lu_env *env, struct osc_object *osc,
 
 		resname = &osc_env_info(env)->oti_resname;
 		fid_build_reg_res_name(lu_object_fid(osc2lu(osc)), resname);
-		res = ldlm_resource_get(osc_export(osc)->exp_obd->obd_namespace,
-					NULL, resname, LDLM_IBITS, 0);
+		res = ldlm_resource_get(osc_export(osc)->
+							exp_obd->obd_namespace,
+					resname, LDLM_IBITS, 0);
 		if (IS_ERR(res))
 			CERROR("No lock resource for "DFID"\n",
 				PFID(lu_object_fid(osc2lu(osc))));

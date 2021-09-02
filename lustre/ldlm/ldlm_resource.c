@@ -1481,9 +1481,8 @@ static void ldlm_resource_free(struct ldlm_resource *res)
  * Returns: referenced, unlocked ldlm_resource or ERR_PTR
  */
 struct ldlm_resource *
-ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
-		  const struct ldlm_res_id *name, enum ldlm_type type,
-		  int create)
+ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
+		  enum ldlm_type type, int create)
 {
 	struct hlist_node	*hnode;
 	struct ldlm_resource	*res = NULL;
@@ -1493,7 +1492,6 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 	int hash;
 
 	LASSERT(ns != NULL);
-	LASSERT(parent == NULL);
 	LASSERT(ns->ns_rs_hash != NULL);
 	LASSERT(name->name[0] != 0);
 

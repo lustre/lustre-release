@@ -398,9 +398,9 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 			resname = &osc_env_info(env)->oti_resname;
 			ostid_build_res_name(&oinfo->loi_oi, resname);
-			res = ldlm_resource_get(
-				osc_export(cl2osc(obj))->exp_obd->obd_namespace,
-				NULL, resname, LDLM_EXTENT, 0);
+			res = ldlm_resource_get(osc_export(cl2osc(obj))->
+							exp_obd->obd_namespace,
+						resname, LDLM_EXTENT, 0);
 			if (IS_ERR(res))
 				CERROR("No lock resource\n");
 			else
