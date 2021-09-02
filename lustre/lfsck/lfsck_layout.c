@@ -2225,6 +2225,9 @@ static int __lfsck_layout_update_pfid(const struct lu_env *env,
 	ff->ff_range = cpu_to_le32(range);
 	lfsck_buf_init(&buf, ff, sizeof(*ff));
 
+	if (!dt_object_exists(child) || lfsck_is_dead_obj(child))
+		return 0;
+
 	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
@@ -2237,7 +2240,10 @@ static int __lfsck_layout_update_pfid(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_xattr_set(env, child, &buf, XATTR_NAME_FID, 0, handle);
+	dt_write_lock(env, child, 0);
+	if (dt_object_exists(child) && !lfsck_is_dead_obj(child))
+		rc = dt_xattr_set(env, child, &buf, XATTR_NAME_FID, 0, handle);
+	dt_write_unlock(env, child);
 
 	GOTO(stop, rc);
 
@@ -5248,11 +5254,6 @@ static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 	if (IS_ERR(obj))
 		GOTO(log, rc = PTR_ERR(obj));
 
-	dt_write_lock(env, obj, 0);
-	if (unlikely(dt_object_exists(obj) == 0 ||
-		     lfsck_is_dead_obj(obj)))
-		GOTO(unlock, rc = 0);
-
 	rc = __lfsck_layout_update_pfid(env, com, obj,
 					&lrl->lrl_ff_client.ff_parent,
 					&lrl->lrl_ff_client.ff_layout,
@@ -5260,10 +5261,6 @@ static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 					lrl->lrl_ff_client.ff_range,
 					lrl->lrl_ff_client.ff_parent.f_ver);
 
-	GOTO(unlock, rc);
-
-unlock:
-	dt_write_unlock(env, obj);
 	lfsck_object_put(env, obj);
 
 log:
