@@ -3362,12 +3362,18 @@ find:
 		}
 	}
 
+	/* we can't hold object lock over transaction start
+	 * and we don't actually need the object to be locked */
+	mdd_write_unlock(env, mdd_obj);
+
 	/* FYI, only the bottom 32 bits of open_flags are recorded */
 	mdd_changelog(env, type, open_flags, md_dev, mdd_object_fid(mdd_obj));
 
-	EXIT;
+	GOTO(unlocked, rc);
+
 out:
 	mdd_write_unlock(env, mdd_obj);
+unlocked:
 	return rc;
 }
 
