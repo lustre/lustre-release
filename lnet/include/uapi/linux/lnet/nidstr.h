@@ -84,27 +84,16 @@ static inline char *libcfs_nid2str(lnet_nid_t nid)
 	return libcfs_nid2str_r(nid, libcfs_next_nidstring(),
 				LNET_NIDSTR_SIZE);
 }
-char *libcfs_nidstr_r(const struct lnet_nid *nid,
-			char *buf, __kernel_size_t buf_size);
-static inline char *libcfs_nidstr(const struct lnet_nid *nid)
-{
-	return libcfs_nidstr_r(nid, libcfs_next_nidstring(),
-				 LNET_NIDSTR_SIZE);
-}
+
 __u32 libcfs_str2net(const char *str);
 lnet_nid_t libcfs_str2nid(const char *str);
-int libcfs_strnid(struct lnet_nid *nid, const char *str);
 int libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 int libcfs_num_parse(char *str, int len, struct list_head *list);
 char *libcfs_id2str(struct lnet_process_id id);
-char *libcfs_idstr(struct lnet_processid *id);
 void cfs_free_nidlist(struct list_head *list);
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(lnet_nid_t nid, struct list_head *list);
-int cfs_match_nid_net(struct lnet_nid *nid, __u32 net,
-		      struct list_head *net_num_list,
-		      struct list_head *addr);
 int cfs_match_net(__u32 net_id, __u32 net_type,
 		  struct list_head *net_num_list);
 

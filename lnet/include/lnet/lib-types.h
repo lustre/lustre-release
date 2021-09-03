@@ -53,6 +53,22 @@
 #include <uapi/linux/lnet/lnetctl.h>
 #include <uapi/linux/lnet/nidstr.h>
 
+char *libcfs_nidstr_r(const struct lnet_nid *nid,
+		      char *buf, size_t buf_size);
+
+static inline char *libcfs_nidstr(const struct lnet_nid *nid)
+{
+	return libcfs_nidstr_r(nid, libcfs_next_nidstring(),
+			       LNET_NIDSTR_SIZE);
+}
+
+int libcfs_strnid(struct lnet_nid *nid, const char *str);
+char *libcfs_idstr(struct lnet_processid *id);
+
+int cfs_match_nid_net(struct lnet_nid *nid, u32 net,
+		      struct list_head *net_num_list,
+		      struct list_head *addr);
+
 /* Max payload size */
 #define LNET_MAX_PAYLOAD	LNET_MTU
 
