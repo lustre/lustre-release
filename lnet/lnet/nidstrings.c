@@ -973,8 +973,8 @@ EXPORT_SYMBOL(libcfs_nid2str_r);
 char *
 libcfs_nidstr_r(const struct lnet_nid *nid, char *buf, size_t buf_size)
 {
-	__u32 nnum = be16_to_cpu(nid->nid_num);
-	__u32 lnd  = nid->nid_type;
+	__u32 nnum;
+	__u32 lnd;
 	struct netstrfns *nf;
 
 	if (LNET_NID_IS_ANY(nid)) {
@@ -983,6 +983,8 @@ libcfs_nidstr_r(const struct lnet_nid *nid, char *buf, size_t buf_size)
 		return buf;
 	}
 
+	nnum = be16_to_cpu(nid->nid_num);
+	lnd = nid->nid_type;
 	nf = libcfs_lnd2netstrfns(lnd);
 	if (nf) {
 		size_t addr_len;
