@@ -2349,7 +2349,8 @@ static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 	int			count;
 
 	dt_object_fini(&obj->opo_obj);
-	lu_object_header_fini(h);
+	if (h)
+		lu_object_header_fini(h);
 	list_for_each_entry_safe(oxe, tmp, &obj->opo_xattr_list, oxe_list) {
 		list_del_init(&oxe->oxe_list);
 		count = atomic_read(&oxe->oxe_ref);
