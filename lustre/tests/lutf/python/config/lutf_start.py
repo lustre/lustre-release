@@ -36,6 +36,7 @@ class LUTF:
 	def __init__(self):
 		self.nodes = {}
 		self.__collect_nodes()
+		self.__cfg_yaml = {}
 
 	def __collect_nodes(self):
 		for k in os.environ:
@@ -194,6 +195,9 @@ class LUTF:
 		if 'PATH' in os.environ and host != os.environ['HOSTNAME']:
 			cmd += " PATH="+os.environ['PATH']
 
+		if 'PYTHONPATH' in os.environ and host != os.environ['HOSTNAME']:
+			cmd += " PYTHONPATH="+os.environ['PYTHONPATH']
+
 		# start the LUTF on the remote
 		if cmd:
 			cmd += ' '
@@ -219,15 +223,22 @@ class LUTF:
 				print(e)
 				rc = -22
 
+		self.__cfg_yaml = cfg
 		return cfg, rc
 
 	def __collect_lutf_logs(self, host):
 		if host != os.environ['HOSTNAME']:
 			rfname = "lutf."+host+".tar.gz"
-			tmp_dir = cfg['lutf']['tmp-dir']
+			tmp_dir = self.__cfg_yaml['lutf']['tmp-dir']
 			rfpath = os.path.join(os.sep, 'tmp', rfname)
-			cmd = "tar -czf "+rfpath+" -C "+os.sep+" "+tmp_dir
-			lutf_exec_remote_cmd(cmd, host);
+			if tmp_dir[-1] == os.sep:
+				landing_dir = os.path.split(tmp_dir[:-1])[0]
+				tar_dir = os.path.split(tmp_dir[:-1])[1]
+			else:
+				landing_dir = os.path.split(tmp_dir)[0]
+				tar_dir = os.path.split(tmp_dir)[1]
+			cmd = "tar -czf "+rfpath+" -C "+landing_dir+" "+tar_dir
+			lutf_exec_remote_cmd(cmd, host, ignore_err=True);
 			lutf_get_file(host, rfpath, os.path.join(tmp_dir, rfname))
 
 	def run(self):
@@ -235,12 +246,12 @@ class LUTF:
 		mname = ''
 
 		if not os.environ['HOSTNAME'] in list(self.nodes.values()):
+			i = 1
 			for k in list(self.nodes.keys()):
-				i = 1
 				if 'CLIENTS' in k:
 					i += 1
-				key = "CLIENTS"+str(i)
-				self.nodes[key] =  os.environ['HOSTNAME']
+			key = "CLIENTS"+str(i)
+			self.nodes[key] =  os.environ['HOSTNAME']
 
 		agent_list = list(self.nodes.keys())
 		if len(agent_list) == 0:
