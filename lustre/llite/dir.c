@@ -453,9 +453,10 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		},
 	};
 	bool encrypt = false;
+	int hash_flags;
 	int err;
-	ENTRY;
 
+	ENTRY;
 	if (unlikely(!lmv_user_magic_supported(lump->lum_magic)))
 		RETURN(-EINVAL);
 
@@ -493,6 +494,10 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 			lump->lum_hash_type = (lump->lum_hash_type ^ type) |
 					      LMV_HASH_TYPE_FNV_1A_64;
 	}
+
+	hash_flags = lump->lum_hash_type & ~LMV_HASH_TYPE_MASK;
+	if (hash_flags & ~LMV_HASH_FLAG_KNOWN)
+		RETURN(-EINVAL);
 
 	if (unlikely(!lmv_user_magic_supported(cpu_to_le32(lump->lum_magic))))
 		lustre_swab_lmv_user_md(lump);

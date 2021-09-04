@@ -3019,6 +3019,11 @@ static int build_prev_component(struct llapi_layout **layout,
 	return 0;
 }
 
+#ifndef LCME_TEMPLATE_FLAGS
+#define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
+				 LCME_FL_EXTENSION)
+#endif
+
 static int build_layout_from_yaml_node(struct cYAML *node,
 				       struct llapi_layout **layout,
 				       struct lfs_setstripe_args *lsa,
@@ -3453,6 +3458,11 @@ enum {
 	LFS_INHERIT_RR_OPT,
 	LFS_FIND_PERM,
 };
+
+#ifndef LCME_USER_MIRROR_FLAGS
+/* The mirror flags can be set by users at creation time. */
+#define LCME_USER_MIRROR_FLAGS  (LCME_FL_PREF_RW)
+#endif
 
 /* functions */
 static int lfs_setstripe_internal(int argc, char **argv,
@@ -7544,6 +7554,21 @@ static inline int lfs_verify_poolarg(char *pool)
 	return 0;
 }
 
+/* special grace time, only notify the user when its quota is over soft limit
+ * but doesn't block new writes until the hard limit is reached.
+ */
+#define NOTIFY_GRACE		"notify"
+#define NOTIFY_GRACE_TIME	LQUOTA_GRACE_MASK
+
+#ifndef toqb
+static inline __u64 lustre_stoqb(size_t space)
+{
+	return (space + QIF_DQBLKSIZE - 1) >> QIF_DQBLKSIZE_BITS;
+}
+#else
+#define lustre_stoqb   toqb
+#endif
+
 int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 {
 	int c, rc;
@@ -8043,6 +8068,19 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 			snprintf(buf, buflen, "%ju%s", (uintmax_t)num, "k");
 	}
 }
+
+#ifdef HAVE_NATIVE_CLIENT
+/* In the current Lustre implementation, the grace time is either the time
+ * or the timestamp to be used after some quota ID exceeds the soft limt,
+ * 48 bits should be enough, its high 16 bits can be used as quota flags.
+ */
+#define LQUOTA_GRACE_BITS	48
+#define LQUOTA_GRACE_MASK	((1ULL << LQUOTA_GRACE_BITS) - 1)
+#define LQUOTA_GRACE_MAX	LQUOTA_GRACE_MASK
+#define LQUOTA_GRACE(t)		(t & LQUOTA_GRACE_MASK)
+#define LQUOTA_FLAG(t)		(t >> LQUOTA_GRACE_BITS)
+#define LQUOTA_GRACE_FLAG(t, f)	((__u64)t | (__u64)f << LQUOTA_GRACE_BITS)
+#endif
 
 #define STRBUF_LEN	24
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
@@ -11273,6 +11311,10 @@ static inline int get_other_mirror_ids(int fd, __u16 *ids, __u16 exclude_id)
 
 	return cid.cid_count;
 }
+
+#ifndef MIRROR_ID_NEG
+#define MIRROR_ID_NEG         0x8000
+#endif
 
 static inline int lfs_mirror_copy(int argc, char **argv)
 {

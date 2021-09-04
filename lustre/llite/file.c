@@ -4058,9 +4058,10 @@ out:
 		RETURN(rc);
 	}
 	case LL_IOC_HSM_ACTION: {
-		struct md_op_data		*op_data;
-		struct hsm_current_action	*hca;
-		int				 rc;
+		struct md_op_data *op_data;
+		struct hsm_current_action *hca;
+		const char *action;
+		int rc;
 
 		OBD_ALLOC_PTR(hca);
 		if (hca == NULL)
@@ -4075,10 +4076,26 @@ out:
 
 		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
 				   op_data, NULL);
+		if (rc < 0)
+			GOTO(skip_copy, rc);
+
+		/* The hsm_current_action retreived from the server could
+		 * contain corrupt information. If it is incorrect data collect
+		 * debug information. We still send the data even if incorrect
+		 * to user land to handle.
+		 */
+		action = hsm_user_action2name(hca->hca_action);
+		if (strcmp(action, "UNKNOWN") == 0 ||
+		    hca->hca_state > HPS_DONE) {
+			CDEBUG(D_HSM,
+			       "HSM current state %s action %s, offset = %llu, length %llu\n",
+			       hsm_progress_state2name(hca->hca_state), action,
+			       hca->hca_location.offset, hca->hca_location.length);
+		}
 
 		if (copy_to_user((char __user *)arg, hca, sizeof(*hca)))
 			rc = -EFAULT;
-
+skip_copy:
 		ll_finish_md_op_data(op_data);
 		OBD_FREE_PTR(hca);
 		RETURN(rc);

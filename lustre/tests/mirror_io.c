@@ -45,7 +45,7 @@
 #include <sys/param.h>
 #include <err.h>
 
-#include <uapi/linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
 #define syserr(exp, str, args...)					\

@@ -1472,18 +1472,6 @@ struct ost_lvb {
  *   lquota data structures
  */
 
-#ifndef QUOTABLOCK_BITS
-# define QUOTABLOCK_BITS LUSTRE_QUOTABLOCK_BITS
-#endif
-
-#ifndef QUOTABLOCK_SIZE
-# define QUOTABLOCK_SIZE LUSTRE_QUOTABLOCK_SIZE
-#endif
-
-#ifndef toqb
-# define toqb lustre_stoqb
-#endif
-
 /* The lquota_id structure is an union of all the possible identifier types that
  * can be used with quota, this includes:
  * - 64-bit user ID

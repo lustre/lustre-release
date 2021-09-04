@@ -3331,11 +3331,13 @@ static long llog_last_index(char *logname)
 
 static char *get_llog_event_name(__u32 cmd)
 {
+#ifdef HAVE_SERVER_SUPPORT
 	struct lcfg_type_data *data;
 
 	data = lcfg_cmd2data(cmd);
 	if (data)
 		return data->ltd_name;
+#endif
 	return NULL;
 }
 

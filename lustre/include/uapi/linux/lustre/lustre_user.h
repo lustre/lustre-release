@@ -1253,12 +1253,10 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 
 /********* Quotas **********/
 
-#define LUSTRE_QUOTABLOCK_BITS 10
-#define LUSTRE_QUOTABLOCK_SIZE (1 << LUSTRE_QUOTABLOCK_BITS)
-
-static inline __u64 lustre_stoqb(__kernel_size_t space)
+/* From linux/fs/quota/quota.c */
+static inline __u64 toqb(__kernel_size_t space)
 {
-	return (space + LUSTRE_QUOTABLOCK_SIZE - 1) >> LUSTRE_QUOTABLOCK_BITS;
+	return (space + QIF_DQBLKSIZE - 1) >> QIF_DQBLKSIZE_BITS;
 }
 
 #define Q_QUOTACHECK	0x800100 /* deprecated as of 2.4 */

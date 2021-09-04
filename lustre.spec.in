@@ -333,9 +333,6 @@ This package contains the header files needed for building additional
 applications against the Lustre / LNet utilities libraries.
 
 :> lustre-devel.files
-%if %{with lustre_modules}
-find . -type f -name '*.h' | grep uapi | sed 's/.*uapi\//usr\/include\//' >> lustre-devel.files
-%endif
 
 %if %{with lustre_tests}
 %package tests
@@ -630,8 +627,13 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %{_libdir}/liblustreapi.so
 %endif
 %{_includedir}/lustre
+%if %{with lustre_modules}
 %{_includedir}/linux/lnet
 %{_includedir}/linux/lustre
+%else
+%exclude %{_includedir}/linux/lnet
+%exclude %{_includedir}/linux/lustre
+%endif
 
 %files -f lustre.files
 %defattr(-,root,root)

@@ -148,7 +148,7 @@ AC_MSG_CHECKING([whether to build Linux kernel modules])
 AC_ARG_ENABLE([modules],
 	AC_HELP_STRING([--disable-modules],
 		[disable building of Lustre kernel modules]),
-	[], [
+	[ AC_DEFINE(HAVE_NATIVE_LINUX_CLIENT, 1, [support native Linux client])], [
 		LC_TARGET_SUPPORTED([enable_modules="yes"],
 				    [enable_modules="no"])
 	])
