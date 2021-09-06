@@ -31,6 +31,7 @@ TBD Whamcloud
          4.12.14-122.83       (SLES12 SP5)
          4.12.14-197.75       (SLES15 SP1)
          5.3.18-24.61         (SLES15 SP2)
+         5.3.18-59.19         (SLES15 SP3)
          4.15.0-48            (Ubuntu 18.04)
        * Other clients known to build on these kernels at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
