@@ -248,6 +248,27 @@ validate_gateway_nids() {
 cleanupall -f
 setup_netns || error "setup_netns failed with $?"
 
+# Determine the local interface(s) used for LNet
+load_modules || error "Failed to load modules"
+NIDS=( $($LCTL list_nids | xargs echo) )
+if [[ -z ${NIDS[@]} ]]; then
+	error "No NID configured after module load"
+fi
+
+declare -a INTERFACES
+for ((i = 0; i < ${#NIDS[@]}; i++)); do
+	ip=$(sed 's/^\(.*\)@.*$/\1/'<<<${NIDS[i]})
+	INTERFACES[i]=$(ip -o a s |
+			awk '$4 ~ /^'$ip'\//{print $2}')
+	if [[ -z ${INTERFACES[i]} ]]; then
+		error "Can't determine interface name for NID ${NIDS[i]}"
+	elif [[ 1 -ne $(wc -w <<<${INTERFACES[i]}) ]]; then
+		error "Found $(wc -w <<<${INTERFACES[i]}) interfaces for NID ${NIDS[i]}. Expect 1"
+	fi
+done
+
+cleanup_lnet || error "Failed to cleanup LNet"
+
 stack_trap 'cleanup_testsuite' EXIT
 
 test_0() {
@@ -1058,15 +1079,14 @@ compare_route_add() {
 }
 
 test_100() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0"
+	add_net "tcp" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
     - net type: tcp
       local NI(s):
         - interfaces:
-              0: eth0
+              0: ${INTERFACES[0]}
           tunables:
               peer_timeout: 180
               peer_credits: 8
@@ -1093,15 +1113,14 @@ EOF
 run_test 100 "Add route with single gw (tcp)"
 
 test_101() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0"
+	add_net "tcp" "${INTERFACES[0]}"
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
 net:
     - net type: tcp
       local NI(s):
         - interfaces:
-              0: eth0
+              0: ${INTERFACES[0]}
           tunables:
               peer_timeout: 180
               peer_credits: 8
@@ -1158,9 +1177,8 @@ compare_route_del() {
 }
 
 test_102() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0"
+	add_net "tcp" "${INTERFACES[0]}"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 	do_lnetctl route add --net tcp102 --gateway 102.102.102.102@tcp ||
 		error "route add failed $?"
@@ -1169,9 +1187,8 @@ test_102() {
 run_test 102 "Delete route with single gw (tcp)"
 
 test_103() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0"
+	add_net "tcp" "${INTERFACES[0]}"
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 	do_lnetctl route add --net tcp103 \
 		--gateway 103.103.103.[103-120/4]@tcp ||
@@ -1402,9 +1419,8 @@ LNET_LOCAL_RESEND_STATUSES="local_interrupt local_dropped local_aborted"
 LNET_LOCAL_RESEND_STATUSES+=" local_no_route local_timeout"
 LNET_LOCAL_NO_RESEND_STATUSES="local_error"
 test_204() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 
 	lnet_health_pre || return $?
 
@@ -1428,13 +1444,11 @@ test_204() {
 run_test 204 "Check no health or resends for single-rail local failures"
 
 test_205() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	local hstatus
 	for hstatus in ${LNET_LOCAL_RESEND_STATUSES}; do
 		reinit_dlc || return $?
-		add_net "tcp" "eth0" || return $?
-		add_net "tcp1" "eth0" || return $?
+		add_net "tcp" "${INTERFACES[0]}" || return $?
+		add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 		echo "Simulate $hstatus"
 		lnet_health_pre
@@ -1453,8 +1467,8 @@ test_205() {
 
 	for hstatus in ${LNET_LOCAL_NO_RESEND_STATUSES}; do
 		reinit_dlc || return $?
-		add_net "tcp" "eth0" || return $?
-		add_net "tcp1" "eth0" || return $?
+		add_net "tcp" "${INTERFACES[0]}" || return $?
+		add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 		echo "Simulate $hstatus"
 		lnet_health_pre || return $?
@@ -1479,9 +1493,8 @@ run_test 205 "Check health and resends for multi-rail local failures"
 LNET_REMOTE_RESEND_STATUSES="remote_dropped"
 LNET_REMOTE_NO_RESEND_STATUSES="remote_error remote_timeout"
 test_206() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 
 	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 		error "failed to discover myself"
@@ -1509,13 +1522,11 @@ test_206() {
 run_test 206 "Check no health or resends for single-rail remote failures"
 
 test_207() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	local hstatus
 	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
 		reinit_dlc || return $?
-		add_net "tcp" "eth0" || return $?
-		add_net "tcp1" "eth0" || return $?
+		add_net "tcp" "${INTERFACES[0]}" || return $?
+		add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 			error "failed to discover myself"
@@ -1536,8 +1547,8 @@ test_207() {
 	done
 	for hstatus in ${LNET_REMOTE_NO_RESEND_STATUSES}; do
 		reinit_dlc || return $?
-		add_net "tcp" "eth0" || return $?
-		add_net "tcp1" "eth0" || return $?
+		add_net "tcp" "${INTERFACES[0]}" || return $?
+		add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 			error "failed to discover myself"
@@ -1592,8 +1603,6 @@ test_208_load_and_check_lnet() {
 }
 
 test_208() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	cleanup_netns || error "Failed to cleanup netns before test execution"
 	cleanup_lnet || error "Failed to unload modules before test execution"
 	setup_fakeif || error "Failed to add fake IF"
@@ -1601,24 +1610,24 @@ test_208() {
 	have_interface "$FAKE_IF" ||
 		error "Expect $FAKE_IF configured but not found"
 
-	local eth0_ip=$(ip --oneline addr show dev eth0 |
-			awk '/inet /{print $4}' |
-			sed 's:/.*::')
-	local ip2nets_str="tcp(eth0) $eth0_ip"
+	local if0_ip=$(ip --oneline addr show dev ${INTERFACES[0]} |
+		       awk '/inet /{print $4}' |
+		       sed 's:/.*::')
+	local ip2nets_str="tcp(${INTERFACES[0]}) $if0_ip"
 
 	echo "Configure single NID \"$ip2nets_str\""
-	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp"
+	test_208_load_and_check_lnet "${ip2nets_str}" "${if0_ip}@tcp"
 
-	ip2nets_str="tcp(eth0) $eth0_ip; tcp1($FAKE_IF) $FAKE_IP"
+	ip2nets_str="tcp(${INTERFACES[0]}) $if0_ip; tcp1($FAKE_IF) $FAKE_IP"
 	echo "Configure two NIDs; two NETs \"$ip2nets_str\""
-	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+	test_208_load_and_check_lnet "${ip2nets_str}" "${if0_ip}@tcp" \
 				     "${FAKE_IP}@tcp1"
 
-	ip2nets_str="tcp(eth0) $eth0_ip; tcp($FAKE_IF) $FAKE_IP"
+	ip2nets_str="tcp(${INTERFACES[0]}) $if0_ip; tcp($FAKE_IF) $FAKE_IP"
 	echo "Configure two NIDs; one NET \"$ip2nets_str\""
-	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+	test_208_load_and_check_lnet "${ip2nets_str}" "${if0_ip}@tcp" \
 				     "${FAKE_IP}@tcp"
-	local addr1=( ${eth0_ip//./ } )
+	local addr1=( ${if0_ip//./ } )
 	local addr2=( ${FAKE_IP//./ } )
 	local range="[${addr1[0]},${addr2[0]}]"
 
@@ -1626,10 +1635,10 @@ test_208() {
 	for i in $(seq 1 3); do
 		range+=".[${addr1[$i]},${addr2[$i]}]"
 	done
-	ip2nets_str="tcp(eth0,${FAKE_IF}) ${range}"
+	ip2nets_str="tcp(${INTERFACES[0]},${FAKE_IF}) ${range}"
 
 	echo "Configured two NIDs; one NET alt syntax \"$ip2nets_str\""
-	test_208_load_and_check_lnet "${ip2nets_str}" "${eth0_ip}@tcp" \
+	test_208_load_and_check_lnet "${ip2nets_str}" "${if0_ip}@tcp" \
 				     "${FAKE_IP}@tcp"
 
 	cleanup_fakeif
@@ -1646,10 +1655,8 @@ test_208() {
 run_test 208 "Test various kernel ip2nets configurations"
 
 test_209() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 
 	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 		error "failed to discover myself"
@@ -1669,8 +1676,8 @@ test_209() {
 	check_no_remote_health || return $?
 
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
-	add_net "tcp1" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 		error "failed to discover myself"
@@ -1772,10 +1779,9 @@ check_ping_count() {
 }
 
 test_210() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
-	add_net "tcp1" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 	local prim_nid=$($LCTL list_nids | head -n 1)
 
@@ -1809,10 +1815,9 @@ test_210() {
 run_test 210 "Local NI recovery checks"
 
 test_211() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
-	add_net "tcp1" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
 
 	local prim_nid=$($LCTL list_nids | head -n 1)
 
@@ -1968,8 +1973,6 @@ test_212() {
 run_test 212 "Check discovery refcount loss bug (LU-14627)"
 
 test_213() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	cleanup_netns || error "Failed to cleanup netns before test execution"
 	cleanup_lnet || error "Failed to unload modules before test execution"
 
@@ -1979,7 +1982,7 @@ test_213() {
 
 	reinit_dlc || return $?
 
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 	add_net "tcp" "$FAKE_IF" || return $?
 
 	local nid1=$(lctl list_nids | head -n 1)
@@ -1997,14 +2000,12 @@ run_test 213 "Check LNetDist calculation for multiple local NIDs"
 
 test_230() {
 	# LU-12815
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	echo "Check valid values; Should succeed"
 	local i
 	local lnid
 	for ((i = 4; i < 16; i+=4)); do
 		reinit_dlc || return $?
-		add_net "tcp" "eth0" || return $?
+		add_net "tcp" "${INTERFACES[0]}" || return $?
 		do_lnetctl net set --all --conns-per-peer $i ||
 			error "should have succeeded $?"
 		$LNETCTL net show -v 1 | grep -q "conns_per_peer: $i" ||
@@ -2017,13 +2018,13 @@ test_230() {
 	done
 
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 	echo "Set > 127; Should fail"
 	do_lnetctl net set --all --conns-per-peer 128 &&
 		error "should have failed $?"
 
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 	echo "Set < 0; Should be ignored"
 	do_lnetctl net set --all --conns-per-peer -1 ||
 		error "should have succeeded $?"
