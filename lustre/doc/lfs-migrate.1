@@ -89,7 +89,9 @@ Directory will be migrated to MDTs starting with
 , or specific MDTs if multiple MDTs are specified in a comma-seperated list.
 This is useful if new MDTs have been added to a filesystem and existing user or
 project directories should be migrated off old MDTs to balance the space usage
-and future metadata workload.
+and future metadata workload. If
+.I start_mdt_index
+is set to -1, the MDT will be chosen by space and inode usage.
 .TP
 .BR -c , --mdt-count=\fICOUNT\fR
 Directory will be migrated to

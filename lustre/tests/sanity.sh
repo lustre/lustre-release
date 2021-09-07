@@ -19644,7 +19644,7 @@ test_230d() {
 		error "migrate remote dir error"
 
 	echo "Finish migration, then checking.."
-	for file in $(find $migrate_dir); do
+	for file in $(find $migrate_dir -maxdepth 1); do
 		mdt_index=$($LFS getstripe -m $file)
 		if [ $mdt_index -lt $new_index ] ||
 		   [ $mdt_index -gt $((new_index + new_count - 1)) ]; then
@@ -20200,6 +20200,48 @@ test_230t()
 	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir || error "migrate failed"
 }
 run_test 230t "migrate directory with project ID set"
+
+test_230u()
+{
+	(( MDSCOUNT > 3 )) || skip_env "needs >= 4 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+
+	local count
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir $DIR/$tdir/sub{0..99} || error "mkdir sub failed"
+	$LFS migrate -m -1 $DIR/$tdir/sub{0..99} || error "migrate sub failed"
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		count=$($LFS getstripe -m $DIR/$tdir/sub* | grep -c ^$i)
+		echo "$count dirs migrated to MDT$i"
+	done
+	count=$($LFS getstripe -m $DIR/$tdir/sub* | sort -u | wc -l)
+	(( count >= MDSCOUNT - 1 )) || error "dirs migrated to $count MDTs"
+}
+run_test 230u "migrate directory by QOS"
+
+test_230v()
+{
+	(( MDSCOUNT > 3 )) || skip_env "needs >= 4 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+
+	local count
+
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir $DIR/$tdir/sub{0..99} || error "mkdir sub failed"
+	$LFS migrate -m 0,2,1 $DIR/$tdir || error "migrate $tdir failed"
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		count=$($LFS getstripe -m $DIR/$tdir/sub* | grep -c ^$i)
+		echo "$count subdirs migrated to MDT$i"
+		(( i == 3 )) && (( count > 0 )) &&
+			error "subdir shouldn't be migrated to MDT3"
+	done
+	count=$($LFS getstripe -m $DIR/$tdir/sub* | sort -u | wc -l)
+	(( count == 3 )) || error "dirs migrated to $count MDTs"
+}
+run_test 230v "subdir migrated to the MDT where its parent is located"
 
 test_231a()
 {

@@ -422,13 +422,10 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 			GOTO(unlock_obj, rc = -EINVAL);
 		}
 
-		if (lmu->lum_stripe_offset != lmv->lmv_master_mdt_index) {
-			CERROR("%s: "DFID" migrate mdt index mismatch %u != %u\n",
-				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-				lmv->lmv_master_mdt_index,
-				lmu->lum_stripe_offset);
-			GOTO(unlock_obj, rc = -EINVAL);
-		}
+		/* lum_stripe_offset is not checked, because subdir is migrated
+		 * to where its parent is located to avoid unnecessary remote
+		 * directory.
+		 */
 
 		if (lum_stripe_count > 1 && lmu->lum_hash_type &&
 		    lmu->lum_hash_type !=
