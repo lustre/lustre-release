@@ -1072,8 +1072,8 @@ net:
               peer_credits: 8
               peer_buffer_credits: 0
               credits: 256
-	  lnd tunables:
-	      conns_per_peer: 1
+          lnd tunables:
+              conns_per_peer: 1
 route:
     - net: tcp7
       gateway: 7.7.7.7@tcp
@@ -1107,8 +1107,8 @@ net:
               peer_credits: 8
               peer_buffer_credits: 0
               credits: 256
-	  lnd tunables:
-	      conns_per_peer: 1
+          lnd tunables:
+              conns_per_peer: 1
 route:
     - net: tcp8
       gateway: 8.8.8.10@tcp
