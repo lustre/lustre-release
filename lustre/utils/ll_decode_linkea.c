@@ -36,11 +36,25 @@
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <linux/lustre/lustre_fid.h>
 
 #define BUFFER_SIZE 65536
+
+static void print_name(const char *cp, int len)
+{
+	unsigned char ch;
+
+	while (len--) {
+		ch = *cp++;
+		if (!isprint(ch) || ch == '\\')
+			printf("\\x%02x", ch);
+		else
+			putchar(ch);
+	}
+}
 
 int decode_linkea(const char *fname)
 {
@@ -106,8 +120,9 @@ int decode_linkea(const char *fname)
 		memcpy(&pfid, &lee->lee_parent_fid, sizeof(pfid));
 		fid_be_to_cpu(&pfid, &pfid);
 
-		printf("    %d: pfid "DFID", name '%s'\n", i, PFID(&pfid),
-		       lee->lee_name);
+		printf("    %d: pfid "DFID", name '", i, PFID(&pfid));
+		print_name(lee->lee_name, reclen - (int)sizeof(*lee));
+		printf("'\n");
 		lee = (struct link_ea_entry *)((char *)lee + reclen);
 	}
 

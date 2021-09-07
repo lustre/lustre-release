@@ -2624,6 +2624,8 @@ setup_for_enc_tests() {
 }
 
 cleanup_for_enc_tests() {
+	rm -rf $DIR/$tdir
+
 	# remount client normally
 	if is_mounted $MOUNT; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
@@ -3589,7 +3591,6 @@ run_test 48b "encrypted file: concurrent truncate"
 
 trace_cmd() {
 	local cmd="$@"
-	local xattr_name="security.c"
 
 	cancel_lru_locks
 	$LCTL set_param debug=+info
@@ -3599,7 +3600,11 @@ trace_cmd() {
 	eval $cmd
 	[ $? -eq 0 ] || error "$cmd failed"
 
-	$LCTL dk | grep -E "get xattr '${xattr_name}'|get xattrs"
+	if [ -z "$MATCHING_STRING" ]; then
+		$LCTL dk | grep -E "get xattr 'security.c'|get xattrs"
+	else
+		$LCTL dk | grep -E "$MATCHING_STRING"
+	fi
 	[ $? -ne 0 ] || error "get xattr event was triggered"
 }
 
@@ -3622,7 +3627,8 @@ test_49() {
 	trace_cmd stat $dirname/f1
 	trace_cmd cat $dirname/f1
 	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
-	trace_cmd $TRUNCATE $dirname/f1 10240
+	MATCHING_STRING="get xattr 'security.c'" \
+		trace_cmd $TRUNCATE $dirname/f1 10240
 	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
 	trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
 
@@ -3642,7 +3648,8 @@ test_49() {
 		trace_cmd stat $dirname/f1
 		trace_cmd cat $dirname/f1
 		dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
-		trace_cmd $TRUNCATE $dirname/f1 10240
+		MATCHING_STRING="get xattr 'security.c'" \
+			trace_cmd $TRUNCATE $dirname/f1 10240
 		trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
 		trace_cmd $LFS migrate -E -1 -S 256K $dirname/f2
 	else
@@ -4311,6 +4318,46 @@ test_57() {
 	return 0
 }
 run_test 57 "security.c xattr protection"
+
+test_58() {
+	local testdir=$DIR/$tdir/mytestdir
+	local testfile=$DIR/$tdir/$tfile
+
+	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	touch $DIR/$tdir/$tfile
+	mkdir $DIR/$tdir/subdir
+
+	cancel_lru_locks
+	sync ; sync
+	echo 3 > /proc/sys/vm/drop_caches
+
+	ll_decode_linkea $DIR/$tdir/$tfile || error "cannot read $tfile linkea"
+	ll_decode_linkea $DIR/$tdir/subdir || error "cannot read subdir linkea"
+
+	for ((i = 0; i < 1000; i = $((i+1)))); do
+		mkdir -p $DIR/$tdir/d${i}
+		touch $DIR/$tdir/f${i}
+		createmany -m $DIR/$tdir/d${i}/f 5 > /dev/null
+	done
+
+	cancel_lru_locks
+	sync ; sync
+	echo 3 > /proc/sys/vm/drop_caches
+
+	sleep 10
+	ls -ailR $MOUNT > /dev/null || error "fail to ls"
+}
+run_test 58 "access to enc file's xattrs"
 
 log "cleanup: ======================================================"
 

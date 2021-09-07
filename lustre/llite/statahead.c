@@ -681,6 +681,30 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 	if (rc)
 		GOTO(out, rc);
 
+	/* If encryption context was returned by MDT, put it in
+	 * inode now to save an extra getxattr.
+	 */
+	if (body->mbo_valid & OBD_MD_ENCCTX) {
+		void *encctx = req_capsule_server_get(&req->rq_pill,
+						      &RMF_FILE_ENCCTX);
+		__u32 encctxlen = req_capsule_get_size(&req->rq_pill,
+						       &RMF_FILE_ENCCTX,
+						       RCL_SERVER);
+
+		if (encctxlen) {
+			CDEBUG(D_SEC,
+			       "server returned encryption ctx for "DFID"\n",
+			       PFID(ll_inode2fid(child)));
+			rc = ll_xattr_cache_insert(child,
+					       LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+					       encctx, encctxlen);
+			if (rc)
+				CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
+				      ll_i2sbi(child)->ll_fsname,
+				      PFID(ll_inode2fid(child)), rc);
+		}
+	}
+
 	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
 	       ll_i2sbi(dir)->ll_fsname, entry->se_qstr.len,
 	       entry->se_qstr.name, PFID(ll_inode2fid(child)), child);

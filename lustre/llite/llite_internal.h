@@ -415,6 +415,8 @@ enum ll_file_flags {
 	LLIF_FOREIGN_REMOVABLE	= 5,
 	/* setting encryption context in progress */
 	LLIF_SET_ENC_CTX	= 6,
+	/* Xattr cache is filled */
+	LLIF_XATTR_CACHE_FILLED	= 7,
 
 };
 
