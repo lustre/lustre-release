@@ -224,6 +224,8 @@ struct lod_mirror_entry {
 		lme_prefer:1;
 	/* mirror id */
 	__u16	lme_id;
+	/* preference */
+	__u16	lme_preference;
 	/* start,end index of this mirror in ldo_comp_entries */
 	__u16	lme_start;
 	__u16	lme_end;

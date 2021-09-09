@@ -7448,6 +7448,11 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 	 * cluster.
 	 */
 	lod_qos_statfs_update(env, lod, &lod->lod_ost_descs);
+
+	rc = lod_fill_mirrors(lo);
+	if (rc)
+		RETURN(rc);
+
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
 		bool ost_avail = true;
 		int index = (i + seq) % lo->ldo_mirror_count;

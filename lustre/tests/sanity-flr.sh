@@ -3699,6 +3699,129 @@ test_207() {
 }
 run_test 207 "create another replica with existing out-of-sync one"
 
+function check_ost_used() {
+	local ddarg
+	local ost
+	local i
+	local file=$1
+	local io=$2
+
+	shift 2
+
+	cancel_lru_locks osc # to drop pages
+	cancel_lru_locks mdc # to refresh layout
+	# XXX: cancel_lru_locks mdc doesn't work
+	# XXX: need a better way to reload the layout
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+
+	# refresh non-rotation status on MDTs
+	sleep 10
+	touch $DIR/$tfile-temp
+	rm -f $DIR/$tfile-temp
+	# refresh non-rotational status on the client
+	$LFS df >&/dev/null
+	sleep 2
+
+	$LCTL set_param osc.*.stats=clear >/dev/null
+	if [[ $io == "read" ]]; then
+		ddarg="if=$file of=/dev/null"
+	elif [[ $io == "write" ]]; then
+		ddarg="if=/dev/zero of=$file"
+	else
+		error "unknown type $io"
+	fi
+	dd $ddarg bs=2M count=1 || error "can't $io $file"
+	cancel_lru_locks osc
+
+	# check only specified OSTs got reads
+	for ((ost = 0; ost < $OSTCOUNT; ost++)); do
+		local nr=$($LCTL get_param -n \
+			osc.$FSNAME-OST000$ost-osc-[-0-9a-f]*.stats |
+			awk "/ost_$io/{print \$2}")
+		nr=${nr:-0}
+		if [[ " $* " =~ " $ost " ]]; then
+			(( nr > 0 )) || error "expected reads on $ost"
+		else
+			(( nr == 0 )) || error "unexpected $nr reads on $ost"
+		fi
+	done
+}
+
+test_208a() {
+	local tf=$DIR/$tfile
+	local osts=$(comma_list $(osts_nodes))
+
+	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+
+	old=$(do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL get_param osd*.*OST*.nonrotational | tr '\n' ' ')
+	stack_trap "do_nodes $osts $LCTL set_param $old"
+
+	stack_trap "rm -f $tf"
+	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
+	dd if=/dev/zero of=$tf bs=2M count=1 || error "can't dd (1)"
+	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
+	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
+	$LFS mirror resync $tf || error "can't resync"
+	$LFS getstripe $tf
+
+	log "set OST0000 non-rotational"
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param osd*.*OST0000*.nonrotational=1
+	check_ost_used $tf read 0
+
+	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
+			osd*.*OST0003*.nonrotational=1
+	check_ost_used $tf read 2 3
+
+	log "set mirror 1 on OST0001 preferred"
+	$LFS setstripe --comp-set -I 0x20001 --comp-flags=prefer $tf ||
+		error "can't set prefer"
+	check_ost_used $tf read 1
+}
+run_test 208a "mirror selection to prefer non-rotational devices for reads"
+
+test_208b() {
+	local tf=$DIR/$tfile
+	local osts=$(comma_list $(osts_nodes))
+
+	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+
+	old=$(do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL get_param osd*.*OST*.nonrotational | tr '\n' ' ')
+	stack_trap "do_nodes $osts $LCTL set_param $old"
+
+	stack_trap "rm -f $tf"
+	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
+	dd if=/dev/zero of=$tf bs=2M count=1 || error "can't dd (1)"
+	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
+	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
+	$LFS mirror resync $tf || error "can't resync"
+	$LFS getstripe $tf | grep -q flags.*stale && error "still stale"
+
+	log "set OST0000 non-rotational"
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param osd*.*OST0000*.nonrotational=1
+	check_ost_used $tf write 0
+	$LFS mirror resync $tf || error "can't resync"
+
+	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
+			osd*.*OST0003*.nonrotational=1
+	check_ost_used $tf write 2 3
+	$LFS mirror resync $tf || error "can't resync"
+
+	log "set mirror 1 on OST0001 preferred"
+	$LFS setstripe --comp-set -I 0x20001 --comp-flags=prefer $tf ||
+		error "can't set prefer"
+	check_ost_used $tf write 1
+}
+run_test 208b "mirror selection to prefer non-rotational devices for writes"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

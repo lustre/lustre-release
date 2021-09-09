@@ -225,6 +225,7 @@ struct lov_layout_dom {
 struct lov_layout_entry {
 	__u32				lle_type;
 	unsigned int			lle_valid:1;
+	unsigned int			lle_preference;
 	struct lu_extent		*lle_extent;
 	struct lov_stripe_md_entry	*lle_lsme;
 	struct lov_comp_layout_entry_ops *lle_comp_ops;
@@ -236,11 +237,11 @@ struct lov_layout_entry {
 
 struct lov_mirror_entry {
 	unsigned short	lre_mirror_id;
-	unsigned short	lre_preferred:1,
-			lre_stale:1,	/* set if any components is stale */
+	unsigned short	lre_stale:1,	/* set if any components is stale */
 			lre_valid:1,	/* set if at least one of components
 					 * in this mirror is valid */
 			lre_foreign:1;	/* set if it is a foreign component */
+	int		lre_preference;	/* overall preference of this mirror */
 
 	unsigned short	lre_start;	/* index to lo_entries, start index of
 					 * this mirror */

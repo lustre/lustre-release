@@ -589,10 +589,12 @@ int lod_alloc_comp_entries(struct lod_object *lo,
 
 int lod_fill_mirrors(struct lod_object *lo)
 {
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_layout_component *lod_comp;
+	bool found_preferred = false;
 	int mirror_idx = -1;
 	__u16 mirror_id = 0xffff;
-	int i;
+	int i, pref;
 	ENTRY;
 
 	LASSERT(equi(!lo->ldo_is_composite, lo->ldo_mirror_count == 0));
@@ -601,16 +603,33 @@ int lod_fill_mirrors(struct lod_object *lo)
 		RETURN(0);
 
 	lod_comp = &lo->ldo_comp_entries[0];
+
 	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
 		int stale = !!(lod_comp->llc_flags & LCME_FL_STALE);
 		int preferred = !!(lod_comp->llc_flags & LCME_FL_PREF_WR);
+		int j;
+
+		pref = 0;
+		/* calculate component preference over all used OSTs */
+		for (j = 0; j < lod_comp->llc_stripes_allocated; j++) {
+			int idx = lod_comp->llc_ost_indices[j];
+			struct obd_statfs *osfs = &OST_TGT(lod,idx)->ltd_statfs;
+
+			if (osfs->os_state & OS_STATFS_NONROT)
+				pref++;
+		}
 
 		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
 			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
 			lo->ldo_mirrors[mirror_idx].lme_prefer |= preferred;
+			lo->ldo_mirrors[mirror_idx].lme_preference += pref;
 			lo->ldo_mirrors[mirror_idx].lme_end = i;
 			continue;
 		}
+
+		if (mirror_idx >= 0 && preferred &&
+		    !lo->ldo_mirrors[mirror_idx].lme_stale)
+			found_preferred = true;
 
 		/* new mirror */
 		++mirror_idx;
@@ -622,11 +641,33 @@ int lod_fill_mirrors(struct lod_object *lo)
 		lo->ldo_mirrors[mirror_idx].lme_id = mirror_id;
 		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
 		lo->ldo_mirrors[mirror_idx].lme_prefer = preferred;
+		lo->ldo_mirrors[mirror_idx].lme_preference = pref;
 		lo->ldo_mirrors[mirror_idx].lme_start = i;
 		lo->ldo_mirrors[mirror_idx].lme_end = i;
 	}
 	if (mirror_idx != lo->ldo_mirror_count - 1)
 		RETURN(-EINVAL);
+
+	if (!found_preferred && mirror_idx > 0) {
+		int best = -1;
+
+		/*
+		 * if no explicited preferred found, then find a mirror
+		 * with higher number of non-rotational OSTs
+		 * */
+		pref = -1;
+		for (i = 0; i <= mirror_idx; i++) {
+			if (lo->ldo_mirrors[i].lme_stale)
+				continue;
+			if (lo->ldo_mirrors[i].lme_preference > pref) {
+				pref = lo->ldo_mirrors[i].lme_preference;
+				best = i;
+			}
+		}
+
+		LASSERT(best >= 0);
+		lo->ldo_mirrors[best].lme_prefer = 1;
+	}
 
 	RETURN(0);
 }
