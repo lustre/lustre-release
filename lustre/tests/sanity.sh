@@ -11304,6 +11304,17 @@ test_104b() {
 }
 run_test 104b "$RUNAS lfs check servers test ===================="
 
+cleanup_104c() {
+	local facets=$1
+	local param=$2
+	local saved_blocks=$3
+
+	for facet in ${facets//,/ }; do
+		osd=$(do_facet $facet $LCTL get_param -n $param.mntdev)
+		do_facet $facet zfs set recordsize=$saved_blocks $osd
+	done
+}
+
 #
 # Verify $1 is within range of $2.
 # Success when $1 is within range. That is, when $1 is >= 2% of $2 and
@@ -11311,8 +11322,8 @@ run_test 104b "$RUNAS lfs check servers test ===================="
 #
 value_in_range() {
 	# Strip all units (M, G, T)
-	actual=$(echo $1 | tr -d A-Z)
-	expect=$(echo $2 | tr -d A-Z)
+	actual=$(echo ${1/[a-zA-Z]*/})
+	expect=$(echo ${2/[a-zA-Z]*/})
 
 	expect_lo=$(($expect * 98 / 100)) # 2% below
 	expect_hi=$(($expect * 102 / 100)) # 2% above
@@ -11361,6 +11372,11 @@ test_104c() {
 		do_facet $facet zfs set recordsize=32768 $mdt
 	done
 
+	# Restore OST recordize back to original
+	stack_trap "cleanup_104c $ofacets $ost_param $saved_ost_blocks"
+	# Restore MDT recordize back to original
+	stack_trap "cleanup_104c $mfacets $mdt_param $saved_mdt_blocks"
+
 	# Give new values chance to reflect change
 	sleep 2
 
@@ -11387,18 +11403,6 @@ test_104c() {
 		error "df used: ${df_after[2]%.*} != ${df[2]%.*}"
 	value_in_range ${df_after[3]%.*} ${df[3]%.*} ||
 		error "df avail: ${df_after[3]%.*} != ${df[3]%.*}"
-
-	# Restore MDT recordize back to original
-	for facet in ${mfacets//,/ }; do
-		mdt=$(do_facet $facet lctl get_param -n $mdt_param.mntdev)
-		do_facet $facet zfs set recordsize=$saved_mdt_blocks $mdt
-	done
-
-	# Restore OST recordize back to original
-	for facet in ${ofacets//,/ }; do
-		ost=$(do_facet $facet lctl get_param -n $ost_param.mntdev)
-		do_facet $facet zfs set recordsize=$saved_ost_blocks $ost
-	done
 
 	return 0
 }
