@@ -2728,11 +2728,12 @@ remount_facet() {
 reboot_facet() {
 	local facet=$1
 	local node=$(facet_active_host $facet)
+	local sleep_time=${2:-10}
 
 	if [ "$FAILURE_MODE" = HARD ]; then
 		boot_node $node
 	else
-		sleep 10
+		sleep $sleep_time
 	fi
 }
 
@@ -3662,7 +3663,7 @@ facet_failover() {
 		facet=$(echo ${affecteds[index]} | tr -s " " | cut -d"," -f 1)
 		echo reboot facets: ${affecteds[index]}
 
-		reboot_facet $facet
+		reboot_facet $facet $sleep_time
 
 		change_active ${affecteds[index]}
 
@@ -5841,30 +5842,30 @@ check_and_cleanup_lustre() {
 # General functions
 
 wait_for_function () {
-    local quiet=""
+	local quiet=""
 
-    # suppress fn both stderr and stdout
-    if [ "$1" = "--quiet" ]; then
-        shift
-        quiet=" > /dev/null 2>&1"
+	# suppress fn both stderr and stdout
+	if [ "$1" = "--quiet" ]; then
+		shift
+		quiet=" > /dev/null 2>&1"
+	fi
 
-    fi
+	local fn=$1
+	local max=${2:-900}
+	local sleep=${3:-5}
 
-    local fn=$1
-    local max=${2:-900}
-    local sleep=${3:-5}
+	local wait=0
 
-    local wait=0
+	while true; do
 
-    while true; do
+		eval $fn $quiet && return 0
 
-        eval $fn $quiet && return 0
-
-        wait=$((wait + sleep))
-        [ $wait -lt $max ] || return 1
-        echo waiting $fn, $((max - wait)) secs left ...
-        sleep $sleep
-    done
+		[ $wait -lt $max ] || return 1
+		echo waiting $fn, $((max - wait)) secs left ...
+		wait=$((wait + sleep))
+		[ $wait -gt $max ] && ((sleep -= wait - max))
+		sleep $sleep
+	done
 }
 
 check_network() {
@@ -6821,7 +6822,7 @@ ostuuid_from_index()
 }
 
 ostname_from_index() {
-    local uuid=$(ostuuid_from_index $1)
+    local uuid=$(ostuuid_from_index $1 $2)
     echo ${uuid/_UUID/}
 }
 
@@ -10676,4 +10677,60 @@ wait_nm_sync() {
 		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
 	fi
 	echo "waited $((i - 1)) seconds for sync"
+}
+
+consume_precreations() {
+	local dir=$1
+	local mfacet=$2
+	local OSTIDX=$3
+	local extra=${4:-2}
+	local OST=$(ostname_from_index $OSTIDX $dir)
+
+	test_mkdir -p $dir/${OST}
+	$LFS setstripe -i $OSTIDX -c 1 ${dir}/${OST}
+
+	# on the mdt's osc
+	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet $OST)
+	local last_id=$(do_facet $mfacet $LCTL get_param -n \
+			osp.$mdtosc_proc.prealloc_last_id)
+	local next_id=$(do_facet $mfacet $LCTL get_param -n \
+			osp.$mdtosc_proc.prealloc_next_id)
+	echo "Creating to objid $last_id on ost $OST..."
+	createmany -o $dir/${OST}/f $next_id $((last_id - next_id + extra))
+}
+
+__exhaust_precreations() {
+	local OSTIDX=$1
+	local FAILLOC=$2
+	local FAILIDX=${3:-$OSTIDX}
+	local ofacet=ost$((OSTIDX + 1))
+
+	mkdir_on_mdt0 $DIR/$tdir
+	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
+	local mfacet=mds$((mdtidx + 1))
+	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
+
+	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet)
+	do_facet $mfacet $LCTL get_param osp.$mdtosc_proc.prealloc*
+
+#define OBD_FAIL_OST_ENOSPC              0x215
+	do_facet $ofacet $LCTL set_param fail_val=$FAILIDX fail_loc=0x215
+
+	consume_precreations $DIR/$tdir $mfacet $OSTIDX
+
+	do_facet $mfacet $LCTL get_param osp.$mdtosc_proc.prealloc*
+	do_facet $ofacet $LCTL set_param fail_loc=$FAILLOC
+}
+
+exhaust_precreations() {
+	__exhaust_precreations $1 $2 $3
+	sleep_maxage
+}
+
+exhaust_all_precreations() {
+	local i
+	for (( i=0; i < OSTCOUNT; i++ )) ; do
+		__exhaust_precreations $i $1 -1
+	done
+	sleep_maxage
 }

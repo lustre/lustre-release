@@ -1860,52 +1860,6 @@ reset_enospc() {
 	wait_update_facet $SINGLEMDS "$get_prealloc" "" $delay
 }
 
-__exhaust_precreations() {
-	local OSTIDX=$1
-	local FAILLOC=$2
-	local FAILIDX=${3:-$OSTIDX}
-	local ofacet=ost$((OSTIDX + 1))
-
-	mkdir_on_mdt0 $DIR/$tdir
-	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
-	local mfacet=mds$((mdtidx + 1))
-	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
-
-	local OST=$(ostname_from_index $OSTIDX)
-
-	# on the mdt's osc
-	local mdtosc_proc1=$(get_mdtosc_proc_path $mfacet $OST)
-	local last_id=$(do_facet $mfacet lctl get_param -n \
-			osp.$mdtosc_proc1.prealloc_last_id)
-	local next_id=$(do_facet $mfacet lctl get_param -n \
-			osp.$mdtosc_proc1.prealloc_next_id)
-
-	local mdtosc_proc2=$(get_mdtosc_proc_path $mfacet)
-	do_facet $mfacet lctl get_param osp.$mdtosc_proc2.prealloc*
-
-	test_mkdir -p $DIR/$tdir/${OST}
-	$LFS setstripe -i $OSTIDX -c 1 $DIR/$tdir/${OST}
-#define OBD_FAIL_OST_ENOSPC              0x215
-	do_facet $ofacet lctl set_param fail_val=$FAILIDX fail_loc=0x215
-	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet $mfacet lctl get_param osp.$mdtosc_proc2.prealloc*
-	do_facet $ofacet lctl set_param fail_loc=$FAILLOC
-}
-
-exhaust_precreations() {
-	__exhaust_precreations $1 $2 $3
-	sleep_maxage
-}
-
-exhaust_all_precreations() {
-	local i
-	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		__exhaust_precreations $i $1 -1
-	done
-	sleep_maxage
-}
-
 test_27n() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

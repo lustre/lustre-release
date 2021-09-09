@@ -1088,6 +1088,62 @@ test_30() {
 }
 run_test 30 "layout lock replay is not blocked on IO"
 
+test_31() {
+	mkdir_on_mdt0 $DIR1/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR1/$tdir
+	for (( i=0; i < 10; i++ )) ; do
+		mkdir -p $DIR1/$tdir/d.${i}
+	done
+	mkdir $DIR1/$tdir/mdtdir
+	$LFS setstripe -E 1M -L mdt $DIR1/$tdir/mdtdir
+
+	# failover has to take longer than blocking timeout involved
+	# by second multiop below which is set to obd_timeout/2 by
+	# disabling AT
+	local timeout=$(do_facet mds1 $LCTL get_param -n timeout)
+
+	timeout=$((timeout / 2 + 5))
+	fail ost1 $timeout &
+	local failpid=$!
+
+	sleep 1
+
+	# consume preallocated objects, precreate thread will be awakened
+	consume_precreations $DIR1/$tdir mds1 0 1
+
+	# disable AT so that blocking timeout gets set to obd_timeout/2
+	local amm=$(at_max_get mds1)
+
+	at_max_set 0 mds1
+	stack_trap "at_max_set $amm mds1"
+
+	declare -a multiops
+
+	#define OBD_FAIL_LLITE_XATTR_PAUSE                 0x1420
+	$LCTL set_param fail_loc=0x80001420
+	$MULTIOP $DIR1/$tdir/mdtdir/$tfile Osw4096c &
+	multiops+=($!)
+	sleep 0.5
+	$MULTIOP $DIR2/$tdir/mdtdir/$tfile oO_WRONLY:w4096c &
+	multiops+=($!)
+	sleep 0.5
+	local mmrif=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight | tail -1)
+	# these are blocked by precreation until ost failover is in progress
+	for (( i=0; i < $mmrif; i++ )) ; do
+		$MULTIOP $DIR1/$tdir/d.${i}/parallel Oc &
+		multiops+=($!)
+	done
+	wait $failpid
+	local failed=0
+
+	for pid in ${multiops[@]}; do
+		wait $pid || ((failed++))
+	done
+	((failed == 0)) || error "$failed multiops failed"
+}
+run_test 31 "deadlock on file_remove_privs and occupied mod rpc slots"
+
 complete $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

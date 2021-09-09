@@ -602,6 +602,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLITE_RACE_MOUNT		    0x1417
 #define OBD_FAIL_LLITE_PAGE_ALLOC		    0x1418
 #define OBD_FAIL_LLITE_OPEN_DELAY		    0x1419
+#define OBD_FAIL_LLITE_XATTR_PAUSE		    0x1420
 
 #define OBD_FAIL_FID_INDIR	0x1501
 #define OBD_FAIL_FID_INLMA	0x1502
