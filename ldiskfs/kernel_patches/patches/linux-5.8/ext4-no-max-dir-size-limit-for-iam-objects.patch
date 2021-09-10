@@ -1,0 +1,30 @@
+---
+ fs/ext4/ext4.h  |    1 +
+ fs/ext4/namei.c |    6 ++++--
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1716,6 +1716,7 @@ enum {
+ 	EXT4_STATE_NO_EXPAND,		/* No space for expansion */
+ 	EXT4_STATE_DA_ALLOC_CLOSE,	/* Alloc DA blks on close */
+ 	EXT4_STATE_EXT_MIGRATE,		/* Inode is migrating */
++	EXT4_STATE_IAM,			/* Lustre IAM objects */
+ 	EXT4_STATE_NEWENTRY,		/* File just added to dir */
+ 	EXT4_STATE_MAY_INLINE_DATA,	/* may have in-inode data */
+ 	EXT4_STATE_EXT_PRECACHED,	/* extents have been precached */
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -60,8 +60,10 @@ struct buffer_head *ext4_append(handle_t
+ 
+ 	if (unlikely(EXT4_SB(inode->i_sb)->s_max_dir_size_kb &&
+ 		     ((inode->i_size >> 10) >=
+-		      EXT4_SB(inode->i_sb)->s_max_dir_size_kb)))
+-		return ERR_PTR(-ENOSPC);
++		      EXT4_SB(inode->i_sb)->s_max_dir_size_kb))) {
++		if (!ext4_test_inode_state(inode, EXT4_STATE_IAM))
++			return ERR_PTR(-ENOSPC);
++	}
+ 
+ 	/* with parallel dir operations all appends
+ 	* have to be serialized -bzzz */
