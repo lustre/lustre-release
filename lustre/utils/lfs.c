@@ -624,11 +624,6 @@ static uint32_t check_foreign_type_name(const char *foreign_type_name)
 
 static const char *error_loc = "syserror";
 
-#define MIGRATION_NONBLOCK	LLAPI_MIGRATION_NONBLOCK
-#define MIGRATION_MIRROR	LLAPI_MIGRATION_MIRROR
-#define MIGRATION_NONDIRECT	LLAPI_MIGRATION_NONDIRECT
-#define MIGRATION_VERBOSE	LLAPI_MIGRATION_VERBOSE
-
 static int
 migrate_open_files(const char *name, __u64 migration_flags,
 		   const struct llapi_stripe_param *param,
@@ -675,7 +670,7 @@ migrate_open_files(const char *name, __u64 migration_flags,
 	 */
 	/* Allow migrating even without the key on encrypted files */
 	rflags = O_RDWR | O_NOATIME | O_FILE_ENC;
-	if (!(migration_flags & MIGRATION_NONDIRECT))
+	if (!(migration_flags & LLAPI_MIGRATION_NONDIRECT))
 		rflags |= O_DIRECT;
 source_open:
 	fd = open(name, rflags);
@@ -684,7 +679,7 @@ source_open:
 		 * retry mirror extend in O_DIRECT.
 		 */
 		if (errno == ENOKEY && !(rflags & O_DIRECT) &&
-		    migration_flags & MIGRATION_MIRROR) {
+		    migration_flags & LLAPI_MIGRATION_MIRROR) {
 			rflags |= O_DIRECT;
 			goto source_open;
 		}
@@ -1249,7 +1244,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out_closed;
 	}
 
-	if (!(migration_flags & MIGRATION_NONBLOCK)) {
+	if (!(migration_flags & LLAPI_MIGRATION_NONBLOCK)) {
 		/*
 		 * Blocking mode (forced if servers do not support file lease).
 		 * It is also the default mode, since we cannot distinguish
@@ -1293,7 +1288,7 @@ out_closed:
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, name, error_loc, strerror(-rc));
-	else if (migration_flags & MIGRATION_VERBOSE)
+	else if (migration_flags & LLAPI_MIGRATION_VERBOSE)
 		printf("%s\n", name);
 
 	return rc;
@@ -1842,8 +1837,9 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		}
 	}
 	llapi_layout_comp_flags_set(m_layout, flags);
-	rc = migrate_open_files(name, MIGRATION_NONDIRECT | MIGRATION_MIRROR,
-				NULL, m_layout, &fd, &fdv);
+	rc = migrate_open_files(name,
+			     LLAPI_MIGRATION_NONDIRECT | LLAPI_MIGRATION_MIRROR,
+			     NULL, m_layout, &fd, &fdv);
 	if (rc < 0)
 		goto out;
 
@@ -2407,7 +2403,7 @@ out:
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, name, error_loc, strerror(-rc));
-	else if (migration_flags & MIGRATION_VERBOSE)
+	else if (migration_flags & LLAPI_MIGRATION_VERBOSE)
 		printf("%s\n", name);
 	if (data)
 		free(data);
@@ -3693,7 +3689,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname, argv[0]);
 				goto usage_error;
 			}
-			migration_flags |= MIGRATION_NONDIRECT;
+			migration_flags |= LLAPI_MIGRATION_NONDIRECT;
 			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
@@ -3842,7 +3838,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname, argv[0]);
 				goto usage_error;
 			}
-			migration_flags |= MIGRATION_NONBLOCK;
+			migration_flags |= LLAPI_MIGRATION_NONBLOCK;
 			break;
 		case 'N':
 			if (opc == SO_SETSTRIPE) {
@@ -3956,7 +3952,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
-			migration_flags = MIGRATION_VERBOSE;
+			migration_flags = LLAPI_MIGRATION_VERBOSE;
 			break;
 		case 'x':
 			xattr = optarg;
@@ -4144,7 +4140,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		goto error;
 	}
 
-	if ((migration_flags & MIGRATION_NONBLOCK) && migration_block) {
+	if ((migration_flags & LLAPI_MIGRATION_NONBLOCK) && migration_block) {
 		fprintf(stderr,
 			"%s %s: options --non-block and --block are mutually exclusive\n",
 			progname, argv[0]);
