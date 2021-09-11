@@ -526,6 +526,7 @@ extern int lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni);
 extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
 extern int lnet_nid2cpt(struct lnet_nid *nid, struct lnet_ni *ni);
 extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
+extern struct lnet_ni *lnet_nid_to_ni_locked(struct lnet_nid *nid, int cpt);
 extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
 extern struct lnet_ni *lnet_net2ni_locked(__u32 net, int cpt);
 extern struct lnet_ni *lnet_net2ni_addref(__u32 net);
@@ -580,9 +581,11 @@ extern void lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all);
 extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 						 struct list_head *queue,
 						 time64_t now);
-extern int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+extern int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni,
+				  struct lnet_nid *nid);
 extern void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
-extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni,
+				  struct lnet_nid *nid);
 void lnet_peer_ni_set_selection_priority(struct lnet_peer_ni *lpni,
 					 __u32 priority);
 extern void lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
@@ -607,7 +610,7 @@ int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf);
 int lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 void lnet_net_clr_pref_rtrs(struct lnet_net *net);
-int lnet_net_add_pref_rtr(struct lnet_net *net, lnet_nid_t gw_nid);
+int lnet_net_add_pref_rtr(struct lnet_net *net, struct lnet_nid *gw_nid);
 
 int lnet_islocalnid4(lnet_nid_t nid);
 int lnet_islocalnid(struct lnet_nid *nid);
@@ -907,6 +910,9 @@ struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 						  struct lnet_peer_ni *prev);
 struct lnet_peer_ni *lnet_nid2peerni_locked(lnet_nid_t nid, lnet_nid_t pref,
 					int cpt);
+struct lnet_peer_ni *lnet_peerni_by_nid_locked(struct lnet_nid *nid,
+					       struct lnet_nid *pref,
+					       int cpt);
 struct lnet_peer_ni *lnet_nid2peerni_ex(struct lnet_nid *nid, int cpt);
 struct lnet_peer_ni *lnet_peer_get_ni_locked(struct lnet_peer *lp,
 					     lnet_nid_t nid);
@@ -928,13 +934,16 @@ int lnet_peer_tables_create(void);
 void lnet_debug_peer(lnet_nid_t nid);
 struct lnet_peer_net *lnet_peer_get_net_locked(struct lnet_peer *peer,
 					       __u32 net_id);
-bool lnet_peer_is_pref_nid_locked(struct lnet_peer_ni *lpni, lnet_nid_t nid);
-int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+bool lnet_peer_is_pref_nid_locked(struct lnet_peer_ni *lpni,
+				  struct lnet_nid *nid);
+int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, struct lnet_nid *nid);
 void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
-bool lnet_peer_is_pref_rtr_locked(struct lnet_peer_ni *lpni, lnet_nid_t gw_nid);
+bool lnet_peer_is_pref_rtr_locked(struct lnet_peer_ni *lpni,
+				  struct lnet_nid *gw_nid);
 void lnet_peer_clr_pref_rtrs(struct lnet_peer_ni *lpni);
-int lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni, lnet_nid_t nid);
-int lnet_peer_ni_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
+int lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni, struct lnet_nid *nid);
+int lnet_peer_ni_set_non_mr_pref_nid(struct lnet_peer_ni *lpni,
+				     struct lnet_nid *nid);
 int lnet_add_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid, bool mr, bool temp);
 int lnet_del_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid);
 int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk);

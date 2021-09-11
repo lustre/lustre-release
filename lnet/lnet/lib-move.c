@@ -1326,9 +1326,8 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
 		 * preferred, then let's use it
 		 */
 		if (best_ni) {
-			/* FIXME need to handle large-addr nid */
 			lpni_is_preferred = lnet_peer_is_pref_nid_locked(
-				lpni, lnet_nid_to_nid4(&best_ni->ni_nid));
+				lpni, &best_ni->ni_nid);
 			CDEBUG(D_NET, "%s lpni_is_preferred = %d\n",
 			       libcfs_nidstr(&best_ni->ni_nid),
 			       lpni_is_preferred);
@@ -1506,7 +1505,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 	struct lnet_route *route;
 	int rc;
 	bool best_rte_is_preferred = false;
-	lnet_nid_t gw_pnid;
+	struct lnet_nid *gw_pnid;
 
 	CDEBUG(D_NET, "Looking up a route to %s, from %s\n",
 	       libcfs_net2str(rnet->lrn_net), libcfs_net2str(src_net));
@@ -1515,7 +1514,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		if (!lnet_is_route_alive(route))
 			continue;
-		gw_pnid = lnet_nid_to_nid4(&route->lr_gateway->lp_primary_nid);
+		gw_pnid = &route->lr_gateway->lp_primary_nid;
 
 		/* no protection on below fields, but it's harmless */
 		if (last_route && (last_route->lr_seq - route->lr_seq < 0))
@@ -1539,7 +1538,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 			if (!lpni) {
 				CDEBUG(D_NET,
 				       "Gateway %s does not have a peer NI on net %s\n",
-				       libcfs_nid2str(gw_pnid),
+				       libcfs_nidstr(gw_pnid),
 				       libcfs_net2str(src_net));
 				continue;
 			}
@@ -1555,7 +1554,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 			best_gw_ni = lpni;
 			best_rte_is_preferred = true;
 			CDEBUG(D_NET, "preferred gw = %s\n",
-			       libcfs_nid2str(gw_pnid));
+			       libcfs_nidstr(gw_pnid));
 			continue;
 		} else if ((!rc) && best_rte_is_preferred)
 			/* The best route we found so far is in the preferred
@@ -1583,7 +1582,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 		if (!lpni) {
 			CDEBUG(D_NET,
 			       "Gateway %s does not have a peer NI on net %s\n",
-			       libcfs_nid2str(gw_pnid),
+			       libcfs_nidstr(gw_pnid),
 			       libcfs_net2str(src_net));
 			continue;
 		}
@@ -1985,8 +1984,7 @@ lnet_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, struct lnet_ni *lni,
 		CDEBUG(D_NET, "Setting preferred local NID %s on NMR peer %s\n",
 		       libcfs_nidstr(&lni->ni_nid),
 		       libcfs_nidstr(&lpni->lpni_nid));
-		lnet_peer_ni_set_non_mr_pref_nid(
-			lpni, lnet_nid_to_nid4(&lni->ni_nid));
+		lnet_peer_ni_set_non_mr_pref_nid(lpni, &lni->ni_nid);
 	}
 }
 
@@ -2524,7 +2522,8 @@ lnet_find_existing_preferred_best_ni(struct lnet_peer_ni *lpni, int cpt)
 		if (lpni_entry->lpni_pref_nnids == 0)
 			continue;
 		LASSERT(lpni_entry->lpni_pref_nnids == 1);
-		best_ni = lnet_nid2ni_locked(lpni_entry->lpni_pref.nid, cpt);
+		best_ni = lnet_nid_to_ni_locked(&lpni_entry->lpni_pref.nid,
+						cpt);
 		break;
 	}
 
@@ -4475,7 +4474,7 @@ lnet_msgtyp2str (int type)
 }
 
 int
-lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
+lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	   void *private, int rdma_req)
 {
 	struct lnet_peer_ni *lpni;
@@ -4484,6 +4483,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	lnet_pid_t dest_pid;
 	lnet_nid_t dest_nid;
 	lnet_nid_t src_nid;
+	struct lnet_nid from_nid;
 	bool push = false;
 	int for_me;
 	__u32 type;
@@ -4491,6 +4491,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	int cpt;
 
 	LASSERT (!in_interrupt ());
+
+	lnet_nid4_to_nid(from_nid4, &from_nid);
 
 	type = le32_to_cpu(hdr->type);
 	src_nid = le64_to_cpu(hdr->src_nid);
@@ -4500,7 +4502,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 
 	/* FIXME handle large-addr nids */
 	for_me = (lnet_nid_to_nid4(&ni->ni_nid) == dest_nid);
-	cpt = lnet_cpt_of_nid(from_nid, ni);
+	cpt = lnet_cpt_of_nid(from_nid4, ni);
 
 	CDEBUG(D_NET, "TRACE: %s(%s) <- %s : %s - %s\n",
 		libcfs_nid2str(dest_nid),
@@ -4514,7 +4516,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	case LNET_MSG_GET:
 		if (payload_length > 0) {
 			CERROR("%s, src %s: bad %s payload %d (0 expected)\n",
-			       libcfs_nid2str(from_nid),
+			       libcfs_nid2str(from_nid4),
 			       libcfs_nid2str(src_nid),
 			       lnet_msgtyp2str(type), payload_length);
 			return -EPROTO;
@@ -4527,7 +4529,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		    (__u32)(for_me ? LNET_MAX_PAYLOAD : LNET_MTU)) {
 			CERROR("%s, src %s: bad %s payload %d "
 			       "(%d max expected)\n",
-			       libcfs_nid2str(from_nid),
+			       libcfs_nid2str(from_nid4),
 			       libcfs_nid2str(src_nid),
 			       lnet_msgtyp2str(type),
 			       payload_length,
@@ -4538,7 +4540,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 
 	default:
 		CERROR("%s, src %s: Bad message type 0x%x\n",
-		       libcfs_nid2str(from_nid),
+		       libcfs_nid2str(from_nid4),
 		       libcfs_nid2str(src_nid), type);
 		return -EPROTO;
 	}
@@ -4565,7 +4567,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			/* should have gone direct */
 			CERROR("%s, src %s: Bad dest nid %s "
 			       "(should have been sent direct)\n",
-				libcfs_nid2str(from_nid),
+				libcfs_nid2str(from_nid4),
 				libcfs_nid2str(src_nid),
 				libcfs_nid2str(dest_nid));
 			return -EPROTO;
@@ -4576,7 +4578,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			 * this node's NID on its own network */
 			CERROR("%s, src %s: Bad dest nid %s "
 			       "(it's my nid but on a different network)\n",
-				libcfs_nid2str(from_nid),
+				libcfs_nid2str(from_nid4),
 				libcfs_nid2str(src_nid),
 				libcfs_nid2str(dest_nid));
 			return -EPROTO;
@@ -4585,7 +4587,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		if (rdma_req && type == LNET_MSG_GET) {
 			CERROR("%s, src %s: Bad optimized GET for %s "
 			       "(final destination must be me)\n",
-				libcfs_nid2str(from_nid),
+				libcfs_nid2str(from_nid4),
 				libcfs_nid2str(src_nid),
 				libcfs_nid2str(dest_nid));
 			return -EPROTO;
@@ -4594,7 +4596,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		if (!the_lnet.ln_routing) {
 			CERROR("%s, src %s: Dropping message for %s "
 			       "(routing not enabled)\n",
-				libcfs_nid2str(from_nid),
+				libcfs_nid2str(from_nid4),
 				libcfs_nid2str(src_nid),
 				libcfs_nid2str(dest_nid));
 			goto drop;
@@ -4607,7 +4609,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	if (!list_empty(&the_lnet.ln_test_peers) &&	/* normally we don't */
 	    fail_peer(src_nid, 0)) {			/* shall we now? */
 		CERROR("%s, src %s: Dropping %s to simulate failure\n",
-		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
+		       libcfs_nid2str(from_nid4), libcfs_nid2str(src_nid),
 		       lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4617,7 +4619,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	    lnet_drop_rule_match(hdr, lnet_nid_to_nid4(&ni->ni_nid), NULL)) {
 		CDEBUG(D_NET,
 		       "%s, src %s, dst %s: Dropping %s to simulate silent message loss\n",
-		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
+		       libcfs_nid2str(from_nid4), libcfs_nid2str(src_nid),
 		       libcfs_nid2str(dest_nid), lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4625,7 +4627,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	msg = lnet_msg_alloc();
 	if (msg == NULL) {
 		CERROR("%s, src %s: Dropping %s (out of memory)\n",
-		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
+		       libcfs_nid2str(from_nid4), libcfs_nid2str(src_nid),
 		       lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4641,7 +4643,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	msg->msg_offset = 0;
 	msg->msg_hdr = *hdr;
 	/* for building message event */
-	msg->msg_from = from_nid;
+	msg->msg_from = from_nid4;
 	if (!for_me) {
 		msg->msg_target.pid	= dest_pid;
 		msg->msg_target.nid	= dest_nid;
@@ -4658,14 +4660,12 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	}
 
 	lnet_net_lock(cpt);
-	/* FIXME support large-addr nid */
-	lpni = lnet_nid2peerni_locked(from_nid, lnet_nid_to_nid4(&ni->ni_nid),
-				      cpt);
+	lpni = lnet_peerni_by_nid_locked(&from_nid, &ni->ni_nid, cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		rc = PTR_ERR(lpni);
 		CERROR("%s, src %s: Dropping %s (error %d looking up sender)\n",
-		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
+		       libcfs_nid2str(from_nid4), libcfs_nid2str(src_nid),
 		       lnet_msgtyp2str(type), rc);
 		lnet_msg_free(msg);
 		if (rc == -ESHUTDOWN)
@@ -4680,7 +4680,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	 */
 	if (((lnet_drop_asym_route && for_me) ||
 	     !lpni->lpni_peer_net->lpn_peer->lp_alive) &&
-	    LNET_NIDNET(src_nid) != LNET_NIDNET(from_nid)) {
+	    LNET_NIDNET(src_nid) != LNET_NIDNET(from_nid4)) {
 		__u32 src_net_id = LNET_NIDNET(src_nid);
 		struct lnet_peer *gw = lpni->lpni_peer_net->lpn_peer;
 		struct lnet_route *route;
@@ -4715,7 +4715,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			 * => asymmetric routing detected but forbidden
 			 */
 			CERROR("%s, src %s: Dropping asymmetrical route %s\n",
-			       libcfs_nid2str(from_nid),
+			       libcfs_nid2str(from_nid4),
 			       libcfs_nid2str(src_nid), lnet_msgtyp2str(type));
 			lnet_msg_free(msg);
 			goto drop;

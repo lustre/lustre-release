@@ -1462,7 +1462,7 @@ lnet_net_clr_pref_rtrs(struct lnet_net *net)
 
 int
 lnet_net_add_pref_rtr(struct lnet_net *net,
-		      lnet_nid_t gw_nid)
+		      struct lnet_nid *gw_nid)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_nid_list *ne;
@@ -1473,7 +1473,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	 * lock.
 	 */
 	list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
-		if (ne->nl_nid == gw_nid)
+		if (nid_same(&ne->nl_nid, gw_nid))
 			return -EEXIST;
 	}
 
@@ -1481,7 +1481,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	if (!ne)
 		return -ENOMEM;
 
-	ne->nl_nid = gw_nid;
+	ne->nl_nid = *gw_nid;
 
 	/* Lock the cpt to protect against addition and checks in the
 	 * selection algorithm
@@ -1494,11 +1494,11 @@ __must_hold(&the_lnet.ln_api_mutex)
 }
 
 bool
-lnet_net_is_pref_rtr_locked(struct lnet_net *net, lnet_nid_t rtr_nid)
+lnet_net_is_pref_rtr_locked(struct lnet_net *net, struct lnet_nid *rtr_nid)
 {
 	struct lnet_nid_list *ne;
 
-	CDEBUG(D_NET, "%s: rtr pref emtpy: %d\n",
+	CDEBUG(D_NET, "%s: rtr pref empty: %d\n",
 	       libcfs_net2str(net->net_id),
 	       list_empty(&net->net_rtr_pref_nids));
 
@@ -1507,9 +1507,9 @@ lnet_net_is_pref_rtr_locked(struct lnet_net *net, lnet_nid_t rtr_nid)
 
 	list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
 		CDEBUG(D_NET, "Comparing pref %s with gw %s\n",
-		       libcfs_nid2str(ne->nl_nid),
-		       libcfs_nid2str(rtr_nid));
-		if (rtr_nid == ne->nl_nid)
+		       libcfs_nidstr(&ne->nl_nid),
+		       libcfs_nidstr(rtr_nid));
+		if (nid_same(rtr_nid, &ne->nl_nid))
 			return true;
 	}
 

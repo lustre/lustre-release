@@ -213,7 +213,7 @@ lnet_udsp_apply_rule_on_ni(struct udsp_info *udi)
 	__u32 priority = (udi->udi_revert) ? -1 : udi->udi_priority;
 
 	rc = cfs_match_nid_net(
-		lnet_nid_to_nid4(&ni->ni_nid),
+		&ni->ni_nid,
 		ni_match->ud_net_id.udn_net_type,
 		&ni_match->ud_net_id.udn_net_num_range,
 		&ni_match->ud_addr_range);
@@ -239,7 +239,7 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 	struct lnet_route *route;
 	struct lnet_peer_ni *lpni;
 	bool cleared = false;
-	lnet_nid_t gw_nid, gw_prim_nid;
+	struct lnet_nid *gw_nid, *gw_prim_nid;
 	int rc = 0;
 	int i;
 
@@ -248,16 +248,17 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 		list_for_each_entry(rnet, rn_list, lrn_list) {
 			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 				/* look if gw nid on the same net matches */
-				gw_prim_nid = lnet_nid_to_nid4(
-					&route->lr_gateway->lp_primary_nid);
+				gw_prim_nid =
+					&route->lr_gateway->lp_primary_nid;
 				lpni = NULL;
 				while ((lpni = lnet_get_next_peer_ni_locked(route->lr_gateway,
 									    NULL,
 									    lpni)) != NULL) {
 					if (!lnet_get_net_locked(lpni->lpni_peer_net->lpn_net_id))
 						continue;
-					gw_nid = lnet_nid_to_nid4(&lpni->lpni_nid);
-					rc = cfs_match_nid_net(gw_nid,
+					gw_nid = &lpni->lpni_nid;
+					rc = cfs_match_nid_net(
+						gw_nid,
 						rte_action->ud_net_id.udn_net_type,
 						&rte_action->ud_net_id.udn_net_num_range,
 						&rte_action->ud_addr_range);
@@ -267,7 +268,8 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 				/* match gw primary nid on a remote network */
 				if (!rc) {
 					gw_nid = gw_prim_nid;
-					rc = cfs_match_nid_net(gw_nid,
+					rc = cfs_match_nid_net(
+						gw_nid,
 						rte_action->ud_net_id.udn_net_type,
 						&rte_action->ud_net_id.udn_net_num_range,
 						&rte_action->ud_addr_range);
@@ -286,13 +288,13 @@ lnet_udsp_apply_rte_list_on_net(struct lnet_net *net,
 				/* match. Add to pref NIDs */
 				CDEBUG(D_NET, "udsp net->gw: %s->%s\n",
 				       libcfs_net2str(net->net_id),
-				       libcfs_nid2str(gw_prim_nid));
+				       libcfs_nidstr(gw_prim_nid));
 				rc = lnet_net_add_pref_rtr(net, gw_prim_nid);
 				lnet_net_lock(LNET_LOCK_EX);
 				/* success if EEXIST return */
 				if (rc && rc != -EEXIST) {
 					CERROR("Failed to add %s to %s pref rtr list\n",
-					       libcfs_nid2str(gw_prim_nid),
+					       libcfs_nidstr(gw_prim_nid),
 					       libcfs_net2str(net->net_id));
 					return rc;
 				}
@@ -417,7 +419,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 	struct list_head *rn_list;
 	struct lnet_route *route;
 	bool cleared = false;
-	lnet_nid_t gw_nid;
+	struct lnet_nid *gw_nid;
 	int rc = 0;
 	int i;
 
@@ -425,9 +427,9 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 		rn_list = &the_lnet.ln_remote_nets_hash[i];
 		list_for_each_entry(rnet, rn_list, lrn_list) {
 			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
-				gw_nid = lnet_nid_to_nid4(
-					&route->lr_gateway->lp_primary_nid);
-				rc = cfs_match_nid_net(gw_nid,
+				gw_nid = &route->lr_gateway->lp_primary_nid;
+				rc = cfs_match_nid_net(
+					gw_nid,
 					rte_action->ud_net_id.udn_net_type,
 					&rte_action->ud_net_id.udn_net_num_range,
 					&rte_action->ud_addr_range);
@@ -446,7 +448,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 					}
 				}
 				CDEBUG(D_NET, "add gw nid %s as preferred for peer %s\n",
-				       libcfs_nid2str(gw_nid),
+				       libcfs_nidstr(gw_nid),
 				       libcfs_nidstr(&lpni->lpni_nid));
 				/* match. Add to pref NIDs */
 				rc = lnet_peer_add_pref_rtr(lpni, gw_nid);
@@ -454,7 +456,7 @@ lnet_udsp_apply_rte_list_on_lpni(struct lnet_peer_ni *lpni,
 				/* success if EEXIST return */
 				if (rc && rc != -EEXIST) {
 					CERROR("Failed to add %s to %s pref rtr list\n",
-					       libcfs_nid2str(gw_nid),
+					       libcfs_nidstr(gw_nid),
 					       libcfs_nidstr(&lpni->lpni_nid));
 					return rc;
 				}
@@ -480,7 +482,7 @@ lnet_udsp_apply_ni_list(struct lnet_peer_ni *lpni,
 			continue;
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
 			rc = cfs_match_nid_net(
-				lnet_nid_to_nid4(&ni->ni_nid),
+				&ni->ni_nid,
 				ni_action->ud_net_id.udn_net_type,
 				&ni_action->ud_net_id.udn_net_num_range,
 				&ni_action->ud_addr_range);
@@ -502,8 +504,7 @@ lnet_udsp_apply_ni_list(struct lnet_peer_ni *lpni,
 				libcfs_nidstr(&ni->ni_nid),
 				libcfs_nidstr(&lpni->lpni_nid));
 			/* match. Add to pref NIDs */
-			rc = lnet_peer_add_pref_nid(
-				lpni, lnet_nid_to_nid4(&ni->ni_nid));
+			rc = lnet_peer_add_pref_nid(lpni, &ni->ni_nid);
 			lnet_net_lock(LNET_LOCK_EX);
 			/* success if EEXIST return */
 			if (rc && rc != -EEXIST) {
@@ -529,7 +530,8 @@ lnet_udsp_apply_rule_on_lpni(struct udsp_info *udi)
 	bool local = udi->udi_local;
 	enum lnet_udsp_action_type type = udi->udi_type;
 
-	rc = cfs_match_nid_net(lnet_nid_to_nid4(&lpni->lpni_nid),
+	rc = cfs_match_nid_net(
+		&lpni->lpni_nid,
 		lp_match->ud_net_id.udn_net_type,
 		&lp_match->ud_net_id.udn_net_num_range,
 		&lp_match->ud_addr_range);
@@ -993,7 +995,8 @@ lnet_udsp_get_ni_info(struct lnet_ioctl_construct_udsp_info *info,
 		info->cud_net_priority = ni->ni_net->net_sel_priority;
 		list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
 			if (i < LNET_MAX_SHOW_NUM_NID)
-				info->cud_pref_rtr_nid[i] = ne->nl_nid;
+				info->cud_pref_rtr_nid[i] =
+					lnet_nid_to_nid4(&ne->nl_nid);
 			else
 				break;
 			i++;
@@ -1017,13 +1020,14 @@ lnet_udsp_get_peer_info(struct lnet_ioctl_construct_udsp_info *info,
 	       libcfs_nidstr(&lpni->lpni_nid),
 	       lpni->lpni_pref_nnids);
 	if (lpni->lpni_pref_nnids == 1) {
-		info->cud_pref_nid[0] = lpni->lpni_pref.nid;
+		info->cud_pref_nid[0] = lnet_nid_to_nid4(&lpni->lpni_pref.nid);
 	} else if (lpni->lpni_pref_nnids > 1) {
 		struct list_head *list = &lpni->lpni_pref.nids;
 
 		list_for_each_entry(ne, list, nl_list) {
 			if (i < LNET_MAX_SHOW_NUM_NID)
-				info->cud_pref_nid[i] = ne->nl_nid;
+				info->cud_pref_nid[i] =
+					lnet_nid_to_nid4(&ne->nl_nid);
 			else
 				break;
 			i++;
@@ -1033,7 +1037,8 @@ lnet_udsp_get_peer_info(struct lnet_ioctl_construct_udsp_info *info,
 	i = 0;
 	list_for_each_entry(ne, &lpni->lpni_rtr_pref_nids, nl_list) {
 		if (i < LNET_MAX_SHOW_NUM_NID)
-			info->cud_pref_rtr_nid[i] = ne->nl_nid;
+			info->cud_pref_rtr_nid[i] =
+				lnet_nid_to_nid4(&ne->nl_nid);
 		else
 			break;
 		i++;

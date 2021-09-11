@@ -102,7 +102,8 @@ void cfs_free_nidlist(struct list_head *list);
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(lnet_nid_t nid, struct list_head *list);
-int cfs_match_nid_net(lnet_nid_t nid, __u32 net, struct list_head *net_num_list,
+int cfs_match_nid_net(struct lnet_nid *nid, __u32 net,
+		      struct list_head *net_num_list,
 		      struct list_head *addr);
 int cfs_match_net(__u32 net_id, __u32 net_type,
 		  struct list_head *net_num_list);

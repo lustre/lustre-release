@@ -809,9 +809,9 @@ cfs_match_net(__u32 net_id, __u32 net_type, struct list_head *net_num_list)
 }
 
 int
-cfs_match_nid_net(lnet_nid_t nid, __u32 net_type,
-		  struct list_head *net_num_list,
-		  struct list_head *addr)
+cfs_match_nid_net(struct lnet_nid *nid, __u32 net_type,
+		   struct list_head *net_num_list,
+		   struct list_head *addr)
 {
 	__u32 address;
 	struct netstrfns *nf;
@@ -819,15 +819,16 @@ cfs_match_nid_net(lnet_nid_t nid, __u32 net_type,
 	if (!addr || !net_num_list)
 		return 0;
 
-	nf = type2net_info(LNET_NETTYP(LNET_NIDNET(nid)));
+	nf = type2net_info(LNET_NETTYP(LNET_NID_NET(nid)));
 	if (!nf || !net_num_list || !addr)
 		return 0;
 
-	address = LNET_NIDADDR(nid);
+	/* FIXME handle long-addr nid */
+	address = LNET_NIDADDR(lnet_nid_to_nid4(nid));
 
 	/* if either the address or net number don't match then no match */
 	if (!nf->nf_match_addr(address, addr) ||
-	    !cfs_match_net(LNET_NIDNET(nid), net_type, net_num_list))
+	    !cfs_match_net(LNET_NID_NET(nid), net_type, net_num_list))
 		return 0;
 
 	return 1;

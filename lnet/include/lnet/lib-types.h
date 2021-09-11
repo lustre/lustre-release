@@ -559,7 +559,7 @@ struct lnet_ping_buffer {
 
 struct lnet_nid_list {
 	struct list_head nl_list;
-	lnet_nid_t nl_nid;
+	struct lnet_nid nl_nid;
 };
 
 struct lnet_peer_ni {
@@ -626,7 +626,7 @@ struct lnet_peer_ni {
 	time64_t		lpni_last_alive;
 	/* preferred local nids: if only one, use lpni_pref.nid */
 	union lpni_pref {
-		lnet_nid_t	nid;
+		struct lnet_nid nid;
 		struct list_head nids;
 	} lpni_pref;
 	/* list of router nids preferred for this peer NI */
