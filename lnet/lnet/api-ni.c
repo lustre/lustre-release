@@ -1714,19 +1714,6 @@ lnet_nid_to_ni_addref(struct lnet_nid *nid)
 EXPORT_SYMBOL(lnet_nid_to_ni_addref);
 
 int
-lnet_islocalnid4(lnet_nid_t nid)
-{
-	struct lnet_ni	*ni;
-	int		cpt;
-
-	cpt = lnet_net_lock_current();
-	ni = lnet_nid2ni_locked(nid, cpt);
-	lnet_net_unlock(cpt);
-
-	return ni != NULL;
-}
-
-int
 lnet_islocalnid(struct lnet_nid *nid)
 {
 	struct lnet_ni	*ni;

@@ -668,7 +668,6 @@ struct lnet_net *lnet_get_net_locked(__u32 net_id);
 void lnet_net_clr_pref_rtrs(struct lnet_net *net);
 int lnet_net_add_pref_rtr(struct lnet_net *net, struct lnet_nid *gw_nid);
 
-int lnet_islocalnid4(lnet_nid_t nid);
 int lnet_islocalnid(struct lnet_nid *nid);
 int lnet_islocalnet(__u32 net);
 int lnet_islocalnet_locked(__u32 net);
@@ -981,7 +980,8 @@ struct lnet_peer_ni *lnet_peer_ni_find_locked(struct lnet_nid *nid);
 struct lnet_peer *lnet_find_peer4(lnet_nid_t nid);
 struct lnet_peer *lnet_find_peer(struct lnet_nid *nid);
 void lnet_peer_net_added(struct lnet_net *net);
-void lnet_peer_primary_nid_locked(lnet_nid_t nid, struct lnet_nid *result);
+void lnet_peer_primary_nid_locked(struct lnet_nid *nid,
+				  struct lnet_nid *result);
 int lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block);
 void lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg);
 int lnet_peer_discovery_start(void);

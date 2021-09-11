@@ -1354,13 +1354,12 @@ lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni)
 }
 
 void
-lnet_peer_primary_nid_locked(lnet_nid_t nid, struct lnet_nid *result)
+lnet_peer_primary_nid_locked(struct lnet_nid *nid, struct lnet_nid *result)
 {
-	/* FIXME handle large-addr nid */
 	struct lnet_peer_ni *lpni;
 
-	lnet_nid4_to_nid(nid, result);
-	lpni = lnet_find_peer_ni_locked(nid);
+	*result = *nid;
+	lpni = lnet_peer_ni_find_locked(nid);
 	if (lpni) {
 		*result = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
 		lnet_peer_ni_decref_locked(lpni);
