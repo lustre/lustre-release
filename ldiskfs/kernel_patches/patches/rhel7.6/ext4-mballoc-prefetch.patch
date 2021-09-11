@@ -29,7 +29,7 @@
  	int err;
  
 -	bh = ext4_read_block_bitmap_nowait(sb, block_group);
-+	bh = ext4_read_block_bitmap_nowait(sb, block_group, 1);
++	bh = ext4_read_block_bitmap_nowait(sb, block_group, 0);
  	if (!bh)
  		return NULL;
  	err = ext4_wait_block_bitmap(sb, block_group, bh);
@@ -203,7 +203,7 @@
  	return err;
  }
  
-@@ -2832,6 +2925,22 @@ int ext4_mb_init(struct super_block *
+@@ -2832,6 +2925,24 @@ int ext4_mb_init(struct super_block *
  		sbi->s_mb_large_req = sbi->s_stripe * 8;
  		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
  	}
@@ -221,8 +221,10 @@
 +	 * load too many groups, at some point we should start to use what
 +	 * we've got in memory.
 +	 * with an average random access time 5ms, it'd take a second to get
-+	 * 200 groups (* N with flex_bg), so let's make this limit 32 */
-+	sbi->s_mb_prefetch_limit = sbi->s_mb_prefetch * 32;
++	 * 200 groups (* N with flex_bg), so let's make this limit 4 */
++	sbi->s_mb_prefetch_limit = sbi->s_mb_prefetch * 4;
++	if (sbi->s_mb_prefetch_limit > ext4_get_groups_count(sb))
++		sbi->s_mb_prefetch_limit = ext4_get_groups_count(sb);
  
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
  	if (sbi->s_locality_groups == NULL) {
