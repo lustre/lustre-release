@@ -4254,24 +4254,28 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 	/* If possible resent found a lock, @lh is set to its handle */
 	new_lock = ldlm_handle2lock_long(&lh->mlh_reg_lh, 0);
 
-        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
-                lh->mlh_reg_lh.cookie = 0;
-                RETURN(0);
-        }
-
-	if (new_lock == NULL && (flags & LDLM_FL_RESENT)) {
-		/* Lock is pinned by ldlm_handle_enqueue0() as it is
-		 * a resend case, however, it could be already destroyed
-		 * due to client eviction or a raced cancel RPC. */
-		LDLM_DEBUG_NOLOCK("Invalid lock handle %#llx\n",
-				  lh->mlh_reg_lh.cookie);
+	if (new_lock == NULL) {
+		if (flags & LDLM_FL_INTENT_ONLY) {
+			result = 0;
+		} else if (flags & LDLM_FL_RESENT) {
+			/* Lock is pinned by ldlm_handle_enqueue0() as it is a
+			 * resend case, however, it could be already destroyed
+			 * due to client eviction or a raced cancel RPC.
+			 */
+			LDLM_DEBUG_NOLOCK("Invalid lock handle %#llx\n",
+					  lh->mlh_reg_lh.cookie);
+			result = -ESTALE;
+		} else {
+			CERROR("%s: Invalid lockh=%#llx flags=%#llx fid1="DFID" fid2="DFID": rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       lh->mlh_reg_lh.cookie, flags,
+			       PFID(&info->mti_tmp_fid1),
+			       PFID(&info->mti_tmp_fid2), result);
+			result = -ESTALE;
+		}
 		lh->mlh_reg_lh.cookie = 0;
-		RETURN(-ESTALE);
+		RETURN(result);
 	}
-
-	LASSERTF(new_lock != NULL,
-		 "lockh %#llx flags %#llx : rc = %d\n",
-		 lh->mlh_reg_lh.cookie, flags, result);
 
         /*
          * If we've already given this lock to a client once, then we should
