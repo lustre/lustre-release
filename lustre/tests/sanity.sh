@@ -14227,21 +14227,31 @@ check_stats() {
 	local want=${3:-0}
 	local res
 
+	# open             11 samples [usecs] 468 4793 13658 35791898
 	case $facet in
-	mds*) res=$(do_facet $facet \
-		   $LCTL get_param mdt.$FSNAME-MDT0000.md_stats | grep "$op")
+	mds*) res=($(do_facet $facet \
+		   $LCTL get_param mdt.$FSNAME-MDT0000.md_stats | grep "$op"))
 		 ;;
-	ost*) res=$(do_facet $facet \
-		   $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$op")
+	ost*) res=($(do_facet $facet \
+		  $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$op"))
 		 ;;
 	*) error "Wrong facet '$facet'" ;;
 	esac
-	[ "$res" ] || error "The counter for $op on $facet was not incremented"
-	# if the argument $3 is zero, it means any stat increment is ok.
-	if [[ $want -gt 0 ]]; then
-		local count=$(echo $res | awk '{ print $2 }')
-		[[ $count -ne $want ]] &&
+	[[ -n "$res" ]] || error "counter for $op on $facet not incremented"
+	# if $want is zero, it means any stat increment is ok.
+	if (( $want > 0 )); then
+		local count=${res[1]}
+
+		if (( $count != $want )); then
+			if [[ $facet =~ "mds" ]]; then
+				do_nodes $(comma_list $(mdts_nodes)) \
+					$LCTL get_param mdt.*.md_stats
+			else
+				do_nodes $(comma_list $(osts-nodes)) \
+					$LCTL get_param obdfilter.*.stats
+			fi
 			error "The $op counter on $facet is $count, not $want"
+		fi
 	fi
 }
 
@@ -14261,8 +14271,11 @@ test_133a() {
 	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	# verify mdt stats first.
-	mkdir ${testdir} || error "mkdir failed"
+	mkdir_on_mdt0 ${testdir} || error "mkdir_on_mdt0 failed"
 	check_stats $SINGLEMDS "mkdir" 1
+
+	# clear "open" from "lfs mkdir" above
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
 	touch ${testdir}/${tfile} || error "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
@@ -14302,7 +14315,8 @@ test_133b() {
 
 	local testdir=$DIR/${tdir}/stats_testdir
 
-	mkdir -p ${testdir} || error "mkdir failed"
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir_on_mdt0 ${testdir} || error "mkdir_on_mdt0 failed"
 	touch ${testdir}/${tfile} || error "touch failed"
 	cancel_lru_locks mdc
 
@@ -14457,12 +14471,12 @@ test_133d() {
 
 	local testdir1=$DIR/${tdir}/stats_testdir1
 	local testdir2=$DIR/${tdir}/stats_testdir2
-	mkdir -p $DIR/${tdir}
+	mkdir -p $DIR/${tdir} || error "mkdir $tdir failed"
 
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.rename_stats=clear
 
-	lfs mkdir -i 0 -c 1 ${testdir1} || error "mkdir failed"
-	lfs mkdir -i 0 -c 1 ${testdir2} || error "mkdir failed"
+	mkdir_on_mdt0 ${testdir1} || error "mkdir $testdir1 failed"
+	mkdir_on_mdt0 ${testdir2} || error "mkdir $testdir2 failed"
 
 	createmany -o $testdir1/test 512 || error "createmany failed"
 

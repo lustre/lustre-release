@@ -716,21 +716,21 @@ test_7_cycle() {
 }
 
 test_7a() {
-    first="createmany -o $DIR/$tdir/$tfile- 1"
-    lost="rm $MOUNT2/$tdir/$tfile-0"
-    last="createmany -o $DIR/$tdir/$tfile- 1"
-    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.1 failed"
+	first="createmany -o $DIR/$tdir/$tfile- 1"
+	lost="rm $MOUNT2/$tdir/$tfile-0"
+	last="createmany -o $DIR/$tdir/$tfile- 1"
+	test_7_cycle "$first" "$lost" "$last" || error "Test 7a.1 failed"
 
-    first="createmany -o $DIR/$tdir/$tfile- 1"
-    lost="rm $MOUNT2/$tdir/$tfile-0"
-    last="mkdir $DIR/$tdir/$tfile-0"
-    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.2 failed"
+	first="createmany -o $DIR/$tdir/$tfile- 1"
+	lost="rm $MOUNT2/$tdir/$tfile-0"
+	last="$LFS mkdir -i 0 -c 1 $DIR/$tdir/$tfile-0"
+	test_7_cycle "$first" "$lost" "$last" || error "Test 7a.2 failed"
 
-    first="mkdir $DIR/$tdir/$tfile-0"
-    lost="mv $MOUNT2/$tdir/$tfile-0 $MOUNT2/$tdir/$tfile-1"
-    last="createmany -o $DIR/$tdir/$tfile- 1"
-    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.3 failed"
-    return 0
+	first="mkdir $DIR/$tdir/$tfile-0"
+	lost="mv $MOUNT2/$tdir/$tfile-0 $MOUNT2/$tdir/$tfile-1"
+	last="createmany -o $DIR/$tdir/$tfile- 1"
+	test_7_cycle "$first" "$lost" "$last" || error "Test 7a.3 failed"
+	return 0
 }
 run_test 7a "create, {lost}, create"
 
