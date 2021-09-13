@@ -1250,7 +1250,7 @@ test_23a() {
 	else
 		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			do_facet mgs $PERM_CMD \
-				osd-*.$FSNAME-OST*.quota_slave.enable=ug
+				osd-*.$FSNAME-OST*.quota_slave.enabled=ug
 		else
 			do_facet mgs $PERM_CMD $FSNAME.quota.ost=ug
 		fi
@@ -1325,7 +1325,7 @@ test_23b() {
 	else
 		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			do_facet mgs $PERM_CMD \
-				osd-*.$FSNAME-OST*.quota_slave.enable=none
+				osd-*.$FSNAME-OST*.quota_slave.enabled=none
 		else
 			do_facet mgs $PERM_CMD $FSNAME.quota.ost=none
 		fi
