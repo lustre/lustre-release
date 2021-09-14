@@ -322,19 +322,15 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	int                 rc, size = 0;
 	ENTRY;
 
-	LASSERT(obj->oo_dn != NULL);
-	LASSERT(osd_invariant(obj));
-
 	if (!osd_obj2dev(obj)->od_posix_acl &&
 	    (strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS) == 0 ||
 	     strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
 	down_read(&obj->oo_guard);
-	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed)) {
-		up_read(&obj->oo_guard);
-		RETURN(-ENOENT);
-	}
+	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
+		GOTO(out, rc = -ENOENT);
+	LASSERT(obj->oo_dn != NULL);
 
 	/* For the OST migrated from ldiskfs, the PFID EA may
 	 * be stored in LMA because of ldiskfs inode size. */
@@ -342,12 +338,13 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		rc = osd_get_pfid_from_lma(env, obj, buf, &size);
 	else
 		rc = osd_xattr_get_internal(env, obj, buf, name, &size);
-	up_read(&obj->oo_guard);
 
 	if (rc == -ENOENT)
 		rc = -ENODATA;
 	else if (rc == 0)
 		rc = size;
+out:
+	up_read(&obj->oo_guard);
 	RETURN(rc);
 }
 
@@ -989,11 +986,12 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
-	LASSERT(obj->oo_dn != NULL);
 
 	down_read(&obj->oo_guard);
-	if (likely(dt_object_exists(&obj->oo_dt) && !obj->oo_destroyed))
+	if (likely(dt_object_exists(&obj->oo_dt) && !obj->oo_destroyed)) {
+		LASSERT(obj->oo_dn != NULL);
 		__osd_xattr_declare_del(env, obj, name, oh);
+	}
 	up_read(&obj->oo_guard);
 
 	RETURN(0);
@@ -1070,9 +1068,6 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(handle != NULL);
-	LASSERT(obj->oo_dn != NULL);
-	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt));
 	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
@@ -1082,14 +1077,18 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-EOPNOTSUPP);
 
 	down_write(&obj->oo_guard);
+	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
+		GOTO(out, rc = -ENOENT);
+	LASSERT(obj->oo_dn != NULL);
 	/* For the OST migrated from ldiskfs, the PFID EA may
 	 * be stored in LMA because of ldiskfs inode size. */
 	if (unlikely(strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma))
 		rc = osd_xattr_split_pfid(env, obj, oh);
 	else
 		rc = __osd_xattr_del(env, obj, name, oh);
-	up_write(&obj->oo_guard);
 
+out:
+	up_write(&obj->oo_guard);
 	RETURN(rc);
 }
 
@@ -1225,11 +1224,10 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	int                    rc, counted;
 	ENTRY;
 
-	LASSERT(obj->oo_dn != NULL);
-	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt));
-
 	down_read(&obj->oo_guard);
+	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
+		GOTO(out, rc = -ENOENT);
+	LASSERT(obj->oo_dn != NULL);
 
 	rc = osd_sa_xattr_list(env, obj, lb);
 	if (rc < 0)
