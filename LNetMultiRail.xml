@@ -400,8 +400,10 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       networks. The peers using the gateway can reach it on one or
       more of its interfaces. Multi-Rail routing takes care of managing which
       interface to use.</para>
-      <screen>lnetctl route add --net &lt;remote network&gt; --gateway &lt;NID for the gateway&gt;
-                  --hops &lt;number of hops&gt; --priority &lt;route priority&gt;</screen>
+      <screen>lnetctl route add --net &lt;remote network&gt;
+      --gateway &lt;NID for the gateway&gt;
+      --hop &lt;number of hops&gt; --priority &lt;route priority&gt;
+      </screen>
       </section>
       <section xml:id="mrrouting.health_config.modparams">
         <title>Configuring Module Parameters</title>
@@ -441,9 +443,15 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
               </entry>
               <entry>
                 <para>Defaults to <literal>1</literal>. If set to
-                <literal>1</literal> a route will be considered up if and only
-                if there exists at least one healthy interface on the local and
-                remote interfaces of the gateway.</para>
+                <literal>1</literal> single-hop routes have an additional
+                requirement to be considered up. The requirement is that the
+                gateway of the route must have at least one healthy network
+                interface connected directly to the remote net of the route. In
+                this context single-hop routes are routes that are given
+                <literal>hop=1</literal> explicitly when created, or routes for
+                which lnet can infer that they have only one hop.
+                Otherwise the route is not single-hop and this parameter has no
+                effect.</para>
               </entry>
             </row>
             <row>
@@ -543,7 +551,8 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       <orderedlist>
         <listitem><para>The gateway can be reached on the local net via at least
         one path.</para></listitem>
-        <listitem><para>If <literal>avoid_asym_router_failure</literal> is
+        <listitem><para> For a single-hop route, if
+        <literal>avoid_asym_router_failure</literal> is
         enabled then the remote network defined in the route must have at least
         one healthy interface on the gateway.</para></listitem>
       </orderedlist>

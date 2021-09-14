@@ -378,8 +378,8 @@ net:
                    all LNet messaged destined for the identified
                    network
         --hop: number of hops to final destination
-               (1 &lt; hops &lt; 255)
-        --priority: priority of route (0 - highest prio)
+               (1 &lt;= hops &lt;= 255) (optional)
+        --priority: priority of route (0 - highest prio) (optional)
 
 Example:
 lnetctl route add --net tcp2 --gateway 192.168.205.130@tcp1 --hop 2 --prio 1</screen>
@@ -397,9 +397,9 @@ lnetctl route del --net tcp2 --gateway 192.168.205.130@tcp1</screen>
         --net: net name (ex tcp0) to filter on
         --gateway: gateway nid (ex 10.1.1.2@tcp) to filter on
         --hop: number of hops to final destination
-               (1 &lt; hops &lt; 255) to filter on
+               (1 &lt;= hops &lt;= 255) to filter on (-1 default)
         --priority: priority of route (0 - highest prio)
-                    to filter on
+                    to filter on (0 default)
         --verbose: display detailed output per route
 
 Examples:

@@ -457,31 +457,130 @@ lnet large_router_buffers=8192
         </listitem>
         <listitem>
           <para>
-          <literal>avoid_asym_router_failure</literal>– When set to 1, the
-          router checker running on the client or a server periodically pings
-          all the routers corresponding to the NIDs identified in the routes
-          parameter setting on the node to determine the status of each router
-          interface. The default setting is 1. (For more information about the
-          LNet routes parameter, see 
+          <literal>avoid_asym_router_failure</literal>– When set to 1,
+          this parameter adds the additional requirement that for a route to be
+          considered up the gateway of the route must have at least one NI up on
+          the remote network of the route.
+          This new requirement applies only to routes that are single-hop,
+          which means that either the route's hop value is explicitly set to 1,
+          or that it can be inferred that the route is single-hop. The default
+          setting is 1.</para>
+          <para>The inference of a single-hop routes works as follows:
+          If the router checker is running on a node, the node will periodically
+          ping all of its gateways, which are routers on the same lnet that are
+          listed in the node's routes. The gateways' responses will include the
+          status of all their network interfaces (NIs).
+          If a node <literal>A</literal> has a route <literal>R</literal>
+          through gateway <literal>B</literal> to network <literal>C</literal>,
+          and node <literal>A</literal> sees that router <literal>B</literal>
+          has at least one NI that connects directly to network
+          <literal>C</literal> (in a ping response from <literal>B</literal>),
+          node <literal>A</literal> will infer that <literal>R</literal> is a
+          single-hop route.
+          This aspect of single-hop is independent of the hop value of the
+          route. For more information about the LNet routes parameter, see
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="lnet_module_routes" /></para>
-          <para>A router is considered down if any of its NIDs are down. For
-          example, router X has three NIDs: 
-          <literal>Xnid1</literal>, 
-          <literal>Xnid2</literal>, and 
-          <literal>Xnid3</literal>. A client is connected to the router via 
-          <literal>Xnid1</literal>. The client has router checker enabled. The
-          router checker periodically sends a ping to the router via 
-          <literal>Xnid1</literal>. The router responds to the ping with the
-          status of each of its NIDs. In this case, it responds with 
-          <literal>Xnid1=up</literal>, 
-          <literal>Xnid2=up</literal>, 
-          <literal>Xnid3=down</literal>. If 
-          <literal>avoid_asym_router_failure==1</literal>, the router is
-          considered down if any of its NIDs are down, so router X is
-          considered down and will not be used for routing messages. If 
-          <literal>avoid_asym_router_failure==0</literal>, router X will
-          continue to be used for routing messages.</para>
+          <para>It is recommended to specify <literal>hop=1</literal> when
+          creating a single-hop
+          route when this feature is enabled. When a route truly has only 1 hop,
+          it is still recommended to explicitly set hop=1 because the single-hop
+          inference mechanism will fail in cases where NIs fail to ever come up
+          at all. This is because for the route inference to work, the NIs must
+          at least come up or the gateway won't even mention them in the ping
+          response, so the node won't see any mention of the remote net of the
+          route in the gateway's NIs, and will mistakenly consider the route to
+          be multi-hop, and <literal>avoid_asym_router_failure</literal>
+          will then have no effect unless hop=1 is set explicitly when the route
+          is created.</para>
+          <para>In the following examples, nodes running lnet are circles,
+          networks are squares,
+          and NIs are lines labeled by their NIDs.
+          There is a client <literal>C</literal> and a router
+          <literal>X</literal>. <literal>C</literal>
+          has routes to networks <literal>o2ib0</literal> and
+          <literal>o2ib1</literal> with <literal>X</literal> as the gateway.
+          If an NI is red
+          with it's name crossed out, <literal>C</literal> considers it
+          to be down, otherwise <literal>C</literal>
+          considers it to be up.</para>
+          <figure xml:id="avoid_asym_router_failure.fig.one_o2ib0_down">
+            <title>One of Two Connections to o2ib0 Down</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata scalefit="1" width="45%"
+                           fileref="figures/Tuning_one_o2ib0_down.png" />
+                </imageobject>
+                <textobject>
+                  <phrase>One of Two Connections to o2ib0 Down</phrase>
+                </textobject>
+            </mediaobject>
+          </figure>
+          <para>In the above figure, one of two NIs that connect to
+          <literal>o2ib0</literal> is up,
+          so the route to <literal>o2ib0</literal> is considered up.</para>
+          <figure xml:id="avoid_asym_router_failure.fig.both_o2ib0_down">
+            <title>Both Connections to o2ib0 Down</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata scalefit="1" width="45%"
+                           fileref="figures/Tuning_both_o2ib0_down.png" />
+               </imageobject>
+               <textobject>
+                 <phrase>Both Connections to o2ib0 Down</phrase>
+               </textobject>
+            </mediaobject>
+          </figure>
+          <para>In the above figure, zero NIs that connect to
+          <literal>o2ib0</literal> are up,
+          so the route to <literal>o2ib0</literal> is down.</para>
+          <figure xml:id="avoid_asym_router_failure.fig.o2ib1_down">
+            <title>Connection to o2ib1 Down</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata scalefit="1" width="45%"
+                           fileref="figures/Tuning_o2ib1_down.png" />
+              </imageobject>
+              <textobject>
+                <phrase>Connection to o2ib1 Down</phrase>
+              </textobject>
+            </mediaobject>
+          </figure>
+          <para>In the above figure, zero NIs that connect to
+          <literal>o2ib1</literal> are up,
+          so the route to <literal>o2ib1</literal> is down.</para>
+          <figure xml:id="avoid_asym_router_failure.fig.o2ib1_missing">
+            <title>Connection to o2ib1 Never Came Up</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata scalefit="1" width="65%"
+                           fileref="figures/Tuning_o2ib1_missing.png" />
+              </imageobject>
+              <textobject>
+                <phrase>Connection to o2ib1 Never Came Up </phrase>
+              </textobject>
+            </mediaobject>
+          </figure>
+          <para>Compare Figures 34.3 and 34.4. In 34.4,
+          <literal>X4@o2ib1</literal> never came up
+          (rather than coming up and then going down). Consequently,
+          <literal>X</literal> did not list <literal>X4@o2ib1</literal> in its
+          ping response, so <literal>C</literal> cannot infer that
+          <literal>X</literal> should be directly connected to
+          <literal>o2ib1</literal>. If <literal>C</literal> has a route to
+          <literal>o2ib1</literal> through <literal>X</literal>, and the hop
+          count is not set to 1 by the sysadmin, LNet assumes that
+          <literal>X</literal> has a route to <literal>o2ib1</literal> through
+          some remote router node, such as <literal>Y</literal>. The gray part of
+          Figure 34.4 shows the sort of configuration that LNet incorrectly
+          assumes in this situation. Therefore, <literal>C</literal> will try
+          to send messages for <literal>o2ib1</literal> through
+          <literal>X</literal>, where they will be dropped.
+          If the sysadmin explicitly sets <literal>hop=1</literal> for the route
+          to <literal>o2ib1</literal> (on <literal>C</literal>), LNet will know
+          that if <literal>X</literal> does not report an NI on
+          <literal>o2ib1</literal>, that the route should be marked as down.
+          </para>
         </listitem>
       </itemizedlist></para>
       <para>The following router checker parameters must be set to the maximum

@@ -255,14 +255,15 @@ extern int lustre_lnet_config_route(char *nw, char *gw,
                     cYAML **err_rc);</screen>
         <para><emphasis role="bold">IOCTL to Kernel:</emphasis></para>
         <para>IOC_LIBCFS_ADD_ROUTE</para>
-	<para><emphasis role="bold">Description:</emphasis></para>
-	<para>The LNet Kernel module adds this route to the list of
-	existing routes, if one doesn't already exist. If hop parameter is
-	not specified (IE: -1) then the hop count is set to 1.  If the
-	priority parameter is not specified (IE: -1) then the priority is
-	set to 0. All routes with the same hop and priority are used in
-	round robin. Routes with lower number of hops and/or higher
-	priority are preferred. 0 is the highest priority.</para>
+	    <para><emphasis role="bold">Description:</emphasis></para>
+	    <para>The LNet Kernel module adds this route to the list of
+	    existing routes, if one doesn't already exist. If the
+        hops parameter is not specified then the hop count is
+        set to "undefined"(-1). If the priority parameter is not specified then
+        the priority is set to 0. All routes with the same hop and priority are
+        used in round robin. Routes with lower number of hops and/or higher
+	    priority are preferred. 0 is the highest priority. "Undefined"
+	    hops (-1) is treated as 1 during route selection.</para>
         <para>If a route already exists the request to add the same route is ignored.</para>
         <para><emphasis role="bold">Return Value</emphasis></para>
         <para>-EINVAL: if the network of the route is local</para>

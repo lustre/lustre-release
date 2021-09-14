@@ -197,14 +197,36 @@ routes (&quot;&quot;)</title>
         <screen>&lt;expansion&gt; :== &quot;[&quot; &lt;entry&gt; { &quot;,&quot; &lt;entry&gt; } &quot;]&quot;
 &lt;entry&gt; :== &lt;numeric range&gt; | &lt;non-numeric item&gt;
 &lt;numeric range&gt; :== &lt;number&gt; [ &quot;-&quot; &lt;number&gt; [ &quot;/&quot; &lt;number&gt; ] ]</screen>
-        <para>The expansion is a list enclosed in square brackets. Numeric items in the list may be a single number, a contiguous range of numbers, or a strided range of numbers. For example, <literal>routes=&quot;elan 192.168.1.[22-24]@tcp&quot;</literal> says that network <literal>elan0</literal> is adjacent (hopcount defaults to 1); and is accessible via 3 routers on the <literal>tcp0</literal> network (<literal>192.168.1.22@tcp</literal>, <literal>192.168.1.23@tcp</literal> and <literal>192.168.1.24@tcp</literal>).</para>
+        <para>The expansion is a list enclosed in square brackets. Numeric
+        items in the list may be a single number, a contiguous range of numbers,
+        or a strided range of numbers. For example, <literal>routes=&quot;elan
+        192.168.1.[22-24]@tcp&quot;</literal> says that network
+        <literal>elan0</literal> may be adjacent or behind another network
+        (hopcount is undefined); and is accessible via 3 routers on the
+        <literal>tcp0</literal> network (<literal>192.168.1.22@tcp</literal>,
+        <literal>192.168.1.23@tcp</literal> and
+        <literal>192.168.1.24@tcp</literal>).</para>
         <para><literal>routes=&quot;[tcp,o2ib] 2 [8-14/2]@elan&quot;</literal>
 says that 2 networks (<literal>tcp0</literal> and <literal>o2ib0</literal>) are accessible through 4 routers (<literal>8@elan</literal>, <literal>10@elan</literal>, <literal>12@elan</literal> and <literal>14@elan</literal>). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
         <para>Duplicate entries, entries that route to a local network, and entries that specify routers on a non-local network are ignored.</para>
-        <para>Prior to release 2.5, a conflict between equivalent entries was resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent)..</para>
-        <para condition='l25'>Since 2.5, equivalent entries are resolved in favor of the route with the lowest priority number or shorter hopcount if the priorities are equal. The priority, if omitted, defaults to 0.  The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
-        <para>It is an error to specify routes to the same destination with routers on different local networks.</para>
-        <para>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
+        <para>Prior to release 2.5, a conflict between equivalent entries was
+        resolved in favor of the route with the shorter hopcount. The hopcount,
+        if omitted, is undefined, but is treated as 1 when being compared to
+        other routes during selection (as if the remote network is adjacent).
+        </para>
+        <para condition='l25'>Since 2.5, equivalent entries are resolved in
+        favor of the route with the lowest priority number or shorter hopcount
+        if the priorities are equal. The priority, if omitted, defaults to 0.
+        The hopcount, if omitted, is undefined, but is treated as 1 when being
+        compared to other routes during selection (as if the remote network is
+        adjacent).</para>
+        <para>It is an error to specify routes to the same destination with
+        routers on different local networks.</para>
+        <para>If a route string contains no hop count, then the hop count is
+        undefined. Explicitly setting the hop count to 1 is recommended if the
+        remote network is adjacent and
+        <literal>avoid_asym_router_failure</literal> is enabled
+        to ensure proper operation of the feature.</para>
       </section>
       <section remap="h4">
           <title><indexterm><primary>configuring</primary>
