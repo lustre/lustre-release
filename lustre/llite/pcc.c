@@ -3364,7 +3364,8 @@ out:
 /*
  * Reset uid, gid or size for the PCC copy masked by @valid.
  */
-static int pcc_inode_reset_iattr(struct dentry *dentry, unsigned int valid,
+static int pcc_inode_reset_iattr(struct inode *lustre_inode,
+				 struct dentry *dentry, unsigned int valid,
 				 kuid_t uid, kgid_t gid, loff_t size)
 {
 	struct inode *inode = dentry->d_inode;
@@ -3377,6 +3378,7 @@ static int pcc_inode_reset_iattr(struct dentry *dentry, unsigned int valid,
 	attr.ia_uid = uid;
 	attr.ia_gid = gid;
 	attr.ia_size = size;
+	attr.ia_mtime = inode_get_mtime(lustre_inode);
 
 	inode_lock(inode);
 	rc = notify_change(&nop_mnt_idmap, dentry, &attr, NULL);
@@ -3502,7 +3504,7 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 	if (pcci == NULL)
 		GOTO(out_put, rc = -ENOMEM);
 
-	rc = pcc_inode_reset_iattr(pcc_dentry, ATTR_UID | ATTR_GID,
+	rc = pcc_inode_reset_iattr(inode, pcc_dentry, ATTR_UID | ATTR_GID,
 				   old_cred->suid, old_cred->sgid, 0);
 	if (rc)
 		GOTO(out_put, rc);
@@ -3658,7 +3660,7 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 		GOTO(out_dentry, rc);
 	}
 
-	rc = pcc_inode_reset_iattr(*dentry, ATTR_UID | ATTR_GID,
+	rc = pcc_inode_reset_iattr(inode, *dentry, ATTR_UID | ATTR_GID,
 				   old_cred->uid, old_cred->gid, 0);
 	if (rc)
 		GOTO(out_fput, rc);
@@ -3693,8 +3695,9 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 	 * copy after copy data. Otherwise, it may get wrong file size after
 	 * re-attach a file. See LU-13023 for details.
 	 */
-	rc = pcc_inode_reset_iattr(*dentry, ATTR_SIZE, KUIDT_INIT(0),
-				   KGIDT_INIT(0), ret);
+	rc = pcc_inode_reset_iattr(inode, *dentry,
+				   ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET,
+				   KUIDT_INIT(0), KGIDT_INIT(0), ret);
 out_fput:
 	fput(pcc_filp);
 out_dentry:
