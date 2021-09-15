@@ -1614,17 +1614,18 @@ function fill_ost_pool() {
 test_29() {
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
-	local mdts=$(comma_list $(mdts_nodes))
 	local threshold=10
-	local prefix="lod.$FSNAME-MDT*.pool.$pool1"
+	local prefix="lod.$FSNAME-MDT0000*.pool.$pool1"
 	local cmd="$LCTL get_param -n $prefix"
+	local before
+	local after
 
 	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
 		skip "Need MDS version at least 2.14.53"
 	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 	check_set_fallocate_or_skip
 
-	mkdir -p $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir
 	stack_trap "rm -rf $DIR/$tdir"
 
 	pool_add $pool1 || error "Pool creation failed"
@@ -1633,14 +1634,15 @@ test_29() {
 	pool_add $pool2 || error "Pool creation failed"
 	pool_add_targets $pool2 2 3 || error "pool_add_targets failed"
 
-	do_nodes $mdts $LCTL set_param $prefix.spill_target=$pool2
-	do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=$threshold
-	stack_trap "do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=0"
+	do_facet mds1 $LCTL set_param $prefix.spill_target=$pool2
+	do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct=$threshold
+	stack_trap "do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct=0"
 
-	[[ $(do_facet mds1 "$cmd.spill_target" | uniq) == "$pool2" ]] ||
+	[[ $(do_facet mds1 "$cmd.spill_target") == "$pool2" ]] ||
 		error "spill target wasn't set"
-	[[ $(do_facet mds1 "$cmd.spill_threshold_pct" | uniq) == "$threshold" ]] ||
+	[[ $(do_facet mds1 "$cmd.spill_threshold_pct") == "$threshold" ]] ||
 		error "spill threshold wasn't set"
+	before=$(do_facet mds1 "$cmd.spill_hit")
 	lfs_df -p $pool1 | grep summary
 	fill_ost_pool $pool1 $threshold
 	cancel_lru_locks osc
@@ -1656,6 +1658,9 @@ test_29() {
 		$LFS getstripe $DIR/$tdir/$tfile-2
 		error "old pool on $tfile-2"
 	}
+	after=$(do_facet mds1 "$cmd.spill_hit")
+	(( after == before + 1 )) || error "after $after != before $before + 1"
+
 	# when striping is specified explicitly
 	$LFS setstripe -p $pool1 $DIR/$tdir/$tfile-3 || error "can't setstripe"
 	touch $DIR/$tdir/$tfile-3
@@ -1663,9 +1668,11 @@ test_29() {
 		$LFS getstripe $DIR/$tdir/$tfile-3
 		error "old pool on $tfile-3"
 	}
+	after=$(do_facet mds1 "$cmd.spill_hit")
+	(( after == before + 2 )) || error "after $after != before $before + 2"
 
 	# spill is revalidated at object creation
-	wait_update_facet mds1 "$cmd.spill_is_active | uniq" "1" ||
+	wait_update_facet mds1 "$cmd.spill_is_active" "1" ||
 		error "spilling is still inactive"
 
 	rm -f $DIR/$tdir/$tfile* || error "can't rm $DIR/$tfile*"
@@ -1679,11 +1686,11 @@ test_29() {
 		error "new pool != $pool1"
 	}
 	# spill is revaluated at object creation
-	wait_update_facet mds1 "$cmd.spill_is_active | uniq" "0" ||
+	wait_update_facet mds1 "$cmd.spill_is_active" "0" ||
 		error "spilling is still active"
 
-	do_nodes $mdts $LCTL set_param $prefix.spill_threshold_pct=0
-	[[ $(do_facet mds1 "$cmd.spill_threshold_pct" | uniq) == "0" ]] ||
+	do_facet mds1 "$LCTL set_param $prefix.spill_threshold_pct=0"
+	[[ $(do_facet mds1 "$cmd.spill_threshold_pct") == "0" ]] ||
 		error "spill threshold wasn't reset"
 }
 run_test 29 "check OST pool spilling"

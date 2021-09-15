@@ -1140,6 +1140,16 @@ static int lod_spill_is_active_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(lod_spill_is_active);
 
+static int lod_spill_hit_seq_show(struct seq_file *m, void *v)
+{
+	struct pool_desc  *pool = m->private;
+
+	LASSERT(pool != NULL);
+	seq_printf(m, "%d\n", atomic_read(&pool->pool_spill_hit));
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lod_spill_hit);
+
 struct lprocfs_vars lprocfs_lod_spill_vars[] = {
 	{ .name	=	"spill_threshold_pct",
 	  .fops	=	&lod_spill_threshold_pct_fops },
@@ -1147,6 +1157,8 @@ struct lprocfs_vars lprocfs_lod_spill_vars[] = {
 	  .fops	=	&lod_spill_target_fops },
 	{ .name	=	"spill_is_active",
 	  .fops	=	&lod_spill_is_active_fops },
+	{ .name	=	"spill_hit",
+	  .fops	=	&lod_spill_hit_fops },
 	{ NULL }
 };
 

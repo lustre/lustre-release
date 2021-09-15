@@ -67,6 +67,7 @@ struct pool_desc {
 	struct proc_dir_entry	*pool_spill_proc_entry;
 	bool			 pool_spill_is_active;
 	unsigned int		 pool_spill_threshold_pct;
+	atomic_t		 pool_spill_hit;
 	char			 pool_spill_target[LOV_MAXPOOLNAME + 1];
 };
 

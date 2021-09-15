@@ -435,6 +435,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	new_pool->pool_spill_is_active = false;
 	new_pool->pool_spill_threshold_pct = 0;
 	new_pool->pool_spill_target[0] = '\0';
+	atomic_set(&new_pool->pool_spill_hit, 0);
 	new_pool->pool_lobd = obd;
 	atomic_set(&new_pool->pool_refcount, 1);
 	rc = lu_tgt_pool_init(&new_pool->pool_obds, 0);
@@ -803,6 +804,7 @@ repeat:
 			      lod2obd(lod)->obd_name, LOD_SPILL_MAX,
 			      *poolname, pool->pool_spill_target);
 		lod_set_pool(poolname, pool->pool_spill_target);
+		atomic_inc(&pool->pool_spill_hit);
 		lod_pool_putref(pool);
 		if (replaced >= LOD_SPILL_MAX)
 			return;
