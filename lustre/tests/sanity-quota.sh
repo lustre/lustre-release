@@ -3588,6 +3588,15 @@ test_66() {
 }
 run_test 66 "nonroot user can not change project state in default"
 
+test_77()
+{
+	mount_client $MOUNT2 "ro"
+	lfs setquota -u quota_usr -b 100M -B 100M -i 10K -I 10K $MOUNT2 &&
+		error "lfs setquota should fail in read-only Lustre mount"
+	umount $MOUNT2
+}
+run_test 77 "lfs setquota should fail in Lustre mount with 'ro'"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

@@ -1152,14 +1152,15 @@ static int check_owner(int type, int id)
 	return 0;
 }
 
-static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
+static int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 {
-        int cmd = qctl->qc_cmd;
-        int type = qctl->qc_type;
-        int id = qctl->qc_id;
-        int valid = qctl->qc_valid;
-        int rc = 0;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int cmd = qctl->qc_cmd;
+	int type = qctl->qc_type;
+	int id = qctl->qc_id;
+	int valid = qctl->qc_valid;
+	int rc = 0;
+	ENTRY;
 
 	switch (cmd) {
 	case Q_SETQUOTA:
@@ -1167,6 +1168,9 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 	case LUSTRE_Q_SETDEFAULT:
 		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			RETURN(-EPERM);
+
+		if (sb->s_flags & SB_RDONLY)
+			RETURN(-EROFS);
 		break;
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
@@ -1840,16 +1844,16 @@ out_req:
 		return rc;
 	}
 	case OBD_IOC_QUOTACTL: {
-                struct if_quotactl *qctl;
+		struct if_quotactl *qctl;
 
-                OBD_ALLOC_PTR(qctl);
-                if (!qctl)
-                        RETURN(-ENOMEM);
+		OBD_ALLOC_PTR(qctl);
+		if (!qctl)
+			RETURN(-ENOMEM);
 
 		if (copy_from_user(qctl, (void __user *)arg, sizeof(*qctl)))
-                        GOTO(out_quotactl, rc = -EFAULT);
+			GOTO(out_quotactl, rc = -EFAULT);
 
-                rc = quotactl_ioctl(sbi, qctl);
+		rc = quotactl_ioctl(inode->i_sb, qctl);
 
 		if (rc == 0 &&
 		    copy_to_user((void __user *)arg, qctl, sizeof(*qctl)))
