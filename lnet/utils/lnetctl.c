@@ -60,6 +60,7 @@ static int jt_set_transaction_to(int argc, char **argv);
 static int jt_set_recov_intrv(int argc, char **argv);
 static int jt_set_rtr_sensitivity(int argc, char **argv);
 static int jt_set_hsensitivity(int argc, char **argv);
+static int jt_set_max_recovery_ping_interval(int argc, char **argv);
 static int jt_reset_stats(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
@@ -250,6 +251,9 @@ command_t set_cmds[] = {
 	 "Set how long LNet will attempt to recover unhealthy interfaces.\n"
 	 "\t0 - Recover indefinitely (default)\n"
 	 "\t>0 - Recover for the specified number of seconds.\n"},
+	{"max_recovery_ping_interval", jt_set_max_recovery_ping_interval, 0,
+	 "maximum recovery ping interval\n"
+	 "\t>0 - maximum recovery ping interval in seconds\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -890,6 +894,36 @@ static int jt_set_routing(int argc, char **argv)
 
 	return rc;
 }
+
+static int jt_set_max_recovery_ping_interval(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "maximum recovery_interval", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse maximum recovery interval value",
+				  &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_max_recovery_ping_interval(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
 
 static int jt_config_lnet(int argc, char **argv)
 {
@@ -1703,6 +1737,12 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_max_recovery_ping_interval(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	if (show_rc)
 		cYAML_print_tree(show_rc);
 
@@ -2051,6 +2091,13 @@ static int jt_export(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_recovery_limit(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_max_recovery_ping_interval(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);

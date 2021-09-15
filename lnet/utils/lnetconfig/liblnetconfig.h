@@ -498,6 +498,9 @@ int lustre_lnet_config_recovery_limit(int val, int seq_no,
 				      struct cYAML **err_rc);
 int lustre_lnet_show_recovery_limit(int seq_no, struct cYAML **show_rc,
 				    struct cYAML **err_rc);
+int lustre_lnet_show_max_recovery_ping_interval(int seq_no,
+						struct cYAML **show_rc,
+						struct cYAML **err_rc);
 
 /*
  * lustre_lnet_config_max_intf
@@ -605,6 +608,17 @@ int lustre_lnet_show_drop_asym_route(int seq_no, struct cYAML **show_rc,
  */
 int lustre_lnet_config_buffers(int tiny, int small, int large,
 			       int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_max_recovery_ping_interval
+ *   Set the maximum recovery ping interval.
+ *
+ *   interval - interval value in seconds
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ */
+int lustre_lnet_config_max_recovery_ping_interval(int interval, int seq_no,
+						  struct cYAML **err_rc);
 
 /*
  * lustre_lnet_show_routing

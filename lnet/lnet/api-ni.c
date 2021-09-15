@@ -128,6 +128,27 @@ module_param(lnet_recovery_limit, uint, 0644);
 MODULE_PARM_DESC(lnet_recovery_limit,
 		 "How long to attempt recovery of unhealthy peer interfaces in seconds. Set to 0 to allow indefinite recovery");
 
+unsigned int lnet_max_recovery_ping_interval = 900;
+unsigned int lnet_max_recovery_ping_count = 9;
+static int max_recovery_ping_interval_set(const char *val,
+					  cfs_kernel_param_arg_t *kp);
+
+#define param_check_max_recovery_ping_interval(name, p) \
+		__param_check(name, p, int)
+
+#ifdef HAVE_KERNEL_PARAM_OPS
+static struct kernel_param_ops param_ops_max_recovery_ping_interval = {
+	.set = max_recovery_ping_interval_set,
+	.get = param_get_int,
+};
+module_param(lnet_max_recovery_ping_interval, max_recovery_ping_interval, 0644);
+#else
+module_param_call(lnet_max_recovery_ping_interval, max_recovery_ping_interval,
+		  param_get_int, &lnet_max_recovery_ping_interval, 0644);
+#endif
+MODULE_PARM_DESC(lnet_max_recovery_ping_interval,
+		 "The max interval between LNet recovery pings, in seconds");
+
 static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
 static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
 
@@ -310,6 +331,39 @@ static int
 recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
 {
 	CWARN("'lnet_recovery_interval' has been deprecated\n");
+
+	return 0;
+}
+
+static int
+max_recovery_ping_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
+{
+	int rc;
+	unsigned long value;
+
+	rc = kstrtoul(val, 0, &value);
+	if (rc) {
+		CERROR("Invalid module parameter value for 'lnet_max_recovery_ping_interval'\n");
+		return rc;
+	}
+
+	if (!value) {
+		CERROR("Invalid max ping timeout. Must be strictly positive\n");
+		return -EINVAL;
+	}
+
+	/* The purpose of locking the api_mutex here is to ensure that
+	 * the correct value ends up stored properly.
+	 */
+	mutex_lock(&the_lnet.ln_api_mutex);
+	lnet_max_recovery_ping_interval = value;
+	lnet_max_recovery_ping_count = 0;
+	value >>= 1;
+	while (value) {
+		lnet_max_recovery_ping_count++;
+		value >>= 1;
+	}
+	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return 0;
 }

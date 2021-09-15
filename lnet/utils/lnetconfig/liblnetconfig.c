@@ -2746,6 +2746,38 @@ out:
 	return rc;
 }
 
+int lustre_lnet_config_max_recovery_ping_interval(int interval, int seq_no,
+						  struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+	char interval_str[LNET_MAX_STR_LEN];
+
+	if (interval <= 0) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "\"must be strictly positive\"");
+
+	} else {
+		snprintf(interval_str, sizeof(interval_str), "%d", interval);
+
+		rc = write_sysfs_file(modparam_path,
+				      "lnet_max_recovery_ping_interval",
+				      interval_str, 1,
+				      strlen(interval_str) + 1);
+		if (rc)
+			snprintf(err_str, sizeof(err_str),
+				 "\"cannot configure maximum recovery ping interval: %s\"",
+				 strerror(errno));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "maximum recovery ping interval",
+			  err_str, err_rc);
+
+	return rc;
+}
+
+
 int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 			     struct cYAML **err_rc, bool backup)
 {
@@ -3964,6 +3996,34 @@ int lustre_lnet_show_recovery_limit(int seq_no, struct cYAML **show_rc,
 				       "recovery_limit", recov_limit,
 				       show_rc, err_rc, l_errno);
 }
+
+int lustre_lnet_show_max_recovery_ping_interval(int seq_no,
+						struct cYAML **show_rc,
+						struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int interval = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_max_recovery_ping_interval",
+			     val, 1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get lnet_max_recovery_ping_interval value: %d\"",
+			 rc);
+	} else {
+		interval = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "max_recovery_ping_interval", interval,
+				       show_rc, err_rc, l_errno);
+}
+
 
 int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc)

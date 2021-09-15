@@ -267,6 +267,13 @@ Set how long LNet will attempt to recover unhealthy peer interfaces\.
   0 - Recover indefinitely (default)\.
   >0 - Recover for the specified number of seconds\.
 .
+.TP
+\fBlnetctl set\fR max_recovery_ping_interval \fIvalue\fR
+Set the maximum recovery ping interval.
+The recovery ping mechanism increases the next scheduled recovery ping attempt
+timeout exponentially (base 2) until it is equal to the value set.
+The default value is 900.
+.
 .SS "Import and Export YAML Configuration Files"
 LNet configuration can be represented in YAML format\. A YAML configuration
 file can be passed to the lnetctl utility via the \fBimport\fR command\. The

@@ -1837,6 +1837,18 @@ check_nid_in_recovq() {
 # If the recovery limit is 10 seconds, then when the 5th enqueue happens
 # we expect the peer NI to have aged out, so it will not actually be
 # queued.
+# If max_recovery_ping_interval is set to 2 then:
+#  First enqueue happens at time 0.
+#  2nd at 0 + 2^0 = 1
+#  3rd at 1 + 2^1 = 3
+#  4th at 3 + 2^1 = 5
+#  5th at 5 + 2^1 = 7
+#  6th at 7 + 2^1 = 9
+#  7th at 9 + 2^1 = 11
+# e.g. after 4 seconds we would expect to have seen the 3th enqueue,
+# (2 pings sent, 3rd about to happen), and the 4th enqueue is yet to happen
+# e.g. after 10 seconds we would expect to have seen the 6th enqueue,
+# (5 pings sent, 6th about to happen), and the 8th enqueue is yet to happen
 check_ping_count() {
 	local queue="$1"
 	local expect="$2"
@@ -1886,6 +1898,8 @@ test_210() {
 	do_lnetctl discover $prim_nid ||
 		error "failed to discover myself"
 
+	local default=$($LNETCTL global show |
+			awk '/recovery_limit/{print $NF}')
 	# Set recovery limit to 10 seconds.
 	do_lnetctl set recovery_limit 10 ||
 		error "failed to set recovery_limit"
@@ -1894,19 +1908,58 @@ test_210() {
 	# Use local_error so LNet doesn't attempt to resend the discovery ping
 	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e local_error
 	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e local_error
-	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+	do_lnetctl discover $prim_nid &&
 		error "Expected discovery to fail"
 
+	# See comment for check_ping_count()
 	sleep 5
-	check_nid_in_recovq "-l" 1
+	check_nid_in_recovq "-l" "1"
 	check_ping_count "ni" "2"
 
 	sleep 5
 
-	check_nid_in_recovq "-l" 1
+	check_nid_in_recovq "-l" "1"
 	check_ping_count "ni" "3"
 
 	$LCTL net_drop_del -a
+
+	reinit_dlc || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
+
+	local prim_nid=$($LCTL list_nids | head -n 1)
+
+	do_lnetctl discover $prim_nid ||
+		error "failed to discover myself"
+
+	do_lnetctl set recovery_limit $default ||
+		error "failed to set recovery_limit"
+
+	default=$($LNETCTL global show |
+		  awk '/max_recovery_ping_interval/{print $NF}')
+	do_lnetctl set max_recovery_ping_interval 2 ||
+		error "failed to set max_recovery_ping_interval"
+
+	$LCTL set_param debug=+net
+	# Use local_error so LNet doesn't attempt to resend the discovery ping
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e local_error
+	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e local_error
+	do_lnetctl discover $prim_nid &&
+		error "Expected discovery to fail"
+
+	# See comment for check_ping_count()
+	sleep 4
+	check_nid_in_recovq "-l" "1"
+	check_ping_count "ni" "2"
+
+	sleep 6
+	check_nid_in_recovq "-l" "1"
+	check_ping_count "ni" "5"
+
+	$LCTL net_drop_del -a
+
+	do_lnetctl set max_recovery_ping_interval $default ||
+		error "failed to set max_recovery_ping_interval"
 
 	return 0
 }
@@ -1922,6 +1975,8 @@ test_211() {
 	do_lnetctl discover $prim_nid ||
 		error "failed to discover myself"
 
+	local default=$($LNETCTL global show |
+			awk '/recovery_limit/{print $NF}')
 	# Set recovery limit to 10 seconds.
 	do_lnetctl set recovery_limit 10 ||
 		error "failed to set recovery_limit"
@@ -1965,6 +2020,44 @@ test_211() {
 
 	check_nid_in_recovq "-p" 0
 	check_ping_count "peer_ni" "0"
+
+	reinit_dlc || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
+
+	local prim_nid=$($LCTL list_nids | head -n 1)
+
+	do_lnetctl discover $prim_nid ||
+		error "failed to discover myself"
+
+	do_lnetctl set recovery_limit $default ||
+		error "failed to set recovery_limit"
+
+	default=$($LNETCTL global show |
+		  awk '/max_recovery_ping_interval/{print $NF}')
+	do_lnetctl set max_recovery_ping_interval 2 ||
+		error "failed to set max_recovery_ping_interval"
+
+	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e remote_error
+	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e remote_error
+
+	# Set health to 0 on one interface. This forces it onto the recovery
+	# queue.
+	$LNETCTL peer set --nid $prim_nid --health 0
+
+	# See comment for check_ping_count()
+	sleep 4
+	check_nid_in_recovq "-p" "1"
+	check_ping_count "peer_ni" "2"
+
+	sleep 6
+	check_nid_in_recovq "-p" "1"
+	check_ping_count "peer_ni" "5"
+
+	$LCTL net_drop_del -a
+
+	do_lnetctl set max_recovery_ping_interval $default ||
+		error "failed to set max_recovery_ping_interval"
 
 	return 0
 }

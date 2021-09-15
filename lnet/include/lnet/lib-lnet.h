@@ -606,6 +606,8 @@ extern unsigned int lnet_recovery_interval;
 extern unsigned int lnet_recovery_limit;
 extern unsigned int lnet_peer_discovery_disabled;
 extern unsigned int lnet_drop_asym_route;
+extern unsigned int lnet_max_recovery_ping_interval;
+extern unsigned int lnet_max_recovery_ping_count;
 extern unsigned int router_sensitivity_percentage;
 extern int alive_router_check_interval;
 extern int live_router_check_interval;
@@ -1086,15 +1088,14 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	return false;
 }
 
-#define LNET_RECOVERY_INTERVAL_MAX 900
 static inline unsigned int
 lnet_get_next_recovery_ping(unsigned int ping_count, time64_t now)
 {
 	unsigned int interval;
 
-	/* 2^9 = 512, 2^10 = 1024 */
-	if (ping_count > 9)
-		interval = LNET_RECOVERY_INTERVAL_MAX;
+	/* lnet_max_recovery_interval <= 2^lnet_max_recovery_ping_count */
+	if (ping_count > lnet_max_recovery_ping_count)
+		interval = lnet_max_recovery_ping_interval;
 	else
 		interval = 1 << ping_count;
 
