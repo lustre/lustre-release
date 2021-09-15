@@ -981,13 +981,15 @@ void qti_lqes_fini(const struct lu_env *env)
 	qti->qti_lqes_cnt = 0;
 }
 
-int qti_lqes_min_qunit(const struct lu_env *env)
+__u64 qti_lqes_min_qunit(const struct lu_env *env)
 {
-	int i, min, qunit;
+	__u64 min, qunit;
+	int i;
 
 	for (i = 1, min = qti_lqe_qunit(env, 0); i < qti_lqes_cnt(env); i++) {
 		qunit = qti_lqe_qunit(env, i);
-		if (qunit < min)
+		/* if qunit is 0, lqe is not enforced and we can ignore it */
+		if (qunit && qunit < min)
 			min = qunit;
 	}
 

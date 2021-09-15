@@ -58,17 +58,6 @@ struct qmt_device {
 	/* pointer to ldlm namespace to be used for quota locks */
 	struct ldlm_namespace	*qmt_ns;
 
-	/* Hash table containing a qmt_pool_info structure for each pool
-	 * this quota master is in charge of. We only have 2 pools in this
-	 * hash for the time being:
-	 * - one for quota management on the default metadata pool
-	 * - one for quota managment on the default data pool
-	 *
-	 * Once we support quota on non-default pools, then more pools will
-	 * be added to this hash table and pool master setup would have to be
-	 * handled via configuration logs */
-	struct cfs_hash		*qmt_pool_hash;
-
 	/* List of pools managed by this master target */
 	struct list_head	 qmt_pool_list;
 	/* rw semaphore to protect pool list */
@@ -499,7 +488,7 @@ void qti_lqes_init(const struct lu_env *env);
 int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe);
 void qti_lqes_del(const struct lu_env *env, int index);
 void qti_lqes_fini(const struct lu_env *env);
-int qti_lqes_min_qunit(const struct lu_env *env);
+__u64 qti_lqes_min_qunit(const struct lu_env *env);
 int qti_lqes_edquot(const struct lu_env *env);
 int qti_lqes_restore_init(const struct lu_env *env);
 void qti_lqes_restore_fini(const struct lu_env *env);
