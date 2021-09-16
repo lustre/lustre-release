@@ -3404,7 +3404,7 @@ test_44() {
 		       head -n 1)
 
 	stack_trap "$LCTL set_param llite.*.pcc_async_threshold=$thresh"
-	$LCTL set_param llite.*.pcc_async_threshold=1G
+	$LCTL set_param llite.*.pcc_async_threshold=0
 
 	dd if=/dev/zero of=$file bs=$bs count=$count ||
 		error "Write $file failed"
@@ -3634,7 +3634,7 @@ test_47() {
 
 	sleep 3
 	cat $file || error "cat $file failed"
-	check_lpcc_state $file "readonly" client
+	wait_readonly_attach_fini $file client
 	mtime1=$(stat -c "%Y" $file)
 
 	(( mtime0 == mtime1 )) || error "mtime changed from $mtime0 to $mtime1"

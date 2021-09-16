@@ -3996,8 +3996,12 @@ static int pcc_readonly_attach_sync(struct file *file,
 		CDEBUG(D_CACHE,
 		       "PCC-RO caching for "DFID" not allowed, rc = %d\n",
 		       PFID(ll_inode2fid(inode)), rc);
-		/* Ignore EEXIST error if the file has already attached. */
-		if (rc == -EEXIST)
+		/*
+		 * Ignore EEXIST error if the file has already attached.
+		 * Ignore EINPROGRESS error if the file is being attached,
+		 * i.e. copy data from OSTs into PCC.
+		 */
+		if (rc == -EEXIST || rc == -EINPROGRESS)
 			rc = 0;
 		RETURN(rc);
 	}
@@ -4084,7 +4088,7 @@ int pcc_ioctl_detach(struct inode *inode, __u32 *flags)
 	ENTRY;
 
 	pcc_inode_lock(inode);
-	pcci = lli->lli_pcc_inode;
+	pcci = ll_i2pcci(inode);
 	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING) {
 		*flags |= PCC_DETACH_FL_ATTACHING;
 		GOTO(out_unlock, rc = 0);

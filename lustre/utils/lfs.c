@@ -13949,6 +13949,11 @@ static int lfs_pcc_detach(int argc, char **argv)
 		}
 	}
 
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify one or more FIDs\n", argv[0]);
+		return CMD_HELP;
+	}
+
 	while (optind < argc) {
 		int rc2;
 
@@ -14004,7 +14009,18 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 		}
 	}
 
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify Lustre mount point\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
 	mntpath = argv[optind++];
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify one or more fids\n", argv[0]);
+		return CMD_HELP;
+	}
+
 	dirfd = open(mntpath, O_RDONLY);
 	if (dirfd < 0) {
 		rc = -errno;
