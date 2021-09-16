@@ -2621,6 +2621,61 @@ out:
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg);
 
+int mdt_io_set_info(struct tgt_session_info *tsi)
+{
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct ost_body		*body = NULL, *repbody;
+	void			*key, *val = NULL;
+	int			 keylen, vallen, rc = 0;
+	bool			 is_grant_shrink;
+
+	ENTRY;
+
+	key = req_capsule_client_get(tsi->tsi_pill, &RMF_SETINFO_KEY);
+	if (key == NULL) {
+		DEBUG_REQ(D_HA, req, "no set_info key");
+		RETURN(err_serious(-EFAULT));
+	}
+	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_KEY,
+				      RCL_CLIENT);
+
+	val = req_capsule_client_get(tsi->tsi_pill, &RMF_SETINFO_VAL);
+	if (val == NULL) {
+		DEBUG_REQ(D_HA, req, "no set_info val");
+		RETURN(err_serious(-EFAULT));
+	}
+	vallen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_VAL,
+				      RCL_CLIENT);
+
+	is_grant_shrink = KEY_IS(KEY_GRANT_SHRINK);
+	if (is_grant_shrink)
+		/* In this case the value is actually an RMF_OST_BODY, so we
+		 * transmutate the type of this PTLRPC */
+		req_capsule_extend(tsi->tsi_pill, &RQF_OST_SET_GRANT_INFO);
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc < 0)
+		RETURN(rc);
+
+	if (is_grant_shrink) {
+		body = req_capsule_client_get(tsi->tsi_pill, &RMF_OST_BODY);
+
+		repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+		*repbody = *body;
+
+		/** handle grant shrink, similar to a read request */
+		tgt_grant_prepare_read(tsi->tsi_env, tsi->tsi_exp,
+				       &repbody->oa);
+	} else {
+		CERROR("%s: Unsupported key %s\n",
+		       tgt_name(tsi->tsi_tgt), (char *)key);
+		rc = -EOPNOTSUPP;
+	}
+
+	RETURN(rc);
+}
+
+
 static int mdt_set_info(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
@@ -5665,6 +5720,9 @@ TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SYNC,	mdt_data_sync),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, OST_FALLOCATE,
 							mdt_fallocate_hdl),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SEEK, tgt_lseek),
+TGT_RPC_HANDLER(OST_FIRST_OPC,
+		0,			OST_SET_INFO,	mdt_io_set_info,
+		&RQF_OBD_SET_INFO, LUSTRE_OST_VERSION),
 };
 
 static struct tgt_handler mdt_sec_ctx_ops[] = {

@@ -8829,6 +8829,50 @@ test_64f() {
 }
 run_test 64f "check grant consumption (with grant allocation)"
 
+test_64g() {
+	#[ $MDS1_VERSION -lt $(version_code 2.14.54) ] &&
+	#	skip "Need MDS version at least 2.14.54"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	local old=$($LCTL get_param mdc.$FSNAME-*.grant_shrink_interval |
+			tr '\n' ' ')
+	stack_trap "$LCTL set_param $old"
+
+	# generate dirty pages and increase dirty granted on MDT
+	stack_trap "rm -f $DIR/$tfile-*"
+	for (( i = 0; i < 10; i++)); do
+		$LFS setstripe -E 1M -L mdt $DIR/$tfile-$i ||
+			error "can't set stripe"
+		dd if=/dev/zero of=$DIR/$tfile-$i bs=128k count=1 ||
+			error "can't dd"
+		$LFS getstripe $DIR/$tfile-$i | grep -q pattern.*mdt || {
+			$LFS getstripe $DIR/$tfile-$i
+			error "not DoM file"
+		}
+	done
+
+	# flush dirty pages
+	sync
+
+	# wait until grant shrink reset grant dirty on MDTs
+	for ((i = 0; i < 120; i++)); do
+		grant_dirty=$(do_nodes $mdts $LCTL get_param -n  mdt.*.tot_dirty |
+			awk '{sum=sum+$1} END {print sum}')
+		vm_dirty=$(awk '/Dirty:/{print $2}' /proc/meminfo)
+		echo "$grant_dirty grants, $vm_dirty pages"
+		(( grant_dirty + vm_dirty == 0 )) && break
+		(( i == 3 )) && sync &&
+			$LCTL set_param mdc.$FSNAME-*.grant_shrink_interval=5
+		sleep 1
+	done
+
+	grant_dirty=$(do_nodes $mdts $LCTL get_param -n  mdt.*.tot_dirty |
+		awk '{sum=sum+$1} END {print sum}')
+	(( grant_dirty == 0 )) || error "$grant_dirty on MDT"
+}
+run_test 64g "grant shrink on MDT"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

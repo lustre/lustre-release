@@ -1388,6 +1388,7 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 void mdt_hp_brw(struct tgt_session_info *tsi);
 void mdt_hp_punch(struct tgt_session_info *tsi);
 int mdt_data_version_get(struct tgt_session_info *tsi);
+int mdt_io_set_info(struct tgt_session_info *tsi);
 
 /* grants */
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,

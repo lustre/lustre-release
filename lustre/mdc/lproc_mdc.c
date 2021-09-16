@@ -613,6 +613,108 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	{ NULL }
 };
 
+static ssize_t cur_lost_grant_bytes_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cli->cl_lost_grant);
+}
+LUSTRE_RO_ATTR(cur_lost_grant_bytes);
+
+static ssize_t cur_dirty_grant_bytes_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cli->cl_dirty_grant);
+}
+LUSTRE_RO_ATTR(cur_dirty_grant_bytes);
+
+static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_import *imp;
+	ssize_t len;
+
+	with_imp_locked(obd, imp, len)
+		len = scnprintf(buf, PAGE_SIZE, "%d\n",
+				!imp->imp_grant_shrink_disabled &&
+				OCD_HAS_FLAG(&imp->imp_connect_data,
+					     GRANT_SHRINK));
+
+	return len;
+}
+
+static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_import *imp;
+	bool val;
+	int rc;
+
+	if (obd == NULL)
+		return 0;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	with_imp_locked(obd, imp, rc) {
+		spin_lock(&imp->imp_lock);
+		imp->imp_grant_shrink_disabled = !val;
+		spin_unlock(&imp->imp_lock);
+	}
+
+	return rc ?: count;
+}
+LUSTRE_RW_ATTR(grant_shrink);
+
+static ssize_t grant_shrink_interval_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return sprintf(buf, "%lld\n", obd->u.cli.cl_grant_shrink_interval);
+}
+
+static ssize_t grant_shrink_interval_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer,
+					   size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val == 0)
+		return -ERANGE;
+
+	obd->u.cli.cl_grant_shrink_interval = val;
+	osc_update_next_shrink(&obd->u.cli);
+	osc_schedule_grant_work();
+
+	return count;
+}
+LUSTRE_RW_ATTR(grant_shrink_interval);
+
 static struct attribute *mdc_attrs[] = {
 	&lustre_attr_active.attr,
 	&lustre_attr_checksums.attr,
@@ -622,6 +724,10 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,
+	&lustre_attr_grant_shrink.attr,
+	&lustre_attr_grant_shrink_interval.attr,
+	&lustre_attr_cur_lost_grant_bytes.attr,
+	&lustre_attr_cur_dirty_grant_bytes.attr,
 	NULL,
 };
 

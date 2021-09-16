@@ -324,6 +324,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				  OBD_CONNECT_SUBTREE |
 				  OBD_CONNECT_MULTIMODRPCS |
 				  OBD_CONNECT_GRANT_PARAM |
+				  OBD_CONNECT_GRANT_SHRINK |
 				  OBD_CONNECT_SHORTIO | OBD_CONNECT_FLAGS2;
 
 	data->ocd_connect_flags2 = OBD_CONNECT2_DIR_MIGRATE |

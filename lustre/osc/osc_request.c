@@ -763,6 +763,7 @@ void osc_update_next_shrink(struct client_obd *cli)
 	CDEBUG(D_CACHE, "next time %lld to shrink grant\n",
 	       cli->cl_next_shrink_grant);
 }
+EXPORT_SYMBOL(osc_update_next_shrink);
 
 static void __osc_update_grant(struct client_obd *cli, u64 grant)
 {
@@ -971,6 +972,7 @@ void osc_schedule_grant_work(void)
 	cancel_delayed_work_sync(&work);
 	schedule_work(&work.work);
 }
+EXPORT_SYMBOL(osc_schedule_grant_work);
 
 /**
  * Start grant thread for returing grant to server for idle clients.

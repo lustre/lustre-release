@@ -671,6 +671,8 @@ int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 		   obd_enqueue_update_f upcall, void *cookie);
 int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 		       obd_enqueue_update_f upcall, void *cookie, int mode);
+void osc_update_next_shrink(struct client_obd *cli);
+void osc_schedule_grant_work(void);
 
 /* osc_io.c */
 int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
