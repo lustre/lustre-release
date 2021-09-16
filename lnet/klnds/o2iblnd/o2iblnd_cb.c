@@ -749,8 +749,9 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 {
 	struct kib_net *net = ni->ni_data;
 	struct scatterlist *sg;
-	int                 fragnob;
-	int		    max_nkiov;
+	int fragnob;
+	int max_nkiov;
+	int sg_count = 0;
 
 	CDEBUG(D_NET, "niov %d offset %d nob %d\n", nkiov, offset, nob);
 
@@ -771,6 +772,12 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	do {
 		LASSERT(nkiov > 0);
 
+		if (!sg) {
+			CERROR("lacking enough sg entries to map tx\n");
+			return -EFAULT;
+		}
+		sg_count++;
+
 		fragnob = min((int)(kiov->bv_len - offset), nob);
 
 		/*
@@ -790,10 +797,6 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		sg_set_page(sg, kiov->bv_page, fragnob,
 			    kiov->bv_offset + offset);
 		sg = sg_next(sg);
-		if (!sg) {
-			CERROR("lacking enough sg entries to map tx\n");
-			return -EFAULT;
-		}
 
 		offset = 0;
 		kiov++;
@@ -801,7 +804,7 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		nob -= fragnob;
 	} while (nob > 0);
 
-	return kiblnd_map_tx(ni, tx, rd, sg - tx->tx_frags);
+	return kiblnd_map_tx(ni, tx, rd, sg_count);
 }
 
 static int
@@ -1100,7 +1103,7 @@ kiblnd_init_tx_msg(struct lnet_ni *ni, struct kib_tx *tx, int type,
 #endif
 
 	LASSERT(tx->tx_nwrq >= 0);
-	LASSERT(tx->tx_nwrq < IBLND_MAX_RDMA_FRAGS + 1);
+	LASSERT(tx->tx_nwrq <= IBLND_MAX_RDMA_FRAGS);
 	LASSERT(nob <= IBLND_MSG_SIZE);
 #ifdef HAVE_IB_GET_DMA_MR
 	LASSERT(mr != NULL);
