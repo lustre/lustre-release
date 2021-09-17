@@ -696,6 +696,7 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 {
 	struct lu_env *env;
 	struct cl_client_cache *cache = cli->cl_cache;
+	struct client_obd *scan;
 	int max_scans;
 	__u16 refcheck;
 	long rc = 0;
@@ -735,19 +736,19 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 
 	max_scans = atomic_read(&cache->ccc_users) - 2;
 	while (--max_scans > 0 &&
-	       (cli = list_first_entry_or_null(&cache->ccc_lru,
-					       struct client_obd,
-					       cl_lru_osc)) != NULL) {
+	       (scan = list_first_entry_or_null(&cache->ccc_lru,
+						  struct client_obd,
+						  cl_lru_osc)) != NULL) {
 		CDEBUG(D_CACHE, "%s: cli %p LRU pages: %ld, busy: %ld.\n",
-			cli_name(cli), cli,
-			atomic_long_read(&cli->cl_lru_in_list),
-			atomic_long_read(&cli->cl_lru_busy));
+		       cli_name(scan), scan,
+		       atomic_long_read(&scan->cl_lru_in_list),
+		       atomic_long_read(&scan->cl_lru_busy));
 
-		list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
-		if (osc_cache_too_much(cli) > 0) {
+		list_move_tail(&scan->cl_lru_osc, &cache->ccc_lru);
+		if (osc_cache_too_much(scan) > 0) {
 			spin_unlock(&cache->ccc_lru_lock);
 
-			rc = osc_lru_shrink(env, cli, npages, true);
+			rc = osc_lru_shrink(env, scan, npages, true);
 			spin_lock(&cache->ccc_lru_lock);
 			if (rc >= npages)
 				break;
@@ -760,7 +761,7 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 out:
 	cl_env_put(env, &refcheck);
 	CDEBUG(D_CACHE, "%s: cli %p freed %ld pages.\n",
-		cli_name(cli), cli, rc);
+	       cli_name(cli), cli, rc);
 	return rc;
 }
 
