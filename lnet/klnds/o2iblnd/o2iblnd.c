@@ -2791,6 +2791,7 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	unsigned long       flags;
 	int                 rc = 0;
 	int		    i;
+	bool		    set_fatal = true;
 
 	LASSERT(*kiblnd_tunables.kib_dev_failover > 1 ||
 		dev->ibd_can_failover ||
@@ -2836,6 +2837,8 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		CERROR("Failed to bind %s:%pI4h to device(%p): %d\n",
 		       dev->ibd_ifname, &dev->ibd_ifip,
 		       cmid->device, rc);
+		if (!rc && !cmid->device)
+			set_fatal = false;
 		rdma_destroy_id(cmid);
 		goto out;
 	}
@@ -2924,11 +2927,13 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 	} else {
 		dev->ibd_failed_failover = 0;
 
-		rcu_read_lock();
-		netdev = dev_get_by_name_rcu(ns, dev->ibd_ifname);
-		if (netdev && (kiblnd_get_link_status(netdev) == 1))
-			kiblnd_set_ni_fatal_on(dev->ibd_hdev, 0);
-		rcu_read_unlock();
+		if (set_fatal) {
+			rcu_read_lock();
+			netdev = dev_get_by_name_rcu(ns, dev->ibd_ifname);
+			if (netdev && (kiblnd_get_link_status(netdev) == 1))
+				kiblnd_set_ni_fatal_on(dev->ibd_hdev, 0);
+			rcu_read_unlock();
+		}
 	}
 
 	return rc;
