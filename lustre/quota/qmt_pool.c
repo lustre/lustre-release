@@ -466,6 +466,8 @@ void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
 
 	/* parse list of pool and destroy each element */
 	list_for_each_entry_safe(pool, tmp, &qmt->qmt_pool_list, qpi_linkage) {
+		/* stop all recalc threads - it may hold qpi reference */
+		qmt_stop_pool_recalc(pool);
 		/* release extra reference taken in qmt_pool_alloc */
 		qpi_putref(env, pool);
 	}
@@ -1179,6 +1181,7 @@ static int qmt_pool_recalc(void *args)
 		while (obd->obd_process_conf)
 			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_RECALC, cfs_fail_val);
 	sem = qmt_sarr_rwsem(pool);
 	LASSERT(sem);
 	down_read(sem);
@@ -1363,6 +1366,9 @@ static int qmt_pool_add_rem(struct obd_device *obd, char *poolname,
 	struct lu_env		 env;
 	int			 rc, idx;
 	ENTRY;
+
+	if (qmt->qmt_stopping)
+		RETURN(0);
 
 	if (strnlen(poolname, LOV_MAXPOOLNAME + 1) > LOV_MAXPOOLNAME)
 		RETURN(-ENAMETOOLONG);

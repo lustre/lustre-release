@@ -5070,7 +5070,6 @@ test_78()
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test
 
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -5192,6 +5191,34 @@ test_80()
 		quota_error u $TSTUSR "write failure, but expect success"
 }
 run_test 80 "check for EDQUOT after OST failover"
+
+test_81() {
+	local global_limit=20  # 100M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -B 1G $DIR || error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	#define OBD_FAIL_QUOTA_RECALC	0xA07
+	do_facet mds1 $LCTL set_param fail_loc=0x80000A07 fail_val=30
+	# added OST casues to start pool recalculation
+	pool_add_targets $qpool 0 0 1
+	stop mds1 -f || error "MDS umount failed"
+
+	#start mds1 back to destroy created pool
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+	clients_up || true
+}
+run_test 81 "Race qmt_start_pool_recalc with qmt_pool_free"
 
 quota_fini()
 {
