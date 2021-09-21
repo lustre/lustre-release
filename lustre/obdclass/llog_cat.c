@@ -834,7 +834,8 @@ static int llog_cat_process_common(const struct lu_env *env,
 	hdr = (*llhp)->lgh_hdr;
 	if ((hdr->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    hdr->llh_count == 1 && cat_llh->lgh_obj != NULL &&
-	    *llhp != cat_llh->u.chd.chd_current_log) {
+	    *llhp != cat_llh->u.chd.chd_current_log &&
+	    *llhp != cat_llh->u.chd.chd_next_log) {
 		rc = llog_destroy(env, *llhp);
 		if (rc)
 			CWARN("%s: can't destroy empty log "DFID": rc = %d\n",
