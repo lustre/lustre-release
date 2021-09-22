@@ -1606,6 +1606,7 @@ again:
 #ifdef IOP_XATTR
 			fakeinode->i_opflags |= IOP_XATTR;
 #endif
+			ll_lli_init(ll_i2info(fakeinode));
 			err = ll_set_encflags(fakeinode,
 					      op_data->op_file_encctx,
 					      op_data->op_file_encctx_size,
