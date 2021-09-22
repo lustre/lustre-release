@@ -328,8 +328,8 @@ AC_DEFUN([LB_ZFS_USER], [
 	AC_MSG_CHECKING([zfs devel headers])
 	AS_IF([test -z "${zfsinc}"], [
         	AS_IF([test -e "${zfssrc}/include/libzfs.h" && test -e "${zfssrc}/lib/libspl/include"], [
-                	zfsinc="-I $zfssrc/lib/libspl/include -I $zfssrc/include"
-			zfslib="-L$zfssrc/lib/libzfs/.libs/ -L$zfssrc/lib/libnvpair/.libs"
+			zfsinc="-I $zfssrc/lib/libspl/include -I $zfssrc/lib/libspl/include/os/linux -I $zfssrc/include"
+			zfslib="-L$zfssrc/lib/libzfs/.libs/ -L$zfssrc/lib/libnvpair/.libs/ -L$zfssrc/lib/libzpool/.libs/"
 		], [test -d /usr/include/libzfs && test -d /usr/include/libspl], [
 			zfsinc="-I/usr/include/libspl -I /usr/include/libzfs"
 			zfslib=""
