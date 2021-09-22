@@ -144,6 +144,21 @@ ha_info()
 	echo "$0: $(date +%H:%M:%S' '%s):" "$@"
 }
 
+ha_touch()
+{
+	local date=$(date +%H:%M:%S' '%s)
+
+	[[ $1 =~ stop ]] &&
+		echo $date ${FUNCNAME[1]} $2 >> $ha_stop_file ||
+		true
+	[[ $1 =~ fail ]] &&
+		echo $date ${FUNCNAME[1]} $2 >> $ha_fail_file ||
+		true
+	[[ $1 =~ lfsck ]] &&
+		echo $date ${FUNCNAME[1]} $2 >> $ha_lfsck_stop ||
+		true
+}
+
 ha_log()
 {
 	local nodes=${1// /,}
@@ -171,6 +186,7 @@ ha_trap_err()
 trap ha_trap_err ERR
 set -eE
 
+declare     ha_power_down_pids
 declare     ha_tmp_dir=/tmp/$(basename $0)-$$
 declare     ha_stop_file=$ha_tmp_dir/stop
 declare     ha_fail_file=$ha_tmp_dir/fail
@@ -193,6 +209,7 @@ declare     ha_power_down_cmd=${POWER_DOWN:-"pm -0"}
 declare     ha_power_up_cmd=${POWER_UP:-"pm -1"}
 declare     ha_power_delay=${POWER_DELAY:-60}
 declare     ha_node_up_delay=${NODE_UP_DELAY:-10}
+declare     ha_wait_nodes_up=${WAIT_NODES_UP:-600}
 declare     ha_pm_host=${PM_HOST:-$(hostname)}
 declare     ha_failback_delay=${DELAY:-5}
 declare     ha_failback_cmd=${FAILBACK:-""}
@@ -369,7 +386,7 @@ ha_on()
 
 ha_trap_exit()
 {
-	touch "$ha_stop_file"
+	ha_touch stop
 	trap 0
 	if [ -e "$ha_fail_file" ]; then
 		ha_info "Test directories ${ha_testdirs[@]} not removed"
@@ -384,8 +401,8 @@ ha_trap_exit()
 
 ha_trap_stop_signals()
 {
-    ha_info "${ha_stop_signals// /,} received"
-    touch "$ha_stop_file"
+	ha_info "${ha_stop_signals// /,} received"
+	ha_touch stop "${ha_stop_signals// /,} received"
 }
 
 ha_sleep()
@@ -505,16 +522,14 @@ ha_repeat_mpi_load()
 		# mustpass=0 means that failure is expected
 		if (( rc !=0 )); then
 			if (( mustpass != 0 )); then
-				touch "$ha_fail_file"
-				touch "$ha_stop_file"
+				ha_touch stop,fail $client,$tag
 				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 			else
 				# Ok to fail
 				rc=0
 			fi
 		elif (( mustpass == 0 )); then
-			touch "$ha_fail_file"
-			touch "$ha_stop_file"
+			ha_touch stop,fail $client,$tag
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 		fi
 		echo rc=$rc mustpass=$mustpass >"$status"
@@ -632,8 +647,7 @@ ha_repeat_nonmpi_load()
 
 		if ((rc != 0)); then
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
-			touch "$ha_fail_file"
-			touch "$ha_stop_file"
+			ha_touch stop,fail $client,$tag
 		fi
 		echo $rc >"$status"
 
@@ -780,12 +794,10 @@ ha_start_lfsck()
 	fi
 
 	[ $rc -eq 0 ] ||
-		{ touch "$ha_fail_file"; touch "$ha_stop_file";
-		touch $ha_lfsck_stop; return 1; }
+		{ ha_touch stop,fail,lfsck; return 1; }
 
 	ha_wait_lfsck_completed ||
-		{ touch "$ha_fail_file"; touch "$ha_stop_file";
-		touch $ha_lfsck_stop; return 1; }
+		{ ha_touch stop,fail,lfsck; return 1; }
 
 	return 0
 }
@@ -798,7 +810,7 @@ ha_lfsck_repaired()
 		awk '{sum += $1} END { print sum }')
 	[ $n -eq 0] ||
 		{ ha_info "Total repaired: $n";
-		touch "$ha_fail_file"; return 1; }
+		ha_touch fail; return 1; }
 	return 0
 }
 
@@ -813,7 +825,7 @@ ha_start_loads()
 
 ha_stop_loads()
 {
-	touch $ha_stop_file
+	ha_touch stop
 	[[ -n $CMD_BG_PID ]] && wait $CMD_BG_PID || true
 	# true because of lfsck_bg could be stopped already
 	$ha_lfsck_bg && wait $LFSCK_BG_PID || true
@@ -896,14 +908,29 @@ ha_power_down_cmd_fn()
 {
 	local nodes=$1
 	local cmd
+	local pid
+	local rc=0
 
 	case $ha_power_down_cmd in
 	# format is: POWER_DOWN=sysrqcrash
-	sysrqcrash) cmd="pdsh -S -w $nodes 'echo c > /proc/sysrq-trigger' &" ;;
-	*) cmd="$ha_power_down_cmd $nodes" ;;
+	sysrqcrash)
+		cmd="pdsh -S -w $nodes -u 120 \"echo c > /proc/sysrq-trigger\" &"
+		eval $cmd
+		pid=$!
+		ha_power_down_pids=$(echo $ha_power_down_pids $pid)
+		ha_info "ha_power_down_pids: $ha_power_down_pids"
+		[[ -z "$ha_power_down_pids" ]] ||
+			ps aux | grep " ${ha_power_down_pids// / \| } " ||
+			true
+		;;
+	*)
+		cmd="$ha_power_down_cmd $nodes"
+		eval $cmd
+		rc=$?
+		;;
 	esac
 
-	eval $cmd
+	return $rc
 }
 
 ha_power_down()
@@ -925,12 +952,17 @@ ha_power_down()
 	fi
 
 	ha_info "Powering down $nodes : cmd: $ha_power_down_cmd"
+	ha_power_down_pids=""
 	for (( i=0; i<10; i++ )) {
 		ha_info "attempt: $i"
-		ha_power_down_cmd_fn $nodes &&
-			ha_powermanage $nodes $state && rc=0 && break
-		sleep $ha_power_delay
+		ha_power_down_cmd_fn $nodes || rc=1
+		ha_sleep $ha_power_delay
+		ha_powermanage $nodes $state && rc=0 && break
 	}
+	if [[ -n "$ha_power_down_pids" ]]; then
+		kill -9 $ha_power_down_pids ||  true
+		wait $ha_power_down_pids || true
+	fi
 
 	[ $rc -eq 0 ] || {
 		ha_info "Failed Powering down in $i attempts:" \
@@ -1052,14 +1084,29 @@ ha_aim()
 ha_wait_nodes()
 {
 	local nodes=$1
-	local end=$(($(date +%s) + 10 * 60))
+	local end=$(($(date +%s) + $ha_wait_nodes_up))
 
-	ha_info "Waiting for $nodes to boot up"
+	ha_info "Waiting for $nodes to boot up in $ha_wait_nodes_up"
 	until ha_on $nodes hostname >/dev/null 2>&1 ||
 		[ -e "$ha_stop_file" ] ||
 			(($(date +%s) >= end)); do
 		ha_sleep 1 >/dev/null
 	done
+
+	ha_info "Check where we are ..."
+	[ -e "$ha_stop_file" ] &&
+		ha_info "$ha_stop_file found!"
+
+	local -a nodes_up
+	nodes_up=($(ha_on $nodes hostname | awk '{ print $2 }'))
+	ha_info "Nodes $nodes are up: ${nodes_up[@]}"
+	local -a n=(${nodes//,/ })
+	if [[ ${#nodes_up[@]} -ne ${#n[@]} ]]; then
+		ha_info "Failed boot up $nodes in $ha_wait_nodes_up sec!"
+		ha_touch fail,stop
+		return 1
+	fi
+	return 0
 }
 
 ha_failback()
