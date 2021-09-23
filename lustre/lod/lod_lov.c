@@ -1653,7 +1653,9 @@ static inline
 struct lov_comp_md_entry_v1 *comp_entry_v1(struct lov_comp_md_v1 *comp, int i)
 {
 	LASSERTF((le32_to_cpu(comp->lcm_magic) & ~LOV_MAGIC_DEFINED) ==
-		 LOV_USER_MAGIC_COMP_V1, "Wrong magic %x\n",
+		 LOV_USER_MAGIC_COMP_V1 ||
+		 (le32_to_cpu(comp->lcm_magic) & ~LOV_MAGIC_DEFINED) ==
+		 LOV_USER_MAGIC_SEL, "Wrong magic %x\n",
 		 le32_to_cpu(comp->lcm_magic));
 	LASSERTF(i >= 0 && i < le16_to_cpu(comp->lcm_entry_count),
 		 "bad index %d, max = %d\n",
@@ -1935,17 +1937,21 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 		RETURN(-EINVAL);
 	}
 
-	if (magic != LOV_USER_MAGIC_V1 &&
-	    magic != LOV_USER_MAGIC_V3 &&
-	    magic != LOV_USER_MAGIC_SPECIFIC &&
-	    magic != LOV_USER_MAGIC_COMP_V1) {
+	switch (magic) {
+	case LOV_USER_MAGIC_FOREIGN:
+		RETURN(0);
+	case LOV_USER_MAGIC_V1:
+	case LOV_USER_MAGIC_V3:
+	case LOV_USER_MAGIC_SPECIFIC:
+		RETURN(lod_verify_v1v3(d, buf, is_from_disk));
+	case LOV_USER_MAGIC_COMP_V1:
+	case LOV_USER_MAGIC_SEL:
+		break;
+	default:
 		CDEBUG(D_LAYOUT, "bad userland LOV MAGIC: %#x\n",
 		       le32_to_cpu(lum->lmm_magic));
 		RETURN(-EINVAL);
 	}
-
-	if (magic != LOV_USER_MAGIC_COMP_V1)
-		RETURN(lod_verify_v1v3(d, buf, is_from_disk));
 
 	/* magic == LOV_USER_MAGIC_COMP_V1 */
 	comp_v1 = buf->lb_buf;
@@ -2058,8 +2064,10 @@ recheck:
 			else if (rc)
 				RETURN(rc);
 
+			if (le16_to_cpu(lum->lmm_stripe_count) == 1)
+				lum->lmm_stripe_count = 0;
 			/* Any stripe count is forbidden on DoM component */
-			if (lum->lmm_stripe_count) {
+			if (lum->lmm_stripe_count > 0) {
 				CDEBUG(D_LAYOUT,
 				       "invalid DoM layout stripe count %u, must be 0\n",
 				       le16_to_cpu(lum->lmm_stripe_count));

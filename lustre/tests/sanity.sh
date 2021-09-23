@@ -22055,6 +22055,16 @@ test_270h() {
 }
 run_test 270h "DoM: DoM stripe removal when disabled on server"
 
+test_270i() {
+	(( $MDS1_VERSION >= $(version_code 2.14.54) )) ||
+		skip "Need MDS version at least 2.14.54"
+
+	mkdir $DIR/$tdir
+	$LFS setstripe -L mdt -S 128k -c -1 $DIR/$tdir &&
+		error "setstripe should fail" || true
+}
+run_test 270i "DoM: setting invalid DoM striping should fail"
+
 test_271a() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"

@@ -5125,6 +5125,8 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 
 	ENTRY;
 
+	lds->lds_def_striping_set = 0;
+
 	rc = lod_get_lov_ea(env, lo);
 	if (rc < 0)
 		RETURN(rc);
@@ -5514,7 +5516,12 @@ static void lod_ah_init(const struct lu_env *env,
 		 */
 		if (likely(lp != NULL)) {
 			lod_get_default_striping(env, lp, lds);
-
+			if (lds->lds_def_striping_set) {
+				rc = lod_verify_striping(env, d, lp,
+							 &info->lti_buf, false);
+				if (rc)
+					lds->lds_def_striping_set = 0;
+			}
 			/* inherit default striping except ROOT */
 			if ((lds->lds_def_striping_set ||
 			     lds->lds_dir_def_striping_set) &&
@@ -5583,8 +5590,12 @@ static void lod_ah_init(const struct lu_env *env,
 	 */
 	if (likely(lp != NULL)) {
 		rc = lod_get_default_lov_striping(env, lp, lds, ah);
-		if (rc == 0)
-			lod_striping_from_default(lc, lds, child_mode);
+		if (rc == 0 && lds->lds_def_striping_set) {
+			rc = lod_verify_striping(env, d, lp, &info->lti_buf,
+						 false);
+			if (rc == 0)
+				lod_striping_from_default(lc, lds, child_mode);
+		}
 	}
 
 	/* Initialize lod_device::lod_md_root object reference */
@@ -5614,8 +5625,14 @@ static void lod_ah_init(const struct lu_env *env,
 	    lod_need_inherit_more(lc, true, ah->dah_append_pool)) {
 		rc = lod_get_default_lov_striping(env, d->lod_md_root, lds,
 						  ah);
+		if (rc || !lds->lds_def_striping_set)
+			goto out;
+
+		rc = lod_verify_striping(env, d, d->lod_md_root, &info->lti_buf,
+					 false);
 		if (rc)
 			goto out;
+
 		if (lc->ldo_comp_cnt == 0) {
 			lod_striping_from_default(lc, lds, child_mode);
 		} else if (!lds->lds_def_striping_is_composite) {
