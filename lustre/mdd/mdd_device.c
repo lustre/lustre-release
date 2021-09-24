@@ -256,6 +256,8 @@ static int changelog_user_init_cb(const struct lu_env *env,
 		mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
 	else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK)
 		mdd->mdd_cl.mc_current_mask |= CHANGELOG_DEFMASK;
+	mdd->mdd_cl.mc_mintime = min(mdd->mdd_cl.mc_mintime, rec->cur_time);
+	mdd->mdd_cl.mc_minrec = min(mdd->mdd_cl.mc_minrec, rec->cur_endrec);
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	if (rec->cur_endrec > mdd->mdd_cl.mc_index)
@@ -652,6 +654,8 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	/* ensure a GC check will, and a thread run may, occur upon start */
 	mdd->mdd_cl.mc_gc_time = 0;
 	mdd->mdd_cl.mc_gc_task = MDD_CHLG_GC_NONE;
+	mdd->mdd_cl.mc_mintime = (__u32)ktime_get_real_seconds();
+	mdd->mdd_cl.mc_minrec = ULLONG_MAX;
 
 	rc = mdd_changelog_llog_init(env, mdd);
 	if (rc) {
@@ -718,7 +722,8 @@ again:
 	}
 }
 
-/** Remove entries with indicies up to and including \a endrec from the
+/**
+ * Remove entries with indicies up to and including \a endrec from the
  *  changelog
  * \param mdd
  * \param endrec
@@ -726,50 +731,48 @@ again:
  */
 static int
 mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
-			  long long endrec)
+			  unsigned long long endrec)
 {
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        struct llog_ctxt *ctxt;
-        long long unsigned cur;
+	struct obd_device *obd = mdd2obd_dev(mdd);
+	struct llog_ctxt *ctxt;
+	unsigned long long cur;
 	struct changelog_cancel_cookie cookie;
-        int rc;
+	int rc;
 
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-        if (ctxt == NULL)
-                return -ENXIO;
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+	if (!ctxt)
+		return -ENXIO;
 
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	cur = (long long)mdd->mdd_cl.mc_index;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
-        if (endrec > cur)
-                endrec = cur;
 
-        /* purge to "0" is shorthand for everything */
-        if (endrec == 0)
-                endrec = cur;
+	/*
+	 * If purging all records, write a header entry so we don't have an
+	 * empty catalog and we're sure to have a valid starting index next
+	 * time. In a case of crash, we just restart with old log so we're
+	 * allright.
+	 */
+	if (endrec >= cur) {
+		rc = mdd_changelog_write_header(env, mdd, CLM_PURGE);
+		if (rc)
+			goto out;
+		endrec = cur;
+	}
 
-        /* If purging all records, write a header entry so we don't have an
-           empty catalog and we're sure to have a valid starting index next
-           time.  In case of crash, we just restart with old log so we're
-           allright. */
-        if (endrec == cur) {
-                /* XXX: transaction is started by llog itself */
-                rc = mdd_changelog_write_header(env, mdd, CLM_PURGE);
-                if (rc)
-                      goto out;
-        }
-
-        /* Some records were purged, so reset repeat-access time (so we
-           record new mtime update records, so users can see a file has been
-           changed since the last purge) */
+	/*
+	 * Some records were purged, so reset repeat-access time (so we
+	 * record new mtime update records, so users can see a file has been
+	 * changed since the last purge)
+	 */
 	mdd->mdd_cl.mc_starttime = ktime_get();
 
 	cookie.endrec = endrec;
 	cookie.mdd = mdd;
 	rc = llog_changelog_cancel(env, ctxt, &cookie);
 out:
-        llog_ctxt_put(ctxt);
-        return rc;
+	llog_ctxt_put(ctxt);
+	return rc;
 }
 
 /** Add a CL_MARK record to the changelog
@@ -1768,8 +1771,12 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rec->cur_time = (__u32)ktime_get_real_seconds();
-	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
-		rec->cur_time = 0;
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_TIME_IN_CHLOG_USER)) {
+		rec->cur_time -= min(cfs_fail_val, rec->cur_time);
+		spin_lock(&mdd->mdd_cl.mc_user_lock);
+		mdd->mdd_cl.mc_mintime = rec->cur_time;
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	}
 
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	rec->cur_endrec = mdd->mdd_cl.mc_index;
@@ -1901,6 +1908,7 @@ struct mdd_changelog_user_purge {
 	__u32 mcup_usercount;
 	__u64 mcup_minrec;
 	bool mcup_found;
+	char mcup_name[CHANGELOG_USER_NAMELEN_FULL];
 };
 
 /**
@@ -1936,10 +1944,11 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
 		RETURN(0);
 	}
 
+	mdd_chlg_username(rec, mcup->mcup_name, sizeof(mcup->mcup_name));
+
 	/* Unregister this user */
 	cookie.lgc_lgl = llh->lgh_id;
 	cookie.lgc_index = hdr->lrh_index;
-
 	rc = llog_cat_cancel_records(env, llh->u.phd.phd_cat_handle,
 				     1, &cookie);
 	if (rc == 0) {
@@ -1962,6 +1971,7 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 		.mcup_found = false,
 		.mcup_usercount = 0,
 		.mcup_minrec = ULLONG_MAX,
+		.mcup_name = { 0 },
 	};
 	struct llog_ctxt *ctxt;
 	int rc;
@@ -1973,17 +1983,21 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 
 	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-	if (ctxt == NULL ||
-	    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
+	if (!ctxt)
+		RETURN(-ENXIO);
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
 		GOTO(out, rc = -ENXIO);
 
 	rc = llog_cat_process(env, ctxt->loc_handle,
-			      mdd_changelog_user_purge_cb, &mcup,
-			      0, 0);
+			      mdd_changelog_user_purge_cb, &mcup, 0, 0);
+	if (rc) {
+		CWARN("%s: failed to purge changelog for user %s: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, mcup.mcup_name, rc);
+		GOTO(out, rc);
+	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PURGE_DELAY, cfs_fail_val);
-
-	if ((rc == 0) && (mcup.mcup_usercount == 0)) {
+	if (mcup.mcup_usercount == 0) {
 		spin_lock(&mdd->mdd_cl.mc_user_lock);
 		if (mdd->mdd_cl.mc_users == 0) {
 			/* No more users; turn changelogs off */
@@ -1993,18 +2007,14 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 		spin_unlock(&mdd->mdd_cl.mc_user_lock);
 	}
 
-	if ((rc == 0) && mcup.mcup_found) {
-		CDEBUG(D_IOCTL, "%s: Purging changelog entries for user %d "
-		       "record=%llu\n",
-		       mdd2obd_dev(mdd)->obd_name, id, mcup.mcup_minrec);
-		/* Cancelling record 0 destroys the entire changelog, make sure
-		   we don't do that unless we mean it. */
-		if (mcup.mcup_minrec != 0 || mcup.mcup_usercount == 0) {
-			rc = mdd_changelog_llog_cancel(env, mdd,
-						       mcup.mcup_minrec);
-		}
+	if (mcup.mcup_found) {
+		CDEBUG(D_IOCTL,
+		       "%s: Purge changelog entries for user %s record=%llu\n",
+		       mdd2obd_dev(mdd)->obd_name,
+		       mcup.mcup_name, mcup.mcup_minrec);
+		rc = mdd_changelog_llog_cancel(env, mdd, mcup.mcup_minrec);
 	} else {
-		CWARN("%s: No changelog for user %u; rc=%d\n",
+		CWARN("%s: No changelog for user id %u: rc = %d\n",
 		      mdd2obd_dev(mdd)->obd_name, id, rc);
 		GOTO(out, rc = -ENOENT);
 	}
@@ -2013,8 +2023,7 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 
 	EXIT;
 out:
-	if (ctxt != NULL)
-		llog_ctxt_put(ctxt);
+	llog_ctxt_put(ctxt);
 
 	return rc;
 }
@@ -2022,9 +2031,11 @@ out:
 struct mdd_changelog_user_clear {
 	__u64 mcuc_endrec;
 	__u64 mcuc_minrec;
+	__u32 mcuc_mintime;
 	__u32 mcuc_id;
 	bool mcuc_flush;
 	struct mdd_device *mcuc_mdd;
+	char mcuc_name[CHANGELOG_USER_NAMELEN_FULL];
 };
 
 /**
@@ -2043,7 +2054,6 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 {
 	struct llog_changelog_user_rec2 *rec;
 	struct mdd_changelog_user_clear *mcuc = data;
-	char user_name[CHANGELOG_USER_NAMELEN_FULL];
 	struct mdd_device *mdd = mcuc->mcuc_mdd;
 	int rc;
 
@@ -2055,38 +2065,33 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 	rec = container_of(hdr, typeof(*rec), cur_hdr);
 	/* Does the changelog id match the requested id? */
 	if (rec->cur_id != mcuc->mcuc_id) {
-		mcuc->mcuc_minrec = min(mcuc->mcuc_minrec,
-					rec->cur_endrec);
+		mcuc->mcuc_minrec = min(mcuc->mcuc_minrec, rec->cur_endrec);
+		mcuc->mcuc_mintime = min(mcuc->mcuc_mintime, rec->cur_time);
 		RETURN(0);
 	}
 
+	mdd_chlg_username(rec, mcuc->mcuc_name, sizeof(mcuc->mcuc_name));
 	/* cur_endrec is the oldest purgeable record, make sure we're newer */
 	if (rec->cur_endrec > mcuc->mcuc_endrec) {
 		rc = -EINVAL;
 		CDEBUG(D_IOCTL,
-		       "%s: request %llu > endrec %llu for user %s: rc = %d\n",
-		       mdd2obd_dev(mdd)->obd_name,
-		       mcuc->mcuc_endrec, rec->cur_endrec,
-		       mdd_chlg_username(rec, user_name, sizeof(user_name)),
-		       rc);
+		       "%s: request %llu < endrec %llu for user %s: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, mcuc->mcuc_endrec,
+		       rec->cur_endrec, mcuc->mcuc_name, rc);
 		RETURN(rc);
 	}
 
-	/* Flag that we've met all the range and user checks.
+	/*
+	 * Flag that we've met all the range and user checks.
 	 * We now know the record to flush.
 	 */
-	rec->cur_endrec = mcuc->mcuc_endrec;
-
-	rec->cur_time = (__u32)ktime_get_real_seconds();
-	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
-		rec->cur_time = 0;
-
 	mcuc->mcuc_flush = true;
 
-	CDEBUG(D_IOCTL, "%s: rewriting changelog user %s endrec = %llu\n",
-	       mdd2obd_dev(mdd)->obd_name,
-	       mdd_chlg_username(rec, user_name, sizeof(user_name)),
-	       rec->cur_endrec);
+	rec->cur_endrec = mcuc->mcuc_endrec;
+	rec->cur_time = (__u32)ktime_get_real_seconds();
+
+	CDEBUG(D_IOCTL, "%s: update changelog user %s endrec = %llu\n",
+	       mdd2obd_dev(mdd)->obd_name, mcuc->mcuc_name, rec->cur_endrec);
 
 	/* Update the endrec */
 	rc = llog_write(env, llh, hdr, hdr->lrh_index);
@@ -2106,6 +2111,8 @@ static int mdd_changelog_clear(const struct lu_env *env,
 		.mcuc_minrec = endrec,
 		.mcuc_flush = false,
 		.mcuc_mdd = mdd,
+		.mcuc_mintime = ktime_get_real_seconds(),
+		.mcuc_name = { 0 },
 	};
 	struct llog_ctxt *ctxt;
 	__u64 start_rec;
@@ -2139,27 +2146,26 @@ static int mdd_changelog_clear(const struct lu_env *env,
 	    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
 		GOTO(out, rc = -ENXIO);
 
-	rc = llog_cat_process(env, ctxt->loc_handle,
-			      mdd_changelog_clear_cb, (void *)&mcuc,
-			      0, 0);
-
+	rc = llog_cat_process(env, ctxt->loc_handle, mdd_changelog_clear_cb,
+			      &mcuc, 0, 0);
 	if (rc == -EINVAL) {
 		CDEBUG(D_IOCTL, "%s: No changelog recnum <= %llu to clear\n",
-		       mdd2obd_dev(mdd)->obd_name, (unsigned long long) endrec);
+		       mdd2obd_dev(mdd)->obd_name, (unsigned long long)endrec);
 		RETURN(-EINVAL);
 	} else if (rc < 0) {
-		CWARN("%s: Failure to clear the changelog for user %d: %d\n",
-		      mdd2obd_dev(mdd)->obd_name, id, rc);
+		CWARN("%s: can't clear the changelog for user %s: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_name, rc);
 	} else if (mcuc.mcuc_flush) {
-		/* Cancelling record 0 destroys the entire changelog, make sure
-		   we don't do that unless we mean it. */
-		if (mcuc.mcuc_minrec != 0) {
-			CDEBUG(D_IOCTL, "%s: Purging changelog entries up "\
-			       "to %llu\n", mdd2obd_dev(mdd)->obd_name,
-			       mcuc.mcuc_minrec);
-
-			rc = mdd_changelog_llog_cancel(env, mdd,
-						      mcuc.mcuc_minrec);
+		CDEBUG(D_IOCTL,
+		       "%s: purge changelog user %s entries up to %llu\n",
+		       mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_name,
+		       mcuc.mcuc_minrec);
+		rc = mdd_changelog_llog_cancel(env, mdd, mcuc.mcuc_minrec);
+		if (!rc) {
+			spin_lock(&mdd->mdd_cl.mc_user_lock);
+			mdd->mdd_cl.mc_minrec = mcuc.mcuc_minrec;
+			mdd->mdd_cl.mc_mintime = mcuc.mcuc_mintime;
+			spin_unlock(&mdd->mdd_cl.mc_user_lock);
 		}
 	} else {
 		CDEBUG(D_IOCTL, "%s: No entry for user %d\n",

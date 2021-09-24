@@ -822,6 +822,17 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 	return rc;
 }
 
+bool mdd_changelog_need_gc(const struct lu_env *env, struct mdd_device *mdd,
+			   struct llog_handle *lgh)
+{
+	unsigned long free_cat_entries = llog_cat_free_space(lgh);
+	struct mdd_changelog *mc = &mdd->mdd_cl;
+
+	return free_cat_entries <= mdd->mdd_changelog_min_free_cat_entries ||
+	       mdd_changelog_is_too_idle(mdd, mc->mc_minrec, mc->mc_mintime) ||
+	       OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD);
+}
+
 /** Add a changelog entry \a rec to the changelog llog
  * \param mdd
  * \param rec
@@ -832,10 +843,11 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th)
 {
-	struct obd_device	*obd = mdd2obd_dev(mdd);
-	struct llog_ctxt	*ctxt;
-	struct thandle		*llog_th;
-	int			 rc;
+	struct obd_device *obd = mdd2obd_dev(mdd);
+	struct llog_ctxt *ctxt;
+	struct thandle *llog_th;
+	int rc;
+	bool need_gc;
 
 	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) +
 					    changelog_rec_varsize(&rec->cr));
@@ -863,20 +875,24 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			ktime_get_real_seconds() - mdd->mdd_cl.mc_gc_time))
 		/* save a spin_lock trip */
 		goto out_put;
+
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_IDX_PUMP)) {
+		spin_lock(&mdd->mdd_cl.mc_lock);
+		mdd->mdd_cl.mc_index += cfs_fail_val;
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+	}
+
+	need_gc = mdd_changelog_need_gc(env, mdd, ctxt->loc_handle);
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	if (likely(mdd->mdd_changelog_gc &&
 		     mdd->mdd_cl.mc_gc_task == MDD_CHLG_GC_NONE &&
 		     ktime_get_real_seconds() - mdd->mdd_cl.mc_gc_time >
 			mdd->mdd_changelog_min_gc_interval)) {
-		if (unlikely(llog_cat_free_space(ctxt->loc_handle) <=
-			     mdd->mdd_changelog_min_free_cat_entries ||
-			     OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD))) {
-			CWARN("%s:%s low on changelog_catalog free entries, "
-			      "starting ChangeLog garbage collection thread\n",
+		if (unlikely(need_gc)) {
+			CWARN("%s:%s starting changelog garbage collection\n",
 			      obd->obd_name,
 			      OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD) ?
-				" simulate" : "");
-
+			      " simulate" : "");
 			/* indicate further kthread run will occur outside
 			 * right after current journal transaction filling has
 			 * completed

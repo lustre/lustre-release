@@ -75,8 +75,8 @@ int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,
 struct mdd_changelog_gc {
 	struct mdd_device *mcgc_mdd;
 	__u32 mcgc_id;
-	__u32 mcgc_maxtime;
-	__u64 mcgc_maxindexes;
+	__u32 mcgc_mintime;
+	__u64 mcgc_minrec;
 	char mcgc_name[CHANGELOG_USER_NAMELEN_FULL];
 };
 
@@ -97,45 +97,13 @@ static int mdd_changelog_gc_cb(const struct lu_env *env,
 
 	rec = container_of(hdr, typeof(*rec), cur_hdr);
 
-	/* find oldest idle user, based on last record update/cancel time (new
-	 * behavior), or for old user records, last record index vs current
-	 * ChangeLog index. Late users with old record format will be treated
-	 * first as we assume they could be idle since longer
-	 */
-	if (rec->cur_time != 0) {
-		u32 time_now = (u32)ktime_get_real_seconds();
-		timeout_t time_out = rec->cur_time +
-				     mdd->mdd_changelog_max_idle_time;
-		timeout_t idle_time = time_now - rec->cur_time;
-
-		/* treat oldest idle user first, and if no old format user
-		 * has been already selected
-		 */
-		if (time_after32(time_now, time_out) &&
-		    idle_time > mcgc->mcgc_maxtime &&
-		    mcgc->mcgc_maxindexes == 0) {
-			mcgc->mcgc_maxtime = idle_time;
-			mcgc->mcgc_id = rec->cur_id;
-			mdd_chlg_username(rec, mcgc->mcgc_name,
-					  sizeof(mcgc->mcgc_name));
-		}
-	} else {
-		/* old user record with no idle time stamp, so use empirical
-		 * method based on its current index/position
-		 */
-		__u64 idle_indexes;
-
-		idle_indexes = mdd->mdd_cl.mc_index - rec->cur_endrec;
-
-		/* treat user with the oldest/smallest current index first */
-		if (idle_indexes >= mdd->mdd_changelog_max_idle_indexes &&
-		    idle_indexes > mcgc->mcgc_maxindexes) {
-			mcgc->mcgc_maxindexes = idle_indexes;
-			mcgc->mcgc_id = rec->cur_id;
-			mdd_chlg_username(rec, mcgc->mcgc_name,
-					  sizeof(mcgc->mcgc_name));
-		}
-
+	if (mdd_changelog_is_too_idle(mdd, rec->cur_endrec, rec->cur_time) &&
+	    rec->cur_endrec < mcgc->mcgc_minrec) {
+		mcgc->mcgc_mintime = rec->cur_time;
+		mcgc->mcgc_minrec = rec->cur_endrec;
+		mcgc->mcgc_id = rec->cur_id;
+		mdd_chlg_username(rec, mcgc->mcgc_name,
+				  sizeof(mcgc->mcgc_name));
 	}
 	RETURN(0);
 }
@@ -156,58 +124,54 @@ static int mdd_chlg_garbage_collect(void *data)
 	       mdd2obd_dev(mdd)->obd_name, current->pid);
 
 	OBD_ALLOC_PTR(env);
-	if (env == NULL)
+	if (!env)
 		GOTO(out, rc = -ENOMEM);
 
 	rc = lu_env_init(env, LCT_MD_THREAD);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_free, rc);
+
+	ctxt = llog_get_context(mdd2obd_dev(mdd),
+				LLOG_CHANGELOG_USER_ORIG_CTXT);
+	if (!ctxt)
+		GOTO(out_env, rc = -ENXIO);
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+		GOTO(out_ctxt, rc = -ENXIO);
 
 	for (;;) {
+		__u32 time_now = (__u32)ktime_get_real_seconds();
 		struct mdd_changelog_gc mcgc = {
 			.mcgc_mdd = mdd,
-			.mcgc_maxtime = 0,
-			.mcgc_maxindexes = 0,
+			.mcgc_minrec = mdd->mdd_cl.mc_index,
+			.mcgc_name = { 0 },
 		};
-
-		ctxt = llog_get_context(mdd2obd_dev(mdd),
-					LLOG_CHANGELOG_USER_ORIG_CTXT);
-		if (ctxt == NULL ||
-		    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
-			GOTO(out_ctxt, rc = -ENXIO);
 
 		rc = llog_cat_process(env, ctxt->loc_handle,
 				      mdd_changelog_gc_cb, &mcgc, 0, 0);
-		if (rc != 0 || !mcgc.mcgc_name[0])
-			break;
-		llog_ctxt_put(ctxt);
+		if (rc)
+			GOTO(out_ctxt, rc);
 
-		if (mcgc.mcgc_maxindexes != 0)
-			CWARN("%s: Force deregister of ChangeLog user %s idle with more than %llu unprocessed records\n",
-			      mdd2obd_dev(mdd)->obd_name, mcgc.mcgc_name,
-			      mcgc.mcgc_maxindexes);
-		else
-			CWARN("%s: Force deregister of ChangeLog user %s idle since more than %us\n",
-			      mdd2obd_dev(mdd)->obd_name, mcgc.mcgc_name,
-			      mcgc.mcgc_maxtime);
+		if (!mcgc.mcgc_name[0])
+			break;
+
+		CWARN("%s: force deregister of changelog user %s idle for %us with %llu unprocessed records\n",
+		      mdd2obd_dev(mdd)->obd_name, mcgc.mcgc_name,
+		      time_now - mcgc.mcgc_mintime,
+		      mdd->mdd_cl.mc_index - mcgc.mcgc_minrec);
 
 		mdd_changelog_user_purge(env, mdd, mcgc.mcgc_id);
 
 		if (kthread_should_stop())
-			GOTO(out_env, rc = 0);
+			GOTO(out_ctxt, rc = 0);
 	}
-
+	EXIT;
 out_ctxt:
-	if (ctxt != NULL)
-		llog_ctxt_put(ctxt);
-
+	llog_ctxt_put(ctxt);
 out_env:
 	lu_env_fini(env);
-	GOTO(out, rc);
+out_free:
+	OBD_FREE_PTR(env);
 out:
-	if (env)
-		OBD_FREE_PTR(env);
-
 	spin_lock(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_gc_task = MDD_CHLG_GC_NONE;
 	spin_unlock(&mdd->mdd_cl.mc_lock);

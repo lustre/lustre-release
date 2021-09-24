@@ -246,6 +246,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_REINT_OPEN2	 0x16a
 #define OBD_FAIL_MDS_COMMITRW_DELAY	 0x16b
 #define OBD_FAIL_MDS_CHANGELOG_DEL	 0x16c
+#define OBD_FAIL_MDS_CHANGELOG_IDX_PUMP	 0x16d
 
 /* layout lock */
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170

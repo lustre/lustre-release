@@ -16050,13 +16050,10 @@ run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
-		skip "Need MDS version at least 2.10.56"
+	[[ $MDS1_VERSION -ge $(version_code 2.14.55) ]] ||
+		skip "Need MDS version at least 2.14.55"
 
 	local mdts=$(comma_list $(mdts_nodes))
-
-	#define OBD_FAIL_TIME_IN_CHLOG_USER	0x1314
-	do_nodes $mdts $LCTL set_param fail_loc=0x1314
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
@@ -16082,10 +16079,9 @@ test_160g() {
 	(( $nbcl > 0 )) || error "no changelogs found"
 
 	# reduce the max_idle_indexes value to make sure we exceed it
-	for param in "changelog_max_idle_indexes=1" \
+	for param in "changelog_max_idle_indexes=2" \
 		     "changelog_gc=1" \
-		     "changelog_min_gc_interval=2" \
-		     "changelog_min_free_cat_entries=3"; do
+		     "changelog_min_gc_interval=2"; do
 		local MDT0=$(facet_svc $SINGLEMDS)
 		local var="${param%=*}"
 		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
@@ -16095,10 +16091,6 @@ test_160g() {
 			error "unable to set mdd.*.$param"
 	done
 
-	# simulate changelog catalog almost full
-	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
-	do_nodes $mdts "$LCTL set_param fail_loc=0x1313 fail_val=3"
-
 	local start=$SECONDS
 	for i in $(seq $MDSCOUNT); do
 		cl_users=(${CL_USERS[mds$i]})
@@ -16106,38 +16098,37 @@ test_160g() {
 		cl_user2[mds$i]="${cl_users[1]}"
 
 		[ -n "${cl_user1[mds$i]}" ] ||
-			error "mds$i: no user registered"
+			error "mds$i: user1 is not registered"
 		[ -n "${cl_user2[mds$i]}" ] ||
 			error "mds$i: only ${cl_user1[mds$i]} is registered"
 
 		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
 		[ -n "$user_rec1" ] ||
-			error "mds$i: User ${cl_user1[mds$i]} not registered"
+			error "mds$i: user1 ${cl_user1[mds$i]} not found"
 		__changelog_clear mds$i ${cl_user1[mds$i]} +2
 		user_rec2=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
 		[ -n "$user_rec2" ] ||
-			error "mds$i: User ${cl_user1[mds$i]} not registered"
-		echo "mds$i: verifying user ${cl_user1[mds$i]} clear: " \
+			error "mds$i: user1 ${cl_user1[mds$i]} not found (2)"
+		echo "mds$i: verifying user1 ${cl_user1[mds$i]} clear: " \
 		     "$user_rec1 + 2 == $user_rec2"
 		[ $((user_rec1 + 2)) == $user_rec2 ] ||
-			error "mds$i: user ${cl_user1[mds$i]} index expected " \
-			      "$user_rec1 + 2, but is $user_rec2"
+			error "mds$i: user1 ${cl_user1[mds$i]} index " \
+			      "expected $user_rec1 + 2, but is $user_rec2"
 		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
 		[ -n "$user_rec2" ] ||
-			error "mds$i: User ${cl_user2[mds$i]} not registered"
+			error "mds$i: user2 ${cl_user2[mds$i]} not found"
 		[ $user_rec1 == $user_rec2 ] ||
-			error "mds$i: user ${cl_user2[mds$i]} index expected " \
-			      "$user_rec1, but is $user_rec2"
+			error "mds$i: user2 ${cl_user2[mds$i]} index " \
+			      "expected $user_rec1, but is $user_rec2"
 	done
 
 	# ensure we are past the previous changelog_min_gc_interval set above
 	local sleep2=$((start + 2 - SECONDS))
 	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
-
 	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
 	# cl_user1 should be OK because it recently processed records.
 	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.3 $DIR/$tdir/d$i.4 ||
+		$LFS mkdir -i $i $DIR/$tdir/d$i.3 ||
 			error "create $DIR/$tdir/d$i.3 failed"
 	done
 
@@ -16151,15 +16142,15 @@ test_160g() {
 	for (( i = 1; i <= MDSCOUNT; i++ )); do
 		# check cl_user1 still registered
 		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
-			error "mds$i: User ${cl_user1[mds$i]} not registered"
+			error "mds$i: user1 ${cl_user1[mds$i]} not found (3)"
 		# check cl_user2 unregistered
 		changelog_users mds$i | grep -q "${cl_user2[mds$i]}" &&
-			error "mds$i: User ${cl_user2[mds$i]} still registered"
+			error "mds$i: user2 ${cl_user2[mds$i]} is registered"
 
 		# check changelogs are present and starting at $user_rec1 + 1
 		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
 		[ -n "$user_rec1" ] ||
-			error "mds$i: User ${cl_user1[mds$i]} not registered"
+			error "mds$i: user1 ${cl_user1[mds$i]} not found (4)"
 		first_rec=$($LFS changelog $(facet_svc mds$i) |
 			    awk '{ print $1; exit; }')
 
@@ -16168,7 +16159,7 @@ test_160g() {
 			error "mds$i: rec $first_rec != $user_rec1 + 1"
 	done
 }
-run_test 160g "changelog garbage collect (old users)"
+run_test 160g "changelog garbage collect on idle records"
 
 test_160h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -16743,6 +16734,89 @@ test_160q() {
 	[[ $mask == *"HLINK"* ]] || error "mask is not DEFMASK as expected"
 }
 run_test 160q "changelog effective mask is DEFMASK if not set"
+
+test_160s() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need MDS version at least 2.14.55"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	#define OBD_FAIL_TIME_IN_CHLOG_USER     0x1314
+	do_nodes $mdts $LCTL set_param fail_loc=0x1314 \
+				       fail_val=$((24 * 3600 * 10))
+
+	# Create a user which is 10 days old
+	changelog_register || error "first changelog_register failed"
+	local cl_users
+	declare -A cl_user1
+	local i
+
+	# generate some changelog records to accumulate on each MDT
+	# use all_char because created files should be evenly distributed
+	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
+		error "test_mkdir $tdir failed"
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
+			error "create $DIR/$tdir/d$i.1 failed"
+	done
+
+	# check changelogs have been generated
+	local nbcl=$(changelog_dump | wc -l)
+	(( nbcl > 0 )) || error "no changelogs found"
+
+	# reduce the max_idle_indexes value to make sure we exceed it
+	for param in "changelog_max_idle_indexes=2097446912" \
+		     "changelog_max_idle_time=2592000" \
+		     "changelog_gc=1" \
+		     "changelog_min_gc_interval=2"; do
+		local MDT0=$(facet_svc $SINGLEMDS)
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
+		do_nodes $mdts $LCTL set_param mdd.*.$param ||
+			error "unable to set mdd.*.$param"
+	done
+
+	local start=$SECONDS
+	for i in $(seq $MDSCOUNT); do
+		cl_users=(${CL_USERS[mds$i]})
+		cl_user1[mds$i]="${cl_users[0]}"
+
+		[[ -n "${cl_user1[mds$i]}" ]] ||
+			error "mds$i: no user registered"
+	done
+
+	#define OBD_FAIL_MDS_CHANGELOG_IDX_PUMP   0x16d
+	do_nodes $mdts $LCTL set_param fail_loc=0x16d fail_val=500000000
+
+	# ensure we are past the previous changelog_min_gc_interval set above
+	local sleep2=$((start + 2 - SECONDS))
+	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
+
+	# Generate one more changelog to trigger GC
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		$LFS mkdir -i $i $DIR/$tdir/d$i.3 $DIR/$tdir/d$i.4 ||
+			error "create $DIR/$tdir/d$i.3 failed"
+	done
+
+	# ensure gc thread is done
+	for node in $(mdts_nodes); do
+		wait_update $node "pgrep chlg_gc_thread" "" 20 ||
+			error "$node: GC-thread not done"
+	done
+
+	do_nodes $mdts $LCTL set_param fail_loc=0
+
+	for (( i = 1; i <= MDSCOUNT; i++ )); do
+		# check cl_user1 is purged
+		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" &&
+			error "mds$i: User ${cl_user1[mds$i]} is registered"
+	done
+	return 0
+}
+run_test 160s "changelog garbage collect on idle records * time"
 
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

@@ -97,6 +97,8 @@ struct mdd_changelog {
 	int			mc_flags;
 	__u32			mc_proc_mask; /* per-server mask set via parameters */
 	__u32			mc_current_mask; /* combined global+users */
+	__u32			mc_mintime; /* the oldest changelog user time */
+	__u64			mc_minrec; /* last known minimal used index */
 	__u64			mc_index;
 	ktime_t			mc_starttime;
 	spinlock_t		mc_user_lock;
@@ -849,6 +851,17 @@ static inline bool mdd_changelog_enabled(const struct lu_env *env,
 	} else {
 		return false;
 	}
+}
+
+static inline bool mdd_changelog_is_too_idle(struct mdd_device *mdd,
+					     __u64 cl_rec, __u32 cl_time)
+{
+	__u64 idle_indexes = mdd->mdd_cl.mc_index - cl_rec;
+	__u32 idle_time = (__u32)ktime_get_real_seconds() - cl_time;
+
+	return (idle_indexes > mdd->mdd_changelog_max_idle_indexes ||
+		idle_time > mdd->mdd_changelog_max_idle_time ||
+		idle_time * idle_indexes > (24 * 3600ULL << 32));
 }
 
 #endif
