@@ -8036,7 +8036,7 @@ static int osd_mount(const struct lu_env *env,
 	if (unlikely(!ldiskfs_has_feature_largedir(o->od_mnt->mnt_sb) &&
 		     !strstr(name, "MGS"))) {
 		ldiskfs_set_feature_largedir(o->od_mnt->mnt_sb);
-		LCONSOLE_INFO("%s: enable 'large_dir' feature on device '%s'\n",
+		LCONSOLE_INFO("%s: enabled 'large_dir' feature on device %s\n",
 			      name, dev);
 	}
 #endif
