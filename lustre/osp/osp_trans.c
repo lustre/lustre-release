@@ -1107,10 +1107,23 @@ static int osp_send_update_req(const struct lu_env *env,
 	struct osp_update_args	*args;
 	struct ptlrpc_request	*req;
 	struct osp_thandle	*oth = our->our_th;
+	struct osp_updates	*ou = osp->opd_update;
 	int	rc = 0;
 	ENTRY;
 
 	LASSERT(oth != NULL);
+
+	if (ou && ou->ou_generation != our->our_generation) {
+		const struct lnet_process_id *peer =
+			&osp->opd_obd->u.cli.cl_import->imp_connection->c_peer;
+		rc = -ESTALE;
+		osp_trans_callback(env, oth, rc);
+		CDEBUG(D_HA, "%s: stale tx to %s: gen %llu != %llu: rc = %d\n",
+		       osp->opd_obd->obd_name, libcfs_nid2str(peer->nid),
+		       osp->opd_update->ou_generation, our->our_generation, rc);
+		RETURN(rc);
+	}
+
 	rc = osp_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
 				 our, &req);
 	if (rc != 0) {
@@ -1382,10 +1395,15 @@ void osp_invalidate_request(struct osp_device *osp)
 	/* invalidate all of request in the sending list */
 	list_for_each_entry_safe(our, tmp, &ou->ou_list, our_list) {
 		spin_lock(&our->our_list_lock);
-		if (our->our_req_ready)
+		if (our->our_req_ready) {
 			list_move(&our->our_list, &list);
-		else
+		} else {
+			/* this thandle won't be forwarded to
+			 * the dedicated thread, so drop the
+			 * reference here */
+			osp_thandle_put(&env, our->our_th);
 			list_del_init(&our->our_list);
+		}
 
 		if (our->our_th->ot_super.th_result == 0)
 			our->our_th->ot_super.th_result = -EIO;
@@ -1468,8 +1486,7 @@ int osp_send_update_thread(void *arg)
 			osp_trans_callback(&env, our->our_th,
 				our->our_th->ot_super.th_result);
 			rc = our->our_th->ot_super.th_result;
-		} else if (ou->ou_generation != our->our_generation ||
-			   OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
+		} else if (OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
 			rc = -EIO;
 			osp_trans_callback(&env, our->our_th, rc);
 		} else {
@@ -1519,7 +1536,13 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th)
 {
 	struct osp_thandle	*oth = thandle_to_osp_thandle(th);
+	struct osp_device	*osp = dt2osp_dev(dt);
+	struct osp_updates	*ou = osp->opd_update;
 
+	if (ou) {
+		LASSERT(oth->ot_our);
+		oth->ot_our->our_generation = ou->ou_generation;
+	}
 	if (oth->ot_super.th_sync)
 		oth->ot_our->our_flags |= UPDATE_FL_SYNC;
 	/* For remote thandle, if there are local thandle, start it here*/
