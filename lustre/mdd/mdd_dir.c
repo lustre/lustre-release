@@ -2822,8 +2822,8 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	/* we prevent an encrypted file from being renamed
 	 * into an unencrypted dir
 	 */
-	if ((cattr->la_valid & LA_FLAGS &&
-	     cattr->la_flags & LUSTRE_ENCRYPT_FL) &&
+	if ((pattr->la_valid & LA_FLAGS &&
+	     pattr->la_flags & LUSTRE_ENCRYPT_FL) &&
 	    !(tpattr->la_valid & LA_FLAGS &&
 	      tpattr->la_flags & LUSTRE_ENCRYPT_FL))
 		RETURN(-EXDEV);
