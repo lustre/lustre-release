@@ -1717,6 +1717,24 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 ])
 
 #
+# LIBCFS_PARAM_SET_UINT_MINMAX
+#
+# Kernel 5.15-rc1 commit 2a14c9ae15a38148484a128b84bff7e9ffd90d68
+# moved param_set_uint_minmax to common code
+#
+AC_DEFUN([LIBCFS_PARAM_SET_UINT_MINMAX],[
+LB_CHECK_COMPILE([does function 'param_set_uint_minmax' exist],
+param_set_uint_minmax, [
+	#include <linux/moduleparam.h>
+],[
+	param_set_uint_minmax(NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_PARAM_SET_UINT_MINMAX, 1,
+		['param_set_uint_minmax' is available])
+])
+]) # LIBCFS_PARAM_SET_UINT_MINMAX
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1846,6 +1864,8 @@ LIBCFS_SEC_RELEASE_SECCTX
 LIBCFS_HAVE_KFREE_SENSITIVE
 LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 LIBCFS_HAVE_LIST_CMP_FUNC_T
+# 5.15
+LIBCFS_PARAM_SET_UINT_MINMAX
 ]) # LIBCFS_PROG_LINUX
 
 #

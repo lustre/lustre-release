@@ -188,6 +188,7 @@ module_param_call(libcfs_console_min_delay, param_set_console_min_delay,
 #endif
 MODULE_PARM_DESC(libcfs_console_min_delay, "Lustre kernel debug console min delay (jiffies)");
 
+#ifndef HAVE_PARAM_SET_UINT_MINMAX
 static int param_set_uint_minmax(const char *val,
 				 cfs_kernel_param_arg_t *kp,
 				 unsigned int min, unsigned int max)
@@ -205,6 +206,7 @@ static int param_set_uint_minmax(const char *val,
 	*((unsigned int *)kp->arg) = num;
 	return 0;
 }
+#endif
 
 static int param_set_uintpos(const char *val,
 			     cfs_kernel_param_arg_t *kp)
