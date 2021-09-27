@@ -1658,7 +1658,7 @@ test_29() {
 	$LFS setstripe -p $pool1 $DIR/$tdir/$tfile-3 || error "can't setstripe"
 	touch $DIR/$tdir/$tfile-3
 	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-3) == "$pool2" ]] || {
-		$LFS getstripe $DIR/$tdir/$tfile-2
+		$LFS getstripe $DIR/$tdir/$tfile-3
 		error "old pool on $tfile-3"
 	}
 
@@ -1715,6 +1715,8 @@ test_30() {
 		error "poolback"
 	do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct="101" &&
 		error ">100%"
+	do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct="-1" &&
+		error "<0%"
 
 	# set persistent spilling
 	do_facet mgs $LCTL set_param -P $prefix.spill_target="$pool2"
@@ -1787,7 +1789,7 @@ test_31() {
 	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_target="$pool4"
 	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_threshold_pct="$threshold"
 
-	do_nodes $mdts $LCTL get_param lod.*.pool.*
+	do_nodes $mdts $LCTL get_param lod.*.pool.*.spill*
 
 	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
 	local tmpfile=$DIR/$tdir/$tfile-2
