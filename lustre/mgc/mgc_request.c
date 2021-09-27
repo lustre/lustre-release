@@ -797,7 +797,7 @@ static int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
 	rc = local_oid_storage_init(env, lsi->lsi_dt_dev, &fid,
 				    &cli->cl_mgc_los);
 	if (rc)
-		RETURN(rc);
+		GOTO(out_mutex, rc);
 
 	rc = dt_root_get(env, lsi->lsi_dt_dev, &rfid);
 	if (rc)
@@ -836,6 +836,7 @@ out_llog:
 out_los:
 	if (rc < 0) {
 		local_oid_storage_fini(env, cli->cl_mgc_los);
+out_mutex:
 		cli->cl_mgc_los = NULL;
 		mutex_unlock(&cli->cl_mgc_mutex);
 	}
