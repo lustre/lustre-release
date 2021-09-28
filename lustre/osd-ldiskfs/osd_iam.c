@@ -779,12 +779,18 @@ void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
 	assert_corr(count < dx_get_limit(entries));
 	assert_corr(frame->at < iam_entry_shift(path, entries, count));
 	assert_inv(dx_node_check(path, frame));
+	/* Prevent memory corruption outside of buffer_head */
+	BUG_ON(count >= dx_get_limit(entries));
+	BUG_ON((char *)iam_entry_shift(path, entries, count + 1) >
+	       (frame->bh->b_data + frame->bh->b_size));
 
 	memmove(iam_entry_shift(path, new, 1), new,
 		(char *)iam_entry_shift(path, entries, count) - (char *)new);
 	dx_set_ikey(path, new, key);
 	dx_set_block(path, new, ptr);
 	dx_set_count(entries, count + 1);
+
+	BUG_ON(count > dx_get_limit(entries));
 	assert_inv(dx_node_check(path, frame));
 }
 
