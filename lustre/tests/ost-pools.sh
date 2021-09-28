@@ -1586,10 +1586,12 @@ test_28() {
 }
 run_test 28 "lfs_migrate with pool name"
 
+fill_ost_pool_cnt=0
+
 function fill_ost_pool() {
 	local pool=$1
 	local threshold=$2
-	local tmpfile=$DIR/$tdir/$tfile-$pool-filler
+	local tmpfile=$DIR/$tdir/$tfile-$pool-filler-$fill_ost_pool_cnt
 
 	mkdir -p $DIR/$tdir
 	lfs setstripe $tmpfile -p $pool -c -1
@@ -1604,13 +1606,16 @@ function fill_ost_pool() {
 		fallocate -l$((towrite * 1024)) $tmpfile ||
 			error "can't fallocate"
 	}
+	echo ">> filled to $threshold"
+	((fill_ost_pool_cnt++))
 }
 
 test_29() {
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
-	local threshold=10
-	local prefix="lod.$FSNAME-MDT0000*.pool.$pool1"
+	local mdts=$(comma_list $(mdts_nodes))
+	local threshold=20
+	local prefix="lod.$FSNAME-MDT0000-mdtlov.pool.$pool1"
 	local cmd="$LCTL get_param -n $prefix"
 	local before
 	local after
@@ -1622,6 +1627,8 @@ test_29() {
 
 	mkdir_on_mdt0 $DIR/$tdir
 	stack_trap "rm -rf $DIR/$tdir"
+	local delay=$(do_facet mds1 lctl get_param -n lo[vd].*.qos_maxage |
+		      awk '{ print $1 * 2; exit; }')
 
 	pool_add $pool1 || error "Pool creation failed"
 	pool_add_targets $pool1 0 1 || error "pool_add_targets failed"
@@ -1633,18 +1640,52 @@ test_29() {
 	do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct=$threshold
 	stack_trap "do_facet mds1 $LCTL set_param $prefix.spill_threshold_pct=0"
 
-	[[ $(do_facet mds1 "$cmd.spill_target") == "$pool2" ]] ||
-		error "spill target wasn't set"
-	[[ $(do_facet mds1 "$cmd.spill_threshold_pct") == "$threshold" ]] ||
+	[[ $(do_facet mds1 "$cmd.spill_target" | uniq) == "$pool2" ]] ||
+		error "spill target wasn't set to $pool2"
+	[[ $(do_facet mds1 "$cmd.spill_threshold_pct" | uniq) == "$threshold" ]] ||
 		error "spill threshold wasn't set"
 	before=$(do_facet mds1 "$cmd.spill_hit")
 	lfs_df -p $pool1 | grep summary
-	fill_ost_pool $pool1 $threshold
+
+	mkdir -p $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir"
+	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
+
+	echo "check status with empty $pool1"
+	sleep $((delay + 1))
+	[[ $(do_nodes $mdts $cmd.spill_is_active | uniq) == "0" ]] || {
+		do_nodes $mdts $cmd.spill_is_active
+		error "spilling on $pool1 is on"
+	}
+	touch $DIR/$tdir/$tfile-5
+	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-5) == "$pool1" ]] || {
+		$LFS getstripe $DIR/$tdir/$tfile-5
+		error "not old pool on $tfile-5"
+	}
+
+	echo "check with non-empty $pool1"
+	fill_ost_pool $pool1 $((threshold / 2))
 	cancel_lru_locks osc
-	local delay=$(do_facet mds1 lctl get_param -n lo[vd].*.qos_maxage |
-		      awk '{ print $1 * 2; exit; }')
 	sleep $((delay + 1))
 	lfs_df -p $pool1 | grep summary
+	[[ $(do_nodes $mdts $cmd.spill_is_active | uniq) == "0" ]] || {
+		do_nodes $mdts $cmd.spill_is_active
+		error "spilling on $pool1 is on"
+	}
+	touch $DIR/$tdir/$tfile-4
+	[[ $($LFS getstripe -p $DIR/$tdir/$tfile-4) == "$pool1" ]] || {
+		$LFS getstripe $DIR/$tdir/$tfile-4
+		error "new pool on $tfile-4"
+	}
+
+	fill_ost_pool $pool1 $threshold
+	cancel_lru_locks osc
+	sleep $((delay + 1))
+	lfs_df -p $pool1 | grep summary
+	[[ $(do_nodes $mdts $cmd.spill_is_active | uniq) == "1" ]] || {
+		do_nodes $mdts $cmd.spill_is_active
+		error "spilling on $pool1 is off"
+	}
 
 	# in a directory with default striping
 	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
