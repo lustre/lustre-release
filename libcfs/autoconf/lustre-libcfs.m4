@@ -438,6 +438,22 @@ ktime_get_seconds, [
 ]) # LIBCFS_KTIME_GET_SECONDS
 
 #
+# Kernel version 3.19 commit v3.18-rc2-26-g61ada528dea0
+# introduce wait_woken()
+#
+AC_DEFUN([LIBCFS_WAIT_WOKEN],[
+LB_CHECK_COMPILE([does function 'wait_woken' exist],
+wait_woken, [
+	#include <linux/wait.h>
+],[
+	wait_woken(NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_WAIT_WOKEN, 1,
+		['wait_woken, is available'])
+])
+]) # LIBCFS_WAIT_WOKEN
+
+#
 # Kernel version 4.0 commit 41fbf3b39d5eca01527338b4d0ee15ee1ae1023c
 # introduced the helper function ktime_ms_delta.
 #
@@ -1699,6 +1715,7 @@ LIBCFS_TIMESPEC64_SUB
 LIBCFS_TIMESPEC64_TO_KTIME
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
+LIBCFS_WAIT_WOKEN
 # 4.0
 LIBCFS_KTIME_MS_DELTA
 # 4.1

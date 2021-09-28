@@ -477,20 +477,32 @@ static int ptlrpcd(void *arg)
 	 * new_req_list and ptlrpcd_check() moves them into the set.
 	 */
 	do {
+		DEFINE_WAIT_FUNC(wait, woken_wake_function);
 		time64_t timeout;
 
 		timeout = ptlrpc_set_next_timeout(set);
 
 		lu_context_enter(&env.le_ctx);
 		lu_context_enter(env.le_ses);
-		if (timeout == 0)
-			wait_event_idle(set->set_waitq,
-					ptlrpcd_check(&env, pc));
-		else if (wait_event_idle_timeout(set->set_waitq,
-						 ptlrpcd_check(&env, pc),
-						 cfs_time_seconds(timeout))
-			 == 0)
+
+		add_wait_queue(&set->set_waitq, &wait);
+		while (!ptlrpcd_check(&env, pc)) {
+			int ret;
+
+			if (timeout == 0)
+				ret = wait_woken(&wait, TASK_IDLE,
+						 MAX_SCHEDULE_TIMEOUT);
+			else
+				ret = wait_woken(&wait, TASK_IDLE,
+						 cfs_time_seconds(timeout));
+			if (ret != 0)
+				continue;
+			/* Timed out */
 			ptlrpc_expired_set(set);
+			break;
+		}
+		remove_wait_queue(&set->set_waitq, &wait);
+
 		lu_context_exit(&env.le_ctx);
 		lu_context_exit(env.le_ses);
 

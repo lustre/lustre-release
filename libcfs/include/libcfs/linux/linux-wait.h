@@ -583,4 +583,11 @@ do {									\
 	__ret;								\
 })
 
+#ifndef HAVE_WAIT_WOKEN
+#define WQ_FLAG_WOKEN		0x02
+long wait_woken(wait_queue_entry_t *wait, unsigned int mode, long timeout);
+int woken_wake_function(wait_queue_entry_t *wait, unsigned int mode,
+			int sync, void *key);
+#endif /* HAVE_WAIT_WOKEN */
+
 #endif /* __LICBFS_LINUX_WAIT_BIT_H */
