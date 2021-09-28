@@ -122,7 +122,7 @@ static int pool_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 	return strcmp(pool_name, pool->pool_name);
 }
 
-const struct rhashtable_params pools_hash_params = {
+static const struct rhashtable_params pools_hash_params = {
 	.key_len	= 1, /* actually variable */
 	.key_offset	= offsetof(struct pool_desc, pool_name),
 	.head_offset	= offsetof(struct pool_desc, pool_hash),
@@ -376,6 +376,31 @@ void lod_pool_hash_destroy(struct rhashtable *tbl)
 	rhashtable_free_and_destroy(tbl, pools_hash_exit, NULL);
 }
 
+bool lod_pool_exists(struct lod_device *lod, char *poolname)
+{
+	struct pool_desc *pool;
+
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body,
+				poolname,
+				pools_hash_params);
+	rcu_read_unlock();
+	return pool != NULL;
+}
+
+static struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
+{
+	struct pool_desc *pool;
+
+	rcu_read_lock();
+	pool = rhashtable_lookup(&lod->lod_pools_hash_body,
+				poolname,
+				pools_hash_params);
+	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
+		pool = NULL;
+	rcu_read_unlock();
+	return pool;
+}
 /**
  * Allocate a new pool for the specified device.
  *
@@ -558,12 +583,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	int rc = -EINVAL;
 	ENTRY;
 
-	rcu_read_lock();
-	pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
-				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
-		pool = NULL;
-	rcu_read_unlock();
+	pool = lod_pool_find(lod, poolname);
 	if (!pool)
 		RETURN(-ENOENT);
 
@@ -622,12 +642,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	ENTRY;
 
 	/* lookup and kill hash reference */
-	rcu_read_lock();
-	pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
-				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
-		pool = NULL;
-	rcu_read_unlock();
+	pool = lod_pool_find(lod, poolname);
 	if (!pool)
 		RETURN(-ENOENT);
 
@@ -696,12 +711,7 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 
 	pool = NULL;
 	if (poolname[0] != '\0') {
-		rcu_read_lock();
-		pool = rhashtable_lookup(&lod->lod_pools_hash_body, poolname,
-					 pools_hash_params);
-		if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
-			pool = NULL;
-		rcu_read_unlock();
+		pool = lod_pool_find(lod, poolname);
 		if (!pool)
 			CDEBUG(D_CONFIG,
 			       "%s: request for an unknown pool (" LOV_POOLNAMEF ")\n",
@@ -782,12 +792,7 @@ void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 	if (!poolname || !*poolname || (*poolname)[0] == '\0')
 		return;
 repeat:
-	rcu_read_lock();
-	pool = rhashtable_lookup(&lod->lod_pools_hash_body, *poolname,
-				 pools_hash_params);
-	if (pool && !atomic_inc_not_zero(&pool->pool_refcount))
-		pool = NULL;
-	rcu_read_unlock();
+	pool = lod_pool_find(lod, *poolname);
 	if (!pool)
 		return;
 

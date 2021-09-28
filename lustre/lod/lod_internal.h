@@ -70,9 +70,10 @@ struct pool_desc {
 	char			 pool_spill_target[LOV_MAXPOOLNAME + 1];
 };
 
+struct lod_device;
 int lod_pool_hash_init(struct rhashtable *tbl);
 void lod_pool_hash_destroy(struct rhashtable *tbl);
-extern const struct rhashtable_params pools_hash_params;
+bool lod_pool_exists(struct lod_device *lod, char *poolname);
 
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p)  ((p)->pool_obds.op_array)

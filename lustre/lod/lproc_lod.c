@@ -1086,7 +1086,7 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct pool_desc *tgt, *pool = m->private;
+	struct pool_desc *pool = m->private;
 	struct lod_device *lod;
 
 	LASSERT(pool != NULL);
@@ -1106,12 +1106,7 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 	pool->pool_spill_target[count] = '\0';
 	if (strcmp(pool->pool_name, pool->pool_spill_target) == 0)
 		return -ELOOP;
-	rcu_read_lock();
-	tgt = rhashtable_lookup(&lod->lod_pools_hash_body,
-				pool->pool_spill_target,
-				pools_hash_params);
-	rcu_read_unlock();
-	if (!tgt) {
+	if (!lod_pool_exists(lod, pool->pool_spill_target)) {
 		pool->pool_spill_target[0] = '\0';
 		pool->pool_spill_expire = 0;
 		return -ENODEV;
