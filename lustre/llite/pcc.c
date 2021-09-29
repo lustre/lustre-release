@@ -2401,10 +2401,14 @@ void pcc_file_release(struct inode *inode, struct file *file)
 		goto out;
 
 	pcci = ll_i2pcci(inode);
-	LASSERT(pcci);
-	path = &pcci->pcci_path;
-	CDEBUG(D_CACHE, "releasing pcc file \"%pd\"\n", path->dentry);
-	pcc_inode_put(pcci);
+	if (pcci) {
+		path = &pcci->pcci_path;
+		CDEBUG(D_CACHE, "releasing pcc file \"%pd\"\n", path->dentry);
+		pcc_inode_put(pcci);
+	} else {
+		CDEBUG(D_CACHE, "PCC copy "DFID" was unlinked?\n",
+		       PFID(ll_inode2fid(inode)));
+	}
 
 	LASSERT(file_count(pccf->pccf_file) > 0);
 	fput(pccf->pccf_file);
@@ -3235,8 +3239,8 @@ static int pcc_inode_remove(struct inode *inode, struct dentry *pcc_dentry)
 	int rc;
 
 	rc = vfs_unlink(&nop_mnt_idmap, d_inode(parent), pcc_dentry);
-	if (rc)
-		CWARN("%s: failed to unlink PCC file %pd, rc = %d\n",
+	if (rc && rc != -ENOENT)
+		CWARN("%s: failed to unlink PCC file %pd: rc = %d\n",
 		      ll_i2sbi(inode)->ll_fsname, pcc_dentry, rc);
 
 	dput(parent);
@@ -4207,6 +4211,12 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	path = dentry_path_raw(pcci->pcci_path.dentry, buf, buf_len);
 	if (IS_ERR(path))
 		GOTO(out_unlock, rc = PTR_ERR(path));
+
+	if (!pcci->pcci_path.dentry->d_inode ||
+	    pcci->pcci_path.dentry->d_inode->i_nlink == 0) {
+		state->pccs_flags |= PCC_STATE_FL_UNLINKED;
+		pcc_inode_detach_put(inode);
+	}
 
 	if (strscpy(state->pccs_path, path, buf_len) < 0)
 		GOTO(out_unlock, rc = -ENAMETOOLONG);

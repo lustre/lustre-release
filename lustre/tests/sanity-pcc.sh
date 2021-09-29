@@ -2807,11 +2807,13 @@ test_32() {
 	sleep 3
 	do_facet $SINGLEAGT rm $lpcc_path || error "rm $lpcc_path failed"
 	rmultiop_stop $agt_host || error "multiop $file read failed"
+
+	# file will be detached in @pcc_ioctl_state()
 	check_lpcc_state $file "readonly"
 
 	local content=$(do_facet $SINGLEAGT cat $file)
 	[[ $content == "roattach_removed" ]] || error "data mismatch: $content"
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RO-PCC detach $file failed"
 	check_lpcc_state $file "none"
@@ -2819,10 +2821,11 @@ test_32() {
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
 		error "RO-PCC attach $file failed"
 	do_facet $SINGLEAGT rm $lpcc_path || error "rm $lpcc_path failed"
+	# file will be detached in @pcc_ioctl_state()
 	check_lpcc_state $file "readonly"
 	content=$(do_facet $SINGLEAGT cat $file)
 	[[ $content == "roattach_removed" ]] || error "data mismatch: $content"
-	check_lpcc_state $file "readonly"
+	check_lpcc_state $file "none"
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "RO-PCC detach $file failed"
 	check_lpcc_state $file "none"
@@ -3652,6 +3655,31 @@ test_47() {
 	(( mtime0 == mtime1 )) || error "mtime changed from $mtime0 to $mtime1"
 }
 run_test 47 "mtime should be kept once file attached into PCC"
+
+test_48() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local -a lpcc_path
+
+	setup_loopdev client $loopfile $mntpt 60
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ ropcc=1"
+
+	echo "QQQQQ" > $file || error "echo $file failed"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	cat $file || error "cat $file failed"
+	check_lpcc_state $file "readonly" client
+
+	rm $lpcc_path || error "rm $lpcc_path failed"
+	$LFS pcc state $file | grep "(unlinked)" || error "$file not unlinked"
+	[[ "$(cat $file)" =~ "QQQQQ" ]] || error "read $file content failed"
+	check_lpcc_state $file "readonly" client
+	$LFS pcc detach $file || error "detach '$file' failed"
+}
+run_test 48 "PCC state should check whether the file in local PCC cache"
 
 test_96() {
 	local loopfile="$TMP/$tfile"

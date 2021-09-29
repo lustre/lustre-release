@@ -14154,10 +14154,9 @@ static int lfs_pcc_detach(int argc, char **argv)
 		}
 
 		rc2 = llapi_pcc_detach_file(fullpath, detach_flags);
-		if (rc2 < 0) {
+		if (rc2 < 0 && rc2 != -ENOENT) {
 			rc2 = -errno;
-			fprintf(stderr,
-				"%s: cannot detach '%s' from PCC: %s\n",
+			fprintf(stderr, "%s: cannot detach '%s' from PCC: %s\n",
 				argv[0], path, strerror(errno));
 			if (rc == 0)
 				rc = rc2;
@@ -14293,6 +14292,8 @@ static int lfs_pcc_state(int argc, char **argv)
 		}
 
 		printf(", PCC_file: %s", state.pccs_path);
+		if (state.pccs_flags & PCC_STATE_FL_UNLINKED)
+			printf(" (unlinked)");
 		printf(", open_count: %u", state.pccs_open_count);
 		printf(", flags: %x", state.pccs_flags);
 		printf("\n");
