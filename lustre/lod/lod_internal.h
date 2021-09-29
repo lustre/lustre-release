@@ -840,5 +840,6 @@ void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 			      char **poolname);
 void lod_spill_target_refresh(const struct lu_env *env, struct lod_device *lod,
 			      struct pool_desc *pool);
+struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname);
 extern struct lprocfs_vars lprocfs_lod_spill_vars[];
 #endif

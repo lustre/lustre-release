@@ -1747,8 +1747,10 @@ test_30() {
 run_test 30 "persistent OST pool spilling"
 
 test_31() {
+	local prefix="lod.$FSNAME-*.pool."
 	local MDT_DEV=$(mdsdevname mds1)
 	local mdts=$(comma_list $(mdts_nodes))
+	local do_mdts="do_nodes $mdts $LCTL"
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
 	local pool3=${TESTNAME}-3
@@ -1781,16 +1783,18 @@ test_31() {
 		      awk '{ print $1 * 2; exit; }')
 	sleep $((delay + 1))
 
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool1.spill_target="$pool2"
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool1.spill_threshold_pct="$threshold"
+	stack_trap "$do_mdts set_param lod.*.pool.*.spill_threshold_pct=0"
 
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool2.spill_target="$pool3"
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool2.spill_threshold_pct="$threshold"
+	$do_mdts set_param lod.*.pool.$pool1.spill_target="$pool2"
+	$do_mdts set_param lod.*.pool.$pool1.spill_threshold_pct="$threshold"
 
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_target="$pool4"
-	do_nodes $mdts $LCTL set_param lod.*.pool.$pool3.spill_threshold_pct="$threshold"
+	$do_mdts set_param lod.*.pool.$pool2.spill_target="$pool3"
+	$do_mdts set_param lod.*.pool.$pool2.spill_threshold_pct="$threshold"
 
-	do_nodes $mdts $LCTL get_param lod.*.pool.*.spill*
+	$do_mdts set_param lod.*.pool.$pool3.spill_target="$pool4"
+	$do_mdts set_param lod.*.pool.$pool3.spill_threshold_pct="$threshold"
+
+	$do_mdts get_param lod.*.pool.*.spill*
 
 	$LFS setstripe -p $pool1 $DIR/$tdir || error "can't set default layout"
 	local tmpfile=$DIR/$tdir/$tfile-2
@@ -1799,6 +1803,36 @@ test_31() {
 		$LFS getstripe $tmpfile
 		error "old pool is not $pool4"
 	}
+
+	# check for loops
+
+	# reset all loop spilling
+	$do_mdts set_param lod.*.pool.*.spill_threshold_pct="0"
+
+	# pool1->pool2->pool3, then pool4->pool1 fails
+	$do_mdts set_param lod.*.pool.$pool1.spill_target="$pool2" ||
+		error "can't set spill target for $pool1"
+	$do_mdts set_param lod.*.pool.$pool2.spill_target="$pool3" ||
+		error "can't set spill target for $pool1"
+	$do_mdts set_param lod.*.pool.$pool3.spill_target="$pool4" ||
+		error "can't set spill target for $pool1"
+	$do_mdts set_param lod.*.pool.$pool4.spill_target="$pool1" &&
+		error "loop succeed"
+
+	# reset all loop spilling
+	$do_mdts set_param lod.*.pool.*.spill_threshold_pct="0"
+
+	# pool1->pool2,pool4->pool1, then pool3->pool4 fails
+	$do_mdts set_param lod.*.pool.$pool1.spill_target="$pool2" ||
+		error "can't set spill target for $pool1"
+	$do_mdts set_param lod.*.pool.$pool2.spill_target="$pool3" ||
+		error "can't set spill target for $pool1"
+	$do_mdts set_param lod.*.pool.$pool4.spill_target="$pool1" ||
+		error "can't set spill target for $pool4"
+	$do_mdts set_param lod.*.pool.$pool3.spill_target="$pool4" &&
+		error "loop succeed"
+
+	return 0
 }
 run_test 31 "OST pool spilling chained"
 

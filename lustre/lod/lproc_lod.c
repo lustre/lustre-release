@@ -1130,8 +1130,10 @@ lod_spill_threshold_pct_seq_write(struct file *file, const char __user *buffer,
 
 	pool->pool_spill_threshold_pct = val;
 	pool->pool_spill_expire = 0;
-	if (pool->pool_spill_threshold_pct == 0)
+	if (pool->pool_spill_threshold_pct == 0) {
 		pool->pool_spill_is_active = false;
+		pool->pool_spill_target[0] = '\0';
+	}
 
 	return count;
 }
@@ -1147,6 +1149,40 @@ static int lod_spill_target_seq_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static DEFINE_MUTEX(lod_spill_loop_mutex);
+
+static int lod_spill_check_loop(struct lod_device *lod,
+				const char *pool,
+				const char *destarg)
+{
+	char dest[LOV_MAXPOOLNAME + 1];
+	struct pool_desc *tgt;
+	int rc = 0;
+
+	strncpy(dest, destarg, sizeof(dest));
+
+	/*
+	 * pool1 -> pool2 -> pool3 ++> pool1
+	 * pool1 -> pool2 ++>pool3 -> pool1
+	 */
+	while (1) {
+		tgt = lod_pool_find(lod, dest);
+		if (!tgt) {
+			/* no more steps, we're fine */
+			break;
+		}
+
+		strncpy(dest, tgt->pool_spill_target, sizeof(dest));
+		lod_pool_putref(tgt);
+
+		if (strcmp(dest, pool) == 0) {
+			rc = -ELOOP;
+			break;
+		}
+	}
+	return rc;
+}
+
 static ssize_t
 lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
@@ -1154,6 +1190,9 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct pool_desc *pool = m->private;
 	struct lod_device *lod;
+	char tgt_name[LOV_MAXPOOLNAME + 1];
+	int rc;
+
 
 	LASSERT(pool != NULL);
 	lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
@@ -1164,21 +1203,33 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 		return count;
 	}
 
-	if (count > LOV_MAXPOOLNAME - 1)
+	if (count > sizeof(tgt_name) - 1)
 		return -E2BIG;
-	if (copy_from_user(pool->pool_spill_target, buffer, count))
+	if (copy_from_user(tgt_name, buffer, count))
 		return -EFAULT;
+	tgt_name[count] = '\0';
 
-	pool->pool_spill_target[count] = '\0';
-	if (strcmp(pool->pool_name, pool->pool_spill_target) == 0)
+	if (strcmp(pool->pool_name, tgt_name) == 0)
 		return -ELOOP;
-	if (!lod_pool_exists(lod, pool->pool_spill_target)) {
+	if (!lod_pool_exists(lod, tgt_name)) {
 		pool->pool_spill_target[0] = '\0';
 		pool->pool_spill_expire = 0;
 		return -ENODEV;
 	}
 
-	return count;
+	/* serialize all checks to protect against racing settings */
+	mutex_lock(&lod_spill_loop_mutex);
+
+	rc = lod_spill_check_loop(lod, pool->pool_name, tgt_name);
+	if (rc == 0) {
+		strncpy(pool->pool_spill_target, tgt_name,
+			sizeof(pool->pool_spill_target));
+		rc = count;
+	}
+
+	mutex_unlock(&lod_spill_loop_mutex);
+
+	return rc;
 }
 LPROC_SEQ_FOPS(lod_spill_target);
 

@@ -388,7 +388,7 @@ bool lod_pool_exists(struct lod_device *lod, char *poolname)
 	return pool != NULL;
 }
 
-static struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
+struct pool_desc *lod_pool_find(struct lod_device *lod, char *poolname)
 {
 	struct pool_desc *pool;
 
@@ -775,18 +775,12 @@ out_sem:
 }
 
 /*
- * to prevent infinite loops during spilling, lets limit number of passes
- */
-#define LOD_SPILL_MAX	10
-
-/*
  * XXX: consider a better schema to detect loops
  */
 void lod_check_and_spill_pool(const struct lu_env *env, struct lod_device *lod,
 			      char **poolname)
 {
 	struct pool_desc *pool;
-	int replaced = 0;
 
 	if (!poolname || !*poolname || (*poolname)[0] == '\0')
 		return;
@@ -797,15 +791,9 @@ repeat:
 
 	lod_spill_target_refresh(env, lod, pool);
 	if (pool->pool_spill_is_active) {
-		if (++replaced >= LOD_SPILL_MAX)
-			CWARN("%s: more than %d levels of pool spill for '%s->%s'\n",
-			      lod2obd(lod)->obd_name, LOD_SPILL_MAX,
-			      *poolname, pool->pool_spill_target);
 		lod_set_pool(poolname, pool->pool_spill_target);
 		atomic_inc(&pool->pool_spill_hit);
 		lod_pool_putref(pool);
-		if (replaced >= LOD_SPILL_MAX)
-			return;
 		goto repeat;
 	}
 
