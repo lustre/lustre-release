@@ -181,12 +181,14 @@ run_test fsx "Dual-mount fsx with DoM files"
 
 test_sanity()
 {
-	SANITY_ONLY=${SANITY_ONLY:-"36 39 40 41 42d 42e 43 46 56r 101e 119a \
-				    131 150a 155a 155b 155c 155d 207 241 251"}
+	local testlist="36 39 40 41 42d 42e 43 46 56r 101e 119a \
+			131 150a 155a 155b 155c 155d 207 241 251"
+
 	# Fallocate tests
 	(( $MDS1_VERSION >= $(version_code 2.14.52) )) &&
-		SANITY_ONLY+=" 150b 150bb 150c 150d 150f 150g"
+		testlist+=" 150b 150bb 150c 150d 150f 150g"
 
+	SANITY_ONLY=${SANITY_ONLY:-$testlist}
 	SANITY_REPEAT=${SANITY_REPEAT:-1}
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed
@@ -199,13 +201,14 @@ run_test sanity "Run sanity with Data-on-MDT files"
 
 test_sanityn()
 {
-	SANITYN_ONLY=${SANITYN_ONLY:-"1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 \
-				      23 27 39 51a 51c 51d"}
+	local testlist="1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 \
+			23 27 39 51a 51c 51d"
 
 	if [[ $MDS1_VERSION -ge $(version_code 2.13.55) ]]; then
-		SANITYN_ONLY+=" 107"
+		testlist+=" 107"
 	fi
 
+	SANITYN_ONLY=${SANITYN_ONLY:-$testlist}
 	SANITYN_REPEAT=${SANITYN_REPEAT:-1}
 	# XXX: to fix 60
 	ONLY=$SANITYN_ONLY ONLY_REPEAT=$SANITYN_REPEAT OSC="mdc" DOM="yes" \
