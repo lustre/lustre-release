@@ -190,7 +190,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	__u64 pos = *ppos;
 	bool is_api32 = ll_need_32bit_api(sbi);
-	bool is_hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
+	bool is_hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 	struct page *page;
 	bool done = false;
 	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
@@ -320,7 +320,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	struct inode *inode = file_inode(filp);
 	struct ll_file_data *lfd = filp->private_data;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	int hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
+	bool hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 	int api32 = ll_need_32bit_api(sbi);
 	struct md_op_data *op_data;
 	struct lu_fid pfid = { 0 };
@@ -524,7 +524,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		encrypt = true;
 	}
 
-	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		/* selinux_dentry_init_security() uses dentry->d_parent and name
 		 * to determine the security context for the file. So our fake
 		 * dentry should be real enough for this purpose. */
@@ -561,7 +561,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	dentry.d_inode = inode;
 
-	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		/* no need to protect selinux_inode_setsecurity() by
 		 * inode_lock. Taking it would lead to a client deadlock
 		 * LU-13617
@@ -1315,6 +1315,7 @@ out:
 int ll_rmfid(struct file *file, void __user *arg)
 {
 	const struct fid_array __user *ufa = arg;
+	struct inode *inode = file_inode(file);
 	struct fid_array *lfa = NULL;
 	size_t size;
 	unsigned nr;
@@ -1322,7 +1323,7 @@ int ll_rmfid(struct file *file, void __user *arg)
 	ENTRY;
 
 	if (!capable(CAP_DAC_READ_SEARCH) &&
-	    !(ll_i2sbi(file_inode(file))->ll_flags & LL_SBI_USER_FID2PATH))
+	    !test_bit(LL_SBI_USER_FID2PATH, ll_i2sbi(inode)->ll_flags))
 		RETURN(-EPERM);
 	/* Only need to get the buflen */
 	if (get_user(nr, &ufa->fa_nr))
@@ -1766,6 +1767,7 @@ out_rmdir:
 		__u32 __user *lmmsizep = NULL;
 		struct lu_fid __user *fidp = NULL;
 		int lmmsize;
+		bool api32;
 
 		if (cmd == IOC_MDC_GETFILEINFO_V1 ||
 		    cmd == IOC_MDC_GETFILEINFO_V2 ||
@@ -1833,6 +1835,7 @@ out_rmdir:
 				GOTO(out_req, rc = -EFAULT);
 			rc = -EOVERFLOW;
 		}
+		api32 = test_bit(LL_SBI_32BIT_API, sbi->ll_flags);
 
 		if (cmd == IOC_MDC_GETFILEINFO_V1 ||
 		    cmd == LL_IOC_MDC_GETINFO_V1) {
@@ -1851,8 +1854,7 @@ out_rmdir:
 			st.st_mtime	= body->mbo_mtime;
 			st.st_ctime	= body->mbo_ctime;
 			st.st_ino	= cl_fid_build_ino(&body->mbo_fid1,
-						sbi->ll_flags &
-						LL_SBI_32BIT_API);
+							   api32);
 
 			if (copy_to_user(statp, &st, sizeof(st)))
 				GOTO(out_req, rc = -EFAULT);
@@ -1867,8 +1869,7 @@ out_rmdir:
 			stx.stx_gid = body->mbo_gid;
 			stx.stx_mode = body->mbo_mode;
 			stx.stx_ino = cl_fid_build_ino(&body->mbo_fid1,
-						       sbi->ll_flags &
-						       LL_SBI_32BIT_API);
+						       api32);
 			stx.stx_size = body->mbo_size;
 			stx.stx_blocks = body->mbo_blocks;
 			stx.stx_atime.tv_sec = body->mbo_atime;
@@ -2284,10 +2285,13 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 	    ((api32 && offset <= LL_DIR_END_OFF_32BIT) ||
 	     (!api32 && offset <= LL_DIR_END_OFF))) {
 		if (offset != file->f_pos) {
+			bool hash64;
+
+			hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 			if ((api32 && offset == LL_DIR_END_OFF_32BIT) ||
 			    (!api32 && offset == LL_DIR_END_OFF))
 				fd->lfd_pos = MDS_DIR_END_OFF;
-			else if (api32 && sbi->ll_flags & LL_SBI_64BIT_HASH)
+			else if (api32 && hash64)
 				fd->lfd_pos = offset << 32;
 			else
 				fd->lfd_pos = offset;

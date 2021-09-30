@@ -97,6 +97,10 @@ int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
 #endif /* HAVE_KSTRTOBOOL_FROM_USER */
 
+#ifndef HAVE_MATCH_WILDCARD
+bool match_wildcard(const char *pattern, const char *str);
+#endif /* !HAVE_MATCH_WILDCARD */
+
 #ifndef HAVE_KREF_READ
 static inline int kref_read(const struct kref *kref)
 {

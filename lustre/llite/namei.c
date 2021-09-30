@@ -889,7 +889,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		it->it_create_mode &= ~current_umask();
 
 	if (it->it_op & IT_CREAT &&
-	    ll_i2sbi(parent)->ll_flags & LL_SBI_FILE_SECCTX) {
+	    test_bit(LL_SBI_FILE_SECCTX, ll_i2sbi(parent)->ll_flags)) {
 		rc = ll_dentry_init_security(dentry, it->it_create_mode,
 					     &dentry->d_name,
 					     &op_data->op_file_secctx_name,
@@ -1427,8 +1427,8 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
-	if ((ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX) &&
-	    secctx != NULL) {
+	if (test_bit(LL_SBI_FILE_SECCTX, ll_i2sbi(inode)->ll_flags) &&
+	    secctx) {
 		/* must be done before d_instantiate, because it calls
 		 * security_d_instantiate, which means a getxattr if security
 		 * context is not set yet */
@@ -1449,7 +1449,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 			RETURN(rc);
 	}
 
-	if (!(ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX)) {
+	if (!test_bit(LL_SBI_FILE_SECCTX, ll_i2sbi(inode)->ll_flags)) {
 		rc = ll_inode_init_security(dentry, inode, dir);
 		if (rc)
 			RETURN(rc);
@@ -1565,7 +1565,7 @@ again:
 	if (S_ISDIR(mode))
 		ll_qos_mkdir_prep(op_data, dir);
 
-	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		err = ll_dentry_init_security(dchild, mode, &dchild->d_name,
 					      &op_data->op_file_secctx_name,
 					      &op_data->op_file_secctx,
@@ -1706,7 +1706,7 @@ again:
 	if (err)
 		GOTO(err_exit, err);
 
-	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+	if (test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		/* must be done before d_instantiate, because it calls
 		 * security_d_instantiate, which means a getxattr if security
 		 * context is not set yet */
@@ -1745,7 +1745,7 @@ again:
 		}
 	}
 
-	if (!(sbi->ll_flags & LL_SBI_FILE_SECCTX)) {
+	if (!test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		err = ll_inode_init_security(dchild, inode, dir);
 		if (err)
 			GOTO(err_exit, err);

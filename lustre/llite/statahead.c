@@ -1685,7 +1685,8 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 		GOTO(out, rc);
 	}
 
-	if (ll_i2sbi(parent->d_inode)->ll_flags & LL_SBI_AGL_ENABLED && agl)
+	if (test_bit(LL_SBI_AGL_ENABLED, ll_i2sbi(parent->d_inode)->ll_flags) &&
+	    agl)
 		ll_start_agl(parent, sai);
 
 	atomic_inc(&ll_i2sbi(parent->d_inode)->ll_sa_total);

@@ -42,6 +42,7 @@
 #include <lustre_intent.h>
 #include <linux/compat.h>
 #include <linux/aio.h>
+#include <linux/parser.h>
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
 #include <range_lock.h>
@@ -611,75 +612,39 @@ enum stats_track_type {
 };
 
 /* flags for sbi->ll_flags */
-#define LL_SBI_NOLCK             0x01 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM          0x02 /* checksum each page as it's written */
-#define LL_SBI_FLOCK             0x04
-#define LL_SBI_USER_XATTR        0x08 /* support user xattr */
-#define LL_SBI_ACL               0x10 /* support ACL */
-/*	LL_SBI_RMT_CLIENT        0x40    remote client */
-#define LL_SBI_MDS_CAPA          0x80 /* support mds capa, obsolete */
-#define LL_SBI_OSS_CAPA         0x100 /* support oss capa, obsolete */
-#define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
-#define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
-#define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
-/*	LL_SBI_SOM_PREVIEW     0x1000    SOM preview mount option, obsolete */
-#define LL_SBI_32BIT_API       0x2000 /* generate 32 bit inodes. */
-#define LL_SBI_64BIT_HASH      0x4000 /* support 64-bits dir hash/offset */
-#define LL_SBI_AGL_ENABLED     0x8000 /* enable agl */
-#define LL_SBI_VERBOSE        0x10000 /* verbose mount/umount */
-#define LL_SBI_LAYOUT_LOCK    0x20000 /* layout lock support */
-#define LL_SBI_USER_FID2PATH  0x40000 /* allow fid2path by unprivileged users */
-#define LL_SBI_XATTR_CACHE    0x80000 /* support for xattr cache */
-#define LL_SBI_NOROOTSQUASH  0x100000 /* do not apply root squash */
-#define LL_SBI_ALWAYS_PING   0x200000 /* always ping even if server
-				       * suppress_pings */
-#define LL_SBI_FAST_READ     0x400000 /* fast read support */
-#define LL_SBI_FILE_SECCTX   0x800000 /* set file security context at create */
-/*	LL_SBI_PIO	    0x1000000    parallel IO support, introduced in
-					 2.10, abandoned */
-#define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
-#define LL_SBI_FILE_HEAT    0x4000000 /* file heat support */
-#define LL_SBI_TEST_DUMMY_ENCRYPTION    0x8000000 /* test dummy encryption */
-#define LL_SBI_ENCRYPT	   0x10000000 /* client side encryption */
-#define LL_SBI_FOREIGN_SYMLINK	    0x20000000 /* foreign fake-symlink support */
-/* foreign fake-symlink upcall registered */
-#define LL_SBI_FOREIGN_SYMLINK_UPCALL	    0x40000000
-#define LL_SBI_PARALLEL_DIO	0x80000000 /* parallel (async) submission of
-					      RPCs for DIO */
-#define LL_SBI_FLAGS { 	\
-	"nolck",	\
-	"checksum",	\
-	"flock",	\
-	"user_xattr",	\
-	"acl",		\
-	"???",		\
-	"???",		\
-	"mds_capa",	\
-	"oss_capa",	\
-	"flock",	\
-	"lru_resize",	\
-	"lazy_statfs",	\
-	"som",		\
-	"32bit_api",	\
-	"64bit_hash",	\
-	"agl",		\
-	"verbose",	\
-	"layout",	\
-	"user_fid2path",\
-	"xattr_cache",	\
-	"norootsquash",	\
-	"always_ping",	\
-	"fast_read",	\
-	"file_secctx",	\
-	"pio",		\
-	"tiny_write",	\
-	"file_heat",	\
-	"test_dummy_encryption", \
-	"noencrypt",	\
-	"foreign_symlink",	\
-	"foreign_symlink_upcall",	\
-	"parallel_dio",	\
-}
+enum ll_sbi_flags {
+	LL_SBI_NOLCK,			/* DLM locking disabled directio-only */
+	LL_SBI_CHECKSUM,		/* checksum each page as it's written */
+	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
+	LL_SBI_FLOCK,			/* flock enabled */
+	LL_SBI_USER_XATTR,		/* support user xattr */
+	LL_SBI_LRU_RESIZE,		/* lru resize support */
+	LL_SBI_LAZYSTATFS,		/* lazystatfs mount option */
+	LL_SBI_32BIT_API,		/* generate 32 bit inodes. */
+	LL_SBI_USER_FID2PATH,		/* fid2path by unprivileged users */
+	LL_SBI_VERBOSE,			/* verbose mount/umount */
+	LL_SBI_ALWAYS_PING,		/* ping even if server suppress_pings */
+	LL_SBI_TEST_DUMMY_ENCRYPTION,	/* test dummy encryption */
+	LL_SBI_ENCRYPT,			/* client side encryption */
+	LL_SBI_FOREIGN_SYMLINK,		/* foreign fake-symlink support */
+	LL_SBI_FOREIGN_SYMLINK_UPCALL,	/* foreign fake-symlink upcall set */
+	LL_SBI_NUM_MOUNT_OPT,
+
+	LL_SBI_ACL,			/* support ACL */
+	LL_SBI_AGL_ENABLED,		/* enable agl */
+	LL_SBI_64BIT_HASH,		/* support 64-bits dir hash/offset */
+	LL_SBI_LAYOUT_LOCK,		/* layout lock support */
+	LL_SBI_XATTR_CACHE,		/* support for xattr cache */
+	LL_SBI_NOROOTSQUASH,		/* do not apply root squash */
+	LL_SBI_FAST_READ,		/* fast read support */
+	LL_SBI_FILE_SECCTX,		/* file security context at create */
+	LL_SBI_TINY_WRITE,		/* tiny write support */
+	LL_SBI_FILE_HEAT,		/* file heat support */
+	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
+	LL_SBI_NUM_FLAGS
+};
+
+int ll_sbi_flags_seq_show(struct seq_file *m, void *v);
 
 /* This is embedded into llite super-blocks to keep track of connect
  * flags (capabilities) supported by all imports given mount is
@@ -708,13 +673,13 @@ struct ll_sb_info {
 	struct dentry		*ll_debugfs_entry;
 	struct lu_fid		 ll_root_fid; /* root object fid */
 
-	int                       ll_flags;
-	unsigned int		  ll_xattr_cache_enabled:1,
-				  ll_xattr_cache_set:1, /* already set to 0/1 */
-				  ll_client_common_fill_super_succeeded:1,
-				  ll_checksum_set:1;
+	DECLARE_BITMAP(ll_flags, LL_SBI_NUM_FLAGS); /* enum ll_sbi_flags */
+	unsigned int		 ll_xattr_cache_enabled:1,
+				 ll_xattr_cache_set:1, /* already set to 0/1 */
+				 ll_client_common_fill_super_succeeded:1,
+				 ll_checksum_set:1;
 
-	struct lustre_client_ocd  ll_lco;
+	struct lustre_client_ocd ll_lco;
 
 	struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
@@ -957,7 +922,7 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 #if BITS_PER_LONG == 32
 	return 1;
 #elif defined(CONFIG_COMPAT)
-	if (unlikely(sbi->ll_flags & LL_SBI_32BIT_API))
+	if (unlikely(test_bit(LL_SBI_32BIT_API, sbi->ll_flags)))
 		return true;
 
 # ifdef CONFIG_X86_X32
@@ -971,33 +936,33 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 
 	return unlikely(in_compat_syscall());
 #else
-	return unlikely(sbi->ll_flags & LL_SBI_32BIT_API);
+	return unlikely(test_bit(LL_SBI_32BIT_API, sbi->ll_flags));
 #endif
 }
 
 static inline bool ll_sbi_has_fast_read(struct ll_sb_info *sbi)
 {
-	return !!(sbi->ll_flags & LL_SBI_FAST_READ);
+	return test_bit(LL_SBI_FAST_READ, sbi->ll_flags);
 }
 
 static inline bool ll_sbi_has_tiny_write(struct ll_sb_info *sbi)
 {
-	return !!(sbi->ll_flags & LL_SBI_TINY_WRITE);
+	return test_bit(LL_SBI_TINY_WRITE, sbi->ll_flags);
 }
 
 static inline bool ll_sbi_has_file_heat(struct ll_sb_info *sbi)
 {
-	return !!(sbi->ll_flags & LL_SBI_FILE_HEAT);
+	return test_bit(LL_SBI_FILE_HEAT, sbi->ll_flags);
 }
 
 static inline bool ll_sbi_has_foreign_symlink(struct ll_sb_info *sbi)
 {
-	return !!(sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK);
+	return test_bit(LL_SBI_FOREIGN_SYMLINK, sbi->ll_flags);
 }
 
 static inline bool ll_sbi_has_parallel_dio(struct ll_sb_info *sbi)
 {
-	return !!(sbi->ll_flags & LL_SBI_PARALLEL_DIO);
+	return test_bit(LL_SBI_PARALLEL_DIO, sbi->ll_flags);
 }
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t count);
@@ -1609,7 +1574,7 @@ static inline int ll_file_nolock(const struct file *file)
 
 	LASSERT(fd != NULL);
 	return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
-		(ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK));
+		test_bit(LL_SBI_NOLCK, ll_i2sbi(inode)->ll_flags));
 }
 
 static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,

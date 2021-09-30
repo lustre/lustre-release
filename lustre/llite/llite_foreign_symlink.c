@@ -203,7 +203,7 @@ static int ll_foreign_symlink_parse(struct ll_sb_info *sbi,
 	 * of foreign LOV is relative path of faked symlink destination,
 	 * to be completed by prefix
 	 */
-	if (!(sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK_UPCALL))
+	if (!test_bit(LL_SBI_FOREIGN_SYMLINK_UPCALL, sbi->ll_flags))
 		rc = ll_foreign_symlink_default_parse(sbi, inode, lfm,
 						      destname);
 	else /* upcall is available */
@@ -448,7 +448,7 @@ ssize_t foreign_symlink_enable_show(struct kobject *kobj,
 					      ll_kset.kobj);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n",
-			!!(sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK));
+			test_bit(LL_SBI_FOREIGN_SYMLINK, sbi->ll_flags));
 }
 
 /*
@@ -475,9 +475,9 @@ ssize_t foreign_symlink_enable_store(struct kobject *kobj,
 		return rc;
 
 	if (val)
-		sbi->ll_flags |= LL_SBI_FOREIGN_SYMLINK;
+		set_bit(LL_SBI_FOREIGN_SYMLINK, sbi->ll_flags);
 	else
-		sbi->ll_flags &= ~LL_SBI_FOREIGN_SYMLINK;
+		clear_bit(LL_SBI_FOREIGN_SYMLINK, sbi->ll_flags);
 
 	return count;
 }
@@ -609,7 +609,7 @@ ssize_t foreign_symlink_upcall_store(struct kobject *kobj,
 	 * order, we may end up using the format provided by a different
 	 * upcall than the one set in ll_foreign_symlink_upcall
 	 */
-	sbi->ll_flags &= ~LL_SBI_FOREIGN_SYMLINK_UPCALL;
+	clear_bit(LL_SBI_FOREIGN_SYMLINK_UPCALL, sbi->ll_flags);
 	up_write(&sbi->ll_foreign_symlink_sem);
 
 	if (strcmp(new, "none")) {
@@ -752,7 +752,7 @@ ssize_t foreign_symlink_upcall_info_store(struct kobject *kobj,
 	old_nb_items = sbi->ll_foreign_symlink_upcall_nb_items;
 	sbi->ll_foreign_symlink_upcall_items = new_items;
 	sbi->ll_foreign_symlink_upcall_nb_items = nb_items;
-	sbi->ll_flags |= LL_SBI_FOREIGN_SYMLINK_UPCALL;
+	set_bit(LL_SBI_FOREIGN_SYMLINK_UPCALL, sbi->ll_flags);
 	up_write(&sbi->ll_foreign_symlink_sem);
 
 	/* free old_items */

@@ -139,7 +139,7 @@ void llcrypt_free_ctx(void *encctx, __u32 size)
 
 bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
 {
-	return unlikely(sbi->ll_flags & LL_SBI_TEST_DUMMY_ENCRYPTION);
+	return unlikely(test_bit(LL_SBI_TEST_DUMMY_ENCRYPTION, sbi->ll_flags));
 }
 
 static bool ll_dummy_context(struct inode *inode)
@@ -151,16 +151,17 @@ static bool ll_dummy_context(struct inode *inode)
 
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
 {
-	return sbi->ll_flags & LL_SBI_ENCRYPT;
+	return test_bit(LL_SBI_ENCRYPT, sbi->ll_flags);
 }
 
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set)
 {
-	if (set)
-		sbi->ll_flags |= LL_SBI_ENCRYPT;
-	else
-		sbi->ll_flags &=
-			~(LL_SBI_ENCRYPT | LL_SBI_TEST_DUMMY_ENCRYPTION);
+	if (set) {
+		set_bit(LL_SBI_ENCRYPT, sbi->ll_flags);
+	} else {
+		clear_bit(LL_SBI_ENCRYPT, sbi->ll_flags);
+		clear_bit(LL_SBI_TEST_DUMMY_ENCRYPTION, sbi->ll_flags);
+	}
 }
 
 static bool ll_empty_dir(struct inode *inode)

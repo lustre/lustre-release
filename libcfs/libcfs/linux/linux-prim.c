@@ -187,6 +187,59 @@ struct kobject *kset_find_obj(struct kset *kset, const char *name)
 EXPORT_SYMBOL_GPL(kset_find_obj);
 #endif
 
+#ifndef HAVE_MATCH_WILDCARD
+/**
+ * match_wildcard: - parse if a string matches given wildcard pattern
+ * @pattern: wildcard pattern
+ * @str: the string to be parsed
+ *
+ * Description: Parse the string @str to check if matches wildcard
+ * pattern @pattern. The pattern may contain two type wildcardes:
+ *   '*' - matches zero or more characters
+ *   '?' - matches one character
+ * If it's matched, return true, else return false.
+ */
+bool match_wildcard(const char *pattern, const char *str)
+{
+	const char *s = str;
+	const char *p = pattern;
+	bool star = false;
+
+	while (*s) {
+		switch (*p) {
+		case '?':
+			s++;
+			p++;
+			break;
+		case '*':
+			star = true;
+			str = s;
+			if (!*++p)
+				return true;
+			pattern = p;
+			break;
+		default:
+			if (*s == *p) {
+				s++;
+				p++;
+			} else {
+				if (!star)
+					return false;
+				str++;
+				s = str;
+				p = pattern;
+			}
+			break;
+		}
+	}
+
+	if (*p == '*')
+		++p;
+	return !*p;
+}
+EXPORT_SYMBOL(match_wildcard);
+#endif /* !HAVE_MATCH_WILDCARD */
+
 #ifndef HAVE_KSTRTOBOOL_FROM_USER
 int kstrtobool_from_user(const char __user *s, size_t count, bool *res)
 {

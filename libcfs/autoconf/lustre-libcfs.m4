@@ -197,6 +197,24 @@ shrinker_count_objects, [
 ]) # LIBCFS_SHRINKER_COUNT
 
 #
+# Kernel version 3.13 commit aace05097a0fd467230e39acb148be0fdaa90068
+# add match_wildcard() function.
+#
+AC_DEFUN([LIBCFS_MATCH_WILDCARD],[
+LB_CHECK_COMPILE([does function 'match_wildcard' exist],
+match_wildcard, [
+	#include <linux/parser.h>
+],[
+	bool match;
+
+	match = match_wildcard(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_MATCH_WILDCARD, 1,
+		[match_wildcard() is available])
+])
+]) # LIBCFS_MATCH_WILDCARD
+
+#
 # LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
 #
 # v3.14-7405-g91b0abe36a7b added AS_EXITING flag with
@@ -1698,6 +1716,8 @@ LIBCFS_KTIME_AFTER
 LIBCFS_KTIME_BEFORE
 LIBCFS_KTIME_COMPARE
 LIBCFS_SHRINKER_COUNT
+# 3.13
+LIBCFS_MATCH_WILDCARD
 # 3.15
 LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
 LIBCFS_IOV_ITER_HAS_TYPE
