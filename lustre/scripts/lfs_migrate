@@ -245,7 +245,7 @@ function calc_stripe()
 					ost_min_kb=$avail
 				fi
 			fi
-		done < <($LFS df $OPT_POOL $OLDNAME | awk '/OST/ { print $4 }')
+		done < <($LFS df $OPT_POOL "$OLDNAME" | awk '/OST/ { print $4 }')
 
 		if [ $ost_max_count -eq 0 ]; then
 			# no OSTs with enough space, stripe over all of them
@@ -362,6 +362,7 @@ lfs_migrate() {
 			fi
 		fi
 
+		local olddir=$(dirname "$OLDNAME")
 		local stripe_size="$OPT_STRIPE_SIZE"
 		local stripe_count="$OPT_STRIPE_COUNT"
 		local stripe_opts="-N --comp-count -c -S -p -y"
@@ -381,14 +382,14 @@ lfs_migrate() {
 		local l_stripe_count=2
 		local l_stripe_size=3
 		local l_stripe_pool=4
-		local layout_info=($($LFS getstripe $stripe_opts $OLDNAME \
+		local layout_info=($($LFS getstripe $stripe_opts "$OLDNAME" \
 			2>/dev/null | awk '{ print $2 }'))
 
 		layout="${OPT_PASSTHROUGH[@]} "
 
 		if $OPT_RESTRIPE; then
 			UNLINK=""
-			layout+="--copy $(dirname $OLDNAME)"
+			layout+="--copy $olddir"
 			OPT_COMP=true
 		else
 			# If rsync copies Lustre xattrs properly in the future
@@ -425,7 +426,7 @@ lfs_migrate() {
 
 			if $OPT_RESTRIPE; then
 				parent_layout=($($LFS getstripe $stripe_opts \
-					-d $(dirname $OLDNAME) 2>/dev/null |
+						-d "$olddir" 2>/dev/null |
 						awk '{print $2 }'))
 				parent_count=${parent_layout[$l_stripe_count]}
 				parent_size=${parent_layout[$l_stripe_size]}
@@ -481,7 +482,9 @@ lfs_migrate() {
 
 		# first try to migrate via Lustre tools, then fall back to rsync
 		if ! $OPT_RSYNC; then
-			$OPT_DEBUG && echo -e "\n$LFS migrate $layout $OLDNAME"
+			if $OPT_DEBUG; then
+				echo -e "\n$LFS migrate $layout \"$OLDNAME\""
+			fi
 			if $LFS migrate $layout "$OLDNAME"; then
 				$ECHO "done"
 				# no-op if hlinks empty for 1-link files
@@ -498,8 +501,7 @@ lfs_migrate() {
 			fi
 		fi
 
-		local olddir=$(dirname $OLDNAME)
-		local oldfile=$(basename $OLDNAME)
+		local oldfile=$(basename "$OLDNAME")
 		NEWNAME=$(mktemp $UNLINK "$olddir/.$oldfile.XXXXXX")
 		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
 			echo -e "\r$OLDNAME: cannot make temp file, skipped" 1>&2
