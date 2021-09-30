@@ -659,7 +659,7 @@ trigger:
 	}
 
 	/* The case NOT allow to trigger OI scrub automatically. */
-	if (osd->od_auto_scrub_interval == AS_NEVER)
+	if (osd->od_scrub.os_auto_scrub_interval == AS_NEVER)
 		GOTO(out, rc);
 
 	/* It is me to trigger the OI scrub. */

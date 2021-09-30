@@ -246,6 +246,26 @@ log:
 }
 EXPORT_SYMBOL(scrub_file_store);
 
+bool scrub_needs_check(struct lustre_scrub *scrub, const struct lu_fid *fid,
+		       u64 index)
+{
+	bool check = true;
+
+	if (!fid_is_norm(fid) && !fid_is_igif(fid))
+		check = false;
+	else if (scrub->os_running && scrub->os_pos_current > index)
+		check = false;
+	else if (scrub->os_auto_scrub_interval == AS_NEVER)
+		check = false;
+	else if (ktime_get_real_seconds() <
+		 scrub->os_file.sf_time_last_complete +
+		 scrub->os_auto_scrub_interval)
+		check = false;
+
+	return check;
+}
+EXPORT_SYMBOL(scrub_needs_check);
+
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub)
 {
 	struct scrub_file *sf = &scrub->os_file;

@@ -230,7 +230,8 @@ static ssize_t auto_scrub_show(struct kobject *kobj, struct attribute *attr,
 	if (!dev->od_os)
 		return -EINPROGRESS;
 
-	return sprintf(buf, "%lld\n", dev->od_auto_scrub_interval);
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
+			 dev->od_scrub.os_auto_scrub_interval);
 }
 
 static ssize_t auto_scrub_store(struct kobject *kobj, struct attribute *attr,
@@ -250,7 +251,7 @@ static ssize_t auto_scrub_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	dev->od_auto_scrub_interval = val;
+	dev->od_scrub.os_auto_scrub_interval = val;
 	return count;
 }
 LUSTRE_RW_ATTR(auto_scrub);

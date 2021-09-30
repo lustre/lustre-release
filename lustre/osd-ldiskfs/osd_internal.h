@@ -280,7 +280,6 @@ struct osd_device {
 				  od_nonrotational:1;
 
 
-	__s64			  od_auto_scrub_interval;
 	__u32			  od_dirent_journal;
 	int			  od_index;
 	struct proc_dir_entry	 *od_proc_entry;

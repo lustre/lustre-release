@@ -362,7 +362,6 @@ struct osd_device {
 
 	int			 od_connects;
 	int			 od_index;
-	__s64			 od_auto_scrub_interval;
 	struct lu_site		 od_site;
 
 	dnode_t			*od_groupused_dn;
@@ -695,7 +694,7 @@ int __osd_xattr_load_by_oid(struct osd_device *osd, uint64_t oid,
 
 /* osd_scrub.c */
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
-		    bool resetoi);
+		    time64_t interval, bool resetoi);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 		    __u32 flags);

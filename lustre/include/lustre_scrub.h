@@ -284,6 +284,9 @@ struct lustre_scrub {
 	/* The time for next checkpoint, seconds */
 	time64_t		os_time_next_checkpoint;
 
+	/* How long to wait to start scrubbing */
+	time64_t		os_auto_scrub_interval;
+
 	/* How many objects have been checked since last checkpoint. */
 	__u64			os_new_checked;
 	__u64			os_pos_current;
@@ -345,6 +348,8 @@ void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid);
 void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags);
 int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_file_store(const struct lu_env *env, struct lustre_scrub *scrub);
+bool scrub_needs_check(struct lustre_scrub *scrub, const struct lu_fid *fid,
+		       u64 index);
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_thread_prep(const struct lu_env *env, struct lustre_scrub *scrub,
 		      uuid_t uuid, u64 start);

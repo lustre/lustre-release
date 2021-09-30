@@ -1317,7 +1317,7 @@ void osd_scrub_stop(struct osd_device *dev)
 static const char osd_scrub_name[] = "OI_scrub";
 
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
-		    bool resetoi)
+		    time64_t interval, bool resetoi)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lustre_scrub *scrub = &dev->od_scrub;
@@ -1337,6 +1337,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	spin_lock_init(&scrub->os_lock);
 	INIT_LIST_HEAD(&scrub->os_inconsistent_items);
 	scrub->os_name = osd_name(dev);
+	scrub->os_auto_scrub_interval = interval;
 
 	/* 'What the @fid is' is not imporatant, because the object
 	 * has no OI mapping, and only is visible inside the OSD.*/
@@ -1408,7 +1409,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 		osd_initial_OI_scrub(env, dev);
 
 	if (!dev->od_dt_dev.dd_rdonly &&
-	    dev->od_auto_scrub_interval != AS_NEVER &&
+	    scrub->os_auto_scrub_interval != AS_NEVER &&
 	    ((sf->sf_status == SS_PAUSED) ||
 	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |

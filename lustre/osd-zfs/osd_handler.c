@@ -1094,6 +1094,7 @@ static int osd_mount(const struct lu_env *env,
 	char *mntdev = lustre_cfg_string(cfg, 1);
 	char *str = lustre_cfg_string(cfg, 2);
 	char *svname = lustre_cfg_string(cfg, 4);
+	time64_t interval = AS_DEFAULT;
 	dnode_t *rootdn;
 	const char *opts;
 	bool resetoi = false;
@@ -1135,7 +1136,7 @@ static int osd_mount(const struct lu_env *env,
 		}
 
 		if (flags & LMD_FLG_NOSCRUB)
-			o->od_auto_scrub_interval = AS_NEVER;
+			interval = AS_NEVER;
 	}
 
 	if (server_name_is_ost(o->od_svname))
@@ -1191,7 +1192,7 @@ static int osd_mount(const struct lu_env *env,
 		resetoi = true;
 
 	o->od_in_init = 1;
-	rc = osd_scrub_setup(env, o, resetoi);
+	rc = osd_scrub_setup(env, o, interval, resetoi);
 	o->od_in_init = 0;
 	if (rc)
 		GOTO(err, rc);
@@ -1310,7 +1311,6 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_dt_dev.dd_ops = &osd_dt_ops;
 	sema_init(&o->od_otable_sem, 1);
 	INIT_LIST_HEAD(&o->od_ios_list);
-	o->od_auto_scrub_interval = AS_DEFAULT;
 	o->od_sync_on_lseek = B_TRUE;
 
 	/* ZFS does not support reporting nonrotional status yet, so this flag

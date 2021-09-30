@@ -1260,7 +1260,7 @@ trigger:
 		goto found;
 	}
 
-	if (dev->od_auto_scrub_interval == AS_NEVER) {
+	if (dev->od_scrub.os_scrub.os_auto_scrub_interval == AS_NEVER) {
 		if (!remote)
 			GOTO(out, result = -EREMCHG);
 
@@ -5854,8 +5854,10 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 }
 
 static int
-osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
-		      const struct lu_fid *fid, struct osd_inode_id *id)
+osd_ldiskfs_consistency_check(struct osd_thread_info *oti,
+			      struct osd_device *dev,
+			      const struct lu_fid *fid,
+			      struct osd_inode_id *id)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct inode *inode = NULL;
@@ -5864,18 +5866,8 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	int rc;
 
 	ENTRY;
-
-	if (!fid_is_norm(fid) && !fid_is_igif(fid))
+	if (!scrub_needs_check(scrub, fid, id->oii_ino))
 		RETURN(0);
-
-	if (scrub->os_running && scrub->os_pos_current > id->oii_ino)
-		RETURN(0);
-
-	if (dev->od_auto_scrub_interval == AS_NEVER ||
-	    ktime_get_real_seconds() <
-	    scrub->os_file.sf_time_last_complete + dev->od_auto_scrub_interval)
-		RETURN(0);
-
 again:
 	rc = osd_oi_lookup(oti, dev, fid, &oti->oti_id, 0);
 	if (rc == -ENOENT) {
@@ -5938,7 +5930,8 @@ trigger:
 		GOTO(out, rc);
 	}
 
-	if (dev->od_auto_scrub_interval != AS_NEVER && ++once == 1) {
+	if (dev->od_scrub.os_scrub.os_auto_scrub_interval != AS_NEVER &&
+	    ++once == 1) {
 		rc = osd_scrub_start(oti->oti_env, dev, SS_AUTO_PARTIAL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
 		CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
@@ -6192,7 +6185,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		if (rc != 0 || osd_remote_fid(env, dev, fid))
 			GOTO(out, rc);
 
-		rc = osd_consistency_check(oti, dev, fid, id);
+		rc = osd_ldiskfs_consistency_check(oti, dev, fid, id);
 		if (rc != -ENOENT) {
 			/* Other error should not affect lookup result. */
 			rc = 0;
@@ -8049,7 +8042,7 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (lmd_flags & LMD_FLG_NOSCRUB)
-		o->od_auto_scrub_interval = AS_NEVER;
+		o->od_scrub.os_scrub.os_auto_scrub_interval = AS_NEVER;
 
 	if (blk_queue_nonrot(bdev_get_queue(osd_sb(o)->s_bdev))) {
 		/* do not use pagecache with flash-backed storage */
@@ -8126,7 +8119,7 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 	o->od_readcache_max_iosize = OSD_READCACHE_MAX_IO_MB << 20;
 	o->od_writethrough_max_iosize = OSD_WRITECACHE_MAX_IO_MB << 20;
-	o->od_auto_scrub_interval = AS_DEFAULT;
+	o->od_scrub.os_scrub.os_auto_scrub_interval = AS_DEFAULT;
 	/* default fallocate to unwritten extents: LU-14326/LU-14333 */
 	o->od_fallocate_zero_blocks = 0;
 

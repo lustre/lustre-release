@@ -536,10 +536,10 @@ out_nvbuf:
 	return rc;
 }
 
-static int
-osd_consistency_check(const struct lu_env *env, struct osd_device *osd,
-		      struct osd_object *obj, const struct lu_fid *fid,
-		      uint64_t oid, bool is_dir)
+static void
+osd_zfs_consistency_check(const struct lu_env *env, struct osd_device *osd,
+			  struct osd_object *obj, const struct lu_fid *fid,
+			  u64 oid, bool is_dir)
 {
 	struct lustre_scrub *scrub = &osd->od_scrub;
 	dnode_t *dn = NULL;
@@ -547,34 +547,21 @@ osd_consistency_check(const struct lu_env *env, struct osd_device *osd,
 	int once = 0;
 	bool insert;
 	int rc;
+
 	ENTRY;
-
-	if (!fid_is_norm(fid) && !fid_is_igif(fid))
-		RETURN(0);
-
 	/* oid == ZFS_NO_OBJECT must be for lookup ".." case */
 	if (oid == ZFS_NO_OBJECT) {
 		rc = osd_sa_handle_get(obj);
 		if (rc)
-			RETURN(rc);
+			return;
 
 		rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_PARENT(osd), &oid, 8);
 		if (rc)
-			RETURN(rc);
+			return;
 	}
 
-	if (scrub->os_running) {
-		if (scrub->os_pos_current > oid)
-			RETURN(0);
-	} else if (osd->od_auto_scrub_interval == AS_NEVER) {
-		RETURN(0);
-	} else {
-		if (ktime_get_real_seconds() <
-		    scrub->os_file.sf_time_last_complete +
-		    osd->od_auto_scrub_interval)
-			RETURN(0);
-	}
-
+	if (!scrub_needs_check(&osd->od_scrub, fid, oid))
+		return;
 again:
 	rc = osd_fid_lookup(env, osd, fid, &oid2);
 	if (rc == -ENOENT) {
@@ -585,7 +572,7 @@ again:
 		rc = __osd_obj2dnode(osd->od_os, oid, &dn);
 		/* The object has been removed (by race maybe). */
 		if (rc)
-			RETURN(rc = (rc == -EEXIST ? -ENOENT : rc));
+			return;
 
 		goto trigger;
 	} else if (rc || oid == oid2) {
@@ -600,7 +587,7 @@ trigger:
 			rc = __osd_obj2dnode(osd->od_os, oid, &dn);
 			/* The object has been removed (by race maybe). */
 			if (rc)
-				RETURN(rc = (rc == -EEXIST ? -ENOENT : rc));
+				return;
 		}
 
 		rc = osd_oii_insert(env, osd, fid, oid, insert);
@@ -619,7 +606,7 @@ trigger:
 		GOTO(out, rc);
 	}
 
-	if (osd->od_auto_scrub_interval != AS_NEVER && ++once == 1) {
+	if (osd->od_scrub.os_auto_scrub_interval != AS_NEVER && ++once == 1) {
 		rc = osd_scrub_start(env, osd, SS_AUTO_FULL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
 		CDEBUG_LIMIT(D_LFSCK | D_CONSOLE | D_WARNING,
@@ -634,8 +621,6 @@ trigger:
 out:
 	if (dn)
 		osd_dnode_rele(dn);
-
-	return rc;
 }
 
 static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
@@ -687,6 +672,8 @@ out_unlock:
 	up_read(&obj->oo_guard);
 out:
 	if (!rc && !osd_remote_fid(env, osd, fid)) {
+		bool is_dir = S_ISDIR(DTTOIF(oti->oti_zde.lzd_reg.zde_type));
+
 		/*
 		 * this should ask the scrubber to check OI given
 		 * the mapping we just found in the dir entry.
@@ -696,8 +683,7 @@ out:
 		 * from the layers above, including LFSCK which
 		 * is supposed to fix dangling entries.
 		 */
-		osd_consistency_check(env, osd, obj, fid, oid,
-				S_ISDIR(DTTOIF(oti->oti_zde.lzd_reg.zde_type)));
+		osd_zfs_consistency_check(env, osd, obj, fid, oid, is_dir);
 	}
 
 	return rc == 0 ? 1 : (rc == -ENOENT ? -ENODATA : rc);

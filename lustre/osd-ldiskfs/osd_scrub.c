@@ -2457,6 +2457,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct lvfs_run_ctxt *ctxt = &dev->od_scrub.os_ctxt;
+	time64_t interval = scrub->os_auto_scrub_interval;
 	struct scrub_file *sf = &scrub->os_file;
 	struct super_block *sb = osd_sb(dev);
 	struct lvfs_run_ctxt saved;
@@ -2478,6 +2479,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	spin_lock_init(&scrub->os_lock);
 	INIT_LIST_HEAD(&scrub->os_inconsistent_items);
 	scrub->os_name = osd_name(dev);
+	scrub->os_auto_scrub_interval = interval;
 
 	push_ctxt(&saved, ctxt);
 	filp = filp_open(osd_scrub_name, O_RDWR |
@@ -2599,7 +2601,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 		dev->od_igif_inoi = 1;
 
 	if (!dev->od_dt_dev.dd_rdonly &&
-	    dev->od_auto_scrub_interval != AS_NEVER &&
+	    dev->od_scrub.os_scrub.os_auto_scrub_interval != AS_NEVER &&
 	    ((sf->sf_status == SS_PAUSED) ||
 	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
