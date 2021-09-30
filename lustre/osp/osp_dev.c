@@ -1440,8 +1440,11 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	if (rc)
 		RETURN(rc);
 
-	osp->opd_obd->u.cli.cl_seq->lcs_exp = class_export_get(osp->opd_exp);
 	*exp = osp->opd_exp;
+
+	osp->opd_obd->u.cli.cl_seq->lcs_exp = class_export_get(osp->opd_exp);
+	/* precreate thread can be waiting for us to initialize fld client */
+	wake_up(&osp->opd_pre_waitq);
 
 	RETURN(rc);
 }

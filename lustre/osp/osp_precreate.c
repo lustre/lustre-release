@@ -1154,9 +1154,8 @@ update:
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-int osp_init_pre_fid(struct osp_device *osp)
+int osp_init_pre_fid(struct lu_env *env, struct osp_device *osp)
 {
-	struct lu_env		env;
 	struct osp_thread_info	*osi;
 	struct lu_client_seq	*cli_seq;
 	struct lu_fid		*last_fid;
@@ -1187,20 +1186,13 @@ int osp_init_pre_fid(struct osp_device *osp)
 		      osp->opd_obd->obd_name,
 		      PFID(&osp->opd_last_used_fid));
 
-	rc = lu_env_init(&env, osp->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
-	if (rc) {
-		CERROR("%s: init env error: rc = %d\n",
-		       osp->opd_obd->obd_name, rc);
-		RETURN(rc);
-	}
-
-	osi = osp_env_info(&env);
+	osi = osp_env_info(env);
 	last_fid = &osi->osi_fid;
 	fid_zero(last_fid);
 	/* For a freshed fs, it will allocate a new sequence first */
 	if (osp_is_fid_client(osp) && osp->opd_group != 0) {
 		cli_seq = osp->opd_obd->u.cli.cl_seq;
-		rc = seq_client_get_seq(&env, cli_seq, &last_fid->f_seq);
+		rc = seq_client_get_seq(env, cli_seq, &last_fid->f_seq);
 		if (rc != 0) {
 			CERROR("%s: alloc fid error: rc = %d\n",
 			       osp->opd_obd->obd_name, rc);
@@ -1217,14 +1209,13 @@ int osp_init_pre_fid(struct osp_device *osp)
 	osp->opd_pre_used_fid = *last_fid;
 	osp->opd_pre_last_created_fid = *last_fid;
 	spin_unlock(&osp->opd_pre_lock);
-	rc = osp_write_last_oid_seq_files(&env, osp, last_fid, 1);
+	rc = osp_write_last_oid_seq_files(env, osp, last_fid, 1);
 	if (rc != 0) {
 		CERROR("%s: write fid error: rc = %d\n",
 		       osp->opd_obd->obd_name, rc);
 		GOTO(out, rc);
 	}
 out:
-	lu_env_fini(&env);
 	RETURN(rc);
 }
 
@@ -1261,6 +1252,12 @@ static int osp_precreate_thread(void *_args)
 	ENTRY;
 
 	complete(args->opta_started);
+
+	/* wait for connection from the layers above */
+	wait_event_idle(d->opd_pre_waitq,
+			kthread_should_stop() ||
+			d->opd_obd->u.cli.cl_seq->lcs_exp != NULL);
+
 	while (!kthread_should_stop()) {
 		/*
 		 * need to be connected to OST
@@ -1289,12 +1286,10 @@ static int osp_precreate_thread(void *_args)
 
 		if (d->opd_pre) {
 			LASSERT(d->opd_obd->u.cli.cl_seq != NULL);
-			/* Sigh, fid client is not ready yet */
-			if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
-				continue;
+			LASSERT(d->opd_obd->u.cli.cl_seq->lcs_exp != NULL);
 
 			/* Init fid for osp_precreate if necessary */
-			rc = osp_init_pre_fid(d);
+			rc = osp_init_pre_fid(env, d);
 			if (rc != 0) {
 				class_export_put(d->opd_exp);
 				d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;

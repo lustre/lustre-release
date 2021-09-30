@@ -784,7 +784,6 @@ void osp_statfs_need_now(struct osp_device *d);
 int osp_reset_last_used(const struct lu_env *env, struct osp_device *osp);
 int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 				 struct lu_fid *fid, int sync);
-int osp_init_pre_fid(struct osp_device *osp);
 int osp_init_statfs(struct osp_device *osp);
 void osp_fini_statfs(struct osp_device *osp);
 void osp_statfs_fini(struct osp_device *d);
