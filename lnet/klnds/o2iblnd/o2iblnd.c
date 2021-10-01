@@ -34,6 +34,7 @@
  */
 
 #include <asm/page.h>
+#include <linux/ethtool.h>
 #include <linux/inetdevice.h>
 
 #include "o2iblnd.h"
