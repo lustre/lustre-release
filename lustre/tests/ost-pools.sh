@@ -302,6 +302,7 @@ test_1n() {
 	add_pool ${POOL}1234567 "OST0000" "$FSNAME-OST0000_UUID "
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	create_dir $POOL_ROOT ${POOL}1234567
+	stack_trap "rm -f $POOL_ROOT/file"
 	dd if=/dev/zero of=$POOL_ROOT/file bs=1M count=100
 	RC=$?; [[ $RC -eq 0 ]] ||
 		error "failed to write to $POOL_ROOT/file: $RC"
@@ -1274,6 +1275,7 @@ test_23a() {
 	if [ $? -eq 0 ]; then
 		$LFS quota -v -u $RUNAS_ID $dir
 		cancel_lru_locks osc
+		stack_trap "rm -f $file"
 		stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
 			count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
 		RC=$?
