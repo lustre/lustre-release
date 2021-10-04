@@ -297,7 +297,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	if (rule == NULL)
 		return -ENOMEM;
 
-	memcpy(rule->tr_name, start->tc_name, strlen(start->tc_name));
+	strlcpy(rule->tr_name, start->tc_name, sizeof(rule->tr_name));
 	rule->tr_rpc_rate = start->u.tc_start.ts_rpc_rate;
 	rule->tr_flags = start->u.tc_start.ts_rule_flags;
 	rule->tr_nsecs_per_rpc = NSEC_PER_SEC / rule->tr_rpc_rate;
@@ -3378,16 +3378,22 @@ static void nrs_tbf_cmd_fini(struct nrs_tbf_cmd *cmd)
 	}
 }
 
-static bool name_is_valid(const char *name)
+static int check_rule_name(const char *name)
 {
 	int i;
 
-	for (i = 0; i < strlen(name); i++) {
-		if ((!isalnum(name[i])) &&
-		    (name[i] != '_'))
-			return false;
+	if (name[0] == '\0')
+		return -EINVAL;
+
+	for (i = 0; name[i] != '\0' && i < MAX_TBF_NAME; i++) {
+		if (!isalnum(name[i]) && name[i] != '_')
+			return -EINVAL;
 	}
-	return true;
+
+	if (i == MAX_TBF_NAME)
+		return -ENAMETOOLONG;
+
+	return 0;
 }
 
 static int
@@ -3419,8 +3425,9 @@ nrs_tbf_parse_value_pair(struct nrs_tbf_cmd *cmd, char *buffer)
 		else
 			return -EINVAL;
 	}  else if (strcmp(key, "rank") == 0) {
-		if (!name_is_valid(val))
-			return -EINVAL;
+		rc = check_rule_name(val);
+		if (rc)
+			return rc;
 
 		if (cmd->tc_cmd == NRS_CTL_TBF_START_RULE)
 			cmd->u.tc_start.ts_next_name = val;
@@ -3507,9 +3514,13 @@ nrs_tbf_parse_cmd(char *buffer, unsigned long count, __u32 type_flag)
 
 	/* Name of the rule */
 	token = strsep(&val, " ");
-	if ((val == NULL && cmd->tc_cmd != NRS_CTL_TBF_STOP_RULE) ||
-	    !name_is_valid(token))
+	if ((val == NULL && cmd->tc_cmd != NRS_CTL_TBF_STOP_RULE))
 		GOTO(out_free_cmd, rc = -EINVAL);
+
+	rc = check_rule_name(token);
+	if (rc)
+		GOTO(out_free_cmd, rc);
+
 	cmd->tc_name = token;
 
 	if (cmd->tc_cmd == NRS_CTL_TBF_START_RULE) {

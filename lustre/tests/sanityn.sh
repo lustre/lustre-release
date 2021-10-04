@@ -4459,6 +4459,35 @@ test_77q() {
 }
 run_test 77q "Parallel TBF rule definitions should not panic"
 
+test_77p() {
+	local c
+	local -a spec_chars=(
+		'@' '.' '~' '#' '/' '^' '%' '*' ';' ',' '?' '<' '>' ':'
+		'+' '=' ')' '(' '{' '}' '|' '[' ']' '!' '&' '\$' '\`' '\\')
+
+	(( $MDS1_VERSION > $(version_code 2.14.54) )) ||
+		skip "need MDS >= 2.14.54"
+
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="tbf"
+	stack_trap "do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies=fifo"
+
+	# TBF rule name size is 16 bytes
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ test_77p_overflo\ uid={500}\ rate=500" &&
+		error "The length of tbf rule name is not checked" || true
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ \ uid={500}\ rate=500" &&
+		error "The server should not accept empty tbf rule name" || true
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ test_77p_empty" &&
+		error "The server should not accept 'start <tbf_rule_name>' without an expression" || true
+
+	# Test with special chars
+	for c in "${spec_chars[@]}"; do
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start test77p${c}spec uid={500} rate=500'" &&
+		error "Special char '${c}' should not be accepted in a tbf rule name" || true
+	done
+
+}
+run_test 77p "Check validity of rule names for TBF policies"
+
 test_78() { #LU-6673
 	local rc
 
