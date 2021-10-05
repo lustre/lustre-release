@@ -3221,7 +3221,9 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		if (namelen != 0)
 			return ERR_PTR(-EINVAL);
 	} else {
-		if (namelen > ll_i2sbi(i1)->ll_namelen)
+		if ((!IS_ENCRYPTED(i1) ||
+		     (opc != LUSTRE_OPC_LOOKUP && opc != LUSTRE_OPC_CREATE)) &&
+		    namelen > ll_i2sbi(i1)->ll_namelen)
 			return ERR_PTR(-ENAMETOOLONG);
 
 		/* "/" is not valid name, but it's allowed */

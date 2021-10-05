@@ -3374,6 +3374,11 @@ test_46() {
 	local testfile=$testdir/myfile
 	local testdir2=$DIR/$tdir/mydirwithaveryverylongnametotestcodebehaviour0
 	local testfile2=$testdir/myfilewithaveryverylongnametotestcodebehaviour0
+	# testdir3, testfile3, testhl3 and testsl3 names are 255 bytes long
+	local testdir3=$testdir2/dir_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz012345678
+	local testfile3=$testdir2/file_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01234567
+	local testhl3=$testdir2/hl_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789
+	local testsl3=$testdir2/sl_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789
 	local lsfile=$TMP/lsfile
 	local scrambleddir
 	local scrambledfile
@@ -3396,6 +3401,14 @@ test_46() {
 	else
 		mkdir $testdir2
 	fi
+	if [ "$mds1_FSTYPE" = ldiskfs ]; then
+		# For now, restrict this part of the test to ldiskfs backend,
+		# as osd-zfs does not support 255 byte-long encrypted names.
+		mkdir $testdir3 || error "cannot mkdir $testdir3"
+		touch $testfile3 || error "cannot touch $testfile3"
+		ln $testfile3 $testhl3 || error "cannot ln $testhl3"
+		ln -s $testfile3 $testsl3 || error "cannot ln $testsl3"
+	fi
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 
 	# remove fscrypt key from keyring
@@ -3406,6 +3419,10 @@ test_46() {
 	# this is $testdir2
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d| grep _)
 	stat $scrambleddir || error "stat $scrambleddir failed"
+	if [ "$mds1_FSTYPE" = ldiskfs ]; then
+		stat $scrambleddir/* || error "cannot stat in $scrambleddir"
+		rm -rf $scrambleddir/* || error "cannot clean in $scrambleddir"
+	fi
 	rmdir $scrambleddir || error "rmdir $scrambleddir failed"
 
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)

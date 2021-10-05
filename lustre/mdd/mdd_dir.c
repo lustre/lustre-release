@@ -1717,7 +1717,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		      struct md_object *cobj, const struct lu_name *lname,
 		      struct md_attr *ma, int no_name)
 {
-	const char *name = lname->ln_name;
+	char *name = (char *)lname->ln_name;
 	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
@@ -1775,6 +1775,16 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
 	if (likely(mdd_cobj != NULL))
 		mdd_write_lock(env, mdd_cobj, DT_TGT_CHILD);
+
+	if (lname->ln_name[lname->ln_namelen] != '\0') {
+		/* lname->ln_name is not necessarily NUL terminated */
+		name = kmalloc(lname->ln_namelen + 1, GFP_NOFS);
+		if (!name)
+			GOTO(cleanup, rc = -ENOMEM);
+
+		memcpy(name, lname->ln_name, lname->ln_namelen);
+		name[lname->ln_namelen] = '\0';
+	}
 
 	if (likely(no_name == 0) && !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle);
@@ -1850,6 +1860,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
 	EXIT;
 cleanup:
+	if (name != lname->ln_name)
+		kfree(name);
+
 	if (likely(mdd_cobj != NULL))
 		mdd_write_unlock(env, mdd_cobj);
 
