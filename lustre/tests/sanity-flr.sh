@@ -3754,9 +3754,10 @@ test_208a() {
 
 	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 
-	old=$(do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL get_param osd*.*OST*.nonrotational | tr '\n' ' ')
-	stack_trap "do_nodes $osts $LCTL set_param $old"
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params $(get_facets OST) osd*.*OST*.nonrotational > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p"
 
 	stack_trap "rm -f $tf"
 	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
@@ -3767,12 +3768,12 @@ test_208a() {
 	$LFS getstripe $tf
 
 	log "set OST0000 non-rotational"
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0000*.nonrotational=1
 	check_ost_used $tf read 0
 
 	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
 			osd*.*OST0003*.nonrotational=1
 	check_ost_used $tf read 2 3
@@ -3790,9 +3791,10 @@ test_208b() {
 
 	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 
-	old=$(do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL get_param osd*.*OST*.nonrotational | tr '\n' ' ')
-	stack_trap "do_nodes $osts $LCTL set_param $old"
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params $(get_facets OST) osd*.*OST*.nonrotational > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p"
 
 	stack_trap "rm -f $tf"
 	$LFS setstripe -i0 -c1 $tf || error "can't setstripe"
@@ -3803,13 +3805,13 @@ test_208b() {
 	$LFS getstripe $tf | grep -q flags.*stale && error "still stale"
 
 	log "set OST0000 non-rotational"
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0000*.nonrotational=1
 	check_ost_used $tf write 0
 	$LFS mirror resync $tf || error "can't resync"
 
 	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
 			osd*.*OST0003*.nonrotational=1
 	check_ost_used $tf write 2 3
