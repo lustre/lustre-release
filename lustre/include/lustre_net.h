@@ -653,15 +653,16 @@ struct ptlrpc_reply_state {
 	/** A spinlock to protect the reply state flags */
 	spinlock_t		rs_lock;
 	/** Reply state flags */
-        unsigned long          rs_difficult:1;     /* ACK/commit stuff */
-        unsigned long          rs_no_ack:1;    /* no ACK, even for
+	unsigned long		rs_difficult:1;     /* ACK/commit stuff */
+	unsigned long		rs_no_ack:1;    /* no ACK, even for
                                                   difficult requests */
-        unsigned long          rs_scheduled:1;     /* being handled? */
-        unsigned long          rs_scheduled_ever:1;/* any schedule attempts? */
-        unsigned long          rs_handled:1;  /* been handled yet? */
-        unsigned long          rs_on_net:1;   /* reply_out_callback pending? */
-        unsigned long          rs_prealloc:1; /* rs from prealloc list */
-        unsigned long          rs_committed:1;/* the transaction was committed
+	unsigned long		rs_scheduled:1;     /* being handled? */
+	unsigned long		rs_scheduled_ever:1;/* any schedule attempts? */
+	unsigned long		rs_handled:1;  /* been handled yet? */
+	unsigned long		rs_sent:1;   /* Got LNET_EVENT_SEND? */
+	unsigned long		rs_unlinked:1; /* Reply MD unlinked? */
+	unsigned long		rs_prealloc:1; /* rs from prealloc list */
+	unsigned long		rs_committed:1;/* the transaction was committed
                                                  and the rs was dispatched
                                                  by ptlrpc_commit_replies */
 	unsigned long		rs_convert_lock:1; /* need to convert saved
@@ -670,15 +671,15 @@ struct ptlrpc_reply_state {
 	/** Number of locks awaiting client ACK */
 	int			rs_nlocks;
 
-        /** Size of the state */
-        int                    rs_size;
-        /** opcode */
-        __u32                  rs_opc;
-        /** Transaction number */
-        __u64                  rs_transno;
-        /** xid */
-        __u64                  rs_xid;
-	struct obd_export     *rs_export;
+	/** Size of the state */
+	int			rs_size;
+	/** opcode */
+	__u32			rs_opc;
+	/** Transaction number */
+	__u64			rs_transno;
+	/** xid */
+	__u64			rs_xid;
+	struct obd_export	*rs_export;
 	struct ptlrpc_service_part *rs_svcpt;
 	/** Lnet metadata handle for the reply */
 	struct lnet_handle_md	rs_md_h;

@@ -542,7 +542,7 @@ void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 
 	LASSERT(atomic_read(&rs->rs_refcount) == 0);
 	LASSERT(!rs->rs_difficult || rs->rs_handled);
-	LASSERT(!rs->rs_on_net);
+	LASSERT(!rs->rs_difficult || rs->rs_unlinked);
 	LASSERT(!rs->rs_scheduled);
 	LASSERT(rs->rs_export == NULL);
 	LASSERT(rs->rs_nlocks == 0);

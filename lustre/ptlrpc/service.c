@@ -2496,10 +2496,14 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 	}
 
-	if ((!been_handled && rs->rs_on_net) || nlocks > 0) {
+	if ((rs->rs_sent && !rs->rs_unlinked) || nlocks > 0) {
 		spin_unlock(&rs->rs_lock);
 
-		if (!been_handled && rs->rs_on_net) {
+		/* We can unlink if the LNET_EVENT_SEND has occurred.
+		 * If rs_unlinked is set then MD is already unlinked and no
+		 * need to do so here.
+		 */
+		if ((rs->rs_sent && !rs->rs_unlinked)) {
 			LNetMDUnlink(rs->rs_md_h);
 			/* Ignore return code; we're racing with completion */
 		}
@@ -2514,7 +2518,7 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	rs->rs_scheduled = 0;
 	rs->rs_convert_lock = 0;
 
-	if (!rs->rs_on_net) {
+	if (rs->rs_unlinked) {
 		/* Off the net */
 		spin_unlock(&rs->rs_lock);
 
