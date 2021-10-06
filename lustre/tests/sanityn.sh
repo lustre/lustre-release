@@ -4429,6 +4429,35 @@ test_77o() {
 }
 run_test 77o "Changing rank should not panic"
 
+test_77q() {
+	local i
+
+	(( $MDS1_VERSION > $(version_code 2.14.54) )) ||
+		skip "need MDS >= 2.14.54"
+
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="tbf"
+	stack_trap "do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies=fifo"
+
+	for i in {1..50}; do
+		local pid1 pid2
+
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_1 uid={500}&gid={500} rate=100'" &
+		pid1=$!
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'start rule77q_2 uid={1000}&gid={1000} rate=100'" &
+		pid2=$!
+		wait $pid1 || error "$i: Fail to start TBF rule 'rule77q_1'"
+		wait $pid2 || error "$i: Fail to start TBF rule 'rule77q_2'"
+
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'stop rule77q_1'" &
+		pid1=$!
+		do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="'stop rule77q_2'" &
+		pid2=$!
+		wait $pid1 || error "$i: Fail to stop TBF rule 'rule77q_1'"
+		wait $pid2 || error "$i: Fail to stop TBF rule 'rule77q_2'"
+	done
+}
+run_test 77q "Parallel TBF rule definitions should not panic"
+
 test_78() { #LU-6673
 	local rc
 

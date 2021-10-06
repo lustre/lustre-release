@@ -3479,10 +3479,10 @@ nrs_tbf_parse_value_pairs(struct nrs_tbf_cmd *cmd, char *buffer)
 static struct nrs_tbf_cmd *
 nrs_tbf_parse_cmd(char *buffer, unsigned long count, __u32 type_flag)
 {
-	static struct nrs_tbf_cmd	*cmd;
-	char				*token;
-	char				*val;
-	int				 rc = 0;
+	struct nrs_tbf_cmd *cmd;
+	char *token;
+	char *val;
+	int rc = 0;
 
 	OBD_ALLOC_PTR(cmd);
 	if (cmd == NULL)
@@ -3580,15 +3580,15 @@ ptlrpc_lprocfs_nrs_tbf_rule_seq_write(struct file *file,
 				      const char __user *buffer,
 				      size_t count, loff_t *off)
 {
-	struct seq_file		  *m = file->private_data;
-	struct ptlrpc_service	  *svc = m->private;
-	char			  *kernbuf;
-	char			  *val;
-	int			   rc;
-	static struct nrs_tbf_cmd *cmd;
+	struct seq_file *m = file->private_data;
+	struct ptlrpc_service *svc = m->private;
+	char *kernbuf;
+	char *val;
+	int rc;
+	struct nrs_tbf_cmd *cmd;
 	enum ptlrpc_nrs_queue_type queue = PTLRPC_NRS_QUEUE_BOTH;
-	unsigned long		   length;
-	char			  *token;
+	unsigned long length;
+	char *token;
 
 	OBD_ALLOC(kernbuf, LPROCFS_WR_NRS_TBF_MAX_CMD);
 	if (kernbuf == NULL)
