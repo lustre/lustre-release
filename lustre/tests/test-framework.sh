@@ -8281,7 +8281,7 @@ check_node_health() {
 	# *clearly* the network is working if get_param returned something.
 	if (( $(grep -c catastro $health) != $(wc -w <<< ${nodes//,/ }) )); then
 		for node in ${nodes//,/ }; do
-			check_network $node 5
+			check_network $node 60
 		done
 	fi
 	rm -f $health
