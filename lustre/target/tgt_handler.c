@@ -1948,6 +1948,9 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 	enum cksum_types cksum_type;
 	loff_t start, end;
 
+	if (unlikely(npages <= 0))
+		return 0;
+
 	/* unlikely to happen and only if resend does not occur due to cksum
 	 * control failure on Client */
 	if (unlikely(server_cksum == client_cksum)) {
