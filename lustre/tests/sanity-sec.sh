@@ -4432,7 +4432,7 @@ test_58() {
 	echo 3 > /proc/sys/vm/drop_caches
 
 	sleep 10
-	ls -ailR $MOUNT > /dev/null || error "fail to ls"
+	ls -ailR $DIR/$tdir > /dev/null || error "fail to ls"
 }
 run_test 58 "access to enc file's xattrs"
 
