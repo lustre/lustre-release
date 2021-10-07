@@ -257,7 +257,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 	}
 
 	if (bits & MDS_INODELOCK_XATTR) {
-		ll_xattr_cache_destroy(inode);
+		ll_xattr_cache_empty(inode);
 		bits &= ~MDS_INODELOCK_XATTR;
 	}
 

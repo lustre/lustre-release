@@ -422,6 +422,7 @@ enum ll_file_flags {
 };
 
 int ll_xattr_cache_destroy(struct inode *inode);
+int ll_xattr_cache_empty(struct inode *inode);
 
 int ll_xattr_cache_get(struct inode *inode,
 		       const char *name,
