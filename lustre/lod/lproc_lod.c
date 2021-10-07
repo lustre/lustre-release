@@ -1304,6 +1304,56 @@ static int lod_spill_hit_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(lod_spill_hit);
 
+static int lod_spill_status_seq_show(struct seq_file *m, void *v)
+{
+	struct pool_desc *pool = m->private;
+	__u64 avail_bytes = 0, total_bytes = 0;
+	struct lu_tgt_pool *osts;
+	struct lod_device *lod;
+	struct lu_env env;
+	int rc, i;
+
+	if (!pool)
+		return -ENODEV;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+
+	lod = lu2lod_dev(pool->pool_lobd->obd_lu_dev);
+
+	osts = &(pool->pool_obds);
+	for (i = 0; i < osts->op_count; i++) {
+		int idx = osts->op_array[i];
+		struct lod_tgt_desc *tgt;
+		struct obd_statfs *sfs;
+
+		if (!test_bit(idx, lod->lod_ost_bitmap))
+			continue;
+		tgt = OST_TGT(lod, idx);
+		if (tgt->ltd_active == 0)
+			continue;
+		sfs = &tgt->ltd_statfs;
+
+		avail_bytes += sfs->os_bavail * sfs->os_bsize;
+		total_bytes += sfs->os_blocks * sfs->os_bsize;
+		seq_printf(m, "%d: %llu %llu\n", idx,
+			avail_bytes >> 10, total_bytes >> 10);
+	}
+	seq_printf(m, "total: %llu\navail: %llu\nusage: %llu\nusage%%: %llu\n"
+		   "active: %s\nthreshold: %dexpire: %d\n",
+		   total_bytes >> 10, avail_bytes >> 10,
+		   (total_bytes - avail_bytes) >> 10,
+		   (total_bytes * pool->pool_spill_threshold_pct / 100) >> 10,
+		   pool->pool_spill_is_active ? "on" : "off",
+		   pool->pool_spill_threshold_pct,
+		   (int)(pool->pool_spill_expire - ktime_get_seconds()));
+	lu_env_fini(&env);
+
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lod_spill_status);
+
 struct lprocfs_vars lprocfs_lod_spill_vars[] = {
 	{ .name	=	"spill_threshold_pct",
 	  .fops	=	&lod_spill_threshold_pct_fops },
@@ -1313,6 +1363,8 @@ struct lprocfs_vars lprocfs_lod_spill_vars[] = {
 	  .fops	=	&lod_spill_is_active_fops },
 	{ .name	=	"spill_hit",
 	  .fops	=	&lod_spill_hit_fops },
+	{ .name	=	"spill_status",
+	  .fops	=	&lod_spill_status_fops },
 	{ NULL }
 };
 
