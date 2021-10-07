@@ -1636,10 +1636,13 @@ $ lctl set_param ost.OSS.ost_io.nrs_policies="tbf gid"</screen>
 	<screen>lctl set_param x.x.x.nrs_tbf_rule=
 "[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."
 	</screen>
-	<para>'<replaceable>rule_name</replaceable>' is a string of the TBF
-	policy rule's name and '<replaceable>arguments</replaceable>' is a
-	string to specify the detailed rule according to the different types.
-	</para>
+        <para>'<replaceable>rule_name</replaceable>' is a string up to 15
+          characters which identifies the TBF policy rule's name. Alphanumeric
+          characters and underscores are accepted (e.g: "test_rule_A1").
+        </para>
+        <para>'<replaceable>arguments</replaceable>' is a string to specify the
+          detailed rule according to the different types.
+        </para>
 	<itemizedlist>
 	<para>Next, the different types of TBF policies will be described.</para>
 	  <listitem>
