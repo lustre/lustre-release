@@ -6493,12 +6493,15 @@ test_89() { # LU-7131
 
 	stopall
 
-	[ "$mds1_FSTYPE" == zfs ] && import_zpool mds1
+	if [[ "$mds1_FSTYPE" == zfs ]]; then
+		import_zpool mds1 || return ${PIPESTATUS[0]}
+	fi
+
 	# Check that parameters are added correctly
 	echo "tunefs --param $key=$val1"
-	do_facet mds "$TUNEFS --param $key=$val1 $mdsdev >/dev/null" ||
+	do_facet mds1 "$TUNEFS --param $key=$val1 $mdsdev >/dev/null" ||
 		error "tunefs --param $key=$val1 failed"
-	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+	params=$(do_facet mds1 $TUNEFS --dryrun $mdsdev) ||
 		error "tunefs --dryrun failed"
 	params=${params##*Parameters:}
 	params=${params%%exiting*}
@@ -6507,9 +6510,9 @@ test_89() { # LU-7131
 
 	# Check that parameters replace existing instances when added
 	echo "tunefs --param $key=$val2"
-	do_facet mds "$TUNEFS --param $key=$val2 $mdsdev >/dev/null" ||
+	do_facet mds1 "$TUNEFS --param $key=$val2 $mdsdev >/dev/null" ||
 		error "tunefs --param $key=$val2 failed"
-	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+	params=$(do_facet mds1 $TUNEFS --dryrun $mdsdev) ||
 		error "tunefs --dryrun failed"
 	params=${params##*Parameters:}
 	params=${params%%exiting*}
@@ -6520,9 +6523,9 @@ test_89() { # LU-7131
 
 	# Check that a parameter is erased properly
 	echo "tunefs --erase-param $key"
-	do_facet mds "$TUNEFS --erase-param $key $mdsdev >/dev/null" ||
+	do_facet mds1 "$TUNEFS --erase-param $key $mdsdev >/dev/null" ||
 		error "tunefs --erase-param $key failed"
-	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+	params=$(do_facet mds1 $TUNEFS --dryrun $mdsdev) ||
 		error "tunefs --dryrun failed"
 	params=${params##*Parameters:}
 	params=${params%%exiting*}
@@ -6530,22 +6533,25 @@ test_89() { # LU-7131
 		error "on-disk parameter not erased correctly via tunefs"
 
 	# Check that all the parameters are erased
+	do_facet mds1 "$TUNEFS --param $key=$val1 $mdsdev >/dev/null" ||
+		error "tunefs --param $key=$val1 failed"
 	echo "tunefs --erase-params"
-	do_facet mds "$TUNEFS --erase-params $mdsdev >/dev/null" ||
+	do_facet mds1 "$TUNEFS --erase-params $mdsdev >/dev/null" ||
 		error "tunefs --erase-params failed"
-	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+	params=$(do_facet mds1 $TUNEFS --dryrun $mdsdev) ||
 		error "tunefs --dryrun failed"
 	params=${params##*Parameters:}
 	params=${params%%exiting*}
-	[ -z $params ] ||
-		error "all on-disk parameters not erased correctly via tunefs"
+	params=$(echo $params | tr ' ' '\n')
+	[ -z "$params" ] ||
+		error "all on-disk parameters not erased correctly via tunefs $params"
 
 	# Check the order of options --erase-params and --param
 	echo "tunefs --param $key=$val1 --erase-params"
-	do_facet mds \
+	do_facet mds1 \
 		"$TUNEFS --param $key=$val1 --erase-params $mdsdev >/dev/null"||
 		error "tunefs --param $key=$val1 --erase-params failed"
-	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+	params=$(do_facet mds1 $TUNEFS --dryrun $mdsdev) ||
 		error "tunefs --dryrun failed"
 	params=${params##*Parameters:}
 	params=${params%%exiting*}
