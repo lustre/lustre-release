@@ -4028,12 +4028,15 @@ test_73() {
 	clear_stats llite.*.stats
 	# PR lock should be cached by now on both clients
 	getfattr -n user.attr1 $DIR1/$tfile || error "getfattr3 failed"
-	# 2 hits for getfattr(0)+getfattr(size)
-	[ $(calc_stats llite.*.stats getxattr_hits) -eq 2 ] ||
+	# At least 2 hits for getfattr(0)+getfattr(size)
+	# There may be more if auditd has a filesystem-related rule enabled
+	(( $(calc_stats llite.*.stats getxattr_hits) >= 2 )) ||
 		error "not cached in $DIR1"
+	clear_stats llite.*.stats
 	getfattr -n user.attr1 $DIR2/$tfile || error "getfattr4 failed"
-	# 4 hits for more getfattr(0)+getfattr(size)
-	[ $(calc_stats llite.*.stats getxattr_hits) -eq 4 ] ||
+	# At least 2 hits for getfattr(0)+getfattr(size)
+	# There may be more if auditd has a filesystem-related rule enabled
+	(( $(calc_stats llite.*.stats getxattr_hits) >= 2 )) ||
 		error "not cached in $DIR2"
 	rm -f $DIR2/$tfile
 
