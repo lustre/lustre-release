@@ -1184,12 +1184,15 @@ test_24u() { # bug12192
 run_test 24u "create stripe file"
 
 simple_cleanup_common() {
+	local createmany=$1
 	local rc=0
-	trap 0
-	[ -z "$DIR" ] || [ -z "$tdir" ] && return 0
+
+	[[ -z "$DIR" || -z "$tdir" || ! -d "$DIR/$tdir" ]] && return 0
 
 	local start=$SECONDS
-	rm -rf $DIR/$tdir
+
+	[[ -n "$createmany" ]] && unlinkmany $DIR/$tdir/$tfile $createmany
+	rm -rf $DIR/$tdir || error "cleanup $DIR/$tdir failed"
 	rc=$?
 	wait_delete_completed
 	echo "cleanup time $((SECONDS - start))"
@@ -1213,10 +1216,10 @@ test_24v() {
 	test_mkdir "$(dirname $fname)"
 	# assume MDT0000 has the fewest inodes
 	local stripes=$($LFS getdirstripe -c $(dirname $fname))
-	local free_inodes=$(($(mdt_free_inodes 0) * stripes))
+	local free_inodes=$(($(mdt_free_inodes 0) * ${stripes/#0/1}))
 	[[ $free_inodes -lt $nrfiles ]] && nrfiles=$free_inodes
 
-	trap simple_cleanup_common EXIT
+	stack_trap "simple_cleanup_common $nrfiles"
 
 	createmany -m "$fname" $nrfiles
 
@@ -1245,12 +1248,10 @@ test_24v() {
 	local rpc_pages=$(max_pages_per_rpc $mdt_idx)
 	local rpc_max=$((nrfiles / (page_entries * rpc_pages) + stripes))
 	local mds_readpage=$(calc_stats mdc.*.stats mds_readpage)
-	echo "readpages: $mds_readpage rpc_max: $rpc_max"
-	(( $mds_readpage < $rpc_max - 2 || $mds_readpage > $rpc_max + 1)) &&
+	echo "readpages: $mds_readpage rpc_max: $rpc_max-2/+1"
+	(( $mds_readpage >= $rpc_max - 2 && $mds_readpage <= $rpc_max + 1)) ||
 		error "large readdir doesn't take effect: " \
 		      "$mds_readpage should be about $rpc_max"
-
-	simple_cleanup_common
 }
 run_test 24v "list large directory (test hash collision, b=17560)"
 
@@ -1359,19 +1360,15 @@ run_test 24z "cross-MDT rename is done as cp"
 test_24A() { # LU-3182
 	local NFILES=5000
 
-	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
-	trap simple_cleanup_common EXIT
+	stack_trap "simple_cleanup_common $NFILES"
 	createmany -m $DIR/$tdir/$tfile $NFILES
 	local t=$(ls $DIR/$tdir | wc -l)
 	local u=$(ls $DIR/$tdir | sort -u | wc -l)
 	local v=$(ls -ai $DIR/$tdir | sort -u | wc -l)
-	if [ $t -ne $NFILES ] || [ $u -ne $NFILES ] ||
-	   [ $v -ne $((NFILES + 2)) ] ; then
-		error "Expected $NFILES files, got $t ($u unique $v .&..)"
-	fi
 
-	simple_cleanup_common || error "Can not delete directories"
+	(( $t == $NFILES && $u == $NFILES && $v == NFILES + 2 )) ||
+		error "Expected $NFILES files, got $t ($u unique $v .&..)"
 }
 run_test 24A "readdir() returns correct number of entries."
 
@@ -1816,7 +1813,7 @@ test_27m() {
 	if [[ $ORIGFREE -gt $MAXFREE ]]; then
 		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
 	fi
-	trap simple_cleanup_common EXIT
+	stack_trap simple_cleanup_common
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile.1
 	dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=1024 count=$MAXFREE &&
@@ -1835,8 +1832,7 @@ test_27m() {
 	touch $DIR/$tdir/$tfile.$i
 	[ $($LFS getstripe $DIR/$tdir/$tfile.$i | grep -A 10 obdidx |
 	    awk '{print $1}'| grep -w "0") ] &&
-		error "OST0 was full but new created file still use it"
-	simple_cleanup_common
+		error "OST0 was full but new created file still use it" || true
 }
 run_test 27m "create file while OST0 was full"
 
@@ -2038,15 +2034,13 @@ test_27u() { # bug 4900
 #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
 	do_nodes $list $LCTL set_param fail_loc=0x139
 	test_mkdir -p $DIR/$tdir
-	trap simple_cleanup_common EXIT
-	createmany -o $DIR/$tdir/t- 1000
+	stack_trap "simple_cleanup_common 1000"
+	createmany -o $DIR/$tdir/$tfile 1000
 	do_nodes $list $LCTL set_param fail_loc=0
 
 	TLOG=$TMP/$tfile.getstripe
 	$LFS getstripe $DIR/$tdir > $TLOG
 	OBJS=$(awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj; }' $TLOG)
-	unlinkmany $DIR/$tdir/t- 1000
-	trap 0
 	[[ $OBJS -gt 0 ]] &&
 		error "$OBJS objects created on OST-0. See $TLOG" ||
 		rm -f $TLOG
@@ -11862,7 +11856,7 @@ test_116a() { # was previously test_116()
 
 	[ $MINV -eq 0 ] && skip "no free space in OST$MINI, skip"
 	[ $MINV -gt 10000000 ] && skip "too much free space in OST$MINI, skip"
-	trap simple_cleanup_common EXIT
+	stack_trap simple_cleanup_common
 
 	# Check if we need to generate uneven OSTs
 	test_mkdir -p $DIR/$tdir/OST${MINI}
@@ -11907,8 +11901,6 @@ test_116a() { # was previously test_116()
 	if [ $DIFF2 -gt $threshold ]; then
 		echo "ok"
 	else
-		echo "failed - QOS mode won't be used"
-		simple_cleanup_common
 		skip "QOS imbalance criteria not met"
 	fi
 
@@ -11966,7 +11958,6 @@ test_116a() { # was previously test_116()
 	fi
 	[[ $MAXC -gt $MINC ]] ||
 		error_ignore LU-9 "stripe QOS didn't balance free space"
-	simple_cleanup_common
 }
 run_test 116a "stripe QOS: free space balance ==================="
 
