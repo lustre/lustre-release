@@ -11,9 +11,9 @@ Subject: [PATCH] This patch implements the large EA support in ext4. If the
  fs/ext4/indirect.c |   3 +-
  fs/ext4/inline.c   |   2 +-
  fs/ext4/inode.c    |  45 +++-
- fs/ext4/xattr.c    | 605 ++++++++++++++++++++++++++++++++++++++++++---
+ fs/ext4/xattr.c    | 607 ++++++++++++++++++++++++++++++++++++++++++---
  fs/ext4/xattr.h    |  33 ++-
- 8 files changed, 645 insertions(+), 53 deletions(-)
+ 8 files changed, 647 insertions(+), 53 deletions(-)
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index ba54a96..e28bcdb 100644
@@ -199,7 +199,7 @@ index 6c6ac63..2086792 100644
  {
  	ext4_group_t groups, ngroups = ext4_get_groups_count(inode->i_sb);
 diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
-index c10e37f..2288410 100644
+index c10e37f..88e8579 100644
 --- a/fs/ext4/xattr.c
 +++ b/fs/ext4/xattr.c
 @@ -201,6 +201,7 @@ ext4_xattr_check_names(struct ext4_xattr_entry *entry, void *end,
@@ -824,7 +824,7 @@ index c10e37f..2288410 100644
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1469,21 +1813,140 @@ cleanup:
+@@ -1469,21 +1813,142 @@ cleanup:
  }
  
  
@@ -901,7 +901,9 @@ index c10e37f..2288410 100644
 +				lea_ino_array->xia_inodes[idx], &error);
 +		if (error)
 +			continue;
++		inode_lock(ea_inode);
 +		ext4_orphan_add(handle, ea_inode);
++		inode_unlock(ea_inode);
 +		/* the inode's i_count will be released by caller */
 +	}
 +
@@ -970,7 +972,7 @@ index c10e37f..2288410 100644
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
  	if (!bh) {
  		EXT4_ERROR_INODE(inode, "block %llu read error",
-@@ -1496,11 +1959,78 @@ ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
+@@ -1496,11 +1961,78 @@ ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -1049,7 +1051,7 @@ index c10e37f..2288410 100644
  }
  
  /*
-@@ -1570,10 +2100,9 @@ ext4_xattr_cmp(struct ext4_xattr_header *header1,
+@@ -1570,10 +2102,9 @@ ext4_xattr_cmp(struct ext4_xattr_header *header1,
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -1061,7 +1063,7 @@ index c10e37f..2288410 100644
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1657,7 +2186,7 @@ static inline void ext4_xattr_hash_entry(struct ext4_xattr_header *header,
+@@ -1657,7 +2188,7 @@ static inline void ext4_xattr_hash_entry(struct ext4_xattr_header *header,
  		       *name++;
  	}
  
