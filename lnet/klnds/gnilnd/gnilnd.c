@@ -2104,7 +2104,6 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 
 int kgnilnd_base_startup(void)
 {
-	struct timespec64    ts;
 	long long	     pkmem = libcfs_kmem_read();
 	int                  rc;
 	int                  i;
@@ -2134,10 +2133,9 @@ int kgnilnd_base_startup(void)
 	 * initialised with seconds + microseconds at startup time.  So we
 	 * rely on NOT creating connections more frequently on average than
 	 * 1MHz to ensure we don't use old connstamps when we reboot. */
-	ktime_get_ts64(&ts);
 	kgnilnd_data.kgn_connstamp =
 		 kgnilnd_data.kgn_peerstamp =
-			(ts.tv_sec * 1000000) + (ts.tv_nsec / 100);
+			ktime_get_seconds();
 
 	init_rwsem(&kgnilnd_data.kgn_net_rw_sem);
 
