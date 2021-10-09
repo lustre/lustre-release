@@ -1300,8 +1300,8 @@ lnet_new_rtrbuf(struct lnet_rtrbufpool *rbp, int cpt)
 	rb->rb_pool = rbp;
 
 	for (i = 0; i < npages; i++) {
-		page = cfs_page_cpt_alloc(lnet_cpt_table(), cpt,
-					  GFP_KERNEL | __GFP_ZERO);
+		page = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, GFP_KERNEL |
+					  __GFP_ZERO | __GFP_NORETRY);
 		if (page == NULL) {
 			while (--i >= 0)
 				__free_page(rb->rb_kiov[i].bv_page);
@@ -1382,8 +1382,8 @@ lnet_rtrpool_adjust_bufs(struct lnet_rtrbufpool *rbp, int nbufs, int cpt)
 	while (num_rb-- > 0) {
 		rb = lnet_new_rtrbuf(rbp, cpt);
 		if (rb == NULL) {
-			CERROR("Failed to allocate %d route bufs of %d pages\n",
-			       nbufs, npages);
+			CERROR("lnet: error allocating %ux%u page router buffers on CPT %u: rc = %d\n",
+			       nbufs, npages, cpt, -ENOMEM);
 
 			lnet_net_lock(cpt);
 			rbp->rbp_req_nbuffers = old_req_nbufs;
@@ -1531,9 +1531,11 @@ lnet_rtrpools_alloc(int im_a_router)
 	} else if (!strcmp(forwarding, "enabled")) {
 		/* explicitly enabled */
 	} else {
-		LCONSOLE_ERROR_MSG(0x10b, "'forwarding' not set to either "
-				   "'enabled' or 'disabled'\n");
-		return -EINVAL;
+		rc = -EINVAL;
+		LCONSOLE_ERROR_MSG(0x10b,
+				   "lnet: forwarding='%s' not set to either 'enabled' or 'disabled': rc = %d\n",
+				   forwarding, rc);
+		return rc;
 	}
 
 	nrb_tiny = lnet_nrb_tiny_calculate();
@@ -1552,30 +1554,32 @@ lnet_rtrpools_alloc(int im_a_router)
 						LNET_NRBPOOLS *
 						sizeof(struct lnet_rtrbufpool));
 	if (the_lnet.ln_rtrpools == NULL) {
+		rc = -ENOMEM;
 		LCONSOLE_ERROR_MSG(0x10c,
-				   "Failed to initialize router buffe pool\n");
-		return -ENOMEM;
+			"lnet: error allocating router buffer pool: rc = %d\n",
+			rc);
+		return rc;
 	}
 
 	cfs_percpt_for_each(rtrp, i, the_lnet.ln_rtrpools) {
 		lnet_rtrpool_init(&rtrp[LNET_TINY_BUF_IDX], 0);
 		rc = lnet_rtrpool_adjust_bufs(&rtrp[LNET_TINY_BUF_IDX],
 					      nrb_tiny, i);
-		if (rc != 0)
+		if (rc)
 			goto failed;
 
 		lnet_rtrpool_init(&rtrp[LNET_SMALL_BUF_IDX],
 				  LNET_NRB_SMALL_PAGES);
 		rc = lnet_rtrpool_adjust_bufs(&rtrp[LNET_SMALL_BUF_IDX],
 					      nrb_small, i);
-		if (rc != 0)
+		if (rc)
 			goto failed;
 
 		lnet_rtrpool_init(&rtrp[LNET_LARGE_BUF_IDX],
 				  LNET_NRB_LARGE_PAGES);
 		rc = lnet_rtrpool_adjust_bufs(&rtrp[LNET_LARGE_BUF_IDX],
 					      nrb_large, i);
-		if (rc != 0)
+		if (rc)
 			goto failed;
 	}
 
