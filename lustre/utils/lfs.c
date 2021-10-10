@@ -324,26 +324,29 @@ command_t mirror_cmdlist[] = {
 command_t pcc_cmdlist[] = {
 	{ .pc_name = "attach", .pc_func = lfs_pcc_attach,
 	  .pc_help = "Attach given files to the Persistent Client Cache.\n"
-		"usage: lfs pcc attach [--id|-i ID] [--readonly|-r] [--write|-w] <file> ...\n"
-		"\t-i: archive id for PCC\n"
+		"usage: lfs pcc attach [--id|-i ID] [--readonly|-r] [--write|-w] FILE [...]\n"
+		"\t-i: archive ID for PCC\n"
 		"\t-r: readonly attach\n"
 		"\t-w: writeable attach\n" },
 	{ .pc_name = "attach_fid", .pc_func = lfs_pcc_attach_fid,
 	  .pc_help = "Attach given files into PCC by FID(s).\n"
-		"usage: lfs pcc attach_id [--id|-i ID] {--mnt|-m MOUNTPOINT} [--readonly|-r] [--write|-w] FID ...\n"
-		"\t-i: archive id for PCC\n"
+		"usage: lfs pcc attach_id [--id|-i ID] {--mnt|-m MOUNTPOINT} [--readonly|-r] [--write|-w] FID [...]\n"
+		"\t-i: archive ID for PCC\n"
 		"\t-m: Lustre mount point\n"
 		"\t-r: readonly attach\n"
 		"\t-w: writeable attach\n" },
 	{ .pc_name = "state", .pc_func = lfs_pcc_state,
 	  .pc_help = "Display the PCC state for given files.\n"
-		"usage: lfs pcc state <file> ...\n" },
+		"usage: lfs pcc state FILE [...]\n" },
+	{ .pc_name = "status", .pc_func = lfs_pcc_state,
+	  .pc_help = "Display the PCC state for given files.\n"
+		"usage: lfs pcc status FILE [...]\n" },
 	{ .pc_name = "detach", .pc_func = lfs_pcc_detach,
 	  .pc_help = "Detach given files from the Persistent Client Cache.\n"
-		"usage: lfs pcc detach <file> ...\n" },
+		"usage: lfs pcc detach [-k] FILE [...]\n" },
 	{ .pc_name = "detach_fid", .pc_func = lfs_pcc_detach_fid,
 	  .pc_help = "Detach given files from PCC by FID(s).\n"
-		"usage: lfs pcc detach_fid <mntpath> <fid>...\n" },
+		"usage: lfs pcc detach_fid {--mnt|-m MOUNTPATH} FID...\n" },
 	{ .pc_help = NULL }
 };
 
@@ -14000,13 +14003,14 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mnt",	.has_arg = required_argument },
 	{ .name = NULL } };
-	char short_opts[] = "hk";
-	int c;
-	int rc = 0;
+	char short_opts[] = "hkm:";
+	const char *mntpath = NULL;
 	const char *fidstr;
-	const char *mntpath;
 	__u32 detach_flags = PCC_DETACH_FL_UNCACHE;
+	int rc = 0;
+	int c;
 	int dirfd;
 
 	optind = 0;
@@ -14016,6 +14020,11 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 		case 'k':
 			detach_flags = PCC_DETACH_FL_NONE;
 			break;
+		case 'm':
+			mntpath = optarg;
+			break;
+		case '?':
+			return CMD_HELP;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
@@ -14025,22 +14034,26 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 		}
 	}
 
+	/* for backward compatibility, allow mntpath without -m */
+	if (!mntpath) {
+		if (argc <= optind) {
+			fprintf(stderr, "%s: must specify Lustre mount point\n",
+				argv[0]);
+			return CMD_HELP;
+		}
+
+		mntpath = argv[optind++];
+	}
+
 	if (argc <= optind) {
-		fprintf(stderr, "%s: must specify Lustre mount point\n",
-			argv[0]);
+		fprintf(stderr, "%s: must specify one or more FIDs\n", argv[0]);
 		return CMD_HELP;
 	}
 
-	mntpath = argv[optind++];
-	if (argc <= optind) {
-		fprintf(stderr, "%s: must specify one or more fids\n", argv[0]);
-		return CMD_HELP;
-	}
-
-	dirfd = open(mntpath, O_RDONLY);
+	dirfd = open(mntpath, O_RDONLY | O_DIRECTORY);
 	if (dirfd < 0) {
 		rc = -errno;
-		fprintf(stderr, "%s: cannot open '%s': %s",
+		fprintf(stderr, "%s: cannot open directory '%s': %s",
 			argv[0], mntpath, strerror(errno));
 		return rc;
 	}

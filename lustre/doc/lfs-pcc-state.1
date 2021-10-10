@@ -1,1 +1,39 @@
-.so man1/lfs-pcc.1
+.TH LFS-PCC-STATE 1 2021-10-07 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs pcc state \- display current PCC state of file
+.SH SYNOPSIS
+.BI "lfs pcc state " FILE \fR[...]
+.SH DESCRIPTION
+Display the current PCC cache state of
+.I FILE
+on the local client.
+This shows several fields for each file.  The cache attach
+.B type
+is one of
+.BR none ,
+.BR readonly ,
+or
+.BR readwrite .
+The
+.B PCC_file
+shows relative pathname of the file within the local cache filesystem.
+The
+.B open_count
+is the number of processes that have the local cache file open, and
+.B flags
+shows additional file states, including
+.B attaching
+for files that are not fully copied into cache,
+.SH EXAMPLES
+.TP
+.B $ lfs pcc state /mnt/lustre/file
+Show the PCC cache state of
+.BR file .
+.TP
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-pcc (1),
+.BR lfs-pcc-detach (1),
+.BR lfs-pcc-state (1),
+.BR lctl-pcc (8),
+.BR llapi_pcc_attach (3)

@@ -280,11 +280,11 @@ int llapi_pcc_detach_fd(int fd, __u32 flags)
 int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
 			enum lu_pcc_detach_flags flags)
 {
-	int rc;
 	struct lu_pcc_detach_fid detach = {
 		.pccd_fid = *fid,
 		.pccd_flags = flags,
 	};
+	int rc;
 
 	rc = ioctl(dirfd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	return rc ? -errno : 0;

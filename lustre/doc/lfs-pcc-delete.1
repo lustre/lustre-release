@@ -1,0 +1,17 @@
+.TH LFS-PCC-DELETE 1 2019-04-15 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs pcc delete \- delete PCC component from file
+.SH SYNOPSIS
+.BR "lfs pcc delete" \fIFILE [...]
+.SH DESCRIPTION
+Delete PCC component from specified
+.IR FILE (s).
+This will remove the cached file from all connected clients, and
+allow the file to be accessed by older clients that do not have
+PCC support.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-pcc (1),
+.BR lfs-pcc-attach (1),
+.BR lfs-pcc-detach (1),
+.BR lctl-pcc (8)
