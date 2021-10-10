@@ -647,6 +647,25 @@ AC_SUBST(GNICPPFLAGS)
 AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
+# LN_CONFIG_STRSCPY_EXISTS
+#
+# If strscpy exists, prefer it over strlcpy
+#
+AC_DEFUN([LN_CONFIG_STRSCPY_EXISTS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([kernel strscpy is available],
+strscpy_exists, [
+	#include <linux/string.h>
+],[
+	strscpy((char *)NULL, (const char *)NULL, 0);
+],[
+	AC_DEFINE(HAVE_STRSCPY, 1,
+		[kernel strscpy is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_CONFIG_STRSCPY_EXISTS
+
 # LN_CONFIG_SOCK_CREATE_KERN
 #
 # 4.x sock_create_kern() added a first parameter as 'struct net *'
@@ -873,6 +892,7 @@ AC_MSG_NOTICE([LNet kernel checks
 LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_GNILND
+LN_CONFIG_STRSCPY_EXISTS
 # 3.10
 LN_EXPORT_KMAP_TO_PAGE
 # 3.15
