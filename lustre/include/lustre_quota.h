@@ -196,6 +196,10 @@ void qsd_op_end(const struct lu_env *, struct qsd_instance *,
 		struct lquota_trans *);
 void qsd_op_adjust(const struct lu_env *, struct qsd_instance *,
 		   union lquota_id *, int);
+int qsd_transfer(const struct lu_env *env, struct qsd_instance *qsd,
+		 struct lquota_trans *trans, unsigned int qtype,
+		 u64 orig_id, u64 new_id, u64 bspace,
+		 struct lquota_id_info *qi);
 int qsd_reserve_or_free_quota(const struct lu_env *env,
 			      struct qsd_instance *qsd,
 			      struct lquota_id_info *qi);

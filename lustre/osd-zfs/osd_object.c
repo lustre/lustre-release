@@ -1048,67 +1048,6 @@ out:
 	return rc;
 }
 
-/* Simple wrapper on top of qsd API which implement quota transfer for osd
- * setattr needs. As a reminder, only the root user can change ownership of
- * a file, that's why EDQUOT & EINPROGRESS errors are discarded */
-static inline int qsd_transfer(const struct lu_env *env,
-			       struct qsd_instance *qsd,
-			       struct lquota_trans *trans, int qtype,
-			       __u64 orig_id, __u64 new_id, __u64 bspace,
-			       struct lquota_id_info *qi)
-{
-	int	rc;
-
-	if (unlikely(qsd == NULL))
-		return 0;
-
-	LASSERT(qtype >= 0 && qtype < LL_MAXQUOTAS);
-	qi->lqi_type = qtype;
-
-	/* inode accounting */
-	qi->lqi_is_blk = false;
-
-	/* one more inode for the new owner ... */
-	qi->lqi_id.qid_uid = new_id;
-	qi->lqi_space      = 1;
-	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
-		rc = 0;
-	if (rc)
-		return rc;
-
-	/* and one less inode for the current id */
-	qi->lqi_id.qid_uid = orig_id;;
-	qi->lqi_space      = -1;
-	/* can't get EDQUOT when reducing usage */
-	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EINPROGRESS)
-		rc = 0;
-	if (rc)
-		return rc;
-
-	/* block accounting */
-	qi->lqi_is_blk = true;
-
-	/* more blocks for the new owner ... */
-	qi->lqi_id.qid_uid = new_id;
-	qi->lqi_space      = bspace;
-	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
-		rc = 0;
-	if (rc)
-		return rc;
-
-	/* and finally less blocks for the current owner */
-	qi->lqi_id.qid_uid = orig_id;
-	qi->lqi_space      = -bspace;
-	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	/* can't get EDQUOT when reducing usage */
-	if (rc == -EINPROGRESS)
-		rc = 0;
-	return rc;
-}
-
 static int osd_declare_attr_set(const struct lu_env *env,
 				struct dt_object *dt,
 				const struct lu_attr *attr,
@@ -1172,66 +1111,63 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		       attr->la_uid, attr->la_gid, bspace, blksize);
 	}
 	/* to preserve locking order - qsd_transfer() may need to flush
-	 * currently running transaction when we're out of quota. */
+	 * currently running transaction when we're out of quota.
+	 */
 	up_read(&obj->oo_guard);
 
-	if (attr && attr->la_valid & LA_UID) {
-		/* quota enforcement for user */
-		if (attr->la_uid != obj->oo_attr.la_uid) {
-			rc = qsd_transfer(env, osd_def_qsd(osd),
-					  &oh->ot_quota_trans, USRQUOTA,
-					  obj->oo_attr.la_uid, attr->la_uid,
-					  bspace, &info->oti_qi);
-			if (rc)
-				GOTO(out, rc);
-		}
+	/* quota enforcement for user */
+	if (attr && attr->la_valid & LA_UID &&
+	    attr->la_uid != obj->oo_attr.la_uid) {
+		rc = qsd_transfer(env, osd_def_qsd(osd),
+				  &oh->ot_quota_trans, USRQUOTA,
+				  obj->oo_attr.la_uid, attr->la_uid,
+				  bspace, &info->oti_qi);
+		if (rc)
+			GOTO(out, rc);
 	}
-	if (attr && attr->la_valid & LA_GID) {
-		/* quota enforcement for group */
-		if (attr->la_gid != obj->oo_attr.la_gid) {
-			rc = qsd_transfer(env, osd_def_qsd(osd),
-					  &oh->ot_quota_trans, GRPQUOTA,
-					  obj->oo_attr.la_gid, attr->la_gid,
-					  bspace, &info->oti_qi);
-			if (rc)
-				GOTO(out, rc);
-		}
+
+	/* quota enforcement for group */
+	if (attr && attr->la_valid & LA_GID &&
+	    attr->la_gid != obj->oo_attr.la_gid) {
+		rc = qsd_transfer(env, osd_def_qsd(osd),
+				  &oh->ot_quota_trans, GRPQUOTA,
+				  obj->oo_attr.la_gid, attr->la_gid,
+				  bspace, &info->oti_qi);
+		if (rc)
+			GOTO(out, rc);
 	}
 #ifdef ZFS_PROJINHERIT
-	if (attr && attr->la_valid & LA_PROJID) {
-		/* quota enforcement for project */
-		if (attr->la_projid != obj->oo_attr.la_projid) {
-			if (!osd->od_projectused_dn)
-				GOTO(out, rc = -EOPNOTSUPP);
+	/* quota enforcement for project */
+	if (attr && attr->la_valid & LA_PROJID &&
+	    attr->la_projid != obj->oo_attr.la_projid) {
+		if (!osd->od_projectused_dn)
+			GOTO(out, rc = -EOPNOTSUPP);
 
-			if (!projid_valid(make_kprojid(&init_user_ns, attr->la_projid)))
-				GOTO(out, rc = -EINVAL);
+		/* Usually, if project quota is upgradable for the
+		 * device, then the upgrade will be done before or when
+		 * mount the device. So when we come here, this project
+		 * should have project ID attribute already (that is
+		 * zero by default).  Otherwise, there was something
+		 * wrong during the former upgrade, let's return failure
+		 * to report that.
+		 *
+		 * Please note that, different from other attributes,
+		 * you can NOT simply set the project ID attribute under
+		 * such case, because adding (NOT change) project ID
+		 * attribute needs to change the object's attribute
+		 * layout to match zfs backend quota accounting
+		 * requirement.
+		 */
+		if (unlikely(!obj->oo_with_projid))
+			GOTO(out, rc = -ENXIO);
 
-			/* Usually, if project quota is upgradable for the
-			 * device, then the upgrade will be done before or when
-			 * mount the device. So when we come here, this project
-			 * should have project ID attribute already (that is
-			 * zero by default).  Otherwise, there was something
-			 * wrong during the former upgrade, let's return failure
-			 * to report that.
-			 *
-			 * Please note that, different from other attributes,
-			 * you can NOT simply set the project ID attribute under
-			 * such case, because adding (NOT change) project ID
-			 * attribute needs to change the object's attribute
-			 * layout to match zfs backend quota accounting
-			 * requirement. */
-			if (unlikely(!obj->oo_with_projid))
-				GOTO(out, rc = -ENXIO);
-
-			rc = qsd_transfer(env, osd_def_qsd(osd),
-					  &oh->ot_quota_trans, PRJQUOTA,
-					  obj->oo_attr.la_projid,
-					  attr->la_projid, bspace,
-					  &info->oti_qi);
-			if (rc)
-				GOTO(out, rc);
-		}
+		rc = qsd_transfer(env, osd_def_qsd(osd),
+				  &oh->ot_quota_trans, PRJQUOTA,
+				  obj->oo_attr.la_projid,
+				  attr->la_projid, bspace,
+				  &info->oti_qi);
+		if (rc)
+			GOTO(out, rc);
 	}
 #endif
 out:

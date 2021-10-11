@@ -1136,6 +1136,72 @@ void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
 }
 EXPORT_SYMBOL(qsd_op_end);
 
+/* Simple wrapper on top of qsd API which implement quota transfer for osd
+ * setattr needs. As a reminder, only the root user can change ownership of
+ * a file, that's why EDQUOT & EINPROGRESS errors are discarded
+ */
+int qsd_transfer(const struct lu_env *env, struct qsd_instance *qsd,
+		 struct lquota_trans *trans, unsigned int qtype,
+		 u64 orig_id, u64 new_id, u64 bspace,
+		 struct lquota_id_info *qi)
+{
+	int rc;
+
+	if (unlikely(!qsd))
+		return 0;
+
+	LASSERT(qtype < LL_MAXQUOTAS);
+	if (qtype == PRJQUOTA)
+		if (!projid_valid(make_kprojid(&init_user_ns, new_id)))
+			return -EINVAL;
+
+	qi->lqi_type = qtype;
+
+	/* inode accounting */
+	qi->lqi_is_blk = false;
+
+	/* one more inode for the new owner ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space = 1;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* and one less inode for the current id */
+	qi->lqi_id.qid_uid = orig_id;
+	qi->lqi_space = -1;
+	/* can't get EDQUOT when reducing usage */
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* block accounting */
+	qi->lqi_is_blk = true;
+
+	/* more blocks for the new owner ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space = bspace;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* and finally less blocks for the current owner */
+	qi->lqi_id.qid_uid = orig_id;
+	qi->lqi_space = -bspace;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	/* can't get EDQUOT when reducing usage */
+	if (rc == -EINPROGRESS)
+		rc = 0;
+	return rc;
+}
+EXPORT_SYMBOL(qsd_transfer);
+
 /**
  * Trigger pre-acquire/release if necessary.
  * It's only used by ldiskfs osd so far. When unlink a file in ldiskfs, the
