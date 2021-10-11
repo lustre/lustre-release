@@ -1967,8 +1967,11 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 		 * immediately.
 		 */
 		body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-		if (body->mbo_valid & OBD_MD_FLNLINK)
+		if (body->mbo_valid & OBD_MD_FLNLINK) {
+			spin_lock(&dchild->d_inode->i_lock);
 			set_nlink(dchild->d_inode, body->mbo_nlink);
+			spin_unlock(&dchild->d_inode->i_lock);
+		}
 	}
 
 	ptlrpc_req_finished(request);
@@ -2055,8 +2058,11 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 	 * the link count so the inode can be freed immediately.
 	 */
 	body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-	if (body->mbo_valid & OBD_MD_FLNLINK)
+	if (body->mbo_valid & OBD_MD_FLNLINK) {
+		spin_lock(&dchild->d_inode->i_lock);
 		set_nlink(dchild->d_inode, body->mbo_nlink);
+		spin_unlock(&dchild->d_inode->i_lock);
+	}
 
 	ll_update_times(request, dir);
 

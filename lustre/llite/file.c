@@ -5150,7 +5150,10 @@ static int ll_merge_md_attr(struct inode *inode)
 	if (rc != 0)
 		RETURN(rc);
 
+	spin_lock(&inode->i_lock);
 	set_nlink(inode, attr.cat_nlink);
+	spin_unlock(&inode->i_lock);
+
 	inode->i_blocks = attr.cat_blocks;
 	i_size_write(inode, attr.cat_size);
 

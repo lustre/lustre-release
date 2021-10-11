@@ -2533,8 +2533,11 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		inode->i_gid = make_kgid(&init_user_ns, body->mbo_gid);
 	if (body->mbo_valid & OBD_MD_FLPROJID)
 		lli->lli_projid = body->mbo_projid;
-	if (body->mbo_valid & OBD_MD_FLNLINK)
+	if (body->mbo_valid & OBD_MD_FLNLINK) {
+		spin_lock(&inode->i_lock);
 		set_nlink(inode, body->mbo_nlink);
+		spin_unlock(&inode->i_lock);
+	}
 	if (body->mbo_valid & OBD_MD_FLRDEV)
 		inode->i_rdev = old_decode_dev(body->mbo_rdev);
 
