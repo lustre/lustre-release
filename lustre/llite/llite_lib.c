@@ -1599,6 +1599,8 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 
+	ENTRY;
+
 	if (!md->default_lmv) {
 		/* clear default lsm */
 		if (lli->lli_default_lsm_md) {
@@ -1609,7 +1611,7 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 			}
 			up_write(&lli->lli_lsm_sem);
 		}
-		return;
+		RETURN_EXIT;
 	}
 
 	if (lli->lli_default_lsm_md) {
@@ -1618,7 +1620,7 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 		if (lli->lli_default_lsm_md &&
 		    lsm_md_eq(lli->lli_default_lsm_md, md->default_lmv)) {
 			up_read(&lli->lli_lsm_sem);
-			return;
+			RETURN_EXIT;
 		}
 		up_read(&lli->lli_lsm_sem);
 	}
@@ -1630,6 +1632,7 @@ static void ll_update_default_lsm_md(struct inode *inode, struct lustre_md *md)
 	lsm_md_dump(D_INODE, md->default_lmv);
 	md->default_lmv = NULL;
 	up_write(&lli->lli_lsm_sem);
+	RETURN_EXIT;
 }
 
 static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)

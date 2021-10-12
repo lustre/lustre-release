@@ -5714,6 +5714,37 @@ test_111() {
 }
 run_test 111 "A racy rename/link an open file should not cause fs corruption"
 
+test_112() {
+	(( MDSCOUNT >= 2 )) ||
+		skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.14.54) )) ||
+		skip "Need server version at least 2.14.54"
+
+	local rr
+	local count
+
+	rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -n1)
+	rr=${rr%%%}
+	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$rr > /dev/null"
+
+	mkdir -p $DIR1/$tdir/s1/s2 || error "mkdir s2 failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/s1/s2/s3 || error "mkdir s3 failed"
+	$LFS setdirstripe -D -i -1 --max-inherit-rr=0 $DIR1/$tdir/s1/s2/s3 ||
+		error "setdirstripe s3 failed"
+	$LCTL set_param lmv.*.qos_threshold_rr=90
+	mkdir $DIR2/$tdir/s1/s2/s3/d{1..64}
+	count=$($LFS getstripe -m $DIR2/$tdir/s1/s2/s3/d* | grep ^0 | wc -l)
+	(( count == 64 )) || error "only $count subdirs created on MDT0"
+
+	$LFS setdirstripe -D -i -1 --max-inherit-rr=3 $DIR1/$tdir/s1/s2/s3 ||
+		error "setdirstripe s3 failed"
+	mkdir $DIR2/$tdir/s1/s2/s3/s{1..64}
+	count=$($LFS getstripe -m $DIR2/$tdir/s1/s2/s3/s* | grep ^0 | wc -l)
+	(( count == 64 / MDSCOUNT )) || error "$count subdirs created on MDT0"
+}
+run_test 112 "update max-inherit in default LMV"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

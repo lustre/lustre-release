@@ -93,6 +93,8 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 	    lsm1->lsm_md_master_mdt_index !=
 				lsm2->lsm_md_master_mdt_index ||
 	    lsm1->lsm_md_hash_type != lsm2->lsm_md_hash_type ||
+	    lsm1->lsm_md_max_inherit != lsm2->lsm_md_max_inherit ||
+	    lsm1->lsm_md_max_inherit_rr != lsm2->lsm_md_max_inherit_rr ||
 	    lsm1->lsm_md_layout_version !=
 				lsm2->lsm_md_layout_version ||
 	    lsm1->lsm_md_migrate_offset !=
@@ -109,6 +111,12 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 				       &lsm2->lsm_md_oinfo[idx].lmo_fid))
 				return false;
 		}
+	} else if (lsm1->lsm_md_magic == LMV_USER_MAGIC_SPECIFIC) {
+		for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
+			if (lsm1->lsm_md_oinfo[idx].lmo_mds !=
+			    lsm2->lsm_md_oinfo[idx].lmo_mds)
+				return false;
+		}
 	}
 
 	return true;
@@ -123,13 +131,13 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 	 * terminated string so only print LOV_MAXPOOLNAME bytes.
 	 */
 	CDEBUG(mask,
-	       "magic %#x stripe count %d master mdt %d hash type %s:%#x max inherit %hhu version %d migrate offset %d migrate hash %#x pool %.*s\n",
+	       "magic %#x stripe count %d master mdt %d hash type %s:%#x max-inherit %hhu max-inherit-rr %hhu version %d migrate offset %d migrate hash %#x pool %.*s\n",
 	       lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
 	       lsm->lsm_md_master_mdt_index,
 	       valid_hash ? "invalid hash" :
 			    mdt_hash_name[lsm->lsm_md_hash_type & (LMV_HASH_TYPE_MAX - 1)],
 	       lsm->lsm_md_hash_type, lsm->lsm_md_max_inherit,
-	       lsm->lsm_md_layout_version,
+	       lsm->lsm_md_max_inherit_rr, lsm->lsm_md_layout_version,
 	       lsm->lsm_md_migrate_offset, lsm->lsm_md_migrate_hash,
 	       LOV_MAXPOOLNAME, lsm->lsm_md_pool_name);
 
