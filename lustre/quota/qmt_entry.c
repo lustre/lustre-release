@@ -652,6 +652,33 @@ __u64 qmt_alloc_expand(struct lquota_entry *lqe, __u64 granted, __u64 spare)
 	RETURN(0);
 }
 
+static inline void
+qmt_adjust_qunit_set_revoke(const struct lu_env *env, struct lquota_entry *lqe,
+			    unsigned long least_qunit)
+{
+	struct lquota_entry *lqe2;
+	time64_t min = 0;
+	int i;
+
+	if (qti_lqes_cnt(env) <= 1)
+		return;
+
+	for (i = 0; i < qti_lqes_cnt(env); i++) {
+		lqe2 = qti_lqes(env)[i];
+		if ((lqe2->lqe_qunit == least_qunit) && lqe2->lqe_revoke_time) {
+			if (!min) {
+				min = lqe2->lqe_revoke_time;
+				continue;
+			}
+			min = lqe2->lqe_revoke_time < min ?
+				lqe2->lqe_revoke_time : min;
+		}
+	}
+
+	lqe->lqe_revoke_time = min;
+}
+
+
 /*
  * Adjust qunit size according to quota limits and total granted count.
  * The caller must have locked the lqe.
@@ -771,10 +798,17 @@ done:
 	/* reset revoke time */
 	lqe->lqe_revoke_time = 0;
 
-	if (lqe->lqe_qunit >= qunit &&
-	    (lqe->lqe_qunit == pool->qpi_least_qunit)) {
-		/* initial qunit value is the smallest one */
-		lqe->lqe_revoke_time = ktime_get_seconds();
+	if (lqe->lqe_qunit == pool->qpi_least_qunit) {
+		if (lqe->lqe_qunit >= qunit)
+			/* initial qunit value is the smallest one */
+			lqe->lqe_revoke_time = ktime_get_seconds();
+		/* If there are several lqes and lqe_revoke_time is set for
+		 * some of them, it means appropriate OSTs have been already
+		 * notified with the least qunit and there is no chance to
+		 * free more space. Find an lqe with the minimum(earliest)
+		 * revoke_time and set this time to the current one.
+		 */
+		qmt_adjust_qunit_set_revoke(env, lqe, pool->qpi_least_qunit);
 	}
 	RETURN(need_reseed);
 }
