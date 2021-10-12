@@ -359,48 +359,6 @@ static enum resync_errors resync_parse_error(const char *err)
 	return -1;
 }
 
-ssize_t mirror_resync_one(int fd, struct llapi_layout *layout,
-			  uint32_t dst, uint64_t start, uint64_t end)
-{
-	uint64_t mirror_end = 0;
-	ssize_t result = 0;
-	uint64_t count;
-
-	if (end == OBD_OBJECT_EOF)
-		count = OBD_OBJECT_EOF;
-	else
-		count = end - start;
-
-	while (count > 0) {
-		uint32_t src;
-		uint64_t to_copy;
-		ssize_t copied;
-
-		src = llapi_mirror_find(layout, start, end, &mirror_end);
-		if (src == 0)
-			return -ENOENT;
-
-		if (mirror_end == OBD_OBJECT_EOF)
-			to_copy = count;
-		else
-			to_copy = MIN(count, mirror_end - start);
-
-		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
-		if (copied < 0)
-			return copied;
-
-		result += copied;
-		if (copied < to_copy) /* end of file */
-			break;
-
-		if (count != OBD_OBJECT_EOF)
-			count -= copied;
-		start += copied;
-	}
-
-	return result;
-}
-
 static void mirror_resync(int argc, char *argv[])
 {
 	const char *fname;
@@ -416,6 +374,8 @@ static void mirror_resync(int argc, char *argv[])
 	struct llapi_resync_comp comp_array[1024] = { { 0 } };
 	size_t comp_size = 0;
 	uint32_t flr_state;
+	uint64_t start;
+	uint64_t end;
 
 	opterr = 0;
 	while ((c = getopt(argc, argv, "e:d:")) != -1) {
@@ -480,51 +440,27 @@ static void mirror_resync(int argc, char *argv[])
 
 	printf("%s: found %zd stale components\n", fname, comp_size);
 
-	idx = 0;
-	while (idx < comp_size) {
-		ssize_t res;
-		uint64_t end;
-		uint32_t mirror_id;
-		int i;
-
-		rc = llapi_lease_check(fd);
-		syserr(rc != LL_LEASE_WRLCK, "lost lease lock");
-
-		mirror_id = comp_array[idx].lrc_mirror_id;
-		end = comp_array[idx].lrc_end;
-
-		printf("%s: resyncing mirror: %u, components: %u ",
-			fname, mirror_id, comp_array[idx].lrc_id);
-
-		for (i = idx + 1; i < comp_size; i++) {
-			if (mirror_id != comp_array[i].lrc_mirror_id ||
-			    end != comp_array[i].lrc_start)
-				break;
-
-			printf("%u ", comp_array[i].lrc_id);
-			end = comp_array[i].lrc_end;
-		}
-		printf("\b\n");
-
-		res = mirror_resync_one(fd, layout, mirror_id,
-					comp_array[idx].lrc_start, end);
-		if (res > 0) {
-			int j;
-
-			printf("components synced: ");
-			for (j = idx; j < i; j++) {
-				comp_array[j].lrc_synced = true;
-				printf("%u ", comp_array[j].lrc_id);
-			}
-			printf("\n");
-		}
-
-		if (res < 0)
-			free(ioc);
-		syserrx(res < 0, "llapi_mirror_copy_many");
-
-		idx = i;
+	/* get the read range [start, end) */
+	start = comp_array[0].lrc_start;
+	end = comp_array[0].lrc_end;
+	for (idx = 1; idx < comp_size; idx++) {
+		if (comp_array[idx].lrc_start < start)
+			start = comp_array[idx].lrc_start;
+		if (end < comp_array[idx].lrc_end)
+			end = comp_array[idx].lrc_end;
 	}
+
+	rc = llapi_lease_check(fd);
+	if (rc != LL_LEASE_WRLCK) {
+		free(ioc);
+		syserr(rc != LL_LEASE_WRLCK, "lost lease lock");
+	}
+
+	rc = llapi_mirror_resync_many(fd, layout, comp_array, comp_size, start,
+				      end);
+	if (rc < 0)
+		free(ioc);
+	syserrx(rc < 0, "llapi_mirror_resync_many");
 
 	/* prepare ioc for lease put */
 	ioc->lil_mode = LL_LEASE_UNLCK;
