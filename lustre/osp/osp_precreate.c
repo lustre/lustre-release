@@ -81,6 +81,8 @@ static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 	struct osp_device *d = cfs_from_timer(d, data, opd_statfs_timer);
 
 	LASSERT(d);
+	/* invalidate statfs data so osp_precreate_thread() can refresh */
+	d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(), NSEC_PER_SEC);
 	if (d->opd_pre_task)
 		wake_up(&d->opd_pre_waitq);
 }
