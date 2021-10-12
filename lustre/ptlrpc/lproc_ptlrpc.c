@@ -597,20 +597,39 @@ again:
 				 * sanity-check the values we get.
 				 */
 			} else {
-				LASSERT(strncmp(infos[pol_idx].pi_name,
-						tmp.pi_name,
-						NRS_POL_NAME_MAX) == 0);
-				LASSERT(strncmp(infos[pol_idx].pi_arg,
-						tmp.pi_arg,
-						sizeof(tmp.pi_arg)) == 0);
+				if (strncmp(infos[pol_idx].pi_name,
+					    tmp.pi_name,
+					    NRS_POL_NAME_MAX) != 0) {
+					spin_unlock(&nrs->nrs_lock);
+					rc = -EINVAL;
+					CERROR("%s: failed to check pi_name: rc = %d\n",
+					       svc->srv_thread_name, rc);
+					GOTO(out, rc);
+				}
+				if (strncmp(infos[pol_idx].pi_arg,
+					    tmp.pi_arg,
+					    sizeof(tmp.pi_arg)) != 0) {
+					spin_unlock(&nrs->nrs_lock);
+					rc = -EINVAL;
+					CERROR("%s: failed to check pi_arg: rc = %d\n",
+					       svc->srv_thread_name, rc);
+					GOTO(out, rc);
+				}
 				/**
-				 * Not asserting ptlrpc_nrs_pol_info::pi_state,
+				 * Not checking ptlrpc_nrs_pol_info::pi_state,
 				 * because it may be different between
 				 * instances of the same policy in different
 				 * service partitions.
 				 */
-				LASSERT(infos[pol_idx].pi_fallback ==
-					tmp.pi_fallback);
+
+				if (infos[pol_idx].pi_fallback !=
+				    tmp.pi_fallback) {
+					spin_unlock(&nrs->nrs_lock);
+					rc = -EINVAL;
+					CERROR("%s: failed to check pi_fallback: rc = %d\n",
+					       svc->srv_thread_name, rc);
+					GOTO(out, rc);
+				}
 			}
 
 			infos[pol_idx].pi_req_queued += tmp.pi_req_queued;
