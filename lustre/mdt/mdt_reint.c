@@ -935,22 +935,56 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		if (ma->ma_attr.la_valid != 0)
 			GOTO(out_put, rc = -EPROTO);
 
+		lh = &info->mti_lh[MDT_LH_PARENT];
+		mdt_lock_reg_init(lh, LCK_PW);
+
 		if (ma->ma_valid & MA_LOV) {
 			buf->lb_buf = ma->ma_lmm;
 			buf->lb_len = ma->ma_lmm_size;
 			name = XATTR_NAME_LOV;
 		} else {
 			struct lmv_user_md *lmu = &ma->ma_lmv->lmv_user_md;
+			struct lu_fid *pfid = &info->mti_tmp_fid1;
+			struct lu_name *pname = &info->mti_name;
+			const char dotdot[] = "..";
+			struct mdt_object *pobj;
 
 			buf->lb_buf = lmu;
 			buf->lb_len = ma->ma_lmv_size;
 			name = XATTR_NAME_DEFAULT_LMV;
-			/* force client to update dir default layout */
-			lockpart |= MDS_INODELOCK_LOOKUP;
-		}
 
-		lh = &info->mti_lh[MDT_LH_PARENT];
-		mdt_lock_reg_init(lh, LCK_PW);
+			if (fid_is_root(rr->rr_fid1)) {
+				lockpart |= MDS_INODELOCK_LOOKUP;
+			} else {
+				/* force client to update dir default layout */
+				fid_zero(pfid);
+				pname->ln_name = dotdot;
+				pname->ln_namelen = sizeof(dotdot);
+				rc = mdo_lookup(info->mti_env,
+						mdt_object_child(mo), pname,
+						pfid, NULL);
+				if (rc)
+					GOTO(out_put, rc);
+
+				pobj = mdt_object_find(info->mti_env, mdt,
+						       pfid);
+				if (IS_ERR(pobj))
+					GOTO(out_put, rc = PTR_ERR(pobj));
+
+				if (mdt_object_remote(pobj))
+					rc = mdt_remote_object_lock(info, pobj,
+						mdt_object_fid(mo),
+						&lh->mlh_rreg_lh, LCK_EX,
+						MDS_INODELOCK_LOOKUP, false);
+				else
+					lockpart |= MDS_INODELOCK_LOOKUP;
+
+				mdt_object_put(info->mti_env, pobj);
+
+				if (rc)
+					GOTO(out_put, rc);
+			}
+		}
 
 		rc = mdt_object_lock(info, mo, lh, lockpart);
 		if (rc != 0)
