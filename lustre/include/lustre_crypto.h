@@ -109,6 +109,13 @@ static inline int critical_decode(const u8 *src, int len, char *dst)
 #define __FS_HAS_ENCRYPTION 1
 #include <linux/fscrypt.h>
 
+#define LLCRYPT_FNAME_DIGEST_SIZE	FSCRYPT_FNAME_DIGEST_SIZE
+#define LLCRYPT_FNAME_DIGEST		FSCRYPT_FNAME_DIGEST
+#define llcrypt_name			fscrypt_name
+#define llcrypt_str			fscrypt_str
+#define LLTR_INIT			FSTR_INIT
+#define LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE \
+	FSCRYPT_FNAME_MAX_UNDIGESTED_SIZE
 #define llcrypt_operations	fscrypt_operations
 #define llcrypt_symlink_data	fscrypt_symlink_data
 #define llcrypt_dummy_context_enabled(inode) \
@@ -161,6 +168,8 @@ static inline int critical_decode(const u8 *src, int len, char *dst)
 	fscrypt_prepare_lookup(dir, dentry, fname)
 #define llcrypt_encrypt_symlink(inode, target, len, disk_link) \
 	fscrypt_encrypt_symlink(inode, target, len, disk_link)
+#define __llcrypt_encrypt_symlink(inode, target, len, disk_link) \
+	__fscrypt_encrypt_symlink(inode, target, len, disk_link)
 #define llcrypt_prepare_symlink(dir, target, len, max_len, disk_link)	\
 	fscrypt_prepare_symlink(dir, target, len, max_len, disk_link)
 #define llcrypt_get_symlink(inode, caddr, max_size, done) \
