@@ -890,8 +890,6 @@ lnet_health_check(struct lnet_msg *msg)
 		 * faster recovery.
 		 */
 		lnet_inc_healthv(&ni->ni_healthv, lnet_health_sensitivity);
-		lnet_net_lock(0);
-		ni->ni_ping_count = 0;
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
 		 * case. Only increment the peer's health if we're
@@ -901,7 +899,9 @@ lnet_health_check(struct lnet_msg *msg)
 		 * as indication that the router is fully healthy.
 		 */
 		if (lpni && msg->msg_rx_committed) {
+			lnet_net_lock(0);
 			lpni->lpni_ping_count = 0;
+			ni->ni_ping_count = 0;
 			/*
 			 * If we're receiving a message from the router or
 			 * I'm a router, then set that lpni's health to
@@ -927,8 +927,8 @@ lnet_health_check(struct lnet_msg *msg)
 						&the_lnet.ln_mt_peerNIRecovq,
 						ktime_get_seconds());
 			}
+			lnet_net_unlock(0);
 		}
-		lnet_net_unlock(0);
 
 		/* we can finalize this message */
 		return -1;
