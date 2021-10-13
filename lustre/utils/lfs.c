@@ -6767,12 +6767,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 			xattr = optarg;
 			break;
 		case 'X':
-			if (!default_stripe) {
-				fprintf(stderr,
-					"%s %s: '--max-inherit' must be specified with '-D'\n",
-					progname, argv[0]);
-				return CMD_HELP;
-			}
 			errno = 0;
 			max_inherit = strtol(optarg, &end, 10);
 			if (errno != 0 || *end != '\0' || max_inherit < -2) {
@@ -6944,12 +6938,12 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
+	if (max_inherit == LAYOUT_INHERIT_UNSET)
+		max_inherit = LMV_INHERIT_DEFAULT;
+	param->lsp_max_inherit = max_inherit;
 	if (default_stripe) {
-		if (max_inherit == LAYOUT_INHERIT_UNSET)
-			max_inherit = LMV_INHERIT_DEFAULT;
 		if (max_inherit_rr == LAYOUT_INHERIT_UNSET)
 			max_inherit_rr = LMV_INHERIT_RR_DEFAULT;
-		param->lsp_max_inherit = max_inherit;
 		param->lsp_max_inherit_rr = max_inherit_rr;
 	}
 	if (strcmp(argv[0], "mkdir") == 0)

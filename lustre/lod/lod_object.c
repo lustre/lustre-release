@@ -4364,6 +4364,12 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 			RETURN(rc);
 	}
 
+	/* ldo_def_striping is not allocated, clear after use, in case directory
+	 * layout is changed later.
+	 */
+	if (!declare)
+		lo->ldo_def_striping = NULL;
+
 	RETURN(0);
 }
 
@@ -5519,18 +5525,8 @@ static void lod_ah_init(const struct lu_env *env,
 			RETURN_EXIT;
 		}
 
-		/*
-		 * If parent object is not root directory,
-		 * then get default striping from parent object.
-		 */
-		if (likely(lp != NULL)) {
+		if (likely(lp != NULL))
 			lod_get_default_striping(env, lp, lds);
-			/* inherit default striping except ROOT */
-			if ((lds->lds_def_striping_set ||
-			     lds->lds_dir_def_striping_set) &&
-			    !fid_is_root(lod_object_fid(lp)))
-				lc->ldo_def_striping = lds;
-		}
 
 		/* It should always honour the specified stripes */
 		/* Note: old client (< 2.7)might also do lfs mkdir, whose EA
@@ -5551,7 +5547,57 @@ static void lod_ah_init(const struct lu_env *env,
 				lc->ldo_dir_stripe_count,
 				(int)lc->ldo_dir_stripe_offset,
 				lc->ldo_dir_hash_type);
+
+			if (d->lod_mdt_descs.ltd_lmv_desc.ld_active_tgt_count &&
+			    lc->ldo_dir_stripe_count < 2 &&
+			    lum1->lum_max_inherit != LMV_INHERIT_NONE) {
+				/* when filesystem-wide default LMV is set, dirs
+				 * will be created on MDT by space usage, but if
+				 * dir is created with "lfs mkdir -c 1 ...", its
+				 * subdirs should be kept on the same MDT. To
+				 * guarantee this, set default LMV for such dir.
+				 */
+				lds->lds_dir_def_stripe_count =
+					le32_to_cpu(lum1->lum_stripe_count);
+				/* if "-1" stripe offset is set, save current
+				 * MDT index in default LMV.
+				 */
+				if (le32_to_cpu(lum1->lum_stripe_offset) ==
+				    LMV_OFFSET_DEFAULT)
+					lds->lds_dir_def_stripe_offset =
+						lod2lu_dev(d)->ld_site->ld_seq_site->ss_node_id;
+				else
+					lds->lds_dir_def_stripe_offset =
+						le32_to_cpu(lum1->lum_stripe_offset);
+				lds->lds_dir_def_hash_type =
+					le32_to_cpu(lum1->lum_hash_type);
+				lds->lds_dir_def_max_inherit =
+					lum1->lum_max_inherit;
+				/* it will be decreased by 1 later in setting */
+				if (lum1->lum_max_inherit >= LMV_INHERIT_END &&
+				    lum1->lum_max_inherit < LMV_INHERIT_MAX)
+					lds->lds_dir_def_max_inherit++;
+				lds->lds_dir_def_max_inherit_rr =
+					lum1->lum_max_inherit_rr;
+				lds->lds_dir_def_striping_set = 1;
+				/* don't inherit LOV from ROOT */
+				if (lds->lds_def_striping_set &&
+				    fid_is_root(lod_object_fid(lp)))
+					lds->lds_def_striping_set = 0;
+				lc->ldo_def_striping = lds;
+			} else if (lds->lds_def_striping_set &&
+				   !fid_is_root(lod_object_fid(lp))) {
+				/* don't inherit default LMV for "lfs mkdir" */
+				lds->lds_dir_def_striping_set = 0;
+				lc->ldo_def_striping = lds;
+			}
 		} else {
+			/* inherit default striping except ROOT */
+			if ((lds->lds_def_striping_set ||
+			     lds->lds_dir_def_striping_set) &&
+			    !fid_is_root(lod_object_fid(lp)))
+				lc->ldo_def_striping = lds;
+
 			/* transfer defaults LMV to new directory */
 			lod_striping_from_default(lc, lds, child_mode);
 

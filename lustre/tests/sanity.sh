@@ -25081,10 +25081,9 @@ test_411() {
 run_test 411 "Slab allocation error with cgroup does not LBUG"
 
 test_412() {
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	if [ $MDS1_VERSION -lt $(version_code 2.10.55) ]; then
+	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.10.55) )) ||
 		skip "Need server version at least 2.10.55"
-	fi
 
 	$LFS mkdir -i $((MDSCOUNT - 1)),$((MDSCOUNT - 2)) $DIR/$tdir ||
 		error "mkdir failed"
@@ -25095,6 +25094,47 @@ test_412() {
 	local stripe_count=$($LFS getdirstripe -T $DIR/$tdir)
 	[ $stripe_count -eq 2 ] ||
 		error "expect 2 get $stripe_count"
+
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) || return 0
+
+	local index
+	local index2
+
+	# subdirs should be on the same MDT as parent
+	for i in $(seq 0 $((MDSCOUNT - 1))); do
+		$LFS mkdir -i $i $DIR/$tdir/mdt$i || error "mkdir mdt$i failed"
+		mkdir $DIR/$tdir/mdt$i/sub || error "mkdir sub failed"
+		index=$($LFS getstripe -m $DIR/$tdir/mdt$i/sub)
+		(( index == i )) || error "mdt$i/sub on MDT$index"
+	done
+
+	# stripe offset -1, ditto
+	for i in {1..10}; do
+		$LFS mkdir -i -1 $DIR/$tdir/qos$i || error "mkdir qos$i failed"
+		index=$($LFS getstripe -m $DIR/$tdir/qos$i)
+		mkdir $DIR/$tdir/qos$i/sub || error "mkdir sub failed"
+		index2=$($LFS getstripe -m $DIR/$tdir/qos$i/sub)
+		(( index == index2 )) ||
+			error "qos$i on MDT$index, sub on MDT$index2"
+	done
+
+	local testdir=$DIR/$tdir/inherit
+
+	$LFS mkdir -i 1 --max-inherit=3 $testdir || error "mkdir inherit failed"
+	# inherit 2 levels
+	for i in 1 2; do
+		testdir=$testdir/s$i
+		mkdir $testdir || error "mkdir $testdir failed"
+		index=$($LFS getstripe -m $testdir)
+		(( index == 1 )) ||
+			error "$testdir on MDT$index"
+	done
+
+	# not inherit any more
+	testdir=$testdir/s3
+	mkdir $testdir || error "mkdir $testdir failed"
+	getfattr -d -m dmv $testdir | grep dmv &&
+		error "default LMV set on $testdir" || true
 }
 run_test 412 "mkdir on specific MDTs"
 

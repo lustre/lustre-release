@@ -3414,13 +3414,14 @@ static inline void mdd_xattrs_fini(struct mdd_xattrs *xattrs)
 	lu_buf_free(&xattrs->mx_namebuf);
 }
 
-/* read xattrs into buf, but ignore LMA, LMV, and LINKEA if 'skip_linkea' is
- * set.
+/* read xattrs into buf, but skip LMA, LMV, LINKEA if 'skip_linkea' is
+ * set, and DMV if 'skip_dmv" is set.
  */
 static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 				   struct mdd_xattrs *xattrs,
 				   struct mdd_object *sobj,
-				   bool skip_linkea)
+				   bool skip_linkea,
+				   bool skip_dmv)
 {
 	struct mdd_xattr_entry *entry;
 	char *xname;
@@ -3458,6 +3459,10 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 
 		if (skip_linkea &&
 		    strcmp(XATTR_NAME_LINK, xname) == 0)
+			continue;
+
+		if (skip_dmv &&
+		    strcmp(XATTR_NAME_DEFAULT_LMV, xname) == 0)
 			continue;
 
 		xsize = mdo_xattr_get(env, sobj, &LU_BUF_NULL, xname);
@@ -4326,7 +4331,7 @@ static int mdd_migrate_object(const struct lu_env *env,
 	 * RPCs inside transaction.
 	 */
 	if (!spec->sp_migrate_nsonly) {
-		rc = mdd_xattrs_migrate_prep(env, &xattrs, sobj, false);
+		rc = mdd_xattrs_migrate_prep(env, &xattrs, sobj, true, true);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -4726,7 +4731,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 		}
 
 		if (!lmv_is_fixed(lmv))
-			rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, true);
+			rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, false,
+						     false);
 	}
 
 	handle = mdd_trans_create(env, mdd);
@@ -4816,6 +4822,8 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 
 	count = lum->lum_stripe_count;
 	lum->lum_stripe_count = 0;
+	/* don't set default LMV since it will become a striped dir  */
+	lum->lum_max_inherit = LMV_INHERIT_NONE;
 	mdd_object_make_hint(env, pobj, tobj, mlc->mlc_attr, mlc->mlc_spec,
 			     hint);
 	rc = mdd_declare_create(env, mdo2mdd(&pobj->mod_obj), pobj, tobj,
@@ -4992,7 +5000,7 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 
 	mdd_xattrs_init(&xattrs);
 	if (is_plain)
-		rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, true);
+		rc = mdd_xattrs_migrate_prep(env, &xattrs, obj, true, true);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))

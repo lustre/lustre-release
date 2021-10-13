@@ -10643,8 +10643,6 @@ mkdir_on_mdt() {
 	shift $((OPTIND - 1))
 
 	$LFS mkdir -i $mdt -c 1 $*
-	# setting default LMV in non-DNE system will cause sanity-quota 41 fail
-	((MDSCOUNT < 2)) || $LFS setdirstripe -D -i $mdt -c 1 $*
 }
 
 mkdir_on_mdt0() {
