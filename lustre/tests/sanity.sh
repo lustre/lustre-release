@@ -25434,7 +25434,8 @@ check_lfs_df() {
 	[ "$1" == "blocks" ] && inodes= || inodes="-i"
 
 	for count in {1..100}; do
-		do_rpc_nodes "$CLIENTS" cancel_lru_locks
+		do_nodes "$CLIENTS" \
+			$LCTL set_param ldlm.namespaces.*.lru_size=clear
 		sync; sleep 0.2
 
 		# read the lines of interest
@@ -25447,7 +25448,9 @@ check_lfs_df() {
 		# "<NID>:/<fsname>" for df, "filesystem_summary:" for lfs df
 		# compare the two outputs
 		passed=true
-		for i in {1..5}; do
+		#  skip "available" on MDT until LU-13997 is fixed.
+		#for i in {1..5}; do
+		for i in 1 2 4 5; do
 			[ "${df_out[i]}" != "${lfs_df_out[i]}" ] && passed=false
 		done
 		$passed && break
