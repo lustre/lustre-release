@@ -16,7 +16,7 @@ PATCH SERIES FOR SERVER KERNELS:
 3.10-rhel7.6.series     3.10.0-957.27.2.el7  (RHEL 7.6)
 3.10-rhel7.7.series     3.10.0-1062.18.1.el7 (RHEL 7.7)
 3.10-rhel7.8.series     3.10.0-1127.19.1.el7 (RHEL 7.8)
-3.10-rhel7.9.series     3.10.0-1160.42.2.el7 (RHEL 7.9)
+3.10-rhel7.9.series     3.10.0-1160.45.1.el7 (RHEL 7.9)
 4.18-rhel8.series       4.18.0-80.11.2.el8   (RHEL 8.0)
 4.18-rhel8.1.series     4.18.0-147.8.1.el8   (RHEL 8.1)
 4.18-rhel8.2.series     4.18.0-193.28.1.el8  (RHEL 8.2)

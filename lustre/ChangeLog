@@ -5,7 +5,7 @@ TBD Whamcloud
        * Server primary kernels built and tested during release cycle:
          3.10.0-1062.18.1.el7 (RHEL7.7)
          3.10.0-1127.19.1.el7 (RHEL7.8)
-         3.10.0-1160.42.2.el7 (RHEL7.9)
+         3.10.0-1160.45.1.el7 (RHEL7.9)
        * Other server kernels known to build and work at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
          3.10.0-957.27.2.el7  (RHEL7.6)
@@ -26,7 +26,7 @@ TBD Whamcloud
        * Client primary kernels built and tested during release cycle:
          3.10.0-1062.18.1.el7 (RHEL7.7)
          3.10.0-1127.19.1.el7 (RHEL7.8)
-         3.10.0-1160.42.2.el7 (RHEL7.9)
+         3.10.0-1160.45.1.el7 (RHEL7.9)
          4.12.14-95.48        (SLES12 SP4)
          4.12.14-122.83       (SLES12 SP5)
          4.12.14-197.75       (SLES15 SP1)
