@@ -122,8 +122,11 @@ static void qmt_set_id_notify(const struct lu_env *env, struct qmt_device *qmt,
 	if (!lqe_gl)
 		GOTO(lqes_fini, rc);
 
+	mutex_lock(&lqe_gl->lqe_glbl_data_lock);
 	if (lqe_gl->lqe_glbl_data)
 		qmt_seed_glbe(env, lqe_gl->lqe_glbl_data);
+	mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
+
 	/* Even if slaves haven't enqueued quota lock yet,
 	 * it is needed to set lqe_revoke_time in qmt_id_lock_glimpse
 	 * in case of reaching qpi_least_qunit */

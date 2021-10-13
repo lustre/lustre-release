@@ -520,10 +520,13 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 		struct lquota_entry *lqe = res->lr_lvb_data;
 		struct lqe_glbl_data *lgd = lqe->lqe_glbl_data;
 
-		/* release lqe reference */
+		mutex_lock(&lqe->lqe_glbl_data_lock);
 		lqe->lqe_glbl_data = NULL;
-		lqe_putref(lqe);
 		qmt_free_lqe_gd(lgd);
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
+
+		/* release lqe reference */
+		lqe_putref(lqe);
 	} else {
 		struct dt_object *obj = res->lr_lvb_data;
 		/* release object reference */

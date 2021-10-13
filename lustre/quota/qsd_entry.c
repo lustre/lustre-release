@@ -50,6 +50,7 @@ static void qsd_lqe_init(struct lquota_entry *lqe, void *arg)
 	init_waitqueue_head(&lqe->lqe_waiters);
 	lqe->lqe_usage    = 0;
 	lqe->lqe_nopreacq = false;
+	mutex_init(&lqe->lqe_glbl_data_lock);
 }
 
 /*

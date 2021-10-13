@@ -189,6 +189,8 @@ struct lquota_entry {
 			lqe_is_global:1,  /* lqe belongs to global pool "0x0"*/
 			lqe_is_deleted:1; /* lqe will be deleted soon */
 
+	/* the lock to protect lqe_glbl_data */
+	struct mutex		 lqe_glbl_data_lock;
 	struct lqe_glbl_data	*lqe_glbl_data;
 };
 

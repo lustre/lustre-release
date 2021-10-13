@@ -44,6 +44,7 @@ static void qmt_lqe_init(struct lquota_entry *lqe, void *arg)
 
 	lqe->lqe_revoke_time = 0;
 	init_rwsem(&lqe->lqe_sem);
+	mutex_init(&lqe->lqe_glbl_data_lock);
 }
 
 /* Apply the default quota setting to the specified quota entry
@@ -841,8 +842,13 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 		return need_reseed;
 	}
 
-	if (lqe_gl->lqe_glbl_data && need_reseed) {
-		qmt_seed_glbe_all(env, lqe_gl->lqe_glbl_data, qunit, edquot);
+	if (need_reseed) {
+		mutex_lock(&lqe_gl->lqe_glbl_data_lock);
+		if (lqe_gl->lqe_glbl_data)
+			qmt_seed_glbe_all(env, lqe_gl->lqe_glbl_data, qunit,
+					  edquot);
+		mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
+
 		qmt_id_lock_notify(qmt, lqe_gl);
 	}
 	return need_reseed;
@@ -879,17 +885,23 @@ void qmt_revalidate_lqes(const struct lu_env *env,
 	for (i = 0; i < qti_lqes_cnt(env); i++)
 		need_notify |= qmt_revalidate(env, qti_lqes(env)[i]);
 
+	if (!need_notify)
+		return;
+
 	/* There could be no ID lock to the moment of reconciliation.
 	 * As a result lqe global data is not initialised yet. It is ok
 	 * for release and report requests. */
 	if (!lqe_gl->lqe_glbl_data &&
-	    (req_is_rel(qb_flags) || req_has_rep(qb_flags)))
+	    (req_is_rel(qb_flags) || req_has_rep(qb_flags))) {
 		return;
-
-	if (need_notify) {
-		qmt_seed_glbe(env, lqe_gl->lqe_glbl_data);
-		qmt_id_lock_notify(qmt, lqe_gl);
 	}
+
+	mutex_lock(&lqe_gl->lqe_glbl_data_lock);
+	if (lqe_gl->lqe_glbl_data)
+		qmt_seed_glbe(env, lqe_gl->lqe_glbl_data);
+	mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
+
+	qmt_id_lock_notify(qmt, lqe_gl);
 }
 
 void qti_lqes_init(const struct lu_env *env)
