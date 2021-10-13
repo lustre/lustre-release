@@ -221,8 +221,14 @@ int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(cl_io_rw_init);
 
+#ifdef HAVE_LIST_CMP_FUNC_T
+static int cl_lock_descr_cmp(void *priv,
+			     const struct list_head *a,
+			     const struct list_head *b)
+#else /* !HAVE_LIST_CMP_FUNC_T */
 static int cl_lock_descr_cmp(void *priv,
 			     struct list_head *a, struct list_head *b)
+#endif /* HAVE_LIST_CMP_FUNC_T */
 {
 	const struct cl_io_lock_link *l0 = list_entry(a, struct cl_io_lock_link,
 						      cill_linkage);

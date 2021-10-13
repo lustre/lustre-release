@@ -1684,6 +1684,26 @@ LB_CHECK_LINUX_HEADER([crypto/sha2.h], [
 		[crypto/sha2.h is present])])
 ]) # LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 
+#
+# LIBCFS_HAVE_LIST_CMP_FUNC_T
+#
+# kernel 5.10.70 commit 4f0f586bf0c898233d8f316f471a21db2abd522d
+# treewide: Change list_sort to use const pointers
+AC_DEFUN([LIBCFS_HAVE_LIST_CMP_FUNC_T], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror -Wno-unused-variable"
+LB_CHECK_COMPILE([if list_cmp_func_t type is defined],
+list_cmp_func_t, [
+	#include <linux/list_sort.h>
+],[
+	list_cmp_func_t cmp;
+],[
+	AC_DEFINE(HAVE_LIST_CMP_FUNC_T, 1,
+		[list_cmp_func_t type is defined])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_LIST_CMP_FUNC_T
+
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_HAVE_PROC_OPS
 
@@ -1825,6 +1845,7 @@ LIBCFS_SEC_RELEASE_SECCTX
 # 5.10
 LIBCFS_HAVE_KFREE_SENSITIVE
 LIBCFS_HAVE_CRYPTO_SHA2_HEADER
+LIBCFS_HAVE_LIST_CMP_FUNC_T
 ]) # LIBCFS_PROG_LINUX
 
 #
