@@ -510,14 +510,9 @@ LPROC_SEQ_FOPS_RO(ofd_checksum_type);
 
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
-static bool sync_on_lock_cancel_warned;
 static ssize_t sync_on_lock_cancel_show(struct kobject *kobj,
 					struct attribute *attr, char *buf)
 {
-	if (!sync_on_lock_cancel_warned) {
-		sync_on_lock_cancel_warned = true;
-		pr_info("ofd: 'obdfilter.*.sync_on_lock_cancel' is deprecated, use 'obdfilter.*.sync_lock_cancel' instead\n");
-	}
 	return sync_lock_cancel_show(kobj, attr, buf);
 }
 
@@ -525,6 +520,8 @@ static ssize_t sync_on_lock_cancel_store(struct kobject *kobj,
 					 struct attribute *attr,
 					 const char *buffer, size_t count)
 {
+	static bool sync_on_lock_cancel_warned;
+
 	if (!sync_on_lock_cancel_warned) {
 		sync_on_lock_cancel_warned = true;
 		pr_info("ofd: 'obdfilter.*.sync_on_lock_cancel' is deprecated, use 'obdfilter.*.sync_lock_cancel' instead\n");
@@ -896,11 +893,7 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(checksum_t10pi_enforce);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
-static bool max_file_warned;
-static bool rd_cache_warned;
-static bool wr_cache_warned;
-
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 53, 0)
 static ssize_t read_cache_enable_show(struct kobject *kobj,
 				      struct attribute *attr,
 				      char *buf)
@@ -908,11 +901,6 @@ static ssize_t read_cache_enable_show(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
-
-	if (!rd_cache_warned) {
-		rd_cache_warned = true;
-		pr_info("ofd: 'obdfilter.*.read_cache_enabled' is deprecated, use 'osd-*.read_cache_enabled' instead\n");
-	}
 
 	if (!ofd->ofd_read_cache_enable)
 		return -EOPNOTSUPP;
@@ -928,10 +916,11 @@ static ssize_t read_cache_enable_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	static bool rd_cache_warned;
 
 	if (!rd_cache_warned) {
 		rd_cache_warned = true;
-		pr_info("ofd: 'obdfilter.*.read_cache_enabled' is deprecated, use 'osd-*.read_cache_enabled' instead\n");
+		pr_info("ofd: 'obdfilter.*.read_cache_enable' is deprecated, use 'osd-*.*.read_cache_enable' instead\n");
 	}
 
 	if (!ofd->ofd_read_cache_enable)
@@ -950,11 +939,6 @@ static ssize_t readcache_max_filesize_show(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	if (!max_file_warned) {
-		max_file_warned = true;
-		pr_info("ofd: 'obdfilter.*.readcache_max_filesize' is deprecated, use 'osd-*.readcache_max_filesize' instead\n");
-	}
-
 	if (!ofd->ofd_read_cache_max_filesize)
 		return -EOPNOTSUPP;
 
@@ -969,10 +953,11 @@ static ssize_t readcache_max_filesize_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	static bool max_file_warned;
 
 	if (!max_file_warned) {
 		max_file_warned = true;
-		pr_info("ofd: 'obdfilter.*.readcache_max_filesize' is deprecated, use 'osd-*.readcache_max_filesize' instead\n");
+		pr_info("ofd: 'obdfilter.*.readcache_max_filesize' is deprecated, use 'osd-*.*.readcache_max_filesize' instead\n");
 	}
 
 	if (!ofd->ofd_read_cache_max_filesize)
@@ -992,11 +977,6 @@ static ssize_t writethrough_cache_enable_show(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	if (!wr_cache_warned) {
-		wr_cache_warned = true;
-		pr_info("ofd: 'obdfilter.*.writethrough_cache_enabled' is deprecated, use 'osd-*.writethrough_cache_enabled' instead\n");
-	}
-
 	if (!ofd->ofd_write_cache_enable)
 		return -EOPNOTSUPP;
 
@@ -1011,6 +991,12 @@ static ssize_t writethrough_cache_enable_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	static bool wr_cache_warned;
+
+	if (!wr_cache_warned) {
+		wr_cache_warned = true;
+		pr_info("ofd: 'obdfilter.*.writethrough_cache_enable' is deprecated, use 'osd-*.*.writethrough_cache_enable' instead\n");
+	}
 
 	if (!ofd->ofd_write_cache_enable)
 		return -EOPNOTSUPP;
@@ -1133,7 +1119,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_access_log_size.attr,
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 53, 0)
 	&lustre_attr_read_cache_enable.attr,
 	&lustre_attr_readcache_max_filesize.attr,
 	&lustre_attr_writethrough_cache_enable.attr,

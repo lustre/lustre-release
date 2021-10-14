@@ -1566,8 +1566,7 @@ get_osd_param() {
 	local device=${2:-$FSNAME-OST*}
 	local name=$3
 
-	do_nodes $nodes "$LCTL get_param -n obdfilter.$device.$name \
-		osd-*.$device.$name 2>&1" | grep -v 'error:'
+	do_nodes $nodes "$LCTL get_param -n osd-*.$device.$name"
 }
 
 set_osd_param() {
@@ -1576,8 +1575,7 @@ set_osd_param() {
 	local name=$3
 	local value=$4
 
-	do_nodes $nodes "$LCTL set_param -n obdfilter.$device.$name=$value \
-		osd-*.$device.$name=$value 2>&1" | grep -v 'error:'
+	do_nodes $nodes "$LCTL set_param -n osd-*.$device.$name=$value"
 }
 
 set_debug_size () {
