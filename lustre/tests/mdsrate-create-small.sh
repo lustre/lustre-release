@@ -38,7 +38,16 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-mkdir -p $BASEDIR
+MDSRATE_ENABLE_DNE=${MDSRATE_ENABLE_DNE:-false}
+if $MDSRATE_ENABLE_DNE; then
+	test_mkdir $BASEDIR
+	mdtcount_opt="--mdtcount $MDSCOUNT"
+else
+	mkdir $BASEDIR
+fi
+if $VERBOSE; then
+	debug_opt="--debug"
+fi
 chmod 0777 $BASEDIR
 mdsrate_STRIPEPARAMS=${mdsrate_STRIPEPARAMS:-${fs_STRIPEPARAMS:-"-i 0 -c 1"}}
 setstripe_getstripe $BASEDIR $mdsrate_STRIPEPARAMS
@@ -48,7 +57,13 @@ if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
 
-generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
+generate_machine_file $NODES_TO_USE $MACHINEFILE ||
+	error "can not generate machinefile"
+
+p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+save_lustre_params $(get_facets MDS) mdt.*.enable_remote_dir_gid > $p
+do_nodes $(comma_list $(mdts_nodes)) \
+	$LCTL set_param mdt.*.enable_remote_dir_gid=-1
 
 if [ -n "$NOSINGLE" ]; then
     echo "NO Tests on single client."
@@ -62,7 +77,8 @@ else
         log "===== $0 ### 1 NODE CREATE ###"
 
 	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
-		--nfiles $NUM_FILES --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
+		--nfiles $NUM_FILES --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'
+		$mdtcount_opt $debug_opt"
 	echo "+ ${COMMAND}"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
@@ -70,6 +86,7 @@ else
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 		error_noexit "mdsrate create on single client failed, aborting"
+		restore_lustre_params < $p
 		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
 				$TESTDIR_SINGLE 'f%%d' --ignore
 		exit 1
@@ -121,6 +138,7 @@ else
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 		error_noexit "mdsrate create on multiple nodes failed, aborting"
+		restore_lustre_params < $p
 		mdsrate_cleanup $((NUM_CLIENTS * THREADS_PER_CLIENT)) \
 				$MACHINEFILE $NUM_FILES \
 				$TESTDIR_MULTI 'f%%d' --ignore
@@ -149,6 +167,7 @@ else
 fi
 
 complete $SECONDS
+restore_lustre_params < $p
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE
 check_and_cleanup_lustre

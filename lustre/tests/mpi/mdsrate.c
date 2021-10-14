@@ -118,7 +118,7 @@ int    openflags = O_RDWR | O_CREAT | O_EXCL;
 int    ndirs = 1;
 char *dirfmt;
 char   dir[PATH_MAX];
-char   mkdir_cmd[PATH_MAX + 32];
+char   mkdir_cmd[PATH_MAX + 48];
 int    dirthreads;
 int    dirnum;
 DIR *directory;
@@ -539,8 +539,9 @@ process_args(int argc, char *argv[])
 				if (!S_ISDIR(sb.st_mode))
 					fatal(myrank, "'%s' is not dir\n", dir);
 			} else if (errno == ENOENT) {
-				sprintf(mkdir_cmd, "lfs mkdir -i %d %s",
-					myrank % mdt_count, dir);
+				sprintf(mkdir_cmd, "lfs mkdir -i %d -c %d %s",
+					rand() % mdt_count,
+					rand() % mdt_count + 1, dir);
 			} else {
 				fatal(myrank, "'%s' stat failed\n", dir);
 			}
@@ -548,11 +549,22 @@ process_args(int argc, char *argv[])
 			sprintf(mkdir_cmd, "mkdir -p %s", dir);
 		}
 
-		dmesg("%d: %s\n", myrank, mkdir_cmd);
 #ifdef _LIGHTWEIGHT_KERNEL
 		printf("NOTICE: not running system(%s)\n", mkdir_cmd);
 #else
-		rc = system(mkdir_cmd);
+		if (ndirs == 1) {
+			if (myrank == 0) {
+				dmesg("%d: %s\n", myrank, mkdir_cmd);
+				rc = system(mkdir_cmd);
+			} else {
+				rc = 0;
+			}
+			if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+				fatal(myrank, "mkdir MPI_Barrier failed\n");
+		} else {
+			dmesg("%d: %s\n", myrank, mkdir_cmd);
+			rc = system(mkdir_cmd);
+		}
 		if (rc)
 			fatal(myrank, "'%s' failed.\n", mkdir_cmd);
 #endif

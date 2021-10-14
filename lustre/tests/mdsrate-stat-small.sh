@@ -37,7 +37,16 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-mkdir -p $BASEDIR
+MDSRATE_ENABLE_DNE=${MDSRATE_ENABLE_DNE:-false}
+if $MDSRATE_ENABLE_DNE; then
+	test_mkdir $BASEDIR
+	mdtcount_opt="--mdtcount $MDSCOUNT"
+else
+	mkdir $BASEDIR
+fi
+if $VERBOSE; then
+	debug_opt="--debug"
+fi
 chmod 0777 $BASEDIR
 mdsrate_STRIPEPARAMS=${mdsrate_STRIPEPARAMS:-${fs_STRIPEPARAMS:-"-i 0 -c 1"}}
 setstripe_getstripe $BASEDIR $mdsrate_STRIPEPARAMS
@@ -47,7 +56,13 @@ if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
 
-generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
+generate_machine_file $NODES_TO_USE $MACHINEFILE ||
+	error "can not generate machinefile"
+
+p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+save_lustre_params $(get_facets MDS) mdt.*.enable_remote_dir_gid > $p
+do_nodes $(comma_list $(mdts_nodes)) \
+	$LCTL set_param mdt.*.enable_remote_dir_gid=-1
 
 if [ -n "$NOCREATE" ]; then
     echo "NOCREATE=$NOCREATE  => no file creation."
@@ -56,9 +71,10 @@ else
 
     log "===== $0 Test preparation: creating ${NUM_FILES} files."
 
-    COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
-                        --nfiles ${NUM_FILES} --filefmt 'f%%d'"
-    echo "+" ${COMMAND}
+	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
+		--nfiles ${NUM_FILES} --filefmt 'f%%d'
+		$mdtcount_opt $debug_opt"
+	echo "+" ${COMMAND}
 
     NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
     NUM_THREADS=$((NUM_CLIENTS * MDSCOUNT))
@@ -71,6 +87,7 @@ else
 
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		error_noexit "mdsrate file creation failed, aborting"
+		restore_lustre_params < $p
 		mdsrate_cleanup $NUM_THREADS $MACHINEFILE $NUM_FILES \
 				$TESTDIR 'f%%d' --ignore
 		exit 1
@@ -93,6 +110,7 @@ else
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 		error_noexit "mdsrate stat on single client failed, aborting"
+		restore_lustre_params < $p
 		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
 				$TESTDIR 'f%%d' --ignore
 		exit 1
@@ -113,6 +131,7 @@ else
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 		error_noexit "mdsrate stat on multiple nodes failed, aborting"
+		restore_lustre_params < $p
 		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
 				$TESTDIR 'f%%d' --ignore
 		exit 1
@@ -120,6 +139,7 @@ else
 fi
 
 complete $SECONDS
+restore_lustre_params < $p
 mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d'
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE
