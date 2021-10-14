@@ -94,6 +94,6 @@ cleanup_cifs() {
 	local smbclients=${3}
 
 	echo -e "\nUnmounting CIFS clients..."
-	do_nodes $smbclients "umount -f $smbclimntpt" || return 1
+	zconf_umount_clients $smbclients $smbclimntpt -f || return 1
 	do_node $smbsrv "service smb stop"
 }
