@@ -218,6 +218,7 @@ declare     ha_test_dir_stripe_count=${TDSTRIPECOUNT:-"1"}
 declare     ha_test_dir_mdt_index=${TDMDTINDEX:-"0"}
 declare     ha_test_dir_mdt_index_random=${TDMDTINDEXRAND:-false}
 declare     ha_dir_stripe_count=${DSTRIPECOUNT:-"1"}
+declare     ha_dir_stripe_count_random=${DSTRIPECOUNTRAND:-false}
 declare     ha_mdt_index=${MDTINDEX:-"0"}
 declare     ha_mdt_index_random=${MDTINDEXRAND:-false}
 declare -a  ha_clients
@@ -496,13 +497,21 @@ ha_repeat_mpi_load()
 		{
 		local mdt_index
 		if $ha_mdt_index_random && [ $ha_mdt_index -ne 0 ]; then
-			mdt_index=$(ha_rand $ha_mdt_index)
+			mdt_index=$(ha_rand $((ha_mdt_index + 1)) )
 		else
 			mdt_index=$ha_mdt_index
 		fi
+		local dir_stripe_count
+		if $ha_dir_stripe_count_random &&
+			[ $ha_dir_stripe_count -ne 1 ]; then
+			dir_stripe_count=$(($(ha_rand $ha_dir_stripe_count) + 1))
+		else
+			dir_stripe_count=$ha_dir_stripe_count
+		fi
 		[[ -n "$ha_precmd" ]] && ha_info "$ha_precmd" &&
 			ha_on $client "$ha_precmd" >>"$log" 2>&1
-		ha_on $client $LFS mkdir -i$mdt_index -c$ha_dir_stripe_count "$dir" &&
+		ha_info "$client Creates $dir with -i$mdt_index -c$dir_stripe_count "
+		ha_on $client $LFS mkdir -i$mdt_index -c$dir_stripe_count "$dir" &&
 		ha_on $client $LFS getdirstripe "$dir" &&
 		ha_on $client $LFS setstripe $stripeparams $dir &&
 		ha_on $client $LFS getstripe $dir &&
@@ -1192,7 +1201,7 @@ ha_main()
 	local mdt_index
 	if $ha_test_dir_mdt_index_random &&
 		[ $ha_test_dir_mdt_index -ne 0 ]; then
-		mdt_index=$(ha_rand $ha_test_dir_mdt_index)
+		mdt_index=$(ha_rand $((ha_test_dir_mdt_index + 1)) )
 	else
 		mdt_index=$ha_test_dir_mdt_index
 	fi
