@@ -2059,15 +2059,23 @@ EXPORT_SYMBOL(class_config_parse_llog);
  * - { index: 4, event: attach, device: lustrewt-clilov, type: lov,
  *     UUID: lustrewt-clilov_UUID }
  */
-int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
+int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
+			     unsigned int *cfg_flags, bool raw)
 {
 	struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
 	char *ptr = buf;
 	char *end = buf + size;
 	int rc = 0, i;
 	struct lcfg_type_data *ldata;
+	int swab = 0;
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
+
+	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
+		lustre_swab_lustre_cfg(lcfg);
+		swab = 1;
+	}
+
 	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
 	if (rc < 0)
 		return rc;
@@ -2076,7 +2084,28 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 	if (!ldata)
 		return -ENOTTY;
 
-	if (lcfg->lcfg_command == LCFG_MARKER)
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
+		lustre_swab_cfg_marker(marker, swab,
+				       LUSTRE_CFG_BUFLEN(lcfg, 1));
+		if (marker->cm_flags & CM_START) {
+			*cfg_flags = CFG_F_MARKER;
+			if (marker->cm_flags & CM_SKIP)
+				*cfg_flags = CFG_F_SKIP;
+		} else if (marker->cm_flags & CM_END) {
+			*cfg_flags = 0;
+		}
+		if (likely(!raw))
+			return 0;
+	}
+
+	/* entries outside marker are skipped */
+	if (!(*cfg_flags & CFG_F_MARKER) && !raw)
+		return 0;
+
+	/* inside skipped marker */
+	if (*cfg_flags & CFG_F_SKIP && !raw)
 		return 0;
 
 	/* form YAML entity */
@@ -2134,6 +2163,31 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 
 		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[1]);
 		ptr += snprintf(ptr, end - ptr, "%s", tmp + 1);
+
+		goto out_done;
+	}
+
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
+		if (marker->cm_flags & CM_START) {
+			*cfg_flags = CFG_F_MARKER;
+			if (marker->cm_flags & CM_SKIP)
+				*cfg_flags = CFG_F_SKIP;
+		} else if (marker->cm_flags & CM_END) {
+			*cfg_flags = 0;
+		}
+		ptr += snprintf(ptr, end - ptr, ", flags: %#04x",
+				marker->cm_flags);
+		ptr += snprintf(ptr, end - ptr, ", version: %d.%d.%d.%d",
+				OBD_OCD_VERSION_MAJOR(marker->cm_vers),
+				OBD_OCD_VERSION_MINOR(marker->cm_vers),
+				OBD_OCD_VERSION_PATCH(marker->cm_vers),
+				OBD_OCD_VERSION_FIX(marker->cm_vers));
+		ptr += snprintf(ptr, end - ptr, ", createtime: %lld",
+				marker->cm_createtime);
+		ptr += snprintf(ptr, end - ptr, ", canceltime: %lld",
+				marker->cm_canceltime);
 
 		goto out_done;
 	}

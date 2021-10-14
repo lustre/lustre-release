@@ -500,29 +500,33 @@ static int jt_lcfg_setparam_perm(int argc, char **argv,
 	int i;
 	int first_param;
 	char *buf = NULL;
-	int len;
 
 	first_param = optind;
 	if (first_param < 0 || first_param >= argc)
 		return CMD_HELP;
 
 	for (i = first_param, rc = 0; i < argc; i++) {
-		len = strlen(argv[i]);
-
 		buf = argv[i];
+		if (popt->po_delete) {
+			char *end_pos;
+			size_t len;
 
-		/* put an '=' on the end in case it doesn't have one */
-		if (popt->po_delete && argv[i][len - 1] != '=') {
-			buf = malloc(len + 1);
-			if (!buf) {
-				rc = -ENOMEM;
-				break;
+			len = strlen(buf);
+			/* Consider param ends at the first '=' in the buffer
+			 * and make sure it always ends with '=' as well
+			 */
+			end_pos = memchr(buf, '=', len - 1);
+			if (end_pos) {
+				*(++end_pos) = '\0';
+			} else if (buf[len - 1] != '=') {
+				buf = malloc(len + 1);
+				if (buf == NULL)
+					return -ENOMEM;
+				sprintf(buf, "%s=", argv[i]);
 			}
-			sprintf(buf, "%s=", argv[i]);
 		}
 
 		rc = lcfg_setparam_perm(argv[0], buf);
-
 		if (buf != argv[i])
 			free(buf);
 	}
@@ -677,21 +681,6 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 	return param_name;
 }
 
-/* Find a character in a length limited string */
-/* BEWARE - kernel definition of strnchr has args in different order! */
-static char *strnchr(const char *p, char c, size_t n)
-{
-	if (!p)
-		return (0);
-
-	while (n-- > 0) {
-		if (*p == c)
-			return ((char *)p);
-		p++;
-	}
-	return (0);
-}
-
 /**
  * Turns a lctl parameter string into a procfs/sysfs subdirectory path pattern.
  *
@@ -832,8 +821,8 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 	if (popt->po_show_path) {
 		bool longbuf;
 
-		longbuf = strnchr(buf, buflen - 1, '\n') != NULL ||
-			buflen + strlen(param_name) >= 80;
+		longbuf = memchr(buf, '\n', buflen - 1) ||
+			  buflen + strlen(param_name) >= 80;
 		printf("%s=%s", param_name, longbuf ? "\n" : "");
 	}
 	printf("%s", buf);

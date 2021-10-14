@@ -463,9 +463,10 @@ command_t cmdlist[] = {
 	 "print log header information.\n"
 	 "usage: llog_info <logname|FID>\n"},
 	{"llog_print", jt_llog_print, 0,
-	 "print log content information.\n"
+	 "print all effective log records by default, or within given range.\n"
+	 "With --raw option skipped records are printed as well.\n"
 	 "usage: llog_print <logname|FID> [--start <index>] [--end <index>j]\n"
-	 "       print all records by default, or within given index range."},
+	 "		    [--raw]\n"},
 	{"llog_cancel", jt_llog_cancel, 0,
 	 "cancel one record in specified log.\n"
 	 "usage:llog_cancel <logname|FID> --log_idx <idx>\n"},

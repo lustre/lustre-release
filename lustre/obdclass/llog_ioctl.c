@@ -201,10 +201,17 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 	RETURN(rc);
 }
 
+struct llog_print_data {
+	struct obd_ioctl_data *lprd_data;
+	unsigned int	       lprd_cfg_flags;
+	bool		       lprd_raw;
+};
+
 static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 			 struct llog_rec_hdr *rec, void *data)
 {
-	struct obd_ioctl_data *ioc_data = data;
+	struct llog_print_data *lprd = data;
+	struct obd_ioctl_data *ioc_data = lprd->lprd_data;
 	static int l, remains;
 	static long from, to;
 	static char *out;
@@ -252,7 +259,9 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 	} else if (rec->lrh_type == OBD_CFG_REC) {
 		int rc;
 
-		rc = class_config_yaml_output(rec, out, remains);
+		rc = class_config_yaml_output(rec, out, remains,
+					      &lprd->lprd_cfg_flags,
+					      lprd->lprd_raw);
 		if (rc < 0)
 			RETURN(rc);
 		l = rc;
@@ -388,14 +397,20 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 		else if (rc)
 			GOTO(out_close, rc);
 		break;
-	case OBD_IOC_LLOG_PRINT:
+	case OBD_IOC_LLOG_PRINT: {
+		struct llog_print_data lprd = {
+			.lprd_data = data,
+			.lprd_raw = data->ioc_u32_1,
+		};
+
 		LASSERT(data->ioc_inllen1 > 0);
-		rc = llog_process(env, handle, llog_print_cb, data, NULL);
+		rc = llog_process(env, handle, llog_print_cb, &lprd, NULL);
 		if (rc == -LLOG_EEMPTY)
 			rc = 0;
 		else if (rc)
 			GOTO(out_close, rc);
 		break;
+	}
 	case OBD_IOC_LLOG_CANCEL: {
 		struct llog_cookie cookie;
 		struct llog_logid plain;

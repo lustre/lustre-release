@@ -8892,22 +8892,32 @@ test_123ad() { # LU-11566
 run_test 123ad "llog_print shows all records"
 
 test_123ae() { # LU-11566
+	local max
+	local mgs_arg=""
+	local log
+	local id
+	local orig
+	local new
+	local rpcs
+
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 	[ -d $MOUNT/.lustre ] || setupall
 
-	local max=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
-	local mgs_arg=""
-
+	max=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
+	pgs=$($LCTL get_param -n osc.*-OST0000-*.max_pages_per_rpc | head -1)
 	[[ $MGS_VERSION -gt $(version_code 2.13.54) ]] ||
 		mgs_arg="--device MGS"
 
 	if do_facet mgs "$LCTL help llog_cancel" 2>&1| grep -q -- --log_id; then
 		# save one set_param -P record in case none exist
-		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
 
-		local log=params
-		local orig=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
-			     tail -1 | awk '{ print $4 }' | tr -d , )
+		do_facet mgs $LCTL set_param -P osc.*.max_pages_per_rpc=$pgs
+		stack_trap "do_facet mgs $LCTL set_param -P -d \
+				osc.*.max_pages_per_rpc"
+
+		log=params
+		orig=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
+			tail -1 | awk '{ print $4 }' | tr -d , )
 		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
 		do_facet mgs $LCTL $mgs_arg llog_print $log | tail -1 |
 			grep "parameter: osc.*.max_dirty_mb" ||
@@ -8915,9 +8925,8 @@ test_123ae() { # LU-11566
 
 		# - { index: 71, event: set_param, device: general,
 		#     param: osc.*.max_dirty_mb, value: 256 }
-		local id=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
-			   tail -1 | awk '{ print $4 }' | tr -d , )
-
+		id=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
+		     tail -1 | awk '{ print $4 }' | tr -d , )
 		do_facet mgs $LCTL $mgs_arg llog_cancel $log --log_idx=$id
 		local new=$(do_facet mgs $LCTL $mgs_arg llog_print $log |
 			    tail -1 | awk '{ print $4 }' | tr -d , )
@@ -8928,18 +8937,25 @@ test_123ae() { # LU-11566
 	# test old positional parameters for a while still
 	if [ "$MGS_VERSION" -le $(version_code 3.1.53) ]; then
 		log=$FSNAME-client
+
+		do_facet mgs $LCTL conf_param \
+			$FSNAME-OST0000.osc.max_pages_per_rpc=$pgs
+		stack_trap "do_facet mgs $LCTL conf_param -d \
+				$FSNAME-OST0000.osc.max_pages_per_rpc"
+
 		orig=$(do_facet mgs $LCTL --device MGS llog_print $log |
 		       tail -1 | awk '{ print $4 }' | tr -d , )
 		do_facet mgs $LCTL conf_param $FSNAME-OST0000.osc.max_dirty_mb=$max
 		do_facet mgs $LCTL --device MGS llog_print $log |
 			tail -1 | grep "parameter: osc.max_dirty_mb" ||
 			error "old conf_param wasn't stored in params log"
-
+		do_facet mgs $LCTL --device MGS llog_print $log
 		# - { index: 71, event: conf_param, device: testfs-OST0000-osc,
 		#     param: osc.max_dirty_mb=256 }
 		id=$(do_facet mgs $LCTL --device MGS llog_print $log |
 		     tail -1 | awk '{ print $4 }' | tr -d , )
 		do_facet mgs $LCTL --device MGS llog_cancel $log $id
+		do_facet mgs $LCTL --device MGS llog_print $log
 		new=$(do_facet mgs $LCTL --device MGS llog_print $log |
 		      tail -1 | awk '{ print $4 }' | tr -d , )
 		(( new == orig )) ||
@@ -8996,6 +9012,36 @@ test_123af() { #LU-13609
 	done
 }
 run_test 123af "llog_catlist can show all config files correctly"
+
+test_123ag() { # LU-15142
+	local rec
+	local orig_val
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	(( $MGS_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need server version least 2.14.55"
+
+	[ -d $MOUNT/.lustre ] || setup
+
+	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
+	stack_trap "do_facet mgs $LCTL set_param -P jobid_name=$orig_val"
+
+	do_facet mgs $LCTL set_param -P jobid_name="TESTNAME1"
+	do_facet mgs $LCTL set_param -P -d jobid_name
+	rec=$(do_facet mgs $LCTL --device MGS llog_print params |
+		grep -c jobid_name)
+	(( rec == 0 )) || error "parameter was not deleted, check #1"
+	do_facet mgs $LCTL set_param -P jobid_name="TESTNAME1"
+	rec=$(do_facet mgs $LCTL --device MGS llog_print params |
+		grep -c jobid_name)
+	(( rec == 1)) || error "parameter is not set"
+	# usage with ordinary set_param format works too
+	do_facet mgs $LCTL set_param -P -d jobid_name="ANY"
+	rec=$(do_facet mgs $LCTL --device MGS llog_print params |
+		grep -c jobid_name)
+	(( rec == 0 )) || error "parameter was not deleted, check #2"
+}
+run_test 123ag "llog_print skips values deleted by set_param -P -d"
 
 test_123F() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
