@@ -533,6 +533,9 @@ kdist_config: prep-deb-files patch-stamp
 			export EXTRAFLAGS="$${EXTRAFLAGS} --disable-$${option}"; \
 		fi; \
 	done; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "notests"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-tests"; \
+	fi; \
 	if [ -f "$${CONFIG_CACHE_FILE}" ]; then \
 		export TMP_CACHE_FILE=$$(mktemp --tmpdir newconfig-XXXXXXXX.cache); \
 		sed -e "/ac_cv_env/d" \
@@ -547,7 +550,6 @@ kdist_config: prep-deb-files patch-stamp
 		--disable-dependency-tracking \
 		--disable-doc  \
 		--disable-iokit \
-		--disable-tests \
 		--enable-quota \
 		--with-kmp-moddir=updates/kernel \
 		$${EXTRAFLAGS} \

@@ -457,6 +457,9 @@ debs: undef.h debs_common
 	elif test "x@ENABLE_EFENCE@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noefence"; \
 	fi; \
+	if test "x@TESTS_FALSE@" = "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} notests"; \
+	fi; \
 	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
