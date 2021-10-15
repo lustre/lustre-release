@@ -54,7 +54,7 @@ static void qsd_lqe_init(struct lquota_entry *lqe, void *arg)
 
 /*
  * Update a slave quota entry. This is done by reading enforcement status from
- * the copy of the global index and then how much is the slave currenly owns
+ * the copy of the global index and the amount the slave currenly owns
  * for this user from the slave index copy.
  *
  * \param env - the environment passed by the caller

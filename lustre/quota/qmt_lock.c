@@ -464,7 +464,7 @@ int qmt_lvbo_fill(struct lu_device *ld, struct ldlm_lock *lock, void *lvb,
 		 * we are thus dealing with an ID lock. */
 		struct lquota_entry *lqe = res->lr_lvb_data;
 		struct qmt_device *qmt;
-		struct obd_uuid	*uuid;
+		struct obd_uuid *uuid;
 		int idx;
 
 		uuid = &(lock)->l_export->exp_client_uuid;
@@ -490,7 +490,7 @@ int qmt_lvbo_fill(struct lu_device *ld, struct ldlm_lock *lock, void *lvb,
 		lqe_putref(lqe);
 	} else {
 		/* global quota lock */
-		struct dt_object	*obj = res->lr_lvb_data;
+		struct dt_object *obj = res->lr_lvb_data;
 
 		/* return current version of global index */
 		qlvb->lvb_glb_ver = dt_version_get(env, obj);

@@ -58,7 +58,7 @@ static inline int qmt_sarr_pool_init(struct qmt_pool_info *qpi);
 static inline int qmt_sarr_pool_add(struct qmt_pool_info *qpi,
 				    int idx, int min);
 static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx);
-static inline int qmt_sarr_pool_free(struct qmt_pool_info *qpi);
+static inline void qmt_sarr_pool_free(struct qmt_pool_info *qpi);
 static inline int qmt_sarr_check_idx(struct qmt_pool_info *qpi, int idx);
 static inline void qmt_stop_pool_recalc(struct qmt_pool_info *qpi);
 
@@ -821,18 +821,6 @@ int qmt_pool_lqes_lookup(const struct lu_env *env,
 			qti_lqes_fini(env);
 			GOTO(out, rc = PTR_ERR(lqe));
 		}
-		/* Only release could be done for not enforced lqe
-		 * (see qmt_dqacq0). However slave could request to
-		 * release more than not global lqe had granted before
-		 * lqe_enforced was cleared. It is legal case,
-		 * because even if current lqe is not enforced,
-		 * lqes from other pools are still active and avilable
-		 * for acquiring. Furthermore, skip not enforced lqe
-		 * to don't make extra allocations. */
-		/*if (!lqe_is_glbl(lqe) && !lqe->lqe_enforced) {
-			lqe_putref(lqe);
-			continue;
-		}*/
 		qti_lqes_add(env, lqe);
 	}
 	LASSERT(qti_lqes_glbl(env)->lqe_is_global);
@@ -1539,19 +1527,19 @@ static inline int qmt_sarr_pool_rem(struct qmt_pool_info *qpi, int idx)
 	}
 }
 
-static inline int qmt_sarr_pool_free(struct qmt_pool_info *qpi)
+static inline void qmt_sarr_pool_free(struct qmt_pool_info *qpi)
 {
 	if (qmt_pool_global(qpi))
-		return 0;
+		return;
 
 	switch (qpi->qpi_rtype) {
 	case LQUOTA_RES_DT:
-		if (!qpi->qpi_sarr.osts.op_array)
-			return 0;
-		return lu_tgt_pool_free(&qpi->qpi_sarr.osts);
+		if (qpi->qpi_sarr.osts.op_array)
+			lu_tgt_pool_free(&qpi->qpi_sarr.osts);
+		return;
 	case LQUOTA_RES_MD:
 	default:
-		return 0;
+		return;
 	}
 }
 

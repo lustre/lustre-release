@@ -39,7 +39,6 @@ BLK_SZ=1024
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 QTYPE="ugp"
-# QP exists since this version. Should be finally set before landing.
 VERSION_WITH_QP="2.13.53"
 mds_supports_qp() {
 	[ $MDS1_VERSION -lt $(version_code $VERSION_WITH_QP) ] &&
@@ -564,7 +563,7 @@ test_1_check_write() {
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 	# sync means client wrote all it's cache, but id doesn't
-	# garantee that slave got new edquot trough glimpse.
+	# guarantee that slave received new edquot through glimpse.
 	# so wait a little to be sure slave got it.
 	sleep 5
 	$RUNAS $DD of=$testfile count=1 seek=$limit &&
@@ -1531,8 +1530,8 @@ test_3c() {
 		error "set user quota failed"
 	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
 		error "set user quota failed"
-	# qpool has minimum soft limit, but it's grace is grater than
-	# grace period of qpool2. Thus write shouldn't fail when
+	# qpool has minimum soft limit, but its grace is greater than
+	# the grace period of qpool2. Thus write shouldn't fail when
 	# hit qpool soft limit - only when reaches up qpool2 limit
 	# after grace2 seconds.
 	$LFS setquota -u $TSTUSR -b ${limit2}M -B 0 --pool $qpool2 $DIR ||

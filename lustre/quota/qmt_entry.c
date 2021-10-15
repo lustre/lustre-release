@@ -301,8 +301,7 @@ struct thandle *qmt_trans_start(const struct lu_env *env,
 int qmt_glb_write_lqes(const struct lu_env *env, struct thandle *th,
 		       __u32 flags, __u64 *ver)
 {
-	int i, rc;
-	rc = 0;
+	int i, rc = 0;
 
 	for (i = 0; i < qti_lqes_cnt(env); i++) {
 		rc = qmt_glb_write(env, th, qti_lqes(env)[i], flags, ver);

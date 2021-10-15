@@ -1538,7 +1538,7 @@ struct lu_tgt_pool {
 int lu_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count);
 int lu_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
 int lu_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx);
-int lu_tgt_pool_free(struct lu_tgt_pool *op);
+void lu_tgt_pool_free(struct lu_tgt_pool *op);
 int lu_tgt_check_index(int idx, struct lu_tgt_pool *osts);
 int lu_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 
