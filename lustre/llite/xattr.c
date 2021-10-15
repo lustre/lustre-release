@@ -261,7 +261,7 @@ static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump,
 	struct lov_user_md *v1 = lump;
 	bool need_clear_release = false;
 	bool release_checked = false;
-	bool is_composite = false;
+	bool default_offset = false;
 	u16 entry_count = 1;
 	int rc = 0;
 	int i;
@@ -276,7 +276,37 @@ static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump,
 		entry_count = comp_v1->lcm_entry_count;
 		if (size < offsetof(typeof(*comp_v1), lcm_entries[entry_count]))
 			return -ERANGE;
-		is_composite = true;
+
+		for (i = 0; i < entry_count; i++) {
+			void *ptr = comp_v1;
+
+			ptr += comp_v1->lcm_entries[i].lcme_offset;
+			v1 = ptr;
+			/* Consider layout as copied if it has an initialized
+			 * entry.
+			 */
+			if (comp_v1->lcm_entries[i].lcme_flags & LCME_FL_INIT) {
+				default_offset = true;
+				break;
+			}
+		}
+	} else if (lump->lmm_magic == LOV_USER_MAGIC_V1) {
+		/* reset starting offset if xattr is copied */
+		if (v1->lmm_stripe_offset == 0 && size > sizeof(*v1) &&
+		    !fid_is_zero(&v1->lmm_objects[0].l_ost_oi.oi_fid)) {
+			default_offset = true;
+		}
+	} else  if (lump->lmm_magic == LOV_USER_MAGIC_V3) {
+		struct lov_user_md_v3 *v3 = (void *)v1;
+
+		/* reset starting offset if xattr is copied */
+		if (v3->lmm_stripe_offset == 0 && size > sizeof(*v3) &&
+		    !fid_is_zero(&v3->lmm_objects[0].l_ost_oi.oi_fid)) {
+			default_offset = true;
+		}
+	} else {
+		/* skip for other layout types */
+		return 0;
 	}
 
 	for (i = 0; i < entry_count; i++) {
@@ -297,8 +327,8 @@ static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump,
 		 * should be allowed to pick the starting OST index.
 		 * b=17846
 		 */
-		if (!is_composite && v1->lmm_stripe_offset == 0)
-			v1->lmm_stripe_offset = -1;
+		if (default_offset)
+			v1->lmm_stripe_offset = LOV_OFFSET_DEFAULT;
 
 		/* Avoid anyone directly setting the RELEASED flag. */
 		if (v1->lmm_pattern & LOV_PATTERN_F_RELEASED) {
@@ -556,9 +586,69 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 	RETURN(rc);
 }
 
+static ssize_t ll_sanitize_xattr(struct inode *inode, void *buf,
+				 size_t buf_size, size_t lmm_size)
+{
+	struct lov_user_md *lum = buf;
+	struct lov_comp_md_v1 *comp = buf;
+	ssize_t rc = lmm_size;
+	int i;
+
+	if (!lmm_size)
+		return -ENODATA;
+	if (!buf_size)
+		return lmm_size;
+	if (buf_size < lmm_size)
+		return -ERANGE;
+	/*
+	 * Do not return layout gen for getxattr() since otherwise it would
+	 * confuse tar --xattr by recognizing layout gen as stripe offset
+	 * when the file is restored (LU-2809).
+	 * Instead, replace lmm_layout_gen (lmm_stripe_offset) with
+	 * LOV_OFFSET_DEFAULT so restoring the xattr allows the MDS to select
+	 * the OST index (LU-13062).
+	 */
+	if ((lum->lmm_magic & __swab32(LOV_MAGIC_MAGIC)) ==
+	    __swab32(LOV_MAGIC_MAGIC))
+		lustre_swab_lov_user_md(lum, lmm_size);
+
+	switch (lum->lmm_magic) {
+	case LOV_MAGIC_V1:
+	case LOV_MAGIC_V3:
+	case LOV_MAGIC_SPECIFIC:
+		lum->lmm_stripe_offset = LOV_OFFSET_DEFAULT;
+		break;
+	case LOV_MAGIC_COMP_V1:
+		for (i = 0; i < comp->lcm_entry_count; i++) {
+			void *ptr = comp;
+
+			ptr += comp->lcm_entries[i].lcme_offset;
+			lum = ptr;
+			lum->lmm_stripe_offset = LOV_OFFSET_DEFAULT;
+		}
+		break;
+	case LOV_MAGIC_FOREIGN:
+		break;
+	default:
+		/* report unknown magic for regular file, for directories
+		 * that was checked in ll_dir_getstripe_default() already
+		 */
+		if (S_ISREG(inode->i_mode)) {
+			rc = -EPROTO;
+			CERROR("%s: bad LOV magic %08x on "DFID": rc = %zd\n",
+			       ll_i2sbi(inode)->ll_fsname, lum->lmm_magic,
+			       PFID(ll_inode2fid(inode)), rc);
+		}
+		break;
+	}
+
+	return rc;
+}
+
 static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 {
 	ssize_t rc;
+	size_t xattr_size;
 
 	if (S_ISREG(inode->i_mode)) {
 		struct cl_object *obj = ll_i2info(inode)->lli_clob;
@@ -580,45 +670,8 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		if (rc < 0)
 			GOTO(out_env, rc);
 
-		if (!cl.cl_size)
-			GOTO(out_env, rc = -ENODATA);
-
-		rc = cl.cl_size;
-
-		if (!buf_size)
-			GOTO(out_env, rc);
-
-		LASSERT(buf && rc <= buf_size);
-
-		/*
-		 * Do not return layout gen for getxattr() since
-		 * otherwise it would confuse tar --xattr by
-		 * recognizing layout gen as stripe offset when the
-		 * file is restored. See LU-2809.
-		 */
-		if ((((struct lov_mds_md *)buf)->lmm_magic &
-		    __swab32(LOV_MAGIC_MAGIC)) == __swab32(LOV_MAGIC_MAGIC))
-			lustre_swab_lov_user_md((struct lov_user_md *)buf,
-						cl.cl_size);
-
-		switch (((struct lov_mds_md *)buf)->lmm_magic) {
-		case LOV_MAGIC_V1:
-		case LOV_MAGIC_V3:
-		case LOV_MAGIC_SPECIFIC:
-			((struct lov_mds_md *)buf)->lmm_layout_gen = 0;
-			break;
-		case LOV_MAGIC_COMP_V1:
-		case LOV_MAGIC_FOREIGN:
-			goto out_env;
-		default:
-			rc = -EINVAL;
-			CERROR("%s: bad LOV magic %08x on "DFID": rc = %zd\n",
-			       ll_i2sbi(inode)->ll_fsname,
-			       ((struct lov_mds_md *)buf)->lmm_magic,
-			       PFID(ll_inode2fid(inode)), rc);
-			GOTO(out_env, rc);
-		}
-
+		xattr_size = cl.cl_size;
+		rc = ll_sanitize_xattr(inode, buf, buf_size, xattr_size);
 out_env:
 		cl_env_put(env, &refcheck);
 
@@ -634,14 +687,11 @@ out_env:
 		if (rc < 0)
 			GOTO(out_req, rc);
 
-		if (!buf_size)
-			GOTO(out_req, rc = lmm_size);
-
-		if (buf_size < lmm_size)
-			GOTO(out_req, rc = -ERANGE);
-
-		memcpy(buf, lmm, lmm_size);
-		GOTO(out_req, rc = lmm_size);
+		xattr_size = lmm_size;
+		rc = ll_sanitize_xattr(inode, (void*)lmm, buf_size,
+				       xattr_size);
+		if (buf && rc > 0)
+			memcpy(buf, lmm, lmm_size);
 out_req:
 		if (req)
 			ptlrpc_req_put(req);

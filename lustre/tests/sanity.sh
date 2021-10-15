@@ -11176,6 +11176,47 @@ test_65q () { # LU-16194
 }
 run_test 65q "setstripe with >=8E offset should fail"
 
+65r_check_offsets() {
+	local offsets
+	local all_zeroes=1
+	local pfl=$1
+
+	offsets=$($LFS getstripe -y $pfl | awk '/stripe_offset:/ { print $2 }')
+	for off in ${offsets[@]}; do
+		((off == 0)) || all_zeroes=0
+	done
+	echo $all_zeroes
+}
+
+test_65r() { #LU-13062
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	local dir=$DIR/$tdir
+	local pfl=$DIR/$tdir/$tfile
+
+	test_mkdir -p $DIR/$tdir
+	# lfs setstripe can set all 0 offsets directly
+	$LFS setstripe -E1m -c1 -i0 -E2m -c2 -i0 -E4m -c4 -i0 -E -1 -i0 $pfl ||
+		error "Create file $pfl failed"
+	(( $(65r_check_offsets $pfl) == 1 )) ||
+		error "lfs setstripe directions are ignored"
+
+	# lfs setstripe --copy should reset specified offsets to default
+	lfs setstripe --copy=$pfl ${pfl}.copy ||
+		error "lfs setstripe --copy failed"
+	(( $(65r_check_offsets ${pfl}.copy) == 0 )) ||
+		error "lfs setstripe --copy keeps specific offsets"
+
+	# directory layout copy should drop specific offsets
+	$LFS setstripe -E1m -c1 -i0 -E2m -c2 -i0 -E4m -c4 -i0 -E -1 -i0 $dir ||
+		error "Failed to set default layout for $dir"
+	lfs setstripe --copy=$dir ${pfl}.dircopy ||
+		error "lfs setstripe --copy from directory failed"
+	(( $(65r_check_offsets ${pfl}.dircopy) == 0 )) ||
+		error "lfs setstripe --copy for directory keeps offsets"
+}
+run_test 65r "prevent all-zero offsets"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

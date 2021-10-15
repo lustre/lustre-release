@@ -2483,8 +2483,8 @@ verify_46() {
 
 	$LFS setstripe --copy=$src $dst || error "setstripe $dst failed"
 
-	local layout1=$(get_layout_param $src)
-	local layout2=$(get_layout_param $dst)
+	local layout1=$(SKIP_INDEX=yes get_layout_param $src)
+	local layout2=$(SKIP_INDEX=yes get_layout_param $dst)
 	# compare their layout info
 	[ "$layout1" == "$layout2" ] ||
 		error "$msg_prefix $src <=> $dst layouts are not equal"
