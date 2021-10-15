@@ -1108,6 +1108,76 @@ test_1h() {
 }
 run_test 1h "Block hard limit test using fallocate"
 
+test_1i() {
+	local global_limit=200  # 200M
+	local limit1=10  # 10M
+	local TESTDIR="$DIR/$tdir/"
+	local testfile="$TESTDIR/$tfile-0"
+	local testfile1="$TESTDIR/$tfile-1"
+	local testfile2="$TESTDIR/$tfile-2"
+	local qpool1="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool1 || error "pool_add failed"
+	pool_add_targets $qpool1 0 0 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	$LFS setstripe $TESTDIR -c 1 -i 0 || error "setstripe $TESTDIR failed"
+
+	# hit pool limit
+	test_1_check_write $testfile "user" $limit1
+	$LFS setquota -u $TSTUSR -B 0 --pool $qpool1 $DIR ||
+		error "set user quota failed"
+
+	$LFS quota -uv $TSTUSR --pool $qpool1 $DIR
+	$RUNAS $DD of=$testfile1 count=$((limit1/2)) ||
+		quota_error u $TSTUSR "write failure, but expect success"
+
+	rm -f $testfile
+	rm -f $testfile1
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
+		error "set user quota failed"
+	test_1_check_write $testfile "user" $limit1
+	local tmp_limit=$(($limit1*2))
+	# increase pool limit
+	$LFS setquota -u $TSTUSR -B ${tmp_limit}M --pool $qpool1 $DIR ||
+		error "set user quota failed"
+	# now write shouldn't fail
+	$RUNAS $DD of=$testfile1 count=$((limit1/3)) ||
+		quota_error u $TSTUSR "write failure, but expect success"
+	# decrease pool limit
+	$LFS setquota -u $TSTUSR -B ${limit1}M --pool $qpool1 $DIR ||
+		error "set user quota failed"
+	$RUNAS $DD of=$testfile2 count=$((limit1/3))
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	$RUNAS $DD of=$testfile2 seek=$((limit1/3)) count=1 &&
+		quota_error u $TSTUSR "write success, but expect failure"
+	return 0
+}
+run_test 1i "Quota pools: different limit and usage relations"
+
 # test inode hardlimit
 test_2() {
 	local TESTFILE="$DIR/$tdir/$tfile-0"
