@@ -2129,8 +2129,10 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 				continue;
 
 			req->rq_status = after_reply(req);
-			if (req->rq_resend)
+			if (req->rq_resend) {
+				force_timer_recalc = 1;
 				continue;
+			}
 
 			/*
 			 * If there is no bulk associated with this request,
