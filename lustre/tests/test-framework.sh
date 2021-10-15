@@ -8649,7 +8649,7 @@ get_block_count() {
 # ldiskfs xattrs over one block in size.  Allow both the historical
 # Lustre feature name (large_xattr) and the upstream name (ea_inode).
 large_xattr_enabled() {
-	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 1
+	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 0
 
 	local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
 
