@@ -863,7 +863,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		 vcred->vc_uid, vcred->vc_gid,
 		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
 		 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name,
-		 imp->imp_connection->c_self, caller_pid);
+		 LNetPrimaryNID(imp->imp_connection->c_self), caller_pid);
 
 	CDEBUG(D_SEC, "requesting key for %s\n", desc);
 

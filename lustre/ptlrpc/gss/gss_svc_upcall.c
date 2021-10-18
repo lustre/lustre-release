@@ -909,9 +909,9 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	rsikey.lustre_svc = lustre_svc;
 	/* In case of MR, rq_peer is not the NID from which request is received,
 	 * but primary NID of peer.
-	 * So we need rq_source, which contains the NID actually in use.
+	 * So we need LNetPrimaryNID(rq_source) to match what the clients uses.
 	 */
-	rsikey.nid = (__u64) req->rq_source.nid;
+	rsikey.nid = (__u64)LNetPrimaryNID(req->rq_source.nid);
 	nodemap_test_nid(req->rq_peer.nid, rsikey.nm_name,
 			 sizeof(rsikey.nm_name));
 
