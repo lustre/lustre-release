@@ -1941,6 +1941,12 @@ nodemap_exercise_fileset() {
 	if [ "$nm" == "default" ]; then
 		do_facet mgs $LCTL nodemap_activate 1
 		wait_nm_sync active
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value 1
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value 1
+		wait_nm_sync default admin_nodemap
+		wait_nm_sync default trusted_nodemap
 	else
 		nodemap_test_setup
 	fi
@@ -2016,6 +2022,12 @@ nodemap_exercise_fileset() {
 	fi
 	fileset_test_cleanup "$nm"
 	if [ "$nm" == "default" ]; then
+		do_facet mgs $LCTL nodemap_modify --name default \
+			 --property admin --value 0
+		do_facet mgs $LCTL nodemap_modify --name default \
+			 --property trusted --value 0
+		wait_nm_sync default admin_nodemap
+		wait_nm_sync default trusted_nodemap
 		do_facet mgs $LCTL nodemap_activate 0
 		wait_nm_sync active 0
 		trap 0
