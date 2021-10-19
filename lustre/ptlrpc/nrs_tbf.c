@@ -929,8 +929,8 @@ static int nrs_tbf_check_id_value(struct cfs_lstr *src, char *key)
 	rc = cfs_gettok(src, '=', &res);
 	if (rc == 0 || res.ls_len != keylen ||
 	    strncmp(res.ls_str, key, keylen) != 0 ||
-	    src->ls_len <= 2 || src->ls_str[0] != '{' ||
-	    src->ls_str[src->ls_len - 1] != '}')
+	    !src->ls_str || src->ls_len <= 2 ||
+	    src->ls_str[0] != '{' || src->ls_str[src->ls_len - 1] != '}')
 		return -EINVAL;
 
 	/* Skip '{' and '}' */
@@ -1840,8 +1840,8 @@ nrs_tbf_expression_parse(struct cfs_lstr *src, struct list_head *cond_list)
 		return -ENOMEM;
 
 	rc = cfs_gettok(src, NRS_TBF_EXPRESSION_DELIM, &field);
-	if (rc == 0 || src->ls_len <= 2 || src->ls_str[0] != '{' ||
-	    src->ls_str[src->ls_len - 1] != '}')
+	if (rc == 0 || !src->ls_str || src->ls_len <= 2 ||
+	    src->ls_str[0] != '{' || src->ls_str[src->ls_len - 1] != '}')
 		GOTO(out, rc = -EINVAL);
 
 	/* Skip '{' and '}' */

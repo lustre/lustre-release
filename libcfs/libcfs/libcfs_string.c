@@ -151,6 +151,7 @@ cfs_gettok(struct cfs_lstr *next, char delim, struct cfs_lstr *res)
 		/* there is no the delimeter in the string */
 		end = next->ls_str + next->ls_len;
 		next->ls_str = NULL;
+		next->ls_len = 0;
 	} else {
 		next->ls_str = end + 1;
 		next->ls_len -= (end - res->ls_str + 1);
