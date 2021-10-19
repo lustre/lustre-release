@@ -21196,18 +21196,20 @@ run_test 253 "Check object allocation limit"
 test_254() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	do_facet $SINGLEMDS $LCTL get_param -n mdd.$MDT0.changelog_size ||
+
+	local mdt=$(facet_svc $SINGLEMDS)
+
+	do_facet $SINGLEMDS $LCTL get_param -n mdd.$mdt.changelog_size ||
 		skip "MDS does not support changelog_size"
 
 	local cl_user
-	local MDT0=$(facet_svc $SINGLEMDS)
 
 	changelog_register || error "changelog_register failed"
 
 	changelog_clear 0 || error "changelog_clear failed"
 
 	local size1=$(do_facet $SINGLEMDS \
-		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+		      $LCTL get_param -n mdd.$mdt.changelog_size)
 	echo "Changelog size $size1"
 
 	rm -rf $DIR/$tdir
@@ -21222,7 +21224,7 @@ test_254() {
 	rm $DIR/$tdir/pics/desktop.jpg
 
 	local size2=$(do_facet $SINGLEMDS \
-		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+		      $LCTL get_param -n mdd.$mdt.changelog_size)
 	echo "Changelog size after work $size2"
 
 	(( $size2 > $size1 )) ||
