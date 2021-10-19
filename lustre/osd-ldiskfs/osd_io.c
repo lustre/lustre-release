@@ -520,12 +520,24 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	for (page_idx = page_idx_start, block_idx = start_blocks;
 	     block_idx < block_idx_end; page_idx++,
 	     block_idx += blocks_left_page) {
+		/* For cases where the filesystems blocksize is not the
+		 * same as PAGE_SIZE (e.g. ARM with PAGE_SIZE=64KB and
+		 * blocksize=4KB), there will be multiple blocks to
+		 * read/write per page. Also, the start and end block may
+		 * not be aligned to the start and end of the page, so the
+		 * first page may skip some blocks at the start ("i != 0",
+		 * "blocks_left_page" is reduced), and the last page may
+		 * skip some blocks at the end (limited by "count").
+		 */
 		page = pages[page_idx];
 		LASSERT(page_idx < iobuf->dr_npages);
 
 		i = block_idx % blocks_per_page;
 		blocks_left_page = blocks_per_page - i;
-		for (page_offset = i * blocksize; i < blocks_left_page;
+		if (block_idx + blocks_left_page > block_idx_end)
+			blocks_left_page = block_idx_end - block_idx;
+		page_offset = i * blocksize;
+		for (i = 0; i < blocks_left_page;
 		     i += nblocks, page_offset += blocksize * nblocks) {
 			nblocks = 1;
 
