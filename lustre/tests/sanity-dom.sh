@@ -220,4 +220,6 @@ run_test sanityn "Run sanityn with Data-on-MDT files"
 
 complete $SECONDS
 check_and_cleanup_lustre
-exit_status "${TMP}/sanity.log ${TMP}/sanityn.log"
+declare -a logs=($ONLY)
+logs=("${logs[@]/#/$TMP/}")
+exit_status "$(echo ${logs[@]/%/.log})"
