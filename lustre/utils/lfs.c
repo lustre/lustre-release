@@ -147,6 +147,7 @@ static int lfs_pcc_attach_fid(int argc, char **argv);
 static int lfs_pcc_detach(int argc, char **argv);
 static int lfs_pcc_detach_fid(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
+static int lfs_pcc_delete(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
@@ -348,6 +349,9 @@ command_t pcc_cmdlist[] = {
 	{ .pc_name = "detach_fid", .pc_func = lfs_pcc_detach_fid,
 	  .pc_help = "Detach given files from PCC by FID(s).\n"
 		"usage: lfs pcc detach_fid {--mnt|-m MOUNTPATH} FID...\n" },
+	{ .pc_name = "delete", .pc_func = lfs_pcc_delete,
+	  .pc_help = "Delete the PCC layout component for given files.\n"
+		"usage: lfs pcc delete <FILE> ...\n" },
 	{ .pc_help = NULL }
 };
 
@@ -1669,10 +1673,11 @@ struct mirror_args {
  * Flags for extending a mirrored file.
  */
 enum mirror_flags {
-	MF_NO_VERIFY	= 0x1,
-	MF_DESTROY	= 0x2,
-	MF_COMP_ID	= 0x4,
-	MF_COMP_POOL	= 0x8,
+	MF_NO_VERIFY	= 0x01,
+	MF_DESTROY	= 0x02,
+	MF_COMP_ID	= 0x04,
+	MF_COMP_POOL	= 0x08,
+	MF_FOREIGN	= 0x10,
 };
 
 /**
@@ -2188,6 +2193,28 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 	return rc;
 }
 
+static int find_foreign_id(struct llapi_layout *layout, void *cbdata)
+{
+	uint64_t pattern;
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_pattern_get(layout, &pattern);
+	if (rc < 0)
+		return rc;
+
+	if (pattern == LLAPI_LAYOUT_FOREIGN) {
+		rc = llapi_layout_mirror_id_get(layout, &id);
+		if (rc < 0)
+			return rc;
+
+		*(uint32_t *)cbdata = id;
+		return LLAPI_LAYOUT_ITER_STOP;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
 static int find_mirror_id(struct llapi_layout *layout, void *cbdata)
 {
 	uint32_t id;
@@ -2388,6 +2415,9 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	} else if (mflags & MF_COMP_ID) {
 		rc = llapi_layout_comp_iterate(layout, find_comp_id, &id);
 		mirror_id = mirror_id_of(id);
+	} else if (mflags & MF_FOREIGN) {
+		rc = llapi_layout_comp_iterate(layout, find_foreign_id, &id);
+		mirror_id = id;
 	} else {
 		rc = llapi_layout_comp_iterate(layout, find_mirror_id, &id);
 		mirror_id = id;
@@ -2406,6 +2436,11 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 			fprintf(stderr,
 				"error %s: file '%s' does not contain mirror with comp-id %u\n",
 				progname, fname, id);
+			goto free_layout;
+		} else if (mflags & MF_FOREIGN) {
+			fprintf(stderr,
+				"error %s: file '%s' does not contain foreign component\n",
+				progname, fname);
 			goto free_layout;
 		} else {
 			fprintf(stderr,
@@ -14298,6 +14333,38 @@ static int lfs_pcc_state(int argc, char **argv)
 		printf(", flags: %x", state.pccs_flags);
 		printf("\n");
 	}
+	return rc;
+}
+
+static int lfs_pcc_delete(int argc, char **argv)
+{
+	int rc = 0;
+	const char *path;
+
+	optind = 1;
+
+	if (argc <= 1) {
+		fprintf(stderr, "%s: must specify one or more file names\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
+	while (optind < argc) {
+		int rc2;
+
+		path = argv[optind++];
+		rc2 = mirror_split(path, 0, NULL,
+				   MF_DESTROY | MF_FOREIGN, NULL);
+		if (rc2 < 0) {
+			if (rc == 0)
+				rc = rc2;
+			fprintf(stderr,
+				"%s: failed to delete PCC for '%s': %s\n",
+				argv[0], path, strerror(-rc2));
+			continue;
+		}
+	}
+
 	return rc;
 }
 
