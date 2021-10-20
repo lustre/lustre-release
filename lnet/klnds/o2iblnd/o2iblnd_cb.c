@@ -3569,8 +3569,7 @@ kiblnd_connd (void *arg)
 		}
 
 		conn = list_first_entry_or_null(&kiblnd_data.kib_connd_waits,
-						struct kib_conn,
-						ibc_sched_list);
+						struct kib_conn, ibc_list);
 		if (conn) {
 			list_del(&conn->ibc_list);
 			spin_unlock_irqrestore(lock, flags);
