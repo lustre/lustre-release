@@ -3373,6 +3373,31 @@ test_27R() {
 }
 run_test 27R "test max_stripecount limitation when stripe count is set to -1"
 
+test_27S() {
+	(( $MDS1_VERSION >= $(version_code 2.14.54) )) ||
+		skip "Need MDS version at least 2.14.54"
+	[[ "$(facet_host mds1)" != "$(facet_host ost1)" ]] ||
+		skip "needs different host for mdt1 ost1"
+
+	local count=$(precreated_ost_obj_count 0 0)
+
+	echo "precreate count $count"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "setstripe $tdir failed"
+	#define OBD_FAIL_OSP_GET_LAST_FID	0x2109
+	do_facet mds1 $LCTL set_param fail_loc=0x2109
+	#define OBD_FAIL_OST_GET_LAST_FID	0x252
+	do_facet ost1 $LCTL set_param fail_loc=0x252
+	createmany -o $DIR/$tdir/f $count &
+	pid=$!
+	echo "precreate count $(precreated_ost_obj_count 0 0)"
+	do_facet mds1 $LCTL set_param fail_loc=0
+	do_facet ost1 $LCTL set_param fail_loc=0
+	wait $pid || error "createmany failed"
+	echo "precreate count $(precreated_ost_obj_count 0 0)"
+}
+run_test 27S "don't deactivate OSP on network issue"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

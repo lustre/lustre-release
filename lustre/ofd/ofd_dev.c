@@ -1170,6 +1170,9 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (rc)
 			RETURN(err_serious(rc));
 
+		if (OBD_FAIL_CHECK(OBD_FAIL_OST_GET_LAST_FID))
+			RETURN(-EAGAIN);
+
 		fid = req_capsule_client_get(tsi->tsi_pill, &RMF_FID);
 		if (fid == NULL)
 			RETURN(err_serious(-EPROTO));
@@ -1183,12 +1186,12 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		oseq = ofd_seq_load(tsi->tsi_env, ofd,
 				    ostid_seq(&fti->fti_ostid));
 		if (IS_ERR(oseq))
-			RETURN(PTR_ERR(oseq));
+			RETURN(-EFAULT);
 
 		rc = ostid_to_fid(fid, &oseq->os_oi,
 				  ofd->ofd_lut.lut_lsd.lsd_osd_index);
 		if (rc != 0)
-			GOTO(out_put, rc);
+			GOTO(out_put, rc = -EFAULT);
 
 		CDEBUG(D_HA, "%s: LAST FID is "DFID"\n", ofd_name(ofd),
 		       PFID(fid));

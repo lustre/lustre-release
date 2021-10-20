@@ -782,12 +782,11 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 
 	rc = ptlrpc_queue_wait(req);
 	if (rc) {
-		/* bad-bad OST.. let sysadm sort this out */
-		if (rc == -ENOTSUPP) {
-			CERROR("%s: server does not support FID: rc = %d\n",
-			       d->opd_obd->obd_name, -ENOTSUPP);
-		}
-		ptlrpc_set_import_active(imp, 0);
+		/* -EFAULT means reading LAST_FID failed (see ofd_get_info_hld),
+		 * let sysadm sort this * out.
+		 */
+		if (rc == -EFAULT)
+			ptlrpc_set_import_active(imp, 0);
 		GOTO(out, rc);
 	}
 
@@ -879,7 +878,8 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	*last_fid = d->opd_last_used_fid;
 	/* The OSP should already get the valid seq now */
 	LASSERT(!fid_is_zero(last_fid));
-	if (fid_oid(&d->opd_last_used_fid) < 2) {
+	if (fid_oid(&d->opd_last_used_fid) < 2 ||
+	    OBD_FAIL_CHECK(OBD_FAIL_OSP_GET_LAST_FID)) {
 		/* lastfid looks strange... ask OST */
 		rc = osp_get_lastfid_from_ost(env, d);
 		if (rc)
@@ -1303,6 +1303,11 @@ static int osp_precreate_thread(void *_args)
 
 			if (d->opd_pre == NULL)
 				continue;
+
+			if (OBD_FAIL_CHECK(OBD_FAIL_OSP_GET_LAST_FID)) {
+				d->opd_pre_recovering = 1;
+				break;
+			}
 
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is

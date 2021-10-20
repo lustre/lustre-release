@@ -350,6 +350,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_SEEK_NET		 0x24a
 #define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
 #define OBD_FAIL_OST_RESTART_IO		 0x251
+#define OBD_FAIL_OST_GET_LAST_FID	 0x252
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -721,6 +722,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_INVALID_LOGID		0x2106
 #define OBD_FAIL_OSP_CON_EVENT_DELAY		0x2107
 #define OBD_FAIL_OSP_PRECREATE_PAUSE		0x2108
+#define OBD_FAIL_OSP_GET_LAST_FID		0x2109
 
 /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200
