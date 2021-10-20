@@ -480,7 +480,7 @@ static int ptlrpcd(void *arg)
 		DEFINE_WAIT_FUNC(wait, woken_wake_function);
 		time64_t timeout;
 
-		timeout = ptlrpc_set_next_timeout(set);
+		timeout = cfs_time_seconds(ptlrpc_set_next_timeout(set));
 
 		lu_context_enter(&env.le_ctx);
 		lu_context_enter(env.le_ses);
@@ -492,9 +492,11 @@ static int ptlrpcd(void *arg)
 			if (timeout == 0)
 				ret = wait_woken(&wait, TASK_IDLE,
 						 MAX_SCHEDULE_TIMEOUT);
-			else
-				ret = wait_woken(&wait, TASK_IDLE,
-						 cfs_time_seconds(timeout));
+			else {
+				ret = wait_woken(&wait, TASK_IDLE, timeout);
+				if (ret > 0)
+					timeout = ret;
+			}
 			if (ret != 0)
 				continue;
 			/* Timed out */
