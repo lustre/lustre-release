@@ -2422,6 +2422,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	} else {
 		repbody->oa.o_valid = 0;
 	}
+	if (body->oa.o_valid & OBD_MD_FLGRANT)
+		repbody->oa.o_valid |= OBD_MD_FLGRANT;
 	/* We're finishing using body->oa as an input variable */
 
 	/* Check if client was evicted while we were doing i/o before touching

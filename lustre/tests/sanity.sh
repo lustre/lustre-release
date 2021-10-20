@@ -8873,6 +8873,60 @@ test_64g() {
 }
 run_test 64g "grant shrink on MDT"
 
+test_64h() {
+	local instance=$($LFS getname -i $DIR)
+	local osc_tgt="$FSNAME-OST0000-osc-$instance"
+	local num_exps=$(do_facet ost1 \
+	    $LCTL get_param -n obdfilter.*OST0000*.num_exports)
+	local max_brw_size=$(import_param $osc_tgt max_brw_size)
+	local avail=$($LCTL get_param -n osc.*OST0000-osc-$instance.kbytesavail)
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	# 10MiB is for file to be written, max_brw_size * 16 *
+	# num_exps is space reserve so that tgt_grant_shrink() decided
+	# to not shrink
+	local expect=$((max_brw_size * 16 * num_exps + 10 * 1048576))
+	(( avail * 1024 < expect )) &&
+		skip "need $expect bytes on ost1, have $(( avail * 1024 )) only"
+
+	save_lustre_params client "osc.*OST0000*.grant_shrink" > $p
+	save_lustre_params client "osc.*OST0000*.grant_shrink_interval" >> $p
+	stack_trap "restore_lustre_params < $p; rm -f $save" EXIT
+	$LCTL set_param osc.*OST0000*.grant_shrink=1
+	$LCTL set_param osc.*OST0000*.grant_shrink_interval=10
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 oflag=sync
+
+	# drop cache so that coming read would do rpc
+	cancel_lru_locks osc
+
+	# shrink interval is set to 10, pause for 7 seconds so that
+	# grant thread did not wake up yet but coming read entered
+	# shrink mode for rpc (osc_should_shrink_grant())
+	sleep 7
+
+	declare -a cur_grant_bytes
+	declare -a tot_granted
+	cur_grant_bytes[0]=$($LCTL get_param -n osc.*OST0000*.cur_grant_bytes)
+	tot_granted[0]=$(do_facet ost1 \
+	    $LCTL get_param -n obdfilter.*OST0000*.tot_granted)
+
+	dd if=$DIR/$tfile bs=4K count=1 of=/dev/null
+
+	cur_grant_bytes[1]=$($LCTL get_param -n osc.*OST0000*.cur_grant_bytes)
+	tot_granted[1]=$(do_facet ost1 \
+	    $LCTL get_param -n obdfilter.*OST0000*.tot_granted)
+
+	# grant change should be equal on both sides
+	(( cur_grant_bytes[0] - cur_grant_bytes[1] ==
+		tot_granted[0] - tot_granted[1])) ||
+		error "grant change mismatch, "				       \
+			"server: ${tot_granted[0]} to ${tot_granted[1]}, "     \
+			"client: ${cur_grant_bytes[0]} to ${cur_grant_bytes[1]}"
+}
+run_test 64h "grant shrink on read"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
