@@ -365,8 +365,16 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 			if (hai->hai_extent.offset != 0)
 				GOTO(out, rc = -EPROTO);
 
+			/* LU-15132 */
+			OBD_RACE(OBD_FAIL_MDS_HSM_RESTORE_RACE);
+
 			rc = cdt_restore_handle_add(mti, cdt, &hai->hai_fid,
 						    &hai->hai_extent);
+			if (rc == 1) {
+				rc = 0;
+				continue;
+			}
+
 			if (rc < 0)
 				GOTO(out, rc);
 		}

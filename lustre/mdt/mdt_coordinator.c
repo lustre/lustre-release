@@ -488,6 +488,9 @@ static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
 	mutex_lock(&cdt->cdt_restore_lock);
 	list_for_each_entry_safe(crh, tmp3, &cdt->cdt_restore_handle_list,
 				 crh_list) {
+		/* not locked yet, cleanup by cdt_restore_handle_add() */
+		if (crh->crh_lh.mlh_type == MDT_NUL_LOCK)
+			continue;
 		list_del(&crh->crh_list);
 		/* give back layout lock */
 		mdt_object_unlock(cdt_mti, NULL, &crh->crh_lh, 1);
@@ -801,10 +804,21 @@ clean_cb_alloc:
 	RETURN(rc);
 }
 
+/**
+ * register a new HSM restore handle for a file and take EX lock on the layout
+ * \param mti [IN] thread info
+ * \param cdt [IN] coordinator
+ * \param fid [IN] fid of the file to restore
+ * \param he  [IN] HSM extent
+ * \retval 0 success
+ * \retval 1 restore handle already exists for the fid
+ * \retval -ve failure
+ */
 int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 			   const struct lu_fid *fid,
 			   const struct hsm_extent *he)
 {
+	struct mdt_lock_handle lh = { 0 };
 	struct cdt_restore_handle *crh;
 	struct mdt_object *obj;
 	int rc;
@@ -821,31 +835,48 @@ int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 	 */
 	crh->crh_extent.start = 0;
 	crh->crh_extent.end = he->length;
+	crh->crh_lh.mlh_type = MDT_NUL_LOCK;
+
+	mutex_lock(&cdt->cdt_restore_lock);
+	if (cdt_restore_handle_find(cdt, fid) != NULL)
+		GOTO(out_crl, rc = 1);
+
+	if (unlikely(cdt->cdt_state == CDT_STOPPED ||
+		     cdt->cdt_state == CDT_STOPPING))
+		GOTO(out_crl, rc = -EAGAIN);
+
+	list_add_tail(&crh->crh_list, &cdt->cdt_restore_handle_list);
+	mutex_unlock(&cdt->cdt_restore_lock);
+
 	/* get the layout lock */
-	mdt_lock_reg_init(&crh->crh_lh, LCK_EX);
-	obj = mdt_object_find_lock(mti, &crh->crh_fid, &crh->crh_lh,
+	mdt_lock_reg_init(&lh, LCK_EX);
+	obj = mdt_object_find_lock(mti, &crh->crh_fid, &lh,
 				   MDS_INODELOCK_LAYOUT);
-	if (IS_ERR(obj))
-		GOTO(out_crh, rc = PTR_ERR(obj));
+	if (IS_ERR(obj)) {
+		mutex_lock(&cdt->cdt_restore_lock);
+		GOTO(out_ldel, rc = PTR_ERR(obj));
+	}
 
 	/* We do not keep a reference on the object during the restore
-	 * which can be very long. */
+	 * which can be very long.
+	 */
 	mdt_object_put(mti->mti_env, obj);
 
 	mutex_lock(&cdt->cdt_restore_lock);
 	if (unlikely(cdt->cdt_state == CDT_STOPPED ||
-		     cdt->cdt_state == CDT_STOPPING)) {
-		mutex_unlock(&cdt->cdt_restore_lock);
+		     cdt->cdt_state == CDT_STOPPING))
 		GOTO(out_lh, rc = -EAGAIN);
-	}
 
-	list_add_tail(&crh->crh_list, &cdt->cdt_restore_handle_list);
+	crh->crh_lh = lh;
 	mutex_unlock(&cdt->cdt_restore_lock);
 
 	RETURN(0);
 out_lh:
 	mdt_object_unlock(mti, NULL, &crh->crh_lh, 1);
-out_crh:
+out_ldel:
+	list_del(&crh->crh_list);
+out_crl:
+	mutex_unlock(&cdt->cdt_restore_lock);
 	OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
 
 	return rc;
@@ -953,6 +984,8 @@ static int hsm_restore_cb(const struct lu_env *env,
 	}
 
 	rc = cdt_restore_handle_add(mti, cdt, &hai->hai_fid, &hai->hai_extent);
+	if (rc == 1)
+		rc = 0;
 out:
 	RETURN(rc);
 }

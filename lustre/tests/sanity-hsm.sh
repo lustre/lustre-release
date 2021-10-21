@@ -1384,6 +1384,37 @@ test_12r() {
 }
 run_test 12r "lseek restores released file"
 
+test_12s() {
+	local f=$DIR/$tdir/$tfile
+	local fid
+	local pid1 pid2
+
+	(( MDS1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need MDS version newer than 2.15.50"
+
+	# test needs a running copytool
+	copytool setup
+
+	mkdir_on_mdt0 $DIR/$tdir
+	fid=$(copy_file /etc/hosts $f)
+
+	$LFS hsm_archive $f || error "archive of $f failed"
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "release of $f failed"
+
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_HSM_RESTORE_RACE 0x8000018b
+	do_facet mds1 $LCTL set_param fail_loc=0x8000018b
+	cat $f > /dev/null & pid1=$!
+	cat $f > /dev/null & pid2=$!
+
+	wait $pid1 || error "cat process 1 fail (pid: $pid1)"
+	wait $pid2 || error "cat process 2 fail (pid: $pid2)"
+
+	# Race exists if more than 1 restore requests is registered
+	assert_request_count $fid RESTORE 1
+}
+run_test 12s "race between restore requests"
+
 test_13() {
 	local -i i j k=0
 	for i in {1..10}; do
