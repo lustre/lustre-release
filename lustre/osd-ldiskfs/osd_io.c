@@ -1956,7 +1956,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		 * level.
 		 */
 		depth = inode != NULL ? ext_depth(inode) : 0;
-		depth = min(max(depth, 1) + 1, LDISKFS_MAX_EXTENT_DEPTH);
+		depth = min(max(depth, 1) + 3, LDISKFS_MAX_EXTENT_DEPTH);
 		credits = depth;
 		/* if not append, then split may need to modify
 		 * existing blocks moving entries into the new ones
