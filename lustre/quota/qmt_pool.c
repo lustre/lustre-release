@@ -1155,6 +1155,13 @@ static int qmt_pool_recalc(void *args)
 
 	pool = args;
 
+	rc = lu_env_init(&env, LCT_MD_THREAD);
+	if (rc) {
+		CERROR("%s: cannot init env: rc = %d\n",
+		       pool->qpi_qmt->qmt_svname, rc);
+		GOTO(out, rc);
+	}
+
 	obd = qmt_get_mgc(pool->qpi_qmt);
 	if (IS_ERR(obd))
 		GOTO(out, rc = PTR_ERR(obd));
@@ -1183,15 +1190,9 @@ static int qmt_pool_recalc(void *args)
 	 * solution looks more complex, so leave it as it is. */
 	down_write(&pool->qpi_recalc_sem);
 
-	rc = lu_env_init(&env, LCT_MD_THREAD);
-	if (rc) {
-		CERROR("%s: cannot init env: rc = %d\n", obd->obd_name, rc);
-		GOTO(out, rc);
-	}
-
 	glbl_pool = qmt_pool_lookup_glb(&env, pool->qpi_qmt, pool->qpi_rtype);
 	if (IS_ERR(glbl_pool))
-		GOTO(out_env, rc = PTR_ERR(glbl_pool));
+		GOTO(out, rc = PTR_ERR(glbl_pool));
 
 	slaves_cnt = qmt_sarr_count(pool);
 	CDEBUG(D_QUOTA, "Starting pool recalculation for %d slaves in %s\n",
@@ -1237,8 +1238,6 @@ static int qmt_pool_recalc(void *args)
 	GOTO(out_stop, rc);
 out_stop:
 	qpi_putref(&env, glbl_pool);
-out_env:
-	lu_env_fini(&env);
 out:
 	if (xchg(&pool->qpi_recalc_task, NULL) == NULL)
 		/*
@@ -1251,12 +1250,20 @@ out:
 
 	clear_bit(QPI_FLAG_RECALC_OFFSET, &pool->qpi_flags);
 	/* Pool can't be changed, since sem has been down.
-	 * Thus until up_read, no one can restart recalc thread. */
+	 * Thus until up_read, no one can restart recalc thread.
+	 */
 	if (sem) {
 		up_read(sem);
 		up_write(&pool->qpi_recalc_sem);
 	}
-	qpi_putref(&env, pool);
+
+	/* qpi_getref has been called in qmt_start_pool_recalc,
+	 * however we can't call qpi_putref if lu_env_init failed.
+	 */
+	if (env.le_ctx.lc_state == LCS_ENTERED) {
+		qpi_putref(&env, pool);
+		lu_env_fini(&env);
+	}
 
 	return rc;
 }
