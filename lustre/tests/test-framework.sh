@@ -7456,48 +7456,49 @@ get_osc_import_name() {
 }
 
 _wait_import_state () {
-    local expected=$1
-    local CONN_PROC=$2
-    local maxtime=${3:-$(max_recovery_time)}
-    local error_on_failure=${4:-1}
-    local CONN_STATE
-    local i=0
+	local expected="$1"
+	local CONN_PROC="$2"
+	local maxtime=${3:-$(max_recovery_time)}
+	local err_on_fail=${4:-1}
+	local CONN_STATE
+	local i=0
 
 	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
-    while ! echo "${CONN_STATE}" | egrep -q "^${expected}\$" ; do
-        if [ "${expected}" == "DISCONN" ]; then
-            # for disconn we can check after proc entry is removed
-            [ "x${CONN_STATE}" == "x" ] && return 0
-            #  with AT enabled, we can have connect request timeout near of
-            # reconnect timeout and test can't see real disconnect
-            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
-        fi
-	if [ $i -ge $maxtime ]; then
-	    [ $error_on_failure -ne 0 ] && \
-		error "can't put import for $CONN_PROC into ${expected}" \
-		      "state after $i sec, have ${CONN_STATE}"
-            return 1
-	fi
-        sleep 1
-	# Add uniq for multi-mount case
-	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
-        i=$(($i + 1))
-    done
+	while ! echo "${CONN_STATE}" | egrep -q "^${expected}\$" ; do
+		if [[ "${expected}" == "DISCONN" ]]; then
+			# for disconn we can check after proc entry is removed
+			[[ -z "${CONN_STATE}" ]] && return 0
+			# with AT, we can have connect request timeout near
+			# reconnect timeout and test can't see real disconnect
+			[[ "${CONN_STATE}" == "CONNECTING" ]] && return 0
+		fi
+		if (( $i >= $maxtime )); then
+			(( $err_on_fail != 0 )) &&
+				error "can't put import for $CONN_PROC into ${expected} state after $i sec, have ${CONN_STATE}"
+			return 1
+		fi
+		sleep 1
+		# Add uniq for multi-mount case
+		CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null |
+			     cut -f2 | uniq)
+		i=$((i + 1))
+	done
 
-    log "$CONN_PROC in ${CONN_STATE} state after $i sec"
-    return 0
+	log "$CONN_PROC in ${CONN_STATE} state after $i sec"
+	return 0
 }
 
 wait_import_state() {
-    local state=$1
-    local params=$2
-    local maxtime=${3:-$(max_recovery_time)}
-    local error_on_failure=${4:-1}
-    local param
+	local expected="$1"
+	local params="$2"
+	local maxtime=${3:-$(max_recovery_time)}
+	local err_on_fail=${4:-1}
+	local param
 
-    for param in ${params//,/ }; do
-	_wait_import_state $state $param $maxtime $error_on_failure || return
-    done
+	for param in ${params//,/ }; do
+		_wait_import_state "$expected" "$param" $maxtime $err_on_fail ||
+		return
+	done
 }
 
 wait_import_state_mount() {
@@ -7505,7 +7506,7 @@ wait_import_state_mount() {
 		return 0
 	fi
 
-	wait_import_state $*
+	wait_import_state "$@"
 }
 
 # One client request could be timed out because server was not ready
@@ -7704,11 +7705,10 @@ do_rpc_nodes () {
 }
 
 wait_clients_import_state () {
-	local list=$1
-	local facet=$2
-	local expected=$3
-
-	local facets=$facet
+	local list="$1"
+	local facet="$2"
+	local expected="$3"
+	local facets="$facet"
 
 	if [ "$FAILURE_MODE" = HARD ]; then
 		facets=$(facets_on_host $(facet_active_host $facet))
@@ -7719,11 +7719,11 @@ wait_clients_import_state () {
 		local proc_path
 		case $facet in
 		ost* ) proc_path="osc.$(get_clientosc_proc_path \
-				  $label).ost_server_uuid" ;;
+					$label).ost_server_uuid" ;;
 		mds* ) proc_path="mdc.$(get_clientmdc_proc_path \
-				  $label).mds_server_uuid" ;;
+					$label).mds_server_uuid" ;;
 		mgs* ) proc_path="mgc.$(get_clientmgc_proc_path \
-				  $label).mgs_server_uuid" ;;
+					$label).mgs_server_uuid" ;;
 		*) error "unknown facet!" ;;
 		esac
 
