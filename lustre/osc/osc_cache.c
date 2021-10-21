@@ -2315,7 +2315,12 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	}
 
 	/* check if the file's owner/group is over quota */
-	if (!io->ci_noquota) {
+	/* do not check for root without root squash, because in this case
+	 * we should bypass quota
+	 */
+	if ((!oio->oi_cap_sys_resource ||
+	     cli->cl_root_squash) &&
+	    !io->ci_noquota) {
 		struct cl_object *obj;
 		struct cl_attr   *attr;
 		unsigned int qid[LL_MAXQUOTAS];
@@ -2330,20 +2335,8 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		qid[USRQUOTA] = attr->cat_uid;
 		qid[GRPQUOTA] = attr->cat_gid;
 		qid[PRJQUOTA] = attr->cat_projid;
-		/*
-		 * if EDQUOT returned for root, we double check
-		 * if root squash enabled or not updated from server side.
-		 * without root squash, we should bypass quota for root.
-		 */
-		if (rc == 0 && osc_quota_chkdq(cli, qid) == -EDQUOT) {
-			if (oio->oi_cap_sys_resource &&
-			    !cli->cl_root_squash) {
-				io->ci_noquota = 1;
-				rc = 0;
-			} else {
-				rc = -EDQUOT;
-			}
-		}
+		if (rc == 0 && osc_quota_chkdq(cli, qid) == -EDQUOT)
+			rc = -EDQUOT;
 		if (rc)
 			RETURN(rc);
 	}
