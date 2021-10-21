@@ -2050,7 +2050,8 @@ test_230() {
 	echo "Check valid values; Should succeed"
 	local i
 	local lnid
-	for ((i = 4; i < 16; i+=4)); do
+	local cmd
+	for ((i = 4; i < 16; i+=1)); do
 		reinit_dlc || return $?
 		add_net "tcp" "${INTERFACES[0]}" || return $?
 		do_lnetctl net set --all --conns-per-peer $i ||
@@ -2060,7 +2061,20 @@ test_230() {
 		lnid="$(lctl list_nids | head -n 1)"
 		do_lnetctl ping "$lnid" ||
 			error "failed to ping myself"
-		printf 'network tcp\nconn_list\n' | lctl | grep -c "$lnid" | grep -q $((2+i*2)) ||
+		# "lctl --net tcp conn_list" prints the list of active
+		# connections. Since we're pinging ourselves, there should be
+		# 2 Control connections plus 2*conns_per_peer connections
+		# created (one Bulk Input, one Bulk Output in each pair).
+		# Here's the sample output for conns_per_peer set to 1:
+		# 12345-1.1.1.1@tcp I[0]host01->host01:988 2626560/1061296 nonagle
+		# 12345-1.1.1.1@tcp O[0]host01->host01:1022 2626560/1061488 nonagle
+		# 12345-1.1.1.1@tcp C[0]host01->host01:988 2626560/1061296 nonagle
+		# 12345-1.1.1.1@tcp C[0]host01->host01:1023 2626560/1061488 nonagle
+		cmd="printf 'network tcp\nconn_list\n' | lctl | grep -c '$lnid'"
+
+		# Expect 2+conns_per_peer*2 connections. Wait no longer
+		# than 2 seconds.
+		wait_update $HOSTNAME "$cmd" "$((2+i*2))" 2 ||
 			error "expected number of tcp connections $((2+i*2))"
 	done
 
