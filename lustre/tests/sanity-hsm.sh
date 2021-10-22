@@ -3516,6 +3516,60 @@ test_103() {
 }
 run_test 103 "Purge all requests"
 
+test_103a() {
+	cdt_clear_non_blocking_restore
+
+	# test needs a running copytool
+	copytool setup
+
+	local -a fids=()
+	local i
+
+	mkdir_on_mdt0 $DIR/$tdir
+	for i in {0..9}; do
+		fids+=( $(copy_file /etc/passwd $DIR/$tdir/${tfile}_$i) )
+	done
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tdir/*
+
+	local time=0
+	local cnt=0
+	local grep_regex="($(tr ' ' '|' <<< "${fids[*]}")).*action=ARCHIVE.*status=SUCCEED"
+	echo $grep_regex
+	while [[ $time -lt 5 ]] && [[ $cnt -ne ${#fids[@]} ]]; do
+		cnt=$(do_facet mds1 "$LCTL get_param -n $HSM_PARAM.actions |
+			grep -c -E '$grep_regex'")
+		sleep 1
+		((++time))
+	done
+	[[ $cnt -eq ${#fids[@]} ]] || error "Fail to archive files $cnt/${#fids[@]}"
+
+	$LFS hsm_release $DIR/$tdir/*
+
+	kill_copytools
+	wait_copytools || error "Copytool failed to stop"
+
+	local -a pids=()
+	for i in "${fids[@]}"; do
+		cat $DIR/.lustre/fid/$i > /dev/null & pids+=($!)
+	done
+
+	cdt_purge
+	grep_regex="($(tr ' ' '|' <<< "${fids[*]}")).*action=RESTORE.*status=CANCELED"
+	cnt=$(do_facet mds1 "$LCTL get_param -n $HSM_PARAM.actions |
+		grep -cE '$grep_regex'")
+
+	[[ "$cnt" -eq ${#fids[@]} ]] ||
+		error "Some request have not been canceled ($cnt/${#fids[@]} canceled)"
+
+	# cat cmds should not hang and should fail
+	for i in "${!pids[@]}"; do
+		wait ${pids[$i]} &&
+			error "Restore for ${tfile}_$i (${pids[$i]}) should fail" ||
+			true
+	done
+}
+run_test 103a "Purge pending restore requests"
+
 DATA=CEA
 DATAHEX='[434541]'
 test_104() {

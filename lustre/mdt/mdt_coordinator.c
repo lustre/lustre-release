@@ -741,8 +741,7 @@ static int mdt_coordinator(void *data)
 		}
 
 		if (update_idx) {
-			rc = mdt_agent_record_update(mti->mti_env, mdt,
-						     updates, update_idx);
+			rc = mdt_agent_record_update(mti, updates, update_idx);
 			if (rc)
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "rc=%d, cannot update records "
@@ -1257,8 +1256,7 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 				.status = ARS_CANCELED,
 			};
 
-			rc = mdt_agent_record_update(mti->mti_env, mti->mti_mdt,
-						     &update, 1);
+			rc = mdt_agent_record_update(mti, &update, 1);
 			if (rc) {
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "rc=%d, cannot update status to %s "
@@ -1682,8 +1680,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		update.cookie = pgs->hpk_cookie;
 		update.status = status;
 
-		rc1 = mdt_agent_record_update(mti->mti_env, mdt,
-					      &update, 1);
+		rc1 = mdt_agent_record_update(mti, &update, 1);
 		if (rc1)
 			CERROR("%s: mdt_agent_record_update() failed,"
 			       " rc=%d, cannot update status to %s"
@@ -1717,20 +1714,12 @@ out:
 
 
 /**
- * data passed to llog_cat_process() callback
- * to cancel requests
- */
-struct hsm_cancel_all_data {
-	struct mdt_device	*mdt;
-};
-
-/**
  *  llog_cat_process() callback, used to:
  *  - purge all requests
  * \param env [IN] environment
  * \param llh [IN] llog handle
  * \param hdr [IN] llog record
- * \param data [IN] cb data = struct hsm_cancel_all_data
+ * \param data [IN] cb data = struct mdt_thread_info
  * \retval 0 success
  * \retval -ve failure
  */
@@ -1738,18 +1727,28 @@ static int mdt_cancel_all_cb(const struct lu_env *env,
 			     struct llog_handle *llh,
 			     struct llog_rec_hdr *hdr, void *data)
 {
-	struct llog_agent_req_rec	*larr;
-	struct hsm_cancel_all_data	*hcad;
-	int				 rc = 0;
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_action_item *hai = &larr->arr_hai;
+	struct mdt_thread_info	*mti = data;
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
+	int rc;
 	ENTRY;
 
-	larr = (struct llog_agent_req_rec *)hdr;
-	hcad = data;
-	if (larr->arr_status == ARS_WAITING ||
-	    larr->arr_status == ARS_STARTED) {
-		larr->arr_status = ARS_CANCELED;
-		larr->arr_req_change = ktime_get_real_seconds();
-		rc = llog_write(env, llh, hdr, hdr->lrh_index);
+	if (larr->arr_status != ARS_WAITING &&
+	    larr->arr_status != ARS_STARTED)
+		RETURN(0);
+
+	/* Unlock the EX layout lock */
+	if (hai->hai_action == HSMA_RESTORE)
+		cdt_restore_handle_del(mti, cdt, &hai->hai_fid);
+
+	larr->arr_status = ARS_CANCELED;
+	larr->arr_req_change = ktime_get_real_seconds();
+	rc = llog_write(env, llh, hdr, hdr->lrh_index);
+	if (rc < 0) {
+		CERROR("%s: cannot update agent log: rc = %d\n",
+		       mdt_obd_name(mti->mti_mdt), rc);
+		rc = LLOG_DEL_RECORD;
 	}
 
 	RETURN(rc);
@@ -1768,7 +1767,6 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 	struct cdt_agent_req		*car;
 	struct hsm_action_list		*hal = NULL;
 	struct hsm_action_item		*hai;
-	struct hsm_cancel_all_data	 hcad;
 	int				 hal_sz = 0, hal_len, rc;
 	enum cdt_states			 old_state;
 	ENTRY;
@@ -1866,10 +1864,8 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 		OBD_FREE(hal, hal_sz);
 
 	/* cancel all on-disk records */
-	hcad.mdt = mdt;
-
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, mdt_cancel_all_cb,
-			      &hcad, 0, 0, WRITE);
+			      (void *)mti, 0, 0, WRITE);
 out_cdt_state:
 	/* Enable coordinator, unless the coordinator was stopping. */
 	set_cdt_state_locked(cdt, old_state);

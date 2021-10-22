@@ -312,11 +312,11 @@ free:
  * to find requests
  */
 struct data_update_cb {
-	struct mdt_device	*mdt;
+	struct mdt_thread_info *mti;
 	struct hsm_record_update *updates;
-	unsigned int		 updates_count;
-	unsigned int		 updates_done;
-	time64_t		 change_time;
+	unsigned int updates_count;
+	unsigned int updates_done;
+	time64_t change_time;
 };
 
 /**
@@ -333,13 +333,14 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 				      struct llog_rec_hdr *hdr,
 				      void *data)
 {
-	struct llog_agent_req_rec	*larr;
-	struct data_update_cb		*ducb;
-	int				 rc, i;
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_action_item *hai = &larr->arr_hai;
+	struct data_update_cb *ducb = data;
+	struct mdt_thread_info *mti = ducb->mti;
+	struct mdt_device *mdt = ducb->mti->mti_mdt;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	int rc, i;
 	ENTRY;
-
-	larr = (struct llog_agent_req_rec *)hdr;
-	ducb = data;
 
 	/* check if all done */
 	if (ducb->updates_count == ducb->updates_done)
@@ -354,9 +355,9 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 		struct hsm_record_update *update = &ducb->updates[i];
 
 		CDEBUG(D_HSM, "%s: search %#llx, found %#llx\n",
-		       mdt_obd_name(ducb->mdt), update->cookie,
-		       larr->arr_hai.hai_cookie);
-		if (larr->arr_hai.hai_cookie == update->cookie) {
+		       mdt_obd_name(mdt), update->cookie,
+		       hai->hai_cookie);
+		if (hai->hai_cookie == update->cookie) {
 
 			/* If record is a cancel request, it cannot be
 			 * canceled. This is to manage the following
@@ -366,21 +367,30 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 			 * has to be set to ARS_CANCELED and the 2nd
 			 * to ARS_SUCCEED
 			 */
-			if (larr->arr_hai.hai_action == HSMA_CANCEL &&
+			if (hai->hai_action == HSMA_CANCEL &&
 			    update->status == ARS_CANCELED)
 				RETURN(0);
 
 			larr->arr_status = update->status;
 			larr->arr_req_change = ducb->change_time;
 			rc = llog_write(env, llh, hdr, hdr->lrh_index);
+			if (rc < 0)
+				break;
+
 			ducb->updates_done++;
+
+			/* Unlock the EX layout lock */
+			if (hai->hai_action == HSMA_RESTORE &&
+			    update->status == ARS_CANCELED)
+				cdt_restore_handle_del(mti, cdt, &hai->hai_fid);
+
 			break;
 		}
 	}
 
 	if (rc < 0)
 		CERROR("%s: mdt_agent_llog_update_rec() failed, rc = %d\n",
-		       mdt_obd_name(ducb->mdt), rc);
+		       mdt_obd_name(mdt), rc);
 
 	RETURN(rc);
 }
@@ -396,10 +406,12 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
  * \retval 0 on success
  * \retval negative on failure
  */
-int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
+int mdt_agent_record_update(struct mdt_thread_info *mti,
 			    struct hsm_record_update *updates,
 			    unsigned int updates_count)
 {
+	const struct lu_env *env = mti->mti_env;
+	struct mdt_device *mdt = mti->mti_mdt;
 	struct data_update_cb	 ducb;
 	u32 start_cat_idx = -1;
 	u32 start_rec_idx = -1;
@@ -433,7 +445,7 @@ int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 	if (start_rec_idx != 0)
 		start_rec_idx -= 1;
 
-	ducb.mdt = mdt;
+	ducb.mti = mti;
 	ducb.updates = updates;
 	ducb.updates_count = updates_count;
 	ducb.updates_done = 0;

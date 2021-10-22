@@ -1038,7 +1038,7 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u32 archive_id, __u64 flags,
 			 struct hsm_action_item *hai);
-int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
+int mdt_agent_record_update(struct mdt_thread_info *mti,
 			    struct hsm_record_update *updates,
 			    unsigned int updates_count);
 void cdt_agent_record_hash_add(struct coordinator *cdt, u64 cookie, u32 cat_idt,

@@ -426,8 +426,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 
 			update.cookie = hai->hai_cookie;
 			update.status = ARS_SUCCEED;
-			rc2 = mdt_agent_record_update(mti->mti_env, mdt,
-						      &update, 1);
+			rc2 = mdt_agent_record_update(mti, &update, 1);
 			if (rc2) {
 				CERROR("%s: mdt_agent_record_update() "
 				      "failed, cannot update "
@@ -483,8 +482,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 				continue;
 
 			fail_request = true;
-			rc = mdt_agent_record_update(mti->mti_env, mdt,
-						     &update, 1);
+			rc = mdt_agent_record_update(mti, &update, 1);
 			if (rc < 0) {
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "cannot update status to %s for cookie "
@@ -512,8 +510,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 			 * make the same HAL with valid only
 			 * records */
 			fail_request = true;
-			rc = mdt_agent_record_update(mti->mti_env, mdt,
-						     &update, 1);
+			rc = mdt_agent_record_update(mti, &update, 1);
 			if (rc) {
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "cannot update status to %s for cookie "
