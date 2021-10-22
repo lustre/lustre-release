@@ -779,8 +779,7 @@ lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 		gw->lp_health_sensitivity = sensitivity;
 		lnet_add_route_to_rnet(rnet2, route);
 		if (lnet_peer_discovery_disabled)
-			CWARN("Consider turning discovery on to enable full "
-			      "Multi-Rail routing functionality\n");
+			CWARN("Consider turning discovery on to enable full Multi-Rail routing functionality\n");
 	}
 
 	/*
@@ -795,7 +794,7 @@ lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 	 * if it is missing a NI on the remote network due to misconfiguration.
 	 */
 	if (avoid_asym_router_failure && hops == LNET_UNDEFINED_HOPS)
-		CWARN("Use hops = 1 for a single-hop route when avoid_asym_router_failure feature is enabled");
+		CWARN("Use hops = 1 for a single-hop route when avoid_asym_router_failure feature is enabled\n");
 
 	rc = 0;
 
