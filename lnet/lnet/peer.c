@@ -509,12 +509,14 @@ static void lnet_peer_cancel_discovery(struct lnet_peer *lp)
 static int
 lnet_peer_del(struct lnet_peer *peer)
 {
+	int rc;
+
 	lnet_peer_cancel_discovery(peer);
 	lnet_net_lock(LNET_LOCK_EX);
-	lnet_peer_del_locked(peer);
+	rc = lnet_peer_del_locked(peer);
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	return 0;
+	return rc;
 }
 
 /*
@@ -1661,7 +1663,9 @@ lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
 			}
 		}
 		/* Delete and recreate as a configured peer. */
-		lnet_peer_del(lp);
+		rc = lnet_peer_del(lp);
+		if (rc)
+			goto out;
 	}
 
 	/* Create peer, peer_net, and peer_ni. */
@@ -3258,6 +3262,7 @@ __must_hold(&lp->lp_lock)
 	struct list_head rlist;
 	struct lnet_route *route, *tmp;
 	int sensitivity = lp->lp_health_sensitivity;
+	int rc;
 
 	INIT_LIST_HEAD(&rlist);
 
@@ -3291,7 +3296,10 @@ __must_hold(&lp->lp_lock)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* lnet_peer_del() deletes all the peer NIs owned by this peer */
-	lnet_peer_del(lp);
+	rc = lnet_peer_del(lp);
+	if (rc)
+		CNETERR("Internal error: Unable to delete peer %s rc %d\n",
+			libcfs_nidstr(&lp->lp_primary_nid), rc);
 
 	list_for_each_entry_safe(route, tmp,
 				 &rlist, lr_list) {

@@ -1258,7 +1258,29 @@ EOF
 }
 run_test 104 "Set/check response_tracking param"
 
-### load lnet in default namespace, configure in target namespace
+test_105() {
+	reinit_dlc || return $?
+	add_net "tcp" "${INTERFACES[0]}"
+	do_lnetctl route add --net tcp105 --gateway 105.105.105.105@tcp ||
+		error "route add failed $?"
+	do_lnetctl peer add --prim 105.105.105.105@tcp &&
+		error "peer add should fail"
+
+	return 0
+}
+run_test 105 "Adding duplicate GW peer should fail"
+
+test_106() {
+	reinit_dlc || return $?
+	add_net "tcp" "${INTERFACES[0]}"
+	do_lnetctl route add --net tcp106 --gateway 106.106.106.106@tcp ||
+		error "route add failed $?"
+	do_lnetctl peer del --prim 106.106.106.106@tcp &&
+		error "peer del should fail"
+
+	return 0
+}
+run_test 106 "Deleting GW peer should fail"
 
 test_200() {
 	cleanup_lnet || exit 1
