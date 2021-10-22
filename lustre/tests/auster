@@ -214,27 +214,30 @@ run_suite() {
 	[[ ! -f $TF_SKIP ]] || rm -f $TF_SKIP
 
 	reset_lustre
+
+	return $rc
 }
 
 run_suite_logged() {
-    local suite_name=${1%.sh}
-    local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
+	local suite_name=${1%.sh}
+	local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
 
-    suite_script=$(find_script_in_path $suite_name $LUSTRE/tests)
+	suite_script=$(find_script_in_path $suite_name $LUSTRE/tests)
 
-    if [[ -z $suite_script ]]; then
-        echo "Can't find test script for $suite_name"
-        return 1
-    fi
+	if [[ -z $suite_script ]]; then
+		echo "Can't find test script for $suite_name"
+		return 1
+	fi
 
-    echo "run_suite $suite_name $suite_script"
-    local log_name=${suite_name}.suite_log.$(hostname -s).log
-    if $verbose; then
-        run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
-    else
-        run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
-    fi
+	echo "run_suite $suite_name $suite_script"
+	local log_name=${suite_name}.suite_log.$(hostname -s).log
+	if $verbose; then
+		run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
+	else
+		run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
+	fi
 
+	return ${PIPESTATUS[0]}
 }
 
 #
