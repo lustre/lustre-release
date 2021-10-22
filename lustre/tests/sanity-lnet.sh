@@ -56,7 +56,7 @@ fi
 cleanup_testsuite() {
 	trap "" EXIT
 	# Cleanup any tmp files created by the sub tests
-	rm -f $TMP/sanity-lnet*
+	rm -f $TMP/sanity-lnet-*.yaml $LNET_PARAMS_FILE
 	cleanup_netns
 	cleanup_lnet
 	if $restore_mounts; then
