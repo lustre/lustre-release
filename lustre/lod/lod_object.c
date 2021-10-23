@@ -5312,6 +5312,15 @@ static int lod_get_default_striping(const struct lu_env *env,
 	int rc, rc1;
 
 	rc = lod_get_default_lov_striping(env, lo, lds, NULL);
+	if (lds->lds_def_striping_set) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+
+		rc = lod_verify_striping(env, d, lo, &info->lti_buf, false);
+		if (rc)
+			lds->lds_def_striping_set = 0;
+	}
+
 	rc1 = lod_get_default_lmv_striping(env, lo, lds);
 	if (rc == 0 && rc1 < 0)
 		rc = rc1;
@@ -5516,12 +5525,6 @@ static void lod_ah_init(const struct lu_env *env,
 		 */
 		if (likely(lp != NULL)) {
 			lod_get_default_striping(env, lp, lds);
-			if (lds->lds_def_striping_set) {
-				rc = lod_verify_striping(env, d, lp,
-							 &info->lti_buf, false);
-				if (rc)
-					lds->lds_def_striping_set = 0;
-			}
 			/* inherit default striping except ROOT */
 			if ((lds->lds_def_striping_set ||
 			     lds->lds_dir_def_striping_set) &&
