@@ -670,6 +670,142 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
 }
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
 
+static void display_brw_stats(struct seq_file *seq, const char *name,
+			      const char *units, struct obd_histogram *read,
+			      struct obd_histogram *write, bool scale)
+{
+	unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
+	unsigned int i;
+
+	seq_printf(seq, "\n%26s read      |     write\n", " ");
+	seq_printf(seq, "%-22s %-5s %% cum %% |  %-11s %% cum %%\n",
+		   name, units, units);
+
+	read_tot = lprocfs_oh_sum(read);
+	write_tot = lprocfs_oh_sum(write);
+
+	if (!read_tot && !write_tot)
+		return;
+
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		r = read->oh_buckets[i];
+		w = write->oh_buckets[i];
+		read_cum += r;
+		write_cum += w;
+		if (read_cum == 0 && write_cum == 0)
+			continue;
+
+		if (!scale)
+			seq_printf(seq, "%u", i);
+		else if (i < 10)
+			seq_printf(seq, "%lu", BIT(i));
+		else if (i < 20)
+			seq_printf(seq, "%luK", BIT(i - 10));
+		else
+			seq_printf(seq, "%luM", BIT(i - 20));
+
+		seq_printf(seq, ":\t\t%10lu %3u %3u   | %4lu %3u %3u\n",
+			   r, pct(r, read_tot), pct(read_cum, read_tot),
+			   w, pct(w, write_tot), pct(write_cum, write_tot));
+
+		if (read_cum == read_tot && write_cum == write_tot)
+			break;
+	}
+}
+
+static const struct brw_stats_props brw_props[] = {
+	{ .bsp_name	= "pages per bulk r/w",
+	  .bsp_units	= "rpcs",
+	  .bsp_scale	= true				},
+	{ .bsp_name	= "discontiguous pages",
+	  .bsp_units	= "rpcs",
+	  .bsp_scale	= false				},
+	{ .bsp_name	= "discontiguous blocks",
+	  .bsp_units	= "rpcs",
+	  .bsp_scale	= false				},
+	{ .bsp_name	= "disk fragmented I/Os",
+	  .bsp_units	= "ios",
+	  .bsp_scale	= false				},
+	{ .bsp_name	= "disk I/Os in flight",
+	  .bsp_units	= "ios",
+	  .bsp_scale	= false				},
+	{ .bsp_name	= "I/O time (1/1000s)",
+	  .bsp_units	= "ios",
+	  .bsp_scale	= true				},
+	{ .bsp_name	= "disk I/O size",
+	  .bsp_units	= "ios",
+	  .bsp_scale	= true				},
+};
+
+static int brw_stats_seq_show(struct seq_file *seq, void *v)
+{
+	struct brw_stats *brw_stats = seq->private;
+	int i;
+
+	/* this sampling races with updates */
+	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":", 1);
+
+	for (i = 0; i < ARRAY_SIZE(brw_stats->bs_props); i++) {
+		if (!brw_stats->bs_props[i].bsp_name)
+			continue;
+
+		display_brw_stats(seq, brw_stats->bs_props[i].bsp_name,
+				  brw_stats->bs_props[i].bsp_units,
+				  &brw_stats->bs_hist[i * 2],
+				  &brw_stats->bs_hist[i * 2 + 1],
+				  brw_stats->bs_props[i].bsp_scale);
+	}
+
+	return 0;
+}
+
+static ssize_t brw_stats_seq_write(struct file *file,
+				   const char __user *buf,
+				   size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct brw_stats *brw_stats = seq->private;
+	int i;
+
+	for (i = 0; i < BRW_RW_STATS_NUM; i++)
+		lprocfs_oh_clear(&brw_stats->bs_hist[i]);
+
+	return len;
+}
+
+LDEBUGFS_SEQ_FOPS(brw_stats);
+
+void ldebugfs_register_osd_stats(struct dentry *parent,
+				 struct brw_stats *brw_stats,
+				 struct lprocfs_stats *stats)
+{
+	int i;
+
+	LASSERT(brw_stats);
+	brw_stats->bs_init = ktime_get();
+	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
+		struct brw_stats_props *props = brw_stats->bs_props;
+
+		spin_lock_init(&brw_stats->bs_hist[i].oh_lock);
+		if (i % 2) {
+			props[i / 2].bsp_name = brw_props[i / 2].bsp_name;
+			props[i / 2].bsp_units = brw_props[i / 2].bsp_units;
+			props[i / 2].bsp_scale = brw_props[i / 2].bsp_scale;
+		}
+	}
+
+	if (!parent)
+		return;
+
+	debugfs_create_file("brw_stats", 0644, parent, brw_stats,
+			    &brw_stats_fops);
+
+	if (stats)
+		debugfs_create_file("stats", 0644, parent, stats,
+				    &ldebugfs_stats_seq_fops);
+}
+EXPORT_SYMBOL(ldebugfs_register_osd_stats);
+
 int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;

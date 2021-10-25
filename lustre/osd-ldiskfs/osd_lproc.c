@@ -39,8 +39,6 @@
 
 #include "osd_internal.h"
 
-#ifdef CONFIG_PROC_FS
-
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 {
 	struct brw_stats *bs = &osd->od_brw_stats;
@@ -77,121 +75,13 @@ void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 	lprocfs_oh_tally(&bs->bs_hist[BRW_R_DISCONT_BLOCKS+rw], discont_blocks);
 }
 
-static void display_brw_stats(struct seq_file *seq, char *name, char *units,
-        struct obd_histogram *read, struct obd_histogram *write, int scale)
-{
-        unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
-        int i;
-
-        seq_printf(seq, "\n%26s read      |     write\n", " ");
-        seq_printf(seq, "%-22s %-5s %% cum %% |  %-11s %% cum %%\n",
-                   name, units, units);
-
-        read_tot = lprocfs_oh_sum(read);
-        write_tot = lprocfs_oh_sum(write);
-        for (i = 0; i < OBD_HIST_MAX; i++) {
-                r = read->oh_buckets[i];
-                w = write->oh_buckets[i];
-                read_cum += r;
-                write_cum += w;
-                if (read_cum == 0 && write_cum == 0)
-                        continue;
-
-                if (!scale)
-                        seq_printf(seq, "%u", i);
-                else if (i < 10)
-                        seq_printf(seq, "%u", scale << i);
-                else if (i < 20)
-                        seq_printf(seq, "%uK", scale << (i-10));
-                else
-                        seq_printf(seq, "%uM", scale << (i-20));
-
-		seq_printf(seq, ":\t\t%10lu %3u %3u   | %4lu %3u %3u\n",
-                           r, pct(r, read_tot), pct(read_cum, read_tot),
-                           w, pct(w, write_tot), pct(write_cum, write_tot));
-
-                if (read_cum == read_tot && write_cum == write_tot)
-                        break;
-        }
-}
-
-static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
-{
-	/* this sampling races with updates */
-	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":", 1);
-
-	display_brw_stats(seq, "pages per bulk r/w", "rpcs",
-			  &brw_stats->bs_hist[BRW_R_PAGES],
-			  &brw_stats->bs_hist[BRW_W_PAGES], 1);
-
-	display_brw_stats(seq, "discontiguous pages", "rpcs",
-			  &brw_stats->bs_hist[BRW_R_DISCONT_PAGES],
-			  &brw_stats->bs_hist[BRW_W_DISCONT_PAGES], 0);
-
-	display_brw_stats(seq, "discontiguous blocks", "rpcs",
-			  &brw_stats->bs_hist[BRW_R_DISCONT_BLOCKS],
-			  &brw_stats->bs_hist[BRW_W_DISCONT_BLOCKS], 0);
-
-	display_brw_stats(seq, "disk fragmented I/Os", "ios",
-			  &brw_stats->bs_hist[BRW_R_DIO_FRAGS],
-			  &brw_stats->bs_hist[BRW_W_DIO_FRAGS], 0);
-
-	display_brw_stats(seq, "disk I/Os in flight", "ios",
-			  &brw_stats->bs_hist[BRW_R_RPC_HIST],
-			  &brw_stats->bs_hist[BRW_W_RPC_HIST], 0);
-
-	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
-			  &brw_stats->bs_hist[BRW_R_IO_TIME],
-			  &brw_stats->bs_hist[BRW_W_IO_TIME], 1);
-
-	display_brw_stats(seq, "disk I/O size", "ios",
-			  &brw_stats->bs_hist[BRW_R_DISK_IOSIZE],
-			  &brw_stats->bs_hist[BRW_W_DISK_IOSIZE], 1);
-}
-
-static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
-{
-        struct osd_device *osd = seq->private;
-
-        brw_stats_show(seq, &osd->od_brw_stats);
-
-        return 0;
-}
-
-static ssize_t osd_brw_stats_seq_write(struct file *file,
-				       const char __user *buf,
-				       size_t len, loff_t *off)
-{
-	struct seq_file *seq = file->private_data;
-	struct osd_device *osd = seq->private;
-	int i;
-
-	for (i = 0; i < BRW_LAST; i++)
-		lprocfs_oh_clear(&osd->od_brw_stats.bs_hist[i]);
-	osd->od_brw_stats.bs_init = ktime_get();
-
-	return len;
-}
-
-LPROC_SEQ_FOPS(osd_brw_stats);
-
 static int osd_stats_init(struct osd_device *osd)
 {
-	int i, result;
+	int result = -ENOMEM;
 
 	ENTRY;
-	osd->od_brw_stats.bs_init = ktime_get();
-
-	for (i = 0; i < BRW_LAST; i++)
-		spin_lock_init(&osd->od_brw_stats.bs_hist[i].oh_lock);
-
         osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
-        if (osd->od_stats != NULL) {
-                result = lprocfs_register_stats(osd->od_proc_entry, "stats",
-                                                osd->od_stats);
-                if (result)
-                        GOTO(out, result);
-
+	if (osd->od_stats) {
                 lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
                                      LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
                                      "get_page", "usec");
@@ -218,13 +108,13 @@ static int osd_stats_init(struct osd_device *osd)
                                      LPROCFS_CNTR_AVGMINMAX,
                                      "thandle closing", "usec");
 #endif
-		result = lprocfs_seq_create(osd->od_proc_entry, "brw_stats",
-					    0644, &osd_brw_stats_fops, osd);
-        } else
-                result = -ENOMEM;
+		result = 0;
+	}
 
-out:
-        RETURN(result);
+	ldebugfs_register_osd_stats(osd->od_dt_dev.dd_debugfs_entry,
+				    &osd->od_brw_stats, osd->od_stats);
+
+	RETURN(result);
 }
 
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
@@ -946,4 +836,3 @@ int osd_procfs_fini(struct osd_device *osd)
 
 	return dt_tunables_fini(&osd->od_dt_dev);
 }
-#endif

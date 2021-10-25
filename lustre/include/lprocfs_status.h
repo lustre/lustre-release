@@ -103,29 +103,6 @@ struct obd_histogram {
 };
 
 enum {
-        BRW_R_PAGES = 0,
-        BRW_W_PAGES,
-        BRW_R_RPC_HIST,
-        BRW_W_RPC_HIST,
-        BRW_R_IO_TIME,
-        BRW_W_IO_TIME,
-        BRW_R_DISCONT_PAGES,
-        BRW_W_DISCONT_PAGES,
-        BRW_R_DISCONT_BLOCKS,
-        BRW_W_DISCONT_BLOCKS,
-        BRW_R_DISK_IOSIZE,
-        BRW_W_DISK_IOSIZE,
-        BRW_R_DIO_FRAGS,
-        BRW_W_DIO_FRAGS,
-        BRW_LAST,
-};
-
-struct brw_stats {
-	ktime_t			bs_init;
-	struct obd_histogram	bs_hist[BRW_LAST];
-};
-
-enum {
         RENAME_SAMEDIR_SIZE = 0,
         RENAME_CROSSDIR_SRC_SIZE,
         RENAME_CROSSDIR_TGT_SIZE,
@@ -408,6 +385,42 @@ enum lprocfs_extra_opc {
 	EXTRA_LAST_OPC
 };
 
+#ifdef HAVE_SERVER_SUPPORT
+enum brw_rw_stats {
+	BRW_R_PAGES = 0,
+	BRW_W_PAGES,
+	BRW_R_DISCONT_PAGES,
+	BRW_W_DISCONT_PAGES,
+	BRW_R_DISCONT_BLOCKS,
+	BRW_W_DISCONT_BLOCKS,
+	BRW_R_DIO_FRAGS,
+	BRW_W_DIO_FRAGS,
+	BRW_R_RPC_HIST,
+	BRW_W_RPC_HIST,
+	BRW_R_IO_TIME,
+	BRW_W_IO_TIME,
+	BRW_R_DISK_IOSIZE,
+	BRW_W_DISK_IOSIZE,
+	BRW_RW_STATS_NUM,
+};
+
+struct brw_stats_props {
+	const char	*bsp_name;
+	const char	*bsp_units;
+	bool		 bsp_scale;
+};
+
+struct brw_stats {
+	ktime_t			bs_init;
+	struct obd_histogram	bs_hist[BRW_RW_STATS_NUM];
+	struct brw_stats_props	bs_props[BRW_RW_STATS_NUM / 2];
+};
+
+void ldebugfs_register_osd_stats(struct dentry *parent,
+				 struct brw_stats *brw_stats,
+				 struct lprocfs_stats *stats);
+#endif /* HAVE_SERVER_SUPPORT */
+
 #define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
 /* class_obd.c */
 extern struct proc_dir_entry *proc_lustre_root;
@@ -415,7 +428,6 @@ extern struct dentry *debugfs_lustre_root;
 extern struct kset *lustre_kset;
 
 struct obd_device;
-struct obd_histogram;
 
 #define JOBSTATS_JOBID_VAR_MAX_LEN	20
 #define JOBSTATS_DISABLE		"disable"
