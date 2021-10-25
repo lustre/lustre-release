@@ -20,7 +20,14 @@ kernel_srpm_location() {
         kdir=updates-sles15.1-src
         ;;
     5.3)
-        kdir=updates-sles15.2-src
+        case ${lnxrel%%.*} in
+        24)
+            kdir=updates-sles15.2-src
+            ;;
+        59)
+            kdir=updates-sles15.3-src
+            ;;
+        esac
         ;;
     esac
 
@@ -122,6 +129,7 @@ find_linux_rpm-sles15() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
     local wanted_kernel_org="$wanted_kernel"
+    local distro
     local base_site
     local base_dir
     local dev_site
@@ -133,14 +141,22 @@ find_linux_rpm-sles15() {
 
     case $lnxmaj in
     4.12)
-        base_dir=updates-basesystem-sles15.1-x86_64
-        dev_dir=updates-devtools-sles15.1-x86_64
+        distro=sles15.1
         ;;
     5.3)
-        base_dir=updates-basesystem-sles15.2-x86_64
-        dev_dir=updates-devtools-sles15.2-x86_64
+        case ${lnxrel%%.*} in
+        24)
+            distro=sles15.2
+            ;;
+        59)
+            distro=sles15.3
+            ;;
+        esac
         ;;
     esac
+
+    base_dir=updates-basesystem-$distro-x86_64
+    dev_dir=updates-devtools-$distro-x86_64
 
     base_site="http://mgmt/cobbler/repo_mirror/$base_dir"
     dev_site="http://mgmt/cobbler/repo_mirror/$dev_dir"
