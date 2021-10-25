@@ -1,10 +1,10 @@
 lnxmaj="4.12"
 lnxmin=".14"
-lnxrel="122.83"
+lnxrel="122.91"
 # use this when there is an "RPM fix" which means that the name of the
 # (source) RPM has been updated but the version of the kernel inside the
 # RPM is not also updated
-rpmfix=".1"
+rpmfix=".2"
 
 # this is the delimeter that goes before the "smp" at the end of the version
 # defaults to empty
