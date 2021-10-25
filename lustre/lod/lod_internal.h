@@ -365,8 +365,10 @@ static inline void lod_obj_inc_layout_gen(struct lod_object *lo)
 	lo->ldo_layout_gen++;
 	lo->ldo_layout_gen |= preserve;
 	/* Zero is not a valid generation */
-	if (unlikely((lo->ldo_layout_gen & LCME_ID_MASK) == 0))
+	if (unlikely((lo->ldo_layout_gen & LCME_ID_MASK) == 0)) {
 		lo->ldo_layout_gen++;
+		lo->ldo_layout_gen &= ~LU_LAYOUT_RESYNC;
+	}
 }
 
 struct lod_it {

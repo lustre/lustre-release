@@ -592,15 +592,17 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 		       PFID(lu_object_fid(&fo->ofo_obj.do_lu)),
 		       ff->ff_layout_version, oa->o_layout_version);
 
-		/* only the MDS has the authority to update layout version */
-		if (!(exp_connect_flags(ofd_info(env)->fti_exp) &
-		      OBD_CONNECT_MDS)) {
-			CERROR(DFID": update layout version from client\n",
-			       PFID(&fo->ofo_ff.ff_parent));
-
-			RETURN(-EPERM);
-		}
-
+		/**
+		 * resync write from client on non-primary objects and
+		 * resync start from MDS on primary objects will contain
+		 * LU_LAYOUT_RESYNC flag in the @oa.
+		 *
+		 * The layout version checking for write/punch from client
+		 * happens in ofd_verify_layout_version() before coming to
+		 * here, so that resync with smaller layout version client
+		 * will be rejected there, the biggest resync version will
+		 * be recorded in the OFD objects.
+		 */
 		if (ff->ff_layout_version & LU_LAYOUT_RESYNC) {
 			/* this opens a new era of writing */
 			ff->ff_layout_version = 0;
@@ -608,7 +610,8 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 		}
 
 		/* it's not allowed to change it to a smaller value */
-		if (oa->o_layout_version < ff->ff_layout_version)
+		if (ofd_layout_version_less(oa->o_layout_version,
+					    ff->ff_layout_version))
 			RETURN(-EINVAL);
 
 		if (ff->ff_layout_version == 0 ||
@@ -942,8 +945,6 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		rc = ofd_verify_layout_version(env, fo, oa);
 		if (rc)
 			GOTO(unlock, rc);
-
-		oa->o_valid &= ~OBD_MD_LAYOUT_VERSION;
 	}
 
 	if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & LUSTRE_ENCRYPT_FL) {

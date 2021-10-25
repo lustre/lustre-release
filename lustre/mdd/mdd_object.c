@@ -1651,7 +1651,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 		GOTO(out, rc);
 
 	rc = mdo_xattr_del(env, vic, XATTR_NAME_LOV, handle);
-	if (rc) /* wtf? */
+	if (rc)
 		GOTO(out_restore, rc);
 
 	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle,

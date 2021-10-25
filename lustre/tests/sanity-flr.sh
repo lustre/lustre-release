@@ -1434,16 +1434,24 @@ test_35() {
 }
 run_test 35 "allow to write to mirrored files"
 
+get_file_layout_version() {
+	$LFS getstripe $1 | awk '/lcm_layout_gen/{print $2}'
+}
+
+get_ost_layout_version() {
+	$MULTIOP $1 oXc | awk '/ostlayoutversion/{print $2}'
+}
+
 verify_ost_layout_version() {
 	local tf=$1
 
 	# get file layout version
-	local flv=$($LFS getstripe $tf | awk '/lcm_layout_gen/{print $2}')
+	local flv=$(get_file_layout_version $tf)
 
 	# layout version from OST objects
-	local olv=$($MULTIOP $tf oXc | awk '/ostlayoutversion/{print $2}')
+	local olv=$(get_ost_layout_version $tf)
 
-	[ $flv -eq $olv ] || error "layout version mismatch: $flv vs. $olv"
+	(( flv >= olv )) || error "layout version mismatch: $flv vs. $olv"
 }
 
 create_file_36() {
@@ -1458,7 +1466,7 @@ create_file_36() {
 	done
 }
 
-test_36() {
+test_36a() {
 	local tf=$DIR/$tfile
 
 	stack_trap "rm -f $tf $tf-2 $tf-3"
@@ -1493,27 +1501,127 @@ test_36() {
 	local st=$(date +%s)
 	$MULTIOP $tf-2 oO_WRONLY:w1024Yc || error "write mirrored file error"
 
-	[ $(date +%s) -ge $((st+delay_sec)) ] ||
-		error "write finished before layout version is transmitted"
-
 	# verify OST layout version
 	verify_ost_layout_version $tf
 
 	do_facet $mds_facet $LCTL set_param fail_loc=0
-
-	# test case 3
-	mds_idx=mds$(($($LFS getstripe -m $tf-3) + 1))
-
-	#define OBD_FAIL_FLR_LV_INC 0x1A02
-	do_facet $mds_facet $LCTL set_param fail_loc=0x1A02
-
-	# write open file should return error
-	$MULTIOP $tf-3 oO_WRONLY:O_SYNC:w1024c &&
-		error "write a mirrored file succeeded" || true
-
-	do_facet $mds_facet $LCTL set_param fail_loc=0
 }
-run_test 36 "write to mirrored files"
+run_test 36a "write to mirrored files"
+
+test_36b() {
+	local tf=$DIR/$tfile
+
+	(( OST1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need OST version at least 2.15.50"
+
+	(( OSTCOUNT >= 2 )) || skip "need >= 2 OSTs"
+
+	# create 2 mirrors using different OSTs
+	$LFS setstripe -N -c1 -i0 --flags=prefer -N -c1 -i1 $tf ||
+		error "create mirrored file"
+
+	# write 1M data to one mirror
+	dd if=/dev/zero of=$tf bs=1M count=1 || error "write file error"
+	sync
+
+	# set prefer mirror to another mirror
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=^prefer $tf ||
+		error "clear prefer mirror error"
+	$LFS setstripe --comp-set -I0x20002 --comp-flags=prefer $tf ||
+		error "set prefer mirror error"
+
+	# the second write should not hung
+	dd if=/dev/zero of=$tf bs=1M count=1 || error "write file error"
+}
+run_test 36b "write should not hung when prefered mirror is stale"
+
+test_36c() {
+	local tf=$DIR/$tfile
+
+	(( OST1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need OST version at least 2.15.50"
+
+	(( OSTCOUNT >= 2 )) || skip "need >= 2 OSTs"
+
+	# create 2 mirrors using different OSTs
+	$LFS setstripe -N -c1 -i0 --flags=prefer -N -c1 -i1 $tf ||
+		error "create mirrored file"
+
+	# write it in the background
+	dd if=/dev/zero of=$tf bs=1M count=600 &
+	local pid=$!
+
+	sleep 1
+
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=^prefer $tf ||
+		error "clear prefer mirror error"
+	$LFS setstripe --comp-set -I0x20002 --comp-flags=prefer $tf ||
+		error "set prefer mirror error"
+
+	wait $pid
+}
+run_test 36c "change prefer mirror during write shouldn't hung"
+
+test_36d() {
+	local tf=$DIR/$tfile
+
+	(( OST1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need OST version at least 2.15.50"
+
+	echo " ** create $tf"
+	$LFS mirror create -N $tf || error "create $tf failed"
+
+	for i in 1 2; do
+		echo " ** mirror extend $tf ($i/2)"
+		$LFS mirror extend -N $tf || error "mirror extend $tf failed"
+		flv=$(get_file_layout_version $tf)
+		olv=$(get_ost_layout_version $tf)
+		echo "    flv=$flv olv=$olv"
+	done
+
+	for i in 1 2; do
+		echo " ** write $tf ($i/2)"
+		dd if=/dev/zero of=$tf bs=1k count=1 || error "write $tf failed"
+		flv=$(get_file_layout_version $tf)
+		olv=$(get_ost_layout_version $tf)
+		echo "    flv=$flv olv=$olv"
+		(( flv == olv )) ||
+			error "write update OST layout failed $flv/$olv"
+	done
+
+	echo " ** resync $tf"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	flv=$(get_file_layout_version $tf)
+	olv=$(get_ost_layout_version $tf)
+	echo "    flv=$flv olv=$olv"
+
+	for i in 1 2; do
+		echo " ** truncate $tf ($i/2)"
+		$TRUNCATE $tf $((1024 * 1024)) || error "truncate $tf fails"
+		flv=$(get_file_layout_version $tf)
+		olv=$(get_ost_layout_version $tf)
+		echo "    flv=$flv olv=$olv"
+		(( flv == olv || flv == olv + 1 )) ||
+			error "truncate update OST layout failed $flv/$olv"
+	done
+
+	echo " ** resync $tf"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	flv=$(get_file_layout_version $tf)
+	olv=$(get_ost_layout_version $tf)
+	echo "    flv=$flv olv=$olv"
+
+	for i in 1 2; do
+		echo " ** write $tf ($i/2)"
+		dd if=/dev/zero of=$tf bs=1k count=1 || error "write $tf failed"
+		flv=$(get_file_layout_version $tf)
+		olv=$(get_ost_layout_version $tf)
+		echo "    flv=$flv olv=$olv"
+		(( flv == olv )) ||
+			error "write update OST layout failed $flv/$olv"
+	done
+}
+run_test 36d "write/punch FLR file update OST layout version"
 
 create_files_37() {
 	local tf
@@ -2646,6 +2754,8 @@ run_test 50A "mirror split update layout generation"
 test_50a() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"
+	[ "$FSTYPE" != "zfs" ] ||
+		skip "lseek for ZFS is not accurate if obj is not committed"
 
 	local file=$DIR/$tdir/$tfile
 	local offset
@@ -2744,6 +2854,8 @@ run_test 50a "mirror extend/copy preserves sparseness"
 test_50b() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"
+	[ "$FSTYPE" != "zfs" ] ||
+		skip "lseek for ZFS is not accurate if obj is not committed"
 
 	local file=$DIR/$tdir/$tfile
 	local offset
@@ -2856,6 +2968,8 @@ test_50d() {
 		skip "OST does not support SEEK_HOLE"
 	(( $LINUX_VERSION_CODE > $(version_code 3.0.0) )) ||
 		skip "client kernel does not support SEEK_HOLE"
+	[ "$FSTYPE" != "zfs" ] ||
+		skip "lseek for ZFS is not accurate if obj is not committed"
 
 	local file=$DIR/$tdir/$tfile
 	local offset

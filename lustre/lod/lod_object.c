@@ -1224,60 +1224,6 @@ unlock:
 	RETURN(rc);
 }
 
-static bool lod_obj_attr_set_comp_skip_cb(const struct lu_env *env,
-		struct lod_object *lo, int comp_idx,
-		struct lod_obj_stripe_cb_data *data)
-{
-	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[comp_idx];
-	bool skipped = false;
-
-	if (!(data->locd_attr->la_valid & LA_LAYOUT_VERSION))
-		return skipped;
-
-	switch (lo->ldo_flr_state) {
-	case LCM_FL_WRITE_PENDING: {
-		int i;
-
-		/* skip stale components */
-		if (lod_comp->llc_flags & LCME_FL_STALE) {
-			skipped = true;
-			break;
-		}
-
-		/* skip valid and overlapping components, therefore any
-		 * attempts to write overlapped components will never succeed
-		 * because client will get EINPROGRESS. */
-		for (i = 0; i < lo->ldo_comp_cnt; i++) {
-			if (i == comp_idx)
-				continue;
-
-			if (lo->ldo_comp_entries[i].llc_flags & LCME_FL_STALE)
-				continue;
-
-			if (lu_extent_is_overlapped(&lod_comp->llc_extent,
-					&lo->ldo_comp_entries[i].llc_extent)) {
-				skipped = true;
-				break;
-			}
-		}
-		break;
-	}
-	case LCM_FL_RDONLY:
-	case LCM_FL_SYNC_PENDING:
-		break;
-	default:
-		LASSERTF(0, "impossible: %d\n", lo->ldo_flr_state);
-		break;
-	}
-
-	CDEBUG(D_LAYOUT, DFID": %s to set component %x to version: %u\n",
-	       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
-	       skipped ? "skipped" : "chose", lod_comp->llc_id,
-	       data->locd_attr->la_layout_version);
-
-	return skipped;
-}
-
 static inline int
 lod_obj_stripe_attr_set_cb(const struct lu_env *env, struct lod_object *lo,
 			   struct dt_object *dt, struct thandle *th,
@@ -1473,7 +1419,6 @@ static int lod_attr_set(const struct lu_env *env,
 
 		data.locd_attr = attr;
 		data.locd_declare = false;
-		data.locd_comp_skip_cb = lod_obj_attr_set_comp_skip_cb;
 		data.locd_stripe_cb = lod_obj_stripe_attr_set_cb;
 		rc = lod_obj_for_each_stripe(env, lo, th, &data);
 	}
@@ -3521,7 +3466,6 @@ static int lod_declare_layout_split(const struct lu_env *env,
 	lod_obj_inc_layout_gen(lo);
 	/* fix on-disk layout gen */
 	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
-
 
 	/* transfer layout version to OST objects. */
 	if (lo->ldo_mirror_count > 1) {
@@ -8001,19 +7945,13 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	 * This way it can make sure that the layout version is
 	 * monotonously increased in this writing era. */
 	lod_obj_inc_layout_gen(lo);
-	if (lo->ldo_layout_gen > (LCME_ID_MAX >> 1)) {
-		__u32 layout_version;
-
-		get_random_bytes(&layout_version, sizeof(layout_version));
-		lo->ldo_layout_gen = layout_version & 0xffff;
-	}
 
 	rc = lod_declare_instantiate_components(env, lo, th, 0);
 	if (rc)
 		GOTO(out, rc);
 
 	layout_attr->la_valid = LA_LAYOUT_VERSION;
-	layout_attr->la_layout_version = 0; /* set current version */
+	layout_attr->la_layout_version = 0;
 	if (mlc->mlc_opc == MD_LAYOUT_RESYNC)
 		layout_attr->la_layout_version = LU_LAYOUT_RESYNC;
 	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
@@ -8163,20 +8101,20 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
+	lod_obj_inc_layout_gen(lo);
+
 	/* 3. transfer layout version to OST objects.
 	 * transfer new layout version to OST objects so that stale writes
 	 * can be denied. It also ends an era of writing by setting
 	 * LU_LAYOUT_RESYNC. Normal client can never use this bit to
 	 * send write RPC; only resync RPCs could do it. */
 	layout_attr->la_valid = LA_LAYOUT_VERSION;
-	layout_attr->la_layout_version = 0; /* set current version */
+	layout_attr->la_layout_version = 0;
 	if (mlc->mlc_opc == MD_LAYOUT_RESYNC)
 		layout_attr->la_layout_version = LU_LAYOUT_RESYNC;
 	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
 	if (rc)
 		GOTO(out, rc);
-
-	lod_obj_inc_layout_gen(lo);
 out:
 	if (rc)
 		lod_striping_free(env, lo);
@@ -8262,7 +8200,7 @@ static int lod_declare_update_sync_pending(const struct lu_env *env,
 	lod_obj_inc_layout_gen(lo);
 
 	layout_attr->la_valid = LA_LAYOUT_VERSION;
-	layout_attr->la_layout_version = 0; /* set current version */
+	layout_attr->la_layout_version = 0;
 	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
 	if (rc)
 		GOTO(out, rc);

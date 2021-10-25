@@ -501,4 +501,23 @@ static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)
 	return 0;
 }
 
+/**
+ * whether the requestion IO contains older layout version than that on the
+ * disk.
+ */
+static inline bool ofd_layout_version_less(__u32 req_version,
+					   __u32 ondisk_version)
+{
+	__u32 req = req_version & ~LU_LAYOUT_RESYNC;
+	__u32 ondisk = ondisk_version & ~LU_LAYOUT_RESYNC;
+
+	/**
+	 * request layout version could be circularly increased to the samllest
+	 * value, in that case @req < @ondisk but @req does not have the high
+	 * end bit set while @ondisk does.
+	 */
+	return (req < ondisk) &&
+		((req & LU_LAYOUT_HIGEN) == (ondisk & LU_LAYOUT_HIGEN));
+}
+
 #endif /* _OFD_INTERNAL_H */

@@ -889,10 +889,6 @@ enum lov_comp_md_entry_flags {
 #define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
 				 LCME_FL_EXTENSION)
 
-/* the highest bit in obdo::o_layout_version is used to mark if the file is
- * being resynced. */
-#define LU_LAYOUT_RESYNC	LCME_FL_NEG
-
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
  * certain LCME_FL_* but not a real ID. Which implies we can have
@@ -902,6 +898,16 @@ enum lcme_id {
 	LCME_ID_MAX	= 0x7FFFFFFF,
 	LCME_ID_ALL	= 0xFFFFFFFF,
 	LCME_ID_NOT_ID	= LCME_FL_NEG
+};
+
+/* layout version equals to lcme_id, except some bits have special meanings */
+enum layout_version_flags {
+	/* layout version reaches the high water mark to be increased to
+	 * circularly reuse the smallest value
+	 */
+	LU_LAYOUT_HIGEN		= 0x40000000,
+	/* the highest bit is used to mark if the file is being resynced */
+	LU_LAYOUT_RESYNC	= 0x80000000,
 };
 
 #define LCME_ID_MASK	LCME_ID_MAX

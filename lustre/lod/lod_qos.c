@@ -2763,6 +2763,7 @@ put_ldts:
 			}
 			lod_comp->llc_stripe_count = 0;
 		} else {
+			lod_comp->llc_layout_gen = 0;
 			lod_comp->llc_stripe = stripe;
 			lod_comp->llc_ost_indices = ost_indices;
 			lod_comp->llc_stripes_allocated = stripe_len;
