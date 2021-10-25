@@ -51,6 +51,11 @@
 #include "osd_internal.h"
 #include "osd_oi.h"
 
+#ifndef HAVE_INODE_LOCK_SHARED
+#define inode_lock_shared(dir) inode_lock(dir)
+#define inode_unlock_shared(dir) inode_unlock(dir)
+#endif
+
 static void osd_push_ctxt(const struct osd_device *dev,
 			  struct lvfs_run_ctxt *newctxt,
 			  struct lvfs_run_ctxt *save)
@@ -1087,9 +1092,9 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 	child->d_name.len = strlen(name);
 
 	dir = d_seq->d_inode;
-	inode_lock(dir);
+	inode_lock_shared(dir);
 	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
-	inode_unlock(dir);
+	inode_unlock_shared(dir);
 
 	if (IS_ERR(bh))
 		RETURN(PTR_ERR(bh));

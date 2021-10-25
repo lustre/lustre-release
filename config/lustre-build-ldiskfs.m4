@@ -553,6 +553,22 @@ ext4_journal_get_write_access, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
 
+# LB_HAVE_INODE_LOCK_SHARED
+#
+AC_DEFUN([LB_HAVE_INODE_LOCK_SHARED], [
+LB_CHECK_COMPILE([if inode_lock_shared() defined],
+inode_lock_shared, [
+	#include <linux/fs.h>
+],[
+	struct inode i;
+
+	inode_lock_shared(&i);
+],[
+	AC_DEFINE(HAVE_INODE_LOCK_SHARED, 1,
+		[inode_lock_shared() defined])
+])
+]) # LB_HAVE_INODE_LOCK_SHARED
+
 #
 # LB_CONFIG_LDISKFS
 #
@@ -609,6 +625,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_INC_DEC_COUNT_2ARGS
 	LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 	LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
+	LB_HAVE_INODE_LOCK_SHARED
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
