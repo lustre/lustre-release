@@ -1311,6 +1311,14 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		}
 		if (rc)
 			RETURN(rc);
+
+		jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC,
+				osd_dto_credits_noquota[DTO_INDEX_DELETE] +
+				osd_dto_credits_noquota[DTO_INDEX_INSERT] +
+				osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
+		if (IS_ERR(jh))
+			RETURN(PTR_ERR(jh));
+		inode_lock(dir);
 	}
 
 	bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name, &de,
