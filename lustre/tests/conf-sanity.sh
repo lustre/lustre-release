@@ -8671,7 +8671,7 @@ test_119() {
 		do_facet mds1 "$LCTL set_param debug_mb=$size_mb"
 		start_mdt 2
 
-		wait_update_cond mds1 \
+		wait_update_facet_cond mds1 \
 			"$LCTL dk | grep -c Processed.log.$FSNAME-MDT0000" \
 			">" 1 300
 	done
