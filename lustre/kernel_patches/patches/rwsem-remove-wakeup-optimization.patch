@@ -1,0 +1,117 @@
+From 5c1ec49b60cdb31e51010f8a647f3189b774bddf Mon Sep 17 00:00:00 2001
+From: Waiman Long <longman@redhat.com>
+Date: Mon, 20 May 2019 16:59:01 -0400
+Subject: [PATCH] locking/rwsem: Remove rwsem_wake() wakeup optimization
+
+After the following commit:
+
+  59aabfc7e959 ("locking/rwsem: Reduce spinlock contention in wakeup after up_read()/up_write()")
+
+the rwsem_wake() forgoes doing a wakeup if the wait_lock cannot be directly
+acquired and an optimistic spinning locker is present.  This can help performance
+by avoiding spinning on the wait_lock when it is contended.
+
+With the later commit:
+
+  133e89ef5ef3 ("locking/rwsem: Enable lockless waiter wakeup(s)")
+
+the performance advantage of the above optimization diminishes as the average
+wait_lock hold time become much shorter.
+
+With a later patch that supports rwsem lock handoff, we can no
+longer relies on the fact that the presence of an optimistic spinning
+locker will ensure that the lock will be acquired by a task soon and
+rwsem_wake() will be called later on to wake up waiters. This can lead
+to missed wakeup and application hang.
+
+So the original 59aabfc7e959 commit has to be reverted.
+
+Signed-off-by: Waiman Long <longman@redhat.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Cc: Borislav Petkov <bp@alien8.de>
+Cc: Davidlohr Bueso <dave@stgolabs.net>
+Cc: H. Peter Anvin <hpa@zytor.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Tim Chen <tim.c.chen@linux.intel.com>
+Cc: Will Deacon <will.deacon@arm.com>
+Cc: huang ying <huang.ying.caritas@gmail.com>
+Link: https://lkml.kernel.org/r/20190520205918.22251-3-longman@redhat.com
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+---
+ kernel/locking/rwsem-xadd.c | 72 -------------------------------------
+ 1 file changed, 72 deletions(-)
+
+diff --git a/kernel/locking/rwsem-xadd.c b/kernel/locking/rwsem-xadd.c
+index c0500679fd2f..3083fdf50447 100644
+--- a/lib/rwsem.c
++++ b/lib/rwsem.c
+@@ -411,25 +411,11 @@ static bool rwsem_optimistic_spin(struct rw_semaphore *sem)
+ 	preempt_enable();
+ 	return taken;
+ }
+-
+-/*
+- * Return true if the rwsem has active spinner
+- */
+-static inline bool rwsem_has_spinner(struct rw_semaphore *sem)
+-{
+-	return osq_is_locked(&sem->osq);
+-}
+-
+ #else
+ static bool rwsem_optimistic_spin(struct rw_semaphore *sem)
+ {
+ 	return false;
+ }
+-
+-static inline bool rwsem_has_spinner(struct rw_semaphore *sem)
+-{
+-	return false;
+-}
+ #endif
+ 
+ /*
+@@ -651,38 +637,7 @@ struct rw_semaphore *rwsem_wake(struct rw_semaphore *sem)
+ 	unsigned long flags;
+ 	WAKE_Q(wake_q);
+ 
+-	/*
+-	 * If a spinner is present, it is not necessary to do the wakeup.
+-	 * Try to do wakeup only if the trylock succeeds to minimize
+-	 * spinlock contention which may introduce too much delay in the
+-	 * unlock operation.
+-	 *
+-	 *    spinning writer		up_write/up_read caller
+-	 *    ---------------		-----------------------
+-	 * [S]   osq_unlock()		[L]   osq
+-	 *	 MB			      RMB
+-	 * [RmW] rwsem_try_write_lock() [RmW] spin_trylock(wait_lock)
+-	 *
+-	 * Here, it is important to make sure that there won't be a missed
+-	 * wakeup while the rwsem is free and the only spinning writer goes
+-	 * to sleep without taking the rwsem. Even when the spinning writer
+-	 * is just going to break out of the waiting loop, it will still do
+-	 * a trylock in rwsem_down_write_failed() before sleeping. IOW, if
+-	 * rwsem_has_spinner() is true, it will guarantee at least one
+-	 * trylock attempt on the rwsem later on.
+-	 */
+-	if (rwsem_has_spinner(sem)) {
+-		/*
+-		 * The smp_rmb() here is to make sure that the spinner
+-		 * state is consulted before reading the wait_lock.
+-		 */
+-		smp_rmb();
+-		if (!raw_spin_trylock_irqsave(&sem->wait_lock, flags))
+-			return sem;
+-		goto locked;
+-	}
+ 	raw_spin_lock_irqsave(&sem->wait_lock, flags);
+-locked:
+ 
+ 	/* do nothing if list empty */
+ 	if (!slist_empty(&sem->wait_list))
+-- 
+2.17.2 (Apple Git-113)
+
