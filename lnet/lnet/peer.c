@@ -2760,15 +2760,6 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 out:
 	lp->lp_state &= ~LNET_PEER_PING_SENT;
 	spin_unlock(&lp->lp_lock);
-
-	lnet_net_lock(LNET_LOCK_EX);
-	/*
-	 * If this peer is a gateway, call the routing callback to
-	 * handle the ping reply
-	 */
-	if (lp->lp_rtr_refcount > 0)
-		lnet_router_discovery_ping_reply(lp);
-	lnet_net_unlock(LNET_LOCK_EX);
 }
 
 /*
@@ -3070,6 +3061,12 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 */
 	rc = 0;
 out:
+	/* If this peer is a gateway, invoke the routing callback to update
+	 * the associated route status
+	 */
+	if (lp->lp_rtr_refcount > 0)
+		lnet_router_discovery_ping_reply(lp, pbuf);
+
 	CFS_FREE_PTR_ARRAY(curnis, nnis);
 	CFS_FREE_PTR_ARRAY(addnis, nnis);
 	CFS_FREE_PTR_ARRAY(delnis, nnis);

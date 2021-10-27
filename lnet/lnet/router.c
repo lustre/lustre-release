@@ -158,6 +158,7 @@ rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 void
 lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
 		struct list_head *rt_list)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_remotenet *rnet;
 	struct list_head zombies;
@@ -391,62 +392,31 @@ lnet_check_route_inconsistency(struct lnet_route *route)
 	}
 }
 
-static void
-lnet_set_route_hop_type(struct lnet_peer *gw, struct lnet_route *route)
-{
-	struct lnet_peer_net *lpn;
-	bool single_hop = false;
-
-	list_for_each_entry(lpn, &gw->lp_peer_nets, lpn_peer_nets) {
-		if (route->lr_net == lpn->lpn_net_id) {
-			single_hop = true;
-			break;
-		}
-	}
-	route->lr_single_hop = single_hop;
-	lnet_check_route_inconsistency(route);
-}
-
-/* Must hold net_lock/EX */
+/* Routes are added and removed under both ln_api_mutex and net_lock/EX
+ * Since we are not modifying anything we simply require the ln_api_mutex be
+ * held so that things are not modified underneath us
+ */
 void
-lnet_router_discovery_ping_reply(struct lnet_peer *lp)
+lnet_router_discovery_ping_reply(struct lnet_peer *lp,
+				 struct lnet_ping_buffer *pbuf)
+__must_hold(&the_lnet.ln_api_mutex)
 {
-	struct lnet_ping_buffer *pbuf = lp->lp_data;
 	struct lnet_peer_net *llpn;
 	struct lnet_route *route;
 	bool single_hop = false;
 	bool net_up = false;
-	unsigned lp_state;
 	__u32 net;
 	int i;
 
-
-	spin_lock(&lp->lp_lock);
-	lp_state = lp->lp_state;
-
-	/* only handle replies if discovery is disabled. */
-	if (!lnet_is_discovery_disabled_locked(lp)) {
-		spin_unlock(&lp->lp_lock);
-		return;
-	}
-
-	spin_unlock(&lp->lp_lock);
-
-	if (lp_state & LNET_PEER_PING_FAILED ||
-	    pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED) {
-		CDEBUG(D_NET, "Set routes down for gw %s because %s %d\n",
-		       libcfs_nidstr(&lp->lp_primary_nid),
-		       lp_state & LNET_PEER_PING_FAILED ? "ping failed" :
-		       "route feature is disabled", lp->lp_ping_error);
-		/* If the ping failed or the peer has routing disabled then
-		 * mark the routes served by this peer down
-		 */
+	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED) {
+		CERROR("Peer %s is being used as a gateway but routing feature is not turned on\n",
+		       libcfs_nidstr(&lp->lp_primary_nid));
 		list_for_each_entry(route, &lp->lp_routes, lr_gwlist)
 			lnet_set_route_aliveness(route, false);
 		return;
 	}
 
-	CDEBUG(D_NET, "Discovery is disabled. Processing reply for gw: %s:%d\n",
+	CDEBUG(D_NET, "Processing reply for gw: %s nnis %d\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), pbuf->pb_info.pi_nnis);
 
 	/*
@@ -510,23 +480,8 @@ lnet_router_discovery_complete(struct lnet_peer *lp)
 	lp->lp_alive = lp->lp_dc_error == 0;
 	spin_unlock(&lp->lp_lock);
 
-	if (!lp->lp_dc_error) {
-		/* ping replies are being handled when discovery is disabled */
-		if (lnet_is_discovery_disabled_locked(lp))
-			return;
-
-		/*
-		* mark single-hop routes.  If the remote net is not configured on
-		* the gateway we assume this is intentional and we mark the
-		* gateway as multi-hop
-		*/
-		list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
-			lnet_set_route_aliveness(route, true);
-			lnet_set_route_hop_type(lp, route);
-		}
-
+	if (!lp->lp_dc_error)
 		return;
-	}
 
 	/*
 	 * We do not send messages directly to the remote interfaces
@@ -660,6 +615,7 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 int
 lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
 	       __u32 priority, __u32 sensitivity)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct list_head *route_entry;
 	struct lnet_remotenet *rnet;
@@ -845,6 +801,7 @@ lnet_del_route_from_rnet(struct lnet_nid *gw_nid,
 
 int
 lnet_del_route(__u32 net, struct lnet_nid *gw)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	LIST_HEAD(rnet_zombies);
 	struct lnet_remotenet *rnet;

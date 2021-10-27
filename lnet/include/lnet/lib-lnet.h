@@ -925,7 +925,8 @@ int lnet_peer_buffer_credits(struct lnet_net *net);
 void lnet_consolidate_routes_locked(struct lnet_peer *orig_lp,
 				    struct lnet_peer *new_lp);
 void lnet_router_discovery_complete(struct lnet_peer *lp);
-void lnet_router_discovery_ping_reply(struct lnet_peer *lp);
+void lnet_router_discovery_ping_reply(struct lnet_peer *lp,
+				      struct lnet_ping_buffer *pbuf);
 
 int lnet_monitor_thr_start(void);
 void lnet_monitor_thr_stop(void);
