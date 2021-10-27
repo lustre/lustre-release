@@ -1273,7 +1273,13 @@ struct lnet {
 	struct list_head		ln_udsp_list;
 };
 
-static const struct nla_policy scalar_attr_policy[LN_SCALAR_CNT + 1] = {
+struct genl_filter_list {
+	struct list_head	 lp_list;
+	void			*lp_cursor;
+	bool			 lp_first;
+};
+
+static const struct nla_policy scalar_attr_policy[LN_SCALAR_MAX + 1] = {
 	[LN_SCALAR_ATTR_LIST]		= { .type = NLA_NESTED },
 	[LN_SCALAR_ATTR_LIST_SIZE]	= { .type = NLA_U16 },
 	[LN_SCALAR_ATTR_INDEX]		= { .type = NLA_U16 },

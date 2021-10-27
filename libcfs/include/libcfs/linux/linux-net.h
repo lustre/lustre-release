@@ -24,6 +24,7 @@
 #define __LIBCFS_LINUX_NET_H__
 
 #include <net/netlink.h>
+#include <net/genetlink.h>
 
 #ifndef HAVE_NLA_STRDUP
 char *nla_strdup(const struct nlattr *nla, gfp_t flags);
@@ -75,6 +76,28 @@ static inline int cfs_nla_parse_nested(struct nlattr *tb[], int maxtype,
 #define cfs_nla_parse           nla_parse
 
 #endif
+
+#ifndef HAVE_GENL_DUMPIT_INFO
+struct cfs_genl_dumpit_info {
+	const struct genl_family *family;
+	const struct genl_ops *ops;
+	struct nlattr **attrs;
+};
+
+static inline const struct cfs_genl_dumpit_info *
+lnet_genl_dumpit_info(struct netlink_callback *cb)
+{
+	return (const struct cfs_genl_dumpit_info *)cb->args[1];
+}
+#else
+#define cfs_genl_dumpit_info	genl_dumpit_info
+
+static inline const struct cfs_genl_dumpit_info *
+lnet_genl_dumpit_info(struct netlink_callback *cb)
+{
+	return (const struct cfs_genl_dumpit_info *)genl_dumpit_info(cb);
+}
+#endif /* HAVE_GENL_DUMPIT_INFO */
 
 #ifdef HAVE_KERNEL_SETSOCKOPT
 

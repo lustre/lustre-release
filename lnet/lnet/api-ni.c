@@ -2753,9 +2753,9 @@ static int lnet_genl_parse_list(struct sk_buff *msg,
 				    list->lkl_maxattr);
 
 		nla_put_u16(msg, LN_SCALAR_ATTR_INDEX, count);
-		if (props[count].lkp_values)
+		if (props[count].lkp_value)
 			nla_put_string(msg, LN_SCALAR_ATTR_VALUE,
-				       props[count].lkp_values);
+				       props[count].lkp_value);
 		if (props[count].lkp_key_format)
 			nla_put_u16(msg, LN_SCALAR_ATTR_KEY_FORMAT,
 				    props[count].lkp_key_format);
@@ -2767,13 +2767,14 @@ static int lnet_genl_parse_list(struct sk_buff *msg,
 			rc = lnet_genl_parse_list(msg, data, ++idx);
 			if (rc < 0)
 				return rc;
+			idx = rc;
 		}
 
 		nla_nest_end(msg, key);
 	}
 
 	nla_nest_end(msg, node);
-	return 0;
+	return idx;
 }
 
 int lnet_genl_send_scalar_list(struct sk_buff *msg, u32 portid, u32 seq,
@@ -2798,7 +2799,7 @@ int lnet_genl_send_scalar_list(struct sk_buff *msg, u32 portid, u32 seq,
 canceled:
 	if (rc < 0)
 		genlmsg_cancel(msg, hdr);
-	return rc;
+	return rc > 0 ? 0 : rc;
 }
 EXPORT_SYMBOL(lnet_genl_send_scalar_list);
 

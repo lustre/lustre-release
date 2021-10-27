@@ -89,6 +89,10 @@ int64_t nla_get_s64(const struct nlattr *nla)
 
 	return tmp;
 }
+
+#define NLA_PUT_S64(msg, attrtype, value) \
+	NLA_PUT_TYPE(msg, int64_t, attrtype, value)
+
 #endif /* ! HAVE_NLA_GET_S64 */
 
 /**
@@ -307,6 +311,7 @@ struct yaml_netlink_input {
 	const char		*errmsg;
 	struct nl_sock		*nl;
 	bool			complete;
+	bool			async;
 	unsigned int		indent;
 	struct yaml_nl_node	*cur;
 	struct yaml_nl_node	*root;
@@ -347,22 +352,28 @@ yaml_parser_set_reader_error(yaml_parser_t *parser, const char *problem,
  *	value will be.
  *
  * LN_SCALAR_ATTR_VALUE:
- *	The key's actually scalar value.
+ *	The string represnting key's actually scalar value.
+ *
+ * LN_SCALAR_ATTR_INT_VALUE:
+ *	For this case the key is an integer value. This shouldn't be
+ *	sent for the receive case since we are going to just turn it
+ *	into a string for YAML. Sending packets will make use of this.
  *
  * LN_SCALAR_ATTR_KEY_TYPE:
  *	What YAML format is it? block or flow. Only useful for
  *	LN_SCALAR_ATTR_NLA_TYPE of type NLA_NESTED or NLA_NUL_STRING
  *
- * LN_SCALAR_ATTR_LIST + CFS_SCALAR_LIST_SIZE:
+ * LN_SCALAR_ATTR_LIST + LN_SCALAR_LIST_SIZE:
  *	Defined the next collection which is a collection of nested
  *	attributes of the above.
  */
-static struct nla_policy scalar_attr_policy[LN_SCALAR_CNT + 1] = {
+static struct nla_policy scalar_attr_policy[LN_SCALAR_MAX + 1] = {
 	[LN_SCALAR_ATTR_LIST]		= { .type = NLA_NESTED },
 	[LN_SCALAR_ATTR_LIST_SIZE]	= { .type = NLA_U16 },
 	[LN_SCALAR_ATTR_INDEX]		= { .type = NLA_U16 },
 	[LN_SCALAR_ATTR_NLA_TYPE]	= { .type = NLA_U16 },
 	[LN_SCALAR_ATTR_VALUE]		= { .type = NLA_STRING },
+	[LN_SCALAR_ATTR_INT_VALUE]	= { .type = NLA_S64 },
 	[LN_SCALAR_ATTR_KEY_FORMAT]	= { .type = NLA_U16 },
 };
 
@@ -370,7 +381,7 @@ static int yaml_parse_key_list(struct yaml_netlink_input *data,
 			       struct yaml_nl_node *parent,
 			       struct nlattr *list)
 {
-	struct nlattr *tbl_info[LN_SCALAR_CNT + 1];
+	struct nlattr *tbl_info[LN_SCALAR_MAX + 1];
 	struct yaml_nl_node *node = NULL;
 	struct nlattr *attr;
 	int rem;
@@ -378,7 +389,7 @@ static int yaml_parse_key_list(struct yaml_netlink_input *data,
 	nla_for_each_nested(attr, list, rem) {
 		uint16_t index = 0;
 
-		if (nla_parse_nested(tbl_info, LN_SCALAR_CNT, attr,
+		if (nla_parse_nested(tbl_info, LN_SCALAR_MAX, attr,
 				     scalar_attr_policy))
 			break;
 
@@ -434,12 +445,12 @@ static int yaml_parse_key_list(struct yaml_netlink_input *data,
 			name = nla_strdup(tbl_info[LN_SCALAR_ATTR_VALUE]);
 			if (!name)
 				return NL_STOP;
-			node->keys.lkl_list[index].lkp_values = name;
+			node->keys.lkl_list[index].lkp_value = name;
 		}
 
 		if (tbl_info[LN_SCALAR_ATTR_LIST]) {
-			int rc =  yaml_parse_key_list(data, node,
-						      tbl_info[LN_SCALAR_ATTR_LIST]);
+			int rc = yaml_parse_key_list(data, node,
+						     tbl_info[LN_SCALAR_ATTR_LIST]);
 			if (rc != NL_OK)
 				return rc;
 		}
@@ -514,7 +525,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 		struct nlattr *attr;
 
 		attr = attr_array[i];
-		if (!attr && !keys[i].lkp_values)
+		if (!attr && !keys[i].lkp_value)
 			continue;
 
 		if (keys[i].lkp_data_type != NLA_NUL_STRING &&
@@ -538,7 +549,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 
 			if (mapping & LNKF_MAPPING) {
 				len = snprintf(data->buffer, *size, "%s: ",
-					       keys[i].lkp_values);
+					       keys[i].lkp_value);
 				if (len < 0)
 					goto unwind;
 				data->buffer += len;
@@ -583,7 +594,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 					len = snprintf(data->buffer, *size,
 						       "%*s%s: %c ",
 						       data->indent, "",
-						       keys[i].lkp_values,
+						       keys[i].lkp_value,
 						       brace);
 				} else {
 					if (keys[i].lkp_key_format &
@@ -596,7 +607,7 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 					len = snprintf(data->buffer, *size,
 						       "%*s%s:\n",
 						       data->indent, "",
-						       keys[i].lkp_values);
+						       keys[i].lkp_value);
 				}
 				if (len < 0)
 					goto unwind;
@@ -634,10 +645,10 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 				/* The top level is special so only print
 				 * once
 				 */
-				if (strlen(keys[i].lkp_values)) {
+				if (strlen(keys[i].lkp_value)) {
 					len = snprintf(data->buffer,
 						       *size, "%s:\n",
-						       keys[i].lkp_values);
+						       keys[i].lkp_value);
 					if (len < 0)
 						goto unwind;
 					data->buffer += len;
@@ -652,9 +663,9 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 						data->indent += 2;
 				}
 not_first:
-				if (attr && parent->lkp_values) {
-					free(parent->lkp_values);
-					parent->lkp_values = nla_strdup(attr);
+				if (attr && parent->lkp_value) {
+					free(parent->lkp_value);
+					parent->lkp_value = nla_strdup(attr);
 				}
 			}
 			break;
@@ -727,9 +738,9 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 	struct nlmsghdr *nlh = nlmsg_hdr(msg);
 
 	if (nlh->nlmsg_flags & NLM_F_CREATE) {
-		struct nlattr *attrs[LN_SCALAR_CNT + 1];
+		struct nlattr *attrs[LN_SCALAR_MAX + 1];
 
-		if (genlmsg_parse(nlh, 0, attrs, LN_SCALAR_CNT + 1,
+		if (genlmsg_parse(nlh, 0, attrs, LN_SCALAR_MAX + 1,
 				  scalar_attr_policy))
 			return NL_SKIP;
 
@@ -741,6 +752,18 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 
 			/* reset to root node */
 			data->cur = data->root;
+		}
+
+		/* For streaming insert '---' to define start of
+		 * YAML document. This allows use to extract
+		 * documents out of a multiplexed stream.
+		 */
+		if (data->async) {
+			char *start_doc = "---\n";
+			size_t len = strlen(start_doc) + 1;
+
+			strncpy(data->buffer, start_doc, len);
+			data->buffer += len - 1;
 		}
 	} else {
 		uint16_t maxtype = data->cur->keys.lkl_maxattr;
@@ -761,10 +784,8 @@ static int yaml_netlink_msg_parse(struct nl_msg *msg, void *arg)
 				      &data->cur->keys.lkl_list[1]);
 	}
 
-	if (nlh->nlmsg_flags & NLM_F_MULTI && nlh->nlmsg_type != NLMSG_DONE)
-		return NL_OK;
-
-	return NL_STOP;
+	/* Let yaml_netlink_msg_complete end collecting data */
+	return NL_OK;
 }
 
 static bool cleanup_children(struct yaml_nl_node *parent)
@@ -776,8 +797,8 @@ static bool cleanup_children(struct yaml_nl_node *parent)
 		int i;
 
 		for (i = 1; i < parent->keys.lkl_maxattr; i++)
-			if (keys[i].lkp_values)
-				free(keys[i].lkp_values);
+			if (keys[i].lkp_value)
+				free(keys[i].lkp_value);
 		nl_list_del(&parent->list);
 		return true;
 	}
@@ -810,28 +831,42 @@ static int yaml_netlink_msg_complete(struct nl_msg *msg, void *arg)
 		/* Newer kernels support NLM_F_ACK_TLVS in nlmsg_flags
 		 * which gives greater detail why we failed.
 		 */
-		if (nlh->nlmsg_flags & NLM_F_ACK_TLVS) {
-			struct nla_policy extack_policy[NLMSGERR_ATTR_MAX + 1] = {
-				[NLMSGERR_ATTR_MSG]	= { .type = NLA_STRING },
-				[NLMSGERR_ATTR_OFFS]	= { .type = NLA_U32 },
-			};
+		if (nlh->nlmsg_flags & NLM_F_ACK_TLVS &&
+		    !(nlh->nlmsg_flags & NLM_F_CAPPED)) {
+			struct nlattr *head = ((void *)&errmsg->msg);
 			struct nlattr *tb[NLMSGERR_ATTR_MAX + 1];
 
-			if (nlmsg_parse(nlh, 0, tb, sizeof(extack_policy),
-					extack_policy) == 0) {
+			if (nla_parse(tb, NLMSGERR_ATTR_MAX + 1, head,
+				      nlmsg_attrlen(nlh, 0), NULL) == 0) {
 				if (tb[NLMSGERR_ATTR_MSG])
-					data->errmsg = nla_get_string(tb[NLMSGERR_ATTR_MSG]);
+					data->errmsg = nla_strdup(tb[NLMSGERR_ATTR_MSG]);
 			}
 		}
 #endif /* HAVE_USRSPC_NLMSGERR */
 		data->parser->error = YAML_READER_ERROR;
+		data->complete = true;
+
+		return NL_STOP;
 	} else {
-		cleanup_children(data->root);
-		free(data->root);
+		if (data->root) {
+			cleanup_children(data->root);
+			free(data->root);
+			data->root = NULL;
+		}
+		/* For streaming insert '...' to define end of
+		 * YAML document
+		 */
+		if (data->async) {
+			char *end_doc = "...\n";
+			size_t len = strlen(end_doc) + 1;
+
+			strncpy(data->buffer, end_doc, len);
+			data->buffer += len - 1;
+		} else
+			data->complete = true;
 	}
 
-	data->complete = true;
-	return NL_STOP;
+	return data->async ? NL_OK : NL_STOP;
 }
 
 /**
@@ -919,6 +954,7 @@ yaml_parser_set_input_netlink(yaml_parser_t *reply, struct nl_sock *nl,
 	}
 
 	buf->nl = nl;
+	buf->async = stream;
 	buf->parser = reply;
 	yaml_parser_set_input(buf->parser, yaml_netlink_read_handler, buf);
 
@@ -987,11 +1023,16 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 						unsigned int *offset,
 						enum lnet_nl_key_format prev)
 {
+	enum lnet_nl_key_format fmt = 0;
 	unsigned int indent = *offset;
 	unsigned int new_indent = 0;
 
-	if (strchr(line, '{') || strchr(line, '['))
-		return LNKF_FLOW;
+	if (strchr(line, '{') || strchr(line, '[')) {
+		fmt = LNKF_FLOW;
+		if (strchr(line, '{'))
+			fmt |= LNKF_MAPPING;
+		return fmt;
+	}
 
 	new_indent = indent_level(line);
 	if (new_indent < indent) {
@@ -1001,7 +1042,11 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 
 	if (strncmp(line + new_indent, "- ", 2) == 0) {
 		*offset = new_indent + emitter->best_indent;
-		return LNKF_SEQUENCE;
+		fmt = LNKF_SEQUENCE;
+
+		if (strstr(line + new_indent, ": "))
+			fmt |= LNKF_MAPPING;
+		return fmt;
 	}
 
 	if (indent != new_indent) {
@@ -1010,7 +1055,34 @@ static enum lnet_nl_key_format yaml_format_type(yaml_emitter_t *emitter,
 			return LNKF_MAPPING;
 	}
 
-	return 0;
+	return fmt;
+}
+
+static int yaml_fill_scalar_data(struct nl_msg *msg,
+				 enum lnet_nl_key_format fmt,
+				 char *line)
+{
+	char *sep = strchr(line, ':');
+	int rc = 0;
+
+	if (sep)
+		*sep++ = '\0';
+
+	NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE, line);
+	if (fmt & LNKF_MAPPING && sep) {
+		while (isspace(*sep))
+			++sep;
+
+		if (strspn(sep, "0123456789") == strlen(sep)) {
+			unsigned long num = strtoull(sep, NULL, 0);
+
+			NLA_PUT_S64(msg, LN_SCALAR_ATTR_INT_VALUE, num);
+		} else {
+			NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE, sep);
+		}
+	}
+nla_put_failure:
+	return rc;
 }
 
 static int yaml_create_nested_list(struct yaml_netlink_output *out,
@@ -1026,35 +1098,51 @@ static int yaml_create_nested_list(struct yaml_netlink_output *out,
 	if (!list) {
 		yaml_emitter_set_writer_error(out->emitter,
 					      "Emmitter netlink list creation failed");
-		nlmsg_free(msg);
 		rc = -EINVAL;
 		goto nla_put_failure;
 	}
 
 	if (fmt & LNKF_FLOW) {
+		char *tmp = NULL;
+
+		tmp = strchr(*hdr, '{');
+		if (!tmp) {
+			tmp = strchr(*hdr, '[');
+			if (!tmp) {
+				yaml_emitter_set_writer_error(out->emitter,
+							      "Emmitter flow format invalid");
+				rc = -EINVAL;
+				goto nla_put_failure;
+			}
+		}
+		*tmp = ' ';
+
+		tmp = strchr(*hdr, '}');
+		if (!tmp) {
+			tmp = strchr(*hdr, ']');
+			if (!tmp) {
+				yaml_emitter_set_writer_error(out->emitter,
+							      "Emmitter flow format invalid");
+				rc = -EINVAL;
+				goto nla_put_failure;
+			}
+		}
+		*tmp = '\0';
+
 		while ((line = strsep(hdr, ",")) != NULL) {
-			char *tmp = NULL;
-
-			if (strchr(line, '{') ||
-			    strchr(line, '[') ||
-			    strchr(line, ' '))
+			if (isspace(line[0]))
 				line++;
-
-			tmp = strchr(line, '}');
-			if (!tmp)
-				tmp = strchr(line, ']');
-			if (tmp)
-				*tmp = '\0';
-
-			NLA_PUT_STRING(msg,
-				       LN_SCALAR_ATTR_VALUE,
-				       line);
+			rc = yaml_fill_scalar_data(msg, fmt, line);
+			if (rc < 0)
+				goto nla_put_failure;
 		}
 		nla_nest_end(msg, list);
 		return 0;
 	}
 
-	NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE, *hdr + *indent);
+	rc = yaml_fill_scalar_data(msg, fmt, *hdr + *indent);
+	if (rc < 0)
+		goto nla_put_failure;
 	do {
 		line = strsep(entry, "\n");
 have_next_line:
@@ -1065,7 +1153,7 @@ have_next_line:
 		if (fmt == LNKF_END)
 			break;
 
-		if (fmt) {
+		if (fmt & ~LNKF_MAPPING) { /* Filter out mappings */
 			rc = yaml_create_nested_list(out, msg, &line, entry,
 						     indent, fmt);
 			if (rc)
@@ -1073,8 +1161,9 @@ have_next_line:
 
 			goto have_next_line;
 		} else {
-			NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE,
-				       line + *indent);
+			rc = yaml_fill_scalar_data(msg, fmt, line + *indent);
+			if (rc)
+				goto nla_put_failure;
 		}
 	} while (strcmp(line, ""));
 
@@ -1097,20 +1186,20 @@ static void yaml_quotation_handling(char *buf)
 {
 	char *tmp = buf, *line;
 
+	line = strstr(tmp, "! \'");
+	if (line)
+		line[0] = ' ';
+
 	while ((line = strchr(tmp, '\"')) != NULL) {
-		line[0] = '%';
-		line[1] = ' ';
-		tmp = strchr(line, '\"') - 1;
+		line[0] = ' ';
+		tmp = strchr(line, '\"');
 		tmp[0] = ' ';
-		tmp[1] = '%';
 	}
 
 	while ((line = strchr(tmp, '\'')) != NULL) {
-		line[0] = '%';
-		line[1] = ' ';
-		tmp = strchr(line, '\'') - 1;
+		line[0] = ' ';
+		tmp = strchr(line, '\'');
 		tmp[0] = ' ';
-		tmp[1] = '%';
 	}
 }
 
@@ -1188,11 +1277,11 @@ complicated:
 
 			fmt = yaml_format_type(out->emitter, line, &indent,
 					       fmt);
-			if (fmt) {
+			if (fmt & ~LNKF_MAPPING) {
 				rc = yaml_create_nested_list(out, msg, &line,
 							     &entry, &indent,
 							     fmt);
-				if (rc) {
+				if (rc < 0) {
 					yaml_emitter_set_writer_error(out->emitter,
 								      nl_geterror(rc));
 					nlmsg_free(msg);
@@ -1204,8 +1293,14 @@ complicated:
 				if (line)
 					goto already_have_line;
 			} else {
-				NLA_PUT_STRING(msg, LN_SCALAR_ATTR_VALUE,
-					       line + indent);
+				rc = yaml_fill_scalar_data(msg, fmt,
+							   line + indent);
+				if (rc < 0) {
+					yaml_emitter_set_writer_error(out->emitter,
+								      nl_geterror(rc));
+					nlmsg_free(msg);
+					goto nla_put_failure;
+				}
 			}
 		}
 	}
@@ -1232,6 +1327,40 @@ nla_put_failure:
 	return out->emitter->error == YAML_NO_ERROR ? 1 : 0;
 }
 
+/* This is the libnl callback for when an error has happened
+ * kernel side. An error message is sent back to the user.
+ */
+static int yaml_netlink_write_error(struct sockaddr_nl *who,
+				    struct nlmsgerr *errmsg, void *arg)
+{
+	struct yaml_netlink_output *data = arg;
+	struct nlmsghdr *nlh = &errmsg->msg;
+
+	if ((nlh->nlmsg_type == NLMSG_ERROR ||
+	     nlh->nlmsg_flags & NLM_F_ACK_TLVS) && errmsg->error) {
+		const char *errstr = nl_geterror(nl_syserr2nlerr(errmsg->error));
+
+#ifdef HAVE_USRSPC_NLMSGERR
+		/* Newer kernels support NLM_F_ACK_TLVS in nlmsg_flags
+		 * which gives greater detail why we failed.
+		 */
+		if (nlh->nlmsg_flags & NLM_F_ACK_TLVS &&
+		    !(nlh->nlmsg_flags & NLM_F_CAPPED)) {
+			struct nlattr *head = ((void *)&errmsg->msg);
+			struct nlattr *tb[NLMSGERR_ATTR_MAX + 1];
+
+			if (nla_parse(tb, NLMSGERR_ATTR_MAX + 1, head,
+				      nlmsg_attrlen(nlh, 0), NULL) == 0) {
+				if (tb[NLMSGERR_ATTR_MSG])
+					errstr = nla_strdup(tb[NLMSGERR_ATTR_MSG]);
+			}
+		}
+#endif /* HAVE_USRSPC_NLMSGERR */
+		yaml_emitter_set_writer_error(data->emitter, errstr);
+	}
+	return NL_STOP;
+}
+
 /* This function is used by external utilities to use Netlink with
  * libyaml so we can turn YAML documentations into Netlink message
  * to send. This behavior mirrors yaml_emitter_set_output_file()
@@ -1242,6 +1371,7 @@ yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 				char *family, int version, int cmd, int flags)
 {
 	struct yaml_netlink_output *out;
+	int rc;
 
 	out = calloc(1, sizeof(*out));
 	if (!out) {
@@ -1257,6 +1387,32 @@ yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 		free(out);
 		return false;
 	}
+
+	rc = nl_socket_modify_err_cb(nl, NL_CB_CUSTOM,
+				     yaml_netlink_write_error, out);
+	if (rc < 0) {
+		yaml_emitter_set_writer_error(sender,
+					      "failed to register error handling");
+		free(out);
+		return false;
+	}
+
+	rc = nl_socket_enable_broadcast_error(nl);
+	if (rc < 0) {
+		yaml_emitter_set_writer_error(sender,
+					      "failed to enable broadcast errors");
+		free(out);
+		return false;
+	}
+
+	rc = nl_socket_set_ext_ack(nl, true);
+	if (rc < 0) {
+		yaml_emitter_set_writer_error(sender,
+					      "failed to enable ext ack");
+		free(out);
+		return false;
+	}
+
 	out->emitter = sender;
 	out->nl = nl;
 	out->family = family;
@@ -1322,14 +1478,12 @@ void yaml_parser_log_error(yaml_parser_t *parser, FILE *log, const char *errmsg)
 			extra = parser->problem;
 
 		if (parser->problem_value != -1) {
-			fprintf(log,
-				"Failed to %s: reader error '%s':#%X at %ld'\n",
-				errmsg, extra, parser->problem_value,
+			fprintf(log, "Reader error: '%s':#%X at %ld'\n",
+				extra, parser->problem_value,
 				(long)parser->problem_offset);
 		} else {
-			fprintf(log,
-				"Failed to %s: reader error '%s' at %ld\n",
-				errmsg, extra, (long)parser->problem_offset);
+			fprintf(log, "Reader error: '%s' at %ld\n",
+				extra, (long)parser->problem_offset);
 		}
 	/* fallthrough */
 	default:

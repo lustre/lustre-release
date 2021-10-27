@@ -262,7 +262,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # LIBCFS_HAVE_NS_TO_TIMESPEC64
 #
-# Kernel version 4.16-rc3 commit a84d1169164b274f13b97a23ff235c000efe3b49
+# Kernel version 3.16-rc3 commit a84d1169164b274f13b97a23ff235c000efe3b49
 # introduced struct __kernel_old_timeval
 #
 AC_DEFUN([LIBCFS_HAVE_NS_TO_TIMESPEC64],[
@@ -278,6 +278,27 @@ kernel_old_timeval, [
 		[ns_to_timespec64() is available])
 ])
 ]) # LIBCFS_HAVE_NS_TO_TIMESPEC64
+
+#
+# LIBCFS_HAVE_GLOB
+#
+# Kernel version 3.16 commit b01250856b25f4417c51aa33afc451fbf7da1484
+# added glob support to the Linux kernel
+#
+AC_DEFUN([LIBCFS_HAVE_GLOB],[
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([does 'glob_match()' exist],
+glob, [
+	#include <linux/glob.h>
+],[
+	return glob_match(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_GLOB, 1,
+		[glob_match() is available])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_GLOB
 
 #
 # Kernel version 3.17 changed hlist_add_after to
@@ -1547,6 +1568,29 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
 #
+# LIBCFS_GENL_DUMPIT_INFO
+#
+# kernel v5.4-rc1 commit bf813b0afeae2f012f0e527a526c1b78ca21ad82
+# expanded struct genl_dumpit_info to include struct genl_family.
+#
+AC_DEFUN([LIBCFS_GENL_DUMPIT_INFO], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if struct genl_dumpit_info has family field],
+genl_dumpit_info, [
+	#include <net/genetlink.h>
+],[
+	static struct genl_dumpit_info info;
+
+	info.family = NULL;
+],[
+	AC_DEFINE(HAVE_GENL_DUMPIT_INFO, 1,
+		[struct genl_dumpit_info has family field])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_GENL_DUMPIT_INFO
+
+#
 # LIBCFS_KALLSYMS_LOOKUP
 #
 # kernel v5.6-11591-g0bd476e6c671
@@ -1784,6 +1828,7 @@ LIBCFS_MATCH_WILDCARD
 LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
 LIBCFS_IOV_ITER_HAS_TYPE
 # 3.16
+LIBCFS_HAVE_GLOB
 LIBCFS_HAVE_NS_TO_TIMESPEC64
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
@@ -1874,7 +1919,8 @@ LIBCFS_GET_REQUEST_KEY_AUTH
 LIBCFS_LOOKUP_USER_KEY
 LIBCFS_FORCE_SIG_WITH_TASK
 LIBCFS_CACHE_DETAIL_WRITERS
-LIBCFS_HAVE_NR_UNSTABLE_NFS
+# 5.4
+LIBCFS_GENL_DUMPIT_INFO
 # 5.7
 LIBCFS_KALLSYMS_LOOKUP
 LIBCFS_TCP_SOCK_SET_QUICKACK
@@ -1884,6 +1930,7 @@ LIBCFS_TCP_SOCK_SET_KEEPCNT
 LIBCFS_HAVE_MMAP_LOCK
 LIBCFS_KERNEL_SETSOCKOPT
 LIBCFS_VMALLOC_2ARGS
+LIBCFS_HAVE_NR_UNSTABLE_NFS
 LIBCFS_SEC_RELEASE_SECCTX
 # 5.10
 LIBCFS_HAVE_KFREE_SENSITIVE
