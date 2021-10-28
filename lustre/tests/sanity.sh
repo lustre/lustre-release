@@ -59,8 +59,8 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596
 	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
-	# bug number:	 LU-11671 LU-11667
-	ALWAYS_EXCEPT+=" 45	  317"
+	# bug number:	 LU-11671
+	ALWAYS_EXCEPT+=" 45"
 	# bug number:	 LU-14067 LU-14067
 	ALWAYS_EXCEPT+=" 400a	  400b"
 fi
@@ -23891,19 +23891,19 @@ test_317() {
 
 	#
 	# sparse file test
-	# Create file with a hole and write actual two blocks. Block count
-	# must be 16.
+	# Create file with a hole and write actual 65536 bytes which aligned
+	# with 4K and 64K PAGE_SIZE. Block count must be 128.
 	#
-	dd if=/dev/zero of=$DIR/$tfile bs=$grant_blk_size count=2 seek=5 \
-		conv=fsync || error "Create file : $DIR/$tfile"
-
-	# Calculate the final truncate size.
-	trunc_sz=$(($(stat --format=%s $DIR/$tfile) - (grant_blk_size + 1)))
+	local bs=65536
+	dd if=/dev/zero of=$DIR/$tfile bs=$bs count=1 seek=5 conv=fsync ||
+		error "Create file : $DIR/$tfile"
 
 	#
-	# truncate to size $trunc_sz bytes. Strip the last block
-	# The block count must drop to 8
+	# Truncate to size $trunc_sz bytes. Strip tail blocks and leave only 8
+	# blocks. The block count must drop to 8.
 	#
+	trunc_sz=$(($(stat --format=%s $DIR/$tfile) - \
+		((bs - grant_blk_size) + 1)))
 	$TRUNCATE $DIR/$tfile $trunc_sz ||
 		error "truncate $tfile to $trunc_sz failed"
 
