@@ -274,6 +274,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	u64 valid;
 	int size, err, checksum;
 	bool api32;
+	void *encctx;
+	int encctxlen;
 
 	ENTRY;
 	sbi->ll_md_obd = class_name2obd(md);
@@ -642,7 +644,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
 	/* make root inode
 	 * XXX: move this to after cbd setup? */
-	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMODEASIZE;
+	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMODEASIZE |
+		OBD_MD_ENCCTX;
 	if (test_bit(LL_SBI_ACL, sbi->ll_flags))
 		valid |= OBD_MD_FLACL;
 
@@ -656,6 +659,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
 	err = md_getattr(sbi->ll_md_exp, op_data, &request);
 
+	/* We need enc ctx info, so reset it in op_data to
+	 * prevent it from being freed.
+	 */
+	encctx = op_data->op_file_encctx;
+	encctxlen = op_data->op_file_encctx_size;
+	op_data->op_file_encctx = NULL;
+	op_data->op_file_encctx_size = 0;
 	OBD_FREE_PTR(op_data);
 	if (err) {
 		CERROR("%s: md_getattr failed for root: rc = %d\n",
@@ -675,7 +685,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	api32 = test_bit(LL_SBI_32BIT_API, sbi->ll_flags);
 	root = ll_iget(sb, cl_fid_build_ino(&sbi->ll_root_fid, api32), &lmd);
 	md_free_lustre_md(sbi->ll_md_exp, &lmd);
-	ptlrpc_req_finished(request);
 
 	if (IS_ERR(root)) {
 		lmd_clear_acl(&lmd);
@@ -683,8 +692,21 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 		root = NULL;
 		CERROR("%s: bad ll_iget() for root: rc = %d\n",
 		       sbi->ll_fsname, err);
+		ptlrpc_req_finished(request);
 		GOTO(out_root, err);
 	}
+
+	if (encctxlen) {
+		CDEBUG(D_SEC,
+		       "server returned encryption ctx for root inode "DFID"\n",
+		       PFID(&sbi->ll_root_fid));
+		err = ll_set_encflags(root, encctx, encctxlen, true);
+		if (err)
+			CWARN("%s: cannot set enc ctx for "DFID": rc = %d\n",
+			      sbi->ll_fsname,
+			      PFID(&sbi->ll_root_fid), err);
+	}
+	ptlrpc_req_finished(request);
 
 	checksum = test_bit(LL_SBI_CHECKSUM, sbi->ll_flags);
 	if (sbi->ll_checksum_set) {
@@ -3276,9 +3298,11 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	if (ll_need_32bit_api(ll_i2sbi(i1)))
 		op_data->op_cli_flags |= CLI_API32;
 
-	if (opc == LUSTRE_OPC_LOOKUP || opc == LUSTRE_OPC_CREATE) {
+	if ((i2 && is_root_inode(i2)) ||
+	    opc == LUSTRE_OPC_LOOKUP || opc == LUSTRE_OPC_CREATE) {
 		/* In case of lookup, ll_setup_filename() has already been
 		 * called in ll_lookup_it(), so just take provided name.
+		 * Also take provided name if we are dealing with root inode.
 		 */
 		fname.disk_name.name = (unsigned char *)name;
 		fname.disk_name.len = namelen;

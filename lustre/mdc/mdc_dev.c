@@ -1290,6 +1290,7 @@ static int mdc_io_data_version_start(const struct lu_env *env,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, 0);
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_ENCCTX, RCL_SERVER, 0);
 	ptlrpc_request_set_replen(req);
 
 	req->rq_interpret_reply = mdc_data_version_interpret;

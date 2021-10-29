@@ -458,6 +458,10 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 					  body->oa.o_flags & OBD_FL_SHORT_IO) ?
 					 remote_nb[0].rnb_len : 0);
 		}
+		if (req_capsule_has_field(tsi->tsi_pill, &RMF_FILE_ENCCTX,
+					  RCL_SERVER))
+			req_capsule_set_size(tsi->tsi_pill, &RMF_FILE_ENCCTX,
+					     RCL_SERVER, 0);
 
 		rc = req_capsule_server_pack(tsi->tsi_pill);
 	}

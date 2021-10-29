@@ -565,12 +565,13 @@ static const struct req_msg_field *mds_getxattr_server[] = {
 };
 
 static const struct req_msg_field *mds_getattr_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_ACL,
-        &RMF_CAPA1,
-        &RMF_CAPA2
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_MDT_MD,
+	&RMF_ACL,
+	&RMF_CAPA1,
+	&RMF_CAPA2,
+	&RMF_FILE_ENCCTX,
 };
 
 static const struct req_msg_field *mds_setattr_server[] = {

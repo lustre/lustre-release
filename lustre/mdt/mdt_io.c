@@ -1586,6 +1586,7 @@ int mdt_data_version_get(struct tgt_session_info *tsi)
 
 	req_capsule_set_size(tsi->tsi_pill, &RMF_MDT_MD, RCL_SERVER, 0);
 	req_capsule_set_size(tsi->tsi_pill, &RMF_ACL, RCL_SERVER, 0);
+	req_capsule_set_size(tsi->tsi_pill, &RMF_FILE_ENCCTX, RCL_SERVER, 0);
 	rc = req_capsule_server_pack(tsi->tsi_pill);
 	if (unlikely(rc != 0))
 		RETURN(err_serious(rc));

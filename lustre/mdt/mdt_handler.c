@@ -1321,6 +1321,20 @@ out:
 	RETURN(rc);
 }
 
+static void mdt_preset_encctx_size(struct mdt_thread_info *info)
+{
+	struct req_capsule *pill = info->mti_pill;
+
+	ENTRY;
+	if (req_capsule_has_field(pill, &RMF_FILE_ENCCTX,
+				  RCL_SERVER))
+		/* pre-set size in server part with max size */
+		req_capsule_set_size(pill, &RMF_FILE_ENCCTX,
+				     RCL_SERVER,
+				     info->mti_mdt->mdt_max_mdsize);
+	EXIT;
+}
+
 static int mdt_getattr_internal(struct mdt_thread_info *info,
 				struct mdt_object *o, int ma_need)
 {
@@ -1641,6 +1655,7 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 	 * enlarge the buffer when necessary. */
 	req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
 			     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
+	mdt_preset_encctx_size(info);
 
 	rc = req_capsule_server_pack(pill);
 	if (unlikely(rc != 0))
@@ -1658,6 +1673,10 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 	info->mti_cross_ref = !!(reqbody->mbo_valid & OBD_MD_FLCROSSREF);
 
 	rc = mdt_getattr_internal(info, obj, 0);
+	if (unlikely(rc))
+		GOTO(out_shrink, rc);
+
+	rc = mdt_pack_encctx_in_reply(info, obj);
 	EXIT;
 out_shrink:
 	mdt_client_compatibility(info);
@@ -2866,18 +2885,6 @@ static void mdt_preset_secctx_size(struct mdt_thread_info *info)
 			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
 					     RCL_SERVER, 0);
 	}
-}
-
-static void mdt_preset_encctx_size(struct mdt_thread_info *info)
-{
-	struct req_capsule *pill = info->mti_pill;
-
-	if (req_capsule_has_field(pill, &RMF_FILE_ENCCTX,
-				  RCL_SERVER))
-		/* pre-set size in server part with max size */
-		req_capsule_set_size(pill, &RMF_FILE_ENCCTX,
-				     RCL_SERVER,
-				     info->mti_mdt->mdt_max_mdsize);
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info,

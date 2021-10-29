@@ -2712,6 +2712,19 @@ setup_dummy_key() {
 	echo -n -e "${key}" | keyctl padd logon fscrypt:4242424242424242 @s
 }
 
+insert_enc_key() {
+	cancel_lru_locks
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	setup_dummy_key
+}
+
+remove_enc_key() {
+	cancel_lru_locks
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+}
+
 setup_for_enc_tests() {
 	# remount client with test_dummy_encryption option
 	if is_mounted $MOUNT; then
@@ -4535,18 +4548,6 @@ test_58() {
 }
 run_test 58 "access to enc file's xattrs"
 
-insert_enc_key() {
-	sync ; echo 3 > /proc/sys/vm/drop_caches
-	setup_dummy_key
-}
-
-remove_env_key() {
-	cancel_lru_locks
-	sync ; echo 3 > /proc/sys/vm/drop_caches
-	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
-	keyctl reap
-}
-
 verify_mirror() {
 	local mirror1=$TMP/$tfile.mirror1
 	local mirror2=$TMP/$tfile.mirror2
@@ -4597,7 +4598,7 @@ test_59a() {
 	$LFS getstripe $testfile
 
 	# now, without the key
-	remove_env_key
+	remove_enc_key
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
 	$LFS mirror resync $scrambledfile ||
 		error "could not resync mirror"
@@ -4645,7 +4646,7 @@ test_59b() {
 	$LFS getstripe $testfile
 
 	# now, without the key
-	remove_env_key
+	remove_enc_key
 	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type f)
 	$LFS migrate -i1 $scrambledfile ||
 		error "migrate $scrambledfile failed"
@@ -4660,7 +4661,7 @@ test_59b() {
 		error "migrated file is corrupted"
 
 	# now, without the key
-	remove_env_key
+	remove_enc_key
 	$LFS mirror extend -N -i0 $scrambledfile ||
 		error "mirror extend $scrambledfile failed (1)"
 	$LFS getstripe $scrambledfile
@@ -4686,7 +4687,7 @@ test_59b() {
 	verify_mirror $testfile $tmpfile
 
 	# now, without the key
-	remove_env_key
+	remove_enc_key
 	$LFS mirror split --mirror-id 1 -d $scrambledfile ||
 		error "mirror split file $scrambledfile failed (1)"
 	$LFS getstripe $scrambledfile
@@ -4725,7 +4726,7 @@ test_59c() {
 	echo b > $dirname/subf
 
 	# now, without the key
-	remove_env_key
+	remove_enc_key
 	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
 
 	# migrate a non-empty encrypted dir
@@ -4737,6 +4738,53 @@ test_59c() {
 		error "migrate $scrambleddir between MDTs failed (2)"
 }
 run_test 59c "MDT migrate of encrypted files without key"
+
+test_60() {
+	local testdir=$DIR/$tdir/mytestdir
+	local testfile=$DIR/$tdir/$tfile
+
+	(( $MDS1_VERSION > $(version_code 2.14.53) )) ||
+		skip "Need MDS version at least 2.14.53"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	echo a > $DIR/$tdir/file1
+	mkdir $DIR/$tdir/subdir
+	echo b > $DIR/$tdir/subdir/subfile1
+
+	remove_enc_key
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# remount client with subdirectory mount
+	export FILESET=/$tdir
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed"
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
+	fi
+	export FILESET=""
+
+	ls -Rl $DIR || error "ls -Rl $DIR failed (1)"
+
+	# now, with the key
+	insert_enc_key
+
+	ls -Rl $DIR || error "ls -Rl $DIR failed (2)"
+	cat $DIR/file1 || error "cat $DIR/$tdir/file1 failed"
+	cat $DIR/subdir/subfile1 ||
+		error "cat $DIR/$tdir/subdir/subfile1 failed"
+}
+run_test 60 "Subdirmount of encrypted dir"
 
 log "cleanup: ======================================================"
 
