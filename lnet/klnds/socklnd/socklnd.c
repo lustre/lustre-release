@@ -422,7 +422,9 @@ ksocknal_incr_conn_count(struct ksock_conn_cb *conn_cb,
 	switch (type) {
 	case SOCKLND_CONN_CONTROL:
 		conn_cb->ksnr_ctrl_conn_count++;
-		/* there's a single control connection per peer */
+		/* there's a single control connection per peer,
+		 * two in case of loopback
+		 */
 		conn_cb->ksnr_connected |= BIT(type);
 		break;
 	case SOCKLND_CONN_BULK_IN:
@@ -445,6 +447,46 @@ ksocknal_incr_conn_count(struct ksock_conn_cb *conn_cb,
 	}
 
 	CDEBUG(D_NET, "Add conn type %d, ksnr_connected %x ksnr_max_conns %d\n",
+	       type, conn_cb->ksnr_connected, conn_cb->ksnr_max_conns);
+}
+
+
+static void
+ksocknal_decr_conn_count(struct ksock_conn_cb *conn_cb,
+			 int type)
+{
+	conn_cb->ksnr_conn_count--;
+
+	/* check if all connections of the given type got created */
+	switch (type) {
+	case SOCKLND_CONN_CONTROL:
+		conn_cb->ksnr_ctrl_conn_count--;
+		/* there's a single control connection per peer,
+		 * two in case of loopback
+		 */
+		if (conn_cb->ksnr_ctrl_conn_count == 0)
+			conn_cb->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_BULK_IN:
+		conn_cb->ksnr_blki_conn_count--;
+		if (conn_cb->ksnr_blki_conn_count < conn_cb->ksnr_max_conns)
+			conn_cb->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_BULK_OUT:
+		conn_cb->ksnr_blko_conn_count--;
+		if (conn_cb->ksnr_blko_conn_count < conn_cb->ksnr_max_conns)
+			conn_cb->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_ANY:
+		if (conn_cb->ksnr_conn_count < conn_cb->ksnr_max_conns)
+			conn_cb->ksnr_connected &= ~BIT(type);
+		break;
+	default:
+		LBUG();
+		break;
+	}
+
+	CDEBUG(D_NET, "Del conn type %d, ksnr_connected %x ksnr_max_conns %d\n",
 	       type, conn_cb->ksnr_connected, conn_cb->ksnr_max_conns);
 }
 
@@ -1236,6 +1278,8 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_conn_cb *conn_cb;
 	struct ksock_conn *conn2;
+	int conn_count;
+	int duplicate_count = 0;
 
 	LASSERT(peer_ni->ksnp_error == 0);
 	LASSERT(!conn->ksnc_closing);
@@ -1249,21 +1293,29 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 		/* dissociate conn from cb... */
 		LASSERT(!conn_cb->ksnr_deleted);
 
+		conn_count = ksocknal_get_conn_count_by_type(conn_cb,
+							     conn->ksnc_type);
 		/* connected bit is set only if all connections
 		 * of the given type got created
 		 */
-		if (ksocknal_get_conn_count_by_type(conn_cb, conn->ksnc_type) ==
-		    conn_cb->ksnr_max_conns)
+		if (conn_count == conn_cb->ksnr_max_conns)
 			LASSERT((conn_cb->ksnr_connected &
 				BIT(conn->ksnc_type)) != 0);
 
-		list_for_each_entry(conn2, &peer_ni->ksnp_conns, ksnc_list) {
-			if (conn2->ksnc_conn_cb == conn_cb &&
-			    conn2->ksnc_type == conn->ksnc_type)
-				goto conn2_found;
+		if (conn_count == 1) {
+			list_for_each_entry(conn2, &peer_ni->ksnp_conns,
+					    ksnc_list) {
+				if (conn2->ksnc_conn_cb == conn_cb &&
+				    conn2->ksnc_type == conn->ksnc_type)
+					duplicate_count += 1;
+			}
+			if (duplicate_count > 0)
+				CERROR("Found %d duplicate conns type %d\n",
+				       duplicate_count,
+				       conn->ksnc_type);
 		}
-		conn_cb->ksnr_connected &= ~BIT(conn->ksnc_type);
-conn2_found:
+		ksocknal_decr_conn_count(conn_cb, conn->ksnc_type);
+
 		conn->ksnc_conn_cb = NULL;
 
 		/* drop conn's ref on conn_cb */
