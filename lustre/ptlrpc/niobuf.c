@@ -986,11 +986,11 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 	struct lnet_md md;
 	struct lnet_me *me;
 
-        CDEBUG(D_NET, "LNetMEAttach: portal %d\n",
-               service->srv_req_portal);
+	CDEBUG(D_NET, "%s: registering portal %d\n", service->srv_name,
+	       service->srv_req_portal);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
-                return (-ENOMEM);
+	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
+		return -ENOMEM;
 
 	/* NB: CPT affinity service should use new LNet flag LNET_INS_LOCAL,
 	 * which means buffer can only be attached on local CPT, and LND
@@ -1000,8 +1000,9 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 			  rqbd->rqbd_svcpt->scp_cpt >= 0 ?
 			  LNET_INS_LOCAL : LNET_INS_AFTER);
 	if (IS_ERR(me)) {
-		CERROR("LNetMEAttach failed: %ld\n", PTR_ERR(me));
-		return -ENOMEM;
+		CERROR("%s: LNetMEAttach failed: rc = %ld\n",
+		       service->srv_name, PTR_ERR(me));
+		return PTR_ERR(me);
 	}
 
 	LASSERT(rqbd->rqbd_refcount == 0);
@@ -1021,10 +1022,9 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 		return 0;
 	}
 
-	CERROR("ptlrpc: LNetMDAttach failed: rc = %d\n", rc);
+	CERROR("%s: LNetMDAttach failed: rc = %d\n", service->srv_name, rc);
 	LASSERT(rc == -ENOMEM);
-	LASSERT(rc == 0);
 	rqbd->rqbd_refcount = 0;
 
-	return -ENOMEM;
+	return rc;
 }
