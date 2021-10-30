@@ -358,7 +358,9 @@ ksocknal_incr_conn_count(struct ksock_route *route,
 	switch (type) {
 	case SOCKLND_CONN_CONTROL:
 		route->ksnr_ctrl_conn_count++;
-		/* there's a single control connection per peer */
+		/* there's a single control connection per peer,
+		 * two in case of loopback
+		 */
 		route->ksnr_connected |= BIT(type);
 		break;
 	case SOCKLND_CONN_BULK_IN:
@@ -388,6 +390,48 @@ ksocknal_incr_conn_count(struct ksock_route *route,
 	       type,
 	       route->ksnr_connected,
 	       *ksocknal_tunables.ksnd_conns_per_peer);
+}
+
+
+static void
+ksocknal_decr_conn_count(struct ksock_route *route,
+			 int type)
+{
+	int max_conns = *ksocknal_tunables.ksnd_conns_per_peer;
+
+	route->ksnr_conn_count--;
+
+	/* check if all connections of the given type got created */
+	switch (type) {
+	case SOCKLND_CONN_CONTROL:
+		route->ksnr_ctrl_conn_count--;
+		/* there's a single control connection per peer,
+		 * two in case of loopback
+		 */
+		if (route->ksnr_ctrl_conn_count == 0)
+			route->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_BULK_IN:
+		route->ksnr_blki_conn_count--;
+		if (route->ksnr_blki_conn_count < max_conns)
+			route->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_BULK_OUT:
+		route->ksnr_blko_conn_count--;
+		if (route->ksnr_blko_conn_count < max_conns)
+			route->ksnr_connected &= ~BIT(type);
+		break;
+	case SOCKLND_CONN_ANY:
+		if (route->ksnr_conn_count < max_conns)
+			route->ksnr_connected &= ~BIT(type);
+		break;
+	default:
+		LBUG();
+		break;
+	}
+
+	CDEBUG(D_NET, "Del conn type %d, ksnr_connected %x\n",
+	       type, route->ksnr_connected);
 }
 
 static void
@@ -1500,7 +1544,8 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_route *route;
 	struct ksock_conn *conn2;
-	struct list_head *tmp;
+	int conn_count;
+	int duplicate_count = 0;
 
 	LASSERT(peer_ni->ksnp_error == 0);
 	LASSERT(!conn->ksnc_closing);
@@ -1514,25 +1559,28 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 		/* dissociate conn from route... */
 		LASSERT(!route->ksnr_deleted);
 
+		conn_count = ksocknal_get_conn_count_by_type(route,
+							     conn->ksnc_type);
 		/* connected bit is set only if all connections
 		 * of the given type got created
 		 */
-		if (ksocknal_get_conn_count_by_type(route, conn->ksnc_type) ==
-		    *ksocknal_tunables.ksnd_conns_per_peer)
+		if (conn_count == *ksocknal_tunables.ksnd_conns_per_peer)
 			LASSERT((route->ksnr_connected &
 				BIT(conn->ksnc_type)) != 0);
-		conn2 = NULL;
-		list_for_each(tmp, &peer_ni->ksnp_conns) {
-			conn2 = list_entry(tmp, struct ksock_conn, ksnc_list);
 
-			if (conn2->ksnc_route == route &&
-			    conn2->ksnc_type == conn->ksnc_type)
-				break;
-
-			conn2 = NULL;
+		if (conn_count == 1) {
+			list_for_each_entry(conn2, &peer_ni->ksnp_conns,
+					    ksnc_list) {
+				if (conn2->ksnc_route == route &&
+				    conn2->ksnc_type == conn->ksnc_type)
+					duplicate_count += 1;
+			}
+			if (duplicate_count > 0)
+				CERROR("Found %d duplicate conns type %d\n",
+				       duplicate_count,
+				       conn->ksnc_type);
 		}
-		if (conn2 == NULL)
-			route->ksnr_connected &= ~(1 << conn->ksnc_type);
+		ksocknal_decr_conn_count(route, conn->ksnc_type);
 
 		conn->ksnc_route = NULL;
 
