@@ -1413,7 +1413,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * heavily-fragmented, it will be reduced to 4K at the worst.
 	 */
 	extent_bytes = osd_extent_bytes(osd);
-	LASSERT(extent_bytes >= (1 << osd_sb(osd)->s_blocksize));
+	LASSERT(extent_bytes >= osd_sb(osd)->s_blocksize);
 
 	/* calculate number of extents (probably better to pass nb) */
 	for (i = 0; i < npages; i++) {
