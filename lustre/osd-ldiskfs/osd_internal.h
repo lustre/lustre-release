@@ -1641,4 +1641,12 @@ static inline bool bio_integrity_prep_fn(struct bio *bio,
 #define osd_bio_nr_segs(bio)		bio_segments((bio))
 #endif /* HAVE_BIO_BI_PHYS_SEGMENTS */
 
+#ifdef HAVE_GET_INODE_USAGE
+#define lock_dquot_transfer(inode) down_read(&LDISKFS_I(inode)->xattr_sem)
+#define unlock_dquot_transfer(inode) up_read(&LDISKFS_I(inode)->xattr_sem)
+#else
+#define lock_dquot_transfer(inode) do {} while (0)
+#define unlock_dquot_transfer(inode) do {} while (0)
+#endif
+
 #endif /* _OSD_INTERNAL_H */
