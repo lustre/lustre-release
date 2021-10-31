@@ -159,7 +159,7 @@ int fld_update_from_controller(const struct lu_env *env,
 	do {
 		rc = fld_client_rpc(fld->lsf_control_exp, range, FLD_READ,
 				    &req);
-		if (rc != 0 && rc != -EAGAIN)
+		if (rc != 0)
 			GOTO(out, rc);
 
 		LASSERT(req != NULL);

@@ -1500,6 +1500,18 @@ test_24G () {
 }
 run_test 24G "migrate symlink in rename"
 
+test_24H() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ $(hostname) != $(facet_active_host mds2) ]] ||
+		skip "MDT1 should be on another node"
+
+	test_mkdir -i 1 -c 1 $DIR/$tdir
+#define OBD_FAIL_FLD_QUERY_REQ           0x1103
+	do_facet mds2 $LCTL set_param fail_loc=0x80001103
+	touch $DIR/$tdir/$tfile || error "touch failed"
+}
+run_test 24H "repeat FLD_QUERY rpc"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 

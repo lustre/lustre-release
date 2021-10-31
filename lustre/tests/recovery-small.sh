@@ -2273,7 +2273,7 @@ test_110k() {
 	stop mds2 || error "stop mds2 failed"
 
 #define OBD_FAIL_FLD_QUERY_REQ 0x1103
-	do_facet mds2 lctl set_param fail_loc=0x1103
+	do_facet mds2 lctl set_param fail_loc=0x80001103
 	local OPTS="$MDS_MOUNT_OPTS -o abort_recovery"
 	start mds2 $(mdsdevname 2) $OPTS ||
 		error "start MDS with abort_recovery should succeed"
