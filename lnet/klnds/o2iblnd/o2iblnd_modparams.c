@@ -140,13 +140,11 @@ MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment suppor
  *     the behavior when transmit with GAPS verses contiguous.
  */
 #ifdef HAVE_IB_GET_DMA_MR
-#define IBLND_DEFAULT_MAP_ON_DEMAND 0
 #define MOD_STR "map on demand"
 #else
-#define IBLND_DEFAULT_MAP_ON_DEMAND 1
 #define MOD_STR "map on demand (obsolete)"
 #endif
-static int map_on_demand = IBLND_DEFAULT_MAP_ON_DEMAND;
+static int map_on_demand = 1;
 module_param(map_on_demand, int, 0444);
 MODULE_PARM_DESC(map_on_demand, MOD_STR);
 
