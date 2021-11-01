@@ -502,8 +502,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_device *obd;
-	char *niduuid = NULL, *ptr = NULL;
-	int i, rc = 0, len = 0;
+	char niduuid[MAX_OBD_NAME + 6], *ptr = NULL;
+	int i, rc = 0;
 
 	ENTRY;
 
@@ -543,23 +543,15 @@ static int lustre_stop_mgc(struct super_block *sb)
 	}
 
 	/*
-	 * Save the obdname for cleaning the nid uuids, which are
-	 * obdname_XX
+	 * Cache the obdname for cleaning the nid uuids, which are
+	 * obdname_XX before calling class_manual_cleanup
 	 */
-	len = strlen(obd->obd_name) + 6;
-	OBD_ALLOC(niduuid, len);
-	if (niduuid) {
-		strcpy(niduuid, obd->obd_name);
-		ptr = niduuid + strlen(niduuid);
-	}
+	strcpy(niduuid, obd->obd_name);
+	ptr = niduuid + strlen(niduuid);
 
 	rc = class_manual_cleanup(obd);
 	if (rc)
 		GOTO(out, rc);
-
-	/* Clean the nid uuids */
-	if (!niduuid)
-		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
 		sprintf(ptr, "_%x", i);
@@ -570,9 +562,6 @@ static int lustre_stop_mgc(struct super_block *sb)
 			       niduuid, rc);
 	}
 out:
-	if (niduuid)
-		OBD_FREE(niduuid, len);
-
 	/* class_import_put will get rid of the additional connections */
 	mutex_unlock(&mgc_start_lock);
 	RETURN(rc);
