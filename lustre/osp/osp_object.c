@@ -2285,15 +2285,12 @@ static const struct dt_object_operations osp_obj_ops = {
 static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 			   const struct lu_object_conf *conf)
 {
-	struct osp_object	*po = lu2osp_obj(o);
-	int			rc = 0;
+	struct osp_object *po = lu2osp_obj(o);
+	int rc = 0;
+
 	ENTRY;
 
-	spin_lock_init(&po->opo_lock);
 	o->lo_header->loh_attr |= LOHA_REMOTE;
-	INIT_LIST_HEAD(&po->opo_xattr_list);
-	INIT_LIST_HEAD(&po->opo_invalidate_cb_list);
-	init_rwsem(&po->opo_invalidate_sem);
 
 	if (is_ost_obj(o)) {
 		po->opo_obj.do_ops = &osp_obj_ops;
@@ -2316,8 +2313,8 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 				rc = 0;
 			}
 		}
-		init_rwsem(&po->opo_sem);
 	}
+
 	RETURN(rc);
 }
 

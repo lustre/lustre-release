@@ -112,33 +112,38 @@ static struct lu_object *osp_object_alloc(const struct lu_env *env,
 					  const struct lu_object_header *hdr,
 					  struct lu_device *d)
 {
-	struct lu_object_header	*h = NULL;
-	struct osp_object	*o;
-	struct lu_object	*l;
+	struct osp_object *o;
 
 	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, GFP_NOFS);
 	if (o != NULL) {
-		l = &o->opo_obj.do_lu;
+		struct lu_object *l = &o->opo_obj.do_lu;
 
 		/* If hdr is NULL, it means the object is not built
 		 * from the top dev(MDT/OST), usually it happens when
 		 * building striped object, like data object on MDT or
 		 * striped object for directory */
 		if (hdr == NULL) {
-			h = &o->opo_header;
+			struct lu_object_header *h = &o->opo_header;
+
 			lu_object_header_init(h);
 			dt_object_init(&o->opo_obj, h, d);
 			lu_object_add_top(h, l);
 		} else {
-			dt_object_init(&o->opo_obj, h, d);
+			dt_object_init(&o->opo_obj, NULL, d);
 		}
 
 		l->lo_ops = &osp_lu_obj_ops;
 
+		init_rwsem(&o->opo_sem);
+		INIT_LIST_HEAD(&o->opo_xattr_list);
+		INIT_LIST_HEAD(&o->opo_invalidate_cb_list);
+		spin_lock_init(&o->opo_lock);
+		init_rwsem(&o->opo_invalidate_sem);
+
 		return l;
-	} else {
-		return NULL;
 	}
+
+	return NULL;
 }
 
 /**
