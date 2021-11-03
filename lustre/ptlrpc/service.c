@@ -1639,8 +1639,7 @@ ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *tmp = NULL;
 
-	if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) ||
-	    (atomic_read(&req->rq_export->exp_rpc_count) == 0))
+	if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
 		return NULL;
 
 	/*
