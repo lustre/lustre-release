@@ -4938,6 +4938,8 @@ run_test 133 "check resend of ongoing requests for lwp during failover"
 
 test_134() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return 0
+	(( $MDS1_VERSION >= $(version_code 2.13.56) )) ||
+		skip "need MDS version >= 2.13.56"
 
 	pool_add pool_134
 	pool_add_targets pool_134 1 1
