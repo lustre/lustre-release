@@ -910,6 +910,19 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 	if (is_grant_shrink) {
 		body = req_capsule_client_get(tsi->tsi_pill, &RMF_OST_BODY);
 
+		/*
+		 * Because we already sync grant info with client when
+		 * reconnect, grant info will be cleared for resent
+		 * req, otherwise, outdated grant count in the rpc
+		 * would de-sync grant counters
+		 */
+		if (lustre_msg_get_flags(req->rq_reqmsg) &
+		    (MSG_RESENT | MSG_REPLAY)) {
+			DEBUG_REQ(D_CACHE, req,
+				  "clear resent/replay req grant info");
+			body->oa.o_valid &= ~OBD_MD_FLGRANT;
+		}
+
 		repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
 		*repbody = *body;
 
