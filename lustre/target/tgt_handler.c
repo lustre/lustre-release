@@ -2232,6 +2232,17 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		GOTO(out_lock, rc = -ETIMEDOUT);
 	}
 
+	/*
+	 * Because we already sync grant info with client when
+	 * reconnect, grant info will be cleared for resent req,
+	 * otherwise, outdated grant count in the rpc would de-sync
+	 * grant counters in case of shrink
+	 */
+	if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
+		DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
+		body->oa.o_valid &= ~OBD_MD_FLGRANT;
+	}
+
 	repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
 	repbody->oa = body->oa;
 

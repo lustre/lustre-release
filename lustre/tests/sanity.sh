@@ -7239,6 +7239,42 @@ test_64h() {
 }
 run_test 64h "grant shrink on read"
 
+test_64i() {
+	local cli
+	local osc_tgt
+	local cgb
+	local testid=${TESTNAME/_/ }
+
+	(( $OST1_VERSION >= $(version_code 2.12.7) )) ||
+		skip "need OST at least 2.12.7 to avoid grant shrink on replay"
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OSTs with nodsh"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=64
+
+	# lustre-ffff9fc75e850800 /mnt/lustre -> ffff9fc75e850800
+	cli=$($LFS getname $DIR); cli=${cli%% *}; cli=${cli##*-}
+	osc_tgt="$FSNAME-OST0000-osc-$cli"
+	cgb=$($LCTL get_param -n osc.$osc_tgt.cur_grant_bytes)
+
+	# shrink grants and simulate rpc loss
+	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC	 0x513
+	do_facet ost1 "$LCTL set_param fail_loc=0x80000513 fail_val=17"
+	$LCTL set_param osc.$osc_tgt.cur_grant_bytes=$((cgb/2))
+
+	fail ost1
+
+	dd if=/dev/zero of=$DIR/$tfile oflag=append bs=1M count=8 conv=notrunc
+
+	do_facet ost1 dmesg | tac | sed "/$testid/,$ d" |
+		grep "GRANT, real grant" &&
+		error "client has more grants then it owns" || true
+}
+run_test 64i "shrink on reconnect"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
