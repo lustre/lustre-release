@@ -107,8 +107,7 @@ static void lov_io_sub_fini(const struct lu_env *env, struct lov_io *lio,
 static inline bool
 is_index_within_mirror(struct lov_object *lov, int index, int mirror_index)
 {
-	struct lov_layout_composite *comp = &lov->u.composite;
-	struct lov_mirror_entry *lre = &comp->lo_mirrors[mirror_index];
+	struct lov_mirror_entry *lre = lov_mirror_entry(lov, mirror_index);
 
 	return (index >= lre->lre_start && index <= lre->lre_end);
 }
@@ -431,7 +430,7 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		struct lov_layout_entry *lle;
 		bool found = false;
 
-		lre = &comp->lo_mirrors[(index + i) % comp->lo_mirror_count];
+		lre = lov_mirror_entry(obj, (index + i) % comp->lo_mirror_count);
 		if (!lre->lre_valid)
 			continue;
 
@@ -1992,7 +1991,7 @@ int lov_io_layout_at(struct lov_io *lio, __u64 offset)
 
 		LASSERT(lio->lis_mirror_index >= 0);
 
-		lre = &comp->lo_mirrors[lio->lis_mirror_index];
+		lre = lov_mirror_entry(lov, lio->lis_mirror_index);
 		start_index = lre->lre_start;
 		end_index = lre->lre_end;
 	}

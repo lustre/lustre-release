@@ -330,14 +330,9 @@ struct lov_object {
 	struct task_struct            *lo_owner;
 };
 
-static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov, int i)
+static inline const struct lu_fid *lov_object_fid(const struct lov_object *lov)
 {
-	LASSERT(lov->lo_type == LLT_COMP);
-	LASSERTF(i < lov->u.composite.lo_entry_count,
-		 "entry %d entry_count %d\n", i,
-		 lov->u.composite.lo_entry_count);
-
-	return &lov->u.composite.lo_entries[i].lle_raid0;
+	return lu_object_fid(&lov->lo_cl.co_lu);
 }
 
 static inline struct lov_stripe_md_entry *lov_lse(struct lov_object *lov, int i)
@@ -365,10 +360,16 @@ static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)
 {
 	LASSERT(lov->lo_type == LLT_COMP);
 	LASSERTF(i < lov->u.composite.lo_entry_count,
-		 "entry %d entry_count %d\n", i,
-		 lov->u.composite.lo_entry_count);
+		 DFID" entry %d, entry_count %d\n",
+		 PFID(lov_object_fid(lov)),
+		 i, lov->u.composite.lo_entry_count);
 
 	return &lov->u.composite.lo_entries[i];
+}
+
+static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov, int i)
+{
+	return &lov_entry(lov, i)->lle_raid0;
 }
 
 #define lov_for_layout_entry(lov, entry, start, end)			\
@@ -387,7 +388,11 @@ static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)
 static inline struct lov_mirror_entry *
 lov_mirror_entry(struct lov_object *lov, int i)
 {
-	LASSERT(i < lov->u.composite.lo_mirror_count);
+	LASSERTF(i < lov->u.composite.lo_mirror_count,
+		 DFID" entry %d, mirror_count %d\n",
+		 PFID(lov_object_fid(lov)),
+		 i, lov->u.composite.lo_mirror_count);
+
 	return &lov->u.composite.lo_mirrors[i];
 }
 
