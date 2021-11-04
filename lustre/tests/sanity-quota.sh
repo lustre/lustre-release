@@ -5412,6 +5412,37 @@ test_81() {
 }
 run_test 81 "Race qmt_start_pool_recalc with qmt_pool_free"
 
+test_82()
+{
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "need MDS 2.14.55 or later"
+	is_project_quota_supported ||
+		skip "skip project quota unsupported"
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test
+	quota_init
+
+	local parent_dir="$DIR/$tdir.parent"
+	local child_dir="$parent_dir/child"
+
+	mkdir -p $child_dir
+	stack_trap "chown -R 0:0 $parent_dir"
+
+	chown $TSTUSR:$TSTUSR $parent_dir ||
+		error "failed to chown on $parent_dir"
+	chown $TSTUSR2:$TSTUSRS2 $child_dir ||
+		error "failed to chown on $parent_dir"
+
+	$LFS project -p 1000 $parent_dir ||
+		error "failed to set project id on $parent_dir"
+	$LFS project -p 1001 $child_dir ||
+		error "failed to set project id on $child_dir"
+
+	rmdir $child_dir || error "cannot remove child dir, test failed"
+}
+run_test 82 "verify more than 8 qids for single operation"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
