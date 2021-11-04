@@ -66,6 +66,20 @@ static int ofd_lvbo_free(struct ldlm_resource *res)
 	return 0;
 }
 
+static bool ofd_resync_allowed(struct ofd_device *ofd)
+{
+	struct obd_device *obd = ofd_obd(ofd);
+
+	if (obd->obd_recovery_start == 0)
+		return false;
+
+	if (obd->obd_recovery_start + obd->obd_recovery_time_hard <
+	    ktime_get_seconds())
+		return false;
+
+	return true;
+}
+
 /**
  * Implementation of ldlm_valblock_ops::lvbo_init for OFD.
  *
@@ -132,8 +146,9 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 			oseq = ofd_seq_load(env, ofd, fid_seq_is_idif(seq) ?
 					    FID_SEQ_OST_MDT0 : seq);
 			if (!IS_ERR_OR_NULL(oseq)) {
-				if (!oseq->os_last_id_synced)
-					rc = -EAGAIN;
+				if (!oseq->os_last_id_synced &&
+				    ofd_resync_allowed(ofd))
+					rc = -EINPROGRESS;
 				ofd_seq_put(env, oseq);
 			}
 		}

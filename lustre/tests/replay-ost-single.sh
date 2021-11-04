@@ -430,34 +430,28 @@ test_10() {
 }
 run_test 10 "conflicting PW & PR locks on a client"
 
-test_12() {
-	[ $FAILURE_MODE != "HARD" ] &&
-		skip "Test needs FAILURE_MODE HARD" && return 0
+test_12a() {
 	remote_ost || { skip "need remote OST" && return 0; }
 
 	local tmp=$TMP/$tdir
 	local dir=$DIR/$tdir
-	declare -a pids
-
 
 	mkdir -p $tmp || error "can't create $tmp"
 	mkdir -p $dir || error "can't create $dir"
 
 	$LFS setstripe -c 1 -i 0 $dir
 
-	for i in `seq 1 10`; do mkdir $dir/d$i; done
+	for i in $(seq 1 10); do mkdir $dir/d$i; done
 
-	#define OBD_FAIL_OST_DELAY_TRANS        0x245
-	do_facet ost1 "$LCTL set_param fail_loc=0x245" ||
-		error "can't set fail_loc"
+	# get client connected if was idle
+	touch $dir/file1
+	sync
 
-	for i in `seq 1 10`;
-	do
-		createmany -o $dir/d$i/$(openssl rand -base64 12) 500 &
-		pids+=($!)
+	replay_barrier ost1
+
+	for i in $(seq 1 10); do
+		createmany -o $dir/d$i/file 500
 	done
-	echo "Waiting createmany pids"
-	wait ${pids[@]}
 
 	ls -lR $dir > $tmp/ls_r_out 2>&1&
 	local ls_pid=$!
@@ -471,7 +465,37 @@ test_12() {
 	rm -rf $tmp
 	rm -rf $dir
 }
-run_test 12 "check stat after OST failover"
+run_test 12a "glimpse after OST failover to a missing object"
+
+test_12b() {
+	remote_ost || { skip "need remote OST" && return 0; }
+
+	local dir=$DIR/$tdir
+	local rc
+
+	test_mkdir -p -i 0 $dir || error "can't create $dir"
+
+	$LFS setstripe -c 1 -i 0 $dir
+
+	for i in $(seq 1 10); do mkdir $dir/d$i; done
+	replay_barrier ost1
+
+	for i in $(seq 1 10); do
+		createmany -o $dir/d$i/file 500
+	done
+
+	#define OBD_FAIL_MDS_DELAY_DELORPHAN	 0x16e
+	do_facet mds1 "$LCTL set_param fail_loc=0x16e fail_val=10" ||
+		error "can't set fail_loc"
+	facet_failover ost1
+
+	dd if=/dev/zero of=$dir/d10/file499 count=1 bs=4K > /dev/null
+	rc=$?
+	[[ $rc -eq 0 ]] || error "dd failed: $rc"
+
+	rm -rf $dir
+}
+run_test 12b "write after OST failover to a missing object"
 
 complete $SECONDS
 check_and_cleanup_lustre

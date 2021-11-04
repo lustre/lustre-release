@@ -874,6 +874,8 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	CDEBUG(D_HA, "%s: going to cleanup orphans since "DFID"\n",
 	       d->opd_obd->obd_name, PFID(&d->opd_last_used_fid));
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_DELORPHAN, cfs_fail_val);
+
 	*last_fid = d->opd_last_used_fid;
 	/* The OSP should already get the valid seq now */
 	LASSERT(!fid_is_zero(last_fid));
