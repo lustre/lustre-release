@@ -234,8 +234,9 @@ struct lquota_id_info {
  * a single transaction for inode and block quota, which is chown transaction:
  * original uid and gid, new uid and gid.
  *
- * This value might need to be revised when directory quota is added.  */
-#define QUOTA_MAX_TRANSIDS    8
+ * Given a parent dir and a sub dir, with different uid, gid and project id,
+ * need <parent,child> x <user,group,project> x <block,inode> = 12 ids */
+#define QUOTA_MAX_TRANSIDS    12
 
 /* all qids involved in a single transaction */
 struct lquota_trans {
