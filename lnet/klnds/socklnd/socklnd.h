@@ -379,7 +379,7 @@ struct ksock_conn_cb {
 	unsigned int		ksnr_connecting:1;/* connection in progress */
 	unsigned int		ksnr_connected:4;/* connections by type */
 	unsigned int		ksnr_deleted:1;	/* been removed from peer_ni? */
-	unsigned int		ksnr_ctrl_conn_count:1; /* # conns by type */
+	unsigned int		ksnr_ctrl_conn_count:2; /* # conns by type */
 	unsigned int		ksnr_blki_conn_count:8;
 	unsigned int		ksnr_blko_conn_count:8;
 	int			ksnr_conn_count;/* total # conns for this cb */
