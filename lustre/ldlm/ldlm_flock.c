@@ -295,7 +295,6 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	enum ldlm_mode mode = req->l_req_mode;
 	int local = ns_is_client(ns);
 	int added = (mode == LCK_NL);
-	int overlaps = 0;
 	int splitted = 0;
 	const struct ldlm_callback_suite null_cbs = { NULL };
 #ifdef HAVE_SERVER_SUPPORT
@@ -497,7 +496,7 @@ reprocess:
 		    lock->l_policy_data.l_flock.start)
 			break;
 
-		++overlaps;
+		res->lr_flock_node.lfn_needs_reprocess = true;
 
 		if (new->l_policy_data.l_flock.start <=
 		    lock->l_policy_data.l_flock.start) {
@@ -606,21 +605,25 @@ reprocess:
 			 * but only once because 'intention' won't be
 			 * LDLM_PROCESS_ENQUEUE from ldlm_reprocess_queue.
 			 */
-			if ((mode == LCK_NL) && overlaps) {
+			struct ldlm_flock_node *fn = &res->lr_flock_node;
+restart:
+			if (mode == LCK_NL && fn->lfn_needs_reprocess &&
+			    atomic_read(&fn->lfn_unlock_pending) == 0) {
 				LIST_HEAD(rpc_list);
 				int rc;
 
-restart:
 				ldlm_reprocess_queue(res, &res->lr_waiting,
 						     &rpc_list,
 						     LDLM_PROCESS_RESCAN, 0);
-
+				fn->lfn_needs_reprocess = false;
 				unlock_res_and_lock(req);
 				rc = ldlm_run_ast_work(ns, &rpc_list,
 						       LDLM_WORK_CP_AST);
 				lock_res_and_lock(req);
-				if (rc == -ERESTART)
+				if (rc == -ERESTART) {
+					fn->lfn_needs_reprocess = true;
 					GOTO(restart, rc);
+				}
 			}
 		} else {
 			LASSERT(req->l_completion_ast);

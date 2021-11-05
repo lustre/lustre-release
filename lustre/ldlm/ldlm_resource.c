@@ -1412,6 +1412,14 @@ static bool ldlm_resource_inodebits_new(struct ldlm_resource *res)
 	return true;
 }
 
+static bool ldlm_resource_flock_new(struct ldlm_resource *res)
+{
+	res->lr_flock_node.lfn_needs_reprocess = false;
+	atomic_set(&res->lr_flock_node.lfn_unlock_pending, 0);
+
+	return true;
+}
+
 /** Create and initialize new resource. */
 static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 {
@@ -1428,6 +1436,9 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 		break;
 	case LDLM_IBITS:
 		rc = ldlm_resource_inodebits_new(res);
+		break;
+	case LDLM_FLOCK:
+		rc = ldlm_resource_flock_new(res);
 		break;
 	default:
 		rc = true;
