@@ -1495,7 +1495,7 @@ static void ll_qos_mkdir_prep(struct md_op_data *op_data, struct inode *dir)
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct lmv_stripe_md *lsm;
 
-	op_data->op_dir_depth = lli->lli_depth;
+	op_data->op_dir_depth = lli->lli_dir_depth;
 
 	/* parent directory is striped */
 	if (unlikely(lli->lli_lsm_md))
@@ -1524,11 +1524,11 @@ static void ll_qos_mkdir_prep(struct md_op_data *op_data, struct inode *dir)
 
 	if (lsm->lsm_md_max_inherit != LMV_INHERIT_NONE &&
 	    (lsm->lsm_md_max_inherit == LMV_INHERIT_UNLIMITED ||
-	     lsm->lsm_md_max_inherit >= lli->lli_depth)) {
+	     lsm->lsm_md_max_inherit >= lli->lli_dir_depth)) {
 		op_data->op_flags |= MF_QOS_MKDIR;
 		if (lsm->lsm_md_max_inherit_rr != LMV_INHERIT_RR_NONE &&
 		    (lsm->lsm_md_max_inherit_rr == LMV_INHERIT_RR_UNLIMITED ||
-		     lsm->lsm_md_max_inherit_rr >= lli->lli_depth))
+		     lsm->lsm_md_max_inherit_rr >= lli->lli_dir_depth))
 			op_data->op_flags |= MF_RR_MKDIR;
 		CDEBUG(D_INODE, DFID" requests qos mkdir %#x\n",
 		       PFID(&lli->lli_fid), op_data->op_flags);

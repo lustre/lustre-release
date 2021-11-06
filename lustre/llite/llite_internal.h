@@ -170,7 +170,7 @@ struct ll_inode_info {
 			 * -- I am the owner of dir statahead. */
 			pid_t				lli_opendir_pid;
 			/* directory depth to ROOT */
-			unsigned short			lli_depth;
+			unsigned short			lli_dir_depth;
 			/* stat will try to access statahead entries or start
 			 * statahead if this flag is set, and this flag will be
 			 * set upon dir open, and cleared when dir is closed,

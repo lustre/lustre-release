@@ -1501,10 +1501,11 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv, __u32 mdt,
 
 	/* if current MDT has above-average space, within range of the QOS
 	 * threshold, stay on the same MDT to avoid creating needless remote
-	 * MDT directories. It's more likely for low level directories.
+	 * MDT directories. It's more likely for low level directories
+	 * "16 / (dir_depth + 10)" is the factor to make it more unlikely for
+	 * top level directories, while more likely for low levels.
 	 */
-	rand = total_avail * (256 - lmv->lmv_qos.lq_threshold_rr) /
-	       (total_usable * 256 * (1 + dir_depth / 4));
+	rand = total_avail * 16 / (total_usable * (dir_depth + 10));
 	if (cur && cur->ltd_qos.ltq_avail >= rand) {
 		tgt = cur;
 		GOTO(unlock, tgt);

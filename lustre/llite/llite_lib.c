@@ -2695,8 +2695,9 @@ void ll_update_dir_depth(struct inode *dir, struct inode *inode)
 		return;
 
 	lli = ll_i2info(inode);
-	lli->lli_depth = ll_i2info(dir)->lli_depth + 1;
-	CDEBUG(D_INODE, DFID" depth %hu\n", PFID(&lli->lli_fid), lli->lli_depth);
+	lli->lli_dir_depth = ll_i2info(dir)->lli_dir_depth + 1;
+	CDEBUG(D_INODE, DFID" depth %hu\n",
+	       PFID(&lli->lli_fid), lli->lli_dir_depth);
 }
 
 void ll_truncate_inode_pages_final(struct inode *inode)
