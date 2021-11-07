@@ -1926,10 +1926,23 @@ static int cb_get_dirstripe(char *path, int *d, struct find_param *param)
 		return -ENOTDIR;
 again:
 	param->fp_lmv_md->lum_stripe_count = param->fp_lmv_stripe_count;
-	if (param->fp_get_default_lmv)
+	if (param->fp_get_default_lmv) {
+#ifdef HAVE_STATX
+		struct statx stx;
+
+		/* open() may not fetch LOOKUP lock, statx() to ensure dir depth
+		 * is set.
+		 */
+		statx(*d, "", AT_EMPTY_PATH, STATX_MODE, &stx);
+#else
+		struct stat st;
+
+		fstat(*d, &st);
+#endif
 		param->fp_lmv_md->lum_magic = LMV_USER_MAGIC;
-	else
+	} else {
 		param->fp_lmv_md->lum_magic = LMV_MAGIC_V1;
+	}
 
 	ret = ioctl(*d, LL_IOC_LMV_GETSTRIPE, param->fp_lmv_md);
 

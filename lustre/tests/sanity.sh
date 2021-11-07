@@ -25752,6 +25752,46 @@ test_413e() {
 }
 run_test 413e "check default max-inherit value"
 
+test_413f() {
+	(( MDSCOUNT >= 2 )) || skip "We need at least 2 MDTs for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need server version at least 2.14.55"
+
+	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
+		error "dump $DIR default LMV failed"
+	stack_trap "setfattr --restore=$TMP/dmv.ea"
+
+	$LFS setdirstripe -D -i -1 -c 1 -X 3 --max-inherit-rr 3 $DIR ||
+		error "set $DIR default LMV failed"
+
+	local testdir=$DIR/$tdir
+
+	local count
+	local inherit
+	local inherit_rr
+
+	for i in $(seq 3); do
+		mkdir $testdir || error "mkdir $testdir failed"
+		count=$($LFS getdirstripe -D -c $testdir)
+		(( count == 1 )) ||
+			error "$testdir default LMV count mismatch $count != 1"
+		inherit=$($LFS getdirstripe -D -X $testdir)
+		(( inherit == 3 - i )) ||
+			error "$testdir default LMV max-inherit $inherit != $((3 - i))"
+		inherit_rr=$($LFS getdirstripe -D --max-inherit-rr $testdir)
+		(( inherit_rr == 3 - i )) ||
+			error "$testdir default LMV max-inherit-rr $inherit_rr != $((3 - i))"
+		testdir=$testdir/sub
+	done
+
+	mkdir $testdir || error "mkdir $testdir failed"
+	count=$($LFS getdirstripe -D -c $testdir)
+	(( count == 0 )) ||
+		error "$testdir default LMV count not zero: $count"
+}
+run_test 413f "lfs getdirstripe -D list ROOT default LMV if it's not set on dir"
+
 test_413z() {
 	local pids=""
 	local subdir

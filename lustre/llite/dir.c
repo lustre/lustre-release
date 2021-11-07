@@ -794,7 +794,7 @@ int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
 				       &req, valid, 0);
 	if (rc == -ENODATA && !fid_is_root(ll_inode2fid(inode)) &&
-	    !(valid & (OBD_MD_MEA|OBD_MD_DEFAULT_MEA)) && root_request != NULL){
+	    !(valid & OBD_MD_MEA) && root_request != NULL) {
 		int rc2 = ll_dir_get_default_layout(inode, (void **)&lmm,
 						    &lmm_size, &root_req, valid,
 						    GET_DEFAULT_LAYOUT_ROOT);
@@ -1627,6 +1627,41 @@ out:
 			if (lmmsize > sizeof(*ulmv))
 				GOTO(finish_req, rc = -EINVAL);
 
+			if (root_request != NULL) {
+				struct lmv_user_md *lum;
+				struct ll_inode_info *lli;
+
+				lum = (struct lmv_user_md *)lmm;
+				lli = ll_i2info(inode);
+				if (lum->lum_max_inherit == LMV_INHERIT_NONE ||
+				    (lum->lum_max_inherit > 0 &&
+				     lum->lum_max_inherit < lli->lli_dir_depth))
+					GOTO(finish_req, rc = -ENODATA);
+
+				if (lum->lum_max_inherit ==
+				    lli->lli_dir_depth) {
+					lum->lum_max_inherit = LMV_INHERIT_NONE;
+					lum->lum_max_inherit_rr =
+						LMV_INHERIT_RR_NONE;
+					goto out_copy;
+				}
+				if (lum->lum_max_inherit > lli->lli_dir_depth &&
+				    lum->lum_max_inherit <= LMV_INHERIT_MAX)
+					lum->lum_max_inherit -=
+						lli->lli_dir_depth;
+
+				if (lum->lum_max_inherit_rr >
+					lli->lli_dir_depth &&
+				    lum->lum_max_inherit_rr <=
+					LMV_INHERIT_RR_MAX)
+					lum->lum_max_inherit_rr -=
+						lli->lli_dir_depth;
+				else if (lum->lum_max_inherit_rr ==
+						lli->lli_dir_depth)
+					lum->lum_max_inherit_rr =
+						LMV_INHERIT_RR_NONE;
+			}
+out_copy:
 			if (copy_to_user(ulmv, lmm, lmmsize))
 				GOTO(finish_req, rc = -EFAULT);
 
