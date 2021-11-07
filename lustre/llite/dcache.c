@@ -255,6 +255,8 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 			    struct lookup_intent *it,
 			    struct dentry *de)
 {
+	struct inode *inode = de->d_inode;
+	__u64 bits = 0;
 	int rc = 0;
 
         ENTRY;
@@ -265,7 +267,18 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 	if (it_disposition(it, DISP_LOOKUP_NEG))
 		RETURN(-ENOENT);
 
-	rc = ll_prep_inode(&de->d_inode, &request->rq_pill, NULL, it);
+	rc = ll_prep_inode(&inode, &request->rq_pill, NULL, it);
+	if (rc)
+		RETURN(rc);
+
+	ll_set_lock_data(ll_i2sbi(inode)->ll_md_exp, inode, it,
+			 &bits);
+	if (bits & MDS_INODELOCK_LOOKUP) {
+		ll_update_dir_depth(de->d_parent->d_inode, inode);
+		if (!ll_d_setup(de, true))
+			RETURN(-ENOMEM);
+		d_lustre_revalidate(de);
+	}
 
 	RETURN(rc);
 }
