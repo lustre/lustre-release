@@ -678,7 +678,13 @@ static int osc_io_setattr_start(const struct lu_env *env,
 
 			oa->o_size = io->u.ci_setattr.sa_falloc_offset;
 			oa->o_blocks = io->u.ci_setattr.sa_falloc_end;
-			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			oa->o_uid = io->u.ci_setattr.sa_falloc_uid;
+			oa->o_gid = io->u.ci_setattr.sa_falloc_gid;
+			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+				OBD_MD_FLUID | OBD_MD_FLGID;
+
+			CDEBUG(D_INODE, "size %llu blocks %llu uid %u gid %u\n",
+			       oa->o_size, oa->o_blocks, oa->o_uid, oa->o_gid);
 			result = osc_fallocate_base(osc_export(cl2osc(obj)),
 						    oa, osc_async_upcall,
 						    cbargs, falloc_mode);

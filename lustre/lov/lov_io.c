@@ -689,6 +689,10 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		if (cl_io_is_fallocate(io)) {
 			io->u.ci_setattr.sa_falloc_offset = start;
 			io->u.ci_setattr.sa_falloc_end = end;
+			io->u.ci_setattr.sa_falloc_uid =
+				parent->u.ci_setattr.sa_falloc_uid;
+			io->u.ci_setattr.sa_falloc_gid =
+				parent->u.ci_setattr.sa_falloc_gid;
 		}
 		if (cl_io_is_trunc(io)) {
 			loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;

@@ -1961,6 +1961,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	struct ldlm_resource *res;
 	struct ofd_object *fo;
 	__u64 flags = 0;
+	__u64 valid;
 	struct lustre_handle lh = { 0, };
 	int rc, mode;
 	__u64 start, end;
@@ -2017,8 +2018,9 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	if (IS_ERR(fo))
 		GOTO(out, rc = PTR_ERR(fo));
 
-	la_from_obdo(&info->fti_attr, oa,
-		     OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
+	valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID |
+		OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+	la_from_obdo(&info->fti_attr, oa, valid);
 
 	rc = ofd_object_fallocate(tsi->tsi_env, fo, start, end, mode,
 				 &info->fti_attr, oa);
@@ -2027,8 +2029,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 
 	rc = ofd_attr_get(tsi->tsi_env, fo, &info->fti_attr);
 	if (rc == 0)
-		obdo_from_la(&repbody->oa, &info->fti_attr,
-			     OFD_VALID_FLAGS);
+		obdo_from_la(&repbody->oa, &info->fti_attr, OFD_VALID_FLAGS);
 	else
 		rc = 0;
 

@@ -5360,6 +5360,14 @@ int cl_falloc(struct file *file, struct inode *inode, int mode, loff_t offset,
 	io->u.ci_setattr.sa_falloc_offset = offset;
 	io->u.ci_setattr.sa_falloc_end = offset + len;
 	io->u.ci_setattr.sa_subtype = CL_SETATTR_FALLOCATE;
+
+	CDEBUG(D_INODE, "UID %u GID %u\n",
+	       from_kuid(&init_user_ns, inode->i_uid),
+	       from_kgid(&init_user_ns, inode->i_gid));
+
+	io->u.ci_setattr.sa_falloc_uid = from_kuid(&init_user_ns, inode->i_uid);
+	io->u.ci_setattr.sa_falloc_gid = from_kgid(&init_user_ns, inode->i_gid);
+
 	if (io->u.ci_setattr.sa_falloc_end > size) {
 		loff_t newsize = io->u.ci_setattr.sa_falloc_end;
 

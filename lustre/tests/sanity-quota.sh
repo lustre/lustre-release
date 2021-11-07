@@ -4993,6 +4993,48 @@ test_77()
 }
 run_test 77 "lfs setquota should fail in Lustre mount with 'ro'"
 
+test_78()
+{
+	(( $OST1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "need OST at least 2.14.55"
+	check_set_fallocate_or_skip
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	mkdir -p $DIR/$tdir || error "failed to create $tdir"
+	chown $TSTUSR $DIR/$tdir || error "failed to chown $tdir"
+
+	# setup quota limit
+	$LFS setquota -u $TSTUSR -b25M -B25M $DIR/$tdir ||
+		error "lfs setquota failed"
+
+	# call fallocate
+	runas -u $TSTUSR -g $TSTUSR fallocate -l 204800 $DIR/$tdir/$tfile
+
+	kbytes=$(lfs quota -u $TSTUSR $DIR |
+		awk -v pattern=$DIR 'match($0, pattern) {printf $2}')
+	echo "kbytes returned:$kbytes"
+
+	# For file size of 204800. We should be having roughly 200 kbytes
+	# returned. Anything alarmingly low (50 taken as arbitrary value)
+	# would bail out this TC. Also this also avoids $kbytes of 0
+	# to be used in calculation below.
+	(( $kbytes > 50 )) ||
+		error "fallocate did not use quota. kbytes returned:$kbytes"
+
+	local expect_lo=$(($kbytes * 95 / 100)) # 5% below
+	local expect_hi=$(($kbytes * 105 / 100)) # 5% above
+
+	# Verify kbytes is 200 (204800/1024). With a permited  5% drift
+	(( $kbytes >= $expect_lo && $kbytes <= $expect_hi )) ||
+		error "fallocate did not use quota correctly"
+}
+run_test 78 "Check fallocate increase quota usage"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
