@@ -2021,8 +2021,6 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 
 	if (result > 0) {
 		ll_heat_add(inode, CIT_WRITE, result);
-		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
-				   result);
 		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 	}
 
