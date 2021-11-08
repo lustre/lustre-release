@@ -1574,7 +1574,7 @@ retry_encrypt:
 		}
 	}
 
-	if (lnet_is_rdma_only_page(pga[0]->pg)) {
+	if (brw_page2oap(pga[0])->oap_brw_flags & OBD_BRW_RDMA_ONLY) {
 		enable_checksum = false;
 		short_io_size = 0;
 	}
