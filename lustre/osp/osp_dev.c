@@ -570,6 +570,7 @@ static int osp_update_init(struct osp_device *osp)
  */
 static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
 {
+	struct obd_import *imp = osp->opd_obd->u.cli.cl_import;
 	struct osp_update_request *our;
 	struct osp_update_request *tmp;
 	struct osp_updates *ou = osp->opd_update;
@@ -580,17 +581,22 @@ static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
 	kthread_stop(ou->ou_update_task);
 	lu_env_fini(&ou->ou_env);
 
+	/*
+	 * import invalidation can be running in a dedicated thread.
+	 * we have to wait for the thread's completion as the thread
+	 * invalidates this list as well.
+	 */
+	wait_event_idle(imp->imp_recovery_waitq,
+			(atomic_read(&imp->imp_inval_count) == 0));
+
 	/* Remove the left osp thandle from the list */
-	spin_lock(&ou->ou_lock);
-	list_for_each_entry_safe(our, tmp, &ou->ou_list,
-				 our_list) {
+	list_for_each_entry_safe(our, tmp, &ou->ou_list, our_list) {
 		list_del_init(&our->our_list);
 		LASSERT(our->our_th != NULL);
 		osp_trans_callback(env, our->our_th, -EIO);
 		/* our will be destroyed in osp_thandle_put() */
 		osp_thandle_put(env, our->our_th);
 	}
-	spin_unlock(&ou->ou_lock);
 
 	OBD_FREE_PTR(ou);
 	osp->opd_update = NULL;
