@@ -1,0 +1,343 @@
+---
+ fs/ext4/ext4.h    |    7 ++
+ fs/ext4/mballoc.c |  133 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/mballoc.h |    3 +
+ fs/ext4/sysfs.c   |   52 +++++++++++++++++++++
+ 4 files changed, 195 insertions(+)
+
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1536,6 +1536,9 @@ struct ext4_sb_info {
+ 	unsigned int s_mb_min_to_scan;
+ 	unsigned int s_mb_stats;
+ 	unsigned int s_mb_order2_reqs;
++	ext4_fsblk_t s_mb_c1_blocks;
++	ext4_fsblk_t s_mb_c2_blocks;
++	ext4_fsblk_t s_mb_c3_blocks;
+ 	unsigned long *s_mb_prealloc_table;
+ 	unsigned int s_mb_group_prealloc;
+ 	unsigned int s_mb_max_inode_prealloc;
+@@ -1555,6 +1558,9 @@ struct ext4_sb_info {
+ 	atomic_t s_bal_goals;	/* goal hits */
+ 	atomic_t s_bal_breaks;	/* too long searches */
+ 	atomic_t s_bal_2orders;	/* 2^order hits */
++	/* cX loop didn't find blocks */
++	atomic64_t s_bal_cX_failed[3];
++	atomic64_t s_bal_cX_skipped[3];
+ 	spinlock_t s_bal_lock;
+ 	unsigned long s_mb_buddies_generated;
+ 	unsigned long long s_mb_generation_time;
+@@ -2846,6 +2852,7 @@ ext4_read_inode_bitmap(struct super_bloc
+ /* mballoc.c */
+ extern const struct proc_ops ext4_seq_prealloc_table_fops;
+ extern const struct seq_operations ext4_mb_seq_groups_ops;
++extern const struct proc_ops ext4_mb_seq_alloc_fops;
+ extern const struct proc_ops ext4_seq_mb_last_group_fops;
+ extern int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v);
+ extern long ext4_mb_stats;
+--- a/fs/ext4/mballoc.c
++++ b/fs/ext4/mballoc.c
+@@ -2308,6 +2308,20 @@ void ext4_mb_prefetch_fini(struct super_
+ 	}
+ }
+ 
++static u64 available_blocks_count(struct ext4_sb_info *sbi)
++{
++	ext4_fsblk_t resv_blocks;
++	u64 bfree;
++	struct ext4_super_block *es = sbi->s_es;
++
++	resv_blocks = EXT4_C2B(sbi, atomic64_read(&sbi->s_resv_clusters));
++	bfree = percpu_counter_sum_positive(&sbi->s_freeclusters_counter) -
++		 percpu_counter_sum_positive(&sbi->s_dirtyclusters_counter);
++
++	bfree = EXT4_C2B(sbi, max_t(s64, bfree, 0));
++	return bfree - (ext4_r_blocks_count(es) + resv_blocks);
++}
++
+ static noinline_for_stack int
+ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
+ {
+@@ -2318,6 +2332,7 @@ ext4_mb_regular_allocator(struct ext4_al
+ 	struct ext4_sb_info *sbi;
+ 	struct super_block *sb;
+ 	struct ext4_buddy e4b;
++	ext4_fsblk_t avail_blocks;
+ 	int lost;
+ 
+ 	sb = ac->ac_sb;
+@@ -2371,6 +2386,21 @@ ext4_mb_regular_allocator(struct ext4_al
+ 
+ 	/* Let's just scan groups to find more-less suitable blocks */
+ 	cr = ac->ac_2order ? 0 : 1;
++
++	/* Choose what loop to pass based on disk fullness */
++	avail_blocks = available_blocks_count(sbi) ;
++
++	if (avail_blocks < sbi->s_mb_c3_blocks) {
++		cr = 3;
++		atomic64_inc(&sbi->s_bal_cX_skipped[2]);
++	} else if(avail_blocks < sbi->s_mb_c2_blocks) {
++		cr = 2;
++		atomic64_inc(&sbi->s_bal_cX_skipped[1]);
++	} else if(avail_blocks < sbi->s_mb_c1_blocks) {
++		cr = 1;
++		atomic64_inc(&sbi->s_bal_cX_skipped[0]);
++	}
++
+ 	/*
+ 	 * cr == 0 try to get exact allocation,
+ 	 * cr == 3  try to get anything
+@@ -2458,6 +2488,9 @@ repeat:
+ 			if (ac->ac_status != AC_STATUS_CONTINUE)
+ 				break;
+ 		}
++		/* Processed all groups and haven't found blocks */
++		if (i == ngroups)
++			atomic64_inc(&sbi->s_bal_cX_failed[cr]);
+ 	}
+ 
+ 	if (ac->ac_b_ex.fe_len > 0 && ac->ac_status != AC_STATUS_FOUND &&
+@@ -2746,6 +2779,92 @@ const struct proc_ops ext4_seq_mb_last_g
+ 	.proc_write	= ext4_mb_last_group_write,
+ };
+ 
++static int mb_seq_alloc_show(struct seq_file *seq, void *v)
++{
++	struct super_block *sb = seq->private;
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++
++	seq_printf(seq, "mballoc:\n");
++	seq_printf(seq, "\tblocks: %u\n", atomic_read(&sbi->s_bal_allocated));
++	seq_printf(seq, "\treqs: %u\n", atomic_read(&sbi->s_bal_reqs));
++	seq_printf(seq, "\tsuccess: %u\n", atomic_read(&sbi->s_bal_success));
++
++	seq_printf(seq, "\textents_scanned: %u\n",
++		   atomic_read(&sbi->s_bal_ex_scanned));
++	seq_printf(seq, "\t\tgoal_hits: %u\n", atomic_read(&sbi->s_bal_goals));
++	seq_printf(seq, "\t\t2^n_hits: %u\n", atomic_read(&sbi->s_bal_2orders));
++	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
++	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
++
++	seq_printf(seq, "\tuseless_c1_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[0]));
++	seq_printf(seq, "\tuseless_c2_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[1]));
++	seq_printf(seq, "\tuseless_c3_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[2]));
++	seq_printf(seq, "\tskipped_c1_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_skipped[0]));
++	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_skipped[1]));
++	seq_printf(seq, "\tskipped_c3_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_skipped[2]));
++	seq_printf(seq, "\tbuddies_generated: %lu\n",
++		   sbi->s_mb_buddies_generated);
++	seq_printf(seq, "\tbuddies_time_used: %llu\n", sbi->s_mb_generation_time);
++	seq_printf(seq, "\tpreallocated: %u\n",
++		   atomic_read(&sbi->s_mb_preallocated));
++	seq_printf(seq, "\tdiscarded: %u\n",
++		   atomic_read(&sbi->s_mb_discarded));
++	return 0;
++}
++
++static ssize_t mb_seq_alloc_write(struct file *file,
++			      const char __user *buf,
++			      size_t cnt, loff_t *pos)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(PDE_DATA(file_inode(file)));
++
++	atomic_set(&sbi->s_bal_allocated, 0),
++	atomic_set(&sbi->s_bal_reqs, 0),
++	atomic_set(&sbi->s_bal_success, 0);
++
++	atomic_set(&sbi->s_bal_ex_scanned, 0),
++	atomic_set(&sbi->s_bal_goals, 0),
++	atomic_set(&sbi->s_bal_2orders, 0),
++	atomic_set(&sbi->s_bal_breaks, 0),
++	atomic_set(&sbi->s_mb_lost_chunks, 0);
++
++	atomic64_set(&sbi->s_bal_cX_failed[0], 0),
++	atomic64_set(&sbi->s_bal_cX_failed[1], 0),
++	atomic64_set(&sbi->s_bal_cX_failed[2], 0);
++
++	atomic64_set(&sbi->s_bal_cX_skipped[0], 0),
++	atomic64_set(&sbi->s_bal_cX_skipped[1], 0),
++	atomic64_set(&sbi->s_bal_cX_skipped[2], 0);
++
++
++	sbi->s_mb_buddies_generated = 0;
++	sbi->s_mb_generation_time = 0;
++
++	atomic_set(&sbi->s_mb_preallocated, 0),
++	atomic_set(&sbi->s_mb_discarded, 0);
++
++	return cnt;
++}
++
++static int mb_seq_alloc_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, mb_seq_alloc_show, PDE_DATA(inode));
++}
++
++const struct proc_ops ext4_mb_seq_alloc_fops = {
++	.proc_open	= mb_seq_alloc_open,
++	.proc_read	= seq_read,
++	.proc_lseek	= seq_lseek,
++	.proc_release	= single_release,
++	.proc_write	= mb_seq_alloc_write,
++};
++
+ int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(m->private);
+@@ -2992,6 +3111,7 @@ static int ext4_groupinfo_create_slab(si
+ 	return 0;
+ }
+ 
++#define THRESHOLD_BLOCKS(ts) (ext4_blocks_count(sbi->s_es) / 100 * ts)
+ int ext4_mb_init(struct super_block *sb)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+@@ -3046,6 +3166,9 @@ int ext4_mb_init(struct super_block *sb)
+ 	sbi->s_mb_stats = MB_DEFAULT_STATS;
+ 	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
+ 	sbi->s_mb_max_inode_prealloc = MB_DEFAULT_MAX_INODE_PREALLOC;
++	sbi->s_mb_c1_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C1_THRESHOLD);
++	sbi->s_mb_c2_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C2_THRESHOLD);
++	sbi->s_mb_c3_blocks = THRESHOLD_BLOCKS(MB_DEFAULT_C3_THRESHOLD);
+ 	/*
+ 	 * The default group preallocation is 512, which for 4k block
+ 	 * sizes translates to 2 megabytes.  However for bigalloc file
+@@ -3185,6 +3308,16 @@ int ext4_mb_release(struct super_block *
+ 				atomic_read(&sbi->s_bal_reqs),
+ 				atomic_read(&sbi->s_bal_success));
+ 		ext4_msg(sb, KERN_INFO,
++			"mballoc: (%llu, %llu, %llu) useless c(0,1,2) loops",
++				atomic64_read(&sbi->s_bal_cX_failed[0]),
++				atomic64_read(&sbi->s_bal_cX_failed[1]),
++				atomic64_read(&sbi->s_bal_cX_failed[2]));
++		ext4_msg(sb, KERN_INFO,
++			"mballoc: (%llu, %llu, %llu) skipped c(0,1,2) loops",
++				atomic64_read(&sbi->s_bal_cX_skipped[0]),
++				atomic64_read(&sbi->s_bal_cX_skipped[1]),
++				atomic64_read(&sbi->s_bal_cX_skipped[2]));
++		ext4_msg(sb, KERN_INFO,
+ 		      "mballoc: %u extents scanned, %u goal hits, "
+ 				"%u 2^N hits, %u breaks, %u lost",
+ 				atomic_read(&sbi->s_bal_ex_scanned),
+--- a/fs/ext4/mballoc.h
++++ b/fs/ext4/mballoc.h
+@@ -68,6 +68,9 @@
+  * for which requests use 2^N search using buddies
+  */
+ #define MB_DEFAULT_ORDER2_REQS		8
++#define MB_DEFAULT_C1_THRESHOLD		25
++#define MB_DEFAULT_C2_THRESHOLD		15
++#define MB_DEFAULT_C3_THRESHOLD		5
+ 
+ /*
+  * default group prealloc size 512 blocks
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -21,6 +21,9 @@
+ typedef enum {
+ 	attr_noop,
+ 	attr_delayed_allocation_blocks,
++	attr_mb_c1_threshold,
++	attr_mb_c2_threshold,
++	attr_mb_c3_threshold,
+ 	attr_session_write_kbytes,
+ 	attr_lifetime_write_kbytes,
+ 	attr_reserved_clusters,
+@@ -140,6 +143,32 @@ static ssize_t journal_task_show(struct
+ 			task_pid_vnr(sbi->s_journal->j_task));
+ }
+ 
++#define THRESHOLD_PERCENT(ts) (ts * 100 / ext4_blocks_count(sbi->s_es))
++
++static int save_threshold_percent(struct ext4_sb_info *sbi, const char *buf,
++				  ext4_fsblk_t *blocks)
++{
++	unsigned long long val;
++
++	int ret;
++
++	ret = kstrtoull(skip_spaces(buf), 0, &val);
++	if (ret || val > 100)
++		return -EINVAL;
++
++	*blocks = val * ext4_blocks_count(sbi->s_es) / 100;
++	return 0;
++}
++
++static ssize_t mb_threshold_store(struct ext4_sb_info *sbi,
++				  const char *buf, size_t count,
++				  ext4_fsblk_t *blocks)
++{
++	int ret = save_threshold_percent(sbi, buf, blocks);
++
++	return ret ?: count;
++}
++
+ #define EXT4_ATTR(_name,_mode,_id)					\
+ static struct ext4_attr ext4_attr_##_name = {				\
+ 	.attr = {.name = __stringify(_name), .mode = _mode },		\
+@@ -208,6 +237,9 @@ EXT4_ATTR_FUNC(delayed_allocation_blocks
+ EXT4_ATTR_FUNC(session_write_kbytes, 0444);
+ EXT4_ATTR_FUNC(lifetime_write_kbytes, 0444);
+ EXT4_ATTR_FUNC(reserved_clusters, 0644);
++EXT4_ATTR_FUNC(mb_c1_threshold, 0644);
++EXT4_ATTR_FUNC(mb_c2_threshold, 0644);
++EXT4_ATTR_FUNC(mb_c3_threshold, 0644);
+ 
+ EXT4_ATTR_OFFSET(inode_readahead_blks, 0644, inode_readahead,
+ 		 ext4_sb_info, s_inode_readahead_blks);
+@@ -261,6 +293,9 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(session_write_kbytes),
+ 	ATTR_LIST(lifetime_write_kbytes),
+ 	ATTR_LIST(reserved_clusters),
++	ATTR_LIST(mb_c1_threshold),
++	ATTR_LIST(mb_c2_threshold),
++	ATTR_LIST(mb_c3_threshold),
+ 	ATTR_LIST(inode_readahead_blks),
+ 	ATTR_LIST(inode_goal),
+ 	ATTR_LIST(max_dir_size),
+@@ -378,6 +413,15 @@ static ssize_t ext4_attr_show(struct kob
+ 		return snprintf(buf, PAGE_SIZE, "%llu\n",
+ 				(s64) EXT4_C2B(sbi,
+ 		       percpu_counter_sum(&sbi->s_dirtyclusters_counter)));
++	case attr_mb_c1_threshold:
++		return scnprintf(buf, PAGE_SIZE, "%llu\n",
++				 THRESHOLD_PERCENT(sbi->s_mb_c1_blocks));
++	case attr_mb_c2_threshold:
++		return scnprintf(buf, PAGE_SIZE, "%llu\n",
++				 THRESHOLD_PERCENT(sbi->s_mb_c2_blocks));
++	case attr_mb_c3_threshold:
++		return scnprintf(buf, PAGE_SIZE, "%llu\n",
++				 THRESHOLD_PERCENT(sbi->s_mb_c3_blocks));
+ 	case attr_session_write_kbytes:
+ 		return session_write_kbytes_show(sbi, buf);
+ 	case attr_lifetime_write_kbytes:
+@@ -479,6 +523,12 @@ static ssize_t ext4_attr_store(struct ko
+ 		return inode_readahead_blks_store(sbi, buf, len);
+ 	case attr_trigger_test_error:
+ 		return trigger_test_error(sbi, buf, len);
++	case attr_mb_c1_threshold:
++		return mb_threshold_store(sbi, buf, len, &sbi->s_mb_c1_blocks);
++	case attr_mb_c2_threshold:
++		return mb_threshold_store(sbi, buf, len, &sbi->s_mb_c2_blocks);
++	case attr_mb_c3_threshold:
++		return mb_threshold_store(sbi, buf, len, &sbi->s_mb_c3_blocks);
+ 	}
+ 	return 0;
+ }
+@@ -541,6 +591,8 @@ int ext4_register_sysfs(struct super_blo
+ 				&ext4_seq_mb_last_group_fops, sb);
+ 		proc_create_single_data("mb_last_start", S_IRUGO, sbi->s_proc,
+ 				ext4_mb_seq_last_start_seq_show, sb);
++		proc_create_data("mb_alloc_stats", S_IFREG | S_IRUGO | S_IWUSR,
++				 sbi->s_proc, &ext4_mb_seq_alloc_fops, sb);
+ 	}
+ 	return 0;
+ }
