@@ -389,9 +389,7 @@ again:
 		rc = -EAGAIN;
 		req->rq_status = rc;
 	} else {
-		obd_get_request_slot(&exp->exp_obd->u.cli);
 		rc = ptlrpc_queue_wait(req);
-		obd_put_request_slot(&exp->exp_obd->u.cli);
 	}
 
 	if (rc == -ENOENT) {
