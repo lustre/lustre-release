@@ -134,9 +134,7 @@ struct tg_grants_data {
 	int			 tgd_tot_granted_clients;
 	/* shall we grant space to clients not
 	 * supporting OBD_CONNECT_GRANT_PARAM? */
-	unsigned int		 tgd_grant_compat_disable:1,
-	/* if 1 then LBUG on grant miscount, CERROR otherwise */
-				 tgd_lbug_on_grant_miscount:1;
+	int			 tgd_grant_compat_disable;
 	/* protect all statfs-related counters */
 	spinlock_t		 tgd_osfs_lock;
 	time64_t		 tgd_osfs_age;
@@ -567,11 +565,6 @@ ssize_t grant_compat_disable_show(struct kobject *kobj, struct attribute *attr,
 ssize_t grant_compat_disable_store(struct kobject *kobj,
 				   struct attribute *attr,
 				   const char *buffer, size_t count);
-ssize_t lbug_on_grant_miscount_show(struct kobject *kobj,
-				    struct attribute *attr, char *buf);
-ssize_t lbug_on_grant_miscount_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count);
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 ssize_t sync_lock_cancel_show(struct kobject *kobj,
 			      struct attribute *attr, char *buf);

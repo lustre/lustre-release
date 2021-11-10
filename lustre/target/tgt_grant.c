@@ -78,6 +78,10 @@
 
 #include "tgt_internal.h"
 
+int lbug_on_grant_miscount;
+module_param(lbug_on_grant_miscount, int, 0644);
+MODULE_PARM_DESC(lbug_on_grant_miscount, "LBUG on grant miscount");
+
 /* Clients typically hold 2x their max_rpcs_in_flight of grant space */
 #define TGT_GRANT_SHRINK_LIMIT(exp)	(2ULL * 8 * exp_max_brw_size(exp))
 
@@ -969,9 +973,10 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 		CERROR("%s: cli %s/%p grant %ld want %llu current %llu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       ted->ted_grant, want, curgrant);
-		spin_unlock(&tgd->tgd_grant_lock);
-		if (tgd->tgd_lbug_on_grant_miscount)
+		if (lbug_on_grant_miscount) {
+			spin_unlock(&tgd->tgd_grant_lock);
 			LBUG();
+		}
 	}
 
 	CDEBUG(D_CACHE,
@@ -1692,60 +1697,3 @@ ssize_t grant_compat_disable_store(struct kobject *kobj,
 	return count;
 }
 EXPORT_SYMBOL(grant_compat_disable_store);
-
-/**
- * Show lbug_on_grant_miscount mode.
- *
- * @kobj		kobject embedded in obd_device
- * @attr		unused
- * @buf			buf used by sysfs to print out data
- *
- * Return:		string length of @buf output on success
- */
-ssize_t lbug_on_grant_miscount_show(struct kobject *kobj,
-				    struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
-
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 tgd->tgd_lbug_on_grant_miscount);
-}
-EXPORT_SYMBOL(lbug_on_grant_miscount_show);
-
-/**
- * Change lbug on grant miscount mode.
- *
- * Setting tgd_lbug_on_grant_miscount to 1 makes tgt_alloc_grant() to
- * LBUG on apparently wrong ted->ted_grant
- *
- * @kobj	kobject embedded in obd_device
- * @attr	unused
- * @buffer	string which represents mode
- *		1: use LBUG on grant miscount
- *		0: use CERROR on grant miscount
- * @count	@buffer length
- *
- * Return:	@count on success
- *		negative number on error
- */
-ssize_t lbug_on_grant_miscount_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
-	bool val;
-	int rc;
-
-	rc = kstrtobool(buffer, &val);
-	if (rc)
-		return rc;
-
-	tgd->tgd_lbug_on_grant_miscount = val;
-
-	return count;
-}
-EXPORT_SYMBOL(lbug_on_grant_miscount_store);

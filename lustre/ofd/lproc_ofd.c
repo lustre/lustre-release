@@ -1021,7 +1021,6 @@ LUSTRE_RO_ATTR(tot_dirty);
 LUSTRE_RO_ATTR(tot_granted);
 LUSTRE_RO_ATTR(tot_pending);
 LUSTRE_RW_ATTR(grant_compat_disable);
-LUSTRE_RW_ATTR(lbug_on_grant_miscount);
 LUSTRE_RO_ATTR(instance);
 
 LUSTRE_RO_ATTR(num_exports);
@@ -1096,7 +1095,6 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_tot_granted.attr,
 	&lustre_attr_tot_pending.attr,
 	&lustre_attr_grant_compat_disable.attr,
-	&lustre_attr_lbug_on_grant_miscount.attr,
 	&lustre_attr_instance.attr,
 	&lustre_attr_recovery_time_hard.attr,
 	&lustre_attr_recovery_time_soft.attr,
