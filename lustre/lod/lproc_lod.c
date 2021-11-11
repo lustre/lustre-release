@@ -281,6 +281,38 @@ static ssize_t stripeoffset_store(struct kobject *kobj,
 
 LUSTRE_RW_ATTR(stripeoffset);
 
+static ssize_t max_stripecount_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", lod->lod_max_stripecount);
+}
+
+static ssize_t max_stripecount_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	long val;
+	int rc;
+
+	rc = kstrtol(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0 || val > LOV_MAX_STRIPE_COUNT)
+		return -ERANGE;
+
+	lod->lod_max_stripecount = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(max_stripecount);
+
 /**
  * Show default striping pattern (LOV_PATTERN_*).
  */
@@ -1178,6 +1210,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_stripesize.attr,
 	&lustre_attr_stripeoffset.attr,
 	&lustre_attr_stripecount.attr,
+	&lustre_attr_max_stripecount.attr,
 	&lustre_attr_stripetype.attr,
 	&lustre_attr_activeobd.attr,
 	&lustre_attr_desc_uuid.attr,

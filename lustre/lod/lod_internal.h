@@ -155,6 +155,9 @@ struct lod_device {
 
 	/* ROOT object, used to fetch FS default striping */
 	struct lod_object      *lod_md_root;
+
+	/* max stripe count if stripe count is set to -1. 0 means unlimited */
+	unsigned int		lod_max_stripecount;
 };
 
 #define lod_ost_bitmap		lod_ost_descs.ltd_tgt_bitmap

@@ -1878,7 +1878,10 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 	/* max stripe count is based on OSD ea size */
 	unsigned int easize = lod->lod_osd_max_easize;
 	int i;
+	ENTRY;
 
+	if (stripe_count == (__u16)(-1) && lod->lod_max_stripecount)
+		stripe_count = lod->lod_max_stripecount;
 	if (!stripe_count)
 		stripe_count =
 			lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_count;
@@ -1932,7 +1935,8 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 	max_stripes = lov_mds_md_max_stripe_count(easize, LOV_MAGIC_V3);
 	max_stripes = (max_stripes == 0) ? 0 : max_stripes - 1;
 
-	return (stripe_count < max_stripes) ? stripe_count : max_stripes;
+	stripe_count = min_t(__u16, stripe_count, max_stripes);
+	RETURN(stripe_count);
 }
 
 /**

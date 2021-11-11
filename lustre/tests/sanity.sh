@@ -3349,6 +3349,36 @@ test_27Q() {
 }
 run_test 27Q "llapi_file_get_stripe() works on symlinks"
 
+test_27R() {
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "need MDS 2.14.55 or later"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs at least 2 OSTs"
+
+	local testdir="$DIR/$tdir"
+	test_mkdir -p $testdir
+	stack_trap "rm -rf $testdir"
+	$LFS setstripe -c -1 $testdir || error "setstripe failed"
+
+	local f1="$testdir/f1"
+	touch $f1 || error "failed to touch $f1"
+	local count=$($LFS getstripe -c $f1)
+	(( $count == $OSTCOUNT )) || error "wrong stripe count"
+
+	do_facet $SINGLEMDS $LCTL set_param lod.*.max_stripecount=-1
+	(( $? == 34 )) || error "setting max_stripecount to -1 should fail and return ERANGE"
+
+	local maxcount=$(($OSTCOUNT - 1))
+	local mdts=$(comma_list $(mdts_nodes))
+	do_nodes $mdts $LCTL set_param lod.*.max_stripecount=$maxcount
+	stack_trap "do_nodes $mdts $LCTL set_param lod.*.max_stripecount=0"
+
+	local f2="$testdir/f2"
+	touch $f2 || error "failed to touch $f2"
+	local count=$($LFS getstripe -c $f2)
+	(( $count == $maxcount )) || error "wrong stripe count"
+}
+run_test 27R "test max_stripecount limitation when stripe count is set to -1"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
