@@ -255,11 +255,15 @@ if [[ -z ${NIDS[@]} ]]; then
 	error "No NID configured after module load"
 fi
 
+do_lnetctl net show
+ip a
+
 declare -a INTERFACES
 for ((i = 0; i < ${#NIDS[@]}; i++)); do
 	ip=$(sed 's/^\(.*\)@.*$/\1/'<<<${NIDS[i]})
 	INTERFACES[i]=$(ip -o a s |
 			awk '$4 ~ /^'$ip'\//{print $2}')
+	INTERFACES=($(echo "${INTERFACES[@]}" | tr ' ' '\n' | uniq | tr '\n' ' '))
 	if [[ -z ${INTERFACES[i]} ]]; then
 		error "Can't determine interface name for NID ${NIDS[i]}"
 	elif [[ 1 -ne $(wc -w <<<${INTERFACES[i]}) ]]; then
@@ -1613,6 +1617,7 @@ test_208() {
 	local if0_ip=$(ip --oneline addr show dev ${INTERFACES[0]} |
 		       awk '/inet /{print $4}' |
 		       sed 's:/.*::')
+	if0_ip=($(echo "${if0_ip[@]}" | tr ' ' '\n' | uniq | tr '\n' ' '))
 	local ip2nets_str="tcp(${INTERFACES[0]}) $if0_ip"
 
 	echo "Configure single NID \"$ip2nets_str\""
