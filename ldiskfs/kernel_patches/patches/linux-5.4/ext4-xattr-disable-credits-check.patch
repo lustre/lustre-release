@@ -1,0 +1,15 @@
+Index: focal/fs/ext4/xattr.c
+===================================================================
+--- focal.orig/fs/ext4/xattr.c
++++ focal/fs/ext4/xattr.c
+@@ -2341,10 +2341,6 @@ ext4_xattr_set_handle(handle_t *handle,
+ 						   flags & XATTR_CREATE);
+ 		brelse(bh);
+ 
+-		if (!ext4_handle_has_enough_credits(handle, credits)) {
+-			error = -ENOSPC;
+-			goto cleanup;
+-		}
+ 		WARN_ON_ONCE(!(current->flags & PF_MEMALLOC_NOFS));
+ 	}
+ 
