@@ -107,11 +107,12 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		AS_IF(
 			[test -z "$KPLEV"], [
 				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
-				LDISKFS_SERIES="5.4.0-80-ubuntu20.series"
+				LDISKFS_SERIES="5.4.0-90-ubuntu20.series"
 			],
 			[test $KPLEV -eq 1007], [LDISKFS_SERIES="5.4.0-42-ubuntu20.series"],
-			[test $KPLEV -ge 66], [LDISKFS_SERIES="5.4.0-66-ubuntu20.series"],
+			[test $KPLEV -ge 90], [LDISKFS_SERIES="5.4.0-90-ubuntu20.series"],
 			[test $KPLEV -ge 80], [LDISKFS_SERIES="5.4.0-80-ubuntu20.series"],
+			[test $KPLEV -ge 66], [LDISKFS_SERIES="5.4.0-66-ubuntu20.series"],
 			[LDISKFS_SERIES="5.4.0-42-ubuntu20.series"]
 		)
 	],
