@@ -134,9 +134,7 @@ static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 static int lfs_pcc_list_commands(int argc, char **argv);
 static int lfs_migrate_to_dom(int fd, int fdv, char *name,
-			      __u64 migration_flags,
-			      struct llapi_stripe_param *param,
-			      struct llapi_layout *layout);
+			      __u64 migration_flags);
 
 struct pool_to_id_cbdata {
 	const char *pool;
@@ -1237,8 +1235,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	 * if new layout used bigger DOM size, then mirroring is used
 	 */
 	if (dom_new > dom_cur) {
-		rc = lfs_migrate_to_dom(fd, fdv, name, migration_flags, param,
-					layout);
+		rc = lfs_migrate_to_dom(fd, fdv, name, migration_flags);
 		if (rc)
 			error_loc = "cannot migrate to DOM layout";
 		goto out_closed;
@@ -1836,6 +1833,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 			goto out;
 		}
 	}
+
 	llapi_layout_comp_flags_set(m_layout, flags);
 	rc = migrate_open_files(name,
 			     LLAPI_MIGRATION_NONDIRECT | LLAPI_MIGRATION_MIRROR,
@@ -2349,9 +2347,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr);
 
 static int lfs_migrate_to_dom(int fd, int fdv, char *name,
-			      __u64 migration_flags,
-			      struct llapi_stripe_param *param,
-			      struct llapi_layout *layout)
+			      __u64 migration_flags)
 {
 	struct ll_ioc_lease *data = NULL;
 	int rc;
@@ -2362,11 +2358,15 @@ static int lfs_migrate_to_dom(int fd, int fdv, char *name,
 		goto out_close;
 	}
 
+	rc = migrate_nonblock(fd, fdv);
+	if (rc < 0)
+		goto out_release;
+
 	/* Atomically put lease, merge layouts, resync and close. */
-	data = calloc(1, offsetof(typeof(*data), lil_ids[1024]));
+	data = calloc(1, offsetof(typeof(*data), lil_ids[1]));
 	if (!data) {
 		error_loc = "memory allocation";
-		goto out_close;
+		goto out_release;
 	}
 	data->lil_mode = LL_LEASE_UNLCK;
 	data->lil_flags = LL_LEASE_LAYOUT_MERGE;
@@ -2396,6 +2396,8 @@ static int lfs_migrate_to_dom(int fd, int fdv, char *name,
 		error_loc = "cannot delete old layout";
 	goto out;
 
+out_release:
+	llapi_lease_release(fd);
 out_close:
 	close(fd);
 	close(fdv);

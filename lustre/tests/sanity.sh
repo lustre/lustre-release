@@ -22685,10 +22685,10 @@ test_272e() {
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 $dom
 
-	dd if=/dev/urandom of=$dom bs=512K count=1 oflag=direct ||
+	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
 		error "failed to write data into $dom"
 	local old_md5=$(md5sum $dom)
-	cancel_lru_locks mdc
+	cancel_lru_locks
 
 	$LFS mirror extend -N -E 1M -L mdt -E eof -c2 $dom ||
 		error "failed mirroring to the DOM layout"
@@ -22697,10 +22697,10 @@ test_272e() {
 	$LFS mirror split --mirror-id 1 -d $dom ||
 		error "failed mirror split"
 
-	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
-		error "MDT stripe was not removed"
+	[[ $($LFS getstripe -L --component-start=0 $dom) == 'mdt' ]] ||
+		error "MDT stripe wasn't set"
 
-	cancel_lru_locks mdc
+	cancel_lru_locks
 	local new_md5=$(md5sum $dom)
 	[ "$old_md5" == "$new_md5" ] ||
 		error "$old_md5 != $new_md5"
@@ -22717,15 +22717,18 @@ test_272f() {
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 $dom
 
-	dd if=/dev/urandom of=$dom bs=512K count=1 oflag=direct ||
+	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
 		error "failed to write data into $dom"
 	local old_md5=$(md5sum $dom)
-	cancel_lru_locks mdc
+	cancel_lru_locks
 
 	$LFS migrate -E 1M -L mdt -E eof -c2 -v $dom ||
 		error "failed migrating to the DOM file"
 
-	cancel_lru_locks mdc
+	[[ $($LFS getstripe -L --component-start=0 $dom) == 'mdt' ]] ||
+		error "MDT stripe wasn't set"
+
+	cancel_lru_locks
 	local new_md5=$(md5sum $dom)
 	[ "$old_md5" != "$new_md5" ] &&
 		error "$old_md5 != $new_md5"
