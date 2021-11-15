@@ -76,7 +76,13 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 
 	rc = security_dentry_init_security(dentry, mode, name, secctx,
 					   secctx_size);
-	if (rc == -EOPNOTSUPP)
+	/* Usually, security_dentry_init_security() returns -EOPNOTSUPP when
+	 * SELinux is disabled.
+	 * But on some kernels (e.g. rhel 8.5) it returns 0 when SELinux is
+	 * disabled, and in this case the security context is empty.
+	 */
+	if (rc == -EOPNOTSUPP || (rc == 0 && *secctx_size == 0))
+		/* do nothing */
 		return 0;
 	if (rc < 0)
 		return rc;
