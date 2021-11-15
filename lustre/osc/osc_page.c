@@ -498,7 +498,6 @@ static void discard_pagevec(const struct lu_env *env, struct cl_io *io,
 		struct cl_page *page = pvec[i];
 
 		LASSERT(cl_page_is_owned(page, io));
-		cl_page_delete(env, page);
 		cl_page_discard(env, io, page);
 		cl_page_disown(env, io, page);
 		cl_pagevec_put(env, page, pagevec);
