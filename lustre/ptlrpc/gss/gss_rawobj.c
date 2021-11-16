@@ -114,7 +114,7 @@ int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen)
         LASSERT(buf);
         LASSERT(buflen);
 
-        len = cfs_size_round4(obj->len);
+	len = round_up(obj->len, 4);
 
         if (*buflen < 4 + len) {
                 CERROR("shorter buflen than needed: %u < %u\n",
@@ -150,7 +150,7 @@ static int __rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen,
                 return 0;
         }
 
-        len = local ? obj->len : cfs_size_round4(obj->len);
+	len = local ? obj->len : round_up(obj->len, 4);
         if (*buflen < len) {
                 CERROR("shorter buflen than object size: %u < %u\n",
                         *buflen, len);

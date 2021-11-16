@@ -1038,7 +1038,7 @@ cache_check:
         }
 
         grctx->src_init = 1;
-        grctx->src_reserve_len = cfs_size_round4(rsip->out_token.len);
+	grctx->src_reserve_len = round_up(rsip->out_token.len, 4);
 
         rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
         if (rc) {

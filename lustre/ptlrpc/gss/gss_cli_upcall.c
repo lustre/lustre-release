@@ -132,7 +132,7 @@ int ctx_init_pack_request(struct obd_import *imp,
 		CERROR("can't copy token\n");
 		return -EFAULT;
 	}
-	size -= sizeof(__u32) + cfs_size_round4(token_size);
+	size -= sizeof(__u32) + round_up(token_size, 4);
 
 	req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
 					     msg->lm_buflens[offset] - size, 0);
@@ -163,8 +163,8 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
                 return -EPROTO;
         }
 
-        if (outlen < (4 + 2) * 4 + cfs_size_round4(ghdr->gh_handle.len) +
-                     cfs_size_round4(msg->lm_buflens[2])) {
+	if (outlen < (4 + 2) * 4 + round_up(ghdr->gh_handle.len, 4) +
+		     round_up(msg->lm_buflens[2], 4)) {
                 CERROR("output buffer size %ld too small\n", outlen);
                 return -EFAULT;
         }
