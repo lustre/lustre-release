@@ -1672,8 +1672,10 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 		RETURN(ERR_CAST(res));
 
 	lock = ldlm_lock_new(res);
-	if (lock == NULL)
+	if (!lock) {
+		ldlm_resource_putref(res);
 		RETURN(ERR_PTR(-ENOMEM));
+	}
 
 	lock->l_req_mode = mode;
 	lock->l_ast_data = data;
