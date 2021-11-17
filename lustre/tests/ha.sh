@@ -299,6 +299,7 @@ declare -A  ha_nonmpi_load_cmds=(
 	[iozone]="iozone -a -e -+d -s $iozone_SIZE {}/f.iozone"
 	[racer]="$ha_racer_params $racer {}"
 )
+declare     ha_check_attrs="find {} -type f -ls 2>&1 | grep -e '?'"
 
 ha_usage()
 {
@@ -480,9 +481,11 @@ ha_repeat_mpi_load()
 	local dir=$test_dir/$client-$tag
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
+	local rccheck=0
 	local nr_loops=0
 	local avg_loop_time=0
 	local start_time=$(date +%s)
+	local check_attrs=${ha_check_attrs//"{}"/$dir}
 
 	cmd=${cmd//"{}"/$dir}
 	cmd=${cmd//"{params}"/$parameter}
@@ -492,7 +495,7 @@ ha_repeat_mpi_load()
 	ha_info "Starting $tag"
 
 	machines="-machinefile $machines"
-	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
+	while [ ! -e "$ha_stop_file" ] && ((rc == 0)) && ((rccheck == 0)); do
 		ha_info "$client Starts: $mpiuser: $cmd" 2>&1 |  tee -a $log
 		{
 		local mdt_index
@@ -519,17 +522,23 @@ ha_repeat_mpi_load()
 		ha_on $client "su $mpiuser sh -c \" $mpirun $mpirunoptions \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client / ha_nclientsset)) \
 			$machines $cmd \" " || rc=$?
+		ha_on ${ha_clients[0]} "$check_attrs &&                    \
+			$LFS df $dir &&                                    \
+			$check_attrs " && rccheck=1
 		[[ -n "$ha_postcmd" ]] && ha_info "$ha_postcmd" &&
 			ha_on $client "$ha_postcmd" >>"$log" 2>&1
-		(( ((rc == 0)) && (( mustpass != 0 )) )) ||
-		(( ((rc != 0)) && (( mustpass == 0 )) )) &&
-			ha_on $client rm -rf "$dir";
-		} >>"$log" 2>&1 || rc=$?
+		(( ((rc == 0)) && ((rccheck == 0)) && (( mustpass != 0 )) )) ||
+		(( ((rc != 0)) && ((rccheck == 0)) && (( mustpass == 0 )) )) &&
+		ha_on $client rm -rf "$dir";
+		} >>"$log" 2>&1
 
-		ha_info $client: rc=$rc mustpass=$mustpass
+		ha_info $client: rc=$rc rccheck=$rccheck mustpass=$mustpass
 
 		# mustpass=0 means that failure is expected
-		if (( rc !=0 )); then
+		if (( rccheck != 0 )); then
+			ha_touch stop,fail $client,$tag
+			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
+		elif (( rc !=0 )); then
 			if (( mustpass != 0 )); then
 				ha_touch stop,fail $client,$tag
 				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
@@ -541,7 +550,7 @@ ha_repeat_mpi_load()
 			ha_touch stop,fail $client,$tag
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 		fi
-		echo rc=$rc mustpass=$mustpass >"$status"
+		echo rc=$rc rccheck=$rccheck mustpass=$mustpass >"$status"
 
 		nr_loops=$((nr_loops + 1))
 	done
@@ -640,9 +649,12 @@ ha_repeat_nonmpi_load()
 	local dir=$test_dir/$client-$tag
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
+
+	local rccheck=0
 	local nr_loops=0
 	local avg_loop_time=0
 	local start_time=$(date +%s)
+	local check_attrs=${ha_check_attrs//"{}"/$dir}
 
 	cmd=${cmd//"{}"/$dir}
 
@@ -651,10 +663,16 @@ ha_repeat_nonmpi_load()
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
 		ha_info "$client Starts: $cmd" 2>&1 |  tee -a $log
 		ha_on $client "mkdir -p $dir &&                              \
-			$cmd &&                                              \
-			rm -rf $dir" >>"$log" 2>&1 || rc=$?
+			$cmd"              >>"$log" 2>&1 || rc=$?
 
-		if ((rc != 0)); then
+		ha_on $client "$check_attrs &&                               \
+			$LFS df $dir &&                                      \
+			$check_attrs "          >>"$log"  2>&1 && rccheck=1 ||
+		ha_on $client "rm -rf $dir"      >>"$log"  2>&1
+
+		ha_info rc=$rc rccheck=$rccheck
+
+		if (( (rc + rccheck) != 0 )); then
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 			ha_touch stop,fail $client,$tag
 		fi
