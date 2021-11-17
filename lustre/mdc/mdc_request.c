@@ -220,14 +220,17 @@ static int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
 
 	*request = NULL;
 	req = ptlrpc_request_alloc(imp, &RQF_MDS_GETATTR);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	/* LU-15245: avoid deadlock with modifying RPCs on MDS_REQUEST_PORTAL */
+	req->rq_request_portal = MDS_READPAGE_PORTAL;
 
 again:
 	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, op_data->op_valid,
@@ -396,15 +399,19 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 		rec->sx_fsgid  = from_kgid(&init_user_ns, current_fsgid());
 		rec->sx_cap = current_cap().cap[0];
 		rec->sx_suppgid1 = suppgid;
-                rec->sx_suppgid2 = -1;
-                rec->sx_fid    = *fid;
-                rec->sx_valid  = valid | OBD_MD_FLCTIME;
+		rec->sx_suppgid2 = -1;
+		rec->sx_fid    = *fid;
+		rec->sx_valid  = valid | OBD_MD_FLCTIME;
 		rec->sx_time   = ktime_get_real_seconds();
-                rec->sx_size   = output_size;
-                rec->sx_flags  = flags;
+		rec->sx_size   = output_size;
+		rec->sx_flags  = flags;
 	} else {
 		mdc_pack_body(&req->rq_pill, fid, valid, output_size,
 			      suppgid, flags);
+		/* Avoid deadlock with modifying RPCs on MDS_REQUEST_PORTAL.
+		 * See LU-15245.
+		 */
+		req->rq_request_portal = MDS_READPAGE_PORTAL;
 	}
 
         if (xattr_name) {
