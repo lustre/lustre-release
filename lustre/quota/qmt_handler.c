@@ -1190,7 +1190,12 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	struct ldlm_lock *lock;
 	int rtype, qtype;
 	int rc, idx, stype;
+	struct obd_device *obd = NULL;
+
 	ENTRY;
+
+	if (req->rq_export)
+		obd = req->rq_export->exp_obd;
 
 	qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
 	if (qbody == NULL)
@@ -1247,7 +1252,9 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 			timeout_t timeout;
 
 			svc = req->rq_rqbd->rqbd_svcpt;
-			timeout = at_est2timeout(at_get(&svc->scp_at_estimate));
+			timeout = at_est2timeout(
+					obd_at_get(obd, &svc->scp_at_estimate));
+
 			timeout += (ldlm_bl_timeout(lock) >> 1);
 
 			/* lock is being cancelled, prolong timeout */

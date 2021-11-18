@@ -750,7 +750,46 @@ struct obd_device {
 	struct kset		        obd_kset; /* sysfs object collection */
 	struct kobj_type		obd_ktype;
 	struct completion		obd_kobj_unregister;
+
+	/* adaptive timeout parameters */
+	unsigned int			obd_at_min;
+	unsigned int			obd_at_max;
+	unsigned int			obd_at_history;
+	unsigned int			obd_ldlm_enqueue_min;
 };
+
+#define obd_get_at_min(obd) ({ \
+	struct obd_device *_obd = obd; \
+	if (_obd == NULL) \
+		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
+	_obd && _obd->obd_at_min ? _obd->obd_at_min : at_min; \
+})
+#define obd_get_at_max(obd) ({\
+	struct obd_device *_obd = obd; \
+	if (_obd == NULL) \
+		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
+	_obd && _obd->obd_at_max ? _obd->obd_at_max : at_max; \
+})
+#define obd_get_at_history(obd) ({ \
+	struct obd_device *_obd = obd; \
+	if (_obd == NULL) \
+		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
+	_obd && _obd->obd_at_history ? _obd->obd_at_history : at_history; \
+})
+extern unsigned int ldlm_enqueue_min;
+#define obd_get_ldlm_enqueue_min(obd) ({ \
+	struct obd_device *_obd = obd; \
+	if (_obd == NULL) \
+		CDEBUG(D_RPCTRACE, "NULL obd\n"); \
+	_obd && _obd->obd_ldlm_enqueue_min ? _obd->obd_ldlm_enqueue_min : \
+					     ldlm_enqueue_min; \
+})
+#define obd_at_off(obd) (obd_get_at_max(obd) == 0)
+
+#define obd_at_get(obd, at) ({ \
+	timeout_t t1 = obd_get_at_min(obd); \
+	max_t(timeout_t, (at)->at_current_timeout, t1); \
+})
 
 int obd_uuid_add(struct obd_device *obd, struct obd_export *export);
 void obd_uuid_del(struct obd_device *obd, struct obd_export *export);

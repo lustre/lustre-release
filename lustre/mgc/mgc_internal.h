@@ -105,8 +105,9 @@ int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data);
 /* This is the timeout value for MGS_CONNECT request plus a ping interval, such
  * that we can have a chance to try the secondary MGS if any.
  */
-#define  MGC_ENQUEUE_LIMIT (INITIAL_CONNECT_TIMEOUT + (AT_OFF ? 0 : at_min) \
-				+ PING_INTERVAL)
+#define  MGC_ENQUEUE_LIMIT(obd) (INITIAL_CONNECT_TIMEOUT + \
+				 (obd_at_off(obd) ? 0 : obd_get_at_min(obd)) + \
+				 PING_INTERVAL)
 #define  MGC_TARGET_REG_LIMIT 10
 #define  MGC_TARGET_REG_LIMIT_MAX RECONNECT_DELAY_MAX
 #define  MGC_SEND_PARAM_LIMIT 10

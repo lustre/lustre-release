@@ -789,6 +789,10 @@ static ssize_t grant_shrink_interval_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(grant_shrink_interval);
 
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+
 static struct attribute *mdc_attrs[] = {
 	&lustre_attr_active.attr,
 	&lustre_attr_checksums.attr,
@@ -802,6 +806,9 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_grant_shrink_interval.attr,
 	&lustre_attr_cur_lost_grant_bytes.attr,
 	&lustre_attr_cur_dirty_grant_bytes.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_history.attr,
 	NULL,
 };
 

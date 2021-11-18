@@ -89,6 +89,7 @@ EXPORT_SYMBOL(ldlm_timeout_set);
 /* bulk transfer timeout, give up after 100s by default */
 unsigned int bulk_timeout = 100; /* seconds */
 EXPORT_SYMBOL(bulk_timeout);
+
 /* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
 unsigned int at_min = 5;
 EXPORT_SYMBOL(at_min);

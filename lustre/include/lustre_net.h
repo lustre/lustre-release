@@ -2585,14 +2585,7 @@ static inline int ptlrpc_no_resend(struct ptlrpc_request *req)
 	return req->rq_no_resend;
 }
 
-static inline int
-ptlrpc_server_get_timeout(struct ptlrpc_service_part *svcpt)
-{
-	int at = AT_OFF ? 0 : at_get(&svcpt->scp_at_estimate);
-
-	return svcpt->scp_service->srv_watchdog_factor *
-	       max_t(int, at, obd_timeout);
-}
+int ptlrpc_server_get_timeout(struct ptlrpc_service_part *svcpt);
 
 static inline struct ptlrpc_service *
 ptlrpc_req2svc(struct ptlrpc_request *req)

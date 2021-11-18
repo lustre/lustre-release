@@ -862,6 +862,11 @@ static int lprocfs_osc_attach_seqstat(struct obd_device *obd)
 }
 #endif /* CONFIG_PROC_FS */
 
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+LUSTRE_OBD_UINT_PARAM_ATTR(ldlm_enqueue_min);
+
 static struct attribute *osc_attrs[] = {
 	&lustre_attr_active.attr,
 	&lustre_attr_checksums.attr,
@@ -881,6 +886,10 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_idle_timeout.attr,
 	&lustre_attr_idle_connect.attr,
 	&lustre_attr_grant_shrink.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_history.attr,
+	&lustre_attr_ldlm_enqueue_min.attr,
 	NULL,
 };
 

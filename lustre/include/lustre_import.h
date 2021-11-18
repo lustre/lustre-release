@@ -90,9 +90,9 @@ struct ptlrpc_at_array {
 
 #define IMP_AT_MAX_PORTALS 8
 struct imp_at {
-        int                     iat_portal[IMP_AT_MAX_PORTALS];
-        struct adaptive_timeout iat_net_latency;
-        struct adaptive_timeout iat_service_estimate[IMP_AT_MAX_PORTALS];
+	int			iat_portal[IMP_AT_MAX_PORTALS];
+	struct adaptive_timeout	iat_net_latency;
+	struct adaptive_timeout	iat_service_estimate[IMP_AT_MAX_PORTALS];
 };
 
 
@@ -252,7 +252,7 @@ struct obd_import {
 	int			  imp_initiated_at;
         /** Incremented every time we send reconnection request */
         __u32                     imp_conn_cnt;
-       /** 
+       /**
         * \see ptlrpc_free_committed remembers imp_generation value here
         * after a check to save on unnecessary replay list iterations
         */
@@ -409,17 +409,9 @@ static inline void at_reinit(struct adaptive_timeout *at, timeout_t timeout,
 	spin_unlock(&at->at_lock);
 }
 
-extern unsigned int at_min;
-extern unsigned int at_max;
-#define AT_OFF (at_max == 0)
+timeout_t obd_at_measure(struct obd_device *obd, struct adaptive_timeout *at,
+			    timeout_t timeout);
 
-static inline timeout_t at_get(struct adaptive_timeout *at)
-{
-	return (at->at_current_timeout > at_min) ?
-		at->at_current_timeout : at_min;
-}
-
-timeout_t at_measured(struct adaptive_timeout *at, timeout_t timeout);
 int import_at_get_index(struct obd_import *imp, int portal);
 
 /* genops.c */

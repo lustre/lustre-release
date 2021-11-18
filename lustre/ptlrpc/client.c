@@ -314,9 +314,12 @@ EXPORT_SYMBOL(ptlrpc_free_bulk);
  */
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 {
-	LASSERT(req->rq_import);
+	struct obd_device *obd;
 
-	if (AT_OFF) {
+	LASSERT(req->rq_import);
+	obd = req->rq_import->imp_obd;
+
+	if (obd_at_off(obd)) {
 		/* non-AT settings */
 		/**
 		 * \a imp_server_timeout means this is reverse import and
@@ -334,7 +337,7 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 
 		idx = import_at_get_index(req->rq_import,
 					  req->rq_request_portal);
-		serv_est = at_get(&at->iat_service_estimate[idx]);
+		serv_est = obd_at_get(obd, &at->iat_service_estimate[idx]);
 		/*
 		 * Currently a 32 bit value is sent over the
 		 * wire for rq_timeout so please don't change this
@@ -361,8 +364,10 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
 	int idx;
 	timeout_t oldse;
 	struct imp_at *at;
+	struct obd_device *obd;
 
 	LASSERT(req->rq_import);
+	obd = req->rq_import->imp_obd;
 	at = &req->rq_import->imp_at;
 
 	idx = import_at_get_index(req->rq_import, req->rq_request_portal);
@@ -370,19 +375,28 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
 	 * max service estimates are tracked on the server side,
 	 * so just keep minimal history here
 	 */
-	oldse = at_measured(&at->iat_service_estimate[idx], serv_est);
-	if (oldse != 0)
+	oldse = obd_at_measure(obd, &at->iat_service_estimate[idx], serv_est);
+	if (oldse != 0) {
+		unsigned int at_est = obd_at_get(obd,
+						&at->iat_service_estimate[idx]);
 		CDEBUG(D_ADAPTTO,
 		       "The RPC service estimate for %s ptl %d has changed from %d to %d\n",
 		       req->rq_import->imp_obd->obd_name,
 		       req->rq_request_portal,
-		       oldse, at_get(&at->iat_service_estimate[idx]));
+		       oldse, at_est);
+	}
 }
 
 /* Expected network latency per remote node (secs) */
 int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
 {
-	return AT_OFF ? 0 : at_get(&req->rq_import->imp_at.iat_net_latency);
+	struct obd_device *obd = NULL;
+
+	if (req->rq_import)
+		obd = req->rq_import->imp_obd;
+
+	return obd_at_off(obd) ?
+	       0 : obd_at_get(obd, &req->rq_import->imp_at.iat_net_latency);
 }
 
 /* Adjust expected network latency */
@@ -393,8 +407,10 @@ void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 	struct imp_at *at;
 	timeout_t oldnl;
 	timeout_t nl;
+	struct obd_device *obd;
 
 	LASSERT(req->rq_import);
+	obd = req->rq_import->imp_obd;
 
 	if (service_timeout > now - req->rq_sent + 3) {
 		/*
@@ -418,13 +434,16 @@ void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 	nl = max_t(timeout_t, now - req->rq_sent - service_timeout, 0) + 1;
 	at = &req->rq_import->imp_at;
 
-	oldnl = at_measured(&at->iat_net_latency, nl);
-	if (oldnl != 0)
+	oldnl = obd_at_measure(obd, &at->iat_net_latency, nl);
+	if (oldnl != 0) {
+		timeout_t timeout = obd_at_get(obd, &at->iat_net_latency);
+
 		CDEBUG(D_ADAPTTO,
 		       "The network latency for %s (nid %s) has changed from %d to %d\n",
 		       req->rq_import->imp_obd->obd_name,
 		       obd_uuid2str(&req->rq_import->imp_connection->c_remote_uuid),
-		       oldnl, at_get(&at->iat_net_latency));
+		       oldnl, timeout);
+	}
 }
 
 static int unpack_reply(struct ptlrpc_request *req)

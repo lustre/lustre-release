@@ -493,15 +493,16 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	ktime_t kstart = ktime_get();
 	int current_blockbits;
 	int rc;
+	timeout_t at_est;
 
 	ENTRY;
 
 	svcpt = req->rq_rqbd->rqbd_svcpt;
 
 	/* This will trigger a watchdog timeout */
+	at_est = obd_at_get(mdt->mdt_lu_dev.ld_obd, &svcpt->scp_at_estimate);
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
-			 (MDT_SERVICE_WATCHDOG_FACTOR *
-			  at_get(&svcpt->scp_at_estimate)) + 1);
+			 (MDT_SERVICE_WATCHDOG_FACTOR * at_est) + 1);
 
 	rc = mdt_check_ucred(info);
 	if (rc)

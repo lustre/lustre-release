@@ -569,16 +569,18 @@ static int import_select_connection(struct obd_import *imp)
 	 */
 	if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
 		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
+		timeout_t timeout = obd_at_get(imp->imp_obd, at);
 
-		if (at_get(at) < CONNECTION_SWITCH_MAX) {
-			at_measured(at, at_get(at) + CONNECTION_SWITCH_INC);
-			if (at_get(at) > CONNECTION_SWITCH_MAX)
+		if (timeout < CONNECTION_SWITCH_MAX) {
+			obd_at_measure(imp->imp_obd, at,
+				       timeout + CONNECTION_SWITCH_INC);
+			if (timeout > CONNECTION_SWITCH_MAX)
 				at_reset(at, CONNECTION_SWITCH_MAX);
 		}
 		LASSERT(imp_conn->oic_last_attempt);
 		CDEBUG(D_HA,
 		       "%s: tried all connections, increasing latency to %ds\n",
-		       imp->imp_obd->obd_name, at_get(at));
+		       imp->imp_obd->obd_name, timeout);
 	}
 
 	imp_conn->oic_last_attempt = ktime_get_seconds();
@@ -1497,7 +1499,7 @@ static int signal_completed_replay(struct obd_import *imp)
 	req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
 	lustre_msg_add_flags(req->rq_reqmsg,
 			     MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
-	if (AT_OFF)
+	if (obd_at_off(imp->imp_obd))
 		req->rq_timeout *= 3;
 	req->rq_interpret_reply = completed_replay_interpret;
 
@@ -1731,7 +1733,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 		long timeout_jiffies;
 		time64_t timeout;
 
-		if (AT_OFF) {
+		if (obd_at_off(imp->imp_obd)) {
 			if (imp->imp_server_timeout)
 				timeout = obd_timeout >> 1;
 			else
@@ -1742,7 +1744,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
 			req_portal = imp->imp_client->cli_request_portal;
 			idx = import_at_get_index(imp, req_portal);
-			timeout = at_get(&imp->imp_at.iat_service_estimate[idx]);
+			timeout = obd_at_get(imp->imp_obd,
+					&imp->imp_at.iat_service_estimate[idx]);
 		}
 
 		timeout_jiffies = cfs_time_seconds(timeout);
@@ -1935,57 +1938,60 @@ void ptlrpc_cleanup_imp(struct obd_import *imp)
  *    but still smoothing out a return to normalcy from a slow response.
  *  - (E.g. remember the maximum latency in each minute of the last 4 minutes.)
  */
-timeout_t at_measured(struct adaptive_timeout *at, timeout_t timeout)
+timeout_t obd_at_measure(struct obd_device *obd, struct adaptive_timeout *at,
+			    timeout_t timeout)
 {
+	unsigned int l_at_min = obd_get_at_min(obd);
+	unsigned int l_at_max = obd_get_at_max(obd);
 	timeout_t old_timeout = at->at_current_timeout;
 	time64_t now = ktime_get_real_seconds();
-	long binlimit = max_t(long, at_history / AT_BINS, 1);
+	long binlimit = max_t(long, obd_get_at_history(obd) / AT_BINS, 1);
 
-        LASSERT(at);
+	LASSERT(at);
 	CDEBUG(D_OTHER, "add %u to %p time=%lld v=%u (%u %u %u %u)\n",
 	       timeout, at, now - at->at_binstart, at->at_current_timeout,
-               at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
+	       at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
 
 	if (timeout <= 0)
 		/* Negative timeouts and 0's don't count, because we never
 		 * want our timeout to drop to 0 or below, and because 0 could
 		 * mean an error
 		 */
-                return 0;
+		return 0;
 
 	spin_lock(&at->at_lock);
 
-        if (unlikely(at->at_binstart == 0)) {
-                /* Special case to remove default from history */
+	if (unlikely(at->at_binstart == 0)) {
+		/* Special case to remove default from history */
 		at->at_current_timeout = timeout;
 		at->at_worst_timeout_ever = timeout;
 		at->at_worst_timestamp = now;
 		at->at_hist[0] = timeout;
-                at->at_binstart = now;
-        } else if (now - at->at_binstart < binlimit ) {
-                /* in bin 0 */
+		at->at_binstart = now;
+	} else if (now - at->at_binstart < binlimit) {
+		/* in bin 0 */
 		at->at_hist[0] = max_t(timeout_t, timeout, at->at_hist[0]);
 		at->at_current_timeout = max_t(timeout_t, timeout,
 					       at->at_current_timeout);
         } else {
-                int i, shift;
+		int i, shift;
 		timeout_t maxv = timeout;
 
 		/* move bins over */
 		shift = (u32)(now - at->at_binstart) / binlimit;
-                LASSERT(shift > 0);
-                for(i = AT_BINS - 1; i >= 0; i--) {
-                        if (i >= shift) {
-                                at->at_hist[i] = at->at_hist[i - shift];
+		LASSERT(shift > 0);
+		for (i = AT_BINS - 1; i >= 0; i--) {
+			if (i >= shift) {
+				at->at_hist[i] = at->at_hist[i - shift];
 				maxv = max_t(timeout_t, maxv, at->at_hist[i]);
-                        } else {
-                                at->at_hist[i] = 0;
-                        }
-                }
+			} else {
+				at->at_hist[i] = 0;
+			}
+		}
 		at->at_hist[0] = timeout;
 		at->at_current_timeout = maxv;
-                at->at_binstart += shift * binlimit;
-        }
+		at->at_binstart += shift * binlimit;
+	}
 
 	if (at->at_current_timeout > at->at_worst_timeout_ever) {
 		at->at_worst_timeout_ever = at->at_current_timeout;
@@ -1993,23 +1999,24 @@ timeout_t at_measured(struct adaptive_timeout *at, timeout_t timeout)
 	}
 
 	if (at->at_flags & AT_FLG_NOHIST)
-                /* Only keep last reported val; keeping the rest of the history
+		/* Only keep last reported val; keeping the rest of the history
 		 * for debugfs only
 		 */
 		at->at_current_timeout = timeout;
 
-        if (at_max > 0)
+	if (l_at_max > 0)
 		at->at_current_timeout = min_t(timeout_t,
-					       at->at_current_timeout, at_max);
+					       at->at_current_timeout,
+					       l_at_max);
 	at->at_current_timeout = max_t(timeout_t, at->at_current_timeout,
-				       at_min);
+				       l_at_min);
 	if (at->at_current_timeout != old_timeout)
 		CDEBUG(D_OTHER,
 		       "AT %p change: old=%u new=%u delta=%d (val=%d) hist %u %u %u %u\n",
 		       at, old_timeout, at->at_current_timeout,
 		       at->at_current_timeout - old_timeout, timeout,
-                       at->at_hist[0], at->at_hist[1], at->at_hist[2],
-                       at->at_hist[3]);
+		       at->at_hist[0], at->at_hist[1], at->at_hist[2],
+		       at->at_hist[3]);
 
 	/* if we changed, report the old timeout value */
 	old_timeout = (at->at_current_timeout != old_timeout) ? old_timeout : 0;

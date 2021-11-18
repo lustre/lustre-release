@@ -1116,14 +1116,14 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 	timeout_t worst_timeout;
 	int i;
 
-	if (AT_OFF) {
+	if (obd_at_off(NULL)) {
 		seq_printf(m, "adaptive timeouts off, using obd_timeout %u\n",
 			   obd_timeout);
 		return 0;
 	}
 
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
-		cur_timeout = at_get(&svcpt->scp_at_estimate);
+		cur_timeout = obd_at_get(NULL, &svcpt->scp_at_estimate);
 		worst_timeout = svcpt->scp_at_estimate.at_worst_timeout_ever;
 		worst_timestamp = svcpt->scp_at_estimate.at_worst_timestamp;
 

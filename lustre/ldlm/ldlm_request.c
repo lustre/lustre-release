@@ -174,8 +174,11 @@ EXPORT_SYMBOL(is_granted_or_cancelled_nolock);
 static timeout_t ldlm_cp_timeout(struct ldlm_lock *lock)
 {
 	timeout_t timeout;
+	struct obd_device *obd;
 
-	if (AT_OFF)
+	obd = class_exp2obd(lock->l_conn_export);
+
+	if (obd_at_off(obd))
 		return obd_timeout;
 
 	/*
@@ -183,8 +186,8 @@ static timeout_t ldlm_cp_timeout(struct ldlm_lock *lock)
 	 * lock from another client.  Server will evict the other client if it
 	 * doesn't respond reasonably, and then give us the lock.
 	 */
-	timeout = at_get(ldlm_lock_to_ns_at(lock));
-	return max(3 * timeout, (timeout_t)ldlm_enqueue_min);
+	timeout = obd_at_get(obd, ldlm_lock_to_ns_at(lock));
+	return max(3 * timeout, (timeout_t)obd_get_ldlm_enqueue_min(obd));
 }
 
 /**
@@ -201,6 +204,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock, void *data)
 	} else if (data == NULL) {
 		LDLM_DEBUG(lock, "client-side enqueue: granted");
 	} else {
+		struct obd_device *obd = class_exp2obd(lock->l_conn_export);
 		/* Take into AT only CP RPC, not immediately granted locks */
 		timeout_t delay = 0;
 
@@ -213,7 +217,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock, void *data)
 		LDLM_DEBUG(lock, "client-side enqueue: granted after %ds",
 			   delay);
 		/* Update our time estimate */
-		at_measured(ldlm_lock_to_ns_at(lock), delay);
+		obd_at_measure(obd, ldlm_lock_to_ns_at(lock), delay);
 	}
 	return result;
 }

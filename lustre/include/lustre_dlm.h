@@ -1808,7 +1808,6 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 
 /** @} ldlm_cli_api */
 
-extern unsigned int ldlm_enqueue_min;
 
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */

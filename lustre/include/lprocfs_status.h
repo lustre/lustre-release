@@ -877,6 +877,31 @@ ssize_t lustre_attr_store(struct kobject *kobj, struct attribute *attr,
 
 extern const struct sysfs_ops lustre_sysfs_ops;
 
+#define LUSTRE_OBD_UINT_PARAM_ATTR(name)\
+static ssize_t name##_show(struct kobject *kobj, struct attribute *attr,\
+			   char *buf)					\
+{									\
+	int rc;								\
+	struct obd_device *obd =					\
+		container_of(kobj, struct obd_device, obd_kset.kobj);	\
+	rc = snprintf(buf, PAGE_SIZE, "%u\n", obd->obd_##name); \
+	return rc;							\
+}									\
+static ssize_t name##_store(struct kobject *kobj, struct attribute *attr,\
+			    const char *buffer, size_t count)		\
+{									\
+	int rc;								\
+	unsigned int val;						\
+	struct obd_device *obd =					\
+		container_of(kobj, struct obd_device, obd_kset.kobj);	\
+	rc = kstrtouint(buffer, 10, &val);				\
+	if (rc)								\
+		return rc;						\
+	obd->obd_##name = val;						\
+	return count;							\
+}									\
+LUSTRE_RW_ATTR(name)
+
 /* lproc_ptlrpc.c */
 struct ptlrpc_request;
 extern void target_print_req(void *seq_file, struct ptlrpc_request *req);

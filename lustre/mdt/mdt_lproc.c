@@ -1651,6 +1651,11 @@ LUSTRE_RO_ATTR(num_exports);
 LUSTRE_RW_ATTR(grant_check_threshold);
 LUSTRE_RO_ATTR(eviction_count);
 
+/* per-device at parameters */
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+
 static struct attribute *mdt_attrs[] = {
 	&lustre_attr_tot_dirty.attr,
 	&lustre_attr_tot_granted.attr,
@@ -1697,6 +1702,9 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_remote_subdir_mount.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	&lustre_attr_enable_dmv_implicit_inherit.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_history.attr,
 	NULL,
 };
 

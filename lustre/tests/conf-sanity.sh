@@ -6027,6 +6027,109 @@ test_73() { #LU-3006
 }
 run_test 73 "failnode to update from mountdata properly"
 
+# LU-15246
+test_74() {
+	(( $MDS1_VERSION >= $(version_code 2.15.57.16) )) ||
+		skip "need MDS version >= 2.15.57.16 for per-device timeouts"
+
+	setup
+	stack_trap "cleanup"
+
+	# Prepare fs2, share the mgs of fs
+	local FSNAME2=fs15246
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+
+	add fs2mds $(mkfs_opts mds1 $fs2mdsdev) --fsname=$FSNAME2 \
+		--reformat $fs2mdsdev $fs2mdsvdev || error "add fs2mds failed"
+	add fs2ost $(mkfs_opts ost1 $fs2ostdev) --fsname=$FSNAME2 \
+		--reformat $fs2ostdev $fs2ostvdev || error "add fs2ost failed"
+
+	stack_trap "cleanup_fs2"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS || error "start fs2ost failed"
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS || error "start fs2mds failed"
+
+	mkdir -p $MOUNT2 || error "mkdir $MOUNT2 failed"
+	$MOUNT_CMD $MGSNID:/$FSNAME2 $MOUNT2 || error "mount $MOUNT2 failed"
+
+	echo "========== All mounted lustre fs ===================="
+	mount | grep 'type lustre'
+	echo "====================================================="
+
+	# Set and check osc/ldlm_enqueue_min
+	$LCTL set_param osc.${FSNAME}-*.ldlm_enqueue_min=99 ||
+		error "failed to set per-device adaptive parameters on client"
+	stack_trap "$LCTL set_param osc.${FSNAME}-*.ldlm_enqueue_min=0"
+
+	local ldlm_enqueue_min
+	ldlm_enqueue_min=$($LCTL get_param -n osc.${FSNAME}-*.ldlm_enqueue_min \
+			   | uniq)
+	(( $ldlm_enqueue_min == 99 )) ||
+		error "wrong ldlm_enqueue_min value for osc.${FSNAME}-*"
+
+	# Check fs2 as reference
+	ldlm_enqueue_min=$($LCTL get_param -n osc.${FSNAME2}-*.ldlm_enqueue_min\
+			   | uniq)
+	(( $ldlm_enqueue_min == 0 )) ||
+		error "wrong ldlm_enqueue_min value for osc.${FSNAME2}-*"
+
+	# Set and check obdfilter/at_min
+	do_facet ost1 $LCTL set_param obdfilter.${FSNAME}-*.at_min=1 ||
+		error "failed to set per-device adaptive parameters on ost"
+	stack_trap "do_facet ost1 $LCTL set_param obdfilter.${FSNAME}-*.at_min=0"
+
+	local at_min
+	at_min=$(do_facet ost1 $LCTL get_param -n obdfilter.${FSNAME}-*.at_min \
+		| uniq)
+	(( $at_min == 1 )) ||
+		error "wrong at_min value for obdfilter.${FSNAME}-*"
+
+	# set and check mdc/at_max
+	$LCTL set_param mdc.${FSNAME}-*.at_max=599 ||
+		error "failed to set per-device adaptive parameters on client"
+	stack_trap "$LCTL set_param mdc.${FSNAME}-*.at_max=0"
+
+	local at_max
+	at_max=$($LCTL get_param -n mdc.${FSNAME}-*.at_max | uniq)
+	(( $at_max == 599 )) ||
+		error "wrong at_max value for osc.${FSNAME}-*"
+
+	# Check fs2 as reference
+	at_max=$($LCTL get_param -n mdc.${FSNAME2}-*.at_max | uniq)
+	(( $at_max == 0 )) ||
+		error "wrong at_max value for osc.${FSNAME2}-*"
+
+	# Set and check mds/at_max
+	do_facet mds1 $LCTL set_param *.${FSNAME}-*.at_max=599 ||
+		error "failed to set per-device adaptive parameters on mds"
+	stack_trap "do_facet mds1 $LCTL set_param *.${FSNAME}-*.at_max=0"
+
+	local at_max
+	at_max=$(do_facet mds1 $LCTL get_param -n mdt.${FSNAME}-*.at_max | uniq)
+	(( at_max == 599 )) ||
+		error "wrong at_max value for mdt.${FSNAME}-*"
+
+	# Set and check mgs&mgc/at_history
+	local mgs_nid=$(do_facet $SINGLEMDS $LCTL list_nids | tail -1)
+	$LCTL set_param mgc.MGC$mgs_nid.at_history=588
+	stack_trap "$LCTL set_param mgc.MGC$mgs_nid.at_history=0"
+
+	local at_history
+	at_history=$($LCTL get_param -n mgc.MGC$mgs_nid.at_history)
+	(( $at_history == 588 )) ||
+		error "wrong at_history value for mgc.MGC$mgs_nid"
+
+	do_facet mgs $LCTL set_param mgs.MGS.at_history=588
+	stack_trap "do_facet mgs $LCTL set_param mgs.MGS.at_history=0"
+	at_history=$(do_facet mgs $LCTL get_param -n mgs.MGS.at_history)
+	(( $at_history == 588 )) ||
+		error "wrong at_history value for mgs.MGS"
+}
+run_test 74 "Test per-device adaptive timeout parameters"
+
 test_75() { # LU-2374
 	[[ "$MDS1_VERSION" -lt $(version_code 2.4.1) ]] &&
 		skip "Need MDS version at least 2.4.1"
@@ -6037,6 +6140,7 @@ test_75() { # LU-2374
 	local opts_ost="$(mkfs_opts ost1 $(ostdevname 1)) \
 		--replace --reformat $(ostdevname 1) $(ostvdevname 1)"
 
+	load_modules
 	#check with default parameters
 	add mds1 $opts_mds || error "add mds1 failed for default params"
 	add ost1 $opts_ost || error "add ost1 failed for default params"

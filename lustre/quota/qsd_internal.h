@@ -330,9 +330,11 @@ static inline void qsd_set_edquot(struct lquota_entry *lqe, bool edquot)
  * quota space */
 static inline int qsd_wait_timeout(struct qsd_instance *qsd)
 {
+	struct obd_device *obd = qsd->qsd_dev->dd_lu_dev.ld_obd;
+
 	if (qsd->qsd_timeout != 0)
 		return qsd->qsd_timeout;
-	return min_t(int, at_max / 2, obd_timeout / 2);
+	return min_t(int, obd_get_at_max(obd) / 2, obd_timeout / 2);
 }
 
 /* qsd_entry.c */

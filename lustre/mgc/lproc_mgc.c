@@ -108,11 +108,18 @@ static ssize_t dynamic_nids_store(struct kobject *kobj, struct attribute *attr,
 
 LUSTRE_RW_ATTR(dynamic_nids);
 
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+
 static struct attribute *mgc_attrs[] = {
 	&lustre_attr_mgs_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_dynamic_nids.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_history.attr,
 	NULL,
 };
 

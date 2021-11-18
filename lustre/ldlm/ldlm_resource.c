@@ -940,7 +940,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	for (idx = 0; idx < (1 << ns->ns_bucket_bits); idx++) {
 		struct ldlm_ns_bucket *nsb = &ns->ns_rs_buckets[idx];
 
-		at_init(&nsb->nsb_at_estimate, ldlm_enqueue_min, 0);
+		at_init(&nsb->nsb_at_estimate, obd_get_ldlm_enqueue_min(obd), 0);
 		nsb->nsb_namespace = ns;
 		nsb->nsb_reclaim_start = 0;
 		atomic_set(&nsb->nsb_count, 0);

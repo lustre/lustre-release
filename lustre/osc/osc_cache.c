@@ -1554,6 +1554,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	int rc = -EDQUOT;
 	int remain;
 	bool entered = false;
+	struct obd_device *obd = cli->cl_import->imp_obd;
 	/* We cannot wait for a long time here since we are holding ldlm lock
 	 * across the actual IO. If no requests complete fast (e.g. due to
 	 * overloaded OST that takes a long time to process everything, we'd
@@ -1562,8 +1563,10 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	 * evicted by server which is half obd_timeout when AT is off
 	 * or at least ldlm_enqueue_min with AT on.
 	 * See LU-13131 */
-	unsigned long timeout = cfs_time_seconds(AT_OFF ? obd_timeout / 2 :
-							  ldlm_enqueue_min / 2);
+	unsigned long timeout =
+		cfs_time_seconds(obd_at_off(obd) ?
+				 obd_timeout / 2 :
+				 obd_get_ldlm_enqueue_min(obd) / 2);
 
 	ENTRY;
 

@@ -121,8 +121,9 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 
 	if (imp->imp_state == LUSTRE_IMP_DISCON) {
 		time64_t dtime = max_t(time64_t, CONNECTION_SWITCH_MIN,
-				       AT_OFF ? 0 :
-				       at_get(&imp->imp_at.iat_net_latency));
+				       obd_at_off(imp->imp_obd) ? 0 :
+				       obd_at_get(imp->imp_obd,
+						&imp->imp_at.iat_net_latency));
 		time = min(time, dtime);
 	}
 	imp->imp_next_ping = ktime_get_seconds() + time;

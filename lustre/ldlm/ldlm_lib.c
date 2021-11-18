@@ -2029,8 +2029,8 @@ check_and_start_recovery_timer(struct obd_device *obd,
 		 * Teach server about old server's estimates, as first guess
 		 * at how long new requests will take.
 		 */
-		at_measured(&req->rq_rqbd->rqbd_svcpt->scp_at_estimate,
-			    service_timeout);
+		obd_at_measure(obd, &req->rq_rqbd->rqbd_svcpt->scp_at_estimate,
+			       service_timeout);
 
 	target_start_recovery_timer(obd);
 
@@ -2424,12 +2424,13 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 	/* don't reset timer for final stage */
 	if (!exp_finished(req->rq_export)) {
 		timeout_t timeout = obd_timeout;
+		struct obd_device *obd = req->rq_export->exp_obd;
 
 		/**
 		 * Add request @timeout to the recovery time so next request from
 		 * this client may come in recovery time
 		 */
-		if (!AT_OFF) {
+		if (!obd_at_off(obd)) {
 			struct ptlrpc_service_part *svcpt;
 			timeout_t est_timeout;
 
@@ -2441,7 +2442,7 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 			 * use the maxium timeout here for waiting the client
 			 * sending the next req
 			 */
-			est_timeout = at_get(&svcpt->scp_at_estimate);
+			est_timeout = obd_at_get(obd, &svcpt->scp_at_estimate);
 			timeout = max_t(timeout_t, at_est2timeout(est_timeout),
 					lustre_msg_get_timeout(req->rq_reqmsg));
 			/*

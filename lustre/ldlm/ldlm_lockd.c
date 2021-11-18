@@ -438,7 +438,8 @@ static void ldlm_add_blocked_lock(struct ldlm_lock *lock)
 
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 {
-	int ret;
+	struct obd_device *obd = NULL;
+	int at_off, ret;
 
 	/* NB: must be called with hold of lock_res_and_lock() */
 	LASSERT(ldlm_is_res_locked(lock));
@@ -448,9 +449,12 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 	 * Do not put cross-MDT lock in the waiting list, since we
 	 * will not evict it due to timeout for now
 	 */
-	if (lock->l_export != NULL &&
-	    (exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS))
-		return 0;
+	if (lock->l_export != NULL) {
+		obd = lock->l_export->exp_obd;
+
+		if (exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS)
+			return 0;
+	}
 
 	spin_lock_bh(&waiting_locks_spinlock);
 	if (ldlm_is_cancel(lock)) {
@@ -484,9 +488,10 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 	if (ret)
 		ldlm_add_blocked_lock(lock);
 
+	at_off = obd_at_off(obd);
 	LDLM_DEBUG(lock, "%sadding to wait list(timeout: %d, AT: %s)",
 		   ret == 0 ? "not re-" : "", timeout,
-		   AT_OFF ? "off" : "on");
+		   at_off ? "off" : "on");
 	return ret;
 }
 
@@ -631,8 +636,9 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout)
 timeout_t ldlm_bl_timeout(struct ldlm_lock *lock)
 {
 	timeout_t timeout;
+	struct obd_device *obd = lock->l_export->exp_obd;
 
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		return obd_timeout / 2;
 
 	/*
@@ -641,9 +647,9 @@ timeout_t ldlm_bl_timeout(struct ldlm_lock *lock)
 	 * It would be nice to have some kind of "early reply" mechanism for
 	 * lock callbacks too...
 	 */
-	timeout = at_get(&lock->l_export->exp_bl_lock_at);
+	timeout = obd_at_get(obd, &lock->l_export->exp_bl_lock_at);
 	return max_t(timeout_t, timeout + (timeout >> 1),
-		     (timeout_t)ldlm_enqueue_min);
+		     (timeout_t)obd_get_ldlm_enqueue_min(obd));
 }
 EXPORT_SYMBOL(ldlm_bl_timeout);
 
@@ -667,8 +673,9 @@ timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
 	timeout_t timeout, req_timeout, at_timeout, netl;
+	struct obd_device *obd = req->rq_export->exp_obd;
 
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		return obd_timeout / 2;
 
 	/* A blocked lock means somebody in the cluster is waiting, and we
@@ -681,9 +688,11 @@ timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req)
 	 * Either this on the next RPC times out, take the max.
 	 * Considering the current RPC, take just the left time.
 	 */
-	netl = at_get(&req->rq_export->exp_imp_reverse->imp_at.iat_net_latency);
+	netl = obd_at_get(obd,
+			  &req->rq_export->exp_imp_reverse->imp_at.iat_net_latency);
 	req_timeout = req->rq_deadline - ktime_get_real_seconds() + netl;
-	at_timeout = at_est2timeout(at_get(&svcpt->scp_at_estimate)) + netl;
+	at_timeout = at_est2timeout(obd_at_get(obd, &svcpt->scp_at_estimate))
+				    + netl;
 	req_timeout = max(req_timeout, at_timeout);
 
 	/* Take 1 re-connect failure and 1 re-connect success into account. */
@@ -691,7 +700,8 @@ timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req)
 
 	/* Client's timeout is calculated as at_est2timeout(), let's be a bit
 	 * more conservative than client */
-	return max(timeout + (timeout >> 4), (timeout_t)ldlm_enqueue_min);
+	return max(timeout + (timeout >> 4),
+		   (timeout_t)obd_get_ldlm_enqueue_min(obd));
 }
 EXPORT_SYMBOL(ldlm_bl_timeout_by_rpc);
 
@@ -936,6 +946,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	struct ptlrpc_request  *req;
 	int instant_cancel = 0;
 	int rc = 0;
+	struct obd_device *obd;
 
 	ENTRY;
 
@@ -950,7 +961,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
 	LASSERT(lock);
 	LASSERT(data != NULL);
-	if (lock->l_export->exp_obd->obd_recovering != 0)
+
+	obd = lock->l_export->exp_obd;
+	if (obd->obd_recovering != 0)
 		LDLM_ERROR(lock, "BUG 6063: lock collide during recovery");
 
 	ldlm_lock_reorder_req(lock);
@@ -1019,7 +1032,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
 	req->rq_send_state = LUSTRE_IMP_FULL;
 	/* ptlrpc_request_alloc_pack already set timeout */
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		req->rq_timeout = ldlm_get_rq_timeout();
 
 	if (lock->l_export && lock->l_export->exp_nid_stats &&
@@ -1048,6 +1061,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	int instant_cancel = 0;
 	int rc = 0;
 	int lvb_len;
+	struct obd_device *obd;
 
 	ENTRY;
 
@@ -1059,6 +1073,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		RETURN(0);
 	}
 
+	obd = lock->l_export->exp_obd;
 	req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,
 				   &RQF_LDLM_CP_CALLBACK);
 	if (req == NULL)
@@ -1120,7 +1135,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	req->rq_send_state = LUSTRE_IMP_FULL;
 	/* ptlrpc_request_pack already set timeout */
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		req->rq_timeout = ldlm_get_rq_timeout();
 
 	/* We only send real blocking ASTs after the lock is granted */
@@ -1182,6 +1197,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 	struct ldlm_cb_async_args *ca;
 	int rc;
 	struct req_format *req_fmt;
+	struct obd_device *obd = lock->l_export->exp_obd;
 
 	ENTRY;
 
@@ -1223,7 +1239,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	req->rq_send_state = LUSTRE_IMP_FULL;
 	/* ptlrpc_request_alloc_pack already set timeout */
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		req->rq_timeout = ldlm_get_rq_timeout();
 
 	req->rq_interpret_reply = ldlm_cb_interpret;
@@ -1815,7 +1831,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 			LDLM_DEBUG(lock,
 				   "server cancels blocked lock after %ds",
 				   delay);
-			at_measured(&lock->l_export->exp_bl_lock_at, delay);
+			obd_at_measure(lock->l_export->exp_obd,
+				       &lock->l_export->exp_bl_lock_at,
+				       delay);
 		}
 		ldlm_lock_cancel(lock);
 		LDLM_LOCK_PUT(lock);

@@ -992,9 +992,9 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	    IS_SERVER(s2lsi(cld->cld_cfg.cfg_sb)))
 		short_limit = 1;
 
-        /* Limit how long we will wait for the enqueue to complete */
-        req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT;
-        rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
+	/* Limit how long we will wait for the enqueue to complete */
+	req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT(exp->exp_obd);
+	rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
 			      NULL, 0, LVB_T_NONE, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast,
            where it will be requeued if needed ("grant failed"). */

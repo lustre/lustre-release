@@ -988,6 +988,10 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
 
 LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
 
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+
 static struct attribute *ofd_attrs[] = {
 	&lustre_attr_tot_dirty.attr,
 	&lustre_attr_tot_granted.attr,
@@ -1017,6 +1021,9 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_access_log_size.attr,
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_history.attr,
 	NULL,
 };
 

@@ -875,13 +875,14 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 		if (imp->imp_at.iat_portal[j] == 0)
 			break;
 		k = max_t(unsigned int, k,
-			  at_get(&imp->imp_at.iat_service_estimate[j]));
+			  obd_at_get(imp->imp_obd,
+				     &imp->imp_at.iat_service_estimate[j]));
 	}
 	seq_printf(m, "    service_estimates:\n"
 		   "       services: %u sec\n"
 		   "       network: %d sec\n",
 		   k,
-		   at_get(&imp->imp_at.iat_net_latency));
+		   obd_at_get(imp->imp_obd, &imp->imp_at.iat_net_latency));
 
 	seq_printf(m, "    transactions:\n"
 		   "       last_replay: %llu\n"
@@ -987,7 +988,7 @@ static void lprocfs_timeouts_seq_show_locked(struct seq_file *m,
 		   "last reply", (s64)imp->imp_last_reply_time,
 		   (s64)(now - imp->imp_last_reply_time));
 
-	cur_timeout = at_get(&imp->imp_at.iat_net_latency);
+	cur_timeout = obd_at_get(imp->imp_obd, &imp->imp_at.iat_net_latency);
 	worst_timeout = imp->imp_at.iat_net_latency.at_worst_timeout_ever;
 	worst_timestamp = imp->imp_at.iat_net_latency.at_worst_timestamp;
 	seq_printf(m, "%-10s : cur %3u  worst %3u (at %lld, %llds ago) ",
@@ -1002,7 +1003,7 @@ static void lprocfs_timeouts_seq_show_locked(struct seq_file *m,
 			break;
 
 		service_est = &imp->imp_at.iat_service_estimate[i];
-		cur_timeout = at_get(service_est);
+		cur_timeout = obd_at_get(imp->imp_obd, service_est);
 		worst_timeout = service_est->at_worst_timeout_ever;
 		worst_timestamp = service_est->at_worst_timestamp;
 		seq_printf(m, "portal %-2d  : cur %3u  worst %3u (at %lld, %llds ago) ",

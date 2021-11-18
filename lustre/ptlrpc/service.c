@@ -642,7 +642,7 @@ static int ptlrpc_service_part_init(struct ptlrpc_service *svc,
 	spin_lock_init(&svcpt->scp_at_lock);
 	array = &svcpt->scp_at_array;
 
-	size = at_est2timeout(at_max);
+	size = at_est2timeout(obd_get_at_max(NULL));
 	array->paa_size     = size;
 	array->paa_count    = 0;
 	array->paa_deadline = -1;
@@ -1287,8 +1287,12 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 	struct ptlrpc_at_array *array = &svcpt->scp_at_array;
 	struct ptlrpc_request *rq = NULL;
 	__u32 index;
+	struct obd_device *obd = NULL;
 
-	if (AT_OFF)
+	if (req->rq_export)
+		obd = req->rq_export->exp_obd;
+
+	if (obd_at_off(obd))
 		return(0);
 
 	if (req->rq_no_reply)
@@ -1365,8 +1369,12 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	timeout_t olddl = req->rq_deadline - ktime_get_real_seconds();
 	time64_t newdl;
 	int rc;
+	struct obd_device *obd = NULL;
 
 	ENTRY;
+
+	if (req->rq_export)
+		obd = req->rq_export->exp_obd;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_RECONNECT) ||
 	    CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_ENQ_RESEND)) {
@@ -1380,11 +1388,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	 */
 	DEBUG_REQ(D_ADAPTTO, req,
 		  "%ssending early reply (deadline %+ds, margin %+ds) for %d+%d",
-		  AT_OFF ? "AT off - not " : "",
-		  olddl, olddl - at_get(&svcpt->scp_at_estimate),
-		  at_get(&svcpt->scp_at_estimate), at_extra);
+		  obd_at_off(obd) ? "AT off - not " : "",
+		  olddl, olddl - obd_at_get(obd, &svcpt->scp_at_estimate),
+		  obd_at_get(obd, &svcpt->scp_at_estimate), at_extra);
 
-	if (AT_OFF)
+	if (obd_at_off(obd))
 		RETURN(0);
 
 	if (olddl < 0) {
@@ -1435,11 +1443,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 		 * based on this service estimate (plus some additional time to
 		 * account for network latency). See ptlrpc_at_recv_early_reply
 		 */
-		at_measured(&svcpt->scp_at_estimate, at_extra +
+		obd_at_measure(obd, &svcpt->scp_at_estimate, at_extra +
 			    ktime_get_real_seconds() -
 			    req->rq_arrival_time.tv_sec);
 		newdl = req->rq_arrival_time.tv_sec +
-			at_get(&svcpt->scp_at_estimate);
+			obd_at_get(obd, &svcpt->scp_at_estimate);
 	}
 
 	/*
@@ -1621,11 +1629,14 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 		 * We're already past request deadlines before we even get a
 		 * chance to send early replies
 		 */
+		timeout_t atg = obd_at_get((struct obd_device *)NULL,
+					   &svcpt->scp_at_estimate);
 		LCONSOLE_WARN("'%s' is processing requests too slowly, client may timeout. Late by %ds, missed %d early replies (reqs waiting=%d active=%d, at_estimate=%d, delay=%lldms)\n",
 			      svcpt->scp_service->srv_name, -first, counter,
 			      svcpt->scp_nreqs_incoming,
 			      svcpt->scp_nreqs_active,
-			      at_get(&svcpt->scp_at_estimate), delay_ms);
+			      atg,
+			      delay_ms);
 	}
 
 	/*
@@ -2252,12 +2263,16 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	s64 timediff_usecs;
 	s64 arrived_usecs;
 	int fail_opc = 0;
+	struct obd_device *obd = NULL;
 
 	ENTRY;
 
 	request = ptlrpc_server_request_get(svcpt, false);
 	if (request == NULL)
 		RETURN(0);
+
+	if (request->rq_export)
+		obd = request->rq_export->exp_obd;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT))
 		fail_opc = OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT;
@@ -2285,7 +2300,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 		lprocfs_counter_add(svc->srv_stats, PTLRPC_REQACTIVE_CNTR,
 				    svcpt->scp_nreqs_active);
 		lprocfs_counter_add(svc->srv_stats, PTLRPC_TIMEOUT,
-				    at_get(&svcpt->scp_at_estimate));
+				    obd_at_get(obd, &svcpt->scp_at_estimate));
 	}
 
 	if (likely(request->rq_export)) {
@@ -3623,6 +3638,7 @@ static int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 	struct ptlrpc_request *request = NULL;
 	struct timespec64 right_now;
 	struct timespec64 timediff;
+	struct obd_device *obd = NULL;
 
 	ktime_get_real_ts64(&right_now);
 
@@ -3641,8 +3657,11 @@ static int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 	timediff = timespec64_sub(right_now, request->rq_arrival_time);
 	spin_unlock(&svcpt->scp_req_lock);
 
+	if (request->rq_export)
+		obd = request->rq_export->exp_obd;
+
 	if ((timediff.tv_sec) >
-	    (AT_OFF ? obd_timeout * 3 / 2 : at_max)) {
+	    (obd_at_off(obd) ? obd_timeout * 3 / 2 : obd_get_at_max(obd))) {
 		CERROR("%s: unhealthy - request has been waiting %llds\n",
 		       svcpt->scp_service->srv_name, (s64)timediff.tv_sec);
 		return -1;
@@ -3669,3 +3688,15 @@ ptlrpc_service_health_check(struct ptlrpc_service *svc)
 	return 0;
 }
 EXPORT_SYMBOL(ptlrpc_service_health_check);
+
+int
+ptlrpc_server_get_timeout(struct ptlrpc_service_part *svcpt)
+{
+	int at = 0;
+
+	if (!obd_at_off(NULL))
+		at = obd_at_get(NULL, &svcpt->scp_at_estimate);
+
+	return svcpt->scp_service->srv_watchdog_factor *
+	       max_t(int, at, obd_timeout);
+}

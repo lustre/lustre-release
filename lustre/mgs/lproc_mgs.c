@@ -250,11 +250,18 @@ static ssize_t mntdev_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(mntdev);
 
+LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
+LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+
 static struct attribute *mgs_attrs[] = {
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
 	&lustre_attr_eviction_count.attr,
 	&lustre_attr_num_exports.attr,
+	&lustre_attr_at_min.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_history.attr,
 	NULL,
 };
 

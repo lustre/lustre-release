@@ -104,7 +104,7 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 }
 
 #define mdunlink_iterate_helper(mds, count) \
-		__mdunlink_iterate_helper(mds, count, false) 
+		__mdunlink_iterate_helper(mds, count, false)
 static void __mdunlink_iterate_helper(struct lnet_handle_md *bd_mds,
 				      int count, bool discard)
 {
@@ -510,10 +510,16 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	struct ptlrpc_service_part	*svcpt = req->rq_rqbd->rqbd_svcpt;
 	struct ptlrpc_service		*svc = svcpt->scp_service;
 	timeout_t service_timeout;
+	struct obd_device *obd = NULL;
 
+	if (req->rq_export)
+		obd = req->rq_export->exp_obd;
+
+	service_timeout = obd_at_off(obd) ?
+			  obd_timeout * 3 / 2 : obd_get_at_max(obd);
 	service_timeout = clamp_t(timeout_t, ktime_get_real_seconds() -
-					     req->rq_arrival_time.tv_sec, 1,
-				  (AT_OFF ? obd_timeout * 3 / 2 : at_max));
+				  req->rq_arrival_time.tv_sec, 1,
+				  service_timeout);
         if (!(flags & PTLRPC_REPLY_EARLY) &&
             (req->rq_type != PTL_RPC_MSG_ERR) &&
             (req->rq_reqmsg != NULL) &&
@@ -523,14 +529,14 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
                 /* early replies, errors and recovery requests don't count
 		 * toward our service time estimate
 		 */
-		timeout_t oldse = at_measured(&svcpt->scp_at_estimate,
-					      service_timeout);
+		timeout_t oldse = obd_at_measure(obd, &svcpt->scp_at_estimate,
+						 service_timeout);
 
 		if (oldse != 0) {
 			DEBUG_REQ(D_ADAPTTO, req,
 				  "svc %s changed estimate from %d to %d",
 				  svc->srv_name, oldse,
-				  at_get(&svcpt->scp_at_estimate));
+				  obd_at_get(obd, &svcpt->scp_at_estimate));
 		}
         }
         /* Report actual service time for client latency calc */
@@ -540,8 +546,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	 * b=15815
 	 */
 	if (req->rq_type == PTL_RPC_MSG_ERR &&
-	    (req->rq_export == NULL ||
-	     req->rq_export->exp_obd->obd_recovering)) {
+	    (req->rq_export == NULL || obd->obd_recovering)) {
 		lustre_msg_set_timeout(req->rq_repmsg, 0);
 	} else {
 		timeout_t timeout;
@@ -550,14 +555,12 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 		    (flags & PTLRPC_REPLY_EARLY) &&
 		    lustre_msg_get_flags(req->rq_reqmsg) &
 		    (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE)) {
-			struct obd_device *exp_obd = req->rq_export->exp_obd;
-
 			timeout = ktime_get_real_seconds() -
 				  req->rq_arrival_time.tv_sec +
 				  min_t(timeout_t, at_extra,
-					exp_obd->obd_recovery_timeout / 4);
+					obd->obd_recovery_timeout / 4);
 		} else {
-			timeout = at_get(&svcpt->scp_at_estimate);
+			timeout = obd_at_get(obd, &svcpt->scp_at_estimate);
 		}
 		lustre_msg_set_timeout(req->rq_repmsg, timeout);
 	}
@@ -803,11 +806,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	 * This check has a race with ptlrpc_connect_import_locked()
 	 * with low chance, don't panic, only report.
 	 */
-	if (!(AT_OFF || imp->imp_state != LUSTRE_IMP_FULL ||
+	if (!(obd_at_off(obd) || imp->imp_state != LUSTRE_IMP_FULL ||
 	    (imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT) ||
 	    !(imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_AT))) {
 		DEBUG_REQ(D_HA, request, "Wrong state of import detected, AT=%d, imp=%d, msghdr=%d, conn=%d\n",
-			  AT_OFF, imp->imp_state != LUSTRE_IMP_FULL,
+			  obd_at_off(obd), imp->imp_state != LUSTRE_IMP_FULL,
 			  (imp->imp_msghdr_flags & MSGHDR_AT_SUPPORT),
 			  !(imp->imp_connect_data.ocd_connect_flags &
 			    OBD_CONNECT_AT));
