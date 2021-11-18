@@ -667,7 +667,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
         <secondary>mrhealth</secondary>
         <tertiary>interface</tertiary>
       </indexterm>User Interface</title>
-      <para>LNet Health is turned off by default. There are multiple module
+      <para>LNet Health is turned on by default. There are multiple module
       parameters available to control the LNet Health feature.</para>
       <para>All the module parameters are implemented in sysfs and are located
       in /sys/module/lnet/parameters/. They can be set directly by echoing a
@@ -697,12 +697,11 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
               <literal>lnet_health_sensitivity</literal>. The greater the value,
               the longer it takes for that interface to become healthy again.
               The default value of <literal>lnet_health_sensitivity</literal>
-              is set to 0, which means the health value will not be decremented.
-              In essense, the health feature is turned off.</para>
-              <para>The sensitivity value can be set greater than 0.  A
-              <literal>lnet_health_sensitivity</literal> of 100 would mean that
-              10 consecutive message failures or a steady-state failure rate
-              over 1% would degrade the interface Health Value until it is
+              is set to 100. To disable LNet health, the value can be set to 0.
+              </para>
+              <para>An <literal>lnet_health_sensitivity</literal> of 100 means
+              that 10 consecutive message failures or a steady-state failure
+              rate over 1% would degrade the interface Health Value until it is
               disabled, while a lower failure rate would steer traffic away from
               the interface but it would continue to be available.  When a
               failure occurs on an interface then its Health Value is
@@ -770,7 +769,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
               re-sending a message it will check if a message has passed the
               maximum retry_count specified. After which if a message wasn't
               sent successfully a failure event will be passed up to the layer
-              which initiated message sending.</para>
+              which initiated message sending. The default value is 2.</para>
               <para>Since the message retry interval
               (<literal>lnet_lnd_timeout</literal>) is computed from
               <literal>lnet_transaction_timeout / lnet_retry_count</literal>,
@@ -793,7 +792,7 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
               two configurable parameters:
               <literal>lnet_transaction_timeout</literal> and
               <literal>retry_count</literal>.</para>
-              <screen>lnet_lnd_timeout = lnet_transaction_timeout / retry_count
+              <screen>lnet_lnd_timeout = (lnet_transaction_timeout-1) / (retry_count+1)
               </screen>
               <para>As such there is a restriction that
               <literal>lnet_transaction_timeout &gt;= retry_count</literal>
