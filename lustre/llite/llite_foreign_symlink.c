@@ -430,15 +430,15 @@ static struct dentry *ll_foreign_dir_lookup(struct inode *parent,
 
 static bool has_same_mount_namespace(struct ll_sb_info *sbi)
 {
-	int rc;
+	bool same;
 
-	rc = (sbi->ll_mnt.mnt == current->fs->root.mnt);
-	if (!rc)
+	same = (sbi->ll_mnt_ns == current->nsproxy->mnt_ns);
+	if (!same)
 		LCONSOLE_WARN("%s: client mount %s and '%s.%d' not in same mnt-namespace\n",
 			      sbi->ll_fsname, sbi->ll_kset.kobj.name,
 			      current->comm, current->pid);
 
-	return rc;
+	return same;
 }
 
 ssize_t foreign_symlink_enable_show(struct kobject *kobj,

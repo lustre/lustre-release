@@ -676,6 +676,7 @@ struct ll_sb_info {
 	struct obd_device	*ll_dt_obd;
 	struct dentry		*ll_debugfs_entry;
 	struct lu_fid		 ll_root_fid; /* root object fid */
+	struct mnt_namespace	*ll_mnt_ns;
 
 	DECLARE_BITMAP(ll_flags, LL_SBI_NUM_FLAGS); /* enum ll_sbi_flags */
 	unsigned int		 ll_xattr_cache_enabled:1,
