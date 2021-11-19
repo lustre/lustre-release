@@ -4024,24 +4024,24 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 
 	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc != 0) {
+	if (rc) {
 		fprintf(stderr,
-			"error: invalid ioctl: %08x errno: %d with rc=%d\n",
-			cmd, errno, rc);
+			"error: invalid ioctl request: %08x errno: %d: %s\n",
+			cmd, errno, strerror(-rc));
 		goto out;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NODEMAP, buf);
-	if (rc != 0) {
+	if (rc) {
 		fprintf(stderr,
-			"error: invalid ioctl: %08x errno: %d with rc=%d\n",
-			cmd, errno, rc);
+			"error: invalid ioctl: %08x errno: %d: %s\n",
+			cmd, errno, strerror(errno));
 		goto out;
 	}
 
 	if (ret_data) {
 		rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-		if (rc != 0)
+		if (rc)
 			goto out;
 
 		if (ret_size > data.ioc_plen1)
@@ -4242,7 +4242,7 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
 		fprintf(stderr,
 			"error: nodemap_xxx_range: can't parse nid range: %s\n",
 			nodemap_range);
-		return -1;
+		return -EINVAL;
 	}
 
 	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
@@ -4272,7 +4272,7 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
  * --name			nodemap name
  * --range			properly formatted nid range
  *
- * \retval			0 on success
+ * \retval			0 on success, -errno on error
  */
 int jt_nodemap_add_range(int argc, char **argv)
 {
@@ -4302,21 +4302,20 @@ int jt_nodemap_add_range(int argc, char **argv)
 	if (!nodemap_name || !nodemap_range) {
 		fprintf(stderr,
 			"usage: nodemap_add_range --name <name> --range <range>\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	rc = parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
 	if (rc) {
-		errno = -rc;
 		return rc;
 	}
 	rc = nodemap_cmd(LCFG_NODEMAP_ADD_RANGE, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
-	if (rc != 0) {
-		errno = -rc;
+	if (rc) {
 		fprintf(stderr,
-			"error: %s: cannot add range '%s' to nodemap '%s': rc = %d\n",
-			jt_cmdname(argv[0]), nodemap_range, nodemap_name, rc);
+			"error: %s: cannot add range '%s' to nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), nodemap_range, nodemap_name,
+			strerror(-rc));
 	}
 
 	return rc;
@@ -5594,7 +5593,7 @@ int jt_get_obj_version(int argc, char **argv)
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
-	if (rc == -1) {
+	if (rc) {
 		fprintf(stderr, "error: %s: ioctl: %s\n",
 			jt_cmdname(argv[0]), strerror(errno));
 		return -errno;

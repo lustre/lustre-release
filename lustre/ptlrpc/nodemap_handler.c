@@ -815,13 +815,14 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 	}
 
 	rc = range_insert(&config->nmc_range_tree, range);
-	if (rc != 0) {
-		CERROR("cannot insert nodemap range into '%s': rc = %d\n",
-		      nodemap->nm_name, rc);
+	if (rc) {
+		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
+			     "cannot insert nodemap range into '%s': rc = %d\n",
+			     nodemap->nm_name, rc);
 		up_write(&config->nmc_range_tree_lock);
 		list_del(&range->rn_list);
 		range_destroy(range);
-		GOTO(out, rc = -ENOMEM);
+		GOTO(out, rc);
 	}
 
 	list_add(&range->rn_list, &nodemap->nm_ranges);
@@ -844,6 +845,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 out:
 	return rc;
 }
+
 int nodemap_add_range(const char *name, const lnet_nid_t nid[2])
 {
 	struct lu_nodemap	*nodemap = NULL;

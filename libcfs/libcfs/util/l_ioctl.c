@@ -44,19 +44,25 @@ struct ioc_dev {
 
 static struct ioc_dev ioc_dev_list[10];
 
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
+#endif /* !ARRAY_SIZE */
+
 static int
 open_ioc_dev(int dev_id)
 {
 	const char *dev_name;
 
-	if (dev_id < 0 ||
-	    dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
-		return -EINVAL;
+	if (dev_id < 0 || dev_id >= ARRAY_SIZE(ioc_dev_list)) {
+		errno = EINVAL;
+		return -errno;
+	}
 
 	dev_name = ioc_dev_list[dev_id].dev_name;
 	if (!dev_name) {
 		fprintf(stderr, "unknown device id: %d\n", dev_id);
-		return -EINVAL;
+		errno = EINVAL;
+		return -errno;
 	}
 
 	if (ioc_dev_list[dev_id].dev_fd < 0) {
@@ -66,7 +72,7 @@ open_ioc_dev(int dev_id)
 			fprintf(stderr, "opening %s failed: %s\n"
 				"hint: the kernel modules may not be loaded\n",
 				dev_name, strerror(errno));
-			return fd;
+			return -errno;
 		}
 		ioc_dev_list[dev_id].dev_fd = fd;
 	}
@@ -84,7 +90,7 @@ int l_ioctl(int dev_id, unsigned int opc, void *buf)
 
 	rc = ioctl(fd, opc, buf);
 
-	return rc;
+	return rc < 0 ? -errno : rc;
 }
 
 /* register a device to send ioctls to. */

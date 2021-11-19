@@ -872,10 +872,11 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		rc = -ENOTTY;
 	}
 
-	if (rc != 0) {
-		CERROR("%s: OBD_IOC_NODEMAP command %X for %s: rc = %d\n",
-		       mgs->mgs_obd->obd_name, lcfg->lcfg_command,
-		       nodemap_name, rc);
+	if (rc) {
+		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
+			     "%s: OBD_IOC_NODEMAP command %X for %s: rc = %d\n",
+			     mgs->mgs_obd->obd_name, lcfg->lcfg_command,
+			     nodemap_name, rc);
 		GOTO(out_lcfg, rc);
 	}
 
