@@ -4263,6 +4263,33 @@ test_33h() {
 }
 run_test 33h "temp file is located on the same MDT as target"
 
+test_33i()
+{
+	(( MDSCOUNT < 2 )) && skip "needs >= 2 MDTs"
+
+	local FNAME=$(str_repeat 'f' 250)
+
+	test_mkdir -i 0 -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -o $DIR/$tdir/$FNAME 1000 || error "createmany failed"
+
+	local count
+	local total
+
+	count=$($LFS getstripe -m $DIR/$tdir/* | grep -cw 1)
+
+	local MDC=$(lctl dl | awk '/MDT0001-mdc-[^M]/ { print $4 }')
+
+	lctl --device %$MDC deactivate
+	stack_trap "lctl --device %$MDC activate"
+	ls $DIR/$tdir > /dev/null && error "ls should return an error"
+	total=$(\ls -l $DIR/$tdir | wc -l)
+	# "ls -l" will list total in the first line
+	total=$((total - 1))
+	(( total + count == 1000 )) ||
+		error "ls list $total files, $count files on MDT1"
+}
+run_test 33i "striped directory can be accessed when one MDT is down"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
@@ -8467,7 +8494,7 @@ test_60g() {
 			awk '/^status/ { print \\\$2 }'" "completed"
 	done
 
-	ls -R $DIR/$tdir || error "ls failed"
+	ls -R $DIR/$tdir
 	rm -rf $DIR/$tdir || error "rmdir failed"
 }
 run_test 60g "transaction abort won't cause MDT hung"
@@ -23689,7 +23716,6 @@ test_300s() {
 	done
 }
 run_test 300s "test lfs mkdir -c without -i"
-
 
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||

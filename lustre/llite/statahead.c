@@ -1067,7 +1067,7 @@ static int ll_statahead_thread(void *arg)
 		}
 
 		sai->sai_in_readpage = 1;
-		page = ll_get_dir_page(dir, op_data, pos);
+		page = ll_get_dir_page(dir, op_data, pos, NULL);
 		ll_unlock_md_op_lsm(op_data);
 		sai->sai_in_readpage = 0;
 		if (IS_ERR(page)) {
@@ -1354,7 +1354,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	 *FIXME choose the start offset of the readdir
 	 */
 
-	page = ll_get_dir_page(dir, op_data, 0);
+	page = ll_get_dir_page(dir, op_data, 0, NULL);
 
 	while (1) {
 		struct lu_dirpage *dp;
@@ -1456,7 +1456,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			 */
 			ll_release_page(dir, page, le32_to_cpu(dp->ldp_flags) &
 					      LDF_COLLIDE);
-			page = ll_get_dir_page(dir, op_data, pos);
+			page = ll_get_dir_page(dir, op_data, pos, NULL);
 		}
 	}
 	EXIT;

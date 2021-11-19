@@ -266,9 +266,10 @@ static int ll_get_name(struct dentry *dentry, char *name,
 
 	inode_lock(dir);
 #ifdef HAVE_DIR_CONTEXT
-	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx);
+	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx, NULL);
 #else
-	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir);
+	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir,
+			 NULL);
 #endif
 	inode_unlock(dir);
 	ll_finish_md_op_data(op_data);

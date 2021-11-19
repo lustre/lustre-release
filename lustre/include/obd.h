@@ -959,10 +959,12 @@ struct md_op_data {
 	__u32			op_archive_id;
 };
 
-struct md_callback {
-	int (*md_blocking_ast)(struct ldlm_lock *lock,
+struct md_readdir_info {
+	int (*mr_blocking_ast)(struct ldlm_lock *lock,
 			       struct ldlm_lock_desc *desc,
 			       void *data, int flag);
+	/* if striped directory is partially read, the result is stored here */
+	int mr_partial_readdir_rc;
 };
 
 struct md_enqueue_info;
@@ -1162,7 +1164,7 @@ struct md_ops {
 		       struct ptlrpc_request **);
 
 	int (*m_read_page)(struct obd_export *, struct md_op_data *,
-			   struct md_callback *cb_op, __u64 hash_offset,
+			   struct md_readdir_info *mrinfo, __u64 hash_offset,
 			   struct page **ppage);
 
 	int (*m_unlink)(struct obd_export *, struct md_op_data *,

@@ -222,8 +222,8 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 
 		rc = md_intent_lock(tgt->ltd_exp, op_data, &it, &req,
 				    cb_blocking, extra_lock_flags);
-		if (rc == -ENOENT) {
-			/* skip stripe is not exists */
+		if (rc == -ENOENT || rc == -ESHUTDOWN) {
+			/* skip stripe that doesn't exist or is inaccessible */
 			rc = 0;
 			continue;
 		}
