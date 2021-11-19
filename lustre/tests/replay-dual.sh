@@ -863,6 +863,12 @@ test_23d () {
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
 		error "lfs mkdir -i $MDTIDX failed"
 
+	# let previous transactions to complete
+	# (distributed llog cancels, etc)
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+	sleep 2
+
 	# OBD_FAIL_UPDATE_OBJ_NET    0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
