@@ -216,7 +216,8 @@ struct client_obd {
 
 	unsigned int		 cl_checksum:1, /* 0 = disabled, 1 = enabled */
 				 cl_checksum_dump:1, /* same */
-				 cl_ocd_grant_param:1;
+				 cl_ocd_grant_param:1,
+				 cl_lsom_update:1; /* send LSOM updates */
 	enum lustre_sec_part	 cl_sp_me;
 	enum lustre_sec_part	 cl_sp_to;
 	struct sptlrpc_flavor	 cl_flvr_mgc; /* fixed flavor of mgc->mgs */
