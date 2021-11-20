@@ -57,8 +57,6 @@ fi
 
 # skip the grant tests for ARM until they are fixed
 if [[ $(uname -m) = aarch64 ]]; then
-	# bug number:	 LU-11596
-	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
 	# bug number:	 LU-11671
 	ALWAYS_EXCEPT+=" 45"
 	# bug number:	 LU-14067 LU-14067

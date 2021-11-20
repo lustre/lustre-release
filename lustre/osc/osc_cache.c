@@ -862,11 +862,14 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 
 	if (!sent) {
 		lost_grant = ext->oe_grants;
-	} else if (blocksize < PAGE_SIZE &&
+	} else if (cli->cl_ocd_grant_param == 0 &&
+		   blocksize < PAGE_SIZE &&
 		   last_count != PAGE_SIZE) {
-		/* For short writes we shouldn't count parts of pages that
-		 * span a whole chunk on the OST side, or our accounting goes
-		 * wrong.  Should match the code in filter_grant_check. */
+		/* For short writes without OBD_CONNECT_GRANT support, we
+		 * shouldn't count parts of pages that span a whole chunk on
+		 * the OST side, or our accounting goes wrong. Should match
+		 * the code in tgt_grant_check.
+		 */
 		int offset = last_off & ~PAGE_MASK;
 		int count = last_count + (offset & (blocksize - 1));
 		int end = (offset + last_count) & (blocksize - 1);
@@ -1451,11 +1454,11 @@ static void osc_unreserve_grant(struct client_obd *cli,
  * used, we should return these grants to OST. There're two cases where grants
  * can be lost:
  * 1. truncate;
- * 2. blocksize at OST is less than PAGE_SIZE and a partial page was
- *    written. In this case OST may use less chunks to serve this partial
- *    write. OSTs don't actually know the page size on the client side. so
- *    clients have to calculate lost grant by the blocksize on the OST.
- *    See filter_grant_check() for details.
+ * 2. Without OBD_CONNECT_GRANT support and blocksize at OST is less than
+ *    PAGE_SIZE and a partial page was written. In this case OST may use less
+ *    chunks to serve this partial write. OSTs don't actually know the page
+ *    size on the client side. so clients have to calculate lost grant by the
+ *    blocksize on the OST. See tgt_grant_check() for details.
  */
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 			   unsigned int lost_grant, unsigned int dirty_grant)
