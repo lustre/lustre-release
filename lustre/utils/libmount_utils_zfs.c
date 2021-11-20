@@ -173,24 +173,61 @@ static int zfs_erase_prop(zfs_handle_t *zhp, char *param)
 	return zfs_remove_prop(zhp, nvl, propname);
 }
 
-static int zfs_erase_allprops(zfs_handle_t *zhp)
+static int zfs_is_special_ldd_prop_param(char *name)
 {
-	nvlist_t *nvl;
-	nvpair_t *curr = NULL;
+	int i;
 
-	nvl = zfs_get_user_props(zhp);
-	if (!nvl)
-		return ENOENT;
-
-	curr = nvlist_next_nvpair(nvl, curr);
-	while (curr) {
-		nvpair_t *next = nvlist_next_nvpair(nvl, curr);
-
-		zfs_remove_prop(zhp, nvl, nvpair_name(curr));
-		curr = next;
-	}
+	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++)
+		if (!strcmp(name, special_ldd_prop_params[i].zlpb_prop_name))
+			return 1;
 
 	return 0;
+}
+
+static int zfs_erase_allprops(zfs_handle_t *zhp)
+{
+	nvlist_t *props;
+	nvpair_t *nvp;
+	size_t str_size = 1024 * 1024;
+	char *strs, *cur;
+	int rc = 0;
+
+	strs = malloc(str_size);
+	if (!strs)
+		return ENOMEM;
+	cur = strs;
+
+	props = zfs_get_user_props(zhp);
+	if (props == NULL) {
+		free(strs);
+		return ENOENT;
+	}
+	nvp = NULL;
+	while (nvp = nvlist_next_nvpair(props, nvp), nvp) {
+		if (strncmp(nvpair_name(nvp), LDD_PREFIX, strlen(LDD_PREFIX)))
+			continue;
+
+		if (zfs_is_special_ldd_prop_param(nvpair_name(nvp)))
+			continue;
+
+		rc = snprintf(cur, str_size - (cur - strs), "%s",
+			      nvpair_name(nvp));
+		if (rc != strlen(nvpair_name(nvp))) {
+			fprintf(stderr, "%s: zfs has too many properties to erase, please repeat\n",
+				progname);
+			rc = EINVAL;
+			break;
+		}
+		cur += strlen(cur) + 1;
+	}
+	cur = strs;
+	while ( cur < (strs + str_size) && strlen(cur) > 0) {
+		zfs_prop_inherit(zhp, cur, false);
+		cur += strlen(cur) + 1;
+	}
+
+	free(strs);
+	return rc;
 }
 /*
  * ZFS on linux 0.7.0-rc5 commit 379ca9cf2beba802f096273e89e30914a2d6bafc
@@ -480,17 +517,6 @@ static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, void *val)
 	(void) strcpy(val, propstr);
 
 	return ret;
-}
-
-static int zfs_is_special_ldd_prop_param(char *name)
-{
-	int i;
-
-	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++)
-		if (!strcmp(name, special_ldd_prop_params[i].zlpb_prop_name))
-			return 1;
-
-	return 0;
 }
 
 static int zfs_get_prop_params(zfs_handle_t *zhp, char *param)
