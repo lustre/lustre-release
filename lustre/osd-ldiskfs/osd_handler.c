@@ -4985,8 +4985,10 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		 */
 		LASSERT(buf->lb_len == sizeof(dt_obj_version_t));
 
-		CDEBUG(D_INODE, "Set version %#llx (old %#llx) for inode %lu\n",
-		       *version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+		CDEBUG(D_INODE,
+		       DFID" set version %#llx (old %#llx) for inode %lu\n",
+		       PFID(lu_object_fid(&dt->do_lu)), *version,
+		       LDISKFS_I(inode)->i_fs_version, inode->i_ino);
 
 		LDISKFS_I(inode)->i_fs_version = *version;
 		/*

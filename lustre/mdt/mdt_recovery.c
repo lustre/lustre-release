@@ -187,6 +187,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 	struct ptlrpc_request  *req = mdt_info_req(mti);
 	struct obd_export *exp = req->rq_export;
 	struct mdt_device *mdt = mti->mti_mdt;
+	struct md_attr *ma = &mti->mti_attr;
 	struct mdt_object *child;
 	struct mdt_body *body;
 	int rc;
@@ -209,11 +210,14 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 	}
 
 	body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-	mti->mti_attr.ma_need = MA_INODE;
-	mti->mti_attr.ma_valid = 0;
-	rc = mdt_attr_get_complex(mti, child, &mti->mti_attr);
+	ma->ma_need = MA_INODE;
+	if (S_ISDIR(ma->ma_attr.la_mode) &&
+	    (mti->mti_spec.sp_cr_flags & MDS_MKDIR_LMV))
+		mdt_prep_ma_buf_from_rep(mti, child, ma, 0);
+	ma->ma_valid = 0;
+	rc = mdt_attr_get_complex(mti, child, ma);
 	if (rc == -ENOENT) {
-		mdt_fake_ma(&mti->mti_attr);
+		mdt_fake_ma(ma);
 	} else if (rc == -EREMOTE) {
 		/* object was created on remote server */
 		if (!mdt_is_dne_client(exp))
@@ -223,8 +227,11 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 		req->rq_status = rc;
 		body->mbo_valid |= OBD_MD_MDS;
 	}
-	mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
-			   mdt_object_fid(child));
+	if (ma->ma_valid & MA_LMV) {
+		body->mbo_eadatasize = ma->ma_lmv_size;
+		body->mbo_valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
+	}
+	mdt_pack_attr2body(mti, body, &ma->ma_attr, mdt_object_fid(child));
 	mdt_object_put(mti->mti_env, child);
 }
 

@@ -2202,7 +2202,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 
 		if (!lmv_user_magic_supported(le32_to_cpu(lum->lum_magic)) &&
-		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_V0) {
+		    !(spec->sp_replay &&
+		      lum->lum_magic == cpu_to_le32(LMV_MAGIC_V1))) {
 			rc = -EINVAL;
 			CERROR("%s: invalid lmv_user_md: magic=%x hash=%x stripe_offset=%d stripe_count=%u: rc = %d\n",
 			       mdd2obd_dev(m)->obd_name,
@@ -2210,7 +2211,6 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 			       le32_to_cpu(lum->lum_hash_type),
 			       (int)le32_to_cpu(lum->lum_stripe_offset),
 			       le32_to_cpu(lum->lum_stripe_count), rc);
-
 			RETURN(rc);
 		}
 	}
@@ -2625,9 +2625,8 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 		jobid_len = strnlen(jobid, LUSTRE_JOBID_SIZE);
 		buf = mdd_buf_get_const(env, jobid, jobid_len);
 
-		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_job_xattr,
-				   LU_XATTR_CREATE, handle);
-
+		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_job_xattr, 0,
+				   handle);
 		/* this xattr is nonessential, so ignore errors. */
 		if (rc != 0) {
 			CDEBUG(D_INODE,
@@ -2761,6 +2760,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	const char *name = lname->ln_name;
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mdi_hint;
 	int acl_size = LUSTRE_POSIX_ACL_MAX_SIZE_OLD;
+	bool name_inserted = false;
 	int rc, rc2;
 
 	ENTRY;
@@ -2771,7 +2771,14 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 
 	/* Sanity checks before big job. */
 	rc = mdd_create_sanity_check(env, pobj, pattr, lname, attr, spec);
-	if (rc)
+	if (unlikely(rc == -EEXIST && S_ISDIR(attr->la_mode) &&
+		     spec->sp_replay && mdd_object_remote(mdd_pobj)))
+		/* if it's replay by client request, and name is found in
+		 * parent directory on remote MDT, it means mkdir was partially
+		 * executed: name was successfully added, but target not.
+		 */
+		name_inserted = true;
+	else if (rc)
 		RETURN(rc);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
@@ -2811,7 +2818,8 @@ use_bigger_buffer:
 		/* migrate may create 1-stripe directory, adjust stripe count
 		 * before lod_ah_init().
 		 */
-		if (lmu && lmu->lum_stripe_count == cpu_to_le32(1))
+		if (lmu && lmu->lum_magic == cpu_to_le32(LMV_USER_MAGIC) &&
+		    lmu->lum_stripe_count == cpu_to_le32(1))
 			lmu->lum_stripe_count = 0;
 	}
 
@@ -2860,10 +2868,13 @@ use_bigger_buffer:
 		rc = mdd_orphan_insert(env, son, handle);
 		GOTO(out_volatile, rc);
 	} else {
-		rc = __mdd_index_insert(env, mdd_pobj, mdd_object_fid(son),
-					attr->la_mode, name, handle);
-		if (rc != 0)
-			GOTO(err_created, rc);
+		if (likely(!name_inserted)) {
+			rc = __mdd_index_insert(env, mdd_pobj,
+						mdd_object_fid(son),
+						attr->la_mode, name, handle);
+			if (rc != 0)
+				GOTO(err_created, rc);
+		}
 
 		mdd_links_add(env, son, mdd_object_fid(mdd_pobj), lname,
 			      handle, ldata, 1);
@@ -5122,8 +5133,13 @@ int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 		rc = mdd_dir_split_plain(env, mdd, pobj, obj, tobj, &xattrs,
 					 mlc, hint, handle);
 	} else {
+		struct lu_buf *buf = &info->mdi_buf[0];
+
+		buf->lb_buf = mlc->mlc_spec->u.sp_ea.eadata;
+		buf->lb_len = mlc->mlc_spec->u.sp_ea.eadatalen;
+
 		mdd_write_lock(env, obj, DT_TGT_CHILD);
-		rc = mdo_xattr_set(env, obj, NULL, XATTR_NAME_LMV,
+		rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_LMV,
 				   LU_XATTR_CREATE, handle);
 		mdd_write_unlock(env, obj);
 		if (rc)

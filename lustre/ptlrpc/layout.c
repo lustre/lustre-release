@@ -230,6 +230,13 @@ static const struct req_msg_field *mds_reint_create_sym_client[] = {
 	&RMF_FILE_ENCCTX,
 };
 
+static const struct req_msg_field *mds_reint_create_acl_server[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_CAPA1,
+	&RMF_MDT_MD
+};
+
 static const struct req_msg_field *mds_reint_open_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_REC_REINT,
@@ -1497,7 +1504,8 @@ EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
 
 struct req_format RQF_MDS_REINT_CREATE_ACL =
 	DEFINE_REQ_FMT0("MDS_REINT_CREATE_ACL",
-			mds_reint_create_acl_client, mdt_body_capa);
+			mds_reint_create_acl_client,
+			mds_reint_create_acl_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_ACL);
 
 struct req_format RQF_MDS_REINT_CREATE_SLAVE =

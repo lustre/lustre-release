@@ -163,7 +163,7 @@ lmv_stripe_object_dump(int mask, const struct lmv_stripe_object *lsmo)
 	const struct lmv_stripe_md *lsm = &lsmo->lso_lsm;
 	int i;
 
-	CDEBUG_LIMIT(mask,
+	CDEBUG(mask,
 	       "dump LMV: refs %u magic=%#x count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
 	       lsm->lsm_md_magic, atomic_read(&lsmo->lso_refs),
 	       lsm->lsm_md_stripe_count, lsm->lsm_md_master_mdt_index,
@@ -181,8 +181,8 @@ lmv_stripe_object_dump(int mask, const struct lmv_stripe_object *lsmo)
 		return;
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
-		CDEBUG(mask, "stripe[%d] "DFID"\n",
-		       i, PFID(&lsm->lsm_md_oinfo[i].lmo_fid));
+		CDEBUG_LIMIT(mask, "stripe[%d] "DFID"\n",
+			     i, PFID(&lsm->lsm_md_oinfo[i].lmo_fid));
 }
 
 static inline bool

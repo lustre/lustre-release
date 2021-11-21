@@ -971,7 +971,8 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 			}
 
 			/* The slot has been occupied. */
-			if (!fid_is_zero(&lmv1->lmv_stripe_fids[index])) {
+			if (!fid_is_zero(&lmv1->lmv_stripe_fids[index]) &&
+			    !CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME)) {
 				struct lu_fid fid0;
 
 				fid_le_to_cpu(&fid0,
@@ -2303,6 +2304,30 @@ int lod_alloc_foreign_lmv(struct lod_object *lo, size_t size)
 	return 0;
 }
 
+static int lod_prep_md_replayed_create(const struct lu_env *env,
+				       struct dt_object *dt,
+				       struct lu_attr *attr,
+				       const struct lu_buf *lmv_buf,
+				       struct dt_object_format *dof,
+				       struct thandle *th)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
+
+	ENTRY;
+
+	mutex_lock(&lo->ldo_layout_mutex);
+	rc = lod_parse_dir_striping(env, lo, lmv_buf);
+	if (rc == 0) {
+		lo->ldo_dir_stripe_loaded = 1;
+		lo->ldo_dir_striped = 1;
+		rc = lod_dir_declare_create_stripes(env, dt, attr, dof, th);
+	}
+	mutex_unlock(&lo->ldo_layout_mutex);
+
+	RETURN(rc);
+}
+
 /**
  *
  * Free cached foreign LMV
@@ -2362,22 +2387,26 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 		if (lo->ldo_is_foreign) {
 			rc = lod_alloc_foreign_lmv(lo, lum_buf->lb_len);
 			if (rc != 0)
-				GOTO(out, rc);
+				RETURN(rc);
 			memcpy(lo->ldo_foreign_lmv, lum, lum_buf->lb_len);
 			lo->ldo_dir_stripe_loaded = 1;
 		}
-		GOTO(out, rc = 0);
+		RETURN(0);
 	}
 
-	/* prepare dir striped objects */
-	rc = lod_prep_md_striped_create(env, dt, attr, lum, dof, th);
-	if (rc != 0) {
+	/* client replay striped directory creation with LMV, this happens when
+	 * all involved MDTs were rebooted, or MDT recovery was aborted.
+	 */
+	if (le32_to_cpu(lum->lum_magic) == LMV_MAGIC_V1)
+		rc = lod_prep_md_replayed_create(env, dt, attr, lum_buf, dof,
+						 th);
+	else
+		rc = lod_prep_md_striped_create(env, dt, attr, lum, dof, th);
+	if (rc != 0)
 		/* failed to create striping, let's reset
 		 * config so that others don't get confused */
 		lod_striping_free(env, lo);
-		GOTO(out, rc);
-	}
-out:
+
 	RETURN(rc);
 }
 
@@ -4236,7 +4265,7 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
  *
  * \param[in] env	execution environment
  * \param[in] dt	the striped object
- * \param[in] buf	not used currently
+ * \param[in] buf	buf lmv_user_md for create, or lmv_mds_md for replay
  * \param[in] name	not used currently
  * \param[in] fl	xattr flag (see OSD API description)
  * \param[in] th	transaction handle
@@ -4248,19 +4277,22 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			     const struct lu_buf *buf, const char *name,
 			     int fl, struct thandle *th)
 {
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lu_attr		*attr = &info->lti_attr;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_attr *attr = &info->lti_attr;
 	struct dt_object_format *dof = &info->lti_format;
-	struct lu_buf		lmv_buf;
-	struct lu_buf		slave_lmv_buf;
-	struct lmv_mds_md_v1	*lmm;
-	struct lmv_mds_md_v1	*slave_lmm = NULL;
-	struct dt_insert_rec	*rec = &info->lti_dt_rec;
-	int			i;
-	int			rc;
-	ENTRY;
+	struct lu_buf lmv_buf;
+	struct lu_buf slave_lmv_buf;
+	struct lmv_user_md *lum = buf->lb_buf;
+	struct lmv_mds_md_v1 *lmm;
+	struct lmv_mds_md_v1 *slave_lmm = NULL;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	int i;
+	int rc;
 
+	ENTRY;
+	/* lum is used to know whether it's replay */
+	LASSERT(lum);
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		RETURN(-ENOTDIR);
 
@@ -4304,6 +4336,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		struct lu_name *sname;
 		struct linkea_data ldata = { NULL };
 		struct lu_buf linkea_buf;
+		bool stripe_created = false;
 
 		/* OBD_FAIL_MDS_STRIPE_FID may leave stripe uninitialized */
 		if (!dto)
@@ -4313,6 +4346,15 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		if (i && CFS_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_CREATE))
 			continue;
 
+		/* if it's replay by client request, and stripe exists on remote
+		 * MDT, it means mkdir was partially executed: stripe was
+		 * created on remote MDT successfully, but target not in last
+		 * run.
+		 */
+		if (unlikely((le32_to_cpu(lum->lum_magic) == LMV_MAGIC_V1) &&
+			     dt_object_exists(dto) && dt_object_remote(dto)))
+			stripe_created = true;
+
 		/* don't create stripe if:
 		 * 1. it's source stripe of migrating directory
 		 * 2. it's existed stripe of splitting directory
@@ -4321,7 +4363,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		    (lod_is_splitting(lo) && i < lo->ldo_dir_split_offset)) {
 			if (!dt_object_exists(dto))
 				GOTO(out, rc = -EINVAL);
-		} else {
+		} else if (!stripe_created) {
 			dt_write_lock(env, dto, DT_TGT_CHILD);
 			rc = lod_sub_create(env, dto, attr, NULL, dof, th);
 			if (rc != 0) {
@@ -4367,12 +4409,6 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		    lo->ldo_dir_split_offset > i)
 			continue;
 
-		rec->rec_fid = lu_object_fid(&dt->do_lu);
-		rc = lod_sub_insert(env, dto, (struct dt_rec *)rec,
-				    (const struct dt_key *)dotdot, th);
-		if (rc != 0)
-			GOTO(out, rc);
-
 		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
 		    cfs_fail_val == i)
 			snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
@@ -4381,18 +4417,27 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
 				 PFID(lu_object_fid(&dto->do_lu)), i);
 
-		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
-		rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
-				      sname, lu_object_fid(&dt->do_lu));
-		if (rc != 0)
-			GOTO(out, rc);
+		if (!stripe_created) {
+			rec->rec_fid = lu_object_fid(&dt->do_lu);
+			rc = lod_sub_insert(env, dto, (struct dt_rec *)rec,
+					    (const struct dt_key *)dotdot, th);
+			if (rc != 0)
+				GOTO(out, rc);
 
-		linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
-		linkea_buf.lb_len = ldata.ld_leh->leh_len;
-		rc = lod_sub_xattr_set(env, dto, &linkea_buf,
-				       XATTR_NAME_LINK, 0, th);
-		if (rc != 0)
-			GOTO(out, rc);
+			sname = lod_name_get(env, stripe_name,
+					     strlen(stripe_name));
+			rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
+					      sname, lu_object_fid(&dt->do_lu));
+			if (rc != 0)
+				GOTO(out, rc);
+
+			linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+			linkea_buf.lb_len = ldata.ld_leh->leh_len;
+			rc = lod_sub_xattr_set(env, dto, &linkea_buf,
+					       XATTR_NAME_LINK, 0, th);
+			if (rc != 0)
+				GOTO(out, rc);
+		}
 
 		rec->rec_fid = lu_object_fid(&dto->do_lu);
 		rc = lod_sub_insert(env, dt_object_child(dt),
@@ -4456,10 +4501,12 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 	LASSERT(ergo(lds != NULL,
 		     lds->lds_def_striping_set ||
 		     lds->lds_dir_def_striping_set));
+	LASSERT(lmu);
 
 	if (!LMVEA_DELETE_VALUES(lo->ldo_dir_stripe_count,
 				 lo->ldo_dir_stripe_offset)) {
-		if (!lmu) {
+		if (!lmu->lb_buf) {
+			/* mkdir by default LMV */
 			struct lmv_user_md_v1 *v1 = info->lti_ea_store;
 			int stripe_count = lo->ldo_dir_stripe_count;
 
@@ -4489,25 +4536,22 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 					       th);
 		if (rc != 0)
 			RETURN(rc);
-	} else {
+	} else if (lmu->lb_buf) {
 		/* foreign LMV EA case */
-		if (lmu) {
+		if (declare) {
 			struct lmv_foreign_md *lfm = lmu->lb_buf;
 
-			if (lfm->lfm_magic == LMV_MAGIC_FOREIGN) {
+			if (lfm->lfm_magic == LMV_MAGIC_FOREIGN)
 				rc = lod_declare_xattr_set_lmv(env, dt, attr,
 							       lmu, dof, th);
-			}
-		} else {
-			if (lo->ldo_is_foreign) {
-				LASSERT(lo->ldo_foreign_lmv != NULL &&
-					lo->ldo_foreign_lmv_size > 0);
-				info->lti_buf.lb_buf = lo->ldo_foreign_lmv;
-				info->lti_buf.lb_len = lo->ldo_foreign_lmv_size;
-				lmu = &info->lti_buf;
-				rc = lod_xattr_set_lmv(env, dt, lmu,
-						       XATTR_NAME_LMV, 0, th);
-			}
+		} else if (lo->ldo_is_foreign) {
+			LASSERT(lo->ldo_foreign_lmv != NULL &&
+				lo->ldo_foreign_lmv_size > 0);
+			info->lti_buf.lb_buf = lo->ldo_foreign_lmv;
+			info->lti_buf.lb_len = lo->ldo_foreign_lmv_size;
+			lmu = &info->lti_buf;
+			rc = lod_xattr_set_lmv(env, dt, lmu, XATTR_NAME_LMV, 0,
+					       th);
 		}
 	}
 
@@ -4609,10 +4653,11 @@ static int lod_declare_dir_striping_create(const struct lu_env *env,
 static int lod_dir_striping_create(const struct lu_env *env,
 				   struct dt_object *dt,
 				   struct lu_attr *attr,
+				   const struct lu_buf *lmu,
 				   struct dt_object_format *dof,
 				   struct thandle *th)
 {
-	return lod_dir_striping_create_internal(env, dt, attr, NULL, dof, th,
+	return lod_dir_striping_create_internal(env, dt, attr, lmu, dof, th,
 						false);
 }
 
@@ -5015,7 +5060,8 @@ static int lod_xattr_set(const struct lu_env *env,
 	    !strcmp(name, XATTR_NAME_LMV)) {
 		switch (fl) {
 		case LU_XATTR_CREATE:
-			rc = lod_dir_striping_create(env, dt, NULL, NULL, th);
+			rc = lod_dir_striping_create(env, dt, NULL, buf, NULL,
+						     th);
 			break;
 		case 0:
 		case LU_XATTR_REPLACE:
@@ -5716,7 +5762,7 @@ static void lod_ah_init(const struct lu_env *env,
 		const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
 
 		/* other default values are 0 */
-		lc->ldo_dir_stripe_offset = -1;
+		lc->ldo_dir_stripe_offset = LMV_OFFSET_DEFAULT;
 
 		/* no default striping configuration is needed for
 		 * foreign dirs
@@ -5733,14 +5779,11 @@ static void lod_ah_init(const struct lu_env *env,
 			lod_get_default_striping(env, lp, ah, lds);
 
 		/* It should always honour the specified stripes */
-		/* Note: old client (< 2.7)might also do lfs mkdir, whose EA
-		 * will have old magic. In this case, we should ignore the
-		 * stripe count and try to create dir by default stripe.
-		 */
 		if (ah->dah_eadata && ah->dah_eadata_len &&
 		    !ah->dah_eadata_is_dmv &&
 		    (le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC ||
-		     le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC_SPECIFIC)) {
+		     le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC_SPECIFIC ||
+		     le32_to_cpu(lum1->lum_magic) == LMV_MAGIC_V1)) {
 			lc->ldo_dir_stripe_count =
 				le32_to_cpu(lum1->lum_stripe_count);
 			lc->ldo_dir_stripe_offset =
@@ -6206,7 +6249,6 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 	} else if (dof->dof_type == DFT_DIR) {
 		struct seq_server_site *ss;
 		struct lu_buf buf = { NULL };
-		struct lu_buf *lmu = NULL;
 
 		ss = lu_site2seq(dt->do_lu.lo_dev->ld_site);
 
@@ -6248,12 +6290,11 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 					GOTO(out, rc = -EINVAL);
 			}
 		} else if (hint && hint->dah_eadata) {
-			lmu = &buf;
-			lmu->lb_buf = (void *)hint->dah_eadata;
-			lmu->lb_len = hint->dah_eadata_len;
+			buf.lb_buf = (void *)hint->dah_eadata;
+			buf.lb_len = hint->dah_eadata_len;
 		}
 
-		rc = lod_declare_dir_striping_create(env, dt, attr, lmu, dof,
+		rc = lod_declare_dir_striping_create(env, dt, attr, &buf, dof,
 						     th);
 	}
 out:
@@ -8689,6 +8730,7 @@ static int lod_dir_declare_layout_attach(const struct lu_env *env,
 	lo->ldo_dir_migrate_offset = lo->ldo_dir_stripe_count;
 	lo->ldo_dir_migrate_hash = le32_to_cpu(lmv->lmv_hash_type);
 	lo->ldo_dir_stripe_count += stripe_count;
+	lo->ldo_dir_layout_version++;
 	lo->ldo_dir_stripes_allocated += stripe_count;
 
 	/* plain directory split creates target as a plain directory, while

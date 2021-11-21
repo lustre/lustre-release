@@ -3507,18 +3507,23 @@ test_100c() {
 	replay_barrier mds2
 	$LFS mkdir -i1 -c2 $striped_dir
 
-	stack_trap fail_abort_cleanup RETURN
 	fail_abort mds2 abort_recov_mdt
 
-	createmany -o $striped_dir/f-%d 20 &&
-		error "createmany -o $DIR/$tfile should fail"
+	if (( $MDS1_VERSION >= $(version_code 2.15.54.138) )); then
+		# after 2.15.54.138 striped mkdir can replay by client request
+		createmany -o $striped_dir/f-%d 20 ||
+			error "createmany -o $DIR/$tfile failed"
+	fi
 
 	fail mds2
 
 	# LU-16159 abort_recovery will cancel update logs, the second recovery
 	# won't replay $striped_dir creation
-	(( $MDS1_VERSION >= $(version_code 2.15.52) )) ||
-		striped_dir_check_100 || error "striped dir check failed"
+	(( $MDS1_VERSION >= $(version_code 2.15.52) &&
+	   $MDS1_VERSION < $(version_code 2.15.54.138) )) &&
+		fail_abort_cleanup && return 0
+
+	striped_dir_check_100 || error "striped dir check failed"
 }
 run_test 100c "DNE: create striped dir, abort_recov_mdt mds2"
 
@@ -3553,6 +3558,37 @@ test_100d() {
 		grep -c index" 0 60 || error "update logs not canceled"
 }
 run_test 100d "DNE: cancel update logs upon recovery abort"
+
+test_100e() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.15.54.79) )) ||
+		skip "Need MDS version 2.15.54.79+"
+	[[ $FAILURE_MODE != "HARD" ||
+	   "$(facet_host mds1)" != "$(facet_host mds2)" ]] ||
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
+
+	local old
+	local new
+	local striped_dir=$DIR/$tdir/striped_dir
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	replay_barrier mds1
+	replay_barrier mds2
+
+	$LFS mkdir -i 0,1 $striped_dir
+	old=$($LFS getdirstripe $striped_dir)
+	echo $old
+
+	fail mds1,mds2
+
+	new=$($LFS getdirstripe $striped_dir)
+	echo $new
+	[ "$old" == "$new" ] ||
+		error "$striped_dir layout mismatch"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 100e "DNE: create striped dir on MDT0 and MDT1, fail MDT0, MDT1"
 
 test_101() { #LU-5648
 	mkdir -p $DIR/$tdir/d1

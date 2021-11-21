@@ -173,7 +173,8 @@ struct md_op_spec {
 		     sp_permitted:1, /* do not check permission */
 		     sp_migrate_close:1, /* close the file during migrate */
 		     sp_migrate_nsonly:1, /* migrate dirent only */
-		     sp_dmv_imp_inherit:1; /* implicit default LMV inherit */
+		     sp_dmv_imp_inherit:1, /* implicit default LMV inherit */
+		     sp_replay:1; /* replay, op may be partially executed */
 
 	/** to create directory */
 	const struct dt_index_features *sp_feat;

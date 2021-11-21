@@ -309,9 +309,9 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags)
 /**
  * prep ma_lmm/ma_lmv for md_attr from reply
  */
-static void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
-				     struct mdt_object *obj,
-				     struct md_attr *ma, __u64 open_flags)
+void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
+			      struct mdt_object *obj, struct md_attr *ma,
+			      __u64 open_flags)
 {
 	struct req_capsule *pill;
 

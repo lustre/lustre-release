@@ -217,6 +217,9 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 	rec->cr_suppgid1 = op_data->op_suppgids[0];
 	rec->cr_suppgid2 = op_data->op_suppgids[1];
 	flags = 0;
+
+	if (S_ISDIR(mode))
+		flags |= MDS_MKDIR_LMV;
 	if (op_data->op_bias & MDS_CREATE_VOLATILE)
 		flags |= MDS_OPEN_VOLATILE;
 	if (op_data->op_bias & MDS_SETSTRIPE_CREATE)

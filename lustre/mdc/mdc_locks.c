@@ -204,7 +204,7 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
 }
 
 /**
- * Save a large LOV EA into the request buffer so that it is available
+ * Save a large LOV/LMV EA into the request buffer so that it is available
  * for replay.  We don't do this in the initial request because the
  * original request doesn't need this buffer (at most it sends just the
  * lov_mds_md) and it is a waste of RAM/bandwidth to send the empty
@@ -216,10 +216,10 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
  * but this is incredibly unlikely, and questionable whether the client
  * could do MDS recovery under OOM anyways...
  */
-static int mdc_save_lovea(struct ptlrpc_request *req, void *data, u32 size)
+int mdc_save_lmm(struct ptlrpc_request *req, void *data, u32 size)
 {
 	struct req_capsule *pill = &req->rq_pill;
-	void *lovea;
+	void *lmm;
 	int rc = 0;
 
 	if (req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT) < size) {
@@ -235,10 +235,10 @@ static int mdc_save_lovea(struct ptlrpc_request *req, void *data, u32 size)
 	}
 
 	req_capsule_set_size(pill, &RMF_EADATA, RCL_CLIENT, size);
-	lovea = req_capsule_client_get(pill, &RMF_EADATA);
-	if (lovea) {
-		memcpy(lovea, data, size);
-		lov_fix_ea_for_replay(lovea);
+	lmm = req_capsule_client_get(pill, &RMF_EADATA);
+	if (lmm) {
+		memcpy(lmm, data, size);
+		lov_fix_ea_for_replay(lmm);
 	}
 
 	return rc;
@@ -799,8 +799,8 @@ int mdc_finish_enqueue(struct obd_export *exp,
 			 * (for example error one).
 			 */
 			if ((it->it_op & IT_OPEN) && req->rq_replay) {
-				rc = mdc_save_lovea(req, eadata,
-						    body->mbo_eadatasize);
+				rc = mdc_save_lmm(req, eadata,
+						  body->mbo_eadatasize);
 				if (rc) {
 					body->mbo_valid &= ~OBD_MD_FLEASIZE;
 					body->mbo_eadatasize = 0;
@@ -827,7 +827,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 			 * another set of OST objects).
 			 */
 			if (req->rq_transno)
-				(void)mdc_save_lovea(req, lvb_data, lvb_len);
+				mdc_save_lmm(req, lvb_data, lvb_len);
 		}
 	}
 

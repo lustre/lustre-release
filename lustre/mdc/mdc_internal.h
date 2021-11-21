@@ -103,6 +103,7 @@ struct obd_client_handle;
 int mdc_set_open_replay_data(struct obd_export *exp,
 			     struct obd_client_handle *och,
 			     struct lookup_intent *it);
+int mdc_save_lmm(struct ptlrpc_request *req, void *data, u32 size);
 
 void mdc_commit_open(struct ptlrpc_request *req);
 void mdc_replay_open(struct ptlrpc_request *req);

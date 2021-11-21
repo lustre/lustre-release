@@ -1656,6 +1656,8 @@ enum la_valid {
 			      MDS_OPEN_PCC | MDS_OP_WITH_FID |		\
 			      MDS_OPEN_DEFAULT_LMV)
 
+/* mkdir fetches LMV, reuse bit of MDS_OPEN_RESYNC */
+#define MDS_MKDIR_LMV	MDS_OPEN_RESYNC
 
 /********* Changelogs **********/
 /** Changelog record types */

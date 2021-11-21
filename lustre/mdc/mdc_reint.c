@@ -163,13 +163,14 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 		kernel_cap_t cap_effective, __u64 rdev,
 		struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *req;
-        int level, rc;
-        int count, resends = 0;
-        struct obd_import *import = exp->exp_obd->u.cli.cl_import;
-        int generation = import->imp_generation;
+	struct ptlrpc_request *req;
+	int level, rc;
+	int count, resends = 0;
+	struct obd_import *import = exp->exp_obd->u.cli.cl_import;
+	int generation = import->imp_generation;
 	LIST_HEAD(cancels);
-        ENTRY;
+
+	ENTRY;
 
 	/* For case if upper layer did not alloc fid, do it now. */
 	if (!fid_is_sane(&op_data->op_fid2)) {
@@ -183,24 +184,24 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
 rebuild:
-        count = 0;
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
-            (fid_is_sane(&op_data->op_fid1)))
-                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
-                                                &cancels, LCK_EX,
-                                                MDS_INODELOCK_UPDATE);
+	count = 0;
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
+	    (fid_is_sane(&op_data->op_fid1)))
+		count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+						&cancels, LCK_EX,
+						MDS_INODELOCK_UPDATE);
 
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_MDS_REINT_CREATE_ACL);
-        if (req == NULL) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
-                RETURN(-ENOMEM);
-        }
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(-ENOMEM);
+	}
 
-        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-                             op_data->op_namelen + 1);
-        req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
-                             data && datalen ? datalen : 0);
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+			     op_data->op_namelen + 1);
+	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+			     data && datalen ? datalen : 0);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
 			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?
@@ -228,33 +229,35 @@ rebuild:
 		RETURN(rc);
 	}
 
-        /*
-         * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
-         * tgt, for symlinks or lov MD data.
-         */
+	/*
+	 * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
+	 * tgt, for symlinks or lov MD data.
+	 */
 	mdc_create_pack(&req->rq_pill, op_data, data, datalen, mode, uid,
 			gid, cap_effective, rdev);
 
-        ptlrpc_request_set_replen(req);
+	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+			     exp->exp_obd->u.cli.cl_default_mds_easize);
+	ptlrpc_request_set_replen(req);
 
 	/* ask ptlrpc not to resend on EINPROGRESS since we have our own retry
 	 * logic here */
 	req->rq_no_retry_einprogress = 1;
 
-        if (resends) {
-                req->rq_generation_set = 1;
-                req->rq_import_generation = generation;
+	if (resends) {
+		req->rq_generation_set = 1;
+		req->rq_import_generation = generation;
 		req->rq_sent = ktime_get_real_seconds() + resends;
-        }
-        level = LUSTRE_IMP_FULL;
+	}
+	level = LUSTRE_IMP_FULL;
  resend:
 	rc = mdc_reint(req, level);
 
-        /* Resend if we were told to. */
-        if (rc == -ERESTARTSYS) {
-                level = LUSTRE_IMP_RECOVER;
-                goto resend;
-        } else if (rc == -EINPROGRESS) {
+	/* Resend if we were told to. */
+	if (rc == -ERESTARTSYS) {
+		level = LUSTRE_IMP_RECOVER;
+		goto resend;
+	} else if (rc == -EINPROGRESS) {
 		/* Retry create infinitely until succeed or get other
 		 * error code or interrupted. */
 		ptlrpc_req_finished(req);
@@ -268,14 +271,48 @@ rebuild:
 			       PFID(&op_data->op_fid1),
 			       PFID(&op_data->op_fid2));
 			goto rebuild;
-                } else {
-                        CDEBUG(D_HA, "resend cross eviction\n");
-                        RETURN(-EIO);
-                }
-        }
+		} else {
+			CDEBUG(D_HA, "resend cross eviction\n");
+			RETURN(-EIO);
+		}
+	} else if (rc == 0 && S_ISDIR(mode)) {
+		struct mdt_body *body;
 
-        *request = req;
-        RETURN(rc);
+		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+		if (body == NULL) {
+			rc = -EPROTO;
+			CERROR("%s: cannot swab mdt_body: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+			RETURN(rc);
+		}
+
+		if ((body->mbo_valid & (OBD_MD_FLDIREA | OBD_MD_MEA)) ==
+		    (OBD_MD_FLDIREA | OBD_MD_MEA)) {
+			void *eadata;
+
+			/* clear valid, because mkdir doesn't need to initialize
+			 * LMV, which will be delayed to lookup.
+			 */
+			body->mbo_valid &= ~(OBD_MD_FLDIREA | OBD_MD_MEA);
+			mdc_update_max_ea_from_body(exp, body);
+			/* The eadata is opaque; just check that it is there.
+			 * Eventually, obd_unpackmd() will check the contents.
+			 */
+			eadata = req_capsule_server_sized_get(&req->rq_pill,
+							  &RMF_MDT_MD,
+							  body->mbo_eadatasize);
+			if (eadata == NULL)
+				RETURN(-EPROTO);
+
+			/* save the reply LMV EA in case we have to replay a
+			 * create for recovery.
+			 */
+			rc = mdc_save_lmm(req, eadata, body->mbo_eadatasize);
+		}
+	}
+
+	*request = req;
+	RETURN(rc);
 }
 
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
