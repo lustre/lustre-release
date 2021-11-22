@@ -1353,6 +1353,28 @@ bio_integrity_prep_fn, [
 ])
 ]) # LC_BIO_INTEGRITY_PREP_FN
 
+# LC_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
+#
+# 13 kernel integrity API has changed and in 4.13+
+# (as well as in rhel 8.4) bio_integrity_prep() returns boolean true
+# on success.
+#
+AC_DEFUN([LC_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL], [
+LB_CHECK_COMPILE([if 'bio_integrity_prep_fn' returns bool],
+bio_integrity_prep, [
+       #include <linux/bio.h>
+       #include <linux/typecheck.h>
+],[
+	#pragma GCC diagnostic warning "-Werror"
+	typedef bool (*bio_integrity_prep_type)(struct bio *bio) ;
+
+	typecheck_fn(bio_integrity_prep_type, bio_integrity_prep);
+],[
+       AC_DEFINE(HAVE_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL, 1,
+               [bio_integrity_prep_fn returns bool])
+])
+]) # LC_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
+
 #
 # LC_HAVE_BI_OPF
 #
@@ -2583,6 +2605,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.13
 	LC_BIO_INTEGRITY_ENABLED
+	LC_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
 	LC_HAVE_GET_INODE_USAGE
 
 	# 4.14
