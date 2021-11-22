@@ -419,10 +419,17 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (info->fti_attr.la_size == 0) {
 		/* object is just created, initialize last id */
-		if (OBD_FAIL_CHECK(OBD_FAIL_OFD_SET_OID))
-			ofd_seq_last_oid_set(oseq, 0xffffff00);
-		else
+		if (OBD_FAIL_CHECK(OBD_FAIL_OFD_SET_OID)) {
+			struct seq_server_site *ss = &ofd->ofd_seq_site;
+			struct lu_client_seq *client_seq = ss->ss_client_seq;
+			__u64 seq_width = fid_seq_is_norm(seq) ?
+				min(OBIF_MAX_OID, client_seq->lcs_width) :
+				min(IDIF_MAX_OID, client_seq->lcs_width);
+
+			ofd_seq_last_oid_set(oseq, seq_width & ~0xffULL);
+		} else {
 			ofd_seq_last_oid_set(oseq, OFD_INIT_OBJID);
+		}
 		ofd_seq_last_oid_write(env, ofd, oseq);
 	} else if (info->fti_attr.la_size == sizeof(lastid)) {
 		info->fti_off = 0;

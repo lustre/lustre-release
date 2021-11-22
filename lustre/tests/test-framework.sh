@@ -36,6 +36,8 @@ export UMOUNT=${UMOUNT:-"umount -d"}
 export LSNAPSHOT_CONF="/etc/ldev.conf"
 export LSNAPSHOT_LOG="/var/log/lsnapshot.log"
 
+export DATA_SEQ_MAX_WIDTH=0x1ffffff
+
 # sles12 umount has a issue with -d option
 [ -e /etc/SuSE-release ] && grep -w VERSION /etc/SuSE-release | grep -wq 12 && {
 	export UMOUNT="umount"
@@ -2142,6 +2144,10 @@ mount_facet() {
 		do_facet ${facet} \
 			"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
 		RC=${PIPESTATUS[0]}
+		if [[ ${facet} =~ ost ]]; then
+			do_facet ${facet} "$LCTL set_param \
+				seq.cli-$(devicelabel $facet $dm_dev)-super.width=$OSTSEQWIDTH"
+		fi
 	fi
 
 	if [ $RC -ne 0 ]; then
@@ -7108,7 +7114,7 @@ ostname_from_index() {
 }
 
 mdtname_from_index() {
-	local uuid=$(mdtuuid_from_index $1)
+	local uuid=$(mdtuuid_from_index $1 $2)
 	echo ${uuid/_UUID/}
 }
 
@@ -11122,7 +11128,7 @@ consume_precreations() {
 	local extra=${4:-2}
 	local OST=$(ostname_from_index $OSTIDX $dir)
 
-	test_mkdir -p $dir/${OST}
+	mkdir_on_mdt -i $(facet_index $mfacet) $dir/${OST}
 	$LFS setstripe -i $OSTIDX -c 1 ${dir}/${OST}
 
 	# on the mdt's osc
@@ -11169,6 +11175,39 @@ exhaust_all_precreations() {
 		__exhaust_precreations $i $1 -1
 	done
 	sleep_maxage
+}
+
+force_new_seq() {
+	local mfacet=$1
+	local MDTIDX=$(facet_index $mfacet)
+	local MDT=$(mdtname_from_index $MDTIDX $DIR)
+	local i
+
+#define OBD_FAIL_OSP_FORCE_NEW_SEQ		0x210a
+	do_facet $mfacet $LCTL set_param fail_loc=0x210a
+	mkdir_on_mdt -i $MDTIDX $DIR/${MDT}
+	for (( i=0; i < OSTCOUNT; i++ )) ; do
+		# consume preallocated objects, to wake up precreate thread
+		consume_precreations $DIR/${MDT} $mfacet $i
+	done
+	do_facet $mfacet $LCTL set_param fail_loc=0
+	rm -rf $DIR/${MDT}
+}
+
+force_new_seq_all() {
+	local i
+	for (( i=0; i < MDSCOUNT; i++ )) ; do
+		force_new_seq mds$((i + 1))
+	done
+	sleep_maxage
+}
+
+ost_set_temp_seq_width_all() {
+	local osts=$(comma_list $(osts_nodes))
+	local width=$(do_facet ost1 $LCTL get_param -n seq.*OST0000-super.width)
+
+	do_nodes $osts $LCTL set_param seq.*OST*-super.width=$1
+	stack_trap "do_nodes $osts $LCTL set_param seq.*OST*-super.width=$width"
 }
 
 verify_yaml_available() {

@@ -53,6 +53,8 @@ if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
 	do_facet $SINGLEMDS "sync; sleep 10; sync; sleep 10; sync"
 fi
 
+force_new_seq mds1
+
 LU482_FAILED=$(mktemp -u $TMP/$TESTSUITE.lu482.XXXXXX)
 test_0a() {
 	echo "Check file is LU482_FAILED=$LU482_FAILED"

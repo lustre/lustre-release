@@ -38,6 +38,8 @@ if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
     do_facet $SINGLEMDS sync
 fi
 
+force_new_seq mds1
+
 test_0() {
     replay_barrier mds1
     fail mds1

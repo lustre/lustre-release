@@ -527,16 +527,21 @@ static ssize_t prealloc_next_id_show(struct kobject *kobj,
 	struct osp_device *osp = dt2osp_dev(dt);
 	struct lu_fid *fid;
 	u64 id;
+	__u64 seq_width;
 
 	if (!osp->opd_pre)
 		return -EINVAL;
 
 	fid = &osp->opd_pre_used_fid;
+	seq_width = osp->opd_pre_seq_width;
 	if (fid_is_idif(fid)) {
 		id = fid_idif_id(fid_seq(fid), fid_oid(fid), fid_ver(fid));
-		id++;
+		if (unlikely(id >= min(IDIF_MAX_OID, seq_width)))
+			id = 1;
+		else
+			id++;
 	} else {
-		id = unlikely(fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH) ?
+		id = unlikely(fid_oid(fid) >= min(OBIF_MAX_OID, seq_width)) ?
 			1 : fid_oid(fid) + 1;
 	}
 

@@ -555,7 +555,7 @@ static ssize_t ldebugfs_client_fid_width_seq_write(struct file *file,
 
 	mutex_lock(&seq->lcs_mutex);
 	if (seq->lcs_type == LUSTRE_SEQ_DATA)
-		max = LUSTRE_DATA_SEQ_MAX_WIDTH;
+		max = IDIF_MAX_OID;
 	else
 		max = LUSTRE_METADATA_SEQ_MAX_WIDTH;
 

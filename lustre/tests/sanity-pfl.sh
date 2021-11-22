@@ -40,6 +40,8 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
 
+force_new_seq mds1
+
 test_0a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
@@ -71,6 +73,8 @@ test_0b() {
 		grep "connect_flags:.*overstriping") ]] ||
 		skip "server does not support overstriping"
 	large_xattr_enabled || skip_env "no large xattr support"
+
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
 	local comp_file=$DIR/$tdir/$tfile
 
@@ -114,6 +118,8 @@ test_0c() {
 		skip "skipped for lustre < $SEL_VER"
 
 	large_xattr_enabled || skip_env "no large xattr support"
+
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
 	local comp_file=$DIR/$tdir/$tfile
 
@@ -252,6 +258,8 @@ test_1c() {
 		grep "connect_flags:.*overstriping") ]] ||
 		skip "server does not support overstriping"
 	large_xattr_enabled || skip_env "no large xattr support"
+
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M

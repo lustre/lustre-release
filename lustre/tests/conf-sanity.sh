@@ -5567,6 +5567,8 @@ test_69() {
 
 	setup
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
+		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 
 	# use OST0000 since it probably has the most creations
 	local OSTNAME=$(ostname_from_index 0)
@@ -8019,6 +8021,8 @@ test_101a() {
 	setup
 
 	mkdir $DIR1/$tdir
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
+		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 	createmany -o $DIR1/$tdir/$tfile-%d 50000 &
 	createmany_pid=$!
 	# MDT->OST reconnection causes MDT<->OST last_id synchornisation
@@ -8342,6 +8346,8 @@ test_106() {
 	reformat
 	setup_noconfig
 	mkdir -p $DIR/$tdir || error "create $tdir failed"
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
+		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 	lfs setstripe -c 1 -i 0 $DIR/$tdir
 #define OBD_FAIL_CAT_RECORDS                        0x1312
 	do_facet mds1 $LCTL set_param fail_loc=0x1312 fail_val=$repeat

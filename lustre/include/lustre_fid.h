@@ -179,9 +179,9 @@ enum {
 	LUSTRE_METADATA_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
 
 	/*
-	 * This is how many data FIDs could be allocated in one sequence(4B - 1)
+	 * This is how many data FIDs could be allocated in one sequence(32M - 1)
 	 */
-	LUSTRE_DATA_SEQ_MAX_WIDTH = 0x00000000FFFFFFFFULL,
+	LUSTRE_DATA_SEQ_MAX_WIDTH = 0x0000000001FFFFFFULL,
 
 	/*
 	 * How many sequences to allocate to a client at once.

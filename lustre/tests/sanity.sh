@@ -2512,6 +2512,8 @@ test_27Cd() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+
 	test_mkdir -p $DIR/$tdir
 	local setcount=$LOV_MAX_STRIPE_COUNT
 
@@ -13474,6 +13476,8 @@ run_test 121 "read cancel race ========="
 test_123a_base() { # was test 123, statahead(bug 11401)
 	local lsx="$1"
 
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+
 	SLOWOK=0
 	if ! grep -q "processor.*: 1" /proc/cpuinfo; then
 		log "testing UP system. Performance may be lower than expected."
@@ -15149,6 +15153,8 @@ test_135() {
 	#set only one record at plain llog
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1319 fail_val=1
 
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+
 	#fill already existed plain llog each 64767
 	#wrapping whole catalog
 	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 1))
@@ -15178,6 +15184,8 @@ test_136() {
 	#set only one record at plain llog
 #define OBD_FAIL_CATALOG_FULL_CHECK                0x131a
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x131a fail_val=1
+
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
 	#fill already existed 2 plain llogs each 64767
 	#wrapping whole catalog

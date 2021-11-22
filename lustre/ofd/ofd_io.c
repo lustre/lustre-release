@@ -736,19 +736,11 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			diff = oid - ofd_seq_last_oid(oseq);
 
 			/* Do sync create if the seq is about to used up */
-			if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq)) {
-				if (unlikely(oid >= IDIF_MAX_OID))
-					sync = 1;
-			} else if (fid_seq_is_norm(seq)) {
-				if (unlikely(oid >=
-					     LUSTRE_DATA_SEQ_MAX_WIDTH - 1))
-					sync = 1;
-			} else {
-				CERROR("%s : invalid o_seq "DOSTID"\n",
-				       ofd_name(ofd), POSTID(&oa->o_oi));
+			sync = ofd_seq_is_exhausted(ofd, oa);
+			if (sync < 0) {
 				mutex_unlock(&oseq->os_create_lock);
 				ofd_seq_put(env, oseq);
-				GOTO(out, rc = -EINVAL);
+				GOTO(out, rc = sync);
 			}
 
 			while (diff > 0) {

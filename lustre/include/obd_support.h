@@ -743,6 +743,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_CON_EVENT_DELAY		0x2107
 #define OBD_FAIL_OSP_PRECREATE_PAUSE		0x2108
 #define OBD_FAIL_OSP_GET_LAST_FID		0x2109
+#define OBD_FAIL_OSP_FORCE_NEW_SEQ		0x210a
 
 /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200

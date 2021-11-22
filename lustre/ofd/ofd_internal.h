@@ -523,4 +523,21 @@ static inline bool ofd_layout_version_less(__u32 req_version,
 		((req & LU_LAYOUT_HIGEN) == (ondisk & LU_LAYOUT_HIGEN));
 }
 
+static inline int ofd_seq_is_exhausted(struct ofd_device *ofd,
+				       const struct obdo *oa)
+{
+	struct seq_server_site *ss = &ofd->ofd_seq_site;
+	__u64 seq_width = ss->ss_client_seq->lcs_width;
+	__u64 seq = ostid_seq(&oa->o_oi);
+	__u64 oid = ostid_id(&oa->o_oi);
+
+	if (fid_seq_is_norm(seq))
+		return oid >= min(seq_width, OBIF_MAX_OID);
+	if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq))
+		return oid >= min(seq_width, IDIF_MAX_OID);
+	CERROR("%s : invalid o_seq "DOSTID"\n",
+	       ofd_name(ofd), POSTID(&oa->o_oi));
+	return -EINVAL;
+}
+
 #endif /* _OFD_INTERNAL_H */

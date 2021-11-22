@@ -73,6 +73,7 @@ struct osp_precreate {
 	struct lu_fid			 osp_pre_last_created_fid;
 	/* how many ids are reserved in declare, we shouldn't block in create */
 	__u64				 osp_pre_reserved;
+	__u64				 osp_pre_seq_width;
 	/* consumers (who needs new ids) wait here */
 	wait_queue_head_t		 osp_pre_user_waitq;
 	/* current precreation status: working, failed, stopping? */
@@ -279,6 +280,7 @@ struct osp_device {
 #define opd_pre_used_fid		opd_pre->osp_pre_used_fid
 #define opd_pre_last_created_fid	opd_pre->osp_pre_last_created_fid
 #define opd_pre_reserved		opd_pre->osp_pre_reserved
+#define opd_pre_seq_width		opd_pre->osp_pre_seq_width
 #define opd_pre_user_waitq		opd_pre->osp_pre_user_waitq
 #define opd_pre_status			opd_pre->osp_pre_status
 #define opd_pre_create_count		opd_pre->osp_pre_create_count
@@ -526,6 +528,12 @@ static inline int osp_fid_diff(const struct lu_fid *fid1,
 		       fid_idif_id(fid2->f_seq, fid2->f_oid, 0);
 	}
 
+	/* Changed to new seq before replay, we always start with oid 2 in
+	 * a new seq. In this case just return 1.
+	 */
+	if (fid_seq(fid1) != fid_seq(fid2) && fid_oid(fid1) == 2)
+		return 1;
+
 	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID", fid2:"DFID"\n",
 		 PFID(fid1), PFID(fid2));
 
@@ -553,10 +561,14 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 	if (diff > 0) {
 		if (diff > 1) {
 			d->opd_gap_start_fid = d->opd_last_used_fid;
-			if (fid_oid(gap_start) == LUSTRE_DATA_SEQ_MAX_WIDTH) {
-				gap_start->f_seq++;
-				gap_start->f_oid = fid_is_idif(gap_start) ?
-							       0 : 1;
+			if (fid_is_idif(gap_start) &&
+			    unlikely(fid_oid(gap_start) == OBIF_MAX_OID)) {
+				struct ost_id oi;
+				__u32 idx = fid_idif_ost_idx(gap_start);
+
+				fid_to_ostid(gap_start, &oi);
+				oi.oi.oi_id++;
+				ostid_to_fid(gap_start, &oi, idx);
 			} else {
 				gap_start->f_oid++;
 			}
@@ -569,26 +581,31 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 	}
 }
 
-static int osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid)
+static bool osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid,
+			   struct osp_device *osp)
 {
+	__u64 seq_width = osp->opd_pre_seq_width;
+
 	/* Skip IDIF sequence for MDT0000 */
 	if (fid_is_idif(fid))
-		return 1;
-	return fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH;
+		return true;
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_FORCE_NEW_SEQ))
+		return true;
+	return fid_oid(fid) >= min(OBIF_MAX_OID, seq_width);
 }
 
-static inline int osp_precreate_end_seq_nolock(const struct lu_env *env,
+static inline bool osp_precreate_end_seq_nolock(const struct lu_env *env,
 					       struct osp_device *osp)
 {
 	struct lu_fid *fid = &osp->opd_pre_last_created_fid;
 
-	return osp_fid_end_seq(env, fid);
+	return osp_fid_end_seq(env, fid, osp);
 }
 
-static inline int osp_precreate_end_seq(const struct lu_env *env,
+static inline bool osp_precreate_end_seq(const struct lu_env *env,
 					struct osp_device *osp)
 {
-	int rc;
+	bool rc;
 
 	spin_lock(&osp->opd_pre_lock);
 	rc = osp_precreate_end_seq_nolock(env, osp);

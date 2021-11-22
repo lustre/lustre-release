@@ -1449,20 +1449,22 @@ out_put:
  */
 static int ofd_create_hdl(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-	struct ost_body		*repbody;
-	const struct obdo	*oa = &tsi->tsi_ost_body->oa;
-	struct obdo		*rep_oa;
-	struct obd_export	*exp = tsi->tsi_exp;
-	struct ofd_device	*ofd = ofd_exp(exp);
-	u64			 seq = ostid_seq(&oa->o_oi);
-	u64			 oid = ostid_id(&oa->o_oi);
-	struct ofd_seq		*oseq;
-	int			 sync_trans = 0;
-	long			 granted = 0;
-	ktime_t			 kstart = ktime_get();
-	s64			 diff;
-	int			 rc = 0;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct ost_body *repbody;
+	const struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct obdo *rep_oa;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct seq_server_site *ss = &ofd->ofd_seq_site;
+	__u64 seq_width = ss->ss_client_seq->lcs_width;
+	u64 seq = ostid_seq(&oa->o_oi);
+	u64 oid = ostid_id(&oa->o_oi);
+	struct ofd_seq *oseq;
+	int sync_trans = 0;
+	long granted = 0;
+	ktime_t kstart = ktime_get();
+	s64 diff;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1485,6 +1487,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 	rep_oa = &repbody->oa;
 	rep_oa->o_oi = oa->o_oi;
+	rep_oa->o_valid |= OBD_MD_FLSIZE;
+	rep_oa->o_size = seq_width;
 
 	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
@@ -1578,18 +1582,9 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		} else {
 			diff = oid - ofd_seq_last_oid(oseq);
 			/* Do sync create if the seq is about to used up */
-			if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq)) {
-				if (unlikely(oid >= IDIF_MAX_OID))
-					sync_trans = 1;
-			} else if (fid_seq_is_norm(seq)) {
-				if (unlikely(oid >=
-					     LUSTRE_DATA_SEQ_MAX_WIDTH - 1))
-					sync_trans = 1;
-			} else {
-				CERROR("%s : invalid o_seq "DOSTID"\n",
-				       ofd_name(ofd), POSTID(&oa->o_oi));
-				GOTO(out, rc = -EINVAL);
-			}
+			sync_trans = ofd_seq_is_exhausted(ofd, oa);
+			if (sync_trans < 0)
+				GOTO(out, rc = sync_trans);
 
 			if (diff <= -OST_MAX_PRECREATE) {
 				/* LU-5648 */
@@ -1625,12 +1620,12 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		 * LFSCK will eventually clean up any orphans. LU-14 */
 		if (diff > 5 * OST_MAX_PRECREATE) {
 			/* Message below is checked in conf-sanity test_122b */
-			LCONSOLE_WARN("%s: precreate FID "DOSTID" is over %lld higher than LAST_ID "DOSTID", only precreating the last %u objects. OST replaced or reformatted?\n",
+			LCONSOLE_WARN("%s: precreate FID "DOSTID" is over %lld higher than LAST_ID "DOSTID", only precreating the last %llu objects. OST replaced or reformatted?\n",
 				      ofd_name(ofd), POSTID(&oa->o_oi), diff,
 				      POSTID(&oseq->os_oi),
-				      OST_MAX_PRECREATE);
+				      min(seq_width, (__u64)OST_MAX_PRECREATE));
 			/* From last created */
-			diff = OST_MAX_PRECREATE;
+			diff = min(seq_width, (__u64)OST_MAX_PRECREATE);
 			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
 			/* no sync_trans when recreating last batch */
 			sync_trans = 0;
