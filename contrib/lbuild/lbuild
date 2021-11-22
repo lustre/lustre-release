@@ -1470,6 +1470,8 @@ basearch() {
 
     if [[ $arch = i[3456]86 ]]; then
         echo "i386"
+    elif [[ $arch = aarch64 ]]; then
+        echo "arm64"
     else
         echo "$arch"
     fi

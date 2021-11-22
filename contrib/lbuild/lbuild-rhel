@@ -58,13 +58,18 @@ prepare_and_build_srpm() {
 	popd >/dev/null
 
 	# copy our .config into the RPM build tree
+	if [[ $DISTROMAJ == "rhel7" ]];then
+		local cfg_file_name=kernel-$lnxmaj-${TARGET_ARCH}.config
+	else
+		local cfg_file_name=kernel-${TARGET_ARCH}.config
+	fi
 	(echo "# $(basearch ${TARGET_ARCH})"; cat $CONFIG_FILE) > \
-		SOURCES/kernel-$lnxmaj-${TARGET_ARCH}.config
+		SOURCES/$cfg_file_name
 
 	# XXX - hackity hack -- until we get (or generate from the base
 	#                       config) configs for xen and debug
 	local f=""
-	for f in SOURCES/kernel-${lnxmaj}-*.config; do
+	for f in SOURCES/kernel-*.config; do
 		grep -q "^CONFIG_SD_IOSTATS=y" $f || \
 		echo "CONFIG_SD_IOSTATS=y" >> $f
 	done
