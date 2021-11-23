@@ -316,11 +316,9 @@ enum fid_seq {
 };
 
 #define OBIF_OID_MAX_BITS           32
-#define OBIF_MAX_OID                (1ULL << OBIF_OID_MAX_BITS)
-#define OBIF_OID_MASK               ((1ULL << OBIF_OID_MAX_BITS) - 1)
+#define OBIF_MAX_OID                ((1ULL << OBIF_OID_MAX_BITS) - 1)
 #define IDIF_OID_MAX_BITS           48
-#define IDIF_MAX_OID                (1ULL << IDIF_OID_MAX_BITS)
-#define IDIF_OID_MASK               ((1ULL << IDIF_OID_MAX_BITS) - 1)
+#define IDIF_MAX_OID                ((1ULL << IDIF_OID_MAX_BITS) - 1)
 
 /** OID for FID_SEQ_SPECIAL */
 enum special_oid {

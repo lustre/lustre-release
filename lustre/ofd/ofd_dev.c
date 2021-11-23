@@ -1579,7 +1579,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			diff = oid - ofd_seq_last_oid(oseq);
 			/* Do sync create if the seq is about to used up */
 			if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq)) {
-				if (unlikely(oid >= IDIF_MAX_OID - 1))
+				if (unlikely(oid >= IDIF_MAX_OID))
 					sync_trans = 1;
 			} else if (fid_seq_is_norm(seq)) {
 				if (unlikely(oid >=

@@ -1476,7 +1476,7 @@ int jt_obd_setattr(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (objid >= OBIF_MAX_OID) {
+	if (objid > OBIF_MAX_OID) {
 		fprintf(stderr, "error: %s: invalid objid '%s'\n",
 			jt_cmdname(argv[0]), argv[1]);
 		return CMD_HELP;
@@ -1563,7 +1563,7 @@ int jt_obd_test_setattr(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-		if (objid >= OBIF_MAX_OID) {
+		if (objid > OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), (unsigned long long)objid);
 			return -E2BIG;
@@ -1656,7 +1656,7 @@ int jt_obd_destroy(int argc, char **argv)
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	for (i = 1, next_count = verbose; i <= count && shmem_running();
 	     i++, id++) {
-		if (id >= OBIF_MAX_OID) {
+		if (id > OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), (unsigned long long)id);
 			return -E2BIG;
@@ -1700,7 +1700,7 @@ static int jt_str_to_ost_id(const char *str, struct ost_id *oi)
 	if (*end == '\0') {
 		/* If str is a single number then assume old echo
 		 * client usage. */
-		if (oid >= OBIF_MAX_OID)
+		if (oid > OBIF_MAX_OID)
 			return -EINVAL;
 
 		ostid_set_seq_echo(oi);
@@ -1847,7 +1847,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-		if (objid >= OBIF_MAX_OID) {
+		if (objid > OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), (unsigned long long)objid);
 			return -E2BIG;
@@ -2058,7 +2058,7 @@ int jt_obd_test_brw(int argc, char **argv)
 #endif
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-	if (objid >= OBIF_MAX_OID) {
+	if (objid > OBIF_MAX_OID) {
 		fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 			jt_cmdname(argv[0]), (unsigned long long)objid);
 		return -E2BIG;

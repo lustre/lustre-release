@@ -91,7 +91,7 @@ static inline __u64 ostid_seq(const struct ost_id *ostid)
 static inline __u64 ostid_id(const struct ost_id *ostid)
 {
 	if (fid_seq_is_mdt0(ostid->oi.oi_seq))
-		return ostid->oi.oi_id & IDIF_OID_MASK;
+		return ostid->oi.oi_id & IDIF_MAX_OID;
 
 	if (fid_seq_is_default(ostid->oi.oi_seq))
 		return ostid->oi.oi_id;
@@ -212,7 +212,7 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 		 * been in production for years.  This can handle create rates
 		 * of 1M objects/s/OST for 9 years, or combinations thereof.
 		 */
-		if (oid >= IDIF_MAX_OID)
+		if (oid > IDIF_MAX_OID)
 			return -EBADF;
 
 		fid->f_seq = fid_idif_seq(oid, ost_idx);
