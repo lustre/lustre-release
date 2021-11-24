@@ -355,6 +355,15 @@ reprocess:
 				continue;
 			}
 
+			if (req->l_req_mode == LCK_PR &&
+			    lock->l_granted_mode == LCK_PR &&
+			    lock->l_policy_data.l_flock.start <=
+				req->l_policy_data.l_flock.start &&
+			    lock->l_policy_data.l_flock.end >=
+				req->l_policy_data.l_flock.end) {
+				/* there can't be granted WR lock */
+				break;
+			}
 			/* locks are compatible, overlap doesn't matter */
 			if (lockmode_compat(lock->l_granted_mode, mode))
 				continue;
