@@ -775,6 +775,15 @@ static ssize_t brw_stats_seq_write(struct file *file,
 
 LDEBUGFS_SEQ_FOPS(brw_stats);
 
+void lprocfs_init_brw_stats(struct brw_stats *brw_stats)
+{
+	int i;
+
+	for (i = 0; i < BRW_RW_STATS_NUM; i++)
+		spin_lock_init(&brw_stats->bs_hist[i].oh_lock);
+}
+EXPORT_SYMBOL(lprocfs_init_brw_stats);
+
 void ldebugfs_register_osd_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats,
 				 struct lprocfs_stats *stats)
@@ -786,7 +795,6 @@ void ldebugfs_register_osd_stats(struct dentry *parent,
 	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
 		struct brw_stats_props *props = brw_stats->bs_props;
 
-		spin_lock_init(&brw_stats->bs_hist[i].oh_lock);
 		if (i % 2) {
 			props[i / 2].bsp_name = brw_props[i / 2].bsp_name;
 			props[i / 2].bsp_units = brw_props[i / 2].bsp_units;

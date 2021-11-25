@@ -1191,6 +1191,8 @@ static int osd_mount(const struct lu_env *env,
 	if (opts && strstr(opts, "resetoi"))
 		resetoi = true;
 
+	lprocfs_init_brw_stats(&o->od_brw_stats);
+
 	o->od_in_init = 1;
 	rc = osd_scrub_setup(env, o, interval, resetoi);
 	o->od_in_init = 0;

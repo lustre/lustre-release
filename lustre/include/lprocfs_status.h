@@ -416,6 +416,8 @@ struct brw_stats {
 	struct brw_stats_props	bs_props[BRW_RW_STATS_NUM / 2];
 };
 
+void lprocfs_init_brw_stats(struct brw_stats *brw_stats);
+
 void ldebugfs_register_osd_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats,
 				 struct lprocfs_stats *stats);

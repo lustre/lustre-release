@@ -8169,6 +8169,9 @@ static int osd_device_init0(const struct lu_env *env,
 		restored = true;
 
 	INIT_LIST_HEAD(&o->od_ios_list);
+
+	lprocfs_init_brw_stats(&o->od_brw_stats);
+
 	/* setup scrub, including OI files initialization */
 	o->od_in_init = 1;
 	rc = osd_scrub_setup(env, o, restored);
