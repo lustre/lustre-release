@@ -2273,7 +2273,7 @@ __u32 lustre_msg_hdr_size(__u32 magic, __u32 count);
 __u32 lustre_msg_size(__u32 magic, int count, __u32 *lengths);
 __u32 lustre_msg_size_v2(int count, __u32 *lengths);
 __u32 lustre_packed_msg_size(struct lustre_msg *msg);
-__u32 lustre_msg_early_size(void);
+extern __u32 lustre_msg_early_size;
 void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, __u32 n, __u32 min_size);
 void *lustre_msg_buf(struct lustre_msg *m, __u32 n, __u32 minlen);
 __u32 lustre_msg_buflen(struct lustre_msg *m, __u32 n);

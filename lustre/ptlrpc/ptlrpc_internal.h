@@ -271,6 +271,7 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 struct ptlrpc_reply_state *
 lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt);
 void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
+void lustre_msg_early_size_init(void); /* just for init */
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);

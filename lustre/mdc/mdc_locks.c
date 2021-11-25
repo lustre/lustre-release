@@ -400,7 +400,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	/* Get real repbuf allocated size as rounded up power of 2 */
 	repsize = size_roundup_power2(req->rq_replen +
-				      lustre_msg_early_size());
+				      lustre_msg_early_size);
 	/* Estimate free space for DoM files in repbuf */
 	repsize_estimate = repsize - (req->rq_replen -
 			   mdt_md_capsule_size +
@@ -418,7 +418,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		CDEBUG(D_INFO, "Increase repbuf by %d bytes, total: %d\n",
 		       repsize, req->rq_replen);
 		repsize = size_roundup_power2(req->rq_replen +
-					      lustre_msg_early_size());
+					      lustre_msg_early_size);
 	}
 	/* The only way to report real allocated repbuf size to the server
 	 * is the lm_repsize but it must be set prior buffer allocation itself

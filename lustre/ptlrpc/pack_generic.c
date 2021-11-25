@@ -95,14 +95,16 @@ int lustre_msg_check_version(struct lustre_msg *msg,
 #undef LUSTRE_MSG_MAGIC_V1
 }
 
+__u32 lustre_msg_early_size;
+EXPORT_SYMBOL(lustre_msg_early_size);
+
 /* early reply size */
-__u32 lustre_msg_early_size()
+void lustre_msg_early_size_init(void)
 {
 	__u32 pblen = sizeof(struct ptlrpc_body);
 
-	return lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pblen);
+	lustre_msg_early_size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pblen);
 }
-EXPORT_SYMBOL(lustre_msg_early_size);
 
 __u32 lustre_msg_size_v2(int count, __u32 *lengths)
 {

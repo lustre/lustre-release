@@ -1012,7 +1012,7 @@ int sptlrpc_plain_init(void)
 	__u32 buflens[PLAIN_PACK_SEGMENTS] = { 0, };
 	int rc;
 
-	buflens[PLAIN_PACK_MSG_OFF] = lustre_msg_early_size();
+	buflens[PLAIN_PACK_MSG_OFF] = lustre_msg_early_size;
 	plain_at_offset = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
 
 	rc = sptlrpc_register_policy(&plain_policy);

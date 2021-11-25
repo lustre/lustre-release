@@ -2838,11 +2838,11 @@ static void gss_init_at_reply_offset(void)
         int clearsize;
 
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = lustre_msg_early_size();
+        buflens[1] = lustre_msg_early_size;
         buflens[2] = gss_cli_payload(NULL, buflens[1], 0);
         gss_at_reply_off_integ = lustre_msg_size_v2(3, buflens);
 
-        buflens[0] = lustre_msg_early_size();
+        buflens[0] = lustre_msg_early_size;
         clearsize = lustre_msg_size_v2(1, buflens);
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
         buflens[1] = gss_cli_payload(NULL, clearsize, 0);

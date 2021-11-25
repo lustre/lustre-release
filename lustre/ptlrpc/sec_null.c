@@ -191,7 +191,7 @@ int null_alloc_repbuf(struct ptlrpc_sec *sec,
 		      int msgsize)
 {
 	/* add space for early replied */
-	msgsize += lustre_msg_early_size();
+	msgsize += lustre_msg_early_size;
 
 	msgsize = size_roundup_power2(msgsize);
 
@@ -352,7 +352,7 @@ int null_authorize(struct ptlrpc_request *req)
 
 	if (likely(req->rq_packed_final)) {
 		if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)
-			req->rq_reply_off = lustre_msg_early_size();
+			req->rq_reply_off = lustre_msg_early_size;
 	} else {
 		__u32 cksum;
 
