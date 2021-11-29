@@ -8207,8 +8207,8 @@ static int osd_device_init0(const struct lu_env *env,
 	/* currently it's no need to prepare qsd_instance_md for OST */
 	if (!o->od_is_ost) {
 		o->od_quota_slave_md = qsd_init(env, o->od_svname,
-						&o->od_dt_dev,
-						o->od_proc_entry, true);
+						&o->od_dt_dev, o->od_proc_entry,
+						true, true);
 		if (IS_ERR(o->od_quota_slave_md)) {
 			rc = PTR_ERR(o->od_quota_slave_md);
 			o->od_quota_slave_md = NULL;
@@ -8217,7 +8217,7 @@ static int osd_device_init0(const struct lu_env *env,
 	}
 
 	o->od_quota_slave_dt = qsd_init(env, o->od_svname, &o->od_dt_dev,
-					o->od_proc_entry, false);
+					o->od_proc_entry, false, true);
 
 	if (IS_ERR(o->od_quota_slave_dt)) {
 		if (o->od_quota_slave_md != NULL) {

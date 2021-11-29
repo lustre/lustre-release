@@ -575,13 +575,13 @@ static int qsd_entry_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return 0;
 }
 
-static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
+static bool qqi_reint_delayed(struct qsd_qtype_info *qqi)
 {
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct qsd_upd_rec	*upd;
 	struct lquota_entry	*lqe, *n;
 	int			 dqacq = 0;
-	bool			 updates = false;
+	bool			 delay = false;
 	ENTRY;
 
 	/* any pending quota adjust? */
@@ -594,35 +594,46 @@ static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
 	}
 	spin_unlock(&qsd->qsd_adjust_lock);
 
-	/* any pending updates? */
-	read_lock(&qsd->qsd_lock);
-	list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
-		if (upd->qur_qqi == qqi) {
-			read_unlock(&qsd->qsd_lock);
-			CDEBUG(D_QUOTA, "%s: pending %s updates for type:%d.\n",
-			       qsd->qsd_svname,
-			       upd->qur_global ? "global" : "slave",
-			       qqi->qqi_qtype);
-			GOTO(out, updates = true);
-		}
-	}
-	read_unlock(&qsd->qsd_lock);
-
 	/* any pending quota request? */
 	cfs_hash_for_each_safe(qqi->qqi_site->lqs_hash, qsd_entry_iter_cb,
 			       &dqacq);
 	if (dqacq) {
 		CDEBUG(D_QUOTA, "%s: pending dqacq for type:%d.\n",
 		       qsd->qsd_svname, qqi->qqi_qtype);
-		updates = true;
+		GOTO(out, delay = true);
 	}
+
+	/* any pending updates? */
+	write_lock(&qsd->qsd_lock);
+
+	/* check if the reintegration has already started or finished */
+	if ((qqi->qqi_glb_uptodate && qqi->qqi_slv_uptodate) ||
+	     qqi->qqi_reint || qsd->qsd_stopping || qsd->qsd_updating)
+		GOTO(out_lock, delay = true);
+
+	/* there could be some unfinished global or index entry updates
+	 * (very unlikely), to avoid them messing up with the reint
+	 * procedure, we just return and try to re-start reint later. */
+	list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
+		if (upd->qur_qqi == qqi) {
+			CDEBUG(D_QUOTA, "%s: pending %s updates for type:%d.\n",
+			       qsd->qsd_svname,
+			       upd->qur_global ? "global" : "slave",
+			       qqi->qqi_qtype);
+			GOTO(out_lock, delay = true);
+		}
+	}
+	qqi->qqi_reint = 1;
+
 	EXIT;
+out_lock:
+	write_unlock(&qsd->qsd_lock);
 out:
-	if (updates)
+	if (delay)
 		CERROR("%s: Delaying reintegration for qtype:%d until pending "
 		       "updates are flushed.\n",
 		       qsd->qsd_svname, qqi->qqi_qtype);
-	return updates;
+	return delay;
 }
 
 int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
@@ -649,28 +660,8 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 		/* no space accounting support, can't enable enforcement */
 		RETURN(0);
 
-	/* check if the reintegration has already started or finished */
-	write_lock(&qsd->qsd_lock);
-
-	if ((qqi->qqi_glb_uptodate && qqi->qqi_slv_uptodate) ||
-	     qqi->qqi_reint || qsd->qsd_stopping) {
-		write_unlock(&qsd->qsd_lock);
+	if (qqi_reint_delayed(qqi))
 		RETURN(0);
-	}
-	qqi->qqi_reint = 1;
-
-	write_unlock(&qsd->qsd_lock);
-
-	/* there could be some unfinished global or index entry updates
-	 * (very unlikely), to avoid them messing up with the reint
-	 * procedure, we just return and try to re-start reint later. */
-	if (qsd_pending_updates(qqi)) {
-		write_lock(&qsd->qsd_lock);
-		qqi->qqi_reint = 0;
-		write_unlock(&qsd->qsd_lock);
-		RETURN(0);
-	}
-
 
 	OBD_ALLOC_PTR(args);
 	if (args == NULL)

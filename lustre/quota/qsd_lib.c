@@ -651,7 +651,8 @@ EXPORT_SYMBOL(qsd_fini);
  */
 struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 			      struct dt_device *dev,
-			      struct proc_dir_entry *osd_proc, bool is_md)
+			      struct proc_dir_entry *osd_proc,
+			      bool is_md, bool excl)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;
@@ -677,6 +678,8 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	qsd->qsd_prepared = false;
 	qsd->qsd_started = false;
 	qsd->qsd_is_md = is_md;
+	qsd->qsd_updating = false;
+	qsd->qsd_exclusive = excl;
 
 	/* copy service name */
 	if (strlcpy(qsd->qsd_svname, svname, sizeof(qsd->qsd_svname))

@@ -280,8 +280,17 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 {
 	struct lquota_entry	*lqe = upd->qur_lqe;
 	struct qsd_qtype_info	*qqi = upd->qur_qqi;
+	struct qsd_instance     *qsd = qqi->qqi_qsd;
 	int			 rc;
 	ENTRY;
+
+	if (qsd->qsd_exclusive) { /* It could be deadlock running with reint */
+		read_lock(&qsd->qsd_lock);
+		rc = qqi->qqi_reint;
+		read_unlock(&qsd->qsd_lock);
+		if (rc)
+			return 1;
+	}
 
 	if (lqe == NULL) {
 		lqe = lqe_locate(env, qqi->qqi_site, &upd->qur_qid);
@@ -298,9 +307,9 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 		/* refresh usage */
 		qsd_refresh_usage(env, lqe);
 
-		spin_lock(&qqi->qqi_qsd->qsd_adjust_lock);
+		spin_lock(&qsd->qsd_adjust_lock);
 		lqe->lqe_adjust_time = 0;
-		spin_unlock(&qqi->qqi_qsd->qsd_adjust_lock);
+		spin_unlock(&qsd->qsd_adjust_lock);
 
 		/* Report usage asynchronously */
 		rc = qsd_adjust(env, lqe);
@@ -411,6 +420,8 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 		list_splice_init(&qsd->qsd_upd_list, upd);
 		job_pending = true;
 	}
+	if (qsd->qsd_exclusive)
+		qsd->qsd_updating = job_pending;
 
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		struct qsd_qtype_info *qqi = qsd->qsd_type_array[qtype];
@@ -466,15 +477,38 @@ static int qsd_upd_thread(void *_args)
 	complete(args->qua_started);
 	while (({set_current_state(TASK_IDLE);
 		 !kthread_should_stop(); })) {
+		int count = 0;
 
 		if (!qsd_job_pending(qsd, &queue, &uptodate))
 			schedule_timeout(cfs_time_seconds(QSD_WB_INTERVAL));
 		__set_current_state(TASK_RUNNING);
 
-		list_for_each_entry_safe(upd, n, &queue, qur_link) {
-			list_del_init(&upd->qur_link);
-			qsd_process_upd(env, upd);
-			qsd_upd_free(upd);
+		while (1) {
+			list_for_each_entry_safe(upd, n, &queue, qur_link) {
+				if (qsd_process_upd(env, upd) <= 0) {
+					list_del_init(&upd->qur_link);
+					qsd_upd_free(upd);
+				}
+			}
+			if (list_empty(&queue))
+				break;
+			count++;
+			if (count % 7 == 0) {
+				n = list_entry(&queue, struct qsd_upd_rec,
+					       qur_link);
+				CWARN("%s: The reintegration thread [%d] "
+				      "blocked more than %ld seconds\n",
+				      n->qur_qqi->qqi_qsd->qsd_svname,
+				      n->qur_qqi->qqi_qtype, count *
+				      cfs_time_seconds(QSD_WB_INTERVAL) / 10);
+			}
+			schedule_timeout_interruptible(
+				cfs_time_seconds(QSD_WB_INTERVAL) / 10);
+		}
+		if (qsd->qsd_exclusive) {
+			write_lock(&qsd->qsd_lock);
+			qsd->qsd_updating = false;
+			write_unlock(&qsd->qsd_lock);
 		}
 
 		spin_lock(&qsd->qsd_adjust_lock);
