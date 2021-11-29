@@ -2615,6 +2615,43 @@ static int mdt_rename_source_lock(struct mdt_thread_info *info,
 	return rc;
 }
 
+/* Helper function for mdt_reint_rename so we don't need to opencode
+ * two different order lockings
+ */
+static int mdt_lock_two_dirs(struct mdt_thread_info *info,
+			     struct mdt_object *mfirstdir,
+			     struct mdt_lock_handle *lh_firstdirp,
+			     struct mdt_object *mseconddir,
+			     struct mdt_lock_handle *lh_seconddirp,
+			     bool cos_incompat)
+{
+	int rc;
+
+	rc = mdt_object_lock_save(info, mfirstdir, lh_firstdirp, 0,
+				  cos_incompat);
+	if (rc)
+		return rc;
+
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
+
+	if (mfirstdir != mseconddir) {
+		rc = mdt_object_lock_save(info, mseconddir, lh_seconddirp, 1,
+					  cos_incompat);
+	} else if (!mdt_object_remote(mseconddir) &&
+		   lh_firstdirp->mlh_pdo_hash !=
+		   lh_seconddirp->mlh_pdo_hash) {
+		rc = mdt_pdir_hash_lock(info, lh_seconddirp, mseconddir,
+					MDS_INODELOCK_UPDATE,
+					cos_incompat);
+		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
+	}
+
+	if (rc != 0)
+		mdt_object_unlock(info, mfirstdir, lh_firstdirp, rc);
+
+	return rc;
+}
+
 /*
  * VBR: rename versions in reply: 0 - srcdir parent; 1 - tgtdir parent;
  * 2 - srcdir child; 3 - tgtdir child.
@@ -2714,7 +2751,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	rc = mdt_rename_determine_lock_order(info, msrcdir, mtgtdir);
 	if (rc < 0)
 		GOTO(out_unlock_rename, rc);
-
 	reverse = rc;
 
 	/* source needs to be looked up after locking source parent, otherwise
@@ -2737,44 +2773,24 @@ relock:
 	mdt_lock_pdo_init(lh_srcdirp, LCK_PW, &rr->rr_name);
 	mdt_lock_pdo_init(lh_tgtdirp, LCK_PW, &rr->rr_tgt_name);
 
-	if (reverse) {
-		rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
-					  cos_incompat);
-		if (rc)
-			GOTO(out_unlock_rename, rc);
+	/* In case of same dir local rename we must sort by the hash,
+	 * otherwise a lock deadlock is possible when renaming
+	 * a to b and b to a at the same time LU-15285
+	 */
+	if (!mdt_object_remote(mtgtdir) && mtgtdir == msrcdir)
+		reverse = lh_srcdirp->mlh_pdo_hash > lh_tgtdirp->mlh_pdo_hash;
+	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK)))
+		reverse = 0;
 
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
+	if (reverse)
+		rc = mdt_lock_two_dirs(info, mtgtdir, lh_tgtdirp, msrcdir,
+				       lh_srcdirp, cos_incompat);
+	else
+		rc = mdt_lock_two_dirs(info, msrcdir, lh_srcdirp, mtgtdir,
+				       lh_tgtdirp, cos_incompat);
 
-		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
-					  cos_incompat);
-		if (rc != 0) {
-			mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
-			GOTO(out_unlock_rename, rc);
-		}
-	} else {
-		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
-					  cos_incompat);
-		if (rc)
-			GOTO(out_unlock_rename, rc);
-
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
-
-		if (mtgtdir != msrcdir) {
-			rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
-						  cos_incompat);
-		} else if (!mdt_object_remote(mtgtdir) &&
-			   lh_srcdirp->mlh_pdo_hash !=
-			   lh_tgtdirp->mlh_pdo_hash) {
-			rc = mdt_pdir_hash_lock(info, lh_tgtdirp, mtgtdir,
-						MDS_INODELOCK_UPDATE,
-						cos_incompat);
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
-		}
-		if (rc != 0) {
-			mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
-			GOTO(out_unlock_rename, rc);
-		}
-	}
+	if (rc != 0)
+		GOTO(out_unlock_rename, rc);
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME2, 5);
