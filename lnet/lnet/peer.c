@@ -2275,7 +2275,7 @@ static int lnet_peer_queue_for_discovery(struct lnet_peer *lp)
  * Discovery of a peer is complete. Wake all waiters on the peer.
  * Call with lnet_net_lock/EX held.
  */
-static void lnet_peer_discovery_complete(struct lnet_peer *lp)
+static void lnet_peer_discovery_complete(struct lnet_peer *lp, int dc_error)
 {
 	struct lnet_msg *msg, *tmp;
 	int rc = 0;
@@ -2286,6 +2286,11 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 
 	list_del_init(&lp->lp_dc_list);
 	spin_lock(&lp->lp_lock);
+	if (dc_error) {
+		lp->lp_dc_error = dc_error;
+		lp->lp_state &= ~LNET_PEER_DISCOVERING;
+		lp->lp_state |= LNET_PEER_REDISCOVER;
+	}
 	list_splice_init(&lp->lp_dc_pendq, &pending_msgs);
 	spin_unlock(&lp->lp_lock);
 	wake_up(&lp->lp_dc_waitq);
@@ -2298,8 +2303,8 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 	/* iterate through all pending messages and send them again */
 	list_for_each_entry_safe(msg, tmp, &pending_msgs, msg_list) {
 		list_del_init(&msg->msg_list);
-		if (lp->lp_dc_error) {
-			lnet_finalize(msg, lp->lp_dc_error);
+		if (dc_error) {
+			lnet_finalize(msg, dc_error);
 			continue;
 		}
 
@@ -3647,22 +3652,6 @@ fail_error:
 }
 
 /*
- * An unrecoverable error was encountered during discovery.
- * Set error status in peer and abort discovery.
- */
-static void lnet_peer_discovery_error(struct lnet_peer *lp, int error)
-{
-	CDEBUG(D_NET, "Discovery error %s: %d\n",
-	       libcfs_nidstr(&lp->lp_primary_nid), error);
-
-	spin_lock(&lp->lp_lock);
-	lp->lp_dc_error = error;
-	lp->lp_state &= ~LNET_PEER_DISCOVERING;
-	lp->lp_state |= LNET_PEER_REDISCOVER;
-	spin_unlock(&lp->lp_lock);
-}
-
-/*
  * Wait for work to be queued or some other change that must be
  * attended to. Returns non-zero if the discovery thread should shut
  * down.
@@ -3840,17 +3829,22 @@ static int lnet_peer_discovery(void *arg)
 			CDEBUG(D_NET, "peer %s(%p) state %#x rc %d\n",
 				libcfs_nidstr(&lp->lp_primary_nid), lp,
 				lp->lp_state, rc);
-			spin_unlock(&lp->lp_lock);
 
-			lnet_net_lock(LNET_LOCK_EX);
 			if (rc == LNET_REDISCOVER_PEER) {
+				spin_unlock(&lp->lp_lock);
+				lnet_net_lock(LNET_LOCK_EX);
 				list_move(&lp->lp_dc_list,
 					  &the_lnet.ln_dc_request);
-			} else if (rc) {
-				lnet_peer_discovery_error(lp, rc);
+			} else if (rc ||
+				   !(lp->lp_state & LNET_PEER_DISCOVERING)) {
+				spin_unlock(&lp->lp_lock);
+				lnet_net_lock(LNET_LOCK_EX);
+				lnet_peer_discovery_complete(lp, rc);
+			} else {
+				spin_unlock(&lp->lp_lock);
+				lnet_net_lock(LNET_LOCK_EX);
 			}
-			if (!(lp->lp_state & LNET_PEER_DISCOVERING))
-				lnet_peer_discovery_complete(lp);
+
 			if (the_lnet.ln_dc_state == LNET_DC_STATE_STOPPING)
 				break;
 
@@ -3888,8 +3882,7 @@ static int lnet_peer_discovery(void *arg)
 	while (!list_empty(&the_lnet.ln_dc_request)) {
 		lp = list_first_entry(&the_lnet.ln_dc_request,
 				      struct lnet_peer, lp_dc_list);
-		lnet_peer_discovery_error(lp, -ESHUTDOWN);
-		lnet_peer_discovery_complete(lp);
+		lnet_peer_discovery_complete(lp, -ESHUTDOWN);
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
