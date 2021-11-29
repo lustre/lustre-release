@@ -93,7 +93,7 @@ get_rpmbuildopts() {
     if $KERNEL_LUSTRE_NAMING; then
         echo -e "--define \"variant -lustre\" \c"
     fi
-    echo "--with firmware"
+    echo "--with firmware --without debug"
 
     return 0
 
