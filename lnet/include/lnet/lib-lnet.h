@@ -627,7 +627,8 @@ void lnet_msg_decommit(struct lnet_msg *msg, int cpt, int status);
 void lnet_prep_send(struct lnet_msg *msg, int type,
 		    struct lnet_process_id target, unsigned int offset,
 		    unsigned int len);
-int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
+int lnet_send(struct lnet_nid *nid, struct lnet_msg *msg,
+	      struct lnet_nid *rtr_nid);
 int lnet_send_ping(lnet_nid_t dest_nid, struct lnet_handle_md *mdh, int nnis,
 		   void *user_ptr, lnet_handler_t handler, bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);

@@ -2308,8 +2308,8 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp, int dc_error)
 		CDEBUG(D_NET, "sending pending message %s to target %s\n",
 		       lnet_msgtyp2str(msg->msg_type),
 		       libcfs_idstr(&msg->msg_target));
-		rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param), msg,
-			       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
+		rc = lnet_send(&msg->msg_src_nid_param, msg,
+			       &msg->msg_rtr_nid_param);
 		if (rc < 0) {
 			CNETERR("Error sending %s to %s: %d\n",
 			       lnet_msgtyp2str(msg->msg_type),
@@ -3725,8 +3725,8 @@ static void lnet_resend_msgs(void)
 
 	list_for_each_entry_safe(msg, tmp, &resend, msg_list) {
 		list_del_init(&msg->msg_list);
-		rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param), msg,
-			       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
+		rc = lnet_send(&msg->msg_src_nid_param, msg,
+			       &msg->msg_rtr_nid_param);
 		if (rc < 0) {
 			CNETERR("Error sending %s to %s: %d\n",
 			       lnet_msgtyp2str(msg->msg_type),

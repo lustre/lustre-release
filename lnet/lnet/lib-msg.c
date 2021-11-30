@@ -373,6 +373,7 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 
 	if (status == 0 && msg->msg_ack) {
 		/* Only send an ACK if the PUT completed successfully */
+		struct lnet_nid src;
 
 		lnet_msg_decommit(msg, cpt, 0);
 
@@ -390,8 +391,8 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
 		msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-		rc = lnet_send(msg->msg_ev.target.nid, msg,
-			       lnet_nid_to_nid4(&msg->msg_from));
+		lnet_nid4_to_nid(msg->msg_ev.target.nid, &src);
+		rc = lnet_send(&src, msg, &msg->msg_from);
 
 		lnet_net_lock(cpt);
 		/*
@@ -413,7 +414,7 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 		LASSERT(!msg->msg_receiving);	/* called back recv already */
 		lnet_net_unlock(cpt);
 
-		rc = lnet_send(LNET_NID_ANY, msg, LNET_NID_ANY);
+		rc = lnet_send(NULL, msg, NULL);
 
 		lnet_net_lock(cpt);
 		/*

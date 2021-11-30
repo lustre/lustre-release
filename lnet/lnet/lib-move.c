@@ -55,9 +55,9 @@ struct lnet_send_data {
 	struct lnet_peer_ni *sd_gw_lpni;
 	struct lnet_peer_net *sd_peer_net;
 	struct lnet_msg *sd_msg;
-	lnet_nid_t sd_dst_nid;
-	lnet_nid_t sd_src_nid;
-	lnet_nid_t sd_rtr_nid;
+	struct lnet_nid sd_dst_nid;
+	struct lnet_nid sd_src_nid;
+	struct lnet_nid sd_rtr_nid;
 	int sd_cpt;
 	int sd_md_cpt;
 	__u32 sd_send_case;
@@ -1965,11 +1965,11 @@ lnet_handle_send(struct lnet_send_data *sd)
 		CDEBUG(D_NET, "TRACE: %s(%s:%s) -> %s(%s:%s) %s : %s try# %d\n",
 		       libcfs_nid2str(msg->msg_hdr.src_nid),
 		       libcfs_nidstr(&msg->msg_txni->ni_nid),
-		       libcfs_nid2str(sd->sd_src_nid),
+		       libcfs_nidstr(&sd->sd_src_nid),
 		       libcfs_nid2str(msg->msg_hdr.dest_nid),
-		       libcfs_nid2str(sd->sd_dst_nid),
+		       libcfs_nidstr(&sd->sd_dst_nid),
 		       libcfs_nidstr(&msg->msg_txpeer->lpni_nid),
-		       libcfs_nid2str(sd->sd_rtr_nid),
+		       libcfs_nidstr(&sd->sd_rtr_nid),
 		       lnet_msgtyp2str(msg->msg_type), msg->msg_retry_count);
 
 	return rc;
@@ -2001,11 +2001,11 @@ lnet_handle_spec_local_nmr_dst(struct lnet_send_data *sd)
 	/* the destination lpni is set before we get here. */
 
 	/* find local NI */
-	sd->sd_best_ni = lnet_nid2ni_locked(sd->sd_src_nid, sd->sd_cpt);
+	sd->sd_best_ni = lnet_nid_to_ni_locked(&sd->sd_src_nid, sd->sd_cpt);
 	if (!sd->sd_best_ni) {
-		CERROR("Can't send to %s: src %s is not a "
-		       "local nid\n", libcfs_nid2str(sd->sd_dst_nid),
-				libcfs_nid2str(sd->sd_src_nid));
+		CERROR("Can't send to %s: src %s is not a local nid\n",
+		       libcfs_nidstr(&sd->sd_dst_nid),
+		       libcfs_nidstr(&sd->sd_src_nid));
 		return -EINVAL;
 	}
 
@@ -2028,11 +2028,11 @@ lnet_handle_spec_local_nmr_dst(struct lnet_send_data *sd)
 static int
 lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 {
-	sd->sd_best_ni = lnet_nid2ni_locked(sd->sd_src_nid, sd->sd_cpt);
+	sd->sd_best_ni = lnet_nid_to_ni_locked(&sd->sd_src_nid, sd->sd_cpt);
 	if (!sd->sd_best_ni) {
-		CERROR("Can't send to %s: src %s is not a "
-		       "local nid\n", libcfs_nid2str(sd->sd_dst_nid),
-				libcfs_nid2str(sd->sd_src_nid));
+		CERROR("Can't send to %s: src %s is not a local nid\n",
+		       libcfs_nidstr(&sd->sd_dst_nid),
+		       libcfs_nidstr(&sd->sd_src_nid));
 		return -EINVAL;
 	}
 
@@ -2044,7 +2044,7 @@ lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 		return lnet_handle_send(sd);
 
 	CERROR("can't send to %s. no NI on %s\n",
-	       libcfs_nid2str(sd->sd_dst_nid),
+	       libcfs_nidstr(&sd->sd_dst_nid),
 	       libcfs_net2str(sd->sd_best_ni->ni_net->net_id));
 
 	return -EHOSTUNREACH;
@@ -2146,7 +2146,7 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 
 static int
 lnet_handle_find_routed_path(struct lnet_send_data *sd,
-			     lnet_nid_t dst_nid,
+			     struct lnet_nid *dst_nid,
 			     struct lnet_peer_ni **gw_lpni,
 			     struct lnet_peer **gw_peer)
 {
@@ -2161,22 +2161,22 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	struct lnet_peer_ni *lpni = NULL;
 	struct lnet_peer_ni *gwni = NULL;
 	bool route_found = false;
-	lnet_nid_t src_nid = (sd->sd_src_nid != LNET_NID_ANY) ? sd->sd_src_nid :
-		(sd->sd_best_ni != NULL)
-		? lnet_nid_to_nid4(&sd->sd_best_ni->ni_nid)
-		: LNET_NID_ANY;
+	struct lnet_nid *src_nid =
+		!LNET_NID_IS_ANY(&sd->sd_src_nid) || !sd->sd_best_ni
+		? &sd->sd_src_nid
+		: &sd->sd_best_ni->ni_nid;
 	int best_lpn_healthv = 0;
 	__u32 best_lpn_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 
 	CDEBUG(D_NET, "using src nid %s for route restriction\n",
-	       libcfs_nid2str(src_nid));
+	       src_nid ? libcfs_nidstr(src_nid) : "ANY");
 
 	/* If a router nid was specified then we are replying to a GET or
 	 * sending an ACK. In this case we use the gateway associated with the
 	 * specified router nid.
 	 */
-	if (sd->sd_rtr_nid != LNET_NID_ANY) {
-		gwni = lnet_find_peer_ni_locked(sd->sd_rtr_nid);
+	if (!LNET_NID_IS_ANY(&sd->sd_rtr_nid)) {
+		gwni = lnet_peer_ni_find_locked(&sd->sd_rtr_nid);
 		if (gwni) {
 			gw = gwni->lpni_peer_net->lpn_peer;
 			lnet_peer_ni_decref_locked(gwni);
@@ -2184,25 +2184,25 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 				route_found = true;
 		} else {
 			CWARN("No peer NI for gateway %s. Attempting to find an alternative route.\n",
-			       libcfs_nid2str(sd->sd_rtr_nid));
+			       libcfs_nidstr(&sd->sd_rtr_nid));
 		}
 	}
 
 	if (!route_found) {
-		if (sd->sd_msg->msg_routing || src_nid != LNET_NID_ANY) {
+		if (sd->sd_msg->msg_routing || (src_nid && !LNET_NID_IS_ANY(src_nid))) {
 			/* If I'm routing this message then I need to find the
 			 * next hop based on the destination NID
 			 *
 			 * We also find next hop based on the destination NID
 			 * if the source NI was specified
 			 */
-			best_rnet = lnet_find_rnet_locked(LNET_NIDNET(sd->sd_dst_nid));
+			best_rnet = lnet_find_rnet_locked(LNET_NID_NET(&sd->sd_dst_nid));
 			if (!best_rnet) {
 				CERROR("Unable to send message from %s to %s - Route table may be misconfigured\n",
-				       src_nid != LNET_NID_ANY ?
-						libcfs_nid2str(src_nid) :
-						"any local NI",
-				       libcfs_nid2str(sd->sd_dst_nid));
+				       (src_nid && LNET_NID_IS_ANY(src_nid)) ?
+						"any local NI" :
+						libcfs_nidstr(src_nid),
+				       libcfs_nidstr(&sd->sd_dst_nid));
 				return -EHOSTUNREACH;
 			}
 		} else {
@@ -2248,17 +2248,17 @@ use_lpn:
 
 			if (!best_lpn) {
 				CERROR("peer %s has no available nets\n",
-				       libcfs_nid2str(sd->sd_dst_nid));
+				       libcfs_nidstr(&sd->sd_dst_nid));
 				return -EHOSTUNREACH;
 			}
 
 			sd->sd_best_lpni = lnet_find_best_lpni(sd->sd_best_ni,
-							       sd->sd_dst_nid,
+							       lnet_nid_to_nid4(&sd->sd_dst_nid),
 							       lp,
 							       best_lpn->lpn_net_id);
 			if (!sd->sd_best_lpni) {
 				CERROR("peer %s is unreachable\n",
-				       libcfs_nid2str(sd->sd_dst_nid));
+				       libcfs_nidstr(&sd->sd_dst_nid));
 				return -EHOSTUNREACH;
 			}
 
@@ -2283,21 +2283,21 @@ use_lpn:
 		 * when adding a route.
 		 */
 		best_route = lnet_find_route_locked(best_rnet,
-						    LNET_NIDNET(src_nid),
+						    LNET_NID_NET(src_nid),
 						    sd->sd_best_lpni,
 						    &last_route, &gwni);
 
 		if (!best_route) {
 			CERROR("no route to %s from %s\n",
-			       libcfs_nid2str(dst_nid),
-			       libcfs_nid2str(src_nid));
+			       libcfs_nidstr(dst_nid),
+			       libcfs_nidstr(src_nid));
 			return -EHOSTUNREACH;
 		}
 
 		if (!gwni) {
 			CERROR("Internal Error. Route expected to %s from %s\n",
-			       libcfs_nid2str(dst_nid),
-			       libcfs_nid2str(src_nid));
+			       libcfs_nidstr(dst_nid),
+			       libcfs_nidstr(src_nid));
 			return -EFAULT;
 		}
 
@@ -2332,7 +2332,7 @@ use_lpn:
 		if (!sd->sd_best_ni) {
 			CERROR("Internal Error. Expected local ni on %s but non found: %s\n",
 			       libcfs_net2str(lpn->lpn_net_id),
-			       libcfs_nid2str(sd->sd_src_nid));
+			       libcfs_nidstr(&sd->sd_src_nid));
 			return -EFAULT;
 		}
 	}
@@ -2344,7 +2344,7 @@ use_lpn:
 	 * increment the sequence numbers since now we're sure we're
 	 * going to use this path
 	 */
-	if (sd->sd_rtr_nid == LNET_NID_ANY) {
+	if (LNET_NID_IS_ANY(&sd->sd_rtr_nid)) {
 		LASSERT(best_route && last_route);
 		best_route->lr_seq = last_route->lr_seq + 1;
 		if (best_lpn)
@@ -2378,16 +2378,16 @@ lnet_handle_spec_router_dst(struct lnet_send_data *sd)
 	struct lnet_peer *gw_peer = NULL;
 
 	/* find local NI */
-	sd->sd_best_ni = lnet_nid2ni_locked(sd->sd_src_nid, sd->sd_cpt);
+	sd->sd_best_ni = lnet_nid_to_ni_locked(&sd->sd_src_nid, sd->sd_cpt);
 	if (!sd->sd_best_ni) {
-		CERROR("Can't send to %s: src %s is not a "
-		       "local nid\n", libcfs_nid2str(sd->sd_dst_nid),
-				libcfs_nid2str(sd->sd_src_nid));
+		CERROR("Can't send to %s: src %s is not a local nid\n",
+		       libcfs_nidstr(&sd->sd_dst_nid),
+		       libcfs_nidstr(&sd->sd_src_nid));
 		return -EINVAL;
 	}
 
-	rc = lnet_handle_find_routed_path(sd, sd->sd_dst_nid, &gw_lpni,
-				     &gw_peer);
+	rc = lnet_handle_find_routed_path(sd, &sd->sd_dst_nid,
+					  &gw_lpni, &gw_peer);
 	if (rc)
 		return rc;
 
@@ -2615,10 +2615,9 @@ lnet_handle_any_local_nmr_dst(struct lnet_send_data *sd)
 	 * output a relevant message and fail the send
 	 */
 	if (!sd->sd_best_lpni) {
-		CERROR("Internal fault. Unable to send msg %s to %s. "
-		       "NID not known\n",
+		CERROR("Internal fault. Unable to send msg %s to %s. NID not known\n",
 		       lnet_msgtyp2str(sd->sd_msg->msg_type),
-		       libcfs_nid2str(sd->sd_dst_nid));
+		       libcfs_nidstr(&sd->sd_dst_nid));
 		return -EFAULT;
 	}
 
@@ -2633,7 +2632,7 @@ lnet_handle_any_local_nmr_dst(struct lnet_send_data *sd)
 							       sd->sd_md_cpt);
 		if (!sd->sd_best_ni) {
 			CERROR("Unable to forward message to %s. No local NI available\n",
-			       libcfs_nid2str(sd->sd_dst_nid));
+			       libcfs_nidstr(&sd->sd_dst_nid));
 			rc = -EHOSTUNREACH;
 		}
 	} else
@@ -2671,9 +2670,8 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 			 * We're not going to deal with not able to send
 			 * a response to the provided final destination
 			 */
-			CERROR("Can't send response to %s. "
-			       "No local NI available\n",
-				libcfs_nid2str(sd->sd_dst_nid));
+			CERROR("Can't send response to %s. No local NI available\n",
+				libcfs_nidstr(&sd->sd_dst_nid));
 			return -EHOSTUNREACH;
 		}
 
@@ -2692,7 +2690,8 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 					lnet_msg_discovery(sd->sd_msg));
 	if (sd->sd_best_ni) {
 		sd->sd_best_lpni =
-		  lnet_find_best_lpni(sd->sd_best_ni, sd->sd_dst_nid,
+		  lnet_find_best_lpni(sd->sd_best_ni,
+					     lnet_nid_to_nid4(&sd->sd_dst_nid),
 				      sd->sd_peer,
 				      sd->sd_best_ni->ni_net->net_id);
 
@@ -2724,8 +2723,8 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 
 		CERROR("Internal Error. Expected to have a best_lpni: "
 		       "%s -> %s\n",
-		       libcfs_nid2str(sd->sd_src_nid),
-		       libcfs_nid2str(sd->sd_dst_nid));
+		       libcfs_nidstr(&sd->sd_src_nid),
+		       libcfs_nidstr(&sd->sd_dst_nid));
 
 		return -EFAULT;
 	}
@@ -2771,12 +2770,11 @@ lnet_handle_any_mr_dst(struct lnet_send_data *sd)
 		struct lnet_peer_ni *gw;
 		struct lnet_peer *gw_peer;
 
-		rc = lnet_handle_find_routed_path(sd, sd->sd_dst_nid, &gw,
-						  &gw_peer);
+		rc = lnet_handle_find_routed_path(
+			sd, &sd->sd_dst_nid, &gw, &gw_peer);
 		if (rc < 0) {
-			CERROR("Can't send response to %s. "
-			       "No route available\n",
-				libcfs_nid2str(sd->sd_dst_nid));
+			CERROR("Can't send response to %s. No route available\n",
+			       libcfs_nidstr(&sd->sd_dst_nid));
 			return -EHOSTUNREACH;
 		} else if (rc > 0) {
 			return rc;
@@ -2807,8 +2805,8 @@ lnet_handle_any_mr_dst(struct lnet_send_data *sd)
 	 * need to select the destination which we can route to and if
 	 * there are multiple, we need to round robin.
 	 */
-	rc = lnet_handle_find_routed_path(sd, sd->sd_dst_nid, &gw_lpni,
-					  &gw_peer);
+	rc = lnet_handle_find_routed_path(sd, &sd->sd_dst_nid,
+					  &gw_lpni, &gw_peer);
 	if (rc)
 		return rc;
 
@@ -2847,7 +2845,7 @@ lnet_handle_any_router_nmr_dst(struct lnet_send_data *sd)
 	 * find the router and that'll find the best NI if we didn't find
 	 * it already.
 	 */
-	rc = lnet_handle_find_routed_path(sd, sd->sd_dst_nid, &gw_lpni,
+	rc = lnet_handle_find_routed_path(sd, &sd->sd_dst_nid, &gw_lpni,
 					  &gw_peer);
 	if (rc)
 		return rc;
@@ -2876,9 +2874,9 @@ lnet_handle_send_case_locked(struct lnet_send_data *sd)
 
 	CDEBUG(D_NET, "Source %s%s to %s %s %s destination\n",
 		(send_case & SRC_SPEC) ? "Specified: " : "ANY",
-		(send_case & SRC_SPEC) ? libcfs_nid2str(sd->sd_src_nid) : "",
+		(send_case & SRC_SPEC) ? libcfs_nidstr(&sd->sd_src_nid) : "",
 		(send_case & MR_DST) ? "MR: " : "NMR: ",
-		libcfs_nid2str(sd->sd_dst_nid),
+		libcfs_nidstr(&sd->sd_dst_nid),
 		(send_case & LOCAL_DST) ? "local" : "routed");
 
 	switch (send_case) {
@@ -2909,8 +2907,10 @@ lnet_handle_send_case_locked(struct lnet_send_data *sd)
 }
 
 static int
-lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
-		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
+lnet_select_pathway(struct lnet_nid *src_nid,
+		    struct lnet_nid *dst_nid,
+		    struct lnet_msg *msg,
+		    struct lnet_nid *rtr_nid)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer *peer;
@@ -2947,7 +2947,7 @@ again:
 	 */
 	send_data.sd_msg = msg;
 	send_data.sd_cpt = cpt;
-	if (dst_nid == LNET_NID_LO_0) {
+	if (nid_is_lo0(dst_nid)) {
 		rc = lnet_handle_lo_send(&send_data);
 		lnet_net_unlock(cpt);
 		return rc;
@@ -2958,7 +2958,7 @@ again:
 	 * created due to network traffic. This call will create the
 	 * peer->peer_net->peer_ni tree.
 	 */
-	lpni = lnet_nid2peerni_locked(dst_nid, LNET_NID_ANY, cpt);
+	lpni = lnet_peerni_by_nid_locked(dst_nid, NULL, cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		return PTR_ERR(lpni);
@@ -2972,8 +2972,14 @@ again:
 	 * continuing the same sequence of messages. Similarly, rtr_nid will
 	 * affect our choice of next hop.
 	 */
-	lnet_nid4_to_nid(src_nid, &msg->msg_src_nid_param);
-	lnet_nid4_to_nid(rtr_nid, &msg->msg_rtr_nid_param);
+	if (src_nid)
+		msg->msg_src_nid_param = *src_nid;
+	else
+		msg->msg_src_nid_param = LNET_ANY_NID;
+	if (rtr_nid)
+		msg->msg_rtr_nid_param = *rtr_nid;
+	else
+		msg->msg_rtr_nid_param = LNET_ANY_NID;
 
 	/*
 	 * If necessary, perform discovery on the peer that owns this peer_ni.
@@ -2993,15 +2999,15 @@ again:
 	/*
 	 * Identify the different send cases
 	 */
-	if (src_nid == LNET_NID_ANY) {
+	if (!src_nid || LNET_NID_IS_ANY(src_nid)) {
 		send_case |= SRC_ANY;
-		if (lnet_get_net_locked(LNET_NIDNET(dst_nid)))
+		if (lnet_get_net_locked(LNET_NID_NET(dst_nid)))
 			send_case |= LOCAL_DST;
 		else
 			send_case |= REMOTE_DST;
 	} else {
 		send_case |= SRC_SPEC;
-		if (LNET_NIDNET(src_nid) == LNET_NIDNET(dst_nid))
+		if (LNET_NID_NET(src_nid) == LNET_NID_NET(dst_nid))
 			send_case |= LOCAL_DST;
 		else
 			send_case |= REMOTE_DST;
@@ -3060,9 +3066,15 @@ again:
 		send_case |= SND_RESP;
 
 	/* assign parameters to the send_data */
-	send_data.sd_rtr_nid = rtr_nid;
-	send_data.sd_src_nid = src_nid;
-	send_data.sd_dst_nid = dst_nid;
+	if (rtr_nid)
+		send_data.sd_rtr_nid = *rtr_nid;
+	else
+		send_data.sd_rtr_nid = LNET_ANY_NID;
+	if (src_nid)
+		send_data.sd_src_nid = *src_nid;
+	else
+		send_data.sd_src_nid = LNET_ANY_NID;
+	send_data.sd_dst_nid = *dst_nid;
 	send_data.sd_best_lpni = lpni;
 	/*
 	 * keep a pointer to the final destination in case we're going to
@@ -3090,16 +3102,12 @@ again:
 }
 
 int
-lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
+lnet_send(struct lnet_nid *src_nid, struct lnet_msg *msg,
+	  struct lnet_nid *rtr_nid)
 {
-	lnet_nid_t dst_nid = lnet_nid_to_nid4(&msg->msg_target.nid);
+	struct lnet_nid	*dst_nid = &msg->msg_target.nid;
 	int rc;
 
-	/*
-	 * NB: rtr_nid is set to LNET_NID_ANY for all current use-cases,
-	 * but we might want to use pre-determined router for ACK/REPLY
-	 * in the future
-	 */
 	/* NB: ni != NULL == interface pre-determined (ACK/REPLY) */
 	LASSERT(msg->msg_txpeer == NULL);
 	LASSERT(msg->msg_txni == NULL);
@@ -3362,9 +3370,8 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 			       lnet_msgtyp2str(msg->msg_type),
 			       msg->msg_recovery,
 			       msg->msg_retry_count);
-			rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param),
-				       msg,
-				       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
+			rc = lnet_send(&msg->msg_src_nid_param, msg,
+				       &msg->msg_rtr_nid_param);
 			if (rc) {
 				CERROR("Error sending %s to %s: %d\n",
 				       lnet_msgtyp2str(msg->msg_type),
@@ -4288,9 +4295,7 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	lnet_ni_recv(ni, msg->msg_private, NULL, 0, 0, 0, 0);
 	msg->msg_receiving = 0;
 
-	/* FIXME need to handle large-addr nid */
-	rc = lnet_send(lnet_nid_to_nid4(&ni->ni_nid), msg,
-		       lnet_nid_to_nid4(&msg->msg_from));
+	rc = lnet_send(&ni->ni_nid, msg, &msg->msg_from);
 	if (rc < 0) {
 		/* didn't get as far as lnet_ni_send() */
 		CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
@@ -4978,7 +4983,7 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
  * \see struct lnet_event::hdr_data and lnet_event_kind_t.
  */
 int
-LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
+LNetPut(lnet_nid_t self4, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 	struct lnet_process_id target, unsigned int portal,
 	__u64 match_bits, unsigned int offset,
 	__u64 hdr_data)
@@ -4988,8 +4993,11 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 	int cpt;
 	int rc;
 	struct lnet_rsp_tracker *rspt = NULL;
+	struct lnet_nid self;
 
 	LASSERT(the_lnet.ln_refcount > 0);
+
+	lnet_nid4_to_nid(self4, &self);
 
 	if (!list_empty(&the_lnet.ln_test_peers) &&	/* normally we don't */
 	    fail_peer(target.nid, 1)) {			/* shall we now? */
@@ -5075,7 +5083,7 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 				 CFS_FAIL_ONCE))
 		rc = -EIO;
 	else
-		rc = lnet_send(self, msg, LNET_NID_ANY);
+		rc = lnet_send(&self, msg, NULL);
 
 	if (rc != 0) {
 		CNETERR("Error sending PUT to %s: %d\n",
@@ -5210,7 +5218,7 @@ EXPORT_SYMBOL(lnet_set_reply_msg_len);
  * \retval -ENOENT Invalid MD object.
  */
 int
-LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
+LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 	struct lnet_process_id target, unsigned int portal,
 	__u64 match_bits, unsigned int offset, bool recovery)
 {
@@ -5219,8 +5227,11 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 	struct lnet_rsp_tracker *rspt;
 	int cpt;
 	int rc;
+	struct lnet_nid self;
 
 	LASSERT(the_lnet.ln_refcount > 0);
+
+	lnet_nid4_to_nid(self4, &self);
 
 	if (!list_empty(&the_lnet.ln_test_peers) &&	/* normally we don't */
 	    fail_peer(target.nid, 1))			/* shall we now? */
@@ -5293,7 +5304,7 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 	else
 		lnet_rspt_free(rspt, cpt);
 
-	rc = lnet_send(self, msg, LNET_NID_ANY);
+	rc = lnet_send(&self, msg, NULL);
 	if (rc < 0) {
 		CNETERR("Error sending GET to %s: %d\n",
 			libcfs_id2str(target), rc);
