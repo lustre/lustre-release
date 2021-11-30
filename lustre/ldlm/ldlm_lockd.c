@@ -679,14 +679,14 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 				 struct ptlrpc_request *req, int rc,
 				 const char *ast_type)
 {
-	struct lnet_process_id peer = req->rq_import->imp_connection->c_peer;
+	struct lnet_processid *peer = &req->rq_import->imp_connection->c_peer;
 
 	if (!req->rq_replied || (rc && rc != -EINVAL)) {
 		if (ldlm_is_cancel(lock)) {
 			LDLM_DEBUG(lock,
 				   "%s AST (req@%p x%llu) timeout from nid %s, but cancel was received (AST reply lost?)",
 				   ast_type, req, req->rq_xid,
-				   libcfs_nid2str(peer.nid));
+				   libcfs_nidstr(&peer->nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
 		} else if (rc == -ENODEV || rc == -ESHUTDOWN ||
@@ -710,7 +710,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 		} else {
 			LDLM_ERROR(lock,
 				   "client (nid %s) %s %s AST (req@%p x%llu status %d rc %d), evict it",
-				   libcfs_nid2str(peer.nid),
+				   libcfs_nidstr(&peer->nid),
 				   req->rq_replied ? "returned error from" :
 				   "failed to reply to",
 				   ast_type, req, req->rq_xid,
@@ -727,7 +727,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 
 		LDLM_DEBUG(lock,
 			   "client (nid %s) returned %d from %s AST (req@%p x%llu) - normal race",
-			   libcfs_nid2str(peer.nid),
+			   libcfs_nidstr(&peer->nid),
 			   req->rq_repmsg ?
 			   lustre_msg_get_status(req->rq_repmsg) : -1,
 			   ast_type, req, req->rq_xid);

@@ -181,7 +181,7 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 		/* if no conn assigned to this exp, reconnect will reclassify */
 		spin_lock(&exp->exp_lock);
 		if (exp->exp_connection) {
-			nid = exp->exp_connection->c_peer.nid;
+			nid = lnet_nid_to_nid4(&exp->exp_connection->c_peer.nid);
 		} else {
 			spin_unlock(&exp->exp_lock);
 			continue;

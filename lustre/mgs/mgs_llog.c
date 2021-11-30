@@ -1547,7 +1547,7 @@ static int only_mgs_is_running(struct obd_device *mgs_obd)
 		if (num_exports > 1)
 			CERROR("%s: node %s still connected during replace_nids connect_flags:%llx\n",
 			       mgs_obd->obd_name,
-			       libcfs_nid2str(exp->exp_nid_stats->nid),
+			       libcfs_nidstr(&exp->exp_nid_stats->nid),
 			       exp_connect_flags(exp));
 	}
 	spin_unlock(&mgs_obd->obd_dev_lock);

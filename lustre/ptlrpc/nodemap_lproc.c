@@ -348,8 +348,8 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 	list_for_each_entry(exp, &nodemap->nm_member_list,
 			    exp_target_data.ted_nodemap_member) {
 		if (exp->exp_connection != NULL)
-			libcfs_nid2str_r(exp->exp_connection->c_peer.nid,
-					 nidstr, sizeof(nidstr));
+			libcfs_nidstr_r(&exp->exp_connection->c_peer.nid,
+					  nidstr, sizeof(nidstr));
 
 		seq_printf(m, " { nid: %s, uuid: %s },",
 			   nidstr, exp->exp_client_uuid.uuid);

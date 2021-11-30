@@ -145,7 +145,7 @@ struct mgs_export_data {
  * It tracks access patterns to this export on a per-client-NID basis
  */
 struct nid_stat {
-	lnet_nid_t		 nid;
+	struct lnet_nid		 nid;
 	struct hlist_node	 nid_hash;
 	struct list_head	 nid_list;
 	struct obd_device       *nid_obd;

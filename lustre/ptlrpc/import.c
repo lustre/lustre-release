@@ -529,7 +529,7 @@ static int import_select_connection(struct obd_import *imp)
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
 		CDEBUG(D_HA, "%s: connect to NID %s last attempt %lld\n",
 		       imp->imp_obd->obd_name,
-		       libcfs_nid2str(conn->oic_conn->c_peer.nid),
+		       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
 		       conn->oic_last_attempt);
 
 		/* If we have not tried this connection since
@@ -602,7 +602,7 @@ static int import_select_connection(struct obd_import *imp)
 			       " %.*s (at %s)\n",
 			       imp->imp_obd->obd_name,
 			       target_len, target_start,
-			       libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+			       libcfs_nidstr(&imp_conn->oic_conn->c_peer.nid));
 		}
 
 		imp->imp_conn_current = imp_conn;
@@ -611,7 +611,7 @@ static int import_select_connection(struct obd_import *imp)
 	/* The below message is checked in conf-sanity.sh test_35[ab] */
 	CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
 	       imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
-	       libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+	       libcfs_nidstr(&imp_conn->oic_conn->c_peer.nid));
 
 out_unlock:
 	spin_unlock(&imp->imp_lock);

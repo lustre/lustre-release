@@ -48,20 +48,20 @@ static struct rhashtable conn_hash;
 
 static u32 lnet_process_id_hash(const void *data, u32 len, u32 seed)
 {
-	const struct lnet_process_id *lpi = data;
+	const struct lnet_processid *lpi = data;
 
 	seed = cfs_hash_32(seed ^ lpi->pid, 32);
-	seed ^= cfs_hash_64(lpi->nid, 32);
+	seed = cfs_hash_32(nidhash(&lpi->nid) ^ seed, 32);
 	return seed;
 }
 
 static int lnet_process_id_cmp(struct rhashtable_compare_arg *arg,
 			       const void *obj)
 {
-	const struct lnet_process_id *lpi = arg->key;
+	const struct lnet_processid *lpi = arg->key;
 	const struct ptlrpc_connection *con = obj;
 
-	if (lpi->nid == con->c_peer.nid &&
+	if (nid_same(&lpi->nid, &con->c_peer.nid) &&
 	    lpi->pid == con->c_peer.pid)
 		return 0;
 	return -ESRCH;
@@ -76,13 +76,15 @@ static const struct rhashtable_params conn_hash_params = {
 };
 
 struct ptlrpc_connection *
-ptlrpc_connection_get(struct lnet_process_id peer, lnet_nid_t self,
+ptlrpc_connection_get(struct lnet_process_id peer4, lnet_nid_t self,
 		      struct obd_uuid *uuid)
 {
 	struct ptlrpc_connection *conn, *conn2;
+	struct lnet_processid peer;
 	ENTRY;
 
-	peer.nid = LNetPrimaryNID(peer.nid);
+	peer4.nid = LNetPrimaryNID(peer4.nid);
+	lnet_pid4_to_pid(peer4, &peer);
 	conn = rhashtable_lookup_fast(&conn_hash, &peer, conn_hash_params);
 	if (conn) {
 		ptlrpc_connection_addref(conn);
@@ -94,7 +96,7 @@ ptlrpc_connection_get(struct lnet_process_id peer, lnet_nid_t self,
 		RETURN(NULL);
 
 	conn->c_peer = peer;
-	conn->c_self = self;
+	lnet_nid4_to_nid(self, &conn->c_self);
 	atomic_set(&conn->c_refcount, 1);
 	if (uuid)
 		obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
@@ -127,7 +129,7 @@ try_again:
 out:
 	CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
 	       conn, atomic_read(&conn->c_refcount),
-	       libcfs_nid2str(conn->c_peer.nid));
+	       libcfs_nidstr(&conn->c_peer.nid));
 	return conn;
 }
 
@@ -139,7 +141,7 @@ ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 	atomic_inc(&conn->c_refcount);
 	CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
 	       conn, atomic_read(&conn->c_refcount),
-	       libcfs_nid2str(conn->c_peer.nid));
+	       libcfs_nidstr(&conn->c_peer.nid));
 
 	RETURN(conn);
 }

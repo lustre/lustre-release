@@ -344,9 +344,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 
 	desc->bd_failure = 0;
 
-	peer.pid = desc->bd_import->imp_connection->c_peer.pid;
-	lnet_nid4_to_nid(desc->bd_import->imp_connection->c_peer.nid,
-		      &peer.nid);
+	peer = desc->bd_import->imp_connection->c_peer;
 
 	LASSERT(desc->bd_cbid.cbid_fn == client_bulk_callback);
 	LASSERT(desc->bd_cbid.cbid_arg == desc);
@@ -848,8 +846,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			request->rq_repmsg = NULL;
 		}
 
-		peer.pid = connection->c_peer.pid;
-		lnet_nid4_to_nid(connection->c_peer.nid, &peer.nid);
+		peer = connection->c_peer;
 		if (request->rq_bulk &&
 		    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_REPLY_ATTACH)) {
 			reply_me = ERR_PTR(-ENOMEM);
@@ -938,7 +935,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	rc = ptl_send_buf(&request->rq_req_md_h,
 			  request->rq_reqbuf, request->rq_reqdata_len,
 			  LNET_NOACK_REQ, &request->rq_req_cbid,
-			  LNET_NID_ANY, connection->c_peer,
+			  LNET_NID_ANY,
+			  lnet_pid_to_pid4(&connection->c_peer),
 			  request->rq_request_portal,
 			  request->rq_xid, 0, &bulk_cookie);
 	if (likely(rc == 0))

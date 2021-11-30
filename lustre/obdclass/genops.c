@@ -1641,9 +1641,11 @@ static int take_first(struct obd_export *exp, void *data)
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
-	lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
+	struct lnet_nid nid_key;
 	struct obd_export *doomed_exp;
 	int exports_evicted = 0;
+
+	libcfs_strnid(&nid_key, nid);
 
 	spin_lock(&obd->obd_dev_lock);
 	/* umount has run already, so evict thread should leave
@@ -1655,7 +1657,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 	spin_unlock(&obd->obd_dev_lock);
 
 	doomed_exp = NULL;
-	while (obd_nid_export_for_each(obd, nid_key,
+	while (obd_nid_export_for_each(obd, &nid_key,
 				       take_first, &doomed_exp) > 0) {
 
 		LASSERTF(doomed_exp != obd->obd_self_export,

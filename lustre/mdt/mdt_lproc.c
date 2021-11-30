@@ -1471,7 +1471,7 @@ static int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
 {
 	struct nid_stat *stats = seq->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_mdt_print_open_files, seq);
 }
 

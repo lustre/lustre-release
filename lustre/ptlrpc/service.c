@@ -2492,7 +2492,7 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 		CDEBUG(D_HA,
 		       "All locks stolen from rs %p x%lld.t%lld o%d NID %s\n",
 		       rs, rs->rs_xid, rs->rs_transno, rs->rs_opc,
-		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
+		       libcfs_nidstr(&exp->exp_connection->c_peer.nid));
 	}
 
 	if ((rs->rs_sent && !rs->rs_unlinked) || nlocks > 0) {

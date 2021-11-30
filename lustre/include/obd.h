@@ -770,7 +770,7 @@ void obd_uuid_del(struct obd_device *obd, struct obd_export *export);
 struct obd_export *obd_uuid_lookup(struct obd_device *obd,
 				   struct obd_uuid *uuid);
 
-int obd_nid_export_for_each(struct obd_device *obd, lnet_nid_t nid,
+int obd_nid_export_for_each(struct obd_device *obd, struct lnet_nid *nid,
 			    int cb(struct obd_export *exp, void *data),
 			    void *data);
 int obd_nid_add(struct obd_device *obd, struct obd_export *exp);

@@ -305,10 +305,10 @@ void sptlrpc_gc_fini(void);
 
 /* sec_config.c */
 void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
-                                enum lustre_sec_part to,
-                                struct obd_uuid *target,
-                                lnet_nid_t nid,
-                                struct sptlrpc_flavor *sf);
+				enum lustre_sec_part to,
+				struct obd_uuid *target,
+				struct lnet_nid *nid,
+				struct sptlrpc_flavor *sf);
 int  sptlrpc_conf_init(void);
 void sptlrpc_conf_fini(void);
 

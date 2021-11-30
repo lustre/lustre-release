@@ -517,25 +517,25 @@ enum lnet_event_kind {
  */
 struct lnet_event {
 	/** The identifier (nid, pid) of the target. */
-	struct lnet_process_id   target;
+	struct lnet_processid	target;
 	/** The identifier (nid, pid) of the initiator. */
-	struct lnet_process_id   initiator;
+	struct lnet_processid	initiator;
 	/** The source NID on the initiator. */
-	struct lnet_process_id   source;
+	struct lnet_processid	source;
 	/**
 	 * The NID of the immediate sender. If the request has been forwarded
 	 * by routers, this is the NID of the last hop; otherwise it's the
 	 * same as the source.
 	 */
-	lnet_nid_t          sender;
+	struct lnet_nid	sender;
 	/** Indicates the type of the event. */
 	enum lnet_event_kind	type;
 	/** The portal table index specified in the request */
-	unsigned int        pt_index;
+	unsigned int		pt_index;
 	/** A copy of the match bits specified in the request. */
-	__u64               match_bits;
+	__u64			match_bits;
 	/** The length (in bytes) specified in the request. */
-	unsigned int        rlength;
+	unsigned int		rlength;
 	/**
 	 * The length (in bytes) of the data that was manipulated by the
 	 * operation. For truncated operations, the manipulated length will be
@@ -543,7 +543,7 @@ struct lnet_event {
 	 * see struct lnet_md). For all other operations, the manipulated length
 	 * will be the length of the requested operation, i.e. rlength.
 	 */
-	unsigned int        mlength;
+	unsigned int		mlength;
 	/**
 	 * The handle to the MD associated with the event. The handle may be
 	 * invalid if the MD has been unlinked.
@@ -560,36 +560,36 @@ struct lnet_event {
 	 * 64 bits of out-of-band user data. Only valid for LNET_EVENT_PUT.
 	 * \see LNetPut
 	 */
-	__u64               hdr_data;
+	__u64			hdr_data;
 	/**
 	 * The message type, to ensure a handler for LNET_EVENT_SEND can
 	 * distinguish between LNET_MSG_GET and LNET_MSG_PUT.
 	 */
-	__u32               msg_type;
+	__u32			msg_type;
 	/**
 	 * Indicates the completion status of the operation. It's 0 for
 	 * successful operations, otherwise it's an error code.
 	 */
-	int                 status;
+	int			status;
 	/**
 	 * Indicates whether the MD has been unlinked. Note that:
 	 * - An event with unlinked set is the last event on the MD.
 	 * - This field is also set for an explicit LNET_EVENT_UNLINK event.
 	 * \see LNetMDUnlink
 	 */
-	int                 unlinked;
+	int			unlinked;
 	/**
 	 * The displacement (in bytes) into the memory region that the
 	 * operation used. The offset can be determined by the operation for
 	 * a remote managed MD or by the local MD.
 	 * \see struct lnet_md::options
 	 */
-	unsigned int        offset;
+	unsigned int		offset;
 	/**
 	 * The sequence number for this event. Sequence numbers are unique
 	 * to each event.
 	 */
-	volatile unsigned long sequence;
+	volatile unsigned long	sequence;
 };
 
 /** \addtogroup lnet_data

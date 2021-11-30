@@ -2764,7 +2764,7 @@ void _debug_req(struct ptlrpc_request *req,
 {
 	bool req_ok = req->rq_reqmsg != NULL;
 	bool rep_ok = false;
-	lnet_nid_t nid = LNET_NID_ANY;
+	struct lnet_nid *nid = NULL;
 	struct va_format vaf;
 	va_list args;
 	int rep_flags = -1;
@@ -2786,9 +2786,9 @@ void _debug_req(struct ptlrpc_request *req,
 	spin_unlock(&req->rq_early_free_lock);
 
 	if (req->rq_import && req->rq_import->imp_connection)
-		nid = req->rq_import->imp_connection->c_peer.nid;
+		nid = &req->rq_import->imp_connection->c_peer.nid;
 	else if (req->rq_export && req->rq_export->exp_connection)
-		nid = req->rq_export->exp_connection->c_peer.nid;
+		nid = &req->rq_export->exp_connection->c_peer.nid;
 
 	va_start(args, fmt);
 	vaf.fmt = fmt;
@@ -2804,7 +2804,7 @@ void _debug_req(struct ptlrpc_request *req,
 			 req->rq_export ?
 			 req->rq_export->exp_client_uuid.uuid :
 			 "<?>",
-			 libcfs_nid2str(nid),
+			 nid ? libcfs_nidstr(nid) : "<unknown>",
 			 req->rq_request_portal, req->rq_reply_portal,
 			 req->rq_reqlen, req->rq_replen,
 			 req->rq_early_count, (s64)req->rq_timedout,

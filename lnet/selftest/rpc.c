@@ -1490,8 +1490,8 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 		buffer = container_of(ev->md_start, struct srpc_buffer,
 				      buf_msg);
-		buffer->buf_peer = ev->source;
-		buffer->buf_self = ev->target.nid;
+		buffer->buf_peer = lnet_pid_to_pid4(&ev->source);
+		buffer->buf_self = lnet_nid_to_nid4(&ev->target.nid);
 
 		LASSERT(scd->scd_buf_nposted > 0);
 		scd->scd_buf_nposted--;
@@ -1529,7 +1529,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 		    (msg->msg_magic != SRPC_MSG_MAGIC &&
 		     msg->msg_magic != __swab32(SRPC_MSG_MAGIC))) {
 			CERROR("Dropping RPC (%s) from %s: status %d mlength %d type %u magic %u.\n",
-			       sv->sv_name, libcfs_id2str(ev->initiator),
+			       sv->sv_name, libcfs_idstr(&ev->initiator),
 			       ev->status, ev->mlength,
 			       msg->msg_type, msg->msg_magic);
 

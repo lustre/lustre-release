@@ -68,25 +68,25 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
-		ev->target.nid	  = le64_to_cpu(hdr->dest_nid);
+		lnet_nid4_to_nid(le64_to_cpu(hdr->dest_nid), &ev->target.nid);
 		ev->target.pid	  = le32_to_cpu(hdr->dest_pid);
-		ev->initiator.nid = LNET_NID_ANY;
+		ev->initiator.nid = LNET_ANY_NID;
 		ev->initiator.pid = the_lnet.ln_pid;
-		ev->source.nid	  = LNET_NID_ANY;
+		ev->source.nid	  = LNET_ANY_NID;
 		ev->source.pid    = the_lnet.ln_pid;
-		ev->sender	  = LNET_NID_ANY;
+		ev->sender	  = LNET_ANY_NID;
 	} else {
 		/* event for passive message */
 		ev->target.pid	  = hdr->dest_pid;
-		ev->target.nid	  = hdr->dest_nid;
+		lnet_nid4_to_nid(hdr->dest_nid, &ev->target.nid);
 		ev->initiator.pid = hdr->src_pid;
 		/* Multi-Rail: resolve src_nid to "primary" peer NID */
-		ev->initiator.nid = lnet_nid_to_nid4(&msg->msg_initiator);
+		ev->initiator.nid = msg->msg_initiator;
 		/* Multi-Rail: track source NID. */
 		ev->source.pid	  = hdr->src_pid;
-		ev->source.nid	  = hdr->src_nid;
-		ev->rlength       = hdr->payload_length;
-		ev->sender	  = lnet_nid_to_nid4(&msg->msg_from);
+		lnet_nid4_to_nid(hdr->src_nid, &ev->source.nid);
+		ev->rlength	  = hdr->payload_length;
+		ev->sender	  = msg->msg_from;
 		ev->mlength	  = msg->msg_wanted;
 		ev->offset	  = msg->msg_offset;
 	}
@@ -373,7 +373,6 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 
 	if (status == 0 && msg->msg_ack) {
 		/* Only send an ACK if the PUT completed successfully */
-		struct lnet_nid src;
 
 		lnet_msg_decommit(msg, cpt, 0);
 
@@ -385,14 +384,15 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 
 		ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
 
-		lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.source, 0, 0);
+		lnet_prep_send(msg, LNET_MSG_ACK,
+			       lnet_pid_to_pid4(&msg->msg_ev.source), 0, 0);
 
 		msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
 		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
 		msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-		lnet_nid4_to_nid(msg->msg_ev.target.nid, &src);
-		rc = lnet_send(&src, msg, &msg->msg_from);
+		rc = lnet_send(&msg->msg_ev.target.nid, msg,
+			       &msg->msg_from);
 
 		lnet_net_lock(cpt);
 		/*

@@ -1388,7 +1388,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
 		if (rc == LUSTRE_ESTALE) {
 			CDEBUG(D_DLMTRACE,
 			       "client/server (nid %s) out of sync -- not fatal\n",
-			       libcfs_nid2str(req->rq_import->imp_connection->c_peer.nid));
+			       libcfs_nidstr(&req->rq_import->imp_connection->c_peer.nid));
 			rc = 0;
 		} else if (rc == -ETIMEDOUT && /* check there was no reconnect*/
 			   req->rq_import_generation == imp->imp_generation) {

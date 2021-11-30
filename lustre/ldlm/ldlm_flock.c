@@ -215,7 +215,7 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 			int found;
 
 			found = obd_nid_export_for_each(bl_exp->exp_obd,
-							bl_exp_conn->c_peer.nid,
+							&bl_exp_conn->c_peer.nid,
 							ldlm_flock_lookup_cb,
 							&cb_data);
 			if (found)
@@ -241,8 +241,8 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 			break;
 
 		if (bl_owner == req_owner &&
-		    (bl_exp_conn->c_peer.nid ==
-		     req_exp->exp_connection->c_peer.nid)) {
+		    nid_same(&bl_exp_conn->c_peer.nid,
+			      &req_exp->exp_connection->c_peer.nid)) {
 			class_export_put(bl_exp);
 			return 1;
 		}

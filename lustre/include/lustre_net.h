@@ -532,22 +532,22 @@ struct ptlrpc_connection {
 	/** linkage for connections hash table */
 	struct rhash_head	c_hash;
 	/** Our own lnet nid for this connection */
-	lnet_nid_t              c_self;
+	struct lnet_nid		c_self;
 	/** Remote side nid for this connection */
-	struct lnet_process_id       c_peer;
+	struct lnet_processid	c_peer;
 	/** UUID of the other side */
-	struct obd_uuid         c_remote_uuid;
+	struct obd_uuid		c_remote_uuid;
 	/** reference counter for this connection */
-	atomic_t            c_refcount;
+	atomic_t		c_refcount;
 };
 
 /** Client definition for PortalRPC */
 struct ptlrpc_client {
-        /** What lnet portal does this client send messages to by default */
-        __u32                   cli_request_portal;
-        /** What portal do we expect replies on */
-        __u32                   cli_reply_portal;
-        /** Name of the client */
+	/** What lnet portal does this client send messages to by default */
+	__u32			cli_request_portal;
+	/** What portal do we expect replies on */
+	__u32			cli_reply_portal;
+	/** Name of the client */
 	const char		*cli_name;
 };
 
@@ -1940,7 +1940,7 @@ static inline void  ptlrpc_connection_put(struct ptlrpc_connection *conn)
 
 	CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
 	       conn, atomic_read(&conn->c_refcount),
-	       libcfs_nid2str(conn->c_peer.nid));
+	       libcfs_nidstr(&conn->c_peer.nid));
 }
 
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
@@ -1966,10 +1966,10 @@ static inline bool ptlrpc_connection_is_local(struct ptlrpc_connection *conn)
 	if (!conn)
 		return false;
 
-	if (conn->c_peer.nid == conn->c_self)
+	if (nid_same(&conn->c_peer.nid, &conn->c_self))
 		return true;
 
-	RETURN(LNetIsPeerLocal(conn->c_peer.nid));
+	RETURN(LNetIsPeerLocal(lnet_nid_to_nid4(&conn->c_peer.nid)));
 }
 
 /* ptlrpc/niobuf.c */

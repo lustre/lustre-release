@@ -270,7 +270,7 @@ static int lprocfs_exp_export_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_export_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_export);
@@ -281,7 +281,7 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 	       client_stat->nid_proc, client_stat->nid_stats);
 
 	LASSERTF(atomic_read(&client_stat->nid_exp_ref_count) == 0,
-		 "nid %s:count %d\n", libcfs_nid2str(client_stat->nid),
+		 "nid %s:count %d\n", libcfs_nidstr(&client_stat->nid),
 		 atomic_read(&client_stat->nid_exp_ref_count));
 
 	if (client_stat->nid_proc)
@@ -331,7 +331,7 @@ lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_nodemap_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_nodemap);
@@ -350,7 +350,7 @@ static int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_uuid_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_uuid);
@@ -412,7 +412,7 @@ static int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_hash_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_hash);
@@ -438,7 +438,7 @@ int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_replydata_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_replydata);
@@ -457,7 +457,7 @@ int lprocfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 
-	return obd_nid_export_for_each(stats->nid_obd, stats->nid,
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
 				       lprocfs_exp_print_fmd_count_seq, m);
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_fmd_count);
@@ -547,13 +547,14 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	if (new_stat == NULL)
 		RETURN(-ENOMEM);
 
-	new_stat->nid     = *nid;
+	lnet_nid4_to_nid(*nid, &new_stat->nid);
 	new_stat->nid_obd = exp->exp_obd;
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
 
 	old_stat = cfs_hash_findadd_unique(obd->obd_nid_stats_hash,
-					   nid, &new_stat->nid_hash);
+					   &new_stat->nid,
+					   &new_stat->nid_hash);
 	CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
 	       old_stat, nidstr, atomic_read(&old_stat->nid_exp_ref_count));
 
@@ -650,7 +651,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 destroy_new_ns:
 	if (new_stat->nid_proc != NULL)
 		lprocfs_remove(&new_stat->nid_proc);
-	cfs_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
+	cfs_hash_del(obd->obd_nid_stats_hash, &new_stat->nid,
+		     &new_stat->nid_hash);
 
 destroy_new:
 	nidstat_putref(new_stat);

@@ -1878,7 +1878,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 }
 
 static int
-check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
+check_write_checksum(struct obdo *oa, const struct lnet_processid *peer,
 		     __u32 client_cksum, __u32 server_cksum,
 		     struct osc_brw_async_args *aa)
 {
@@ -1951,7 +1951,7 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 			   DFID " object "DOSTID" extent [%llu-%llu], original "
 			   "client csum %x (type %x), server csum %x (type %x),"
 			   " client csum now %x\n",
-			   obd_name, msg, libcfs_nid2str(peer->nid),
+			   obd_name, msg, libcfs_nidstr(&peer->nid),
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
@@ -1970,7 +1970,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
 	struct client_obd *cli = aa->aa_cli;
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
-	const struct lnet_process_id *peer =
+	const struct lnet_processid *peer =
 		&req->rq_import->imp_connection->c_peer;
 	struct ost_body *body;
 	u32 client_cksum = 0;
@@ -2110,7 +2110,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 			GOTO(out, rc);
 
 		if (req->rq_bulk != NULL &&
-		    peer->nid != req->rq_bulk->bd_sender) {
+		    lnet_nid_to_nid4(&peer->nid) != req->rq_bulk->bd_sender) {
 			via = " via ";
 			router = libcfs_nid2str(req->rq_bulk->bd_sender);
 		}
@@ -2135,7 +2135,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					   " extent [%llu-%llu], client %x/%x, "
 					   "server %x, cksum_type %x\n",
 					   obd_name,
-					   libcfs_nid2str(peer->nid),
+					   libcfs_nidstr(&peer->nid),
 					   via, router,
 					   clbody->oa.o_valid & OBD_MD_FLFID ?
 						clbody->oa.o_parent_seq : 0ULL,
@@ -2164,7 +2164,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		if ((cksum_missed & (-cksum_missed)) == cksum_missed)
 			CERROR("%s: checksum %u requested from %s but not sent\n",
 			       obd_name, cksum_missed,
-			       libcfs_nid2str(peer->nid));
+			       libcfs_nidstr(&peer->nid));
 	} else {
 		rc = 0;
 	}

@@ -72,7 +72,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 	if (imp->imp_connection &&
 	    imp->imp_connection->c_remote_uuid.uuid[0] == 0)
 		/* nid4refnet is used to restrict network connections */
-		nid4refnet = imp->imp_connection->c_self;
+		nid4refnet = lnet_nid_to_nid4(&imp->imp_connection->c_self);
 	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, nid4refnet);
 	if (!ptlrpc_conn) {
 		CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
@@ -325,7 +325,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	const char *name = obd->obd_type->typ_name;
 	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
-	struct ptlrpc_connection fake_conn = { .c_self = 0,
+	struct ptlrpc_connection fake_conn = { .c_self = {},
 					       .c_remote_uuid.uuid[0] = 0 };
 	int rc;
 
@@ -548,7 +548,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			       rc);
 			GOTO(err_import, rc);
 		}
-		fake_conn.c_self = LNET_MKNID(refnet, 0);
+		lnet_nid4_to_nid(LNET_MKNID(refnet, 0), &fake_conn.c_self);
 		imp->imp_connection = &fake_conn;
 	}
 
@@ -1269,13 +1269,14 @@ int target_handle_connect(struct ptlrpc_request *req)
 	} else if ((mds_conn || (lw_client && initial_conn) ||
 		   OCD_HAS_FLAG(data, MDS_MDS)) && export->exp_connection) {
 		spin_unlock(&export->exp_lock);
-		if (req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+		if (req->rq_peer.nid !=
+		    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid)) {
 			/* MDS or LWP reconnected after failover. */
 			LCONSOLE_WARN("%s: Received %s connection from %s, removing former export from %s\n",
 				      target->obd_name,
 				      lw_client ? "LWP" : "MDS",
 				      libcfs_nid2str(req->rq_peer.nid),
-				      libcfs_nid2str(export->exp_connection->c_peer.nid));
+				      libcfs_nidstr(&export->exp_connection->c_peer.nid));
 		} else {
 			/* New connection from the same NID. */
 			LCONSOLE_WARN("%s: Received new %s connection from %s, %s former export from same NID\n",
@@ -1286,7 +1287,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 				      "keep" : "remove");
 		}
 
-		if (req->rq_peer.nid == export->exp_connection->c_peer.nid &&
+		if (req->rq_peer.nid ==
+		    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid) &&
 		    OCD_HAS_FLAG(data, MDS_MDS)) {
 			/*
 			 * Because exports between MDTs will always be
@@ -1308,14 +1310,14 @@ int target_handle_connect(struct ptlrpc_request *req)
 			rc = 0;
 		}
 	} else if (export->exp_connection != NULL && initial_conn &&
-		   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+		   req->rq_peer.nid != lnet_nid_to_nid4(&export->exp_connection->c_peer.nid)) {
 		spin_unlock(&export->exp_lock);
 		/* In MDS failover we have static UUID but NID can change. */
 		LCONSOLE_WARN("%s: Client %s seen on new nid %s when existing nid %s is already connected\n",
 			      target->obd_name, cluuid.uuid,
 			      libcfs_nid2str(req->rq_peer.nid),
-			      libcfs_nid2str(
-					export->exp_connection->c_peer.nid));
+			      libcfs_nidstr(
+				      &export->exp_connection->c_peer.nid));
 		rc = -EALREADY;
 		class_export_put(export);
 		export = NULL;
@@ -1503,7 +1505,8 @@ dont_check_exports:
 
 	/* Check to see if connection came from another NID. */
 	if (export->exp_connection != NULL &&
-	    export->exp_connection->c_peer.nid != req->rq_peer.nid) {
+	    lnet_nid_to_nid4(&export->exp_connection->c_peer.nid) !=
+	    req->rq_peer.nid) {
 		obd_nid_del(export->exp_obd, export);
 		ptlrpc_connection_put(export->exp_connection);
 		export->exp_connection = NULL;

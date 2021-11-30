@@ -372,12 +372,12 @@ static inline void sptlrpc_rule_set_init(struct sptlrpc_rule_set *set)
 void sptlrpc_rule_set_free(struct sptlrpc_rule_set *set);
 int  sptlrpc_rule_set_expand(struct sptlrpc_rule_set *set);
 int  sptlrpc_rule_set_merge(struct sptlrpc_rule_set *set,
-                            struct sptlrpc_rule *rule);
+			    struct sptlrpc_rule *rule);
 int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
-                            enum lustre_sec_part from,
-                            enum lustre_sec_part to,
-                            lnet_nid_t nid,
-                            struct sptlrpc_flavor *sf);
+			    enum lustre_sec_part from,
+			    enum lustre_sec_part to,
+			    lnet_nid_t nid,
+			    struct sptlrpc_flavor *sf);
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *set);
 
 int  sptlrpc_process_config(struct lustre_cfg *lcfg);
@@ -389,9 +389,9 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd);
 int  sptlrpc_conf_target_get_rules(struct obd_device *obd,
 				   struct sptlrpc_rule_set *rset);
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
-                                  enum lustre_sec_part from,
-                                  lnet_nid_t nid,
-                                  struct sptlrpc_flavor *flavor);
+				  enum lustre_sec_part from,
+				  lnet_nid_t nid,
+				  struct sptlrpc_flavor *flavor);
 
 /* The maximum length of security payload. 1024 is enough for Kerberos 5,
  * and should be enough for other future mechanisms but not sure.

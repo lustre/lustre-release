@@ -169,10 +169,10 @@ static u32 nid_keyhash(const void *data, u32 key_len, u32 seed)
 static int
 nid_keycmp(struct rhashtable_compare_arg *arg, const void *obj)
 {
-	const lnet_nid_t *nid = arg->key;
+	const struct lnet_nid *nid = arg->key;
 	const struct obd_export *exp = obj;
 
-	if (exp->exp_connection->c_peer.nid == *nid)
+	if (nid_same(&exp->exp_connection->c_peer.nid, nid))
 		return 0;
 
 	return -ESRCH;
@@ -187,7 +187,7 @@ nid_export_exit(void *vexport, void *data)
 }
 
 static const struct rhashtable_params nid_hash_params = {
-	.key_len		= sizeof(lnet_nid_t),
+	.key_len		= sizeof(struct lnet_nid),
 	.head_offset		= offsetof(struct obd_export, exp_nid_hash),
 	.obj_hashfn		= nid_keyhash,
 	.obj_cmpfn		= nid_keycmp,
@@ -233,7 +233,7 @@ void obd_nid_del(struct obd_device *obd, struct obd_export *exp)
 }
 EXPORT_SYMBOL(obd_nid_del);
 
-int obd_nid_export_for_each(struct obd_device *obd, lnet_nid_t nid,
+int obd_nid_export_for_each(struct obd_device *obd, struct lnet_nid *nid,
 			    int cb(struct obd_export *exp, void *data),
 			    void *data)
 {
@@ -242,7 +242,7 @@ int obd_nid_export_for_each(struct obd_device *obd, lnet_nid_t nid,
 	int ret = 0;
 
 	rcu_read_lock();
-	exports = rhltable_lookup(&obd->obd_nid_hash, &nid, nid_hash_params);
+	exports = rhltable_lookup(&obd->obd_nid_hash, nid, nid_hash_params);
 	if (!exports) {
 		ret = -ENODEV;
 		goto out_unlock;
@@ -2352,7 +2352,7 @@ EXPORT_SYMBOL(class_manual_cleanup);
 static unsigned
 nidstats_hash(struct cfs_hash *hs, const void *key, unsigned int mask)
 {
-	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
+	return cfs_hash_djb2_hash(key, sizeof(struct lnet_nid), mask);
 }
 
 static void *
@@ -2368,7 +2368,8 @@ nidstats_key(struct hlist_node *hnode)
 static int
 nidstats_keycmp(const void *key, struct hlist_node *hnode)
 {
-	return *(lnet_nid_t *)nidstats_key(hnode) == *(lnet_nid_t *)key;
+	return nid_same((struct lnet_nid *)nidstats_key(hnode),
+			 (struct lnet_nid *)key);
 }
 
 static void *
@@ -2396,14 +2397,13 @@ nidstats_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 }
 
 static struct cfs_hash_ops nid_stat_hash_ops = {
-	.hs_hash        = nidstats_hash,
-	.hs_key         = nidstats_key,
-	.hs_keycmp      = nidstats_keycmp,
-	.hs_object      = nidstats_object,
-	.hs_get         = nidstats_get,
-	.hs_put_locked  = nidstats_put_locked,
+	.hs_hash	= nidstats_hash,
+	.hs_key		= nidstats_key,
+	.hs_keycmp	= nidstats_keycmp,
+	.hs_object	= nidstats_object,
+	.hs_get		= nidstats_get,
+	.hs_put_locked	= nidstats_put_locked,
 };
-
 
 /*
  * client_generation<->export hash operations

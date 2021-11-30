@@ -818,14 +818,14 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 	spin_lock(&imp->imp_lock);
 	j = 0;
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
-		libcfs_nid2str_r(conn->oic_conn->c_peer.nid,
-				 nidstr, sizeof(nidstr));
+		libcfs_nidstr_r(&conn->oic_conn->c_peer.nid,
+				  nidstr, sizeof(nidstr));
 		seq_printf(m, "%s%s", j ? ", " : "", nidstr);
 		j++;
 	}
 	if (imp->imp_connection)
-		libcfs_nid2str_r(imp->imp_connection->c_peer.nid,
-				 nidstr, sizeof(nidstr));
+		libcfs_nidstr_r(&imp->imp_connection->c_peer.nid,
+				  nidstr, sizeof(nidstr));
 	else
 		strncpy(nidstr, "<none>", sizeof(nidstr));
 	seq_printf(m, " ]\n"

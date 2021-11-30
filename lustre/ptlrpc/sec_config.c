@@ -831,46 +831,47 @@ static void inline flavor_set_flags(struct sptlrpc_flavor *sf,
 }
 
 void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
-                                enum lustre_sec_part to,
-                                struct obd_uuid *target,
-                                lnet_nid_t nid,
-                                struct sptlrpc_flavor *sf)
+				enum lustre_sec_part to,
+				struct obd_uuid *target,
+				struct lnet_nid *nid,
+				struct sptlrpc_flavor *sf)
 {
-        struct sptlrpc_conf     *conf;
-        struct sptlrpc_conf_tgt *conf_tgt;
-        char                     name[MTI_NAME_MAXLEN];
-        int                      len, rc = 0;
+	struct sptlrpc_conf     *conf;
+	struct sptlrpc_conf_tgt *conf_tgt;
+	char                     name[MTI_NAME_MAXLEN];
+	int                      len, rc = 0;
 
 	obd_uuid2fsname(name, target->uuid, sizeof(name));
 
 	mutex_lock(&sptlrpc_conf_lock);
 
-        conf = sptlrpc_conf_get(name, 0);
-        if (conf == NULL)
-                goto out;
+	conf = sptlrpc_conf_get(name, 0);
+	if (conf == NULL)
+		goto out;
 
-        /* convert uuid name (supposed end with _UUID) to target name */
-        len = strlen(target->uuid);
-        LASSERT(len > 5);
-        memcpy(name, target->uuid, len - 5);
-        name[len - 5] = '\0';
+	/* convert uuid name (supposed end with _UUID) to target name */
+	len = strlen(target->uuid);
+	LASSERT(len > 5);
+	memcpy(name, target->uuid, len - 5);
+	name[len - 5] = '\0';
 
-        conf_tgt = sptlrpc_conf_get_tgt(conf, name, 0);
-        if (conf_tgt) {
-                rc = sptlrpc_rule_set_choose(&conf_tgt->sct_rset,
-                                             from, to, nid, sf);
-                if (rc)
-                        goto out;
-        }
+	conf_tgt = sptlrpc_conf_get_tgt(conf, name, 0);
+	if (conf_tgt) {
+		rc = sptlrpc_rule_set_choose(&conf_tgt->sct_rset,
+					     from, to, lnet_nid_to_nid4(nid), sf);
+		if (rc)
+			goto out;
+	}
 
-        rc = sptlrpc_rule_set_choose(&conf->sc_rset, from, to, nid, sf);
+	rc = sptlrpc_rule_set_choose(&conf->sc_rset, from, to,
+				     lnet_nid_to_nid4(nid), sf);
 out:
 	mutex_unlock(&sptlrpc_conf_lock);
 
-        if (rc == 0)
-                get_default_flavor(sf);
+	if (rc == 0)
+		get_default_flavor(sf);
 
-        flavor_set_flags(sf, from, to, 1);
+	flavor_set_flags(sf, from, to, 1);
 }
 
 /**
@@ -878,12 +879,12 @@ out:
  * certain peer (from, nid).
  */
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
-                                  enum lustre_sec_part from,
-                                  lnet_nid_t nid,
-                                  struct sptlrpc_flavor *sf)
+				  enum lustre_sec_part from,
+				  lnet_nid_t nid,
+				  struct sptlrpc_flavor *sf)
 {
-        if (sptlrpc_rule_set_choose(rset, from, LUSTRE_SP_ANY, nid, sf) == 0)
-                get_default_flavor(sf);
+	if (sptlrpc_rule_set_choose(rset, from, LUSTRE_SP_ANY, nid, sf) == 0)
+		get_default_flavor(sf);
 }
 
 #define SEC_ADAPT_DELAY         (10)

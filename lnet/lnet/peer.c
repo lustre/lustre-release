@@ -776,7 +776,7 @@ lnet_peer_ni_get_locked(struct lnet_peer *lp, struct lnet_nid *nid)
 }
 
 struct lnet_peer *
-lnet_find_peer(lnet_nid_t nid)
+lnet_find_peer4(lnet_nid_t nid)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer *lp = NULL;
@@ -784,6 +784,25 @@ lnet_find_peer(lnet_nid_t nid)
 
 	cpt = lnet_net_lock_current();
 	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni) {
+		lp = lpni->lpni_peer_net->lpn_peer;
+		lnet_peer_addref_locked(lp);
+		lnet_peer_ni_decref_locked(lpni);
+	}
+	lnet_net_unlock(cpt);
+
+	return lp;
+}
+
+struct lnet_peer *
+lnet_find_peer(struct lnet_nid *nid)
+{
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer *lp = NULL;
+	int cpt;
+
+	cpt = lnet_net_lock_current();
+	lpni = lnet_peer_ni_find_locked(nid);
 	if (lpni) {
 		lp = lpni->lpni_peer_net->lpn_peer;
 		lnet_peer_addref_locked(lp);
@@ -2333,11 +2352,11 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	pbuf = LNET_PING_INFO_TO_BUFFER(ev->md_start + ev->offset);
 
 	/* lnet_find_peer() adds a refcount */
-	lp = lnet_find_peer(ev->source.nid);
+	lp = lnet_find_peer(&ev->source.nid);
 	if (!lp) {
 		CDEBUG(D_NET, "Push Put from unknown %s (source %s). Ignoring...\n",
-		       libcfs_nid2str(ev->initiator.nid),
-		       libcfs_nid2str(ev->source.nid));
+		       libcfs_nidstr(&ev->initiator.nid),
+		       libcfs_nidstr(&ev->source.nid));
 		pbuf->pb_needs_post = true;
 		return;
 	}
@@ -2356,7 +2375,7 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		CDEBUG(D_NET, "Push Put error %d from %s (source %s)\n",
 		       ev->status,
 		       libcfs_nidstr(&lp->lp_primary_nid),
-		       libcfs_nid2str(ev->source.nid));
+		       libcfs_nidstr(&ev->source.nid));
 		goto out;
 	}
 
@@ -2661,8 +2680,8 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 
 	spin_lock(&lp->lp_lock);
 
-	lnet_nid4_to_nid(ev->target.nid, &lp->lp_disc_src_nid);
-	lnet_nid4_to_nid(ev->source.nid, &lp->lp_disc_dst_nid);
+	lp->lp_disc_src_nid = ev->target.nid;
+	lp->lp_disc_dst_nid = ev->source.nid;
 
 	/*
 	 * If some kind of error happened the contents of message
@@ -2674,7 +2693,7 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 		CDEBUG(D_NET, "Ping Reply error %d from %s (source %s)\n",
 		       ev->status,
 		       libcfs_nidstr(&lp->lp_primary_nid),
-		       libcfs_nid2str(ev->source.nid));
+		       libcfs_nidstr(&ev->source.nid));
 		goto out;
 	}
 
@@ -2861,7 +2880,7 @@ lnet_discovery_event_send(struct lnet_peer *lp, struct lnet_event *ev)
 out:
 	CDEBUG(D_NET, "%s Send to %s: %d\n",
 		(ev->msg_type == LNET_MSG_GET ? "Ping" : "Push"),
-		libcfs_nid2str(ev->target.nid), rc);
+		libcfs_nidstr(&ev->target.nid), rc);
 	return rc;
 }
 
@@ -4060,7 +4079,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	__u32 size;
 	int rc;
 
-	lp = lnet_find_peer(cfg->prcfg_prim_nid);
+	lp = lnet_find_peer4(cfg->prcfg_prim_nid);
 
 	if (!lp) {
 		rc = -ENOENT;

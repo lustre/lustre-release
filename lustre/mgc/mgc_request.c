@@ -1633,7 +1633,8 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	mgc_conn = class_exp2cliimp(cld->cld_mgcexp)->imp_connection;
 
 	/* don't need to get local config */
-	if (cld_is_nodemap(cld) && LNetIsPeerLocal(mgc_conn->c_peer.nid))
+	if (cld_is_nodemap(cld) &&
+	    LNetIsPeerLocal(lnet_nid_to_nid4(&mgc_conn->c_peer.nid)))
 		GOTO(out, rc = 0);
 
 	/* allocate buffer for bulk transfer.
