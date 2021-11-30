@@ -663,7 +663,7 @@ struct kib_peer_ni {
 	/* when (in seconds) I was last alive */
 	time64_t		ibp_last_alive;
 	/* # users */
-	atomic_t		ibp_refcount;
+	struct kref		ibp_kref;
 	/* version of peer_ni */
 	__u16			ibp_version;
 	/* current passive connection attempts */
@@ -784,23 +784,23 @@ do {									\
 	}								\
 } while (0)
 
-#define kiblnd_peer_addref(peer_ni)                                \
-do {                                                            \
-	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)++\n",                \
-	       (peer_ni), libcfs_nid2str((peer_ni)->ibp_nid),         \
-	       atomic_read (&(peer_ni)->ibp_refcount));        	\
-	atomic_inc(&(peer_ni)->ibp_refcount);                  	\
-} while (0)
+void kiblnd_destroy_peer(struct kref *kref);
 
-#define kiblnd_peer_decref(peer_ni)                                \
-do {                                                            \
-	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)--\n",                \
-	       (peer_ni), libcfs_nid2str((peer_ni)->ibp_nid),         \
-	       atomic_read (&(peer_ni)->ibp_refcount));        	\
-	LASSERT_ATOMIC_POS(&(peer_ni)->ibp_refcount);              \
-	if (atomic_dec_and_test(&(peer_ni)->ibp_refcount))     	\
-		kiblnd_destroy_peer(peer_ni);                      \
-} while (0)
+static inline void kiblnd_peer_addref(struct kib_peer_ni *peer_ni)
+{
+	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)++\n",
+	       peer_ni, libcfs_nid2str(peer_ni->ibp_nid),
+	       kref_read(&peer_ni->ibp_kref));
+	kref_get(&(peer_ni)->ibp_kref);
+}
+
+static inline void kiblnd_peer_decref(struct kib_peer_ni *peer_ni)
+{
+	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)--\n",
+	       peer_ni, libcfs_nid2str(peer_ni->ibp_nid),
+	       kref_read(&peer_ni->ibp_kref));
+	kref_put(&peer_ni->ibp_kref, kiblnd_destroy_peer);
+}
 
 static inline bool
 kiblnd_peer_connecting(struct kib_peer_ni *peer_ni)
@@ -1130,7 +1130,6 @@ int  kiblnd_translate_mtu(int value);
 int  kiblnd_dev_failover(struct kib_dev *dev, struct net *ns);
 int kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 		       lnet_nid_t nid);
-void kiblnd_destroy_peer(struct kib_peer_ni *peer);
 bool kiblnd_reconnect_peer(struct kib_peer_ni *peer);
 void kiblnd_destroy_dev(struct kib_dev *dev);
 void kiblnd_unlink_peer_locked(struct kib_peer_ni *peer_ni);

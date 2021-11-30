@@ -338,7 +338,7 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 	peer_ni->ibp_max_frags = IBLND_MAX_RDMA_FRAGS;
 	peer_ni->ibp_queue_depth = ni->ni_net->net_tunables.lct_peer_tx_credits;
 	peer_ni->ibp_queue_depth_mod = 0;	/* try to use the default */
-	atomic_set(&peer_ni->ibp_refcount, 1);	/* 1 ref for caller */
+	kref_init(&peer_ni->ibp_kref);
 
 	INIT_HLIST_NODE(&peer_ni->ibp_list);
 	INIT_LIST_HEAD(&peer_ni->ibp_conns);
@@ -359,12 +359,13 @@ kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 }
 
 void
-kiblnd_destroy_peer(struct kib_peer_ni *peer_ni)
+kiblnd_destroy_peer(struct kref *kref)
 {
+	struct kib_peer_ni *peer_ni = container_of(kref, struct kib_peer_ni,
+						   ibp_kref);
 	struct kib_net *net = peer_ni->ibp_ni->ni_data;
 
 	LASSERT(net != NULL);
-	LASSERT (atomic_read(&peer_ni->ibp_refcount) == 0);
 	LASSERT(!kiblnd_peer_active(peer_ni));
 	LASSERT(kiblnd_peer_idle(peer_ni));
 	LASSERT(list_empty(&peer_ni->ibp_tx_queue));
@@ -404,7 +405,7 @@ kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid)
 
 		CDEBUG(D_NET, "got peer_ni [%p] -> %s (%d) version: %x\n",
 		       peer_ni, libcfs_nid2str(nid),
-		       atomic_read(&peer_ni->ibp_refcount),
+		       kref_read(&peer_ni->ibp_kref),
 		       peer_ni->ibp_version);
 		return peer_ni;
 	}
@@ -442,7 +443,7 @@ kiblnd_get_peer_info(struct lnet_ni *ni, int index,
 			continue;
 
 		*nidp = peer_ni->ibp_nid;
-		*count = atomic_read(&peer_ni->ibp_refcount);
+		*count = kref_read(&peer_ni->ibp_kref);
 
 		read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 		return 0;
