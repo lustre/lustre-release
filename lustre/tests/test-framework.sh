@@ -8698,7 +8698,6 @@ mds_backup_restore() {
 	local devname=$(mdsdevname $(facet_number $facet))
 	local mntpt=$(facet_mntpt brpt)
 	local rcmd="do_facet $facet"
-	local metaea=${TMP}/backup_restore.ea
 	local metadata=${TMP}/backup_restore.tgz
 	local opts=${MDS_MOUNT_FS_OPTS}
 	local svc=${facet}_svc
@@ -8712,41 +8711,36 @@ mds_backup_restore() {
 	# step 1: build mount point
 	${rcmd} mkdir -p $mntpt
 	# step 2: cleanup old backup
-	${rcmd} rm -f $metaea $metadata
+	${rcmd} rm -f $metadata
 	# step 3: mount dev
-	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 1
+	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 3
 	if [ ! -z $igif ]; then
 		# step 3.5: rm .lustre
-		${rcmd} rm -rf $mntpt/ROOT/.lustre || return 1
+		${rcmd} rm -rf $mntpt/ROOT/.lustre || return 3
 	fi
-	# step 4: backup metaea
-	echo "backup EA"
-	${rcmd} "cd $mntpt && getfattr -R -d -m '.*' -P . > $metaea && cd -" ||
-		return 2
-	# step 5: backup metadata
+	# step 4: backup metadata
 	echo "backup data"
-	${rcmd} tar zcf $metadata -C $mntpt/ . > /dev/null 2>&1 || return 3
-	# step 6: umount
-	${rcmd} $UMOUNT $mntpt || return 4
-	# step 8: reformat dev
+	${rcmd} tar zcf $metadata --xattrs --xattrs-include="trusted.*" \
+		--sparse -C $mntpt/ . > /dev/null 2>&1 || return 4
+	# step 5: umount
+	${rcmd} $UMOUNT $mntpt || return 5
+	# step 6: reformat dev
 	echo "reformat new device"
 	format_mdt $(facet_number $facet)
-	# step 9: mount dev
+	# step 7: mount dev
 	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 7
-	# step 10: restore metadata
+	# step 8: restore metadata
 	echo "restore data"
-	${rcmd} tar zxfp $metadata -C $mntpt > /dev/null 2>&1 || return 8
-	# step 11: restore metaea
-	echo "restore EA"
-	${rcmd} "cd $mntpt && setfattr --restore=$metaea && cd - " || return 9
-	# step 12: remove recovery logs
+	${rcmd} tar zxfp $metadata --xattrs --xattrs-include="trusted.*" \
+		--sparse -C $mntpt > /dev/null 2>&1 || return 8
+	# step 9: remove recovery logs
 	echo "remove recovery logs"
 	${rcmd} rm -fv $mntpt/OBJECTS/* $mntpt/CATALOGS
-	# step 13: umount dev
+	# step 10: umount dev
 	${rcmd} $UMOUNT $mntpt || return 10
-	# step 14: cleanup tmp backup
+	# step 11: cleanup tmp backup
 	${rcmd} rm -f $metaea $metadata
-	# step 15: reset device label - it's not virgin on
+	# step 12: reset device label - it's not virgin on
 	${rcmd} e2label $devname ${!svc}
 }
 

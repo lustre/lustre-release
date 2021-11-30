@@ -27833,6 +27833,69 @@ test_903() {
 }
 run_test 903 "Test long page discard does not cause evictions"
 
+test_904() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
+	do_facet mds1 $DEBUGFS -R features $(mdsdevname 1) |
+		grep -q project || skip "skip project quota not supported"
+
+	local testfile="$DIR/$tdir/$tfile"
+	local xattr="trusted.projid"
+	local projid
+
+	mkdir -p $DIR/$tdir
+	touch $testfile
+	#should be hidden when projid is 0
+	$LFS project -p 0 $testfile ||
+		error "set $testfile project id failed"
+	getfattr -m - $testfile | grep $xattr &&
+		error "do not show trusted.projid with project ID 0"
+
+	#still can getxattr explicitly
+	projid=$(getfattr -n $xattr $testfile |
+		sed -n 's/^trusted\.projid="\(.*\)"/\1/p')
+	[ $projid == "0" ] ||
+		error "projid expected 0 not $projid"
+
+	#set the projid via setxattr
+	setfattr -n $xattr -v "1000" $testfile ||
+		error "setattr failed with $?"
+	projid=($($LFS project $testfile))
+	[ ${projid[0]} == "1000" ] ||
+		error "projid expected 1000 not $projid"
+
+	#check the new projid via getxattr
+	$LFS project -p 1001 $testfile ||
+		error "set $testfile project id failed"
+	projid=$(getfattr -n $xattr $testfile |
+		sed -n 's/^trusted\.projid="\(.*\)"/\1/p')
+	[ $projid == "1001" ] ||
+		error "projid expected 1001 not $projid"
+
+	#try to set invalid projid
+	setfattr -n $xattr -v "4294967295" $testfile &&
+		error "set invalid projid should fail"
+
+	#remove the xattr means setting projid to 0
+	setfattr -x $xattr $testfile ||
+		error "setfattr failed with $?"
+	projid=($($LFS project $testfile))
+	[ ${projid[0]} == "0" ] ||
+		error "projid expected 0 not $projid"
+
+	#should be hidden when parent has inherit flag and same projid
+	$LFS project -srp 1002 $DIR/$tdir ||
+		error "set $tdir project id failed"
+	getfattr -m - $testfile | grep $xattr &&
+		error "do not show trusted.projid with inherit flag"
+
+	#still can getxattr explicitly
+	projid=$(getfattr -n $xattr $testfile |
+		sed -n 's/^trusted\.projid="\(.*\)"/\1/p')
+	[ $projid == "1002" ] ||
+		error "projid expected 1002 not $projid"
+}
+run_test 904 "virtual project ID xattr"
+
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

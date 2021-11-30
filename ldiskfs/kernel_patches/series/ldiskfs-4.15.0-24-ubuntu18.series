@@ -26,3 +26,4 @@ suse15/ext4-export-mb-stream-allocator-variables.patch
 rhel8/ext4-xattr-disable-credits-check.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
+ubuntu18/ext4-projid-xattrs.patch

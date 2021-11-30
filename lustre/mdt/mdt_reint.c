@@ -717,6 +717,11 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	 */
 	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
 		lockpart |= MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
+	/* Clear xattr cache on clients, so the virtual project ID xattr
+	 * can get the new project ID
+	 */
+	if (ma->ma_attr.la_valid & LA_PROJID)
+		lockpart |= MDS_INODELOCK_XATTR;
 
 	rc = mdt_reint_striped_lock(info, mo, lh, lockpart, einfo,
 				    cos_incompat);

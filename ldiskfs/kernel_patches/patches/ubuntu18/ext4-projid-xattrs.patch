@@ -1,0 +1,220 @@
+Index: bionic/fs/ext4/ext4.h
+===================================================================
+--- bionic.orig/fs/ext4/ext4.h
++++ bionic/fs/ext4/ext4.h
+@@ -2669,6 +2669,7 @@ extern int ext4_ind_remove_space(handle_
+ /* ioctl.c */
+ extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
+ extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
++extern int ext4_ioctl_setproject(struct inode *, __u32);
+ 
+ /* migrate.c */
+ extern int ext4_ext_migrate(struct inode *);
+Index: bionic/fs/ext4/ioctl.c
+===================================================================
+--- bionic.orig/fs/ext4/ioctl.c
++++ bionic/fs/ext4/ioctl.c
+@@ -315,9 +315,8 @@ flags_out:
+ }
+ 
+ #ifdef CONFIG_QUOTA
+-static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
+ {
+-	struct inode *inode = file_inode(filp);
+ 	struct super_block *sb = inode->i_sb;
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+ 	int err, rc;
+@@ -344,19 +343,14 @@ static int ext4_ioctl_setproject(struct
+ 	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
+ 		return 0;
+ 
+-	err = mnt_want_write_file(filp);
+-	if (err)
+-		return err;
+-
+ 	err = -EPERM;
+-	inode_lock(inode);
+ 	/* Is it quota file? Do not allow user to mess with it */
+ 	if (ext4_is_quota_file(inode))
+-		goto out_unlock;
++		goto out;
+ 
+ 	err = ext4_get_inode_loc(inode, &iloc);
+ 	if (err)
+-		goto out_unlock;
++		goto out;
+ 
+ 	raw_inode = ext4_raw_inode(&iloc);
+ 	if (!EXT4_FITS_IN_INODE(raw_inode, ei, i_projid)) {
+@@ -364,7 +358,7 @@ static int ext4_ioctl_setproject(struct
+ 					      EXT4_SB(sb)->s_want_extra_isize,
+ 					      &iloc);
+ 		if (err)
+-			goto out_unlock;
++			goto out;
+ 	} else {
+ 		brelse(iloc.bh);
+ 	}
+@@ -376,7 +370,7 @@ static int ext4_ioctl_setproject(struct
+ 		EXT4_QUOTA_DEL_BLOCKS(sb) + 3);
+ 	if (IS_ERR(handle)) {
+ 		err = PTR_ERR(handle);
+-		goto out_unlock;
++		goto out;
+ 	}
+ 
+ 	err = ext4_reserve_inode_write(handle, inode, &iloc);
+@@ -405,13 +399,11 @@ out_dirty:
+ 		err = rc;
+ out_stop:
+ 	ext4_journal_stop(handle);
+-out_unlock:
+-	inode_unlock(inode);
+-	mnt_drop_write_file(filp);
++out:
+ 	return err;
+ }
+ #else
+-static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++static int ext4_ioctl_setproject(struct inode *inode, __u32 projid)
+ {
+ 	if (projid != EXT4_DEF_PROJID)
+ 		return -EOPNOTSUPP;
+@@ -1037,7 +1029,14 @@ resizefs_out:
+ 		if (err)
+ 			return err;
+ 
++		err = mnt_want_write_file(filp);
++		if (err)
++			return err;
++
++		inode_lock(inode);
+ 		err = ext4_ioctl_setproject(filp, fa.fsx_projid);
++		inode_unlock(inode);
++		mnt_drop_write_file(filp);
+ 		if (err)
+ 			return err;
+ 
+Index: bionic/fs/ext4/xattr.c
+===================================================================
+--- bionic.orig/fs/ext4/xattr.c
++++ bionic/fs/ext4/xattr.c
+@@ -61,6 +61,8 @@
+ #include "xattr.h"
+ #include "acl.h"
+ 
++#define EXT4_XATTR_PROJID "projid"
++
+ #ifdef EXT4_XATTR_DEBUG
+ # define ea_idebug(inode, fmt, ...)					\
+ 	printk(KERN_DEBUG "inode %s:%lu: " fmt "\n",			\
+@@ -644,11 +646,30 @@ ext4_xattr_get(struct inode *inode, int
+ 		return -ERANGE;
+ 
+ 	down_read(&EXT4_I(inode)->xattr_sem);
++	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
++	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
++	    ext4_has_feature_project(inode->i_sb)) {
++		/* 10 chars to hold u32 in decimal, plus ending \0 */
++		char value[11];
++		__u32 projid = (__u32)from_kprojid(&init_user_ns,
++						   EXT4_I(inode)->i_projid);
++		error = snprintf(value, sizeof(value), "%u", projid);
++		if (buffer) {
++			if (error > buffer_size) {
++				error = -ERANGE;
++				goto out;
++			}
++			memcpy(buffer, value, error);
++		}
++		goto out;
++	}
++
+ 	error = ext4_xattr_ibody_get(inode, name_index, name, buffer,
+ 				     buffer_size);
+ 	if (error == -ENODATA)
+ 		error = ext4_xattr_block_get(inode, name_index, name, buffer,
+ 					     buffer_size);
++out:
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
+@@ -773,7 +794,33 @@ ext4_listxattr(struct dentry *dentry, ch
+ 	ret = ext4_xattr_block_list(dentry, buffer, buffer_size);
+ 	if (ret < 0)
+ 		goto errout;
++	if (buffer) {
++		buffer += ret;
++		buffer_size -= ret;
++	}
+ 	ret += ret2;
++	if (ext4_has_feature_project(dentry->d_sb)) {
++		size_t prefix_len = strlen(XATTR_TRUSTED_PREFIX);
++		size_t name_len = strlen(EXT4_XATTR_PROJID);
++		size_t size = prefix_len + name_len + 1;
++
++		if (__kprojid_val(EXT4_I(dentry->d_inode)->i_projid) ==
++							EXT4_DEF_PROJID)
++			goto errout;
++		if (buffer) {
++			if (size > buffer_size) {
++				ret = -ERANGE;
++				goto errout;
++			}
++			strncpy(buffer, XATTR_TRUSTED_PREFIX, prefix_len);
++			buffer += prefix_len;
++			strncpy(buffer, EXT4_XATTR_PROJID, name_len);
++			buffer += name_len;
++			*buffer++ = 0;
++			buffer_size -= size;
++		}
++		ret += size;
++	}
+ errout:
+ 	up_read(&EXT4_I(d_inode(dentry))->xattr_sem);
+ 	return ret;
+@@ -2487,6 +2534,43 @@ ext4_xattr_set(struct inode *inode, int
+ 	int error, retries = 0;
+ 	int credits;
+ 
++	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
++	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
++	    ext4_has_feature_project(inode->i_sb)) {
++		/* 10 chars to hold u32 in decimal, plus ending \0 */
++		char buffer[11];
++		__u32 projid;
++
++		/*
++		 * Project Quota ID state is only allowed to change from within
++		 * the init namespace.
++		 */
++		if (current_user_ns() != &init_user_ns)
++			return -EINVAL;
++
++		if (value && value_len) {
++			if (value_len >= sizeof(buffer))
++				return -EINVAL;
++			memcpy(buffer, value, value_len);
++			buffer[value_len] = '\0';
++			error = kstrtouint(buffer, 0, &projid);
++			if (error)
++				return error;
++		} else {
++			projid = EXT4_DEF_PROJID;
++		}
++
++		/*
++		 * Caller is allowed to change the project ID. If it is being
++		 * changed, make sure that the new value is valid.
++		 */
++		if (!projid_valid(make_kprojid(&init_user_ns, projid)))
++			return -EINVAL;
++
++		error = ext4_ioctl_setproject(inode, projid);
++		return error;
++	}
++
+ 	error = dquot_initialize(inode);
+ 	if (error)
+ 		return error;

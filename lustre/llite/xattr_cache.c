@@ -610,6 +610,21 @@ int ll_xattr_cache_get(struct inode *inode,
 				else
 					rc = -ERANGE;
 			}
+		/* Return the project id when the virtual project id xattr
+		 * is explicitly asked.
+		 */
+		} else if (strcmp(name, XATTR_NAME_PROJID) == 0) {
+			/* 10 chars to hold u32 in decimal, plus ending \0 */
+			char projid[11];
+
+			rc = snprintf(projid, sizeof(projid),
+				      "%u", lli->lli_projid);
+			if (size != 0) {
+				if (rc <= size)
+					memcpy(buffer, projid, rc);
+				else
+					rc = -ERANGE;
+			}
 		}
 	} else if (valid & OBD_MD_FLXATTRLS) {
 		rc = ll_xattr_cache_list(&lli->lli_xattrs,

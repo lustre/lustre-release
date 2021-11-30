@@ -623,6 +623,7 @@ static int ll_xattr_get(const struct xattr_handler *handler,
 
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
+	struct inode *dir = d_inode(dentry->d_parent);
 	struct inode *inode = dentry->d_inode;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	ktime_t kstart = ktime_get();
@@ -663,6 +664,20 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 			struct ll_cl_context *lcc = ll_cl_find(inode);
 
 			if (!lcc || !lcc->lcc_getencctx)
+				hide_xattr = true;
+		}
+
+		/* Hide virtual project id xattr from the list when
+		 * parent has the inherit flag and the same project id,
+		 * so project id won't be messed up by copying the xattrs
+		 * when mv to a tree with different project id.
+		 */
+		if (get_xattr_type(xattr_name)->flags == XATTR_TRUSTED_T &&
+		    strcmp(xattr_name, XATTR_NAME_PROJID) == 0) {
+			if (ll_i2info(inode)->lli_projid ==
+					ll_i2info(dir)->lli_projid &&
+			    test_bit(LLIF_PROJECT_INHERIT,
+				     &ll_i2info(dir)->lli_flags))
 				hide_xattr = true;
 		}
 
