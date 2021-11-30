@@ -2306,13 +2306,23 @@ use_lpn:
 	}
 
 	/*
-	 * Discover this gateway if it hasn't already been discovered.
-	 * This means we might delay the message until discovery has
-	 * completed
+	 * If the router checker is not active then discover the gateway here.
+	 * This ensures we are able to take advantage of multi-rail routing, but
+	 * if the router checker is active then we do not unecessarily delay
+	 * messages while the gateway is being checked by the dedicated monitor
+	 * thread.
+	 *
+	 * NB: We're only checking the alive_router_check_interval here, rather
+	 * than calling lnet_router_checker_active(), because the other
+	 * conditions that are checked by that function are either
+	 * irrelevant (the_lnet.ln_routing) or must be true (list of routers
+	 * is not empty)
 	 */
-	rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_cpt);
-	if (rc)
-		return rc;
+	if (alive_router_check_interval <= 0) {
+		rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_cpt);
+		if (rc)
+			return rc;
+	}
 
 	if (!sd->sd_best_ni) {
 		lpn = gwni->lpni_peer_net;
