@@ -261,7 +261,7 @@ static void lnet_set_lnd_timeout(void)
  */
 static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 
-static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
+static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_process_id __user *ids,
 		     int n_ids);
 
@@ -4657,7 +4657,7 @@ lnet_ping_event_handler(struct lnet_event *event)
 		complete(&pd->completion);
 }
 
-static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
+static int lnet_ping(struct lnet_process_id id4, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_process_id __user *ids,
 		     int n_ids)
 {
@@ -4665,13 +4665,14 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 	struct ping_data pd = { 0 };
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_process_id tmpid;
+	struct lnet_processid id;
 	int i;
 	int nob;
 	int rc;
 	int rc2;
 
 	/* n_ids limit is arbitrary */
-	if (n_ids <= 0 || id.nid == LNET_NID_ANY)
+	if (n_ids <= 0 || id4.nid == LNET_NID_ANY)
 		return -EINVAL;
 
 	/*
@@ -4681,8 +4682,8 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 	if (n_ids > lnet_interfaces_max)
 		n_ids = lnet_interfaces_max;
 
-	if (id.pid == LNET_PID_ANY)
-		id.pid = LNET_PID_LUSTRE;
+	if (id4.pid == LNET_PID_ANY)
+		id4.pid = LNET_PID_LUSTRE;
 
 	pbuf = lnet_ping_buffer_alloc(n_ids, GFP_NOFS);
 	if (!pbuf)
@@ -4705,8 +4706,8 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 		goto fail_ping_buffer_decref;
 	}
 
-	rc = LNetGet(lnet_nid_to_nid4(src_nid), pd.mdh, id,
-		     LNET_RESERVED_PORTAL,
+	lnet_pid4_to_pid(id4, &id);
+	rc = LNetGet(src_nid, pd.mdh, &id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, false);
 
 	if (rc != 0) {
@@ -4734,7 +4735,7 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 
 	if (nob < 8) {
 		CERROR("%s: ping info too short %d\n",
-		       libcfs_id2str(id), nob);
+		       libcfs_id2str(id4), nob);
 		goto fail_ping_buffer_decref;
 	}
 
@@ -4742,19 +4743,19 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 		lnet_swap_pinginfo(pbuf);
 	} else if (pbuf->pb_info.pi_magic != LNET_PROTO_PING_MAGIC) {
 		CERROR("%s: Unexpected magic %08x\n",
-		       libcfs_id2str(id), pbuf->pb_info.pi_magic);
+		       libcfs_id2str(id4), pbuf->pb_info.pi_magic);
 		goto fail_ping_buffer_decref;
 	}
 
 	if ((pbuf->pb_info.pi_features & LNET_PING_FEAT_NI_STATUS) == 0) {
 		CERROR("%s: ping w/o NI status: 0x%x\n",
-		       libcfs_id2str(id), pbuf->pb_info.pi_features);
+		       libcfs_id2str(id4), pbuf->pb_info.pi_features);
 		goto fail_ping_buffer_decref;
 	}
 
 	if (nob < LNET_PING_INFO_SIZE(0)) {
 		CERROR("%s: Short reply %d(%d min)\n",
-		       libcfs_id2str(id),
+		       libcfs_id2str(id4),
 		       nob, (int)LNET_PING_INFO_SIZE(0));
 		goto fail_ping_buffer_decref;
 	}
@@ -4764,7 +4765,7 @@ static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 
 	if (nob < LNET_PING_INFO_SIZE(n_ids)) {
 		CERROR("%s: Short reply %d(%d expected)\n",
-		       libcfs_id2str(id),
+		       libcfs_id2str(id4),
 		       nob, (int)LNET_PING_INFO_SIZE(n_ids));
 		goto fail_ping_buffer_decref;
 	}

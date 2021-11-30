@@ -165,13 +165,11 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
 	struct obd_export	*exp = desc->bd_export;
-	lnet_nid_t		 self_nid4;
 	struct lnet_nid		 self_nid;
-	struct lnet_process_id	 peer_id4;
 	struct lnet_processid	 peer_id;
-	int			  rc = 0;
-	__u64			  mbits;
-	int			  posted_md;
+	int			 rc = 0;
+	__u64			 mbits;
+	int			 posted_md;
 	int			 total_md;
 	struct lnet_md		 md;
 	ENTRY;
@@ -190,10 +188,8 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	 * request, so they are based on the route taken by the
 	 * message.
 	 */
-	self_nid4 = desc->bd_req->rq_self;
-	peer_id4 = desc->bd_req->rq_source;
-	lnet_nid4_to_nid(self_nid4, &self_nid);
-	lnet_pid4_to_pid(peer_id4, &peer_id);
+	lnet_nid4_to_nid(desc->bd_req->rq_self, &self_nid);
+	lnet_pid4_to_pid(desc->bd_req->rq_source, &peer_id);
 
 	/* NB total length may be 0 for a read past EOF, so we send 0
 	 * length bulks, since the client expects bulk events.
@@ -241,15 +237,15 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 				     LNET_ACK_REQ, &peer_id,
 				     desc->bd_portal, mbits, 0, 0);
 		else
-			rc = LNetGet(self_nid4, desc->bd_mds[posted_md],
-				     peer_id4, desc->bd_portal,
+			rc = LNetGet(&self_nid, desc->bd_mds[posted_md],
+				     &peer_id, desc->bd_portal,
 				     mbits, 0, false);
 
 		posted_md++;
 		if (rc != 0) {
 			CERROR("%s: failed bulk transfer with %s:%u x%llu: "
 			       "rc = %d\n", exp->exp_obd->obd_name,
-			       libcfs_id2str(peer_id4), desc->bd_portal,
+			       libcfs_idstr(&peer_id), desc->bd_portal,
 			       mbits, rc);
 			break;
 		}
@@ -270,7 +266,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 	CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
 	       "id %s mbits %#llx-%#llx\n", desc->bd_iov_count,
-	       desc->bd_nob, desc->bd_portal, libcfs_id2str(peer_id4),
+	       desc->bd_nob, desc->bd_portal, libcfs_idstr(&peer_id),
 	       mbits - posted_md, mbits - 1);
 
 	RETURN(0);

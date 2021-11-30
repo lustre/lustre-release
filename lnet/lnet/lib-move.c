@@ -3891,7 +3891,7 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 	       void *user_data, lnet_handler_t handler, bool recovery)
 {
 	struct lnet_md md = { NULL };
-	struct lnet_process_id id;
+	struct lnet_processid id;
 	struct lnet_ping_buffer *pbuf;
 	int rc;
 
@@ -3923,9 +3923,9 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 		goto fail_error;
 	}
 	id.pid = LNET_PID_LUSTRE;
-	id.nid = lnet_nid_to_nid4(dest_nid);
+	id.nid = *dest_nid;
 
-	rc = LNetGet(LNET_NID_ANY, *mdh, id,
+	rc = LNetGet(NULL, *mdh, &id,
 		     LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, recovery);
 
@@ -5210,8 +5210,8 @@ EXPORT_SYMBOL(lnet_set_reply_msg_len);
  * \retval -ENOENT Invalid MD object.
  */
 int
-LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
-	struct lnet_process_id target4, unsigned int portal,
+LNetGet(struct lnet_nid *self, struct lnet_handle_md mdh,
+	struct lnet_processid *target, unsigned int portal,
 	__u64 match_bits, unsigned int offset, bool recovery)
 {
 	struct lnet_msg *msg;
@@ -5219,27 +5219,21 @@ LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 	struct lnet_rsp_tracker *rspt;
 	int cpt;
 	int rc;
-	struct lnet_nid self;
-	struct lnet_processid target;
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
-	lnet_nid4_to_nid(self4, &self);
-	lnet_nid4_to_nid(target4.nid, &target.nid);
-	target.pid = target4.pid;
-
 	if (!list_empty(&the_lnet.ln_test_peers) &&	/* normally we don't */
-	    fail_peer(&target.nid, 1))		/* shall we now? */
+	    fail_peer(&target->nid, 1))		/* shall we now? */
 	{
 		CERROR("Dropping GET to %s: simulated failure\n",
-		       libcfs_id2str(target4));
+		       libcfs_idstr(target));
 		return -EIO;
 	}
 
 	msg = lnet_msg_alloc();
 	if (!msg) {
 		CERROR("Dropping GET to %s: ENOMEM on struct lnet_msg\n",
-		       libcfs_id2str(target4));
+		       libcfs_idstr(target));
 		return -ENOMEM;
 	}
 
@@ -5248,7 +5242,7 @@ LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 	rspt = lnet_rspt_alloc(cpt);
 	if (!rspt) {
 		CERROR("Dropping GET to %s: ENOMEM on response tracker\n",
-		       libcfs_id2str(target4));
+		       libcfs_idstr(target));
 		return -ENOMEM;
 	}
 	INIT_LIST_HEAD(&rspt->rspt_on_list);
@@ -5260,7 +5254,7 @@ LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 	md = lnet_handle2md(&mdh);
 	if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
 		CERROR("Dropping GET (%llu:%d:%s): MD (%d) invalid\n",
-		       match_bits, portal, libcfs_id2str(target4),
+		       match_bits, portal, libcfs_idstr(target),
 		       md == NULL ? -1 : md->md_threshold);
 		if (md != NULL && md->md_me != NULL)
 			CERROR("REPLY MD also attached to portal %d\n",
@@ -5273,11 +5267,11 @@ LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 		return -ENOENT;
 	}
 
-	CDEBUG(D_NET, "%s -> %s\n", __func__, libcfs_id2str(target4));
+	CDEBUG(D_NET, "%s -> %s\n", __func__, libcfs_idstr(target));
 
 	lnet_msg_attach_md(msg, md, 0, 0);
 
-	lnet_prep_send(msg, LNET_MSG_GET, &target, 0, 0);
+	lnet_prep_send(msg, LNET_MSG_GET, target, 0, 0);
 
 	msg->msg_hdr.msg.get.match_bits = cpu_to_le64(match_bits);
 	msg->msg_hdr.msg.get.ptl_index = cpu_to_le32(portal);
@@ -5299,10 +5293,10 @@ LNetGet(lnet_nid_t self4, struct lnet_handle_md mdh,
 	else
 		lnet_rspt_free(rspt, cpt);
 
-	rc = lnet_send(&self, msg, NULL);
+	rc = lnet_send(self, msg, NULL);
 	if (rc < 0) {
 		CNETERR("Error sending GET to %s: %d\n",
-			libcfs_id2str(target4), rc);
+			libcfs_idstr(target), rc);
 		msg->msg_no_resend = true;
 		lnet_finalize(msg, rc);
 	}

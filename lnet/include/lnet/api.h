@@ -144,13 +144,13 @@ int LNetPut(struct lnet_nid		*self,
 	    unsigned int		offset_in,
 	    __u64			hdr_data_in);
 
-int LNetGet(lnet_nid_t	      self,
-	    struct lnet_handle_md md_in,
-	    struct lnet_process_id target_in,
-	    unsigned int      portal_in,
-	    __u64	      match_bits_in,
-	    unsigned int      offset_in,
-	    bool	      recovery);
+int LNetGet(struct lnet_nid		*self,
+	    struct lnet_handle_md	md_in,
+	    struct lnet_processid	*target_in,
+	    unsigned int		portal_in,
+	    __u64			match_bits_in,
+	    unsigned int		offset_in,
+	    bool			recovery);
 /** @} lnet_data */
 
 
