@@ -264,16 +264,16 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 
 	/* don't use 0@lo, use the first non-lo local NID instead */
 	if (nid == LNET_NID_LO_0) {
-		struct lnet_process_id id;
+		struct lnet_processid id;
 		int i = 0;
 
 		do {
 			rc = LNetGetId(i++, &id);
 			if (rc < 0)
 				RETURN(ERR_PTR(-EINVAL));
-		} while (id.nid == LNET_NID_LO_0);
+		} while (nid_is_lo0(&id.nid));
 
-		nid = id.nid;
+		nid = lnet_nid_to_nid4(&id.nid);
 		CDEBUG(D_INFO, "found nid %s\n", libcfs_nid2str(nid));
 	}
 

@@ -212,7 +212,7 @@ MODULE_ALIAS_FS("lustre");
 
 static int __init lustre_init(void)
 {
-	struct lnet_process_id lnet_id;
+	struct lnet_processid lnet_id;
 	int i, rc;
 	unsigned long lustre_inode_cache_flags;
 

@@ -1094,7 +1094,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_desc	*desc;
-	struct lnet_process_id lnet_id;
+	struct lnet_processid lnet_id;
 	int i = 0;
 	int rc;
 
@@ -1128,8 +1128,8 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * can distribute subdirs evenly from the beginning.
 	 */
 	while (LNetGetId(i++, &lnet_id) != -ENOENT) {
-		if (lnet_id.nid != LNET_NID_LO_0) {
-			lmv->lmv_qos_rr_index = (u32)lnet_id.nid;
+		if (!nid_is_lo0(&lnet_id.nid)) {
+			lmv->lmv_qos_rr_index = ntohl(lnet_id.nid.nid_addr[0]);
 			break;
 		}
 	}
@@ -1212,15 +1212,15 @@ static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
 
 	/* choose initial MDT for this client */
 	for (i = 0;; i++) {
-		struct lnet_process_id lnet_id;
+		struct lnet_processid lnet_id;
 		if (LNetGetId(i, &lnet_id) == -ENOENT)
 			break;
 
-		if (lnet_id.nid != LNET_NID_LO_0) {
+		if (!nid_is_lo0(&lnet_id.nid)) {
 			/* We dont need a full 64-bit modulus, just enough
 			 * to distribute the requests across MDTs evenly.
 			 */
-			lmv->lmv_statfs_start = (u32)lnet_id.nid %
+			lmv->lmv_statfs_start = nidhash(&lnet_id.nid) %
 						lmv->lmv_mdt_count;
 			break;
 		}

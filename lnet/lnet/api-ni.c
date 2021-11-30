@@ -261,7 +261,7 @@ static void lnet_set_lnd_timeout(void)
  */
 static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 
-static int lnet_ping(struct lnet_process_id id, lnet_nid_t src_nid,
+static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_process_id __user *ids,
 		     int n_ids);
 
@@ -3935,7 +3935,8 @@ LNetCtl(unsigned int cmd, void *arg)
 {
 	struct libcfs_ioctl_data *data = arg;
 	struct lnet_ioctl_config_data *config;
-	struct lnet_process_id	  id = {0};
+	struct lnet_process_id	  id4 = {};
+	struct lnet_processid	  id = {};
 	struct lnet_ni		 *ni;
 	struct lnet_nid		  nid;
 	int			  rc;
@@ -3946,7 +3947,7 @@ LNetCtl(unsigned int cmd, void *arg)
 	switch (cmd) {
 	case IOC_LIBCFS_GET_NI:
 		rc = LNetGetId(data->ioc_count, &id);
-		data->ioc_nid = id.nid;
+		data->ioc_nid = lnet_nid_to_nid4(&id.nid);
 		return rc;
 
 	case IOC_LIBCFS_FAIL_NID:
@@ -4325,8 +4326,8 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_PING: {
 		signed long timeout;
 
-		id.nid = data->ioc_nid;
-		id.pid = data->ioc_u32[0];
+		id4.nid = data->ioc_nid;
+		id4.pid = data->ioc_u32[0];
 
 		/* If timeout is negative then set default of 3 minutes */
 		if (((s32)data->ioc_u32[1] <= 0) ||
@@ -4335,7 +4336,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		else
 			timeout = nsecs_to_jiffies(data->ioc_u32[1] * NSEC_PER_MSEC);
 
-		rc = lnet_ping(id, LNET_NID_ANY, timeout, data->ioc_pbuf1,
+		rc = lnet_ping(id4, &LNET_ANY_NID, timeout, data->ioc_pbuf1,
 			       data->ioc_plen1 / sizeof(struct lnet_process_id));
 
 		if (rc < 0)
@@ -4347,9 +4348,9 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_PING_PEER: {
 		struct lnet_ioctl_ping_data *ping = arg;
+		struct lnet_nid src_nid = LNET_ANY_NID;
 		struct lnet_peer *lp;
 		signed long timeout;
-		lnet_nid_t src_nid = LNET_NID_ANY;
 
 		/* Check if the supplied ping data supports source nid
 		 * NB: This check is sufficient if lnet_ioctl_ping_data has
@@ -4360,7 +4361,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		 * compatibility scheme.
 		 */
 		if (ping->ping_hdr.ioc_len >= sizeof(struct lnet_ioctl_ping_data))
-			src_nid = ping->ping_src;
+			lnet_nid4_to_nid(ping->ping_src, &src_nid);
 
 		/* If timeout is negative then set default of 3 minutes */
 		if (((s32)ping->op_param) <= 0 ||
@@ -4369,7 +4370,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		else
 			timeout = nsecs_to_jiffies(ping->op_param * NSEC_PER_MSEC);
 
-		rc = lnet_ping(ping->ping_id, src_nid, timeout,
+		rc = lnet_ping(ping->ping_id, &src_nid, timeout,
 			       ping->ping_buf,
 			       ping->ping_count);
 		if (rc < 0)
@@ -4577,7 +4578,7 @@ EXPORT_SYMBOL(LNetIsPeerLocal);
  * \retval -ENOENT If no interface has been found.
  */
 int
-LNetGetId(unsigned int index, struct lnet_process_id *id)
+LNetGetId(unsigned int index, struct lnet_processid *id)
 {
 	struct lnet_ni	 *ni;
 	struct lnet_net  *net;
@@ -4596,7 +4597,7 @@ LNetGetId(unsigned int index, struct lnet_process_id *id)
 			if (index-- != 0)
 				continue;
 
-			id->nid = lnet_nid_to_nid4(&ni->ni_nid);
+			id->nid = ni->ni_nid;
 			id->pid = the_lnet.ln_pid;
 			rc = 0;
 			break;
@@ -4635,7 +4636,7 @@ lnet_ping_event_handler(struct lnet_event *event)
 		complete(&pd->completion);
 }
 
-static int lnet_ping(struct lnet_process_id id, lnet_nid_t src_nid,
+static int lnet_ping(struct lnet_process_id id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_process_id __user *ids,
 		     int n_ids)
 {
@@ -4683,7 +4684,7 @@ static int lnet_ping(struct lnet_process_id id, lnet_nid_t src_nid,
 		goto fail_ping_buffer_decref;
 	}
 
-	rc = LNetGet(src_nid, pd.mdh, id,
+	rc = LNetGet(lnet_nid_to_nid4(src_nid), pd.mdh, id,
 		     LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, false);
 

@@ -1693,12 +1693,12 @@ lstcon_session_match(struct lst_sid sid)
 static void
 lstcon_new_session_id(struct lst_sid *sid)
 {
-	struct lnet_process_id id;
+	struct lnet_processid id;
 
 	LASSERT(console_session.ses_state == LST_SESSION_NONE);
 
 	LNetGetId(1, &id);
-	sid->ses_nid = id.nid;
+	sid->ses_nid = lnet_nid_to_nid4(&id.nid);
 	sid->ses_stamp = div_u64(ktime_get_ns(), NSEC_PER_MSEC);
 }
 
