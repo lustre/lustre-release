@@ -1555,7 +1555,7 @@ enum lq_flag {
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
-	__u32			 lqr_start_idx;	/* start index of new inode */
+	atomic_t		 lqr_start_idx;	/* start index of new inode */
 	__u32			 lqr_offset_idx;/* aliasing for start_idx */
 	int			 lqr_start_count;/* reseed counter */
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
