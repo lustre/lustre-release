@@ -530,8 +530,10 @@ test_0d() {
 		verify_comp_extent $tf-3 ${ids[$i]} 0 EOF
 	done
 
-	$mirror_cmd -N $tf-3 &> /dev/null &&
-		error "exceeded maximum mirror count $mirror_count" || true
+	$mirror_cmd -N $tf-3 &> /dev/null
+	rc=$?
+	[[ $rc == 34 ]] ||
+		error "exceeded maximum mirror count returns $rc not ERANGE(34)"
 }
 run_test 0d "lfs mirror extend with -N option"
 

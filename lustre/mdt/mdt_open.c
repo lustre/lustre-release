@@ -2348,6 +2348,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	struct md_attr *ma = &info->mti_attr;
 	struct lu_fid *ofid = &info->mti_tmp_fid1;
 	int rc = 0;
+	int rc2;
 	u64 open_flags;
 	u64 intent;
 
@@ -2379,8 +2380,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		rc = mdt_close_handle_layouts(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_INODE,
-			       "%s: cannot swap layout of "DFID": rc = %d\n",
+			       "%s: cannot %s layout of "DFID": rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
+			       intent == MDS_CLOSE_LAYOUT_MERGE ? "merge" :
+			       intent == MDS_CLOSE_LAYOUT_SPLIT ? "split" :
+			       "swap",
 			       PFID(ofid), rc);
 			/* continue to close even if error occurred. */
 		}
@@ -2388,6 +2392,13 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	}
 	case MDS_CLOSE_RESYNC_DONE:
 		rc = mdt_close_resync_done(info, o, ma);
+		if (rc < 0) {
+			CDEBUG(D_INODE,
+			       "%s: cannot resync layout of "DFID": rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(ofid), rc);
+			/* continue to close even if error occurred. */
+		}
 		break;
 	default:
 		/* nothing */
@@ -2396,15 +2407,16 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
 	if (S_ISREG(lu_object_attr(&o->mot_obj)) &&
 	    ma->ma_attr.la_valid & (LA_LSIZE | LA_LBLOCKS)) {
-		int rc2;
-
 		rc2 = mdt_lsom_update(info, o, false);
-		if (rc2 < 0)
+		if (rc2 < 0) {
 			CDEBUG(D_INODE,
 			       "%s: File " DFID " LSOM failed: rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PFID(ofid), rc2);
-			/* continue to close even if error occured. */
+			if (rc == 0)
+				rc = rc2;
+			/* continue to close even if error occurred. */
+		}
 	}
 
 	if (open_flags & MDS_FMODE_WRITE)
@@ -2423,27 +2435,49 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		ma->ma_attr.la_valid &= (LA_ATIME | LA_MTIME | LA_CTIME);
 
 		if (ma->ma_attr.la_valid & LA_MTIME) {
-			rc = mdt_attr_get_pfid(info, o, &ma->ma_pfid);
-			if (!rc)
+			if (mdt_attr_get_pfid(info, o, &ma->ma_pfid) == 0)
 				ma->ma_valid |= MA_PFID;
 		}
 
-		rc = mo_attr_set(info->mti_env, next, ma);
+		rc2 = mo_attr_set(info->mti_env, next, ma);
+		if (rc2 != 0) {
+			CDEBUG(D_INODE,
+			   "%s: File "DFID" set attr (%#llx) failed: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), PFID(ofid),
+			       ma->ma_attr.la_valid, rc2);
+			if (rc == 0)
+				rc = rc2;
+		}
 	}
 
 	/* If file data is modified, add the dirty flag. */
-	if (ma->ma_attr_flags & MDS_DATA_MODIFIED)
-		rc = mdt_add_dirty_flag(info, o, ma);
+	if (ma->ma_attr_flags & MDS_DATA_MODIFIED) {
+		rc2 = mdt_add_dirty_flag(info, o, ma);
+		if (rc2 != 0) {
+			CDEBUG(D_INODE,
+			     "%s: File "DFID" add dirty flag failed: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), PFID(ofid), rc2);
+			if (rc == 0)
+				rc = rc2;
+		}
+	}
 
-        ma->ma_need |= MA_INODE;
-        ma->ma_valid &= ~MA_INODE;
+	ma->ma_need |= MA_INODE;
+	ma->ma_valid &= ~MA_INODE;
 
 	LASSERT(atomic_read(&o->mot_open_count) > 0);
 	atomic_dec(&o->mot_open_count);
 	mdt_handle_last_unlink(info, o, ma);
 
 	if (!MFD_CLOSED(open_flags)) {
-		rc = mo_close(info->mti_env, next, ma, open_flags);
+		rc2 = mo_close(info->mti_env, next, ma, open_flags);
+		if (rc2 != 0) {
+			CDEBUG(D_INODE,
+			       "%s: File "DFID" close failed: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), PFID(ofid), rc2);
+			if (rc == 0)
+				rc = rc2;
+		}
 		if (mdt_dom_check_for_discard(info, o))
 			mdt_dom_discard_data(info, o);
 	}
@@ -2492,13 +2526,15 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 
 int mdt_close(struct tgt_session_info *tsi)
 {
-	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
-	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-        struct md_attr         *ma = &info->mti_attr;
-        struct mdt_body        *repbody = NULL;
-	ktime_t			kstart = ktime_get();
-        int rc, ret = 0;
-        ENTRY;
+	struct mdt_thread_info *info = tsi2mdt_info(tsi);
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct md_attr *ma = &info->mti_attr;
+	struct mdt_body *repbody = NULL;
+	ktime_t kstart = ktime_get();
+	int rc;
+	int rc2;
+
+	ENTRY;
 
 	/* Close may come with the Size-on-MDS update. Unpack it. */
 	rc = mdt_close_unpack(info);
@@ -2536,14 +2572,18 @@ int mdt_close(struct tgt_session_info *tsi)
 		rc = err_serious(rc);
 	}
 
-	rc = mdt_close_internal(info, req, repbody);
-	if (rc != -ESTALE)
-		mdt_empty_transno(info, rc);
+	rc2 = mdt_close_internal(info, req, repbody);
+	if (rc2 != -ESTALE)
+		mdt_empty_transno(info, rc2);
+	if (rc2 != 0 && rc == 0)
+		rc = rc2;
 
-        if (repbody != NULL) {
-                mdt_client_compatibility(info);
-                rc = mdt_fix_reply(info);
-        }
+	if (repbody != NULL) {
+		mdt_client_compatibility(info);
+		rc2 = mdt_fix_reply(info);
+		if (rc2 != 0 && rc == 0)
+			rc = rc2;
+	}
 
 	mdt_exit_ucred(info);
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
@@ -2557,5 +2597,5 @@ out:
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_CLOSE,
 				 ktime_us_delta(ktime_get(), kstart));
-	RETURN(rc ? rc : ret);
+	RETURN(rc);
 }
