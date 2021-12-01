@@ -4032,7 +4032,8 @@ run_test 61 "default quota tests"
 test_62() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
-	 [[ "$(chattr -h 2>&1)" =~ "project" ]] ||
+	[[ "$(chattr -h 2>&1)" =~ "project" ||
+	   "$(chattr -h 2>&1)" =~ "pRVf" ]] ||
 		skip "chattr did not support project quota"
 	setup_quota_test || error "setup quota failed with $?"
 	local testdir=$DIR/$tdir/
