@@ -421,9 +421,6 @@ static int lod_sub_cancel_llog(const struct lu_env *env,
 		LCONSOLE(D_INFO, "%s: cancel update llog "DFID"\n",
 			 dt->dd_lu_dev.ld_obd->obd_name,
 			 PLOGID(&ctxt->loc_handle->lgh_id));
-		/* set startcat to "lgh_last_idx + 1" to zap empty llogs */
-		llog_cat_process(env, ctxt->loc_handle, NULL, NULL,
-				 ctxt->loc_handle->lgh_last_idx + 1, 0);
 		/* set retention on logs to simplify reclamation */
 		llog_process_or_fork(env, ctxt->loc_handle, llog_cat_retain_cb,
 				     NULL, NULL, false);

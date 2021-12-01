@@ -526,9 +526,19 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
 	RETURN(rc);
 }
 
+
+static inline int llog_max_idx(struct llog_log_hdr *lh)
+{
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) &&
+	    unlikely(lh->llh_flags & LLOG_F_IS_CAT))
+		return cfs_fail_val;
+	else
+		return LLOG_HDR_BITMAP_SIZE(lh) - 1;
+}
+
 static inline int llog_is_full(struct llog_handle *llh)
 {
-	return llh->lgh_last_idx >= LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1;
+	return llh->lgh_last_idx >= llog_max_idx(llh->lgh_hdr);
 }
 
 /* Determine if a llog plain of a catalog could be skiped based on record
@@ -545,6 +555,13 @@ static inline int llog_is_plain_skipable(struct llog_log_hdr *lh,
 		return 0;
 
 	return (LLOG_HDR_BITMAP_SIZE(lh) - rec->lrh_index) < (start - curr);
+}
+
+static inline bool llog_cat_is_wrapped(struct llog_handle *cat)
+{
+	struct llog_log_hdr *llh = cat->lgh_hdr;
+
+	return llh->llh_cat_idx >= cat->lgh_last_idx && llh->llh_count > 1;
 }
 
 struct llog_cfg_rec {

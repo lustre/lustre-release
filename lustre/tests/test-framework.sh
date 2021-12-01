@@ -9973,22 +9973,26 @@ __changelog_clear()
 	$LFS changelog_clear $mdt $cl_user $rec
 }
 
-# usage: changelog_clear [+]INDEX
+# usage: changelog_clear [+]INDEX [facet]...
 #
 # If INDEX is prefixed with '+', increment every changelog user's record index
 # by INDEX. Otherwise, clear the changelog up to INDEX for every changelog
 # users.
 changelog_clear() {
 	local rc
+	local idx=$1
+	shift
+	local cl_facets="$@"
 	# bash assoc arrays do not guarantee to list keys in created order
 	# so reorder to get same order than in changelog_register()
-	local cl_facets=$(echo "${!CL_USERS[@]}" | tr " " "\n" | sort |
-			  tr "\n" " ")
+	[[ -n "$cl_facets" ]] ||
+		cl_facets=$(echo "${!CL_USERS[@]}" | tr " " "\n" | sort |
+			tr "\n" " ")
 	local cl_user
 
 	for facet in $cl_facets; do
 		for cl_user in ${CL_USERS[$facet]}; do
-			__changelog_clear $facet $cl_user $1 || rc=${rc:-$?}
+			__changelog_clear $facet $cl_user $idx || rc=${rc:-$?}
 		done
 	done
 

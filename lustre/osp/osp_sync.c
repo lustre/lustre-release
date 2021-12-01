@@ -1245,9 +1245,7 @@ again:
 	do {
 		int	size;
 
-		wrapped = (llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
-			   llh->lgh_hdr->llh_count > 1);
-
+		wrapped = llog_cat_is_wrapped(llh);
 		if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
 			rc = -EINPROGRESS;
 			goto next;
@@ -1256,18 +1254,20 @@ again:
 				      d->opd_sync_last_catalog_idx, 0);
 
 next:
-		size = OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) ?
-		       cfs_fail_val : (LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
+		size = llog_max_idx(llh->lgh_hdr);
+
 		/* processing reaches catalog bottom */
 		if (d->opd_sync_last_catalog_idx == size)
-			d->opd_sync_last_catalog_idx = LLOG_CAT_FIRST;
+			d->opd_sync_last_catalog_idx = 1;
+		else if (wrapped)
+			d->opd_sync_last_catalog_idx++;
 		/* If catalog is wrapped we can`t predict last index of
 		 * processing because lgh_last_idx could be changed.
 		 * Starting form the next one. Index would be increased
 		 * at llog_process_thread
 		 */
 	} while (rc == 0 && (wrapped ||
-			     d->opd_sync_last_catalog_idx == LLOG_CAT_FIRST));
+			     d->opd_sync_last_catalog_idx == 1));
 
 	if (rc < 0) {
 		if (rc == -EINPROGRESS) {

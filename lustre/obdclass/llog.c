@@ -293,7 +293,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
-	    ((loghandle->lgh_last_idx == LLOG_HDR_BITMAP_SIZE(llh) - 1) ||
+	    ((loghandle->lgh_last_idx == llog_max_idx(llh)) ||
 	     (loghandle->u.phd.phd_cat_handle != NULL &&
 	      loghandle->u.phd.phd_cat_handle->u.chd.chd_current_log !=
 		loghandle))) {
@@ -479,7 +479,7 @@ int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec)
 	else if (rec->lrh_len == 0 || rec->lrh_len > chunk_size)
 		LLOG_ERROR_REC(llh, rec, "bad record len, chunk size is %d",
 			       chunk_size);
-	else if (rec->lrh_index >= LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr))
+	else if (rec->lrh_index > llog_max_idx(llh->lgh_hdr))
 		LLOG_ERROR_REC(llh, rec, "index is too high");
 	else
 		return 0;
@@ -529,16 +529,20 @@ static int llog_process_thread(void *arg)
 		RETURN(0);
 	}
 
-	if (cd != NULL) {
-		last_called_index = cd->lpcd_first_idx;
+	last_index = llog_max_idx(llh);
+	if (cd) {
+		if (cd->lpcd_first_idx >= llog_max_idx(llh))
+			/* End of the indexes -> Nothing to do */
+			GOTO(out, rc = 0);
+
 		index = cd->lpcd_first_idx + 1;
+		last_called_index = cd->lpcd_first_idx;
+		if (cd->lpcd_last_idx > 0 &&
+		    cd->lpcd_last_idx <= llog_max_idx(llh))
+			last_index = cd->lpcd_last_idx;
+		else if (cd->lpcd_read_mode & LLOG_READ_MODE_RAW)
+			last_index = loghandle->lgh_last_idx;
 	}
-	if (cd && cd->lpcd_last_idx)
-		last_index = cd->lpcd_last_idx;
-	else if (cd && (cd->lpcd_read_mode & LLOG_READ_MODE_RAW))
-		last_index = loghandle->lgh_last_idx;
-	else
-		last_index = LLOG_HDR_BITMAP_SIZE(llh) - 1;
 
 	while (rc == 0) {
 		struct llog_rec_hdr *rec;
@@ -974,7 +978,7 @@ int llog_reverse_process(const struct lu_env *env,
 	if (cd != NULL && cd->lpcd_last_idx)
 		index = cd->lpcd_last_idx;
 	else
-		index = LLOG_HDR_BITMAP_SIZE(llh) - 1;
+		index = llog_max_idx(llh);
 
 	while (rc == 0) {
 		struct llog_rec_hdr *rec;

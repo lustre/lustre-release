@@ -571,7 +571,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
 		       PLOGID(&loghandle->lgh_id));
 		/* this is to signal that this llog is full */
-		loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(llh) - 1;
+		loghandle->lgh_last_idx = llog_max_idx(llh);
 		RETURN(-ENOSPC);
 	}
 
@@ -589,10 +589,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	}
 	/* if it's the last idx in log file, then return -ENOSPC
 	 * or wrap around if a catalog */
-	if (llog_is_full(loghandle) ||
-	    unlikely(llh->llh_flags & LLOG_F_IS_CAT &&
-		     OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) &&
-		     loghandle->lgh_last_idx >= cfs_fail_val)) {
+	if (llog_is_full(loghandle)) {
 		if (llh->llh_flags & LLOG_F_IS_CAT)
 			loghandle->lgh_last_idx = 0;
 		else
@@ -762,7 +759,7 @@ out:
 	} else if (--loghandle->lgh_last_idx == 0 &&
 	    (llh->llh_flags & LLOG_F_IS_CAT) && llh->llh_cat_idx != 0) {
 		/* catalog had just wrap-around case */
-		loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(llh) - 1;
+		loghandle->lgh_last_idx = llog_max_idx(llh);
 	}
 
 	LLOG_HDR_TAIL(llh)->lrt_index = loghandle->lgh_last_idx;

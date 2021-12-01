@@ -10461,6 +10461,116 @@ test_134() {
 }
 run_test 134 "check_iam works without faults"
 
+cleanup_test_135(){
+	local oldgc=$1
+
+	printf "\nCleanup test_135\n" >&2
+	do_facet mds1 "$LCTL set_param -n $oldgc"
+	rm -rf $DIR/$tdir &> /dev/null
+	cleanup
+}
+
+__test_135_file_thread() {
+	local service="$1"
+	local init_time=$(awk '{print $1}' /proc/uptime)
+	local awkcmd="/crosses index zero/ {if (\$1 > $init_time) exit(1);}"
+
+	#Generate a full plain llogs
+	while dmesg | sed -r 's/(\[|\])//g' | awk "$awkcmd" ; do
+		createmany -o $DIR/$tdir/f 4500 >&2
+		createmany -u $DIR/$tdir/f 4500 >&2
+	done
+}
+
+__test_135_reader() {
+	local fd=$1
+	local cl_user=$2
+	local firstidx=$(changelog_user_rec mds1 $cl_user)
+	local oldidx=$firstidx
+	local newidx=0
+	local pid=0
+	local other
+
+	while read -t10 -u$fd newidx other; do
+		(( (newidx - oldidx) == 1 )) ||
+			error  "changelog jump detected (last: $oldidx, current: $newidx)"
+
+		if (( (newidx - firstidx + 1) % 13000 == 0 )); then
+			[[ $pid -eq 0 ]] ||
+				wait $pid || error "changelog_clear failed"
+			changelog_clear $((newidx - 1)) mds1 >&2 & pid=$!
+		fi
+		oldidx=$newidx
+	done
+
+	[[ $pid -eq 0 ]] ||
+		wait $pid || error "changelog_clear failed"
+
+	echo "$oldidx"
+}
+
+test_135() {
+	(( MDS1_VERSION >= $(version_code 2.15.52) )) ||
+		skip "need MDS version at least 2.15.52"
+
+	local service=$(facet_svc mds1)
+	local rc=0
+	local lastread lastidx
+	local files_pid reader_pid
+	local fd
+	local init_time
+	local cl_user
+
+	# Need to reformat because we are changing llog catalog sizes to 5.
+	# Otherwise, processing could fail with existing catalogs (last_idx>5).
+	reformat
+	setup_noconfig
+
+	# Disable changelog garbage colector
+	local oldgc=$(do_facet mds1 "$LCTL get_param mdd.${service}.changelog_gc")
+	do_facet mds1 "$LCTL set_param -n mdd.${service}.changelog_gc=0"
+	stack_trap "cleanup_test_135 $oldgc" EXIT INT
+
+	# change the changelog_catalog size to 5 entries for everybody
+#define OBD_FAIL_CAT_RECORDS                        0x1312
+	do_node $(comma_list $(all_nodes)) $LCTL set_param fail_loc=0x1312 fail_val=5
+
+	# disable console ratelimit
+	local rl=$(cat /sys/module/libcfs/parameters/libcfs_console_ratelimit)
+	echo 0 > /sys/module/libcfs/parameters/libcfs_console_ratelimit
+	stack_trap "echo $rl > /sys/module/libcfs/parameters/libcfs_console_ratelimit" EXIT
+
+	test_mkdir -c 1 -i 0 $DIR/$tdir || error "Failed to create directory"
+	changelog_chmask "ALL" || error "changelog_chmask failed"
+	changelog_register || error "changelog_register failed"
+
+	cl_user="${CL_USERS[mds1]%% *}"
+	changelog_users mds1 | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+
+	# Start reader thread
+	coproc $LFS changelog --follow $service
+	reader_pid=$!
+	fd=${COPROC[0]}
+	stack_trap "echo kill changelog reader; kill $reader_pid" EXIT
+
+	echo -e "\nWrap arround changelog catalog"
+
+	# Start file writer thread
+	__test_135_file_thread "$service" & files_pid=$!
+	stack_trap "(pkill -P$files_pid; kill $files_pid) &> /dev/null || true" EXIT
+
+	# Check changelog entries
+	lastread=$(__test_135_reader $fd $cl_user) || exit $?
+	! kill -0 $files_pid 2>/dev/null ||
+		error "creation thread is running. Is changelog reader stuck?"
+
+	lastidx=$(changelog_users mds1 | awk '/current_index/ {print $NF}' )
+	[[ "$lastread" -eq "$lastidx" ]] ||
+		error "invalid changelog lastidx (read: $lastread, mds: $lastidx)"
+}
+run_test 135 "check the behavior when changelog is wrapped around"
+
 #
 # (This was sanity/802a)
 #
