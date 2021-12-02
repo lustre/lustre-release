@@ -584,6 +584,7 @@ int lod_alloc_comp_entries(struct lod_object *lo,
 	}
 
 	lo->ldo_comp_cnt = comp_count;
+	lo->ldo_is_foreign = 0;
 	return 0;
 }
 
@@ -1512,7 +1513,7 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 				info->lti_ea_store_size = 0;
 
 				lo->ldo_dir_stripe_loaded = 1;
-				lo->ldo_dir_is_foreign = 1;
+				lo->ldo_is_foreign = 1;
 				GOTO(unlock, rc = 0);
 			}
 		}

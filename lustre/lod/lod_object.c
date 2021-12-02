@@ -1868,6 +1868,7 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 	}
 out:
 	lo->ldo_stripe = stripe;
+	lo->ldo_is_foreign = 0;
 	lo->ldo_dir_stripe_count = le32_to_cpu(lmv1->lmv_stripe_count);
 	lo->ldo_dir_stripes_allocated = le32_to_cpu(lmv1->lmv_stripe_count);
 	lo->ldo_dir_layout_version = le32_to_cpu(lmv1->lmv_layout_version);
@@ -2300,6 +2301,41 @@ out:
 
 /**
  *
+ * Alloc cached foreign LOV
+ *
+ * \param[in] lo        object
+ * \param[in] size      size of foreign LOV
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+int lod_alloc_foreign_lov(struct lod_object *lo, size_t size)
+{
+	OBD_ALLOC_LARGE(lo->ldo_foreign_lov, size);
+	if (lo->ldo_foreign_lov == NULL)
+		return -ENOMEM;
+	lo->ldo_foreign_lov_size = size;
+	lo->ldo_is_foreign = 1;
+	return 0;
+}
+
+/**
+ *
+ * Free cached foreign LOV
+ *
+ * \param[in] lo        object
+ */
+void lod_free_foreign_lov(struct lod_object *lo)
+{
+	if (lo->ldo_foreign_lov != NULL)
+		OBD_FREE_LARGE(lo->ldo_foreign_lov, lo->ldo_foreign_lov_size);
+	lo->ldo_foreign_lov = NULL;
+	lo->ldo_foreign_lov_size = 0;
+	lo->ldo_is_foreign = 0;
+}
+
+/**
+ *
  * Alloc cached foreign LMV
  *
  * \param[in] lo        object
@@ -2314,9 +2350,24 @@ int lod_alloc_foreign_lmv(struct lod_object *lo, size_t size)
 	if (lo->ldo_foreign_lmv == NULL)
 		return -ENOMEM;
 	lo->ldo_foreign_lmv_size = size;
-	lo->ldo_dir_is_foreign = 1;
+	lo->ldo_is_foreign = 1;
 
 	return 0;
+}
+
+/**
+ *
+ * Free cached foreign LMV
+ *
+ * \param[in] lo        object
+ */
+void lod_free_foreign_lmv(struct lod_object *lo)
+{
+	if (lo->ldo_foreign_lmv != NULL)
+		OBD_FREE_LARGE(lo->ldo_foreign_lmv, lo->ldo_foreign_lmv_size);
+	lo->ldo_foreign_lmv = NULL;
+	lo->ldo_foreign_lmv_size = 0;
+	lo->ldo_is_foreign = 0;
 }
 
 /**
@@ -2357,7 +2408,7 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 	       (int)le32_to_cpu(lum->lum_stripe_offset));
 
 	if (lo->ldo_dir_stripe_count == 0) {
-		if (lo->ldo_dir_is_foreign) {
+		if (lo->ldo_is_foreign) {
 			rc = lod_alloc_foreign_lmv(lo, lum_buf->lb_len);
 			if (rc != 0)
 				GOTO(out, rc);
@@ -4231,7 +4282,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 	/* The stripes are supposed to be allocated in declare phase,
 	 * if there are no stripes being allocated, it will skip */
 	if (lo->ldo_dir_stripe_count == 0) {
-		if (lo->ldo_dir_is_foreign) {
+		if (lo->ldo_is_foreign) {
 			rc = lod_sub_xattr_set(env, dt_object_child(dt), buf,
 					       XATTR_NAME_LMV, fl, th);
 			if (rc != 0)
@@ -4463,7 +4514,7 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 							       lmu, dof, th);
 			}
 		} else {
-			if (lo->ldo_dir_is_foreign) {
+			if (lo->ldo_is_foreign) {
 				LASSERT(lo->ldo_foreign_lmv != NULL &&
 					lo->ldo_foreign_lmv_size > 0);
 				info->lti_buf.lb_buf = lo->ldo_foreign_lmv;
@@ -5650,7 +5701,7 @@ static void lod_ah_init(const struct lu_env *env,
 		 */
 		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0 &&
 		    le32_to_cpu(lum1->lum_magic) == LMV_MAGIC_FOREIGN) {
-			lc->ldo_dir_is_foreign = true;
+			lc->ldo_is_foreign = true;
 			/* keep stripe_count 0 and stripe_offset -1 */
 			CDEBUG(D_INFO, "no default striping for foreign dir\n");
 			RETURN_EXIT;
@@ -8346,6 +8397,7 @@ static int lod_dir_declare_layout_attach(const struct lu_env *env,
 		OBD_FREE_PTR_ARRAY(lo->ldo_stripe,
 				   lo->ldo_dir_stripes_allocated);
 	lo->ldo_stripe = stripes;
+	lo->ldo_is_foreign = 0;
 	lo->ldo_dir_migrate_offset = lo->ldo_dir_stripe_count;
 	lo->ldo_dir_migrate_hash = le32_to_cpu(lmv->lmv_hash_type);
 	lo->ldo_dir_stripe_count += stripe_count;
@@ -8590,6 +8642,7 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	OBD_FREE(lo->ldo_stripe,
 		 sizeof(*stripes) * lo->ldo_dir_stripes_allocated);
 	lo->ldo_stripe = stripes;
+	lo->ldo_is_foreign = 0;
 	lo->ldo_dir_striped = 1;
 	lo->ldo_dir_stripe_count = rc;
 	lo->ldo_dir_stripes_allocated = stripe_count;
@@ -9059,56 +9112,6 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 
 /**
  *
- * Alloc cached foreign LOV
- *
- * \param[in] lo        object
- * \param[in] size      size of foreign LOV
- *
- * \retval		0 on success
- * \retval		negative if failed
- */
-int lod_alloc_foreign_lov(struct lod_object *lo, size_t size)
-{
-	OBD_ALLOC_LARGE(lo->ldo_foreign_lov, size);
-	if (lo->ldo_foreign_lov == NULL)
-		return -ENOMEM;
-	lo->ldo_foreign_lov_size = size;
-	lo->ldo_is_foreign = 1;
-	return 0;
-}
-
-/**
- *
- * Free cached foreign LOV
- *
- * \param[in] lo        object
- */
-void lod_free_foreign_lov(struct lod_object *lo)
-{
-	if (lo->ldo_foreign_lov != NULL)
-		OBD_FREE_LARGE(lo->ldo_foreign_lov, lo->ldo_foreign_lov_size);
-	lo->ldo_foreign_lov = NULL;
-	lo->ldo_foreign_lov_size = 0;
-	lo->ldo_is_foreign = 0;
-}
-
-/**
- *
- * Free cached foreign LMV
- *
- * \param[in] lo        object
- */
-void lod_free_foreign_lmv(struct lod_object *lo)
-{
-	if (lo->ldo_foreign_lmv != NULL)
-		OBD_FREE_LARGE(lo->ldo_foreign_lmv, lo->ldo_foreign_lmv_size);
-	lo->ldo_foreign_lmv = NULL;
-	lo->ldo_foreign_lmv_size = 0;
-	lo->ldo_dir_is_foreign = 0;
-}
-
-/**
- *
  * Release resources associated with striping.
  *
  * If the object is striped (regular or directory), then release
@@ -9120,14 +9123,17 @@ void lod_free_foreign_lmv(struct lod_object *lo)
 void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_layout_component *lod_comp;
+	__u32 obj_attr = lo->ldo_obj.do_lu.lo_header->loh_attr;
 	int i, j;
 
 	if (unlikely(lo->ldo_is_foreign)) {
-		lod_free_foreign_lov(lo);
-		lo->ldo_comp_cached = 0;
-	} else if (unlikely(lo->ldo_dir_is_foreign)) {
-		lod_free_foreign_lmv(lo);
-		lo->ldo_dir_stripe_loaded = 0;
+		if (S_ISREG(obj_attr)) {
+			lod_free_foreign_lov(lo);
+			lo->ldo_comp_cached = 0;
+		} else if (S_ISDIR(obj_attr)) {
+			lod_free_foreign_lmv(lo);
+			lo->ldo_dir_stripe_loaded = 0;
+		}
 	} else if (lo->ldo_stripe != NULL) {
 		LASSERT(lo->ldo_comp_entries == NULL);
 		LASSERT(lo->ldo_dir_stripes_allocated > 0);

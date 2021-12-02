@@ -246,6 +246,8 @@ struct lod_object {
 	/* common fields for both files and directories */
 	struct dt_object		ldo_obj;
 	struct mutex			ldo_layout_mutex;
+					/* foreign file/directory */
+	__u32				ldo_is_foreign:1;
 	union {
 		/* file stripe (LOV) */
 		struct {
@@ -259,8 +261,7 @@ struct lod_object {
 			struct lod_mirror_entry	*ldo_mirrors;
 			__u32		ldo_is_composite:1,
 					ldo_flr_state:4,
-					ldo_comp_cached:1,
-					ldo_is_foreign:1;
+					ldo_comp_cached:1;
 		};
 		/* directory stripe (LMV) */
 		struct {
@@ -277,9 +278,7 @@ struct lod_object {
 			__u32		ldo_dir_slave_stripe:1,
 					ldo_dir_striped:1,
 					/* the stripe has been loaded */
-					ldo_dir_stripe_loaded:1,
-					/* foreign directory */
-					ldo_dir_is_foreign;
+					ldo_dir_stripe_loaded:1;
 			/*
 			 * This default LMV is parent default LMV, which will be
 			 * used in child creation, and it's not cached, so this
