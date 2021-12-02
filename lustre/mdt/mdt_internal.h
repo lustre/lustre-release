@@ -345,13 +345,16 @@ struct mdt_object {
 						     * attribute cache */
 				mot_restriping:1,   /* dir restriping */
 				/* dir auto-split disabled */
-				mot_auto_split_disabled:1;
+				mot_auto_split_disabled:1,
+				mot_lsom_inited:1; /* lsom was inited */
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
 	/* Lock to protect object's SOM update. */
 	struct mutex		mot_som_mutex;
+	__u64			mot_lsom_size;
+	__u64			mot_lsom_blocks;
 	/* lock to protect read/write stages for Data-on-MDT files */
 	struct rw_semaphore	mot_dom_sem;
 	/* Lock to protect lease open.

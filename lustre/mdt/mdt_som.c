@@ -100,6 +100,14 @@ int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
 			attr->la_size = som->ms_size;
 			attr->la_blocks = som->ms_blocks;
 			info->mti_som_valid = 1;
+		} else if (!obj->mot_lsom_inited &&
+			   (som->ms_valid & SOM_FL_LAZY) &&
+			   !mutex_is_locked(&obj->mot_som_mutex)) {
+			mutex_lock(&obj->mot_som_mutex);
+			obj->mot_lsom_size = som->ms_size;
+			obj->mot_lsom_blocks = som->ms_blocks;
+			obj->mot_lsom_inited = true;
+			mutex_unlock(&obj->mot_som_mutex);
 		}
 	} else if (rc == -ENODATA) {
 		rc = 0;
@@ -138,7 +146,11 @@ int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 	buf->lb_buf = som;
 	buf->lb_len = sizeof(*som);
 	rc = mo_xattr_set(info->mti_env, next, buf, XATTR_NAME_SOM, 0);
-
+	if (!rc && flag == SOM_FL_LAZY) {
+		obj->mot_lsom_size = size;
+		obj->mot_lsom_blocks = blocks;
+		obj->mot_lsom_inited = true;
+	}
 	RETURN(rc);
 }
 
@@ -187,14 +199,20 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	ma = &info->mti_attr;
 	la = &ma->ma_attr;
 
-	mutex_lock(&o->mot_som_mutex);
+	if (!(la->la_valid & (LA_SIZE | LA_LSIZE) &&
+	      o->mot_lsom_size < la->la_size) &&
+	    !(la->la_valid & (LA_BLOCKS | LA_LBLOCKS) &&
+	      o->mot_lsom_blocks < la->la_blocks) && !truncate &&
+	    o->mot_lsom_inited)
+		RETURN(0);
+
 	tmp_ma = &info->mti_u.som.attr;
 	tmp_ma->ma_need = MA_INODE | MA_SOM;
 	tmp_ma->ma_valid = 0;
 
 	rc = mdt_attr_get_complex(info, o, tmp_ma);
 	if (rc)
-		GOTO(out_lock, rc);
+		RETURN(rc);
 
 	/**
 	 * If mti_big_lmm_used is set, it indicates that mti_big_lmm
@@ -203,11 +221,11 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	if (!info->mti_big_lmm_used) {
 		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LOV);
 		if (rc < 0 && rc != -ENODATA)
-			GOTO(out_lock, rc);
+			RETURN(rc);
 
 		/* No LOV EA */
 		if (rc == -ENODATA)
-			GOTO(out_lock, rc = 0);
+			RETURN(0);
 
 		rc = 0;
 	}
@@ -264,7 +282,7 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 				if (som->ms_valid & SOM_FL_STRICT ||
 				    (som->ms_valid & SOM_FL_STALE &&
 				     !(ma->ma_attr_flags & MDS_DATA_MODIFIED)))
-					GOTO(out_lock, rc);
+					RETURN(rc);
 
 				size = som->ms_size;
 				blocks = som->ms_blocks;
@@ -280,11 +298,22 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 				}
 			}
 		}
-		if (truncate || changed)
+		if (truncate || changed) {
+			mutex_lock(&o->mot_som_mutex);
+			if (size <= o->mot_lsom_size &&
+			    blocks <= o->mot_lsom_blocks && !truncate &&
+			    o->mot_lsom_inited) {
+				mutex_unlock(&o->mot_som_mutex);
+				RETURN(0);
+			}
+			if (!truncate && size < o->mot_lsom_size)
+				size = o->mot_lsom_size;
+			if (!truncate && blocks < o->mot_lsom_blocks)
+				blocks = o->mot_lsom_blocks;
 			rc = mdt_set_som(info, o, SOM_FL_LAZY, size, blocks);
+			mutex_unlock(&o->mot_som_mutex);
+		}
 	}
 
-out_lock:
-	mutex_unlock(&o->mot_som_mutex);
 	RETURN(rc);
 }

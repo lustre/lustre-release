@@ -6316,6 +6316,9 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		atomic_set(&mo->mot_open_count, 0);
 		mo->mot_restripe_offset = 0;
 		INIT_LIST_HEAD(&mo->mot_restripe_linkage);
+		mo->mot_lsom_size = 0;
+		mo->mot_lsom_blocks = 0;
+		mo->mot_lsom_inited = false;
 		RETURN(o);
 	}
 	RETURN(NULL);
