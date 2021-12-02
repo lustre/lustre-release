@@ -8182,14 +8182,16 @@ static int osd_device_init0(const struct lu_env *env,
 
 	INIT_LIST_HEAD(&o->od_ios_list);
 
-	lprocfs_init_brw_stats(&o->od_brw_stats);
+	rc = lprocfs_init_brw_stats(&o->od_brw_stats);
+	if (rc)
+		GOTO(out_brw_stats, rc);
 
 	/* setup scrub, including OI files initialization */
 	o->od_in_init = 1;
 	rc = osd_scrub_setup(env, o, restored);
 	o->od_in_init = 0;
 	if (rc < 0)
-		GOTO(out_site, rc);
+		GOTO(out_brw_stats, rc);
 
 	rc = osd_procfs_init(o, o->od_svname);
 	if (rc != 0) {
@@ -8240,6 +8242,8 @@ out_procfs:
 	osd_procfs_fini(o);
 out_scrub:
 	osd_scrub_cleanup(env, o);
+out_brw_stats:
+	lprocfs_fini_brw_stats(&o->od_brw_stats);
 out_site:
 	lu_site_fini(&o->od_site);
 out_compat:

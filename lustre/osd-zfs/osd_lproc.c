@@ -407,6 +407,8 @@ int osd_procfs_fini(struct osd_device *osd)
 {
 	ENTRY;
 
+	lprocfs_fini_brw_stats(&osd->od_brw_stats);
+
 	if (osd->od_stats)
 		lprocfs_free_stats(&osd->od_stats);
 

@@ -147,13 +147,15 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 	int rw = iobuf->dr_rw;
 
 	if (iobuf->dr_elapsed_valid) {
+		struct brw_stats *h = &d->od_brw_stats;
+
 		iobuf->dr_elapsed_valid = 0;
 		LASSERT(iobuf->dr_dev == d);
 		LASSERT(iobuf->dr_frags > 0);
-		lprocfs_oh_tally(&d->od_brw_stats.bs_hist[BRW_R_DIO_FRAGS + rw],
-				 iobuf->dr_frags);
-		lprocfs_oh_tally_log2(&d->od_brw_stats.bs_hist[BRW_R_IO_TIME+rw],
-				      ktime_to_ms(iobuf->dr_elapsed));
+		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_R_DIO_FRAGS+rw],
+				      iobuf->dr_frags);
+		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_R_IO_TIME+rw],
+					   ktime_to_ms(iobuf->dr_elapsed));
 	}
 }
 
@@ -230,21 +232,23 @@ static void dio_complete_routine(struct bio *bio, int error)
 static void record_start_io(struct osd_iobuf *iobuf, int size)
 {
 	struct osd_device *osd = iobuf->dr_dev;
-	struct obd_histogram *h = osd->od_brw_stats.bs_hist;
+	struct brw_stats *h = &osd->od_brw_stats;
 
 	iobuf->dr_frags++;
 	atomic_inc(&iobuf->dr_numreqs);
 
 	if (iobuf->dr_rw == 0) {
 		atomic_inc(&osd->od_r_in_flight);
-		lprocfs_oh_tally(&h[BRW_R_RPC_HIST],
+		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_R_RPC_HIST],
 				 atomic_read(&osd->od_r_in_flight));
-		lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE], size);
+		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_R_DISK_IOSIZE],
+					   size);
 	} else if (iobuf->dr_rw == 1) {
 		atomic_inc(&osd->od_w_in_flight);
-		lprocfs_oh_tally(&h[BRW_W_RPC_HIST],
+		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_W_RPC_HIST],
 				 atomic_read(&osd->od_w_in_flight));
-		lprocfs_oh_tally_log2(&h[BRW_W_DISK_IOSIZE], size);
+		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_W_DISK_IOSIZE],
+					   size);
 	} else {
 		LBUG();
 	}

@@ -102,6 +102,11 @@ struct obd_histogram {
 	unsigned long	oh_buckets[OBD_HIST_MAX];
 };
 
+struct obd_hist_pcpu {
+	struct percpu_counter	oh_pc_buckets[OBD_HIST_MAX];
+	bool			oh_initialized;
+};
+
 enum {
         RENAME_SAMEDIR_SIZE = 0,
         RENAME_CROSSDIR_SRC_SIZE,
@@ -412,11 +417,12 @@ struct brw_stats_props {
 
 struct brw_stats {
 	ktime_t			bs_init;
-	struct obd_histogram	bs_hist[BRW_RW_STATS_NUM];
+	struct obd_hist_pcpu	bs_hist[BRW_RW_STATS_NUM];
 	struct brw_stats_props	bs_props[BRW_RW_STATS_NUM / 2];
 };
 
-void lprocfs_init_brw_stats(struct brw_stats *brw_stats);
+int lprocfs_init_brw_stats(struct brw_stats *brw_stats);
+void lprocfs_fini_brw_stats(struct brw_stats *brw_stats);
 
 void ldebugfs_register_osd_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats,
@@ -649,6 +655,15 @@ void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_clear(struct obd_histogram *oh);
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh);
+
+void lprocfs_oh_tally_pcpu(struct obd_hist_pcpu *oh, unsigned int value);
+void lprocfs_oh_tally_log2_pcpu(struct obd_hist_pcpu *oh, unsigned int value);
+int lprocfs_oh_alloc_pcpu(struct obd_hist_pcpu *oh);
+void lprocfs_oh_clear_pcpu(struct obd_hist_pcpu *oh);
+void lprocfs_oh_release_pcpu(struct obd_hist_pcpu *oh);
+unsigned long lprocfs_oh_sum_pcpu(struct obd_hist_pcpu *oh);
+unsigned long lprocfs_oh_counter_pcpu(struct obd_hist_pcpu *oh,
+		      unsigned int value);
 
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
                            struct lprocfs_counter *cnt);

@@ -702,8 +702,8 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
 
 static void display_brw_stats(struct seq_file *seq, const char *name,
-			      const char *units, struct obd_histogram *read,
-			      struct obd_histogram *write, bool scale)
+			      const char *units, struct obd_hist_pcpu *read,
+			      struct obd_hist_pcpu *write, bool scale)
 {
 	unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
 	unsigned int i;
@@ -712,15 +712,15 @@ static void display_brw_stats(struct seq_file *seq, const char *name,
 	seq_printf(seq, "%-22s %-5s %% cum %% |  %-11s %% cum %%\n",
 		   name, units, units);
 
-	read_tot = lprocfs_oh_sum(read);
-	write_tot = lprocfs_oh_sum(write);
+	read_tot = lprocfs_oh_sum_pcpu(read);
+	write_tot = lprocfs_oh_sum_pcpu(write);
 
 	if (!read_tot && !write_tot)
 		return;
 
 	for (i = 0; i < OBD_HIST_MAX; i++) {
-		r = read->oh_buckets[i];
-		w = write->oh_buckets[i];
+		r = lprocfs_oh_counter_pcpu(read, i);
+		w = lprocfs_oh_counter_pcpu(write, i);
 		read_cum += r;
 		write_cum += w;
 		if (read_cum == 0 && write_cum == 0)
@@ -799,21 +799,35 @@ static ssize_t brw_stats_seq_write(struct file *file,
 	int i;
 
 	for (i = 0; i < BRW_RW_STATS_NUM; i++)
-		lprocfs_oh_clear(&brw_stats->bs_hist[i]);
+		lprocfs_oh_clear_pcpu(&brw_stats->bs_hist[i]);
 
 	return len;
 }
 
 LDEBUGFS_SEQ_FOPS(brw_stats);
 
-void lprocfs_init_brw_stats(struct brw_stats *brw_stats)
+int lprocfs_init_brw_stats(struct brw_stats *brw_stats)
+{
+	int i, result;
+
+	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
+		result = lprocfs_oh_alloc_pcpu(&brw_stats->bs_hist[i]);
+		if (result)
+			break;
+	}
+
+	return result;
+}
+EXPORT_SYMBOL(lprocfs_init_brw_stats);
+
+void lprocfs_fini_brw_stats(struct brw_stats *brw_stats)
 {
 	int i;
 
 	for (i = 0; i < BRW_RW_STATS_NUM; i++)
-		spin_lock_init(&brw_stats->bs_hist[i].oh_lock);
+		lprocfs_oh_release_pcpu(&brw_stats->bs_hist[i]);
 }
-EXPORT_SYMBOL(lprocfs_init_brw_stats);
+EXPORT_SYMBOL(lprocfs_fini_brw_stats);
 
 void ldebugfs_register_osd_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats,

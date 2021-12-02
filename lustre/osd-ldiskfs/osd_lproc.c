@@ -57,7 +57,7 @@ void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 
 	blocks_per_page = PAGE_SIZE >> osd_sb(osd)->s_blocksize_bits;
 
-	lprocfs_oh_tally_log2(&bs->bs_hist[BRW_R_PAGES + rw], nr_pages);
+	lprocfs_oh_tally_log2_pcpu(&bs->bs_hist[BRW_R_PAGES + rw], nr_pages);
 
 	while (nr_pages-- > 0) {
 		if (last_page && (*pages)->index != (last_page->index + 1))
@@ -71,8 +71,10 @@ void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 		}
 	}
 
-	lprocfs_oh_tally(&bs->bs_hist[BRW_R_DISCONT_PAGES+rw], discont_pages);
-	lprocfs_oh_tally(&bs->bs_hist[BRW_R_DISCONT_BLOCKS+rw], discont_blocks);
+	lprocfs_oh_tally_pcpu(&bs->bs_hist[BRW_R_DISCONT_PAGES+rw],
+			      discont_pages);
+	lprocfs_oh_tally_pcpu(&bs->bs_hist[BRW_R_DISCONT_BLOCKS+rw],
+			      discont_blocks);
 }
 
 static int osd_stats_init(struct osd_device *osd)
@@ -828,6 +830,8 @@ out:
 
 int osd_procfs_fini(struct osd_device *osd)
 {
+	lprocfs_fini_brw_stats(&osd->od_brw_stats);
+
 	if (osd->od_stats)
 		lprocfs_free_stats(&osd->od_stats);
 

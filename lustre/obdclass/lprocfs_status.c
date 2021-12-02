@@ -1941,6 +1941,95 @@ void lprocfs_oh_clear(struct obd_histogram *oh)
 }
 EXPORT_SYMBOL(lprocfs_oh_clear);
 
+void lprocfs_oh_tally_pcpu(struct obd_hist_pcpu *oh,
+			   unsigned int value)
+{
+	if (value >= OBD_HIST_MAX)
+		value = OBD_HIST_MAX - 1;
+
+	percpu_counter_inc(&oh->oh_pc_buckets[value]);
+}
+EXPORT_SYMBOL(lprocfs_oh_tally_pcpu);
+
+void lprocfs_oh_tally_log2_pcpu(struct obd_hist_pcpu *oh,
+				unsigned int value)
+{
+	unsigned int val = 0;
+
+	if (likely(value != 0))
+		val = min(fls(value - 1), OBD_HIST_MAX);
+
+	lprocfs_oh_tally_pcpu(oh, val);
+}
+EXPORT_SYMBOL(lprocfs_oh_tally_log2_pcpu);
+
+unsigned long lprocfs_oh_counter_pcpu(struct obd_hist_pcpu *oh,
+				      unsigned int value)
+{
+	return percpu_counter_sum(&oh->oh_pc_buckets[value]);
+}
+EXPORT_SYMBOL(lprocfs_oh_counter_pcpu);
+
+unsigned long lprocfs_oh_sum_pcpu(struct obd_hist_pcpu *oh)
+{
+	unsigned long ret = 0;
+	int i;
+
+	for (i = 0; i < OBD_HIST_MAX; i++)
+		ret += percpu_counter_sum(&oh->oh_pc_buckets[i]);
+
+	return ret;
+}
+EXPORT_SYMBOL(lprocfs_oh_sum_pcpu);
+
+int lprocfs_oh_alloc_pcpu(struct obd_hist_pcpu *oh)
+{
+	int i, rc;
+
+	if (oh->oh_initialized)
+		return 0;
+
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		rc = percpu_counter_init(&oh->oh_pc_buckets[i], 0, GFP_KERNEL);
+		if (rc)
+			goto out;
+	}
+
+	oh->oh_initialized = true;
+
+	return 0;
+
+out:
+	for (i--; i >= 0; i--)
+		percpu_counter_destroy(&oh->oh_pc_buckets[i]);
+
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_oh_alloc_pcpu);
+
+void lprocfs_oh_clear_pcpu(struct obd_hist_pcpu *oh)
+{
+	int i;
+
+	for (i = 0; i < OBD_HIST_MAX; i++)
+		percpu_counter_set(&oh->oh_pc_buckets[i], 0);
+}
+EXPORT_SYMBOL(lprocfs_oh_clear_pcpu);
+
+void lprocfs_oh_release_pcpu(struct obd_hist_pcpu *oh)
+{
+	int i;
+
+	if (!oh->oh_initialized)
+		return;
+
+	for (i = 0; i < OBD_HIST_MAX; i++)
+		percpu_counter_destroy(&oh->oh_pc_buckets[i]);
+
+	oh->oh_initialized = false;
+}
+EXPORT_SYMBOL(lprocfs_oh_release_pcpu);
+
 ssize_t lustre_attr_show(struct kobject *kobj,
 			 struct attribute *attr, char *buf)
 {
