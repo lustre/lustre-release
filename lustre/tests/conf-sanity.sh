@@ -6971,63 +6971,33 @@ generate_ldev_conf() {
 	local ldevconfpath=$1
 	local fstype=
 	local fsldevformat=""
-	touch $ldevconfpath
+	rm -f $ldevconfpath
 
-	fstype=$(facet_fstype mgs)
-	if [ "$fstype" == zfs ]; then
-		fsldevformat="$fstype:"
-	else
+	local facets="mgs,$(get_facets OST),$(get_facets MDS)"
+	for facet in ${facets//,/ }; do
 		fsldevformat=""
-	fi
-
-	printf "%s\t-\t%s-MGS0000\t%s%s\n" \
-		$mgs_HOST \
-		$FSNAME \
-		$fsldevformat \
-		$(mgsdevname) > $ldevconfpath
-
-	local mdsfo_host=$mdsfailover_HOST;
-	if [ -z "$mdsfo_host" ]; then
-		mdsfo_host="-"
-	fi
-
-	for num in $(seq $MDSCOUNT); do
-		fstype=$(facet_fstype mds$num)
-		if [ "$fstype" == zfs ]; then
-			fsldevformat="$fstype:"
-		else
-			fsldevformat=""
+		fstype=$(facet_fstype $facet)
+		[ "$fstype" = zfs ] && fsldevformat="$fstype:"
+		local host=$(facet_host $facet)
+		local fo="-"
+		local varfo=${facet}failover_HOST
+		if [ $facet == mgs ] && combined_mgs_mds; then
+			varfo=mds1failover_HOST
 		fi
-
-		printf "%s\t%s\t%s-MDT%04d\t%s%s\n" \
-			$mds_HOST \
-			$mdsfo_host \
+		[ -n "${!varfo}" ] && fo=${!varfo}
+		local type=$(echo $facet | tr -d "[:digit:]" | \
+			tr "[:lower:]" "[:upper:]" | sed s/MDS/MDT/ )
+		local num=1
+		[ ${facet} == mgs ] ||
+			num=$(facet_number $facet)
+		printf "%s\t%s\t%s-%s%04x\t%s%s\n" \
+			${host} \
+			${fo} \
 			$FSNAME \
-			$num \
+			$type \
+			$(( num - 1 )) \
 			$fsldevformat \
-			$(mdsdevname $num) >> $ldevconfpath
-	done
-
-	local ostfo_host=$ostfailover_HOST;
-	if [ -z "$ostfo_host" ]; then
-		ostfo_host="-"
-	fi
-
-	for num in $(seq $OSTCOUNT); do
-		fstype=$(facet_fstype ost$num)
-		if [ "$fstype" == zfs ]; then
-			fsldevformat="$fstype:"
-		else
-			fsldevformat=""
-		fi
-
-		printf "%s\t%s\t%s-OST%04d\t%s%s\n" \
-			$ost_HOST \
-			$ostfo_host \
-			$FSNAME \
-			$num \
-			$fsldevformat \
-			$(ostdevname $num) >> $ldevconfpath
+			$(facet_device $facet) >> $ldevconfpath
 	done
 
 	echo "----- $ldevconfpath -----"
@@ -7049,8 +7019,8 @@ generate_nids() {
 }
 
 compare_ldev_output() {
-	ldev_output=$1
-	expected_output=$2
+	local ldev_output=$1
+	local expected_output=$2
 
 	sort $expected_output -o $expected_output
 	sort $ldev_output -o $ldev_output
@@ -7081,30 +7051,27 @@ test_92() {
 	generate_nids $NIDSPATH
 
 	# echo the mgs nid and compare it to environment variable MGSNID
-	# also, ldev.conf and nids is a server side thing, use the OSS
-	# hostname
-	local output
-	output=$($LDEV -c $LDEVCONFPATH -H $ost_HOST -n $NIDSPATH echo %m)
+	local facets="$(get_facets OST),$(get_facets MDS),mgs"
+	for facet in ${facets//,/ }; do
+		local host=$(facet_host $facet)
+		local output=$($LDEV -c $LDEVCONFPATH -H $host -n $NIDSPATH echo %m)
 
-	echo "-- START OF LDEV OUTPUT --"
-	echo -e "$output"
-	echo "--- END OF LDEV OUTPUT ---"
+		echo "-- START OF LDEV OUTPUT --"
+		echo -e "$output"
+		echo "--- END OF LDEV OUTPUT ---"
 
-	# ldev failed, error
-	if [ $? -ne 0 ]; then
-		rm $LDEVCONFPATH $NIDSPATH
-		error "ldev failed to execute!"
-	fi
+		[ -z "$output" ] &&
+			error "ldev failed to execute!"
 
-	# need to process multiple lines because of combined MGS and MDS
-	echo -e $output | awk '{ print $2 }' | while read -r line ; do
-		if [ "$line" != "$MGSNID" ]; then
-			rm $LDEVCONFPATH $NIDSPATH
-			error "ldev failed mgs nid '$line', expected '$MGSNID'"
-		fi
+		# need to process multiple lines because of
+		# several targets on host
+		echo -e $output | awk '{ print $2 }' | while read -r line ; do
+			[ "$line" = "$MGSNID" ] ||
+				error "ldev failed mgs nid '$line', \
+					expected '$MGSNID'"
+		done
 	done
-
-	rm $LDEVCONFPATH $NIDSPATH
+	rm -f $LDEVCONFPATH $NIDSPATH
 }
 run_test 92 "ldev returns MGS NID correctly in command substitution"
 
@@ -7163,11 +7130,11 @@ test_94() {
 	printf "%s-MGS0000\n" $FSNAME > $EXPECTED_OUTPUT
 
 	for num in $(seq $MDSCOUNT); do
-		printf "%s-MDT%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+		printf "%s-MDT%04x\n" $FSNAME $((num - 1)) >> $EXPECTED_OUTPUT
 	done
 
 	for num in $(seq $OSTCOUNT); do
-		printf "%s-OST%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+		printf "%s-OST%04x\n" $FSNAME $((num - 1)) >> $EXPECTED_OUTPUT
 	done
 
 	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
@@ -7295,19 +7262,13 @@ test_96() {
 
 	echo "$mgs_HOST-$(facet_fstype mgs)" > $EXPECTED_OUTPUT
 
-	if [ "$mgs_HOST" == "$mds_HOST" ]; then
-		for num in $(seq $MDSCOUNT); do
-			echo "$mds_HOST-$(facet_fstype mds$num)" \
+	local facets="$(get_facets OST),$(get_facets MDS)"
+	for facet in ${facets//,/ }; do
+		local host=$(facet_host $facet)
+		[ "$mgs_HOST" == "$host" ] &&
+			echo "$host-$(facet_fstype $facet)" \
 			>> $EXPECTED_OUTPUT
-		done
-	fi
-
-	if [ "$mgs_HOST" == "$ost_HOST" ]; then
-		for num in $(seq $OSTCOUNT); do
-			echo "$ost_HOST-$(facet_fstype ost$num)" \
-			>> $EXPECTED_OUTPUT
-		done
-	fi
+	done
 
 	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
 
@@ -7343,7 +7304,7 @@ test_97() {
 	fi
 
 	for num in $(seq $MDSCOUNT); do
-		printf "%s-MDT%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+		printf "%s-MDT%04x\n" $FSNAME $((num - 1)) >> $EXPECTED_OUTPUT
 	done
 
 	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
@@ -7363,7 +7324,7 @@ test_97() {
 
 	rm $EXPECTED_OUTPUT
 	for num in $(seq $OSTCOUNT); do
-		printf "%s-OST%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+		printf "%s-OST%04x\n" $FSNAME $((num - 1)) >> $EXPECTED_OUTPUT
 	done
 
 	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
