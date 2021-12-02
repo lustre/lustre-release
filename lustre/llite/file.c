@@ -764,8 +764,6 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 	file->private_data = fd;
 	ll_readahead_init(inode, &fd->fd_ras);
 	fd->fd_omode = it->it_flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
-	/* turn off the kernel's read-ahead */
-	file->f_ra.ra_pages = 0;
 
 	RETURN(0);
 }
