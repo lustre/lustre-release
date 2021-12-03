@@ -158,6 +158,7 @@ struct lod_device {
 
 	/* max stripe count if stripe count is set to -1. 0 means unlimited */
 	unsigned int		lod_max_stripecount;
+	unsigned int		lod_max_mdt_stripecount;
 };
 
 #define lod_ost_bitmap		lod_ost_descs.ltd_tgt_bitmap

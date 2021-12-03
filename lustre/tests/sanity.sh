@@ -23733,6 +23733,38 @@ test_300s() {
 }
 run_test 300s "test lfs mkdir -c without -i"
 
+test_300t() {
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "need MDS 2.14.55 or later"
+	(( $MDSCOUNT >= 2 )) || skip "needs at least 2 MDTs"
+
+	local testdir="$DIR/$tdir/striped_dir"
+	local dir1=$testdir/dir1
+	local dir2=$testdir/dir2
+
+	mkdir -p $testdir
+
+	$LFS setdirstripe -D -c -1 --max-inherit=3 $testdir ||
+		error "failed to set default stripe count for $testdir"
+
+	mkdir $dir1
+	local stripe_count=$($LFS getdirstripe -c $dir1)
+
+	(( $stripe_count == $MDSCOUNT )) || error "wrong stripe count"
+
+	local max_count=$((MDSCOUNT - 1))
+	local mdts=$(comma_list $(mdts_nodes))
+
+	do_nodes $mdts $LCTL set_param lod.*.max_mdt_stripecount=$max_count
+	stack_trap "do_nodes $mdts $LCTL set_param lod.*.max_mdt_stripecount=0"
+
+	mkdir $dir2
+	stripe_count=$($LFS getdirstripe -c $dir2)
+
+	(( $stripe_count == $max_count )) || error "wrong stripe count"
+}
+run_test 300t "test max_mdt_stripecount"
+
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
 		error "create remote source failed"
