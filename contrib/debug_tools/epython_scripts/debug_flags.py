@@ -53,12 +53,12 @@ def print_flags(flag_tbl, mask):
             if key & mask:
                flags = flags + value + " "
                tmp &= ~key
-    print "mask: 0x%x = %s" % (mask, flags)
+    print("mask: 0x%x = %s" % (mask, flags))
     if tmp != 0:
-        print "unknown bits set in mask: 0x%x" % tmp
+        print("unknown bits set in mask: 0x%x" % tmp)
 
 def dump_debug_flags(bitmask):
-    print bitmask
+    print(bitmask)
     if not bitmask:
         bitmask = readSymbol('libcfs_debug')
     print_flags(debug_flags_tbl, bitmask)

@@ -40,24 +40,24 @@ def get_hash_object(hs, hnode):
 def dump_hnodes(hs, hlist, hnode, depth=0, ruler=RULER):
     while(hnode != hlist & hnode):
         s = get_hash_object(hs, hnode)
-        print "%*.*shlist_node 0x%x  %s" % (depth, depth, ruler, Addr(hnode), s)
+        print("%*.*shlist_node 0x%x  %s" % (depth, depth, ruler, Addr(hnode), s))
         hnode = hnode.next
 
 def dump_hlist(hs, hlist, depth=0, ruler=RULER):
     if hlist.first:
         hnode = hlist.first
-        print "%*.*shlist_head 0x%x" % (depth, depth, ruler, Addr(hlist))
+        print("%*.*shlist_head 0x%x" % (depth, depth, ruler, Addr(hlist)))
         dump_hnodes(hs, hlist, hnode, depth+DEPTH, ruler)
 
 def dump_hash_bucket(hs, bd_bkt, depth=0, ruler=RULER):
-    print "%*.*scfs_hash_bucket 0x%x" % (depth, depth, ruler, Addr(bd_bkt))
+    print("%*.*scfs_hash_bucket 0x%x" % (depth, depth, ruler, Addr(bd_bkt)))
     for bd_offset in range(ll.CFS_HASH_BKT_NHLIST(hs)):
         hlist = ll.cfs_hash_hhead(hs, bd_bkt, bd_offset)
         if hlist:
             dump_hlist(hs, hlist, depth+DEPTH, ruler)
 
 def dump_hash_table(hs):
-    print "cfs_hash@0x%x" % Addr(hs)
+    print("cfs_hash@0x%x" % Addr(hs))
 
     for bd_bkt in ll.cfs_hash_get_buckets(hs):
         dump_hash_bucket(hs, bd_bkt, DEPTH, RULER)

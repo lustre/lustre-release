@@ -19,4 +19,4 @@ def phys2pfn(physaddr):
 
 def pfn2phys(pfn):
     """Convert a page offset into a physical address."""
-    return pfn << crashlib.cid.mdtbl.pageshift
+    return int(pfn) << int(crashlib.cid.mdtbl.pageshift)

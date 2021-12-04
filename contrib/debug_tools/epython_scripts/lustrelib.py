@@ -81,7 +81,10 @@ def cfs_hash_get_hlist_nodes(hsh, bd_bkt, bd_offset):
     hnode = hlist.first
     while (hnode and hnode != hlist):
         hnodes.append(hnode)
-        hnode = hnode.next
+        try:
+            hnode = hnode.next
+        except (crash.error, IndexError):
+            break
     return hnodes
 
 def cfs_hash_get_nodes(hsh):
@@ -109,6 +112,7 @@ def LNET_NETNUM(net):
 LNET_NID_ANY = 0xffffffffffffffff
 LNET_NIDSTR_SIZE = 32
 
+SOCKLND = 2
 O2IBLND = 5
 PTLLND = 4
 GNILND = 13
@@ -131,6 +135,9 @@ def nid2str(nid):
         s = "%d@ptl" % addr
     elif lnd == GNILND:
         s = "%d@gni" % addr
+    elif lnd == SOCKLND:
+        s = "%d.%d.%d.%d@tcp" % ((addr >> 24) & 0xff, (addr >> 16) & 0xff,
+                                 (addr >> 8) & 0xff, addr & 0xff)
     else:
         nnum = 0
     if nnum != 0:
@@ -228,7 +235,7 @@ tmpsiz = 256
 LNET_CPT_BITS = the_lnet.ln_cpt_bits
 LNET_PROC_CPT_BITS = LNET_CPT_BITS + 1
 LNET_LOFFT_BITS = getSizeOf('loff_t') * 8
-LNET_PROC_VER_BITS = max((min(LNET_LOFFT_BITS, 64) / 4), 8)
+LNET_PROC_VER_BITS = int(max((min(LNET_LOFFT_BITS, 64) / 4), 8))
 LNET_PROC_HASH_BITS = 9
 LNET_PROC_HOFF_BITS = LNET_LOFFT_BITS - LNET_PROC_CPT_BITS - LNET_PROC_VER_BITS - LNET_PROC_HASH_BITS -1
 LNET_PROC_HPOS_BITS = LNET_PROC_HASH_BITS + LNET_PROC_HOFF_BITS

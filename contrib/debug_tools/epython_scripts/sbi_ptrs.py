@@ -16,11 +16,11 @@ def dump_inode(inode):
      sb = readSU('struct super_block', inode.i_sb)
      lsi = readSU('struct lustre_sb_info', sb.s_fs_info)
      llsbi = readSU('struct ll_sb_info', lsi.lsi_llsbi)
-     print "%x %x %x %x %x" % (Addr(inode), lli, sb, lsi, llsbi)
+     print("%x %x %x %x %x" % (Addr(inode), lli, sb, lsi, llsbi))
 
 def dump_inode_list(inodes):
-    print "%-16s %-16s %-16s %-16s %-16s" % ("inode", "ll_inode_info",
-          "super_block", "lustre_sb_info", "ll_sb_info")
+    print("%-16s %-16s %-16s %-16s %-16s" % ("inode", "ll_inode_info",
+          "super_block", "lustre_sb_info", "ll_sb_info"))
     for addr in inodes:
         dump_inode(readSU('struct inode', addr))
 

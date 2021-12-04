@@ -69,9 +69,9 @@ def print_flags(flag_dict, mask):
             if key & mask:
                 flags = flags + value + " "
                 tmp &= ~key
-    print "mask: 0x%x = %s" % (mask, flags)
+    print("mask: 0x%x = %s" % (mask, flags))
     if tmp != 0:
-        print "unknown bits set in mask: 0x%x" % tmp
+        print("unknown bits set in mask: 0x%x" % tmp)
 
 if __name__ == "__main__":
     description = "Prints string identifiers for specified LDLM flags."

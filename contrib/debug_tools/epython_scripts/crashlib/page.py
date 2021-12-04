@@ -9,7 +9,6 @@ import crashlib.cid
 import crashlib.cid.machdep_table
 import crashlib.cid.page_flags
 import crashlib.cid.phys_mem_map
-import crashlib.memarray
 
 # --------------------------------------------------------------------------
 
@@ -104,24 +103,3 @@ def pfn(page):
     return (page - vmemmap_vaddr) / page_struct_size
 
 # --------------------------------------------------------------------------
-
-def page_list():
-    """Return a list-like class of page structs indexed by pfn.
-
-    This implementation assumes the kernel is configured with a virtually
-    contiguous mem_map.
-    """
-    # If the kernel doesn't have a virtually contiguous mem_map, this could
-    # be changed to return a chained list of MemCArray objects.
-
-    PAGE_SHIFT = crashlib.cid.mdtbl.pageshift
-    pfn_start  = crashlib.cid.physmap[0].start >> PAGE_SHIFT
-    pfn_end    = crashlib.cid.physmap[-1].end >> PAGE_SHIFT
-
-    # Find page map and create an array of page_struct
-    vmemmap_addr = crashlib.cid.mdtbl.vmemmap_vaddr
-
-    return crashlib.memarray.MemCArray(vmemmap_addr,
-                                        lambda a:readSU('struct page',a),
-                                        getSizeOf('struct page'),
-                                        pfn_end-pfn_start)

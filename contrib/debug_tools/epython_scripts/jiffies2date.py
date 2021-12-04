@@ -25,7 +25,7 @@ def jiffies2date(jts):
 
     stime = scur - soffset
     date = time.asctime(time.localtime(stime))
-    print '%s (epoch: %d)' % (date, stime)
+    print('%s (epoch: %d)' % (date, stime))
 
 if __name__ == "__main__":
     description = "Print the date and time of a given jiffies timestamp. " + \

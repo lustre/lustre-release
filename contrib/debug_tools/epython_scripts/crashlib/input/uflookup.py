@@ -95,7 +95,7 @@ if __name__ == '__main__':
                       {"casesensitive": False, "prefixok": True},
                       {"casesensitive": True,  "prefixok": False},
                       {"casesensitive": True,  "prefixok": True}]
-            for i in xrange(len(expectedlist)):
+            for i in range(len(expectedlist)):
                 e = expectedlist[i]
                 if e is None:
                     self.assertRaises(KeyError,

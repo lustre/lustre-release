@@ -19,16 +19,16 @@ description_short = "Displays the RPC queues of the Lustre ptlrpcd daemons"
 
 def print_separator(count):
     s = ""
-    for idx in xrange(count):
+    for idx in range(count):
         s += "="
-    print s
+    print(s)
 
 def print_title(title):
     if title:
-        print "\n" + title
-        print "%-14s %-6s %-19s %-18s %-19s %-4s %-14s %-4s %-22s %-19s" \
+        print("\n" + title)
+        print("%-14s %-6s %-19s %-18s %-19s %-4s %-14s %-4s %-22s %-19s" \
                % ("thread", "pid", "ptlrpc_request", "xid", "nid", "opc",
-                  "phase:flags", "R:W", "sent/deadline", "ptlrpc_body")
+                  "phase:flags", "R:W", "sent/deadline", "ptlrpc_body"))
     print_separator(148)
 
 def enum(**enums):
@@ -81,7 +81,7 @@ def get_ptlrpc_body(req):
     offset = size_round(offset)
     addr = Addr(msg) + offset
     if addr == 0:
-        print "addr"
+        print("addr")
         return None
     return readSU('struct ptlrpc_body_v2', addr)
 
@@ -154,7 +154,7 @@ def print_one_request(sthread, req):
         nid = ll.nid2str(req.rq_import.imp_connection.c_peer.nid)
     brw = "%1d:%1d" % (req.rq_bulk_read, req.rq_bulk_write)
     rq_sent_dl = "%d/%d" % (req.rq_sent, req.rq_deadline)
-    print "%-14s %-6s 0x%-17x %-18d %-19s %-4d %-14s %-4s %-22s 0x%-17x" % \
+    print("%-14s %-6s 0x%-17x %-18d %-19s %-4d %-14s %-4s %-22s 0x%-17x" % \
             (sthread,
             status,
             Addr(req),
@@ -164,7 +164,7 @@ def print_one_request(sthread, req):
             get_phase_flags(req),
             brw,
             rq_sent_dl,
-            pbaddr)
+            pbaddr))
 
 def print_request_list(sthread, lhdr, loffset):
     try:
@@ -174,7 +174,7 @@ def print_request_list(sthread, lhdr, loffset):
             req = readSU('struct ptlrpc_request', reqlnk.next-loffset)
             print_one_request(sthread, req)
 
-    except Exception, e:
+    except Exception as e:
         print_exc()
         return 1
     return 0
@@ -194,9 +194,9 @@ def foreach_ptlrpcd_ctl(callback, *args):
     pinfo_rpcds = readSymbol('ptlrpcds')
     pinfo_count = readSymbol('ptlrpcds_num')
 
-    for idx in xrange(pinfo_count):
+    for idx in range(pinfo_count):
         ptlrpcd = pinfo_rpcds[idx]
-        for jdx in xrange(ptlrpcd.pd_nthreads):
+        for jdx in range(ptlrpcd.pd_nthreads):
             pd = ptlrpcd.pd_threads[jdx]
             callback(pd, *args)
     pd = readSymbol('ptlrpcd_rcv')
@@ -227,8 +227,8 @@ def dump_daemon_rpclists():
 
 def print_overview_entry(pd):
     s = "%s:" % pd.pc_name
-    print "%-14s  ptlrpcd_ctl 0x%x   ptlrpc_request_set 0x%x" % \
-        (s, Addr(pd), pd.pc_set)
+    print("%-14s  ptlrpcd_ctl 0x%x   ptlrpc_request_set 0x%x" % \
+        (s, Addr(pd), pd.pc_set))
 
 def dump_overview():
     foreach_ptlrpcd_ctl(print_overview_entry)
@@ -237,15 +237,15 @@ def print_pcset_stats(pd):
     if pd.pc_set.set_new_count.counter != 0 or \
         pd.pc_set.set_remaining.counter != 0:
         s = "%s:" %pd.pc_name
-        print "%-13s 0x%-18x %-4d %-4d %-6d" % \
+        print("%-13s 0x%-18x %-4d %-4d %-6d" % \
             (s, Addr(pd.pc_set),
             pd.pc_set.set_refcount.counter,
             pd.pc_set.set_new_count.counter,
-            pd.pc_set.set_remaining.counter)
+            pd.pc_set.set_remaining.counter))
 
 def dump_pcsets():
-    print '%-14s %-19s %-4s %-4s %-6s' % \
-        ("thread", "ptlrpc_request_set", "ref", "new", "remain")
+    print('%-14s %-19s %-4s %-4s %-6s' % \
+        ("thread", "ptlrpc_request_set", "ref", "new", "remain"))
     print_separator(52)
     foreach_ptlrpcd_ctl(print_pcset_stats)
 

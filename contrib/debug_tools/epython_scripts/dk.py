@@ -17,7 +17,8 @@ import os
 description_short = 'Dump and sort the Lustre dk logs.'
 
 def do_shell_cmd(cmd):
-    return os.popen(cmd).read()
+    return "done"
+    #return os.popen(cmd).read()
 
 # ---------------------------------------------------------------------------
 # pfn: 2582e8c, physaddr: 2582e8c000, vaddr: ffff002582e8c000
@@ -32,12 +33,12 @@ def dump_dk_line(tmpfd, options, pfn, used):
         laddr = vaddr + hdr_size
         try:
             line = readmem(laddr, hdr.ph_len - hdr_size)
-	except:
-            print "Skipping pfn: %x, physaddr: %x, vaddr: %x, laddr: %x" % \
-                (pfn, physaddr, vaddr, laddr)
+        except:
+            print("Skipping pfn: %x, physaddr: %x, vaddr: %x, laddr: %x" % \
+                (pfn, physaddr, vaddr, laddr))
             return
 
-        (filename,function,text) = line.split('\0')
+        (filename,function,text) = line.decode().split('\0')
         text = text.rstrip()
 
         used -= hdr.ph_len
@@ -68,8 +69,8 @@ def walk_pages(tmpfd, options, cfs_page_head, trace_page_struct):
 def walk_array(options):
     """Walk the cfs_trace_data array of array pointers."""
 
-    fname = do_shell_cmd('mktemp .dklogXXXX').rstrip()
-    tmpfd = file(fname, 'w')
+    #fname = do_shell_cmd('mktemp .dklogXXXX').rstrip()
+    tmpfd = open("/tmp/log.bin", 'w')
 
     try:
         cfs_trace_data = readSymbol('cfs_trace_data')
@@ -79,20 +80,20 @@ def walk_array(options):
             cfs_trace_data = readSymbol('trace_data')
             trace_page_struct = 'struct trace_page'
         except:
-            print "Ensure you have loaded the Lustre modules"
+            print("Ensure you have loaded the Lustre modules")
             return 1
 
     for cfstd_array in cfs_trace_data:
         if not cfstd_array: continue
 
-        for i in xrange(sys_info.CPUS):
+        for i in range(sys_info.CPUS):
             u = cfstd_array[i]
             walk_pages(tmpfd, options, u.tcd.tcd_pages, trace_page_struct)
             walk_pages(tmpfd, options, u.tcd.tcd_stock_pages, trace_page_struct)
 
     tmpfd.close()
-    print do_shell_cmd('sort -n -s -t: -k4,4 ' + fname)
-    print do_shell_cmd('rm ' + fname)
+    print(do_shell_cmd('sort -n -s -t: -k4,4 ' + fname))
+    print(do_shell_cmd('rm ' + fname))
 
 # ---------------------------------------------------------------------------
 def dump_dk_log():
