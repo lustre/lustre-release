@@ -1,0 +1,14 @@
+diff -ur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+--- a/fs/ext4/xattr.c	2021-12-04 15:34:36.356774600 -0700
++++ b/fs/ext4/xattr.c	2021-12-04 15:46:25.813868672 -0700
+@@ -2325,10 +2325,6 @@
+ 						   flags & XATTR_CREATE);
+ 		brelse(bh);
+ 
+-		if (jbd2_handle_buffer_credits(handle) < credits) {
+-			error = -ENOSPC;
+-			goto cleanup;
+-		}
+ 		WARN_ON_ONCE(!(current->flags & PF_MEMALLOC_NOFS));
+ 	}
+ 

@@ -118,7 +118,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	],
 	[LDISKFS_SERIES="5.4.0-ml.series"])],
 	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
-	[LDISKFS_SERIES="5.8.0-53-ubuntu20.series"],
+	[LDISKFS_SERIES="5.8.0-63-ubuntu20.series"],
 	[LDISKFS_SERIES="5.8.0-ml.series"])
 ])
 ])
