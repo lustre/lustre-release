@@ -880,6 +880,7 @@ struct ll_readahead_work {
 	struct file			*lrw_file;
 	pgoff_t				 lrw_start_idx;
 	pgoff_t				 lrw_end_idx;
+	pid_t				 lrw_user_pid;
 
 	/* async worker to handler read */
 	struct work_struct		 lrw_readahead_work;

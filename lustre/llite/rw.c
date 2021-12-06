@@ -591,6 +591,11 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	inode = file_inode(file);
 	sbi = ll_i2sbi(inode);
 
+	CDEBUG(D_READA|D_IOTRACE,
+	       "%s: async ra from %lu to %lu triggered by user pid %d\n",
+	       file_dentry(file)->d_name.name, work->lrw_start_idx,
+	       work->lrw_end_idx, work->lrw_user_pid);
+
 	env = cl_env_alloc(&refcheck, LCT_NOREF);
 	if (IS_ERR(env))
 		GOTO(out_free_work, rc = PTR_ERR(env));
@@ -1301,7 +1306,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	spin_lock(&ras->ras_lock);
 
 	if (!hit)
-		CDEBUG(D_READA, DFID " pages at %lu miss.\n",
+		CDEBUG(D_READA|D_IOTRACE, DFID " pages at %lu miss.\n",
 		       PFID(ll_inode2fid(inode)), index);
 	ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
 
@@ -1670,7 +1675,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			skip_index = vvp_index(vpg);
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file, skip_index);
-		CDEBUG(D_READA, DFID " %d pages read ahead at %lu\n",
+		CDEBUG(D_READA|D_IOTRACE, DFID " %d pages read ahead at %lu\n",
 		       PFID(ll_inode2fid(inode)), rc2, vvp_index(vpg));
 	} else if (vvp_index(vpg) == io_start_index &&
 		   io_end_index - io_start_index > 0) {
@@ -1769,6 +1774,7 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 		lrw->lrw_file = get_file(file);
 		lrw->lrw_start_idx = start_idx;
 		lrw->lrw_end_idx = end_idx;
+		lrw->lrw_user_pid = current->pid;
 		spin_lock(&ras->ras_lock);
 		ras->ras_next_readahead_idx = end_idx + 1;
 		ras->ras_async_last_readpage_idx = start_idx;

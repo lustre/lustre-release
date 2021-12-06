@@ -105,6 +105,7 @@ struct ptldebug_header {
 #define D_TRACE         0x00000001 /* ENTRY/EXIT markers */
 #define D_INODE         0x00000002
 #define D_SUPER         0x00000004
+#define D_IOTRACE	0x00000008 /* simple, low overhead io tracing */
 #define D_MALLOC        0x00000010 /* print malloc, free information */
 #define D_CACHE         0x00000020 /* cache-related items */
 #define D_INFO          0x00000040 /* general information */
@@ -135,7 +136,7 @@ struct ptldebug_header {
 #define D_LAYOUT        0x80000000
 
 #define LIBCFS_DEBUG_MASKS_NAMES {					\
-	"trace", "inode", "super", "tty", "malloc", "cache", "info",	\
+	"trace", "inode", "super", "iotrace", "malloc", "cache", "info",\
 	"ioctl", "neterror", "net", "warning", "buffs", "other",	\
 	"dentry", "nettrace", "page", "dlmtrace", "error", "emerg",	\
 	"ha", "rpctrace", "vfstrace", "reada", "mmap", "config",	\

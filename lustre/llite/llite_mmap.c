@@ -370,9 +370,10 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (cached)
 		goto out;
 
-	CDEBUG(D_MMAP, DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx\n",
+	CDEBUG(D_MMAP|D_IOTRACE,
+	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
-	       vma, vma->vm_start, vma->vm_end, vma->vm_flags);
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff);
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
@@ -440,6 +441,12 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	bool cached;
 	ktime_t kstart = ktime_get();
 	vm_fault_t result;
+
+	CDEBUG(D_MMAP|D_IOTRACE,
+	       DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
+	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
+	       vma, vma->vm_start, vma->vm_end, vma->vm_flags,
+	       vmf->page->index);
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)

@@ -1940,8 +1940,15 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	ktime_t kstart = ktime_get();
 	bool cached;
 
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE|D_IOTRACE, "file %s:"DFID", ppos: %lld, count: %zu\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
+	       iov_iter_count(to));
+
 	if (!iov_iter_count(to))
-		return 0;
+		RETURN(0);
 
 	/**
 	 * Currently when PCC read failed, we do not fall back to the
@@ -1966,7 +1973,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
-		return PTR_ERR(env);
+		RETURN(PTR_ERR(env));
 
 	args = ll_env_args(env);
 	args->u.normal.via_iter = to;
@@ -1989,7 +1996,7 @@ out:
 				   ktime_us_delta(ktime_get(), kstart));
 	}
 
-	return result;
+	RETURN(result);
 }
 
 /**
@@ -2065,6 +2072,11 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	ENTRY;
 
+	CDEBUG(D_VFSTRACE|D_IOTRACE, "file %s:"DFID", ppos: %lld, count: %zu\n",
+	       file_dentry(file)->d_name.name,
+	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
+	       iov_iter_count(from));
+
 	if (!iov_iter_count(from))
 		GOTO(out, rc_normal = 0);
 
@@ -2099,7 +2111,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
-		return PTR_ERR(env);
+		RETURN(PTR_ERR(env));
 
 	args = ll_env_args(env);
 	args->u.normal.via_iter = from;
