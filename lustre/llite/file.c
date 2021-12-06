@@ -4999,7 +4999,7 @@ ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
 	 */
 	if (!(fd->fd_flags & LL_FILE_FLOCK_WARNING)) {
 		fd->fd_flags |= LL_FILE_FLOCK_WARNING;
-		CDEBUG_LIMIT(D_TTY | D_CONSOLE,
+		CDEBUG_LIMIT(D_CONSOLE,
 			     "flock disabled, mount with '-o [local]flock' to enable\r\n");
 	}
 	RETURN(-ENOSYS);

@@ -42,7 +42,6 @@
 #include <linux/kthread.h>
 #include <linux/pagemap.h>
 #include <linux/poll.h>
-#include <linux/tty.h>
 #include <linux/uaccess.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/libcfs.h>
@@ -328,41 +327,6 @@ static void cfs_set_ptldebug_header(struct ptldebug_header *header,
 	header->ph_extern_pid = 0;
 }
 
-/**
- * tty_write_msg - write a message to a certain tty, not just the console.
- * @tty: the destination tty_struct
- * @msg: the message to write
- *
- * tty_write_message is not exported, so write a same function for it
- *
- */
-static void tty_write_msg(struct tty_struct *tty, const char *msg)
-{
-	mutex_lock(&tty->atomic_write_lock);
-	tty_lock(tty);
-	if (tty->ops->write && tty->count > 0)
-		tty->ops->write(tty, msg, strlen(msg));
-	tty_unlock(tty);
-	mutex_unlock(&tty->atomic_write_lock);
-	wake_up_interruptible_poll(&tty->write_wait, POLLOUT);
-}
-
-static void cfs_tty_write_message(const char *prefix, int mask, const char *msg)
-{
-	struct tty_struct *tty;
-
-	tty = get_current_tty();
-	if (!tty)
-		return;
-
-	tty_write_msg(tty, prefix);
-	if ((mask & D_EMERG) || (mask & D_ERROR))
-		tty_write_msg(tty, "Error");
-	tty_write_msg(tty, ": ");
-	tty_write_msg(tty, msg);
-	tty_kref_put(tty);
-}
-
 static void cfs_vprint_to_console(struct ptldebug_header *hdr, int mask,
 				  struct va_format *vaf, const char *file,
 				  const char *fn)
@@ -397,10 +361,6 @@ static void cfs_vprint_to_console(struct ptldebug_header *hdr, int mask,
 		else if (mask & (D_CONSOLE | libcfs_printk))
 			pr_info("%s: %pV", prefix, vaf);
 	}
-
-	if (mask & D_TTY)
-		/* tty_write_msg doesn't handle formatting */
-		cfs_tty_write_message(prefix, mask, vaf->fmt);
 }
 
 static void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
@@ -511,14 +471,6 @@ int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	if (*(string_buf + needed - 1) != '\n') {
 		pr_info("Lustre: format at %s:%d:%s doesn't end in newline\n",
 			file, msgdata->msg_line, msgdata->msg_fn);
-	} else if (mask & D_TTY) {
-		/* TTY needs '\r\n' to move carriage to leftmost position */
-		if (needed < 2 || *(string_buf + needed - 2) != '\r')
-			pr_info("Lustre: format at %s:%d:%s doesn't end in '\\r\\n'\n",
-				file, msgdata->msg_line, msgdata->msg_fn);
-		if (strnchr(string_buf, needed, '%'))
-			pr_info("Lustre: format at %s:%d:%s mustn't contain %%\n",
-				file, msgdata->msg_line, msgdata->msg_fn);
 	}
 
 	header.ph_len = known_size + needed;
@@ -598,8 +550,7 @@ console:
 	}
 
 	if (cdls != NULL && cdls->cdls_count != 0) {
-		/* Do not allow print this to TTY */
-		cfs_print_to_console(&header, mask & ~D_TTY, file,
+		cfs_print_to_console(&header, mask, file,
 				     msgdata->msg_fn,
 				     "Skipped %d previous similar message%s\n",
 				     cdls->cdls_count,
