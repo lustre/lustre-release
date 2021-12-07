@@ -1761,6 +1761,70 @@ static void __osd_th_check_slow(void *oth, struct osd_device *dev,
 #endif /* OSD_THANDLE_STATS */
 
 /*
+ * in some cases (like overstriped files) the same operations on the same
+ * objects are declared many times and this may lead to huge number of
+ * credits which can be a problem and/or cause performance degradation.
+ * this function is to remember what declarations have been made within
+ * a given thandle and then skip duplications.
+ * limit it's scope so that regular small transactions don't need all
+ * this overhead with allocations, lists.
+ * also, limit scope to the specific objects like llogs, etc.
+ */
+static inline bool osd_check_special_fid(const struct lu_fid *f)
+{
+	if (fid_seq_is_llog(f->f_seq))
+		return true;
+	if (f->f_seq == FID_SEQ_LOCAL_FILE &&
+	    f->f_oid == MDD_LOV_OBJ_OID)
+		return true;
+	return false;
+}
+
+bool osd_tx_was_declared(const struct lu_env *env, struct osd_thandle *oth,
+			 struct dt_object *dt, enum dt_txn_op op, loff_t pos)
+{
+	const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_obj_declare *old;
+
+	if (osd->od_is_ost)
+		return false;
+
+	/* small transactions don't need this overhead */
+	if (oti->oti_declare_ops[DTO_OBJECT_CREATE] < 10 &&
+	    oti->oti_declare_ops[DTO_WRITE_BASE] < 10)
+		return false;
+
+	if (osd_check_special_fid(fid) == 0)
+		return false;
+
+	list_for_each_entry(old, &oth->ot_declare_list, old_list) {
+		if (old->old_op == op && old->old_pos == pos &&
+		    lu_fid_eq(&old->old_fid, fid))
+			return true;
+	}
+	OBD_ALLOC_PTR(old);
+	if (unlikely(old == NULL))
+		return false;
+	old->old_fid = *lu_object_fid(&dt->do_lu);
+	old->old_op = op;
+	old->old_pos = pos;
+	list_add(&old->old_list, &oth->ot_declare_list);
+	return false;
+}
+
+void osd_tx_declaration_free(struct osd_thandle *oth)
+{
+	struct osd_obj_declare *old, *tmp;
+
+	list_for_each_entry_safe(old, tmp, &oth->ot_declare_list, old_list) {
+		list_del_init(&old->old_list);
+		OBD_FREE_PTR(old);
+	}
+}
+
+/*
  * Concurrency: doesn't access mutable data.
  */
 static int osd_param_is_not_sane(const struct osd_device *dev,
@@ -1845,6 +1909,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_trunc_locks);
+	INIT_LIST_HEAD(&oh->ot_declare_list);
 	osd_th_alloced(oh);
 
 	memset(oti->oti_declare_ops, 0,
@@ -1934,6 +1999,9 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	if (unlikely(osd_param_is_not_sane(dev, th))) {
 		static unsigned long last_printed;
 		static int last_credits;
+
+		lprocfs_counter_add(dev->od_stats,
+				    LPROC_OSD_TOO_MANY_CREDITS, 1);
 
 		/*
 		 * don't make noise on a tiny testing systems
@@ -2064,6 +2132,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	qtrans = oh->ot_quota_trans;
 	oh->ot_quota_trans = NULL;
+
+	osd_tx_declaration_free(oh);
 
 	/* move locks to local list, stop tx, execute truncates */
 	list_splice(&oh->ot_trunc_locks, &truncates);
@@ -3706,6 +3776,9 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
+
+	if (osd_tx_was_declared(env, oh, dt, DTO_OBJECT_CREATE, 0))
+		RETURN(0);
 
 	/*
 	 * EA object consumes more credits than regular object: osd_mk_index
