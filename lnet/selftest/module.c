@@ -115,8 +115,10 @@ lnet_selftest_init(void)
 
 	nscheds = cfs_cpt_number(lnet_cpt_table());
 	CFS_ALLOC_PTR_ARRAY(lst_sched_test, nscheds);
-	if (lst_sched_test == NULL)
+	if (lst_sched_test == NULL) {
+		rc = -ENOMEM;
 		goto error;
+	}
 
 	lst_init_step = LST_INIT_WI_TEST;
 	for (i = 0; i < nscheds; i++) {
