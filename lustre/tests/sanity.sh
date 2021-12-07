@@ -18551,7 +18551,7 @@ test_208() {
 	echo "==== test 2: verify lease can be broken by upcoming open"
 	$MULTIOP $DIR/$tfile oO_RDWR:eR_E-eUc &
 	local PID=$!
-	sleep 1
+	sleep 2
 
 	$MULTIOP $DIR/$tfile oO_RDWR:c
 	kill -USR1 $PID && wait $PID || error "break lease error"
@@ -18559,7 +18559,7 @@ test_208() {
 	echo "==== test 3: verify lease can't be granted if an open already exists"
 	$MULTIOP $DIR/$tfile oO_RDWR:_c &
 	local PID=$!
-	sleep 1
+	sleep 2
 
 	$MULTIOP $DIR/$tfile oO_RDWR:eReUc && error "apply lease should fail"
 	kill -USR1 $PID && wait $PID || error "open file error"
@@ -18567,7 +18567,7 @@ test_208() {
 	echo "==== test 4: lease can sustain over recovery"
 	$MULTIOP $DIR/$tfile oO_RDWR:eR_E+eUc &
 	PID=$!
-	sleep 1
+	sleep 2
 
 	fail mds1
 
@@ -18576,7 +18576,7 @@ test_208() {
 	echo "==== test 5: lease broken can't be regained by replay"
 	$MULTIOP $DIR/$tfile oO_RDWR:eR_E-eUc &
 	PID=$!
-	sleep 1
+	sleep 2
 
 	# open file to break lease and then recovery
 	$MULTIOP $DIR/$tfile oO_RDWR:c || error "open file error"
