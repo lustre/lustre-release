@@ -18319,8 +18319,8 @@ verify_jobstats() {
 		local stats="*.$(convert_facet2label $facet).job_stats"
 
 		# strip out libtool wrappers for in-tree executables
-		if [ $(do_facet $facet lctl get_param $stats |
-		       sed -e 's/\.lt-/./' | grep -c $JOBVAL) -ne 1 ]; then
+		if (( $(do_facet $facet lctl get_param $stats |
+			sed -e 's/\.lt-/./' | grep -cw $JOBVAL) != 1 )); then
 			do_facet $facet lctl get_param $stats
 			error "No jobstats for $JOBVAL found on $facet::$stats"
 		fi
