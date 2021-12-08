@@ -3447,6 +3447,23 @@ int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg)
 	RETURN(0);
 }
 
+struct dname_buf {
+	struct work_struct db_work;
+	struct dentry *db_dentry;
+	/* Let's hope the path is not too long, 32 bytes for the work struct
+	 * on my kernel
+	 */
+	char buf[PAGE_SIZE - sizeof(struct work_struct) - sizeof(void *)];
+};
+
+static void ll_dput_later(struct work_struct *work)
+{
+	struct dname_buf *db = container_of(work, struct dname_buf, db_work);
+
+	dput(db->db_dentry);
+	free_page((unsigned long)db);
+}
+
 static char* ll_d_path(struct dentry *dentry, char *buf, int bufsize)
 {
 	char *path = NULL;
@@ -3461,33 +3478,43 @@ static char* ll_d_path(struct dentry *dentry, char *buf, int bufsize)
 	return path;
 }
 
-void ll_dirty_page_discard_warn(struct page *page, int ioret)
+void ll_dirty_page_discard_warn(struct inode *inode, int ioret)
 {
-	char *buf, *path = NULL;
+	struct dname_buf *db;
+	char  *path = NULL;
 	struct dentry *dentry = NULL;
-	struct inode *inode = page->mapping->host;
 
 	/* this can be called inside spin lock so use GFP_ATOMIC. */
-	buf = (char *)__get_free_page(GFP_ATOMIC);
-	if (buf != NULL) {
-		dentry = d_find_alias(page->mapping->host);
+	db = (struct dname_buf *)__get_free_page(GFP_ATOMIC);
+	if (db != NULL) {
+
+		dentry = d_find_alias(inode);
 		if (dentry != NULL)
-			path = ll_d_path(dentry, buf, PAGE_SIZE);
+			path = ll_d_path(dentry, db->buf, sizeof(db->buf));
 	}
 
 	/* The below message is checked in recovery-small.sh test_24b */
 	CDEBUG(D_WARNING,
 	       "%s: dirty page discard: %s/fid: "DFID"/%s may get corrupted "
 	       "(rc %d)\n", ll_i2sbi(inode)->ll_fsname,
-	       s2lsi(page->mapping->host->i_sb)->lsi_lmd->lmd_dev,
+	       s2lsi(inode->i_sb)->lsi_lmd->lmd_dev,
 	       PFID(ll_inode2fid(inode)),
 	       (path && !IS_ERR(path)) ? path : "", ioret);
 
-	if (dentry != NULL)
-		dput(dentry);
-
-	if (buf != NULL)
-		free_page((unsigned long)buf);
+	if (dentry != NULL) {
+		/* We cannot dput here since if we happen to be the last holder
+		 * then we can end up waiting for page evictions that
+		 * in turn wait for RPCs that need this instance of ptlrpcd
+		 * (callng brw_interpret->*page_completion*->vmpage_error->here)
+		 * LU-15340
+		 */
+		INIT_WORK(&db->db_work, ll_dput_later);
+		db->db_dentry = dentry;
+		schedule_work(&db->db_work);
+	} else {
+		if (db != NULL)
+			free_page((unsigned long)db);
+	}
 }
 
 ssize_t ll_copy_user_md(const struct lov_user_md __user *md,

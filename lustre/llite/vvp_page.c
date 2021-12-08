@@ -254,7 +254,7 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 		if ((ioret == -ESHUTDOWN || ioret == -EINTR ||
 		     ioret == -EIO) && obj->vob_discard_page_warned == 0) {
 			obj->vob_discard_page_warned = 1;
-			ll_dirty_page_discard_warn(vmpage, ioret);
+			ll_dirty_page_discard_warn(inode, ioret);
 		}
 	}
 }
