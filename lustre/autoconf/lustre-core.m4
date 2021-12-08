@@ -2213,6 +2213,26 @@ VM_FAULT_RETRY, [
 ]) # LC_VM_FAULT_RETRY
 
 #
+# LC_ALLOC_FILE_PSEUDO
+#
+# kernel 4.18-rc1 commit d93aa9d82aea80b80f225dbf9c7986df444d8106
+# new wrapper: alloc_file_pseudo()
+#
+AC_DEFUN([LC_ALLOC_FILE_PSEUDO], [
+LB_CHECK_COMPILE([if 'alloc_file_pseudo' is defined],
+alloc_file_pseudo, [
+	#include <linux/file.h>
+],[
+	struct file *file;
+	file = alloc_file_pseudo(NULL, NULL, "[test]",
+				 00000002, NULL);
+],[
+	AC_DEFINE(HAVE_ALLOC_FILE_PSEUDO, 1,
+		['alloc_file_pseudo' exist])
+])
+]) # LC_ALLOC_FILE_PSEUDO
+
+#
 # LC_INODE_TIMESPEC64
 #
 # kernel 4.17-rc7 commit 8efd6894ff089adeeac7cb9f32125b85d963d1bc
@@ -2619,6 +2639,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_I_PAGES
 
 	# 4.18
+	LC_ALLOC_FILE_PSEUDO
 	LC_INODE_TIMESPEC64
 
 	# 4.20

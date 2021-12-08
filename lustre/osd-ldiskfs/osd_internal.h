@@ -519,7 +519,7 @@ struct osd_it_ea_dirent {
 struct osd_it_ea {
 	struct osd_object	*oie_obj;
 	/** used in ldiskfs iterator, to stored file pointer */
-	struct file		oie_file;
+	struct file		*oie_file;
 	/** how many entries have been read-cached from storage */
 	int			oie_rd_dirent;
 	/** current entry is being iterated by caller */
@@ -528,7 +528,6 @@ struct osd_it_ea {
 	struct osd_it_ea_dirent *oie_dirent;
 	/** buffer to hold entries, size == OSD_IT_EA_BUFSIZE */
 	void			*oie_buf;
-	struct dentry		oie_dentry;
 };
 
 /**
@@ -585,9 +584,36 @@ struct osd_iobuf {
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
-int osd_security_file_alloc(struct file *file);
-
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
+
+#ifndef HAVE_ALLOC_FILE_PSEUDO
+
+#define OPEN_FMODE(flag) ((__force fmode_t)(((flag + 1) & O_ACCMODE) | \
+					    (flag & __FMODE_NONOTIFY)))
+static inline
+struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
+			       const char *name, int flags,
+			       const struct file_operations *fops)
+{
+	struct qstr this = QSTR_INIT(name, strlen(name));
+	struct path path;
+	struct file *file;
+
+	path.dentry = d_alloc_pseudo(mnt->mnt_sb, &this);
+	if (!path.dentry)
+		return ERR_PTR(-ENOMEM);
+	path.mnt = mntget(mnt);
+	d_instantiate(path.dentry, inode);
+	file = alloc_file(&path, OPEN_FMODE(flags), fops);
+	if (IS_ERR(file)) {
+		ihold(inode);
+		path_put(&path);
+	} else {
+		file->f_flags = flags;
+	}
+	return file;
+}
+#endif /* !HAVE_ALLOC_FILE_PSEUDO */
 
 #ifdef HAVE_INODE_TIMESPEC64
 # define osd_timespec			timespec64
@@ -616,12 +642,8 @@ struct osd_thread_info {
 	/** dentry for Iterator context. */
 	struct dentry		oti_it_dentry;
 
-	union {
-		/* fake struct file for osd_object_sync */
-		struct file		oti_file;
-		/* osd_statfs() */
-		struct kstatfs		oti_ksfs;
-	};
+	/* osd_statfs() */
+	struct kstatfs		oti_ksfs;
 
 	struct htree_lock     *oti_hlock;
 
@@ -789,8 +811,9 @@ void osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
 		      struct osd_inode_id *id, const struct lu_fid *fid);
 int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 		 struct dentry *dentry, struct lu_fid *fid);
-struct osd_it_ea *osd_it_dir_init(const struct lu_env *env, struct inode *inode,
-				  __u32 attr);
+struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
+				  struct osd_device *dev, struct inode *inode,
+				  u32 attr);
 void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
 		     struct inode *inode);
 int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di);
@@ -1206,43 +1229,6 @@ struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
         return child_dentry;
 }
 
-/* build quasi file structure when it is needed to call an inode i_fop */
-static inline struct file *osd_quasi_file_init(const struct lu_env *env,
-					       struct dentry *dentry,
-					       struct inode *inode)
-{
-	struct osd_thread_info *info = osd_oti_get(env);
-
-	info->oti_file.f_path.dentry = dentry;
-	info->oti_file.f_mapping = inode->i_mapping;
-	info->oti_file.f_op = inode->i_fop;
-	info->oti_file.f_inode = inode;
-	info->oti_file.f_pos = 0;
-	info->oti_file.private_data = NULL;
-	info->oti_file.f_cred = current_cred();
-	info->oti_file.f_flags = O_NOATIME;
-	info->oti_file.f_mode = FMODE_64BITHASH | FMODE_NONOTIFY;
-
-	return &info->oti_file;
-}
-
-static inline struct file *osd_quasi_file(const struct lu_env *env,
-					  struct inode *inode)
-{
-	struct osd_thread_info *info = osd_oti_get(env);
-
-	info->oti_obj_dentry.d_inode = inode;
-	info->oti_obj_dentry.d_sb = inode->i_sb;
-
-	return osd_quasi_file_init(env, &info->oti_obj_dentry, inode);
-}
-
-static inline struct file *osd_quasi_file_by_dentry(const struct lu_env *env,
-						    struct dentry *dentry)
-{
-	return osd_quasi_file_init(env, dentry, dentry->d_inode);
-}
-
 extern int osd_trans_declare_op2rb[];
 extern int ldiskfs_track_declares_assert;
 void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th);
@@ -1575,7 +1561,7 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh,
 		   bool shared);
 void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list);
-void osd_process_truncates(const struct lu_env *env, struct list_head *list);
+int osd_process_truncates(const struct lu_env *env, struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG

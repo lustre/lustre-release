@@ -2654,20 +2654,26 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, int whence)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *dev = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	struct file *file;
 	loff_t result;
 
 	ENTRY;
-
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode);
 	LASSERT(offset >= 0);
 
-	file = osd_quasi_file(env, inode);
-	result = file->f_op->llseek(file, offset, whence);
+	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				 inode->i_fop);
+	if (IS_ERR(file))
+		RETURN(PTR_ERR(file));
 
+	file->f_mode |= FMODE_64BITHASH;
+	result = file->f_op->llseek(file, offset, whence);
+	ihold(inode);
+	fput(file);
 	/*
 	 * If 'offset' is beyond end of object file then treat it as not error
 	 * but valid case for SEEK_HOLE and return 'offset' as result.
@@ -2847,22 +2853,34 @@ void osd_execute_truncate(struct osd_object *obj)
 	osd_partial_page_flush(d, inode, size);
 }
 
-void osd_execute_punch(const struct lu_env *env, struct osd_object *obj,
-		       loff_t start, loff_t end, int mode)
+static int osd_execute_punch(const struct lu_env *env, struct osd_object *obj,
+			     loff_t start, loff_t end, int mode)
 {
 	struct osd_device *d = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
-	struct file *file = osd_quasi_file(env, inode);
+	struct file *file;
+	int rc;
 
-	file->f_op->fallocate(file, mode, start, end - start);
-	osd_partial_page_flush_punch(d, inode, start, end - 1);
+	file = alloc_file_pseudo(inode, d->od_mnt, "/", O_NOATIME,
+				 inode->i_fop);
+	if (IS_ERR(file))
+		RETURN(PTR_ERR(file));
+
+	file->f_mode |= FMODE_64BITHASH;
+	rc = file->f_op->fallocate(file, mode, start, end - start);
+	ihold(inode);
+	fput(file);
+	if (rc == 0)
+		osd_partial_page_flush_punch(d, inode, start, end - 1);
+	return rc;
 }
 
-void osd_process_truncates(const struct lu_env *env, struct list_head *list)
+int osd_process_truncates(const struct lu_env *env, struct list_head *list)
 {
 	struct osd_access_lock *al;
+	int rc = 0;
 
-	LASSERT(journal_current_handle() == NULL);
+	LASSERT(!journal_current_handle());
 
 	list_for_each_entry(al, list, tl_list) {
 		if (al->tl_shared)
@@ -2870,7 +2888,9 @@ void osd_process_truncates(const struct lu_env *env, struct list_head *list)
 		if (al->tl_truncate)
 			osd_execute_truncate(al->tl_obj);
 		else if (al->tl_punch)
-			osd_execute_punch(env, al->tl_obj, al->tl_start,
-					  al->tl_end, al->tl_mode);
+			rc = osd_execute_punch(env, al->tl_obj, al->tl_start,
+					       al->tl_end, al->tl_mode);
 	}
+
+	return rc;
 }

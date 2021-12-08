@@ -39,7 +39,6 @@
 #define DEBUG_SUBSYSTEM S_OSD
 
 #include <linux/fs_struct.h>
-#include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
@@ -1028,7 +1027,6 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 			 struct inode *inode)
 {
 	struct lu_buf *buf = &oti->oti_big_buf;
-	struct dentry *dentry = &oti->oti_obj_dentry;
 	struct file *filp;
 	struct lmv_mds_md_v1 *lmv1;
 	struct osd_check_lmv_buf oclb = {
@@ -1040,12 +1038,24 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 	int rc = 0;
 
 	ENTRY;
+	/* We should use the VFS layer to create a real dentry. */
+	oti->oti_obj_dentry.d_inode = inode;
+	oti->oti_obj_dentry.d_sb = inode->i_sb;
 
+	filp = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				 inode->i_fop);
+	if (IS_ERR(filp))
+		RETURN(-ENOMEM);
+
+	filp->f_mode |= FMODE_64BITHASH;
+	filp->f_pos = 0;
+	ihold(inode);
 again:
-	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV, buf->lb_buf,
-			     buf->lb_len);
+	rc = __osd_xattr_get(inode, filp->f_path.dentry, XATTR_NAME_LMV,
+			     buf->lb_buf, buf->lb_len);
 	if (rc == -ERANGE) {
-		rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV, NULL, 0);
+		rc = __osd_xattr_get(inode, filp->f_path.dentry,
+				     XATTR_NAME_LMV, NULL, 0);
 		if (rc > 0) {
 			lu_buf_realloc(buf, rc);
 			if (buf->lb_buf == NULL)
@@ -1073,19 +1083,13 @@ again:
 	if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)
 		GOTO(out, rc = 0);
 
-	filp = osd_quasi_file(oti->oti_env, inode);
-	rc = osd_security_file_alloc(filp);
-	if (rc)
-		goto out;
-
 	do {
 		oclb.oclb_items = 0;
 		rc = iterate_dir(filp, &oclb.ctx);
 	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
-	inode->i_fop->release(inode, filp);
-
 out:
+	fput(filp);
 	if (rc < 0)
 		CDEBUG(D_LFSCK,
 		       "%s: cannot check LMV, ino = %lu/%u: rc = %d\n",
@@ -2090,7 +2094,15 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		if (!rc)
 			rc = rc2;
 
-		osd_process_truncates(env, &truncates);
+		/* We preserve the origin behavior of ignoring any
+		 * failures with the underlying punch / truncate
+		 * operation. We do record for debugging if an error
+		 * does occur in the lctl dk logs.
+		 */
+		rc2 = osd_process_truncates(env, &truncates);
+		if (rc2 != 0)
+			CERROR("%s: failed truncate process: rc = %d\n",
+			       osd_name(osd), rc2);
 	} else {
 		osd_trans_stop_cb(oh, th->th_result);
 		OBD_FREE_PTR(oh);
@@ -2490,15 +2502,6 @@ static int osd_commit_async(const struct lu_env *env,
 	up_read(&s->s_umount);
 
 	RETURN(rc);
-}
-
-static int (*priv_security_file_alloc)(struct file *file);
-
-int osd_security_file_alloc(struct file *file)
-{
-	if (priv_security_file_alloc)
-		return priv_security_file_alloc(file);
-	return 0;
 }
 
 /*
@@ -4976,13 +4979,21 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 			   __u64 start, __u64 end)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *dev = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
-	struct file *file = osd_quasi_file(env, inode);
+	struct file *file;
 	int rc;
 
 	ENTRY;
+	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				 inode->i_fop);
+	if (IS_ERR(file))
+		RETURN(PTR_ERR(file));
 
+	file->f_mode |= FMODE_64BITHASH;
 	rc = vfs_fsync_range(file, start, end, 0);
+	ihold(inode);
+	fput(file);
 
 	RETURN(rc);
 }
@@ -6684,23 +6695,29 @@ static const struct dt_index_operations osd_index_iam_ops = {
 };
 
 struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
-				  struct inode *inode, __u32 attr)
+				  struct osd_device *dev,
+				  struct inode *inode, u32 attr)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_it_ea *oie;
 	struct file *file;
-	struct dentry *obj_dentry;
 
 	ENTRY;
+	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				 inode->i_fop);
+	if (IS_ERR(file))
+		RETURN(ERR_CAST(file));
 
-	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);
-	if (oie == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
-	obj_dentry = &oie->oie_dentry;
+	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
+	if (attr & LUDA_64BITHASH)
+		file->f_mode |= FMODE_64BITHASH;
+	else
+		file->f_mode |= FMODE_32BITHASH;
+	ihold(inode);
 
-	obj_dentry->d_inode = inode;
-	obj_dentry->d_sb = inode->i_sb;
-	obj_dentry->d_name.hash = 0;
+	OBD_SLAB_ALLOC_PTR(oie, osd_itea_cachep);
+	if (!oie)
+		goto out_fput;
 
 	oie->oie_rd_dirent       = 0;
 	oie->oie_it_dirent       = 0;
@@ -6710,24 +6727,20 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 		info->oti_it_ea_buf_used = 1;
 	} else {
 		OBD_ALLOC(oie->oie_buf, OSD_IT_EA_BUFSIZE);
-		if (oie->oie_buf == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
+		if (!oie->oie_buf)
+			goto out_free;
 	}
 	oie->oie_obj = NULL;
-
-	file = &oie->oie_file;
-
-	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
-	if (attr & LUDA_64BITHASH)
-		file->f_mode	= FMODE_64BITHASH;
-	else
-		file->f_mode	= FMODE_32BITHASH;
-	file->f_path.dentry	= obj_dentry;
-	file->f_mapping		= inode->i_mapping;
-	file->f_op		= inode->i_fop;
-	file->f_inode = inode;
+	oie->oie_file = file;
 
 	RETURN(oie);
+
+out_free:
+	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
+out_fput:
+	fput(file);
+
+	return ERR_PTR(-ENOMEM);
 }
 
 /**
@@ -6741,6 +6754,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 				    __u32 attr)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *dev = osd_obj2dev(obj);
 	struct lu_object *lo = &dt->do_lu;
 	struct osd_it_ea *oie;
 
@@ -6749,9 +6763,9 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	if (!dt_object_exists(dt) || obj->oo_destroyed)
 		RETURN(ERR_PTR(-ENOENT));
 
-	oie = osd_it_dir_init(env, obj->oo_inode, attr);
+	oie = osd_it_dir_init(env, dev, obj->oo_inode, attr);
 	if (IS_ERR(oie))
-		RETURN((struct dt_it *)oie);
+		RETURN(ERR_CAST(oie));
 
 	oie->oie_obj = obj;
 	lu_object_get(lo);
@@ -6764,7 +6778,7 @@ void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
 	struct osd_thread_info *info = osd_oti_get(env);
 
 	ENTRY;
-	oie->oie_file.f_op->release(inode, &oie->oie_file);
+	fput(oie->oie_file);
 	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
 		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 	else
@@ -6807,7 +6821,7 @@ static int osd_it_ea_get(const struct lu_env *env,
 
 	ENTRY;
 	LASSERT(((const char *)key)[0] == '\0');
-	it->oie_file.f_pos = 0;
+	it->oie_file->f_pos = 0;
 	it->oie_rd_dirent = 0;
 	it->oie_it_dirent = 0;
 	it->oie_dirent = NULL;
@@ -6928,7 +6942,7 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 	struct osd_it_ea *it = (struct osd_it_ea *)di;
 	struct osd_object *obj = it->oie_obj;
 	struct htree_lock *hlock = NULL;
-	struct file *filp = &it->oie_file;
+	struct file *filp = it->oie_file;
 	int rc = 0;
 	struct osd_filldir_cbs buf = {
 		.ctx.actor = osd_ldiskfs_filldir,
@@ -6950,13 +6964,6 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		}
 	}
 
-	filp->f_cred = current_cred();
-	rc = osd_security_file_alloc(filp);
-	if (rc)
-		GOTO(unlock, rc);
-
-	filp->f_flags |= O_NOATIME;
-	filp->f_mode |= FMODE_NONOTIFY;
 	rc = iterate_dir(filp, &buf.ctx);
 	if (rc)
 		GOTO(unlock, rc);
@@ -6966,7 +6973,7 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		 * If it does not get any dirent, it means it has been reached
 		 * to the end of the dir
 		 */
-		it->oie_file.f_pos = ldiskfs_get_htree_eof(&it->oie_file);
+		it->oie_file->f_pos = ldiskfs_get_htree_eof(it->oie_file);
 		if (rc == 0)
 			rc = 1;
 	} else {
@@ -7010,7 +7017,7 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
 		it->oie_it_dirent++;
 		rc = 0;
 	} else {
-		if (it->oie_file.f_pos == ldiskfs_get_htree_eof(&it->oie_file))
+		if (it->oie_file->f_pos == ldiskfs_get_htree_eof(it->oie_file))
 			rc = 1;
 		else
 			rc = osd_ldiskfs_it_fill(env, di);
@@ -7613,7 +7620,7 @@ static int osd_it_ea_load(const struct lu_env *env,
 	int rc;
 
 	ENTRY;
-	it->oie_file.f_pos = hash;
+	it->oie_file->f_pos = hash;
 
 	rc =  osd_ldiskfs_it_fill(env, di);
 	if (rc > 0)
@@ -8564,11 +8571,6 @@ static int __init osd_init(void)
 	if (rc)
 		return rc;
 
-#ifdef CONFIG_KALLSYMS
-	priv_security_file_alloc =
-		(void *)cfs_kallsyms_lookup_name("security_file_alloc");
-#endif
-
 	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
 	if (rc) {
@@ -8586,6 +8588,7 @@ static int __init osd_init(void)
 			rc = 0;
 		}
 	}
+
 	return rc;
 }
 

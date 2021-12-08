@@ -2142,24 +2142,29 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 		.oifb_dentry = dentry
 	};
 	struct file *filp;
-	struct inode *inode = dentry->d_inode;
+	struct path path;
 	int rc;
 
 	ENTRY;
+	LASSERT(filldir);
+	path.dentry = dget(dentry);
+	path.mnt = mntget(dev->od_mnt);
 
-	LASSERT(filldir != NULL);
+	filp = dentry_open(&path, O_RDONLY, current_cred());
+	path_put(&path);
+	if (IS_ERR(filp))
+		RETURN(PTR_ERR(filp));
 
-	filp = osd_quasi_file_by_dentry(info->oti_env, dentry);
-	rc = osd_security_file_alloc(filp);
-	if (rc)
-		RETURN(rc);
+	filp->f_mode |= FMODE_64BITHASH | FMODE_NONOTIFY;
+	filp->f_flags |= O_NOATIME;
+	filp->f_pos = 0;
 
 	do {
 		buf.oifb_items = 0;
 		rc = iterate_dir(filp, &buf.ctx);
 	} while (rc >= 0 && buf.oifb_items > 0 &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
-	inode->i_fop->release(inode, filp);
+	fput(filp);
 
 	RETURN(rc);
 }
@@ -3017,11 +3022,11 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 
 	ENTRY;
 
-	oie = osd_it_dir_init(env, inode, LUDA_TYPE);
+	oie = osd_it_dir_init(env, dev, inode, LUDA_TYPE);
 	if (IS_ERR(oie))
 		RETURN(PTR_ERR(oie));
 
-	oie->oie_file.f_pos = 0;
+	oie->oie_file->f_pos = 0;
 	rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
 	if (rc > 0)
 		rc = -ENODATA;
@@ -3041,8 +3046,8 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 		if (oie->oie_it_dirent <= oie->oie_rd_dirent)
 			continue;
 
-		if (oie->oie_file.f_pos ==
-		    ldiskfs_get_htree_eof(&oie->oie_file))
+		if (oie->oie_file->f_pos ==
+		    ldiskfs_get_htree_eof(oie->oie_file))
 			break;
 
 		rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
@@ -3064,7 +3069,7 @@ static int osd_remove_ml_file(struct osd_thread_info *info,
 {
 	handle_t *th;
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
-	struct dentry *dentry;
+	struct dentry dentry;
 	int rc;
 
 	ENTRY;
@@ -3078,10 +3083,10 @@ static int osd_remove_ml_file(struct osd_thread_info *info,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	dentry = &oie->oie_dentry;
-	dentry->d_inode = dir;
-	dentry->d_sb = dir->i_sb;
-	rc = osd_obj_del_entry(info, dev, dentry, oie->oie_dirent->oied_name,
+	/* Should be created by the VFS layer */
+	dentry.d_inode = dir;
+	dentry.d_sb = dir->i_sb;
+	rc = osd_obj_del_entry(info, dev, &dentry, oie->oie_dirent->oied_name,
 			       oie->oie_dirent->oied_namelen, th);
 	drop_nlink(inode);
 	mark_inode_dirty(inode);
