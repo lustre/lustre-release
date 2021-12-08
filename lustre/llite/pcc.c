@@ -1057,7 +1057,7 @@ void pcc_inode_free(struct inode *inode)
  * reduce overhead:
  * (fid->f_oid >> 16 & oxFFFF)/FID
  */
-#define MAX_PCC_DATABASE_PATH (6 * 5 + FID_NOBRACE_LEN + 1)
+#define PCC_DATASET_MAX_PATH (6 * 5 + FID_NOBRACE_LEN + 1)
 static int pcc_fid2dataset_path(char *buf, int sz, struct lu_fid *fid)
 {
 	return scnprintf(buf, sz, "%04x/%04x/%04x/%04x/%04x/%04x/"
@@ -1137,21 +1137,6 @@ static int pcc_get_layout_info(struct inode *inode, struct cl_layout *clt)
 	RETURN(rc < 0 ? rc : 0);
 }
 
-static int pcc_fid2dataset_fullpath(char *buf, int sz, struct lu_fid *fid,
-				    struct pcc_dataset *dataset)
-{
-	return scnprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
-			 DFID_NOBRACE,
-			 dataset->pccd_pathname,
-			 (fid)->f_oid       & 0xFFFF,
-			 (fid)->f_oid >> 16 & 0xFFFF,
-			 (unsigned int)((fid)->f_seq       & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			 PFID(fid));
-}
-
 /* Must be called with pcci->pcci_lock held */
 static void pcc_inode_attach_init(struct pcc_dataset *dataset,
 				  struct pcc_inode *pcci,
@@ -1198,6 +1183,72 @@ static inline bool pcc_inode_has_layout(struct pcc_inode *pcci)
 	return pcci->pcci_layout_gen != CL_LAYOUT_GEN_NONE;
 }
 
+static struct dentry *pcc_lookup(struct dentry *base, char *pathname)
+{
+	char *ptr = NULL, *component;
+	struct dentry *parent;
+	struct dentry *child = ERR_PTR(-ENOENT);
+
+	ptr = pathname;
+
+	/* move past any initial '/' to the start of the first path component*/
+	while (*ptr == '/')
+		ptr++;
+
+	/* store the start of the first path component */
+	component = ptr;
+
+	parent = dget(base);
+	while (ptr) {
+		/* find the start of the next component - if we don't find it,
+		 * the current component is the last component
+		 */
+		ptr = strchr(ptr, '/');
+		/* put a NUL char in place of the '/' before the next compnent
+		 * so we can treat this component as a string; note the full
+		 * path string is NUL terminated to this is not needed for the
+		 * last component
+		 */
+		if (ptr)
+			*ptr = '\0';
+
+		/* look up the current component */
+		inode_lock(parent->d_inode);
+		child = lookup_one_len(component, parent, strlen(component));
+		inode_unlock(parent->d_inode);
+
+		/* repair the path string: put '/' back in place of the NUL */
+		if (ptr)
+			*ptr = '/';
+
+		dput(parent);
+
+		if (IS_ERR_OR_NULL(child))
+			break;
+
+		/* we may find a cached negative dentry */
+		if (!d_is_positive(child)) {
+			dput(child);
+			child = NULL;
+			break;
+		}
+
+		/* descend in to the next level of the path */
+		parent = child;
+
+		/* move the pointer past the '/' to the next component */
+		if (ptr)
+			ptr++;
+		component = ptr;
+	}
+
+	/* NULL child means we didn't find anything */
+	if (!child)
+		child = ERR_PTR(-ENOENT);
+
+	return child;
+}
+
 static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 				  enum lu_pcc_type type,
 				  struct pcc_dataset *dataset,
@@ -1206,9 +1257,8 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci = lli->lli_pcc_inode;
 	const struct cred *old_cred;
-	struct dentry *pcc_dentry;
-	struct path path;
-	char *pathname;
+	struct dentry *pcc_dentry = NULL;
+	char pathname[PCC_DATASET_MAX_PATH];
 	__u32 pcc_gen;
 	int rc;
 
@@ -1218,24 +1268,25 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 	    !(dataset->pccd_flags & PCC_DATASET_RWPCC))
 		RETURN(0);
 
-	OBD_ALLOC(pathname, PATH_MAX);
-	if (pathname == NULL)
-		RETURN(-ENOMEM);
-
-	pcc_fid2dataset_fullpath(pathname, PATH_MAX, &lli->lli_fid, dataset);
+	rc = pcc_fid2dataset_path(pathname, PCC_DATASET_MAX_PATH,
+				  &lli->lli_fid);
 
 	old_cred = override_creds(pcc_super_cred(inode->i_sb));
-	rc = kern_path(pathname, LOOKUP_FOLLOW, &path);
-	if (rc)
+	pcc_dentry = pcc_lookup(dataset->pccd_path.dentry, pathname);
+	if (IS_ERR(pcc_dentry)) {
+		rc = PTR_ERR(pcc_dentry);
+		CDEBUG(D_CACHE, "%s: path lookup error on "DFID":%s: rc = %d\n",
+		       ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid),
+		       pathname, rc);
 		/* ignore this error */
 		GOTO(out, rc = 0);
+	}
 
-	pcc_dentry = path.dentry;
 	rc = ll_vfs_getxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
 			     &pcc_gen, sizeof(pcc_gen));
 	if (rc < 0)
 		/* ignore this error */
-		GOTO(out_put_path, rc = 0);
+		GOTO(out_put_pcc_dentry, rc = 0);
 
 	rc = 0;
 	/* The file is still valid cached in PCC, attach it immediately. */
@@ -1245,7 +1296,7 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 		if (!pcci) {
 			OBD_SLAB_ALLOC_PTR_GFP(pcci, pcc_inode_slab, GFP_NOFS);
 			if (pcci == NULL)
-				GOTO(out_put_path, rc = -ENOMEM);
+				GOTO(out_put_pcc_dentry, rc = -ENOMEM);
 
 			pcc_inode_init(pcci, lli);
 			dget(pcc_dentry);
@@ -1267,11 +1318,10 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 		pcc_layout_gen_set(pcci, gen);
 		*cached = true;
 	}
-out_put_path:
-	path_put(&path);
+out_put_pcc_dentry:
+	dput(pcc_dentry);
 out:
 	revert_creds(old_cred);
-	OBD_FREE(pathname, PATH_MAX);
 	RETURN(rc);
 }
 
@@ -2186,11 +2236,11 @@ static int __pcc_inode_create(struct pcc_dataset *dataset,
 	struct dentry *child;
 	int rc = 0;
 
-	OBD_ALLOC(path, MAX_PCC_DATABASE_PATH);
+	OBD_ALLOC(path, PCC_DATASET_MAX_PATH);
 	if (path == NULL)
 		return -ENOMEM;
 
-	pcc_fid2dataset_path(path, MAX_PCC_DATABASE_PATH, fid);
+	pcc_fid2dataset_path(path, PCC_DATASET_MAX_PATH, fid);
 
 	base = pcc_mkdir_p(dataset->pccd_path.dentry, path, 0);
 	if (IS_ERR(base)) {
@@ -2198,7 +2248,7 @@ static int __pcc_inode_create(struct pcc_dataset *dataset,
 		GOTO(out, rc);
 	}
 
-	snprintf(path, MAX_PCC_DATABASE_PATH, DFID_NOBRACE, PFID(fid));
+	snprintf(path, PCC_DATASET_MAX_PATH, DFID_NOBRACE, PFID(fid));
 	child = pcc_create(base, path, 0);
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
@@ -2209,7 +2259,7 @@ static int __pcc_inode_create(struct pcc_dataset *dataset,
 out_base:
 	dput(base);
 out:
-	OBD_FREE(path, MAX_PCC_DATABASE_PATH);
+	OBD_FREE(path, PCC_DATASET_MAX_PATH);
 	return rc;
 }
 

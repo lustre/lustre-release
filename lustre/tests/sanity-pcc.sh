@@ -91,10 +91,12 @@ check_file_data()
 	local client="$1"
 	local path="$2"
 	local expected_data="$3"
+	local pid=$4
 
-	path_data=$(do_facet $client cat $path)
-	[[ "x$path_data" == "x$expected_data" ]] || error \
-		"expected $path: $expected_data, got: $path_data"
+	# if $pid is set, then run command within namespace for that process
+	path_data=$(do_facet $client ${pid:+nsenter -t $pid -U -m} cat $path)
+	[[ "x$path_data" == "x$expected_data" ]] ||
+		error "expected $path: $expected_data, got: $path_data"
 }
 
 check_lpcc_data()
@@ -1488,6 +1490,125 @@ test_20() {
 		error "Failed to detach $file"
 }
 run_test 20 "Auto attach works after the inode was once evicted from cache"
+
+#test 101: containers and PCC
+#LU-15170: Test mount namespaces with PCC
+#This tests the cases where the PCC mount is not present in the container by
+#creating a mount namespace without the PCC mount in it (this is probably the
+#standard config for most containers)
+test_101a() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tdir/$tfile
+
+	# Some kernels such as RHEL7 default to 0 user namespaces
+	local maxuserns=$(do_facet $SINGLEAGT cat /proc/sys/user/max_user_namespaces)
+	do_facet $SINGLEAGT "echo 10 > /proc/sys/user/max_user_namespaces"
+	stack_trap "do_facet $SINGLEAGT 'echo $maxuserns > /proc/sys/user/max_user_namespaces'"
+
+	echo "creating user namespace for $RUNAS_ID"
+	# Create a mount and user namespace with this command, and leave the
+	# process running so we can do the rest of our steps
+	do_facet $SINGLEAGT $RUNAS unshare -Um sleep 600 &
+	# Let the child start...
+	sleep 0.2
+	# Get the sleep PID so we can find its namespace and kill it later
+	PID=$(do_facet $SINGLEAGT pgrep sleep)
+	stack_trap "do_facet $SINGLEAGT kill -9 $PID" EXIT
+	echo "Created NS: child (sleep) pid $PID"
+	# Map 'RUNAS' to root in the namespace, so it has rights to do whatever
+	# This is handled by '-r' in unshare in newer versions
+	do_facet $SINGLEAGT $RUNAS newuidmap $PID 0 $RUNAS_ID 1 ||
+		error "could not map uid $RUNAS_ID to root in namespace"
+	do_facet $SINGLEAGT $RUNAS newgidmap $PID 0 $RUNAS_GID 1 ||
+		error "could not map gid $RUNAS_GID to root in namespace"
+
+	# Create PCC after creating namespace; namespace will not have PCC
+	# mount
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+
+	# Create a temp file inside the PCC mount to verify mount namespace
+	do_facet $SINGLEAGT touch $mntpt/$tfile.tmp
+	stack_trap "do_facet $SINGLEAGT rm -f $mntpt/$tfile.tmp" EXIT
+	echo "Check for temp file in PCC mount"
+	do_facet $SINGLEAGT test -f $mntpt/$tfile.tmp ||
+		error "Should see $mntpt/$tfile.tmp"
+	echo "Check for temp file in PCC mount from inside namespace"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m test -f $mntpt/$tfile.tmp &&
+		error "Should not see $mntpt/$tfile.tmp from namespace"
+	rm -f $mntpt/$tfile.tmp
+
+	# Finish PCC setup
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
+
+	echo "Verify open attach from inside mount namespace"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach \
+		-i $HSM_ARCHIVE_NUMBER $file || error "cannot attach $file"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc state $file
+
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	# Detach the file but keep the cache, as the file layout generation
+	# is not changed, so the file is still valid cached in PCC, and can
+	# be reused from PCC cache directly.
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc detach -k $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc detach $file ||
+		error "PCC detach $file failed"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	rm -f $file || error "rm $file failed"
+
+	echo "Verify auto attach at open from inside NS for RW-PCC"
+	# nsenter has strange behavior with echo, which means we have to place
+	# this in a script so we can use sh, otherwise it doesn't execute echo
+	# in the namespace
+	# NB: using /bin/echo instead of the shell built in does not help
+	echo "echo -n autoattach_data > $file" > $DIR/$tdir/$tfile.shell
+	# File is owned by root, make it accessible to RUNAS user
+	chmod a+rw $DIR/$tdir/$tfile.shell
+	stack_trap 'rm -f $DIR/$tdir/$tfile.shell' EXIT
+	do_facet $SINGLEAGT nsenter -t $PID -U -m "sh $DIR/$tdir/$tfile.shell"
+	do_facet $SINGLEAGT nsenter -t $PID -U -m $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "RW-PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_file_data $SINGLEAGT $file "autoattach_data" $PID
+	check_lpcc_state $file "readwrite"
+
+	# Detach the file with -k option, as the file layout generation
+	# is not changed, so the file is still valid cached in PCC,
+	# and can be reused from PCC cache directly.
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RW-PCC detach $file failed"
+	check_lpcc_state $file "readwrite"
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+	check_file_data $SINGLEAGT $file "autoattach_data" $PID
+
+	# HSM restore the PCC cached file, the layout generation
+	# was changed, so the file can not be auto attached.
+	$LFS hsm_restore $file || error "failed to restore $file"
+	wait_request_state $(path2fid $file) RESTORE SUCCEED
+	check_lpcc_state $file "none"
+	# HSM exists archived status
+	check_hsm_flags $file "0x00000009"
+}
+run_test 101a "Test auto attach in mount namespace (simulated container)"
 
 complete $SECONDS
 check_and_cleanup_lustre
