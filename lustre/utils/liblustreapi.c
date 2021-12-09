@@ -3670,7 +3670,7 @@ static inline void
 lov_v1v3_pool_name(struct lov_user_md *v1, char *pool_name)
 {
 	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
-		snprintf(pool_name, LOV_MAXPOOLNAME, "%s",
+		snprintf(pool_name, LOV_MAXPOOLNAME + 1, "%s",
 			 ((struct lov_user_md_v3 *)v1)->lmm_pool_name);
 	else
 		pool_name[0] = '\0';
