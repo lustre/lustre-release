@@ -1253,37 +1253,42 @@ test_30a() {
 	setup_noconfig
 
 	echo Big config llog
-	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
-	ORIG=$($LCTL get_param -n $TEST)
-	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
-	for i in ${LIST[@]}; do
-		set_persistent_param_and_check client "$TEST" \
-			"$FSNAME.llite.max_read_ahead_whole_mb" $i
+	local path="llite.$FSNAME-*"
+	local cpath="$FSNAME.llite"
+	local param="max_read_ahead_whole_mb"
+
+	local test="${path}.$param"
+	local conf="${cpath}.$param"
+
+	local orig=$($LCTL get_param -n $test)
+	local list=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
+	for i in ${list[@]}; do
+		set_persistent_param_and_check client $test $conf $i
 	done
 	# make sure client restart still works
 	umount_client $MOUNT
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	[ "$($LCTL get_param -n $TEST)" -ne "$i" ] &&
-		error "Param didn't stick across restart $($TEST) != $i"
+	[ "$($LCTL get_param -n $test)" -ne "$i" ] &&
+		error "Param didn't stick across restart $($test) != $i"
 	pass
 
 	echo Erase parameter setting
 	if [[ $PERM_CMD == *"set_param -P"* ]]; then
-		do_facet mgs "$PERM_CMD -d $TEST" ||
-			error "Erase param $TEST failed"
+		do_facet mgs "$PERM_CMD -d $test" ||
+			error "Erase param $test failed"
 	else
-		do_facet mgs "$PERM_CMD \
-			      -d $FSNAME.llite.max_read_ahead_whole_mb" ||
-			error "Erase param $FSNAME.llite.max_read_ahead_whole_mb failed"
+		do_facet mgs "$PERM_CMD -d $conf" ||
+			error "Erase param $conf failed"
 	fi
 	umount_client $MOUNT
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	FINAL=$($LCTL get_param -n $TEST)
-	echo "deleted (default) value=$FINAL, orig=$ORIG"
-	ORIG=${ORIG%%.[0-9]*}
-	FINAL=${FINAL%%.[0-9]*}
+	local final=$($LCTL get_param -n $test)
+	echo "deleted (default) value=$final, orig=$orig"
+	orig=${orig%%.[0-9]*}
+	final=${final%%.[0-9]*}
 	# assumes this parameter started at the default value
-	[ "$FINAL" -eq "$ORIG" ] || fail "Deleted value=$FINAL, orig=$ORIG"
+	[ "$final" -eq "$orig" ] ||
+		error "Deleted value=$final -ne orig=$orig"
 
 	cleanup || error "cleanup failed with rc $?"
 }
