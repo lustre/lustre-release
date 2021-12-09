@@ -1469,14 +1469,14 @@ int lr_locate_rsync(void)
 		return -1;
 
 	if (fgets(rsync, sizeof(rsync), fp) == NULL) {
-		fclose(fp);
+		pclose(fp);
 		return -1;
 	}
 
 	len = strlen(rsync);
 	if (len > 0 && rsync[len - 1] == '\n')
 		rsync[len - 1] = '\0';
-	fclose(fp);
+	pclose(fp);
 
 	/* Determine the version of rsync */
 	snprintf(rsync_ver, sizeof(rsync_ver), "%s --version", rsync);
@@ -1485,13 +1485,13 @@ int lr_locate_rsync(void)
 		return -1;
 
 	if (fgets(rsync_ver, sizeof(rsync_ver), fp) == NULL) {
-		fclose(fp);
+		pclose(fp);
 		return -1;
 	}
 	len = strlen(rsync_ver);
 	if (len > 0 && rsync_ver[len - 1] == '\n')
 		rsync_ver[len - 1] = '\0';
-	fclose(fp);
+	pclose(fp);
 
 	return 0;
 }
