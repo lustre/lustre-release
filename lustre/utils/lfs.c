@@ -399,32 +399,29 @@ command_t cmdlist[] = {
 	{"find", lfs_find, 0,
 	 "find files matching given attributes recursively in directory tree.\n"
 	 "usage: find <directory|filename> ...\n"
-	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --ctime|-C [+-]N[smhdwy]]\n"
-	 "     [[!] --mtime|-M [+-]N[smhdwy]]\n"
-	 "     [[!] --btime|--Btime|-B [+-]N[smhdwy]] [--help|-h]\n"
-	 "     [[!] --newer[XY] <reference>] [[!] --blocks|-b N]\n"
-	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
-	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
-	 "     [[!] --perm [/-]mode] [[!] --pool <pool>] [--print|-P]\n"
-	 "     [--print0|-0] [[!] --projid <projid>]\n"
-	 "     [[!] --size|-s [+-]N[bkMGTPE]]\n"
-	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
-	 "     [[!] --stripe-index|-i <index,...>]\n"
-	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
-	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
-	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
-	 "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
-	 "     [[!] --layout|-L released,raid0,mdt]\n"
-	 "     [[!] --foreign[=<foreign_type>]]\n"
-	 "     [[!] --component-count [+-]<comp_cnt>]\n"
+	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --btime|-B [+-]N[smhdwy]]\n"
+	 "     [[!] --ctime|-C [+-]N[smhdwy]] [[!] --mtime|-M [+-]N[smhdwy]]\n"
+	 "     [[!] --blocks|-b N] [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-flags {init,stale,prefer,offline,nosync,extension}]\n"
+	 "     [[!] --extension-size|--ext-size|-z [+-]N[kMGT]]\n"
+	 "     [[!] --foreign[=<foreign_type>]]\n"
+	 "     [[!] --gid|-g|--group|-G <gid>|<gname>] [--help|-h]\n"
+	 "     [[!] --layout|-L released,raid0,mdt] [--lazy]\n"
+	 "     [--maxdepth|-D N] [[!] --mdt-count|-T [+-]<stripes>]\n"
+	 "     [[!] --mdt-hash|-H <[^][blm],[^]fnv_1a_64,all_char,crush,...>\n"
+	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --mirror-count|-N [+-]<n>]\n"
 	 "     [[!] --mirror-state <[^]state>]\n"
-	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
-	 "     [[!] --mdt-hash|-H <[^][blm],[^]fnv_1a_64,all_char,crush,...>\n"
-	 "     [[!] --mdt-index|-m <uuid|index,...>]\n"
+	 "     [[!] --name|-n <pattern>] [[!] --newer[XY] <reference>]\n"
+	 "     [[!] --ost|-O <uuid|index,...>] [[!] --perm [/-]mode]\n"
+	 "     [[!] --pool <pool>] [--print|-P] [--print0|-0]\n"
+	 "     [[!] --projid <projid>] [[!] --size|-s [+-]N[bkMGTPE]]\n"
+	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
+	 "     [[!] --stripe-index|-i <index,...>]\n"
+	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
+	 "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
 	 "\t !: used before an option indicates 'NOT' requested attribute\n"
 	 "\t -: used before a value indicates less than requested value\n"
 	 "\t +: used before a value indicates more than requested value\n"
@@ -4896,6 +4893,8 @@ static int lfs_find(int argc, char **argv)
 /* find	{ .val = 'o'	.name = "or", .has_arg = no_argument }, like find(1) */
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
+	{ .val = LFS_FIND_PERM,
+			.name = "perm",		.has_arg = required_argument },
 	/* no short option for pool yet, can be 'p' after 2.18 */
 	{ .val = LFS_POOL_OPT,
 			.name = "pool",		.has_arg = required_argument },
@@ -4910,8 +4909,6 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
 	{ .val = 't',	.name = "type",		.has_arg = required_argument },
-	{ .val = LFS_FIND_PERM,
-			.name = "perm",		.has_arg = required_argument },
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
