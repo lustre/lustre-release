@@ -23,6 +23,12 @@
 
 #include "llcrypt_private.h"
 
+#ifdef HAVE_CIPHER_H
+#include <crypto/internal/cipher.h>
+
+MODULE_IMPORT_NS(CRYPTO_INTERNAL);
+#endif
+
 static struct crypto_shash *essiv_hash_tfm;
 
 static struct llcrypt_mode available_modes[] = {

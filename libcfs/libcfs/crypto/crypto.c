@@ -35,6 +35,12 @@
 #include <crypto/skcipher.h>
 #include "llcrypt_private.h"
 
+#ifdef HAVE_CIPHER_H
+#include <crypto/internal/cipher.h>
+
+MODULE_IMPORT_NS(CRYPTO_INTERNAL);
+#endif
+
 static unsigned int num_prealloc_crypto_pages = 32;
 static unsigned int num_prealloc_crypto_ctxs = 128;
 

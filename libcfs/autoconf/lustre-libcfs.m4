@@ -1803,6 +1803,22 @@ param_set_uint_minmax, [
 ]) # LIBCFS_PARAM_SET_UINT_MINMAX
 
 #
+# LIBCFS_HAVE_CIPHER_HEADER
+#
+# Kernel 5.12 commit 0eb76ba29d16df2951d37c54ca279c4e5630b071
+# crypto: remove cipher routines from public crypto API
+#
+AC_DEFUN([LIBCFS_HAVE_CIPHER_HEADER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_LINUX_HEADER([crypto/internal/cipher.h], [
+	AC_DEFINE(HAVE_CIPHER_H, 1,
+		[crypto/internal/cipher.h is present])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_CIPHER_HEADER
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1936,6 +1952,8 @@ LIBCFS_SEC_RELEASE_SECCTX
 LIBCFS_HAVE_KFREE_SENSITIVE
 LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 LIBCFS_HAVE_LIST_CMP_FUNC_T
+# 5.12
+LIBCFS_HAVE_CIPHER_HEADER
 # 5.15
 LIBCFS_PARAM_SET_UINT_MINMAX
 ]) # LIBCFS_PROG_LINUX
