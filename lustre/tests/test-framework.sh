@@ -303,7 +303,7 @@ init_test_env() {
 	[ ! -f "$KSOCKLND_CONFIG" ] &&
 		export KSOCKLND_CONFIG=$(which ksocklnd-config 2> /dev/null)
 
-	export PERM_CMD=${PERM_CMD:-"$LCTL conf_param"}
+	export PERM_CMD=$(echo ${PERM_CMD:-"$LCTL conf_param"})
 
 	export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
 	if [ ! -f "$L_GETIDENTITY" ]; then
