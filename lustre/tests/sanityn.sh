@@ -945,22 +945,23 @@ test_32b() { # bug 11270
 #run_test 32b "lockless i/o"
 
 print_jbd_stat () {
-    local dev
-    local mdts=$(get_facets MDS)
-    local varcvs
-    local mds
+	local mdts=$(get_facets MDS)
+	local stat=0
+	local varsvc
+	local dev
+	local mds
 
-    local stat=0
-    for mds in ${mdts//,/ }; do
-        varsvc=${mds}_svc
-        dev=$(basename $(do_facet $mds "lctl get_param -n osd*.${!varsvc}.mntdev|\
-		xargs readlink -f" ))
-	val=$(do_facet $mds "cat /proc/fs/jbd*/${dev}{,:*,-*}/info 2>/dev/null |
-		head -n1")
-        val=${val%% *};
-        stat=$(( stat + val))
-    done
-    echo $stat
+	for mds in ${mdts//,/ }; do
+		varsvc=${mds}_svc
+
+		dev=$(basename $(do_facet $mds "lctl get_param -n \
+			osd*.${!varsvc}.mntdev | xargs readlink -f"))
+		val=$(do_facet $mds "cat /proc/fs/jbd*/${dev}{,:*,-*}/info \
+			2>/dev/null | head -n1")
+		val=${val%% *};
+		stat=$((stat + val))
+	done
+	echo $stat
 }
 
 # commit on sharing tests
