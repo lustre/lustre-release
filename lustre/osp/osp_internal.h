@@ -571,15 +571,10 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 
 static int osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid)
 {
-	if (fid_is_idif(fid)) {
-		struct osp_thread_info *info = osp_env_info(env);
-		struct ost_id *oi = &info->osi_oi;
-
-		fid_to_ostid(fid, oi);
-		return ostid_id(oi) == IDIF_MAX_OID;
-	} else {
-		return fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH;
-	}
+	/* Skip IDIF sequence for MDT0000 */
+	if (fid_is_idif(fid))
+		return 1;
+	return fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH;
 }
 
 static inline int osp_precreate_end_seq_nolock(const struct lu_env *env,

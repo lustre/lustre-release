@@ -1364,10 +1364,6 @@ static int osp_precreate_thread(void *_args)
 
 			if (unlikely(osp_precreate_end_seq(env, d) &&
 				     osp_create_end_seq(env, d))) {
-				LCONSOLE_INFO("%s:%#llx is used up."
-					      " Update to new seq\n",
-					      d->opd_obd->obd_name,
-					 fid_seq(&d->opd_pre_last_created_fid));
 				rc = osp_precreate_rollover_new_seq(env, d);
 				if (rc)
 					continue;
