@@ -42,7 +42,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 
 	df $TESTDIR || true
 	dd bs=4k count=$BLKS status=noxfer if=/dev/zero of=$TESTDIR/dd-file \
-								1>$LOG
+								1>$LOG & wait $!
 	if [ $? -eq 0 ]; then
 		echoerr "$(date +'%F %H:%M:%S'): dd succeeded"
 		cd $TMP

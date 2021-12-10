@@ -50,7 +50,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 		break
 	fi
 
-	do_tar
+	do_tar & wait $!
 	RC=$?
 	PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
 	if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then
@@ -60,7 +60,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	if [ $RC -eq 0 ]; then
 		echoerr "$(date +'%F %H:%M:%S'): tar succeeded"
 		cd $TMP
-		rm -rf $TESTDIR
+		rm -rf $TESTDIR & wait $!
 		echoerr "$(date +'%F %H:%M:%S'): tar run finished"
 	else
 		echoerr "$(date +'%F %H:%M:%S'): tar failed"
