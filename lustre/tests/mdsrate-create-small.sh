@@ -1,4 +1,4 @@
- #!/bin/bash
+#!/bin/bash
 #
 # This test was used in a set of CMD3 tests (cmd3-3 test).
 

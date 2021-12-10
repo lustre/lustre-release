@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # System Profiling Script
 
@@ -54,7 +54,7 @@ vmstat_start() {
 
 proc_dump_start() {
 	echo "$(date +%T): proc dump started...." >> $OUTPUTDIR/$HOSTNAME/summary
-	sh -c '
+	bash -c '
 		CTRFILE=/$OUTPUTDIR/$HOSTNAME/tmp/running.$$.pid;
 		echo $$ > ${CTRFILE};
 		while [ -f $CTRFILE ]; do

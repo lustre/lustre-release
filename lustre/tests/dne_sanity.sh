@@ -75,7 +75,7 @@ test_sanity()
 	for index in $(seq $PARALLEL_RUNS); do
 		DIR=$ORIGIN_DIR/dir${index} PARALLEL=yes \
 		EXT2_DEV="$TMP/SANITY.LOOP_${index}" \
-		LOGDIR="${LOGDIR}_${index}" YAML_LOG="" sh sanity.sh &
+		LOGDIR="${LOGDIR}_${index}" YAML_LOG="" bash sanity.sh &
 		pid=$!
 		echo start sanity: $pid
 		rpids="$rpids $pid"

@@ -169,26 +169,26 @@ signaled() {
 }
 
 mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
-    local command="$mpirun $@"
-    local mpilog=$TMP/mpi.log
-    local rc
+	local mpirun="$MPIRUN $MPIRUN_OPTIONS"
+	local command="$mpirun $@"
+	local mpilog=$TMP/mpi.log
+	local rc
 
-    if [ -n "$MPI_USER" -a "$MPI_USER" != root -a -n "$mpirun" ]; then
-        echo "+ chmod 0777 $MOUNT"
-        chmod 0777 $MOUNT
-        command="su $MPI_USER sh -c \"$command \""
-    fi
+	if [ -n "$MPI_USER" -a "$MPI_USER" != root -a -n "$mpirun" ]; then
+		echo "+ chmod 0777 $MOUNT"
+		chmod 0777 $MOUNT
+		command="su $MPI_USER bash -c \"$command \""
+	fi
 
-    ls -ald $MOUNT
-    echo "+ $command"
-    eval $command 2>&1 | tee $mpilog || true
+	ls -ald $MOUNT
+	echo "+ $command"
+	eval $command 2>&1 | tee $mpilog || true
 
-    rc=${PIPESTATUS[0]}
-    if [ $rc -eq 0 ] && grep -q "p4_error:" $mpilog ; then
-       rc=1
-    fi
-    return $rc
+	rc=${PIPESTATUS[0]}
+	if [ $rc -eq 0 ] && grep -q "p4_error:" $mpilog ; then
+		rc=1
+	fi
+	return $rc
 }
 
 nids_list () {

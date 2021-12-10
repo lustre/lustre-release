@@ -105,20 +105,20 @@ lst_prepare () {
 
 # make batch
 test_smoke_sub () {
-    local servers=$1
-    local clients=$2
+	local servers=$1
+	local clients=$2
 
-    local nc=$(echo ${clients//,/ } | wc -w)
-    local ns=$(echo ${servers//,/ } | wc -w)
-    echo '#!/bin/bash'
-    echo 'set -e'
+	local nc=$(echo ${clients//,/ } | wc -w)
+	local ns=$(echo ${servers//,/ } | wc -w)
+	echo '#!/bin/bash'
+	echo 'set -e'
 
-    echo 'cleanup () { trap 0; echo killing $1 ... ; kill -9 $1 || true; }'
+	echo 'cleanup () { trap 0; echo killing $1 ... ; kill -9 $1 || true; }'
 
-    echo "$LST new_session --timeo 100000 hh"
-    echo "$LST add_group c $(nids_list $clients)"
-    echo "$LST add_group s $(nids_list $servers)"
-    echo "$LST add_batch b"
+	echo "$LST new_session --timeo 100000 hh"
+	echo "$LST add_group c $(nids_list $clients)"
+	echo "$LST add_group s $(nids_list $servers)"
+	echo "$LST add_batch b"
 
 	declare -a tests
 
@@ -151,23 +151,22 @@ test_smoke_sub () {
 		done
 	done
 
-    echo $LST run b
-    echo sleep 1
-    echo "$LST stat --delay 10 --timeout 10 c s &"
-    echo 'pid=$!'
-    echo 'trap "cleanup $pid" INT TERM'
-    echo sleep $smoke_DURATION
-    echo 'cleanup $pid'
-    
+	echo $LST run b
+	echo sleep 1
+	echo "$LST stat --delay 10 --timeout 10 c s &"
+	echo 'pid=$!'
+	echo 'trap "cleanup $pid" INT TERM'
+	echo sleep $smoke_DURATION
+	echo 'cleanup $pid'
 }
 
 run_lst () {
-   local file=$1
+	local file=$1
 
-   export LST_SESSION=$$
+	export LST_SESSION=$$
 
-   # start lst
-   sh $file
+	# start lst
+	bash $file
 }
 
 check_lst_err () {

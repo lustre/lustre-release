@@ -50,20 +50,20 @@ check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 start_dbench()
 {
-    NPROC=`cat /proc/cpuinfo 2>/dev/null | grep ^processor | wc -l`
-    [ $NPROC -gt 2 ] && NPROC=2
-    sh rundbench $NPROC 1>/dev/null &
-    DBENCH_PID=$!
-    sleep 2
+	NPROC=`cat /proc/cpuinfo 2>/dev/null | grep ^processor | wc -l`
+	[ $NPROC -gt 2 ] && NPROC=2
+	bash rundbench $NPROC 1>/dev/null &
+	DBENCH_PID=$!
+	sleep 2
 
-    num=`ps --no-headers -p $DBENCH_PID 2>/dev/null | wc -l`
-    if [ $num -ne 1 ]; then
-        error "failed to start dbench $NPROC"
-    else
-        echo "started dbench with $NPROC processes at background"
-    fi
+	num=`ps --no-headers -p $DBENCH_PID 2>/dev/null | wc -l`
+	if [ $num -ne 1 ]; then
+		error "failed to start dbench $NPROC"
+	else
+		echo "started dbench with $NPROC processes at background"
+	fi
 
-    return 0
+	return 0
 }
 
 check_dbench()

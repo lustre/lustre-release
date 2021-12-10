@@ -534,7 +534,7 @@ test_8() {
 		-E -1 -c 4 -S 4M $parent ||
 		error "Set default layout to $parent failed"
 
-	sh rundbench -C -D $parent 2 || error "dbench failed"
+	bash rundbench -C -D $parent 2 || error "dbench failed"
 
 	rm -fr $parent || error "Delete dir $parent failed"
 }

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 export PATH=`dirname $0`:`dirname $0`/../utils:$PATH

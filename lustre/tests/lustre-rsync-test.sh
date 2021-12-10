@@ -273,7 +273,8 @@ test_2a() {
 	init_changelog
 
 	# Run dbench
-	sh rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME || error "dbench failed"
+	bash rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME ||
+		error "dbench failed"
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT
@@ -297,7 +298,7 @@ test_2b() {
 	init_changelog
 
 	# Run dbench
-	sh rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME &
+	bash rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME &
 	# wait for dbench to start
 	wait_for_function 'child_pid=$(pgrep dbench)' 360
 	# let dbench run for a bit
@@ -347,7 +348,7 @@ test_2c() {
 	init_changelog
 
 	# Run dbench
-	sh rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME &
+	bash rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME &
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT

@@ -519,7 +519,7 @@ ha_repeat_mpi_load()
 		ha_on $client $LFS setstripe $stripeparams $dir &&
 		ha_on $client $LFS getstripe $dir &&
 		ha_on $client chmod a+xwr $dir &&
-		ha_on $client "su $mpiuser sh -c \" $mpirun $mpirunoptions \
+		ha_on $client "su $mpiuser bash -c \" $mpirun $mpirunoptions \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client / ha_nclientsset)) \
 			$machines $cmd \" " || rc=$?
 		ha_on ${ha_clients[0]} "$check_attrs &&                    \

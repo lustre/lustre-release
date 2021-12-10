@@ -283,7 +283,7 @@ test_11() {
 run_test 11 "execution of file opened for write should return error ===="
 
 test_12() {
-	DIR=$DIR DIR2=$DIR2 sh lockorder.sh
+	DIR=$DIR DIR2=$DIR2 bash lockorder.sh
 }
 run_test 12 "test lock ordering (link, stat, unlink)"
 
@@ -361,7 +361,7 @@ run_test 14d "chmod of executing file is still possible ========"
 
 test_15() {	# bug 974 - ENOSPC
 	echo "PATH=$PATH"
-	sh oos2.sh $MOUNT1 $MOUNT2
+	bash oos2.sh $MOUNT1 $MOUNT2
 	wait_delete_completed
 	grant_error=$(dmesg | grep "< tot_grant")
 	[ -z "$grant_error" ] || error "$grant_error"
@@ -822,7 +822,7 @@ run_test 28 "read/write/truncate file with lost stripes"
 test_30() { #b=11110, LU-2523
 	test_mkdir $DIR1/$tdir
 	cp -f /bin/bash $DIR1/$tdir/bash
-	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
+	bash -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
 	$DIR1/$tdir/bash -c 'sleep 2;
 		openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?'
 	wait
@@ -1123,9 +1123,9 @@ op_trigger_cos() {
 
 	# trigger CoS twice in case transaction commit before unlock
 	for i in 1 2; do
-		sh -c "$1"
+		bash -c "$1"
 		do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
-		sh -c "$2"
+		bash -c "$2"
 		commit_nr=$(do_nodes $nodes \
 			"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
 		total=$((total + commit_nr));

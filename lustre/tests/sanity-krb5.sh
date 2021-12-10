@@ -64,7 +64,7 @@ start_dbench()
 {
 	local NPROC=$(grep -c ^processor /proc/cpuinfo)
 	[ $NPROC -gt 2 ] && NPROC=2
-	sh rundbench $NPROC 1>/dev/null &
+	bash rundbench $NPROC 1>/dev/null &
 	DBENCH_PID=$!
 	sleep 2
 

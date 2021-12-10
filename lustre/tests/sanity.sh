@@ -8594,7 +8594,7 @@ run_test 64a "verify filter grant calculations (in kernel) ====="
 test_64b () {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-	sh oos.sh $MOUNT || error "oos.sh failed: $?"
+	bash oos.sh $MOUNT || error "oos.sh failed: $?"
 }
 run_test 64b "check out-of-space detection on client"
 
@@ -9380,7 +9380,7 @@ run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 test_71() {
 	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir
-	sh rundbench -C -D $DIR/$tdir 2 || error "dbench failed!"
+	bash rundbench -C -D $DIR/$tdir 2 || error "dbench failed!"
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
@@ -25073,7 +25073,7 @@ test_411() {
 	# Should not LBUG, just be killed by oom-killer
 	# dd will return 0 even allocation failure in some environment.
 	# So don't check return value
-	sh -c "echo \$$ > $cgdir/tasks && dd if=$DIR/$tfile of=/dev/null"
+	bash -c "echo \$$ > $cgdir/tasks && dd if=$DIR/$tfile of=/dev/null"
 	cleanup_test411_cgroup $cgdir
 
 	return 0
