@@ -4222,8 +4222,8 @@ test_66() {
 	local testdir=$DIR/$tdir/foo
 
 	do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=0
-	stack_trap "do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=0" \
-		EXIT
+	stack_trap "do_facet mds1 $LCTL \
+		set_param mdt.*.enable_chprojid_gid=$old" EXIT
 
 	mkdir_on_mdt0 $testdir || error "failed to mkdir"
 	chown -R $TSTID:$TSTID $testdir
