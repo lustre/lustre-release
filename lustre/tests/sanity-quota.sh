@@ -3411,7 +3411,7 @@ test_38() {
 
 	local procf="osd-$mds1_FSTYPE.$FSNAME-MDT0000"
 	procf=${procf}.quota_slave.acct_user
-	local accnt_cnt
+	local acct_cnt
 
 	acct_cnt=$(do_facet mds1 $LCTL get_param $procf | grep "id:" | \
 		   awk '{if ($3 < 10000) {print $3}}' | wc -l)
