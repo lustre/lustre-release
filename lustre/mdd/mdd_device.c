@@ -1866,8 +1866,10 @@ static int mdd_changelog_clear(const struct lu_env *env,
 
 	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-	if (ctxt == NULL ||
-	    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
+	if (!ctxt)
+		RETURN(-ENXIO);
+
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
 		GOTO(out, rc = -ENXIO);
 
 	rc = llog_cat_process(env, ctxt->loc_handle,
@@ -1875,33 +1877,36 @@ static int mdd_changelog_clear(const struct lu_env *env,
 			      0, 0);
 
 	if (rc == -EINVAL) {
-		CDEBUG(D_IOCTL, "%s: No changelog recnum <= %llu to clear\n",
+		CDEBUG(D_IOCTL, "%s: no changelog recnum <= %llu to clear\n",
 		       mdd2obd_dev(mdd)->obd_name, (unsigned long long) endrec);
-		RETURN(-EINVAL);
-	} else if (rc < 0) {
-		CWARN("%s: Failure to clear the changelog for user %d: %d\n",
-		      mdd2obd_dev(mdd)->obd_name, id, rc);
-	} else if (mcuc.mcuc_flush) {
-		/* Cancelling record 0 destroys the entire changelog, make sure
-		   we don't do that unless we mean it. */
-		if (mcuc.mcuc_minrec != 0) {
-			CDEBUG(D_IOCTL, "%s: Purging changelog entries up "\
-			       "to %llu\n", mdd2obd_dev(mdd)->obd_name,
-			       mcuc.mcuc_minrec);
+		GOTO(out, rc);
+	}
 
-			rc = mdd_changelog_llog_cancel(env, mdd,
-						      mcuc.mcuc_minrec);
-		}
-	} else {
-		CDEBUG(D_IOCTL, "%s: No entry for user %d\n",
-		      mdd2obd_dev(mdd)->obd_name, id);
-		rc = -ENOENT;
+	if (rc < 0) {
+		CWARN("%s: failure to clear the changelog for user %d: %d\n",
+		      mdd2obd_dev(mdd)->obd_name, id, rc);
+		GOTO(out, rc);
+	}
+
+	if (!mcuc.mcuc_flush) {
+		CDEBUG(D_IOCTL, "%s: no entry for user %d\n",
+		       mdd2obd_dev(mdd)->obd_name, id);
+		GOTO(out, rc = -ENOENT);
+	}
+
+	/* Cancelling record 0 destroys the entire changelog, make sure
+	   we don't do that unless we mean it. */
+	if (mcuc.mcuc_minrec != 0) {
+		CDEBUG(D_IOCTL, "%s: purge changelog entries up to %llu\n",
+		       mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_minrec);
+		rc = mdd_changelog_llog_cancel(env, mdd, mcuc.mcuc_minrec);
+		if (rc)
+			GOTO(out, rc);
 	}
 
 	EXIT;
 out:
-	if (ctxt != NULL)
-		llog_ctxt_put(ctxt);
+	llog_ctxt_put(ctxt);
 
 	return rc;
 }
