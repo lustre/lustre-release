@@ -2142,48 +2142,54 @@ static int mdd_changelog_clear(const struct lu_env *env,
 
 	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-	if (ctxt == NULL ||
-	    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
+	if (!ctxt)
+		RETURN(-ENXIO);
+
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
 		GOTO(out, rc = -ENXIO);
 
 	rc = llog_cat_process(env, ctxt->loc_handle, mdd_changelog_clear_cb,
 			      &mcuc, 0, 0);
 	if (rc == -EINVAL) {
-		CDEBUG(D_IOCTL, "%s: No changelog recnum <= %llu to clear\n",
+		CDEBUG(D_IOCTL, "%s: no changelog recnum <= %llu to clear\n",
 		       mdd2obd_dev(mdd)->obd_name, (unsigned long long)endrec);
-		RETURN(-EINVAL);
-	} else if (rc < 0) {
+		GOTO(out, rc);
+	}
+
+	if (rc < 0) {
 		CWARN("%s: can't clear the changelog for user %s: rc = %d\n",
 		      mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_name, rc);
-	} else if (mcuc.mcuc_flush) {
-		CDEBUG(D_IOCTL,
-		       "%s: purge changelog user %s entries up to %llu\n",
-		       mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_name,
-		       mcuc.mcuc_minrec);
-		rc = mdd_changelog_llog_cancel(env, mdd, mcuc.mcuc_minrec);
-		if (!rc) {
-			spin_lock(&mdd->mdd_cl.mc_user_lock);
-			mdd->mdd_cl.mc_minrec = mcuc.mcuc_minrec;
-			mdd->mdd_cl.mc_mintime = mcuc.mcuc_mintime;
-			spin_unlock(&mdd->mdd_cl.mc_user_lock);
-		}
-	} else {
-		CDEBUG(D_IOCTL, "%s: No entry for user %d\n",
-		      mdd2obd_dev(mdd)->obd_name, id);
-		rc = -ENOENT;
+		GOTO(out, rc);
 	}
+
+	if (!mcuc.mcuc_flush) {
+		CDEBUG(D_IOCTL, "%s: no entry for user %d\n",
+		       mdd2obd_dev(mdd)->obd_name, id);
+		GOTO(out, rc = -ENOENT);
+	}
+
+	CDEBUG(D_IOCTL, "%s: purge changelog user %s entries up to %llu\n",
+	       mdd2obd_dev(mdd)->obd_name, mcuc.mcuc_name, mcuc.mcuc_minrec);
+
+	rc = mdd_changelog_llog_cancel(env, mdd, mcuc.mcuc_minrec);
+	if (rc)
+		GOTO(out, rc);
+
+	spin_lock(&mdd->mdd_cl.mc_user_lock);
+	mdd->mdd_cl.mc_minrec = mcuc.mcuc_minrec;
+	mdd->mdd_cl.mc_mintime = mcuc.mcuc_mintime;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	EXIT;
 out:
-	if (ctxt != NULL)
-		llog_ctxt_put(ctxt);
+	llog_ctxt_put(ctxt);
 
 	return rc;
 }
 
 static int mdd_changelog_user_deregister(const struct lu_env *env,
-				       struct mdd_device *mdd, int *id,
-				       const char *name)
+					 struct mdd_device *mdd, int *id,
+					 const char *name)
 {
 	struct llog_ctxt *ctxt;
 	struct mdd_changelog_name_check_data mcnc = {
