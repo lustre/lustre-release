@@ -1126,14 +1126,29 @@ static int lfs_component_del(char *fname, __u32 comp_id,
 {
 	int	rc = 0;
 
-	if (flags && neg_flags)
+	if (flags && neg_flags) {
+		fprintf(stderr,
+			"%s: cannot specify both positive and negative flags\n",
+			progname);
 		return -EINVAL;
+	}
 
 	if (!flags && neg_flags)
 		flags = neg_flags | LCME_FL_NEG;
 
-	if ((flags && comp_id) || (!flags && !comp_id))
+	if (flags && comp_id) {
+		fprintf(stderr,
+			"%s: cannot specify component ID and flags at the same time\n",
+			progname);
 		return -EINVAL;
+	}
+
+	if (!flags && !comp_id) {
+		fprintf(stderr,
+			"%s: neither flags nor component ID is specified\n",
+			progname);
+		return -EINVAL;
+	}
 
 	if (flags) {
 		if (flags & ~LCME_KNOWN_FLAGS) {
