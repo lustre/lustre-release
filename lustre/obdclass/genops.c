@@ -377,6 +377,8 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	newdev->obd_pool_slv = 0;
 
 	INIT_LIST_HEAD(&newdev->obd_exports);
+	newdev->obd_num_exports = 0;
+	newdev->obd_grant_check_threshold = 100;
 	INIT_LIST_HEAD(&newdev->obd_unlinked_exports);
 	INIT_LIST_HEAD(&newdev->obd_delayed_exports);
 	INIT_LIST_HEAD(&newdev->obd_exports_timed);

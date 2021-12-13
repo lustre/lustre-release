@@ -154,6 +154,37 @@ ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
 }
 EXPORT_SYMBOL(num_exports_show);
 
+ssize_t grant_check_threshold_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 obd->obd_grant_check_threshold);
+}
+EXPORT_SYMBOL(grant_check_threshold_show);
+
+ssize_t grant_check_threshold_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	int val;
+	int rc;
+
+	rc = kstrtoint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0)
+		return -EINVAL;
+	obd->obd_grant_check_threshold = val;
+	return count;
+}
+EXPORT_SYMBOL(grant_check_threshold_store);
+
 static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
 {
 	bool first = true;

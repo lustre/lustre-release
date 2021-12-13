@@ -1381,6 +1381,7 @@ LUSTRE_RW_ATTR(grant_compat_disable);
 LUSTRE_RO_ATTR(instance);
 
 LUSTRE_RO_ATTR(num_exports);
+LUSTRE_RW_ATTR(grant_check_threshold);
 
 static struct attribute *mdt_attrs[] = {
 	&lustre_attr_tot_dirty.attr,
@@ -1392,6 +1393,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_recovery_time_soft.attr,
 	&lustre_attr_ir_factor.attr,
 	&lustre_attr_num_exports.attr,
+	&lustre_attr_grant_check_threshold.attr,
 	&lustre_attr_identity_expire.attr,
 	&lustre_attr_identity_acquire_expire.attr,
 	&lustre_attr_identity_upcall.attr,

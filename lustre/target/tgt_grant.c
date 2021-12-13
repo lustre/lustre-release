@@ -176,7 +176,7 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
  * argument. LBUG is only called in case of serious counter corruption (i.e.
  * value larger than the device size).
  * Those sanity checks can be pretty expensive and are disabled if the OBD
- * device has more than 100 connected exports.
+ * device has more than 100 connected exports by default.
  *
  * \param[in] obd	OBD device for which grant accounting should be
  *			verified
@@ -200,9 +200,14 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 	if (list_empty(&obd->obd_exports))
 		return;
 
-	/* We don't want to do this for large machines that do lots of
-	 * mounts or unmounts.  It burns... */
-	if (obd->obd_num_exports > 100)
+	/*
+	 * We don't want to do this for large machines that do lots of
+	 * mounts or unmounts.  It burns...
+	 * Use set_param to change obd_grant_check_threshold, which
+	 * is 100 by default, 0 to always check grants
+	 */
+	if (obd->obd_num_exports > obd->obd_grant_check_threshold &&
+	    obd->obd_grant_check_threshold)
 		return;
 
 	maxsize = tgd->tgd_osfs.os_blocks << tgd->tgd_blockbits;

@@ -601,6 +601,11 @@ extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
 #ifdef HAVE_SERVER_SUPPORT
 ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf);
+ssize_t grant_check_threshold_show(struct kobject *kobj,
+				   struct attribute *attr, char *buf);
+ssize_t grant_check_threshold_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count);
 #endif
 struct adaptive_timeout;
 extern int lprocfs_at_hist_helper(struct seq_file *m,
