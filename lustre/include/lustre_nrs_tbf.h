@@ -102,7 +102,7 @@ struct nrs_tbf_client {
 	/** Generation of the rule matched. */
 	__u64				 tc_rule_generation;
 	/** Limit of RPC rate. */
-	u32				 tc_rpc_rate;
+	__u64				 tc_rpc_rate;
 	/** Time to wait for next token. */
 	__u64				 tc_nsecs;
 	/** RPC token number. */
@@ -169,7 +169,7 @@ struct nrs_tbf_rule {
 	/** Generic condition string of the rule. */
 	char				*tr_conds_str;
 	/** RPC/s limit. */
-	u32				 tr_rpc_rate;
+	__u64				 tr_rpc_rate;
 	/** Time to wait for next token. */
 	u64				 tr_nsecs_per_rpc;
 	/** Token bucket depth. */
