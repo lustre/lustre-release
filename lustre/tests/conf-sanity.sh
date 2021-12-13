@@ -8341,6 +8341,7 @@ test_122b() {
 			error "unlinkmany failed unlink $files files"
 	done
 	sync
+	touch $DIR/$tdir/$tfile
 	do_facet ost1 sync
 	#we need a write req during recovery for ofd_seq_load
 	replay_barrier ost1
