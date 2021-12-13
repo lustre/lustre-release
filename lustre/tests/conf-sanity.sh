@@ -9341,8 +9341,11 @@ test_115() {
 	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1))	 \
 		--mkfsoptions='-O ea_inode,^resize_inode,meta_bg \
 		-N 2247484000 -E lazy_itable_init' --device-size=$IMAGESIZE"
-	add mds1 $mds_opts --mgs --reformat $mdsdev ||
+	add mds1 $mds_opts --mgs --reformat $mdsdev || {
+		do_facet $SINGLEMDS \
+			"losetup -d $mdsdev && rm -f $mdsimgname"
 		skip_env "format large MDT failed"
+	}
 
 	local ostdev=$(ostdevname 1)
 
