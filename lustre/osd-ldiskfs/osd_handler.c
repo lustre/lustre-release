@@ -8025,6 +8025,12 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out_mnt, rc = -EINVAL);
 	}
 
+	if (ldiskfs_has_feature_fast_commit(o->od_mnt->mnt_sb)) {
+		CERROR("%s: device %s is mounted with fast_commit that breaks recovery\n",
+		       name, dev);
+		GOTO(out_mnt, rc = -EOPNOTSUPP);
+	}
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 53, 0)
 #ifdef LDISKFS_MOUNT_DIRDATA
 	if (ldiskfs_has_feature_dirdata(o->od_mnt->mnt_sb))

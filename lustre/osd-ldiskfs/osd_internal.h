@@ -1555,7 +1555,14 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 # define ldiskfs_has_feature_project(sb) \
 	LDISKFS_HAS_RO_COMPAT_FEATURE(sb, LDISKFS_FEATURE_RO_COMPAT_PROJECT)
 # endif
+# ifdef LDISKFS_FEATURE_COMPAT_FAST_COMMIT
+# define ldiskfs_has_feature_fast_commit(sb) \
+	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_COMPAT_FAST_COMMIT)
+# endif
+#endif
 
+#ifndef ldiskfs_has_feature_fast_commit
+#define ldiskfs_has_feature_fast_commit(sb)  false
 #endif
 
 int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh,
