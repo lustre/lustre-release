@@ -303,8 +303,8 @@ ksocknal_recv_kiov(struct ksock_conn *conn, struct page **rx_scratch_pgs,
 	struct bio_vec *kiov = conn->ksnc_rx_kiov;
 	int nob;
 	int rc;
-	LASSERT(conn->ksnc_rx_nkiov > 0);
 
+	LASSERT(conn->ksnc_rx_nkiov > 0);
 	/* Never touch conn->ksnc_rx_kiov or change connection
 	 * status inside ksocknal_lib_recv_iov */
 	rc = ksocknal_lib_recv_kiov(conn, rx_scratch_pgs, scratch_iov);
@@ -396,7 +396,6 @@ ksocknal_tx_done(struct lnet_ni *ni, struct ksock_tx *tx, int rc)
 {
 	struct lnet_msg *lnetmsg = tx->tx_lnetmsg;
 	enum lnet_msg_hstatus hstatus = tx->tx_hstatus;
-        ENTRY;
 
 	LASSERT(ni != NULL || tx->tx_conn != NULL);
 
@@ -414,8 +413,6 @@ ksocknal_tx_done(struct lnet_ni *ni, struct ksock_tx *tx, int rc)
 		lnetmsg->msg_health_status = hstatus;
 		lnet_finalize(lnetmsg, rc);
 	}
-
-	EXIT;
 }
 
 void
@@ -1609,7 +1606,6 @@ int ksocknal_scheduler(void *arg)
 void ksocknal_read_callback(struct ksock_conn *conn)
 {
 	struct ksock_sched *sched;
-	ENTRY;
 
 	sched = conn->ksnc_scheduler;
 
@@ -1627,8 +1623,6 @@ void ksocknal_read_callback(struct ksock_conn *conn)
 		wake_up (&sched->kss_waitq);
 	}
 	spin_unlock_bh(&sched->kss_lock);
-
-	EXIT;
 }
 
 /*
@@ -1638,7 +1632,6 @@ void ksocknal_read_callback(struct ksock_conn *conn)
 void ksocknal_write_callback(struct ksock_conn *conn)
 {
 	struct ksock_sched *sched;
-	ENTRY;
 
 	sched = conn->ksnc_scheduler;
 
@@ -1657,8 +1650,6 @@ void ksocknal_write_callback(struct ksock_conn *conn)
 	}
 
 	spin_unlock_bh(&sched->kss_lock);
-
-	EXIT;
 }
 
 static const struct ksock_proto *

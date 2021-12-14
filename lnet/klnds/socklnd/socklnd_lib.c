@@ -574,7 +574,6 @@ ksocknal_data_ready(struct sock *sk, int n)
 #endif
 {
 	struct ksock_conn  *conn;
-	ENTRY;
 
         /* interleave correctly with closing sockets... */
         LASSERT(!in_irq());
@@ -592,8 +591,6 @@ ksocknal_data_ready(struct sock *sk, int n)
 		ksocknal_read_callback(conn);
 
 	read_unlock(&ksocknal_data.ksnd_global_lock);
-
-	EXIT;
 }
 
 static void
