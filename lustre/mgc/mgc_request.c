@@ -1184,12 +1184,15 @@ static int mgc_target_register(struct obd_export *exp,
 		req->rq_delay_limit = MGC_TARGET_REG_LIMIT_MAX;
 
         rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                rep_mti = req_capsule_server_get(&req->rq_pill,
-                                                 &RMF_MGS_TARGET_INFO);
-                memcpy(mti, rep_mti, sizeof(*rep_mti));
-                CDEBUG(D_MGC, "register %s got index = %d\n",
-                       mti->mti_svname, mti->mti_stripe_index);
+	if (ptlrpc_client_replied(req)) {
+		rep_mti = req_capsule_server_get(&req->rq_pill,
+						 &RMF_MGS_TARGET_INFO);
+		if (rep_mti)
+			memcpy(mti, rep_mti, sizeof(*rep_mti));
+	}
+	if (!rc) {
+		CDEBUG(D_MGC, "register %s got index = %d\n",
+		       mti->mti_svname, mti->mti_stripe_index);
         }
         ptlrpc_req_finished(req);
 

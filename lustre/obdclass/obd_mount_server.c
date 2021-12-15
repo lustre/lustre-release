@@ -1220,7 +1220,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 {
 	struct obd_device *mgc = lsi->lsi_mgc;
 	struct mgs_target_info *mti = NULL;
-	bool writeconf;
+	bool must_succeed;
 	int rc;
 	int tried = 0;
 	ENTRY;
@@ -1243,8 +1243,10 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	       libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index,
 	       mti->mti_flags);
 
-	/* if write_conf is true, the registration must succeed */
-	writeconf = !!(lsi->lsi_flags & (LDD_F_NEED_INDEX | LDD_F_UPDATE));
+	/* we cannot ignore registration failure if MGS logs must be updated. */
+	must_succeed = !!(lsi->lsi_flags &
+		    (LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_WRITECONF |
+		     LDD_F_VIRGIN));
 	mti->mti_flags |= LDD_F_OPC_REG;
 
 again:
@@ -1260,7 +1262,7 @@ again:
 				"%s: the MGS refuses to allow this server "
 				"to start: rc = %d. Please see messages on "
 				"the MGS.\n", lsi->lsi_svname, rc);
-		} else if (writeconf) {
+		} else if (must_succeed) {
 			if ((rc == -ESHUTDOWN || rc == -EIO) && ++tried < 5) {
 				/* The connection with MGS is not established.
 				 * Try again after 2 seconds. Interruptable. */

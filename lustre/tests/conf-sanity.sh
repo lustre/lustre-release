@@ -9312,6 +9312,23 @@ test_128()
 }
 run_test 128 "Force using remote logs with --nolocallogs"
 
+test_129()
+{
+	stopall
+	start_mds || error "MDS start failed"
+	format_ost 1
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &&
+		error "start ost1 should fail" || true
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &&
+		error "second start ost1 should fail" || true
+	do_facet ost1 "$TUNEFS --writeconf $(ostdevname 1)"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "start ost1 failed"
+	stop ost1
+	stop_mds
+}
+run_test 129 "attempt to connect an OST with the same index should fail"
+
 test_130()
 {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"

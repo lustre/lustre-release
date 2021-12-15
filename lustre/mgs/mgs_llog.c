@@ -636,10 +636,16 @@ static bool server_make_name(u32 flags, u16 index, const char *fs,
 	bool invalid_flag = false;
 
 	if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
+		char reg_flag = '-';
+
+		if (flags & LDD_F_WRITECONF)
+			reg_flag = '=';
+		else if (flags & LDD_F_VIRGIN)
+			reg_flag = ':';
+
 		if (!(flags & LDD_F_SV_ALL))
 			snprintf(name_buf, name_buf_size, "%.8s%c%s%04x", fs,
-				(flags & LDD_F_VIRGIN) ? ':' :
-					((flags & LDD_F_WRITECONF) ? '=' : '-'),
+				reg_flag,
 				(flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
 				index);
 	} else if (flags & LDD_F_SV_TYPE_MGS) {
