@@ -703,12 +703,13 @@ out_free_work:
 static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			struct cl_page_list *queue,
 			struct ll_readahead_state *ras, bool hit,
-			struct file *file, pgoff_t skip_index)
+			struct file *file, pgoff_t skip_index,
+			pgoff_t *start_idx)
 {
 	struct vvp_io *vio = vvp_env_io(env);
 	struct ll_thread_info *lti = ll_env_info(env);
 	unsigned long pages, pages_min = 0;
-	pgoff_t ra_end_idx = 0, start_idx = 0, end_idx = 0;
+	pgoff_t ra_end_idx = 0, end_idx = 0;
 	struct inode *inode;
 	struct ra_io_arg *ria = &lti->lti_ria;
 	struct cl_object *clob;
@@ -716,8 +717,6 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	__u64 kms;
 	struct ll_sb_info *sbi;
 	struct ll_ra_info *ra;
-
-	ENTRY;
 
         ENTRY;
 
@@ -755,16 +754,16 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	 * so that stride read ahead can work correctly.
 	 */
 	if (stride_io_mode(ras))
-		start_idx = max_t(pgoff_t, ras->ras_next_readahead_idx,
+		*start_idx = max_t(pgoff_t, ras->ras_next_readahead_idx,
 				  ras->ras_stride_offset >> PAGE_SHIFT);
 	else
-		start_idx = ras->ras_next_readahead_idx;
+		*start_idx = ras->ras_next_readahead_idx;
 
 	if (ras->ras_window_pages > 0)
 		end_idx = ras->ras_window_start_idx + ras->ras_window_pages - 1;
 
 	if (skip_index)
-		end_idx = start_idx + ras->ras_window_pages - 1;
+		end_idx = *start_idx + ras->ras_window_pages - 1;
 
 	/* Enlarge the RA window to encompass the full read */
 	if (vio->vui_ra_valid &&
@@ -781,7 +780,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			ria->ria_eof = true;
 		}
 	}
-	ria->ria_start_idx = start_idx;
+	ria->ria_start_idx = *start_idx;
 	ria->ria_end_idx = end_idx;
 	/* If stride I/O mode is detected, get stride window*/
 	if (stride_io_mode(ras)) {
@@ -1629,6 +1628,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	struct vvp_page           *vpg;
 	int			   rc = 0, rc2 = 0;
 	bool			   uptodate;
+	pgoff_t ra_start_index = 0;
 	pgoff_t io_start_index;
 	pgoff_t io_end_index;
 	ENTRY;
@@ -1674,9 +1674,12 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		if (ras->ras_next_readahead_idx < vvp_index(vpg))
 			skip_index = vvp_index(vpg);
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
-				   uptodate, file, skip_index);
-		CDEBUG(D_READA|D_IOTRACE, DFID " %d pages read ahead at %lu\n",
-		       PFID(ll_inode2fid(inode)), rc2, vvp_index(vpg));
+				   uptodate, file, skip_index,
+				   &ra_start_index);
+		CDEBUG(D_READA|D_IOTRACE,
+		       DFID " %d pages read ahead at %lu, triggered by user read at %lu\n",
+		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
+		       vvp_index(vpg));
 	} else if (vvp_index(vpg) == io_start_index &&
 		   io_end_index - io_start_index > 0) {
 		rc2 = ll_readpages(env, io, &queue->c2_qin, io_start_index + 1,
