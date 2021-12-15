@@ -378,6 +378,7 @@ static inline void ptlrpc_cli_req_init(struct ptlrpc_request *req)
 
 	req->rq_receiving_reply = 0;
 	req->rq_req_unlinked = req->rq_reply_unlinked = 1;
+	req->rq_replied = 0;
 
 	INIT_LIST_HEAD(&cr->cr_set_chain);
 	INIT_LIST_HEAD(&cr->cr_ctx_chain);
