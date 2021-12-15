@@ -75,6 +75,12 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
+#skip ACL tests on RHEL8 and SLES15 until tests changed to use other users
+if (( $(egrep -cw "^bin|^daemon" /etc/passwd) < 2 )); then
+	# bug number:   LU-15259 LU-15259
+	ALWAYS_EXCEPT+=" 103a  125   154a"
+fi
+
 #                                  5              12     8   12  15   (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
 
