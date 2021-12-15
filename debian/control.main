@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Lustre Developers <lustre-devel@lists.lustre.org>
 Uploaders: Lustre Developers <lustre-devel@lists.lustre.org>
 Standards-Version: 3.8.3
-Build-Depends: module-assistant, libreadline-dev, debhelper (>= 11), automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, pkg-config, libtool, libyaml-dev, libnl-genl-3-dev, libselinux-dev, mpi-default-dev, bzip2, quilt, linux-headers-generic | linux-headers-amd64 | linux-headers-arm64, rsync, libssl-dev, libpython3-dev, swig, libmount-dev, ed
+Build-Depends: module-assistant, libreadline-dev, debhelper (>= 11), automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, pkg-config, libtool, libyaml-dev, libnl-genl-3-dev, libselinux-dev, bzip2, quilt, linux-headers-generic | linux-headers-amd64 | linux-headers-arm64, rsync, libssl-dev, libpython3-dev, swig, libmount-dev, ed
 Homepage: https://wiki.whamcloud.com/
 Vcs-Git: git://git.whamcloud.com/fs/lustre-release.git
 
@@ -12,7 +12,7 @@ Package: lustre-source
 Section: admin
 Architecture: all
 Priority: optional
-Depends: module-assistant, bzip2, debhelper (>= 11), libtool, libyaml-dev, libnl-genl-3-dev, libselinux-dev, mpi-default-dev, pkg-config
+Depends: module-assistant, bzip2, debhelper (>= 11), libtool, libyaml-dev, libnl-genl-3-dev, libselinux-dev, pkg-config
 Description: source for Lustre filesystem client kernel modules
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
@@ -88,7 +88,7 @@ Package: lustre-tests
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-iokit (= ${binary:Version}), lustre-dev (= ${binary:Version}), attr, rsync, quota, perl, lsof, mpi-default-bin, selinux-utils, uidmap, python3
+Depends: lustre-iokit (= ${binary:Version}), lustre-dev (= ${binary:Version}), attr, rsync, quota, perl, lsof, mpi-default-bin, mpi-default-dev, selinux-utils, uidmap, python3
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
