@@ -2162,6 +2162,7 @@ struct ioc_data_version {
 enum ioc_data_version_flags {
 	LL_DV_RD_FLUSH	= (1 << 0), /* Flush dirty pages from clients */
 	LL_DV_WR_FLUSH	= (1 << 1), /* Flush all caching pages from clients */
+	LL_DV_SZ_UPDATE	= (1 << 2), /* Update the file size on the client */
 };
 
 #ifndef offsetof

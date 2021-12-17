@@ -4885,6 +4885,36 @@ test_260c()
 }
 run_test 260c "Requests are not reordered on the 'hot' path of the coordinator"
 
+test_261() {
+	local file=$DIR/$tdir/$tfile
+	local size
+	local fid
+
+	copytool setup
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	dd if=/dev/zero of=$file bs=4k count=2 || error "Write $file failed"
+	fid=$(path2fid $file)
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $file
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_state $file
+	$LFS hsm_release $file
+	$LFS hsm_restore $file
+	wait_request_state $fid RESTORE SUCCEED
+	$LFS hsm_release $file
+	size=$(stat -c %s $file)
+	[[ $size == 8192 ]] || error "Size after HSM release: $size"
+
+	$LFS hsm_release $file
+	$LFS hsm_restore $file
+	$LFS hsm_release $file
+	size=$(stat -c %s $file)
+	[[ $size == 8192 ]] || error "Size after HSM release: $size"
+	$LFS hsm_state $file
+}
+run_test 261 "Report 0 bytes size after HSM release"
+
 test_300() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
 

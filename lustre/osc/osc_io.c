@@ -842,8 +842,12 @@ static void osc_io_data_version_end(const struct lu_env *env,
 				    const struct cl_io_slice *slice)
 {
 	struct cl_data_version_io *dv = &slice->cis_io->u.ci_data_version;
-	struct osc_io		*oio    = cl2osc_io(env, slice);
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct cl_object *obj = slice->cis_obj;
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
+	struct obdo *oa = &oio->oi_oa;
+	unsigned int cl_valid = 0;
 
 	ENTRY;
 	wait_for_completion(&cbargs->opc_sync);
@@ -852,14 +856,30 @@ static void osc_io_data_version_end(const struct lu_env *env,
 		slice->cis_io->ci_result = cbargs->opc_rc;
 	} else {
 		slice->cis_io->ci_result = 0;
-		if (!(oio->oi_oa.o_valid &
+		if (!(oa->o_valid &
 		      (OBD_MD_LAYOUT_VERSION | OBD_MD_FLDATAVERSION)))
 			slice->cis_io->ci_result = -ENOTSUPP;
 
-		if (oio->oi_oa.o_valid & OBD_MD_LAYOUT_VERSION)
-			dv->dv_layout_version = oio->oi_oa.o_layout_version;
-		if (oio->oi_oa.o_valid & OBD_MD_FLDATAVERSION)
-			dv->dv_data_version = oio->oi_oa.o_data_version;
+		if (oa->o_valid & OBD_MD_LAYOUT_VERSION)
+			dv->dv_layout_version = oa->o_layout_version;
+		if (oa->o_valid & OBD_MD_FLDATAVERSION)
+			dv->dv_data_version = oa->o_data_version;
+
+		if (dv->dv_flags & LL_DV_SZ_UPDATE) {
+			if (oa->o_valid & OBD_MD_FLSIZE) {
+				attr->cat_size = oa->o_size;
+				cl_valid |= CAT_SIZE;
+			}
+
+			if (oa->o_valid & OBD_MD_FLBLOCKS) {
+				attr->cat_blocks = oa->o_blocks;
+				cl_valid |= CAT_BLOCKS;
+			}
+
+			cl_object_attr_lock(obj);
+			cl_object_attr_update(env, obj, attr, cl_valid);
+			cl_object_attr_unlock(obj);
+		}
 	}
 
 	EXIT;
