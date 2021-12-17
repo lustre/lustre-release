@@ -6891,6 +6891,21 @@ static int lfs_setdirstripe(int argc, char **argv)
 		previous_mode = umask(0);
 	}
 
+	/* check max-inherit and warn user in some cases */
+	if (default_stripe &&
+	    (lsa.lsa_stripe_count < 0 || lsa.lsa_stripe_count > 1)) {
+		if (max_inherit == LMV_INHERIT_UNLIMITED)
+			fprintf(stderr,
+			"%s %s: unrecommended max-inherit=-1 when default stripe-count=%lld\n",
+			progname, argv[0], lsa.lsa_stripe_count);
+		else if (max_inherit > LMV_INHERIT_DEFAULT_STRIPED + 2 &&
+			 max_inherit != LMV_INHERIT_NONE)
+			fprintf(stderr,
+				"%s %s: unrecommended max-inherit=%d when default stripe-count=%lld\n",
+				progname, argv[0], max_inherit,
+				lsa.lsa_stripe_count);
+	}
+
 	if (max_inherit_rr != LAYOUT_INHERIT_UNSET &&
 	    lsa.lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
 	    lsa.lsa_stripe_off != LMV_OFFSET_DEFAULT) {
@@ -6950,10 +6965,15 @@ static int lfs_setdirstripe(int argc, char **argv)
 		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
-	if (max_inherit == LAYOUT_INHERIT_UNSET)
-		max_inherit = LMV_INHERIT_DEFAULT;
+	if (max_inherit == LAYOUT_INHERIT_UNSET) {
+		if (lsa.lsa_stripe_count == 0 || lsa.lsa_stripe_count == 1)
+			max_inherit = LMV_INHERIT_DEFAULT_PLAIN;
+		else
+			max_inherit = LMV_INHERIT_DEFAULT_STRIPED;
+	}
 	param->lsp_max_inherit = max_inherit;
 	if (default_stripe) {
+
 		if (max_inherit_rr == LAYOUT_INHERIT_UNSET)
 			max_inherit_rr = LMV_INHERIT_RR_DEFAULT;
 		param->lsp_max_inherit_rr = max_inherit_rr;

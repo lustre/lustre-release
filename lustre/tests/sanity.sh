@@ -25601,6 +25601,54 @@ test_413d() {
 }
 run_test 413d "inherit ROOT default LMV"
 
+test_413e() {
+	(( MDSCOUNT >= 2 )) ||
+		skip "We need at least 2 MDTs for this test"
+	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need server version at least 2.14.55"
+
+	local testdir=$DIR/$tdir
+	local tmpfile=$TMP/temp.setdirstripe.stderr.$$
+	local max_inherit
+	local sub_max_inherit
+
+	mkdir -p $testdir || error "failed to create $testdir"
+
+	# set default max-inherit to -1 if stripe count is 0 or 1
+	$LFS setdirstripe -D -c 1 $testdir ||
+		error "failed to set default LMV"
+	max_inherit=$($LFS getdirstripe -D --max-inherit $testdir)
+	(( max_inherit == -1 )) ||
+		error "wrong max_inherit value $max_inherit"
+
+	# set default max_inherit to a fixed value if stripe count is not 0 or 1
+	$LFS setdirstripe -D -c -1 $testdir ||
+		error "failed to set default LMV"
+	max_inherit=$($LFS getdirstripe -D --max-inherit $testdir)
+	(( max_inherit > 0 )) ||
+		error "wrong max_inherit value $max_inherit"
+
+	# and the subdir will decrease the max_inherit by 1
+	mkdir -p $testdir/subdir-1 || error "failed to make subdir"
+	sub_max_inherit=$($LFS getdirstripe -D --max-inherit $testdir/subdir-1)
+	(( sub_max_inherit == max_inherit - 1)) ||
+		error "wrong max-inherit of subdir $sub_max_inherit"
+
+	# check specified --max-inherit and warning message
+	stack_trap "rm -f $tmpfile"
+	$LFS setdirstripe -D -c 2 --max-inherit=-1 $testdir 2> $tmpfile ||
+		error "failed to set default LMV"
+	max_inherit=$($LFS getdirstripe -D --max-inherit $testdir)
+	(( max_inherit == -1 )) ||
+		error "wrong max_inherit value $max_inherit"
+
+	# check the warning messages
+	if ! [[ $(cat $tmpfile) =~ "max-inherit=" ]]; then
+		error "failed to detect warning string"
+	fi
+}
+run_test 413e "check default max-inherit value"
+
 test_413z() {
 	local pids=""
 	local subdir

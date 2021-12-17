@@ -1135,23 +1135,25 @@ enum lmv_type {
  */
 enum {
 	/* for historical reason, 0 means unlimited inheritance */
-	LMV_INHERIT_UNLIMITED	= 0,
-	/* unlimited lum_max_inherit by default */
-	LMV_INHERIT_DEFAULT	= 0,
+	LMV_INHERIT_UNLIMITED		= 0,
+	/* unlimited lum_max_inherit by default for plain stripe (0 or 1) */
+	LMV_INHERIT_DEFAULT_PLAIN	= LMV_INHERIT_UNLIMITED,
 	/* not inherit any more */
-	LMV_INHERIT_END		= 1,
+	LMV_INHERIT_END			= 1,
+	/* for multiple stripes, the default lum_max_inherit is 3 */
+	LMV_INHERIT_DEFAULT_STRIPED	= 3,
 	/* max inherit depth */
-	LMV_INHERIT_MAX		= 250,
+	LMV_INHERIT_MAX			= 250,
 	/* [251, 254] are reserved */
 	/* not set, or when inherit depth goes beyond end,  */
-	LMV_INHERIT_NONE	= 255,
+	LMV_INHERIT_NONE		= 255,
 };
 
 enum {
 	/* not set, or when inherit_rr depth goes beyond end,  */
 	LMV_INHERIT_RR_NONE		= 0,
 	/* disable lum_max_inherit_rr by default */
-	LMV_INHERIT_RR_DEFAULT		= 0,
+	LMV_INHERIT_RR_DEFAULT		= LMV_INHERIT_RR_NONE,
 	/* not inherit any more */
 	LMV_INHERIT_RR_END		= 1,
 	/* default inherit_rr of ROOT */
