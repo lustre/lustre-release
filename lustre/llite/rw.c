@@ -1691,7 +1691,10 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file, skip_index,
 				   &ra_start_index);
-		CDEBUG(D_READA|D_IOTRACE,
+		/* to keep iotrace clean, we only print here if we actually
+		 * read pages
+		 */
+		CDEBUG(D_READA | (rc2 ? D_IOTRACE : 0),
 		       DFID " %d pages read ahead at %lu, triggered by user read at %lu\n",
 		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
 		       vvp_index(vpg));
