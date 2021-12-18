@@ -1695,9 +1695,11 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		 * read pages
 		 */
 		CDEBUG(D_READA | (rc2 ? D_IOTRACE : 0),
-		       DFID " %d pages read ahead at %lu, triggered by user read at %lu\n",
+		       DFID " %d pages read ahead at %lu, triggered by user read at %lu, stride offset %lld, stride length %lld, stride bytes %lld\n",
 		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
-		       vvp_index(vpg));
+		       vvp_index(vpg), ras->ras_stride_offset,
+		       ras->ras_stride_length, ras->ras_stride_bytes);
+
 	} else if (vvp_index(vpg) == io_start_index &&
 		   io_end_index - io_start_index > 0) {
 		rc2 = ll_readpages(env, io, &queue->c2_qin, io_start_index + 1,
