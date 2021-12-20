@@ -1350,8 +1350,24 @@ static void pcc_inode_get(struct pcc_inode *pcci)
 
 static void pcc_inode_put(struct pcc_inode *pcci)
 {
-	if (atomic_dec_and_test(&pcci->pcci_refcount))
+	if (atomic_dec_and_test(&pcci->pcci_refcount)) {
+		struct inode *inode = &pcci->pcci_lli->lli_vfs_inode;
+		struct inode *pcc_inode = pcci->pcci_path.dentry->d_inode;
+
+		if (inode && IS_ENCRYPTED(inode) && pcc_inode) {
+			/* get rid of all page cache pages for this pcc inode,
+			 * as they contain clear text data
+			 */
+			truncate_inode_pages_final(pcc_inode->i_mapping);
+			/* also get rid of pages cache pages for this Lustre
+			 * inode, as they might contain cipher text because
+			 * of the pcc file
+			 */
+			truncate_inode_pages_final(inode->i_mapping);
+		}
+
 		pcc_inode_fini(pcci);
+	}
 }
 
 void pcc_inode_free(struct inode *inode)
@@ -1444,6 +1460,38 @@ static int pcc_layout_xattr_set(struct pcc_inode *pcci, __u32 gen)
 
 	rc = ll_vfs_setxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
 			     &gen, sizeof(gen), 0);
+
+	RETURN(rc);
+}
+
+/* xattr to store encrypted file's size
+ *
+ * This is required because in case of encrypted inode, the PCC file contains
+ * the ciphertext. This means its size is aligned on LUSTRE_ENCRYPTION_UNIT_SIZE
+ * instead of being lustre inode's clear text size.
+ */
+static const char pcc_xattr_encsize[] = XATTR_USER_PREFIX "PCC.encsize";
+
+static int pcc_encsize_xattr_set(struct pcc_inode *pcci)
+{
+	struct dentry *pcc_dentry = pcci->pcci_path.dentry;
+	struct inode *inode = &pcci->pcci_lli->lli_vfs_inode;
+	loff_t size;
+	int rc;
+
+	ENTRY;
+
+	if (!IS_ENCRYPTED(inode))
+		RETURN(0);
+
+	if (ll_require_key(inode) == -ENOKEY &&
+	    pcci->pcci_lli->lli_attr_valid & OBD_MD_FLLAZYSIZE)
+		size = pcci->pcci_lli->lli_lazysize;
+	else
+		size = inode->i_size;
+
+	rc = ll_vfs_setxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_encsize,
+			     &size, sizeof(size), 0);
 
 	RETURN(rc);
 }
@@ -2335,11 +2383,16 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	if (!S_ISREG(inode->i_mode))
 		RETURN(0);
 
-	if (IS_ENCRYPTED(inode))
-		RETURN(0);
-
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
+
+	/* We only support pcc for encrypted files if we have the encryption key
+	 * and if it is PCC-RO.
+	 */
+	if (IS_ENCRYPTED(inode) &&
+	    (!llcrypt_has_encryption_key(inode) ||
+	     (pcci && pcci->pcci_type != LU_PCC_READONLY)))
+		GOTO(out_unlock, rc = 0);
 
 	if (lli->lli_pcc_state & PCC_STATE_FL_ATTACHING) {
 		pcc_file_fallback_set(lli, pccf);
@@ -2371,7 +2424,7 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	CDEBUG(D_CACHE, "opening pcc file '%pd' - %pd\n",
 	       path->dentry, file->f_path.dentry);
 
-	pcc_file = dentry_open(path, file->f_flags,
+	pcc_file = dentry_open(path, file->f_flags & ~O_DIRECT,
 			       pcc_super_cred(inode->i_sb));
 	if (IS_ERR_OR_NULL(pcc_file)) {
 		rc = pcc_file == NULL ? -EINVAL : PTR_ERR(pcc_file);
@@ -2467,7 +2520,10 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file_inode(file);
 	struct pcc_file *pccf = ll_file2pccf(file);
-	ssize_t result;
+	unsigned int blockbits = 0, blocksize = 0;
+	pgoff_t start_index, end_index, index;
+	ssize_t result = 0;
+	int rc = 0;
 
 	ENTRY;
 	file->f_ra.ra_pages = 0;
@@ -2480,18 +2536,109 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 	if (!*cached)
 		RETURN(0);
 
-	/* Fake I/O error on RO-PCC */
+	/* Fake I/O error on PCC-RO */
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_FAKE_ERROR))
 		GOTO(out, result = -EIO);
 
 	iocb->ki_filp = pccf->pccf_file;
-	/* generic_file_aio_read does not support ext4-dax,
-	 * __pcc_file_read_iter uses ->aio_read hook directly
-	 * to add support for ext4-dax.
-	 */
+	if (!IS_ENCRYPTED(inode)) {
+		/* generic_file_aio_read does not support ext4-dax,
+		 * __pcc_file_read_iter uses ->aio_read hook directly
+		 * to add support for ext4-dax.
+		 */
+		result = __pcc_file_read_iter(iocb, iter);
+		GOTO(out, result);
+	}
+
+	/* from this point, we are dealing with an encrypted inode */
+	blockbits = inode->i_blkbits;
+	blocksize = 1 << blockbits;
+	start_index = iocb->ki_pos >> PAGE_SHIFT;
+	if (i_size_read(inode) == 0)
+		end_index = (iocb->ki_pos + (loff_t)iov_iter_count(iter) - 1)
+			>> PAGE_SHIFT;
+	else
+		end_index = (min(iocb->ki_pos + (loff_t)iov_iter_count(iter),
+				 i_size_read(inode)) - 1) >> PAGE_SHIFT;
+
+	/* Proceed to decryption of PCC-RO page cache pages */
+	for (index = start_index; index <= end_index; index++) {
+		struct address_space *mapping;
+		struct page *vmpage = NULL;
+		unsigned int offs = 0;
+
+		mapping = file_inode(pccf->pccf_file)->i_mapping;
+		vmpage = grab_cache_page(mapping, index);
+		if (vmpage == NULL)
+			continue;
+
+		/* vmpage has already been decrypted */
+		if (PagePrivate2(vmpage))
+			goto out_pageprivate2;
+
+		if (PageDirty(vmpage))
+			/* this should not happen with PCC-RO */
+			GOTO(out_pageprivate2, rc = -EIO);
+		if (!PageUptodate(vmpage)) {
+#ifdef HAVE_AOPS_READ_FOLIO
+			rc = mapping->a_ops->read_folio(pccf->pccf_file,
+							page_folio(vmpage));
+#else
+			rc = mapping->a_ops->readpage(pccf->pccf_file, vmpage);
+#endif
+			if (rc) {
+				put_page(vmpage);
+				continue;
+			}
+			lock_page(vmpage);
+			if (!PageUptodate(vmpage))
+				GOTO(out_pageprivate2, rc = -EIO);
+		}
+
+		while (offs < PAGE_SIZE) {
+			u64 lblk_num = ((u64)vmpage->index <<
+					(PAGE_SHIFT - blockbits)) +
+				       (offs >> blockbits);
+			unsigned int i;
+
+			/* do not decrypt if page is all 0s */
+			if (memchr_inv(page_address(vmpage) + offs, 0,
+				       LUSTRE_ENCRYPTION_UNIT_SIZE) ==
+			    NULL)
+				break;
+
+			for (i = offs;
+			     i < offs + LUSTRE_ENCRYPTION_UNIT_SIZE;
+			     i += blocksize, lblk_num++) {
+				rc = llcrypt_decrypt_block_inplace(inode,
+								   vmpage,
+								   blocksize, i,
+								   lblk_num);
+				if (rc)
+					break;
+			}
+			if (rc)
+				GOTO(out_pageprivate2, rc);
+
+			offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
+		}
+		/* set PagePrivate2 flag so that we know
+		 * this page is now decrypted
+		 */
+		SetPagePrivate2(vmpage);
+
+out_pageprivate2:
+		unlock_page(vmpage);
+		put_page(vmpage);
+
+	}
+
 	result = __pcc_file_read_iter(iocb, iter);
-	iocb->ki_filp = file;
+	if (iocb->ki_pos > i_size_read(inode) && result > 0)
+		result -= iocb->ki_pos - i_size_read(inode);
+
 out:
+	iocb->ki_filp = file;
 	pcc_io_fini(inode, PIT_READ, result, cached);
 	RETURN(result);
 }
@@ -2610,7 +2757,9 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	const struct cred *old_cred;
+	struct pcc_inode *pcci;
 	struct kstat stat;
+	loff_t size;
 	s64 atime;
 	s64 mtime;
 	s64 ctime;
@@ -2628,7 +2777,8 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 		RETURN(0);
 
 	old_cred = override_creds(pcc_super_cred(inode->i_sb));
-	rc = ll_vfs_getattr(&ll_i2pcci(inode)->pcci_path, &stat, request_mask,
+	pcci = ll_i2pcci(inode);
+	rc = ll_vfs_getattr(&pcci->pcci_path, &stat, request_mask,
 			    flags);
 	revert_creds(old_cred);
 	if (rc)
@@ -2655,7 +2805,19 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 	if (mtime < stat.mtime.tv_sec)
 		mtime = stat.mtime.tv_sec;
 
-	i_size_write(inode, stat.size);
+	size = stat.size;
+	/* The pcc_xattr_encsize xattr is only valid for PCC-RO. */
+	if (IS_ENCRYPTED(inode) && pcci->pcci_type == LU_PCC_READONLY) {
+		loff_t encsize;
+
+		rc = ll_vfs_getxattr(pcci->pcci_path.dentry,
+				     pcci->pcci_path.dentry->d_inode,
+				     pcc_xattr_encsize,
+				     &encsize, sizeof(encsize));
+		if (rc > 0)
+			size = encsize;
+	}
+	i_size_write(inode, size);
 	inode->i_blocks = stat.blocks;
 
 	inode_set_atime(inode, atime, 0);
@@ -2722,9 +2884,9 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	}
 
 	/*
-	 * After the file is attached into RO-PCC, its dirty pages on this
+	 * After the file is attached into PCC-RO, its dirty pages on this
 	 * client may not be flushed. So fsync() should fall back to normal
-	 * Lustre I/O path flushing dirty data to OSTs. And flush on RO-PCC
+	 * Lustre I/O path flushing dirty data to OSTs. And flush on PCC-RO
 	 * copy is meaningless.
 	 */
 	if (pccf->pccf_type == LU_PCC_READONLY) {
@@ -3215,7 +3377,7 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	if (!*cached)
 		RETURN(0);
 
-	/* Tolerate the mmap read failure for RO-PCC */
+	/* Tolerate the mmap read failure for PCC-RO */
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_FAKE_ERROR))
 		GOTO(out, rc = VM_FAULT_SIGBUS);
 
@@ -3540,6 +3702,8 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 	/* Set the layout generation of newly created file with 0 */
 	pcc_layout_gen_set(pcci, 0);
 
+	rc = pcc_encsize_xattr_set(pcci);
+
 out_put:
 	if (rc) {
 		(void) pcc_inode_remove(inode, pcc_dentry);
@@ -3605,6 +3769,7 @@ static ssize_t pcc_copy_data(struct file *src, struct file *dst)
 	ssize_t rc2;
 	loff_t pos, offset = 0;
 	size_t buf_len = 1048576;
+	struct inode *inode = file_inode(src);
 	void *buf;
 
 	ENTRY;
@@ -3627,6 +3792,13 @@ static ssize_t pcc_copy_data(struct file *src, struct file *dst)
 			GOTO(out_free, rc = -EINTR);
 
 		pos = offset;
+		if (inode && IS_ENCRYPTED(inode))
+			/* Setting the S_PCCCOPY flag prevents the Lustre file
+			 * from being decrypted in the OSC layer, so that the
+			 * PCC file contains ciphertext data.
+			 * S_PCCCOPY flag is removed in ll_prepare_close().
+			 */
+			inode->i_flags |= S_PCCCOPY;
 		rc2 = cfs_kernel_read(src, buf, buf_len, &pos);
 		if (rc2 < 0)
 			GOTO(out_free, rc = rc2);
@@ -3655,6 +3827,7 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 	bool direct = false;
 	struct path path;
 	ssize_t ret;
+	int flags = O_WRONLY | O_LARGEFILE;
 	int rc;
 
 	ENTRY;
@@ -3666,7 +3839,14 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 
 	path.mnt = dataset->pccd_path.mnt;
 	path.dentry = *dentry;
-	pcc_filp = dentry_open(&path, O_WRONLY | O_LARGEFILE, current_cred());
+	/* If the inode is encrypted, we want the PCC file to be synced to the
+	 * storage. This is necessary as we are going to decrypt the page cache
+	 * pages of the PCC inode later in pcc_file_read_iter(), but still we
+	 * need to keep the ciphertext version on disk.
+	 */
+	if (IS_ENCRYPTED(inode))
+		flags |= O_SYNC;
+	pcc_filp = dentry_open(&path, flags, current_cred());
 	if (IS_ERR_OR_NULL(pcc_filp)) {
 		rc = pcc_filp == NULL ? -EINVAL : PTR_ERR(pcc_filp);
 		GOTO(out_dentry, rc);
@@ -3990,6 +4170,8 @@ static int pcc_readonly_attach(struct file *file,
 	}
 
 	pcc_layout_gen_set(pcci, gen);
+
+	rc = pcc_encsize_xattr_set(pcci);
 out_put_unlock:
 	if (rc) {
 		if (!unlinked)

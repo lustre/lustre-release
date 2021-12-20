@@ -1703,7 +1703,7 @@ retry_encrypt:
 		if (attr.cat_size)
 			oa->o_size = attr.cat_size;
 	} else if (opc == OST_READ && inode && IS_ENCRYPTED(inode) &&
-		   llcrypt_has_encryption_key(inode)) {
+		   ll_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
 			u32 nunits = (pg->bp_off & ~PAGE_MASK) + pg->bp_count;
@@ -1734,7 +1734,7 @@ retry_encrypt:
 	for (i = 0; i < page_count; i++) {
 		short_io_size += pga[i]->bp_count;
 		if (!inode || !IS_ENCRYPTED(inode) ||
-		    !llcrypt_has_encryption_key(inode)) {
+		    !ll_has_encryption_key(inode)) {
 			pga[i]->bp_count_diff = 0;
 			pga[i]->bp_off_diff = 0;
 		}
@@ -2366,7 +2366,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 	if (inode && IS_ENCRYPTED(inode)) {
 		int idx;
 
-		if (!llcrypt_has_encryption_key(inode)) {
+		if (!ll_has_encryption_key(inode)) {
 			CDEBUG(D_SEC, "no enc key for ino %lu\n", inode->i_ino);
 			GOTO(out, rc);
 		}

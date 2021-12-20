@@ -2381,7 +2381,7 @@ out_rmdir:
 			st.st_uid	= body->mbo_uid;
 			st.st_gid	= body->mbo_gid;
 			st.st_rdev	= body->mbo_rdev;
-			if (llcrypt_require_key(inode) == -ENOKEY)
+			if (ll_require_key(inode) == -ENOKEY)
 				st.st_size = round_up(st.st_size,
 						   LUSTRE_ENCRYPTION_UNIT_SIZE);
 			else
@@ -2408,7 +2408,7 @@ out_rmdir:
 			stx.stx_mode = body->mbo_mode;
 			stx.stx_ino = cl_fid_build_ino(&body->mbo_fid1,
 						       api32);
-			if (llcrypt_require_key(inode) == -ENOKEY)
+			if (ll_require_key(inode) == -ENOKEY)
 				stx.stx_size = round_up(stx.stx_size,
 						   LUSTRE_ENCRYPTION_UNIT_SIZE);
 			else

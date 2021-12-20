@@ -635,7 +635,7 @@ int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 	dir = dget_parent(dentry);
 	err = llcrypt_prepare_readdir(d_inode(dir));
-	valid = !llcrypt_has_encryption_key(d_inode(dir));
+	valid = !ll_has_encryption_key(d_inode(dir));
 	dput(dir);
 
 	if (err < 0)

@@ -130,7 +130,7 @@ static int ll_readlink_internal(struct inode *inode,
 		/* Do not cache symlink targets encoded without the key,
 		 * since those become outdated once the key is added.
 		 */
-		if (!llcrypt_has_encryption_key(inode))
+		if (!ll_has_encryption_key(inode))
 			RETURN(0);
 	}
 #endif

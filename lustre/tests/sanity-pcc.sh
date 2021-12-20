@@ -131,7 +131,7 @@ lpcc_fid2path()
 {
 	local hsm_root="$1"
 	local lustre_path="$2"
-	local fid=$(path2fid $lustre_path)
+	local fid=${3:-$(path2fid $lustre_path)}
 
 	local seq=$(echo $fid | awk -F ':' '{print $1}')
 	local oid=$(echo $fid | awk -F ':' '{print $2}')
@@ -273,6 +273,45 @@ setup_loopdev_project() {
 		error "mount -o loop,prjquota $file $mntpt failed"
 	stack_trap "umount_loopdev $facet $mntpt" EXIT
 	do_facet $facet mount | grep $mntpt
+}
+
+setup_dummy_key() {
+	local mode='\x00\x00\x00\x00'
+	local raw="$(printf ""\\\\x%02x"" {0..63})"
+	local size
+	local key
+
+	[[ $(lscpu) =~ Byte\ Order.*Little ]] && size='\x40\x00\x00\x00' ||
+		size='\x00\x00\x00\x40'
+	key="${mode}${raw}${size}"
+	do_facet $SINGLEAGT "echo -en '${key}' |
+		keyctl padd logon fscrypt:4242424242424242 @u"
+}
+
+setup_for_enc_tests() {
+	local agthost=${SINGLEAGT}_HOST
+
+	# remount client with test_dummy_encryption option
+	zconf_umount ${!agthost} $MOUNT ||
+		error "umount $SINGLEAGT $MOUNT failed"
+	zconf_mount ${!agthost} $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount $SINGLEAGT with '-o test_dummy_encryption' failed"
+
+	setup_dummy_key
+
+	# this directory will be encrypted, because of dummy mode
+	do_facet $SINGLEAGT mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+}
+
+cleanup_for_enc_tests() {
+	local agthost=${SINGLEAGT}_HOST
+
+	do_facet $SINGLEAGT rm -rf $DIR/$tdir
+	# remount client normally
+	zconf_umount ${!agthost} $MOUNT ||
+		error "umount $SINGLEAGT $MOUNT failed"
+	zconf_mount ${!agthost} $MOUNT ||
+		error "remount $SINGLEAGT failed"
 }
 
 lpcc_rw_test() {
@@ -2110,6 +2149,93 @@ test_21i() {
 }
 run_test 21i "HSM release increase layout gen, should invalidate PCC-RO cache"
 
+test_21j() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local tmpfile=$TMP/abc
+	local file=$DIR/$tdir/$tfile
+	local scrambledfile
+	local lpcc_path
+	local size
+	local fid
+	local key
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	do_facet $SINGLEAGT "yes 1 | dd of=$tmpfile bs=1 count=5000 conv=fsync"
+	do_facet $SINGLEAGT cp $tmpfile $file
+	do_facet $SINGLEAGT $LFS getstripe $file
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to PCC-RO attach file $file"
+	check_lpcc_state $file "readonly"
+	echo "PCC-RO attach '$file':"
+	do_facet $SINGLEAGT $LFS getstripe -v $file
+
+	do_facet $SINGLEAGT cmp -bl $tmpfile $file ||
+		error "file $file is corrupted (1)"
+	fid=$(do_facet $SINGLEAGT lfs path2fid $file | tr -d '[]')
+	lpcc_path=$(lpcc_fid2path $hsm_root $file $fid)
+	do_facet $SINGLEAGT cmp -bl -n 4096 $tmpfile $lpcc_path ||
+		error "file $lpcc_path is corrupted (2)"
+
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "failed to PCC-RO detach file $file"
+	do_facet $SINGLEAGT cmp -s -n 4096 $tmpfile $lpcc_path &&
+		error "file $lpcc_path is corrupted (3)"
+
+	size=$(do_facet $SINGLEAGT stat "--printf=%s" $lpcc_path)
+	[ $size == 8192 ] || error "PCC file $lpcc_path incorrect size $size"
+
+	do_facet $SINGLEAGT cmp -bl $tmpfile $file ||
+		error "file $file is corrupted (4)"
+	do_facet $SINGLEAGT cmp -bl -n 4096 $tmpfile $lpcc_path ||
+		error "file $lpcc_path is corrupted (5)"
+
+	do_facet $SINGLEAGT cp $tmpfile ${file}_2
+	do_facet $SINGLEAGT $LFS getstripe ${file}_2
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER ${file}_2 ||
+		error "failed to PCC-RO attach file ${file}_2"
+	check_lpcc_state ${file}_2 "readonly"
+	echo "PCC-RO attach '${file}_2':"
+	do_facet $SINGLEAGT $LFS getstripe -v ${file}_2
+
+	do_facet $SINGLEAGT $LFS pcc detach ${file}_2 ||
+		error "failed to PCC-RO detach file ${file}_2"
+	do_facet $SINGLEAGT cmp -bl $tmpfile ${file}_2 ||
+		error "file ${file}_2 is corrupted (6)"
+	rm -f ${file}_2
+
+	# remove fscrypt key from keyring
+	key=$(do_facet $SINGLEAGT keyctl show |
+				  awk '$7 ~ "^fscrypt:" {print $1}')
+	[ -n "$key" ] || error "fscrypt key empty on $SINGLEAGT"
+	do_facet $SINGLEAGT keyctl revoke $key
+	do_facet $SINGLEAGT keyctl reap
+	do_facet $SINGLEAGT $LCTL set_param -n ldlm.namespaces.*.lru_size=clear
+
+	scrambledfile=$(do_facet $SINGLEAGT find $DIR/$tdir/ \
+					    -maxdepth 1 -mindepth 1 -type f)
+	do_facet $SINGLEAGT $LFS pcc detach -k $scrambledfile ||
+		error "failed to PCC-RO detach file $scrambledfile (2)"
+
+	do_facet $SINGLEAGT rm -f $tmpfile
+}
+run_test 21j "PCC-RO for encrypted file"
+
 test_22() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"
@@ -2779,7 +2905,7 @@ test_31() {
 
 	file=$DIR/$tdir/roattach
 	echo -n backend_del_roattach_rm > $file
-	lpcc_path3=$(lpcc_fid2path $hsm_root $file "readonly")
+	lpcc_path3=$(lpcc_fid2path $hsm_root $file)
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
 		error "RO-PCC attach $file failed"
 	check_lpcc_state $file "readonly"
@@ -2817,7 +2943,7 @@ test_32() {
 		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
 	do_facet $SINGLEAGT echo -n roattach_removed > $file
-	lpcc_path=$(lpcc_fid2path $hsm_root $file "readonly")
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
 		error "RO-PCC attach $file failed"
 	rmultiop_start $agt_host $file o_rc || error "multiop $file failed"

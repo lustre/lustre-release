@@ -116,11 +116,16 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	 * stored into lli_lazysize in ll_merge_attr(), so set proper file size
 	 * now that we are closing.
 	 */
-	if (llcrypt_require_key(inode) == -ENOKEY &&
-	    ll_i2info(inode)->lli_attr_valid & OBD_MD_FLLAZYSIZE)
+	if (ll_require_key(inode) == -ENOKEY &&
+	    ll_i2info(inode)->lli_attr_valid & OBD_MD_FLLAZYSIZE) {
 		op_data->op_attr.ia_size = ll_i2info(inode)->lli_lazysize;
-	else
+		if (IS_PCCCOPY(inode)) {
+			inode->i_flags &= ~S_PCCCOPY;
+			i_size_write(inode, op_data->op_attr.ia_size);
+		}
+	} else {
 		op_data->op_attr.ia_size = i_size_read(inode);
+	}
 	op_data->op_attr.ia_valid |= (ATTR_MODE | ATTR_ATIME | ATTR_ATIME_SET |
 				      ATTR_MTIME | ATTR_MTIME_SET |
 				      ATTR_CTIME);
@@ -490,7 +495,7 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	kunmap_atomic(kaddr);
 
 	if (inode && IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode)) {
-		if (!llcrypt_has_encryption_key(inode)) {
+		if (!ll_has_encryption_key(inode)) {
 			CDEBUG(D_SEC, "no enc key for "DFID"\n",
 			       PFID(ll_inode2fid(inode)));
 			rc = -ENOKEY;
@@ -1530,7 +1535,7 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu i_blocks %llu\n",
 	       PFID(&lli->lli_fid), attr->cat_size, attr->cat_blocks);
 
-	if (llcrypt_require_key(inode) == -ENOKEY) {
+	if (ll_require_key(inode) == -ENOKEY) {
 		/* Without the key, round up encrypted file size to next
 		 * LUSTRE_ENCRYPTION_UNIT_SIZE. Clear text size is put in
 		 * lli_lazysize for proper file size setting at close time.
@@ -4317,6 +4322,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 		if (ioc->lil_count != 1)
 			RETURN(-EINVAL);
 
+		/* PCC-RW is not supported for encrypted files. */
 		if (IS_ENCRYPTED(inode))
 			RETURN(-EOPNOTSUPP);
 
@@ -4917,6 +4923,14 @@ out_ladvise:
 				   sizeof(*attach)))
 			GOTO(out_pcc, rc = -EFAULT);
 
+		/* We only support pcc for encrypted files if we have the
+		 * encryption key and if it is PCC-RO.
+		 */
+		if (IS_ENCRYPTED(inode) &&
+		    (!llcrypt_has_encryption_key(inode) ||
+		     attach->pcca_type != LU_PCC_READONLY))
+			GOTO(out_pcc, rc = -EOPNOTSUPP);
+
 		rc = pcc_ioctl_attach(file, inode, attach);
 out_pcc:
 		OBD_FREE_PTR(attach);
@@ -5023,7 +5037,7 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	/* Without the key, SEEK_HOLE return value has to be
 	 * rounded up to next LUSTRE_ENCRYPTION_UNIT_SIZE.
 	 */
-	if (llcrypt_require_key(inode) == -ENOKEY && whence == SEEK_HOLE)
+	if (ll_require_key(inode) == -ENOKEY && whence == SEEK_HOLE)
 		retval = round_up(retval, LUSTRE_ENCRYPTION_UNIT_SIZE);
 
 	RETURN(retval);

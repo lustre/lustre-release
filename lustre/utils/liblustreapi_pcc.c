@@ -369,7 +369,10 @@ int llapi_pcc_detach_file(const char *path, __u32 flags)
 	int rc;
 	int fd;
 
-	fd = open(path, O_RDWR | O_NONBLOCK);
+	/* Specify O_CIPHERTEXT | O_DIRECT flags to allow pcc detach
+	 * on encrypted file without the key.
+	 */
+	fd = open(path, O_RDWR | O_NONBLOCK | O_CIPHERTEXT | O_DIRECT);
 	if (fd < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'",

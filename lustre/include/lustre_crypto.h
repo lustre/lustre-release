@@ -244,4 +244,20 @@ static inline int critical_decode(const u8 *src, int len, char *dst)
 	return (char *)q - dst;
 }
 
+/* Used for support of PCC-RO for encrypted files.
+ * In case an encrypted file is put in PCC-RO, we want it to be in ciphertext.
+ * The way to achieve this is to set the S_PCCCOPY flag on the inode, so that
+ * we directly return -ENOKEY in this case. This makes the lustre inode be
+ * treated as if we do not have the key, hence fetching ciphertext content
+ * instead of decrypting it.
+ * S_PCCCOPY is actually S_DIRSYNC, as it is safe so far to use it on regular
+ * files in this scenario.
+ */
+#define S_PCCCOPY S_DIRSYNC
+#define IS_PCCCOPY(inode)	((inode)->i_flags & S_PCCCOPY)
+#define ll_require_key(inode)	\
+	(IS_PCCCOPY(inode) ? -ENOKEY : llcrypt_require_key(inode))
+#define ll_has_encryption_key(inode)	\
+	(IS_PCCCOPY(inode) ? false : llcrypt_has_encryption_key(inode))
+
 #endif /* _LUSTRE_CRYPTO_H_ */
