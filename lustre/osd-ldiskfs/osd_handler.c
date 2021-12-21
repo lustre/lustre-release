@@ -4031,9 +4031,9 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	if (!S_ISDIR(type))
 		RETURN(local);
 
-	rc = osd_add_dot_dotdot_internal(info, local, pobj->oo_inode,
+	rc = osd_add_dot_dotdot_internal(info, local, pobj->oo_inode, fid,
 					 lu_object_fid(&pobj->oo_dt.do_lu),
-					 fid, oh);
+					 oh);
 	if (rc != 0) {
 		CERROR("%s: "DFID" add dot dotdot error: rc = %d\n",
 			osd_name(osd), PFID(fid), rc);
@@ -6230,6 +6230,9 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 				osd_add_oi_cache(osd_oti_get(env),
 						 osd_obj2dev(obj), id, fid);
 		}
+		CDEBUG(D_INODE, DFID"/"DNAME" => "DFID"\n",
+		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), PNAME(&ln),
+		       PFID(fid));
 	} else {
 		rc = PTR_ERR(bh);
 	}
