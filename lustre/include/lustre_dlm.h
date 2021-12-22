@@ -1032,12 +1032,10 @@ struct ldlm_match_data {
  *  which is for server. */
 #define l_slc_link l_rk_ast
 
-#define HANDLE_MAP_SIZE  ((LMV_MAX_STRIPE_COUNT + 7) >> 3)
-
 struct lustre_handle_array {
 	unsigned int		ha_count;
 	/* ha_map is used as bit flag to indicate handle is remote or local */
-	char			ha_map[HANDLE_MAP_SIZE];
+	DECLARE_BITMAP(ha_map, LMV_MAX_STRIPE_COUNT);
 	struct lustre_handle	ha_handles[0];
 };
 
