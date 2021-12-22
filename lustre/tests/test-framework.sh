@@ -10864,9 +10864,7 @@ function createmany() {
 	fi
 	$LUSTRE/tests/createmany $*
 	rc=$?
-	if (( count > 100 )); then
-		debugrestore
-	fi
+	debugrestore > /dev/null
 
 	return $rc
 }
@@ -10881,9 +10879,52 @@ function unlinkmany() {
 	fi
 	$LUSTRE/tests/unlinkmany $*
 	rc=$?
-	debugrestore
+	debugrestore > /dev/null
 
 	return $rc
+}
+
+# Check if fallocate on facet is working. Returns fallocate mode if enabled.
+# Takes optional facet name as argument, to allow separate MDS/OSS checks.
+function check_fallocate_supported()
+{
+	local facet=${1:-ost1}
+	local supported="FALLOCATE_SUPPORTED_$facet"
+	local fstype="${facet}_FSTYPE"
+
+	if [[ -n "${!supported}" ]]; then
+		echo "${!supported}"
+		return 0
+	fi
+	if [[ -z "${!fstype}" ]]; then
+		eval export $fstype=$(facet_fstype $facet)
+	fi
+	if [[ "${!fstype}" != "ldiskfs" ]]; then
+		echo "fallocate on ${!fstype} doesn't consume space" 1>&2
+		return 1
+	fi
+
+	local fa_mode="osd-ldiskfs.$(facet_svc $facet).fallocate_zero_blocks"
+	local mode=$(do_facet $facet $LCTL get_param -n $fa_mode 2>/dev/null |
+		     head -n 1)
+
+	if [[ -z "$mode" ]]; then
+		echo "fallocate not supported on $facet" 1>&2
+		return 1
+	fi
+	eval export $supported="$mode"
+
+	echo ${!supported}
+	return 0
+}
+
+# Check if fallocate supported on OSTs, enable if unset, skip if unavailable.
+# Takes optional facet name as argument.
+function check_fallocate_or_skip()
+{
+	local facet=$1
+
+	check_fallocate_supported $1 || skip "fallocate not supported"
 }
 
 # Check if fallocate supported on OSTs, enable if unset, default mode=0
@@ -10891,16 +10932,15 @@ function unlinkmany() {
 function check_set_fallocate()
 {
 	local new_mode="$1"
-	local osts=$(comma_list $(osts_nodes))
 	local fa_mode="osd-ldiskfs.*.fallocate_zero_blocks"
-	local old_mode=$(do_facet ost1 $LCTL get_param -n $fa_mode 2>/dev/null|
-			 head -n 1)
+	local old_mode="$(check_fallocate_supported)"
 
 	[[ -n "$old_mode" ]] || { echo "fallocate not supported"; return 1; }
 	[[ -z "$new_mode" && "$old_mode" != "-1" ]] &&
 		{ echo "keep default fallocate mode: $old_mode"; return 0; }
 	[[ "$new_mode" && "$old_mode" == "$new_mode" ]] &&
 		{ echo "keep current fallocate mode: $old_mode"; return 0; }
+	local osts=$(comma_list $(osts_nodes))
 
 	stack_trap "do_nodes $osts $LCTL set_param $fa_mode=$old_mode"
 	do_nodes $osts $LCTL set_param $fa_mode=${new_mode:-0} ||
@@ -10910,8 +10950,7 @@ function check_set_fallocate()
 # Check if fallocate supported on OSTs, enable if unset, skip if unavailable
 function check_set_fallocate_or_skip()
 {
-	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
-	check_set_fallocate || skip "need at least 2.13.57 for fallocate"
+	check_set_fallocate || skip "need >= 2.13.57 and ldiskfs for fallocate"
 }
 
 function disable_opencache()
