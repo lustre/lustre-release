@@ -25,11 +25,11 @@ def run():
 		t.configure_lnet()
 		intfs = t.get_available_devs()
 		t.configure_net('tcp', intfs)
-		t.set_max_intf(500)
+		t.set_max_intf(800)
 		cfg = t.get_globals()
-		if not cfg['global']['max_intf'] == 500:
+		if not cfg['global']['max_interfaces'] == 800:
 			return lutfrc(LUTF_TEST_FAIL, "max_intf wasn't set properly",
-					intended_value=500, actual_value=cfg['global']['max_intf'])
+					intended_value=800, actual_value=cfg['global']['max_interfaces'])
 
 		t.unconfigure_lnet()
 		return lutfrc(LUTF_TEST_PASS)

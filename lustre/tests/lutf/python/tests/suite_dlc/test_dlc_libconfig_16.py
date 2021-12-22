@@ -20,9 +20,18 @@ def run():
 	la = agents.keys()
 	if len(la) < 1:
 		return lutfrc(LUTF_TEST_SKIP, "No agents to run test")
-	t = LNetHelpers(target=la[0])
+	t = None
+	for agent in la:
+		t = LNetHelpers(target=agent)
+		if t.can_be_router():
+			break
+		else:
+			t = None
+	if not t:
+		return lutfrc(LUTF_TEST_SKIP,
+			comment="no routers found")
 	try:
-		t = LNetHelpers(target=la[0])
+		t = LNetHelpers(target=agent)
 		t.configure_lnet()
 		t.api_set_routing(True)
 		t.set_exception(False)

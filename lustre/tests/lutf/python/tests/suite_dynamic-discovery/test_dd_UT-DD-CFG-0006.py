@@ -29,7 +29,9 @@ def set_check(target, helper, value):
 	helper.api_yaml_cfg(tmp.get_full_path(), 1, delete=False)
 	tmp.remove()
 	cfg = helper.get_globals()
-	return cfg['global']['max_intf'] == value, cfg
+	# TODO: Why can we set it with max_intf but when we show it we
+	# have to use max_interfaces
+	return cfg['global']['max_interfaces'] == value, cfg
 
 def run():
 	la = agents.keys()

@@ -15,6 +15,8 @@ LNET_NRB_SMALL = LNET_NRB_SMALL_MIN * 4
 LNET_NRB_LARGE_MIN = 256
 LNET_NRB_LARGE = LNET_NRB_LARGE_MIN * 4
 
+LNET_ROUTER_MEMORY = 3221225472
+
 class LNetHelpers(BaseTest):
 	def __init__(self, script=os.path.abspath(__file__),
 		     target=None, exceptions=True):
@@ -35,6 +37,12 @@ class LNetHelpers(BaseTest):
 	def uninit(self):
 		logging.debug('uninit: Uninitializing LNetHelper')
 		lnetconfig.lustre_lnet_config_lib_uninit()
+
+	# a router must have at least 3 GB of RAM
+	def can_be_router(self):
+		if psutil.virtual_memory().total > LNET_ROUTER_MEMORY:
+			return True
+		return False
 
 	def set_exception(self, exception):
 		self.exceptions = exception

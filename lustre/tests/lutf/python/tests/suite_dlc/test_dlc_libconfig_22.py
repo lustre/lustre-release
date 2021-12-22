@@ -33,7 +33,16 @@ def run():
 	#
 	peer1 = TestTraffic(target=la[0])
 	peer2 = TestTraffic(target=la[1])
-	rtr = TestTraffic(target=la[2])
+	rtr = None
+	for agent in la[2:]:
+		rtr = LNetHelpers(target=agent)
+		if rtr.can_be_router():
+			break
+		else:
+			rtr = None
+	if not rtr:
+		return lutfrc(LUTF_TEST_SKIP,
+			comment="no routers found")
 	try:
 		peer1.lh.configure_net('tcp')
 		peer2.lh.configure_net('tcp2')
