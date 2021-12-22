@@ -137,7 +137,6 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			LASSERT(desc->ld_active_tgt_count > 0);
 			desc->ld_active_tgt_count--;
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
-			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_rr.lqr_flags);
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -153,7 +152,6 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			tgt->ltd_connecting = 0;
 			desc->ld_active_tgt_count++;
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
-			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_rr.lqr_flags);
 			CDEBUG(D_CONFIG, "%s: turns active\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -689,7 +687,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	o = lod_qos_declare_object_on(env, lod, ost_idx, true, th);
+	o = lod_qos_declare_object_on(env, lod, ost_idx, (speed > 1), th);
 	if (IS_ERR(o)) {
 		CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 		       ost_idx, (int) PTR_ERR(o));
@@ -1374,6 +1372,20 @@ out:
 	RETURN(rc);
 }
 
+#ifdef HAVE_DOWN_WRITE_KILLABLE
+struct semaphore_timer {
+	struct timer_list timer;
+	struct task_struct *task;
+};
+
+static void process_semaphore_timer(struct timer_list *t)
+{
+	struct semaphore_timer *timeout = cfs_from_timer(timeout, t, timer);
+
+	send_sig(SIGKILL, timeout->task, 1);
+}
+#endif
+
 /**
  * Calculate penalties per-ost in a pool
  *
@@ -1550,9 +1562,30 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
 
+#ifdef HAVE_DOWN_WRITE_KILLABLE
+	if (!down_write_trylock(&lod->lod_ost_descs.ltd_qos.lq_rw_sem)) {
+		struct semaphore_timer timer;
+
+		kernel_sigaction(SIGKILL, SIG_DFL);
+		timer.task = current;
+		cfs_timer_setup(&timer.timer, process_semaphore_timer, 0, 0);
+		mod_timer(&timer.timer, jiffies + cfs_time_seconds(2));
+		/* Do actual allocation, use write lock here. */
+		rc = down_write_killable(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+
+		del_singleshot_timer_sync(&timer.timer);
+		kernel_sigaction(SIGKILL, SIG_IGN);
+		if (rc) {
+			flush_signals(current);
+			QOS_DEBUG("%s: wakeup semaphore on timeout rc = %d\n",
+			          lod2obd(lod)->obd_name, rc);
+			GOTO(out_nolock, rc = -EAGAIN);
+		}
+	}
+#else
 	/* Do actual allocation, use write lock here. */
 	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
-
+#endif
 	/*
 	 * Check again, while we were sleeping on @lq_rw_sem things could
 	 * change.
