@@ -878,6 +878,12 @@ lnet_health_check(struct lnet_msg *msg)
 			if (!lnet_isrouter(lpni))
 				handle_remote_health = false;
 		}
+		/* Do not put my interfaces into peer NI recovery. They should
+		 * be handled with local NI recovery.
+		 */
+		if (handle_remote_health && lpni &&
+		    lnet_nid_to_ni_locked(&lpni->lpni_nid, 0))
+			handle_remote_health = false;
 		lnet_net_unlock(0);
 	}
 

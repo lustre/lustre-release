@@ -1834,7 +1834,7 @@ check_nid_in_recovq() {
 	local found=false
 	local nid=""
 
-	echo "Check recovery queue"
+	echo "Check \"$1\" recovery queue"
 	echo "$recovq"
 	if [[ $(grep -c 'nid-'<<<$recovq) -ne $expect ]]; then
 		error "Expect $expect NIDs found: \"$recovq\""
@@ -2294,6 +2294,46 @@ test_215() {
 	return 0
 }
 run_test 215 "Test lnetctl ping --source option"
+
+test_216() {
+	local rc=0
+
+	reinit_dlc || return $?
+
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
+
+	local nids=( $($LCTL list_nids | xargs echo) )
+
+	do_lnetctl discover ${nids[0]} ||
+		error "Initial discovery failed"
+
+	do_lnetctl ping --source ${nids[0]} ${nids[0]} ||
+		error "Initial ping failed $?"
+
+	do_lnetctl ping --source ${nids[1]} ${nids[1]} ||
+		error "Initial ping failed $?"
+
+	local src dst
+	for src in ${nids[@]}; do
+		for dst in ${nids[@]}; do
+			$LCTL net_drop_add -r 1 -s $src -d $dst -e network_timeout
+		done
+	done
+
+	do_lnetctl ping ${nids[0]} || rc=$?
+
+	$LCTL net_drop_del -a
+
+	[[ $rc -eq 0 ]] &&
+		error "expected ping to fail"
+
+	check_nid_in_recovq "-p" 0
+	check_nid_in_recovq "-l" 1
+
+	return 0
+}
+run_test 216 "Failed send to peer NI owned by local host should not trigger peer NI recovery"
 
 test_230() {
 	# LU-12815
