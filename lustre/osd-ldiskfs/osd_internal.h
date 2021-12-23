@@ -49,6 +49,7 @@
 #include <linux/dirent.h>
 #include <linux/statfs.h>
 #include <linux/bio.h>
+#include <linux/file.h>
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
 
