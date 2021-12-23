@@ -117,14 +117,16 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 	if (cmd && cmd->pc_func) {
 		int rc = cmd->pc_func(argc, argv);
 
-		if (rc == CMD_HELP)
-			fprintf(stderr, "%s\n", cmd->pc_help);
+		if (rc == CMD_HELP) {
+			fprintf(stdout, "%s\n", cmd->pc_help);
+			fflush(stdout);
+		}
 		return rc;
 	}
-	printf("Try interactive use without arguments or use one of:\n");
-	for (cmd = cmds; cmd->pc_name; cmd++)
-		printf("\"%s\"\n", cmd->pc_name);
-	printf("as argument.\n");
+	fprintf(stderr,
+		"%s: '%s' is not a valid command. See '%s --list-commands'.\n",
+		program_invocation_short_name, argv[0],
+		program_invocation_short_name);
 
 	return -1;
 }
@@ -296,8 +298,10 @@ static int execute_line(char *line)
 		i = line2args(line, argv, MAXARGS);
 		rc = cmd->pc_func(i, argv);
 
-		if (rc == CMD_HELP)
-			fprintf(stderr, "%s\n", cmd->pc_help);
+		if (rc == CMD_HELP) {
+			fprintf(stdout, "%s\n", cmd->pc_help);
+			fflush(stdout);
+		}
 
 		break;
 	}
@@ -464,8 +468,8 @@ void Parser_qhelp(int argc, char *argv[])
 	       program_invocation_short_name);
 	printf("Without any parameters, interactive mode is invoked\n");
 
-	printf("Try '%s help <COMMAND>' or '%s --list-commands' for more information\n",
-	       program_invocation_short_name, program_invocation_short_name);
+	printf("Try '%s help <COMMAND>', or '%s --list-commands' for a list of commands.\n",
+		program_invocation_short_name, program_invocation_short_name);
 }
 
 int Parser_help(int argc, char **argv)
