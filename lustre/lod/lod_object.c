@@ -3950,6 +3950,192 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static int lod_get_default_lov_striping(const struct lu_env *env,
+				       struct lod_object *lo,
+				       struct lod_default_striping *lds,
+				       struct dt_allocation_hint *ah);
+
+/**
+ * Helper function to convert compound layout to compound layout with
+ * pool
+ *
+ * Copy lcm_entries array of \a src to \a tgt. Replace lov_user_md_v1
+ * components of \a src with lov_user_md_v3 using \a pool.
+ *
+ * \param[in] src	source layout
+ * \param[in] pool	pool to use in \a tgt
+ * \param[out] tgt	target layout
+ */
+static void embed_pool_to_comp_v1(const struct lov_comp_md_v1 *src,
+				  const char *pool,
+				  struct lov_comp_md_v1 *tgt)
+{
+	size_t shift;
+	struct lov_user_md_v1 *lum;
+	struct lov_user_md_v3 *lum3;
+	struct lov_comp_md_entry_v1 *entry;
+	int i;
+	__u32 offset;
+
+	entry = tgt->lcm_entries;
+	shift = 0;
+	for (i = 0; i < le16_to_cpu(src->lcm_entry_count); i++, entry++) {
+		*entry = src->lcm_entries[i];
+		offset = le32_to_cpu(src->lcm_entries[i].lcme_offset);
+		entry->lcme_offset = cpu_to_le32(offset + shift);
+
+		lum = (struct lov_user_md_v1 *)((char *)src + offset);
+		lum3 = (struct lov_user_md_v3 *)((char *)tgt + offset + shift);
+		*(struct lov_user_md_v1 *)lum3 = *lum;
+		if (lum->lmm_pattern == cpu_to_le32(LOV_PATTERN_MDT)) {
+			lum3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V1);
+		} else {
+			lum3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
+			entry->lcme_size = cpu_to_le32(sizeof(*lum3));
+			strlcpy(lum3->lmm_pool_name, pool,
+				sizeof(lum3->lmm_pool_name));
+			shift += sizeof(*lum3) - sizeof(*lum);
+		}
+	}
+}
+
+/**
+ * Set default striping on a directory.
+ *
+ * Sets specified striping on a directory object unless it matches the default
+ * striping (LOVEA_DELETE_VALUES() macro). In the latter case remove existing
+ * EA. This striping will be used when regular file is being created in this
+ * directory.
+ * If current default striping includes a pool but specifed striping
+ * does not - retain the pool if it exists.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	the striped object
+ * \param[in] buf	buffer with the striping
+ * \param[in] name	name of EA
+ * \param[in] fl	xattr flag (see OSD API description)
+ * \param[in] th	transaction handle
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+static int lod_xattr_set_default_lov_on_dir(const struct lu_env *env,
+					    struct dt_object *dt,
+					    const struct lu_buf *buf,
+					    const char *name, int fl,
+					    struct thandle *th)
+{
+	struct lod_default_striping	*lds = lod_lds_buf_get(env);
+	struct lov_user_md_v1		*v1 = buf->lb_buf;
+	char				 pool[LOV_MAXPOOLNAME + 1];
+	bool				 is_del;
+	int				 rc;
+
+	ENTRY;
+
+	/* get existing striping config */
+	rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds, NULL);
+	if (rc)
+		RETURN(rc);
+
+	memset(pool, 0, sizeof(pool));
+	if (lds->lds_def_striping_set == 1)
+		lod_layout_get_pool(lds->lds_def_comp_entries,
+				    lds->lds_def_comp_cnt, pool,
+				    sizeof(pool));
+
+	is_del = LOVEA_DELETE_VALUES(v1->lmm_stripe_size,
+				     v1->lmm_stripe_count,
+				     v1->lmm_stripe_offset,
+				     NULL);
+
+	/* Retain the pool name if it is not given */
+	if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0' &&
+	    !is_del) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lov_user_md_v3 *v3  = info->lti_ea_store;
+
+		memset(v3, 0, sizeof(*v3));
+		v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
+		v3->lmm_pattern = cpu_to_le32(v1->lmm_pattern);
+		v3->lmm_stripe_count = cpu_to_le32(v1->lmm_stripe_count);
+		v3->lmm_stripe_offset =	cpu_to_le32(v1->lmm_stripe_offset);
+		v3->lmm_stripe_size = cpu_to_le32(v1->lmm_stripe_size);
+
+		strlcpy(v3->lmm_pool_name, pool, sizeof(v3->lmm_pool_name));
+
+		info->lti_buf.lb_buf = v3;
+		info->lti_buf.lb_len = sizeof(*v3);
+		rc = lod_xattr_set_lov_on_dir(env, dt, &info->lti_buf,
+					      name, fl, th);
+	} else if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1 &&
+		   pool[0] != '\0' && !is_del) {
+		/*
+		 * try to retain the pool from default layout if the
+		 * specified component layout does not provide pool
+		 * info explicitly
+		 */
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lov_comp_md_v1 *comp_v1 = buf->lb_buf;
+		struct lov_comp_md_v1 *comp_v1p;
+		struct lov_user_md_v1 *lum;
+		int entry_count;
+		int i;
+		__u32 offset;
+		struct lov_comp_md_entry_v1 *entry;
+		int size;
+
+		entry_count = le16_to_cpu(comp_v1->lcm_entry_count);
+		size = sizeof(*comp_v1) +
+			entry_count * sizeof(comp_v1->lcm_entries[0]);
+		entry = comp_v1->lcm_entries;
+		for (i = 0; i < entry_count; i++, entry++) {
+			offset = le32_to_cpu(entry->lcme_offset);
+			lum = (struct lov_user_md_v1 *)((char *)comp_v1 +
+							offset);
+			if (le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V1)
+				/* the i-th component includes pool info */
+				break;
+			if (lum->lmm_pattern == cpu_to_le32(LOV_PATTERN_MDT))
+				size += sizeof(struct lov_user_md_v1);
+			else
+				size += sizeof(struct lov_user_md_v3);
+		}
+
+		if (i == entry_count) {
+			/*
+			 * re-compose the layout to include the pool for
+			 * each component
+			 */
+			if (info->lti_ea_store_size < size)
+				rc = lod_ea_store_resize(info, size);
+
+			if (rc == 0) {
+				comp_v1p = info->lti_ea_store;
+				*comp_v1p = *comp_v1;
+				comp_v1p->lcm_size = cpu_to_le32(size);
+				embed_pool_to_comp_v1(comp_v1, pool, comp_v1p);
+
+				info->lti_buf.lb_buf = comp_v1p;
+				info->lti_buf.lb_len = size;
+				rc = lod_xattr_set_lov_on_dir(env, dt,
+							      &info->lti_buf,
+							      name, fl, th);
+			}
+		} else {
+			rc = lod_xattr_set_lov_on_dir(env, dt, buf, name, fl,
+						      th);
+		}
+	} else {
+		rc = lod_xattr_set_lov_on_dir(env, dt, buf, name, fl, th);
+	}
+
+	if (lds->lds_def_striping_set == 1 && lds->lds_def_comp_entries != NULL)
+		lod_free_def_comp_entries(lds);
+
+	RETURN(rc);
+}
+
 /**
  * Set default striping on a directory object.
  *
@@ -4756,10 +4942,6 @@ out:
 }
 
 
-static int lod_get_default_lov_striping(const struct lu_env *env,
-					struct lod_object *lo,
-					struct lod_default_striping *lds,
-					struct dt_allocation_hint *ah);
 /**
  * Implementation of dt_object_operations::do_xattr_set.
  *
@@ -4807,59 +4989,8 @@ static int lod_xattr_set(const struct lu_env *env,
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 		   strcmp(name, XATTR_NAME_LOV) == 0) {
-		struct lod_default_striping *lds = lod_lds_buf_get(env);
-		struct lov_user_md_v1 *v1 = buf->lb_buf;
-		char pool[LOV_MAXPOOLNAME + 1];
-		bool is_del;
-
-		/* get existing striping config */
-		rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds,
-						  NULL);
-		if (rc)
-			RETURN(rc);
-
-		memset(pool, 0, sizeof(pool));
-		if (lds->lds_def_striping_set == 1)
-			lod_layout_get_pool(lds->lds_def_comp_entries,
-					    lds->lds_def_comp_cnt, pool,
-					    sizeof(pool));
-
-		is_del = LOVEA_DELETE_VALUES(v1->lmm_stripe_size,
-					     v1->lmm_stripe_count,
-					     v1->lmm_stripe_offset,
-					     NULL);
-
-		/* Retain the pool name if it is not given */
-		if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0' &&
-			!is_del) {
-			struct lod_thread_info *info = lod_env_info(env);
-			struct lov_user_md_v3 *v3  = info->lti_ea_store;
-
-			memset(v3, 0, sizeof(*v3));
-			v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
-			v3->lmm_pattern = cpu_to_le32(v1->lmm_pattern);
-			v3->lmm_stripe_count =
-					cpu_to_le32(v1->lmm_stripe_count);
-			v3->lmm_stripe_offset =
-					cpu_to_le32(v1->lmm_stripe_offset);
-			v3->lmm_stripe_size = cpu_to_le32(v1->lmm_stripe_size);
-
-			strlcpy(v3->lmm_pool_name, pool,
-				sizeof(v3->lmm_pool_name));
-
-			info->lti_buf.lb_buf = v3;
-			info->lti_buf.lb_len = sizeof(*v3);
-			rc = lod_xattr_set_lov_on_dir(env, dt, &info->lti_buf,
-						      name, fl, th);
-		} else {
-			rc = lod_xattr_set_lov_on_dir(env, dt, buf, name,
-						      fl, th);
-		}
-
-		if (lds->lds_def_striping_set == 1 &&
-		    lds->lds_def_comp_entries != NULL)
-			lod_free_def_comp_entries(lds);
-
+		rc = lod_xattr_set_default_lov_on_dir(env, dt, buf, name, fl,
+						      th);
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 		   strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {

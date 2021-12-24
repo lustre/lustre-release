@@ -9392,6 +9392,14 @@ test_65n() {
 	mkdir $MOUNT/$tdir-6 || error "mkdir $tdir-6 failed"
 	local lmv_count=$($LFS getdirstripe -c $MOUNT/$tdir-6)
 	[ $lmv_count -eq 2 ] || error "$tdir-6 stripe count $lmv_count"
+
+	# $dir4 layout includes pool
+	$LFS setstripe -S $((new_def_stripe_size * 2)) $dir4
+	[[ "$pool" = $($LFS getstripe -p -d $dir4) ]] ||
+		error "pool lost on setstripe"
+	$LFS setstripe -E -1 -S $new_def_stripe_size $dir4
+	[[ "$pool" = $($LFS getstripe -p -d $dir4) ]] ||
+		error "pool lost on compound layout setstripe"
 }
 run_test 65n "don't inherit default layout from root for new subdirectories"
 
