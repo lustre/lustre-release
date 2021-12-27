@@ -1180,21 +1180,19 @@ run_test 1i "Quota pools: different limit and usage relations"
 
 # test inode hardlimit
 test_2() {
-	local TESTFILE="$DIR/$tdir/$tfile-0"
-	local LIMIT=$(do_facet mds1 $LCTL get_param -n \
+	local testfile="$DIR/$tdir/$tfile-0"
+	local least_qunit=$(do_facet mds1 $LCTL get_param -n \
 		qmt.$FSNAME-QMT0000.md-0x0.info |
 		awk '/least qunit/{ print $3 }')
-	local L2=$(do_facet mds1 $LCTL get_param -n \
-		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
+	local limit
 
-	[ $L2 -le $LIMIT ] || LIMIT=$L2
+	[ "$SLOW" = "no" ] && limit=$((least_qunit * 2)) ||
+		limit=$((least_qunit * 1024))
 
-	[ "$SLOW" = "no" ] || LIMIT=$((LIMIT * 1024))
-
-	local FREE_INODES=$(mdt_free_inodes 0)
-	echo "$FREE_INODES free inodes on master MDT"
-	[ $FREE_INODES -lt $LIMIT ] &&
-		skip "not enough free inodes $FREE_INODES required $LIMIT"
+	local free_inodes=$(mdt_free_inodes 0)
+	echo "$free_inodes free inodes on master MDT"
+	[ $free_inodes -lt $limit ] &&
+		skip "not enough free inodes $free_inodes required $limit"
 
 	setup_quota_test || error "setup quota failed with $?"
 
@@ -1202,56 +1200,64 @@ test_2() {
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
 	# test for user
-	log "User quota (inode hardlimit:$LIMIT files)"
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+	log "User quota (inode hardlimit:$limit files)"
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $limit $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && error "Used inodes($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curinodes)
+	[ $used -ne 0 ] && error "Used inodes($used) for user $TSTUSR isn't 0."
 
-	log "Create $LIMIT files ..."
-	$RUNAS createmany -m ${TESTFILE} $LIMIT ||
+	log "Create $((limit - least_qunit)) files ..."
+	$RUNAS createmany -m ${testfile} $((limit - least_qunit)) ||
 		quota_error u $TSTUSR "user create failure, but expect success"
+	# it is ok, if it fails on the last qunit
+	$RUNAS createmany -m ${testfile}_yyy $least_qunit || true
 	log "Create out of file quota ..."
-	$RUNAS touch ${TESTFILE}_xxx &&
+	$RUNAS touch ${testfile}_xxx &&
 		quota_error u $TSTUSR "user create success, but expect EDQUOT"
 
 	# cleanup
-	unlinkmany ${TESTFILE} $LIMIT || error "unlinkmany $TESTFILE failed"
-	rm -f ${TESTFILE}_xxx
+	unlinkmany ${testfile} $((limit - least_qunit)) ||
+		error "unlinkmany $testfile failed"
+	# if 2nd createmany got EDQUOT, not all of nodes would be created
+	unlinkmany ${testfile}_yyy $least_qunit || true
+	rm -f ${testfile}_xxx
 	wait_delete_completed
 
-	USED=$(getquota -u $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && quota_error u $TSTUSR \
+	used=$(getquota -u $TSTUSR global curinodes)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
 		"user quota isn't released after deletion"
 	resetquota -u $TSTUSR
 
 	# test for group
 	log "--------------------------------------"
-	log "Group quota (inode hardlimit:$LIMIT files)"
-	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+	log "Group quota (inode hardlimit:$limit files)"
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $limit $DIR ||
 		error "set group quota failed"
 
-	TESTFILE=$DIR/$tdir/$tfile-1
+	testfile=$DIR/$tdir/$tfile-1
 	# make sure the system is clean
-	USED=$(getquota -g $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && error "Used inodes($USED) for group $TSTUSR isn't 0."
+	used=$(getquota -g $TSTUSR global curinodes)
+	[ $used -ne 0 ] && error "Used inodes($used) for group $TSTUSR isn't 0."
 
-	log "Create $LIMIT files ..."
-	$RUNAS createmany -m ${TESTFILE} $LIMIT ||
+	log "Create $limit files ..."
+	$RUNAS createmany -m ${testfile} $((limit - least_qunit)) ||
 		quota_error g $TSTUSR "group create failure, but expect success"
+	$RUNAS createmany -m ${testfile}_yyy $least_qunit ||
 	log "Create out of file quota ..."
-	$RUNAS touch ${TESTFILE}_xxx &&
+	$RUNAS touch ${testfile}_xxx &&
 		quota_error g $TSTUSR "group create success, but expect EDQUOT"
 
 	# cleanup
-	unlinkmany ${TESTFILE} $LIMIT || error "unlinkmany $TESTFILE failed"
-	rm -f ${TESTFILE}_xxx
+	unlinkmany ${testfile} $((limit - least_qunit)) ||
+		error "unlinkmany $testfile failed"
+	unlinkmany ${testfile}_yyy $least_qunit || true
+	rm -f ${testfile}_xxx
 	wait_delete_completed
 
-	USED=$(getquota -g $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && quota_error g $TSTUSR \
+	used=$(getquota -g $TSTUSR global curinodes)
+	[ $used -ne 0 ] && quota_error g $TSTUSR \
 		"user quota isn't released after deletion"
 
 	resetquota -g $TSTUSR
@@ -1260,28 +1266,30 @@ test_2() {
 
 	# test for project
 	log "--------------------------------------"
-	log "Project quota (inode hardlimit:$LIMIT files)"
-	$LFS setquota -p $TSTPRJID -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+	log "Project quota (inode hardlimit:$limit files)"
+	$LFS setquota -p $TSTPRJID -b 0 -B 0 -i 0 -I $limit $DIR ||
 		error "set project quota failed"
 
-	TESTFILE=$DIR/$tdir/$tfile-1
+	testfile=$DIR/$tdir/$tfile-1
 	# make sure the system is clean
-	USED=$(getquota -p $TSTPRJID global curinodes)
-	[ $USED -ne 0 ] &&
-		error "Used inodes($USED) for project $TSTPRJID isn't 0"
+	used=$(getquota -p $TSTPRJID global curinodes)
+	[ $used -ne 0 ] &&
+		error "Used inodes($used) for project $TSTPRJID isn't 0"
 
 	change_project -sp $TSTPRJID $DIR/$tdir
-	log "Create $LIMIT files ..."
-	$RUNAS createmany -m ${TESTFILE} $((LIMIT-1)) || quota_error p \
-		$TSTPRJID "project create fail, but expect success"
+	log "Create $limit files ..."
+	$RUNAS createmany -m ${testfile} $((limit-least_qunit)) ||
+		quota_error p $TSTPRJID \
+			"project create fail, but expect success"
+	$RUNAS createmany -m ${testfile}_yyy $least_qunit || true
 	log "Create out of file quota ..."
-	$RUNAS touch ${TESTFILE}_xxx && quota_error p $TSTPRJID \
+	$RUNAS touch ${testfile}_xxx && quota_error p $TSTPRJID \
 		"project create success, but expect EDQUOT"
 	change_project -C $DIR/$tdir
 
 	cleanup_quota_test
-	USED=$(getquota -p $TSTPRJID global curinodes)
-	[ $USED -eq 0 ] || quota_error p $TSTPRJID \
+	used=$(getquota -p $TSTPRJID global curinodes)
+	[ $used -eq 0 ] || quota_error p $TSTPRJID \
 		"project quota isn't released after deletion"
 
 }
