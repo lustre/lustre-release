@@ -796,7 +796,7 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 	if (rc && !result)
 		result = rc;
 
-	if (result == -EAGAIN && io->ci_ndelay) {
+	if (result == -EAGAIN && io->ci_ndelay && !io->ci_iocb_nowait) {
 		io->ci_need_restart = 1;
 		result = 0;
 	}

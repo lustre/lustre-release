@@ -1577,6 +1577,12 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 #endif
 	}
 
+#ifdef IOCB_NOWAIT
+	io->ci_iocb_nowait = !!(args &&
+				(args->u.normal.via_iocb->ki_flags &
+				 IOCB_NOWAIT));
+#endif
+
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	io->ci_lockreq = CILR_MAYBE;
 	if (ll_file_nolock(file)) {
