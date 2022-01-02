@@ -69,15 +69,15 @@ index cb649f0..fe35251 100644
  };
  
  /*
-@@ -1137,6 +1138,7 @@ struct ext4_inode_info {
- #define EXT4_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
- #define EXT4_MOUNT_NO_AUTO_DA_ALLOC	0x10000	/* No auto delalloc mapping */
- #define EXT4_MOUNT_BARRIER		0x20000 /* Use block barriers */
-+#define EXT4_MOUNT_DIRDATA		0x60000	/* Data in directory entries*/
- #define EXT4_MOUNT_QUOTA		0x40000 /* Some quota option set */
- #define EXT4_MOUNT_USRQUOTA		0x80000 /* "old" user quota,
- 						 * enable enforcement for hidden
-@@ -1843,6 +1845,7 @@ EXT4_FEATURE_INCOMPAT_FUNCS(casefold,		CASEFOLD)
+@@ -1114,6 +1115,7 @@
+  * Mount flags set via mount options or defaults
+  */
+ #define EXT4_MOUNT_NO_MBCACHE		0x00001 /* Do not use mbcache */
++#define EXT4_MOUNT_DIRDATA		0x00002	/* Data in directory entries */
+ #define EXT4_MOUNT_GRPID		0x00004	/* Create files with directory's group */
+ #define EXT4_MOUNT_DEBUG		0x00008	/* Some debugging messages */
+ #define EXT4_MOUNT_ERRORS_CONT		0x00010	/* Continue on errors */
+@@ -1843,6 +1845,7 @@
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
  					 EXT4_FEATURE_INCOMPAT_EA_INODE| \
  					 EXT4_FEATURE_INCOMPAT_MMP | \
