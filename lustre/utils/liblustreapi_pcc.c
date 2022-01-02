@@ -193,6 +193,9 @@ int llapi_pcc_detach_fd(int fd, __u32 option)
 
 	detach.pccd_opt = option;
 	rc = ioctl(fd, LL_IOC_PCC_DETACH, &detach);
+	/* If error, save errno value */
+	rc = rc ? -errno : 0;
+
 	return rc;
 }
 
@@ -228,8 +231,11 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 	 */
 	detach.pccd_fid = *fid;
 	detach.pccd_opt = option;
+
+	/* fd is cached internally, no need to close */
 	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
-	close(fd);
+	rc = rc ? -errno : 0;
+
 	return rc;
 }
 

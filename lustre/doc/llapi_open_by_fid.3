@@ -1,0 +1,51 @@
+.TH llapi_open_by_fid 3 "2022-11-08" "Lustre User API"
+.SH NAME
+llapi_open_by_fid \- open a file descriptor from a File Identifier
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_open_by_fid(const char *" mntpath ", struct lu_fid *" fid ", int " oflag ");"
+.BI "int llapi_open_by_fid_at(int " dir_fd ", struct lu_fid *" fid ", int " oflag ");"
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_open_by_fid()
+opens a file descriptor in the filesystem mountpoint referenced by
+.I path
+for the file identified by
+.IR fid  ,
+using the open file flags in
+.IR oflag
+(as with the normal
+.BR open (2)
+call).
+.PP
+.BR llapi_open_by_fid_at()
+opens a file descriptor on
+.I fid
+in the filesystem referenced by the open file descriptor
+.IR dir_fd .
+This is similar to the
+.IR open_by_handle_at (3)
+system call that can open files by their NFS file handle.  If
+.I dir_fd
+is
+.B AT_CWD
+then the open is performed against the local working directory.
+.SH RETURN VALUES
+.LP
+returns file descriptor number or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EINVAL
+An invalid argument was specified.
+.TP 15
+.SM -ENOMEM
+No memory was available during operation.
+.SH SEE ALSO
+.BR llapi_fid_parse (3),
+.BR llapi_fid2path (3),
+.BR llapi_path2fid (3),
+.BR lustreapi (7),
+.BR open_by_handle_at (3)

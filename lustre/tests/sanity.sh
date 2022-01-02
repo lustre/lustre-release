@@ -15886,7 +15886,6 @@ run_test 154f "get parent fids by reading link ea"
 
 test_154g()
 {
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	[[ $MDS1_VERSION -ge $(version_code 2.6.92) &&
 	   $CLIENT_VERSION -gt $(version_code 2.6.99) ]] ||
 		skip "Need MDS version at least 2.6.92"

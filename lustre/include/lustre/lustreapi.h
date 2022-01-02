@@ -513,7 +513,13 @@ int llapi_fd2parent(int fd, unsigned int linkno, struct lu_fid *parent_fid,
 		    char *name, size_t name_size);
 int llapi_rmfid(const char *path, struct fid_array *fa);
 int llapi_chomp_string(char *buf);
-int llapi_open_by_fid(const char *dir, const struct lu_fid *fid,
+
+struct file_handle;
+
+int llapi_handle_to_fid(struct file_handle **handle, const struct lu_fid *fid);
+int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid,
+			 int open_flags);
+int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 		      int open_flags);
 int llapi_get_version_string(char *version, unsigned int version_size);
 /* llapi_get_version() is deprecated, use llapi_get_version_string() instead */

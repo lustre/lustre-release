@@ -30,7 +30,7 @@
  * Copyright (c) 2018, 2019, Data Direct Networks
  */
 
-/* for O_DIRECTORY */
+/* for O_DIRECTORY and struct file_handle */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -43,6 +43,7 @@
 #include <sys/ioctl.h>
 #include <sys/xattr.h>
 #include <unistd.h>
+#include <sched.h>
 
 #include <libcfs/util/ioctl.h>
 #include <lustre/lustreapi.h>
@@ -222,16 +223,6 @@ int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		goto out;
 	}
 
-	if (*path_or_device == '/')
-		rc = get_root_path(WANT_FD, NULL, &mnt_fd,
-				   (char *)path_or_device, -1, NULL, NULL);
-	else
-		rc = get_root_path(WANT_FD, (char *)path_or_device,
-				   &mnt_fd, NULL, -1, NULL, NULL);
-
-	if (rc < 0)
-		goto out;
-
 	rc = llapi_fid_parse(fidstr, &fid, NULL);
 	if (rc < 0) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
@@ -241,11 +232,20 @@ int llapi_fid2path(const char *path_or_device, const char *fidstr, char *path,
 		goto out;
 	}
 
-	rc = llapi_fid2path_at(mnt_fd, &fid, path, pathlen, recno, linkno);
-out:
-	if (!(mnt_fd < 0))
-		close(mnt_fd);
+	if (path_or_device[0] == '/')
+		rc = get_root_path(WANT_FD, NULL, &mnt_fd,
+				   (char *)path_or_device, -1, NULL, NULL);
+	else
+		rc = get_root_path(WANT_FD, (char *)path_or_device,
+				   &mnt_fd, NULL, -1, NULL, NULL);
 
+	if (rc < 0)
+		goto out;
+
+	/* mnt_fd is cached internally, no need to close it */
+	rc = llapi_fid2path_at(mnt_fd, &fid, path, pathlen, recno, linkno);
+
+out:
 	return rc;
 }
 
@@ -398,6 +398,69 @@ int llapi_path2parent(const char *path, unsigned int linkno,
 }
 
 /**
+ * Convert a struct lu_fid into a struct file_handle
+ *
+ * \param[out] _handle	a newly allocated struct file_handle on success
+ * \param[in]  fid	a Lustre File IDentifier
+ *
+ * \retval		0 on success
+ * \retval		negative errno if an error occured
+ *
+ * On success, the caller is responsible for freeing \p handle.
+ */
+int llapi_fid_to_handle(struct file_handle **_handle, const struct lu_fid *fid)
+{
+	struct lustre_file_handle *lfh;
+	struct file_handle *handle;
+
+	if (!_handle || !fid)
+		return -EINVAL;
+
+	handle = calloc(1, sizeof(*handle) + sizeof(*lfh));
+	if (handle == NULL)
+		return -errno;
+
+	handle->handle_bytes = sizeof(*lfh);
+	handle->handle_type = FILEID_LUSTRE;
+	lfh = (struct lustre_file_handle *)handle->f_handle;
+	/* Only lfh->lfh_child needs to be set */
+	lfh->lfh_child = *fid;
+
+	*_handle = handle;
+	return 0;
+}
+
+/**
+ * Attempt to open a file with a Lustre File IDentifier
+ *
+ * \param[in] lustre_fd		an open file descriptor for an object in lustre
+ * \param[in] fid		a Lustre File IDentifier of the file to open
+ * \param[in] flags		open(2) flags
+ *
+ * \retval			non-negative file descriptor on success
+ * \retval			negative errno if an error occured
+ */
+int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid, int flags)
+{
+	struct file_handle *handle;
+	int fd;
+	int rc;
+
+	rc = llapi_fid_to_handle(&handle, fid);
+	if (rc < 0)
+		return rc;
+
+	/* Sadly open_by_handle_at() only works for root, but this is also the
+	 * case for the original approach of opening $MOUNT/.lustre/FID.
+	 */
+	fd = open_by_handle_at(lustre_fd, handle, flags);
+	rc = -errno;
+	free(handle);
+
+	return fd < 0 ? rc : fd;
+}
+
+/**
  * Attempt to open a file with Lustre file identifier \a fid
  * and return an open file descriptor.
  *
@@ -411,18 +474,17 @@ int llapi_path2parent(const char *path, unsigned int linkno,
 int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 		      int flags)
 {
-	char mntdir[PATH_MAX];
-	char path[PATH_MAX + 64];
-	int rc;
+	int mnt_fd, rc;
 
-	rc = llapi_search_mounts(lustre_dir, 0, mntdir, NULL);
+	/* this will return a cached FD if available, so only one open needed.
+	 * WANT_FD doesn't modify lustre_dir so casting away "const" is OK */
+	rc = get_root_path(WANT_FD, NULL, &mnt_fd, (char *)lustre_dir, 0, NULL,
+			   NULL);
 	if (rc)
-		return rc;
+		goto out;
 
-	snprintf(path, sizeof(path), "%s/.lustre/fid/"DFID, mntdir, PFID(fid));
-	rc = open(path, flags);
-	if (rc < 0)
-		rc = -errno;
-
+	/* "mnt_fd" is cached internally for reuse, no need to close it */
+	rc = llapi_open_by_fid_at(mnt_fd, fid, flags);
+out:
 	return rc;
 }

@@ -44,6 +44,8 @@
 #include <linux/lustre/lustre_kernelcomm.h>
 
 #define MAX_IOC_BUFLEN	8192
+#define MAX_LINE_LEN	 256
+#define MAX_INSTANCE_LEN  32
 
 #define WANT_PATH   0x1
 #define WANT_FSNAME 0x2
