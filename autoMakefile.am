@@ -234,10 +234,20 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 	cp $$rpmbuilddir/SRPMS/$(distdir)-*.src.rpm $(top_srcdir) || exit 1; \
 	rm -rf $$rpmbuilddir
 
+debs_common:
+	export SRC_GIT_HASH=$$(git log --oneline | head -1 | cut -d' ' -f1); \
+	rm -f /usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2; \
+	if test -f /usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2; then \
+		echo "************************************************************" ; \
+		echo "WARNING: move or remove /usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2" ; \
+		echo "************************************************************" ; \
+		exit 1 ; \
+	fi
 # In the debs target, first make sure what's in the changelog reflects
 # the software version.
-debs: undef.h
+debs: undef.h debs_common
 	cp -v debian/changelog.in debian/changelog ; \
+	export SRC_GIT_HASH=$$(git log --oneline | head -1 | cut -d' ' -f1); \
 	lversion=$$(echo @VERSION@ | tr '_' '-'); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
@@ -320,7 +330,7 @@ debs: undef.h
 	pushd debian/tmp/modules-deb && \
 	dpkg -x ../../../../lustre-source_$${version}_all.deb $$(pwd) && \
 	mkdir usr_src/ && \
-	tar -C usr_src/ -xjf usr/src/lustre.tar.bz2 && \
+	tar -C usr_src/ -xjf usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2 && \
 	chmod 755 usr_src/modules/lustre/debian/rules && \
 	mkdir -p usr_share_modass && \
 	ln -s /usr/share/modass/include/ usr_share_modass/ && \
@@ -344,8 +354,9 @@ debs: undef.h
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   debs/
 
-dkms-debs: undef.h
+dkms-debs: undef.h debs_common
 	cp -v debian/changelog.in debian/changelog ; \
+	export SRC_GIT_HASH=$$(git log --oneline | head -1 | cut -d' ' -f1); \
 	lversion=$$(echo @VERSION@ | tr '_' '-'); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
