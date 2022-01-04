@@ -1185,7 +1185,7 @@ relock:
 		 * hash. So find name that matches provided hash.
 		 */
 		if (!find_name_matching_hash(info, &rr->rr_name,
-					     NULL, mc, false))
+					     NULL, mc))
 			GOTO(put_child, rc = -ENOENT);
 	}
 

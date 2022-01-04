@@ -1914,15 +1914,13 @@ lookup:
  * \param lname encoded hash to find
  * \param parent parent object
  * \param child object to search with LinkEA
- * \param force_check true to check hash even if LinkEA has only one entry
  *
  * \retval 1 match found
  * \retval 0 no match found
  * \retval -ev negative errno upon error
  */
 int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
-			    struct mdt_object *parent, struct mdt_object *child,
-			    bool force_check)
+			    struct mdt_object *parent, struct mdt_object *child)
 {
 	/* Here, lname is an encoded hash of on-disk name, and
 	 * client is doing access without encryption key.
@@ -1936,7 +1934,7 @@ int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
 	struct link_ea_header *leh;
 	struct link_ea_entry *lee;
 	struct lu_buf link = { 0 };
-	char *hash = NULL;
+	char *hash;
 	int reclen, count, rc;
 
 	ENTRY;
@@ -1953,21 +1951,15 @@ int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
 	if (rc < 0)
 		RETURN(rc);
 
+	hash = kmalloc(lname->ln_namelen, GFP_NOFS);
+	if (!hash)
+		RETURN(-ENOMEM);
+	rc = critical_decode(lname->ln_name, lname->ln_namelen, hash);
+
 	leh = buf->lb_buf;
-	if (force_check || leh->leh_reccount > 1) {
-		hash = kmalloc(lname->ln_namelen, GFP_NOFS);
-		if (!hash)
-			RETURN(-ENOMEM);
-		rc = critical_decode(lname->ln_name, lname->ln_namelen, hash);
-	}
 	lee = (struct link_ea_entry *)(leh + 1);
 	for (count = 0; count < leh->leh_reccount; count++) {
 		linkea_entry_unpack(lee, &reclen, &name, &pfid);
-		if (!force_check && leh->leh_reccount == 1) {
-			/* if there is only one rec, it has to be it */
-			*lname = name;
-			break;
-		}
 		if (!parent || lu_fid_eq(&pfid, mdt_object_fid(parent))) {
 			lu_buf_check_and_alloc(&link, name.ln_namelen);
 			if (!link.lb_buf)
@@ -2238,7 +2230,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		 * So we need to compare name hash with the one in the request.
 		 */
 		if (!find_name_matching_hash(info, lname, parent,
-					     child, true)) {
+					     child)) {
 			mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
 			mdt_clear_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
 			GOTO(out_child, rc = -ENOENT);
