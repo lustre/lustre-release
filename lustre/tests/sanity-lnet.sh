@@ -250,26 +250,11 @@ setup_netns || error "setup_netns failed with $?"
 
 # Determine the local interface(s) used for LNet
 load_modules || error "Failed to load modules"
-NIDS=( $($LCTL list_nids | xargs echo) )
-if [[ -z ${NIDS[@]} ]]; then
-	error "No NID configured after module load"
-fi
 
 do_lnetctl net show
 ip a
 
-declare -a INTERFACES
-for ((i = 0; i < ${#NIDS[@]}; i++)); do
-	ip=$(sed 's/^\(.*\)@.*$/\1/'<<<${NIDS[i]})
-	INTERFACES[i]=$(ip -o a s |
-			awk '$4 ~ /^'$ip'\//{print $2}')
-	INTERFACES=($(echo "${INTERFACES[@]}" | tr ' ' '\n' | uniq | tr '\n' ' '))
-	if [[ -z ${INTERFACES[i]} ]]; then
-		error "Can't determine interface name for NID ${NIDS[i]}"
-	elif [[ 1 -ne $(wc -w <<<${INTERFACES[i]}) ]]; then
-		error "Found $(wc -w <<<${INTERFACES[i]}) interfaces for NID ${NIDS[i]}. Expect 1"
-	fi
-done
+INTERFACES=( $(lnet_if_list) )
 
 cleanup_lnet || error "Failed to cleanup LNet"
 
@@ -1340,18 +1325,12 @@ function lnet_health_pre() {
 	$LNETCTL set transaction_timeout 10 ||
 		error "Failed to set transaction_timeout $?"
 
-	# Increase recovery interval so we have time to capture health values
-	$LNETCTL set recovery_interval 20 ||
-		error "Failed to set recovery_interval $?"
-
 	RETRY_PARAM=$($LNETCTL global show | awk '/retry_count/{print $NF}')
 	RSND_PRE=$($LNETCTL stats show | awk '/resend_count/{print $NF}')
 	LO_HVAL_PRE=$($LNETCTL net show -v 2 | awk '/health value/{print $NF}' |
 		      xargs echo | sed 's/ /+/g' | bc -l)
 
-	local my_nid=$($LCTL list_nids | head -n 1)
-
-	RMT_HVAL_PRE=$($LNETCTL peer show --nid $my_nid -v 2 2>/dev/null |
+	RMT_HVAL_PRE=$($LNETCTL peer show --nid ${RNIDS[0]} -v 2 2>/dev/null |
 		       awk '/health value/{print $NF}' | xargs echo |
 		       sed 's/ /+/g' | bc -l)
 
@@ -1367,9 +1346,7 @@ function lnet_health_post() {
 		       awk '/health value/{print $NF}' |
 		       xargs echo | sed 's/ /+/g' | bc -l)
 
-	local my_nid=$($LCTL list_nids | head -n 1)
-
-	RMT_HVAL_POST=$($LNETCTL peer show --nid $my_nid -v 2 2>/dev/null |
+	RMT_HVAL_POST=$($LNETCTL peer show --nid ${RNIDS[0]} -v 2 2>/dev/null |
 			awk '/health value/{print $NF}' | xargs echo |
 			sed 's/ /+/g' | bc -l)
 
@@ -1386,6 +1363,9 @@ function lnet_health_post() {
 	echo "Post remote health: $RMT_HVAL_POST"
 
 	restore_lnet_params
+
+	do_lnetctl peer set --health 1000 --all
+	do_lnetctl net set --health 1000 --all
 
 	return 0
 }
@@ -1440,48 +1420,177 @@ function check_remote_health() {
 	return 0
 }
 
+RNODE=""
+RLOADED=false
+NET_DEL_ARGS=""
+RNIDS=( )
+LNIDS=( )
+setup_health_test() {
+	local need_mr=$1
+	local rc=0
+
+	local rnodes=$(remote_nodes_list)
+	[[ -z $rnodes ]] && skip "Need at least 1 remote node"
+
+	cleanup_lnet || error "Failed to cleanup before test execution"
+
+	# Loading modules should configure LNet with the appropriate
+	# test-framework configuration
+	load_modules || error "Failed to load modules"
+
+	LNIDS=( $($LCTL list_nids | xargs echo) )
+
+	RNODE=$(awk '{print $1}' <<<$rnodes)
+	RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
+
+	if [[ -z ${RNIDS[@]} ]]; then
+		do_rpc_nodes $RNODE load_modules_local
+		RLOADED=true
+		RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
+	fi
+
+	[[ ${#LNIDS[@]} -lt 1 ]] &&
+		error "No NIDs configured for local host $HOSTNAME"
+	[[ ${#RNIDS[@]} -lt 1 ]] &&
+		error "No NIDs configured for remote host $RNODE"
+
+	do_lnetctl discover ${RNIDS[0]} ||
+		error "Unable to discover ${RNIDS[0]}"
+
+	local mr=$($LNETCTL peer show --nid ${RNIDS[0]} |
+		   awk '/Multi-Rail/{print $NF}')
+
+	if ${need_mr} && [[ $mr == False ]]; then
+		cleanup_health_test || return $?
+		skip "Need MR peer"
+	fi
+
+	if ( ! ${need_mr} && [[ ${#RNIDS[@]} -gt 1 ]] ) ||
+	   ( ! ${need_mr} && [[ ${#LNIDS[@]} -gt 1 ]] ); then
+		cleanup_health_test || return $?
+		skip "Need SR peer"
+	fi
+
+	if ${need_mr} && [[ ${#RNIDS[@]} -lt 2 ]]; then
+		# Add a second, reachable NID to rnode.
+		local net=${RNIDS[0]}
+
+		net="${net//*@/}1"
+
+		local if=$(do_rpc_nodes --quiet $RNODE lnet_if_list)
+		[[ -z $if ]] &&
+			error "Failed to determine interface for $RNODE"
+
+		do_rpc_nodes $RNODE "$LNETCTL lnet configure"
+		do_rpc_nodes $RNODE "$LNETCTL net add --net $net --if $if" ||
+			rc=$?
+		if [[ $rc -ne 0 ]]; then
+			error "Failed to add interface to $RNODE rc=$?"
+		else
+			RNIDS[1]="${RNIDS[0]}1"
+			NET_DEL_ARGS="--net $net --if $if"
+		fi
+	fi
+
+	if ${need_mr} && [[ ${#LNIDS[@]} -lt 2 ]]; then
+		local net=${LNIDS[0]}
+		net="${net//*@/}1"
+
+		do_lnetctl lnet configure &&
+			do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
+			rc=$?
+		if [[ $rc -ne 0 ]]; then
+			error "Failed to add interface rc=$?"
+		else
+			LNIDS[1]="${LNIDS[0]}1"
+		fi
+	fi
+
+	$LNETCTL net show
+
+	$LNETCTL peer show -v 2 | egrep -e nid -e health
+
+	$LCTL set_param debug=+net
+
+	return 0
+
+}
+
+cleanup_health_test() {
+	local rc=0
+
+	if [[ -n $NET_DEL_ARGS ]]; then
+		do_rpc_nodes $RNODE \
+			"$LNETCTL net del $NET_DEL_ARGS" ||
+			rc=$((rc + $?))
+		NET_DEL_ARGS=""
+	fi
+
+	unload_modules || rc=$?
+
+	if $RLOADED; then
+		do_rpc_nodes $RNODE unload_modules_local ||
+			rc=$((rc + $?))
+		RLOADED=false
+	fi
+
+	[[ $rc -ne 0 ]] &&
+		error "Failed cleanup"
+
+	return $rc
+}
+
+add_health_test_drop_rules() {
+	local hstatus=$1
+	local lnid rnid
+
+	for lnid in ${LNIDS[@]}; do
+		for rnid in ${RNIDS[@]}; do
+			$LCTL net_drop_add -s $lnid -d $rnid -m GET -r 1 -e ${hstatus}
+		done
+	done
+}
+
 # See lnet/lnet/lib-msg.c:lnet_health_check()
 LNET_LOCAL_RESEND_STATUSES="local_interrupt local_dropped local_aborted"
 LNET_LOCAL_RESEND_STATUSES+=" local_no_route local_timeout"
 LNET_LOCAL_NO_RESEND_STATUSES="local_error"
 test_204() {
-	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}" || return $?
-
-	lnet_health_pre || return $?
+	setup_health_test false || return $?
 
 	local hstatus
 	for hstatus in ${LNET_LOCAL_RESEND_STATUSES} \
 		       ${LNET_LOCAL_NO_RESEND_STATUSES}; do
 		echo "Simulate $hstatus"
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		lnet_health_pre || return $?
+
+		add_health_test_drop_rules ${hstatus}
+		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
 		$LCTL net_drop_del -a
+
+		lnet_health_post
+
+		check_no_resends || return $?
+		check_no_local_health || return $?
 	done
 
-	lnet_health_post
-
-	check_no_resends || return $?
-	check_no_local_health || return $?
+	cleanup_health_test || return $?
 
 	return 0
 }
 run_test 204 "Check no health or resends for single-rail local failures"
 
 test_205() {
+	setup_health_test true || return $?
+
 	local hstatus
 	for hstatus in ${LNET_LOCAL_RESEND_STATUSES}; do
-		reinit_dlc || return $?
-		add_net "tcp" "${INTERFACES[0]}" || return $?
-		add_net "tcp1" "${INTERFACES[0]}" || return $?
-
 		echo "Simulate $hstatus"
-		lnet_health_pre
+		lnet_health_pre || return $?
 
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		add_health_test_drop_rules ${hstatus}
+		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
 		$LCTL net_drop_del -a
 
@@ -1492,16 +1601,11 @@ test_205() {
 	done
 
 	for hstatus in ${LNET_LOCAL_NO_RESEND_STATUSES}; do
-		reinit_dlc || return $?
-		add_net "tcp" "${INTERFACES[0]}" || return $?
-		add_net "tcp1" "${INTERFACES[0]}" || return $?
-
 		echo "Simulate $hstatus"
 		lnet_health_pre || return $?
 
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		add_health_test_drop_rules ${hstatus}
+		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
 		$LCTL net_drop_del -a
 
@@ -1511,6 +1615,8 @@ test_205() {
 		check_local_health || return $?
 	done
 
+	cleanup_health_test || return $?
+
 	return 0
 }
 run_test 205 "Check health and resends for multi-rail local failures"
@@ -1519,71 +1625,16 @@ run_test 205 "Check health and resends for multi-rail local failures"
 LNET_REMOTE_RESEND_STATUSES="remote_dropped"
 LNET_REMOTE_NO_RESEND_STATUSES="remote_error remote_timeout"
 test_206() {
-	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}" || return $?
-
-	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
-		error "failed to discover myself"
-
-	lnet_health_pre || return $?
+	setup_health_test false || return $?
 
 	local hstatus
 	for hstatus in ${LNET_REMOTE_RESEND_STATUSES} \
 		       ${LNET_REMOTE_NO_RESEND_STATUSES}; do
 		echo "Simulate $hstatus"
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
-			error "Should have failed"
-		$LCTL net_drop_del -a
-	done
-
-	lnet_health_post
-
-	check_no_resends || return $?
-	check_no_local_health || return $?
-	check_no_remote_health || return $?
-
-	return 0
-}
-run_test 206 "Check no health or resends for single-rail remote failures"
-
-test_207() {
-	local hstatus
-	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
-		reinit_dlc || return $?
-		add_net "tcp" "${INTERFACES[0]}" || return $?
-		add_net "tcp1" "${INTERFACES[0]}" || return $?
-
-		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
-			error "failed to discover myself"
-
-		echo "Simulate $hstatus"
 		lnet_health_pre || return $?
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
-			error "Should have failed"
-		$LCTL net_drop_del -a
 
-		lnet_health_post
-
-		check_resends || return $?
-		check_no_local_health || return $?
-		check_remote_health || return $?
-	done
-	for hstatus in ${LNET_REMOTE_NO_RESEND_STATUSES}; do
-		reinit_dlc || return $?
-		add_net "tcp" "${INTERFACES[0]}" || return $?
-		add_net "tcp1" "${INTERFACES[0]}" || return $?
-
-		do_lnetctl discover $($LCTL list_nids | head -n 1) ||
-			error "failed to discover myself"
-
-		echo "Simulate $hstatus"
-		lnet_health_pre || return $?
-		$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e ${hstatus}
-		$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e ${hstatus}
-		do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+		add_health_test_drop_rules ${hstatus}
+		do_lnetctl discover ${RNIDS[0]} &&
 			error "Should have failed"
 		$LCTL net_drop_del -a
 
@@ -1591,8 +1642,59 @@ test_207() {
 
 		check_no_resends || return $?
 		check_no_local_health || return $?
-		check_remote_health || return $?
+		check_no_remote_health || return $?
 	done
+
+	cleanup_health_test || return $?
+
+	return 0
+}
+run_test 206 "Check no health or resends for single-rail remote failures"
+
+test_207() {
+	setup_health_test true || return $?
+
+	local hstatus
+	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
+		echo "Simulate $hstatus"
+		lnet_health_pre || return $?
+
+		add_health_test_drop_rules ${hstatus}
+
+		do_lnetctl discover ${RNIDS[0]} &&
+			error "Should have failed"
+
+		lnet_health_post
+
+		$LCTL net_drop_del -a
+
+		check_resends || return $?
+		check_no_local_health || return $?
+		check_remote_health || return $?
+		do_lnetctl peer set --health 1000 --all ||
+			error "Unable to reset health rc=$?"
+	done
+	for hstatus in ${LNET_REMOTE_NO_RESEND_STATUSES}; do
+		echo "Simulate $hstatus"
+		lnet_health_pre || return $?
+
+		add_health_test_drop_rules ${hstatus}
+
+		do_lnetctl discover ${RNIDS[0]} &&
+			error "Should have failed"
+
+		lnet_health_post
+
+		$LCTL net_drop_del -a
+
+		check_no_resends || return $?
+		check_no_local_health || return $?
+		check_remote_health || return $?
+		do_lnetctl peer set --health 1000 --all ||
+			error "Unable to reset health rc=$?"
+	done
+
+	cleanup_health_test || return $?
 
 	return 0
 }
@@ -1682,17 +1784,14 @@ test_208() {
 run_test 208 "Test various kernel ip2nets configurations"
 
 test_209() {
-	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}" || return $?
-
-	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
-		error "failed to discover myself"
+	setup_health_test false || return $?
 
 	echo "Simulate network_timeout w/SR config"
 	lnet_health_pre
 
-	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e network_timeout
-	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+	add_health_test_drop_rules network_timeout
+
+	do_lnetctl discover ${RNIDS[0]} &&
 		error "Should have failed"
 	$LCTL net_drop_del -a
 
@@ -1702,19 +1801,17 @@ test_209() {
 	check_no_local_health || return $?
 	check_no_remote_health || return $?
 
-	reinit_dlc || return $?
-	add_net "tcp" "${INTERFACES[0]}" || return $?
-	add_net "tcp1" "${INTERFACES[0]}" || return $?
+	cleanup_health_test || return $?
 
-	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
-		error "failed to discover myself"
+	setup_health_test true || return $?
 
 	echo "Simulate network_timeout w/MR config"
+
 	lnet_health_pre
 
-	$LCTL net_drop_add -s *@tcp -d *@tcp -m GET -r 1 -e network_timeout
-	$LCTL net_drop_add -s *@tcp1 -d *@tcp1 -m GET -r 1 -e network_timeout
-	do_lnetctl discover $($LCTL list_nids | head -n 1) &&
+	add_health_test_drop_rules network_timeout
+
+	do_lnetctl discover ${RNIDS[0]} &&
 		error "Should have failed"
 	$LCTL net_drop_del -a
 
@@ -1723,6 +1820,8 @@ test_209() {
 	check_no_resends || return $?
 	check_local_health || return $?
 	check_remote_health || return $?
+
+	cleanup_health_test || return $?
 
 	return 0
 }
@@ -2042,8 +2141,6 @@ function check_ni_status() {
 }
 
 test_214() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	cleanup_netns || error "Failed to cleanup netns before test execution"
 	cleanup_lnet || error "Failed to unload modules before test execution"
 
@@ -2053,7 +2150,7 @@ test_214() {
 
 	reinit_dlc || return $?
 
-	add_net "tcp" "eth0" || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
 	add_net "tcp" "$FAKE_IF" || return $?
 
 	local nid1=$(lctl list_nids | head -n 1)
@@ -2116,15 +2213,13 @@ ni_stat_changed() {
 }
 
 test_215() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
-
 	cleanup_netns || error "Failed to cleanup netns before test execution"
 	cleanup_lnet || error "Failed to unload modules before test execution"
 
 	reinit_dlc || return $?
 
-	add_net "tcp1" "eth0" || return $?
-	add_net "tcp2" "eth0" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
+	add_net "tcp2" "${INTERFACES[0]}" || return $?
 
 	local nid1=$($LCTL list_nids | head -n 1)
 	local nid2=$($LCTL list_nids | tail --lines 1)
@@ -2252,10 +2347,9 @@ run_test 230 "Test setting conns-per-peer"
 
 ### Test that linux route is added for each ni
 test_250() {
-	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
 	reinit_dlc || return $?
-	add_net "tcp" "eth0" || return $?
-	ip route show table eth0 | grep -q "eth0"
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	ip route show table ${INTERFACES[0]} | grep -q "${INTERFACES[0]}"
 }
 run_test 250 "test that linux routes are added"
 

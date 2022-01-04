@@ -6914,6 +6914,33 @@ local_addr_list() {
 	ip addr | awk '/inet / {print $2}' | awk -F/ '{print $1}'
 }
 
+# Description:
+#   Returns list of interfaces configured for LNet
+lnet_if_list() {
+	local nids=( $($LCTL list_nids | xargs echo) )
+
+	[[ -z ${nids[@]} ]] &&
+		return 0
+
+	declare -a INTERFACES
+
+	for ((i = 0; i < ${#nids[@]}; i++)); do
+		ip=$(sed 's/^\(.*\)@.*$/\1/'<<<${nids[i]})
+		INTERFACES[i]=$(ip -o a s |
+				awk '$4 ~ /^'$ip'\//{print $2}')
+		INTERFACES=($(echo "${INTERFACES[@]}" | tr ' ' '\n' | uniq | tr '\n' ' '))
+		if [[ -z ${INTERFACES[i]} ]]; then
+			error "Can't determine interface name for NID ${nids[i]}"
+		elif [[ 1 -ne $(wc -w <<<${INTERFACES[i]}) ]]; then
+			error "Found $(wc -w <<<${INTERFACES[i]}) interfaces for NID ${nids[i]}. Expect 1"
+		fi
+	done
+
+	echo "${INTERFACES[@]}"
+
+	return 0
+}
+
 is_local_addr() {
 	local addr=$1
 	# Cache address list to avoid mutiple execution of local_addr_list
@@ -7747,6 +7774,10 @@ get_clientmgc_proc_path() {
 }
 
 do_rpc_nodes () {
+	local quiet
+
+	[[ "$1" == "--quiet" || "$1" == "-q" ]] && quiet="$1" && shift
+
 	local list=$1
 	shift
 
@@ -7756,7 +7787,7 @@ do_rpc_nodes () {
 	local LIBPATH="/usr/lib/lustre/tests:/usr/lib64/lustre/tests:"
 	local TESTPATH="$RLUSTRE/tests:"
 	local RPATH="PATH=${TESTPATH}${LIBPATH}${PATH}:/sbin:/bin:/usr/sbin:"
-	do_nodesv $list "${RPATH} NAME=${NAME} bash rpc.sh $@ "
+	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} bash rpc.sh $@ "
 }
 
 wait_clients_import_state () {
