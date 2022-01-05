@@ -202,6 +202,9 @@ run_IOR() {
 		skip_env "IOR is not installed, skipping"
 	fi
 
+	# Requires at least 20GB (roughly)
+	(( MDSSIZE >= 20000000 )) || skip "Require MDS of at least 20GB"
+
 	local IOR=$(which IOR)
 	local iter=$((DP_FNUM / DP_NUM))
 	local direct=""
