@@ -830,9 +830,6 @@ static int vvp_io_read_start(const struct lu_env *env,
 			 "Read ino %lu, %zu bytes, offset %lld, size %llu\n",
 			 inode->i_ino, cnt, pos, i_size_read(inode));
 
-	/* turn off the kernel's read-ahead */
-	vio->vui_fd->fd_file->f_ra.ra_pages = 0;
-
 	/* initialize read-ahead window once per syscall */
 	if (!vio->vui_ra_valid) {
 		vio->vui_ra_valid = true;
