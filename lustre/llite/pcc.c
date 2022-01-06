@@ -2374,6 +2374,8 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	} else {
 		pccf->pccf_file = pcc_file;
 		pccf->pccf_type = pcci->pcci_type;
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_HIT_BYTES,
+				   inode->i_size);
 	}
 
 out_unlock:
@@ -3721,6 +3723,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 	struct pcc_dataset *dataset;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_super *super = ll_i2pccs(inode);
+	ktime_t kstart = ktime_get();
 	struct pcc_inode *pcci;
 	struct dentry *dentry;
 	int rc;
@@ -3762,7 +3765,10 @@ out_unlock:
 		revert_creds(old_cred);
 		dput(dentry);
 	} else {
-		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH, 1);
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH,
+				   ktime_us_delta(ktime_get(), kstart));
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH_BYTES,
+				   inode->i_size);
 	}
 out_dataset_put:
 	pcc_dataset_put(dataset);
@@ -3911,6 +3917,7 @@ static int pcc_readonly_attach(struct file *file,
 	const struct cred *old_cred;
 	struct pcc_dataset *dataset;
 	struct pcc_inode *pcci = NULL;
+	ktime_t kstart = ktime_get();
 	struct dentry *dentry;
 	bool attached = false;
 	bool unlinked = false;
@@ -3987,7 +3994,10 @@ out_put_unlock:
 		else
 			dput(dentry);
 	} else {
-		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH, 1);
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH,
+				   ktime_us_delta(ktime_get(), kstart));
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_PCC_ATTACH_BYTES,
+				   inode->i_size);
 	}
 	revert_creds(old_cred);
 	pcc_inode_unlock(inode);

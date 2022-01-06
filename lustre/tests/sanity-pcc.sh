@@ -4334,6 +4334,42 @@ test_102() {
 }
 run_test 102 "PCC-RO should not hange for io_uring I/O engine"
 
+test_203() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local bs="1024"
+
+	setup_loopdev client $loopfile $mntpt 10
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	$LCTL pcc list $MOUNT
+	clear_stats llite.*.stats
+
+	dd if=/dev/zero of=$file bs=$bs count=1 ||
+		error "Write $file failed"
+
+	cat $file > /dev/null
+	cat $file > /dev/null
+
+	echo "==== stats ===="
+	$LCTL get_param llite.*.stats
+
+	local attach_num=$(calc_stats llite.*.stats pcc_attach_bytes)
+	local attach_bytes=$(calc_stats_sum llite.*.stats pcc_attach_bytes)
+	local hit_num=$(calc_stats llite.*.stats pcc_hit_bytes)
+	local hit_bytes=$(calc_stats_sum llite.*.stats pcc_hit_bytes)
+	echo "attach_num: $attach_num, attach_bytes: $attach_bytes, hit_num: $hit_num, hit_bytes: $hit_bytes"
+
+	(( $attach_num == 1 )) || error "wrong attach number: $attach_num"
+	(( $attach_bytes == $bs )) || error "wrong attach bytes: $attach_bytes"
+	(( $hit_num == 2 )) || error "wrong hit number: $hit_num"
+	(( $hit_bytes == $((2 * bs)) )) || error "wrong hit bytes: $hit_bytes"
+}
+run_test 203 "Verify attach/hit bytes statistics data"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

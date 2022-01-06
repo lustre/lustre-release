@@ -8379,7 +8379,15 @@ calc_stats() {
 	local stat="$2"
 
 	lctl get_param -n $paramfile |
-		awk '/^'$stat'/ { sum += $2 } END { printf("%0.0f", sum) }'
+		awk '/^'$stat' / { sum += $2 } END { printf("%0.0f", sum) }'
+}
+
+calc_stats_sum() {
+	local paramfile="$1"
+	local stat="$2"
+
+	lctl get_param -n $paramfile |
+		awk '/^'$stat' / { sum += $7 } END { printf("%0.0f", sum) }'
 }
 
 calc_sum () {

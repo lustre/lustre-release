@@ -2568,6 +2568,9 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_PCC_ATTACH,  LPROCFS_TYPE_REQS,	"pcc_attach" },
 	{ LPROC_LL_PCC_DETACH,  LPROCFS_TYPE_REQS,	"pcc_detach" },
 	{ LPROC_LL_PCC_AUTOAT, LPROCFS_TYPE_REQS,	"pcc_auto_attach" },
+	{ LPROC_LL_PCC_HIT_BYTES, LPROCFS_TYPE_BYTES_FULL, "pcc_hit_bytes" },
+	{ LPROC_LL_PCC_ATTACH_BYTES, LPROCFS_TYPE_BYTES_FULL,
+		"pcc_attach_bytes" },
 	/* hybrid IO switch from buffered I/O (BIO) to direct I/O (DIO) */
 	{ LPROC_LL_HYBRID_NOSWITCH, LPROCFS_TYPE_REQS, "hybrid_noswitch" },
 	{ LPROC_LL_HYBRID_WRITESIZE_SWITCH, LPROCFS_TYPE_REQS,
