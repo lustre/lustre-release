@@ -502,14 +502,10 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #define page_tree i_pages
 #define ll_xa_lock_irqsave(lockp, flags) xa_lock_irqsave(lockp, flags)
 #define ll_xa_unlock_irqrestore(lockp, flags) xa_unlock_irqrestore(lockp, flags)
-#define ll_xa_lock(lockp) xa_lock(lockp)
-#define ll_xa_unlock(lockp) xa_unlock(lockp)
 #else
 #define i_pages tree_lock
 #define ll_xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
 #define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
-#define ll_xa_lock(lockp) spin_lock(lockp)
-#define ll_xa_unlock(lockp) spin_unlock(lockp)
 #endif
 
 #ifndef HAVE_LOCK_PAGE_MEMCG

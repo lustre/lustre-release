@@ -265,22 +265,8 @@ struct lu_device_type vvp_device_type = {
         .ldt_ctx_tags = LCT_CL_THREAD
 };
 
-#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
 unsigned int (*vvp_account_page_dirtied)(struct page *page,
 					 struct address_space *mapping);
-
-unsigned int ll_account_page_dirtied(struct page *page,
-				     struct address_space *mapping)
-{
-	/* must use __set_page_dirty, which means unlocking and
-	 * relocking, which hurts performance.
-	 */
-	ll_xa_unlock(&mapping->i_pages);
-	__set_page_dirty(page, mapping, 0);
-	ll_xa_lock(&mapping->i_pages);
-	return 0;
-}
-#endif
 
 /**
  * A mutex serializing calls to vvp_inode_fini() under extreme memory
@@ -299,13 +285,13 @@ int vvp_global_init(void)
 		goto out_kmem;
 
 #ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
+#ifdef HAVE_KALLSYMS_LOOKUP_NAME
 	/*
 	 * Kernel v5.2-5678-gac1c3e4 no longer exports account_page_dirtied
 	 */
 	vvp_account_page_dirtied = (void *)
 		cfs_kallsyms_lookup_name("account_page_dirtied");
-	if (!vvp_account_page_dirtied)
-		vvp_account_page_dirtied = ll_account_page_dirtied;
+#endif
 #endif
 
 	return 0;

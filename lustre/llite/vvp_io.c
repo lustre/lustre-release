@@ -996,12 +996,14 @@ static inline void ll_account_page_dirtied(struct page *page,
 void vvp_set_pagevec_dirty(struct pagevec *pvec)
 {
 	struct page *page = pvec->pages[0];
+	int count = pagevec_count(pvec);
+	int i;
+#ifdef HAVE_KALLSYMS_LOOKUP_NAME
 	struct address_space *mapping = page->mapping;
 	unsigned long flags;
 	unsigned long skip_pages = 0;
-	int count = pagevec_count(pvec);
 	int dirtied = 0;
-	int i;
+#endif
 
 	ENTRY;
 
@@ -1010,6 +1012,15 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		 "mapping must be set. page %p, page->private (cl_page) %p\n",
 		 page, (void *) page->private);
 
+/* kernels without HAVE_KALLSYMS_LOOKUP_NAME also don't have account_dirty_page
+ * exported, and if we can't access that symbol, we can't do page dirtying in
+ * batch (taking the xarray lock only once) so we just fall back to a looped
+ * call to __set_page_dirty_nobuffers
+ */
+#ifndef HAVE_KALLSYMS_LOOKUP_NAME
+	for (i = 0; i < count; i++)
+		__set_page_dirty_nobuffers(pvec->pages[i]);
+#else
 	for (i = 0; i < count; i++) {
 		page = pvec->pages[i];
 
@@ -1059,7 +1070,7 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 		/* !PageAnon && !swapper_space */
 		__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
 	}
-
+#endif
 	EXIT;
 }
 
