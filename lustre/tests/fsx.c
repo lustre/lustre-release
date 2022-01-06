@@ -136,8 +136,7 @@ jmp_buf jmpbuf;
 #define OP_MAX_FULL		9
 
 #define OP_SKIPPED 101
-/* _GNU_SOURCE defines O_DIRECT as 14th bit which is 0x4000(16384) */
-#define OP_DIRECT  16384
+#define OP_DIRECT O_DIRECT
 
 #ifndef FALLOC_FL_PUNCH_HOLE
 #define FALLOC_FL_PUNCH_HOLE 0x02 /* de-allocates range */
@@ -583,9 +582,7 @@ open_test_files(char **argv, int argc)
 
 	for (i = 0, tf = test_files; i < num_test_files; i++, tf++) {
 		tf->path = argv[i];
-#ifdef O_DIRECT
 		tf->o_direct = (random() % (o_direct + 1)) ? OP_DIRECT : 0;
-#endif
 		tf->fd = open(tf->path,
 			      O_RDWR | (lite ? 0 : O_CREAT | O_TRUNC) |
 			      tf->o_direct, 0666);
@@ -1255,9 +1252,7 @@ docloseopen(void)
 		return;
 
 	tf = get_tf();
-#ifdef O_DIRECT
 	direct = (random() % (o_direct + 1)) ? OP_DIRECT : 0;
-#endif
 	log4(OP_CLOSEOPEN + direct, file_size, (unsigned int)file_size, 0);
 
 	if (fd_policy != FD_SINGLE)
@@ -1475,9 +1470,7 @@ usage(void)
 "	-S seed: for random # generator (default 1) 0 gets timestamp\n"
 /* OSX: -T datasize: atomic data element write size [1,2,4] (default 4)\n\ */
 "	-W: mapped write operations DISabled\n"
-#ifdef O_DIRECT
 "	-Z[P]: O_DIRECT file IO [1 in P chance for each open] (default off)\n"
-#endif
 "	fname: this filename is REQUIRED (no default)\n",
 	page_size);
 	exit(90);
@@ -1693,12 +1686,10 @@ main(int argc, char **argv)
 				fprintf(stdout, "mapped writes DISABLED\n");
 			break;
 		case 'Z':
-#ifdef O_DIRECT
 			if (optarg)
 				o_direct = getnum(optarg, &endp);
 			if (!optarg || o_direct == 0)
 				o_direct = 1;
-#endif
 			break;
 		default:
 			usage();

@@ -24,8 +24,8 @@ ALWAYS_EXCEPT+="                28 "
 
 # skip tests for PPC until they are fixed
 if [[ $(uname -m) = ppc64 ]]; then
-	# bug number:    LU-11597 LU-11787
-	ALWAYS_EXCEPT+=" 16a      71a"
+	# bug number:    LU-11787
+	ALWAYS_EXCEPT+=" 71a"
 fi
 
 if [ $mds1_FSTYPE = "zfs" ]; then
@@ -402,9 +402,9 @@ test_16a() {
 		error "fsx failed"
 	rm -f $file1
 
-	# O_DIRECT reads and writes must be aligned to the device block size.
-	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r 4096 \
-		-w 4096 $file1 $file2 || error "fsx with O_DIRECT failed."
+	# O_DIRECT reads and writes must be aligned to the PAGE_SIZE.
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r $PAGE_SIZE \
+		-w $PAGE_SIZE $file1 $file2 || error "fsx with O_DIRECT failed."
 }
 run_test 16a "$FSXNUM iterations of dual-mount fsx"
 
