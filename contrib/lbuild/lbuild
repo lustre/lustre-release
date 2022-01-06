@@ -1684,7 +1684,6 @@ build_ofed() {
     mkdir ${kib_rpm}-devel
     cd ${kib_rpm}-devel
 
-	o2ib_location="$(pwd)/usr/src/${kib_prefix}"
 	case $ofed_type in
 		mlnx) # Prior to MOFED 3.1, we had to use build_kernel_ib=1 to
 		      # build devel rpm. not so after 3.1
@@ -1693,7 +1692,6 @@ build_ofed() {
 			else
 				rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-${ofed_version%%-*}-*.rpm)
 			fi
-			o2ib_location="${o2ib_location}/default"
 			;;
 		ofa) # Prior to OFA 3.18, we had to use build_kernel_ib=1 during configure,
 		     # not so after 3.18
@@ -1707,11 +1705,12 @@ build_ofed() {
 			rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-*.rpm)
 			;;
 	esac
-
 	if ! rpm2cpio < $rpm | cpio -id; then
 		fatal 1 "could not unpack the $rpm."
 	fi
-	CONFIGURE_FLAGS="--with-o2ib=${o2ib_location} ${CONFIGURE_FLAGS}"
+	# find the path (this might not work for ofa and ifs)
+	o2ib_location=$(find $(pwd)/usr/src/${kib_prefix} -type d -name ofed_scripts)
+	CONFIGURE_FLAGS="--with-o2ib=$(dirname ${o2ib_location}) ${CONFIGURE_FLAGS}"
 	popd >/dev/null
 
 }
