@@ -1,6 +1,5 @@
 # Administration utilities Makefile
 
-PYTHON_BIN=python$(PYTHON_VERSION)
 SWIG_COMPFLAGS=-g -Wall -fPIC -c
 SWIG_FLAGS=-D__x86_64__
 SWIG_INCLUDES=-I/usr/include -I/usr/include/linux -I/usr/include/c++/4.4.4/tr1 -I/usr/include/c++/4.4.4/cstdbool
@@ -54,9 +53,9 @@ lutf_DEPENDENCIES := _clutf_agent.so _clutf_global.so dlc_glue
 
 update_swig_intf :
 	echo "updating lutf_agent.i"
-	$(PYTHON_BIN) $(UPDATE_LUTF_SWIG_INTF) $(GEN_SWIG_TEMPLATES) $(LUTF_AGENT_SWG)
+	$(PYTHON) $(UPDATE_LUTF_SWIG_INTF) $(GEN_SWIG_TEMPLATES) $(LUTF_AGENT_SWG)
 	echo "updating lutf_global.i"
-	$(PYTHON_BIN) $(UPDATE_LUTF_SWIG_INTF) $(GEN_SWIG_TEMPLATES) $(LUTF_GLOBAL_SWG)
+	$(PYTHON) $(UPDATE_LUTF_SWIG_INTF) $(GEN_SWIG_TEMPLATES) $(LUTF_GLOBAL_SWG)
 
 lutf_agent_wrap.c : update_swig_intf
 	echo "generating lutf_agent_warp.c"
@@ -98,7 +97,7 @@ liblutf_connect.so :
 
 dlc_glue:
 	echo "generating liblnetconfig.i"
-	$(PYTHON_BIN) $(GEN_SWIG_INTF_PY) $(top_builddir)
+	$(PYTHON) $(GEN_SWIG_INTF_PY) $(top_builddir)
 	echo "generating liblndconfig_wrap.c"
 	$(SWIG) -python $(DLC_SWIG_FLAGS) $(DLC_SWIG_INCLUDES) $(LNETCONFIG_I)
 	echo "building liblnetconfig_wrap.c"
