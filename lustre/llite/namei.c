@@ -939,6 +939,9 @@ getctx:
 #ifdef CONFIG_LL_ENCRYPTION
 			rc = lsi->lsi_cop->get_context(ref_inode,
 						       ctx, ctx_size);
+#elif defined(HAVE_LUSTRE_CRYPTO)
+			rc = ref_inode->i_sb->s_cop->get_context(ref_inode,
+								 ctx, ctx_size);
 #else
 			rc = -ENODATA;
 #endif

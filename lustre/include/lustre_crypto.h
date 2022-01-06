@@ -120,6 +120,8 @@ static inline int critical_decode(const u8 *src, int len, char *dst)
 #define llcrypt_symlink_data	fscrypt_symlink_data
 #define llcrypt_dummy_context_enabled(inode) \
 	fscrypt_dummy_context_enabled(inode)
+#define llcrypt_require_key(inode)	\
+	fscrypt_require_key(inode)
 #define llcrypt_has_encryption_key(inode) fscrypt_has_encryption_key(inode)
 #define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
 	fscrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)
