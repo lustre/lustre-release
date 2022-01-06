@@ -1,0 +1,55 @@
+diff -wur a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -4766,8 +4766,9 @@ void ext4_set_inode_flags(struct inod
+ 	if (init && ext4_should_enable_dax(inode))
+ 		new_fl |= S_DAX;
+ 
+-	if (flags & EXT4_ENCRYPT_FL)
++	if (flags & EXT4_ENCRYPT_FL &&
++	    unlikely(test_opt(inode->i_sb, DIRDATA) != EXT4_MOUNT_DIRDATA))
+ 		new_fl |= S_ENCRYPTED;
+ 	inode_set_flags(inode, new_fl,
+ 			S_SYNC|S_APPEND|S_IMMUTABLE|S_NOATIME|S_DIRSYNC|S_DAX|
+ 			S_ENCRYPTED);
+@@ -5753,8 +5757,9 @@ int ext4_getattr(const struct path *p
+ 		stat->attributes |= STATX_ATTR_APPEND;
+ 	if (flags & EXT4_COMPR_FL)
+ 		stat->attributes |= STATX_ATTR_COMPRESSED;
+-	if (flags & EXT4_ENCRYPT_FL)
++	if (flags & EXT4_ENCRYPT_FL &&
++	    unlikely(test_opt(inode->i_sb, DIRDATA) != EXT4_MOUNT_DIRDATA))
+ 		stat->attributes |= STATX_ATTR_ENCRYPTED;
+ 	if (flags & EXT4_IMMUTABLE_FL)
+ 		stat->attributes |= STATX_ATTR_IMMUTABLE;
+ 	if (flags & EXT4_NODUMP_FL)
+diff -wur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -654,6 +654,7 @@
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_get);
+ 
+ static int
+ ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
+@@ -2413,13 +2415,18 @@
+ 			ext4_handle_sync(handle);
+ 	}
+ 
++	if (!error && name_index == EXT4_XATTR_INDEX_ENCRYPTION &&
++	    strcmp(name, "c") == 0)
++		EXT4_I(inode)->i_flags |= EXT4_ENCRYPT_FL;
++
+ cleanup:
+ 	brelse(is.iloc.bh);
+ 	brelse(bs.bh);
+ 	ext4_write_unlock_xattr(inode, &no_expand);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_set_handle);
+ 
+ int ext4_xattr_set_credits(struct inode *inode, size_t value_len,
+ 			    bool is_create, int *credits)
+ 

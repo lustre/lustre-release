@@ -1198,6 +1198,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_USER_PREFIX       "user."
 #define XATTR_TRUSTED_PREFIX    "trusted."
 #define XATTR_SECURITY_PREFIX   "security."
+#define XATTR_ENCRYPTION_PREFIX	"encryption."
 
 #define XATTR_NAME_SOM		"trusted.som"
 #define XATTR_NAME_LOV          "trusted.lov"
@@ -1213,7 +1214,8 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_DUMMY	"trusted.dummy"
 #define XATTR_NAME_PROJID	"trusted.projid"
 
-#define LL_XATTR_NAME_ENCRYPTION_CONTEXT XATTR_SECURITY_PREFIX"c"
+#define LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD XATTR_SECURITY_PREFIX"c"
+#define LL_XATTR_NAME_ENCRYPTION_CONTEXT XATTR_ENCRYPTION_PREFIX"c"
 
 #define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_ns"
 #define XATTR_NAME_MAX_LEN	32 /* increase this, if there is longer name. */

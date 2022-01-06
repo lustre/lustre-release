@@ -3745,7 +3745,7 @@ trace_cmd() {
 	[ $? -eq 0 ] || error "$cmd failed"
 
 	if [ -z "$MATCHING_STRING" ]; then
-		$LCTL dk | grep -E "get xattr 'security.c'|get xattrs"
+		$LCTL dk | grep -E "get xattr 'encryption.c'|get xattrs"
 	else
 		$LCTL dk | grep -E "$MATCHING_STRING"
 	fi
@@ -3774,7 +3774,7 @@ test_49() {
 	trace_cmd cat $dirname/f1
 	dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
 	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
-	MATCHING_STRING="get xattr 'security.c'" \
+	MATCHING_STRING="get xattr 'encryption.c'" \
 		trace_cmd $TRUNCATE $dirname/f1 10240
 	trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
 	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
@@ -3801,7 +3801,7 @@ test_49() {
 		trace_cmd cat $dirname/f1
 		dd if=/dev/zero of=$dirname/f1 bs=1M count=10 conv=fsync
 		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
-		MATCHING_STRING="get xattr 'security.c'" \
+		MATCHING_STRING="get xattr 'encryption.c'" \
 			trace_cmd $TRUNCATE $dirname/f1 10240
 		trace_cmd $LFS setstripe -E -1 -S 4M $dirname/f2
 		sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
@@ -4435,10 +4435,14 @@ test_57() {
 	mkdir $DIR/$tdir
 	mkdir $testdir
 	setfattr -n security.c -v myval $testdir &&
-		error "setting xattr on $testdir should have failed (1)"
+		error "setting xattr on $testdir should have failed (1.1)"
+	setfattr -n encryption.c -v myval $testdir &&
+		error "setting xattr on $testdir should have failed (1.2)"
 	touch $testfile
 	setfattr -n security.c -v myval $testfile &&
-		error "setting xattr on $testfile should have failed (1)"
+		error "setting xattr on $testfile should have failed (1.1)"
+	setfattr -n encryption.c -v myval $testfile &&
+		error "setting xattr on $testfile should have failed (1.2)"
 
 	rm -rf $DIR/$tdir
 
@@ -4448,28 +4452,48 @@ test_57() {
 	mkdir $testdir
 	if [ $(getfattr -n security.c $testdir 2>&1 |
 	       grep -ci "Operation not permitted") -eq 0 ]; then
-		error "getting xattr on $testdir should have failed"
+		error "getting xattr on $testdir should have failed (1.1)"
+	fi
+	if [ $(getfattr -n encryption.c $testdir 2>&1 |
+	       grep -ci "Operation not supported") -eq 0 ]; then
+		error "getting xattr on $testdir should have failed (1.2)"
 	fi
 	getfattr -d -m - $testdir 2>&1 | grep security\.c &&
 		error "listing xattrs on $testdir should not expose security.c"
+	getfattr -d -m - $testdir 2>&1 | grep encryption\.c &&
+	       error "listing xattrs on $testdir should not expose encryption.c"
 	if [ $(setfattr -n security.c -v myval $testdir 2>&1 |
 	       grep -ci "Operation not permitted") -eq 0 ]; then
-		error "setting xattr on $testdir should have failed (2)"
+		error "setting xattr on $testdir should have failed (2.1)"
+	fi
+	if [ $(setfattr -n encryption.c -v myval $testdir 2>&1 |
+	       grep -ci "Operation not supported") -eq 0 ]; then
+		error "setting xattr on $testdir should have failed (2.2)"
 	fi
 	touch $testfile
 	if [ $(getfattr -n security.c $testfile 2>&1 |
 	       grep -ci "Operation not permitted") -eq 0 ]; then
-		error "getting xattr on $testfile should have failed"
+		error "getting xattr on $testfile should have failed (1.1)"
+	fi
+	if [ $(getfattr -n encryption.c $testfile 2>&1 |
+	       grep -ci "Operation not supported") -eq 0 ]; then
+		error "getting xattr on $testfile should have failed (1.2)"
 	fi
 	getfattr -d -m - $testfile 2>&1 | grep security\.c &&
 		error "listing xattrs on $testfile should not expose security.c"
+	getfattr -d -m - $testfile 2>&1 | grep encryption\.c &&
+	      error "listing xattrs on $testfile should not expose encryption.c"
 	if [ $(setfattr -n security.c -v myval $testfile 2>&1 |
 	       grep -ci "Operation not permitted") -eq 0 ]; then
-		error "setting xattr on $testfile should have failed (2)"
+		error "setting xattr on $testfile should have failed (2.1)"
+	fi
+	if [ $(setfattr -n encryption.c -v myval $testfile 2>&1 |
+	       grep -ci "Operation not supported") -eq 0 ]; then
+		error "setting xattr on $testfile should have failed (2.2)"
 	fi
 	return 0
 }
-run_test 57 "security.c xattr protection"
+run_test 57 "security.c/encryption.c xattr protection"
 
 test_58() {
 	local testdir=$DIR/$tdir/mytestdir

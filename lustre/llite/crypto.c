@@ -33,29 +33,13 @@
 
 static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 {
-	struct dentry *dentry = d_find_any_alias(inode);
-	struct lu_env *env;
-	__u16 refcheck;
 	int rc;
 
-	env = cl_env_get(&refcheck);
-	if (IS_ERR(env))
-		return PTR_ERR(env);
-
-	/* Set lcc_getencctx=1 to allow this thread to read
-	 * LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr, as requested by llcrypt.
+	/* Get enc context xattr directly instead of going through the VFS,
+	 * as there is no xattr handler for "encryption.".
 	 */
-	ll_cl_add(inode, env, NULL, LCC_RW);
-	ll_env_info(env)->lti_io_ctx.lcc_getencctx = 1;
-
-	rc = ll_vfs_getxattr(dentry, inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
-			     ctx, len);
-
-	ll_cl_remove(inode, env);
-	cl_env_put(env, &refcheck);
-
-	if (dentry)
-		dput(dentry);
+	rc = ll_xattr_list(inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+			   XATTR_ENCRYPTION_T, ctx, len, OBD_MD_FLXATTR);
 
 	/* used as encryption unit size */
 	if (S_ISREG(inode->i_mode))
@@ -92,15 +76,15 @@ int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
  *   op_data, so that it will be sent along to the server with the request that
  *   the caller is preparing, thus saving a setxattr request.
  * - inode is not NULL:
- *   normal case in which passed fs_data is a struct dentry *, letting proceed
- *   with setxattr operation.
+ *   normal case, letting proceed with setxattr operation.
  *   This use case should only be used when explicitly setting a new encryption
  *   policy on an existing, empty directory.
  */
 static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 			  void *fs_data)
 {
-	struct dentry *dentry;
+	struct ptlrpc_request *req = NULL;
+	struct ll_sb_info *sbi;
 	int rc;
 
 	if (inode == NULL) {
@@ -121,12 +105,16 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	if (is_root_inode(inode))
 		return -EPERM;
 
-	dentry = (struct dentry *)fs_data;
-	set_bit(LLIF_SET_ENC_CTX, &ll_i2info(inode)->lli_flags);
-	rc = ll_vfs_setxattr(dentry, inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
-			     ctx, len, XATTR_CREATE);
+	sbi = ll_i2sbi(inode);
+	/* Send setxattr request to lower layers directly instead of going
+	 * through the VFS, as there is no xattr handler for "encryption.".
+	 */
+	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
+			 OBD_MD_FLXATTR, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
+			 ctx, len, XATTR_CREATE, ll_i2suppgid(inode), &req);
 	if (rc)
 		return rc;
+	ptlrpc_req_finished(req);
 
 	return ll_set_encflags(inode, (void *)ctx, len, false);
 }

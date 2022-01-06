@@ -51,3 +51,4 @@ base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel7.6/ext4-dquot-commit-speedup.patch
 rhel7.7/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 rhel7.6/ext4-projid-xattrs.patch
+rhel7.9/ext4-enc-flag.patch

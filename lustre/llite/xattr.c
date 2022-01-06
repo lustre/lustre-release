@@ -146,15 +146,14 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 			RETURN(-EPERM);
 	}
 
-	/* Setting LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr is only allowed
-	 * when defining an encryption policy on a directory, ie when it
-	 * comes from ll_set_context().
-	 * When new files/dirs are created in an encrypted dir, the xattr
-	 * is set directly in the create request.
+	/* This check is required for compatibility with 2.14, in which
+	 * encryption context is stored in security.c xattr.
+	 * Setting the encryption context should only be possible by llcrypt
+	 * when defining an encryption policy on a directory.
+	 * When new files/dirs are created in an encrypted dir, the enc
+	 * context is set directly in the create request.
 	 */
-	if (handler->flags == XATTR_SECURITY_T &&
-	    !strcmp(name, "c") &&
-	    !test_and_clear_bit(LLIF_SET_ENC_CTX, &ll_i2info(inode)->lli_flags))
+	if (handler->flags == XATTR_SECURITY_T && strcmp(name, "c") == 0)
 		RETURN(-EPERM);
 
 	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);
@@ -379,18 +378,12 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 	int rc;
 	ENTRY;
 
-	/* Getting LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr is only allowed
-	 * when it comes from ll_get_context(), ie when llcrypt needs to
-	 * know the encryption context.
-	 * Otherwise, any direct reading of this xattr returns -EPERM.
+	/* This check is required for compatibility with 2.14, in which
+	 * encryption context is stored in security.c xattr. Accessing the
+	 * encryption context should only be possible by llcrypt.
 	 */
-	if (type == XATTR_SECURITY_T &&
-	    !strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT)) {
-		struct ll_cl_context *lcc = ll_cl_find(inode);
-
-		if (!lcc || !lcc->lcc_getencctx)
-			GOTO(out_xattr, rc = -EPERM);
-	}
+	if (type == XATTR_SECURITY_T && strcmp(name, "security.c") == 0)
+		GOTO(out_xattr, rc = -EPERM);
 
 	if (sbi->ll_xattr_cache_enabled && type != XATTR_ACL_ACCESS_T &&
 	    (type != XATTR_SECURITY_T || strcmp(name, "security.selinux"))) {
@@ -623,7 +616,6 @@ static int ll_xattr_get(const struct xattr_handler *handler,
 
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
-	struct inode *dir = d_inode(dentry->d_parent);
 	struct inode *inode = dentry->d_inode;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	ktime_t kstart = ktime_get();
@@ -653,38 +645,37 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 	rem = rc;
 
 	while (rem > 0) {
+		const struct xattr_handler *xh = get_xattr_type(xattr_name);
 		bool hide_xattr = false;
-
-		/* Listing xattrs should not expose
-		 * LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr, unless it comes
-		 * from llcrypt.
-		 */
-		if (get_xattr_type(xattr_name)->flags == XATTR_SECURITY_T &&
-		    !strcmp(xattr_name, LL_XATTR_NAME_ENCRYPTION_CONTEXT)) {
-			struct ll_cl_context *lcc = ll_cl_find(inode);
-
-			if (!lcc || !lcc->lcc_getencctx)
-				hide_xattr = true;
-		}
 
 		/* Hide virtual project id xattr from the list when
 		 * parent has the inherit flag and the same project id,
 		 * so project id won't be messed up by copying the xattrs
 		 * when mv to a tree with different project id.
 		 */
-		if (get_xattr_type(xattr_name)->flags == XATTR_TRUSTED_T &&
+		if (xh && xh->flags == XATTR_TRUSTED_T &&
 		    strcmp(xattr_name, XATTR_NAME_PROJID) == 0) {
-			if (ll_i2info(inode)->lli_projid ==
-					ll_i2info(dir)->lli_projid &&
+			struct inode *dir = d_inode(dentry->d_parent);
+
+			if ((ll_i2info(inode)->lli_projid ==
+			     ll_i2info(dir)->lli_projid) &&
 			    test_bit(LLIF_PROJECT_INHERIT,
 				     &ll_i2info(dir)->lli_flags))
 				hide_xattr = true;
+		} else if (xh && xh->flags == XATTR_SECURITY_T &&
+			   strcmp(xattr_name, "security.c") == 0) {
+			/* Listing xattrs should not expose encryption
+			 * context. There is no handler defined for
+			 * XATTR_ENCRYPTION_PREFIX, so this test is just
+			 * needed for compatibility with 2.14, in which
+			 * encryption context is stored in security.c xattr.
+			 */
+			hide_xattr = true;
 		}
 
 		len = strnlen(xattr_name, rem - 1) + 1;
 		rem -= len;
-		if (!xattr_type_filter(sbi, hide_xattr ? NULL :
-				       get_xattr_type(xattr_name))) {
+		if (!xattr_type_filter(sbi, hide_xattr ? NULL : xh)) {
 			/* Skip OK xattr type, leave it in buffer. */
 			xattr_name += len;
 			continue;

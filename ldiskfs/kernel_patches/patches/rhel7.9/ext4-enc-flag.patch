@@ -1,0 +1,32 @@
+diff -wur a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -654,6 +654,7 @@
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_get);
+ 
+ static int
+ ext4_xattr_list_entries(struct dentry *dentry, struct ext4_xattr_entry *entry,
+@@ -1197,6 +1197,7 @@
+ 	up_write(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
++EXPORT_SYMBOL(ext4_xattr_set_handle);
+ 
+ /*
+  * ext4_xattr_set()
+diff -wur a/fs/ext4/xattr.h b/fs/ext4/xattr.h
+--- a/fs/ext4/xattr.h
++++ b/fs/ext4/xattr.h
+@@ -121,6 +121,9 @@
+ extern const struct xattr_handler ext4_xattr_acl_default_handler;
+ extern const struct xattr_handler ext4_xattr_security_handler;
+ 
++#define LDISKFS_XATTR_INDEX_ENCRYPTION		9
++#define LDISKFS_XATTR_NAME_ENCRYPTION_CONTEXT "c"
++
+ extern ssize_t ext4_listxattr(struct dentry *, char *, size_t);
+ 
+ extern int ext4_xattr_get(struct inode *, int, const char *, void *, size_t);

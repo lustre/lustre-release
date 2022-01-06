@@ -28,4 +28,5 @@ ubuntu2004/ext4-simple-blockalloc.patch
 ubuntu2004/ext4-xattr-disable-credits-check.patch
 linux-5.8/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
+base/ext4-projid-xattrs.patch
 linux-5.8/ext4-enc-flag.patch

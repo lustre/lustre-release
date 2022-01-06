@@ -2016,6 +2016,12 @@ int mdt_pack_encctx_in_reply(struct mdt_thread_info *info,
 					  mdt_object_child(child),
 					  buffer,
 					  LL_XATTR_NAME_ENCRYPTION_CONTEXT);
+			if (unlikely(rc == -ENODATA))
+				/* For compatibility with 2.14 */
+				rc = mo_xattr_get(info->mti_env,
+					  mdt_object_child(child),
+					  buffer,
+					  LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD);
 			if (rc >= 0) {
 				CDEBUG(D_SEC,
 				       "found encryption ctx of size %d for "DFID"\n",

@@ -4491,8 +4491,18 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			ol->ol_comp_id = 0;
 		}
 	} else {
-		rc = __osd_xattr_get(inode, dentry, name,
-				     buf->lb_buf, buf->lb_len);
+		/* Get enc context xattr directly from ldiskfs instead of going
+		 * through the VFS, as there is no xattr handler for
+		 * "encryption.".
+		 */
+		if (strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0)
+			rc = ldiskfs_xattr_get(inode,
+					  LDISKFS_XATTR_INDEX_ENCRYPTION,
+					  LDISKFS_XATTR_NAME_ENCRYPTION_CONTEXT,
+					  buf->lb_buf, buf->lb_len);
+		else
+			rc = __osd_xattr_get(inode, dentry, name,
+					     buf->lb_buf, buf->lb_len);
 	}
 
 	if (cache_xattr) {
@@ -4860,7 +4870,27 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	if (fl & LU_XATTR_CREATE)
 		fs_flags |= XATTR_CREATE;
 
-	rc = __osd_xattr_set(info, inode, name, buf->lb_buf, len, fs_flags);
+	if (strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0) {
+		/* Set enc context xattr directly in ldiskfs instead of going
+		 * through the VFS, as there is no xattr handler for
+		 * "encryption.".
+		 */
+		struct osd_thandle *oth = container_of(handle,
+						       struct osd_thandle,
+						       ot_super);
+
+		if (!oth->ot_handle)
+			/* this should be already part of a transaction */
+			RETURN(-EPROTO);
+
+		rc = ldiskfs_xattr_set_handle(oth->ot_handle, inode,
+					  LDISKFS_XATTR_INDEX_ENCRYPTION,
+					  LDISKFS_XATTR_NAME_ENCRYPTION_CONTEXT,
+					  buf->lb_buf, len, fs_flags);
+	} else {
+		rc = __osd_xattr_set(info, inode, name,
+				     buf->lb_buf, len, fs_flags);
+	}
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
 
 	if (rc == 0 &&
