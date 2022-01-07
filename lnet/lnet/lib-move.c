@@ -4492,8 +4492,8 @@ lnet_msgtyp2str (int type)
 EXPORT_SYMBOL(lnet_msgtyp2str);
 
 int
-lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
-	   void *private, int rdma_req)
+lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
+	   struct lnet_nid *from_nid, void *private, int rdma_req)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_msg *msg;
@@ -4501,7 +4501,6 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	lnet_pid_t dest_pid;
 	struct lnet_nid dest_nid;
 	struct lnet_nid src_nid;
-	struct lnet_nid from_nid;
 	bool push = false;
 	int for_me;
 	__u32 type;
@@ -4510,8 +4509,6 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 
 	LASSERT (!in_interrupt ());
 
-	lnet_nid4_to_nid(from_nid4, &from_nid);
-
 	type = hdr->type;
 	src_nid = hdr->src_nid;
 	dest_nid = hdr->dest_nid;
@@ -4519,7 +4516,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	payload_length = hdr->payload_length;
 
 	for_me = nid_same(&ni->ni_nid, &dest_nid);
-	cpt = lnet_nid2cpt(&from_nid, ni);
+	cpt = lnet_nid2cpt(from_nid, ni);
 
 	CDEBUG(D_NET, "TRACE: %s(%s) <- %s : %s - %s\n",
 		libcfs_nidstr(&dest_nid),
@@ -4533,7 +4530,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	case LNET_MSG_GET:
 		if (payload_length > 0) {
 			CERROR("%s, src %s: bad %s payload %d (0 expected)\n",
-			       libcfs_nid2str(from_nid4),
+			       libcfs_nidstr(from_nid),
 			       libcfs_nidstr(&src_nid),
 			       lnet_msgtyp2str(type), payload_length);
 			return -EPROTO;
@@ -4546,7 +4543,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 		    (__u32)(for_me ? LNET_MAX_PAYLOAD : LNET_MTU)) {
 			CERROR("%s, src %s: bad %s payload %d "
 			       "(%d max expected)\n",
-			       libcfs_nid2str(from_nid4),
+			       libcfs_nidstr(from_nid),
 			       libcfs_nidstr(&src_nid),
 			       lnet_msgtyp2str(type),
 			       payload_length,
@@ -4557,7 +4554,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 
 	default:
 		CERROR("%s, src %s: Bad message type 0x%x\n",
-		       libcfs_nid2str(from_nid4),
+		       libcfs_nidstr(from_nid),
 		       libcfs_nidstr(&src_nid), type);
 		return -EPROTO;
 	}
@@ -4584,7 +4581,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 			/* should have gone direct */
 			CERROR("%s, src %s: Bad dest nid %s "
 			       "(should have been sent direct)\n",
-				libcfs_nid2str(from_nid4),
+				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
 			return -EPROTO;
@@ -4595,7 +4592,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 			 * this node's NID on its own network */
 			CERROR("%s, src %s: Bad dest nid %s "
 			       "(it's my nid but on a different network)\n",
-				libcfs_nid2str(from_nid4),
+				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
 			return -EPROTO;
@@ -4604,7 +4601,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 		if (rdma_req && type == LNET_MSG_GET) {
 			CERROR("%s, src %s: Bad optimized GET for %s "
 			       "(final destination must be me)\n",
-				libcfs_nid2str(from_nid4),
+				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
 			return -EPROTO;
@@ -4613,7 +4610,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 		if (!the_lnet.ln_routing) {
 			CERROR("%s, src %s: Dropping message for %s "
 			       "(routing not enabled)\n",
-				libcfs_nid2str(from_nid4),
+				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
 			goto drop;
@@ -4626,7 +4623,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	if (!list_empty(&the_lnet.ln_test_peers) &&	/* normally we don't */
 	    fail_peer(&src_nid, 0)) {			/* shall we now? */
 		CERROR("%s, src %s: Dropping %s to simulate failure\n",
-		       libcfs_nid2str(from_nid4), libcfs_nidstr(&src_nid),
+		       libcfs_nidstr(from_nid), libcfs_nidstr(&src_nid),
 		       lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4636,7 +4633,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	    lnet_drop_rule_match(hdr, lnet_nid_to_nid4(&ni->ni_nid), NULL)) {
 		CDEBUG(D_NET,
 		       "%s, src %s, dst %s: Dropping %s to simulate silent message loss\n",
-		       libcfs_nid2str(from_nid4), libcfs_nidstr(&src_nid),
+		       libcfs_nidstr(from_nid), libcfs_nidstr(&src_nid),
 		       libcfs_nidstr(&dest_nid), lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4644,7 +4641,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	msg = lnet_msg_alloc();
 	if (msg == NULL) {
 		CERROR("%s, src %s: Dropping %s (out of memory)\n",
-		       libcfs_nid2str(from_nid4), libcfs_nidstr(&src_nid),
+		       libcfs_nidstr(from_nid), libcfs_nidstr(&src_nid),
 		       lnet_msgtyp2str(type));
 		goto drop;
 	}
@@ -4660,7 +4657,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	msg->msg_offset = 0;
 	msg->msg_hdr = *hdr;
 	/* for building message event */
-	msg->msg_from = from_nid;
+	msg->msg_from = *from_nid;
 	if (!for_me) {
 		msg->msg_target.pid = dest_pid;
 		msg->msg_target.nid = dest_nid;
@@ -4668,12 +4665,12 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	}
 
 	lnet_net_lock(cpt);
-	lpni = lnet_peerni_by_nid_locked(&from_nid, &ni->ni_nid, cpt);
+	lpni = lnet_peerni_by_nid_locked(from_nid, &ni->ni_nid, cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		rc = PTR_ERR(lpni);
 		CERROR("%s, src %s: Dropping %s (error %d looking up sender)\n",
-		       libcfs_nid2str(from_nid4), libcfs_nidstr(&src_nid),
+		       libcfs_nidstr(from_nid), libcfs_nidstr(&src_nid),
 		       lnet_msgtyp2str(type), rc);
 		lnet_msg_free(msg);
 		if (rc == -ESHUTDOWN)
@@ -4688,7 +4685,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	 */
 	if (((lnet_drop_asym_route && for_me) ||
 	     !lpni->lpni_peer_net->lpn_peer->lp_alive) &&
-	    LNET_NID_NET(&src_nid) != LNET_NIDNET(from_nid4)) {
+	    LNET_NID_NET(&src_nid) != LNET_NID_NET(from_nid)) {
 		__u32 src_net_id = LNET_NID_NET(&src_nid);
 		struct lnet_peer *gw = lpni->lpni_peer_net->lpn_peer;
 		struct lnet_route *route;
@@ -4723,7 +4720,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 			 * => asymmetric routing detected but forbidden
 			 */
 			CERROR("%s, src %s: Dropping asymmetrical route %s\n",
-			       libcfs_nid2str(from_nid4),
+			       libcfs_nidstr(from_nid),
 			       libcfs_nidstr(&src_nid), lnet_msgtyp2str(type));
 			lnet_msg_free(msg);
 			goto drop;

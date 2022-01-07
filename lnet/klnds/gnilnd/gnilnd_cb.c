@@ -4024,6 +4024,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	unsigned long timestamp, newest_last_rx, timeout;
 	int           last_seq;
 	struct lnet_hdr hdr;
+	struct lnet_nid srcnid;
 	ENTRY;
 
 	/* Short circuit if the ep_handle is null.
@@ -4285,13 +4286,15 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		/* only get SMSG payload for IMMEDIATE */
 		atomic64_add(msg->gnm_payload_len, &conn->gnc_device->gnd_short_rxbytes);
 		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.immediate.gnim_hdr);
-		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 0);
+		lnet_nid4_to_nid(msg->gnm_srcnid, &srcnid);
+		rc = lnet_parse(net->gnn_ni, &hdr, &srcnid, rx, 0);
 		repost = rc < 0;
 		break;
 	case GNILND_MSG_GET_REQ_REV:
 	case GNILND_MSG_PUT_REQ:
 		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.putreq.gnprm_hdr);
-		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 1);
+		lnet_nid4_to_nid(msg->gnm_srcnid, &srcnid);
+		rc = lnet_parse(net->gnn_ni, &hdr, &srcnid, rx, 1);
 		repost = rc < 0;
 		break;
 	case GNILND_MSG_GET_NAK_REV:
@@ -4397,7 +4400,8 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	case GNILND_MSG_PUT_REQ_REV:
 	case GNILND_MSG_GET_REQ:
 		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.get.gngm_hdr);
-		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 1);
+		lnet_nid4_to_nid(msg->gnm_srcnid, &srcnid);
+		rc = lnet_parse(net->gnn_ni, &hdr, &srcnid, rx, 1);
 		repost = rc < 0;
 		break;
 

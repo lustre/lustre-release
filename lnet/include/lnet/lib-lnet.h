@@ -748,7 +748,7 @@ void lnet_portals_destroy(void);
 
 /* message functions */
 int lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
-	       lnet_nid_t fromnid, void *private, int rdma_req);
+	       struct lnet_nid *fromnid, void *private, int rdma_req);
 int lnet_parse_local(struct lnet_ni *ni, struct lnet_msg *msg);
 int lnet_parse_forward_locked(struct lnet_ni *ni, struct lnet_msg *msg);
 
