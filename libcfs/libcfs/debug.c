@@ -43,6 +43,9 @@
 #include <linux/stacktrace.h>
 #include <linux/utsname.h>
 #include <linux/kallsyms.h>
+#ifdef HAVE_PANIC_NOTIFIER_H
+#include <linux/panic_notifier.h>
+#endif
 #include "tracefile.h"
 
 static char debug_file_name[1024];

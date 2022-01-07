@@ -1785,6 +1785,38 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 ])
 
 #
+# LIBCFS_HAVE_CIPHER_HEADER
+#
+# Kernel 5.12 commit 0eb76ba29d16df2951d37c54ca279c4e5630b071
+# crypto: remove cipher routines from public crypto API
+#
+AC_DEFUN([LIBCFS_HAVE_CIPHER_HEADER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_LINUX_HEADER([crypto/internal/cipher.h], [
+	AC_DEFINE(HAVE_CIPHER_H, 1,
+		[crypto/internal/cipher.h is present])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_CIPHER_HEADER
+
+#
+# LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
+#
+# Kernel 5.14 commit f39650de687e35766572ac89dbcd16a5911e2f0a
+# kernel.h: split out panic and oops helpers
+#
+AC_DEFUN([LIBCFS_HAVE_PANIC_NOTIFIER_HEADER], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_LINUX_HEADER([linux/panic_notifier.h], [
+	AC_DEFINE(HAVE_PANIC_NOTIFIER_H, 1,
+		[linux/panic_notifier.h is present])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
+
+#
 # LIBCFS_PARAM_SET_UINT_MINMAX
 #
 # Kernel 5.15-rc1 commit 2a14c9ae15a38148484a128b84bff7e9ffd90d68
@@ -1801,22 +1833,6 @@ param_set_uint_minmax, [
 		['param_set_uint_minmax' is available])
 ])
 ]) # LIBCFS_PARAM_SET_UINT_MINMAX
-
-#
-# LIBCFS_HAVE_CIPHER_HEADER
-#
-# Kernel 5.12 commit 0eb76ba29d16df2951d37c54ca279c4e5630b071
-# crypto: remove cipher routines from public crypto API
-#
-AC_DEFUN([LIBCFS_HAVE_CIPHER_HEADER], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_LINUX_HEADER([crypto/internal/cipher.h], [
-	AC_DEFINE(HAVE_CIPHER_H, 1,
-		[crypto/internal/cipher.h is present])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LIBCFS_HAVE_CIPHER_HEADER
 
 #
 # LIBCFS_PROG_LINUX
@@ -1954,6 +1970,8 @@ LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 LIBCFS_HAVE_LIST_CMP_FUNC_T
 # 5.12
 LIBCFS_HAVE_CIPHER_HEADER
+# 5.14
+LIBCFS_HAVE_PANIC_NOTIFIER_HEADER
 # 5.15
 LIBCFS_PARAM_SET_UINT_MINMAX
 ]) # LIBCFS_PROG_LINUX
