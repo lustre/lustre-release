@@ -517,6 +517,36 @@ lnet_net2rnethash(__u32 net)
 		((1U << the_lnet.ln_remote_nets_hbits) - 1)];
 }
 
+static inline void lnet_hdr_from_nid4(struct lnet_hdr *hdr,
+				    const struct lnet_hdr_nid4 *vhdr)
+{
+	const struct _lnet_hdr_nid4 *hdr_nid4 = (void *)vhdr;
+
+	hdr->dest_nid = le64_to_cpu(hdr_nid4->dest_nid);
+	hdr->src_nid = le64_to_cpu(hdr_nid4->src_nid);
+	hdr->dest_pid = le32_to_cpu(hdr_nid4->dest_pid);
+	hdr->src_pid = le32_to_cpu(hdr_nid4->src_pid);
+	hdr->type = le32_to_cpu(hdr_nid4->type);
+	hdr->payload_length = le32_to_cpu(hdr_nid4->payload_length);
+
+	hdr->msg = hdr_nid4->msg;
+}
+
+static inline void lnet_hdr_to_nid4(const struct lnet_hdr *hdr,
+				      struct lnet_hdr_nid4 *vhdr)
+{
+	struct _lnet_hdr_nid4 *hdr_nid4 = (void *)vhdr;
+
+	hdr_nid4->dest_nid = cpu_to_le64(hdr->dest_nid);
+	hdr_nid4->src_nid = cpu_to_le64(hdr->src_nid);
+	hdr_nid4->dest_pid = cpu_to_le32(hdr->dest_pid);
+	hdr_nid4->src_pid = cpu_to_le32(hdr->src_pid);
+	hdr_nid4->type = cpu_to_le32(hdr->type);
+	hdr_nid4->payload_length = cpu_to_le32(hdr->payload_length);
+
+	hdr_nid4->msg = hdr->msg;
+}
+
 extern const struct lnet_lnd the_lolnd;
 extern int avoid_asym_router_failure;
 

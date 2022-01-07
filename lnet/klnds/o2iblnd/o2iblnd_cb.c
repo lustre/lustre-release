@@ -325,13 +325,14 @@ static void
 kiblnd_handle_rx(struct kib_rx *rx)
 {
 	struct kib_msg *msg = rx->rx_msg;
-	struct kib_conn   *conn = rx->rx_conn;
+	struct kib_conn *conn = rx->rx_conn;
 	struct lnet_ni *ni = conn->ibc_peer->ibp_ni;
-        int           credits = msg->ibm_credits;
+	int credits = msg->ibm_credits;
 	struct kib_tx *tx;
-        int           rc = 0;
-        int           rc2;
-        int           post_credit;
+	int rc = 0;
+	int rc2;
+	int post_credit;
+	struct lnet_hdr hdr;
 
         LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
@@ -389,21 +390,21 @@ kiblnd_handle_rx(struct kib_rx *rx)
                         post_credit = IBLND_POSTRX_PEER_CREDIT;
                 break;
 
-        case IBLND_MSG_IMMEDIATE:
-                post_credit = IBLND_POSTRX_DONT_POST;
-                rc = lnet_parse(ni, &msg->ibm_u.immediate.ibim_hdr,
-                                msg->ibm_srcnid, rx, 0);
-                if (rc < 0)                     /* repost on error */
-                        post_credit = IBLND_POSTRX_PEER_CREDIT;
-                break;
+	case IBLND_MSG_IMMEDIATE:
+		post_credit = IBLND_POSTRX_DONT_POST;
+		lnet_hdr_from_nid4(&hdr, &msg->ibm_u.immediate.ibim_hdr);
+		rc = lnet_parse(ni, &hdr, msg->ibm_srcnid, rx, 0);
+		if (rc < 0)                     /* repost on error */
+			post_credit = IBLND_POSTRX_PEER_CREDIT;
+		break;
 
-        case IBLND_MSG_PUT_REQ:
-                post_credit = IBLND_POSTRX_DONT_POST;
-                rc = lnet_parse(ni, &msg->ibm_u.putreq.ibprm_hdr,
-                                msg->ibm_srcnid, rx, 1);
-                if (rc < 0)                     /* repost on error */
-                        post_credit = IBLND_POSTRX_PEER_CREDIT;
-                break;
+	case IBLND_MSG_PUT_REQ:
+		post_credit = IBLND_POSTRX_DONT_POST;
+		lnet_hdr_from_nid4(&hdr, &msg->ibm_u.putreq.ibprm_hdr);
+		rc = lnet_parse(ni, &hdr, msg->ibm_srcnid, rx, 1);
+		if (rc < 0)                     /* repost on error */
+			post_credit = IBLND_POSTRX_PEER_CREDIT;
+		break;
 
         case IBLND_MSG_PUT_NAK:
                 CWARN ("PUT_NACK from %s\n",
@@ -459,13 +460,13 @@ kiblnd_handle_rx(struct kib_rx *rx)
                                          msg->ibm_u.completion.ibcm_cookie);
                 break;
 
-        case IBLND_MSG_GET_REQ:
-                post_credit = IBLND_POSTRX_DONT_POST;
-                rc = lnet_parse(ni, &msg->ibm_u.get.ibgm_hdr,
-                                msg->ibm_srcnid, rx, 1);
-                if (rc < 0)                     /* repost on error */
-                        post_credit = IBLND_POSTRX_PEER_CREDIT;
-                break;
+	case IBLND_MSG_GET_REQ:
+		post_credit = IBLND_POSTRX_DONT_POST;
+		lnet_hdr_from_nid4(&hdr, &msg->ibm_u.get.ibgm_hdr);
+		rc = lnet_parse(ni, &hdr, msg->ibm_srcnid, rx, 1);
+		if (rc < 0)			/* repost on error */
+			post_credit = IBLND_POSTRX_PEER_CREDIT;
+		break;
 
         case IBLND_MSG_GET_DONE:
                 post_credit = IBLND_POSTRX_RSRVD_CREDIT;
@@ -1697,7 +1698,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 		nob = offsetof(struct kib_get_msg, ibgm_rd.rd_frags[rd->rd_nfrags]);
 		ibmsg->ibm_u.get.ibgm_cookie = tx->tx_cookie;
-		ibmsg->ibm_u.get.ibgm_hdr = *hdr;
+		lnet_hdr_to_nid4(hdr, &ibmsg->ibm_u.get.ibgm_hdr);
 
                 kiblnd_init_tx_msg(ni, tx, IBLND_MSG_GET_REQ, nob);
 
@@ -1732,7 +1733,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			return -EIO;
 		}
 
-		ibmsg->ibm_u.putreq.ibprm_hdr = *hdr;
+		lnet_hdr_to_nid4(hdr, &ibmsg->ibm_u.putreq.ibprm_hdr);
 		ibmsg->ibm_u.putreq.ibprm_cookie = tx->tx_cookie;
 		kiblnd_init_tx_msg(ni, tx, IBLND_MSG_PUT_REQ,
 				   sizeof(struct kib_putreq_msg));
@@ -1749,7 +1750,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		<= IBLND_MSG_SIZE);
 
 	ibmsg = tx->tx_msg;
-	ibmsg->ibm_u.immediate.ibim_hdr = *hdr;
+	lnet_hdr_to_nid4(hdr, &ibmsg->ibm_u.immediate.ibim_hdr);
 
 	lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
 			    offsetof(struct kib_msg,
@@ -1861,16 +1862,16 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	switch (rxmsg->ibm_type) {
 	default:
 		LBUG();
-
-        case IBLND_MSG_IMMEDIATE:
+		/* fallthrough */
+	case IBLND_MSG_IMMEDIATE:
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[rlen]);
-                if (nob > rx->rx_nob) {
-                        CERROR ("Immediate message from %s too big: %d(%d)\n",
-                                libcfs_nid2str(rxmsg->ibm_u.immediate.ibim_hdr.src_nid),
-                                nob, rx->rx_nob);
-                        rc = -EPROTO;
-                        break;
-                }
+		if (nob > rx->rx_nob) {
+			CERROR("Immediate message from %s too big: %d(%d)\n",
+			       libcfs_nid2str(lntmsg->msg_hdr.src_nid),
+			       nob, rx->rx_nob);
+			rc = -EPROTO;
+			break;
+		}
 
 		lnet_copy_flat2kiov(niov, kiov, offset,
 				    IBLND_MSG_SIZE, rxmsg,

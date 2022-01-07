@@ -65,7 +65,7 @@ struct ksock_msg {
 		/* case ksm_kh.ksh_type == KSOCK_MSG_NOOP */
 		/* - nothing */
 		/* case ksm_kh.ksh_type == KSOCK_MSG_LNET */
-		struct lnet_hdr lnetmsg;
+		struct lnet_hdr_nid4 lnetmsg_nid4;
 	} __packed ksm_u;
 } __packed;
 #define ksm_type ksm_kh.ksh_type

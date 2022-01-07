@@ -2107,9 +2107,10 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 		tx->tx_lntmsg[0] = lntmsg;
 		if ((reverse_rdma_flag & GNILND_REVERSE_GET) == 0)
-			tx->tx_msg.gnm_u.get.gngm_hdr = *hdr;
+			lnet_hdr_to_nid4(hdr, &tx->tx_msg.gnm_u.get.gngm_hdr);
 		else
-			tx->tx_msg.gnm_u.putreq.gnprm_hdr = *hdr;
+			lnet_hdr_to_nid4(hdr,
+					   &tx->tx_msg.gnm_u.putreq.gnprm_hdr);
 
 		/* rest of tx_msg is setup just before it is sent */
 		kgnilnd_launch_tx(tx, net, target);
@@ -2143,9 +2144,10 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 		tx->tx_lntmsg[0] = lntmsg;
 		if ((reverse_rdma_flag & GNILND_REVERSE_PUT) == 0)
-			tx->tx_msg.gnm_u.putreq.gnprm_hdr = *hdr;
+			lnet_hdr_to_nid4(hdr,
+					   &tx->tx_msg.gnm_u.putreq.gnprm_hdr);
 		else
-			tx->tx_msg.gnm_u.get.gngm_hdr = *hdr;
+			lnet_hdr_to_nid4(hdr, &tx->tx_msg.gnm_u.get.gngm_hdr);
 
 		/* rest of tx_msg is setup just before it is sent */
 		kgnilnd_launch_tx(tx, net, target);
@@ -2170,7 +2172,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		goto out;
 	}
 
-	tx->tx_msg.gnm_u.immediate.gnim_hdr = *hdr;
+	lnet_hdr_to_nid4(hdr, &tx->tx_msg.gnm_u.immediate.gnim_hdr);
 	tx->tx_lntmsg[0] = lntmsg;
 	kgnilnd_launch_tx(tx, net, target);
 
@@ -4021,6 +4023,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	int           repost = 1, saw_complete;
 	unsigned long timestamp, newest_last_rx, timeout;
 	int           last_seq;
+	struct lnet_hdr hdr;
 	ENTRY;
 
 	/* Short circuit if the ep_handle is null.
@@ -4281,14 +4284,14 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	case GNILND_MSG_IMMEDIATE:
 		/* only get SMSG payload for IMMEDIATE */
 		atomic64_add(msg->gnm_payload_len, &conn->gnc_device->gnd_short_rxbytes);
-		rc = lnet_parse(net->gnn_ni, &msg->gnm_u.immediate.gnim_hdr,
-				msg->gnm_srcnid, rx, 0);
+		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.immediate.gnim_hdr);
+		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 0);
 		repost = rc < 0;
 		break;
 	case GNILND_MSG_GET_REQ_REV:
 	case GNILND_MSG_PUT_REQ:
-		rc = lnet_parse(net->gnn_ni, &msg->gnm_u.putreq.gnprm_hdr,
-				msg->gnm_srcnid, rx, 1);
+		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.putreq.gnprm_hdr);
+		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 1);
 		repost = rc < 0;
 		break;
 	case GNILND_MSG_GET_NAK_REV:
@@ -4393,8 +4396,8 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		break;
 	case GNILND_MSG_PUT_REQ_REV:
 	case GNILND_MSG_GET_REQ:
-		rc = lnet_parse(net->gnn_ni, &msg->gnm_u.get.gngm_hdr,
-				msg->gnm_srcnid, rx, 1);
+		lnet_hdr_from_nid4(&hdr, &msg->gnm_u.get.gngm_hdr);
+		rc = lnet_parse(net->gnn_ni, &hdr, msg->gnm_srcnid, rx, 1);
 		repost = rc < 0;
 		break;
 

@@ -141,7 +141,32 @@ struct lnet_hello {
 	__u32			type;
 } __attribute__((packed));
 
+union lnet_cmd_hdr {
+	struct lnet_ack		ack;
+	struct lnet_put		put;
+	struct lnet_get		get;
+	struct lnet_reply	reply;
+	struct lnet_hello	hello;
+} __attribute__((packed));
+
+/* This is used for message headers that lnet code is manipulating.
+ *  All fields before the union are in host-byte-order.
+ */
 struct lnet_hdr {
+	lnet_nid_t		dest_nid;
+	lnet_nid_t		src_nid;
+	lnet_pid_t		dest_pid;
+	lnet_pid_t		src_pid;
+	__u32			type;		/* enum lnet_msg_type */
+	__u32			payload_length;	/* payload data to follow */
+	/*<------__u64 aligned------->*/
+	union lnet_cmd_hdr	msg;
+} __attribute__((packed));
+
+/* This is used to support conversion between an lnet_hdr and
+ * the content of a network message.
+ */
+struct _lnet_hdr_nid4 {
 	lnet_nid_t	dest_nid;
 	lnet_nid_t	src_nid;
 	lnet_pid_t	dest_pid;
@@ -149,13 +174,14 @@ struct lnet_hdr {
 	__u32		type;		/* enum lnet_msg_type */
 	__u32		payload_length;	/* payload data to follow */
 	/*<------__u64 aligned------->*/
-	union {
-		struct lnet_ack		ack;
-		struct lnet_put		put;
-		struct lnet_get		get;
-		struct lnet_reply	reply;
-		struct lnet_hello	hello;
-	} msg;
+	union lnet_cmd_hdr msg;
+} __attribute__((packed));
+
+/* This is stored in a network message buffer.  Content cannot be accessed
+ * without converting to an lnet_hdr.
+ */
+struct lnet_hdr_nid4 {
+	char	_bytes[sizeof(struct _lnet_hdr_nid4)];
 } __attribute__((packed));
 
 /* A HELLO message contains a magic number and protocol version

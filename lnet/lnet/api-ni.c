@@ -776,64 +776,64 @@ static void lnet_assert_wire_constants(void)
 				   version_minor) != 6);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_magicversion *)0)->version_minor) != 2);
 
-	/* Checks for struct struct lnet_hdr */
-	BUILD_BUG_ON((int)sizeof(struct lnet_hdr) != 72);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, dest_nid) != 0);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->dest_nid) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, src_nid) != 8);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->src_nid) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, dest_pid) != 16);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->dest_pid) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, src_pid) != 20);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->src_pid) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, type) != 24);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->type) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, payload_length) != 28);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->payload_length) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg) != 40);
+	/* Checks for struct _lnet_hdr_nid4 */
+	BUILD_BUG_ON((int)sizeof(struct _lnet_hdr_nid4) != 72);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, dest_nid) != 0);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->dest_nid) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, src_nid) != 8);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->src_nid) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, dest_pid) != 16);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->dest_pid) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, src_pid) != 20);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->src_pid) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, type) != 24);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->type) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, payload_length) != 28);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->payload_length) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg) != 40);
 
 	/* Ack */
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.ack.dst_wmd) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.ack.dst_wmd) != 16);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.ack.match_bits) != 48);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.ack.match_bits) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.ack.mlength) != 56);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.ack.mlength) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.ack.dst_wmd) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.ack.dst_wmd) != 16);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.ack.match_bits) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.ack.match_bits) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.ack.mlength) != 56);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.ack.mlength) != 4);
 
 	/* Put */
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.put.ack_wmd) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.put.ack_wmd) != 16);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.put.match_bits) != 48);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.put.match_bits) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.put.hdr_data) != 56);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.put.hdr_data) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.put.ptl_index) != 64);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.put.ptl_index) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.put.offset) != 68);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.put.offset) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.put.ack_wmd) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.put.ack_wmd) != 16);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.put.match_bits) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.put.match_bits) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.put.hdr_data) != 56);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.put.hdr_data) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.put.ptl_index) != 64);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.put.ptl_index) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.put.offset) != 68);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.put.offset) != 4);
 
 	/* Get */
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.get.return_wmd) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.get.return_wmd) != 16);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.get.match_bits) != 48);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.get.match_bits) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.get.ptl_index) != 56);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.get.ptl_index) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.get.src_offset) != 60);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.get.src_offset) != 4);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.get.sink_length) != 64);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.get.sink_length) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.get.return_wmd) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.get.return_wmd) != 16);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.get.match_bits) != 48);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.get.match_bits) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.get.ptl_index) != 56);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.get.ptl_index) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.get.src_offset) != 60);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.get.src_offset) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.get.sink_length) != 64);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.get.sink_length) != 4);
 
 	/* Reply */
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.reply.dst_wmd) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.reply.dst_wmd) != 16);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.reply.dst_wmd) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.reply.dst_wmd) != 16);
 
 	/* Hello */
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.hello.incarnation) != 32);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.hello.incarnation) != 8);
-	BUILD_BUG_ON((int)offsetof(struct lnet_hdr, msg.hello.type) != 40);
-	BUILD_BUG_ON((int)sizeof(((struct lnet_hdr *)0)->msg.hello.type) != 4);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.hello.incarnation) != 32);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.hello.incarnation) != 8);
+	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, msg.hello.type) != 40);
+	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->msg.hello.type) != 4);
 
 	/* Checks for struct lnet_ni_status and related constants */
 	BUILD_BUG_ON(LNET_NI_STATUS_INVALID != 0x00000000);

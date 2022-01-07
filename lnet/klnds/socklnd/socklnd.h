@@ -339,8 +339,9 @@ struct ksock_conn {
 						 * V2.x message takes the
 						 * whole struct
 						 * V1.x message is a bare
-						 * struct lnet_hdr, it's stored
-						 * in ksnc_msg.ksm_u.lnetmsg
+						 * struct lnet_hdr_nid4, it's
+						 * stored in
+						 * ksnc_msg.ksm_u.lnetmsg
 						 */
 	/* -- WRITER -- */
 	/* where I enq waiting for output space */

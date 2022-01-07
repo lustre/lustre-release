@@ -411,13 +411,13 @@ typedef struct {
 } __packed kgn_rdma_desc_t;
 
 typedef struct {
-	struct lnet_hdr	  gnim_hdr;             /* LNet header */
+	struct lnet_hdr_nid4	gnim_hdr;	/* LNet header */
 	/* LNet payload is in FMA "Message Data" */
 } __packed kgn_immediate_msg_t;
 
 typedef struct {
-	struct lnet_hdr   gnprm_hdr;            /* LNet header */
-	__u64             gnprm_cookie;         /* opaque completion cookie */
+	struct lnet_hdr_nid4	gnprm_hdr;	/* LNet header */
+	__u64			gnprm_cookie;	/* opaque completion cookie */
 } __packed kgn_putreq_msg_t;
 
 typedef struct {
@@ -428,10 +428,10 @@ typedef struct {
 } __packed kgn_putack_msg_t;
 
 typedef struct {
-	struct lnet_hdr   gngm_hdr;             /* LNet header */
-	__u64             gngm_cookie;          /* opaque completion cookie */
-	__u16		  gngm_payload_cksum;   /* checksum for put msg */
-	kgn_rdma_desc_t   gngm_desc;            /* sender's sink buffer */
+	struct lnet_hdr_nid4	gngm_hdr;	/* LNet header */
+	__u64			gngm_cookie;	/* opaque completion cookie */
+	__u16			gngm_payload_cksum; /* checksum for put msg */
+	kgn_rdma_desc_t		gngm_desc;	/* sender's sink buffer */
 } __packed kgn_get_msg_t;
 
 typedef struct {

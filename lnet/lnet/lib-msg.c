@@ -68,8 +68,8 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
-		lnet_nid4_to_nid(le64_to_cpu(hdr->dest_nid), &ev->target.nid);
-		ev->target.pid	  = le32_to_cpu(hdr->dest_pid);
+		lnet_nid4_to_nid(hdr->dest_nid, &ev->target.nid);
+		ev->target.pid	  = hdr->dest_pid;
 		ev->initiator.nid = LNET_ANY_NID;
 		ev->initiator.pid = the_lnet.ln_pid;
 		ev->source.nid	  = LNET_ANY_NID;

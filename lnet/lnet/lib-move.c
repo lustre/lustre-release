@@ -722,13 +722,13 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_process_id target,
 		lnet_setpayloadbuffer(msg);
 
 	memset (&msg->msg_hdr, 0, sizeof (msg->msg_hdr));
-	msg->msg_hdr.type           = cpu_to_le32(type);
+	msg->msg_hdr.type           = type;
 	/* dest_nid will be overwritten by lnet_select_pathway() */
-	msg->msg_hdr.dest_nid       = cpu_to_le64(target.nid);
-	msg->msg_hdr.dest_pid       = cpu_to_le32(target.pid);
+	msg->msg_hdr.dest_nid       = target.nid;
+	msg->msg_hdr.dest_pid       = target.pid;
 	/* src_nid will be set later */
-	msg->msg_hdr.src_pid        = cpu_to_le32(the_lnet.ln_pid);
-	msg->msg_hdr.payload_length = cpu_to_le32(len);
+	msg->msg_hdr.src_pid        = the_lnet.ln_pid;
+	msg->msg_hdr.payload_length = len;
 }
 
 void
@@ -900,7 +900,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 			!list_empty(&lp->lpni_txq));
 
 		msg->msg_peertxcredit = 1;
-		lp->lpni_txqnob += msg->msg_len + sizeof(struct lnet_hdr);
+		lp->lpni_txqnob += msg->msg_len + sizeof(struct lnet_hdr_nid4);
 		lp->lpni_txcredits--;
 
 		if (lp->lpni_txcredits < lp->lpni_mintxcredits)
@@ -1097,7 +1097,8 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 		LASSERT((txpeer->lpni_txcredits < 0) ==
 			!list_empty(&txpeer->lpni_txq));
 
-		txpeer->lpni_txqnob -= msg->msg_len + sizeof(struct lnet_hdr);
+		txpeer->lpni_txqnob -=	msg->msg_len +
+					sizeof(struct lnet_hdr_nid4);
 		LASSERT(txpeer->lpni_txqnob >= 0);
 
 		txpeer->lpni_txcredits++;
@@ -1813,10 +1814,10 @@ lnet_handle_lo_send(struct lnet_send_data *sd)
 	/* No send credit hassles with LOLND */
 	lnet_ni_addref_locked(the_lnet.ln_loni, cpt);
 	msg->msg_hdr.dest_nid =
-		cpu_to_le64(lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid));
+		lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid);
 	if (!msg->msg_routing)
 		msg->msg_hdr.src_nid =
-			cpu_to_le64(lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid));
+			lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid);
 	msg->msg_target.nid = the_lnet.ln_loni->ni_nid;
 	lnet_msg_commit(msg, cpt);
 	msg->msg_txni = the_lnet.ln_loni;
@@ -1918,7 +1919,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 */
 	if (!msg->msg_routing)
 		msg->msg_hdr.src_nid =
-			cpu_to_le64(lnet_nid_to_nid4(&msg->msg_txni->ni_nid));
+			lnet_nid_to_nid4(&msg->msg_txni->ni_nid);
 
 	if (routing) {
 		msg->msg_target_is_router = 1;
@@ -1935,14 +1936,14 @@ lnet_handle_send(struct lnet_send_data *sd)
 		 */
 		/* FIXME handle large-addr nid */
 		msg->msg_hdr.dest_nid =
-			cpu_to_le64(lnet_nid_to_nid4(&final_dst_lpni->lpni_nid));
+			lnet_nid_to_nid4(&final_dst_lpni->lpni_nid);
 	} else {
 		/*
 		 * if we're not routing set the dest_nid to the best peer
 		 * ni NID that we picked earlier in the algorithm.
 		 */
 		msg->msg_hdr.dest_nid =
-			cpu_to_le64(lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid));
+			lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
 	}
 
 	/*
@@ -4522,11 +4523,11 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 
 	lnet_nid4_to_nid(from_nid4, &from_nid);
 
-	type = le32_to_cpu(hdr->type);
-	src_nid = le64_to_cpu(hdr->src_nid);
-	dest_nid = le64_to_cpu(hdr->dest_nid);
-	dest_pid = le32_to_cpu(hdr->dest_pid);
-	payload_length = le32_to_cpu(hdr->payload_length);
+	type = hdr->type;
+	src_nid = hdr->src_nid;
+	dest_nid = hdr->dest_nid;
+	dest_pid = hdr->dest_pid;
+	payload_length = hdr->payload_length;
 
 	/* FIXME handle large-addr nids */
 	for_me = (lnet_nid_to_nid4(&ni->ni_nid) == dest_nid);
@@ -4676,15 +4677,6 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 		msg->msg_target.pid	= dest_pid;
 		lnet_nid4_to_nid(dest_nid, &msg->msg_target.nid);
 		msg->msg_routing	= 1;
-
-	} else {
-		/* convert common msg->hdr fields to host byteorder */
-		msg->msg_hdr.type	= type;
-		msg->msg_hdr.src_nid	= src_nid;
-		msg->msg_hdr.src_pid	= le32_to_cpu(msg->msg_hdr.src_pid);
-		msg->msg_hdr.dest_nid	= dest_nid;
-		msg->msg_hdr.dest_pid	= dest_pid;
-		msg->msg_hdr.payload_length = payload_length;
 	}
 
 	lnet_net_lock(cpt);
