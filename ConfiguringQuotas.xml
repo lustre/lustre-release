@@ -519,12 +519,24 @@ lfs setquota {-u|-g|-p} <replaceable>username|groupname</replaceable> -d <replac
       <screen>
 # lfs setquota -P -b 0 -B 0 -i 0 -I 0 /mnt/testfs
       </screen>
+      <para>To set user 'bob' to use the default user quota:</para>
+      <screen>
+# lfs setquota -u bob -d /mnt/testfs
+      </screen>
+      <para>To set group 'bob' to use the default group quota:</para>
+      <screen>
+# lfs setquota -g bob -d /mnt/testfs
+      </screen>
+      <para>To set project 1000 to use the default project quota:</para>
+      <screen>
+# lfs setquota -p 1000 -d /mnt/testfs
+      </screen>
       <note>
       <para>
       If quota limits are set for some user, group or project, it will use
       those specific quota limits instead of the default quota. Quota limits for
       any user, group or project will use the default quota by setting its quota
-      limits to <literal>0</literal>.
+      limits with option '-d'.
       </para>
       </note>
     </section>
