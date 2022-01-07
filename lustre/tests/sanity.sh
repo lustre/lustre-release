@@ -2912,9 +2912,9 @@ test_27K() {
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA value"
 
 	# file create in dir should fail
-	touch $DIR/$tdir/$tdir/$tfile && "$DIR/$tdir: file create should fail"
+	touch $DIR/$tdir/$tdir/$tfile && error "$DIR/$tdir: file create should fail"
 	touch $DIR/$tdir/${tdir}2/$tfile &&
-		"$DIR/${tdir}2: file create should fail"
+		error "$DIR/${tdir}2: file create should fail"
 
 	# chmod should work
 	chmod 777 $DIR/$tdir/$tdir ||
@@ -3250,7 +3250,7 @@ test_27P() {
 
 	# file create in dir should fail
 	# ("/{foreign_symlink_prefix}/${uuid1}/${uuid2}/" missing)
-	touch $DIR/$tdir/$tdir/$tfile && "$DIR/$tdir: file create should fail"
+	touch $DIR/$tdir/$tdir/$tfile && error "$DIR/$tdir: file create should fail"
 
 	# rename should succeed
 	mv $DIR/$tdir/$tdir $DIR/$tdir/${tdir}.new ||
@@ -17867,10 +17867,10 @@ test_184a() {
 	$LFS swap_layouts $file1 $file2 || error "swap of file layout failed"
 	gen=$($LFS getstripe -g $file1)
 	[[ $gen1 != $gen ]] ||
-		"Layout generation on $file1 does not change"
+		error "Layout generation on $file1 does not change"
 	gen=$($LFS getstripe -g $file2)
 	[[ $gen2 != $gen ]] ||
-		"Layout generation on $file2 does not change"
+		error "Layout generation on $file2 does not change"
 
 	cmp $ref1 $file2 || error "content compare failed ($ref1 != $file2)"
 	cmp $ref2 $file1 || error "content compare failed ($ref2 != $file1)"
@@ -26688,7 +26688,7 @@ test_801b() {
 	prep_801
 
 	mkdir $DIR/$tdir || error "(1) fail to mkdir"
-	createmany -d $DIR/$tdir/d 6 || "(2) fail to mkdir"
+	createmany -d $DIR/$tdir/d 6 || error "(2) fail to mkdir"
 	touch $DIR/$tdir/d2/f10 || error "(3) fail to touch"
 	touch $DIR/$tdir/d3/f11 || error "(4) fail to touch"
 	touch $DIR/$tdir/d4/f12 || error "(5) fail to touch"

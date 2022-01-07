@@ -5853,7 +5853,7 @@ test_38()
 		error "$DIR/$tdir/$tfile: setstripe should fail"
 
 	# R/W should fail
-	cat $DIR/$tdir/$tfile && "$DIR/$tdir/$tfile: read should fail"
+	cat $DIR/$tdir/$tfile && error "$DIR/$tdir/$tfile: read should fail"
 	cat /etc/passwd > $DIR/$tdir/$tfile &&
 		error "$DIR/$tdir/$tfile: write should fail"
 

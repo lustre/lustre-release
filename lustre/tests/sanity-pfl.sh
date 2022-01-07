@@ -499,7 +499,7 @@ test_6() {
 	[ "$old_chksum" != "$chksum" ] &&
 		error "(composite -> v1) $old_chksum != $chksum"
 
-	rm -f $comp_file || "Delete $comp_file failed"
+	rm -f $comp_file || error "Delete $comp_file failed"
 }
 run_test 6 "Migrate composite file"
 
@@ -520,7 +520,7 @@ test_7() {
 	$RUNAS $LFS setstripe --component-add -E -1 -c 5 $comp_file ||
 		error "Add last component to $comp_file failed"
 
-	rm $comp_file || "Delete composite failed"
+	rm $comp_file || error "Delete composite failed"
 }
 run_test 7 "Add/Delete/Create composite file by non-privileged user"
 
