@@ -3,8 +3,6 @@
 # For multiple clients testing, we need use the cfg/ncli.sh config file, and
 # only need specify the "RCLIENTS" variable. The "CLIENTS" and "CLIENTCOUNT"
 # variables are defined in init_clients_lists(), called from cfg/ncli.sh.
-CLIENT1=${CLIENT1:-$(hostname)}
-SINGLECLIENT=$CLIENT1
 RCLIENTS=${RCLIENTS:-""}
 
 init_clients_lists

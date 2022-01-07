@@ -265,7 +265,6 @@ test_2 () {
 run_test 2 "run llverfs on OST ldiskfs/zfs filesystem"
 
 test_3 () {
-	[ -z "$CLIENTS" ] && skip_env "CLIENTS not defined, skipping"
 	[ -z "$MPIRUN" ] && skip_env "MIPRUN not defined, skipping"
 	[ -z "$MDSRATE" ] && skip_env "MDSRATE not defined, skipping"
 	[ ! -x $MDSRATE ] && skip_env "$MDSRATE not built, skipping"

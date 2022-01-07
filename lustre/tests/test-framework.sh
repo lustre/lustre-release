@@ -7203,20 +7203,23 @@ init_clients_lists () {
     # Sanity check: exclude the dup entries
     RCLIENTS=$(for i in ${rclients//,/ }; do echo $i; done | sort -u)
 
-    clients="$SINGLECLIENT $HOSTNAME $RCLIENTS"
+	export CLIENT1=${CLIENT1:-$HOSTNAME}
+	export SINGLECLIENT=$CLIENT1
+
+	clients="$SINGLECLIENT $HOSTNAME $RCLIENTS"
 
     # Sanity check: exclude the dup entries from CLIENTS
     # for those configs which has SINGLCLIENT set to local client
     clients=$(for i in $clients; do echo $i; done | sort -u)
 
-    CLIENTS=$(comma_list $clients)
+	export CLIENTS=$(comma_list $clients)
     local -a remoteclients=($RCLIENTS)
     for ((i=0; $i<${#remoteclients[@]}; i++)); do
             varname=CLIENT$((i + 2))
-            eval $varname=${remoteclients[i]}
+			eval export $varname=${remoteclients[i]}
     done
 
-    CLIENTCOUNT=$((${#remoteclients[@]} + 1))
+	export CLIENTCOUNT=$((${#remoteclients[@]} + 1))
 }
 
 get_random_entry () {

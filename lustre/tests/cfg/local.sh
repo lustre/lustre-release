@@ -6,7 +6,6 @@ mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
 ost_HOST=${ost_HOST:-$(hostname)}
 ostfailover_HOST=${ostfailover_HOST}
-CLIENTS=""
 # FILESET variable is used by sanity.sh to verify fileset
 # feature, tests should pass even under subdirectory namespace.
 FILESET=${FILESET:-""}

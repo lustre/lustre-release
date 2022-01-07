@@ -1009,7 +1009,6 @@ test_10b() { # former test_2b
 	local post
 	local var=${SINGLEMDS}_svc
 
-	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
 	[ $CLIENTCOUNT -ge 2 ] || \
 		{ skip "Need two or more clients, have $CLIENTCOUNT" && \
 			exit 0; }
