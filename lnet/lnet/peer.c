@@ -1334,21 +1334,18 @@ lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni)
 	}
 }
 
-lnet_nid_t
-lnet_peer_primary_nid_locked(lnet_nid_t nid)
+void
+lnet_peer_primary_nid_locked(lnet_nid_t nid, struct lnet_nid *result)
 {
 	/* FIXME handle large-addr nid */
 	struct lnet_peer_ni *lpni;
-	lnet_nid_t primary_nid = nid;
 
+	lnet_nid4_to_nid(nid, result);
 	lpni = lnet_find_peer_ni_locked(nid);
 	if (lpni) {
-		primary_nid = lnet_nid_to_nid4(
-			&lpni->lpni_peer_net->lpn_peer->lp_primary_nid);
+		*result = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
 		lnet_peer_ni_decref_locked(lpni);
 	}
-
-	return primary_nid;
 }
 
 bool
@@ -2310,13 +2307,13 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp, int dc_error)
 
 		CDEBUG(D_NET, "sending pending message %s to target %s\n",
 		       lnet_msgtyp2str(msg->msg_type),
-		       libcfs_id2str(msg->msg_target));
-		rc = lnet_send(msg->msg_src_nid_param, msg,
-			       msg->msg_rtr_nid_param);
+		       libcfs_idstr(&msg->msg_target));
+		rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param), msg,
+			       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
 		if (rc < 0) {
 			CNETERR("Error sending %s to %s: %d\n",
 			       lnet_msgtyp2str(msg->msg_type),
-			       libcfs_id2str(msg->msg_target), rc);
+			       libcfs_idstr(&msg->msg_target), rc);
 			lnet_finalize(msg, rc);
 		}
 	}
@@ -3728,12 +3725,12 @@ static void lnet_resend_msgs(void)
 
 	list_for_each_entry_safe(msg, tmp, &resend, msg_list) {
 		list_del_init(&msg->msg_list);
-		rc = lnet_send(msg->msg_src_nid_param, msg,
-			       msg->msg_rtr_nid_param);
+		rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param), msg,
+			       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
 		if (rc < 0) {
 			CNETERR("Error sending %s to %s: %d\n",
 			       lnet_msgtyp2str(msg->msg_type),
-			       libcfs_id2str(msg->msg_target), rc);
+			       libcfs_idstr(&msg->msg_target), rc);
 			lnet_finalize(msg, rc);
 		}
 	}

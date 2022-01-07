@@ -117,19 +117,19 @@ struct lnet_msg {
 	struct list_head	msg_activelist;
 	struct list_head	msg_list;	/* Q for credits/MD */
 
-	struct lnet_process_id	msg_target;
+	struct lnet_processid	msg_target;
 	/* Primary NID of the source. */
-	lnet_nid_t		msg_initiator;
+	struct lnet_nid		msg_initiator;
 	/* where is it from, it's only for building event */
-	lnet_nid_t		msg_from;
+	struct lnet_nid		msg_from;
 	__u32			msg_type;
 
 	/*
 	 * hold parameters in case message is with held due
 	 * to discovery
 	 */
-	lnet_nid_t		msg_src_nid_param;
-	lnet_nid_t		msg_rtr_nid_param;
+	struct lnet_nid		msg_src_nid_param;
+	struct lnet_nid		msg_rtr_nid_param;
 
 	/*
 	 * Deadline for the message after which it will be finalized if it

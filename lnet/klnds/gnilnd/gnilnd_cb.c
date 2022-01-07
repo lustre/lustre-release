@@ -1676,7 +1676,7 @@ kgnilnd_queue_tx(kgn_conn_t *conn, kgn_tx_t *tx)
 }
 
 void
-kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
+kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_processid *target)
 {
 	kgn_peer_t      *peer;
 	kgn_peer_t      *new_peer = NULL;
@@ -1699,7 +1699,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
 	/* I expect to find him, so only take a read lock */
 	read_lock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	peer = kgnilnd_find_peer_locked(target->nid);
+	peer = kgnilnd_find_peer_locked(lnet_nid_to_nid4(&target->nid));
 	if (peer != NULL) {
 		conn = kgnilnd_find_conn_locked(peer);
 		/* this could be NULL during quiesce */
@@ -1723,7 +1723,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
 
 	CFS_RACE(CFS_FAIL_GNI_FIND_TARGET);
 
-	node_state = kgnilnd_get_node_state(LNET_NIDADDR(target->nid));
+	node_state = kgnilnd_get_node_state(ntohl(target->nid->nid_addr[0]));
 
 	/* NB - this will not block during normal operations -
 	 * the only writer of this is in the startup/shutdown path. */
@@ -1736,7 +1736,8 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
 	/* ignore previous peer entirely - we cycled the lock, so we
 	 * will create new peer and at worst drop it if peer is still
 	 * in the tables */
-	rc = kgnilnd_create_peer_safe(&new_peer, target->nid, net, node_state);
+	rc = kgnilnd_create_peer_safe(&new_peer, lnet_nid_to_nid4(&target->nid),
+				      net, node_state);
 	if (rc != 0) {
 		up_read(&kgnilnd_data.kgn_net_rw_sem);
 		GOTO(no_peer, rc);
@@ -1747,7 +1748,8 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
 
 	/* search for peer again now that we have the lock
 	 * if we don't find it, add our new one to the list */
-	kgnilnd_add_peer_locked(target->nid, new_peer, &peer);
+	kgnilnd_add_peer_locked(lnet_nid_to_nid4(&target->nid), new_peer,
+				&peer);
 
 	/* don't create a connection if the peer is not up */
 	if (peer->gnp_state != GNILND_PEER_UP) {
@@ -2017,7 +2019,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
 	struct lnet_hdr  *hdr = &lntmsg->msg_hdr;
 	int               type = lntmsg->msg_type;
-	struct lnet_process_id target = lntmsg->msg_target;
+	struct lnet_processid *target = &lntmsg->msg_target;
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      niov = lntmsg->msg_niov;
@@ -2036,7 +2038,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	LASSERT(!in_interrupt());
 
 	CDEBUG(D_NET, "sending msg type %d with %d bytes in %d frags to %s\n",
-	       type, nob, niov, libcfs_id2str(target));
+	       type, nob, niov, libcfs_idstr(target));
 
 	LASSERTF(nob == 0 || niov > 0,
 		"lntmsg %p nob %d niov %d\n", lntmsg, nob, niov);
@@ -2097,7 +2099,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		tx->tx_lntmsg[1] = lnet_create_reply_msg(ni, lntmsg);
 		if (tx->tx_lntmsg[1] == NULL) {
 			CERROR("Can't create reply for GET to %s\n",
-			       libcfs_nid2str(target.nid));
+			       libcfs_nidstr(&target->nid));
 			kgnilnd_tx_done(tx, rc);
 			rc = -EIO;
 			goto out;
@@ -2110,7 +2112,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			tx->tx_msg.gnm_u.putreq.gnprm_hdr = *hdr;
 
 		/* rest of tx_msg is setup just before it is sent */
-		kgnilnd_launch_tx(tx, net, &target);
+		kgnilnd_launch_tx(tx, net, target);
 		goto out;
 	case LNET_MSG_REPLY:
 	case LNET_MSG_PUT:
@@ -2146,7 +2148,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			tx->tx_msg.gnm_u.get.gngm_hdr = *hdr;
 
 		/* rest of tx_msg is setup just before it is sent */
-		kgnilnd_launch_tx(tx, net, &target);
+		kgnilnd_launch_tx(tx, net, target);
 		goto out;
 	}
 
@@ -2170,7 +2172,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	tx->tx_msg.gnm_u.immediate.gnim_hdr = *hdr;
 	tx->tx_lntmsg[0] = lntmsg;
-	kgnilnd_launch_tx(tx, net, &target);
+	kgnilnd_launch_tx(tx, net, target);
 
 out:
 	/* use stored value as we could have already finalized lntmsg here from a failed launch */

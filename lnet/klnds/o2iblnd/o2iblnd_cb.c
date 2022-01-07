@@ -1620,7 +1620,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
 	struct lnet_hdr *hdr = &lntmsg->msg_hdr;
 	int               type = lntmsg->msg_type;
-	struct lnet_process_id target = lntmsg->msg_target;
+	struct lnet_processid *target = &lntmsg->msg_target;
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      payload_niov = lntmsg->msg_niov;
@@ -1633,10 +1633,10 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	int               nob;
 	int               rc;
 
-        /* NB 'private' is different depending on what we're sending.... */
+	/* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
-               payload_nob, payload_niov, libcfs_id2str(target));
+	CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
+	       payload_nob, payload_niov, libcfs_idstr(target));
 
 	LASSERT (payload_nob == 0 || payload_niov > 0);
 	LASSERT (payload_niov <= LNET_MAX_IOV);
@@ -1644,11 +1644,11 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	/* Thread context */
 	LASSERT (!in_interrupt());
 
-	tx = kiblnd_get_idle_tx(ni, target.nid);
+	tx = kiblnd_get_idle_tx(ni, lnet_nid_to_nid4(&target->nid));
 	if (tx == NULL) {
 		CERROR("Can't allocate %s txd for %s\n",
 			lnet_msgtyp2str(type),
-			libcfs_nid2str(target.nid));
+			libcfs_nidstr(&target->nid));
 		return -ENOMEM;
 	}
 	ibmsg = tx->tx_msg;
@@ -1678,7 +1678,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 					  0, lntmsg->msg_md->md_length);
 		if (rc != 0) {
 			CERROR("Can't setup GET sink for %s: %d\n",
-			       libcfs_nid2str(target.nid), rc);
+			       libcfs_nidstr(&target->nid), rc);
 			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 			return -EIO;
@@ -1693,7 +1693,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
                 tx->tx_lntmsg[1] = lnet_create_reply_msg(ni, lntmsg);
 		if (tx->tx_lntmsg[1] == NULL) {
 			CERROR("Can't create reply for GET -> %s\n",
-			       libcfs_nid2str(target.nid));
+			       libcfs_nidstr(&target->nid));
 			kiblnd_tx_done(tx);
 			return -EIO;
 		}
@@ -1701,7 +1701,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		/* finalise lntmsg[0,1] on completion */
 		tx->tx_lntmsg[0] = lntmsg;
 		tx->tx_waiting = 1;             /* waiting for GET_DONE */
-		kiblnd_launch_tx(ni, tx, target.nid);
+		kiblnd_launch_tx(ni, tx, lnet_nid_to_nid4(&target->nid));
 		return 0;
 
 	case LNET_MSG_REPLY:
@@ -1716,7 +1716,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 					  payload_offset, payload_nob);
 		if (rc != 0) {
 			CERROR("Can't setup PUT src for %s: %d\n",
-			       libcfs_nid2str(target.nid), rc);
+			       libcfs_nidstr(&target->nid), rc);
 			kiblnd_tx_done(tx);
 			return -EIO;
 		}
@@ -1729,7 +1729,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		/* finalise lntmsg[0,1] on completion */
 		tx->tx_lntmsg[0] = lntmsg;
 		tx->tx_waiting = 1;             /* waiting for PUT_{ACK,NAK} */
-		kiblnd_launch_tx(ni, tx, target.nid);
+		kiblnd_launch_tx(ni, tx, lnet_nid_to_nid4(&target->nid));
 		return 0;
 	}
 
@@ -1753,14 +1753,14 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	/* finalise lntmsg on completion */
 	tx->tx_lntmsg[0] = lntmsg;
 
-	kiblnd_launch_tx(ni, tx, target.nid);
+	kiblnd_launch_tx(ni, tx, lnet_nid_to_nid4(&target->nid));
 	return 0;
 }
 
 static void
 kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 {
-	struct lnet_process_id target = lntmsg->msg_target;
+	struct lnet_processid *target = &lntmsg->msg_target;
 	unsigned int niov = lntmsg->msg_niov;
 	struct bio_vec *kiov = lntmsg->msg_kiov;
 	unsigned int offset = lntmsg->msg_offset;
@@ -1769,33 +1769,33 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 	int rc;
 
 	tx = kiblnd_get_idle_tx(ni, rx->rx_conn->ibc_peer->ibp_nid);
-        if (tx == NULL) {
-                CERROR("Can't get tx for REPLY to %s\n",
-                       libcfs_nid2str(target.nid));
-                goto failed_0;
-        }
+	if (tx == NULL) {
+		CERROR("Can't get tx for REPLY to %s\n",
+		       libcfs_nidstr(&target->nid));
+		goto failed_0;
+	}
 
-        if (nob == 0)
-                rc = 0;
-        else
-                rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
-                                          niov, kiov, offset, nob);
+	if (nob == 0)
+		rc = 0;
+	else
+		rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
+					  niov, kiov, offset, nob);
 
-        if (rc != 0) {
-                CERROR("Can't setup GET src for %s: %d\n",
-                       libcfs_nid2str(target.nid), rc);
-                goto failed_1;
-        }
+	if (rc != 0) {
+		CERROR("Can't setup GET src for %s: %d\n",
+		       libcfs_nidstr(&target->nid), rc);
+		goto failed_1;
+	}
 
-        rc = kiblnd_init_rdma(rx->rx_conn, tx,
-                              IBLND_MSG_GET_DONE, nob,
-                              &rx->rx_msg->ibm_u.get.ibgm_rd,
-                              rx->rx_msg->ibm_u.get.ibgm_cookie);
-        if (rc < 0) {
-                CERROR("Can't setup rdma for GET from %s: %d\n",
-                       libcfs_nid2str(target.nid), rc);
-                goto failed_1;
-        }
+	rc = kiblnd_init_rdma(rx->rx_conn, tx,
+			      IBLND_MSG_GET_DONE, nob,
+			      &rx->rx_msg->ibm_u.get.ibgm_rd,
+			      rx->rx_msg->ibm_u.get.ibgm_cookie);
+	if (rc < 0) {
+		CERROR("Can't setup rdma for GET from %s: %d\n",
+		       libcfs_nidstr(&target->nid), rc);
+		goto failed_1;
+	}
 
 	if (nob == 0) {
 		/* No RDMA: local completion may happen now! */

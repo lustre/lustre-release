@@ -685,7 +685,7 @@ lnet_ptl_attach_md(struct lnet_me *me, struct lnet_libmd *md,
 
 		hdr   = &msg->msg_hdr;
 		/* Multi-Rail: Primary peer NID */
-		lnet_nid4_to_nid(msg->msg_initiator, &info.mi_id.nid);
+		info.mi_id.nid  = msg->msg_initiator;
 		info.mi_id.pid	= hdr->src_pid;
 		info.mi_opc	= LNET_MD_OP_PUT;
 		info.mi_portal	= hdr->msg.put.ptl_index;

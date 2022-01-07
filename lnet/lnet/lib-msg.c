@@ -81,12 +81,12 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 		ev->target.nid	  = hdr->dest_nid;
 		ev->initiator.pid = hdr->src_pid;
 		/* Multi-Rail: resolve src_nid to "primary" peer NID */
-		ev->initiator.nid = msg->msg_initiator;
+		ev->initiator.nid = lnet_nid_to_nid4(&msg->msg_initiator);
 		/* Multi-Rail: track source NID. */
 		ev->source.pid	  = hdr->src_pid;
 		ev->source.nid	  = hdr->src_nid;
 		ev->rlength       = hdr->payload_length;
-		ev->sender	  = msg->msg_from;
+		ev->sender	  = lnet_nid_to_nid4(&msg->msg_from);
 		ev->mlength	  = msg->msg_wanted;
 		ev->offset	  = msg->msg_offset;
 	}
@@ -390,7 +390,8 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
 		msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-		rc = lnet_send(msg->msg_ev.target.nid, msg, msg->msg_from);
+		rc = lnet_send(msg->msg_ev.target.nid, msg,
+			       lnet_nid_to_nid4(&msg->msg_from));
 
 		lnet_net_lock(cpt);
 		/*
@@ -633,7 +634,7 @@ lnet_resend_msg_locked(struct lnet_msg *msg)
 	 * this message consumed. The message will
 	 * consume another credit when it gets resent.
 	 */
-	msg->msg_target.nid = msg->msg_hdr.dest_nid;
+	lnet_nid4_to_nid(msg->msg_hdr.dest_nid, &msg->msg_target.nid);
 	lnet_msg_decommit_tx(msg, -EAGAIN);
 	msg->msg_sending = 0;
 	msg->msg_receiving = 0;
@@ -689,8 +690,8 @@ lnet_attempt_msg_resend(struct lnet_msg *msg)
 	/* don't resend recovery messages */
 	if (msg->msg_recovery) {
 		CDEBUG(D_NET, "msg %s->%s is a recovery ping. retry# %d\n",
-			libcfs_nid2str(msg->msg_from),
-			libcfs_nid2str(msg->msg_target.nid),
+			libcfs_nidstr(&msg->msg_from),
+			libcfs_nidstr(&msg->msg_target.nid),
 			msg->msg_retry_count);
 		return -ENOTRECOVERABLE;
 	}
@@ -701,8 +702,8 @@ lnet_attempt_msg_resend(struct lnet_msg *msg)
 	 */
 	if (msg->msg_no_resend) {
 		CDEBUG(D_NET, "msg %s->%s requested no resend. retry# %d\n",
-			libcfs_nid2str(msg->msg_from),
-			libcfs_nid2str(msg->msg_target.nid),
+			libcfs_nidstr(&msg->msg_from),
+			libcfs_nidstr(&msg->msg_target.nid),
 			msg->msg_retry_count);
 		return -ENOTRECOVERABLE;
 	}
@@ -710,8 +711,8 @@ lnet_attempt_msg_resend(struct lnet_msg *msg)
 	/* check if the message has exceeded the number of retries */
 	if (msg->msg_retry_count >= lnet_retry_count) {
 		CNETERR("msg %s->%s exceeded retry count %d\n",
-			libcfs_nid2str(msg->msg_from),
-			libcfs_nid2str(msg->msg_target.nid),
+			libcfs_nidstr(&msg->msg_from),
+			libcfs_nidstr(&msg->msg_target.nid),
 			msg->msg_retry_count);
 		return -ENOTRECOVERABLE;
 	}

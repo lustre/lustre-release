@@ -1818,7 +1818,8 @@ int kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command, int er
 void kgnilnd_peer_increase_reconnect_locked(kgn_peer_t *peer);
 void kgnilnd_queue_reply(kgn_conn_t *conn, kgn_tx_t *tx);
 void kgnilnd_queue_tx(kgn_conn_t *conn, kgn_tx_t *tx);
-void kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target);
+void kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net,
+		       struct lnet_processid *target);
 int kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full);
 void kgnilnd_consume_rx(kgn_rx_t *rx);
 

@@ -713,7 +713,8 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_process_id target,
 	       unsigned int offset, unsigned int len)
 {
 	msg->msg_type = type;
-	msg->msg_target = target;
+	msg->msg_target.pid = target.pid;
+	lnet_nid4_to_nid(target.nid, &msg->msg_target.nid);
 	msg->msg_len = len;
 	msg->msg_offset = offset;
 
@@ -764,7 +765,7 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 		CERROR("recv from %s / send to %s aborted: "
 		       "eager_recv failed %d\n",
 		       libcfs_nidstr(&msg->msg_rxpeer->lpni_nid),
-		       libcfs_id2str(msg->msg_target), rc);
+		       libcfs_idstr(&msg->msg_target), rc);
 		LASSERT(rc < 0); /* required by my callers */
 	}
 
@@ -866,7 +867,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 					LNET_STATS_TYPE_DROP);
 
 		CNETERR("Dropping message for %s: peer not alive\n",
-			libcfs_id2str(msg->msg_target));
+			libcfs_idstr(&msg->msg_target));
 		msg->msg_health_status = LNET_MSG_STATUS_REMOTE_DROPPED;
 		if (do_send)
 			lnet_finalize(msg, -EHOSTUNREACH);
@@ -881,11 +882,11 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 
 		CNETERR("Aborting message for %s: LNetM[DE]Unlink() already "
 			"called on the MD/ME.\n",
-			libcfs_id2str(msg->msg_target));
+			libcfs_idstr(&msg->msg_target));
 		if (do_send) {
 			msg->msg_no_resend = true;
 			CDEBUG(D_NET, "msg %p to %s canceled and will not be resent\n",
-			       msg, libcfs_id2str(msg->msg_target));
+			       msg, libcfs_idstr(&msg->msg_target));
 			lnet_finalize(msg, -ECANCELED);
 		}
 
@@ -1816,7 +1817,7 @@ lnet_handle_lo_send(struct lnet_send_data *sd)
 	if (!msg->msg_routing)
 		msg->msg_hdr.src_nid =
 			cpu_to_le64(lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid));
-	msg->msg_target.nid = lnet_nid_to_nid4(&the_lnet.ln_loni->ni_nid);
+	msg->msg_target.nid = the_lnet.ln_loni->ni_nid;
 	lnet_msg_commit(msg, cpt);
 	msg->msg_txni = the_lnet.ln_loni;
 
@@ -1901,8 +1902,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	 * what was originally set in the target or it will be the NID of
 	 * a router if this message should be routed
 	 */
-	/* FIXME handle large-addr nids */
-	msg->msg_target.nid = lnet_nid_to_nid4(&msg->msg_txpeer->lpni_nid);
+	msg->msg_target.nid = msg->msg_txpeer->lpni_nid;
 
 	/*
 	 * lnet_msg_commit assigns the correct cpt to the message, which
@@ -2972,8 +2972,8 @@ again:
 	 * continuing the same sequence of messages. Similarly, rtr_nid will
 	 * affect our choice of next hop.
 	 */
-	msg->msg_src_nid_param = src_nid;
-	msg->msg_rtr_nid_param = rtr_nid;
+	lnet_nid4_to_nid(src_nid, &msg->msg_src_nid_param);
+	lnet_nid4_to_nid(rtr_nid, &msg->msg_rtr_nid_param);
 
 	/*
 	 * If necessary, perform discovery on the peer that owns this peer_ni.
@@ -3092,8 +3092,8 @@ again:
 int
 lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
 {
-	lnet_nid_t		dst_nid = msg->msg_target.nid;
-	int			rc;
+	lnet_nid_t dst_nid = lnet_nid_to_nid4(&msg->msg_target.nid);
+	int rc;
 
 	/*
 	 * NB: rtr_nid is set to LNET_NID_ANY for all current use-cases,
@@ -3357,17 +3357,18 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 
 			lnet_net_unlock(cpt);
 			CDEBUG(D_NET, "resending %s->%s: %s recovery %d try# %d\n",
-			       libcfs_nid2str(msg->msg_src_nid_param),
-			       libcfs_id2str(msg->msg_target),
+			       libcfs_nidstr(&msg->msg_src_nid_param),
+			       libcfs_idstr(&msg->msg_target),
 			       lnet_msgtyp2str(msg->msg_type),
 			       msg->msg_recovery,
 			       msg->msg_retry_count);
-			rc = lnet_send(msg->msg_src_nid_param, msg,
-				       msg->msg_rtr_nid_param);
+			rc = lnet_send(lnet_nid_to_nid4(&msg->msg_src_nid_param),
+				       msg,
+				       lnet_nid_to_nid4(&msg->msg_rtr_nid_param));
 			if (rc) {
 				CERROR("Error sending %s to %s: %d\n",
 				       lnet_msgtyp2str(msg->msg_type),
-				       libcfs_id2str(msg->msg_target), rc);
+				       libcfs_idstr(&msg->msg_target), rc);
 				msg->msg_no_resend = true;
 				lnet_finalize(msg, rc);
 			}
@@ -4185,14 +4186,14 @@ lnet_parse_put(struct lnet_ni *ni, struct lnet_msg *msg)
 	hdr->msg.put.offset	= le32_to_cpu(hdr->msg.put.offset);
 
 	/* Primary peer NID. */
-	lnet_nid4_to_nid(msg->msg_initiator, &info.mi_id.nid);
+	info.mi_id.nid = msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_PUT;
 	info.mi_portal	= hdr->msg.put.ptl_index;
 	info.mi_rlength	= hdr->payload_length;
 	info.mi_roffset	= hdr->msg.put.offset;
 	info.mi_mbits	= hdr->msg.put.match_bits;
-	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_initiator, ni);
+	info.mi_cpt	= lnet_nid2cpt(&msg->msg_initiator, ni);
 
 	msg->msg_rx_ready_delay = ni->ni_net->net_lnd->lnd_eager_recv == NULL;
 	ready_delay = msg->msg_rx_ready_delay;
@@ -4248,14 +4249,14 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	source_id.nid = hdr->src_nid;
 	source_id.pid = hdr->src_pid;
 	/* Primary peer NID */
-	lnet_nid4_to_nid(msg->msg_initiator, &info.mi_id.nid);
+	info.mi_id.nid  = msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_GET;
 	info.mi_portal	= hdr->msg.get.ptl_index;
 	info.mi_rlength	= hdr->msg.get.sink_length;
 	info.mi_roffset	= hdr->msg.get.src_offset;
 	info.mi_mbits	= hdr->msg.get.match_bits;
-	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_initiator, ni);
+	info.mi_cpt	= lnet_nid2cpt(&msg->msg_initiator, ni);
 
 	rc = lnet_ptl_match_md(&info, msg);
 	if (rc == LNET_MATCHMD_DROP) {
@@ -4288,7 +4289,8 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	msg->msg_receiving = 0;
 
 	/* FIXME need to handle large-addr nid */
-	rc = lnet_send(lnet_nid_to_nid4(&ni->ni_nid), msg, msg->msg_from);
+	rc = lnet_send(lnet_nid_to_nid4(&ni->ni_nid), msg,
+		       lnet_nid_to_nid4(&msg->msg_from));
 	if (rc < 0) {
 		/* didn't get as far as lnet_ni_send() */
 		CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
@@ -4664,10 +4666,10 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	msg->msg_offset = 0;
 	msg->msg_hdr = *hdr;
 	/* for building message event */
-	msg->msg_from = from_nid4;
+	msg->msg_from = from_nid;
 	if (!for_me) {
 		msg->msg_target.pid	= dest_pid;
-		msg->msg_target.nid	= dest_nid;
+		lnet_nid4_to_nid(dest_nid, &msg->msg_target.nid);
 		msg->msg_routing	= 1;
 
 	} else {
@@ -4761,7 +4763,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid4,
 	msg->msg_rxni = ni;
 	lnet_ni_addref_locked(ni, cpt);
 	/* Multi-Rail: Primary NID of source. */
-	msg->msg_initiator = lnet_peer_primary_nid_locked(src_nid);
+	lnet_peer_primary_nid_locked(src_nid, &msg->msg_initiator);
 
 	/*
 	 * mark the status of this lpni as UP since we received a message
@@ -5100,7 +5102,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 {
 	struct lnet_msg	*msg = lnet_msg_alloc();
 	struct lnet_libmd *getmd = getmsg->msg_md;
-	struct lnet_process_id peer_id = getmsg->msg_target;
+	struct lnet_processid *peer_id = &getmsg->msg_target;
 	int cpt;
 
 	LASSERT(!getmsg->msg_target_is_router);
@@ -5108,7 +5110,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 
 	if (msg == NULL) {
 		CERROR("%s: Dropping REPLY from %s: can't allocate msg\n",
-		       libcfs_nidstr(&ni->ni_nid), libcfs_id2str(peer_id));
+		       libcfs_nidstr(&ni->ni_nid), libcfs_idstr(peer_id));
 		goto drop;
 	}
 
@@ -5119,7 +5121,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 
 	if (getmd->md_threshold == 0) {
 		CERROR("%s: Dropping REPLY from %s for inactive MD %p\n",
-			libcfs_nidstr(&ni->ni_nid), libcfs_id2str(peer_id),
+			libcfs_nidstr(&ni->ni_nid), libcfs_idstr(peer_id),
 			getmd);
 		lnet_res_unlock(cpt);
 		goto drop;
@@ -5128,21 +5130,21 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 	LASSERT(getmd->md_offset == 0);
 
 	CDEBUG(D_NET, "%s: Reply from %s md %p\n",
-	       libcfs_nidstr(&ni->ni_nid), libcfs_id2str(peer_id), getmd);
+	       libcfs_nidstr(&ni->ni_nid), libcfs_idstr(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
 	msg->msg_initiator =
-		lnet_nid_to_nid4(&getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid);
-	msg->msg_from = peer_id.nid;
+		getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid;
+	msg->msg_from = peer_id->nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
-	msg->msg_hdr.src_nid = peer_id.nid;
+	msg->msg_hdr.src_nid = lnet_nid_to_nid4(&peer_id->nid);
 	msg->msg_hdr.payload_length = getmd->md_length;
 	msg->msg_receiving = 1; /* required by lnet_msg_attach_md */
 
 	lnet_msg_attach_md(msg, getmd, getmd->md_offset, getmd->md_length);
 	lnet_res_unlock(cpt);
 
-	cpt = lnet_cpt_of_nid(peer_id.nid, ni);
+	cpt = lnet_nid2cpt(&peer_id->nid, ni);
 
 	lnet_net_lock(cpt);
 	lnet_msg_commit(msg, cpt);
@@ -5153,7 +5155,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 	return msg;
 
  drop:
-	cpt = lnet_cpt_of_nid(peer_id.nid, ni);
+	cpt = lnet_nid2cpt(&peer_id->nid, ni);
 
 	lnet_net_lock(cpt);
 	lnet_incr_stats(&ni->ni_stats, LNET_MSG_GET, LNET_STATS_TYPE_DROP);

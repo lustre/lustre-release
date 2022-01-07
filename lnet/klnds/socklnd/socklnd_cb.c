@@ -982,7 +982,7 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	/* '1' for consistency with code that checks !mpflag to restore */
 	unsigned int mpflag = 1;
 	int type = lntmsg->msg_type;
-	struct lnet_processid target;
+	struct lnet_processid *target = &lntmsg->msg_target;
 	unsigned int payload_niov = lntmsg->msg_niov;
 	struct bio_vec *payload_kiov = lntmsg->msg_kiov;
 	unsigned int payload_offset = lntmsg->msg_offset;
@@ -994,11 +994,9 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	/* NB 'private' is different depending on what we're sending.
 	 * Just ignore it...
 	 */
-	target.pid = lntmsg->msg_target.pid;
-	lnet_nid4_to_nid(lntmsg->msg_target.nid, &target.nid);
 
 	CDEBUG(D_NET, "sending %u bytes in %d frags to %s\n",
-	       payload_nob, payload_niov, libcfs_idstr(&target));
+	       payload_nob, payload_niov, libcfs_idstr(target));
 
 	LASSERT (payload_nob == 0 || payload_niov > 0);
 	LASSERT (payload_niov <= LNET_MAX_IOV);
@@ -1037,7 +1035,7 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	tx->tx_msg.ksm_zc_cookies[1] = 0;
 
 	/* The first fragment will be set later in pro_pack */
-	rc = ksocknal_launch_packet(ni, tx, &target);
+	rc = ksocknal_launch_packet(ni, tx, target);
 	/*
 	 * We can't test lntsmg->msg_vmflush again as lntmsg may
 	 * have been freed.
