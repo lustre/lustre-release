@@ -1179,6 +1179,17 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 				    lnet_nid_to_nid4(&id.nid)) < 1)
 			continue;
 
+		if (!class_find_param(lsi->lsi_lmd->lmd_params,
+					PARAM_NETWORK, NULL)) {
+			if (LNetGetPeerDiscoveryStatus()) {
+				CERROR("LNet Dynamic Peer Discovery is enabled"
+				       " on this node. 'network' option used in"
+				       " mkfs.lustre cannot be taken into"
+				       " account.\n");
+				RETURN(-EINVAL);
+			}
+		}
+
 		/* match specified network */
 		if (!class_match_net(lsi->lsi_lmd->lmd_params,
 				     PARAM_NETWORK, LNET_NID_NET(&id.nid)))
