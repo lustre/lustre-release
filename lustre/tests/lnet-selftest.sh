@@ -6,10 +6,6 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
-if [[ $(uname -m) = ppc64 ]]; then
-	# bug number for skipped test: LU-10073
-	ALWAYS_EXCEPT+="               smoke "
-fi
 
 build_test_filter
 
