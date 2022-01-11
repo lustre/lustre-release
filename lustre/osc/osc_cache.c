@@ -2413,15 +2413,16 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		LASSERT(ergo(grants > 0, grants >= tmp));
 
 		rc = 0;
+
+		/* We must not hold a page lock while we do osc_enter_cache()
+		 * or osc_extent_find(), so we must mark dirty & unlock
+		 * any pages in the write commit pagevec. */
+		if (pagevec_count(pvec)) {
+			cb(env, io, pvec);
+			pagevec_reinit(pvec);
+		}
+
 		if (grants == 0) {
-			/* We haven't allocated grant for this page, and we
-			 * must not hold a page lock while we do enter_cache,
-			 * so we must mark dirty & unlock any pages in the
-			 * write commit pagevec. */
-			if (pagevec_count(pvec)) {
-				cb(env, io, pvec);
-				pagevec_reinit(pvec);
-			}
 			rc = osc_enter_cache(env, cli, oap, tmp);
 			if (rc == 0)
 				grants = tmp;
