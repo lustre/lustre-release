@@ -2425,16 +2425,16 @@ zconf_umount() {
 
 # Mount the file system on the MDS
 mount_mds_client() {
-	local mds_HOST=${SINGLEMDS}_HOST
-	echo $mds_HOST
-	zconf_mount $mds1_HOST $MOUNT2 $MOUNT_OPTS ||
-		error "unable to mount $MOUNT2 on MDS"
+	local host=$(facet_active_host $SINGLEMDS)
+	echo $host
+	zconf_mount $host $MOUNT2 $MOUNT_OPTS ||
+		error "unable to mount $MOUNT2 on $host"
 }
 
 # Unmount the file system on the MDS
 umount_mds_client() {
-	local mds_HOST=${SINGLEMDS}_HOST
-	zconf_umount $mds1_HOST $MOUNT2
+	local host=$(facet_active_host $SINGLEMDS)
+	zconf_umount $host $MOUNT2
 	do_facet $SINGLEMDS "rmdir $MOUNT2"
 }
 
