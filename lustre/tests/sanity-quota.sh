@@ -3647,19 +3647,64 @@ run_test 51 "Test project accounting with mv/cp"
 test_52() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
-	setup_quota_test || error "setup quota failed with $?"
-	local dir="$DIR/$tdir/dir"
-	mkdir $dir && change_project -sp 1 $dir
 
-	touch $DIR/$tdir/file
-	#Try renaming a file into the project.  This should fail.
-	for num in $(seq 1 2000); do
-		mrename $DIR/$tdir/file $dir/file >&/dev/null &&
-			error "rename should fail"
-	done
-	return 0
+	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need MDS version at least 2.14.55"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	local dir1=$DIR/$tdir/t52_dir1
+	local dir2=$DIR/$tdir/t52_dir2
+
+	mkdir $dir1 || error "failed to mkdir $dir1"
+	mkdir $dir2 || error "failed to mkdir $dir2"
+
+	$LFS project -sp 1000 $dir1 || error "fail to set project on $dir1"
+	$LFS project -sp 1001 $dir2 || error "fail to set project on $dir2"
+
+	$DD if=/dev/zero of=/$dir1/$tfile bs=1M count=100 ||
+		error "failed to create and write $tdir1/$tfile"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+
+	local attrs=($(lsattr -p $dir1/$tfile))
+	(( ${attrs[0]} == 1000 )) ||
+		error "project ID on $dir1/$tfile is not inherited"
+
+	$LFS quota -p 1000 $DIR
+	$LFS quota -p 1001 $DIR
+
+	local prev_used=$(getquota -p 1000 global curspace)
+	local prev_used2=$(getquota -p 1001 global curspace)
+
+	mrename $dir1 $dir2/tdir || log "rename directory return $?"
+
+	local inum_before=$(ls -i $dir1/$tfile | awk '{print $1}')
+	mrename $dir1/$tfile $dir2/$tfile || error "failed to rename file"
+	local inum_after=$(ls -i $dir2/$tfile | awk '{print $1}')
+
+	attrs=($(lsattr -p $dir2/$tfile))
+	(( ${attrs[0]} == 1001 )) ||
+		error "project ID is not updated after rename"
+
+	(( $inum_before == $inum_after )) ||
+		error "inode is changed after rename: $inum_before, $inum_after"
+
+	sync_all_data || true
+
+	$LFS quota -p 1000 $DIR
+	$LFS quota -p 1001 $DIR
+
+	local new_used=$(getquota -p 1000 global curspace)
+	local new_used2=$(getquota -p 1001 global curspace)
+
+	(( $prev_used >= $new_used + 102400 )) ||
+		error "quota is not deducted from old project ID"
+	(( $prev_used2 <= $new_used2 - 102400 )) ||
+		error "quota is not added for the new project ID"
 }
-run_test 52 "Rename across different project ID"
+run_test 52 "Rename normal file across project ID"
 
 test_53() {
 	! is_project_quota_supported &&

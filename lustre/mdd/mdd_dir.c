@@ -2842,10 +2842,11 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * into our tree when the project IDs are the same; otherwise
 	 * tree quota mechanism would be circumvented.
 	 */
-	if (((tpattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
+	if ((((tpattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
 	    tpattr->la_projid != cattr->la_projid) ||
 	    ((pattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
-	    (pattr->la_projid != tpattr->la_projid)))
+	    (pattr->la_projid != tpattr->la_projid))) &&
+	    S_ISDIR(cattr->la_mode))
 		RETURN(-EXDEV);
 
 	/* we prevent an encrypted file from being renamed
@@ -2888,7 +2889,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 			      const struct lu_name *sname,
 			      const struct lu_name *tname,
 			      struct md_attr *ma,
-			      struct linkea_data *ldata,
+			      struct linkea_data *ldata, bool change_projid,
 			      struct thandle *handle)
 {
 	struct lu_attr *la = &mdd_env_info(env)->mdi_la_for_fix;
@@ -2942,6 +2943,8 @@ static int mdd_declare_rename(const struct lu_env *env,
 		return rc;
 
 	la->la_valid = LA_CTIME;
+	if (change_projid)
+		la->la_valid |= LA_PROJID;
 	rc = mdo_declare_attr_set(env, mdd_sobj, la, handle);
 	if (rc)
 		return rc;
@@ -3035,6 +3038,7 @@ static int mdd_rename(const struct lu_env *env,
 	bool is_dir;
 	bool tobj_ref = 0;
 	bool tobj_locked = 0;
+	bool change_projid = false;
 	unsigned cl_flags = 0;
 	int rc, rc2;
 	ENTRY;
@@ -3117,8 +3121,13 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc)
 		GOTO(stop, rc);
 
+	if (tpattr->la_projid != cattr->la_projid &&
+	    tpattr->la_flags & LUSTRE_PROJINHERIT_FL)
+		change_projid = true;
+
 	rc = mdd_declare_rename(env, mdd, mdd_spobj, mdd_tpobj, mdd_sobj,
-				mdd_tobj, lsname, ltname, ma, ldata, handle);
+				mdd_tobj, lsname, ltname, ma, ldata,
+				change_projid, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -3163,6 +3172,11 @@ static int mdd_rename(const struct lu_env *env,
 
 	/* XXX: mdd_sobj must be local one if it is NOT NULL. */
 	la->la_valid = LA_CTIME;
+	if (change_projid) {
+		/* mdd_update_time honors other valid flags except TIME ones */
+		la->la_valid |= LA_PROJID;
+		la->la_projid = tpattr->la_projid;
+	}
 	rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
 	if (rc)
 		GOTO(fixup_tpobj, rc);
