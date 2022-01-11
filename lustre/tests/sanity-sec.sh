@@ -2725,6 +2725,8 @@ setup_for_enc_tests() {
 }
 
 cleanup_for_enc_tests() {
+	local dummy_key
+
 	rm -rf $DIR/$tdir $*
 
 	# remount client normally
@@ -2740,6 +2742,13 @@ cleanup_for_enc_tests() {
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} ||
 			error "remount failed"
+	fi
+
+	# remove fscrypt key from keyring
+	dummy_key=$(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	if [ -n "$dummy_key" ]; then
+		keyctl revoke $dummy_key
+		keyctl reap
 	fi
 }
 
