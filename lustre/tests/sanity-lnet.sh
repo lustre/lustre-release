@@ -2335,6 +2335,19 @@ test_216() {
 }
 run_test 216 "Failed send to peer NI owned by local host should not trigger peer NI recovery"
 
+test_217() {
+	reinit_dlc || return $?
+
+	[[ $($LNETCTL net show | grep -c nid) -ne 1 ]] &&
+		error "Unexpected number of NIs after initalizing DLC"
+
+	do_lnetctl discover 0@lo ||
+		error "Failed to discover 0@lo"
+
+	unload_modules
+}
+run_test 217 "Don't leak memory when discovering peer with nnis <= 1"
+
 test_230() {
 	# LU-12815
 	echo "Check valid values; Should succeed"

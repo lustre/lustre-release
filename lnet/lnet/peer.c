@@ -3362,8 +3362,10 @@ __must_hold(&lp->lp_lock)
 	 * primary NID to the correct value here. Moreover, this peer
 	 * can show up with only the loopback NID in the ping buffer.
 	 */
-	if (pbuf->pb_info.pi_nnis <= 1)
+	if (pbuf->pb_info.pi_nnis <= 1) {
+		lnet_ping_buffer_decref(pbuf);
 		goto out;
+	}
 	nid = pbuf->pb_info.pi_ni[1].ns_nid;
 	if (nid_is_lo0(&lp->lp_primary_nid)) {
 		rc = lnet_peer_set_primary_nid(lp, nid, flags);
