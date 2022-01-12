@@ -450,13 +450,6 @@ module support is required to build Lustre kernel modules.
 
 LB_CHECK_CONFIG([MODVERSIONS])
 
-LB_CHECK_CONFIG([KALLSYMS], [], [
-	AC_MSG_ERROR([
-
-Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.
-])
-	])
-
 # 2.6.28
 LC_MODULE_LOADING
 ])
