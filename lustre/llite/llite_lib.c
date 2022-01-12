@@ -3268,7 +3268,16 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		return ERR_PTR(-ENOMEM);
 
 	ll_i2gids(op_data->op_suppgids, i1, i2);
-	op_data->op_fid1 = *ll_inode2fid(i1);
+	/* If the client is using a subdir mount and looks at what it sees as
+	 * /.fscrypt, interpret it as the .fscrypt dir at the root of the fs.
+	 */
+	if (unlikely(i1->i_sb && i1->i_sb->s_root && is_root_inode(i1) &&
+		     !fid_is_root(ll_inode2fid(i1)) &&
+		     name && namelen == strlen(dot_fscrypt_name) &&
+		     strncmp(name, dot_fscrypt_name, namelen) == 0))
+		lu_root_fid(&op_data->op_fid1);
+	else
+		op_data->op_fid1 = *ll_inode2fid(i1);
 
 	if (S_ISDIR(i1->i_mode)) {
 		down_read_non_owner(&ll_i2info(i1)->lli_lsm_sem);

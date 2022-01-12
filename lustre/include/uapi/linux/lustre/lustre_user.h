@@ -2172,6 +2172,7 @@ enum ioc_data_version_flags {
 #endif
 
 #define dot_lustre_name ".lustre"
+#define dot_fscrypt_name ".fscrypt"
 
 
 /********* HSM **********/

@@ -2147,6 +2147,15 @@ static int ll_rename(struct user_namespace *mnt_userns,
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
+	/* If the client is using a subdir mount and does a rename to what it
+	 * sees as /.fscrypt, interpret it as the .fscrypt dir at fs root.
+	 */
+	if (unlikely(is_root_inode(tgt) && !fid_is_root(ll_inode2fid(tgt)) &&
+		     tgt_dchild->d_name.len == strlen(dot_fscrypt_name) &&
+		     strncmp(tgt_dchild->d_name.name, dot_fscrypt_name,
+			     tgt_dchild->d_name.len) == 0))
+		lu_root_fid(&op_data->op_fid2);
+
 	if (src_dchild->d_inode)
 		op_data->op_fid3 = *ll_inode2fid(src_dchild->d_inode);
 

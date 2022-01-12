@@ -4234,6 +4234,8 @@ test_54() {
 	local testfile2=$testdir/${tfile}withveryverylongnametoexercisecode
 	local tmpfile=$TMP/${tfile}.tmp
 	local resfile=$TMP/${tfile}.res
+	local fid1
+	local fid2
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -4309,7 +4311,75 @@ test_54() {
 	$RUNAS fscrypt lock --verbose $testdir ||
 		error "fscrypt lock $testdir failed (3)"
 
-	rm -f $tmpfile $resfile
+	rm -rf $tmpfile $resfile $testdir ${testdir}2 $MOUNT/.fscrypt
+
+	# remount client with subdirectory mount
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+	export FILESET=/$tdir
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (1)"
+	export FILESET=""
+
+	# setup encryption from inside this subdir mount
+	# the .fscrypt directory is going to be created at the real fs root
+	fscrypt setup --verbose $MOUNT ||
+		error "fscrypt setup $MOUNT failed (2)"
+	testdir=$MOUNT/vault
+	mkdir $testdir
+	chown -R $ID0:$ID0 $testdir
+	fid1=$(path2fid $MOUNT/.fscrypt)
+	echo "With FILESET $tdir, .fscrypt FID is $fid1"
+
+	# encrypt 'vault' dir inside the subdir mount
+	echo -e 'mypass\nmypass' | su - $USER0 -c "fscrypt encrypt --verbose \
+		--source=custom_passphrase --name=protector $testdir" ||
+		error "fscrypt encrypt failed"
+
+	echo abc > $tmpfile
+	chmod 666 $tmpfile
+	$RUNAS cp $tmpfile $testdir/encfile
+
+	$RUNAS fscrypt lock --verbose $testdir ||
+		error "fscrypt lock $testdir failed (4)"
+
+	# remount client with encrypted dir as subdirectory mount
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+	export FILESET=/$tdir/vault
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (2)"
+	export FILESET=""
+	ls -laR $MOUNT
+	fid2=$(path2fid $MOUNT/.fscrypt)
+	echo "With FILESET $tdir/vault, .fscrypt FID is $fid2"
+	[ "$fid1" == "$fid2" ] || error "fid1 $fid1 != fid2 $fid2 (1)"
+
+	# all content seen by this mount is encrypted, but .fscrypt is virtually
+	# presented, letting us call fscrypt lock/unlock
+	echo mypass | $RUNAS fscrypt unlock --verbose $MOUNT ||
+		error "fscrypt unlock $MOUNT failed (3)"
+
+	ls -laR $MOUNT
+	[ $(cat $MOUNT/encfile) == "abc" ] || error "cat encfile failed"
+
+	# remount client without subdir mount
+	umount_client $MOUNT || error "umount $MOUNT failed (3)"
+	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (3)"
+	ls -laR $MOUNT
+	fid2=$(path2fid $MOUNT/.fscrypt)
+	echo "Without FILESET, .fscrypt FID is $fid2"
+	[ "$fid1" == "$fid2" ] || error "fid1 $fid1 != fid2 $fid2 (2)"
+
+	# because .fscrypt was actually created at the real root of the fs,
+	# we can call fscrypt lock/unlock on the encrypted dir
+	echo mypass | $RUNAS fscrypt unlock --verbose $DIR/$tdir/vault ||
+		error "fscrypt unlock $$DIR/$tdir/vault failed (4)"
+
+	ls -laR $MOUNT
+	echo c >> $DIR/$tdir/vault/encfile || error "write to encfile failed"
+
+	rm -rf $DIR/$tdir/vault/*
+	$RUNAS fscrypt lock --verbose $DIR/$tdir/vault ||
+		error "fscrypt lock $DIR/$tdir/vault failed (5)"
+
+	rm -rf $tmpfile $MOUNT/.fscrypt
 }
 run_test 54 "Encryption policies with fscrypt"
 
