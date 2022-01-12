@@ -16824,8 +16824,9 @@ test_160p() {
 
 	# remove changelog_users and check that orphan entries are removed
 	stop mds1
-	do_facet mds1 "$DEBUGFS -w -R 'rm changelog_users' $(mdsdevname 1)"
-	start mds1 || error "cannot start mdt"
+	local dev=$(mdsdevname 1)
+	do_facet mds1 "$DEBUGFS -w -R 'rm changelog_users' $dev"
+	start mds1 $dev $MDS_MOUNT_OPTS || error "cannot start mds1"
 	entry_count=$(changelog_dump | wc -l)
 	((entry_count == 0)) ||
 		error "found $entry_count changelog entries, expected none"
