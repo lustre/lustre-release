@@ -416,7 +416,7 @@ command_t cmdlist[] = {
 	 "     [[!] --mirror-state <[^]state>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --newer[XY] <reference>]\n"
 	 "     [[!] --ost|-O <uuid|index,...>] [[!] --perm [/-]mode]\n"
-	 "     [[!] --pool <pool>] [--print|-P] [--print0|-0]\n"
+	 "     [[!] --pool <pool>] [--print|-P] [--print0|-0] [--printf <format>]\n"
 	 "     [[!] --projid <projid>] [[!] --size|-s [+-]N[bkMGTPE]]\n"
 	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
 	 "     [[!] --stripe-index|-i <index,...>]\n"
@@ -3349,6 +3349,7 @@ enum {
 	LFS_NEWERXY_OPT,
 	LFS_INHERIT_RR_OPT,
 	LFS_FIND_PERM,
+	LFS_PRINTF_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -4915,6 +4916,8 @@ static int lfs_find(int argc, char **argv)
 			.name = "pool",		.has_arg = required_argument },
 	{ .val = '0',	.name = "print0",	.has_arg = no_argument },
 	{ .val = 'P',	.name = "print",	.has_arg = no_argument },
+	{ .val = LFS_PRINTF_OPT,
+			.name = "printf",       .has_arg = required_argument },
 	{ .val = LFS_PROJID_OPT,
 			.name = "projid",	.has_arg = required_argument },
 /* getstripe { .val = 'q', .name = "quiet",	.has_arg = no_argument }, */
@@ -4927,11 +4930,10 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
+/* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
 	{ .val = 'z',	.name = "extension-size",
 						.has_arg = required_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = required_argument },
-/* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
-/* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
 	int optidx = 0;
 	int pathstart = -1;
@@ -4947,7 +4949,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-		"-0A:b:B:c:C:D:E:g:G:hH:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
+		"-0A:b:B:c:C:D:E:g:G:hH:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:z:",
 		long_opts, &optidx)) >= 0) {
 		xtime = NULL;
 		xsign = NULL;
@@ -5537,6 +5539,9 @@ err_free:
 			break;
 		case 'P': /* we always print, this option is a no-op */
 			break;
+		case LFS_PRINTF_OPT:
+			param.fp_format_printf_str = optarg;
+			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
 			if (rc) {
@@ -5691,6 +5696,8 @@ err_free:
 			goto err;
 		}
 	}
+	if (!param.fp_verbose)
+		param.fp_verbose = VERBOSE_DEFAULT;
 
 	if (pathstart == -1) {
 		fprintf(stderr, "error: %s: no filename|pathname\n",

@@ -384,7 +384,7 @@ struct find_param {
 	unsigned long long	 fp_comp_end;
 	unsigned long long	 fp_comp_end_units;
 	unsigned long long	 fp_mdt_count;
-	unsigned		 fp_projid;
+	unsigned int		 fp_projid;
 	unsigned long long	 fp_blocks;
 	unsigned long long	 fp_blocks_units;
 
@@ -407,6 +407,8 @@ struct find_param {
 	int			 fp_bsign;
 	unsigned int		 fp_hash_inflags;
 	unsigned int		 fp_hash_exflags;
+	/* Print all information (lfs find only) */
+	char			 *fp_format_printf_str;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
@@ -546,7 +548,8 @@ int llapi_swap_layouts(const char *path1, const char *path2, __u64 dv1,
 
 /* Records received are in extended format now, though most of them are still
  * written in disk in changelog_rec format (to save space and time), it's
- * converted to extended format in the lustre api to ease changelog analysis. */
+ * converted to extended format in the lustre api to ease changelog analysis.
+ */
 #define HAVE_CHANGELOG_EXTEND_REC 1
 
 int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
@@ -822,8 +825,8 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 #define LLAPI_LAYOUT_OVERSTRIPING	4ULL
 
 /**
-* The layout includes a specific set of OSTs on which to allocate.
-*/
+ * The layout includes a specific set of OSTs on which to allocate.
+ */
 #define LLAPI_LAYOUT_SPECIFIC	0x2000000000000000ULL
 
 /**

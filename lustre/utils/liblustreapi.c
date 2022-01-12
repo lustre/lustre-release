@@ -82,6 +82,8 @@
 #include "lustreapi_internal.h"
 #include "lstddef.h"
 
+#define FORMATTED_BUF_LEN	1024
+
 static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
 
@@ -4871,6 +4873,549 @@ static bool find_check_lmm_info(struct find_param *param)
 }
 
 /*
+ * Interpret backslash escape sequences and write output into buffer.
+ * Anything written to the buffer will be null terminated.
+ *
+ * @param[in]	seq	String being parsed for escape sequence. The leading
+ *			'\' character is not included in this string (only the
+ *			characters after it)
+ * @param[out]	buffer	Location where interpreted escape sequence is written
+ * @param[in]	size	Size of the available buffer. (Needs to be large enough
+ *			to handle escape sequence output plus null terminator.)
+ * @param[out]	wrote	Number of bytes written to the buffer.
+ * @return		Number of characters from input string processed
+ *			as part of the escape sequence (0 for an unrecognized
+ *			escape sequence)
+ */
+int printf_format_escape(char *seq, char *buffer, size_t size, int *wrote)
+{
+	*wrote = 0;
+	/* For now, only handle single char escape sequences: \n, \t, \\ */
+	if (size < 2)
+		return 0;
+
+	switch (*seq) {
+	case 'n':
+		*buffer = '\n';
+		break;
+	case 't':
+		*buffer = '\t';
+		break;
+	case '\\':
+		*buffer = '\\';
+		break;
+	default:
+		return 0;
+	}
+
+	*wrote = 1;
+	return 1;
+}
+
+/*
+ * Interpret formats for timestamps (%a, %A@, etc)
+ *
+ * @param[in]	seq	String being parsed for timestamp format.  The leading
+ *			'%' character is not included in this string
+ * @param[out]	buffer	Location where timestamp info is written
+ * @param[in]	size	Size of the available buffer.
+ * @param[out]	wrote	Number of bytes written to the buffer.
+ * @return		Number of characters from input string processed
+ *			as part of the format (0 for an unknown format)
+ */
+
+int printf_format_timestamp(char *seq, char *buffer, size_t size, int *wrote,
+			    struct find_param *param)
+{
+	struct statx_timestamp ts = { 0, 0 };
+	struct tm *tm;
+	time_t t;
+	int rc = 0;
+	char *fmt = "%c";  /* Print in ctime format by default */
+	*wrote = 0;
+
+	switch (*seq) {
+	case 'a':
+		ts = param->fp_lmd->lmd_stx.stx_atime;
+		rc = 1;
+		break;
+	case 'A':
+		if (*(seq + 1) == '@') {
+			ts = param->fp_lmd->lmd_stx.stx_atime;
+			fmt = "%s";
+			rc = 2;
+		}
+		break;
+	case 'c':
+		ts = param->fp_lmd->lmd_stx.stx_ctime;
+		rc = 1;
+		break;
+	case 'C':
+		if (*(seq + 1) == '@') {
+			ts = param->fp_lmd->lmd_stx.stx_ctime;
+			fmt = "%s";
+			rc = 2;
+		}
+		break;
+	case 't':
+		ts = param->fp_lmd->lmd_stx.stx_mtime;
+		rc = 1;
+		break;
+	case 'T':
+		if (*(seq + 1) == '@') {
+			ts = param->fp_lmd->lmd_stx.stx_mtime;
+			fmt = "%s";
+			rc = 2;
+		}
+		break;
+	case 'w':
+		ts = param->fp_lmd->lmd_stx.stx_btime;
+		rc = 1;
+		break;
+	case 'W':
+		if (*(seq + 1) == '@') {
+			ts = param->fp_lmd->lmd_stx.stx_btime;
+			fmt = "%s";
+			rc = 2;
+		}
+		break;
+	default:
+		rc = 0;
+	}
+
+	if (rc) {
+		/* Found valid format, print to buffer */
+		t = ts.tv_sec;
+		tm = localtime(&t);
+		*wrote = strftime(buffer, size, fmt, tm);
+	}
+
+	return rc;
+}
+
+/*
+ * Print all ost indices associated with a file layout using a commma separated
+ * list.  For a file with mutliple components, the list of indices for each
+ * component will be enclosed in brackets.
+ *
+ * @param[out]	buffer	Location where OST indices are written
+ * @param[in]	size	Size of the available buffer.
+ * @pararm[in]	layout	Pointer to layout structure for the file
+ * @return		Number of bytes written to output buffer
+ */
+static int printf_format_ost_indices(char *buffer, size_t size,
+				struct llapi_layout *layout)
+{
+	uint64_t count, idx, i;
+	int err, bytes, wrote = 0;
+
+	/* Make sure to start at the first component */
+	err = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (err) {
+		llapi_error(LLAPI_MSG_ERROR, err,
+			    "error: layout component iteration failed\n");
+		goto format_done;
+	}
+	while (1) {
+		err = llapi_layout_stripe_count_get(layout, &count);
+		if (err) {
+			llapi_error(LLAPI_MSG_ERROR, err,
+				    "error: cannot get stripe_count\n");
+			goto format_done;
+		}
+
+		bytes = snprintf(buffer, (size - wrote), "%s", "[");
+		wrote += bytes;
+		if (wrote >= size)
+			goto format_done;
+		buffer += bytes;
+		for (i = 0; i < count; i++) {
+			err = llapi_layout_ost_index_get(layout, i, &idx);
+			if (err) {
+				llapi_error(LLAPI_MSG_ERROR, err,
+					    "error: cannot get OST index\n");
+				bytes = snprintf(buffer, (size - wrote),
+						 "%c,", '?');
+			} else {
+				bytes = snprintf(buffer, (size - wrote),
+						 "%"PRIu64",", idx);
+			}
+			wrote += bytes;
+			if (wrote >= size)
+				goto format_done;
+			buffer += bytes;
+		}
+		/* Overwrite last comma with closing bracket */
+		*(buffer - 1) = ']';
+
+		err = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (err == 0)		/* next component is found */
+			continue;
+		if (err < 0)
+			llapi_error(LLAPI_MSG_ERROR, err,
+				    "error: layout component iteration failed\n");
+		/* At this point, either got error or reached last component */
+		break;
+	}
+
+format_done:
+	if (wrote >= size)
+		wrote = (size - 1);
+	return wrote;
+}
+
+/*
+ * Parse Lustre-specific format sequences of the form %L{x}.
+ *
+ * @param[in]	seq	String being parsed for format sequence.  The leading
+ *			'%' character is not included in this string
+ * @param[out]	buffer	Location where interpreted format info is written
+ * @param[in]	size	Size of the available buffer.
+ * @param[out]	wrote	Number of bytes written to the buffer.
+ * @param[in]	param	The find_param structure associated with the file/dir
+ * @param[in]	path	Pathname of the current file/dir being handled
+ * @param[in]	projid	Project ID associated with the current file/dir
+ * @param[in]	d	File descriptor for the directory (or -1 for a
+ *			non-directory file)
+ * @return		Number of characters from input string processed
+ *			as part of the format (0 for an unknown format)
+ */
+int printf_format_lustre(char *seq, char *buffer, size_t size, int *wrote,
+			 struct find_param *param, char *path, int projid,
+			 int d)
+{
+	struct lmv_user_md *lum;
+	struct lmv_user_mds_data *objects;
+	struct llapi_layout *layout = NULL;
+	struct lu_fid fid;
+	unsigned int hash_type;
+	uint64_t str_cnt, str_size, idx;
+	char pool_name[LOV_MAXPOOLNAME + 1] = { '\0' };
+	int err, bytes, i;
+	int rc = 2;	/* all current valid sequences are 2 chars */
+	*wrote = 0;
+
+	/* Sanity check.  Formats always look like %L{X} */
+	if (*seq++ != 'L') {
+		rc = 0;
+		goto format_done;
+	}
+
+	/*
+	 * Some formats like %LF or %LP are handled the same for both files
+	 * and dirs, so handle all of those here.
+	 */
+	switch (*seq) {
+	case 'F':
+		err = llapi_path2fid(path, &fid);
+		if (err) {
+			llapi_error(LLAPI_MSG_ERROR, err,
+				    "error: cannot get fid\n");
+			goto format_done;
+		}
+		*wrote = snprintf(buffer, size, DFID_NOBRACE, PFID(&fid));
+		goto format_done;
+	case 'P':
+		*wrote = snprintf(buffer, size, "%d", projid);
+		goto format_done;
+	}
+
+	/* Other formats for files/dirs need to be handled differently */
+	if (d == -1) {		/* file */
+		//layout = llapi_layout_get_by_xattr(&param->fp_lmd->lmd_lmm,
+		//				   param->fp_lum_size, 0);
+		layout = llapi_layout_get_by_path(path, 0);
+		if (layout == NULL) {
+			llapi_error(LLAPI_MSG_ERROR, errno,
+				    "error: cannot get file layout\n");
+			goto format_done;
+		}
+
+		/*
+		 * Set the layout pointer to the last init component
+		 * since that is the component used for most of these
+		 * formats. (This also works for non-composite files)
+		 */
+		err = llapi_layout_get_last_init_comp(layout);
+		if (err) {
+			llapi_error(LLAPI_MSG_ERROR, err,
+				    "error: cannot get last initialized compomnent\n");
+			goto format_done;
+		}
+
+		switch (*seq) {
+		case 'c':	/* stripe count */
+			err = llapi_layout_stripe_count_get(layout, &str_cnt);
+			if (err) {
+				llapi_error(LLAPI_MSG_ERROR, err,
+					    "error: cannot get stripe_count\n");
+				goto format_done;
+			}
+			*wrote = snprintf(buffer, size, "%"PRIu64, str_cnt);
+			break;
+		case 'h':	/* hash info */
+			/* Not applicable to files.  Skip it. */
+			break;
+		case 'i':	/* starting index */
+			err = llapi_layout_ost_index_get(layout, 0, &idx);
+			if (err) {
+				llapi_error(LLAPI_MSG_ERROR, err,
+					    "error: cannot get OST index of last initialized component\n");
+				goto format_done;
+			}
+			*wrote = snprintf(buffer, size, "%"PRIu64, idx);
+			break;
+		case 'o':	/* list of object indices */
+			*wrote = printf_format_ost_indices(buffer, size, layout);
+			break;
+		case 'p':	/* pool name */
+			err = llapi_layout_pool_name_get(layout, pool_name,
+							 sizeof(pool_name));
+			if (err) {
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error: cannot get pool name\n");
+				goto format_done;
+			}
+			*wrote = snprintf(buffer, size, "%s", pool_name);
+			break;
+		case 'S':	/* stripe size */
+			err = llapi_layout_stripe_size_get(layout, &str_size);
+			if (err) {
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error: cannot get stripe_size\n");
+				goto format_done;
+			}
+			*wrote = snprintf(buffer, size, "%"PRIu64, str_size);
+			break;
+		default:
+			rc = 0;
+			break;
+		}
+	} else {		/* directory */
+		lum = (struct lmv_user_md *)param->fp_lmv_md;
+		objects = lum->lum_objects;
+
+		switch (*seq) {
+		case 'c':	/* stripe count */
+			*wrote = snprintf(buffer, size, "%d",
+					  (int)lum->lum_stripe_count);
+			break;
+		case 'h':	/* hash info */
+			hash_type = lum->lum_hash_type & LMV_HASH_TYPE_MASK;
+			if (hash_type < LMV_HASH_TYPE_MAX)
+				*wrote = snprintf(buffer, size, "%s",
+						  mdt_hash_name[hash_type]);
+			else
+				*wrote = snprintf(buffer, size, "%#x",
+						  hash_type);
+			break;
+		case 'i':	/* starting index */
+			*wrote = snprintf(buffer, size, "%d",
+					  lum->lum_stripe_offset);
+			break;
+		case 'o':	/* list of object indices */
+			str_cnt = (int) lum->lum_stripe_count;
+			*wrote = snprintf(buffer, size, "%s", "[");
+			if (*wrote >= size)
+				goto format_done;
+			buffer += *wrote;
+			for (i = 0; i < str_cnt; i++) {
+				bytes = snprintf(buffer, (size - *wrote),
+						 "%d,", objects[i].lum_mds);
+				*wrote += bytes;
+				if (*wrote >= size)
+					goto format_done;
+				buffer += bytes;
+			}
+			if (str_cnt == 0) {
+				/* Use lum_offset as the only list entry */
+				bytes = snprintf(buffer, (size - *wrote),
+						"%d]", lum->lum_stripe_offset);
+				*wrote += bytes;
+			} else {
+				/* Overwrite last comma with closing bracket */
+				*(buffer - 1) = ']';
+			}
+			break;
+		case 'p':	/* pool name */
+			*wrote = snprintf(buffer, size, "%s",
+					  lum->lum_pool_name);
+			break;
+		case 'S':	/* stripe size */
+			/* This has no meaning for directories.  Skip it. */
+			break;
+		default:
+			rc = 0;
+			break;
+		}
+	}
+
+format_done:
+	if (layout != NULL)
+		llapi_layout_free(layout);
+
+	if (*wrote >= size)
+		/* output of snprintf was truncated */
+		*wrote = size - 1;
+
+	return rc;
+}
+
+/*
+ * Interpret format specifiers beginning with '%'.
+ *
+ * @param[in]	seq	String being parsed for format specifier.  The leading
+ *			'%' character is not included in this string
+ * @param[out]	buffer	Location where formatted info is written
+ * @param[in]	size	Size of the available buffer.
+ * @param[out]	wrote	Number of bytes written to the buffer.
+ * @param[in]	param	The find_param structure associated with the file/dir
+ * @param[in]	path	Pathname of the current file/dir being handled
+ * @param[in]	projid	Project ID associated with the current file/dir
+ * @param[in]	d	File descriptor for the directory (or -1 for a
+ *			non-directory file)
+ * @return		Number of characters from input string processed
+ *			as part of the format (0 for an unknown format)
+ */
+int printf_format_directive(char *seq, char *buffer, size_t size, int *wrote,
+			 struct find_param *param, char *path, int projid,
+			 int d)
+{
+	__u16 mode = param->fp_lmd->lmd_stx.stx_mode;
+	uint64_t blocks = param->fp_lmd->lmd_stx.stx_blocks;
+	int rc = 1;  /* most specifiers are single character */
+
+	*wrote = 0;
+
+	switch (*seq) {
+	case 'a': case 'A':
+	case 'c': case 'C':
+	case 't': case 'T':
+	case 'w': case 'W':	/* timestamps */
+		rc = printf_format_timestamp(seq, buffer, size, wrote, param);
+		break;
+	case 'b':	/* file size (in 512B blocks) */
+		*wrote = snprintf(buffer, size, "%"PRIu64, blocks);
+		break;
+	case 'G':	/* GID of owner */
+		*wrote = snprintf(buffer, size, "%u",
+				   param->fp_lmd->lmd_stx.stx_gid);
+		break;
+	case 'k':	/* file size (in 1K blocks) */
+		*wrote = snprintf(buffer, size, "%"PRIu64, (blocks + 1)/2);
+		break;
+	case 'L':	/* Lustre-specific formats */
+		rc = printf_format_lustre(seq, buffer, size, wrote, param,
+					  path, projid, d);
+		break;
+	case 'm':	/* file mode in octal */
+		*wrote = snprintf(buffer, size, "%#o", (mode & (~S_IFMT)));
+		break;
+	case 'p':	/* Path name of file */
+		*wrote = snprintf(buffer, size, "%s", path);
+		break;
+	case 's':	/* file size (in bytes) */
+		*wrote = snprintf(buffer, size, "%"PRIu64,
+				   (uint64_t) param->fp_lmd->lmd_stx.stx_size);
+		break;
+	case 'U':	/* UID of owner */
+		*wrote = snprintf(buffer, size, "%u",
+				   param->fp_lmd->lmd_stx.stx_uid);
+		break;
+	case 'y':	/* file type */
+		if (S_ISREG(mode))
+			*buffer = 'f';
+		else if (S_ISDIR(mode))
+			*buffer = 'd';
+		else if (S_ISLNK(mode))
+			*buffer = 'l';
+		else if (S_ISBLK(mode))
+			*buffer = 'b';
+		else if (S_ISCHR(mode))
+			*buffer = 'c';
+		else if (S_ISFIFO(mode))
+			*buffer = 'p';
+		else if (S_ISSOCK(mode))
+			*buffer = 's';
+		else
+			*buffer = '?';
+		*wrote = 1;
+		break;
+	case '%':
+		*buffer = '%';
+		*wrote = 1;
+		break;
+	default:	/* invalid format specifier */
+		rc = 0;
+		break;
+	}
+
+	if (*wrote >= size)
+		/* output of snprintf was truncated */
+		*wrote = size - 1;
+
+	return rc;
+}
+
+/*
+ * Parse user-supplied string for the -printf option and interpret any
+ * '%' format specifiers or '\' escape sequences.
+ *
+ * @param[in]	param	The find_param struct containing the -printf string
+ *			as well as info about the current file/dir that mathced
+ *			the lfs find search criteria
+ * @param[in]	path	Path name for current file/dir
+ * @param[in]	projid	Project ID associated with current file/dir
+ * @param[in]	d	File descriptor for current directory (or -1 for a
+ *			non-directory file)
+ */
+void printf_format_string(struct find_param *param, char *path,
+			   int projid, int d)
+{
+	char output[FORMATTED_BUF_LEN];
+	char *fmt_char = param->fp_format_printf_str;
+	char *buff = output;
+	size_t buff_size;
+	int rc, written;
+
+	buff = output;
+	*buff = '\0';
+	buff_size = FORMATTED_BUF_LEN;
+
+	/* Always leave one free byte in buffer for trailing NUL */
+	while (*fmt_char && (buff_size > 1)) {
+		rc = 0;
+		written = 0;
+		if (*fmt_char == '%') {
+			rc = printf_format_directive(fmt_char + 1, buff,
+						  buff_size, &written, param,
+						  path, projid, d);
+		} else if (*fmt_char == '\\')
+			rc = printf_format_escape(fmt_char + 1, buff,
+						  buff_size, &written);
+
+		if (rc > 0) {
+			/* Either a '\' escape or '%' format was processed.
+			 * Increment pointers accordingly.
+			 */
+			fmt_char += (rc + 1);
+			buff += written;
+			buff_size -= written;
+		} else {
+			/* Regular char or invalid escape/format.
+			 * Either way, copy current character.
+			 */
+			*buff++ = *fmt_char++;
+			buff_size--;
+		}
+	}
+
+	/* Terminate output buffer and print */
+	*buff = '\0';
+	llapi_printf(LLAPI_MSG_NORMAL, "%s", output);
+}
+
+/*
  * Get file/directory project id.
  * by the open fd resides on.
  * Return 0 and project id on success, or -ve errno.
@@ -4930,9 +5475,18 @@ static int cb_find_init(char *path, int p, int *dp,
 	__u32 stripe_count = 0;
 	__u64 flags;
 	int fd = -2;
+	int projid = 0;
+	bool gather_all = false;
 
 	if (p == -1 && d == -1)
 		return -EINVAL;
+
+	/* Reset this value between invocations */
+	param->fp_get_lmv = 0;
+
+	/* Gather all file/dir info, not just what's needed for search params */
+	if (param->fp_format_printf_str)
+		gather_all = true;
 
 	/* If a regular expression is presented, make the initial decision */
 	if (param->fp_pattern != NULL) {
@@ -4976,7 +5530,8 @@ static int cb_find_init(char *path, int p, int *dp,
 	    param->fp_check_size || param->fp_check_blocks ||
 	    find_check_lmm_info(param) ||
 	    param->fp_check_mdt_count || param->fp_hash_type ||
-	    param->fp_check_hash_flag || param->fp_perm_sign)
+	    param->fp_check_hash_flag || param->fp_perm_sign ||
+	    gather_all)
 		decision = 0;
 
 	if (param->fp_type != 0 && checked_type == 0)
@@ -4985,18 +5540,20 @@ static int cb_find_init(char *path, int p, int *dp,
 	if (decision == 0) {
 		if (d != -1 &&
 		    (param->fp_check_mdt_count || param->fp_hash_type ||
-		     param->fp_check_hash_flag || param->fp_check_foreign)) {
+		     param->fp_check_hash_flag || param->fp_check_foreign ||
+		     gather_all)) {
 			param->fp_get_lmv = 1;
 			ret = cb_get_dirstripe(path, &d, param);
 			if (ret != 0) {
 				if (errno == ENODATA) {
+					/* Fill in struct for unstriped dir */
 					ret = 0;
-					if (param->fp_check_mdt_count ||
-					    param->fp_hash_type ||
-					    param->fp_check_hash_flag) {
-						param->fp_lmv_md->lum_stripe_count = 0;
-						param->fp_lmv_md->lum_hash_type = 0;
-					}
+					param->fp_lmv_md->lum_magic = LMV_MAGIC_V1;
+					/* Use 0 until we find actual offset */
+					param->fp_lmv_md->lum_stripe_offset = 0;
+					param->fp_lmv_md->lum_stripe_count = 0;
+					param->fp_lmv_md->lum_hash_type = 0;
+
 					if (param->fp_check_foreign) {
 						if (param->fp_exclude_foreign)
 							goto print;
@@ -5066,10 +5623,17 @@ static int cb_find_init(char *path, int p, int *dp,
 			lmm->lmm_stripe_count = 0;
 			lmm->lmm_stripe_offset = -1;
 		}
-		if (ret == 0 && param->fp_mdt_uuid != NULL) {
+		if (ret == 0 && (param->fp_mdt_uuid != NULL || gather_all)) {
 			if (d != -1) {
 				ret = llapi_file_fget_mdtidx(d,
 						     &param->fp_file_mdt_index);
+				/*
+				 *  Make sure lum_stripe_offset matches
+				 *  mdt_index even for unstriped directories.
+				 */
+				if (ret == 0 && param->fp_get_lmv)
+					param->fp_lmv_md->lum_stripe_offset =
+						param->fp_file_mdt_index;
 			} else if (S_ISREG(lmd->lmd_stx.stx_mode)) {
 				/*
 				 * FIXME: we could get the MDT index from the
@@ -5241,7 +5805,7 @@ obd_matches:
 		}
 	}
 
-	if (param->fp_check_projid) {
+	if (param->fp_check_projid || gather_all) {
 		int projid = 0;
 
 		if (fd == -2)
@@ -5341,7 +5905,7 @@ obd_matches:
 	 * The regular stat is almost of the same speed as some new
 	 * 'glimpse-size-ioctl'.
 	 */
-	if (!decision) {
+	if (!decision || gather_all) {
 		lstat_t st;
 
 		/*
@@ -5415,8 +5979,11 @@ obd_matches:
 	}
 
 print:
-	llapi_printf(LLAPI_MSG_NORMAL, "%s%c", path,
-		     param->fp_zero_end ? '\0' : '\n');
+	if (param->fp_format_printf_str)
+		printf_format_string(param, path, projid, d);
+	else
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%c", path,
+			     param->fp_zero_end ? '\0' : '\n');
 
 decided:
 	ret = 0;
@@ -5599,8 +6166,123 @@ int llapi_mv(char *path, struct find_param *param)
 	return llapi_migrate_mdt(path, param);
 }
 
+/*
+ * Check string for escape sequences and print a message to stdout
+ * if any invalid escapes are found.
+ *
+ * @param[in]	c	Pointer to character immediately following the
+ *			'\' character indicating the start of an escape
+ *			sequence.
+ * @return		Number of characters examined in the escape sequence
+ *			(regardless of whether the sequence is valid or not).
+ */
+int validate_printf_esc(char *c)
+{
+	char *valid_esc = "nt\\";
+
+	if (*c == '\0') {
+		 /* backslash at end of string */
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+			"warning: '\\' at end of -printf format string\n");
+		return 0;
+	}
+
+	if (!strchr(valid_esc, *c))
+		/* Invalid escape character */
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+			"warning: unrecognized escape: '\\%c'\n", *c);
+
+	return 1;
+}
+
+/*
+ * Check string for format directives and print a message to stdout
+ * if any invalid directives are found.
+ *
+ * @param[in]	c	Pointer to character immediately following the
+ *			'%' character indicating the start of a format
+ *			directive.
+ * @return		Number of characters examined in the format directive
+ *			(regardless of whether the directive is valid or not).
+ */
+int validate_printf_fmt(char *c)
+{
+	char *valid_fmt_single = "abcGkmpstUwy%";
+	char *valid_fmt_double = "ACTW";
+	char *valid_fmt_lustre = "cFhioPpS";
+	char curr = *c, next;
+
+	if (curr == '\0') {
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+			"warning: '%%' at end of -printf format string\n");
+		return 0;
+	}
+
+	next = *(c + 1);
+	if ((next == '\0') || (next == '%') || (next == '\\'))
+		/* Treat as single char format directive */
+		goto check_single;
+
+	/* Check format directives with multiple characters */
+	if (strchr(valid_fmt_double, curr)) {
+		/* For now, only valid formats are followed by '@' char */
+		if (next != '@')
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+				"warning: unrecognized format directive: '%%%c%c'\n",
+				curr, next);
+		return 2;
+	}
+
+	/* Lustre formats always start with 'L' */
+	if (curr == 'L') {
+		if (!strchr(valid_fmt_lustre, next))
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+				"warning: unrecognized format directive: '%%%c%c'\n",
+				curr, next);
+		return 2;
+	}
+
+check_single:
+
+	if (!strchr(valid_fmt_single, curr))
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+			"warning: unrecognized format directive: '%%%c'\n", curr);
+	return 1;
+}
+
+/*
+ * Validate the user-supplied string for the -printf option and report
+ * any invalid backslash escape sequences or format directives.
+ *
+ * @param[in]	param	Structure containing info about invocation of lfs find
+ * @return		None
+ */
+void validate_printf_str(struct find_param *param)
+{
+	char *c = param->fp_format_printf_str;
+	int ret = 0;
+
+	while (*c) {
+		switch (*c) {
+		case '%':
+			ret = validate_printf_fmt(++c);
+			c += ret;
+			break;
+		case '\\':
+			ret = validate_printf_esc(++c);
+			c += ret;
+			break;
+		default:
+			c++;
+			break;
+		}
+	}
+}
+
 int llapi_find(char *path, struct find_param *param)
 {
+	if (param->fp_format_printf_str)
+		validate_printf_str(param);
 	return param_callback(path, cb_find_init, cb_common_fini, param);
 }
 

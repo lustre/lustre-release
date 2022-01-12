@@ -8184,6 +8184,47 @@ test_56da() { # LU-14179
 }
 run_test 56da "test lfs find with long paths"
 
+test_56ea() { #LU-10378
+	local path=$DIR/$tdir
+	local pool=$TESTNAME
+
+	# Create ost pool
+	pool_add $pool || error "pool_add $pool failed"
+	pool_add_targets $pool 0 $((OSTCOUNT - 1)) 1 ||
+		error "adding targets to $pool failed"
+
+	# Set default pool on directory before creating file
+	mkdir $path || error "mkdir $path failed"
+	$LFS setstripe -p $pool $path ||
+		error "set OST pool on $pool failed"
+	touch $path/$tfile || error "touch $path/$tfile failed"
+
+	# Compare basic file attributes from -printf and stat
+	local attr_printf=$($LFS find $path/$tfile -printf "%A@ %T@ %C@ %U %G")
+	local attr_stat=$(stat -c "%X %Y %Z %u %g" $path/$tfile)
+
+	[[ "${attr_printf}" == "${attr_stat}" ]] ||
+		error "Attrs from lfs find and stat don't match"
+
+	# Compare Lustre attributes from lfs find and lfs getstripe
+	local lattr_printf=$($LFS find $path/$tfile -printf "%Lc %LS %Li %Lp")
+	local str_cnt=$($LFS getstripe --stripe-count $path/$tfile)
+	local str_size=$($LFS getstripe --stripe-size $path/$tfile)
+	local str_idx=$($LFS getstripe --stripe-index $path/$tfile)
+	local fpool=$($LFS getstripe --pool $path/$tfile)
+	local lattr_getstr="${str_cnt} ${str_size} ${str_idx} ${fpool}"
+
+	[[ "${lattr_printf}" == "${lattr_getstr}" ]] ||
+		error "Attrs from lfs find and lfs getstripe don't match"
+
+	# Verify behavior for unknown escape/format sequences
+	local esc_printf=$($LFS find $path/$tfile -printf '\\ %% \Q %Q')
+
+	[[ "${esc_printf}" == '\ % \Q %Q' ]] ||
+		error "Escape/format codes don't match"
+}
+run_test 56ea "test lfs find -printf option"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

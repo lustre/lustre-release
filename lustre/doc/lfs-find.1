@@ -31,6 +31,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--pool\fR \fIPOOL\fR]
 [\fB--print\fR|\fB-P\fR]
       [\fB--print0\fR|\fB-0\fR]
+[\fB--printf\fR \fIFORMAT\fR]
 [[\fB!\fR] \fB--projid\fR \fIPROJID\fR]
       [[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
 [[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
@@ -290,6 +291,105 @@ parameters, followed by a NUL character.  This is for use together with
 with the
 .B -0
 option to handle filenames with embedded spaces or other special characters.
+.TP
+.BR "--printf \fIformat\fR"
+Print \fIformat\fR to standard output for each matching file, interpreting
+`\' escapes and `%' directives.  Unlike \fB--print\fR, the \fB--printf\fR option
+does not automatically add a newline to the end of the string. The escapes and
+directives are:
+.RS 1.2i
+.TP
+.B \en
+Newline.
+.TP
+.B \et
+Horizontal tab.
+.TP
+.B \e\e
+A literal backslash.
+.TP
+.B %%
+A literal percent sign.
+.TP
+.B %a
+File\'s last access time in the format returned by the C \`ctime\' function.
+.TP
+.B %A@
+File\'s last access time in seconds since Jan. 1, 1970, 00:00 GMT.
+.TP
+.B %b
+The amount of disk space used for the file (in 512-byte blocks).
+.TP
+.B %c
+File\'s last status change time in the format returned by the C \`ctime\' function.
+.TP
+.B %C@
+File\'s last status change time in seconds since Jan. 1, 1970, 00:00 GMT.
+.TP
+.B %G
+File\'s numeric group ID.
+.TP
+.B %m
+File permission bits (in octal).
+.TP
+.B %p
+File's name.
+.TP
+.B %s
+File size in bytes.
+.TP
+.B %t
+File\'s last modification time in the format returned by the C \`ctime\' function.
+.TP
+.B %T@
+File\'s last modification time in seconds since Jan. 1, 1970, 00:00 GMT.
+.TP
+.B %U
+File's numeric user ID.
+.TP
+.B %w
+File\'s birth time in the format returned by the C \`ctime\' function.
+.TP
+.B %W@
+File\'s birth time in seconds since Jan. 1, 1970, 00:00 GMT.
+.TP
+.B %y
+File's type (f=file, d=directory, p=pipe, b=block device, c=character device,
+s=socket l=symbolic link)
+.TP
+Lustre-specific information about a file can be printed using these directives:
+.TP
+.B %Lc
+File\'s stripe count.  For a composite file, this is the stripe count of the last
+instantiated component.
+.TP
+.B %LF
+File Identifier (FID) associated with the file.
+.TP
+.B %Lh
+Directory's hash type (or \`none\' for an unstriped directory).
+.TP
+.B %Li
+File\'s starting OST index (or starting MDT index for a directory).
+For a composite file, this is the starting OST index of the last instantiated
+component.
+.TP
+.B %Lo
+List of all OST/MDT indices associated with a file or directory.
+.TP
+.B %Lp
+File\'s OST pool name.  For a composite file, this is the pool associated
+with the last instantiated component.  (NOTE: This can also be used for
+directories, but since MDT pools are not currently implemented, nothing will
+be printed.)
+.TP
+.B %LP
+Numeric project ID assigned to the file or directory.
+.TP
+.B %LS
+File's stripe size.  For a composite file, this is the stripe size of the last
+instantiated component.
+.RE
 .TP
 .BR --projid
 File has specified numeric project ID.
