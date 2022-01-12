@@ -92,6 +92,7 @@ load_lnet() {
 }
 
 do_lnetctl() {
+	$LCTL mark "$LNETCTL $@"
 	echo "$LNETCTL $@"
 	$LNETCTL "$@"
 }
@@ -2347,6 +2348,59 @@ test_217() {
 	unload_modules
 }
 run_test 217 "Don't leak memory when discovering peer with nnis <= 1"
+
+test_218() {
+	reinit_dlc || return $?
+
+	[[ ${#INTERFACES[@]} -lt 2 ]] &&
+		skip "Need two LNet interfaces"
+
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+
+	local nid1=$($LCTL list_nids | head -n 1)
+
+	do_lnetctl ping $nid1 ||
+		error "ping failed"
+
+	add_net "tcp" "${INTERFACES[1]}" || return $?
+
+	local nid2=$($LCTL list_nids | tail --lines 1)
+
+	do_lnetctl ping $nid2 ||
+		error "ping failed"
+
+	$LCTL net_drop_add -s $nid1 -d $nid1 -e local_error -r 1
+
+	do_lnetctl ping $nid1 &&
+		error "ping should have failed"
+
+	local health_recovered
+	local i
+
+	for i in $(seq 1 5); do
+		health_recovered=$($LNETCTL net show -v 2 |
+				   grep -c 'health value: 1000')
+
+		if [[ $health_recovered -ne 2 ]]; then
+			echo "Wait 1 second for health to recover"
+			sleep 1
+		else
+			break
+		fi
+	done
+
+	health_recovered=$($LNETCTL net show -v 2 |
+			   grep -c 'health value: 1000')
+
+	$LCTL net_drop_del -a
+
+	[[ $health_recovered -ne 2 ]] &&
+		do_lnetctl net show -v 2 | egrep -e nid -e health &&
+		error "Health hasn't recovered"
+
+	return 0
+}
+run_test 218 "Local recovery pings should exercise all available paths"
 
 test_230() {
 	# LU-12815

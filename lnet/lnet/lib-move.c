@@ -1703,13 +1703,13 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 			continue;
 
 		if (best_ni)
-			CDEBUG(D_NET, "compare ni %s [c:%d, d:%d, s:%d, p:%u, g:%u] with best_ni %s [c:%d, d:%d, s:%d, p:%u, g:%u]\n",
+			CDEBUG(D_NET, "compare ni %s [c:%d, d:%d, s:%d, p:%u, g:%u, h:%d] with best_ni %s [c:%d, d:%d, s:%d, p:%u, g:%u, h:%d]\n",
 			       libcfs_nidstr(&ni->ni_nid), ni_credits, distance,
-			       ni->ni_seq, ni_sel_prio, ni_dev_prio,
+			       ni->ni_seq, ni_sel_prio, ni_dev_prio, ni_healthv,
 			       (best_ni) ? libcfs_nidstr(&best_ni->ni_nid)
 			       : "not selected", best_credits, shortest_distance,
 			       (best_ni) ? best_ni->ni_seq : 0,
-			       best_sel_prio, best_dev_prio);
+			       best_sel_prio, best_dev_prio, best_healthv);
 		else
 			goto select_ni;
 
@@ -1756,6 +1756,19 @@ select_ni:
 	return best_ni;
 }
 
+static bool
+lnet_reserved_msg(struct lnet_msg *msg)
+{
+	if (msg->msg_type == LNET_MSG_PUT) {
+		if (msg->msg_hdr.msg.put.ptl_index == LNET_RESERVED_PORTAL)
+			return true;
+	} else if (msg->msg_type == LNET_MSG_GET) {
+		if (msg->msg_hdr.msg.get.ptl_index == LNET_RESERVED_PORTAL)
+			return true;
+	}
+	return false;
+}
+
 /*
  * Traffic to the LNET_RESERVED_PORTAL may not trigger peer discovery,
  * because such traffic is required to perform discovery. We therefore
@@ -1767,14 +1780,7 @@ select_ni:
 static bool
 lnet_msg_discovery(struct lnet_msg *msg)
 {
-	if (msg->msg_type == LNET_MSG_PUT) {
-		if (msg->msg_hdr.msg.put.ptl_index != LNET_RESERVED_PORTAL)
-			return true;
-	} else if (msg->msg_type == LNET_MSG_GET) {
-		if (msg->msg_hdr.msg.get.ptl_index != LNET_RESERVED_PORTAL)
-			return true;
-	}
-	return false;
+	return !(lnet_reserved_msg(msg) || lnet_msg_is_response(msg));
 }
 
 #define SRC_SPEC	0x0001
@@ -2543,7 +2549,6 @@ static int
 lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 {
 	struct lnet_ni *best_ni = NULL;
-	struct lnet_peer_ni *best_lpni = sd->sd_best_lpni;
 
 	/*
 	 * We must use a consistent source address when sending to a
@@ -2554,25 +2559,27 @@ lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 	 *
 	 * So we need to pick the NI the peer prefers for this
 	 * particular network.
+	 *
+	 * An exception is traffic on LNET_RESERVED_PORTAL. Internal LNet
+	 * traffic doesn't care which source NI is used, and we don't actually
+	 * want to restrict local recovery pings to a single source NI.
 	 */
+	if (!lnet_reserved_msg(sd->sd_msg))
+		best_ni = lnet_find_existing_preferred_best_ni(sd->sd_best_lpni,
+							       sd->sd_cpt);
 
-	best_ni = lnet_find_existing_preferred_best_ni(sd->sd_best_lpni,
-						       sd->sd_cpt);
-
-	/* if best_ni is still not set just pick one */
-	if (!best_ni) {
-		best_ni =
-		  lnet_find_best_ni_on_spec_net(NULL, sd->sd_peer,
+	if (!best_ni)
+		best_ni = lnet_find_best_ni_on_spec_net(NULL, sd->sd_peer,
 						sd->sd_best_lpni->lpni_peer_net,
 						sd->sd_msg,
 						sd->sd_md_cpt);
-		/* If there is no best_ni we don't have a route */
-		if (!best_ni) {
-			CERROR("no path to %s from net %s\n",
-				libcfs_nidstr(&best_lpni->lpni_nid),
-				libcfs_net2str(best_lpni->lpni_net->net_id));
-			return -EHOSTUNREACH;
-		}
+
+	/* If there is no best_ni we don't have a route */
+	if (!best_ni) {
+		CERROR("no path to %s from net %s\n",
+			libcfs_nidstr(&sd->sd_best_lpni->lpni_nid),
+			libcfs_net2str(sd->sd_best_lpni->lpni_net->net_id));
+		return -EHOSTUNREACH;
 	}
 
 	sd->sd_best_ni = best_ni;
