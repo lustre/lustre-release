@@ -4080,10 +4080,14 @@ test_208a() {
 
 	log "set OST0000 non-rotational"
 	do_nodes $osts \
+		$LCTL set_param osd*.*OST*.nonrotational=0
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0000*.nonrotational=1
 	check_ost_used $tf read 0
 
 	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
+	do_nodes $osts \
+		$LCTL set_param osd*.*OST*.nonrotational=0
 	do_nodes $osts \
 		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
 			osd*.*OST0003*.nonrotational=1
@@ -4119,11 +4123,15 @@ test_208b() {
 
 	log "set OST0000 non-rotational"
 	do_nodes $osts \
+		$LCTL set_param osd*.*OST*.nonrotational=0
+	do_nodes $osts \
 		$LCTL set_param osd*.*OST0000*.nonrotational=1
 	check_ost_used $tf write 0
 	$LFS mirror resync $tf || error "can't resync"
 
 	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
+	do_nodes $osts \
+		$LCTL set_param osd*.*OST*.nonrotational=0
 	do_nodes $osts \
 		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
 			osd*.*OST0003*.nonrotational=1
