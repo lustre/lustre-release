@@ -1222,7 +1222,7 @@ int cfs_cpu_init(void)
 #endif /* !HAVE_HOTPLUG_STATE_MACHINE */
 #endif /* CONFIG_HOTPLUG_CPU */
 
-	get_online_cpus();
+	cpus_read_lock();
 	if (*cpu_pattern) {
 		cfs_cpt_tab = cfs_cpt_table_create_pattern(cpu_pattern);
 		if (IS_ERR(cfs_cpt_tab)) {
@@ -1242,7 +1242,7 @@ int cfs_cpu_init(void)
 		}
 	}
 
-	put_online_cpus();
+	cpus_read_unlock();
 
 	LCONSOLE(0, "HW NUMA nodes: %d, HW CPU cores: %d, npartitions: %d\n",
 		 num_online_nodes(), num_online_cpus(),
@@ -1250,7 +1250,7 @@ int cfs_cpu_init(void)
 	return 0;
 
 failed_alloc_table:
-	put_online_cpus();
+	cpus_read_unlock();
 
 	if (!IS_ERR_OR_NULL(cfs_cpt_tab))
 		cfs_cpt_table_free(cfs_cpt_tab);
