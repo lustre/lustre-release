@@ -795,6 +795,31 @@ failed:
 	RETURN(rc == 0 ? count : rc);
 }
 
+/* foreign fake-symlink version of ll_getattr() */
+#if defined(HAVE_USER_NAMESPACE_ARG)
+int ll_foreign_symlink_getattr(struct user_namespace *mnt_userns,
+			       const struct path *path, struct kstat *stat,
+			       u32 request_mask, unsigned int flags)
+{
+	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
+				 true);
+}
+#elif defined(HAVE_INODEOPS_ENHANCED_GETATTR)
+int ll_foreign_symlink_getattr(const struct path *path, struct kstat *stat,
+			       u32 request_mask, unsigned int flags)
+{
+	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
+				 true);
+}
+#else
+int ll_foreign_symlink_getattr(struct vfsmount *mnt, struct dentry *de,
+			       struct kstat *stat)
+{
+	return ll_getattr_dentry(de, stat, STATX_BASIC_STATS,
+				 AT_STATX_SYNC_AS_STAT, true);
+}
+#endif
+
 struct inode_operations ll_foreign_file_symlink_inode_operations = {
 #ifdef HAVE_IOP_GENERIC_READLINK
 	.readlink	= generic_readlink,
@@ -838,20 +863,3 @@ struct inode_operations ll_foreign_dir_symlink_inode_operations = {
 #endif
 	.listxattr	= ll_listxattr,
 };
-
-/* foreign fake-symlink version of ll_getattr() */
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
-int ll_foreign_symlink_getattr(const struct path *path, struct kstat *stat,
-			       u32 request_mask, unsigned int flags)
-{
-	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
-				 true);
-}
-#else
-int ll_foreign_symlink_getattr(struct vfsmount *mnt, struct dentry *de,
-			       struct kstat *stat)
-{
-	return ll_getattr_dentry(de, stat, STATX_BASIC_STATS,
-				 AT_STATX_SYNC_AS_STAT, true);
-}
-#endif

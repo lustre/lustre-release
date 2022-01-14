@@ -46,6 +46,18 @@
 #include <lustre_dlm.h>
 #include "llite_internal.h"
 
+#ifndef HAVE_USER_NAMESPACE_ARG
+#define ll_create_nd(ns, dir, de, mode, ex)	ll_create_nd(dir, de, mode, ex)
+#define ll_mkdir(ns, dir, dch, mode)		ll_mkdir(dir, dch, mode)
+#define ll_mknod(ns, dir, dch, mode, rd)	ll_mknod(dir, dch, mode, rd)
+#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+#define ll_rename(ns, src, sdc, tgt, tdc, fl)	ll_rename(src, sdc, tgt, tdc, fl)
+#else
+#define ll_rename(ns, src, sdc, tgt, tdc)	ll_rename(src, sdc, tgt, tdc)
+#endif /* HAVE_IOPS_RENAME_WITH_FLAGS */
+#define ll_symlink(nd, dir, dch, old)		ll_symlink(dir, dch, old)
+#endif
+
 static int ll_create_it(struct inode *dir, struct dentry *dentry,
 			struct lookup_intent *it,
 			void *secctx, __u32 secctxlen, bool encrypt,
@@ -1121,7 +1133,8 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 	 * to proceed with lookup. LU-4185
 	 */
 	if ((flags & LOOKUP_CREATE) && !(flags & LOOKUP_OPEN) &&
-	    (inode_permission(parent, MAY_WRITE | MAY_EXEC) == 0))
+	    (inode_permission(&init_user_ns,
+			      parent, MAY_WRITE | MAY_EXEC) == 0))
 		return NULL;
 
 	if (flags & (LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE))
@@ -1766,8 +1779,8 @@ err_exit:
 	RETURN(err);
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *dchild, umode_t mode,
-		    dev_t rdev)
+static int ll_mknod(struct user_namespace *mnt_userns, struct inode *dir,
+		    struct dentry *dchild, umode_t mode, dev_t rdev)
 {
 	ktime_t kstart = ktime_get();
 	int err;
@@ -1808,7 +1821,8 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, umode_t mode,
 /*
  * Plain create. Intent create is handled in atomic_open.
  */
-static int ll_create_nd(struct inode *dir, struct dentry *dentry,
+static int ll_create_nd(struct user_namespace *mnt_userns,
+			struct inode *dir, struct dentry *dentry,
 			umode_t mode, bool want_excl)
 {
 	ktime_t kstart = ktime_get();
@@ -1822,7 +1836,7 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 
 	/* Using mknod(2) to create a regular file is designed to not recognize
 	 * volatile file name, so we use ll_mknod() here. */
-	rc = ll_mknod(dir, dentry, mode, 0);
+	rc = ll_mknod(mnt_userns, dir, dentry, mode, 0);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, unhashed %d\n",
 	       dentry, d_unhashed(dentry));
@@ -1834,8 +1848,8 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 	return rc;
 }
 
-static int ll_symlink(struct inode *dir, struct dentry *dchild,
-		      const char *oldpath)
+static int ll_symlink(struct user_namespace *mnt_userns, struct inode *dir,
+		      struct dentry *dchild, const char *oldpath)
 {
 	ktime_t kstart = ktime_get();
 	int len = strlen(oldpath);
@@ -1904,7 +1918,8 @@ out:
 	RETURN(err);
 }
 
-static int ll_mkdir(struct inode *dir, struct dentry *dchild, umode_t mode)
+static int ll_mkdir(struct user_namespace *mnt_userns, struct inode *dir,
+		    struct dentry *dchild, umode_t mode)
 {
 	ktime_t kstart = ktime_get();
 	int err;
@@ -2078,9 +2093,10 @@ out:
 	RETURN(rc);
 }
 
-static int ll_rename(struct inode *src, struct dentry *src_dchild,
+static int ll_rename(struct user_namespace *mnt_userns,
+		     struct inode *src, struct dentry *src_dchild,
 		     struct inode *tgt, struct dentry *tgt_dchild
-#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
 		     , unsigned int flags
 #endif
 		     )
@@ -2094,7 +2110,7 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 	int err;
 	ENTRY;
 
-#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
 	if (flags)
 		return -EINVAL;
 #endif
@@ -2107,7 +2123,7 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 	if (unlikely(d_mountpoint(src_dchild) || d_mountpoint(tgt_dchild)))
 		RETURN(-EBUSY);
 
-#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
 	err = llcrypt_prepare_rename(src, src_dchild, tgt, tgt_dchild, flags);
 #else
 	err = llcrypt_prepare_rename(src, src_dchild, tgt, tgt_dchild, 0);

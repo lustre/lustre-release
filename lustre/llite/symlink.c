@@ -258,7 +258,6 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 # endif /* HAVE_IOP_GET_LINK */
 #endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA */
 
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 /**
  * ll_getattr_link() - link-specific getattr to set the correct st_size
  *		       for encrypted symlinks
@@ -280,7 +279,12 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
  *
  * Return: 0 on success, -errno on failure
  */
-static int ll_getattr_link(const struct path *path, struct kstat *stat,
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
+static int ll_getattr_link(
+#if defined(HAVE_USER_NAMESPACE_ARG)
+			   struct user_namespace *mnt_userns,
+#endif
+			   const struct path *path, struct kstat *stat,
 			   u32 request_mask, unsigned int flags)
 {
 	struct dentry *dentry = path->dentry;
@@ -289,7 +293,7 @@ static int ll_getattr_link(const struct path *path, struct kstat *stat,
 	const char *link;
 	int rc;
 
-	rc = ll_getattr(path, stat, request_mask, flags);
+	rc = ll_getattr(mnt_userns, path, stat, request_mask, flags);
 	if (rc || !IS_ENCRYPTED(inode))
 		return rc;
 
@@ -311,7 +315,6 @@ static int ll_getattr_link(const struct path *path, struct kstat *stat,
 #else /* HAVE_INODEOPS_ENHANCED_GETATTR */
 #define ll_getattr_link ll_getattr
 #endif
-
 
 const struct inode_operations ll_fast_symlink_inode_operations = {
 #ifdef HAVE_IOP_GENERIC_READLINK

@@ -349,7 +349,7 @@ static int osd_remove_oi_one(struct osd_device *osd, struct dentry *parent,
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {
-		rc = ll_vfs_unlink(parent->d_inode, child);
+		rc = vfs_unlink(&init_user_ns, parent->d_inode, child);
 		dput(child);
 	}
 

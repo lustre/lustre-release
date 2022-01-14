@@ -200,7 +200,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 		RETURN(dchild);
 	}
 
-	err = vfs_mkdir(dir->d_inode, dchild, mode);
+	err = vfs_mkdir(&init_user_ns, dir->d_inode, dchild, mode);
 	if (err)
 		GOTO(out_err, err);
 
@@ -1313,7 +1313,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		/* If the src object has never been modified, then remove it. */
 		if (inode->i_size == 0 && inode->i_mode & S_ISUID &&
 		    inode->i_mode & S_ISGID) {
-			rc = ll_vfs_unlink(src_parent, src_child);
+			rc = vfs_unlink(&init_user_ns, src_parent, src_child);
 			if (unlikely(rc == -ENOENT))
 				rc = 0;
 		}

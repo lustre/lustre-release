@@ -24,13 +24,6 @@
 #define LLITE_FOREIGN_SYMLINK_H
 
 /* llite/llite_foreign_symlink.c */
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
-int ll_foreign_symlink_getattr(const struct path *path, struct kstat *stat,
-			       u32 request_mask, unsigned int flags);
-#else
-int ll_foreign_symlink_getattr(struct vfsmount *mnt, struct dentry *de,
-			       struct kstat *stat);
-#endif
 ssize_t foreign_symlink_enable_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf);
 ssize_t foreign_symlink_enable_store(struct kobject *kobj,

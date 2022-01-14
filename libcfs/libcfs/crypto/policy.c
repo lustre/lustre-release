@@ -17,6 +17,7 @@
 #include <linux/random.h>
 #include <linux/string.h>
 #include <linux/mount.h>
+#include <lustre_compat.h>
 #include "llcrypt_private.h"
 
 /**
@@ -333,7 +334,7 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 		return -EFAULT;
 	policy.version = version;
 
-	if (!inode_owner_or_capable(inode))
+	if (!inode_owner_or_capable(&init_user_ns, inode))
 		return -EACCES;
 
 	ret = mnt_want_write_file(filp);

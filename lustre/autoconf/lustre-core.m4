@@ -1897,8 +1897,8 @@ LB_CHECK_COMPILE([if 'struct vm_fault' replaced virtual_address with address fie
 vm_fault_address, [
 	#include <linux/mm.h>
 ],[
-	struct vm_fault vmf;
-	vmf.address = NULL;
+	unsigned long vaddr = ((struct vm_fault *)0)->address;
+	(void)vaddr;
 ],[
 	AC_DEFINE(HAVE_VM_FAULT_ADDRESS, 1,
 		[virtual_address has been replaced by address field])
@@ -2457,9 +2457,6 @@ lock_manager_ops_lm_compare_owner, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_LM_COMPARE_OWNER_EXISTS
 
-AC_DEFUN([LC_PROG_LINUX_SRC], [])
-AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
-
 #
 # LC_FSCRYPT_SUPPORT
 #
@@ -2476,6 +2473,32 @@ fscrypt_support, [
 	has_fscrypt_support="yes"
 ])
 ]) # LC_FSCRYPT_SUPPORT
+
+#
+# LC_HAVE_USER_NAMESPACE_ARG
+#
+# kernel 5.12 commit 549c7297717c32ee53f156cd949e055e601f67bb
+# fs: make helpers idmap mount aware
+# Extend some inode methods with an additional user namespace argument.
+#
+AC_DEFUN([LC_HAVE_USER_NAMESPACE_ARG], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'inode_operations' members have user namespace argument],
+user_namespace_argument, [
+	#include <linux/fs.h>
+],[
+	((struct inode_operations *)1)->getattr((struct user_namespace *)NULL,
+						NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_USER_NAMESPACE_ARG, 1,
+		['inode_operations' members have user namespace argument])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_USER_NAMESPACE_ARG
+
+AC_DEFUN([LC_PROG_LINUX_SRC], [])
+AC_DEFUN([LC_PROG_LINUX_RESULTS], [])
 
 #
 # LC_PROG_LINUX
@@ -2658,6 +2681,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 5.3
 	LC_BIO_BI_PHYS_SEGMENTS
 	LC_LM_COMPARE_OWNER_EXISTS
+
+	# 5.12
+	LC_HAVE_USER_NAMESPACE_ARG
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

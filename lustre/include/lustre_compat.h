@@ -109,10 +109,12 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d)
 #endif
 
-#ifdef HAVE_VFS_UNLINK_3ARGS
-#define ll_vfs_unlink(a, b) vfs_unlink(a, b, NULL)
+#ifdef HAVE_USER_NAMESPACE_ARG
+#define vfs_unlink(ns, dir, de) vfs_unlink(ns, dir, de, NULL)
+#elif defined HAVE_VFS_UNLINK_3ARGS
+#define vfs_unlink(ns, dir, de) vfs_unlink(dir, de, NULL)
 #else
-#define ll_vfs_unlink(a, b) vfs_unlink(a, b)
+#define vfs_unlink(ns, dir, de) vfs_unlink(dir, de)
 #endif
 
 static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
@@ -120,7 +122,7 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 {
 	int rc;
 
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 	rc = vfs_getattr(path, st, request_mask, flags);
 #else
 	rc = vfs_getattr(path, st);
@@ -207,7 +209,7 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-#ifndef HAVE_POSIX_ACL_UPDATE_MODE
+#if !defined(HAVE_USER_NAMESPACE_ARG) && !defined(HAVE_POSIX_ACL_UPDATE_MODE)
 static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 			  struct posix_acl **acl)
 {
@@ -527,13 +529,15 @@ static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  void *value, size_t size)
 {
-#ifndef HAVE_VFS_SETXATTR
+#ifdef HAVE_USER_NAMESPACE_ARG
+	return vfs_getxattr(&init_user_ns, dentry, name, value, size);
+#elif defined(HAVE_VFS_SETXATTR)
+	return __vfs_getxattr(dentry, inode, name, value, size);
+#else
 	if (unlikely(!inode->i_op->getxattr))
 		return -ENODATA;
 
 	return inode->i_op->getxattr(dentry, name, value, size);
-#else
-	return __vfs_getxattr(dentry, inode, name, value, size);
 #endif
 }
 
@@ -541,26 +545,30 @@ static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  const void *value, size_t size, int flags)
 {
-#ifndef HAVE_VFS_SETXATTR
+#ifdef HAVE_USER_NAMESPACE_ARG
+	return vfs_setxattr(&init_user_ns, dentry, name, value, size, flags);
+#elif defined(HAVE_VFS_SETXATTR)
+	return __vfs_setxattr(dentry, inode, name, value, size, flags);
+#else
 	if (unlikely(!inode->i_op->setxattr))
 		return -EOPNOTSUPP;
 
 	return inode->i_op->setxattr(dentry, name, value, size, flags);
-#else
-	return __vfs_setxattr(dentry, inode, name, value, size, flags);
 #endif
 }
 
 static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 				     const char *name)
 {
-#ifndef HAVE_VFS_SETXATTR
+#ifdef HAVE_USER_NAMESPACE_ARG
+	return vfs_removexattr(&init_user_ns, dentry, name);
+#elif defined(HAVE_VFS_SETXATTR)
+	return __vfs_removexattr(dentry, name);
+#else
 	if (unlikely(!inode->i_op->setxattr))
 		return -EOPNOTSUPP;
 
 	return inode->i_op->removexattr(dentry, name);
-#else
-	return __vfs_removexattr(dentry, name);
 #endif
 }
 
@@ -602,5 +610,15 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen)
 	return security_release_secctx(secdata, seclen);
 #endif
 }
+
+#ifndef HAVE_USER_NAMESPACE_ARG
+#define posix_acl_update_mode(ns, inode, mode, acl) \
+	posix_acl_update_mode(inode, mode, acl)
+#define notify_change(ns, de, attr, inode)	notify_change(de, attr, inode)
+#define inode_owner_or_capable(ns, inode)	inode_owner_or_capable(inode)
+#define vfs_create(ns, dir, de, mode, ex)	vfs_create(dir, de, mode, ex)
+#define vfs_mkdir(ns, dir, de, mode)		vfs_mkdir(dir, de, mode)
+#define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
+#endif
 
 #endif /* _LUSTRE_COMPAT_H */

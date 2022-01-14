@@ -1284,8 +1284,8 @@ static int ll_check_swap_layouts_validity(struct inode *inode1,
 	if (!S_ISREG(inode1->i_mode) || !S_ISREG(inode2->i_mode))
 		return -EINVAL;
 
-	if (inode_permission(inode1, MAY_WRITE) ||
-	    inode_permission(inode2, MAY_WRITE))
+	if (inode_permission(&init_user_ns, inode1, MAY_WRITE) ||
+	    inode_permission(&init_user_ns, inode2, MAY_WRITE))
 		return -EPERM;
 
 	if (inode1->i_sb != inode2->i_sb)
@@ -4333,7 +4333,7 @@ out_ladvise:
 		if (!S_ISREG(inode->i_mode))
 			GOTO(out_detach_free, rc = -EINVAL);
 
-		if (!inode_owner_or_capable(inode))
+		if (!inode_owner_or_capable(&init_user_ns, inode))
 			GOTO(out_detach_free, rc = -EPERM);
 
 		rc = pcc_ioctl_detach(inode, detach->pccd_opt);
@@ -5334,7 +5334,7 @@ fill_attr:
 	stat->size = i_size_read(inode);
 	stat->blocks = inode->i_blocks;
 
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 	if (flags & AT_STATX_DONT_SYNC) {
 		if (stat->size == 0 &&
 		    lli->lli_attr_valid & OBD_MD_FLLAZYSIZE)
@@ -5360,9 +5360,9 @@ fill_attr:
 	return 0;
 }
 
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
-int ll_getattr(const struct path *path, struct kstat *stat,
-	       u32 request_mask, unsigned int flags)
+#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
+int ll_getattr(struct user_namespace *mnt_userns, const struct path *path,
+	       struct kstat *stat, u32 request_mask, unsigned int flags)
 {
 	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
 				 false);
@@ -5525,7 +5525,8 @@ out:
 	return rc;
 }
 
-int ll_inode_permission(struct inode *inode, int mask)
+int ll_inode_permission(struct user_namespace *mnt_userns, struct inode *inode,
+			int mask)
 {
 	int rc = 0;
 	struct ll_sb_info *sbi;
@@ -5581,7 +5582,7 @@ int ll_inode_permission(struct inode *inode, int mask)
 		old_cred = override_creds(cred);
 	}
 
-	rc = generic_permission(inode, mask);
+	rc = generic_permission(mnt_userns, inode, mask);
 	/* restore current process's credentials and FS capability */
 	if (squash_id) {
 		revert_creds(old_cred);
