@@ -1936,6 +1936,11 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		}
 
 		if (req->rq_err) {
+			if (!ptlrpc_unregister_reply(req, 1)) {
+				ptlrpc_unregister_bulk(req, 1);
+				continue;
+			}
+
 			spin_lock(&req->rq_lock);
 			req->rq_replied = 0;
 			spin_unlock(&req->rq_lock);
