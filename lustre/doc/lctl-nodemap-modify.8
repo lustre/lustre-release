@@ -74,6 +74,12 @@ Defaults to all, which means the nodemap maps UIDs, GIDs, and PROJIDs.
 Other possible values (multiple can be specified, comma separated) are uid to
 map UIDs, gid to map GIDs, both to map UIDs and GIDs, and projid to map PROJIDs.
 .RE
+.PP
+readonly_mount
+.RS 4
+Defaults to off, which lets clients mount in read-write mode. If set to 1,
+clients are only allowed to mount in read-only mount, and get -EROFS otherwise.
+.RE
 
 .RE
 .I value

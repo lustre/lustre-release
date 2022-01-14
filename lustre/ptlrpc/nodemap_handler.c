@@ -1184,6 +1184,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_map_mode = NODEMAP_MAP_ALL;
 		nodemap->nmf_enable_audit = 1;
 		nodemap->nmf_forbid_encryption = 0;
+		nodemap->nmf_readonly_mount = 0;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1203,6 +1204,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_enable_audit = default_nodemap->nmf_enable_audit;
 		nodemap->nmf_forbid_encryption =
 			default_nodemap->nmf_forbid_encryption;
+		nodemap->nmf_readonly_mount =
+			default_nodemap->nmf_readonly_mount;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1514,6 +1517,33 @@ out:
 }
 EXPORT_SYMBOL(nodemap_set_forbid_encryption);
 
+/**
+ * Set the nmf_readonly_mount flag to true or false.
+ * \param	name			nodemap name
+ * \param	readonly_mount		if true, forbid rw mount
+ * \retval	0 on success
+ *
+ */
+int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	nodemap->nmf_readonly_mount = readonly_mount;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_readonly_mount);
 
 /**
  * Add a nodemap

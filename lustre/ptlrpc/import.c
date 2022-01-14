@@ -1338,10 +1338,11 @@ out:
 		time64_t next_connect;
 
 		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
-		if (rc == -EACCES) {
+		if (rc == -EACCES || rc == -EROFS) {
 			/*
 			 * Give up trying to reconnect
 			 * EACCES means client has no permission for connection
+			 * EROFS means client must mount read-only
 			 */
 			imp->imp_obd->obd_no_recov = 1;
 			ptlrpc_deactivate_import_nolock(imp);

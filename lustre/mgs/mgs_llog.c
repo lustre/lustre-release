@@ -5521,6 +5521,12 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 			rc = nodemap_set_forbid_encryption(nodemap_name,
 							   bool_switch);
 		break;
+	case LCFG_NODEMAP_READONLY_MOUNT:
+		rc = kstrtobool(param, &bool_switch);
+		if (rc == 0)
+			rc = nodemap_set_readonly_mount(nodemap_name,
+							bool_switch);
+		break;
 	case LCFG_NODEMAP_MAP_MODE:
 	{
 		char *p;

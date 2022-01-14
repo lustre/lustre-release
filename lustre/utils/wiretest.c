@@ -5591,13 +5591,11 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name[16 + 1]));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name[16 + 1]));
-	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_flags) == 17, "found %lld\n",
-		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_flags));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_flags) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_flags));
-	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding1) == 18, "found %lld\n",
+	/* ncr_flags' address and size cannot be taken because it is a bit-field (8 bits) */
+	/* ncr_flags2' address and size cannot be taken because it is a bit-field (8 bits) */
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding1) == 19, "found %lld\n",
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_padding1));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1) == 2, "found %lld\n",
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1));
 	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_squash_projid) == 20, "found %lld\n",
 		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_squash_projid));
@@ -6121,6 +6119,8 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)LCFG_NODEMAP_FORBID_ENCRYPT);
 	LASSERTF(LCFG_NODEMAP_SQUASH_PROJID == 0x000ce05dUL, "found 0x%.8xUL\n",
 		 (unsigned)LCFG_NODEMAP_SQUASH_PROJID);
+	LASSERTF(LCFG_NODEMAP_READONLY_MOUNT == 0x000ce05eUL, "found 0x%.8xUL\n",
+		 (unsigned)LCFG_NODEMAP_READONLY_MOUNT);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);

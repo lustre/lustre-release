@@ -1034,30 +1034,45 @@ int tgt_connect(struct tgt_session_info *tsi)
 
 	if (strcmp(tsi->tsi_exp->exp_obd->obd_type->typ_name,
 		   LUSTRE_MDT_NAME) == 0) {
+		struct lu_nodemap *nm = NULL;
+
 		rc = req_check_sepol(tsi->tsi_pill);
 		if (rc)
 			GOTO(out, rc);
 
-		if (reply->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
-		    reply->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT &&
-		    tsi->tsi_pill->rc_req->rq_export) {
-			bool forbid_encrypt = true;
-			struct lu_nodemap *nm =
+		if (tsi->tsi_pill->rc_req->rq_export)
+			nm =
 			 nodemap_get_from_exp(tsi->tsi_pill->rc_req->rq_export);
 
-			if (!nm) {
+		if (reply->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		    reply->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT) {
+			bool forbid_encrypt = true;
+
+			if (!nm)
 				/* nodemap_get_from_exp returns NULL in case
 				 * nodemap is not active, so we do not forbid
 				 */
 				forbid_encrypt = false;
-			} else if (!IS_ERR(nm)) {
+			else if (!IS_ERR(nm))
 				forbid_encrypt = nm->nmf_forbid_encryption;
-				nodemap_putref(nm);
-			}
-
 			if (forbid_encrypt)
-				GOTO(out, rc = -EACCES);
+				GOTO(put_nm, rc = -EACCES);
 		}
+
+		if (!(reply->ocd_connect_flags & OBD_CONNECT_RDONLY)) {
+			bool readonly = false;
+
+			if (!IS_ERR_OR_NULL(nm))
+				readonly = nm->nmf_readonly_mount;
+			if (unlikely(readonly))
+				GOTO(put_nm, rc = -EROFS);
+		}
+
+put_nm:
+		if (!IS_ERR_OR_NULL(nm))
+			nodemap_putref(nm);
+		if (rc)
+			GOTO(out, rc);
 	}
 
 	RETURN(0);

@@ -67,18 +67,6 @@ static DEFINE_MUTEX(ncf_list_lock);
 /* MGS index is different than others, others are listeners to MGS idx */
 static struct nm_config_file *nodemap_mgs_ncf;
 
-/* lu_nodemap flags */
-enum nm_flag_shifts {
-	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
-	NM_FL_TRUST_CLIENT_IDS = 0x2,
-	NM_FL_DENY_UNKNOWN = 0x4,
-	NM_FL_MAP_UID = 0x8,
-	NM_FL_MAP_GID = 0x10,
-	NM_FL_ENABLE_AUDIT = 0x20,
-	NM_FL_FORBID_ENCRYPT = 0x40,
-	NM_FL_MAP_PROJID = 0x80,
-};
-
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
 {
 	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id,
@@ -95,7 +83,7 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
 	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
 	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
-	nr->ncr.ncr_flags = cpu_to_le32(
+	nr->ncr.ncr_flags =
 		(nodemap->nmf_trust_client_ids ?
 			NM_FL_TRUST_CLIENT_IDS : 0) |
 		(nodemap->nmf_allow_root_access ?
@@ -111,7 +99,10 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 		(nodemap->nmf_enable_audit ?
 			NM_FL_ENABLE_AUDIT : 0) |
 		(nodemap->nmf_forbid_encryption ?
-			NM_FL_FORBID_ENCRYPT : 0));
+			NM_FL_FORBID_ENCRYPT : 0);
+	nr->ncr.ncr_flags2 =
+		(nodemap->nmf_readonly_mount ?
+			NM_FL2_READONLY_MOUNT : 0);
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -685,7 +676,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	struct lu_nodemap *nodemap = NULL;
 	enum nodemap_idx_type type;
 	enum nodemap_id_type id_type;
-	u8 flags;
+	enum nm_flag_bits flags;
+	enum nm_flag2_bits flags2;
 	u32 nodemap_id;
 	lnet_nid_t nid[2];
 	u32 map[2];
@@ -768,7 +760,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		nodemap->nm_squash_projid =
 			le32_to_cpu(rec->ncr.ncr_squash_projid);
 
-		flags = le32_to_cpu(rec->ncr.ncr_flags);
+		flags = rec->ncr.ncr_flags;
 		nodemap->nmf_allow_root_access =
 					flags & NM_FL_ALLOW_ROOT_ACCESS;
 		nodemap->nmf_trust_client_ids =
@@ -787,6 +779,9 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					flags & NM_FL_ENABLE_AUDIT;
 		nodemap->nmf_forbid_encryption =
 					flags & NM_FL_FORBID_ENCRYPT;
+		flags2 = rec->ncr.ncr_flags2;
+		nodemap->nmf_readonly_mount =
+					flags2 & NM_FL2_READONLY_MOUNT;
 
 		/* The fileset should be saved otherwise it will be empty
 		 * every time in case of "NODEMAP_CLUSTER_IDX". */

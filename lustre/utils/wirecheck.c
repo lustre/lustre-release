@@ -2631,6 +2631,7 @@ static void check_nodemap_cluster_rec(void)
 	CHECK_CDEFINE(LUSTRE_NODEMAP_NAME_LENGTH);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1]);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags2);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding1);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_projid);
 	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_uid);
@@ -2880,6 +2881,7 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_SET_SEPOL);
 	CHECK_VALUE_X(LCFG_NODEMAP_FORBID_ENCRYPT);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_PROJID);
+	CHECK_VALUE_X(LCFG_NODEMAP_READONLY_MOUNT);
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);

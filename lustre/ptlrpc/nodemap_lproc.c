@@ -710,6 +710,33 @@ static int nodemap_forbid_encryption_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+/**
+ * Reads and prints the readonly_mount flag for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_readonly_mount_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "%d\n", (int)nodemap->nmf_readonly_mount);
+	nodemap_putref(nodemap);
+	return 0;
+}
+
 static struct lprocfs_vars lprocfs_nm_module_vars[] = {
 	{
 		.name		= "active",
@@ -730,6 +757,7 @@ LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
 LPROC_SEQ_FOPS_RO(nodemap_map_mode);
 LPROC_SEQ_FOPS_RO(nodemap_audit_mode);
 LPROC_SEQ_FOPS_RO(nodemap_forbid_encryption);
+LPROC_SEQ_FOPS_RO(nodemap_readonly_mount);
 
 static const struct proc_ops nodemap_ranges_fops = {
 	.proc_open		= nodemap_ranges_open,
@@ -780,6 +808,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "forbid_encryption",
 		.fops		= &nodemap_forbid_encryption_fops,
+	},
+	{
+		.name		= "readonly_mount",
+		.fops		= &nodemap_readonly_mount_fops,
 	},
 	{
 		.name		= "squash_uid",
@@ -862,6 +894,10 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "forbid_encryption",
 		.fops		= &nodemap_forbid_encryption_fops,
+	},
+	{
+		.name		= "readonly_mount",
+		.fops		= &nodemap_readonly_mount_fops,
 	},
 	{
 		NULL

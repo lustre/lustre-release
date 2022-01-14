@@ -3588,15 +3588,31 @@ struct llog_update_record {
 				     SELINUX_POLICY_VER_LEN + \
 				     SELINUX_POLICY_HASH_LEN + 3)
 
+/* lu_nodemap flags */
+enum nm_flag_bits {
+	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
+	NM_FL_TRUST_CLIENT_IDS = 0x2,
+	NM_FL_DENY_UNKNOWN = 0x4,
+	NM_FL_MAP_UID = 0x8,
+	NM_FL_MAP_GID = 0x10,
+	NM_FL_ENABLE_AUDIT = 0x20,
+	NM_FL_FORBID_ENCRYPT = 0x40,
+	NM_FL_MAP_PROJID = 0x80,
+};
+enum nm_flag2_bits {
+	NM_FL2_READONLY_MOUNT = 0x1,
+};
+
 /* nodemap records, uses 32 byte record length */
 #define LUSTRE_NODEMAP_NAME_LENGTH 16
 struct nodemap_cluster_rec {
-	char	ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
-	__u8	ncr_flags;
-	__u16	ncr_padding1;
-	__u32	ncr_squash_projid;
-	__u32	ncr_squash_uid;
-	__u32	ncr_squash_gid;
+	char			ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	enum nm_flag_bits	ncr_flags:8;
+	enum nm_flag2_bits	ncr_flags2:8;
+	__u8			ncr_padding1;
+	__u32			ncr_squash_projid;
+	__u32			ncr_squash_uid;
+	__u32			ncr_squash_gid;
 };
 
 /* lnet_nid_t is 8 bytes */

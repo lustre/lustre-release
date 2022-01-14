@@ -2779,11 +2779,27 @@ cleanup_for_enc_tests() {
 }
 
 cleanup_nodemap_after_enc_tests() {
+	umount_client $MOUNT || true
+
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property forbid_encryption --value 0
-	wait_nm_sync default forbid_encryption
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property readonly_mount --value 0 || true
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0
 	do_facet mgs $LCTL nodemap_activate 0
+
+	wait_nm_sync default forbid_encryption '' inactive
+	[ -z "$(do_facet mgs \
+			lctl get_param -n nodemap.default.readonly_mount)" ] ||
+		wait_nm_sync default readonly_mount '' inactive
+	wait_nm_sync default trusted_nodemap '' inactive
+	wait_nm_sync default admin_nodemap '' inactive
 	wait_nm_sync active
+
+	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
 }
 
 test_36() {
@@ -4972,6 +4988,55 @@ test_60() {
 		error "cat $DIR/$tdir/subdir/subfile1 failed"
 }
 run_test 60 "Subdirmount of encrypted dir"
+
+test_61() {
+	local testfile=$DIR/$tdir/$tfile
+	local readonly
+
+	readonly=$(do_facet mgs \
+			lctl get_param -n nodemap.default.readonly_mount)
+	[ -n "$readonly" ] ||
+		skip "Server does not have readonly_mount nodemap flag"
+
+	stack_trap cleanup_nodemap_after_enc_tests EXIT
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+
+	# Activate nodemap, and mount rw.
+	# Should succeed as rw mount is not forbidden on default nodemap
+	# by default.
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default admin_nodemap
+	wait_nm_sync default trusted_nodemap
+	readonly=$(do_facet mgs \
+			lctl get_param -n nodemap.default.readonly_mount)
+	[ $readonly -eq 0 ] || error "wrong default value for readonly_mount"
+
+	mount_client $MOUNT ${MOUNT_OPTS},rw ||
+		error "mount '-o rw' failed with default"
+	findmnt $MOUNT --output=options -n -f | grep -q "rw," ||
+		error "should be rw mount"
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo a > $testfile || error "write $testfile failed"
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+
+	# Now enforce read-only, and retry.
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property readonly_mount --value 1
+	wait_nm_sync default readonly_mount
+	mount_client $MOUNT ${MOUNT_OPTS},rw &&
+		error "mount '-o rw' should have failed"
+	mount_client $MOUNT ${MOUNT_OPTS},ro ||
+		error "mount '-o ro' failed"
+	cat $testfile || error "read $testfile failed"
+	echo b > $testfile && error "write $testfile should fail"
+	umount_client $MOUNT || error "umount $MOUNT failed (3)"
+}
+run_test 61 "Nodemap enforces read-only mount"
 
 log "cleanup: ======================================================"
 
