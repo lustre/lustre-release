@@ -1876,39 +1876,48 @@ int jt_obd_destroy(int argc, char **argv)
 	return rc;
 }
 
+static int jt_str_to_ost_id(const char *str, struct ost_id *oi)
+{
+	__u64 oid;
+	char *end;
+
+	oid = strtoull(str, &end, 0);
+	if (*end == '\0') {
+		/* If str is a single number then assume old echo
+		 * client usage. */
+		if (oid >= OBIF_MAX_OID)
+			return -EINVAL;
+
+		ostid_set_seq_echo(oi);
+		oi->oi_fid.f_oid = oid;
+		return 0;
+	}
+
+	return llapi_fid_parse(str, &oi->oi_fid, NULL);
+}
+
 int jt_obd_getattr(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
+	struct obdo *oa;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	__u64 objid;
-	char *end;
 	int rc;
 
 	if (argc != 2)
 		return CMD_HELP;
 
-	objid = strtoull(argv[1], &end, 0);
-	if (*end) {
-		fprintf(stderr, "error: %s: objid '%s' is not a number\n",
-			jt_cmdname(argv[0]), argv[1]);
-		return CMD_HELP;
-	}
-
-	if (objid >= OBIF_MAX_OID) {
-		fprintf(stderr, "error: %s: invalid objid '%s'\n",
-			jt_cmdname(argv[0]), argv[1]);
-		return CMD_HELP;
-	}
-
 	memset(&data, 0, sizeof(data));
 	data.ioc_dev = cur_device;
-	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-	data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
-	/* to help obd filter */
-	data.ioc_obdo1.o_mode = 0100644;
-	data.ioc_obdo1.o_valid = 0xffffffff;
-	printf("%s: object id %#jx\n", jt_cmdname(argv[0]),
-	       (uintmax_t)ostid_id(&data.ioc_obdo1.o_oi));
+	oa = &data.ioc_obdo1;
+
+	rc = jt_str_to_ost_id(argv[1], &oa->o_oi);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: invalid objid of FID '%s'\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
+
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
 	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -1922,12 +1931,51 @@ int jt_obd_getattr(int argc, char **argv)
 	if (rc) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));
-	} else {
-		printf("%s: object id %ju, mode %o\n", jt_cmdname(argv[0]),
-		       (uintmax_t)ostid_id(&data.ioc_obdo1.o_oi),
-		       data.ioc_obdo1.o_mode);
+		return rc;
 	}
-	return rc;
+
+#define OP4(bits, name, format, value)					\
+	do {								\
+		if ((oa->o_valid & (bits)) == (bits))			\
+			printf("%s: "format"\n", (name), value);	\
+	} while (0)
+
+#define OPM(bits, member, format)					\
+	OP4(bits, #member, format, (uintmax_t)(oa->o_ ## member))
+
+#define OPO(bits, member) OPM(bits, member, "%#jo")
+#define OPU(bits, member) OPM(bits, member, "%ju")
+#define OPX(bits, member) OPM(bits, member, "%#jx")
+
+	OPX(0, valid);
+	OPX(OBD_MD_FLID | OBD_MD_FLGROUP, oi.oi.oi_id);
+	OPX(OBD_MD_FLID | OBD_MD_FLGROUP, oi.oi.oi_seq);
+	OP4(OBD_MD_FLID | OBD_MD_FLGROUP, "oi.oi_fid", DFID, PFID(&oa->o_oi.oi_fid));
+	OPU(OBD_MD_FLATIME, atime);
+	OPU(OBD_MD_FLMTIME, mtime);
+	OPU(OBD_MD_FLCTIME, ctime);
+	OPU(OBD_MD_FLSIZE, size);
+	OPU(OBD_MD_FLBLOCKS, blocks);
+	OPU(OBD_MD_FLBLKSZ, blksize);
+	OPO(OBD_MD_FLMODE | OBD_MD_FLTYPE, mode);
+	OPU(OBD_MD_FLUID, uid);
+	OPU(OBD_MD_FLGID, gid);
+	OPU(OBD_MD_FLFLAGS, flags);
+	OPU(OBD_MD_FLNLINK, nlink);
+	OPX(OBD_MD_FLPARENT | OBD_MD_FLFID, parent_seq);
+	OPX(OBD_MD_FLPARENT | OBD_MD_FLFID, parent_oid);
+	OPX(OBD_MD_FLPARENT | OBD_MD_FLFID, parent_ver);
+	OPU(OBD_MD_LAYOUT_VERSION, layout_version);
+	OPU(OBD_MD_FLGRANT, grant);
+	OPU(OBD_MD_FLPROJID, projid);
+	OPU(OBD_MD_FLDATAVERSION, data_version);
+#undef OP4
+#undef OPM
+#undef OPO
+#undef OPU
+#undef OPX
+
+	return 0;
 }
 
 int jt_obd_test_getattr(int argc, char **argv)

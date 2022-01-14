@@ -3193,6 +3193,9 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (rc > 0)
 			rc = 0;
 		break;
+	case OBD_IOC_GETATTR:
+		rc = obd_getattr(NULL, exp, &data->ioc_obdo1);
+		break;
 	case IOC_OSC_SET_ACTIVE:
 		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
 					      data->ioc_offset);
