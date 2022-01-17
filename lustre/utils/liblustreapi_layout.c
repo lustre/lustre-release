@@ -1538,7 +1538,7 @@ int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
  * \retval	-1 if arguments are invalid or pool name is too long
  */
 int llapi_layout_pool_name_set(struct llapi_layout *layout,
-			       char *pool_name)
+			       const char *pool_name)
 {
 	struct llapi_layout_comp *comp;
 
@@ -1586,9 +1586,9 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 	}
 
 	if (layout) {
-		rc = llapi_layout_sanity((struct llapi_layout *)layout,
-					 path, false,
-					 !!(layout->llot_mirror_count > 1));
+		rc = llapi_layout_sanity_fsname_check(
+				(struct llapi_layout *)layout, path, false,
+				!!(layout->llot_mirror_count > 1));
 		if (rc) {
 			llapi_layout_sanity_perror(rc);
 			return -1;
@@ -2218,7 +2218,8 @@ int llapi_layout_file_comp_add(const char *path,
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, path, false, false);
+	rc = llapi_layout_sanity_fsname_check(existing_layout, path,
+					      false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -2353,7 +2354,8 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, path, false, false);
+	rc = llapi_layout_sanity_fsname_check(existing_layout, path,
+					      false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -2513,7 +2515,8 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 		goto out;
 	}
 
-	rc = llapi_layout_sanity(existing_layout, path, false, false);
+	rc = llapi_layout_sanity_fsname_check(existing_layout, path,
+					      false, false);
 	if (rc) {
 		tmp_errno = errno;
 		llapi_layout_sanity_perror(rc);
@@ -3447,10 +3450,10 @@ void llapi_layout_sanity_perror(int error)
  * \retval                      0, success, positive: various errors, see
  *                              llapi_layout_sanity_perror, -1, failure
  */
-int llapi_layout_sanity(struct llapi_layout *layout,
-			const char *fname,
-			bool incomplete,
-			bool flr)
+static int __llapi_layout_sanity(struct llapi_layout *layout,
+				 const char *fname,
+				 bool incomplete,
+				 bool flr)
 {
 	struct llapi_layout_sanity_args args = { { 0 } };
 	struct llapi_layout_comp *curr;
@@ -3496,6 +3499,21 @@ int llapi_layout_sanity(struct llapi_layout *layout,
 	layout->llot_cur_comp = curr;
 
 	return rc;
+}
+
+int llapi_layout_sanity(struct llapi_layout *layout,
+			bool incomplete,
+			bool flr)
+{
+	return __llapi_layout_sanity(layout, NULL, incomplete, flr);
+}
+
+int llapi_layout_sanity_fsname_check(struct llapi_layout *layout,
+				     const char *pathname,
+				     bool incomplete,
+				     bool flr)
+{
+	return __llapi_layout_sanity(layout, pathname, incomplete, flr);
 }
 
 int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size)

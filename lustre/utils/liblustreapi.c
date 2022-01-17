@@ -402,10 +402,10 @@ int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 
 /* XXX: llapi_xxx() functions return negative values upon failure */
 
-int llapi_layout_search_ost(__u32 ost, char *pname, char *fsname)
+int llapi_layout_search_ost(__u32 ost, const char *pname, char *fsname)
 {
 	char ostname[MAX_OBD_NAME + 64];
-	char *pool_name = pname;
+	const char *pool_name = pname;
 	int rc = 0;
 
 	/**
@@ -446,7 +446,7 @@ int llapi_layout_search_ost(__u32 ost, char *pname, char *fsname)
  *				< 0, error code on failre
  */
 static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
-				     char **pool_name,
+				     const char **pool_name,
 				     char *fsname)
 {
 	int count;
@@ -492,8 +492,8 @@ static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 	if (param->lsp_stripe_pattern == LOV_PATTERN_MDT) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "Invalid pattern: %d, must be specified with -E\n",
-			    param->lsp_stripe_pattern);
+			    "Invalid pattern: '-L mdt', must be specified "
+			    "with -E\n");
 		goto out;
 	} else {
 		if (!llapi_stripe_count_is_valid(count)) {
@@ -679,7 +679,7 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 {
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct lov_user_md *lum = NULL;
-	char *pool_name = param->lsp_pool;
+	const char *pool_name = param->lsp_pool;
 	size_t lum_size;
 	int fd, rc;
 

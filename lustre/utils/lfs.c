@@ -1047,7 +1047,7 @@ int lfs_layout_compid_by_pool(char *fname, const char *pool, int *comp_id)
 		rc = -errno;
 		goto free_layout;
 	}
-	rc = llapi_layout_sanity(layout, fname, false, true);
+	rc = llapi_layout_sanity_fsname_check(layout, fname, false, true);
 	if (rc < 0) {
 		llapi_layout_sanity_perror(errno);
 		goto free_layout;
@@ -1512,7 +1512,8 @@ static int mirror_create_sanity_check(const char *fname,
 			return -ENODATA;
 		}
 
-		rc = llapi_layout_sanity(layout, fname, false, true);
+		rc = llapi_layout_sanity_fsname_check(layout, fname,
+						      false, true);
 
 		llapi_layout_free(layout);
 
@@ -1544,7 +1545,8 @@ static int mirror_create_sanity_check(const char *fname,
 			}
 		}
 
-		rc = llapi_layout_sanity(list->m_layout, fname, false, true);
+		rc = llapi_layout_sanity_fsname_check(list->m_layout, fname,
+						      false, true);
 		if (rc) {
 			llapi_layout_sanity_perror(rc);
 			return rc;
@@ -2114,7 +2116,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		return -EINVAL;
 	}
 
-	rc = llapi_layout_sanity(layout, fname, false, true);
+	rc = llapi_layout_sanity_fsname_check(layout, fname, false, true);
 	if (rc) {
 		llapi_layout_sanity_perror(rc);
 		goto free_layout;

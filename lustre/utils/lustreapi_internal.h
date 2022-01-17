@@ -131,10 +131,10 @@ static inline bool llapi_stripe_index_is_valid(int64_t index)
 	return index >= -1 && index <= LOV_V1_INSANE_STRIPE_COUNT;
 }
 
-static inline bool llapi_pool_name_is_valid(char **pool_name,
+static inline bool llapi_pool_name_is_valid(const char **pool_name,
 					    const char *fsname)
 {
-	char *ptr;
+	const char *ptr;
 
 	if (*pool_name == NULL)
 		return false;
@@ -145,10 +145,12 @@ static inline bool llapi_pool_name_is_valid(char **pool_name,
 	 */
 	ptr = strchr(*pool_name, '.');
 	if (ptr != NULL) {
-		*ptr = '\0';
-		if (fsname != NULL && strcmp(*pool_name, fsname) != 0) {
-			*ptr = '.';
-			return false;
+		if (fsname != NULL) {
+			int fslen = strlen(fsname);
+
+			if (fslen != ptr - *pool_name ||
+			    strncmp(*pool_name, fsname, fslen) != 0)
+				return false;
 		}
 		*pool_name = ptr + 1;
 	}
@@ -160,7 +162,7 @@ static inline bool llapi_pool_name_is_valid(char **pool_name,
 }
 
 
-int llapi_layout_search_ost(__u32 ost, char *pname, char *fsname);
+int llapi_layout_search_ost(__u32 ost, const char *pname, char *fsname);
 
 /* Compatibility macro for legacy llapi functions that use "offset"
  * terminology instead of the preferred "index". */
