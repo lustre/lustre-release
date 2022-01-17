@@ -3031,7 +3031,7 @@ test_141() {
 	local oldc
 	local newc
 
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ "$PARALLEL" == "yes" ] && skip "skip parallel run"
 	combined_mgs_mds || skip "needs combined MGS/MDT"
 	( local_mode || from_build_tree ) &&
 		skip "cannot run in local mode or from build tree"
@@ -3069,7 +3069,7 @@ run_test 142 "orphan name stub can be cleaned up in startup"
 test_143() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.13.00) ] &&
 		skip "Need MDS version at least 2.13.00"
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ "$PARALLEL" == "yes" ] && skip "skip parallel run"
 
 	local mntpt=$(facet_mntpt $SINGLEMDS)
 	stop mds1
