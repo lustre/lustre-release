@@ -932,7 +932,7 @@ void test21(void)
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
 	fd = llapi_layout_file_create(template, 0, 0640, layout);
-	ASSERTF(fd == -1 && errno == ENOENT,
+	ASSERTF(fd == -1 && errno == ENOTTY,
 		"fd = %d, errno = %d, template = %s", fd, errno, template);
 	llapi_layout_free(layout);
 }

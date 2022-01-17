@@ -400,39 +400,6 @@ int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 	return 0;
 }
 
-/* XXX: llapi_xxx() functions return negative values upon failure */
-
-int llapi_layout_search_ost(__u32 ost, const char *pname, char *fsname)
-{
-	char ostname[MAX_OBD_NAME + 64];
-	const char *pool_name = pname;
-	int rc = 0;
-
-	/**
-	 * The current policy is that the pool does not have to exist at the
-	 * setstripe time, see sanity-pfl/-flr tests.
-	 * If this logic will change, re-enable it.
-	 *
-	 * if (pname && strlen(pname) == 0)
-	 */
-		pool_name = NULL;
-
-	snprintf(ostname, sizeof(ostname), "%s-OST%04x_UUID",
-		 fsname, ost);
-	rc = llapi_search_ost(fsname, pool_name, ostname);
-	if (rc <= 0) {
-		if (rc == 0)
-			rc = -ENODEV;
-
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "%s: cannot find OST %s in %s", __func__, ostname,
-			    pool_name != NULL ? "pool" : "system");
-		return rc;
-	}
-
-	return 0;
-}
-
 /**
  * Verify the setstripe parameters before using.
  * This is a pair method for comp_args_to_layout()/llapi_layout_sanity_cb()
@@ -446,8 +413,7 @@ int llapi_layout_search_ost(__u32 ost, const char *pname, char *fsname)
  *				< 0, error code on failre
  */
 static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
-				     const char **pool_name,
-				     char *fsname)
+				     const char **pool_name)
 {
 	int count;
 	static int page_size;
@@ -506,55 +472,14 @@ static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 
 	/* Make sure we have a good pool */
 	if (*pool_name != NULL) {
-		if (!llapi_pool_name_is_valid(pool_name, fsname)) {
+		if (!llapi_pool_name_is_valid(pool_name)) {
 			rc = -EINVAL;
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "Pool '%s' is not on filesystem '%s'",
-				    *pool_name, fsname);
+				    "Invalid Poolname '%s'", *pool_name);
 			goto out;
 		}
-
-		/* Make sure the pool exists and is non-empty */
-		rc = llapi_search_ost(fsname, *pool_name, NULL);
-		if (rc < 1) {
-			char *err = rc == 0 ? "has no OSTs" : "does not exist";
-
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc, "pool '%s.%s' %s",
-				    fsname, *pool_name, err);
-			goto out;
-		}
-		rc = 0;
 	}
 
-	/* sanity check of target list */
-	if (param->lsp_is_specific) {
-		bool found = false;
-		int i;
-
-		for (i = 0; i < count; i++) {
-			rc = llapi_layout_search_ost(param->lsp_osts[i],
-						     *pool_name, fsname);
-			if (rc)
-				goto out;
-
-			/* Make sure stripe offset is in OST list. */
-			if (param->lsp_osts[i] == param->lsp_stripe_offset)
-				found = true;
-		}
-		if (!found) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "%s: stripe offset '%d' is not in the target list",
-				    __func__, param->lsp_stripe_offset);
-			goto out;
-		}
-	} else if (param->lsp_stripe_offset != -1) {
-		rc = llapi_layout_search_ost(param->lsp_stripe_offset,
-					     *pool_name, fsname);
-		if (rc)
-			goto out;
-	}
 out:
 	errno = -rc;
 	return rc;
@@ -677,23 +602,13 @@ int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param)
 {
-	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct lov_user_md *lum = NULL;
 	const char *pool_name = param->lsp_pool;
 	size_t lum_size;
 	int fd, rc;
 
-	/* Make sure we are on a Lustre file system */
-	rc = llapi_search_fsname(name, fsname);
-	if (rc) {
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "'%s' is not on a Lustre filesystem",
-			    name);
-		return rc;
-	}
-
 	/* Check if the stripe pattern is sane. */
-	rc = llapi_stripe_param_verify(param, &pool_name, fsname);
+	rc = llapi_stripe_param_verify(param, &pool_name);
 	if (rc != 0)
 		return rc;
 

@@ -131,38 +131,23 @@ static inline bool llapi_stripe_index_is_valid(int64_t index)
 	return index >= -1 && index <= LOV_V1_INSANE_STRIPE_COUNT;
 }
 
-static inline bool llapi_pool_name_is_valid(const char **pool_name,
-					    const char *fsname)
+static inline bool llapi_pool_name_is_valid(const char **pool_name)
 {
 	const char *ptr;
 
 	if (*pool_name == NULL)
 		return false;
 
-	/**
-	 * in case user gives the full pool name <fsname>.<poolname>,
-	 * strip the fsname
-	 */
+	/* Strip off any 'fsname.' portion. */
 	ptr = strchr(*pool_name, '.');
-	if (ptr != NULL) {
-		if (fsname != NULL) {
-			int fslen = strlen(fsname);
-
-			if (fslen != ptr - *pool_name ||
-			    strncmp(*pool_name, fsname, fslen) != 0)
-				return false;
-		}
+	if (ptr != NULL)
 		*pool_name = ptr + 1;
-	}
 
 	if (strlen(*pool_name) > LOV_MAXPOOLNAME)
 		return false;
 
 	return true;
 }
-
-
-int llapi_layout_search_ost(__u32 ost, const char *pname, char *fsname);
 
 /* Compatibility macro for legacy llapi functions that use "offset"
  * terminology instead of the preferred "index". */
