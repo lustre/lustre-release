@@ -5808,22 +5808,13 @@ test_51b() {
 }
 run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
-test_51d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
-	local qos_old
+test_51d_sub() {
+	local stripecount=$1
+	local nfiles=$((200 * $OSTCOUNT))
 
-	test_mkdir $DIR/$tdir
-	$LFS setstripe -c $OSTCOUNT $DIR/$tdir
-
-	qos_old=$(do_facet mds1 \
-		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=100"
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
-		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
-
-	createmany -o $DIR/$tdir/t- 1000
+	log "create files with stripecount=$stripecount"
+	$LFS setstripe -C $stripecount $DIR/$tdir
+	createmany -o $DIR/$tdir/t- $nfiles
 	$LFS getstripe $DIR/$tdir > $TMP/$tfile
 	for ((n = 0; n < $OSTCOUNT; n++)); do
 		objs[$n]=$(awk -vobjs=0 '($1 == '$n') { objs += 1 } \
@@ -5833,28 +5824,58 @@ test_51d() {
 			    END { printf("%0.0f", objs) }')
 		log "OST$n has ${objs[$n]} objects, ${objs0[$n]} are index 0"
 	done
-	unlinkmany $DIR/$tdir/t- 1000
+	unlinkmany $DIR/$tdir/t- $nfiles
+	rm  -f $TMP/$tfile
 
-	nlast=0
-	for ((n = 0; n < $OSTCOUNT; n++)); do
+	local nlast
+	local min=4
+	local max=5 # allow variance of (1 - $min/$max) = 20% by default
+
+	# For some combinations of stripecount and OSTCOUNT current code
+	# is not ideal, and allocates 50% fewer *first* objects to some OSTs
+	# than others. Rather than skipping this test entirely, check that
+	# and keep testing to ensure imbalance does not get worse. LU-15282
+	(( (OSTCOUNT == 6 && stripecount == 4) ||
+	   (OSTCOUNT == 10 && (stripecount == 4 || stripecount == 8)) ||
+	   (OSTCOUNT == 12 && (stripecount == 8 || stripecount == 9)))) && max=9
+	for ((nlast=0, n = 1; n < $OSTCOUNT; nlast=n,n++)); do
 		(( ${objs[$n]} > ${objs[$nlast]} * 4 / 5 )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer objects vs. OST $nlast" \
-			      " (${objs[$n]} < ${objs[$nlast]}"; }
+			error "OST $n has fewer objects vs. OST $nlast " \
+			      "(${objs[$n]} < ${objs[$nlast]} x 4/5)"; }
 		(( ${objs[$n]} < ${objs[$nlast]} * 5 / 4 )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer objects vs. OST $nlast" \
-			      " (${objs[$n]} < ${objs[$nlast]}"; }
+			error "OST $n has fewer objects vs. OST $nlast " \
+			      "(${objs[$n]} > ${objs[$nlast]} x 5/4)"; }
 
-		(( ${objs0[$n]} > ${objs0[$nlast]} * 4 / 5 )) ||
+		(( ${objs0[$n]} > ${objs0[$nlast]} * $min / $max )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer #0 objects vs. OST $nlast" \
-			      " (${objs0[$n]} < ${objs0[$nlast]}"; }
-		(( ${objs0[$n]} < ${objs0[$nlast]} * 5 / 4 )) ||
+			error "OST $n has fewer #0 objects vs. OST $nlast " \
+			      "(${objs0[$n]} < ${objs0[$nlast]} x $min/$max)"; }
+		(( ${objs0[$n]} < ${objs0[$nlast]} * $max / $min )) ||
 			{ $LFS df && $LFS df -i &&
-			error "OST $n has fewer #0 objects vs. OST $nlast" \
-			      " (${objs0[$n]} < ${objs0[$nlast]}"; }
-		nlast=$n
+			error "OST $n has fewer #0 objects vs. OST $nlast " \
+			      "(${objs0[$n]} > ${objs0[$nlast]} x $max/$min)"; }
+	done
+}
+
+test_51d() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
+
+	local stripecount
+	local qos_old=$(do_facet mds1 \
+		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=100"
+	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
+		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
+
+	test_mkdir $DIR/$tdir
+
+	for ((stripecount = 3; stripecount <= $OSTCOUNT; stripecount++)); do
+		test_51d_sub $stripecount
 	done
 }
 run_test 51d "check object distribution"
