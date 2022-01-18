@@ -529,15 +529,14 @@ lnet_peer_del(struct lnet_peer *peer)
  *  -EBUSY:  The lnet_peer_ni is the primary, and not the only peer_ni.
  */
 static int
-lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
+lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
+		  unsigned int flags)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_nid primary_nid = lp->lp_primary_nid;
-	struct lnet_nid nid;
 	int rc = 0;
 	bool force = (flags & LNET_PEER_RTR_NI_FORCE_DEL) ? true : false;
 
-	lnet_nid4_to_nid(nid4, &nid);
 	if (!(flags & LNET_PEER_CONFIGURED)) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
 			rc = -EPERM;
@@ -545,7 +544,7 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 		}
 	}
 
-	lpni = lnet_peer_ni_find_locked(&nid);
+	lpni = lnet_peer_ni_find_locked(nid);
 	if (!lpni) {
 		rc = -ENOENT;
 		goto out;
@@ -560,14 +559,14 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 	 * This function only allows deletion of the primary NID if it
 	 * is the only NID.
 	 */
-	if (nid_same(&nid, &lp->lp_primary_nid) && lp->lp_nnis != 1 && !force) {
+	if (nid_same(nid, &lp->lp_primary_nid) && lp->lp_nnis != 1 && !force) {
 		rc = -EBUSY;
 		goto out;
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	if (nid_same(&nid, &lp->lp_primary_nid) && lp->lp_nnis != 1 && force) {
+	if (nid_same(nid, &lp->lp_primary_nid) && lp->lp_nnis != 1 && force) {
 		struct lnet_peer_ni *lpni2;
 		/* assign the next peer_ni to be the primary */
 		lpni2 = lnet_get_next_peer_ni_locked(lp, NULL, lpni);
@@ -580,7 +579,7 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid4, unsigned int flags)
 
 out:
 	CDEBUG(D_NET, "peer %s NID %s flags %#x: %d\n",
-	       libcfs_nidstr(&primary_nid), libcfs_nidstr(&nid),
+	       libcfs_nidstr(&primary_nid), libcfs_nidstr(nid),
 	       flags, rc);
 
 	return rc;
@@ -1342,7 +1341,7 @@ lnet_is_discovery_disabled(struct lnet_peer *lp)
 int
 LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 {
-	lnet_nid_t pnid = 0;
+	struct lnet_nid pnid = LNET_ANY_NID;
 	bool mr;
 	int i, rc;
 
@@ -1359,16 +1358,21 @@ LNetAddPeer(lnet_nid_t *nids, __u32 num_nids)
 
 	rc = 0;
 	for (i = 0; i < num_nids; i++) {
+		struct lnet_nid nid;
+
 		if (nids[i] == LNET_NID_LO_0)
 			continue;
 
-		if (!pnid) {
-			pnid = nids[i];
-			rc = lnet_add_peer_ni(pnid, LNET_NID_ANY, mr, true);
+		lnet_nid4_to_nid(nids[i], &nid);
+		if (LNET_NID_IS_ANY(&pnid)) {
+			lnet_nid4_to_nid(nids[i], &pnid);
+			rc = lnet_add_peer_ni(&pnid, &LNET_ANY_NID, mr, true);
 		} else if (lnet_peer_discovery_disabled) {
-			rc = lnet_add_peer_ni(nids[i], LNET_NID_ANY, mr, true);
+			lnet_nid4_to_nid(nids[i], &nid);
+			rc = lnet_add_peer_ni(&nid, &LNET_ANY_NID, mr, true);
 		} else {
-			rc = lnet_add_peer_ni(pnid, nids[i], mr, true);
+			lnet_nid4_to_nid(nids[i], &nid);
+			rc = lnet_add_peer_ni(&pnid, &nid, mr, true);
 		}
 
 		if (rc && rc != -EEXIST)
@@ -1859,19 +1863,16 @@ out:
  * being created/modified/deleted by a different thread.
  */
 int
-lnet_add_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid4, bool mr, bool temp)
+lnet_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid, bool mr,
+		 bool temp)
 {
-	struct lnet_nid prim_nid, nid;
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_ni *lpni;
 	unsigned int flags = 0;
 
 	/* The prim_nid must always be specified */
-	if (prim_nid4 == LNET_NID_ANY)
+	if (LNET_NID_IS_ANY(prim_nid))
 		return -EINVAL;
-
-	lnet_nid4_to_nid(prim_nid4, &prim_nid);
-	lnet_nid4_to_nid(nid4, &nid);
 
 	if (!temp)
 		flags = LNET_PEER_CONFIGURED;
@@ -1883,11 +1884,11 @@ lnet_add_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid4, bool mr, bool temp)
 	 * If nid isn't specified, we must create a new peer with
 	 * prim_nid as its primary nid.
 	 */
-	if (nid4 == LNET_NID_ANY)
-		return lnet_peer_add(&prim_nid, flags);
+	if (LNET_NID_IS_ANY(nid))
+		return lnet_peer_add(prim_nid, flags);
 
 	/* Look up the prim_nid, which must exist. */
-	lpni = lnet_peer_ni_find_locked(&prim_nid);
+	lpni = lnet_peer_ni_find_locked(prim_nid);
 	if (!lpni)
 		return -ENOENT;
 	lnet_peer_ni_decref_locked(lpni);
@@ -1896,14 +1897,14 @@ lnet_add_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid4, bool mr, bool temp)
 	/* Peer must have been configured. */
 	if (!temp && !(lp->lp_state & LNET_PEER_CONFIGURED)) {
 		CDEBUG(D_NET, "peer %s was not configured\n",
-		       libcfs_nidstr(&prim_nid));
+		       libcfs_nidstr(prim_nid));
 		return -ENOENT;
 	}
 
 	/* Primary NID must match */
-	if (!nid_same(&lp->lp_primary_nid, &prim_nid)) {
+	if (!nid_same(&lp->lp_primary_nid, prim_nid)) {
 		CDEBUG(D_NET, "prim_nid %s is not primary for peer %s\n",
-		       libcfs_nidstr(&prim_nid),
+		       libcfs_nidstr(prim_nid),
 		       libcfs_nidstr(&lp->lp_primary_nid));
 		return -ENODEV;
 	}
@@ -1911,11 +1912,11 @@ lnet_add_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid4, bool mr, bool temp)
 	/* Multi-Rail flag must match. */
 	if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL) {
 		CDEBUG(D_NET, "multi-rail state mismatch for peer %s\n",
-		       libcfs_nidstr(&prim_nid));
+		       libcfs_nidstr(prim_nid));
 		return -EPERM;
 	}
 
-	return lnet_peer_add_nid(lp, &nid, flags);
+	return lnet_peer_add_nid(lp, nid, flags);
 }
 
 /*
@@ -1930,26 +1931,24 @@ lnet_add_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid4, bool mr, bool temp)
  * being modified/deleted by a different thread.
  */
 int
-lnet_del_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid)
+lnet_del_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid)
 {
 	struct lnet_peer *lp;
 	struct lnet_peer_ni *lpni;
 	unsigned int flags;
-	struct lnet_nid prim_nid;
 
-	if (prim_nid4 == LNET_NID_ANY)
+	if (!prim_nid || LNET_NID_IS_ANY(prim_nid))
 		return -EINVAL;
-	lnet_nid4_to_nid(prim_nid4, &prim_nid);
 
-	lpni = lnet_peer_ni_find_locked(&prim_nid);
+	lpni = lnet_peer_ni_find_locked(prim_nid);
 	if (!lpni)
 		return -ENOENT;
 	lnet_peer_ni_decref_locked(lpni);
 	lp = lpni->lpni_peer_net->lpn_peer;
 
-	if (!nid_same(&prim_nid, &lp->lp_primary_nid)) {
+	if (!nid_same(prim_nid, &lp->lp_primary_nid)) {
 		CDEBUG(D_NET, "prim_nid %s is not primary for peer %s\n",
-		       libcfs_nidstr(&prim_nid),
+		       libcfs_nidstr(prim_nid),
 		       libcfs_nidstr(&lp->lp_primary_nid));
 		return -ENODEV;
 	}
@@ -1958,12 +1957,12 @@ lnet_del_peer_ni(lnet_nid_t prim_nid4, lnet_nid_t nid)
 	if (lp->lp_rtr_refcount > 0) {
 		lnet_net_unlock(LNET_LOCK_EX);
 		CERROR("%s is a router. Can not be deleted\n",
-		       libcfs_nidstr(&prim_nid));
+		       libcfs_nidstr(prim_nid));
 		return -EBUSY;
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	if (nid == LNET_NID_ANY || nid == lnet_nid_to_nid4(&lp->lp_primary_nid))
+	if (LNET_NID_IS_ANY(nid) || nid_same(nid, &lp->lp_primary_nid))
 		return lnet_peer_del(lp);
 
 	flags = LNET_PEER_CONFIGURED;
@@ -3029,9 +3028,10 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		 * being told that the router changed its primary_nid
 		 * then it's okay to delete it.
 		 */
+		lnet_nid4_to_nid(delnis[i], &nid);
 		if (lp->lp_rtr_refcount > 0)
 			flags |= LNET_PEER_RTR_NI_FORCE_DEL;
-		rc = lnet_peer_del_nid(lp, delnis[i], flags);
+		rc = lnet_peer_del_nid(lp, &nid, flags);
 		if (rc) {
 			CERROR("Error deleting NID %s from peer %s: %d\n",
 			       libcfs_nid2str(delnis[i]),

@@ -4258,27 +4258,31 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_ADD_PEER_NI: {
 		struct lnet_ioctl_peer_cfg *cfg = arg;
+		struct lnet_nid prim_nid;
 
 		if (cfg->prcfg_hdr.ioc_len < sizeof(*cfg))
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_add_peer_ni(cfg->prcfg_prim_nid,
-				      cfg->prcfg_cfg_nid,
-				      cfg->prcfg_mr, false);
+		lnet_nid4_to_nid(cfg->prcfg_prim_nid, &prim_nid);
+		lnet_nid4_to_nid(cfg->prcfg_cfg_nid, &nid);
+		rc = lnet_add_peer_ni(&prim_nid, &nid, cfg->prcfg_mr, false);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
 
 	case IOC_LIBCFS_DEL_PEER_NI: {
 		struct lnet_ioctl_peer_cfg *cfg = arg;
+		struct lnet_nid prim_nid;
 
 		if (cfg->prcfg_hdr.ioc_len < sizeof(*cfg))
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_del_peer_ni(cfg->prcfg_prim_nid,
-				      cfg->prcfg_cfg_nid);
+		lnet_nid4_to_nid(cfg->prcfg_prim_nid, &prim_nid);
+		lnet_nid4_to_nid(cfg->prcfg_cfg_nid, &nid);
+		rc = lnet_del_peer_ni(&prim_nid,
+				      &nid);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
