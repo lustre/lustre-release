@@ -1622,12 +1622,11 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 		 * We're already past request deadlines before we even get a
 		 * chance to send early replies
 		 */
-		LCONSOLE_WARN("%s: This server is not able to keep up with request traffic (cpu-bound).\n",
-			      svcpt->scp_service->srv_name);
-		CWARN("earlyQ=%d reqQ=%d recA=%d, svcEst=%d, delay=%lldms\n",
-		      counter, svcpt->scp_nreqs_incoming,
-		      svcpt->scp_nreqs_active,
-		      at_get(&svcpt->scp_at_estimate), delay_ms);
+		LCONSOLE_WARN("'%s' is processing requests too slowly, client may timeout. Late by %ds, missed %d early replies (reqs waiting=%d active=%d, at_estimate=%d, delay=%lldms)\n",
+			      svcpt->scp_service->srv_name, -first, counter,
+			      svcpt->scp_nreqs_incoming,
+			      svcpt->scp_nreqs_active,
+			      at_get(&svcpt->scp_at_estimate), delay_ms);
 	}
 
 	/*
