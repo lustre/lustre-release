@@ -63,7 +63,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 				LDISKFS_SERIES="5.4.0-66-ubuntu20.series"
 			fi
 			;; # (
-		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp2.series"
+		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp3.series"
 			;;
 		esac
 	    ])
