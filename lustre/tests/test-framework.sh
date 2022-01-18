@@ -753,7 +753,9 @@ load_modules_local() {
 	fi
 	load_module ../lnet/klnds/$LNETLND
 	load_module obdclass/obdclass
-	MODOPTS_PTLRPC=${MODOPTS_PTLRPC:-"lbug_on_grant_miscount=1"}
+	if ! client_only; then
+		MODOPTS_PTLRPC=${MODOPTS_PTLRPC:-"lbug_on_grant_miscount=1"}
+	fi
 	load_module ptlrpc/ptlrpc
 	load_module ptlrpc/gss/ptlrpc_gss
 	load_module fld/fld
