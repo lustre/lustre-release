@@ -2606,9 +2606,9 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body != NULL);
 
-	if (desc && lnet_nid_to_nid4(&req->rq_peer.nid) != desc->bd_sender) {
+	if (desc && !nid_same(&req->rq_peer.nid, &desc->bd_sender)) {
 		via = " via ";
-		router = libcfs_nid2str(desc->bd_sender);
+		router = libcfs_nidstr(&desc->bd_sender);
 	}
 
 	if (exp->exp_obd->obd_checksum_dump)

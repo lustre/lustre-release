@@ -1384,17 +1384,17 @@ struct ptlrpc_bulk_desc {
 	/** Back pointer to the request */
 	struct ptlrpc_request *bd_req;
 	const struct ptlrpc_bulk_frag_ops *bd_frag_ops;
-	wait_queue_head_t      bd_waitq;        /* server side only WQ */
-	int                    bd_iov_count;    /* # entries in bd_iov */
-	int                    bd_max_iov;      /* allocated size of bd_iov */
-	int                    bd_nob;          /* # bytes covered */
-	int                    bd_nob_transferred; /* # bytes GOT/PUT */
+	wait_queue_head_t	bd_waitq;	/* server side only WQ */
+	int			bd_iov_count;	/* # entries in bd_iov */
+	int			bd_max_iov;	/* allocated size of bd_iov */
+	int			bd_nob;		/* # bytes covered */
+	int			bd_nob_transferred; /* # bytes GOT/PUT */
 	unsigned int		bd_nob_last;	/* # bytes in last MD */
 
-	__u64                  bd_last_mbits;
+	__u64			bd_last_mbits;
 
-	struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
-	lnet_nid_t             bd_sender;       /* stash event::sender */
+	struct ptlrpc_cb_id	bd_cbid;	/* network callback info */
+	struct lnet_nid		bd_sender;	/* stash event::sender */
 	int			bd_md_count;	/* # valid entries in bd_mds */
 	int			bd_md_max_brw;	/* max entries in bd_mds */
 

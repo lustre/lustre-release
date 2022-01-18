@@ -219,7 +219,7 @@ void client_bulk_callback(struct lnet_event *ev)
 
 	if (ev->type != LNET_EVENT_UNLINK && ev->status == 0) {
 		desc->bd_nob_transferred += ev->mlength;
-		desc->bd_sender = lnet_nid_to_nid4(&ev->sender);
+		desc->bd_sender = ev->sender;
 	} else {
 		/* start reconnect and resend if network error hit */
 		spin_lock(&req->rq_lock);
@@ -486,7 +486,7 @@ void server_bulk_callback(struct lnet_event *ev)
 		 * before the SENT event (oh yes we can), we know we
 		 * read/wrote the peer buffer and how much... */
 		desc->bd_nob_transferred += ev->mlength;
-		desc->bd_sender = lnet_nid_to_nid4(&ev->sender);
+		desc->bd_sender = ev->sender;
 	}
 
 	if (ev->status != 0)
