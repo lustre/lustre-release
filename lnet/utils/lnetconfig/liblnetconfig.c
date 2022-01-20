@@ -44,7 +44,6 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <libcfs/util/ioctl.h>
-#include <libcfs/util/hash.h>
 #include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
 #include <sys/types.h>
@@ -3794,22 +3793,18 @@ out:
 unsigned int
 lnet_nid_cpt_hash(lnet_nid_t nid, long int number)
 {
-	__u64		key = nid;
-	unsigned int	val;
-	int cpt_bits = 0;
+	__u64 key = nid;
+	__u64 pair_bits = 0x0001000100010001LLU;
+	__u64 mask = pair_bits * 0xFF;
+	__u64 pair_sum;
 
 	if (number == 1)
 		return 0;
 
-	while ((1 << cpt_bits) < number)
-		cpt_bits++;
+	pair_sum = (key & mask) + ((key >> 8) & mask);
+	pair_sum = (pair_sum * pair_bits) >> 48;
 
-	val = hash_long(key, cpt_bits);
-	/* NB: LNET_CP_NUMBER doesn't have to be PO2 */
-	if (val < number)
-		return val;
-
-	return (unsigned int)(key + val + (val >> 1)) % number;
+	return (unsigned int)(pair_sum) % number;
 }
 
 int lustre_lnet_calc_cpt_of_nid(char *nidc, long int ncpts)
