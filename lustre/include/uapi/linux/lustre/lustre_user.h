@@ -1218,9 +1218,11 @@ static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 	if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
 		/* Obviously not safe, but for printfs, no real harm done...
 		   we're always null-terminated, even in a race. */
-		static char temp[sizeof(*uuid)];
-		memcpy(temp, uuid->uuid, sizeof(*uuid) - 1);
-		temp[sizeof(*uuid) - 1] = '\0';
+		static char temp[sizeof(*uuid->uuid)];
+
+		memcpy(temp, uuid->uuid, sizeof(*uuid->uuid) - 1);
+		temp[sizeof(*uuid->uuid) - 1] = '\0';
+
 		return temp;
 	}
 	return (char *)(uuid->uuid);

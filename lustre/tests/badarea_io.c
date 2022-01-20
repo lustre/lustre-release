@@ -35,8 +35,11 @@
 int main(int argc, char **argv)
 {
 	int rc;
-	int fd = open(argv[1], O_WRONLY);
+	int fd;
+	void *volatile buf = (void *)0x4096000;
+	void *volatile fd_ptr;
 
+	fd = open(argv[1], O_WRONLY);
 	if (fd == -1) {
 		perror(argv[1]);
 		goto read;
@@ -44,27 +47,28 @@ int main(int argc, char **argv)
 
 	/* We need rc because Sles11 compiler warns against unchecked
 	 * return value of read and write */
-	rc = write(fd, (void *)0x4096000, 5);
+	rc = write(fd, buf, 5);
 	if (rc != 5)
 		perror("write badarea (Should have failed)");
 
-	rc = write(fd, &fd, 0);
+	fd_ptr = (void *)&fd;
+	rc = write(fd, fd_ptr, 0);
 	if (rc != 0)
 		perror("write zero bytes");
 
-	rc = write(fd, &fd, 1);
+	rc = write(fd, fd_ptr, 1);
 	if (rc != 1)
 		perror("write one byte");
 
-	rc = write(fd, &fd, 2UL*1024*1024);
+	rc = write(fd, fd_ptr, 2UL*1024*1024);
 	if (rc != 2UL*1024*1024)
 		perror("write 2M");
 
-	rc = write(fd, &fd, 2UL*1024*1024*1024);
+	rc = write(fd, fd_ptr, 2UL*1024*1024*1024);
 	if (rc != 2UL*1024*1024*1024)
 		perror("write 2G");
 
-	rc = write(fd, &fd, -2);
+	rc = write(fd, fd_ptr, -2);
 	if (rc != -2)
 		perror("write -2");
 
@@ -74,7 +78,7 @@ read:
 	fd = open(argv[1], O_RDONLY);
 	if (fd == -1)
 		return 0;
-	rc = read(fd, (void *)0x4096000, 5);
+	rc = read(fd, buf, 5);
 	perror("read");
 
 	close(fd);
