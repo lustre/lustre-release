@@ -1723,7 +1723,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_processid *target)
 
 	CFS_RACE(CFS_FAIL_GNI_FIND_TARGET);
 
-	node_state = kgnilnd_get_node_state(ntohl(target->nid->nid_addr[0]));
+	node_state = kgnilnd_get_node_state(ntohl(target->nid.nid_addr[0]));
 
 	/* NB - this will not block during normal operations -
 	 * the only writer of this is in the startup/shutdown path. */
