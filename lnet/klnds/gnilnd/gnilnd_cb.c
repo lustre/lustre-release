@@ -874,7 +874,7 @@ kgnilnd_verify_rdma_cksum(kgn_tx_t *tx, __u16 rx_cksum, int put_len)
 				kgnilnd_dump_blob(D_BUFFS, "RDMA payload",
 						  tx->tx_buffer, nob);
 			}
-			/* fallthrough */
+			fallthrough;
 		case 1:
 			libcfs_debug_dumplog();
 			break;
@@ -1661,11 +1661,11 @@ kgnilnd_queue_tx(kgn_conn_t *conn, kgn_tx_t *tx)
 			break;
 		}
 		/* needs to queue to try again, so... */
-		/* fall through... */
+		fallthrough;
 	case GNILND_MSG_NOOP:
 		/* Just make sure this goes out first for this conn */
 		add_tail = 0;
-		/* fall through... */
+		fallthrough;
 	default:
 		spin_lock(&conn->gnc_list_lock);
 		kgnilnd_tx_add_state_locked(tx, conn->gnc_peer, conn, GNILND_TX_FMAQ, add_tail);
@@ -2411,7 +2411,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 				case 2:
 					kgnilnd_dump_blob(D_BUFFS, "bad payload checksum",
 							  &rxmsg[1], rxmsg->gnm_payload_len);
-					/* fallthrough */
+					fallthrough;
 				case 1:
 					libcfs_debug_dumplog();
 					break;
@@ -3754,7 +3754,7 @@ kgnilnd_process_fmaq(kgn_conn_t *conn)
 	case GNILND_MSG_PUT_REQ:
 	case GNILND_MSG_GET_REQ_REV:
 		tx->tx_msg.gnm_u.putreq.gnprm_cookie = tx->tx_id.txe_cookie;
-		/* fallthrough */
+		fallthrough;
 	case GNILND_MSG_PUT_ACK:
 	case GNILND_MSG_PUT_REQ_REV:
 	case GNILND_MSG_GET_ACK_REV:

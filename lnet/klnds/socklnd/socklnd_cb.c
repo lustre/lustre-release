@@ -1338,7 +1338,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 			ksocknal_close_conn_and_siblings(conn, rc);
 			return (-EPROTO);
 		}
-		/* Fall through */
+		fallthrough;
 
 	case SOCKNAL_RX_SLOP:
 		/* starting new packet? */

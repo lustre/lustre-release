@@ -989,7 +989,7 @@ static int srpc_handle_rpc(struct swi_workitem *wi)
 	switch (wi->swi_state) {
 	default:
 		LBUG();
-		/* fallthrough */
+		fallthrough;
 	case SWI_STATE_NEWBORN: {
 		struct srpc_msg *msg;
 		struct srpc_generic_reply *reply;
@@ -1031,7 +1031,7 @@ static int srpc_handle_rpc(struct swi_workitem *wi)
 			ev->ev_status = rc;
 		}
 	}
-	/* fallthrough */
+	fallthrough;
 	case SWI_STATE_BULK_STARTED:
 		LASSERT(rpc->srpc_bulk == NULL || ev->ev_fired);
 
@@ -1231,7 +1231,7 @@ srpc_send_rpc(struct swi_workitem *wi)
 			break;
 
 		wi->swi_state = SWI_STATE_REQUEST_SENT;
-		/* fallthrough */
+		fallthrough;
 	case SWI_STATE_REQUEST_SENT: {
 		enum srpc_msg_type type;
 
@@ -1265,7 +1265,7 @@ srpc_send_rpc(struct swi_workitem *wi)
 
 		wi->swi_state = SWI_STATE_REPLY_RECEIVED;
 	}
-	/* fallthrough */
+	fallthrough;
 	case SWI_STATE_REPLY_RECEIVED:
 		if (do_bulk && !rpc->crpc_bulkev.ev_fired)
 			break;
@@ -1439,14 +1439,14 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 		CERROR("Unknown event: status %d, type %d, lnet %d\n",
 		       rpcev->ev_status, rpcev->ev_type, rpcev->ev_lnet);
 		LBUG();
-		/* fallthrough */
+		fallthrough;
 	case SRPC_REQUEST_SENT:
 		if (ev->status == 0 && ev->type != LNET_EVENT_UNLINK) {
 			spin_lock(&srpc_data.rpc_glock);
 			srpc_data.rpc_counters.rpcs_sent++;
 			spin_unlock(&srpc_data.rpc_glock);
 		}
-		/* fallthrough */
+		fallthrough;
 	case SRPC_REPLY_RCVD:
 	case SRPC_BULK_REQ_RCVD:
 		crpc = rpcev->ev_data;
@@ -1569,7 +1569,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 		if (!ev->unlinked)
 			break; /* wait for final event */
-		/* fallthrough */
+		fallthrough;
 	case SRPC_BULK_PUT_SENT:
 		if (ev->status == 0 && ev->type != LNET_EVENT_UNLINK) {
 			spin_lock(&srpc_data.rpc_glock);
@@ -1581,7 +1581,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 			spin_unlock(&srpc_data.rpc_glock);
 		}
-		/* fallthrough */
+		fallthrough;
 	case SRPC_REPLY_SENT:
 		srpc = rpcev->ev_data;
 		scd  = srpc->srpc_scd;
@@ -1655,7 +1655,7 @@ srpc_shutdown (void)
 	switch (state) {
 	default:
 		LBUG();
-		/* fallthrough */
+		fallthrough;
 	case SRPC_STATE_RUNNING:
 		spin_lock(&srpc_data.rpc_glock);
 
@@ -1670,14 +1670,14 @@ srpc_shutdown (void)
 		spin_unlock(&srpc_data.rpc_glock);
 
 		stt_shutdown();
-		/* fallthrough */
+		fallthrough;
 
 	case SRPC_STATE_EQ_INIT:
 		rc = LNetClearLazyPortal(SRPC_FRAMEWORK_REQUEST_PORTAL);
 		rc = LNetClearLazyPortal(SRPC_REQUEST_PORTAL);
 		LASSERT(rc == 0);
 		lnet_assert_handler_unused(srpc_data.rpc_lnet_handler);
-		/* fallthrough */
+		fallthrough;
 
 	case SRPC_STATE_NI_INIT:
 		LNetNIFini();

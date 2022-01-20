@@ -109,6 +109,10 @@ extern struct lnet the_lnet;			/* THE network */
 #define in_dev_for_each_ifa_rcu(ifa, in_dev)	for_ifa((in_dev))
 #endif
 
+#ifndef fallthrough
+#define fallthrough do {} while (0)  /* fallthrough */
+#endif
+
 int choose_ipv4_src(__u32 *ret,
 		    int interface, __u32 dst_ipaddr, struct net *ns);
 

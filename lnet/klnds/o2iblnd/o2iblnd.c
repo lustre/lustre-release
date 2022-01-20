@@ -2999,7 +2999,7 @@ kiblnd_base_shutdown(void)
 				       !atomic_read(&kiblnd_data.kib_nthreads),
 				       "Waiting for %d threads to terminate\n",
 				       atomic_read(&kiblnd_data.kib_nthreads));
-		/* fall through */
+		fallthrough;
 
 	case IBLND_INIT_NOTHING:
 		break;
@@ -3057,7 +3057,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 		list_del(&net->ibn_list);
 		write_unlock_irqrestore(g_lock, flags);
 
-		/* fall through */
+		fallthrough;
 
         case IBLND_INIT_NOTHING:
 		LASSERT (atomic_read(&net->ibn_nconns) == 0);

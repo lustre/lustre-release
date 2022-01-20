@@ -2947,7 +2947,7 @@ kiblnd_rejected(struct kib_conn *conn, int reason, void *priv, int priv_nob)
 			}
 			break;
 		}
-		/* fall through */
+		fallthrough;
 	default:
 		CNETERR("%s rejected: reason %d, size %d\n",
 			libcfs_nid2str(peer_ni->ibp_nid), reason, priv_nob);

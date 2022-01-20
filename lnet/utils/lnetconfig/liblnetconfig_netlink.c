@@ -32,6 +32,10 @@
 #include <linux/lnet/lnet-nl.h>
 #include "liblnetconfig.h"
 
+#ifndef fallthrough
+#define fallthrough do {} while (0)  /* fallthrough */
+#endif
+
 #ifndef SOL_NETLINK /* for glibc < 2.24 */
 # define SOL_NETLINK 270
 #endif
@@ -703,7 +707,7 @@ not_first:
 		case NLA_S64:
 			len = snprintf(data->buffer, *size, "%jd",
 				       nla_get_s64(attr));
-		/* fallthrough */
+			fallthrough;
 		default:
 			break;
 		}
@@ -1485,7 +1489,7 @@ void yaml_parser_log_error(yaml_parser_t *parser, FILE *log, const char *errmsg)
 			fprintf(log, "Reader error: '%s' at %ld\n",
 				extra, (long)parser->problem_offset);
 		}
-	/* fallthrough */
+		fallthrough;
 	default:
 		break;
 	}
