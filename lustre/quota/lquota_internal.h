@@ -186,7 +186,8 @@ struct lquota_entry {
 			lqe_gl:1,	  /* glimpse is in progress */
 			lqe_nopreacq:1,	  /* pre-acquire disabled */
 			lqe_is_default:1, /* the default quota is used */
-			lqe_is_global:1;  /* lqe belongs to global pool "0x0"*/
+			lqe_is_global:1,  /* lqe belongs to global pool "0x0"*/
+			lqe_is_deleted:1; /* lqe will be deleted soon */
 
 	struct lqe_glbl_data	*lqe_glbl_data;
 };
@@ -456,6 +457,18 @@ struct lquota_entry *lqe_locate_find(const struct lu_env *,
 				     struct lquota_site *,
 				     union lquota_id *, bool);
 
+static inline void lqe_set_deleted(struct lquota_entry *lqe)
+{
+	lqe->lqe_enforced = 0;
+	lqe->lqe_edquot = 0;
+	lqe->lqe_is_default = 0;
+	lqe->lqe_hardlimit = 0;
+	lqe->lqe_softlimit = 0;
+	lqe->lqe_gracetime = 0;
+
+	lqe->lqe_is_deleted = 1;
+}
+
 /* lquota_disk.c */
 struct dt_object *lquota_disk_dir_find_create(const struct lu_env *,
 					      struct dt_device *,
@@ -484,6 +497,8 @@ int lquota_disk_declare_write(const struct lu_env *, struct thandle *,
 int lquota_disk_write(const struct lu_env *, struct thandle *,
 		      struct dt_object *, union lquota_id *, struct dt_rec *,
 		      __u32, __u64 *);
+int lquota_disk_delete(const struct lu_env *env, struct thandle *th,
+		       struct dt_object *obj, __u64 qid, __u64 *ver);
 int lquota_disk_update_ver(const struct lu_env *, struct dt_device *,
 			   struct dt_object *, __u64);
 int lquota_disk_write_glb(const struct lu_env *, struct dt_object *, __u64,

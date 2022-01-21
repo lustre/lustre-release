@@ -1291,6 +1291,7 @@ static inline __u64 toqb(__kernel_size_t space)
 #define LUSTRE_Q_SETINFOPOOL	0x800012  /* set pool quota info */
 #define LUSTRE_Q_GETDEFAULT_POOL	0x800013  /* get default pool quota*/
 #define LUSTRE_Q_SETDEFAULT_POOL	0x800014  /* set default pool quota */
+#define LUSTRE_Q_DELETEQID	0x800015  /* delete quota ID */
 /* In the current Lustre implementation, the grace time is either the time
  * or the timestamp to be used after some quota ID exceeds the soft limt,
  * 48 bits should be enough, its high 16 bits can be used as quota flags.
@@ -1315,6 +1316,7 @@ static inline __u64 toqb(__kernel_size_t space)
  * and high 16 bits will contain this flag (see above comment).
  * */
 #define LQUOTA_FLAG_DEFAULT	0x0001
+#define LQUOTA_FLAG_DELETED	0x0002
 
 #define LUSTRE_Q_CMD_IS_POOL(cmd)		\
 	(cmd == LUSTRE_Q_GETQUOTAPOOL ||	\

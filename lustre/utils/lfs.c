@@ -444,7 +444,8 @@ command_t cmdlist[] = {
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
 #ifdef HAVE_SYS_QUOTA_H
 	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-	 "usage: setquota [-t][-d] {-u|-U|-g|-G|-p|-P} {-b|-B|-i|-I LIMIT} [--pool POOL] FILESYSTEM"},
+	 "usage: setquota [-t][-D] {-u|-U|-g|-G|-p|-P} {-b|-B|-i|-I LIMIT} [--pool POOL] FILESYSTEM\n"
+	 "	 setquota {-u|-g|-p} --delete FILESYSTEM\n"},
 	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
 	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-i MDT_IDX|-I OST_IDX]\n"
 	 "	       [{-u|-g|-p} UNAME|UID|GNAME|GID|PROJID]\n"
@@ -3330,6 +3331,7 @@ static void lfs_mirror_list_free(struct mirror_args *mirror_list)
 }
 
 enum {
+	LFS_SETQUOTA_DELETE = 1,
 	LFS_POOL_OPT = 3,
 	LFS_COMP_COUNT_OPT,
 	LFS_COMP_START_OPT,
@@ -7678,6 +7680,8 @@ int lfs_setquota(int argc, char **argv)
 	{ .val = 'B',	.name = "block-hardlimit",
 						.has_arg = required_argument },
 	{ .val = 'd',	.name = "default",	.has_arg = no_argument },
+	{ .val = LFS_SETQUOTA_DELETE,
+			.name = "delete",	.has_arg = no_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -7715,8 +7719,7 @@ int lfs_setquota(int argc, char **argv)
 				   * so it can be used as a marker that qc_type
 				   * isn't reinitialized from command line
 				   */
-
-	while ((c = getopt_long(argc, argv, "b:B:dg:Ghi:I:p:Pu:U",
+	while ((c = getopt_long(argc, argv, "b:B:dDg:Ghi:I:p:Pu:U",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'U':
@@ -7774,9 +7777,19 @@ quota_type_def:
 			}
 			qctl->qc_type = qtype;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'd':
-			qctl->qc_cmd = LUSTRE_Q_SETDEFAULT;
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 15, 53, 0)
+			fprintf(stderr, "'-d' deprecatd, use '-D' or '--default'\n");
+#endif
+			/* falltrrough */
+#endif
+		case 'D':
 			use_default = true;
+			qctl->qc_cmd = LUSTRE_Q_SETDEFAULT;
+			break;
+		case LFS_SETQUOTA_DELETE:
+			qctl->qc_cmd = LUSTRE_Q_DELETEQID;
 			break;
 		case 'b':
 			ARG2ULL(dqb->dqb_bsoftlimit, optarg, 1024);
@@ -7854,7 +7867,8 @@ quota_type_def:
 		goto out;
 	}
 
-	if (!use_default && limit_mask == 0) {
+	if (!use_default && qctl->qc_cmd != LUSTRE_Q_DELETEQID &&
+	    limit_mask == 0) {
 		fprintf(stderr,
 			"%s setquota: at least one limit must be specified\n",
 			progname);
@@ -7862,9 +7876,10 @@ quota_type_def:
 		goto out;
 	}
 
-	if (use_default && limit_mask != 0) {
+	if ((use_default || qctl->qc_cmd == LUSTRE_Q_DELETEQID)  &&
+	    limit_mask != 0) {
 		fprintf(stderr,
-			"%s setquota: limits should not be specified when using default quota\n",
+			"%s setquota: limits should not be specified when using default quota or deleting quota ID\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;
@@ -7873,6 +7888,14 @@ quota_type_def:
 	if (use_default && qctl->qc_id == 0) {
 		fprintf(stderr,
 			"%s setquota: can not set default quota for root user/group/project\n",
+			progname);
+		rc = CMD_HELP;
+		goto out;
+	}
+
+	if (qctl->qc_cmd == LUSTRE_Q_DELETEQID  && qctl->qc_id == 0) {
+		fprintf(stderr,
+			"%s setquota: can not delete root user/group/project\n",
 			progname);
 		rc = CMD_HELP;
 		goto out;

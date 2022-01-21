@@ -1188,6 +1188,7 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
 	case LUSTRE_Q_SETDEFAULT_POOL:
+	case LUSTRE_Q_DELETEQID:
 		if (!capable(CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 

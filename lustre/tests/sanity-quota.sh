@@ -3590,6 +3590,68 @@ test_41() {
 }
 run_test 41 "df should return projid-specific values"
 
+test_delete_qid()
+{
+	local qslv_file=$1
+	local qtype_file=$2
+	local qtype=$3
+	local qid=$4
+	local osd="osd-ldiskfs"
+
+	[ "$ost1_FSTYPE" = zfs ] && osd="osd-zfs"
+
+	rm -f $DIR/$tdir/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile
+	chmod a+rw $DIR/$tdir/$tfile
+
+	$LFS setquota $qtype $qid -B 300M $MOUNT
+	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 ||
+		error "failed to dd"
+
+	do_facet $SINGLEMDS \
+		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
+		 grep -E 'id: *$qid'" || error "QMT: no qid $qid is found"
+	echo $osd
+	do_facet ost1 \
+		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
+		 grep -E 'id: *$qid'" || error "QSD: no qid $qid is found"
+
+	$LFS setquota $qtype $qid --delete $MOUNT
+	do_facet $SINGLEMDS \
+		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
+		 grep -E 'id: *$qid'" && error "QMT: qid $qid is not deleted"
+	sleep 5
+	do_facet ost1 \
+		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
+		 grep -E 'id: *$qid'" && error "QSD: qid $qid is not deleted"
+
+	$LFS setquota $qtype $qid -B 500M $MOUNT
+	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 ||
+		error "failed to dd"
+	do_facet $SINGLEMDS \
+		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
+		 grep -E 'id: *$qid'" || error "QMT: qid $pid is not recreated"
+	cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file
+	do_facet ost1 \
+		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
+		 grep -E 'id: *$qid'" || error "QSD: qid $qid is not recreated"
+}
+
+test_48()
+{
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	quota_init
+
+	test_delete_qid "quota_slave/limit_user" "glb-usr" "-u" $TSTID
+	test_delete_qid "quota_slave/limit_group" "glb-grp" "-g" $TSTID
+	is_project_quota_supported &&
+	    test_delete_qid "quota_slave/limit_project" "glb-prj" "-p" "10000"
+
+	cleanup_quota_test
+}
+run_test 48 "lfs quota --delete should delete quota project ID"
+
 test_50() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"

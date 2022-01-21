@@ -292,11 +292,47 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 			return 1;
 	}
 
+	if (upd->qur_global &&
+	    (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
+							LQUOTA_FLAG_DELETED)) {
+		struct thandle		*th = NULL;
+		struct dt_object	*obj;
+
+		obj = qqi->qqi_glb_obj;
+
+		th = dt_trans_create(env, qqi->qqi_qsd->qsd_dev);
+		if (IS_ERR(th))
+			RETURN(PTR_ERR(th));
+
+		rc = lquota_disk_declare_write(env, th, obj, &upd->qur_qid);
+		if (rc)
+			GOTO(out_del, rc);
+
+		rc = dt_trans_start_local(env, qqi->qqi_qsd->qsd_dev, th);
+		if (rc)
+			GOTO(out_del, rc);
+
+		rc = lquota_disk_delete(env, th, obj, upd->qur_qid.qid_uid,
+					NULL);
+		if (rc == -ENOENT)
+			rc = 0;
+
+out_del:
+		dt_trans_stop(env, qqi->qqi_qsd->qsd_dev, th);
+		if (lqe != NULL)
+			lqe_set_deleted(lqe);
+
+		qsd_bump_version(qqi, upd->qur_ver, true);
+		RETURN(rc);
+	}
+
 	if (lqe == NULL) {
 		lqe = lqe_locate(env, qqi->qqi_site, &upd->qur_qid);
 		if (IS_ERR(lqe))
 			GOTO(out, rc = PTR_ERR(lqe));
 	}
+
+	lqe->lqe_is_deleted = 0;
 
 	/* The in-memory lqe update for slave index copy isn't deferred,
 	 * we shouldn't touch it here. */

@@ -701,6 +701,36 @@ out:
 	return rc;
 }
 
+int lquota_disk_delete(const struct lu_env *env, struct thandle *th,
+		       struct dt_object *obj, __u64 qid, __u64 *ver)
+{
+	struct lquota_thread_info	*qti = lquota_info(env);
+	struct dt_key			*key = (struct dt_key *)&qid;
+	int				 rc;
+
+	ENTRY;
+
+	LASSERT(dt_object_exists(obj));
+	LASSERT(obj->do_index_ops != NULL);
+
+	/* lock index */
+	dt_write_lock(env, obj, 0);
+
+	/* check whether there is already an existing record for this ID */
+	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_rec, key);
+	if (rc == 0) {
+		rc = dt_delete(env, obj, key, th);
+		if (rc == 0 && ver != NULL) {
+			*ver = dt_version_get(env, obj);
+			(*ver)++;
+			dt_version_set(env, obj, *ver, th);
+		}
+	}
+
+	dt_write_unlock(env, obj);
+	RETURN(rc);
+}
+
 /*
  * Update version of an index file
  *

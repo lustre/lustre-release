@@ -15,13 +15,16 @@ lfs setquota \- set quota limits or grace time for users, groups or projects.
        [\fB--inode-grace\fR|\fB-i\fR \fIINODE_GRACE_TIME\fR] <\fIfilesystem\fR>
 .TP
 .BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
-       [\fB--default|-d\fR] <\fIfilesystem\fR>
+       [\fB--default|-D\fR] <\fIfilesystem\fR>
 .TP
 .BR "lfs setquota " { -U | --default-usr | -G | --default-grp | -P | --default-prj }
        [\fB--block-softlimit\fR|\fB-b\fR \fIBLOCK_SOFTLIMIT\fR[\fBkMGTPE\fR]]
        [\fB--block-hardlimit\fR|\fB-B\fR \fIBLOCK_HARDLIMIT\fR[\fBkMGTPE\fR]]
        [\fB--inode-softlimit\fR|\fB-i\fR \fIINODE_SOFTLIMIT\fR[\fBkMGTPE\fR]]
        [\fB--inode-hardlimit\fR|\fB-I\fR \fIINODE_HARDLIMIT\fR[\fBkMGTPE\fR]] <\fIfilesystem\fR>
+.TP
+.BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
+       [\fB--delete\fR] <\fIfilesystem\fR>
 .TP
 .SH DESCRIPTION
 .TP
@@ -41,7 +44,10 @@ Specify block softlimit, zero means unlimited.
 Specify block hardlimit, zero means unlimited. The block hardlimit should be
 greater than block softlimit when it's being specified.
 .TP
-.BR -d|--default
+.BR --delete
+Delete the unused UID|GID|PROJID.
+.TP
+.BR -D|--default
 Set user/group/project to use the default quota limits.
 .TP
 .BR -g | --group \fIGROUPNAME\fR|\fIGID
@@ -127,7 +133,7 @@ Set default project quota limit.
 .B $ lfs setquota -u bob --block-softlimit 2G --block-hardlimit 1G /mnt/lustre
 Set quotas of user `bob': 1GB block hardlimit and 2 GB block softlimit
 .TP
-.B $ lfs setquota -u bob -d /mnt/lustre
+.B $ lfs setquota -u bob -D /mnt/lustre
 Set quotas of user `bob' to use default quota setting
 .TP
 .B $ lfs setquota -U --block-softlimit 1G --block-hardlimit 2G /mnt/lustre
@@ -142,6 +148,15 @@ Set hard block limit 1G for user 'ivan' per pool 'flash_pool'
 .TP
 .B $ lfs setquota -t -u --block-grace 1000 --pool flash_pool /mnt/lustre
 Set grace time 1000 seconds for block quotas per pool 'flash_pool'
+.TP
+.BR "lfs setquota " { -u | -g | -p "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR " " [\fB--delete\fR] " " <\fIfilesystem\fR>
+Command deletes the unused UID|GID|PROJID from Quota settings.
+.TP
+.PP
+.SH EXAMPLES
+.TP
+.B $ lfs setquota -u bob --delete /mnt/lustre
+Delete unused user 'bob'.
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-quota(1)

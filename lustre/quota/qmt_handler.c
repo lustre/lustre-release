@@ -335,9 +335,74 @@ static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(lqe))
 			RETURN(PTR_ERR(lqe));
 
+	lqe->lqe_is_deleted = 0;
 	rc = qmt_set_with_lqe(env, qmt, lqe, hard, soft, time, valid,
 			      is_default, is_updated);
+	if (rc == 0)
+		lqe->lqe_is_deleted = 0;
+
 	lqe_putref(lqe);
+	RETURN(rc);
+}
+
+/*
+ * Delete the quota setting of the specified quota ID
+ *
+ * \param env        - is the environment passed by the caller
+ * \param qmt        - is the quota master target
+ * \param restype    - is the pool type, either block (i.e. LQUOTA_RES_DT) or
+ *                     inode (i.e. LQUOTA_RES_MD)
+ * \param qtype      - is the quota type
+ * \param qid        - is the quota indentifier for which we want to delete its
+ *                     quota settings.
+ */
+static int qmt_delete_qid(const struct lu_env *env, struct qmt_device *qmt,
+			  __u8 restype, __u8 qtype, __u64 qid)
+{
+	struct qmt_thread_info *qti = qmt_info(env);
+	union lquota_id	*quota_id = &qti->qti_id;
+	struct thandle *th = NULL;
+	struct qmt_pool_info *qpi = NULL;
+	struct lquota_entry *lqe = NULL;
+	__u64 ver = 0;
+	int rc;
+
+	ENTRY;
+
+	quota_id->qid_uid = qid;
+	lqe = qmt_pool_lqe_lookup(env, qmt, restype, qtype, quota_id, NULL);
+	if (IS_ERR(lqe))
+		RETURN(PTR_ERR(lqe));
+
+	lqe_write_lock(lqe);
+
+	qpi = qmt_pool_lookup_glb(env, qmt, restype);
+	if (IS_ERR(qpi))
+		GOTO(out, rc = -ENOMEM);
+
+	th = qmt_trans_start(env, lqe);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	rc = lquota_disk_delete(env, th,
+				qpi->qpi_glb_obj[qtype], qid, &ver);
+
+	dt_trans_stop(env, qmt->qmt_child, th);
+
+	if (rc == 0) {
+		lqe_set_deleted(lqe);
+		qmt_glb_lock_notify(env, lqe, ver);
+	} else if (rc == -ENOENT) {
+		rc = 0;
+	}
+
+out:
+	if (!IS_ERR_OR_NULL(qpi))
+		qpi_putref(env, qpi);
+
+	lqe_write_unlock(lqe);
+	lqe_putref(lqe);
+
 	RETURN(rc);
 }
 
@@ -480,6 +545,16 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 				     dqb->dqb_bsoftlimit, dqb->dqb_btime,
 				     dqb->dqb_valid & QIF_BFLAGS, is_default,
 				     false, poolname);
+		break;
+
+	case LUSTRE_Q_DELETEQID:
+		rc = qmt_delete_qid(env, qmt, LQUOTA_RES_MD, oqctl->qc_type,
+				    oqctl->qc_id);
+		if (rc)
+			break;
+
+		rc = qmt_delete_qid(env, qmt, LQUOTA_RES_DT, oqctl->qc_type,
+				    oqctl->qc_id);
 		break;
 
 	default:
