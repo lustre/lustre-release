@@ -50,13 +50,12 @@
 
 static char debug_file_name[1024];
 
-unsigned int libcfs_subsystem_debug = ~0;
+unsigned int libcfs_subsystem_debug = LIBCFS_S_DEFAULT;
 EXPORT_SYMBOL(libcfs_subsystem_debug);
 module_param(libcfs_subsystem_debug, int, 0644);
 MODULE_PARM_DESC(libcfs_subsystem_debug, "Lustre kernel debug subsystem mask");
 
-unsigned int libcfs_debug = (D_CANTMASK | D_NETERROR | D_HA | D_CONFIG |
-			     D_IOCTL | D_LFSCK);
+unsigned int libcfs_debug = LIBCFS_D_DEFAULT;
 EXPORT_SYMBOL(libcfs_debug);
 module_param(libcfs_debug, int, 0644);
 MODULE_PARM_DESC(libcfs_debug, "Lustre kernel debug mask");
@@ -266,7 +265,7 @@ int libcfs_panic_in_progress;
 /* libcfs_debug_token2mask() expects the returned string in lower-case */
 static const char *libcfs_debug_subsys2str(int subsys)
 {
-	static const char * const libcfs_debug_subsystems[] =
+	static const char *const libcfs_debug_subsystems[] =
 		LIBCFS_DEBUG_SUBSYS_NAMES;
 
 	if (subsys >= ARRAY_SIZE(libcfs_debug_subsystems))
@@ -357,8 +356,8 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 		return 0;
 	}
 
-	return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
-			    0xffffffff);
+	return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK, ~0,
+			    is_subsys ? LIBCFS_S_DEFAULT : LIBCFS_D_DEFAULT);
 }
 
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
