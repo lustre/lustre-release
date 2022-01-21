@@ -719,11 +719,11 @@ test_17m() {
 	done
 
 	local mds_index=$(($($LFS getstripe -m $wdir) + 1))
-	local devname=$(mdsdevname $mds_index)
 
 	echo "stop and checking mds${mds_index}:"
 	# e2fsck should not return error
 	stop mds${mds_index}
+	local devname=$(mdsdevname $mds_index)
 	run_e2fsck $(facet_active_host mds${mds_index}) $devname -n
 	rc=$?
 
@@ -743,9 +743,9 @@ check_fs_consistency_17n() {
 	# create/unlink in 17n only change 2 MDTs(MDT1/MDT2),
 	# so it only check MDT1/MDT2 instead of all of MDTs.
 	for mdt_index in 1 2; do
-		local devname=$(mdsdevname $mdt_index)
 		# e2fsck should not return error
 		stop mds${mdt_index}
+		local devname=$(mdsdevname $mdt_index)
 		run_e2fsck $(facet_active_host mds$mdt_index) $devname -n ||
 			rc=$((rc + $?))
 
@@ -19469,7 +19469,8 @@ test_228b() {
 	# stop the MDT
 	stop $SINGLEMDS || error "Fail to stop MDT."
 	# remount the MDT
-	start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS || error "Fail to start MDT."
+	start $SINGLEMDS $(facet_device $SINGLEMDS) $MDS_MOUNT_OPTS ||
+		error "Fail to start MDT."
 
 	df $MOUNT || error "Fail to df."
 	# Create new files, idle OI blocks should be reused.
@@ -21825,13 +21826,13 @@ test_256() {
 	local cat_sl
 	local mdt_dev
 
-	mdt_dev=$(mdsdevname 1)
+	mdt_dev=$(facet_device $SINGLEMDS)
 	echo $mdt_dev
 
 	changelog_register || error "changelog_register failed"
 
 	rm -rf $DIR/$tdir
-	mkdir_on_mdt0 $DIR/$tdir
+	mkdir_on_mdt -i$(($(facet_number $SINGLEMDS) - 1)) $DIR/$tdir
 
 	changelog_clear 0 || error "changelog_clear failed"
 
@@ -21842,8 +21843,8 @@ test_256() {
 	stop $SINGLEMDS || error "Fail to stop MDT"
 
 	# remount the MDT
-
-	start $SINGLEMDS $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT"
+	start $SINGLEMDS $(facet_device $SINGLEMDS) $MDS_MOUNT_OPTS ||
+		error "Fail to start MDT"
 
 	#after mount new plainllog is used
 	touch $DIR/$tdir/{11..19}
@@ -27226,10 +27227,10 @@ test_804() {
 		error "Fail to rm $DIR/$tdir/dir0"
 
 	for idx in $(seq $MDSCOUNT); do
-		dev=$(mdsdevname $idx)
 		rc=0
 
 		stop mds${idx}
+		dev=$(mdsdevname $idx)
 		run_e2fsck $(facet_active_host mds$idx) $dev -n ||
 			rc=$?
 		start mds${idx} $dev $MDS_MOUNT_OPTS ||
