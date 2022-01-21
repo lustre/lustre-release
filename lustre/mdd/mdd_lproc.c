@@ -148,7 +148,8 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	}
 
 	rc = cfs_str2mask(kernbuf, changelog_type2str, &newmask,
-			  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
+			  CHANGELOG_MINMASK, CHANGELOG_ALLMASK,
+			  CHANGELOG_DEFMASK);
 	if (rc)
 		GOTO(out, rc);
 

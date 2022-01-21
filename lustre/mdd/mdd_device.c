@@ -1786,7 +1786,8 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 		/* if user will use relative mask apply it on default one */
 		rec->cur_mask = CHANGELOG_DEFMASK;
 		rc = cfs_str2mask(mask, changelog_type2str, &rec->cur_mask,
-				  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
+				  CHANGELOG_MINMASK, CHANGELOG_ALLMASK,
+				  CHANGELOG_DEFMASK);
 		if (rc)
 			GOTO(out_users, rc);
 	} else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK) {
