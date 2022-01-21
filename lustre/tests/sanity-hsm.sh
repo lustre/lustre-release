@@ -3517,6 +3517,9 @@ test_103() {
 run_test 103 "Purge all requests"
 
 test_103a() {
+	(( MDS1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "Need MDS version at least 2.14.56"
+
 	cdt_clear_non_blocking_restore
 
 	# test needs a running copytool
@@ -3524,9 +3527,12 @@ test_103a() {
 
 	local -a fids=()
 	local i
+	local rpcs_inflight=$($LCTL get_param -n \
+		"mdc.$(facet_svc mds1)*.max_rpcs_in_flight" |
+		head -n1)
 
 	mkdir_on_mdt0 $DIR/$tdir
-	for i in {0..9}; do
+	for ((i=0; i < rpcs_inflight; i++)); do
 		fids+=( $(copy_file /etc/passwd $DIR/$tdir/${tfile}_$i) )
 	done
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tdir/*
