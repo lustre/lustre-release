@@ -3563,20 +3563,15 @@ wait_remote_prog () {
 
 lfs_df_check() {
 	local clients=${1:-$CLIENTS}
-	local rc
+	local rc=0
 
 	if [ -z "$clients" ]; then
-		$LFS df $MOUNT > /dev/null
-		rc=$?
+		$LFS df $MOUNT > /dev/null || rc=$?
 	else
-		$PDSH $clients "$LFS df $MOUNT" > /dev/null
-		rc=$?
+		$PDSH $clients "$LFS df $MOUNT" > /dev/null || rc=$?
 	fi
 
 	check_lfs_df_ret_val $rc
-	rc=$?
-
-	return $rc
 }
 
 clients_up() {
