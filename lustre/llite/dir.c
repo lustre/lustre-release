@@ -2004,9 +2004,7 @@ out_quotactl:
 		RETURN(rc);
         }
 	case OBD_IOC_GETNAME_OLD:
-		/* fall through */
 	case OBD_IOC_GETDTNAME:
-		/* fall through */
 	case OBD_IOC_GETMDNAME:
                 RETURN(ll_get_obd_name(inode, cmd, arg));
         case LL_IOC_FLUSHCTX:

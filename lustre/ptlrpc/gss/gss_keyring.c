@@ -691,24 +691,24 @@ static void request_key_unlink(struct key *key)
 				break;
 		}
 #endif
-		/* fall through */
+		fallthrough;
 	case KEY_REQKEY_DEFL_THREAD_KEYRING:
 		ring = key_get(cred->thread_keyring);
 		if (ring)
 			break;
-		/* fallthrough */
+		fallthrough;
 	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
 		ring = key_get(cred->process_keyring);
 		if (ring)
 			break;
-		/* fallthrough */
+		fallthrough;
 	case KEY_REQKEY_DEFL_SESSION_KEYRING:
 		rcu_read_lock();
 		ring = key_get(rcu_dereference(cred->session_keyring));
 		rcu_read_unlock();
 		if (ring)
 			break;
-		/* fallthrough */
+		fallthrough;
 	case KEY_REQKEY_DEFL_USER_SESSION_KEYRING:
 		ring = get_user_session_keyring(cred);
 		break;

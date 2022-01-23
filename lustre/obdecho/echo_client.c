@@ -1004,17 +1004,17 @@ out:
 			CERROR("Cleanup obd device %s error(%d)\n",
 			       obd->obd_name, rc2);
 	}
-	/* fallthrough */
+	fallthrough;
 
 	case 3:
 		echo_site_fini(env, ed);
-		/* fallthrough */
+		fallthrough;
 	case 2:
 		cl_device_fini(&ed->ed_cl);
-		/* fallthrough */
+		fallthrough;
 	case 1:
 		OBD_FREE_PTR(ed);
-		/* fallthrough */
+		fallthrough;
 	case 0:
 	default:
 		break;
@@ -2767,7 +2767,7 @@ static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
 
 	switch (test_mode) {
 	case 1:
-		/* fall through */
+		fallthrough;
 	case 2:
 		rc = echo_client_kbrw(ed, rw, oa, eco, data->ioc_offset,
 				      data->ioc_count, async);
@@ -2940,7 +2940,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			GOTO(out, rc = -EPERM);
 
 		rw = OBD_BRW_WRITE;
-		/* fall through */
+		fallthrough;
 	case OBD_IOC_BRW_READ:
 		rc = echo_client_brw_ioctl(env, rw, exp, data);
 		GOTO(out, rc);

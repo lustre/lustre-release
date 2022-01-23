@@ -599,6 +599,10 @@ static inline bool is_root_inode(struct inode *inode)
 #define register_shrinker(_s) (register_shrinker(_s), 0)
 #endif
 
+#ifndef fallthrough
+#define fallthrough do {} while (0)  /* fallthrough */
+#endif
+
 static inline void ll_security_release_secctx(char *secdata, u32 seclen)
 {
 #ifdef HAVE_SEC_RELEASE_SECCTX_1ARG

@@ -3778,7 +3778,7 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 
 			repaired = true;
 
-			/* fall through */
+			/* fallthrough */
 		}
 
 		parent = lfsck_object_find_bottom(env, lfsck, pfid);
@@ -7152,14 +7152,14 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	default:
 		CERROR("%s: unknown lfsck_namespace status %d\n",
 		       lfsck_lfsck2name(lfsck), ns->ln_status);
-		/* fall through */
+		fallthrough;
 	case LS_SCANNING_PHASE1:
 	case LS_SCANNING_PHASE2:
 		/* No need to store the status to disk right now.
 		 * If the system crashed before the status stored,
 		 * it will be loaded back when next time. */
 		ns->ln_status = LS_CRASHED;
-		/* fall through */
+		fallthrough;
 	case LS_PAUSED:
 	case LS_CRASHED:
 		spin_lock(&lfsck->li_lock);

@@ -1054,7 +1054,7 @@ static int ll_options(char *options, struct super_block *sb)
 
 		case LL_SBI_CHECKSUM:
 			sbi->ll_checksum_set = 1;
-			/* fall through */
+			fallthrough;
 		case LL_SBI_USER_XATTR:
 		case LL_SBI_USER_FID2PATH:
 		case LL_SBI_LRU_RESIZE:
@@ -1122,7 +1122,7 @@ static int ll_options(char *options, struct super_block *sb)
 				LCONSOLE_ERROR_MSG(0x152,
 						   "invalid %s option\n", s1);
 			}
-		/* fall through */
+		fallthrough;
 		default:
 			break;
 		}

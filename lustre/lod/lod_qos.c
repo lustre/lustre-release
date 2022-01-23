@@ -2168,13 +2168,13 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	case __swab32(LOV_USER_MAGIC_V1):
 		lustre_swab_lov_user_md_v1(v1);
 		magic = v1->lmm_magic;
-		/* fall through */
+		fallthrough;
 	case LOV_USER_MAGIC_V1:
 		break;
 	case __swab32(LOV_USER_MAGIC_V3):
 		lustre_swab_lov_user_md_v3(v3);
 		magic = v3->lmm_magic;
-		/* fall through */
+		fallthrough;
 	case LOV_USER_MAGIC_V3:
 		break;
 	case __swab32(LOV_USER_MAGIC_SPECIFIC):
@@ -2182,7 +2182,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		lustre_swab_lov_user_md_objects(v3->lmm_objects,
 						v3->lmm_stripe_count);
 		magic = v3->lmm_magic;
-		/* fall through */
+		fallthrough;
 	case LOV_USER_MAGIC_SPECIFIC:
 		break;
 	case __swab32(LOV_USER_MAGIC_COMP_V1):
@@ -2198,7 +2198,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		__swab32s(&lfm->lfm_type);
 		__swab32s(&lfm->lfm_flags);
 		magic = lfm->lfm_magic;
-		/* fall through */
+		fallthrough;
 	case LOV_USER_MAGIC_FOREIGN:
 		if (!lfm)
 			lfm = buf->lb_buf;

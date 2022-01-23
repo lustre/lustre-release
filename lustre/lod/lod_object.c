@@ -3899,7 +3899,7 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 		v3 = buf->lb_buf;
 		if (v3->lmm_pool_name[0] != '\0')
 			pool_name = v3->lmm_pool_name;
-		/* fall through */
+		fallthrough;
 	case LOV_USER_MAGIC_V1:
 		/* if { size, offset, count } = { 0, -1, 0 } and no pool
 		 * (i.e. all default values specified) then delete default

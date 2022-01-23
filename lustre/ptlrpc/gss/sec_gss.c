@@ -534,7 +534,7 @@ int gss_check_seq_num(struct gss_svc_seq_data *ssd, __u32 seq_num, int set)
                 switch (rc) {
                 case -1:
                         gss_stat_oos_record_svc(1, 1);
-                        /* fall through */
+			fallthrough;
                 case 0:
                         goto exit;
                 }

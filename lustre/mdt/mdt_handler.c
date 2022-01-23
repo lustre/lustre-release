@@ -3222,7 +3222,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		if (!nodemap_can_setquota(nodemap, oqctl->qc_type,
 					  oqctl->qc_id))
 			GOTO(out_nodemap, rc = -EPERM);
-		/* fallthrough */
+		fallthrough;
 	case Q_GETINFO:
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
@@ -3232,7 +3232,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		if (qmt == NULL)
 			GOTO(out_nodemap, rc = -EOPNOTSUPP);
 		/* slave quotactl */
-		/* fallthrough */
+		fallthrough;
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
 		break;
@@ -4836,7 +4836,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 		break;
 	case IT_GETATTR:
 		check_mdt_object = true;
-		/* fallthrough */
+		fallthrough;
 	case IT_LOOKUP:
 		it_format = &RQF_LDLM_INTENT_GETATTR;
 		it_handler = &mdt_intent_getattr;

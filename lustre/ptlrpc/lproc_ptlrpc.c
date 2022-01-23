@@ -1015,6 +1015,7 @@ void target_print_req(void *seq_file, struct ptlrpc_request *req)
 		/* being handled, so basic msg swabbed, and opc is valid
 		 * but racing with mds_handle().  fallthrough.
 		 */
+		fallthrough;
 	case RQ_PHASE_COMPLETE:
 		/* been handled by mds_handle(), reply state may be volatile */
 		seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));

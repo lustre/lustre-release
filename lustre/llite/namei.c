@@ -423,13 +423,13 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	switch (lock->l_req_mode) {
 	case LCK_PR:
 		mode = LCK_PR;
-		/* fallthrough */
+		fallthrough;
 	case LCK_PW:
 		mode |= LCK_CR;
 		break;
 	case LCK_CW:
 		mode = LCK_CW;
-		/* fallthrough */
+		fallthrough;
 	case LCK_CR:
 		mode |= LCK_CR;
 		break;
@@ -1795,7 +1795,7 @@ static int ll_mknod(struct user_namespace *mnt_userns, struct inode *dir,
 	switch (mode & S_IFMT) {
 	case 0:
 		mode |= S_IFREG;
-		/* fallthrough */
+		fallthrough;
 	case S_IFREG:
 	case S_IFCHR:
 	case S_IFBLK:

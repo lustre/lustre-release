@@ -7018,7 +7018,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 	default:
 		CERROR("%s: unknown lfsck_layout status %d\n",
 		       lfsck_lfsck2name(lfsck), lo->ll_status);
-		/* fall through */
+		fallthrough;
 	case LS_SCANNING_PHASE1:
 	case LS_SCANNING_PHASE2:
 		/* No need to store the status to disk right now.
@@ -7027,7 +7027,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		lo->ll_status = LS_CRASHED;
 		if (!lfsck->li_master)
 			lo->ll_flags |= LF_INCOMPLETE;
-		/* fall through */
+		fallthrough;
 	case LS_PAUSED:
 	case LS_CRASHED:
 	case LS_CO_FAILED:

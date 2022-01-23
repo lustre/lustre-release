@@ -420,7 +420,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	case LUSTRE_Q_GETDEFAULT:
 	case LUSTRE_Q_GETDEFAULT_POOL:
 		is_default = true;
-		/* fallthrough */
+		fallthrough;
 
 	case Q_GETQUOTA: /* consult quota limit */
 	case LUSTRE_Q_GETQUOTAPOOL:
@@ -455,7 +455,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	case LUSTRE_Q_SETDEFAULT:
 	case LUSTRE_Q_SETDEFAULT_POOL:
 		is_default = true;
-		/* fallthrough */
+		fallthrough;
 
 	case Q_SETQUOTA: /* change quota limits */
 	case LUSTRE_Q_SETQUOTAPOOL:

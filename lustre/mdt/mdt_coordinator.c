@@ -296,7 +296,7 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 		break;
 	case HSMA_RESTORE:
 		hsd->hsd_one_restore = true;
-		/* Intentional fallthrough */
+		fallthrough;
 	default:
 		cdt_agent_record_hash_add(cdt, hai->hai_cookie,
 					  llh->lgh_hdr->llh_cat_idx,
