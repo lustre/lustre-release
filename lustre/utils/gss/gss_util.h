@@ -34,6 +34,10 @@
 #include <stdlib.h>
 #include "write_bytes.h"
 
+#ifndef fallthrough
+#define fallthrough do {} while (0)  /* fallthrough */
+#endif
+
 extern char *this_realm;
 extern gss_cred_id_t	gssd_creds;
 

@@ -319,7 +319,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			cred->cr_uid = 0;
 			cred->cr_usr_oss = 1;
 		}
-		/* fall through */
+		fallthrough;
 	case LUSTRE_GSS_SVC_OSS:
 		if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
 			cred->cr_uid = 0;

@@ -5197,7 +5197,7 @@ int jt_pool_cmd(int argc, char **argv)
 			if (ostnames_buf)
 				free(ostnames_buf);
 		}
-		/* fall through */
+		fallthrough;
 	}
 	} /* switch */
 

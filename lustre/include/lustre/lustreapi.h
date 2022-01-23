@@ -61,6 +61,10 @@ extern "C" {
 #define LOV_PATTERN_DEFAULT	0xffffffff
 #endif
 
+#ifndef fallthrough
+#define fallthrough do {} while (0)  /* fallthrough */
+#endif
+
 typedef struct statx lstatx_t;
 
 #define lustre_fid struct lu_fid

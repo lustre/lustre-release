@@ -1683,6 +1683,7 @@ int lr_replicate(void)
 			 * Nothing needs to be done for these entries
 			 * fallthrough
 			 */
+			fallthrough;
 		default:
 			break;
 		}

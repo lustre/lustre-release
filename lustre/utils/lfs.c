@@ -3664,7 +3664,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
-			/* fall through */
+			fallthrough;
 		case 'c':
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
@@ -4435,19 +4435,25 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 		switch (*endptr) {
 		case  'y':
 			unit *= 52; /* 52 weeks + 1 day below */
-		case  'w':	/* fallthrough */
+			fallthrough;
+		case  'w':
 			unit *= 7;
 			if (param->fp_time_margin == FP_DEFAULT_TIME_MARGIN)
 				param->fp_time_margin *= (1 + unit / 52);
 			unit += (*endptr == 'y'); /* +1 day for 365 days/year */
+			fallthrough;
 		case '\0': /* days are default unit if none used */
-		case  'd':	/* fallthrough */
+			fallthrough;
+		case  'd':
 			unit *= 24;
-		case  'h':	/* fallthrough */
+			fallthrough;
+		case  'h':
 			unit *= 60;
-		case  'm':	/* fallthrough */
+			fallthrough;
+		case  'm':
 			unit *= 60;
-		case  's':	/* fallthrough */
+			fallthrough;
+		case  's':
 			break;
 			/* don't need to multiply by 1 for seconds */
 		default:
@@ -4992,6 +4998,7 @@ static int lfs_find(int argc, char **argv)
 			xsign = &param.fp_asign;
 			param.fp_exclude_atime = !!neg_opt;
 			/* no break, this falls through to 'B' for btime */
+			fallthrough;
 		case 'B':
 			if (c == 'B') {
 				xtime = &param.fp_btime;
@@ -4999,6 +5006,7 @@ static int lfs_find(int argc, char **argv)
 				param.fp_exclude_btime = !!neg_opt;
 			}
 			/* no break, this falls through to 'C' for ctime */
+			fallthrough;
 		case 'C':
 			if (c == 'C') {
 				xtime = &param.fp_ctime;
@@ -5006,6 +5014,7 @@ static int lfs_find(int argc, char **argv)
 				param.fp_exclude_ctime = !!neg_opt;
 			}
 			/* no break, this falls through to 'M' for mtime */
+			fallthrough;
 		case 'M':
 			if (c == 'M') {
 				xtime = &param.fp_mtime;
@@ -6212,12 +6221,13 @@ static int lfs_getdirstripe(int argc, char **argv)
 		case 't':
 			fprintf(stderr,
 				"warning: '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
-			/* fallthrough */
+			fallthrough;
 #endif
 		case 'H':
 			param.fp_verbose |= VERBOSE_HASH_TYPE;
 			break;
-		case 'i': /* fallthrough */
+		case 'i':
+			fallthrough;
 		case 'm':
 			param.fp_verbose |= VERBOSE_STRIPE_OFFSET;
 			break;
@@ -6248,7 +6258,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -6739,7 +6749,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 't':
 			fprintf(stderr,
 				"warning: '--hash-type' and '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
-			/* fallthrough */
+			fallthrough;
 #endif
 		case 'H':
 			lsa.lsa_pattern = check_hashtype(optarg);
@@ -6836,7 +6846,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -7328,7 +7338,7 @@ static int lfs_getname(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -7620,7 +7630,7 @@ quota_type:
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -7829,7 +7839,7 @@ quota_type_def:
 			fprintf(stderr,
 				"%s setquota: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			rc = CMD_HELP;
 			goto out;
@@ -9483,7 +9493,7 @@ static int lfs_data_version(int argc, char **argv)
 			fprintf(stderr,
 				"%s data_version: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -9627,7 +9637,7 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -9861,7 +9871,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -10161,7 +10171,7 @@ static int lfs_ladvise(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -10350,7 +10360,7 @@ static int lfs_heat_set(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -10803,7 +10813,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			rc = CMD_HELP;
 			goto error;
@@ -10949,7 +10959,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -11114,7 +11124,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -11364,7 +11374,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -12130,7 +12140,7 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			rc = CMD_HELP;
 			goto error;
@@ -12237,7 +12247,7 @@ static int lfs_getsom(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -12340,7 +12350,7 @@ static int lfs_pcc_attach(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -12417,7 +12427,7 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -12480,7 +12490,7 @@ static int lfs_pcc_detach(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
@@ -12533,7 +12543,7 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			/* fallthrough */
+			fallthrough;
 		case 'h':
 			return CMD_HELP;
 		}
