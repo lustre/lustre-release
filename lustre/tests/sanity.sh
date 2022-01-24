@@ -3414,6 +3414,20 @@ test_27S() {
 }
 run_test 27S "don't deactivate OSP on network issue"
 
+test_27T() {
+	[ $(facet_host client) == $(facet_host ost1) ] &&
+		skip "need ost1 and client on different nodes"
+
+#define OBD_FAIL_OSC_NO_GRANT            0x411
+	$LCTL set_param fail_loc=0x20000411 fail_val=1
+#define OBD_FAIL_OST_ENOSPC              0x215
+	do_facet ost1 "$LCTL set_param fail_loc=0x80000215"
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
+	$MULTIOP $DIR/$tfile oO_WRONLY:P$((4 * 1024 * 1024 + 10 * 4096))c ||
+		error "multiop failed"
+}
+run_test 27T "no eio on close on partial write due to enosp"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

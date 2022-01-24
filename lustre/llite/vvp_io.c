@@ -1177,6 +1177,8 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 
 	/* out of quota, try sync write */
 	if (rc == -EDQUOT && !cl_io_is_mkwrite(io)) {
+		struct ll_inode_info *lli = ll_i2info(inode);
+
 		rc = vvp_io_commit_sync(env, io, queue,
 					vio->u.readwrite.vui_from,
 					vio->u.readwrite.vui_to);
@@ -1184,6 +1186,9 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 			vio->u.readwrite.vui_written += rc;
 			rc = 0;
 		}
+		if (lli->lli_clob != NULL)
+			lov_read_and_clear_async_rc(lli->lli_clob);
+		lli->lli_async_rc = 0;
 	}
 
 	/* update inode size */

@@ -103,6 +103,7 @@ char usage[] =
 "	 v  verbose\n"
 "	 V  open a volatile file\n"
 "	 w[num] write optional length\n"
+"	 P[num] like w, but only one write call\n"
 "	 x  get file data version\n"
 "	 W  write entire mmap-ed region\n"
 "	 y  fsync\n"
@@ -685,6 +686,7 @@ int main(int argc, char **argv)
 			rc = fd;
 			break;
 		case 'w':
+		case 'P':
 			len = atoi(commands + 1);
 			if (len <= 0)
 				len = 1;
@@ -715,6 +717,8 @@ int main(int argc, char **argv)
 					fprintf(stderr,
 						"short write: %lld/%u\n",
 						rc, len);
+				if (commands[0] == 'P')
+					break;
 				len -= rc;
 			}
 			break;
