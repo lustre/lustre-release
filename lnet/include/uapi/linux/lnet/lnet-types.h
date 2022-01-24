@@ -120,7 +120,10 @@ static inline int nid_is_nid4(const struct lnet_nid *nid)
 
 static inline __u32 LNET_NID_NET(const struct lnet_nid *nid)
 {
-	return LNET_MKNET(nid->nid_type, __be16_to_cpu(nid->nid_num));
+	if (LNET_NID_IS_ANY(nid))
+		return LNET_NET_ANY;
+	else
+		return LNET_MKNET(nid->nid_type, __be16_to_cpu(nid->nid_num));
 }
 
 static inline void lnet_nid4_to_nid(lnet_nid_t nid4, struct lnet_nid *nid)
