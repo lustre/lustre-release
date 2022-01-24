@@ -4266,6 +4266,97 @@ test_208b() {
 }
 run_test 208b "mirror selection to prefer non-rotational devices for writes"
 
+test_209a() {
+	local tf=$DIR/$tfile
+	local tmpfile="$TMP/$TESTSUITE-$TESTNAME-multiop.output"
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(comma_list $(osts_nodes))
+
+	stack_trap "rm -f $tmpfile"
+
+	mkdir -p $MOUNT2 && mount_client $MOUNT2
+	stack_trap "umount_client $MOUNT2"
+
+	# to make replica on ost1 preferred for new writes
+	save_lustre_params $(get_facets OST) osd*.*OST*.nonrotational > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p"
+	do_nodes $osts \
+		$LCTL set_param osd*.*OST*.nonrotational=0
+	do_nodes $osts \
+		$LCTL set_param osd*.*OST0001*.nonrotational=1
+
+	$LFS setstripe -c1 -i0 $tf || errro "can't create $tf"
+	echo "AAAA" >$tf
+	$LFS mirror extend -N -o1 $tf || error "can't make replica"
+	log "replicated file created"
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	log "open(O_RDONLY) and first read from OST"
+	$MULTIOP $tf vvoO_RDONLY:r4_z0r4_z0r4c >$tmpfile &
+	PID=$!
+	sleep 1
+	log "first read complete"
+
+	echo "BBBB" | dd bs=1 count=4 of=$DIR2/$tfile conv=notrunc ||
+		error "can't write BBBB"
+	log "BBBB written which made replica on ost1 stale"
+
+	log "fast read from pagecache in the original process"
+	kill -USR1 $PID
+	sleep 1
+
+	log "read via $DIR2 new open(2)"
+	$MULTIOP $DIR2/$tfile vvoO_RDONLY:r4c
+
+	log "fast read from pagecache after 5s in the original process"
+	sleep 5
+	kill -USR1 $PID
+	wait $PID
+	cat $tmpfile
+	local nr=$(grep "BBBB" $tmpfile | wc -l)
+	(( nr == 2 )) || {
+		cat $tmpfile
+		error "$nr != 2"
+	}
+
+	log "read via new open(2)"
+	$MULTIOP $tf vvoO_RDONLY:r4c
+}
+run_test 209a "skip fast reads after layout invalidation"
+
+function sum_ost_reads() {
+	$LCTL get_param -n osc.$FSNAME-OST*-osc-[-0-9a-f]*.stats |
+		awk '/^ost_read/{sum=sum+$2}END{print sum}'
+}
+
+test_209b() {
+	local tf=$DIR/$tfile
+
+	dd if=/dev/zero of=$tf bs=4k count=2 || error "can't create file"
+	cancel_lru_locks osc
+	echo "the very first read"
+	cat $tf >/dev/null || error "can't read"
+
+	# cancel layout lock
+	cancel_lru_locks mdc
+
+	# now read again, data must be in the cache, so no ost reads
+	$LCTL set_param osc.*.stats=clear >/dev/null
+	echo "read with warm cache"
+	cat $tf >/dev/null || error "can't read"
+	nr=$(sum_ost_reads)
+	(( nr == 0 )) || error "reads with warm cache"
+
+	# now verify we can catch reads at all
+	cancel_lru_locks osc
+	cat $tf >/dev/null || error "can't read"
+	nr=$(sum_ost_reads)
+	(( nr > 0 )) || error "no reads with cold cache"
+}
+run_test 209b "pagecache can be used after LL cancellation"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
