@@ -2827,7 +2827,6 @@ test_37() {
 	local testfile=$DIR/$tdir/$tfile
 	local tmpfile=$TMP/abc
 	local objdump=$TMP/objdump
-	local objid
 
 	$LCTL get_param mdc.*.import | grep -q client_encryption ||
 		skip "client encryption not supported"
@@ -2847,8 +2846,17 @@ test_37() {
 	do_facet ost1 "sync; sync"
 
 	# check that content on ost is encrypted
-	objid=$($LFS getstripe $testfile | awk '/obdidx/{getline; print $2}')
-	do_facet ost1 "$DEBUGFS -c -R 'cat O/0/d$(($objid % 32))/$objid' \
+	local fid=($($LFS getstripe $testfile | grep 0x))
+	local seq=${fid[3]#0x}
+	local oid=${fid[1]}
+	local oid_hex
+
+	if [ $seq == 0 ]; then
+		oid_hex=${fid[1]}
+	else
+		oid_hex=${fid[2]#0x}
+	fi
+	do_facet ost1 "$DEBUGFS -c -R 'cat O/$seq/d$(($oid % 32))/$oid_hex' \
 		 $(ostdevname 1)" > $objdump
 	cmp -s $objdump $tmpfile &&
 		error "file $testfile is not encrypted on ost"
