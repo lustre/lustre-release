@@ -1339,11 +1339,19 @@ test_18() {
 run_test 18 "test mount -o resetoi to recreate OI files"
 
 test_19() {
-	local rcmd="do_facet ost${ost}"
-
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
-	createmany -o $DIR/$tdir/f 64 || error "(0) Fail to create 32 files."
+	createmany -o $DIR/$tdir/f 64 || error "(0) Fail to create 64 files."
+	local fid=($($LFS getstripe $DIR/$tdir/f0 | grep 0x))
+	local seq=${fid[3]#0x}
+	local oid=${fid[1]}
+	local oid_hex
+
+	if [ $seq = 0 ] || [ "$ost1_FSTYPE" == "zfs" ]; then
+		oid_hex=${fid[1]}
+	else
+		oid_hex=${fid[2]#0x}
+	fi
 
 	echo "stopall"
 	stopall > /dev/null
@@ -1352,12 +1360,12 @@ test_19() {
 	mount_fstype ost1 || error "(1) Fail to mount ost1"
 	mntpt=$(facet_mntpt ost1)
 
-	local path=$mntpt/O/0/d2
-	local file=$(${rcmd} ls $path | awk '{print $0; exit}')
+	local path="$mntpt/O/$seq/d$(($oid % 32))"
 
 	# create link to the first file
-	echo "link $path/1 to $path/$file"
-	${rcmd} ln $path/$file $path/1
+	echo "link $path/$(($oid + 1)) to $path/$oid_hex"
+	do_facet ost1 ln $path/$oid_hex $path/$(($oid + 1)) ||
+		{ do_facet ost1 "ls -l $path"; error "(1b) link error"; }
 	unmount_fstype ost1 || error "(2) Fail to umount ost1"
 
 	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
@@ -1371,8 +1379,9 @@ test_19() {
 		error "(4) Expected '$expected' on ost1"
 
 	stop ost1
-	mount_fstype ost1 || error "(5) Fail to mount ost1"
-	links=$(do_facet ost1 "stat $path/$file" | awk '/Links:/ { print $6 }')
+	mount_fstype ost1 || error "(5) Fail to mount ost1 again"
+	do_facet ost1 "stat $path/$oid_hex" || do_facet ost1 "ls -l $path"
+	links=$(do_facet ost1 "stat $path/$oid_hex" | awk '/Links:/ { print $6 }')
 	unmount_fstype ost1 || error "(6) Fail to umount ost1"
 
 	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
