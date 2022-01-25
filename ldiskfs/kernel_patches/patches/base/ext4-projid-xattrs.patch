@@ -2,14 +2,14 @@ Index: linux-4.18.0-348.2.1.el8_5/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.18.0-348.2.1.el8_5.orig/fs/ext4/ext4.h
 +++ linux-4.18.0-348.2.1.el8_5/fs/ext4/ext4.h
-@@ -2770,6 +2770,7 @@ extern int ext4_ind_remove_space(handle_
+@@ -2768,6 +2768,7 @@ extern int ext4_ind_remove_space(handle_
+ 				 ext4_lblk_t start, ext4_lblk_t end);
+ 
  /* ioctl.c */
++extern int ext4_ioctl_setproject(struct inode *, __u32);
  extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
  extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
-+extern int ext4_ioctl_setproject(struct inode *, __u32);
  
- /* migrate.c */
- extern int ext4_ext_migrate(struct inode *);
 Index: linux-4.18.0-348.2.1.el8_5/fs/ext4/ioctl.c
 ===================================================================
 --- linux-4.18.0-348.2.1.el8_5.orig/fs/ext4/ioctl.c
