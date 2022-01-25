@@ -38,11 +38,20 @@
 
 #include "llite_internal.h"
 
-struct posix_acl *ll_get_acl(struct inode *inode, int type)
+struct posix_acl *ll_get_acl(struct inode *inode, int type
+#ifdef HAVE_GET_ACL_RCU_ARG
+			     , bool rcu
+#endif /* HAVE_GET_ACL_RCU_ARG */
+			    )
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct posix_acl *acl = NULL;
 	ENTRY;
+
+#ifdef HAVE_GET_ACL_RCU_ARG
+	if (rcu)
+		return ERR_PTR(-ECHILD);
+#endif
 
 	read_lock(&lli->lli_lock);
 	/* VFS' acl_permission_check->check_acl will release the refcount */
