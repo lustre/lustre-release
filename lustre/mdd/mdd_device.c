@@ -393,8 +393,8 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 	 * last cr_index at this plain llog. And if it less then cookie endrec
 	 * cancel the whole file.
 	 */
-	if ((LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - hdr->lrh_index +
-	     rec->cr.cr_index) < cl_cookie->endrec) {
+	if (llog_is_plain_skipable(llh->lgh_hdr, hdr, rec->cr.cr_index,
+				   cl_cookie->endrec)) {
 		int rc;
 
 		if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_CHANGELOG_DEL))) {

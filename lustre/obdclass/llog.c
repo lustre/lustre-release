@@ -735,7 +735,8 @@ repeat:
 					lgc->lgc_index = tmp_idx;
 				}
 
-				if (rc == LLOG_PROC_BREAK) {
+				if (rc == LLOG_PROC_BREAK ||
+				    rc == LLOG_SKIP_PLAIN) {
 					GOTO(out, rc);
 				} else if (rc == LLOG_DEL_RECORD) {
 					rc = llog_cancel_rec(lpi->lpi_env,
@@ -1003,7 +1004,8 @@ int llog_reverse_process(const struct lu_env *env,
 				      sizeof(*tail);
 
 				rc = cb(env, loghandle, rec, data);
-				if (rc == LLOG_PROC_BREAK) {
+				if (rc == LLOG_PROC_BREAK ||
+				    rc == LLOG_SKIP_PLAIN) {
 					GOTO(out, rc);
 				} else if (rc == LLOG_DEL_RECORD) {
 					rc = llog_cancel_rec(env, loghandle,
