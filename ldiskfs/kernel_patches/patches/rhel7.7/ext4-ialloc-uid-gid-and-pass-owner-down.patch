@@ -1,0 +1,105 @@
+From 3950e714298eca5bfd4955202c70b390f6f6c679 Mon Sep 17 00:00:00 2001
+From: Shaun Tancheff <shaun.tancheff@hpe.com>
+Date: Wed, 2 Dec 2020 13:23:45 -0600
+Subject: [PATCH] ext4 ialloc uid gid and pass owner down
+
+pass inode timestamps at initial creation
+---
+ fs/ext4/ext4.h   |  9 +++++----
+ fs/ext4/ialloc.c | 12 +++++++++++-
+ fs/ext4/namei.c  | 13 +++++++++++--
+ 3 files changed, 27 insertions(+), 7 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 3228967..f1446e2 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -2331,15 +2331,16 @@ extern int ext4fs_dirhash(const char *name, int len, struct
+ extern struct inode *__ext4_new_inode(handle_t *, struct inode *, umode_t,
+ 				      const struct qstr *qstr, __u32 goal,
+ 				      uid_t *owner, int handle_type,
+-				      unsigned int line_no, int nblocks);
++				      unsigned int line_no, int nblocks,
++				      struct iattr *iattr);
+ 
+ #define ext4_new_inode(handle, dir, mode, qstr, goal, owner) \
+ 	__ext4_new_inode((handle), (dir), (mode), (qstr), (goal), (owner), \
+-			 0, 0, 0)
++			 0, 0, 0, NULL)
+ #define ext4_new_inode_start_handle(dir, mode, qstr, goal, owner, \
+ 				    type, nblocks)		    \
+ 	__ext4_new_inode(NULL, (dir), (mode), (qstr), (goal), (owner), \
+-			 (type), __LINE__, (nblocks))
++			 (type), __LINE__, (nblocks), NULL)
+ 
+ 
+ extern void ext4_free_inode(handle_t *, struct inode *);
+@@ -2463,7 +2464,7 @@ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+ 				__u32 start_minor_hash, __u32 *next_hash);
+ extern struct inode *ext4_create_inode(handle_t *handle,
+ 				       struct inode *dir, int mode,
+-				       uid_t *owner);
++				       struct iattr *iattr);
+ extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
+ 			     struct ext4_dir_entry_2 *de_del,
+ 			     struct buffer_head *bh);
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index 844e06b..a8ab19b 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -698,7 +698,8 @@ next:
+ struct inode *__ext4_new_inode(handle_t *handle, struct inode *dir,
+ 			       umode_t mode, const struct qstr *qstr,
+ 			       __u32 goal, uid_t *owner, int handle_type,
+-			       unsigned int line_no, int nblocks)
++			       unsigned int line_no, int nblocks,
++			       struct iattr *iattr)
+ {
+ 	struct super_block *sb;
+ 	struct buffer_head *inode_bitmap_bh = NULL;
+@@ -1029,6 +1030,15 @@ got:
+ 	if (err)
+ 		goto fail_drop;
+ 
++	if (iattr) {
++		if (iattr->ia_valid & ATTR_CTIME)
++			inode->i_ctime = iattr->ia_ctime;
++		if (iattr->ia_valid & ATTR_MTIME)
++			inode->i_mtime = iattr->ia_mtime;
++		if (iattr->ia_valid & ATTR_ATIME)
++			inode->i_atime = iattr->ia_atime;
++	}
++
+ 	err = ext4_init_acl(handle, inode, dir);
+ 	if (err)
+ 		goto fail_free_drop;
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index 81c2bfb..59a6f82 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -2895,11 +2895,20 @@ static int ext4_add_nondir(handle_t *handle,
+  /* Return locked inode, then the caller can modify the inode's states/flags
+   * before others finding it. The caller should unlock the inode by itself. */
+ struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode,
+-				uid_t *owner)
++				struct iattr *iattr)
+ {
+ 	struct inode *inode;
++	uid_t owner[2] = {0, 0};
++
++	if (iattr) {
++		if (iattr->ia_valid & ATTR_UID)
++			owner[0] = from_kuid(&init_user_ns, iattr->ia_uid);
++		if (iattr->ia_valid & ATTR_GID)
++			owner[1] = from_kgid(&init_user_ns, iattr->ia_gid);
++	}
++	inode = __ext4_new_inode(handle, dir, mode, NULL, 0, owner,
++				 0, 0, 0, iattr);
+ 
+-	inode = ext4_new_inode(handle, dir, mode, NULL, 0, owner);
+ 	if (!IS_ERR(inode)) {
+ 		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
+ #ifdef CONFIG_LDISKFS_FS_XATTR
+-- 
+2.25.1
+

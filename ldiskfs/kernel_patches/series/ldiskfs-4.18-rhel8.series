@@ -28,3 +28,4 @@ rhel8/ext4-mballoc-prefetch.patch
 rhel8/ext4-xattr-disable-credits-check.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 base/ext4-reset-exts-for-gcc10.patch
+rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
