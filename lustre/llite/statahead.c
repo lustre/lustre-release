@@ -1247,6 +1247,9 @@ out:
 	spin_unlock(&lli->lli_sa_lock);
 	wake_up(&sai->sai_waitq);
 
+	atomic_add(sai->sai_hit, &sbi->ll_sa_hit_total);
+	atomic_add(sai->sai_miss, &sbi->ll_sa_miss_total);
+
 	ll_sai_put(sai);
 
 	return rc;

@@ -178,6 +178,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 	atomic_set(&sbi->ll_sa_wrong, 0);
 	atomic_set(&sbi->ll_sa_running, 0);
 	atomic_set(&sbi->ll_agl_total, 0);
+	atomic_set(&sbi->ll_sa_hit_total, 0);
+	atomic_set(&sbi->ll_sa_miss_total, 0);
 	set_bit(LL_SBI_AGL_ENABLED, sbi->ll_flags);
 	set_bit(LL_SBI_FAST_READ, sbi->ll_flags);
 	set_bit(LL_SBI_TINY_WRITE, sbi->ll_flags);

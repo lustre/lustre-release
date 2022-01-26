@@ -13037,7 +13037,7 @@ test_123a_base() { # was test 123, statahead(bug 11401)
 		lctl set_param llite.*.statahead_max=$max
 
 		swrong=$(lctl get_param -n llite.*.statahead_stats |
-			grep "statahead wrong:" | awk '{print $3}')
+			 awk '/statahead.wrong:/ { print $NF }')
 		lctl get_param -n llite.*.statahead_max | grep '[0-9]'
 		cancel_lru_locks mdc
 		cancel_lru_locks osc
@@ -13048,13 +13048,13 @@ test_123a_base() { # was test 123, statahead(bug 11401)
 		log "$lsx $i files with statahead: $delta_sa sec"
 		lctl get_param -n llite.*.statahead_stats
 		ewrong=$(lctl get_param -n llite.*.statahead_stats |
-			grep "statahead wrong:" | awk '{print $3}')
+			 awk '/statahead.wrong:/ { print $NF }')
 
 		[[ $swrong -lt $ewrong ]] &&
 			log "statahead was stopped, maybe too many locks held!"
 		[[ $delta -eq 0 || $delta_sa -eq 0 ]] && continue
 
-		if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
+		if (( $delta_sa*100 > $delta*105 && $delta_sa > $delta+2)); then
 			max=$(lctl get_param -n llite.*.statahead_max |
 				head -n 1)
 			lctl set_param -n llite.*.statahead_max 0
@@ -13067,8 +13067,8 @@ test_123a_base() { # was test 123, statahead(bug 11401)
 			delta=$((etime - stime))
 			log "$lsx $i files again without statahead: $delta sec"
 			lctl set_param llite.*.statahead_max=$max
-			if [ $((delta_sa * 100 > delta * 105 && delta_sa > delta + 2)) ]; then
-				if [  $SLOWOK -eq 0 ]; then
+			if (( $delta_sa*100 > delta*105 && delta_sa > delta+2 )); then
+				if [ $SLOWOK -eq 0 ]; then
 					error "$lsx $i files is slower with statahead!"
 				else
 					log "$lsx $i files is slower with statahead!"
@@ -13122,11 +13122,11 @@ test_123ac() {
 	cancel_lru_locks $OSC
 	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
 	agl_before=$($LCTL get_param -n llite.*.statahead_stats |
-		awk '/agl.total:/ {print $3}')
+		     awk '/agl.total:/ { print $NF }')
 	test_123a_base "$STATX -c \"%n %i %A %h %u %g %W %X %Z\" -D"
 	test_123a_base "$STATX --cached=always -D"
 	agl_after=$($LCTL get_param -n llite.*.statahead_stats |
-		awk '/agl.total:/ {print $3}')
+		    awk '/agl.total:/ { print $NF }')
 	[ $agl_before -eq $agl_after ] ||
 		error "Should not trigger AGL thread - $agl_before:$agl_after"
 	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
@@ -13188,13 +13188,17 @@ test_123d() {
 	createmany -d $DIR/$tdir/$tfile $num || error "createmany $num failed"
 	remount_client $MOUNT
 	$LCTL get_param llite.*.statahead_max
+	$LCTL set_param llite.*.statahead_stats=0 ||
+		error "clear statahead_stats failed"
 	swrong=$(lctl get_param -n llite.*.statahead_stats |
-		grep "statahead wrong:" | awk '{print $3}')
+		 awk '/statahead.wrong:/ { print $NF }')
 	ls -l $DIR/$tdir || error "ls -l $DIR/$tdir failed"
+	# wait for statahead thread finished to update hit/miss stats.
+	sleep 1
 	$LCTL get_param -n llite.*.statahead_stats
 	ewrong=$(lctl get_param -n llite.*.statahead_stats |
-		grep "statahead wrong:" | awk '{print $3}')
-	[[ $swrong -eq $ewrong ]] ||
+		 awk '/statahead.wrong:/ { print $NF }')
+	(( $swrong == $ewrong )) ||
 		log "statahead was stopped, maybe too many locks held!"
 }
 run_test 123d "Statahead on striped directories works correctly"

@@ -833,14 +833,34 @@ static int ll_statahead_stats_seq_show(struct seq_file *m, void *v)
 
 	seq_printf(m, "statahead total: %u\n"
 		      "statahead wrong: %u\n"
-		      "agl total: %u\n",
+		      "agl total: %u\n"
+		      "hit_total: %u\n"
+		      "miss_total: %u\n",
 		   atomic_read(&sbi->ll_sa_total),
 		   atomic_read(&sbi->ll_sa_wrong),
-		   atomic_read(&sbi->ll_agl_total));
+		   atomic_read(&sbi->ll_agl_total),
+		   atomic_read(&sbi->ll_sa_hit_total),
+		   atomic_read(&sbi->ll_sa_miss_total));
 	return 0;
 }
 
-LDEBUGFS_SEQ_FOPS_RO(ll_statahead_stats);
+static ssize_t ll_statahead_stats_seq_write(struct file *file,
+					    const char __user *buffer,
+					    size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	atomic_set(&sbi->ll_sa_total, 0);
+	atomic_set(&sbi->ll_sa_wrong, 0);
+	atomic_set(&sbi->ll_agl_total, 0);
+	atomic_set(&sbi->ll_sa_hit_total, 0);
+	atomic_set(&sbi->ll_sa_miss_total, 0);
+
+	return count;
+}
+LDEBUGFS_SEQ_FOPS(ll_statahead_stats);
 
 static ssize_t lazystatfs_show(struct kobject *kobj,
 			       struct attribute *attr,
