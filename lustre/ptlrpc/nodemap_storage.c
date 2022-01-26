@@ -1356,8 +1356,9 @@ int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,
 }
 EXPORT_SYMBOL(nodemap_process_idx_pages);
 
-static int nodemap_page_build(const struct lu_env *env, union lu_page *lp,
-			      size_t nob, const struct dt_it_ops *iops,
+static int nodemap_page_build(const struct lu_env *env, struct dt_object *obj,
+			      union lu_page *lp, size_t bytes,
+			      const struct dt_it_ops *iops,
 			      struct dt_it *it, __u32 attr, void *arg)
 {
 	struct idx_info *ii = (struct idx_info *)arg;
@@ -1367,19 +1368,19 @@ static int nodemap_page_build(const struct lu_env *env, union lu_page *lp,
 	int rc;
 	ENTRY;
 
-	if (nob < LIP_HDR_SIZE)
+	if (bytes < LIP_HDR_SIZE)
 		return -EINVAL;
 
 	/* initialize the header of the new container */
 	memset(lip, 0, LIP_HDR_SIZE);
 	lip->lip_magic = LIP_MAGIC;
-	nob           -= LIP_HDR_SIZE;
+	bytes -= LIP_HDR_SIZE;
 
 	entry = lip->lip_entries;
 	do {
-		char		*tmp_entry = entry;
-		struct dt_key	*key;
-		__u64		hash;
+		char *tmp_entry = entry;
+		struct dt_key *key;
+		__u64 hash;
 		enum nodemap_idx_type key_type;
 
 		/* fetch 64-bit hash value */
@@ -1391,7 +1392,7 @@ static int nodemap_page_build(const struct lu_env *env, union lu_page *lp,
 				GOTO(out, rc = 0);
 		}
 
-		if (nob < size) {
+		if (bytes < size) {
 			if (lip->lip_nr == 0)
 				GOTO(out, rc = -EINVAL);
 			GOTO(out, rc = 0);
@@ -1424,7 +1425,7 @@ static int nodemap_page_build(const struct lu_env *env, union lu_page *lp,
 					ii->ii_hash_start = hash;
 
 				entry = tmp_entry + ii->ii_recsize;
-				nob -= size;
+				bytes -= size;
 			}
 		}
 

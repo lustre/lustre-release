@@ -3600,89 +3600,96 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
-			      size_t nob, const struct dt_it_ops *iops,
+static int mdd_dir_page_build(const struct lu_env *env, struct dt_object *obj,
+			      union lu_page *lp, size_t bytes,
+			      const struct dt_it_ops *iops,
 			      struct dt_it *it, __u32 attr, void *arg)
 {
-	struct lu_dirpage	*dp = &lp->lp_dir;
-	void			*area = dp;
-	int			 result;
-	__u64			 hash = 0;
-	struct lu_dirent	*ent;
-	struct lu_dirent	*last = NULL;
-	struct lu_fid		 fid;
-	int			 first = 1;
+	struct lu_dirpage *dp = &lp->lp_dir;
+	void *area = dp;
+	__u64 hash = 0;
+	struct lu_dirent *ent;
+	struct lu_dirent *last = NULL;
+	struct lu_fid fid;
+	int first = 1;
+	int result;
 
-	if (nob < sizeof(*dp))
-		return -EINVAL;
+	if (bytes < sizeof(*dp))
+		GOTO(out_err, result = -EOVERFLOW);
 
-        memset(area, 0, sizeof (*dp));
-        area += sizeof (*dp);
-        nob  -= sizeof (*dp);
+	memset(area, 0, sizeof(*dp));
+	area += sizeof(*dp);
+	bytes -= sizeof(*dp);
 
-        ent  = area;
-        do {
-                int    len;
+	ent = area;
+	do {
+		int len;
 		size_t recsize;
 
-                len = iops->key_size(env, it);
+		len = iops->key_size(env, it);
 
-                /* IAM iterator can return record with zero len. */
-                if (len == 0)
-                        goto next;
+		/* IAM iterator can return record with zero len. */
+		if (len == 0)
+			GOTO(next, 0);
 
-                hash = iops->store(env, it);
-                if (unlikely(first)) {
-                        first = 0;
-                        dp->ldp_hash_start = cpu_to_le64(hash);
-                }
+		hash = iops->store(env, it);
+		if (unlikely(first)) {
+			first = 0;
+			dp->ldp_hash_start = cpu_to_le64(hash);
+		}
 
-                /* calculate max space required for lu_dirent */
-                recsize = lu_dirent_calc_size(len, attr);
+		/* calculate max space required for lu_dirent */
+		recsize = lu_dirent_calc_size(len, attr);
 
-                if (nob >= recsize) {
-                        result = iops->rec(env, it, (struct dt_rec *)ent, attr);
-                        if (result == -ESTALE)
-                                goto next;
-                        if (result != 0)
-                                goto out;
+		if (bytes >= recsize &&
+		    !OBD_FAIL_CHECK(OBD_FAIL_MDS_DIR_PAGE_WALK)) {
+			result = iops->rec(env, it, (struct dt_rec *)ent, attr);
+			if (result == -ESTALE)
+				GOTO(next, result);
+			if (result != 0)
+				GOTO(out, result);
 
-                        /* osd might not able to pack all attributes,
-                         * so recheck rec length */
-                        recsize = le16_to_cpu(ent->lde_reclen);
+			/* OSD might not able to pack all attributes, so
+			 * recheck record length had room to store FID
+			 */
+			recsize = le16_to_cpu(ent->lde_reclen);
 
 			if (le32_to_cpu(ent->lde_attrs) & LUDA_FID) {
 				fid_le_to_cpu(&fid, &ent->lde_fid);
 				if (fid_is_dot_lustre(&fid))
-					goto next;
+					GOTO(next, recsize);
 			}
-                } else {
-                        result = (last != NULL) ? 0 :-EINVAL;
-                        goto out;
-                }
-                last = ent;
-                ent = (void *)ent + recsize;
-                nob -= recsize;
+		} else {
+			result = (last != NULL) ? 0 : -EBADSLT;
+			GOTO(out, result);
+		}
+		last = ent;
+		ent = (void *)ent + recsize;
+		bytes -= recsize;
 
 next:
-                result = iops->next(env, it);
-                if (result == -ESTALE)
-                        goto next;
-        } while (result == 0);
+		result = iops->next(env, it);
+		if (result == -ESTALE)
+			GOTO(next, result);
+	} while (result == 0);
 
 out:
-        dp->ldp_hash_end = cpu_to_le64(hash);
-        if (last != NULL) {
-                if (last->lde_hash == dp->ldp_hash_end)
-                        dp->ldp_flags |= cpu_to_le32(LDF_COLLIDE);
-                last->lde_reclen = 0; /* end mark */
-        }
+	dp->ldp_hash_end = cpu_to_le64(hash);
+	if (last != NULL) {
+		if (last->lde_hash == dp->ldp_hash_end)
+			dp->ldp_flags |= cpu_to_le32(LDF_COLLIDE);
+		last->lde_reclen = 0; /* end mark */
+	}
+out_err:
 	if (result > 0)
 		/* end of directory */
 		dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
 	else if (result < 0)
-		CWARN("build page failed: %d!\n", result);
-        return result;
+		CWARN("%s: build page failed for "DFID": rc = %d\n",
+		      lu_dev_name(obj->do_lu.lo_dev),
+		      PFID(lu_object_fid(&obj->do_lu)), result);
+
+	return result;
 }
 
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,

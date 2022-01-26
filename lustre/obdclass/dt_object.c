@@ -685,15 +685,17 @@ static inline const struct dt_index_features *dt_index_feat_select(__u64 seq,
  * RPC
  *
  * \param env - is the environment passed by the caller
+ * \param obj - index object being traversed (mostly for debugging)
  * \param lp  - is a pointer to the lu_page to fill
- * \param nob - is the maximum number of bytes that should be copied
+ * \param bytes - is the maximum number of bytes that should be copied
  * \param iops - is the index operation vector associated with the index object
  * \param it   - is a pointer to the current iterator
  * \param attr - is the index attribute to pass to iops->rec()
  * \param arg  - is a pointer to the idx_info structure
  */
-static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
-			       size_t nob, const struct dt_it_ops *iops,
+static int dt_index_page_build(const struct lu_env *env, struct dt_object *obj,
+			       union lu_page *lp, size_t bytes,
+			       const struct dt_it_ops *iops,
 			       struct dt_it *it, __u32 attr, void *arg)
 {
 	struct idx_info *ii = (struct idx_info *)arg;
@@ -707,13 +709,13 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 
 	ENTRY;
 
-	if (nob < LIP_HDR_SIZE)
+	if (bytes < LIP_HDR_SIZE)
 		return -EINVAL;
 
 	/* initialize the header of the new container */
 	memset(lip, 0, LIP_HDR_SIZE);
 	lip->lip_magic = LIP_MAGIC;
-	nob           -= LIP_HDR_SIZE;
+	bytes -= LIP_HDR_SIZE;
 
 	/* client wants to the 64-bit hash value associated with each record */
 	if (!(ii->ii_flags & II_FL_NOHASH))
@@ -734,9 +736,13 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 			keysize = iops->key_size(env, it);
 			if (!(ii->ii_flags & II_FL_VARKEY) &&
 			    keysize != ii->ii_keysize) {
-				CERROR("keysize mismatch %hu != %hu.\n",
-				       keysize, ii->ii_keysize);
-				GOTO(out, rc = -EINVAL);
+				rc = -EINVAL;
+				CERROR("%s: keysize mismatch %hu != %hu on "
+				       DFID": rc = %d\n",
+				       lu_dev_name(obj->do_lu.lo_dev),
+				       keysize, ii->ii_keysize,
+				       PFID(lu_object_fid(&obj->do_lu)), rc);
+				GOTO(out, rc);
 			}
 		}
 
@@ -746,7 +752,7 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 		else
 			recsize = ii->ii_recsize;
 
-		if (nob < hashsize + keysize + recsize) {
+		if (bytes < hashsize + keysize + recsize) {
 			if (lip->lip_nr == 0)
 				GOTO(out, rc = -E2BIG);
 			GOTO(out, rc = 0);
@@ -769,7 +775,7 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 			if (unlikely(lip->lip_nr == 1 && ii->ii_count == 0))
 				ii->ii_hash_start = hash;
 			entry += hashsize + keysize + recsize;
-			nob -= hashsize + keysize + recsize;
+			bytes -= hashsize + keysize + recsize;
 		} else if (rc != -ESTALE) {
 			GOTO(out, rc);
 		}
@@ -812,7 +818,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 {
 	struct dt_it *it;
 	const struct dt_it_ops *iops;
-	size_t pageidx, nob, nlupgs = 0;
+	size_t pageidx, bytes, nlupgs = 0;
 	int rc;
 	ENTRY;
 
@@ -822,8 +828,8 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 	if (filler == NULL)
 		filler = dt_index_page_build;
 
-	nob = rdpg->rp_count;
-	if (nob == 0)
+	bytes = rdpg->rp_count;
+	if (bytes == 0)
 		RETURN(-EFAULT);
 
 	/* Iterate through index and fill containers from @rdpg */
@@ -863,7 +869,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 	 *  rc >  0 -> end of index.
 	 *  rc <  0 -> error.
 	 */
-	for (pageidx = 0; rc == 0 && nob > 0; pageidx++) {
+	for (pageidx = 0; rc == 0 && bytes > 0; pageidx++) {
 		union lu_page	*lp;
 		int		 i;
 
@@ -871,8 +877,9 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		lp = kmap(rdpg->rp_pages[pageidx]);
 
 		/* fill lu pages */
-		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, nob -= LU_PAGE_SIZE) {
-			rc = filler(env, lp, min_t(size_t, nob, LU_PAGE_SIZE),
+		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, bytes-=LU_PAGE_SIZE) {
+			rc = filler(env, obj, lp,
+				    min_t(size_t, bytes, LU_PAGE_SIZE),
 				    iops, it, rdpg->rp_attrs, arg);
 			if (rc < 0)
 				break;
