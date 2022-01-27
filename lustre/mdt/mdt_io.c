@@ -800,7 +800,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 		la_from_obdo(la, oa, valid);
 
-		mdt_counter_incr(req, LPROC_MDT_IO_WRITE, nob);
+		mdt_counter_incr(req, LPROC_MDT_IO_WRITE_BYTES, nob);
+		mdt_counter_incr(req, LPROC_MDT_IO_WRITE,
+				 ktime_us_delta(ktime_get(), kstart));
 
 		rc = mdt_commitrw_write(env, exp, mdt, mo, la, oa, objcount,
 					npages, lnb, oa->o_grant_used, old_rc);
@@ -855,7 +857,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		if (oa)
 			mdt_dom_obj_lvb_update(env, mo, NULL, true);
 
-		mdt_counter_incr(req, LPROC_MDT_IO_READ, nob);
+		mdt_counter_incr(req, LPROC_MDT_IO_READ_BYTES, nob);
+		mdt_counter_incr(req, LPROC_MDT_IO_READ,
+				 ktime_us_delta(ktime_get(), kstart));
 
 		rc = mdt_commitrw_read(env, mdt, mo, objcount, npages, lnb);
 		if (old_rc)

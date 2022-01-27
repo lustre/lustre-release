@@ -1524,8 +1524,10 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_SYNC]		= "sync",
 	[LPROC_MDT_SAMEDIR_RENAME]	= "samedir_rename",
 	[LPROC_MDT_CROSSDIR_RENAME]	= "crossdir_rename",
-	[LPROC_MDT_IO_READ]		= "read_bytes",
-	[LPROC_MDT_IO_WRITE]		= "write_bytes",
+	[LPROC_MDT_IO_READ_BYTES]	= "read_bytes",
+	[LPROC_MDT_IO_WRITE_BYTES]	= "write_bytes",
+	[LPROC_MDT_IO_READ]		= "read",
+	[LPROC_MDT_IO_WRITE]		= "write",
 	[LPROC_MDT_IO_PUNCH]		= "punch",
 	[LPROC_MDT_MIGRATE]		= "migrate",
 	[LPROC_MDT_FALLOCATE]		= "fallocate",
@@ -1541,7 +1543,8 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
 
 	for (midx = 0; midx < array_size; midx++) {
 		oidx = midx + offset;
-		if (midx == LPROC_MDT_IO_READ || midx == LPROC_MDT_IO_WRITE)
+		if (midx == LPROC_MDT_IO_READ_BYTES ||
+		    midx == LPROC_MDT_IO_WRITE_BYTES)
 			lprocfs_counter_init(stats, oidx,
 					     LPROCFS_TYPE_BYTES_FULL,
 					     mdt_stats[midx], "bytes");
