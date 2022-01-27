@@ -384,7 +384,8 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 			 struct obd_export *export, struct obdo *oa,
 			 int objcount, struct obd_ioobj *obj,
 			 struct niobuf_remote *rb, int niocount,
-			 struct niobuf_local *res, int rc)
+			 struct niobuf_local *res, int rc, int nob,
+			 ktime_t kstart)
 {
 	struct obd_device *obd;
 	int pgs = 0;

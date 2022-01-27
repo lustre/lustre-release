@@ -1360,7 +1360,8 @@ int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		     struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		     struct niobuf_remote *rnb, int npages,
-		     struct niobuf_local *lnb, int old_rc);
+		     struct niobuf_local *lnb, int old_rc, int nob,
+		     ktime_t kstart);
 int mdt_punch_hdl(struct tgt_session_info *tsi);
 int mdt_fallocate_hdl(struct tgt_session_info *tsi);
 int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,

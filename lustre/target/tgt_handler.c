@@ -2264,6 +2264,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 				 npages_read;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
 	const char *obd_name = exp->exp_obd->obd_name;
+	ktime_t kstart;
 
 	ENTRY;
 
@@ -2362,6 +2363,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	repbody->oa = body->oa;
 
 	npages = PTLRPC_MAX_BRW_PAGES;
+	kstart = ktime_get();
 	rc = obd_preprw(tsi->tsi_env, OBD_BRW_READ, exp, &repbody->oa, 1,
 			ioo, remote_nb, &npages, local_nb);
 	if (rc != 0)
@@ -2379,7 +2381,6 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 			GOTO(out_commitrw, rc = -ENOMEM);
 	}
 
-	nob = 0;
 	npages_read = npages;
 	for (i = 0; i < npages; i++) {
 		int page_rc = local_nb[i].lnb_rc;
@@ -2478,7 +2479,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 out_commitrw:
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_READ, exp, &repbody->oa, 1, ioo,
-			  remote_nb, npages, local_nb, rc);
+			  remote_nb, npages, local_nb, rc, nob, kstart);
 out_lock:
 	tgt_brw_unlock(exp, ioo, remote_nb, &lockh, LCK_PR);
 
@@ -2622,6 +2623,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	const char *obd_name = exp->exp_obd->obd_name;
 	/* '1' for consistency with code that checks !mpflag to restore */
 	unsigned int mpflags = 1;
+	ktime_t kstart;
+	int nob = 0;
 
 	ENTRY;
 
@@ -2748,6 +2751,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	repbody->oa = body->oa;
 
 	npages = PTLRPC_MAX_BRW_PAGES;
+	kstart = ktime_get();
 	rc = obd_preprw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,
 			objcount, ioo, remote_nb, &npages, local_nb);
 	if (rc < 0)
@@ -2832,13 +2836,25 @@ skip_transfer:
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, cfs_fail_val);
 
 out_commitrw:
+	/* calculate the expected actual write bytes (nob) for OFD stats.
+	 * Technically, if commit fails this would be wrong, but that should be
+	 * very rare
+	 */
+	for (i = 0; i < niocount; i++) {
+		int len = remote_nb[i].rnb_len;
+
+		nob += len;
+	}
+
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,
-			  objcount, ioo, remote_nb, npages, local_nb, rc);
+			  objcount, ioo, remote_nb, npages, local_nb, rc, nob,
+			  kstart);
 	if (rc == -ENOTCONN)
 		/* quota acquire process has been given up because
 		 * either the client has been evicted or the client
-		 * has timed out the request already */
+		 * has timed out the request already
+		 */
 		no_reply = true;
 
 	for (i = 0; i < niocount; i++) {
@@ -2855,13 +2871,10 @@ out_commitrw:
 	repbody->oa.o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLATIME);
 
 	if (rc == 0) {
-		int nob = 0;
-
 		/* set per-requested niobuf return codes */
 		for (i = j = 0; i < niocount; i++) {
 			int len = remote_nb[i].rnb_len;
 
-			nob += len;
 			rcs[i] = 0;
 			do {
 				LASSERT(j < npages);

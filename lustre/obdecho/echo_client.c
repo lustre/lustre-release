@@ -2714,7 +2714,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 		}
 
 		ret = obd_commitrw(env, rw, exp, oa, 1, &ioo, &rnb, npages, lnb,
-				   ret);
+				   ret, rnb.rnb_len, ktime_set(0, 0));
 		if (ret != 0)
 			break;
 

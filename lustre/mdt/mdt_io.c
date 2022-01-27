@@ -362,10 +362,8 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct mdt_device *mdt, struct mdt_object *mo,
 			   struct lu_attr *la, int niocount,
 			   struct niobuf_remote *rnb, int *nr_local,
-			   struct niobuf_local *lnb, char *jobid)
+			   struct niobuf_local *lnb)
 {
-	struct tgt_session_info *tsi = tgt_ses_info(env);
-	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct dt_object *dob;
 	int i, j, rc, tot_bytes = 0;
 	int maxlnb = *nr_local;
@@ -424,7 +422,6 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
 
-	mdt_counter_incr(req, LPROC_MDT_IO_READ, tot_bytes);
 	RETURN(0);
 buf_put:
 	dt_bufs_put(env, dob, lnb, *nr_local);
@@ -437,10 +434,8 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct lu_attr *la, struct obdo *oa,
 			    int objcount, struct obd_ioobj *obj,
 			    struct niobuf_remote *rnb, int *nr_local,
-			    struct niobuf_local *lnb, char *jobid)
+			    struct niobuf_local *lnb)
 {
-	struct tgt_session_info *tsi = tgt_ses_info(env);
-	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct dt_object *dob;
 	int i, j, k, rc = 0, tot_bytes = 0;
 	int maxlnb = *nr_local;
@@ -500,7 +495,6 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (likely(rc))
 		GOTO(err, rc);
 
-	mdt_counter_incr(req, LPROC_MDT_IO_WRITE, tot_bytes);
 	RETURN(0);
 err:
 	dt_bufs_put(env, dob, lnb, *nr_local);
@@ -525,15 +519,12 @@ int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct lu_attr *la = &info->mti_attr.ma_attr;
 	struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
 	struct mdt_object *mo;
-	char *jobid;
 	int rc = 0;
 
 	/* The default value PTLRPC_MAX_BRW_PAGES is set in tgt_brw_write()
 	 * but for MDT it is different, correct it here. */
 	if (*nr_local > MD_MAX_BRW_PAGES)
 		*nr_local = MD_MAX_BRW_PAGES;
-
-	jobid = tsi->tsi_jobid;
 
 	if (!oa || objcount != 1 || obj->ioo_bufcnt == 0) {
 		CERROR("%s: bad parameters %p/%i/%i\n",
@@ -551,13 +542,11 @@ int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	if (cmd == OBD_BRW_WRITE) {
 		la_from_obdo(la, oa, OBD_MD_FLGETATTR);
 		rc = mdt_preprw_write(env, exp, mdt, mo, la, oa,
-				      objcount, obj, rnb, nr_local, lnb,
-				      jobid);
+				      objcount, obj, rnb, nr_local, lnb);
 	} else if (cmd == OBD_BRW_READ) {
 		tgt_grant_prepare_read(env, exp, oa);
 		rc = mdt_preprw_read(env, exp, mdt, mo, la,
-				     obj->ioo_bufcnt, rnb, nr_local, lnb,
-				     jobid);
+				     obj->ioo_bufcnt, rnb, nr_local, lnb);
 		obdo_from_la(oa, la, LA_ATIME);
 	} else {
 		CERROR("%s: wrong cmd %d received!\n",
@@ -753,8 +742,11 @@ void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
 int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		     struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		     struct niobuf_remote *rnb, int npages,
-		     struct niobuf_local *lnb, int old_rc)
+		     struct niobuf_local *lnb, int old_rc, int nob,
+		     ktime_t kstart)
 {
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
 	struct mdt_thread_info *info = mdt_th_info(env);
 	struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
 	struct mdt_object *mo = info->mti_object;
@@ -808,6 +800,8 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 		la_from_obdo(la, oa, valid);
 
+		mdt_counter_incr(req, LPROC_MDT_IO_WRITE, nob);
+
 		rc = mdt_commitrw_write(env, exp, mdt, mo, la, oa, objcount,
 					npages, lnb, oa->o_grant_used, old_rc);
 		if (rc == 0)
@@ -860,6 +854,9 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * will also get the updated value. bug 5972 */
 		if (oa)
 			mdt_dom_obj_lvb_update(env, mo, NULL, true);
+
+		mdt_counter_incr(req, LPROC_MDT_IO_READ, nob);
+
 		rc = mdt_commitrw_read(env, mdt, mo, objcount, npages, lnb);
 		if (old_rc)
 			rc = old_rc;

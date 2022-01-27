@@ -1049,7 +1049,8 @@ struct obd_ops {
 			  struct obd_export *exp, struct obdo *oa,
 			  int objcount, struct obd_ioobj *obj,
 			  struct niobuf_remote *remote, int pages,
-			  struct niobuf_local *local, int rc);
+			  struct niobuf_local *local, int rc, int nob,
+			  ktime_t kstart);
 	int (*o_init_export)(struct obd_export *exp);
 	int (*o_destroy_export)(struct obd_export *exp);
 

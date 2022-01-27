@@ -570,14 +570,13 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct ofd_device *ofd, const struct lu_fid *fid,
 			   struct lu_attr *la, struct obdo *oa, int niocount,
 			   struct niobuf_remote *rnb, int *nr_local,
-			   struct niobuf_local *lnb, char *jobid)
+			   struct niobuf_local *lnb)
 {
 	struct ofd_object *fo;
 	int i, j, rc, tot_bytes = 0;
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_READ;
 	int maxlnb = *nr_local;
 	__u64 begin, end;
-	ktime_t kstart = ktime_get();
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -644,9 +643,6 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		niocount,
 		READ);
 
-	ofd_counter_incr(exp, LPROC_OFD_STATS_READ_BYTES, jobid, tot_bytes);
-	ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid,
-			 ktime_us_delta(ktime_get(), kstart));
 	RETURN(0);
 
 buf_put:
@@ -685,14 +681,13 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct lu_attr *la, struct obdo *oa,
 			    int objcount, struct obd_ioobj *obj,
 			    struct niobuf_remote *rnb, int *nr_local,
-			    struct niobuf_local *lnb, char *jobid)
+			    struct niobuf_local *lnb)
 {
 	struct ofd_object *fo;
 	int i, j, k, rc = 0, tot_bytes = 0;
 	enum dt_bufs_type dbt = DT_BUFS_TYPE_WRITE;
 	int maxlnb = *nr_local;
 	__u64 begin, end;
-	ktime_t kstart = ktime_get();
 	struct range_lock *range = &ofd_info(env)->fti_write_range;
 
 	ENTRY;
@@ -868,9 +863,6 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	range_lock(&fo->ofo_write_tree, range);
 	ofd_info(env)->fti_range_locked = 1;
 
-	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE_BYTES, jobid, tot_bytes);
-	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid,
-			 ktime_us_delta(ktime_get(), kstart));
 	RETURN(0);
 err:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
@@ -913,7 +905,6 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct tgt_session_info	*tsi = tgt_ses_info(env);
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
-	char			*jobid;
 	const struct lu_fid	*fid = &oa->o_oi.oi_fid;
 	int			 rc = 0;
 
@@ -925,10 +916,8 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	if (tgt_ses_req(tsi) == NULL) { /* echo client case */
 		info = ofd_info_init(env, exp);
-		jobid = NULL;
 	} else {
 		info = tsi2ofd_info(tsi);
-		jobid = tsi->tsi_jobid;
 	}
 
 	LASSERT(oa != NULL);
@@ -960,12 +949,11 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	if (cmd == OBD_BRW_WRITE) {
 		la_from_obdo(&info->fti_attr, oa, OBD_MD_FLGETATTR);
 		rc = ofd_preprw_write(env, exp, ofd, fid, &info->fti_attr, oa,
-				      objcount, obj, rnb, nr_local, lnb, jobid);
+				      objcount, obj, rnb, nr_local, lnb);
 	} else if (cmd == OBD_BRW_READ) {
 		tgt_grant_prepare_read(env, exp, oa);
 		rc = ofd_preprw_read(env, exp, ofd, fid, &info->fti_attr, oa,
-				     obj->ioo_bufcnt, rnb, nr_local, lnb,
-				     jobid);
+				     obj->ioo_bufcnt, rnb, nr_local, lnb);
 	} else {
 		CERROR("%s: wrong cmd %d received!\n",
 		       exp->exp_obd->obd_name, cmd);
@@ -1447,22 +1435,39 @@ out:
 int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		 struct niobuf_remote *rnb, int npages,
-		 struct niobuf_local *lnb, int old_rc)
+		 struct niobuf_local *lnb, int old_rc, int nob, ktime_t kstart)
 {
+	struct tgt_session_info	*tsi = tgt_ses_info(env);
 	struct ofd_thread_info *info = ofd_info(env);
 	struct ofd_device *ofd = ofd_exp(exp);
 	const struct lu_fid *fid = &oa->o_oi.oi_fid;
 	struct ldlm_namespace *ns = ofd->ofd_namespace;
 	struct ldlm_resource *rs = NULL;
+	char *jobid;
 	__u64 valid;
 	int rc = 0;
 	int root_squash = 0;
 
 	LASSERT(npages > 0);
 
+	if (tgt_ses_req(tsi) == NULL) { /* echo client case */
+		jobid = NULL;
+	} else {
+		jobid = tsi->tsi_jobid;
+	}
+
 	if (cmd == OBD_BRW_WRITE) {
 		struct lu_nodemap *nodemap;
 		__u32 mapped_uid, mapped_gid, mapped_projid;
+
+		/* doing this before the commit operation places the counter
+		 * update almost immediately after reply to the client, which
+		 * gives reasonable time stats and lets us use the actual
+		 * bytes of i/o (rather than requested)
+		 */
+		ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE_BYTES, jobid, nob);
+		ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid,
+				 ktime_us_delta(ktime_get(), kstart));
 
 		nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
@@ -1560,6 +1565,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		oa->o_gid = mapped_gid;
 		oa->o_projid = mapped_projid;
 	} else if (cmd == OBD_BRW_READ) {
+		/* see comment on LPROC_OFD_STATS_WRITE_BYTES usage above */
+		ofd_counter_incr(exp, LPROC_OFD_STATS_READ_BYTES, jobid, nob);
+		ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid,
+			 ktime_us_delta(ktime_get(), kstart));
+
 		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);
 		if (old_rc)
