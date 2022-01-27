@@ -124,7 +124,7 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 struct rsi {
 	struct cache_head       h;
 	__u32                   lustre_svc;
-	__u64                   nid;
+	lnet_nid_t		nid4; /* FIXME Support larger NID */
 	char			nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	wait_queue_head_t       waitq;
 	rawobj_t                in_handle, in_token;
@@ -192,7 +192,7 @@ static void rsi_request(struct cache_detail *cd,
 
 	qword_addhex(bpp, blen, (char *) &rsi->lustre_svc,
 			sizeof(rsi->lustre_svc));
-	qword_addhex(bpp, blen, (char *) &rsi->nid, sizeof(rsi->nid));
+	qword_addhex(bpp, blen, (char *) &rsi->nid4, sizeof(rsi->nid4));
 	qword_addhex(bpp, blen, (char *) &index, sizeof(index));
 	qword_addhex(bpp, blen, (char *) rsi->nm_name,
 		     strlen(rsi->nm_name) + 1);
@@ -212,7 +212,7 @@ static inline void __rsi_init(struct rsi *new, struct rsi *item)
 	item->in_token = RAWOBJ_EMPTY;
 
 	new->lustre_svc = item->lustre_svc;
-	new->nid = item->nid;
+	new->nid4 = item->nid4;
 	memcpy(new->nm_name, item->nm_name, sizeof(item->nm_name));
 	init_waitqueue_head(&new->waitq);
 }
@@ -903,6 +903,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	struct gss_rep_header     *rephdr;
 	int                        first_check = 1;
 	int                        rc = SECSVC_DROP;
+	struct lnet_nid primary;
 	ENTRY;
 
 	memset(&rsikey, 0, sizeof(rsikey));
@@ -911,7 +912,9 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	 * but primary NID of peer.
 	 * So we need LNetPrimaryNID(rq_source) to match what the clients uses.
 	 */
-	rsikey.nid = (__u64)LNetPrimaryNID(req->rq_source.nid);
+	lnet_nid4_to_nid(req->rq_source.nid, &primary);
+	LNetPrimaryNID(&primary);
+	rsikey.nid4 = lnet_nid_to_nid4(&primary);
 	nodemap_test_nid(req->rq_peer.nid, rsikey.nm_name,
 			 sizeof(rsikey.nm_name));
 

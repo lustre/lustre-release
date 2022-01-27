@@ -1439,21 +1439,20 @@ unlock:
 }
 EXPORT_SYMBOL(LNetAddPeer);
 
-/* FIXME support large-addr nid */
-lnet_nid_t
-LNetPrimaryNID(lnet_nid_t nid)
+void LNetPrimaryNID(struct lnet_nid *nid)
 {
 	struct lnet_peer *lp;
 	struct lnet_peer_ni *lpni;
-	lnet_nid_t primary_nid = nid;
+	struct lnet_nid orig;
 	int rc = 0;
 	int cpt;
 
-	if (nid == LNET_NID_LO_0)
-		return LNET_NID_LO_0;
+	if (!nid || nid_is_lo0(nid))
+		return;
+	orig = *nid;
 
 	cpt = lnet_net_lock_current();
-	lpni = lnet_nid2peerni_locked(nid, LNET_NID_ANY, cpt);
+	lpni = lnet_peerni_by_nid_locked(nid, NULL, cpt);
 	if (IS_ERR(lpni)) {
 		rc = PTR_ERR(lpni);
 		goto out_unlock;
@@ -1480,7 +1479,7 @@ LNetPrimaryNID(lnet_nid_t nid)
 		 * and lookup the lpni again
 		 */
 		lnet_peer_ni_decref_locked(lpni);
-		lpni = lnet_find_peer_ni_locked(nid);
+		lpni = lnet_peer_ni_find_locked(nid);
 		if (!lpni) {
 			rc = -ENOENT;
 			goto out_unlock;
@@ -1495,15 +1494,14 @@ LNetPrimaryNID(lnet_nid_t nid)
 		if (lnet_is_discovery_disabled(lp))
 			break;
 	}
-	primary_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
+	*nid = lp->lp_primary_nid;
 out_decref:
 	lnet_peer_ni_decref_locked(lpni);
 out_unlock:
 	lnet_net_unlock(cpt);
 
-	CDEBUG(D_NET, "NID %s primary NID %s rc %d\n", libcfs_nid2str(nid),
-	       libcfs_nid2str(primary_nid), rc);
-	return primary_nid;
+	CDEBUG(D_NET, "NID %s primary NID %s rc %d\n", libcfs_nidstr(&orig),
+	       libcfs_nidstr(nid), rc);
 }
 EXPORT_SYMBOL(LNetPrimaryNID);
 

@@ -741,6 +741,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	const char *sec_part_flags = "";
 	char svc_flag = '-';
 	pid_t caller_pid;
+	struct lnet_nid primary;
 	ENTRY;
 
 	LASSERT(imp != NULL);
@@ -858,13 +859,17 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		/* Do not switch namespace in gss keyring upcall. */
 		caller_pid = 0;
 	}
+	primary = imp->imp_connection->c_self;
+	LNetPrimaryNID(&primary);
+
+	/* FIXME !! Needs to support larger NIDs */
 	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx:%d",
 		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
 		 vcred->vc_uid, vcred->vc_gid,
 		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
 		 lnet_nid_to_nid4(&imp->imp_connection->c_peer.nid),
 		 imp->imp_obd->obd_name,
-		 LNetPrimaryNID(lnet_nid_to_nid4(&imp->imp_connection->c_self)),
+		 lnet_nid_to_nid4(&primary),
 		 caller_pid);
 
 	CDEBUG(D_SEC, "requesting key for %s\n", desc);

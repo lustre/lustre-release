@@ -83,8 +83,8 @@ ptlrpc_connection_get(struct lnet_process_id peer4, lnet_nid_t self,
 	struct lnet_processid peer;
 	ENTRY;
 
-	peer4.nid = LNetPrimaryNID(peer4.nid);
 	lnet_pid4_to_pid(peer4, &peer);
+	LNetPrimaryNID(&peer.nid);
 	conn = rhashtable_lookup_fast(&conn_hash, &peer, conn_hash_params);
 	if (conn) {
 		ptlrpc_connection_addref(conn);
