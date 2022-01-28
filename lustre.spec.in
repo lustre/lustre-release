@@ -278,6 +278,8 @@ Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
 BuildRequires: e2fsprogs-devel >= 1.44.3
 Requires: ldiskfsprogs >= 1.45.6.wc1
 Provides: lustre-osd-mount = %{version}
+Provides: %{name}-osd-mount = %{version}
+Obsoletes: %{name}-osd-mount < %{version}
 Obsoletes: lustre-osd-mount < %{version}
 Group: System Environment/Kernel
 
@@ -292,7 +294,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
-Provides: lustre-osd-mount = %{version}
+Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 # Tests also require zpool from zfs package:
 Requires: zfs
@@ -338,9 +340,11 @@ applications against the Lustre / LNet utilities libraries.
 %package tests
 Summary: Lustre testing framework
 Group: System Environment/Kernel
-Provides: lustre-tests = %{version}
+Provides: %{name}-tests = %{version}
 %if %{with lustre_iokit}
-Requires: lustre-iokit
+Requires: %{name} = %{version}, lustre-iokit
+%else
+Requires: %{name} = %{version}
 %endif
 Requires: lustre-devel = %{version}
 %if %{with lustre_modules}
