@@ -600,7 +600,11 @@ static inline bool is_root_inode(struct inode *inode)
 #endif
 
 #ifndef fallthrough
-#define fallthrough do {} while (0)  /* fallthrough */
+# if defined(__GNUC__) && __GNUC__ >= 7
+#  define fallthrough  __attribute__((fallthrough)) /* fallthrough */
+# else
+#  define fallthrough do {} while (0)  /* fallthrough */
+# endif
 #endif
 
 static inline void ll_security_release_secctx(char *secdata, u32 seclen)

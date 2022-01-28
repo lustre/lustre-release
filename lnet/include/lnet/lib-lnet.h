@@ -110,7 +110,11 @@ extern struct lnet the_lnet;			/* THE network */
 #endif
 
 #ifndef fallthrough
-#define fallthrough do {} while (0)  /* fallthrough */
+# if defined(__GNUC__) && __GNUC__ >= 7
+#  define fallthrough  __attribute__((fallthrough)) /* fallthrough */
+# else
+#  define fallthrough do {} while (0)  /* fallthrough */
+# endif
 #endif
 
 int choose_ipv4_src(__u32 *ret,
