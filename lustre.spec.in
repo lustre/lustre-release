@@ -204,8 +204,8 @@ BuildRequires: pkg-config
 BuildRequires: krb5-devel openssl-devel
 %endif
 %if %{with servers}
-Requires: lustre-osd
-Requires: lustre-osd-mount
+Requires: %{name}-osd
+Requires: %{name}-osd-mount
 Obsoletes: lustre-server < %{version}
 Provides: lustre-server = %{version}-%{release}
 %endif
