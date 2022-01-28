@@ -541,12 +541,21 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 {
 	struct osd_device *dev;
 	struct qsd_instance *qsd;
+	struct lu_fid fid = { 0 };
 	struct inode *inode = NULL;
+	unsigned long long ino =  0;
 	int i, rc = 0, crd;
 	__u8 res = qi->lqi_is_blk ? LQUOTA_RES_DT : LQUOTA_RES_MD;
 	bool found = false;
 
 	ENTRY;
+	if (obj) {
+		fid = *lu_object_fid(&obj->oo_dt.do_lu);
+		inode = obj->oo_inode;
+		ino = inode ? inode->i_ino : 0;
+	}
+	CDEBUG(D_QUOTA, "fid="DFID" ino=%llu type=%u, id=%llu\n",
+	       PFID(&fid), ino, qi->lqi_type, qi->lqi_id.qid_uid);
 
 	LASSERT(oh != NULL);
 	LASSERTF(oh->ot_id_cnt <= OSD_MAX_UGID_CNT, "count=%d\n",
@@ -572,12 +581,12 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 	if (!found) {
 		/* we need to account for credits for this new ID */
 		if (i >= OSD_MAX_UGID_CNT) {
-			CERROR("Too many(%d) trans qids!\n", i + 1);
-			RETURN(-EOVERFLOW);
+			rc = -EOVERFLOW;
+			CERROR("%s: too many qids %u > %u on "DFID": rc = %d\n",
+			       osd_name(dev), i + 1, OSD_MAX_UGID_CNT,
+			       PFID(&fid), rc);
+			RETURN(rc);
 		}
-
-		if (obj != NULL)
-			inode = obj->oo_inode;
 
 		if (qi->lqi_id.qid_uid == 0) {
 			/* root ID should be always present in the quota file */
