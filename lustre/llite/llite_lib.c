@@ -1717,20 +1717,20 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	}
 
 	rc = ll_init_lsm_md(inode, md);
-	up_write(&lli->lli_lsm_sem);
-
-	if (rc)
+	if (rc) {
+		up_write(&lli->lli_lsm_sem);
 		RETURN(rc);
+	}
+
+	/* md_merge_attr() may take long, since lsm is already set, switch to
+	 * read lock.
+	 */
+	downgrade_write(&lli->lli_lsm_sem);
 
 	/* set md->lmv to NULL, so the following free lustre_md will not free
 	 * this lsm.
 	 */
 	md->lmv = NULL;
-
-	/* md_merge_attr() may take long, since lsm is already set, switch to
-	 * read lock.
-	 */
-	down_read(&lli->lli_lsm_sem);
 
 	if (!lmv_dir_striped(lli->lli_lsm_md))
 		GOTO(unlock, rc = 0);

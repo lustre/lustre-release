@@ -1189,8 +1189,10 @@ static int ll_statahead_thread(void *arg)
 		}
 
 		pos = le64_to_cpu(dp->ldp_hash_end);
+		down_read(&lli->lli_lsm_sem);
 		ll_release_page(dir, page,
 				le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
+		up_read(&lli->lli_lsm_sem);
 
 		if (sa_low_hit(sai)) {
 			rc = -EFAULT;
