@@ -21573,9 +21573,9 @@ ladvise_willread_performance()
 		"$average_ladvise = +$speedup_ladvise%"
 
 	local lowest_speedup=20
-	if [ ${average_cache%.*} -lt $lowest_speedup ]; then
-		echo "Speedup with OSS cached read less than $lowest_speedup%," \
-			"got $average_cache%. Skipping ladvise willread check."
+	if (( ${average_cache%.*} < $lowest_speedup )); then
+		echo "Speedup with OSS cached read less than $lowest_speedup%,"\
+		     " got $average_cache%. Skipping ladvise willread check."
 		return 0
 	fi
 
@@ -21587,7 +21587,7 @@ ladvise_willread_performance()
 		return 0
 
 	lowest_speedup=$(bc <<<"scale=2; $average_cache / 2")
-	[[ ${average_ladvise%.*} > $lowest_speedup ]] ||
+	(( ${average_ladvise%.*} > ${lowest_speedup%.*} )) ||
 		error_not_in_vm "Speedup with willread is less than " \
 			"$lowest_speedup%, got $average_ladvise%"
 }
