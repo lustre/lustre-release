@@ -51,9 +51,8 @@ cleanupall
 # build up a clean test environment.
 REFORMAT="yes" check_and_setup_lustre
 
-MDT_DEV="${FSNAME}-MDT0000"
+MDT_DEV=$(devicelabel $SINGLEMDS $(facet_device $SINGLEMDS))
 OST_DEV="${FSNAME}-OST0000"
-MDT_DEVNAME=$(mdsdevname ${SINGLEMDS//mds/})
 START_NAMESPACE="do_facet $SINGLEMDS \
 		$LCTL lfsck_start -M ${MDT_DEV} -t namespace"
 START_LAYOUT="do_facet $SINGLEMDS \
@@ -104,17 +103,31 @@ lfsck_prep() {
 	echo "prepared $(date)."
 }
 
-run_e2fsck_on_mdt0() {
+start_facet () {
+	local facet=$1
+	local opts=$2
+	local err=$3
+	local dev=$(facet_device $facet)
+
+	start $facet $dev $opts > /dev/null ||
+		error "($err) Fail to start $facet!"
+}
+
+run_e2fsck_on_mds_facet() {
 	[ $mds1_FSTYPE == ldiskfs ] || return 0
 
-	stop $SINGLEMDS > /dev/null || error "(0) Fail to the stop MDT0"
-	run_e2fsck $(facet_active_host $SINGLEMDS) $(mdsdevname 1) "-n" |
+	local mds=$1
+
+	stop $mds > /dev/null || error "(0) Fail to the stop $mds"
+	local host=$(facet_active_host $mds)
+	local dev=$(facet_device $mds)
+
+	run_e2fsck $host $dev "-n" |
 		grep "Fix? no" && {
-		run_e2fsck $(facet_active_host $SINGLEMDS) $(mdsdevname 1) "-n"
-		error "(2) Detected inconsistency on MDT0"
+		run_e2fsck $host $dev "-n"
+		error "(2) Detected inconsistency on $mds"
 	}
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(3) Fail to start MDT0"
+	start_facet $mds "$MOUNT_OPTS_NOSCRUB" 3
 }
 
 wait_all_targets_blocked() {
@@ -227,7 +240,7 @@ test_1a() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed FID-in-dirent: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -273,7 +286,7 @@ test_1b()
 		error "(5) Fail to repair the missing FID-in-LMA: $repaired"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -312,7 +325,7 @@ test_1c() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair lost FID-in-dirent: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -415,7 +428,7 @@ test_2a() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -452,7 +465,7 @@ test_2b()
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -492,7 +505,7 @@ test_2c()
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -532,7 +545,7 @@ test_2d()
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -629,12 +642,11 @@ test_4()
 
 	lfsck_prep 3 3
 	cleanup_mount $MOUNT || error "(0.1) Fail to stop client!"
-	stop $SINGLEMDS > /dev/null || error "(0.2) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || error "(0.2) Fail to stop $SINGLEMDS!"
 
 	mds_backup_restore $SINGLEMDS || error "(1) Fail to backup/restore!"
 	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_NOSCRUB" 2
 
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_val=1 fail_loc=0x1601
@@ -658,7 +670,7 @@ test_4()
 		error "(7) unexpected status"
 	}
 
-	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
 	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
 
 	local repaired=$($SHOW_NAMESPACE |
@@ -671,7 +683,7 @@ test_4()
 	[ $repaired -ge 9 ] ||
 		error "(9) Fail to re-generate FID-in-dirent: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(10) Fail to start client!"
 
@@ -689,12 +701,11 @@ test_5()
 
 	lfsck_prep 1 1 1
 	cleanup_mount $MOUNT || error "(0.1) Fail to stop client!"
-	stop $SINGLEMDS > /dev/null || error "(0.2) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || error "(0.2) Fail to stop $SINGLEMDS!"
 
 	mds_backup_restore $SINGLEMDS 1 || error "(1) Fail to backup/restore!"
 	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_NOSCRUB" 2
 
 	#define OBD_FAIL_LFSCK_DELAY2		0x1601
 	do_facet $SINGLEMDS $LCTL set_param fail_val=1 fail_loc=0x1601
@@ -718,7 +729,7 @@ test_5()
 		error "(7) unexpected status"
 	}
 
-	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
 	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
 
 	local repaired=$($SHOW_NAMESPACE |
@@ -731,7 +742,7 @@ test_5()
 	[ $repaired -ge 2 ] ||
 		error "(9) Fail to generate FID-in-dirent for IGIF: $repaired"
 
-	run_e2fsck_on_mdt0
+	run_e2fsck_on_mds_facet $SINGLEMDS
 
 	mount_client $MOUNT || error "(10) Fail to start client!"
 
@@ -881,12 +892,11 @@ test_7a()
 	# Sleep 3 sec to guarantee at least one object processed by LFSCK
 	sleep 3
 	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(4) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || error "(4) Fail to stop $SINGLEMDS!"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	echo "start $SINGLEMDS"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(5) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SCRUB" 5
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
@@ -919,12 +929,11 @@ test_7b()
 
 	umount_client $MOUNT
 	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(5) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || error "(5) Fail to stop $SINGLEMDS!"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	echo "start $SINGLEMDS"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(6) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SCRUB" 6
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
@@ -1017,8 +1026,7 @@ test_8()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160b
 
 	echo "start $SINGLEMDS"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		namespace_error "(14) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SCRUB" 14
 
 	local timeout=$(max_recovery_time)
 	local timer=0
@@ -1052,14 +1060,13 @@ test_8()
 		namespace_error "(17) Expect 'scanning-phase1', but got '$STATUS'"
 
 	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(18) Fail to stop MDS!"
+	stop $SINGLEMDS > /dev/null || error "(18) Fail to stop $SINGLEMDS!"
 
 	#define OBD_FAIL_LFSCK_NO_AUTO		0x160b
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160b
 
 	echo "start $SINGLEMDS"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(19) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SCRUB" 19
 
 	timer=0
 	while [ $timer -lt $timeout ]; do
@@ -1085,8 +1092,7 @@ test_8()
 	stop $SINGLEMDS > /dev/null || error "(20.1) Fail to stop MDS!"
 
 	echo "start $SINGLEMDS without resume LFSCK"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SKIP_LFSCK > /dev/null ||
-		error "(20.2) Fail to start MDS!"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SKIP_LFSCK" 20.2
 
 	timer=0
 	while [ $timer -lt $timeout ]; do
@@ -4859,14 +4865,15 @@ test_30() {
 
 	umount_client $MOUNT || error "(10) Fail to stop client!"
 
-	stop $SINGLEMDS || error "(11) Fail to stop MDT0"
+	stop $SINGLEMDS || error "(11) Fail to stop $SINGLEMDS"
 
-	echo "run e2fsck"
-	run_e2fsck $(facet_host $SINGLEMDS) $MDT_DEVNAME "-y" ||
+	local dev=$(facet_device $SINGLEMDS)
+
+	echo "run e2fsck on $SINGLEMDS"
+	run_e2fsck $(facet_active_host $SINGLEMDS) $dev "-y" ||
 		error "(12) Fail to run e2fsck"
 
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(13) Fail to start MDT0"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_NOSCRUB" 13
 
 	echo "Trigger namespace LFSCK to recover backend orphans"
 	$START_NAMESPACE -r -A ||
