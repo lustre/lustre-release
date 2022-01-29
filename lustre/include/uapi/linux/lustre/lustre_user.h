@@ -1042,7 +1042,7 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 #define LMV_HASH_FLAG_LAYOUT_CHANGE	\
 	(LMV_HASH_FLAG_MIGRATION | LMV_HASH_FLAG_SPLIT | LMV_HASH_FLAG_MERGE)
 
-#define LMV_HASH_FLAG_KNOWN		0xfe000000
+#define LMV_HASH_FLAG_KNOWN		0xbe000000
 
 /* both SPLIT and MIGRATION are set for directory split */
 static inline bool lmv_hash_is_splitting(__u32 hash)

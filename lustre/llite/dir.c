@@ -496,7 +496,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		enum lmv_hash_type type = lump->lum_hash_type &
 					  LMV_HASH_TYPE_MASK;
 
-		if (type == LMV_HASH_TYPE_CRUSH ||
+		if (type >= LMV_HASH_TYPE_CRUSH ||
 		    type == LMV_HASH_TYPE_UNKNOWN)
 			lump->lum_hash_type = (lump->lum_hash_type ^ type) |
 					      LMV_HASH_TYPE_FNV_1A_64;
@@ -620,12 +620,29 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 		case LOV_USER_MAGIC_COMP_V1:
 			lum_size = ((struct lov_comp_md_v1 *)lump)->lcm_size;
 			break;
-		case LMV_USER_MAGIC:
-			if (lump->lmm_magic != cpu_to_le32(LMV_USER_MAGIC))
-				lustre_swab_lmv_user_md(
-					(struct lmv_user_md *)lump);
-			lum_size = sizeof(struct lmv_user_md);
+		case LMV_USER_MAGIC: {
+			struct lmv_user_md *lmv = (struct lmv_user_md *)lump;
+
+			/* MDS < 2.14 doesn't support 'crush' hash type, and
+			 * cannot handle unknown hash if client doesn't set a
+			 * valid one. switch to fnv_1a_64.
+			 */
+			if (!(exp_connect_flags2(sbi->ll_md_exp) &
+			      OBD_CONNECT2_CRUSH)) {
+				enum lmv_hash_type type = lmv->lum_hash_type &
+							  LMV_HASH_TYPE_MASK;
+
+				if (type >= LMV_HASH_TYPE_CRUSH ||
+				    type == LMV_HASH_TYPE_UNKNOWN)
+					lmv->lum_hash_type =
+						(lmv->lum_hash_type ^ type) |
+						LMV_HASH_TYPE_FNV_1A_64;
+			}
+			if (lmv->lum_magic != cpu_to_le32(LMV_USER_MAGIC))
+				lustre_swab_lmv_user_md(lmv);
+			lum_size = sizeof(*lmv);
 			break;
+		}
 		case LOV_USER_MAGIC_SPECIFIC: {
 			struct lov_user_md_v3 *v3 =
 				(struct lov_user_md_v3 *)lump;
