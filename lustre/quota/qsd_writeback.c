@@ -530,8 +530,8 @@ static int qsd_upd_thread(void *_args)
 				break;
 			count++;
 			if (count % 7 == 0) {
-				n = list_entry(&queue, struct qsd_upd_rec,
-					       qur_link);
+				n = list_first_entry(&queue, struct qsd_upd_rec,
+						     qur_link);
 				CWARN("%s: The reintegration thread [%d] "
 				      "blocked more than %ld seconds\n",
 				      n->qur_qqi->qqi_qsd->qsd_svname,
