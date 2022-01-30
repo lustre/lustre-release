@@ -53,8 +53,8 @@ static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 {
 	struct mdt_file_data *mfd;
-	ENTRY;
 
+	ENTRY;
 	OBD_ALLOC_PTR(mfd);
 	if (mfd != NULL) {
 		refcount_set(&mfd->mfd_open_handle.h_ref, 1);
@@ -78,8 +78,8 @@ struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 					bool is_replay_or_resent)
 {
 	struct mdt_file_data   *mfd;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(open_handle != NULL);
 	mfd = class_handle2object(open_handle->cookie, mfd_open_handle_owner);
 	if (mfd)
@@ -108,13 +108,13 @@ void mdt_mfd_free(struct mdt_file_data *mfd)
 }
 
 static int mdt_create_data(struct mdt_thread_info *info,
-                           struct mdt_object *p, struct mdt_object *o)
+			   struct mdt_object *p, struct mdt_object *o)
 {
-	struct md_op_spec     *spec = &info->mti_spec;
-	struct md_attr        *ma   = &info->mti_attr;
-	int                    rc   = 0;
-	ENTRY;
+	struct md_op_spec *spec = &info->mti_spec;
+	struct md_attr *ma = &info->mti_attr;
+	int rc = 0;
 
+	ENTRY;
 	if (!md_should_create(spec->sp_cr_flags))
 		RETURN(0);
 
@@ -139,6 +139,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 int mdt_write_read(struct mdt_object *o)
 {
 	int rc = 0;
+
 	ENTRY;
 	spin_lock(&o->mot_write_lock);
 	rc = o->mot_write_count;
@@ -149,6 +150,7 @@ int mdt_write_read(struct mdt_object *o)
 int mdt_write_get(struct mdt_object *o)
 {
 	int rc = 0;
+
 	ENTRY;
 	spin_lock(&o->mot_write_lock);
 	if (o->mot_write_count < 0)
@@ -172,6 +174,7 @@ void mdt_write_put(struct mdt_object *o)
 static int mdt_write_deny(struct mdt_object *o)
 {
 	int rc = 0;
+
 	ENTRY;
 	spin_lock(&o->mot_write_lock);
 	if (o->mot_write_count > 0)
@@ -194,21 +197,21 @@ static void mdt_write_allow(struct mdt_object *o)
 /* there can be no real transaction so prepare the fake one */
 static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 {
-        struct mdt_device      *mdt = info->mti_mdt;
-        struct ptlrpc_request  *req = mdt_info_req(info);
-        struct tg_export_data  *ted;
-        struct lsd_client_data *lcd;
-        ENTRY;
+	struct mdt_device *mdt = info->mti_mdt;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct tg_export_data *ted;
+	struct lsd_client_data *lcd;
 
+	ENTRY;
 	if (mdt_rdonly(req->rq_export))
 		RETURN_EXIT;
 
-        /* transaction has occurred already */
-        if (lustre_msg_get_transno(req->rq_repmsg) != 0)
-                RETURN_EXIT;
+	/* transaction has occurred already */
+	if (lustre_msg_get_transno(req->rq_repmsg) != 0)
+		RETURN_EXIT;
 
 	if (tgt_is_multimodrpcs_client(req->rq_export)) {
-		struct thandle	       *th;
+		struct thandle *th;
 
 		/* generate an empty transaction to get a transno
 		 * and reply data */
@@ -268,27 +271,28 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
 		if (info->mti_transno != 0)
 			lcd->lcd_last_close_transno = info->mti_transno;
-                lcd->lcd_last_close_xid = req->rq_xid;
-                lcd->lcd_last_close_result = rc;
-        } else {
-                /* VBR: save versions in last_rcvd for reconstruct. */
-                __u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
-                if (pre_versions) {
-                        lcd->lcd_pre_versions[0] = pre_versions[0];
-                        lcd->lcd_pre_versions[1] = pre_versions[1];
-                        lcd->lcd_pre_versions[2] = pre_versions[2];
-                        lcd->lcd_pre_versions[3] = pre_versions[3];
-                }
+		lcd->lcd_last_close_xid = req->rq_xid;
+		lcd->lcd_last_close_result = rc;
+	} else {
+		/* VBR: save versions in last_rcvd for reconstruct. */
+		__u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+
+		if (pre_versions) {
+			lcd->lcd_pre_versions[0] = pre_versions[0];
+			lcd->lcd_pre_versions[1] = pre_versions[1];
+			lcd->lcd_pre_versions[2] = pre_versions[2];
+			lcd->lcd_pre_versions[3] = pre_versions[3];
+		}
 		if (info->mti_transno != 0)
 			lcd->lcd_last_transno = info->mti_transno;
 
 		lcd->lcd_last_xid = req->rq_xid;
-                lcd->lcd_last_result = rc;
-                lcd->lcd_last_data = info->mti_opdata;
-        }
+		lcd->lcd_last_result = rc;
+		lcd->lcd_last_data = info->mti_opdata;
+	}
 	mutex_unlock(&ted->ted_lcd_lock);
 
-        EXIT;
+	EXIT;
 }
 
 void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags)
@@ -515,28 +519,28 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 			   u64 open_flags,
 			   struct ldlm_reply *rep)
 {
-	struct ptlrpc_request	*req = mdt_info_req(info);
-	struct obd_export	*exp = req->rq_export;
-	struct mdt_export_data	*med = &req->rq_export->exp_mdt_data;
-	struct md_attr		*ma  = &info->mti_attr;
-	struct lu_attr		*la  = &ma->ma_attr;
-	struct mdt_file_data	*mfd;
-	struct mdt_body		*repbody;
-	int			 created;
-	int			 rc = 0;
-	int			 isreg, isdir, islnk;
-	struct list_head	*t;
-	ENTRY;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct obd_export *exp = req->rq_export;
+	struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
+	struct md_attr *ma  = &info->mti_attr;
+	struct lu_attr *la  = &ma->ma_attr;
+	struct mdt_file_data *mfd;
+	struct mdt_body *repbody;
+	int created;
+	int rc = 0;
+	int isreg, isdir, islnk;
+	struct list_head *t;
 
-        LASSERT(ma->ma_valid & MA_INODE);
+	ENTRY;
+	LASSERT(ma->ma_valid & MA_INODE);
 	created = mdt_get_disposition(rep, DISP_OPEN_CREATE);
 
-        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
-        isreg = S_ISREG(la->la_mode);
-        isdir = S_ISDIR(la->la_mode);
-        islnk = S_ISLNK(la->la_mode);
-        mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
+	isreg = S_ISREG(la->la_mode);
+	isdir = S_ISDIR(la->la_mode);
+	islnk = S_ISLNK(la->la_mode);
+	mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
 	/* compatibility check for 2.10 clients when it tries to open mirrored
 	 * files. 2.10 clients don't verify overlapping components so they
@@ -640,7 +644,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 					repbody->mbo_valid |= OBD_MD_FLDIREA;
 				else
 					repbody->mbo_valid |= OBD_MD_FLEASIZE;
-                        }
+			}
 			mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
 			RETURN(0);
 		}
@@ -663,12 +667,12 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 	struct req_capsule *pill = info->mti_pill;
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct md_attr          *ma   = &info->mti_attr;
+	struct md_attr *ma = &info->mti_attr;
 	struct ldlm_reply *ldlm_rep;
 	u64 opdata;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
 	ldlm_rep = req_capsule_server_get(pill, &RMF_DLM_REP);
 
@@ -678,10 +682,10 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 	mdt_set_disposition(info, ldlm_rep, opdata);
 
 	CDEBUG(D_INODE, "This is reconstruct open: disp=%#llx, result=%d\n",
-               ldlm_rep->lock_policy_res1, req->rq_status);
+	       ldlm_rep->lock_policy_res1, req->rq_status);
 	if (req->rq_status)
-                /* We did not create successfully, return error to client. */
-                GOTO(out, rc = req->rq_status);
+		/* We did not create successfully, return error to client. */
+		GOTO(out, rc = req->rq_status);
 
 	/* tg_reply_data is just memory only  structure, so any non zero fid
 	 * means a real resend not a resend after recovery which need to be
@@ -781,7 +785,6 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	unsigned int dom_lock = 0;
 
 	ENTRY;
-
 	*ibits = 0;
 	mdt_lock_handle_init(lhc);
 
@@ -973,8 +976,8 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 {
 	__u64 open_flags = info->mti_spec.sp_cr_flags;
 	struct mdt_lock_handle *ll = &info->mti_lh[MDT_LH_LOCAL];
-	ENTRY;
 
+	ENTRY;
 	if (req_is_replay(mdt_info_req(info)))
 		RETURN_EXIT;
 
@@ -1162,8 +1165,8 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 	struct md_attr *ma = &info->mti_attr;
 	struct mdt_object *o;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	o = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(o))
 		RETURN(rc = PTR_ERR(o));
@@ -1512,23 +1515,23 @@ again_pw:
 			if (result == 0)
 				result = mdt_attr_get_complex(info, child, ma);
 
-                        if (result != 0)
-                                GOTO(out_child, result);
-                }
+			if (result != 0)
+				GOTO(out_child, result);
+		}
 		created = 1;
 		mdt_counter_incr(req, LPROC_MDT_MKNOD,
 				 ktime_us_delta(ktime_get(), kstart));
-        } else {
-                /*
-                 * The object is on remote node, return its FID for remote open.
-                 */
+	} else {
+		/*
+		 * The object is on remote node, return its FID for remote open.
+		 */
 		if (mdt_object_remote(child)) {
-                        /*
-                         * Check if this lock already was sent to client and
-                         * this is resent case. For resent case do not take lock
-                         * again, use what is already granted.
-                         */
-                        LASSERT(lhc != NULL);
+			/*
+			 * Check if this lock already was sent to client and
+			 * this is resent case. For resent case do not take lock
+			 * again, use what is already granted.
+			 */
+			LASSERT(lhc != NULL);
 
 			rc = mdt_check_resent_lock(info, child, lhc);
 			if (rc < 0) {
@@ -1542,11 +1545,11 @@ again_pw:
 			}
 			repbody->mbo_fid1 = *mdt_object_fid(child);
 			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
-                        if (rc != 0)
-                                result = rc;
+			if (rc != 0)
+				result = rc;
 			else
 				result = -MDT_EREMOTE_OPEN;
-                        GOTO(out_child, result);
+			GOTO(out_child, result);
 		} else if (mdt_object_exists(child)) {
 			/* Check early for MDS_OPEN_DIRECTORY/O_DIRECTORY to
 			 * avoid opening regular files from lfs getstripe
@@ -1678,8 +1681,8 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 	struct lu_ucred *uc;
 	kernel_cap_t uc_cap_save;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = dt_root_get(env, mdt->mdt_bottom, local_root_fid);
 	if (rc != 0)
 		RETURN(ERR_PTR(rc));
@@ -1736,10 +1739,10 @@ out:
 /* XXX Look into layout in MDT layer. */
 static inline int mdt_hsm_set_released(struct lov_mds_md *lmm)
 {
-	struct lov_comp_md_v1	*comp_v1;
-	struct lov_mds_md	*v1;
-	__u32	off;
-	int	i;
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	__u32 off;
+	int i;
 
 	if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_COMP_V1_DEFINED)) {
 		comp_v1 = (struct lov_comp_md_v1 *)lmm;
@@ -1778,18 +1781,18 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 			   struct md_attr *ma)
 {
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LAYOUT];
-	struct lu_ucred	       *uc = mdt_ucred(info);
-	struct close_data      *data;
-	struct ldlm_lock       *lease;
-	struct mdt_object      *orphan;
-	struct md_attr         *orp_ma;
-	struct lu_buf          *buf;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct close_data *data;
+	struct ldlm_lock *lease;
+	struct mdt_object *orphan;
+	struct md_attr *orp_ma;
+	struct lu_buf *buf;
 	kernel_cap_t cap;
-	bool			lease_broken;
-	int                     rc;
-	int                     rc2;
-	ENTRY;
+	bool lease_broken;
+	int rc;
+	int rc2;
 
+	ENTRY;
 	if (mdt_rdonly(info->mti_exp))
 		RETURN(-EROFS);
 
@@ -2043,16 +2046,16 @@ out_reprocess:
 int mdt_close_handle_layouts(struct mdt_thread_info *info,
 			     struct mdt_object *o, struct md_attr *ma)
 {
-	struct mdt_lock_handle	*lh1 = &info->mti_lh[MDT_LH_NEW];
-	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
-	struct close_data	*data;
-	struct ldlm_lock	*lease;
-	struct mdt_object	*o1 = o, *o2 = NULL;
-	bool			 lease_broken;
-	bool			 swap_objects = false;
-	int			 rc;
-	ENTRY;
+	struct mdt_lock_handle *lh1 = &info->mti_lh[MDT_LH_NEW];
+	struct mdt_lock_handle *lh2 = &info->mti_lh[MDT_LH_OLD];
+	struct close_data *data;
+	struct ldlm_lock *lease;
+	struct mdt_object *o1 = o, *o2 = NULL;
+	bool lease_broken;
+	bool swap_objects = false;
+	int rc;
 
+	ENTRY;
 	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
 		RETURN(-EROFS);
 
@@ -2268,7 +2271,6 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
-
 	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
 		RETURN(-EROFS);
 
@@ -2392,7 +2394,6 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	u64 intent;
 
 	ENTRY;
-
 	open_flags = mfd->mfd_open_flags;
 	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
 	*ofid = *mdt_object_fid(o);
@@ -2538,10 +2539,10 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 {
 	struct mdt_export_data *med;
 	struct mdt_file_data   *mfd;
-	int			ret = 0;
-	int			rc = 0;
-	ENTRY;
+	int ret = 0;
+	int rc = 0;
 
+	ENTRY;
 	med = &req->rq_export->exp_mdt_data;
 	spin_lock(&med->med_open_lock);
 	mfd = mdt_open_handle2mfd(med, &info->mti_open_handle,
@@ -2574,7 +2575,6 @@ int mdt_close(struct tgt_session_info *tsi)
 	int rc2;
 
 	ENTRY;
-
 	/* Close may come with the Size-on-MDS update. Unpack it. */
 	rc = mdt_close_unpack(info);
 	if (rc)
@@ -2582,28 +2582,28 @@ int mdt_close(struct tgt_session_info *tsi)
 
 	/* These fields are no longer used and are left for compatibility.
 	 * size is always zero */
-        req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
+	req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
 			     0);
-        req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
+	req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
 			     0);
-        rc = req_capsule_server_pack(info->mti_pill);
-        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
-                mdt_client_compatibility(info);
-                if (rc == 0)
-                        mdt_fix_reply(info);
+	rc = req_capsule_server_pack(info->mti_pill);
+	if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
+		mdt_client_compatibility(info);
+		if (rc == 0)
+			mdt_fix_reply(info);
 		mdt_exit_ucred(info);
 		GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
-        }
+	}
 
-        /* Continue to close handle even if we can not pack reply */
-        if (rc == 0) {
-                repbody = req_capsule_server_get(info->mti_pill,
-                                                 &RMF_MDT_BODY);
-                ma->ma_lmm = req_capsule_server_get(info->mti_pill,
-                                                    &RMF_MDT_MD);
-                ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
-                                                       &RMF_MDT_MD,
-                                                       RCL_SERVER);
+	/* Continue to close handle even if we can not pack reply */
+	if (rc == 0) {
+		repbody = req_capsule_server_get(info->mti_pill,
+						 &RMF_MDT_BODY);
+		ma->ma_lmm = req_capsule_server_get(info->mti_pill,
+						    &RMF_MDT_MD);
+		ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
+						       &RMF_MDT_MD,
+						       RCL_SERVER);
 		ma->ma_need = MA_INODE | MA_LOV;
 		repbody->mbo_eadatasize = 0;
 		repbody->mbo_aclsize = 0;
