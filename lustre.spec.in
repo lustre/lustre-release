@@ -472,6 +472,18 @@ fi
 %{?_openmpi_load}
 %{?_mpich_load}
 
+%if %{with mofed}
+	o2ib_path=$(find /usr/src/ofa_kernel/ -type d -name ofed_scripts | xargs dirname)
+	if [ -z "$o2ib_path" ]; then
+		echo "ERROR: could not find OFED devel headers"
+		exit 1
+	fi
+	if [ $(echo $o2ib_path | wc -w) -ge 2 ]; then
+		echo "ERROR: multiple OFED versions installed"
+		exit 1
+	fi
+%endif
+
 %eval_configure $CONFIGURE_ARGS \
 	%{?with_lustre_tests:--enable-tests}%{!?with_lustre_tests:--disable-tests} \
 	%{?with_lustre_utils:--enable-utils}%{!?with_lustre_utils:--disable-utils} \
@@ -488,7 +500,7 @@ fi
 	%{!?with_manpages:--disable-manpages} \
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
-	%{?with_mofed:--with-o2ib=/usr/src/ofa_kernel/default} \
+	%{?with_mofed:--with-o2ib=$o2ib_path} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}

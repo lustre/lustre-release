@@ -66,7 +66,9 @@ case $with_o2ib in
 				OFED_INFO="ofed_info"
 				LSPKG="rpm -ql"
 			])
-			O2IBPATHS=$(eval $OFED_INFO | egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' | xargs $LSPKG | grep '\(/openib\|/ofa_kernel/default\|/ofa_kernel\)$' | head -n1)
+			O2IBPATHS=$(eval $OFED_INFO |
+				    egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' |
+				    xargs $LSPKG | grep -v 'ofa_kernel-' | grep rdma_cm.h | sed 's/\/include\/rdma\/rdma_cm.h//')
 			AS_IF([test -z "$O2IBPATHS"], [
 				AC_MSG_ERROR([
 You seem to have an OFED installed but have not installed it's devel package.
