@@ -678,7 +678,8 @@ static ssize_t __qos_threshold_rr_show(struct kobject *kobj,
 					    &lod->lod_ost_descs;
 
 	return scnprintf(buf, PAGE_SIZE, "%d%%\n",
-			 (ltd->ltd_qos.lq_threshold_rr * 100 + 255) >> 8);
+			 (ltd->ltd_qos.lq_threshold_rr * 100 +
+			  (QOS_THRESHOLD_MAX - 1)) / QOS_THRESHOLD_MAX);
 }
 
 static ssize_t mdt_qos_threshold_rr_show(struct kobject *kobj,
@@ -732,7 +733,7 @@ static ssize_t __qos_threshold_rr_store(struct kobject *kobj,
 
 	if (val > 100)
 		return -EINVAL;
-	ltd->ltd_qos.lq_threshold_rr = (val << 8) / 100;
+	ltd->ltd_qos.lq_threshold_rr = (val * QOS_THRESHOLD_MAX) / 100;
 	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 
 	return count;

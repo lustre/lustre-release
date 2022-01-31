@@ -157,7 +157,8 @@ static ssize_t qos_threshold_rr_show(struct kobject *kobj,
 					      obd_kset.kobj);
 
 	return scnprintf(buf, PAGE_SIZE, "%u%%\n",
-			(obd->u.lmv.lmv_qos.lq_threshold_rr * 100 + 255) >> 8);
+			(obd->u.lmv.lmv_qos.lq_threshold_rr * 100 +
+			(QOS_THRESHOLD_MAX - 1)) / QOS_THRESHOLD_MAX);
 }
 
 static ssize_t qos_threshold_rr_store(struct kobject *kobj,
@@ -189,7 +190,7 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 	if (val > 100)
 		return -EINVAL;
 
-	lmv->lmv_qos.lq_threshold_rr = (val << 8) / 100;
+	lmv->lmv_qos.lq_threshold_rr = (val * QOS_THRESHOLD_MAX) / 100;
 	set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
 
 	return count;
