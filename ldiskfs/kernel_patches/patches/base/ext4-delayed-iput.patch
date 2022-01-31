@@ -1,0 +1,79 @@
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 1ac2f2cdc..197dd546d 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -972,6 +972,8 @@ static void ext4_put_super(struct super_block *sb)
+ 	int aborted = 0;
+ 	int i, err;
+ 
++	flush_scheduled_work();
++
+ 	ext4_unregister_li_request(sb);
+ 	ext4_quota_off_umount(sb);
+ 
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index 491f9ee40..6a77f12d1 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -1551,6 +1551,31 @@ static int ext4_xattr_inode_lookup_create(handle_t *handle, struct inode *inode,
+ 	return 0;
+ }
+ 
++struct delayed_iput_work {
++	struct work_struct work;
++	struct inode *inode;
++};
++
++static void delayed_iput_fn(struct work_struct *work)
++{
++	struct delayed_iput_work *diwork;
++
++	diwork = container_of(work, struct delayed_iput_work, work);
++	iput(diwork->inode);
++	kfree(diwork);
++}
++
++static void delayed_iput(struct inode *inode, struct delayed_iput_work *work)
++{
++	if (!work) {
++		iput(inode);
++	} else {
++		INIT_WORK(&work->work, delayed_iput_fn);
++		work->inode = inode;
++		schedule_work(&work->work);
++	}
++}
++
+ /*
+  * Reserve min(block_size/8, 1024) bytes for xattr entries/names if ea_inode
+  * feature is enabled.
+@@ -1568,6 +1593,7 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+ 	int in_inode = i->in_inode;
+ 	struct inode *old_ea_inode = NULL;
+ 	struct inode *new_ea_inode = NULL;
++	struct delayed_iput_work *diwork = NULL;
+ 	size_t old_size, new_size;
+ 	int ret;
+ 
+@@ -1644,7 +1670,11 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+ 	 * Finish that work before doing any modifications to the xattr data.
+ 	 */
+ 	if (!s->not_found && here->e_value_inum) {
+-		ret = ext4_xattr_inode_iget(inode,
++		diwork = kmalloc(sizeof(*diwork), GFP_NOFS);
++		if (!diwork)
++			ret = -ENOMEM;
++		else
++			ret = ext4_xattr_inode_iget(inode,
+ 					    le32_to_cpu(here->e_value_inum),
+ 					    le32_to_cpu(here->e_hash),
+ 					    &old_ea_inode);
+@@ -1797,7 +1827,7 @@ update_hash:
+ 
+ 	ret = 0;
+ out:
+-	iput(old_ea_inode);
++	delayed_iput(old_ea_inode, diwork);
+ 	iput(new_ea_inode);
+ 	return ret;
+ }
