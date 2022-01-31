@@ -22,12 +22,6 @@ ALWAYS_EXCEPT="$SANITYN_EXCEPT "
 ALWAYS_EXCEPT+="                28      16f"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# skip tests for PPC until they are fixed
-if [[ $(uname -m) = ppc64 ]]; then
-	# bug number:    LU-11787
-	ALWAYS_EXCEPT+=" 71a"
-fi
-
 if [ $mds1_FSTYPE = "zfs" ]; then
 	# bug number:    LU-15757 (test_102() causes crash in umount later)
 	ALWAYS_EXCEPT+=" 102"
@@ -3507,28 +3501,28 @@ test_71a() {
 	checkfiemap --test ||
 		skip "checkfiemap not runnable: $?"
 	# write data this way: hole - data - hole - data
-	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
+	dd if=/dev/urandom of=$DIR1/$tfile bs=64K seek=1 count=1
 	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR1/$tfile) + 1)))" = \
 		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
-	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
+	dd if=/dev/urandom of=$DIR1/$tfile bs=64K seek=3 count=1
 	GET_STAT="lctl get_param -n ldlm.services.ldlm_cbd.stats"
 	stat $DIR2/$tfile
 	local can1=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
 	echo $can1
-	checkfiemap $DIR2/$tfile 81920 ||
+	checkfiemap $DIR2/$tfile 131072 ||
 		error "data is not flushed from client"
 	local can2=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
 	echo $can2
 
 	# common case of "create file, copy file" on a single node
 	# should not flush data from ost
-	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
-	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
+	dd if=/dev/urandom of=$DIR1/$tfile bs=64K seek=1 count=1
+	dd if=/dev/urandom of=$DIR1/$tfile bs=64K seek=3 count=1
 	stat $DIR1/$tfile
 	local can3=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
 	echo $can3
-	checkfiemap $DIR1/$tfile 81920 ||
+	checkfiemap $DIR1/$tfile 131072 ||
 	error 4
 	local can4=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
 	echo $can2
@@ -3552,11 +3546,11 @@ test_71b() {
 	mkdir -p $DIR1/$tdir
 
 	$LFS setstripe -c -1 $DIR1/$tdir || error "setstripe failed"
-	dd if=/dev/urandom of=$DIR1/$tdir/$tfile bs=40K count=1
+	dd if=/dev/urandom of=$DIR1/$tdir/$tfile bs=64K count=1
 	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR1/$tdir/$tfile) + 1)))" = \
 		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
-	checkfiemap $DIR1/$tdir/$tfile 40960 || error "checkfiemap failed"
+	checkfiemap $DIR1/$tdir/$tfile 65536 || error "checkfiemap failed"
 }
 run_test 71b "check fiemap support for stripecount > 1"
 
