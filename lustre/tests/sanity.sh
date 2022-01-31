@@ -9624,6 +9624,49 @@ test_65n() {
 }
 run_test 65n "don't inherit default layout from root for new subdirectories"
 
+test_65o() {
+	(( $MDS1_VERSION >= $(version_code 2.14.57) )) ||
+		skip "need MDS version at least 2.14.57"
+
+	# set OST pool on root directory
+	local pool=$TESTNAME
+
+	pool_add $pool || error "add $pool failed"
+	pool_add_targets $pool 0 $((OSTCOUNT - 1)) 1 ||
+		error "add targets to $pool failed"
+
+	local dir1=$MOUNT/$tdir
+
+	mkdir $dir1 || error "mkdir $dir1 failed"
+
+	# set a new striping pattern on root directory
+	local def_stripe_size=$($LFS getstripe -S $MOUNT)
+
+	$LFS setstripe -p $pool $dir1 ||
+		error "set directory layout on $dir1 failed"
+
+	# $dir1 layout includes pool
+	$LFS setstripe -S $((def_stripe_size * 2)) $dir1
+	[[ "$pool" = $($LFS getstripe -p -d $dir1) ]] ||
+		error "pool lost on setstripe"
+	$LFS setstripe -E 1M -L mdt -E -1 -c 1 $dir1
+	$LFS getstripe $dir1
+	[[ "$pool" = $($LFS getstripe -p -d $dir1) ]] ||
+		error "pool lost on compound layout setstripe"
+
+	$LFS setdirstripe -i 0 -c 2 $dir1/dir2 ||
+		error "setdirstripe failed on sub-dir with inherited pool"
+	$LFS getstripe $dir1/dir2
+	[[ "$pool" = $($LFS getstripe -p -d $dir1/dir2) ]] ||
+		error "pool lost on compound layout setdirstripe"
+
+	$LFS setstripe -E -1 -c 1 $dir1
+	$LFS getstripe -d $dir1
+	[[ "$pool" = $($LFS getstripe -p -d $dir1) ]] ||
+		error "pool lost on setstripe"
+}
+run_test 65o "pool inheritance for mdt component"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
