@@ -2809,6 +2809,9 @@ test_32b() {
 
 	t32_check
 	for tarball in $tarballs; do
+		# temporarily skip these multi-MDT tests LU-15506
+		[[ "$tarball" =~ "2_10" || "$tarball" =~ "2_12" ]] &&
+			{ echo "skip $(basename $tarball)"; continue; }
 		banner "testing $tarball upgrade with writeconf"
 		t32_test $tarball writeconf || let "rc += $?"
 	done
@@ -2864,7 +2867,8 @@ test_32e() {
 
 	t32_check
 	for tarball in $tarballs; do
-		[[ "$tarball" =~ "2_9" ]] || continue
+		[[ "$tarball" =~ "2_9" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
 		#load_modules
 		banner "testing $tarball upgrade with DoM"
 		dom_upgrade=yes t32_test $tarball writeconf || let "rc += $?"
@@ -2883,7 +2887,8 @@ test_32f() {
 
 	t32_check
 	for tarball in $tarballs; do
-		echo $tarball | grep "2_10" || continue
+		[[ "$tarball" =~ "2_10" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
 		pfl_upgrade=yes project_quota_upgrade=yes \
 		t32_test $tarball writeconf || let "rc += $?"
 	done
@@ -2901,7 +2906,8 @@ test_32g() {
 
 	t32_check
 	for tarball in $tarballs; do
-		echo $tarball | grep "2_12" || continue
+		[[ $tarball =~ "2_12" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
 		flr_upgrade=yes dom_new_upgrade=yes \
 		t32_test $tarball writeconf || let "rc += $?"
 	done
