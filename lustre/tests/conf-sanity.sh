@@ -1626,8 +1626,9 @@ t32_check() {
 
 	local IMGTYPE="$mds1_FSTYPE"
 
-	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 \
-		   -name \'disk*-$IMGTYPE.tar.bz2\')
+	[[ -n "$T32IMAGE" ]] && tarballs=$T32IMAGE ||
+		tarballs=$($r find $RLUSTRE/tests -maxdepth 1 \
+			   -name \'disk*-$IMGTYPE.tar.bz2\')
 
 	[ -z "$tarballs" ] && skip "No applicable tarballs found"
 }
@@ -1637,6 +1638,7 @@ t32_test_cleanup() {
 	local facet=$SINGLEMDS
 	local rc=$?
 
+	echo "== cleanup with rc=$rc =="
 	if $shall_cleanup_lustre; then
 		umount $tmp/mnt/lustre || rc=$?
 	fi
@@ -1916,6 +1918,7 @@ t32_test() {
 	! $r test -f $ost2_dev || ost2_is_available=true
 
 	if [[ "$mds1_FSTYPE" == zfs ]]; then
+		echo "== fstype is zfs =="
 		# import pool first
 		local poolname
 		local poolname_list="t32fs-mdt1 t32fs-ost1"
@@ -1942,6 +1945,7 @@ t32_test() {
 				return 1
 			}
 	elif [ "$project_upgrade" != "no" ]; then
+		echo "== project upgrade =="
 		! $r tune2fs -O project $mdt_dev &&
 			error_noexit "enable project on mdt0 failed" &&
 				return 1
@@ -1949,7 +1953,10 @@ t32_test() {
 			error_noexit "enable project on mdt failed" &&
 				return 1
 		! $r tune2fs -O project $ost_dev &&
-			error_noexit "enable project on mdt failed" &&
+			error_noexit "enable project on ost failed" &&
+				return 1
+		$ost2_is_available && ! $r tune2fs -O project $ost2_dev &&
+			error_noexit "enable project on ost2 failed" &&
 				return 1
 	fi
 
@@ -1970,6 +1977,7 @@ t32_test() {
 	fi
 
 	if [ "$writeconf" ]; then
+		echo "== writeconf mdt tunefs and quota =="
 		mopts=writeconf
 		if [ "$mds1_FSTYPE" == ldiskfs ]; then
 			mopts="loop,$mopts"
@@ -1980,32 +1988,33 @@ t32_test() {
 			}
 
 			if [ "$project_quota_upgrade" != "no" ]; then
+				echo "== enable mdt2 project quota =="
 				$r $TUNE2FS -O project $mdt_dev || {
 					$r losetup -a
 					error_noexit "tune2fs $mdt_dev failed"
 					return 1
 				}
-				echo "enable project quota on $mdt_dev"
 			fi
 
 			if $mdt2_is_available; then
 				$r $TUNEFS --quota $mdt2_dev || {
 					$r losetup -a
-					error_noexit "Enable mdt quota feature"
+					error_noexit "Enable mdt2 quota feature"
 					return 1
 				}
 				if [ "$project_quota_upgrade" != "no" ]; then
+					echo "== enable mdt2 project quota =="
 					$r $TUNE2FS -O project $mdt2_dev || {
 						$r losetup -a
 						error_noexit \
-						"tune2fs $mdt2_dev failed"
+						    "tune2fs $mdt2_dev failed"
 						return 1
 					}
-					echo "enable project quota on $mdt2_dev"
 				fi
 			fi
 		fi
 	else
+		echo "== replace nids =="
 		if [ -n "$($LCTL list_nids | grep -v '\(tcp\|lo\)[[:digit:]]*$')" ]; then
 			[[ "$MGS_VERSION" -ge $(version_code 2.3.59) ]] ||
 			skip "LU-2200: Cannot run over IB w/o lctl replace_nids "
@@ -2021,6 +2030,9 @@ t32_test() {
 		fi
 		$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
 		$r $LCTL replace_nids $fsname-OST0000 $ostnid
+		if $ost2_is_available; then
+			$r $LCTL replace_nids $fsname-OST0001 $ostnid
+		fi
 		$r $LCTL replace_nids $fsname-MDT0000 $nid
 		if $mdt2_is_available; then
 			$r $LCTL replace_nids $fsname-MDT0001 $nid
@@ -2043,6 +2055,7 @@ t32_test() {
 	shall_cleanup_mdt=true
 
 	if $mdt2_is_available; then
+		echo "== mdt2 available =="
 		mopts=mgsnode=$nid,$mopts
 		$r $MOUNT_CMD -o $mopts $mdt2_dev $tmp/mnt/mdt1 || {
 			$r losetup -a
@@ -2050,7 +2063,7 @@ t32_test() {
 			return 1
 		}
 		shall_cleanup_mdt1=true
-		echo "mount new MDT....$mdt2_dev"
+		echo "== mount new MDT $mdt2_dev =="
 
 		$r $LCTL set_param -n mdt.${fsname}*.enable_remote_dir=1 || {
 			error_noexit "enable remote dir create failed"
@@ -2061,7 +2074,7 @@ t32_test() {
 		local fs2mdsdev=$(mdsdevname 1_2)
 		local fs2mdsvdev=$(mdsvdevname 1_2)
 
-		echo "mkfs new MDT on ${fs2mdsdev}...."
+		echo "== mkfs new MDT on ${fs2mdsdev} =="
 		if [ "$mds1_FSTYPE" == ldiskfs ]; then
 			mkfsoptions="--mkfsoptions=\\\"-J size=8\\\""
 		fi
@@ -2080,7 +2093,7 @@ t32_test() {
 			return 1
 		}
 
-		echo "mount new MDT....$fs2mdsdev"
+		echo "== mount new MDT....$fs2mdsdev =="
 		$r $MOUNT_CMD -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
 			error_noexit "mount mdt1 failed"
 			return 1
@@ -2114,6 +2127,7 @@ t32_test() {
 	fi
 
 	if [ "$writeconf" ]; then
+		echo "== writeconf and ost quota tunefs =="
 		mopts=mgsnode=$nid,$writeconf
 		if [ "$ost1_FSTYPE" == ldiskfs ]; then
 			mopts="loop,$mopts"
@@ -2124,12 +2138,12 @@ t32_test() {
 			}
 
 			if [ "$project_quota_upgrade" != "no" ]; then
+				echo "== enable ost project quota =="
 				$r $TUNE2FS -O project $ost_dev || {
 					$r losetup -a
 					error_noexit "tune2fs $ost_dev failed"
 					return 1
 				}
-				echo "enable project quota on $ost_dev"
 			fi
 
 			if $ost2_is_available; then
@@ -2139,13 +2153,13 @@ t32_test() {
 					return 1
 				}
 				if [ "$project_quota_upgrade" != "no" ]; then
+					echo "== enable ost2 project quota =="
 					$r $TUNE2FS -O project $ost2_dev || {
 						$r losetup -a
 						error_noexit \
 						"tune2fs $ost2_dev failed"
 						return 1
 					}
-					echo "enable project quota on $ost2_dev"
 				fi
 			fi
 		fi
@@ -2191,7 +2205,8 @@ t32_test() {
 		fi
 	fi
 
-	if [[ $PERM_CMD == *"set_param -P"* ]]; then
+	if [[ $PERM_CMD =~ "set_param" ]]; then
+		echo "== perm cmd = '$PERM_CMD' =="
 		$r $PERM_CMD osc.$fsname-OST0000*.import=connection=$nid || {
 			error_noexit "Setting OST \"failover.node\""
 			return 1
@@ -2217,6 +2232,7 @@ t32_test() {
 			return 1
 		}
 	else
+		echo "== perm cmd = '$PERM_CMD' =="
 		$r $PERM_CMD $fsname-OST0000.failover.node=$nid || {
 			error_noexit "Setting OST \"failover.node\""
 			return 1
@@ -2251,6 +2267,7 @@ t32_test() {
 	}
 
 	if [ "$ff_convert" != "no" -a "$ost1_FSTYPE" == ldiskfs ]; then
+		echo "== ff convert ($ff_convert) =="
 		$r $LCTL lfsck_start -M $fsname-OST0000 || {
 			error_noexit "Start OI scrub on OST0"
 			return 1
@@ -2274,8 +2291,9 @@ t32_test() {
 		}
 	fi
 
-	if [ "$dne_upgrade" != "no" ]; then
-		if [[ $PERM_CMD == *"set_param -P"* ]]; then
+	if [[ "$dne_upgrade" != "no" ]] || $mdt2_is_available; then
+		echo "== dne upgrate ($dne_upgrade) or mdt2 available =="
+		if [[ $PERM_CMD =~ "set_param" ]]; then
 			$r $PERM_CMD mdc.$fsname-MDT0001*.import=connection=$nid || {
 				error_noexit "Setting MDT1 \"failover.node\""
 				return 1
@@ -2306,6 +2324,7 @@ t32_test() {
 	fi
 
 	if [ "$writeconf" ]; then
+		echo "== writeconf and client mount =="
 		$MOUNT_CMD $nid:/$fsname $tmp/mnt/lustre || {
 			error_noexit "Mounting the client"
 			return 1
@@ -2320,6 +2339,7 @@ t32_test() {
 		}
 
 		if $r test -f $tmp/list; then
+			echo "== list verification =="
 			#
 			# There is not a Test Framework API to copy files to or
 			# from a remote node.
@@ -2367,12 +2387,12 @@ t32_test() {
 				return 1
 			fi
 		else
-			echo "list verification skipped"
+			echo "== list verification skipped =="
 		fi
 
 		#non-dom upgrade to dom
 		if [ "$dom_upgrade" != "no" ]; then
-			echo "Check DoM file can be created"
+			echo "== dom upgrade =="
 			$LFS setstripe -E 1M -L mdt -E EOF $tmp/mnt/lustre/dom || {
 				error_noexit "Verify DoM creation"
 				return 1
@@ -2406,7 +2426,7 @@ t32_test() {
 			if ! $mdt2_is_available; then
 				dom_file=$tmp/mnt/lustre/dom_dir/dom_file
 			fi
-			echo "Check DoM file can be accessed"
+			echo "== check DoM file can be accessed =="
 			[ $($LFS getstripe -I1 -L $dom_file) == "mdt" ] || {
 				error_noexit "Verify a DoM file"
 				return 1
@@ -2422,7 +2442,7 @@ t32_test() {
 				flr_file=$tmp/mnt/lustre/flr_dir/flr_file
 			fi
 			local mirror_count=$($LFS getstripe -N $flr_file)
-			echo "Check FLR file"
+			echo "== check FLR file =="
 			[ $mirror_count == 2 ] || {
 				error_noexit "FLR mirror count wrong"
 				return 1
@@ -2430,6 +2450,7 @@ t32_test() {
 		fi
 
 		if [ "$dne_upgrade" != "no" ]; then
+			echo "== dne upgrade striped_dir  =="
 			$LFS mkdir -i 1 -c2 $tmp/mnt/lustre/striped_dir || {
 				error_noexit "set striped dir failed"
 				return 1
@@ -2454,7 +2475,7 @@ t32_test() {
 			local stripe_cnt
 			local comp_id
 
-			echo "Check PFL file"
+			echo "== check PFL file =="
 			if ! $mdt2_is_available; then
 				pfl_file=$tmp/mnt/lustre/pfl_dir/pfl_file
 			fi
@@ -2501,7 +2522,7 @@ t32_test() {
 			fi
 			local hardlimit
 
-			echo "Check Project Quota"
+			echo "== check Project Quota =="
 			hardlimit=$(getquota -p $T32_PRJID global 3 \
 							${tmp}/mnt/lustre)
 			[ $hardlimit == $T32_PROLIMIT ] || {
@@ -2513,6 +2534,7 @@ t32_test() {
 		# If it is upgrade from DNE (2.5), then rename the remote dir,
 		# which is created in 2.5 to striped dir.
 		if $mdt2_is_available && [[ "$dne_upgrade" != "no" ]]; then
+			echo "== rename remote_dir =="
 			stripe_index=$($LFS getdirstripe -i	\
 				       $tmp/mnt/lustre/remote_dir)
 
@@ -2531,6 +2553,7 @@ t32_test() {
 		# If it is upgraded from DNE (2.7), then move the striped dir
 		# which was created in 2.7 to the new striped dir.
 		if $mdt2_is_available && [[ "$dne_upgrade" != "no" ]] &&
+			echo "== rename striped dir =="
 			[[ -d $tmp/mnt/lustre/striped_dir_old ]]; then
 			stripe_count=$($LFS getdirstripe -c	\
 				       $tmp/mnt/lustre/striped_dir_old)
@@ -2558,29 +2581,40 @@ t32_test() {
 		}
 
 		if $r test -f $tmp/sha1sums; then
+			echo "== checking sha1sums =="
 			# LU-2393 - do both sorts on same node to ensure locale
 			# is identical
 			$r cat $tmp/sha1sums | sort -k 2 >$tmp/sha1sums.orig
-			if [ "$dne_upgrade" != "no" ]; then
-				pushd $tmp/mnt/lustre/striped_dir
-			elif [ "$pfl_upgrade" != "no" ] ||
-				[ "$flr_upgrade" != "no" ] ||
-				[ "$dom_new_upgrade" != "no" ] ||
-				[ "$project_quota_upgrade" != "no" ]; then
+			if [[ "$dne_upgrade" != "no" ]]; then
+				if [[ -d $tmp/mnt/lustre/striped_dir/remote_dir ]]; then
+					pushd $tmp/mnt/lustre/striped_dir/remote_dir
+				else
+					pushd $tmp/mnt/lustre/striped_dir
+				fi
+			elif [[ "$pfl_upgrade" != "no" ]] ||
+				[[ "$flr_upgrade" != "no" ]] ||
+				[[ "$dom_new_upgrade" != "no" ]] ||
+				[[ "$project_quota_upgrade" != "no" ]] ||
+				[[ -d $tmp/mnt/lustre/remote_dir ]]; then
 				pushd $tmp/mnt/lustre/remote_dir
 			else
 				pushd $tmp/mnt/lustre
 			fi
 
 			find ! -path "*remote_dir*" ! -path "*striped_dir*" \
-				! -name .lustre -type f -exec sha1sum {} \; |
+			     ! -name .lustre -type f -exec sha1sum {} \; |
 				sort -k 2 >$tmp/sha1sums || {
 				popd
 				error_noexit "sha1sum"
 				return 1
 			}
+			local save=$PWD
+
 			popd
 			if ! diff -ub $tmp/sha1sums.orig $tmp/sha1sums; then
+				echo "==** find $save files start **=="
+				find $save -type f -ls
+				echo "==** find $save files finish **=="
 				error_noexit "sha1sum verification failed"
 				return 1
 			fi
@@ -2589,6 +2623,7 @@ t32_test() {
 			# if upgrade from DNE(2.7), then check striped directory
 			if $mdt2_is_available &&
 			   [[ "$dne_upgrade" != "no" ]]; then
+				echo "== mdt2 upgrade sha1sum check =="
 				local new_dir="$tmp/mnt/lustre/striped_dir"
 				local striped_dir_old="$new_dir/striped_dir_old"
 
@@ -2597,10 +2632,12 @@ t32_test() {
 					dir_list+=" $striped_dir_old"
 
 				for dir in $dir_list; do
+					echo "== dir = $dir =="
 					pushd $dir
-					find ! -name .lustre -type f	\
+					find ! -name .lustre -type f \
 						-exec sha1sum {} \; |
 						sort -k 2 >$tmp/sha1sums || {
+							ls -alR
 							popd
 							error_noexit "sha1sum"
 							return 1
@@ -2608,6 +2645,7 @@ t32_test() {
 					popd
 					if ! diff -ub $tmp/sha1sums.orig \
 						$tmp/sha1sums; then
+						ls -alR $dir
 						error_noexit "sha1sum $dir" \
 							     "failed"
 						return 1
@@ -2615,7 +2653,7 @@ t32_test() {
 				done
 			fi
 		else
-			echo "sha1sum verification skipped"
+			echo "== sha1sum verification skipped =="
 		fi
 
 		# PFL write test after sha1sum check
@@ -2643,7 +2681,7 @@ t32_test() {
 			$r $LCTL set_param -n	\
 				mdt.${fsname}*.enable_remote_dir=1 2>/dev/null
 
-			echo "test migration"
+			echo "== test migration =="
 			pushd $tmp/mnt/lustre
 			for dir in $(find ! -name .lustre ! -name . -type d); do
 				mdt_index=$($LFS getdirstripe -i $dir)
@@ -2814,9 +2852,6 @@ test_32b() {
 
 	t32_check
 	for tarball in $tarballs; do
-		# temporarily skip these multi-MDT tests LU-15506
-		[[ "$tarball" =~ "2_10" || "$tarball" =~ "2_12" ]] &&
-			{ echo "skip $(basename $tarball)"; continue; }
 		banner "testing $tarball upgrade with writeconf"
 		t32_test $tarball writeconf || let "rc += $?"
 	done
@@ -2829,12 +2864,8 @@ test_32c() {
 	local tarball
 	local rc=0
 
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	t32_check
 	for tarball in $tarballs; do
-		# Do not support 1_8 and 2_1 direct upgrade to DNE2 anymore */
-		[[ "$tarball" =~ "1_8" ]] && echo "skip $tarball" && continue
-		[[ "$tarball" =~ "2_1" ]] && echo "skip $tarball" && continue
 		banner "testing $tarball upgrade with DNE"
 		load_modules
 		dne_upgrade=yes t32_test $tarball writeconf || rc=$?
@@ -2850,7 +2881,7 @@ test_32d() {
 
 	t32_check
 	for tarball in $tarballs; do
-		banner "testing $tarball upgrade with ff convert and project upgrade"
+		banner "testing $tarball upgrade with ff and project upgrade"
 		project_upgrade="no"
 		[[ "$MDS1_VERSION" -ge $(version_code 2.13.54) ]] &&
 			[[ "$tarball" =~ "disk2_4-ldiskfs" ]] &&
