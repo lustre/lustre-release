@@ -1390,6 +1390,23 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 
 	LASSERT(conf->coc_opc == OBJECT_CONF_SET);
 
+	/*
+	 * don't apply old layouts which can be brought
+	 * if returned w/o ldlm lock.
+	 * XXX: can we rollback in case of recovery?
+	 */
+	if (lsm && lov->lo_lsm) {
+		u32 oldgen = lov->lo_lsm->lsm_layout_gen &= ~LU_LAYOUT_RESYNC;
+		u32 newgen = lsm->lsm_layout_gen & ~LU_LAYOUT_RESYNC;
+
+		if (newgen < oldgen) {
+			CDEBUG(D_HA, "skip old for "DFID": %d < %d\n",
+			       PFID(lu_object_fid(lov2lu(lov))),
+			       (int)newgen, (int)oldgen);
+			GOTO(out, result = 0);
+		}
+	}
+
 	if ((lsm == NULL && lov->lo_lsm == NULL) ||
 	    ((lsm != NULL && lov->lo_lsm != NULL) &&
 	     (lov->lo_lsm->lsm_layout_gen == lsm->lsm_layout_gen) &&

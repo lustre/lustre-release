@@ -1894,7 +1894,13 @@ static int lfsck_layout_new_comp_lovea(const struct lu_env *env,
 						  rec->lor_range);
 		lcm->lcm_flags = cpu_to_le16(LCM_FL_NONE);
 	} else {
-		lcm->lcm_layout_gen = cpu_to_le32(1);
+		/*
+		 * if OST doesn't provide layout version, then try
+		 * to inherit one from MDS's layout, but increment
+		 * it so the client notices and applies modified
+		 * layout
+		 */
+		le32_add_cpu(&lcm->lcm_layout_gen, 1);
 		lcm->lcm_flags = cpu_to_le16(LCM_FL_NONE);
 	}
 	lcm->lcm_entry_count = cpu_to_le16(1);

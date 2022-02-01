@@ -114,10 +114,13 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 		obj->vob_discard_page_warned = 0;
 	} else {
 		SetPageError(vmpage);
-		if (ioret == -ENOSPC)
+		if (ioret == -ENOSPC) {
 			set_bit(AS_ENOSPC, &inode->i_mapping->flags);
-		else
+		} else {
+			if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
+				LBUG();
 			set_bit(AS_EIO, &inode->i_mapping->flags);
+		}
 
 		if ((ioret == -ESHUTDOWN || ioret == -EINTR ||
 		     ioret == -EIO) && obj->vob_discard_page_warned == 0) {
