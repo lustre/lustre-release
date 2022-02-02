@@ -605,17 +605,34 @@ int lod_fill_mirrors(struct lod_object *lo)
 	lod_comp = &lo->ldo_comp_entries[0];
 
 	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
-		int stale = !!(lod_comp->llc_flags & LCME_FL_STALE);
-		int preferred = !!(lod_comp->llc_flags & LCME_FL_PREF_WR);
+		bool stale = lod_comp->llc_flags & LCME_FL_STALE;
+		bool preferred = lod_comp->llc_flags & LCME_FL_PREF_WR;
+		bool init = lod_comp_inited(lod_comp);
 		int j;
 
 		pref = 0;
 		/* calculate component preference over all used OSTs */
-		for (j = 0; j < lod_comp->llc_stripes_allocated; j++) {
-			int idx = lod_comp->llc_ost_indices[j];
-			struct obd_statfs *osfs = &OST_TGT(lod,idx)->ltd_statfs;
+		for (j = 0; init && j < lod_comp->llc_stripes_allocated; j++) {
+			__u32 idx = lod_comp->llc_ost_indices[j];
+			struct lod_tgt_desc *ltd;
 
-			if (osfs->os_state & OS_STATFS_NONROT)
+			if (unlikely(idx > lod->lod_ost_descs.ltd_tgts_size)) {
+				CERROR("%s: "DFID" OST idx %u > max %u\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
+				       idx, lod->lod_ost_descs.ltd_tgts_size);
+				continue;
+			}
+			ltd = OST_TGT(lod, idx);
+			if (unlikely(!ltd)) {
+				CERROR("%s: "DFID" OST idx %u is NULL\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
+				       idx);
+				continue;
+			}
+
+			if (ltd->ltd_statfs.os_state & OS_STATFS_NONROT)
 				pref++;
 		}
 
@@ -1033,7 +1050,7 @@ int validate_lod_and_idx(struct lod_device *md, __u32 idx)
  * Instantiate objects for stripes.
  *
  * Allocate and initialize LU-objects representing the stripes. The number
- * of the stripes (ldo_stripe_count) must be initialized already. The caller
+ * of the stripes (llc_stripe_count) must be initialized already. The caller
  * must ensure nobody else is calling the function on the object at the same
  * time. FLDB service must be running to be able to map a FID to the targets
  * and find appropriate device representing that target.

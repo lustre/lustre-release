@@ -2921,7 +2921,7 @@ test_32g() {
 run_test 32g "flr/dom upgrade test"
 
 test_33a() { # bug 12333, was test_33
-	local FSNAME2=test-123
+	local FSNAME2=test-$testnum
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local mkfsoptions
 
@@ -4763,6 +4763,12 @@ test_56a() {
 	mount_client $MOUNT || error "Unable to mount client"
 	echo ok
 	$LFS osts
+
+	# test instantiating PFL components with sparse index LU-15513
+	mkdir -p $MOUNT/$tdir
+	$LFS setstripe -E 4M -c 1 -E 1G -c 4 -S4M -E eof -c -1 $MOUNT/$tdir
+	dd if=/dev/zero of=$MOUNT/$tdir/$tfile bs=4K count=1 seek=10k ||
+		error "dd to second component failed"
 
 	if [[ "$MDS1_VERSION" -ge $(version_code 2.6.54) ]] ||
 	   [[ "$MDS1_VERSION" -ge $(version_code 2.5.4) &&
