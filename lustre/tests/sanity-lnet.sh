@@ -2402,6 +2402,27 @@ test_218() {
 }
 run_test 218 "Local recovery pings should exercise all available paths"
 
+test_219() {
+	reinit_dlc || return $?
+	add_net "tcp" "${INTERFACES[0]}" || return $?
+	add_net "tcp1" "${INTERFACES[0]}" || return $?
+
+	local nid1=$(lctl list_nids | head -n 1)
+	local nid2=$(lctl list_nids | tail --lines 1)
+
+	do_lnetctl ping $nid1 ||
+		error "Ping failed $?"
+	do_lnetctl ping $nid2 ||
+		error "Ping failed $?"
+
+	do_lnetctl discover $nid2 ||
+		error "Discovery failed"
+
+	$LNETCTL peer show --nid $nid1 | grep -q $nid2 ||
+		error "$nid2 is not listed under $nid1"
+}
+run_test 219 "Consolidate peer entries"
+
 test_230() {
 	# LU-12815
 	echo "Check valid values; Should succeed"

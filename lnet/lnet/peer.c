@@ -2593,6 +2593,8 @@ again:
 			break;
 		if (lnet_peer_is_uptodate(lp))
 			break;
+		if (lp->lp_state & LNET_PEER_MARK_DELETED)
+			break;
 		lnet_peer_queue_for_discovery(lp);
 		count++;
 		CDEBUG(D_NET, "Discovery attempt # %d\n", count);
@@ -2637,7 +2639,9 @@ again:
 		rc = lp->lp_dc_error;
 	else if (!block)
 		CDEBUG(D_NET, "non-blocking discovery\n");
-	else if (!lnet_peer_is_uptodate(lp) && !lnet_is_discovery_disabled(lp))
+	else if (!lnet_peer_is_uptodate(lp) &&
+		 !(lnet_is_discovery_disabled(lp) ||
+		   (lp->lp_state & LNET_PEER_MARK_DELETED)))
 		goto again;
 
 	CDEBUG(D_NET, "peer %s NID %s: %d. %s\n",
