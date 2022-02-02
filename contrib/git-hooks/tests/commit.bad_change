@@ -1,0 +1,16 @@
+LU-15511 misc: allow Lustre-change and Lustre-commit
+
+Allow the Lustre-change:, Lustre-commit:, Linux-commit: labels in
+the signoff section.  Verify that Lustre-change: has a valid-looking
+Gerrit URL in "permalink" format "https://review.whamcloud.com/nnnnn".
+Verify -commit: labels have a valid-looking Git hashes (40 hex chars),
+though the actual hash cannot be verified because it may be from a
+different Git repository.
+
+Shorten the help message in case of error, and add "commit-msg --help"
+to print the full commit format help.
+
+Lustre-change: https://review.whamcloud.com/#/c/46420
+Test-Parameters: trivial
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I866ab91b33f6e52ff893344df74af243903ebbe5

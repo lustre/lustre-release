@@ -20,22 +20,29 @@ init() {
 	readonly SIGNOFF="Signed-off-by:"
 	readonly CHANGEID="Change-Id:"
 	readonly FIXES="Fixes:"
-	readonly TESTPARAMS="Test-Parameters:"
-	readonly INNOCUOUS=$(echo \
+	readonly TEST_PARAMS="Test-Parameters:"
+	readonly TEST_PARAMS2="Test-parameters:"
+	readonly LUSTRE_CHANGE="Lustre-change:"
+	readonly LUSTRE_COMMIT="Lustre-commit:"
+	readonly LINUX_COMMIT="Linux-commit:"
+	readonly EMAILS=$(echo \
 			Acked-by \
 			Tested-by \
 			Reported-by \
 			Reviewed-by \
 			CC \
 		| tr ' ' '|')
-	readonly WIDTH_SUM=62
-	readonly WIDTH_REG=70
+
+	# allow temporary override for rare cases (e.g. merge commits)
+	readonly WIDTH_SUM=${WIDTH_SUM:-62}
+	readonly WIDTH_REG=${WIDTH_REG:-70}
 	readonly JIRA_FMT_A="^[A-Z]\{2,9\}-[0-9]\{1,5\} [-a-z0-9]\{2,11\}: "
 	readonly JIRA_FMT_B="^[A-Z]\{2,9\}-[0-9]\{1,5\} "
+	readonly GERRIT_URL="https://review.whamcloud.com"
 
 	# Identify a name followed by an email address.
 	#
-	readonly EMAILPAT=$'[ \t]*[^<> ]* [^<>]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
+	readonly EMAILPAT=$'[ \t]*[-._ [:alnum:]]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
 
 	HAS_ERROR=false
 	HAS_SUMMARY=false
@@ -67,9 +74,9 @@ die() {
 function ck_wrapup() {
 	$IS_WRAPPING_UP && return
 
-	$HAS_LAST_BLANK || error "blank line must preceed signoff section"
-	$HAS_SUMMARY    || error "missing commit summary line."
-	$HAS_BODY       || error "missing commit description."
+	$HAS_LAST_BLANK	|| error "blank line must preceed signoff section"
+	$HAS_SUMMARY	|| error "missing commit summary line."
+	$HAS_BODY	|| error "missing commit description."
 
 	HAS_LAST_BLANK=false
 	IS_WRAPPING_UP=true
@@ -80,7 +87,7 @@ function do_signoff() {
 	# Signed-off-by: First Last <email@host.domain>
 	local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
 	if (( ${#txt} == 0 )); then
-		error "$SIGNOFF line requires name and email address"
+		error "$SIGNOFF line needs full name and email address"
 	else
 		HAS_SIGNOFF=true # require at least one
 	fi
@@ -88,7 +95,7 @@ function do_signoff() {
 
 function do_changeid() {
 	ck_wrapup
-	$HAS_CHANGEID && error "multiple $CHANGEID lines are not allowed"
+	$HAS_CHANGEID && error "multiple $CHANGEID lines not allowed"
 
 	# Change-Id: I1234567890123456789012345678901234567890
 	# capital "I" plus 40 hex digits
@@ -104,7 +111,7 @@ function do_testparams() {
 	ck_wrapup
 
 	grep -q mdsfilesystemtype <<< $LINE &&
-		error "mdsfilesystemtype is deprecated, use mdtfilesystemtype"
+		error "mdsfilesystemtype is deprecated, use fstype"
 }
 
 function do_fixes() {
@@ -112,15 +119,37 @@ function do_fixes() {
 
 	local commit=$(awk '{ print $2 }' <<<$LINE)
 	git describe --tags $commit 2>&1 | grep "[Nn]ot a valid" &&
-		error "has invalid $FIXES commit hash"
+		error "invalid $FIXES hash, want '<12hex> (\"summary line\")'"
 }
 
-# All "innocuous" lines specify a person and email address
+# All "emails" lines specify a person and email address
 #
-function do_innocuous() {
+function do_emails() {
 	ck_wrapup
 	local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
-	(( ${#txt} == 0 )) && error "invalid name and address"
+	(( ${#txt} == 0 )) && error "${LINE%: *} invalid name and email"
+}
+
+# All "change" lines specify a Gerrit URL
+#
+function do_change() {
+	local url="${LINE#*change: }"
+	[[ $url =~ $GERRIT_URL/[0-9][0-9][0-9] ]] ||
+		error "bad Gerrit URL, use '$GERRIT_URL/nnnnn' format"
+}
+
+# All "commit" lines specify a commit hash, but the commit may be in
+# another repo, so the hash can't be directly verified
+#
+function do_commit() {
+	local val=${LINE#*commit: }
+	if [[ $val =~ TBD ]]; then
+		val=${val#TBD (from }
+		val=${val%)}
+	fi
+
+	[[ $val =~ [g-zG-Z] ]] && error "bad commit hash '$val', non-hex chars"
+	(( ${#val} == 40 )) || error "bad commit hash '$val', not 40 chars"
 }
 
 function do_default_line() {
@@ -145,7 +174,8 @@ function do_default_line() {
 		fi
 		NEEDS_FIRST_LINE=false
 
-	elif (( ${#LINE} > WIDTH_REG )); then
+	elif (( ${#LINE} > WIDTH_REG )) && ! [[ $LINE =~ http ]]; then
+		# ignore long lines containing URLs
 		error "has line longer than $WIDTH_REG columns."
 	elif ! $HAS_BODY && ! $HAS_LAST_BLANK; then
 		error "has no blank line after summary."
@@ -176,55 +206,69 @@ new_changeid() {
 #
 error() {
 	(( ${#LINE} > 0 )) && echo "line $NUM: $LINE"
-	echo "error: commit message $*" | fmt
+	echo "error: commit message $*"
 	HAS_ERROR=true
 } 1>&2
 
-usage() {
-        exec 1>&2
-        cat <<- EOF
-
-	See https://wiki.whamcloud.com/display/PUB/Commit+Comments
-	for full details.  An example valid commit comment is:
-
-	LU-nnn component: short description of change under 64 columns
-
-	The "component:" should be a lower-case single-word subsystem of the
-	Lustre code best covering the patch.  Example components include:
-	   llite, lov, lmv, osc, mdc, ldlm, lnet, ptlrpc, mds, oss, osd,
-	   ldiskfs, libcfs, socklnd, o2iblnd; recovery, quota, grant;
-	   build, tests, docs. This list is not exhaustive, but a guideline.
-
-	The comment body should explan the change being made.  This can be
-	as long as needed.  Please include details of the problem that was
-	solved (including error messages that were seen), a good high-level
-	description of how it was solved, and which parts of the code were
-	changed (including important functions that were changed, if this is
-	useful to understand the patch, and for easier searching).
-	Performance patches should quanify the improvements being seen.
-	Wrap lines at/under $WIDTH_REG columns.
-
-	Finish the comment with a blank line followed by the signoff section:
-
-	$SIGNOFF Your Real Name <your_email@domain.name>
-	$CHANGEID Ixxxx(added automatically if missing)xxxx
-
-	The "$CHANGEID" line should only be present when updating a previous
-	commit/submission.  Copy the $CHANGEID from the original commit. It
-	will automatically be added by the Git commit-msg hook if missing.
-
-	The "signoff section" may optionally include other tag lines:
-	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do       \
-	     echo "    $T: Some Person <email@domain.com>"; \
-	  done)
-	$FIXES git_commit_hash ("optional summary of original broken patch")
-	$TESTPARAMS optional additional test parameters
-	{Organization}-bug-id: associated external change identifier
-	EOF
+short() {
+	echo "Run '$0 --help' for longer commit message help." 1>&2
 
 	mv "$ORIGINAL" "$SAVE" &&
 		echo "$0: saved original commit comment to $SAVE" 1>&2
 }
+
+usage() {
+	cat << USAGE
+
+Normally '$0' is invoked automatically by "git commit".
+
+See https://wiki.whamcloud.com/display/PUB/Commit+Comments
+for full details.  A good example of a valid commit comment is:
+
+    LU-nnnnn component: short description of change under 64 columns
+
+    The "component:" should be a lower-case single-word subsystem of the
+    Lustre code best covering the patch.  Example components include:
+        llite, lov, lmv, osc, mdc, ldlm, lnet, ptlrpc, mds, oss, osd,
+        ldiskfs, libcfs, socklnd, o2iblnd, recovery, quota, grant,
+        build, tests, docs. This list is not exhaustive, but a guideline.
+
+    The comment body should explan the change being made.  This can be
+    as long as needed.  Please include details of the problem that was
+    solved (including error messages that were seen), a good high-level
+    description of how it was solved, and which parts of the code were
+    changed (including important functions that were changed, if this
+    is useful to understand the patch, and for easier searching).
+    Performance patches should quanify the improvements being seen.
+    Wrap lines at/under $WIDTH_REG columns.
+
+    Optionally, if the patch is backported from master, include links
+    to the original patch to simplify tracking it across branches/repos:
+
+    $LUSTRE_CHANGE: $GERRIT_URL/nnnn
+    $LUSTRE_COMMIT: 40-char-git-hash-of-patch-on-master
+    or
+    $LUSTRE_COMMIT: TBD (from 40-char-hash-of-unlanded-patch)
+
+    Finish the comment with a blank line followed by the signoff section.
+    The "$CHANGEID" line should only be present when updating a previous
+    commit/submission.  Keep the same $CHANGEID for ported patches. It
+    will automatically be added by the Git commit-msg hook if missing.
+
+    $TEST_PARAMS extra test options, see https://wiki.whamcloud.com/x/dICC
+    $FIXES 12-char-hash ("commit summary line of original broken patch")
+    $SIGNOFF Your Real Name <your_email@domain.name>
+    $CHANGEID Ixxxx(added automatically if missing)xxxx
+
+    The "signoff section" may optionally include other reviewer lines:
+	$(for T in $(tr '|' ' ' <<< "$EMAILS"); do		\
+		echo "    $T: Some Person <email@example.com>";	\
+	done)
+    {Organization}-bug-id: associated external change identifier
+USAGE
+}
+
+[[ "$1" == "--help" ]] && usage && exit 0
 
 init ${1+"$@"}
 exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
@@ -232,10 +276,14 @@ exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 while IFS= read -u3 LINE; do
 	((NUM += 1))
 	case "$LINE" in
-	$SIGNOFF* )	do_signoff ;;
-	$CHANGEID* )	do_changeid ;;
-	$FIXES* )	do_fixes ;;
-	$TESTPARAMS* )	do_testparams ;;
+	$SIGNOFF* )		do_signoff ;;
+	$CHANGEID* )		do_changeid ;;
+	$FIXES* )		do_fixes ;;
+	$TEST_PARAMS* )		do_testparams ;;
+	$TEST_PARAMS2* )	do_testparams ;;
+	$LUSTRE_CHANGE* )	do_change ;;
+	$LUSTRE_COMMIT* )	do_commit ;;
+	$LINUX_COMMIT* )	do_commit ;;
 
 	"")
 		HAS_LAST_BLANK=true
@@ -273,10 +321,10 @@ while IFS= read -u3 LINE; do
 		;;
 
 	*)
-		if [[ "$LINE" =~ ^($INNOCUOUS): ]]; then
-			do_innocuous
+		if [[ "$LINE" =~ ^($EMAILS): ]]; then
+			do_emails
 
-		elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
+		elif [[ "$LINE" =~ ^[A-Z][A-Za-z0-9_-]*-bug-id: ]]; then
 			# Allow arbitrary external bug identifiers for tracking.
 			#
 			ck_wrapup
@@ -297,7 +345,7 @@ $HAS_SIGNOFF || error "missing valid $SIGNOFF: line."
 
 if $HAS_ERROR; then
 	exec 3<&- 4>&-
-	usage
+	short
 	rm "$REVISED"
 	exit 1
 fi
