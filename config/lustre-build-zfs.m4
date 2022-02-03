@@ -767,6 +767,19 @@ your distribution.
 			AC_DEFINE(HAVE_DB_DIRTY_RECORDS_LIST, 1,
 				[Have db_dirty_records list_t])
 		])
+		dnl #
+		dnl # ZFS 2.0 renamed sys/refcount.h to zfs_refcount.h
+		dnl # This build issue shows up with ZFS 2.0.7 and Lustre 2.12 LTS
+		dnl #
+		LB_CHECK_COMPILE([if ZFS renamed sys/refcount to zfs_refcount.h],
+		zfs_zfs_refcount, [
+			#include <sys/zfs_refcount.h>
+		],[
+			zfs_refcount_add((zfs_refcount_t *) NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_ZFS_REFCOUNT_HEADER, 1,
+				[Have zfs_refcount.h])
+		])
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [

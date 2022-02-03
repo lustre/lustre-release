@@ -39,6 +39,7 @@
 #ifndef _OSD_INTERNAL_H
 #define _OSD_INTERNAL_H
 
+#include <linux/refcount.h>
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_quota.h>
@@ -49,6 +50,9 @@
 #endif
 #include <sys/arc.h>
 #include <sys/nvpair.h>
+#ifdef HAVE_ZFS_REFCOUNT_HEADER
+#include <sys/zfs_refcount.h>
+#endif
 #include <sys/zfs_znode.h>
 #include <sys/zap.h>
 #include <sys/dbuf.h>
@@ -98,8 +102,10 @@
 
 #define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
+#ifndef HAVE_ZFS_REFCOUNT_HEADER
 #ifndef HAVE_ZFS_REFCOUNT_ADD
 #define zfs_refcount_add	refcount_add
+#endif
 #endif
 
 extern const struct dt_body_operations osd_body_scrub_ops;
