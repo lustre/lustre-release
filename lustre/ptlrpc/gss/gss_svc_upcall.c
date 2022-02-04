@@ -303,47 +303,54 @@ static struct cache_head *rsi_alloc(void)
 
 static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 {
-        char           *buf = mesg;
-        int             len;
-        struct rsi      rsii, *rsip = NULL;
+	char *buf = mesg;
+	int len;
+	struct rsi rsii, *rsip = NULL;
 	time64_t expiry;
-        int             status = -EINVAL;
-        ENTRY;
+	int status = -EINVAL;
+	ENTRY;
 
+	memset(&rsii, 0, sizeof(rsii));
 
-        memset(&rsii, 0, sizeof(rsii));
+	/* handle */
+	len = qword_get(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsii.in_handle, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
 
-        /* handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.in_handle, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
+	/* token */
+	len = qword_get(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsii.in_token, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
 
-        /* token */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
+	rsip = rsi_lookup(&rsii);
+	if (!rsip)
+		goto out;
+	if (!test_bit(CACHE_PENDING, &rsip->h.flags)) {
+		/* If this is not a pending request, it probably means
+		 * someone wrote arbitrary data to the init channel.
+		 * Directly return -EINVAL in this case.
+		 */
+		status = -EINVAL;
                 goto out;
-        if (rawobj_alloc(&rsii.in_token, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
+	}
 
-        rsip = rsi_lookup(&rsii);
-        if (!rsip)
-                goto out;
+	rsii.h.flags = 0;
+	/* expiry */
+	expiry = get_expiry(&mesg);
+	if (expiry == 0)
+		goto out;
 
-        rsii.h.flags = 0;
-        /* expiry */
-        expiry = get_expiry(&mesg);
-        if (expiry == 0)
-                goto out;
-
-        len = qword_get(&mesg, buf, mlen);
-        if (len <= 0)
-                goto out;
+	len = qword_get(&mesg, buf, mlen);
+	if (len <= 0)
+		goto out;
 
 	/* major */
 	status = kstrtoint(buf, 10, &rsii.major_status);
@@ -361,27 +368,27 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 	if (status)
 		goto out;
 
-        /* out_handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.out_handle, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
+	/* out_handle */
+	len = qword_get(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsii.out_handle, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
 
-        /* out_token */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.out_token, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
+	/* out_token */
+	len = qword_get(&mesg, buf, mlen);
+	if (len < 0)
+		goto out;
+	if (rawobj_alloc(&rsii.out_token, buf, len)) {
+		status = -ENOMEM;
+		goto out;
+	}
 
-        rsii.h.expiry_time = expiry;
-        rsip = rsi_update(&rsii, rsip);
-        status = 0;
+	rsii.h.expiry_time = expiry;
+	rsip = rsi_update(&rsii, rsip);
+	status = 0;
 out:
 	rsi_free(&rsii);
 	if (rsip) {
