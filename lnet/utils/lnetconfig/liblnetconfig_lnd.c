@@ -148,7 +148,7 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 
 	map_on_demand = cYAML_get_object_item(lndparams, "map_on_demand");
 	lnd_cfg->lnd_map_on_demand =
-		(map_on_demand) ? map_on_demand->cy_valueint : 0;
+		(map_on_demand) ? map_on_demand->cy_valueint : UINT_MAX;
 
 	concurrent_sends = cYAML_get_object_item(lndparams, "concurrent_sends");
 	lnd_cfg->lnd_concurrent_sends =

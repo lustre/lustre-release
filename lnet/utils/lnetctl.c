@@ -1171,6 +1171,9 @@ static int jt_add_ni(int argc, char **argv)
 		found = true;
 	}
 
+	if (found && LNET_NETTYP(nw_descr.nw_id) == O2IBLND)
+		tunables.lt_tun.lnd_tun_u.lnd_o2ib.lnd_map_on_demand = UINT_MAX;
+
 	rc = lustre_lnet_config_ni(&nw_descr,
 				   (cpt_rc == 0) ? global_cpts: NULL,
 				   ip2net, (found) ? &tunables : NULL,
