@@ -261,7 +261,7 @@ static char **command_completion(const char *text, int start, int end)
 #endif
 
 /* take a string and execute the function or print help */
-int execute_line(char *line)
+static int execute_line(char *line)
 {
 	command_t *cmd, *ambig;
 	char *prev;
@@ -335,7 +335,7 @@ static int init_input(void)
 
 #ifndef HAVE_LIBREADLINE
 #define add_history(s)
-char *readline(char *prompt)
+static char *readline(char *prompt)
 {
 	int size = 2048;
 	char *line = malloc(size);
