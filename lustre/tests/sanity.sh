@@ -17186,6 +17186,82 @@ test_160s() {
 }
 run_test 160s "changelog garbage collect on idle records * time"
 
+test_160t() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( $MDS1_VERSION >= $(version_code 2.15.50) )) ||
+		skip "Need MDS version at least 2.15.50"
+
+	local MDT0=$(facet_svc $SINGLEMDS)
+	local cl_users
+	local cl_user1
+	local cl_user2
+	local start
+
+	changelog_register --user user1 -m all ||
+		error "user1 failed to register"
+
+	mkdir_on_mdt0 $DIR/$tdir
+	# create default overstripe to maximize changelog size
+	$LFS setstripe  -C 8 $DIR/$tdir || error "setstripe failed"
+	createmany -o $DIR/$tdir/u1_ 2000 || error "createmany for user1 failed"
+	llog_size1=$(do_facet mds1 $LCTL get_param -n mdd.$MDT0.changelog_size)
+
+	# user2 consumes less records so less space
+	changelog_register --user user2 || error "user2 failed to register"
+	createmany -o $DIR/$tdir/u2_ 500 || error "createmany for user2 failed"
+	llog_size2=$(do_facet mds1 $LCTL get_param -n mdd.$MDT0.changelog_size)
+
+	# check changelogs have been generated
+	local nbcl=$(changelog_dump | wc -l)
+	(( nbcl > 0 )) || error "no changelogs found"
+
+	# reduce the changelog_min_gc_interval to force check
+	for param in "changelog_gc=1" "changelog_min_gc_interval=2"; do
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_facet mds1 $LCTL set_param mdd.$MDT0.$var=$old"
+		do_facet mds1 $LCTL set_param mdd.$MDT0.$param ||
+			error "unable to set mdd.*.$param"
+	done
+
+	start=$SECONDS
+	cl_users=(${CL_USERS[mds1]})
+	cl_user1="${cl_users[0]}"
+	cl_user2="${cl_users[1]}"
+
+	[[ -n $cl_user1 ]] ||
+		error "mds1: user #1 isn't registered"
+	[[ -n $cl_user2 ]] ||
+		error "mds1: user #2 isn't registered"
+
+	# ensure we are past the previous changelog_min_gc_interval set above
+	local sleep2=$((start + 2 - SECONDS))
+	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
+
+	#define OBD_FAIL_MDS_CHANGELOG_ENOSPC 0x018c
+	do_facet mds1 $LCTL set_param fail_loc=0x018c \
+			fail_val=$(((llog_size1 + llog_size2) / 2))
+
+	# Generate more changelog to trigger GC
+	createmany -o $DIR/$tdir/u3_ 4 ||
+		error "create failed for more files"
+
+	# ensure gc thread is done
+	wait_update_facet mds1 "pgrep chlg_gc_thread" "" 20 ||
+		error "mds1: GC-thread not done"
+
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	# check cl_user1 is purged
+	changelog_users mds1 | grep -q "$cl_user1" &&
+		error "User $cl_user1 is registered"
+	# check cl_user2 is not purged
+	changelog_users mds1 | grep -q "$cl_user2" ||
+		error "User $cl_user2 is not registered"
+}
+run_test 160t "changelog garbage collect on lack of space"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

@@ -144,6 +144,10 @@ struct mdd_device {
         struct dt_object                *mdd_orphans; /* PENDING directory */
         struct mdd_changelog             mdd_cl;
 	unsigned int			 mdd_changelog_gc;
+					 /* emrg GC is in progress */
+	bool				 mdd_changelog_emrg_gc;
+					 /* don't use GC by free space */
+	bool				 mdd_changelog_free_space_gc;
 	time64_t			 mdd_changelog_max_idle_time;
 	unsigned long			 mdd_changelog_max_idle_indexes;
 	time64_t			 mdd_changelog_min_gc_interval;
@@ -871,5 +875,10 @@ static inline bool mdd_changelog_is_too_idle(struct mdd_device *mdd,
 		idle_time > mdd->mdd_changelog_max_idle_time ||
 		idle_time * idle_indexes > (24 * 3600ULL << 32));
 }
+
+bool mdd_changelog_is_space_safe(const struct lu_env *env,
+				 struct mdd_device *mdd,
+				 struct llog_handle *lgh,
+				 bool estimate);
 
 #endif

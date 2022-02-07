@@ -149,6 +149,10 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	mdd->mdd_sync_permission = 1;
 	/* enable changelog garbage collection */
 	mdd->mdd_changelog_gc = 1;
+	/* enable changelog cleanup due to lack of space */
+	mdd->mdd_changelog_free_space_gc = true;
+	/* set when emergency GC is started */
+	mdd->mdd_changelog_emrg_gc = false;
 	/* with a significant amount of idle time */
 	mdd->mdd_changelog_max_idle_time = CHLOG_MAX_IDLE_TIME;
 	/* or a significant amount of late indexes */

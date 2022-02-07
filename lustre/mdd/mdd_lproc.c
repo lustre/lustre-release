@@ -337,6 +337,34 @@ static ssize_t changelog_gc_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(changelog_gc);
 
+static ssize_t changelog_free_space_gc_show(struct kobject *kobj,
+					    struct attribute *attr, char *buf)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	return sprintf(buf, "%u\n", mdd->mdd_changelog_free_space_gc);
+}
+
+static ssize_t changelog_free_space_gc_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdd->mdd_changelog_free_space_gc = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(changelog_free_space_gc);
+
 static ssize_t changelog_max_idle_time_show(struct kobject *kobj,
 					    struct attribute *attr,
 					    char *buf)
@@ -737,6 +765,7 @@ static struct attribute *mdd_attrs[] = {
 	&lustre_attr_atime_diff.attr,
 	&lustre_attr_changelog_size.attr,
 	&lustre_attr_changelog_gc.attr,
+	&lustre_attr_changelog_free_space_gc.attr,
 	&lustre_attr_changelog_max_idle_time.attr,
 	&lustre_attr_changelog_max_idle_indexes.attr,
 	&lustre_attr_changelog_min_gc_interval.attr,

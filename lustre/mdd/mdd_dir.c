@@ -821,13 +821,119 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 	return rc;
 }
 
+/**
+ * Checks that changelog consumes safe amount of space comparing
+ * with FS free space
+ *
+ * \param env - current lu_env
+ * \param mdd - current MDD device
+ * \param lgh - changelog catalog llog handle
+ * \param estimate - get exact llog size or estimate it.
+ *
+ * \retval true/false
+ */
+bool mdd_changelog_is_space_safe(const struct lu_env *env,
+				 struct mdd_device *mdd,
+				 struct llog_handle *lgh,
+				 bool estimate)
+{
+	struct obd_statfs sfs;
+	unsigned long long free_space_limit;
+	unsigned long long llog_size;
+	int rc;
+
+	rc = dt_statfs(env, mdd->mdd_bottom, &sfs);
+	if (rc)
+		/* check is ignored if OSD is not healthy for any reason */
+		return true;
+
+	/*
+	 * if changelog consumes more than 1/4 of available space then start
+	 * emergency cleanup.
+	 */
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_ENOSPC))
+		free_space_limit = cfs_fail_val;
+	else
+		free_space_limit = (sfs.os_bfree * sfs.os_bsize) >> 2;
+
+	/* if \estimate parameter is used then calculate llog size from
+	 * number of used catalog entries and plain llog maximum size.
+	 * Plain llog maximum size if set as 1/64 of FS free space limited
+	 * by 128MB as maximum and 2MB as minimum, see llog_cat_new_log()
+	 * Estimation helps to avoid full llog processing to get exact size
+	 * by llog_cat_size().
+	 */
+	if (estimate) {
+		/* use 1/64 of FS size but keep it between 2MB and 128MB */
+		llog_size = clamp_t(unsigned long long,
+				    (sfs.os_blocks * sfs.os_bsize) >> 6,
+				    2 << 20, 128 << 20);
+		/*
+		 * llog_cat_free_space() gives free slots, we need occupied,
+		 * so subtruct free from total slots minus one for header
+		 */
+		llog_size *= LLOG_HDR_BITMAP_SIZE(lgh->lgh_hdr) - 1 -
+			     llog_cat_free_space(lgh);
+	} else {
+		/* get exact llog size */
+		llog_size = llog_cat_size(env, lgh);
+	}
+	CDEBUG(D_HA, "%s:%s changelog size is %lluMB, space limit is %lluMB\n",
+	       mdd2obd_dev(mdd)->obd_name, estimate ? " estimated" : "",
+	       llog_size >> 20, free_space_limit >> 20);
+
+	if (llog_size > free_space_limit) {
+		CWARN("%s: changelog uses %lluMB with %lluMB space limit\n",
+		      mdd2obd_dev(mdd)->obd_name, llog_size >> 20,
+		      free_space_limit >> 20);
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Checks if there is enough space in changelog itself and in FS and force
+ * emergency changelog cleanup if needed. It will purge users one by one
+ * from the oldest one while emergency conditions are true.
+ *
+ * \param env - current lu_env
+ * \param mdd - current MDD device
+ * \param lgh - changelog catalog llog handle
+ *
+ * \retval true if emergency cleanup is needed for changelog
+ */
+static bool mdd_changelog_emrg_cleanup(const struct lu_env *env,
+				       struct mdd_device *mdd,
+				       struct llog_handle *lgh)
+{
+	unsigned long free_entries = llog_cat_free_space(lgh);
+
+	/* free space GC is disabled or is in progress already */
+	if (!mdd->mdd_changelog_free_space_gc || mdd->mdd_changelog_emrg_gc)
+		return false;
+
+	if (free_entries <= mdd->mdd_changelog_min_free_cat_entries) {
+		CWARN("%s: changelog has only %lu free catalog entries\n",
+		      mdd2obd_dev(mdd)->obd_name, free_entries);
+		mdd->mdd_changelog_emrg_gc = true;
+		return true;
+	}
+
+	if (!mdd_changelog_is_space_safe(env, mdd, lgh, true)) {
+		mdd->mdd_changelog_emrg_gc = true;
+		return true;
+	}
+
+	return false;
+}
+
 bool mdd_changelog_need_gc(const struct lu_env *env, struct mdd_device *mdd,
 			   struct llog_handle *lgh)
 {
-	unsigned long free_cat_entries = llog_cat_free_space(lgh);
 	struct mdd_changelog *mc = &mdd->mdd_cl;
 
-	return free_cat_entries <= mdd->mdd_changelog_min_free_cat_entries ||
+	return mdd_changelog_emrg_cleanup(env, mdd, lgh) ||
 	       mdd_changelog_is_too_idle(mdd, mc->mc_minrec, mc->mc_mintime) ||
 	       OBD_FAIL_CHECK(OBD_FAIL_FORCE_GC_THREAD);
 }

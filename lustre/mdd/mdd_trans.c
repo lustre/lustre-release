@@ -97,8 +97,9 @@ static int mdd_changelog_gc_cb(const struct lu_env *env,
 
 	rec = container_of(hdr, typeof(*rec), cur_hdr);
 
-	if (mdd_changelog_is_too_idle(mdd, rec->cur_endrec, rec->cur_time) &&
-	    rec->cur_endrec < mcgc->mcgc_minrec) {
+	if (rec->cur_endrec < mcgc->mcgc_minrec &&
+	    (mdd->mdd_changelog_emrg_gc ||
+	     mdd_changelog_is_too_idle(mdd, rec->cur_endrec, rec->cur_time))) {
 		mcgc->mcgc_mintime = rec->cur_time;
 		mcgc->mcgc_minrec = rec->cur_endrec;
 		mcgc->mcgc_id = rec->cur_id;
@@ -160,6 +161,10 @@ static int mdd_chlg_garbage_collect(void *data)
 		      mdd->mdd_cl.mc_index - mcgc.mcgc_minrec);
 
 		mdd_changelog_user_purge(env, mdd, mcgc.mcgc_id);
+
+		if (mdd->mdd_changelog_emrg_gc &&
+		    mdd_changelog_is_space_safe(env, mdd, ctxt->loc_handle, 0))
+			mdd->mdd_changelog_emrg_gc = false;
 
 		if (kthread_should_stop())
 			GOTO(out_ctxt, rc = 0);
