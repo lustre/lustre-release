@@ -467,6 +467,8 @@ struct lnet_md {
 #define LNET_MD_NO_TRACK_RESPONSE    (1 << 11)
 /** See struct lnet_md::options. */
 #define LNET_MD_GNILND               (1 << 12)
+/** Special page mapping handling */
+#define LNET_MD_GPU_ADDR	     (1 << 13)
 
 /** Infinite threshold on MD operations. See struct lnet_md::threshold */
 #define LNET_MD_THRESH_INF	 (-1)

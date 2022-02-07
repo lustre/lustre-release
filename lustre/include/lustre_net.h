@@ -1368,7 +1368,9 @@ struct ptlrpc_bulk_desc {
 	/** completed with failure */
 	unsigned long bd_failure:1;
 	/** client side */
-	unsigned long bd_registered:1;
+	unsigned long bd_registered:1,
+	/* bulk request is RDMA transfer, use page->host as real address */
+			bd_is_rdma:1;
 	/** For serialization with callback */
 	spinlock_t bd_lock;
 	/** {put,get}{source,sink}{kvec,kiov} */

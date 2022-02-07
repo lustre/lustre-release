@@ -141,8 +141,6 @@ struct lnet_msg {
 	enum lnet_msg_hstatus	msg_health_status;
 	/* This is a recovery message */
 	bool			msg_recovery;
-	/* force an RDMA even if the message size is < 4K */
-	bool			msg_rdma_force;
 	/* the number of times a transmission has been retried */
 	int			msg_retry_count;
 	/* flag to indicate that we do not want to resend this message */
@@ -248,6 +246,7 @@ struct lnet_libmd {
  */
 #define LNET_MD_FLAG_HANDLING	 BIT(3)
 #define LNET_MD_FLAG_DISCARD	 BIT(4)
+#define LNET_MD_FLAG_GPU	 BIT(5) /**< Special mapping needs */
 
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */

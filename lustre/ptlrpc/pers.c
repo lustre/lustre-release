@@ -58,6 +58,9 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 		return;
 	}
 
+	if (desc->bd_is_rdma)
+		md->options |= LNET_MD_GPU_ADDR;
+
 	if (mdidx == (desc->bd_md_count - 1))
 		md->length = desc->bd_iov_count - start;
 	else

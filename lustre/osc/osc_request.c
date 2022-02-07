@@ -1406,6 +1406,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
 	struct inode *inode = NULL;
 	bool directio = false;
+	bool gpu = 0;
 	bool enable_checksum = true;
 	struct cl_page *clpage;
 
@@ -1571,6 +1572,7 @@ retry_encrypt:
 	if (brw_page2oap(pga[0])->oap_brw_flags & OBD_BRW_RDMA_ONLY) {
 		enable_checksum = false;
 		short_io_size = 0;
+		gpu = 1;
 	}
 
 	/* Check if read/write is small enough to be a short io. */
@@ -1618,6 +1620,7 @@ retry_encrypt:
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
         /* NB request now owns desc and will free it when it gets freed */
+	desc->bd_is_rdma = gpu;
 no_bulk:
         body = req_capsule_client_get(pill, &RMF_OST_BODY);
         ioobj = req_capsule_client_get(pill, &RMF_OBD_IOOBJ);

@@ -670,8 +670,7 @@ kiblnd_unmap_tx(struct kib_tx *tx)
 		kiblnd_fmr_pool_unmap(&tx->tx_fmr, tx->tx_status);
 
 	if (tx->tx_nfrags != 0) {
-		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev,
-				    tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
+		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev, tx);
 		tx->tx_nfrags = 0;
 	}
 }
@@ -724,9 +723,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
         tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	tx->tx_nfrags = nfrags;
 
-	rd->rd_nfrags = kiblnd_dma_map_sg(hdev, tx->tx_frags,
-					  tx->tx_nfrags, tx->tx_dmadir);
-
+	rd->rd_nfrags = kiblnd_dma_map_sg(hdev, tx);
         for (i = 0, nob = 0; i < rd->rd_nfrags; i++) {
                 rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
                         hdev->ibh_ibdev, &tx->tx_frags[i]);
@@ -1174,7 +1171,8 @@ kiblnd_init_rdma(struct kib_conn *conn, struct kib_tx *tx, int type,
 		int	prev = dstidx;
 
 		if (srcidx >= srcrd->rd_nfrags) {
-			CERROR("Src buffer exhausted: %d frags\n", srcidx);
+			CERROR("Src buffer exhausted: %d frags %px\n",
+				srcidx, tx);
 			rc = -EPROTO;
 			break;
 		}
@@ -1647,11 +1645,12 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	struct bio_vec   *payload_kiov = lntmsg->msg_kiov;
 	unsigned int      payload_offset = lntmsg->msg_offset;
 	unsigned int      payload_nob = lntmsg->msg_len;
+	bool		 gpu;
 	struct kib_msg *ibmsg;
 	struct kib_rdma_desc *rd;
-	struct kib_tx *tx;
-	int               nob;
-	int               rc;
+	struct kib_tx	*tx;
+	int		 nob;
+	int		 rc;
 
 	/* NB 'private' is different depending on what we're sending.... */
 
@@ -1672,26 +1671,28 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		return -ENOMEM;
 	}
 	ibmsg = tx->tx_msg;
+	gpu = (lntmsg->msg_md->md_flags & LNET_MD_FLAG_GPU);
 
 	switch (type) {
 	default:
 		LBUG();
 		return (-EIO);
 
-        case LNET_MSG_ACK:
-                LASSERT (payload_nob == 0);
-                break;
+	case LNET_MSG_ACK:
+		LASSERT(payload_nob == 0);
+		break;
 
-        case LNET_MSG_GET:
-                if (routing || target_is_router)
-                        break;                  /* send IMMEDIATE */
+	case LNET_MSG_GET:
+		if (routing || target_is_router)
+			break;                  /* send IMMEDIATE */
 
-                /* is the REPLY message too small for RDMA? */
+		/* is the REPLY message too small for RDMA? */
 		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[lntmsg->msg_md->md_length]);
-		if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
+		if (nob <= IBLND_MSG_SIZE && !gpu)
 			break;                  /* send IMMEDIATE */
 
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
+		tx->tx_gpu = !!gpu;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
 					  lntmsg->msg_md->md_niov,
 					  lntmsg->msg_md->md_kiov,
@@ -1708,9 +1709,9 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		ibmsg->ibm_u.get.ibgm_cookie = tx->tx_cookie;
 		lnet_hdr_to_nid4(hdr, &ibmsg->ibm_u.get.ibgm_hdr);
 
-                kiblnd_init_tx_msg(ni, tx, IBLND_MSG_GET_REQ, nob);
+		kiblnd_init_tx_msg(ni, tx, IBLND_MSG_GET_REQ, nob);
 
-                tx->tx_lntmsg[1] = lnet_create_reply_msg(ni, lntmsg);
+		tx->tx_lntmsg[1] = lnet_create_reply_msg(ni, lntmsg);
 		if (tx->tx_lntmsg[1] == NULL) {
 			CERROR("Can't create reply for GET -> %s\n",
 			       libcfs_nidstr(&target->nid));
@@ -1727,9 +1728,12 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	case LNET_MSG_REPLY:
 	case LNET_MSG_PUT:
 		/* Is the payload small enough not to need RDMA? */
-		nob = offsetof(struct kib_msg, ibm_u.immediate.ibim_payload[payload_nob]);
-		if (nob <= IBLND_MSG_SIZE && !lntmsg->msg_rdma_force)
-			break;                  /* send IMMEDIATE */
+		nob = offsetof(struct kib_msg,
+				ibm_u.immediate.ibim_payload[payload_nob]);
+		if (nob <= IBLND_MSG_SIZE && !gpu)
+			break;			/* send IMMEDIATE */
+
+		tx->tx_gpu = gpu;
 
 		rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
 					  payload_niov, payload_kiov,
@@ -1813,6 +1817,7 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 	struct bio_vec *kiov = lntmsg->msg_kiov;
 	unsigned int offset = lntmsg->msg_offset;
 	unsigned int nob = lntmsg->msg_len;
+	struct lnet_libmd *payload_md = lntmsg->msg_md;
 	struct kib_tx *tx;
 	int rc;
 
@@ -1823,6 +1828,7 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 		goto failed_0;
 	}
 
+	tx->tx_gpu = !!(payload_md->md_flags & LNET_MD_FLAG_GPU);
 	if (nob == 0)
 		rc = 0;
 	else
@@ -1920,8 +1926,9 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	case IBLND_MSG_PUT_REQ: {
 		struct kib_msg	*txmsg;
 		struct kib_rdma_desc *rd;
-		ibprm_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
+		struct lnet_libmd *payload_md = lntmsg->msg_md;
 
+		ibprm_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
 		if (mlen == 0) {
 			lnet_finalize(lntmsg, 0);
 			kiblnd_send_completion(rx->rx_conn, IBLND_MSG_PUT_NAK,
@@ -1930,14 +1937,15 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		}
 
 		tx = kiblnd_get_idle_tx(ni, conn->ibc_peer->ibp_nid);
-                if (tx == NULL) {
-                        CERROR("Can't allocate tx for %s\n",
-                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                        /* Not replying will break the connection */
-                        rc = -ENOMEM;
-                        break;
-                }
+		if (tx == NULL) {
+			CERROR("Can't allocate tx for %s\n",
+				libcfs_nid2str(conn->ibc_peer->ibp_nid));
+			/* Not replying will break the connection */
+			rc = -ENOMEM;
+			break;
+		}
 
+		tx->tx_gpu = !!(payload_md->md_flags & LNET_MD_FLAG_GPU);
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,

@@ -513,9 +513,11 @@ struct kib_tx {					/* transmit message */
 	/* # tx callbacks outstanding */
 	short			tx_sending;
 	/* queued for sending */
-	short			tx_queued;
+	unsigned long		tx_queued:1,
 	/* waiting for peer_ni */
-	short			tx_waiting;
+				tx_waiting:1,
+	/* force RDMA */
+				tx_gpu:1;
 	/* LNET completion status */
 	int			tx_status;
 	/* health status of the transmit */
@@ -1038,33 +1040,32 @@ static inline void kiblnd_dma_unmap_single(struct ib_device *dev,
 #define KIBLND_UNMAP_ADDR_SET(p, m, a)  do {} while (0)
 #define KIBLND_UNMAP_ADDR(p, m, a)      (a)
 
-static inline int kiblnd_dma_map_sg(struct kib_hca_dev *hdev,
-				    struct scatterlist *sg, int nents,
-				    enum dma_data_direction direction)
+static inline
+int kiblnd_dma_map_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 {
-	int count;
+	struct scatterlist *sg = tx->tx_frags;
+	int nents = tx->tx_nfrags;
+	enum dma_data_direction direction = tx->tx_dmadir;
 
-	count = lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
-				       sg, nents, direction);
-
-	if (count != 0)
-		return count;
+	if (tx->tx_gpu)
+		return lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
+					      sg, nents, direction);
 
 	return ib_dma_map_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
 
-static inline void kiblnd_dma_unmap_sg(struct kib_hca_dev *hdev,
-				       struct scatterlist *sg, int nents,
-				       enum dma_data_direction direction)
+static inline
+void kiblnd_dma_unmap_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 {
-	int count;
+	struct scatterlist *sg = tx->tx_frags;
+	int nents = tx->tx_nfrags;
+	enum dma_data_direction direction = tx->tx_dmadir;
 
-	count = lnet_rdma_unmap_sg(hdev->ibh_ibdev->dma_device,
-				   sg, nents, direction);
-	if (count != 0)
-		return;
-
-	ib_dma_unmap_sg(hdev->ibh_ibdev, sg, nents, direction);
+	if (tx->tx_gpu)
+		lnet_rdma_unmap_sg(hdev->ibh_ibdev->dma_device,
+					  sg, nents, direction);
+	else
+		ib_dma_unmap_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
 
 #ifndef HAVE_IB_SG_DMA_ADDRESS
