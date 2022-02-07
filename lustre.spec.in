@@ -130,14 +130,15 @@
 # requires want to set a version including epoch
 %global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//' -e 's/-%{_flavor}//')
 
-%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
 	%global requires_kmod_name kmod-%{lustre_name}
 	%global requires_kmod_osd_zfs_name kmod-%{lustre_name}-osd-zfs
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name kmod-%{lustre_name}-tests
 	%endif
 	%global requires_kmod_version %{version}
-%else	#for Suse
+#for Suse
+%else
 	%global requires_kmod_name %{lustre_name}-kmp
 	%global requires_kmod_osd_zfs_name %{lustre_name}-osd-zfs-kmp
 	%if %{with lustre_tests}
@@ -194,7 +195,7 @@ Requires: python3 >= 3.6.0
 BuildRequires: python3-devel >= 3.6.0, swig
 %endif
 BuildRequires: libtool libyaml-devel zlib-devel libnl3-devel
-%if %{_vendor}=="redhat"
+%if "%{_vendor}" == "redhat"
 BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig
 %else
@@ -211,14 +212,14 @@ Provides: lustre-server = %{version}-%{release}
 %endif
 Obsoletes: lustre-client < %{version}
 Provides: lustre-client = %{version}-%{release}
-%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
 %endif
 %if %{with lustre_modules}
 %if %{with mofed}
 BuildRequires: mlnx-ofa_kernel-devel
-%if %{_vendor} == "redhat"
+%if "%{_vendor}" == "redhat"
 Requires: kmod-mlnx-ofa_kernel
 %else
 Requires: mlnx-ofa_kernel-kmp
@@ -230,7 +231,7 @@ BuildRequires: kernel-rpm-macros
 BuildRequires: %kernel_module_package_buildreqs
 # need to provide a /usr/lib/${uname -r)/build dir
 BuildRequires: kernel
-%if %{_vendor}=="redhat"
+%if "%{_vendor}" == "redhat"
 %if %{with kabi}
 BuildRequires: kernel-abi-whitelists
 %endif
@@ -286,8 +287,10 @@ Group: System Environment/Kernel
 %description osd-ldiskfs-mount
 LDISKFS hooks for mount/mkfs into a dynamic library.
 
-%endif	# with lustre_utils
-%endif	# with ldiskfs
+# with lustre_utils
+%endif
+# with ldiskfs
+%endif
 
 %if %{with zfs}
 %kernel_module_package -n %{name}-osd-zfs -p %SOURCE5 -f %SOURCE6 %{_flavor}
@@ -304,10 +307,12 @@ Group: System Environment/Kernel
 %description osd-zfs-mount
 ZFS hooks for mount/mkfs into a dynamic library.
 
-%endif	# with lustre_utils
-%endif	# with zfs
-
-%endif # with lustre_modules
+# with lustre_utils
+%endif
+# with zfs
+%endif
+# with lustre_modules
+%endif
 
 %if %{with servers}
 %package resource-agents
@@ -356,11 +361,11 @@ Requires: python3 >= 3.6.0
 %endif
 Requires: attr, rsync, perl, lsof, /usr/bin/getconf
 %if %{with mpi}
-%if %{mpi_name} == "mpich"
+%if "%{mpi_name}" == "mpich"
 BuildRequires: mpich-devel
 %endif
-%if %{mpi_name} == "openmpi"
-%if %{_vendor} == "redhat" || 0%{?suse_version} < 1500
+%if "%{mpi_name}" == "openmpi"
+%if "%{_vendor}" == "redhat" || 0%{?suse_version} < 1500
 BuildRequires: openmpi-devel
 %else
 BuildRequires: openmpi2-devel
@@ -443,7 +448,7 @@ export UTILS_CFLAGS="${UTILS_CFLAGS} -D__SANE_USERSPACE_TYPES__=1"
 %endif
 
 # Disable any hardening or annotation since this doesn't make sense for
-# kernel code, and reset %optflags so that the vendor's overzealous flags don't
+# kernel code, and reset "optflags" so that the vendor's overzealous flags don't
 # create build failures.
 %define optflags -g -O2 -Werror
 %undefine _annotated_build
@@ -470,7 +475,7 @@ fi
 # string in it which we don't want word splitted by the shell
 # also remove (build|host|target) options because they will be specified
 # inside $CONFIGURE_ARGS
-# kmod tools/scripts require %{name} directory with kernel modules
+# kmod tools/scripts require "name" directory with kernel modules
 %define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
 
 %{?_openmpi_load}
@@ -566,7 +571,7 @@ echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 echo '%{_unitdir}/lnet.service' >>lustre.files
 %endif
 
-%if %{_vendor}=="redhat"
+%if "%{_vendor}" == "redhat"
 # The following scripts are Red Hat specific
 %if %{with servers}
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
@@ -731,7 +736,8 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 %endif
 
-%endif # with lustre_modules
+# with lustre_modules
+%endif
 
 %if %{with servers}
 %files resource-agents
