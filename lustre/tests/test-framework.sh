@@ -3694,7 +3694,7 @@ facet_failover() {
 		skip=0
 		#check whether facet has been included in other affected facets
 		for ((index=0; index<$total; index++)); do
-			[[ *,$facet,* == ,${affecteds[index]}, ]] && skip=1
+			[[ ,${affecteds[index]}, == *,$facet,* ]] && skip=1
 		done
 
 		if [ $skip -eq 0 ]; then
@@ -3710,20 +3710,52 @@ facet_failover() {
 		shutdown_facet $facet
 	done
 
+	echo "$(date +'%H:%M:%S (%s)') shut down"
+
+	local hostlist
+	local waithostlist
+
+	for facet in ${facets//,/ }; do
+		local host=$(facet_active_host $facet)
+
+		hostlist=$(expand_list $hostlist $host)
+		if [ $(facet_host $facet) = \
+			$(facet_failover_host $facet) ]; then
+			waithostlist=$(expand_list $waithostlist $host)
+		fi
+	done
+
+	if [ "$FAILURE_MODE" = HARD ]; then
+		for host in ${hostlist//,/ }; do
+			reboot_node $host
+		done
+		echo "$(date +'%H:%M:%S (%s)') $hostlist rebooted"
+		# We need to wait the rebooted hosts in case if
+		# facet_HOST == facetfailover_HOST
+		if ! [ -z "$waithostlist" ]; then
+			wait_for_host $waithostlist
+			if $LOAD_MODULES_REMOTE; then
+				echo "loading modules on $waithostlist"
+				do_rpc_nodes $waithostlist load_modules_local
+			fi
+		fi
+	else
+		sleep 10
+	fi
+
+	if [[ " ${affecteds[@]} " =~ " $SINGLEMDS " ]]; then
+		change_active $SINGLEMDS
+	fi
+
 	$E2FSCK_ON_MDT0 && (run_e2fsck $(facet_active_host $SINGLEMDS) \
-		$(mdsdevname 1) "-n" || error "Running e2fsck")
+		$(facet_device $SINGLEMDS) "-n" || error "Running e2fsck")
 
 	local -a mountpids
 
 	for ((index=0; index<$total; index++)); do
-		facet=$(echo ${affecteds[index]} | tr -s " " | cut -d"," -f 1)
-		echo reboot facets: ${affecteds[index]}
-
-		reboot_facet $facet $sleep_time
-
-		change_active ${affecteds[index]}
-
-		wait_for_facet ${affecteds[index]}
+		if [[ ${affecteds[index]} != $SINGLEMDS ]]; then
+			change_active ${affecteds[index]}
+		fi
 		if $GSS_SK; then
 			init_gss
 			init_facets_vars_simple
@@ -3753,6 +3785,20 @@ facet_failover() {
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
 		fi
 	done
+	echo "$(date +'%H:%M:%S (%s)') targets are mounted"
+
+	if [ "$FAILURE_MODE" = HARD ]; then
+		hostlist=$(exclude_items_from_list $hostlist $waithostlist)
+		if ! [ -z "$hostlist" ]; then
+			wait_for_host $hostlist
+			if $LOAD_MODULES_REMOTE; then
+				echo "loading modules on $hostlist"
+				do_rpc_nodes $hostlist load_modules_local
+			fi
+		fi
+	fi
+
+	echo "$(date +'%H:%M:%S (%s)') facet_failover done"
 }
 
 replay_barrier() {
@@ -7884,7 +7930,9 @@ wait_clients_import_state () {
 	local facets="$facet"
 
 	if [ "$FAILURE_MODE" = HARD ]; then
-		facets=$(facets_on_host $(facet_active_host $facet))
+		facets=$(for f in ${facet//,/ }; do
+			facets_on_host $(facet_active_host $f) | tr "," "\n"
+		done | sort -u | paste -sd , )
 	fi
 
 	for facet in ${facets//,/ }; do
