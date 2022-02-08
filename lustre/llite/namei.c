@@ -1646,7 +1646,7 @@ again:
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			current_cap(), rdev, &request);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 58, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 58, 0)
 	/*
 	 * server < 2.12.58 doesn't pack default LMV in intent_getattr reply,
 	 * fetch default LMV here.
