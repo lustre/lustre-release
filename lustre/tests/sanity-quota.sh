@@ -5835,6 +5835,43 @@ test_84()
 }
 run_test 84 "Reset quota should fix the insane granted quota"
 
+test_85()
+{
+	local limit=3 # 3M
+	local qpool="qpool1"
+	local qpool2="qpool2"
+	local tfile1="$DIR/$tdir/$tfile-0"
+
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	$LFS setquota -u $TSTUSR -b 0 -B 50T -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setstripe -p $qpool $DIR/$tdir || error "cannot set stripe"
+	$LFS setquota -u $TSTUSR -B 30M --pool $qpool $DIR ||
+		error "set user quota failed"
+	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
+		error "set user quota failed"
+
+	# don't care about returned value. Just check we don't hung on write.
+	$RUNAS $DD of=$tfile1 count=10
+	return 0
+}
+run_test 85 "do not hung at write with the least_qunit"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

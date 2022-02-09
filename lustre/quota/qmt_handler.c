@@ -879,6 +879,7 @@ static inline void qmt_lqes_tune_grace(const struct lu_env *env, __u64 now)
  *                   acquire/release
  * \param qb_usage - is the current space usage on the slave
  * \param repbody - is the quota_body of reply
+ * \param idx     - is the index of a slave target
  *
  * \retval 0            : success
  * \retval -EDQUOT      : out of quota
@@ -887,7 +888,7 @@ static inline void qmt_lqes_tune_grace(const struct lu_env *env, __u64 now)
  */
 int qmt_dqacq0(const struct lu_env *env, struct qmt_device *qmt,
 	       struct obd_uuid *uuid, __u32 qb_flags, __u64 qb_count,
-	       __u64 qb_usage, struct quota_body *repbody)
+	       __u64 qb_usage, struct quota_body *repbody, int idx)
 {
 	__u64			 now, count = 0;
 	struct dt_object	*slv_obj = NULL;
@@ -1098,7 +1099,7 @@ out_write:
 	 * size according to the total granted & limits. */
 
 	/* clear/set edquot flag and notify slaves via glimpse if needed */
-	qmt_adjust_and_notify(env, qmt, now, qb_flags);
+	qmt_adjust_notify_nu(env, qmt, now, qb_flags, idx);
 out_locked:
 	LQUOTA_DEBUG_LQES(env, "dqacq ends count:%llu ver:%llu rc:%d",
 		     repbody->qb_count, repbody->qb_slv_ver, rc);
@@ -1267,7 +1268,8 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 		RETURN(rc);
 
 	rc = qmt_dqacq0(env, qmt, uuid, qbody->qb_flags,
-			qbody->qb_count, qbody->qb_usage, repbody);
+			qbody->qb_count, qbody->qb_usage, repbody,
+			qmt_dom(rtype, stype) ? -1 : idx);
 
 	if (lustre_handle_is_used(&qbody->qb_lockh))
 		/* return current qunit value only to slaves owning an per-ID

@@ -812,7 +812,7 @@ int qmt_pool_lqes_lookup(const struct lu_env *env,
 
 	/* Until MDT pools are not emplemented, all MDTs belong to
 	 * global pool, thus lookup lqes only from global pool. */
-	if (rtype == LQUOTA_RES_DT && stype == QMT_STYPE_MDT)
+	if (qmt_dom(rtype, stype))
 		idx = -1;
 
 	qti_pools_init(env);

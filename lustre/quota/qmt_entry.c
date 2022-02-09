@@ -826,10 +826,12 @@ done:
 bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 				    struct qmt_device *qmt,
 				    __u64 now, bool edquot,
-				    bool qunit, __u32 qb_flags)
+				    bool qunit, __u32 qb_flags,
+				    int idx)
 {
 	struct lquota_entry *lqe_gl, *lqe;
 	bool need_reseed = false;
+	bool need_notify = false;
 	int i;
 
 	lqe_gl = qti_lqes_glbl(env);
@@ -852,15 +854,34 @@ bool qmt_adjust_edquot_qunit_notify(const struct lu_env *env,
 		return need_reseed;
 	}
 
-	if (need_reseed) {
+	if (need_reseed || idx >= 0) {
 		mutex_lock(&lqe_gl->lqe_glbl_data_lock);
-		if (lqe_gl->lqe_glbl_data)
-			qmt_seed_glbe_all(env, lqe_gl->lqe_glbl_data, qunit,
-					  edquot);
-		mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
+		if (lqe_gl->lqe_glbl_data) {
+			struct lqe_glbl_data *lgd = lqe_gl->lqe_glbl_data;
 
-		qmt_id_lock_notify(qmt, lqe_gl);
+			if (need_reseed) {
+				qmt_seed_glbe_all(env, lgd, qunit, edquot);
+			} else if (idx >= 0) {
+				LASSERT(idx <= lgd->lqeg_num_used);
+				/* If there are no locks yet when
+				 * lge_qunit/edquot_nu is set, slaves
+				 * are still not notified with new
+				 * qunit/edquot value. In a such case
+				 * we need to notify them with new values to
+				 * avoid endless EINPROGRESS if qunit is equal
+				 * to the least qunit, but lqe_revoke_time is
+				 * still not set.
+				 */
+				need_notify = lgd->lqeg_arr[idx].lge_qunit_nu ||
+					      lgd->lqeg_arr[idx].lge_edquot_nu;
+			}
+		}
+		mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
 	}
+
+	if (need_reseed || need_notify)
+		qmt_id_lock_notify(qmt, lqe_gl);
+
 	return need_reseed;
 }
 

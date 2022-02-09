@@ -97,6 +97,10 @@ enum {
 	QMT_STYPE_CNT
 };
 
+#define qmt_dom(rtype, stype) \
+	((rtype == LQUOTA_RES_DT && \
+	 stype == QMT_STYPE_MDT) ? true : false)
+
 enum {
 	/* set while recalc_thread is working */
 	QPI_FLAG_RECALC_OFFSET,
@@ -474,13 +478,13 @@ bool qmt_adjust_qunit(const struct lu_env *, struct lquota_entry *);
 bool qmt_adjust_edquot(struct lquota_entry *, __u64);
 
 #define qmt_adjust_edquot_notify(env, qmt, now, qb_flags) \
-	  qmt_adjust_edquot_qunit_notify(env, qmt, now, true, false, qb_flags)
-#define qmt_adjust_qunit_notify(env, qmt, qb_flags) \
-	  qmt_adjust_edquot_qunit_notify(env, qmt, 0, false, true, qb_flags)
-#define qmt_adjust_and_notify(env, qmt, now, qb_flags) \
-	  qmt_adjust_edquot_qunit_notify(env, qmt, now, true, true, qb_flags)
+	  qmt_adjust_edquot_qunit_notify(env, qmt, now, true, \
+					 false, qb_flags, -1)
+#define qmt_adjust_notify_nu(env, qmt, now, qb_flags, idx) \
+	  qmt_adjust_edquot_qunit_notify(env, qmt, now, true, \
+					 true, qb_flags, idx)
 bool qmt_adjust_edquot_qunit_notify(const struct lu_env *, struct qmt_device *,
-				    __u64, bool, bool, __u32);
+				    __u64, bool, bool, __u32, int idx);
 bool qmt_revalidate(const struct lu_env *, struct lquota_entry *);
 void qmt_revalidate_lqes(const struct lu_env *, struct qmt_device *, __u32);
 __u64 qmt_alloc_expand(struct lquota_entry *, __u64, __u64);
@@ -514,7 +518,7 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 		     struct lquota_entry *lqe, __u64 hard, __u64 soft,
 		     __u64 time, __u32 valid, bool is_default, bool is_updated);
 int qmt_dqacq0(const struct lu_env *, struct qmt_device *, struct obd_uuid *,
-	       __u32, __u64, __u64, struct quota_body *);
+	       __u32, __u64, __u64, struct quota_body *, int);
 int qmt_uuid2idx(struct obd_uuid *, int *);
 
 /* qmt_lock.c */

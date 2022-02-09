@@ -89,7 +89,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	case IT_QUOTA_DQACQ: {
 		struct lquota_entry	*lqe;
 		struct ldlm_lock	*lock;
-		int idx;
+		int idx, stype;
 
 		if (res->lr_name.name[LUSTRE_RES_ID_QUOTA_SEQ_OFF] == 0)
 			/* acquire on global lock? something is wrong ... */
@@ -104,8 +104,8 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 			GOTO(out, rc = -ENOLCK);
 		LDLM_LOCK_PUT(lock);
 
-		rc = qmt_uuid2idx(uuid, &idx);
-		if (rc < 0)
+		stype = qmt_uuid2idx(uuid, &idx);
+		if (stype < 0)
 			GOTO(out, rc = -EINVAL);
 
 		/* TODO: it seems we don't need to get lqe from
@@ -115,7 +115,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 		LASSERT(lqe != NULL);
 		lqe_getref(lqe);
 
-		rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), rc,
+		rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), stype,
 					  lqe_qtype(lqe), &reqbody->qb_id,
 					  NULL, idx);
 		if (rc) {
@@ -126,7 +126,8 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 		/* acquire quota space */
 		rc = qmt_dqacq0(env, qmt, uuid,
 				reqbody->qb_flags, reqbody->qb_count,
-				reqbody->qb_usage, repbody);
+				reqbody->qb_usage, repbody,
+				qmt_dom(lqe_rtype(lqe), stype) ? -1 : idx);
 		lqe_putref(lqe);
 		qti_lqes_fini(env);
 		if (rc)
@@ -275,7 +276,7 @@ static bool qmt_clear_lgeg_arr_nu(struct lquota_entry *lqe, int stype, int idx)
 
 	/* There is no array to store lge for the case of DOM.
 	 * Ignore it until MDT pools will be ready. */
-	if (!(lqe_rtype(lqe) == LQUOTA_RES_DT && stype == QMT_STYPE_MDT)) {
+	if (!qmt_dom(lqe_rtype(lqe), stype)) {
 		lqe->lqe_glbl_data->lqeg_arr[idx].lge_qunit_nu = 0;
 		lqe->lqe_glbl_data->lqeg_arr[idx].lge_edquot_nu = 0;
 
@@ -331,7 +332,7 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	struct ldlm_lock	*lock;
 	struct obd_export	*exp;
 	bool			 need_revoke;
-	int			 rc = 0, idx;
+	int			 rc = 0, idx, stype;
 	ENTRY;
 
 	LASSERT(res != NULL);
@@ -381,11 +382,11 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 		GOTO(out, rc = -EFAULT);
 	}
 
-	rc = qmt_uuid2idx(&exp->exp_client_uuid, &idx);
-	if (rc < 0)
-		GOTO(out_exp, rc);
+	stype = qmt_uuid2idx(&exp->exp_client_uuid, &idx);
+	if (stype < 0)
+		GOTO(out_exp, rc = stype);
 
-	need_revoke = qmt_clear_lgeg_arr_nu(lqe, rc, idx);
+	need_revoke = qmt_clear_lgeg_arr_nu(lqe, stype, idx);
 	if (lvb->lvb_id_rel == 0) {
 		/* nothing to release */
 		if (lvb->lvb_id_may_rel != 0)
@@ -396,12 +397,12 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	if (!need_revoke && lvb->lvb_id_rel == 0)
 		GOTO(out_exp, rc = 0);
 
-	rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), rc, lqe_qtype(lqe),
-				  &lqe->lqe_id, NULL, idx);
+	rc = qmt_pool_lqes_lookup(env, qmt, lqe_rtype(lqe), stype,
+				  lqe_qtype(lqe), &lqe->lqe_id, NULL, idx);
 	if (rc)
 		GOTO(out_exp, rc);
 
-	if (need_revoke && qmt_set_revoke(env, lqe, rc, idx) &&
+	if (need_revoke && qmt_set_revoke(env, lqe, stype, idx) &&
 	    lqe->lqe_glbl_data) {
 		qmt_seed_glbe_edquot(env, lqe->lqe_glbl_data);
 		qmt_id_lock_notify(qmt, lqe);
@@ -414,7 +415,8 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 		/* release quota space */
 		rc = qmt_dqacq0(env, qmt, &exp->exp_client_uuid,
 				QUOTA_DQACQ_FL_REL, lvb->lvb_id_rel,
-				0, &qti->qti_body);
+				0, &qti->qti_body,
+				qmt_dom(lqe_rtype(lqe), stype) ? -1 : idx);
 		if (rc || qti->qti_body.qb_count != lvb->lvb_id_rel)
 			LQUOTA_ERROR(lqe,
 				     "failed to release quota space on glimpse %llu!=%llu : rc = %d\n",
@@ -637,7 +639,7 @@ void qmt_setup_id_desc(struct ldlm_lock *lock, union ldlm_gl_desc *desc,
 	LASSERT(stype >= 0);
 
 	/* DOM case - set global lqe settings */
-	if (lqe_rtype(lqe) == LQUOTA_RES_DT && stype == QMT_STYPE_MDT) {
+	if (qmt_dom(lqe_rtype(lqe), stype)) {
 		edquot = lqe->lqe_edquot;
 		qunit = lqe->lqe_qunit;
 	} else {
@@ -844,7 +846,7 @@ static int qmt_id_lock_cb(struct ldlm_lock *lock, struct lquota_entry *lqe)
 
 	/* Quota pools support only OSTs, despite MDTs also could be registered
 	 * as LQUOTA_RES_DT devices(DOM). */
-	if (lqe_rtype(lqe) == LQUOTA_RES_DT && stype == QMT_STYPE_MDT)
+	if (qmt_dom(lqe_rtype(lqe), stype))
 		return 1;
 	else
 		return lgd->lqeg_arr[idx].lge_edquot_nu ||
