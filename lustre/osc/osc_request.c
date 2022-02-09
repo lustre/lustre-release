@@ -2644,6 +2644,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 	spin_lock(&cli->cl_loi_list_lock);
 	starting_offset >>= PAGE_SHIFT;
+	ending_offset >>= PAGE_SHIFT;
 	if (cmd == OBD_BRW_READ) {
 		cli->cl_r_in_flight++;
 		lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
@@ -2660,8 +2661,19 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	spin_unlock(&cli->cl_loi_list_lock);
 
 	DEBUG_REQ(D_INODE, req, "%d pages, aa %p, now %ur/%uw in flight",
-		  page_count, aa, cli->cl_r_in_flight,
-		  cli->cl_w_in_flight);
+		  page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight);
+	if (libcfs_debug & D_IOTRACE) {
+		struct lu_fid fid;
+
+		fid.f_seq = crattr->cra_oa->o_parent_seq;
+		fid.f_oid = crattr->cra_oa->o_parent_oid;
+		fid.f_ver = crattr->cra_oa->o_parent_ver;
+		CDEBUG(D_IOTRACE,
+		       DFID": %d %s pages, start %lld, end %lld, now %ur/%uw in flight\n",
+		       PFID(&fid), page_count,
+		       cmd == OBD_BRW_READ ? "read" : "write", starting_offset,
+		       ending_offset, cli->cl_r_in_flight, cli->cl_w_in_flight);
+	}
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_IO, cfs_fail_val);
 
 	ptlrpcd_add_req(req);
