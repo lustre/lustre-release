@@ -1354,6 +1354,10 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *ldesc,
 struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de);
 int ll_rmdir_entry(struct inode *dir, char *name, int namelen);
 void ll_update_times(struct ptlrpc_request *request, struct inode *inode);
+int ll_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
+		   struct lookup_intent *it, struct ptlrpc_request **reqp,
+		   ldlm_blocking_callback cb_blocking, __u64 extra_lock_flags,
+		   bool tryagain);
 
 /* llite/rw.c */
 int ll_writepage(struct page *page, struct writeback_control *wbc);

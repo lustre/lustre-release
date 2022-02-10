@@ -37,6 +37,7 @@
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <upcall_cache.h>
+#include "upcall_cache_internal.h"
 
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
 					      __u64 key, void *args)
@@ -57,19 +58,6 @@ static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
 	if (cache->uc_ops->init_entry)
 		cache->uc_ops->init_entry(entry, args);
 	return entry;
-}
-
-/* protected by cache lock */
-static void free_entry(struct upcall_cache *cache,
-		       struct upcall_cache_entry *entry)
-{
-	if (cache->uc_ops->free_entry)
-		cache->uc_ops->free_entry(cache, entry);
-
-	list_del(&entry->ue_hash);
-	CDEBUG(D_OTHER, "destroy cache entry %p for key %llu\n",
-		entry, entry->ue_key);
-	LIBCFS_FREE(entry, sizeof(*entry));
 }
 
 static inline int upcall_compare(struct upcall_cache *cache,
@@ -96,20 +84,6 @@ static inline int downcall_compare(struct upcall_cache *cache,
 		return cache->uc_ops->downcall_compare(cache, entry, key, args);
 
 	return 0;
-}
-
-static inline void get_entry(struct upcall_cache_entry *entry)
-{
-	atomic_inc(&entry->ue_refcount);
-}
-
-static inline void put_entry(struct upcall_cache *cache,
-			     struct upcall_cache_entry *entry)
-{
-	if (atomic_dec_and_test(&entry->ue_refcount) &&
-	    (UC_CACHE_IS_INVALID(entry) || UC_CACHE_IS_EXPIRED(entry))) {
-		free_entry(cache, entry);
-	}
 }
 
 static inline void write_lock_from_read(rwlock_t *lock, bool *writelock)
@@ -190,7 +164,7 @@ out:
 EXPORT_SYMBOL(upcall_cache_set_upcall);
 
 static inline int refresh_entry(struct upcall_cache *cache,
-			 struct upcall_cache_entry *entry)
+				struct upcall_cache_entry *entry, __u32 fsgid)
 {
 	LASSERT(cache->uc_ops->do_upcall);
 	return cache->uc_ops->do_upcall(cache, entry);
@@ -200,11 +174,13 @@ struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 						  __u64 key, void *args)
 {
 	struct upcall_cache_entry *entry = NULL, *new = NULL, *next;
+	gid_t fsgid = (__u32)__kgid_val(INVALID_GID);
+	struct group_info *ginfo = NULL;
 	bool failedacquiring = false;
 	struct list_head *head;
 	wait_queue_entry_t wait;
 	bool writelock;
-	int rc, found;
+	int rc = 0, found;
 
 	ENTRY;
 
@@ -267,13 +243,27 @@ find_with_lock:
 	/* now we hold a write lock */
 	get_entry(entry);
 
+	/* special processing of supp groups for identity upcall */
+	if (strcmp(cache->uc_upcall, IDENTITY_UPCALL_INTERNAL) == 0) {
+		write_unlock(&cache->uc_lock);
+		rc = upcall_cache_get_entry_internal(cache, entry, args,
+						     &fsgid, &ginfo);
+		write_lock(&cache->uc_lock);
+		if (rc)
+			GOTO(out, entry = ERR_PTR(rc));
+	}
+
 	/* acquire for new one */
 	if (UC_CACHE_IS_NEW(entry)) {
-		UC_CACHE_SET_ACQUIRING(entry);
 		UC_CACHE_CLEAR_NEW(entry);
-		write_unlock(&cache->uc_lock);
-		rc = refresh_entry(cache, entry);
-		write_lock(&cache->uc_lock);
+		if (strcmp(cache->uc_upcall, IDENTITY_UPCALL_INTERNAL) == 0) {
+			refresh_entry_internal(cache, entry, fsgid, &ginfo);
+		} else {
+			UC_CACHE_SET_ACQUIRING(entry);
+			write_unlock(&cache->uc_lock);
+			rc = refresh_entry(cache, entry, fsgid);
+			write_lock(&cache->uc_lock);
+		}
 		entry->ue_acquire_expire = ktime_get_seconds() +
 					   cache->uc_acquire_expire;
 		if (rc < 0) {
@@ -360,6 +350,8 @@ out:
 		write_unlock(&cache->uc_lock);
 	else
 		read_unlock(&cache->uc_lock);
+	if (ginfo)
+		groups_free(ginfo);
 	RETURN(entry);
 }
 EXPORT_SYMBOL(upcall_cache_get_entry);

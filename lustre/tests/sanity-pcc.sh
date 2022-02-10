@@ -3582,6 +3582,7 @@ test_46() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 	local fsuuid=$($LFS getname $MOUNT | awk '{print $1}')
+	local runascmd="$RUNAS -G0"
 
 	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
 		skip "Server does not support PCC-RO"
@@ -3593,7 +3594,7 @@ test_46() {
 	$LCTL pcc list $MOUNT
 
 	local mode=$($LCTL get_param -n llite.$fsuuid.pcc_mode)
-	$RUNAS id
+	$runascmd id
 
 	echo "Mode: $mode"
 	echo "QQQQQ" > $file || error "write $file failed"
@@ -3602,44 +3603,44 @@ test_46() {
 	$LCTL set_param llite.$fsuuid.pcc_mode="0" ||
 		error "Set PCC mode failed"
 	stack_trap "$LCTL set_param llite.$fsuuid.pcc_mode=$mode" EXIT
-	$RUNAS $LFS pcc attach -r $file &&
+	$runascmd $LFS pcc attach -r $file &&
 		error "User should not attach $file"
-	$RUNAS cat $file || error "cat $file failed"
+	$runascmd cat $file || error "cat $file failed"
 	check_lpcc_state $file "none" client
 
 	$LCTL set_param llite.$fsuuid.pcc_mode="0400" ||
 		error "Set PCC mode failed"
 	stack_trap "$LCTL set_param llite.$fsuuid.pcc_mode=$mode" EXIT
-	$RUNAS $LFS pcc attach -r $file &&
+	$runascmd $LFS pcc attach -r $file &&
 		error "User should not attach $file"
-	$RUNAS cat $file || error "cat $file failed"
+	$runascmd cat $file || error "cat $file failed"
 	check_lpcc_state $file "none" client
 
 	$LCTL set_param llite.$fsuuid.pcc_mode="0004" ||
 		error "Set PCC mode failed"
-	$RUNAS cat $file || error "cat $file failed"
+	$runascmd cat $file || error "cat $file failed"
 	$LFS pcc state $file
 	check_lpcc_state $file "readonly" client
-	$RUNAS $LFS pcc detach $file || error "Detach $file failed"
+	$runascmd $LFS pcc detach $file || error "Detach $file failed"
 
-	$RUNAS stat $file || error "stat $file failed"
+	$runascmd stat $file || error "stat $file failed"
 	$LFS pcc attach -r $file || error "failed to attach $file"
 	check_lpcc_state $file "readonly" client
-	$RUNAS $LFS pcc detach $file || error "failed to detach $file"
+	$runascmd $LFS pcc detach $file || error "failed to detach $file"
 
 	$LCTL set_param llite.$fsuuid.pcc_mode="0040" ||
 		error "Set PCC mode failed"
 	chmod 660 $file || error "chmod $file failed"
-	$RUNAS cat $file || error "cat $file failed"
+	$runascmd cat $file || error "cat $file failed"
 	$LFS pcc state $file
 	check_lpcc_state $file "readonly" client
-	$RUNAS $LFS pcc detach $file || error "failed to detach $file"
+	$runascmd $LFS pcc detach $file || error "failed to detach $file"
 
-	$RUNAS $LFS pcc attach -r $file || error "attach $file failed"
+	$runascmd $LFS pcc attach -r $file || error "attach $file failed"
 	stat $file || error "stat $file failed"
 	$LFS pcc state $file
 	check_lpcc_state $file "readonly" client
-	$RUNAS $LFS pcc detach $file || error "Detach $file failed"
+	$runascmd $LFS pcc detach $file || error "Detach $file failed"
 }
 run_test 46 "Verify PCC mode setting works correctly"
 

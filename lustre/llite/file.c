@@ -700,8 +700,8 @@ retry:
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_OPEN_DELAY, cfs_fail_val);
 
-	rc = md_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
-			    &ll_md_blocking_ast, 0);
+	rc = ll_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
+			    &ll_md_blocking_ast, 0, true);
 	kfree(name);
 	ll_finish_md_op_data(op_data);
 	if (rc == -ESTALE) {
@@ -1250,7 +1250,7 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 
 	it.it_open_flags = fmode | open_flags;
 	it.it_open_flags |= MDS_OPEN_LOCK | MDS_OPEN_BY_FID | MDS_OPEN_LEASE;
-	rc = md_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
+	rc = ll_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
 			    &ll_md_blocking_lease_ast,
 	/* LDLM_FL_NO_LRU: To not put the lease lock into LRU list, otherwise
 	 * it can be cancelled which may mislead applications that the lease is
@@ -1259,7 +1259,8 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	 * open in ll_md_blocking_ast(). Otherwise as ll_md_blocking_lease_ast
 	 * doesn't deal with openhandle, so normal openhandle will be leaked.
 	 */
-			    LDLM_FL_NO_LRU | LDLM_FL_EXCL);
+			    LDLM_FL_NO_LRU | LDLM_FL_EXCL,
+			    true);
 	ll_finish_md_op_data(op_data);
 	ptlrpc_req_put(req);
 	if (rc < 0)
@@ -6015,7 +6016,8 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 		RETURN(PTR_ERR(op_data));
 
 	op_data->op_flags |= flags;
-	rc = md_intent_lock(exp, op_data, &oit, &req, &ll_md_blocking_ast, 0);
+	rc = ll_intent_lock(exp, op_data, &oit, &req,
+			    &ll_md_blocking_ast, 0, true);
 	ll_finish_md_op_data(op_data);
 	if (rc < 0) {
 		rc = ll_inode_revalidate_fini(inode, rc);
@@ -6907,8 +6909,8 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",
 			  sbi->ll_fsname, PFID(&lli->lli_fid), inode);
 
-	rc = md_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
-			    &ll_md_blocking_ast, 0);
+	rc = ll_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
+			    &ll_md_blocking_ast, 0, true);
 	if (it.it_request != NULL)
 		ptlrpc_req_put(it.it_request);
 	it.it_request = NULL;

@@ -2404,7 +2404,7 @@ test_8() {
 
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
-	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration ||
+	$RUNAS -G0 bash rundbench -D $DIR/$tdir 3 $duration ||
 		quota_error a $TSTUSR "dbench failed!"
 
 	is_project_quota_supported && change_project -C $DIR/$tdir

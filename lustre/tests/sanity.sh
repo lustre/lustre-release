@@ -8482,7 +8482,7 @@ test_56xb() {
 
 	chown -R $RUNAS_ID $dir
 	echo "testing non-root lfs migrate mode when not all links are in xattr"
-	check_migrate_links "$dir" 101 100 "$RUNAS"
+	check_migrate_links "$dir" 101 100 "$RUNAS -G0"
 
 	# clean up
 	rm -rf $dir

@@ -95,6 +95,27 @@ void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
 }
 EXPORT_SYMBOL(lustre_groups_from_list);
 
+void lustre_list_from_groups(gid_t *glist, struct group_info *ginfo)
+{
+#ifdef HAVE_GROUP_INFO_GID
+	memcpy(glist, ginfo->gid, ginfo->ngroups * sizeof(__u32));
+#else
+	int i;
+	int count = ginfo->ngroups;
+
+	/* fill in gid array from group_info */
+	for (i = 0; i < ginfo->nblocks && count > 0; i++) {
+		int cp_count = min(CFS_NGROUPS_PER_BLOCK, count);
+		int off = i * CFS_NGROUPS_PER_BLOCK;
+		int len = cp_count * sizeof(*glist);
+
+		memcpy(glist + off, ginfo->blocks[i], len);
+		count -= cp_count;
+	}
+#endif
+}
+EXPORT_SYMBOL(lustre_list_from_groups);
+
 /* groups_sort() is copied from linux kernel! */
 /* a simple shell-metzner sort */
 void lustre_groups_sort(struct group_info *group_info)

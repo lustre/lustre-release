@@ -41,7 +41,10 @@
 static void mdt_identity_entry_init(struct upcall_cache_entry *entry,
 				    void *unused)
 {
-	entry->u.identity.mi_uc_entry = entry;
+	struct md_identity *identity = &entry->u.identity;
+
+	memset(identity, 0, sizeof(*identity));
+	identity->mi_uc_entry = entry;
 }
 
 static void mdt_identity_entry_free(struct upcall_cache *cache,
@@ -187,14 +190,16 @@ out:
 	RETURN(rc);
 }
 
-struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
+struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid,
+				     struct mdt_thread_info *info)
 {
 	struct upcall_cache_entry *entry;
 
 	if (!cache)
 		return ERR_PTR(-ENOENT);
 
-	entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
+	entry = upcall_cache_get_entry(cache, (__u64)uid,
+				       info ? mdt_ucred(info) : NULL);
 	if (unlikely(!entry))
 		return ERR_PTR(-ENOENT);
 	if (IS_ERR(entry))

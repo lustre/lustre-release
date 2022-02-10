@@ -823,6 +823,145 @@ out:
 	return rc;
 }
 
+static int get_acl_from_req(struct ptlrpc_request *req, struct posix_acl **acl)
+{
+	struct mdt_body	*body;
+	void *buf;
+	int rc;
+
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	if (!body->mbo_aclsize) {
+		*acl = NULL;
+		return 0;
+	}
+
+	buf = req_capsule_server_sized_get(&req->rq_pill, &RMF_ACL,
+					   body->mbo_aclsize);
+	if (!buf)
+		return -EPROTO;
+
+	*acl = posix_acl_from_xattr(&init_user_ns, buf, body->mbo_aclsize);
+	if (IS_ERR_OR_NULL(*acl)) {
+		rc = *acl ? PTR_ERR(*acl) : 0;
+		CDEBUG(D_SEC, "convert xattr to acl: %d\n", rc);
+		return rc;
+	}
+
+	rc = posix_acl_valid(&init_user_ns, *acl);
+	if (rc) {
+		CDEBUG(D_SEC, "validate acl: %d\n", rc);
+		posix_acl_release(*acl);
+		return rc;
+	}
+
+	return 0;
+}
+
+static inline int accmode_from_openflags(u64 open_flags)
+{
+	unsigned int may_mask = 0;
+
+	if (open_flags & (FMODE_READ | FMODE_PREAD))
+		may_mask |= MAY_READ;
+	if (open_flags & (FMODE_WRITE | FMODE_PWRITE))
+		may_mask |= MAY_WRITE;
+	if (open_flags & FMODE_EXEC)
+		may_mask = MAY_EXEC;
+
+	return may_mask;
+}
+
+static __u32 get_uc_group_from_acl(const struct posix_acl *acl, int want)
+{
+	const struct posix_acl_entry *pa, *pe;
+
+	FOREACH_ACL_ENTRY(pa, acl, pe) {
+		switch (pa->e_tag) {
+		case ACL_GROUP_OBJ:
+		case ACL_GROUP:
+			if (in_group_p(pa->e_gid) &&
+			    (pa->e_perm & want) == want)
+				return (__u32)from_kgid(&init_user_ns,
+							pa->e_gid);
+			break;
+		default:
+			/* nothing to do */
+			break;
+		}
+	}
+
+	return (__u32)__kgid_val(INVALID_GID);
+}
+
+/* This function implements a retry mechanism on top of md_intent_lock().
+ * This is useful because the client can provide at most 2 supplementary
+ * groups in the request sent to the MDS, but sometimes it does not know
+ * which ones are useful for credentials calculation on server side. For
+ * instance in case of lookup, the client does not have the child inode yet
+ * when it sends the intent lock request.
+ * Hopefully, the server can hint at the useful groups, by putting in the
+ * request reply the target inode's GID, and also its ACL.
+ * So in case the server replies -EACCES, we check the user's credentials
+ * against those, and try again the intent lock request if we find a matching
+ * supplementary group.
+ */
+int ll_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
+		   struct lookup_intent *it, struct ptlrpc_request **reqp,
+		   ldlm_blocking_callback cb_blocking, __u64 extra_lock_flags,
+		   bool tryagain)
+{
+	int rc;
+
+	ENTRY;
+
+intent:
+	rc = md_intent_lock(exp, op_data, it, reqp, cb_blocking,
+			    extra_lock_flags);
+	CDEBUG(D_VFSTRACE,
+	       "intent lock %d on i1 "DFID" suppgids %d %d: rc %d\n",
+	       it->it_op, PFID(&op_data->op_fid1),
+	       op_data->op_suppgids[0], op_data->op_suppgids[1], rc);
+	if (rc == -EACCES && tryagain && it->it_op & IT_OPEN &&
+	    it_disposition(it, DISP_OPEN_DENY) && *reqp) {
+		struct mdt_body *body;
+		__u32 new_suppgid;
+
+		body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
+		new_suppgid = body->mbo_gid;
+		CDEBUG(D_SEC, "new suppgid from body: %d\n", new_suppgid);
+		if (op_data->op_suppgids[0] == body->mbo_gid ||
+		    op_data->op_suppgids[1] == body->mbo_gid ||
+		    !in_group_p(make_kgid(&init_user_ns, body->mbo_gid))) {
+			int accmode = accmode_from_openflags(it->it_open_flags);
+			struct posix_acl *acl;
+
+			rc = get_acl_from_req(*reqp, &acl);
+			if (rc || !acl)
+				GOTO(out, rc = -EACCES);
+
+			new_suppgid = get_uc_group_from_acl(acl, accmode);
+			posix_acl_release(acl);
+			CDEBUG(D_SEC, "new suppgid from acl: %d\n",
+			       new_suppgid);
+
+			if (new_suppgid == (__u32)__kgid_val(INVALID_GID))
+				GOTO(out, rc = -EACCES);
+		}
+
+		if (!(it->it_open_flags & MDS_OPEN_BY_FID))
+			fid_zero(&op_data->op_fid2);
+		op_data->op_suppgids[1] = new_suppgid;
+		ptlrpc_req_put(*reqp);
+		*reqp = NULL;
+		ll_intent_release(it);
+		tryagain = false;
+		goto intent;
+	}
+
+out:
+	RETURN(rc);
+}
+
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
 				   void **secctx, __u32 *secctxlen,
@@ -1019,35 +1158,14 @@ inherit:
 		it->it_open_flags |= MDS_OPEN_PCC;
 	}
 
-	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
-			    &ll_md_blocking_ast, 0);
 	/* If the MDS allows the client to chgrp (CFS_SETGRP_PERM), but the
 	 * client does not know which suppgid should be sent to the MDS, or
 	 * some other(s) changed the target file's GID after this RPC sent
 	 * to the MDS with the suppgid as the original GID, then we should
 	 * try again with right suppgid.
 	 */
-	if (rc == -EACCES && it->it_op & IT_OPEN &&
-	    it_disposition(it, DISP_OPEN_DENY)) {
-		struct mdt_body *body;
-
-		LASSERT(req != NULL);
-
-		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-		if (op_data->op_suppgids[0] == body->mbo_gid ||
-		    op_data->op_suppgids[1] == body->mbo_gid ||
-		    !in_group_p(make_kgid(&init_user_ns, body->mbo_gid)))
-			GOTO(out, retval = ERR_PTR(-EACCES));
-
-		fid_zero(&op_data->op_fid2);
-		op_data->op_suppgids[1] = body->mbo_gid;
-		ptlrpc_req_put(req);
-		req = NULL;
-		ll_intent_release(it);
-		rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
-				    &ll_md_blocking_ast, 0);
-	}
-
+	rc = ll_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
+			    &ll_md_blocking_ast, 0, true);
 	if (rc < 0)
 		GOTO(out, retval = ERR_PTR(rc));
 

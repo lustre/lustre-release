@@ -216,13 +216,9 @@ static ssize_t identity_expire_show(struct kobject *kobj,
 			 mdt->mdt_identity_cache->uc_entry_expire);
 }
 
-static ssize_t identity_expire_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count)
+static ssize_t entry_expire_store(struct upcall_cache *cache,
+				  const char *buffer, size_t count)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	time64_t val;
 	int rc;
 
@@ -233,9 +229,20 @@ static ssize_t identity_expire_store(struct kobject *kobj,
 	if (val < 0)
 		return -ERANGE;
 
-	mdt->mdt_identity_cache->uc_entry_expire = val;
+	cache->uc_entry_expire = val;
 
 	return count;
+}
+
+static ssize_t identity_expire_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return entry_expire_store(mdt->mdt_identity_cache, buffer, count);
 }
 LUSTRE_RW_ATTR(identity_expire);
 
@@ -250,13 +257,9 @@ static ssize_t identity_acquire_expire_show(struct kobject *kobj,
 			 mdt->mdt_identity_cache->uc_acquire_expire);
 }
 
-static ssize_t identity_acquire_expire_store(struct kobject *kobj,
-					     struct attribute *attr,
-					     const char *buffer, size_t count)
+static ssize_t acquire_expire_store(struct upcall_cache *cache,
+				    const char *buffer, size_t count)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	time64_t val;
 	int rc;
 
@@ -267,9 +270,20 @@ static ssize_t identity_acquire_expire_store(struct kobject *kobj,
 	if (val < 0 || val > INT_MAX)
 		return -ERANGE;
 
-	mdt->mdt_identity_cache->uc_acquire_expire = val;
+	cache->uc_acquire_expire = val;
 
 	return count;
+}
+
+static ssize_t identity_acquire_expire_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return acquire_expire_store(mdt->mdt_identity_cache, buffer, count);
 }
 LUSTRE_RW_ATTR(identity_acquire_expire);
 
@@ -320,13 +334,9 @@ static ssize_t identity_upcall_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(identity_upcall);
 
-static ssize_t identity_flush_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buffer, size_t count)
+static ssize_t flush_store(struct upcall_cache *cache,
+			   const char *buffer, size_t count)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	int uid;
 	int rc;
 
@@ -334,8 +344,19 @@ static ssize_t identity_flush_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	mdt_flush_identity(mdt->mdt_identity_cache, uid);
+	mdt_flush_identity(cache, uid);
 	return count;
+}
+
+static ssize_t identity_flush_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return flush_store(mdt->mdt_identity_cache, buffer, count);
 }
 LUSTRE_WO_ATTR(identity_flush);
 
@@ -405,6 +426,66 @@ out:
 	return rc ? rc : count;
 }
 LPROC_SEQ_FOPS_WR_ONLY(mdt, identity_info);
+
+static ssize_t identity_int_expire_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
+			 mdt->mdt_identity_cache_int->uc_entry_expire);
+}
+
+static ssize_t identity_int_expire_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return entry_expire_store(mdt->mdt_identity_cache_int, buffer, count);
+}
+LUSTRE_RW_ATTR(identity_int_expire);
+
+static ssize_t identity_int_acquire_expire_show(struct kobject *kobj,
+						struct attribute *attr,
+						char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
+			 mdt->mdt_identity_cache_int->uc_acquire_expire);
+}
+
+static ssize_t identity_int_acquire_expire_store(struct kobject *kobj,
+						 struct attribute *attr,
+						 const char *buffer,
+						 size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return acquire_expire_store(mdt->mdt_identity_cache_int, buffer, count);
+}
+LUSTRE_RW_ATTR(identity_int_acquire_expire);
+
+static ssize_t identity_int_flush_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return flush_store(mdt->mdt_identity_cache_int, buffer, count);
+}
+LUSTRE_WO_ATTR(identity_int_flush);
 
 static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
 {
@@ -1366,6 +1447,9 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_identity_acquire_expire.attr,
 	&lustre_attr_identity_upcall.attr,
 	&lustre_attr_identity_flush.attr,
+	&lustre_attr_identity_int_expire.attr,
+	&lustre_attr_identity_int_acquire_expire.attr,
+	&lustre_attr_identity_int_flush.attr,
 	&lustre_attr_evict_tgt_nids.attr,
 	&lustre_attr_enable_cap_mask.attr,
 	&lustre_attr_enable_chprojid_gid.attr,

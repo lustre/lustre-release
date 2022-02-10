@@ -20,6 +20,13 @@
 #include <obd.h>
 #include <lustre_sec.h>
 
+/* The special identity_upcall value "INTERNAL" implements a particular behavior
+ * which does not involve an actual upcall. Instead, the cache is filled with
+ * supplementary groups read from the user's credentials provided as input
+ * (usually got from the client request), cumulatively at each request.
+ */
+#define IDENTITY_UPCALL_INTERNAL	"INTERNAL"
+
 /** \defgroup ucache ucache
  *
  * @{

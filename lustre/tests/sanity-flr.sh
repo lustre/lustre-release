@@ -3206,7 +3206,7 @@ test_61a() { # LU-14508
 	check_times_61 $file "${tim[@]}"
 
 	echo "normal user migrate $tfile and test timestamps"
-	$RUNAS $LFS migrate -n $file || error "cannot migrate $file"
+	$RUNAS -G0 $LFS migrate -n $file || error "cannot migrate $file"
 	check_times_61 $file "${tim[@]}"
 }
 run_test 61a "mirror extend and migrate preserve timestamps"
@@ -3245,7 +3245,7 @@ test_61b() { # LU-14508
 	check_times_61 $file "${tim[@]}"
 
 	echo "normal user mirror extend $tfile and test timestamps"
-	$RUNAS $LFS mirror extend -N -c1 -i1 $file ||
+	$RUNAS -G0 $LFS mirror extend -N -c1 -i1 $file ||
 		error "cannot extend mirror $file"
 	check_times_61 $file "${tim[@]}"
 }

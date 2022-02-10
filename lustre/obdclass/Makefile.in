@@ -27,6 +27,7 @@ obdclass-all-objs += range_lock.o
 obdclass-all-objs += page_pools.o
 
 @SERVER_TRUE@obdclass-all-objs += idmap.o
+@SERVER_TRUE@obdclass-all-objs += upcall_cache_internal.o
 @SERVER_TRUE@obdclass-all-objs += lprocfs_jobstats.o
 @SERVER_TRUE@obdclass-all-objs += lprocfs_status_server.o
 @SERVER_TRUE@obdclass-all-objs += lu_ucred.o
@@ -39,10 +40,11 @@ obdclass-objs := $(obdclass-all-objs)
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
 EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_internal.h
-EXTRA_DIST += cl_internal.h local_storage.h
+EXTRA_DIST += cl_internal.h local_storage.h upcall_cache_internal.h
 EXTRA_DIST += range_lock.c
 
 @SERVER_FALSE@EXTRA_DIST += idmap.c
+@SERVER_FALSE@EXTRA_DIST += upcall_cache_internal.c
 @SERVER_FALSE@EXTRA_DIST += lprocfs_jobstats.c
 @SERVER_FALSE@EXTRA_DIST += lprocfs_status_server.c
 @SERVER_FALSE@EXTRA_DIST += lu_ucred.c

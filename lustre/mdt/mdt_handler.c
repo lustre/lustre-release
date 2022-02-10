@@ -6306,6 +6306,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	mdt_tunables_fini(m);
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
+	upcall_cache_cleanup(m->mdt_identity_cache_int);
+	m->mdt_identity_cache_int = NULL;
 
 	tgt_fini(env, &m->mdt_lut);
 
@@ -6358,6 +6360,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	struct lu_site *s;
 	struct seq_server_site *ss_site;
 	const char *identity_upcall = "NONE";
+	char cache_internal[NAME_MAX + 1] = { 0 };
 	struct md_device *next;
 	struct lu_fid fid;
 	int rc;
@@ -6568,7 +6571,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 */
 	if (m->mdt_opts.mo_acl)
 		identity_upcall = MDT_IDENTITY_UPCALL_PATH;
-
 	m->mdt_identity_cache = upcall_cache_init(mdt_obd_name(m),
 						identity_upcall,
 						UC_IDCACHE_HASH_SIZE,
@@ -6580,6 +6582,21 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		rc = PTR_ERR(m->mdt_identity_cache);
 		m->mdt_identity_cache = NULL;
 		GOTO(err_free_hsm, rc);
+	}
+
+	snprintf(cache_internal, sizeof(cache_internal), "%s_int",
+		 mdt_obd_name(m));
+	m->mdt_identity_cache_int = upcall_cache_init(cache_internal,
+						IDENTITY_UPCALL_INTERNAL,
+						UC_IDCACHE_HASH_SIZE,
+						1200, /* entry expire: 20 mn */
+						30, /* acquire expire: 30 s */
+						true, /* acquire can replay */
+						&mdt_identity_upcall_cache_ops);
+	if (IS_ERR(m->mdt_identity_cache_int)) {
+		rc = PTR_ERR(m->mdt_identity_cache_int);
+		m->mdt_identity_cache_int = NULL;
+		GOTO(err_cache, rc);
 	}
 
 	rc = mdt_tunables_init(m, dev);
@@ -6623,6 +6640,9 @@ err_ping_evictor:
 err_procfs:
 	mdt_tunables_fini(m);
 err_recovery:
+	upcall_cache_cleanup(m->mdt_identity_cache_int);
+	m->mdt_identity_cache_int = NULL;
+err_cache:
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
 err_free_hsm:

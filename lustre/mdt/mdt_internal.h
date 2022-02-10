@@ -291,6 +291,7 @@ struct mdt_device {
 	__u32			   mdt_brw_size;
 
 	struct upcall_cache	  *mdt_identity_cache;
+	struct upcall_cache	  *mdt_identity_cache_int;
 
 	unsigned int		   mdt_evict_tgt_nids:1,
 				   mdt_dom_read_open:1,
@@ -1055,7 +1056,8 @@ static inline bool agent_req_in_final_state(enum agent_req_status ars)
 #define UC_IDCACHE_HASH_SIZE 128
 extern struct upcall_cache_ops mdt_identity_upcall_cache_ops;
 
-struct md_identity *mdt_identity_get(struct upcall_cache *, __u32);
+struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid,
+				     struct mdt_thread_info *info);
 
 void mdt_identity_put(struct upcall_cache *, struct md_identity *);
 

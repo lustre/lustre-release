@@ -45,12 +45,12 @@
 #endif
 
 static const char usage[] =
-"Usage: %s -u user_id [-g grp_id] [-v euid] [-j egid] [-G[gid0,gid1,...]] command\n"
-"  -u user_id           switch to UID user_id\n"
-"  -g grp_id            switch to GID grp_id\n"
-"  -v euid              switch euid to UID\n"
-"  -j egid              switch egid to GID\n"
-"  -G[gid0,gid1,...]    set supplementary groups\n";
+"Usage: %s -u USER_ID [-g GRP_ID] [-v EUID] [-j EGID] [-G <GID0,GID1,...>] command\n"
+"  -u USER_ID           switch to uid USER_ID\n"
+"  -g GRP_ID            switch to gid GRP_ID\n"
+"  -v EUID              switch euid to EUID\n"
+"  -j EGID              switch egid to EGID\n"
+"  -G <GID0,GID1,...>   set supplementary groups\n";
 
 static void Usage_and_abort(const char *name)
 {
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 	}
 
 	/* get UID and GID */
-	while ((c = getopt(argc, argv, "+u:g:v:j:hG::")) != -1) {
+	while ((c = getopt(argc, argv, "+u:g:v:j:hG:")) != -1) {
 		switch (c) {
 		case 'u':
 			if (!isdigit(optarg[0])) {
@@ -144,9 +144,14 @@ int main(int argc, char **argv)
 			break;
 
 		case 'G':
-			num_supp = 0;
-			if (!optarg || !isdigit(optarg[0]))
+			if (!optarg || !isdigit(optarg[0])) {
+				fprintf(stderr,
+					"Provided parameter '%s' for option '-G' is bad\n",
+					optarg);
+				Usage_and_abort(name);
 				break;
+			}
+			num_supp = 0;
 			while ((grp = strsep(&optarg, ",")) != NULL) {
 				printf("adding supp group %d\n", atoi(grp));
 				supp_groups[num_supp++] = atoi(grp);
@@ -199,12 +204,17 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	if (num_supp >= 0) {
-		status = setgroups(num_supp, supp_groups);
-		if (status == -1) {
-			perror("setting supplementary groups");
-			exit(-1);
-		}
+	if (num_supp == -1) {
+		/* at least one supp group needs to be provided,
+		 * so take the gid
+		 */
+		num_supp = 1;
+		supp_groups[0] = grp_id;
+	}
+	status = setgroups(num_supp, supp_groups);
+	if (status == -1) {
+		perror("setting supplementary groups");
+		exit(-1);
 	}
 
 	/* set UID */

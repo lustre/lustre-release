@@ -269,7 +269,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
-					    pud->pud_uid);
+					    pud->pud_uid, info);
 		if (IS_ERR(identity)) {
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
 				     cap_raised(ucred->uc_cap,
@@ -480,7 +480,8 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 	if (is_identity_get_disabled(mdt->mdt_identity_cache))
 		RETURN(0);
 
-	identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
+	identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid,
+				    info);
 	if (IS_ERR(identity)) {
 		if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
 			RETURN(0);
@@ -536,7 +537,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
-					    uc->uc_fsuid);
+					    uc->uc_fsuid, info);
 		if (IS_ERR(identity)) {
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
 				     cap_raised(uc->uc_cap,
