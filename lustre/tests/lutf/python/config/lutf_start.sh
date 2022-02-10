@@ -5,7 +5,7 @@ export PYTHONPATH=$PYTHONPATH:$LUSTRE/tests/lutf/:$LUSTRE/tests/lutf/src/:$LUSTR
 
 export LUTFPATH=$LUSTRE/tests/lutf/
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LUTFPATH:$LUTFPATH/src:$LUSTRE/lnet/utils/lnetconfig/.libs/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LUTFPATH:$LUTFPATH/src:$LUSTRE/../lnet/utils/lnetconfig/.libs/
 
 export PATH=$PATH:$LUSTRE/tests/lutf/src:$LUSTRE/tests/lutf
 
