@@ -517,11 +517,18 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);
 	} else if (is_bad_inode(inode)) {
-		rc = -ENOENT;
 		CWARN("%s: bad inode: ino = %u: rc = %d\n",
-		      osd_dev2name(dev), id->oii_ino, rc);
+		      osd_dev2name(dev), id->oii_ino, -ENOENT);
 		iput(inode);
-		inode = ERR_PTR(rc);
+		inode = ERR_PTR(-ENOENT);
+	} else  if (osd_is_ea_inode(inode)) {
+		/*
+		 * EA inode is internal ldiskfs object, should don't visible
+		 * on osd
+		 */
+		CDEBUG(D_INODE, "EA inode: ino = %u\n", id->oii_ino);
+		iput(inode);
+		inode = ERR_PTR(-ENOENT);
 	} else if ((rc = osd_attach_jinode(inode))) {
 		iput(inode);
 		inode = ERR_PTR(rc);
@@ -634,7 +641,7 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 	 */
 
 again:
-	inode = osd_ldiskfs_iget(osd_sb(dev), id->oii_ino);
+	inode = osd_iget(info, dev, id);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
@@ -644,40 +651,6 @@ again:
 		       PFID(fid), id->oii_ino, rc);
 		GOTO(put, rc);
 	}
-
-	if (is_bad_inode(inode)) {
-		rc = -ENOENT;
-		if (!trusted)
-			goto check_oi;
-
-		CDEBUG(D_INODE, "bad inode for FID: "DFID", ino = %u\n",
-		       PFID(fid), id->oii_ino);
-		GOTO(put, rc);
-	}
-
-	if (id->oii_gen != OSD_OII_NOGEN &&
-	    inode->i_generation != id->oii_gen) {
-		rc = -ESTALE;
-		if (!trusted)
-			goto check_oi;
-
-		CDEBUG(D_INODE, "unmatched inode for FID: "DFID", ino = %u, "
-		       "oii_gen = %u, i_generation = %u\n", PFID(fid),
-		       id->oii_ino, id->oii_gen, inode->i_generation);
-		GOTO(put, rc);
-	}
-
-	if (inode->i_nlink == 0) {
-		rc = -ENOENT;
-		if (!trusted)
-			goto check_oi;
-
-		CDEBUG(D_INODE, "stale inode for FID: "DFID", ino = %u\n",
-		       PFID(fid), id->oii_ino);
-		GOTO(put, rc);
-	}
-
-	ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 
 check_oi:
 	if (rc != 0) {
@@ -752,19 +725,6 @@ check_oi:
 			rc = -ENOENT;
 		else
 			rc = -EREMCHG;
-	} else {
-		if (id->oii_gen == OSD_OII_NOGEN)
-			osd_id_gen(id, inode->i_ino, inode->i_generation);
-
-		/*
-		 * Do not update file c/mtime in ldiskfs.
-		 * NB: we don't have any lock to protect this because we don't
-		 * have reference on osd_object now, but contention with
-		 * another lookup + attr_set can't happen in the tiny window
-		 * between if (...) and set S_NOCMTIME.
-		 */
-		if (!(inode->i_flags & S_NOCMTIME))
-			inode->i_flags |= S_NOCMTIME;
 	}
 
 	GOTO(put, rc);
@@ -1179,7 +1139,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	/* Search order: 3. OI files. */
 	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
 	if (result == -ENOENT) {
-		if (!(fid_is_norm(fid) || fid_is_igif(fid)) ||
+		if (!fid_is_norm(fid) ||
 		    fid_is_on_ost(info, dev, fid, OI_CHECK_FLD) ||
 		    !ldiskfs_test_bit(osd_oi_fid2idx(dev, fid),
 				      sf->sf_oi_bitmap))
