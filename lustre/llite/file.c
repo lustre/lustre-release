@@ -2834,7 +2834,7 @@ static int ll_do_fiemap(struct inode *inode, struct fiemap *fiemap,
 			GOTO(out, rc);
 	}
 
-	fmkey.lfik_oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	fmkey.lfik_oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLPROJID;
 	obdo_from_inode(&fmkey.lfik_oa, inode, OBD_MD_FLSIZE);
 	obdo_set_parent_fid(&fmkey.lfik_oa, &ll_i2info(inode)->lli_fid);
 
@@ -3575,8 +3575,8 @@ int ll_ioctl_check_project(struct inode *inode, __u32 xflags,
 
 static int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 {
-	struct md_op_data *op_data;
 	struct ptlrpc_request *req = NULL;
+	struct md_op_data *op_data;
 	struct cl_object *obj;
 	unsigned int inode_flags;
 	int rc = 0;
@@ -3594,7 +3594,10 @@ static int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode_flags);
 	if (xflags & FS_XFLAG_PROJINHERIT)
 		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
+
+	/* pass projid to md_op_data */
 	op_data->op_projid = projid;
+
 	op_data->op_xvalid |= OP_XVALID_PROJID | OP_XVALID_FLAGS;
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL, 0, &req);
 	ptlrpc_req_finished(req);
@@ -5454,11 +5457,11 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 int cl_falloc(struct file *file, struct inode *inode, int mode, loff_t offset,
 	      loff_t len)
 {
+	loff_t size = i_size_read(inode);
 	struct lu_env *env;
 	struct cl_io *io;
 	__u16 refcheck;
 	int rc;
-	loff_t size = i_size_read(inode);
 
 	ENTRY;
 
@@ -5477,12 +5480,14 @@ int cl_falloc(struct file *file, struct inode *inode, int mode, loff_t offset,
 	io->u.ci_setattr.sa_falloc_end = offset + len;
 	io->u.ci_setattr.sa_subtype = CL_SETATTR_FALLOCATE;
 
-	CDEBUG(D_INODE, "UID %u GID %u\n",
+	CDEBUG(D_INODE, "UID %u GID %u PRJID %u\n",
 	       from_kuid(&init_user_ns, inode->i_uid),
-	       from_kgid(&init_user_ns, inode->i_gid));
+	       from_kgid(&init_user_ns, inode->i_gid),
+	       ll_i2info(inode)->lli_projid);
 
 	io->u.ci_setattr.sa_falloc_uid = from_kuid(&init_user_ns, inode->i_uid);
 	io->u.ci_setattr.sa_falloc_gid = from_kgid(&init_user_ns, inode->i_gid);
+	io->u.ci_setattr.sa_falloc_projid = ll_i2info(inode)->lli_projid;
 
 	if (io->u.ci_setattr.sa_falloc_end > size) {
 		loff_t newsize = io->u.ci_setattr.sa_falloc_end;
