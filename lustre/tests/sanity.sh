@@ -14647,7 +14647,7 @@ test_150b() {
 
 	touch $DIR/$tfile
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
-	check_fallocate $DIR/$tfile || error "fallocate failed"
+	check_fallocate $DIR/$tfile || skip_eopnotsupp "fallocate failed"
 }
 run_test 150b "Verify fallocate (prealloc) functionality"
 
@@ -14697,8 +14697,7 @@ test_150c() {
 
 	$LFS setstripe -E1M $striping -E16M -c3 -Eeof -c 4 $DIR/$tfile ||
 		error "Create $DIR/$tfile failed"
-	fallocate -l $((1048576 * 512)) $DIR/$tfile ||
-			error "fallocate failed"
+	fallocate -l $((1048576 * 512)) $DIR/$tfile || error "fallocate failed"
 	bytes=$(($(stat -c '%b * %B' $DIR/$tfile)))
 	want=$((512 * 1048576))
 
@@ -14802,8 +14801,8 @@ test_150f() {
 		error "dd failed for bs 4096 and count 5"
 
 	# Call fallocate with punch range which is within the file range
-	fallocate -p --offset 4096 -l $length $DIR/$tfile ||
-		error "fallocate failed: offset 4096 and length $length"
+	out=$(fallocate -p --offset 4096 -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|fallocate: offset 4096 and length $length"
 	# client must see changes immediately after fallocate
 	size=$(stat -c '%s' $DIR/$tfile)
 	blocks=$(stat -c '%b' $DIR/$tfile)
@@ -14833,8 +14832,8 @@ test_150f() {
 	want_blocks_after=40  # 512 sized blocks
 
 	# Punch overlaps two blocks and less than blocksize
-	fallocate -p --offset 4000 -l 3000 $DIR/$tfile ||
-		error "fallocate failed: offset 4000 length 3000"
+	out=$(fallocate -p --offset 4000 -l 3000 $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|fallocate: offset 4000 length 3000"
 	size=$(stat -c '%s' $DIR/$tfile)
 	blocks=$(stat -c '%b' $DIR/$tfile)
 
@@ -14918,8 +14917,8 @@ test_150g() {
 	# Call fallocate to punch all except 2 blocks. We leave the
 	# first and the last block
 	echo "fallocate -p --offset $BS -l $punch_size $DIR/$tfile"
-	fallocate -p --offset $BS -l $punch_size $DIR/$tfile ||
-		error "fallocate failed: offset $BS length $punch_size"
+	out=$(fallocate -p --offset $BS -l $punch_size $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|fallocate: offset $BS length $punch_size"
 
 	size_after=$(stat -c '%s' $DIR/$tfile)
 	blocks_after=$(stat -c '%b' $DIR/$tfile)

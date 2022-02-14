@@ -1987,10 +1987,12 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	/*
 	 * fallocate start and end are passed in o_size, o_blocks
 	 * on the wire.
+	 * Return -EOPNOTSUPP to also handle older clients not
+	 * supporting newer server modes
 	 */
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
 	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
-		RETURN(err_serious(-EPROTO));
+		RETURN(-EOPNOTSUPP);
 
 	start = oa->o_size;
 	end = oa->o_blocks;

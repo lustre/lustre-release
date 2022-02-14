@@ -2720,8 +2720,8 @@ test_50c() {
 
 	if [[ "$FSTYPE" == "ldiskfs" ]]; then
 		# ZFS does not support fallocate for now
-		fallocate -p -o 1MiB -l 1MiB $tf ||
-			error "punch hole in $tf failed"
+		out=$(fallocate -p -o 1MiB -l 1MiB $tf 2>&1) ||
+			skip_eopnotsupp "$out|punch hole in $tf failed"
 		verify_flr_state $tf "wp"
 	fi
 
@@ -2763,7 +2763,7 @@ test_50d() {
 	elif [[ ! $prt =~ "unsupported" ]]; then
 		error "punch hole in $file failed: $prt"
 	else
-		skip "Fallocate punch is not supported"
+		skip "Fallocate punch is not supported: $prt"
 	fi
 
 	echo " ** verify sparseness"

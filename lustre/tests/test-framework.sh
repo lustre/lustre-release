@@ -6451,6 +6451,19 @@ skip() {
 	exit 0
 }
 
+#
+# For interop testing treate EOPNOTSUPP as success
+# and skip
+#
+skip_eopnotsupp() {
+	local retstr=$@
+
+	echo $retstr | awk -F'|' '{print $1}' |
+		grep -E unsupported\|"(Operation not supported)"
+	(( $? == 0 )) || error "$retstr"
+	skip $retstr
+}
+
 build_test_filter() {
 	EXCEPT="$EXCEPT $(testslist_filter)"
 
