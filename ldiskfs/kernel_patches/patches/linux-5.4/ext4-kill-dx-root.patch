@@ -232,7 +232,7 @@ index a1db7ce..b0291ed 100644
 -			dxroot->info.indirect_levels += 1;
 +			info = dx_get_dx_info((struct ext4_dir_entry_2 *)
 +					      frames[0].bh->b_data);
-+			info->indirect_levels = 1;
++			info->indirect_levels += 1;
  			dxtrace(printk(KERN_DEBUG
  				       "Creating %d level index...\n",
  				       dxroot->info.indirect_levels));
