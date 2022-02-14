@@ -361,7 +361,7 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 	spin_lock_init(&net->net_lock);
 
 	net->net_id = net_id;
-	net->net_last_alive = ktime_get_real_seconds();
+	net->net_last_alive = ktime_get_seconds();
 
 	net->net_sel_priority = LNET_MAX_SELECTION_PRIORITY;
 

@@ -1081,7 +1081,7 @@ lnet_update_ni_status_locked(void)
 
 	timeout = router_ping_timeout + alive_router_check_interval;
 
-	now = ktime_get_real_seconds();
+	now = ktime_get_seconds();
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		if (net->net_lnd->lnd_type == LOLND)
 			continue;
