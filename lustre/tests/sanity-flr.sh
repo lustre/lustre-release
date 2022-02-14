@@ -816,6 +816,36 @@ test_0j() {
 }
 run_test 0j "test lfs mirror read/write commands"
 
+test_0k() {
+	[[ $OSTCOUNT -lt 3 ]] && skip "need >= 3 OSTs" && return
+
+	mkdir $DIR/$tdir
+	# default FLR with 2 mirrors
+	$LFS setstripe -N -c1 -i0 -N -c1 -i1 $DIR/$tdir ||
+		error "set default layout failed"
+
+	# plain file extension under default FLR dir
+	echo $tfile >> $DIR/$tdir/$tfile.append || error "create $tfile.append failed"
+	echo -n " before extend $tfile.append, mirror count = "
+	$LFS getstripe -N $DIR/$tdir/$tfile.append
+
+	$LFS mirror extend -N -c1 -i2 $DIR/$tdir/$tfile.append ||
+		error "mirror extend failed"
+	echo -n " after extend $tfile.append, mirror count = "
+	$LFS getstripe -N $DIR/$tdir/$tfile.append
+
+	# normal file extension under default FLR dir
+	touch $DIR/$tdir/$tfile || error "create $tfile failed"
+	echo -n " before extend $tfile, mirror count = "
+	$LFS getstripe -N $DIR/$tdir/$tfile
+
+	$LFS mirror extend -N -c1 -i2 $DIR/$tdir/$tfile ||
+		error "mirror extend $tfile failed"
+	echo -n " after extend $tfile, mirror count = "
+	$LFS getstripe -N $DIR/$tdir/$tfile
+}
+run_test 0k "mirroring a file in directory with default FLR layout"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX

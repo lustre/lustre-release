@@ -914,7 +914,10 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_cnt - 1);
-	lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
+	if (mirror_cnt > 1)
+		lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
+	else
+		lcm->lcm_flags = LCM_FL_NONE;
 
 	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
 	LASSERT(offset % sizeof(__u64) == 0);
