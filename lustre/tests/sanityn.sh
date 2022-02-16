@@ -54,6 +54,34 @@ dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
+test_0() {
+	local client2=${CLIENT2:-$HOSTNAME}
+	local tmp=$(mktemp)
+
+	printf 'a b\n' > $tmp
+
+	do_node_vp "$HOSTNAME" printf 'a b\n' |
+	diff $tmp - || error "do_node_vp mismatch"
+
+	do_node_vp "$client2" printf 'a b\n' |
+	diff $tmp - || error "do_node_vp mismatch"
+
+	do_facet_vp mds1 printf 'a b\n' |
+	diff $tmp - || error "do_facet_vp mismatch"
+
+	printf '%s' 1 2 3 4 5 6 7 8 \ 9 10 ' ' '"' "'" \! \' \( \) $'\n' > $tmp
+
+	do_node_vp "$HOSTNAME" printf '%s' 1 2 3 4 5 6 7 8 \ 9 10 ' ' '"' "'" \! \' \( \) $'\n' |
+	diff $tmp - || error "do_node_vp mismatch"
+
+	do_node_vp "$client2" printf '%s' 1 2 3 4 5 6 7 8 \ 9 10 ' ' '"' "'" \! \' \( \) $'\n' |
+	diff $tmp - || error "do_node_vp mismatch"
+
+	do_facet_vp mds1 printf '%s' 1 2 3 4 5 6 7 8 \ 9 10 ' ' '"' "'" \! \' \( \) $'\n' |
+	diff $tmp - || error "do_facet_vp mismatch"
+}
+run_test 0 "do_node_vp() and do_facet_vp() do the right thing"
+
 test_1() {
 	touch $DIR1/$tfile
 	[ -f $DIR2/$tfile ] || error "Check create"

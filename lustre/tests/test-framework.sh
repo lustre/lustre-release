@@ -4242,6 +4242,36 @@ do_node() {
 	return ${PIPESTATUS[0]}
 }
 
+##
+# Execute exact command line on host
+#
+# The \a host may be on a local or remote node, which is determined at
+# the time the command is run. Does careful argument quotation to
+# ensure that the exact command line is executed without any globbing,
+# substitution, or shell interpretation on the remote side. Does not
+# support --verbose or --quiet. Does not include "$host: " prefixes on
+# output. See also do_facet_vp().
+#
+# usage: do_node_vp "$host" "$command" "$arg"...
+do_node_vp() {
+	local host="$1"
+	shift
+
+	if [[ "$host" == "$HOSTNAME" ]]; then
+		sh -c "$(printf -- ' %q' "$@")"
+		return $?
+	fi
+
+	if [[ "${PDSH}" != *pdsh* || "${PDSH}" != *-S* ]]; then
+		echo "cannot run '$*' on host '${host}' with PDSH='${PDSH}'" >&2
+		return 128
+	fi
+
+	# -N Disable hostname: prefix on lines of output.
+
+	$PDSH "${host}" -N "cd $RPWD; PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; export LUSTRE=$RLUSTRE; $(printf -- ' %q' "$@")"
+}
+
 single_local_node () {
 	[ "$1" = "$HOSTNAME" ]
 }
@@ -4347,6 +4377,30 @@ do_facet() {
 
 	[ -z "$host" ] && echo "No host defined for facet ${facet}" && exit 1
 	do_node $verbose $quiet $host "$@"
+}
+
+##
+# Execute exact command line on the host of a facet
+#
+# The \a facet (service) may be on a local or remote node, which is
+# determined at the time the command is run. Does careful argument
+# quotation to ensure that the exact command line is executed without
+# any globbing, substitution, or shell interpretation on the remote
+# side. Does not support --verbose or --quiet. Does not include
+# "$host: " prefixes on output.
+#
+# usage: do_facet_vp "$facet" "$command" "$arg"...
+do_facet_vp() {
+	local facet="$1"
+	local host=$(facet_active_host "$facet")
+	shift
+
+	if [[ -z "$host" ]]; then
+		echo "no host defined for facet ${facet}" >&2
+		exit 1
+	fi
+
+	do_node_vp "$host" "$@"
 }
 
 # Function: do_facet_random_file $FACET $FILE $SIZE
