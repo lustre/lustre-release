@@ -13,12 +13,12 @@
  *
  * Change History:
  *
- * version of copy command using async i/o
+ * version of copy command using async I/O
  * From:	Stephen Hemminger <shemminger@osdl.org>
  * Modified by Daniel McNeil <daniel@osdl.org> for testing aio.
  *	- added -a alignment
  *	- added -b blksize option
- *	_ added -s size	option
+ *	- added -s size option
  *	- added -f open_flag option
  *	- added -w (no write) option (reads from source only)
  *	- added -n (num aio) option
@@ -27,8 +27,8 @@
  *  - 2/2004  Marty Ridgeway (mridge@us.ibm.com) Changes to adapt to LTP
  */
 
-//#define _GNU_SOURCE
-//#define DEBUG 1
+/* #define _GNU_SOURCE */
+/* #define DEBUG 1 */
 #undef DEBUG
 
 #include <unistd.h>
@@ -40,7 +40,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/select.h>
-
+#include <lustre/lustreapi.h>
 #include <libaio.h>
 
 #define AIO_BLKSIZE	(64*1024)
@@ -49,10 +49,10 @@
 static int aio_blksize = AIO_BLKSIZE;
 static int aio_maxio = AIO_MAXIO;
 
-static int busy;		// # of I/O's in flight
-static int tocopy;		// # of blocks left to copy
-static int srcfd;		// source fd
-static int dstfd = -1;		// destination file descriptor
+static int busy;		/* # of I/O's in flight */
+static int tocopy;		/* # of blocks left to copy */
+static int srcfd;		/* source fd */
+static int dstfd = -1;		/* destination file descriptor */
 static const char *dstname;
 static const char *srcname;
 static int source_open_flag = O_RDONLY;	/* open flags on source file */
@@ -61,13 +61,13 @@ static int no_write;			/* do not write */
 static int zero;			/* write zero's only */
 
 static int debug;
-static int count_io_q_waits;	/* how many time io_queue_wait called */
+static int count_io_q_waits;	/* how many times io_queue_wait called */
 
 struct iocb **iocb_free;	/* array of pointers to iocb */
 int iocb_free_count;		/* current free count */
 int alignment = 512;		/* buffer alignment */
 
-struct timeval delay;		/* delay between i/o */
+struct timeval delay;		/* delay between I/O */
 
 int init_iocb(int n, int iosize)
 {
@@ -163,7 +163,7 @@ static void wr_done(io_context_t ctx, struct iocb *iocb, long res, long res2)
 		io_error("aio write", res2);
 
 	if (res != iocb->u.c.nbytes) {
-		fprintf(stderr, "write missed bytes expect %lu got %ld\n",
+		fprintf(stderr, "write missed bytes expected %lu got %ld\n",
 			iocb->u.c.nbytes, res2);
 		exit(1);
 	}
@@ -188,7 +188,7 @@ static void rd_done(io_context_t ctx, struct iocb *iocb, long res, long res2)
 	if (res2 != 0)
 		io_error("aio read", res2);
 	if (res != iosize) {
-		fprintf(stderr, "read missing bytes expect %lu got %ld\n",
+		fprintf(stderr, "read missed bytes expected %lu got %ld\n",
 			iocb->u.c.nbytes, res);
 		exit(1);
 	}
@@ -233,9 +233,11 @@ long long scale_by_kmg(long long value, char scale)
 	case 'g':
 	case 'G':
 		value *= 1024;
+		fallthrough;
 	case 'm':
 	case 'M':
 		value *= 1024;
+		fallthrough;
 	case 'k':
 	case 'K':
 		value *= 1024;
@@ -385,7 +387,7 @@ int main(int argc, char *const *argv)
 	io_queue_init(aio_maxio, &myctx);
 	tocopy = howmany(length, aio_blksize);
 	if (init_iocb(aio_maxio, aio_blksize) < 0) {
-		fprintf(stderr, "Error allocating the i/o buffers\n");
+		fprintf(stderr, "Error allocating the I/O buffers\n");
 		exit(1);
 	}
 
@@ -431,7 +433,7 @@ int main(int argc, char *const *argv)
 		}
 
 		/*
-		 * We have submitted all the i/o requests.
+		 * We have submitted all the I/O requests.
 		 * Wait for at least one to complete and call the callbacks.
 		 */
 		count_io_q_waits++;
