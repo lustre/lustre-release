@@ -4362,11 +4362,9 @@ failed:
 
 static bool
 yaml_extract_cmn_tunables(struct cYAML *tree,
-			  struct lnet_ioctl_config_lnd_cmn_tunables *tunables,
-			  struct cfs_expr_list **global_cpts)
+			  struct lnet_ioctl_config_lnd_cmn_tunables *tunables)
 {
-	struct cYAML *tun, *item, *smp;
-	int rc;
+	struct cYAML *tun, *item;
 
 	tun = cYAML_get_object_item(tree, "tunables");
 	if (tun != NULL) {
@@ -4382,14 +4380,6 @@ yaml_extract_cmn_tunables(struct cYAML *tree,
 		item = cYAML_get_object_item(tun, "credits");
 		if (item != NULL)
 			tunables->lct_max_tx_credits = item->cy_valueint;
-		smp = cYAML_get_object_item(tun, "CPT");
-		if (smp != NULL) {
-			rc = cfs_expr_list_parse(smp->cy_valuestring,
-						 strlen(smp->cy_valuestring),
-						 0, UINT_MAX, global_cpts);
-			if (rc != 0)
-				*global_cpts = NULL;
-		}
 
 		return true;
 	}
@@ -4400,13 +4390,11 @@ yaml_extract_cmn_tunables(struct cYAML *tree,
 static bool
 yaml_extract_tunables(struct cYAML *tree,
 		      struct lnet_ioctl_config_lnd_tunables *tunables,
-		      struct cfs_expr_list **global_cpts,
 		      __u32 net_type)
 {
 	bool rc;
 
-	rc = yaml_extract_cmn_tunables(tree, &tunables->lt_cmn,
-				       global_cpts);
+	rc = yaml_extract_cmn_tunables(tree, &tunables->lt_cmn);
 
 	if (!rc)
 		return rc;
@@ -4415,6 +4403,23 @@ yaml_extract_tunables(struct cYAML *tree,
 					 &tunables->lt_tun);
 
 	return rc;
+}
+
+static void
+yaml_extract_cpt(struct cYAML *tree,
+		      struct cfs_expr_list **global_cpts)
+{
+	int rc;
+	struct cYAML *smp;
+
+	smp = cYAML_get_object_item(tree, "CPT");
+	if (smp != NULL) {
+		rc = cfs_expr_list_parse(smp->cy_valuestring,
+					 strlen(smp->cy_valuestring),
+					 0, UINT_MAX, global_cpts);
+		if (rc != 0)
+			*global_cpts = NULL;
+	}
 }
 
 /*
@@ -4492,8 +4497,9 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 		}
 	}
 
-	found = yaml_extract_tunables(tree, &tunables, &global_cpts,
+	found = yaml_extract_tunables(tree, &tunables,
 				      LNET_NETTYP(nw_descr.nw_id));
+	yaml_extract_cpt(tree, &global_cpts);
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
 	rc = lustre_lnet_config_ni(&nw_descr, global_cpts,
@@ -4581,14 +4587,18 @@ static int handle_yaml_config_ip2nets(struct cYAML *tree,
 		}
 	}
 
-	found = yaml_extract_tunables(tree, &tunables, &global_cpts,
+	found = yaml_extract_tunables(tree, &tunables,
 				      LNET_NETTYP(ip2nets.ip2nets_net.nw_id));
+	yaml_extract_cpt(tree, &global_cpts);
 
 	rc = lustre_lnet_config_ip2nets(&ip2nets,
 			(found) ? &tunables : NULL,
 			global_cpts,
 			(seq_no) ? seq_no->cy_valueint : -1,
 			err_rc);
+
+	if (global_cpts != NULL)
+		cfs_expr_list_free(global_cpts);
 
 	/*
 	 * don't stop because there was no match. Continue processing the
