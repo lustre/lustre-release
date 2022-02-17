@@ -358,6 +358,7 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 #ifdef HAVE_LUSTRE_CRYPTO
 		} else if (strncmp(arg, "test_dummy_encryption", 21) == 0) {
 #ifdef HAVE_LIBKEYUTILS
+#ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
 			/* Using dummy encryption mode requires inserting a
 			 * special dummy key into the session keyring.
 			 * Key type is "logon", key description is
@@ -395,6 +396,13 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 				if (rc != 0)
 					goto out_options;
 			}
+#else /* !HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED */
+			/* pass this on as an option */
+			rc = append_option(options, options_len, opt,
+					   NULL);
+			if (rc != 0)
+				goto out_options;
+#endif
 #else /* HAVE_LIBKEYUTILS */
 			fprintf(stderr,
 				"%s: test dummy encryption option ignored: Lustre not built with libkeyutils support\n",

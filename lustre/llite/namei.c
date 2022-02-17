@@ -879,7 +879,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	rc = ll_setup_filename(parent, &dentry->d_name, 1, &fname, &fid);
 	if ((!rc || rc == -ENOENT) && fname.is_ciphertext_name) {
 		spin_lock(&dentry->d_lock);
-		dentry->d_flags |= DCACHE_ENCRYPTED_NAME;
+		dentry->d_flags |= DCACHE_NOKEY_NAME;
 		spin_unlock(&dentry->d_lock);
 	}
 	if (rc == -ENOENT)
@@ -1598,7 +1598,8 @@ again:
 	if (ll_sbi_has_encrypt(sbi) &&
 	    ((IS_ENCRYPTED(dir) &&
 	    (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode))) ||
-	    (unlikely(llcrypt_dummy_context_enabled(dir)) && S_ISDIR(mode)))) {
+	     (unlikely(ll_sb_has_test_dummy_encryption(dir->i_sb)) &&
+	      S_ISDIR(mode)))) {
 		err = llcrypt_get_encryption_info(dir);
 		if (err)
 			GOTO(err_exit, err);

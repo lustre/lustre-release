@@ -153,17 +153,34 @@ void llcrypt_free_ctx(void *encctx, __u32 size)
 		OBD_FREE(encctx, size);
 }
 
-bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
+#ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
+bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
 {
-	return unlikely(test_bit(LL_SBI_TEST_DUMMY_ENCRYPTION, sbi->ll_flags));
+	struct ll_sb_info *sbi = s2lsi(sb)->lsi_llsbi;
+
+	return sbi ?
+	       unlikely(test_bit(LL_SBI_TEST_DUMMY_ENCRYPTION, sbi->ll_flags)) :
+	       false;
 }
 
 static bool ll_dummy_context(struct inode *inode)
 {
-	struct ll_sb_info *sbi = ll_i2sbi(inode);
-
-	return sbi ? ll_sbi_has_test_dummy_encryption(sbi) : false;
+	return ll_sb_has_test_dummy_encryption(inode->i_sb);
 }
+#else
+static const union llcrypt_context *
+ll_get_dummy_context(struct super_block *sb)
+{
+	struct lustre_sb_info *lsi = s2lsi(sb);
+
+	return lsi ? lsi->lsi_dummy_enc_ctx.ctx : NULL;
+}
+
+bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
+{
+	return ll_get_dummy_context(sb) != NULL;
+}
+#endif
 
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi)
 {
@@ -265,14 +282,14 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 			rc = -EINVAL;
 			goto out_free;
 		}
-		digest = (struct ll_digest_filename *)fname->crypto_buf.name;
+		digest = (struct ll_digest_filename *)fname->disk_name.name;
 		*fid = digest->ldf_fid;
 		if (!fid_is_sane(fid)) {
 			rc = -EINVAL;
 			goto out_free;
 		}
 		fname->disk_name.name = digest->ldf_excerpt;
-		fname->disk_name.len = LLCRYPT_FNAME_DIGEST_SIZE;
+		fname->disk_name.len = sizeof(digest->ldf_excerpt);
 	}
 	if (IS_ENCRYPTED(dir) &&
 	    !name_is_dot_or_dotdot(fname->disk_name.name,
@@ -356,7 +373,7 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			lltr.name = buf;
 			lltr.len = len;
 		}
-		if (lltr.len > LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE &&
+		if (lltr.len > LL_CRYPTO_BLOCK_SIZE * 2 &&
 		    !llcrypt_has_encryption_key(inode) &&
 		    llcrypt_policy_has_filename_enc(inode)) {
 			digested = 1;
@@ -369,8 +386,8 @@ int ll_fname_disk_to_usr(struct inode *inode,
 				return -EINVAL;
 			digest.ldf_fid = *fid;
 			memcpy(digest.ldf_excerpt,
-			       LLCRYPT_FNAME_DIGEST(lltr.name, lltr.len),
-			       LLCRYPT_FNAME_DIGEST_SIZE);
+			       LLCRYPT_EXTRACT_DIGEST(lltr.name, lltr.len),
+			       sizeof(digest.ldf_excerpt));
 
 			lltr.name = (char *)&digest;
 			lltr.len = sizeof(digest);
@@ -406,7 +423,7 @@ int ll_revalidate_d_crypto(struct dentry *dentry, unsigned int flags)
 	 * reverting to ciphertext names without evicting the directory's inode
 	 * -- which implies eviction of the dentries in the directory.
 	 */
-	if (!(dentry->d_flags & DCACHE_ENCRYPTED_NAME))
+	if (!llcrypt_is_nokey_name(dentry))
 		return 1;
 
 	/*
@@ -439,7 +456,11 @@ const struct llcrypt_operations lustre_cryptops = {
 	.key_prefix		= "lustre:",
 	.get_context		= ll_get_context,
 	.set_context		= ll_set_context,
+#ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
 	.dummy_context		= ll_dummy_context,
+#else
+	.get_dummy_context	= ll_get_dummy_context,
+#endif
 	.empty_dir		= ll_empty_dir,
 	.max_namelen		= NAME_MAX,
 };
@@ -459,7 +480,7 @@ void llcrypt_free_ctx(void *encctx, __u32 size)
 {
 }
 
-bool ll_sbi_has_test_dummy_encryption(struct ll_sb_info *sbi)
+bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
 {
 	return false;
 }

@@ -49,6 +49,9 @@
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <uapi/linux/lustre/lustre_idl.h>
+#if !defined(CONFIG_LL_ENCRYPTION) && defined(HAVE_LUSTRE_CRYPTO)
+#include <lustre_crypto.h>
+#endif
 
 #define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)
@@ -142,6 +145,9 @@ struct lustre_sb_info {
 #ifdef CONFIG_LL_ENCRYPTION
 	const struct llcrypt_operations	*lsi_cop;
 	struct key		 *lsi_master_keys; /* master crypto keys used */
+#elif defined(HAVE_LUSTRE_CRYPTO) && !defined(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED)
+	/* Encryption context for '-o test_dummy_encryption' */
+	struct llcrypt_dummy_context lsi_dummy_enc_ctx;
 #endif
 };
 

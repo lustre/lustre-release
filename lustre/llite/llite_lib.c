@@ -487,7 +487,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 		set_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags);
 
 	if (ll_sbi_has_encrypt(sbi) && !obd_connect_has_enc(data)) {
-		if (ll_sbi_has_test_dummy_encryption(sbi))
+		if (ll_sb_has_test_dummy_encryption(sb))
 			LCONSOLE_WARN("%s: server %s does not support encryption feature, encryption deactivated.\n",
 				      sbi->ll_fsname,
 				      sbi->ll_md_exp->exp_obd->obd_name);
@@ -584,11 +584,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
 	if (ll_sbi_has_encrypt(sbi) &&
 	    !obd_connect_has_enc(&sbi->ll_dt_obd->u.lov.lov_ocd)) {
-		if (ll_sbi_has_test_dummy_encryption(sbi))
+		if (ll_sb_has_test_dummy_encryption(sb))
 			LCONSOLE_WARN("%s: server %s does not support encryption feature, encryption deactivated.\n",
 				      sbi->ll_fsname, dt);
 		ll_sbi_set_encrypt(sbi, false);
-	} else if (ll_sbi_has_test_dummy_encryption(sbi)) {
+	} else if (ll_sb_has_test_dummy_encryption(sb)) {
 		LCONSOLE_WARN("Test dummy encryption mode enabled\n");
 	}
 
@@ -937,6 +937,7 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_VERBOSE,		"verbose"},
 	{LL_SBI_VERBOSE,		"noverbose"},
 	{LL_SBI_ALWAYS_PING,		"always_ping"},
+	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption=%s"},
 	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption"},
 	{LL_SBI_ENCRYPT,		"encrypt"},
 	{LL_SBI_ENCRYPT,		"noencrypt"},
@@ -985,6 +986,7 @@ static int ll_options(char *options, struct super_block *sb)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	char *s2, *s1, *opts;
+	int err = 0;
 
 	ENTRY;
 	if (!options)
@@ -1068,7 +1070,29 @@ static int ll_options(char *options, struct super_block *sb)
 			break;
 		case LL_SBI_TEST_DUMMY_ENCRYPTION: {
 #ifdef HAVE_LUSTRE_CRYPTO
+#ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
 			set_bit(token, sbi->ll_flags);
+#else
+			struct lustre_sb_info *lsi = s2lsi(sb);
+
+			err = llcrypt_set_test_dummy_encryption(sb, &args[0],
+								&lsi->lsi_dummy_enc_ctx);
+			if (!err)
+				break;
+
+			if (err == -EEXIST)
+				LCONSOLE_WARN(
+					 "Can't change test_dummy_encryption");
+			else if (err == -EINVAL)
+				LCONSOLE_WARN(
+					"Value of option \"%s\" unrecognized",
+					options);
+			else
+				LCONSOLE_WARN(
+					 "Error processing option \"%s\" [%d]",
+					 options, err);
+			err = -1;
+#endif
 #else
 			LCONSOLE_WARN("Test dummy encryption mount option ignored: encryption not supported\n");
 #endif
@@ -1129,7 +1153,7 @@ static int ll_options(char *options, struct super_block *sb)
 		}
         }
 	kfree(opts);
-        RETURN(0);
+	RETURN(err);
 }
 
 void ll_lli_init(struct ll_inode_info *lli)
@@ -1453,6 +1477,7 @@ void ll_put_super(struct super_block *sb)
 	}
 #endif
 
+	llcrypt_free_dummy_context(&lsi->lsi_dummy_enc_ctx);
 	ll_free_sbi(sb);
 	lsi->lsi_llsbi = NULL;
 out_no_sbi:
@@ -3344,9 +3369,10 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 			op_data->op_bias = MDS_FID_OP;
 		}
 		if (fname.disk_name.name &&
-		    fname.disk_name.name != (unsigned char *)name)
+		    fname.disk_name.name != (unsigned char *)name) {
 			/* op_data->op_name must be freed after use */
 			op_data->op_flags |= MF_OPNAME_KMALLOCED;
+		}
 	}
 
 	/* In fact LUSTRE_OPC_LOOKUP, LUSTRE_OPC_OPEN
@@ -3425,6 +3451,8 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 				   ll_sbi_flags_name[i].pattern);
 		}
 	}
+
+	llcrypt_show_test_dummy_encryption(seq, ',', dentry->d_sb);
 
 	RETURN(0);
 }

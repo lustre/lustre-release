@@ -48,7 +48,7 @@
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_param.h>
-#include <libcfs/crypto/llcrypt.h>
+#include <lustre_crypto.h>
 
 /**************** config llog ********************/
 

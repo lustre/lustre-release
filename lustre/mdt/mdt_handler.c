@@ -1957,8 +1957,7 @@ int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
 	int reclen, count, rc;
 
 	ENTRY;
-
-	if (lname->ln_namelen < LLCRYPT_FNAME_DIGEST_SIZE)
+	if (lname->ln_namelen < LL_CRYPTO_BLOCK_SIZE)
 		RETURN(-EINVAL);
 
 	buf = lu_buf_check_and_alloc(buf, PATH_MAX);
@@ -1986,8 +1985,8 @@ int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
 			rc = critical_decode(name.ln_name, name.ln_namelen,
 					     link.lb_buf);
 
-			if (memcmp(LLCRYPT_FNAME_DIGEST(link.lb_buf, rc),
-				   hash, LLCRYPT_FNAME_DIGEST_SIZE) == 0) {
+			if (memcmp(LLCRYPT_EXTRACT_DIGEST(link.lb_buf, rc),
+				   hash, LL_CRYPTO_BLOCK_SIZE) == 0) {
 				*lname = name;
 				break;
 			}
