@@ -274,6 +274,7 @@ F:	lustre/ptlrpc/sec*.c
 F:	lustre/scripts/lsvgss
 F:	lustre/tests/sanity-sec.sh
 F:	lustre/utils/gss
+F:	lustre/include/uapi/linux/lustre/lgss.h
 
 Lustre GSSAPI - Kerberos
 M:	Sebastien Buisson <sbuisson@whamcloud.com>

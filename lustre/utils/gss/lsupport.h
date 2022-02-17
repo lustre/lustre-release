@@ -97,21 +97,6 @@ struct lgssd_upcall_data {
 #define GSSD_INTERFACE_VERSION_V2       (2)
 #define GSSD_INTERFACE_VERSION_V1       (1)
 
-struct lgssd_ioctl_param {
-        int             version;        /* in   */
-        int             secid;          /* in   */
-        char           *uuid;           /* in   */
-        int             lustre_svc;     /* in   */
-        uid_t           uid;            /* in   */
-        gid_t           gid;            /* in   */
-        long            send_token_size;/* in   */
-        char           *send_token;     /* in   */
-        long            reply_buf_size; /* in   */
-        char           *reply_buf;      /* in   */
-        long            status;         /* out  */
-        long            reply_length;   /* out  */
-};
-
 #define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
 #define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
 

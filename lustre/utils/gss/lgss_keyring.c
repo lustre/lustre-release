@@ -52,6 +52,7 @@
 
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
+#include <uapi/linux/lustre/lgss.h>
 #include "lsupport.h"
 #include "lgss_utils.h"
 #include "write_bytes.h"
@@ -260,7 +261,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 	logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
 	if (param.status) {
 		logmsg(LL_ERR, "status: %ld (%s)\n",
-		       param.status, strerror((int)(-param.status)));
+		       (long int)param.status, strerror((int)(-param.status)));
 		return param.status;
 	}
 

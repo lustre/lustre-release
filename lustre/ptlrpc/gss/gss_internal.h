@@ -18,18 +18,7 @@
 /*
  * rawobj stuff
  */
-typedef struct netobj_s {
-        __u32           len;
-        __u8            data[0];
-} netobj_t;
-
 #define NETOBJ_EMPTY    ((netobj_t) { 0 })
-
-typedef struct rawobj_s {
-        __u32           len;
-        __u8           *data;
-} rawobj_t;
-
 #define RAWOBJ_EMPTY    ((rawobj_t) { 0, NULL })
 
 typedef struct rawobj_buf_s {
@@ -144,63 +133,6 @@ __u32 import_to_gss_svc(struct obd_import *imp)
 		return 0;
 	}
 }
-
-/*
- * following 3 header must have the same size and offset
- */
-struct gss_header {
-        __u8                    gh_version;     /* gss version */
-        __u8                    gh_sp;          /* sec part */
-        __u16                   gh_pad0;
-        __u32                   gh_flags;       /* wrap flags */
-        __u32                   gh_proc;        /* proc */
-        __u32                   gh_seq;         /* sequence */
-        __u32                   gh_svc;         /* service */
-        __u32                   gh_pad1;
-        __u32                   gh_pad2;
-        __u32                   gh_pad3;
-        netobj_t                gh_handle;      /* context handle */
-};
-
-struct gss_rep_header {
-        __u8                    gh_version;
-        __u8                    gh_sp;
-        __u16                   gh_pad0;
-        __u32                   gh_flags;
-        __u32                   gh_proc;
-        __u32                   gh_major;
-        __u32                   gh_minor;
-        __u32                   gh_seqwin;
-        __u32                   gh_pad2;
-        __u32                   gh_pad3;
-        netobj_t                gh_handle;
-};
-
-struct gss_err_header {
-        __u8                    gh_version;
-        __u8                    gh_sp;
-        __u16                   gh_pad0;
-        __u32                   gh_flags;
-        __u32                   gh_proc;
-        __u32                   gh_major;
-        __u32                   gh_minor;
-        __u32                   gh_pad1;
-        __u32                   gh_pad2;
-        __u32                   gh_pad3;
-        netobj_t                gh_handle;
-};
-
-/*
- * part of wire context information send from client which be saved and
- * used later by server.
- */
-struct gss_wire_ctx {
-        __u32                   gw_flags;
-        __u32                   gw_proc;
-        __u32                   gw_seq;
-        __u32                   gw_svc;
-        rawobj_t                gw_handle;
-};
 
 #define PTLRPC_GSS_MAX_HANDLE_SIZE      (8)
 #define PTLRPC_GSS_HEADER_SIZE          (sizeof(struct gss_header) + \

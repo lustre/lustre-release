@@ -5201,6 +5201,199 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_user_import, hui_archive_id));
 	LASSERTF((int)sizeof(((struct hsm_user_import *)0)->hui_archive_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_user_import *)0)->hui_archive_id));
+
+	/* Checks for struct netobj_s */
+	LASSERTF((int)sizeof(struct netobj_s) == 4, "found %lld\n",
+		 (long long)(int)sizeof(struct netobj_s));
+	LASSERTF((int)offsetof(struct netobj_s, len) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct netobj_s, len));
+	LASSERTF((int)sizeof(((struct netobj_s *)0)->len) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct netobj_s *)0)->len));
+	LASSERTF((int)offsetof(struct netobj_s, data) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct netobj_s, data));
+	LASSERTF((int)sizeof(((struct netobj_s *)0)->data) == 0, "found %lld\n",
+		 (long long)(int)sizeof(((struct netobj_s *)0)->data));
+
+	/* Checks for struct rawobj_s */
+	LASSERTF((int)sizeof(struct rawobj_s) == 16, "found %lld\n",
+		 (long long)(int)sizeof(struct rawobj_s));
+	LASSERTF((int)offsetof(struct rawobj_s, len) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct rawobj_s, len));
+	LASSERTF((int)sizeof(((struct rawobj_s *)0)->len) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct rawobj_s *)0)->len));
+	LASSERTF((int)offsetof(struct rawobj_s, data) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct rawobj_s, data));
+	LASSERTF((int)sizeof(((struct rawobj_s *)0)->data) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct rawobj_s *)0)->data));
+
+	/* Checks for struct gss_header */
+	LASSERTF((int)sizeof(struct gss_header) == 36, "found %lld\n",
+		 (long long)(int)sizeof(struct gss_header));
+	LASSERTF((int)offsetof(struct gss_header, gh_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_version));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_version) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_version));
+	LASSERTF((int)offsetof(struct gss_header, gh_sp) == 1, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_sp));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_sp) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_sp));
+	LASSERTF((int)offsetof(struct gss_header, gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_pad0));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_pad0));
+	LASSERTF((int)offsetof(struct gss_header, gh_flags) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_flags));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_flags));
+	LASSERTF((int)offsetof(struct gss_header, gh_proc) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_proc));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_proc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_proc));
+	LASSERTF((int)offsetof(struct gss_header, gh_seq) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_seq));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_seq) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_seq));
+	LASSERTF((int)offsetof(struct gss_header, gh_svc) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_svc));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_svc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_svc));
+	LASSERTF((int)offsetof(struct gss_header, gh_pad1) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_pad1));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_pad1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_pad1));
+	LASSERTF((int)offsetof(struct gss_header, gh_pad2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_pad2));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_pad2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_pad2));
+	LASSERTF((int)offsetof(struct gss_header, gh_pad3) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_pad3));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_pad3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_pad3));
+	LASSERTF((int)offsetof(struct gss_header, gh_handle) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_header, gh_handle));
+	LASSERTF((int)sizeof(((struct gss_header *)0)->gh_handle) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_header *)0)->gh_handle));
+
+	/* Checks for struct gss_rep_header */
+	LASSERTF((int)sizeof(struct gss_rep_header) == 36, "found %lld\n",
+		 (long long)(int)sizeof(struct gss_rep_header));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_version));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_version) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_version));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_sp) == 1, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_sp));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_sp) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_sp));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_pad0));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_pad0));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_flags) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_flags));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_flags));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_proc) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_proc));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_proc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_proc));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_major) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_major));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_major) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_major));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_minor) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_minor));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_minor) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_minor));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_seqwin) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_seqwin));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_seqwin) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_seqwin));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_pad2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_pad2));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_pad2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_pad2));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_pad3) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_pad3));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_pad3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_pad3));
+	LASSERTF((int)offsetof(struct gss_rep_header, gh_handle) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_rep_header, gh_handle));
+	LASSERTF((int)sizeof(((struct gss_rep_header *)0)->gh_handle) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_rep_header *)0)->gh_handle));
+
+	/* Checks for struct gss_err_header */
+	LASSERTF((int)sizeof(struct gss_err_header) == 36, "found %lld\n",
+		 (long long)(int)sizeof(struct gss_err_header));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_version));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_version) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_version));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_sp) == 1, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_sp));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_sp) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_sp));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_pad0));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_pad0) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_pad0));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_flags) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_flags));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_flags));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_proc) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_proc));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_proc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_proc));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_major) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_major));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_major) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_major));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_minor) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_minor));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_minor) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_minor));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_pad1) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_pad1));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_pad1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_pad1));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_pad2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_pad2));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_pad2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_pad2));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_pad3) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_pad3));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_pad3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_pad3));
+	LASSERTF((int)offsetof(struct gss_err_header, gh_handle) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_err_header, gh_handle));
+	LASSERTF((int)sizeof(((struct gss_err_header *)0)->gh_handle) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_err_header *)0)->gh_handle));
+
+	/* Checks for struct gss_wire_ctx */
+	LASSERTF((int)sizeof(struct gss_wire_ctx) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct gss_wire_ctx));
+	LASSERTF((int)offsetof(struct gss_wire_ctx, gw_flags) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_wire_ctx, gw_flags));
+	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_flags));
+	LASSERTF((int)offsetof(struct gss_wire_ctx, gw_proc) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_wire_ctx, gw_proc));
+	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_proc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_proc));
+	LASSERTF((int)offsetof(struct gss_wire_ctx, gw_seq) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_wire_ctx, gw_seq));
+	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_seq) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_seq));
+	LASSERTF((int)offsetof(struct gss_wire_ctx, gw_svc) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_wire_ctx, gw_svc));
+	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_svc) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_svc));
+	LASSERTF((int)offsetof(struct gss_wire_ctx, gw_handle) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct gss_wire_ctx, gw_handle));
+	LASSERTF((int)sizeof(((struct gss_wire_ctx *)0)->gw_handle) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_handle));
+
 #ifdef HAVE_SERVER_SUPPORT
 
 	/* Checks for struct object_update_param */
