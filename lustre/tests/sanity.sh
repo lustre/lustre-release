@@ -13869,6 +13869,31 @@ test_123e() {
 }
 run_test 123e "statahead with large wide striping"
 
+test_123f() {
+	local max
+	local batch_max
+	local dir=$DIR/$tdir
+
+	mkdir $dir || error "mkdir $dir failed"
+	$LFS setstripe -C 1000 $dir || error "setstripe $dir failed"
+
+	touch $dir/$tfile.{0..200} || error "touch 200 files failed"
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+
+	$LCTL set_param llite.*.statahead_max=64
+	$LCTL set_param llite.*.statahead_batch_max=64
+
+	ls -l $dir
+	lctl get_param mdc.*.batch_stats
+	lctl get_param llite.*.statahead_*
+
+	$LCTL set_param llite.*.statahead_max=$max
+	$LCTL set_param llite.*.statahead_batch_max=$batch_max
+}
+run_test 123f "Retry mechanism with large wide striping files"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
