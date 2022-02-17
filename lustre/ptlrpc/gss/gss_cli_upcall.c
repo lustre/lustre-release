@@ -47,6 +47,7 @@
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_sec.h>
+#include <uapi/linux/lustre/lgss.h>
 
 #include "gss_err.h"
 #include "gss_internal.h"
@@ -211,22 +212,6 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
 	return effective;
 }
 
-/* XXX move to where lgssd could see */
-struct lgssd_ioctl_param {
-        int             version;        /* in   */
-        int             secid;          /* in   */
-	char __user    *uuid;		/* in   */
-        int             lustre_svc;     /* in   */
-        uid_t           uid;            /* in   */
-        gid_t           gid;            /* in   */
-        long            send_token_size;/* in   */
-	char __user    *send_token;     /* in   */
-        long            reply_buf_size; /* in   */
-	char __user    *reply_buf;	/* in   */
-        long            status;         /* out  */
-        long            reply_length;   /* out  */
-};
-
 int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 {
 	struct obd_import *imp, *imp0;
@@ -237,38 +222,39 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 	long lsize;
 	int rc;
 
-        if (count != sizeof(param)) {
-                CERROR("ioctl size %lu, expect %lu, please check lgss_keyring "
-                       "version\n", count, (unsigned long) sizeof(param));
-                RETURN(-EINVAL);
-        }
+	if (count != sizeof(param)) {
+		CERROR("ioctl size %lu, expect %lu, please check lgss_keyring version\n",
+		       count, (unsigned long) sizeof(param));
+		RETURN(-EINVAL);
+	}
 	if (copy_from_user(&param, buffer, sizeof(param))) {
-                CERROR("failed copy data from lgssd\n");
-                RETURN(-EFAULT);
-        }
+		CERROR("failed copy data from lgssd\n");
+		RETURN(-EFAULT);
+	}
 
-        if (param.version != GSSD_INTERFACE_VERSION) {
-                CERROR("gssd interface version %d (expect %d)\n",
-                        param.version, GSSD_INTERFACE_VERSION);
-                RETURN(-EINVAL);
-        }
+	if (param.version != GSSD_INTERFACE_VERSION) {
+		CERROR("gssd interface version %d (expect %d)\n",
+		       param.version, GSSD_INTERFACE_VERSION);
+		RETURN(-EINVAL);
+	}
 
-        /* take name */
-        if (strncpy_from_user(obdname, param.uuid, sizeof(obdname)) <= 0) {
-                CERROR("Invalid obdname pointer\n");
-                RETURN(-EFAULT);
-        }
+	/* take name */
+	if (strncpy_from_user(obdname, (const char __user *)param.uuid,
+			      sizeof(obdname)) <= 0) {
+		CERROR("Invalid obdname pointer\n");
+		RETURN(-EFAULT);
+	}
 
-        obd = class_name2obd(obdname);
-        if (!obd) {
-                CERROR("no such obd %s\n", obdname);
-                RETURN(-EINVAL);
-        }
+	obd = class_name2obd(obdname);
+	if (!obd) {
+		CERROR("no such obd %s\n", obdname);
+		RETURN(-EINVAL);
+	}
 
-        if (unlikely(!obd->obd_set_up)) {
-                CERROR("obd %s not setup\n", obdname);
-                RETURN(-EINVAL);
-        }
+	if (unlikely(!obd->obd_set_up)) {
+		CERROR("obd %s not setup\n", obdname);
+		RETURN(-EINVAL);
+	}
 
 	spin_lock(&obd->obd_dev_lock);
 	if (obd->obd_stopping) {
@@ -295,77 +281,78 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 		RETURN(-EINVAL);
 	}
 
-        if (imp->imp_deactive) {
-                CERROR("import has been deactivated\n");
-                class_import_put(imp);
-                RETURN(-EINVAL);
-        }
+	if (imp->imp_deactive) {
+		CERROR("import has been deactivated\n");
+		class_import_put(imp);
+		RETURN(-EINVAL);
+	}
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
-                                        SEC_CTX_INIT);
-        if (req == NULL) {
-                param.status = -ENOMEM;
-                goto out_copy;
-        }
+	req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
+					SEC_CTX_INIT);
+	if (req == NULL) {
+		param.status = -ENOMEM;
+		goto out_copy;
+	}
 
-        if (req->rq_cli_ctx->cc_sec->ps_id != param.secid) {
-                CWARN("original secid %d, now has changed to %d, "
-                      "cancel this negotiation\n", param.secid,
-                      req->rq_cli_ctx->cc_sec->ps_id);
-                param.status = -EINVAL;
-                goto out_copy;
-        }
+	if (req->rq_cli_ctx->cc_sec->ps_id != param.secid) {
+		CWARN("original secid %d, now has changed to %d, cancel this negotiation\n",
+		      param.secid, req->rq_cli_ctx->cc_sec->ps_id);
+		param.status = -EINVAL;
+		goto out_copy;
+	}
 
-        /* get token */
-        rc = ctx_init_pack_request(imp, req,
-                                   param.lustre_svc,
-                                   param.uid, param.gid,
-                                   param.send_token_size,
-                                   param.send_token);
-        if (rc) {
-                param.status = rc;
-                goto out_copy;
-        }
+	/* get token */
+	rc = ctx_init_pack_request(imp, req,
+				   param.lustre_svc,
+				   param.uid, param.gid,
+				   param.send_token_size,
+				   (char __user *)param.send_token);
+	if (rc) {
+		param.status = rc;
+		goto out_copy;
+	}
 
-        ptlrpc_request_set_replen(req);
+	ptlrpc_request_set_replen(req);
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc) {
-                /* If any _real_ denial be made, we expect server return
-                 * -EACCES reply or return success but indicate gss error
-                 * inside reply messsage. All other errors are treated as
-                 * timeout, caller might try the negotiation repeatedly,
-                 * leave recovery decisions to general ptlrpc layer.
-                 *
-                 * FIXME maybe some other error code shouldn't be treated
-                 * as timeout. */
-                param.status = rc;
-                if (rc != -EACCES)
-                        param.status = -ETIMEDOUT;
-                goto out_copy;
-        }
+	rc = ptlrpc_queue_wait(req);
+	if (rc) {
+		/* If any _real_ denial be made, we expect server return
+		 * -EACCES reply or return success but indicate gss error
+		 * inside reply messsage. All other errors are treated as
+		 * timeout, caller might try the negotiation repeatedly,
+		 * leave recovery decisions to general ptlrpc layer.
+		 *
+		 * FIXME maybe some other error code shouldn't be treated
+		 * as timeout.
+		 */
+		param.status = rc;
+		if (rc != -EACCES)
+			param.status = -ETIMEDOUT;
+		goto out_copy;
+	}
 
 	LASSERT(req->rq_repdata);
 	lsize = ctx_init_parse_reply(req->rq_repdata,
 				     req_capsule_rep_need_swab(&req->rq_pill),
-				     param.reply_buf, param.reply_buf_size);
+				     (char __user *)param.reply_buf,
+				     param.reply_buf_size);
 	if (lsize < 0) {
 		param.status = (int) lsize;
 		goto out_copy;
 	}
 
-        param.status = 0;
-        param.reply_length = lsize;
+	param.status = 0;
+	param.reply_length = lsize;
 
 out_copy:
 	if (copy_to_user(buffer, &param, sizeof(param)))
-                rc = -EFAULT;
-        else
-                rc = 0;
+		rc = -EFAULT;
+	else
+		rc = 0;
 
-        class_import_put(imp);
-        ptlrpc_req_finished(req);
-        RETURN(rc);
+	class_import_put(imp);
+	ptlrpc_req_finished(req);
+	RETURN(rc);
 }
 
 int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)

@@ -36,6 +36,7 @@ lustreinclude_HEADERS = \
 	lustre_fiemap.h \
 	lustre_idl.h \
 	lustre_ioctl.h \
+	lgss.h \
 	lustre_kernelcomm.h \
 	lustre_ostid.h \
 	lustre_param.h \
@@ -60,6 +61,7 @@ EXTRA_DIST = \
 	lustre_fiemap.h \
 	lustre_idl.h \
 	lustre_ioctl.h \
+	lgss.h \
 	lustre_kernelcomm.h \
 	lustre_lfsck_user.h \
 	lustre_log_user.h \

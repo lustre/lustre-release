@@ -2457,6 +2457,84 @@ static void check_hsm_user_import(void)
 	CHECK_MEMBER(hsm_user_import, hui_archive_id);
 }
 
+static void check_netobj_s(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(netobj_s);
+	CHECK_MEMBER(netobj_s, len);
+	CHECK_MEMBER(netobj_s, data);
+}
+
+static void check_rawobj_s(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(rawobj_s);
+	CHECK_MEMBER(rawobj_s, len);
+	CHECK_MEMBER(rawobj_s, data);
+}
+
+static void check_gss_header(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(gss_header);
+	CHECK_MEMBER(gss_header, gh_version);
+	CHECK_MEMBER(gss_header, gh_sp);
+	CHECK_MEMBER(gss_header, gh_pad0);
+	CHECK_MEMBER(gss_header, gh_flags);
+	CHECK_MEMBER(gss_header, gh_proc);
+	CHECK_MEMBER(gss_header, gh_seq);
+	CHECK_MEMBER(gss_header, gh_svc);
+	CHECK_MEMBER(gss_header, gh_pad1);
+	CHECK_MEMBER(gss_header, gh_pad2);
+	CHECK_MEMBER(gss_header, gh_pad3);
+	CHECK_MEMBER(gss_header, gh_handle);
+}
+
+static void check_gss_rep_header(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(gss_rep_header);
+	CHECK_MEMBER(gss_rep_header, gh_version);
+	CHECK_MEMBER(gss_rep_header, gh_sp);
+	CHECK_MEMBER(gss_rep_header, gh_pad0);
+	CHECK_MEMBER(gss_rep_header, gh_flags);
+	CHECK_MEMBER(gss_rep_header, gh_proc);
+	CHECK_MEMBER(gss_rep_header, gh_major);
+	CHECK_MEMBER(gss_rep_header, gh_minor);
+	CHECK_MEMBER(gss_rep_header, gh_seqwin);
+	CHECK_MEMBER(gss_rep_header, gh_pad2);
+	CHECK_MEMBER(gss_rep_header, gh_pad3);
+	CHECK_MEMBER(gss_rep_header, gh_handle);
+}
+
+static void check_gss_err_header(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(gss_err_header);
+	CHECK_MEMBER(gss_err_header, gh_version);
+	CHECK_MEMBER(gss_err_header, gh_sp);
+	CHECK_MEMBER(gss_err_header, gh_pad0);
+	CHECK_MEMBER(gss_err_header, gh_flags);
+	CHECK_MEMBER(gss_err_header, gh_proc);
+	CHECK_MEMBER(gss_err_header, gh_major);
+	CHECK_MEMBER(gss_err_header, gh_minor);
+	CHECK_MEMBER(gss_err_header, gh_pad1);
+	CHECK_MEMBER(gss_err_header, gh_pad2);
+	CHECK_MEMBER(gss_err_header, gh_pad3);
+	CHECK_MEMBER(gss_err_header, gh_handle);
+}
+
+static void check_gss_wire_ctx(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(gss_wire_ctx);
+	CHECK_MEMBER(gss_wire_ctx, gw_flags);
+	CHECK_MEMBER(gss_wire_ctx, gw_proc);
+	CHECK_MEMBER(gss_wire_ctx, gw_seq);
+	CHECK_MEMBER(gss_wire_ctx, gw_svc);
+	CHECK_MEMBER(gss_wire_ctx, gw_handle);
+}
+
 #ifndef HAVE_NATIVE_LINUX_CLIENT
 static void check_object_update_param(void)
 {
@@ -3179,6 +3257,13 @@ printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 	check_hsm_request();
 	check_hsm_user_request();
 	check_hsm_user_import();
+
+	check_netobj_s();
+	check_rawobj_s();
+	check_gss_header();
+	check_gss_rep_header();
+	check_gss_err_header();
+	check_gss_wire_ctx();
 
 #ifndef HAVE_NATIVE_LINUX_CLIENT
 	printf("#ifdef HAVE_SERVER_SUPPORT\n");

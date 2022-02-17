@@ -65,6 +65,7 @@
 #endif
 
 #include <libcfs/util/param.h>
+#include <uapi/linux/lustre/lgss.h>
 
 #include "gssd.h"
 #include "err_util.h"
