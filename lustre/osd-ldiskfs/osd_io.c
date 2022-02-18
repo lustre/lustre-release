@@ -1129,6 +1129,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 	while (i < pages) {
 		long blen, total = 0, previous_total = 0;
 		struct ldiskfs_map_blocks map = { 0 };
+		ktime_t time;
 
 		if (fp == NULL) { /* start new extent */
 			fp = *page++;
@@ -1180,9 +1181,19 @@ cont_map:
 			else
 				oh->oh_declared_ext--;
 		}
+
+		time = ktime_get();
 		rc = ldiskfs_map_blocks(handle, inode, &map, create);
+		time = ktime_sub(ktime_get(), time);
+
 		if (rc >= 0) {
-			int c = 0;
+			struct brw_stats *h = &osd->od_brw_stats;
+			int idx, c = 0;
+
+			idx = map.m_flags & LDISKFS_MAP_NEW ?
+				BRW_ALLOC_TIME : BRW_MAP_TIME;
+			lprocfs_oh_tally_log2_pcpu(&h->bs_hist[idx],
+						   ktime_to_ms(time));
 
 			for (; total < blen && c < map.m_len; c++, total++) {
 				if (rc == 0) {

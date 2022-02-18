@@ -768,6 +768,9 @@ static const struct brw_stats_props brw_props[] = {
 	{ .bsp_name	= "disk I/O size",
 	  .bsp_units	= "ios",
 	  .bsp_scale	= true				},
+	{ .bsp_name	= "block maps msec",
+	  .bsp_units	= "maps",
+	  .bsp_scale	= true,				},
 };
 
 static int brw_stats_seq_show(struct seq_file *seq, void *v)
