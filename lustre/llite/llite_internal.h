@@ -1552,7 +1552,7 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 /* statahead.c */
 
 #define LL_SA_RPC_MIN           8
-#define LL_SA_RPC_DEF           32
+#define LL_SA_RPC_DEF           128
 #define LL_SA_RPC_MAX           2048
 
 /* XXX: If want to support more concurrent statahead instances,
@@ -1563,7 +1563,7 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 #define LL_SA_RUNNING_DEF	16
 
 #define LL_SA_BATCH_MAX		1024
-#define LL_SA_BATCH_DEF		0
+#define LL_SA_BATCH_DEF		64
 
 #define LL_SA_CACHE_BIT         5
 #define LL_SA_CACHE_SIZE        (1 << LL_SA_CACHE_BIT)
