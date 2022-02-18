@@ -538,6 +538,35 @@ client# lfs mkdir -c
         <listitem><para>Otherwise, create more subdirectories on MDTs with more
         free inodes/blocks.</para></listitem>
       </itemizedlist>
+      <para>Sometime there are many MDTs. But it is not always desirable to
+        stripe a directory across all MDTs, even if the directory default
+        <literal>stripe_count=-1</literal> (unlimited).
+        In this case, the per-filesystem tunable parameter
+        <literal>lod.*.max_mdt_stripecount</literal> can be used to limit the
+        actual stripe count of directory to fewer than the full MDT count.
+        If <literal>lod.*.max_mdt_stripecount</literal> is not 0, and the
+        directory <literal>stripe_count=-1</literal>, the real directory
+        stripe count will be the minimum of the number of MDTs and
+        <literal>max_mdt_stripecount</literal>.
+        If <literal>lod.*.max_mdt_stripecount=0</literal>, or an explicit
+        stripe count is given for the directory, it is ignored.
+      </para>
+      <para>To set <literal>max_mdt_stripecount</literal>, on all MDSes of
+        file system, run:
+        <screen>
+mgs# lctl set_param -P lod.$fsname-MDTxxxx-mdtlov.max_mdt_stripecount=&lt;N&gt;
+        </screen>
+      </para>
+      <para>To check <literal>max_mdt_stripecount</literal>, run:
+        <screen>
+mds# lctl get_param lod.$fsname-MDTxxxx-mdtlov.max_mdt_stripecount
+        </screen>
+      </para>
+      <para>To reset <literal>max_mdt_stripecount</literal>, run:
+        <screen>
+mgs# lctl set_param -P -d lod.$fsname-MDTxxxx-mdtlov.max_mdt_stripecount
+        </screen>
+      </para>
     </section>
     <section xml:id="fsdefaultlmv" condition='l2E'>
       <title>Filesystem-wide default directory striping</title>
@@ -569,6 +598,48 @@ client# lfs mkdir -c
       <screen>lfs setdirstripe -D -i 0 -c 1 --max-inherit 0 &lt;mountpoint&gt;
       </screen>
     </section>
+  </section>
+  <section xml:id="default_dir_stripe_policy">
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>default dir stripe policy</secondary>
+    </indexterm>Default Dir Stripe Policy</title>
+    <para>If default dir stripe policy is set to a directory, it will be
+      applied to sub directories created later. For example:
+      <screen>
+$ mkdir testdir1
+$ lfs setdirstripe testdir1 -D -c 2
+$ lfs getdirstripe testdir1 -D
+lmv_stripe_count: 2 lmv_stripe_offset: -1 lmv_hash_type: none lmv_max_inherit: 3 lmv_max_inherit_rr: 0
+$ mkdir dir1/subdir1
+$ lfs getdirstripe testdir1/subdir1
+lmv_stripe_count: 2 lmv_stripe_offset: 0 lmv_hash_type: crush
+mdtidx       FID[seq:oid:ver]
+     0       [0x200000400:0x2:0x0]
+     1       [0x240000401:0x2:0x0]
+    </screen></para>
+    <para>Default dir stripe can be inherited by sub directory.
+      This behavior is controlled by <literal>lmv_max_inherit</literal>
+      parameter. If <literal>lmv_max_inherit</literal> is 0 or 1, sub
+      directory stops to inherit default dir stripe policy.
+      Or sub directory decreases its parent's
+      <literal>lmv_max_inherit</literal> and uses it as its own
+      <literal>lmv_max_inherit</literal>.
+      -1 is special because it means unlimited. For example:
+      <screen>
+$ lfs getdirstripe testdir1/subdir1 -D
+lmv_stripe_count: 2 lmv_stripe_offset: -1 lmv_hash_type: none lmv_max_inherit: 2 lmv_max_inherit_rr: 0
+      </screen>
+    </para>
+    <para><literal>lmv_max_inherit</literal> can be set explicitly with
+      <literal>--max-inherit</literal> option in
+      <literal>lfs setdirstripe -D</literal> command.
+      If the max-inherit value is not specified, the default value is -1
+      when <literal>stripe_count</literal> is 0 or 1.
+      For other values of <literal>stripe_count</literal>, the default value
+      is 3.
+    </para>
   </section>
   <section xml:id="set_get_lustre_params">
     <title>

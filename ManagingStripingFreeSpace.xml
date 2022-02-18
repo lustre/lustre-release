@@ -316,6 +316,40 @@ obdidx     objid        objid           group
     <section remap="h3">
       <title><indexterm>
           <primary>striping</primary>
+          <secondary>stripe count limit</secondary>
+        </indexterm>Per File System Stripe Count Limit</title>
+      <para>Sometime there are many OSTs in a filesystem, but it is not always
+        desirable to stripe file to across all OSTs, even if the given
+        <literal>stripe_count=-1</literal> (unlimited).
+        In this case, the per-filesystem tunable parameter
+        <literal>lod.*.max_stripecount</literal> can be used to limit the real
+        stripe count of file to a lower number than the OST count.
+        If <literal>lod.*.max_stripecount</literal> is not 0, and the file
+        <literal>stripe_count=-1</literal>, the real stripe count will be
+        the minimum of the OST count and <literal>max_stripecount</literal>. If
+        <literal>lod.*.max_stripecount=0</literal>, or an explicit stripe count
+        is given for the file, it is ignored.</para>
+      <para>To set <literal>max_stripecount</literal>, on all MDSes of
+        file system, run:
+        <screen>
+mgs# lctl set_param -P lod.$fsname-MDTxxxx-mdtlov.max_stripecount=&lt;N&gt;
+        </screen>
+      </para>
+      <para>To check <literal>max_stripecount</literal>, run:
+        <screen>
+mds# lctl get_param lod.$fsname-MDTxxxx-mdtlov.max_stripecount
+        </screen>
+      </para>
+      <para>To reset <literal>max_stripecount</literal>, run:
+        <screen>
+mgs# lctl set_param -P -d lod.$fsname-MDTxxxx-mdtlov.max_stripecount
+        </screen>
+      </para>
+    </section>
+
+    <section remap="h3">
+      <title><indexterm>
+          <primary>striping</primary>
           <secondary>on specific OST</secondary>
         </indexterm>Creating a File on a Specific OST</title>
       <para>You can use <literal>lfs setstripe</literal> to create a file on a specific OST. In the
