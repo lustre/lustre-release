@@ -380,6 +380,7 @@ static int llog_test3_process(const struct lu_env *env,
 
 	CWARN("test3: processing records from index %d to the end\n",
 	      start);
+	cd.lpcd_read_mode = LLOG_READ_MODE_NORMAL;
 	cd.lpcd_first_idx = start - 1;
 	cd.lpcd_last_idx = 0;
 	test_3_rec_num = test_3_paddings = 0;
