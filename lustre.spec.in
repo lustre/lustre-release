@@ -466,7 +466,10 @@ if [ -n "$CONFIGURE_ARGS" ]; then
 	# and create dedicated cache in temporary build directory
 	if [ -f "$CONFIG_CACHE_FILE" ]; then
 		TMP_CONFIG_CACHE="$(mktemp --tmpdir newconfig-XXXXXXXX.cache)"
-		sed "/ac_cv_env/d" "$CONFIG_CACHE_FILE" > $TMP_CONFIG_CACHE
+		sed -e "/ac_cv_env/d" \
+		    -e "/am_cv_CC_dependencies_compiler_type/d" \
+		    -e "/lb_cv_mpi_tests/d" \
+		       "$CONFIG_CACHE_FILE" > $TMP_CONFIG_CACHE
 		CONFIGURE_ARGS="$CONFIGURE_ARGS --cache-file=$TMP_CONFIG_CACHE"
 	fi
 fi
