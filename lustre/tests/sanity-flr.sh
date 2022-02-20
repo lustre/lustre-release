@@ -2080,6 +2080,9 @@ test_44a() {
 run_test 44a "lfs mirror split check"
 
 test_44b() {
+	(( $MDS1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "Need MDS version at least 2.14.56"
+
 	rm -rf $DIR/$tdir
 	local tf=$DIR/$tdir/$tfile
 
