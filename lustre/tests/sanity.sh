@@ -8936,8 +8936,8 @@ test_64f() {
 run_test 64f "check grant consumption (with grant allocation)"
 
 test_64g() {
-	#[ $MDS1_VERSION -lt $(version_code 2.14.54) ] &&
-	#	skip "Need MDS version at least 2.14.54"
+	(( $MDS1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "Need MDS version at least 2.14.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
