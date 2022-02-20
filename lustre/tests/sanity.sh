@@ -28020,6 +28020,9 @@ test_823() {
 run_test 823 "Setting create_count > OST_MAX_PRECREATE is lowered to maximum"
 
 test_831() {
+	[[ $MDS1_VERSION -lt $(version_code 2.14.56) ]] &&
+		skip "Need MDS version 2.14.56"
+
 	local sync_changes=$(do_facet $SINGLEMDS \
 		$LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.sync_changes)
 
