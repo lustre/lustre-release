@@ -3809,7 +3809,9 @@ test_208a() {
 	local tf=$DIR/$tfile
 	local osts=$(comma_list $(osts_nodes))
 
-	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need MDS version at least 2.14.55"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
@@ -3846,7 +3848,9 @@ test_208b() {
 	local tf=$DIR/$tfile
 	local osts=$(comma_list $(osts_nodes))
 
-	(( $OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need MDS version at least 2.14.55"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
