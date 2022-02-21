@@ -10100,8 +10100,10 @@ test_77n() {
 run_test 77n "Verify read from a hole inside contiguous blocks with T10PI"
 
 test_77o() {
-	(( $CLIENT_VERSION >= $(version_code 2.14.54) )) ||
-		skip "Need at least version 2.14.54"
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need MDS version at least 2.14.55"
+	(( $OST1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "Need OST version at least 2.14.55"
 	local ofd=obdfilter
 	local mdt=mdt
 
