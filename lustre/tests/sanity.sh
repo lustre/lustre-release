@@ -27995,6 +27995,9 @@ test_823() {
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	local OST_MAX_PRECREATE=20000
 
+	(( $MDS1_VERSION >= $(version_code 2.14.56) )) ||
+		skip "Need MDS version at least 2.14.56"
+
 	save_lustre_params mds1 \
 		"osp.$FSNAME-OST*-osc-MDT0000.max_create_count" > $p
 	do_facet $SINGLEMDS "$LCTL set_param -n \
