@@ -1482,10 +1482,15 @@ void ll_put_super(struct super_block *sb)
 		client_common_put_super(sb);
 	}
 
+	/* imitate failed cleanup */
+	if (OBD_FAIL_CHECK(OBD_FAIL_OBD_CLEANUP))
+		goto skip_cleanup;
+
 	next = 0;
 	while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)))
 		class_manual_cleanup(obd);
 
+skip_cleanup:
 	if (test_bit(LL_SBI_VERBOSE, sbi->ll_flags))
 		LCONSOLE_WARN("Unmounted %s\n", profilenm ? profilenm : "");
 

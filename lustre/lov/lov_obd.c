@@ -309,8 +309,14 @@ static int lov_disconnect(struct obd_export *exp)
 		goto out;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
+	if (lov->lov_connects == 0) {
+		CWARN("%s: was disconnected already #%d\n",
+		      obd->obd_name, lov->lov_connects);
+		RETURN(0);
+	}
+
 	lov->lov_connects--;
-	if (lov->lov_connects != 0) {
+	if (lov->lov_connects > 0) {
 		/* why should there be more than 1 connect? */
 		CWARN("%s: unexpected disconnect #%d\n",
 		      obd->obd_name, lov->lov_connects);

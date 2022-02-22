@@ -17857,6 +17857,36 @@ test_171() { # bug20592
 }
 run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
 
+test_172() {
+
+	#define OBD_FAIL_OBD_CLEANUP  0x60e
+	$LCTL set_param fail_loc=0x60e
+	umount $MOUNT || error "umount $MOUNT failed"
+	stack_trap "mount_client $MOUNT"
+
+	(( $($LCTL dl | egrep -c " osc | lov | lmv | mdc ") > 0 )) ||
+		error "no client OBDs are remained"
+
+	$LCTL dl | while read devno state type name foo; do
+		case $type in
+		lov|osc|lmv|mdc)
+			$LCTL --device $name cleanup
+			$LCTL --device $name detach
+			;;
+		*)
+			# skip server devices
+			;;
+		esac
+	done
+
+	if (( $($LCTL dl | egrep -c " osc | lov | lmv | mdc ") > 0 )); then
+		$LCTL dl | egrep " osc | lov | lmv | mdc "
+		error "some client OBDs are still remained"
+	fi
+
+}
+run_test 172 "manual device removal with lctl cleanup/detach ======"
+
 # it would be good to share it with obdfilter-survey/iokit-libecho code
 setup_obdecho_osc () {
         local rc=0
