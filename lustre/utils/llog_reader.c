@@ -927,7 +927,7 @@ static void print_unlink_rec(struct llog_unlink_rec *lur)
 {
 	printf("unlink record id:0x%x target %llx:%x:%x\n",
 		__le32_to_cpu(lur->lur_hdr.lrh_id),
-		__le64_to_cpu(lur->lur_oid),
+		(unsigned long long)__le64_to_cpu(lur->lur_oid),
 		__le32_to_cpu(lur->lur_oseq),
 		__le32_to_cpu(lur->lur_count));
 }
@@ -944,7 +944,7 @@ static void print_setattr64_rec(struct llog_setattr64_rec *lsr)
 	printf("setattr64 record id:0x%x target "DFID" valid %llx uid %u:%u gid %u:%u\n",
 		__le32_to_cpu(lsr->lsr_hdr.lrh_id),
 		PFID(&lsr->lsr_oi.oi_fid),
-		__le64_to_cpu(lsr->lsr_valid),
+		(unsigned long long)__le64_to_cpu(lsr->lsr_valid),
 		__le32_to_cpu(lsr->lsr_uid_h),
 		__le32_to_cpu(lsr->lsr_uid),
 		__le32_to_cpu(lsr->lsr_gid_h),
@@ -956,7 +956,7 @@ static void print_setattr64_rec_v2(struct llog_setattr64_rec_v2 *lsr)
 	printf("setattr64 v2 record id:0x%x target "DFID" valid %llx uid %u:%u gid %u:%u prj %u\n",
 		__le32_to_cpu(lsr->lsr_hdr.lrh_id),
 		PFID(&lsr->lsr_oi.oi_fid),
-		__le64_to_cpu(lsr->lsr_valid),
+		(unsigned long long)__le64_to_cpu(lsr->lsr_valid),
 		__le32_to_cpu(lsr->lsr_uid_h),
 		__le32_to_cpu(lsr->lsr_uid),
 		__le32_to_cpu(lsr->lsr_gid_h),
