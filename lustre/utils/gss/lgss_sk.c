@@ -588,6 +588,7 @@ int main(int argc, char **argv)
 		}
 
 		DH_free(dh);
+		dh = NULL;
 	}
 
 	if (write_config_file(modify ?: output, config, modify))
