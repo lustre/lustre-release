@@ -20447,8 +20447,8 @@ test_230r() {
 run_test 230r "migrate with too many local locks"
 
 test_230s() {
-	[ $MDS1_VERSION -ge $(version_code 2.13.57) ] ||
-		skip "Need MDS version at least 2.13.57"
+	(( $MDS1_VERSION >= $(version_code 2.14.52) )) ||
+		skip "Need MDS version at least 2.14.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
 	local restripe_status=$(do_facet mds1 $LCTL get_param -n \
@@ -20462,7 +20462,7 @@ test_230s() {
 		do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=$st"
 		test_mkdir $DIR/$tdir
 		$LFS mkdir $DIR/$tdir |& grep "File exists" ||
-			error "$LFS mkdir doesn't return -EEXIST if target exists"
+			error "$LFS mkdir should return EEXIST if target exists"
 		rmdir $DIR/$tdir
 	done
 }
