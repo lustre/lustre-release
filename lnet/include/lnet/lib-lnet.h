@@ -1188,13 +1188,49 @@ lnet_atomic_add_unless_max(atomic_t *v, int a, int u)
 	return mod;
 }
 
-static inline void
-lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni, int value)
+static bool
+lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
 {
-	/* only adjust the net health if the lpni health value changed */
-	if (lnet_atomic_add_unless_max(&lpni->lpni_healthv, value,
-				       LNET_MAX_HEALTH_VALUE))
+	int h = atomic_read(healthv);
+
+	if (h == 0)
+		return false;
+
+	if (h < sensitivity)
+		h = 0;
+	else
+		h -= sensitivity;
+
+	return (atomic_xchg(healthv, h) != h);
+}
+
+static inline void
+lnet_dec_lpni_healthv_locked(struct lnet_peer_ni *lpni)
+{
+	/* If there is a health sensitivity in the peer then use that
+	 * instead of the globally set one.
+	 * only adjust the net health if the lpni health value changed
+	 */
+	if (lnet_dec_healthv_locked(&lpni->lpni_healthv,
+			lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity ? :
+			lnet_health_sensitivity)) {
 		lnet_update_peer_net_healthv(lpni);
+	}
+}
+
+static inline void
+lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni)
+{
+	/* If there is a health sensitivity in the peer then use that
+	 * instead of the globally set one.
+	 * only adjust the net health if the lpni health value changed
+	 */
+	if (lnet_atomic_add_unless_max(&lpni->lpni_healthv,
+			lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity ? :
+			lnet_health_sensitivity,
+				       LNET_MAX_HEALTH_VALUE)) {
+		lnet_update_peer_net_healthv(lpni);
+	}
 }
 
 static inline void

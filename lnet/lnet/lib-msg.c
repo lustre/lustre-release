@@ -437,19 +437,6 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 	return 0;
 }
 
-static void
-lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
-{
-	int h = atomic_read(healthv);
-
-	if (h < sensitivity) {
-		atomic_set(healthv, 0);
-	} else {
-		h -= sensitivity;
-		atomic_set(healthv, h);
-	}
-}
-
 /* must hold net_lock/0 */
 void
 lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
@@ -499,21 +486,7 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 void
 lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 {
-	__u32 sensitivity = lnet_health_sensitivity;
-	__u32 lp_sensitivity;
-
-	/*
-	 * If there is a health sensitivity in the peer then use that
-	 * instead of the globally set one.
-	 */
-	lp_sensitivity = lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity;
-	if (lp_sensitivity)
-		sensitivity = lp_sensitivity;
-
-	lnet_dec_healthv_locked(&lpni->lpni_healthv, sensitivity);
-
-	/* update the peer_net's health value */
-	lnet_update_peer_net_healthv(lpni);
+	lnet_dec_lpni_healthv_locked(lpni);
 
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
@@ -918,12 +891,7 @@ lnet_health_check(struct lnet_msg *msg)
 				lnet_set_lpni_healthv_locked(lpni,
 					LNET_MAX_HEALTH_VALUE);
 			} else {
-				__u32 sensitivity = lpni->lpni_peer_net->
-					lpn_peer->lp_health_sensitivity;
-
-				lnet_inc_lpni_healthv_locked(lpni,
-					(sensitivity) ? sensitivity :
-					lnet_health_sensitivity);
+				lnet_inc_lpni_healthv_locked(lpni);
 				/* This peer NI may have previously aged out
 				 * of recovery. Now that we've received a
 				 * message from it, we can continue recovery
