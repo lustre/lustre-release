@@ -493,7 +493,7 @@ lctl get_param osd-*.*.quota_slave.limit*
 lfs quota [-U|--default-usr|-G|--default-grp|-P|--default-prj] <replaceable>/mount_point</replaceable>
 lfs setquota {-U|--default-usr|-G|--default-grp|-P|--default-prj} [-b <replaceable>block-softlimit</replaceable>] \
              [-B <replaceable>block_hardlimit</replaceable>] [-i <replaceable>inode_softlimit</replaceable>] [-I <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable>
-lfs setquota {-u|-g|-p} <replaceable>username|groupname</replaceable> -d <replaceable>/mount_point</replaceable>
+lfs setquota {-u|-g|-p} <replaceable>username|groupname</replaceable> --default <replaceable>/mount_point</replaceable>
       </screen>
       <para>To set the default user quota:</para>
       <screen>
@@ -521,22 +521,22 @@ lfs setquota {-u|-g|-p} <replaceable>username|groupname</replaceable> -d <replac
       </screen>
       <para>To set user 'bob' to use the default user quota:</para>
       <screen>
-# lfs setquota -u bob -d /mnt/testfs
+# lfs setquota -u bob --default /mnt/testfs
       </screen>
       <para>To set group 'bob' to use the default group quota:</para>
       <screen>
-# lfs setquota -g bob -d /mnt/testfs
+# lfs setquota -g bob --default /mnt/testfs
       </screen>
       <para>To set project 1000 to use the default project quota:</para>
       <screen>
-# lfs setquota -p 1000 -d /mnt/testfs
+# lfs setquota -p 1000 --default /mnt/testfs
       </screen>
       <note>
       <para>
       If quota limits are set for some user, group or project, it will use
       those specific quota limits instead of the default quota. Quota limits for
       any user, group or project will use the default quota by setting its quota
-      limits with option '-d'.
+      limits with option '<literal>--default</literal>'.
       </para>
       </note>
     </section>
