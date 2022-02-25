@@ -422,15 +422,15 @@ command_t cmdlist[] = {
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
 #ifdef HAVE_SYS_QUOTA_H
 	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-	 "usage: setquota [-t][-D] {-u|-U|-g|-G|-p|-P} {-b|-B|-i|-I LIMIT} [--pool POOL] FILESYSTEM\n"
-	 "	 setquota {-u|-g|-p} --delete FILESYSTEM\n"},
+	 "usage: setquota [-t] {-u|-U|-g|-G|-p|-P ID} {-b|-B|-i|-I LIMIT} [--pool POOL] FILESYSTEM\n"
+	 "       setquota {-u|-g|-p ID} {--default|--delete} FILESYSTEM\n"},
 	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
 	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-i MDT_IDX|-I OST_IDX]\n"
 	 "	       [{-u|-g|-p} UNAME|UID|GNAME|GID|PROJID]\n"
-	 "	       [--pool <OST pool name>] <filesystem>\n"
-	 "	 quota -t <-u|-g|-p> [--pool <OST pool name>] <filesystem>\n"
-	 "	 quota [-q] [-v] [h] {-U|-G|-P} [--pool <OST pool name>] <filesystem>\n"
-	 "	 quota -a {-u|-g|-p} [-s start_qid] [-e end_qid] <filesystem>"},
+	 "             [--pool OST_POOL_NAME] FILESYSTEM\n"
+	 "       quota -t {-u|-g|-p} [--pool OST_POOL_NAME] FILESYSTEM\n"
+	 "       quota [-hqv] {-U|-G|-P} [--pool OST_POOL_NAME] FILESYSTEM\n"
+	 "	 quota -a {-u|-g|-p} [-s START_QID] [-e END_QID] FILESYSTEM"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|-r] <file|directory...>\n"
@@ -8101,7 +8101,7 @@ static inline int has_times_option(int argc, char **argv)
 	int i;
 
 	for (i = 1; i < argc; i++)
-		if (!strcmp(argv[i], "-t"))
+		if (!strcmp(argv[i], "-t") || !strcmp(argv[i], "--times"))
 			return 1;
 
 	return 0;
@@ -8144,11 +8144,10 @@ static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 	{ .val = 'g',	.name = "group",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inode-grace",	.has_arg = required_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = no_argument },
 	{ .val = 't',	.name = "times",	.has_arg = no_argument },
 	{ .val = 'u',	.name = "user",		.has_arg = no_argument },
-	{ .val = LFS_POOL_OPT,
-			.name = "pool",		.has_arg = required_argument },
 	{ .name = NULL } };
 	int qtype;
 
@@ -8158,23 +8157,6 @@ static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 	while ((c = getopt_long(argc, argv, "b:ghi:ptu",
 				long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'u':
-			qtype = USRQUOTA;
-			goto quota_type;
-		case 'g':
-			qtype = GRPQUOTA;
-			goto quota_type;
-		case 'p':
-			qtype = PRJQUOTA;
-quota_type:
-			if (qctl->qc_type != ALLQUOTA) {
-				fprintf(stderr,
-					"%s: -u/g/p cannot be used more than once\n",
-					progname);
-				return CMD_HELP;
-			}
-			qctl->qc_type = qtype;
-			break;
 		case 'b':
 			if (strncmp(optarg, NOTIFY_GRACE,
 				    strlen(NOTIFY_GRACE)) == 0) {
@@ -8190,6 +8172,9 @@ quota_type:
 			}
 			dqb->dqb_valid |= QIF_BTIME;
 			break;
+		case 'g':
+			qtype = GRPQUOTA;
+			goto quota_type;
 		case 'i':
 			if (strncmp(optarg, NOTIFY_GRACE,
 				    strlen(NOTIFY_GRACE)) == 0) {
@@ -8205,13 +8190,27 @@ quota_type:
 			}
 			dqb->dqb_valid |= QIF_ITIME;
 			break;
-		case 't': /* Yes, of course! */
-			break;
+		case 'p':
+			qtype = PRJQUOTA;
+			goto quota_type;
 		case LFS_POOL_OPT:
 			if (lfs_verify_poolarg(optarg))
 				return -1;
 			strncpy(qctl->qc_poolname, optarg, LOV_MAXPOOLNAME);
 			qctl->qc_cmd  = LUSTRE_Q_SETINFOPOOL;
+			break;
+		case 't': /* Yes, of course! */
+			break;
+		case 'u':
+			qtype = USRQUOTA;
+quota_type:
+			if (qctl->qc_type != ALLQUOTA) {
+				fprintf(stderr,
+					"%s: -u/g/p cannot be used more than once\n",
+					progname);
+				return CMD_HELP;
+			}
+			qctl->qc_type = qtype;
 			break;
 		/* getopt prints error message for us when opterr != 0 */
 		default:
@@ -8510,7 +8509,7 @@ quota_type_def:
 			}
 			qctl->qc_type = qtype;
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 22, 53, 0)
 		case 'd':
 			fprintf(stderr,
 				"%s setquota: '-d' deprecated, use '-D' or '--default'\n",
@@ -8999,7 +8998,7 @@ static int tgt_name2index(const char *tgtname, unsigned int *idx)
 	dash += 4;
 
 	*idx = strtoul(dash, &endp, 16);
-	if (*idx > 0xffff) {
+	if (*idx > LOV_V1_INSANE_STRIPE_COUNT) {
 		fprintf(stderr, "wrong index %s\n", tgtname);
 		return -ERANGE;
 	}
@@ -9450,16 +9449,39 @@ static int lfs_quota(int argc, char **argv)
 	int c;
 	char *mnt, *name = NULL;
 	struct if_quotactl *qctl;
-	char *obd_uuid;
+	char *obd_uuid, *endp;
 	int rc = 0, rc1 = 0, verbose = 0, quiet = 0;
-	__u32 valid = QC_GENERAL, idx = 0;
+	__u32 valid = QC_GENERAL;
+	long idx = 0;
 	__u32 start_qid = 0, end_qid = 0;
 	bool human_readable = false;
 	bool show_default = false;
 	int qtype;
 	bool show_pools = false;
 	struct option long_opts[] = {
-	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = optional_argument },
+	{ .val = 'a',	.name = "all",		.has_arg = required_argument },
+	{ .val = 'e',	.name = "end-qid",	.has_arg = required_argument },
+	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
+	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
+	/* It is unfortunate that '-i' was used for mdt-index, and '-I' for
+	 * ost-index, because '-i' is used for ost-index everywhere else.
+	 * These options have been this way since ancient days, but I suspect
+	 * that they are not often used. Prefer --ost and --mdt instead.
+	 */
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
+	{ .val = 'o',	.name = "ost-index",	.has_arg = required_argument },
+	{ .val = 'o',	.name = "ost",		.has_arg = required_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = optional_argument },
+	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
+	{ .val = 'P',	.name = "default-prj",	.has_arg = no_argument },
+	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument },
+	{ .val = 's',	.name = "start-qid",	.has_arg = required_argument },
+	{ .val = 't',	.name = "times",	.has_arg = no_argument },
+	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
+	{ .val = 'U',	.name = "default-usr",	.has_arg = required_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
 	char **poollist = NULL;
 	char *buf = NULL;
@@ -9473,80 +9495,77 @@ static int lfs_quota(int argc, char **argv)
 	qctl->qc_type = ALLQUOTA;
 	obd_uuid = (char *)qctl->obd_uuid.uuid;
 
-	while ((c = getopt_long(argc, argv, "ae:gGi:I:o:pPqs:tuUvh",
+	while ((c = getopt_long(argc, argv, "ae:gGhi:I:m:o:pPqs:tuUv",
 		long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'U':
-			show_default = true;
-		case 'u':
-			qtype = USRQUOTA;
-			goto quota_type;
-		case 'G':
-			show_default = true;
-		case 'g':
-			qtype = GRPQUOTA;
-			goto quota_type;
-		case 'P':
-			show_default = true;
-		case 'p':
-			qtype = PRJQUOTA;
-quota_type:
-			if (qctl->qc_type != ALLQUOTA) {
-				fprintf(stderr,
-					"%s quota: only one of -u, -g, or -p may be specified\n",
-					progname);
-				rc = CMD_HELP;
-				goto out;
-			}
-			qctl->qc_type = qtype;
-			break;
 		case 'a':
 			qctl->qc_cmd = LUSTRE_Q_ITERQUOTA;
 			break;
-		case 't':
-			qctl->qc_cmd = LUSTRE_Q_GETINFO;
+		case 'e':
+			end_qid = strtoul(optarg, NULL, 0);
 			break;
-		case 'o':
-			valid = qctl->qc_valid = QC_UUID;
-			snprintf(obd_uuid, sizeof(*obd_uuid), "%s", optarg);
+		case 'G':
+			show_default = true;
+			/* fallthrough */
+		case 'g':
+			qtype = GRPQUOTA;
+			goto quota_type;
+		case 'h':
+			human_readable = true;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 22, 53, 0)
 		case 'i':
-			valid = qctl->qc_valid = QC_MDTIDX;
-			idx = qctl->qc_idx = atoi(optarg);
-			if (idx == 0 && *optarg != '0') {
+			fprintf(stderr,
+				"'-i' deprecated, use '--ost' or '--mdt'\n");
+			/* fallthrough */
+#endif
+		case 'm':
+			errno = 0;
+			idx = strtol(optarg, &endp, 0);
+			if (errno != 0 || idx > LOV_V1_INSANE_STRIPE_COUNT ||
+			    idx < 0 || *endp != '\0') {
 				fprintf(stderr,
 					"%s quota: invalid MDT index '%s'\n",
 					progname, optarg);
 				rc = CMD_HELP;
 				goto out;
 			}
+			valid = qctl->qc_valid = QC_MDTIDX;
+			qctl->qc_idx = idx;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 22, 53, 0)
 		case 'I':
-			valid = qctl->qc_valid = QC_OSTIDX;
-			idx = qctl->qc_idx = atoi(optarg);
-			if (idx == 0 && *optarg != '0') {
-				fprintf(stderr,
-					"%s quota: invalid OST index '%s'\n",
-					progname, optarg);
-				rc = CMD_HELP;
-				goto out;
+			fprintf(stderr, "'-I' deprecated, use '--ost'\n");
+			/* fallthrough */
+#endif
+		case 'o':
+			errno = 0;
+			idx = strtol(optarg, &endp, 0);
+			/* simple digit, treat it as a numerical OST index */
+			if (*endp == '\0') {
+				if (idx > LOV_V1_INSANE_STRIPE_COUNT ||
+				    idx < 0) {
+					fprintf(stderr,
+						"%s quota: invalid OST index '%s'\n",
+						progname, optarg);
+					rc = CMD_HELP;
+					goto out;
+				}
+				valid = qctl->qc_valid = QC_OSTIDX;
+				qctl->qc_idx = idx;
+				break;
 			}
+
+			/* need to also handle a UUID for compatibility */
+			valid = qctl->qc_valid = QC_UUID;
+			snprintf(obd_uuid, sizeof(*obd_uuid), "%s", optarg);
 			break;
-		case 's':
-			start_qid = strtoul(optarg, NULL, 0);
-			break;
-		case 'e':
-			end_qid = strtoul(optarg, NULL, 0);
-			break;
-		case 'v':
-			verbose = 1;
-			break;
-		case 'q':
-			quiet = 1;
-			break;
-		case 'h':
-			human_readable = true;
-			break;
+		case 'P':
+			show_default = true;
+			/* fallthrough */
+		case 'p':
+			qtype = PRJQUOTA;
+			goto quota_type;
 		case LFS_POOL_OPT:
 			if ((!optarg) && (argv[optind] != NULL) &&
 				(argv[optind][0] != '-') &&
@@ -9568,6 +9587,33 @@ quota_type:
 			/* optarg is NULL */
 			show_pools = true;
 			qctl->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
+			break;
+		case 'q':
+			quiet = 1;
+			break;
+		case 's':
+			start_qid = strtoul(optarg, NULL, 0);
+			break;
+		case 't':
+			qctl->qc_cmd = LUSTRE_Q_GETINFO;
+			break;
+		case 'U':
+			show_default = true;
+			/* fallthrough */
+		case 'u':
+			qtype = USRQUOTA;
+quota_type:
+			if (qctl->qc_type != ALLQUOTA) {
+				fprintf(stderr,
+					"%s quota: only one of -u, -g, or -p may be specified\n",
+					progname);
+				rc = CMD_HELP;
+				goto out;
+			}
+			qctl->qc_type = qtype;
+			break;
+		case 'v':
+			verbose = 1;
 			break;
 		default:
 			fprintf(stderr, "%s quota: unrecognized option '%s'\n",

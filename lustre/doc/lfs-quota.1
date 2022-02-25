@@ -1,20 +1,17 @@
-.TH LFS-QUOTA 1 2020-04-06 "Lustre" "Lustre Utilities"
+.TH LFS-QUOTA 1 2022-02-26 "Lustre" "Lustre Utilities"
 .SH NAME
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
-.B lfs quota \fR[\fB-hqv\fR]
-       [\fB-o <\fIobd_uuid\fR>|\fB-I <\fIost_idx\fR>|\fB-i <\fImdt_idx\fR>]
-       [\fB-u <\fIuname\fR|\fIuid\fR>|\fB-g <\fIgname\fR|\fIgid\fR>\
-|\fB-p <\fIprojid\fR>]
-       [\fB--pool\fR <\fIpname\fR>]
-       <\fIfilesystem\fR>\fR
+.BR "lfs quota " [ -hqv "] [" --ost " \fIobd_uuid\fR|" --mdt " \fIMDT_IDX\fR]
+       [\fB-u \fIUSER\fR|\fB-g <\fIGROUP\fR>|\fB-p \fIPROJID\fR]
+[\fB--pool\fR \fIPOOL_NAME\fR] \fIFILESYSTEM
 
 .br
-.B lfs quota \fR[\fB-hq\fR] \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
+.BR "lfs quota " [ -hq "] {" -U | -G | -P } " " \fIFILESYSTEM
 .br
 
 .br
-.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.BR "lfs quota " -t " {" -u | -g | -p "} " \fIFILESYSTEM
 .br
 
 .br
@@ -24,115 +21,102 @@ lfs-quota \- display quota limits and status for users, groups, or projects.
 .TP
 .SH DESCRIPTION
 .PP
-.B lfs quota <\fIfilesystem\fR>\fR
 .TP
-
-Display disk usage and limits for individual users, groups, and projects. \
-An asterisk is displayed when the quota is exceeded. \
-By default the statistics for the entire filesystem are displayed but \
-individual MDTs and OSTs can be specified. \
-A user or group name or an ID can \
-be specified. If user, group and project are omitted, quotas for \
+.B lfs quota \fIFILESYSTEM
+Display disk usage and limits for individual users, groups, and projects.
+An asterisk is displayed when the quota is exceeded.
+By default the statistics for the entire filesystem are displayed but
+individual MDTs and OSTs can be specified with the
+.B --ost
+or
+.B --mdt
+options.  A user, group, or project ID can be specified.
+If user, group, and project are omitted, quotas for the
 current uid/gid/projid are shown.
 .TP
-.B -h
-Human readable. This will change the formatting of \
-block storage and time values. Without this option block storage values \
-are in kilobytes and times are in seconds. With this option block storage \
+.BR -h | --human-readable
+This will change the formatting of
+block storage and time values. Without this option block storage values
+are in kilobytes and times are in seconds. With this option block storage
 values use the common metric binary suffixes
-.BR k "," M "," G "," T "," P "," E
-which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 \
-respectively.
-Time values use the "XXwXXdXXhXXmXXs" format. This format specifies \
-weeks, days, hours, minutes, seconds.
+.BR K ", " M ", " G ", " T ", " P ", and " E
+which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 bytes,
+respectively.  Time values will use the "XXwXXdXXhXXmXXs" format, which
+specifies weeks, days, hours, minutes, seconds.
 .TP
-.B -q
-Quiet. Display only the line containing the data. \
-The line saying what the data is, and the line with the data
-column headers will not be printed.
+.BR -g | --group " {" \fIGROUP | \fIGID }
+Display quota information for group name \fIGROUP\fR or numeric \fIGID\fR.
 .TP
-.B -v
-Verbose. Display per-MDT and per-OST statistics in addition
+.BR -m | --mdt " " \fIMDT_IDX
+Display quota information for MDT \fIMDT_IDX\fR.
+.TP
+.BR -o | --ost " " \fIOST_IDX
+Display quota information for OST \fIOST_IDX\fR.
+.TP
+.BR --pool " " \fIPOOL_NAME
+Display quota information for OST pool \fIPOOL_NAME\fR.
+.TP
+.BR -p | --projid " " \fIPROJID
+Display quota information for project \fIPROJID\fR.
+.TP
+.BR -q | --quiet
+Display only the line containing the data.
+The line saying what the data is, and the column headers will not be printed.
+.TP
+.BR -u | --user " {" \fIUSER | \fIUID }
+Display quota information for user name \fIUSER\fR or numeric \fIUID\fR.
+.TP
+.BR -v | --verbose
+Display per-MDT and per-OST statistics in addition
 to the usual system wide data. An asterisk near the OST or MDT means that
 the quota is exceeded only for that specific target. The user is over the
 quota only if an asterisk is near the whole filesystem usage.
 Inactive target will also be printed but marked as "inact".
 .TP
-.B -u <\fIuname|uid\fR>
-Display user quota information for \fIuname\fR or \fIuid\fR.
-.TP
-.B -g <\fIgname|gid\fR>
-Display group quota information for name \fIgname\fR or \fIgid\fR.
-.TP
-.B -p <\fIprojid\fR>
-Display project quota information for \fIprojid\fR.
-.TP
-.B -o <\fIobd_uuid\fR>
-Display quota information for \fIobd_uuid\fR.
-.TP
-.B -i <\fImdt_idx\fR>
-Display project quota information for \fImdt_idx\fR.
-.TP
-.B -I <\fIost_idx\fR>
-Display project quota information for \fIost_idx\fR.
-.TP
-.B --pool <\fIpname\fR>
-Display quota information per OST pool \fIpname\fR.
-.TP
-.B lfs quota \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
-.TP
-Display default quota values for users, groups, or projects. \
+.BR "lfs quota " { -U | -G | -P "} " FILESYSTEM
+Display default quota values for users, groups, or projects.
 This command requires super user permissions.
 .TP
-.B -U <\fIuname|uid\fR>
-Display default user quota information for <\fIfilesystem\fR>.
+.BR -G | --default-grp " {" \fIGROUP | \fIGID }
+Display default quota limits for group name \fIGROUP\fR or numeric \fIGID\fR.
 .TP
-.B -G <\fIgname|gid\fR>
-Display default group quota information for name <\fIfilesystem\fR>.
+.BR -P \fIPROJID
+Display default quota limits for project \fIPROJID\fR.
 .TP
-.B -P <\fIprojid\fR>
-Display default project quota information for <\fIfilesystem\fR>.
+.BR -U | --default-usr " {" \fIUSER | UID }
+Display default quota limits for username \fIUSER\fR or numeric \fIUID\fR.
 .TP
-.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> [\fB--pool\fR <\fIpname\fR>] <\fIfilesystem\fR>
-.TP
-Display grace times for users, groups, or projects. \
-The format is always "XXwXXdXXhXXmXXs".
-.TP
-.B -u <\fIuname|uid\fR>
-Display default user grace times for <\fIfilesystem\fR>.
-.TP
-.B -g <\fIgname|gid\fR>
-Display default group grace times for name <\fIfilesystem\fR>.
-.TP
-.B -p <\fIprojid\fR>
-Display default project grace times for <\fIfilesystem\fR>.
-.TP
-.B --pool <\fIpname\fR>
-Display user, group or project grace times per OST pool \fIpname\fR.
-.TP
-.B lfs quota -a \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.BR "lfs quota -a" " {" -u | -g | -p "} " \fIFILESYSTEM
 .TP
 Display all quota setting for all users, groups, or projects.
 .TP
+.BR "lfs quota -t" | --times " {" -u | -g | -p "} [" --pool " \fIPOOL_NAME\fR] " \fIFILESYSTEM
+Display grace times for users, groups, or projects.
+Time values use the "XXwXXdXXhXXmXXs" format, which specifies
+weeks, days, hours, minutes, seconds.
 .SH EXAMPLES
 .TP
 .B $ lfs quota /mnt/lustre
 Display quotas and usage for current user, group, and project
 .TP
-.B $ lfs quota -u bob /mnt/lustre
+.B # lfs quota -u bob /mnt/lustre
 Display quotas and usage for user 'bob'
 .TP
-.B $ lfs quota -U /mnt/lustre
+.B # lfs quota -U /mnt/lustre
 Display default user quotas
 .TP
 .B $ lfs quota -t -u /mnt/lustre
 Display grace times for user quotas on /mnt/lustre
 .TP
-.B $ lfs quota -u ivan --pool flash_pool /mnt/lustre
-Display quotas and usage for user 'ivan' per 'flash_pool"
+.B # lfs quota -u ivan --pool flash_pool /mnt/lustre
+Display quotas and usage for user
+.B ivan
+from the OST pool
+.BR flash_pool .
 .TP
 .B $ lfs quota -t -g --pool flash_pool /mnt/lustre
-Display grace times for group quotas per 'flash_pool"
+Display grace times for group quotas for the OST pool
+.BR flash_pool .
 .TP
 .SH SEE ALSO
 .BR lfs (1),
