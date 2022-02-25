@@ -2329,7 +2329,7 @@ again:
 	data->lil_ids[1] = mirror_id;
 	rc = llapi_lease_set(fd, data);
 	if (rc <= 0) {
-		if (rc == -EINVAL && purge) {
+		if ((rc == -EINVAL || rc == -EBUSY) && purge) {
 			/* could be old MDS which prohibit fd==fdv */
 			purge = false;
 			goto again;
