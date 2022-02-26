@@ -10577,33 +10577,31 @@ statx_supported() {
 #
 function createmany() {
 	local count=${!#}
+	local rc
 
-	(( count > 100 )) && {
-		local saved_debug=$($LCTL get_param -n debug)
-		local list=$(comma_list $(all_nodes))
-
-		do_nodes $list $LCTL set_param -n debug=0
-	}
+	if (( count > 100 )); then
+		debugsave
+		do_nodes $(comma_list $(all_nodes)) $LCTL set_param -n debug=0
+	fi
 	$LUSTRE/tests/createmany $*
-	local rc=$?
-	(( count > 100 )) &&
-		do_nodes $list "$LCTL set_param -n debug=\\\"$saved_debug\\\""
+	rc=$?
+	debugrestore
+
 	return $rc
 }
 
 function unlinkmany() {
 	local count=${!#}
+	local rc
 
-	(( count > 100 )) && {
-		local saved_debug=$($LCTL get_param -n debug)
-		local list=$(comma_list $(all_nodes))
-
-		do_nodes $list $LCTL set_param -n debug=0
-	}
+	if (( count > 100 )); then
+		debugsave
+		do_nodes $(comma_list $(all_nodes)) $LCTL set_param -n debug=0
+	fi
 	$LUSTRE/tests/unlinkmany $*
-	local rc=$?
-	(( count > 100 )) &&
-		do_nodes $list "$LCTL set_param -n debug=\\\"$saved_debug\\\""
+	rc=$?
+	debugrestore
+
 	return $rc
 }
 

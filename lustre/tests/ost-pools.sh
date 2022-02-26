@@ -990,20 +990,20 @@ test_17() {
 run_test 17 "Referencing an empty pool"
 
 create_perf() {
-    local cdir=$1/d
-    local numsec=$2
-    local time
+	local cdir=$1/d
+	local numsec=$2
+	local time
 
-    mkdir -p $cdir
-    sync
-    wait_delete_completed >/dev/null # give pending IO a chance to go to disk
-    stat=$(createmany -o $cdir/${tfile} -$numsec | tail -1)
-    files=$(echo $stat | cut -f 2 -d ' ')
-    echo $stat 1>&2
-    unlinkmany $cdir/${tfile} $files > /dev/null
-    sync
+	mkdir -p $cdir
+	sync
+	wait_delete_completed >/dev/null # give pending IO chance to go to disk
+	stat=$(createmany -o $cdir/${tfile} -t $numsec | tail -1)
+	files=$(echo $stat | cut -f 2 -d ' ')
+	echo $stat 1>&2
+	unlinkmany $cdir/${tfile} $files > /dev/null
+	sync
 
-    echo $files
+	echo $files
 }
 
 test_18() {
