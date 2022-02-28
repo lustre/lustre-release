@@ -3121,6 +3121,21 @@ test_301() {
 }
 run_test 301 "Check for dynamic adds of same/wrong interface (memory leak)"
 
+test_302() {
+	! [[ $NETTYPE =~ (tcp|o2ib) ]] && skip "Need tcp or o2ib NETTYPE"
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	local nid=$($LCTL list_nids)
+
+	do_lnetctl ping ${nid} ||
+		error "pinging self failed $?"
+	do_lnetctl debug peer --nid ${nid} ||
+		error "failed to dump peer debug info $?"
+}
+run_test 302 "Check that peer debug info can be dumped"
+
 complete $SECONDS
 
 cleanup_testsuite

@@ -3986,6 +3986,43 @@ out:
 	return rc;
 }
 
+int lustre_lnet_show_peer_debug_info(char *peer_nid, int seq_no,
+				     struct cYAML **err_rc)
+{
+	struct libcfs_ioctl_data data;
+	int rc;
+	char err_str[LNET_MAX_STR_LEN] = "Error";
+	lnet_nid_t pnid = LNET_NID_ANY;
+
+	if (!peer_nid) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "--nid must be specified");
+		goto out;
+	}
+
+	pnid = libcfs_str2nid(peer_nid);
+	if (pnid == LNET_NID_ANY) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			"badly formatted primary NID: %s", peer_nid);
+		goto out;
+	}
+
+	LIBCFS_IOC_INIT(data);
+	data.ioc_net = LNET_NIDNET(pnid);
+	data.ioc_nid = pnid;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER, &data);
+
+out:
+	if (rc != 0)
+		cYAML_build_error(rc, seq_no, "debug", "peer", err_str,
+				  err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_show_local_ni_recovq(int seq_no, struct cYAML **show_rc,
 				     struct cYAML **err_rc)
 {

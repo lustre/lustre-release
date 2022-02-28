@@ -329,7 +329,7 @@ of the \fBexport\fR command can be used as input to the \fBimport\fR command\.
 .SS "LNet Statistics"
 .
 .TP
-\fBlnetctl stats\fR
+\fBlnetctl stats\fR show
 Show LNET statistics
 .
 .br
@@ -500,6 +500,27 @@ Delete user-defined selection policy.
 .TP
 \fBlnetctl udsp\fR show
 Show all user-defined selection policies in the system\. The policies are dumped in YAML form\.
+.
+.SS "Debugging"
+.
+.TP
+\fBlnetctl debug\fR recovery
+List NIDs on recovery queue
+.
+.br
+\-\-local : list NIDs on local recovery queue
+.
+.br
+\-\-peer : list NIDs on peer recovery queue
+.
+.br
+.
+.TP
+\fBlnetctl debug\fR peer
+Dump peer debug info to debug log and console
+.
+.br
+\-\-nid : peer's NID
 .
 .br
 .

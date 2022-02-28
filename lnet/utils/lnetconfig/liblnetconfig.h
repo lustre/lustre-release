@@ -946,4 +946,14 @@ int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc);
 int lustre_lnet_show_udsp(int idx, int seq_no, struct cYAML **show_rc,
 			  struct cYAML **err_rc);
 
+/* lustre_lnet_show_peer_debug_info
+ *	dump peer debug info
+ *	peer_nid - nid of the peer to show
+ *	seq_no - sequence number of the request
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *	caller
+ */
+int lustre_lnet_show_peer_debug_info(char *peer_nid, int seq_no,
+				     struct cYAML **err_rc);
+
 #endif /* LIB_LNET_CONFIG_API_H */
