@@ -1047,11 +1047,16 @@ full:
 		}
 
 		param->bitmap = ldiskfs_read_inode_bitmap(param->sb, param->bg);
-		if (!param->bitmap) {
-			CERROR("%s: fail to read bitmap for %u, "
-			       "scrub will stop, urgent mode\n",
-			       osd_scrub2name(scrub), (__u32)param->bg);
-			RETURN(-EIO);
+		if (IS_ERR_OR_NULL(param->bitmap)) {
+			if (param->bitmap) {
+				rc = PTR_ERR(param->bitmap);
+				param->bitmap = NULL;
+			} else {
+				rc = -EIO;
+			}
+			CERROR("%s: fail to read bitmap for %u, scrub will stop, urgent mode: rc = %d\n",
+			       osd_scrub2name(scrub), (__u32)param->bg, rc);
+			GOTO(out, rc);
 		}
 
 		do {
