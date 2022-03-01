@@ -2046,9 +2046,10 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 
 	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
 	if (IS_ERR(req)) {
-		CERROR("%s: unable to initialize checksum hash %s\n",
-		       tgt_name(tgt), cfs_crypto_hash_name(cfs_alg));
-		return PTR_ERR(req);
+		rc = PTR_ERR(req);
+		CERROR("%s: unable to initialize checksum hash %s: rc = %d\n",
+		       tgt_name(tgt), cfs_crypto_hash_name(cfs_alg), rc);
+		goto out;
 	}
 
 	buffer = kmap(__page);
