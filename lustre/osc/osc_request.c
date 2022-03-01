@@ -1407,22 +1407,14 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	struct inode *inode = NULL;
 	bool directio = false;
 	bool enable_checksum = true;
+	struct cl_page *clpage;
 
 	ENTRY;
 	if (pga[0]->pg) {
-		inode = page2inode(pga[0]->pg);
-		if (inode == NULL) {
-			/* Try to get reference to inode from cl_page if we are
-			 * dealing with direct IO, as handled pages are not
-			 * actual page cache pages.
-			 */
-			struct osc_async_page *oap = brw_page2oap(pga[0]);
-			struct cl_page *clpage = oap2cl_page(oap);
-
-			inode = clpage->cp_inode;
-			if (inode)
-				directio = true;
-		}
+		clpage = oap2cl_page(brw_page2oap(pga[0]));
+		inode = clpage->cp_inode;
+		if (clpage->cp_type == CPT_TRANSIENT)
+			directio = true;
 	}
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
 		RETURN(-ENOMEM); /* Recoverable */
@@ -1444,11 +1436,11 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode) &&
 	    llcrypt_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
-			struct brw_page *pg = pga[i];
+			struct brw_page *brwpg = pga[i];
 			struct page *data_page = NULL;
 			bool retried = false;
 			bool lockedbymyself;
-			u32 nunits = (pg->off & ~PAGE_MASK) + pg->count;
+			u32 nunits = (brwpg->off & ~PAGE_MASK) + brwpg->count;
 			struct address_space *map_orig = NULL;
 			pgoff_t index_orig;
 
@@ -1463,23 +1455,24 @@ retry_encrypt:
 			 * end in vvp_page_completion_write/cl_page_completion,
 			 * which means only once the page is fully processed.
 			 */
-			lockedbymyself = trylock_page(pg->pg);
+			lockedbymyself = trylock_page(brwpg->pg);
 			if (directio) {
-				map_orig = pg->pg->mapping;
-				pg->pg->mapping = inode->i_mapping;
-				index_orig = pg->pg->index;
-				pg->pg->index = pg->off >> PAGE_SHIFT;
+				map_orig = brwpg->pg->mapping;
+				brwpg->pg->mapping = inode->i_mapping;
+				index_orig = brwpg->pg->index;
+				clpage = oap2cl_page(brw_page2oap(brwpg));
+				brwpg->pg->index = clpage->cp_page_index;
 			}
 			data_page =
-				llcrypt_encrypt_pagecache_blocks(pg->pg,
+				llcrypt_encrypt_pagecache_blocks(brwpg->pg,
 								 nunits, 0,
 								 GFP_NOFS);
 			if (directio) {
-				pg->pg->mapping = map_orig;
-				pg->pg->index = index_orig;
+				brwpg->pg->mapping = map_orig;
+				brwpg->pg->index = index_orig;
 			}
 			if (lockedbymyself)
-				unlock_page(pg->pg);
+				unlock_page(brwpg->pg);
 			if (IS_ERR(data_page)) {
 				rc = PTR_ERR(data_page);
 				if (rc == -ENOMEM && !retried) {
@@ -1494,10 +1487,11 @@ retry_encrypt:
 			 * disambiguation in osc_release_bounce_pages().
 			 */
 			SetPageChecked(data_page);
-			pg->pg = data_page;
+			brwpg->pg = data_page;
 			/* there should be no gap in the middle of page array */
 			if (i == page_count - 1) {
-				struct osc_async_page *oap = brw_page2oap(pg);
+				struct osc_async_page *oap =
+					brw_page2oap(brwpg);
 
 				oa->o_size = oap->oap_count +
 					oap->oap_obj_off + oap->oap_page_off;
@@ -1505,10 +1499,10 @@ retry_encrypt:
 			/* len is forced to nunits, and relative offset to 0
 			 * so store the old, clear text info
 			 */
-			pg->bp_count_diff = nunits - pg->count;
-			pg->count = nunits;
-			pg->bp_off_diff = pg->off & ~PAGE_MASK;
-			pg->off = pg->off & PAGE_MASK;
+			brwpg->bp_count_diff = nunits - brwpg->count;
+			brwpg->count = nunits;
+			brwpg->bp_off_diff = brwpg->off & ~PAGE_MASK;
+			brwpg->off = brwpg->off & PAGE_MASK;
 		}
 	} else if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode)) {
 		struct osc_async_page *oap = brw_page2oap(pga[0]);
@@ -1974,8 +1968,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		&req->rq_import->imp_connection->c_peer;
 	struct ost_body *body;
 	u32 client_cksum = 0;
-	struct inode *inode;
+	struct inode *inode = NULL;
 	unsigned int blockbits = 0, blocksize = 0;
+	struct cl_page *clpage;
 
 	ENTRY;
 
@@ -2169,19 +2164,12 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		rc = 0;
 	}
 
-	inode = page2inode(aa->aa_ppga[0]->pg);
-	if (inode == NULL) {
-		/* Try to get reference to inode from cl_page if we are
-		 * dealing with direct IO, as handled pages are not
-		 * actual page cache pages.
-		 */
-		struct osc_async_page *oap = brw_page2oap(aa->aa_ppga[0]);
-
-		inode = oap2cl_page(oap)->cp_inode;
-		if (inode) {
-			blockbits = inode->i_blkbits;
-			blocksize = 1 << blockbits;
-		}
+	/* get the inode from the first cl_page */
+	clpage = oap2cl_page(brw_page2oap(aa->aa_ppga[0]));
+	inode = clpage->cp_inode;
+	if (clpage->cp_type == CPT_TRANSIENT && inode) {
+		blockbits = inode->i_blkbits;
+		blocksize = 1 << blockbits;
 	}
 	if (inode && IS_ENCRYPTED(inode)) {
 		int idx;
@@ -2191,19 +2179,19 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 			GOTO(out, rc);
 		}
 		for (idx = 0; idx < aa->aa_page_count; idx++) {
-			struct brw_page *pg = aa->aa_ppga[idx];
+			struct brw_page *brwpg = aa->aa_ppga[idx];
 			unsigned int offs = 0;
 
 			while (offs < PAGE_SIZE) {
 				/* do not decrypt if page is all 0s */
-				if (memchr_inv(page_address(pg->pg) + offs, 0,
-					 LUSTRE_ENCRYPTION_UNIT_SIZE) == NULL) {
+				if (memchr_inv(page_address(brwpg->pg) + offs,
+				      0, LUSTRE_ENCRYPTION_UNIT_SIZE) == NULL) {
 					/* if page is empty forward info to
 					 * upper layers (ll_io_zero_page) by
 					 * clearing PagePrivate2
 					 */
 					if (!offs)
-						ClearPagePrivate2(pg->pg);
+						ClearPagePrivate2(brwpg->pg);
 					break;
 				}
 
@@ -2213,19 +2201,22 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					 * input parameter. Page does not need
 					 * to be locked.
 					 */
-					u64 lblk_num =
-						((u64)(pg->off >> PAGE_SHIFT) <<
-						     (PAGE_SHIFT - blockbits)) +
-						       (offs >> blockbits);
+					u64 lblk_num;
 					unsigned int i;
 
+					clpage =
+					       oap2cl_page(brw_page2oap(brwpg));
+					lblk_num =
+						((u64)(clpage->cp_page_index) <<
+						(PAGE_SHIFT - blockbits)) +
+						(offs >> blockbits);
 					for (i = offs;
 					     i < offs +
 						    LUSTRE_ENCRYPTION_UNIT_SIZE;
 					     i += blocksize, lblk_num++) {
 						rc =
 						  llcrypt_decrypt_block_inplace(
-							  inode, pg->pg,
+							  inode, brwpg->pg,
 							  blocksize, i,
 							  lblk_num);
 						if (rc)
@@ -2233,7 +2224,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					}
 				} else {
 					rc = llcrypt_decrypt_pagecache_blocks(
-						pg->pg,
+						brwpg->pg,
 						LUSTRE_ENCRYPTION_UNIT_SIZE,
 						offs);
 				}

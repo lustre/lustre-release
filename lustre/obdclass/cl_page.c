@@ -294,10 +294,17 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		cl_page->cp_vmpage = vmpage;
 		cl_page->cp_state = CPS_CACHED;
 		cl_page->cp_type = type;
-		cl_page->cp_inode = NULL;
+		if (type == CPT_TRANSIENT)
+			/* ref to correct inode will be added
+			 * in ll_direct_rw_pages
+			 */
+			cl_page->cp_inode = NULL;
+		else
+			cl_page->cp_inode = page2inode(vmpage);
 		INIT_LIST_HEAD(&cl_page->cp_batch);
 		lu_ref_init(&cl_page->cp_reference);
 		head = o;
+		cl_page->cp_page_index = ind;
 		cl_object_for_each(o, head) {
 			if (o->co_ops->coo_page_init != NULL) {
 				result = o->co_ops->coo_page_init(env, o,

@@ -735,7 +735,8 @@ struct cl_page {
 	atomic_t		cp_ref;
 	/** layout_entry + stripe index, composed using lov_comp_index() */
 	unsigned int		cp_lov_index;
-	pgoff_t			cp_osc_index;
+	/** page->index of the page within the whole file */
+	pgoff_t			cp_page_index;
 	/** An object this page is a part of. Immutable after creation. */
 	struct cl_object	*cp_obj;
 	/** vmpage */

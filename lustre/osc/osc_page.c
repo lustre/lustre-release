@@ -270,7 +270,6 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 
 	opg->ops_srvlock = osc_io_srvlock(oio);
 	cl_page_slice_add(cl_page, &opg->ops_cl, obj, &osc_page_ops);
-	cl_page->cp_osc_index = index;
 
 	/* reserve an LRU space for this page */
 	if (cl_page->cp_type == CPT_CACHEABLE) {

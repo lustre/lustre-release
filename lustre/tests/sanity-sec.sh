@@ -3354,7 +3354,38 @@ test_44() {
 	cmp -bl $tmpfile $resfile ||
 		error "file $testfile is corrupted (3)"
 
-	rm -f $tmpfile $resfile
+	rm -f $tmpfile $resfile $testfile
+
+	if [ $OSTCOUNT -ge 2 ]; then
+		dd if=/dev/urandom of=$tmpfile bs=$pagesz count=1 conv=fsync
+		$LFS setstripe -S 256k -c2 $testfile
+
+		# write in file, at beginning of first stripe, buffered IO
+		dd if=$tmpfile of=$testfile bs=$pagesz count=1 \
+			conv=fsync,notrunc
+
+		# write at beginning of second stripe, direct IO
+		dd if=$tmpfile of=$testfile bs=$pagesz count=1 seek=256k \
+			oflag=seek_bytes,direct conv=fsync,notrunc
+
+		cancel_lru_locks
+
+		# read at beginning of first stripe, direct IO
+		dd if=$testfile of=$resfile bs=$pagesz count=1 \
+			iflag=direct conv=fsync
+
+		cmp -bl $tmpfile $resfile ||
+			error "file $testfile is corrupted (4)"
+
+		# read at beginning of second stripe, buffered IO
+		dd if=$testfile of=$resfile bs=$pagesz count=1 skip=256k \
+			iflag=skip_bytes conv=fsync
+
+		cmp -bl $tmpfile $resfile ||
+			error "file $testfile is corrupted (5)"
+
+		rm -f $tmpfile $resfile
+	fi
 }
 run_test 44 "encrypted file access semantics: direct IO"
 

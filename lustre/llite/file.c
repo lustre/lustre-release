@@ -444,11 +444,15 @@ out:
 
 static inline int ll_dom_readpage(void *data, struct page *page)
 {
+	/* since ll_dom_readpage is a page cache helper, it is safe to assume
+	 * mapping and host pointers are set here
+	 */
+	struct inode *inode;
 	struct niobuf_local *lnb = data;
 	void *kaddr;
 	int rc = 0;
 
-	struct inode *inode = page2inode(page);
+	inode = page2inode(page);
 
 	kaddr = kmap_atomic(page);
 	memcpy(kaddr, lnb->lnb_data, lnb->lnb_len);
