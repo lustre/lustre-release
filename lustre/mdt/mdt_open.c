@@ -1263,6 +1263,28 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 	return 0;
 }
 
+static inline enum ldlm_mode mdt_open_lock_mode(struct mdt_thread_info *info,
+						struct mdt_object *p,
+						struct lu_name *name,
+						u64 open_flags)
+{
+	int result;
+	struct lu_fid fid;
+
+	/* We don't need to take the DLM lock for a volatile */
+	if (open_flags & MDS_OPEN_VOLATILE)
+		return LCK_NL;
+
+	if (!(open_flags & MDS_OPEN_CREAT))
+		return LCK_PR;
+
+	result = mdo_lookup(info->mti_env, mdt_object_child(p), name, &fid,
+			    &info->mti_spec);
+
+	/* If the file exists we only need a read lock on the parent */
+	return (result == 0) ? LCK_PR : LCK_PW;
+}
+
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
 	struct mdt_device *mdt = info->mti_mdt;
@@ -1280,7 +1302,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	int result, rc;
 	int created = 0;
 	int object_locked = 0;
-	enum ldlm_mode lock_mode = LCK_PR;
+	enum ldlm_mode lock_mode;
 	u32 msg_flags;
 	ktime_t kstart = ktime_get();
 
@@ -1369,21 +1391,18 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result);
 	}
 
+	fid_zero(child_fid);
+	result = -ENOENT;
+	lock_mode = mdt_open_lock_mode(info, parent, &rr->rr_name, open_flags);
+
 	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
 again_pw:
-	fid_zero(child_fid);
-
-	if (open_flags & MDS_OPEN_VOLATILE) {
-		lh = NULL;
-		result = -ENOENT;
-	} else {
+	if (lock_mode != LCK_NL) {
 		lh = &info->mti_lh[MDT_LH_PARENT];
 		mdt_lock_pdo_init(lh, lock_mode, &rr->rr_name);
 		result = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
-		if (result != 0) {
-			mdt_object_put(info->mti_env, parent);
-			GOTO(out, result);
-		}
+		if (result != 0)
+			GOTO(out_parent, result);
 
 		result = mdo_lookup(info->mti_env, mdt_object_child(parent),
 				    &rr->rr_name, child_fid, &info->mti_spec);
@@ -1395,21 +1414,21 @@ again_pw:
 		 PFID(child_fid));
 
 	if (result != 0 && result != -ENOENT)
-		GOTO(out_parent, result);
+		GOTO(out_parent_unlock, result);
 
 	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 
 	if (result == -ENOENT) {
 		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
 		if (!(open_flags & MDS_OPEN_CREAT))
-			GOTO(out_parent, result);
+			GOTO(out_parent_unlock, result);
 		if (mdt_rdonly(req->rq_export))
-			GOTO(out_parent, result = -EROFS);
+			GOTO(out_parent_unlock, result = -EROFS);
 
-		LASSERT(equi(lh == NULL, open_flags & MDS_OPEN_VOLATILE));
+		LASSERT(equi(lh == NULL, lock_mode == LCK_NL));
 
-		if (lh != NULL && lock_mode == LCK_PR) {
-			/* first pass: get write lock and restart */
+		if (lock_mode == LCK_PR) {
+			/* unlink vs create race: get write lock and restart */
 			mdt_object_unlock(info, parent, lh, 1);
 			mdt_clear_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
 			mdt_lock_handle_init(lh);
@@ -1433,7 +1452,7 @@ again_pw:
 		child = mdt_object_find(info->mti_env, mdt, child_fid);
 	}
 	if (IS_ERR(child))
-		GOTO(out_parent, result = PTR_ERR(child));
+		GOTO(out_parent_unlock, result = PTR_ERR(child));
 
 	/** check version of child  */
 	rc = mdt_version_get_check(info, child, 1);
@@ -1608,10 +1627,11 @@ out_child:
 	mdt_object_put(info->mti_env, child);
 	if (result == 0)
 		mdt_pack_size2body(info, child_fid, &lhc->mlh_reg_lh);
-out_parent:
+out_parent_unlock:
 	if (lh != NULL)
 		mdt_object_unlock(info, parent, lh, result || !created);
 
+out_parent:
 	mdt_object_put(info->mti_env, parent);
 out:
 	if (result)
