@@ -1243,12 +1243,10 @@ static int osd_mount(const struct lu_env *env,
 		o->od_posix_acl = 1;
 
 	osd_unlinked_drain(env, o);
-err:
-	if (rc && o->od_os) {
-		osd_dmu_objset_disown(o->od_os, B_TRUE, o);
-		o->od_os = NULL;
-	}
 
+	RETURN(0);
+
+err:
 	RETURN(rc);
 }
 
@@ -1327,7 +1325,59 @@ out:
 }
 
 static struct lu_device *osd_device_fini(const struct lu_env *env,
-					 struct lu_device *dev);
+					 struct lu_device *d)
+{
+	struct osd_device *o = osd_dev(d);
+	int		   rc;
+
+	ENTRY;
+	osd_index_backup(env, o, false);
+	if (o->od_os) {
+		osd_objset_unregister_callbacks(o);
+		if (!o->od_dt_dev.dd_rdonly) {
+			osd_sync(env, lu2dt_dev(d));
+			txg_wait_callbacks(
+					spa_get_dsl(dmu_objset_spa(o->od_os)));
+		}
+	}
+
+	/* now with all the callbacks completed we can cleanup the remainings */
+	osd_shutdown(env, o);
+	osd_scrub_cleanup(env, o);
+
+	rc = osd_procfs_fini(o);
+	if (rc) {
+		CERROR("proc fini error %d\n", rc);
+		RETURN(ERR_PTR(rc));
+	}
+
+	if (o->od_os)
+		osd_umount(env, o);
+
+	RETURN(NULL);
+}
+
+
+static struct lu_device *osd_device_free(const struct lu_env *env,
+					 struct lu_device *d)
+{
+	struct osd_device *o = osd_dev(d);
+
+	ENTRY;
+	/* XXX: make osd top device in order to release reference */
+	if (d->ld_site) {
+		d->ld_site->ls_top_dev = d;
+		lu_site_purge(env, d->ld_site, -1);
+		lu_site_print(env, d->ld_site, &d->ld_site->ls_obj_hash.nelems,
+			      D_ERROR, lu_cdebug_printer);
+	}
+	if (o->od_site.ls_bottom_dev)
+		lu_site_fini(&o->od_site);
+	dt_device_fini(&o->od_dt_dev);
+	OBD_FREE_PTR(o);
+
+	RETURN(NULL);
+}
 
 static struct lu_device *osd_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *type,
@@ -1355,68 +1405,20 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 		rc = osd_device_init0(env, dev, cfg);
 		if (rc == 0) {
 			rc = osd_mount(env, dev, cfg);
-			if (rc)
+			if (rc) {
 				osd_device_fini(env, osd2lu_dev(dev));
-		}
-		if (rc)
+				osd_device_free(env, osd2lu_dev(dev));
+				dev = NULL;
+			}
+		} else {
 			dt_device_fini(&dev->od_dt_dev);
+		}
 	}
 
-	if (unlikely(rc != 0))
+	if (unlikely(rc != 0) && dev)
 		OBD_FREE_PTR(dev);
 
 	return rc == 0 ? osd2lu_dev(dev) : ERR_PTR(rc);
-}
-
-static struct lu_device *osd_device_free(const struct lu_env *env,
-					 struct lu_device *d)
-{
-	struct osd_device *o = osd_dev(d);
-	ENTRY;
-
-	/* XXX: make osd top device in order to release reference */
-	d->ld_site->ls_top_dev = d;
-	lu_site_purge(env, d->ld_site, -1);
-	lu_site_print(env, d->ld_site, &d->ld_site->ls_obj_hash.nelems,
-		      D_ERROR, lu_cdebug_printer);
-	lu_site_fini(&o->od_site);
-	dt_device_fini(&o->od_dt_dev);
-	OBD_FREE_PTR(o);
-
-	RETURN (NULL);
-}
-
-static struct lu_device *osd_device_fini(const struct lu_env *env,
-					 struct lu_device *d)
-{
-	struct osd_device *o = osd_dev(d);
-	int		   rc;
-	ENTRY;
-
-	osd_index_backup(env, o, false);
-	if (o->od_os) {
-		osd_objset_unregister_callbacks(o);
-		if (!o->od_dt_dev.dd_rdonly) {
-			osd_sync(env, lu2dt_dev(d));
-			txg_wait_callbacks(
-					spa_get_dsl(dmu_objset_spa(o->od_os)));
-		}
-	}
-
-	/* now with all the callbacks completed we can cleanup the remainings */
-	osd_shutdown(env, o);
-	osd_scrub_cleanup(env, o);
-
-	rc = osd_procfs_fini(o);
-	if (rc) {
-		CERROR("proc fini error %d\n", rc);
-		RETURN(ERR_PTR(rc));
-	}
-
-	if (o->od_os)
-		osd_umount(env, o);
-
-	RETURN(NULL);
 }
 
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,

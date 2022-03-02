@@ -1251,11 +1251,11 @@ int dt_tunables_fini(struct dt_device *dt)
 	if (!dt)
 		return -EINVAL;
 
-	if (dt->dd_def_attrs)
+	if (dt->dd_def_attrs) {
 		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);
-
-	kobject_put(&dt->dd_kobj);
-	wait_for_completion(&dt->dd_kobj_unregister);
+		kobject_put(&dt->dd_kobj);
+		wait_for_completion(&dt->dd_kobj_unregister);
+	}
 
 	return 0;
 }
@@ -1280,6 +1280,7 @@ int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 	rc = sysfs_create_files(&dt->dd_kobj, dt->dd_def_attrs);
 	if (rc) {
 		kobject_put(&dt->dd_kobj);
+		dt->dd_def_attrs = NULL;
 		return rc;
 	}
 
