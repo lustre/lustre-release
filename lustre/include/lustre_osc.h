@@ -531,10 +531,6 @@ struct osc_page {
 	 * lru page list. See osc_lru_{del|use}() in osc_page.c for usage.
 	 */
 	struct list_head	ops_lru;
-	/**
-	 * Submit time - the time when the page is starting RPC. For debugging.
-	 */
-	ktime_t			ops_submit_time;
 };
 
 struct osc_brw_async_args {
@@ -569,7 +565,7 @@ void osc_index2policy(union ldlm_policy_data *policy, const struct cl_object *ob
 		      pgoff_t start, pgoff_t end);
 void osc_lru_add_batch(struct client_obd *cli, struct list_head *list);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
-		     enum cl_req_type crt, int brw_flags, ktime_t submit_time);
+		     enum cl_req_type crt, int brw_flags);
 int lru_queue_work(const struct lu_env *env, void *data);
 long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		    long target, bool force);

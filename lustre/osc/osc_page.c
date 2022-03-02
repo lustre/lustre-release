@@ -110,14 +110,6 @@ void osc_index2policy(union ldlm_policy_data *policy,
 	policy->l_extent.end   = cl_offset(obj, end + 1) - 1;
 }
 
-static inline s64 osc_submit_duration(struct osc_page *opg)
-{
-	if (ktime_to_ns(opg->ops_submit_time) == 0)
-		return 0;
-
-	return ktime_ms_delta(ktime_get(), opg->ops_submit_time);
-}
-
 static int osc_page_print(const struct lu_env *env,
 			  const struct cl_page_slice *slice,
 			  void *cookie, lu_printer_t printer)
@@ -130,7 +122,7 @@ static int osc_page_print(const struct lu_env *env,
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
 			  "1< %#x %d %c %c > "
 			  "2< %lld %u %u %#x %#x | %p %p %p > "
-			  "3< %d %lld %d > "
+			  "3< %d %d > "
 			  "4< %d %d %d %lu %c | %c %c %c %c > "
 			  "5< %c %c %c %c | %d %c | %d %c %c>\n",
 			  opg, osc_index(opg),
@@ -144,7 +136,7 @@ static int osc_page_print(const struct lu_env *env,
 			  oap->oap_request, cli, obj,
 			  /* 3 */
 			  opg->ops_transfer_pinned,
-			  osc_submit_duration(opg), opg->ops_srvlock,
+			  opg->ops_srvlock,
 			  /* 4 */
 			  cli->cl_r_in_flight, cli->cl_w_in_flight,
 			  cli->cl_max_rpcs_in_flight,
@@ -300,7 +292,7 @@ EXPORT_SYMBOL(osc_page_init);
  * transfer (i.e., transferred synchronously).
  */
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
-		     enum cl_req_type crt, int brw_flags, ktime_t submit_time)
+		     enum cl_req_type crt, int brw_flags)
 {
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_async_page *oap = &opg->ops_oap;
@@ -320,7 +312,6 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		oap->oap_cmd |= OBD_BRW_SYS_RESOURCE;
 	}
 
-	opg->ops_submit_time = submit_time;
 	osc_page_transfer_get(opg, "transfer\0imm");
 	osc_page_transfer_add(env, opg, crt);
 }
