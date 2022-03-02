@@ -120,14 +120,14 @@ static int osc_page_print(const struct lu_env *env,
 	struct client_obd *cli = &osc_export(obj)->exp_obd->u.cli;
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
-			  "1< %#x %d %c %c > "
+			  "1< %d %c %c > "
 			  "2< %lld %u %u %#x %#x | %p %p %p > "
 			  "3< %d %d > "
 			  "4< %d %d %d %lu %c | %c %c %c %c > "
 			  "5< %c %c %c %c | %d %c | %d %c %c>\n",
 			  opg, osc_index(opg),
 			  /* 1 */
-			  oap->oap_magic, oap->oap_cmd,
+			  oap->oap_cmd,
 			  list_empty_marker(&oap->oap_pending_item),
 			  list_empty_marker(&oap->oap_rpc_item),
 			  /* 2 */
@@ -297,8 +297,6 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_async_page *oap = &opg->ops_oap;
 
-	LASSERTF(oap->oap_magic == OAP_MAGIC, "Bad oap magic: oap %p, "
-		 "magic 0x%x\n", oap, oap->oap_magic);
 	LASSERT(oap->oap_async_flags & ASYNC_READY);
 	LASSERT(oap->oap_async_flags & ASYNC_COUNT_STABLE);
 

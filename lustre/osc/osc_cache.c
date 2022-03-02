@@ -2247,7 +2247,6 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	if (!page)
 		return cfs_size_round(sizeof(*oap));
 
-	oap->oap_magic = OAP_MAGIC;
 	oap->oap_obj = osc;
 
 	oap->oap_page = vmpage;
@@ -2289,9 +2288,6 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	int    need_release = 0;
 	int    rc = 0;
 	ENTRY;
-
-	if (oap->oap_magic != OAP_MAGIC)
-		RETURN(-EINVAL);
 
 	if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
 		RETURN(-EIO);
@@ -2467,8 +2463,6 @@ int osc_teardown_async_page(const struct lu_env *env,
 	struct osc_async_page *oap = &ops->ops_oap;
 	int rc = 0;
 	ENTRY;
-
-	LASSERT(oap->oap_magic == OAP_MAGIC);
 
 	CDEBUG(D_INFO, "teardown oap %p page %p at index %lu.\n",
 	       oap, ops, osc_index(oap2osc(oap)));
