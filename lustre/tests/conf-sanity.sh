@@ -332,7 +332,7 @@ test_4() {
 	setup
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	stop_ost || error "Unable to stop OST1"
-	umount_client $MOUNT -f || error “unmount $MOUNT failed”
+	umount_client $MOUNT -f || error "unmount $MOUNT failed"
 	cleanup_nocli
 	eno=$?
 	# ok for ost to fail shutdown
