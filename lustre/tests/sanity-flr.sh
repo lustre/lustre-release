@@ -3258,7 +3258,7 @@ test_203() {
 	local new_id=$($LFS getstripe --mirror-id=2 -I $tf)
 	count=$($LFS getstripe --mirror-id=2 -c $tf) ||
 		error "getstripe count of mirror 2"
-	[[ x$oldid = x$newid ]] ||
+	[[ x$old_id = x$new_id ]] ||
 		error "mirror 2 changed ID from $old_id to $new_id"
 	[[ x$count = x1 ]] || error "mirror 2 stripe count $count is not 1"
 
