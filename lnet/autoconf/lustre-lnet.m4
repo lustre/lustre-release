@@ -927,6 +927,43 @@ AC_DEFUN([LN_CONFIGURE], [
 AC_MSG_NOTICE([LNet core checks
 ==============================================================================])
 
+AC_ARG_WITH([cuda],
+	AC_HELP_STRING([--with-cuda=path],
+			[Use a CUDA sources.]),
+	[LB_ARG_CANON_PATH([cuda], [CUDA_PATH])],
+	[CUDA_PATH=`ls -d1 /usr/src/nvidia-*/nvidia/ | tail -1`]
+)
+
+AC_ARG_WITH([gds],
+	AC_HELP_STRING([--with-gds=path],
+			[Use a gds sources.]),
+	[LB_ARG_CANON_PATH([gds], [GDS_PATH])],
+	[GDS_PATH=`ls -d1 /usr/src/nvidia-fs* | tail -1`]
+)
+
+AS_IF([test -n "${CUDA_PATH}" && test -n "${GDS_PATH}"],[
+LB_CHECK_FILE([$CUDA_PATH/nv-p2p.h],
+	[
+	AC_MSG_RESULT([CUDA path is $CUDA_PATH])
+	AC_SUBST(CUDA_PATH)
+	],
+	[AC_MSG_ERROR([CUDA sources don't found. nv-p2p.h don't exit])]
+)
+
+LB_CHECK_FILE([$GDS_PATH/nvfs-dma.h],
+	[
+	LB_CHECK_FILE([$GDS_PATH/config-host.h], [
+	AC_MSG_RESULT([GDS path is $GDS_PATH])
+	AC_SUBST(GDS_PATH)
+	AC_DEFINE(WITH_GDS, 1, "GDS build enabled")
+	], [])
+	],
+	[])
+],[
+	AC_MSG_WARN([CUDA or GDS sources don't found. GDS support disabled])
+]
+)
+
 # lnet/utils/lnetconfig/liblnetconfig_netlink.c
 AS_IF([test "x$enable_dist" = xno], [
 	PKG_CHECK_MODULES(LIBNL3, [libnl-genl-3.0 >= 3.1])

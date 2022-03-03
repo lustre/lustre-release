@@ -5,6 +5,8 @@ lnet-objs += lib-me.o lib-msg.o lib-md.o lib-ptl.o
 lnet-objs += lib-socket.o lib-move.o module.o lo.o
 lnet-objs += router.o router_proc.o acceptor.o peer.o net_fault.o udsp.o
 
+CFLAGS_lnet_rdma.o += -I @GDS_PATH@ -I@CUDA_PATH@
+
 default: all
 
 @INCLUDE_RULES@
