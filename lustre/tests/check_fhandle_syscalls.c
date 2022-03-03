@@ -118,7 +118,7 @@ static int debug_mark(const char *msg)
 {
 	char cmd[4096] = "";
 
-	snprintf(cmd, sizeof(cmd), "../utils/lctl mark %s", msg);
+	snprintf(cmd, sizeof(cmd), "../utils/lctl mark %s 2>/dev/null", msg);
 	return system(cmd);
 }
 

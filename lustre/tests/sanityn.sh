@@ -5264,7 +5264,7 @@ run_test 101c "Discard DoM data on close-unlink"
 # This test opens the file normally on $DIR1, which is on one mount, and then
 # opens it by handle on $DIR2, which is on a different mount.
 test_102() {
-	[ "$MDS1_VERSION" -lt $(version_code 2.11.57) ] &&
+	(( "$MDS1_VERSION" >= $(version_code 2.11.57) )) ||
 		skip "Needs MDS version 2.11.57 or later"
 
 	echo "Test file_handle syscalls" > $DIR/$tfile ||
@@ -5273,7 +5273,7 @@ test_102() {
 		error "check_fhandle_syscalls $tfile failed"
 
 	# test this is working on DNE directories also
-	if (( MDSCOUNT > 1  MDS1_VERSION >= $(version_code 2.14.52) )); then
+	if (( MDSCOUNT > 1 && MDS1_VERSION >= $(version_code 2.14.52) )); then
 		$LFS mkdir -i 1 $DIR/$tdir.remote
 		cancel_lru_locks mdc
 		check_fhandle_syscalls $DIR/$tdir.remote $DIR2 ||
