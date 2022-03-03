@@ -12,7 +12,8 @@
 # process, but it would catch the worst cases of in-use files, but
 # to be 100% safe the administrator needs to ensure this is safe.
 
-RSYNC=${RSYNC:-rsync}
+RSYNC=${RSYNC:-"rsync"}
+RSYNC_OPTS=${RSYNC_OPTS:-"-a --inplace"}
 ECHO=echo
 LFS=${LFS:-lfs}
 RSYNC_WITH_HLINKS=false
@@ -44,11 +45,11 @@ old_fid_in_set() {
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
+usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync|--cp]
 		   [--auto-stripe|-A [-C <cap>]
 		   [--min-free|-M <min_free>] [--max-free|-X <max_free>]]
 		   [--pool|-p <pool>] [--stripe-count|-c <stripe_count>]
-		   [--stripe-size|-S <stripe_size>]
+		   [--stripe-size|-S <stripe_size>] [--quiet|-q]
 		   [-D] [-h] [-n] [-S]
 		   [--restripe|-R] [--skip|-s] [--verbose|-v] [--yes|-y] [-0]
 		   [FILE|DIR...]
@@ -58,6 +59,7 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   restripe file using the specified <stripe_count>
 	-C <cap>   when -A is set, limit the migrated file to use on each OST
 		   at most 1/<cap> of the available space of the smallest OST
+	--cp       force the use of 'cp' instead of migrate or rsync
 	-D         do not use direct I/O to copy file contents
 	-h         show this usage message
 	-M <min_free>
@@ -78,12 +80,13 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   when -A is set, limit the amount of space on each OST that
 		   can be considered available for the migration to
 		   <max_free> KB
-	-y         answer 'y' to usage question (only when --rsync used)
+	-y         answer 'y' to usage question (only when --rsync/--cp used)
 	-0         input file names on stdin are separated by a null character
 
 Options '-A', and '-R' are mutually exclusive with each other, and any
 specific layout (e.g. any specific parameters like '-c', '-S', '-E', '-p').
 Options '-C', '-M', and '-X' are ignored if '-A' is not set.
+Options --rsync, --cp, --no-rsync may not be specified at the same time.
 
 If a directory is an argument, all files in the directory are migrated.
 If no file/directory is given, the file list is read from standard input.
@@ -139,40 +142,43 @@ OPT_CAP=100
 while [ -n "$*" ]; do
 	arg="$1"
 	case "$arg" in
+	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
+	-b|--block|--non-block|--non-direct|-D|--no-verify)
+	   # Always pass non-layout options to 'lfs migrate'
+	   OPT_PASSTHROUGH+=("$arg");;
+	--cp) $OPT_RSYNC && [[ "$RSYNC" != "cp" ]] && OPT_NO_RSYNC=true
+	   OPT_RSYNC=true; RSYNC="cp"; RSYNC_OPTS="-p";;
+	--copy|--yaml|--file) OPT_COPY=true;
+	   # these options have files as arguments, pass both through
+	   OPT_LAYOUT+="$arg $2 "; shift;;
+	--dry-run) OPT_DRYRUN=true; OPT_YES=true;;
+	-c|--stripe-count) # if within a component, pass through stripe_count
+		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_STRIPE_COUNT="$2"
+		shift;;
+	-C) OPT_CAP="$2"; shift;;
+	-D) LFS_OPT_DIRECTIO="-D";;
+	-E|--comp-end|--component-end) OPT_COMP=true; OPT_LAYOUT+="$arg ";;
 	-h|--help) usage;;
 	-l|--link) ;; # maintained backward compatibility for now
+	-M|--min-free) OPT_MINFREE="$2"; shift;;
 	-n) OPT_DRYRUN=true; OPT_YES=true
 	   echo "$PROG: -n deprecated, use --dry-run or --non-block" 1>&2;;
-	--dry-run) OPT_DRYRUN=true; OPT_YES=true;;
 	-p|--pool) # if within a component, pass through pool
 		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_POOL="-p $2";
 		shift;;
 	-q|--quiet) ECHO=:;;
 	-R|--restripe) OPT_RESTRIPE=true;;
-	-s|--skip) OPT_CHECK=false;;
-	-v|--verbose) OPT_DEBUG=true; ECHO=echo;;
-	-y|--yes) OPT_YES=true;;
-	-0) OPT_NULL=true;;
-	-b|--block|--non-block|--non-direct|-D|--no-verify)
-	   # Always pass non-layout options to 'lfs migrate'
-	   OPT_PASSTHROUGH+=("$arg");;
-	--rsync) OPT_RSYNC=true; OPT_NO_RSYNC=false;;
 	--no-rsync) OPT_NO_RSYNC=true; OPT_RSYNC=false;;
-	--copy|--yaml|--file) OPT_COPY=true;
-	   # these options have files as arguments, pass both through
-	   OPT_LAYOUT+="$arg $2 "; shift;;
-	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
-	-C) OPT_CAP="$2"; shift;;
-	-D) LFS_OPT_DIRECTIO="-D";;
-	-E|--comp-end|--component-end) OPT_COMP=true; OPT_LAYOUT+="$arg ";;
-	-M|--min-free) OPT_MINFREE="$2"; shift;;
-	-X|--max-free) OPT_MAXFREE="$2"; shift;;
-	-c|--stripe-count) # if within a component, pass through stripe_count
-		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_STRIPE_COUNT="$2"
-		shift;;
+	--rsync) [[ "$RSYNC" != "rsync" ]] && OPT_NO_RSYNC=true || OPT_NO_RSYNC=false
+	   OPT_RSYNC=true ;;
+	-s|--skip) OPT_CHECK=false;;
 	-S|--stripe-size) # if within a component, pass through stripe_size
 		$OPT_COMP && OPT_LAYOUT+="$arg $2 " || OPT_STRIPE_SIZE="$2"
 		shift;;
+	-v|--verbose) OPT_DEBUG=true; ECHO=echo;;
+	-X|--max-free) OPT_MAXFREE="$2"; shift;;
+	-y|--yes) OPT_YES=true;;
+	-0) OPT_NULL=true;;
 	*) # Pass other non-file layout options to 'lfs migrate'
 	   [[ -e "$arg" ]] && OPT_FILE+="$arg " && break || OPT_LAYOUT+="$arg "
 	esac
@@ -191,6 +197,12 @@ elif $OPT_RESTRIPE && $OPT_AUTOSTRIPE; then
 	exit 1
 fi
 
+if $OPT_RSYNC && $OPT_NO_RSYNC; then
+	echo "$PROG: Options --cp, --rsync, and --no-rsync may not be" \
+		"specified at the same time." 1>&2
+	exit 1
+fi
+
 if $OPT_RSYNC && ! $OPT_YES; then
 	echo ""
 	echo "'lfs_migrate --rsync' is NOT SAFE for moving in-use files." 1>&2
@@ -202,8 +214,8 @@ if $OPT_RSYNC && ! $OPT_YES; then
 fi
 
 # if rsync has --xattr support, then try to copy the xattrs.
-$RSYNC --help 2>&1 | grep -q xattr && RSYNC_OPTS="$RSYNC_OPTS -X"
-$RSYNC --help 2>&1 | grep -q acls && RSYNC_OPTS="$RSYNC_OPTS -A"
+$RSYNC --help 2>&1 | grep -q -- --xattrs && RSYNC_OPTS="$RSYNC_OPTS --xattrs"
+$RSYNC --help 2>&1 | grep -q -- --acls && RSYNC_OPTS="$RSYNC_OPTS --acls"
 # If rsync copies lustre xattrs in the future, then we can skip lfs (bug 22189)
 strings $(which $RSYNC) 2>&1 | grep -q lustre && LFS=:
 
@@ -461,8 +473,8 @@ lfs_migrate() {
 			continue
 		fi
 
-		if ! $OPT_COPY && ! $OPT_COMP &&
-		   [[ ${layout_info[$l_comp_count]} > 0 ]]; then
+		if ! $OPT_COPY && ! $OPT_COMP && ! $OPT_RSYNC &&
+		   (( ${layout_info[$l_comp_count]} > 0 )); then
 			layout+="--copy $OLDNAME"
 			OPT_COPY=true
 		fi
@@ -501,6 +513,8 @@ lfs_migrate() {
 				echo -e "\n$LFS migrate $layout \"$OLDNAME\""
 			fi
 			if $LFS migrate $layout "$OLDNAME"; then
+				(( $mirror_count > 1 )) &&
+					$LFS mirror resync "$OLDNAME"
 				$ECHO "done"
 				# no-op if hlinks empty for 1-link files
 				for link in ${hlinks[*]}; do
@@ -531,7 +545,7 @@ lfs_migrate() {
 		fi
 
 		# we use --inplace, since we created our own temp file already
-		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
+		if ! $RSYNC $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
 			echo -e "\r$OLDNAME: copy error, exiting" 1>&2
 			exit 4
 		fi
@@ -546,7 +560,8 @@ lfs_migrate() {
 			exit 12
 		fi
 
-		$ECHO "done rsync"
+		(( $mirror_count > 1 )) && $LFS mirror resync "$OLDNAME"
+		$ECHO "done $RSYNC"
 		# no-op if hlinks empty for 1-link files
 		for link in ${hlinks[*]}; do
 			if [ "$link" != "$OLDNAME" ]; then

@@ -5,6 +5,7 @@
 .SH SYNOPSIS
 .B lfs_migrate
 .RB [ "-A " [ -C \fI<cap> \fR] [ -M \fI<min_free> \fR] [ -X \fI<max_free> \fR]]
+.RB [ --cp ]
 .RB [ --dry-run | -n ]
 .RB [ --help | -h ]
 .RB [ --no-rsync | --rsync ]
@@ -69,6 +70,12 @@ OSTs), or if there is a specific default file striping for the target
 directory (potentially changing the stripe count, stripe size, OST pool,
 or OST index of a new file).
 .SH OPTIONS
+.TP
+.B --cp
+Force use of
+.BR cp (1)
+to copy files instead of
+.BR rsync (1).
 .TP
 .B \\--dry-run|-n
 Only print the names of files to be migrated.
