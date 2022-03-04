@@ -2071,14 +2071,14 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	const char *obd_name = tgt->lut_obd->obd_name;
 	struct ahash_request *req;
-	unsigned int bufsize;
 	unsigned char *buffer;
 	struct page *__page;
 	__be16 *guard_start;
 	int guard_number;
 	int used_number = 0;
 	__u32 cksum;
-	int rc = 0;
+	unsigned int bufsize = sizeof(cksum);
+	int rc = 0, rc2;
 	int used;
 	int i;
 
@@ -2143,6 +2143,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			used = DIV_ROUND_UP(local_nb[i].lnb_len, sector_size);
 			if (used > (guard_number - used_number)) {
 				rc = -E2BIG;
+				CDEBUG(D_PAGE | D_HA,
+				       "%s: used %u, guard %u/%u, data size %u+%u, sector_size %u: rc = %d\n",
+				       obd_name, used, guard_number,
+				       used_number, local_nb[i].lnb_page_offset,
+				       local_nb[i].lnb_len, sector_size, rc);
 				break;
 			}
 			memcpy(guard_start + used_number,
@@ -2255,15 +2260,15 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	}
 	kunmap(__page);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_hash, rc);
 
 	if (used_number != 0)
 		cfs_crypto_hash_update_page(req, __page, 0,
-			used_number * sizeof(*guard_start));
-
-	bufsize = sizeof(cksum);
-	rc = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
-
+					    used_number * sizeof(*guard_start));
+out_hash:
+	rc2 = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
+	if (!rc)
+		rc = rc2;
 	if (rc == 0)
 		*check_sum = cksum;
 out:

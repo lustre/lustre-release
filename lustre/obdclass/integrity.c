@@ -45,38 +45,40 @@ __be16 obd_dif_ip_fn(void *data, unsigned int len)
 EXPORT_SYMBOL(obd_dif_ip_fn);
 
 int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
-				 __u32 offset, __u32 length,
+				 __u32 start, __u32 length,
 				 __be16 *guard_start, int guard_number,
 				 int *used_number, int sector_size,
 				 obd_dif_csum_fn *fn)
 {
-	unsigned int i = offset;
-	unsigned int end = offset + length;
+	unsigned int off = start;
+	unsigned int end = start + length;
 	char *data_buf;
 	__be16 *guard_buf = guard_start;
 	unsigned int data_size;
-	int used = 0;
+	int guard_used = 0;
+	int rc = 0;
 
-	data_buf = kmap(page) + offset;
-	while (i < end) {
-		if (used >= guard_number) {
-			CERROR("%s: unexpected used guard number of DIF %u/%u, "
-			       "data length %u, sector size %u: rc = %d\n",
-			       obd_name, used, guard_number, length,
-			       sector_size, -E2BIG);
-			return -E2BIG;
+	data_buf = kmap(page) + start;
+	while (off < end) {
+		if (guard_used >= guard_number) {
+			rc = -E2BIG;
+			CERROR("%s: used %u >= guard %u, data %u+%u, sector_size %u: rc = %d\n",
+			       obd_name, guard_used, guard_number, start,
+			       length, sector_size, rc);
+			goto out;
 		}
-		data_size = min(round_up(i + 1, sector_size), end) - i;
+		data_size = min(round_up(off + 1, sector_size), end) - off;
 		*guard_buf = fn(data_buf, data_size);
 		guard_buf++;
+		guard_used++;
 		data_buf += data_size;
-		i += data_size;
-		used++;
+		off += data_size;
 	}
+	*used_number = guard_used;
+out:
 	kunmap(page);
-	*used_number = used;
 
-	return 0;
+	return rc;
 }
 EXPORT_SYMBOL(obd_page_dif_generate_buffer);
 
