@@ -15,6 +15,9 @@
 
 CHECKPATCH=${CHECKPATCH:-contrib/scripts/checkpatch.pl}
 CHECKPATCH_OPTS=${CHECKPATCH_OPTS:-"--no-signoff --no-tree"}
+SHELLCHECK=${SHELLCHECK:-$(which shellcheck)}
+SHELLCHECK_OPTS=${SHELLCHECK_OPTS:-" -f gcc "}
+SHELLCHECK_RUN=${SHELLCHECK_RUN:-"yes"} # run everytime by default
 
 # If there are no comments in the commit, it is likely a rebase and
 # this shouldn't be adding new comments, or they appear in the commit.
@@ -35,6 +38,56 @@ if [ -x "$CHECKPATCH" ]; then
 		DIFFOPT="HEAD" || DIFFOPT="--cached"
 	git diff $DIFFOPT | $CHECKPATCH $CHECKPATCH_OPTS - |
 		sed -e 's/^/# /' >> "$1"
+fi
+
+# Add the shellcheck output as comments, but don't cause a commit error.
+if [[ -x "$SHELLCHECK" && "$SHELLCHECK_RUN" == "yes" ]]; then
+	# Add header
+	echo "#" >> "$1"
+	echo "# shellcheck output:" >> "$1"
+	echo "#" >> "$1"
+	# Get file that needs to be shellchecked. We only consider *.sh files
+	# Example Start --
+	#       modified:   lustre/tests/sanity.sh
+	#       modified:   contrib/git-hooks/prepare-commit-msg
+	#            new:   lustre/utils/liblustreapi_error.c
+	# Example End   --
+	mod_files=($(awk '/modified:.*\.sh|new:.*\.sh/ { print $3 }' $1))
+	for cur_file in ${mod_files[@]}; do
+		# Get start/end range of lines that needs to be reported
+		# range presently not used will come in handy when dealing with
+		# warnings reported by shellcheck
+		# Example 'git show' output Start --
+		#       @@ -29,6 +29,7 @@ DEF_STRIPE_COUNT=-1
+		# Example 'git show' output End   --
+		range=($(git show $cur_file | awk '/^@@/ { print $3 }' | \
+			sed -e 's/+//' -e 's/,/ /'))
+		start_line=${range[0]}
+		end_line=$((start_line + ${range[1]}))
+
+		# 'shellcheck' reports errors/warnings/notes as below:
+		# Example start ---
+		#        sanity-lnet.sh:2319:13: error: Double quote array \
+		#        expansions to avoid re-splitting elements. [SC2068]
+		#
+		#        sanity-lnet.sh:2421:27: note: Double quote to prevent \
+		#        globbing and word splitting. [SC2086]
+		#
+		#        sanity-lnet.sh:2411:8: warning: Declare and assign \
+		#        separately to avoid masking return values. [SC2155]
+		# Example end   ---
+		$SHELLCHECK $SHELLCHECK_OPTS $cur_file |
+			while IFS=": " read -r file line char mtype msg; do
+			# Only filter out "errors" reported by shellcheck
+			# We ignore "warnings" and "notes" for now.
+			# TODO "Warnings" reported by shellcheck will come later
+			[[ "$mtype" == "error" ]] || continue
+			# Empty line we skip it.
+			[[ -n "$line" ]] || continue
+			echo "# $file:$line:$char $mtype: $msg" >> "$1"
+		done
+	done
+	echo "#" >> "$1"
 fi
 
 # Cause Vim to wrap text at 70 columns to match commit message style.
