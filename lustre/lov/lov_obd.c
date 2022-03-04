@@ -124,24 +124,26 @@ int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 	if (lov->lov_tgts[index] == NULL)
 		RETURN(-EINVAL);
 
-        tgt_uuid = &lov->lov_tgts[index]->ltd_uuid;
-        tgt_obd = lov->lov_tgts[index]->ltd_obd;
+	tgt_uuid = &lov->lov_tgts[index]->ltd_uuid;
+	tgt_obd = lov->lov_tgts[index]->ltd_obd;
 
-        if (!tgt_obd->obd_set_up) {
-                CERROR("Target %s not set up\n", obd_uuid2str(tgt_uuid));
-                RETURN(-EINVAL);
-        }
+	if (!tgt_obd->obd_set_up) {
+		rc = -EINVAL;
+		CERROR("%s: target not set up: rc = %d\n",
+		       obd_uuid2str(tgt_uuid), rc);
+		RETURN(rc);
+	}
 
-        /* override the sp_me from lov */
-        tgt_obd->u.cli.cl_sp_me = lov->lov_sp_me;
+	/* override the sp_me from lov */
+	tgt_obd->u.cli.cl_sp_me = lov->lov_sp_me;
 
-        if (data && (data->ocd_connect_flags & OBD_CONNECT_INDEX))
-                data->ocd_index = index;
+	if (data && (data->ocd_connect_flags & OBD_CONNECT_INDEX))
+		data->ocd_index = index;
 
-        /*
-         * Divine LOV knows that OBDs under it are OSCs.
-         */
-        imp = tgt_obd->u.cli.cl_import;
+	/*
+	 * Divine LOV knows that OBDs under it are OSCs.
+	 */
+	imp = tgt_obd->u.cli.cl_import;
 
 	if (activate) {
 		tgt_obd->obd_no_recov = 0;
@@ -150,12 +152,12 @@ int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 		ptlrpc_activate_import(imp, false);
 	}
 
-        rc = obd_register_observer(tgt_obd, obd);
-        if (rc) {
-                CERROR("Target %s register_observer error %d\n",
-                       obd_uuid2str(tgt_uuid), rc);
-                RETURN(rc);
-        }
+	rc = obd_register_observer(tgt_obd, obd);
+	if (rc) {
+		CERROR("%s: target register_observer error: rc = %d\n",
+		       obd_uuid2str(tgt_uuid), rc);
+		RETURN(rc);
+	}
 
 	if (imp->imp_invalid) {
 		CDEBUG(D_CONFIG, "%s: not connecting - administratively disabled\n",
@@ -165,16 +167,17 @@ int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 
 	rc = obd_connect(NULL, &lov->lov_tgts[index]->ltd_exp, tgt_obd,
 			 &lov_osc_uuid, data, lov->lov_cache);
-        if (rc || !lov->lov_tgts[index]->ltd_exp) {
-                CERROR("Target %s connect error %d\n",
-                       obd_uuid2str(tgt_uuid), rc);
-                RETURN(-ENODEV);
-        }
+	if (rc || !lov->lov_tgts[index]->ltd_exp) {
+		CERROR("%s: target connect error: rc = %d\n",
+		       obd_uuid2str(tgt_uuid), rc);
+		obd_register_observer(tgt_obd, NULL);
+		RETURN(-ENODEV);
+	}
 
-        lov->lov_tgts[index]->ltd_reap = 0;
+	lov->lov_tgts[index]->ltd_reap = 0;
 
-        CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
-               obd_uuid2str(tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
+	CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
+	       obd_uuid2str(tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
 
 	if (lov->lov_tgts_kobj) {
 		/* Even if we failed, that's ok */

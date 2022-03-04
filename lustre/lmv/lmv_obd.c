@@ -482,6 +482,7 @@ out_disc:
 			continue;
 
 		--lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count;
+		obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
 		obd_disconnect(tgt->ltd_exp);
 	}
 

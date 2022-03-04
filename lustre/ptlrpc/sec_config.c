@@ -403,6 +403,10 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 	struct sptlrpc_rule *r;
 	int n;
 
+	if (nid_is_lo0(nid))
+		/* do not enforce any sec flavor on loopback connection */
+		return 0;
+
 	for (n = 0; n < rset->srs_nrule; n++) {
 		r = &rset->srs_rules[n];
 

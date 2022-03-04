@@ -1196,6 +1196,12 @@ init_gss() {
 			do_nodes $clients "find $SK_PATH/nodemap \
 				-name \*.key | xargs -IX $LGSS_SK -t client \
 				-m X >/dev/null 2>&1"
+			# also have a client key available on server side,
+			# for local client mount
+			do_nodes $(comma_list $(all_server_nodes)) \
+			"cp $SK_PATH/$FSNAME.key $SK_PATH/${FSNAME}_cli.key && \
+			 $LGSS_SK -t client -m \
+				$SK_PATH/${FSNAME}_cli.key >/dev/null 2>&1"
 		fi
 		# This is required for servers as well, if S2S in use
 		if $SK_S2S; then
