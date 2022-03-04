@@ -84,8 +84,6 @@ struct osc_async_page {
 
 	struct ptlrpc_request	*oap_request;
 	struct osc_object	*oap_obj;
-
-	spinlock_t		 oap_lock;
 };
 
 #define oap_page	oap_brw_page.pg

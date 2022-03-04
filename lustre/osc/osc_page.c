@@ -207,12 +207,7 @@ static void osc_page_clip(const struct lu_env *env,
 	opg->ops_from = from;
 	/* argument @to is exclusive, but @ops_to is inclusive */
 	opg->ops_to   = to - 1;
-	/* This isn't really necessary for transient pages, but we also don't
-	 * call clip on transient pages often, so it's OK.
-	 */
-	spin_lock(&oap->oap_lock);
 	oap->oap_async_flags |= ASYNC_COUNT_STABLE;
-	spin_unlock(&oap->oap_lock);
 }
 
 static int osc_page_flush(const struct lu_env *env,

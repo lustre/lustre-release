@@ -194,10 +194,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
                 }
 
 		if (page->cp_type != CPT_TRANSIENT) {
-			spin_lock(&oap->oap_lock);
-			oap->oap_async_flags = ASYNC_URGENT|ASYNC_READY;
-			oap->oap_async_flags |= ASYNC_COUNT_STABLE;
-			spin_unlock(&oap->oap_lock);
+			oap->oap_async_flags = ASYNC_URGENT|ASYNC_READY|ASYNC_COUNT_STABLE;
 		}
 
 		osc_page_submit(env, opg, crt, brw_flags);
