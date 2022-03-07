@@ -3262,12 +3262,15 @@ __must_hold(&lp->lp_lock)
 	if (lp->lp_state & LNET_PEER_MARK_DELETED)
 		return 0;
 
-	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
-		return -ESHUTDOWN;
-
 	spin_unlock(&lp->lp_lock);
 
 	mutex_lock(&the_lnet.ln_api_mutex);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING ||
+	    the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		spin_lock(&lp->lp_lock);
+		return -ESHUTDOWN;
+	}
 
 	lnet_net_lock(LNET_LOCK_EX);
 	/* remove the peer from the discovery work
@@ -3958,8 +3961,10 @@ void lnet_peer_discovery_stop(void)
 	else
 		wake_up(&the_lnet.ln_dc_waitq);
 
+	mutex_unlock(&the_lnet.ln_api_mutex);
 	wait_event(the_lnet.ln_dc_waitq,
 		   the_lnet.ln_dc_state == LNET_DC_STATE_SHUTDOWN);
+	mutex_lock(&the_lnet.ln_api_mutex);
 
 	LASSERT(list_empty(&the_lnet.ln_dc_request));
 	LASSERT(list_empty(&the_lnet.ln_dc_working));

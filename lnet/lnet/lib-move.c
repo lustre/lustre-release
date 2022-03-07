@@ -4134,7 +4134,9 @@ void lnet_monitor_thr_stop(void)
 	complete(&the_lnet.ln_mt_wait_complete);
 
 	/* block until monitor thread signals that it's done */
+	mutex_unlock(&the_lnet.ln_api_mutex);
 	down(&the_lnet.ln_mt_signal);
+	mutex_lock(&the_lnet.ln_api_mutex);
 	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN);
 
 	/* perform cleanup tasks */
