@@ -99,7 +99,7 @@ int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
 			 */
 			attr->la_size = som->ms_size;
 			attr->la_blocks = som->ms_blocks;
-			info->mti_som_valid = 1;
+			info->mti_som_strict = 1;
 		} else if (!obj->mot_lsom_inited &&
 			   (som->ms_valid & SOM_FL_LAZY) &&
 			   !mutex_is_locked(&obj->mot_som_mutex)) {
@@ -176,7 +176,7 @@ int mdt_lsom_downgrade(struct mdt_thread_info *info, struct mdt_object *o)
 	if (tmp_ma->ma_valid & MA_SOM) {
 		struct md_som *som = &tmp_ma->ma_som;
 
-		info->mti_som_valid = 0;
+		info->mti_som_strict = 0;
 		/* The size and blocks info should be still correct. */
 		if (som->ms_valid & SOM_FL_STRICT)
 			rc = mdt_set_som(info, o, SOM_FL_STALE,

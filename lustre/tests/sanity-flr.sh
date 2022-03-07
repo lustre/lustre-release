@@ -2212,6 +2212,54 @@ test_44d() {
 }
 run_test 44d "lfs mirror split does not break size"
 
+test_44e() {
+	local tf=$DIR/$tdir/$tfile
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local size1
+	local size2
+
+	test_mkdir $DIR/$tdir
+	[ $MDS1_VERSION -ge $(version_code 2.14.52) ] ||
+		skip "Need MDS version at least 2.14.52"
+
+	$LFS mirror create -N2 $tf || error "create mirrored file $tf failed"
+
+	# Disable xattr caching so we can repeatedly check SOM with lfs getsom
+	$LCTL set_param llite.*.xattr_cache=0
+	stack_trap "$LCTL set_param llite.*.xattr_cache=1"
+
+	dd if=/dev/zero of=$tf bs=1M count=10 || error "dd write $tfile failed"
+	sync
+	size1=$(stat -c "%s" $tf)
+	echo " ** before mirror resync, file size=$size1"
+
+	$LFS mirror resync $tf || error "mirror resync file $tf failed"
+	size1=$(stat -c "%s" $tf)
+	size2=$($LFS getsom -s $tf)
+
+	$LFS getsom $tf
+
+	((size1 == size2)) ||
+		error "mirrored file with strict SOM $size1 != disabled SOM $size2"
+
+	# Remount client to clear cached size information
+	remount_client $MOUNT
+
+	save_lustre_params $(get_facets MDS) mdt.*MDT*.enable_strict_som > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p"
+	local mds_facet=mds$(($($LFS getstripe -m $tf) + 1))
+
+	do_facet $mds_facet $LCTL set_param mdt.*MDT*.enable_strict_som=0
+
+	size2=$(stat -c "%s" $tf)
+	# 'getsom' here is just for debugging
+	$LFS getsom $tf
+
+	((size2 == size1)) ||
+		error "mirrored file in sync with som disabled, size with som disabled ($size2) and without som disabled ($size1) should agree"
+}
+run_test 44e "basic FLR SOM tests + disable SOM"
+
 test_45() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 

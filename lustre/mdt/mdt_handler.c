@@ -801,8 +801,9 @@ static inline bool mdt_hsm_is_released(struct lov_mds_md *lmm)
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
-	struct md_attr *ma = &info->mti_attr;
+	struct mdt_device *mdt = info->mti_mdt;
 	struct obd_export *exp = info->mti_exp;
+	struct md_attr *ma = &info->mti_attr;
 	struct lu_nodemap *nodemap = NULL;
 
 	LASSERT(ma->ma_valid & MA_INODE);
@@ -897,7 +898,9 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			else
 				b->mbo_blocks = 1;
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-		} else if (info->mti_som_valid) { /* som is valid */
+		} else if (info->mti_som_strict &&
+			   mdt->mdt_opts.mo_enable_strict_som) {
+			/* use SOM for size*/
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		} else if (ma->ma_valid & MA_SOM) { /* lsom is valid */
 			b->mbo_valid |= OBD_MD_FLLAZYSIZE | OBD_MD_FLLAZYBLOCKS;
@@ -4248,7 +4251,7 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
 	info->mti_big_acl_used = 0;
-	info->mti_som_valid = 0;
+	info->mti_som_strict = 0;
 
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
@@ -6113,6 +6116,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		m->mdt_opts.mo_acl = 1;
 	else
 		m->mdt_opts.mo_acl = 0;
+
+	m->mdt_opts.mo_enable_strict_som = 1;
 
 	/* XXX: to support suppgid for ACL, we enable identity_upcall
 	 * by default, otherwise, maybe got unexpected -EACCESS. */

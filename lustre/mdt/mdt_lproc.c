@@ -1046,6 +1046,58 @@ static ssize_t dom_read_open_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(dom_read_open);
 
+/**
+ * Show policy for using strict SOM information for real size (stat size).
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static ssize_t enable_strict_som_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 !!mdt->mdt_opts.mo_enable_strict_som);
+}
+
+/**
+ * Modify policy for using strict SOM information for real size (stat size).
+ *
+ * If disabled, SOM is never used for stat.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents policy
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t enable_strict_som_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_opts.mo_enable_strict_som = !!val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_strict_som);
+
 static ssize_t migrate_hsm_allowed_show(struct kobject *kobj,
 					struct attribute *attr, char *buf)
 {
@@ -1413,6 +1465,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_sync_count.attr,
 	&lustre_attr_dom_lock.attr,
 	&lustre_attr_dom_read_open.attr,
+	&lustre_attr_enable_strict_som.attr,
 	&lustre_attr_migrate_hsm_allowed.attr,
 	&lustre_attr_hsm_control.attr,
 	&lustre_attr_job_cleanup_interval.attr,

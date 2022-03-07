@@ -260,7 +260,8 @@ struct mdt_device {
 				   mo_cos:1,
 				   mo_evict_tgt_nids:1,
 				   mo_dom_read_open:1,
-				   mo_migrate_hsm_allowed:1;
+				   mo_migrate_hsm_allowed:1,
+				   mo_enable_strict_som:1;
 		unsigned int       mo_dom_lock;
 	} mdt_opts;
         /* mdt state flags */
@@ -488,7 +489,7 @@ struct mdt_thread_info {
 	/* big_lmm buffer was used and must be used in reply */
 				   mti_big_lmm_used:1,
 				   mti_big_acl_used:1,
-				   mti_som_valid:1;
+				   mti_som_strict:1;
 
 	/* opdata for mdt_reint_open(), has the same as
 	 * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
