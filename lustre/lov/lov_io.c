@@ -551,11 +551,6 @@ static int lov_io_slice_init(struct lov_io *lio,
 	case CIT_GLIMPSE:
 		lio->lis_pos = 0;
 		lio->lis_endpos = OBD_OBJECT_EOF;
-
-		if (lov_flr_state(obj) == LCM_FL_RDONLY &&
-		    !OBD_FAIL_CHECK(OBD_FAIL_FLR_GLIMPSE_IMMUTABLE))
-			/* SoM is accurate, no need glimpse */
-			GOTO(out, result = 1);
 		break;
 
 	case CIT_MISC:

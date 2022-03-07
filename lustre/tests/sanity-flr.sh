@@ -1061,9 +1061,6 @@ test_31() {
 	$LFS mirror create -N -o 0 -N -o 1 $tf ||
 		error "creating mirrored file $tf failed"
 
-	#define OBD_FAIL_GLIMPSE_IMMUTABLE 0x1A00
-	$LCTL set_param fail_loc=0x1A00
-
 	local ost_idx
 	for ((ost_idx = 1; ost_idx <= 2; ost_idx++)); do
 		cancel_lru_locks osc
@@ -2172,6 +2169,48 @@ test_44c() {
 		error "mirror split does not reduce block# $block3 != $block1"
 }
 run_test 44c "lfs mirror split reduces block size of a file"
+
+test_44d() {
+	local tf=$DIR/$tdir/$tfile
+	local size1
+	local size2
+	local size3
+	local size4
+
+	stack_trap "rm -f $tf"
+
+	mkdir -p $DIR/$tdir || error "create directroy failed"
+
+	dd if=/dev/zero of=$tf bs=1M count=10 || error "dd write $tfile failed"
+	sync
+	size1=$(stat -c "%s" $tf)
+	echo " ** before mirror ops, file size=$size1"
+
+	$LFS mirror extend -N2 -c1 $tf || error "mirror extend $tfile failed"
+	sync
+	size2=$(stat -c "%s" $tf)
+	echo " ** after mirror extend, file size=$size2"
+
+	(($size1 == $size2)) ||
+		error "mirror extend should not change size, before: $size1, after $size2"
+
+	$LFS mirror split -d --mirror-id=2 $tf ||
+		error "mirror split $tfile failed"
+
+	size2=$(stat -c "%s" $tf)
+	echo " ** after mirror split, file size=$size2"
+	(($size1 == $size2)) ||
+		error "mirror split should not change size, before: $size1, after $size2"
+
+	# Remount client to clear cached size information
+	remount_client $MOUNT
+	size2=$(stat -c "%s" $tf)
+	echo " ** after mirror split & remount, file size=$size2"
+	(($size1 == $size2)) ||
+		error "mirror extend should not change size, before: $size1, after $size2"
+
+}
+run_test 44d "lfs mirror split does not break size"
 
 test_45() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
