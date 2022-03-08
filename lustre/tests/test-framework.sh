@@ -7656,7 +7656,7 @@ check_node_health() {
 	# Only check/report network health if get_param isn't reported, since
 	# *clearly* the network is working if get_param returned something.
 	if (( $(grep -c catastro $health) != $(wc -w <<< ${nodes//,/ }) )); then
-		for node in ${nodes//,/}; do
+		for node in ${nodes//,/ }; do
 			check_network $node 5
 		done
 	fi
