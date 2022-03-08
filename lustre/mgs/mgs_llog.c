@@ -3919,6 +3919,21 @@ static int mgs_write_log_param2(const struct lu_env *env,
 		goto end;
 	}
 
+	/* root squash parameters must not be set on llite subsystem, this can
+	 * lead to inconsistencies between client and server values
+	 */
+	if ((strstr(ptr, PARAM_NOSQUASHNIDS) ||
+	     strstr(ptr, PARAM_ROOTSQUASH)) &&
+	    strncmp(ptr, "llite.", strlen("llite.")) == 0) {
+		rc = -EINVAL;
+		CWARN("%s: cannot add %s param to llite subsystem, use mdt instead: rc=%d\n",
+		      mgs->mgs_obd->obd_name,
+		      strstr(ptr, PARAM_ROOTSQUASH) ?
+			PARAM_ROOTSQUASH : PARAM_NOSQUASHNIDS,
+		      rc);
+		goto end;
+	}
+
 	rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, PARAMS_FILENAME, &bufs,
 			  mti->mti_svname, ptr);
 end:

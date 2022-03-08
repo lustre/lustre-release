@@ -1261,6 +1261,7 @@ static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 	char *upcall = lustre_cfg_string(lcfg, 2);
 	struct kobject *kobj = NULL;
 	const char *subsys = param;
+	char *newparam = NULL;
 	char *argv[] = {
 		[0] = "/usr/sbin/lctl",
 		[1] = "set_param",
@@ -1277,15 +1278,15 @@ static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 
 	len = strcspn(param, ".=");
 	if (!len)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
 	/* If we find '=' then its the top level sysfs directory */
 	if (param[len] == '=')
-		return class_set_global(param);
+		RETURN(class_set_global(param));
 
 	subsys = kstrndup(param, len, GFP_KERNEL);
 	if (!subsys)
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 
 	kobj = kset_find_obj(lustre_kset, subsys);
 	kfree(subsys);
@@ -1316,6 +1317,22 @@ static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 		RETURN(-EINVAL);
 	}
 
+	/* root_squash and nosquash_nids settings must be applied to
+	 * global subsystem (*.) so that it is taken into account by
+	 * both client and server sides. So do the equivalent of a
+	 * 's / mdt. / *. /'.
+	 */
+	if ((strstr(param, PARAM_NOSQUASHNIDS) ||
+	     strstr(param, PARAM_ROOTSQUASH)) &&
+	    (param[0] != '*' || param[1] != '.')) {
+		newparam = kmalloc(strlen(param) + 1, GFP_NOFS);
+		if (!newparam)
+			RETURN(-ENOMEM);
+
+		snprintf(newparam, strlen(param) + 1, "*%s", param + len);
+		argv[2] = (char *)newparam;
+	}
+
 	start = ktime_get();
 	rc = call_usermodehelper(argv[0], argv, NULL, UMH_WAIT_PROC);
 	end = ktime_get();
@@ -1331,6 +1348,7 @@ static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 		       rc = 0;
 	}
 
+	kfree(newparam);
 	RETURN(rc);
 }
 
