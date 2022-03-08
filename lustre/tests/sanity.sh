@@ -34,7 +34,7 @@ TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 
 init_logging
 
@@ -2414,7 +2414,7 @@ test_27Ca() { #LU-2871
 		# get striping information
 		ost_idx=($($LFS getstripe $tfile$i |
 		         tail -n $((OSTCOUNT + 1)) | awk '{print $1}'))
-		echo ${ost_idx[@]}
+		echo "OST Index: ${ost_idx[*]}"
 
 		# check the layout
 		[ ${#ost_idx[@]} -eq $OSTCOUNT ] ||
@@ -2422,14 +2422,14 @@ test_27Ca() { #LU-2871
 
 		for index in $(seq 0 $((OSTCOUNT - 1))); do
 			found=0
-			for j in $(echo ${ost_idx[@]}); do
+			for j in "${ost_idx[@]}"; do
 				if [ $index -eq $j ]; then
 					found=1
 					break
 				fi
 			done
 			[ $found = 1 ] ||
-				error "Can not find $index in ${ost_idx[@]}"
+				error "Can not find $index in ${ost_idx[*]}"
 		done
 	done
 }
@@ -6021,10 +6021,13 @@ test_54c() {
 run_test 54c "block device works in lustre ====================="
 
 test_54d() {
-	f="$DIR/f54d"
-	string="aaaaaa"
-	mknod $f p
-	[ "$string" = $(echo $string > $f | cat $f) ] || error "$f != $string"
+	local pipe="$DIR/$tfile.pipe"
+	local string="aaaaaa"
+
+	mknod $pipe p
+	echo -n "$string" > $pipe &
+	local result=$(cat $pipe)
+	[[ "$result" == "$string" ]] || error "$result != $string"
 }
 run_test 54d "fifo device works in lustre ======================"
 
@@ -10433,20 +10436,20 @@ calc_total() {
 }
 
 ra_check_101() {
-	local READ_SIZE=$1
-	local STRIPE_SIZE=$2
-	local FILE_LENGTH=$3
-	local RA_INC=1048576
-	local STRIDE_LENGTH=$((STRIPE_SIZE/READ_SIZE))
-	local discard_limit=$((((STRIDE_LENGTH - 1)*3/(STRIDE_LENGTH*OSTCOUNT))* \
-			     (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH)))
-	DISCARD=$($LCTL get_param -n llite.*.read_ahead_stats |
+	local read_size=$1
+	local stripe_size=$2
+	local stride_length=$((stripe_size / read_size))
+	local stride_width=$((stride_length * OSTCOUNT))
+	local discard_limit=$(( ((stride_length - 1) * 3 / stride_width) *
+			        (stride_width - stride_length) ))
+	local discard=$($LCTL get_param -n llite.*.read_ahead_stats |
 		  get_named_value 'read.but.discarded' | calc_total)
-	if [[ $DISCARD -gt $discard_limit ]]; then
+
+	if [[ $discard -gt $discard_limit ]]; then
 		$LCTL get_param llite.*.read_ahead_stats
-		error "Too many ($DISCARD) discarded pages with size (${READ_SIZE})"
+		error "($discard) discarded pages with size (${read_size})"
 	else
-		echo "Read-ahead success for size ${READ_SIZE}"
+		echo "Read-ahead success for size ${read_size}"
 	fi
 }
 
@@ -11962,7 +11965,7 @@ run_test 115 "verify dynamic thread creation===================="
 free_min_max () {
 	wait_delete_completed
 	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
-	echo "OST kbytes available: ${AVAIL[@]}"
+	echo "OST kbytes available: ${AVAIL[*]}"
 	MAXV=${AVAIL[0]}
 	MAXI=0
 	MINV=${AVAIL[0]}
@@ -21028,7 +21031,7 @@ test_247d() {
 	for rootpath in "$submount" "$submount///" "$submount/dir1"; do
 		echo "$rootpath $fid"
 		found=$($LFS fid2path $rootpath "$fid")
-		[ -n "found" ] || error "fid2path should succeed"
+		[ -n "$found" ] || error "fid2path should succeed"
 		[ "$found" == "$td" ] || error "fid2path $found != $td"
 	done
 	# check wrong root path format
@@ -22355,9 +22358,9 @@ test_270g() {
 		echo "Free space: ${spfree}%, default DOM stripe: ${dom_def}K"
 		[[ $dom_def != $dom_current ]] ||
 			error "Default stripe size was not changed"
-		if [[ $spfree > 0 ]] ; then
+		if (( spfree > 0 )) ; then
 			dom_set=$($LFS getstripe -S $dom)
-			[[ $dom_set == $((dom_def * 1024)) ]] ||
+			(( dom_set == dom_def * 1024 )) ||
 				error "DOM component size is still old"
 		else
 			[[ $($LFS getstripe -L $dom) != "mdt" ]] ||
@@ -24182,7 +24185,7 @@ test_317() {
 	# Truncate to size $trunc_sz bytes. Strip tail blocks and leave only 8
 	# blocks. The block count must drop to 8.
 	#
-	trunc_sz=$(($(stat --format=%s $DIR/$tfile) - \
+	trunc_sz=$(($(stat --format=%s $DIR/$tfile) -
 		((bs - grant_blk_size) + 1)))
 	$TRUNCATE $DIR/$tfile $trunc_sz ||
 		error "truncate $tfile to $trunc_sz failed"
@@ -25389,16 +25392,16 @@ generate_uneven_mdts() {
 
 		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
 		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
-		max=$(((${ffree[max_index]} >> 8) * \
+		max=$(((${ffree[max_index]} >> 8) *
 			(${bavail[max_index]} * bsize >> 16)))
-		min=$(((${ffree[min_index]} >> 8) * \
+		min=$(((${ffree[min_index]} >> 8) *
 			(${bavail[min_index]} * bsize >> 16)))
 		diff=$(((max - min) * 100 / min))
 		i=$((i + 1))
 	done
 
-	echo "MDT filesfree available: ${ffree[@]}"
-	echo "MDT blocks available: ${bavail[@]}"
+	echo "MDT filesfree available: ${ffree[*]}"
+	echo "MDT blocks available: ${bavail[*]}"
 	echo "weight diff=$diff%"
 }
 
@@ -25532,8 +25535,8 @@ test_qos_mkdir() {
 	(( ${ffree[min_index]} < 10000000 )) ||
 		skip "too many free files in MDT$min_index"
 
-	echo "MDT filesfree available: ${ffree[@]}"
-	echo "MDT blocks available: ${bavail[@]}"
+	echo "MDT filesfree available: ${ffree[*]}"
+	echo "MDT blocks available: ${bavail[*]}"
 	echo "weight diff=$(((max - min) * 100 / min))%"
 	echo
 	echo "Mkdir (stripe_count $stripe_count) with balanced space usage:"
