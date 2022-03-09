@@ -10,7 +10,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT "
@@ -1539,7 +1539,7 @@ test_37()
 	echo "Verifying mirror read .."
 
 	local sum
-	for i in ${mirror_array[@]}; do
+	for i in "${mirror_array[@]}"; do
 		$LCTL set_param ldlm.namespaces.*.lru_size=clear > /dev/null
 		sum=$($LFS mirror read -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[$i]}" ] ||
@@ -1565,7 +1565,7 @@ test_37()
 
 	# verify copying is successful by checking checksums
 	remount_client $MOUNT
-	for i in ${mirror_array[@]}; do
+	for i in "${mirror_array[@]}"; do
 		sum=$($LFS mirror read -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[1]}" ] ||
 			error "$i: mismatch checksum after copy \'$sum\'"
@@ -1613,7 +1613,7 @@ test_38() {
 	[ "$file_cksum" = "$ref_cksum" ] || error "write failed, cksum mismatch"
 
 	get_mirror_ids $tf
-	echo "mirror IDs: ${mirror_array[@]}"
+	echo "mirror IDs: ${mirror_array[*]}"
 
 	local valid_mirror stale_mirror id mirror_cksum
 	for id in "${mirror_array[@]}"; do
@@ -2760,7 +2760,7 @@ test_50d() {
 
 	if [[ $rc -eq 0 ]]; then
 		verify_flr_state $file "wp"
-	elif [[ ! $prt =~ "unsupported" ]]; then
+	elif [[ ! $prt =~ unsupported ]]; then
 		error "punch hole in $file failed: $prt"
 	else
 		skip "Fallocate punch is not supported: $prt"
@@ -2900,20 +2900,20 @@ test_61a() { # LU-14508
 	echo "mirror merge $tfile-2 to $tfile and test timestamps"
 	$LFS mirror extend -N -f $file-2 $file ||
 		error "cannot mirror merge $file-2 to $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo "mirror extend $tfile and test timestamps"
 	$LFS mirror extend -N -c1 -i1 $file ||
 		error "cannot extend mirror $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo "migrate $tfile and test timestamps"
 	$LFS migrate -n $file || error "cannot migrate $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo "normal user migrate $tfile and test timestamps"
 	$RUNAS $LFS migrate -n $file || error "cannot migrate $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 }
 run_test 61a "mirror extend and migrate preserve timestamps"
 
@@ -2943,17 +2943,17 @@ test_61b() { # LU-14508
 	echo "mirror extend $tfile and test timestamps"
 	$LFS mirror extend -N -c1 -i1 $file ||
 		error "cannot extend mirror $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo "mirror split $tfile and test timestamps"
 	$LFS mirror split -d --mirror-id=1 $file ||
 		error "cannot split mirror 1 off $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo "normal user mirror extend $tfile and test timestamps"
 	$RUNAS $LFS mirror extend -N -c1 -i1 $file ||
 		error "cannot extend mirror $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 }
 run_test 61b "mirror extend and split preserve timestamps"
 
@@ -2981,14 +2981,14 @@ test_61c() { # LU-14508
 	tim=( $(get_times_61 $file) )
 	sleep $nap
 	$LFS mirror resync $file || error "cannot resync mirror $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 
 	echo XXXXXX > $file || error "write $tfile failed"
 
 	echo "normal user resync $tfile and test timestamps"
 	tim=( $(get_times_61 $file) )
 	$RUNAS $LFS mirror resync $file || error "cannot resync mirror $file"
-	check_times_61 $file ${tim[@]}
+	check_times_61 $file "${tim[@]}"
 }
 run_test 61c "mirror resync preserves timestamps"
 
@@ -3141,8 +3141,8 @@ test_200() {
 
 	rm -f $ctrl_file
 
-	echo "Waiting ${pids[@]}"
-	wait ${pids[@]}
+	echo "Waiting ${pids[*]}"
+	wait "${pids[@]}"
 
 	umount_client $MOUNT2
 	umount_client $MOUNT3
@@ -3153,8 +3153,9 @@ test_200() {
 	$LFS mirror resync $tf || error "final resync failed"
 	get_mirror_ids $tf
 
-	local csum=$($LFS mirror read -N ${mirror_array[0]} $tf | md5sum)
-	for id in ${mirror_array[@]:1}; do
+	local csum=$($LFS mirror read -N "${mirror_array[0]}" $tf | md5sum)
+
+	for id in "${mirror_array[@]:1}"; do
 		[ "$($LFS mirror read -N $id $tf | md5sum)" = "$csum" ] ||
 			error "checksum error for mirror $id"
 	done
@@ -3735,23 +3736,23 @@ test_207() {
 	$LFS mirror create -N -S 4M -c 2 -N -S 1M -c -1 $file ||
 		error "create mirrored file $file failed"
 	get_mirror_ids $file
-	echo "mirror IDs: ${mirror_array[@]}"
+	echo "mirror IDs: ${mirror_array[*]}"
 
 	dd if=$tmpfile of=$file bs=1M || error "can't copy"
 	get_mirror_ids $file
-	echo "mirror IDs: ${mirror_array[@]}"
+	echo "mirror IDs: ${mirror_array[*]}"
 
 	drop_client_cache
 	cmp $tmpfile $file || error "files don't match"
 	get_mirror_ids $file
-	echo "mirror IDs: ${mirror_array[@]}"
+	echo "mirror IDs: ${mirror_array[*]}"
 
 	# mirror creation should work fine
 	$LFS mirror extend -N -S 8M -c -1 $file ||
 		error "mirror extend $file failed"
 
 	get_mirror_ids $file
-	echo "mirror IDs: ${mirror_array[@]}"
+	echo "mirror IDs: ${mirror_array[*]}"
 
 	drop_client_cache
 	$LFS mirror verify -v $file || error "verification failed"
@@ -3800,7 +3801,7 @@ function check_ost_used() {
 			osc.$FSNAME-OST000$ost-osc-[-0-9a-f]*.stats |
 			awk "/ost_$io/{print \$2}")
 		nr=${nr:-0}
-		if [[ " $* " =~ " $ost " ]]; then
+		if [[ " $* " =~ $ost ]]; then
 			(( nr > 0 )) || error "expected reads on $ost"
 		else
 			(( nr == 0 )) || error "unexpected $nr reads on $ost"
