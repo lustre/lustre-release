@@ -112,7 +112,6 @@ try_again:
 						  conn_hash_params);
 	if (conn2) {
 		/* insertion failed */
-		OBD_FREE_PTR(conn);
 		if (IS_ERR(conn2)) {
 			/* hash table could be resizing. */
 			if (PTR_ERR(conn2) == -ENOMEM ||
@@ -120,10 +119,12 @@ try_again:
 				msleep(5);
 				goto try_again;
 			}
-			return NULL;
+			conn2 = NULL;
 		}
+		OBD_FREE_PTR(conn);
 		conn = conn2;
-		ptlrpc_connection_addref(conn);
+		if (conn)
+			ptlrpc_connection_addref(conn);
 	}
 	EXIT;
 out:
