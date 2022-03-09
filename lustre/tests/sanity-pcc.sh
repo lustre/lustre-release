@@ -1512,7 +1512,7 @@ test_101a() {
 	# process running so we can do the rest of our steps
 	do_facet $SINGLEAGT $RUNAS unshare -Um sleep 600 &
 	# Let the child start...
-	sleep 0.2
+	sleep 2
 	# Get the sleep PID so we can find its namespace and kill it later
 	PID=$(do_facet $SINGLEAGT pgrep sleep)
 	stack_trap "do_facet $SINGLEAGT kill -9 $PID" EXIT
