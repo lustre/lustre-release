@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT "
@@ -3174,7 +3174,7 @@ test_60() {
 	local sleep=1
 
 	echo -n "Expecting a progress update within $progress_timeout seconds... "
-	while [ true ]; do
+	while true; do
 		RESULT=$(do_node $(facet_active_host $mds) "$cmd")
 		if [ -n "$RESULT" ] && [ "$RESULT" -gt 0 ]; then
 			echo "$RESULT bytes copied in $WAIT seconds."
@@ -5683,7 +5683,7 @@ test_606() {
 	[ -n "$nid" ] || error "nid is empty"
 	echo "Got NID $nid"
 	[ -n "$nid" ] && [[ "${CLIENT_NIDS[*]}" =~ $nid ]] ||
-		error "nid '$nid' does not match any NID ${CLIENT_NIDS[@]}"
+		error "nid '$nid' does not match any NID ${CLIENT_NIDS[*]}"
 }
 run_test 606 "llog_reader groks changelog fields"
 
