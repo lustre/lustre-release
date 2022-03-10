@@ -1628,6 +1628,8 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	struct vvp_page           *vpg;
 	int			   rc = 0, rc2 = 0;
 	bool			   uptodate;
+	struct vvp_io *vio = vvp_env_io(env);
+	bool mmap = !vio->vui_ra_valid;
 	pgoff_t ra_start_index = 0;
 	pgoff_t io_start_index;
 	pgoff_t io_end_index;
@@ -1642,12 +1644,11 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	uptodate = vpg->vpg_defer_uptodate;
 
 	if (ll_readahead_enabled(sbi) && !vpg->vpg_ra_updated && ras) {
-		struct vvp_io *vio = vvp_env_io(env);
 		enum ras_update_flags flags = 0;
 
 		if (uptodate)
 			flags |= LL_RAS_HIT;
-		if (!vio->vui_ra_valid)
+		if (mmap)
 			flags |= LL_RAS_MMAP;
 		ras_update(sbi, inode, ras, vvp_index(vpg), flags, io);
 	}
@@ -1665,9 +1666,16 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		cl_2queue_add(queue, page, true);
 	}
 
-	io_start_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos);
-	io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
-				io->u.ci_rw.crw_count - 1);
+	/* mmap does not set the ci_rw fields */
+	if (!mmap) {
+		io_start_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos);
+		io_end_index = cl_index(io->ci_obj, io->u.ci_rw.crw_pos +
+					io->u.ci_rw.crw_count - 1);
+	} else {
+		io_start_index = vvp_index(vpg);
+		io_end_index = vvp_index(vpg);
+	}
+
 	if (ll_readahead_enabled(sbi) && ras && !io->ci_rand_read) {
 		pgoff_t skip_index = 0;
 
