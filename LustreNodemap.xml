@@ -104,6 +104,30 @@
     </section>
 
     <section remap="h3">
+      <title>Defining a Servers Specific Group</title>
+
+      <para>For proper operations, the Lustre file system
+      <emphasis role="bold">requires</emphasis> to have a privileged group that
+      covers all Lustre server nodes. So the very first step when working with
+      nodemaps is to create such a group with both properties
+      <literal>admin</literal> and <literal>trusted</literal> set. It is
+      recommended to give this group an explicit label such as “TrustedSystems”
+      or some identifier that makes the association clear.</para>
+
+      <para>Let's consider a deployment where the server nodes are in the NID
+      range <literal>192.168.0.[1-10]@tcp</literal>. Create the policy group,
+      add the NID range to that group, and set the properties accordingly using
+      the <literal>lctl</literal> command on the MGS:</para>
+
+      <screen>mgs# lctl nodemap_add <replaceable>TrustedSystems</replaceable>
+mgs# lctl nodemap_add_range --name <replaceable>TrustedSystems</replaceable> --range 192.168.0.[1-10]@tcp
+mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --property admin --value 1
+mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --property trusted --value 1
+</screen>
+
+    </section>
+
+    <section remap="h3">
       <title>Describing and Deploying a Sample Mapping</title>
 
       <para>Deploy nodemap by first considering which users need to be
@@ -240,6 +264,13 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
     to user <literal>nobody</literal>, which interferes with most
     administrative actions.</para>
 
+    <para>For proper operations, the Lustre file system
+    <emphasis role="bold">requires</emphasis> a group that covers all Lustre
+    server nodes, with both properties <literal>admin</literal> and
+    <literal>trusted</literal> set. It is recommended to give this group an
+    explicit label such as “TrustedSystems” or some identifier that makes the
+    association clear.</para>
+
     <section remap="h3">
       <title>Managing the Properties</title>
 
@@ -344,9 +375,9 @@ mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --prope
       order to perform maintenance or to perform administrative tasks. </para>
 
       <warning>
-        <para>MDS systems <emphasis role="bold">must</emphasis> be in a policy
-        group with both these properties set to 1. It is recommended to put the
-        MDS in a policy group labeled “TrustedSystems” or some identifier that
+        <para>Lustre server nodes <emphasis role="bold">must</emphasis> be in a
+        policy group with both these properties set to 1. It is recommended to
+        use a policy group labeled “TrustedSystems” or some identifier that
         makes the association clear.</para>
       </warning>
 
