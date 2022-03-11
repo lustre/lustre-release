@@ -4269,7 +4269,7 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 		/* inc_nlink from 0 may cause WARN_ON */
 		set_nlink(inode, 1);
 	else {
-		ldiskfs_inc_count(oh->ot_handle, inode);
+		osd_ldiskfs_inc_count(oh->ot_handle, inode);
 		if (!S_ISDIR(inode->i_mode))
 			LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
 	}
@@ -4348,7 +4348,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	CDEBUG(D_INODE, DFID" decrease nlink %d\n",
 	       PFID(lu_object_fid(&dt->do_lu)), inode->i_nlink);
 
-	ldiskfs_dec_count(oh->ot_handle, inode);
+	osd_ldiskfs_dec_count(oh->ot_handle, inode);
 	spin_unlock(&obj->oo_guard);
 
 	osd_dirty_inode(inode, I_DIRTY_DATASYNC);

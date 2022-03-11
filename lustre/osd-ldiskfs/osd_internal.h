@@ -1493,8 +1493,13 @@ bool bio_integrity_enabled(struct bio *bio);
 # define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
 #endif
 
-void ldiskfs_inc_count(handle_t *handle, struct inode *inode);
-void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
+#ifdef HAVE_EXT4_INC_DEC_COUNT_2ARGS
+#define osd_ldiskfs_inc_count(h, inode)		ldiskfs_inc_count((h), (inode))
+#define osd_ldiskfs_dec_count(h, inode)		ldiskfs_dec_count((h), (inode))
+#else
+#define osd_ldiskfs_inc_count(h, inode)		ldiskfs_inc_count((inode))
+#define osd_ldiskfs_dec_count(h, inode)		ldiskfs_dec_count((inode))
+#endif /* HAVE_EXT4_INC_DEC_COUNT_2ARGS */
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
 

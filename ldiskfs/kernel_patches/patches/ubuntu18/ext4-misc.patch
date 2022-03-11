@@ -34,12 +34,14 @@ Index: linux-4.15.0/fs/ext4/ext4.h
  
  static inline bool ext4_has_compat_features(struct super_block *sb)
  {
-@@ -3103,6 +3119,11 @@ struct ext4_extent;
+@@ -3103,6 +3119,13 @@ struct ext4_extent;
  
  extern int ext4_ext_tree_init(handle_t *handle, struct inode *);
  extern int ext4_ext_writepage_trans_blocks(struct inode *, int);
 +extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
 +						  ext4_group_t block_group);
++extern void ext4_inc_count(handle_t *handle, struct inode *inode);
++extern void ext4_dec_count(handle_t *handle, struct inode *inode);
 +extern struct buffer_head *ext4_append(handle_t *handle,
 +				       struct inode *inode,
 +				       ext4_lblk_t *block);

@@ -42,12 +42,14 @@ diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
  
  static inline bool ext4_has_compat_features(struct super_block *sb)
  {
-@@ -3399,6 +3415,11 @@
+@@ -3399,6 +3415,13 @@
  #define EXT_MAX_BLOCKS	0xffffffff
  
  extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
 +extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
 +						  ext4_group_t block_group);
++extern void ext4_inc_count(handle_t *handle, struct inode *inode);
++extern void ext4_dec_count(handle_t *handle, struct inode *inode);
 +extern struct buffer_head *ext4_append(handle_t *handle,
 +				       struct inode *inode,
 +				       ext4_lblk_t *block);

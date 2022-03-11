@@ -1,15 +1,16 @@
 ---
- fs/ext4/ext4.h   |   29 ++++++++++++++++++++++-
- fs/ext4/ialloc.c |    3 ++-
- fs/ext4/inode.c  |   15 +++++++++++++++
- fs/ext4/namei.c  |    9 ++++++---
- fs/ext4/super.c  |   10 ++--------
- 5 files changed, 47 insertions(+), 13 deletions(-)
+ fs/ext4/ext4.h   | 25 ++++++++++++++++++++++++-
+ fs/ext4/ialloc.c |  3 ++-
+ fs/ext4/inode.c  | 16 ++++++++++++++++
+ fs/ext4/namei.c  |  9 ++++++---
+ fs/ext4/super.c  | 10 ++--------
+ 5 files changed, 50 insertions(+), 13 deletions(-)
 
-diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
---- a/fs/ext4/ext4.h	2021-12-09 07:30:00.134965109 -0700
-+++ b/fs/ext4/ext4.h	2021-12-09 07:32:16.038650421 -0700
-@@ -1849,6 +1849,8 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 2c8b1ae..1d80381 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1849,6 +1849,8 @@ static inline bool ext4_verity_in_progress(struct inode *inode)
  
  #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
  
@@ -18,7 +19,7 @@ diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
  /*
   * Codes for operating systems
   */
-@@ -2089,7 +2091,21 @@
+@@ -2089,7 +2091,21 @@ static inline bool ext4_has_unknown_ext##ver##_incompat_features(struct super_bl
  
  EXTN_FEATURE_FUNCS(2)
  EXTN_FEATURE_FUNCS(3)
@@ -41,22 +42,25 @@ diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
  
  static inline bool ext4_has_compat_features(struct super_block *sb)
  {
-@@ -3554,6 +3575,11 @@
+@@ -3554,6 +3570,13 @@ struct ext4_extent;
  #define EXT_MAX_BLOCKS	0xffffffff
  
  extern void ext4_ext_tree_init(handle_t *handle, struct inode *inode);
 +extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
 +						  ext4_group_t block_group);
++extern void ext4_inc_count(struct inode *inode);
++extern void ext4_dec_count(struct inode *inode);
 +extern struct buffer_head *ext4_append(handle_t *handle,
 +				       struct inode *inode,
 +				       ext4_lblk_t *block);
  extern int ext4_ext_index_trans_blocks(struct inode *inode, int extents);
  extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
  			       struct ext4_map_blocks *map, int flags);
-diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
---- a/fs/ext4/ialloc.c	2021-12-09 07:30:00.086965299 -0700
-+++ b/fs/ext4/ialloc.c	2021-12-09 07:30:47.418778395 -0700
-@@ -120,7 +120,7 @@
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index 221d849..e83c30e 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -120,7 +120,7 @@ verified:
   *
   * Return buffer_head of bitmap on success, or an ERR_PTR on error.
   */
@@ -65,7 +69,7 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
  ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
  {
  	struct ext4_group_desc *desc;
-@@ -215,6 +215,7 @@
+@@ -215,6 +215,7 @@ out:
  	put_bh(bh);
  	return ERR_PTR(err);
  }
@@ -73,10 +77,11 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
  
  /*
   * NOTE! When we get the inode, we're the only people
-diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
---- a/fs/ext4/inode.c	2021-12-09 07:30:00.126965141 -0700
-+++ b/fs/ext4/inode.c	2021-12-09 07:30:47.422778379 -0700
-@@ -6197,3 +6197,19 @@
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index ea9976b..e3630b0 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -6206,3 +6206,19 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
  
  	return ret;
  }
@@ -96,9 +101,10 @@ diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4fs_dirhash);
 +EXPORT_SYMBOL(ext4_get_inode_loc);
 +EXPORT_SYMBOL(__ext4_journal_ensure_credits);
-diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
---- a/fs/ext4/namei.c	2021-12-09 07:30:00.138965094 -0700
-+++ b/fs/ext4/namei.c	2021-12-09 07:30:47.426778363 -0700
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index f09b60b..ff6c251 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
 @@ -50,7 +50,7 @@
  #define NAMEI_RA_BLOCKS  4
  #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
@@ -108,7 +114,7 @@ diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
  					struct inode *inode,
  					ext4_lblk_t *block)
  {
-@@ -181,6 +181,7 @@
+@@ -181,6 +181,7 @@ static struct buffer_head *__ext4_read_dirblock(struct inode *inode,
  	}
  	return bh;
  }
@@ -116,7 +122,7 @@ diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
  
  #ifndef assert
  #define assert(test) J_ASSERT(test)
-@@ -2575,23 +2576,25 @@
+@@ -2578,23 +2579,25 @@ EXPORT_SYMBOL(ext4_delete_entry);
   * for checking S_ISDIR(inode) (since the INODE_INDEX feature will not be set
   * on regular files) and to avoid creating huge/slow non-HTREE directories.
   */
@@ -144,10 +150,11 @@ diff -ur a/fs/ext4/namei.c b/fs/ext4/namei.c
  
  
  /*
-diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
---- a/fs/ext4/super.c	2021-12-09 07:30:00.050965441 -0700
-+++ b/fs/ext4/super.c	2021-12-09 07:30:47.426778363 -0700
-@@ -435,7 +435,7 @@
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index ea5aefa..056009e 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -435,7 +435,7 @@ static void __save_error_info(struct super_block *sb, int error,
  		return;
  	es->s_state |= cpu_to_le16(EXT4_ERROR_FS);
  	ext4_update_tstamp(es, s_last_error_time);
@@ -156,7 +163,7 @@ diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
  	es->s_last_error_line = cpu_to_le32(line);
  	es->s_last_error_ino = cpu_to_le32(ino);
  	es->s_last_error_block = cpu_to_le64(block);
-@@ -496,7 +496,7 @@
+@@ -496,7 +496,7 @@ static void __save_error_info(struct super_block *sb, int error,
  	if (!es->s_first_error_time) {
  		es->s_first_error_time = es->s_last_error_time;
  		es->s_first_error_time_hi = es->s_last_error_time_hi;
@@ -165,7 +172,7 @@ diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
  			sizeof(es->s_first_error_func));
  		es->s_first_error_line = cpu_to_le32(line);
  		es->s_first_error_ino = es->s_last_error_ino;
-@@ -6683,16 +6683,12 @@
+@@ -6673,16 +6673,12 @@ static int __init ext4_init_fs(void)
  	if (err)
  		goto out05;
  
@@ -182,7 +189,7 @@ diff -ur a/fs/ext4/super.c b/fs/ext4/super.c
  out05:
  	destroy_inodecache();
  out1:
-@@ -6716,8 +6712,6 @@
+@@ -6706,8 +6702,6 @@ out7:
  static void __exit ext4_exit_fs(void)
  {
  	ext4_destroy_lazyinit_thread();

@@ -358,7 +358,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	rc = osd_ldiskfs_add_entry(info, osd, oh->ot_handle, dentry,
 				   obj->oo_inode, NULL);
 	if (!rc && S_ISDIR(obj->oo_inode->i_mode))
-		ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
+		osd_ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
 	else if (unlikely(rc == -EEXIST))
 		rc = 0;
 	if (!rc)
@@ -401,7 +401,7 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 		rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode,
 					  de, bh);
 		if (!rc && S_ISDIR(obj->oo_inode->i_mode))
-			ldiskfs_dec_count(oh->ot_handle, parent->d_inode);
+			osd_ldiskfs_dec_count(oh->ot_handle, parent->d_inode);
 		mark_inode_dirty(parent->d_inode);
 		inode_unlock(parent->d_inode);
 		brelse(bh);
