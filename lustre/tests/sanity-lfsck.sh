@@ -10,7 +10,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 # bug number for skipped test:
@@ -947,7 +947,7 @@ run_test 7b "non-stopped LFSCK should auto restarts after MDS remount (2)"
 namespace_error()
 {
 	$SHOW_NAMESPACE
-	error $@
+	error "$@"
 }
 
 test_8()
@@ -1174,7 +1174,7 @@ test_9a() {
 	# We allow another 20% schedule error.
 	local TIME_DIFF=2
 	# MAX_MARGIN = 1.3 = 13 / 10
-	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
+	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) /
 			   RUN_TIME1 * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_LAYOUT
@@ -1191,8 +1191,8 @@ test_9a() {
 
 	SPEED=$($SHOW_LAYOUT | awk '/^average_speed_phase1/ { print $2 }')
 	# MIN_MARGIN = 0.7 = 7 / 10
-	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
-			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) +
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) /
 			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
 		if [ $mds1_FSTYPE != ldiskfs ]; then
@@ -1205,8 +1205,8 @@ test_9a() {
 	}
 
 	# MAX_MARGIN = 1.3 = 13 / 10
-	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
-		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) +
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) /
 		     (RUN_TIME1 + RUN_TIME2) * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_LAYOUT
@@ -1272,7 +1272,7 @@ test_9b() {
 	# We allow another 20% schedule error.
 	local TIME_DIFF=2
 	# MAX_MARGIN = 1.3 = 13 / 10
-	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
+	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) /
 			  RUN_TIME1 * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_NAMESPACE
@@ -1289,8 +1289,8 @@ test_9b() {
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase2/ { print $2 }')
 	# MIN_MARGIN = 0.7 = 7 / 10
-	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
-			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) +
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) /
 			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
 		if [ $mds1_FSTYPE != ldiskfs ]; then
@@ -1303,8 +1303,8 @@ test_9b() {
 	}
 
 	# MAX_MARGIN = 1.3 = 13 / 10
-	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
-		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) +
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) /
 		     (RUN_TIME1 + RUN_TIME2) * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_NAMESPACE
