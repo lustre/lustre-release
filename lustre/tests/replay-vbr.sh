@@ -6,7 +6,7 @@ MOUNT_2=${MOUNT_2:-"yes"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0

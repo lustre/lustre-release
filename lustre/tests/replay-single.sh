@@ -4,7 +4,7 @@ set -e
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
