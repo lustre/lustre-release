@@ -25,7 +25,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
-init_test_env $@
+init_test_env "$@"
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
@@ -92,8 +92,8 @@ load_lnet() {
 }
 
 do_lnetctl() {
-	$LCTL mark "$LNETCTL $@"
-	echo "$LNETCTL $@"
+	$LCTL mark "$LNETCTL $*"
+	echo "$LNETCTL $*"
 	$LNETCTL "$@"
 }
 
@@ -101,7 +101,7 @@ TESTNS='test_ns'
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
 do_ns() {
-	echo "ip netns exec $TESTNS $@"
+	echo "ip netns exec $TESTNS $*"
 	ip netns exec $TESTNS "$@"
 }
 
@@ -1545,8 +1545,8 @@ add_health_test_drop_rules() {
 	local hstatus=$1
 	local lnid rnid
 
-	for lnid in ${LNIDS[@]}; do
-		for rnid in ${RNIDS[@]}; do
+	for lnid in "${LNIDS[@]}"; do
+		for rnid in "${RNIDS[@]}"; do
 			$LCTL net_drop_add -s $lnid -d $rnid -m GET -r 1 -e ${hstatus}
 		done
 	done
@@ -1887,7 +1887,7 @@ check_ping_count() {
 
 	local count
 	local found=false
-	for count in ${ping_count[@]}; do
+	for count in "${ping_count[@]}"; do
 		if [[ $count -eq $expect ]]; then
 			if [[ $expect -ne 0 ]] && $found ; then
 				error "Found more than one interface matching \"$expect\" ping count"
@@ -2316,8 +2316,8 @@ test_216() {
 		error "Initial ping failed $?"
 
 	local src dst
-	for src in ${nids[@]}; do
-		for dst in ${nids[@]}; do
+	for src in "${nids[@]}"; do
+		for dst in "${nids[@]}"; do
 			$LCTL net_drop_add -r 1 -s $src -d $dst -e network_timeout
 		done
 	done
