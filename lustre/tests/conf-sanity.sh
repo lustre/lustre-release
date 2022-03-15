@@ -8,7 +8,7 @@ SRCDIR=$(dirname $0)
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 #                                  tool to create lustre filesystem images
@@ -98,7 +98,7 @@ reformat() {
 
 start_mgs () {
 	echo "start mgs service on $(facet_active_host mgs)"
-	start mgs $(mgsdevname) $MGS_MOUNT_OPTS $@
+	start mgs $(mgsdevname) $MGS_MOUNT_OPTS "$@"
 }
 
 start_mdt() {
@@ -108,7 +108,7 @@ start_mdt() {
 	shift 1
 
 	echo "start mds service on `facet_active_host $facet`"
-	start $facet ${dev} $MDS_MOUNT_OPTS $@ || return 94
+	start $facet ${dev} $MDS_MOUNT_OPTS "$@" || return 94
 }
 
 stop_mdt_no_force() {
@@ -136,7 +136,7 @@ start_mds() {
 	local num
 
 	for num in $(seq $MDSCOUNT); do
-		start_mdt $num $@ || return 94
+		start_mdt $num "$@" || return 94
 	done
 	for num in $(seq $MDSCOUNT); do
 		wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds${num} FULL
@@ -147,7 +147,7 @@ start_mgsmds() {
 	if ! combined_mgs_mds ; then
 		start_mgs
 	fi
-	start_mds $@
+	start_mds "$@"
 }
 
 stop_mds() {
@@ -165,7 +165,7 @@ stop_mgs() {
 
 start_ost() {
 	echo "start ost1 service on `facet_active_host ost1`"
-	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS $@ || return 95
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS "$@" || return 95
 	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost1 FULL
 }
 
@@ -177,7 +177,7 @@ stop_ost() {
 
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
-	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS $@ || return 92
+	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS "$@" || return 92
 	wait_clients_import_state ${CLIENTS:-$HOSTNAME} ost2 FULL
 }
 
@@ -199,7 +199,7 @@ umount_client() {
 	local mountpath=$1
 	shift
 	echo "umount lustre on $mountpath....."
-	zconf_umount $HOSTNAME $mountpath $@ || return 97
+	zconf_umount $HOSTNAME $mountpath "$@" || return 97
 }
 
 manual_umount_client(){
@@ -704,13 +704,13 @@ test_18() {
 	setup
 	check_mount || error "check_mount failed"
 
-        echo "check journal size..."
-        local FOUNDSIZE=$(do_facet $SINGLEMDS "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}')
-        if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
-                log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
-        else
-                error "expected journal size > 32M, found $((FOUNDSIZE >> 20))M"
-        fi
+	echo "check journal size..."
+	local FOUNDSIZE=$(do_facet $SINGLEMDS "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}')
+	if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
+		log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
+	else
+		error "expected journal size > 32M, found $((FOUNDSIZE >> 20))M"
+	fi
 
 	cleanup || error "cleanup failed with rc $?"
 
@@ -2659,6 +2659,7 @@ t32_test() {
 		# PFL write test after sha1sum check
 		if [ "$pfl_upgrade" != "no" ]; then
 			local rw_len=$((3 * 1034 * 1024))
+
 			if ! $mdt2_is_available; then
 				pfl_file=$tmp/mnt/lustre/pfl_dir/pfl_file
 			fi
@@ -2953,6 +2954,7 @@ run_test 32g "flr/dom upgrade test"
 
 test_33a() { # bug 12333, was test_33
 	local FSNAME2=test-$testnum
+
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local mkfsoptions
 
@@ -2961,6 +2963,7 @@ test_33a() { # bug 12333, was test_33
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		local dev=${SINGLEMDS}_dev
 		local MDSDEV=${!dev}
+
 		is_blkdev $SINGLEMDS $MDSDEV &&
 			skip_env "mixed loopback and real device not working"
 	fi
@@ -3011,10 +3014,10 @@ test_33a() { # bug 12333, was test_33
 run_test 33a "Mount ost with a large index number"
 
 test_33b() {	# was test_34
-        setup
+	setup
 
-        do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
-        # Drop lock cancelation reply during umount
+	do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
+	# Drop lock cancelation reply during umount
 	#define OBD_FAIL_LDLM_CANCEL_NET			0x304
 	do_facet client $LCTL set_param fail_loc=0x80000304
 	#lctl set_param debug=-1
@@ -3024,7 +3027,7 @@ test_33b() {	# was test_34
 run_test 33b "Drop cancel during umount"
 
 test_34a() {
-        setup
+	setup
 	do_facet client "sh runmultiop_bg_pause $DIR/file O_c"
 	manual_umount_client
 	rc=$?
@@ -3266,23 +3269,23 @@ test_36() { # 12743
 	DFAVAIL=$(echo $STRING | cut -d, -f3)
 	DFFREE=$(($DFTOTAL - $DFUSED))
 
-        ALLOWANCE=$((64 * $OSTCOUNT))
+	ALLOWANCE=$((64 * $OSTCOUNT))
 
-        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||
-           [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
-                echo "**** FAIL: df total($DFTOTAL) mismatch OST total($BKTOTAL)"
-                rc=1
-        fi
-        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] ||
-           [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
-                echo "**** FAIL: df free($DFFREE) mismatch OST free($BKFREE)"
-                rc=2
-        fi
-        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] ||
-           [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
-                echo "**** FAIL: df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
-                rc=3
-       fi
+	if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||
+	   [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
+		echo "**** FAIL: df total($DFTOTAL) mismatch OST total($BKTOTAL)"
+		rc=1
+	fi
+	if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] ||
+	   [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
+		echo "**** FAIL: df free($DFFREE) mismatch OST free($BKFREE)"
+		rc=2
+	fi
+	if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] ||
+	   [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
+		echo "**** FAIL: df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
+		rc=3
+	fi
 
 	$UMOUNT $MOUNT2
 	stop fs3ost -f || error "unable to stop OST3"
@@ -3341,6 +3344,7 @@ test_38() { # bug 14222
 	local COUNT=10
 	local SRC="/etc /bin"
 	local FILES=$(find $SRC -type f -mtime +1 | head -n $COUNT)
+
 	log "copying $(echo $FILES | wc -w) files to $DIR/$tdir"
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	tar cf - $FILES | tar xf - -C $DIR/$tdir ||
@@ -3536,6 +3540,7 @@ test_41c() {
 	local rc2=$?
 	wait $pid
 	local rc=$?
+
 	do_facet mds1 "$LCTL set_param fail_loc=0x0"
 	if [ $rc -eq 0 ] && [ $rc2 -ne 0 ]; then
 		echo "1st MDT start succeed"
@@ -3848,12 +3853,12 @@ test_44() { # 16317
 	check_mount || error "check_mount"
 	UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
 	STATS_FOUND=no
-        UUIDS=$(do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.*.uuid")
-        for VAL in $UUIDS; do
-                NID=$(echo $VAL | cut -d= -f1)
-                CLUUID=$(echo $VAL | cut -d= -f2)
-                [ "$UUID" = "$CLUUID" ] && STATS_FOUND=yes && break
-        done
+	UUIDS=$(do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.*.uuid")
+	for VAL in $UUIDS; do
+		NID=$(echo $VAL | cut -d= -f1)
+		CLUUID=$(echo $VAL | cut -d= -f2)
+		[ "$UUID" = "$CLUUID" ] && STATS_FOUND=yes && break
+	done
 	[ "$STATS_FOUND" = "no" ] && error "stats not found for client"
 	cleanup || error "cleanup failed with $?"
 }
@@ -3902,7 +3907,7 @@ test_46a() {
 	start_mds || error "unable to start MDS"
 	#first client should see only one ost
 	start_ost || error "Unable to start OST1"
-        wait_osc_import_state mds ost FULL
+	wait_osc_import_state mds ost FULL
 	#start_client
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 	trap "cleanup_46a $OSTCOUNT" EXIT ERR
@@ -3948,33 +3953,33 @@ test_47() { #17674
 	check_mount || error "check_mount failed"
 	$LCTL set_param ldlm.namespaces.$FSNAME-*-*-*.lru_size=100
 
-        local lru_size=[]
-        local count=0
-        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
-            if echo $ns | grep "MDT[[:digit:]]*"; then
-                continue
-            fi
-            lrs=$(echo $ns | sed 's/.*lru_size=//')
-            lru_size[count]=$lrs
-            let count=count+1
-        done
+	local lru_size=[]
+	local count=0
+	for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+		if echo $ns | grep "MDT[[:digit:]]*"; then
+			continue
+		fi
+		lrs=$(echo $ns | sed 's/.*lru_size=//')
+		lru_size[count]=$lrs
+		let count=count+1
+	done
 
 	facet_failover ost1
 	facet_failover $SINGLEMDS
 	client_up || error "client_up failed"
 
-        count=0
-        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
-            if echo $ns | grep "MDT[[:digit:]]*"; then
-                continue
-            fi
-            lrs=$(echo $ns | sed 's/.*lru_size=//')
-            if ! test "$lrs" -eq "${lru_size[count]}"; then
-                n=$(echo $ns | sed -e 's/ldlm.namespaces.//' -e 's/.lru_size=.*//')
-                error "$n has lost lru_size: $lrs vs. ${lru_size[count]}"
-            fi
-            let count=count+1
-        done
+	count=0
+	for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+		if echo $ns | grep "MDT[[:digit:]]*"; then
+			continue
+		fi
+		lrs=$(echo $ns | sed 's/.*lru_size=//')
+		if ! test "$lrs" -eq "${lru_size[count]}"; then
+			n=$(echo $ns | sed -e 's/ldlm.namespaces.//' -e 's/.lru_size=.*//')
+			error "$n has lost lru_size: $lrs vs. ${lru_size[count]}"
+		fi
+		let count=count+1
+	done
 
 	cleanup || error "cleanup failed with $?"
 }
@@ -4025,6 +4030,7 @@ test_48() { # bz-17636 LU-7473
 	cancel_lru_locks mdc
 	stat $MOUNT/widestripe || error "stat $MOUNT/widestripe failed"
 	local r_count=$(getfacl $MOUNT/widestripe | grep "user:" | wc -l)
+
 	count=$((count + 1)) # for the entry "user::rw-"
 
 	[ $count -eq $r_count ] ||
@@ -4103,7 +4109,7 @@ run_test 49b "check PARAM_SYS_LDLM_TIMEOUT option of mkfs.lustre"
 lazystatfs() {
 	# wait long enough to exceed OBD_STATFS_CACHE_SECONDS = 1
 	sleep 2
-        # Test both statfs and lfs df and fail if either one fails
+	# Test both statfs and lfs df and fail if either one fails
 	multiop_bg_pause $1 f_
 	RC=$?
 	PID=$!
@@ -4164,7 +4170,7 @@ test_50c() {
 
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
-        wait_osc_import_state mds ost DISCONN
+	wait_osc_import_state mds ost DISCONN
 	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
 
 	umount_client $MOUNT || error "Unable to unmount client"
@@ -4243,10 +4249,10 @@ test_50f() {
 	start_mds || error "Unable to start mds"
 	#first client should see only one ost
 	start_ost || error "Unable to start OST1"
-        wait_osc_import_state mds ost FULL
+	wait_osc_import_state mds ost FULL
 
-        start_ost2 || error "Unable to start OST2"
-        wait_osc_import_state mds ost2 FULL
+	start_ost2 || error "Unable to start OST2"
+	wait_osc_import_state mds ost2 FULL
 
 	# Wait for client to detect down OST
 	stop_ost2 || error "Unable to stop OST2"
@@ -4449,11 +4455,11 @@ copy_files_xattrs()
 	do_node $node mkdir -p $dest
 	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
 
-	do_node $node  'tar cf - '$@' | tar xf - -C '$dest';
+	do_node $node  'tar cf - '$*' | tar xf - -C '$dest';
 			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
 	[ $? -eq 0 ] || { error "Unable to tar files"; return 2; }
 
-	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$*' > '$xattrs
 	[ $? -eq 0 ] || { error "Unable to read xattrs"; return 3; }
 }
 
@@ -4469,7 +4475,7 @@ diff_files_xattrs()
 	do_node $node mkdir -p $backup2
 	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
 
-	do_node $node  'tar cf - '$@' | tar xf - -C '$backup2';
+	do_node $node  'tar cf - '$*' | tar xf - -C '$backup2';
 			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
 	[ $? -eq 0 ] || { error "Unable to tar files to diff"; return 2; }
 
@@ -4477,7 +4483,7 @@ diff_files_xattrs()
 	[ $? -eq 0 ] || { error "contents differ"; return 3; }
 
 	local xattrs2=${TMP}/xattrs2
-	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs2
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$*' > '$xattrs2
 	[ $? -eq 0 ] || { error "Unable to read xattrs to diff"; return 4; }
 
 	do_node $node "diff $xattrs $xattrs2"
@@ -4582,30 +4588,30 @@ run_test 52 "check recovering objects from lost+found"
 # Arguments: service name (OST or MDT), facet (e.g., ost1, $SINGLEMDS), and a
 # parameter pattern prefix like 'ost.*.ost'.
 thread_sanity() {
-        local modname=$1
-        local facet=$2
-        local parampat=$3
-        local opts=$4
+	local modname=$1
+	local facet=$2
+	local parampat=$3
+	local opts=$4
 	local basethr=$5
-        local tmin
-        local tmin2
-        local tmax
-        local tmax2
-        local tstarted
-        local paramp
-        local msg="Insane $modname thread counts"
+	local tmin
+	local tmin2
+	local tmax
+	local tmax2
+	local tstarted
+	local paramp
+	local msg="Insane $modname thread counts"
 	local ncpts=$(check_cpt_number $facet)
 	local nthrs
-        shift 4
+	shift 4
 
-        check_mount || return 41
+	check_mount || return 41
 
-        # We need to expand $parampat, but it may match multiple parameters, so
-        # we'll pick the first one
-        if ! paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1); then
-                error "Couldn't expand ${parampat}.threads_min parameter name"
-                return 22
-        fi
+	# We need to expand $parampat, but it may match multiple parameters, so
+	# we'll pick the first one
+	if ! paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1); then
+		error "Couldn't expand ${parampat}.threads_min parameter name"
+		return 22
+	fi
 
 	# Remove the .threads_min part
 	paramp=${paramp%.threads_min}
@@ -4667,6 +4673,7 @@ thread_sanity() {
 	cleanup
 	local oldvalue
 	local newvalue="${opts}=$(expr $basethr \* $ncpts)"
+
 	setmodopts -a $modname "$newvalue" oldvalue
 
 	setup
@@ -4735,6 +4742,7 @@ run_test 54b "test llverfs and partial verify of filesystem"
 lov_objid_size()
 {
 	local max_ost_index=$1
+
 	echo -n $(((max_ost_index + 1) * 8))
 }
 
@@ -4945,7 +4953,7 @@ test_57b() {
 run_test 57b "initial registration from servicenode should not fail"
 
 count_osts() {
-        do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l
+	do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l
 }
 
 test_58() { # bug 22658
@@ -8900,6 +8908,7 @@ test_115() {
 	stopall
 
 	local saved_flakey=${FLAKEY}
+
 	stack_trap "FLAKEY=$saved_flakey" EXIT
 	FLAKEY=false
 
@@ -8914,12 +8923,14 @@ test_115() {
 	# partition that can store 2B inodes
 	do_facet $SINGLEMDS "mkdir -p $TMP/$tdir"
 	local mdsimgname=$TMP/$tdir/lustre-mdt
+
 	do_facet $SINGLEMDS "rm -f $mdsimgname"
 	do_facet $SINGLEMDS "touch $mdsimgname"
 	trap cleanup_115 RETURN EXIT
 	do_facet $SINGLEMDS "$TRUNCATE $mdsimgname $IMAGESIZE" ||
 		skip "Backend FS doesn't support sparse files"
 	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
+
 	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
 
 	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1))	 \
@@ -8944,6 +8955,7 @@ test_115() {
 	# attrs from 1 to 16 go to block, 17th - to inode
 	for i in {1..17}; do
 		local nm="trusted.ea$i"
+
 		setfattr -n $nm -v $(printf "xattr%0250d" $i) $DIR/$tdir/$tfile
 	done
 
@@ -9379,7 +9391,7 @@ test_123af() { #LU-13609
 		fi
 		orig_clist=($(do_facet $facet $LCTL $cmd | awk '{ print $2 }'))
 		orig_count=${#orig_clist[@]}
-		echo "orig_clist: ${orig_clist[@]}"
+		echo "orig_clist: ${orig_clist[*]}"
 
 		#define OBD_FAIL_CATLIST 0x131b
 		#fetch to llog records from the second one
@@ -9387,7 +9399,7 @@ test_123af() { #LU-13609
 
 		new_clist=($(do_facet $facet $LCTL $cmd | awk '{ print $2 }'))
 		new_count=${#new_clist[@]}
-		echo "new_clist: ${new_clist[@]}"
+		echo "new_clist: ${new_clist[*]}"
 
 		[ $new_count -eq $((orig_count - 1)) ] ||
 			error "$new_count != $orig_count - 1"
@@ -9437,12 +9449,14 @@ test_123F() {
 
 	[ -d $MOUNT/.lustre ] || setup
 	local yaml_file="$TMP/$tfile.yaml"
+
 	do_facet mgs rm "$yaml_file"
 	local cfgfiles=$(do_facet mgs "lctl --device MGS llog_catlist" |
 			 sed 's/config_log://')
 
 	# set jobid_var to a different value for test
 	local orig_val=$(do_facet mgs $LCTL get_param jobid_var)
+
 	do_facet mgs $LCTL set_param -P jobid_var="TESTNAME"
 
 	for i in $cfgfiles params; do
@@ -9461,6 +9475,7 @@ test_123F() {
 	do_facet mgs "lctl set_param -F $yaml_file"
 
 	local set_val=$(do_facet mgs $LCTL get_param jobid_var)
+
 	do_facet mgs $LCTL set_param -P $orig_val
 
 	[ $set_val == "jobid_var=TESTNAME" ] ||
@@ -9492,6 +9507,7 @@ test_124()
 	fi
 	local nid=$(do_facet mds2 $LCTL list_nids | head -1)
 	local failover_nid=$(do_node $mds2failover_HOST $LCTL list_nids | head -1)
+
 	do_facet mgs $LCTL replace_nids $FSNAME-MDT0001 $nid:$failover_nid ||
 		error "replace_nids execution error"
 
@@ -9555,6 +9571,7 @@ check_slaves_max_sectors_kb()
 
 	local slave max_sectors new_max_sectors max_hw_sectors path
 	local rc=0
+
 	for slave in ${slave_devices}; do
 		path="/dev/${slave}"
 		! is_blkdev ${facet} ${path} && continue
