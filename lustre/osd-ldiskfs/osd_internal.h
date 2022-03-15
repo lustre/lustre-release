@@ -201,12 +201,12 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 struct osd_inconsistent_item {
 	/* link into lustre_scrub::os_inconsistent_items,
 	 * protected by lustre_scrub::os_lock. */
-	struct list_head       oii_list;
+	struct list_head	oii_list;
 
 	/* The right FID <=> ino#/gen mapping. */
-	struct osd_idmap_cache oii_cache;
+	struct osd_idmap_cache	oii_cache;
 
-	unsigned int	       oii_insert:1; /* insert or update mapping. */
+	unsigned int		oii_insert:1; /* insert or update mapping. */
 };
 
 struct osd_otable_cache {
@@ -861,10 +861,10 @@ void osd_scrub_stop(struct osd_device *dev);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 		    bool restored);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
-int osd_oii_insert(struct osd_device *dev, const struct lu_fid *fid,
-		   struct osd_inode_id *id, int insert);
-int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
-		   struct osd_inode_id *id);
+int osd_scrub_oi_insert(struct osd_device *dev, const struct lu_fid *fid,
+			 struct osd_inode_id *id, int insert);
+void osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
+			    const struct lu_fid *fid);
 void osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
 struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,

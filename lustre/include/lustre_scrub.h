@@ -264,6 +264,8 @@ struct lustre_scrub {
 
 	struct task_struct     *os_task;
 	struct list_head	os_inconsistent_items;
+	/* once inconsistent mapping can't be fixed, put into this list */
+	struct list_head	os_stale_items;
 
 	/* write lock for scrub prep/update/post/checkpoint,
 	 * read lock for scrub dump. */

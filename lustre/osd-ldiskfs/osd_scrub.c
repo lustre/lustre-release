@@ -51,6 +51,126 @@
 
 #define OSD_OTABLE_MAX_HASH		0x00000000ffffffffULL
 
+/* high priority inconsistent items list APIs */
+#define SCRUB_BAD_OIMAP_DECAY_INTERVAL	60
+
+/**
+ * Add mapping into scrub.os_inconsistent_item list, and the OI scrub thread
+ * will fix them in priority.
+ */
+int osd_scrub_oi_insert(struct osd_device *dev, const struct lu_fid *fid,
+			struct osd_inode_id *id, int insert)
+{
+	struct osd_inconsistent_item *oii;
+	struct osd_scrub *oscrub = &dev->od_scrub;
+	struct lustre_scrub *lscrub = &oscrub->os_scrub;
+	int wakeup = 0;
+
+	ENTRY;
+
+	OBD_ALLOC_PTR(oii);
+	if (unlikely(oii == NULL))
+		RETURN(-ENOMEM);
+
+	INIT_LIST_HEAD(&oii->oii_list);
+	oii->oii_cache.oic_fid = *fid;
+	oii->oii_cache.oic_lid = *id;
+	oii->oii_cache.oic_dev = dev;
+	oii->oii_insert = insert;
+
+	spin_lock(&lscrub->os_lock);
+	if (lscrub->os_partial_scan) {
+		__u64 now = ktime_get_real_seconds();
+
+		/* If there haven't been errors in a long time,
+		 * decay old count until either the errors are
+		 * gone or we reach the current interval.
+		 */
+		while (unlikely(oscrub->os_bad_oimap_count > 0 &&
+				oscrub->os_bad_oimap_time +
+				SCRUB_BAD_OIMAP_DECAY_INTERVAL < now)) {
+			oscrub->os_bad_oimap_count >>= 1;
+			oscrub->os_bad_oimap_time +=
+				SCRUB_BAD_OIMAP_DECAY_INTERVAL;
+		}
+
+		oscrub->os_bad_oimap_time = now;
+		if (++oscrub->os_bad_oimap_count >
+		    dev->od_full_scrub_threshold_rate)
+			lscrub->os_full_scrub = 1;
+	}
+
+	if (list_empty(&lscrub->os_inconsistent_items)) {
+		wakeup = 1;
+	} else {
+		struct osd_inconsistent_item *tmp;
+
+		list_for_each_entry(tmp, &lscrub->os_inconsistent_items,
+				    oii_list) {
+			if (lu_fid_eq(fid, &tmp->oii_cache.oic_fid)) {
+				spin_unlock(&lscrub->os_lock);
+				OBD_FREE_PTR(oii);
+				RETURN(0);
+			}
+		}
+	}
+
+	list_add_tail(&oii->oii_list, &lscrub->os_inconsistent_items);
+	spin_unlock(&lscrub->os_lock);
+
+	if (wakeup)
+		wake_up_var(lscrub);
+
+	RETURN(0);
+}
+
+/* if item could not be repaired, add it to the os_stale_items list to avoid
+ * triggering scrub repeatedly.
+ */
+static inline void osd_scrub_oi_mark_stale(struct lustre_scrub *scrub,
+					   struct osd_inconsistent_item *oii)
+{
+	spin_lock(&scrub->os_lock);
+	list_move_tail(&oii->oii_list, &scrub->os_stale_items);
+	spin_unlock(&scrub->os_lock);
+}
+
+/* OI of \a fid may be marked stale, and if its mapping is scrubbed, remove it
+ * from os_stale_items list.
+ */
+void osd_scrub_oi_resurrect(struct lustre_scrub *scrub,
+			    const struct lu_fid *fid)
+{
+	struct osd_inconsistent_item *oii;
+
+	if (list_empty(&scrub->os_stale_items))
+		return;
+
+	spin_lock(&scrub->os_lock);
+	list_for_each_entry(oii, &scrub->os_stale_items, oii_list) {
+		if (lu_fid_eq(fid, &oii->oii_cache.oic_fid)) {
+			list_del(&oii->oii_list);
+			OBD_FREE_PTR(oii);
+			break;
+		}
+	}
+	spin_unlock(&scrub->os_lock);
+}
+
+static void osd_scrub_ois_fini(struct lustre_scrub *scrub,
+			       struct list_head *list)
+{
+	struct osd_inconsistent_item *oii;
+	struct osd_inconsistent_item *tmp;
+
+	spin_lock(&scrub->os_lock);
+	list_for_each_entry_safe(oii, tmp, list, oii_list) {
+		list_del(&oii->oii_list);
+		OBD_FREE_PTR(oii);
+	}
+	spin_unlock(&scrub->os_lock);
+}
+
 static inline int osd_scrub_has_window(struct lustre_scrub *scrub,
 				       struct osd_otable_cache *ooc)
 {
@@ -270,9 +390,12 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 	if (val < 0)
 		GOTO(out, rc = val);
 
-	if (scrub->os_in_prior)
+	if (scrub->os_in_prior) {
 		oii = list_entry(oic, struct osd_inconsistent_item,
 				 oii_cache);
+		if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE))
+			GOTO(out, rc = -ESTALE);
+	}
 
 	if (lid->oii_ino < sf->sf_pos_latest_start && oii == NULL)
 		GOTO(out, rc = 0);
@@ -405,13 +528,38 @@ out:
 		if (sf->sf_pos_first_inconsistent == 0 ||
 		    sf->sf_pos_first_inconsistent > lid->oii_ino)
 			sf->sf_pos_first_inconsistent = lid->oii_ino;
+		if (oii) {
+			osd_scrub_oi_mark_stale(scrub, oii);
+			CDEBUG(D_LFSCK,
+			       "%s: fix inconsistent OI "DFID" -> %u/%u failed: %d\n",
+			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
+			       lid->oii_gen, rc);
+		}
 	} else {
+		if (!oii && !OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_STALE)) {
+			osd_scrub_oi_resurrect(scrub, fid);
+			CDEBUG(D_LFSCK,
+			       "%s: resurrect OI "DFID" -> %u/%u\n",
+			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
+			       lid->oii_gen);
+		} else if (oii) {
+			/* release fixed inconsistent item */
+			CDEBUG(D_LFSCK,
+			       "%s: inconsistent OI "DFID" -> %u/%u fixed\n",
+			       osd_dev2name(dev), PFID(fid), lid->oii_ino,
+			       lid->oii_gen);
+			spin_lock(&scrub->os_lock);
+			list_del_init(&oii->oii_list);
+			spin_unlock(&scrub->os_lock);
+
+			OBD_FREE_PTR(oii);
+		}
 		rc = 0;
 	}
 
 	/* There may be conflict unlink during the OI scrub,
 	 * if happend, then remove the new added OI mapping. */
-	if (ops == DTO_INDEX_INSERT && inode != NULL && !IS_ERR(inode) &&
+	if (ops == DTO_INDEX_INSERT && !IS_ERR_OR_NULL(inode) &&
 	    unlikely(ldiskfs_test_inode_state(inode,
 					      LDISKFS_STATE_LUSTRE_DESTROY)))
 		osd_scrub_refresh_mapping(info, dev, fid, lid,
@@ -419,19 +567,11 @@ out:
 				(val == SCRUB_NEXT_OSTOBJ ||
 				 val == SCRUB_NEXT_OSTOBJ_OLD) ?
 				OI_KNOWN_ON_OST : 0, NULL);
+
 	up_write(&scrub->os_rwsem);
 
-	if (!IS_ERR(inode))
+	if (!IS_ERR_OR_NULL(inode))
 		iput(inode);
-
-	if (oii != NULL) {
-		spin_lock(&scrub->os_lock);
-		if (likely(!list_empty(&oii->oii_list)))
-			list_del(&oii->oii_list);
-		spin_unlock(&scrub->os_lock);
-
-		OBD_FREE_PTR(oii);
-	}
 
 	RETURN(sf->sf_param & SP_FAILOUT ? rc : 0);
 }
@@ -1200,15 +1340,7 @@ post:
 	       osd_scrub2name(scrub), scrub->os_pos_current, rc);
 
 out:
-	while (!list_empty(&scrub->os_inconsistent_items)) {
-		struct osd_inconsistent_item *oii;
-
-		oii = list_entry(scrub->os_inconsistent_items.next,
-				 struct osd_inconsistent_item, oii_list);
-		list_del_init(&oii->oii_list);
-		OBD_FREE_PTR(oii);
-	}
-
+	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);
 	lu_env_fini(&env);
 
 noenv:
@@ -2449,6 +2581,9 @@ void osd_scrub_stop(struct osd_device *dev)
 	spin_unlock(&scrub->os_lock);
 	scrub_stop(scrub);
 	mutex_unlock(&dev->od_otable_mutex);
+
+	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);
+	osd_scrub_ois_fini(scrub, &scrub->os_stale_items);
 }
 
 /* OI scrub setup/cleanup */
@@ -2482,6 +2617,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	init_rwsem(&scrub->os_rwsem);
 	spin_lock_init(&scrub->os_lock);
 	INIT_LIST_HEAD(&scrub->os_inconsistent_items);
+	INIT_LIST_HEAD(&scrub->os_stale_items);
 	scrub->os_name = osd_name(dev);
 	scrub->os_auto_scrub_interval = interval;
 
@@ -2912,87 +3048,6 @@ const struct dt_index_operations osd_otable_ops = {
 		.key_rec  = osd_otable_it_key_rec,
 	}
 };
-
-/* high priority inconsistent items list APIs */
-
-#define SCRUB_BAD_OIMAP_DECAY_INTERVAL	60
-
-int osd_oii_insert(struct osd_device *dev, const struct lu_fid *fid,
-		   struct osd_inode_id *id, int insert)
-{
-	struct osd_inconsistent_item *oii;
-	struct osd_scrub *oscrub = &dev->od_scrub;
-	struct lustre_scrub *lscrub = &oscrub->os_scrub;
-	int wakeup = 0;
-	ENTRY;
-
-	OBD_ALLOC_PTR(oii);
-	if (unlikely(oii == NULL))
-		RETURN(-ENOMEM);
-
-	INIT_LIST_HEAD(&oii->oii_list);
-	oii->oii_cache.oic_fid = *fid;
-	oii->oii_cache.oic_lid = *id;
-	oii->oii_cache.oic_dev = dev;
-	oii->oii_insert = insert;
-
-	spin_lock(&lscrub->os_lock);
-	if (lscrub->os_partial_scan) {
-		__u64 now = ktime_get_real_seconds();
-
-		/* If there haven't been errors in a long time,
-		 * decay old count until either the errors are
-		 * gone or we reach the current interval. */
-		while (unlikely(oscrub->os_bad_oimap_count > 0 &&
-				oscrub->os_bad_oimap_time +
-				SCRUB_BAD_OIMAP_DECAY_INTERVAL < now)) {
-			oscrub->os_bad_oimap_count >>= 1;
-			oscrub->os_bad_oimap_time +=
-				SCRUB_BAD_OIMAP_DECAY_INTERVAL;
-		}
-
-		oscrub->os_bad_oimap_time = now;
-		if (++oscrub->os_bad_oimap_count >
-		    dev->od_full_scrub_threshold_rate)
-			lscrub->os_full_scrub = 1;
-	}
-
-	if (!lscrub->os_running) {
-		spin_unlock(&lscrub->os_lock);
-		OBD_FREE_PTR(oii);
-		RETURN(-EAGAIN);
-	}
-
-	if (list_empty(&lscrub->os_inconsistent_items))
-		wakeup = 1;
-	list_add_tail(&oii->oii_list, &lscrub->os_inconsistent_items);
-	spin_unlock(&lscrub->os_lock);
-
-	if (wakeup)
-		wake_up_var(lscrub);
-
-	RETURN(0);
-}
-
-int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
-		   struct osd_inode_id *id)
-{
-	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
-	struct osd_inconsistent_item *oii;
-	ENTRY;
-
-	spin_lock(&scrub->os_lock);
-	list_for_each_entry(oii, &scrub->os_inconsistent_items, oii_list) {
-		if (lu_fid_eq(fid, &oii->oii_cache.oic_fid)) {
-			*id = oii->oii_cache.oic_lid;
-			spin_unlock(&scrub->os_lock);
-			RETURN(0);
-		}
-	}
-	spin_unlock(&scrub->os_lock);
-
-	RETURN(-ENOENT);
-}
 
 void osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 {

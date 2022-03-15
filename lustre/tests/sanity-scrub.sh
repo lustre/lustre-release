@@ -1382,6 +1382,38 @@ test_19() {
 }
 run_test 19 "LFSCK can fix multiple linked files on OST"
 
+test_20() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
+
+	check_mount_and_prep
+
+	rm -rf $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	#define OBD_FAIL_OSD_FID_MAPPING	0x193
+	do_facet mds1 $LCTL set_param fail_loc=0x193
+	chmod 757 $DIR/$tdir || error "chmod $tdir failed"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MOUNT_OPTS_NOSCRUB
+	scrub_enable_auto
+
+	local sec
+
+	#define OBD_FAIL_OSD_SCRUB_IRREPARABLE	0x19f
+	do_facet mds1 $LCTL set_param fail_loc=0x19f
+	stat $DIR/$tdir && error "stat $tdir should fail"
+	sec=$(scrub_status 1 | awk '/^time_since_latest_start/ { print $2 }')
+	echo "OI scrub was triggerred $sec seconds ago"
+
+	sleep 5
+	# OI mappings are irreparable, which shouldn't trigger scrub again
+	stat $DIR/$tdir && error "stat $tdir should fail"
+	sec=$(scrub_status 1 | awk '/^time_since_latest_start/ { print $2 }')
+	echo "OI scrub was triggerred $sec seconds ago"
+	(( sec >= 5 )) || error "OI scrub retriggered"
+}
+run_test 20 "Don't trigger OI scrub for irreparable oi repeatedly"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}
