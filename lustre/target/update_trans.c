@@ -1296,6 +1296,9 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 	struct sub_thandle *st;
 	ENTRY;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_TXN_NO_CANCEL))
+		RETURN(0);
+
 	top_multiple_thandle_dump(tmt, D_INFO);
 	/* Cancel update logs on other MDTs */
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {

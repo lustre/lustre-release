@@ -1028,6 +1028,39 @@ test_28() {
 }
 run_test 28 "lock replay should be ordered: waiting after granted"
 
+test_32() {
+	(( $MDSCOUNT < 2 )) && skip_env "needs >= 2 MDTs"
+
+	# inject a gap with 10th transaction
+#define OBD_FAIL_LLOG_ADD_GAP                      0x131d
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0000131d fail_val=10
+	for ((i=0; i < 20; i++)); do
+		$LFS setdirstripe -i1 $DIR/$tdir-$i ||
+			error "can't mkdir $DIR/$tdir-$i"
+	done
+
+	# prevent update llog cancellation, so next boot MDS has
+	# process the update llog with gap injected
+#define OBD_FAIL_TGT_TXN_NO_CANCEL      0x726
+	$LCTL set_param fail_loc=0x726
+
+	stop mds2
+	stop mds1
+
+	$LCTL set_param fail_loc=0
+
+	mount_facet mds1
+	mount_facet mds2
+
+	$LFS df $DIR
+
+	local testid=$(echo $TESTNAME | tr '_' ' ')
+	dmesg | tac | sed "/$testid/,$ d" | grep "This client was evicted" &&
+		error "client got evicted due to aborted recovery"
+	return 0
+}
+run_test 32 "gap in update llog shouldn't break recovery"
+
 complete $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

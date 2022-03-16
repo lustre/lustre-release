@@ -493,6 +493,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_TGT_RECOVERY_REQ_RACE	 0x721
 #define OBD_FAIL_TGT_REPLY_DATA_RACE	 0x722
 #define OBD_FAIL_TGT_NO_GRANT		 0x725
+#define OBD_FAIL_TGT_TXN_NO_CANCEL	 0x726
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -563,6 +564,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLOG_PURGE_DELAY		    0x1318
 #define OBD_FAIL_CATLIST			    0x131b
 #define OBD_FAIL_LLOG_PAUSE_AFTER_PAD               0x131c
+#define OBD_FAIL_LLOG_ADD_GAP			    0x131d
 
 #define OBD_FAIL_LLITE                              0x1400
 #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE             0x1401

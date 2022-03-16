@@ -663,23 +663,15 @@ repeat:
 				continue;
 			}
 
-			if (rec->lrh_index != index) {
-				/*
-				 * the last time we couldn't parse the block due
-				 * to corruption, thus has no idea about the
-				 * next index, take it from the block, once.
-				 */
-				if (refresh_idx) {
-					refresh_idx = false;
-					index = rec->lrh_index;
-				} else {
-					CERROR("%s: "DFID" Invalid record: index"
-					       " %u but expected %u\n",
-					       loghandle2name(loghandle),
-					       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
-					       rec->lrh_index, index);
-					GOTO(out, rc = -ERANGE);
-				}
+			if (rec->lrh_index > index) {
+				/* the record itself looks good, but we met a
+				 * gap which can be result of old bugs, just
+				 * keep going */
+				CERROR("%s: "DFID" index %u, expected %u\n",
+				       loghandle2name(loghandle),
+				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
+				       rec->lrh_index, index);
+				index = rec->lrh_index;
 			}
 
 			CDEBUG(D_OTHER,

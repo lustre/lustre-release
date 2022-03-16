@@ -604,6 +604,8 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	down_write(&loghandle->lgh_last_sem);
 	/* increment the last_idx along with llh_tail index, they should
 	 * be equal for a llog lifetime */
+	if (OBD_FAIL_CHECK(OBD_FAIL_LLOG_ADD_GAP) && --cfs_fail_val == 0)
+		loghandle->lgh_last_idx++;
 	loghandle->lgh_last_idx++;
 	index = loghandle->lgh_last_idx;
 	LLOG_HDR_TAIL(llh)->lrt_index = index;
