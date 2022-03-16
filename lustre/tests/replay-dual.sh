@@ -8,7 +8,7 @@ LR_READER=${LR_READER:-"$LUSTRE/utils/lr_reader"}
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
@@ -83,172 +83,172 @@ if [ -f "$LU482_FAILED" ]; then
 	do_nodes $CLIENTS umount -f $MOUNT2 || true
 	do_nodes $CLIENTS umount -f $MOUNT || true
 	# copied from stopall, but avoid the MDS recovery
-    for num in `seq $OSTCOUNT`; do
-        stop ost$num -f
-        rm -f $TMP/ost${num}active
-    done
-    if ! combined_mgs_mds ; then
-        stop mgs
-    fi
+	for num in `seq $OSTCOUNT`; do
+		stop ost$num -f
+		rm -f $TMP/ost${num}active
+	done
+	if ! combined_mgs_mds ; then
+		stop mgs
+	fi
 
 	exit_status
 fi
 
 test_0b() {
-    replay_barrier $SINGLEMDS
-    touch $MOUNT2/$tfile
-    touch $MOUNT1/$tfile-2
-    umount $MOUNT2
-    facet_failover $SINGLEMDS
-    umount -f $MOUNT1
-    zconf_mount `hostname` $MOUNT1 || error "mount1 fais"
-    zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
-    # it is uncertain if file-2 exists or not, remove it if it does
-    checkstat $MOUNT1/$tfile-2 && rm $MOUNT1/$tfile-2
-    checkstat $MOUNT2/$tfile && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	touch $MOUNT2/$tfile
+	touch $MOUNT1/$tfile-2
+	umount $MOUNT2
+	facet_failover $SINGLEMDS
+	umount -f $MOUNT1
+	zconf_mount `hostname` $MOUNT1 || error "mount1 fais"
+	zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
+	# it is uncertain if file-2 exists or not, remove it if it does
+	checkstat $MOUNT1/$tfile-2 && rm $MOUNT1/$tfile-2
+	checkstat $MOUNT2/$tfile && return 2
+	return 0
 }
 run_test 0b "lost client during waiting for next transno"
 
 test_1() {
-    touch $MOUNT1/a
-    replay_barrier $SINGLEMDS
-    touch $MOUNT2/b
+	touch $MOUNT1/a
+	replay_barrier $SINGLEMDS
+	touch $MOUNT2/b
 
-    fail $SINGLEMDS
-    checkstat $MOUNT2/a || return 1
-    checkstat $MOUNT1/b || return 2
-    rm $MOUNT2/a $MOUNT1/b
-    checkstat $MOUNT1/a && return 3
-    checkstat $MOUNT2/b && return 4
-    return 0
+	fail $SINGLEMDS
+	checkstat $MOUNT2/a || return 1
+	checkstat $MOUNT1/b || return 2
+	rm $MOUNT2/a $MOUNT1/b
+	checkstat $MOUNT1/a && return 3
+	checkstat $MOUNT2/b && return 4
+	return 0
 }
 
 run_test 1 "|X| simple create"
 
 
 test_2() {
-    replay_barrier $SINGLEMDS
-    mkdir $MOUNT1/adir
+	replay_barrier $SINGLEMDS
+	mkdir $MOUNT1/adir
 
-    fail $SINGLEMDS
-    checkstat $MOUNT2/adir || return 1
-    rmdir $MOUNT2/adir
-    checkstat $MOUNT2/adir && return 2
-    return 0
+	fail $SINGLEMDS
+	checkstat $MOUNT2/adir || return 1
+	rmdir $MOUNT2/adir
+	checkstat $MOUNT2/adir && return 2
+	return 0
 }
 run_test 2 "|X| mkdir adir"
 
 test_3() {
-    replay_barrier $SINGLEMDS
-    mkdir $MOUNT1/adir
-    mkdir $MOUNT2/adir/bdir
+	replay_barrier $SINGLEMDS
+	mkdir $MOUNT1/adir
+	mkdir $MOUNT2/adir/bdir
 
-    fail $SINGLEMDS
-    checkstat $MOUNT2/adir      || return 1
-    checkstat $MOUNT1/adir/bdir || return 2
-    rmdir $MOUNT2/adir/bdir $MOUNT1/adir
-    checkstat $MOUNT1/adir      && return 3
-    checkstat $MOUNT2/adir/bdir && return 4
-    return 0
+	fail $SINGLEMDS
+	checkstat $MOUNT2/adir      || return 1
+	checkstat $MOUNT1/adir/bdir || return 2
+	rmdir $MOUNT2/adir/bdir $MOUNT1/adir
+	checkstat $MOUNT1/adir      && return 3
+	checkstat $MOUNT2/adir/bdir && return 4
+	return 0
 }
 run_test 3 "|X| mkdir adir, mkdir adir/bdir "
 
 test_4() {
-    mkdir $MOUNT1/adir
-    replay_barrier $SINGLEMDS
-    mkdir $MOUNT1/adir  && return 1
-    mkdir $MOUNT2/adir/bdir
+	mkdir $MOUNT1/adir
+	replay_barrier $SINGLEMDS
+	mkdir $MOUNT1/adir  && return 1
+	mkdir $MOUNT2/adir/bdir
 
-    fail $SINGLEMDS
-    checkstat $MOUNT2/adir      || return 2
-    checkstat $MOUNT1/adir/bdir || return 3
+	fail $SINGLEMDS
+	checkstat $MOUNT2/adir      || return 2
+	checkstat $MOUNT1/adir/bdir || return 3
 
-    rmdir $MOUNT2/adir/bdir $MOUNT1/adir
-    checkstat $MOUNT1/adir      && return 4
-    checkstat $MOUNT2/adir/bdir && return 5
-    return 0
+	rmdir $MOUNT2/adir/bdir $MOUNT1/adir
+	checkstat $MOUNT1/adir      && return 4
+	checkstat $MOUNT2/adir/bdir && return 5
+	return 0
 }
 run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
 
 
 test_5() {
-    # multiclient version of replay_single.sh/test_8
-    mcreate $MOUNT1/a
-    multiop_bg_pause $MOUNT2/a o_tSc || return  1
-    pid=$!
-    rm -f $MOUNT1/a
-    replay_barrier $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
+	# multiclient version of replay_single.sh/test_8
+	mcreate $MOUNT1/a
+	multiop_bg_pause $MOUNT2/a o_tSc || return  1
+	pid=$!
+	rm -f $MOUNT1/a
+	replay_barrier $SINGLEMDS
+	kill -USR1 $pid
+	wait $pid || return 1
 
-    fail $SINGLEMDS
-    [ -e $MOUNT2/a ] && return 2
-    return 0
+	fail $SINGLEMDS
+	[ -e $MOUNT2/a ] && return 2
+	return 0
 }
 run_test 5 "open, unlink |X| close"
 
 
 test_6() {
-    mcreate $MOUNT1/a
-    multiop_bg_pause $MOUNT2/a o_c || return 1
-    pid1=$!
-    multiop_bg_pause $MOUNT1/a o_c || return 1
-    pid2=$!
-    rm -f $MOUNT1/a
-    replay_barrier $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 1
+	mcreate $MOUNT1/a
+	multiop_bg_pause $MOUNT2/a o_c || return 1
+	pid1=$!
+	multiop_bg_pause $MOUNT1/a o_c || return 1
+	pid2=$!
+	rm -f $MOUNT1/a
+	replay_barrier $SINGLEMDS
+	kill -USR1 $pid1
+	wait $pid1 || return 1
 
-    fail $SINGLEMDS
-    kill -USR1 $pid2
-    wait $pid2 || return 1
-    [ -e $MOUNT2/a ] && return 2
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid2
+	wait $pid2 || return 1
+	[ -e $MOUNT2/a ] && return 2
+	return 0
 }
 run_test 6 "open1, open2, unlink |X| close1 [fail $SINGLEMDS] close2"
 
 test_8() {
-    replay_barrier $SINGLEMDS
-    drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
-    fail $SINGLEMDS
-    checkstat $MOUNT2/$tfile || return 2
-    rm $MOUNT1/$tfile || return 3
+	replay_barrier $SINGLEMDS
+	drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
+	fail $SINGLEMDS
+	checkstat $MOUNT2/$tfile || return 2
+	rm $MOUNT1/$tfile || return 3
 
-    return 0
+	return 0
 }
 run_test 8 "replay of resent request"
 
 test_9() {
-    replay_barrier $SINGLEMDS
-    mcreate $MOUNT1/$tfile-1
-    mcreate $MOUNT2/$tfile-2
-    # drop first reint reply
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x80000119
-    fail $SINGLEMDS
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
+	replay_barrier $SINGLEMDS
+	mcreate $MOUNT1/$tfile-1
+	mcreate $MOUNT2/$tfile-2
+	# drop first reint reply
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000119
+	fail $SINGLEMDS
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
 
-    rm $MOUNT1/$tfile-[1,2] || return 1
+	rm $MOUNT1/$tfile-[1,2] || return 1
 
-    return 0
+	return 0
 }
 run_test 9 "resending a replayed create"
 
 test_10() {
-    mcreate $MOUNT1/$tfile-1
-    replay_barrier $SINGLEMDS
-    munlink $MOUNT1/$tfile-1
-    mcreate $MOUNT2/$tfile-2
-    # drop first reint reply
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x80000119
-    fail $SINGLEMDS
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
+	mcreate $MOUNT1/$tfile-1
+	replay_barrier $SINGLEMDS
+	munlink $MOUNT1/$tfile-1
+	mcreate $MOUNT2/$tfile-2
+	# drop first reint reply
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000119
+	fail $SINGLEMDS
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
 
-    checkstat $MOUNT1/$tfile-1 && return 1
-    checkstat $MOUNT1/$tfile-2 || return 2
-    rm $MOUNT1/$tfile-2
+	checkstat $MOUNT1/$tfile-1 && return 1
+	checkstat $MOUNT1/$tfile-2 || return 2
+	rm $MOUNT1/$tfile-2
 
-    return 0
+	return 0
 }
 run_test 10 "resending a replayed unlink"
 
@@ -276,47 +276,47 @@ test_11() {
 run_test 11 "both clients timeout during replay"
 
 test_12() {
-    replay_barrier $SINGLEMDS
+	replay_barrier $SINGLEMDS
 
-    multiop_bg_pause $DIR/$tfile mo_c || return 1
-    MULTIPID=$!
+	multiop_bg_pause $DIR/$tfile mo_c || return 1
+	MULTIPID=$!
 
 #define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x80000302
-    facet_failover $SINGLEMDS
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
-    clients_up || return 1
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000302
+	facet_failover $SINGLEMDS
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	clients_up || return 1
 
-    ls $DIR/$tfile
-    kill -USR1 $MULTIPID || return 3
-    wait $MULTIPID || return 4
-    $CHECKSTAT -t file $DIR/$tfile || return 2
-    rm $DIR/$tfile
+	ls $DIR/$tfile
+	kill -USR1 $MULTIPID || return 3
+	wait $MULTIPID || return 4
+	$CHECKSTAT -t file $DIR/$tfile || return 2
+	rm $DIR/$tfile
 
-    return 0
+	return 0
 }
 run_test 12 "open resend timeout"
 
 test_13() {
-    multiop_bg_pause $DIR/$tfile mo_c || return 1
-    MULTIPID=$!
+	multiop_bg_pause $DIR/$tfile mo_c || return 1
+	MULTIPID=$!
 
-    replay_barrier $SINGLEMDS
+	replay_barrier $SINGLEMDS
 
-    kill -USR1 $MULTIPID || return 3
-    wait $MULTIPID || return 4
+	kill -USR1 $MULTIPID || return 3
+	wait $MULTIPID || return 4
 
-    # drop close
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x80000115
-    facet_failover $SINGLEMDS
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
-    clients_up || return 1
+	# drop close
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000115
+	facet_failover $SINGLEMDS
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	clients_up || return 1
 
-    ls $DIR/$tfile
-    $CHECKSTAT -t file $DIR/$tfile || return 2
-    rm $DIR/$tfile
+	ls $DIR/$tfile
+	$CHECKSTAT -t file $DIR/$tfile || return 2
+	rm $DIR/$tfile
 
-    return 0
+	return 0
 }
 run_test 13 "close resend timeout"
 
@@ -361,71 +361,71 @@ test_14b() {
 run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
 test_15a() { # was test_15
-    replay_barrier $SINGLEMDS
-    createmany -o $MOUNT1/$tfile- 25
-    createmany -o $MOUNT2/$tfile-2- 1
-    umount $MOUNT2
+	replay_barrier $SINGLEMDS
+	createmany -o $MOUNT1/$tfile- 25
+	createmany -o $MOUNT2/$tfile-2- 1
+	umount $MOUNT2
 
-    fail $SINGLEMDS
+	fail $SINGLEMDS
 
-    unlinkmany $MOUNT1/$tfile- 25 || return 2
-    [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
+	unlinkmany $MOUNT1/$tfile- 25 || return 2
+	[ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
+	zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	return 0
 }
 run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 
 test_15c() {
-    replay_barrier $SINGLEMDS
-    for ((i = 0; i < 2000; i++)); do
-        echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
-    done
-    umount $MOUNT2
+	replay_barrier $SINGLEMDS
+	for ((i = 0; i < 2000; i++)); do
+		echo "data" > "$MOUNT2/${tfile}-$i" ||
+			error "create ${tfile}-$i failed"
+	done
+	umount $MOUNT2
 
-    fail $SINGLEMDS
+	fail $SINGLEMDS
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
+	zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	return 0
 }
 run_test 15c "remove multiple OST orphans"
 
 test_16() {
-    replay_barrier $SINGLEMDS
-    createmany -o $MOUNT1/$tfile- 25
-    createmany -o $MOUNT2/$tfile-2- 1
-    umount $MOUNT2
+	replay_barrier $SINGLEMDS
+	createmany -o $MOUNT1/$tfile- 25
+	createmany -o $MOUNT2/$tfile-2- 1
+	umount $MOUNT2
 
-    facet_failover $SINGLEMDS
-    sleep $TIMEOUT
-    fail $SINGLEMDS
+	facet_failover $SINGLEMDS
+	sleep $TIMEOUT
+	fail $SINGLEMDS
 
-    unlinkmany $MOUNT1/$tfile- 25 || return 2
+	unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
-
+	zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	return 0
 }
 run_test 16 "fail MDS during recovery (3571)"
 
 test_17() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    createmany -o $MOUNT1/$tfile- 25
-    createmany -o $MOUNT2/$tfile-2- 1
+	createmany -o $MOUNT1/$tfile- 25
+	createmany -o $MOUNT2/$tfile-2- 1
 
-    # Make sure the disconnect is lost
-    replay_barrier ost1
-    umount $MOUNT2
+	# Make sure the disconnect is lost
+	replay_barrier ost1
+	umount $MOUNT2
 
-    facet_failover ost1
-    sleep $TIMEOUT
-    fail ost1
+	facet_failover ost1
+	sleep $TIMEOUT
+	fail ost1
 
-    unlinkmany $MOUNT1/$tfile- 25 || return 2
+	unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    return 0
+	zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	return 0
 
 }
 run_test 17 "fail OST during recovery (3571)"
@@ -461,13 +461,13 @@ test_18() { # bug 3822 - evicting client with enqueued lock
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 test_19() { # Bug 10991 - resend of open request does not fail assertion.
-    replay_barrier $SINGLEMDS
-    drop_mdt_ldlm_reply "createmany -o $DIR/$tfile 1" || return 1
-    fail $SINGLEMDS
-    checkstat $DIR2/${tfile}0 || return 2
-    rm $DIR/${tfile}0 || return 3
+	replay_barrier $SINGLEMDS
+	drop_mdt_ldlm_reply "createmany -o $DIR/$tfile 1" || return 1
+	fail $SINGLEMDS
+	checkstat $DIR2/${tfile}0 || return 2
+	rm $DIR/${tfile}0 || return 3
 
-    return 0
+	return 0
 }
 run_test 19 "resend of open request"
 
@@ -500,28 +500,28 @@ run_test 20 "recovery time is not increasing"
 
 # commit on sharing tests
 test_21a() {
-    local param_file=$TMP/$tfile-params
+	local param_file=$TMP/$tfile-params
 
 	save_lustre_params $SINGLEMDS "mdt.*.commit_on_sharing" > $param_file
-    do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=1
-    touch  $MOUNT1/$tfile-1
-    mv  $MOUNT2/$tfile-1 $MOUNT2/$tfile-2
-    mv  $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
-    replay_barrier_nosync $SINGLEMDS
-    umount $MOUNT2
+	do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=1
+	touch  $MOUNT1/$tfile-1
+	mv  $MOUNT2/$tfile-1 $MOUNT2/$tfile-2
+	mv  $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
+	replay_barrier_nosync $SINGLEMDS
+	umount $MOUNT2
 
-    facet_failover $SINGLEMDS
+	facet_failover $SINGLEMDS
 
-    # all renames are replayed
-    unlink  $MOUNT1/$tfile-3 || return 2
+	# all renames are replayed
+	unlink  $MOUNT1/$tfile-3 || return 2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
 
-    do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=0
-    rm -rf $MOUNT1/$tfile-*
-    restore_lustre_params < $param_file
-    rm -f $param_file
-    return 0
+	do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=0
+	rm -rf $MOUNT1/$tfile-*
+	restore_lustre_params < $param_file
+	rm -f $param_file
+	return 0
 }
 run_test 21a "commit on sharing"
 
@@ -1139,7 +1139,7 @@ test_31() {
 	wait $failpid
 	local failed=0
 
-	for pid in ${multiops[@]}; do
+	for pid in "${multiops[@]}"; do
 		wait $pid || ((failed++))
 	done
 	((failed == 0)) || error "$failed multiops failed"
