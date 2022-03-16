@@ -3,7 +3,7 @@ AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
 
 DIST_SUBDIRS = mpi
-DIST_SUBDIRS += lutf
+DIST_SUBDIRS += lutf iabf
 
 noinst_DATA = disk2_4-ldiskfs.tar.bz2 disk2_4-zfs.tar.bz2
 noinst_DATA += disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
@@ -89,18 +89,18 @@ if LIBAIO
 THETESTS += aiocp
 endif
 
+
 if TESTS
+
+SUBDIRS = iabf
+
 if MPITESTS
-SUBDIRS = mpi
+SUBDIRS += mpi
 endif
 
 # Build LUTF only if the packages are available
 if BUILD_LUTF
-if MPITESTS
 SUBDIRS += lutf
-else
-SUBDIRS = lutf
-endif
 endif # BUILD_LUTF
 
 bin_PROGRAMS = mcreate munlink statx

@@ -1,0 +1,66 @@
+Usage: [IABF_OPTIONS...] iabf [INIT] --- A --- B --- [FINI] ---
+
+Initialize, run tasks A and B with various overlaps, and Finalize.
+
+Command lines for INIT, A, B, and FINI are terminated by ---.
+If INIT or FINI is empty then it will be skipped.
+If INIT or FINI fail then we exit immediately with status 1.
+
+For delay = $IABF_DELAY_BEGIN_NS; delay < $IABF_DELAY_END_NS; delay += $IABF_DELAY_STEP_NS
+  Run initializer (INIT).
+  In parallel: Fork, delay *, and exec processes A and B.
+    If delay is negative then delay A by abs(delay) ns.
+    Otherwise delay B by delay ns.
+  Wait for A and B to terminate.
+  Run finilizer (FINI).
+
+To autotune IABF_DELAY_*, omit any or all of these variables and set
+IABF_STEP_COUNT to the desired number of iterations and iabf will run
+tasks A and B $IABF_AUTOTUNE_COUNT (16) times to determine their
+expected elapsed runtimes. It will then choose IABF_DELAY_BEGIN_NS and
+IABF_DELAY_ED_NS to try to arrange as much overlap coverage as
+possible:
+
+     AAAAAAAAAA         delay(A) is approx elapsed(B)
+BBBBB                   delay(B) == 0
+
+   AAAAAAAAAA           delay(A) < elapsed(B)
+BBBBB                   delay(B) == 0
+
+AAAAAAAAAA              delay(A) == 0
+BBBBB                   delay(B) == 0
+
+AAAAAAAAAA              delay(A) == 0
+    BBBBB               delay(B) < elapsed(A)
+
+AAAAAAAAAA              delay(A) == 0
+         BBBBB          delay(B) is approx elapsed(A)
+
+ENVIRONMENT VARIABLES:
+  IABF_DELAY_BEGIN_NS=N
+  IABF_DELAY_END_NS=N
+  IABF_DELAY_STEP_NS=N
+  IABF_AFFINITY='0 1 7'         run task A on CPU 0, task B on CPU 1, main task on CPU 7.
+  IABF_AUTOTUNE_COUNT=COUNT     set autotune count
+  IABF_DEBUG=[01]
+  IABF_STEP_COUNT=COUNT         set number of steps when autotuning
+
+EXAMPLES:
+
+IABF_DELAY_BEGIN_NS=000000000 IABF_DELAY_END_NS=200000000 IABF_DELAY_STEP_NS=100000 \
+iabf rm -f /mnt/lustre/f0 ---  \
+     dd if=/dev/zero of=/mnt/lustre/f0 bs=1M count=16 conv=notrunc --- \
+     truncate /mnt/lustre2/f0 $(( 5 *  1048576)) --- \
+     ---
+
+IABF_STEP_COUNT=4096 \
+IABF_AFFINITY='0 1 2' \
+iabf dd if=/dev/zero of=/mnt/lustre/f0 bs=1M count=128 --- \
+     dd if=/mnt/lustre2/f0 of=/dev/null bs=1M --- \
+     truncate /mnt/lustre/f0 $((5 << 20)) --- \
+     rm /mnt/lustre/f0 ---
+
+TODO
+* Start with a coarse step value (10ms or something) and refine.
+* Add options to stop on failure of A and/or B.
+
