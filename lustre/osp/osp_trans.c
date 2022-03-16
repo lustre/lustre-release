@@ -1115,6 +1115,7 @@ static int osp_send_update_req(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(oth != NULL);
+	LASSERT(osp->opd_obd);
 
 	if (ou && ou->ou_generation != our->our_generation) {
 		const struct lnet_processid *peer;
