@@ -3,14 +3,15 @@
 # Simple function used by run_*.sh scripts
 
 assert_env() {
-    local failed=""
-    for name in $@; do
-        if [ -z "${!name}" ]; then
-            echo "$0: $name must be set"
-            failed=1
-        fi
-    done
-    [ $failed ] && exit 1 || true
+	local failed=""
+
+	for name in "$@"; do
+	if [ -z "${!name}" ]; then
+		echo "$0: $name must be set"
+		failed=1
+	fi
+	done
+	[ $failed ] && exit 1 || true
 }
 
 # lrepl - Lustre test Read-Eval-Print Loop.
@@ -19,11 +20,11 @@ assert_env() {
 # doesn't exec an actual shell because the user may want to inspect
 # variables and use functions from the test framework.
 lrepl() {
-    local line
-    local rawline
-    local prompt
+	local line
+	local rawline
+	local prompt
 
-    cat <<EOF
+	cat <<EOF
         This is an interactive read-eval-print loop interactive shell
         simulation that you can use to debug failing tests.  You can
         enter most bash command lines (see notes below).
@@ -50,45 +51,45 @@ lrepl() {
 
 EOF
 
-    # Prompt escapes don't work in read -p, sadly.
-    prompt=":${TESTNAME:-UNKNOWN}:$(uname -n):$(basename $PWD)% "
+	# Prompt escapes don't work in read -p, sadly.
+	prompt=":${TESTNAME:-UNKNOWN}:$(uname -n):$(basename $PWD)% "
 
-    # We use read -r to get close to a shell experience
-    while read -e -r -p "$prompt" rawline; do
-        line=
-        case "$rawline" in
-        # Don't want to exit-exit, just exit the REPL
-        exit) break;;
-        # We need to handle continuations, and read -r doesn't do
-        # that for us.  Yet we need read -r.
-        #
-        # We also use case/esac to compare lines read to "*\\"
-        # because [ "$line" = *\\ ] and variants of that don't work.
-        *\\) line="$rawline"
-            while read -e -r -p '> ' rawline
-            do
-                line="$line"$'\n'"$rawline"
-                case "$rawline" in
-                # We could check for here documents by matching
-                # against *<<*, but who cares.
-                *\\) continue;;
-                *) break;;
-                esac
-            done
-            ;;
-        *) line=$rawline
-        esac
+	# We use read -r to get close to a shell experience
+	while read -e -r -p "$prompt" rawline; do
+	line=
+	case "$rawline" in
+	# Don't want to exit-exit, just exit the REPL
+	exit) break;;
+	# We need to handle continuations, and read -r doesn't do
+	# that for us.  Yet we need read -r.
+	#
+	# We also use case/esac to compare lines read to "*\\"
+	# because [ "$line" = *\\ ] and variants of that don't work.
+	*\\) line="$rawline"
+		while read -e -r -p '> ' rawline
+		do
+			line="$line"$'\n'"$rawline"
+			case "$rawline" in
+			# We could check for here documents by matching
+			# against *<<*, but who cares.
+			*\\) continue;;
+			*) break;;
+			esac
+		done
+		;;
+	*) line=$rawline
+	esac
 
-        case "$line" in
-        *\\) break;;
-        esac
+	case "$line" in
+	*\\) break;;
+	esac
 
-        # Finally!  Time to eval.
-        eval "$line"
-    done
+	# Finally!  Time to eval.
+	eval "$line"
+	done
 
-    echo $'\n\tExiting interactive shell...\n'
-    return 0
+	echo $'\n\tExiting interactive shell...\n'
+	return 0
 }
 
 # lassert - Lustre test framework assert
@@ -101,22 +102,22 @@ EOF
 # If the REPL sets retcode=0 then the assertion failure will be
 # ignored.
 lassert() {
-    local retcode=$1
-    local msg=$2
-    shift 2
+	local retcode=$1
+	local msg=$2
+	shift 2
 
-    echo "checking $* ($(eval echo \""$*"\"))..."
-    eval "$@" && return 0;
+	echo "checking $* ($(eval echo \""$*"\"))..."
+	eval "$@" && return 0;
 
-    if ${REPL_ON_LASSERT:-false}; then
-        echo "Assertion $retcode failed: $* (expanded: $(eval echo \""$*"\"))
-$msg"
-        lrepl
-    fi
+	if ${REPL_ON_LASSERT:-false}; then
+		echo "Assertion $retcode failed: $*
+			(expanded: $(eval echo \""$*"\")) $msg"
+		lrepl
+	fi
 
-    error "Assertion $retcode failed: $* (expanded: $(eval echo \""$*"\"))
-$msg"
-    return $retcode
+	error "Assertion $retcode failed: $*
+		(expanded: $(eval echo \""$*"\")) $msg"
+	return $retcode
 }
 
 # setmodopts- set module options for subsequent calls to load_modules
@@ -160,12 +161,12 @@ setmodopts() {
 echoerr () { echo "$@" 1>&2 ; }
 
 signaled() {
-    echoerr "$(date +'%F %H:%M:%S'): client load was signaled to terminate"
+	echoerr "$(date +'%F %H:%M:%S'): client load was signaled to terminate"
 
-    local PGID=$(ps -eo "%c %p %r" | awk "/ $PPID / {print \$3}")
-    kill -TERM -$PGID
-    sleep 5
-    kill -KILL -$PGID
+	local PGID=$(ps -eo "%c %p %r" | awk "/ $PPID / {print \$3}")
+	kill -TERM -$PGID
+	sleep 5
+	kill -KILL -$PGID
 }
 
 mpi_run () {
@@ -206,45 +207,45 @@ nids_list () {
 
 # FIXME: all setup/cleanup can be done without rpc.sh
 lst_end_session () {
-    local verbose=false
-    [ x$1 = x--verbose ] && verbose=true
+	local verbose=false
+	[ x$1 = x--verbose ] && verbose=true
 
-    export LST_SESSION=`$LST show_session 2>/dev/null | awk -F " " '{print $5}'`
-    [ "$LST_SESSION" == "" ] && return
+	export LST_SESSION=`$LST show_session 2>/dev/null | awk '{print $5}'`
+	[ "$LST_SESSION" == "" ] && return
 
 	$LST stop b
-    if $verbose; then
-        $LST show_error c s
-    fi
-    $LST end_session
+	if $verbose; then
+		$LST show_error c s
+	fi
+	$LST end_session
 }
 
 lst_session_cleanup_all () {
-    local list=$(comma_list $(nodes_list))
-    do_rpc_nodes $list lst_end_session
+	local list=$(comma_list $(nodes_list))
+	do_rpc_nodes $list lst_end_session
 }
 
 lst_cleanup () {
-    lsmod | grep -q lnet_selftest && \
-        rmmod lnet_selftest > /dev/null 2>&1 || true
+	lsmod | grep -q lnet_selftest && \
+		rmmod lnet_selftest > /dev/null 2>&1 || true
 }
 
 lst_cleanup_all () {
-   local list=$(comma_list $(nodes_list))
+	local list=$(comma_list $(nodes_list))
 
-   # lst end_session needs to be executed only locally
-   # i.e. on node where lst new_session was called
-   lst_end_session --verbose
-   do_rpc_nodes $list lst_cleanup
+	# lst end_session needs to be executed only locally
+	# i.e. on node where lst new_session was called
+	lst_end_session --verbose
+	do_rpc_nodes $list lst_cleanup
 }
 
 lst_setup () {
-    load_module lnet_selftest
+	load_module lnet_selftest
 }
 
 lst_setup_all () {
-    local list=$(comma_list $(nodes_list))
-    do_rpc_nodes $list lst_setup
+	local list=$(comma_list $(nodes_list))
+	do_rpc_nodes $list lst_setup
 }
 
 ###
@@ -254,7 +255,7 @@ lst_setup_all () {
 # and includes the first period.
 # client-20.lab.whamcloud.com becomes client-20
 short_hostname() {
-  echo $(sed 's/\..*//' <<< $1)
+	echo $(sed 's/\..*//' <<< $1)
 }
 
 ###
@@ -271,15 +272,15 @@ short_nodename() {
 }
 
 print_opts () {
-    local var
+	local var
 
-    echo OPTIONS:
+	echo OPTIONS:
 
-    for i in $@; do
-        var=$i
-        echo "${var}=${!var}"
-    done
-    [ -e $MACHINEFILE ] && cat $MACHINEFILE
+	for i in "$@"; do
+		var=$i
+		echo "${var}=${!var}"
+	done
+	[ -e $MACHINEFILE ] && cat $MACHINEFILE
 }
 
 is_lustre () {
@@ -336,20 +337,20 @@ run_compilebench() {
 	test_mkdir -p $testdir
 	setstripe_getstripe $testdir $cbench_STRIPEPARAMS
 
-    local savePWD=$PWD
-    cd $cbench_DIR
-    local cmd="./compilebench -D $testdir -i $cbench_IDIRS \
-        -r $cbench_RUNS --makej"
+	local savePWD=$PWD
+	cd $cbench_DIR
+	local cmd="./compilebench -D $testdir -i $cbench_IDIRS \
+		-r $cbench_RUNS --makej"
 
-    log "$cmd"
+	log "$cmd"
 
-    local rc=0
-    eval $cmd
-    rc=$?
+	local rc=0
+	eval $cmd
+	rc=$?
 
-    cd $savePWD
-    [ $rc = 0 ] || error "compilebench failed: $rc"
-    rm -rf $testdir
+	cd $savePWD
+	[ $rc = 0 ] || error "compilebench failed: $rc"
+	rm -rf $testdir
 }
 
 run_metabench() {
@@ -439,11 +440,12 @@ run_simul() {
 			-np $((num_clients * simul_THREADS)) $cmd
 	fi
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "simul failed! $rc"
-    fi
-    rm -rf $testdir
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "simul failed! $rc"
+	fi
+	rm -rf $testdir
 }
 
 run_mdtest() {
@@ -509,10 +511,11 @@ run_mdtest() {
 			-np $((num_clients * mdtest_THREADS)) $cmd
 	fi
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "mdtest failed! $rc"
-    fi
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "mdtest failed! $rc"
+	fi
 	rm -rf $testdir
 	for ((i=1; i<mdtest_Nmntp; i++)); do
 		local dir=$DIR$i/d0.mdtest$i
@@ -689,11 +692,12 @@ run_ior() {
 			-np $mpi_ior_custom_threads $cmd
 	fi
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "ior failed! $rc"
-    fi
-    $ior_CLEANUP && rm -rf $testdir || true
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "ior failed! $rc"
+	fi
+	$ior_CLEANUP && rm -rf $testdir || true
 }
 
 run_mib() {
@@ -739,11 +743,12 @@ run_mib() {
 			-np $((num_clients * mib_THREADS)) $cmd
 	fi
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "mib failed! $rc"
-    fi
-    rm -rf $testdir
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "mib failed! $rc"
+	fi
+	rm -rf $testdir
 }
 
 run_cascading_rw() {
@@ -776,11 +781,12 @@ run_cascading_rw() {
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((num_clients * $casc_THREADS)) $cmd
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "cascading_rw failed! $rc"
-    fi
-    rm -rf $testdir
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "cascading_rw failed! $rc"
+	fi
+	rm -rf $testdir
 }
 
 run_write_append_truncate() {
@@ -814,12 +820,13 @@ run_write_append_truncate() {
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((num_clients * $write_THREADS)) $cmd
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "write_append_truncate failed! $rc"
-        return $rc
-    fi
-    rm -rf $testdir
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+	error "write_append_truncate failed! $rc"
+	return $rc
+	fi
+	rm -rf $testdir
 }
 
 run_write_disjoint() {
@@ -852,11 +859,12 @@ run_write_disjoint() {
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((num_clients * $wdisjoint_THREADS)) $cmd
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "write_disjoint failed! $rc"
-    fi
-    rm -rf $testdir
+	local rc=$?
+
+	if [ $rc != 0 ] ; then
+		error "write_disjoint failed! $rc"
+	fi
+	rm -rf $testdir
 }
 
 run_parallel_grouplock() {
@@ -903,16 +911,16 @@ run_parallel_grouplock() {
 }
 
 cleanup_statahead () {
-    trap 0
+	trap 0
 
-    local clients=$1
-    local mntpt_root=$2
-    local num_mntpts=$3
+	local clients=$1
+	local mntpt_root=$2
+	local num_mntpts=$3
 
-    for i in $(seq 0 $num_mntpts);do
-        zconf_umount_clients $clients ${mntpt_root}$i ||
-            error_exit "Failed to umount lustre on ${mntpt_root}$i"
-    done
+	for i in $(seq 0 $num_mntpts);do
+	zconf_umount_clients $clients ${mntpt_root}$i ||
+		error_exit "Failed to umount lustre on ${mntpt_root}$i"
+	done
 }
 
 run_statahead () {
@@ -943,55 +951,56 @@ run_statahead () {
 	test_mkdir $testdir
 	setstripe_getstripe $testdir $statahead_STRIPEPARAMS
 
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    local num_files=$statahead_NUMFILES
+	local num_files=$statahead_NUMFILES
 
-    local IFree=$(inodes_available)
-    if [ $IFree -lt $num_files ]; then
-      num_files=$IFree
-    fi
+	local IFree=$(inodes_available)
+	if [ $IFree -lt $num_files ]; then
+		num_files=$IFree
+	fi
 
-    cancel_lru_locks mdc
+	cancel_lru_locks mdc
 
-    local cmd1="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir"
-    local cmd2="--nfiles $num_files --filefmt 'f%%d'"
-    local cmd="$cmd1 $cmd2"
-    echo "+ $cmd"
+	local cmd1="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir"
+	local cmd2="--nfiles $num_files --filefmt 'f%%d'"
+	local cmd="$cmd1 $cmd2"
+	echo "+ $cmd"
 
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((num_clients * 32)) $cmd
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "mdsrate failed to create $rc"
-        return $rc
-    fi
+	local rc=$?
 
-    local num_mntpts=$statahead_NUMMNTPTS
-    local mntpt_root=$TMP/mntpt/lustre
-    local mntopts=$MNTOPTSTATAHEAD
+	if [ $rc != 0 ] ; then
+		error "mdsrate failed to create $rc"
+		return $rc
+	fi
 
-    echo "Mounting $num_mntpts lustre clients starts on $clients"
-    trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR
-    for i in $(seq 0 $num_mntpts); do
-        zconf_mount_clients $clients ${mntpt_root}$i "$mntopts" ||
-            error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
-    done
+	local num_mntpts=$statahead_NUMMNTPTS
+	local mntpt_root=$TMP/mntpt/lustre
+	local mntopts=$MNTOPTSTATAHEAD
 
-    do_rpc_nodes $clients cancel_lru_locks mdc
+	echo "Mounting $num_mntpts lustre clients starts on $clients"
+	trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR
+	for i in $(seq 0 $num_mntpts); do
+	zconf_mount_clients $clients ${mntpt_root}$i "$mntopts" ||
+		error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
+	done
 
-    do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
+	do_rpc_nodes $clients cancel_lru_locks mdc
 
-    mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
-        $num_files $testdir 'f%%d' --ignore
+	do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
 
-    # use rm instead of rmdir because of
-    # testdir could contain the files created by someone else,
-    # or by previous run where is num_files prev > num_files current
-    rm -rf $testdir
-    cleanup_statahead $clients $mntpt_root $num_mntpts
+	mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
+		$num_files $testdir 'f%%d' --ignore
+
+	# use rm instead of rmdir because of
+	# testdir could contain the files created by someone else,
+	# or by previous run where is num_files prev > num_files current
+	rm -rf $testdir
+	cleanup_statahead $clients $mntpt_root $num_mntpts
 }
 
 cleanup_rr_alloc () {
@@ -1150,7 +1159,7 @@ run_fs_test() {
 	echo "+ $fs_test_objsize * $fs_test_objunit * $total_threads "
 	if [ $((space / 2)) -le \
 		$((fs_test_objsize * fs_test_objunit * total_threads)) ]; then
-			fs_test_objsize=$((space / 2 / fs_test_objunit / \
+			fs_test_objsize=$((space / 2 / fs_test_objunit /
 				total_threads))
 			[ $fs_test_objsize -eq 0 ] &&
 			skip_env "Need free space more than \
