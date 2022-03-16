@@ -84,31 +84,30 @@ static int osd_stats_init(struct osd_device *osd)
 	ENTRY;
         osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
 	if (osd->od_stats) {
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
-                                     "get_page", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "get_page_failures", "num");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_access", "pages");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_HIT,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_hit", "pages");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_MISS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_miss", "pages");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
+				     LPROCFS_TYPE_LATENCY, "get_page");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_PAGE,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_REQS,
+				     "get_page_failures");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_access");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_HIT,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_hit");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_MISS,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_miss");
 #if OSD_THANDLE_STATS
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_STARTING,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle starting", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_OPEN,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle open", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_CLOSING,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle closing", "usec");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_STARTING,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle starting");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_OPEN,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle open");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_CLOSING,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle closing");
 #endif
 		result = 0;
 	}

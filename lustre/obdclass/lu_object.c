@@ -1160,24 +1160,19 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 		return -ENOMEM;
 	}
 
-        lprocfs_counter_init(s->ls_stats, LU_SS_CREATED,
-                             0, "created", "created");
-        lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_HIT,
-                             0, "cache_hit", "cache_hit");
-        lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_MISS,
-                             0, "cache_miss", "cache_miss");
-        lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_RACE,
-                             0, "cache_race", "cache_race");
-        lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_DEATH_RACE,
-                             0, "cache_death_race", "cache_death_race");
-        lprocfs_counter_init(s->ls_stats, LU_SS_LRU_PURGED,
-                             0, "lru_purged", "lru_purged");
+	lprocfs_counter_init(s->ls_stats, LU_SS_CREATED, 0, "created");
+	lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_HIT, 0, "cache_hit");
+	lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_MISS, 0, "cache_miss");
+	lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_RACE, 0, "cache_race");
+	lprocfs_counter_init(s->ls_stats, LU_SS_CACHE_DEATH_RACE,
+			     0, "cache_death_race");
+	lprocfs_counter_init(s->ls_stats, LU_SS_LRU_PURGED, 0, "lru_purged");
 
 	INIT_LIST_HEAD(&s->ls_linkage);
-        s->ls_top_dev = top;
-        top->ld_site = s;
-        lu_device_get(top);
-        lu_ref_add(&top->ld_reference, "site-top", s);
+	s->ls_top_dev = top;
+	top->ld_site = s;
+	lu_device_get(top);
+	lu_ref_add(&top->ld_reference, "site-top", s);
 
 	INIT_LIST_HEAD(&s->ls_ld_linkage);
 	spin_lock_init(&s->ls_ld_lock);

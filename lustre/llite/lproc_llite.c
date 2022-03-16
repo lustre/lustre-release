@@ -39,6 +39,7 @@
 #include <obd_support.h>
 
 #include "llite_internal.h"
+#include "lprocfs_status.h"
 #include "vvp_internal.h"
 
 static struct kobject *llite_kobj;
@@ -1808,9 +1809,9 @@ static struct kobj_type sbi_ktype = {
 };
 
 static const struct llite_file_opcode {
-	__u32		opcode;
-	__u32		type;
-	const char	*opname;
+	__u32				lfo_opcode;
+	enum lprocfs_counter_config	lfo_config;
+	const char			*lfo_opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
 	/* file operation */
 	{ LPROC_LL_READ_BYTES,	LPROCFS_TYPE_BYTES_FULL, "read_bytes" },
@@ -1826,8 +1827,7 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_LLSEEK,	LPROCFS_TYPE_LATENCY,	"seek" },
 	{ LPROC_LL_FSYNC,	LPROCFS_TYPE_LATENCY,	"fsync" },
 	{ LPROC_LL_READDIR,	LPROCFS_TYPE_LATENCY,	"readdir" },
-	{ LPROC_LL_INODE_OCOUNT,LPROCFS_TYPE_REQS |
-				LPROCFS_CNTR_AVGMINMAX |
+	{ LPROC_LL_INODE_OCOUNT, LPROCFS_TYPE_REQS | LPROCFS_CNTR_AVGMINMAX |
 				LPROCFS_CNTR_STDDEV,	"opencount" },
 	{ LPROC_LL_INODE_OPCLTM,LPROCFS_TYPE_LATENCY,	"openclosetime" },
 	/* inode operation */
@@ -1835,7 +1835,7 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_TRUNC,	LPROCFS_TYPE_LATENCY,	"truncate" },
 	{ LPROC_LL_FLOCK,	LPROCFS_TYPE_LATENCY,	"flock" },
 	{ LPROC_LL_GETATTR,	LPROCFS_TYPE_LATENCY,	"getattr" },
-	{ LPROC_LL_FALLOCATE,	LPROCFS_TYPE_LATENCY, "fallocate"},
+	{ LPROC_LL_FALLOCATE,	LPROCFS_TYPE_LATENCY,	"fallocate"},
 	/* dir inode operation */
 	{ LPROC_LL_CREATE,	LPROCFS_TYPE_LATENCY,	"create" },
 	{ LPROC_LL_LINK,	LPROCFS_TYPE_LATENCY,	"link" },
@@ -1929,20 +1929,11 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 		GOTO(out_debugfs, err = -ENOMEM);
 
 	/* do counter init */
-	for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
-		u32 type = llite_opcode_table[id].type;
-		void *ptr = "unknown";
-
-		if (type & LPROCFS_TYPE_REQS)
-			ptr = "reqs";
-		else if (type & LPROCFS_TYPE_BYTES)
-			ptr = "bytes";
-		else if (type & LPROCFS_TYPE_USEC)
-			ptr = "usec";
+	for (id = 0; id < LPROC_LL_FILE_OPCODES; id++)
 		lprocfs_counter_init(sbi->ll_stats,
-				     llite_opcode_table[id].opcode, type,
-				     llite_opcode_table[id].opname, ptr);
-	}
+				     llite_opcode_table[id].lfo_opcode,
+				     llite_opcode_table[id].lfo_config,
+				     llite_opcode_table[id].lfo_opname);
 
 	debugfs_create_file("stats", 0644, sbi->ll_debugfs_entry,
 			    sbi->ll_stats, &ldebugfs_stats_seq_fops);
@@ -1953,8 +1944,8 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 		GOTO(out_stats, err = -ENOMEM);
 
 	for (id = 0; id < ARRAY_SIZE(ra_stat_string); id++)
-		lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
-				     ra_stat_string[id], "pages");
+		lprocfs_counter_init(sbi->ll_ra_stats, id, LPROCFS_TYPE_PAGES,
+				     ra_stat_string[id]);
 
 	debugfs_create_file("read_ahead_stats", 0644, sbi->ll_debugfs_entry,
 			    sbi->ll_ra_stats, &ldebugfs_stats_seq_fops);

@@ -1462,8 +1462,34 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
 }
 EXPORT_SYMBOL(lprocfs_register_stats);
 
-void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-			  unsigned conf, const char *name, const char *units)
+static const char *lprocfs_counter_config_units(const char *name,
+					 enum lprocfs_counter_config config)
+{
+	const char *units;
+
+	switch (config & LPROCFS_TYPE_MASK) {
+	default:
+		units = "reqs"; break;
+	case LPROCFS_TYPE_BYTES:
+		units = "bytes"; break;
+	case LPROCFS_TYPE_PAGES:
+		units = "pages"; break;
+	case LPROCFS_TYPE_LOCKS:
+		units = "locks"; break;
+	case LPROCFS_TYPE_LOCKSPS:
+		units = "locks/s"; break;
+	case LPROCFS_TYPE_SECS:
+		units = "secs"; break;
+	case LPROCFS_TYPE_USECS:
+		units = "usecs"; break;
+	}
+
+	return units;
+}
+
+void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
+				enum lprocfs_counter_config config,
+				const char *name, const char *units)
 {
 	struct lprocfs_counter_header *header;
 	struct lprocfs_counter *percpu_cntr;
@@ -1477,9 +1503,9 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 	LASSERTF(header != NULL, "Failed to allocate stats header:[%d]%s/%s\n",
 		 index, name, units);
 
-	header->lc_config = conf;
-	header->lc_name   = name;
-	header->lc_units  = units;
+	header->lc_config = config;
+	header->lc_name = name;
+	header->lc_units = units;
 
 	num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 	for (i = 0; i < num_cpu; ++i) {
@@ -1495,6 +1521,15 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 			percpu_cntr->lc_sum_irq	= 0;
 	}
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
+}
+EXPORT_SYMBOL(lprocfs_counter_init_units);
+
+void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
+			  enum lprocfs_counter_config config,
+			  const char *name)
+{
+	lprocfs_counter_init_units(stats, index, config, name,
+				   lprocfs_counter_config_units(name, config));
 }
 EXPORT_SYMBOL(lprocfs_counter_init);
 
@@ -1541,7 +1576,8 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
 		return -ENOMEM;
 
 	for (i = 0; i < ARRAY_SIZE(mps_stats); i++) {
-		lprocfs_counter_init(stats, i, 0, mps_stats[i], "reqs");
+		lprocfs_counter_init(stats, i, LPROCFS_TYPE_REQS,
+				     mps_stats[i]);
 		if (!stats->ls_cnt_header[i].lc_name) {
 			CERROR("Missing md_stat initializer md_op operation at offset %d. Aborting.\n",
 			       i);
@@ -1573,24 +1609,18 @@ EXPORT_SYMBOL(lprocfs_free_md_stats);
 
 void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 {
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_ENQUEUE - LDLM_FIRST_OPC,
-			     0, "ldlm_enqueue", "reqs");
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_CONVERT - LDLM_FIRST_OPC,
-			     0, "ldlm_convert", "reqs");
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_CANCEL - LDLM_FIRST_OPC,
-			     0, "ldlm_cancel", "reqs");
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_BL_CALLBACK - LDLM_FIRST_OPC,
-			     0, "ldlm_bl_callback", "reqs");
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_CP_CALLBACK - LDLM_FIRST_OPC,
-			     0, "ldlm_cp_callback", "reqs");
-	lprocfs_counter_init(ldlm_stats,
-			     LDLM_GL_CALLBACK - LDLM_FIRST_OPC,
-			     0, "ldlm_gl_callback", "reqs");
+	lprocfs_counter_init(ldlm_stats, LDLM_ENQUEUE - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_enqueue");
+	lprocfs_counter_init(ldlm_stats, LDLM_CONVERT - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_convert");
+	lprocfs_counter_init(ldlm_stats, LDLM_CANCEL - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_cancel");
+	lprocfs_counter_init(ldlm_stats, LDLM_BL_CALLBACK - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_bl_callback");
+	lprocfs_counter_init(ldlm_stats, LDLM_CP_CALLBACK - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_cp_callback");
+	lprocfs_counter_init(ldlm_stats, LDLM_GL_CALLBACK - LDLM_FIRST_OPC,
+			     LPROCFS_TYPE_REQS, "ldlm_gl_callback");
 }
 EXPORT_SYMBOL(lprocfs_init_ldlm_stats);
 
@@ -1620,7 +1650,9 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 			ret = lc->lc_max;
 			break;
 		case LPROCFS_FIELDS_FLAGS_AVG:
-			ret = (lc->lc_max - lc->lc_min) / 2;
+			ret = div64_u64((flags & LPROCFS_STATS_FLAG_IRQ_SAFE ?
+					 lc->lc_sum_irq : 0) + lc->lc_sum,
+					lc->lc_count);
 			break;
 		case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
 			ret = lc->lc_sumsquare;

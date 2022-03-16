@@ -779,11 +779,11 @@ static int echo_srv_init0(const struct lu_env *env,
 	if (!lprocfs_obd_setup(obd, true) &&
 	    lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
 		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
-				     LPROCFS_CNTR_AVGMINMAX,
-				     "read_bytes", "bytes");
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+				     "read_bytes");
 		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
-				     LPROCFS_CNTR_AVGMINMAX,
-				     "write_bytes", "bytes");
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
+				     "write_bytes");
 	}
 
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,

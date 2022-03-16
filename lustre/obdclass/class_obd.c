@@ -694,8 +694,8 @@ static int __init obdclass_init(void)
 	}
 
 	lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-			     LPROCFS_CNTR_AVGMINMAX,
-			     "memused", "bytes");
+			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
+			     "memused");
 #endif
 	err = obd_zombie_impexp_init();
 	if (err)

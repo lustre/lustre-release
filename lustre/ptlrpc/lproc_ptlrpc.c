@@ -207,9 +207,9 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 {
 	struct dentry *svc_debugfs_entry;
 	struct lprocfs_stats *svc_stats;
+	enum lprocfs_counter_config config = LPROCFS_CNTR_AVGMINMAX |
+					     LPROCFS_CNTR_STDDEV;
 	int i;
-	unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX |
-					  LPROCFS_CNTR_STDDEV;
 
 	LASSERT(!*debugfs_root_ret);
 	LASSERT(!*stats_ret);
@@ -225,37 +225,33 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 		svc_debugfs_entry = root;
 
 	lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
-			     svc_counter_config, "req_waittime", "usec");
+			     config | LPROCFS_TYPE_USECS, "req_waittime");
 	lprocfs_counter_init(svc_stats, PTLRPC_REQQDEPTH_CNTR,
-			     svc_counter_config, "req_qdepth", "reqs");
+			     config | LPROCFS_TYPE_REQS, "req_qdepth");
 	lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
-			     svc_counter_config, "req_active", "reqs");
+			     config | LPROCFS_TYPE_REQS, "req_active");
 	lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
-			     svc_counter_config, "req_timeout", "sec");
-	lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
-			     svc_counter_config, "reqbuf_avail", "bufs");
+			     config | LPROCFS_TYPE_SECS, "req_timeout");
+	lprocfs_counter_init_units(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
+			     config, "reqbuf_avail", "bufs");
 	for (i = 0; i < EXTRA_LAST_OPC; i++) {
-		char *units;
+		enum lprocfs_counter_config extra_type = LPROCFS_TYPE_REQS;
 
 		switch (i) {
 		case BRW_WRITE_BYTES:
 		case BRW_READ_BYTES:
-			units = "bytes";
-			break;
-		default:
-			units = "reqs";
+			extra_type = LPROCFS_TYPE_BYTES;
 			break;
 		}
 		lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
-				     svc_counter_config,
-				     ll_eopcode2str(i), units);
+				     config | extra_type, ll_eopcode2str(i));
 	}
 	for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
 		__u32 opcode = ll_rpc_opcode_table[i].opcode;
 
-		lprocfs_counter_init(svc_stats,
-				     EXTRA_MAX_OPCODES + i, svc_counter_config,
-				     ll_opcode2str(opcode), "usec");
+		lprocfs_counter_init(svc_stats, EXTRA_MAX_OPCODES + i,
+				     config | LPROCFS_TYPE_USECS,
+				     ll_opcode2str(opcode));
 	}
 
 	debugfs_create_file(name, 0644, svc_debugfs_entry, svc_stats,
