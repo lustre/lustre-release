@@ -8,7 +8,7 @@ CLEANUP=${CLEANUP:-""}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$LARGE_SCALE_EXCEPT "
@@ -56,7 +56,7 @@ test_3a() {
 	chmod 0777 $dir
 
 	while [ $num -le $CLIENTCOUNT ]; do
-		list=$(comma_list ${nodes[@]:0:$num})
+		list=$(comma_list "${nodes[@]:0:$num}")
 
 		generate_machine_file $list $MACHINEFILE ||
 			error "can not generate machinefile"

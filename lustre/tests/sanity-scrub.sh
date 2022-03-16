@@ -10,7 +10,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT"
@@ -38,8 +38,8 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 # 400M MDT device can guarantee uninitialized groups during the OI scrub
-[[ $MDSSIZE < 400000 || "$mds1_FSTYPE" == ldiskfs ]] && MDSSIZE=400000
-[[ $OSTSIZE < 400000 || "$ost1_FSTYPE" == ldiskfs ]] && OSTSIZE=400000
+[[ $MDSSIZE -lt 400000 || "$mds1_FSTYPE" == ldiskfs ]] && MDSSIZE=400000
+[[ $OSTSIZE -lt 400000 || "$ost1_FSTYPE" == ldiskfs ]] && OSTSIZE=400000
 
 # no need too many OSTs, to reduce the format/start/stop overhead
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
@@ -924,7 +924,7 @@ test_9() {
 	local PRE_FETCHED=1024
 	local TIME_DIFF=2
 	# MAX_MARGIN = 1.2 = 12 / 10
-	local MAX_SPEED=$(((PRE_FETCHED + BASE_SPEED1 * \
+	local MAX_SPEED=$(((PRE_FETCHED + BASE_SPEED1 *
 		(RUN_TIME1 + TIME_DIFF)) / RUN_TIME1 * 12 / 10))
 	local n
 	for n in $(seq $MDSCOUNT); do
@@ -946,14 +946,14 @@ test_9() {
 
 	# 30% margin
 	local MARGIN=3
-	local MIN_SPEED=$(((PRE_FETCHED + \
-			    BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
-			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+	local MIN_SPEED=$(((PRE_FETCHED +
+			    BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) +
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) /
 			   (RUN_TIME1 + RUN_TIME2) * (10 - MARGIN) / 10))
 	# MAX_MARGIN = 1.2 = 12 / 10
-	MAX_SPEED=$(((PRE_FETCHED + \
-		      BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
-		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+	MAX_SPEED=$(((PRE_FETCHED +
+		      BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) +
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) /
 		     (RUN_TIME1 + RUN_TIME2) * (10 + MARGIN) / 10))
 	for n in $(seq $MDSCOUNT); do
 		SPEED=$(scrub_status $n | awk '/^average_speed/ { print $2 }')

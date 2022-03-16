@@ -5,7 +5,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 build_test_filter
@@ -35,7 +35,7 @@ if $RACER_FAILOVER; then
 	for target in $FAIL_TARGETS; do
 		victims=(${victims[@]} $(get_facets $target))
 	done
-	echo Victim facets ${victims[@]}
+	echo Victim facets "${victims[@]}"
 fi
 
 if ((MDSCOUNT > 1)); then

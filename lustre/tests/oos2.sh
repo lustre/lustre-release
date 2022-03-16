@@ -4,7 +4,7 @@ set -e
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 
 MOUNT=${MOUNT:-$1}
 MOUNT=${MOUNT:-/mnt/lustre}
@@ -62,13 +62,13 @@ if ! oos_full; then
 	SUCCESS=0
 fi
 
-RECORDSOUT=$((`grep "records out" $LOG | cut -d+ -f 1` + \
+RECORDSOUT=$((`grep "records out" $LOG | cut -d+ -f 1` +
               `grep "records out" $LOG2 | cut -d+ -f 1`))
 
 FILESIZE=$((`ls -l $OOS | awk '{print $5}'` + `ls -l $OOS2 | awk '{print $5}'`))
 if [ "$RECORDSOUT" -ne $(($FILESIZE / 1024)) ]; then
-        echo "ERROR: blocks written by dd not equal to the size of file"
-        SUCCESS=0
+	echo "ERROR: blocks written by dd not equal to the size of file"
+	SUCCESS=0
 fi
 
 echo LOG LOG2 file

@@ -2,7 +2,7 @@
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
@@ -16,14 +16,14 @@ lst_LOOP=${lst_LOOP:-100000}
 lst_CONCR=${lst_CONCR:-"1 2 4 8"}
 lst_SIZES=${lst_SIZES:-"4k 8k 256k 1M"}
 if [ "$SLOW" = no ]; then
-    lst_CONCR="1 8"
-    lst_SIZES="4k 1M"
-    lst_LOOP=1000
+	lst_CONCR="1 8"
+	lst_SIZES="4k 1M"
+	lst_LOOP=1000
 fi
 
 smoke_DURATION=${smoke_DURATION:-1800}
 if [ "$SLOW" = no ]; then
-    [ $smoke_DURATION -le 300 ] || smoke_DURATION=300
+	[ $smoke_DURATION -le 300 ] || smoke_DURATION=300
 fi
 
 lst_TESTS=${lst_TESTS:-"write read ping"}
@@ -89,9 +89,9 @@ if is_mounted $MOUNT2; then
 fi
 
 lst_prepare () {
-    # Workaround for bug 15619
-    lst_cleanup_all
-    lst_setup_all
+	# Workaround for bug 15619
+	lst_cleanup_all
+	lst_setup_all
 }
 
 # make batch
