@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import re
 import subprocess
@@ -47,8 +47,8 @@ GIT_LOG_FORMAT = '%x1f'.join(GIT_LOG_KEYS) + '%x1e'
 
 def _change_from_record(rec):
     change = Change()
-    change.__dict__.update(dict(zip(GIT_LOG_FIELDS, rec.split('\x1f'))))
-    change.author_date = long(change.author_date)
+    change.__dict__.update(dict(list(zip(GIT_LOG_FIELDS, rec.split('\x1f')))))
+    change.author_date = int(change.author_date)
     for line in change.body.splitlines():
         # Sometimes we have 'key : value' so we strip both sides.
         lis = line.split(':', 1)
@@ -140,7 +140,8 @@ class Branch(object):
                                             '--reverse',
                                             self.name
                                             ] + self.paths,
-                                stdout=subprocess.PIPE)
+                                stdout=subprocess.PIPE,
+                                text=True)
         out, _ = pipe.communicate()
         rc = pipe.wait()
         assert rc == 0
@@ -234,7 +235,7 @@ def branch_comm(b1, b2):
             i1 += 1
             i2 += 1
             # c1 is common to both branches.
-            print '\t\t%s\t%s' % (c1.commit, c1.subject) # TODO Add a '*' if subjects different...
+            print('\t\t%s\t%s' % (c1.commit, c1.subject)) # TODO Add a '*' if subjects different...
             continue
 
         if p1 and not p2:
@@ -242,7 +243,7 @@ def branch_comm(b1, b2):
             change_set_printed(c1)
             i1 += 1
             # c1 is unique to b1.
-            print '%s\t\t\t%s' % (c1.commit, c1.subject)
+            print('%s\t\t\t%s' % (c1.commit, c1.subject))
             continue
 
         if p2 and not p1:
@@ -250,7 +251,7 @@ def branch_comm(b1, b2):
             change_set_printed(c2)
             i2 += 1
             # c2 is unique to b2.
-            print '\t%s\t\t%s' % (c2.commit, c2.subject)
+            print('\t%s\t\t%s' % (c2.commit, c2.subject))
             continue
 
         # Now neither is ported or both are ported (and the order is weird).
@@ -259,13 +260,13 @@ def branch_comm(b1, b2):
             change_set_printed(p2)
             i1 += 1
             # c1 is common to both branches.
-            print '\t\t%s\t%s' % (c1.commit, c1.subject)
+            print('\t\t%s\t%s' % (c1.commit, c1.subject))
             continue
         else:
             change_set_printed(c1)
             i1 += 1
             # c1 is unique to b1.
-            print '%s\t\t\t%s' % (c1.commit, c1.subject)
+            print('%s\t\t\t%s' % (c1.commit, c1.subject))
             continue
 
     for c1 in b1.log[i1:]:
@@ -278,7 +279,7 @@ def branch_comm(b1, b2):
         # c1 is unique to b1 and must be printed.
 
         change_set_printed(c1)
-        print '%s\t\t\t%s' % (c1.commit, c1.subject)
+        print('%s\t\t\t%s' % (c1.commit, c1.subject))
 
     for c2 in b2.log[i2:]:
         if change_is_printed(c2):
@@ -287,7 +288,7 @@ def branch_comm(b1, b2):
         assert i1 == n1
         # ...
         change_set_printed(c2)
-        print '\t%s\t\t%s' % (c2.commit, c2.subject)
+        print('\t%s\t\t%s' % (c2.commit, c2.subject))
 
 
 USAGE = """usage: '_PROGNAME_ BRANCH1 BRANCH2 [PATH]...'
@@ -320,7 +321,7 @@ repositories (for example 'origin/master' and 'other/b_post_cmd3') do:
 
 def main():
     if len(sys.argv) < 3:
-        print >> sys.stderr, USAGE.replace('_PROGNAME_', sys.argv[0])
+        print(USAGE.replace('_PROGNAME_', sys.argv[0]), file=sys.stderr)
         sys.exit(1)
 
     paths = sys.argv[3:]
