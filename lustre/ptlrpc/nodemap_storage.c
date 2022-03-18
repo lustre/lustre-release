@@ -781,6 +781,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					 NODEMAP_MAP_GID : 0) |
 					(flags & NM_FL_MAP_PROJID ?
 					 NODEMAP_MAP_PROJID : 0);
+		if (nodemap->nmf_map_mode == NODEMAP_MAP_BOTH_LEGACY)
+			nodemap->nmf_map_mode = NODEMAP_MAP_BOTH;
 		nodemap->nmf_enable_audit =
 					flags & NM_FL_ENABLE_AUDIT;
 		nodemap->nmf_forbid_encryption =

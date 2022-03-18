@@ -53,6 +53,7 @@ enum nodemap_tree_type {
 };
 
 enum nodemap_mapping_modes {
+	NODEMAP_MAP_BOTH_LEGACY	= 0x0,  /* for compatibility */
 	NODEMAP_MAP_UID		= 0x01,
 	NODEMAP_MAP_GID		= 0x02,
 	NODEMAP_MAP_BOTH	= 0x03, /* for compatibility */
