@@ -2556,11 +2556,16 @@ static __u64 get_next_transno(struct lu_target *lut, int *type)
  * \param[in] env	execution environment
  * \param[in] obd	failover obd device
  * \param[in] req	request to be dropped
+ *
+ * \retval true		duplicate replay update is dropped
+ * \retval false	duplicate replay update is not dropped
  */
-static void drop_duplicate_replay_req(struct lu_env *env,
+static bool drop_duplicate_replay_req(struct lu_env *env,
 				      struct obd_device *obd,
 				      struct ptlrpc_request *req)
 {
+	__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
 	DEBUG_REQ(D_HA, req,
 		  "remove t%lld from %s because duplicate update records found",
 		  lustre_msg_get_transno(req->rq_reqmsg),
@@ -2570,20 +2575,26 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 	 * Right now, only for MDS reint operation update replay and
 	 * normal request replay can have the same transno
 	 */
-	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_REINT) {
+	if (opc == MDS_REINT) {
 		req_capsule_set(&req->rq_pill, &RQF_MDS_REINT);
 		req->rq_status = req_capsule_server_pack(&req->rq_pill);
 		if (likely(req->rq_export))
 			target_committed_to_req(req);
 		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
 		target_send_reply(req, req->rq_status, 0);
+	} else if (opc == MDS_CLOSE) {
+		DEBUG_REQ(D_HA, req, "duplicate close replay from %s\n",
+				libcfs_nidstr(&req->rq_peer.nid));
+		return false;
 	} else {
-		DEBUG_REQ(D_ERROR, req, "wrong opc from %s",
-		libcfs_nidstr(&req->rq_peer.nid));
+		DEBUG_REQ(D_ERROR, req, "wrong opc %d from %s\n", opc,
+			  libcfs_nidstr(&req->rq_peer.nid));
 	}
 	target_exp_dequeue_req_replay(req);
 	target_request_copy_put(req);
 	obd->obd_replayed_requests++;
+
+	return true;
 }
 
 #define WATCHDOG_TIMEOUT (obd_timeout * 10)
@@ -2627,6 +2638,7 @@ static void replay_request_or_update(struct lu_env *env,
 		spin_lock(&obd->obd_recovery_task_lock);
 		transno = get_next_transno(lut, &type);
 		if (type == REQUEST_RECOVERY && transno != 0) {
+			bool update = false;
 			/*
 			 * Drop replay request from client side, if the
 			 * replay has been executed by update with the
@@ -2654,9 +2666,10 @@ static void replay_request_or_update(struct lu_env *env,
 				spin_unlock(&tdtd->tdtd_replay_list_lock);
 				dtrq_destroy(dtrq);
 
-				drop_duplicate_replay_req(env, obd, req);
-
-				continue;
+				if (drop_duplicate_replay_req(env, obd, req))
+					continue;
+				/* not dropped yet */
+				update = true;
 			}
 
 			LASSERT(trd->trd_processing_task == current->pid);
@@ -2675,9 +2688,11 @@ static void replay_request_or_update(struct lu_env *env,
 			 * bz18031: increase next_recovery_transno before
 			 * target_request_copy_put() will drop exp_rpc reference
 			 */
-			spin_lock(&obd->obd_recovery_task_lock);
-			obd->obd_next_recovery_transno++;
-			spin_unlock(&obd->obd_recovery_task_lock);
+			if (!update) {
+				spin_lock(&obd->obd_recovery_task_lock);
+				obd->obd_next_recovery_transno++;
+				spin_unlock(&obd->obd_recovery_task_lock);
+			}
 			target_exp_dequeue_req_replay(req);
 			target_request_copy_put(req);
 			obd->obd_replayed_requests++;
