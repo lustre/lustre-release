@@ -2983,12 +2983,34 @@ static inline const char *pcc_type2string(enum lu_pcc_type type)
 	}
 }
 
-#define PCC_YAML_PCCPATH	"pccpath"
-#define PCC_YAML_HSMTOOL	"hsmtool"
-#define PCC_YAML_RWID		"rwid"
-#define PCC_YAML_ROID		"roid"
-#define PCC_YAML_FLAGS		"flags"
-#define PCC_YAML_AUTOCACHE	"autocache"
+#define PCC_CMDNAME_ADD			"add"
+#define PCC_CMDNAME_DEL			"del"
+#define PCC_CMDNAME_CLEAR		"clear"
+#define PCC_CMDNAME_RWID		"rwid"
+#define PCC_CMDNAME_ROID		"roid"
+#define PCC_CMDNAME_AUTO_ATTACH		"auto_attach"
+#define PCC_CMDNAME_OPEN_ATTACH		"open_attach"
+#define PCC_CMDNAME_IO_ATTACH		"io_attach"
+#define PCC_CMDNAME_STAT_ATTACH		"stat_attach"
+/* unfortunately, the API gives these two names... */
+#define PCC_CMDNAME_RWPCC		"rwpcc"
+#define PCC_CMDNAME_PCCRW		"pccrw"
+#define PCC_CMDNAME_ROPCC		"ropcc"
+#define PCC_CMDNAME_PCCRO		"pccro"
+#define PCC_CMDNAME_MMAP_CONV		"mmap_conv"
+#define PCC_CMDNAME_PROJ_QUOTA		"proj_quota"
+#define PCC_CMDNAME_BUFFER_COUNT	"buf_count"
+#define PCC_CMDNAME_BUFFER_SIZE		"buf_size"
+#define PCC_CMDNAME_BUFFERS		"buffers"
+#define PCC_YAML_PCCPATH		"pccpath"
+#define PCC_YAML_HSMTOOL		"hsmtool"
+#define PCC_YAML_RWID			PCC_CMDNAME_RWID
+#define PCC_YAML_ROID			PCC_CMDNAME_ROID
+#define PCC_YAML_FLAGS			"flags"
+#define PCC_YAML_BUFCOUNT		"bufcount"
+#define PCC_YAML_BUFSIZE		"bufsize"
+#define PCC_YAML_BUFFERS		"buffers"
+#define PCC_YAML_AUTOCACHE		"autocache"
 
 enum hsmtool_type {
 	HSMTOOL_UNKNOWN		= 0,

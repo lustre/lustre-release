@@ -7306,7 +7306,7 @@ int jt_pcc_add(int argc, char **argv)
 	mntpath = argv[optind++];
 	pccpath = argv[optind];
 
-	snprintf(cmd, PATH_MAX, "add %s %s", pccpath, param);
+	snprintf(cmd, PATH_MAX, "%s %s %s", PCC_CMDNAME_ADD, pccpath, param);
 	rc = llapi_pccdev_set(mntpath, cmd);
 	if (rc < 0)
 		fprintf(stderr, "%s: failed to run '%s' on '%s': %s\n",

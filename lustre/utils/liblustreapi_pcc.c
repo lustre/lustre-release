@@ -641,7 +641,7 @@ static int llapi_pcc_del_internal(const char *mntpath, const char *pccpath,
 	char cmd[PATH_MAX];
 	int rc;
 
-	snprintf(cmd, sizeof(cmd), "del %s", pccpath);
+	snprintf(cmd, sizeof(cmd), "%s %s", PCC_CMDNAME_DEL, pccpath);
 	rc = llapi_pccdev_set(mntpath, cmd);
 	if (rc < 0) {
 		llapi_error(LLAPI_MSG_ERROR, rc,

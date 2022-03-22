@@ -587,82 +587,89 @@ static int
 pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 {
 	char *key, *val;
-	unsigned long id;
 	bool enable;
 	int rc;
+
+	ENTRY;
 
 	val = buffer;
 	key = strsep(&val, "=");
 	if (val == NULL || strlen(val) == 0)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
 	/* Key of the value pair */
-	if (strcmp(key, "rwid") == 0) {
-		rc = kstrtoul(val, 10, &id);
+	if (strcmp(key, PCC_CMDNAME_RWID) == 0) {
+		u32 id;
+
+		rc = kstrtou32(val, 10, &id);
 		if (rc)
-			return rc;
-		if (id <= 0)
-			return -EINVAL;
+			RETURN(rc);
+		if (id == 0)
+			RETURN(-EINVAL);
 		cmd->u.pccc_add.pccc_rwid = id;
-	} else if (strcmp(key, "roid") == 0) {
-		rc = kstrtoul(val, 10, &id);
+	} else if (strcmp(key, PCC_CMDNAME_ROID) == 0) {
+		u32 id;
+
+		rc = kstrtou32(val, 10, &id);
 		if (rc)
-			return rc;
-		if (id <= 0)
-			return -EINVAL;
+			RETURN(rc);
+		if (id == 0)
+			RETURN(-EINVAL);
 		cmd->u.pccc_add.pccc_roid = id;
-	} else if (strcmp(key, "auto_attach") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_AUTO_ATTACH) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_AUTO_ATTACH;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_AUTO_ATTACH;
-	} else if (strcmp(key, "open_attach") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_OPEN_ATTACH) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_OPEN_ATTACH;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_OPEN_ATTACH;
-	} else if (strcmp(key, "io_attach") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_IO_ATTACH) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_IO_ATTACH;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_IO_ATTACH;
-	} else if (strcmp(key, "stat_attach") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_STAT_ATTACH) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_STAT_ATTACH;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_STAT_ATTACH;
-	} else if (strcmp(key, "rwpcc") == 0 || strcmp(key, "pccrw") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_RWPCC) == 0 ||
+		   strcmp(key, PCC_CMDNAME_PCCRW) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRW;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PCCRW;
-	} else if (strcmp(key, "ropcc") == 0 || strcmp(key, "pccro") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_ROPCC) == 0 ||
+		   strcmp(key, PCC_CMDNAME_PCCRO) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRO;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PCCRO;
-	} else if (strcmp(key, "mmap_conv") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_MMAP_CONV) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 #ifdef HAVE_ADD_TO_PAGE_CACHE_LOCKED
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_MMAP_CONV;
@@ -671,24 +678,24 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 #endif
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_MMAP_CONV;
-	} else if (strcmp(key, "proj_quota") == 0) {
+	} else if (strcmp(key, PCC_CMDNAME_PROJ_QUOTA) == 0) {
 		rc = kstrtobool(val, &enable);
 		if (rc)
-			return rc;
+			RETURN(rc);
 		if (enable)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PROJ_QUOTA;
 		else
 			cmd->u.pccc_add.pccc_flags &= ~PCC_DATASET_PROJ_QUOTA;
-	} else if (strcmp(key, "hsmtool") == 0) {
+	} else if (strcmp(key, PCC_YAML_HSMTOOL) == 0) {
 		cmd->u.pccc_add.pccc_hsmtool_type = hsmtool_string2type(val);
 		if (cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V1 &&
 		    cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V2)
-			return -EINVAL;
+			RETURN(-EINVAL);
 	} else {
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
-	return 0;
+	RETURN(0);
 }
 
 static int
@@ -697,6 +704,8 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 	char *val;
 	char *token;
 	int rc;
+
+	ENTRY;
 
 	switch (cmd->pccc_cmd) {
 	case PCC_ADD_DATASET:
@@ -709,7 +718,7 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 	case PCC_CLEAR_ALL:
 		break;
 	default:
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	val = buffer;
@@ -717,10 +726,10 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 		token = strsep(&val, " ");
 		rc = pcc_parse_value_pair(cmd, token);
 		if (rc)
-			return rc;
+			RETURN(rc);
 	}
 
-	return 0;
+	RETURN(0);
 }
 
 static void
@@ -1196,7 +1205,8 @@ pcc_cmd_parse(char *buffer, unsigned long count)
 		GOTO(out, rc = -ENOMEM);
 
 	/* clear all setting */
-	if (strncmp(buffer, "clear", 5) == 0) {
+	if (strncmp(buffer, PCC_CMDNAME_CLEAR,
+		    strlen(PCC_CMDNAME_CLEAR)) == 0) {
 		cmd->pccc_cmd = PCC_CLEAR_ALL;
 		GOTO(out, rc = 0);
 	}
@@ -1207,21 +1217,24 @@ pcc_cmd_parse(char *buffer, unsigned long count)
 		GOTO(out_free_cmd, rc = -EINVAL);
 
 	/* Type of the command */
-	if (strcmp(token, "add") == 0) {
+	if (strcmp(token, PCC_CMDNAME_ADD) == 0) {
 		cmd->pccc_cmd = PCC_ADD_DATASET;
 		INIT_LIST_HEAD(&cmd->u.pccc_add.pccc_conds);
-	} else if (strcmp(token, "del") == 0) {
+	} else if (strcmp(token, PCC_CMDNAME_DEL) == 0) {
 		cmd->pccc_cmd = PCC_DEL_DATASET;
 	} else {
 		GOTO(out_free_cmd, rc = -EINVAL);
 	}
 
-	/* Pathname of the dataset */
-	token = strsep(&val, " ");
-	if ((val == NULL && cmd->pccc_cmd != PCC_DEL_DATASET) ||
-	    !pathname_is_valid(token))
-		GOTO(out_free_cmd, rc = -EINVAL);
-	cmd->pccc_pathname = token;
+	if (cmd->pccc_cmd == PCC_ADD_DATASET ||
+	    cmd->pccc_cmd == PCC_DEL_DATASET) {
+		/* Pathname of the dataset */
+		token = strsep(&val, " ");
+		if ((val == NULL && cmd->pccc_cmd != PCC_DEL_DATASET) ||
+		    !pathname_is_valid(token))
+			GOTO(out_free_cmd, rc = -EINVAL);
+		cmd->pccc_pathname = token;
+	}
 
 	if (cmd->pccc_cmd == PCC_ADD_DATASET) {
 		/* List of ID */
