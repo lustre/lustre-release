@@ -4099,9 +4099,8 @@ facet_failover_host() {
 	fi
 
 	if combined_mgs_mds && [ $facet == "mgs" ] &&
-		[ -z $mds1failover_HOST ]; then
-		temp=mds1failover_HOST
-		echo ${!temp}
+		[ -n "$mds1failover_HOST" ]; then
+		echo $mds1failover_HOST
 		return
 	fi
 
