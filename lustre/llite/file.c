@@ -1664,6 +1664,8 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 
 	io = vvp_env_thread_io(env);
 	if (file->f_flags & O_DIRECT) {
+		if (file->f_flags & O_APPEND)
+			dio_lock = 1;
 		if (!is_sync_kiocb(args->u.normal.via_iocb))
 			is_aio = true;
 
