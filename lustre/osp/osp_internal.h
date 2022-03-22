@@ -268,6 +268,8 @@ struct osp_device {
 	 */
 	int				opd_reserved_mb_high;
 	int				opd_reserved_mb_low;
+	bool				opd_cleanup_orphans_done;
+	bool				opd_force_creation;
 };
 
 #define opd_pre_used_fid		opd_pre->osp_pre_used_fid

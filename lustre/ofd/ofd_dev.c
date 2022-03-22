@@ -1665,6 +1665,22 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		int count;
 		int rc2;
 
+		/* This can happen if a new OST is formatted and installed
+		 * in place of an old one at the same index.  Instead of
+		 * precreating potentially millions of deleted old objects
+		 * (possibly filling the OST), only precreate the last batch.
+		 * LFSCK will eventually clean up any orphans. LU-14 */
+		if (diff > 5 * OST_MAX_PRECREATE) {
+			/* Message below is checked in conf-sanity test_122b */
+			LCONSOLE_WARN("%s: precreate FID "DOSTID" is over %lld higher than LAST_ID "DOSTID", only precreating the last %u objects. OST replaced or reformatted?\n",
+				      ofd_name(ofd), POSTID(&oa->o_oi), diff,
+				      POSTID(&oseq->os_oi),
+				      OST_MAX_PRECREATE);
+			/* From last created */
+			diff = OST_MAX_PRECREATE;
+			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
+		}
+
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
 		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
 			/* don't enforce grant during orphan recovery */
@@ -1681,20 +1697,6 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			}
 		}
 
-		/* This can happen if a new OST is formatted and installed
-		 * in place of an old one at the same index.  Instead of
-		 * precreating potentially millions of deleted old objects
-		 * (possibly filling the OST), only precreate the last batch.
-		 * LFSCK will eventually clean up any orphans. LU-14 */
-		if (diff > 5 * OST_MAX_PRECREATE) {
-			/* Message below is checked in conf-sanity test_122b */
-			LCONSOLE_WARN("%s: precreate FID "DOSTID" is over %lld higher than LAST_ID "DOSTID", only precreating the last %u objects. OST replaced or reformatted?\n",
-				      ofd_name(ofd), POSTID(&oa->o_oi), diff,
-				      POSTID(&oseq->os_oi),
-				      OST_MAX_PRECREATE / 2);
-			diff = OST_MAX_PRECREATE / 2;
-			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
-		}
 
 		while (diff > 0) {
 			next_id = ofd_seq_last_oid(oseq) + 1;

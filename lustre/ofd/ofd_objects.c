@@ -356,7 +356,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		}
 	}
 
-	rc = dt_trans_start_local(env, ofd->ofd_osd, th);
+	rc = dt_trans_start(env, ofd->ofd_osd, th);
 	if (rc)
 		GOTO(trans_stop, rc);
 

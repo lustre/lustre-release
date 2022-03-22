@@ -5585,6 +5585,7 @@ test_69() {
 	start_ost || error "OST0 restart failure"
 	wait_osc_import_state mds ost FULL
 
+	sleep $((TIMEOUT/2)) #object recreation requires some time
 	mount_client $MOUNT || error "mount client failed"
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
 	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)
@@ -5593,7 +5594,7 @@ test_69() {
 	local iused=$($LFS df -i $MOUNT |
 		awk '/OST0000/ { print $3 }'; exit ${PIPESTATUS[0]})
 	log "On OST0, $iused used inodes rc=$?"
-	[ $iused -ge $((ost_max_pre/2 + 1000)) ] &&
+	[ $iused -ge $((ost_max_pre + 1000)) ] &&
 		error "OST replacement created too many inodes; $iused"
 	cleanup || error "cleanup failed with $?"
 }

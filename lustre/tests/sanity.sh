@@ -3378,31 +3378,6 @@ test_27R() {
 }
 run_test 27R "test max_stripecount limitation when stripe count is set to -1"
 
-test_27S() {
-	(( $MDS1_VERSION >= $(version_code 2.14.54) )) ||
-		skip "Need MDS version at least 2.14.54"
-	[[ "$(facet_host mds1)" != "$(facet_host ost1)" ]] ||
-		skip "needs different host for mdt1 ost1"
-
-	local count=$(precreated_ost_obj_count 0 0)
-
-	echo "precreate count $count"
-	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
-	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "setstripe $tdir failed"
-	#define OBD_FAIL_OSP_GET_LAST_FID	0x2109
-	do_facet mds1 $LCTL set_param fail_loc=0x2109
-	#define OBD_FAIL_OST_GET_LAST_FID	0x252
-	do_facet ost1 $LCTL set_param fail_loc=0x252
-	createmany -o $DIR/$tdir/f $count &
-	pid=$!
-	echo "precreate count $(precreated_ost_obj_count 0 0)"
-	do_facet mds1 $LCTL set_param fail_loc=0
-	do_facet ost1 $LCTL set_param fail_loc=0
-	wait $pid || error "createmany failed"
-	echo "precreate count $(precreated_ost_obj_count 0 0)"
-}
-run_test 27S "don't deactivate OSP on network issue"
-
 test_27T() {
 	[ $(facet_host client) == $(facet_host ost1) ] &&
 		skip "need ost1 and client on different nodes"
@@ -28367,34 +28342,6 @@ test_820() {
 	[ $ret -eq 0 ] || error "Failed to copy files to mds$n"
 }
 run_test 820 "update max EA from open intent"
-
-test_822() {
-	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-
-	save_lustre_params mds1 \
-		"osp.$FSNAME-OST*-osc-MDT0000.max_create_count" > $p
-	do_facet $SINGLEMDS "$LCTL set_param -n \
-			osp.$FSNAME-OST*MDT0000.max_create_count=0"
-	do_facet $SINGLEMDS "$LCTL set_param -n \
-			osp.$FSNAME-OST0000*MDT0000.max_create_count=20000"
-
-	# wait for statfs update to clear OS_STATFS_NOPRECREATE
-	local maxage=$(do_facet mds1 $LCTL get_param -n \
-		       osp.$FSNAME-OST0000*MDT0000.maxage)
-	sleep $((maxage + 1))
-
-	#define OBD_FAIL_NET_ERROR_RPC          0x532
-	do_facet mds1 "$LCTL set_param fail_loc=0x80000532 fail_val=5"
-
-	stack_trap "restore_lustre_params < $p; rm $p"
-
-	local count=$(do_facet $SINGLEMDS "lctl get_param -n \
-		      osp.$FSNAME-OST0000*MDT0000.create_count")
-	for i in $(seq 1 $count); do
-		touch $DIR/$tfile.${i} || error "touch failed"
-	done
-}
-run_test 822 "test precreate failure"
 
 test_823() {
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
