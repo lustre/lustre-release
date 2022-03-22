@@ -612,6 +612,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 			bio_start_page_idx = page_idx;
 			/* allocate new bio */
+			bio_private = NULL;
 			bio = cfs_bio_alloc(bdev,
 					    min_t(unsigned short, BIO_MAX_VECS,
 						  (block_idx_end - block_idx +
