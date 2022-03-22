@@ -20,10 +20,6 @@ init_logging
 
 . $LUSTRE/tests/setup-cifs.sh
 
-check_and_setup_lustre
-
-# first unmount all the lustre clients
-cleanup_mount $MOUNT
 # lustre client used as samba server (default is mds node)
 LUSTRE_CLIENT_SMBSRV=${LUSTRE_CLIENT_SMBSRV:-$(facet_active_host $SINGLEMDS)}
 SMBSHARE=${SMBSHARE:-lustretest}
@@ -36,6 +32,13 @@ SMBCLIENTS=$(exclude_items_from_list $SMBCLIENTS $LUSTRE_CLIENT_SMBSRV)
 
 [ -z "$SMBCLIENTS" ] &&
 	skip_env "need at least two nodes: samba server and samba client"
+
+do_nodes $SMBCLIENTS modinfo cifs | grep dummy > /dev/null &&
+	skip_env "OFED installation caused CIFS to break in RHEL8.4 mlnx 5.4"
+
+check_and_setup_lustre
+# first unmount all the lustre clients
+cleanup_mount $MOUNT
 
 # set CONFIGURE_SMB=false to skip smb config
 CONFIGURE_SMB=${CONFIGURE_SMB:-true}
