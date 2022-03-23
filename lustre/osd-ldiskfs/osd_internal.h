@@ -278,7 +278,8 @@ struct osd_device {
 	/* Other flags */
 				  od_read_cache:1,
 				  od_writethrough_cache:1,
-				  od_nonrotational:1;
+				  od_nonrotational:1,
+				  od_enable_projid_xattr:1;
 
 
 	__u32			  od_dirent_journal;

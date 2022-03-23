@@ -28160,9 +28160,22 @@ test_904() {
 	local testfile="$DIR/$tdir/$tfile"
 	local xattr="trusted.projid"
 	local projid
+	local mdts=$(comma_list $(mdts_nodes))
+	local saved=$(do_facet mds1 $LCTL get_param -n \
+		osd-ldiskfs.*MDT0000.enable_projid_xattr)
+
+	do_nodes $mdts $LCTL set_param osd-ldiskfs.*MDT*.enable_projid_xattr=0
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		osd-ldiskfs.*MDT*.enable_projid_xattr=$saved"
 
 	mkdir -p $DIR/$tdir
 	touch $testfile
+	#hide projid xattr on server
+	$LFS project -p 1 $testfile ||
+		error "set $testfile project id failed"
+	getfattr -m - $testfile | grep $xattr &&
+		error "do not show trusted.projid when disabled on server"
+	do_nodes $mdts $LCTL set_param osd-ldiskfs.*MDT*.enable_projid_xattr=1
 	#should be hidden when projid is 0
 	$LFS project -p 0 $testfile ||
 		error "set $testfile project id failed"
@@ -28185,6 +28198,8 @@ test_904() {
 	#check the new projid via getxattr
 	$LFS project -p 1001 $testfile ||
 		error "set $testfile project id failed"
+	getfattr -m - $testfile | grep $xattr ||
+		error "should show trusted.projid when project ID != 0"
 	projid=$(getfattr -n $xattr $testfile |
 		sed -n 's/^trusted\.projid="\(.*\)"/\1/p')
 	[ $projid == "1001" ] ||

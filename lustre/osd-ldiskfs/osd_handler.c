@@ -4908,9 +4908,11 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 			  const struct lu_buf *buf)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *dev = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct dentry *dentry = &info->oti_obj_dentry;
+	int rc;
 
 	if (!dt_object_exists(dt))
 		return -ENOENT;
@@ -4921,7 +4923,31 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
+	rc = inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
+
+	if (rc < 0 || buf->lb_buf == NULL)
+		return rc;
+
+	/* Hide virtual project ID xattr from list if disabled */
+	if (!dev->od_enable_projid_xattr) {
+		char *end = (char *)buf->lb_buf + rc;
+		char *p = buf->lb_buf;
+
+		while (p < end) {
+			char *next = p + strlen(p) + 1;
+
+			if (strcmp(p, XATTR_NAME_PROJID) == 0) {
+				if (end - next > 0)
+					memmove(p, next, end - next);
+				rc -= next - p;
+				break;
+			}
+
+			p = next;
+		}
+	}
+
+	return rc;
 }
 
 static int osd_declare_xattr_del(const struct lu_env *env,
@@ -8163,6 +8189,7 @@ static int osd_device_init0(const struct lu_env *env,
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
+	o->od_enable_projid_xattr = 0;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 	o->od_readcache_max_iosize = OSD_READCACHE_MAX_IO_MB << 20;
 	o->od_writethrough_max_iosize = OSD_WRITECACHE_MAX_IO_MB << 20;

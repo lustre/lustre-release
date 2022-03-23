@@ -218,6 +218,45 @@ static ssize_t writethrough_cache_enable_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(writethrough_cache_enable);
 
+static ssize_t enable_projid_xattr_show(struct kobject *kobj,
+					struct attribute *attr,
+					char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", osd->od_enable_projid_xattr);
+}
+
+static ssize_t enable_projid_xattr_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer,
+					size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	bool val;
+	int rc;
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	osd->od_enable_projid_xattr = !!val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_projid_xattr);
+
 static ssize_t fallocate_zero_blocks_show(struct kobject *kobj,
 					  struct attribute *attr,
 					  char *buf)
@@ -762,6 +801,7 @@ struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_read_cache_enable.attr,
 	&lustre_attr_writethrough_cache_enable.attr,
+	&lustre_attr_enable_projid_xattr.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
 	&lustre_attr_fallocate_zero_blocks.attr,
