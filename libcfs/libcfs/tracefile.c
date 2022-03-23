@@ -967,7 +967,10 @@ int cfs_trace_get_debug_mb(void)
 
 	up_read(&cfs_tracefile_sem);
 
-	return (total_pages >> (20 - PAGE_SHIFT)) + 1;
+	if (total_pages)
+		return (total_pages >> (20 - PAGE_SHIFT)) + 1;
+	else
+		return 0;
 }
 
 static int tracefiled(void *arg)

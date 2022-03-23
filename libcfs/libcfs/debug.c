@@ -661,12 +661,10 @@ int libcfs_debug_init(unsigned long bufsize)
 	/* If libcfs_debug_mb is uninitialized then just make the
 	 * total buffers smp_num_cpus * TCD_MAX_PAGES
 	 */
-	if (max < num_possible_cpus()) {
+	if (max < num_possible_cpus())
 		max = TCD_MAX_PAGES;
-	} else {
-		max = (max / num_possible_cpus());
+	else
 		max <<= (20 - PAGE_SHIFT);
-	}
 
 	rc = cfs_tracefile_init(max);
 	if (rc)
@@ -674,8 +672,7 @@ int libcfs_debug_init(unsigned long bufsize)
 
 	libcfs_register_panic_notifier();
 	kernel_param_lock(THIS_MODULE);
-	if (libcfs_debug_mb == 0)
-		libcfs_debug_mb = cfs_trace_get_debug_mb();
+	libcfs_debug_mb = cfs_trace_get_debug_mb();
 	kernel_param_unlock(THIS_MODULE);
 	return rc;
 }
