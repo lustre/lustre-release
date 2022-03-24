@@ -783,6 +783,19 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 			ff_needed = true;
 		else if (rc < 0)
 			RETURN(rc);
+
+		if (ff_needed) {
+			if (oa->o_valid & OBD_MD_FLFID) {
+				ff->ff_parent.f_seq = oa->o_parent_seq;
+				ff->ff_parent.f_oid = oa->o_parent_oid;
+				ff->ff_parent.f_ver = oa->o_stripe_idx;
+			}
+			if (oa->o_valid & OBD_MD_FLOSTLAYOUT)
+				ff->ff_layout = oa->o_layout;
+			if (oa->o_valid & OBD_MD_LAYOUT_VERSION)
+				ff->ff_layout_version = oa->o_layout_version;
+			filter_fid_cpu_to_le(ff, ff, sizeof(*ff));
+		}
 	}
 
 	th = ofd_trans_create(env, ofd);
@@ -796,6 +809,16 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	rc = dt_declare_fallocate(env, dob, start, end, mode, th);
 	if (rc)
 		GOTO(stop, rc);
+
+	if (ff_needed) {
+		info->fti_buf.lb_buf = ff;
+		info->fti_buf.lb_len = sizeof(*ff);
+		rc = dt_declare_xattr_set(env, ofd_object_child(fo),
+					  &info->fti_buf, XATTR_NAME_FID, 0,
+					  th);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
 	rc = ofd_trans_start(env, ofd, fo, th);
 	if (rc)
