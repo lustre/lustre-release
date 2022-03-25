@@ -2300,16 +2300,31 @@ out_detach:
 	case LL_IOC_ADD_ENCRYPTION_KEY:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
-		return llcrypt_ioctl_add_key(file, (void __user *)arg);
+		rc = llcrypt_ioctl_add_key(file, (void __user *)arg);
+#ifdef CONFIG_LL_ENCRYPTION
+		if (!rc)
+			sptlrpc_enc_pool_add_user();
+#endif
+		return rc;
 	case LL_IOC_REMOVE_ENCRYPTION_KEY:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key(file, (void __user *)arg);
+		rc = llcrypt_ioctl_remove_key(file, (void __user *)arg);
+#ifdef CONFIG_LL_ENCRYPTION
+		if (!rc)
+			sptlrpc_enc_pool_del_user();
+#endif
+		return rc;
 	case LL_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;
-		return llcrypt_ioctl_remove_key_all_users(file,
-							  (void __user *)arg);
+		rc = llcrypt_ioctl_remove_key_all_users(file,
+							(void __user *)arg);
+#ifdef CONFIG_LL_ENCRYPTION
+		if (!rc)
+			sptlrpc_enc_pool_del_user();
+#endif
+		return rc;
 	case LL_IOC_GET_ENCRYPTION_KEY_STATUS:
 		if (!ll_sbi_has_encrypt(ll_i2sbi(inode)))
 			return -EOPNOTSUPP;

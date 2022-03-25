@@ -472,10 +472,9 @@ static inline void enc_pools_wakeup(void)
 {
 	assert_spin_locked(&page_pools.epp_lock);
 
-	if (unlikely(page_pools.epp_waitqlen)) {
-		LASSERT(waitqueue_active(&page_pools.epp_waitq));
+	/* waitqueue_active */
+	if (unlikely(waitqueue_active(&page_pools.epp_waitq)))
 		wake_up(&page_pools.epp_waitq);
-	}
 }
 
 static int enc_pools_should_grow(int page_needed, time64_t now)
@@ -525,44 +524,50 @@ int pool_is_at_full_capacity(void)
 }
 EXPORT_SYMBOL(pool_is_at_full_capacity);
 
+static inline struct page **page_from_bulkdesc(void *array, int index)
+{
+	struct ptlrpc_bulk_desc *desc = (struct ptlrpc_bulk_desc *)array;
+
+	return &desc->bd_enc_vec[index].bv_page;
+}
+
+static inline struct page **page_from_pagearray(void *array, int index)
+{
+	struct page **pa = (struct page **)array;
+
+	return &pa[index];
+}
+
 /*
  * we allocate the requested pages atomically.
  */
-int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
+static inline int __sptlrpc_enc_pool_get_pages(void *array, unsigned int count,
+					struct page **(*page_from)(void *, int))
 {
 	wait_queue_entry_t waitlink;
 	unsigned long this_idle = -1;
 	u64 tick_ns = 0;
 	time64_t now;
 	int p_idx, g_idx;
-	int i;
+	int i, rc = 0;
 
-	LASSERT(desc->bd_iov_count > 0);
-	LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
-
-	/* resent bulk, enc iov might have been allocated previously */
-	if (desc->bd_enc_vec != NULL)
-		return 0;
-
-	OBD_ALLOC_LARGE(desc->bd_enc_vec,
-		  desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
-	if (desc->bd_enc_vec == NULL)
-		return -ENOMEM;
+	if (!array || count <= 0 || count > page_pools.epp_max_pages)
+		return -EINVAL;
 
 	spin_lock(&page_pools.epp_lock);
 
 	page_pools.epp_st_access++;
 again:
-	if (unlikely(page_pools.epp_free_pages < desc->bd_iov_count)) {
+	if (unlikely(page_pools.epp_free_pages < count)) {
 		if (tick_ns == 0)
 			tick_ns = ktime_get_ns();
 
 		now = ktime_get_real_seconds();
 
 		page_pools.epp_st_missings++;
-		page_pools.epp_pages_short += desc->bd_iov_count;
+		page_pools.epp_pages_short += count;
 
-		if (enc_pools_should_grow(desc->bd_iov_count, now)) {
+		if (enc_pools_should_grow(count, now)) {
 			page_pools.epp_growing = 1;
 
 			spin_unlock(&page_pools.epp_lock);
@@ -577,7 +582,7 @@ again:
 				if (++page_pools.epp_waitqlen >
 				    page_pools.epp_st_max_wqlen)
 					page_pools.epp_st_max_wqlen =
-							page_pools.epp_waitqlen;
+						page_pools.epp_waitqlen;
 
 				set_current_state(TASK_UNINTERRUPTIBLE);
 				init_wait(&waitlink);
@@ -588,7 +593,6 @@ again:
 				schedule();
 				remove_wait_queue(&page_pools.epp_waitq,
 						  &waitlink);
-				LASSERT(page_pools.epp_waitqlen > 0);
 				spin_lock(&page_pools.epp_lock);
 				page_pools.epp_waitqlen--;
 			} else {
@@ -599,17 +603,13 @@ again:
 				 * will put request back in queue.
 				 */
 				page_pools.epp_st_outofmem++;
-				spin_unlock(&page_pools.epp_lock);
-				OBD_FREE_LARGE(desc->bd_enc_vec,
-					       desc->bd_iov_count *
-						sizeof(*desc->bd_enc_vec));
-				desc->bd_enc_vec = NULL;
-				return -ENOMEM;
+				GOTO(out_unlock, rc = -ENOMEM);
 			}
 		}
 
-		LASSERT(page_pools.epp_pages_short >= desc->bd_iov_count);
-		page_pools.epp_pages_short -= desc->bd_iov_count;
+		if (page_pools.epp_pages_short < count)
+			GOTO(out_unlock, rc = -EPROTO);
+		page_pools.epp_pages_short -= count;
 
 		this_idle = 0;
 		goto again;
@@ -624,15 +624,17 @@ again:
 	}
 
 	/* proceed with rest of allocation */
-	page_pools.epp_free_pages -= desc->bd_iov_count;
+	page_pools.epp_free_pages -= count;
 
 	p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
 	g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-	for (i = 0; i < desc->bd_iov_count; i++) {
-		LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
-		desc->bd_enc_vec[i].bv_page =
-		       page_pools.epp_pools[p_idx][g_idx];
+	for (i = 0; i < count; i++) {
+		struct page **pagep = page_from(array, i);
+
+		if (page_pools.epp_pools[p_idx][g_idx] == NULL)
+			GOTO(out_unlock, rc = -EPROTO);
+		*pagep = page_pools.epp_pools[p_idx][g_idx];
 		page_pools.epp_pools[p_idx][g_idx] = NULL;
 
 		if (++g_idx == PAGES_PER_POOL) {
@@ -653,58 +655,119 @@ again:
 	}
 	page_pools.epp_idle_idx = (page_pools.epp_idle_idx * IDLE_IDX_WEIGHT +
 				   this_idle) /
-				   (IDLE_IDX_WEIGHT + 1);
+		(IDLE_IDX_WEIGHT + 1);
 
 	page_pools.epp_last_access = ktime_get_seconds();
 
+out_unlock:
 	spin_unlock(&page_pools.epp_lock);
-	return 0;
+	return rc;
+}
+
+int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
+{
+	int rc;
+
+	LASSERT(desc->bd_iov_count > 0);
+	LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
+
+	/* resent bulk, enc iov might have been allocated previously */
+	if (desc->bd_enc_vec != NULL)
+		return 0;
+
+	OBD_ALLOC_LARGE(desc->bd_enc_vec,
+			desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
+	if (desc->bd_enc_vec == NULL)
+		return -ENOMEM;
+
+	rc = __sptlrpc_enc_pool_get_pages((void *)desc, desc->bd_iov_count,
+					  page_from_bulkdesc);
+	if (rc) {
+		OBD_FREE_LARGE(desc->bd_enc_vec,
+			       desc->bd_iov_count *
+			       sizeof(*desc->bd_enc_vec));
+		desc->bd_enc_vec = NULL;
+	}
+	return rc;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_get_pages);
 
-void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
+int sptlrpc_enc_pool_get_pages_array(struct page **pa, unsigned int count)
+{
+	return __sptlrpc_enc_pool_get_pages((void *)pa, count,
+					    page_from_pagearray);
+}
+EXPORT_SYMBOL(sptlrpc_enc_pool_get_pages_array);
+
+static int __sptlrpc_enc_pool_put_pages(void *array, unsigned int count,
+					struct page **(*page_from)(void *, int))
 {
 	int p_idx, g_idx;
-	int i;
+	int i, rc = 0;
 
-	if (desc->bd_enc_vec == NULL)
-		return;
-
-	LASSERT(desc->bd_iov_count > 0);
+	if (!array || count <= 0)
+		return -EINVAL;
 
 	spin_lock(&page_pools.epp_lock);
 
 	p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
 	g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-	LASSERT(page_pools.epp_free_pages + desc->bd_iov_count <=
-		page_pools.epp_total_pages);
-	LASSERT(page_pools.epp_pools[p_idx]);
+	if (page_pools.epp_free_pages + count > page_pools.epp_total_pages)
+		GOTO(out_unlock, rc = -EPROTO);
+	if (!page_pools.epp_pools[p_idx])
+		GOTO(out_unlock, rc = -EPROTO);
 
-	for (i = 0; i < desc->bd_iov_count; i++) {
-		LASSERT(desc->bd_enc_vec[i].bv_page);
-		LASSERT(g_idx != 0 || page_pools.epp_pools[p_idx]);
-		LASSERT(page_pools.epp_pools[p_idx][g_idx] == NULL);
+	for (i = 0; i < count; i++) {
+		struct page **pagep = page_from(array, i);
 
-		page_pools.epp_pools[p_idx][g_idx] =
-			desc->bd_enc_vec[i].bv_page;
+		if (!*pagep ||
+		    page_pools.epp_pools[p_idx][g_idx] != NULL)
+			GOTO(out_unlock, rc = -EPROTO);
 
+		page_pools.epp_pools[p_idx][g_idx] = *pagep;
 		if (++g_idx == PAGES_PER_POOL) {
 			p_idx++;
 			g_idx = 0;
 		}
 	}
 
-	page_pools.epp_free_pages += desc->bd_iov_count;
-
+	page_pools.epp_free_pages += count;
 	enc_pools_wakeup();
 
+out_unlock:
 	spin_unlock(&page_pools.epp_lock);
+	return rc;
+}
+
+void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
+{
+	int rc;
+
+	if (desc->bd_enc_vec == NULL)
+		return;
+
+	rc = __sptlrpc_enc_pool_put_pages((void *)desc, desc->bd_iov_count,
+					  page_from_bulkdesc);
+	if (rc)
+		CDEBUG(D_SEC, "error putting pages in enc pool: %d\n", rc);
 
 	OBD_FREE_LARGE(desc->bd_enc_vec,
-		 desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
+		       desc->bd_iov_count * sizeof(*desc->bd_enc_vec));
 	desc->bd_enc_vec = NULL;
 }
+
+void sptlrpc_enc_pool_put_pages_array(struct page **pa, unsigned int count)
+{
+	int rc;
+
+	rc = __sptlrpc_enc_pool_put_pages((void *)pa, count,
+					  page_from_pagearray);
+
+	if (rc)
+		CDEBUG(D_SEC, "error putting pages in enc pool: %d\n", rc);
+}
+EXPORT_SYMBOL(sptlrpc_enc_pool_put_pages_array);
 
 /*
  * we don't do much stuff for add_user/del_user anymore, except adding some

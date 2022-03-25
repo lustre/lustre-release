@@ -50,8 +50,6 @@
 #define llcrypt_has_encryption_key(inode) fscrypt_has_encryption_key(inode)
 #define llcrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)	\
 	fscrypt_encrypt_pagecache_blocks(page, len, offs, gfp_flags)
-#define llcrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags) \
-	fscrypt_encrypt_block_inplace(inode, page, len, offs, lblk, gfp_flags)
 #define llcrypt_decrypt_pagecache_blocks(page, len, offs)	\
 	fscrypt_decrypt_pagecache_blocks(page, len, offs)
 #define llcrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num)	\
