@@ -340,6 +340,7 @@ debs: undef.h debs_common
 	KVERS=$${KVERS:-$(LINUXRELEASE)} && \
 	export KSRC_TREE=$(LINUX) && \
 	KSRC=$${KSRC:-$(LINUX_OBJ)} && \
+	TARBALL=$$(realpath usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2) \
 	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog) && \

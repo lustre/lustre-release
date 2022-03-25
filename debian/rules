@@ -357,13 +357,14 @@ binary-$(SOURCE_PKG): build-stamp
 	      . debian/$(SOURCE_PKG)/usr/src/modules/lustre
 	# Remove FULLCLEAN setting
 	rm debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/rules
-	sed -e 's/FULLCLEAN=full-clean/FULLCLEAN=/' < debian/rules > debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/rules
+	cp -v debian/rules debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/rules
+	sed -i -e 's/FULLCLEAN=full-clean/FULLCLEAN=/' debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/rules
 	# clean up dest
 	rm -rf debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/patched \
 	       debian/$(SOURCE_PKG)/usr/src/modules/lustre/debian/patches/* 
 	$(MAKE) -C debian/$(SOURCE_PKG)/usr/src/modules/lustre -f debian/rules clean
 	# Create the module-source tarball.
-	cd debian/$(SOURCE_PKG)/usr/src && tar jcf lustre-$${SRC_GIT_HASH}.tar.bz2 modules
+	cd debian/$(SOURCE_PKG)/usr/src && tar --exclude-vcs -jcf lustre-$${SRC_GIT_HASH}.tar.bz2 modules
 	rm -rf debian/$(SOURCE_PKG)/usr/src/modules
 	dh_install -p$(SOURCE_PKG)
 	dh_installchangelogs -p $(SOURCE_PKG) lustre/ChangeLog
