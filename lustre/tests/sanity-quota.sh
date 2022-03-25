@@ -4532,6 +4532,11 @@ get_slave_nr() {
 	local qtype=$2
 	local nr
 
+	wait_update_facet mds1 \
+		"$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info \
+			>/dev/null 2>&1 || echo foo" "" ||
+	error "mds1: failed to create quota pool $pool"
+
 	do_facet mds1 $LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info |
 		awk '/usr/ {getline; print $2}'
 }
