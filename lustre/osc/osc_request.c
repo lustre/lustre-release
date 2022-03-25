@@ -1369,21 +1369,123 @@ static int osc_checksum_bulk_rw(const char *obd_name,
 	RETURN(rc);
 }
 
+#ifdef CONFIG_LL_ENCRYPTION
+/**
+ * osc_encrypt_pagecache_blocks() - overlay to llcrypt_encrypt_pagecache_blocks
+ * @srcpage:      The locked pagecache page containing the block(s) to encrypt
+ * @dstpage:      The page to put encryption result
+ * @len:       Total size of the block(s) to encrypt.  Must be a nonzero
+ *		multiple of the filesystem's block size.
+ * @offs:      Byte offset within @page of the first block to encrypt.  Must be
+ *		a multiple of the filesystem's block size.
+ * @gfp_flags: Memory allocation flags
+ *
+ * This overlay function is necessary to be able to provide our own bounce page.
+ */
+static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
+						 struct page *dstpage,
+						 unsigned int len,
+						 unsigned int offs,
+						 gfp_t gfp_flags)
+
+{
+	const struct inode *inode = srcpage->mapping->host;
+	const unsigned int blockbits = inode->i_blkbits;
+	const unsigned int blocksize = 1 << blockbits;
+	u64 lblk_num = ((u64)srcpage->index << (PAGE_SHIFT - blockbits)) +
+		(offs >> blockbits);
+	unsigned int i;
+	int err;
+
+	if (unlikely(!dstpage))
+		return llcrypt_encrypt_pagecache_blocks(srcpage, len, offs,
+							gfp_flags);
+
+	if (WARN_ON_ONCE(!PageLocked(srcpage)))
+		return ERR_PTR(-EINVAL);
+
+	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
+		return ERR_PTR(-EINVAL);
+
+	/* Set PagePrivate2 for disambiguation in
+	 * osc_finalize_bounce_page().
+	 * It means cipher page was not allocated by llcrypt.
+	 */
+	SetPagePrivate2(dstpage);
+
+	for (i = offs; i < offs + len; i += blocksize, lblk_num++) {
+		err = llcrypt_encrypt_block(inode, srcpage, dstpage, blocksize,
+					    i, lblk_num, gfp_flags);
+		if (err)
+			return ERR_PTR(err);
+	}
+	SetPagePrivate(dstpage);
+	set_page_private(dstpage, (unsigned long)srcpage);
+	return dstpage;
+}
+
+/**
+ * osc_finalize_bounce_page() - overlay to llcrypt_finalize_bounce_page
+ *
+ * This overlay function is necessary to handle bounce pages
+ * allocated by ourselves.
+ */
+static inline void osc_finalize_bounce_page(struct page **pagep)
+{
+	struct page *page = *pagep;
+
+	/* PagePrivate2 was set in osc_encrypt_pagecache_blocks
+	 * to indicate the cipher page was allocated by ourselves.
+	 * So we must not free it via llcrypt.
+	 */
+	if (unlikely(!page || !PagePrivate2(page)))
+		return llcrypt_finalize_bounce_page(pagep);
+
+	if (llcrypt_is_bounce_page(page)) {
+		*pagep = llcrypt_pagecache_page(page);
+		ClearPagePrivate2(page);
+		set_page_private(page, (unsigned long)NULL);
+		ClearPagePrivate(page);
+	}
+}
+#else /* !CONFIG_LL_ENCRYPTION */
+#define osc_encrypt_pagecache_blocks(srcpage, dstpage, len, offs, gfp_flags) \
+	llcrypt_encrypt_pagecache_blocks(srcpage, len, offs, gfp_flags)
+#define osc_finalize_bounce_page(page) llcrypt_finalize_bounce_page(page)
+#endif
+
 static inline void osc_release_bounce_pages(struct brw_page **pga,
 					    u32 page_count)
 {
 #ifdef HAVE_LUSTRE_CRYPTO
-	int i;
+	struct page **pa = NULL;
+	int i, j = 0;
+
+#ifdef CONFIG_LL_ENCRYPTION
+	if (PageChecked(pga[0]->pg)) {
+		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
+		if (!pa)
+			return;
+	}
+#endif
 
 	for (i = 0; i < page_count; i++) {
-		/* Bounce pages allocated by a call to
-		 * llcrypt_encrypt_pagecache_blocks() in osc_brw_prep_request()
+		/* Bounce pages used by osc_encrypt_pagecache_blocks()
+		 * called from osc_brw_prep_request()
 		 * are identified thanks to the PageChecked flag.
 		 */
-		if (PageChecked(pga[i]->pg))
-			llcrypt_finalize_bounce_page(&pga[i]->pg);
+		if (PageChecked(pga[i]->pg)) {
+			if (pa)
+				pa[j++] = pga[i]->pg;
+			osc_finalize_bounce_page(&pga[i]->pg);
+		}
 		pga[i]->count -= pga[i]->bp_count_diff;
 		pga[i]->off += pga[i]->bp_off_diff;
+	}
+
+	if (pa) {
+		sptlrpc_enc_pool_put_pages_array(pa, j);
+		OBD_FREE_PTR_ARRAY_LARGE(pa, page_count);
 	}
 #endif
 }
@@ -1436,6 +1538,24 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 
 	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode) &&
 	    llcrypt_has_encryption_key(inode)) {
+		struct page **pa = NULL;
+
+#ifdef CONFIG_LL_ENCRYPTION
+		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
+		if (pa == NULL) {
+			ptlrpc_request_free(req);
+			RETURN(-ENOMEM);
+		}
+
+		rc = sptlrpc_enc_pool_get_pages_array(pa, page_count);
+		if (rc) {
+			CDEBUG(D_SEC, "failed to allocate from enc pool: %d\n",
+			       rc);
+			ptlrpc_request_free(req);
+			RETURN(rc);
+		}
+#endif
+
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *brwpg = pga[i];
 			struct page *data_page = NULL;
@@ -1465,9 +1585,10 @@ retry_encrypt:
 				brwpg->pg->index = clpage->cp_page_index;
 			}
 			data_page =
-				llcrypt_encrypt_pagecache_blocks(brwpg->pg,
-								 nunits, 0,
-								 GFP_NOFS);
+				osc_encrypt_pagecache_blocks(brwpg->pg,
+							    pa ? pa[i] : NULL,
+							    nunits, 0,
+							    GFP_NOFS);
 			if (directio) {
 				brwpg->pg->mapping = map_orig;
 				brwpg->pg->index = index_orig;
@@ -1480,6 +1601,12 @@ retry_encrypt:
 					retried = true;
 					rc = 0;
 					goto retry_encrypt;
+				}
+				if (pa) {
+					sptlrpc_enc_pool_put_pages_array(pa + i,
+								page_count - i);
+					OBD_FREE_PTR_ARRAY_LARGE(pa,
+								 page_count);
 				}
 				ptlrpc_request_free(req);
 				RETURN(rc);
@@ -1505,6 +1632,9 @@ retry_encrypt:
 			brwpg->bp_off_diff = brwpg->off & ~PAGE_MASK;
 			brwpg->off = brwpg->off & PAGE_MASK;
 		}
+
+		if (pa)
+			OBD_FREE_PTR_ARRAY_LARGE(pa, page_count);
 	} else if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode)) {
 		struct osc_async_page *oap = brw_page2oap(pga[0]);
 		struct cl_page *clpage = oap2cl_page(oap);

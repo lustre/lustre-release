@@ -1165,7 +1165,9 @@ int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
 int sptlrpc_enc_pool_add_user(void);
 int sptlrpc_enc_pool_del_user(void);
 int  sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc);
+int sptlrpc_enc_pool_get_pages_array(struct page **pa, unsigned int count);
 void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc);
+void sptlrpc_enc_pool_put_pages_array(struct page **pa, unsigned int count);
 int get_free_pages_in_pool(void);
 int pool_is_at_full_capacity(void);
 
