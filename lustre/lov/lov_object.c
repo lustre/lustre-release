@@ -215,7 +215,6 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 
 	spin_lock_init(&r0->lo_sub_lock);
 	r0->lo_nr = lse->lsme_stripe_count;
-	r0->lo_trunc_stripeno = -1;
 
 	OBD_ALLOC_PTR_ARRAY_LARGE(r0->lo_sub, r0->lo_nr);
 	if (r0->lo_sub == NULL)
@@ -646,7 +645,6 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 
 	entry_count = lsm->lsm_entry_count;
 
-	spin_lock_init(&comp->lo_write_lock);
 	comp->lo_flags = lsm->lsm_flags;
 	comp->lo_mirror_count = lsm->lsm_mirror_count + 1;
 	comp->lo_entry_count = lsm->lsm_entry_count;

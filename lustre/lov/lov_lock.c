@@ -116,6 +116,8 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 					  struct cl_lock *lock)
 {
 	struct lov_object *lov = cl2lov(obj);
+	struct lov_io *lio = lov_env_io(env);
+	bool is_trunc = cl_io_is_trunc(io);
 	struct lov_lock *lovlck;
 	struct lu_extent ext;
 	loff_t start;
@@ -127,6 +129,8 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 
 	ENTRY;
 
+	LASSERT(ergo(is_trunc, lio->lis_trunc_stripe_index != NULL));
+
 	ext.e_start = cl_offset(obj, lock->cll_descr.cld_start);
 	if (lock->cll_descr.cld_end == CL_PAGE_EOF)
 		ext.e_end = OBD_OBJECT_EOF;
@@ -134,16 +138,13 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		ext.e_end  = cl_offset(obj, lock->cll_descr.cld_end + 1);
 
 	nr = 0;
-	lov_foreach_io_layout(index, lov_env_io(env), &ext) {
+	lov_foreach_io_layout(index, lio, &ext) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		for (i = 0; i < r0->lo_nr; i++) {
 			if (likely(r0->lo_sub[i])) {/* spare layout */
-				if (lov_stripe_intersects(lov->lo_lsm, index, i,
-							  &ext, &start, &end))
-					nr++;
-				else if (cl_io_is_trunc(io) &&
-					 r0->lo_trunc_stripeno == i)
+				if (lov_stripe_intersects(lov->lo_lsm, index, i, &ext, &start, &end) ||
+				    (is_trunc && i == lio->lis_trunc_stripe_index[index]))
 					nr++;
 			}
 		}
@@ -164,24 +165,21 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		for (i = 0; i < r0->lo_nr; ++i) {
-			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
-			struct cl_lock_descr *descr = &lls->sub_lock.cll_descr;
-			bool intersect = false;
+			struct lov_lock_sub *lls;
+			struct cl_lock_descr *descr;
 
 			if (unlikely(!r0->lo_sub[i]))
 				continue;
 
-			intersect = lov_stripe_intersects(lov->lo_lsm, index, i,
-							  &ext, &start, &end);
-			if (intersect)
-				goto init_sublock;
-
-			if (cl_io_is_trunc(io) && i == r0->lo_trunc_stripeno)
+			if (lov_stripe_intersects(lov->lo_lsm, index, i, &ext, &start, &end) ||
+			    (is_trunc && i == lio->lis_trunc_stripe_index[index]))
 				goto init_sublock;
 
 			continue;
-
 init_sublock:
+			LASSERT(nr < lovlck->lls_nr);
+			lls = &lovlck->lls_sub[nr];
+			descr = &lls->sub_lock.cll_descr;
 			LASSERT(descr->cld_obj == NULL);
 			descr->cld_obj   = lovsub2cl(r0->lo_sub[i]);
 			descr->cld_start = cl_index(descr->cld_obj, start);

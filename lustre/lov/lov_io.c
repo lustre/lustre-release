@@ -790,6 +790,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	bool is_trunc = cl_io_is_trunc(ios->cis_io);
 	struct lov_io_sub *sub;
 	struct lu_extent ext;
 	int index;
@@ -800,6 +801,13 @@ static int lov_io_iter_init(const struct lu_env *env,
 	ext.e_start = lio->lis_pos;
 	ext.e_end = lio->lis_endpos;
 
+	if (is_trunc) {
+		OBD_ALLOC_PTR_ARRAY(lio->lis_trunc_stripe_index,
+				    lio->lis_object->u.composite.lo_entry_count);
+		if (lio->lis_trunc_stripe_index == NULL)
+			RETURN(-ENOMEM);
+	}
+
 	lov_foreach_io_layout(index, lio, &ext) {
 		struct lov_layout_entry *le = lov_entry(lio->lis_object, index);
 		struct lov_layout_raid0 *r0 = &le->lle_raid0;
@@ -808,7 +816,8 @@ static int lov_io_iter_init(const struct lu_env *env,
 		int stripe;
 		bool tested_trunc_stripe = false;
 
-		r0->lo_trunc_stripeno = -1;
+		if (is_trunc)
+			lio->lis_trunc_stripe_index[index] = -1;
 
 		CDEBUG(D_VFSTRACE, "component[%d] flags %#x\n",
 		       index, lsm->lsm_entries[index]->lsme_flags);
@@ -843,8 +852,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 				continue;
 			}
 
-			if (cl_io_is_trunc(ios->cis_io) &&
-			    !tested_trunc_stripe) {
+			if (is_trunc && !tested_trunc_stripe) {
 				int prev;
 				u64 tr_start;
 
@@ -859,7 +867,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 				if (ext.e_start < lsm->lsm_entries[index]->
 							lsme_extent.e_start) {
 					/* need previous stripe involvement */
-					r0->lo_trunc_stripeno = prev;
+					lio->lis_trunc_stripe_index[index] = prev;
 				} else {
 					tr_start = ext.e_start;
 					tr_start = lov_do_div64(tr_start,
@@ -868,13 +876,13 @@ static int lov_io_iter_init(const struct lu_env *env,
 					if (tr_start == stripe * lsm->
 							lsm_entries[index]->
 							lsme_stripe_size)
-						r0->lo_trunc_stripeno = prev;
+						lio->lis_trunc_stripe_index[index] = prev;
 				}
 			}
 
 			/* if the last stripe is the trunc stripeno */
-			if (r0->lo_trunc_stripeno == stripe)
-				r0->lo_trunc_stripeno = -1;
+			if (is_trunc && lio->lis_trunc_stripe_index[index] == stripe)
+				lio->lis_trunc_stripe_index[index] = -1;
 
 			sub = lov_sub_get(env, lio,
 					  lov_comp_index(index, stripe));
@@ -888,10 +896,10 @@ static int lov_io_iter_init(const struct lu_env *env,
 		if (rc != 0)
 			break;
 
-		if (r0->lo_trunc_stripeno != -1) {
-			stripe = r0->lo_trunc_stripeno;
+		if (is_trunc && lio->lis_trunc_stripe_index[index] != -1) {
+			stripe = lio->lis_trunc_stripe_index[index];
 			if (unlikely(!r0->lo_sub[stripe])) {
-				r0->lo_trunc_stripeno = -1;
+				lio->lis_trunc_stripe_index[index] = -1;
 				continue;
 			}
 			sub = lov_sub_get(env, lio,
@@ -905,7 +913,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 			 * read get wrong kms.
 			 */
 			if (!list_empty(&sub->sub_linkage)) {
-				r0->lo_trunc_stripeno = -1;
+				lio->lis_trunc_stripe_index[index] = -1;
 				continue;
 			}
 
@@ -1113,6 +1121,12 @@ static void lov_io_iter_fini(const struct lu_env *env,
 	int rc;
 
 	ENTRY;
+
+	if (lio->lis_trunc_stripe_index != NULL)
+		OBD_FREE_PTR_ARRAY(lio->lis_trunc_stripe_index,
+				   lio->lis_object->u.composite.lo_entry_count);
+	lio->lis_trunc_stripe_index = NULL;
+
 	rc = lov_io_call(env, lio, lov_io_iter_fini_wrapper);
 	LASSERT(rc == 0);
 	while (!list_empty(&lio->lis_active))

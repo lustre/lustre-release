@@ -175,11 +175,6 @@ struct lov_comp_layout_entry_ops {
 struct lov_layout_raid0 {
 	unsigned               lo_nr;
 	/**
-	 * record the stripe no before the truncate size, used for setting OST
-	 * object size for truncate. LU-14128.
-	 */
-	int                    lo_trunc_stripeno;
-	/**
 	 * When this is true, lov_object::lo_attr contains
 	 * valid up to date attributes for a top-level
 	 * object. This field is reset to 0 when attributes of
@@ -322,11 +317,6 @@ struct lov_object {
 			 * lo_active_ios reaches zero.
 			 */
 			int             lo_preferred_mirror;
-			/**
-			 * For FLR: the lock to protect access to
-			 * lo_preferred_mirror.
-			 */
-			spinlock_t      lo_write_lock;
 			/**
 			 * For FLR: Number of (valid) mirrors.
 			 */
@@ -557,6 +547,13 @@ struct lov_io {
          * This is used only for CIT_READ and CIT_WRITE io's.
          */
         loff_t             lis_io_endpos;
+
+	/**
+	 * Record the stripe index before the truncate size, used for setting OST
+	 * object size for truncate. LU-14128. lis_trunc_stripe_index[i] refers to
+	 * lov_object.u.composite.lo_entries[i].
+	 */
+	int *lis_trunc_stripe_index;
 
         /**
          * starting position within a file, for the current io loop iteration
