@@ -2269,9 +2269,12 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 			break;
 		case DT_DIR:
 			rc = llapi_semantic_traverse(path, size, d, sem_init,
-						      sem_fini, data, dent);
+						     sem_fini, data, dent);
 			if (rc != 0 && ret == 0)
 				ret = rc;
+			if (rc < 0 && rc != -EALREADY &&
+			    param->fp_stop_on_error)
+				goto out;
 			break;
 		default:
 			rc = 0;
@@ -2279,6 +2282,9 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 				rc = sem_init(path, d, NULL, data, dent);
 				if (rc < 0 && ret == 0) {
 					ret = rc;
+					if (rc && rc != -EALREADY &&
+					    param->fp_stop_on_error)
+						goto out;
 					break;
 				}
 			}
@@ -6076,6 +6082,7 @@ out:
 
 int llapi_migrate_mdt(char *path, struct find_param *param)
 {
+	param->fp_stop_on_error = 1;
 	return param_callback(path, cb_migrate_mdt_init, cb_migrate_mdt_fini,
 			      param);
 }

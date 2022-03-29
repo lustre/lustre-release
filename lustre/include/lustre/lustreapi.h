@@ -341,7 +341,7 @@ struct find_param {
 				 fp_newerxy:1,
 				 fp_exclude_btime:1,
 				 fp_exclude_perm:1,
-				 fp_unused_bit4:1, /* Once all unused fields  */
+				 fp_stop_on_error:1, /* stop iteration on error */
 				 fp_unused_bit5:1, /* are used we need to add */
 				 fp_unused_bit6:1, /* a separate flag field at*/
 				 fp_unused_bit7:1; /* the end of the struct.  */
