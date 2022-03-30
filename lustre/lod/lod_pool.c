@@ -711,22 +711,23 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 {
 	struct pool_desc *pool;
 
-	pool = NULL;
-	if (poolname[0] != '\0') {
-		pool = lod_pool_find(lod, poolname);
-		if (!pool)
-			CDEBUG(D_CONFIG,
-			       "%s: request for an unknown pool (" LOV_POOLNAMEF ")\n",
-			       lod->lod_child_exp->exp_obd->obd_name, poolname);
-		if (pool != NULL && pool_tgt_count(pool) == 0) {
-			CDEBUG(D_CONFIG, "%s: request for an empty pool ("
-			       LOV_POOLNAMEF")\n",
-			       lod->lod_child_exp->exp_obd->obd_name, poolname);
-			/* pool is ignored, so we remove ref on it */
-			lod_pool_putref(pool);
-			pool = NULL;
-		}
+	if (poolname[0] == '\0' || lov_pool_is_reserved(poolname))
+		return NULL;
+
+	pool = lod_pool_find(lod, poolname);
+	if (!pool)
+		CDEBUG(D_CONFIG,
+		       "%s: request for an unknown pool (" LOV_POOLNAMEF ")\n",
+		       lod->lod_child_exp->exp_obd->obd_name, poolname);
+	if (pool != NULL && pool_tgt_count(pool) == 0) {
+		CDEBUG(D_CONFIG, "%s: request for an empty pool ("
+		       LOV_POOLNAMEF")\n",
+		       lod->lod_child_exp->exp_obd->obd_name, poolname);
+		/* pool is ignored, so we remove ref on it */
+		lod_pool_putref(pool);
+		pool = NULL;
 	}
+
 	return pool;
 }
 

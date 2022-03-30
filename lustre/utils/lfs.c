@@ -3940,12 +3940,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'p':
 			if (!optarg)
 				goto usage_error;
-			lsa.lsa_pool_name = optarg;
 
-			if (strlen(lsa.lsa_pool_name) == 0 ||
-			    strncmp(lsa.lsa_pool_name, "none",
-				    LOV_MAXPOOLNAME) == 0)
+			if (optarg[0] == '\0' || lov_pool_is_inherited(optarg))
 				lsa.lsa_pool_name = NULL;
+			else
+				lsa.lsa_pool_name = optarg;
 			break;
 		case 'S':
 			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,

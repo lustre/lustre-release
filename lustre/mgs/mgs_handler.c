@@ -716,6 +716,9 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 		return -EINVAL;
 	ptr++;
 
+	/* Check pool name validity. */
+	if (ptr[0] == '\0' || lov_pool_is_reserved(ptr))
+		return -EINVAL;
 	/* Also make sure poolname is not to long. */
 	if (strlen(ptr) > LOV_MAXPOOLNAME)
 		return -ENAMETOOLONG;

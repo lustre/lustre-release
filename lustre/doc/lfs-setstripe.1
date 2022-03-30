@@ -247,10 +247,14 @@ plain
 .B raid0
 layouts, or the first component of a composite file).
 Use
-.BR pool_name='' ,
+.BR pool_name=ignore
+to force a component without a pool set (no inheritance from last component,
+root or parent).
+Use
+.BR pool_name=''
 or
-.BR pool_name=none
-(since Lustre 2.11) to force a component to inherit the pool from the parent
+.BR pool_name=inherit
+(since Lustre 2.15) to force a component to inherit the pool from the parent
 or root directory instead of the previous component.
 .TP
 .B --foreign \fR[<\fIforeign_type\fR>]
