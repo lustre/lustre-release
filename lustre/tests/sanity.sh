@@ -20719,10 +20719,12 @@ run_test 230v "subdir migrated to the MDT where its parent is located"
 
 test_230w() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
-	(( MDS1_VERSION >= $(version_code 2.14.53) )) ||
-		skip "Need MDS version at least 2.14.53"
+	(( MDS1_VERSION >= $(version_code 2.15.0) )) ||
+		skip "Need MDS version at least 2.15.0"
 
-	mkdir -p $DIR/$tdir/sub || error "mkdir failed"
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -o $DIR/$tdir/f 10 || error "create files failed"
+	createmany -d $DIR/$tdir/d 10 || error "create dirs failed"
 
 	$LFS migrate -m 1 -c $MDSCOUNT -d $DIR/$tdir ||
 		error "migrate failed"
@@ -20730,8 +20732,10 @@ test_230w() {
 	(( $($LFS getdirstripe -c $DIR/$tdir) == MDSCOUNT )) ||
 		error "$tdir stripe count mismatch"
 
-	(( $($LFS getdirstripe -c $DIR/$tdir/sub) == 0 )) ||
-		error "$tdir/sub is striped"
+	for i in $(seq 0 9); do
+		(( $($LFS getdirstripe -c $DIR/$tdir/d$i) == 0 )) ||
+			error "d$i is striped"
+	done
 }
 run_test 230w "non-recursive mode dir migration"
 

@@ -6016,7 +6016,8 @@ out:
 	/* Do not get down anymore? */
 	if (param->fp_depth == param->fp_max_depth)
 		ret = 1;
-	param->fp_depth++;
+	else
+		param->fp_depth++;
 
 	if (dp != NULL) {
 		/*
