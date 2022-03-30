@@ -68,35 +68,6 @@ cleanup_testsuite() {
 	return 0
 }
 
-load_lnet() {
-	load_module ../libcfs/libcfs/libcfs
-	# Prevent local MODOPTS_LIBCFS being passed as part of environment
-	# variable to remote nodes
-	unset MODOPTS_LIBCFS
-
-	set_default_debug "neterror net nettrace malloc"
-	load_module ../lnet/lnet/lnet "$@"
-
-	LNDPATH=${LNDPATH:-"../lnet/klnds"}
-	if [ -z "$LNETLND" ]; then
-		case $NETTYPE in
-		o2ib*)  LNETLND="o2iblnd/ko2iblnd" ;;
-		tcp*)   LNETLND="socklnd/ksocklnd" ;;
-		*)      local lnd="${NETTYPE%%[0-9]}lnd"
-			[ -f "$LNDPATH/$lnd/k$lnd.ko" ] &&
-				LNETLND="$lnd/k$lnd" ||
-				LNETLND="socklnd/ksocklnd"
-		esac
-	fi
-	load_module ../lnet/klnds/$LNETLND
-}
-
-do_lnetctl() {
-	$LCTL mark "$LNETCTL $*"
-	echo "$LNETCTL $*"
-	$LNETCTL "$@"
-}
-
 TESTNS='test_ns'
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
@@ -250,7 +221,7 @@ cleanupall -f
 setup_netns || error "setup_netns failed with $?"
 
 # Determine the local interface(s) used for LNet
-load_modules || error "Failed to load modules"
+load_lnet "config_on_load=1" || error "Failed to load modules"
 
 do_lnetctl net show
 ip a
@@ -1437,7 +1408,7 @@ setup_health_test() {
 
 	# Loading modules should configure LNet with the appropriate
 	# test-framework configuration
-	load_modules || error "Failed to load modules"
+	load_lnet "config_on_load=1" || error "Failed to load modules"
 
 	LNIDS=( $($LCTL list_nids | xargs echo) )
 
@@ -1445,7 +1416,7 @@ setup_health_test() {
 	RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
 
 	if [[ -z ${RNIDS[@]} ]]; then
-		do_rpc_nodes $RNODE load_modules_local
+		do_rpc_nodes $RNODE load_lnet "config_on_load=1"
 		RLOADED=true
 		RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
 	fi
@@ -2007,7 +1978,7 @@ test_212() {
 
 	# Loading modules should configure LNet with the appropriate
 	# test-framework configuration
-	load_modules || error "Failed to load modules"
+	load_lnet "config_on_load=1" || error "Failed to load modules"
 
 	local my_nid=$($LCTL list_nids | head -n 1)
 	[[ -z $my_nid ]] &&
@@ -2018,7 +1989,7 @@ test_212() {
 	local rloaded=false
 
 	if [[ -z $rnodenids ]]; then
-		do_rpc_nodes $rnode load_modules_local
+		do_rpc_nodes $rnode load_lnet "config_on_load=1"
 		rloaded=true
 		rnodenids=$(do_node $rnode $LCTL list_nids | xargs echo)
 	fi

@@ -676,22 +676,13 @@ load_module() {
 	fi
 }
 
-load_modules_local() {
-	if [ -n "$MODPROBE" ]; then
-		# use modprobe
-		echo "Using modprobe to load modules"
-		return 0
-	fi
+do_lnetctl() {
+	$LCTL mark "$LNETCTL $*"
+	echo "$LNETCTL $*"
+	$LNETCTL "$@"
+}
 
-	# Create special udev test rules on every node
-	if [ -f $LUSTRE/lustre/conf/99-lustre.rules ]; then {
-		sed -e 's|/usr/sbin/lctl|$LCTL|g' $LUSTRE/lustre/conf/99-lustre.rules > /etc/udev/rules.d/99-lustre-test.rules
-	} else {
-		echo "SUBSYSTEM==\"lustre\", ACTION==\"change\", ENV{PARAM}==\"?*\", RUN+=\"$LCTL set_param '\$env{PARAM}=\$env{SETTING}'\"" > /etc/udev/rules.d/99-lustre-test.rules
-	} fi
-	udevadm control --reload-rules
-	udevadm trigger
-
+load_lnet() {
 	# For kmemleak-enabled kernels we need clear all past state
 	# that obviously has nothing to do with this Lustre run
 	# Disable automatic memory scanning to avoid perf hit.
@@ -735,23 +726,52 @@ load_modules_local() {
 	load_module ../libcfs/libcfs/libcfs
 	# Prevent local MODOPTS_LIBCFS being passed as part of environment
 	# variable to remote nodes
-	MODOPTS_LIBCFS=$saved_opts
+	unset MODOPTS_LIBCFS
 
-	set_default_debug
-	load_module ../lnet/lnet/lnet
+	set_default_debug "neterror net nettrace malloc"
+	if [ "$1" = "config_on_load=1" ]; then
+		load_module ../lnet/lnet/lnet
+	else
+		load_module ../lnet/lnet/lnet "$@"
+	fi
 
 	LNDPATH=${LNDPATH:-"../lnet/klnds"}
 	if [ -z "$LNETLND" ]; then
 		case $NETTYPE in
-		o2ib*)  LNETLND="o2iblnd/ko2iblnd" ;;
-		tcp*)   LNETLND="socklnd/ksocklnd" ;;
-		*)      local lnd="${NETTYPE%%[0-9]}lnd"
+		o2ib*)	LNETLND="o2iblnd/ko2iblnd" ;;
+		tcp*)	LNETLND="socklnd/ksocklnd" ;;
+		*)	local lnd="${NETTYPE%%[0-9]}lnd"
 			[ -f "$LNDPATH/$lnd/k$lnd.ko" ] &&
 				LNETLND="$lnd/k$lnd" ||
 				LNETLND="socklnd/ksocklnd"
 		esac
 	fi
 	load_module ../lnet/klnds/$LNETLND
+
+	if [ "$1" = "config_on_load=1" ]; then
+		do_lnetctl lnet configure --all ||
+			return $?
+	fi
+}
+
+load_modules_local() {
+	if [ -n "$MODPROBE" ]; then
+		# use modprobe
+		echo "Using modprobe to load modules"
+		return 0
+	fi
+
+	# Create special udev test rules on every node
+	if [ -f $LUSTRE/lustre/conf/99-lustre.rules ]; then {
+		sed -e 's|/usr/sbin/lctl|$LCTL|g' $LUSTRE/lustre/conf/99-lustre.rules > /etc/udev/rules.d/99-lustre-test.rules
+	} else {
+		echo "SUBSYSTEM==\"lustre\", ACTION==\"change\", ENV{PARAM}==\"?*\", RUN+=\"$LCTL set_param '\$env{PARAM}=\$env{SETTING}'\"" > /etc/udev/rules.d/99-lustre-test.rules
+	} fi
+	udevadm control --reload-rules
+	udevadm trigger
+
+	load_lnet
+
 	load_module obdclass/obdclass
 	if ! client_only; then
 		MODOPTS_PTLRPC=${MODOPTS_PTLRPC:-"lbug_on_grant_miscount=1"}
