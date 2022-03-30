@@ -115,7 +115,8 @@ struct lod_device {
 	unsigned int	      lod_recovery_completed:1,
 			      lod_initialized:1,
 			      lod_lmv_failout:1,
-			      lod_child_got_update_log:1;
+			      lod_child_got_update_log:1,
+			      lod_dist_txn_check_space:1;
 
 	/* protect ld_active_tgt_count, ltd_active and lod_md_root */
 	spinlock_t	     lod_lock;

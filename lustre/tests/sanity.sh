@@ -21027,6 +21027,48 @@ test_230w() {
 }
 run_test 230w "non-recursive mode dir migration"
 
+test_230x() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.15.0) )) ||
+		skip "Need MDS version at least 2.15.0"
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+	createmany -d $DIR/$tdir/sub 100 || error "createmany failed"
+
+	local mdt_name=$(mdtname_from_index 0)
+	local low=$(do_facet mds2 $LCTL get_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_low)
+	local high=$(do_facet mds2 $LCTL get_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_high)
+	local ffree=$($LFS df -i $MOUNT | awk "/$mdt_name/ { print \$4 }")
+	local maxage=$(do_facet mds2 $LCTL get_param -n \
+		osp.*$mdt_name-osp-MDT0001.maxage)
+
+	stack_trap "do_facet mds2 $LCTL set_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$low \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_high=$high" EXIT
+	stack_trap "do_facet mds2 $LCTL set_param -n \
+		osp.*$mdt_name-osp-MDT0001.maxage=$maxage" EXIT
+
+	do_facet mds2 $LCTL set_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$((ffree + 1))
+	do_facet mds2 $LCTL set_param -n osp.*$mdt_name-osp-MDT0001.maxage=1
+	sleep 4
+	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir &&
+		error "migrate $tdir should fail"
+
+	do_facet mds2 $LCTL set_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$low
+	do_facet mds2 $LCTL set_param -n \
+		osp.*$mdt_name-osp-MDT0001.reserved_ino_high=$high
+	sleep 4
+	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir ||
+		error "migrate failed"
+	(( $($LFS getdirstripe -c $DIR/$tdir) == $MDSCOUNT )) ||
+		error "$tdir stripe count mismatch"
+}
+run_test 230x "dir migration check space"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

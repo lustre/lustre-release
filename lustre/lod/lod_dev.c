@@ -1444,6 +1444,52 @@ static struct thandle *lod_trans_create(const struct lu_env *env,
 	return th;
 }
 
+/* distributed transaction failure may cause object missing or disconnected
+ * directories, check space before transaction start.
+ */
+static int lod_trans_space_check(const struct lu_env *env,
+				 struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct obd_statfs *sfs = &info->lti_osfs;
+	struct top_thandle *top_th = container_of(th, struct top_thandle,
+						  tt_super);
+	struct top_multiple_thandle *tmt = top_th->tt_multiple_thandle;
+	struct sub_thandle *st;
+	int rc;
+
+	if (likely(!tmt))
+		return 0;
+
+	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
+		struct dt_device *sub_dt;
+
+		if (st->st_sub_th == NULL)
+			continue;
+
+		if (st->st_sub_th == top_th->tt_master_sub_thandle)
+			continue;
+
+		sub_dt = st->st_sub_th->th_dev;
+		rc = dt_statfs(env, sub_dt, sfs);
+		if (rc) {
+			CDEBUG(D_INFO, "%s: fail - statfs error: rc = %d\n",
+			       sub_dt->dd_lu_dev.ld_obd->obd_name, rc);
+			return rc;
+		}
+
+		if (unlikely(sfs->os_state &
+			     (OS_STATFS_ENOINO | OS_STATFS_ENOSPC))) {
+			CDEBUG(D_INFO, "%s: fail - target state %x: rc = %d\n",
+			       sub_dt->dd_lu_dev.ld_obd->obd_name,
+			       sfs->os_state, -ENOSPC);
+			return -ENOSPC;
+		}
+	}
+
+	return 0;
+}
+
 /**
  * Implementation of dt_device_operations::dt_trans_start() for LOD
  *
@@ -1455,7 +1501,17 @@ static struct thandle *lod_trans_create(const struct lu_env *env,
 static int lod_trans_start(const struct lu_env *env, struct dt_device *dt,
 			   struct thandle *th)
 {
-	return top_trans_start(env, dt2lod_dev(dt)->lod_child, th);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	if (lod->lod_dist_txn_check_space) {
+		int rc;
+
+		rc = lod_trans_space_check(env, th);
+		if (rc)
+			return rc;
+	}
+
+	return top_trans_start(env, lod->lod_child, th);
 }
 
 static int lod_trans_cb_add(struct thandle *th,
@@ -1827,6 +1883,7 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	lu_tgt_descs_init(&lod->lod_ost_descs, false);
 	lu_qos_rr_init(&lod->lod_mdt_descs.ltd_qos.lq_rr);
 	lu_qos_rr_init(&lod->lod_ost_descs.ltd_qos.lq_rr);
+	lod->lod_dist_txn_check_space = 1;
 
 	RETURN(0);
 

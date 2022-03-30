@@ -1098,6 +1098,37 @@ out:
 }
 LUSTRE_RW_ATTR(mdt_hash);
 
+static ssize_t dist_txn_check_space_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", lod->lod_dist_txn_check_space);
+}
+
+static ssize_t dist_txn_check_space_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	bool val = 0;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	lod->lod_dist_txn_check_space = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dist_txn_check_space);
+
 static const struct proc_ops lod_proc_mdt_fops = {
 	PROC_OWNER(THIS_MODULE)
 	.proc_open	= lod_mdts_seq_open,
@@ -1319,6 +1350,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_mdt_qos_prio_free.attr,
 	&lustre_attr_mdt_qos_threshold_rr.attr,
 	&lustre_attr_mdt_hash.attr,
+	&lustre_attr_dist_txn_check_space.attr,
 	NULL,
 };
 

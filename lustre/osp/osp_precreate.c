@@ -161,7 +161,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	if (d->opd_pre)
 		osp_pre_update_status_msfs(d, msfs, 0);
 	else
-		d->opd_statfs = *msfs;
+		osp_pre_update_msfs(d, msfs);
 
 	/* schedule next update */
 	maxage_ns = d->opd_statfs_maxage * NSEC_PER_SEC;
@@ -171,12 +171,13 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	d->opd_statfs_update_in_progress = 0;
 
 	sfs = &d->opd_statfs;
-	CDEBUG(D_CACHE, "%s (%p): %llu blocks, %llu free, %llu avail, "
-	       "%u bsize, %u reserved mb low, %u reserved mb high,"
-	       "%llu files, %llu free files\n", d->opd_obd->obd_name, d,
-	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail, sfs->os_bsize,
-	       d->opd_reserved_mb_low, d->opd_reserved_mb_high,
-	       sfs->os_files, sfs->os_ffree);
+	CDEBUG(D_CACHE,
+	       "%s (%p): %llu blocks, %llu free, %llu avail, %u bsize, %u reserved mb low, %u reserved mb high, %u reserved ino low, %u reserved ino high, %llu files, %llu free files %#x\n",
+	       d->opd_obd->obd_name, d, sfs->os_blocks, sfs->os_bfree,
+	       sfs->os_bavail, sfs->os_bsize, d->opd_reserved_mb_low,
+	       d->opd_reserved_mb_high, d->opd_reserved_ino_low,
+	       d->opd_reserved_ino_high, sfs->os_files, sfs->os_ffree,
+	       sfs->os_state);
 
 	RETURN(0);
 out:
@@ -1062,8 +1063,8 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 
 	if (unlikely(d->opd_reserved_ino_high == 0 &&
 		     d->opd_reserved_ino_low == 0)) {
-		/* Use ~0.1% by default to disallow distributed transactions,
-		 * and ~0.2% to allow, set both watermark
+		/* Use ~0.0001% by default to disallow distributed transactions,
+		 * and ~0.0002% to allow, set both watermark
 		 */
 		spin_lock(&d->opd_pre_lock);
 		if (d->opd_reserved_ino_high == 0 &&
@@ -1095,7 +1096,10 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 	       d->opd_obd->obd_name, msfs->os_blocks, msfs->os_bfree,
 	       msfs->os_bavail, available_mb, d->opd_reserved_mb_high,
 	       msfs->os_files, msfs->os_ffree, msfs->os_state,
-	       d->opd_pre_status);
+	       d->opd_pre ? d->opd_pre_status : 0);
+
+	if (!d->opd_pre)
+		goto update;
 
 	if (msfs->os_state & (OS_STATFS_ENOINO | OS_STATFS_ENOSPC)) {
 		d->opd_pre_status = -ENOSPC;
@@ -1128,6 +1132,7 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 		msfs->os_state |= OS_STATFS_NOPRECREATE;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
+update:
 	/* copy only new statfs state to make it visible to MDS threads */
 	if (&d->opd_statfs != msfs)
 		d->opd_statfs = *msfs;
