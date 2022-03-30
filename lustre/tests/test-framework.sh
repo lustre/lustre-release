@@ -4717,6 +4717,7 @@ stopall() {
 	# The add fn does rm ${facet}active file, this would be enough
 	# if we use do_facet <facet> only after the facet added, but
 	# currently we use do_facet mds in local.sh
+	local num
 	for num in `seq $MDSCOUNT`; do
 		stop mds$num -f
 		rm -f ${TMP}/mds${num}active
