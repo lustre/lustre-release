@@ -2093,6 +2093,59 @@ unlock:
 	RETURN(rc);
 }
 
+static void lod_qos_set_pool(struct lod_object *lo, int pos, char *pool_name,
+			     struct lov_user_md_v1 *v1)
+{
+	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct lod_layout_component *lod_comp;
+	struct pool_desc *pool = NULL;
+	int j, rc = 0;
+
+	/* In the function below, .hs_keycmp resolves to
+	 * pool_hashkey_keycmp() */
+	/* coverity[overrun-buffer-val] */
+	if (pool_name)
+		pool = lod_find_pool(d, pool_name);
+
+	if (pool) {
+		lod_comp = &lo->ldo_comp_entries[pos];
+		if (lod_comp->llc_stripe_offset != LOV_OFFSET_DEFAULT) {
+			if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+				struct lov_user_md_v3 *v3;
+
+				v3 = (struct lov_user_md_v3 *)v1;
+				for (j = 0; j < v3->lmm_stripe_count; j++) {
+					__u32 num;
+
+					num = lod_comp->llc_ostlist.op_array[j];
+					rc = lod_check_index_in_pool(num, pool);
+					if (rc)
+						break;
+				}
+			} else {
+				rc = lod_check_index_in_pool(
+					lod_comp->llc_stripe_offset, pool);
+			}
+			if (rc < 0) {
+				CDEBUG(D_LAYOUT, "%s: index %u is not in the "
+				       "pool %s, dropping the pool\n",
+				       lod2obd(d)->obd_name,
+				       lod_comp->llc_stripe_offset,
+				       pool_name);
+				pool_name = NULL;
+			}
+		}
+
+		if (lod_comp->llc_stripe_count > pool_tgt_count(pool) &&
+		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
+			lod_comp->llc_stripe_count = pool_tgt_count(pool);
+
+		lod_pool_putref(pool);
+	}
+
+	lod_obj_set_pool(lo, pos, pool_name);
+}
+
 /**
  * Parse suggested striping configuration.
  *
@@ -2229,7 +2282,6 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_entries);
 
 	for (i = 0; i < comp_cnt; i++) {
-		struct pool_desc	*pool;
 		struct lu_extent	*ext;
 		char	*pool_name;
 
@@ -2260,8 +2312,6 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 				rc = lod_comp_copy_ost_lists(lod_comp, v3);
 				if (rc)
 					GOTO(free_comp, rc);
-
-				pool_name = NULL;
 			}
 		}
 
@@ -2294,35 +2344,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
-		lod_obj_set_pool(lo, i, pool_name);
-
-		if (pool_name == NULL)
-			continue;
-
-		/* In the function below, .hs_keycmp resolves to
-		 * pool_hashkey_keycmp() */
-		/* coverity[overrun-buffer-val] */
-		pool = lod_find_pool(d, pool_name);
-		if (pool == NULL)
-			continue;
-
-		if (lod_comp->llc_stripe_offset != LOV_OFFSET_DEFAULT) {
-			rc = lod_check_index_in_pool(
-					lod_comp->llc_stripe_offset, pool);
-			if (rc < 0) {
-				lod_pool_putref(pool);
-				CDEBUG(D_LAYOUT, "%s: invalid offset, %u\n",
-				       lod2obd(d)->obd_name,
-				       lod_comp->llc_stripe_offset);
-				GOTO(free_comp, rc = -EINVAL);
-			}
-		}
-
-		if (lod_comp->llc_stripe_count > pool_tgt_count(pool) &&
-		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
-			lod_comp->llc_stripe_count = pool_tgt_count(pool);
-
-		lod_pool_putref(pool);
+		lod_qos_set_pool(lo, i, pool_name, v1);
 	}
 
 	RETURN(0);
