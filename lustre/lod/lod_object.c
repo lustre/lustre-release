@@ -2730,7 +2730,6 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	struct dt_object *next = dt_object_child(dt);
 	struct lov_desc	*desc = &d->lod_ost_descs.ltd_lov_desc;
 	struct lod_object *lo = lod_dt_obj(dt);
-	struct lov_user_md_v3 *v3;
 	struct lov_comp_md_v1 *comp_v1 = buf->lb_buf;
 	__u32 magic;
 	int i, rc, array_cnt, old_array_cnt;
@@ -2786,8 +2785,10 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_adjust_stripe_info(lod_comp, desc, 0);
 
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
-			v3 = (struct lov_user_md_v3 *) v1;
-			if (v3->lmm_pool_name[0] != '\0') {
+			struct lov_user_md_v3 *v3 = (typeof(*v3) *) v1;
+
+			if (v3->lmm_pool_name[0] != '\0' &&
+			    !lov_pool_is_ignored(v3->lmm_pool_name)) {
 				rc = lod_set_pool(&lod_comp->llc_pool,
 						  v3->lmm_pool_name);
 				if (rc)
@@ -3895,7 +3896,9 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	case LOV_USER_MAGIC_SPECIFIC:
 	case LOV_USER_MAGIC_V3:
 		v3 = buf->lb_buf;
-		if (v3->lmm_pool_name[0] != '\0')
+		if (lov_pool_is_reserved(v3->lmm_pool_name))
+			memset(v3->lmm_pool_name, 0, sizeof(v3->lmm_pool_name));
+		else if (v3->lmm_pool_name[0] != '\0')
 			pool_name = v3->lmm_pool_name;
 		fallthrough;
 	case LOV_USER_MAGIC_V1:

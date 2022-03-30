@@ -5137,7 +5137,7 @@ static int extract_fsname_poolname(char **argv, char *fsname,
 	*ptr = '\0';
 	++ptr;
 
-	if (strlen(ptr) == 0) {
+	if (ptr[0] == '\0') {
 		fprintf(stderr, "poolname is empty\n");
 		rc = -EINVAL;
 		goto err;
@@ -5146,8 +5146,8 @@ static int extract_fsname_poolname(char **argv, char *fsname,
 	strncpy(poolname, ptr, LOV_MAXPOOLNAME);
 	poolname[LOV_MAXPOOLNAME] = '\0';
 
-	if (strncmp(poolname, "none", LOV_MAXPOOLNAME) == 0) {
-		fprintf(stderr, "poolname cannot be 'none'\n");
+	if (lov_pool_is_reserved(poolname)) {
+		fprintf(stderr, "poolname cannot be '%s'\n", poolname);
 		return -EINVAL;
 	}
 out:

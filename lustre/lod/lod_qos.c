@@ -2450,7 +2450,10 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		    v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
 			v3 = (struct lov_user_md_v3 *)v1;
 
-			if (v3->lmm_pool_name[0] != '\0')
+			if (lov_pool_is_ignored(v3->lmm_pool_name))
+				pool_name = NULL;
+			else if (v3->lmm_pool_name[0] != '\0' &&
+				 !lov_pool_is_inherited(v3->lmm_pool_name))
 				pool_name = v3->lmm_pool_name;
 
 			if (v3->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {

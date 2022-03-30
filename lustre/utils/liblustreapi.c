@@ -2861,7 +2861,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			separator = "\n";
 	}
 
-	if ((verbose & VERBOSE_POOL) && pool_name && (pool_name[0] != '\0')) {
+	if ((verbose & VERBOSE_POOL) && pool_name && (pool_name[0] != '\0') &&
+	    (!lov_pool_is_ignored(pool_name) || is_raw)) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_POOL)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spool:          ",

@@ -1880,6 +1880,52 @@ test_31() {
 }
 run_test 31 "OST pool spilling chained"
 
+test_32() { # LU-15707
+	(( OSTCOUNT >= 2 )) || skip "Need at least 2 OST"
+
+	local pool=$TESTNAME
+	pool_add $pool || error "add $pool failed"
+	pool_add_targets $pool 0 ||
+		error "add targets to $pool failed"
+
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -p $pool $DIR/$tdir ||
+		error "setstripe fail on $DIR/$tdir"
+
+	( $LFS getstripe -p $DIR/$tdir | grep -q $pool ) ||
+		error "fail to set pool on $DIR/$tdir"
+
+	$LFS setstripe -p ignore $DIR/$tdir/$tfile ||
+		error "setstripe fail on $DIR/$tdir/$tfile"
+
+	! ( $LFS getstripe -p $DIR/$tdir/$tfile | egrep -q "[^ ]+" ) ||
+		error "fail to create $DIR/$tdir/$tfile without pool"
+
+	# Test with start index
+	local got idx
+	for ((idx = 0; idx < OSTCOUNT; idx++)); do
+		$LFS setstripe -p ignore -i $idx $DIR/$tdir/$tfile.$idx ||
+			error "setstripe -i fail on $DIR/$tdir/$tfile.$idx"
+
+		got=$($LFS getstripe -i $DIR/$tdir/$tfile.$idx)
+		(( got == idx )) ||
+			error "file $tfile.$idx on OST $got != $idx"
+	done
+
+	# Test with ost list
+	$LFS setstripe -p ignore -o 1,0 $DIR/$tdir/$tfile.1_0 ||
+		error "setstripe --ost fail on $DIR/$tdir/$tfile.1_0"
+
+	got=$($LFS getstripe -i $DIR/$tdir/$tfile.1_0)
+	(( got == 1 )) ||
+		error "file $tfile.1_0 (ostlist) start on OST $got != 1"
+
+	got=$($LFS getstripe -c $DIR/$tdir/$tfile.1_0)
+	(( got == 2 )) ||
+		error "file $tfile.1_0 (ostlist) has stripe count $got != 2"
+}
+run_test 32 "force to create a file without pool (no inheritance)"
+
 cd $ORIG_PWD
 
 complete $SECONDS

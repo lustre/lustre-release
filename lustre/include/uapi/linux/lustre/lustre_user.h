@@ -748,6 +748,30 @@ static inline bool lov_pattern_supported_normal_comp(__u32 pattern)
 
 #define LOV_MAXPOOLNAME 15
 #define LOV_POOLNAMEF "%.15s"
+/* The poolname "ignore" is used to force a component creation without pool */
+#define LOV_POOL_IGNORE "ignore"
+/* The poolname "inherit" is used to force a component to inherit the pool from
+ * parent or root directory
+ */
+#define LOV_POOL_INHERIT "inherit"
+/* The poolname "none" is deprecated in 2.15 (same behavior as "inherit") */
+#define LOV_POOL_NONE "none"
+
+static inline bool lov_pool_is_ignored(const char *pool)
+{
+	return pool && strncmp(pool, LOV_POOL_IGNORE, LOV_MAXPOOLNAME) == 0;
+}
+
+static inline bool lov_pool_is_inherited(const char *pool)
+{
+	return pool && (strncmp(pool, LOV_POOL_INHERIT, LOV_MAXPOOLNAME) == 0 ||
+			strncmp(pool, LOV_POOL_NONE, LOV_MAXPOOLNAME) == 0);
+}
+
+static inline bool lov_pool_is_reserved(const char *pool)
+{
+	return lov_pool_is_ignored(pool) || lov_pool_is_inherited(pool);
+}
 
 #define LOV_MIN_STRIPE_BITS 16   /* maximum PAGE_SIZE (ia64), power of 2 */
 #define LOV_MIN_STRIPE_SIZE (1 << LOV_MIN_STRIPE_BITS)

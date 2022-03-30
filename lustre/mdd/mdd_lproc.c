@@ -723,24 +723,16 @@ static ssize_t append_pool_store(struct kobject *kobj, struct attribute *attr,
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
 
-	if (!count || count > LOV_MAXPOOLNAME + 1)
+	if (!count || count > LOV_MAXPOOLNAME + 1 || buffer[0]  == '\n')
 		return -EINVAL;
 
-	/* clear previous value */
-	memset(mdd->mdd_append_pool, 0, LOV_MAXPOOLNAME + 1);
+	strlcpy(mdd->mdd_append_pool, buffer, LOV_MAXPOOLNAME + 1);
+	if (mdd->mdd_append_pool[count - 1] == '\n')
+		mdd->mdd_append_pool[count - 1] = '\0';
 
-	/* entering "none" clears the pool, otherwise copy the new pool */
-	if (strncmp("none", buffer, 4)) {
-		memcpy(mdd->mdd_append_pool, buffer, count);
-
-		/* Trim the trailing '\n' if any */
-		if (mdd->mdd_append_pool[count - 1] == '\n') {
-			/* Don't echo just a newline */
-			if (count == 1)
-				return -EINVAL;
-			mdd->mdd_append_pool[count - 1] = 0;
-		}
-	}
+	/* clears the pool for "none", "inherit" or "ignore" */
+	if (lov_pool_is_reserved(mdd->mdd_append_pool))
+		memset(mdd->mdd_append_pool, 0, LOV_MAXPOOLNAME + 1);
 
 	return count;
 }
