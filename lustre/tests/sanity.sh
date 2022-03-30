@@ -24123,17 +24123,17 @@ test_315() { # LU-618
 run_test 315 "read should be accounted"
 
 test_316() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	large_xattr_enabled || skip_env "ea_inode feature disabled"
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	large_xattr_enabled || skip "ea_inode feature disabled"
 
-	rm -rf $DIR/$tdir/d
-	mkdir -p $DIR/$tdir/d
-	chown nobody $DIR/$tdir/d
-	touch $DIR/$tdir/d/file
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir $DIR/$tdir/d || error "mkdir $tdir/d failed"
+	chown nobody $DIR/$tdir/d || error "chown $tdir/d failed"
+	touch $DIR/$tdir/d/$tfile || error "touch $tdir/d/$tfile failed"
 
-	$LFS mv -m1 $DIR/$tdir/d || error "lfs mv failed"
+	$LFS migrate -m1 $DIR/$tdir/d || error "lfs migrate -m1 failed"
 }
-run_test 316 "lfs mv"
+run_test 316 "lfs migrate of file with large_xattr enabled"
 
 test_317() {
 	[ $MDS1_VERSION -lt $(version_code 2.11.53) ] &&
@@ -24252,7 +24252,7 @@ test_318() {
 run_test 318 "Verify async readahead tunables"
 
 test_319() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 
 	local before=$(date +%s)
 	local evict
@@ -24264,7 +24264,7 @@ test_319() {
 
 #define OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE 0x32c
 	$LCTL set_param fail_val=5 fail_loc=0x8000032c
-	$LFS mv -m1 $file &
+	$LFS migrate -m1 $mdir &
 
 	sleep 1
 	dd if=$file of=/dev/null
