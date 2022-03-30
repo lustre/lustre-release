@@ -1010,7 +1010,7 @@ static __attribute__((unused)) const char *mdt_hash_name[] = {
 	"crush",
 };
 
-#define LMV_HASH_TYPE_DEFAULT LMV_HASH_TYPE_CRUSH
+#define LMV_HASH_TYPE_DEFAULT LMV_HASH_TYPE_FNV_1A_64
 
 /* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
  * and the higher part will be the flag to indicate the status of object,
