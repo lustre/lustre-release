@@ -1839,15 +1839,18 @@ lnet_handle_send(struct lnet_send_data *sd)
 	__u32 send_case = sd->sd_send_case;
 	int rc;
 	__u32 routing = send_case & REMOTE_DST;
-	 struct lnet_rsp_tracker *rspt;
+	struct lnet_rsp_tracker *rspt;
 
 	/* Increment sequence number of the selected peer, peer net,
 	 * local ni and local net so that we pick the next ones
 	 * in Round Robin.
 	 */
-	best_lpni->lpni_peer_net->lpn_seq++;
+	best_lpni->lpni_peer_net->lpn_peer->lp_send_seq++;
+	best_lpni->lpni_peer_net->lpn_seq =
+		best_lpni->lpni_peer_net->lpn_peer->lp_send_seq;
 	best_lpni->lpni_seq = best_lpni->lpni_peer_net->lpn_seq;
-	best_ni->ni_net->net_seq++;
+	the_lnet.ln_net_seq++;
+	best_ni->ni_net->net_seq = the_lnet.ln_net_seq;
 	best_ni->ni_seq = best_ni->ni_net->net_seq;
 
 	CDEBUG(D_NET, "%s NI seq info: [%d:%d:%d:%u] %s LPNI seq info [%d:%d:%d:%u]\n",
@@ -1936,6 +1939,11 @@ lnet_handle_send(struct lnet_send_data *sd)
 		 * lnet_select_pathway() function and is never changed.
 		 * It's safe to use it here.
 		 */
+		final_dst_lpni->lpni_peer_net->lpn_peer->lp_send_seq++;
+		final_dst_lpni->lpni_peer_net->lpn_seq =
+			final_dst_lpni->lpni_peer_net->lpn_peer->lp_send_seq;
+		final_dst_lpni->lpni_seq =
+			final_dst_lpni->lpni_peer_net->lpn_seq;
 		msg->msg_hdr.dest_nid = final_dst_lpni->lpni_nid;
 	} else {
 		/*
@@ -2168,8 +2176,10 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	int best_lpn_healthv = 0;
 	__u32 best_lpn_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 
-	CDEBUG(D_NET, "using src nid %s for route restriction\n",
-	       src_nid ? libcfs_nidstr(src_nid) : "ANY");
+	CDEBUG(D_NET, "%s route (%s) from local NI %s to destination %s\n",
+	       LNET_NID_IS_ANY(&sd->sd_rtr_nid) ? "Lookup" : "Specified",
+	       libcfs_nidstr(&sd->sd_rtr_nid), libcfs_nidstr(src_nid),
+	       libcfs_nidstr(&sd->sd_dst_nid));
 
 	/* If a router nid was specified then we are replying to a GET or
 	 * sending an ACK. In this case we use the gateway associated with the
@@ -2184,12 +2194,12 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 				route_found = true;
 		} else {
 			CWARN("No peer NI for gateway %s. Attempting to find an alternative route.\n",
-			       libcfs_nidstr(&sd->sd_rtr_nid));
+			      libcfs_nidstr(&sd->sd_rtr_nid));
 		}
 	}
 
 	if (!route_found) {
-		if (sd->sd_msg->msg_routing || (src_nid && !LNET_NID_IS_ANY(src_nid))) {
+		if (sd->sd_msg->msg_routing || !LNET_NID_IS_ANY(src_nid)) {
 			/* If I'm routing this message then I need to find the
 			 * next hop based on the destination NID
 			 *
@@ -2205,6 +2215,8 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 				       libcfs_nidstr(&sd->sd_dst_nid));
 				return -EHOSTUNREACH;
 			}
+			CDEBUG(D_NET, "best_rnet %s\n",
+			       libcfs_net2str(best_rnet->lrn_net));
 		} else {
 			/* we've already looked up the initial lpni using
 			 * dst_nid
@@ -2221,10 +2233,18 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 				if (!rnet)
 					continue;
 
-				if (!best_lpn) {
-					best_lpn = lpn;
-					best_rnet = rnet;
-				}
+				if (!best_lpn)
+					goto use_lpn;
+				else
+					CDEBUG(D_NET, "n[%s, %s] h[%d, %d], p[%u, %u], s[%d, %d]\n",
+					       libcfs_net2str(lpn->lpn_net_id),
+					       libcfs_net2str(best_lpn->lpn_net_id),
+					       lpn->lpn_healthv,
+					       best_lpn->lpn_healthv,
+					       lpn->lpn_sel_priority,
+					       best_lpn->lpn_sel_priority,
+					       lpn->lpn_seq,
+					       best_lpn->lpn_seq);
 
 				/* select the preferred peer net */
 				if (best_lpn_healthv > lpn->lpn_healthv)
@@ -2252,6 +2272,9 @@ use_lpn:
 				return -EHOSTUNREACH;
 			}
 
+			CDEBUG(D_NET, "selected best_lpn %s\n",
+			       libcfs_net2str(best_lpn->lpn_net_id));
+
 			sd->sd_best_lpni = lnet_find_best_lpni(sd->sd_best_ni,
 							       lnet_nid_to_nid4(&sd->sd_dst_nid),
 							       lp,
@@ -2266,12 +2289,6 @@ use_lpn:
 			 * NI's so update the final destination we selected
 			 */
 			sd->sd_final_dst_lpni = sd->sd_best_lpni;
-
-			/* Increment the sequence number of the remote lpni so
-			 * we can round robin over the different interfaces of
-			 * the remote lpni
-			 */
-			sd->sd_best_lpni->lpni_seq++;
 		}
 
 		/*
@@ -2341,14 +2358,12 @@ use_lpn:
 	*gw_peer = gw;
 
 	/*
-	 * increment the sequence numbers since now we're sure we're
-	 * going to use this path
+	 * increment the sequence number since now we're sure we're
+	 * going to use this route
 	 */
 	if (LNET_NID_IS_ANY(&sd->sd_rtr_nid)) {
 		LASSERT(best_route && last_route);
 		best_route->lr_seq = last_route->lr_seq + 1;
-		if (best_lpn)
-			best_lpn->lpn_seq++;
 	}
 
 	return 0;
@@ -2425,7 +2440,15 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 	__u32 lpn_sel_prio;
 	__u32 best_net_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 	__u32 net_sel_prio;
-	bool exit = false;
+
+	/* if this is a discovery message and lp_disc_net_id is
+	 * specified then use that net to send the discovery on.
+	 */
+	if (discovery && peer->lp_disc_net_id) {
+		best_lpn = lnet_peer_get_net_locked(peer, peer->lp_disc_net_id);
+		if (best_lpn && lnet_get_net_locked(best_lpn->lpn_net_id))
+			goto select_best_ni;
+	}
 
 	/*
 	 * The peer can have multiple interfaces, some of them can be on
@@ -2448,18 +2471,25 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 		net_healthv = lnet_get_net_healthv_locked(net);
 		net_sel_prio = net->net_sel_priority;
 
-		/*
-		 * if this is a discovery message and lp_disc_net_id is
-		 * specified then use that net to send the discovery on.
-		 */
-		if (peer->lp_disc_net_id == lpn->lpn_net_id &&
-		    discovery) {
-			exit = true;
-			goto select_lpn;
-		}
-
 		if (!best_lpn)
 			goto select_lpn;
+		else
+			CDEBUG(D_NET,
+			       "n[%s, %s] ph[%d, %d], pp[%u, %u], nh[%d, %d], np[%u, %u], ps[%u, %u], ns[%u, %u]\n",
+			       libcfs_net2str(lpn->lpn_net_id),
+			       libcfs_net2str(best_lpn->lpn_net_id),
+			       lpn->lpn_healthv,
+			       best_lpn_healthv,
+			       lpn_sel_prio,
+			       best_lpn_sel_prio,
+			       net_healthv,
+			       best_net_healthv,
+			       net_sel_prio,
+			       best_net_sel_prio,
+			       lpn->lpn_seq,
+			       best_lpn->lpn_seq,
+			       net->net_seq,
+			       best_net->net_seq);
 
 		/* always select the lpn with the best health */
 		if (best_lpn_healthv > lpn->lpn_healthv)
@@ -2499,15 +2529,15 @@ select_lpn:
 		best_lpn_sel_prio = lpn_sel_prio;
 		best_lpn = lpn;
 		best_net = net;
-
-		if (exit)
-			break;
 	}
 
 	if (best_lpn) {
 		/* Select the best NI on the same net as best_lpn chosen
 		 * above
 		 */
+select_best_ni:
+		CDEBUG(D_NET, "selected best_lpn %s\n",
+		       libcfs_net2str(best_lpn->lpn_net_id));
 		best_ni = lnet_find_best_ni_on_spec_net(NULL, peer, best_lpn,
 							msg, md_cpt);
 	}

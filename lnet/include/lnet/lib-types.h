@@ -756,6 +756,11 @@ struct lnet_peer {
 
 	/* cached peer aliveness */
 	bool			lp_alive;
+
+	/* sequence number used to round robin traffic to this peer's
+	 * nets/NIs
+	 */
+	__u32                   lp_send_seq;
 };
 
 /*
@@ -1160,6 +1165,8 @@ struct lnet {
 	struct list_head		ln_delay_rules;
 	/* LND instances */
 	struct list_head		ln_nets;
+	/* Sequence number used to round robin sends across all nets */
+	__u32				ln_net_seq;
 	/* the loopback NI */
 	struct lnet_ni			*ln_loni;
 	/* network zombie list */
