@@ -874,75 +874,6 @@ LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, timeouts);
 LDEBUGFS_SEQ_FOPS_RW_TYPE(osp, import);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, state);
 
-/**
- * Show high watermark (in megabytes). If available free space at OST is grater
- * than high watermark and object allocation for OST is disabled, enable it.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
- */
-static int osp_reserved_mb_high_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", osp->opd_reserved_mb_high);
-	return 0;
-}
-
-/**
- * Change high watermark
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents new value (in megabytes)
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t
-osp_reserved_mb_high_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
-{
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	char kernbuf[22] = "";
-	u64 val;
-	int			rc;
-
-	if (osp == NULL || osp->opd_pre == NULL)
-		return -EINVAL;
-
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
-	if (rc < 0)
-		return rc;
-	val >>= 20;
-	if (val < 1)
-		return -ERANGE;
-
-	spin_lock(&osp->opd_pre_lock);
-	osp->opd_reserved_mb_high = val;
-	if (val <= osp->opd_reserved_mb_low)
-		osp->opd_reserved_mb_low = val - 1;
-	spin_unlock(&osp->opd_pre_lock);
-
-	return count;
-}
-LDEBUGFS_SEQ_FOPS(osp_reserved_mb_high);
-
 static int osp_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
 	struct obd_device *dev = seq->private;
@@ -965,58 +896,81 @@ static ssize_t osp_rpc_stats_seq_write(struct file *file,
 LDEBUGFS_SEQ_FOPS(osp_rpc_stats);
 
 /**
+ * Show high watermark (in megabytes). If available free space at OST is greater
+ * than high watermark and object allocation for OST is disabled, enable it.
+ */
+static ssize_t reserved_mb_high_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_mb_high);
+}
+
+/**
+ * Change high watermark
+ */
+static ssize_t reserved_mb_high_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
+	if (rc < 0)
+		return rc;
+	val >>= 20;
+	if (val < 1)
+		return -ERANGE;
+
+	spin_lock(&osp->opd_pre_lock);
+	osp->opd_reserved_mb_high = val;
+	if (val <= osp->opd_reserved_mb_low)
+		osp->opd_reserved_mb_low = val - 1;
+	spin_unlock(&osp->opd_pre_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(reserved_mb_high);
+
+/**
  * Show low watermark (in megabytes). If available free space at OST is less
  * than low watermark, object allocation for OST is disabled.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
  */
-static int osp_reserved_mb_low_seq_show(struct seq_file *m, void *data)
+static ssize_t reserved_mb_low_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", osp->opd_reserved_mb_low);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_mb_low);
 }
 
 /**
  * Change low watermark
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents new value (in megabytes)
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
  */
-static ssize_t
-osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
+static ssize_t reserved_mb_low_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer,
+				     size_t count)
 {
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	char kernbuf[22] = "";
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	u64 val;
-	int			rc;
+	int rc;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return -EINVAL;
-
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
 	if (rc < 0)
 		return rc;
 	val >>= 20;
@@ -1029,7 +983,96 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LDEBUGFS_SEQ_FOPS(osp_reserved_mb_low);
+LUSTRE_RW_ATTR(reserved_mb_low);
+
+/**
+ * Show high watermark of inode.
+ */
+static ssize_t reserved_ino_high_show(struct kobject *kobj,
+				      struct attribute *attr,
+				      char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_ino_high);
+}
+
+/**
+ * Change high watermark of inode.
+ */
+static ssize_t reserved_ino_high_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer,
+				       size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc < 0)
+		return rc;
+	if (val < 1)
+		return -ERANGE;
+
+	spin_lock(&osp->opd_pre_lock);
+	osp->opd_reserved_ino_high = val;
+	if (val <= osp->opd_reserved_ino_low)
+		osp->opd_reserved_ino_low = val >> 1;
+	spin_unlock(&osp->opd_pre_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(reserved_ino_high);
+
+/**
+ * Show low watermark.
+ */
+static ssize_t reserved_ino_low_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_ino_low);
+}
+
+/**
+ * Change low watermark
+ */
+static ssize_t reserved_ino_low_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val & (1UL << 31))
+		return -EOVERFLOW;
+
+	spin_lock(&osp->opd_pre_lock);
+	osp->opd_reserved_ino_low = val;
+	if (val >= osp->opd_reserved_ino_high)
+		osp->opd_reserved_ino_high = val << 1;
+	spin_unlock(&osp->opd_pre_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(reserved_ino_low);
 
 static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 				const char *buffer, size_t count)
@@ -1061,10 +1104,6 @@ static struct ldebugfs_vars ldebugfs_osp_obd_vars[] = {
 	  .fops =	&osp_import_fops		},
 	{ .name =	"state",
 	  .fops =	&osp_state_fops			},
-	{ .name =	"reserved_mb_high",
-	  .fops =	&osp_reserved_mb_high_fops	},
-	{ .name =	"reserved_mb_low",
-	  .fops =	&osp_reserved_mb_low_fops	},
 	{ NULL }
 };
 
@@ -1108,6 +1147,10 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_old_sync_processed.attr,
 	&lustre_attr_create_count.attr,
 	&lustre_attr_max_create_count.attr,
+	&lustre_attr_reserved_mb_high.attr,
+	&lustre_attr_reserved_mb_low.attr,
+	&lustre_attr_reserved_ino_high.attr,
+	&lustre_attr_reserved_ino_low.attr,
 	NULL,
 };
 
@@ -1123,6 +1166,10 @@ static struct attribute *osp_md_attrs[] = {
 	&lustre_attr_mdt_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_prealloc_status.attr,
+	&lustre_attr_reserved_mb_high.attr,
+	&lustre_attr_reserved_mb_low.attr,
+	&lustre_attr_reserved_ino_high.attr,
+	&lustre_attr_reserved_ino_low.attr,
 	NULL,
 };
 

@@ -266,8 +266,10 @@ struct osp_device {
 	/*
 	 * Limit the object allocation using ENOSPC for opd_pre_status
 	 */
-	int				opd_reserved_mb_high;
-	int				opd_reserved_mb_low;
+	unsigned int			opd_reserved_mb_high;
+	unsigned int			opd_reserved_mb_low;
+	unsigned int			opd_reserved_ino_high;
+	unsigned int			opd_reserved_ino_low;
 	bool				opd_cleanup_orphans_done;
 	bool				opd_force_creation;
 };

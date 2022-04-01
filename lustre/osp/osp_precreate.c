@@ -1035,8 +1035,6 @@ out:
 static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 {
 	u32 old_state = d->opd_statfs.os_state;
-	u32 reserved_ino_low = 32;	/* could be tunable in the future */
-	u32 reserved_ino_high = reserved_ino_low * 2;
 	u64 available_mb;
 
 	/* statfs structure not initialized yet */
@@ -1054,7 +1052,7 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 		    d->opd_reserved_mb_low == 0) {
 			d->opd_reserved_mb_low = ((msfs->os_bsize >> 10) *
 						  msfs->os_blocks) >> 20;
-			if (d->opd_reserved_mb_low == 0)
+			if (d->opd_reserved_mb_low < 1)
 				d->opd_reserved_mb_low = 1;
 			d->opd_reserved_mb_high =
 				(d->opd_reserved_mb_low << 1) + 1;
@@ -1062,11 +1060,34 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 		spin_unlock(&d->opd_pre_lock);
 	}
 
+	if (unlikely(d->opd_reserved_ino_high == 0 &&
+		     d->opd_reserved_ino_low == 0)) {
+		/* Use ~0.1% by default to disallow distributed transactions,
+		 * and ~0.2% to allow, set both watermark
+		 */
+		spin_lock(&d->opd_pre_lock);
+		if (d->opd_reserved_ino_high == 0 &&
+		    d->opd_reserved_ino_low == 0) {
+			d->opd_reserved_ino_low = msfs->os_ffree >> 20;
+			if (d->opd_reserved_ino_low < 32)
+				d->opd_reserved_ino_low = 32;
+			d->opd_reserved_ino_high =
+				(d->opd_reserved_ino_low << 1) + 1;
+		}
+		spin_unlock(&d->opd_pre_lock);
+	}
+
 	available_mb = (msfs->os_bavail * (msfs->os_bsize >> 10)) >> 10;
-	if (msfs->os_ffree < reserved_ino_low)
+	if (msfs->os_ffree < d->opd_reserved_ino_low)
 		msfs->os_state |= OS_STATFS_ENOINO;
-	else if (msfs->os_ffree <= reserved_ino_high)
+	else if (msfs->os_ffree <= d->opd_reserved_ino_high)
 		msfs->os_state |= old_state & OS_STATFS_ENOINO;
+	/* else don't clear flags in new msfs->os_state sent from OST */
+
+	if (available_mb < d->opd_reserved_mb_low)
+		msfs->os_state |= OS_STATFS_ENOSPC;
+	else if (available_mb <= d->opd_reserved_mb_high)
+		msfs->os_state |= old_state & OS_STATFS_ENOSPC;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
 	CDEBUG(D_INFO,
@@ -1075,11 +1096,6 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 	       msfs->os_bavail, available_mb, d->opd_reserved_mb_high,
 	       msfs->os_files, msfs->os_ffree, msfs->os_state,
 	       d->opd_pre_status);
-	if (available_mb < d->opd_reserved_mb_low)
-		msfs->os_state |= OS_STATFS_ENOSPC;
-	else if (available_mb <= d->opd_reserved_mb_high)
-		msfs->os_state |= old_state & OS_STATFS_ENOSPC;
-	/* else don't clear flags in new msfs->os_state sent from OST */
 
 	if (msfs->os_state & (OS_STATFS_ENOINO | OS_STATFS_ENOSPC)) {
 		d->opd_pre_status = -ENOSPC;
