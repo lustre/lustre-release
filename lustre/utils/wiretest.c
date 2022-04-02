@@ -1657,7 +1657,7 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLGID);
 	LASSERTF(OBD_MD_FLFLAGS == (0x00000800ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLFLAGS);
-	LASSERTF(OBD_MD_DOM_SIZE == (0x00001000ULL), "found 0x%.16llxULL\n",
+	LASSERTF(OBD_MD_DOM_SIZE == (0X00001000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_DOM_SIZE);
 	LASSERTF(OBD_MD_FLNLINK == (0x00002000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLNLINK);
@@ -7033,4 +7033,60 @@ void lustre_assert_wire_constants(void)
 		 (long long)PORTALS_CFG_TYPE);
 	LASSERTF(LUSTRE_CFG_TYPE == 123, "found %lld\n",
 		 (long long)LUSTRE_CFG_TYPE);
+
+	/* Checks for struct lu_pcc_attach */
+	LASSERTF((int)sizeof(struct lu_pcc_attach) == 8, "found %lld\n",
+		 (long long)(int)sizeof(struct lu_pcc_attach));
+	LASSERTF((int)offsetof(struct lu_pcc_attach, pcca_type) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_attach, pcca_type));
+	LASSERTF((int)sizeof(((struct lu_pcc_attach *)0)->pcca_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_attach *)0)->pcca_type));
+	LASSERTF((int)offsetof(struct lu_pcc_attach, pcca_id) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_attach, pcca_id));
+	LASSERTF((int)sizeof(((struct lu_pcc_attach *)0)->pcca_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_attach *)0)->pcca_id));
+
+	/* Checks for struct lu_pcc_detach */
+	LASSERTF((int)sizeof(struct lu_pcc_detach) == 4, "found %lld\n",
+		 (long long)(int)sizeof(struct lu_pcc_detach));
+	LASSERTF((int)offsetof(struct lu_pcc_detach, pccd_opt) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_detach, pccd_opt));
+	LASSERTF((int)sizeof(((struct lu_pcc_detach *)0)->pccd_opt) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_detach *)0)->pccd_opt));
+
+	/* Checks for struct lu_pcc_detach_fid */
+	LASSERTF((int)sizeof(struct lu_pcc_detach_fid) == 20, "found %lld\n",
+		 (long long)(int)sizeof(struct lu_pcc_detach_fid));
+	LASSERTF((int)offsetof(struct lu_pcc_detach_fid, pccd_fid) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_detach_fid, pccd_fid));
+	LASSERTF((int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_fid) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_fid));
+	LASSERTF((int)offsetof(struct lu_pcc_detach_fid, pccd_opt) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_detach_fid, pccd_opt));
+	LASSERTF((int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_opt) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_opt));
+
+	/* Checks for struct lu_pcc_state */
+	LASSERTF((int)sizeof(struct lu_pcc_state) == 4112, "found %lld\n",
+		 (long long)(int)sizeof(struct lu_pcc_state));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_type) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_type));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_type));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_open_count) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_open_count));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_open_count) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_open_count));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_flags) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_flags));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_flags));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_padding) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_padding));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_padding) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_padding));
+	LASSERTF((int)offsetof(struct lu_pcc_state, pccs_path) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_state, pccs_path));
+	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_path) == 4096, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_path));
 }

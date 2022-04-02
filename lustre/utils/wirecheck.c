@@ -3284,6 +3284,40 @@ check_lustre_cfg(void)
 	CHECK_VALUE(LUSTRE_CFG_TYPE);
 }
 
+static void check_lu_pcc_attach(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lu_pcc_attach);
+	CHECK_MEMBER(lu_pcc_attach, pcca_type);
+	CHECK_MEMBER(lu_pcc_attach, pcca_id);
+}
+
+static void check_lu_pcc_detach(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lu_pcc_detach);
+	CHECK_MEMBER(lu_pcc_detach, pccd_opt);
+}
+
+static void check_lu_pcc_detach_fid(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lu_pcc_detach_fid);
+	CHECK_MEMBER(lu_pcc_detach_fid, pccd_fid);
+	CHECK_MEMBER(lu_pcc_detach_fid, pccd_opt);
+}
+
+static void check_lu_pcc_state(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lu_pcc_state);
+	CHECK_MEMBER(lu_pcc_state, pccs_type);
+	CHECK_MEMBER(lu_pcc_state, pccs_open_count);
+	CHECK_MEMBER(lu_pcc_state, pccs_flags);
+	CHECK_MEMBER(lu_pcc_state, pccs_padding);
+	CHECK_MEMBER(lu_pcc_state, pccs_path);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3714,6 +3748,11 @@ main(int argc, char **argv)
 	CHECK_COND_FINISH(HAVE_SERVER_SUPPORT);
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_lustre_cfg();
+
+	check_lu_pcc_attach();
+	check_lu_pcc_detach();
+	check_lu_pcc_detach_fid();
+	check_lu_pcc_state();
 
 	printf("}\n");
 
