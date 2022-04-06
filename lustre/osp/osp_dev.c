@@ -1251,6 +1251,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		GOTO(out, rc);
 	if (osdname)
 		OBD_FREE(osdname, MAX_OBD_NAME);
+	init_waitqueue_head(&osp->opd_out_waitq);
 	RETURN(0);
 
 out:

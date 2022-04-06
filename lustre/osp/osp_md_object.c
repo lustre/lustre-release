@@ -83,16 +83,30 @@ static int osp_create_interpreter(const struct lu_env *env,
 				  struct osp_object *obj,
 				  void *data, int index, int rc)
 {
+	struct osp_device *osp = lu2osp_dev(obj->opo_obj.do_lu.lo_dev);
+
+	spin_lock(&obj->opo_lock);
 	if (rc != 0 && rc != -EEXIST) {
 		obj->opo_obj.do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
 		obj->opo_non_exist = 1;
 	}
+	obj->opo_creating = 0;
+	spin_unlock(&obj->opo_lock);
 
 	/*
 	 * invalidate opo cache for the object after the object is created, so
 	 * attr_get will try to get attr from remote object.
 	 */
 	osp_obj_invalidate_cache(obj);
+
+	/*
+	 * currently reads from objects being created
+	 * are exceptional - during recovery only, when
+	 * remote llog update fetching can race with
+	 * orphan cleanup. so don't waste memory adding
+	 * a wait queue to every osp object
+	 */
+	wake_up_all(&osp->opd_out_waitq);
 
 	return 0;
 }
@@ -181,9 +195,12 @@ int osp_md_create(const struct lu_env *env, struct dt_object *dt,
 	if (rc < 0)
 		GOTO(out, rc);
 
+	spin_lock(&obj->opo_lock);
+	obj->opo_creating = 1;
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
 	dt2osp_obj(dt)->opo_non_exist = 0;
 	obj->opo_stale = 0;
+	spin_unlock(&obj->opo_lock);
 
 	obj->opo_attr = *attr;
 out:
@@ -1157,6 +1174,8 @@ static int osp_write_interpreter(const struct lu_env *env,
 				  struct osp_object *obj,
 				  void *data, int index, int rc)
 {
+	struct osp_device *osp = lu2osp_dev(obj->opo_obj.do_lu.lo_dev);
+
 	if (rc) {
 		CDEBUG(D_HA, "error "DFID": rc = %d\n",
 		       PFID(lu_object_fid(&obj->opo_obj.do_lu)), rc);
@@ -1166,6 +1185,8 @@ static int osp_write_interpreter(const struct lu_env *env,
 		obj->opo_stale = 1;
 		spin_unlock(&obj->opo_lock);
 	}
+	if (atomic_dec_and_test(&obj->opo_writes_in_flight))
+		wake_up_all(&osp->opd_out_waitq);
 	return 0;
 }
 
@@ -1233,6 +1254,8 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	}
 	spin_unlock(&obj->opo_lock);
 
+	atomic_inc(&obj->opo_writes_in_flight);
+
 	RETURN(buf->lb_len);
 }
 
@@ -1244,7 +1267,16 @@ static inline void orr_le_to_cpu(struct out_read_reply *orr_dst,
 	orr_dst->orr_offset = le64_to_cpu(orr_dst->orr_offset);
 }
 
+static int osp_md_check_creating(struct osp_object *obj)
+{
+	int rc;
 
+	spin_lock(&obj->opo_lock);
+	rc = obj->opo_creating;
+	spin_unlock(&obj->opo_lock);
+
+	return rc;
+}
 
 static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 			   struct lu_buf *rbuf, loff_t *pos)
@@ -1264,6 +1296,10 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 
 	if (dt2osp_obj(dt)->opo_destroyed)
 		RETURN(-ENOENT);
+
+	wait_event_idle(osp->opd_out_waitq,
+			!atomic_read(&dt2osp_obj(dt)->opo_writes_in_flight) &&
+			osp_md_check_creating(dt2osp_obj(dt)) == 0);
 
 	/* Because it needs send the update buffer right away,
 	 * just create an update buffer, instead of attaching the

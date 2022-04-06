@@ -270,6 +270,8 @@ struct osp_device {
 	unsigned int			opd_reserved_mb_low;
 	unsigned int			opd_reserved_ino_high;
 	unsigned int			opd_reserved_ino_low;
+
+	wait_queue_head_t		 opd_out_waitq;
 	bool				opd_cleanup_orphans_done;
 	bool				opd_force_creation;
 };
@@ -309,7 +311,8 @@ struct osp_object {
 	unsigned int		opo_reserved:1,
 				opo_non_exist:1,
 				opo_stale:1,
-				opo_destroyed:1;
+				opo_destroyed:1,
+				opo_creating:1; /* create in progress */
 
 	/* read/write lock for md osp object */
 	struct rw_semaphore	opo_sem;
@@ -322,6 +325,7 @@ struct osp_object {
 	/* to implement in-flight invalidation */
 	atomic_t		opo_invalidate_seq;
 	struct rw_semaphore	opo_invalidate_sem;
+	atomic_t		opo_writes_in_flight;
 };
 
 extern const struct lu_object_operations osp_lu_obj_ops;
