@@ -580,6 +580,7 @@ int lod_alloc_comp_entries(struct lod_object *lo,
 			sizeof(*lo->ldo_comp_entries) * comp_count);
 	if (lo->ldo_comp_entries == NULL) {
 		OBD_FREE_PTR_ARRAY(lo->ldo_mirrors, mirror_count);
+		lo->ldo_mirrors = NULL;
 		lo->ldo_mirror_count = 0;
 		return -ENOMEM;
 	}
