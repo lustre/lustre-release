@@ -101,12 +101,13 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs);
 static void osp_pre_update_status_msfs(struct osp_device *d,
 				       struct obd_statfs *msfs, int rc)
 {
+	CDEBUG(D_INFO, "%s: Updating status = %d\n", d->opd_obd->obd_name, rc);
 	if (rc)
 		d->opd_pre_status = rc;
 	else
 		osp_pre_update_msfs(d, msfs);
 
-	wake_up(&d->opd_pre_user_waitq);
+	wake_up_all(&d->opd_pre_user_waitq);
 }
 
 /* Pass in the old statfs data in case the limits have changed */
@@ -722,7 +723,6 @@ ready:
 out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
-	wake_up(&d->opd_pre_user_waitq);
 
 	/* pause to let osp_precreate_reserve to go first */
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OSP_PRECREATE_PAUSE, 2);
@@ -955,6 +955,7 @@ out:
 	if (req)
 		ptlrpc_req_finished(req);
 
+
 	/*
 	 * If rc is zero, the pre-creation window should have been emptied.
 	 * Since waking up the herd would be useless without pre-created
@@ -971,7 +972,7 @@ out:
 			 * this OSP isn't quite functional yet */
 			osp_pre_update_status(d, rc);
 		} else {
-			wake_up(&d->opd_pre_user_waitq);
+			wake_up_all(&d->opd_pre_user_waitq);
 		}
 	} else {
 		spin_lock(&d->opd_pre_lock);
@@ -1364,6 +1365,19 @@ static int osp_precreate_thread(void *_args)
 static int osp_precreate_ready_condition(const struct lu_env *env,
 					 struct osp_device *d)
 {
+	/* Bail out I/O fails to OST */
+	if (d->opd_pre_status != 0 &&
+	    d->opd_pre_status != -EAGAIN &&
+	    d->opd_pre_status != -ENODEV &&
+	    d->opd_pre_status != -ENOTCONN &&
+	    d->opd_pre_status != -ENOSPC) {
+		/* DEBUG LU-3230 */
+		if (d->opd_pre_status != -EIO)
+			CERROR("%s: precreate failed opd_pre_status %d\n",
+			       d->opd_obd->obd_name, d->opd_pre_status);
+		return 1;
+	}
+
 	if (d->opd_pre_recovering)
 		return 0;
 
@@ -1377,19 +1391,6 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 	    atomic_read(&d->opd_sync_rpcs_in_progress) == 0 &&
 	    d->opd_pre_status == -ENOSPC)
 		return 1;
-
-	/* Bail out I/O fails to OST */
-	if (d->opd_pre_status != 0 &&
-	    d->opd_pre_status != -EAGAIN &&
-	    d->opd_pre_status != -ENODEV &&
-	    d->opd_pre_status != -ENOTCONN &&
-	    d->opd_pre_status != -ENOSPC) {
-		/* DEBUG LU-3230 */
-		if (d->opd_pre_status != -EIO)
-			CERROR("%s: precreate failed opd_pre_status %d\n",
-			       d->opd_obd->obd_name, d->opd_pre_status);
-		return 1;
-	}
 
 	return 0;
 }
@@ -1513,6 +1514,8 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 			break;
 		}
 
+		CDEBUG(D_INFO, "%s: Sleeping on objects\n",
+		       d->opd_obd->obd_name);
 		if (wait_event_idle_timeout(
 			    d->opd_pre_user_waitq,
 			    osp_precreate_ready_condition(env, d),
@@ -1527,6 +1530,9 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 			       atomic_read(&d->opd_sync_changes),
 			       atomic_read(&d->opd_sync_rpcs_in_progress),
 			       d->opd_pre_status);
+		} else {
+			CDEBUG(D_INFO, "%s: Waked up, status=%d\n",
+			       d->opd_obd->obd_name, d->opd_pre_status);
 		}
 	}
 
