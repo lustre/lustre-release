@@ -1084,6 +1084,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 				       struct thandle *thandle)
 {
 	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+	int blocksize = 1 << inode->i_blkbits;
 	int rc = 0, i = 0, mapped_index = 0;
 	struct page *fp = NULL;
 	int clen = 0;
@@ -1140,6 +1141,48 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 		/* process found extent */
 		map.m_lblk = fp->index * blocks_per_page;
 		map.m_len = blen = clen * blocks_per_page;
+
+		/*
+		 * For PAGE_SIZE > blocksize block allocation mapping, the
+		 * ldiskfs_map_blocks() aims at looking up already mapped
+		 * blocks, recording them to iobuf->dr_blocks and fixing up
+		 * m_lblk, m_len for un-allocated blocks to be created/mapped
+		 * in the second ldiskfs_map_blocks().
+		 *
+		 * M_lblk should be the first un-allocated block if m_lblk
+		 * points at an already allocated block when create = 1,
+		 * ldiskfs_map_blocks() will just return with already
+		 * allocated blocks and without allocating any requested
+		 * new blocks for the extent. For PAGE_SIZE = blocksize
+		 * case, if m_lblk points at an already allocated block it
+		 * will point at an un-allocated block in next restart
+		 * transaction, because the already mapped block/page will
+		 * be filtered out in next restart transaction via flag
+		 * OBD_BRW_DONE in osd_declare_write_commit().
+		 */
+		if (create && PAGE_SIZE > blocksize) {
+			/* With flags=0 just for already mapped blocks lookup */
+			rc = ldiskfs_map_blocks(handle, inode, &map, 0);
+			if (rc > 0 && map.m_flags & LDISKFS_MAP_MAPPED) {
+				for (; total < blen && total < map.m_len;
+						total++)
+					*(blocks + total) = map.m_pblk + total;
+
+				/* The extent is already full mapped */
+				if (total == blen) {
+					rc = 0;
+					goto ext_already_mapped;
+				}
+			}
+			/*
+			 * Fixup or reset m_lblk and m_len for un-mapped blocks.
+			 * The second ldiskfs_map_blocks() will create and map
+			 * them.
+			 */
+			map.m_lblk = fp->index * blocks_per_page + total;
+			map.m_len = blen - total;
+		}
+
 cont_map:
 		/**
 		 * We might restart transaction for block allocations,
@@ -1204,6 +1247,7 @@ cont_map:
 			rc = 0;
 		}
 
+ext_already_mapped:
 		if (rc == 0 && create) {
 			count += (total - previous_total);
 			mapped_index = (count + blocks_per_page -
