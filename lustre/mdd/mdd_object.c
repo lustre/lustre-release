@@ -710,6 +710,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		 * close RPCs.
 		 */
 		if (la->la_valid & LA_ATIME &&
+		    oattr->la_atime > max(oattr->la_ctime, oattr->la_mtime) &&
 		    la->la_atime <= (oattr->la_atime +
 				mdd_obj2mdd_dev(obj)->mdd_atime_diff))
 			la->la_valid &= ~LA_ATIME;

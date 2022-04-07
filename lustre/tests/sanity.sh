@@ -5223,6 +5223,62 @@ test_39q() { # LU-8041
 }
 run_test 39q "close won't zero out atime"
 
+test_39s() {
+	local atime0
+	local atime1
+	local atime2
+	local atime3
+	local atime4
+
+	umount_client $MOUNT
+	mount_client $MOUNT relatime
+
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 status=noxfer conv=fsync
+	atime0=$(stat -c %X $DIR/$tfile)
+
+	# First read updates atime
+	sleep 1
+	cat $DIR/$tfile >/dev/null
+	atime1=$(stat -c %X $DIR/$tfile) # (atime = atime0 + 1)
+
+	# Next reads do not update atime
+	sleep 1
+	cat $DIR/$tfile >/dev/null
+	atime2=$(stat -c %X $DIR/$tfile) # (atime = atime0 + 1)
+
+	# If mtime is greater than atime, atime is updated
+	sleep 1
+	touch -m $DIR/$tfile # (mtime = now)
+	sleep 1
+	cat $DIR/$tfile >/dev/null # (atime is updated because atime < mtime)
+	atime3=$(stat -c %X $DIR/$tfile) # (atime = mtime = atime0 + 3)
+
+	# Next reads do not update atime
+	sleep 1
+	cat $DIR/$tfile >/dev/null
+	atime4=$(stat -c %X $DIR/$tfile)
+
+	# Remount the client to clear 'relatime' option
+	remount_client $MOUNT
+
+	if (( MDS1_VERSION >= $(version_code 2.15.50) )); then
+		# The full test lasted less than default atime_diff
+		# Client was remounted to clear 'relatime' option for next tests
+		# and to confirm atime was written to disk
+		local atime5=$(stat -c %X $DIR/$tfile)
+		(( atime3 == atime5 )) ||
+			error "atime3 $atime3 != atime5 $atime5"
+	fi
+
+	(( atime0 < atime1 )) ||
+		error "atime $atime0 should be smaller than $atime1"
+	(( atime1 == atime2 )) ||
+		error "atime $atime1 was updated to $atime2"
+	(( atime1 < atime3 )) || error "atime1 $atime1 != atime3 $atime3"
+	(( atime3 == atime4 )) || error "atime3 $atime3 != atime4 $atime4"
+}
+run_test 39s "relatime is supported"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/$tfile &&

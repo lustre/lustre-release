@@ -1529,12 +1529,47 @@ void ll_io_set_mirror(struct cl_io *io, const struct file *file)
 	       file->f_path.dentry->d_name.name, io->ci_designated_mirror);
 }
 
+/*
+ * This is relatime_need_update() from Linux 5.17, which is not exported.
+ */
+static int relatime_need_update(struct vfsmount *mnt, struct inode *inode,
+				struct timespec64 now)
+{
+
+	if (!(mnt->mnt_flags & MNT_RELATIME))
+		return 1;
+	/*
+	 * Is mtime younger than atime? If yes, update atime:
+	 */
+	if (timespec64_compare(&inode->i_mtime, &inode->i_atime) >= 0)
+		return 1;
+	/*
+	 * Is ctime younger than atime? If yes, update atime:
+	 */
+	if (timespec64_compare(&inode->i_ctime, &inode->i_atime) >= 0)
+		return 1;
+
+	/*
+	 * Is the previous atime value older than a day? If yes,
+	 * update atime:
+	 */
+	if ((long)(now.tv_sec - inode->i_atime.tv_sec) >= 24*60*60)
+		return 1;
+	/*
+	 * Good, we can skip the atime update:
+	 */
+	return 0;
+}
+
+/*
+ * Very similar to kernel function: !__atime_needs_update()
+ */
 static bool file_is_noatime(const struct file *file)
 {
-	const struct vfsmount *mnt = file->f_path.mnt;
-	const struct inode *inode = file_inode((struct file *)file);
+	struct vfsmount *mnt = file->f_path.mnt;
+	struct inode *inode = file_inode((struct file *)file);
+	struct timespec64 now;
 
-	/* Adapted from file_accessed() and touch_atime().*/
 	if (file->f_flags & O_NOATIME)
 		return true;
 
@@ -1551,6 +1586,11 @@ static bool file_is_noatime(const struct file *file)
 		return true;
 
 	if ((inode->i_sb->s_flags & SB_NODIRATIME) && S_ISDIR(inode->i_mode))
+		return true;
+
+	now = current_time(inode);
+
+	if (!relatime_need_update(mnt, inode, now))
 		return true;
 
 	return false;
