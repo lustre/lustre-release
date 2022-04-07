@@ -2962,11 +2962,10 @@ test_27M() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
 
-	test_mkdir $DIR/$tdir
-
 	# Set default striping on directory
 	local setcount=4
 	local stripe_opt
+	local mdts=$(comma_list $(mdts_nodes))
 
 	# if we run against a 2.12 server which lacks overstring support
 	# then the connect_flag will not report overstriping, even if client
@@ -2978,17 +2977,24 @@ test_27M() {
 	else
 		skip "server does not support overstriping"
 	fi
+
+	test_mkdir $DIR/$tdir
+
+	# Validate existing append_* params and ensure restore
+	local pool=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_pool)
+	[[ "$pool" == "" ]] || error "expected append_pool == '', got '$pool'"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool=none"
+
+	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
+	((orig_count == 1)) || error "expected append_stripe_count == 1, got $orig_count"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1"
+
 	$LFS setstripe $stripe_opt $DIR/$tdir
 
 	echo 1 > $DIR/$tdir/${tfile}.1
 	local count=$($LFS getstripe -c $DIR/$tdir/${tfile}.1)
 	[ $count -eq $setcount ] ||
 		error "(1) stripe count $count, should be $setcount"
-
-	# Capture existing append_stripe_count setting for restore
-	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
-	local mdts=$(comma_list $(mdts_nodes))
-	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$orig_count" EXIT
 
 	local appendcount=$orig_count
 	echo 1 >> $DIR/$tdir/${tfile}.2_append
@@ -3067,12 +3073,9 @@ test_27M() {
 		error "(9) stripe count $count, should be $appendcount for append"
 
 	# Now test O_APPEND striping with pools
-	do_nodes $mdts $LCTL set_param mdd.*.append_pool="$TESTNAME"
-	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool='none'" EXIT
-
-	# Create the pool
 	pool_add $TESTNAME || error "pool creation failed"
 	pool_add_targets $TESTNAME 0 1 || error "Pool add targets failed"
+	do_nodes $mdts $LCTL set_param mdd.*.append_pool="$TESTNAME"
 
 	echo 1 >> $DIR/$tdir/${tfile}.10_append
 
@@ -3414,6 +3417,66 @@ test_27T() {
 		error "multiop failed"
 }
 run_test 27T "no eio on close on partial write due to enosp"
+
+test_27U() {
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local append_pool=${TESTNAME}-append
+	local normal_pool=${TESTNAME}-normal
+	local pool
+	local stripe_count
+	local stripe_count2
+	local mdts=$(comma_list $(mdts_nodes))
+
+	# FIMXE
+	# (( $MDS1_VERSION >= $(version_code 2.15.42) )) ||
+	# 	skip "Need MDS version at least 2.15.42"
+
+	# Validate existing append_* params and ensure restore
+	pool=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_pool)
+	[[ "$pool" == "" ]] || error "expected append_pool == '', got '$pool'"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool=none"
+
+	stripe_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
+	((stripe_count == 1)) || error "expected append_stripe_count != 0, got $stripe_count"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$stripe_count"
+
+	pool_add $append_pool || error "pool creation failed"
+	pool_add_targets $append_pool 0 1 || error "Pool add targets failed"
+
+	pool_add $normal_pool || error "pool creation failed"
+	pool_add_targets $normal_pool 0 1 || error "Pool add targets failed"
+
+	test_mkdir $dir
+	$LFS setstripe -E 1M -c 1 -p $normal_pool -E 2M -c 2 -p $normal_pool -E eof -c -1 $dir
+
+	echo XXX >> $file.1
+	$LFS getstripe $file.1
+
+	pool=$($LFS getstripe -p $file.1)
+	[[ "$pool" == "$normal_pool" ]] || error "got pool '$pool', expected '$normal_pool'"
+
+	stripe_count2=$($LFS getstripe -c $file.1)
+	((stripe_count2 == stripe_count)) ||
+		error "got stripe_count '$stripe_count2', expected '$stripe_count'"
+
+	do_nodes $mdts $LCTL set_param mdd.*.append_pool=$append_pool
+
+	echo XXX >> $file.2
+	$LFS getstripe $file.2
+
+	pool=$($LFS getstripe -p $file.2)
+	[[ "$pool" == "$append_pool" ]] || error "got pool '$pool', expected '$append_pool'"
+
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=2
+
+	echo XXX >> $file.3
+	$LFS getstripe $file.3
+
+	stripe_count2=$($LFS getstripe -c $file.3)
+	((stripe_count2 == 2)) || error "got stripe_count '$stripe_count2', expected 2"
+}
+run_test 27U "append pool and stripe count work with composite default layout"
 
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)

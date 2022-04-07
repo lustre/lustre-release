@@ -3201,22 +3201,10 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 	    unlikely(spec != NULL && spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
 		hint->dah_eadata = spec->u.sp_ea.eadata;
 		hint->dah_eadata_len = spec->u.sp_ea.eadatalen;
-	} else {
-		hint->dah_eadata = NULL;
-		hint->dah_eadata_len = 0;
-		if (spec->sp_cr_flags & MDS_OPEN_APPEND) {
-			if (mdd->mdd_append_stripe_count != 0 ||
-			    mdd->mdd_append_pool[0])
-				CDEBUG(D_INFO,
-				       "using O_APPEND file striping\n");
-			if (mdd->mdd_append_stripe_count)
-				hint->dah_append_stripes =
-					mdd->mdd_append_stripe_count;
-			if (mdd->mdd_append_pool[0])
-				hint->dah_append_pool = mdd->mdd_append_pool;
-		} else {
-			hint->dah_append_stripes = 0;
-		}
+	} else if (S_ISREG(attr->la_mode) &&
+		   spec->sp_cr_flags & MDS_OPEN_APPEND) {
+		hint->dah_append_stripe_count = mdd->mdd_append_stripe_count;
+		hint->dah_append_pool = mdd->mdd_append_pool;
 	}
 
 	CDEBUG(D_INFO, DFID" eadata %p len %d\n", PFID(mdd_object_fid(child)),

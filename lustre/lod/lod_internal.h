@@ -363,12 +363,6 @@ static inline int lod_set_pool(char **pool, const char *new_pool)
 	return 0;
 }
 
-static inline int lod_set_def_pool(struct lod_default_striping *lds,
-				   int i, const char *new_pool)
-{
-	return lod_set_pool(&lds->lds_def_comp_entries[i].llc_pool, new_pool);
-}
-
 static inline int lod_obj_set_pool(struct lod_object *lo, int i,
 				   const char *new_pool)
 {

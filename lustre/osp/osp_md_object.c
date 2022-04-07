@@ -305,7 +305,6 @@ static void osp_md_ah_init(const struct lu_env *env,
 	LASSERT(ah);
 
 	ah->dah_parent = parent;
-	ah->dah_mode = child_mode;
 }
 
 /**

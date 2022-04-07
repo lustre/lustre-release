@@ -5303,15 +5303,21 @@ skip:
 static int lod_get_default_lov_striping(const struct lu_env *env,
 					struct lod_object *lo,
 					struct lod_default_striping *lds,
-					struct dt_allocation_hint *ah)
+					struct dt_allocation_hint *dah)
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lov_user_md_v1 *v1 = NULL;
 	struct lov_user_md_v3 *v3 = NULL;
-	struct lov_comp_md_v1 *comp_v1 = NULL;
-	__u16 comp_cnt;
-	__u16 mirror_cnt;
-	bool composite;
+	struct lov_comp_md_v1 *lcm = NULL;
+	__u32 magic;
+	int append_stripe_count = dah != NULL ? dah->dah_append_stripe_count : 0;
+	const char *append_pool = (dah != NULL &&
+				   dah->dah_append_pool != NULL &&
+				   dah->dah_append_pool[0] != '\0') ?
+				  dah->dah_append_pool : NULL;
+	__u16 entry_count = 1;
+	__u16 mirror_count = 0;
+	bool want_composite = false;
 	int rc, i, j;
 
 	ENTRY;
@@ -5325,75 +5331,91 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	if (rc < (typeof(rc))sizeof(struct lov_user_md))
 		RETURN(0);
 
-	v1 = info->lti_ea_store;
-	if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V1)) {
-		lustre_swab_lov_user_md_v1(v1);
-	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-		v3 = (struct lov_user_md_v3 *)v1;
-		lustre_swab_lov_user_md_v3(v3);
-	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_SPECIFIC)) {
-		v3 = (struct lov_user_md_v3 *)v1;
+	magic = *(__u32 *)info->lti_ea_store;
+	if (magic == __swab32(LOV_USER_MAGIC_V1)) {
+		lustre_swab_lov_user_md_v1(info->lti_ea_store);
+	} else if (magic == __swab32(LOV_USER_MAGIC_V3)) {
+		lustre_swab_lov_user_md_v3(info->lti_ea_store);
+	} else if (magic == __swab32(LOV_USER_MAGIC_SPECIFIC)) {
+		v3 = (struct lov_user_md_v3 *)info->lti_ea_store;
 		lustre_swab_lov_user_md_v3(v3);
 		lustre_swab_lov_user_md_objects(v3->lmm_objects,
 						v3->lmm_stripe_count);
-	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_COMP_V1) ||
-		   v1->lmm_magic == __swab32(LOV_USER_MAGIC_SEL)) {
-		comp_v1 = (struct lov_comp_md_v1 *)v1;
-		lustre_swab_lov_comp_md_v1(comp_v1);
+	} else if (magic == __swab32(LOV_USER_MAGIC_COMP_V1) ||
+		   magic == __swab32(LOV_USER_MAGIC_SEL)) {
+		lustre_swab_lov_comp_md_v1(info->lti_ea_store);
 	}
 
-	if (v1->lmm_magic != LOV_MAGIC_V3 && v1->lmm_magic != LOV_MAGIC_V1 &&
-	    v1->lmm_magic != LOV_MAGIC_COMP_V1 &&
-	    v1->lmm_magic != LOV_MAGIC_SEL &&
-	    v1->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
-		RETURN(-ENOTSUPP);
-
-	if ((v1->lmm_magic == LOV_MAGIC_COMP_V1 ||
-	    v1->lmm_magic == LOV_MAGIC_SEL) &&
-	     !(ah && ah->dah_append_stripes)) {
-		comp_v1 = (struct lov_comp_md_v1 *)v1;
-		comp_cnt = comp_v1->lcm_entry_count;
-		if (comp_cnt == 0)
+	switch (magic) {
+	case LOV_MAGIC_V1:
+	case LOV_MAGIC_V3:
+	case LOV_USER_MAGIC_SPECIFIC:
+		v1 = info->lti_ea_store;
+		break;
+	case LOV_MAGIC_COMP_V1:
+	case LOV_MAGIC_SEL:
+		lcm = info->lti_ea_store;
+		entry_count = lcm->lcm_entry_count;
+		if (entry_count == 0)
 			RETURN(-EINVAL);
-		mirror_cnt = comp_v1->lcm_mirror_count + 1;
-		composite = true;
-	} else {
-		comp_cnt = 1;
-		mirror_cnt = 0;
-		composite = false;
+
+		mirror_count = lcm->lcm_mirror_count + 1;
+		want_composite = true;
+		break;
+	default:
+		RETURN(-ENOTSUPP);
+	}
+
+	if (append_stripe_count != 0 || append_pool != NULL) {
+		entry_count = 1;
+		mirror_count = 0;
+		want_composite = false;
 	}
 
 	/* realloc default comp entries if necessary */
-	rc = lod_def_striping_comp_resize(lds, comp_cnt);
+	rc = lod_def_striping_comp_resize(lds, entry_count);
 	if (rc < 0)
 		RETURN(rc);
 
-	lds->lds_def_comp_cnt = comp_cnt;
-	lds->lds_def_striping_is_composite = composite;
-	lds->lds_def_mirror_cnt = mirror_cnt;
+	lds->lds_def_comp_cnt = entry_count;
+	lds->lds_def_striping_is_composite = want_composite;
+	lds->lds_def_mirror_cnt = mirror_count;
 
-	for (i = 0; i < comp_cnt; i++) {
-		struct lod_layout_component *lod_comp;
-		char *pool;
+	for (i = 0; i < entry_count; i++) {
+		struct lod_layout_component *llc = &lds->lds_def_comp_entries[i];
+		const char *pool;
 
-		lod_comp = &lds->lds_def_comp_entries[i];
 		/*
-		 * reset lod_comp values, llc_stripes is always NULL in
-		 * the default striping template, llc_pool will be reset
-		 * later below.
+		 * reset llc values, llc_stripes is always NULL in the
+		 * default striping template, llc_pool will be reset
+		 * later below using lod_set_pool().
+		 *
+		 * XXX At this point llc_pool may point to valid (!)
+		 * kmalloced strings from previous RPCs.
 		 */
-		memset(lod_comp, 0, offsetof(typeof(*lod_comp), llc_pool));
+		memset(llc, 0, offsetof(typeof(*llc), llc_pool));
 
-		if (composite) {
-			v1 = (struct lov_user_md *)((char *)comp_v1 +
-					comp_v1->lcm_entries[i].lcme_offset);
-			lod_comp->llc_extent =
-					comp_v1->lcm_entries[i].lcme_extent;
-			/* We only inherit certain flags from the layout */
-			lod_comp->llc_flags =
-					comp_v1->lcm_entries[i].lcme_flags &
+		if (lcm != NULL) {
+			v1 = (struct lov_user_md *)((char *)lcm +
+						    lcm->lcm_entries[i].lcme_offset);
+
+			if (want_composite) {
+				llc->llc_extent = lcm->lcm_entries[i].lcme_extent;
+				/* We only inherit certain flags from the layout */
+				llc->llc_flags = lcm->lcm_entries[i].lcme_flags &
 					LCME_TEMPLATE_FLAGS;
+			}
 		}
+
+		CDEBUG(D_LAYOUT, DFID" magic = %#08x, pattern = %#x, stripe_count = %hu, stripe_size = %u, stripe_offset = %hu, append_pool = '%s', append_stripe_count = %d\n",
+		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
+		       v1->lmm_magic,
+		       v1->lmm_pattern,
+		       v1->lmm_stripe_count,
+		       v1->lmm_stripe_size,
+		       v1->lmm_stripe_offset,
+		       append_pool ?: "",
+		       append_stripe_count);
 
 		if (!lov_pattern_supported(v1->lmm_pattern) &&
 		    !(v1->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
@@ -5401,40 +5423,41 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 			RETURN(-EINVAL);
 		}
 
-		CDEBUG(D_LAYOUT, DFID" stripe_count=%d stripe_size=%d stripe_offset=%d append_stripes=%d\n",
-		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
-		       (int)v1->lmm_stripe_count, (int)v1->lmm_stripe_size,
-		       (int)v1->lmm_stripe_offset,
-		       ah ? ah->dah_append_stripes : 0);
+		llc->llc_stripe_count = v1->lmm_stripe_count;
+		llc->llc_stripe_size = v1->lmm_stripe_size;
+		llc->llc_stripe_offset = v1->lmm_stripe_offset;
+		llc->llc_pattern = v1->lmm_pattern;
 
-		if (ah && ah->dah_append_stripes)
-			lod_comp->llc_stripe_count = ah->dah_append_stripes;
-		else
-			lod_comp->llc_stripe_count = v1->lmm_stripe_count;
-		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
-		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
-		lod_comp->llc_pattern = v1->lmm_pattern;
+		if (append_stripe_count != 0 || append_pool != NULL)
+			llc->llc_pattern = LOV_PATTERN_RAID0;
+
+		if (append_stripe_count != 0)
+			llc->llc_stripe_count = append_stripe_count;
 
 		pool = NULL;
-		if (ah && ah->dah_append_pool && ah->dah_append_pool[0]) {
-			pool = ah->dah_append_pool;
+		if (append_pool != NULL) {
+			pool = append_pool;
 		} else if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
 			/* XXX: sanity check here */
-			v3 = (struct lov_user_md_v3 *) v1;
+			v3 = (struct lov_user_md_v3 *)v1;
 			if (v3->lmm_pool_name[0] != '\0')
 				pool = v3->lmm_pool_name;
 		}
-		lod_set_def_pool(lds, i, pool);
-		if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+
+		lod_set_pool(&llc->llc_pool, pool);
+
+		if (append_stripe_count != 0 || append_pool != NULL) {
+			/* Ignore specific striping for append. */
+		} else if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
 			v3 = (struct lov_user_md_v3 *)v1;
-			rc = lod_comp_copy_ost_lists(lod_comp, v3);
+			rc = lod_comp_copy_ost_lists(llc, v3);
 			if (rc)
 				RETURN(rc);
-		} else if (lod_comp->llc_ostlist.op_array &&
-			   lod_comp->llc_ostlist.op_count) {
-			for (j = 0; j < lod_comp->llc_ostlist.op_count; j++)
-				lod_comp->llc_ostlist.op_array[j] = -1;
-			lod_comp->llc_ostlist.op_count = 0;
+		} else if (llc->llc_ostlist.op_array &&
+			   llc->llc_ostlist.op_count) {
+			for (j = 0; j < llc->llc_ostlist.op_count; j++)
+				llc->llc_ostlist.op_array[j] = -1;
+			llc->llc_ostlist.op_count = 0;
 		}
 	}
 
@@ -5617,7 +5640,7 @@ static void lod_striping_from_default(struct lod_object *lo,
 }
 
 static inline bool lod_need_inherit_more(struct lod_object *lo, bool from_root,
-					 char *append_pool)
+					 const char *append_pool)
 {
 	struct lod_layout_component *lod_comp;
 
@@ -5674,8 +5697,8 @@ static void lod_ah_init(const struct lu_env *env,
 
 	LASSERT(child);
 
-	if (ah->dah_append_stripes == -1)
-		ah->dah_append_stripes =
+	if (ah->dah_append_stripe_count == -1)
+		ah->dah_append_stripe_count =
 			d->lod_ost_descs.ltd_lov_desc.ld_tgt_count;
 
 	if (likely(parent)) {
@@ -5919,7 +5942,8 @@ out:
 		LASSERT(!lc->ldo_is_composite);
 		lod_comp = &lc->ldo_comp_entries[0];
 		desc = &d->lod_ost_descs.ltd_lov_desc;
-		lod_adjust_stripe_info(lod_comp, desc, ah->dah_append_stripes);
+		lod_adjust_stripe_info(lod_comp, desc,
+				       ah->dah_append_stripe_count);
 		if (ah->dah_append_pool && ah->dah_append_pool[0])
 			lod_obj_set_pool(lc, 0, ah->dah_append_pool);
 	}

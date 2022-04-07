@@ -412,12 +412,11 @@ extern const struct dt_index_features dt_nodemap_features;
 struct dt_allocation_hint {
 	struct dt_object	*dah_parent;
 	const void		*dah_eadata;
+	const char		*dah_append_pool;
 	int			dah_eadata_len;
+	int			dah_append_stripe_count;
 	int			dah_acl_len;
-	__u32			dah_mode;
-	int			dah_append_stripes;
 	bool			dah_can_block;
-	char			*dah_append_pool;
 };
 
 /**

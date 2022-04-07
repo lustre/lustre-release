@@ -3428,7 +3428,6 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 	LASSERT(ah);
 
 	ah->dah_parent = parent;
-	ah->dah_mode = child_mode;
 
 	if (parent != NULL && !dt_object_remote(parent)) {
 		/* will help to find FID->ino at dt_insert("..") */
