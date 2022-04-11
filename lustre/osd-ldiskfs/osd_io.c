@@ -872,6 +872,9 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_inode);
 
+	if (unlikely(obj->oo_destroyed))
+		RETURN(-ENOENT);
+
 	rc = osd_map_remote_to_local(pos, len, &npages, lnb, maxlnb);
 	if (rc)
 		RETURN(rc);

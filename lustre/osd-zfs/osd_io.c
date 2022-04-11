@@ -589,14 +589,18 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object *obj  = osd_dt_obj(dt);
 	int                rc;
 
-	LASSERT(dt_object_exists(dt));
-	LASSERT(obj->oo_dn);
+	down_read(&obj->oo_guard);
+
+	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
+		GOTO(out, rc = -ENOENT);
 
 	if (rw & DT_BUFS_TYPE_WRITE)
 		rc = osd_bufs_get_write(env, obj, offset, len, lnb, maxlnb);
 	else
 		rc = osd_bufs_get_read(env, obj, offset, len, lnb, maxlnb);
 
+out:
+	up_read(&obj->oo_guard);
 	return rc;
 }
 
