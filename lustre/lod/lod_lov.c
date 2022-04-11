@@ -610,7 +610,9 @@ int lod_fill_mirrors(struct lod_object *lo)
 	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
 		bool stale = lod_comp->llc_flags & LCME_FL_STALE;
 		bool preferred = lod_comp->llc_flags & LCME_FL_PREF_WR;
-		bool init = lod_comp_inited(lod_comp);
+		bool init = (lod_comp->llc_stripe != NULL) &&
+			    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
+			    !(lod_comp->llc_pattern & LOV_PATTERN_MDT);
 		int j;
 
 		pref = 0;
@@ -619,7 +621,10 @@ int lod_fill_mirrors(struct lod_object *lo)
 			__u32 idx = lod_comp->llc_ost_indices[j];
 			struct lod_tgt_desc *ltd;
 
-			if (unlikely(idx > lod->lod_ost_descs.ltd_tgts_size)) {
+			if (lod_comp->llc_stripe[j] == NULL)
+				continue;
+
+			if (unlikely(idx >= lod->lod_ost_descs.ltd_tgts_size)) {
 				CERROR("%s: "DFID" OST idx %u > max %u\n",
 				       lod2obd(lod)->obd_name,
 				       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
