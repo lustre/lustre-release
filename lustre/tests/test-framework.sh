@@ -292,7 +292,6 @@ init_test_env() {
 	if ! echo $PATH | grep -q $LUSTRE/tests/mpi; then
 		export PATH=$LUSTRE/tests/mpi:$PATH
 	fi
-	export RSYNC_RSH=${RSYNC_RSH:-rsh}
 
 	export LNETCTL=${LNETCTL:-"$LUSTRE/../lnet/utils/lnetctl"}
 	[ ! -f "$LNETCTL" ] && export LNETCTL=$(which lnetctl 2> /dev/null)
