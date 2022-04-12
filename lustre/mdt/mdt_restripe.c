@@ -607,12 +607,14 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	if ((lmv_is_splitting(lmv) &&
 	     idx >= le32_to_cpu(lmv->lmv_split_offset)) ||
 	    (lmv_is_merging(lmv) &&
-	     (le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_TYPE_MASK) ==
-		LMV_HASH_TYPE_CRUSH &&
+	     ((le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_TYPE_MASK) ==
+						 LMV_HASH_TYPE_CRUSH ||
+	      (le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_TYPE_MASK) ==
+						 LMV_HASH_TYPE_CRUSH2) &&
 	     idx < le32_to_cpu(lmv->lmv_merge_offset))) {
 		/* new stripes doesn't need to migrate sub files in dir
 		 * split, neither for target stripes in dir merge if hash type
-		 * is CRUSH.
+		 * is CRUSH or CRUSH2.
 		 */
 		rc = mdt_restripe_migrate_finish(info, stripe, lmv);
 		RETURN(rc);

@@ -1362,8 +1362,29 @@ static inline bool lu_name_is_dot_or_dotdot(const struct lu_name *lname)
 	return name_is_dot_or_dotdot(lname->ln_name, lname->ln_namelen);
 }
 
+/**
+ * Determine if filename should be considered a "temporary" name.
+ *
+ * For temporary names, use only the main part of the filename and ignore
+ * the suffix, so that the filename will hash to the same MDT after it is
+ * renamed.  That avoids creating spurious remote entries for rsync, dcp,
+ * vi, and other tools that create a temporary name before renaming the file.
+ *
+ * The "CRUSH" and "CRUSH2" hash types are slightly different, and should
+ * not be modified without introducing a new hash type.  The hash algorithm
+ * forms an important part of the network protocol for striped directories,
+ * so if the hash function were "fixed" in any way it would prevent clients
+ * from looking up a filename on the right MDT.  LU-15692.
+ *
+ * \param[in] name		filename
+ * \param[in] namelen		length of @name
+ * \param[in] dot_prefix	if @name needs a leading '.' to be temporary
+ * \param[in] suffixlen		number of characters after '.' in @name to check
+ * \param[in] crush2		whether CRUSH or CRUSH2 heuristic should be used
+ */
 static inline bool lu_name_is_temp_file(const char *name, int namelen,
-					bool dot_prefix, int suffixlen)
+					bool dot_prefix, int suffixlen,
+					bool crush2)
 {
 	int lower = 0;
 	int upper = 0;
@@ -1377,20 +1398,45 @@ static inline bool lu_name_is_temp_file(const char *name, int namelen,
 	    name[namelen - suffixlen - 1] != '.')
 		return false;
 
+	/* Any non-alphanumeric chars in the suffix for CRUSH2 mean the
+	 * filename is *not* temporary.  The original CRUSH was incorrectly
+	 * matching if a '.' happens to be in the right place, for example
+	 * file.mdtest.12.12345 or output.6334.log, which is bad.  LU-15692
+	 */
 	while (len) {
-		lower += islower(name[namelen - len]);
-		upper += isupper(name[namelen - len]);
-		digit += isdigit(name[namelen - len]);
+		if (islower(name[namelen - len]))
+			lower++;
+		else if (isupper(name[namelen - len]))
+			upper++;
+		else if (isdigit(name[namelen - len]))
+			digit++;
+		else if (crush2)
+			return false;
 		len--;
 	}
-	/* mktemp() filename suffixes will have a mix of upper- and lower-case
-	 * letters and/or numbers, not all numbers, or all upper or lower-case.
-	 * About 0.07% of randomly-generated names will slip through,
+
+	/* mktemp() suffixes normally have a mix of upper- and lower-case
+	 * letters and/or digits, rarely all upper- or lower-case or digits.
+	 * Random all-digit suffixes are rare (1/45k for suffixlen=6), but
+	 * common in normal usage (incrementing versions, dates, ranks, etc),
+	 * so are considered non-temporary even if 1 or 2 non-numeric chars.
+	 *
+	 * About 0.07% of randomly-generated names will slip through, which
+	 * only means that they may be renamed to a different MDT (slowdown),
 	 * but this avoids 99.93% of cross-MDT renames for those files.
 	 */
-	if ((digit >= suffixlen - 1 && !isdigit(name[namelen - suffixlen])) ||
-	    upper == suffixlen || lower == suffixlen)
+	if (upper == suffixlen || lower == suffixlen)
 		return false;
+
+	if (crush2) {
+		if (digit >= suffixlen - 1 &&
+		    isdigit(name[namelen - suffixlen]))
+			return false;
+	} else { /* old crush incorrectly returns "true" for all-digit suffix */
+		if (digit >= suffixlen - 1 &&
+		    !isdigit(name[namelen - suffixlen]))
+			return false;
+	}
 
 	return true;
 }

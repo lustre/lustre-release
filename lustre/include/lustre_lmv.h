@@ -124,21 +124,20 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 
 static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 {
-	bool valid_hash = lmv_dir_bad_hash(lsm);
 	int i;
 
-	/* If lsm_md_magic == LMV_MAGIC_FOREIGN pool_name may not be a null
-	 * terminated string so only print LOV_MAXPOOLNAME bytes.
-	 */
-	CDEBUG(mask,
-	       "magic %#x stripe count %d master mdt %d hash type %s:%#x max-inherit %hhu max-inherit-rr %hhu version %d migrate offset %d migrate hash %#x pool %.*s\n",
+	CDEBUG_LIMIT(mask,
+	       "dump LMV: magic=%#x count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
 	       lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
 	       lsm->lsm_md_master_mdt_index,
-	       valid_hash ? "invalid hash" :
-			    mdt_hash_name[lsm->lsm_md_hash_type & (LMV_HASH_TYPE_MAX - 1)],
-	       lsm->lsm_md_hash_type, lsm->lsm_md_max_inherit,
-	       lsm->lsm_md_max_inherit_rr, lsm->lsm_md_layout_version,
-	       lsm->lsm_md_migrate_offset, lsm->lsm_md_migrate_hash,
+	       lmv_is_known_hash_type(lsm->lsm_md_hash_type) ?
+		mdt_hash_name[lsm->lsm_md_hash_type & LMV_HASH_TYPE_MASK] :
+		"invalid", lsm->lsm_md_hash_type,
+	       lsm->lsm_md_max_inherit, lsm->lsm_md_max_inherit_rr,
+	       lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
+	       lmv_is_known_hash_type(lsm->lsm_md_migrate_hash) ?
+		mdt_hash_name[lsm->lsm_md_migrate_hash & LMV_HASH_TYPE_MASK] :
+		"invalid", lsm->lsm_md_migrate_hash,
 	       LOV_MAXPOOLNAME, lsm->lsm_md_pool_name);
 
 	if (!lmv_dir_striped(lsm))
@@ -248,7 +247,7 @@ static inline __u32 crush_hash(__u32 a, __u32 b)
  * algorithm.
  */
 static inline unsigned int
-lmv_hash_crush(unsigned int count, const char *name, int namelen)
+lmv_hash_crush(unsigned int count, const char *name, int namelen, bool crush2)
 {
 	unsigned long long straw;
 	unsigned long long highest_straw = 0;
@@ -261,10 +260,10 @@ lmv_hash_crush(unsigned int count, const char *name, int namelen)
 	 * 1. rsync: .<target>.XXXXXX
 	 * 2. dstripe: <target>.XXXXXXXX
 	 */
-	if (lu_name_is_temp_file(name, namelen, true, 6)) {
+	if (lu_name_is_temp_file(name, namelen, true, 6, crush2)) {
 		name++;
 		namelen -= 8;
-	} else if (lu_name_is_temp_file(name, namelen, false, 8)) {
+	} else if (lu_name_is_temp_file(name, namelen, false, 8, crush2)) {
 		namelen -= 9;
 	} else if (lu_name_is_backup_file(name, namelen, &i)) {
 		LASSERT(i < namelen);
@@ -343,7 +342,11 @@ __lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
 			break;
 		case LMV_HASH_TYPE_CRUSH:
 			stripe_index = lmv_hash_crush(stripe_count, name,
-						      namelen);
+						      namelen, false);
+			break;
+		case LMV_HASH_TYPE_CRUSH2:
+			stripe_index = lmv_hash_crush(stripe_count, name,
+						      namelen, true);
 			break;
 		default:
 			return -EBADFD;
@@ -415,16 +418,19 @@ static inline bool lmv_user_magic_supported(__u32 lum_magic)
 	       lum_magic == LMV_MAGIC_FOREIGN;
 }
 
-#define LMV_DEBUG(mask, lmv, msg)					\
-	CDEBUG(mask,							\
-	       "%s LMV: magic=%#x count=%u index=%u hash=%s:%#x version=%u migrate offset=%u migrate hash=%s:%u.\n",\
-	       msg, (lmv)->lmv_magic, (lmv)->lmv_stripe_count,		\
-	       (lmv)->lmv_master_mdt_index,				\
-	       mdt_hash_name[(lmv)->lmv_hash_type & (LMV_HASH_TYPE_MAX - 1)],\
-	       (lmv)->lmv_hash_type, (lmv)->lmv_layout_version,		\
-	       (lmv)->lmv_migrate_offset,				\
-	       mdt_hash_name[(lmv)->lmv_migrate_hash & (LMV_HASH_TYPE_MAX - 1)],\
-	       (lmv)->lmv_migrate_hash)
+#define LMV_DEBUG(mask, lmv, msg)					      \
+	CDEBUG_LIMIT(mask,						      \
+	       "%s LMV: magic=%#x count=%u index=%u hash=%s:%#x version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",\
+	       msg, (lmv)->lmv_magic, (lmv)->lmv_stripe_count,		      \
+	       (lmv)->lmv_master_mdt_index,				      \
+	       lmv_is_known_hash_type((lmv)->lmv_hash_type) ?		      \
+		mdt_hash_name[(lmv)->lmv_hash_type & LMV_HASH_TYPE_MASK] :    \
+		"invalid", (lmv)->lmv_hash_type,			      \
+	       (lmv)->lmv_layout_version, (lmv)->lmv_migrate_offset,	      \
+	       lmv_is_known_hash_type((lmv)->lmv_migrate_hash) ?	      \
+		mdt_hash_name[(lmv)->lmv_migrate_hash & LMV_HASH_TYPE_MASK] : \
+		"invalid", (lmv)->lmv_migrate_hash,			      \
+	       LOV_MAXPOOLNAME, lmv->lmv_pool_name)
 
 /* master LMV is sane */
 static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
@@ -443,7 +449,7 @@ static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
 
 	return true;
 insane:
-	LMV_DEBUG(D_ERROR, lmv, "insane");
+	LMV_DEBUG(D_ERROR, lmv, "unknown layout");
 	return false;
 }
 
@@ -465,7 +471,7 @@ static inline bool lmv_is_sane2(const struct lmv_mds_md_v1 *lmv)
 
 	return true;
 insane:
-	LMV_DEBUG(D_ERROR, lmv, "insane");
+	LMV_DEBUG(D_ERROR, lmv, "unknown layout");
 	return false;
 }
 

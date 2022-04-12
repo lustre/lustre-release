@@ -539,7 +539,7 @@ static int mdt_create(struct mdt_thread_info *info)
 		}
 
 		if ((!(exp_connect_flags2(exp) & OBD_CONNECT2_CRUSH)) &&
-		    (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_TYPE_MASK) ==
+		    (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_TYPE_MASK) >=
 		    LMV_HASH_TYPE_CRUSH)
 			RETURN(-EPROTO);
 

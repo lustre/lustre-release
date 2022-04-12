@@ -468,7 +468,7 @@ check_cpt_number() {
 # code is useful for comparison two version strings to see which is newer.
 version_code() {
 	# split arguments like "1.8.6-wc3" into "1", "8", "6", "3"
-	eval set -- $(tr "[:punct:][a-z]" " " <<< $*)
+	eval set -- $(tr "[:punct:][a-zA-Z]" " " <<< $*)
 
 	echo -n $(((${1:-0}<<24) | (${2:-0}<<16) | (${3:-0}<<8) | (${4:-0})))
 }
@@ -9072,6 +9072,9 @@ test_mkdir() {
 	local dirstripe_count=${DIRSTRIPE_COUNT:-"2"}
 	local dirstripe_index=${DIRSTRIPE_INDEX:-$((base % $MDSCOUNT))}
 	local OPTIND=1
+
+	(( $MDS1_VERSION > $(version_code 2.15.0) )) &&
+		hash_name+=("crush2")
 
 	while getopts "c:H:i:p" opt; do
 		case $opt in

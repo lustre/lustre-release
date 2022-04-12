@@ -469,9 +469,10 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	if (lump->lum_magic != LMV_MAGIC_FOREIGN) {
 		CDEBUG(D_VFSTRACE,
-		       "VFS Op:inode="DFID"(%p) name %s stripe_offset %d, stripe_count: %u\n",
+		       "VFS Op:inode="DFID"(%p) name=%s stripe_offset=%d stripe_count=%u, hash_type=%x\n",
 		       PFID(ll_inode2fid(parent)), parent, dirname,
-		       (int)lump->lum_stripe_offset, lump->lum_stripe_count);
+		       (int)lump->lum_stripe_offset, lump->lum_stripe_count,
+		       lump->lum_hash_type);
 	} else {
 		struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)lump;
 
@@ -492,7 +493,9 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	/* MDS < 2.14 doesn't support 'crush' hash type, and cannot handle
 	 * unknown hash if client doesn't set a valid one. switch to fnv_1a_64.
 	 */
-	if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_CRUSH)) {
+	if (CFS_FAIL_CHECK(OBD_FAIL_LMV_UNKNOWN_STRIPE)) {
+		lump->lum_hash_type = cfs_fail_val;
+	} else if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_CRUSH)) {
 		enum lmv_hash_type type = lump->lum_hash_type &
 					  LMV_HASH_TYPE_MASK;
 

@@ -1013,10 +1013,12 @@ struct lmv_user_mds_data {
 
 enum lmv_hash_type {
 	LMV_HASH_TYPE_UNKNOWN	= 0,	/* 0 is reserved for testing purpose */
-	LMV_HASH_TYPE_ALL_CHARS = 1,
-	LMV_HASH_TYPE_FNV_1A_64 = 2,
-	LMV_HASH_TYPE_CRUSH	= 3,
+	LMV_HASH_TYPE_ALL_CHARS = 1,	/* simple sum of characters */
+	LMV_HASH_TYPE_FNV_1A_64 = 2,	/* reasonable non-cryptographic hash */
+	LMV_HASH_TYPE_CRUSH	= 3,	/* double-hash to optimize migration */
+	LMV_HASH_TYPE_CRUSH2	= 4,	/* CRUSH with small fixes, LU-15692 */
 	LMV_HASH_TYPE_MAX,
+	LMV_HASH_TYPE_DEFAULT	= LMV_HASH_TYPE_FNV_1A_64
 };
 
 static __attribute__((unused)) const char *mdt_hash_name[] = {
@@ -1024,9 +1026,9 @@ static __attribute__((unused)) const char *mdt_hash_name[] = {
 	"all_char",
 	"fnv_1a_64",
 	"crush",
+	"crush2",
 };
 
-#define LMV_HASH_TYPE_DEFAULT LMV_HASH_TYPE_FNV_1A_64
 
 /* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
  * and the higher part will be the flag to indicate the status of object,
@@ -1036,9 +1038,8 @@ static __attribute__((unused)) const char *mdt_hash_name[] = {
 
 static inline bool lmv_is_known_hash_type(__u32 type)
 {
-	return (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_FNV_1A_64 ||
-	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS ||
-	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_CRUSH;
+	return (type & LMV_HASH_TYPE_MASK) > LMV_HASH_TYPE_UNKNOWN &&
+	       (type & LMV_HASH_TYPE_MASK) < LMV_HASH_TYPE_MAX;
 }
 
 /* fixed layout, such directories won't split automatically */

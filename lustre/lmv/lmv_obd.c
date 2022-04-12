@@ -3343,8 +3343,8 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 	lsm->lsm_md_magic = le32_to_cpu(lmm1->lmv_magic);
 	lsm->lsm_md_stripe_count = le32_to_cpu(lmm1->lmv_stripe_count);
 	lsm->lsm_md_master_mdt_index = le32_to_cpu(lmm1->lmv_master_mdt_index);
-	if (OBD_FAIL_CHECK(OBD_FAIL_UNKNOWN_LMV_STRIPE))
-		lsm->lsm_md_hash_type = LMV_HASH_TYPE_UNKNOWN;
+	if (CFS_FAIL_CHECK(OBD_FAIL_LMV_UNKNOWN_STRIPE))
+		lsm->lsm_md_hash_type = cfs_fail_val ?: LMV_HASH_TYPE_UNKNOWN;
 	else
 		lsm->lsm_md_hash_type = le32_to_cpu(lmm1->lmv_hash_type);
 	lsm->lsm_md_layout_version = le32_to_cpu(lmm1->lmv_layout_version);

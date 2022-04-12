@@ -2894,6 +2894,8 @@ test_27K() {
 		$DIR/$tdir/${tdir}2 ||
 		error "$DIR/$tdir/${tdir}2: create failed"
 
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2
+
 	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
 		grep "lfm_magic:.*0x0CD50CD0" ||
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA magic"
@@ -3234,6 +3236,8 @@ test_27P() {
 	$LFS mkdir --foreign=symlink --xattr="${uuid1}/${uuid2}" \
 		--flags=0xda05 --mode 0750 $DIR/$tdir/${tdir} ||
 		error "$DIR/$tdir/${tdir}: create failed"
+
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}
 
 	$LFS getdirstripe -v $DIR/$tdir/${tdir} |
 		grep "lfm_magic:.*0x0CD50CD0" ||
@@ -4236,45 +4240,122 @@ test_33g() {
 }
 run_test 33g "nonroot user create already existing root created file"
 
-test_33h() {
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.13.50) ] &&
-		skip "Need MDS version at least 2.13.50"
+sub_33h() {
+	local hash_type=$1
+	local count=250
 
-	test_mkdir -c $MDSCOUNT -H crush $DIR/$tdir ||
-		error "mkdir $tdir failed"
+	test_mkdir -c $MDSCOUNT -H $hash_type $DIR/$tdir ||
+		error "lfs mkdir -H $hash_type $tdir failed"
 	touch $DIR/$tdir/$tfile || error "touch $tfile failed"
 
 	local index=$($LFS getstripe -m $DIR/$tdir/$tfile)
 	local index2
+	local fname
 
 	for fname in $DIR/$tdir/$tfile.bak \
 		     $DIR/$tdir/$tfile.SAV \
 		     $DIR/$tdir/$tfile.orig \
 		     $DIR/$tdir/$tfile~; do
-		touch $fname  || error "touch $fname failed"
+		touch $fname || error "touch $fname failed"
 		index2=$($LFS getstripe -m $fname)
-		[ $index -eq $index2 ] ||
+		(( $index == $index2 )) ||
 			error "$fname MDT index mismatch $index != $index2"
 	done
 
 	local failed=0
-	for i in {1..250}; do
-		for fname in $(mktemp -u $DIR/$tdir/.$tfile.XXXXXX) \
-			     $(mktemp $DIR/$tdir/$tfile.XXXXXXXX); do
-			touch $fname  || error "touch $fname failed"
+	local patterns=(".$tfile.XXXXXX" "$tfile.XXXXXXXX")
+	local pattern
+
+	for pattern in ${patterns[*]}; do
+		echo "pattern $pattern"
+		fname=$DIR/$tdir/$pattern
+		for (( i = 0; i < $count; i++ )); do
+			fname=$(mktemp $DIR/$tdir/$pattern) ||
+				error "mktemp $DIR/$tdir/$pattern failed"
 			index2=$($LFS getstripe -m $fname)
-			if [[ $index != $index2 ]]; then
-				failed=$((failed + 1))
-				echo "$fname MDT index mismatch $index != $index2"
-			fi
+			(( $index == $index2 )) && continue
+
+			failed=$((failed + 1))
+			echo "$fname MDT index mismatch $index != $index2"
 		done
 	done
-	echo "$failed MDT index mismatches"
-	(( failed < 20 )) || error "MDT index mismatch $failed times"
 
+	echo "$failed/$count MDT index mismatches, expect ~2-4"
+	(( failed < 10 )) || error "MDT index mismatch $failed/$count times"
+
+	local same=0
+	local expect
+
+	# verify that "crush" is still broken with all files on same MDT,
+	# crush2 should have about 1/MDSCOUNT files on each MDT, with margin
+	[[ "$hash_type" == "crush" ]] && expect=$count ||
+		expect=$((count / MDSCOUNT))
+
+	# crush2 doesn't put all-numeric suffixes on the same MDT,
+	# filename like $tfile.12345678 should *not* be considered temp
+	for pattern in ${patterns[*]}; do
+		local base=${pattern%%X*}
+		local suff=${pattern#$base}
+
+		echo "pattern $pattern"
+		for (( i = 0; i < $count; i++ )); do
+			fname=$DIR/$tdir/$base$((${suff//X/1} + i))
+			touch $fname || error "touch $fname failed"
+			index2=$($LFS getstripe -m $fname)
+			(( $index != $index2 )) && continue
+
+			same=$((same + 1))
+		done
+	done
+
+	echo "$((same/${#patterns[*]}))/$count matches, expect ~$expect for $1"
+	(( same / ${#patterns[*]} < expect * 5 / 4 &&
+	   same / ${#patterns[*]} > expect * 4 / 5 )) ||
+		error "MDT index match $((same / ${#patterns[*]}))/$count times"
+	same=0
+
+	# crush2 doesn't put suffixes with special characters on the same MDT
+	# filename like $tfile.txt.1234 should *not* be considered temp
+	for pattern in ${patterns[*]}; do
+		local base=${pattern%%X*}
+		local suff=${pattern#$base}
+
+		pattern=$base...${suff/XXX}
+		echo "pattern=$pattern"
+		for (( i = 0; i < $count; i++ )); do
+			fname=$(mktemp $DIR/$tdir/$pattern) ||
+				error "touch $fname failed"
+			index2=$($LFS getstripe -m $fname)
+			(( $index != $index2 )) && continue
+
+			same=$((same + 1))
+		done
+	done
+
+	echo "$((same/${#patterns[*]}))/$count matches, expect ~$expect for $1"
+	(( same / ${#patterns[*]} < expect * 5 / 4 &&
+	   same / ${#patterns[*]} > expect * 4 / 5 )) ||
+		error "MDT index match $((same / ${#patterns[*]}))/$count times"
 }
-run_test 33h "temp file is located on the same MDT as target"
+
+test_33h() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.13.50) )) ||
+		skip "Need MDS version at least 2.13.50"
+
+	sub_33h crush
+}
+run_test 33h "temp file is located on the same MDT as target (crush)"
+
+test_33hh() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	echo "MDS1_VERSION=$MDS1_VERSION version_code=$(version_code 2.15.0)"
+	(( $MDS1_VERSION > $(version_code 2.15.0) )) ||
+		skip "Need MDS version at least 2.15.0 for crush2"
+
+	sub_33h crush2
+}
+run_test 33hh "temp file is located on the same MDT as target (crush2)"
 
 test_33i()
 {
@@ -23468,9 +23549,9 @@ test_300h() {
 run_test 300h "check default striped directory for striped directory"
 
 test_300i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.7.55) )) ||
 		skip "Need MDS version at least 2.7.55"
 
 	local stripe_count
@@ -23501,11 +23582,31 @@ test_300i() {
 
 	$LFS find -H fnv_1a_64,crush $DIR/$tdir/hashdir
 	local dircnt=$($LFS find -H fnv_1a_64,crush $DIR/$tdir/hashdir | wc -l)
-	[ $dircnt -eq 2 ] || error "lfs find striped dir got:$dircnt,except:1"
+	(( $dircnt == 2 )) || error "lfs find striped dir got $dircnt != 2"
 
-	#set the stripe to be unknown hash type
-	#define OBD_FAIL_UNKNOWN_LMV_STRIPE	0x1901
-	$LCTL set_param fail_loc=0x1901
+	if (( $MDS1_VERSION > $(version_code 2.15.0) )); then
+		$LFS mkdir -i0 -c$MDSCOUNT -H crush2 $DIR/$tdir/hashdir/d3 ||
+			error "create crush2 dir $tdir/hashdir/d3 failed"
+		$LFS find -H crush2 $DIR/$tdir/hashdir
+		dircnt=$($LFS find -H crush2 $DIR/$tdir/hashdir | wc -l)
+		(( $dircnt == 1 )) || error "find crush2 dir got $dircnt != 1"
+
+		# mkdir with an invalid hash type (hash=fail_val) from client
+		# should be replaced on MDS with a valid (default) hash type
+		#define OBD_FAIL_LMV_UNKNOWN_STRIPE	0x1901
+		$LCTL set_param fail_loc=0x1901 fail_val=99
+		$LFS mkdir -c2 $DIR/$tdir/hashdir/d99
+
+		local hash=$($LFS getdirstripe -H $DIR/$tdir/hashdir/d99)
+		local expect=$(do_facet mds1 \
+			$LCTL get_param -n lod.$FSNAME-MDT0000-mdtlov.mdt_hash)
+		[[ $hash == $expect ]] ||
+			error "d99 hash '$hash' != expected hash '$expect'"
+	fi
+
+	#set the stripe to be unknown hash type on read
+	#define OBD_FAIL_LMV_UNKNOWN_STRIPE	0x1901
+	$LCTL set_param fail_loc=0x1901 fail_val=99
 	for ((i = 0; i < 10; i++)); do
 		$CHECKSTAT -t file $DIR/$tdir/striped_dir/f-$i ||
 			error "stat f-$i failed"

@@ -1071,24 +1071,30 @@ static ssize_t mdt_hash_store(struct kobject *kobj, struct attribute *attr,
 	struct lod_device *lod = dt2lod_dev(dt);
 	char *hash;
 	int len;
+	int rc = -EINVAL;
 	int i;
 
 	hash = kstrndup(buffer, count, GFP_KERNEL);
 	if (!hash)
 		return -ENOMEM;
 
+	if (kstrtoint(hash, 10, &i) == 0 && lmv_is_known_hash_type(i)) {
+		lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern = i;
+		GOTO(out, rc = count);
+	}
+
 	len = strcspn(hash, "\n ");
 	hash[len] = '\0';
-	for (i = LMV_HASH_TYPE_ALL_CHARS; i < LMV_HASH_TYPE_MAX; i++) {
-		if (!strcmp(hash, mdt_hash_name[i])) {
+	for (i = LMV_HASH_TYPE_ALL_CHARS; i < ARRAY_SIZE(mdt_hash_name); i++) {
+		if (strcmp(hash, mdt_hash_name[i]) == 0) {
 			lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern = i;
-			kfree(hash);
-			return count;
+			GOTO(out, rc = count);
 		}
 	}
+out:
 	kfree(hash);
 
-	return -EINVAL;
+	return rc;
 }
 LUSTRE_RW_ATTR(mdt_hash);
 

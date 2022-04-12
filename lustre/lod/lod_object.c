@@ -2396,16 +2396,19 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 				     struct dt_object_format *dof,
 				     struct thandle *th)
 {
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lmv_user_md_v1	*lum = lum_buf->lb_buf;
-	int			rc;
-	ENTRY;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lmv_user_md_v1 *lum = lum_buf->lb_buf;
+	int rc;
 
+	ENTRY;
 	LASSERT(lum != NULL);
 
-	CDEBUG(D_INFO, "lum magic = %x count = %u offset = %d\n",
-	       le32_to_cpu(lum->lum_magic), le32_to_cpu(lum->lum_stripe_count),
-	       (int)le32_to_cpu(lum->lum_stripe_offset));
+	CDEBUG(D_INFO,
+	       "lum magic=%x hash=%x count=%u offset=%d inherit=%u rr=%u\n",
+	       le32_to_cpu(lum->lum_magic), le32_to_cpu(lum->lum_hash_type),
+	       le32_to_cpu(lum->lum_stripe_count),
+	       (int)le32_to_cpu(lum->lum_stripe_offset),
+	       lum->lum_max_inherit, lum->lum_max_inherit_rr);
 
 	if (lo->ldo_dir_stripe_count == 0) {
 		if (lo->ldo_is_foreign) {
@@ -2436,7 +2439,7 @@ out:
  *
  * \param[in] env	execution environment
  * \param[in] dt	target object
- * \param[in] buf	LMV buf which contains source stripe fids
+ * \param[in] lmv_buf	LMV buf which contains source stripe FIDs
  * \param[in] fl	set or replace
  * \param[in] th	transaction handle
  *
@@ -2445,14 +2448,14 @@ out:
  */
 static int lod_dir_layout_set(const struct lu_env *env,
 			      struct dt_object *dt,
-			      const struct lu_buf *buf,
+			      const struct lu_buf *lmv_buf,
 			      int fl,
 			      struct thandle *th)
 {
 	struct dt_object *next = dt_object_child(dt);
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lod_device *lod = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct lmv_mds_md_v1 *lmv = buf->lb_buf;
+	struct lmv_mds_md_v1 *lmv = lmv_buf->lb_buf;
 	struct lmv_mds_md_v1 *slave_lmv;
 	struct lu_buf slave_buf;
 	int i;
@@ -2472,7 +2475,7 @@ static int lod_dir_layout_set(const struct lu_env *env,
 
 	LMV_DEBUG(D_INFO, lmv, "set");
 
-	rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LMV, fl, th);
+	rc = lod_sub_xattr_set(env, next, lmv_buf, XATTR_NAME_LMV, fl, th);
 	if (rc)
 		RETURN(rc);
 
@@ -5551,8 +5554,9 @@ static void lod_striping_from_default(struct lod_object *lo,
 			struct lod_layout_component *def_comp =
 						&lds->lds_def_comp_entries[i];
 
-			CDEBUG(D_LAYOUT, "Inherit from default: flags=%#x "
-			       "size=%hu nr=%u offset=%u pattern=%#x pool=%s\n",
+			CDEBUG(D_LAYOUT,
+			       "inherit "DFID" file layout from default: flags=%#x size=%hu nr=%u offset=%u pattern=%#x pool=%s\n",
+			       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
 			       def_comp->llc_flags,
 			       def_comp->llc_stripe_size,
 			       def_comp->llc_stripe_count,
@@ -5601,11 +5605,12 @@ static void lod_striping_from_default(struct lod_object *lo,
 		if (lo->ldo_dir_stripe_offset == -1)
 			lo->ldo_dir_stripe_offset =
 				lds->lds_dir_def_stripe_offset;
-		if (lo->ldo_dir_hash_type == 0)
+		if (lo->ldo_dir_hash_type == LMV_HASH_TYPE_UNKNOWN)
 			lo->ldo_dir_hash_type = lds->lds_dir_def_hash_type;
 
-		CDEBUG(D_LAYOUT, "striping from default dir: count:%hu, "
-		       "offset:%u, hash_type:%u\n",
+		CDEBUG(D_LAYOUT,
+		       "inherit "DFID" dir layout from default: count=%hu offset=%u hash_type=%x\n",
+		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
 		       lo->ldo_dir_stripe_count, lo->ldo_dir_stripe_offset,
 		       lo->ldo_dir_hash_type);
 	}
@@ -5644,8 +5649,8 @@ static inline bool lod_need_inherit_more(struct lod_object *lo, bool from_root,
  * This method is used to make a decision on the striping configuration for the
  * object being created. It can be taken from the \a parent object if it exists,
  * or filesystem's default. The resulting configuration (number of stripes,
- * stripe size/offset, pool name, etc) is stored in the object itself and will
- * be used by the methods like ->doo_declare_create().
+ * stripe size/offset, pool name, hash_type, etc.) is stored in the object
+ * itself and will be used by the methods like ->doo_declare_create().
  *
  * \see dt_object_operations::do_ah_init() in the API description for details.
  */
@@ -5725,7 +5730,7 @@ static void lod_ah_init(const struct lu_env *env,
 			lc->ldo_dir_hash_type =
 				le32_to_cpu(lum1->lum_hash_type);
 			CDEBUG(D_INFO,
-			       "set dirstripe: count %hu, offset %d, hash %u\n",
+			       "set dirstripe: count %hu, offset %d, hash %x\n",
 				lc->ldo_dir_stripe_count,
 				(int)lc->ldo_dir_stripe_offset,
 				lc->ldo_dir_hash_type);
@@ -5803,11 +5808,12 @@ static void lod_ah_init(const struct lu_env *env,
 				lc->ldo_dir_stripe_count = 0;
 		}
 
-		if (!(lc->ldo_dir_hash_type & LMV_HASH_TYPE_MASK))
-			lc->ldo_dir_hash_type |=
+		if (!lmv_is_known_hash_type(lc->ldo_dir_hash_type))
+			lc->ldo_dir_hash_type =
+				(lc->ldo_dir_hash_type & LMV_HASH_FLAG_KNOWN) |
 				d->lod_mdt_descs.ltd_lmv_desc.ld_pattern;
 
-		CDEBUG(D_INFO, "final dir stripe [%hu %d %u]\n",
+		CDEBUG(D_INFO, "final dir stripe_count=%hu offset=%d hash=%u\n",
 		       lc->ldo_dir_stripe_count,
 		       (int)lc->ldo_dir_stripe_offset, lc->ldo_dir_hash_type);
 

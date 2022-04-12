@@ -2098,13 +2098,14 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		if (!lmv_user_magic_supported(le32_to_cpu(lum->lum_magic)) &&
 		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_V0) {
 			rc = -EINVAL;
-			CERROR("%s: invalid lmv_user_md: magic = %x, "
-			       "stripe_offset = %d, stripe_count = %u: "
-			       "rc = %d\n", mdd2obd_dev(m)->obd_name,
-				le32_to_cpu(lum->lum_magic),
+			CERROR("%s: invalid lmv_user_md: magic=%x hash=%x stripe_offset=%d stripe_count=%u: rc = %d\n",
+			       mdd2obd_dev(m)->obd_name,
+			       le32_to_cpu(lum->lum_magic),
+			       le32_to_cpu(lum->lum_hash_type),
 			       (int)le32_to_cpu(lum->lum_stripe_offset),
 			       le32_to_cpu(lum->lum_stripe_count), rc);
-			return rc;
+
+			RETURN(rc);
 		}
 	}
 
