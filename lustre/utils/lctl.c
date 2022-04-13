@@ -346,12 +346,6 @@ command_t cmdlist[] = {
 	 "usage: snapshot_umount <-F | --fsname fsname> [-h | --help]\n"
 	 "			 <-n | --name ssname>\n"
 	 "			 [-r | --rsh remote_shell]"},
-	{"fork_lcfg", jt_lcfg_fork, 0,
-	 "copy configuration files for named filesystem with given name\n"
-	 "usage: fork_lcfg <fsname> <newname>"},
-	{"erase_lcfg", jt_lcfg_erase, 0,
-	 "permanently erase configuration for the named filesystem\n"
-	 "usage: erase_lcfg <fsname>"},
 #endif /* HAVE_SERVER_SUPPORT */
 	/* Nodemap commands */
 	{"=== Nodemap ===", NULL, 0, "nodemap management"},
@@ -427,15 +421,6 @@ command_t cmdlist[] = {
 	 "usage: setup <args...>"},
 	{"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
 	 "usage: cleanup [force | failover]"},
-	{"clear_conf", jt_lcfg_clear, 0,
-	 "drop unused config logs for a device or filesystem\n"
-	 "usage: clear_conf <device|fsname>"},
-	{"fork_lcfg", jt_lcfg_fork, 0,
-	 "copy configuration files for named filesystem with given name\n"
-	 "usage: fork_lcfg <fsname> <newname>"},
-	{"erase_lcfg", jt_lcfg_erase, 0,
-	 "permanently erase configuration for the named filesystem\n"
-	 "usage: erase_lcfg <fsname>"},
 
 #ifdef HAVE_SERVER_SUPPORT
 	/* LFSCK commands */
@@ -457,7 +442,6 @@ command_t cmdlist[] = {
 	 "usage: lfsck_query [--device|-M MDT_device] [--help|-h]\n"
 	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
 	 "		     [--wait|-w]"},
-#endif /* HAVE_SERVER_SUPPORT */
 
 	/* Llog operations */
 	{"==== LLOG ====", NULL, 0, "LLOG"},
@@ -483,6 +467,16 @@ command_t cmdlist[] = {
 	{"llog_remove", jt_llog_remove, 0,
 	 "remove one log from catalog or plain log, erase it from disk.\n"
 	 "usage: llog_remove <logname|FID> [--log_id <id>]"},
+	{"clear_conf", jt_lcfg_clear, 0,
+	 "drop unused config logs for a device or filesystem\n"
+	 "usage: clear_conf <device|fsname>"},
+	{"fork_lcfg", jt_lcfg_fork, 0,
+	 "copy configuration logs for named filesystem with given name\n"
+	 "usage: fork_lcfg <fsname> <newname>"},
+	{"erase_lcfg", jt_lcfg_erase, 0,
+	 "permanently erase configuration logs for the named filesystem\n"
+	 "usage: erase_lcfg <fsname>"},
+#endif /* HAVE_SERVER_SUPPORT */
 
 	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
 	/* network operations */
