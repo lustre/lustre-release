@@ -608,8 +608,14 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		/* The inode may be removed after bitmap searching, or the
-		 * file is new created without inode initialized yet. */
-		if (rc == -ENOENT || rc == -ESTALE)
+		 * file is new created without inode initialized yet.
+		 * LU-15754: After "new primitive: discard_new_inode()" change
+		 * in the kernel find_inode_fast() returns -ESTALE, but
+		 * iget_locked replaces it to the NULL and finally
+		 * ldiskfs_inode_attach_jinode() returns -ENOMEM
+		 * Let's skip an inode if -ENOMEM returned.
+		 */
+		if (rc == -ENOENT || rc == -ESTALE || rc == -ENOMEM)
 			RETURN(SCRUB_NEXT_CONTINUE);
 
 		CDEBUG(D_LFSCK, "%s: fail to read inode, ino# = %u: "
