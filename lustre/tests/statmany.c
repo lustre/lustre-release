@@ -55,10 +55,13 @@ char *shortopts = "hlr:s0123456789";
 static int usage(char *prog, FILE *out)
 {
 	fprintf(out,
-		"Usage: %s [-r rand_seed] {-s|-l} filenamebase total_files iterations\n"
-		"-r : random seed\n"
+		"random stat of files within a directory\n"
+		"usage: %s [-r rand_seed] {-s|-l} filenamebase total_files [iterations]\n"
+		"-r : random seed for repeatable sequence\n"
 		"-s : regular stat() calls\n"
-		"-l : lookup ioctl only\n", prog);
+		"-l : llapi_file_lookup() ioctl only\n"
+		"iterations: default = total_files, or negative for seconds\n",
+		prog);
 	exit(out == stderr);
 }
 
@@ -68,12 +71,18 @@ static int usage(char *prog, FILE *out)
 
 int main(int argc, char **argv)
 {
-	long i, count, iter = LONG_MAX, mode = 0, offset;
-	long int start, length = LONG_MAX, last;
+	long i, count, iter = 1, mode = 0, offset;
+	long int start, duration = LONG_MAX, last, now;
 	char parent[4096], *t;
-	char *prog = argv[0], *base;
+	char *prog, *base;
 	int seed = 0, rc;
 	int fd = -1;
+
+	prog = strrchr(argv[0], '/');
+	if (prog)
+		prog++;
+	else
+		prog = argv[0];
 
 	while ((rc = getopt_long(argc, argv, shortopts, longopts,
 				 NULL)) != -1) {
@@ -91,6 +100,10 @@ int main(int argc, char **argv)
 		case 's':
 			mode = rc;
 			break;
+		/* a negative "count" argument (test duration in seconds,
+		 * e.g. "-300") is treated as a command-line argument.
+		 * Parse all of the digits here back into "duration".
+		 */
 		case '0':
 		case '1':
 		case '2':
@@ -101,10 +114,10 @@ int main(int argc, char **argv)
 		case '7':
 		case '8':
 		case '9':
-			if (length == LONG_MAX)
-				length = rc - '0';
+			if (duration == LONG_MAX)
+				duration = rc - '0';
 			else
-				length = length * 10 + (rc - '0');
+				duration = duration * 10 + (rc - '0');
 			break;
 		case 'h':
 			usage(prog, stdout);
@@ -113,7 +126,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (optind + 2 + (length == LONG_MAX) != argc) {
+	if (argc < optind + 2 || argc > optind + 3) {
 		fprintf(stderr,
 			"missing filenamebase, total_files, or iterations\n");
 		usage(prog, stderr);
@@ -138,11 +151,15 @@ int main(int argc, char **argv)
 	srand(seed);
 
 	count = strtoul(argv[optind + 1], NULL, 0);
-	if (length == LONG_MAX) {
-		iter = strtoul(argv[optind + 2], NULL, 0);
+	if (duration == LONG_MAX) {
+		if (argc > optind + 2)
+			iter = strtoul(argv[optind + 2], NULL, 0);
+		else
+			iter = count;
 		printf("running for %lu iterations\n", iter);
 	} else {
-		printf("running for %lu seconds\n", length);
+		iter = LONG_MAX;
+		printf("running for %lu seconds\n", duration);
 	}
 
 	start = time(0);
@@ -166,8 +183,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	for (i = 0; i < iter && time(0) - start < length; i++) {
-		char filename[4096];
+	for (i = 0, now = start; i < iter && now - start < duration; i++) {
+		char filename[4096] = "";
 		int tmp;
 
 		tmp = random() % count;
@@ -195,18 +212,19 @@ int main(int argc, char **argv)
 				break;
 			}
 		}
-		if ((i % 10000) == 0) {
+		now = time(0);
+		if ((i > 0 && (i % 10000) == 0) || now - last > 10) {
 			printf(" - stat %lu (time %ld ; total %ld ; last %ld)\n",
-			       i, time(0), time(0) - start, time(0) - last);
-			last = time(0);
+			       i, now, now - start, now - last);
+			last = now;
 		}
 	}
 
 	if (mode == 'l')
 		close(fd);
 
-	printf("total: %lu stats in %ld seconds: %f stats/second\n", i,
-	       time(0) - start, ((float)i / (time(0) - start)));
+	printf("total: %lu stats in %ld seconds: %f stats/second\n",
+	       i, now - start, ((float)i / (now - start)));
 
-	exit(rc);
+	return rc;
 }

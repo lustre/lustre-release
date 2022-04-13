@@ -82,6 +82,7 @@ int main(int argc, char ** argv)
 {
 	bool do_open = false, do_keep = false, do_link = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
+	bool do_rmdir = false;
 	char *filename, *progname;
 	char *fmt = NULL, *fmt_unlink = NULL, *tgt = NULL;
 	char *endp = NULL;
@@ -147,6 +148,8 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "error: only one of -o, -m, -l, -d\n");
 		usage(progname);
 	}
+	if (do_mkdir && do_unlink)
+		do_rmdir = true;
 
 	if (!do_open && do_keep) {
 		fprintf(stderr, "error: can only use -k with -o\n");
@@ -216,7 +219,12 @@ int main(int argc, char ** argv)
 				filename = get_file_name(fmt_unlink, begin,
 							 unlink_has_fmt_spec);
 
-			rc = do_mkdir ? rmdir(filename) : unlink(filename);
+			rc = do_rmdir ? rmdir(filename) : unlink(filename);
+			/* use rmdir if this is a directory */
+			if (!do_rmdir && rc && errno == EISDIR) {
+				do_rmdir = true;
+				rc = rmdir(filename);
+			}
 			if (rc) {
 				printf("unlink(%s) error: %s\n",
 				       filename, strerror(errno));

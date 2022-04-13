@@ -12,6 +12,7 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$SLOW" = "no" ] && COUNT=1000
 
 [ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
+[ "$STATMANY" ] || STATMANY="statmany -s"
 [ "$RMDIRMANY" ] || RMDIRMANY="unlinkmany -d"
 
 check_and_setup_lustre
@@ -19,6 +20,10 @@ check_and_setup_lustre
 test_1() {
 	sleep 5 # let MDS refresh aggregated statfs
 	# Include some extra space for the status file
+
+	echo "usage before starting test"
+	$LFS df
+	$LFS df -i
 	local dfused=$(df -P $DIR | awk '{ print $3 }' | tail -n 1)
 	local truncsize=123
 
@@ -84,6 +89,9 @@ test_1() {
 	done
 	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
+	# mkdirmany test (bug 589)
+	log "running $MKDIRMANY $dst/d $COUNT"
+	$MKDIRMANY $dst/d $COUNT || error "$MKDIRMANY failed"
 	log "finished at $(date) ($(($(date +%s) - stime)))"
 
 	stopall || error "stopall failed"
@@ -95,8 +103,17 @@ test_1() {
 	done
 	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
+	log "running $STATMANY $dst/d $COUNT $((COUNT * 2))"
+	$STATMANY $dst/d $COUNT $((COUNT * 2)) ||
+		error "$STATMANY $dst/d failed"
+	echo "usage after creating all files"
+	$LFS df
+	$LFS df -i
 	stopall || error "stopall failed (2)"
 	setupall || error "setupall failed (2)"
+
+	log "running $RMDIRMANY $dst/d $COUNT"
+	$RMDIRMANY $dst/d $COUNT || error "$RMDIRMANY cleanup failed"
 
 	log "removing $dst"
 	rm -r $dst || error "can't remove $dst"
@@ -115,17 +132,13 @@ test_1() {
 		rm $hfile.2 || error "can't remove $hfile.2"
 	fi
 
-	# mkdirmany test (bug 589)
-	test_mkdir -p $dst
-	log "running $MKDIRMANY $dst/d 100"
-	$MKDIRMANY $dst/d 100 || error "$MKDIRMANY failed"
-	log "running $RMDIRMANY $dst/d 100"
-	$RMDIRMANY $dst/d 100 || error "$RMDIRMANY cleanup failed"
-
 	log "done"
 
 	wait_delete_completed
 	sleep 5 # let MDS refresh aggregated statfs
+	echo "usage after removing all files"
+	$LFS df
+	$LFS df -i
 	local nowdfused=$(($(df -P $DIR | awk '{ print $3 }' | tail -n 1)))
 	if [ $(expr $nowdfused - $dfused) -gt $(fs_log_size) ]; then
 		error "Space not all freed: now ${nowdfused}kB, was ${dfused}kB"
