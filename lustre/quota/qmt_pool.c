@@ -1397,9 +1397,10 @@ static int qmt_pool_add_rem(struct obd_device *obd, char *poolname,
 	rc = add ? qmt_sarr_pool_add(qpi, idx, 32) :
 		   qmt_sarr_pool_rem(qpi, idx);
 	if (rc) {
-		CERROR("%s: can't %s %s pool %s: rc = %d\n",
-		       add ? "add to" : "remove", obd->obd_name,
-		       slavename, poolname, rc);
+		/* message is checked in sanity-quota test_1b */
+		CERROR("%s: can't %s %s pool '%s': rc = %d\n",
+		       obd->obd_name, add ? "add to" : "remove", slavename,
+		       poolname, rc);
 		GOTO(out_putref, rc);
 	}
 	qmt_pool_slv_nr_change(&env, qpi, idx, add);
