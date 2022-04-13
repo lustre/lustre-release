@@ -136,7 +136,20 @@ struct pcc_dataset {
 };
 
 #define PCC_DEFAULT_ASYNC_THRESHOLD	(256 << 20)
+/* buffer size for kernel buffered I/O for pcc attach
+ *
+ * performance barely varies for buffered I/O once size is more than a few
+ * hundred KiB, so just leave this at 1 MiB
+ */
+#define PCC_COPY_BUFFER_BYTES	(1 << 20) /* 1 MiB */
 
+/* after this many attaches are queued up, fall back to sync attach.  each
+ * attach creates a kthread, so we don't allow too many at once, but sync
+ * attach is very bad for applications, so we try to be generous.
+ */
+#define PCC_ATTACH_THREAD_MAX_DEFAULT	1024
+/* an unreasonably large number of threads, but systems always get larger */
+#define PCC_ATTACH_THREAD_MAX_MAX	16384
 struct pcc_super {
 	/* Protect pccs_datasets */
 	struct rw_semaphore	 pccs_rw_sem;
@@ -154,6 +167,8 @@ struct pcc_super {
 	__u64			 pccs_async_threshold;
 	bool			 pccs_async_affinity;
 	umode_t			 pccs_mode;
+	atomic_t		 pccs_attach_thread;
+	unsigned int		 pccs_attach_thread_max;
 };
 
 struct pcc_inode {

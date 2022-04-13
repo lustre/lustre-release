@@ -881,14 +881,49 @@ static ssize_t pcc_async_affinity_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(pcc_async_affinity);
 
-static ssize_t pcc_mode_show(struct kobject *kobj, struct attribute *attr,
-			      char *buffer)
+static ssize_t
+pcc_attach_thread_max_show(struct kobject *kobj, struct attribute *attr,
+			       char *buffer)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 	struct pcc_super *super = &sbi->ll_pcc_super;
 
-	return sprintf(buffer, "0%o\n", super->pccs_mode);
+	return scnprintf(buffer, PAGE_SIZE, "%u\n",
+			 super->pccs_attach_thread_max);
+}
+
+static ssize_t
+pcc_attach_thread_max_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1 || val > PCC_ATTACH_THREAD_MAX_MAX)
+		return -EOVERFLOW;
+
+	super->pccs_attach_thread_max = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(pcc_attach_thread_max);
+
+static ssize_t pcc_mode_show(struct kobject *kobj, struct attribute *attr,
+			     char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct pcc_super *super = &sbi->ll_pcc_super;
+
+	return scnprintf(buffer, PAGE_SIZE, "0%o\n", super->pccs_mode);
 
 }
 
@@ -2672,6 +2707,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_opencache_max_ms.attr,
 	&lustre_attr_parallel_dio.attr,
 	&lustre_attr_pcc_async_threshold.attr,
+	&lustre_attr_pcc_attach_thread_max.attr,
 	&lustre_attr_pcc_mode.attr,
 	&lustre_attr_pcc_async_affinity.attr,
 	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
