@@ -7476,6 +7476,29 @@ calc_osc_kbytes () {
 	$LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
+free_min_max () {
+	wait_delete_completed
+	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
+	echo "OST kbytes available: ${AVAIL[*]}"
+	MAXV=${AVAIL[0]}
+	MAXI=0
+	MINV=${AVAIL[0]}
+	MINI=0
+	for ((i = 0; i < ${#AVAIL[@]}; i++)); do
+		#echo OST $i: ${AVAIL[i]}kb
+		if [[ ${AVAIL[i]} -gt $MAXV ]]; then
+			MAXV=${AVAIL[i]}
+			MAXI=$i
+		fi
+		if [[ ${AVAIL[i]} -lt $MINV ]]; then
+			MINV=${AVAIL[i]}
+			MINI=$i
+		fi
+	done
+	echo "Min free space: OST $MINI: $MINV"
+	echo "Max free space: OST $MAXI: $MAXV"
+}
+
 # save_lustre_params(comma separated facet list, parameter_mask)
 # generate a stream of formatted strings (<facet> <param name>=<param value>)
 save_lustre_params() {

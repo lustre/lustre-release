@@ -9921,6 +9921,99 @@ test_132() {
 }
 run_test 132 "hsm_actions processed after failover"
 
+# This test verifies we do RR allocation within a pool even if there is a
+# significant imbalance vs an OST outside the pool
+test_133() {
+	[[ $OSTCOUNT -lt 4 ]] && skip_env "needs >= 4 OSTs"
+	# This is the easiest way to ensure OSTs start out balanced
+	reformat_and_config
+	setupall
+
+	check_set_fallocate_or_skip
+
+	local testfile=$DIR/$tdir/$tfile
+	local pool="testpool"
+	local ostrange=$((OSTCOUNT - 1))
+	# Select all but the last OST to add to the pool
+	local poolostrange=$((OSTCOUNT - 2))
+	local filenum=20
+	local filecount
+	local stripecount
+
+	declare -a AVAIL
+	free_min_max
+
+	[ $MINV -eq 0 ] && error "no free space in OST$MINI"
+	[ $MAXV -gt $((2 * $MINV)) ] &&
+		error "OSTs badly unbalanced after reformat"
+
+	create_pool $FSNAME.$pool || error "failed to create a pool"
+	do_facet mgs $LCTL pool_add $FSNAME.$pool OST[0-$poolostrange] ||
+		error "failed to add OST[0-$poolostrange] to the pool"
+
+	test_mkdir -p $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+	# Consume space on the OSTs in the pool so they are unbalanced with the
+	# OST outside of the pool
+	# fill each OST 90% with fallocate so they are widely
+	# imbalanced
+	local size=$(((MINV * 9 / 10) * 1024))
+	for ((i = 0; i <= poolostrange; i++)); do
+		$LFS setstripe -c 1 -i $i $testfile$i ||
+			error "failed to setstripe $testfile$i"
+		fallocate -l $size $testfile$i || error "fallocate failed"
+	done
+	ls -la $DIR/$tdir
+	sleep_maxage
+	$LFS df
+
+	# Create files in the pool now that there is an imbalance
+	filecount=$(((OSTCOUNT - 1) * filenum))
+	for ((i = 0; i < filecount; i++)); do
+		$LFS setstripe -p $pool $testfile-$i ||
+			error "failed to setstripe -p $pool $testfile-$i"
+	done
+	$LFS getstripe -i $testfile-* > /tmp/$tfile.log
+	# Count the number of files with a stripe on each OST to verify the
+	# pool allocated with round-robin
+	for ((i = 0; i <= poolostrange; i++)); do
+		stripecount=$(grep -c $i /tmp/$tfile.log)
+		# Allow a little leeway
+		if (( stripecount < filenum - 1 ||
+		      stripecount > filenum + 1 )); then
+			cat /tmp/$tfile.log
+			error "$stripecount != $filenum files on OST$i"
+		fi
+	done
+
+	# Create files across the system now that there is an imbalance
+	filecount=$((OSTCOUNT * filenum))
+	for ((i = 1; i < filecount; i++)); do
+		$LFS setstripe $testfile-$i.2 ||
+			error "failed to setstripe $testilfe-$i.2"
+	done
+	$LFS getstripe -i $testfile-*.2 > /tmp/$tfile.log
+	local qos_used=""
+	# Count the number of files with a stripe on each OST to verify the
+	# files are *NOT* allocated with round-robin
+	for ((i = 0; i <= ostrange; i++)); do
+		stripecount=$(grep -c $i /tmp/$tfile.log)
+		if [[ $stripecount -ne $filenum ]]; then
+			qos_used="true"
+			echo "QOS: $stripecount != $filenum files on OST$i"
+		fi
+	done
+	if [ -z "$qos_used" ]; then
+		error "QOS not used on imbalanced OSTs!"
+	fi
+
+	rm -rf /tmp/$tfile.log $DIR/$tdir
+	do_facet mgs $LCTL pool_remove $FSNAME.$pool OST[0-$poolostrange] ||
+		"failed to remove OST[0-$poolostrange] from the pool"
+	do_facet mgs $LCTL pool_destroy $FSNAME.$pool ||
+		error "failed to destroy pool"
+}
+run_test 133 "stripe QOS: free space balance in a pool"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

@@ -1375,6 +1375,101 @@ out:
 }
 
 /**
+ * Calculate penalties per-ost in a pool
+ *
+ * The algorithm is similar to ltd_qos_penalties_calc(), but much simpler,
+ * just considering the space of each OST in this pool.
+ *
+ * \param[in] lod	lod_device
+ * \param[in] pool	pool_desc
+ *
+ * \retval 0		on success
+ * \retval -EAGAIN	the number of OSTs isn't enough or all tgt spaces are
+ *			almost the same
+ */
+static int lod_pool_qos_penalties_calc(struct lod_device *lod,
+				       struct pool_desc *pool)
+{
+	struct lu_tgt_descs *ltd = &lod->lod_ost_descs;
+	struct lu_qos *qos = &ltd->ltd_qos;
+	struct lov_desc *desc = &ltd->ltd_lov_desc;
+	struct lu_tgt_pool *osts = &pool->pool_obds;
+	struct lod_tgt_desc *ost;
+	__u64 ba_max, ba_min, ba;
+	__u32 num_active;
+	int prio_wide;
+	time64_t now, age;
+	int i, rc;
+
+	ENTRY;
+
+	now = ktime_get_real_seconds();
+
+	if (pool->pool_same_space && now < pool->pool_same_space_expire)
+		GOTO(out, rc = 0);
+
+	num_active = osts->op_count - 1;
+	if (num_active < 1)
+		GOTO(out, rc = -EAGAIN);
+
+	prio_wide = 256 - qos->lq_prio_free;
+
+	ba_min = (__u64)(-1);
+	ba_max = 0;
+
+	/* Calculate penalty per OST */
+	for (i = 0; i < osts->op_count; i++) {
+		if (!test_bit(osts->op_array[i], lod->lod_ost_bitmap))
+			continue;
+
+		ost = OST_TGT(lod, osts->op_array[i]);
+		if (!ost->ltd_active)
+			continue;
+
+		ba = ost->ltd_statfs.os_bavail * ost->ltd_statfs.os_bsize;
+		ba >>= 8;
+		if (!ba)
+			continue;
+
+		ba_min = min(ba, ba_min);
+		ba_max = max(ba, ba_max);
+		ost->ltd_qos.ltq_svr->lsq_bavail += ba;
+
+		/*
+		 * per-ost penalty is
+		 * prio * bavail * iavail / (num_tgt - 1) / 2
+		 */
+		ost->ltd_qos.ltq_penalty_per_obj = prio_wide * ba >> 8;
+		do_div(ost->ltd_qos.ltq_penalty_per_obj, num_active);
+
+		age = (now - ost->ltd_qos.ltq_used) >> 3;
+		if (age > 32 * desc->ld_qos_maxage)
+			ost->ltd_qos.ltq_penalty = 0;
+		else if (age > desc->ld_qos_maxage)
+			/* Decay ost penalty. */
+			ost->ltd_qos.ltq_penalty >>= age / desc->ld_qos_maxage;
+	}
+
+	/*
+	 * If each ost has almost same free space, do rr allocation for better
+	 * creation performance
+	 */
+	if ((ba_max * (256 - qos->lq_threshold_rr)) >> 8 < ba_min) {
+		pool->pool_same_space = true;
+		pool->pool_same_space_expire = now + desc->ld_qos_maxage;
+	} else {
+		pool->pool_same_space = false;
+	}
+	rc = 0;
+
+out:
+	if (!rc && pool->pool_same_space)
+		rc = -EAGAIN;
+
+	RETURN(rc);
+}
+
+/**
  * Allocate a striping using an algorithm with weights.
  *
  * The function allocates OST objects to create a striping. The algorithm
@@ -1465,7 +1560,10 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (!ltd_qos_is_usable(&lod->lod_ost_descs))
 		GOTO(out, rc = -EAGAIN);
 
-	rc = ltd_qos_penalties_calc(&lod->lod_ost_descs);
+	if (pool != NULL)
+		rc = lod_pool_qos_penalties_calc(lod, pool);
+	else
+		rc = ltd_qos_penalties_calc(&lod->lod_ost_descs);
 	if (rc)
 		GOTO(out, rc);
 

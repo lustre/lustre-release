@@ -69,6 +69,8 @@ struct pool_desc {
 	unsigned int		 pool_spill_threshold_pct;
 	atomic_t		 pool_spill_hit;
 	char			 pool_spill_target[LOV_MAXPOOLNAME + 1];
+	bool			 pool_same_space; /* targets in pool balanced*/
+	time64_t		 pool_same_space_expire; /*uses ld_qos_maxage*/
 };
 
 struct lod_device;

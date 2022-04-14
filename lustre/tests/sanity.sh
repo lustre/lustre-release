@@ -11946,29 +11946,6 @@ test_115() {
 }
 run_test 115 "verify dynamic thread creation===================="
 
-free_min_max () {
-	wait_delete_completed
-	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
-	echo "OST kbytes available: ${AVAIL[*]}"
-	MAXV=${AVAIL[0]}
-	MAXI=0
-	MINV=${AVAIL[0]}
-	MINI=0
-	for ((i = 0; i < ${#AVAIL[@]}; i++)); do
-		#echo OST $i: ${AVAIL[i]}kb
-		if [[ ${AVAIL[i]} -gt $MAXV ]]; then
-			MAXV=${AVAIL[i]}
-			MAXI=$i
-		fi
-		if [[ ${AVAIL[i]} -lt $MINV ]]; then
-			MINV=${AVAIL[i]}
-			MINI=$i
-		fi
-	done
-	echo "Min free space: OST $MINI: $MINV"
-	echo "Max free space: OST $MAXI: $MAXV"
-}
-
 test_116a() { # was previously test_116()
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"

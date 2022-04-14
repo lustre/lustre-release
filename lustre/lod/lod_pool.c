@@ -426,14 +426,11 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 		RETURN(-ENAMETOOLONG);
 
 	/* OBD_ALLOC_* doesn't work with direct kfree_rcu use */
-	new_pool = kmalloc(sizeof(*new_pool), GFP_KERNEL);
+	new_pool = kmalloc(sizeof(*new_pool), __GFP_ZERO);
 	if (new_pool == NULL)
 		RETURN(-ENOMEM);
 
 	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
-	new_pool->pool_spill_expire = 0;
-	new_pool->pool_spill_is_active = false;
-	new_pool->pool_spill_threshold_pct = 0;
 	new_pool->pool_spill_target[0] = '\0';
 	atomic_set(&new_pool->pool_spill_hit, 0);
 	new_pool->pool_lobd = obd;
