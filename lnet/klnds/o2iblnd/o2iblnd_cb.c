@@ -1671,7 +1671,6 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	       payload_nob, payload_niov, libcfs_idstr(target));
 
 	LASSERT(payload_nob == 0 || payload_niov > 0);
-	LASSERT(payload_niov <= LNET_MAX_IOV);
 
 	/* Thread context */
 	LASSERT(!in_interrupt());
