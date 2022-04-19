@@ -10,7 +10,6 @@ Package: lustre-client-modules-_KVERS_
 Architecture: any
 Recommends: linux-image, lustre-client-utils
 Provides: lustre-client-modules
-Depends: linux-generic
 Description: Lustre Linux kernel module (kernel _KVERS_)
  This package contains the lustre loadable kernel modules for the
  patchless client for the Lustre cluster filesystem.
